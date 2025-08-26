@@ -16,9 +16,199 @@ module Value = struct
   let pp_bitvector fmt b = Format.pp_print_string fmt (show_bitvector b)
 end
 
-module ExprType = struct
-  open Value
+module BType = struct
+  type leaf = Boolean | Integer | Bitvector of int | Unit | Top | Nothing
 
+  (*
+  Nothing < Unit < {boolean, integer, bitvector} < Top
+  *)
+  let compare (a : leaf) (b : leaf) =
+    match (a, b) with
+    | Top, Top -> 0
+    | Top, _ -> 1
+    | _, Top -> -1
+    | Nothing, Nothing -> 0
+    | Nothing, _ -> -1
+    | _, Nothing -> 1
+    | Unit, _ -> -1
+    | _, Unit -> 1
+    | Boolean, Integer -> 0
+    | Integer, Boolean -> 0
+    | Boolean, Bitvector _ -> 0
+    | Bitvector _, Boolean -> 0
+    | Boolean, Boolean -> 0
+    | Integer, Bitvector _ -> 0
+    | Bitvector _, Integer -> 0
+    | Bitvector a, Bitvector b -> Int.compare a b
+    | Integer, Integer -> 0
+
+  type lambda = Leaf of leaf | Lambda of (leaf * lambda)
+
+  let to_string = function
+    | Boolean -> "bool"
+    | Integer -> "int"
+    | Bitvector i -> "bv" ^ Int.to_string i
+    | Unit -> "()"
+    | Top -> "⊤"
+    | Nothing -> "⊥"
+end
+
+(*
+module QFBV : Intrins = struct
+  type 'a t = [ `BVADD of int * 'a * 'a | `BVMUL of int * 'a * 'a ]
+
+  open BType
+
+  let get_type = function
+    | `BVADD (s, a, b) ->
+        Lambda (Bitvector s, Lambda (Bitvector s, Leaf (Bitvector s)))
+    | `BVMUL (s, a, b) ->
+        Lambda (Bitvector s, Lambda (Bitvector s, Leaf (Bitvector s)))
+
+  let show x = "bvadd"
+
+  let map f = function
+    | `BVADD (s, a, b) -> `BVADD (s, f a, f b)
+    | `BVMUL (s, a, b) -> `BVMUL (s, f a, f b)
+
+  let fold f u = function
+    | `BVADD (s, a, b) -> f (f u b) a
+    | `BVMUL (s, a, b) -> f (f u b) a
+end
+*)
+
+module type IntrinOp = sig
+  type t
+
+  val get_type : t -> BType.lambda
+  val show : t -> string
+end
+
+module Unop (Ops : sig
+  type t
+end) =
+struct
+  type 'expr unop = [ `Unop of Ops.t * 'expr ]
+
+  let map_unop f = function `Unop (op, arg) -> `Unop (op, f arg)
+  let fold_unop f u = function `Unop (op, b) -> f u b
+  let list_unop = function `Unop (f, a) -> [ a ]
+  let iter_unop f = function `Unop (_, a) -> f a
+end
+
+module BinOp (Ops : sig
+  type t
+end) =
+struct
+  type 'expr binop = [ `BinOp of Ops.t * 'expr * 'expr ]
+
+  let map_binop f = function `BinOp (op, a, b) -> `BinOp (op, f a, f b)
+
+  let fold_binop f u (e : 'expr binop) =
+    match e with `BinOp (op, a, b) -> f (f u b) a
+
+  let list_binop = function `BinOp (f, a, b) -> [ a; b ]
+
+  let iter_binop f (b : 'expr binop) =
+    match b with
+    | `BinOp (_, a, b) ->
+        f a;
+        f b
+end
+
+module FuncOp (Ops : sig
+  type t
+end) =
+struct
+  type 'expr funcop = [ `FuncOp of Ops.t * 'expr list ]
+
+  let map_funcop f (e : 'expr funcop) =
+    match e with `FuncOp (op, a) -> `FuncOp (op, List.map f a)
+
+  let fold_funcop f u = function `FuncOp (op, l) -> List.fold_left f u l
+  let iter_funcop f = function `FuncOp (op, l) -> List.iter f l
+  let list_funcop = function `FuncOp (f, l) -> l
+end
+
+module GenExpType (Ops : sig
+  type binops
+  type unops
+  type funintrins
+
+  val hash_binop : binops -> int
+  val hash_unop : unops -> int
+  val hashfunintrin : funintrins -> int
+end) =
+struct
+  open Ops
+
+  include Unop (struct
+    type t = unops
+  end)
+
+  include BinOp (struct
+    type t = binops
+  end)
+
+  include FuncOp (struct
+    type t = funintrins
+  end)
+
+  type 'a t =
+    [ 'a unop
+    | 'a binop
+    | 'a funcop
+    | `BVConstant of Value.bitvector
+    | `IntConstant of Value.integer
+    | `BoolConstant of bool ]
+
+  let equal equal e1 e2 : bool =
+    match (e1, e2) with
+    | `BinOp (op1, a1, b1), `BinOp (op2, a2, b2) ->
+        op1 = op2 && equal a1 a2 && equal b1 b2
+    | `Unop (op, a), `Unop (op2, a2) -> op = op2 && equal a a2
+    | `FuncOp (op, a), `FuncOp (op2, b) ->
+        op = op2
+        && List.combine a b
+           |> List.fold_left (fun a (l, r) -> a && equal l r) true
+    | _ -> false
+
+  let combine acc n = (acc * 65599) + n
+  let combine2 acc n1 n2 = combine (combine acc n1) n2
+  let combine3 acc n1 n2 n3 = combine (combine (combine acc n1) n2) n3
+
+  let rec combinel acc n1 =
+    match n1 with [] -> acc | h :: tl -> combinel (combine acc h) tl
+
+  let hash hash e1 : int =
+    match e1 with
+    | `BinOp (bop, e1, e2) -> combine2 (Ops.hash_binop bop) (hash e1) (hash e2)
+    | `Unop (op, e1) -> combine (Ops.hash_unop op) (hash e1)
+    | `FuncOp (op, es) -> combinel (Ops.hashfunintrin op) (List.map hash es)
+
+  let fold =
+   fun f unit e ->
+    match e with
+    | #binop as b -> fold_binop f unit b
+    | #unop as b -> fold_unop f unit b
+    | #funcop as b -> fold_funcop f unit b
+
+  let iter =
+   fun f e ->
+    match e with
+    | #binop as b -> iter_binop f b
+    | #unop as b -> iter_unop f b
+    | #funcop as b -> iter_funcop f b
+
+  let map =
+   fun f e ->
+    match e with
+    | #binop as b -> map_binop f b
+    | #unop as b -> map_unop f b
+    | #funcop as b -> map_funcop f b
+end
+
+module Prim = struct
   type assocop = [ `EQ | `NEQ | `BOOLAND | `BOOLOR ]
   [@@deriving show { with_path = false }]
 
@@ -125,13 +315,25 @@ module ExprType = struct
     | `IntConst -> 48
     | `BVConst -> 49
     | `BVConcat -> 50
+end
 
-  type btype = Boolean | Integer | Bitvector of int
+module BasicExpr = struct
+  include GenExpType (struct
+    type binops = Prim.binop
+    type unops = Prim.unop
+    type funintrins = [ `ZeroExtend | `SignExtend | `BVConcat ]
 
-  let show_type = function
-    | Boolean -> "bool"
-    | Integer -> "int"
-    | Bitvector i -> "bv" ^ Int.to_string i
+    let hash_binop = Prim.hash_op
+    let hash_unop = Prim.hash_op
+    let hashfunintrin = Prim.hash_op
+  end)
+end
+
+module ExprType = struct
+  open Value
+  open Prim
+
+  type btype = BType.leaf
 
   type ('v, 'e) expr_node =
     | RVar of 'v * btype
@@ -253,21 +455,6 @@ module ExprType = struct
     | BVConst bv -> BVConst bv
     | IntConst i -> IntConst i
     | BoolConst b -> BoolConst b
-
-  let immediate_children = function
-    | AssocExpr (op, es) -> es
-    | BinaryExpr (op, e1, e2) -> [ e1; e2 ]
-    | UnaryExpr (op, e1) -> [ e1 ]
-    | BVZeroExtend (i, e) -> [ e ]
-    | BVSignExtend (i, e) -> [ e ]
-    | BVExtract (hi, lo, e) -> [ e ]
-    | BVConcat (e1, e2) -> [ e1; e2 ]
-    | Old b -> [ b ]
-    | FApply (id, params, rt) -> params
-    | RVar (i, t) -> []
-    | BVConst bv -> []
-    | IntConst i -> []
-    | BoolConst b -> []
 end
 
 module type TYPE = sig
@@ -351,11 +538,12 @@ module Expr (V : TYPE) = struct
 
   let printer_alg e =
     match (e : (V.t, 'a) expr_node) with
-    | RVar (id, t) -> V.show id ^ ":" ^ show_type t
+    | RVar (id, t) -> V.show id ^ ":" ^ BType.to_string t
     | AssocExpr (op, args) ->
-        Format.sprintf "%s(%s)" (show_assocop op) (String.concat ", " args)
-    | BinaryExpr (op, l, r) -> Format.sprintf "%s(%s, %s)" (show_binop op) l r
-    | UnaryExpr (op, a) -> Format.sprintf "%s(%s)" (show_unop op) a
+        Format.sprintf "%s(%s)" (Prim.show_assocop op) (String.concat ", " args)
+    | BinaryExpr (op, l, r) ->
+        Format.sprintf "%s(%s, %s)" (Prim.show_binop op) l r
+    | UnaryExpr (op, a) -> Format.sprintf "%s(%s)" (Prim.show_unop op) a
     | BVZeroExtend (n, a) -> Format.sprintf "zero_extend(%d, %s)" n a
     | BVSignExtend (n, a) -> Format.sprintf "sign_extend(%d, %s)" n a
     | BVExtract (hi, lo, a) ->
@@ -368,7 +556,7 @@ module Expr (V : TYPE) = struct
     | BoolConst false -> "false"
     | Old e -> Format.sprintf "old(%s)" e
     | FApply (i, a, r) ->
-        Format.sprintf "%s(%s):%s" i (String.concat "," a) (show_type r)
+        Format.sprintf "%s(%s):%s" i (String.concat "," a) (BType.to_string r)
 
   let to_string =
     let alg e = printer_alg e in
@@ -413,16 +601,16 @@ module Expr (V : TYPE) = struct
     let p = cata alg in
     ignore (p @@ exp ());
     [%expect
-      "\n\
-      \      5\n\
-      \      50\n\
-      \      `INTADD(50, 5)\n\
-      \      50\n\
-      \      `INTADD(50, `INTADD(50, 5))\n\
-      \      50\n\
-      \      `INTADD(50, `INTADD(50, `INTADD(50, 5)))\n\
-      \      50\n\
-      \      `INTADD(50, `INTADD(50, `INTADD(50, `INTADD(50, 5))))"]
+      {|
+      5
+      50
+      `INTADD(50, 5)
+      50
+      `INTADD(50, `INTADD(50, 5))
+      50
+      `INTADD(50, `INTADD(50, `INTADD(50, 5)))
+      50
+      `INTADD(50, `INTADD(50, `INTADD(50, `INTADD(50, 5))))|}]
 
   let%expect_test _ =
     let alg e =
@@ -433,13 +621,13 @@ module Expr (V : TYPE) = struct
     let p = cata_memo alg in
     ignore (p @@ exp ());
     [%expect
-      "
-      5
-      50
-      `INTADD(50, 5)
-      `INTADD(50, `INTADD(50, 5))
-      `INTADD(50, `INTADD(50, `INTADD(50, 5)))
-      `INTADD(50, `INTADD(50, `INTADD(50, `INTADD(50, 5))))"]
+      {|
+    5
+    50
+    `INTADD(50, 5)
+    `INTADD(50, `INTADD(50, 5))
+    `INTADD(50, `INTADD(50, `INTADD(50, 5)))
+    `INTADD(50, `INTADD(50, `INTADD(50, `INTADD(50, 5)))) |}]
 end
 
 let () = Printexc.record_backtrace true
