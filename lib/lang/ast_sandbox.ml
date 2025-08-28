@@ -44,10 +44,22 @@ module BvOps = struct
     | rest -> depth rest
 end
 
+
+module IntrinOps = struct
+  type ('a, 'b) t = [
+    | `Intrin of 'b * 'a list
+  ]
+  [@@deriving eq, show]
+
+  let map_intrins map f = function
+    | `Intrin (op, xs) -> `Intrin (op, List.map f xs)
+end
+
 module AllOps = struct
   type 'a t = [
     | 'a IntOps.t
     | 'a BvOps.t
+    | ('a, string) IntrinOps.t
   ]
   [@@deriving eq, show]
 
@@ -59,27 +71,39 @@ module AllOps = struct
   let rec map_allops f : 'a allops -> 'b allops = function
     | #IntOps.t as x -> IntOps.map_intops map_allops f x
     | #BvOps.t as x -> BvOps.map_bvops map_allops f x
+    | #IntrinOps.t as x -> IntrinOps.map_intrins map_allops f x
 
   let rec depth_allops : 'a allops -> int = function
     | #IntOps.t as x -> IntOps.depth_intops depth_allops x
     | #BvOps.t as x -> BvOps.depth_bvops depth_allops x
-
 end
+
+let alg_all = function
+  | #IntOps.t as x -> true
+  | #BvOps.t as x -> true
+  | #IntrinOps.t as x -> true
+let alg_small : bool IntOps.t -> bool = alg_all
 
 (* the module parameter is designed to be compatible
   with that produced by [@@ deriving eq, show]. *)
 module Close (M : sig
   type 'a t
-  val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
-  val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
-  val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+  val map : ('a -> 'b) -> 'a t -> 'b t
+  (* val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit *)
+  (* val show : (Format.formatter -> 'a -> unit) -> 'a t -> string *)
+  (* val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool *)
 end) = struct
 
-  type t = Fix of t M.t
-  [@@deriving eq, show]
+  type t = Fix of t M.t [@@unboxed]
+  (* [@@deriving eq, show] *)
 
   let fix x = Fix x
   let unfix (Fix x) = x
+
+  let ( >> ) = fun f g x -> g (f x)
+
+  let rec cata : 'a. ('a M.t -> 'a) -> t -> 'a =
+   fun alg x -> x |> unfix |> M.map (cata alg) |> alg
 
 end
 

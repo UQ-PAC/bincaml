@@ -305,7 +305,7 @@ let%expect_test _ =
   let p = cata alg in
   ignore (p @@ exp_bool ());
   [%expect
-    {| 
+    {|
       (Value.Value.Integer 5)
       (Value.Value.Integer 50)
       `BOOLAND((Value.Value.Integer 50), (Value.Value.Integer 5))
@@ -318,3 +318,4 @@ let%expect_test _ =
     |}]
 
 let () = Printexc.record_backtrace true
+
