@@ -33,3 +33,19 @@ module type HASH_TYPE = sig
 end
 
 let identity x = x
+
+(* module type X = sig *)
+(*   include Graph.Sig.G *)
+(**)
+(*   val vertex_name : V.t -> string *)
+(* end *)
+(**)
+(* let f (type t v e) (make_name : v -> string) *)
+(*     (module G : Graph.Sig.G with type t = t and type V.t = v and type E.t = e) : *)
+(*     (module X with type t = t and type V.t = v and type E.t = e) = *)
+(*   let module M = struct *)
+(*     include G *)
+(**)
+(*     let vertex_name = make_name *)
+(*   end in *)
+(*   (module M) *)
