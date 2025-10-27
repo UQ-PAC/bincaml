@@ -6,6 +6,18 @@
 
 (library
  (name demo)
- (modules demo)
+ (modules demo demo)
  (flags -w -27))
 
+(rule
+ (alias runtest)
+ (mode promote)
+ (action
+  (with-stdout-to
+   dune.wrapper.inc
+   (setenv
+    ORTAC_ONLY_PLUGIN
+    dune-rules
+   (run ortac dune wrapper demo.mli)))))
+
+(include dune.wrapper.inc)
