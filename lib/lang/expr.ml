@@ -233,6 +233,8 @@ module BasilExpr = struct
 
   include R
 
+  type 'a scheme = (const, var, unary, binary, intrin, 'a) AbstractExpr.t
+
   (* printers *)
   let print_alg =
     let open AbstractExpr in

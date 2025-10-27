@@ -1,2 +1,9 @@
 (test
- (name test_ocaml_of_basil))
+ (name test_ocaml_of_basil)
+ (modules test_ocaml_of_basil))
+
+(library
+ (name test_expr_print)
+ (modules test_expr_print)
+ (inline_tests)
+ (preprocess (pps ppx_expect)))

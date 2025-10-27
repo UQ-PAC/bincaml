@@ -28,7 +28,7 @@
    basil_ast
    ppx_deriving
    ocamlgraph
-   (ppx_expect_nobase (>= "0.17.2.2"))
+   (ppx_expect :with-test)
    )
  (tags
   ("add topics" "to describe" your project)))
