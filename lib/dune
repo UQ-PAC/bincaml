@@ -1,4 +1,11 @@
 (library
- (name ocaml_of_basil )
+ (name ocaml_of_basil)
  (flags -w -27)
+ (modules loadir)
  (libraries basil_ast ocaml_of_basil.ast))
+
+(library
+ (name demo)
+ (modules demo)
+ (flags -w -27))
+

@@ -1,2 +1,19 @@
-(test
- (name test_ocaml_of_basil))
+(library
+ (name demo_config)
+ (libraries demo)
+ (modules demo_config))
+
+(rule
+ (alias runtest)
+ (mode promote)
+ (action
+  (with-stdout-to
+   dune.inc
+   (pipe-stdout
+    (run ortac dune qcheck-stm ../lib/demo.mli)
+    ; filter out the promote settings for the generated
+    ; test code, so the test code is not committed.
+    (run grep -v "alias runtest")
+    (run grep -v "mode promote")))))
+
+(include dune.inc)

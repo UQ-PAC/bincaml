@@ -28,6 +28,10 @@
    basil_ast
    ppx_deriving
    ocamlgraph
+   containers-data
+   ortac-qcheck-stm
+   ortac-wrapper
+   ortac-dune
    (ppx_expect_nobase (>= "0.17.2.2"))
    )
  (tags
