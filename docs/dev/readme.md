@@ -273,18 +273,29 @@ https://github.com/agle/eggomess/blob/0bd8401aae7f0b362ac9c730c0f5f07930a60414/b
 - whole program interpreter on irreducible programs
 - unit tests
 
+## Whole-program interpreter
+
+- Want it to be reasonably fast for test efficiency: don't make it a monad again for performance
+- If we want efficiency we could make all values a z.t and monomorphise operations to their width-specialisations, have the allocator bookkeep where pages are allocated.
+- Structrue memory as a tree to pages of bytes, and flatten the bytes to bitvectors on load/store
+- Try to make memory initialisation complete
+- Provide debugging hooks somehow
+- depends: expression evaluator
+
+### Validation / Testing
+
+The execution of csmith-generated programs matches the execution natively or in qemu (i.e. outputs the same hash)
+
 ## Translation validator
 
 - Implementation of TACAS paper in ocaml, roughly this is decomposed into:
 
 1. Cut set transform (may be able to use [ocamlgraph](https://ocaml.org/p/ocamlgraph/2.2.0/doc/ocamlgraph/Graph/Mincut/Make/index.html#val-min_cutset)
 2. Monadic effect encoding
-  - make the call encoding simpler, just capture all global variables in the
-  program rather than doing some weird analysis
+    - make the call encoding simpler, just capture all global variables in the program rather than doing some weird analysis
 4. Invarinat construction based on an analysis result
 5. SSA-based DAG program extration
-  - emit src and target programs as a let .. in function rather than the
-  encoding sbasil uses as its cleaner and more efficient
+    - emit src and target programs as a let .. in function rather than the encoding sbasil uses as its cleaner and more efficient
 
 - We should extend it to interprocedural validation, this means guarding
 ackermann instantiations by the interproc domain value, and adding the
