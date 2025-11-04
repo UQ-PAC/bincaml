@@ -1,7 +1,7 @@
 (library
- (name demo_wrapped_config)
- (libraries demo_wrapped)
- (modules demo_wrapped_config))
+ (name demo_config)
+ (libraries demo qcheck-core)
+ (modules demo_config))
 
 (rule
  (alias runtest)
@@ -9,13 +9,13 @@
  (action
   (with-stdout-to
    dune.inc
-   ; (pipe-stdout
-    (run ortac dune qcheck-stm ../lib/demo_wrapped.mli)
+   (pipe-stdout
+    (run ortac dune qcheck-stm ../lib/demo.mli)
     ; filter out the promote settings for the generated
     ; test code, so the test code is not committed.
-    ; (run grep -v "alias runtest")
-    ; (run grep -v "mode promote")
-    ; )
+    (run grep -v "alias runtest")
+    (run grep -v "mode promote")
+    )
   )))
 
 (include dune.inc)

@@ -16,11 +16,11 @@ val make : int -> 'a -> 'a t
 
 val get : 'a t -> int -> 'a
 (*@ a = get t i
-    checks 0 <= i < to_size t
+    checks 0 <= i < t.size
     ensures a = List.nth t.contents i *)
 
 val set : 'a t -> int -> 'a -> unit
 (*@ set t i a
-    requires 0 <= i < to_size t
+    checks 0 <= i < t.size
     modifies t.contents
     ensures t.contents = List.mapi (fun j x -> if j = (i : integer) then a else x) (old t.contents) *)

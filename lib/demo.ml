@@ -7,6 +7,6 @@ let make = Array.make
 let get = Array.get
 
 let set xs i x =
-  (if not (0 <= i && i < Array.length xs) then
-    invalid_arg "");
-  Array.set xs (-1) x
+  if not (0 <= i && i < Array.length xs) then
+    invalid_arg "";
+  Array.set xs i x
