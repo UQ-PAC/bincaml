@@ -11,76 +11,12 @@ let int_ops = [ `INTDIV; `INTADD; `INTMOD; `INTMUL; `INTSUB ]
 let rel_bv_ops = [ `NEQ; `EQ; `BVULT; `BVSLE; `BVULE; `BVSLT ]
 let bv_other_ops = [ `BVConcat ]
 *)
-let bv_unop = [ `BVNOT; `BVNEG ]
-let bv_ops_partial = [ `BVSREM; `BVSDIV; `BVUREM; `BVUDIV; `BVSMOD ]
 
-let bv_ops_total =
-  [
-    `BVADD;
-    `BVASHR;
-    `BVMUL;
-    `BVSHL;
-    `BVNAND;
-    `BVXOR;
-    `BVOR;
-    `BVSUB;
-    `BVLSHR;
-    `BVAND;
-  ]
-
-module ExprGen = struct
-  open QCheck.Gen
-
-  let arb_width = int_range 1 62
-  let arb_bv_op = oneofl bv_ops_total
-
-  let arb_unop l =
-    let* op = oneofl bv_unop in
-    return (Expr.BasilExpr.unexp ~op l)
-
-  let arb_binop_total l r =
-    let* op = oneofl bv_ops_total in
-    return (Expr.BasilExpr.binexp ~op l r)
-
-  let arb_binop_partial l r =
-    let* op = oneofl bv_ops_partial in
-    return (Expr.BasilExpr.binexp ~op l r)
-
-  let arb_bv ?(min = 0) w =
-    let* v =
-      QCheck.Gen.int_range min
-        (Value.PrimQFBV.ones ~size:w |> Value.PrimQFBV.value |> Z.to_int)
-    in
-    return (Value.PrimQFBV.of_int ~size:w v)
-
-  let arb_bvconst ?min w =
-    let* c = arb_bv ?min w in
-    return (Expr.BasilExpr.bvconst c)
-
-  let shallow_expr =
-    let* w = arb_width in
-    sized
-    @@ fix (fun self n ->
-        match n with
-        | 0 -> arb_bvconst w
-        | 1 -> arb_bvconst ~min:1 w
-        | n ->
-            frequency
-              [
-                (1, arb_bvconst w);
-                (2, self 0 >>= arb_unop);
-                ( 2,
-                  let* l = self 0 in
-                  let* r = self 0 in
-                  arb_binop_total l r );
-                ( 2,
-                  let* l = self 0 in
-                  let* r = self 1 in
-                  arb_binop_partial l r );
-              ])
-
+module EvalExprGen = struct
   let eval_expr =
-    let* exp = shallow_expr in
+    let open QCheck.Gen in
+    let* wd = Expr_gen.gen_width in
+    let* exp = Expr_gen.gen_bvexpr (5, wd) in
     let evaled = Expr_eval.partial_eval_expr exp in
     return (exp, evaled)
 
@@ -102,7 +38,7 @@ let run_smt query =
 
 let test =
   QCheck.(
-    Test.make ~count:1000 ~max_fail:3 ExprGen.arb_bvexpr (fun (exp, evaled) ->
+    Test.make ~count:1000 ~max_fail:3 EvalExprGen.arb_bvexpr (fun (exp, evaled) ->
         let comparison =
           Expr.BasilExpr.boolnot (Expr.BasilExpr.binexp ~op:`EQ exp evaled)
         in
