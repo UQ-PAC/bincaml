@@ -1,6 +1,6 @@
 open Lang
 
-let () = Printexc.record_backtrace true
+(* let () = Printexc.record_backtrace true *)
 
 let e =
   Ocaml_of_basil.Loadir.parse_expr_string
