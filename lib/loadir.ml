@@ -161,45 +161,59 @@ module BasilASTLoader = struct
         let open Procedure.Vert in
         let formal_out_params_order = List.map param_to_formal out_params in
         (* add blocks *)
-        let blocks_id =
-          List.map
-            (function
+        let p, blocks_id =
+          List.fold_left
+            (fun (p, a) b ->
+              match b with
               | LBlock (name, stmts, succ) ->
                   let stmts = stmts in
-                  (name, Procedure.decl_block_exn p name ~stmts ()))
-            blocks
+                  let p, bid = Procedure.decl_block_exn p name ~stmts () in
+                  (p, (name, bid) :: a))
+            (p, []) blocks
         in
+        let blocks_id = List.rev blocks_id in
         let block_label_id = StringMap.of_list blocks_id in
-        Option.iter
-          (fun (_, entry) -> Procedure.G.add_edge p.graph Entry (Begin entry))
-          (List.head_opt blocks_id);
+        let p =
+          match List.head_opt blocks_id with
+          | None -> p
+          | Some (_, entry) ->
+              {
+                p with
+                graph = Procedure.G.add_edge p.graph Entry (Begin entry);
+              }
+        in
 
         (* add intraproc edges*)
-        List.iter
-          (function
-            | LBlock (name, _, succ) -> (
-                match succ with
-                | `None -> ()
-                | `Goto tgts ->
-                    let f = StringMap.find name block_label_id in
-                    let succ =
-                      List.map (fun c -> StringMap.find c block_label_id) tgts
-                    in
-                    Procedure.add_goto p ~from:f ~targets:succ
-                | `ReturnNamed exprs ->
-                    let f = StringMap.find name block_label_id in
-                    let args = StringMap.of_list exprs in
-                    Procedure.add_return p ~from:f ~args
-                | `Return exprs ->
-                    let args =
-                      List.combine formal_out_params_order exprs
-                      |> List.map (function (name, var), expr -> (name, expr))
-                      |> StringMap.of_list
-                    in
-                    let f = StringMap.find name block_label_id in
-                    Procedure.add_return p ~from:f ~args))
-          blocks;
-        prog
+        let p =
+          List.fold_left
+            (fun (p : Program.proc) b ->
+              match b with
+              | LBlock (name, _, succ) -> (
+                  match succ with
+                  | `None -> p
+                  | `Goto tgts ->
+                      let f = StringMap.find name block_label_id in
+                      let succ =
+                        List.map (fun c -> StringMap.find c block_label_id) tgts
+                      in
+                      Procedure.add_goto p ~from:f ~targets:succ
+                  | `ReturnNamed exprs ->
+                      let f = StringMap.find name block_label_id in
+                      let args = StringMap.of_list exprs in
+                      Procedure.add_return p ~from:f ~args
+                  | `Return exprs ->
+                      let args =
+                        List.combine formal_out_params_order exprs
+                        |> List.map (function (name, var), expr -> (name, expr))
+                        |> StringMap.of_list
+                      in
+                      let f = StringMap.find name block_label_id in
+                      Procedure.add_return p ~from:f ~args))
+            p blocks
+        in
+        map_prog
+          (fun prog -> { prog with procs = ID.Map.add proc_id p prog.procs })
+          prog
     | _ -> prog
 
   and transMapType (x : mapType) : Types.t =

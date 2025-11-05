@@ -57,13 +57,17 @@ let of_cmd st (e : Containers.Sexp.t) =
   | "run-transforms" ->
       let args = assert_atoms (List.length args) args in
       let ba = Ocaml_of_basil.Passes.PassManager.batch_of_list args in
-      Ocaml_of_basil.Passes.PassManager.run_batch ba (get_prog st);
-      st
+      let prog =
+        Some (Ocaml_of_basil.Passes.PassManager.run_batch ba (get_prog st))
+      in
+      { prog }
   | "run-transform" ->
       let args = assert_atoms 1 args in
       let ba = Ocaml_of_basil.Passes.PassManager.batch_of_list args in
-      Ocaml_of_basil.Passes.PassManager.run_batch ba (get_prog st);
-      st
+      let prog =
+        Some (Ocaml_of_basil.Passes.PassManager.run_batch ba (get_prog st))
+      in
+      { prog }
   | e -> failwith @@ "not a command : " ^ e
 
 let of_str st (e : string) =

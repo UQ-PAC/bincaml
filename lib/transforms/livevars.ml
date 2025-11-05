@@ -244,12 +244,13 @@ module DSE = struct
   let sane_transform (p : Program.proc) =
     let live = run p in
     let blocks = Procedure.blocks_to_list p in
-    List.iter
-      (function
+    List.fold_left
+      (fun p b ->
+        match b with
         | ( (Procedure.Vert.Begin id as v),
             (b : (Var.t, Expr.BasilExpr.t) Block.t) ) ->
             let stmts = filter_dead (live v) b in
             Procedure.update_block p id { b with stmts }
-        | _ -> ())
-      blocks
+        | _ -> p)
+      p blocks
 end

@@ -8,8 +8,9 @@ let simplify_proc_exprs p =
   let blocks = Procedure.blocks_to_list p in
 
   let open Procedure.Edge in
-  List.iter
-    (function
+  List.fold_left
+    (fun p e ->
+      match e with
       | Procedure.Vert.Begin id, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
           let stmts =
             Vector.map
@@ -18,8 +19,9 @@ let simplify_proc_exprs p =
               b.stmts
           in
           Procedure.update_block p id { b with stmts }
-      | _ -> ())
-    blocks
+      | _ -> p)
+    p blocks
 
 let simplify_prog_exprs (p : Program.t) =
-  ID.Map.iter (fun id proc -> simplify_proc_exprs proc) p.procs
+  let procs = ID.Map.map (fun proc -> simplify_proc_exprs proc) p.procs in
+  { p with procs }

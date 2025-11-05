@@ -38,15 +38,9 @@ let print_cfg fname proc =
   let prg = Ocaml_of_basil.Loadir.ast_of_fname fname in
   let id = prg.prog.proc_names.get_id proc in
   let _ = Lang.ID.Map.find id prg.prog.procs in
-  (*Lang.Livevars.print_live_vars_dot Format.std_formatter p ; *)
-  (*Lang.Livevars.print_dse_dot Format.std_formatter p; *)
-  CCUnix.with_out "before.il" ~f:(fun c ->
-      Lang.ID.Map.iter (fun i p -> print_proc c p) prg.prog.procs);
-  Lang.ID.Map.iter
-    (fun i p -> Transforms.Livevars.DSE.sane_transform p)
-    prg.prog.procs;
-  CCUnix.with_out "after.il" ~f:(fun c ->
-      Lang.ID.Map.iter (fun i p -> print_proc c p) prg.prog.procs)
+  ()
+(*Lang.Livevars.print_live_vars_dot Format.std_formatter p ; *)
+(*Lang.Livevars.print_dse_dot Format.std_formatter p; *)
 
 let print_cfg_cmd =
   let doc = "print dot CFG for graph" in

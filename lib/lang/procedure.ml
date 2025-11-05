@@ -39,7 +39,7 @@ end
 module Loc = Int
 
 module G = struct
-  include Graph.Imperative.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
+  include Graph.Persistent.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
 end
 
 type ('v, 'e) proc_spec = {
@@ -64,18 +64,19 @@ let add_goto p ~(from : ID.t) ~(targets : ID.t list) =
   let open Vert in
   let g = p.graph in
   let fr = End from in
-  List.iter (fun t -> G.add_edge g fr (Begin t)) targets
+  let g = List.fold_left (fun g t -> G.add_edge g fr (Begin t)) g targets in
+  { p with graph = g }
 
 let create id ?(formal_in_params = StringMap.empty)
     ?(formal_out_params = StringMap.empty) ?(captures_globs = [])
     ?(modifies_globs = []) ?(requires = []) ?(ensures = []) () =
-  let graph = G.create () in
+  let graph = G.empty in
   let specification =
     Some { captures_globs; modifies_globs; requires; ensures }
   in
-  G.add_vertex graph Entry;
-  G.add_vertex graph Exit;
-  G.add_vertex graph Return;
+  let graph = G.add_vertex graph Entry in
+  let graph = G.add_vertex graph Exit in
+  let graph = G.add_vertex graph Return in
   {
     id;
     formal_in_params;
@@ -93,24 +94,28 @@ let add_block p id ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
   let b = Edge.(Block { phis; stmts }) in
   let open Vert in
   let existing = G.find_all_edges p.graph (Begin id) (End id) in
-  List.iter (fun e -> G.remove_edge_e p.graph e) existing;
-  G.add_edge_e p.graph (Begin id, b, End id);
-  List.iter (fun i -> G.add_edge p.graph (End id) (Begin i)) successors
+  let graph = List.fold_left G.remove_edge_e p.graph existing in
+  let graph = G.add_edge_e graph (Begin id, b, End id) in
+  let graph =
+    List.fold_left
+      (fun graph i -> G.add_edge graph (End id) (Begin i))
+      graph successors
+  in
+  { p with graph }
 
 let decl_block_exn p name ?(phis = [])
     ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   let open Block in
   let id = p.block_ids.decl_exn name in
-  add_block p id ~phis ~stmts ~successors ();
-  id
+  let p = add_block p id ~phis ~stmts ~successors () in
+  (p, id)
 
 let fresh_block p ?name ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
     ?(successors = []) () =
   let open Block in
   let name = Option.get_or ~default:"block" name in
   let id = p.block_ids.fresh ~name () in
-  add_block p id ~phis ~stmts ~successors ();
-  id
+  (add_block p id ~phis ~stmts ~successors (), id)
 
 let add_return p ~(from : ID.t) ~(args : BasilExpr.t StringMap.t) =
   let open Vert in
@@ -120,7 +125,7 @@ let add_return p ~(from : ID.t) ~(args : BasilExpr.t StringMap.t) =
       Block
         { phis = []; stmts = Vector.of_list [ Stmt.(Instr_Return { args }) ] })
   in
-  G.add_edge_e p.graph (fr, b, Return)
+  { p with graph = G.add_edge_e p.graph (fr, b, Return) }
 
 let get_entry_block p id =
   let open Edge in
@@ -141,8 +146,10 @@ let get_block p id =
 let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
   let open Edge in
   let open G in
-  G.remove_edge p.graph (Begin id) (End id);
-  G.add_edge_e p.graph (Begin id, Block block, End id)
+  let g = p.graph in
+  let g = G.remove_edge g (Begin id) (End id) in
+  let g = G.add_edge_e g (Begin id, Block block, End id) in
+  { p with graph = g }
 
 let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
   update_block p id block

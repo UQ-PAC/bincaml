@@ -5,7 +5,7 @@ open Lang
 module PassManager = struct
   type transform =
     | Prog of (Program.t -> unit)
-    | Proc of (Program.proc -> unit)
+    | Proc of (Program.proc -> Program.proc)
 
   type pass = { name : string; apply : transform }
 
@@ -32,17 +32,23 @@ module PassManager = struct
     Trace.with_span ~__FILE__ ~__LINE__ ("transform-prog::" ^ tf.name)
     @@ fun _ ->
     match tf.apply with
-    | Prog tf -> tf p
+    | Prog tf ->
+        tf p;
+        p
     | Proc app ->
-        ID.Map.iter
-          (fun id proc ->
-            Trace.with_span ~__FILE__ ~__LINE__
-              ("transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
-            @@ fun _ -> app proc)
-          p.procs
+        let procs =
+          ID.Map.mapi
+            (fun id proc ->
+              Trace.with_span ~__FILE__ ~__LINE__
+                ("transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
+              @@ fun _ -> app proc)
+            p.procs
+        in
+        { p with procs }
 
   let construct_batch (s : t) (passes : string list) =
     List.map (fun p -> SMap.find p s.avail) passes
 
-  let run_batch (batch : pass list) prog = List.iter (run_transform prog) batch
+  let run_batch (batch : pass list) prog =
+    List.fold_left run_transform prog batch
 end

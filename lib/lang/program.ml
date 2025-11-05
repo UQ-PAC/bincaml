@@ -90,7 +90,7 @@ module CallGraph = struct
     let default = Nop
   end
 
-  module G = Graph.Imperative.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
+  module G = Graph.Persistent.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
 
   let make_call_graph t =
     let called_by (p : proc) =
@@ -105,7 +105,7 @@ module CallGraph = struct
       ID.Map.to_iter t.procs
       |> Iter.map (function pid, proc -> (pid, called_by proc))
     in
-    let graph = G.create ~size:(ID.Map.cardinal t.procs) () in
+    let graph = G.empty in
     let open Edge in
     let open Vert in
     let proc_edges =
@@ -113,11 +113,14 @@ module CallGraph = struct
         (function id -> (ProcBegin id, Proc id, ProcReturn id))
         (ID.Map.keys t.procs)
     in
-    Iter.iter (G.add_edge_e graph) proc_edges;
-    t.entry_proc
-    |> Option.iter (fun entry ->
-        List.iter (G.add_edge_e graph)
-          [ (Entry, Nop, ProcBegin entry); (ProcReturn entry, Nop, Return) ]);
+    let graph = Iter.fold G.add_edge_e graph proc_edges in
+    let graph =
+      match t.entry_proc with
+      | Some entry ->
+          List.fold_left G.add_edge_e graph
+            [ (Entry, Nop, ProcBegin entry); (ProcReturn entry, Nop, Return) ]
+      | None -> graph
+    in
     let call_dep caller callee =
       Iter.of_list
         [
@@ -136,6 +139,5 @@ module CallGraph = struct
                    (ID.Set.to_iter called)))
         calls
     in
-    Iter.iter (G.add_edge_e graph) call_dep_edges;
-    graph
+    Iter.fold G.add_edge_e graph call_dep_edges
 end
