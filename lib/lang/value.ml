@@ -19,9 +19,8 @@ module PrimInt = struct
 end
 
 module PrimQFBV = struct
-  (* representation of bitvector positive Z.t and an explicit size*)
-
   type t = { w : int; v : Z.t }
+  (** Representation of bitvector with non-negative Z.t and an explicit size. *)
 
   let typ i = Types.BType.Bitvector i.w
   let show (b : t) = Printf.sprintf "0x%s:bv%d" (Z.format "%x" @@ b.v) b.w
@@ -32,6 +31,7 @@ module PrimQFBV = struct
   let zero ~(size : int) = { w = size; v = Z.zero }
   let empty = zero ~size:0
   let is_zero b = Z.equal Z.zero b.v
+  let is_nonzero b = not (is_zero b)
   let size (x : t) = match x with { w; v } -> w
   let value (b : t) : Z.t = match b with { w; v } -> v
   let to_signed_bigint b = z_signed_extract b.v 0 b.w
@@ -40,21 +40,23 @@ module PrimQFBV = struct
   let equal a b = Int.equal a.w b.w && Z.equal a.v b.v
   let true_bv = ones ~size:1
   let false_bv = zero ~size:1
-  let extract hi lo (b : t) = { w = hi - lo; v = z_signed_extract b.v hi lo }
+
+  let extract ~off ~len (b : t) =
+    assert (off >= 0);
+    assert (off + len <= b.w);
+    { w = len; v = z_extract b.v off len }
 
   let compare a b =
     Int.compare a.w b.w |> function 0 -> Z.compare a.v b.v | o -> o
 
+  (** Smart constructor for {!t}. Extracts its bits from the two's complement
+      representation of the given {!Z.t}, with negative numbers being treated as
+      having an infinite number of [1]s to their left. *)
   let create ~(size : int) (v : Z.t) : t =
     assert (size >= 0);
-    let v = z_extract v 0 size in
-    { w = size; v }
+    { w = size; v = z_extract v 0 size }
 
-  let of_int ~(size : int) i =
-    assert (size >= 0);
-    let v = Z.of_int i in
-    assert (Z.geq v Z.zero);
-    create ~size v
+  let of_int ~(size : int) i = create ~size (Z.of_int i)
 
   let of_string i =
     let vty = String.split_on_char ':' i in
@@ -75,7 +77,8 @@ module PrimQFBV = struct
     { w; v }
 
   let size_is_equal a b = assert (size a = size b) [@@inline always]
-  let bind f a = create ~size:a.w (f a.v) [@@inline always]
+  let bind1 f a = create ~size:a.w (f a.v) [@@inline always]
+  let bind1_signed f a = create ~size:a.w (f a.v) [@@inline always]
 
   (* wrap bv operation *)
   let bind2 f a b =
@@ -94,23 +97,47 @@ module PrimQFBV = struct
     f a.v b.v
   [@@inline always]
 
-  let neg a = bind Z.neg a
+  let neg a = bind1_signed Z.neg a
   let add a b = bind2 Z.add a b
   let mul a b = bind2 Z.mul a b
   let sub a b = bind2 Z.sub a b
-  let bitnot a = bind Z.lognot a
+  let bitnot a = bind1 Z.lognot a
   let bitand a b = bind2 Z.logand a b
   let bitor a b = bind2 Z.logor a b
   let bitxor a b = bind2 Z.logxor a b
-
-  let udiv a b =
-    size_is_equal a b;
-    let v = if Z.equal b.v Z.zero then Z.minus_one else Z.div a.v b.v in
-    create ~size:a.w v
-
-  let sdiv a b = bind2_signed Z.div a b
-  let srem a b = bind2_signed Z.rem a b
+  let udiv a b = if is_zero b then ones ~size:a.w else bind2 Z.div a b
   let urem a b = if is_zero b then a else bind2 Z.rem a b
+
+  (** Signed division.
+
+      From Z3: https://z3prover.github.io/api/html/group__capi.html
+
+      {v
+  It is defined in the following way:
+  - The floor of t1/t2 if t2 is different from zero, and t1*t2 >= 0.
+  - The ceiling of t1/t2 if t2 is different from zero, and t1*t2 < 0.
+  If t2 is zero, then the result is undefined.
+      v} *)
+  let sdiv a b =
+    assert (is_nonzero b);
+    bind2_signed Z.div a b
+
+  (** Remainder with result sign following the dividend (a) sign. *)
+  let srem a b =
+    assert (is_nonzero b);
+    bind2_signed Z.rem a b
+
+  (** Remainder with result sign following the divisor (b) sign. *)
+  let smod a b =
+    size_is_equal a b;
+    assert (is_nonzero b);
+    let w = a.w and a, b = (to_signed_bigint a, to_signed_bigint b) in
+    let remainder = Z.rem a b and wanted_sign = Z.sign b in
+    match (Z.sign remainder, wanted_sign) with
+    | 1, -1 -> create ~size:w Z.(remainder - abs b)
+    | -1, 1 -> create ~size:w Z.(remainder + abs b)
+    | _ -> create ~size:w remainder
+
   let ult a b = map2 Z.lt a b
   let ugt a b = map2 Z.gt a b
   let ule a b = map2 Z.leq a b
@@ -125,38 +152,24 @@ module PrimQFBV = struct
   let sle a b = map2_signed Z.leq a b
   let sge a b = map2_signed Z.geq a b
 
-  let smod a b =
-    (* TODO: can we write this in terms of Z.erem or Z.rem ? *)
-    let isneg a = slt a (zero ~size:a.w) in
-    let msb_a = isneg a in
-    let msb_b = isneg b in
-    let abs_a = if msb_a then neg a else a in
-    let abs_b = if msb_b then neg b else b in
-    let u = urem abs_a abs_b in
-    if is_zero u then u
-    else if (not msb_a) && not msb_b then u
-    else if msb_a && not msb_b then sub b u
-    else if (not msb_a) && msb_b then add u b
-    else neg u
-
   let ashr a b =
-    { w = a.w; v = Z.shift_right (to_signed_bigint a) (Z.to_int b.v) }
+    create ~size:a.w @@ Z.shift_right (to_signed_bigint a) (Z.to_int b.v)
 
-  let lshr a b = { w = a.w; v = Z.shift_right_trunc a.v (Z.to_int b.v) }
-  let zero_extend ~(extension : int) b = { w = b.w + extension; v = b.v }
+  let lshr a b =
+    create ~size:a.w
+    @@ Z.shift_right_trunc (to_unsigned_bigint a) (Z.to_int b.v)
 
-  let shl a b =
-    if Z.gt b.v (Z.of_int a.w) then zero ~size:(size a)
-    else { w = a.w; v = z_extract (Z.shift_left a.v (Z.to_int b.v)) 0 a.w }
+  let zero_extend ~(extension : int) b = create ~size:(b.w + extension) b.v
 
   let sign_extend ~(extension : int) b =
-    let w = b.w + extension in
-    let v = z_extract (z_signed_extract b.v 0 b.w) 0 w in
-    { w; v }
+    create ~size:(b.w + extension) @@ to_signed_bigint b
+
+  let shl a b =
+    create ~size:a.w @@ Z.shift_left (to_unsigned_bigint a) (Z.to_int b.v)
 
   let concat a b =
     let a = zero_extend ~extension:b.w a in
-    let a = { w = a.w; v = Z.shift_left a.v b.w } in
+    let a = shl a (create ~size:a.w b.v) in
     let b = zero_extend ~extension:a.w b in
     bitor a b
 
