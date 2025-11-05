@@ -177,10 +177,9 @@ module BasilASTLoader = struct
           match List.head_opt blocks_id with
           | None -> p
           | Some (_, entry) ->
-              {
-                p with
-                graph = Procedure.G.add_edge p.graph Entry (Begin entry);
-              }
+              p
+              |> Procedure.map_graph (fun g ->
+                  Procedure.G.add_edge g Entry (Begin entry))
         in
 
         (* add intraproc edges*)

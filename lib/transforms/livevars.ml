@@ -63,11 +63,11 @@ module LV =
 let run (p : Program.proc) =
   let wto =
     Trace.with_span ~__FILE__ ~__LINE__ "WTO" @@ fun _ ->
-    WTO.recursive_scc p.graph Procedure.Vert.Return
+    WTO.recursive_scc (Procedure.graph p) Procedure.Vert.Return
   in
   let r =
     Trace.with_span ~__FILE__ ~__LINE__ "live-vars-analysis" @@ fun _ ->
-    LV.recurse p.graph wto
+    LV.recurse (Procedure.graph p) wto
       (fun v -> V.empty)
       (Graph.ChaoticIteration.Predicate (fun _ -> false))
       10
@@ -83,7 +83,7 @@ let print_live_vars_dot fmt p =
   let (module M : Viscfg.ProcPrinter) =
     Viscfg.dot_labels (fun v -> Some (label r v))
   in
-  M.fprint_graph fmt p.graph
+  M.fprint_graph fmt (Procedure.graph p)
 
 let%expect_test _ =
   let open BasilExpr in
@@ -173,7 +173,9 @@ module Interproc = struct
     Trace.with_span ~__FILE__ ~__LINE__ "liveness-solve-proc" @@ fun _ ->
     let proc = ID.Map.find pid prog.procs in
     let res =
-      ILV.analyze (function e -> { proc_summary; lives = V.empty }) proc.graph
+      ILV.analyze
+        (function e -> { proc_summary; lives = V.empty })
+        (Procedure.graph proc)
     in
     let entry = res Procedure.Vert.Entry in
     let n = ID.Map.add pid entry.lives proc_summary in
