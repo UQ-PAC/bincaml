@@ -193,6 +193,13 @@ let add_goto p ~(from : ID.t) ~(targets : ID.t list) =
       let fr = End from in
       List.fold_left (fun g t -> G.add_edge g fr (Begin t)) g targets)
 
+let remove_block p id =
+  map_graph
+    (fun g ->
+      let g = G.remove_vertex g (End id) in
+      G.remove_vertex g (Begin id))
+    p
+
 let add_block p id ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
     ?(successors = []) () =
   let stmts = Vector.of_list stmts in

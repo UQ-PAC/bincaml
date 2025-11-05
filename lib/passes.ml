@@ -16,6 +16,10 @@ module PassManager = struct
   let passes =
     [
       {
+        name = "remove-unreachable-block";
+        apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
+      };
+      {
         name = "cf-expressions";
         apply = Proc Transforms.Cf_tx.simplify_proc_exprs;
       };
