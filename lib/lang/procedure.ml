@@ -2,8 +2,6 @@ open Common
 open Containers
 open Expr
 
-type ident = Proc of int [@@unboxed]
-
 module Vert = struct
   type t = Begin of ID.t | End of ID.t | Entry | Return | Exit
   [@@deriving show { with_path = false }, eq, ord]
@@ -65,11 +63,19 @@ type ('v, 'e) proc_spec = {
 
 module PG : sig
   type ('v, 'e) t
+  (** type of procedures *)
 
   val id : ('a, 'b) t -> ID.t
+  (** Get procedure ID *)
+
   val map_graph : (G.t -> G.t) -> ('a, 'b) t -> ('a, 'b) t
+  (** modify graph *)
+
   val set_graph : G.t -> ('a, 'b) t -> ('a, 'b) t
+  (** set graph *)
+
   val graph : ('a, 'b) t -> G.t
+  (** return graph of procedure *)
 
   val create :
     ID.t ->
@@ -83,16 +89,33 @@ module PG : sig
     ('a, 'b) t
 
   val block_ids : ('a, 'b) t -> ID.generator
+  (** return mutable generator for fresh block IDS *)
+
   val local_ids : ('a, 'b) t -> ID.generator
+  (** return mutable generator for fresh local variable IDS *)
+
   val locals : ('a, 'b) t -> 'a Var.Decls.t
+  (** return mutable declaration map for local var IDS *)
+
   val formal_in_params : ('a, 'b) t -> 'a StringMap.t
+  (** return formal in parameters *)
+
   val formal_out_params : ('a, 'b) t -> 'a StringMap.t
+  (** return formal out parameters *)
 
   val map_formal_in_params :
     ('a StringMap.t -> 'a StringMap.t) -> ('a, 'b) t -> ('a, 'b) t
+  (** modify formal in parameters *)
 
   val map_formal_out_params :
     ('a StringMap.t -> 'a StringMap.t) -> ('a, 'b) t -> ('a, 'b) t
+  (** modify formal out parameters *)
+
+  val topo_fwd : ('a, 'b) t -> Vert.t Graph.WeakTopological.t
+  (** return SCCs in forwards weak topological order from entry *)
+
+  val topo_rev : ('a, 'b) t -> Vert.t Graph.WeakTopological.t
+  (** return SCCs in reverse weak topological order from return *)
 end = struct
   type ('v, 'e) t = {
     id : ID.t;
@@ -114,6 +137,8 @@ end = struct
   let locals p = p.locals
   let formal_in_params p = p.formal_in_params
   let formal_out_params p = p.formal_out_params
+  let topo_fwd p = Lazy.force p.topo_fwd
+  let topo_rev p = Lazy.force p.topo_rev
 
   let map_graph f p =
     let graph = f p.graph in
@@ -254,6 +279,35 @@ let blocks_to_list p =
     match edge with Edge.(Block b) -> (id, b) :: acc | _ -> acc
   in
   G.fold_edges_e collect_edge (graph p) []
+
+let fold_blocks_topo_fwd (f : 'a -> Edge.block -> 'a) init p =
+  let open Graph.WeakTopological in
+  let f acc e =
+    match e with
+    | Vert.Begin id ->
+        Option.map (f acc) (get_block p id) |> Option.get_or ~default:acc
+    | _ -> acc
+  in
+  let rec ff acc e =
+    match e with
+    | Vertex a -> f acc a
+    | Component (a, e) -> f (Graph.WeakTopological.fold_left ff acc e) a
+  in
+  let topo = topo_fwd p in
+  Graph.WeakTopological.fold_left ff init topo
+
+let fold_blocks_topo_rev (f : 'a -> 'e -> 'a) init p =
+  let open Graph.WeakTopological in
+  let f acc e =
+    match e with Vert.Begin id -> Some (f (get_block p id)) | _ -> acc
+  in
+  let rec ff acc e =
+    match e with
+    | Vertex a -> f acc a
+    | Component (a, e) -> f (Graph.WeakTopological.fold_left ff acc e) a
+  in
+  let topo = topo_rev p in
+  Graph.WeakTopological.fold_left ff init topo
 
 let pretty show_lvar show_var show_expr p =
   let open Containers_pp in
