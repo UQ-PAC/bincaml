@@ -1,0 +1,7 @@
+
+(tests
+ (names expr_eval)
+ (flags -w -27)
+ (libraries qcheck-core containers containers.unix lang qcheck-core.runner)
+
+ )

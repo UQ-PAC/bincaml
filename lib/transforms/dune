@@ -1,0 +1,18 @@
+
+(library
+;  (public_name ocaml_of_basil.transforms)
+ (name transforms)
+ (flags -w -27)
+ (modules algsimp cf_tx livevars)
+ (libraries lang zarith fix ocamlgraph containers containers-data iter containers.pp trace)
+ (inline_tests)
+ (preprocess
+  (pps
+   ppx_deriving.show
+   ppx_deriving.eq
+   ppx_deriving.ord
+   ppx_deriving.map
+   ppx_deriving.iter
+   ppx_deriving.fold
+   ppx_deriving.enum
+   ppx_expect_nobase)))

@@ -1,0 +1,29 @@
+
+(library
+ (name BasilIR)
+ (modules AbsBasilIR BNFC_Util PrintBasilIR showBasilIR SkelBasilIR LexBasilIR ParBasilIR)
+ (flags
+  (-w -27 -w -39 -w -33))
+ )
+
+(ocamllex LexBasilIR)
+
+(menhir
+  (modules ParBasilIR)
+  )
+
+(rule
+ (deps BasilIR.cf)
+ (targets
+   AbsBasilIR.ml
+   BNFC_Util.ml
+   PrintBasilIR.ml
+   ShowBasilIR.ml
+   SkelBasilIR.ml
+   TestBasilIR.ml
+   LexBasilIR.mll
+   ParBasilIR.mly
+ )
+  (mode promote)
+  (action (run	bnfc --ocaml-menhir -o . BasilIR.cf))
+ )

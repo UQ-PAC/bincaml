@@ -1,9 +1,32 @@
 (library
  (public_name ocaml_of_basil.ast)
  (name lang)
- (modules expr value prog common types var ops viscfg livevars)
+ (modules
+  expr
+  value
+  common
+  types
+  var
+  ops
+  viscfg
+  expr_smt
+  expr_eval
+  ID
+  stmt
+  block
+  procedure
+  program
+  )
  (flags -w -27)
- (libraries zarith fix ocamlgraph containers containers-data)
+ (libraries zarith fix ocamlgraph containers containers-data iter containers.pp trace)
  (inline_tests)
- (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord ppx_deriving.map ppx_deriving.iter ppx_deriving.fold ppx_deriving.enum ppx_expect_nobase))
- )
+ (preprocess
+  (pps
+   ppx_deriving.show
+   ppx_deriving.eq
+   ppx_deriving.ord
+   ppx_deriving.map
+   ppx_deriving.iter
+   ppx_deriving.fold
+   ppx_deriving.enum
+   ppx_expect_nobase)))

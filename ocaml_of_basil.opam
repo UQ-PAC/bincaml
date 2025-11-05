@@ -14,15 +14,18 @@ depends: [
   "ocaml"
   "zarith"
   "fix"
+  "trace"
+  "trace-tef"
   "containers"
+  "iter"
   "containers-data"
-  "basil_ast"
   "ppx_deriving"
   "ocamlgraph"
   "containers-data"
   "ortac-qcheck-stm"
   "ortac-wrapper"
   "ortac-dune"
+  "qcheck-core"
   "ppx_expect_nobase" {>= "0.17.2.2"}
   "odoc" {with-doc}
 ]

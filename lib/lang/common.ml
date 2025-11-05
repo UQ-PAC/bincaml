@@ -1,3 +1,5 @@
+open Containers
+
 module HashHelper = struct
   let combine acc n = (acc * 65599) + n
   let combine2 acc n1 n2 = combine (combine acc n1) n2
@@ -34,6 +36,7 @@ end
 
 let identity x = x
 
+
 (* module type X = sig *)
 (*   include Graph.Sig.G *)
 (**)
@@ -49,3 +52,6 @@ let identity x = x
 (*     let vertex_name = make_name *)
 (*   end in *)
 (*   (module M) *)
+
+
+module StringMap = Map.Make (String)

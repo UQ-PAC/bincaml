@@ -21,6 +21,7 @@ Structure
 - [Recursion schemes in ocaml](https://icfp24.sigplan.org/details/ocaml-2024-papers/11/Recursion-schemes-in-OCaml-An-experience-report)
 - [A guide to recursion schemes](https://yangzhixuan.github.io/pdf/fantastic-morphisms.pdf)
 - [Code reuse through polymorphic variants](https://www.math.nagoya-u.ac.jp/~garrigue/papers/variant-reuse.pdf)
+- [expr structrue in smtml](https://formalsec.github.io/smtml/smtml/Smtml/Eval/index.html#type-op_type)
 
 Semantics
 
@@ -51,39 +52,8 @@ OCaml engineering
 
 # TODO
 
-## Basil Core
-
 To continue performing program analysis research on an ocaml-based platform
 what will we absolutely need to implement as a foundation?
-
-The IR is the most important design to get right: we choose an ocamlgraph cfg
-with statement list/block edges.
-
-It needs to provide enough to express both programs and specifications, and
-provide a precise abstraction of verification backends; i.e. so we can
-experiment with the encoding at the IR level rather than backend level. for
-reference, viper syntax:
-https://github.com/viperproject/silver/blob/master/documentation/syntax/sil-syntax.txt
-We would additionally like to generalise traversal, e.g. define a fold over the
-IR which interprets it abstractly (recursion schemes? lenses?). See also
-compiling with abstract interpretation free algebra lift functor.
-https://icfp24.sigplan.org/details/ocaml-2024-papers/11/Recursion-schemes-in-OCaml-An-experience-report
-
-We can use the existing bnfc frontend to use scalabasil as a frontend
-
-- Eventually frontend directly from gtrib_semantics and the offline lifter to
-produce a control-flow graph immediately Interpreter and core evaluation
-environment for basil: global features:
-- axioms
-- function decls (L spec), ghost procs?
-- procedures
-- rely guar spec
-- global precondition: memory initialisation before main local features:
-- procedure spec
-- loop invariants Data flow framework: based on ocamlgraph iteration
-- intraprocedural analyses + transforms
-- basic callgraph fixed point of abstracting intraproc analyses A way to
-discharge verification conditions: boogie/SMT/Why3/Kratos
 
 ## Testing / Validation story
 
@@ -106,8 +76,6 @@ input
 - regression testing framework
 - probably some kind of equivalence checking of programs as early as possible;
 interpreter, smt, etc
-
-##### Formal methods
 
 - consider using gospel framework to gradually verify modules, or provide more
 powerful dynamic testing on top of regular tests
@@ -165,6 +133,8 @@ Implemenentation options:
 - The formal and actual parameter lists match up across call and returns
 - all branches are total and deterministic
 - everything is declared before use
+- reaching definitions analysis
+- entry vert has no predecessors
 
 ## Value Analysis
 
@@ -204,6 +174,22 @@ extract the final solver.
 - implement a simple analysi
 
 - See also:
+
+## Program parser and serialiser
+
+- Need to enable unit testing via parsing an ocaml string into a procedure
+- want less magic when loading dsl than is present in sbasil
+- Varying levels of completeness: e.g. including the attrib lists defining
+memory initialisation for whole-program interpreter
+- I would like to relax the restrictions on the IR regarding type annotation to
+make it easier to write manually and include a basic type-propagation pass
+- maybe going via an edsl is a good idea again
+
+#### Validation / Testing
+
+- serialise parse loop is the identity
+  - requires deep-equality definition on programs
+- IR well-formedness checks
 
 ## Interproc Linear-Expr propagation
 
@@ -271,7 +257,20 @@ https://github.com/agle/eggomess/blob/0bd8401aae7f0b362ac9c730c0f5f07930a60414/b
 #### Validation / Testing
 
 - whole program interpreter on irreducible programs
-- unit tests
+- unit tests: depends program parser serialiser
+
+## Whole-program interpreter
+
+- Want it to be reasonably fast for test efficiency: don't make it a monad again for performance
+- If we want efficiency we could make all values a z.t and monomorphise operations to their width-specialisations, have the allocator bookkeep where pages are allocated.
+- Structrue memory as a tree to pages of bytes, and flatten the bytes to bitvectors on load/store
+- Try to make memory initialisation complete
+- Provide debugging hooks somehow
+- depends: expression evaluator
+
+### Validation / Testing
+
+The execution of csmith-generated programs matches the execution natively or in qemu (i.e. outputs the same hash)
 
 ## Whole-program interpreter
 

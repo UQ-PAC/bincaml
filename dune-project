@@ -1,5 +1,5 @@
 (lang dune 3.19)
-
+(using menhir 3.0)
 (name ocaml_of_basil)
 
 (generate_opam_files true)
@@ -10,6 +10,9 @@
 (authors "Author Name <author@example.com>")
 
 (maintainers "Maintainer Name <maintainer@example.com>")
+
+(formatting
+ (enabled_for dune))
 
 (license LICENSE)
 
@@ -23,15 +26,18 @@
    ocaml
    zarith
    fix
+   trace
+   trace-tef
    containers
+   iter
    containers-data
-   basil_ast
    ppx_deriving
    ocamlgraph
    containers-data
    ortac-qcheck-stm
    ortac-wrapper
    ortac-dune
+   qcheck-core
    (ppx_expect_nobase (>= "0.17.2.2"))
    )
  (tags
