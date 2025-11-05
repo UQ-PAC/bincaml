@@ -567,8 +567,17 @@ let parse_proc lexbuf =
     and end_pos = Lexing.lexeme_end_p lexbuf in
     raise (BNFC_Util.Parse_error (start_pos, end_pos))
 
+
+let parse_expr lexbuf =
+  let open BasilIR in
+  try ParBasilIR.pExpr LexBasilIR.token lexbuf
+  with ParBasilIR.Error ->
+    let start_pos = Lexing.lexeme_start_p lexbuf
+    and end_pos = Lexing.lexeme_end_p lexbuf in
+    raise (BNFC_Util.Parse_error (start_pos, end_pos))
+
 let parse_proc_string st c =
-  let lexbuf = Lexing.from_channel c in
+  let lexbuf = Lexing.from_string c in
   let proc = parse_proc lexbuf in
   BasilASTLoader.trans_definition st proc
 
@@ -576,6 +585,11 @@ let parse_proc_channel st c =
   let lexbuf = Lexing.from_channel c in
   let proc = parse_proc lexbuf in
   BasilASTLoader.trans_definition st proc
+
+let parse_expr_string s =
+  let lexbuf = Lexing.from_string s in
+  let proc = parse_expr lexbuf in
+  BasilASTLoader.trans_expr proc
 
 let ast_of_concrete_ast ~name m =
   Trace.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->

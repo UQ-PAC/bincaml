@@ -53,7 +53,7 @@ module PrimQFBV = struct
   let of_int ~(size : int) i =
     assert (size >= 0);
     let v = Z.of_int i in
-    assert (Z.geq v (Z.of_int 0));
+    assert (Z.geq v Z.zero);
     create ~size v
 
   let of_string i =

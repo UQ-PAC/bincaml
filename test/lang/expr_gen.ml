@@ -48,29 +48,26 @@ let gen_bvconst ?min w =
   return (BasilExpr.bvconst c)
 
 let make_bvconst wd x = BasilExpr.bvconst @@ Value.PrimQFBV.of_int ~size:wd x
-
-let ensure_nonzero wd e =
-  BasilExpr.binexp ~op:`BVOR e (make_bvconst wd 1)
+let ensure_nonzero wd e = BasilExpr.binexp ~op:`BVOR e (make_bvconst wd 1)
 
 let gen_bvexpr (size, wd) =
   fix
     (fun self (size, wd) ->
+      let self wd = self (size / 2, wd) in
       match size with
       | 0 -> gen_bvconst wd
       | size ->
           frequency
             [
               (1, gen_bvconst wd);
-              (2, self (size / 2, wd) >>= gen_unop);
+              (2, self wd >>= gen_unop);
               ( 2,
-                let* l = self (size / 2, wd) in
-                let* r = self (size / 2, wd) in
+                let* l = self wd in
+                let* r = self wd in
                 gen_binop_total l r );
               ( 2,
-                let* l = self (size / 2, wd) in
-                let* r = self (size / 2, wd) >|= ensure_nonzero wd in
+                let* l = self wd in
+                let* r = self wd >|= ensure_nonzero wd in
                 gen_binop_partial l r );
             ])
     (size, wd)
-
-

@@ -1,7 +1,20 @@
+(library
+ (name expr_gen)
+ (modules expr_gen)
+ (flags -w -27)
+ (libraries qcheck-core containers containers.unix lang ocaml_of_basil))
 
 (tests
- (names expr_eval)
+ (names expr_eval_qcheck)
+ (modules expr_eval_qcheck)
  (flags -w -27)
- (libraries qcheck-core containers containers.unix lang qcheck-core.runner)
+ (libraries expr_gen qcheck-core.runner))
 
- )
+(library
+ (name expr_eval_expect)
+ (modules expr_eval_expect)
+ (flags -w -27)
+ (libraries expr_gen )
+ (inline_tests)
+ (preprocess (pps
+   ppx_expect_nobase)))

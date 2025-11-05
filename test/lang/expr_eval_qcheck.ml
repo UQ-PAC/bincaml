@@ -17,7 +17,14 @@ module EvalExprGen = struct
     let open QCheck.Gen in
     let* wd = Expr_gen.gen_width in
     let* exp = Expr_gen.gen_bvexpr (5, wd) in
-    let evaled = Expr_eval.partial_eval_expr exp in
+    let evaled =
+      try Expr_eval.partial_eval_expr exp
+      with exc ->
+        begin
+          Printf.printf "exc: %s\n" (Expr.BasilExpr.to_string exp);
+          raise exc
+        end
+    in
     return (exp, evaled)
 
   let arb_bvexpr =
@@ -38,7 +45,8 @@ let run_smt query =
 
 let test =
   QCheck.(
-    Test.make ~count:1000 ~max_fail:3 EvalExprGen.arb_bvexpr (fun (exp, evaled) ->
+    Test.make ~count:1000 ~max_fail:3 EvalExprGen.arb_bvexpr
+      (fun (exp, evaled) ->
         let comparison =
           Expr.BasilExpr.boolnot (Expr.BasilExpr.binexp ~op:`EQ exp evaled)
         in
