@@ -280,12 +280,12 @@ let blocks_to_list p =
   in
   G.fold_edges_e collect_edge (graph p) []
 
-let fold_blocks_topo_fwd (f : 'a -> Edge.block -> 'a) init p =
+let fold_blocks_topo_fwd (f : 'a -> ID.t -> Edge.block -> 'a) init p =
   let open Graph.WeakTopological in
   let f acc e =
     match e with
     | Vert.Begin id ->
-        Option.map (f acc) (get_block p id) |> Option.get_or ~default:acc
+        Option.map (f acc id) (get_block p id) |> Option.get_or ~default:acc
     | _ -> acc
   in
   let rec ff acc e =
@@ -296,10 +296,13 @@ let fold_blocks_topo_fwd (f : 'a -> Edge.block -> 'a) init p =
   let topo = topo_fwd p in
   Graph.WeakTopological.fold_left ff init topo
 
-let fold_blocks_topo_rev (f : 'a -> 'e -> 'a) init p =
+let fold_blocks_topo_rev (f : 'a -> ID.t -> Edge.block -> 'a) init p =
   let open Graph.WeakTopological in
   let f acc e =
-    match e with Vert.Begin id -> Some (f (get_block p id)) | _ -> acc
+    match e with
+    | Vert.Begin id ->
+        Option.map (f acc id) (get_block p id) |> Option.get_or ~default:acc
+    | _ -> acc
   in
   let rec ff acc e =
     match e with

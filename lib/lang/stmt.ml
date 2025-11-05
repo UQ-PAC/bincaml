@@ -151,7 +151,7 @@ let pretty show_lvar show_var show_expr s =
       append_l ~sep:nil
         [ l_param_list lhs; newline ^ text "call "; text n; r_param_list args ]
   | Instr_Return { args } -> text "return " ^ r_param_list args
-  | Instr_IndirectCall { target } -> text "indirect_call " ^ target
+  | Instr_IndirectCall { target } -> text "indirect call " ^ target
 
 (** Pretty print to il format*)
 let to_string ?width show_lvar show_var show_expr

@@ -47,6 +47,18 @@ module Make (L : Labelling) = Graph.Graphviz.Dot (struct
   let default_edge_attributes _ = []
   let get_subgraph _ = None
 
+  let vertex_label_name (v : Vert.t) =
+    let open Vert in
+    let n =
+      match v with
+      | Begin v -> Printf.sprintf "beg%s" (ID.to_string v)
+      | End v -> Printf.sprintf "end%s" (ID.to_string v)
+      | Entry -> "entry"
+      | Exit -> "exit"
+      | Return -> "return"
+    in
+    n
+
   let vertex_name (v : Vert.t) =
     let open Vert in
     let n =
@@ -60,7 +72,7 @@ module Make (L : Labelling) = Graph.Graphviz.Dot (struct
     n
 
   let vertex_attributes v =
-    let n = vertex_name v in
+    let n = vertex_label_name v in
     let l =
       match L.labelling v with
       | Some x ->

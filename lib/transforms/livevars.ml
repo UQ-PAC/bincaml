@@ -72,7 +72,7 @@ let run (p : Program.proc) =
       (Graph.ChaoticIteration.Predicate (fun _ -> false))
       10
   in
-  fun v -> LV.M.find v r
+  fun v -> Option.get_or ~default:V.empty (LV.M.find_opt v r)
 
 let label (r : G.vertex -> V.t) (v : G.vertex) = show_v (r v)
 let print_g res = Viscfg.dot_labels (fun v -> Some (label res v))

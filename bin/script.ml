@@ -5,6 +5,22 @@ exception Parse
 
 let print_proc chan p = Program.output_proc_pretty chan p
 
+let print_blocks_topo_fwd chan p =
+  let ids = Procedure.fold_blocks_topo_fwd (fun l id b -> id :: l) [] p in
+  let ids_rev = Procedure.fold_blocks_topo_rev (fun l id b -> id :: l) [] p in
+  (*assert (List.equal ID.equal ids (List.rev ids));*)
+  List.iter
+    (fun i ->
+      output_string chan (ID.to_string i);
+      output_string chan "\n")
+    (List.rev ids);
+  output_string chan "\n\n";
+  List.iter
+    (fun i ->
+      output_string chan (ID.to_string i);
+      output_string chan "\n")
+    ids_rev
+
 let assert_atoms n args =
   assert (List.length args = n);
   List.map (function `Atom n -> n | _ -> failwith "expected atom") args
@@ -32,6 +48,23 @@ let of_cmd st (e : Containers.Sexp.t) =
       Lang.ID.Map.iter
         (fun i _ -> Printf.printf "%s\n" (ID.show i))
         (get_prog st).procs;
+      st
+  | "list-blocks-il" ->
+      let proc = List.hd (assert_atoms 1 args) in
+      let id = (get_prog st).proc_names.get_id proc in
+      let p = Lang.ID.Map.find id (get_prog st).procs in
+      print_blocks_topo_fwd stdout p;
+      st
+  | "write-proc-cfg" ->
+      let proc, ofile =
+        assert_atoms 2 args |> function
+        | [ proc; ofile ] -> (proc, ofile)
+        | _ -> failwith "unreachable"
+      in
+      CCIO.with_out ofile (fun c ->
+          let id = (get_prog st).proc_names.get_id proc in
+          let p = Lang.ID.Map.find id (get_prog st).procs in
+          Viscfg.Dot.output_graph c (Procedure.graph p));
       st
   | "dump-proc-il" ->
       let proc = List.hd (assert_atoms 1 args) in
