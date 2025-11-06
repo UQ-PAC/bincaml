@@ -40,3 +40,10 @@ let%expect_test "shift_right negative bug 2" =
     0x0:bv16
     eval:
     Some `Bitvector (0x0:bv16) |}]
+
+let%expect_test "oom" =
+  let s = "boolnot(eq(bvlshr(bvsrem(bvor(0x1148eddde:bv33, 0xc3140fb6:bv33), bvor(bvadd(0x8434f25b:bv33, 0x29774afc:bv33), 0x1:bv33)), bvsrem(bvneg(0x19853c892:bv33), bvor(bvsub(0x89f237c8:bv33, 0x1c4effe96:bv33), 0x1:bv33))), 0x0:bv33))" in
+  let s2 = "bvsmod(bvand(bvshl(0x2236652f8b6b4b3a:bv62, 0x33b2d13023f607b5:bv62), 0x2104bfbd0e7bebd1:bv62), bvor(0x7ea57bb7d5942bd:bv62, 0x1:bv62))" in
+  let exp = Ocaml_of_basil.Loadir.parse_expr_string s2 in
+  CCOption.pp Ops.AllOps.pp_const Format.std_formatter (Expr_eval.eval_expr e)
+

@@ -61,6 +61,7 @@ module BVOps = struct
     | `BVNEG
     | `ZeroExtend of int
     | `SignExtend of int
+
     | `Extract of int * int ]
   [@@deriving show { with_path = false }, eq, ord]
 
@@ -78,15 +79,7 @@ module BVOps = struct
     | `SignExtend sz -> PrimQFBV.sign_extend ~extension:sz
     | `BVNOT -> PrimQFBV.bitnot
     | `ZeroExtend sz -> PrimQFBV.zero_extend ~extension:sz
-    | `Extract (hi, lo) -> fun b -> PrimQFBV.extract hi lo b
-
-  let eval_unary_bv (o : unary_unif) =
-    match o with
-    | `BVNEG -> PrimQFBV.neg
-    | `SignExtend sz -> PrimQFBV.sign_extend ~extension:sz
-    | `BVNOT -> PrimQFBV.bitnot
-    | `ZeroExtend sz -> PrimQFBV.zero_extend ~extension:sz
-    | `Extract (hi, lo) -> fun b -> PrimQFBV.extract hi lo b
+    | `Extract (hi, lo) -> PrimQFBV.extract ~hi ~lo
 
   type binary_pred = [ `EQ | `BVULT | `BVULE | `BVSLT | `BVSLE ]
   [@@deriving show { with_path = false }, eq, ord]

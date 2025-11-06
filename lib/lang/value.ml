@@ -41,10 +41,13 @@ module PrimQFBV = struct
   let true_bv = ones ~size:1
   let false_bv = zero ~size:1
 
-  let extract ~off ~len (b : t) =
-    assert (off >= 0);
-    assert (off + len <= b.w);
-    { w = len; v = z_extract b.v off len }
+  (** Extracts a slice of the given bitvector. The slice is extracted from [lo]
+      (inclusive) up to [hi] (exclusive). *)
+  let extract ~hi ~lo (b : t) =
+    assert (0 <= lo);
+    assert (lo <= hi);
+    assert (hi <= b.w);
+    { w = hi - lo; v = z_extract b.v lo (hi - lo) }
 
   let compare a b =
     Int.compare a.w b.w |> function 0 -> Z.compare a.v b.v | o -> o
@@ -165,7 +168,8 @@ module PrimQFBV = struct
     create ~size:(b.w + extension) @@ to_signed_bigint b
 
   let shl a b =
-    create ~size:a.w @@ Z.shift_left (to_unsigned_bigint a) (Z.to_int b.v)
+    if Z.(geq b.v (of_int a.w)) then create ~size:a.w Z.zero
+    else create ~size:a.w @@ Z.shift_left (to_unsigned_bigint a) (Z.to_int b.v)
 
   let concat a b =
     let a = zero_extend ~extension:b.w a in

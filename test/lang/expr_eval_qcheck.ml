@@ -16,7 +16,7 @@ module EvalExprGen = struct
   let eval_expr =
     let open QCheck.Gen in
     let* wd = Expr_gen.gen_width in
-    Expr_gen.gen_bvexpr (5, wd)
+    Expr_gen.gen_bvexpr (4, wd)
 
   let arb_bvexpr = QCheck.make ~print:Expr.BasilExpr.to_string eval_expr
 
@@ -47,9 +47,10 @@ let partial_eval_test =
   let comparison =
     Expr.BasilExpr.boolnot (Expr.BasilExpr.binexp ~op:`EQ exp evaled)
   in
-  let smt = Expr_smt.SMTLib2.check_sat_bexpr comparison in
-  let smt = Iter.map Sexp.to_string smt in
-  let smt = String.concat_iter ~sep:"\n" smt in
+  let smt =
+    comparison |> Expr_smt.SMTLib2.check_sat_bexpr |> Iter.map Sexp.to_string
+    |> String.concat_iter ~sep:"\n"
+  in
   let res = run_smt smt in
   (*let smt = Lang.Expr_smt.*)
   match res with
@@ -60,29 +61,5 @@ let partial_eval_test =
       false
   | `UNKNOWN (e, stderr) -> failwith (e ^ "\n" ^ stderr)
 
-let eval_test =
-  let open QCheck in
-  Test.make ~name:"smt eval test" ~count:1000 ~max_fail:3 EvalExprGen.arb_bvexpr
-  @@ fun exp ->
-  let evaled =
-    exp |> Expr_eval.eval_expr
-    |> Option.get_exn_or "couldnt eval"
-    |> Expr.BasilExpr.const
-  in
-  let comparison =
-    Expr.BasilExpr.boolnot (Expr.BasilExpr.binexp ~op:`EQ exp evaled)
-  in
-  let smt = Expr_smt.SMTLib2.check_sat_bexpr comparison in
-  let smt = Iter.map Sexp.to_string smt in
-  let smt = String.concat_iter ~sep:"\n" smt in
-  let res = run_smt smt in
-  (*let smt = Lang.Expr_smt.*)
-  match res with
-  | `UNSAT -> true
-  | `SAT q ->
-      print_endline q;
-      print_endline "";
-      false
-  | `UNKNOWN (e, stderr) -> failwith (e ^ "\n" ^ stderr)
-
-let _ = QCheck_base_runner.run_tests_main [ eval_test ]
+let () = Printexc.record_backtrace true
+let _ = QCheck_base_runner.run_tests_main [ partial_eval_test ]

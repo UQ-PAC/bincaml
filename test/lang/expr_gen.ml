@@ -50,7 +50,7 @@ let gen_bvconst ?min w =
 let make_bvconst wd x = BasilExpr.bvconst @@ Value.PrimQFBV.of_int ~size:wd x
 let ensure_nonzero wd e = BasilExpr.binexp ~op:`BVOR e (make_bvconst wd 1)
 
-let gen_bvexpr (size, wd) =
+let gen_bvexpr =
   fix
     (fun self (size, wd) ->
       let self wd = self (size / 2, wd) in
@@ -70,4 +70,3 @@ let gen_bvexpr (size, wd) =
                 let* r = self wd >|= ensure_nonzero wd in
                 gen_binop_partial l r );
             ])
-    (size, wd)
