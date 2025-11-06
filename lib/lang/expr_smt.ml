@@ -56,12 +56,13 @@ module SMTLib2 = struct
   let ( let* ) = bind
 
   let sequence (args : 'a t list) : 'a list t =
-    List.fold_left
+    let* l = List.fold_left
       (fun (a : CCSexp.t list t) i ->
         let* a = a in
         let* i = i in
         return (i :: a))
-      (return []) args
+      (return []) args in
+    return (List.rev l)
 
   let add_command (v : Sexp.t) (s : builder) =
     let asrt = v in

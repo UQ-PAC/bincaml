@@ -363,7 +363,15 @@ module BasilExpr = struct
       =
     let rw_alg e =
       let orig s = fix s in
-      match rw_fun e with Some e -> e | None -> orig e
+      match rw_fun e with
+      | Some e' when Types.BType.equal (type_of e') (type_of (orig e)) -> e'
+      | Some e' ->
+          failwith
+          @@ Printf.sprintf
+               "improper rewrite type: attempt to rewrite %s into %s"
+               (to_string (orig e))
+               (to_string e')
+      | None -> orig e
     in
     cata rw_alg expr
 

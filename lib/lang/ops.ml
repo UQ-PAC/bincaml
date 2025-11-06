@@ -140,8 +140,8 @@ module BVOps = struct
   let eval_intrin (op : intrin) args =
     let ev f =
       match args with
-      | h :: tl -> List.fold_left f h args
-      | _ -> raise (Invalid_argument "op needs at least two args")
+      | h :: tl -> List.fold_left f h tl
+      | _ -> raise (Invalid_argument "op needs at least one arg")
     in
     match op with
     | `BVADD -> ev PrimQFBV.add

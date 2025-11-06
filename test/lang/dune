@@ -8,7 +8,7 @@
  (names expr_eval_qcheck)
  (modules expr_eval_qcheck)
  (flags -w -27)
- (libraries expr_gen qcheck-core.runner))
+ (libraries str expr_gen qcheck-core.runner))
 
 (library
  (name expr_eval_expect)

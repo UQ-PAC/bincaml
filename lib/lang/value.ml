@@ -122,24 +122,33 @@ module PrimQFBV = struct
   If t2 is zero, then the result is undefined.
       v} *)
   let sdiv a b =
-    assert (is_nonzero b);
-    bind2_signed Z.div a b
+    if a.w = 0 then a
+    else begin
+      assert (is_nonzero b);
+      bind2_signed Z.div a b
+    end
 
   (** Remainder with result sign following the dividend (a) sign. *)
   let srem a b =
-    assert (is_nonzero b);
-    bind2_signed Z.rem a b
+    if a.w = 0 then a
+    else begin
+      assert (is_nonzero b);
+      bind2_signed Z.rem a b
+    end
 
   (** Remainder with result sign following the divisor (b) sign. *)
   let smod a b =
     size_is_equal a b;
-    assert (is_nonzero b);
-    let w = a.w and a, b = (to_signed_bigint a, to_signed_bigint b) in
-    let remainder = Z.rem a b and wanted_sign = Z.sign b in
-    match (Z.sign remainder, wanted_sign) with
-    | 1, -1 -> create ~size:w Z.(remainder - abs b)
-    | -1, 1 -> create ~size:w Z.(remainder + abs b)
-    | _ -> create ~size:w remainder
+    if a.w = 0 then a
+    else begin
+      assert (is_nonzero b);
+      let w = a.w and a, b = (to_signed_bigint a, to_signed_bigint b) in
+      let remainder = Z.rem a b and wanted_sign = Z.sign b in
+      match (Z.sign remainder, wanted_sign) with
+      | 1, -1 -> create ~size:w Z.(remainder - abs b)
+      | -1, 1 -> create ~size:w Z.(remainder + abs b)
+      | _ -> create ~size:w remainder
+    end
 
   let ult a b = map2 Z.lt a b
   let ugt a b = map2 Z.gt a b
@@ -168,13 +177,15 @@ module PrimQFBV = struct
     create ~size:(b.w + extension) @@ to_signed_bigint b
 
   let shl a b =
+    (* shift left by a very large number will OOM. guard against that. *)
     if Z.(geq b.v (of_int a.w)) then create ~size:a.w Z.zero
     else create ~size:a.w @@ Z.shift_left (to_unsigned_bigint a) (Z.to_int b.v)
 
   let concat a b =
-    let a = zero_extend ~extension:b.w a in
-    let a = shl a (create ~size:a.w b.v) in
-    let b = zero_extend ~extension:a.w b in
+    let wd = a.w + b.w in
+    let a = zero_extend ~extension:(wd - a.w) a in
+    let a = shl a (of_int ~size:a.w b.w) in
+    let b = zero_extend ~extension:(wd - b.w) b in
     bitor a b
 
   let repeat_bits ~(copies : int) a =

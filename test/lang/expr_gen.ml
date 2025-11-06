@@ -50,9 +50,21 @@ let gen_bvconst ?min w =
 let make_bvconst wd x = BasilExpr.bvconst @@ Value.PrimQFBV.of_int ~size:wd x
 let ensure_nonzero wd e = BasilExpr.binexp ~op:`BVOR e (make_bvconst wd 1)
 
+let gen_unop_advanced gen_bvexpr wd =
+  let* w1 = int_range 0 wd in
+  let w2 = wd - w1 in
+  oneof
+    [
+      gen_bvexpr w2 >|= BasilExpr.sign_extend ~n_prefix_bits:w1;
+      gen_bvexpr w2 >|= BasilExpr.zero_extend ~n_prefix_bits:w1;
+      BasilExpr.concat <$> gen_bvexpr w1 <*> gen_bvexpr w2;
+    ]
+  (* >|= fun e -> *)
+  (* assert (BasilExpr.type_of e = Bitvector wd); *)
+  (* e *)
+
 let gen_bvexpr =
-  fix
-    (fun self (size, wd) ->
+  fix (fun self (size, wd) ->
       let self wd = self (size / 2, wd) in
       match size with
       | 0 -> gen_bvconst wd
@@ -61,6 +73,7 @@ let gen_bvexpr =
             [
               (1, gen_bvconst wd);
               (2, self wd >>= gen_unop);
+              (2, gen_unop_advanced self wd);
               ( 2,
                 let* l = self wd in
                 let* r = self wd in
