@@ -45,7 +45,7 @@ end)
 
 module LV =
   Graph.ChaoticIteration.Make
-    (G)
+    (Procedure.RevG)
     (struct
       type vertex = G.E.vertex
       type edge = G.E.t
