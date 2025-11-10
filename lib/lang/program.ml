@@ -9,6 +9,17 @@ type proc = (Var.t, BasilExpr.t) Procedure.t
 type bloc = (Var.t, BasilExpr.t) Block.t
 type stmt = (Var.t, Var.t, e) Stmt.t
 
+let equal_stmt = Stmt.equal Var.equal Var.equal BasilExpr.equal
+let compare_stmt = Stmt.compare Var.compare Var.compare BasilExpr.compare
+
+let show_stmt =
+  let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
+  let show_var v = Containers_pp.text @@ Var.to_string_il_rvar v in
+  let show_expr e = BasilExpr.pretty e in
+  Stmt.to_string show_lvar show_var show_expr
+
+let pp_stmt fmt s = Format.pp_print_string fmt (show_stmt s)
+
 type t = {
   modulename : string;
   globals : Var.t Var.Decls.t;
@@ -16,6 +27,8 @@ type t = {
   procs : proc ID.Map.t;
   proc_names : ID.generator;
 }
+
+let proc g p = ID.Map.find p g.procs
 
 let proc_pretty p =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in

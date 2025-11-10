@@ -11,7 +11,6 @@ module Loc = struct
   type t =
     | IntraVertex of { proc_id : ID.t; v : Procedure.Vert.t }
     | CallSite of stmt_id
-    | Procedure of ID.t  (** summary for a procedure *)
     | AfterCall of stmt_id
   [@@deriving eq, ord, show]
 
@@ -19,11 +18,139 @@ module Loc = struct
 end
 
 module IDEGraph = struct
-  module V = struct
+  module Vert = struct
     include Loc
   end
 
-  type t = { prog : Program.t; vertices : Loc.t Iter.t Lazy.t }
+  open Vert
+
+  module Edge = struct
+    type t =
+      | Call of Program.stmt (* fallthrough *)
+      | Stmts of Var.t Block.phi list * Program.stmt list
+      | InterCall of (Var.t * Expr.BasilExpr.t) list
+          (** (target.formal_in, rhs arg) assignment to call formal params*)
+      | InterReturn of (Var.t * Var.t) list
+          (** (call lhs out, target formal_out) assignment of returns to call
+              lhs *)
+      | Nop
+    [@@deriving eq, ord, show]
+
+    let default = Nop
+  end
+
+  module StmtLabel = struct
+    type 'a t = 'a Iter.t
+  end
+
+  module G = Graph.Imperative.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
+  module GB = Graph.Builder.I (G)
+
+  type t = {
+    prog : Program.t;
+    callgraph : Program.CallGraph.G.t;
+    vertices : Loc.t Iter.t Lazy.t;
+  }
+
+  type bstate = {
+    graph : G.t;
+    last_vert : Loc.t;
+    stmts : Var.t Block.phi list * Program.stmt list;
+  }
+
+  let push_edge (ending : Loc.t) (g : bstate) =
+    match g with
+    | { graph; last_vert; stmts } ->
+        let phi, stmts = (fst stmts, List.rev (snd stmts)) in
+        let e1 = (last_vert, Edge.Stmts (phi, stmts), ending) in
+        { graph = GB.add_edge_e graph e1; stmts = ([], []); last_vert = ending }
+
+  let add_call p (st : bstate) (origin : stmt_id) (callstmt : Program.stmt) =
+    let lhs, rhs, target =
+      match callstmt with
+      | Stmt.(Instr_Call { lhs; procid; args }) -> begin
+          let target_proc = Program.proc p procid in
+          let formal_in =
+            Procedure.formal_in_params target_proc |> StringMap.to_iter
+          in
+          let actual_in = args |> StringMap.to_iter in
+          let actual_rhs =
+            Iter.join_by fst fst
+              ~merge:(fun id a b -> Some (snd a, snd b))
+              formal_in actual_in
+            |> Iter.to_list
+          in
+          let formal_out =
+            Procedure.formal_out_params target_proc |> StringMap.to_iter
+          in
+          let actual_out = lhs |> StringMap.to_iter in
+          let actual_lhs =
+            Iter.join_by fst fst
+              ~merge:(fun id a b -> Some (snd a, snd b))
+              actual_out formal_out
+            |> Iter.to_list
+          in
+          (actual_lhs, actual_rhs, procid)
+        end
+      | _ -> failwith "not a call"
+    in
+    let g = push_edge (CallSite origin) st in
+    let graph = g.graph in
+    let graph =
+      GB.add_edge_e graph (CallSite origin, Call callstmt, AfterCall origin)
+    in
+    let call_entry = IntraVertex { proc_id = target; v = Entry } in
+    let call_return = IntraVertex { proc_id = target; v = Return } in
+    let graph =
+      GB.add_edge_e graph (CallSite origin, InterCall rhs, call_entry)
+    in
+    let graph =
+      GB.add_edge_e graph (call_return, InterReturn lhs, AfterCall origin)
+    in
+    { g with graph }
+
+  let proc_graph prog g p =
+    let proc_id = Procedure.id p in
+    let add_block_edge b graph =
+      match b with
+      | v1, Procedure.Edge.Jump, v2 ->
+          GB.add_edge_e g
+            Loc.
+              ( IntraVertex { proc_id; v = v1 },
+                Nop,
+                IntraVertex { proc_id; v = v2 } )
+      | ( Procedure.Vert.Begin block,
+          Procedure.Edge.Block b,
+          Procedure.Vert.End b2 ) ->
+          assert (ID.equal b2 block);
+          let is =
+            {
+              graph;
+              last_vert = IntraVertex { proc_id; v = Begin block };
+              stmts = (b.phis, []);
+            }
+          in
+          Block.stmts_iter_i b
+          |> Iter.fold
+               (fun st (i, s) ->
+                 let stmt_id : Loc.stmt_id = { proc_id; block; offset = i } in
+                 match s with
+                 | Stmt.Instr_Call _ as c -> add_call prog st stmt_id c
+                 | stmt ->
+                     { st with stmts = (fst st.stmts, stmt :: snd st.stmts) })
+               is
+          |> push_edge (IntraVertex { proc_id; v = End block })
+          |> fun x -> x.graph
+      | _, _, _ -> failwith "bad proc edge"
+    in
+    (* add all vertices *)
+    let intra_verts =
+      Procedure.G.fold_vertex
+        (fun v acc -> Iter.cons (Loc.IntraVertex { proc_id; v }) acc)
+        (Procedure.graph p) Iter.empty
+    in
+    let g = Iter.fold GB.add_vertex g intra_verts in
+    Procedure.G.fold_edges_e add_block_edge (Procedure.graph p) g
 
   let proc_vertices p =
     let proc_id = Procedure.id p in
@@ -37,30 +164,25 @@ module IDEGraph = struct
       |> Iter.flat_map (function
         | Procedure.Vert.Begin block, (b : Program.bloc) ->
             Block.stmts_iter_i b
-            |> Iter.filter_map (fun (i, s) ->
+            |> Iter.flat_map (fun (i, s) ->
                 let stmt_id : Loc.stmt_id = { proc_id; block; offset = i } in
                 match s with
-                | Stmt.Instr_Call _ -> Some Loc.(CallSite stmt_id)
-                | _ -> None)
+                | Stmt.Instr_Call _ ->
+                    Loc.(Iter.doubleton (AfterCall stmt_id) (CallSite stmt_id))
+                | _ -> Iter.empty)
         | _, _ -> Iter.empty)
     in
-    Iter.cons Loc.(Procedure proc_id) @@ Iter.append intra_verts b
+    Iter.append intra_verts b
 
-  let prog_vertices (prog : Program.t) =
-    ID.Map.values prog.procs
-    |> Iter.flat_map (fun p -> proc_vertices p)
-    |> Iter.persistent
-
-  let create (p : Program.t) = { prog = p; vertices = lazy (prog_vertices p) }
-  let iter_vertex p = Lazy.force p.vertices |> Iter.iter
+  let create (prog : Program.t) =
+    ID.Map.to_iter prog.procs |> Iter.map snd
+    |> Iter.fold (fun g p -> proc_graph prog g p) (GB.empty ())
 end
 
 module LVD = struct
   type mfun = Live | Dead | CondLive of Var.t [@@deriving eq, ord]
 
   module VM = Map.Make (Var)
-
-  let st = VM.empty
 
   type idest
   type read_state = idest -> Var.t -> mfun
@@ -114,7 +236,7 @@ module LVD = struct
     | CondLive v, Dead -> CondLive v
     | Dead, Dead -> Dead
 
-  let update_state st updates =
+  let compose_state_updates updates st =
     List.fold_left
       (fun st (v, ex) ->
         let e = VM.find_opt v st in
@@ -123,8 +245,22 @@ module LVD = struct
         VM.add v c st)
       st updates
 
-  let compose_call (prog : Program.t) proc lhs args st stmt =
-    let summary = Hashtbl.find summaries Loc.(Procedure (Procedure.id proc)) in
+  let direction : [ `Forwards | `Backwards ] = `Backwards
+
+  let compose_call summaries (prog : Program.t) proc lhs args st stmt =
+    let summary =
+      Hashtbl.find summaries
+      @@
+      match direction with
+      | `Forwards ->
+          Loc.(
+            IntraVertex
+              { proc_id = Procedure.id proc; v = Procedure.Vert.Return })
+      | `Backwards ->
+          Loc.(
+            IntraVertex
+              { proc_id = Procedure.id proc; v = Procedure.Vert.Return })
+    in
     let globs = prog.globals |> Hashtbl.to_list in
     let globs =
       List.map
@@ -186,16 +322,15 @@ module LVD = struct
         (param, compose mf rvar))
     |> List.fold_left (fun acc (p, rv) -> VM.add p rv acc) st
 
-  let tf_local_stmt prog st id s =
+  let tf_phis phis : (Var.t * mfun) list = failwith "unimplemented"
+
+  let tf_local_stmt s =
     let open Livevars in
     let assigned = Livevars.assigned_stmt V.empty s |> V.to_list in
     let read = Livevars.free_vars_stmt V.empty s |> V.to_list in
-    let updates =
-      match assigned with
-      | h :: [] -> List.map (fun r -> (r, CondLive h)) read
-      | _ -> List.map (fun r -> (r, Live)) read
-    in
-    update_state st updates
+    match assigned with
+    | h :: [] -> List.map (fun r -> (r, CondLive h)) read
+    | _ -> List.map (fun r -> (r, Live)) read
 
   let tf_stmt summaries (proc : Program.proc) (prog : Program.t) block_id
       stmt_offset st s =
@@ -214,13 +349,13 @@ module LVD = struct
             Loc.(CallSite { proc_id; block = block_id; offset = stmt_offset })
           in
           Hashtbl.add summaries call_site st;
-          let call_s = compose_call prog proc lhs args st c in
+          let call_s = compose_call summaries prog proc lhs args st c in
           Hashtbl.add summaries after_call call_s;
           call_s
       | Instr_Return _ as c -> compose_return prog proc stmt_offset st c
       | ( Instr_Assign _ | Instr_Assert _ | Instr_Assume _ | Instr_Load _
         | Instr_Store _ | Instr_IntrinCall _ | Instr_IndirectCall _ ) as stmt ->
-          tf_local_stmt prog st stmt_offset stmt
+          compose_state_updates (tf_local_stmt stmt) st
     in
     r
 
@@ -237,44 +372,52 @@ module LVD = struct
       ~phi:(fun a p -> a)
       edge ~init:st
 
-  let solve dir (prog : Program.t) =
-    let worklist = CCDeque.create () in
+  type edge = Loc.t * IDEGraph.Edge.t * Loc.t
+
+  let solve dir (prog : Program.t) default roots =
+    let module Q = Fix.CompactQueue in
+    let (worklist : edge Q.t) = Q.create () in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
+    let proc id = ID.Map.find id prog.procs in
     let callgraph = Program.CallGraph.make_call_graph prog in
-    let c v = Program.CallGraph.G.succ callgraph v in
-    while not (CCDeque.is_empty worklist) do
-      let (p : Loc.t) = CCDeque.take_back worklist in
-      let proc id = ID.Map.find id prog.procs in
+    let succ v = Program.CallGraph.G.succ callgraph v |> Iter.of_list in
+    let succ_intra proc_id v =
+      Procedure.G.succ (Procedure.graph (proc proc_id)) v
+      |> Iter.of_list
+      |> Iter.map (function v -> Loc.IntraVertex { proc_id; v })
+    in
+    let get_summary loc = Hashtbl.get summaries loc |> Option.get_or ~default in
+    while not (Q.is_empty worklist) do
+      let (p : edge) = Q.take worklist in
       let st = failwith "" in
       let st =
         match p with
-        | IntraVertex { proc_id; v = Begin i } ->
-            let block =
-              Procedure.get_block (proc proc_id) i
-              |> Option.get_exn_or "block does not exist"
+        | bedge, Stmts (phi, bs), endedge ->
+            List.fold_left
+              (fun st s -> compose_state_updates (tf_local_stmt s) st)
+              (get_summary endedge) bs
+            |> compose_state_updates (tf_phis phi)
+        | origin, InterCall args, target ->
+            let origin = get_summary origin in
+            let target = get_summary target in
+            let args =
+              List.map
+                (function
+                  | formal, actual -> (formal, eval_summary target actual))
+                args
             in
-            tf_block summaries (proc proc_id) prog i st block
-        | IntraVertex { proc_id; v = End i } ->
-            let p = proc proc_id in
-            let succ = Procedure.G.succ (Procedure.graph p) (End i) in
-            let succ =
-              List.map (fun v -> Loc.IntraVertex { proc_id; v }) succ
-              |> List.to_iter
+            compose_assigns origin args
+        | origin, InterReturn args, target ->
+            let origin = get_summary origin in
+            let target = get_summary target in
+            let args =
+              List.map
+                (function formal, actual -> (formal, VM.find actual target))
+                args
             in
-            CCDeque.add_iter_back worklist succ;
-            st
-        | IntraVertex { proc_id; v = Entry } -> st
-        | IntraVertex { proc_id; v = Return } -> st
-        | IntraVertex { proc_id; v = Exit } -> st
-        | Procedure p -> st
-        | CallSite p ->
-            let proc = proc p.proc_id in
-            let block =
-              Procedure.get_block proc p.block
-              |> Option.get_exn_or "block not exist"
-            in
-            tf_block_from summaries proc prog p.block p.offset st block
-        | AfterCall p -> failwith "" (* continue analysing procedure *)
+            compose_assigns origin args
+        | origin, Call args, target -> failwith ""
+        | origin, Nop, target -> failwith ""
       in
       ()
     done
@@ -292,9 +435,11 @@ module LVD = struct
       summary ResultMap.t
   end
 
+  (*
   module Phase1ProcSolver (P : sig
     val proc : Program.proc
     val prog : Program.t
+    val summaries : ('a, summary) Hashtbl.t
   end) =
     Graph.ChaoticIteration.Make
       (G)
@@ -317,14 +462,15 @@ module LVD = struct
             | _ -> failwith "Not a block"
           in
           match G.E.label e with
-          | Block b -> tf_block P.proc P.prog id d b
+          | Block b -> tf_block P.summaries P.proc P.prog id d b
           | _ -> d
       end)
 
-  let solve_proc (prog : Program.t) (p : Program.proc) =
+  let solve_proc summaries (prog : Program.t) (p : Program.proc) =
     let module M : LocalPhaseProcAnalysis = Phase1ProcSolver (struct
       let prog = prog
       let proc = p
+      let summaries = summaries
     end) in
     let result =
       M.recurse (Procedure.graph p) (Procedure.topo_rev p)
@@ -335,6 +481,7 @@ module LVD = struct
     let init_summary = ResultMap.find Procedure.Vert.Entry result in
     Hashtbl.add summaries (Procedure (Procedure.id p)) init_summary;
     ()
+    *)
 end
 
 (*
