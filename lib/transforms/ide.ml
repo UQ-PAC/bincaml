@@ -208,6 +208,10 @@ module LVD = struct
     | CondLive v1, CondLive v2 when Var.equal v1 v2 -> CondLive v1
     | CondLive _, CondLive _ -> Live
 
+  (** compose the summary for all variables in the two summaries *)
+  let compose_summaries st st' =
+    VM.union (fun v a b -> Some (compose a b)) st st'
+
   (** compose the edge functions for a set of pairs of vars updating the first,
       e.g. v1 := mf2 ~> v1 |-> st1(v) compose st2(v2) *)
   let compose_var_states st vars =
@@ -235,6 +239,8 @@ module LVD = struct
     | Dead, CondLive v -> CondLive v
     | CondLive v, Dead -> CondLive v
     | Dead, Dead -> Dead
+
+  let join_summaries a b = VM.union (fun v a b -> Some (join a b)) a b
 
   let compose_state_updates updates st =
     List.fold_left
@@ -374,31 +380,33 @@ module LVD = struct
 
   type edge = Loc.t * IDEGraph.Edge.t * Loc.t
 
-  let solve dir (prog : Program.t) default roots =
+  let phase1_solve dir graph (prog : Program.t) default roots =
     let module Q = Fix.CompactQueue in
     let (worklist : edge Q.t) = Q.create () in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
-    let proc id = ID.Map.find id prog.procs in
-    let callgraph = Program.CallGraph.make_call_graph prog in
-    let succ v = Program.CallGraph.G.succ callgraph v |> Iter.of_list in
-    let succ_intra proc_id v =
-      Procedure.G.succ (Procedure.graph (proc proc_id)) v
-      |> Iter.of_list
-      |> Iter.map (function v -> Loc.IntraVertex { proc_id; v })
-    in
     let get_summary loc = Hashtbl.get summaries loc |> Option.get_or ~default in
+    List.iter (fun v -> Q.add v worklist) roots;
+    IDEGraph.G.fold_edges_e (fun e a -> Q.add e worklist) graph ();
     while not (Q.is_empty worklist) do
       let (p : edge) = Q.take worklist in
-      let st = failwith "" in
-      let st =
+      let st' =
+        let pred =
+          match (p, dir) with
+          | (b, _, e), `Forwards -> IDEGraph.G.pred graph b
+          | (b, _, e), `Backwards -> IDEGraph.G.succ graph e
+        in
+        let st =
+          match List.map get_summary pred with
+          | h :: tl -> List.fold_left (fun i j -> join_summaries i j) h tl
+          | [] -> failwith ""
+        in
         match p with
         | bedge, Stmts (phi, bs), endedge ->
             List.fold_left
               (fun st s -> compose_state_updates (tf_local_stmt s) st)
-              (get_summary endedge) bs
+              st bs
             |> compose_state_updates (tf_phis phi)
         | origin, InterCall args, target ->
-            let origin = get_summary origin in
             let target = get_summary target in
             let args =
               List.map
@@ -406,21 +414,38 @@ module LVD = struct
                   | formal, actual -> (formal, eval_summary target actual))
                 args
             in
-            compose_assigns origin args
+            compose_assigns st args
         | origin, InterReturn args, target ->
-            let origin = get_summary origin in
             let target = get_summary target in
             let args =
               List.map
                 (function formal, actual -> (formal, VM.find actual target))
                 args
             in
-            compose_assigns origin args
-        | origin, Call args, target -> failwith ""
-        | origin, Nop, target -> failwith ""
+            compose_assigns st args
+        | origin, Call args, target -> st
+        | origin, Nop, target -> st
       in
-      ()
-    done
+      let v =
+        match dir with
+        | `Backwards -> IDEGraph.G.E.src p
+        | `Forwards -> IDEGraph.G.E.dst p
+      in
+      let o = get_summary v in
+      if not (equal_summary o st') then begin
+        Hashtbl.add summaries v st';
+        let succ =
+          match dir with
+          | `Forwards -> IDEGraph.G.succ_e graph v
+          | `Backwards -> IDEGraph.G.pred_e graph v
+        in
+        List.iter (fun v -> Q.add v worklist) succ;
+        ()
+      end
+    done;
+    summaries
+
+  let phase2_solve graph = ()
 
   module G = Procedure.RevG
   module ResultMap = Map.Make (G.V)
