@@ -380,7 +380,35 @@ module LVD = struct
 
   type edge = Loc.t * IDEGraph.Edge.t * Loc.t
 
-  let phase1_solve dir graph (prog : Program.t) default roots =
+  let tf_edge_phase_1 get_summary st edge =
+    let open IDEGraph.Edge in
+    match edge with
+    | _, Stmts (phi, bs), _ ->
+        List.fold_left
+          (fun st s -> compose_state_updates (tf_local_stmt s) st)
+          st bs
+        |> compose_state_updates (tf_phis phi)
+    | _, InterCall args, target ->
+        let target = get_summary target in
+        let args =
+          List.map
+            (function formal, actual -> (formal, eval_summary target actual))
+            args
+        in
+        compose_assigns st args
+    | _, InterReturn args, target ->
+        let target = get_summary target in
+        let args =
+          List.map
+            (function formal, actual -> (formal, VM.find actual target))
+            args
+        in
+        compose_assigns st args
+    | _, Call args, _ -> st
+    | _, Nop, _ -> st
+
+  let naive_summary_worklist dir graph default roots edge_transfer_function =
+    (*TODO: abstract the graph iteration direction stuff *)
     let module Q = Fix.CompactQueue in
     let (worklist : edge Q.t) = Q.create () in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
@@ -389,50 +417,20 @@ module LVD = struct
     IDEGraph.G.fold_edges_e (fun e a -> Q.add e worklist) graph ();
     while not (Q.is_empty worklist) do
       let (p : edge) = Q.take worklist in
-      let st' =
-        let pred =
-          match (p, dir) with
-          | (b, _, e), `Forwards -> IDEGraph.G.pred graph b
-          | (b, _, e), `Backwards -> IDEGraph.G.succ graph e
-        in
-        let st =
-          match List.map get_summary pred with
-          | h :: tl -> List.fold_left (fun i j -> join_summaries i j) h tl
-          | [] -> failwith ""
-        in
-        match p with
-        | bedge, Stmts (phi, bs), endedge ->
-            List.fold_left
-              (fun st s -> compose_state_updates (tf_local_stmt s) st)
-              st bs
-            |> compose_state_updates (tf_phis phi)
-        | origin, InterCall args, target ->
-            let target = get_summary target in
-            let args =
-              List.map
-                (function
-                  | formal, actual -> (formal, eval_summary target actual))
-                args
-            in
-            compose_assigns st args
-        | origin, InterReturn args, target ->
-            let target = get_summary target in
-            let args =
-              List.map
-                (function formal, actual -> (formal, VM.find actual target))
-                args
-            in
-            compose_assigns st args
-        | origin, Call args, target -> st
-        | origin, Nop, target -> st
+      let st =
+        match (p, dir) with
+        | (b, _, e), `Forwards -> get_summary b
+        | (b, _, e), `Backwards -> get_summary e
       in
+      let st' = edge_transfer_function get_summary st p in
       let v =
         match dir with
         | `Backwards -> IDEGraph.G.E.src p
         | `Forwards -> IDEGraph.G.E.dst p
       in
-      let o = get_summary v in
-      if not (equal_summary o st') then begin
+      let ost' = get_summary v in
+      let st' = join_summaries ost' st' in
+      if not (equal_summary ost' st') then begin
         Hashtbl.add summaries v st';
         let succ =
           match dir with
@@ -445,7 +443,10 @@ module LVD = struct
     done;
     summaries
 
-  let phase2_solve graph = ()
+  let phase1_solve dir graph default roots =
+    naive_summary_worklist dir graph default roots tf_edge_phase_1
+
+  let phase2_solve dir graph summaries = ()
 
   module G = Procedure.RevG
   module ResultMap = Map.Make (G.V)
