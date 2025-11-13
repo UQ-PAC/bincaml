@@ -204,6 +204,8 @@ module Recursion (O : Fix) = struct
     in
     cata alg e
 
+  let free_vars_iter (e : t) = free_vars e |> VarSet.to_iter
+
   (* substite variables for expressions *)
   let substitute (sub : var -> t option) (e : t) =
     let open AbstractExpr in

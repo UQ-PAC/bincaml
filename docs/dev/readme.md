@@ -236,7 +236,13 @@ https://github.com/agle/eggomess/blob/0bd8401aae7f0b362ac9c730c0f5f07930a60414/b
 
 ## SSA translation
 
-- The ir embeds an SSA structure, it would be useful to enforce this
+- The ir embeds an SSA structure we need implemnent analyses
+  1. To translate IR into the SSA structure
+  2. To adapt DSA into SSA structure
+
+## SSA-based analysis
+
+- framwork for efficient fixedpoint analysis for SSA-based IR with a single state domain.
 
 #### Validation / Testing
 

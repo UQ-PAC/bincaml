@@ -19,7 +19,6 @@ module type TYPE = sig
   include PRINTABLE
 
   val equal : t -> t -> bool
-  val hash : t -> int
 end
 
 module type ORD_TYPE = sig
