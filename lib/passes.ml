@@ -27,6 +27,7 @@ module PassManager = struct
         name = "intra-dead-store-elim";
         apply = Proc Transforms.Livevars.DSE.sane_transform;
       };
+      { name = "ide-live"; apply = Prog Transforms.Ide.transform };
     ]
 
   let batch_of_list pass =
