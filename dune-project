@@ -34,6 +34,7 @@
    ppx_deriving
    ocamlgraph
    qcheck-core
+   intPQueue
    (ppx_expect_nobase (>= "0.17.2.2"))
    )
  (tags

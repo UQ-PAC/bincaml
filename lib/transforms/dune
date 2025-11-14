@@ -5,7 +5,7 @@
  (name transforms)
  (flags -w -27)
  (modules algsimp cf_tx livevars cleanup_cfg ide)
- (libraries lang zarith fix ocamlgraph containers containers-data iter containers.pp trace)
+ (libraries intPQueue lang zarith fix ocamlgraph containers containers-data iter containers.pp trace)
  (inline_tests)
  (preprocess
   (pps

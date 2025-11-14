@@ -193,6 +193,18 @@ module IDEGraph = struct
   let create (prog : Program.t) =
     ID.Map.to_iter prog.procs |> Iter.map snd
     |> Iter.fold (fun g p -> proc_graph prog g p) (GB.empty ())
+
+  module RevTop = Graph.Topological.Make (struct
+    type t = G.t
+
+    module V = G.V
+    module E = G.E
+
+    let iter_vertex = G.iter_vertex
+    let iter_succ = G.iter_pred
+  end)
+
+  module Top = Graph.Topological.Make (G)
 end
 
 module type Domain = sig
@@ -469,15 +481,22 @@ module IDE (D : IDEDomain) = struct
         compose_assigns st args
     | Nop -> st
 
-  let naive_summary_worklist dir graph default edge_transfer_function =
+  module LM = Map.Make (Loc)
+
+  let naive_summary_worklist order dir graph default edge_transfer_function =
     (*TODO: abstract the graph iteration direction stuff *)
-    let module Q = Fix.CompactQueue in
+    let module Q = IntPQueue.Plain in
     let (worklist : edge Q.t) = Q.create () in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
     let get_summary loc = Hashtbl.get summaries loc |> Option.get_or ~default in
-    IDEGraph.G.fold_edges_e (fun e a -> Q.add e worklist) graph ();
+    let priority (edge : edge) =
+      match dir with
+      | `Forwards -> ( match edge with l, _, _ -> LM.find l order)
+      | `Backwards -> ( match edge with _, _, l -> LM.find l order)
+    in
+    IDEGraph.G.fold_edges_e (fun e a -> Q.add worklist e (priority e)) graph ();
     while not (Q.is_empty worklist) do
-      let (p : edge) = Q.take worklist in
+      let (p : edge) = Q.extract worklist |> Option.get_exn_or "queue empty" in
       let st, vend, ost' =
         match (p, dir) with
         | (b, _, e), `Forwards -> (get_summary b, e, get_summary e)
@@ -493,20 +512,27 @@ module IDE (D : IDEDomain) = struct
           | `Backwards -> IDEGraph.G.pred_e graph vend
         in
         (*print_endline @@ show_summary st';*)
-        List.iter (fun v -> Q.add v worklist) succ;
+        List.iter (fun v -> Q.add worklist v (priority v)) succ;
         ()
       end
     done;
     summaries
 
-  let phase1_solve dir graph default =
-    naive_summary_worklist dir graph default (tf_edge_phase_1 dir)
+  let phase1_solve order dir graph default =
+    Trace.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
+    naive_summary_worklist order dir graph default (tf_edge_phase_1 dir)
 
-  let phase2_solve dir graph (summaries : (Loc.t, summary) Hashtbl.t) =
-    let module Q = Fix.CompactQueue in
+  let phase2_solve order dir graph (summaries : (Loc.t, summary) Hashtbl.t) =
+    let module Q = IntPQueue.Plain in
+    Trace.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
     let (worklist : edge Q.t) = Q.create () in
     let constants : (Loc.t, constant_state) Hashtbl.t = Hashtbl.create 100 in
     let get_st l = Hashtbl.get_or constants l ~default:VM.empty in
+    let priority (edge : edge) =
+      match dir with
+      | `Forwards -> ( match edge with l, _, _ -> LM.find l order)
+      | `Backwards -> ( match edge with _, _, l -> LM.find l order)
+    in
     let get_summary loc =
       Hashtbl.get summaries loc |> function
       | Some e -> e
@@ -514,9 +540,9 @@ module IDE (D : IDEDomain) = struct
           print_endline @@ "summary undefined " ^ Loc.show loc;
           VM.empty
     in
-    IDEGraph.G.fold_edges_e (fun e a -> Q.add e worklist) graph ();
+    IDEGraph.G.fold_edges_e (fun e a -> Q.add worklist e (priority e)) graph ();
     while not (Q.is_empty worklist) do
-      let (p : edge) = Q.take worklist in
+      let (p : edge) = Q.extract worklist |> Option.get_exn_or "queue empty" in
       let b, e, summary, st, ost' =
         match (p, dir) with
         | (b, _, e), `Forwards -> (b, e, get_summary b, get_st b, get_st e)
@@ -535,7 +561,7 @@ module IDE (D : IDEDomain) = struct
           | `Forwards -> IDEGraph.G.succ_e graph e
           | `Backwards -> IDEGraph.G.pred_e graph e
         in
-        List.iter (fun v -> Q.add v worklist) succ;
+        List.iter (fun v -> Q.add worklist v (priority v)) succ;
         ()
       end
     done;
@@ -545,9 +571,18 @@ module IDE (D : IDEDomain) = struct
     Hashtbl.get r (IntraVertex { proc_id; v = vert })
 
   let solve dir prog =
+    Trace.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
     let graph = IDEGraph.create prog in
-    let summary = phase1_solve dir graph VM.empty in
-    (query @@ summary, query @@ phase2_solve dir graph summary)
+    let order =
+      (match dir with
+        | `Forwards -> Iter.from_iter (fun f -> IDEGraph.Top.iter f graph)
+        | `Backwards -> Iter.from_iter (fun f -> IDEGraph.RevTop.iter f graph))
+      |> Iter.zip_i
+      |> Iter.map (fun (i, v) -> (v, i))
+      |> LM.of_iter
+    in
+    let summary = phase1_solve order dir graph VM.empty in
+    (query @@ summary, query @@ phase2_solve order dir graph summary)
 
   module G = Procedure.RevG
   module ResultMap = Map.Make (G.V)
@@ -577,6 +612,8 @@ let print_live_vars_dot sum r fmt prog proc_id =
 
 let transform (prog : Program.t) =
   let summary, r = IDELiveAnalysis.solve `Backwards prog in
+  ()
+(*
   ID.Map.to_iter prog.procs
   |> Iter.iter (fun (proc, proc_n) ->
       let n = ID.to_string proc in
@@ -592,3 +629,4 @@ let transform (prog : Program.t) =
             print_live_vars_dot show_const_summary (r ~proc_id:proc)
               (Format.of_chan s) prog proc)
       end)
+      *)
