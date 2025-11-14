@@ -344,7 +344,8 @@ end
 (** FIXME:
     - properly handle global variables / local variables across procedure calls;
       procedure summaries should be in terms of globals and formal paramters
-      only ; composition across calls should include the globals *)
+      only ; composition across calls should include the globals
+    - phis *)
 
 module IDE (D : IDEDomain) = struct
   module VM = Map.Make (Var)
@@ -474,7 +475,8 @@ module IDE (D : IDEDomain) = struct
         let c = compose_state_updates (D.transfer_call args) target in
         let args =
           List.map
-            (function formal, _ -> (formal, VM.find formal c))
+            (function
+              | formal, _ -> (formal, VM.get_or ~default:D.bottom formal c))
             args.args
         in
         compose_assigns st args
@@ -483,7 +485,8 @@ module IDE (D : IDEDomain) = struct
         let c = compose_state_updates (D.transfer_return args) target in
         let args =
           List.map
-            (function formal, _ -> (formal, VM.find formal c))
+            (function
+              | formal, _ -> (formal, VM.get_or ~default:D.bottom formal c))
             args.args
         in
         compose_assigns st args
@@ -505,16 +508,23 @@ module IDE (D : IDEDomain) = struct
     IDEGraph.G.fold_edges_e (fun e a -> Q.add worklist e (priority e)) graph ();
     while not (Q.is_empty worklist) do
       let (p : edge) = Q.extract worklist |> Option.get_exn_or "queue empty" in
-      let st, vend, ost' =
+      let st, vend, ost', siblings =
         match (p, dir) with
-        | (b, _, e), `Forwards -> (get_summary b, e, get_summary e)
-        | (b, _, e), `Backwards -> (get_summary e, b, get_summary b)
+        | (b, _, e), `Forwards ->
+            (get_summary b, e, get_summary e, IDEGraph.G.pred graph e)
+        | (b, _, e), `Backwards ->
+            (get_summary e, b, get_summary b, IDEGraph.G.succ graph b)
       in
+
       let n = Loc.show vend in
       Trace.with_span ~__FILE__ ~__LINE__ ("ide-phase1" ^ n) @@ fun _ ->
       let st' = edge_transfer_function get_summary st p in
       let st' = VM.filter (fun v i -> not (D.equal D.bottom i)) st' in
-      let st' = join_summaries ost' st' in
+
+      let st' =
+        if List.length siblings > 1 then join_summaries ost' st' else st'
+      in
+
       if not (equal_summary ost' st') then begin
         Hashtbl.add summaries vend st';
         let succ =
@@ -554,10 +564,12 @@ module IDE (D : IDEDomain) = struct
     IDEGraph.G.fold_edges_e (fun e a -> Q.add worklist e (priority e)) graph ();
     while not (Q.is_empty worklist) do
       let (p : edge) = Q.extract worklist |> Option.get_exn_or "queue empty" in
-      let b, e, summary, st, ost' =
+      let b, e, summary, st, ost', siblings =
         match (p, dir) with
-        | (b, _, e), `Forwards -> (b, e, get_summary b, get_st b, get_st e)
-        | (b, _, e), `Backwards -> (e, b, get_summary e, get_st e, get_st b)
+        | (b, _, e), `Forwards ->
+            (b, e, get_summary b, get_st b, get_st e, IDEGraph.G.pred graph e)
+        | (b, _, e), `Backwards ->
+            (e, b, get_summary e, get_st e, get_st b, IDEGraph.G.succ graph b)
       in
       let read v =
         VM.get v st |> function Some v -> v | None -> D.Const.bottom
@@ -566,7 +578,9 @@ module IDE (D : IDEDomain) = struct
       Trace.with_span ~__FILE__ ~__LINE__ ("ide-phase2" ^ n) @@ fun _ ->
       let updates = D.transfer_const read (VM.to_iter summary) in
       let st' = Iter.fold (fun m (v, t) -> VM.add v t m) st updates in
-      let st' = join_constant_summary st' ost' in
+      let st' =
+        if List.length siblings > 1 then join_constant_summary st' ost' else st'
+      in
       if not (equal_constant_state ost' st') then begin
         Hashtbl.add constants e st';
         let succ =
@@ -625,7 +639,8 @@ let print_live_vars_dot sum r fmt prog proc_id =
 
 let transform (prog : Program.t) =
   let summary, r = IDELiveAnalysis.solve `Backwards prog in
-  ID.Map.to_iter prog.procs
+  ()
+(*ID.Map.to_iter prog.procs
   |> Iter.iter (fun (proc, proc_n) ->
       let n = ID.to_string proc in
       begin
@@ -640,3 +655,4 @@ let transform (prog : Program.t) =
             print_live_vars_dot show_const_summary (r ~proc_id:proc)
               (Format.of_chan s) prog proc)
       end)
+    *)
