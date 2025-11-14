@@ -227,6 +227,7 @@ module type IDEDomain = sig
   val compose : t -> t -> t
   val join : t -> t -> t
   val eval : Expr.BasilExpr.t -> t
+  val bottom : t
 
   val transfer_call : call_info -> t state_update
   (** edge calling a procedure *)
@@ -267,6 +268,8 @@ module IDELive = struct
   open Const
 
   type t = Live | Dead | CondLive of Var.t [@@deriving eq, ord]
+
+  let bottom = Dead
 
   let show v =
     match v with
@@ -337,6 +340,11 @@ module IDELive = struct
           | Dead -> Some false
           | CondLive v -> read v ))
 end
+
+(** FIXME:
+    - properly handle global variables / local variables across procedure calls;
+      procedure summaries should be in terms of globals and formal paramters
+      only ; composition across calls should include the globals *)
 
 module IDE (D : IDEDomain) = struct
   module VM = Map.Make (Var)
@@ -502,7 +510,10 @@ module IDE (D : IDEDomain) = struct
         | (b, _, e), `Forwards -> (get_summary b, e, get_summary e)
         | (b, _, e), `Backwards -> (get_summary e, b, get_summary b)
       in
+      let n = Loc.show vend in
+      Trace.with_span ~__FILE__ ~__LINE__ ("ide-phase1" ^ n) @@ fun _ ->
       let st' = edge_transfer_function get_summary st p in
+      let st' = VM.filter (fun v i -> not (D.equal D.bottom i)) st' in
       let st' = join_summaries ost' st' in
       if not (equal_summary ost' st') then begin
         Hashtbl.add summaries vend st';
@@ -551,6 +562,8 @@ module IDE (D : IDEDomain) = struct
       let read v =
         VM.get v st |> function Some v -> v | None -> D.Const.bottom
       in
+      let n = Loc.show e in
+      Trace.with_span ~__FILE__ ~__LINE__ ("ide-phase2" ^ n) @@ fun _ ->
       let updates = D.transfer_const read (VM.to_iter summary) in
       let st' = Iter.fold (fun m (v, t) -> VM.add v t m) st updates in
       let st' = join_constant_summary st' ost' in
@@ -612,8 +625,6 @@ let print_live_vars_dot sum r fmt prog proc_id =
 
 let transform (prog : Program.t) =
   let summary, r = IDELiveAnalysis.solve `Backwards prog in
-  ()
-(*
   ID.Map.to_iter prog.procs
   |> Iter.iter (fun (proc, proc_n) ->
       let n = ID.to_string proc in
@@ -629,4 +640,3 @@ let transform (prog : Program.t) =
             print_live_vars_dot show_const_summary (r ~proc_id:proc)
               (Format.of_chan s) prog proc)
       end)
-      *)

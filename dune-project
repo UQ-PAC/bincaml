@@ -35,6 +35,7 @@
    ocamlgraph
    qcheck-core
    intPQueue
+   cmdliner
    (ppx_expect_nobase (>= "0.17.2.2"))
    )
  (tags
