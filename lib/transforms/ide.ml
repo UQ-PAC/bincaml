@@ -245,24 +245,22 @@ end
 
 module IDELive = struct
   module Const = struct
-    type t = bool option [@@deriving eq, ord, show]
+    type t = bool [@@deriving eq, ord, show]
 
-    let bottom = None
-    let live : t = Some true
-    let dead : t = Some false
+    let bottom = false
+    let live : t = true
+    let dead : t = false
 
     let join a b =
       match (a, b) with
-      | Some a, Some b when Bool.equal a b -> Some a
-      | Some _, Some _ -> Some true
-      | Some a, None -> Some a
-      | None, Some a -> Some a
-      | None, None -> None
+      | true, _ -> true
+      | _, true -> true
+      | false, false -> false
   end
 
   let show_const_state s =
     s
-    |> Iter.filter_map (function c, Some true -> Some c | _ -> None)
+    |> Iter.filter_map (function c, true -> Some c | _ -> None)
     |> Iter.to_string ~sep:", " (fun v -> Var.to_string v)
 
   open Const
@@ -334,11 +332,7 @@ module IDELive = struct
       (Var.t * Const.t) Iter.t =
     es
     |> Iter.map (fun (v, e) ->
-        ( v,
-          match e with
-          | Live -> Some true
-          | Dead -> Some false
-          | CondLive v -> read v ))
+        (v, match e with Live -> true | Dead -> false | CondLive v -> read v))
 end
 
 (** FIXME:
@@ -443,6 +437,38 @@ module IDE (D : IDEDomain) = struct
   let tf_phis phis : (Var.t * D.t) Iter.t = Iter.empty
 
   type edge = Loc.t * IDEGraph.Edge.t * Loc.t
+
+  let tf_edge_phase_2 st summary edge =
+    let open IDEGraph.Edge in
+    let read v =
+      VM.get v st |> function Some v -> v | None -> D.Const.bottom
+    in
+    match IDEGraph.G.E.label edge with
+    | Stmts (phi, bs) ->
+        let updates = D.transfer_const read (VM.to_iter summary) in
+        let st' = Iter.fold (fun m (v, t) -> VM.add v t m) st updates in
+        st'
+    | InterCall args ->
+        let args =
+          List.map
+            (function
+              | formal, _ -> (formal, VM.get_or ~default:D.bottom formal summary))
+            args.args
+        in
+        let updates = D.transfer_const read (List.to_iter args) in
+        let st' = Iter.fold (fun m (v, t) -> VM.add v t m) st updates in
+        st'
+    | InterReturn args ->
+        let args =
+          List.map
+            (function
+              | formal, _ -> (formal, VM.get_or ~default:D.bottom formal summary))
+            args.args
+        in
+        let updates = D.transfer_const read (List.to_iter args) in
+        let st' = Iter.fold (fun m (v, t) -> VM.add v t m) st updates in
+        st'
+    | Nop -> st
 
   let tf_edge_phase_1 dir get_summary st edge =
     let open IDEGraph.Edge in
@@ -571,13 +597,9 @@ module IDE (D : IDEDomain) = struct
         | (b, _, e), `Backwards ->
             (e, b, get_summary e, get_st e, get_st b, IDEGraph.G.succ graph b)
       in
-      let read v =
-        VM.get v st |> function Some v -> v | None -> D.Const.bottom
-      in
       let n = Loc.show e in
       Trace.with_span ~__FILE__ ~__LINE__ ("ide-phase2" ^ n) @@ fun _ ->
-      let updates = D.transfer_const read (VM.to_iter summary) in
-      let st' = Iter.fold (fun m (v, t) -> VM.add v t m) st updates in
+      let st' = tf_edge_phase_2 st summary p in
       let st' =
         if List.length siblings > 1 then join_constant_summary st' ost' else st'
       in
