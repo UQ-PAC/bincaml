@@ -39,8 +39,8 @@ type ('lvar, 'var, 'expr) t =
       name : string;
       args : 'expr StringMap.t;
     }  (** effectful operation calling a named intrinsic*)
-  | Instr_Return of { args : 'expr StringMap.t }
-      (** return to caller with [args] as return values (bound to the formal out
+  (*| Instr_Return of { args : 'expr StringMap.t }
+       return to caller with [args] as return values (bound to the formal out
           parameters of this procedure);
 
           TODO: remove this statement and encode returns as an assignment to the
@@ -98,7 +98,6 @@ let iter_rexpr stmt =
   | Instr_IntrinCall { lhs; name; args } -> StringMap.to_iter args >|= snd
   | Instr_IndirectCall { target } -> Iter.singleton target
   | Instr_Call { lhs; procid; args } -> StringMap.to_iter args >|= snd
-  | Instr_Return { args } -> StringMap.to_iter args >|= snd
 
 (** get an iterator over the variables in the LHS of the statement *)
 let iter_lvar stmt =
@@ -112,7 +111,6 @@ let iter_lvar stmt =
   | Instr_IntrinCall { lhs; name; args } -> StringMap.to_iter lhs >|= snd
   | Instr_IndirectCall { target } -> Iter.empty
   | Instr_Call { lhs; procid; args } -> StringMap.to_iter lhs >|= snd
-  | Instr_Return { args } -> Iter.empty
 
 (** Get pretty-printer for il format*)
 let pretty show_lvar show_var show_expr s =
@@ -163,7 +161,6 @@ let pretty show_lvar show_var show_expr s =
       let n = ID.to_string procid in
       append_l ~sep:nil
         [ l_param_list lhs; newline ^ text "call "; text n; r_param_list args ]
-  | Instr_Return { args } -> text "return " ^ r_param_list args
   | Instr_IndirectCall { target } -> text "indirect call " ^ target
 
 (** Pretty print to il format*)

@@ -226,11 +226,11 @@ module type IDEDomain = sig
   (** update the state for a program statement *)
 
   val transfer_const :
-    (Var.t -> Const.t option) -> (Var.t * t) Iter.t -> Const.t state_update
+    (Var.t -> Const.t) -> (Var.t * t) Iter.t -> Const.t state_update
   (** update the constant state for each edge in the microfunction *)
 end
 
-module IDELive : IDEDomain = struct
+module IDELive = struct
   module Const = struct
     type t = bool option [@@deriving eq, ord, show]
 
@@ -247,21 +247,32 @@ module IDELive : IDEDomain = struct
       | None, None -> None
   end
 
+  let show_const_state s =
+    s
+    |> Iter.filter_map (function c, Some true -> Some c | _ -> None)
+    |> Iter.to_string ~sep:", " (fun v -> Var.to_string v)
+
   open Const
 
-  type t = Live | Dead | CondLive of Var.t [@@deriving eq, ord, show]
+  type t = Live | Dead | CondLive of Var.t [@@deriving eq, ord]
 
+  let show v =
+    match v with
+    | Live -> "Live"
+    | Dead -> "Dead"
+    | CondLive v -> Var.to_string v
+
+  let pp fmt v = Format.pp_print_string fmt (show v)
   let identity v = CondLive v
 
   (** compose (\lambda v . a) (\lambda v . b) *)
   let compose a b =
     match (a, b) with
-    | Live, _ -> Live
-    | Dead, _ -> Dead
-    | CondLive v, Live -> CondLive v
-    | CondLive v, Dead -> CondLive v
+    | _, Live -> Live
+    | _, Dead -> Dead
     | CondLive v1, CondLive v2 when Var.equal v1 v2 -> CondLive v1
     | CondLive _, CondLive _ -> Live
+    | _, CondLive v -> CondLive v
   (** not representible *)
 
   let join a b =
@@ -286,24 +297,33 @@ module IDELive : IDEDomain = struct
 
   let transfer s =
     let open Livevars in
+    let open Stmt in
     let assigned = Livevars.assigned_stmt V.empty s |> V.to_iter in
     let read = Livevars.free_vars_stmt V.empty s |> V.to_iter in
     let rhs =
-      match assigned |> Iter.take 2 |> Iter.to_list with
-      | h :: [] -> Iter.map (fun r -> (r, CondLive h)) read
-      | _ -> Iter.map (fun r -> (r, Live)) read
+      match s with
+      | Instr_Load _ | Instr_Store _ | Instr_Assert _ | Instr_Assume _
+      | Instr_IntrinCall _ | Instr_IndirectCall _ ->
+          Iter.map (fun v -> (v, Live)) read
+      | Instr_Call _ -> failwith "unreachable"
+      | Instr_Assign assigns ->
+          List.to_iter assigns
+          |> Iter.flat_map (fun (l, r) ->
+              Iter.cons (l, Dead)
+                (Expr.BasilExpr.free_vars_iter r
+                |> Iter.map (fun rv -> (rv, CondLive l))))
     in
-    Iter.append (Iter.map (fun v -> (v, Dead)) assigned) rhs
+    Iter.append rhs (Iter.map (fun v -> (v, Dead)) assigned)
 
-  let transfer_const (read : Var.t -> Const.t option) (es : (Var.t * t) Iter.t)
-      : (Var.t * Const.t) Iter.t =
+  let transfer_const (read : Var.t -> Const.t) (es : (Var.t * t) Iter.t) :
+      (Var.t * Const.t) Iter.t =
     es
     |> Iter.map (fun (v, e) ->
         ( v,
           match e with
           | Live -> Some true
           | Dead -> Some false
-          | CondLive v -> ( match read v with Some v -> v | None -> None) ))
+          | CondLive v -> read v ))
 end
 
 module IDE (D : IDEDomain) = struct
@@ -414,9 +434,15 @@ module IDE (D : IDEDomain) = struct
     match IDEGraph.G.E.label edge with
     | Stmts (phi, bs) -> begin
         let stmts st =
-          List.fold_left
-            (fun st s -> compose_state_updates (D.transfer s) st)
-            st bs
+          match dir with
+          | `Forwards ->
+              List.fold_left
+                (fun st s -> compose_state_updates (D.transfer s) st)
+                st bs
+          | `Backwards ->
+              List.fold_right
+                (fun s st -> compose_state_updates (D.transfer s) st)
+                bs st
         in
         let phis = compose_state_updates (tf_phis phi) in
         match dir with
@@ -496,9 +522,10 @@ module IDE (D : IDEDomain) = struct
         | (b, _, e), `Forwards -> (b, e, get_summary b, get_st b, get_st e)
         | (b, _, e), `Backwards -> (e, b, get_summary e, get_st e, get_st b)
       in
-      let updates =
-        D.transfer_const (fun v -> VM.get v st) (VM.to_iter summary)
+      let read v =
+        VM.get v st |> function Some v -> v | None -> D.Const.bottom
       in
+      let updates = D.transfer_const read (VM.to_iter summary) in
       let st' = Iter.fold (fun m (v, t) -> VM.add v t m) st updates in
       let st' = join_constant_summary st' ost' in
       if not (equal_constant_state ost' st') then begin
@@ -514,13 +541,13 @@ module IDE (D : IDEDomain) = struct
     done;
     constants
 
-  let query (r : (Loc.t, constant_state) Hashtbl.t) ~proc_id vert =
+  let query (r : (Loc.t, 'a VM.t) Hashtbl.t) ~proc_id vert =
     Hashtbl.get r (IntraVertex { proc_id; v = vert })
 
   let solve dir prog =
     let graph = IDEGraph.create prog in
     let summary = phase1_solve dir graph VM.empty in
-    query @@ phase2_solve dir graph summary
+    (query @@ summary, query @@ phase2_solve dir graph summary)
 
   module G = Procedure.RevG
   module ResultMap = Map.Make (G.V)
@@ -538,4 +565,30 @@ end
 
 module IDELiveAnalysis = IDE (IDELive)
 
-let transform prog = IDELiveAnalysis.solve `Backwards prog |> ignore
+let show_const_summary (v : IDELiveAnalysis.constant_state) =
+  IDELiveAnalysis.VM.to_iter v |> IDELive.show_const_state
+
+let print_live_vars_dot sum r fmt prog proc_id =
+  let label (v : Procedure.G.vertex) = r v |> Option.map (fun s -> sum s) in
+  let p = Program.proc prog proc_id in
+  Trace.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
+  let (module M : Viscfg.ProcPrinter) = Viscfg.dot_labels (fun v -> label v) in
+  M.fprint_graph fmt (Procedure.graph p)
+
+let transform (prog : Program.t) =
+  let summary, r = IDELiveAnalysis.solve `Backwards prog in
+  ID.Map.to_iter prog.procs
+  |> Iter.iter (fun (proc, proc_n) ->
+      let n = ID.to_string proc in
+      begin
+        CCIO.with_out
+          ("idelive" ^ n ^ ".dot")
+          (fun s ->
+            print_live_vars_dot IDELiveAnalysis.show_summary
+              (summary ~proc_id:proc) (Format.of_chan s) prog proc);
+        CCIO.with_out
+          ("idelive-const" ^ n ^ ".dot")
+          (fun s ->
+            print_live_vars_dot show_const_summary (r ~proc_id:proc)
+              (Format.of_chan s) prog proc)
+      end)

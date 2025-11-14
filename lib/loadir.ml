@@ -172,16 +172,20 @@ module BasilASTLoader = struct
                     |> List.map (function
                       | `Stmt s -> s
                       | `ReturnNamed exprs ->
-                          let args = StringMap.of_list exprs in
-                          Stmt.(Instr_Return { args })
+                          let formal_out = Procedure.formal_out_params p in
+                          let args =
+                            List.map
+                              (fun (f, e) -> (StringMap.find f formal_out, e))
+                              exprs
+                          in
+                          Stmt.(Instr_Assign args)
                       | `Return exprs ->
                           let args =
                             List.combine formal_out_params_order exprs
                             |> List.map (function (name, var), expr ->
-                                (name, expr))
-                            |> StringMap.of_list
+                                (var, expr))
                           in
-                          Stmt.(Instr_Return { args }))
+                          Stmt.(Instr_Assign args))
                   in
                   let p, bid = Procedure.decl_block_exn p name ~stmts () in
                   (p, (name, bid) :: a))
