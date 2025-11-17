@@ -83,7 +83,7 @@ let of_cmd st (e : Containers.Sexp.t) =
           let p = Lang.ID.Map.find id (get_prog st).procs in
           print_proc c p);
       st
-  | "write-il" ->
+  | "dump-il" ->
       let ofile = List.hd @@ assert_atoms 1 args in
       CCIO.with_out ofile (fun c -> Program.pretty_to_chan c (get_prog st));
       st

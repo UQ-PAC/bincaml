@@ -23,6 +23,7 @@
  (synopsis "A short synopsis")
  (description "A longer description")
  (depends
+   menhir
    ocaml
    zarith
    fix

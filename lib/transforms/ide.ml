@@ -224,7 +224,7 @@ module type IDEDomain = sig
   module Const : Domain
 
   val identity : Var.t -> t
-  val compose : t -> t -> t
+  val compose : (Var.t -> t) -> t -> t
   val join : t -> t -> t
   val eval : Expr.BasilExpr.t -> t
   val bottom : t
@@ -279,13 +279,15 @@ module IDELive = struct
   let identity v = CondLive v
 
   (** compose (\lambda v . a) (\lambda v . b) *)
-  let compose a b =
-    match (a, b) with
-    | _, Live -> Live
-    | _, Dead -> Dead
-    | CondLive v1, CondLive v2 when Var.equal v1 v2 -> CondLive v1
-    | CondLive _, CondLive _ -> Live
-    | _, CondLive v -> CondLive v
+  let compose read b =
+    match b with
+    | Live -> Live
+    | Dead -> Dead
+    | CondLive v1 -> (
+        match read v1 with
+        | Live -> Live
+        | Dead -> Dead
+        | CondLive v2 -> CondLive v2)
   (** not representible *)
 
   let join a b =
@@ -303,10 +305,20 @@ module IDELive = struct
     if Iter.length free = 1 then CondLive (Iter.head_exn free) else Live
 
   let transfer_call (c : call_info) =
-    Iter.of_list c.args |> Iter.map (fun (formal, expr) -> (formal, eval expr))
+    Iter.of_list c.args
+    |> Iter.flat_map (fun (formal, e) ->
+        Expr.BasilExpr.free_vars_iter e |> Iter.map (fun fv -> (formal, fv)))
+    |> Iter.map (fun (formal, v) -> (v, CondLive formal))
+    |> Iter.group_by ~eq:(fun a b -> Var.equal (fst a) (fst b))
+    |> Iter.map (function
+      | [ a ] -> a
+      | a :: tl -> (fst a, Live)
+      | [] -> failwith "unreachable")
 
   let transfer_return (c : return_info) =
-    Iter.of_list c.args |> Iter.map (fun (lhs, rhs) -> (rhs, CondLive lhs))
+    Iter.of_list c.args
+    |> Iter.map (fun (lhs, rhs) ->
+        if Var.is_global lhs then (rhs, CondLive lhs) else (rhs, Live))
 
   let transfer s =
     let open Livevars in
@@ -359,34 +371,14 @@ module IDE (D : IDEDomain) = struct
 
   let empty_summary = VM.empty
 
-  (** compose the summary for all variables in the two summaries *)
-  let compose_summaries st st' =
-    VM.merge
-      (fun v a b ->
-        match (a, b) with
-        | Some a, Some b -> Some (D.compose a b)
-        | Some _, None -> None (* saturating bot *)
-        | None, Some _ -> None (* saturatin gbot *)
-        | None, None -> None)
-      st st'
-
-  (** compose the edge functions for a set of pairs of vars updating the first,
-      e.g. v1 := mf2 ~> v1 |-> st1(v) compose st2(v2) *)
-  let compose_var_states st vars =
-    List.fold_left
-      (fun acc (v1, mf1, mf2) -> VM.add v1 (D.compose mf1 mf2) acc)
-      st vars
-
   (** composition of an assignment var := mfun', where var |-> mfun in st: i.e.
       becomes compose mfun compose mfun' *)
-  let compose_assigns st vars =
-    let updates =
-      List.map
-        (fun (v, mf) ->
-          (v, VM.find_opt v st |> Option.get_or ~default:(D.identity v), mf))
-        vars
-    in
-    compose_var_states st updates
+  let compose_assigns st1 st vars =
+    Iter.fold
+      (fun acc (v, mf) ->
+        let r = D.compose (fun v -> VM.get_or ~default:D.bottom v st1) mf in
+        if D.equal r D.bottom then VM.remove v acc else VM.add v r acc)
+      st vars
 
   let join_summaries a b =
     (* keeps everything present in a and not b, does that make sense?*)
@@ -398,15 +390,8 @@ module IDE (D : IDEDomain) = struct
     VM.union (fun v a b -> Some (D.Const.join a b)) s0 s1
 
   (* compose bot f = f ? *)
-  let compose_state_updates (updates : D.t state_update) st =
-    Iter.map
-      (fun (v, ex) ->
-        let e = VM.find_opt v st in
-        let c = Option.map (fun e -> D.compose e ex) e in
-        let c = Option.get_or ~default:ex c in
-        (v, c))
-      updates
-    |> Iter.fold (fun a (v, c) -> VM.add v c a) st
+  let compose_state_updates (updates : D.t state_update) st1 st =
+    compose_assigns st1 st updates
 
   let direction : [ `Forwards | `Backwards ] = `Backwards
 
@@ -438,90 +423,82 @@ module IDE (D : IDEDomain) = struct
 
   type edge = Loc.t * IDEGraph.Edge.t * Loc.t
 
-  let tf_edge_phase_2 st summary edge =
+  let tf_edge_phase_2 st summary globals edge =
     let open IDEGraph.Edge in
-    let read v =
-      VM.get v st |> function Some v -> v | None -> D.Const.bottom
+    let read v = VM.get_or ~default:D.Const.bottom v st in
+    let update k v st =
+      if D.Const.equal D.Const.bottom v then VM.remove k st else VM.add k v st
     in
     match IDEGraph.G.E.label edge with
     | Stmts (phi, bs) ->
         let updates = D.transfer_const read (VM.to_iter summary) in
-        let st' = Iter.fold (fun m (v, t) -> VM.add v t m) st updates in
+        let st' = Iter.fold (fun m (v, t) -> update v t m) st updates in
         st'
     | InterCall args ->
         let args =
-          List.map
-            (function
-              | formal, _ -> (formal, VM.get_or ~default:D.bottom formal summary))
-            args.args
+          List.to_iter args.args
+          |> Iter.map (function formal, _ -> formal)
+          |> Iter.append globals
+          |> Iter.map (fun v -> (v, VM.get_or ~default:D.bottom v summary))
         in
-        let updates = D.transfer_const read (List.to_iter args) in
-        let st' = Iter.fold (fun m (v, t) -> VM.add v t m) st updates in
+        let updates = D.transfer_const read args in
+        let st' = Iter.fold (fun m (v, t) -> update v t m) st updates in
         st'
     | InterReturn args ->
         let args =
-          List.map
-            (function
-              | formal, _ -> (formal, VM.get_or ~default:D.bottom formal summary))
-            args.args
+          List.to_iter args.args
+          |> Iter.map (function formal, _ -> formal)
+          |> Iter.append globals
+          |> Iter.map (fun v -> (v, VM.get_or ~default:D.bottom v summary))
         in
-        let updates = D.transfer_const read (List.to_iter args) in
-        let st' = Iter.fold (fun m (v, t) -> VM.add v t m) st updates in
+        let updates = D.transfer_const read args in
+        let st' = Iter.fold (fun m (v, t) -> update v t m) st updates in
         st'
     | Nop -> st
 
-  let tf_edge_phase_1 dir get_summary st edge =
+  let tf_edge_phase_1 dir globals get_summary st edge =
     let open IDEGraph.Edge in
     let orig, target =
       match (dir, edge) with
       | `Forwards, (a, _, b) -> (a, b)
       | `Backwards, (a, _, b) -> (b, a)
     in
-
     match IDEGraph.G.E.label edge with
     | Stmts (phi, bs) -> begin
         let stmts st =
           match dir with
           | `Forwards ->
               List.fold_left
-                (fun st s -> compose_state_updates (D.transfer s) st)
+                (fun st s -> compose_state_updates (D.transfer s) st st)
                 st bs
           | `Backwards ->
               List.fold_right
-                (fun s st -> compose_state_updates (D.transfer s) st)
+                (fun s st -> compose_state_updates (D.transfer s) st st)
                 bs st
         in
-        let phis = compose_state_updates (tf_phis phi) in
+        let phis st = compose_state_updates (tf_phis phi) st st in
         match dir with
         | `Forwards -> phis (stmts st)
         | `Backwards -> stmts (phis st)
       end
     | InterCall args ->
         let target = get_summary target in
-        let c = compose_state_updates (D.transfer_call args) target in
-        let args =
-          List.map
-            (function
-              | formal, _ -> (formal, VM.get_or ~default:D.bottom formal c))
-            args.args
-        in
-        compose_assigns st args
+        compose_state_updates (D.transfer_call args) st target
+        |> compose_state_updates
+             (globals |> Iter.map (fun v -> (v, D.identity v)))
+             st
     | InterReturn args ->
         let target = get_summary target in
-        let c = compose_state_updates (D.transfer_return args) target in
-        let args =
-          List.map
-            (function
-              | formal, _ -> (formal, VM.get_or ~default:D.bottom formal c))
-            args.args
-        in
-        compose_assigns st args
+        compose_state_updates (D.transfer_return args) st target
+        |> compose_state_updates
+             (globals |> Iter.map (fun v -> (v, D.identity v)))
+             st
     | Nop -> st
 
   module LM = Map.Make (Loc)
 
-  let naive_summary_worklist order dir graph default edge_transfer_function =
-    (*TODO: abstract the graph iteration direction stuff *)
+  let phase1_solve order dir graph globals default =
+    Trace.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
     let module Q = IntPQueue.Plain in
     let (worklist : edge Q.t) = Q.create () in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
@@ -541,37 +518,27 @@ module IDE (D : IDEDomain) = struct
         | (b, _, e), `Backwards ->
             (get_summary e, b, get_summary b, IDEGraph.G.succ graph b)
       in
-
-      let n = Loc.show vend in
-      Trace.with_span ~__FILE__ ~__LINE__ ("ide-phase1" ^ n) @@ fun _ ->
-      let st' = edge_transfer_function get_summary st p in
+      let st' = tf_edge_phase_1 dir globals get_summary st p in
       let st' = VM.filter (fun v i -> not (D.equal D.bottom i)) st' in
-
       let st' =
         if List.length siblings > 1 then join_summaries ost' st' else st'
       in
-
-      if not (equal_summary ost' st') then begin
+      if not (equal_summary ost' st') then (
         Hashtbl.add summaries vend st';
         let succ =
           match dir with
           | `Forwards -> IDEGraph.G.succ_e graph vend
           | `Backwards -> IDEGraph.G.pred_e graph vend
         in
-        (*print_endline @@ show_summary st';*)
         List.iter (fun v -> Q.add worklist v (priority v)) succ;
-        ()
-      end
+        ())
     done;
     summaries
 
-  let phase1_solve order dir graph default =
-    Trace.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
-    naive_summary_worklist order dir graph default (tf_edge_phase_1 dir)
-
-  let phase2_solve order dir graph (summaries : (Loc.t, summary) Hashtbl.t) =
-    let module Q = IntPQueue.Plain in
+  let phase2_solve order dir graph globals
+      (summaries : (Loc.t, summary) Hashtbl.t) =
     Trace.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
+    let module Q = IntPQueue.Plain in
     let (worklist : edge Q.t) = Q.create () in
     let constants : (Loc.t, constant_state) Hashtbl.t = Hashtbl.create 100 in
     let get_st l = Hashtbl.get_or constants l ~default:VM.empty in
@@ -597,9 +564,7 @@ module IDE (D : IDEDomain) = struct
         | (b, _, e), `Backwards ->
             (e, b, get_summary e, get_st e, get_st b, IDEGraph.G.succ graph b)
       in
-      let n = Loc.show e in
-      Trace.with_span ~__FILE__ ~__LINE__ ("ide-phase2" ^ n) @@ fun _ ->
-      let st' = tf_edge_phase_2 st summary p in
+      let st' = tf_edge_phase_2 st summary globals p in
       let st' =
         if List.length siblings > 1 then join_constant_summary st' ost' else st'
       in
@@ -619,8 +584,9 @@ module IDE (D : IDEDomain) = struct
   let query (r : (Loc.t, 'a VM.t) Hashtbl.t) ~proc_id vert =
     Hashtbl.get r (IntraVertex { proc_id; v = vert })
 
-  let solve dir prog =
+  let solve dir (prog : Program.t) =
     Trace.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
+    let globals = prog.globals |> Var.Decls.to_iter |> Iter.map snd in
     let graph = IDEGraph.create prog in
     let order =
       (match dir with
@@ -630,8 +596,8 @@ module IDE (D : IDEDomain) = struct
       |> Iter.map (fun (i, v) -> (v, i))
       |> LM.of_iter
     in
-    let summary = phase1_solve order dir graph VM.empty in
-    (query @@ summary, query @@ phase2_solve order dir graph summary)
+    let summary = phase1_solve order dir graph globals VM.empty in
+    (query @@ summary, query @@ phase2_solve order dir graph globals summary)
 
   module G = Procedure.RevG
   module ResultMap = Map.Make (G.V)
@@ -661,8 +627,7 @@ let print_live_vars_dot sum r fmt prog proc_id =
 
 let transform (prog : Program.t) =
   let summary, r = IDELiveAnalysis.solve `Backwards prog in
-  ()
-(*ID.Map.to_iter prog.procs
+  ID.Map.to_iter prog.procs
   |> Iter.iter (fun (proc, proc_n) ->
       let n = ID.to_string proc in
       begin
@@ -677,4 +642,3 @@ let transform (prog : Program.t) =
             print_live_vars_dot show_const_summary (r ~proc_id:proc)
               (Format.of_chan s) prog proc)
       end)
-    *)
