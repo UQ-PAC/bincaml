@@ -3,18 +3,12 @@ open Containers
 open Common
 
 type call_info = {
-  args : (Var.t * Expr.BasilExpr.t) list;
+  rhs : (Var.t * Expr.BasilExpr.t) list;
+  lhs : (Var.t * Var.t) list;
   call_from : Program.stmt; (* stmt must be variable Instr_Call*)
 }
 [@@deriving eq, ord, show { with_path = false }]
 (** (target.formal_in, rhs arg) assignment to call formal params *)
-
-type return_info = {
-  args : (Var.t * Var.t) list;
-  return_to_after : Program.stmt; (* stmt must be variable Instr_Call*)
-}
-[@@deriving eq, ord, show]
-(** (call lhs out, target formal_out) assignment of returns to call lhs *)
 
 module Loc = struct
   type stmt_id = { proc_id : ID.t; block : ID.t; offset : int }
@@ -42,7 +36,7 @@ module IDEGraph = struct
     type t =
       | Stmts of Var.t Block.phi list * Program.stmt list
       | InterCall of call_info
-      | InterReturn of return_info
+      | InterReturn of call_info
       | Nop
     [@@deriving eq, ord, show]
 
@@ -114,13 +108,13 @@ module IDEGraph = struct
     let graph =
       GB.add_edge_e graph
         ( CallSite origin,
-          InterCall { args = rhs; call_from = callstmt },
+          InterCall { rhs; lhs; call_from = callstmt },
           call_entry )
     in
     let graph =
       GB.add_edge_e graph
         ( call_return,
-          InterReturn { args = lhs; return_to_after = callstmt },
+          InterReturn { lhs; rhs; call_from = callstmt },
           AfterCall origin )
     in
     { g with graph }
@@ -229,10 +223,10 @@ module type IDEDomain = sig
   val eval : Expr.BasilExpr.t -> t
   val bottom : t
 
-  val transfer_call : call_info -> t state_update
+  val compose_call : (Var.t -> t) -> call_info -> t state_update
   (** edge calling a procedure *)
 
-  val transfer_return : return_info -> t state_update
+  val compose_return : (Var.t -> t) -> call_info -> t state_update
   (** edge return to after a call *)
 
   val transfer : Program.stmt -> t state_update
@@ -304,21 +298,38 @@ module IDELive = struct
     let free = Expr.BasilExpr.free_vars_iter e in
     if Iter.length free = 1 then CondLive (Iter.head_exn free) else Live
 
-  let transfer_call (c : call_info) =
-    Iter.of_list c.args
+  let compose_call read (c : call_info) =
+    Iter.of_list c.rhs
     |> Iter.flat_map (fun (formal, e) ->
         Expr.BasilExpr.free_vars_iter e |> Iter.map (fun fv -> (formal, fv)))
-    |> Iter.map (fun (formal, v) -> (v, CondLive formal))
+    |> Iter.map (fun (formal, v) ->
+        ( v,
+          match read v with
+          | Live -> Live
+          | Dead -> Dead
+          | CondLive v when Var.is_global v -> CondLive v
+          | CondLive _ -> Live ))
     |> Iter.group_by ~eq:(fun a b -> Var.equal (fst a) (fst b))
     |> Iter.map (function
       | [ a ] -> a
       | a :: tl -> (fst a, Live)
       | [] -> failwith "unreachable")
+    |> Iter.append
+         (Iter.of_list c.lhs |> Iter.map (fun (lhs, rhs) -> (lhs, Dead)))
 
-  let transfer_return (c : return_info) =
-    Iter.of_list c.args
+  let compose_return read (c : call_info) =
+    Iter.of_list c.lhs
     |> Iter.map (fun (lhs, rhs) ->
-        if Var.is_global lhs then (rhs, CondLive lhs) else (rhs, Live))
+        let mf =
+          match read lhs with
+          | Live -> Live
+          | Dead -> Dead
+          | CondLive v when Var.is_global v -> CondLive v
+          | CondLive _ -> Live
+        in
+        (rhs, mf))
+    |> Iter.append
+         (Iter.of_list c.lhs |> Iter.map (fun (lhs, rhs) -> (lhs, Dead)))
 
   let transfer s =
     let open Livevars in
@@ -380,6 +391,12 @@ module IDE (D : IDEDomain) = struct
         if D.equal r D.bottom then VM.remove v acc else VM.add v r acc)
       st vars
 
+  let update_state st1 st vars =
+    Iter.fold
+      (fun acc (v, mf) ->
+        if D.equal mf D.bottom then VM.remove v acc else VM.add v mf acc)
+      st vars
+
   let join_summaries a b =
     (* keeps everything present in a and not b, does that make sense?*)
     VM.union (fun v a b -> Some (D.join a b)) a b
@@ -436,7 +453,7 @@ module IDE (D : IDEDomain) = struct
         st'
     | InterCall args ->
         let args =
-          List.to_iter args.args
+          List.to_iter args.rhs
           |> Iter.map (function formal, _ -> formal)
           |> Iter.append globals
           |> Iter.map (fun v -> (v, VM.get_or ~default:D.bottom v summary))
@@ -446,7 +463,7 @@ module IDE (D : IDEDomain) = struct
         st'
     | InterReturn args ->
         let args =
-          List.to_iter args.args
+          List.to_iter args.rhs
           |> Iter.map (function formal, _ -> formal)
           |> Iter.append globals
           |> Iter.map (fun v -> (v, VM.get_or ~default:D.bottom v summary))
@@ -483,13 +500,17 @@ module IDE (D : IDEDomain) = struct
       end
     | InterCall args ->
         let target = get_summary target in
-        compose_state_updates (D.transfer_call args) st target
+        update_state st target
+          (D.compose_call (fun v -> VM.get_or v ~default:D.bottom target) args)
         |> compose_state_updates
              (globals |> Iter.map (fun v -> (v, D.identity v)))
              st
     | InterReturn args ->
         let target = get_summary target in
-        compose_state_updates (D.transfer_return args) st target
+        update_state st target
+          (D.compose_return
+             (fun v -> VM.get_or ~default:D.bottom v target)
+             args)
         |> compose_state_updates
              (globals |> Iter.map (fun v -> (v, D.identity v)))
              st
@@ -498,6 +519,8 @@ module IDE (D : IDEDomain) = struct
   module LM = Map.Make (Loc)
 
   let phase1_solve order dir graph globals default =
+    (* FIXME: this doesn't maintain context sensitivity because there is only one edgefunction
+       for each procedure entry, therefore joining all the contexts*)
     Trace.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
     let module Q = IntPQueue.Plain in
     let (worklist : edge Q.t) = Q.create () in
@@ -537,6 +560,7 @@ module IDE (D : IDEDomain) = struct
 
   let phase2_solve order dir graph globals
       (summaries : (Loc.t, summary) Hashtbl.t) =
+    (* FIXME: use summaries ; propertly evaluate call edges first then fill in between*)
     Trace.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
     let module Q = IntPQueue.Plain in
     let (worklist : edge Q.t) = Q.create () in
