@@ -169,3 +169,13 @@ let to_string ?width show_lvar show_var show_expr
   let width = Option.get_or ~default:80 width in
   let d = pretty show_lvar show_var show_expr s in
   Containers_pp.Pretty.to_string ~width d
+
+module V = Set.Make (Var)
+
+let assigned (init : V.t) s : V.t =
+  let f_lvar a v = V.add v a in
+  iter_lvar s |> Iter.fold f_lvar init
+
+let free_vars (init : V.t) (s : (Var.t, Var.t, BasilExpr.t) t) : V.t =
+  let f_expr a v = V.union (BasilExpr.free_vars v) a in
+  iter_rexpr s |> Iter.fold f_expr init

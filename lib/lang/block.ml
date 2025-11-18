@@ -77,6 +77,20 @@ let fold_forwards ~(phi : 'acc -> 'v phi list -> 'acc)
     =
   Iter.fold f (phi i b.phis) (Vector.to_iter b.stmts)
 
+let map_fold_forwards ~(phi : 'acc -> 'v phi list -> 'acc * 'v phi list)
+    ~(f : 'acc -> ('v, 'v, 'e) Stmt.t -> 'acc * ('v, 'v, 'e) Stmt.t) (i : 'a)
+    (b : ('v, 'e) t) : 'acc * ('v, 'e) t =
+  let acc, phis = phi i b.phis in
+  let acc, stmts =
+    Iter.fold
+      (fun (a, stmts) s ->
+        let a, s' = f a s in
+        (a, Iter.snoc stmts s'))
+      (acc, Iter.empty) (Vector.to_iter b.stmts)
+  in
+  let stmts = Vector.of_iter stmts |> Vector.freeze in
+  (acc, { phis; stmts })
+
 let foldi_backwards ~(f : 'acc -> int * ('v, 'v, 'e) Stmt.t -> 'acc)
     ~(phi : 'acc -> 'v phi list -> 'acc) ~(init : 'a) (b : ('v, 'e) t) : 'acc =
   Iter.fold f init

@@ -15,17 +15,9 @@ let show_v b =
   in
   Pretty.to_string ~width:80 x
 
-let assigned_stmt (init : V.t) s : V.t =
-  let f_lvar a v = V.add v a in
-  Stmt.iter_lvar s |> Iter.fold f_lvar init
-
-let free_vars_stmt (init : V.t) (s : (Var.t, Var.t, BasilExpr.t) Stmt.t) : V.t =
-  let f_expr a v = V.union (BasilExpr.free_vars v) a in
-  Stmt.iter_rexpr s |> Iter.fold f_expr init
-
 let tf_stmt_live init s =
-  let assigns = V.diff init (assigned_stmt V.empty s) in
-  free_vars_stmt assigns s
+  let assigns = V.diff init (Stmt.assigned V.empty s) in
+  Stmt.free_vars assigns s
 
 let tf_block (init : V.t) (b : (Var.t, BasilExpr.t) Block.t) =
   Block.fold_backwards ~f:tf_stmt_live ~phi:(fun f _ -> f) ~init b
@@ -139,7 +131,7 @@ module Interproc = struct
 
   let tf_block summary (init : V.t) (b : (Var.t, BasilExpr.t) Block.t) =
     let tf_stmt init s =
-      let assigns = V.diff init (assigned_stmt V.empty s) in
+      let assigns = V.diff init (Stmt.assigned V.empty s) in
       free_vars_stmt summary assigns s
     in
     Block.fold_backwards ~f:tf_stmt ~phi:(fun f _ -> f) ~init b
@@ -232,7 +224,7 @@ module DSE = struct
             is_assign
             && Stmt.iter_lvar s
                |> Iter.for_all (fun v ->
-                   Var.is_local v && (not @@ V.mem v live))
+                      Var.is_local v && (not @@ V.mem v live))
           in
           let live = V.filter Var.is_local @@ tf_stmt_live live s in
           let s = if dead_store then acc else s :: acc in

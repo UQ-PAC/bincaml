@@ -192,8 +192,8 @@ let add_goto p ~(from : ID.t) ~(targets : ID.t list) =
   let open Vert in
   p
   |> map_graph (fun g ->
-      let fr = End from in
-      List.fold_left (fun g t -> G.add_edge g fr (Begin t)) g targets)
+         let fr = End from in
+         List.fold_left (fun g t -> G.add_edge g fr (Begin t)) g targets)
 
 let remove_block p id =
   map_graph
@@ -253,9 +253,9 @@ let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
   let open G in
   p
   |> map_graph (fun g ->
-      let g = G.remove_edge g (Begin id) (End id) in
-      let g = G.add_edge_e g (Begin id, Block block, End id) in
-      g)
+         let g = G.remove_edge g (Begin id) (End id) in
+         let g = G.add_edge_e g (Begin id, Block block, End id) in
+         g)
 
 let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
   update_block p id block
@@ -265,8 +265,9 @@ let decl_local p v =
   Var.Decls.add (locals p) v;
   v
 
-let fresh_var p ?(pure = true) typ =
-  let n, _ = (local_ids p).fresh ~name:"v" () in
+let fresh_var p ?(pure = true) ?name typ : Var.t =
+  let name = Option.get_or ~default:"v" name in
+  let n, _ = (local_ids p).fresh ~name () in
   let v = Var.create n typ ~pure in
   Var.Decls.add (locals p) v;
   v
@@ -310,6 +311,31 @@ let fold_blocks_topo_rev (f : 'a -> ID.t -> Edge.block -> 'a) init p =
   in
   let topo = topo_rev p in
   Graph.WeakTopological.fold_left ff init topo
+
+let blocks_succ p i =
+  Iter.from_iter (fun f -> G.iter_succ f (graph p) (End i))
+  |> Iter.flat_map (function
+       | Vert.Begin i ->
+           Iter.singleton
+             (i, get_block p i |> Option.get_exn_or "bad cfg sturcture")
+       | Return -> Iter.empty
+       | Exit -> Iter.empty
+       | v -> failwith @@ "bad graph structure " ^ Vert.show v)
+
+let blocks_pred p i =
+  Iter.from_iter (fun f -> G.iter_pred f (graph p) (Begin i))
+  |> Iter.flat_map (function
+       | Vert.End i ->
+           Iter.singleton
+             (i, get_block p i |> Option.get_exn_or "bad cfg sturcture")
+       | Entry -> Iter.empty
+       | v -> failwith @@ "bad graph structure  " ^ Vert.show v)
+
+let iter_blocks_topo_fwd p =
+  Iter.from_iter (fun f -> fold_blocks_topo_fwd (fun acc a b -> f (a, b)) () p)
+
+let iter_blocks_topo_rev p =
+  Iter.from_iter (fun f -> fold_blocks_topo_rev (fun acc a b -> f (a, b)) () p)
 
 let pretty show_lvar show_var show_expr p =
   let open Containers_pp in

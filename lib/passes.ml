@@ -15,6 +15,7 @@ module PassManager = struct
 
   let passes =
     [
+      { name = "simple-ssa"; apply = Proc Transforms.Ssa.ssa };
       {
         name = "remove-unreachable-block";
         apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
