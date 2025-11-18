@@ -2,6 +2,12 @@ open Lang
 open Containers
 open Common
 
+(** Prototype IDE solver: proof of concept for the design for a generic ish ide
+    solver.
+
+    WARN: the implemented live variables analysis here is not correct and the
+    solver is likely wrong; particularly with regard to context sensitivity *)
+
 type call_info = {
   rhs : (Var.t * Expr.BasilExpr.t) list;
   lhs : (Var.t * Var.t) list;
