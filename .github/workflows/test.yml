@@ -1,4 +1,4 @@
-name: build
+name: build and test
 
 on:
   - push
@@ -7,7 +7,7 @@ on:
 permissions: read-all
 
 jobs:
-  build:
+  build_test_macos:
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +32,7 @@ jobs:
       - run: opam exec -- dune build --ignore-promoted-rules
       - run: opam exec -- dune runtest --ignore-promoted-rules
 
-  build:
+  build_test_ubuntu:
     strategy:
       fail-fast: false
       matrix:
