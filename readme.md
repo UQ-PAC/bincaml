@@ -29,7 +29,6 @@ scripts (in addition to cli) are used to drive the tool, for example:
 
 ```lisp
 ; test.s
-(load-il "examples/cat.il")
 (load-il "examples/cntlm-simp-output.il")
 (dump-il "before.il")
 (run-transforms "cf-expressions" "intra-dead-store-elim")
