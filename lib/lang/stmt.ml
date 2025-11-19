@@ -26,6 +26,7 @@ type ('lvar, 'var, 'expr) t =
           swapped depending on endiannesss, and concatenated and stored into
           [lhs]*)
   | Instr_Store of {
+      lhs : 'lvar;
       mem : 'var;
       addr : 'expr;
       value : 'expr;
@@ -39,22 +40,6 @@ type ('lvar, 'var, 'expr) t =
       name : string;
       args : 'expr StringMap.t;
     }  (** effectful operation calling a named intrinsic*)
-  (*| Instr_Return of { args : 'expr StringMap.t }
-       return to caller with [args] as return values (bound to the formal out
-          parameters of this procedure);
-
-          TODO: remove this statement and encode returns as an assignment to the
-          formal out parameters, followed by jump to return vertex---corresponds
-          to the Boogie style.
-
-          This is really just an assignment of exprs to the corresponind formal
-          parameters
-
-          Whereas the actual return is encoded in the CFG where the formal
-          params are returned to the caller, not sure how to square this
-          invariant that this statement has to be followed by a return vertex; I
-          think possibly its just confusing things and isn't really neccessary.
-      *)
   | Instr_Call of {
       lhs : 'lvar StringMap.t;
       procid : ID.t;

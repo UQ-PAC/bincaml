@@ -177,19 +177,15 @@ module IDEGraph = struct
     let b =
       Procedure.blocks_to_list p |> List.to_iter
       |> Iter.flat_map (function
-           | Procedure.Vert.Begin block, (b : Program.bloc) ->
-               Block.stmts_iter_i b
-               |> Iter.flat_map (fun (i, s) ->
-                      let stmt_id : Loc.stmt_id =
-                        { proc_id; block; offset = i }
-                      in
-                      match s with
-                      | Stmt.Instr_Call _ ->
-                          Loc.(
-                            Iter.doubleton (AfterCall stmt_id)
-                              (CallSite stmt_id))
-                      | _ -> Iter.empty)
-           | _, _ -> Iter.empty)
+        | Procedure.Vert.Begin block, (b : Program.bloc) ->
+            Block.stmts_iter_i b
+            |> Iter.flat_map (fun (i, s) ->
+                let stmt_id : Loc.stmt_id = { proc_id; block; offset = i } in
+                match s with
+                | Stmt.Instr_Call _ ->
+                    Loc.(Iter.doubleton (AfterCall stmt_id) (CallSite stmt_id))
+                | _ -> Iter.empty)
+        | _, _ -> Iter.empty)
     in
     Iter.append intra_verts b
 
@@ -201,7 +197,13 @@ module IDEGraph = struct
     type t = G.t
 
     module V = G.V
-    module E = G.E
+
+    module E = struct
+      include G.E
+
+      let src = G.E.dst
+      let dst = G.E.src
+    end
 
     let iter_vertex = G.iter_vertex
     let iter_succ = G.iter_pred
@@ -310,33 +312,33 @@ module IDELive = struct
   let compose_call read (c : call_info) =
     Iter.of_list c.rhs
     |> Iter.flat_map (fun (formal, e) ->
-           Expr.BasilExpr.free_vars_iter e |> Iter.map (fun fv -> (formal, fv)))
+        Expr.BasilExpr.free_vars_iter e |> Iter.map (fun fv -> (formal, fv)))
     |> Iter.map (fun (formal, v) ->
-           ( v,
-             match read v with
-             | Live -> Live
-             | Dead -> Dead
-             | CondLive v when Var.is_global v -> CondLive v
-             | CondLive _ -> Live ))
+        ( v,
+          match read v with
+          | Live -> Live
+          | Dead -> Dead
+          | CondLive v when Var.is_global v -> CondLive v
+          | CondLive _ -> Live ))
     |> Iter.group_by ~eq:(fun a b -> Var.equal (fst a) (fst b))
     |> Iter.map (function
-         | [ a ] -> a
-         | a :: tl -> (fst a, Live)
-         | [] -> failwith "unreachable")
+      | [ a ] -> a
+      | a :: tl -> (fst a, Live)
+      | [] -> failwith "unreachable")
     |> Iter.append
          (Iter.of_list c.lhs |> Iter.map (fun (lhs, rhs) -> (lhs, Dead)))
 
   let compose_return read (c : call_info) =
     Iter.of_list c.lhs
     |> Iter.map (fun (lhs, rhs) ->
-           let mf =
-             match read lhs with
-             | Live -> Live
-             | Dead -> Dead
-             | CondLive v when Var.is_global v -> CondLive v
-             | CondLive _ -> Live
-           in
-           (rhs, mf))
+        let mf =
+          match read lhs with
+          | Live -> Live
+          | Dead -> Dead
+          | CondLive v when Var.is_global v -> CondLive v
+          | CondLive _ -> Live
+        in
+        (rhs, mf))
     |> Iter.append
          (Iter.of_list c.lhs |> Iter.map (fun (lhs, rhs) -> (lhs, Dead)))
 
@@ -354,9 +356,9 @@ module IDELive = struct
       | Instr_Assign assigns ->
           List.to_iter assigns
           |> Iter.flat_map (fun (l, r) ->
-                 Iter.cons (l, Dead)
-                   (Expr.BasilExpr.free_vars_iter r
-                   |> Iter.map (fun rv -> (rv, CondLive l))))
+              Iter.cons (l, Dead)
+                (Expr.BasilExpr.free_vars_iter r
+                |> Iter.map (fun rv -> (rv, CondLive l))))
     in
     Iter.append rhs (Iter.map (fun v -> (v, Dead)) assigned)
 
@@ -364,8 +366,7 @@ module IDELive = struct
       (Var.t * Const.t) Iter.t =
     es
     |> Iter.map (fun (v, e) ->
-           ( v,
-             match e with Live -> true | Dead -> false | CondLive v -> read v ))
+        (v, match e with Live -> true | Dead -> false | CondLive v -> read v))
 end
 
 (** FIXME:
@@ -386,7 +387,7 @@ module IDE (D : IDEDomain) = struct
   let show_summary v =
     VM.to_iter v
     |> Iter.to_string ~sep:", " (fun (v, i) ->
-           Var.to_string v ^ "->" ^ D.show i)
+        Var.to_string v ^ "->" ^ D.show i)
 
   type constant_state = D.Const.t VM.t [@@deriving eq, ord]
 
@@ -622,8 +623,8 @@ module IDE (D : IDEDomain) = struct
     let graph = IDEGraph.create prog in
     let order =
       (match dir with
-      | `Forwards -> Iter.from_iter (fun f -> IDEGraph.Top.iter f graph)
-      | `Backwards -> Iter.from_iter (fun f -> IDEGraph.RevTop.iter f graph))
+        | `Forwards -> Iter.from_iter (fun f -> IDEGraph.Top.iter f graph)
+        | `Backwards -> Iter.from_iter (fun f -> IDEGraph.RevTop.iter f graph))
       |> Iter.zip_i
       |> Iter.map (fun (i, v) -> (v, i))
       |> LM.of_iter
@@ -661,14 +662,15 @@ let transform (prog : Program.t) =
   let summary, r = IDELiveAnalysis.solve `Backwards prog in
   ID.Map.to_iter prog.procs
   |> Iter.iter (fun (proc, proc_n) ->
-         let n = ID.to_string proc in
-         CCIO.with_out
-           ("idelive" ^ n ^ ".dot")
-           (fun s ->
-             print_live_vars_dot IDELiveAnalysis.show_summary
-               (summary ~proc_id:proc) (Format.of_chan s) prog proc);
-         CCIO.with_out
-           ("idelive-const" ^ n ^ ".dot")
-           (fun s ->
-             print_live_vars_dot show_const_summary (r ~proc_id:proc)
-               (Format.of_chan s) prog proc))
+      let n = ID.to_string proc in
+      CCIO.with_out
+        ("idelive" ^ n ^ ".dot")
+        (fun s ->
+          print_live_vars_dot IDELiveAnalysis.show_summary
+            (summary ~proc_id:proc) (Format.of_chan s) prog proc);
+      CCIO.with_out
+        ("idelive-const" ^ n ^ ".dot")
+        (fun s ->
+          print_live_vars_dot show_const_summary (r ~proc_id:proc)
+            (Format.of_chan s) prog proc));
+  prog

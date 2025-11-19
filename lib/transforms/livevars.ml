@@ -55,7 +55,7 @@ module LV =
 let run (p : Program.proc) =
   let wto =
     Trace.with_span ~__FILE__ ~__LINE__ "WTO" @@ fun _ ->
-    WTO.recursive_scc (Procedure.graph p) Procedure.Vert.Return
+    Procedure.RevWTO.recursive_scc (Procedure.graph p) Procedure.Vert.Return
   in
   let r =
     Trace.with_span ~__FILE__ ~__LINE__ "live-vars-analysis" @@ fun _ ->
@@ -224,7 +224,7 @@ module DSE = struct
             is_assign
             && Stmt.iter_lvar s
                |> Iter.for_all (fun v ->
-                      Var.is_local v && (not @@ V.mem v live))
+                   Var.is_local v && (not @@ V.mem v live))
           in
           let live = V.filter Var.is_local @@ tf_stmt_live live s in
           let s = if dead_store then acc else s :: acc in

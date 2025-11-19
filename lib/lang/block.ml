@@ -32,7 +32,7 @@ let pretty_phi show_var v =
         | bid, v -> (text @@ ID.to_string bid) ^ text " -> " ^ show_var v)
       v.rhs
   in
-  lhs ^ text " := phi" ^ (bracket "(" (fill (text ", ") rhs)) ")"
+  lhs ^ text " := phi" ^ (bracket "(" (fill (text "," ^ newline) rhs)) ")"
 
 let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
   let open Containers_pp in
@@ -42,7 +42,7 @@ let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
     | [] -> []
     | o ->
         let phi = List.map (pretty_phi show_var) o in
-        [ bracket "(" (fill (text ",") phi) ")" ]
+        [ bracket "(" (fill (text "," ^ newline) phi) ")" ]
   in
   let stmts =
     Vector.to_list b.stmts

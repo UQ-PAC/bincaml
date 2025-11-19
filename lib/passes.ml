@@ -4,7 +4,7 @@ open Lang
 
 module PassManager = struct
   type transform =
-    | Prog of (Program.t -> unit)
+    | Prog of (Program.t -> Program.t)
     | Proc of (Program.proc -> Program.proc)
 
   type pass = { name : string; apply : transform }
@@ -15,6 +15,7 @@ module PassManager = struct
 
   let passes =
     [
+      { name = "simple-params"; apply = Prog Transforms.Ssa.set_params };
       { name = "simple-ssa"; apply = Proc Transforms.Ssa.ssa };
       {
         name = "remove-unreachable-block";
@@ -38,9 +39,7 @@ module PassManager = struct
     Trace.with_span ~__FILE__ ~__LINE__ ("transform-prog::" ^ tf.name)
     @@ fun _ ->
     match tf.apply with
-    | Prog tf ->
-        tf p;
-        p
+    | Prog tf -> tf p
     | Proc app ->
         let procs =
           ID.Map.mapi

@@ -286,6 +286,7 @@ module BasilASTLoader = struct
         `Stmt
           (Instr_Store
              {
+               lhs = mem;
                mem;
                addr = trans_expr addr;
                value = trans_expr value;
@@ -598,7 +599,6 @@ let parse_proc lexbuf =
     let start_pos = Lexing.lexeme_start_p lexbuf
     and end_pos = Lexing.lexeme_end_p lexbuf in
     raise (BNFC_Util.Parse_error (start_pos, end_pos))
-
 
 let parse_expr lexbuf =
   let open BasilIR in
