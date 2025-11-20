@@ -79,7 +79,9 @@ let fresh c ?(name : string option) () =
       | (n, Some i) as ind ->
           incr_index c.name_counts n i;
           ind
-      | o -> o
+      | (n, None) as ind ->
+          incr_index c.name_counts n 0;
+          ind
   in
   let uniq_name = indexed_name uniq_name in
   let id = c.gen () in
@@ -141,3 +143,16 @@ let make_gen () : generator =
     decl_exn = decl_exn c;
     get_declared = (fun () -> !(c.names));
   }
+
+let%expect_test "fresh" =
+  let g = make_gen () in
+  let a = g.fresh ~name:"a" () in
+  let b = g.fresh ~name:"a" () in
+  let c = g.fresh ~name:"a" () in
+  print_endline @@ ID.show a;
+  print_endline @@ ID.show b;
+  print_endline @@ ID.show c;
+  [%expect {|
+    ("a", 0)
+    ("a_1", 1)
+    ("a_2", 2) |}]

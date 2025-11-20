@@ -19,13 +19,18 @@ let set_params (p : Program.t) =
           globs
           |> Iter.map (fun (n, i) ->
               let name = n ^ "_in" in
-              (name, i, Procedure.fresh_var ~name proc (Var.typ i)))
+              let v = Procedure.fresh_var ~name proc (Var.typ i) in
+              (name, i, v))
+          |> Iter.persistent
+          (* don't re-increment on next iteration *)
         in
         let outparam =
           globs
           |> Iter.map (fun (n, i) ->
               let name = n ^ "_out" in
               (name, i, Procedure.fresh_var ~name proc (Var.typ i)))
+          |> Iter.persistent
+          (* don't re-increment on next iteration *)
         in
         let to_block l = [ Stmt.Instr_Assign l ] in
         let to_formal param =
@@ -82,6 +87,8 @@ let set_params (p : Program.t) =
   { p with procs }
 
 let ssa (in_proc : Program.proc) =
+  Procedure.iter_blocks_topo_fwd in_proc
+  |> Iter.iter (fun (i, b) -> print_endline (ID.to_string i));
   let lives = Livevars.run in_proc in
   CCIO.with_out
     ("live" ^ (Procedure.id in_proc |> ID.to_string) ^ ".dot")
@@ -94,17 +101,34 @@ let ssa (in_proc : Program.proc) =
   let rn_stmt rr (stmt : ('v, 'v, 'e) Stmt.t) : Var.t VM.t * ('v, 'v, 'e) Stmt.t
       =
     let new_renames = ref [] in
-    let ns =
-      Stmt.map ~f_lvar:(rename new_renames)
+    let stmt =
+      Stmt.map
+        ~f_lvar:(fun v -> v)
         ~f_rvar:(fun v -> VM.get_or ~default:v v rr)
         ~f_expr:(fun e ->
           Expr.BasilExpr.substitute
-            (fun v -> VM.find_opt v rr |> Option.map Expr.BasilExpr.rvar)
+            (fun v ->
+              try Some (Expr.BasilExpr.rvar (VM.find v rr)) with
+              | Not_found
+                when StringMap.exists
+                       (fun i j -> Var.equal j v)
+                       (Procedure.formal_out_params in_proc)
+                     || StringMap.exists
+                          (fun i j -> Var.equal j v)
+                          (Procedure.formal_in_params in_proc) ->
+                  Some (Expr.BasilExpr.rvar v)
+              | Not_found ->
+                  failwith @@ "not found: " ^ Var.to_string v
+                  ^ " likely a read-uninitialised variable")
             e)
         stmt
     in
-    (*print_endline ([%derive.show: (Var.t * Var.t) list] !new_renames);*)
-    (List.fold_left (fun m (v, nv) -> VM.add v nv m) rr !new_renames, ns)
+    let stmt =
+      Stmt.map ~f_lvar:(rename new_renames) ~f_rvar:identity ~f_expr:identity
+        stmt
+    in
+    print_endline ([%derive.show: (Var.t * Var.t) list] !new_renames);
+    (List.fold_left (fun m (v, nv) -> VM.add v nv m) rr !new_renames, stmt)
   in
   let st = Hashtbl.create 100 in
   let phis = Hashtbl.create 100 in
@@ -113,6 +137,15 @@ let ssa (in_proc : Program.proc) =
     VM.values joined_phis
     |> Iter.map (function lhs, rhs -> Block.{ lhs; rhs })
     |> Iter.to_list
+  in
+  let merge_existing_phi target_block block v r =
+    match r with
+    | `Both ((phi, defs), b) -> Some (phi, (block, b) :: defs)
+    | `Left phi -> Some phi
+    | `Right rn ->
+        print_endline @@ "no phi defined for variable : " ^ Var.to_string v
+        ^ " " ^ " block phi " ^ ID.to_string target_block ^ ID.to_string block;
+        None
   in
   let merge_phi block v r =
     match r with
@@ -131,7 +164,7 @@ let ssa (in_proc : Program.proc) =
     let get_st_pred id =
       Hashtbl.get st id |> function
       | Some v ->
-          print_endline (VM.cardinal v |> Int.to_string);
+          (*print_endline (VM.cardinal v |> Int.to_string);*)
           v
       | None ->
           print_endline @@ "delay phis: " ^ ID.to_string id;
@@ -147,7 +180,7 @@ let ssa (in_proc : Program.proc) =
           (VM.empty, [])
       | [ (id, _) ] ->
           print_endline "eingle pred";
-          (get_st_pred id, [])
+          (Hashtbl.find st id, [])
       | inc ->
           print_endline "many pred";
           let joined_phis =
@@ -160,13 +193,19 @@ let ssa (in_proc : Program.proc) =
               inc
             |> List.fold_left
                  (fun phim (block, rn) ->
-                   print_endline @@ "live " ^ [%derive.show: Var.t list]
-                   @@ VS.to_list (lives (Begin block_id));
-                   let rn =
+                   (*print_endline @@ "live " ^ [%derive.show: Var.t list]
+                   @@ VS.to_list (lives (Begin block_id));*)
+                   (*let rn =
                      VM.filter (fun v _ -> VS.mem v (lives (Begin block_id))) rn
-                   in
+                   in*)
                    VM.merge_safe ~f:(merge_phi block) phim rn)
                  VM.empty
+            (*|> VM.filter (fun v (l, ins) ->
+                match ins with
+                | (h, i) :: tl ->
+                    not (List.for_all (fun (_, v) -> Var.equal v i) tl)
+                | _ -> true)
+                *)
           in
           (* TODO: this will join everything, we should only join things with diff definitions *)
           Hashtbl.add phis block_id joined_phis;
@@ -174,7 +213,8 @@ let ssa (in_proc : Program.proc) =
             [%derive.show: (Var.t * (Var.t * (ID.t * Var.t) list)) list]
           in
           let l = VM.to_list joined_phis in
-          print_endline (sh l);
+          (*print_endline (sh l);*)
+
           let renames = VM.mapi (fun i (v, t) -> v) joined_phis in
           (renames, phi_to_def joined_phis)
     in
@@ -187,13 +227,13 @@ let ssa (in_proc : Program.proc) =
     in
     let renames =
       let l = lives (End block_id) in
-      print_endline @@ "live " ^ [%derive.show: Var.t list] @@ VS.to_list l;
+      (*print_endline @@ "live " ^ [%derive.show: Var.t list] @@ VS.to_list l;*)
       VM.filter (fun v a -> VS.mem v l) renames
     in
     Hashtbl.add st block_id renames;
-    print_endline
+    (*print_endline
       ("set " ^ ID.to_string block_id ^ "  "
-      ^ (VM.cardinal renames |> Int.to_string));
+      ^ (VM.cardinal renames |> Int.to_string));*)
     Procedure.update_block proc block_id { nb with phis = bl_phis }
   in
 
@@ -201,13 +241,18 @@ let ssa (in_proc : Program.proc) =
 
   let fixup_delayed block_id proc =
     let renames = Hashtbl.find st block_id in
+    print_endline @@ "fixup " ^ ID.to_string block_id;
     if ID.Set.mem block_id !delayed_phis then
       Procedure.blocks_succ proc block_id
+      |> Iter.filter (fun (bid, _) ->
+          let pred = Procedure.G.pred (Procedure.graph proc) (Begin bid) in
+          List.length pred > 1)
       |> Iter.fold
            (fun proc (succ_bid, _) ->
              let phis =
-               VM.merge_safe ~f:(merge_phi succ_bid)
-                 (* FIXME: this default might be unsafe*)
+               VM.merge_safe
+                 ~f:((merge_existing_phi succ_bid) block_id)
+                 (* FIXME: this default might be unsafe; probably have to handle fallthrough case where not assigned on path? idk*)
                  (Hashtbl.get_or ~default:VM.empty phis succ_bid)
                  renames
                |> phi_to_def
@@ -220,4 +265,21 @@ let ssa (in_proc : Program.proc) =
            proc
     else proc
   in
-  ID.Set.fold fixup_delayed !delayed_phis proc
+  let proc = ID.Set.fold fixup_delayed !delayed_phis proc in
+  let check_bl (block_id, (block : Program.bloc)) =
+    let pred =
+      Procedure.blocks_pred proc block_id |> Iter.map (fun (i, _) -> i)
+    in
+    let npred = Iter.length pred in
+    block.phis
+    |> List.map (fun (p : Var.t Block.phi) ->
+        List.to_iter p.rhs |> Iter.map (fun (b, _) -> b) |> fun bs ->
+        let preg = Iter.length (Iter.inter bs pred) = npred in
+        let bad = Iter.diff pred bs |> Iter.to_string ~sep:", " ID.to_string in
+        if not preg then
+          print_endline @@ "bad " ^ ID.to_string block_id ^ "; missing " ^ bad;
+        preg)
+    |> List.for_all identity
+  in
+  assert (Procedure.iter_blocks_topo_fwd proc |> Iter.for_all check_bl);
+  proc
