@@ -87,8 +87,6 @@ let set_params (p : Program.t) =
   { p with procs }
 
 let ssa (in_proc : Program.proc) =
-  Procedure.iter_blocks_topo_fwd in_proc
-  |> Iter.iter (fun (i, b) -> print_endline (ID.to_string i));
   let lives = Livevars.run in_proc in
   CCIO.with_out
     ("live" ^ (Procedure.id in_proc |> ID.to_string) ^ ".dot")
@@ -127,7 +125,6 @@ let ssa (in_proc : Program.proc) =
       Stmt.map ~f_lvar:(rename new_renames) ~f_rvar:identity ~f_expr:identity
         stmt
     in
-    print_endline ([%derive.show: (Var.t * Var.t) list] !new_renames);
     (List.fold_left (fun m (v, nv) -> VM.add v nv m) rr !new_renames, stmt)
   in
   let st = Hashtbl.create 100 in
@@ -143,9 +140,9 @@ let ssa (in_proc : Program.proc) =
     | `Both ((phi, defs), b) -> Some (phi, (block, b) :: defs)
     | `Left phi -> Some phi
     | `Right rn ->
-        print_endline @@ "no phi defined for variable : " ^ Var.to_string v
-        ^ " " ^ " block phi " ^ ID.to_string target_block ^ ID.to_string block;
-        None
+        failwith @@ "cannot join as no phi defined for variable : "
+        ^ Var.to_string v ^ " " ^ " block phi " ^ ID.to_string target_block
+        ^ ID.to_string block
   in
   let merge_phi block v r =
     match r with
@@ -160,14 +157,10 @@ let ssa (in_proc : Program.proc) =
 
   let tf_block proc block_id b =
     let pred = Procedure.blocks_pred proc block_id |> Iter.to_list in
-    print_endline @@ ID.to_string block_id;
     let get_st_pred id =
       Hashtbl.get st id |> function
-      | Some v ->
-          (*print_endline (VM.cardinal v |> Int.to_string);*)
-          v
+      | Some v -> v
       | None ->
-          print_endline @@ "delay phis: " ^ ID.to_string id;
           Hashtbl.add phis id VM.empty;
           delayed_phis := ID.Set.add id !delayed_phis;
           VM.empty
@@ -175,14 +168,10 @@ let ssa (in_proc : Program.proc) =
     let renames, bl_phis =
       match pred with
       | [] ->
-          print_endline "empty pred";
           Hashtbl.add phis block_id VM.empty;
           (VM.empty, [])
-      | [ (id, _) ] ->
-          print_endline "eingle pred";
-          (Hashtbl.find st id, [])
+      | [ (id, _) ] -> (Hashtbl.find st id, [])
       | inc ->
-          print_endline "many pred";
           let joined_phis =
             List.map
               (fun (id, _) ->
@@ -195,9 +184,9 @@ let ssa (in_proc : Program.proc) =
                  (fun phim (block, rn) ->
                    (*print_endline @@ "live " ^ [%derive.show: Var.t list]
                    @@ VS.to_list (lives (Begin block_id));*)
-                   (*let rn =
+                   let rn =
                      VM.filter (fun v _ -> VS.mem v (lives (Begin block_id))) rn
-                   in*)
+                   in
                    VM.merge_safe ~f:(merge_phi block) phim rn)
                  VM.empty
             (*|> VM.filter (fun v (l, ins) ->
@@ -209,12 +198,12 @@ let ssa (in_proc : Program.proc) =
           in
           (* TODO: this will join everything, we should only join things with diff definitions *)
           Hashtbl.add phis block_id joined_phis;
-          let sh =
+
+          (*let sh =
             [%derive.show: (Var.t * (Var.t * (ID.t * Var.t) list)) list]
           in
           let l = VM.to_list joined_phis in
-          (*print_endline (sh l);*)
-
+          print_endline (sh l);*)
           let renames = VM.mapi (fun i (v, t) -> v) joined_phis in
           (renames, phi_to_def joined_phis)
     in
@@ -241,7 +230,6 @@ let ssa (in_proc : Program.proc) =
 
   let fixup_delayed block_id proc =
     let renames = Hashtbl.find st block_id in
-    print_endline @@ "fixup " ^ ID.to_string block_id;
     if ID.Set.mem block_id !delayed_phis then
       Procedure.blocks_succ proc block_id
       |> Iter.filter (fun (bid, _) ->
@@ -252,7 +240,6 @@ let ssa (in_proc : Program.proc) =
              let phis =
                VM.merge_safe
                  ~f:((merge_existing_phi succ_bid) block_id)
-                 (* FIXME: this default might be unsafe; probably have to handle fallthrough case where not assigned on path? idk*)
                  (Hashtbl.get_or ~default:VM.empty phis succ_bid)
                  renames
                |> phi_to_def
@@ -277,7 +264,7 @@ let ssa (in_proc : Program.proc) =
         let preg = Iter.length (Iter.inter bs pred) = npred in
         let bad = Iter.diff pred bs |> Iter.to_string ~sep:", " ID.to_string in
         if not preg then
-          print_endline @@ "bad " ^ ID.to_string block_id ^ "; missing " ^ bad;
+          print_endline @@ "bad: " ^ ID.to_string block_id ^ "; missing " ^ bad;
         preg)
     |> List.for_all identity
   in
