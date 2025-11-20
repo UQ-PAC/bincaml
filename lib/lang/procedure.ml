@@ -298,7 +298,9 @@ let fold_blocks_topo_fwd (f : 'a -> ID.t -> Edge.block -> 'a) init p =
   let rec ff acc e =
     match e with
     | Vertex a -> f acc a
-    | Component (a, e) -> f (Graph.WeakTopological.fold_left ff acc e) a
+    | Component (a, e) ->
+        let acc = f acc a in
+        f (Graph.WeakTopological.fold_left ff acc e) a
   in
   let topo = topo_fwd p in
   Graph.WeakTopological.fold_left ff init topo
@@ -314,7 +316,9 @@ let fold_blocks_topo_rev (f : 'a -> ID.t -> Edge.block -> 'a) init p =
   let rec ff acc e =
     match e with
     | Vertex a -> f acc a
-    | Component (a, e) -> f (Graph.WeakTopological.fold_left ff acc e) a
+    | Component (a, e) ->
+        let acc = Graph.WeakTopological.fold_left ff acc e in
+        f acc a
   in
   let topo = topo_rev p in
   Graph.WeakTopological.fold_left ff init topo
