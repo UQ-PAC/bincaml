@@ -9,3 +9,6 @@
  (modules test_expr_print)
  (preprocess
   (pps ppx_expect_nobase)))
+
+(cram
+ (deps ../examples/irreducible_loop_1.il basicssa.sexp))
