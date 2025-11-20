@@ -3,10 +3,11 @@
 open Lang.Common
 open Lang
 open Containers
-module VM = Map.Make (Var)
-module VS = Set.Make (Var)
 
-type t = Var.t VM.t
+open struct
+  module VM = Map.Make (Var)
+  module VS = Set.Make (Var)
+end
 
 let set_params (p : Program.t) =
   let globs =
