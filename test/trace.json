@@ -1,2 +1,0 @@
-[{"pid":2411984,"name":"process_name","ph":"M","args": {"name":"main"}},
-{"pid":2411984,"tid": 0,"name":"thread_name","ph":"M","args": {"name":"t1"}}

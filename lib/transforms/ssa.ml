@@ -19,7 +19,10 @@ let set_params (p : Program.t) =
         let inparam =
           globs
           |> Iter.map (fun (n, i) ->
-              let name = n ^ "_in" in
+              let name =
+                String.drop_while (function '$' -> true | _ -> false) n
+                ^ "_in"
+              in
               let v = Procedure.fresh_var ~name proc (Var.typ i) in
               (name, i, v))
           |> Iter.persistent
@@ -28,7 +31,10 @@ let set_params (p : Program.t) =
         let outparam =
           globs
           |> Iter.map (fun (n, i) ->
-              let name = n ^ "_out" in
+              let name =
+                String.drop_while (function '$' -> true | _ -> false) n
+                ^ "_out"
+              in
               (name, i, Procedure.fresh_var ~name proc (Var.typ i)))
           |> Iter.persistent
           (* don't re-increment on next iteration *)
@@ -57,26 +63,44 @@ let set_params (p : Program.t) =
         let proc, outbl =
           Procedure.fresh_block ~name:"%returns" proc ~stmts:assigns_out ()
         in
+
         let graph = Procedure.graph proc in
-        let graph =
-          let edges = Procedure.G.succ_e graph Procedure.Vert.Entry in
-          let graph = List.fold_left Procedure.G.remove_edge_e graph edges in
-          let new_edges =
-            List.map (fun (b, l, e) -> (Procedure.Vert.(End inbl), l, e)) edges
-          in
-          let graph = List.fold_left Procedure.G.add_edge_e graph new_edges in
-          Procedure.G.add_edge graph Entry (Begin inbl)
+        let proc =
+          Procedure.map_graph
+            (fun graph ->
+              let graph =
+                let edges = Procedure.G.succ_e graph Procedure.Vert.Entry in
+                let graph =
+                  List.fold_left Procedure.G.remove_edge_e graph edges
+                in
+                let new_edges =
+                  List.map
+                    (fun (b, l, e) -> (Procedure.Vert.(End inbl), l, e))
+                    edges
+                in
+                let graph =
+                  List.fold_left Procedure.G.add_edge_e graph new_edges
+                in
+                Procedure.G.add_edge graph Entry (Begin inbl)
+              in
+              let graph =
+                let edges = Procedure.G.pred_e graph Procedure.Vert.Return in
+                let graph =
+                  List.fold_left Procedure.G.remove_edge_e graph edges
+                in
+                let new_edges =
+                  List.map
+                    (fun (b, l, e) -> (b, l, Procedure.Vert.Begin outbl))
+                    edges
+                in
+                let graph =
+                  List.fold_left Procedure.G.add_edge_e graph new_edges
+                in
+                Procedure.G.add_edge graph (End outbl) Return
+              in
+              graph)
+            proc
         in
-        let graph =
-          let edges = Procedure.G.pred_e graph Procedure.Vert.Return in
-          let graph = List.fold_left Procedure.G.remove_edge_e graph edges in
-          let new_edges =
-            List.map (fun (b, l, e) -> (b, l, Procedure.Vert.Begin outbl)) edges
-          in
-          let graph = List.fold_left Procedure.G.add_edge_e graph new_edges in
-          Procedure.G.add_edge graph (End outbl) Return
-        in
-        let proc = Procedure.set_graph graph proc in
         let proc =
           Procedure.map_formal_in_params (fun i -> to_formal inparam) proc
         in
@@ -89,9 +113,6 @@ let set_params (p : Program.t) =
 
 let ssa (in_proc : Program.proc) =
   let lives = Livevars.run in_proc in
-  CCIO.with_out
-    ("live" ^ (Procedure.id in_proc |> ID.to_string) ^ ".dot")
-    (fun o -> Livevars.print_live_vars_dot (Format.of_chan o) in_proc);
   let rename r v : Var.t =
     if
       (* don't rename formal out params; should only be assigned once*)
@@ -106,32 +127,33 @@ let ssa (in_proc : Program.proc) =
   let rn_stmt rr (stmt : ('v, 'v, 'e) Stmt.t) : Var.t VM.t * ('v, 'v, 'e) Stmt.t
       =
     let read v =
-      try Some (Expr.BasilExpr.rvar (VM.find v rr)) with
+      try VM.find v rr with
       | Not_found
-        when StringMap.exists
-               (fun i j -> Var.equal j v)
-               (Procedure.formal_out_params in_proc)
+        when (not @@ Var.pure v)
+             || StringMap.exists
+                  (fun i j -> Var.equal j v)
+                  (Procedure.formal_out_params in_proc)
              || StringMap.exists
                   (fun i j -> Var.equal j v)
                   (Procedure.formal_in_params in_proc) ->
-          Some (Expr.BasilExpr.rvar v)
+          v
       | Not_found ->
           failwith @@ "not found: " ^ Var.to_string v
           ^ " likely a read-uninitialised variable"
     in
     let new_renames = ref [] in
     let stmt =
-      Stmt.map
-        ~f_lvar:(fun v -> v)
-        ~f_rvar:(fun v -> VM.get_or ~default:v v rr)
-        ~f_expr:(fun e -> Expr.BasilExpr.substitute read e)
+      Stmt.map ~f_lvar:(rename new_renames) ~f_rvar:read
+        ~f_expr:(fun e ->
+          Expr.BasilExpr.substitute
+            (fun v -> Some (Expr.BasilExpr.rvar @@ read v))
+            e)
         stmt
     in
-    let stmt =
-      Stmt.map ~f_lvar:(rename new_renames) ~f_rvar:identity ~f_expr:identity
-        stmt
+    let vm =
+      (List.fold_left (fun m (v, nv) -> VM.add v nv m) rr !new_renames, stmt)
     in
-    (List.fold_left (fun m (v, nv) -> VM.add v nv m) rr !new_renames, stmt)
+    vm
   in
   let st = Hashtbl.create 100 in
   let phis = Hashtbl.create 100 in

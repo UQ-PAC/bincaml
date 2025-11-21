@@ -74,15 +74,18 @@ let iter_mem_store stmt =
 let iter_rexpr stmt =
   let open Iter.Infix in
   match stmt with
-  | Instr_Assign ls -> List.to_iter ls >|= snd
-  | Instr_Assert { body } -> Iter.singleton body
-  | Instr_Assume { body } -> Iter.singleton body
-  | Instr_Load { lhs; mem; addr; endian } -> Iter.singleton addr
-  | Instr_Store { mem; addr; value; endian } ->
-      Iter.singleton value <+> Iter.singleton addr
-  | Instr_IntrinCall { lhs; name; args } -> StringMap.to_iter args >|= snd
-  | Instr_IndirectCall { target } -> Iter.singleton target
-  | Instr_Call { lhs; procid; args } -> StringMap.to_iter args >|= snd
+  | Instr_Assign ls -> List.to_iter ls >|= snd >|= fun v -> `Expr v
+  | Instr_Assert { body } -> Iter.singleton (`Expr body)
+  | Instr_Assume { body } -> Iter.singleton (`Expr body)
+  | Instr_Load { lhs; mem; addr; endian } ->
+      Iter.doubleton (`Expr addr) (`Var mem)
+  | Instr_Store { lhs; mem; addr; value; endian } ->
+      Iter.of_list [ `Expr value; `Expr addr; `Var mem ]
+  | Instr_IntrinCall { lhs; name; args } ->
+      StringMap.to_iter args >|= snd >|= fun e -> `Expr e
+  | Instr_IndirectCall { target } -> Iter.singleton (`Expr target)
+  | Instr_Call { lhs; procid; args } ->
+      StringMap.to_iter args >|= snd >|= fun e -> `Expr e
 
 (** get an iterator over the variables in the LHS of the statement *)
 let iter_lvar stmt =
@@ -92,7 +95,7 @@ let iter_lvar stmt =
   | Instr_Assert { body } -> Iter.empty
   | Instr_Assume { body } -> Iter.empty
   | Instr_Load { lhs; mem; addr; endian } -> Iter.singleton lhs
-  | Instr_Store { mem; addr; value; endian } -> Iter.singleton mem
+  | Instr_Store { lhs; mem; addr; value; endian } -> Iter.singleton lhs
   | Instr_IntrinCall { lhs; name; args } -> StringMap.to_iter lhs >|= snd
   | Instr_IndirectCall { target } -> Iter.empty
   | Instr_Call { lhs; procid; args } -> StringMap.to_iter lhs >|= snd
@@ -163,5 +166,9 @@ let assigned (init : V.t) s : V.t =
   iter_lvar s |> Iter.fold f_lvar init
 
 let free_vars (init : V.t) (s : (Var.t, Var.t, BasilExpr.t) t) : V.t =
-  let f_expr a v = V.union (BasilExpr.free_vars v) a in
+  let f_expr a v =
+    match v with
+    | `Expr v -> V.union (BasilExpr.free_vars v) a
+    | `Var v -> V.add v a
+  in
   iter_rexpr s |> Iter.fold f_expr init

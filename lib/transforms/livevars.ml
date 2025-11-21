@@ -113,7 +113,11 @@ module Interproc = struct
 
   let free_vars_stmt summary (init : V.t)
       (s : (Var.t, Var.t, BasilExpr.t) Stmt.t) : V.t =
-    let f_expr a v = V.union (BasilExpr.free_vars v) a in
+    let f_expr a v =
+      match v with
+      | `Expr v -> V.union (BasilExpr.free_vars v) a
+      | `Var v -> V.add v a
+    in
     let filter_glob =
       V.filter (function (v : Var.t) ->
           Var.equal_declaration_scope (Var.scope v) Global)
