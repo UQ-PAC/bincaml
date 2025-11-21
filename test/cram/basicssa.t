@@ -16,24 +16,22 @@ Run on basic irreducible loop example
   var $NF:bv1;
   var $R30:bv64;
   prog entry @main_1876;
-  proc @puts_1584()  -> ()
-  [  ];
   proc @main_1876()  -> ()
   [
      block %main_entry [
         var #4:bv64 := bvadd($R31:bv64, 0xffffffffffffffe0:bv64);
-        store le $stack #4:bv64 $R29:bv64 64;
-        store le $stack bvadd(#4:bv64, 0x8:bv64) $R30:bv64 64;
+        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) #4:bv64 $R29:bv64 64;
+        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(#4:bv64, 0x8:bv64) $R30:bv64 64;
         $R31:bv64 := #4:bv64;
         $R29:bv64 := $R31:bv64;
-        store le $stack bvadd($R31:bv64, 0x1c:bv64) extract(32,0, $R0:bv64) 32;
-        store le $stack bvadd($R31:bv64, 0x10:bv64) $R1:bv64 64;
+        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd($R31:bv64, 0x1c:bv64) extract(32,0, $R0:bv64) 32;
+        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd($R31:bv64, 0x10:bv64) $R1:bv64 64;
         $R0:bv64 := 0x20000:bv64;
         $R0:bv64 := bvadd($R0:bv64, 0x3c:bv64);
-        store le $mem $R0:bv64 0x0:bv32 32;
+        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) $R0:bv64 0x0:bv32 32;
         $R0:bv64 := 0x20000:bv64;
         $R0:bv64 := bvadd($R0:bv64, 0x40:bv64);
-        var load18:bv32 := load le $mem $R0:bv64 32;
+        var load18:bv32 := load le $mem:(bv64->bv8) $R0:bv64 32;
         $R0:bv64 := zero_extend(32, load18:bv32);
         $R0:bv64 := zero_extend(32, bvconcat(0x0:bv31, extract(1,0, $R0:bv64)));
         var #5:bv32 := bvadd(extract(32,0, $R0:bv64), 0xffffffff:bv32);
@@ -48,12 +46,12 @@ Run on basic irreducible loop example
      block %main_3 [
         $R0:bv64 := 0x20000:bv64;
         $R0:bv64 := bvadd($R0:bv64, 0x3c:bv64);
-        var load19:bv32 := load le $mem $R0:bv64 32;
+        var load19:bv32 := load le $mem:(bv64->bv8) $R0:bv64 32;
         $R0:bv64 := zero_extend(32, load19:bv32);
         $R1:bv64 := zero_extend(32, bvadd(extract(32,0, $R0:bv64), 0x1:bv32));
         $R0:bv64 := 0x20000:bv64;
         $R0:bv64 := bvadd($R0:bv64, 0x3c:bv64);
-        store le $mem $R0:bv64 extract(32,0, $R1:bv64) 32;
+        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) $R0:bv64 extract(32,0, $R1:bv64) 32;
         goto (%main_19);
         ];
      block %main_5 [
@@ -71,9 +69,9 @@ Run on basic irreducible loop example
         ];
      block %main_11 [
         $R0:bv64 := 0x0:bv64;
-        var load21:bv64 := load le $stack $R31:bv64 64;
+        var load21:bv64 := load le $stack:(bv64->bv8) $R31:bv64 64;
         $R29:bv64 := load21:bv64;
-        var load22:bv64 := load le $stack bvadd($R31:bv64, 0x8:bv64) 64;
+        var load22:bv64 := load le $stack:(bv64->bv8) bvadd($R31:bv64, 0x8:bv64) 64;
         $R30:bv64 := load22:bv64;
         $R31:bv64 := bvadd($R31:bv64, 0x20:bv64);
         goto (%main_basil_return_1);
@@ -91,7 +89,7 @@ Run on basic irreducible loop example
      block %main_17 [
         $R0:bv64 := 0x20000:bv64;
         $R0:bv64 := bvadd($R0:bv64, 0x3c:bv64);
-        var load20:bv32 := load le $mem $R0:bv64 32;
+        var load20:bv32 := load le $mem:(bv64->bv8) $R0:bv64 32;
         $R0:bv64 := zero_extend(32, load20:bv32);
         var #6:bv32 := bvadd(extract(32,0, $R0:bv64), 0xfffffffa:bv32);
         $VF:bv1 := bvnot(booltobv1(eq(sign_extend(1, bvadd(#6:bv32, 0x1:bv32)),
@@ -120,8 +118,10 @@ Run on basic irreducible loop example
         guard eq(booltobv1(eq($ZF:bv1, 0x1:bv1)), 0x0:bv1);
         goto (%main_25);
         ];
-     block %main_basil_return_1 [ ; ]
+     block %main_basil_return_1 [ nop; return(); ]
   ];
+  proc @puts_1584()  -> ()
+  [  ];
 
   $ cat after.il
   var $R29:bv64;
@@ -136,46 +136,28 @@ Run on basic irreducible loop example
   var $NF:bv1;
   var $R30:bv64;
   prog entry @main_1876;
-  proc @puts_1584(stack_in, ZF_in:bv1, VF_in:bv1, R31_in:bv64, R30_in:bv64,
-     R29_in:bv64, R1_in:bv64, R0_in:bv64, NF_in:bv1, CF_in:bv1)
-     -> (stack_out, ZF_out:bv1, VF_out:bv1, R31_out:bv64, R30_out:bv64, R29_out:bv64,
-     R1_out:bv64, R0_out:bv64, NF_out:bv1, CF_out:bv1)
-  [
-     block %inputs [
-        (var R30:bv64 := R30_in:bv64, var NF:bv1 := NF_in:bv1,
-         var CF:bv1 := CF_in:bv1, var VF:bv1 := VF_in:bv1, var R0:bv64 := R0_in:bv64,
-         var R31:bv64 := R31_in:bv64, stack := stack_in:(bv64->bv8),
-         var R1:bv64 := R1_in:bv64, var ZF:bv1 := ZF_in:bv1,
-         var R29:bv64 := R29_in:bv64);
-        unreachable;
-        ];
-     block %returns [
-        (var R30_out:bv64 := $R30:bv64, var NF_out:bv1 := $NF:bv1,
-         var CF_out:bv1 := $CF:bv1, var VF_out:bv1 := $VF:bv1,
-         var R0_out:bv64 := $R0:bv64, var R31_out:bv64 := $R31:bv64,
-         stack_out := $stack:(bv64->bv8), var R1_out:bv64 := $R1:bv64,
-         var ZF_out:bv1 := $ZF:bv1, var R29_out:bv64 := $R29:bv64);
-        ]
-  ];
-  proc @main_1876(stack_in, ZF_in:bv1, VF_in:bv1, R31_in:bv64, R30_in:bv64,
-     R29_in:bv64, R1_in:bv64, R0_in:bv64, NF_in:bv1, CF_in:bv1)
-     -> (stack_out, ZF_out:bv1, VF_out:bv1, R31_out:bv64, R30_out:bv64, R29_out:bv64,
-     R1_out:bv64, R0_out:bv64, NF_out:bv1, CF_out:bv1)
+  proc @main_1876(stack_in:(bv64->bv8), ZF_in:bv1, VF_in:bv1, R31_in:bv64,
+     R30_in:bv64, R29_in:bv64, R1_in:bv64, R0_in:bv64, NF_in:bv1, CF_in:bv1)
+     -> (stack_out:(bv64->bv8), ZF_out:bv1, VF_out:bv1, R31_out:bv64, R30_out:bv64,
+     R29_out:bv64, R1_out:bv64, R0_out:bv64, NF_out:bv1, CF_out:bv1)
   [
      block %main_entry [
         var #4_1:bv64 := bvadd(R31:bv64, 0xffffffffffffffe0:bv64);
-        store le $stack #4_1:bv64 R29:bv64 64;
-        store le stack_1 bvadd(#4_1:bv64, 0x8:bv64) R30:bv64 64;
+        var stack_1:(bv64->bv8) := store le $stack:(bv64->bv8) #4_1:bv64 R29:bv64 64;
+        var stack_2:(bv64->bv8) := store le stack_1:(bv64->bv8) bvadd(#4_1:bv64,
+         0x8:bv64) R30:bv64 64;
         var R31_1:bv64 := #4_1:bv64;
         var R29_1:bv64 := R31_1:bv64;
-        store le stack_2 bvadd(R31_1:bv64, 0x1c:bv64) extract(32,0, R0:bv64) 32;
-        store le stack_3 bvadd(R31_1:bv64, 0x10:bv64) R1:bv64 64;
+        var stack_3:(bv64->bv8) := store le stack_2:(bv64->bv8) bvadd(R31_1:bv64,
+         0x1c:bv64) extract(32,0, R0:bv64) 32;
+        var stack_4:(bv64->bv8) := store le stack_3:(bv64->bv8) bvadd(R31_1:bv64,
+         0x10:bv64) R1:bv64 64;
         var R0_1:bv64 := 0x20000:bv64;
         var R0_2:bv64 := bvadd(R0_1:bv64, 0x3c:bv64);
-        store le $mem R0_2:bv64 0x0:bv32 32;
+        var mem:(bv64->bv8) := store le $mem:(bv64->bv8) R0_2:bv64 0x0:bv32 32;
         var R0_3:bv64 := 0x20000:bv64;
         var R0_4:bv64 := bvadd(R0_3:bv64, 0x40:bv64);
-        var load18_1:bv32 := load le mem R0_4:bv64 32;
+        var load18_1:bv32 := load le mem:(bv64->bv8) R0_4:bv64 32;
         var R0_5:bv64 := zero_extend(32, load18_1:bv32);
         var R0_6:bv64 := zero_extend(32,
         bvconcat(0x0:bv31, extract(1,0, R0_5:bv64)));
@@ -192,16 +174,17 @@ Run on basic irreducible loop example
      block %main_3 [
         var R0_14:bv64 := 0x20000:bv64;
         var R0_15:bv64 := bvadd(R0_14:bv64, 0x3c:bv64);
-        var load19_1:bv32 := load le $mem R0_15:bv64 32;
+        var load19_1:bv32 := load le $mem:(bv64->bv8) R0_15:bv64 32;
         var R0_16:bv64 := zero_extend(32, load19_1:bv32);
         var R1_2:bv64 := zero_extend(32, bvadd(extract(32,0, R0_16:bv64), 0x1:bv32));
         var R0_17:bv64 := 0x20000:bv64;
         var R0_18:bv64 := bvadd(R0_17:bv64, 0x3c:bv64);
-        store le $mem R0_18:bv64 extract(32,0, R1_2:bv64) 32;
+        var mem_1:(bv64->bv8) := store le $mem:(bv64->bv8) R0_18:bv64 extract(32,0, R1_2:bv64) 32;
         goto (%main_19);
         ];
      block %main_5 [
-        (stack_6 := phi(%main_25 -> stack_4, %main_7 -> stack_5),
+        (stack_6:(bv64->bv8) := phi(%main_25 -> stack_4:(bv64->bv8),
+          %main_7 -> stack_5:(bv64->bv8)),
          R31_3:bv64 := phi(%main_25 -> R31_1:bv64, %main_7 -> R31_2:bv64));
         var R0_12:bv64 := 0x0:bv64;
         var R0_13:bv64 := bvadd(R0_12:bv64, 0x820:bv64);
@@ -217,9 +200,9 @@ Run on basic irreducible loop example
         ];
      block %main_11 [
         var R0_23:bv64 := 0x0:bv64;
-        var load21_1:bv64 := load le stack_5 R31_2:bv64 64;
+        var load21_1:bv64 := load le stack_5:(bv64->bv8) R31_2:bv64 64;
         var R29_2:bv64 := load21_1:bv64;
-        var load22_1:bv64 := load le stack_5 bvadd(R31_2:bv64, 0x8:bv64) 64;
+        var load22_1:bv64 := load le stack_5:(bv64->bv8) bvadd(R31_2:bv64, 0x8:bv64) 64;
         var R30_5:bv64 := load22_1:bv64;
         var R31_5:bv64 := bvadd(R31_2:bv64, 0x20:bv64);
         goto (%main_basil_return_1);
@@ -237,7 +220,7 @@ Run on basic irreducible loop example
      block %main_17 [
         var R0_9:bv64 := 0x20000:bv64;
         var R0_10:bv64 := bvadd(R0_9:bv64, 0x3c:bv64);
-        var load20_1:bv32 := load le $mem R0_10:bv64 32;
+        var load20_1:bv32 := load le $mem:(bv64->bv8) R0_10:bv64 32;
         var R0_11:bv64 := zero_extend(32, load20_1:bv32);
         var #6_1:bv32 := bvadd(extract(32,0, R0_11:bv64), 0xfffffffa:bv32);
         var VF_2:bv1 := bvnot(booltobv1(eq(sign_extend(1,
@@ -251,7 +234,8 @@ Run on basic irreducible loop example
         goto (%main_15,%main_9);
         ];
      block %main_19 [
-        (stack_7 := phi(%main_3 -> stack_6, %main_21 -> stack_4, %main_3 -> stack_6),
+        (stack_7:(bv64->bv8) := phi(%main_3 -> stack_6:(bv64->bv8),
+          %main_21 -> stack_4:(bv64->bv8), %main_3 -> stack_6:(bv64->bv8)),
          R1_3:bv64 := phi(%main_3 -> R1_2:bv64, %main_21 -> R1:bv64,
           %main_3 -> R1_2:bv64),
          R31_4:bv64 := phi(%main_3 -> R31_3:bv64, %main_21 -> R31_1:bv64,
@@ -277,7 +261,7 @@ Run on basic irreducible loop example
      block %inputs [
         (var R30:bv64 := R30_in:bv64, var NF:bv1 := NF_in:bv1,
          var CF:bv1 := CF_in:bv1, var VF:bv1 := VF_in:bv1, var R0:bv64 := R0_in:bv64,
-         var R31:bv64 := R31_in:bv64, stack := stack_in:(bv64->bv8),
+         var R31:bv64 := R31_in:bv64, var stack:(bv64->bv8) := stack_in:(bv64->bv8),
          var R1:bv64 := R1_in:bv64, var ZF:bv1 := ZF_in:bv1,
          var R29:bv64 := R29_in:bv64);
         goto (%main_entry);
@@ -286,7 +270,32 @@ Run on basic irreducible loop example
         (var R30_out:bv64 := R30_5:bv64, var NF_out:bv1 := NF_2:bv1,
          var CF_out:bv1 := CF_2:bv1, var VF_out:bv1 := VF_2:bv1,
          var R0_out:bv64 := R0_23:bv64, var R31_out:bv64 := R31_5:bv64,
-         stack_out := stack_5:(bv64->bv8), var R1_out:bv64 := R1_1:bv64,
-         var ZF_out:bv1 := ZF_2:bv1, var R29_out:bv64 := R29_2:bv64);
+         var stack_out:(bv64->bv8) := stack_5:(bv64->bv8),
+         var R1_out:bv64 := R1_1:bv64, var ZF_out:bv1 := ZF_2:bv1,
+         var R29_out:bv64 := R29_2:bv64);
+        return($stack_out=stack_out:(bv64->bv8),$ZF_out=ZF_out:bv1,$VF_out=VF_out:bv1,$R31_out=R31_out:bv64,$R30_out=R30_out:bv64,$R29_out=R29_out:bv64,$R1_out=R1_out:bv64,$R0_out=R0_out:bv64,$NF_out=NF_out:bv1,$CF_out=CF_out:bv1);
+        ]
+  ];
+  proc @puts_1584(stack_in:(bv64->bv8), ZF_in:bv1, VF_in:bv1, R31_in:bv64,
+     R30_in:bv64, R29_in:bv64, R1_in:bv64, R0_in:bv64, NF_in:bv1, CF_in:bv1)
+     -> (stack_out:(bv64->bv8), ZF_out:bv1, VF_out:bv1, R31_out:bv64, R30_out:bv64,
+     R29_out:bv64, R1_out:bv64, R0_out:bv64, NF_out:bv1, CF_out:bv1)
+  [
+     block %inputs [
+        (var R30:bv64 := R30_in:bv64, var NF:bv1 := NF_in:bv1,
+         var CF:bv1 := CF_in:bv1, var VF:bv1 := VF_in:bv1, var R0:bv64 := R0_in:bv64,
+         var R31:bv64 := R31_in:bv64, var stack:(bv64->bv8) := stack_in:(bv64->bv8),
+         var R1:bv64 := R1_in:bv64, var ZF:bv1 := ZF_in:bv1,
+         var R29:bv64 := R29_in:bv64);
+        unreachable;
+        ];
+     block %returns [
+        (var R30_out:bv64 := $R30:bv64, var NF_out:bv1 := $NF:bv1,
+         var CF_out:bv1 := $CF:bv1, var VF_out:bv1 := $VF:bv1,
+         var R0_out:bv64 := $R0:bv64, var R31_out:bv64 := $R31:bv64,
+         var stack_out:(bv64->bv8) := $stack:(bv64->bv8),
+         var R1_out:bv64 := $R1:bv64, var ZF_out:bv1 := $ZF:bv1,
+         var R29_out:bv64 := $R29:bv64);
+        return($stack_out=stack_out:(bv64->bv8),$ZF_out=ZF_out:bv1,$VF_out=VF_out:bv1,$R31_out=R31_out:bv64,$R30_out=R30_out:bv64,$R29_out=R29_out:bv64,$R1_out=R1_out:bv64,$R0_out=R0_out:bv64,$NF_out=NF_out:bv1,$CF_out=CF_out:bv1);
         ]
   ];

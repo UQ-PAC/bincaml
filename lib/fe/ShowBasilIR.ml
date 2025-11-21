@@ -123,10 +123,13 @@ and showAssignment (e : AbsBasilIR.assignment) : showable = match e with
 
 
 and showStmt (e : AbsBasilIR.stmt) : showable = match e with
-       AbsBasilIR.Stmt_SingleAssign assignment -> s2s "Stmt_SingleAssign" >> c2s ' ' >> c2s '(' >> showAssignment assignment >> c2s ')'
+       AbsBasilIR.Stmt_Nop  -> s2s "Stmt_Nop"
+  |    AbsBasilIR.Stmt_SingleAssign assignment -> s2s "Stmt_SingleAssign" >> c2s ' ' >> c2s '(' >> showAssignment assignment >> c2s ')'
   |    AbsBasilIR.Stmt_MultiAssign assignments -> s2s "Stmt_MultiAssign" >> c2s ' ' >> c2s '(' >> showList showAssignment assignments >> c2s ')'
   |    AbsBasilIR.Stmt_Load (lvar, endian, globalident, expr, intval) -> s2s "Stmt_Load" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
   |    AbsBasilIR.Stmt_Store (endian, globalident, expr0, expr, intval) -> s2s "Stmt_Store" >> c2s ' ' >> c2s '(' >> showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
+  |    AbsBasilIR.Stmt_Load_Var (lvar, endian, var, expr, intval) -> s2s "Stmt_Load_Var" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showEndian endian  >> s2s ", " >>  showVar var  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
+  |    AbsBasilIR.Stmt_Store_Var (lvar, endian, var, expr0, expr, intval) -> s2s "Stmt_Store_Var" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showEndian endian  >> s2s ", " >>  showVar var  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
   |    AbsBasilIR.Stmt_DirectCall (lvars, procident, callparams) -> s2s "Stmt_DirectCall" >> c2s ' ' >> c2s '(' >> showLVars lvars  >> s2s ", " >>  showProcIdent procident  >> s2s ", " >>  showCallParams callparams >> c2s ')'
   |    AbsBasilIR.Stmt_IndirectCall expr -> s2s "Stmt_IndirectCall" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Stmt_Assume expr -> s2s "Stmt_Assume" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
@@ -140,6 +143,11 @@ and showLocalVar (e : AbsBasilIR.localVar) : showable = match e with
 
 and showGlobalVar (e : AbsBasilIR.globalVar) : showable = match e with
        AbsBasilIR.GlobalVar1 (globalident, type') -> s2s "GlobalVar1" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type' >> c2s ')'
+
+
+and showVar (e : AbsBasilIR.var) : showable = match e with
+       AbsBasilIR.VarLocalVar localvar -> s2s "VarLocalVar" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
+  |    AbsBasilIR.VarGlobalVar globalvar -> s2s "VarGlobalVar" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
 
 
 and showNamedCallReturn (e : AbsBasilIR.namedCallReturn) : showable = match e with

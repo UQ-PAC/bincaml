@@ -1,5 +1,6 @@
 (library
  (name BasilIR)
+ (public_name bincaml.basilir)
  (modules
   AbsBasilIR
   BNFC_Util

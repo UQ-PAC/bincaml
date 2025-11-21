@@ -75,18 +75,24 @@ Endian_Big . Endian ::= "be" ;
 
 rules Assignment ::= LVar ":=" Expr ;
 
+Stmt_Nop . Stmt ::= "nop";
 Stmt_SingleAssign . Stmt ::= Assignment ;
 
 separator nonempty Assignment ",";
 Stmt_MultiAssign . Stmt ::= "(" [Assignment]  ")" ;
 
-Stmt_Load . Stmt ::= LVar ":=" "load" Endian GlobalIdent Expr IntVal;
-Stmt_Store . Stmt ::= "store" Endian GlobalIdent Expr Expr IntVal;
 
 rules LocalVar ::= LocalIdent ":" Type ;
 rules GlobalVar ::= GlobalIdent ":" Type ;
 separator nonempty LocalVar ",";
+rules Var ::= LocalVar | GlobalVar ;
 
+
+Stmt_Load . Stmt ::= LVar ":=" "load" Endian GlobalIdent Expr IntVal;
+Stmt_Store . Stmt ::= "store" Endian GlobalIdent Expr Expr IntVal;
+
+Stmt_Load_Var . Stmt ::= LVar ":=" "load" Endian Var Expr IntVal;
+Stmt_Store_Var . Stmt ::= LVar ":="  "store" Endian Var Expr Expr IntVal;
 
 rules NamedCallReturn ::= LVar "=" LocalIdent;
 separator NamedCallReturn "," ;

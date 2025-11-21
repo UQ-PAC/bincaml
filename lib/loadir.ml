@@ -4,7 +4,6 @@ open Lang
 open Value
 open Expr
 open Containers
-module StringMap = Map.Make (String)
 
 type load_st = {
   prog : Program.t;
@@ -13,7 +12,11 @@ type load_st = {
     (string, (string * Var.t) list * (string * Var.t) list) Hashtbl.t;
 }
 
-let map_prog f l = { l with prog = f l.prog }
+open struct
+  module StringMap = Map.Make (String)
+
+  let map_prog f l = { l with prog = f l.prog }
+end
 
 type textRange = (int * int) option [@@deriving show { with_path = false }, eq]
 
@@ -68,7 +71,7 @@ module BasilASTLoader = struct
             Program.decl_global p
               (Var.create
                  (unsafe_unsigil (`Global bident))
-                 ~pure:false ~scope:Global (transType type'));
+                 ~pure:false ~scope:Global (trans_type type'));
             p)
           prog
     | Decl_UnsharedMem (bident, type') ->
@@ -77,7 +80,7 @@ module BasilASTLoader = struct
             Program.decl_global p
               (Var.create
                  (unsafe_unsigil (`Global bident))
-                 ~pure:true ~scope:Global (transType type'));
+                 ~pure:true ~scope:Global (trans_type type'));
             p)
           prog
     | Decl_Var (bident, type') ->
@@ -86,7 +89,7 @@ module BasilASTLoader = struct
             Program.decl_global p
               (Var.create
                  (unsafe_unsigil (`Global bident))
-                 ~pure:true ~scope:Global (transType type'));
+                 ~pure:true ~scope:Global (trans_type type'));
             p)
           prog
     | Decl_UninterpFun (attrDefList, glident, argtypes, rettype) -> prog
@@ -229,9 +232,9 @@ module BasilASTLoader = struct
     | _ -> prog
 
   and transMapType (x : mapType) : Types.t =
-    match x with MapType1 (t0, t1) -> Map (transType t0, transType t1)
+    match x with MapType1 (t0, t1) -> Map (trans_type t0, trans_type t1)
 
-  and transType (x : typeT) : Types.t =
+  and trans_type (x : typeT) : Types.t =
     match x with
     | TypeIntType inttype -> Integer
     | TypeBoolType booltype -> Boolean
@@ -246,10 +249,48 @@ module BasilASTLoader = struct
   and trans_endian (x : BasilIR.AbsBasilIR.endian) =
     match x with Endian_Little -> `Little | Endian_Big -> `Big
 
+  and load_var p_st (v : var) =
+    match v with
+    | VarLocalVar (LocalVar1 (localVar, ty)) ->
+        decl p_st (unsafe_unsigil (`Local localVar)) (trans_type ty) Var.Local
+    | VarGlobalVar (GlobalVar1 (globalVar, ty)) ->
+        decl p_st
+          (unsafe_unsigil (`Global globalVar))
+          (trans_type ty) Var.Global
+
   and trans_stmt (p_st : load_st) (x : BasilIR.AbsBasilIR.stmtWithAttrib) =
     let stmt = match x with StmtWithAttrib1 (stmt, _) -> stmt in
     let open Stmt in
     match stmt with
+    | Stmt_Nop -> `None
+    | Stmt_Load_Var (lvar, endian, var, expr, intval) ->
+        let endian = trans_endian endian in
+        let mem = load_var p_st var in
+        let cells = transIntVal intval |> Z.to_int in
+        `Stmt
+          (Instr_Load
+             {
+               lhs = transLVar p_st lvar;
+               mem;
+               addr = trans_expr expr;
+               endian;
+               cells;
+             })
+    | Stmt_Store_Var (lhs, endian, var, addr, value, intval) ->
+        let endian = trans_endian endian in
+        let cells = transIntVal intval |> Z.to_int in
+        let mem = load_var p_st var in
+        let lhs = transLVar p_st lhs in
+        `Stmt
+          (Instr_Store
+             {
+               lhs;
+               mem;
+               addr = trans_expr addr;
+               value = trans_expr value;
+               cells;
+               endian;
+             })
     | Stmt_SingleAssign (Assignment1 (lvar, expr)) ->
         `Stmt (Instr_Assign [ (transLVar p_st lvar, trans_expr expr) ])
     | Stmt_MultiAssign assigns ->
@@ -338,7 +379,7 @@ module BasilASTLoader = struct
     List.map
       (function
         | LocalVar1 (i, t) ->
-            Var.create ~scope:Local (unsafe_unsigil (`Local i)) (transType t))
+            Var.create ~scope:Local (unsafe_unsigil (`Local i)) (trans_type t))
       lvs
 
   and trans_jump (x : BasilIR.AbsBasilIR.jumpWithAttrib) =
@@ -357,25 +398,23 @@ module BasilASTLoader = struct
         in
         `ReturnNamed es
 
-  and transLVar prog (x : BasilIR.AbsBasilIR.lVar) : Var.t =
+  and decl prog name ty scope =
     let p = Option.get_exn_or "didnt set proc" prog.curr_proc in
-    match x with
-    | LVar_Local (LocalVar1 (bident, type')) ->
-        let v =
-          Var.create ~scope:Local
-            (unsafe_unsigil (`Local bident))
-            (transType type')
-        in
+    match scope with
+    | Var.Local ->
+        let v = Var.create ~scope:Local name ty in
         let _ = Procedure.decl_local p v in
         v
-    | LVar_Global (GlobalVar1 (bident, type')) ->
-        let v =
-          Var.create ~scope:Global
-            (unsafe_unsigil (`Global bident))
-            (transType type')
-        in
-        (*let _ = Program.decl_global prog.prog v in*)
+    | Var.Global ->
+        let v = Var.create ~scope:Global name ty in
         v
+
+  and transLVar prog (x : BasilIR.AbsBasilIR.lVar) : Var.t =
+    match x with
+    | LVar_Local (LocalVar1 (bident, type')) ->
+        decl prog (unsafe_unsigil (`Local bident)) (trans_type type') Local
+    | LVar_Global (GlobalVar1 (bident, type')) ->
+        decl prog (unsafe_unsigil (`Global bident)) (trans_type type') Global
 
   and list_begin_end_to_textrange beginlist endlist : textRange =
     let beg = match beginlist with BeginList ((i, j), l) -> i in
@@ -398,7 +437,10 @@ module BasilASTLoader = struct
           endlist ) ->
         let stmts =
           List.map (trans_stmt prog) statements
-          |> List.map (function `Call c -> `Stmt c | `Stmt c -> `Stmt c)
+          |> List.filter_map (function
+            | `Call c -> Some (`Stmt c)
+            | `Stmt c -> Some (`Stmt c)
+            | `None -> None)
         in
         let succ = trans_jump jump in
         let succ, stmts =
@@ -412,11 +454,11 @@ module BasilASTLoader = struct
 
   and param_to_lvar (pp : params) : Var.t =
     match pp with
-    | Params1 (LocalIdent (pos, id), t) -> Var.create id (transType t)
+    | Params1 (LocalIdent (pos, id), t) -> Var.create id (trans_type t)
 
   and param_to_formal (pp : params) : string * Var.t =
     match pp with
-    | Params1 (LocalIdent (pos, id), t) -> (id, Var.create id (transType t))
+    | Params1 (LocalIdent (pos, id), t) -> (id, Var.create id (trans_type t))
 
   and unsafe_unsigil g : string =
     match g with
@@ -432,10 +474,12 @@ module BasilASTLoader = struct
         BasilExpr.rvar
         @@ Var.create ~scope:Global
              (unsafe_unsigil (`Global g))
-             (transType type')
+             (trans_type type')
     | Expr_Local (LocalVar1 (g, type')) ->
         BasilExpr.rvar
-        @@ Var.create ~scope:Local (unsafe_unsigil (`Local g)) (transType type')
+        @@ Var.create ~scope:Local
+             (unsafe_unsigil (`Local g))
+             (trans_type type')
     | Expr_Assoc (binop, rs) -> (
         match transBoolBinOp binop with
         | #AllOps.intrin as op ->
@@ -573,6 +617,13 @@ module BasilASTLoader = struct
     | BoolBinOp_boolimplies -> `IMPLIES
 end
 
+exception
+  ILBParseError of {
+    input : Pp_loc.Input.t;
+    start_pos : Lexing.position;
+    end_pos : Lexing.position;
+  }
+
 let () =
   Printexc.register_printer (function
     | BasilIR.BNFC_Util.Parse_error (b, e) ->
@@ -580,37 +631,55 @@ let () =
         let x = b.pos_lnum in
         let col = b.pos_cnum - b.pos_bol in
         Some (Printf.sprintf "Parse error in \"%s\" line %d col %d" fname x col)
+    | ILBParseError { input; start_pos; end_pos } ->
+        let loc =
+          [
+            ( Pp_loc.Position.of_lexing start_pos,
+              Pp_loc.Position.of_lexing end_pos );
+          ]
+        in
+        let f = Format.get_str_formatter () in
+        Format.pp_print_string f "Parse error:\n";
+        Pp_loc.pp ~input f loc;
+        let s = Format.flush_str_formatter () in
+        Some s
     | _ -> None (* for other exceptions *))
 
-let concrete_prog_ast_of_channel ?filename c =
+let concrete_prog_ast_of_channel ?input ?filename c =
   let open BasilIR in
+  let input = Option.get_or ~default:(Pp_loc.Input.in_channel c) input in
   let lexbuf = Lexing.from_channel c in
   filename |> Option.iter (fun f -> Lexing.set_filename lexbuf f);
   try ParBasilIR.pModuleT LexBasilIR.token lexbuf
   with ParBasilIR.Error ->
     let start_pos = Lexing.lexeme_start_p lexbuf
     and end_pos = Lexing.lexeme_end_p lexbuf in
-    raise (BNFC_Util.Parse_error (start_pos, end_pos))
+    raise (ILBParseError { input; start_pos; end_pos })
 
-let parse_proc lexbuf =
+let parse_proc ?input lexbuf =
   let open BasilIR in
   try ParBasilIR.pDecl LexBasilIR.token lexbuf
-  with ParBasilIR.Error ->
+  with ParBasilIR.Error -> (
     let start_pos = Lexing.lexeme_start_p lexbuf
     and end_pos = Lexing.lexeme_end_p lexbuf in
-    raise (BNFC_Util.Parse_error (start_pos, end_pos))
+    match input with
+    | Some input -> raise (ILBParseError { input; start_pos; end_pos })
+    | None -> raise (BNFC_Util.Parse_error (start_pos, end_pos)))
 
-let parse_expr lexbuf =
+let parse_expr ?input lexbuf =
   let open BasilIR in
   try ParBasilIR.pExpr LexBasilIR.token lexbuf
-  with ParBasilIR.Error ->
+  with ParBasilIR.Error -> (
     let start_pos = Lexing.lexeme_start_p lexbuf
     and end_pos = Lexing.lexeme_end_p lexbuf in
-    raise (BNFC_Util.Parse_error (start_pos, end_pos))
+    match input with
+    | Some input -> raise (ILBParseError { input; start_pos; end_pos })
+    | None -> raise (BNFC_Util.Parse_error (start_pos, end_pos)))
 
 let parse_proc_string st c =
   let lexbuf = Lexing.from_string c in
-  let proc = parse_proc lexbuf in
+  let input = Pp_loc.Input.string c in
+  let proc = parse_proc ~input lexbuf in
   BasilASTLoader.trans_definition st proc
 
 let parse_proc_channel st c =
@@ -620,19 +689,22 @@ let parse_proc_channel st c =
 
 let parse_expr_string s =
   let lexbuf = Lexing.from_string s in
-  let proc = parse_expr lexbuf in
+  let input = Pp_loc.Input.string s in
+  let proc = parse_expr ~input lexbuf in
   BasilASTLoader.trans_expr proc
 
 let ast_of_concrete_ast ~name m =
   Trace.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->
   BasilASTLoader.trans_program ~name m
 
-let ast_of_channel fname c =
+let ast_of_channel ?input fname c =
   let m =
     Trace.with_span ~__FILE__ ~__LINE__ "load-concrete-ast" @@ fun f ->
-    let m = concrete_prog_ast_of_channel ~filename:fname c in
+    let m = concrete_prog_ast_of_channel ?input ~filename:fname c in
     m
   in
   ast_of_concrete_ast ~name:fname m
 
-let ast_of_fname fname = IO.with_in fname (fun c -> ast_of_channel fname c)
+let ast_of_fname fname =
+  IO.with_in fname (fun c ->
+      ast_of_channel ~input:(Pp_loc.Input.file fname) fname c)

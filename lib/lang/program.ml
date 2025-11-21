@@ -54,7 +54,10 @@ let prog_pretty (p : t) =
   let pretty =
     append_l ~sep:(text ";\n")
     @@ globs @ n
-    @ List.map (fun (_, p) -> proc_pretty p) (ID.Map.to_list p.procs)
+    @ List.map
+        (fun (_, p) -> proc_pretty p)
+        (ID.Map.to_list p.procs
+        |> List.sort (fun (i, _) (j, _) -> ID.compare i j))
   in
   pretty
 

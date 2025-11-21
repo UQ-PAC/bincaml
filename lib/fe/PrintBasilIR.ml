@@ -209,10 +209,13 @@ and prtAssignmentListBNFC i es : doc = match (i, es) with
   | (_,[x]) -> (concatD [prtAssignment 0 x])
   | (_,x::xs) -> (concatD [prtAssignment 0 x ; render "," ; prtAssignmentListBNFC 0 xs])
 and prtStmt (i:int) (e : AbsBasilIR.stmt) : doc = match e with
-       AbsBasilIR.Stmt_SingleAssign assignment -> prPrec i 0 (concatD [prtAssignment 0 assignment])
+       AbsBasilIR.Stmt_Nop  -> prPrec i 0 (concatD [render "nop"])
+  |    AbsBasilIR.Stmt_SingleAssign assignment -> prPrec i 0 (concatD [prtAssignment 0 assignment])
   |    AbsBasilIR.Stmt_MultiAssign assignments -> prPrec i 0 (concatD [render "(" ; prtAssignmentListBNFC 0 assignments ; render ")"])
   |    AbsBasilIR.Stmt_Load (lvar, endian, globalident, expr, intval) -> prPrec i 0 (concatD [prtLVar 0 lvar ; render ":=" ; render "load" ; prtEndian 0 endian ; prtGlobalIdent 0 globalident ; prtExpr 0 expr ; prtIntVal 0 intval])
   |    AbsBasilIR.Stmt_Store (endian, globalident, expr1, expr2, intval) -> prPrec i 0 (concatD [render "store" ; prtEndian 0 endian ; prtGlobalIdent 0 globalident ; prtExpr 0 expr1 ; prtExpr 0 expr2 ; prtIntVal 0 intval])
+  |    AbsBasilIR.Stmt_Load_Var (lvar, endian, var, expr, intval) -> prPrec i 0 (concatD [prtLVar 0 lvar ; render ":=" ; render "load" ; prtEndian 0 endian ; prtVar 0 var ; prtExpr 0 expr ; prtIntVal 0 intval])
+  |    AbsBasilIR.Stmt_Store_Var (lvar, endian, var, expr1, expr2, intval) -> prPrec i 0 (concatD [prtLVar 0 lvar ; render ":=" ; render "store" ; prtEndian 0 endian ; prtVar 0 var ; prtExpr 0 expr1 ; prtExpr 0 expr2 ; prtIntVal 0 intval])
   |    AbsBasilIR.Stmt_DirectCall (lvars, procident, callparams) -> prPrec i 0 (concatD [prtLVars 0 lvars ; render "call" ; prtProcIdent 0 procident ; render "(" ; prtCallParams 0 callparams ; render ")"])
   |    AbsBasilIR.Stmt_IndirectCall expr -> prPrec i 0 (concatD [render "indirect" ; render "call" ; prtExpr 0 expr])
   |    AbsBasilIR.Stmt_Assume expr -> prPrec i 0 (concatD [render "assume" ; prtExpr 0 expr])
@@ -229,6 +232,11 @@ and prtLocalVarListBNFC i es : doc = match (i, es) with
   | (_,x::xs) -> (concatD [prtLocalVar 0 x ; render "," ; prtLocalVarListBNFC 0 xs])
 and prtGlobalVar (i:int) (e : AbsBasilIR.globalVar) : doc = match e with
        AbsBasilIR.GlobalVar1 (globalident, type_) -> prPrec i 0 (concatD [prtGlobalIdent 0 globalident ; render ":" ; prtTypeT 0 type_])
+
+
+and prtVar (i:int) (e : AbsBasilIR.var) : doc = match e with
+       AbsBasilIR.VarLocalVar localvar -> prPrec i 0 (concatD [prtLocalVar 0 localvar])
+  |    AbsBasilIR.VarGlobalVar globalvar -> prPrec i 0 (concatD [prtGlobalVar 0 globalvar])
 
 
 and prtNamedCallReturn (i:int) (e : AbsBasilIR.namedCallReturn) : doc = match e with

@@ -1,4 +1,4 @@
-(load-il "../examples/irreducible_loop_1.il")
+(load-il "../../examples/irreducible_loop_1.il")
 (dump-il "before.il")
 (run-transforms "remove-unreachable-block" "cf-expressions" "intra-dead-store-elim")
 (run-transforms "simple-params")

@@ -140,10 +140,13 @@ and transAssignment (x : assignment) : result = match x with
 
 
 and transStmt (x : stmt) : result = match x with
-    Stmt_SingleAssign assignment -> failure x
+    Stmt_Nop  -> failure x
+  | Stmt_SingleAssign assignment -> failure x
   | Stmt_MultiAssign assignments -> failure x
   | Stmt_Load (lvar, endian, globalident, expr, intval) -> failure x
   | Stmt_Store (endian, globalident, expr0, expr, intval) -> failure x
+  | Stmt_Load_Var (lvar, endian, var, expr, intval) -> failure x
+  | Stmt_Store_Var (lvar, endian, var, expr0, expr, intval) -> failure x
   | Stmt_DirectCall (lvars, procident, callparams) -> failure x
   | Stmt_IndirectCall expr -> failure x
   | Stmt_Assume expr -> failure x
@@ -157,6 +160,11 @@ and transLocalVar (x : localVar) : result = match x with
 
 and transGlobalVar (x : globalVar) : result = match x with
     GlobalVar1 (globalident, type') -> failure x
+
+
+and transVar (x : var) : result = match x with
+    VarLocalVar localvar -> failure x
+  | VarGlobalVar globalvar -> failure x
 
 
 and transNamedCallReturn (x : namedCallReturn) : result = match x with

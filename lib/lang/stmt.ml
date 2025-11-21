@@ -119,6 +119,7 @@ let pretty show_lvar show_var show_expr s =
   in
   let e = map ~f_lvar:show_lvar ~f_expr:show_expr ~f_rvar:show_var s in
   match e with
+  | Instr_Assign [] -> text "nop"
   | Instr_Assign ls ->
       let ls = List.map (function lhs, rhs -> lhs ^ text " := " ^ rhs) ls in
       let b = fill (text "," ^ newline) ls in
@@ -130,8 +131,8 @@ let pretty show_lvar show_var show_expr s =
       lhs ^ text " := " ^ text "load "
       ^ text (show_endian endian)
       ^ text " " ^ mem ^ text " " ^ addr ^ text " " ^ int cells
-  | Instr_Store { mem; addr; value; cells; endian } ->
-      text "store "
+  | Instr_Store { lhs; mem; addr; value; cells; endian } ->
+      lhs ^ text " := " ^ text "store "
       ^ text (show_endian endian)
       ^ text " " ^ mem ^ text " " ^ addr ^ text " " ^ value ^ text " "
       ^ int cells

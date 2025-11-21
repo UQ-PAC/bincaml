@@ -1,5 +1,5 @@
 (library
- (name bincaml)
+ (public_name bincaml)
  (flags -w -27)
  (modules loadir passes)
- (libraries BasilIR lang transforms bincaml.ast trace))
+ (libraries pp_loc BasilIR lang transforms bincaml.ast trace))

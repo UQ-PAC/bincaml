@@ -363,30 +363,41 @@ let pretty show_lvar show_var show_expr p =
            (newline ^ text " -> ")
            [ params (formal_in_params p); params (formal_out_params p) ])
   in
+  let return_stmt =
+    text "return"
+    ^ bracket "("
+        (fill (text ",")
+           (formal_out_params p |> StringMap.to_list
+           |> List.map (fun (n, v) ->
+               text n ^ text "=" ^ text (Var.to_string v))))
+        ")"
+  in
   let collect_edge b ende acc =
     let vert = G.V.label b in
     let edge = G.E.label (G.find_edge (graph p) b ende) in
     match (vert, edge) with
     | Vert.Begin block_id, Edge.(Block b) ->
-        let succ = G.succ (graph p) ende in
+        let succ = G.succ_e (graph p) ende in
         let succ =
           match succ with
-          | [ Return ] -> (
-              let _, re, _ = G.find_edge (graph p) ende Return in
+          | [] -> [ text "unreachable" ]
+          | [ (b, re, Return) ] -> (
               match re with
               | Block { stmts } ->
-                  Vector.map
-                    (fun s ->
-                      Stmt.pretty show_lvar show_var show_expr s ^ text ";")
-                    stmts
-                  |> Vector.to_list
-              | _ -> [])
-          | [] -> [ text "unreachable" ]
+                  let stmts =
+                    Vector.map
+                      (fun s ->
+                        Stmt.pretty show_lvar show_var show_expr s ^ text ";")
+                      stmts
+                    |> Vector.to_list
+                  in
+                  stmts @ [ return_stmt ]
+              | Jump -> [ return_stmt ])
           | succ ->
               let succ =
                 List.map
-                  (fun f ->
-                    match G.V.label f with
+                  (fun (b, label, e) ->
+                    match G.V.label e with
                     | Begin i -> text @@ ID.to_string i
                     | _ -> failwith "unsupp")
                   succ

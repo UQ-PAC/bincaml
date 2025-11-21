@@ -43,15 +43,10 @@ let equal (a : t) (b : t) = Fix.HashCons.equal a b
 let hash (a : t) = Fix.HashCons.hash a
 let is_local (v : t) = equal_declaration_scope (scope v) Local
 let is_global (v : t) = equal_declaration_scope (scope v) Global
-
-let to_string_il_rvar v =
-  if match typ v with Types.Map _ -> true | _ -> false then name v
-  else to_string v
+let to_string_il_rvar v = to_string v
 
 let to_string_il_lvar v =
-  if match typ v with Types.Map _ -> true | _ -> false then name v
-  else
-    match scope v with Local -> "var " ^ to_string v | Global -> to_string v
+  match scope v with Local -> "var " ^ to_string v | Global -> to_string v
 
 let to_decl_string_il v =
   let decl_n = match typ v with Types.Map _ -> "memory" | _ -> "var" in

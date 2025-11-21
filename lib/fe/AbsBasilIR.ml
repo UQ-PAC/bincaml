@@ -71,10 +71,13 @@ and assignment =
    Assignment1 of lVar * expr
 
 and stmt =
-   Stmt_SingleAssign of assignment
+   Stmt_Nop
+ | Stmt_SingleAssign of assignment
  | Stmt_MultiAssign of assignment list
  | Stmt_Load of lVar * endian * globalIdent * expr * intVal
  | Stmt_Store of endian * globalIdent * expr * expr * intVal
+ | Stmt_Load_Var of lVar * endian * var * expr * intVal
+ | Stmt_Store_Var of lVar * endian * var * expr * expr * intVal
  | Stmt_DirectCall of lVars * procIdent * callParams
  | Stmt_IndirectCall of expr
  | Stmt_Assume of expr
@@ -86,6 +89,10 @@ and localVar =
 
 and globalVar =
    GlobalVar1 of globalIdent * typeT
+
+and var =
+   VarLocalVar of localVar
+ | VarGlobalVar of globalVar
 
 and namedCallReturn =
    NamedCallReturn1 of lVar * localIdent
