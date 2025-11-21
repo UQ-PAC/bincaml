@@ -287,6 +287,8 @@ let blocks_to_list p =
   in
   G.fold_edges_e collect_edge (graph p) []
 
+(** Fold over blocks in forwards weak topological order (boundocle). The order
+    is *not* stable *)
 let fold_blocks_topo_fwd (f : 'a -> ID.t -> Edge.block -> 'a) init p =
   let open Graph.WeakTopological in
   let f acc e =
@@ -305,6 +307,8 @@ let fold_blocks_topo_fwd (f : 'a -> ID.t -> Edge.block -> 'a) init p =
   let topo = topo_fwd p in
   Graph.WeakTopological.fold_left ff init topo
 
+(** Fold over blocks in reverse weak topological order (boundocle). The order is
+    *not* stable *)
 let fold_blocks_topo_rev (f : 'a -> ID.t -> Edge.block -> 'a) init p =
   let open Graph.WeakTopological in
   let f acc e =
