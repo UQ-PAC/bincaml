@@ -11,4 +11,4 @@
   (pps ppx_expect_nobase)))
 
 (cram
- (deps ../examples/irreducible_loop_1.il basicssa.sexp))
+ (deps ../examples/irreducible_loop_1.il basicssa.sexp ../bin/main.exe))

@@ -283,10 +283,10 @@ Run on basic irreducible loop example
         goto (%main_entry);
         ];
      block %returns [
-        (var R30_out_1:bv64 := R30_5:bv64, var NF_out_1:bv1 := NF_2:bv1,
-         var CF_out_1:bv1 := CF_2:bv1, var VF_out_1:bv1 := VF_2:bv1,
-         var R0_out_1:bv64 := R0_23:bv64, var R31_out_1:bv64 := R31_5:bv64,
-         stack_out_1 := stack_5:(bv64->bv8), var R1_out_1:bv64 := R1_1:bv64,
-         var ZF_out_1:bv1 := ZF_2:bv1, var R29_out_1:bv64 := R29_2:bv64);
+        (var R30_out:bv64 := R30_5:bv64, var NF_out:bv1 := NF_2:bv1,
+         var CF_out:bv1 := CF_2:bv1, var VF_out:bv1 := VF_2:bv1,
+         var R0_out:bv64 := R0_23:bv64, var R31_out:bv64 := R31_5:bv64,
+         stack_out := stack_5:(bv64->bv8), var R1_out:bv64 := R1_1:bv64,
+         var ZF_out:bv1 := ZF_2:bv1, var R29_out:bv64 := R29_2:bv64);
         ]
   ];

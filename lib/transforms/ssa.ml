@@ -93,33 +93,38 @@ let ssa (in_proc : Program.proc) =
     ("live" ^ (Procedure.id in_proc |> ID.to_string) ^ ".dot")
     (fun o -> Livevars.print_live_vars_dot (Format.of_chan o) in_proc);
   let rename r v : Var.t =
-    let nv = Procedure.fresh_var ~name:(Var.name v) in_proc (Var.typ v) in
-    r := (v, nv) :: !r;
-    nv
+    if
+      (* don't rename formal out params; should only be assigned once*)
+      Procedure.formal_out_params in_proc
+      |> StringMap.exists (fun _ i -> Var.equal i v)
+    then v
+    else
+      let nv = Procedure.fresh_var ~name:(Var.name v) in_proc (Var.typ v) in
+      r := (v, nv) :: !r;
+      nv
   in
   let rn_stmt rr (stmt : ('v, 'v, 'e) Stmt.t) : Var.t VM.t * ('v, 'v, 'e) Stmt.t
       =
+    let read v =
+      try Some (Expr.BasilExpr.rvar (VM.find v rr)) with
+      | Not_found
+        when StringMap.exists
+               (fun i j -> Var.equal j v)
+               (Procedure.formal_out_params in_proc)
+             || StringMap.exists
+                  (fun i j -> Var.equal j v)
+                  (Procedure.formal_in_params in_proc) ->
+          Some (Expr.BasilExpr.rvar v)
+      | Not_found ->
+          failwith @@ "not found: " ^ Var.to_string v
+          ^ " likely a read-uninitialised variable"
+    in
     let new_renames = ref [] in
     let stmt =
       Stmt.map
         ~f_lvar:(fun v -> v)
         ~f_rvar:(fun v -> VM.get_or ~default:v v rr)
-        ~f_expr:(fun e ->
-          Expr.BasilExpr.substitute
-            (fun v ->
-              try Some (Expr.BasilExpr.rvar (VM.find v rr)) with
-              | Not_found
-                when StringMap.exists
-                       (fun i j -> Var.equal j v)
-                       (Procedure.formal_out_params in_proc)
-                     || StringMap.exists
-                          (fun i j -> Var.equal j v)
-                          (Procedure.formal_in_params in_proc) ->
-                  Some (Expr.BasilExpr.rvar v)
-              | Not_found ->
-                  failwith @@ "not found: " ^ Var.to_string v
-                  ^ " likely a read-uninitialised variable")
-            e)
+        ~f_expr:(fun e -> Expr.BasilExpr.substitute read e)
         stmt
     in
     let stmt =
