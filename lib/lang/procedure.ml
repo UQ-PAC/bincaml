@@ -300,7 +300,7 @@ let fold_blocks_topo_fwd (f : 'a -> ID.t -> Edge.block -> 'a) init p =
     | Vertex a -> f acc a
     | Component (a, e) ->
         let acc = f acc a in
-        f (Graph.WeakTopological.fold_left ff acc e) a
+        Graph.WeakTopological.fold_left ff acc e
   in
   let topo = topo_fwd p in
   Graph.WeakTopological.fold_left ff init topo
@@ -372,51 +372,48 @@ let pretty show_lvar show_var show_expr p =
                text n ^ text "=" ^ text (Var.to_string v))))
         ")"
   in
-  let collect_edge b ende acc =
-    let vert = G.V.label b in
-    let edge = G.E.label (G.find_edge (graph p) b ende) in
-    match (vert, edge) with
-    | Vert.Begin block_id, Edge.(Block b) ->
-        let succ = G.succ_e (graph p) ende in
-        let succ =
-          match succ with
-          | [] -> [ text "unreachable" ]
-          | [ (b, re, Return) ] -> (
-              match re with
-              | Block { stmts } ->
-                  let stmts =
-                    Vector.map
-                      (fun s ->
-                        Stmt.pretty show_lvar show_var show_expr s ^ text ";")
-                      stmts
-                    |> Vector.to_list
-                  in
-                  stmts @ [ return_stmt ]
-              | Jump -> [ return_stmt ])
-          | succ ->
-              let succ =
-                List.map
-                  (fun (b, label, e) ->
-                    match G.V.label e with
-                    | Begin i -> text @@ ID.to_string i
-                    | _ -> failwith "unsupp")
-                  succ
+  let pretty_block graph block_id block =
+    let succ = G.succ_e graph (Vert.End block_id) in
+    let succ =
+      match succ with
+      | [] -> [ text "unreachable" ]
+      | [ (b, re, Return) ] -> (
+          match re with
+          | Block { stmts } ->
+              let stmts =
+                Vector.map
+                  (fun s ->
+                    Stmt.pretty show_lvar show_var show_expr s ^ text ";")
+                  stmts
+                |> Vector.to_list
               in
-              [
-                text "goto "
-                ^ (fun s -> bracket "(" (fill (text ",") s) ")") succ;
-              ]
-        in
-        let b =
-          Block.pretty show_lvar show_var show_expr ~block_id ~terminator:succ b
-        in
-        b :: acc
-    | _ -> acc
+              stmts @ [ return_stmt ]
+          | Jump -> [ return_stmt ])
+      | succ ->
+          let succ =
+            List.map
+              (fun (b, label, e) ->
+                match G.V.label e with
+                | Begin i -> text @@ ID.to_string i
+                | _ -> failwith "bad graph structure: goto targets non-block")
+              succ
+          in
+          [ text "goto " ^ (fun s -> bracket "(" (fill (text ",") s) ")") succ ]
+    in
+    Block.pretty show_lvar show_var show_expr ~block_id ~terminator:succ block
   in
-  let blocks = G.fold_edges collect_edge (graph p) [] in
+  let module StableTopoSort = Graph.Topological.Make_stable (G) in
+  let blocks =
+    Iter.from_iter (fun f -> StableTopoSort.iter f (graph p))
+    |> Iter.filter_map (function Vert.Begin id -> Some id | _ -> None)
+    |> Iter.map (fun id ->
+        (id, get_block p id |> Option.get_exn_or "bad graph"))
+    |> Iter.map (fun (id, block) -> pretty_block (graph p) id block)
+    |> Iter.to_list
+  in
   let blocks =
     surround (text "[")
-      (nest 2 @@ newline ^ append_l ~sep:(text ";" ^ newline) (List.rev blocks))
+      (nest 2 @@ newline ^ append_l ~sep:(text ";" ^ newline) blocks)
       (newline ^ text "]")
   in
   header ^ nl ^ blocks
