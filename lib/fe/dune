@@ -19,6 +19,9 @@
 
 (rule
  (deps BasilIR.cf)
+ ; can ignore -s or --ignore-promoted-rules
+ ; we disable it whenever binary is missing for compatability with CI tools
+ (enabled_if %{bin-available:bnfc})
  (targets
   AbsBasilIR.ml
   BNFC_Util.ml
