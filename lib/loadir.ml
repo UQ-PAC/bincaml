@@ -617,12 +617,7 @@ module BasilASTLoader = struct
     | BoolBinOp_boolimplies -> `IMPLIES
 end
 
-exception
-  ILBParseError of {
-    input : Pp_loc.Input.t;
-    start_pos : Lexing.position;
-    end_pos : Lexing.position;
-  }
+exception ILBParseError of { input : Pp_loc.Input.t; lexbuf : Lexing.lexbuf }
 
 let () =
   Printexc.register_printer (function
@@ -631,30 +626,29 @@ let () =
         let x = b.pos_lnum in
         let col = b.pos_cnum - b.pos_bol in
         Some (Printf.sprintf "Parse error in \"%s\" line %d col %d" fname x col)
-    | ILBParseError { input; start_pos; end_pos } ->
+    | ILBParseError { input; lexbuf } ->
         let loc =
           [
-            ( Pp_loc.Position.of_lexing start_pos,
-              Pp_loc.Position.of_lexing end_pos );
+            ( Pp_loc.Position.of_lexing @@ Lexing.lexeme_start_p lexbuf,
+              Pp_loc.Position.of_lexing @@ Lexing.lexeme_end_p lexbuf );
           ]
         in
-        let f = Format.get_str_formatter () in
-        Format.pp_print_string f "Parse error:\n";
-        Pp_loc.pp ~input f loc;
-        let s = Format.flush_str_formatter () in
-        Some s
+        let o =
+          Format.asprintf "Parse error: %s%a%a"
+            (Lexing.lexeme_end_p lexbuf).pos_fname Format.pp_print_newline ()
+            (Pp_loc.pp ~input ~max_lines:5)
+            loc
+        in
+        Some o
     | _ -> None (* for other exceptions *))
 
 let concrete_prog_ast_of_channel ?input ?filename c =
   let open BasilIR in
   let input = Option.get_or ~default:(Pp_loc.Input.in_channel c) input in
-  let lexbuf = Lexing.from_channel c in
+  let lexbuf = Lexing.from_channel ~with_positions:true c in
   filename |> Option.iter (fun f -> Lexing.set_filename lexbuf f);
   try ParBasilIR.pModuleT LexBasilIR.token lexbuf
-  with ParBasilIR.Error ->
-    let start_pos = Lexing.lexeme_start_p lexbuf
-    and end_pos = Lexing.lexeme_end_p lexbuf in
-    raise (ILBParseError { input; start_pos; end_pos })
+  with ParBasilIR.Error -> raise (ILBParseError { input; lexbuf })
 
 let parse_proc ?input lexbuf =
   let open BasilIR in
@@ -663,7 +657,7 @@ let parse_proc ?input lexbuf =
     let start_pos = Lexing.lexeme_start_p lexbuf
     and end_pos = Lexing.lexeme_end_p lexbuf in
     match input with
-    | Some input -> raise (ILBParseError { input; start_pos; end_pos })
+    | Some input -> raise (ILBParseError { input; lexbuf })
     | None -> raise (BNFC_Util.Parse_error (start_pos, end_pos)))
 
 let parse_expr ?input lexbuf =
@@ -673,22 +667,22 @@ let parse_expr ?input lexbuf =
     let start_pos = Lexing.lexeme_start_p lexbuf
     and end_pos = Lexing.lexeme_end_p lexbuf in
     match input with
-    | Some input -> raise (ILBParseError { input; start_pos; end_pos })
+    | Some input -> raise (ILBParseError { input; lexbuf })
     | None -> raise (BNFC_Util.Parse_error (start_pos, end_pos)))
 
 let parse_proc_string st c =
-  let lexbuf = Lexing.from_string c in
+  let lexbuf = Lexing.from_string ~with_positions:true c in
   let input = Pp_loc.Input.string c in
   let proc = parse_proc ~input lexbuf in
   BasilASTLoader.trans_definition st proc
 
 let parse_proc_channel st c =
-  let lexbuf = Lexing.from_channel c in
+  let lexbuf = Lexing.from_channel ~with_positions:true c in
   let proc = parse_proc lexbuf in
   BasilASTLoader.trans_definition st proc
 
 let parse_expr_string s =
-  let lexbuf = Lexing.from_string s in
+  let lexbuf = Lexing.from_string ~with_positions:true s in
   let input = Pp_loc.Input.string s in
   let proc = parse_expr ~input lexbuf in
   BasilASTLoader.trans_expr proc

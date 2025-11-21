@@ -1,3 +1,6 @@
-
 (cram
- (deps ../../examples/irreducible_loop_1.il basicssa.sexp ../../bin/main.exe roundtrip.sexp))
+ (deps
+  ../../examples/irreducible_loop_1.il
+  basicssa.sexp
+  ../../bin/main.exe
+  roundtrip.sexp))
