@@ -73,7 +73,7 @@ end
 
 module A = Intra_analysis.Forwards (ReadUninitAnalysis)
 
-let check (p : Program.proc) =
+let check ?(include_locals = false) (p : Program.proc) =
   let result =
     A.analyse
       ~init:(function
@@ -99,7 +99,8 @@ let check (p : Program.proc) =
           | Some ms ->
               let ru =
                 ReadUninitAnalysis.read_uninit_vars ms
-                |> Iter.filter Var.is_local |> Iter.filter Var.pure
+                |> Iter.filter (fun v -> include_locals || Var.is_local v)
+                |> Iter.filter Var.pure
               in
               if Iter.is_empty ru then None else Some (v, ru)
           | None -> None)

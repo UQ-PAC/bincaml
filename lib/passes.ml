@@ -11,21 +11,32 @@ module PassManager = struct
     | Prog of (Program.t -> Program.t)
     | Proc of (Program.proc -> Program.proc)
     | ProcCheck of (Program.proc -> bool)
+    | Batch of pass list
 
-  type pass = { name : string; apply : transform }
+  and pass = { name : string; apply : transform }
 
   module SMap = Map.Make (String)
 
   type t = { avail : pass SMap.t }
 
+  let sparams =
+    { name = "simple-params"; apply = Prog Transforms.Ssa.set_params }
+
+  let read_uninit =
+    {
+      name = "check-read-uninitialised";
+      apply = ProcCheck Transforms.May_read_uninit.check;
+    }
+
+  let sssa = { name = "simple-ssa"; apply = Proc Transforms.Ssa.ssa }
+  let full_ssa = { name = "ssa"; apply = Batch [ sparams; read_uninit; sssa ] }
+
   let passes =
     [
-      { name = "simple-params"; apply = Prog Transforms.Ssa.set_params };
-      { name = "simple-ssa"; apply = Proc Transforms.Ssa.ssa };
-      {
-        name = "check-read-uninitialised";
-        apply = ProcCheck Transforms.May_read_uninit.check;
-      };
+      sparams;
+      read_uninit;
+      sssa;
+      full_ssa;
       {
         name = "remove-unreachable-block";
         apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
@@ -44,11 +55,12 @@ module PassManager = struct
   let batch_of_list pass =
     List.map (fun n -> List.find (fun t -> String.equal t.name n) passes) pass
 
-  let run_transform (p : Program.t) (tf : pass) =
+  let rec run_transform (p : Program.t) (tf : pass) =
     Trace.with_span ~__FILE__ ~__LINE__ ("transform-prog::" ^ tf.name)
     @@ fun _ ->
     match tf.apply with
     | Prog tf -> tf p
+    | Batch tf -> List.fold_left run_transform p tf
     | ProcCheck app ->
         let _ =
           ID.Map.mapi
@@ -58,7 +70,7 @@ module PassManager = struct
               @@ fun _ ->
               match app proc with
               | false -> ()
-              | true -> print_endline @@ "Check failed: " ^ ID.to_string id)
+              | true -> failwith @@ "Check failed: " ^ ID.to_string id)
             p.procs
         in
         p
