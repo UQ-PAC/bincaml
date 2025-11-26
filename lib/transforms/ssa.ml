@@ -29,6 +29,30 @@ let check_ssa proc =
   in
   assert (VM.for_all (fun v i -> i = 1) assigns)
 
+let drop_unused_declarations_proc p =
+  let used =
+    Procedure.fold_blocks_topo_fwd
+      (fun acc id bl ->
+        Iter.append (Block.read_vars_iter bl) (Block.assigned_vars_iter bl)
+        |> Iter.fold (fun acc i -> VS.add i acc) acc)
+      VS.empty p
+  in
+  Var.Decls.filter_map_inplace
+    (fun _ v -> if VS.mem v used then Some v else None)
+    (Procedure.local_decls p);
+  VS.filter Var.is_global used
+
+let drop_unused_declarations_prog (p : Program.t) =
+  let used =
+    ID.Map.fold
+      (fun i p acc -> VS.union acc (drop_unused_declarations_proc p))
+      p.procs VS.empty
+  in
+  Var.Decls.filter_map_inplace
+    (fun _ v -> if VS.mem v used then Some v else None)
+    p.globals;
+  p
+
 let set_params (p : Program.t) =
   let globs =
     p.globals |> Var.Decls.to_iter |> Iter.filter (fun (i, v) -> Var.pure v)

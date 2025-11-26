@@ -634,9 +634,22 @@ let () =
           ]
         in
         let o =
-          Format.asprintf "Parse error: %s%a%a"
+          Format.asprintf "Parse error:  %s%a%a"
             (Lexing.lexeme_end_p lexbuf).pos_fname Format.pp_print_newline ()
-            (Pp_loc.pp ~input ~max_lines:5)
+            (fun f ->
+              Pp_loc.setup_highlight_tags f
+                ~single_line_underline:
+                  {
+                    open_tag =
+                      (fun _ ->
+                        Format.ANSI_codes.string_of_style_list
+                          [ `Bold; `FG `Red ]);
+                    close_tag =
+                      (fun _ -> Format.ANSI_codes.string_of_style `Reset);
+                  }
+                ();
+
+              Pp_loc.pp ~input ~max_lines:5 f)
             loc
         in
         Some o

@@ -71,11 +71,11 @@ module ReadUninitAnalysis = struct
     |> Iter.fold (fun acc (k, v) -> update k v acc) st
 end
 
-module A = Intra_analysis.Forwards (ReadUninitAnalysis)
+module A = struct
+  include Intra_analysis.Forwards (ReadUninitAnalysis)
 
-let check ?(include_locals = false) (p : Program.proc) =
-  let result =
-    A.analyse
+  let analyse p =
+    analyse
       ~init:(function
         | Entry ->
             Procedure.formal_in_params p
@@ -85,7 +85,10 @@ let check ?(include_locals = false) (p : Program.proc) =
                  ReadUninitAnalysis.bottom
         | _ -> ReadUninitAnalysis.bottom)
       p
-  in
+end
+
+let check ?(include_locals = false) (p : Program.proc) =
+  let result = A.analyse p in
   CCIO.with_out
     (ID.to_string (Procedure.id p) ^ "ru.dot")
     (fun o -> A.print_dot (Format.of_chan o) p result);

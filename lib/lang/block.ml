@@ -100,3 +100,17 @@ let foldi_backwards ~(f : 'acc -> int * ('v, 'v, 'e) Stmt.t -> 'acc)
 let fold_backwards ~(f : 'acc -> ('v, 'v, 'e) Stmt.t -> 'acc)
     ~(phi : 'acc -> 'v phi list -> 'acc) ~(init : 'a) (b : ('v, 'e) t) : 'acc =
   Iter.fold f init (Vector.to_iter_rev b.stmts) |> fun e -> phi e b.phis
+
+let assigned_vars_iter b =
+  let phi = List.to_iter b.phis |> Iter.map (fun b -> b.lhs) in
+  let bls = stmts_iter b |> Iter.flat_map Stmt.iter_assigned in
+  Iter.append phi bls
+
+let read_vars_iter b =
+  let phi =
+    List.to_iter b.phis
+    |> Iter.flat_map (fun b ->
+        b.rhs |> List.to_iter |> Iter.map (fun (_, v) -> v))
+  in
+  let bls = stmts_iter b |> Iter.flat_map Stmt.free_vars_iter in
+  Iter.append phi bls

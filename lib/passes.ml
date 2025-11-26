@@ -38,6 +38,15 @@ module PassManager = struct
       doc = "Fail if the program contains read-uninitialised variables";
     }
 
+  let remove_unused =
+    {
+      name = "remove-unused-decls";
+      apply = Prog Transforms.Ssa.drop_unused_declarations_prog;
+      doc =
+        "Removes all unused variable declarations (globals and locals on each \
+         procedure) from the IR program";
+    }
+
   let sssa =
     {
       name = "simple-ssa";
@@ -50,7 +59,7 @@ module PassManager = struct
   let full_ssa =
     {
       name = "ssa";
-      apply = Batch [ sparams; read_uninit true; sssa ];
+      apply = Batch [ sparams; read_uninit true; sssa; remove_unused ];
       doc =
         "Complete SSA pipeline for early IR (global register parameterless \
          form)";
@@ -72,7 +81,7 @@ module PassManager = struct
         name = "cf-expressions";
         apply = Proc Transforms.Cf_tx.simplify_proc_exprs;
         doc =
-          "Perform intra-expression simplificatinos and constant folding for \
+          "Perform intra-expression simplifications and constant folding for \
            whole program";
       };
       {
@@ -87,6 +96,7 @@ module PassManager = struct
         apply = Prog Transforms.Ide.transform;
         doc = "broken ide test analysis";
       };
+      remove_unused;
     ]
 
   let print_passes =
@@ -94,9 +104,25 @@ module PassManager = struct
     let open Containers_pp.Infix in
     passes
     |> List.map (fun p ->
-        text p.name ^ newline
-        ^ (text @@ String.init (String.length p.name) (fun i -> '-'))
-        ^ newline ^ newline ^ text "    " ^ text p.doc)
+        let body =
+          match p.apply with
+          | Prog _ -> text "prog transform"
+          | Proc _ -> text "intraproc transform"
+          | ProcCheck _ -> text "proc check"
+          | Batch bs ->
+              text "batch of "
+              ^ bracket "("
+                  (fill newline
+                     (List.map (fun i -> bracket "\"" (text i.name) "\"") bs))
+                  ")"
+        in
+        let doc =
+          fill newline (String.split_on_char ' ' p.doc |> List.map text)
+        in
+        Term_color.style_l [ `Underline ] (text p.name ^ newline)
+        ^ nest 2 (newline ^ text "type: " ^ body)
+        ^ newline
+        ^ nest 2 (newline ^ nest 2 doc))
     |> fill (newline ^ newline)
 
   let batch_of_list pass =

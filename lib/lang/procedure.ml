@@ -102,7 +102,7 @@ module PG : sig
   val local_ids : ('a, 'b) t -> ID.generator
   (** return mutable generator for fresh local variable IDS *)
 
-  val locals : ('a, 'b) t -> 'a Var.Decls.t
+  val local_decls : ('a, 'b) t -> 'a Var.Decls.t
   (** return mutable declaration map for local var IDS *)
 
   val formal_in_params : ('a, 'b) t -> 'a StringMap.t
@@ -142,7 +142,7 @@ end = struct
   let graph p = p.graph
   let block_ids p = p.block_ids
   let local_ids p = p.local_ids
-  let locals p = p.locals
+  let local_decls p = p.locals
   let formal_in_params p = p.formal_in_params
   let formal_out_params p = p.formal_out_params
   let topo_fwd p = Lazy.force p.topo_fwd
@@ -268,7 +268,7 @@ let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
 
 let decl_local p v =
   let _ = (local_ids p).decl_or_get (Var.name v) in
-  Var.Decls.add (locals p) v;
+  Var.Decls.add (local_decls p) v;
   v
 
 let fresh_var p ?(pure = true) ?name typ : Var.t =
@@ -276,7 +276,7 @@ let fresh_var p ?(pure = true) ?name typ : Var.t =
   let name = Option.get_or ~default:"v" name in
   let n, _ = (local_ids p).fresh ~name () in
   let v = Var.create n typ ~pure in
-  Var.Decls.add (locals p) v;
+  Var.Decls.add (local_decls p) v;
   v
 
 let blocks_to_list p =
