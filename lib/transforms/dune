@@ -2,7 +2,15 @@
  (public_name bincaml.transforms)
  (name transforms)
  (flags -w -27)
- (modules ssa algsimp cf_tx livevars cleanup_cfg ide)
+ (modules
+  ssa
+  algsimp
+  cf_tx
+  livevars
+  cleanup_cfg
+  ide
+  intra_analysis
+  may_read_uninit)
  (libraries
   intPQueue
   lang

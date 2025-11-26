@@ -1,5 +1,4 @@
 
-
 # Related Work
 
 ### IR
@@ -295,3 +294,16 @@ interproc results to invariant at beginning and return cuts
 - Should eventually include the smt incremental solver effect optimisation
 - query simplification using a copyprop etc
 - very rough reference implementation; https://github.com/ncough/tv-sanity
+
+# Program Data Tagging
+
+- attach type-parametric tags to ast at significant locations to enable
+- support source location tagging for error reporting
+- support parametric type system ; attach analysis data to each expression node
+  - and therefore each statement node
+
+# Source location tagging
+
+# Parametric type system tagging
+
+# loading and wrapping a single block/proceduer for expect tests

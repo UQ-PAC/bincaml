@@ -2,10 +2,15 @@ open Lang
 open Containers
 open Lang
 
+(** TODO: pass program to procedure-local passes
+
+    TODO: structured errors for checks *)
+
 module PassManager = struct
   type transform =
     | Prog of (Program.t -> Program.t)
     | Proc of (Program.proc -> Program.proc)
+    | ProcCheck of (Program.proc -> bool)
 
   type pass = { name : string; apply : transform }
 
@@ -17,6 +22,10 @@ module PassManager = struct
     [
       { name = "simple-params"; apply = Prog Transforms.Ssa.set_params };
       { name = "simple-ssa"; apply = Proc Transforms.Ssa.ssa };
+      {
+        name = "check-read-uninitialised";
+        apply = ProcCheck Transforms.May_read_uninit.check;
+      };
       {
         name = "remove-unreachable-block";
         apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
@@ -40,6 +49,19 @@ module PassManager = struct
     @@ fun _ ->
     match tf.apply with
     | Prog tf -> tf p
+    | ProcCheck app ->
+        let _ =
+          ID.Map.mapi
+            (fun id proc ->
+              Trace.with_span ~__FILE__ ~__LINE__
+                ("check-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
+              @@ fun _ ->
+              match app proc with
+              | false -> ()
+              | true -> print_endline @@ "Check failed: " ^ ID.to_string id)
+            p.procs
+        in
+        p
     | Proc app ->
         let procs =
           ID.Map.mapi

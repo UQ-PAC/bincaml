@@ -30,6 +30,7 @@ let show v =
 
 let pp fmt v = Format.pp_print_string fmt (show v)
 let to_string v = V.show (Fix.HashCons.data v)
+let pretty v = Containers_pp.text (to_string v)
 
 let create name ?(pure = true) ?(scope = Local) typ =
   H.make { name; typ; pure; scope }

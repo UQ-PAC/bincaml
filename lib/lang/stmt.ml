@@ -165,6 +165,16 @@ let assigned (init : V.t) s : V.t =
   let f_lvar a v = V.add v a in
   iter_lvar s |> Iter.fold f_lvar init
 
+let iter_assigned = iter_lvar
+
+let free_vars_iter (s : (Var.t, Var.t, BasilExpr.t) t) : Var.t Iter.t =
+  let f_expr v =
+    match v with
+    | `Expr v -> BasilExpr.free_vars_iter v
+    | `Var v -> Iter.singleton v
+  in
+  iter_rexpr s |> Iter.flat_map f_expr
+
 let free_vars (init : V.t) (s : (Var.t, Var.t, BasilExpr.t) t) : V.t =
   let f_expr a v =
     match v with
@@ -172,3 +182,24 @@ let free_vars (init : V.t) (s : (Var.t, Var.t, BasilExpr.t) t) : V.t =
     | `Var v -> V.add v a
   in
   iter_rexpr s |> Iter.fold f_expr init
+
+let%expect_test "frees" =
+  let s =
+    Instr_Assign
+      [
+        ( Var.create "v1" Types.Boolean,
+          BasilExpr.rvar @@ Var.create "v2" Types.Boolean );
+        ( Var.create "v3" Types.Boolean,
+          BasilExpr.rvar @@ Var.create "v4" Types.Boolean );
+      ]
+  in
+  print_endline (to_string ~width:80 Var.pretty Var.pretty BasilExpr.pretty s);
+  print_string "Rvars: ";
+  print_endline @@ Iter.to_string ~sep:"," Var.to_string (free_vars_iter s);
+  print_string "Lvars: ";
+  print_endline @@ Iter.to_string ~sep:"," Var.to_string (iter_lvar s);
+  [%expect
+    {|
+    (v1:bool := v2:bool, v3:bool := v4:bool)
+    Rvars: v2:bool,v4:bool
+    Lvars: v1:bool,v3:bool |}]
