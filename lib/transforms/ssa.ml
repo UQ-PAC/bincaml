@@ -9,6 +9,26 @@ open struct
   module VS = Set.Make (Var)
 end
 
+let check_ssa proc =
+  let add_assign m v =
+    VM.get_or ~default:0 v m |> fun n -> VM.add v (n + 1) m
+  in
+  let assigns =
+    Procedure.fold_blocks_topo_fwd
+      (fun acc idbl bl ->
+        let acc =
+          List.fold_left
+            (fun acc (phi : Var.t Block.phi) -> add_assign acc phi.lhs)
+            acc bl.phis
+        in
+        Block.stmts_iter bl
+        |> Iter.fold
+             (fun acc stmt -> Stmt.iter_lvar stmt |> Iter.fold add_assign acc)
+             acc)
+      VM.empty proc
+  in
+  assert (VM.for_all (fun v i -> i = 1) assigns)
+
 let set_params (p : Program.t) =
   let globs =
     p.globals |> Var.Decls.to_iter |> Iter.filter (fun (i, v) -> Var.pure v)
@@ -297,4 +317,5 @@ let ssa (in_proc : Program.proc) =
     |> List.for_all identity
   in
   assert (Procedure.iter_blocks_topo_fwd proc |> Iter.for_all check_bl);
+  check_ssa proc;
   proc
