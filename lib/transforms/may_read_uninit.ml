@@ -93,7 +93,9 @@ let check ?(include_locals = false) (p : Program.proc) =
     (ID.to_string (Procedure.id p) ^ "ru.dot")
     (fun o -> A.print_dot (Format.of_chan o) p result);
   let it =
-    Iter.from_iter (fun f -> Procedure.G.iter_vertex f (Procedure.graph p))
+    Option.to_iter (Procedure.graph p)
+    |> Iter.flat_map (fun gr ->
+        Iter.from_iter (fun f -> Procedure.G.iter_vertex f gr))
   in
   Iter.filter_map
     (function

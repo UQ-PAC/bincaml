@@ -101,50 +101,41 @@ let set_params (p : Program.t) =
               (param, Expr.BasilExpr.rvar orig))
           |> Iter.to_list |> to_block
         in
-        let proc, inbl =
-          Procedure.fresh_block ~name:"%inputs" proc ~stmts:assigns_in ()
-        in
-        let proc, outbl =
-          Procedure.fresh_block ~name:"%returns" proc ~stmts:assigns_out ()
-        in
 
-        let graph = Procedure.graph proc in
-        let proc =
-          Procedure.map_graph
-            (fun graph ->
-              let graph =
-                let edges = Procedure.G.succ_e graph Procedure.Vert.Entry in
-                let graph =
-                  List.fold_left Procedure.G.remove_edge_e graph edges
-                in
-                let new_edges =
-                  List.map
-                    (fun (b, l, e) -> (Procedure.Vert.(End inbl), l, e))
-                    edges
-                in
-                let graph =
-                  List.fold_left Procedure.G.add_edge_e graph new_edges
-                in
-                Procedure.G.add_edge graph Entry (Begin inbl)
-              in
-              let graph =
-                let edges = Procedure.G.pred_e graph Procedure.Vert.Return in
-                let graph =
-                  List.fold_left Procedure.G.remove_edge_e graph edges
-                in
-                let new_edges =
-                  List.map
-                    (fun (b, l, e) -> (b, l, Procedure.Vert.Begin outbl))
-                    edges
-                in
-                let graph =
-                  List.fold_left Procedure.G.add_edge_e graph new_edges
-                in
-                Procedure.G.add_edge graph (End outbl) Return
-              in
-              graph)
-            proc
+        let add_formal_assigns graph =
+          let graph, inbl =
+            Procedure.fresh_block_graph proc graph ~name:"%inputs"
+              ~stmts:assigns_in ()
+          in
+          let graph, outbl =
+            Procedure.fresh_block_graph proc graph ~name:"%returns"
+              ~stmts:assigns_out ()
+          in
+          let graph =
+            let edges = Procedure.G.succ_e graph Procedure.Vert.Entry in
+            let graph = List.fold_left Procedure.G.remove_edge_e graph edges in
+            let new_edges =
+              List.map
+                (fun (b, l, e) -> (Procedure.Vert.(End inbl), l, e))
+                edges
+            in
+            let graph = List.fold_left Procedure.G.add_edge_e graph new_edges in
+            Procedure.G.add_edge graph Entry (Begin inbl)
+          in
+          let graph =
+            let edges = Procedure.G.pred_e graph Procedure.Vert.Return in
+            let graph = List.fold_left Procedure.G.remove_edge_e graph edges in
+            let new_edges =
+              List.map
+                (fun (b, l, e) -> (b, l, Procedure.Vert.Begin outbl))
+                edges
+            in
+            let graph = List.fold_left Procedure.G.add_edge_e graph new_edges in
+            Procedure.G.add_edge graph (End outbl) Return
+          in
+          graph
         in
+        let proc = Procedure.map_graph add_formal_assigns proc in
         let proc =
           Procedure.map_formal_in_params (fun i -> to_formal inparam) proc
         in
@@ -305,7 +296,11 @@ let ssa (in_proc : Program.proc) =
     if ID.Set.mem block_id !delayed_phis then
       Procedure.blocks_succ proc block_id
       |> Iter.filter (fun (bid, _) ->
-          let pred = Procedure.G.pred (Procedure.graph proc) (Begin bid) in
+          let pred =
+            Procedure.G.pred
+              (Option.get_exn_or "unreachable" @@ Procedure.graph proc)
+              (Begin bid)
+          in
           List.length pred > 1)
       |> Iter.fold
            (fun proc (succ_bid, _) ->

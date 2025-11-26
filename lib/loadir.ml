@@ -109,7 +109,7 @@ module BasilASTLoader = struct
         let proc_id = prog.prog.proc_names.decl_or_get id in
         Hashtbl.add prog.params_order id
           (formal_in_params_order, formal_out_params_order);
-        let p = Procedure.create proc_id () in
+        let p = Procedure.create ~is_stub:true proc_id () in
         let prog =
           map_prog
             (fun pr -> { pr with procs = ID.Map.add proc_id p pr.procs })
@@ -161,6 +161,9 @@ module BasilASTLoader = struct
         let p = ID.Map.find proc_id prog.prog.procs in
         let prog = { prog with curr_proc = Some p } in
         let blocks = List.map (trans_block prog) blocks in
+        let p =
+          if List.is_empty blocks then p else Procedure.add_empty_impl p
+        in
         let open Procedure.Vert in
         let formal_out_params_order = List.map param_to_formal out_params in
         (* add blocks *)

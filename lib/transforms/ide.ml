@@ -159,20 +159,27 @@ module IDEGraph = struct
       | _, _, _ -> failwith "bad proc edge"
     in
     (* add all vertices *)
+    (* TODO: missing stub procedure edges probably *)
     let intra_verts =
-      Procedure.G.fold_vertex
-        (fun v acc -> Iter.cons (Loc.IntraVertex { proc_id; v }) acc)
-        (Procedure.graph p) Iter.empty
+      Option.to_iter (Procedure.graph p)
+      |> Iter.flat_map (fun graph ->
+          Procedure.G.fold_vertex
+            (fun v acc -> Iter.cons (Loc.IntraVertex { proc_id; v }) acc)
+            graph Iter.empty)
     in
     let g = Iter.fold GB.add_vertex g intra_verts in
-    Procedure.G.fold_edges_e add_block_edge (Procedure.graph p) g
+    Procedure.graph p
+    |> Option.map (fun procg -> Procedure.G.fold_edges_e add_block_edge procg g)
+    |> Option.get_or ~default:g
 
   let proc_vertices p =
     let proc_id = Procedure.id p in
     let intra_verts =
-      Procedure.G.fold_vertex
-        (fun v acc -> Iter.cons (Loc.IntraVertex { proc_id; v }) acc)
-        (Procedure.graph p) Iter.empty
+      Option.to_iter (Procedure.graph p)
+      |> Iter.flat_map (fun graph ->
+          Procedure.G.fold_vertex
+            (fun v acc -> Iter.cons (Loc.IntraVertex { proc_id; v }) acc)
+            graph Iter.empty)
     in
     let b =
       Procedure.blocks_to_list p |> List.to_iter
@@ -656,7 +663,7 @@ let print_live_vars_dot sum r fmt prog proc_id =
   let p = Program.proc prog proc_id in
   Trace.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
   let (module M : Viscfg.ProcPrinter) = Viscfg.dot_labels (fun v -> label v) in
-  M.fprint_graph fmt (Procedure.graph p)
+  Option.iter (fun g -> M.fprint_graph fmt g) (Procedure.graph p)
 
 let transform (prog : Program.t) =
   let summary, r = IDELiveAnalysis.solve `Backwards prog in

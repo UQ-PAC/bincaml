@@ -64,7 +64,8 @@ let of_cmd st (e : Containers.Sexp.t) =
       CCIO.with_out ofile (fun c ->
           let id = (get_prog st).proc_names.get_id proc in
           let p = Lang.ID.Map.find id (get_prog st).procs in
-          Viscfg.Dot.output_graph c (Procedure.graph p));
+          Viscfg.Dot.output_graph c
+            (Procedure.graph p |> Option.get_exn_or "procedure has no graph"));
       st
   | "dump-proc-il" ->
       let proc = List.hd (assert_atoms 1 args) in

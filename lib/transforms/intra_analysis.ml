@@ -96,19 +96,24 @@ module Forwards (D : Analysis) = struct
   let analyse ~init
       ?(widening_set = Graph.ChaoticIteration.Predicate (fun _ -> false))
       ?(widening_delay = 0) p =
-    Trace.with_span ~__FILE__ ~__LINE__ D.name
-      (fun _ -> A.recurse (Procedure.graph p) (Procedure.topo_fwd p))
-      init widening_set widening_delay
+    Trace.with_span ~__FILE__ ~__LINE__ D.name (fun _ ->
+        Procedure.graph p
+        |> Option.map (fun g ->
+            A.recurse g (Procedure.topo_fwd p) init widening_set widening_delay))
+    |> Option.get_or ~default:A.M.empty
 
   let print_dot fmt p analysis_result =
     Trace.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
-    let r =
-     fun v -> Option.get_or ~default:D.bottom (A.M.find_opt v analysis_result)
+    let to_dot graph =
+      let r =
+       fun v -> Option.get_or ~default:D.bottom (A.M.find_opt v analysis_result)
+      in
+      let (module M : Viscfg.ProcPrinter) =
+        Viscfg.dot_labels (fun v -> Some (D.show (r v)))
+      in
+      M.fprint_graph fmt graph
     in
-    let (module M : Viscfg.ProcPrinter) =
-      Viscfg.dot_labels (fun v -> Some (D.show (r v)))
-    in
-    M.fprint_graph fmt (Procedure.graph p)
+    Option.iter to_dot (Procedure.graph p)
 end
 
 module Backwards (D : Analysis) = struct
@@ -133,17 +138,22 @@ module Backwards (D : Analysis) = struct
   let analyse ~init
       ?(widening_set = Graph.ChaoticIteration.Predicate (fun _ -> false))
       ?(widening_delay = 0) p =
-    Trace.with_span ~__FILE__ ~__LINE__ D.name
-      (fun _ -> A.recurse (Procedure.graph p) (Procedure.topo_rev p))
-      init widening_set widening_delay
+    Trace.with_span ~__FILE__ ~__LINE__ D.name (fun _ ->
+        Procedure.graph p
+        |> Option.map (fun g ->
+            A.recurse g (Procedure.topo_rev p) init widening_set widening_delay))
+    |> Option.get_or ~default:A.M.empty
 
   let print_dot fmt p analysis_result =
     Trace.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
-    let r =
-     fun v -> Option.get_or ~default:D.bottom (A.M.find_opt v analysis_result)
+    let to_dot graph =
+      let r =
+       fun v -> Option.get_or ~default:D.bottom (A.M.find_opt v analysis_result)
+      in
+      let (module M : Viscfg.ProcPrinter) =
+        Viscfg.dot_labels (fun v -> Some (D.show (r v)))
+      in
+      M.fprint_graph fmt graph
     in
-    let (module M : Viscfg.ProcPrinter) =
-      Viscfg.dot_labels (fun v -> Some (D.show (r v)))
-    in
-    M.fprint_graph fmt (Procedure.graph p)
+    Option.iter to_dot (Procedure.graph p)
 end

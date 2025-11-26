@@ -282,22 +282,4 @@ Run on basic irreducible loop example
      R30_in:bv64, R29_in:bv64, R1_in:bv64, R0_in:bv64, NF_in:bv1, CF_in:bv1)
      -> (stack_out:(bv64->bv8), ZF_out:bv1, VF_out:bv1, R31_out:bv64, R30_out:bv64,
      R29_out:bv64, R1_out:bv64, R0_out:bv64, NF_out:bv1, CF_out:bv1)
-  [
-     block %returns [
-        (var R30_out:bv64 := $R30:bv64, var NF_out:bv1 := $NF:bv1,
-         var CF_out:bv1 := $CF:bv1, var VF_out:bv1 := $VF:bv1,
-         var R0_out:bv64 := $R0:bv64, var R31_out:bv64 := $R31:bv64,
-         var stack_out:(bv64->bv8) := $stack:(bv64->bv8),
-         var R1_out:bv64 := $R1:bv64, var ZF_out:bv1 := $ZF:bv1,
-         var R29_out:bv64 := $R29:bv64);
-        return(stack_out=stack_out:(bv64->bv8),ZF_out=ZF_out:bv1,VF_out=VF_out:bv1,R31_out=R31_out:bv64,R30_out=R30_out:bv64,R29_out=R29_out:bv64,R1_out=R1_out:bv64,R0_out=R0_out:bv64,NF_out=NF_out:bv1,CF_out=CF_out:bv1);
-        ];
-     block %inputs [
-        (var R30:bv64 := R30_in:bv64, var NF:bv1 := NF_in:bv1,
-         var CF:bv1 := CF_in:bv1, var VF:bv1 := VF_in:bv1, var R0:bv64 := R0_in:bv64,
-         var R31:bv64 := R31_in:bv64, var stack:(bv64->bv8) := stack_in:(bv64->bv8),
-         var R1:bv64 := R1_in:bv64, var ZF:bv1 := ZF_in:bv1,
-         var R29:bv64 := R29_in:bv64);
-        unreachable;
-        ]
-  ];
+  [  ];
