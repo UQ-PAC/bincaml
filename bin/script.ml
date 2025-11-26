@@ -97,6 +97,11 @@ let of_cmd st (e : Containers.Sexp.t) =
       let ba = Bincaml.Passes.PassManager.batch_of_list args in
       let prog = Some (Bincaml.Passes.PassManager.run_batch ba (get_prog st)) in
       { prog }
+  | "list-passes" ->
+      Bincaml.Passes.PassManager.print_passes
+      |> Containers_pp.Pretty.to_string ~width:80
+      |> print_endline;
+      st
   | e -> failwith @@ "not a command : " ^ e
 
 let of_str st (e : string) =
