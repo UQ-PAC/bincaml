@@ -41,7 +41,7 @@ module PassManager = struct
   let remove_unused =
     {
       name = "remove-unused-decls";
-      apply = Prog Transforms.Ssa.drop_unused_declarations_prog;
+      apply = Prog Transforms.Ssa.drop_unused_var_declarations_prog;
       doc =
         "Removes all unused variable declarations (globals and locals on each \
          procedure) from the IR program";

@@ -25,9 +25,9 @@ let assert_atoms n args =
   assert (List.length args = n);
   List.map (function `Atom n -> n | _ -> failwith "expected atom") args
 
-type dsl_st = { prog : Program.t option }
+type dsl_st = { prog : Program.t option; line : int }
 
-let init_st = { prog = None }
+let init_st = { prog = None; line = 0 }
 let get_prog s = Option.get_exn_or "no program loaded" s.prog
 
 let of_cmd st (e : Containers.Sexp.t) =
@@ -41,8 +41,8 @@ let of_cmd st (e : Containers.Sexp.t) =
   | "skip" -> st
   | "load-il" ->
       let fname = List.hd (assert_atoms 1 args) in
-      let p = Bincaml.Loadir.ast_of_fname fname in
-      { prog = Some p.prog }
+      let p = Loader.Loadir.ast_of_fname fname in
+      { st with prog = Some p.prog }
   | "list-procs" ->
       let open Program in
       Lang.ID.Map.iter
@@ -62,7 +62,28 @@ let of_cmd st (e : Containers.Sexp.t) =
         | _ -> failwith "unreachable"
       in
       CCIO.with_out ofile (fun c ->
-          let id = (get_prog st).proc_names.get_id proc in
+          let id =
+            try (get_prog st).proc_names.get_id proc
+            with Not_found ->
+              begin
+                let procs =
+                  Lang.ID.Map.keys (get_prog st).procs
+                  |> Iter.to_string ~sep:"\n" (fun n ->
+                      Printf.sprintf "  %s\n" (ID.show n))
+                in
+                raise
+                  (Common.ReplError
+                     {
+                       __LINE__;
+                       __FILE__;
+                       __FUNCTION__;
+                       cmd = "write-proc-cfg";
+                       msg =
+                         Printf.sprintf
+                           "No procedure in program with name %s:%s" proc procs;
+                     })
+              end
+          in
           let p = Lang.ID.Map.find id (get_prog st).procs in
           Viscfg.Dot.output_graph c
             (Procedure.graph p |> Option.get_exn_or "procedure has no graph"));
@@ -92,12 +113,12 @@ let of_cmd st (e : Containers.Sexp.t) =
       let args = assert_atoms (List.length args) args in
       let ba = Bincaml.Passes.PassManager.batch_of_list args in
       let prog = Some (Bincaml.Passes.PassManager.run_batch ba (get_prog st)) in
-      { prog }
+      { st with prog }
   | "run-transform" ->
       let args = assert_atoms 1 args in
       let ba = Bincaml.Passes.PassManager.batch_of_list args in
       let prog = Some (Bincaml.Passes.PassManager.run_batch ba (get_prog st)) in
-      { prog }
+      { st with prog }
   | "list-passes" ->
       Bincaml.Passes.PassManager.print_passes
       |> Containers_pp.Pretty.to_string ~width:80
@@ -109,13 +130,16 @@ let of_str st (e : string) =
   let str_comment =
     try String.index_from e 0 ';' with Not_found -> String.length e
   in
+  let st = { st with line = st.line + 1 } in
   let e = String.sub e 0 str_comment in
   let s = match e with "" -> Ok (`List []) | e -> CCSexp.parse_string e in
   let s =
     match s with
     | Ok e -> e
     | Error err ->
-        let m = "failed to parse " ^ e ^ ": " ^ err in
-        failwith m
+        let msg = "failed to parse " ^ e ^ ": " ^ err in
+        raise
+          (Common.ReplError
+             { msg; __FILE__; __LINE__; __FUNCTION__; cmd = "parse" })
   in
   of_cmd st s

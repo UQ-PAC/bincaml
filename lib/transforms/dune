@@ -12,6 +12,7 @@
   intra_analysis
   may_read_uninit)
  (libraries
+  loader
   intPQueue
   lang
   zarith

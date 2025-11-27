@@ -161,6 +161,14 @@ let to_string ?width show_lvar show_var show_expr
 
 module V = Set.Make (Var)
 
+let show_stmt_basil =
+  let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
+  let show_var v = Containers_pp.text @@ Var.to_string_il_rvar v in
+  let show_expr e = BasilExpr.pretty e in
+  to_string show_lvar show_var show_expr
+
+let pp_stmt_basil fmt s = Format.pp_print_string fmt (show_stmt_basil s)
+
 let assigned (init : V.t) s : V.t =
   let f_lvar a v = V.add v a in
   iter_lvar s |> Iter.fold f_lvar init
@@ -182,24 +190,3 @@ let free_vars (init : V.t) (s : (Var.t, Var.t, BasilExpr.t) t) : V.t =
     | `Var v -> V.add v a
   in
   iter_rexpr s |> Iter.fold f_expr init
-
-let%expect_test "frees" =
-  let s =
-    Instr_Assign
-      [
-        ( Var.create "v1" Types.Boolean,
-          BasilExpr.rvar @@ Var.create "v2" Types.Boolean );
-        ( Var.create "v3" Types.Boolean,
-          BasilExpr.rvar @@ Var.create "v4" Types.Boolean );
-      ]
-  in
-  print_endline (to_string ~width:80 Var.pretty Var.pretty BasilExpr.pretty s);
-  print_string "Rvars: ";
-  print_endline @@ Iter.to_string ~sep:"," Var.to_string (free_vars_iter s);
-  print_string "Lvars: ";
-  print_endline @@ Iter.to_string ~sep:"," Var.to_string (iter_lvar s);
-  [%expect
-    {|
-    (v1:bool := v2:bool, v3:bool := v4:bool)
-    Rvars: v2:bool,v4:bool
-    Lvars: v1:bool,v3:bool |}]

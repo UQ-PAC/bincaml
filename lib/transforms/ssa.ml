@@ -27,9 +27,9 @@ let check_ssa proc =
              acc)
       VM.empty proc
   in
-  assert (VM.for_all (fun v i -> i = 1) assigns)
+  assert (VM.for_all (fun v i -> (not (Var.pure v)) || i = 1) assigns)
 
-let drop_unused_declarations_proc p =
+let drop_unused_var_declarations_proc p =
   let used =
     Procedure.fold_blocks_topo_fwd
       (fun acc id bl ->
@@ -42,10 +42,10 @@ let drop_unused_declarations_proc p =
     (Procedure.local_decls p);
   VS.filter Var.is_global used
 
-let drop_unused_declarations_prog (p : Program.t) =
+let drop_unused_var_declarations_prog (p : Program.t) =
   let used =
     ID.Map.fold
-      (fun i p acc -> VS.union acc (drop_unused_declarations_proc p))
+      (fun i p acc -> VS.union acc (drop_unused_var_declarations_proc p))
       p.procs VS.empty
   in
   Var.Decls.filter_map_inplace
@@ -137,10 +137,21 @@ let set_params (p : Program.t) =
         in
         let proc = Procedure.map_graph add_formal_assigns proc in
         let proc =
-          Procedure.map_formal_in_params (fun i -> to_formal inparam) proc
+          Procedure.map_formal_in_params
+            (fun i ->
+              StringMap.union
+                (fun n i j -> failwith @@ "Existing param with name: " ^ n)
+                i
+              @@ to_formal inparam)
+            proc
         in
         let proc =
-          Procedure.map_formal_out_params (fun i -> to_formal outparam) proc
+          Procedure.map_formal_out_params
+            (fun i ->
+              StringMap.union
+                (fun n i j -> failwith @@ "Existing param with name: " ^ n)
+                i (to_formal outparam))
+            proc
         in
         proc)
   in
@@ -150,9 +161,10 @@ let ssa (in_proc : Program.proc) =
   let lives = Livevars.run in_proc in
   let rename r v : Var.t =
     if
-      (* don't rename formal out params; should only be assigned once*)
-      Procedure.formal_out_params in_proc
-      |> StringMap.exists (fun _ i -> Var.equal i v)
+      (* don't rename formal out params; should only be assigned once anyway*)
+      (not (Var.pure v))
+      || Procedure.formal_out_params in_proc
+         |> StringMap.exists (fun _ i -> Var.equal i v)
     then v
     else
       let nv = Procedure.fresh_var ~name:(Var.name v) in_proc (Var.typ v) in

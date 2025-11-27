@@ -16,12 +16,13 @@ let proc =
 let print_proc chan p = Program.output_proc_pretty chan p
 
 let list_procs fname =
-  let p = Bincaml.Loadir.ast_of_fname fname in
+  let p = Loader.Loadir.ast_of_fname fname in
   let procs prog =
     let open Program in
     Lang.ID.Map.iter (fun i _ -> Printf.printf "%s\n" (ID.show i)) prog.procs
   in
-  procs p.prog
+  procs p.prog;
+  Ok ()
 
 let procs_cmd =
   let doc = "list program print procedures " in
@@ -29,16 +30,17 @@ let procs_cmd =
   Cmd.v info Term.(const list_procs $ fname)
 
 let dump_proc fname proc =
-  let p = Bincaml.Loadir.ast_of_fname fname in
+  let p = Loader.Loadir.ast_of_fname fname in
   let id = p.prog.proc_names.get_id proc in
   let p = Lang.ID.Map.find id p.prog.procs in
-  print_proc stdout p
+  print_proc stdout p;
+  Ok ()
 
 let print_cfg fname proc =
-  let prg = Bincaml.Loadir.ast_of_fname fname in
+  let prg = Loader.Loadir.ast_of_fname fname in
   let id = prg.prog.proc_names.get_id proc in
   let _ = Lang.ID.Map.find id prg.prog.procs in
-  ()
+  Ok ()
 (*Lang.Livevars.print_live_vars_dot Format.std_formatter p ; *)
 (*Lang.Livevars.print_dse_dot Format.std_formatter p; *)
 
@@ -54,12 +56,23 @@ let dump_proc_cmd =
 
 let run_script fname =
   let st = Script.init_st in
-  let _ =
+  let r =
     CCIO.with_in fname (fun c ->
         let iter = CCIO.read_lines_iter c in
-        Iter.fold (fun acc l -> Script.of_str acc l) st iter)
+        try
+          let _ = Iter.fold (fun acc l -> Script.of_str acc l) st iter in
+          Ok ()
+        with
+        | Common.ReplError { __LINE__; __FILE__; __FUNCTION__; msg; cmd } ->
+          let n =
+            Printf.sprintf "Error in %s: %s at %s %s:%d" cmd
+              (Containers_pp.Term_color.color `Red (Containers_pp.text msg)
+              |> Containers_pp.Pretty.to_string ~width:80)
+              __FUNCTION__ __FILE__ __LINE__
+          in
+          Error n)
   in
-  ()
+  r
 
 (*
 let callgraph_cmd =
@@ -81,6 +94,6 @@ let cmd =
 let main () =
   Trace.set_process_name "main";
   Trace.set_thread_name "t1";
-  exit (Cmd.eval cmd)
+  exit (Cmd.eval_result cmd)
 
 let () = Trace_tef.with_setup ~out:(`File "trace.json") () @@ fun () -> main ()

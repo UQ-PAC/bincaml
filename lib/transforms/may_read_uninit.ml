@@ -7,7 +7,6 @@ How to do this....
 
 BOT -> readuninit -> write
 
-
 *)
 open Containers
 open Lang
@@ -21,7 +20,6 @@ module ReadUninit = struct
     match (a, b) with
     | _, ReadUninit -> ReadUninit
     | ReadUninit, _ -> ReadUninit
-    | Bot, Bot -> Bot
     | a, Bot -> a
     | Bot, a -> a
     | Write, Write -> Write
@@ -58,7 +56,10 @@ module ReadUninitAnalysis = struct
     |> Iter.filter_map (fun (i, v) ->
         match v with ReadUninit.ReadUninit -> Some i | _ -> None)
 
-  let show st = read_uninit_vars st |> Iter.to_string ~sep:", " Var.to_string
+  let show_full = show
+
+  let show_short st =
+    read_uninit_vars st |> Iter.to_string ~sep:", " Var.to_string
 
   let tf_stmt st stmt =
     let st =
@@ -77,13 +78,15 @@ module A = struct
   let analyse p =
     analyse
       ~init:(function
-        | Entry ->
+        | v ->
             Procedure.formal_in_params p
             |> Common.StringMap.values
             |> Iter.fold
                  (fun acc v -> ReadUninitAnalysis.update v ReadUninit.Write acc)
                  ReadUninitAnalysis.bottom
-        | _ -> ReadUninitAnalysis.bottom)
+        | v ->
+            print_endline @@ Procedure.Vert.show v;
+            ReadUninitAnalysis.bottom)
       p
 end
 
@@ -116,3 +119,38 @@ let check ?(include_locals = false) (p : Program.proc) =
         (Iter.to_string ~sep:", " Var.to_string vars))
   |> Iter.length
   |> fun l -> if l > 0 then true else false
+
+let%expect_test "fold_block" =
+  let block =
+    Loader.Loadir.parse_single_block
+      {|
+   block %main_entry [
+      $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xfffffffffffffffc:bv64) extract(32,0, R0_in:bv64) 32;
+      var load45_1:bv32 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xfffffffffffffffc:bv64) 32;
+      var R1_4:bv64 := zero_extend(32, load45_1:bv32);
+      $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x420034:bv64 extract(32,0, R1_4:bv64) 32;
+      var load46_1:bv32 := load le $mem:(bv64->bv8) 0x42002c:bv64 32;
+      var R0_10:bv64 := zero_extend(32, load46_1:bv32);
+      goto (%phi_4,%phi_3);
+      ]
+    |}
+  in
+  let _ =
+    Block.fold_forwards
+      ~f:(fun a i ->
+        let r = ReadUninitAnalysis.tf_stmt a i in
+        print_endline @@ ReadUninitAnalysis.show_full r;
+        r)
+      ~phi:(fun a i -> a)
+      ReadUninitAnalysis.bottom block
+  in
+  [%expect
+    {|
+    $stack->RU, R0_in->RU, R31_in->RU
+    $stack->RU, R0_in->RU, R31_in->RU, load45_1->W
+    $stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W
+    $stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, $mem->RU
+    $stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W
+    $stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, R0_10->W |}]
