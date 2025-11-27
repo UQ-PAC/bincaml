@@ -47,11 +47,9 @@ let partial_eval_test =
   let evaled =
     try Lazy.force evaled
     with exc ->
-      begin
-        Printf.printf "exc: %s\n%s\n" (Printexc.to_string exc)
-          (Expr.BasilExpr.to_string exp);
-        raise exc
-      end
+      Printf.printf "exc: %s\n%s\n" (Printexc.to_string exc)
+        (Expr.BasilExpr.to_string exp);
+      raise exc
   in
 
   let comparison =
@@ -70,7 +68,8 @@ let partial_eval_test =
       print_endline "";
       false
   | `UNKNOWN (e, stderr)
-    when CCString.mem ~sub:"Invalid argument '0' for 'size'" e ->
+    when CCString.mem ~sub:"invalid argument '0' for 'size'"
+           (String.lowercase_ascii e) ->
       assume_fail ()
   | `UNKNOWN (e, stderr) -> failwith (e ^ "\n" ^ stderr)
 

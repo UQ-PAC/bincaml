@@ -162,10 +162,10 @@ Run on basic irreducible loop example
          0x10:bv64) R1:bv64 64;
         var R0_1:bv64 := 0x20000:bv64;
         var R0_2:bv64 := bvadd(R0_1:bv64, 0x3c:bv64);
-        var mem:(bv64->bv8) := store le $mem:(bv64->bv8) R0_2:bv64 0x0:bv32 32;
+        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) R0_2:bv64 0x0:bv32 32;
         var R0_3:bv64 := 0x20000:bv64;
         var R0_4:bv64 := bvadd(R0_3:bv64, 0x40:bv64);
-        var load18_1:bv32 := load le mem:(bv64->bv8) R0_4:bv64 32;
+        var load18_1:bv32 := load le $mem:(bv64->bv8) R0_4:bv64 32;
         var R0_5:bv64 := zero_extend(32, load18_1:bv32);
         var R0_6:bv64 := zero_extend(32,
         bvconcat(0x0:bv31, extract(1,0, R0_5:bv64)));
@@ -192,18 +192,16 @@ Run on basic irreducible loop example
      block %main_3 [
         var R0_14:bv64 := 0x20000:bv64;
         var R0_15:bv64 := bvadd(R0_14:bv64, 0x3c:bv64);
-        var load19_1:bv32 := load le mem_2:(bv64->bv8) R0_15:bv64 32;
+        var load19_1:bv32 := load le $mem:(bv64->bv8) R0_15:bv64 32;
         var R0_16:bv64 := zero_extend(32, load19_1:bv32);
         var R1_2:bv64 := zero_extend(32, bvadd(extract(32,0, R0_16:bv64), 0x1:bv32));
         var R0_17:bv64 := 0x20000:bv64;
         var R0_18:bv64 := bvadd(R0_17:bv64, 0x3c:bv64);
-        var mem_3:(bv64->bv8) := store le mem_2:(bv64->bv8) R0_18:bv64 extract(32,0, R1_2:bv64) 32;
+        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) R0_18:bv64 extract(32,0, R1_2:bv64) 32;
         goto (%main_19);
         ];
      block %main_5 [
-        (mem_2:(bv64->bv8) := phi(%main_25 -> mem:(bv64->bv8),
-          %main_7 -> mem_1:(bv64->bv8)),
-         stack_6:(bv64->bv8) := phi(%main_25 -> stack_4:(bv64->bv8),
+        (stack_6:(bv64->bv8) := phi(%main_25 -> stack_4:(bv64->bv8),
           %main_7 -> stack_5:(bv64->bv8)),
          R31_3:bv64 := phi(%main_25 -> R31_1:bv64, %main_7 -> R31_2:bv64));
         var R0_12:bv64 := 0x0:bv64;
@@ -221,7 +219,7 @@ Run on basic irreducible loop example
      block %main_17 [
         var R0_9:bv64 := 0x20000:bv64;
         var R0_10:bv64 := bvadd(R0_9:bv64, 0x3c:bv64);
-        var load20_1:bv32 := load le mem_1:(bv64->bv8) R0_10:bv64 32;
+        var load20_1:bv32 := load le $mem:(bv64->bv8) R0_10:bv64 32;
         var R0_11:bv64 := zero_extend(32, load20_1:bv32);
         var #6_1:bv32 := bvadd(extract(32,0, R0_11:bv64), 0xfffffffa:bv32);
         var VF_2:bv1 := bvnot(booltobv1(eq(sign_extend(1,
@@ -235,9 +233,7 @@ Run on basic irreducible loop example
         goto (%main_15,%main_9);
         ];
      block %main_19 [
-        (mem_1:(bv64->bv8) := phi(%main_3 -> mem_3:(bv64->bv8),
-          %main_21 -> mem:(bv64->bv8)),
-         stack_5:(bv64->bv8) := phi(%main_3 -> stack_6:(bv64->bv8),
+        (stack_5:(bv64->bv8) := phi(%main_3 -> stack_6:(bv64->bv8),
           %main_21 -> stack_4:(bv64->bv8)),
          R1_1:bv64 := phi(%main_3 -> R1_2:bv64, %main_21 -> R1:bv64),
          R31_2:bv64 := phi(%main_3 -> R31_3:bv64, %main_21 -> R31_1:bv64));
