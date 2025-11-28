@@ -15,6 +15,7 @@
   stmt
   block
   procedure
+  interp
   program)
  (flags -w -27)
  (libraries
@@ -25,6 +26,7 @@
   containers-data
   iter
   containers.pp
+  fmt
   trace)
  (inline_tests)
  (preprocess

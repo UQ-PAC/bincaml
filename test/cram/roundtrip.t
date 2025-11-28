@@ -1,5 +1,5 @@
 
-  $ bincaml script roundtrip.sexp
+  $ ../../bin/main.exe script roundtrip.sexp
 
 The serialise -> parse serialise loop should be idempotent
 

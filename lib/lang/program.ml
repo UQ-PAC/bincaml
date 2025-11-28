@@ -68,6 +68,21 @@ let pretty_to_chan chan (p : t) =
 
 let decl_global p = Var.Decls.add p.globals
 
+let create_single_proc ?(name = "<module>") () =
+  let proc_names = ID.make_gen () in
+  let procname = proc_names.fresh ~name () in
+  let proc = Procedure.create procname () in
+  let prog =
+    {
+      modulename = name;
+      entry_proc = Some procname;
+      globals = Var.Decls.empty ();
+      procs = ID.Map.singleton procname proc;
+      proc_names;
+    }
+  in
+  (prog, proc)
+
 let empty ?name () =
   let modulename = Option.get_or ~default:"<module>" name in
   {

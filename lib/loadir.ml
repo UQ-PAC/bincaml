@@ -722,30 +722,47 @@ let protect_parse parsefun =
 
 (** Loads a single block in isolation in a proceudre and returns it, does not
     support procedure calls or returns *)
-let load_single_block ?input lexbuf =
+let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
   let block = protect_parse BasilIR.ParBasilIR.pBlock input lexbuf in
-  let proc = Procedure.create ("<proc>", 0) () in
-  let prog =
-    {
-      prog = Program.empty ~name:"<prog>" ();
-      params_order = Hashtbl.create 30;
-      curr_proc = Some proc;
-    }
-  in
-  let bl = BasilASTLoader.trans_block prog block in
+  let prog, proc = Program.create_single_proc ~name:proc () in
+  let st = { prog; params_order = Hashtbl.create 30; curr_proc = Some proc } in
+  let bl = BasilASTLoader.trans_block st block in
   let bl = BasilASTLoader.conv_lblock [] proc bl in
-  bl
+  let proc, bid =
+    Procedure.fresh_block proc ~name:"blah" ~stmts:bl ~phis:[] ()
+  in
+  let proc =
+    Procedure.map_graph
+      (fun g ->
+        let g = Procedure.G.add_edge g Entry (Begin bid) in
+        Procedure.G.add_edge g (End bid) Return)
+      proc
+  in
+  let prog =
+    { prog with procs = ID.Map.add (Procedure.id proc) proc prog.procs }
+  in
+  let bl = Procedure.get_block proc bid |> Option.get_exn_or "" in
+  let globals =
+    Iter.append (Block.read_vars_iter bl) (Block.assigned_vars_iter bl)
+    |> Iter.filter Var.is_global
+    |> Iter.map (fun v -> (Var.name v, v))
+    |> Var.Decls.of_iter
+  in
+  ({ prog with globals }, proc, bl)
+
+let load_single_block ?proc ~input lexbuf =
+  let _, _, block = load_single_block_proc ?proc ~input lexbuf in
+  block
+
+let parse_single_block_proc ?proc s =
+  let lexbuf = Lexing.from_string ~with_positions:true s in
+  let input = Pp_loc.Input.string s in
+  load_single_block_proc ?proc ~input lexbuf
 
 let parse_single_block s : Program.bloc =
   let lexbuf = Lexing.from_string ~with_positions:true s in
   let input = Pp_loc.Input.string s in
-  let x : Program.bloc =
-    {
-      stmts = Vector.of_list (load_single_block ~input lexbuf) |> Vector.freeze;
-      phis = [];
-    }
-  in
-  x
+  load_single_block ~input lexbuf
 
 let ast_of_concrete_ast ~name m =
   Trace.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->

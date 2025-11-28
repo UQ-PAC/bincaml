@@ -37,6 +37,7 @@
    intPQueue
    cmdliner
    pp_loc
+   fmt
    (ocamlformat :with-dev-setup)
    (odig :with-dev-setup)
    (sherlodoc :with-doc)
