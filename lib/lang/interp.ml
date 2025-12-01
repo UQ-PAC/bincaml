@@ -4,15 +4,36 @@ exception AssertFailure
 open Common
 open Containers
 
+module Byte_slice = struct
+  include Byte_slice
+
+  let blit_to src dest dest_pos =
+    Bytes.blit src.bs src.off dest dest_pos src.len
+end
+
 module IValue = struct
   type t = Z.t
 
-  (** conversion from basil values *)
+  (** interpreter uses a uniform bitvector representation for values *)
+
+  (** representation size chosen for arbitrary precision integers *)
+  let int_size = 128
 
   let true_value = Z.one
   let false_value = Z.zero
   let bv_value bv = Value.PrimQFBV.value bv
   let int_value v = v
+
+  (** conversion from basil values *)
+  let bv_of_constant (v : Ops.AllOps.const) =
+    let open Value in
+    let open Expr.BasilExpr in
+    let open Expr.AbstractExpr in
+    match v with
+    | `Bitvector bv -> bv
+    | `Integer v -> PrimQFBV.create ~size:int_size v
+    | `Bool true -> PrimQFBV.create ~size:8 Z.one
+    | `Bool false -> PrimQFBV.create ~size:8 Z.zero
 
   let of_constant (v : Ops.AllOps.const) =
     let open Expr.BasilExpr in
@@ -24,7 +45,7 @@ module IValue = struct
 
   (** conversion to basil values *)
 
-  let as_int v = v
+  let as_int v = Value.z_signed_extract v 0 int_size
   let as_bv ~size v = Value.PrimQFBV.create ~size v
   let as_bool v = Z.equal Z.zero v
 
@@ -107,17 +128,21 @@ module PageTable = struct
           Z.sub i page_addr |> Z.to_int
         in
         let page_content = lookup_page st page_addr in
-        Iter.int_range ~start:begin_offset ~stop:end_offset
-        |> Iter.iter (fun ind ->
-            Option.iter
-              (fun r -> r (Byte_buffer.unsafe_get page_content ind))
-              read;
-            Option.iter
-              (fun fn ->
-                let c = fn () in
-                Byte_buffer.unsafe_set page_content ind c;
-                ())
-              write))
+        Option.iter
+          (fun r ->
+            r
+              ( Byte_buffer.to_slice page_content |> fun slice ->
+                Byte_slice.sub slice begin_offset end_offset ))
+          read;
+        Option.iter
+          (fun writing ->
+            let bytes = Byte_buffer.bytes page_content in
+            let len = end_offset - begin_offset in
+            let slice = Byte_slice.sub writing 0 len in
+            Byte_slice.blit_to slice bytes begin_offset;
+            Byte_slice.consume writing len;
+            ())
+          write)
 
   let bytes_to_value_swap v =
     Iter.fold
@@ -135,21 +160,31 @@ module PageTable = struct
       (0, Z.zero) v
     |> snd
 
+  let slices_to_value v =
+    Iter.fold
+      (fun acc slice ->
+        let byteind, acc = acc in
+        let contents = Byte_slice.contents slice in
+        let acc =
+          Z.logor acc (Z.shift_left (Z.of_bits contents) (byteind * 8))
+        in
+        (byteind + Byte_slice.len slice, acc))
+      (0, Z.zero) v
+    |> snd
+
   let read_bytes st ~addr ~num_bytes =
     Iter.from_iter (fun f -> bytes_view st ~addr ~num_bytes ~read:f)
-    |> bytes_to_value num_bytes
+    |> slices_to_value
 
   let write_bytes st ~addr ~bytes =
-    bytes_view ~addr
-      ~num_bytes:(Byte_slice.len bytes - 1)
-      ~write:(fun _ ->
-        let c = Byte_slice.get bytes 0 in
-        Byte_slice.consume bytes 1;
-        c)
-      st
+    bytes_view ~addr ~num_bytes:(Byte_slice.len bytes) ~write:bytes st
 
-  let write_bv st ~addr bits =
-    let bytes = Z.to_bits bits |> Byte_slice.unsafe_of_string in
+  let write_bv st ~addr (bits : Value.PrimQFBV.t) =
+    assert (bits.w mod 8 = 0);
+    let bytes =
+      Z.to_bits bits.v |> Byte_slice.unsafe_of_string |> fun slice ->
+      Byte_slice.sub slice 0 (bits.w / 8)
+    in
     write_bytes st ~addr ~bytes
 
   let read_bv st ~addr ~nbits =
@@ -175,18 +210,24 @@ let%expect_test "page range multi" =
   [%expect {| 0, 1024, 2048, 3072, 4096 |}]
 
 let%expect_test "page" =
+  let open Value in
   let tbl = PageTable.create () in
-  PageTable.write_bv tbl ~addr:(Z.of_int 0x0c8) (Z.of_bits "abcdefgh");
-  PageTable.write_bv tbl ~addr:(Z.of_int 0x0ce) (Z.of_bits "abcdefgh");
+  let obits = Value.PrimQFBV.create ~size:64 (Z.of_bits "abcdefgh") in
+  PageTable.write_bv tbl ~addr:(Z.of_int 0x0c8) @@ obits;
+  PageTable.write_bv tbl ~addr:(Z.of_int 0x0ce) obits;
+  let read = PageTable.read_bv tbl ~addr:(Z.of_int 0x0c8) ~nbits:(14 * 8) in
   let read_bv =
-    PageTable.read_bv tbl ~addr:(Z.of_int 0x0c8) ~nbits:(14 * 8)
-    |> Value.PrimQFBV.value |> Z.to_bits
-    |> fun s -> String.sub s 0 14
+    read |> Value.PrimQFBV.value |> Z.to_bits |> fun s -> String.sub s 0 14
   in
+  let reado = PageTable.read_bv tbl ~addr:(Z.of_int 0x0ce) ~nbits:64 in
+  Printf.printf "%s == %s %b\n" (PrimQFBV.to_string reado)
+    (PrimQFBV.to_string obits)
+    (PrimQFBV.equal reado obits);
   print_endline read_bv;
   print_endline @@ PageTable.show tbl;
   [%expect
     {|
+    0x6867666564636261:bv64 == 0x6867666564636261:bv64 true
     abcdefabcdefgh
     page at 0
     000: 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000
@@ -247,7 +288,8 @@ let%expect_test "page" =
     3e8: 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000
 
          .......................
-         . |}]
+         .
+    |}]
 
 module IState = struct
   type stack_frame = { locals : IValue.t VarMap.t; proc : Program.proc }
@@ -418,7 +460,7 @@ module IState = struct
         let lhs = lookup_memory mem st in
         assert (CCEqual.physical lhs m);
         let addr = eval_expr addr st |> IValue.of_constant in
-        let value = eval_expr value st |> IValue.of_constant in
+        let value = eval_expr value st |> IValue.bv_of_constant in
         PageTable.write_bv m ~addr value;
         st
     | Stmt.Instr_IntrinCall _ -> failwith "unsupported"
