@@ -109,6 +109,19 @@ let of_cmd st (e : Containers.Sexp.t) =
       let ofile = List.hd @@ assert_atoms 1 args in
       CCIO.with_out ofile (fun c -> Program.pretty_to_chan c (get_prog st));
       st
+  | "interp-out" ->
+      let ofile = List.hd @@ assert_atoms 1 args in
+      let prog = get_prog st in
+      let main =
+        Lang.ID.Map.find (Option.get_exn_or "no" prog.entry_proc) prog.procs
+      in
+      let ist =
+        match Lang.Interp.test_run_proc ~seed:123456 prog main with
+        | Ok (st, _) -> Lang.Interp.IState.show st
+        | Error st -> "ERROR STATE " ^ Lang.Interp.IState.show st
+      in
+      CCIO.with_out ofile (fun c -> output_string c ist);
+      st
   | "run-transforms" ->
       let args = assert_atoms (List.length args) args in
       let ba = Bincaml.Passes.PassManager.batch_of_list args in

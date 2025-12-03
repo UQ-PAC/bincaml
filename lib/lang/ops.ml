@@ -61,7 +61,6 @@ module BVOps = struct
     | `BVNEG
     | `ZeroExtend of int
     | `SignExtend of int
-
     | `Extract of int * int ]
   [@@deriving show { with_path = false }, eq, ord]
 

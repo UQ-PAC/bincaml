@@ -24,9 +24,9 @@ let%expect_test "fold_block" =
   [%expect {|
     PC= test::Return
     Stack
-     - test
+
     Top frame:
-    R0_in:bv64=3e8, R31_in:bv64=3e8
+    empty stack
 
 
     Mem $mem:(bv64->bv8)

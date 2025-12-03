@@ -40,6 +40,18 @@ module PrimQFBV = struct
   let equal a b = Int.equal a.w b.w && Z.equal a.v b.v
   let true_bv = ones ~size:1
   let false_bv = zero ~size:1
+  let max_value_unsigned size = ones ~size
+
+  (** [to_bytes v] converts a byte-aligned-width bitvector value to bytes with
+      the length matching [length v]*)
+  let to_bytes v =
+    assert (v.w mod 8 = 0);
+    assert (v.w / 8 > 0);
+    let bs = Bytes.init (v.w / 8) (fun _ -> Char.unsafe_chr 0) in
+    let bits = Z.to_bits v.v in
+    let len = min (String.length bits) (v.w / 8) in
+    if len > 0 then Bytes.blit_string bits 0 bs 0 len;
+    bs
 
   (** Extracts a slice of the given bitvector. The slice is extracted from [lo]
       (inclusive) up to [hi] (exclusive). *)
