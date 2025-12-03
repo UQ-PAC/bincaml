@@ -104,7 +104,7 @@ module BasilASTLoader = struct
             Program.decl_global p
               (Var.create
                  (unsafe_unsigil (`Global bident))
-                 ~pure:true ~scope:Global (trans_type type'));
+                 ~pure:false ~scope:Global (trans_type type'));
             p)
           prog
     | Decl_Var (bident, type') ->

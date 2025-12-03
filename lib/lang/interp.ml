@@ -2,21 +2,13 @@ exception ConversionError of string
 exception AssertFailure of Program.stmt
 exception AssumeFail of Program.stmt
 
+open Common
+
 let () =
   Printexc.register_printer (function
     | AssumeFail stmt -> Some ("Assumption failed: " ^ Program.show_stmt stmt)
     | AssertFailure e -> Some ("AssertFailure : " ^ Program.show_stmt e)
     | _ -> None)
-
-open Common
-open Containers
-
-module Byte_slice = struct
-  include Byte_slice
-
-  let blit_to src dest dest_pos =
-    Bytes.blit src.bs src.off dest dest_pos src.len
-end
 
 module IValue = struct
   type t = Z.t
@@ -654,7 +646,7 @@ module IState = struct
     | Stmt.Instr_Assume { body } -> (
         IValue.of_constant body |> IValue.as_bool |> function
         | true -> st
-        | false -> raise (AssumeFail stmt))
+        | false -> raise_notrace (AssumeFail stmt))
     | Stmt.Instr_Load { lhs; mem; addr; cells; endian } -> begin
         let m = lookup_memory mem st in
         let nbits = cells in

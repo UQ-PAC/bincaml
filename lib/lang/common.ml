@@ -1,4 +1,4 @@
-open Containers
+include Containers
 
 exception
   ReplError of {
@@ -45,3 +45,17 @@ end
 let identity x = x
 
 module StringMap = Map.Make (String)
+
+module Byte_slice = struct
+  include Byte_slice
+
+  let blit_to src dest dest_pos =
+    Bytes.blit src.bs src.off dest dest_pos src.len
+end
+
+module Iter = struct
+  include Iter
+
+  (** combine two equal-length iterators to an iterator of pairs *)
+  let zip i j = i |> Iter.map (fun i -> (i, Iter.head_exn @@ Iter.take 1 j))
+end
