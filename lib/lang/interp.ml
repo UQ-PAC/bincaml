@@ -464,6 +464,7 @@ module IState = struct
     memories : PageTable.t VarMap.t;
     stack : stack_frame list;
     pc : loc;
+    last_block : ID.t option;
     events : event list;
   }
 
@@ -548,7 +549,7 @@ module IState = struct
       |> Iter.map (fun v -> (v, init_glob v))
       |> VarMap.of_iter
     in
-    { prog; pc; stack; memories; globals; events = [] }
+    { prog; pc; stack; memories; globals; events = []; last_block = None }
 
   type decisions = { choices_remaining : decisions list; choice : t }
 
@@ -675,19 +676,9 @@ module IState = struct
         st
     | Stmt.Instr_IndirectCall _ -> failwith "unsupported"
 
-  and set_succ st e = { st with pc = { st.pc with vert = e } }
-
   and exec_edge st e =
     let b, l, e = e in
-    let pred =
-      match st.pc.vert with
-      | End id -> Some id
-      | Begin id -> Some id
-      | Entry -> None
-      | v ->
-          failwith
-            (Printf.sprintf "odd cfg structure : %s" (Procedure.Vert.show v))
-    in
+    let pred = st.last_block in
     let eval_block st block =
       Block.fold_forwards
         ~phi:(fun st phis ->
@@ -698,9 +689,20 @@ module IState = struct
                 | { lhs; rhs } ->
                     let _, rhs =
                       let pred =
-                        Option.get_exn_or "Phi node in successor of entry" pred
+                        Option.get_exn_or
+                          (Printf.sprintf "no predecessor blokc for %s"
+                             (Procedure.Vert.show b))
+                          pred
                       in
-                      List.find (fun (id, v) -> ID.equal id pred) rhs
+                      List.find_opt (fun (id, v) -> ID.equal id pred) rhs
+                      |> function
+                      | Some i -> i
+                      | None ->
+                          failwith
+                          @@ Printf.sprintf
+                               "Phi assignment not found for %s %s %s"
+                               (Var.to_string lhs) (ID.to_string pred)
+                               (Procedure.Vert.show b)
                     in
                     let rhs = read_var rhs st in
                     (lhs, rhs))
@@ -715,7 +717,10 @@ module IState = struct
       | Procedure.Edge.Jump -> st
       | Procedure.Edge.Block block -> eval_block st block
     in
-    { st with pc = { st.pc with vert = e } }
+    let last_block =
+      match e with Procedure.Vert.End id -> Some id | _ -> st.last_block
+    in
+    { st with pc = { st.pc with vert = e }; last_block }
 
   and step st =
     match st.pc.vert with
@@ -756,7 +761,9 @@ module IState = struct
         (st, o)
     | _ when StringMap.is_empty (Procedure.formal_out_params p) ->
         (st, StringMap.empty)
-    | _ -> failwith "cannot execute undef proc with return params"
+    | _ ->
+        failwith @@ "cannot execute undef proc with return params :"
+        ^ ID.to_string @@ Procedure.id p
 
   and exec_proc st p (args : Ops.AllOps.const StringMap.t) =
     let rec run st =
