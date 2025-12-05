@@ -4,3 +4,4 @@
 (run-transforms "simple-params")
 (run-transforms "simple-ssa")
 (dump-il "after.il")
+(load-il "after.il")

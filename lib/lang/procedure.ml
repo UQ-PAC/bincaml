@@ -393,6 +393,13 @@ let fold_blocks_topo_rev (f : 'a -> ID.t -> Edge.block -> 'a) init p =
     Graph.WeakTopological.fold_left ff init topo
   else init
 
+let map_blocks_topo_fwd f p =
+  fold_blocks_topo_fwd
+    (fun p id b ->
+      let updated = f id b in
+      if not @@ Equal.physical updated b then update_block p id updated else p)
+    p p
+
 let blocks_succ p i =
   Option.to_iter (graph p)
   |> Iter.flat_map (fun graph ->

@@ -91,6 +91,9 @@ let map_fold_forwards ~(phi : 'acc -> 'v phi list -> 'acc * 'v phi list)
   let stmts = Vector.of_iter stmts |> Vector.freeze in
   (acc, { phis; stmts })
 
+let map ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
+  { stmts = Vector.map f b.stmts; phis = phi b.phis }
+
 let foldi_backwards ~(f : 'acc -> int * ('v, 'v, 'e) Stmt.t -> 'acc)
     ~(phi : 'acc -> 'v phi list -> 'acc) ~(init : 'a) (b : ('v, 'e) t) : 'acc =
   Iter.fold f init

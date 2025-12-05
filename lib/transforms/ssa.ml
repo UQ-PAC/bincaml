@@ -59,29 +59,54 @@ let set_params (p : Program.t) =
   let globs =
     p.globals |> Var.Decls.to_iter |> Iter.filter (fun (i, v) -> Var.pure v)
   in
+
+  let inparam =
+    globs
+    |> Iter.map (fun (n, global) ->
+        let name =
+          String.drop_while (function '$' -> true | _ -> false) n ^ "_in"
+        in
+        (name, global))
+  in
+  let outparam =
+    globs
+    |> Iter.map (fun (n, global) ->
+        let name =
+          String.drop_while (function '$' -> true | _ -> false) n ^ "_out"
+        in
+        (name, global))
+  in
+
+  let actual_lhs = StringMap.of_iter outparam in
+  let actual_rhs =
+    inparam
+    |> Iter.map (fun (i, j) -> (i, Expr.BasilExpr.rvar j))
+    |> StringMap.of_iter
+  in
+  let set_params_calls_block blockid (b : Program.bloc) =
+    let lhs = actual_lhs in
+    let args = actual_rhs in
+    Block.map ~phi:identity
+      (function
+        | Stmt.Instr_Call { procid } -> Instr_Call { lhs; args; procid }
+        | i -> i)
+      b
+  in
   let procs =
     p.procs
     |> ID.Map.mapi (fun procid proc ->
         let inparam =
-          globs
-          |> Iter.map (fun (n, i) ->
-              let name =
-                String.drop_while (function '$' -> true | _ -> false) n
-                ^ "_in"
-              in
-              let v = Procedure.fresh_var ~name proc (Var.typ i) in
-              (name, i, v))
+          inparam
+          |> Iter.map (fun (name, global) ->
+              let v = Procedure.fresh_var ~name proc (Var.typ global) in
+              (name, global, v))
           |> Iter.persistent
           (* don't re-increment on next iteration *)
         in
         let outparam =
-          globs
-          |> Iter.map (fun (n, i) ->
-              let name =
-                String.drop_while (function '$' -> true | _ -> false) n
-                ^ "_out"
-              in
-              (name, i, Procedure.fresh_var ~name proc (Var.typ i)))
+          outparam
+          |> Iter.map (fun (name, global) ->
+              (name, global, Procedure.fresh_var ~name proc (Var.typ global)))
           |> Iter.persistent
           (* don't re-increment on next iteration *)
         in
@@ -156,6 +181,11 @@ let set_params (p : Program.t) =
             proc
         in
         proc)
+  in
+  let procs =
+    procs
+    |> ID.Map.mapi (fun procid proc ->
+        Procedure.map_blocks_topo_fwd set_params_calls_block proc)
   in
   { p with procs }
 

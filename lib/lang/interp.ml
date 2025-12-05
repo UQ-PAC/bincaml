@@ -68,15 +68,14 @@ module IValue = struct
         let v = Z.of_bits bytes in
         `Bitvector (PrimQFBV.create ~size:sz v)
     | Boolean -> (
-        let i = Random.State.int_in_range gen ~min:0 ~max:1 in
+        let i = Random.State.int gen 2 in
         match i with
         | 0 -> `Bool false
         | 1 -> `Bool true
         | _ -> failwith "not in range")
     | Integer ->
-        let i =
-          Random.State.int64_in_range gen ~min:Int64.zero ~max:Int64.max_int
-        in
+        (* TODO: max is exclusive so this can't generate max_int :(  - use stdlib compat*)
+        let i = Random.State.int64 gen Int64.max_int in
         `Integer (Z.of_int64_unsigned i)
     | v -> failwith @@ "unsupported type for value : " ^ Types.to_string v
 end
@@ -772,6 +771,7 @@ module IState = struct
     | _ when StringMap.is_empty (Procedure.formal_out_params p) ->
         (st, StringMap.empty)
     | _ ->
+        (* TODO: implement havoc-style solution here maybe*)
         failwith @@ "cannot execute undef proc with return params :"
         ^ ID.to_string @@ Procedure.id p
 
