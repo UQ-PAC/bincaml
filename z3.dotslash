@@ -1,0 +1,42 @@
+#!/usr/bin/env dotslash
+{
+  "name": "z3",
+  "platforms": {
+    "linux-x86_64": {
+      "size": 52027929,
+      "hash": "blake3",
+      "digest": "e319872fb7601600d46fffaf327625ca99c5896b6d181043f22429af6977f697",
+      "format": "zip",
+      "path": "z3-4.15.4-x64-glibc-2.39/bin/z3",
+      "providers": [
+        {
+          "url": "https://github.com/Z3Prover/z3/releases/download/z3-4.15.4/z3-4.15.4-x64-glibc-2.39.zip"
+        }
+      ]
+    },
+    "macos-aarch64": {
+      "size": 37100466,
+      "hash": "blake3",
+      "digest": "c446975b72af188f2bc4e58e22592f96b7a9f1181e88616b750ea182e2f32b52",
+      "format": "zip",
+      "path": "z3-4.15.4-arm64-osx-13.7.6/bin/z3",
+      "providers": [
+        {
+          "url": "https://github.com/Z3Prover/z3/releases/download/z3-4.15.4/z3-4.15.4-arm64-osx-13.7.6.zip"
+        }
+      ]
+    },
+    "macos-x86_64": {
+      "size": 39751122,
+      "hash": "blake3",
+      "digest": "fa628ea4a46e28ed2b9176cf6a9bd1f228b168ccf0330b5da042c96aa3c1f0cb",
+      "format": "zip",
+      "path": "z3-4.15.4-x64-osx-13.7.6/bin/z3",
+      "providers": [
+        {
+          "url": "https://github.com/Z3Prover/z3/releases/download/z3-4.15.4/z3-4.15.4-x64-osx-13.7.6.zip"
+        }
+      ]
+    }
+  },
+}
