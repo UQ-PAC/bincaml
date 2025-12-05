@@ -190,8 +190,17 @@ and showJumpWithAttrib (e : AbsBasilIR.jumpWithAttrib) : showable = match e with
        AbsBasilIR.JumpWithAttrib1 (jump, attribset) -> s2s "JumpWithAttrib1" >> c2s ' ' >> c2s '(' >> showJump jump  >> s2s ", " >>  showAttribSet attribset >> c2s ')'
 
 
+and showPhiExpr (e : AbsBasilIR.phiExpr) : showable = match e with
+       AbsBasilIR.PhiExpr1 (blockident, var) -> s2s "PhiExpr1" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showVar var >> c2s ')'
+
+
+and showPhiAssign (e : AbsBasilIR.phiAssign) : showable = match e with
+       AbsBasilIR.PhiAssign1 (lvar, phiexprs) -> s2s "PhiAssign1" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showList showPhiExpr phiexprs >> c2s ')'
+
+
 and showBlock (e : AbsBasilIR.block) : showable = match e with
-       AbsBasilIR.Block1 (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> s2s "Block1" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showStmtWithAttrib stmtwithattribs  >> s2s ", " >>  showJumpWithAttrib jumpwithattrib  >> s2s ", " >>  showEndList endlist >> c2s ')'
+       AbsBasilIR.Block_NoPhi (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> s2s "Block_NoPhi" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showStmtWithAttrib stmtwithattribs  >> s2s ", " >>  showJumpWithAttrib jumpwithattrib  >> s2s ", " >>  showEndList endlist >> c2s ')'
+  |    AbsBasilIR.Block_Phi (blockident, attribset, beginlist, phiassigns, stmtwithattribs, jumpwithattrib, endlist) -> s2s "Block_Phi" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showPhiAssign phiassigns  >> s2s ", " >>  showList showStmtWithAttrib stmtwithattribs  >> s2s ", " >>  showJumpWithAttrib jumpwithattrib  >> s2s ", " >>  showEndList endlist >> c2s ')'
 
 
 and showAttrKeyValue (e : AbsBasilIR.attrKeyValue) : showable = match e with

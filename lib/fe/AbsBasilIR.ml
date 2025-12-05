@@ -126,8 +126,15 @@ and stmtWithAttrib =
 and jumpWithAttrib =
    JumpWithAttrib1 of jump * attribSet
 
+and phiExpr =
+   PhiExpr1 of blockIdent * var
+
+and phiAssign =
+   PhiAssign1 of lVar * phiExpr list
+
 and block =
-   Block1 of blockIdent * attribSet * beginList * stmtWithAttrib list * jumpWithAttrib * endList
+   Block_NoPhi of blockIdent * attribSet * beginList * stmtWithAttrib list * jumpWithAttrib * endList
+ | Block_Phi of blockIdent * attribSet * beginList * phiAssign list * stmtWithAttrib list * jumpWithAttrib * endList
 
 and attrKeyValue =
    AttrKeyValue1 of bIdent * attr

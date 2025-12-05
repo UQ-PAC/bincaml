@@ -273,13 +273,6 @@ let add_block p id ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
     (fun graph -> add_block_graph graph id ~phis ~stmts ~successors ())
     p
 
-let decl_block_exn p name ?(phis = [])
-    ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
-  let open Block in
-  let id = (block_ids p).decl_exn name in
-  let p = add_block p id ~phis ~stmts ~successors () in
-  (p, id)
-
 let fresh_block_graph p graph ?name ?(phis = [])
     ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   let open Block in
@@ -313,6 +306,14 @@ let get_block p id =
         let _, e, _ = G.find_edge g (Begin id) (End id) in
         match e with Block b -> Some b | Jump -> None)
   with Not_found -> None
+
+let decl_block_exn p name ?(phis = [])
+    ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
+  let open Block in
+  let id = (block_ids p).decl_or_get name in
+  assert (Option.is_none (get_block p id));
+  let p = add_block p id ~phis ~stmts ~successors () in
+  (p, id)
 
 let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
   let open Edge in

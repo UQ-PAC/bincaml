@@ -68,7 +68,7 @@ Run on basic irreducible loop example
         $R0:bv64 := 0x0:bv64;
         $R0:bv64 := bvadd($R0:bv64, 0x820:bv64);
         $R30:bv64 := 0x7a0:bv64;
-
+        
         call @puts_1584();
         goto (%main_3);
         ];
@@ -95,7 +95,7 @@ Run on basic irreducible loop example
         $R0:bv64 := 0x0:bv64;
         $R0:bv64 := bvadd($R0:bv64, 0x820:bv64);
         $R30:bv64 := 0x7d0:bv64;
-
+        
         call @puts_1584();
         goto (%main_17);
         ];
@@ -104,7 +104,7 @@ Run on basic irreducible loop example
         $R0:bv64 := 0x0:bv64;
         $R0:bv64 := bvadd($R0:bv64, 0x828:bv64);
         $R30:bv64 := 0x7f4:bv64;
-
+        
         call @puts_1584();
         goto (%main_13);
         ];
@@ -199,19 +199,19 @@ Run on basic irreducible loop example
         goto (%main_19);
         ];
      block %main_5 [
-        (CF_5:bv1 := phi(%main_25 -> CF_1:bv1, %main_7 -> CF_4:bv1),
-         NF_5:bv1 := phi(%main_25 -> NF_1:bv1, %main_7 -> NF_4:bv1),
-         R1_3:bv64 := phi(%main_25 -> R1:bv64, %main_7 -> R1_2:bv64),
-         R29_4:bv64 := phi(%main_25 -> R29_1:bv64, %main_7 -> R29_3:bv64),
-         R31_4:bv64 := phi(%main_25 -> R31_1:bv64, %main_7 -> R31_3:bv64),
-         VF_5:bv1 := phi(%main_25 -> VF_1:bv1, %main_7 -> VF_4:bv1),
-         ZF_5:bv1 := phi(%main_25 -> ZF_1:bv1, %main_7 -> ZF_4:bv1));
+        (var CF_5:bv1 := phi(%main_25 -> CF_1:bv1, %main_7 -> CF_4:bv1),
+         var NF_5:bv1 := phi(%main_25 -> NF_1:bv1, %main_7 -> NF_4:bv1),
+         var R1_3:bv64 := phi(%main_25 -> R1:bv64, %main_7 -> R1_2:bv64),
+         var R29_4:bv64 := phi(%main_25 -> R29_1:bv64, %main_7 -> R29_3:bv64),
+         var R31_4:bv64 := phi(%main_25 -> R31_1:bv64, %main_7 -> R31_3:bv64),
+         var VF_5:bv1 := phi(%main_25 -> VF_1:bv1, %main_7 -> VF_4:bv1),
+         var ZF_5:bv1 := phi(%main_25 -> ZF_1:bv1, %main_7 -> ZF_4:bv1));
         var R0_13:bv64 := 0x0:bv64;
         var R0_14:bv64 := bvadd(R0_13:bv64, 0x820:bv64);
         var R30_3:bv64 := 0x7a0:bv64;
         (var ZF_6:bv1=ZF_out, var VF_6:bv1=VF_out, var R31_5:bv64=R31_out,
            var R30_4:bv64=R30_out, var R29_5:bv64=R29_out, var R1_4:bv64=R1_out,
-           var R0_15:bv64=R0_out, var NF_6:bv1=NF_out, var CF_6:bv1=CF_out) :=
+           var R0_15:bv64=R0_out, var NF_6:bv1=NF_out, var CF_6:bv1=CF_out) := 
         call @puts_1584(ZF_in=ZF_5:bv1, VF_in=VF_5:bv1, R31_in=R31_4:bv64,
            R30_in=R30_3:bv64, R29_in=R29_4:bv64, R1_in=R1_3:bv64, R0_in=R0_14:bv64,
            NF_in=NF_5:bv1, CF_in=CF_5:bv1);
@@ -239,19 +239,19 @@ Run on basic irreducible loop example
         goto (%main_15,%main_9);
         ];
      block %main_19 [
-        (CF_2:bv1 := phi(%main_3 -> CF_6:bv1, %main_21 -> CF_1:bv1),
-         NF_2:bv1 := phi(%main_3 -> NF_6:bv1, %main_21 -> NF_1:bv1),
-         R1_1:bv64 := phi(%main_3 -> R1_5:bv64, %main_21 -> R1:bv64),
-         R29_2:bv64 := phi(%main_3 -> R29_5:bv64, %main_21 -> R29_1:bv64),
-         R31_2:bv64 := phi(%main_3 -> R31_5:bv64, %main_21 -> R31_1:bv64),
-         VF_2:bv1 := phi(%main_3 -> VF_6:bv1, %main_21 -> VF_1:bv1),
-         ZF_2:bv1 := phi(%main_3 -> ZF_6:bv1, %main_21 -> ZF_1:bv1));
+        (var CF_2:bv1 := phi(%main_3 -> CF_6:bv1, %main_21 -> CF_1:bv1),
+         var NF_2:bv1 := phi(%main_3 -> NF_6:bv1, %main_21 -> NF_1:bv1),
+         var R1_1:bv64 := phi(%main_3 -> R1_5:bv64, %main_21 -> R1:bv64),
+         var R29_2:bv64 := phi(%main_3 -> R29_5:bv64, %main_21 -> R29_1:bv64),
+         var R31_2:bv64 := phi(%main_3 -> R31_5:bv64, %main_21 -> R31_1:bv64),
+         var VF_2:bv1 := phi(%main_3 -> VF_6:bv1, %main_21 -> VF_1:bv1),
+         var ZF_2:bv1 := phi(%main_3 -> ZF_6:bv1, %main_21 -> ZF_1:bv1));
         var R0_7:bv64 := 0x0:bv64;
         var R0_8:bv64 := bvadd(R0_7:bv64, 0x820:bv64);
         var R30_1:bv64 := 0x7d0:bv64;
         (var ZF_3:bv1=ZF_out, var VF_3:bv1=VF_out, var R31_3:bv64=R31_out,
            var R30_2:bv64=R30_out, var R29_3:bv64=R29_out, var R1_2:bv64=R1_out,
-           var R0_9:bv64=R0_out, var NF_3:bv1=NF_out, var CF_3:bv1=CF_out) :=
+           var R0_9:bv64=R0_out, var NF_3:bv1=NF_out, var CF_3:bv1=CF_out) := 
         call @puts_1584(ZF_in=ZF_2:bv1, VF_in=VF_2:bv1, R31_in=R31_2:bv64,
            R30_in=R30_1:bv64, R29_in=R29_2:bv64, R1_in=R1_1:bv64, R0_in=R0_8:bv64,
            NF_in=NF_2:bv1, CF_in=CF_2:bv1);
@@ -264,7 +264,7 @@ Run on basic irreducible loop example
         var R30_5:bv64 := 0x7f4:bv64;
         (var ZF_7:bv1=ZF_out, var VF_7:bv1=VF_out, var R31_6:bv64=R31_out,
            var R30_6:bv64=R30_out, var R29_6:bv64=R29_out, var R1_6:bv64=R1_out,
-           var R0_23:bv64=R0_out, var NF_7:bv1=NF_out, var CF_7:bv1=CF_out) :=
+           var R0_23:bv64=R0_out, var NF_7:bv1=NF_out, var CF_7:bv1=CF_out) := 
         call @puts_1584(ZF_in=ZF_4:bv1, VF_in=VF_4:bv1, R31_in=R31_3:bv64,
            R30_in=R30_5:bv64, R29_in=R29_3:bv64, R1_in=R1_2:bv64, R0_in=R0_22:bv64,
            NF_in=NF_4:bv1, CF_in=CF_4:bv1);
@@ -295,3 +295,16 @@ Run on basic irreducible loop example
      -> (ZF_out:bv1, VF_out:bv1, R31_out:bv64, R30_out:bv64, R29_out:bv64,
      R1_out:bv64, R0_out:bv64, NF_out:bv1, CF_out:bv1)
   [  ];
+
+  $ diff after.il after_reparsed.il
+  63a64
+  >    block %main_7 [ goto (%main_5); ];
+  94d94
+  <    block %main_7 [ goto (%main_5); ];
+  163a164,168
+  >       (var ZF_out:bv1 := ZF_out:bv1, var VF_out:bv1 := VF_out:bv1,
+  >        var R31_out:bv64 := R31_out:bv64, var R30_out:bv64 := R30_out:bv64,
+  >        var R29_out:bv64 := R29_out:bv64, var R1_out:bv64 := R1_out:bv64,
+  >        var R0_out:bv64 := R0_out:bv64, var NF_out:bv1 := NF_out:bv1,
+  >        var CF_out:bv1 := CF_out:bv1);
+  [1]

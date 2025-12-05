@@ -22,10 +22,10 @@ type ('v, 'e) t = {
 }
 [@@deriving eq, ord]
 
-let pretty_phi show_var v =
+let pretty_phi show_lvar show_var v =
   let open Containers_pp in
   let open Containers_pp.Infix in
-  let lhs = show_var v.lhs in
+  let lhs = show_lvar v.lhs in
   let rhs =
     List.map
       (function
@@ -41,7 +41,7 @@ let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
     match b.phis with
     | [] -> []
     | o ->
-        let phi = List.map (pretty_phi show_var) o in
+        let phi = List.map (pretty_phi show_lvar show_var) o in
         [ bracket "(" (fill (text "," ^ newline) phi) ")" ]
   in
   let stmts =

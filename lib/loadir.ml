@@ -26,6 +26,7 @@ module BasilASTLoader = struct
   type loaded_block =
     | LBlock of
         (string
+        * Var.t Block.phi list
         * [ `Stmt of Program.stmt
           | `Return of Program.e list
           | `ReturnNamed of (string * Program.e) list ]
@@ -33,7 +34,7 @@ module BasilASTLoader = struct
         * [ `Goto of string list | `None | `Return ])
 
   let conv_lblock formal_out_params_order p = function
-    | LBlock (name, stmts, succ) ->
+    | LBlock (name, phis, stmts, succ) ->
         let stmts = stmts in
         let stmts =
           stmts
@@ -195,9 +196,11 @@ module BasilASTLoader = struct
           List.fold_left
             (fun (p, a) b ->
               match b with
-              | LBlock (name, stmts, succ) ->
+              | LBlock (name, phis, stmts, succ) ->
                   let stmts = conv_lblock formal_out_params_order p b in
-                  let p, bid = Procedure.decl_block_exn p name ~stmts () in
+                  let p, bid =
+                    Procedure.decl_block_exn p name ~stmts ~phis ()
+                  in
                   (p, (name, bid) :: a))
             (p, []) blocks
         in
@@ -217,7 +220,7 @@ module BasilASTLoader = struct
           List.fold_left
             (fun (p : Program.proc) b ->
               match b with
-              | LBlock (name, _, succ) -> (
+              | LBlock (name, _, _, succ) -> (
                   match succ with
                   | `None -> p
                   | `Return ->
@@ -256,7 +259,7 @@ module BasilASTLoader = struct
   and trans_endian (x : BasilIR.AbsBasilIR.endian) =
     match x with Endian_Little -> `Little | Endian_Big -> `Big
 
-  and load_var p_st (v : var) =
+  and trans_var p_st (v : var) =
     match v with
     | VarLocalVar (LocalVar1 (localVar, ty)) ->
         decl p_st (unsafe_unsigil (`Local localVar)) (trans_type ty) Var.Local
@@ -272,7 +275,7 @@ module BasilASTLoader = struct
     | Stmt_Nop -> `None
     | Stmt_Load_Var (lvar, endian, var, expr, intval) ->
         let endian = trans_endian endian in
-        let mem = load_var p_st var in
+        let mem = trans_var p_st var in
         let cells = transIntVal intval |> Z.to_int in
         `Stmt
           (Instr_Load
@@ -286,7 +289,7 @@ module BasilASTLoader = struct
     | Stmt_Store_Var (lhs, endian, var, addr, value, intval) ->
         let endian = trans_endian endian in
         let cells = transIntVal intval |> Z.to_int in
-        let mem = load_var p_st var in
+        let mem = trans_var p_st var in
         let lhs = trans_lvar p_st lhs in
         `Stmt
           (Instr_Store
@@ -434,30 +437,63 @@ module BasilASTLoader = struct
     Some (beg, ed)
 
   and trans_block (prog : load_st) (x : BasilIR.AbsBasilIR.block) =
+    let tx name (phis : phiAssign list) statements jump =
+      let stmts =
+        List.map (trans_stmt prog) statements
+        |> List.filter_map (function
+          | `Call c -> Some (`Stmt c)
+          | `Stmt c -> Some (`Stmt c)
+          | `None -> None)
+      in
+      let find_block_ident name =
+        (Procedure.block_ids
+           (prog.curr_proc |> Option.get_exn_or "currproc not set"))
+          .decl_or_get
+          name
+      in
+      let tx_phi e : Var.t Block.phi =
+        match e with
+        | PhiAssign1 (v, phexprs) ->
+            let rhs =
+              List.map
+                (function
+                  | PhiExpr1 (blockIdent, var) ->
+                      ( find_block_ident (unsafe_unsigil (`Block blockIdent)),
+                        trans_var prog var ))
+                phexprs
+            in
+
+            { lhs = trans_lvar prog v; rhs }
+      in
+      let phis = List.map tx_phi phis in
+      let succ = trans_jump jump in
+      let succ, stmts =
+        match (succ, stmts) with
+        | (`Return _ as r), s -> (`Return, s @ [ r ])
+        | (`ReturnNamed _ as r), s -> (`Return, s @ [ r ])
+        | `None, s -> (`None, s)
+        | `Goto g, s -> (`Goto g, s)
+      in
+      LBlock (name, phis, stmts, succ)
+    in
     match x with
-    | Block1
+    | Block_NoPhi
         ( BlockIdent (text_range, name),
           addrattr,
           beginlist,
           statements,
           jump,
           endlist ) ->
-        let stmts =
-          List.map (trans_stmt prog) statements
-          |> List.filter_map (function
-            | `Call c -> Some (`Stmt c)
-            | `Stmt c -> Some (`Stmt c)
-            | `None -> None)
-        in
-        let succ = trans_jump jump in
-        let succ, stmts =
-          match (succ, stmts) with
-          | (`Return _ as r), s -> (`Return, s @ [ r ])
-          | (`ReturnNamed _ as r), s -> (`Return, s @ [ r ])
-          | `None, s -> (`None, s)
-          | `Goto g, s -> (`Goto g, s)
-        in
-        LBlock (name, stmts, succ)
+        tx name [] statements jump
+    | Block_Phi
+        ( BlockIdent (text_range, name),
+          addrattr,
+          beginlist,
+          phi,
+          statements,
+          jump,
+          endlist ) ->
+        tx name phi statements jump
 
   and param_to_lvar (pp : params) : Var.t =
     match pp with

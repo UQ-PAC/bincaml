@@ -5,3 +5,4 @@
 (run-transforms "simple-ssa")
 (dump-il "after.il")
 (load-il "after.il")
+(dump-il "after_reparsed.il")

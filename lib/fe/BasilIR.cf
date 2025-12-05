@@ -132,7 +132,19 @@ terminator StmtWithAttrib ";";
 
 rules JumpWithAttrib ::= Jump AttribSet ;
 
-rules Block ::= "block" BlockIdent AttribSet BeginList 
+rules PhiExpr ::= BlockIdent "->" Var ;
+separator PhiExpr "," ;
+
+rules PhiAssign ::= LVar ":=" "phi" "(" [ PhiExpr ] ")";
+separator PhiAssign ",";
+
+
+Block_NoPhi . Block ::= "block" BlockIdent AttribSet BeginList 
+  [StmtWithAttrib] JumpWithAttrib ";"
+  EndList ;
+
+Block_Phi . Block ::= "block" BlockIdent AttribSet BeginList 
+  "(" [PhiAssign] ")" ";"
   [StmtWithAttrib] JumpWithAttrib ";"
   EndList ;
 
