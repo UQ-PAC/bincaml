@@ -191,7 +191,7 @@ and transJump (x : jump) : result = match x with
     Jump_GoTo blockidents -> failure x
   | Jump_Unreachable  -> failure x
   | Jump_Return exprs -> failure x
-  | Jump_ReturnNamedParams namedcallargs -> failure x
+  | Jump_ProcReturn  -> failure x
 
 
 and transLVar (x : lVar) : result = match x with

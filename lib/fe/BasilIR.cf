@@ -118,7 +118,7 @@ Stmt_Assert . Stmt ::= "assert" Expr ;
 Jump_GoTo . Jump ::= "goto" "(" [BlockIdent] ")" ;
 Jump_Unreachable . Jump ::= "unreachable" ;
 Jump_Return . Jump ::= "return" "(" [Expr] ")" ;
-Jump_ReturnNamedParams . Jump ::= "return" "(" [NamedCallArg] ")" ;
+Jump_ProcReturn. Jump ::= "return"  ;
 
 LVar_Local . LVar ::= "var" LocalVar;
 LVar_Global . LVar ::= GlobalVar;

@@ -463,7 +463,7 @@ callParams : expr_list { CallParams_Exprs $1 }
 jump : KW_goto SYMB5 blockIdent_list SYMB6 { Jump_GoTo $3 }
   | KW_unreachable { Jump_Unreachable  }
   | KW_return SYMB5 expr_list SYMB6 { Jump_Return $3 }
-  | KW_return SYMB5 namedCallArg_list SYMB6 { Jump_ReturnNamedParams $3 }
+  | KW_return { Jump_ProcReturn  }
   ;
 
 lVar : KW_var localVar { LVar_Local $2 }

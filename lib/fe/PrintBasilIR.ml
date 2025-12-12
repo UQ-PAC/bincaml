@@ -269,7 +269,7 @@ and prtJump (i:int) (e : AbsBasilIR.jump) : doc = match e with
        AbsBasilIR.Jump_GoTo blockidents -> prPrec i 0 (concatD [render "goto" ; render "(" ; prtBlockIdentListBNFC 0 blockidents ; render ")"])
   |    AbsBasilIR.Jump_Unreachable  -> prPrec i 0 (concatD [render "unreachable"])
   |    AbsBasilIR.Jump_Return exprs -> prPrec i 0 (concatD [render "return" ; render "(" ; prtExprListBNFC 0 exprs ; render ")"])
-  |    AbsBasilIR.Jump_ReturnNamedParams namedcallargs -> prPrec i 0 (concatD [render "return" ; render "(" ; prtNamedCallArgListBNFC 0 namedcallargs ; render ")"])
+  |    AbsBasilIR.Jump_ProcReturn  -> prPrec i 0 (concatD [render "return"])
 
 
 and prtLVar (i:int) (e : AbsBasilIR.lVar) : doc = match e with

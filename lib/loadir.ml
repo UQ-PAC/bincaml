@@ -27,10 +27,7 @@ module BasilASTLoader = struct
     | LBlock of
         (string
         * Var.t Block.phi list
-        * [ `Stmt of Program.stmt
-          | `Return of Program.e list
-          | `ReturnNamed of (string * Program.e) list ]
-          list
+        * [ `Stmt of Program.stmt | `Return of Program.e list ] list
         * [ `Goto of string list | `None | `Return ])
 
   let conv_lblock formal_out_params_order p = function
@@ -40,14 +37,6 @@ module BasilASTLoader = struct
           stmts
           |> List.map (function
             | `Stmt s -> s
-            | `ReturnNamed exprs ->
-                let formal_out = Procedure.formal_out_params p in
-                let args =
-                  List.map
-                    (fun (f, e) -> (StringMap.find f formal_out, e))
-                    exprs
-                in
-                Stmt.(Instr_Assign args)
             | `Return exprs ->
                 let args =
                   List.combine formal_out_params_order exprs
@@ -400,13 +389,7 @@ module BasilASTLoader = struct
         `Goto (List.map get_id bidents)
     | Jump_Unreachable -> `None
     | Jump_Return exprs -> `Return (List.map trans_expr exprs)
-    | Jump_ReturnNamedParams exprs ->
-        let es =
-          exprs
-          |> List.map (function NamedCallArg1 (id, expr) ->
-              (unsafe_unsigil (`Local id), trans_expr expr))
-        in
-        `ReturnNamed es
+    | Jump_ProcReturn -> `ProcReturn
 
   and decl prog name ty scope =
     let p = Option.get_exn_or "didnt set proc" prog.curr_proc in
@@ -470,7 +453,7 @@ module BasilASTLoader = struct
       let succ, stmts =
         match (succ, stmts) with
         | (`Return _ as r), s -> (`Return, s @ [ r ])
-        | (`ReturnNamed _ as r), s -> (`Return, s @ [ r ])
+        | `ProcReturn, s -> (`Return, s)
         | `None, s -> (`None, s)
         | `Goto g, s -> (`Goto g, s)
       in

@@ -174,7 +174,7 @@ and showJump (e : AbsBasilIR.jump) : showable = match e with
        AbsBasilIR.Jump_GoTo blockidents -> s2s "Jump_GoTo" >> c2s ' ' >> c2s '(' >> showList showBlockIdent blockidents >> c2s ')'
   |    AbsBasilIR.Jump_Unreachable  -> s2s "Jump_Unreachable"
   |    AbsBasilIR.Jump_Return exprs -> s2s "Jump_Return" >> c2s ' ' >> c2s '(' >> showList showExpr exprs >> c2s ')'
-  |    AbsBasilIR.Jump_ReturnNamedParams namedcallargs -> s2s "Jump_ReturnNamedParams" >> c2s ' ' >> c2s '(' >> showList showNamedCallArg namedcallargs >> c2s ')'
+  |    AbsBasilIR.Jump_ProcReturn  -> s2s "Jump_ProcReturn"
 
 
 and showLVar (e : AbsBasilIR.lVar) : showable = match e with

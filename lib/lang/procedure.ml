@@ -455,15 +455,7 @@ let pretty show_lvar show_var show_expr p =
            (newline ^ text " -> ")
            [ params (formal_in_params p); params (formal_out_params p) ])
   in
-  let return_stmt =
-    text "return"
-    ^ bracket "("
-        (fill (text ",")
-           (formal_out_params p |> StringMap.to_list
-           |> List.map (fun (n, v) ->
-               text n ^ text "=" ^ text (Var.to_string v))))
-        ")"
-  in
+  let return_stmt = text "return" in
   let pretty_block graph block_id block =
     let succ = G.succ_e graph (Vert.End block_id) in
     let succ =

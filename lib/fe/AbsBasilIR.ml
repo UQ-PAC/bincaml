@@ -114,7 +114,7 @@ and jump =
    Jump_GoTo of blockIdent list
  | Jump_Unreachable
  | Jump_Return of expr list
- | Jump_ReturnNamedParams of namedCallArg list
+ | Jump_ProcReturn
 
 and lVar =
    LVar_Local of localVar
