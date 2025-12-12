@@ -29,7 +29,7 @@ let%expect_test "fold_block" =
     empty stack
 
 
-    trace: Store {mem = "$mem:(bv64->bv8)"; addr = `Bitvector (0x420034:bv64);
+    trace: Store {mem = "$mem"; addr = `Bitvector (0x420034:bv64);
           value = `Bitvector (0x3e8:bv32)}
 
     final mem state

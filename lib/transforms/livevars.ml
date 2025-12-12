@@ -22,9 +22,8 @@ let tf_stmt_live init s =
 let tf_block (init : V.t) (b : (Var.t, BasilExpr.t) Block.t) =
   Block.fold_backwards ~f:tf_stmt_live ~phi:(fun f _ -> f) ~init b
 
-module G = Procedure.G
-
 module WTO = Graph.WeakTopological.Make (struct
+  open Procedure
   open G
 
   type t = G.t
@@ -39,9 +38,11 @@ module LV =
   Graph.ChaoticIteration.Make
     (Procedure.RevG)
     (struct
-      type vertex = G.E.vertex
-      type edge = G.E.t
-      type g = G.t
+      open Procedure
+
+      type vertex = RevG.E.vertex
+      type edge = RevG.E.t
+      type g = RevG.t
       type t = V.t
 
       let equal = V.equal
@@ -60,7 +61,11 @@ let run (p : Program.proc) =
     in
     Trace.with_span ~__FILE__ ~__LINE__ "live-vars-analysis" @@ fun _ ->
     LV.recurse graph wto
-      (fun v -> V.empty)
+      (function
+        | Return ->
+            Procedure.formal_out_params p
+            |> Common.StringMap.values |> V.of_iter
+        | _ -> V.empty)
       (Graph.ChaoticIteration.Predicate (fun _ -> false))
       10
   in
@@ -68,7 +73,9 @@ let run (p : Program.proc) =
   fun v ->
     Option.get_or ~default:V.empty (Option.flat_map (LV.M.find_opt v) res)
 
-let label (r : G.vertex -> V.t) (v : G.vertex) = show_v (r v)
+let label (r : Procedure.G.vertex -> V.t) (v : Procedure.G.vertex) =
+  show_v (r v)
+
 let print_g res = Viscfg.dot_labels (fun v -> Some (label res v))
 
 let print_live_vars_dot fmt p =
@@ -150,8 +157,10 @@ module Interproc = struct
 
   module ILV =
     Graph.Fixpoint.Make
-      (G)
+      (Procedure.G)
       (struct
+        open Procedure
+
         type vertex = G.E.vertex
         type edge = G.E.t
         type g = G.t
@@ -245,13 +254,13 @@ module DSE = struct
 
   let sane_transform (p : Program.proc) =
     let live = run p in
+    CCIO.with_out "live.dot" (fun c -> print_live_vars_dot (Format.of_chan c) p);
     let blocks = Procedure.blocks_to_list p in
     List.fold_left
       (fun p b ->
         match b with
-        | ( (Procedure.Vert.Begin id as v),
-            (b : (Var.t, Expr.BasilExpr.t) Block.t) ) ->
-            let stmts = filter_dead (live v) b in
+        | Procedure.Vert.Begin id, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
+            let stmts = filter_dead (live (End id)) b in
             Procedure.update_block p id { b with stmts }
         | _ -> p)
       p blocks

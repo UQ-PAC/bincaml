@@ -9,6 +9,12 @@ type proc = (Var.t, BasilExpr.t) Procedure.t
 type bloc = (Var.t, BasilExpr.t) Block.t
 type stmt = (Var.t, Var.t, e) Stmt.t
 
+module Proc = struct
+  type t = proc
+
+  let compare a b = Procedure.compare a b
+end
+
 let equal_stmt = Stmt.equal Var.equal Var.equal BasilExpr.equal
 let compare_stmt = Stmt.compare Var.compare Var.compare BasilExpr.compare
 

@@ -1,6 +1,7 @@
 (cram
  (deps
   ../../examples/irreducible_loop_1.il
+  ../../examples/x-output.il
   basicssa.sexp
   ../../bin/main.exe
   roundtrip.sexp))

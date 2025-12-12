@@ -706,6 +706,14 @@ let concrete_prog_ast_of_channel ?input ?filename c =
   try ParBasilIR.pModuleT LexBasilIR.token lexbuf
   with ParBasilIR.Error -> raise (ILBParseError { input; lexbuf })
 
+let concrete_prog_ast_of_string ?input ?filename str =
+  let open BasilIR in
+  let input = Option.get_or ~default:(Pp_loc.Input.string str) input in
+  let lexbuf = Lexing.from_string ~with_positions:true str in
+  filename |> Option.iter (fun f -> Lexing.set_filename lexbuf f);
+  try ParBasilIR.pModuleT LexBasilIR.token lexbuf
+  with ParBasilIR.Error -> raise (ILBParseError { input; lexbuf })
+
 let parse_proc ?input lexbuf =
   let open BasilIR in
   try ParBasilIR.pDecl LexBasilIR.token lexbuf
@@ -803,6 +811,17 @@ let parse_single_block s : Program.bloc =
 let ast_of_concrete_ast ~name m =
   Trace.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->
   BasilASTLoader.trans_program ~name m
+
+let ast_of_string ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
+  let name =
+    let open Option.Infix in
+    let* line = __LINE__ >|= Int.to_string in
+    let* file = __FILE__ in
+    let func = Option.get_or ~default:"" (__FUNCTION__ >|= fun c -> "::" ^ c) in
+    Some ("string at " ^ file ^ ":" ^ line ^ func)
+  in
+  let name = Option.get_or ~default:"<string>" name in
+  concrete_prog_ast_of_string ~filename:name string |> ast_of_concrete_ast ~name
 
 let ast_of_channel ?input fname c =
   let m =

@@ -308,3 +308,13 @@ Run on basic irreducible loop example
   >        var R0_out:bv64 := R0_out:bv64, var NF_out:bv1 := NF_out:bv1,
   >        var CF_out:bv1 := CF_out:bv1);
   [1]
+
+The interpreter should give the same output for both
+
+  $ diff  before_loop.txt after_loop.txt
+
+
+
+Similar example fixing up  a file already in DSA form
+
+  $ diff  before_conds.txt after_conds.txt

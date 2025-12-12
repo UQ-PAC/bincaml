@@ -73,6 +73,9 @@ module PG : sig
   type ('v, 'e) t
   (** type of procedures *)
 
+  val compare : ('a, 'b) t -> ('c, 'd) t -> int
+  (** compare procedure names only *)
+
   val id : ('a, 'b) t -> ID.t
   (** Get procedure ID *)
 
@@ -103,6 +106,12 @@ module PG : sig
     ?ensures:BasilExpr.t list ->
     unit ->
     ('a, 'b) t
+
+  val set_specification : ('a, 'b) t -> ('a, 'c) proc_spec -> ('a, 'c) t
+  (** set the procedure's specification/contract *)
+
+  val specification : ('a, 'b) t -> ('a, 'b) proc_spec
+  (** return the procedure's specification/contract if defined *)
 
   val block_ids : ('a, 'b) t -> ID.generator
   (** return mutable generator for fresh block IDS *)
@@ -143,9 +152,11 @@ end = struct
     topo_rev : Vert.t Graph.WeakTopological.t lazy_t;
     local_ids : ID.generator;
     block_ids : ID.generator;
-    specification : ('v, 'e) proc_spec option;
+    specification : ('v, 'e) proc_spec;
   }
 
+  let set_specification p specification = { p with specification }
+  let specification p = p.specification
   let id p = p.id
   let graph p = p.graph
   let block_ids p = p.block_ids
@@ -155,6 +166,7 @@ end = struct
   let formal_out_params p = p.formal_out_params
   let topo_fwd p = Lazy.force p.topo_fwd
   let topo_rev p = Lazy.force p.topo_rev
+  let compare a b = ID.compare (id a) (id b)
 
   let map_graph f p =
     let np =
@@ -192,9 +204,7 @@ end = struct
   let create id ?(is_stub = false) ?(formal_in_params = StringMap.empty)
       ?(formal_out_params = StringMap.empty) ?(captures_globs = [])
       ?(modifies_globs = []) ?(requires = []) ?(ensures = []) () =
-    let specification =
-      Some { captures_globs; modifies_globs; requires; ensures }
-    in
+    let specification = { captures_globs; modifies_globs; requires; ensures } in
     let graph = if is_stub then None else Some empty_graph in
     {
       id;

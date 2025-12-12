@@ -114,13 +114,23 @@ let of_cmd st (e : Containers.Sexp.t) =
       | "interp-out" ->
           let ofile = List.hd @@ assert_atoms 1 args in
           let prog = get_prog st in
+          let prog = Transforms.Spec_modifies.set_modsets prog in
           let main =
             Lang.ID.Map.find (Option.get_exn_or "no" prog.entry_proc) prog.procs
           in
           let ist =
             match Lang.Interp.test_run_proc ~seed:123456 prog main with
-            | Ok (st, _) -> Lang.Interp.IState.show st
-            | Error st -> "ERROR STATE " ^ Lang.Interp.IState.show st
+            | Ok (st, rvals) ->
+                let state = Lang.Interp.IState.show ~show_stack:false st in
+                let params =
+                  "returned: "
+                  ^ (Common.StringMap.to_iter rvals
+                    |> Iter.to_string ~sep:", " (fun (k, v) ->
+                        k ^ "=" ^ Lang.Ops.AllOps.to_string v))
+                in
+                params ^ "\n" ^ state
+            | Error st ->
+                "ERROR STATE " ^ Lang.Interp.IState.show ~show_stack:true st
           in
           CCIO.with_out ofile (fun c -> output_string c ist);
           st

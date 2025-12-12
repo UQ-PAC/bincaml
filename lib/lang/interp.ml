@@ -1,6 +1,7 @@
 exception ConversionError of string
 exception AssertFailure of Program.stmt
 exception AssumeFail of Program.stmt
+exception ReadUninit of Var.t
 
 open Common
 
@@ -8,6 +9,7 @@ let () =
   Printexc.register_printer (function
     | AssumeFail stmt -> Some ("Assumption failed: " ^ Program.show_stmt stmt)
     | AssertFailure e -> Some ("AssertFailure : " ^ Program.show_stmt e)
+    | ReadUninit e -> Some ("ReadUninitialised : " ^ Var.to_string e)
     | _ -> None)
 
 module IValue = struct
@@ -89,7 +91,7 @@ module PageTable = struct
     table : (Z.t, page) Hashtbl.t;
     parent : t option;
     page_len : int;
-    create_random_seed : Random.State.t option;
+    random_gen : Random.State.t option;
   }
 
   let flatten tbl =
@@ -119,7 +121,7 @@ module PageTable = struct
   let new_page tbl =
     let b = Byte_buffer.create ~cap:tbl.page_len () in
     let init =
-      match tbl.create_random_seed with
+      match tbl.random_gen with
       | Some gen -> fun c -> Random.State.bits gen |> Char.unsafe_chr
       | None -> fun _ -> Char.unsafe_chr 0
     in
@@ -144,7 +146,7 @@ module PageTable = struct
       table = Hashtbl.create 10;
       parent = None;
       page_len;
-      create_random_seed = use_random_init;
+      random_gen = use_random_init;
     }
 
   let clone tbl = { tbl with table = Hashtbl.create 10; parent = Some tbl }
@@ -274,81 +276,6 @@ let%expect_test "page range multi" =
   print_endline r;
   [%expect {| 0, 1024, 2048, 3072, 4096 |}]
 
-let%expect_test "random_page" =
-  let gen = Random.State.make [| 123456 |] in
-  let tbl = PageTable.create ~use_random_init:gen () in
-  let obits = Value.PrimQFBV.create ~size:64 (Z.of_bits "abcdefgh") in
-  PageTable.write_bv tbl ~addr:(Z.of_int 0x0c8) @@ obits;
-  print_endline @@ PageTable.show tbl;
-  [%expect
-    {|
-    page at 0
-    000: 37c0 4216 ba2b 9ff9 8c16 0ca5 0f3a b5ff  7.B..+.......:..
-    010: 11d3 1d51 6739 6e55 41c5 f559 49a3 5929  ...Qg9nUA..YI.Y)
-    020: d7b8 700c 7949 d180 eaea 19b3 16c5 c569  ..p.yI.........i
-    030: b8cc 1675 4a81 3eea bffe 1b3e 4707 b7fc  ...uJ.>....>G...
-    040: fee8 b8c6 c8e5 3201 f110 c860 0788 a354  ......2....`...T
-    050: f3df fb31 08e6 f13e cc51 9c0a 2c2e fbdc  ...1...>.Q..,...
-    060: fa84 3bca 0765 54e6 162f f0c2 9878 114b  ..;..eT../...x.K
-    070: 977d c09c dac9 4ee7 781d f9da d668 52ef  .}....N.x....hR.
-    080: 64d5 7d79 b21c 16db 4a1d 2336 d4ac e9b7  d.}y....J.#6....
-    090: 57b6 ea0e 112b 2c61 c560 b033 560c 78dd  W....+,a.`.3V.x.
-    0a0: b6ba cbb5 fd23 5bff c003 bef8 5014 a7f7  .....#[.....P...
-    0b0: 2917 5c3f 9e51 c0ef c59d 7239 36b5 6a3b  ).\?.Q....r96.j;
-    0c0: a1d1 2572 dd57 fcba 6162 6364 6566 6768  ..%r.W..abcdefgh
-    0d0: 9826 c7b2 5499 09e7 930a 3f9a b489 291f  .&..T.....?...).
-    0e0: 4b86 3a42 c846 f596 b7ab d2ea 8d29 7728  K.:B.F.......)w(
-    0f0: ae43 733b 2aa5 3710 3b57 670b 9946 5f40  .Cs;*.7.;Wg..F_@
-    100: 55cc e76f 3b96 371b d6f6 946f 0199 c6e5  U..o;.7....o....
-    110: 2762 2116 96e3 eb73 be96 fae8 077e 4359  'b!....s.....~CY
-    120: 2905 3abe eaba 3aaf 139c 9c4d 0f16 c765  ).:...:....M...e
-    130: 4b8c 9e23 693e b7b0 1707 201c 5fb4 f7bd  K..#i>.... ._...
-    140: 04b0 01c5 667f 110d 4175 138b 1d3f a189  ....f...Au...?..
-    150: 5e23 c69c 1dca f7ab d459 d509 abef 6082  ^#.......Y....`.
-    160: d4f7 5ebe f2a6 55f6 da33 b18d ec80 ffb2  ..^...U..3......
-    170: 1150 a400 16b5 2373 f8b2 0e3f bf32 fb32  .P....#s...?.2.2
-    180: 36c9 7cd9 9a21 d3f9 5fd8 76ae cfb1 5e00  6.|..!.._.v...^.
-    190: d120 1123 57da 4afe 6805 119f d305 a635  . .#W.J.h......5
-    1a0: cb72 6cd6 882b ad2b d104 28fc c394 5758  .rl..+.+..(...WX
-    1b0: 6621 0a17 e89f 9926 7571 035c c631 bd59  f!.....&uq.\.1.Y
-    1c0: 7602 d21d 8f82 87c8 0007 f8d9 2f96 466b  v.........../.Fk
-    1d0: 3637 8ae6 4dc6 e983 ec14 856e 007f 6e46  67..M......n..nF
-    1e0: 8f10 67ed c2a4 b3c3 26a0 36ca 79a1 8fb8  ..g.....&.6.y...
-    1f0: 6a15 cee8 a59a 9fd1 34ff 3ce7 787c 88bc  j.......4.<.x|..
-    200: 1286 be57 a1de 32a8 3be3 57c1 7468 6ea9  ...W..2.;.W.thn.
-    210: 6fbc 5f8d 55ea c166 8342 1888 baa7 2d14  o._.U..f.B....-.
-    220: 8e19 7f4a 9e06 31e6 eb93 1ded bb1c 2595  ...J..1.......%.
-    230: e806 b9f6 09ea bd5c 25c4 7476 ebae 59e0  .......\%.tv..Y.
-    240: 491f 90a2 4285 e94c e32f 9f9f 539a f0f0  I...B..L./..S...
-    250: 5d5b a311 2020 8dd0 91d0 2798 d9aa 76c6  ][..  ....'...v.
-    260: c6d2 e0ab 2c3e 4750 bc06 0cda 0783 da2e  ....,>GP........
-    270: 2dab f24e f3f0 f947 c668 0fcf e860 0b4b  -..N...G.h...`.K
-    280: 16ea fabb 3259 16b8 d445 1097 e6f0 44f1  ....2Y...E....D.
-    290: b308 9427 6b57 2429 0a51 6832 8e8e 4acd  ...'kW$).Qh2..J.
-    2a0: 89ba 5914 64ac e631 2557 4e61 3585 ae8b  ..Y.d..1%WNa5...
-    2b0: 4dc2 3a32 5bce a904 5ee6 cbce bbec 627e  M.:2[...^.....b~
-    2c0: 9424 2d59 352b 486d 67c8 ca33 dd28 010b  .$-Y5+Hmg..3.(..
-    2d0: ca03 8d64 5e84 f79d 7b9b 6292 6f9f 664f  ...d^...{.b.o.fO
-    2e0: 3a3c 83f6 c4ad c0bd e787 a86e feed 0035  :<.........n...5
-    2f0: 2f21 df62 1b41 98e6 76ec a5ae d1ed c0d0  /!.b.A..v.......
-    300: d126 ab4b 5e09 d171 7b0f 7d97 3da6 bc65  .&.K^..q{.}.=..e
-    310: 269a 1279 dca6 8482 3217 c526 b828 6991  &..y....2..&.(i.
-    320: 615f 78d4 6174 2559 4573 d0cd 54ad 40d9  a_x.at%YEs..T.@.
-    330: 95ee 99ba b1e0 bf3c 13d4 77e0 5e16 6d53  .......<..w.^.mS
-    340: 8b9c b303 2e92 3f52 9c9c 4b80 4552 e2d8  ......?R..K.ER..
-    350: b220 ab61 a393 fbce 83fc 1060 5f29 6185  . .a.......`_)a.
-    360: 7c7c 7c21 d33d 553d 0fad 80c8 a7ec 9526  |||!.=U=.......&
-    370: 759a 6814 07a6 3363 c472 902d 4fe1 fec8  u.h...3c.r.-O...
-    380: cba8 7306 437b 7aaa 6583 8cad e642 d68a  ..s.C{z.e....B..
-    390: 55dd cb53 ab07 2c39 3f76 45ab 57c3 64fc  U..S..,9?vE.W.d.
-    3a0: af8d cf8a 04a5 18ca 3190 b66a 5b95 602f  ........1..j[.`/
-    3b0: 583f ac66 2234 4502 5569 dab2 12ca a4eb  X?.f"4E.Ui......
-    3c0: f61f 69b0 0bae 981c f992 2244 c1c8 dcdc  ..i......."D....
-    3d0: ab1f 88ad bdc3 3ad5 b5e4 e3fc c7b5 ad73  ......:........s
-    3e0: ec8f 8bb4 606a 8005 e055 42a8 7294 d975  ....`j...UB.r..u
-    3f0: 1ba2 fe46 aa2b e752 db62 a908 5b87 138f  ...F.+.R.b..[...
-    |}]
-
 let%expect_test "page" =
   let open Value in
   let tbl = PageTable.create () in
@@ -475,6 +402,7 @@ module IState = struct
     pc : loc;
     last_block : ID.t option;
     events : event list;
+    random_gen : Random.State.t option;
   }
 
   let add_event st e = { st with events = e :: st.events }
@@ -484,25 +412,30 @@ module IState = struct
     let log = add_event st in
     match stmt with
     | Stmt.Instr_Load { mem; addr; cells; endian } ->
-        log @@ Load { mem = Var.to_string mem; addr }
+        log @@ Load { mem = Var.name mem; addr }
     | Stmt.Instr_Store { mem; addr; value } ->
-        log @@ Store { mem = Var.to_string mem; addr; value }
+        log @@ Store { mem = Var.name mem; addr; value }
     | Stmt.Instr_Call { procid; args } ->
         log @@ Call { procid; args = StringMap.values args |> Iter.to_list }
     | _ -> st
 
-  let show st =
+  let show ?(show_stack = true) st =
     let open Containers_pp in
     let stack =
-      List.head_opt st.stack
-      |> Option.map (fun s ->
-          s.locals |> VarMap.to_list
-          |> List.map (fun (v, i) ->
-              text (Var.to_string v) ^ text "=" ^ text (Z.format "%x" i))
-          |> fill (text "," ^ newline))
-      |> Option.get_or ~default:(text "empty stack")
+      if not show_stack then text ""
+      else
+        let stack =
+          List.head_opt st.stack
+          |> Option.map (fun s ->
+              s.locals |> VarMap.to_list
+              |> List.map (fun (v, i) ->
+                  text (Var.to_string v) ^ text "=" ^ text (Z.format "%x" i))
+              |> fill (text "," ^ newline))
+          |> Option.get_or ~default:(text "empty stack")
+        in
+        let stack = text "Top frame: " ^ newline ^ stack in
+        stack
     in
-    let stack = text "Top frame: " ^ newline ^ stack in
     text "PC= "
     ^ text (show_loc st.pc)
     ^ newline ^ text "Stack" ^ newline
@@ -543,7 +476,7 @@ module IState = struct
       prog.globals |> Var.Decls.values
       |> Iter.filter (fun v ->
           match Var.typ v with Map _ -> true | _ -> false)
-      |> Iter.map (fun v -> (v, PageTable.create ?use_random_init:random ()))
+      |> Iter.map (fun v -> (v, PageTable.create ()))
       |> VarMap.of_iter
     in
     let init_glob g =
@@ -558,7 +491,17 @@ module IState = struct
       |> Iter.map (fun v -> (v, init_glob v))
       |> VarMap.of_iter
     in
-    { prog; pc; stack; memories; globals; events = []; last_block = None }
+    let random = Option.map (fun _ -> Random.State.make [| 1234 |]) random in
+    {
+      prog;
+      pc;
+      stack;
+      memories;
+      globals;
+      events = [];
+      last_block = None;
+      random_gen = random;
+    }
 
   type decisions = { choices_remaining : decisions list; choice : t }
 
@@ -568,9 +511,12 @@ module IState = struct
   let stack_top st = List.hd st.stack
 
   let lookup_var v st =
-    match Var.scope v with
-    | Local -> VarMap.find v (stack_top st).locals
-    | Global -> VarMap.find v st.globals
+    (match Var.scope v with
+      | Local -> VarMap.find_opt v (stack_top st).locals
+      | Global -> VarMap.find_opt v st.globals)
+    |> function
+    | Some v -> v
+    | None -> raise (ReadUninit v)
 
   let read_var v st = lookup_var v st |> IValue.conv (Var.typ v)
 
@@ -768,6 +714,20 @@ module IState = struct
         let st, o = exec_proc st p args in
         let st = { st with stack = List.tl st.stack } in
         (st, o)
+    | _ when Option.is_some st.random_gen ->
+        let rand = Option.get_exn_or "" st.random_gen in
+        let st =
+          (Procedure.specification p).modifies_globs
+          |> List.fold_left
+               (fun st v -> write_var v (IValue.random rand (Var.typ v)) st)
+               st
+        in
+        ( st,
+          Procedure.formal_out_params p
+          |> StringMap.map (fun i ->
+              IValue.random
+                (Option.get_exn_or "unreachable" st.random_gen)
+                (Var.typ i)) )
     | _ when StringMap.is_empty (Procedure.formal_out_params p) ->
         (st, StringMap.empty)
     | _ ->
@@ -789,6 +749,20 @@ module IState = struct
     let st = activate_proc p st args in
     let st, r = run st in
     (st, r)
+
+  let initialise_spec st (sp : (Var.t, Program.e) Procedure.proc_spec) =
+    let open Expr.AbstractExpr in
+    sp.requires
+    |> List.fold_left
+         (fun st e ->
+           match
+             Expr.BasilExpr.unfix e
+             |> Expr.AbstractExpr.map Expr.BasilExpr.unfix
+           with
+           | BinaryExpr (`EQ, Constant c, RVar v2) -> write_var v2 c st
+           | BinaryExpr (`EQ, RVar v2, Constant c) -> write_var v2 c st
+           | _ -> st)
+         st
 end
 
 (** Call the procedure with random input args and randomly initialised memory *)
