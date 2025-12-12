@@ -36,8 +36,10 @@ let solve (prog : Program.t) =
       Procedure.fold_blocks_topo_fwd
         (fun a bid block ->
           let local =
-            ( Block.read_vars_iter block |> VS.of_iter,
-              VS.of_iter (Block.assigned_vars_iter block) )
+            ( Block.read_vars_iter block |> Iter.filter Var.is_global
+              |> VS.of_iter,
+              VS.of_iter
+                (Block.assigned_vars_iter block |> Iter.filter Var.is_global) )
           in
           let calls =
             Block.stmts_iter block
@@ -84,6 +86,8 @@ proc @entry() -> ()
 [
   block %entry  [
     call @b();
+    var c:bv64 := 1:bv64;
+    var b:bv64 := c:bv64;
     return ();
   ]
 ];
@@ -91,6 +95,7 @@ proc @b() -> ()
 [
   block %entry  [
     $R0: bv64 := 0x1:bv64 { .comment = "op: 0x52800020" };
+    var beans:bv64 := 0x1:bv64;
     store le $mem $R1:bv64 0x0:bv32 32;
     call @c();
     return ();
@@ -110,7 +115,8 @@ proc @c() -> ()
     (fun pid proc ->
       print_endline (ID.to_string pid ^ ":\n" ^ (res pid |> RWSets.to_string)))
     prog.prog.procs;
-  [%expect{|
+  [%expect
+    {|
     @entry:
     read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
     written: $R0:bv64,$mem:(bv64->bv8)
