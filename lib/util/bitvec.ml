@@ -112,12 +112,10 @@ let urem a b = if is_zero b then a else bind2 Z.rem a b
 
     From Z3: https://z3prover.github.io/api/html/group__capi.html
 
-    {v
-  It is defined in the following way:
-  - The floor of t1/t2 if t2 is different from zero, and t1*t2 >= 0.
-  - The ceiling of t1/t2 if t2 is different from zero, and t1*t2 < 0.
-  If t2 is zero, then the result is undefined.
-    v} *)
+    It is defined in the following way:
+    - The floor of t1/t2 if t2 is different from zero, and t1*t2 >= 0.
+    - The ceiling of t1/t2 if t2 is different from zero, and t1*t2 < 0. If t2 is
+      zero, then the result is undefined. *)
 let sdiv a b =
   if a.w = 0 then a
   else begin
