@@ -1,8 +1,6 @@
+open Util.Common
 open Lang
 open Expr_eval
-open Containers
-
-let identity x = x
 
 let simplify_proc_exprs p =
   let blocks = Procedure.blocks_to_list p in
@@ -11,14 +9,13 @@ let simplify_proc_exprs p =
   List.fold_left
     (fun p e ->
       match e with
-      | Procedure.Vert.Begin id, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
+      | Procedure.Vert.Begin bid, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
           let stmts =
             Vector.map
-              (Stmt.map ~f_lvar:identity ~f_rvar:identity
-                 ~f_expr:Algsimp.alg_simp_rewriter)
+              (Stmt.map ~f_lvar:id ~f_rvar:id ~f_expr:Algsimp.alg_simp_rewriter)
               b.stmts
           in
-          Procedure.update_block p id { b with stmts }
+          Procedure.update_block p bid { b with stmts }
       | _ -> p)
     p blocks
 

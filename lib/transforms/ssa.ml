@@ -86,7 +86,7 @@ let set_params (p : Program.t) =
   let set_params_calls_block blockid (b : Program.bloc) =
     let lhs = actual_lhs in
     let args = actual_rhs in
-    Block.map ~phi:identity
+    Block.map ~phi:id
       (function
         | Stmt.Instr_Call { procid } -> Instr_Call { lhs; args; procid }
         | i -> i)
@@ -377,7 +377,7 @@ let ssa (in_proc : Program.proc) =
         if not preg then
           print_endline @@ "bad: " ^ ID.to_string block_id ^ "; missing " ^ bad;
         preg)
-    |> List.for_all identity
+    |> List.for_all id
   in
   assert (Procedure.iter_blocks_topo_fwd proc |> Iter.for_all check_bl);
   check_ssa proc;

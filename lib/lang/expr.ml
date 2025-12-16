@@ -159,7 +159,7 @@ module Recursion (O : Fix) = struct
     let p f g x = (f x, g x) in
     (alg % AbstractExpr.map (p f (para_f alg f)) % unfix) e
 
-  let para alg e = para_f alg identity e
+  let para alg e = para_f alg id e
 
   module Constructors = struct
     let rvar v = fix (RVar v)

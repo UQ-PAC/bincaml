@@ -587,9 +587,7 @@ module IState = struct
 
   let rec eval_stmt (stmt : Program.stmt) (st : t) =
     let stmt' =
-      Stmt.map ~f_lvar:identity ~f_rvar:identity
-        ~f_expr:(fun e -> eval_expr e st)
-        stmt
+      Stmt.map ~f_lvar:id ~f_rvar:id ~f_expr:(fun e -> eval_expr e st) stmt
     in
     let st = add_event_stmt st stmt' in
     match stmt' with

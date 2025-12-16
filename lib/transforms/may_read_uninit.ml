@@ -83,10 +83,7 @@ module A = struct
             |> Common.StringMap.values
             |> Iter.fold
                  (fun acc v -> ReadUninitAnalysis.update v ReadUninit.Write acc)
-                 ReadUninitAnalysis.bottom
-        | v ->
-            print_endline @@ Procedure.Vert.show v;
-            ReadUninitAnalysis.bottom)
+                 ReadUninitAnalysis.bottom)
       p
 end
 

@@ -17,8 +17,9 @@
   procedure
   interp
   program)
- (flags -w -27)
+ (flags -w -27) ; unused var
  (libraries
+  util
   zarith
   fix
   ocamlgraph
