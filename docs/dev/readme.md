@@ -1,5 +1,4 @@
 
-
 # Related Work
 
 ### IR
@@ -236,7 +235,13 @@ https://github.com/agle/eggomess/blob/0bd8401aae7f0b362ac9c730c0f5f07930a60414/b
 
 ## SSA translation
 
-- The ir embeds an SSA structure, it would be useful to enforce this
+- The ir embeds an SSA structure we need implemnent analyses
+  1. To translate IR into the SSA structure
+  2. To adapt DSA into SSA structure
+
+## SSA-based analysis
+
+- framwork for efficient fixedpoint analysis for SSA-based IR with a single state domain.
 
 #### Validation / Testing
 
@@ -302,3 +307,16 @@ interproc results to invariant at beginning and return cuts
 - Should eventually include the smt incremental solver effect optimisation
 - query simplification using a copyprop etc
 - very rough reference implementation; https://github.com/ncough/tv-sanity
+
+# Program Data Tagging
+
+- attach type-parametric tags to ast at significant locations to enable
+- support source location tagging for error reporting
+- support parametric type system ; attach analysis data to each expression node
+  - and therefore each statement node
+
+# Source location tagging
+
+# Parametric type system tagging
+
+# loading and wrapping a single block/proceduer for expect tests

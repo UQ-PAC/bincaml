@@ -1,7 +1,33 @@
-
-(tests
- (names expr_eval)
+(library
+ (name expr_gen)
+ (modules expr_gen)
  (flags -w -27)
- (libraries qcheck-core containers containers.unix lang qcheck-core.runner)
+ (libraries qcheck-core containers containers.unix lang bincaml))
 
- )
+(executable
+ (name expr_eval_qcheck)
+ (modules expr_eval_qcheck)
+ (flags -w -27)
+ (libraries str expr_gen alcotest qcheck-alcotest))
+
+(rule
+ (alias runtest)
+ (enabled_if %{bin-available:cvc5})
+ (action
+  (run %{dep:expr_eval_qcheck.exe})))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (not %{bin-available:cvc5}))
+ (action
+  (echo "WARN: cvc5 not available, qcheck eval test disabled\n")))
+
+(library
+ (name expr_eval_expect)
+ (modules expr_eval_expect stmt interp)
+ (flags -w -27)
+ (libraries expr_gen loader)
+ (inline_tests)
+ (preprocess
+  (pps ppx_expect_nobase)))

@@ -140,10 +140,13 @@ and transAssignment (x : assignment) : result = match x with
 
 
 and transStmt (x : stmt) : result = match x with
-    Stmt_SingleAssign assignment -> failure x
+    Stmt_Nop  -> failure x
+  | Stmt_SingleAssign assignment -> failure x
   | Stmt_MultiAssign assignments -> failure x
   | Stmt_Load (lvar, endian, globalident, expr, intval) -> failure x
   | Stmt_Store (endian, globalident, expr0, expr, intval) -> failure x
+  | Stmt_Load_Var (lvar, endian, var, expr, intval) -> failure x
+  | Stmt_Store_Var (lvar, endian, var, expr0, expr, intval) -> failure x
   | Stmt_DirectCall (lvars, procident, callparams) -> failure x
   | Stmt_IndirectCall expr -> failure x
   | Stmt_Assume expr -> failure x
@@ -157,6 +160,11 @@ and transLocalVar (x : localVar) : result = match x with
 
 and transGlobalVar (x : globalVar) : result = match x with
     GlobalVar1 (globalident, type') -> failure x
+
+
+and transVar (x : var) : result = match x with
+    VarLocalVar localvar -> failure x
+  | VarGlobalVar globalvar -> failure x
 
 
 and transNamedCallReturn (x : namedCallReturn) : result = match x with
@@ -183,7 +191,7 @@ and transJump (x : jump) : result = match x with
     Jump_GoTo blockidents -> failure x
   | Jump_Unreachable  -> failure x
   | Jump_Return exprs -> failure x
-  | Jump_ReturnNamedParams namedcallargs -> failure x
+  | Jump_ProcReturn  -> failure x
 
 
 and transLVar (x : lVar) : result = match x with
@@ -199,8 +207,17 @@ and transJumpWithAttrib (x : jumpWithAttrib) : result = match x with
     JumpWithAttrib1 (jump, attribset) -> failure x
 
 
+and transPhiExpr (x : phiExpr) : result = match x with
+    PhiExpr1 (blockident, var) -> failure x
+
+
+and transPhiAssign (x : phiAssign) : result = match x with
+    PhiAssign1 (lvar, phiexprs) -> failure x
+
+
 and transBlock (x : block) : result = match x with
-    Block1 (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> failure x
+    Block_NoPhi (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> failure x
+  | Block_Phi (blockident, attribset, beginlist, phiassigns, stmtwithattribs, jumpwithattrib, endlist) -> failure x
 
 
 and transAttrKeyValue (x : attrKeyValue) : result = match x with

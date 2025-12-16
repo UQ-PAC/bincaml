@@ -1,16 +1,16 @@
+(** Basic intra-expression algebraic simplifications *)
+
+open Util.Common
 open Lang
 open Expr
-open Value
 open Ops
-open Containers
 
 let algebraic_simplifications
     (e :
       (BasilExpr.t BasilExpr.abstract_expr * Types.t) BasilExpr.abstract_expr) =
   let open AbstractExpr in
-  let open Value in
   let open BasilExpr in
-  let open PrimQFBV in
+  let open Bitvec in
   let keep a = Some (fix (fst a)) in
   match e with
   | ApplyIntrin (`BVConcat, (ApplyIntrin (`BVConcat, al), _) :: tl) ->

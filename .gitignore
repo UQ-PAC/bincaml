@@ -1,3 +1,7 @@
 _build
 .basillsplog
 _build/**
+trace.json
+**/trace.json
+*.dot
+**/*.dot

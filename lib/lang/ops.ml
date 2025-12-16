@@ -1,6 +1,5 @@
 open Common
 open Containers
-open Value
 
 module Maps = struct
   (* map, value -> result *)
@@ -48,7 +47,7 @@ module LogicalOps = struct
 end
 
 module BVOps = struct
-  type const = [ `Bitvector of PrimQFBV.t ]
+  type const = [ `Bitvector of Bitvec.t ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let eval_const = function `Bitvector b -> b
@@ -70,23 +69,15 @@ module BVOps = struct
   let eval_unary_bool (o : unary_bool) =
     match o with
     | `BOOLTOBV1 -> (
-        function true -> PrimQFBV.true_bv | false -> PrimQFBV.false_bv)
+        function true -> Bitvec.true_bv | false -> Bitvec.false_bv)
 
   let eval_unary_unif (o : unary_unif) =
     match o with
-    | `BVNEG -> PrimQFBV.neg
-    | `SignExtend sz -> PrimQFBV.sign_extend ~extension:sz
-    | `BVNOT -> PrimQFBV.bitnot
-    | `ZeroExtend sz -> PrimQFBV.zero_extend ~extension:sz
-    | `Extract (hi, lo) -> fun b -> PrimQFBV.extract hi lo b
-
-  let eval_unary_bv (o : unary_unif) =
-    match o with
-    | `BVNEG -> PrimQFBV.neg
-    | `SignExtend sz -> PrimQFBV.sign_extend ~extension:sz
-    | `BVNOT -> PrimQFBV.bitnot
-    | `ZeroExtend sz -> PrimQFBV.zero_extend ~extension:sz
-    | `Extract (hi, lo) -> fun b -> PrimQFBV.extract hi lo b
+    | `BVNEG -> Bitvec.neg
+    | `SignExtend sz -> Bitvec.sign_extend ~extension:sz
+    | `BVNOT -> Bitvec.bitnot
+    | `ZeroExtend sz -> Bitvec.zero_extend ~extension:sz
+    | `Extract (hi, lo) -> Bitvec.extract ~hi ~lo
 
   type binary_pred = [ `EQ | `BVULT | `BVULE | `BVSLT | `BVSLE ]
   [@@deriving show { with_path = false }, eq, ord]
@@ -94,11 +85,11 @@ module BVOps = struct
 
   let eval_binary_pred (op : [< binary_pred ]) =
     match op with
-    | `EQ -> PrimQFBV.equal
-    | `BVSLE -> PrimQFBV.sle
-    | `BVULT -> PrimQFBV.ult
-    | `BVULE -> PrimQFBV.ule
-    | `BVSLT -> PrimQFBV.slt
+    | `EQ -> Bitvec.equal
+    | `BVSLE -> Bitvec.sle
+    | `BVULT -> Bitvec.ult
+    | `BVULE -> Bitvec.ule
+    | `BVSLT -> Bitvec.slt
 
   type binary_unif =
     [ `BVAND
@@ -120,7 +111,7 @@ module BVOps = struct
   (** ops with type bv -> bv -> bv *)
 
   let eval_binary_unif (op : binary_unif) =
-    let open PrimQFBV in
+    let open Bitvec in
     match op with
     | `BVSREM -> srem
     | `BVSDIV -> sdiv
@@ -147,15 +138,15 @@ module BVOps = struct
   let eval_intrin (op : intrin) args =
     let ev f =
       match args with
-      | h :: tl -> List.fold_left f h args
-      | _ -> raise (Invalid_argument "op needs at least two args")
+      | h :: tl -> List.fold_left f h tl
+      | _ -> raise (Invalid_argument "op needs at least one arg")
     in
     match op with
-    | `BVADD -> ev PrimQFBV.add
-    | `BVXOR -> ev PrimQFBV.bitxor
-    | `BVOR -> ev PrimQFBV.bitor
-    | `BVAND -> ev PrimQFBV.bitand
-    | `BVConcat -> ev PrimQFBV.concat
+    | `BVADD -> ev Bitvec.add
+    | `BVXOR -> ev Bitvec.bitxor
+    | `BVOR -> ev Bitvec.bitor
+    | `BVAND -> ev Bitvec.bitand
+    | `BVConcat -> ev Bitvec.concat
 
   let show = function
     | #const as c -> show_const c
@@ -228,7 +219,7 @@ module AllOps = struct
     match o with
     | `Bool _ -> return Boolean
     | `Integer _ -> return Integer
-    | `Bitvector v -> return (Bitvector (PrimQFBV.size v))
+    | `Bitvector v -> return (Bitvector (Bitvec.size v))
 
   let ret_type_unary (o : unary) a =
     let open Types in
@@ -330,7 +321,7 @@ module AllOps = struct
     | `INTMOD -> "intmod"
     | `BVAND -> "bvand"
     | `INTMUL -> "intmul"
-    | `Bitvector z -> PrimQFBV.to_string z
+    | `Bitvector z -> Bitvec.to_string z
     | `BVSMOD -> "bvsmod"
     | `INTLT -> "intlt"
     | `IMPLIES -> "implies"
@@ -346,7 +337,7 @@ module AllOps = struct
 
   let eval_equal (a : const) (b : const) =
     match (a, b) with
-    | `Bitvector a, `Bitvector b -> PrimQFBV.equal a b
+    | `Bitvector a, `Bitvector b -> Bitvec.equal a b
     | `Integer a, `Integer b -> Z.equal a b
     | `Bool a, `Bool b -> Bool.equal a b
     | _, _ -> false

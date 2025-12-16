@@ -71,10 +71,13 @@ and assignment =
    Assignment1 of lVar * expr
 
 and stmt =
-   Stmt_SingleAssign of assignment
+   Stmt_Nop
+ | Stmt_SingleAssign of assignment
  | Stmt_MultiAssign of assignment list
  | Stmt_Load of lVar * endian * globalIdent * expr * intVal
  | Stmt_Store of endian * globalIdent * expr * expr * intVal
+ | Stmt_Load_Var of lVar * endian * var * expr * intVal
+ | Stmt_Store_Var of lVar * endian * var * expr * expr * intVal
  | Stmt_DirectCall of lVars * procIdent * callParams
  | Stmt_IndirectCall of expr
  | Stmt_Assume of expr
@@ -86,6 +89,10 @@ and localVar =
 
 and globalVar =
    GlobalVar1 of globalIdent * typeT
+
+and var =
+   VarLocalVar of localVar
+ | VarGlobalVar of globalVar
 
 and namedCallReturn =
    NamedCallReturn1 of lVar * localIdent
@@ -107,7 +114,7 @@ and jump =
    Jump_GoTo of blockIdent list
  | Jump_Unreachable
  | Jump_Return of expr list
- | Jump_ReturnNamedParams of namedCallArg list
+ | Jump_ProcReturn
 
 and lVar =
    LVar_Local of localVar
@@ -119,8 +126,15 @@ and stmtWithAttrib =
 and jumpWithAttrib =
    JumpWithAttrib1 of jump * attribSet
 
+and phiExpr =
+   PhiExpr1 of blockIdent * var
+
+and phiAssign =
+   PhiAssign1 of lVar * phiExpr list
+
 and block =
-   Block1 of blockIdent * attribSet * beginList * stmtWithAttrib list * jumpWithAttrib * endList
+   Block_NoPhi of blockIdent * attribSet * beginList * stmtWithAttrib list * jumpWithAttrib * endList
+ | Block_Phi of blockIdent * attribSet * beginList * phiAssign list * stmtWithAttrib list * jumpWithAttrib * endList
 
 and attrKeyValue =
    AttrKeyValue1 of bIdent * attr

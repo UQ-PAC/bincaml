@@ -1,10 +1,29 @@
-
 (library
-;  (public_name ocaml_of_basil.transforms)
+ (public_name bincaml.transforms)
  (name transforms)
  (flags -w -27)
- (modules algsimp cf_tx livevars)
- (libraries lang zarith fix ocamlgraph containers containers-data iter containers.pp trace)
+ (modules
+  ssa
+  algsimp
+  cf_tx
+  spec_modifies
+  livevars
+  cleanup_cfg
+  ide
+  intra_analysis
+  may_read_uninit)
+ (libraries
+  loader
+  intPQueue
+  lang
+  zarith
+  fix
+  ocamlgraph
+  containers
+  containers-data
+  iter
+  containers.pp
+  trace)
  (inline_tests)
  (preprocess
   (pps

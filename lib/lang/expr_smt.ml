@@ -1,7 +1,6 @@
+open Common
 open Expr
-open Containers
 open CCSexp
-open Value
 
 module SMTLib2 = struct
   type logic = UF | Int | Prop | BV | Array | DT [@@deriving ord]
@@ -12,14 +11,12 @@ module SMTLib2 = struct
     let compare = compare_logic
   end)
 
-  module VMap = Map.Make (Var)
-
   type var_decl = { decl_cmd : CCSexp.t; var : CCSexp.t }
 
   type builder = {
     preamble : CCSexp.t list;
     commands : CCSexp.t list;
-    var_decls : var_decl VMap.t;
+    var_decls : var_decl VarMap.t;
     logics : LSet.t;
   }
 
@@ -27,7 +24,7 @@ module SMTLib2 = struct
     {
       preamble = [];
       commands = [];
-      var_decls = VMap.empty;
+      var_decls = VarMap.empty;
       logics = LSet.empty;
     }
 
@@ -56,12 +53,15 @@ module SMTLib2 = struct
   let ( let* ) = bind
 
   let sequence (args : 'a t list) : 'a list t =
-    List.fold_left
-      (fun (a : CCSexp.t list t) i ->
-        let* a = a in
-        let* i = i in
-        return (i :: a))
-      (return []) args
+    let* l =
+      List.fold_left
+        (fun (a : CCSexp.t list t) i ->
+          let* a = a in
+          let* i = i in
+          return (i :: a))
+        (return []) args
+    in
+    return (List.rev l)
 
   let add_command (v : Sexp.t) (s : builder) =
     let asrt = v in
@@ -79,7 +79,7 @@ module SMTLib2 = struct
     let open Iter.Infix in
     let logic = list [ atom "set-logic"; atom (get_logic_string b.logics) ] in
     let preamble = List.to_iter (logic :: b.preamble) in
-    let decls = VMap.to_iter b.var_decls >|= fun (v, d) -> d.decl_cmd in
+    let decls = VarMap.to_iter b.var_decls >|= fun (v, d) -> d.decl_cmd in
     let commands = List.rev b.commands |> List.to_iter in
     return (preamble <+> decls <+> commands)
 
@@ -118,14 +118,14 @@ module SMTLib2 = struct
     return v
 
   let decl_var (v : Var.t) s =
-    VMap.find_opt v s.var_decls |> function
+    VarMap.find_opt v s.var_decls |> function
     | Some { decl_cmd; var } -> (var, s)
     | None ->
         let decl, logics = gen_decl v in
         ( decl.var,
           {
             s with
-            var_decls = VMap.add v decl s.var_decls;
+            var_decls = VarMap.add v decl s.var_decls;
             logics = LSet.union logics s.logics;
           } )
 
@@ -148,8 +148,8 @@ module SMTLib2 = struct
         list
           [
             atom "_";
-            atom @@ "bv" ^ (PrimQFBV.value i |> Z.to_string);
-            atom @@ Int.to_string @@ PrimQFBV.size i;
+            atom @@ "bv" ^ (Bitvec.value i |> Z.to_string);
+            atom @@ Int.to_string @@ Bitvec.size i;
           ]
     | `EQ -> atom "="
     | `BoolNOT -> atom "not"
@@ -202,8 +202,8 @@ module SMTLib2 = struct
     let open BasilExpr in
     let e =
       binexp ~op:`EQ
-        (unexp ~op:(`SignExtend 10) (bvconst (PrimQFBV.ones ~size:3)))
-        (bvconst @@ PrimQFBV.of_int ~size:13 100)
+        (unexp ~op:(`SignExtend 10) (bvconst (Bitvec.ones ~size:3)))
+        (bvconst @@ Bitvec.of_int ~size:13 100)
     in
     print_endline (to_string e);
     let smt = assert_bexpr e in

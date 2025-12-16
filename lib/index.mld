@@ -1,0 +1,29 @@
+{0 Bincaml }
+
+See {{!contributing} contibuting to bincaml}.
+
+Bincaml is structured as follows.
+
+{2 The core IR}
+
+- library [bincaml.ast] : {!Lang} defines the IR itself
+- library [bincaml.loader] : {!Loader.Loadir}, defines the parser for IR files.
+
+{2 Basic utilities: [bincaml.util] }
+
+- Standard library {!Util.Common}: import this at the top of every file.
+- Bitvectors {!Util.Bitvec} and Integers {!Util.Zint}
+- Identifiers with counters {!Util.ID}
+- Variables {!Util.Var} and types {!Util.Types}
+
+The entry point of this library is the module: {!Util}.
+
+
+{2 IR Transforms}
+
+- library [bincaml.transforms]: {!Transforms} contains transform pass
+  implementatinos
+- library [bincaml]: {!Bincaml.Passes.PassManager} defines the transform pass
+  manager
+
+

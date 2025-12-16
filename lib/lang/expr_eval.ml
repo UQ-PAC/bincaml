@@ -1,11 +1,9 @@
+open Common
 open Expr
-open Value
 open Ops
-open Containers
 
 let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
   let open AbstractExpr in
-  let open Value in
   let bool e = Some (`Bool e) in
   let bv e = `Bitvector e in
   let z e = Some (`Integer e) in

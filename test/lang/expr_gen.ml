@@ -1,0 +1,83 @@
+open Util.Common
+open Lang
+open QCheck.Gen
+module BasilExpr = Expr.BasilExpr
+
+type 'a gen = 'a QCheck.Gen.t
+
+let bv_unop = [ `BVNOT; `BVNEG ]
+let bv_ops_partial = [ `BVSREM; `BVSDIV; `BVUREM; `BVUDIV; `BVSMOD ]
+
+let bv_ops_total =
+  [
+    `BVADD;
+    `BVASHR;
+    `BVMUL;
+    `BVSHL;
+    `BVNAND;
+    `BVXOR;
+    `BVOR;
+    `BVSUB;
+    `BVLSHR;
+    `BVAND;
+  ]
+
+let gen_width = int_range 1 62
+let arb_bv_op : Ops.BVOps.binary gen = oneofl bv_ops_total
+
+let gen_bv ?(min = 0) w =
+  let* v = int_range min (Bitvec.ones ~size:w |> Bitvec.value |> Z.to_int) in
+  return (Bitvec.of_int ~size:w v)
+
+let gen_unop l =
+  let* op = oneofl bv_unop in
+  return (BasilExpr.unexp ~op l)
+
+let gen_binop_total l r =
+  let* op = oneofl bv_ops_total in
+  return (BasilExpr.binexp ~op l r)
+
+let gen_binop_partial l r =
+  let* op = oneofl bv_ops_partial in
+  return (BasilExpr.binexp ~op l r)
+
+let gen_bvconst ?min w =
+  let* c = gen_bv ?min w in
+  return (BasilExpr.bvconst c)
+
+let make_bvconst wd x = BasilExpr.bvconst @@ Bitvec.of_int ~size:wd x
+let ensure_nonzero wd e = BasilExpr.binexp ~op:`BVOR e (make_bvconst wd 1)
+
+let gen_unop_advanced gen_bvexpr wd =
+  let* w1 = int_range 0 wd in
+  let w2 = wd - w1 in
+  oneof
+    [
+      gen_bvexpr w2 >|= BasilExpr.sign_extend ~n_prefix_bits:w1;
+      gen_bvexpr w2 >|= BasilExpr.zero_extend ~n_prefix_bits:w1;
+      BasilExpr.concat <$> gen_bvexpr w1 <*> gen_bvexpr w2;
+    ]
+(* >|= fun e -> *)
+(* assert (BasilExpr.type_of e = Bitvector wd); *)
+(* e *)
+
+let gen_bvexpr =
+  fix (fun self (size, wd) ->
+      let self wd = self (size / 2, wd) in
+      match size with
+      | 0 -> gen_bvconst wd
+      | size ->
+          frequency
+            [
+              (1, gen_bvconst wd);
+              (2, self wd >>= gen_unop);
+              (2, gen_unop_advanced self wd);
+              ( 2,
+                let* l = self wd in
+                let* r = self wd in
+                gen_binop_total l r );
+              ( 2,
+                let* l = self wd in
+                let* r = self wd >|= ensure_nonzero wd in
+                gen_binop_partial l r );
+            ])

@@ -1,6 +1,6 @@
 (lang dune 3.19)
 (using menhir 3.0)
-(name ocaml_of_basil)
+(name bincaml)
 
 (generate_opam_files true)
 
@@ -14,15 +14,16 @@
 (formatting
  (enabled_for dune))
 
-(license LICENSE)
+(license Apache-2.0)
 
 (documentation https://url/to/documentation)
 
 (package
- (name ocaml_of_basil)
+ (name bincaml)
  (synopsis "A short synopsis")
  (description "A longer description")
  (depends
+   menhir
    ocaml
    zarith
    fix
@@ -33,12 +34,20 @@
    containers-data
    ppx_deriving
    ocamlgraph
-   containers-data
    ortac-qcheck-stm
    ortac-wrapper
    ortac-dune
-   qcheck-core
+   intPQueue
+   cmdliner
+   pp_loc
+   fmt
+   (ocamlformat :with-dev-setup)
+   (odig :with-dev-setup)
+   (sherlodoc :with-doc)
    (ppx_expect_nobase (>= "0.17.2.2"))
+   (alcotest :with-test)
+   (qcheck-core :with-test)
+   (qcheck-alcotest :with-test)
    )
  (tags
   ("add topics" "to describe" your project)))

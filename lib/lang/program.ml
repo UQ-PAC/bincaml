@@ -1,4 +1,3 @@
-open Value
 open Common
 open Types
 open Expr
@@ -9,6 +8,23 @@ type proc = (Var.t, BasilExpr.t) Procedure.t
 type bloc = (Var.t, BasilExpr.t) Block.t
 type stmt = (Var.t, Var.t, e) Stmt.t
 
+module Proc = struct
+  type t = proc
+
+  let compare a b = Procedure.compare a b
+end
+
+let equal_stmt = Stmt.equal Var.equal Var.equal BasilExpr.equal
+let compare_stmt = Stmt.compare Var.compare Var.compare BasilExpr.compare
+
+let show_stmt =
+  let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
+  let show_var v = Containers_pp.text @@ Var.to_string_il_rvar v in
+  let show_expr e = BasilExpr.pretty e in
+  Stmt.to_string show_lvar show_var show_expr
+
+let pp_stmt fmt s = Format.pp_print_string fmt (show_stmt s)
+
 type t = {
   modulename : string;
   globals : Var.t Var.Decls.t;
@@ -16,6 +32,8 @@ type t = {
   procs : proc ID.Map.t;
   proc_names : ID.generator;
 }
+
+let proc g p = ID.Map.find p g.procs
 
 let proc_pretty p =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
@@ -41,7 +59,10 @@ let prog_pretty (p : t) =
   let pretty =
     append_l ~sep:(text ";\n")
     @@ globs @ n
-    @ List.map (fun (_, p) -> proc_pretty p) (ID.Map.to_list p.procs)
+    @ List.map
+        (fun (_, p) -> proc_pretty p)
+        (ID.Map.to_list p.procs
+        |> List.sort (fun (i, _) (j, _) -> ID.compare i j))
   in
   pretty
 
@@ -51,6 +72,21 @@ let pretty_to_chan chan (p : t) =
   output_string chan ";"
 
 let decl_global p = Var.Decls.add p.globals
+
+let create_single_proc ?(name = "<module>") () =
+  let proc_names = ID.make_gen () in
+  let procname = proc_names.fresh ~name () in
+  let proc = Procedure.create procname () in
+  let prog =
+    {
+      modulename = name;
+      entry_proc = Some procname;
+      globals = Var.Decls.empty ();
+      procs = ID.Map.singleton procname proc;
+      proc_names;
+    }
+  in
+  (prog, proc)
 
 let empty ?name () =
   let modulename = Option.get_or ~default:"<module>" name in
@@ -90,7 +126,7 @@ module CallGraph = struct
     let default = Nop
   end
 
-  module G = Graph.Imperative.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
+  module G = Graph.Persistent.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
 
   let make_call_graph t =
     let called_by (p : proc) =
@@ -105,7 +141,7 @@ module CallGraph = struct
       ID.Map.to_iter t.procs
       |> Iter.map (function pid, proc -> (pid, called_by proc))
     in
-    let graph = G.create ~size:(ID.Map.cardinal t.procs) () in
+    let graph = G.empty in
     let open Edge in
     let open Vert in
     let proc_edges =
@@ -113,11 +149,14 @@ module CallGraph = struct
         (function id -> (ProcBegin id, Proc id, ProcReturn id))
         (ID.Map.keys t.procs)
     in
-    Iter.iter (G.add_edge_e graph) proc_edges;
-    t.entry_proc
-    |> Option.iter (fun entry ->
-        List.iter (G.add_edge_e graph)
-          [ (Entry, Nop, ProcBegin entry); (ProcReturn entry, Nop, Return) ]);
+    let graph = Iter.fold G.add_edge_e graph proc_edges in
+    let graph =
+      match t.entry_proc with
+      | Some entry ->
+          List.fold_left G.add_edge_e graph
+            [ (Entry, Nop, ProcBegin entry); (ProcReturn entry, Nop, Return) ]
+      | None -> graph
+    in
     let call_dep caller callee =
       Iter.of_list
         [
@@ -136,6 +175,5 @@ module CallGraph = struct
                    (ID.Set.to_iter called)))
         calls
     in
-    Iter.iter (G.add_edge_e graph) call_dep_edges;
-    graph
+    Iter.fold G.add_edge_e graph call_dep_edges
 end

@@ -123,10 +123,13 @@ and showAssignment (e : AbsBasilIR.assignment) : showable = match e with
 
 
 and showStmt (e : AbsBasilIR.stmt) : showable = match e with
-       AbsBasilIR.Stmt_SingleAssign assignment -> s2s "Stmt_SingleAssign" >> c2s ' ' >> c2s '(' >> showAssignment assignment >> c2s ')'
+       AbsBasilIR.Stmt_Nop  -> s2s "Stmt_Nop"
+  |    AbsBasilIR.Stmt_SingleAssign assignment -> s2s "Stmt_SingleAssign" >> c2s ' ' >> c2s '(' >> showAssignment assignment >> c2s ')'
   |    AbsBasilIR.Stmt_MultiAssign assignments -> s2s "Stmt_MultiAssign" >> c2s ' ' >> c2s '(' >> showList showAssignment assignments >> c2s ')'
   |    AbsBasilIR.Stmt_Load (lvar, endian, globalident, expr, intval) -> s2s "Stmt_Load" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
   |    AbsBasilIR.Stmt_Store (endian, globalident, expr0, expr, intval) -> s2s "Stmt_Store" >> c2s ' ' >> c2s '(' >> showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
+  |    AbsBasilIR.Stmt_Load_Var (lvar, endian, var, expr, intval) -> s2s "Stmt_Load_Var" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showEndian endian  >> s2s ", " >>  showVar var  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
+  |    AbsBasilIR.Stmt_Store_Var (lvar, endian, var, expr0, expr, intval) -> s2s "Stmt_Store_Var" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showEndian endian  >> s2s ", " >>  showVar var  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
   |    AbsBasilIR.Stmt_DirectCall (lvars, procident, callparams) -> s2s "Stmt_DirectCall" >> c2s ' ' >> c2s '(' >> showLVars lvars  >> s2s ", " >>  showProcIdent procident  >> s2s ", " >>  showCallParams callparams >> c2s ')'
   |    AbsBasilIR.Stmt_IndirectCall expr -> s2s "Stmt_IndirectCall" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Stmt_Assume expr -> s2s "Stmt_Assume" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
@@ -140,6 +143,11 @@ and showLocalVar (e : AbsBasilIR.localVar) : showable = match e with
 
 and showGlobalVar (e : AbsBasilIR.globalVar) : showable = match e with
        AbsBasilIR.GlobalVar1 (globalident, type') -> s2s "GlobalVar1" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type' >> c2s ')'
+
+
+and showVar (e : AbsBasilIR.var) : showable = match e with
+       AbsBasilIR.VarLocalVar localvar -> s2s "VarLocalVar" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
+  |    AbsBasilIR.VarGlobalVar globalvar -> s2s "VarGlobalVar" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
 
 
 and showNamedCallReturn (e : AbsBasilIR.namedCallReturn) : showable = match e with
@@ -166,7 +174,7 @@ and showJump (e : AbsBasilIR.jump) : showable = match e with
        AbsBasilIR.Jump_GoTo blockidents -> s2s "Jump_GoTo" >> c2s ' ' >> c2s '(' >> showList showBlockIdent blockidents >> c2s ')'
   |    AbsBasilIR.Jump_Unreachable  -> s2s "Jump_Unreachable"
   |    AbsBasilIR.Jump_Return exprs -> s2s "Jump_Return" >> c2s ' ' >> c2s '(' >> showList showExpr exprs >> c2s ')'
-  |    AbsBasilIR.Jump_ReturnNamedParams namedcallargs -> s2s "Jump_ReturnNamedParams" >> c2s ' ' >> c2s '(' >> showList showNamedCallArg namedcallargs >> c2s ')'
+  |    AbsBasilIR.Jump_ProcReturn  -> s2s "Jump_ProcReturn"
 
 
 and showLVar (e : AbsBasilIR.lVar) : showable = match e with
@@ -182,8 +190,17 @@ and showJumpWithAttrib (e : AbsBasilIR.jumpWithAttrib) : showable = match e with
        AbsBasilIR.JumpWithAttrib1 (jump, attribset) -> s2s "JumpWithAttrib1" >> c2s ' ' >> c2s '(' >> showJump jump  >> s2s ", " >>  showAttribSet attribset >> c2s ')'
 
 
+and showPhiExpr (e : AbsBasilIR.phiExpr) : showable = match e with
+       AbsBasilIR.PhiExpr1 (blockident, var) -> s2s "PhiExpr1" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showVar var >> c2s ')'
+
+
+and showPhiAssign (e : AbsBasilIR.phiAssign) : showable = match e with
+       AbsBasilIR.PhiAssign1 (lvar, phiexprs) -> s2s "PhiAssign1" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showList showPhiExpr phiexprs >> c2s ')'
+
+
 and showBlock (e : AbsBasilIR.block) : showable = match e with
-       AbsBasilIR.Block1 (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> s2s "Block1" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showStmtWithAttrib stmtwithattribs  >> s2s ", " >>  showJumpWithAttrib jumpwithattrib  >> s2s ", " >>  showEndList endlist >> c2s ')'
+       AbsBasilIR.Block_NoPhi (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> s2s "Block_NoPhi" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showStmtWithAttrib stmtwithattribs  >> s2s ", " >>  showJumpWithAttrib jumpwithattrib  >> s2s ", " >>  showEndList endlist >> c2s ')'
+  |    AbsBasilIR.Block_Phi (blockident, attribset, beginlist, phiassigns, stmtwithattribs, jumpwithattrib, endlist) -> s2s "Block_Phi" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showPhiAssign phiassigns  >> s2s ", " >>  showList showStmtWithAttrib stmtwithattribs  >> s2s ", " >>  showJumpWithAttrib jumpwithattrib  >> s2s ", " >>  showEndList endlist >> c2s ')'
 
 
 and showAttrKeyValue (e : AbsBasilIR.attrKeyValue) : showable = match e with

@@ -40,8 +40,8 @@ let rec compare_partial (a : t) (b : t) =
   | Integer, Integer -> Some 0
   | Map (k, v), Map (k2, v2) -> (
       compare_partial k k2 |> function Some 0 -> compare_partial v v2 | o -> o)
-  | Map (k, v), _ -> None
-  | _, Map (k, v) -> None
+  | Map _, _ -> None
+  | _, Map _ -> None
 
 let compare a b = compare_partial a b |> Option.get_or ~default:0
 

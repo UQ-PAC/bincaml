@@ -7,7 +7,7 @@ open AbsBasilIR
 open Lexing
 %}
 
-%token KW_axiom KW_memory KW_shared KW_var KW_prog KW_entry KW_proc KW_le KW_be KW_load KW_store KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_block KW_true KW_false KW_forall KW_exists KW_old KW_boolnot KW_intneg KW_booltobv1 KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_invariant KW_rely KW_guarantee
+%token KW_axiom KW_memory KW_shared KW_var KW_prog KW_entry KW_proc KW_le KW_be KW_nop KW_load KW_store KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_old KW_boolnot KW_intneg KW_booltobv1 KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_invariant KW_rely KW_guarantee
 
 %token SYMB1 /* ; */
 %token SYMB2 /* , */
@@ -43,7 +43,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pSemicolons pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr pLambdaDef pBinOp pUnOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pFunSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pSemicolons pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr pLambdaDef pBinOp pUnOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pFunSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -66,6 +66,7 @@ open Lexing
 %type <AbsBasilIR.localVar> pLocalVar
 %type <AbsBasilIR.globalVar> pGlobalVar
 %type <AbsBasilIR.localVar list> pLocalVar_list
+%type <AbsBasilIR.var> pVar
 %type <AbsBasilIR.namedCallReturn> pNamedCallReturn
 %type <AbsBasilIR.namedCallReturn list> pNamedCallReturn_list
 %type <AbsBasilIR.lVars> pLVars
@@ -79,6 +80,10 @@ open Lexing
 %type <AbsBasilIR.stmtWithAttrib> pStmtWithAttrib
 %type <AbsBasilIR.stmtWithAttrib list> pStmtWithAttrib_list
 %type <AbsBasilIR.jumpWithAttrib> pJumpWithAttrib
+%type <AbsBasilIR.phiExpr> pPhiExpr
+%type <AbsBasilIR.phiExpr list> pPhiExpr_list
+%type <AbsBasilIR.phiAssign> pPhiAssign
+%type <AbsBasilIR.phiAssign list> pPhiAssign_list
 %type <AbsBasilIR.block> pBlock
 %type <AbsBasilIR.attrKeyValue> pAttrKeyValue
 %type <AbsBasilIR.attrKeyValue list> pAttrKeyValue_list
@@ -128,6 +133,7 @@ open Lexing
 %type <AbsBasilIR.localVar> localVar
 %type <AbsBasilIR.globalVar> globalVar
 %type <AbsBasilIR.localVar list> localVar_list
+%type <AbsBasilIR.var> var
 %type <AbsBasilIR.namedCallReturn> namedCallReturn
 %type <AbsBasilIR.namedCallReturn list> namedCallReturn_list
 %type <AbsBasilIR.lVars> lVars
@@ -141,6 +147,10 @@ open Lexing
 %type <AbsBasilIR.stmtWithAttrib> stmtWithAttrib
 %type <AbsBasilIR.stmtWithAttrib list> stmtWithAttrib_list
 %type <AbsBasilIR.jumpWithAttrib> jumpWithAttrib
+%type <AbsBasilIR.phiExpr> phiExpr
+%type <AbsBasilIR.phiExpr list> phiExpr_list
+%type <AbsBasilIR.phiAssign> phiAssign
+%type <AbsBasilIR.phiAssign list> phiAssign_list
 %type <AbsBasilIR.block> block
 %type <AbsBasilIR.attrKeyValue> attrKeyValue
 %type <AbsBasilIR.attrKeyValue list> attrKeyValue_list
@@ -231,6 +241,8 @@ pGlobalVar : globalVar TOK_EOF { $1 };
 
 pLocalVar_list : localVar_list TOK_EOF { $1 };
 
+pVar : var TOK_EOF { $1 };
+
 pNamedCallReturn : namedCallReturn TOK_EOF { $1 };
 
 pNamedCallReturn_list : namedCallReturn_list TOK_EOF { $1 };
@@ -256,6 +268,14 @@ pStmtWithAttrib : stmtWithAttrib TOK_EOF { $1 };
 pStmtWithAttrib_list : stmtWithAttrib_list TOK_EOF { $1 };
 
 pJumpWithAttrib : jumpWithAttrib TOK_EOF { $1 };
+
+pPhiExpr : phiExpr TOK_EOF { $1 };
+
+pPhiExpr_list : phiExpr_list TOK_EOF { $1 };
+
+pPhiAssign : phiAssign TOK_EOF { $1 };
+
+pPhiAssign_list : phiAssign_list TOK_EOF { $1 };
 
 pBlock : block TOK_EOF { $1 };
 
@@ -382,10 +402,13 @@ endian : KW_le { Endian_Little  }
 assignment : lVar SYMB10 expr { Assignment1 ($1, $3) }
   ;
 
-stmt : assignment { Stmt_SingleAssign $1 }
+stmt : KW_nop { Stmt_Nop  }
+  | assignment { Stmt_SingleAssign $1 }
   | SYMB5 assignment_list SYMB6 { Stmt_MultiAssign $2 }
   | lVar SYMB10 KW_load endian globalIdent expr intVal { Stmt_Load ($1, $4, $5, $6, $7) }
   | KW_store endian globalIdent expr expr intVal { Stmt_Store ($2, $3, $4, $5, $6) }
+  | lVar SYMB10 KW_load endian var expr intVal { Stmt_Load_Var ($1, $4, $5, $6, $7) }
+  | lVar SYMB10 KW_store endian var expr expr intVal { Stmt_Store_Var ($1, $4, $5, $6, $7, $8) }
   | lVars KW_call procIdent SYMB5 callParams SYMB6 { Stmt_DirectCall ($1, $3, $5) }
   | KW_indirect KW_call expr { Stmt_IndirectCall $3 }
   | KW_assume expr { Stmt_Assume $2 }
@@ -405,6 +428,10 @@ globalVar : globalIdent SYMB3 typeT { GlobalVar1 ($1, $3) }
 
 localVar_list : localVar { (fun x -> [x]) $1 }
   | localVar SYMB2 localVar_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  ;
+
+var : localVar { VarLocalVar $1 }
+  | globalVar { VarGlobalVar $1 }
   ;
 
 namedCallReturn : lVar SYMB9 localIdent { NamedCallReturn1 ($1, $3) }
@@ -436,7 +463,7 @@ callParams : expr_list { CallParams_Exprs $1 }
 jump : KW_goto SYMB5 blockIdent_list SYMB6 { Jump_GoTo $3 }
   | KW_unreachable { Jump_Unreachable  }
   | KW_return SYMB5 expr_list SYMB6 { Jump_Return $3 }
-  | KW_return SYMB5 namedCallArg_list SYMB6 { Jump_ReturnNamedParams $3 }
+  | KW_return { Jump_ProcReturn  }
   ;
 
 lVar : KW_var localVar { LVar_Local $2 }
@@ -462,7 +489,24 @@ stmtWithAttrib_list : /* empty */ { []  }
 jumpWithAttrib : jump attribSet { JumpWithAttrib1 ($1, $2) }
   ;
 
-block : KW_block blockIdent attribSet beginList stmtWithAttrib_list jumpWithAttrib SYMB1 endList { Block1 ($2, $3, $4, $5, $6, $8) }
+phiExpr : blockIdent SYMB7 var { PhiExpr1 ($1, $3) }
+  ;
+
+phiExpr_list : /* empty */ { []  }
+  | phiExpr { (fun x -> [x]) $1 }
+  | phiExpr SYMB2 phiExpr_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  ;
+
+phiAssign : lVar SYMB10 KW_phi SYMB5 phiExpr_list SYMB6 { PhiAssign1 ($1, $5) }
+  ;
+
+phiAssign_list : /* empty */ { []  }
+  | phiAssign { (fun x -> [x]) $1 }
+  | phiAssign SYMB2 phiAssign_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  ;
+
+block : KW_block blockIdent attribSet beginList stmtWithAttrib_list jumpWithAttrib SYMB1 endList { Block_NoPhi ($2, $3, $4, $5, $6, $8) }
+  | KW_block blockIdent attribSet beginList SYMB5 phiAssign_list SYMB6 SYMB1 stmtWithAttrib_list jumpWithAttrib SYMB1 endList { Block_Phi ($2, $3, $4, $6, $9, $10, $12) }
   ;
 
 attrKeyValue : bIdent SYMB9 attr { AttrKeyValue1 ($1, $3) }

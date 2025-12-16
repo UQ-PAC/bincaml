@@ -1,0 +1,16 @@
+(library
+ (public_name bincaml.util)
+ (name util)
+ (modules common var ID types bitvec zint)
+ (libraries containers fix containers.pp containers-data zarith)
+ (inline_tests)
+ (preprocess
+  (pps
+   ppx_deriving.show
+   ppx_deriving.eq
+   ppx_deriving.ord
+   ppx_deriving.map
+   ppx_deriving.iter
+   ppx_deriving.fold
+   ppx_deriving.enum
+   ppx_expect_nobase)))

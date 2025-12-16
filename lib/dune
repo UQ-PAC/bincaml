@@ -1,12 +1,21 @@
 (library
- (name ocaml_of_basil)
+ (public_name bincaml.loader)
+ (name loader)
  (flags -w -27)
- (modules loadir passes )
- (libraries BasilIR lang transforms ocaml_of_basil.ast trace))
+ (modules loadir)
+ (libraries pp_loc BasilIR lang bincaml.ast trace))
+
+(library
+ (public_name bincaml)
+ (flags -w -27)
+ (modules passes)
+ (libraries loader pp_loc BasilIR lang transforms bincaml.ast trace))
+
+(documentation
+ (package bincaml))
 
 (library
  (name demo)
  (modules demo demo)
  (flags -w -27))
-
 
