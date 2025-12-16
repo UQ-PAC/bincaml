@@ -14,9 +14,7 @@ module PassManager = struct
 
   and pass = { name : string; apply : transform; doc : string }
 
-  module SMap = Map.Make (String)
-
-  type t = { avail : pass SMap.t }
+  type t = { avail : pass StringMap.t }
 
   let sparams =
     {
@@ -158,7 +156,7 @@ module PassManager = struct
         { p with procs }
 
   let construct_batch (s : t) (passes : string list) =
-    List.map (fun p -> SMap.find p s.avail) passes
+    List.map (fun p -> StringMap.find p s.avail) passes
 
   let run_batch (batch : pass list) prog =
     List.fold_left run_transform prog batch

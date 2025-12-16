@@ -80,8 +80,6 @@ module IValue = struct
     | v -> failwith @@ "unsupported type for value : " ^ Types.to_string v
 end
 
-module VarMap = Map.Make (Var)
-
 module PageTable = struct
   type page = Byte_buffer.t
 

@@ -12,8 +12,6 @@ type load_st = {
 }
 
 open struct
-  module StringMap = Map.Make (String)
-
   let map_prog f l = { l with prog = f l.prog }
 end
 

@@ -19,26 +19,19 @@ end
 
 (** variables are interned *)
 
-module Var = struct
-  module H = Fix.HashCons.ForHashedTypeWeak (V)
+module H = Fix.HashCons.ForHashedTypeWeak (V)
 
-  type t = V.t Fix.HashCons.cell
+type t = V.t Fix.HashCons.cell
 
-  let create name ?(pure = true) ?(scope = Local) typ =
-    H.make { name; typ; pure; scope }
+let create name ?(pure = true) ?(scope = Local) typ =
+  H.make { name; typ; pure; scope }
 
-  let show v =
-    Printf.sprintf "{id=%d ; data=%s}" (Fix.HashCons.id v)
-      (V.show (Fix.HashCons.data v))
+let show v =
+  Printf.sprintf "{id=%d ; data=%s}" (Fix.HashCons.id v)
+    (V.show (Fix.HashCons.data v))
 
-  let equal (a : t) (b : t) = Fix.HashCons.equal a b
-  let compare (a : t) (b : t) = Fix.HashCons.compare a b
-end
-
-include Var
-module Map = Map.Make (Var)
-module Set = Set.Make (Var)
-
+let equal (a : t) (b : t) = Fix.HashCons.equal a b
+let compare (a : t) (b : t) = Fix.HashCons.compare a b
 let pp fmt v = Format.pp_print_string fmt (show v)
 let to_string v = V.show (Fix.HashCons.data v)
 let pretty v = Containers_pp.text (to_string v)

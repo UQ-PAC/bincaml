@@ -5,16 +5,14 @@ open Util.Common
 open Lang
 open Expr
 open Types
-module V = Set.Make (Var)
-module B = Map.Make (Var)
 
 (** live vars transfer function for a statement *)
 let tf_stmt_live init s =
-  let assigns = V.diff init (Stmt.assigned V.empty s) in
+  let assigns = VarSet.diff init (Stmt.assigned VarSet.empty s) in
   Stmt.free_vars assigns s
 
 (** live vars transfer function for a block *)
-let tf_block (init : V.t) (b : (Var.t, BasilExpr.t) Block.t) =
+let tf_block (init : VarSet.t) (b : (Var.t, BasilExpr.t) Block.t) =
   Block.fold_backwards ~f:tf_stmt_live ~phi:(fun f _ -> f) ~init b
 
 (** Boundockle live-variable analysis using ocamlgraph's chaotic iteration *)
@@ -27,11 +25,11 @@ module LV =
       type vertex = RevG.E.vertex
       type edge = RevG.E.t
       type g = RevG.t
-      type t = V.t
+      type t = VarSet.t
 
-      let equal = V.equal
-      let join = V.union
-      let widening a b = V.union a b
+      let equal = VarSet.equal
+      let join = VarSet.union
+      let widening a b = VarSet.union a b
 
       let analyze (e : edge) d =
         match G.E.label e with Block b -> tf_block d b | _ -> d
@@ -48,23 +46,23 @@ let run (p : Program.proc) =
       (function
         | Return ->
             Procedure.formal_out_params p
-            |> Common.StringMap.values |> V.of_iter
-        | _ -> V.empty)
+            |> Common.StringMap.values |> VarSet.of_iter
+        | _ -> VarSet.empty)
       (Graph.ChaoticIteration.Predicate (fun _ -> false))
       10
   in
   let res = Procedure.graph p |> Option.map analyse in
   fun v ->
-    Option.get_or ~default:V.empty (Option.flat_map (LV.M.find_opt v) res)
+    Option.get_or ~default:VarSet.empty (Option.flat_map (LV.M.find_opt v) res)
 
-let label (r : Procedure.G.vertex -> V.t) (v : Procedure.G.vertex) =
+let label (r : Procedure.G.vertex -> VarSet.t) (v : Procedure.G.vertex) =
   let show_v b =
     let open Containers_pp in
     let open Containers_pp.Infix in
     let x =
       fill
         (text "," ^ newline)
-        (V.to_list b |> List.map (fun v -> Containers_pp.text (Var.name v)))
+        (VarSet.to_list b |> List.map (fun v -> Containers_pp.text (Var.name v)))
     in
     Pretty.to_string ~width:80 x
   in
@@ -105,7 +103,7 @@ module DSE = struct
   (** Dead-store elimination for local variables based on intraprocedural live
       variables analysis *)
 
-  let filter_dead (live : V.t) (b : (Var.t, BasilExpr.t) Block.t) =
+  let filter_dead (live : VarSet.t) (b : (Var.t, BasilExpr.t) Block.t) =
     let r =
       Block.fold_backwards
         ~f:(fun (live, acc) s ->
@@ -116,9 +114,9 @@ module DSE = struct
             is_assign
             && Stmt.iter_lvar s
                |> Iter.for_all (fun v ->
-                   Var.is_local v && (not @@ V.mem v live))
+                   Var.is_local v && (not @@ VarSet.mem v live))
           in
-          let live = V.filter Var.is_local @@ tf_stmt_live live s in
+          let live = VarSet.filter Var.is_local @@ tf_stmt_live live s in
           let s = if dead_store then acc else s :: acc in
           (live, s))
         b

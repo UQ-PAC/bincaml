@@ -4,16 +4,11 @@ open Lang.Common
 open Lang
 open Containers
 
-open struct
-  module VM = Map.Make (Var)
-  module VS = Set.Make (Var)
-end
-
 (** FIXME: param form doesn't correct call site*)
 
 let check_ssa proc =
   let add_assign m v =
-    VM.get_or ~default:0 v m |> fun n -> VM.add v (n + 1) m
+    VarMap.get_or ~default:0 v m |> fun n -> VarMap.add v (n + 1) m
   in
   let assigns =
     Procedure.fold_blocks_topo_fwd
@@ -27,31 +22,31 @@ let check_ssa proc =
         |> Iter.fold
              (fun acc stmt -> Stmt.iter_lvar stmt |> Iter.fold add_assign acc)
              acc)
-      VM.empty proc
+      VarMap.empty proc
   in
-  assert (VM.for_all (fun v i -> (not (Var.pure v)) || i = 1) assigns)
+  assert (VarMap.for_all (fun v i -> (not (Var.pure v)) || i = 1) assigns)
 
 let drop_unused_var_declarations_proc p =
   let used =
     Procedure.fold_blocks_topo_fwd
       (fun acc id bl ->
         Iter.append (Block.read_vars_iter bl) (Block.assigned_vars_iter bl)
-        |> Iter.fold (fun acc i -> VS.add i acc) acc)
-      VS.empty p
+        |> Iter.fold (fun acc i -> VarSet.add i acc) acc)
+      VarSet.empty p
   in
   Var.Decls.filter_map_inplace
-    (fun _ v -> if VS.mem v used then Some v else None)
+    (fun _ v -> if VarSet.mem v used then Some v else None)
     (Procedure.local_decls p);
-  VS.filter Var.is_global used
+  VarSet.filter Var.is_global used
 
 let drop_unused_var_declarations_prog (p : Program.t) =
   let used =
     ID.Map.fold
-      (fun i p acc -> VS.union acc (drop_unused_var_declarations_proc p))
-      p.procs VS.empty
+      (fun i p acc -> VarSet.union acc (drop_unused_var_declarations_proc p))
+      p.procs VarSet.empty
   in
   Var.Decls.filter_map_inplace
-    (fun _ v -> if VS.mem v used then Some v else None)
+    (fun _ v -> if VarSet.mem v used then Some v else None)
     p.globals;
   p
 
@@ -203,10 +198,10 @@ let ssa (in_proc : Program.proc) =
       r := (v, nv) :: !r;
       nv
   in
-  let rn_stmt rr (stmt : ('v, 'v, 'e) Stmt.t) : Var.t VM.t * ('v, 'v, 'e) Stmt.t
-      =
+  let rn_stmt rr (stmt : ('v, 'v, 'e) Stmt.t) :
+      Var.t VarMap.t * ('v, 'v, 'e) Stmt.t =
     let read v =
-      try VM.find v rr with
+      try VarMap.find v rr with
       | Not_found
         when (not @@ Var.pure v)
              || StringMap.exists
@@ -230,7 +225,7 @@ let ssa (in_proc : Program.proc) =
         stmt
     in
     let vm =
-      (List.fold_left (fun m (v, nv) -> VM.add v nv m) rr !new_renames, stmt)
+      (List.fold_left (fun m (v, nv) -> VarMap.add v nv m) rr !new_renames, stmt)
     in
     vm
   in
@@ -238,7 +233,7 @@ let ssa (in_proc : Program.proc) =
   let phis = Hashtbl.create 100 in
 
   let phi_to_def joined_phis =
-    VM.values joined_phis
+    VarMap.values joined_phis
     |> Iter.map (function lhs, rhs -> Block.{ lhs; rhs })
     |> Iter.to_list
   in
@@ -268,35 +263,37 @@ let ssa (in_proc : Program.proc) =
       Hashtbl.get st id |> function
       | Some v -> v
       | None ->
-          Hashtbl.add phis id VM.empty;
+          Hashtbl.add phis id VarMap.empty;
           delayed_phis := ID.Set.add id !delayed_phis;
-          VM.empty
+          VarMap.empty
     in
     let renames, bl_phis =
       match pred with
       | [] ->
-          Hashtbl.add phis block_id VM.empty;
-          (VM.empty, [])
+          Hashtbl.add phis block_id VarMap.empty;
+          (VarMap.empty, [])
       | [ (id, _) ] -> (Hashtbl.find st id, [])
       | inc ->
           let joined_phis =
             List.map
               (fun (id, _) ->
                 ( id,
-                  (*VM.filter (fun v _ -> VS.mem v (lives (Begin id)))
+                  (*VarMap.filter (fun v _ -> VarSet.mem v (lives (Begin id)))
                   @@*)
                   get_st_pred id ))
               inc
             |> List.fold_left
                  (fun phim (block, rn) ->
                    (*print_endline @@ "live " ^ [%derive.show: Var.t list]
-                   @@ VS.to_list (lives (Begin block_id));*)
+                   @@ VarSet.to_list (lives (Begin block_id));*)
                    let rn =
-                     VM.filter (fun v _ -> VS.mem v (lives (Begin block_id))) rn
+                     VarMap.filter
+                       (fun v _ -> VarSet.mem v (lives (Begin block_id)))
+                       rn
                    in
-                   VM.merge_safe ~f:(merge_phi block) phim rn)
-                 VM.empty
-            (*|> VM.filter (fun v (l, ins) ->
+                   VarMap.merge_safe ~f:(merge_phi block) phim rn)
+                 VarMap.empty
+            (*|> VarMap.filter (fun v (l, ins) ->
                 match ins with
                 | (h, i) :: tl ->
                     not (List.for_all (fun (_, v) -> Var.equal v i) tl)
@@ -309,9 +306,9 @@ let ssa (in_proc : Program.proc) =
           (*let sh =
             [%derive.show: (Var.t * (Var.t * (ID.t * Var.t) list)) list]
           in
-          let l = VM.to_list joined_phis in
+          let l = VarMap.to_list joined_phis in
           print_endline (sh l);*)
-          let renames = VM.mapi (fun i (v, t) -> v) joined_phis in
+          let renames = VarMap.mapi (fun i (v, t) -> v) joined_phis in
           (renames, phi_to_def joined_phis)
     in
 
@@ -323,13 +320,13 @@ let ssa (in_proc : Program.proc) =
     in
     let renames =
       let l = lives (End block_id) in
-      (*print_endline @@ "live " ^ [%derive.show: Var.t list] @@ VS.to_list l;*)
-      VM.filter (fun v a -> VS.mem v l) renames
+      (*print_endline @@ "live " ^ [%derive.show: Var.t list] @@ VarSet.to_list l;*)
+      VarMap.filter (fun v a -> VarSet.mem v l) renames
     in
     Hashtbl.add st block_id renames;
     (*print_endline
       ("set " ^ ID.to_string block_id ^ "  "
-      ^ (VM.cardinal renames |> Int.to_string));*)
+      ^ (VarMap.cardinal renames |> Int.to_string));*)
     Procedure.update_block proc block_id { nb with phis = bl_phis }
   in
 
@@ -349,9 +346,9 @@ let ssa (in_proc : Program.proc) =
       |> Iter.fold
            (fun proc (succ_bid, _) ->
              let phis =
-               VM.merge_safe
+               VarMap.merge_safe
                  ~f:((merge_existing_phi succ_bid) block_id)
-                 (Hashtbl.get_or ~default:VM.empty phis succ_bid)
+                 (Hashtbl.get_or ~default:VarMap.empty phis succ_bid)
                  renames
                |> phi_to_def
              in

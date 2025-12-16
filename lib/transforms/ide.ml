@@ -352,8 +352,8 @@ module IDELive = struct
   let transfer s =
     let open Livevars in
     let open Stmt in
-    let assigned = Stmt.assigned V.empty s |> V.to_iter in
-    let read = Stmt.free_vars V.empty s |> V.to_iter in
+    let assigned = Stmt.assigned VarSet.empty s |> VarSet.to_iter in
+    let read = Stmt.free_vars VarSet.empty s |> VarSet.to_iter in
     let rhs =
       match s with
       | Instr_Load _ | Instr_Store _ | Instr_Assert _ | Instr_Assume _
@@ -383,46 +383,44 @@ end
     - phis *)
 
 module IDE (D : IDEDomain) = struct
-  module VM = Map.Make (Var)
-
-  type summary = D.t VM.t [@@deriving eq, ord]
+  type summary = D.t VarMap.t [@@deriving eq, ord]
   (** Edge function type: map from variables to lambda functions of at most one
       other variable (implicit)
 
       Non membership in the map means v -> \l l . bot *)
 
   let show_summary v =
-    VM.to_iter v
+    VarMap.to_iter v
     |> Iter.to_string ~sep:", " (fun (v, i) ->
         Var.to_string v ^ "->" ^ D.show i)
 
-  type constant_state = D.Const.t VM.t [@@deriving eq, ord]
+  type constant_state = D.Const.t VarMap.t [@@deriving eq, ord]
 
-  let empty_summary = VM.empty
+  let empty_summary = VarMap.empty
 
   (** composition of an assignment var := mfun', where var |-> mfun in st: i.e.
       becomes compose mfun compose mfun' *)
   let compose_assigns st1 st vars =
     Iter.fold
       (fun acc (v, mf) ->
-        let r = D.compose (fun v -> VM.get_or ~default:D.bottom v st1) mf in
-        if D.equal r D.bottom then VM.remove v acc else VM.add v r acc)
+        let r = D.compose (fun v -> VarMap.get_or ~default:D.bottom v st1) mf in
+        if D.equal r D.bottom then VarMap.remove v acc else VarMap.add v r acc)
       st vars
 
   let update_state st1 st vars =
     Iter.fold
       (fun acc (v, mf) ->
-        if D.equal mf D.bottom then VM.remove v acc else VM.add v mf acc)
+        if D.equal mf D.bottom then VarMap.remove v acc else VarMap.add v mf acc)
       st vars
 
   let join_summaries a b =
     (* keeps everything present in a and not b, does that make sense?*)
-    VM.union (fun v a b -> Some (D.join a b)) a b
+    VarMap.union (fun v a b -> Some (D.join a b)) a b
 
   let join_constant_summary (s0 : constant_state) (s1 : constant_state) :
       constant_state =
     (* keeps everything present in a and not b, does that make sense?*)
-    VM.union (fun v a b -> Some (D.Const.join a b)) s0 s1
+    VarMap.union (fun v a b -> Some (D.Const.join a b)) s0 s1
 
   (* compose bot f = f ? *)
   let compose_state_updates (updates : D.t state_update) st1 st =
@@ -460,13 +458,14 @@ module IDE (D : IDEDomain) = struct
 
   let tf_edge_phase_2 st summary globals edge =
     let open IDEGraph.Edge in
-    let read v = VM.get_or ~default:D.Const.bottom v st in
+    let read v = VarMap.get_or ~default:D.Const.bottom v st in
     let update k v st =
-      if D.Const.equal D.Const.bottom v then VM.remove k st else VM.add k v st
+      if D.Const.equal D.Const.bottom v then VarMap.remove k st
+      else VarMap.add k v st
     in
     match IDEGraph.G.E.label edge with
     | Stmts (phi, bs) ->
-        let updates = D.transfer_const read (VM.to_iter summary) in
+        let updates = D.transfer_const read (VarMap.to_iter summary) in
         let st' = Iter.fold (fun m (v, t) -> update v t m) st updates in
         st'
     | InterCall args ->
@@ -474,7 +473,7 @@ module IDE (D : IDEDomain) = struct
           List.to_iter args.rhs
           |> Iter.map (function formal, _ -> formal)
           |> Iter.append globals
-          |> Iter.map (fun v -> (v, VM.get_or ~default:D.bottom v summary))
+          |> Iter.map (fun v -> (v, VarMap.get_or ~default:D.bottom v summary))
         in
         let updates = D.transfer_const read args in
         let st' = Iter.fold (fun m (v, t) -> update v t m) st updates in
@@ -484,7 +483,7 @@ module IDE (D : IDEDomain) = struct
           List.to_iter args.rhs
           |> Iter.map (function formal, _ -> formal)
           |> Iter.append globals
-          |> Iter.map (fun v -> (v, VM.get_or ~default:D.bottom v summary))
+          |> Iter.map (fun v -> (v, VarMap.get_or ~default:D.bottom v summary))
         in
         let updates = D.transfer_const read args in
         let st' = Iter.fold (fun m (v, t) -> update v t m) st updates in
@@ -518,7 +517,9 @@ module IDE (D : IDEDomain) = struct
     | InterCall args ->
         let target = get_summary target in
         update_state st target
-          (D.compose_call (fun v -> VM.get_or v ~default:D.bottom target) args)
+          (D.compose_call
+             (fun v -> VarMap.get_or v ~default:D.bottom target)
+             args)
         |> compose_state_updates
              (globals |> Iter.map (fun v -> (v, D.identity v)))
              st
@@ -526,7 +527,7 @@ module IDE (D : IDEDomain) = struct
         let target = get_summary target in
         update_state st target
           (D.compose_return
-             (fun v -> VM.get_or ~default:D.bottom v target)
+             (fun v -> VarMap.get_or ~default:D.bottom v target)
              args)
         |> compose_state_updates
              (globals |> Iter.map (fun v -> (v, D.identity v)))
@@ -559,7 +560,7 @@ module IDE (D : IDEDomain) = struct
             (get_summary e, b, get_summary b, IDEGraph.G.succ graph b)
       in
       let st' = tf_edge_phase_1 dir globals get_summary st p in
-      let st' = VM.filter (fun v i -> not (D.equal D.bottom i)) st' in
+      let st' = VarMap.filter (fun v i -> not (D.equal D.bottom i)) st' in
       let st' =
         if List.length siblings > 1 then join_summaries ost' st' else st'
       in
@@ -582,7 +583,7 @@ module IDE (D : IDEDomain) = struct
     let module Q = IntPQueue.Plain in
     let (worklist : edge Q.t) = Q.create () in
     let constants : (Loc.t, constant_state) Hashtbl.t = Hashtbl.create 100 in
-    let get_st l = Hashtbl.get_or constants l ~default:VM.empty in
+    let get_st l = Hashtbl.get_or constants l ~default:VarMap.empty in
     let priority (edge : edge) =
       match dir with
       | `Forwards -> ( match edge with l, _, _ -> LM.find l order)
@@ -593,7 +594,7 @@ module IDE (D : IDEDomain) = struct
       | Some e -> e
       | None ->
           print_endline @@ "summary undefined " ^ Loc.show loc;
-          VM.empty
+          VarMap.empty
     in
     IDEGraph.G.fold_edges_e (fun e a -> Q.add worklist e (priority e)) graph ();
     while not (Q.is_empty worklist) do
@@ -621,7 +622,7 @@ module IDE (D : IDEDomain) = struct
     done;
     constants
 
-  let query (r : (Loc.t, 'a VM.t) Hashtbl.t) ~proc_id vert =
+  let query (r : (Loc.t, 'a VarMap.t) Hashtbl.t) ~proc_id vert =
     Hashtbl.get r (IntraVertex { proc_id; v = vert })
 
   let solve dir (prog : Program.t) =
@@ -636,7 +637,7 @@ module IDE (D : IDEDomain) = struct
       |> Iter.map (fun (i, v) -> (v, i))
       |> LM.of_iter
     in
-    let summary = phase1_solve order dir graph globals VM.empty in
+    let summary = phase1_solve order dir graph globals VarMap.empty in
     (query @@ summary, query @@ phase2_solve order dir graph globals summary)
 
   module G = Procedure.RevG
@@ -656,7 +657,7 @@ end
 module IDELiveAnalysis = IDE (IDELive)
 
 let show_const_summary (v : IDELiveAnalysis.constant_state) =
-  IDELiveAnalysis.VM.to_iter v |> IDELive.show_const_state
+  VarMap.to_iter v |> IDELive.show_const_state
 
 let print_live_vars_dot sum r fmt prog proc_id =
   let label (v : Procedure.G.vertex) = r v |> Option.map (fun s -> sum s) in

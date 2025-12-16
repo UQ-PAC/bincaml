@@ -11,14 +11,12 @@ module SMTLib2 = struct
     let compare = compare_logic
   end)
 
-  module VMap = Map.Make (Var)
-
   type var_decl = { decl_cmd : CCSexp.t; var : CCSexp.t }
 
   type builder = {
     preamble : CCSexp.t list;
     commands : CCSexp.t list;
-    var_decls : var_decl VMap.t;
+    var_decls : var_decl VarMap.t;
     logics : LSet.t;
   }
 
@@ -26,7 +24,7 @@ module SMTLib2 = struct
     {
       preamble = [];
       commands = [];
-      var_decls = VMap.empty;
+      var_decls = VarMap.empty;
       logics = LSet.empty;
     }
 
@@ -81,7 +79,7 @@ module SMTLib2 = struct
     let open Iter.Infix in
     let logic = list [ atom "set-logic"; atom (get_logic_string b.logics) ] in
     let preamble = List.to_iter (logic :: b.preamble) in
-    let decls = VMap.to_iter b.var_decls >|= fun (v, d) -> d.decl_cmd in
+    let decls = VarMap.to_iter b.var_decls >|= fun (v, d) -> d.decl_cmd in
     let commands = List.rev b.commands |> List.to_iter in
     return (preamble <+> decls <+> commands)
 
@@ -120,14 +118,14 @@ module SMTLib2 = struct
     return v
 
   let decl_var (v : Var.t) s =
-    VMap.find_opt v s.var_decls |> function
+    VarMap.find_opt v s.var_decls |> function
     | Some { decl_cmd; var } -> (var, s)
     | None ->
         let decl, logics = gen_decl v in
         ( decl.var,
           {
             s with
-            var_decls = VMap.add v decl s.var_decls;
+            var_decls = VarMap.add v decl s.var_decls;
             logics = LSet.union logics s.logics;
           } )
 

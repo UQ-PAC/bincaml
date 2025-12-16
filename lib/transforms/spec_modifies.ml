@@ -3,23 +3,21 @@
 
 open Lang
 open Common
-module VS = Set.Make (Var)
-module VM = Map.Make (Var)
 
 module RWSets = struct
-  type property = VS.t * VS.t [@@deriving eq, ord]
+  type property = VarSet.t * VarSet.t [@@deriving eq, ord]
 
-  let bottom = (VS.empty, VS.empty)
+  let bottom = (VarSet.empty, VarSet.empty)
   let equal = equal_property
   let compare = compare_property
   let is_maximal p = false
 
   let leq_join (a : property) (b : property) : property =
-    (VS.union (fst a) (fst b), VS.union (snd a) (snd b))
+    (VarSet.union (fst a) (fst b), VarSet.union (snd a) (snd b))
 
   let to_string (p : property) =
     let print =
-     fun i -> VS.to_iter i |> Iter.to_string ~sep:"," Var.to_string
+     fun i -> VarSet.to_iter i |> Iter.to_string ~sep:"," Var.to_string
     in
     ("read: " ^ print (fst p)) ^ "\nwritten: " ^ print (snd p)
 
@@ -37,8 +35,8 @@ let solve (prog : Program.t) =
         (fun a bid block ->
           let local =
             ( Block.read_vars_iter block |> Iter.filter Var.is_global
-              |> VS.of_iter,
-              VS.of_iter
+              |> VarSet.of_iter,
+              VarSet.of_iter
                 (Block.assigned_vars_iter block |> Iter.filter Var.is_global) )
           in
           let calls =
@@ -48,7 +46,8 @@ let solve (prog : Program.t) =
               | _ -> None)
           in
           Iter.cons local calls |> Iter.fold RWSets.leq_join a)
-        (VS.empty, VS.empty) p
+        (VarSet.empty, VarSet.empty)
+        p
     in
     (read, written)
   in
@@ -60,8 +59,8 @@ let set_modsets prog =
     ID.Map.mapi
       (fun i p ->
         let read, written = rwset i in
-        let captures_globs = VS.to_list @@ VS.union read written in
-        let modifies_globs = VS.to_list written in
+        let captures_globs = VarSet.to_list @@ VarSet.union read written in
+        let modifies_globs = VarSet.to_list written in
         let spec : (Var.t, Program.e) Procedure.proc_spec =
           Procedure.specification p
         in

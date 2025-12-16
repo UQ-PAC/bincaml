@@ -159,8 +159,6 @@ let to_string ?width show_lvar show_var show_expr
   let d = pretty show_lvar show_var show_expr s in
   Containers_pp.Pretty.to_string ~width d
 
-module V = Set.Make (Var)
-
 let show_stmt_basil =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
   let show_var v = Containers_pp.text @@ Var.to_string_il_rvar v in
@@ -169,8 +167,8 @@ let show_stmt_basil =
 
 let pp_stmt_basil fmt s = Format.pp_print_string fmt (show_stmt_basil s)
 
-let assigned (init : V.t) s : V.t =
-  let f_lvar a v = V.add v a in
+let assigned (init : VarSet.t) s : VarSet.t =
+  let f_lvar a v = VarSet.add v a in
   iter_lvar s |> Iter.fold f_lvar init
 
 let iter_assigned = iter_lvar
@@ -183,10 +181,10 @@ let free_vars_iter (s : (Var.t, Var.t, BasilExpr.t) t) : Var.t Iter.t =
   in
   iter_rexpr s |> Iter.flat_map f_expr
 
-let free_vars (init : V.t) (s : (Var.t, Var.t, BasilExpr.t) t) : V.t =
+let free_vars (init : VarSet.t) (s : (Var.t, Var.t, BasilExpr.t) t) : VarSet.t =
   let f_expr a v =
     match v with
-    | `Expr v -> V.union (BasilExpr.free_vars v) a
-    | `Var v -> V.add v a
+    | `Expr v -> VarSet.union (BasilExpr.free_vars v) a
+    | `Var v -> VarSet.add v a
   in
   iter_rexpr s |> Iter.fold f_expr init
