@@ -1,3 +1,4 @@
+open Util.Common
 open Lang
 open QCheck.Gen
 module BasilExpr = Expr.BasilExpr
@@ -25,11 +26,8 @@ let gen_width = int_range 1 62
 let arb_bv_op : Ops.BVOps.binary gen = oneofl bv_ops_total
 
 let gen_bv ?(min = 0) w =
-  let* v =
-    int_range min
-      (Value.PrimQFBV.ones ~size:w |> Value.PrimQFBV.value |> Z.to_int)
-  in
-  return (Value.PrimQFBV.of_int ~size:w v)
+  let* v = int_range min (Bitvec.ones ~size:w |> Bitvec.value |> Z.to_int) in
+  return (Bitvec.of_int ~size:w v)
 
 let gen_unop l =
   let* op = oneofl bv_unop in
@@ -47,7 +45,7 @@ let gen_bvconst ?min w =
   let* c = gen_bv ?min w in
   return (BasilExpr.bvconst c)
 
-let make_bvconst wd x = BasilExpr.bvconst @@ Value.PrimQFBV.of_int ~size:wd x
+let make_bvconst wd x = BasilExpr.bvconst @@ Bitvec.of_int ~size:wd x
 let ensure_nonzero wd e = BasilExpr.binexp ~op:`BVOR e (make_bvconst wd 1)
 
 let gen_unop_advanced gen_bvexpr wd =
@@ -59,9 +57,9 @@ let gen_unop_advanced gen_bvexpr wd =
       gen_bvexpr w2 >|= BasilExpr.zero_extend ~n_prefix_bits:w1;
       BasilExpr.concat <$> gen_bvexpr w1 <*> gen_bvexpr w2;
     ]
-  (* >|= fun e -> *)
-  (* assert (BasilExpr.type_of e = Bitvector wd); *)
-  (* e *)
+(* >|= fun e -> *)
+(* assert (BasilExpr.type_of e = Bitvector wd); *)
+(* e *)
 
 let gen_bvexpr =
   fix (fun self (size, wd) ->

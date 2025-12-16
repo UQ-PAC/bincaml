@@ -1,5 +1,6 @@
 open Lang
 open Lang.Stmt
+open Lang.Common
 open Expr
 
 let%expect_test "frees" =
