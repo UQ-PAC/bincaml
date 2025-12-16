@@ -1,3 +1,5 @@
+(** Intra-expression constant-folding *)
+
 open Util.Common
 open Lang
 open Expr_eval

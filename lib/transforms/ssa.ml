@@ -1,4 +1,4 @@
-(** fix up ssa form *)
+(** Naive paramerter and SSA transform *)
 
 open Lang.Common
 open Lang

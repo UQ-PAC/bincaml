@@ -3,9 +3,6 @@
  (modules test_bincaml)
  (libraries bincaml_inline_tests))
 
-(documentation
- (package bincaml))
-
 (library
  (name bincaml_inline_tests)
  (inline_tests)

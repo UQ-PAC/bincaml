@@ -1,8 +1,8 @@
+(** Intraprocedural analyses for programs not in ssa form. *)
+
 open Lang
 open Common
 open Containers
-
-(** Intraprocedural analyses for programs not in ssa form. *)
 
 module type ValDomain = sig
   val name : string

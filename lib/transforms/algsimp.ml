@@ -1,3 +1,5 @@
+(** Basic intra-expression algebraic simplifications *)
+
 open Util.Common
 open Lang
 open Expr

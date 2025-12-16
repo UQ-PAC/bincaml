@@ -1,3 +1,5 @@
+(** Remove unreachable CFG basic-blocks *)
+
 open Lang
 open Lang.Common
 

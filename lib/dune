@@ -10,3 +10,6 @@
  (flags -w -27)
  (modules passes)
  (libraries loader pp_loc BasilIR lang transforms bincaml.ast trace))
+
+(documentation
+ (package bincaml))

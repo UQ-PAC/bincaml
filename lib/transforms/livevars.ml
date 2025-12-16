@@ -1,3 +1,6 @@
+(** Dead code elimination based on intraprocedural live local-variables analysis
+*)
+
 open Util.Common
 open Lang
 open Expr

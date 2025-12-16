@@ -1,10 +1,10 @@
+(** Interprocedurally infer read/write sets of procedures, ignoring the
+    specified captures/modifies sets *)
+
 open Lang
 open Common
 module VS = Set.Make (Var)
 module VM = Map.Make (Var)
-
-(** Interprocedurally infer read/write sets of procedures, ignoring the
-    specified captures/modifies sets *)
 
 module RWSets = struct
   type property = VS.t * VS.t [@@deriving eq, ord]
