@@ -1,4 +1,4 @@
-(** Standard library *)
+(** {1 Standard library} *)
 
 include Containers
 include Fun
@@ -44,3 +44,18 @@ module type HASH_TYPE = sig
 
   val hash : t -> int
 end
+
+(** {1 vars and ids} *)
+
+module Types = Types
+module Var = Var
+module ID = ID
+module IDMap = Map.Make (ID)
+module VarMap = Map.Make (Var)
+module IDSet = Set.Make (ID)
+module VarSet = Set.Make (Var)
+
+(** Values *)
+
+module Bitvec = Bitvec
+module PrimInt = Zint

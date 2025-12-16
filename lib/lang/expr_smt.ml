@@ -1,7 +1,6 @@
+open Common
 open Expr
-open Containers
 open CCSexp
-open Value
 
 module SMTLib2 = struct
   type logic = UF | Int | Prop | BV | Array | DT [@@deriving ord]
@@ -151,8 +150,8 @@ module SMTLib2 = struct
         list
           [
             atom "_";
-            atom @@ "bv" ^ (PrimQFBV.value i |> Z.to_string);
-            atom @@ Int.to_string @@ PrimQFBV.size i;
+            atom @@ "bv" ^ (Bitvec.value i |> Z.to_string);
+            atom @@ Int.to_string @@ Bitvec.size i;
           ]
     | `EQ -> atom "="
     | `BoolNOT -> atom "not"
@@ -205,8 +204,8 @@ module SMTLib2 = struct
     let open BasilExpr in
     let e =
       binexp ~op:`EQ
-        (unexp ~op:(`SignExtend 10) (bvconst (PrimQFBV.ones ~size:3)))
-        (bvconst @@ PrimQFBV.of_int ~size:13 100)
+        (unexp ~op:(`SignExtend 10) (bvconst (Bitvec.ones ~size:3)))
+        (bvconst @@ Bitvec.of_int ~size:13 100)
     in
     print_endline (to_string e);
     let smt = assert_bexpr e in

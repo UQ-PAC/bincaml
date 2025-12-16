@@ -1,4 +1,4 @@
-open Containers
+open Common
 
 module type Labelling = sig
   val labelling : Procedure.Vert.t -> string option

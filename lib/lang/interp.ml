@@ -1,9 +1,9 @@
+open Common
+
 exception ConversionError of string
 exception AssertFailure of Program.stmt
 exception AssumeFail of Program.stmt
 exception ReadUninit of Var.t
-
-open Common
 
 let () =
   Printexc.register_printer (function
@@ -22,19 +22,18 @@ module IValue = struct
 
   let true_value = Z.one
   let false_value = Z.zero
-  let bv_value bv = Value.PrimQFBV.value bv
+  let bv_value bv = Bitvec.value bv
   let int_value v = v
 
   (** conversion from basil values *)
   let bv_of_constant (v : Ops.AllOps.const) =
-    let open Value in
     let open Expr.BasilExpr in
     let open Expr.AbstractExpr in
     match v with
     | `Bitvector bv -> bv
-    | `Integer v -> PrimQFBV.create ~size:int_size v
-    | `Bool true -> PrimQFBV.create ~size:8 Z.one
-    | `Bool false -> PrimQFBV.create ~size:8 Z.zero
+    | `Integer v -> Bitvec.create ~size:int_size v
+    | `Bool true -> Bitvec.create ~size:8 Z.one
+    | `Bool false -> Bitvec.create ~size:8 Z.zero
 
   let of_constant (v : Ops.AllOps.const) =
     let open Expr.BasilExpr in
@@ -46,8 +45,8 @@ module IValue = struct
 
   (** conversion to basil values *)
 
-  let as_int v = Value.z_signed_extract v 0 int_size
-  let as_bv ~size v = Value.PrimQFBV.create ~size v
+  let as_int v = Bitvec.z_signed_extract v 0 int_size
+  let as_bv ~size v = Bitvec.create ~size v
   let as_bool v = not (Z.equal Z.zero v)
 
   let conv ty v : Ops.AllOps.const =
@@ -59,7 +58,6 @@ module IValue = struct
 
   let random gen ty =
     let open Types in
-    let open Value in
     match ty with
     | Bitvector sz ->
         let bytes =
@@ -68,7 +66,7 @@ module IValue = struct
             (fun _ -> Random.State.bits gen |> Char.unsafe_chr)
         in
         let v = Z.of_bits bytes in
-        `Bitvector (PrimQFBV.create ~size:sz v)
+        `Bitvector (Bitvec.create ~size:sz v)
     | Boolean -> (
         let i = Random.State.int gen 2 in
         match i with
@@ -246,16 +244,16 @@ module PageTable = struct
   let write_bytes st ~addr ~bytes =
     bytes_view ~addr ~num_bytes:(Byte_slice.len bytes) ~write:bytes st
 
-  let write_bv st ~addr (bits : Value.PrimQFBV.t) =
+  let write_bv st ~addr (bits : Bitvec.t) =
     assert (bits.w mod 8 = 0);
     assert (bits.w / 8 > 0);
-    let bytes = Value.PrimQFBV.to_bytes bits |> Byte_slice.create in
+    let bytes = Bitvec.to_bytes bits |> Byte_slice.create in
     write_bytes st ~addr ~bytes
 
   let read_bv st ~addr ~nbits =
     let d, r = Z.div_rem (Z.of_int nbits) (Z.of_int 8) in
     let num_bytes = Z.to_int @@ if Z.equal Z.zero r then d else Z.succ d in
-    read_bytes st ~addr ~num_bytes |> Value.PrimQFBV.create ~size:nbits
+    read_bytes st ~addr ~num_bytes |> Bitvec.create ~size:nbits
 end
 
 let%expect_test "page range" =
@@ -277,19 +275,17 @@ let%expect_test "page range multi" =
   [%expect {| 0, 1024, 2048, 3072, 4096 |}]
 
 let%expect_test "page" =
-  let open Value in
   let tbl = PageTable.create () in
-  let obits = Value.PrimQFBV.create ~size:64 (Z.of_bits "abcdefgh") in
+  let obits = Bitvec.create ~size:64 (Z.of_bits "abcdefgh") in
   PageTable.write_bv tbl ~addr:(Z.of_int 0x0c8) @@ obits;
   PageTable.write_bv tbl ~addr:(Z.of_int 0x0ce) obits;
   let read = PageTable.read_bv tbl ~addr:(Z.of_int 0x0c8) ~nbits:(14 * 8) in
   let read_bv =
-    read |> Value.PrimQFBV.value |> Z.to_bits |> fun s -> String.sub s 0 14
+    read |> Bitvec.value |> Z.to_bits |> fun s -> String.sub s 0 14
   in
   let reado = PageTable.read_bv tbl ~addr:(Z.of_int 0x0ce) ~nbits:64 in
-  Printf.printf "%s == %s %b\n" (PrimQFBV.to_string reado)
-    (PrimQFBV.to_string obits)
-    (PrimQFBV.equal reado obits);
+  Printf.printf "%s == %s %b\n" (Bitvec.to_string reado)
+    (Bitvec.to_string obits) (Bitvec.equal reado obits);
   print_endline read_bv;
   print_endline @@ PageTable.show tbl;
   [%expect
@@ -366,8 +362,8 @@ let%expect_test "page" =
 module IChannel = struct
   type t = { data : Byte_buffer.t; seek_head : int }
 
-  let write st (bits : Value.PrimQFBV.t) =
-    let bval = Value.PrimQFBV.to_bytes bits in
+  let write st (bits : Bitvec.t) =
+    let bval = Bitvec.to_bytes bits in
     Byte_buffer.ensure_cap st.data (st.seek_head + Bytes.length bval);
     let ub = Byte_buffer.bytes st.data in
     Bytes.blit bval 0 ub st.seek_head (Bytes.length bval);

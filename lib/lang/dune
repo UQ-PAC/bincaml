@@ -3,15 +3,11 @@
  (name lang)
  (modules
   expr
-  value
   common
-  types
-  var
   ops
   viscfg
   expr_smt
   expr_eval
-  ID
   stmt
   block
   procedure

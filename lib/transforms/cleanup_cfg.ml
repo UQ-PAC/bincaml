@@ -1,4 +1,5 @@
 open Lang
+open Lang.Common
 
 let reachable proc =
   ID.Set.of_list

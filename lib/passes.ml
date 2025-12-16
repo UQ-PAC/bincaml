@@ -1,6 +1,5 @@
 open Lang
-open Containers
-open Lang
+open Lang.Common
 
 (** TODO: pass program to procedure-local passes
 

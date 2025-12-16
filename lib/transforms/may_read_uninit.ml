@@ -8,7 +8,7 @@ How to do this....
 BOT -> readuninit -> write
 
 *)
-open Containers
+open Util.Common
 open Lang
 
 module ReadUninit = struct
@@ -37,7 +37,7 @@ module ReadUninitAnalysis = struct
 
   type edge = Lang.Procedure.G.edge
   type val_t = ReadUninit.t
-  type key_t = Lang.Var.t
+  type key_t = Var.t
 
   let read_var v st =
     match read v st with

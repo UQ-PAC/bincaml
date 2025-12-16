@@ -37,7 +37,7 @@ let name_indexed (str : string) : string * int option =
   String.split_on_char '_' str |> List.rev |> function
   | ind :: tl when Int.of_string ind |> Option.is_some ->
       Int.of_string ind |> fun n -> (List.rev tl |> String.concat "_", n)
-  | x -> (str, None)
+  | _ -> (str, None)
 
 let indexed_name (str : string * int option) : string =
   match str with n, None -> n | str, Some n -> str ^ "_" ^ Int.to_string n

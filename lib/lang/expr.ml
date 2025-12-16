@@ -1,6 +1,5 @@
 open Common
 open Containers
-open Value
 open Ops
 
 module AbstractExpr = struct
@@ -26,24 +25,15 @@ module AbstractExpr = struct
     let id a = a in
     map id id id id id f e
 
-  let hash hash e1 =
-    let hash_const = Hashtbl.hash in
-    let hash_var = Hashtbl.hash in
-    let hash_unary = Hashtbl.hash in
-    let hash_binary = Hashtbl.hash in
-    let hash_intrin = Hashtbl.hash in
-    let open HashHelper in
+  let hash hash e1 : int =
     match e1 with
-    | RVar r -> combine 1 (hash_var r)
-    | UnaryExpr (op, a) -> combine2 3 (hash_unary op) (hash a)
-    | BinaryExpr (op, l, r) -> combine3 5 (hash_binary op) (hash l) (hash r)
-    | Constant c -> combine 7 (hash_const c)
-    | ApplyIntrin (i, args) ->
-        combine 11 (combinel (hash_intrin i) (List.map hash args))
-    | ApplyFun (n, args) ->
-        combine 13 (combinel (String.hash n) (List.map hash args))
-    | Binding (args, body) ->
-        combine 17 (combinel (hash body) (List.map hash_var args))
+    | RVar r -> Hash.(combine2 1 (poly r))
+    | UnaryExpr (op, a) -> Hash.(combine3 3 (poly op) (hash a))
+    | BinaryExpr (op, l, r) -> Hash.(combine4 5 (poly op) (hash l) (hash r))
+    | Constant c -> Hash.(combine2 7 (poly c))
+    | ApplyIntrin (i, args) -> Hash.(combine3 11 (poly i) (list hash args))
+    | ApplyFun (n, args) -> Hash.(combine3 13 (string n) (list hash args))
+    | Binding (args, body) -> Hash.(combine3 17 (list poly args) (hash body))
 end
 
 module Alges = struct
@@ -432,10 +422,10 @@ module BasilExpr = struct
   let boolnot e = unexp ~op:`BoolNOT e
   let intconst (v : PrimInt.t) : t = const (`Integer v)
   let boolconst (v : bool) : t = const (`Bool v)
-  let bvconst (v : PrimQFBV.t) : t = const (`Bitvector v)
+  let bvconst (v : Bitvec.t) : t = const (`Bitvector v)
 
   let bv_of_int ~(size : int) (v : int) : t =
-    const (`Bitvector (PrimQFBV.of_int ~size v))
+    const (`Bitvector (Bitvec.of_int ~size v))
 
   (*
   module Memoiser = Fix.Memoize.ForHashedType (struct

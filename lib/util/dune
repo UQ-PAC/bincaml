@@ -1,10 +1,8 @@
-
 (library
  (public_name bincaml.util)
  (name util)
- (modules common)
- (libraries
-  containers)
+ (modules common var ID types bitvec zint)
+ (libraries containers fix containers.pp containers-data zarith)
  (inline_tests)
  (preprocess
   (pps
