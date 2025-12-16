@@ -1,7 +1,7 @@
 (library
- (name demo_config)
- (libraries demo qcheck-core)
- (modules demo_config))
+ (name interp_spec_config)
+ (libraries bincaml.ast qcheck-core)
+ (modules interp_spec_config))
 
 (rule
  (alias runtest)
@@ -10,7 +10,7 @@
   (with-stdout-to
    dune.inc
    (pipe-stdout
-    (run ortac dune qcheck-stm ../lib/demo.mli)
+    (run ortac dune qcheck-stm ../lib/lang/interp_spec.mli --library=bincaml.ast)
     ; filter out the promote settings for the generated
     ; test code, so the test code is not committed.
     (run grep -v "alias runtest")

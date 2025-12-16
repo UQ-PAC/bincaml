@@ -12,6 +12,7 @@
   block
   procedure
   interp
+  interp_spec
   program)
  (flags -w -27) ; unused var
  (libraries
