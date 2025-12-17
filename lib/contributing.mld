@@ -84,7 +84,7 @@ reverse direction.
 ]}
 
 
-3. For a simple forwards fixed-point over the call graph / block graph use {! module:Fix.Fixpoint }
+3. For a simple backwards fixed-point over the call graph / block graph use {! module:Fix.Fixpoint }
 
 See also {{:https://ocaml.org/p/fix/20250919/doc/fix/Fix/Fix/ForOrderedType/index.html}documentation for fix}
 

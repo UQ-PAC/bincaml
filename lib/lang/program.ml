@@ -133,7 +133,7 @@ module CallGraph = struct
       Procedure.blocks_to_list p |> List.to_iter |> Iter.map snd
       |> Iter.flat_map Block.stmts_iter
       |> Iter.filter_map (function
-        | Stmt.Instr_Call { procid } -> Some procid
+        | Stmt.Instr_Call (_, { procid }) -> Some procid
         | _ -> None)
       |> ID.Set.of_iter
     in
