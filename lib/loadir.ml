@@ -265,8 +265,13 @@ module BasilASTLoader = struct
         let cells = transIntVal intval |> Z.to_int in
         `Stmt
           (Instr_Load
-             ( trans_lvar p_st lvar,
-               { mem; addr = trans_expr expr; endian; cells } ))
+             {
+               lhs = trans_lvar p_st lvar;
+               mem;
+               addr = trans_expr expr;
+               endian;
+               cells;
+             })
     | Stmt_Store_Var (lhs, endian, var, addr, value, intval) ->
         let endian = trans_endian endian in
         let cells = transIntVal intval |> Z.to_int in
@@ -274,14 +279,14 @@ module BasilASTLoader = struct
         let lhs = trans_lvar p_st lhs in
         `Stmt
           (Instr_Store
-             ( lhs,
-               {
-                 mem;
-                 addr = trans_expr addr;
-                 value = trans_expr value;
-                 cells;
-                 endian;
-               } ))
+             {
+               lhs;
+               mem;
+               addr = trans_expr addr;
+               value = trans_expr value;
+               cells;
+               endian;
+             })
     | Stmt_SingleAssign (Assignment1 (lvar, expr)) ->
         `Stmt (Instr_Assign [ (trans_lvar p_st lvar, trans_expr expr) ])
     | Stmt_MultiAssign assigns ->
@@ -300,8 +305,13 @@ module BasilASTLoader = struct
         let cells = transIntVal intval |> Z.to_int in
         `Stmt
           (Instr_Load
-             ( trans_lvar p_st lvar,
-               { mem; addr = trans_expr expr; endian; cells } ))
+             {
+               lhs = trans_lvar p_st lvar;
+               mem;
+               addr = trans_expr expr;
+               endian;
+               cells;
+             })
     | Stmt_Store (endian, bident, addr, value, intval) ->
         let endian = trans_endian endian in
         let cells = transIntVal intval |> Z.to_int in
@@ -312,21 +322,21 @@ module BasilASTLoader = struct
         in
         `Stmt
           (Instr_Store
-             ( mem,
-               {
-                 mem;
-                 addr = trans_expr addr;
-                 value = trans_expr value;
-                 cells;
-                 endian;
-               } ))
+             {
+               lhs = mem;
+               mem;
+               addr = trans_expr addr;
+               value = trans_expr value;
+               cells;
+               endian;
+             })
     | Stmt_DirectCall (calllvars, bident, exprs) ->
         let n = unsafe_unsigil (`Proc bident) in
         let procid = p_st.prog.proc_names.get_id n in
         let in_param, out_param = Hashtbl.find p_st.params_order n in
         let lhs = trans_call_lhs p_st (List.map fst out_param) calllvars in
         let args = trans_call_rhs in_param exprs in
-        `Call (Instr_Call (lhs, { procid; args }))
+        `Call (Instr_Call { lhs; procid; args })
     | Stmt_IndirectCall expr ->
         `Call (Instr_IndirectCall { target = trans_expr expr })
     | Stmt_Assume expr ->
