@@ -78,7 +78,7 @@ module IDEGraph = struct
   let add_call p (st : bstate) (origin : stmt_id) (callstmt : Program.stmt) =
     let lhs, rhs, target =
       match callstmt with
-      | Stmt.(Instr_Call { lhs; procid; args }) ->
+      | Stmt.(Instr_Call (lhs, { procid; args })) ->
           let target_proc = Program.proc p procid in
           let formal_in =
             Procedure.formal_in_params target_proc |> StringMap.to_iter
@@ -357,7 +357,7 @@ module IDELive = struct
     let rhs =
       match s with
       | Instr_Load _ | Instr_Store _ | Instr_Assert _ | Instr_Assume _
-      | Instr_IntrinCall _ | Instr_IndirectCall _ ->
+      | Instr_IndirectCall _ ->
           Iter.map (fun v -> (v, Live)) read
       | Instr_Call _ -> failwith "unreachable"
       | Instr_Assign assigns ->

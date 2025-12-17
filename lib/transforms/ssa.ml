@@ -83,7 +83,7 @@ let set_params (p : Program.t) =
     let args = actual_rhs in
     Block.map ~phi:id
       (function
-        | Stmt.Instr_Call { procid } -> Instr_Call { lhs; args; procid }
+        | Stmt.Instr_Call (_, { procid }) -> Instr_Call (lhs, { args; procid })
         | i -> i)
       b
   in

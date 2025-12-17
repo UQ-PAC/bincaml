@@ -9,42 +9,40 @@ type ident = string
 let show_endian = function `Big -> "be" | `Little -> "le"
 let pp_endian fmt e = Format.pp_print_string fmt (show_endian e)
 
+type ('var, 'expr) load_expr = {
+  mem : 'var;
+  addr : 'expr;
+  cells : int;
+  endian : endian;
+}
+[@@deriving eq, ord, map]
+
+type ('var, 'expr) store_expr = {
+  mem : 'var;
+  addr : 'expr;
+  value : 'expr;
+  cells : int;
+  endian : endian;
+}
+[@@deriving eq, ord, map]
+
+type 'expr call_expr = { procid : ID.t; args : 'expr StringMap.t }
+[@@deriving eq, ord, map]
+
 type ('lvar, 'var, 'expr) t =
   | Instr_Assign of ('lvar * 'expr) list
       (** simultaneous assignment of expr snd to lvar fst*)
   | Instr_Assert of { body : 'expr }  (** assertions *)
   | Instr_Assume of { body : 'expr; branch : bool }
       (** assumption; or branch guard *)
-  | Instr_Load of {
-      lhs : 'lvar;
-      mem : 'var;
-      addr : 'expr;
-      cells : int;
-      endian : endian;
-    }
+  | Instr_Load of 'lvar * ('var, 'expr) load_expr
       (** a load from memory index [addr] up to of [addr] + [cells] (byte
           swapped depending on endiannesss, and concatenated and stored into
           [lhs]*)
-  | Instr_Store of {
-      lhs : 'lvar;
-      mem : 'var;
-      addr : 'expr;
-      value : 'expr;
-      cells : int;
-      endian : endian;
-    }
+  | Instr_Store of 'lvar * ('var, 'expr) store_expr
       (** a store into memory indexes [addr] up to of [addr] + [cells] (of
           [value] byte swapped depending on endiannesss*)
-  | Instr_IntrinCall of {
-      lhs : 'lvar StringMap.t;
-      name : string;
-      args : 'expr StringMap.t;
-    }  (** effectful operation calling a named intrinsic*)
-  | Instr_Call of {
-      lhs : 'lvar StringMap.t;
-      procid : ID.t;
-      args : 'expr StringMap.t;
-    }
+  | Instr_Call of 'lvar StringMap.t * 'expr call_expr
       (** call a procedure with the args, assigning its return parameters to lhs
       *)
   | Instr_IndirectCall of { target : 'expr }
@@ -60,14 +58,14 @@ let map ~f_lvar ~f_expr ~f_rvar e = map f_lvar f_rvar f_expr e
 *)
 let iter_mem_access stmt =
   match stmt with
-  | Instr_Load { lhs; mem; addr; endian } -> Iter.singleton mem
-  | Instr_Store { mem; addr; value; endian } -> Iter.singleton mem
+  | Instr_Load (lhs, { mem; addr; endian }) -> Iter.singleton mem
+  | Instr_Store (lhs, { mem; addr; value; endian }) -> Iter.doubleton lhs mem
   | _ -> Iter.empty
 
 (** return an iterator containing the memory written to by the statement *)
 let iter_mem_store stmt =
   match stmt with
-  | Instr_Store { mem; addr; value; endian } -> Iter.singleton mem
+  | Instr_Store (lhs, { mem; addr; value; endian }) -> Iter.singleton mem
   | _ -> Iter.empty
 
 (** get an iterator over the expresions in the RHS of the statement *)
@@ -77,14 +75,12 @@ let iter_rexpr stmt =
   | Instr_Assign ls -> List.to_iter ls >|= snd >|= fun v -> `Expr v
   | Instr_Assert { body } -> Iter.singleton (`Expr body)
   | Instr_Assume { body } -> Iter.singleton (`Expr body)
-  | Instr_Load { lhs; mem; addr; endian } ->
+  | Instr_Load (lhs, { mem; addr; endian }) ->
       Iter.doubleton (`Expr addr) (`Var mem)
-  | Instr_Store { lhs; mem; addr; value; endian } ->
+  | Instr_Store (lhs, { mem; addr; value; endian }) ->
       Iter.of_list [ `Expr value; `Expr addr; `Var mem ]
-  | Instr_IntrinCall { lhs; name; args } ->
-      StringMap.to_iter args >|= snd >|= fun e -> `Expr e
   | Instr_IndirectCall { target } -> Iter.singleton (`Expr target)
-  | Instr_Call { lhs; procid; args } ->
+  | Instr_Call (lhs, { procid; args }) ->
       StringMap.to_iter args >|= snd >|= fun e -> `Expr e
 
 (** get an iterator over the variables in the LHS of the statement *)
@@ -94,11 +90,10 @@ let iter_lvar stmt =
   | Instr_Assign ls -> List.to_iter ls >|= fst
   | Instr_Assert { body } -> Iter.empty
   | Instr_Assume { body } -> Iter.empty
-  | Instr_Load { lhs; mem; addr; endian } -> Iter.singleton lhs
-  | Instr_Store { lhs; mem; addr; value; endian } -> Iter.singleton lhs
-  | Instr_IntrinCall { lhs; name; args } -> StringMap.to_iter lhs >|= snd
+  | Instr_Load (lhs, { mem; addr; endian }) -> Iter.singleton lhs
+  | Instr_Store (lhs, { mem; addr; value; endian }) -> Iter.singleton lhs
   | Instr_IndirectCall { target } -> Iter.empty
-  | Instr_Call { lhs; procid; args } -> StringMap.to_iter lhs >|= snd
+  | Instr_Call (lhs, { procid; args }) -> StringMap.to_iter lhs >|= snd
 
 (** Get pretty-printer for il format*)
 let pretty show_lvar show_var show_expr s =
@@ -130,23 +125,16 @@ let pretty show_lvar show_var show_expr s =
   | Instr_Assert { body } -> text "assert " ^ body
   | Instr_Assume { body; branch = false } -> text "assume " ^ body
   | Instr_Assume { body; branch = true } -> text "guard " ^ body
-  | Instr_Load { lhs; mem; addr; cells; endian } ->
+  | Instr_Load (lhs, { mem; addr; cells; endian }) ->
       lhs ^ text " := " ^ text "load "
       ^ text (show_endian endian)
       ^ text " " ^ mem ^ text " " ^ addr ^ text " " ^ int cells
-  | Instr_Store { lhs; mem; addr; value; cells; endian } ->
+  | Instr_Store (lhs, { mem; addr; value; cells; endian }) ->
       lhs ^ text " := " ^ text "store "
       ^ text (show_endian endian)
       ^ text " " ^ mem ^ text " " ^ addr ^ text " " ^ value ^ text " "
       ^ int cells
-  | Instr_IntrinCall { lhs; name; args } when StringMap.cardinal lhs = 0 ->
-      append_l ~sep:nil [ text "call "; text name; r_param_list args ]
-  | Instr_IntrinCall { lhs; name; args } ->
-      append_l ~sep:nil
-        [
-          l_param_list lhs; newline ^ text "call "; text name; r_param_list args;
-        ]
-  | Instr_Call { lhs; procid; args } ->
+  | Instr_Call (lhs, { procid; args }) ->
       let n = ID.to_string procid in
       append_l ~sep:nil
         [ l_param_list lhs; newline ^ text "call "; text n; r_param_list args ]

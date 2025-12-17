@@ -405,11 +405,11 @@ module IState = struct
     let open Expr.AbstractExpr in
     let log = add_event st in
     match stmt with
-    | Stmt.Instr_Load { mem; addr; cells; endian } ->
+    | Stmt.Instr_Load (_, { mem; addr; cells; endian }) ->
         log @@ Load { mem = Var.name mem; addr }
-    | Stmt.Instr_Store { mem; addr; value } ->
+    | Stmt.Instr_Store (_, { mem; addr; value }) ->
         log @@ Store { mem = Var.name mem; addr; value }
-    | Stmt.Instr_Call { procid; args } ->
+    | Stmt.Instr_Call (_, { procid; args }) ->
         log @@ Call { procid; args = StringMap.values args |> Iter.to_list }
     | _ -> st
 
@@ -595,7 +595,7 @@ module IState = struct
         IValue.of_constant body |> IValue.as_bool |> function
         | true -> st
         | false -> raise_notrace (AssumeFail stmt))
-    | Stmt.Instr_Load { lhs; mem; addr; cells; endian } -> begin
+    | Stmt.Instr_Load (lhs, { mem; addr; cells; endian }) -> begin
         let m = lookup_memory mem st in
         let nbits = cells in
         let addr = IValue.of_constant addr in
@@ -603,7 +603,7 @@ module IState = struct
         let st = write_var lhs res st in
         st
       end
-    | Stmt.Instr_Store { lhs; mem; addr; value; cells; endian } ->
+    | Stmt.Instr_Store (lhs, { mem; addr; value; cells; endian }) ->
         let m = lookup_memory mem st in
         let lhs = lookup_memory mem st in
         assert (CCEqual.physical lhs m);
@@ -611,8 +611,7 @@ module IState = struct
         let value = IValue.bv_of_constant value in
         PageTable.write_bv m ~addr value;
         st
-    | Stmt.Instr_IntrinCall _ -> failwith "unsupported"
-    | Stmt.Instr_Call { lhs; procid; args } ->
+    | Stmt.Instr_Call (lhs, { procid; args }) ->
         let proc = ID.Map.find procid st.prog.procs in
         let st, out = call_proc st proc args in
         let st =
