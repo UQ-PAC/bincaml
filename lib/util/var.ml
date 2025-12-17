@@ -14,7 +14,11 @@ module V = struct
   let show (v : t) : string = Printf.sprintf "%s:%s" v.name (Types.show v.typ)
   let pp fmt (b : t) : unit = Format.pp_print_string fmt (show b)
   let var name ?(pure = true) ?(scope = Local) typ = { name; typ; pure; scope }
-  let hash v = Hashtbl.hash v
+
+  let hash v =
+    Hash.(
+      combine4 (Hash.string v.name) (Hash.poly v.typ) (Hash.bool v.pure)
+        (Hash.poly v.scope))
 end
 
 (** variables are interned *)
@@ -25,6 +29,8 @@ type t = V.t Fix.HashCons.cell
 
 let create name ?(pure = true) ?(scope = Local) typ =
   H.make { name; typ; pure; scope }
+
+let to_int (v : V.t Fix.HashCons.cell) = v.id
 
 let show v =
   Printf.sprintf "{id=%d ; data=%s}" (Fix.HashCons.id v)

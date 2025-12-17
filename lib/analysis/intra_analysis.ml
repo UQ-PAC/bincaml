@@ -45,24 +45,24 @@ let tf_forwards st (read_st : 'a -> Var.t -> 'b) (s : Program.stmt)
        s
 
 module MapState (V : ValDomain) = struct
-  type edge = Procedure.G.edge
-
-  module M = Map.Make (Var)
+  module M = PatriciaTree.MakeMap (Var)
 
   type val_t = V.t
   type key_t = Var.t
   type t = val_t M.t
 
+  let to_iter m = Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
+
   let show m =
-    M.to_iter m
+    Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
     |> Iter.to_string ~sep:", " (fun (k, v) ->
         Printf.sprintf "%s->%s" (Var.name k) (V.show v))
 
   let bottom = M.empty
-  let join a b = M.union (fun v a b -> Some (V.join a b)) a b
-  let equal a b = M.equal V.equal a b
-  let compare a b = M.compare V.compare a b
-  let read (v : Var.t) m = M.get_or ~default:V.bottom v m
+  let join a b = M.idempotent_union (fun v a b -> V.join a b) a b
+  let equal a b = M.reflexive_equal V.equal a b
+  let compare a b = M.reflexive_compare V.compare a b
+  let read (v : Var.t) m = M.find_opt v m |> Option.get_or ~default:V.bottom
   let update k v m = M.add k v m
   let widening a b = join a b
 end

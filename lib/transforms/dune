@@ -10,9 +10,10 @@
   livevars
   cleanup_cfg
   ide
-  intra_analysis
   may_read_uninit)
  (libraries
+  bincaml.analysis
+  patricia-tree
   loader
   intPQueue
   lang

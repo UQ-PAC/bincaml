@@ -2,7 +2,9 @@
  (public_name bincaml.analysis)
  (name analysis)
  (flags -w -27)
+ (modules valuegraph intra_analysis)
  (libraries
+   patricia-tree
   loader
   intPQueue
   lang

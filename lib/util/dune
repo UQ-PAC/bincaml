@@ -1,8 +1,8 @@
 (library
  (public_name bincaml.util)
  (name bincaml_util)
- (modules common var ID types bitvec zint)
- (libraries containers fix containers.pp containers-data zarith)
+ (modules common var ID types bitvec zint reverse_graph)
+ (libraries containers fix containers.pp containers-data zarith ocamlgraph)
  (inline_tests)
  (preprocess
   (pps
