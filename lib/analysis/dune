@@ -1,0 +1,27 @@
+(library
+ (public_name bincaml.analysis)
+ (name analysis)
+ (flags -w -27)
+ (libraries
+  loader
+  intPQueue
+  lang
+  zarith
+  fix
+  ocamlgraph
+  containers
+  containers-data
+  iter
+  containers.pp
+  trace)
+ (inline_tests)
+ (preprocess
+  (pps
+   ppx_deriving.show
+   ppx_deriving.eq
+   ppx_deriving.ord
+   ppx_deriving.map
+   ppx_deriving.iter
+   ppx_deriving.fold
+   ppx_deriving.enum
+   ppx_expect_nobase)))
