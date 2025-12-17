@@ -31,3 +31,19 @@
  (inline_tests)
  (preprocess
   (pps ppx_expect_nobase)))
+
+(library
+ (name pagetable_spec)
+ (modules pagetable_spec)
+ (libraries bincaml.ast bincaml.util qcheck-stm.stm)
+ (flags -w +27)
+ (inline_tests)
+ (preprocess
+  (pps
+   ppx_deriving.show
+   ppx_deriving.eq
+   ppx_deriving.ord
+   ppx_deriving.map
+   ppx_deriving.iter
+   ppx_deriving.fold
+   ppx_deriving.enum)))

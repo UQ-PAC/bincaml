@@ -45,6 +45,7 @@
    (alcotest :with-test)
    (qcheck-core :with-test)
    (qcheck-alcotest :with-test)
+   (qcheck-stm :with-test)
    )
  (tags
   ("add topics" "to describe" your project)))

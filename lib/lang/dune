@@ -12,7 +12,6 @@
   block
   procedure
   interp
-  pagetable_spec
   program)
  (flags -w -27) ; unused var
  (libraries

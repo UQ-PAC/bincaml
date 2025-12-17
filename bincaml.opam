@@ -33,6 +33,7 @@ depends: [
   "alcotest" {with-test}
   "qcheck-core" {with-test}
   "qcheck-alcotest" {with-test}
+  "qcheck-stm" {with-test}
   "odoc" {with-doc}
 ]
 build: [
