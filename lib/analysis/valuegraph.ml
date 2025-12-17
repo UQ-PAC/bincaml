@@ -99,43 +99,70 @@ let def_use_graph p =
   in
   def_use_vert |> Iter.fold add_vert UseDef.empty
 
-module M = PatriciaTree.MakeMap (Var)
+module type Transfer = functor
+  (G : Util.Reverse_graph.GraphSig
+         with type V.t = Vertex.t
+         with type t = UseDef.t)
+  -> sig
+  type edge = G.edge
+
+  val analyse : Program.stmt -> 'a -> 'a
+end
 
 module Analysis
+    (G :
+      Util.Reverse_graph.GraphSig
+        with type V.t = Vertex.t
+        with type t = UseDef.t)
     (V : Intra_analysis.ValDomain)
-    (A : sig
-      type edge = UseDef.edge
-
-      val analyse : Program.stmt -> 'a -> 'a
-    end) =
+    (A : Transfer) =
 struct
-  module type Edge = module type of UseDef.E
-
   module StateDomain = Intra_analysis.MapState (V)
 
-  module State (E : Edge) = struct
+  module State = struct
     include StateDomain
-    include A
+    include A (G)
 
-    let analyze edge data =
-      let v = E.dst edge in
+    let analyze (edge : G.edge) data =
+      let v = G.E.dst edge in
       match v with
       | Vertex.(Phi (lhs, rhs)) ->
           update lhs
             (rhs |> List.fold_left (fun a v -> V.join a (read v data)) V.bottom)
             data
-      | Vertex.(Stmt s) -> A.analyse s data
+      | Vertex.(Stmt s) -> analyse s data
       | _ -> data
   end
 
-  module Fwd = UseDef
-  module Rev = Util.Reverse_graph.RevG (UseDef)
-  module RevTop = Graph.WeakTopological.Make (Rev)
-  module FwdTop = Graph.WeakTopological.Make (UseDef)
-  module FwdAnalysis = Graph.ChaoticIteration.Make (Fwd) (State (Fwd.E))
-  module RevAnalysis = Graph.ChaoticIteration.Make (Rev) (State (Rev.E))
+  module Topo = Graph.WeakTopological.Make (G)
+  module Analysis = Graph.ChaoticIteration.Make (G) (State)
 
-  let analyse_proc_fwd p =
+  let analyse root ?(init = fun v -> StateDomain.bottom) ~widen_set ~delay_widen
+      p =
     let g = def_use_graph p in
-    FwdAnalysis.recurse g (FwdTop.recursive_scc g Entry)
+    Analysis.recurse g (Topo.recursive_scc g root) init widen_set delay_widen
+end
+
+module AnalysisFwd (V : Intra_analysis.ValDomain) (TF : Transfer) = struct
+  include Analysis (UseDef) (V) (TF)
+
+  let (analyse :
+        ?init:(Vertex.t -> State.t) ->
+        widen_set:Vertex.t Graph.ChaoticIteration.widening_set ->
+        delay_widen:int ->
+        (Var.t, V.t) Procedure.t ->
+        State.t Analysis.M.t) =
+    analyse Entry
+end
+
+module AnalysisRev (V : Intra_analysis.ValDomain) (TF : Transfer) = struct
+  include Analysis (Util.Reverse_graph.RevG (UseDef)) (V) (TF)
+
+  let (analyse :
+        ?init:(Vertex.t -> State.t) ->
+        widen_set:Vertex.t Graph.ChaoticIteration.widening_set ->
+        delay_widen:int ->
+        (Var.t, V.t) Procedure.t ->
+        State.t Analysis.M.t) =
+    analyse Return
 end
