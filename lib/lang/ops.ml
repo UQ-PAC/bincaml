@@ -13,61 +13,6 @@ module Maps = struct
   let hash = Hashtbl.hash
 end
 
-(*
-
-(* this is a bad idea*)
-
-module Tuple = struct
-  type intrin = [ `Tuple ] [@@deriving show { with_path = false }, eq, ord]
-
-  type unary = [ `TupleGet of int ]
-  [@@deriving show { with_path = false }, eq, ord]
-
-  type binary = [ `TupleSet of int ]
-  [@@deriving show { with_path = false }, eq, ord]
-
-  let eval_unary (op : unary) l = match op with `TupleGet i -> List.nth l i
-
-  let eval_binary (op : binary) t v =
-    match op with `TupleSet i -> List.set_at_idx i v t
-end
-
-module NamedTuple = struct
-  type intrin = [ `NamedTuple of string list ]
-  [@@deriving show { with_path = false }, eq, ord]
-
-  type unary = [ `NamedTupleGet of string ]
-  [@@deriving show { with_path = false }, eq, ord]
-
-  type binary = [ `NamedTupleSet of string ]
-  [@@deriving show { with_path = false }, eq, ord]
-
-  let eval_unary (op : unary) l =
-    match op with `NamedTupleGet i -> StringMap.find i l
-
-  let eval_binary (op : binary) t v =
-    match op with `NamedTupleSet i -> StringMap.add i t
-end
-
-module Memory = struct
-  type endian = [ `Big | `Little ]
-  [@@deriving show { with_path = false }, eq, ord]
-
-  (* memory, addr *)
-  type 'e binary = [ `MemLoad of int * endian * 'e * 'e ]
-  [@@deriving show { with_path = false }, eq, ord]
-
-  (* memory, addr, value*)
-  type intrin = [ `MemUpdate of int * endian ]
-  [@@deriving show { with_path = false }, eq, ord]
-end
-
-module Calls = struct
-  (* memory, addr, value*)
-  type intrin = [ `CallProc of ID.t ]
-end
-*)
-
 module LogicalOps = struct
   type const = [ `Bool of bool ]
   [@@deriving show { with_path = false }, eq, ord]

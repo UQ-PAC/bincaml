@@ -42,7 +42,7 @@ let solve (prog : Program.t) =
           let calls =
             Block.stmts_iter block
             |> Iter.filter_map (function
-              | Stmt.Instr_Call (_, { procid }) -> Some (valuations procid)
+              | Stmt.Instr_Call { procid } -> Some (valuations procid)
               | _ -> None)
           in
           Iter.cons local calls |> Iter.fold RWSets.leq_join a)
