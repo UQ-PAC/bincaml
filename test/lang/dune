@@ -35,7 +35,7 @@
 (library
  (name pagetable_spec)
  (modules pagetable_spec)
- (libraries zarith bincaml.ast bincaml.util qcheck-stm.stm)
+ (libraries zarith bincaml.ast bincaml.util qcheck-stm.stm qcheck-core)
  (root_module deps)
  (flags -w +27)
  (preprocess
