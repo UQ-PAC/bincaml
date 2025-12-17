@@ -10,6 +10,7 @@ BOT -> readuninit -> write
 *)
 open Util.Common
 open Lang
+open Analysis
 
 module ReadUninit = struct
   let name = "read-uninitialised-analysis"
@@ -31,7 +32,7 @@ module ReadUninit = struct
 end
 
 module ReadUninitAnalysis = struct
-  include Intra_analysis.MapState (ReadUninit)
+  include Analysis.Intra_analysis.MapState (ReadUninit)
 
   let name = "intra-read-uninit-analysis"
 
@@ -52,7 +53,7 @@ module ReadUninitAnalysis = struct
     | Bot -> Write
 
   let read_uninit_vars st =
-    M.to_iter st
+    to_iter st
     |> Iter.filter_map (fun (i, v) ->
         match v with ReadUninit.ReadUninit -> Some i | _ -> None)
 

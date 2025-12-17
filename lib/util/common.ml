@@ -59,3 +59,5 @@ module VarSet = Set.Make (Var)
 
 module Bitvec = Bitvec
 module PrimInt = Zint
+
+(** pattree *)
