@@ -23,7 +23,9 @@
   containers-data
   iter
   containers.pp
-  trace)
+  trace
+  bincaml.util
+  ppx_expect_nobase.common)
  (inline_tests)
  (preprocess
   (pps

@@ -5,10 +5,14 @@
  (modules main script)
  (libraries
   bincaml.ast
+  bincaml.util
+  bincaml.loader
+  bincaml.transforms
   bincaml
   cmdliner
-  containers.pp
+  iter
   containers
+  containers.pp
   containers.unix
   trace
   trace-tef))

@@ -2,13 +2,13 @@
  (name expr_gen)
  (modules expr_gen)
  (flags -w -27)
- (libraries qcheck-core containers containers.unix lang bincaml))
+ (libraries qcheck-core (re_export containers) (re_export iter) (re_export containers.unix) (re_export bincaml.ast) (re_export bincaml.util) zarith))
 
 (executable
  (name expr_eval_qcheck)
  (modules expr_eval_qcheck)
  (flags -w -27)
- (libraries str expr_gen alcotest qcheck-alcotest))
+ (libraries str expr_gen alcotest qcheck-alcotest qcheck-core))
 
 (rule
  (alias runtest)
@@ -27,7 +27,7 @@
  (name expr_eval_expect)
  (modules expr_eval_expect stmt interp)
  (flags -w -27)
- (libraries expr_gen loader)
+ (libraries expr_gen loader ppx_expect_nobase.common)
  (inline_tests)
  (preprocess
   (pps ppx_expect_nobase)))
@@ -35,9 +35,9 @@
 (library
  (name pagetable_spec)
  (modules pagetable_spec)
- (libraries bincaml.ast bincaml.util qcheck-stm.stm)
+ (libraries zarith bincaml.ast bincaml.util qcheck-stm.stm)
+ (root_module deps)
  (flags -w +27)
- (inline_tests)
  (preprocess
   (pps
    ppx_deriving.show
