@@ -101,3 +101,4 @@ module Spec : STM.Spec = struct
     | Write _, STM.Res ((STM.Unit, _), ()) -> true
     | _ -> false
 end
+
