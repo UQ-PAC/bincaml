@@ -33,6 +33,19 @@ module Model = struct
                (Z.(addr + ~$1), IntegerMap.add addr c state))
              (addr, state)
         |> snd
+
+  let arb_cmd = failwith ""
 end
 
-module Spec : STM.Spec = struct end
+module Spec : STM.Spec = struct
+  include Model
+
+  type sut = Lang.Interp.PageTable.t
+
+  let init_sut () = Lang.Interp.PageTable.create ~page_len:9 ?use_random_init:None ()
+  let cleanup _ = ()
+
+  let precond cmd st = true
+  let run cmd st = failwith ""
+  let postcond cmd st res = true
+end
