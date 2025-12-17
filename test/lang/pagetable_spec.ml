@@ -23,16 +23,12 @@ module Model = struct
 
   let init_state = IntegerMap.empty
 
-  let next_state cmd state =
+  let next_state cmd st =
     match cmd with
-    | Read _ -> state
+    | Read _ -> st
     | Write { addr; bv } ->
-        Bitvec.to_bytes bv
-        |> Bytes.fold_left
-             (fun (addr, state) c ->
-               (Z.(addr + ~$1), IntegerMap.add addr c state))
-             (addr, state)
-        |> snd
+        Bitvec.to_bytes bv |> Bytes.to_seq
+        |> Seq.fold_lefti (fun st i c -> IntegerMap.add Z.(addr + ~$i) c st) st
 
   let read_byte ~addr st =
     IntegerMap.find_opt addr st |> Option.value ~default:'\x00'
@@ -50,8 +46,8 @@ module Model = struct
       | [] -> arb_posint
       | addrs -> oneof [ oneofl addrs; arb_posint ]
     in
-    let+ fuzz = small_signed_int in
-    Z.(addr + ~$fuzz)
+    let+ fuzz = QCheck.Gen.int_range (-10) 10 in
+    Z.(max zero @@ (addr + ~$fuzz))
 
   let arb_cmd st =
     let open QCheck.Gen in
@@ -80,7 +76,9 @@ module Spec : STM.Spec = struct
   let cleanup _ = ()
 
   let precond cmd _ =
-    match cmd with Read _ -> true | Write { bv; _ } -> bv.w mod 8 == 0
+    match cmd with
+    | Read { addr; _ } -> Z.(geq addr zero)
+    | Write { addr; bv } -> Z.(geq addr zero) && bv.w mod 8 == 0
 
   type 'a STM.ty += BitvecTy : Bitvec.t STM.ty
 
