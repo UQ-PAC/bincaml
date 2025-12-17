@@ -4,6 +4,40 @@ open Lang
 open Common
 open Containers
 
+module type ValueAbstraction = sig
+  val name : string
+
+  type t
+
+  val show : t -> string
+  val join : t -> t -> t
+  val equal : t -> t -> bool
+
+  (** evaluate operators *)
+
+  val eval_const : Lang.Ops.AllOps.const -> t
+  val eval_unop : Lang.Ops.AllOps.unary -> t -> t
+  val eval_binop : Lang.Ops.AllOps.binary -> t -> t -> t
+  val eval_intrin : Lang.Ops.AllOps.intrin -> t list -> t
+end
+
+module EvalValueAbstraction (V : ValueAbstraction) = struct
+  type t
+
+  let eval read expr =
+    let open Expr.AbstractExpr in
+    let eval_alg e =
+      match e with
+      | RVar v -> read v
+      | Constant c -> V.eval_const c
+      | UnaryExpr (op, e) -> V.eval_unop op e
+      | BinaryExpr (op, a, b) -> V.eval_binop op a b
+      | ApplyIntrin (op, es) -> V.eval_intrin op es
+      | _ -> failwith "unsupported"
+    in
+    Lang.Expr.BasilExpr.cata eval_alg
+end
+
 module type ValDomain = sig
   val name : string
 
@@ -15,7 +49,6 @@ module type ValDomain = sig
   val equal : t -> t -> bool
   val compare : t -> t -> int
   val widening : t -> t -> t
-  (*val eval : ('c, 'v, 'e, 'f, 'g, t * Types.t) Expr.AbstractExpr.t -> t*)
 end
 
 module type StateDomain = sig

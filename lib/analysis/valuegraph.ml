@@ -99,14 +99,49 @@ let def_use_graph p =
   in
   def_use_vert |> Iter.fold add_vert UseDef.empty
 
-module type Transfer = functor
-  (G : Util.Reverse_graph.GraphSig
-         with type V.t = Vertex.t
-         with type t = UseDef.t)
-  -> sig
-  type edge = G.edge
-
+module type Transfer = sig
   val analyse : Program.stmt -> 'a -> 'a
+end
+
+module StateTransferFwd
+    (V : Intra_analysis.ValDomain)
+    (VE : Intra_analysis.ValueAbstraction with type t = V.t)
+    (SF : sig
+      val transfer : ('a, V.t, Program.e -> V.t) Stmt.t -> (Var.t * V.t) Iter.t
+    end) =
+struct
+  open struct
+    module StateDomain = Intra_analysis.MapState (V)
+    module EV = Intra_analysis.EvalValueAbstraction (VE)
+  end
+
+  let fwd_analyse stmt dom =
+    Stmt.map ~f_lvar:id
+      ~f_rvar:(fun v -> StateDomain.read v dom)
+      ~f_expr:(EV.eval (fun v -> StateDomain.read v dom))
+      stmt
+    |> SF.transfer
+    |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) dom
+end
+
+module StateTransferRev
+    (V : Intra_analysis.ValDomain)
+    (VE : Intra_analysis.ValueAbstraction with type t = V.t)
+    (SF : sig
+      val transfer : (V.t, 'a, 'b) Stmt.t -> (Var.t * V.t) Iter.t
+    end) =
+struct
+  open struct
+    module StateDomain = Intra_analysis.MapState (V)
+    module EV = Intra_analysis.EvalValueAbstraction (VE)
+  end
+
+  let rev_analyse stmt dom =
+    Stmt.map
+      ~f_lvar:(fun v -> StateDomain.read v dom)
+      ~f_rvar:id ~f_expr:id stmt
+    |> SF.transfer
+    |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) dom
 end
 
 module Analysis
@@ -121,7 +156,8 @@ struct
 
   module State = struct
     include StateDomain
-    include A (G)
+
+    type edge = G.edge
 
     let analyze (edge : G.edge) data =
       let v = G.E.dst edge in
@@ -130,7 +166,7 @@ struct
           update lhs
             (rhs |> List.fold_left (fun a v -> V.join a (read v data)) V.bottom)
             data
-      | Vertex.(Stmt s) -> analyse s data
+      | Vertex.(Stmt s) -> A.analyse s data
       | _ -> data
   end
 
