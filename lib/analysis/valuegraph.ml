@@ -1,204 +1,188 @@
-(** This is a def-use graph for a procedure in ssa form. *)
-
-(** - vertices are assignment statements or phis
-    - edges are data dependency *)
-
+open Util.Common
 open Lang
-open Lang.Common
 
-module Vertex = struct
-  type t = Entry | Return | Stmt of Program.stmt | Phi of Var.t * Var.t list
-  [@@deriving ord, eq]
+module Open = struct
+  type ('var, 'ops, 'e) valuegraph =
+    | Func of 'ops * 'e list
+    | Var of 'var
+    | LVar of 'var
+  [@@deriving eq, ord]
 
-  let hash v =
+  let hash hash_var hash_op hashf v =
     match v with
-    | Stmt s -> Hash.combine2 251 (Hashtbl.hash s)
-    | Phi (l, r) -> Hash.combine2 271 (Hash.list Var.hash r)
-    | o -> Hashtbl.hash o
+    | Func (op, args) -> Hash.combine2 (hash_op op) (Hash.list hashf args)
+    | Var v -> Hash.combine2 1 (hash_var v)
+    | LVar v -> Hash.combine2 3 (hash_var v)
+
+  let equal eq_var eq_op eq_e v1 v2 =
+    match (v1, v2) with
+    | Var v1, Var v2 -> eq_var v1 v2
+    | Func (op1, args1), Func (op2, args2) ->
+        eq_op op1 op2 && Equal.list eq_e args1 args2
+    | LVar v1, LVar v2 -> eq_var v1 v2
+    | _ -> false
 end
 
-module UseDef = Graph.Persistent.Digraph.ConcreteBidirectional (Vertex)
-module B = Graph.Builder.P (UseDef)
-module MDeps = CCMultiMap.Make (Var) (Vertex)
+include struct
+  open Lang.Ops.AllOps
 
-type defuse = { var_to_use : MDeps.t; var_to_def : MDeps.t }
+  type endian = [ `Little | `Big ]
 
-let vert_defines p =
-  Vertex.(
+  type stmts =
+    [ `Assign
+    | `Call of ID.t
+    | `Assert
+    | `Assume
+    | `Guard
+    | `Store of int * endian
+    | `Load of int * endian ]
+
+  type 'a ops_all = [< stmts | const | unary | binary | intrin ] as 'a
+  type ops = [ stmts | const | unary | binary | intrin ]
+end
+
+module HashCons = struct
+  type 'a cell = { id : int; data : 'a }
+
+  module Make (M : Fix.MEMOIZER) = struct
+    type data = M.key
+
+    module F = Fix.HashCons
+
+    let visibly_make () =
+      let gensym = Fix.Gensym.generator () in
+      let make, tbl =
+        M.visibly_memoize (fun data ->
+            let v = { id = Fix.Gensym.fresh gensym; data } in
+            v)
+      in
+      (make, tbl, gensym)
+
+    let make () =
+      let gensym = Fix.Gensym.generator () in
+      M.memoize (fun data ->
+          let v = { id = Fix.Gensym.fresh gensym; data } in
+          v)
+  end
+
+  let id x = x.id
+  let data x = x.data
+  let hash a = Hashtbl.hash a.data
+  let equal x y = Int.equal x.id y.id
+  let compare x y = Int.compare x.id y.id
+end
+
+module ValueGraph = struct
+  type cell = fix_type HashCons.cell
+  and fix_type = E of (Var.t, ops, cell) Open.valuegraph [@@unboxed]
+
+  module Data = struct
+    type t = fix_type
+
+    let hash (v : fix_type) =
+      match v with E v -> Open.hash Var.hash Hash.poly HashCons.hash v
+
+    let equal (x : fix_type) (y : fix_type) =
+      match (x, y) with
+      | E x, E y -> Open.equal Var.equal Equal.poly HashCons.equal x y
+  end
+
+  let compare = HashCons.compare
+  let equal = HashCons.equal
+  let hash = HashCons.hash
+
+  type t = cell
+end
+
+let rec expr_of_expr fixvg (s : Program.e) : ValueGraph.t =
+  let open Expr.AbstractExpr in
+  let open Expr.BasilExpr in
+  let tx_alg e : ValueGraph.t =
+    Open.(
+      match (e : ValueGraph.t abstract_expr) with
+      | RVar v -> fixvg (Var v)
+      | Constant (#const as c) -> fixvg (Func (c, []))
+      | UnaryExpr ((#unary as o), a) -> fixvg (Func (o, [ a ]))
+      | BinaryExpr ((#binary as o), l, r) -> fixvg (Func (o, [ l; r ]))
+      | ApplyIntrin ((#intrin as o), ls) -> fixvg (Func (o, ls))
+      | ApplyFun (_, _) -> failwith "unsupp"
+      | Binding (_, _) -> failwith "unsupp")
+  in
+  cata tx_alg s
+
+let expr_of_stmt (fixvg : ('a, 'b, 'c) Open.valuegraph -> ValueGraph.t)
+    (s : Program.stmt) : ValueGraph.t Iter.t =
+  let open Open in
+  let expr_of_expr = expr_of_expr fixvg in
+  match s with
+  | Stmt.Instr_Assign l ->
+      List.to_iter l
+      |> Iter.map (fun (l, r) ->
+          fixvg (Func (`Assign, [ fixvg (LVar l); expr_of_expr r ])))
+  | Stmt.Instr_Assert { body } ->
+      Iter.singleton (fixvg @@ Func (`Assert, [ expr_of_expr body ]))
+  | Stmt.Instr_Assume { body; branch = false } ->
+      Iter.singleton (fixvg @@ Func (`Assume, [ expr_of_expr body ]))
+  | Stmt.Instr_Assume { body; branch = true } ->
+      Iter.singleton (fixvg @@ Func (`Guard, [ expr_of_expr body ]))
+  | Stmt.Instr_Load { lhs; mem; addr; cells; endian } ->
+      Iter.singleton
+        (fixvg
+        @@ Func
+             ( `Load (cells, endian),
+               [ fixvg (Var lhs); fixvg (Var mem); expr_of_expr addr ] ))
+  | Stmt.Instr_Store { lhs; mem; addr; cells; endian; value } ->
+      Iter.singleton
+        (fixvg
+           (Func
+              ( `Store (cells, endian),
+                [
+                  fixvg (Var lhs);
+                  fixvg (Var mem);
+                  expr_of_expr addr;
+                  expr_of_expr value;
+                ] )))
+  | Stmt.Instr_Call { procid; args; lhs } -> failwith ""
+  | Stmt.Instr_IndirectCall _ -> failwith ""
+  | Stmt.Instr_IntrinCall _ -> failwith ""
+
+let vert_to_vg fixvg p =
+  Defuse.Vertex.(
     function
-    | Phi (lhs, _) -> Iter.singleton lhs
-    | Stmt s -> Stmt.iter_assigned s
-    | Entry -> Procedure.formal_in_params p |> StringMap.values
-    | Return -> Iter.empty)
+    | Phi (lhs, rhs) ->
+        List.to_iter rhs
+        |> Iter.map (fun rhs ->
+            Open.(
+              fixvg @@ Func (`Assign, [ fixvg @@ LVar lhs; fixvg @@ Var rhs ])))
+    | Stmt s -> expr_of_stmt fixvg s
+    | Entry ->
+        Procedure.formal_in_params p
+        |> StringMap.values
+        |> Iter.map (fun v -> fixvg (Open.Var v))
+    | Return ->
+        Procedure.formal_in_params p
+        |> StringMap.values
+        |> Iter.map (fun v -> fixvg (Open.LVar v)))
 
-let vert_uses p =
-  Vertex.(
-    function
-    | Phi (_, rhs) -> List.to_iter rhs
-    | Stmt s -> Stmt.free_vars_iter s
-    | Entry -> Iter.empty
-    | Return -> Procedure.formal_in_params p |> StringMap.values)
+module BackingMap = struct
+  include Fix.Glue.HashTablesAsImperativeMaps (ValueGraph.Data)
 
-let def_use_vert p =
-  Block.(
-    Procedure.iter_blocks_topo_fwd p
-    |> Iter.flat_map (fun (id, (b : Program.bloc)) ->
-        let phi_def_use =
-          List.to_iter b.phis
-          |> Iter.map (function { lhs; rhs } ->
-              Vertex.Phi (lhs, List.map snd rhs))
-        in
-        let block_def_use =
-          Block.stmts_iter b |> Iter.map (fun stmt -> Vertex.Stmt stmt)
-        in
-        Iter.append phi_def_use block_def_use))
-  |> Iter.persistent
+  let to_iter m = Iter.from_iter (fun f -> iter (fun k v -> f (k, v)) m)
+end
 
-let def_use_maps ?(require_full_ssa = false) ?def_use p =
-  let def_use_vert = Option.get_or ~default:(def_use_vert p) def_use in
-  let to_def =
-    def_use_vert
-    |> Iter.flat_map (fun v -> vert_defines p v |> Iter.map (fun s -> (s, v)))
-    |> MDeps.of_iter
+module Memo = Fix.Memoize.Make (BackingMap)
+
+module type HashConsed = module type of HashCons.Make (Memo)
+
+module HC = HashCons.Make (Memo)
+module Graph = CCMultiMap.Make (Int) (Int)
+
+let of_proc p : ValueGraph.t BackingMap.t =
+  let stmts = Defuse.def_use_vert p in
+  let make, table, gensym = HC.visibly_make () in
+  let table : ValueGraph.t BackingMap.t = table in
+  let fix : ('a, 'b, 'c) Open.valuegraph -> ValueGraph.t =
+   fun v -> make (E v)
   in
-  if require_full_ssa then
-    (* we let memory appear in the value graph with havoc semantics so allow
-       skipping this assertion *)
-    assert (
-      MDeps.keys to_def
-      |> Iter.map (MDeps.count to_def)
-      |> Iter.for_all (fun i -> i <= 1));
-  let to_use =
-    def_use_vert
-    |> Iter.flat_map (fun v -> vert_uses p v |> Iter.map (fun s -> (s, v)))
-    |> MDeps.of_iter
-  in
-  { var_to_use = to_use; var_to_def = to_def }
-
-let def_use_graph p =
-  let def_use_vert = def_use_vert p in
-  let to_use, to_def =
-    def_use_maps ~def_use:def_use_vert p |> function
-    | { var_to_use; var_to_def } -> (var_to_use, var_to_def)
-  in
-  let add_vert graph vert =
-    let graph = B.add_vertex graph vert in
-    let graph =
-      vert_defines p vert
-      |> Iter.flat_map (fun v -> MDeps.find_iter to_use v)
-      |> Iter.fold (fun g use -> B.add_edge g vert use) graph
-    in
-    (* I feel like it shouldn't be neccessary to add the edge in both
-       directions, it would probably only occur due to bugs? *)
-    let graph =
-      vert_uses p vert
-      |> Iter.flat_map (fun v -> MDeps.find_iter to_def v)
-      |> Iter.fold (fun g def -> B.add_edge g def vert) graph
-    in
-    graph
-  in
-  def_use_vert |> Iter.fold add_vert UseDef.empty
-
-module type Transfer = sig
-  val analyse : Program.stmt -> 'a -> 'a
-end
-
-module StateTransferFwd
-    (V : Intra_analysis.ValDomain)
-    (VE : Intra_analysis.ValueAbstraction with type t = V.t)
-    (SF : sig
-      val transfer : ('a, V.t, Program.e -> V.t) Stmt.t -> (Var.t * V.t) Iter.t
-    end) =
-struct
-  open struct
-    module StateDomain = Intra_analysis.MapState (V)
-    module EV = Intra_analysis.EvalValueAbstraction (VE)
-  end
-
-  let fwd_analyse stmt dom =
-    Stmt.map ~f_lvar:id
-      ~f_rvar:(fun v -> StateDomain.read v dom)
-      ~f_expr:(EV.eval (fun v -> StateDomain.read v dom))
-      stmt
-    |> SF.transfer
-    |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) dom
-end
-
-module StateTransferRev
-    (V : Intra_analysis.ValDomain)
-    (VE : Intra_analysis.ValueAbstraction with type t = V.t)
-    (SF : sig
-      val transfer : (V.t, 'a, 'b) Stmt.t -> (Var.t * V.t) Iter.t
-    end) =
-struct
-  open struct
-    module StateDomain = Intra_analysis.MapState (V)
-    module EV = Intra_analysis.EvalValueAbstraction (VE)
-  end
-
-  let rev_analyse stmt dom =
-    Stmt.map
-      ~f_lvar:(fun v -> StateDomain.read v dom)
-      ~f_rvar:id ~f_expr:id stmt
-    |> SF.transfer
-    |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) dom
-end
-
-module Analysis
-    (G :
-      Util.Reverse_graph.GraphSig
-        with type V.t = Vertex.t
-        with type t = UseDef.t)
-    (V : Intra_analysis.ValDomain)
-    (A : Transfer) =
-struct
-  module StateDomain = Intra_analysis.MapState (V)
-
-  module State = struct
-    include StateDomain
-
-    type edge = G.edge
-
-    let analyze (edge : G.edge) data =
-      let v = G.E.dst edge in
-      match v with
-      | Vertex.(Phi (lhs, rhs)) ->
-          update lhs
-            (rhs |> List.fold_left (fun a v -> V.join a (read v data)) V.bottom)
-            data
-      | Vertex.(Stmt s) -> A.analyse s data
-      | _ -> data
-  end
-
-  module Topo = Graph.WeakTopological.Make (G)
-  module Analysis = Graph.ChaoticIteration.Make (G) (State)
-
-  let analyse root ?(init = fun v -> StateDomain.bottom) ~widen_set ~delay_widen
-      p =
-    let g = def_use_graph p in
-    Analysis.recurse g (Topo.recursive_scc g root) init widen_set delay_widen
-end
-
-module AnalysisFwd (V : Intra_analysis.ValDomain) (TF : Transfer) = struct
-  include Analysis (UseDef) (V) (TF)
-
-  let (analyse :
-        ?init:(Vertex.t -> State.t) ->
-        widen_set:Vertex.t Graph.ChaoticIteration.widening_set ->
-        delay_widen:int ->
-        (Var.t, V.t) Procedure.t ->
-        State.t Analysis.M.t) =
-    analyse Entry
-end
-
-module AnalysisRev (V : Intra_analysis.ValDomain) (TF : Transfer) = struct
-  include Analysis (Util.Reverse_graph.RevG (UseDef)) (V) (TF)
-
-  let (analyse :
-        ?init:(Vertex.t -> State.t) ->
-        widen_set:Vertex.t Graph.ChaoticIteration.widening_set ->
-        delay_widen:int ->
-        (Var.t, V.t) Procedure.t ->
-        State.t Analysis.M.t) =
-    analyse Return
-end
+  let _ = stmts |> Iter.flat_map (vert_to_vg fix p) in
+  table
