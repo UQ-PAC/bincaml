@@ -3,7 +3,6 @@
 (name bincaml)
 
 (generate_opam_files true)
-(implicit_transitive_deps false)
 
 (source
  (github username/reponame))
