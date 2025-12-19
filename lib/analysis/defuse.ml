@@ -99,58 +99,13 @@ let def_use_graph p =
   in
   def_use_vert |> Iter.fold add_vert UseDef.empty
 
-module type Transfer = sig
-  val analyse : Program.stmt -> 'a -> 'a
-end
-
-module StateTransferFwd
-    (V : Intra_analysis.ValDomain)
-    (VE : Intra_analysis.ValueAbstraction with type t = V.t)
-    (SF : sig
-      val transfer : ('a, V.t, Program.e -> V.t) Stmt.t -> (Var.t * V.t) Iter.t
-    end) =
-struct
-  open struct
-    module StateDomain = Intra_analysis.MapState (V)
-    module EV = Intra_analysis.EvalValueAbstraction (VE)
-  end
-
-  let fwd_analyse stmt dom =
-    Stmt.map ~f_lvar:id
-      ~f_rvar:(fun v -> StateDomain.read v dom)
-      ~f_expr:(EV.eval (fun v -> StateDomain.read v dom))
-      stmt
-    |> SF.transfer
-    |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) dom
-end
-
-module StateTransferRev
-    (V : Intra_analysis.ValDomain)
-    (VE : Intra_analysis.ValueAbstraction with type t = V.t)
-    (SF : sig
-      val transfer : (V.t, 'a, 'b) Stmt.t -> (Var.t * V.t) Iter.t
-    end) =
-struct
-  open struct
-    module StateDomain = Intra_analysis.MapState (V)
-    module EV = Intra_analysis.EvalValueAbstraction (VE)
-  end
-
-  let rev_analyse stmt dom =
-    Stmt.map
-      ~f_lvar:(fun v -> StateDomain.read v dom)
-      ~f_rvar:id ~f_expr:id stmt
-    |> SF.transfer
-    |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) dom
-end
-
-module Analysis
+module DefUseGraphAnalysis
     (G :
       Util.Reverse_graph.GraphSig
         with type V.t = Vertex.t
         with type t = UseDef.t)
-    (V : Intra_analysis.ValDomain)
-    (A : Transfer) =
+    (V : Intra_analysis.Lattice)
+    (A : Intra_analysis.Transfer with type t = Intra_analysis.MapState(V).t) =
 struct
   module StateDomain = Intra_analysis.MapState (V)
 
@@ -166,39 +121,51 @@ struct
           update lhs
             (rhs |> List.fold_left (fun a v -> V.join a (read v data)) V.bottom)
             data
-      | Vertex.(Stmt s) -> A.analyse s data
+      | Vertex.(Stmt s) -> A.transfer s data
       | _ -> data
   end
 
   module Topo = Graph.WeakTopological.Make (G)
-  module Analysis = Graph.ChaoticIteration.Make (G) (State)
+  module DuAnalysis = Graph.ChaoticIteration.Make (G) (State)
 
   let analyse root ?(init = fun v -> StateDomain.bottom) ~widen_set ~delay_widen
       p =
     let g = def_use_graph p in
-    Analysis.recurse g (Topo.recursive_scc g root) init widen_set delay_widen
+    DuAnalysis.recurse g (Topo.recursive_scc g root) init widen_set delay_widen
+
+  let analyse_graph g root ?(init = fun v -> StateDomain.bottom) ~widen_set
+      ~delay_widen p =
+    DuAnalysis.recurse g (Topo.recursive_scc g root) init widen_set delay_widen
 end
 
-module AnalysisFwd (V : Intra_analysis.ValDomain) (TF : Transfer) = struct
-  include Analysis (UseDef) (V) (TF)
+module AnalysisFwd
+    (V : Intra_analysis.ValueAbstraction)
+    (TRF : Intra_analysis.ForwardStmtTransfer with type t = V.t) =
+struct
+  module TF = Intra_analysis.StateTransferFwd (V) (TRF)
+  include DefUseGraphAnalysis (UseDef) (V) (TF)
 
   let (analyse :
         ?init:(Vertex.t -> State.t) ->
         widen_set:Vertex.t Graph.ChaoticIteration.widening_set ->
         delay_widen:int ->
-        (Var.t, V.t) Procedure.t ->
-        State.t Analysis.M.t) =
+        Program.proc ->
+        State.t DuAnalysis.M.t) =
     analyse Entry
 end
 
-module AnalysisRev (V : Intra_analysis.ValDomain) (TF : Transfer) = struct
-  include Analysis (Util.Reverse_graph.RevG (UseDef)) (V) (TF)
+module AnalysisRev
+    (V : Intra_analysis.ValueAbstraction)
+    (TRF : Intra_analysis.ReverseStmtTransfer with type t = V.t) =
+struct
+  module TF = Intra_analysis.StateTransferRev (V) (TRF)
+  include DefUseGraphAnalysis (Util.Reverse_graph.RevG (UseDef)) (V) (TF)
 
   let (analyse :
         ?init:(Vertex.t -> State.t) ->
         widen_set:Vertex.t Graph.ChaoticIteration.widening_set ->
         delay_widen:int ->
-        (Var.t, V.t) Procedure.t ->
-        State.t Analysis.M.t) =
+        Program.proc ->
+        State.t DuAnalysis.M.t) =
     analyse Return
 end

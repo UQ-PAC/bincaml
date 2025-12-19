@@ -2,9 +2,9 @@
  (public_name bincaml.analysis)
  (name analysis)
  (flags -w -27)
- (modules defuse intra_analysis valuegraph)
+ (modules defuse intra_analysis valuegraph defuse_bool)
  (libraries
-   patricia-tree
+  patricia-tree
   loader
   intPQueue
   lang
