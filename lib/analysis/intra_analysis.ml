@@ -110,12 +110,20 @@ end
 module type ForwardStmtTransfer = sig
   type t
 
+  val do_assume :
+    (Var.t -> t) -> Program.e -> is_guard:bool -> (Var.t * t) Iter.t
+
+  val do_assert : (Var.t -> t) -> Program.e -> (Var.t * t) Iter.t
   val transfer : (Var.t, t, t) Stmt.t -> (Var.t * t) Iter.t
 end
 
 module type ReverseStmtTransfer = sig
   type t
 
+  val do_assume :
+    (Var.t -> t) -> Program.e -> is_guard:bool -> (Var.t * t) Iter.t
+
+  val do_assert : (Var.t -> t) -> Program.e -> (Var.t * t) Iter.t
   val transfer : (t, Var.t, Program.e) Stmt.t -> (Var.t * t) Iter.t
 end
 
@@ -150,11 +158,20 @@ struct
 
   type t = StateDomain.t
 
+  let do_assume read e ~is_guard = SF.do_assume read e ~is_guard
+  let do_assert read e = SF.do_assert read e
+
   let transfer (stmt : Program.stmt) dom =
-    Stmt.map
-      ~f_lvar:(fun v -> StateDomain.read v dom)
-      ~f_rvar:id ~f_expr:id stmt
-    |> SF.transfer
+    (match stmt with
+      | Stmt.Instr_Assume { body; branch } ->
+          SF.do_assume (fun v -> StateDomain.read v dom) ~is_guard:branch body
+      | Stmt.Instr_Assert { body } ->
+          SF.do_assert (fun v -> StateDomain.read v dom) body
+      | stmt ->
+          Stmt.map
+            ~f_lvar:(fun v -> StateDomain.read v dom)
+            ~f_rvar:id ~f_expr:id stmt
+          |> SF.transfer)
     |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) dom
 end
 

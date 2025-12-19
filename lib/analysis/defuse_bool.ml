@@ -112,6 +112,9 @@ module Transfer = struct
 
   open IsZeroLattice
 
+  let do_assume read e ~is_guard = Iter.empty
+  let do_assert read e = Iter.empty
+
   let transfer (stmt : (Var.t, t, t) Lang.Stmt.t) : (Var.t * t) Iter.t =
     match stmt with
     | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
