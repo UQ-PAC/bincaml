@@ -8,7 +8,7 @@ open struct
     let pp fmt z = Format.pp_print_string fmt (Z.to_string z)
   end
 
-  module Bitvec = Util.Bitvec
+  module Bitvec = Bincaml_util.Bitvec
 end
 
 module Model = struct

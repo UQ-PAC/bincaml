@@ -11,7 +11,7 @@ Bincaml is structured as follows.
 
 {2 Basic utilities: [bincaml.util] }
 
-- Standard library {!Util.Common}: import this at the top of every file.
+- Standard library {!Bincaml_util.Common}: import this at the top of every file.
 - Bitvectors {!Util.Bitvec} and Integers {!Util.Zint}
 - Identifiers with counters {!Util.ID}
 - Variables {!Util.Var} and types {!Util.Types}

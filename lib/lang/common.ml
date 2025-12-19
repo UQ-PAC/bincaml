@@ -9,4 +9,4 @@ exception
     __LINE__ : int;
   }
 
-include Util.Common
+include Bincaml_util.Common

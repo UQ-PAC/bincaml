@@ -8,7 +8,7 @@ How to do this....
 BOT -> readuninit -> write
 
 *)
-open Util.Common
+open Bincaml_util.Common
 open Lang
 
 module ReadUninit = struct

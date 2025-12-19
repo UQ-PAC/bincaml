@@ -1,6 +1,6 @@
 (** Basic intra-expression algebraic simplifications *)
 
-open Util.Common
+open Bincaml_util.Common
 open Lang
 open Expr
 open Ops

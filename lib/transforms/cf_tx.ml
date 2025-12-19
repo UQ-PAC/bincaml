@@ -1,6 +1,6 @@
 (** Intra-expression constant-folding *)
 
-open Util.Common
+open Bincaml_util.Common
 open Lang
 open Expr_eval
 

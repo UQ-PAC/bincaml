@@ -1,4 +1,4 @@
-open Util.Common
+open Bincaml_util.Common
 open Lang
 open Cmdliner
 open Cmdliner.Term.Syntax

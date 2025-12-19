@@ -6,11 +6,11 @@ This guide explains who to get started as a contributor.
 
 {1 Standard Library}
 
-All files should import the [util.common] library which contains extensions to
+All files should import the [Bincaml_util.Common] library which contains extensions to
 the OCaml standard library in the [containers] library, this is done by
 depending on the [bincaml.util] library and putting at the top of the file.
 
-[open Util.Common]
+[open Bincaml_util.Common]
 
 Use the documentation for [containers] as a reference before the standard
 library api docs (although it should be a superset).

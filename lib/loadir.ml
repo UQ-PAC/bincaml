@@ -1,6 +1,6 @@
 (** Loads a initial IR from the semi-concrete AST *)
 
-open Util.Common
+open Bincaml_util.Common
 open Lang
 open Expr
 
