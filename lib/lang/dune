@@ -24,8 +24,7 @@
   containers.pp
   fmt
   trace
-  bincaml.util
-  ppx_expect_nobase.common)
+  bincaml.util)
  (inline_tests)
  (preprocess
   (pps

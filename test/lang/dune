@@ -34,7 +34,7 @@
  (name expr_eval_expect)
  (modules expr_eval_expect stmt interp)
  (flags -w -27)
- (libraries expr_gen loader ppx_expect_nobase.common)
+ (libraries expr_gen loader)
  (inline_tests)
  (preprocess
   (pps ppx_expect_nobase)))
