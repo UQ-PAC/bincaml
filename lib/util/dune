@@ -2,7 +2,14 @@
  (public_name bincaml.util)
  (name bincaml_util)
  (modules common var ID types bitvec zint reverse_graph recursionscheme)
- (libraries iter containers fix containers.pp containers-data zarith ocamlgraph)
+ (libraries
+  iter
+  containers
+  fix
+  containers.pp
+  containers-data
+  zarith
+  ocamlgraph)
  (inline_tests)
  (preprocess
   (pps
