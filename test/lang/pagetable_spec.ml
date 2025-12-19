@@ -13,6 +13,8 @@ open struct
   module Gen = QCheck.Gen
 end
 
+(** Abstract reference model for the page table, along with associated
+    operations. *)
 module Model = struct
   type cmd =
     | Read of { addr : Z.t; nbytes : int }
@@ -25,6 +27,15 @@ module Model = struct
 
   let init_state = IntegerMap.empty
 
+  (** Precondition of page table commands. Addresses are non-negative and
+      reads/writes are byte-sized and non-zero sized. *)
+  let precond cmd _ =
+    match cmd with
+    | Read { addr; nbytes } -> Z.(geq addr zero) && nbytes > 0
+    | Write { addr; bv } -> Z.(geq addr zero) && bv.w mod 8 == 0 && bv.w > 0
+
+  (** Given an abstract state and a command, computes the abstract state after
+      the command. *)
   let next_state cmd st =
     match cmd with
     | Read _ -> st
@@ -36,7 +47,7 @@ module Model = struct
     IntegerMap.find_opt addr st |> Option.value ~default:'\x00'
 
   (** Generates a non-negative {!Z.t} (currently up to int64 size). *)
-  let arb_posint =
+  let arb_zint_nonneg =
     let open QCheck.Gen in
     let+ n = int64 in
     Z.of_int64_unsigned n
@@ -45,8 +56,8 @@ module Model = struct
     let open QCheck.Gen in
     let* addr =
       match IntegerMap.bindings st |> List.map fst with
-      | [] -> arb_posint
-      | addrs -> oneof [ oneofl addrs; arb_posint ]
+      | [] -> arb_zint_nonneg
+      | addrs -> oneof [ oneofl addrs; arb_zint_nonneg ]
     in
     let+ fuzz = int_range (-10) 10 in
     Z.(max zero @@ (addr + ~$fuzz))
@@ -54,20 +65,19 @@ module Model = struct
   let is_digit = function '0' .. '9' -> true | _ -> false
 
   let shrink_zint : Z.t Shrink.t =
-    fun x ->
-      Z.to_int64_unsigned x |> Shrink.int64
-      |> Iter.map Z.of_int64_unsigned
-      |> Iter.filter (Z.gt x)
+   fun x ->
+    Z.to_int64_unsigned x |> Shrink.int64
+    |> Iter.map Z.of_int64_unsigned
+    |> Iter.filter (Z.gt x)
 
   let shrink_bitvec : Bitvec.t Shrink.t =
-    fun bv ->
-      Shrink.int bv.w
-      |> Iter.map (fun size -> size / 8 * 8)
-      |> Iter.filter (fun x -> x < bv.w)
-      |> Iter.map (fun size -> Bitvec.create ~size bv.v)
+   fun bv ->
+    Shrink.int bv.w
+    |> Iter.map (fun size -> size / 8 * 8)
+    |> Iter.filter (fun x -> x < bv.w)
+    |> Iter.map (fun size -> Bitvec.create ~size bv.v)
 
-  let shrink_cmd : cmd Shrink.t =
-    function
+  let shrink_cmd : cmd Shrink.t = function
     | Read { addr; nbytes } ->
         Iter.map (fun nbytes -> Read { addr; nbytes }) (Shrink.int nbytes)
     | Write { addr; bv } ->
@@ -82,11 +92,12 @@ module Model = struct
     oneof
       [
         return (Read { addr; nbytes });
-        (let+ v = arb_posint in
+        (let+ v = arb_zint_nonneg in
          Write { addr; bv = Bitvec.create ~size:(nbytes * 8) v });
       ]
 end
 
+(** Concrete system under test for the page table. *)
 module Spec : STM.Spec = struct
   include Model
 
@@ -96,18 +107,18 @@ module Spec : STM.Spec = struct
 
   type sut = PageTable.t
 
+  (** Initialises a page table of all zeros. All zeros ensures it initially
+      matches with the abstract model. *)
   let init_sut () = PageTable.create ~page_len:9 ?use_random_init:None ()
-  let cleanup _ = ()
 
-  let precond cmd _ =
-    match cmd with
-    | Read { addr; nbytes } -> Z.(geq addr zero) && nbytes > 0
-    | Write { addr; bv } -> Z.(geq addr zero) && bv.w mod 8 == 0 && bv.w > 0
+  let cleanup _ = ()
 
   type 'a STM.ty += BitvecTy : Bitvec.t STM.ty
 
   let bitvec_show = (BitvecTy, Bitvec.to_string)
 
+  (** Performs a command on the concrete system under test and returns the
+      result of the command. *)
   let run cmd sut =
     match cmd with
     | Read { addr; nbytes } ->
@@ -115,6 +126,11 @@ module Spec : STM.Spec = struct
         STM.Res (bitvec_show, PageTable.read_bv ~addr ~nbits sut)
     | Write { addr; bv } -> STM.Res (STM.unit, PageTable.write_bv sut ~addr bv)
 
+  (** Postcondition for validating the returned value from {!run} aligns with
+      that expected by the abstract operation.
+
+      Note: does not validate the whole abstract state (and doesn't need to,
+      because a later read could expose errors). *)
   let postcond cmd oldst res =
     match (cmd, res) with
     | Read { addr; nbytes }, STM.Res ((BitvecTy, _), bv) ->
