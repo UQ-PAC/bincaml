@@ -46,14 +46,14 @@ module Model = struct
       | [] -> arb_posint
       | addrs -> oneof [ oneofl addrs; arb_posint ]
     in
-    let+ fuzz = QCheck.Gen.int_range (-10) 10 in
+    let+ fuzz = int_range (-10) 10 in
     Z.(max zero @@ (addr + ~$fuzz))
 
   let arb_cmd st =
     let open QCheck.Gen in
     QCheck.make ~print:show_cmd
     @@
-    let* nbytes = small_nat in
+    let* nbytes = small_nat >|= Int.add 1 in
     let* addr = gen_addr st in
     oneof
       [
@@ -77,8 +77,8 @@ module Spec : STM.Spec = struct
 
   let precond cmd _ =
     match cmd with
-    | Read { addr; _ } -> Z.(geq addr zero)
-    | Write { addr; bv } -> Z.(geq addr zero) && bv.w mod 8 == 0
+    | Read { addr; nbytes } -> Z.(geq addr zero) && nbytes > 0
+    | Write { addr; bv } -> Z.(geq addr zero) && bv.w mod 8 == 0 && bv.w > 0
 
   type 'a STM.ty += BitvecTy : Bitvec.t STM.ty
 
