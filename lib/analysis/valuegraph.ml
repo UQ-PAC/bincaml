@@ -6,7 +6,7 @@ module Open = struct
     | Func of 'ops * 'e list
     | Var of 'var
     | LVar of 'var
-  [@@deriving eq, ord]
+  [@@deriving eq, ord, map]
 
   let hash hash_var hash_op hashf v =
     match v with
@@ -73,8 +73,12 @@ module HashCons = struct
 end
 
 module ValueGraph = struct
+  type 'a expr = (Var.t, ops, 'a) Open.valuegraph
+
+  let map_expr f = Open.map_valuegraph Fun.id Fun.id f
+
   type cell = fix_type HashCons.cell
-  and fix_type = E of (Var.t, ops, cell) Open.valuegraph [@@unboxed]
+  and fix_type = E of cell expr [@@unboxed]
 
   module Data = struct
     type t = fix_type
@@ -177,12 +181,56 @@ module type HashConsed = module type of HashCons.Make (Memo)
 module HC = HashCons.Make (Memo)
 module Graph = CCMultiMap.Make (Int) (Int)
 
+let tbltodeps iter_use iter_def tbl =
+  BackingMap.to_iter tbl
+  |> Iter.flat_map (fun (k, v) ->
+      let v : ValueGraph.t = v in
+      let uses = iter_use v in
+      let uses =
+        iter_def v
+        |> Iter.flat_map (fun d -> iter_use v |> Iter.map (fun u -> (d, u)))
+      in
+      failwith "")
+
+module GenerativeVG () = struct
+  include ValueGraph
+
+  let make, table, gensym = HC.visibly_make ()
+  let table : ValueGraph.t BackingMap.t = table
+  let fix : ('a, 'b, 'c) Open.valuegraph -> ValueGraph.t = fun v -> make (E v)
+
+  let unfix : ValueGraph.t -> ('a, 'b, 'c) Open.valuegraph =
+   fun v -> match HashCons.data v with E e -> e
+end
+
+module GenRC () = struct
+  module Vg = GenerativeVG ()
+  include Vg
+  include Util.Recursionscheme.Recursion (Vg)
+end
+
 let of_proc p : ValueGraph.t BackingMap.t =
   let stmts = Defuse.def_use_vert p in
-  let make, table, gensym = HC.visibly_make () in
-  let table : ValueGraph.t BackingMap.t = table in
-  let fix : ('a, 'b, 'c) Open.valuegraph -> ValueGraph.t =
-   fun v -> make (E v)
+  let open GenRC () in
+  let reg = Iter.flat_map (vert_to_vg fix p) stmts |> Iter.persistent in
+
+  let uses_alg visit_lvar visit_rvar =
+   fun e ->
+    match map_expr fst e with
+    | Var v -> visit_rvar v
+    | LVar v -> visit_lvar v
+    | _ -> ()
   in
-  let _ = stmts |> Iter.flat_map (vert_to_vg fix p) in
-  table
+  let iter_usedefs ~visit_def ~visit_use e =
+    para (uses_alg visit_def visit_use) e
+  in
+  let iter_use e =
+    Iter.from_iter (fun visit_use ->
+        iter_usedefs ~visit_def:(fun _ -> ()) ~visit_use e)
+  in
+  let iter_def e =
+    Iter.from_iter (fun visit_def ->
+        iter_usedefs ~visit_use:(fun _ -> ()) ~visit_def e)
+  in
+  let deps = tbltodeps iter_use iter_def table in
+  deps
