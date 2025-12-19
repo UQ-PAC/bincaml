@@ -245,9 +245,8 @@ module PageTable = struct
   let write_bv st ~addr (bits : Bitvec.t) =
     assert (bits.w mod 8 = 0);
     assert (bits.w / 8 > 0);
-    ()
-    (* let bytes = Bitvec.to_bytes bits |> Byte_slice.create in *)
-    (* write_bytes st ~addr ~bytes *)
+    let bytes = Bitvec.to_bytes bits |> Byte_slice.create in
+    write_bytes st ~addr ~bytes
 
   let read_bv st ~addr ~nbits =
     let d, r = Z.div_rem (Z.of_int nbits) (Z.of_int 8) in

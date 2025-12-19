@@ -9,6 +9,8 @@ open struct
   end
 
   module Bitvec = Bincaml_util.Bitvec
+  module Shrink = QCheck.Shrink
+  module Gen = QCheck.Gen
 end
 
 module Model = struct
@@ -51,25 +53,25 @@ module Model = struct
 
   let is_digit = function '0' .. '9' -> true | _ -> false
 
-  let shrink_zint : Z.t QCheck.Shrink.t =
-    let open QCheck.Shrink in
-    fun x -> Z.to_int64_unsigned x |> int64 |> Iter.map Z.of_int64_unsigned |> Iter.filter (Z.gt x)
+  let shrink_zint : Z.t Shrink.t =
+    fun x ->
+      Z.to_int64_unsigned x |> Shrink.int64
+      |> Iter.map Z.of_int64_unsigned
+      |> Iter.filter (Z.gt x)
 
-  let shrink_bitvec : Bitvec.t QCheck.Shrink.t =
-    let open QCheck.Shrink in
-    fun bv -> int bv.w |> Iter.map (fun size -> Bitvec.create ~size bv.v)
+  let shrink_bitvec : Bitvec.t Shrink.t =
+    fun bv ->
+      Shrink.int bv.w
+      |> Iter.map (fun size -> size / 8 * 8)
+      |> Iter.filter (fun x -> x < bv.w)
+      |> Iter.map (fun size -> Bitvec.create ~size bv.v)
 
-  let shrink_cmd : cmd QCheck.Shrink.t =
-    let open QCheck.Shrink in
+  let shrink_cmd : cmd Shrink.t =
     function
     | Read { addr; nbytes } ->
-        Iter.map
-          (fun (addr, nbytes) -> Read { addr; nbytes })
-          (pair shrink_zint int (addr, nbytes))
+        Iter.map (fun nbytes -> Read { addr; nbytes }) (Shrink.int nbytes)
     | Write { addr; bv } ->
-        Iter.map
-          (fun (addr, bv) -> Write { addr; bv })
-          (pair shrink_zint shrink_bitvec (addr, bv))
+        Iter.map (fun bv -> Write { addr; bv }) (shrink_bitvec bv)
 
   let arb_cmd st =
     let open QCheck.Gen in
@@ -109,7 +111,8 @@ module Spec : STM.Spec = struct
   let run cmd sut =
     match cmd with
     | Read { addr; nbytes } ->
-        STM.Res (bitvec_show, PageTable.read_bv ~addr ~nbits:(nbytes * 8) sut)
+        let nbits = nbytes * 8 in
+        STM.Res (bitvec_show, PageTable.read_bv ~addr ~nbits sut)
     | Write { addr; bv } -> STM.Res (STM.unit, PageTable.write_bv sut ~addr bv)
 
   let postcond cmd oldst res =
