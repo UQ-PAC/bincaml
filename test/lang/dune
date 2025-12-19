@@ -50,7 +50,6 @@
   qcheck-stm.stm
   qcheck-core
   qcheck-stm.sequential)
- (root_module deps)
  (flags -w +27)
  (preprocess
   (pps
