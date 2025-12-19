@@ -2,7 +2,13 @@
  (public_name bincaml.util)
  (name bincaml_util)
  (modules common var ID types bitvec zint)
- (libraries containers fix containers.pp containers-data zarith ppx_expect_nobase.common)
+ (libraries
+  containers
+  fix
+  containers.pp
+  containers-data
+  zarith
+  ppx_expect_nobase.common)
  (inline_tests)
  (preprocess
   (pps

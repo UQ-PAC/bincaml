@@ -2,7 +2,14 @@
  (name expr_gen)
  (modules expr_gen)
  (flags -w -27)
- (libraries qcheck-core (re_export containers) (re_export iter) (re_export containers.unix) (re_export bincaml.ast) (re_export bincaml.util) zarith))
+ (libraries
+  qcheck-core
+  (re_export containers)
+  (re_export iter)
+  (re_export containers.unix)
+  (re_export bincaml.ast)
+  (re_export bincaml.util)
+  zarith))
 
 (executable
  (name expr_eval_qcheck)
@@ -35,7 +42,14 @@
 (library
  (name pagetable_spec)
  (modules pagetable_spec)
- (libraries iter zarith bincaml.ast bincaml.util qcheck-stm.stm qcheck-core qcheck-stm.sequential)
+ (libraries
+  iter
+  zarith
+  bincaml.ast
+  bincaml.util
+  qcheck-stm.stm
+  qcheck-core
+  qcheck-stm.sequential)
  (root_module deps)
  (flags -w +27)
  (preprocess
