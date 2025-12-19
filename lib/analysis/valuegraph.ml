@@ -172,6 +172,8 @@ module BackingMap = struct
   include Fix.Glue.HashTablesAsImperativeMaps (ValueGraph.Data)
 
   let to_iter m = Iter.from_iter (fun f -> iter (fun k v -> f (k, v)) m)
+  let keys m = Iter.from_iter (fun f -> iter (fun k _ -> f k) m)
+  let values m = Iter.from_iter (fun f -> iter (fun _ v -> f v) m)
 end
 
 module Memo = Fix.Memoize.Make (BackingMap)
@@ -180,17 +182,6 @@ module type HashConsed = module type of HashCons.Make (Memo)
 
 module HC = HashCons.Make (Memo)
 module Graph = CCMultiMap.Make (Int) (Int)
-
-let tbltodeps iter_use iter_def tbl =
-  BackingMap.to_iter tbl
-  |> Iter.flat_map (fun (k, v) ->
-      let v : ValueGraph.t = v in
-      let uses = iter_use v in
-      let uses =
-        iter_def v
-        |> Iter.flat_map (fun d -> iter_use v |> Iter.map (fun u -> (d, u)))
-      in
-      failwith "")
 
 module GenerativeVG () = struct
   include ValueGraph
@@ -209,7 +200,7 @@ module GenRC () = struct
   include Util.Recursionscheme.Recursion (Vg)
 end
 
-let of_proc p : ValueGraph.t BackingMap.t =
+let of_proc p =
   let stmts = Defuse.def_use_vert p in
   let open GenRC () in
   let reg = Iter.flat_map (vert_to_vg fix p) stmts |> Iter.persistent in
@@ -232,5 +223,10 @@ let of_proc p : ValueGraph.t BackingMap.t =
     Iter.from_iter (fun visit_def ->
         iter_usedefs ~visit_use:(fun _ -> ()) ~visit_def e)
   in
-  let deps = tbltodeps iter_use iter_def table in
+  let gdep e =
+    Iter.from_iter (fun (visit : ValueGraph.t -> unit) ->
+        ignore @@ (unfix e |> map_expr (fun subexpr -> visit subexpr)))
+    |> Iter.map (fun dep -> (e, dep))
+  in
+  let deps = BackingMap.values table |> Iter.flat_map gdep in
   deps
