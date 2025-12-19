@@ -200,10 +200,10 @@ module GenRC () = struct
   include Util.Recursionscheme.Recursion (Vg)
 end
 
-let of_proc p =
+let of_proc init p =
   let stmts = Defuse.def_use_vert p in
   let open GenRC () in
-  let reg = Iter.flat_map (vert_to_vg fix p) stmts |> Iter.persistent in
+  let constraints = Iter.flat_map (vert_to_vg fix p) stmts |> Iter.persistent in
 
   let uses_alg visit_lvar visit_rvar =
    fun e ->
@@ -228,5 +228,6 @@ let of_proc p =
         ignore @@ (unfix e |> map_expr (fun subexpr -> visit subexpr)))
     |> Iter.map (fun dep -> (e, dep))
   in
+  let istate = Array.init (Fix.Gensym.current gensym) (fun x -> init) in
   let deps = BackingMap.values table |> Iter.flat_map gdep in
   deps
