@@ -80,76 +80,13 @@ module Recursion (O : Fix) = struct
   type 'e abstract_expr =
     (const, Var.t, unary, binary, intrin, 'e) AbstractExpr.t
 
-  type 'a alg = 'a abstract_expr -> 'a
-  type 'a coalg = 'a -> 'a abstract_expr
+  include Util.Recursionscheme.Recursion (struct
+    include O
 
-  (** {1 Recursion schemes}
+    type 'e expr = 'e abstract_expr
 
-      Methods of traversing a generic on 'a abstract_expr for a given fix point
-      type [Fix.t].
-
-      See:
-
-      {:https://arxiv.org/pdf/2202.13633v1}
-
-      {:https://icfp24.sigplan.org/details/ocaml-2024-papers/11/Recursion-schemes-in-OCaml-An-experience-report}
-  *)
-
-  (** Fold an algebra e -> 'a through the expression, from leaves to nodes to
-      return 'a. *)
-  let rec cata (alg : 'a alg) e =
-    (unfix %> AbstractExpr.map (cata alg) %> alg) e
-
-  (* ana coalg = Out◦ ◦ fmap (ana coalg) ◦ coalg *)
-  let rec ana (coalg : 'a coalg) e =
-    (coalg %> AbstractExpr.map (ana coalg) %> fix) e
-
-  (** Apply function ~f to the expression first, then pass it to alg. Its result
-      is accumulated down the expression tree. *)
-  let rec map_fold ~(f : 'a -> t abstract_expr -> 'a)
-      ~(alg : 'a -> 'b abstract_expr -> 'b) r e =
-    let r = f r (unfix e) in
-    (unfix %> (AbstractExpr.map (map_fold ~f ~alg r) %> alg r)) e
-
-  (* hylo
-  let rec hylo ~consume_alg ~produce_coalg e =
-    consume_alg
-    % AbstractExpr.map (hylo ~consume_alg ~produce_coalg)
-    % produce_coalg
-    @@ e
-    *)
-
-  (** mutual recursion: simultaneously evaluate two catamorphisms which can
-      depend on each-other's results. *)
-  let rec mutu ?(cata = cata) (alg1 : ('a * 'b) abstract_expr -> 'a)
-      (alg2 : ('a * 'b) abstract_expr -> 'b) =
-    let alg x = (alg1 x, alg2 x) in
-    (fst % cata alg, snd % cata alg)
-
-  (** zygomorphism;
-
-      Perform two recursion simultaneously, passing the result of the first to
-      the second *)
-  let zygo ?(cata = cata) (alg1 : 'a alg) (alg2 : ('a * 'b) abstract_expr -> 'b)
-      e =
-    snd (mutu ~cata (AbstractExpr.map fst %> alg1) alg2) e
-
-  (* zygo with the order swapped *)
-  let zygo_l ?(cata = cata) (alg2 : 'a alg)
-      (alg1 : ('b * 'a) abstract_expr -> 'b) =
-    fst (mutu ~cata alg1 (AbstractExpr.map snd %> alg2))
-
-  let map_fold2 ~f ~(alg1 : 'a -> ('b * 'c) abstract_expr -> 'b)
-      ~(alg2 : 'c alg) r e =
-    let alg r x = (alg1 r x, alg2 (AbstractExpr.map snd x)) in
-    fst (fst % map_fold ~f ~alg r, snd % map_fold ~f ~alg r) e
-
-  (** catamorphism that also passes the original expression through *)
-  let rec para_f (alg : ('a * 'b) abstract_expr -> 'b) f e =
-    let p f g x = (f x, g x) in
-    (alg % AbstractExpr.map (p f (para_f alg f)) % unfix) e
-
-  let para alg e = para_f alg id e
+    let map_expr = AbstractExpr.map
+  end)
 
   module Constructors = struct
     let rvar v = fix (RVar v)
