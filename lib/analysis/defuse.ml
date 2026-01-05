@@ -125,7 +125,7 @@ let def_use_graph p =
 
 module DefUseGraphAnalysis
     (G :
-      Util.Reverse_graph.GraphSig
+      Bincaml_util.Reverse_graph.GraphSig
         with type V.t = Vertex.t
         with type t = UseDef.t)
     (V : Intra_analysis.Lattice)
@@ -194,7 +194,7 @@ module AnalysisRev
     (TRF : Intra_analysis.ReverseStmtTransfer with type t = V.t) =
 struct
   module TF = Intra_analysis.StateTransferRev (V) (TRF)
-  include DefUseGraphAnalysis (Util.Reverse_graph.RevG (UseDef)) (V) (TF)
+  include DefUseGraphAnalysis (Bincaml_util.Reverse_graph.RevG (UseDef)) (V) (TF)
 
   (** providing an incorrect function for init can make the analysis unsound, by default
       it executes the vertex with a bot initial state.

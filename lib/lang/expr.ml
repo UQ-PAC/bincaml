@@ -80,7 +80,7 @@ module Recursion (O : Fix) = struct
   type 'e abstract_expr =
     (const, Var.t, unary, binary, intrin, 'e) AbstractExpr.t
 
-  include Util.Recursionscheme.Recursion (struct
+  include Bincaml_util.Recursionscheme.Recursion (struct
     include O
 
     type 'e expr = 'e abstract_expr

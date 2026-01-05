@@ -1,6 +1,6 @@
 (** Example minimal static analysis on def-use graph for truthiness *)
 
-open Util.Common
+open Bincaml_util.Common
 
 module IsZeroLattice = struct
   let name = "isZero"
