@@ -114,8 +114,7 @@ struct
 
     type edge = G.edge
 
-    let analyze (edge : G.edge) data =
-      let v = G.E.dst edge in
+    let analyze_vert (v: Vertex.t) data =
       match v with
       | Vertex.(Phi (lhs, rhs)) ->
           update lhs
@@ -123,12 +122,18 @@ struct
             data
       | Vertex.(Stmt s) -> A.transfer s data
       | _ -> data
+
+    let analyze (edge : G.edge) data =
+      (* this gets swapped based on graph direction so is always the logical
+         successor 
+      *)
+      analyze_vert (G.E.dst edge) data
   end
 
   module Topo = Graph.WeakTopological.Make (G)
   module DuAnalysis = Graph.ChaoticIteration.Make (G) (State)
 
-  let analyse root ?(init = fun v -> StateDomain.bottom) ~widen_set ~delay_widen
+  let analyse root ?(init = fun v -> State.analyze_vert v (StateDomain.bottom)) ~widen_set ~delay_widen
       p =
     let g = def_use_graph p in
     DuAnalysis.recurse g (Topo.recursive_scc g root) init widen_set delay_widen
@@ -145,6 +150,12 @@ struct
   module TF = Intra_analysis.StateTransferFwd (V) (TRF)
   include DefUseGraphAnalysis (UseDef) (V) (TF)
 
+  (** providing an incorrect function for init can make the analysis unsound, by default
+      it executes the vertex with a bot initial state.
+
+      This is the only time the root vertex (Entry) gets processed; the transfer function of the root 
+      vertex (Entry) must not depend on an abstract state.
+      *)
   let (analyse :
         ?init:(Vertex.t -> State.t) ->
         widen_set:Vertex.t Graph.ChaoticIteration.widening_set ->
@@ -161,6 +172,12 @@ struct
   module TF = Intra_analysis.StateTransferRev (V) (TRF)
   include DefUseGraphAnalysis (Util.Reverse_graph.RevG (UseDef)) (V) (TF)
 
+  (** providing an incorrect function for init can make the analysis unsound, by default
+      it executes the vertex with a bot initial state.
+
+      This is the only time the root vertex (Return) gets processed; the transfer function of the root 
+      vertex (Return) must not depend on an abstract state.
+      *)
   let (analyse :
         ?init:(Vertex.t -> State.t) ->
         widen_set:Vertex.t Graph.ChaoticIteration.widening_set ->
