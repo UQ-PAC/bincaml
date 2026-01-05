@@ -1,7 +1,31 @@
 (** This is a def-use graph for a procedure in ssa form. *)
 
 (** - vertices are assignment statements or phis
-    - edges are data dependency *)
+    - edges are data dependency 
+  
+  Due to the statement structure, a vertex can have both multiple incoming
+  dependencies and multiple outgoing dependencies; hence the weirdness with
+  evaluating vertices and pushing the result down the dependency graph, 
+  rather than the usual edge evaluation.
+
+  {4 Performance Considerations }
+
+   This first pass still uses ocamlgraph's ChaoticIteration; this will probably
+   evaluate everything at least three times(?), and stores the analysis result
+   in a map at each vertex. To reduce the cost of this we use a patricia tree,
+   this enforces maximal sharing and O(1) comparisons of the graph but probably
+   makes the transfer functions more expensive. [fix] has a solver with a
+   better strategy which uses an array and tracks taintedness in a bit-vector,
+   but does not support widening. Ideally we want a graph wherein a vertex is a
+   single variable, but that makes it harder to phrase the transfer function
+   for statements which have multiple outgoing dependencies (procedure calls).
+
+   Ideally performance-wise we want to design a solver like that used by fix
+   which (1) uses a single mutable array backing state (2) supports widening
+   and (3) possibly encodes dependency with references/points-to rather than a
+   map-based graph.
+
+    *)
 
 open Lang
 open Lang.Common
