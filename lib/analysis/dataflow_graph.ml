@@ -72,8 +72,10 @@ end
 (** Ocamlgraph dataflow graph *)
 module DFGraph = Graph.Persistent.Digraph.ConcreteBidirectional (Vertex)
 
-(** Ocamlgraph builder for dfgraph *)
-module DFGBuilder = Graph.Builder.P (DFGraph)
+open struct
+  (** Ocamlgraph builder for dfgraph *)
+  module DFGBuilder = Graph.Builder.P (DFGraph)
+end
 
 module MDeps = CCMultiMap.Make (Var) (Vertex)
 
