@@ -42,7 +42,7 @@ module EvalValueAbstraction (V : ValueAbstraction) = struct
       | ApplyIntrin (op, es) -> V.eval_intrin op es
       | _ -> failwith "unsupported"
     in
-    Lang.Expr.BasilExpr.cata eval_alg
+    Lang.Expr.BasilExpr.cata eval_alg expr
 end
 
 module type StateDomain = sig
@@ -141,7 +141,7 @@ struct
   let transfer (stmt : Program.stmt) dom =
     Stmt.map ~f_lvar:id
       ~f_rvar:(fun v -> StateDomain.read v dom)
-      ~f_expr:(EV.eval (fun v -> failwith "") (fun v -> StateDomain.read v dom))
+      ~f_expr:(EV.eval (fun v -> StateDomain.read v dom))
       stmt
     |> SF.transfer
     |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) dom

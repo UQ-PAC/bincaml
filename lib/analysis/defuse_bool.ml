@@ -1,11 +1,11 @@
-(** Example minimal static analysis on def-use graph for truthiness *)
+(** Example minimal static analysis on ssa dataflow graph graph for truthiness *)
 
 open Bincaml_util.Common
 
 module IsZeroLattice = struct
   let name = "isZero"
 
-  type t = Top | Zero | NonZero | Bot [@@deriving ord, eq, show]
+  type t = Top | Zero | NonZero | Bot [@@deriving ord, eq, show {with_path = false}]
 
   let bottom = Bot
 
@@ -132,6 +132,12 @@ end
 module Analysis = Dataflow_graph.AnalysisFwd (IsZeroValueAbstraction) (Transfer)
 
 let analyse (p : Lang.Program.proc) =
-  Analysis.analyse
+  let init p = 
+    let vs = Lang.Procedure.formal_in_params p |> StringMap.values in 
+    vs |> Iter.map (fun v -> (v, IsZeroLattice.Top))
+  in
+  Analysis.A.DFGChaoticIter.M.find_opt Return
+  (Analysis.analyse
+    ~init
     ~widen_set:(Graph.ChaoticIteration.Predicate (fun _ -> false))
-    ~delay_widen:0 (`Proc p)
+    ~delay_widen:0 p)

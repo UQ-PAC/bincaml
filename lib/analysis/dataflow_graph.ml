@@ -32,7 +32,11 @@
 open Lang
 open Lang.Common
 
+open struct 
 
+let dbg_print = print_endline
+
+end
 (** {1 Building dataflow graphs for procedures }*)
 
 module Vertex = struct
@@ -40,7 +44,7 @@ module Vertex = struct
 
 
   type t = Entry | Return | Stmt of Program.stmt | Phi of Var.t * Var.t list
-  [@@deriving ord, eq]
+    [@@deriving ord, eq, show {with_path = false}]
 
   let hash v =
     match v with
@@ -60,7 +64,7 @@ let uses p =
     | Phi (_, rhs) -> List.to_iter rhs
     | Stmt s -> Stmt.free_vars_iter s
     | Entry -> Iter.empty
-    | Return -> Procedure.formal_in_params p |> StringMap.values
+    | Return -> Procedure.formal_out_params p |> StringMap.values
 
 end
 
@@ -84,7 +88,7 @@ type defuse = { var_to_use : MDeps.t; var_to_def : MDeps.t }
     possible future work: encode the reachability of definitions a la TV paper
     to make phis precise conditionals.
   *)
-let def_use_vert p =
+let get_dfg_vertices p =
   Block.(
     Procedure.iter_blocks_topo_fwd p
     |> Iter.flat_map (fun (id, (b : Program.bloc)) ->
@@ -94,14 +98,17 @@ let def_use_vert p =
               Vertex.Phi (lhs, List.map snd rhs))
         in
         let block_def_use =
-          Block.stmts_iter b |> Iter.map (fun stmt -> Vertex.Stmt stmt)
+      Block.stmts_iter b |> Iter.flat_map (function
+          | Stmt.Instr_Assign assigns -> (List.to_iter assigns 
+            |> Iter.map (fun (lhs, rhs) -> Vertex.Stmt (Stmt.Instr_Assign [lhs, rhs])))
+          | stmt -> Iter.singleton @@ Vertex.Stmt stmt)
         in
         Iter.append phi_def_use block_def_use))
   |> Iter.persistent
 
 (** return the vertex dependency maps {! defuse} for a procedure *)
 let def_use_maps ?(require_full_ssa = false) ?def_use p =
-  let def_use_vert = Option.get_or ~default:(def_use_vert p) def_use in
+  let def_use_vert = Option.get_or ~default:(get_dfg_vertices p) def_use in
   let to_def =
     def_use_vert
     |> Iter.flat_map (fun v -> Vertex.defines p v |> Iter.map (fun s -> (s, v)))
@@ -125,7 +132,7 @@ let def_use_maps ?(require_full_ssa = false) ?def_use p =
     Vertices are phi nodes or program statements, edges are directed
     from definitions to their uses. *)
 let create p =
-  let def_use_vert = def_use_vert p in
+  let def_use_vert = get_dfg_vertices p in
   let to_use, to_def =
     def_use_maps ~def_use:def_use_vert p |> function
     | { var_to_use; var_to_def } -> (var_to_use, var_to_def)
@@ -146,7 +153,31 @@ let create p =
     in
     graph
   in
+  let def_use_vert = Iter.append  def_use_vert (Iter.of_list [Vertex.Entry; Vertex.Return])in
   def_use_vert |> Iter.fold add_vert DFGraph.empty
+
+module DFGDotPrinter = Graph.Graphviz.Dot (struct 
+
+  include DFGraph
+
+  let default_vertex_attributes v = []
+  let graph_attributes g = []
+
+  let vertex_name v = Vertex.(match v with
+    | Entry -> "e"
+    | Return -> "r"
+    | Stmt _ -> "stmt" ^ (Int.to_string @@ Vertex.hash v)
+    | Phi _ -> "phi" ^ (Int.to_string @@ Vertex.hash v))
+
+  let get_subgraph v = None
+  let default_edge_attributes e = []
+  let edge_attributes e = []
+
+  let vertex_attributes v = 
+    let n = Vertex.show v
+    in
+    [ `Shape `Box; `Fontname "Mono"; `Label n ]
+end)
 
 (** {1 Value-analysis of dataflow graphs }*)
 
@@ -170,10 +201,13 @@ struct
     let analyze_vert (v: Vertex.t) data =
       match v with
       | Vertex.(Phi (lhs, rhs)) ->
+          dbg_print "phi";
           update lhs
             (rhs |> List.fold_left (fun a v -> V.join a (read v data)) V.bottom)
             data
-      | Vertex.(Stmt s) -> A.transfer s data
+      | Vertex.(Stmt s) -> 
+          dbg_print ("eval stmt " ^ (Stmt.to_string (Var.pretty) (Var.pretty) Expr.BasilExpr.pretty) s);
+          A.transfer s data
       | _ -> data
 
     let analyze (edge : G.edge) data =
@@ -186,13 +220,20 @@ struct
   module Topo = Graph.WeakTopological.Make (G)
   module DFGChaoticIter = Graph.ChaoticIteration.Make (G) (StateDomain)
 
-  (** compute def-use graph for an SSA-form procedure 
-      and run a dataflow analysis over it, returning a single abstract state
-      relating all program variables to an abstract value. *)
-  let analyse root ?(init = fun v -> StateDomain.analyze_vert v (StateDomain.bottom)) ~widen_set ~delay_widen
-      (p: [ `DFG of DFGraph.t | `Proc of Program.proc ]) =
-    let g = match p with `Proc p -> create p | `DFG g -> g in
-    DFGChaoticIter.recurse g (Topo.recursive_scc g root) init widen_set delay_widen
+  (** Run a dataflow analysis over it, returning a single abstract state
+      relating all program variables to an abstract value. 
+
+      If dataflow graph [g] is not provided, compute the dfg for an SSA-form procedure 
+  *)
+  let analyse root ~init ~widen_set ~delay_widen
+      ?g (p: Program.proc) =
+    let g = Option.get_or ~default:(create p) g in
+    let scc = (Topo.recursive_scc g root) in
+    let f_init v = match v with
+      | v when Vertex.equal root v -> init p |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) StateDomain.bottom
+      | o -> (StateDomain.bottom)
+      in
+    DFGChaoticIter.recurse g scc f_init widen_set delay_widen
 
 end
 end
@@ -214,14 +255,14 @@ struct
       This is the only time the root vertex (Entry) gets processed; the transfer function of the root 
       vertex ([Entry]) must not depend on an abstract state.
       *)
-  let (analyse :
-        ?init:(Vertex.t -> A.StateDomain.t) ->
-        widen_set:Vertex.t Graph.ChaoticIteration.widening_set ->
-        delay_widen:int ->
-        [ `DFG of DFGraph.t | `Proc of Program.proc ]
-    ->
-        A.StateDomain.t A.DFGChaoticIter.M.t) =
-    A.analyse Entry
+  let analyse 
+        ~init 
+        ?g
+        ~widen_set
+        ~delay_widen 
+        p
+        : A.StateDomain.t A.DFGChaoticIter.M.t =
+    A.analyse Entry ~init ~widen_set ~delay_widen ?g p
 end
 
 (** Backwards dataflow analysis over DFG *)
@@ -241,12 +282,12 @@ struct
       This is the only time the root vertex ([Return]) gets processed; the transfer function of the root 
       vertex ([Return]) must not depend on an abstract state.
       *)
-  let (analyse :
-        ?init:(Vertex.t -> A.StateDomain.t) ->
-        widen_set:Vertex.t Graph.ChaoticIteration.widening_set ->
-        delay_widen:int ->
-        [ `DFG of DFGraph.t | `Proc of Program.proc ]
-    ->
-        A.StateDomain.t A.DFGChaoticIter.M.t) =
-    A.analyse Return
+  let analyse 
+        ~init 
+        ?g
+        ~widen_set
+        ~delay_widen 
+        p
+        : A.StateDomain.t A.DFGChaoticIter.M.t =
+    A.analyse Return ~init ~widen_set ~delay_widen ?g p
 end
