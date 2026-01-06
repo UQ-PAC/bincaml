@@ -156,6 +156,9 @@ let create p =
   in
   let def_use_vert = Iter.append  def_use_vert (Iter.of_list [Vertex.Entry; Vertex.Return]) in
   let graph = def_use_vert |> Iter.fold add_vert DFGraph.empty in
+  (* topological order only visits vertices dominated by the root, hence this
+     hack to get it to include
+     constant assignments *)
   let graph = def_use_vert |> Iter.fold (fun g v -> if (Iter.is_empty (Vertex.uses p v)) 
     then (DFGBuilder.add_edge g Vertex.Entry v)
     else g)
