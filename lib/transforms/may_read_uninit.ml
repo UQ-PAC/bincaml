@@ -151,4 +151,5 @@ let%expect_test "fold_block" =
     $stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W
     $stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, $mem->RU
     $stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W
-    $stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, R0_10->W |}]
+    $stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, R0_10->W
+    |}]

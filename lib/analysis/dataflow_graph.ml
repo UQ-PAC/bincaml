@@ -34,7 +34,7 @@ open Lang.Common
 
 open struct 
 
-let dbg_print = print_endline
+let dbg_print f = ()
 
 end
 (** {1 Building dataflow graphs for procedures }*)
@@ -153,8 +153,15 @@ let create p =
     in
     graph
   in
-  let def_use_vert = Iter.append  def_use_vert (Iter.of_list [Vertex.Entry; Vertex.Return])in
-  def_use_vert |> Iter.fold add_vert DFGraph.empty
+  let def_use_vert = Iter.append  def_use_vert (Iter.of_list [Vertex.Entry; Vertex.Return]) in
+  let graph = def_use_vert |> Iter.fold add_vert DFGraph.empty in
+  let graph = def_use_vert |> Iter.fold (fun g v -> if (Iter.is_empty (Vertex.uses p v)) 
+    then (DFGBuilder.add_edge g Vertex.Entry v)
+    else g)
+    graph
+  in
+  graph
+
 
 module DFGDotPrinter = Graph.Graphviz.Dot (struct 
 
@@ -199,26 +206,28 @@ struct
     type edge = G.edge
 
     let analyze_vert (v: Vertex.t) data =
-      match v with
+      dbg_print (show data) ;
+      dbg_print ("eval " ^ (Vertex.show v));
+      let r = match v with
       | Vertex.(Phi (lhs, rhs)) ->
-          dbg_print "phi";
           update lhs
             (rhs |> List.fold_left (fun a v -> V.join a (read v data)) V.bottom)
             data
       | Vertex.(Stmt s) -> 
-          dbg_print ("eval stmt " ^ (Stmt.to_string (Var.pretty) (Var.pretty) Expr.BasilExpr.pretty) s);
           A.transfer s data
       | _ -> data
+  in dbg_print @@ show r ; r
 
     let analyze (edge : G.edge) data =
       (* this gets swapped based on graph direction so is always the logical
          successor (dataflow dependee)
       *)
-      analyze_vert (G.E.dst edge) data
+      analyze_vert (G.E.src edge) data
   end
 
   module Topo = Graph.WeakTopological.Make (G)
   module DFGChaoticIter = Graph.ChaoticIteration.Make (G) (StateDomain)
+
 
   (** Run a dataflow analysis over it, returning a single abstract state
       relating all program variables to an abstract value. 
@@ -230,8 +239,7 @@ struct
     let g = Option.get_or ~default:(create p) g in
     let scc = (Topo.recursive_scc g root) in
     let f_init v = match v with
-      | v when Vertex.equal root v -> init p |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) StateDomain.bottom
-      | o -> (StateDomain.bottom)
+      | v -> init p |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) StateDomain.bottom
       in
     DFGChaoticIter.recurse g scc f_init widen_set delay_widen
 

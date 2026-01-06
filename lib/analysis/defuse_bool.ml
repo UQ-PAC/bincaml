@@ -13,8 +13,10 @@ module IsZeroLattice = struct
     match (a, b) with
     | Top, _ -> Top
     | _, Top -> Top
-    | a, b when not (equal a b) -> Top
-    | a, _ -> a
+    | a, b when (equal a b) -> a
+    | a, Bot -> a
+    | Bot, a -> a
+    | _ -> Top
 
   let widening a b = join a b
 end
