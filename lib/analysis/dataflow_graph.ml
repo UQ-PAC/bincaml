@@ -40,7 +40,8 @@ end
 (** {1 Building dataflow graphs for procedures }*)
 
 module Vertex = struct
-  (** Vertices in the intraprocedural dataflow graph represent executable statements or phi nodes.*)
+  (** Vertices in the intraprocedural dataflow graph represent executable
+      statements or phi nodes.*)
 
 
   type t = Entry | Return | Stmt of Program.stmt | Phi of Var.t * Var.t list
@@ -190,7 +191,7 @@ end)
 
 open struct 
 
-(** Dataflow analysis that is parametric in analysis direction, via functor argument {G}
+(** Dataflow analysis that is parametric in analysis direction, via functor argument {! G}
     which may present either a forwards or backwards view of the graph. *)
 module DataflowAnalysis
     (G :
@@ -220,7 +221,7 @@ struct
 
     let analyze (edge : G.edge) data =
       (* this gets swapped based on graph direction so is always the logical
-         successor (dataflow dependee)
+         predecessor (dataflow dependency)
       *)
       analyze_vert (G.E.src edge) data
   end

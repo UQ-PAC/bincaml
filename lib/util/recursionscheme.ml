@@ -28,7 +28,7 @@ module Recursion (O : Fix) = struct
       [type 'child a = A of 'child * 'child | B ... ]. For example we may
       define the fixed point: [type t = E of t expr [@@unboxed]].
 
-      The module type {Fix} defines
+      The module type {! Fix} defines
 
       1. the open recursive type ['a expr]
       2. the fixed type [t]
