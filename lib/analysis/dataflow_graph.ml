@@ -1,7 +1,9 @@
-(** This is a def-use graph for a procedure in ssa form. *)
+(** Intraprocedural dataflow analyses on a SSA-form dataflow graph (similar to a def-use graph)*)
 
-(** - vertices are assignment statements or phis
-    - edges are data dependency 
+(** 
+
+  - vertices are assignment statements or phis
+  - edges are data dependency  (directed from dependency to dependee)
   
   Due to the statement structure, a vertex can have both multiple incoming
   dependencies and multiple outgoing dependencies; hence the weirdness with
@@ -30,7 +32,13 @@
 open Lang
 open Lang.Common
 
+
+(** {1 Building dataflow graphs for procedures }*)
+
 module Vertex = struct
+  (** Vertices in the intraprocedural dataflow graph represent executable statements or phi nodes.*)
+
+
   type t = Entry | Return | Stmt of Program.stmt | Phi of Var.t * Var.t list
   [@@deriving ord, eq]
 
@@ -39,30 +47,43 @@ module Vertex = struct
     | Stmt s -> Hash.combine2 251 (Hashtbl.hash s)
     | Phi (l, r) -> Hash.combine2 271 (Hash.list Var.hash r)
     | o -> Hashtbl.hash o
-end
 
-module UseDef = Graph.Persistent.Digraph.ConcreteBidirectional (Vertex)
-module B = Graph.Builder.P (UseDef)
-module MDeps = CCMultiMap.Make (Var) (Vertex)
-
-type defuse = { var_to_use : MDeps.t; var_to_def : MDeps.t }
-
-let vert_defines p =
-  Vertex.(
+let defines p =
     function
     | Phi (lhs, _) -> Iter.singleton lhs
     | Stmt s -> Stmt.iter_assigned s
     | Entry -> Procedure.formal_in_params p |> StringMap.values
-    | Return -> Iter.empty)
+    | Return -> Iter.empty
 
-let vert_uses p =
-  Vertex.(
+let uses p =
     function
     | Phi (_, rhs) -> List.to_iter rhs
     | Stmt s -> Stmt.free_vars_iter s
     | Entry -> Iter.empty
-    | Return -> Procedure.formal_in_params p |> StringMap.values)
+    | Return -> Procedure.formal_in_params p |> StringMap.values
 
+end
+
+(** Ocamlgraph dataflow graph *)
+module DFGraph = Graph.Persistent.Digraph.ConcreteBidirectional (Vertex)
+
+(** Ocamlgraph builder for dfgraph *)
+module DFGBuilder = Graph.Builder.P (DFGraph)
+
+module MDeps = CCMultiMap.Make (Var) (Vertex)
+
+(** Dataflow graph as maps from variables to the verices which use or define
+    them resp.*)
+type defuse = { var_to_use : MDeps.t; var_to_def : MDeps.t }
+
+(** Return a persistent iterator of dfgraph vertices for a procedure.
+
+    This is an approximated program representation for abstract semantics which
+    assumes phi nodes compute the union of incoming states.
+
+    possible future work: encode the reachability of definitions a la TV paper
+    to make phis precise conditionals.
+  *)
 let def_use_vert p =
   Block.(
     Procedure.iter_blocks_topo_fwd p
@@ -78,11 +99,12 @@ let def_use_vert p =
         Iter.append phi_def_use block_def_use))
   |> Iter.persistent
 
+(** return the vertex dependency maps {! defuse} for a procedure *)
 let def_use_maps ?(require_full_ssa = false) ?def_use p =
   let def_use_vert = Option.get_or ~default:(def_use_vert p) def_use in
   let to_def =
     def_use_vert
-    |> Iter.flat_map (fun v -> vert_defines p v |> Iter.map (fun s -> (s, v)))
+    |> Iter.flat_map (fun v -> Vertex.defines p v |> Iter.map (fun s -> (s, v)))
     |> MDeps.of_iter
   in
   if require_full_ssa then
@@ -94,47 +116,54 @@ let def_use_maps ?(require_full_ssa = false) ?def_use p =
       |> Iter.for_all (fun i -> i <= 1));
   let to_use =
     def_use_vert
-    |> Iter.flat_map (fun v -> vert_uses p v |> Iter.map (fun s -> (s, v)))
+    |> Iter.flat_map (fun v -> Vertex.uses p v |> Iter.map (fun s -> (s, v)))
     |> MDeps.of_iter
   in
   { var_to_use = to_use; var_to_def = to_def }
 
-let def_use_graph p =
+(** Return a {! DFGraph.t} representing the dataflow.
+    Vertices are phi nodes or program statements, edges are directed
+    from definitions to their uses. *)
+let create p =
   let def_use_vert = def_use_vert p in
   let to_use, to_def =
     def_use_maps ~def_use:def_use_vert p |> function
     | { var_to_use; var_to_def } -> (var_to_use, var_to_def)
   in
   let add_vert graph vert =
-    let graph = B.add_vertex graph vert in
+    let graph = DFGBuilder.add_vertex graph vert in
     let graph =
-      vert_defines p vert
+      Vertex.defines p vert
       |> Iter.flat_map (fun v -> MDeps.find_iter to_use v)
-      |> Iter.fold (fun g use -> B.add_edge g vert use) graph
+      |> Iter.fold (fun g use -> DFGBuilder.add_edge g vert use) graph
     in
     (* I feel like it shouldn't be neccessary to add the edge in both
        directions, it would probably only occur due to bugs? *)
     let graph =
-      vert_uses p vert
+      Vertex.uses p vert
       |> Iter.flat_map (fun v -> MDeps.find_iter to_def v)
-      |> Iter.fold (fun g def -> B.add_edge g def vert) graph
+      |> Iter.fold (fun g def -> DFGBuilder.add_edge g def vert) graph
     in
     graph
   in
-  def_use_vert |> Iter.fold add_vert UseDef.empty
+  def_use_vert |> Iter.fold add_vert DFGraph.empty
 
-module DefUseGraphAnalysis
+(** {1 Value-analysis of dataflow graphs }*)
+
+open struct 
+
+(** Dataflow analysis that is parametric in analysis direction, via functor argument {G}
+    which may present either a forwards or backwards view of the graph. *)
+module DataflowAnalysis
     (G :
       Bincaml_util.Reverse_graph.GraphSig
         with type V.t = Vertex.t
-        with type t = UseDef.t)
+        with type t = DFGraph.t)
     (V : Intra_analysis.Lattice)
     (A : Intra_analysis.Transfer with type t = Intra_analysis.MapState(V).t) =
 struct
-  module StateDomain = Intra_analysis.MapState (V)
-
-  module State = struct
-    include StateDomain
+  module StateDomain = struct 
+    include Intra_analysis.MapState (V)
 
     type edge = G.edge
 
@@ -149,64 +178,75 @@ struct
 
     let analyze (edge : G.edge) data =
       (* this gets swapped based on graph direction so is always the logical
-         successor 
+         successor (dataflow dependee)
       *)
       analyze_vert (G.E.dst edge) data
   end
 
   module Topo = Graph.WeakTopological.Make (G)
-  module DuAnalysis = Graph.ChaoticIteration.Make (G) (State)
+  module DFGChaoticIter = Graph.ChaoticIteration.Make (G) (StateDomain)
 
-  let analyse root ?(init = fun v -> State.analyze_vert v (StateDomain.bottom)) ~widen_set ~delay_widen
-      p =
-    let g = def_use_graph p in
-    DuAnalysis.recurse g (Topo.recursive_scc g root) init widen_set delay_widen
+  (** compute def-use graph for an SSA-form procedure 
+      and run a dataflow analysis over it, returning a single abstract state
+      relating all program variables to an abstract value. *)
+  let analyse root ?(init = fun v -> StateDomain.analyze_vert v (StateDomain.bottom)) ~widen_set ~delay_widen
+      (p: [ `DFG of DFGraph.t | `Proc of Program.proc ]) =
+    let g = match p with `Proc p -> create p | `DFG g -> g in
+    DFGChaoticIter.recurse g (Topo.recursive_scc g root) init widen_set delay_widen
 
-  let analyse_graph g root ?(init = fun v -> StateDomain.bottom) ~widen_set
-      ~delay_widen p =
-    DuAnalysis.recurse g (Topo.recursive_scc g root) init widen_set delay_widen
+end
 end
 
+(** forwards dataflow analysis over dfg *)
 module AnalysisFwd
     (V : Intra_analysis.ValueAbstraction)
     (TRF : Intra_analysis.ForwardStmtTransfer with type t = V.t) =
 struct
   module TF = Intra_analysis.StateTransferFwd (V) (TRF)
-  include DefUseGraphAnalysis (UseDef) (V) (TF)
+  module A = DataflowAnalysis(DFGraph) (V) (TF)
 
-  (** providing an incorrect function for init can make the analysis unsound, by default
+  (** 
+      Construct DFGraph and run dataflow analysis.
+
+      providing an incorrect function for init can make the analysis unsound, by default
       it executes the vertex with a bot initial state.
 
       This is the only time the root vertex (Entry) gets processed; the transfer function of the root 
-      vertex (Entry) must not depend on an abstract state.
+      vertex ([Entry]) must not depend on an abstract state.
       *)
   let (analyse :
-        ?init:(Vertex.t -> State.t) ->
+        ?init:(Vertex.t -> A.StateDomain.t) ->
         widen_set:Vertex.t Graph.ChaoticIteration.widening_set ->
         delay_widen:int ->
-        Program.proc ->
-        State.t DuAnalysis.M.t) =
-    analyse Entry
+        [ `DFG of DFGraph.t | `Proc of Program.proc ]
+    ->
+        A.StateDomain.t A.DFGChaoticIter.M.t) =
+    A.analyse Entry
 end
 
+(** Backwards dataflow analysis over DFG *)
 module AnalysisRev
     (V : Intra_analysis.ValueAbstraction)
     (TRF : Intra_analysis.ReverseStmtTransfer with type t = V.t) =
 struct
   module TF = Intra_analysis.StateTransferRev (V) (TRF)
-  include DefUseGraphAnalysis (Bincaml_util.Reverse_graph.RevG (UseDef)) (V) (TF)
+  module A = DataflowAnalysis(Bincaml_util.Reverse_graph.RevG (DFGraph)) (V) (TF)
 
-  (** providing an incorrect function for init can make the analysis unsound, by default
+  (** 
+      Construct DFGraph and run dataflow analysis.
+
+      Providing an incorrect function for init can make the analysis unsound, by default
       it executes the vertex with a bot initial state.
 
-      This is the only time the root vertex (Return) gets processed; the transfer function of the root 
-      vertex (Return) must not depend on an abstract state.
+      This is the only time the root vertex ([Return]) gets processed; the transfer function of the root 
+      vertex ([Return]) must not depend on an abstract state.
       *)
   let (analyse :
-        ?init:(Vertex.t -> State.t) ->
+        ?init:(Vertex.t -> A.StateDomain.t) ->
         widen_set:Vertex.t Graph.ChaoticIteration.widening_set ->
         delay_widen:int ->
-        Program.proc ->
-        State.t DuAnalysis.M.t) =
-    analyse Return
+        [ `DFG of DFGraph.t | `Proc of Program.proc ]
+    ->
+        A.StateDomain.t A.DFGChaoticIter.M.t) =
+    A.analyse Return
 end

@@ -129,9 +129,9 @@ module Transfer = struct
     | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
 end
 
-module Analysis = Defuse.AnalysisFwd (IsZeroValueAbstraction) (Transfer)
+module Analysis = Dataflow_graph.AnalysisFwd (IsZeroValueAbstraction) (Transfer)
 
 let analyse (p : Lang.Program.proc) =
   Analysis.analyse
     ~widen_set:(Graph.ChaoticIteration.Predicate (fun _ -> false))
-    ~delay_widen:0 p
+    ~delay_widen:0 (`Proc p)

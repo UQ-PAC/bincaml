@@ -21,6 +21,7 @@ The entry point of this library is the module: {!Bincaml_util}.
 
 {2 IR Transforms}
 
+- library [bincaml.analysis] : {!Analysis} defines static analyses 
 - library [bincaml.transforms]: {!Transforms} contains transform pass
   implementatinos
 - library [bincaml]: {!Bincaml.Passes.PassManager} defines the transform pass
