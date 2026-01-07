@@ -1,4 +1,5 @@
-(** Example minimal static analysis on ssa dataflow graph graph for truthiness *)
+(** Example minimal static analysis on ssa dataflow graph graph for truthiness
+*)
 
 open Bincaml_util.Common
 
@@ -110,29 +111,34 @@ module IsZeroValueAbstraction = struct
         else Top
 end
 
-module Transfer = struct
-  type t = IsZeroLattice.t
+module Domain = Intra_analysis.MapState (IsZeroLattice)
 
+module TransferFunc = struct
   open IsZeroLattice
 
-  let do_assume read e ~is_guard = Iter.empty
-  let do_assert read e = Iter.empty
+  type t = Domain.t
 
-  let transfer (stmt : (Var.t, t, t) Lang.Stmt.t) : (Var.t * t) Iter.t =
-    match stmt with
-    | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
-    | Lang.Stmt.Instr_Assert _ -> Iter.empty
-    | Lang.Stmt.Instr_Assume _ -> Iter.empty
-    | Lang.Stmt.Instr_Load { lhs } -> Iter.singleton (lhs, Top)
-    | Lang.Stmt.Instr_Store { lhs } -> Iter.singleton (lhs, Top)
-    | Lang.Stmt.Instr_IntrinCall { lhs } ->
-        StringMap.values lhs |> Iter.map (fun v -> (v, Top))
-    | Lang.Stmt.Instr_Call { lhs } ->
-        StringMap.values lhs |> Iter.map (fun v -> (v, Top))
-    | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
+  module Eval = Intra_analysis.EvalStmt (IsZeroValueAbstraction) (Domain)
+
+  let transfer stmt dom =
+    let stmt = Eval.stmt_eval_fwd stmt dom in
+    let updates =
+      match stmt with
+      | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
+      | Lang.Stmt.Instr_Assert _ -> Iter.empty
+      | Lang.Stmt.Instr_Assume _ -> Iter.empty
+      | Lang.Stmt.Instr_Load { lhs } -> Iter.singleton (lhs, Top)
+      | Lang.Stmt.Instr_Store { lhs } -> Iter.singleton (lhs, Top)
+      | Lang.Stmt.Instr_IntrinCall { lhs } ->
+          StringMap.values lhs |> Iter.map (fun v -> (v, Top))
+      | Lang.Stmt.Instr_Call { lhs } ->
+          StringMap.values lhs |> Iter.map (fun v -> (v, Top))
+      | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
+    in
+    Iter.fold (fun a (k, v) -> Domain.update k v a) dom updates
 end
 
-module Analysis = Dataflow_graph.AnalysisFwd (IsZeroValueAbstraction) (Transfer)
+module Analysis = Dataflow_graph.AnalysisFwd (Domain) (TransferFunc)
 
 let analyse (p : Lang.Program.proc) =
   let init p =

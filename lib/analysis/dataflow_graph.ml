@@ -200,28 +200,30 @@ open struct
         Bincaml_util.Reverse_graph.GraphSig
           with type V.t = Vertex.t
           with type t = DFGraph.t)
-      (V : Intra_analysis.Lattice)
-      (A : Intra_analysis.Transfer with type t = Intra_analysis.MapState(V).t) =
+      (D : Intra_analysis.StateDomain with type key_t = Var.t)
+      (A : Intra_analysis.Transfer with type t = D.t) =
   struct
-    module StateDomain = struct
-      include Intra_analysis.MapState (V)
+    module Domain = struct
+      include D
 
       type edge = G.edge
 
       let analyze_vert (v : Vertex.t) data =
-        dbg_print (show data);
+        dbg_print (D.show data);
         dbg_print ("eval " ^ Vertex.show v);
         let r =
           match v with
           | Vertex.(Phi (lhs, rhs)) ->
-              update lhs
+              D.update lhs
                 (rhs
-                |> List.fold_left (fun a v -> V.join a (read v data)) V.bottom)
+                |> List.fold_left
+                     (fun a v -> D.V.join a (D.read v data))
+                     D.V.bottom)
                 data
           | Vertex.(Stmt s) -> A.transfer s data
           | _ -> data
         in
-        dbg_print @@ show r;
+        dbg_print @@ D.show r;
         r
 
       let analyze (edge : G.edge) data =
@@ -232,7 +234,7 @@ open struct
     end
 
     module Topo = Graph.WeakTopological.Make (G)
-    module DFGChaoticIter = Graph.ChaoticIteration.Make (G) (StateDomain)
+    module DFGChaoticIter = Graph.ChaoticIteration.Make (G) (Domain)
 
     (** Run a dataflow analysis over it, returning a single abstract state
         relating all program variables to an abstract value.
@@ -246,9 +248,7 @@ open struct
         match v with
         | v ->
             init p
-            |> Iter.fold
-                 (fun m (v, d) -> StateDomain.update v d m)
-                 StateDomain.bottom
+            |> Iter.fold (fun m (v, d) -> Domain.update v d m) Domain.bottom
       in
       DFGChaoticIter.recurse g scc f_init widen_set delay_widen
   end
@@ -256,11 +256,11 @@ end
 
 (** forwards dataflow analysis over dfg *)
 module AnalysisFwd
-    (V : Intra_analysis.ValueAbstraction)
-    (TRF : Intra_analysis.ForwardStmtTransfer with type t = V.t) =
+    (D : Intra_analysis.StateDomain with type key_t = Var.t)
+    (TRF : Intra_analysis.Transfer with type t = D.t) =
 struct
-  module TF = Intra_analysis.StateTransferFwd (V) (TRF)
-  module A = DataflowAnalysis (DFGraph) (V) (TF)
+  (*module TF = Intra_analysis.StateTransferFwd (V) (TRF)*)
+  module A = DataflowAnalysis (DFGraph) (D) (TRF)
 
   (** Construct DFGraph and run dataflow analysis.
 
@@ -270,20 +270,17 @@ struct
       This is the only time the root vertex (Entry) gets processed; the transfer
       function of the root vertex ([Entry]) must not depend on an abstract
       state. *)
-  let analyse ~init ?g ~widen_set ~delay_widen p :
-      A.StateDomain.t A.DFGChaoticIter.M.t =
+  let analyse ~init ?g ~widen_set ~delay_widen p : D.t A.DFGChaoticIter.M.t =
     A.analyse Entry ~init ~widen_set ~delay_widen ?g p
 end
 
 (** Backwards dataflow analysis over DFG *)
 module AnalysisRev
-    (V : Intra_analysis.ValueAbstraction)
-    (TRF : Intra_analysis.ReverseStmtTransfer with type t = V.t) =
+    (V : Intra_analysis.StateDomain with type key_t = Var.t)
+    (TRF : Intra_analysis.Transfer with type t = V.t) =
 struct
-  module TF = Intra_analysis.StateTransferRev (V) (TRF)
-
   module A =
-    DataflowAnalysis (Bincaml_util.Reverse_graph.RevG (DFGraph)) (V) (TF)
+    DataflowAnalysis (Bincaml_util.Reverse_graph.RevG (DFGraph)) (V) (TRF)
 
   (** Construct DFGraph and run dataflow analysis.
 
@@ -293,7 +290,6 @@ struct
       This is the only time the root vertex ([Return]) gets processed; the
       transfer function of the root vertex ([Return]) must not depend on an
       abstract state. *)
-  let analyse ~init ?g ~widen_set ~delay_widen p :
-      A.StateDomain.t A.DFGChaoticIter.M.t =
+  let analyse ~init ?g ~widen_set ~delay_widen p : V.t A.DFGChaoticIter.M.t =
     A.analyse Return ~init ~widen_set ~delay_widen ?g p
 end

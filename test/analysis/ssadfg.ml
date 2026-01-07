@@ -56,22 +56,25 @@ proc @main_4196260 () -> ()
   in
   let lst =
     Loader.Loadir.ast_of_string ~__LINE__ ~__FILE__ ~__FUNCTION__ block
-  in 
+  in
   let prog = lst.prog in
-  let ba = Bincaml.Passes.PassManager.batch_of_list ["ssa"] in
+  let ba = Bincaml.Passes.PassManager.batch_of_list [ "ssa" ] in
   let prog = Bincaml.Passes.PassManager.run_batch ba prog in
-  let proc = (Program.proc prog (prog.entry_proc |> Option.get_exn_or "fail")) in
-  let ar = Analysis.Defuse_bool.analyse proc in 
+  let proc = Program.proc prog (prog.entry_proc |> Option.get_exn_or "fail") in
+  let ar = Analysis.Defuse_bool.analyse proc in
   let ar = Option.get_exn_or "" ar in
 
-  let f = Analysis.Defuse_bool.Analysis.A.StateDomain.to_iter ar 
-      |> Iter.filter (function (v, _) -> String.ends_with ~suffix:"_out" (Var.name v))
-      |> Iter.to_string ~sep:"\n"
-      (fun (k, v) ->
-        Printf.sprintf "%s->%s" (Var.name k) (Analysis.Defuse_bool.IsZeroLattice.show v))
+  let f =
+    Analysis.Defuse_bool.Domain.to_iter ar
+    |> Iter.filter (function v, _ ->
+        String.ends_with ~suffix:"_out" (Var.name v))
+    |> Iter.to_string ~sep:"\n" (fun (k, v) ->
+        Printf.sprintf "%s->%s" (Var.name k)
+          (Analysis.Defuse_bool.IsZeroLattice.show v))
   in
   print_endline f;
-  [%expect {|
+  [%expect
+    {|
     R30_out->Top
     NF_out->NonZero
     CF_out->Top

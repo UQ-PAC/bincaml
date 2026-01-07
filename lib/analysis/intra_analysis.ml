@@ -28,6 +28,23 @@ module type ValueAbstraction = sig
   val eval_intrin : Lang.Ops.AllOps.intrin -> t list -> t
 end
 
+module type StateDomain = sig
+  type t
+  type val_t
+  type key_t
+
+  module V : Lattice with type t = val_t
+
+  val show : t -> string
+  val bottom : t
+  val join : t -> t -> t
+  val equal : t -> t -> bool
+  val compare : t -> t -> int
+  val read : key_t -> t -> val_t
+  val update : key_t -> val_t -> t -> t
+  val widening : t -> t -> t
+end
+
 module EvalValueAbstraction (V : ValueAbstraction) = struct
   type t
 
@@ -45,20 +62,22 @@ module EvalValueAbstraction (V : ValueAbstraction) = struct
     Lang.Expr.BasilExpr.cata eval_alg expr
 end
 
-module type StateDomain = sig
-  type edge = Procedure.G.edge
+module EvalStmt
+    (V : ValueAbstraction)
+    (S : StateDomain with type key_t = Var.t with type val_t = V.t) =
+struct
   type t
-  type val_t
-  type key_t
 
-  val show : t -> string
-  val bottom : t
-  val join : t -> t -> t
-  val equal : t -> t -> bool
-  val compare : t -> t -> int
-  val read : key_t -> t -> val_t
-  val update : key_t -> val_t -> t -> t
-  val widening : t -> t -> t
+  module EV = EvalValueAbstraction (V)
+
+  let stmt_eval_fwd (stmt : Program.stmt) dom =
+    Stmt.map ~f_lvar:id
+      ~f_rvar:(fun v -> S.read v dom)
+      ~f_expr:(EV.eval (fun v -> S.read v dom))
+      stmt
+
+  let stmt_eval_rev (stmt : Program.stmt) dom =
+    Stmt.map ~f_lvar:(fun v -> S.read v dom) ~f_rvar:id ~f_expr:id stmt
 end
 
 let tf_forwards st (read_st : 'a -> Var.t -> 'b) (s : Program.stmt)
@@ -75,6 +94,8 @@ module MapState (V : Lattice) = struct
   open struct
     module M = PatriciaTree.MakeMap (Var)
   end
+
+  module V = V
 
   type val_t = V.t
   type key_t = Var.t
@@ -109,6 +130,7 @@ module type Transfer = sig
   val transfer : Program.stmt -> t -> t
 end
 
+(*
 module type ForwardStmtTransfer = sig
   type t
 
@@ -130,20 +152,18 @@ module type ReverseStmtTransfer = sig
 end
 
 module StateTransferFwd
-    (V : ValueAbstraction)
-    (SF : ForwardStmtTransfer with type t = V.t) =
+    (S : StateDomain with type key_t = Var.t)
+    (V : ValueAbstraction with type t = S.V.t)
+    (SF : ForwardStmtTransfer with type t = S.val_t with type v = S.key_t) =
 struct
-  open struct
-    module StateDomain = MapState (V)
-    module EV = EvalValueAbstraction (V)
-  end
+  type t = S.t
 
-  type t = StateDomain.t
+  module EV = EvalValueAbstraction (V)
 
   let transfer (stmt : Program.stmt) dom =
     Stmt.map ~f_lvar:id
-      ~f_rvar:(fun v -> StateDomain.read v dom)
-      ~f_expr:(EV.eval (fun v -> StateDomain.read v dom))
+      ~f_rvar:(fun v -> S.read v dom)
+      ~f_expr:(EV.eval (fun v -> S.read v dom))
       stmt
     |> SF.transfer
     |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) dom
@@ -176,6 +196,7 @@ struct
           |> SF.transfer)
     |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) dom
 end
+*)
 
 module Forwards (D : Analysis) = struct
   module AnalyseBlock = struct
