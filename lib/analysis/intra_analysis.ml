@@ -72,7 +72,7 @@ let tf_forwards st (read_st : 'a -> Var.t -> 'b) (s : Program.stmt)
        s
 
 module MapState (V : Lattice) = struct
-  open struct 
+  open struct
     module M = PatriciaTree.MakeMap (Var)
   end
 

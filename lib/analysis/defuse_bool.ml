@@ -5,7 +5,8 @@ open Bincaml_util.Common
 module IsZeroLattice = struct
   let name = "isZero"
 
-  type t = Top | Zero | NonZero | Bot [@@deriving ord, eq, show {with_path = false}]
+  type t = Top | Zero | NonZero | Bot
+  [@@deriving ord, eq, show { with_path = false }]
 
   let bottom = Bot
 
@@ -13,7 +14,7 @@ module IsZeroLattice = struct
     match (a, b) with
     | Top, _ -> Top
     | _, Top -> Top
-    | a, b when (equal a b) -> a
+    | a, b when equal a b -> a
     | a, Bot -> a
     | Bot, a -> a
     | _ -> Top
@@ -134,12 +135,11 @@ end
 module Analysis = Dataflow_graph.AnalysisFwd (IsZeroValueAbstraction) (Transfer)
 
 let analyse (p : Lang.Program.proc) =
-  let init p = 
-    let vs = Lang.Procedure.formal_in_params p |> StringMap.values in 
+  let init p =
+    let vs = Lang.Procedure.formal_in_params p |> StringMap.values in
     vs |> Iter.map (fun v -> (v, IsZeroLattice.Top))
   in
   Analysis.A.DFGChaoticIter.M.find_opt Return
-  (Analysis.analyse
-    ~init
-    ~widen_set:(Graph.ChaoticIteration.Predicate (fun _ -> false))
-    ~delay_widen:0 p)
+    (Analysis.analyse ~init
+       ~widen_set:(Graph.ChaoticIteration.Predicate (fun _ -> false))
+       ~delay_widen:0 p)
