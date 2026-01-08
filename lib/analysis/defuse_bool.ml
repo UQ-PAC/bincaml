@@ -114,13 +114,11 @@ end
 module Domain = Intra_analysis.MapState (IsZeroLattice)
 
 module TransferFunc = struct
-  open IsZeroLattice
-
-  type t = Domain.t
-
   module Eval = Intra_analysis.EvalStmt (IsZeroValueAbstraction) (Domain)
+  open IsZeroLattice
+  include Domain
 
-  let transfer stmt dom =
+  let transfer dom stmt =
     let stmt = Eval.stmt_eval_fwd stmt dom in
     let updates =
       match stmt with
@@ -138,7 +136,7 @@ module TransferFunc = struct
     Iter.fold (fun a (k, v) -> Domain.update k v a) dom updates
 end
 
-module Analysis = Dataflow_graph.AnalysisFwd (Domain) (TransferFunc)
+module Analysis = Dataflow_graph.AnalysisFwd (TransferFunc)
 
 let analyse (p : Lang.Program.proc) =
   let init p =

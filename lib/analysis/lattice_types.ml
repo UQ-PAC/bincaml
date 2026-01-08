@@ -1,0 +1,46 @@
+open Lang
+open Common
+open Containers
+
+module type Lattice = sig
+  val name : string
+
+  type t
+
+  val compare : t -> t -> int
+  val show : t -> string
+  val bottom : t
+  val join : t -> t -> t
+  val equal : t -> t -> bool
+  val widening : t -> t -> t
+end
+
+(** an abstract value providing opertions of basil ir *)
+module type ValueAbstraction = sig
+  include Lattice
+
+  (** evaluate operators *)
+
+  val eval_const : Lang.Ops.AllOps.const -> t
+  val eval_unop : Lang.Ops.AllOps.unary -> t -> t
+  val eval_binop : Lang.Ops.AllOps.binary -> t -> t -> t
+  val eval_intrin : Lang.Ops.AllOps.intrin -> t list -> t
+end
+
+(** a value abstraction providing variable store/load operations *)
+module type StateAbstraction = sig
+  type val_t
+  type key_t
+
+  module V : Lattice with type t = val_t
+  include Lattice
+
+  val read : key_t -> t -> val_t
+  val update : key_t -> val_t -> t -> t
+end
+
+module type Domain = sig
+  include Lattice
+
+  val transfer : t -> Program.stmt -> t
+end

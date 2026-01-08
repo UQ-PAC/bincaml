@@ -3,47 +3,7 @@
 open Lang
 open Common
 open Containers
-
-module type Lattice = sig
-  val name : string
-
-  type t
-
-  val compare : t -> t -> int
-  val show : t -> string
-  val bottom : t
-  val join : t -> t -> t
-  val equal : t -> t -> bool
-  val widening : t -> t -> t
-end
-
-module type ValueAbstraction = sig
-  include Lattice
-
-  (** evaluate operators *)
-
-  val eval_const : Lang.Ops.AllOps.const -> t
-  val eval_unop : Lang.Ops.AllOps.unary -> t -> t
-  val eval_binop : Lang.Ops.AllOps.binary -> t -> t -> t
-  val eval_intrin : Lang.Ops.AllOps.intrin -> t list -> t
-end
-
-module type StateDomain = sig
-  type t
-  type val_t
-  type key_t
-
-  module V : Lattice with type t = val_t
-
-  val show : t -> string
-  val bottom : t
-  val join : t -> t -> t
-  val equal : t -> t -> bool
-  val compare : t -> t -> int
-  val read : key_t -> t -> val_t
-  val update : key_t -> val_t -> t -> t
-  val widening : t -> t -> t
-end
+open Lattice_types
 
 module EvalValueAbstraction (V : ValueAbstraction) = struct
   type t
@@ -64,7 +24,7 @@ end
 
 module EvalStmt
     (V : ValueAbstraction)
-    (S : StateDomain with type key_t = Var.t with type val_t = V.t) =
+    (S : StateAbstraction with type key_t = Var.t with type val_t = V.t) =
 struct
   type t
 
@@ -101,6 +61,7 @@ module MapState (V : Lattice) = struct
   type key_t = Var.t
   type t = val_t M.t
 
+  let name = V.name ^ "maplattice"
   let to_iter m = Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
 
   let show m =
@@ -117,88 +78,7 @@ module MapState (V : Lattice) = struct
   let widening a b = join a b
 end
 
-module type Analysis = sig
-  include StateDomain
-
-  val name : string
-  val tf_stmt : t -> Program.stmt -> t
-end
-
-module type Transfer = sig
-  type t
-
-  val transfer : Program.stmt -> t -> t
-end
-
-(*
-module type ForwardStmtTransfer = sig
-  type t
-
-  val do_assume :
-    (Var.t -> t) -> Program.e -> is_guard:bool -> (Var.t * t) Iter.t
-
-  val do_assert : (Var.t -> t) -> Program.e -> (Var.t * t) Iter.t
-  val transfer : (Var.t, t, t) Stmt.t -> (Var.t * t) Iter.t
-end
-
-module type ReverseStmtTransfer = sig
-  type t
-
-  val do_assume :
-    (Var.t -> t) -> Program.e -> is_guard:bool -> (Var.t * t) Iter.t
-
-  val do_assert : (Var.t -> t) -> Program.e -> (Var.t * t) Iter.t
-  val transfer : (t, Var.t, Program.e) Stmt.t -> (Var.t * t) Iter.t
-end
-
-module StateTransferFwd
-    (S : StateDomain with type key_t = Var.t)
-    (V : ValueAbstraction with type t = S.V.t)
-    (SF : ForwardStmtTransfer with type t = S.val_t with type v = S.key_t) =
-struct
-  type t = S.t
-
-  module EV = EvalValueAbstraction (V)
-
-  let transfer (stmt : Program.stmt) dom =
-    Stmt.map ~f_lvar:id
-      ~f_rvar:(fun v -> S.read v dom)
-      ~f_expr:(EV.eval (fun v -> S.read v dom))
-      stmt
-    |> SF.transfer
-    |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) dom
-end
-
-module StateTransferRev
-    (V : ValueAbstraction)
-    (SF : ReverseStmtTransfer with type t = V.t) =
-struct
-  open struct
-    module StateDomain = MapState (V)
-    module EV = EvalValueAbstraction (V)
-  end
-
-  type t = StateDomain.t
-
-  let do_assume read e ~is_guard = SF.do_assume read e ~is_guard
-  let do_assert read e = SF.do_assert read e
-
-  let transfer (stmt : Program.stmt) dom =
-    (match stmt with
-      | Stmt.Instr_Assume { body; branch } ->
-          SF.do_assume (fun v -> StateDomain.read v dom) ~is_guard:branch body
-      | Stmt.Instr_Assert { body } ->
-          SF.do_assert (fun v -> StateDomain.read v dom) body
-      | stmt ->
-          Stmt.map
-            ~f_lvar:(fun v -> StateDomain.read v dom)
-            ~f_rvar:id ~f_expr:id stmt
-          |> SF.transfer)
-    |> Iter.fold (fun m (v, d) -> StateDomain.update v d m) dom
-end
-*)
-
-module Forwards (D : Analysis) = struct
+module Forwards (D : Domain) = struct
   module AnalyseBlock = struct
     include D
 
@@ -209,7 +89,7 @@ module Forwards (D : Analysis) = struct
       | Jump -> s
       | Block b -> begin
           assert (List.is_empty b.phis);
-          Block.fold_forwards ~phi:(fun a _ -> a) ~f:D.tf_stmt s b
+          Block.fold_forwards ~phi:(fun a _ -> a) ~f:D.transfer s b
         end
   end
 
@@ -240,7 +120,7 @@ module Forwards (D : Analysis) = struct
     Option.iter to_dot (Procedure.graph p)
 end
 
-module Backwards (D : Analysis) = struct
+module Backwards (D : Domain) = struct
   module AnalyseBlock = struct
     include D
 
@@ -251,7 +131,7 @@ module Backwards (D : Analysis) = struct
       | Jump -> s
       | Block b -> begin
           assert (List.is_empty b.phis);
-          Block.fold_backwards ~phi:(fun a _ -> a) ~f:D.tf_stmt ~init:s b
+          Block.fold_backwards ~phi:(fun a _ -> a) ~f:D.transfer ~init:s b
         end
   end
 

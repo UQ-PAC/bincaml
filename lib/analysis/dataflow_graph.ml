@@ -191,6 +191,13 @@ end)
 
 (** {1 Value-analysis of dataflow graphs}*)
 
+(** Type of a dataflow analysis domain: this needs at minimum a view of variable
+    state, lattice order, and transfer function *)
+module type DFAnalysis = sig
+  include Lattice_types.StateAbstraction with type key_t = Var.t
+  include Lattice_types.Domain with type t := t
+end
+
 open struct
   (** Dataflow analysis that is parametric in analysis direction, via functor
       argument {! G} which may present either a forwards or backwards view of
@@ -200,8 +207,7 @@ open struct
         Bincaml_util.Reverse_graph.GraphSig
           with type V.t = Vertex.t
           with type t = DFGraph.t)
-      (D : Intra_analysis.StateDomain with type key_t = Var.t)
-      (A : Intra_analysis.Transfer with type t = D.t) =
+      (D : DFAnalysis) =
   struct
     module Domain = struct
       include D
@@ -220,7 +226,7 @@ open struct
                      (fun a v -> D.V.join a (D.read v data))
                      D.V.bottom)
                 data
-          | Vertex.(Stmt s) -> A.transfer s data
+          | Vertex.(Stmt s) -> D.transfer data s
           | _ -> data
         in
         dbg_print @@ D.show r;
@@ -255,12 +261,9 @@ open struct
 end
 
 (** forwards dataflow analysis over dfg *)
-module AnalysisFwd
-    (D : Intra_analysis.StateDomain with type key_t = Var.t)
-    (TRF : Intra_analysis.Transfer with type t = D.t) =
-struct
+module AnalysisFwd (D : DFAnalysis) = struct
   (*module TF = Intra_analysis.StateTransferFwd (V) (TRF)*)
-  module A = DataflowAnalysis (DFGraph) (D) (TRF)
+  module A = DataflowAnalysis (DFGraph) (D)
 
   (** Construct DFGraph and run dataflow analysis.
 
@@ -275,12 +278,8 @@ struct
 end
 
 (** Backwards dataflow analysis over DFG *)
-module AnalysisRev
-    (V : Intra_analysis.StateDomain with type key_t = Var.t)
-    (TRF : Intra_analysis.Transfer with type t = V.t) =
-struct
-  module A =
-    DataflowAnalysis (Bincaml_util.Reverse_graph.RevG (DFGraph)) (V) (TRF)
+module AnalysisRev (D : DFAnalysis) = struct
+  module A = DataflowAnalysis (Bincaml_util.Reverse_graph.RevG (DFGraph)) (D)
 
   (** Construct DFGraph and run dataflow analysis.
 
@@ -290,6 +289,6 @@ struct
       This is the only time the root vertex ([Return]) gets processed; the
       transfer function of the root vertex ([Return]) must not depend on an
       abstract state. *)
-  let analyse ~init ?g ~widen_set ~delay_widen p : V.t A.DFGChaoticIter.M.t =
+  let analyse ~init ?g ~widen_set ~delay_widen p : D.t A.DFGChaoticIter.M.t =
     A.analyse Return ~init ~widen_set ~delay_widen ?g p
 end
