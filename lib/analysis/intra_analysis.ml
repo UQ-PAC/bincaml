@@ -5,7 +5,7 @@ open Common
 open Containers
 open Lattice_types
 
-module EvalValueAbstraction (V : ValueAbstraction) = struct
+module EvalExpr (V : ValueAbstraction) = struct
   type t
 
   let eval read expr =
@@ -19,24 +19,34 @@ module EvalValueAbstraction (V : ValueAbstraction) = struct
       | ApplyIntrin (op, es) -> V.eval_intrin op es
       | _ -> failwith "unsupported"
     in
-    Lang.Expr.BasilExpr.cata eval_alg expr
+    V.E.cata eval_alg expr
+end
+
+module EvalValueAbstraction
+    (V : ValueAbstraction with module E = Expr.BasilExpr) =
+struct
+  type t
+
+  module Eval = EvalExpr (V)
+
+  let eval read expr = Eval.eval read expr
 end
 
 module EvalStmt
     (V : ValueAbstraction)
-    (S : StateAbstraction with type key_t = Var.t with type val_t = V.t) =
+    (S : StateAbstraction with type val_t = V.t with type key_t = V.E.var) =
 struct
   type t
 
-  module EV = EvalValueAbstraction (V)
+  module EV = EvalExpr (V)
 
-  let stmt_eval_fwd (stmt : Program.stmt) dom =
+  let stmt_eval_fwd stmt dom =
     Stmt.map ~f_lvar:id
       ~f_rvar:(fun v -> S.read v dom)
       ~f_expr:(EV.eval (fun v -> S.read v dom))
       stmt
 
-  let stmt_eval_rev (stmt : Program.stmt) dom =
+  let stmt_eval_rev stmt dom =
     Stmt.map ~f_lvar:(fun v -> S.read v dom) ~f_rvar:id ~f_expr:id stmt
 end
 

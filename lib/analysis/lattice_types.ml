@@ -18,13 +18,14 @@ end
 (** an abstract value providing opertions of basil ir *)
 module type ValueAbstraction = sig
   include Lattice
+  module E : Expr.ExprType
 
   (** evaluate operators *)
 
-  val eval_const : Lang.Ops.AllOps.const -> t
-  val eval_unop : Lang.Ops.AllOps.unary -> t -> t
-  val eval_binop : Lang.Ops.AllOps.binary -> t -> t -> t
-  val eval_intrin : Lang.Ops.AllOps.intrin -> t list -> t
+  val eval_const : E.const -> t
+  val eval_unop : E.unary -> t -> t
+  val eval_binop : E.binary -> t -> t -> t
+  val eval_intrin : E.intrin -> t list -> t
 end
 
 (** a value abstraction providing variable store/load operations *)

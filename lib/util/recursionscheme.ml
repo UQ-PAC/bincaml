@@ -9,36 +9,82 @@ module type Fix = sig
   val map_expr : ('b -> 'a) -> 'b expr -> 'a expr
 end
 
+module type Recurseable = sig
+  module O : Fix
+
+  type 'a alg = 'a O.expr -> 'a
+  type 'a coalg = 'a -> 'a O.expr
+
+  val cata : 'a alg -> O.t -> 'a
+  val ana : 'a coalg -> 'a -> O.t
+
+  val map_fold :
+    f:('a -> O.t O.expr -> 'a) -> alg:('a -> 'b O.expr -> 'b) -> 'a -> O.t -> 'b
+
+  val mutu :
+    ?cata:(('a * 'b) alg -> O.t -> 'a * 'b) ->
+    (('a * 'b) O.expr -> 'a) ->
+    (('a * 'b) O.expr -> 'b) ->
+    (O.t -> 'a) * (O.t -> 'b)
+
+  val zygo :
+    ?cata:(('a * 'b) alg -> O.t -> 'a * 'b) ->
+    'a alg ->
+    (('a * 'b) O.expr -> 'b) ->
+    O.t ->
+    'b
+
+  val zygo_l :
+    ?cata:(('b * 'a) alg -> O.t -> 'b * 'a) ->
+    'a alg ->
+    (('b * 'a) O.expr -> 'b) ->
+    O.t ->
+    'b
+
+  val map_fold2 :
+    f:('a -> O.t O.expr -> 'a) ->
+    alg1:('a -> ('b * 'c) O.expr -> 'b) ->
+    alg2:'c alg ->
+    'a ->
+    O.t ->
+    'b
+
+  val para_f : (('a * 'b) O.expr -> 'b) -> (O.t -> 'a) -> O.t -> 'b
+  val para : ((O.t * 'a) O.expr -> 'a) -> O.t -> 'a
+  val iter_children : (O.t O.expr -> unit) -> O.t -> unit
+  val children_iter : O.t -> O.t O.expr Iter.t
+end
+
 module Recursion (O : Fix) = struct
   open Fun.Infix
   open O
+  module O = O
 
   type 'a alg = 'a expr -> 'a
   type 'a coalg = 'a -> 'a expr
 
   (** {1 Recursion schemes}
 
-      Recursion schemes abstract recursion for open-recursive types.
-      This enables us to write a function (an [alg]) which only describes how to process
-      one level of the type, without also describing the recursion to its
-      children.
+      Recursion schemes abstract recursion for open-recursive types. This
+      enables us to write a function (an [alg]) which only describes how to
+      process one level of the type, without also describing the recursion to
+      its children.
 
-      Closed recursive types immediately fix the recursion, i.e. [type a = A of
-      a * a], whereas open recursive types are parametric in the fixpoint type:
-      [type 'child a = A of 'child * 'child | B ... ]. For example we may
-      define the fixed point: [type t = E of t expr [@@unboxed]].
+      Closed recursive types immediately fix the recursion, i.e.
+      [type a = A of a * a], whereas open recursive types are parametric in the
+      fixpoint type: [type 'child a = A of 'child * 'child | B ... ]. For
+      example we may define the fixed point: [type t = E of t expr [@@unboxed]].
 
       The module type {! Fix} defines
 
-      1. the open recursive type ['a expr]
-      2. the fixed type [t]
-      3. an [map_expr] function on the open recursive type (note we can use [@@deriving map] on [expr] to define this)
-      4. a [fix] and [unfix] type which convert between the back and forth from the open and fixed types.
+      1. the open recursive type ['a expr] 2. the fixed type [t] 3. an
+      [map_expr] function on the open recursive type (note we can use
+      [@@deriving map] on [expr] to define this) 4. a [fix] and [unfix] type
+      which convert between the back and forth from the open and fixed types.
 
-      With this we can define fucntions which fold a function over the type ['a
-      expr], and more.
-      Functions for traversing a generic on ['a expr] for a given fix point type
-      [Fix.t].
+      With this we can define fucntions which fold a function over the type
+      ['a expr], and more. Functions for traversing a generic on ['a expr] for a
+      given fix point type [Fix.t].
 
       See:
 

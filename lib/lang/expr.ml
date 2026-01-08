@@ -73,7 +73,7 @@ module type Fix = sig
   val unfix : t -> (const, var, unary, binary, intrin, t) AbstractExpr.t
 end
 
-module Recursion (O : Fix) = struct
+module Make (O : Fix) = struct
   open Fun.Infix
   open O
 
@@ -198,7 +198,8 @@ module BasilExpr = struct
     include AllOps
 
     type var = Var.t
-    type 'a cell = 'a Fix.HashCons.cell
+
+    module Var = Var
 
     type t = expr_node_v
 
@@ -211,12 +212,7 @@ module BasilExpr = struct
   end
 
   include E
-
-  module R = Recursion (struct
-    include E
-    module Var = Var
-  end)
-
+  module R = Make (E)
   include R
 
   let pretty_alg (e : Containers_pp.t abstract_expr) =
@@ -391,3 +387,35 @@ module BasilExpr = struct
   let rewrite_typed_two_memo = rewrite_typed_two ~cata:cata_memo
   *)
 end
+
+module type ExprType = sig
+  include Fix
+
+  include
+    Bincaml_util.Recursionscheme.Recurseable
+      with type 'a O.expr =
+        (const, var, unary, binary, intrin, 'a) AbstractExpr.t
+end
+
+module IVarFix = struct
+  include AllOps
+
+  module Var = struct
+    include Int
+
+    let show v = Int.to_string v
+  end
+
+  type var = Int.t
+
+  type t = expr_node_v
+
+  and expr_node_v =
+    | E of (const, Int.t, unary, binary, intrin, t) AbstractExpr.t
+  [@@unboxed] [@@deriving eq, ord]
+
+  let fix i = E i
+  let unfix i = match i with E i -> i
+end
+
+module ExprIntVar = Make (IVarFix)

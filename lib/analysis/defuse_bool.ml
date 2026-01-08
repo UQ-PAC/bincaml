@@ -113,8 +113,15 @@ end
 
 module Domain = Intra_analysis.MapState (IsZeroLattice)
 
+module Eval =
+  Intra_analysis.EvalStmt
+    (struct
+      include IsZeroValueAbstraction
+      module E = Lang.Expr.BasilExpr
+    end)
+    (Domain)
+
 module TransferFunc = struct
-  module Eval = Intra_analysis.EvalStmt (IsZeroValueAbstraction) (Domain)
   open IsZeroLattice
   include Domain
 
