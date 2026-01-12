@@ -61,31 +61,48 @@ let tf_forwards st (read_st : 'a -> Var.t -> 'b) (s : Program.stmt)
        s
 
 module MapState (V : Lattice) = struct
-  open struct
-    module M = PatriciaTree.MakeMap (Var)
-  end
+  include (
+    struct
+      module M = PatriciaTree.MakeMap (Var)
 
-  module V = V
+      type t = V.t M.t
+
+      let name = V.name ^ "maplattice"
+      let compare a b = M.reflexive_compare V.compare a b
+      let bottom = M.empty
+      let join a b = M.idempotent_union (fun v a b -> V.join a b) a b
+      let equal a b = M.reflexive_equal V.equal a b
+
+      let show m =
+        Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
+        |> Iter.to_string ~sep:", " (fun (k, v) ->
+            Printf.sprintf "%s->%s" (Var.name k) (V.show v))
+
+      let pretty v =
+        let lst = M.to_list v in
+        Containers_pp.(
+          fill
+            (text "," ^ newline)
+            (List.map
+               (fun (k, v) -> textpf "%s->%s" (Var.name k) (V.show v))
+               lst))
+
+      let to_iter m = Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
+      let read (v : Var.t) m = M.find_opt v m |> Option.get_or ~default:V.bottom
+      let update k v m = M.add k v m
+      let widening a b = join a b
+
+      type val_t = V.t
+      type key_t = Var.t
+
+      module V = V
+    end :
+      StateAbstraction with type val_t = V.t and type key_t = Var.t)
 
   type val_t = V.t
   type key_t = Var.t
-  type t = val_t M.t
 
-  let name = V.name ^ "maplattice"
-  let to_iter m = Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
-
-  let show m =
-    Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
-    |> Iter.to_string ~sep:", " (fun (k, v) ->
-        Printf.sprintf "%s->%s" (Var.name k) (V.show v))
-
-  let bottom = M.empty
-  let join a b = M.idempotent_union (fun v a b -> V.join a b) a b
-  let equal a b = M.reflexive_equal V.equal a b
-  let compare a b = M.reflexive_compare V.compare a b
-  let read (v : Var.t) m = M.find_opt v m |> Option.get_or ~default:V.bottom
-  let update k v m = M.add k v m
-  let widening a b = join a b
+  module V = V
 end
 
 module Forwards (D : Domain) = struct
@@ -107,13 +124,15 @@ module Forwards (D : Domain) = struct
 
   let name = D.name
 
-  let analyse ~init
+  let analyse
       ?(widening_set = Graph.ChaoticIteration.Predicate (fun _ -> false))
       ?(widening_delay = 0) p =
     Trace.with_span ~__FILE__ ~__LINE__ D.name (fun _ ->
         Procedure.graph p
         |> Option.map (fun g ->
-            A.recurse g (Procedure.topo_fwd p) init widening_set widening_delay))
+            A.recurse g (Procedure.topo_fwd p)
+              (fun v -> D.init p)
+              widening_set widening_delay))
     |> Option.get_or ~default:A.M.empty
 
   let print_dot fmt p analysis_result =

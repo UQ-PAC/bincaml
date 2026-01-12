@@ -8,9 +8,15 @@ open Lang.Common
 module PassManager = struct
   type transform =
     | Prog of (Program.t -> Program.t)
+        (** A transform over the whole program *)
     | Proc of (Program.proc -> Program.proc)
+        (** A transform over each procedure *)
     | ProcCheck of (Program.proc -> bool)
-    | Batch of pass list
+        (** A check over a procedure, throw exception if false is returned
+            (function should log diagnostic information) *)
+    | Batch of pass list  (** Run passes in sequence *)
+    | DFGAnalysis of (module Analysis.Dataflow_graph.AnalysisType)
+        (** Run an analysis over SSA-form DSG and print output *)
 
   and pass = { name : string; apply : transform; doc : string }
 
@@ -33,6 +39,13 @@ module PassManager = struct
       apply =
         ProcCheck (Transforms.May_read_uninit.check ~include_locals:locals);
       doc = "Fail if the program contains read-uninitialised variables";
+    }
+
+  let dfg_bool =
+    {
+      name = "demo-dfg-bool-analysis";
+      apply = DFGAnalysis (module Analysis.Defuse_bool.Analysis);
+      doc = "runs truthiness analysis on dataflow graph and prints results";
     }
 
   let remove_unused =
@@ -64,6 +77,7 @@ module PassManager = struct
 
   let passes =
     [
+      dfg_bool;
       sparams;
       read_uninit false;
       read_uninit true;
@@ -106,6 +120,7 @@ module PassManager = struct
           | Prog _ -> text "prog transform"
           | Proc _ -> text "intraproc transform"
           | ProcCheck _ -> text "proc check"
+          | DFGAnalysis _ -> text "dataflow graph analysis"
           | Batch bs ->
               text "batch of "
               ^ bracket "("
@@ -131,6 +146,21 @@ module PassManager = struct
     match tf.apply with
     | Prog tf -> tf p
     | Batch tf -> List.fold_left run_transform p tf
+    | DFGAnalysis (module D : Analysis.Dataflow_graph.AnalysisType) ->
+        ID.Map.to_iter p.procs
+        |> Iter.filter (fun (_, p) -> Procedure.graph p |> Option.is_some)
+        |> Iter.iter (fun (pn, p) ->
+            let g = Analysis.Dataflow_graph.create p in
+            let r =
+              D.analyse
+                ~widen_set:(Graph.ChaoticIteration.Predicate (fun _ -> false))
+                ~delay_widen:0 g
+            in
+            print_endline (D.D.name ^ " :: " ^ ID.to_string pn);
+            print_endline
+              Containers_pp.(
+                Pretty.to_string ~width:80 @@ nest 4 (D.D.pretty r)));
+        p
     | ProcCheck app ->
         let _ =
           ID.Map.mapi

@@ -10,6 +10,7 @@ module IsZeroLattice = struct
   [@@deriving ord, eq, show { with_path = false }]
 
   let bottom = Bot
+  let pretty t = Containers_pp.text (show t)
 
   let join a b =
     match (a, b) with
@@ -111,7 +112,7 @@ module IsZeroValueAbstraction = struct
         else Top
 end
 
-module Domain = Intra_analysis.MapState (IsZeroLattice)
+module StateAbstraction = Intra_analysis.MapState (IsZeroLattice)
 
 module Eval =
   Intra_analysis.EvalStmt
@@ -119,11 +120,19 @@ module Eval =
       include IsZeroValueAbstraction
       module E = Lang.Expr.BasilExpr
     end)
-    (Domain)
+    (StateAbstraction)
 
-module TransferFunc = struct
+module Domain = struct
   open IsZeroLattice
-  include Domain
+  include StateAbstraction
+
+  let init p =
+    let vs = Lang.Procedure.formal_in_params p |> StringMap.values in
+    vs
+    |> Iter.map (fun v -> (v, IsZeroLattice.Top))
+    |> Iter.fold
+         (fun m (v, d) -> StateAbstraction.update v d m)
+         StateAbstraction.bottom
 
   let transfer dom stmt =
     let stmt = Eval.stmt_eval_fwd stmt dom in
@@ -140,17 +149,13 @@ module TransferFunc = struct
           StringMap.values lhs |> Iter.map (fun v -> (v, Top))
       | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
     in
-    Iter.fold (fun a (k, v) -> Domain.update k v a) dom updates
+    Iter.fold (fun a (k, v) -> StateAbstraction.update k v a) dom updates
 end
 
-module Analysis = Dataflow_graph.AnalysisFwd (TransferFunc)
+module Analysis = Dataflow_graph.AnalysisFwd (Domain)
 
 let analyse (p : Lang.Program.proc) =
-  let init p =
-    let vs = Lang.Procedure.formal_in_params p |> StringMap.values in
-    vs |> Iter.map (fun v -> (v, IsZeroLattice.Top))
-  in
-  Analysis.A.DFGChaoticIter.M.find_opt Return
-    (Analysis.analyse ~init
-       ~widen_set:(Graph.ChaoticIteration.Predicate (fun _ -> false))
-       ~delay_widen:0 p)
+  let g = Dataflow_graph.create p in
+  Analysis.analyse
+    ~widen_set:(Graph.ChaoticIteration.Predicate (fun _ -> false))
+    ~delay_widen:0 g
