@@ -14,10 +14,10 @@ Windows is explicitly not supported outside of WSL.
 
 - Tests requrie smt solver CVC5 installed.
 
-```
+```bash
 opam switch create bincaml ocaml-variants.5.3.0+options ocaml-option-flambda ocaml-option-fp
 opam repository add pac https://github.com/uq-pac/opam-repository.git
-opam install --deps-only --doc .
+opam install --deps-only --with-doc --with-test .
 dune build
 ```
 
