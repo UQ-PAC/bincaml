@@ -370,7 +370,9 @@ end
 
 module IState = struct
   type stack_frame = { locals : IValue.t VarMap.t; proc : Program.proc }
-  type loc = { proc : Program.proc; vert : Procedure.Vert.t }
+
+  type loc = { proc : Program.proc; [@opaque] vert : Procedure.Vert.t }
+  [@@deriving show { with_path = false }]
 
   let show_loc l =
     Printf.sprintf "%s::%s"
@@ -386,6 +388,25 @@ module IState = struct
         value : Ops.AllOps.const;
       }
     | Load of { mem : string; addr : Ops.AllOps.const }
+    | TraceVariables of {
+        vars : Ops.AllOps.const VarMap.t;
+            [@printer fun fmt -> VarMap.pp Var.pp Ops.AllOps.pp_const fmt]
+        loc : loc;
+        stmt : (Var.t, Var.t, Ops.AllOps.const) Stmt.t;
+            [@printer
+              fun fmt ->
+                Stmt.pretty Var.pretty Var.pretty (fun const ->
+                    let buf = Buffer.create 50 in
+                    let fmt = Format.formatter_of_buffer buf in
+                    Ops.AllOps.pp_const fmt const;
+                    Containers_pp.text (Buffer.contents buf))]
+      }
+        (** A moment-in-time trace of the state of variables in during
+            evaluation.
+
+            The map of variables is represented as a function returning a value,
+            and this includes locals and globals. This function may throw
+            {!ReadUninit} if the requested variable is uninitialised. *)
   [@@deriving show { with_path = false }]
 
   type t = {
@@ -396,22 +417,12 @@ module IState = struct
     pc : loc;
     last_block : ID.t option;
     events : event list;
+    events_filter : event -> bool;
+        (** Filter applied to events before they are recorded in the trace.
+            Events are kept if and only if this filter function returns [true].
+        *)
     random_gen : Random.State.t option;
   }
-
-  let add_event st e = { st with events = e :: st.events }
-
-  let add_event_stmt st (stmt : ('a, 'b, Ops.AllOps.const) Stmt.t) =
-    let open Expr.AbstractExpr in
-    let log = add_event st in
-    match stmt with
-    | Stmt.Instr_Load { mem; addr; cells; endian } ->
-        log @@ Load { mem = Var.name mem; addr }
-    | Stmt.Instr_Store { mem; addr; value } ->
-        log @@ Store { mem = Var.name mem; addr; value }
-    | Stmt.Instr_Call { procid; args } ->
-        log @@ Call { procid; args = StringMap.values args |> Iter.to_list }
-    | _ -> st
 
   let show ?(show_stack = true) st =
     let open Containers_pp in
@@ -453,9 +464,16 @@ module IState = struct
             ^ text (PageTable.show m)))
     |> Pretty.to_string ~width:200
 
-  (** create a new state for prog that is either zero-intiialised or randomly
-      initialised based on whether the random geenrator is passed *)
-  let create ?random (prog : Program.t) =
+  (** Creates a new interpreter state for the given program
+
+      @param random
+        Random generator to use for initialising memory. If unspecified, memory
+        is zero-initialised.
+
+      @param events_filter
+        Filter function to use as {!t.events_filter}. If unspecified, defaults
+        to the function always returning [false]. *)
+  let create ?random ?(events_filter = fun _ -> false) (prog : Program.t) =
     let stack = [] in
     let pc =
       {
@@ -493,6 +511,7 @@ module IState = struct
       memories;
       globals;
       events = [];
+      events_filter;
       last_block = None;
       random_gen = random;
     }
@@ -535,6 +554,33 @@ module IState = struct
         in
         { st with stack }
     | Global -> { st with globals = VarMap.add var value st.globals }
+
+  (* FIXME: this still *computes* every event, even those that are dropped by the filter. *)
+  let add_event st e =
+    { st with events = List.filter st.events_filter [ e ] @ st.events }
+
+  let add_event_stmt st (stmt : ('a, 'b, Ops.AllOps.const) Stmt.t) =
+    let open Expr.AbstractExpr in
+    let map_add st (k, v) = VarMap.add k v st in
+    let vars =
+      Iter.append (VarMap.keys st.globals) (VarMap.keys (stack_top st).locals)
+      |> Iter.map (fun v -> (v, read_var v st))
+      |> Iter.fold map_add VarMap.empty
+    in
+
+    let new_events =
+      TraceVariables { vars; loc = st.pc; stmt }
+      ::
+      (match stmt with
+      | Stmt.Instr_Load { mem; addr; cells; endian } ->
+          [ Load { mem = Var.name mem; addr } ]
+      | Stmt.Instr_Store { mem; addr; value } ->
+          [ Store { mem = Var.name mem; addr; value } ]
+      | Stmt.Instr_Call { procid; args } ->
+          [ Call { procid; args = StringMap.values args |> Iter.to_list } ]
+      | _ -> [])
+    in
+    List.fold_left add_event st new_events
 
   let map f v = (fst v, f (snd v))
 
