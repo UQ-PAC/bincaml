@@ -3,11 +3,17 @@
 See {{!contributing} contibuting to bincaml}.
 
 Bincaml is structured as follows.
+Below, the Capital name is the module name—use this to access that library from Ocaml code,
+and the Dune package name is in parentheses—use this to add it as Dune dependency.
 
 {2 The core IR}
 
-- library [bincaml.ast] : {!Lang} defines the IR itself
-- library [bincaml.loader] : {!Loader.Loadir}, defines the parser for IR files.
+{!modules: Lang Loader.Loadir}
+
+The root page for this library is: {!}.
+
+- {!Lang} ([bincaml.ast]) defines the IR itself.
+- {!Loader.Loadir} ([bincaml.loader]) defines the parser for IR files.
 
 {2 Basic utilities: [bincaml.util] }
 

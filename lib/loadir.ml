@@ -1,4 +1,4 @@
-(** Loads a initial IR from the semi-concrete AST *)
+(** Parser and functions for loading an initial AST from IR files. *)
 
 open Bincaml_util.Common
 open Lang
