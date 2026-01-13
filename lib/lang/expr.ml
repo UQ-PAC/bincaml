@@ -158,62 +158,89 @@ module Make (O : Fix) = struct
 end
 
 module BasilExpr = struct
-  open AllOps
+  type const = Ops.AllOps.const
+  type unary = Ops.AllOps.unary
+  type binary = Ops.AllOps.binary
+  type intrin = Ops.AllOps.intrin
+  type var = Var.t
 
-  module EHashed = struct
-    include AllOps
+  module Var = Var
+  open Ops.AllOps
 
-    type var = Var.t
-    type 'a cell = 'a Fix.HashCons.cell
+  (** Fixed type of basil expressions: an expression of type {!t} whose
+      subexpressions are also expressions of type {!t} *)
+  type t = E of (const, Var.t, unary, binary, intrin, t) AbstractExpr.t
+  [@@unboxed] [@@deriving eq, ord]
 
-    let equal_cell _ a b = Fix.HashCons.equal a b
-    let compare_cell _ a b = Fix.HashCons.compare a b
+  open struct
+    (** leftover ; we could hash-cons the expression if we want *)
+    module EHashed = struct
+      include AllOps
 
-    type t = expr_node_v cell
+      type var = Var.t
+      type 'a cell = 'a Fix.HashCons.cell
 
-    and expr_node_v =
-      | E of (const, Var.t, unary, binary, intrin, t) AbstractExpr.t
-    [@@deriving eq, ord]
+      let equal_cell _ a b = Fix.HashCons.equal a b
+      let compare_cell _ a b = Fix.HashCons.compare a b
 
-    module HashExpr = struct
-      type t = expr_node_v
+      type t = expr_node_v cell
 
-      let hash e : int =
-        e |> function E e -> AbstractExpr.hash Fix.HashCons.hash e
+      and expr_node_v =
+        | E of (const, Var.t, unary, binary, intrin, t) AbstractExpr.t
+      [@@deriving eq, ord]
 
-      let equal (i : t) (j : t) : bool =
-        match (i, j) with
-        | E i, E j ->
-            AbstractExpr.equal AllOps.equal_const Var.equal AllOps.equal_unary
-              AllOps.equal_binary AllOps.equal_intrin Fix.HashCons.equal i j
+      module HashExpr = struct
+        type t = expr_node_v
+
+        let hash e : int =
+          e |> function E e -> AbstractExpr.hash Fix.HashCons.hash e
+
+        let equal (i : t) (j : t) : bool =
+          match (i, j) with
+          | E i, E j ->
+              AbstractExpr.equal AllOps.equal_const Var.equal AllOps.equal_unary
+                AllOps.equal_binary AllOps.equal_intrin Fix.HashCons.equal i j
+      end
+
+      module H = Fix.HashCons.ForHashedTypeWeak (HashExpr)
+
+      let fix i = H.make (E i)
+      let unfix i = match Fix.HashCons.data i with E i -> i
+    end
+  end
+
+  (** {1 Expression recursions}
+
+      We define the {! fix} and {!unfix} functions in order to derive traversal
+      operations using recursion schemes, for more explanation on this see:
+      {!Bincaml_util.Recursionscheme.Recursion}. *)
+
+  (** create fixed type from abstract type *)
+  let fix i = E i
+
+  (** create abstract type from fixed type *)
+  let unfix i = match i with E i -> i
+
+  open struct
+    module E = struct
+      include AllOps
+
+      type outer = t
+      type t = outer
+      type var = Var.t
+
+      module Var = Var
+
+      let fix i = fix i
+      let unfix i = unfix i
     end
 
-    module H = Fix.HashCons.ForHashedTypeWeak (HashExpr)
-
-    let fix i = H.make (E i)
-    let unfix i = match Fix.HashCons.data i with E i -> i
+    module R = Make (E)
   end
 
-  module E = struct
-    include AllOps
-
-    type var = Var.t
-
-    module Var = Var
-
-    type t = expr_node_v
-
-    and expr_node_v =
-      | E of (const, Var.t, unary, binary, intrin, t) AbstractExpr.t
-    [@@unboxed] [@@deriving eq, ord]
-
-    let fix i = E i
-    let unfix i = match i with E i -> i
-  end
-
-  include E
-  module R = Make (E)
   include R
+
+  (** {1 Printing}*)
 
   let pretty_alg (e : Containers_pp.t abstract_expr) =
     let open AbstractExpr in
@@ -272,6 +299,8 @@ module BasilExpr = struct
   let to_string s = cata print_alg s
   let pp fmt s = Format.pp_print_string fmt @@ to_string s
 
+  (** {1 Typing}*)
+
   (** Algebra that infers types of expressions *)
   let type_alg (e : Types.t abstract_expr) =
     let open AbstractExpr in
@@ -290,11 +319,12 @@ module BasilExpr = struct
 
   let type_of e = cata type_alg e
 
-  let fold_with_type ?(cata = cata) (alg : 'e abstract_expr -> 'a) =
-    zygo_l ~cata type_alg alg
+  (** {1 Additional traversals}*)
 
-  let rewrite ?(cata = cata) ~(rw_fun : t abstract_expr -> t option) (expr : t)
-      =
+  let fold_with_type (alg : 'e abstract_expr -> 'a) = zygo_l ~cata type_alg alg
+
+  (** substitute subexpression sbased on parameter *)
+  let rewrite ~(rw_fun : t abstract_expr -> t option) (expr : t) =
     let rw_alg e =
       let orig s = fix s in
       match rw_fun e with
@@ -309,8 +339,7 @@ module BasilExpr = struct
     in
     cata rw_alg expr
 
-  let rewrite_typed ?(cata = cata) (f : (t * Types.t) abstract_expr -> t option)
-      (expr : t) =
+  let rewrite_typed (f : (t * Types.t) abstract_expr -> t option) (expr : t) =
     let rw_alg e =
       let orig s = fix @@ AbstractExpr.map fst s in
       match f e with Some e -> e | None -> orig e
@@ -318,25 +347,24 @@ module BasilExpr = struct
     fold_with_type rw_alg expr
 
   (** typed expression rewriter *)
-  let rewrite_typed ?(cata = cata) (f : (t * Types.t) abstract_expr -> t option)
-      (expr : t) =
+  let rewrite_typed (f : (t * Types.t) abstract_expr -> t option) (expr : t) =
     let rw_alg e =
       let orig s = fix @@ AbstractExpr.map fst s in
       match f e with Some e -> e | None -> orig e
     in
-    fold_with_type ~cata rw_alg expr
+    fold_with_type rw_alg expr
 
   (** typed rewriter that expands two layers deep into the expression *)
-  let rewrite_typed_two ?(cata = cata)
+  let rewrite_typed_two
       (f : (t abstract_expr * Types.t) abstract_expr -> t option) (expr : t) =
     let rw_alg e =
       let unfold = AbstractExpr.map (fun (e, t) -> (unfix e, t)) e in
       let orig s = fix @@ AbstractExpr.map fst s in
       match f unfold with Some e -> e | None -> orig e
     in
-    fold_with_type ~cata rw_alg expr
+    fold_with_type rw_alg expr
 
-  (** {2 Smart Constructors} *)
+  (** {1 Smart Constructors} *)
 
   include R.Constructors
 
