@@ -11,7 +11,7 @@ module PassManager = struct
         (** A transform over the whole program *)
     | Proc of (Program.proc -> Program.proc)
         (** A transform over each procedure *)
-    | ProcCheck of (Program.proc -> bool)
+    | ProcCheck of (Program.t -> Program.proc -> bool)
         (** A check over a procedure, throw exception if false is returned
             (function should log diagnostic information) *)
     | Batch of pass list  (** Run passes in sequence *)
@@ -37,7 +37,9 @@ module PassManager = struct
         ("check-read-uninitialised-"
         ^ if locals then "globals" else "withlocals");
       apply =
-        ProcCheck (Transforms.May_read_uninit.check ~include_locals:locals);
+        ProcCheck
+          (fun _ proc ->
+            Transforms.May_read_uninit.check ~include_locals:locals proc);
       doc = "Fail if the program contains read-uninitialised variables";
     }
 
@@ -168,7 +170,7 @@ module PassManager = struct
               Trace.with_span ~__FILE__ ~__LINE__
                 ("check-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
               @@ fun _ ->
-              match app proc with
+              match app p proc with
               | false -> ()
               | true -> failwith @@ "Check failed: " ^ ID.to_string id)
             p.procs

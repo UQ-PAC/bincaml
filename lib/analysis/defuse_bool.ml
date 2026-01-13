@@ -32,7 +32,10 @@ module IsZeroValueAbstraction = struct
     | `Bool true -> NonZero
     | `Bool false -> Zero
     | `Integer i -> if Z.equal Z.zero i then Zero else NonZero
-    | `Bitvector i -> if Z.equal Z.zero (Bitvec.value i) then Zero else NonZero
+    | `Bitvector i ->
+        if Bitvec.size i = 0 then Top
+        else if Z.equal Z.zero (Bitvec.value i) then Zero
+        else NonZero
 
   let eval_unop (op : Lang.Ops.AllOps.unary) a =
     match op with
@@ -114,13 +117,13 @@ end
 
 module StateAbstraction = Intra_analysis.MapState (IsZeroLattice)
 
+module IsZeroValueAbstractionBasil = struct
+  include IsZeroValueAbstraction
+  module E = Lang.Expr.BasilExpr
+end
+
 module Eval =
-  Intra_analysis.EvalStmt
-    (struct
-      include IsZeroValueAbstraction
-      module E = Lang.Expr.BasilExpr
-    end)
-    (StateAbstraction)
+  Intra_analysis.EvalStmt (IsZeroValueAbstractionBasil) (StateAbstraction)
 
 module Domain = struct
   open IsZeroLattice

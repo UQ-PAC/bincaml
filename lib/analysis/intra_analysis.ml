@@ -5,6 +5,46 @@ open Common
 open Containers
 open Lattice_types
 
+module EvalExprLog (V : ValueAbstraction) = struct
+  type t
+
+  let eval show_const show_unop show_binop show_intrin read expr =
+    let open Expr.AbstractExpr in
+    let eval_alg e =
+      let e_eval = Expr.AbstractExpr.map fst e in
+      let e_pretty = Expr.AbstractExpr.map snd e in
+      let evaled =
+        match e_eval with
+        | RVar v -> read v
+        | Constant c -> V.eval_const c
+        | UnaryExpr (op, e) -> V.eval_unop op e
+        | BinaryExpr (op, a, b) -> V.eval_binop op a b
+        | ApplyIntrin (op, es) -> V.eval_intrin op es
+        | _ -> failwith "unsupported"
+      in
+      let pretty =
+        let open Containers_pp in
+        let eval_e = textpf "%s = " (V.show evaled) in
+        let print op lst =
+          bracket " ("
+            (eval_e
+            ^ bracket "(" (text op ^ nest 2 (fill (text ";" ^ newline) lst)) ")"
+            )
+            ")"
+        in
+        match e_pretty with
+        | RVar v -> eval_e ^ text @@ V.E.Var.show v
+        | Constant c -> eval_e ^ text @@ show_const c
+        | UnaryExpr (op, e) -> print (show_unop op) [ e ]
+        | BinaryExpr (op, a, b) -> print (show_binop op) [ a; b ]
+        | ApplyIntrin (op, es) -> print (show_intrin op) es
+        | _ -> failwith "unsupported"
+      in
+      (evaled, pretty)
+    in
+    V.E.cata eval_alg expr
+end
+
 module EvalExpr (V : ValueAbstraction) = struct
   type t
 
