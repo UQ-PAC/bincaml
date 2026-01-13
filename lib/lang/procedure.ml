@@ -345,7 +345,7 @@ let decl_local p v =
 let fresh_var p ?(pure = true) ?name typ : Var.t =
   let name = Option.map (String.drop_while (Char.equal '$')) name in
   let name = Option.get_or ~default:"v" name in
-  let n, _ = (local_ids p).fresh ~name () in
+  let n = ID.name @@ (local_ids p).fresh ~name () in
   let v = Var.create n typ ~pure in
   Var.Decls.add (local_decls p) v;
   v

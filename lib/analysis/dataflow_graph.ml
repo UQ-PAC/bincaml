@@ -127,44 +127,53 @@ let def_use_maps ?(require_full_ssa = false) ?def_use p =
 (** Return a {! DFGraph.t} representing the dataflow. Vertices are phi nodes or
     program statements, edges are directed from definitions to their uses. *)
 let create p =
-  let def_use_vert = get_dfg_vertices p in
-  let to_use, to_def =
-    def_use_maps ~def_use:def_use_vert p |> function
-    | { var_to_use; var_to_def } -> (var_to_use, var_to_def)
-  in
-  let add_vert graph vert =
-    let graph = DFGBuilder.add_vertex graph vert in
-    let graph =
-      Vertex.defines p vert
-      |> Iter.flat_map (fun v -> MDeps.find_iter to_use v)
-      |> Iter.fold (fun g use -> DFGBuilder.add_edge g vert use) graph
+  let make_graph () =
+    let def_use_vert = get_dfg_vertices p in
+    let to_use, to_def =
+      def_use_maps ~def_use:def_use_vert p |> function
+      | { var_to_use; var_to_def } -> (var_to_use, var_to_def)
     in
-    (* I feel like it shouldn't be neccessary to add the edge in both
+    let add_vert graph vert =
+      let graph = DFGBuilder.add_vertex graph vert in
+      let graph =
+        Vertex.defines p vert
+        |> Iter.flat_map (fun v -> MDeps.find_iter to_use v)
+        |> Iter.fold (fun g use -> DFGBuilder.add_edge g vert use) graph
+      in
+      (* I feel like it shouldn't be neccessary to add the edge in both
        directions, it would probably only occur due to bugs? *)
+      let graph =
+        Vertex.uses p vert
+        |> Iter.flat_map (fun v -> MDeps.find_iter to_def v)
+        |> Iter.fold (fun g def -> DFGBuilder.add_edge g def vert) graph
+      in
+      graph
+    in
+    let def_use_vert =
+      Iter.append def_use_vert (Iter.of_list [ Vertex.Entry; Vertex.Return ])
+    in
+    let graph = def_use_vert |> Iter.fold add_vert DFGraph.empty in
+    (* topological order only visits vertices dominated by the root, hence this
+     hack to get it to include
+     constant assignments *)
     let graph =
-      Vertex.uses p vert
-      |> Iter.flat_map (fun v -> MDeps.find_iter to_def v)
-      |> Iter.fold (fun g def -> DFGBuilder.add_edge g def vert) graph
+      def_use_vert
+      |> Iter.fold
+           (fun g v ->
+             if Iter.is_empty (Vertex.uses p v) then
+               DFGBuilder.add_edge g Vertex.Entry v
+             else g)
+           graph
     in
     graph
   in
-  let def_use_vert =
-    Iter.append def_use_vert (Iter.of_list [ Vertex.Entry; Vertex.Return ])
-  in
-  let graph = def_use_vert |> Iter.fold add_vert DFGraph.empty in
-  (* topological order only visits vertices dominated by the root, hence this
-     hack to get it to include
-     constant assignments *)
-  let graph =
-    def_use_vert
-    |> Iter.fold
-         (fun g v ->
-           if Iter.is_empty (Vertex.uses p v) then
-             DFGBuilder.add_edge g Vertex.Entry v
-           else g)
-         graph
-  in
-  graph
+  (p, lazy (make_graph ()))
+
+type graph
+
+open struct
+  type graph = Program.proc * DFGraph.t lazy_t
+end
 
 module DFGDotPrinter = Graph.Graphviz.Dot (struct
   include DFGraph
@@ -247,48 +256,53 @@ open struct
 
         If dataflow graph [g] is not provided, compute the dfg for an SSA-form
         procedure *)
-    let analyse root ~init ~widen_set ~delay_widen ?g (p : Program.proc) =
-      let g = Option.get_or ~default:(create p) g in
+    let analyse root ~init ~widen_set ~delay_widen g =
       let scc = Topo.recursive_scc g root in
-      let f_init v =
-        match v with
-        | v ->
-            init p
-            |> Iter.fold (fun m (v, d) -> Domain.update v d m) Domain.bottom
-      in
+      let f_init v = init in
       DFGChaoticIter.recurse g scc f_init widen_set delay_widen
   end
 end
 
-(** forwards dataflow analysis over dfg *)
-module AnalysisFwd (D : DFAnalysis) = struct
-  (*module TF = Intra_analysis.StateTransferFwd (V) (TRF)*)
-  module A = DataflowAnalysis (DFGraph) (D)
+module type AnalysisType = sig
+  module D : DFAnalysis
 
-  (** Construct DFGraph and run dataflow analysis.
-
-      providing an incorrect function for init can make the analysis unsound, by
-      default it executes the vertex with a bot initial state.
-
-      This is the only time the root vertex (Entry) gets processed; the transfer
-      function of the root vertex ([Entry]) must not depend on an abstract
-      state. *)
-  let analyse ~init ?g ~widen_set ~delay_widen p : D.t A.DFGChaoticIter.M.t =
-    A.analyse Entry ~init ~widen_set ~delay_widen ?g p
+  val analyse :
+    widen_set:Vertex.t Graph.ChaoticIteration.widening_set ->
+    delay_widen:int ->
+    graph ->
+    D.t
+  (** Construct run dataflow analysis over a {!DFGraph.t}. *)
 end
 
 (** Backwards dataflow analysis over DFG *)
 module AnalysisRev (D : DFAnalysis) = struct
+  module D = D
   module A = DataflowAnalysis (Bincaml_util.Reverse_graph.RevG (DFGraph)) (D)
 
-  (** Construct DFGraph and run dataflow analysis.
+  (** Construct run dataflow analysis over a {!DFGraph.t}. *)
+  let analyse ~widen_set ~delay_widen (g : graph) : D.t =
+    A.DFGChaoticIter.M.find_opt Entry
+    @@ A.analyse Return
+         ~init:(D.init (fst g))
+         ~widen_set ~delay_widen
+         (Lazy.force (snd g))
+    |> Option.get_exn_or "entry not reachable from return"
+end
 
-      Providing an incorrect function for init can make the analysis unsound, by
-      default it executes the vertex with a bot initial state.
+(** Forwards dataflow analysis over dfg *)
+module AnalysisFwd (AD : DFAnalysis) = struct
+  (*module TF = Intra_analysis.StateTransferFwd (V) (TRF)*)
+  module A = DataflowAnalysis (DFGraph) (AD)
+  module D = AD
 
-      This is the only time the root vertex ([Return]) gets processed; the
-      transfer function of the root vertex ([Return]) must not depend on an
-      abstract state. *)
-  let analyse ~init ?g ~widen_set ~delay_widen p : D.t A.DFGChaoticIter.M.t =
-    A.analyse Return ~init ~widen_set ~delay_widen ?g p
+  type t = D.t
+
+  (** Construct run dataflow analysis over a {!DFGraph.t}. *)
+  let analyse ~widen_set ~delay_widen g : AD.t =
+    A.DFGChaoticIter.M.find_opt Return
+      (A.analyse Entry
+         ~init:(AD.init (fst g))
+         ~widen_set ~delay_widen
+         (Lazy.force (snd g)))
+    |> Option.get_exn_or "error: return not reachable from entry"
 end

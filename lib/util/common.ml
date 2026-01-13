@@ -19,31 +19,8 @@ module Byte_slice = struct
     Bytes.blit src.bs src.off dest dest_pos src.len
 end
 
+include Mtypes
 (** Types *)
-
-module type PRINTABLE = sig
-  type t
-
-  val show : t -> string
-end
-
-module type TYPE = sig
-  include PRINTABLE
-
-  val equal : t -> t -> bool
-end
-
-module type ORD_TYPE = sig
-  include TYPE
-
-  val compare : t -> t -> int
-end
-
-module type HASH_TYPE = sig
-  include ORD_TYPE
-
-  val hash : t -> int
-end
 
 (** {1 vars and ids} *)
 

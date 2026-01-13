@@ -116,6 +116,25 @@ let solve prog_proc =
 
 We have multiple kinds of testing
 
+{4 Value Abstraction Domain Soundness }
+
+When implementing a single value abstraction we have a simple property test
+framework set up to validate that the operator is sound according to the join.
+
+This can be seen here. As long as the domain implements {! Analysis.Lattice_types.ValueAbstraction},
+setting up this test is as simple as applying the functor and adding the resulting suite to the run list as 
+in [test/lang/value_soundness.ml].
+
+{[
+module TestBoolDom =
+  ValueAbstractionSoundness (Analysis.Defuse_bool.IsZeroValueAbstractionBasil)
+
+let _ =
+  Alcotest.run "value domain abstract eval soundness" [ TestBoolDom.suite ]
+]}
+
+{: https://github.com/agle/bincaml/blob/docs-cleanup/test/lang/value_soundness.ml#L54-L54}
+
 {4 Property tests}
 
 Property tests use the using [quickcheck] library and {!QCheck_alcotest} driver.
@@ -200,15 +219,15 @@ Cheifly it comes down to
 - good tooling: the build system; dune, the langauge server, the compiler are
   all fast and interactive and well suited to the research-code use case.
 
-If you want more evangelism you can find it {{:https://xvw.lol/en/articles/why-ocaml.html}here}.
+If you want more OCaml evangelism you can find it {{:https://xvw.lol/en/articles/why-ocaml.html}here}.
 
 
 {3 Learning OCaml }
 
 We recommend the textbook to Cornell's CS3110 functional programming course,
 which is available for free on their
-{{:https://cs3110.github.io/textbook/ocaml_programming.pdf}website} and as
-{{:https://cs3110.github.io/textbook/cover.html} pdf}.
+{{:https://cs3110.github.io/textbook/cover.html}website} and as
+{{:https://cs3110.github.io/textbook/ocaml_programming.pdf}pdf}.
 
 Also consider reviewing the {{:https://ocaml.org/manual/5.3/index.html}OCaml manual}.
 

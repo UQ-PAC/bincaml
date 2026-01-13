@@ -5,6 +5,46 @@ open Common
 open Containers
 open Lattice_types
 
+module EvalExprLog (V : ValueAbstraction) = struct
+  type t
+
+  let eval show_const show_unop show_binop show_intrin read expr =
+    let open Expr.AbstractExpr in
+    let eval_alg e =
+      let e_eval = Expr.AbstractExpr.map fst e in
+      let e_pretty = Expr.AbstractExpr.map snd e in
+      let evaled =
+        match e_eval with
+        | RVar v -> read v
+        | Constant c -> V.eval_const c
+        | UnaryExpr (op, e) -> V.eval_unop op e
+        | BinaryExpr (op, a, b) -> V.eval_binop op a b
+        | ApplyIntrin (op, es) -> V.eval_intrin op es
+        | _ -> failwith "unsupported"
+      in
+      let pretty =
+        let open Containers_pp in
+        let eval_e = textpf "%s = " (V.show evaled) in
+        let print op lst =
+          bracket " ("
+            (eval_e
+            ^ bracket "(" (text op ^ nest 2 (fill (text ";" ^ newline) lst)) ")"
+            )
+            ")"
+        in
+        match e_pretty with
+        | RVar v -> eval_e ^ text @@ V.E.Var.show v
+        | Constant c -> eval_e ^ text @@ show_const c
+        | UnaryExpr (op, e) -> print (show_unop op) [ e ]
+        | BinaryExpr (op, a, b) -> print (show_binop op) [ a; b ]
+        | ApplyIntrin (op, es) -> print (show_intrin op) es
+        | _ -> failwith "unsupported"
+      in
+      (evaled, pretty)
+    in
+    V.E.cata eval_alg expr
+end
+
 module EvalExpr (V : ValueAbstraction) = struct
   type t
 
@@ -61,31 +101,48 @@ let tf_forwards st (read_st : 'a -> Var.t -> 'b) (s : Program.stmt)
        s
 
 module MapState (V : Lattice) = struct
-  open struct
-    module M = PatriciaTree.MakeMap (Var)
-  end
+  include (
+    struct
+      module M = PatriciaTree.MakeMap (Var)
 
-  module V = V
+      type t = V.t M.t
+
+      let name = V.name ^ "maplattice"
+      let compare a b = M.reflexive_compare V.compare a b
+      let bottom = M.empty
+      let join a b = M.idempotent_union (fun v a b -> V.join a b) a b
+      let equal a b = M.reflexive_equal V.equal a b
+
+      let show m =
+        Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
+        |> Iter.to_string ~sep:", " (fun (k, v) ->
+            Printf.sprintf "%s->%s" (Var.name k) (V.show v))
+
+      let pretty v =
+        let lst = M.to_list v in
+        Containers_pp.(
+          fill
+            (text "," ^ newline)
+            (List.map
+               (fun (k, v) -> textpf "%s->%s" (Var.name k) (V.show v))
+               lst))
+
+      let to_iter m = Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
+      let read (v : Var.t) m = M.find_opt v m |> Option.get_or ~default:V.bottom
+      let update k v m = M.add k v m
+      let widening a b = join a b
+
+      type val_t = V.t
+      type key_t = Var.t
+
+      module V = V
+    end :
+      StateAbstraction with type val_t = V.t and type key_t = Var.t)
 
   type val_t = V.t
   type key_t = Var.t
-  type t = val_t M.t
 
-  let name = V.name ^ "maplattice"
-  let to_iter m = Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
-
-  let show m =
-    Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
-    |> Iter.to_string ~sep:", " (fun (k, v) ->
-        Printf.sprintf "%s->%s" (Var.name k) (V.show v))
-
-  let bottom = M.empty
-  let join a b = M.idempotent_union (fun v a b -> V.join a b) a b
-  let equal a b = M.reflexive_equal V.equal a b
-  let compare a b = M.reflexive_compare V.compare a b
-  let read (v : Var.t) m = M.find_opt v m |> Option.get_or ~default:V.bottom
-  let update k v m = M.add k v m
-  let widening a b = join a b
+  module V = V
 end
 
 module Forwards (D : Domain) = struct
@@ -107,13 +164,15 @@ module Forwards (D : Domain) = struct
 
   let name = D.name
 
-  let analyse ~init
+  let analyse
       ?(widening_set = Graph.ChaoticIteration.Predicate (fun _ -> false))
       ?(widening_delay = 0) p =
     Trace.with_span ~__FILE__ ~__LINE__ D.name (fun _ ->
         Procedure.graph p
         |> Option.map (fun g ->
-            A.recurse g (Procedure.topo_fwd p) init widening_set widening_delay))
+            A.recurse g (Procedure.topo_fwd p)
+              (fun v -> D.init p)
+              widening_set widening_delay))
     |> Option.get_or ~default:A.M.empty
 
   let print_dot fmt p analysis_result =

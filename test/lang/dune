@@ -1,3 +1,5 @@
+; common expr generator library
+
 (library
  (name expr_gen)
  (modules expr_gen)
@@ -10,6 +12,8 @@
   (re_export bincaml.ast)
   (re_export bincaml.util)
   zarith))
+
+; only enable this test if cvc available
 
 (executable
  (name expr_eval_qcheck)
@@ -30,6 +34,8 @@
  (action
   (echo "WARN: cvc5 not available, qcheck eval test disabled\n")))
 
+; inline-test libs
+
 (library
  (name expr_eval_expect)
  (modules expr_eval_expect stmt interp)
@@ -38,6 +44,8 @@
  (inline_tests)
  (preprocess
   (pps ppx_expect_nobase)))
+
+; pagetable spec library
 
 (library
  (name pagetable_spec)
@@ -61,8 +69,16 @@
    ppx_deriving.fold
    ppx_deriving.enum)))
 
-(executable
+; actual tests
+
+(test
  (name pagetable_qcheck)
  (modules pagetable_qcheck)
  (flags -w -27)
  (libraries pagetable_spec qcheck-core.runner qcheck-stm.sequential))
+
+(test
+ (name value_soundness)
+ (modules value_soundness)
+ (flags -w -27)
+ (libraries expr_gen alcotest qcheck-alcotest qcheck-core bincaml.analysis))

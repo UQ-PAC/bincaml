@@ -26,6 +26,7 @@ module ReadUninit = struct
     | Write, Write -> Write
 
   let show v = match v with ReadUninit -> "RU" | Bot -> "bot" | Write -> "W"
+  let pretty v = Containers_pp.text (show v)
   let widening = join
   let bottom = Bot
   let analyze (e : Lang.Procedure.G.edge) d = d
@@ -62,6 +63,11 @@ module ReadUninitAnalysis = struct
   let show_short st =
     read_uninit_vars st |> Iter.to_string ~sep:", " Var.to_string
 
+  let init p =
+    Procedure.formal_in_params p
+    |> Common.StringMap.values
+    |> Iter.fold (fun acc v -> update v ReadUninit.Write acc) bottom
+
   let transfer st stmt =
     let st =
       Stmt.free_vars_iter stmt
@@ -76,16 +82,7 @@ end
 module A = struct
   include Intra_analysis.Forwards (ReadUninitAnalysis)
 
-  let analyse p =
-    analyse
-      ~init:(function
-        | v ->
-            Procedure.formal_in_params p
-            |> Common.StringMap.values
-            |> Iter.fold
-                 (fun acc v -> ReadUninitAnalysis.update v ReadUninit.Write acc)
-                 ReadUninitAnalysis.bottom)
-      p
+  let analyse p = analyse p
 end
 
 let check ?(include_locals = false) (p : Program.proc) =

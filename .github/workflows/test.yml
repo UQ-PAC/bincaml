@@ -1,7 +1,8 @@
 name: build and test
 
 on:
-  - push
+  merge_group:
+  push:
 
 permissions: read-all
 
