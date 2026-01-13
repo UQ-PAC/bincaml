@@ -25,7 +25,27 @@ let print_errors ls =
 let check_expr e : type_error List.t = BasilExpr.fold_with_type checker e
  **)
 
-let type_check p =
+let check (pt: Program.t) p =
+
+  (* TODO tried using optional tf1 arg here and did not like it *)
+  let compare_maps tf1 map1 map2 stmt=
+    let list1 = StringMap.to_list map1 in
+    let list2 = StringMap.to_list map2 in
+    match List.compare_lengths list1 list2 with
+    | 0 -> List.fold_left2 (fun acc (_, v) (_, v2) ->
+        if Types.equal (tf1 v) (Var.typ v2) then acc
+        else StatementEqualityError
+          {
+            text = "Type mismatch in arguments";
+            stmt = Stmt.show_stmt_basil stmt;
+          }::acc
+      ) [] list1 list2
+    | _ -> [StatementEqualityError
+      {
+        text = "Missing or extra arguments";
+        stmt = Stmt.show_stmt_basil stmt;
+      }]
+  in
   (*
     These all return arrays of error not just errors as some can return more than one error
     
@@ -132,7 +152,15 @@ let type_check p =
       TODO
       Get the params and make sure they match agaisnt the ones the function wants and check to make sure the function returns the type that the lhs is
     *)
-    | Stmt.Instr_Call { lhs = lhs; procid = id; args = args } -> [NotImplementedError]
+    | Stmt.Instr_Call { lhs = lhs; procid = id; args = args } -> (
+      let target_proc = ID.Map.find id pt.procs in
+      let real_args = Procedure.formal_in_params target_proc in
+      let output = Procedure.formal_out_params target_proc in
+      let errors = List.append (compare_maps BasilExpr.type_of args real_args stmt)
+        (compare_maps Var.typ lhs output stmt)
+      in
+        errors
+      )
   in
   
   let check_type (id, bl) =
@@ -145,4 +173,4 @@ let type_check p =
       ) []
   in
   print_errors errors;
-  p
+  if List.length errors = 0 then false else true
