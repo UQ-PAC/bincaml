@@ -466,14 +466,13 @@ module IState = struct
 
   (** Creates a new interpreter state for the given program
 
-      @param random
-        Random generator to use for initialising memory. If unspecified, memory
-        is zero-initialised.
+      @param random Random generator to use for initialising memory. If
+      unspecified, memory is zero-initialised.
 
-      @param events_filter
-        Filter function to use as {!t.events_filter}. If unspecified, defaults
-        to the function always returning [false]. *)
-  let create ?random ?(events_filter = fun _ -> false) (prog : Program.t) =
+      @param events_filter Filter function to use as {!t.events_filter}. If
+      unspecified, defaults to a function returning [false] for
+      {!TraceVariables}, and [true] otherwise. *)
+  let create ?random ?(events_filter = function | TraceVariables _ -> false | _ -> true) (prog : Program.t) =
     let stack = [] in
     let pc =
       {
