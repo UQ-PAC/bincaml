@@ -66,3 +66,11 @@
  (modules pagetable_qcheck)
  (flags -w -27)
  (libraries pagetable_spec qcheck-core.runner qcheck-stm.sequential))
+
+
+(executable
+ (name test_analysis_check)
+ (modules test_analysis_check)
+ (flags -w -27)
+ (libraries bincaml))
+

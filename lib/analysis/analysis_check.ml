@@ -39,20 +39,29 @@ let check_soundness_of_istate
 let go () =
   let loaded = Loader.Loadir.ast_of_fname "examples/cat.il" in
   let prog = loaded.prog in
-  let proc = loaded.curr_proc |> Option.get_exn_or "curr proc" in
+
+  let id = prog.proc_names.get_id "@p9main_4198208" in
+  let proc = ID.Map.find id prog.procs in
+
+  Containers_pp.pp Format.std_formatter @@ Lang.Program.prog_pretty prog;
+
   let abs_result =
     Defuse_bool.analyse proc
     |> Option.get_exn_or "defuse_bool analyse"
     |> Defuse_bool.Domain.to_iter |> VarMap.of_iter
   in
 
+  let pc_var = Var.Decls.find prog.globals "$_PC" in
   let istate =
     Lang.Interp.IState.create
       ~events_filter:(function TraceVariables _ -> true | _ -> false)
       prog
+    |> Lang.Interp.IState.write_var pc_var
+         (`Bitvector (Bitvec.of_int ~size:64 0x400f40))
   in
   let conc_state, _final_vars =
-    Lang.Interp.IState.call_proc istate proc StringMap.empty
+    Lang.Interp.IState.call_proc istate proc
+    @@ StringMap.singleton "_PC" (`Bitvector (Bitvec.of_int ~size:64 0x400f40))
   in
   let check_predicate abs conc =
     let open Defuse_bool.IsZeroValueAbstraction in
