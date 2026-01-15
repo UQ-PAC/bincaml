@@ -45,6 +45,46 @@ Check whether these implement what you need before re-implementing standard algo
 
 {1 CookBook}
 
+{2 Implementing a Value Domain} 
+
++ Choose a good representation type and implement the lattice (order) operations, define
+  a module implementing the {! Analysis.Lattice_types.Lattice} signature. 
++ Implement the abstraction functions for each expression operation by
+  defining a module implementing the {! Analysis.Lattice_types.ValueAbstraction} signature
+  signature for [type t = YourLattice.t].
++ Set up a soundness test using the property framework as describe in {!section-testvaluedomain}.
++ Fill out the set of operations in your vaue abstraction to increase precision 
+
+It is a good idea to start with the lattice, ensure you have a good printer for
+the values, and define all the evaluation functions as returning Top, and set
+up the soundness test. You can then implement more operations and gradually
+increase precision using the test to ensure your domain is sound.
+
+{3 Run the analysis on an IL program}
+
++ Combine the Lattice ValueAbstraction these into an analysis using {! Analysis.Dataflow_graph.EasyForwardAnalysisPack}.
++ Set up a pass to run the analysis on an input file and print the result:
+  {[
+  let dfg_bool =
+    {
+      name = "demo-dfg-bool-analysis";
+      apply = DFGAnalysis (module Analysis.Defuse_bool.Analysis);
+      doc = "runs truthiness analysis on dataflow graph and prints results";
+    }
+  ]}
+  And add the pass (in this case [dfg_bool]) to the [passes] list.
++ Save and run the following script with [dune exec script scriptname.sexp] for your analysis name:
+
+{v
+(load-il "examples/irreducible_loop_1.il")
+(run-transforms "remove-unreachable-block" "cf-expressions" "intra-dead-store-elim")
+(run-transforms "ssa")
+(run-transforms "demo-dfg-bool-analysis")
+v}
+
+Find the complete example this guide refers in {{:https://github.com/agle/bincaml/blob/main/lib/analysis/defuse_bool.ml}lib/analysis/defuse_bool.ml}.
+
+
 {2 Implementing Analyses }
 
 1. An intraprocedural flow-insensitive single-pass analysis of an IR
@@ -116,7 +156,7 @@ let solve prog_proc =
 
 We have multiple kinds of testing
 
-{4 Value Abstraction Domain Soundness }
+{4:testvaluedomain Value Abstraction Domain Soundness }
 
 When implementing a single value abstraction we have a simple property test
 framework set up to validate that the operator is sound according to the join.
@@ -134,6 +174,12 @@ let _ =
 ]}
 
 {: https://github.com/agle/bincaml/blob/docs-cleanup/test/lang/value_soundness.ml#L54-L54}
+
+This test can be run in isolation with 
+
+{v
+dune exec test/lang/value_soundness.exe
+v}
 
 {4 Property tests}
 
