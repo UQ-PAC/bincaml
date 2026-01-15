@@ -13,30 +13,6 @@ let print_errors ls =
       match msg with StatementEqualityError { text = t } -> printf "%s\n" t)
     ls
 
-let binary_same_types arg1 arg2 (typ : Types.t) =
-  match (arg1, arg2) with
-  | tl, tr when Types.equal tl typ && Types.equal tr typ -> []
-  | tl, _ when Types.equal tl typ ->
-      [
-        StatementEqualityError
-          { text = sprintf "%s is not the correct type" (Types.to_string arg1) };
-      ]
-  | _, tr when Types.equal tr typ ->
-      [
-        StatementEqualityError
-          (* This only reports one error so if both are not ints can be bad *)
-          { text = sprintf "%s is not the correct type" (Types.to_string arg2) };
-      ]
-  | _, _ ->
-      [
-        StatementEqualityError
-          (* This only reports one error so if both are not ints can be bad *)
-          {
-            text =
-              Printf.sprintf "%s and %s are not the correct type"
-                (Types.to_string arg1) (Types.to_string arg2);
-          };
-      ]
 
 let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
   let open Ops in
@@ -106,6 +82,31 @@ let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
 
 let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :
     type_error list =
+  let binary_same_types arg1 arg2 (typ : Types.t) =
+    match (arg1, arg2) with
+    | tl, tr when Types.equal tl typ && Types.equal tr typ -> []
+    | tl, _ when Types.equal tl typ ->
+        [
+          StatementEqualityError
+            { text = sprintf "%s is not the correct type" (Types.to_string arg1) };
+        ]
+    | _, tr when Types.equal tr typ ->
+        [
+          StatementEqualityError
+            (* This only reports one error so if both are not ints can be bad *)
+            { text = sprintf "%s is not the correct type" (Types.to_string arg2) };
+        ]
+    | _, _ ->
+        [
+          StatementEqualityError
+            (* This only reports one error so if both are not ints can be bad *)
+            {
+              text =
+                Printf.sprintf "%s and %s are not the correct type"
+                  (Types.to_string arg1) (Types.to_string arg2);
+            };
+        ]
+  in
   let open Ops in
   match op with
   | `INTADD | `INTMUL | `INTSUB | `INTDIV | `INTMOD | `INTLT | `INTLE ->
@@ -333,13 +334,8 @@ let check_statement_types stmt (pt : Program.t) =
       in
       List.append params_check args
 
-let check (pt : Program.t) p =
-  (*
-    These all return arrays of error not just errors as some can return more than one error
-    
-    It could be seperated into an a new type that can be one or multiple errors? but that just
-     sounds like a list with more steps
-  *)
+
+let checker (pt : Program.t) p =
   let check_type (id, bl) =
     let stmts = Block.stmts_iter bl in
     Iter.fold
@@ -351,4 +347,6 @@ let check (pt : Program.t) p =
     |> Iter.fold (fun acc x -> List.append (check_type x) acc) []
   in
   print_errors errors;
-  if List.length errors = 0 then false else true
+  errors
+
+let check (pt: Program.t) p = if List.length (checker pt p) = 0 then false else true
