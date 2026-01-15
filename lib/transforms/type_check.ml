@@ -13,6 +13,28 @@ let print_errors ls =
       match msg with StatementEqualityError { text = t } -> printf "%s\n" t)
     ls
 
+let compare_maps (type_of_1 : 'a -> Types.t) (to_string_1 : 'a -> string)
+    (map1 : 'a StringMap.t) (type_of_2 : 'b -> Types.t)
+    (to_string_2 : 'b -> string) (map2 : 'b StringMap.t) =
+  let list1 : (string * 'a) list = StringMap.to_list map1 in
+  let list2 : (string * 'b) list = StringMap.to_list map2 in
+  match List.compare_lengths list1 list2 with
+  | 0 ->
+      List.fold_left2
+        (fun acc (_, v) (_, v2) ->
+          if Types.equal (type_of_1 v) (type_of_2 v2) then acc
+          else
+            StatementEqualityError
+              {
+                text =
+                  sprintf "Type mismatch in arguments %s and %s" (to_string_1 v)
+                    (to_string_2 v2);
+              }
+            :: acc)
+        [] list1 list2
+  | n when n > 0 -> [ StatementEqualityError { text = "Extra arguments" } ]
+  | _ -> [ StatementEqualityError { text = "Missing arguments" } ]
+
 let binary_same_types arg1 arg2 (typ : Types.t) =
   match (arg1, arg2) with
   | tl, tr when Types.equal tl typ && Types.equal tr typ -> []
@@ -302,50 +324,18 @@ let check_statement_types stmt (pt : Program.t) =
         :: expr_errors
   | Stmt.Instr_Call { lhs; procid; args } ->
       (* TODO tried using optional tf1 arg here and did not like it *)
-      let compare_maps
-          (type_of_1 : 'a -> Types.t)
-          (to_string_1 : 'a -> string) (map1 : 'a StringMap.t)
-          (type_of_2 : 'b -> Types.t)
-          (to_string_2 : 'b -> string) (map2 : 'b StringMap.t)
-          =
-        let list1: (string * 'a) list = StringMap.to_list map1 in
-        let list2: (string * 'b) list = StringMap.to_list map2 in
-        match List.compare_lengths list1 list2 with
-        | 0 ->
-            List.fold_left2
-              (fun acc (_, v) (_, v2) ->
-                if Types.equal (type_of_1 v) (type_of_2 v2) then acc
-                else
-                  StatementEqualityError
-                    {
-                      text =
-                        sprintf "Type mismatch in arguments %s and %s"
-                          (to_string_1 v) (to_string_2 v2);
-                    }
-                  :: acc)
-              [] list1 list2
-        | n when n > 0 ->
-            [ StatementEqualityError { text = "Extra arguments" } ]
-        | _ -> [ StatementEqualityError { text = "Missing arguments" } ]
-      in
       let target_proc = ID.Map.find procid pt.procs in
       let real_args = Procedure.formal_in_params target_proc in
       let output = Procedure.formal_out_params target_proc in
-      (* This is disgusting
-          I have a list of exprs I want to go through and type check
-            A fold through these will give back a list list type error
-          The default case (first arg of fold) can be the things I want to add to the errors anyway
-            So it can just be the result from type checking the real args to the args
-             passed in appended to the outputs from function vs the outputs we are assigning
-          The second arg in the fold is the StringMap as a list but mapped to remove the keys
-            (probably a way to just get a seq or list of just the values in a single method)
-          Then Finally List.concat takes the list list type_error to just a list type_error by
-            joining over all of the lists.
-      *)
+
       let params_check = List.append
-               (compare_maps BasilExpr.type_of BasilExpr.to_string args Var.typ Var.to_string real_args)
-               (compare_maps Var.typ Var.to_string lhs Var.typ Var.to_string output) in
-      let args =  StringMap.values args |> Iter.to_list |> List.flat_map type_check in
+        (compare_maps BasilExpr.type_of BasilExpr.to_string args Var.typ
+          Var.to_string real_args)
+        (compare_maps Var.typ Var.to_string lhs Var.typ Var.to_string output)
+      in
+      let args =
+        StringMap.values args |> Iter.to_list |> List.flat_map type_check
+      in
       List.append params_check args
 
 let check (pt : Program.t) p =
