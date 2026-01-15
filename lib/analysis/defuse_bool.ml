@@ -115,50 +115,12 @@ module IsZeroValueAbstraction = struct
         else Top
 end
 
-module StateAbstraction = Intra_analysis.MapState (IsZeroLattice)
-
 module IsZeroValueAbstractionBasil = struct
   include IsZeroValueAbstraction
+
+  let top = IsZeroLattice.Top
+
   module E = Lang.Expr.BasilExpr
 end
 
-module Eval =
-  Intra_analysis.EvalStmt (IsZeroValueAbstractionBasil) (StateAbstraction)
-
-module Domain = struct
-  open IsZeroLattice
-  include StateAbstraction
-
-  let init p =
-    let vs = Lang.Procedure.formal_in_params p |> StringMap.values in
-    vs
-    |> Iter.map (fun v -> (v, IsZeroLattice.Top))
-    |> Iter.fold
-         (fun m (v, d) -> StateAbstraction.update v d m)
-         StateAbstraction.bottom
-
-  let transfer dom stmt =
-    let stmt = Eval.stmt_eval_fwd stmt dom in
-    let updates =
-      match stmt with
-      | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
-      | Lang.Stmt.Instr_Assert _ -> Iter.empty
-      | Lang.Stmt.Instr_Assume _ -> Iter.empty
-      | Lang.Stmt.Instr_Load { lhs } -> Iter.singleton (lhs, Top)
-      | Lang.Stmt.Instr_Store { lhs } -> Iter.singleton (lhs, Top)
-      | Lang.Stmt.Instr_IntrinCall { lhs } ->
-          StringMap.values lhs |> Iter.map (fun v -> (v, Top))
-      | Lang.Stmt.Instr_Call { lhs } ->
-          StringMap.values lhs |> Iter.map (fun v -> (v, Top))
-      | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
-    in
-    Iter.fold (fun a (k, v) -> StateAbstraction.update k v a) dom updates
-end
-
-module Analysis = Dataflow_graph.AnalysisFwd (Domain)
-
-let analyse (p : Lang.Program.proc) =
-  let g = Dataflow_graph.create p in
-  Analysis.analyse
-    ~widen_set:(Graph.ChaoticIteration.Predicate (fun _ -> false))
-    ~delay_widen:0 g
+include Dataflow_graph.EasyForwardAnalysisPack (IsZeroValueAbstractionBasil)

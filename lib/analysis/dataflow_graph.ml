@@ -306,3 +306,51 @@ module AnalysisFwd (AD : DFAnalysis) = struct
          (Lazy.force (snd g)))
     |> Option.get_exn_or "error: return not reachable from entry"
 end
+
+(** Simple way to get started with forwards analysis on def-use graph *)
+module EasyForwardAnalysisPack (V : sig
+  include Lattice_types.ValueAbstraction with module E = Expr.BasilExpr
+
+  val top : t
+end) =
+struct
+  module SV = Intra_analysis.MapState (V)
+  module Eval = Intra_analysis.EvalStmt (V) (SV)
+
+  module Domain = struct
+    let top_val = V.top
+
+    include SV
+
+    let init p =
+      let vs = Lang.Procedure.formal_in_params p |> StringMap.values in
+      vs
+      |> Iter.map (fun v -> (v, V.bottom))
+      |> Iter.fold (fun m (v, d) -> SV.update v d m) SV.bottom
+
+    let transfer dom stmt =
+      let stmt = Eval.stmt_eval_fwd stmt dom in
+      let updates =
+        match stmt with
+        | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
+        | Lang.Stmt.Instr_Assert _ -> Iter.empty
+        | Lang.Stmt.Instr_Assume _ -> Iter.empty
+        | Lang.Stmt.Instr_Load { lhs } -> Iter.singleton (lhs, top_val)
+        | Lang.Stmt.Instr_Store { lhs } -> Iter.singleton (lhs, top_val)
+        | Lang.Stmt.Instr_IntrinCall { lhs } ->
+            StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
+        | Lang.Stmt.Instr_Call { lhs } ->
+            StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
+        | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
+      in
+      Iter.fold (fun a (k, v) -> SV.update k v a) dom updates
+  end
+
+  module Analysis = AnalysisFwd (Domain)
+
+  let analyse (p : Lang.Program.proc) =
+    let g = create p in
+    Analysis.analyse
+      ~widen_set:(Graph.ChaoticIteration.Predicate (fun _ -> false))
+      ~delay_widen:0 g
+end
