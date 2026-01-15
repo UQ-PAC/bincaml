@@ -13,7 +13,6 @@ let print_errors ls =
       match msg with StatementEqualityError { text = t } -> printf "%s\n" t)
     ls
 
-
 let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
   let open Ops in
   match op with
@@ -88,13 +87,17 @@ let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :
     | tl, _ when Types.equal tl typ ->
         [
           StatementEqualityError
-            { text = sprintf "%s is not the correct type" (Types.to_string arg1) };
+            {
+              text = sprintf "%s is not the correct type" (Types.to_string arg1);
+            };
         ]
     | _, tr when Types.equal tr typ ->
         [
           StatementEqualityError
             (* This only reports one error so if both are not ints can be bad *)
-            { text = sprintf "%s is not the correct type" (Types.to_string arg2) };
+            {
+              text = sprintf "%s is not the correct type" (Types.to_string arg2);
+            };
         ]
     | _, _ ->
         [
@@ -102,8 +105,9 @@ let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :
             (* This only reports one error so if both are not ints can be bad *)
             {
               text =
-                Printf.sprintf "%s and %s are not the correct type"
-                  (Types.to_string arg1) (Types.to_string arg2);
+                sprintf "%s and %s are not the correct type of %s"
+                  (Types.to_string arg1) (Types.to_string arg2)
+                  (Types.to_string typ);
             };
         ]
   in
@@ -203,6 +207,8 @@ let check_statement_types stmt (pt : Program.t) =
   | Stmt.Instr_Assign ls ->
       List.fold_left
         (fun acc (lvar, e) ->
+          let expr_errors = type_check e in
+          let acc = List.append acc expr_errors in
           if Types.equal (BasilExpr.type_of e) (Var.typ lvar) then acc
           else
             StatementEqualityError
@@ -325,17 +331,19 @@ let check_statement_types stmt (pt : Program.t) =
       let real_args = Procedure.formal_in_params target_proc in
       let output = Procedure.formal_out_params target_proc in
 
-      let params_check = List.append
-        (compare_stringmaps BasilExpr.type_of BasilExpr.to_string args Var.typ Var.to_string real_args)
-        (compare_stringmaps Var.typ Var.to_string lhs Var.typ Var.to_string output)
+      let params_check =
+        List.append
+          (compare_stringmaps BasilExpr.type_of BasilExpr.to_string args Var.typ
+             Var.to_string real_args)
+          (compare_stringmaps Var.typ Var.to_string lhs Var.typ Var.to_string
+             output)
       in
       let args =
         StringMap.values args |> Iter.to_list |> List.flat_map type_check
       in
       List.append params_check args
 
-
-let checker (pt : Program.t) p =
+let check (pt : Program.t) p =
   let check_type (id, bl) =
     let stmts = Block.stmts_iter bl in
     Iter.fold
@@ -347,6 +355,5 @@ let checker (pt : Program.t) p =
     |> Iter.fold (fun acc x -> List.append (check_type x) acc) []
   in
   print_errors errors;
-  errors
+  if List.length errors = 0 then false else true
 
-let check (pt: Program.t) p = if List.length (checker pt p) = 0 then false else true

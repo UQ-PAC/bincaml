@@ -23,22 +23,22 @@ let bv_ops_total =
   ]
 
 let gen_width = int_range 1 62
-let arb_bv_op : Ops.BVOps.binary gen = oneofl bv_ops_total
+let arb_bv_op : Ops.BVOps.binary gen = oneof_list bv_ops_total
 
 let gen_bv ?(min = 0) w =
   let* v = int_range min (Bitvec.ones ~size:w |> Bitvec.value |> Z.to_int) in
   return (Bitvec.of_int ~size:w v)
 
 let gen_unop l =
-  let* op = oneofl bv_unop in
+  let* op = oneof_list bv_unop in
   return (BasilExpr.unexp ~op l)
 
 let gen_binop_total l r =
-  let* op = oneofl bv_ops_total in
+  let* op = oneof_list bv_ops_total in
   return (BasilExpr.binexp ~op l r)
 
 let gen_binop_partial l r =
-  let* op = oneofl bv_ops_partial in
+  let* op = oneof_list bv_ops_partial in
   return (BasilExpr.binexp ~op l r)
 
 let gen_bvconst ?min w =
@@ -67,7 +67,7 @@ let gen_bvexpr =
       match size with
       | 0 -> gen_bvconst wd
       | size ->
-          frequency
+          oneof_weighted
             [
               (1, gen_bvconst wd);
               (2, self wd >>= gen_unop);

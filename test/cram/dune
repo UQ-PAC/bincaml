@@ -1,7 +1,9 @@
 (cram
  (deps
   ../../examples/irreducible_loop_1.il
+  ../../examples/incorrect_types.il
   ../../examples/x-output.il
+  typefail.sexp
   basicssa.sexp
   ../../bin/main.exe
   roundtrip.sexp))
