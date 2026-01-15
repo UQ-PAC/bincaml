@@ -3,14 +3,14 @@
 open Bincaml_util.Common
 open Lang
 open Expr
+open Printf
 
 type type_error = StatementEqualityError of { text : string }
 
 let print_errors ls =
   List.iter
     (fun msg ->
-      match msg with
-      | StatementEqualityError { text = t } -> Printf.printf "%s\n" t)
+      match msg with StatementEqualityError { text = t } -> printf "%s\n" t)
     ls
 
 let binary_same_types arg1 arg2 (typ : Types.t) =
@@ -19,17 +19,13 @@ let binary_same_types arg1 arg2 (typ : Types.t) =
   | tl, _ when Types.equal tl typ ->
       [
         StatementEqualityError
-          {
-            text = String.cat (Types.to_string arg1) " is not the correct type";
-          };
+          { text = sprintf "%s is not the correct type" (Types.to_string arg1) };
       ]
   | _, tr when Types.equal tr typ ->
       [
         StatementEqualityError
           (* This only reports one error so if both are not ints can be bad *)
-          {
-            text = String.cat (Types.to_string arg2) " is not the correct type";
-          };
+          { text = sprintf "%s is not the correct type" (Types.to_string arg2) };
       ]
   | _, _ ->
       [
@@ -50,14 +46,14 @@ let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
       else
         [
           StatementEqualityError
-            { text = String.cat (AllOps.to_string op) " body is not a integer" };
+            { text = sprintf "%s body is not a boolean" (AllOps.to_string op) };
         ]
   | `INTNEG as op ->
       if Types.equal arg Types.Integer then []
       else
         [
           StatementEqualityError
-            { text = String.cat (AllOps.to_string op) " body is not a integer" };
+            { text = sprintf "%s body is not a integer" (AllOps.to_string op) };
         ]
   | (`BVNOT | `BVNEG) as op -> (
       match arg with
@@ -67,7 +63,7 @@ let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
             StatementEqualityError
               {
                 text =
-                  String.cat (AllOps.to_string op) " body is not a bitvector";
+                  sprintf "%s body is not a bitvector" (AllOps.to_string op);
               };
           ])
   (* TODO not sure if these need to be seperate from above but there is probs type checking stuff I can do on b *)
@@ -79,7 +75,7 @@ let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
             StatementEqualityError
               {
                 text =
-                  String.cat (AllOps.to_string op) " body is not a bitvector";
+                  sprintf "%s body is not a bitvector" (AllOps.to_string op);
               };
           ])
   | `Extract (hi, _) as op -> (
@@ -92,8 +88,9 @@ let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
                 StatementEqualityError
                   {
                     text =
-                      String.cat (AllOps.to_string op)
-                        " needs to have a bitvector of at least it's hi value";
+                      sprintf
+                        "%s needs to have a bitvector of at least it's hi value"
+                        (AllOps.to_string op);
                   };
               ])
       | _ ->
@@ -101,7 +98,7 @@ let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
             StatementEqualityError
               {
                 text =
-                  String.cat (AllOps.to_string op) " body is not a bitvector";
+                  sprintf "%s body is not a bitvector" (AllOps.to_string op);
               };
           ])
   | `Old -> []
@@ -120,7 +117,7 @@ let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :
           StatementEqualityError
             {
               text =
-                String.cat "Arguments are not of the same type in "
+                sprintf "Arguments are not of the same type in %s"
                   (AllOps.to_string op);
             };
         ]
@@ -133,7 +130,10 @@ let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :
       | _ ->
           [
             StatementEqualityError
-              { text = "Bitvector operator without bitvector args" };
+              {
+                text =
+                  sprintf "%s is not of bitvector type" (Types.to_string arg1);
+              };
           ])
 
 let check_intrin (op : Ops.AllOps.intrin) (args : Types.t list) :
@@ -146,7 +146,10 @@ let check_intrin (op : Ops.AllOps.intrin) (args : Types.t list) :
           if Types.equal correct_type typ then acc
           else
             StatementEqualityError
-              { text = Printf.sprintf "%s wrong type" (Types.to_string typ) }
+              {
+                text =
+                  sprintf "%s is not a bitvector type" (Types.to_string typ);
+              }
             :: acc)
         [] args
   | `BVConcat ->
@@ -157,7 +160,10 @@ let check_intrin (op : Ops.AllOps.intrin) (args : Types.t list) :
           | Types.Bitvector _ -> acc
           | _ ->
               StatementEqualityError
-                { text = Printf.sprintf "%s wrong type" (Types.to_string typ) }
+                {
+                  text =
+                    sprintf "%s is not a bitvector type" (Types.to_string typ);
+                }
               :: acc)
         [] args
   | `OR | `AND ->
@@ -166,7 +172,7 @@ let check_intrin (op : Ops.AllOps.intrin) (args : Types.t list) :
           if Types.equal Types.Boolean typ then acc
           else
             StatementEqualityError
-              { text = Printf.sprintf "%s wrong type" (Types.to_string typ) }
+              { text = sprintf "%s is not a boolean" (Types.to_string typ) }
             :: acc)
         [] args
 
@@ -192,14 +198,20 @@ let type_check expr = BasilExpr.fold_with_type type_error_alg expr
 
 let check_statement_types stmt (pt : Program.t) =
   match stmt with
-  | Stmt.Instr_IntrinCall { lhs } -> []
+  | Stmt.Instr_IntrinCall _ -> []
   | Stmt.Instr_Assign ls ->
       List.fold_left
         (fun acc (lvar, e) ->
           if Types.equal (BasilExpr.type_of e) (Var.typ lvar) then acc
           else
             StatementEqualityError
-              { text = "Assigned var is not the same type as expr" }
+              {
+                text =
+                  sprintf
+                    "Paramters for the function has a type mismatch: type of \
+                     %s != type of %s"
+                    (BasilExpr.to_string e) (Var.to_string lvar);
+              }
             :: acc)
         [] ls
   | Stmt.Instr_Assert { body = e } | Stmt.Instr_Assume { body = e } ->
@@ -208,28 +220,38 @@ let check_statement_types stmt (pt : Program.t) =
       else
         StatementEqualityError
           {
-            text =
-              Printf.sprintf "%s body is not a bool" (BasilExpr.to_string e);
+            text = sprintf "Body of %s is not a Boolean" (BasilExpr.to_string e);
           }
         :: expr_errors
   | Stmt.Instr_Load { lhs; cells; mem; addr } ->
       let addressSize =
         match Var.typ mem with
         | Map (Bitvector addressSize, Bitvector valueSize) -> addressSize
-        | _ -> failwith "Mem addressSize did not exist"
+        | _ -> failwith "Mem's addressSize did not exist"
       in
       let errors = type_check addr in
       let errors =
         if Types.equal (Var.typ lhs) (Types.bv cells) then errors
         else
-          StatementEqualityError { text = "Load size doesn't match lhs" }
+          StatementEqualityError
+            {
+              text =
+                sprintf "Load size (%d) doesn't match lhs (%s) type" cells
+                  (Var.to_string lhs);
+            }
           :: errors
       in
       let errors =
         if Types.equal (BasilExpr.type_of addr) (Types.bv addressSize) then
           errors
         else
-          StatementEqualityError { text = "Load address doesn't match memory" }
+          StatementEqualityError
+            {
+              text =
+                sprintf
+                  "Address loading data (%s) does not match address size (%d)"
+                  (BasilExpr.to_string addr) addressSize;
+            }
           :: errors
       in
       errors
@@ -244,13 +266,24 @@ let check_statement_types stmt (pt : Program.t) =
         if Types.equal (BasilExpr.type_of addr) (Types.bv addressSize) then
           errors
         else
-          StatementEqualityError { text = "Store address doesn't match memory" }
+          StatementEqualityError
+            {
+              text =
+                sprintf
+                  "Address loading data (%s) does not match address size (%d)"
+                  (BasilExpr.to_string addr) addressSize;
+            }
           :: errors
       in
       let errors =
         if Types.equal (BasilExpr.type_of value) (Types.bv cells) then errors
         else
-          StatementEqualityError { text = "Store size doesn't match lhs" }
+          StatementEqualityError
+            {
+              text =
+                sprintf "Store size (%d) doesn't match lhs (%s) type" cells
+                  (BasilExpr.to_string value);
+            }
           :: errors
       in
       errors
@@ -259,24 +292,41 @@ let check_statement_types stmt (pt : Program.t) =
       if Types.equal (BasilExpr.type_of target) (Types.bv 64) then expr_errors
       else
         StatementEqualityError
-          { text = "Indirect call target must be an address" }
+          {
+            text =
+              sprintf
+                "Indirect call target (%s) must be an address (i.e. Bitvector \
+                 64)"
+                (BasilExpr.to_string target);
+          }
         :: expr_errors
   | Stmt.Instr_Call { lhs; procid; args } ->
       (* TODO tried using optional tf1 arg here and did not like it *)
-      let compare_maps tf1 map1 map2 stmt =
+      let compare_maps
+          (type_of_1 : 'a -> Types.t)
+          (to_string_1 : 'a -> string) (map1 : 'a StringMap.t)
+          (type_of_2 : 'b -> Types.t)
+          (to_string_2 : 'b -> string) (map2 : 'b StringMap.t)
+          =
         let list1 = StringMap.to_list map1 in
         let list2 = StringMap.to_list map2 in
         match List.compare_lengths list1 list2 with
         | 0 ->
             List.fold_left2
               (fun acc (_, v) (_, v2) ->
-                if Types.equal (tf1 v) (Var.typ v2) then acc
+                if Types.equal (type_of_1 v) (type_of_2 v2) then acc
                 else
-                  StatementEqualityError { text = "Type mismatch in arguments" }
+                  StatementEqualityError
+                    {
+                      text =
+                        sprintf "Type mismatch in arguments %s and %s"
+                          (to_string_1 v) (to_string_2 v2);
+                    }
                   :: acc)
               [] list1 list2
-        | _ ->
-            [ StatementEqualityError { text = "Missing or extra arguments" } ]
+        | n when n > 0 ->
+            [ StatementEqualityError { text = "Extra arguments" } ]
+        | _ -> [ StatementEqualityError { text = "Missing arguments" } ]
       in
       let target_proc = ID.Map.find procid pt.procs in
       let real_args = Procedure.formal_in_params target_proc in
@@ -297,8 +347,8 @@ let check_statement_types stmt (pt : Program.t) =
            (fun acc arg -> type_check arg :: acc)
            [
              List.append
-               (compare_maps BasilExpr.type_of args real_args stmt)
-               (compare_maps Var.typ lhs output stmt);
+               (compare_maps BasilExpr.type_of BasilExpr.to_string args Var.typ Var.to_string real_args)
+               (compare_maps Var.typ Var.to_string lhs Var.typ Var.to_string output)
            ]
            (List.map (fun (_, v) -> v) (StringMap.to_list args)))
 
