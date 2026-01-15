@@ -325,7 +325,7 @@ struct
     let init p =
       let vs = Lang.Procedure.formal_in_params p |> StringMap.values in
       vs
-      |> Iter.map (fun v -> (v, V.bottom))
+      |> Iter.map (fun v -> (v, top_val))
       |> Iter.fold (fun m (v, d) -> SV.update v d m) SV.bottom
 
     let transfer dom stmt =
