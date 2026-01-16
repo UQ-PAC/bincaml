@@ -14,5 +14,5 @@
   containers
   containers.pp
   containers.unix
-  trace
+  trace.core
   trace-tef))

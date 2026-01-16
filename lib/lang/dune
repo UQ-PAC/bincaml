@@ -23,7 +23,7 @@
   iter
   containers.pp
   fmt
-  trace
+  trace.core
   bincaml.util)
  (inline_tests)
  (preprocess

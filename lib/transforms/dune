@@ -24,7 +24,7 @@
   containers-data
   iter
   containers.pp
-  trace
+  trace.core
   bincaml.util)
  (inline_tests)
  (preprocess

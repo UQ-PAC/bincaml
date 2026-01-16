@@ -15,7 +15,7 @@
   containers-data
   iter
   containers.pp
-  trace)
+  trace.core)
  (inline_tests)
  (preprocess
   (pps
