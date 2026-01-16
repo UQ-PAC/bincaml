@@ -192,11 +192,25 @@ let check_intrin (op : Ops.AllOps.intrin) (args : Types.t list) :
               }
             :: acc)
         [] args
-
+    
 let type_error_alg e =
+  let open Ops.AllOps in
+  let open AbstractExpr in
   let errors =
     AbstractExpr.map fst e
     |> AbstractExpr.fold (fun acc f -> List.append f acc) []
+  in
+  let get_ty o =
+    match o with Fun { ret } -> ([], ret) | Conflict c -> ([StatementEqualityError {text = "Nothing type encountered in operator" }], Nothing)
+  in
+  let (inf_errors, rtype) = match (AbstractExpr.map snd e) with
+  | RVar r -> ([], Var.typ r)
+  | Constant op -> ret_type_const op |> get_ty
+  | UnaryExpr (op, a) -> ret_type_unary op a |> get_ty
+  | BinaryExpr (op, l, r) -> ret_type_bin op l r |> get_ty
+  | ApplyIntrin (op, args) -> ret_type_intrin op args |> get_ty
+  | ApplyFun (a, b) -> ([], Types.Top)
+  | Binding (vars, b) ->([], Types.uncurry vars b)
   in
   let typed_expr = AbstractExpr.map snd e in
   let new_errors : type_error list =
@@ -209,9 +223,9 @@ let type_error_alg e =
     | BinaryExpr (op, l, r) -> check_binary op l r
     | ApplyIntrin (op, args) -> check_intrin op args
   in
-  List.append new_errors errors
+  (inf_errors @ new_errors @ errors, rtype)
 
-let type_check expr = BasilExpr.fold_with_type type_error_alg expr
+let type_check expr = BasilExpr.cata type_error_alg expr
 
 let check_statement_types stmt (pt : Program.t) =
   match stmt with
@@ -219,9 +233,9 @@ let check_statement_types stmt (pt : Program.t) =
   | Stmt.Instr_Assign ls ->
       List.fold_left
         (fun acc (lvar, e) ->
-          let expr_errors = type_check e in
+          let (expr_errors, rtype) = type_check e in
           let acc = List.append acc expr_errors in
-          if Types.equal (BasilExpr.type_of e) (Var.typ lvar) then acc
+          if Types.equal (rtype) (Var.typ lvar) then acc
           else
             StatementEqualityError
               {
@@ -234,8 +248,8 @@ let check_statement_types stmt (pt : Program.t) =
             :: acc)
         [] ls
   | Stmt.Instr_Assert { body = e } | Stmt.Instr_Assume { body = e } ->
-      let expr_errors = type_check e in
-      if Types.equal (BasilExpr.type_of e) Types.Boolean then expr_errors
+      let expr_errors, rtype = type_check e in
+      if Types.equal rtype Types.Boolean then expr_errors
       else
         StatementEqualityError
           {
@@ -248,7 +262,7 @@ let check_statement_types stmt (pt : Program.t) =
         | Map (Bitvector addressSize, Bitvector valueSize) -> addressSize
         | _ -> failwith "Mem's addressSize did not exist"
       in
-      let errors = type_check addr in
+      let errors, rtype = type_check addr in
       let errors =
         if Types.equal (Var.typ lhs) (Types.bv cells) then errors
         else
@@ -261,7 +275,7 @@ let check_statement_types stmt (pt : Program.t) =
           :: errors
       in
       let errors =
-        if Types.equal (BasilExpr.type_of addr) (Types.bv addressSize) then
+        if Types.equal rtype (Types.bv addressSize) then
           errors
         else
           StatementEqualityError
@@ -280,9 +294,11 @@ let check_statement_types stmt (pt : Program.t) =
         | Map (Bitvector addressSize, _) -> addressSize
         | _ -> failwith "Mem addressSize did not exist"
       in
-      let errors = List.append (type_check addr) (type_check value) in
+      let val_errors, val_rtype = type_check addr in
+      let addr_errors, addr_rtype = type_check addr in
+      let errors = List.append (addr_errors) (val_errors) in
       let errors =
-        if Types.equal (BasilExpr.type_of addr) (Types.bv addressSize) then
+        if Types.equal addr_rtype (Types.bv addressSize) then
           errors
         else
           StatementEqualityError
@@ -295,7 +311,7 @@ let check_statement_types stmt (pt : Program.t) =
           :: errors
       in
       let errors =
-        if Types.equal (BasilExpr.type_of value) (Types.bv cells) then errors
+        if Types.equal val_rtype (Types.bv cells) then errors
         else
           StatementEqualityError
             {
@@ -307,8 +323,8 @@ let check_statement_types stmt (pt : Program.t) =
       in
       errors
   | Stmt.Instr_IndirectCall { target } ->
-      let expr_errors = type_check target in
-      if Types.equal (BasilExpr.type_of target) (Types.bv 64) then expr_errors
+      let expr_errors, rtype = type_check target in
+      if Types.equal rtype (Types.bv 64) then expr_errors
       else
         StatementEqualityError
           {
@@ -343,17 +359,15 @@ let check_statement_types stmt (pt : Program.t) =
       let real_args = Procedure.formal_in_params target_proc in
       let output = Procedure.formal_out_params target_proc in
 
+      let args = StringMap.map (fun v -> snd (type_check v)) args in
       let params_check =
         List.append
-          (compare_stringmaps BasilExpr.type_of BasilExpr.to_string args Var.typ
+          (compare_stringmaps id Types.to_string args Var.typ
              Var.to_string real_args)
           (compare_stringmaps Var.typ Var.to_string lhs Var.typ Var.to_string
              output)
       in
-      let args =
-        StringMap.values args |> Iter.to_list |> List.flat_map type_check
-      in
-      List.append params_check args
+      params_check
 
 let check (pt : Program.t) p =
   let check_type (id, bl) =

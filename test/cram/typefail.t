@@ -1,6 +1,8 @@
   $ dune exec bincaml script ./typefail.sexp 2>/dev/null
+  Store size (32) doesn't match lhs (extract(32, 0, $R1:bv64)) type
   Body of booltobv1(0x7a0:bv64) is not a Boolean
   booltobv1 body is not a boolean
+  Store size (64) doesn't match lhs ($R29:bv64) type
   Address loading data (#4:bv32) does not match address size (64)
   bv32 is not the correct type of bv64 for bvashr
   bool is not of bitvector type in bvashr
@@ -39,8 +41,10 @@
   int is not of bitvector type in bvsle
   extract_32_31  body is not a bitvector
   Paramters for the function has a type mismatch: type of sign_extend(32, 2) != type of $NF:bv64
+  Nothing type encountered in operator
   sign_extend_32 body is not a bitvector
   Paramters for the function has a type mismatch: type of zero_extend(32, 2) != type of $NF:bv64
+  Nothing type encountered in operator
   zero_extend_32 body is not a bitvector
   Paramters for the function has a type mismatch: type of bvneg(1) != type of $NF:bv1
   bvneg body is not a bitvector
