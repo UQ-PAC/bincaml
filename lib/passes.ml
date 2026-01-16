@@ -143,7 +143,7 @@ module PassManager = struct
     List.map (fun n -> List.find (fun t -> String.equal t.name n) passes) pass
 
   let rec run_transform (p : Program.t) (tf : pass) =
-    Trace.with_span ~__FILE__ ~__LINE__ ("transform-prog::" ^ tf.name)
+    Trace_core.with_span ~__FILE__ ~__LINE__ ("transform-prog::" ^ tf.name)
     @@ fun _ ->
     match tf.apply with
     | Prog tf -> tf p
@@ -167,7 +167,7 @@ module PassManager = struct
         let _ =
           ID.Map.mapi
             (fun id proc ->
-              Trace.with_span ~__FILE__ ~__LINE__
+              Trace_core.with_span ~__FILE__ ~__LINE__
                 ("check-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
               @@ fun _ ->
               match app p proc with
@@ -180,7 +180,7 @@ module PassManager = struct
         let procs =
           ID.Map.mapi
             (fun id proc ->
-              Trace.with_span ~__FILE__ ~__LINE__
+              Trace_core.with_span ~__FILE__ ~__LINE__
                 ("transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
               @@ fun _ -> app proc)
             p.procs

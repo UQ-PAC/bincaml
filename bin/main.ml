@@ -92,8 +92,8 @@ let cmd =
   @@ [ procs_cmd; dump_proc_cmd; print_cfg_cmd; script_cmd ]
 
 let main () =
-  Trace.set_process_name "main";
-  Trace.set_thread_name "t1";
+  Trace_core.set_process_name "main";
+  Trace_core.set_thread_name "t1";
   exit (Cmd.eval_result cmd)
 
 let () = Trace_tef.with_setup ~out:(`File "trace.json") () @@ fun () -> main ()

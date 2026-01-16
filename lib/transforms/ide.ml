@@ -539,7 +539,7 @@ module IDE (D : IDEDomain) = struct
   let phase1_solve order dir graph globals default =
     (* FIXME: this doesn't maintain context sensitivity because there is only one edgefunction
        for each procedure entry, therefore joining all the contexts*)
-    Trace.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
+    Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
     let module Q = IntPQueue.Plain in
     let (worklist : edge Q.t) = Q.create () in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
@@ -579,7 +579,7 @@ module IDE (D : IDEDomain) = struct
   let phase2_solve order dir graph globals
       (summaries : (Loc.t, summary) Hashtbl.t) =
     (* FIXME: use summaries ; propertly evaluate call edges first then fill in between*)
-    Trace.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
+    Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
     let module Q = IntPQueue.Plain in
     let (worklist : edge Q.t) = Q.create () in
     let constants : (Loc.t, constant_state) Hashtbl.t = Hashtbl.create 100 in
@@ -626,7 +626,7 @@ module IDE (D : IDEDomain) = struct
     Hashtbl.get r (IntraVertex { proc_id; v = vert })
 
   let solve dir (prog : Program.t) =
-    Trace.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
+    Trace_core.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
     let globals = prog.globals |> Var.Decls.to_iter |> Iter.map snd in
     let graph = IDEGraph.create prog in
     let order =
@@ -662,7 +662,7 @@ let show_const_summary (v : IDELiveAnalysis.constant_state) =
 let print_live_vars_dot sum r fmt prog proc_id =
   let label (v : Procedure.G.vertex) = r v |> Option.map (fun s -> sum s) in
   let p = Program.proc prog proc_id in
-  Trace.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
+  Trace_core.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
   let (module M : Viscfg.ProcPrinter) = Viscfg.dot_labels (fun v -> label v) in
   Option.iter (fun g -> M.fprint_graph fmt g) (Procedure.graph p)
 
