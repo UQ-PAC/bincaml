@@ -21,7 +21,8 @@ let%expect_test "fold_block" =
   let st, _ = Lang.Interp.run_prog prog in
   print_endline (Lang.Interp.IState.show st);
   ();
-  [%expect {|
+  [%expect
+    {|
     PC= test::Return
     Stack
 
