@@ -3,7 +3,15 @@
  (name loader)
  (flags -w -27)
  (modules loadir)
- (libraries pp_loc BasilIR lang bincaml.ast bincaml.util zarith iter trace.core))
+ (libraries
+  pp_loc
+  BasilIR
+  lang
+  bincaml.ast
+  bincaml.util
+  zarith
+  iter
+  trace.core))
 
 (library
  (public_name bincaml)
