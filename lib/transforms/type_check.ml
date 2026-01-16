@@ -294,7 +294,7 @@ let check_statement_types stmt (pt : Program.t) =
         | Map (Bitvector addressSize, _) -> addressSize
         | _ -> failwith "Mem addressSize did not exist"
       in
-      let val_errors, val_rtype = type_check addr in
+      let val_errors, val_rtype = type_check value in
       let addr_errors, addr_rtype = type_check addr in
       let errors = List.append (addr_errors) (val_errors) in
       let errors =
@@ -316,8 +316,8 @@ let check_statement_types stmt (pt : Program.t) =
           StatementEqualityError
             {
               text =
-                sprintf "Store size (%d) doesn't match lhs (%s) type" cells
-                  (BasilExpr.to_string value);
+                sprintf "Store size (%s) doesn't match lhs (%s) type" (Types.to_string (Types.bv cells))
+                  (Types.to_string val_rtype);
             }
           :: errors
       in

@@ -1,8 +1,6 @@
   $ dune exec bincaml script ./typefail.sexp 2>/dev/null
-  Store size (32) doesn't match lhs (extract(32, 0, $R1:bv64)) type
   Body of booltobv1(0x7a0:bv64) is not a Boolean
   booltobv1 body is not a boolean
-  Store size (64) doesn't match lhs ($R29:bv64) type
   Address loading data (#4:bv32) does not match address size (64)
   bv32 is not the correct type of bv64 for bvashr
   bool is not of bitvector type in bvashr
