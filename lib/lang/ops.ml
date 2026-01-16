@@ -228,11 +228,11 @@ module AllOps = struct
     | `SignExtend sz -> (
         match a with
         | Bitvector s -> return @@ Bitvector (sz + s)
-        | o -> Conflict [ (o, "<bitvector") ])
+        | o -> return Nothing)
     | `ZeroExtend sz -> (
         match a with
         | Bitvector s -> return @@ Bitvector (sz + s)
-        | o -> Conflict [ (o, "<bitvector") ])
+        | o -> return Nothing)
     | `Forall -> return Boolean
     | `BVNEG -> return a
     | `INTNEG -> return Integer

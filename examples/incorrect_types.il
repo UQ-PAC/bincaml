@@ -16,26 +16,69 @@ proc @main_1876 () -> ()
   { .name = "main"; .address = 0x754; .returnBlock = "main_basil_return_1" }
 [
   block %main_entry {.address = 0x754} [
+    $NF: bool := eq(1, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := neq(1, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := eq(true, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := neq(true, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := eq(1, true) { .label = "%00000408" };
+    $NF: bool := neq(1, true) { .label = "%00000408" };
+
+
+    $NF: bv1 := intneg(0x1:bv32) { .label = "%00000408" };
+    
+    $NF: int := intadd(1, 0x1:bv32) { .label = "%00000408" };
+    $NF: int := intdiv(1, 0x1:bv32) { .label = "%00000408" };
+    $NF: int := intmod(1, 0x1:bv32) { .label = "%00000408" };
+    $NF: int := intmul(1, 0x1:bv32) { .label = "%00000408" };
+    $NF: int := intsub(1, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := intlt(1, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := intle(1, 0x1:bv32) { .label = "%00000408" };
+
+    $NF: bv1 := bvnot(1) { .label = "%0000048" };
+    $NF: bv1 := bvneg(1) { .label = "%0000048" };
+    $NF: bv64 := zero_extend(32, 2) { .label = "%000003a4$1" };
+    $NF: bv64 := sign_extend(32, 2) { .label = "%000003a4$1" };
+    $NF: bv1 := extract(32, 31, 2) { .label = "%00000408" };
+    
+    $NF: bool := bvsle(1, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := bvslt(1, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := bvsle(0x1:bv64, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := bvslt(0x1:bv64, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := bvult(1, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := bvule(1, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := bvand(1, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := bvor(true, 0x1:bv32) { .label = "%00000408" };
+    $NF: bool := bvadd(true, 0x1:bv32) { .label = "%00000408" };
     var #4: bv64 := bvadd($R31:bv64, 0xffffffffffffffe0:bv32) { .label = "%0000035a" };
-    store le $stack #4:bv32 $R29:bv64 64 { .label = "%00000360" };
-    store le $stack bvadd(#4:bv64, 0x8:bv64) $R30:bv64 64 { .label = "%00000366" };
-    $R31: bv64 := #4:bv64 { .label = "%0000036a" };
-    $R29: bv64 := $R31:bv64 { .label = "%00000370" };
-    store le $stack bvadd($R31:bv64, 0x1c:bv64) extract(32, 0, $R0:bv64) 32 { .label = "%00000378" };
-    store le $stack bvadd($R31:bv64, 0x10:bv64) $R1:bv64 64 { .label = "%00000380" };
-    $R0: bv64 := 0x20000:bv64 { .label = "%00000385" };
-    $R0: bv64 := bvadd($R0:bv64, 0x3c:bv64) { .label = "%0000038b" };
-    store le $mem $R0:bv64 0x0:bv32 32 { .label = "%00000392" };
-    $R0: bv64 := 0x20000:bv64 { .label = "%00000397" };
-    $R0: bv64 := bvadd($R0:bv64, 0x40:bv64) { .label = "%0000039d" };
+    $NF: bool := bvmul(true, 0x1:bv32) { .label = "%00000408" };
+    var #4: bv64 := bvmul($R31:bv64, 0xffffffffffffffe0:bv32) { .label = "%0000035a" };
+    $NF: bool := bvudiv(true, 0x1:bv32) { .label = "%00000408" };
+    var #4: bv64 := bvudiv($R31:bv64, 0xffffffffffffffe0:bv32) { .label = "%0000035a" };
+    $NF: bool := bvurem(true, 0x1:bv32) { .label = "%00000408" };
+    var #4: bv64 := bvurem($R31:bv64, 0xffffffffffffffe0:bv32) { .label = "%0000035a" };
+    $NF: bool := bvshl(true, 0x1:bv32) { .label = "%00000408" };
+    var #4: bv64 := bvshl($R31:bv64, 0xffffffffffffffe0:bv32) { .label = "%0000035a" };
+    $NF: bool := bvlshr(true, 0x1:bv32) { .label = "%00000408" };
+    var #4: bv64 := bvlshr($R31:bv64, 0xffffffffffffffe0:bv32) { .label = "%0000035a" };
+    $NF: bool := bvnand(true, 0x1:bv32) { .label = "%00000408" };
+    var #4: bv64 := bvnand($R31:bv64, 0xffffffffffffffe0:bv32) { .label = "%0000035a" };
+    $NF: bool := bvxor(true, 0x1:bv32) { .label = "%00000408" };
+    var #4: bv64 := bvxor($R31:bv64, 0xffffffffffffffe0:bv32) { .label = "%0000035a" };
+    $NF: bool := bvsub(true, 0x1:bv32) { .label = "%00000408" };
+    var #4: bv64 := bvsub($R31:bv64, 0xffffffffffffffe0:bv32) { .label = "%0000035a" };
+    $NF: bool := bvsdiv(true, 0x1:bv32) { .label = "%00000408" };
+    var #4: bv64 := bvsdiv($R31:bv64, 0xffffffffffffffe0:bv32) { .label = "%0000035a" };
+    $NF: bool := bvsrem(true, 0x1:bv32) { .label = "%00000408" };
+    var #4: bv64 := bvsrem($R31:bv64, 0xffffffffffffffe0:bv32) { .label = "%0000035a" };
+    $NF: bool := bvsmod(true, 0x1:bv32) { .label = "%00000408" };
+    var #4: bv64 := bvsmod($R31:bv64, 0xffffffffffffffe0:bv32) { .label = "%0000035a" };
+    $NF: bool := bvashr(true, 0x1:bv32) { .label = "%00000408" };
+    var #4: bv64 := bvashr($R31:bv64, 0xffffffffffffffe0:bv32) { .label = "%0000035a" };
+
+
     var load18: bv32 := load le $mem $R0:bv64 32 { .label = "%000003a4$0" };
-    $R0: bv64 := zero_extend(32, load18:bv32) { .label = "%000003a4$1" };
-    $R0: bv64 := zero_extend(32, bvconcat(0x0:bv31, extract(1, 0, $R0:bv64))) { .label = "%000003aa" };
-    var #5: bv32 := bvadd(extract(32, 0, $R0:bv64), 0xffffffff:bv32) { .label = "%000003b0" };
-    $VF: bv1 := bvnot(bvcomp(sign_extend(1, bvadd(#5:bv32, 0x1:bv32)), bvadd(sign_extend(1, extract(32, 0, $R0:bv64)), 0x0:bv33))) { .label = "%000003b5" };
-    $CF: bv1 := bvnot(bvcomp(zero_extend(1, bvadd(#5:bv32, 0x1:bv32)), bvadd(zero_extend(1, extract(32, 0, $R0:bv64)), 0x100000000:bv33))) { .label = "%000003ba" };
-    $ZF: bv1 := bvcomp(bvadd(#5:bv32, 0x1:bv32), 0x0:bv32) { .label = "%000003be" };
-    $NF: bv1 := extract(32, 31, bvadd(#5:bv32, 0x1:bv32)) { .label = "%000003c2" };
+    store le $stack #4:bv32 $R29:bv64 64 { .label = "%00000360" };
+
     goto(%main_23, %main_27);
   ];
   block %main_3 {.address = 0x7a0} [
@@ -53,14 +96,13 @@ proc @main_1876 () -> ()
     $R0: bv64 := 0x0:bv64 { .label = "%00000416" };
     $R0: bv64 := bvadd($R0:bv64, 0x820:bv64) { .label = "%0000041c" };
     $R30: bv64 := 0x7a0:bv64 { .label = "%00000421" };
-    call @puts_1584 () { .label = "%00000423" };
     goto(%main_3);
   ];
   block %main_7 {.address = 0x790} [
     goto(%main_5);
   ];
   block %main_9 [
-    guard neq(bvnot(bvcomp($ZF:bv1, 0x1:bv1)), 0x0:bv1);
+    guard booltobv1(0x7a0:bv64);
     goto(%main_7);
   ];
   block %main_11 {.address = 0x7f4} [
@@ -80,7 +122,6 @@ proc @main_1876 () -> ()
     $R0: bv64 := 0x0:bv64 { .label = "%00000459" };
     $R0: bv64 := bvadd($R0:bv64, 0x828:bv64) { .label = "%0000045f" };
     $R30: bv64 := 0x7f4:bv64 { .label = "%00000464" };
-    call @puts_1584 () { .label = "%00000466" };
     goto(%main_13);
   ];
   block %main_17 {.address = 0x7d0} [
@@ -92,14 +133,12 @@ proc @main_1876 () -> ()
     $VF: bv1 := bvnot(bvcomp(sign_extend(1, bvadd(#6:bv32, 0x1:bv32)), bvadd(sign_extend(1, extract(32, 0, $R0:bv64)), 0x1fffffffb:bv33))) { .label = "%000003fb" };
     $CF: bv1 := bvnot(bvcomp(zero_extend(1, bvadd(#6:bv32, 0x1:bv32)), bvadd(zero_extend(1, extract(32, 0, $R0:bv64)), 0xfffffffb:bv33))) { .label = "%00000400" };
     $ZF: bv1 := bvcomp(bvadd(#6:bv32, 0x1:bv32), 0x0:bv32) { .label = "%00000404" };
-    $NF: bv1 := extract(32, 31, intadd(#6:bv32, 0x1:bv32)) { .label = "%00000408" };
     goto(%main_9, %main_15);
   ];
   block %main_19 {.address = 0x7c4} [
     $R0: bv64 := 0x0:bv64 { .label = "%000003d0" };
     $R0: bv64 := bvadd($R0:bv64, 0x820:bv64) { .label = "%000003d6" };
     $R30: bv64 := 0x7d0:bv64 { .label = "%000003db" };
-    call @puts_1584 () { .label = "%000003de" };
     goto(%main_17);
   ];
   block %main_21 {.address = 0x7c0} [
@@ -122,10 +161,8 @@ proc @main_1876 () -> ()
 ];
 
 
-proc @puts_1584 () -> ()
+proc @puts_1584 (R0_in:bv32) -> ()
   { .name = "puts"; .address = 0x630 };
-
-
 
 
 prog entry @main_1876 {

@@ -16,21 +16,21 @@ let print_errors ls =
 let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
   let open Ops in
   match op with
-  | (`BoolNOT | `BOOLTOBV1) as op ->
+  | `BoolNOT | `BOOLTOBV1 ->
       if Types.equal arg Types.Boolean then []
       else
         [
           StatementEqualityError
             { text = sprintf "%s body is not a boolean" (AllOps.to_string op) };
         ]
-  | `INTNEG as op ->
+  | `INTNEG ->
       if Types.equal arg Types.Integer then []
       else
         [
           StatementEqualityError
             { text = sprintf "%s body is not a integer" (AllOps.to_string op) };
         ]
-  | (`BVNOT | `BVNEG) as op -> (
+  | `BVNOT | `BVNEG -> (
       match arg with
       | Bitvector _ -> []
       | _ ->
@@ -41,8 +41,7 @@ let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
                   sprintf "%s body is not a bitvector" (AllOps.to_string op);
               };
           ])
-  (* TODO not sure if these need to be seperate from above but there is probs type checking stuff I can do on b *)
-  | (`ZeroExtend b | `SignExtend b) as op -> (
+  | `ZeroExtend _ | `SignExtend _ -> (
       match arg with
       | Bitvector _ -> []
       | _ ->
@@ -53,7 +52,7 @@ let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
                   sprintf "%s body is not a bitvector" (AllOps.to_string op);
               };
           ])
-  | `Extract (hi, _) as op -> (
+  | `Extract (hi, _) -> (
       match arg with
       | Bitvector sz -> (
           match sz >= hi with
@@ -84,19 +83,25 @@ let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :
   let binary_same_types arg1 arg2 (typ : Types.t) =
     match (arg1, arg2) with
     | tl, tr when Types.equal tl typ && Types.equal tr typ -> []
-    | tl, _ when Types.equal tl typ ->
+    | _, tr when Types.equal tr typ ->
         [
           StatementEqualityError
             {
-              text = sprintf "%s is not the correct type" (Types.to_string arg1);
+              text =
+                sprintf "%s is not the correct type of %s for %s"
+                  (Types.to_string arg1) (Types.to_string typ)
+                  (Ops.AllOps.to_string op);
             };
         ]
-    | _, tr when Types.equal tr typ ->
+    | tl, _ when Types.equal tl typ ->
         [
           StatementEqualityError
             (* This only reports one error so if both are not ints can be bad *)
             {
-              text = sprintf "%s is not the correct type" (Types.to_string arg2);
+              text =
+                sprintf "%s is not the correct type of %s for %s"
+                  (Types.to_string arg2) (Types.to_string typ)
+                  (Ops.AllOps.to_string op);
             };
         ]
     | _, _ ->
@@ -105,9 +110,9 @@ let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :
             (* This only reports one error so if both are not ints can be bad *)
             {
               text =
-                sprintf "%s and %s are not the correct type of %s"
+                sprintf "%s and %s are not the correct type of %s for %s"
                   (Types.to_string arg1) (Types.to_string arg2)
-                  (Types.to_string typ);
+                  (Types.to_string typ) (Ops.AllOps.to_string op);
             };
         ]
   in
@@ -137,7 +142,8 @@ let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :
             StatementEqualityError
               {
                 text =
-                  sprintf "%s is not of bitvector type" (Types.to_string arg1);
+                  sprintf "%s is not of bitvector type in %s"
+                    (Types.to_string arg1) (Ops.AllOps.to_string op);
               };
           ])
 
@@ -153,7 +159,8 @@ let check_intrin (op : Ops.AllOps.intrin) (args : Types.t list) :
             StatementEqualityError
               {
                 text =
-                  sprintf "%s is not a bitvector type" (Types.to_string typ);
+                  sprintf "%s is not a bitvector type in %s"
+                    (Types.to_string typ) (Ops.AllOps.to_string op);
               }
             :: acc)
         [] args
@@ -167,7 +174,8 @@ let check_intrin (op : Ops.AllOps.intrin) (args : Types.t list) :
               StatementEqualityError
                 {
                   text =
-                    sprintf "%s is not a bitvector type" (Types.to_string typ);
+                    sprintf "%s is not a bitvector type in %s"
+                      (Types.to_string typ) (Ops.AllOps.to_string op);
                 }
               :: acc)
         [] args
@@ -177,7 +185,11 @@ let check_intrin (op : Ops.AllOps.intrin) (args : Types.t list) :
           if Types.equal Types.Boolean typ then acc
           else
             StatementEqualityError
-              { text = sprintf "%s is not a boolean" (Types.to_string typ) }
+              {
+                text =
+                  sprintf "%s is not a boolean in %s" (Types.to_string typ)
+                    (Ops.AllOps.to_string op);
+              }
             :: acc)
         [] args
 
@@ -356,4 +368,3 @@ let check (pt : Program.t) p =
   in
   print_errors errors;
   if List.length errors = 0 then false else true
-
