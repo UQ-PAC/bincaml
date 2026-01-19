@@ -46,6 +46,8 @@ end
 module LSet = Set.Make (Loc)
 module LM = Map.Make (Loc)
 
+let direction : [ `Forwards | `Backwards ] = `Backwards
+
 module IDEGraph = struct
   module Vert = struct
     include Loc
@@ -84,14 +86,24 @@ module IDEGraph = struct
     stmts : Var.t Block.phi list * Program.stmt list;
   }
 
-  let push_edge (ending : Loc.t) (g : bstate) =
+  let add_edge_e_dir dir g (v1, e, v2) =
+    match dir with
+    | `Forwards -> GB.add_edge_e g (v1, e, v2)
+    | `Backwards -> GB.add_edge_e g (v2, e, v1)
+
+  let push_edge dir (ending : Loc.t) (g : bstate) =
     match g with
     | { graph; last_vert; stmts } ->
         let phi, stmts = (fst stmts, List.rev (snd stmts)) in
         let e1 = (last_vert, Edge.Stmts (phi, stmts), ending) in
-        { graph = GB.add_edge_e graph e1; stmts = ([], []); last_vert = ending }
+        {
+          graph = add_edge_e_dir dir graph e1;
+          stmts = ([], []);
+          last_vert = ending;
+        }
 
-  let add_call p (st : bstate) (origin : stmt_id) (callstmt : Program.stmt) =
+  let add_call dir p (st : bstate) (origin : stmt_id) (callstmt : Program.stmt)
+      =
     let lhs, rhs, target =
       match callstmt with
       | Stmt.(Instr_Call { lhs; procid; args }) ->
@@ -120,13 +132,18 @@ module IDEGraph = struct
       | _ -> failwith "not a call"
     in
     let caller, callee = (origin.proc_id, target) in
-    let g = push_edge (CallSite origin) st in
+    let g = push_edge dir (CallSite origin) st in
     let graph = g.graph in
     let graph =
       GB.add_edge_e graph (CallSite origin, Call callstmt, AfterCall origin)
     in
     let call_entry = IntraVertex { proc_id = target; v = Entry } in
     let call_return = IntraVertex { proc_id = target; v = Return } in
+    let call_entry, call_return =
+      match dir with
+      | `Forwards -> (call_entry, call_return)
+      | `Backwards -> (call_return, call_entry)
+    in
     let ret_info = { lhs; rhs; call_from = callstmt; caller; callee } in
     let graph =
       GB.add_edge_e graph
@@ -140,12 +157,12 @@ module IDEGraph = struct
     in
     { g with graph }
 
-  let proc_graph prog g p =
+  let proc_graph prog g p dir =
     let proc_id = Procedure.id p in
     let add_block_edge b graph =
       match b with
       | v1, Procedure.Edge.Jump, v2 ->
-          GB.add_edge_e g
+          add_edge_e_dir dir g
             Loc.
               ( IntraVertex { proc_id; v = v1 },
                 Nop,
@@ -161,16 +178,18 @@ module IDEGraph = struct
               stmts = (b.phis, []);
             }
           in
-          Block.stmts_iter_i b
+          (match dir with
+            | `Forwards -> Block.stmts_iter_i b
+            | `Backwards -> Block.stmts_iter_i b |> Iter.rev)
           |> Iter.fold
                (fun st (i, s) ->
                  let stmt_id : Loc.stmt_id = { proc_id; block; offset = i } in
                  match s with
-                 | Stmt.Instr_Call _ as c -> add_call prog st stmt_id c
+                 | Stmt.Instr_Call _ as c -> add_call dir prog st stmt_id c
                  | stmt ->
                      { st with stmts = (fst st.stmts, stmt :: snd st.stmts) })
                is
-          |> push_edge (IntraVertex { proc_id; v = End block })
+          |> push_edge dir (IntraVertex { proc_id; v = End block })
           |> fun x -> x.graph
       | _, _, _ -> failwith "bad proc edge"
     in
@@ -188,9 +207,9 @@ module IDEGraph = struct
     |> Option.map (fun procg -> Procedure.G.fold_edges_e add_block_edge procg g)
     |> Option.get_or ~default:g
 
-  let create (prog : Program.t) =
+  let create (prog : Program.t) dir =
     ID.Map.to_iter prog.procs |> Iter.map snd
-    |> Iter.fold (fun g p -> proc_graph prog g p) (GB.empty ())
+    |> Iter.fold (fun g p -> proc_graph prog g p dir) (GB.empty ())
 
   let vertex_to_entry_table g =
     let t = ref LM.empty in
@@ -352,9 +371,8 @@ module IDELive = struct
     | IdEdge, IdEdge -> IdEdge
 
   let eval f v = match f with IdEdge -> v | ConstEdge v -> v
-  let compose_call c d = Iter.singleton (d, IdEdge)
 
-  let compose_return (r : ret_info) d =
+  let compose_call (c : call_info) d =
     match d with
     | Lambda ->
         List.fold_left
@@ -362,9 +380,11 @@ module IDELive = struct
             Expr.BasilExpr.free_vars_iter out_expr
             |> Iter.fold (fun i v -> Iter.cons (Label v, ConstEdge live) i) i)
           (Iter.singleton (d, IdEdge))
-          r.rhs
+          c.rhs
     | Label v when Var.is_global v -> Iter.empty
     | Label v -> Iter.empty
+
+  let compose_return r d = Iter.singleton (d, IdEdge)
 
   let compose_call_to_aftercall stmt d =
     match d with Lambda -> Iter.singleton (d, IdEdge) | Label _ -> Iter.empty
@@ -433,8 +453,6 @@ module IDE (D : IDEDomain) = struct
       VarMap.get v st |> Option.map (D.Value.join x) |> Option.get_or ~default:x
     in
     VarMap.add v j st
-
-  let direction : [ `Forwards | `Backwards ] = `Backwards
 
   (** Determine composites of edge functions through an intravertex block *)
   let tf_stmts dir phi bs i =
@@ -691,7 +709,7 @@ module IDE (D : IDEDomain) = struct
   let solve dir (prog : Program.t) =
     Trace.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
     let globals = prog.globals |> Var.Decls.to_iter |> Iter.map snd in
-    let graph = IDEGraph.create prog in
+    let graph = IDEGraph.create prog dir in
     let order =
       (match dir with
         | `Forwards -> Iter.from_iter (fun f -> IDEGraph.Top.iter f graph)
@@ -746,6 +764,6 @@ let transform (prog : Program.t) =
       CCIO.with_out
         ("idelive-const" ^ n ^ ".dot")
         (fun s ->
-          print_live_vars_dot show_state (r ~proc_id:proc)
-            (Format.of_chan s) prog proc));
+          print_live_vars_dot show_state (r ~proc_id:proc) (Format.of_chan s)
+            prog proc));
   prog
