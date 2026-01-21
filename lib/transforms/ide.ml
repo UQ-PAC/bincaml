@@ -97,7 +97,7 @@ module IDEGraph = struct
         let phi, stmts = (fst stmts, List.rev (snd stmts)) in
         let e1 = (last_vert, Edge.Stmts (phi, stmts), ending) in
         {
-          graph = add_edge_e_dir dir graph e1;
+          graph = add_edge_e_dir `Forwards graph e1;
           stmts = ([], []);
           last_vert = ending;
         }
@@ -174,7 +174,15 @@ module IDEGraph = struct
           let is =
             {
               graph;
-              last_vert = IntraVertex { proc_id; v = Begin block };
+              last_vert =
+                IntraVertex
+                  {
+                    proc_id;
+                    v =
+                      (match dir with
+                      | `Forwards -> Begin block
+                      | `Backwards -> End block);
+                  };
               stmts = (b.phis, []);
             }
           in
@@ -189,7 +197,15 @@ module IDEGraph = struct
                  | stmt ->
                      { st with stmts = (fst st.stmts, stmt :: snd st.stmts) })
                is
-          |> push_edge dir (IntraVertex { proc_id; v = End block })
+          |> push_edge dir
+               (IntraVertex
+                  {
+                    proc_id;
+                    v =
+                      (match dir with
+                      | `Forwards -> End block
+                      | `Backwards -> Begin block);
+                  })
           |> fun x -> x.graph
       | _, _, _ -> failwith "bad proc edge"
     in
@@ -424,12 +440,12 @@ module IDELive = struct
         let open Livevars in
         let open Stmt in
         match stmt with
-        | Instr_Assign _ -> Iter.empty
+        | Instr_Assign _ -> Iter.singleton (d, IdEdge)
         | _ ->
             Stmt.free_vars_iter stmt
             |> Iter.fold
                  (fun i v -> Iter.cons (Label v, ConstEdge live) i)
-                 Iter.empty)
+                 (Iter.singleton (d, IdEdge)))
     | Label v -> (
         match stmt with
         | Instr_Assign assigns ->
@@ -471,7 +487,7 @@ module IDE (D : IDEDomain) = struct
     |> Iter.flat_map (fun (d1, m) ->
         DlMap.to_iter m |> Iter.map (fun x -> (d1, x)))
     |> Iter.to_string ~sep:", " (fun (v, (v', i)) ->
-        "(" ^ Lambda.show v ^ "," ^ Lambda.show v' ^ "->" ^ D.show i)
+        "(" ^ Lambda.show v ^ "," ^ Lambda.show v' ^ "->" ^ D.show i ^ ")")
 
   let empty_summary = DlMap.empty
 
@@ -485,7 +501,7 @@ module IDE (D : IDEDomain) = struct
 
   (** Determine composites of edge functions through an intravertex block *)
   let tf_stmts dir phi bs i =
-    let bs = match dir with `Forwards -> bs | `Backwards -> List.rev bs in
+    (*let bs = match dir with `Forwards -> bs | `Backwards -> List.rev bs in*)
     let stmts i =
       List.fold_left
         (fun efs stmt ->
@@ -501,19 +517,26 @@ module IDE (D : IDEDomain) = struct
     let phis i =
       match dir with
       | `Forwards ->
-          Iter.of_list phi
-          |> Iter.flat_map (fun (p : Var.t Block.phi) ->
-              Iter.filter_map
+          List.fold_left
+            (fun i (p : Var.t Block.phi) ->
+              Iter.map
                 (fun (d2, e) ->
-                  List.exists (fun (_, v) -> Lambda.equal (Label v) d2) p.rhs
-                  |> flip Option.return_if (Label p.lhs, e))
+                  if List.exists (fun (_, v) -> Lambda.equal (Label v) d2) p.rhs
+                  then (Label p.lhs, e)
+                  else (d2, e))
                 i)
+            i phi
       | `Backwards ->
-          Iter.of_list phi
-          |> Iter.flat_map (fun (p : Var.t Block.phi) ->
-              Iter.filter (fun (d2, e) -> Lambda.equal (Label p.lhs) d2) i
-              |> Iter.flat_map (fun (d2, e) ->
-                  Iter.of_list p.rhs |> Iter.map (fun (_, d3) -> (Label d3, e))))
+          List.fold_left
+            (fun i (p : Var.t Block.phi) ->
+              Iter.flat_map
+                (fun (d2, e) ->
+                  if Lambda.equal (Label p.lhs) d2 then
+                    Iter.of_list p.rhs
+                    |> Iter.map (fun (_, d3) -> (Label d3, e))
+                  else Iter.singleton (d2, e))
+                i)
+            i phi
     in
     match dir with `Forwards -> stmts (phis i) | `Backwards -> phis (stmts i)
 
@@ -526,16 +549,16 @@ module IDE (D : IDEDomain) = struct
 
   let propagate worklist summaries priority summary loc updates =
     let module Q = IntPQueue.Plain in
-    Iter.for_each updates (fun ((d1, d3), _) ->
-        Q.add worklist (loc, (d1, d3)) (priority loc));
     Iter.filter_map
       (fun ((d1, d3), e) ->
         let l = dldlget d1 d3 summary in
         let j = D.join l e in
-        D.equal l j |> flip Option.return_if ((d1, d3), j))
+        print_endline (Lambda.show d3 ^ " " ^ D.show j);
+        (not (D.equal l j)) |> flip Option.return_if ((d1, d3), j))
       updates
     |> Iter.fold
          (fun acc ((d1, d3), e) ->
+           Q.add worklist (loc, (d1, d3)) (priority loc);
            let m = DlMap.get_or d1 acc ~default:DlMap.empty in
            DlMap.add d1 (DlMap.add d3 e m) acc)
          summary
@@ -546,6 +569,8 @@ module IDE (D : IDEDomain) = struct
     let module Q = IntPQueue.Plain in
     let (worklist : (Loc.t * Lambda2.t) Q.t) = Q.create () in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
+    Hashtbl.add summaries start
+      (DlMap.singleton Lambda (DlMap.singleton Lambda D.identity));
     (* Stores edge functions from the first procedure's entry to the second
        procedure's entry where the d value of the second procedure's entry is
        the given dl. *)
@@ -567,16 +592,15 @@ module IDE (D : IDEDomain) = struct
       in
       let l, (d1, d2) = x in
       let ost = get_summary l in
+      print_endline @@ show_summary ost;
       let e1 = dldlget d1 d2 ost in
-      (match dir with
-        | `Forwards -> IDEGraph.G.succ_e graph l |> Iter.of_list
-        | `Backwards -> IDEGraph.G.pred_e graph l |> Iter.of_list)
+      print_endline
+        (Loc.show l ^ ": " ^ Lambda.show d1 ^ ", " ^ Lambda.show d2 ^ ", "
+       ^ D.show e1);
+      IDEGraph.G.succ_e graph l |> Iter.of_list
       |> Iter.iter (fun e ->
-          let from, target =
-            match (dir, e) with
-            | `Forwards, (from, _, target) -> (from, target)
-            | `Backwards, (target, _, from) -> (from, target)
-          in
+          let from, target = match e with from, _, target -> (from, target) in
+          print_endline (Loc.show target);
           match IDEGraph.G.E.label e with
           | Stmts (phi, bs) ->
               tf_stmts dir phi bs (Iter.singleton (d2, e1))
@@ -658,7 +682,8 @@ module IDE (D : IDEDomain) = struct
       Hashtbl.get summaries loc |> function
       | Some e -> e
       | None ->
-          print_endline @@ "summary undefined " ^ Loc.show loc;
+          (*
+          print_endline @@ "summary undefined " ^ Loc.show loc;*)
           DlMap.empty
     in
     (* The first step is to initialise the entry nodes of each procedure with
@@ -680,7 +705,7 @@ module IDE (D : IDEDomain) = struct
           let target =
             match (dir, e) with
             | `Forwards, (_, _, target) -> target
-            | `Backwards, (target, _, _) -> target
+            | `Backwards, (_, _, target) -> target
           in
           match IDEGraph.G.E.label e with
           | InterCall callinfo ->
@@ -715,7 +740,8 @@ module IDE (D : IDEDomain) = struct
       match l with
       | IntraVertex { proc_id; v } -> Loc.IntraVertex { proc_id; v = Entry }
       | CallSite stmt_id -> IntraVertex { proc_id = stmt_id.proc_id; v = Entry }
-      | AfterCall stmt_id -> IntraVertex { proc_id = stmt_id.proc_id; v = Entry }
+      | AfterCall stmt_id ->
+          IntraVertex { proc_id = stmt_id.proc_id; v = Entry }
       | Entry -> Entry
       | Exit -> Entry
     in
