@@ -8,26 +8,6 @@ open Lang
 open Containers
 open Common
 
-type ret_info = {
-  rhs : (Var.t * Expr.BasilExpr.t) list;
-  lhs : (Var.t * Var.t) list;
-  call_from : Program.stmt; (* stmt must be variable Instr_Call*)
-  caller : ID.t;
-  callee : ID.t;
-}
-[@@deriving eq, ord, show { with_path = false }]
-
-type call_info = {
-  rhs : (Var.t * Expr.BasilExpr.t) list;
-  lhs : (Var.t * Var.t) list;
-  call_from : Program.stmt; (* stmt must be variable Instr_Call*)
-  caller : ID.t;
-  callee : ID.t;
-  ret : ret_info;
-}
-[@@deriving eq, ord, show { with_path = false }]
-(** (target.formal_in, rhs arg) assignment to call formal params *)
-
 module Loc = struct
   type stmt_id = { proc_id : ID.t; block : ID.t; offset : int }
   [@@deriving eq, ord, show { with_path = false }]
@@ -42,6 +22,27 @@ module Loc = struct
 
   let hash = Hashtbl.hash
 end
+
+type ret_info = {
+  rhs : (Var.t * Expr.BasilExpr.t) list;
+  lhs : (Var.t * Var.t) list;
+  call_from : Program.stmt; (* stmt must be variable Instr_Call*)
+  caller : ID.t;
+  callee : ID.t;
+}
+[@@deriving eq, ord, show { with_path = false }]
+
+type call_info = {
+  rhs : (Var.t * Expr.BasilExpr.t) list;
+  lhs : (Var.t * Var.t) list;
+  call_from : Program.stmt; (* stmt must be variable Instr_Call*)
+  aftercall : Loc.stmt_id;
+  caller : ID.t;
+  callee : ID.t;
+  ret : ret_info;
+}
+[@@deriving eq, ord, show { with_path = false }]
+(** (target.formal_in, rhs arg) assignment to call formal params *)
 
 module LSet = Set.Make (Loc)
 module LM = Map.Make (Loc)
@@ -149,7 +150,15 @@ module IDEGraph = struct
       GB.add_edge_e graph
         ( CallSite origin,
           InterCall
-            { rhs; lhs; call_from = callstmt; caller; callee; ret = ret_info },
+            {
+              rhs;
+              lhs;
+              call_from = callstmt;
+              aftercall = origin;
+              caller;
+              callee;
+              ret = ret_info;
+            },
           call_entry )
     in
     let graph =
@@ -526,7 +535,7 @@ module IDE (D : IDEDomain) = struct
                      if not (D.equal j D.bottom) then DlMap.add d3 j m else m)
                    m)
             om DlMap.empty)
-        (* Should be joining i *)
+        (* TODO Should be joining i *)
         (DlMap.of_iter i)
         bs
       |> DlMap.to_iter
@@ -621,7 +630,6 @@ module IDE (D : IDEDomain) = struct
               |> propagate worklist summaries priority (get_summary target)
                    target
           | InterCall callinfo ->
-              (* This is not direction agnostic :( it would be nice to make the IDEGraph direction agnostic *)
               D.compose_call callinfo d2
               |> Iter.iter (fun (d3, e2) ->
                   propagate worklist summaries priority (get_summary target)
@@ -636,6 +644,7 @@ module IDE (D : IDEDomain) = struct
                   in
                   Hashtbl.add entry_to_call_entry_cache k m;
                   (* Surely there's a better way to do this... *)
+                  let aftercall = Loc.AfterCall callinfo.aftercall in
                   let _ =
                     Hashtbl.get entry_to_exit_cache (callinfo.callee, d3)
                     |> Option.map (fun m ->
@@ -646,7 +655,7 @@ module IDE (D : IDEDomain) = struct
                             |> Iter.map (fun (d5, e4) ->
                                 ((d1, d5), D.compose e4 e321))
                             |> propagate worklist summaries priority
-                                 (get_summary target) target))
+                                 (get_summary aftercall) aftercall))
                   in
                   ())
           | InterReturn retinfo ->
