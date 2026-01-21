@@ -449,10 +449,23 @@ module IDELive = struct
     | Label v -> (
         match stmt with
         | Instr_Assign assigns ->
+            List.fold_left
+              (fun i (v', ex) ->
+                Iter.flat_map
+                  (fun (d, e) ->
+                    if Lambda.equal d (Label v') then
+                      Expr.BasilExpr.free_vars_iter ex
+                      |> Iter.map (fun v' -> (Label v', IdEdge))
+                    else Iter.singleton (Label v, e))
+                  i)
+              (Iter.singleton (d, IdEdge))
+              assigns
+        (*
             Iter.of_list assigns
             |> Iter.filter (fun (v', _) -> Var.equal v v')
             |> Iter.flat_map (fun (v, e) -> Expr.BasilExpr.free_vars_iter e)
             |> Iter.fold (fun i v' -> Iter.cons (Label v', IdEdge) i) Iter.empty
+            *)
         (* The index variables of a memory read are always live regardless of if
            the lhs was dead, since there are still side effects of reading
            memory ? *)
@@ -553,7 +566,6 @@ module IDE (D : IDEDomain) = struct
       (fun ((d1, d3), e) ->
         let l = dldlget d1 d3 summary in
         let j = D.join l e in
-        print_endline (Lambda.show d3 ^ " " ^ D.show j);
         (not (D.equal l j)) |> flip Option.return_if ((d1, d3), j))
       updates
     |> Iter.fold
@@ -592,15 +604,10 @@ module IDE (D : IDEDomain) = struct
       in
       let l, (d1, d2) = x in
       let ost = get_summary l in
-      print_endline @@ show_summary ost;
       let e1 = dldlget d1 d2 ost in
-      print_endline
-        (Loc.show l ^ ": " ^ Lambda.show d1 ^ ", " ^ Lambda.show d2 ^ ", "
-       ^ D.show e1);
       IDEGraph.G.succ_e graph l |> Iter.of_list
       |> Iter.iter (fun e ->
           let from, target = match e with from, _, target -> (from, target) in
-          print_endline (Loc.show target);
           match IDEGraph.G.E.label e with
           | Stmts (phi, bs) ->
               tf_stmts dir phi bs (Iter.singleton (d2, e1))
@@ -682,8 +689,7 @@ module IDE (D : IDEDomain) = struct
       Hashtbl.get summaries loc |> function
       | Some e -> e
       | None ->
-          (*
-          print_endline @@ "summary undefined " ^ Loc.show loc;*)
+          print_endline @@ "summary undefined " ^ Loc.show loc;
           DlMap.empty
     in
     (* The first step is to initialise the entry nodes of each procedure with
