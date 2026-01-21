@@ -243,6 +243,18 @@ module IDEGraph = struct
     ID.Map.to_iter prog.procs |> Iter.map snd
     |> Iter.fold (fun g p -> proc_graph prog g p dir) (GB.empty ())
 
+  let proc_call_table dir g (prog : Program.t) =
+    let tbl = Hashtbl.create 100 in
+    G.iter_vertex
+      (fun l ->
+        match l with
+        | CallSite s ->
+            let cur = Hashtbl.get_or tbl s.proc_id ~default:Iter.empty in
+            Hashtbl.add tbl s.proc_id (Iter.cons (CallSite s) cur)
+        | _ -> ())
+      g;
+    tbl
+
   module RevTop = Graph.Topological.Make (struct
     type t = G.t
 
@@ -429,11 +441,9 @@ module IDELive = struct
     match d with
     | Lambda ->
         List.fold_left
-          (fun i (_, out_expr) ->
-            Expr.BasilExpr.free_vars_iter out_expr
-            |> Iter.fold (fun i v -> Iter.cons (Label v, ConstEdge live) i) i)
+          (fun i (_, out) -> Iter.cons (Label out, IdEdge) i)
           (Iter.singleton (d, IdEdge))
-          c.rhs
+          c.lhs
     | Label v when Var.is_global v -> Iter.empty
     | Label v -> Iter.empty
 
@@ -692,7 +702,7 @@ module IDE (D : IDEDomain) = struct
     done;
     summaries
 
-  let phase2_solve order dir start graph globals
+  let phase2_solve order dir prog start_proc graph globals
       (summaries : (Loc.t, summary) Hashtbl.t) =
     (* FIXME: use summaries ; propertly evaluate call edges first then fill in between*)
     Trace.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
@@ -711,8 +721,9 @@ module IDE (D : IDEDomain) = struct
        their initial value based on the entry procedure being initialised to
        top, using the summary functions. *)
     let (worklist : (Loc.t * Lambda.t) Q.t) = Q.create () in
-    let visited = ref LSet.empty in
-    Q.add worklist (start, Lambda) (priority start);
+    let calls_table = IDEGraph.proc_call_table dir graph prog in
+    Hashtbl.get_or calls_table start_proc ~default:Iter.empty
+    |> Iter.iter (fun l -> Q.add worklist (l, Lambda) (priority l));
     while not (Q.is_empty worklist) do
       let l, d = Q.extract worklist |> Option.get_exn_or "queue empty" in
       let ost = get_st l in
@@ -723,11 +734,7 @@ module IDE (D : IDEDomain) = struct
       in
       IDEGraph.G.succ_e graph l |> Iter.of_list
       |> Iter.iter (fun e ->
-          let target =
-            match (dir, e) with
-            | `Forwards, (_, _, target) -> target
-            | `Backwards, (_, _, target) -> target
-          in
+          let target = match e with _, _, target -> target in
           match IDEGraph.G.E.label e with
           | InterCall callinfo ->
               let summary = get_summary l in
@@ -747,14 +754,15 @@ module IDE (D : IDEDomain) = struct
                           if not (D.Value.equal j y) then (
                             let st' = VarMap.add v (D.Value.join y fd) st in
                             Hashtbl.add states target st';
-                            Q.add worklist (target, d3) (priority target))
+                            (* This should really add all calls in the target procedure to the worklist *)
+                            Hashtbl.get_or calls_table callinfo.callee
+                              ~default:Iter.empty
+                            |> Iter.iter (fun c ->
+                                Q.add worklist (c, d3) (priority c)))
                           else ()
                       | _ -> ());
                       ()))
-          | _ ->
-              if not (LSet.mem target !visited) then
-                Q.add worklist (target, d) (priority target);
-              visited := LSet.add target !visited)
+          | _ -> ())
     done;
     (* We then apply all summary functions to each location *)
     let entry_of (l : Loc.t) =
@@ -800,9 +808,12 @@ module IDE (D : IDEDomain) = struct
     let start =
       match dir with `Forwards -> Loc.Entry | `Backwards -> Loc.Exit
     in
+    let start_proc =
+      prog.entry_proc |> Option.get_exn_or "Missing entry procedure"
+    in
     let summary = phase1_solve order dir start graph globals DlMap.empty in
     ( query @@ summary,
-      query @@ phase2_solve order dir start graph globals summary )
+      query @@ phase2_solve order dir prog start_proc graph globals summary )
 
   module G = Procedure.RevG
   module ResultMap = Map.Make (G.V)
