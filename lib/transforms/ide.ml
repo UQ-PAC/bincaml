@@ -390,7 +390,7 @@ module IDELive = struct
   (*type t = Live | Dead | CondLive of Var.t [@@deriving eq, ord]*)
   type t = IdEdge | ConstEdge of Value.t [@@deriving eq, ord]
 
-  let bottom = ConstEdge dead
+  let bottom = ConstEdge bottom
 
   let show v =
     match v with IdEdge -> "IdEdge" | ConstEdge v -> "ConstEdge " ^ show v
@@ -404,7 +404,6 @@ module IDELive = struct
     | IdEdge, b -> b
     | a, IdEdge -> a
     | ConstEdge v, ConstEdge v' -> ConstEdge v
-  (** not representible *)
 
   let join a b =
     match (a, b) with
@@ -435,10 +434,9 @@ module IDELive = struct
     match d with Lambda -> Iter.singleton (d, IdEdge) | Label _ -> Iter.empty
 
   let transfer stmt d =
+    let open Stmt in
     match d with
     | Lambda -> (
-        let open Livevars in
-        let open Stmt in
         match stmt with
         | Instr_Assign _ -> Iter.singleton (d, IdEdge)
         | _ ->
@@ -456,7 +454,7 @@ module IDELive = struct
                     if Lambda.equal d (Label v') then
                       Expr.BasilExpr.free_vars_iter ex
                       |> Iter.map (fun v' -> (Label v', IdEdge))
-                    else Iter.singleton (Label v, e))
+                    else Iter.singleton (d, e))
                   i)
               (Iter.singleton (d, IdEdge))
               assigns
@@ -517,13 +515,21 @@ module IDE (D : IDEDomain) = struct
     (*let bs = match dir with `Forwards -> bs | `Backwards -> List.rev bs in*)
     let stmts i =
       List.fold_left
-        (fun efs stmt ->
-          Iter.flat_map
-            (fun (d2, e1) ->
+        (fun om stmt ->
+          DlMap.fold
+            (fun d2 e1 m ->
               D.transfer stmt d2
-              |> Iter.map (fun (d3, e2) -> (d3, D.compose e2 e1)))
-            efs)
-        i bs
+              |> Iter.fold
+                   (fun m (d3, e2) ->
+                     let e = D.compose e2 e1 in
+                     let j = D.join e (DlMap.get_or d3 m ~default:D.bottom) in
+                     if not (D.equal j D.bottom) then DlMap.add d3 j m else m)
+                   m)
+            om DlMap.empty)
+        (* Should be joining i *)
+        (DlMap.of_iter i)
+        bs
+      |> DlMap.to_iter
     in
     (* TODO this might be more imprecise than joining on the opposite side of the phi node
                  https://link.springer.com/chapter/10.1007/978-3-642-11970-5_8 reckons so *)
@@ -777,9 +783,7 @@ module IDE (D : IDEDomain) = struct
     let globals = prog.globals |> Var.Decls.to_iter |> Iter.map snd in
     let graph = IDEGraph.create prog dir in
     let order =
-      (match dir with
-        | `Forwards -> Iter.from_iter (fun f -> IDEGraph.Top.iter f graph)
-        | `Backwards -> Iter.from_iter (fun f -> IDEGraph.RevTop.iter f graph))
+      Iter.from_iter (fun f -> IDEGraph.Top.iter f graph)
       |> Iter.zip_i
       |> Iter.map (fun (i, v) -> (v, i))
       |> LM.of_iter
@@ -818,9 +822,10 @@ let print_live_vars_dot sum r fmt prog proc_id =
   Option.iter (fun g -> M.fprint_graph fmt g) (Procedure.graph p)
 
 let transform (prog : Program.t) =
+  (*
   let g = IDEGraph.create prog `Backwards in
   CCIO.with_out "idegraph.dot" (fun s ->
-      IDEGraph.Vis.fprint_graph (Format.of_chan s) g);
+      IDEGraph.Vis.fprint_graph (Format.of_chan s) g);*)
   let summary, r = IDELiveAnalysis.solve `Backwards prog in
   ID.Map.to_iter prog.procs
   |> Iter.iter (fun (proc, proc_n) ->
