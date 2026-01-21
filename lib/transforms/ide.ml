@@ -155,7 +155,7 @@ module IDEGraph = struct
     let graph =
       GB.add_edge_e graph (call_return, InterReturn ret_info, AfterCall origin)
     in
-    { g with graph }
+    { g with graph; last_vert = AfterCall origin }
 
   let proc_graph prog g p dir =
     let proc_id = Procedure.id p in
@@ -203,6 +203,13 @@ module IDEGraph = struct
             graph Iter.empty)
     in
     let g = Iter.fold GB.add_vertex g intra_verts in
+    let g =
+      if Option.equal ID.equal prog.entry_proc (Some proc_id) then
+        add_edge_e_dir dir g (Entry, Nop, IntraVertex { proc_id; v = Entry })
+        |> fun g ->
+        add_edge_e_dir dir g (IntraVertex { proc_id; v = Return }, Nop, Exit)
+      else g
+    in
     Procedure.graph p
     |> Option.map (fun procg -> Procedure.G.fold_edges_e add_block_edge procg g)
     |> Option.get_or ~default:g
@@ -210,38 +217,6 @@ module IDEGraph = struct
   let create (prog : Program.t) dir =
     ID.Map.to_iter prog.procs |> Iter.map snd
     |> Iter.fold (fun g p -> proc_graph prog g p dir) (GB.empty ())
-
-  let vertex_to_entry_table g =
-    let t = ref LM.empty in
-    let s = Stack.create () in
-    G.iter_vertex
-      (function
-        | IntraVertex { proc_id; v = l } as v
-          when Procedure.Vert.equal l Procedure.Vert.Entry ->
-            Stack.push v s
-        | _ -> ())
-      g;
-    while not (Stack.is_empty s) do
-      let entry = Stack.pop s in
-      let s2 = Stack.create () in
-      Stack.push entry s2;
-      let vis = ref (LSet.singleton entry) in
-      while not (Stack.is_empty s2) do
-        let v = Stack.pop s2 in
-        G.iter_succ_e
-          (fun (_, e, v2) ->
-            match e with
-            | Stmts _ | Call _ | Nop ->
-                if not (LSet.mem v2 !vis) then (
-                  vis := LSet.add v2 !vis;
-                  Stack.push v2 s2)
-                else ()
-            | _ -> ())
-          g v
-      done;
-      ()
-    done;
-    !t
 
   module RevTop = Graph.Topological.Make (struct
     type t = G.t
@@ -260,6 +235,60 @@ module IDEGraph = struct
   end)
 
   module Top = Graph.Topological.Make (G)
+
+  module Vis = Graph.Graphviz.Dot (struct
+    include G
+    open G.V
+    open G.E
+
+    let graph_attributes _ = []
+
+    let vertex_name (v : Loc.t) =
+      match v with
+      | IntraVertex { proc_id; v } ->
+          "\""
+          ^ Procedure.Vert.block_id_string v
+          ^ "@" ^ ID.to_string proc_id ^ "\""
+      | Entry -> "\"Entry\""
+      | Exit -> "\"Exit\""
+      | CallSite s ->
+          "\"" ^ "CallSite" ^ ID.to_string s.block ^ "."
+          ^ Int.to_string s.offset ^ "\""
+      | AfterCall s ->
+          "\"" ^ "AfterCall" ^ ID.to_string s.block ^ "."
+          ^ Int.to_string s.offset ^ "\""
+
+    let vertex_attributes (v : Loc.t) =
+      let l =
+        match v with
+        | IntraVertex { proc_id; v } ->
+            Procedure.Vert.block_id_string v
+            ^ "@" ^ Int.to_string @@ ID.index proc_id
+        | Entry -> "Entry"
+        | Exit -> "Exit"
+        | CallSite s ->
+            "CallSite" ^ ID.to_string s.block ^ "." ^ Int.to_string s.offset
+        | AfterCall s ->
+            "AfterCall" ^ ID.to_string s.block ^ "." ^ Int.to_string s.offset
+      in
+      [ `Label l ]
+
+    let default_vertex_attributes _ = []
+
+    let edge_attributes (e : E.t) =
+      let l =
+        match e with
+        | _, Stmts _, _ -> "Stmts"
+        | _, InterCall _, _ -> "InterCall"
+        | _, InterReturn _, _ -> "InterReturn"
+        | _, Call _, _ -> "Call"
+        | _, Nop, _ -> ""
+      in
+      [ `Label l ]
+
+    let default_edge_attributes _ = []
+    let get_subgraph _ = None
+  end)
 end
 
 module type Lattice = sig
@@ -335,7 +364,7 @@ module IDELive = struct
       | false, false -> false
   end
 
-  let show_const_state s =
+  let show_state s =
     s
     |> Iter.filter_map (function c, true -> Some c | _ -> None)
     |> Iter.to_string ~sep:", " (fun v -> Var.to_string v)
@@ -491,7 +520,9 @@ module IDE (D : IDEDomain) = struct
   type edge = Loc.t * IDEGraph.Edge.t * Loc.t
 
   let dldlget d1 d2 summary =
-    DlMap.get d1 summary |> Option.flat_map (DlMap.get d2)
+    DlMap.get d1 summary
+    |> Option.flat_map (DlMap.get d2)
+    |> Option.get_or ~default:D.bottom
 
   let propagate worklist summaries priority summary loc updates =
     let module Q = IntPQueue.Plain in
@@ -499,7 +530,7 @@ module IDE (D : IDEDomain) = struct
         Q.add worklist (loc, (d1, d3)) (priority loc));
     Iter.filter_map
       (fun ((d1, d3), e) ->
-        let l = dldlget d1 d3 summary |> Option.get_or ~default:D.bottom in
+        let l = dldlget d1 d3 summary in
         let j = D.join l e in
         D.equal l j |> flip Option.return_if ((d1, d3), j))
       updates
@@ -536,7 +567,7 @@ module IDE (D : IDEDomain) = struct
       in
       let l, (d1, d2) = x in
       let ost = get_summary l in
-      let e1 = dldlget d1 d2 ost |> Option.get_exn_or "edge function missing" in
+      let e1 = dldlget d1 d2 ost in
       (match dir with
         | `Forwards -> IDEGraph.G.succ_e graph l |> Iter.of_list
         | `Backwards -> IDEGraph.G.pred_e graph l |> Iter.of_list)
@@ -680,13 +711,16 @@ module IDE (D : IDEDomain) = struct
               visited := LSet.add target !visited)
     done;
     (* We then apply all summary functions to each location *)
-    let entry_table = IDEGraph.vertex_to_entry_table graph in
+    let entry_of (l : Loc.t) =
+      match l with
+      | IntraVertex { proc_id; v } -> Loc.IntraVertex { proc_id; v = Entry }
+      | CallSite stmt_id -> IntraVertex { proc_id = stmt_id.proc_id; v = Entry }
+      | AfterCall stmt_id -> IntraVertex { proc_id = stmt_id.proc_id; v = Entry }
+      | Entry -> Entry
+      | Exit -> Entry
+    in
     flip IDEGraph.G.iter_vertex graph (fun l ->
-        let pst =
-          get_st
-            (LM.get l entry_table
-            |> Option.get_exn_or "vertex has no associated entry node")
-        in
+        let pst = get_st (entry_of l) in
         get_summary l
         |> DlMap.iter (fun d1 ->
             let x =
@@ -742,16 +776,19 @@ end
 module IDELiveAnalysis = IDE (IDELive)
 
 let show_state (v : IDELiveAnalysis.analysis_state) =
-  VarMap.to_iter v |> IDELive.show_const_state
+  VarMap.to_iter v |> IDELive.show_state
 
 let print_live_vars_dot sum r fmt prog proc_id =
   let label (v : Procedure.G.vertex) = r v |> Option.map (fun s -> sum s) in
   let p = Program.proc prog proc_id in
   Trace.with_span ~__FILE__ ~__LINE__ "dot-printer" @@ fun _ ->
-  let (module M : Viscfg.ProcPrinter) = Viscfg.dot_labels (fun v -> label v) in
+  let (module M : Viscfg.ProcPrinter) = Viscfg.dot_labels label in
   Option.iter (fun g -> M.fprint_graph fmt g) (Procedure.graph p)
 
 let transform (prog : Program.t) =
+  let g = IDEGraph.create prog `Backwards in
+  CCIO.with_out "idegraph.dot" (fun s ->
+      IDEGraph.Vis.fprint_graph (Format.of_chan s) g);
   let summary, r = IDELiveAnalysis.solve `Backwards prog in
   ID.Map.to_iter prog.procs
   |> Iter.iter (fun (proc, proc_n) ->
