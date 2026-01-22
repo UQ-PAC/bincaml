@@ -173,7 +173,7 @@ let _ =
   Alcotest.run "value domain abstract eval soundness" [ TestBoolDom.suite ]
 ]}
 
-{: https://github.com/agle/bincaml/blob/docs-cleanup/test/lang/value_soundness.ml#L54-L54}
+{: https://github.com/agle/bincaml/blob/main/test/lang/value_soundness.ml#L54-L54}
 
 This test can be run in isolation with 
 
