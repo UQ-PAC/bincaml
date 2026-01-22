@@ -91,7 +91,7 @@ module type IDEDomain = sig
   val transfer_return : ret_info -> DL.t -> t state_update
   (** edge return from a call (from the entry block when backwards) *)
 
-  val transfer_call_to_aftercall : Program.stmt -> DL.t -> t state_update
+  val transfer_call_to_aftercall : call_info -> DL.t -> t state_update
   (** edge from a call to its aftercall statement (or reversed when backwards)
   *)
 
@@ -111,7 +111,7 @@ module IDEGraph = struct
       | Stmts of Var.t Block.phi list * Program.stmt list
       | InterCall of call_info
       | InterReturn of ret_info
-      | Call of Program.stmt
+      | Call of call_info
       | Nop
     [@@deriving eq, ord, show]
 
@@ -185,9 +185,6 @@ module IDEGraph = struct
     let caller, callee = (origin.proc_id, target) in
     let g = push_edge dir (CallSite origin) st in
     let graph = g.graph in
-    let graph =
-      GB.add_edge_e graph (CallSite origin, Call callstmt, AfterCall origin)
-    in
     let call_entry = IntraVertex { proc_id = target; v = Entry } in
     let call_return = IntraVertex { proc_id = target; v = Return } in
     let call_entry, call_return =
@@ -196,20 +193,22 @@ module IDEGraph = struct
       | `Backwards -> (call_return, call_entry)
     in
     let ret_info = { lhs; rhs; call_from = callstmt; caller; callee } in
+    let call_info =
+      {
+        rhs;
+        lhs;
+        call_from = callstmt;
+        aftercall = origin;
+        caller;
+        callee;
+        ret = ret_info;
+      }
+    in
     let graph =
-      GB.add_edge_e graph
-        ( CallSite origin,
-          InterCall
-            {
-              rhs;
-              lhs;
-              call_from = callstmt;
-              aftercall = origin;
-              caller;
-              callee;
-              ret = ret_info;
-            },
-          call_entry )
+      GB.add_edge_e graph (CallSite origin, InterCall call_info, call_entry)
+    in
+    let graph =
+      GB.add_edge_e graph (CallSite origin, Call call_info, AfterCall origin)
     in
     let graph =
       GB.add_edge_e graph (call_return, InterReturn ret_info, AfterCall origin)
@@ -336,7 +335,10 @@ module IDEGraph = struct
       match v with
       | IntraVertex { proc_id; v } ->
           "\""
-          ^ Procedure.Vert.block_id_string v
+          ^ (match v with
+            | Begin _ -> "Begin " ^ Procedure.Vert.block_id_string v
+            | End _ -> "End " ^ Procedure.Vert.block_id_string v
+            | _ -> Procedure.Vert.block_id_string v)
           ^ "@" ^ ID.to_string proc_id ^ "\""
       | Entry -> "\"Entry\""
       | Exit -> "\"Exit\""
@@ -351,7 +353,10 @@ module IDEGraph = struct
       let l =
         match v with
         | IntraVertex { proc_id; v } ->
-            Procedure.Vert.block_id_string v
+            (match v with
+              | Begin _ -> "Begin " ^ Procedure.Vert.block_id_string v
+              | End _ -> "End " ^ Procedure.Vert.block_id_string v
+              | _ -> Procedure.Vert.block_id_string v)
             ^ "@" ^ Int.to_string @@ ID.index proc_id
         | Entry -> "Entry"
         | Exit -> "Exit"

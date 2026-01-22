@@ -60,19 +60,34 @@ module IDELive = struct
 
   let transfer_call (c : call_info) d =
     match d with
-    | Lambda ->
-        List.fold_left
-          (fun i (_, out) -> Iter.cons (Label out, IdEdge) i)
-          (Iter.singleton (d, IdEdge))
-          c.lhs
-    | Label v when Var.is_global v -> Iter.empty
+    | Lambda -> Iter.singleton (d, IdEdge)
+    | Label v when Var.is_global v -> Iter.singleton (d, IdEdge)
+    | Label v when List.exists (fun (a, _) -> Var.equal a v) c.lhs ->
+        Iter.of_list c.lhs
+        |> Iter.filter (fun (a, _) -> Var.equal a v)
+        |> Iter.map (fun (_, f) -> (Label f, IdEdge))
     | Label v -> Iter.empty
 
-  let transfer_return r d = Iter.singleton (d, IdEdge)
+  let transfer_return (r : ret_info) d =
+    match d with
+    | Lambda -> Iter.singleton (d, IdEdge)
+    | Label v when Var.is_global v -> Iter.singleton (d, IdEdge)
+    | Label v when List.exists (fun (f, _) -> Var.equal f v) r.rhs ->
+        Iter.of_list r.rhs
+        |> Iter.filter (fun (a, _) -> Var.equal a v)
+        |> Iter.flat_map (fun (_, e) ->
+            Expr.BasilExpr.free_vars_iter e
+            |> Iter.map (fun v' -> (Label v', IdEdge)))
+    | _ -> Iter.empty
 
-  (* TODO preserve locals that aren't involved in the call *)
-  let transfer_call_to_aftercall stmt d =
-    match d with Lambda -> Iter.singleton (d, IdEdge) | Label _ -> Iter.empty
+  let transfer_call_to_aftercall c d =
+    match d with
+    | Lambda -> Iter.singleton (d, IdEdge)
+    | Label v
+      when Var.is_local v
+           && (not @@ List.exists (fun (a, _) -> Var.equal a v) c.lhs) ->
+        Iter.singleton (d, IdEdge)
+    | Label _ -> Iter.empty
 
   let transfer stmt d =
     let open Stmt in
