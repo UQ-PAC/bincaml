@@ -210,3 +210,35 @@ proc @fun2 (f:bv64) -> (out2:bv64)
     $global:bv64
     f:bv64
     |}]
+
+let%expect_test "stub" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+memory shared $mem : (bv64 -> bv8);
+
+var $g: bv64;
+
+prog entry @main;
+
+proc @main () -> ()
+[
+    block %main_entry [
+        call @stub();
+        return();
+    ];
+];
+
+proc @stub() -> ();
+    |}
+  in
+  let program = lst.prog in
+  let _, results = IDELiveAnalysis.solve program in
+  let main = program.entry_proc |> Option.get_exn_or "No entry proc" in
+  print_lives results main;
+  [%expect
+    {|
+    @main
+    $mem:(bv64->bv8)
+    $g:bv64
+    |}]

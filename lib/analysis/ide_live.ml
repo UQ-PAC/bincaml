@@ -89,6 +89,13 @@ module IDELive = struct
         Iter.singleton (d, IdEdge)
     | Label _ -> Iter.empty
 
+  let transfer_stub (s : stub_info) d =
+      match d with
+      | Lambda -> Iter.singleton (d, IdEdge)
+      |> Iter.append (Iter.of_list s.formal_in |> Iter.map (fun v -> (Label v, ConstEdge live)))
+      |> Iter.append (Iter.of_list s.globals |> Iter.map (fun v -> (Label v, ConstEdge live)))
+      | _ -> Iter.empty
+
   let transfer stmt d =
     let open Stmt in
     match d with

@@ -34,6 +34,7 @@ type ret_info = {
   callee : ID.t;
 }
 [@@deriving eq, ord, show { with_path = false }]
+(** (target.formal_in, rhs arg) assignment to call formal params *)
 
 type call_info = {
   rhs : (Var.t * Expr.BasilExpr.t) list;
@@ -46,6 +47,9 @@ type call_info = {
 }
 [@@deriving eq, ord, show { with_path = false }]
 (** (target.formal_in, rhs arg) assignment to call formal params *)
+
+type stub_info = { formal_in : Var.t list; globals : Var.t list }
+[@@deriving eq, ord, show { with_path = false }]
 
 module LSet = Set.Make (Loc)
 module LM = Map.Make (Loc)
@@ -95,6 +99,9 @@ module type IDEDomain = sig
   (** edge from a call to its aftercall statement (or reversed when backwards)
   *)
 
+  val transfer_stub : stub_info -> DL.t -> t state_update
+  (** edge from entry to exit (or reversed when backwards) of stub procedure *)
+
   val transfer : Program.stmt -> DL.t -> t state_update
   (** update the state for a program statement *)
 end
@@ -112,6 +119,7 @@ module IDEGraph = struct
       | InterCall of call_info
       | InterReturn of ret_info
       | Call of call_info
+      | StubProc of stub_info
       | Nop
     [@@deriving eq, ord, show]
 
@@ -268,7 +276,6 @@ module IDEGraph = struct
       | _, _, _ -> failwith "bad proc edge"
     in
     (* add all vertices *)
-    (* TODO: missing stub procedure edges probably *)
     let intra_verts =
       Option.to_iter (Procedure.graph p)
       |> Iter.flat_map (fun graph ->
@@ -286,7 +293,16 @@ module IDEGraph = struct
     in
     Procedure.graph p
     |> Option.map (fun procg -> Procedure.G.fold_edges_e add_block_edge procg g)
-    |> Option.get_or ~default:g
+    |> Option.get_or
+         ~default:
+           (let formal_in =
+              Procedure.formal_in_params p |> StringMap.to_list |> List.map snd
+            in
+            let globals = prog.globals |> Hashtbl.to_list |> List.map snd in
+            add_edge_e_dir dir g
+              ( IntraVertex { proc_id; v = Entry },
+                StubProc { formal_in; globals },
+                IntraVertex { proc_id; v = Return } ))
 
   let create (prog : Program.t) dir =
     ID.Map.to_iter prog.procs |> Iter.map snd
@@ -336,8 +352,8 @@ module IDEGraph = struct
       | IntraVertex { proc_id; v } ->
           "\""
           ^ (match v with
-            | Begin _ -> "Begin " ^ Procedure.Vert.block_id_string v
-            | End _ -> "End " ^ Procedure.Vert.block_id_string v
+            | Begin _ -> Procedure.Vert.block_id_string v
+            | End _ -> Procedure.Vert.block_id_string v
             | _ -> Procedure.Vert.block_id_string v)
           ^ "@" ^ ID.to_string proc_id ^ "\""
       | Entry -> "\"Entry\""
@@ -377,6 +393,7 @@ module IDEGraph = struct
         | _, InterReturn _, _ -> "InterReturn"
         | _, Call _, _ -> "Call"
         | _, Nop, _ -> ""
+        | _, StubProc _, _ -> "StubProc"
       in
       [ `Label l ]
 
@@ -603,6 +620,11 @@ module IDE (D : IDEDomain) = struct
               |> Iter.map (fun (d3, e2) -> ((d1, d3), D.compose e2 e1))
               |> propagate worklist summaries priority (get_summary target)
                    target
+          | StubProc stubinfo ->
+              D.transfer_stub stubinfo d2
+              |> Iter.map (fun (d3, e2) -> ((d1, d3), D.compose e2 e1))
+              |> propagate worklist summaries priority (get_summary target)
+                   target
           | Nop ->
               propagate worklist summaries priority (get_summary target) target
                 (Iter.singleton ((d1, d2), e1)))
@@ -621,6 +643,8 @@ module IDE (D : IDEDomain) = struct
       Hashtbl.get summaries loc |> function
       | Some e -> e
       | None ->
+          (* This issue occurs whenever there are unimplemented procedures.
+             There's a fix but I haven't written it yet. *)
           (*print_endline @@ "summary undefined " ^ Loc.show loc;*)
           DlMap.empty
     in
