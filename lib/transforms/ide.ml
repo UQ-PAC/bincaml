@@ -1,12 +1,15 @@
-(** Prototype IDE solver: proof of concept for the design for a generic ish ide
-    solver.
-
-    WARN: the implemented live variables analysis here is not correct and the
-    solver is likely wrong; particularly with regard to context sensitivity *)
+(** IDE solver *)
 
 open Lang
 open Containers
 open Common
+
+(* TODO (perf)
+   Nop edges create duplicate states that are redundant (we store the same
+   state before and after the edge). It may be more efficient to collapse these
+   edges somehow. I suspect this won't give a huge performance improvement since
+   mose of the time in the solver is spent on evaluating transfer functions. *)
+(* TODO write a sample forwards analysis to test forwards correctness *)
 
 module Loc = struct
   type stmt_id = { proc_id : ID.t; block : ID.t; offset : int }
@@ -243,6 +246,8 @@ module IDEGraph = struct
     ID.Map.to_iter prog.procs |> Iter.map snd
     |> Iter.fold (fun g p -> proc_graph prog g p dir) (GB.empty ())
 
+  (** a table giving, to each procedure, all of its call sites to other
+      procedures *)
   let proc_call_table dir g (prog : Program.t) =
     let tbl = Hashtbl.create 100 in
     G.iter_vertex
@@ -333,36 +338,26 @@ module type Lattice = sig
 
   val join : t -> t -> t
   val bottom : t
-
-  (*val eval : (Var.t -> t option) -> Expr.BasilExpr.t -> t*)
-  (*val transfer : (Var.t -> t option) -> Program.stmt -> (Var.t * t) Iter.t*)
 end
 
-(* TODO rename these types !!!!!!!!!!!!! *)
-
-(** blah blah blah *)
-type 'a dl = Label of 'a | Lambda [@@deriving eq, ord, show]
-
-module Lambda = struct
+module DL = struct
   (* TODO not Var.t (want more generality e.g. dsa uses symbolic addresses in scala code) *)
-  type t = Var.t dl [@@deriving eq, ord, show]
-  (** blah blah blah *)
+  type t = Label of Var.t | Lambda [@@deriving eq, ord, show]
 end
 
-module Lambda2 = struct
-  type t = Lambda.t * Lambda.t [@@deriving eq, ord, show]
-end
+module DlMap = Map.Make (DL)
 
-module DlMap = Map.Make (Lambda)
+type 'a state_update = (DL.t * 'a) Iter.t
 
-type 'a state_update = (Var.t dl * 'a) Iter.t
-
+(** An IDE domain where values are edge functions *)
 module type IDEDomain = sig
   include Lattice
 
-  (* idk how to document this but the ordering of this domain should be of the edge functions
-   so t = EdgeFunction ... would it be better for the module to be edge functions? *)
+  val direction : [ `Forwards | `Backwards ]
+  (** The direction this analysis should be performed in *)
+
   module Value : Lattice
+  (** The underlying lattice the edge functions operate on *)
 
   val identity : t
   (** identity edge function *)
@@ -373,20 +368,23 @@ module type IDEDomain = sig
   val eval : t -> Value.t -> Value.t
   (** evaluate an edge function *)
 
-  val compose_call : call_info -> Var.t dl -> t state_update
-  (** edge calling a procedure *)
+  val transfer_call : call_info -> DL.t -> t state_update
+  (** edge calling a procedure (to the return block when backwards) *)
 
-  val compose_return : ret_info -> Var.t dl -> t state_update
-  (** edge return to after a call *)
+  val transfer_return : ret_info -> DL.t -> t state_update
+  (** edge return from a call (from the entry block when backwards) *)
 
-  val compose_call_to_aftercall : Program.stmt -> Var.t dl -> t state_update
-  (** edge from a call to its aftercall statement *)
+  val transfer_call_to_aftercall : Program.stmt -> DL.t -> t state_update
+  (** edge from a call to its aftercall statement (or reversed when backwards)
+  *)
 
-  val transfer : Program.stmt -> Var.t dl -> t state_update
+  val transfer : Program.stmt -> DL.t -> t state_update
   (** update the state for a program statement *)
 end
 
 module IDELive = struct
+  let direction = `Backwards
+
   module Value = struct
     type t = bool [@@deriving eq, ord, show]
 
@@ -437,7 +435,9 @@ module IDELive = struct
 
   let eval f v = match f with IdEdge -> v | ConstEdge v -> v
 
-  let compose_call (c : call_info) d =
+  open DL
+
+  let transfer_call (c : call_info) d =
     match d with
     | Lambda ->
         List.fold_left
@@ -447,9 +447,10 @@ module IDELive = struct
     | Label v when Var.is_global v -> Iter.empty
     | Label v -> Iter.empty
 
-  let compose_return r d = Iter.singleton (d, IdEdge)
+  let transfer_return r d = Iter.singleton (d, IdEdge)
 
-  let compose_call_to_aftercall stmt d =
+  (* TODO preserve locals that aren't involved in the call *)
+  let transfer_call_to_aftercall stmt d =
     match d with Lambda -> Iter.singleton (d, IdEdge) | Label _ -> Iter.empty
 
   let transfer stmt d =
@@ -470,19 +471,13 @@ module IDELive = struct
               (fun i (v', ex) ->
                 Iter.flat_map
                   (fun (d, e) ->
-                    if Lambda.equal d (Label v') then
+                    if DL.equal d (Label v') then
                       Expr.BasilExpr.free_vars_iter ex
                       |> Iter.map (fun v' -> (Label v', IdEdge))
                     else Iter.singleton (d, e))
                   i)
               (Iter.singleton (d, IdEdge))
               assigns
-        (*
-            Iter.of_list assigns
-            |> Iter.filter (fun (v', _) -> Var.equal v v')
-            |> Iter.flat_map (fun (v, e) -> Expr.BasilExpr.free_vars_iter e)
-            |> Iter.fold (fun i v' -> Iter.cons (Label v', IdEdge) i) Iter.empty
-            *)
         (* The index variables of a memory read are always live regardless of if
            the lhs was dead, since there are still side effects of reading
            memory ? *)
@@ -502,8 +497,7 @@ end
 (** FIXME:
     - properly handle global variables / local variables across procedure calls;
       procedure summaries should be in terms of globals and formal paramters
-      only ; composition across calls should include the globals
-    - phis *)
+      only ; composition across calls should include the globals *)
 
 module IDE (D : IDEDomain) = struct
   type summary = D.t DlMap.t DlMap.t [@@deriving eq, ord]
@@ -512,12 +506,16 @@ module IDE (D : IDEDomain) = struct
 
       Non membership in the map means v v' -> const bottom *)
 
+  let dir = D.direction
+
+  open DL
+
   let show_summary v =
     DlMap.to_iter v
     |> Iter.flat_map (fun (d1, m) ->
         DlMap.to_iter m |> Iter.map (fun x -> (d1, x)))
     |> Iter.to_string ~sep:", " (fun (v, (v', i)) ->
-        "(" ^ Lambda.show v ^ "," ^ Lambda.show v' ^ "->" ^ D.show i ^ ")")
+        "(" ^ DL.show v ^ "," ^ DL.show v' ^ "->" ^ D.show i ^ ")")
 
   let empty_summary = DlMap.empty
 
@@ -530,8 +528,7 @@ module IDE (D : IDEDomain) = struct
     VarMap.add v j st
 
   (** Determine composites of edge functions through an intravertex block *)
-  let tf_stmts dir phi bs i =
-    (*let bs = match dir with `Forwards -> bs | `Backwards -> List.rev bs in*)
+  let tf_stmts phi bs i =
     let stmts i =
       List.fold_left
         (fun om stmt ->
@@ -559,7 +556,7 @@ module IDE (D : IDEDomain) = struct
             (fun i (p : Var.t Block.phi) ->
               Iter.map
                 (fun (d2, e) ->
-                  if List.exists (fun (_, v) -> Lambda.equal (Label v) d2) p.rhs
+                  if List.exists (fun (_, v) -> DL.equal (Label v) d2) p.rhs
                   then (Label p.lhs, e)
                   else (d2, e))
                 i)
@@ -569,7 +566,7 @@ module IDE (D : IDEDomain) = struct
             (fun i (p : Var.t Block.phi) ->
               Iter.flat_map
                 (fun (d2, e) ->
-                  if Lambda.equal (Label p.lhs) d2 then
+                  if DL.equal (Label p.lhs) d2 then
                     Iter.of_list p.rhs
                     |> Iter.map (fun (_, d3) -> (Label d3, e))
                   else Iter.singleton (d2, e))
@@ -585,6 +582,7 @@ module IDE (D : IDEDomain) = struct
     |> Option.flat_map (DlMap.get d2)
     |> Option.get_or ~default:D.bottom
 
+  (** Propagate summaries into a new location and update the worklist *)
   let propagate worklist summaries priority summary loc updates =
     let module Q = IntPQueue.Plain in
     Iter.filter_map
@@ -595,39 +593,44 @@ module IDE (D : IDEDomain) = struct
       updates
     |> Iter.fold
          (fun acc ((d1, d3), e) ->
-           Q.add worklist (loc, (d1, d3)) (priority loc);
+           Q.add worklist (loc, d1, d3) (priority loc);
            let m = DlMap.get_or d1 acc ~default:DlMap.empty in
            DlMap.add d1 (DlMap.add d3 e m) acc)
          summary
     |> Hashtbl.add summaries loc
 
-  let phase1_solve order dir start graph globals default =
+  (** Computes a table of summary edge functions
+
+      A summary edge function is an edge function from the start of a procedure
+      to some location in the procedure that is equal to the join of all
+      composite edge functions through paths to this location. *)
+  let phase1_solve order start graph globals default =
+    (* We compute summaries with a worklist fixpoint solver.
+       TOOD perhaps a better solver could be used?*)
     Trace.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
     let module Q = IntPQueue.Plain in
-    let (worklist : (Loc.t * Lambda2.t) Q.t) = Q.create () in
+    let (worklist : (Loc.t * DL.t * DL.t) Q.t) = Q.create () in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
     Hashtbl.add summaries start
       (DlMap.singleton Lambda (DlMap.singleton Lambda D.identity));
     (* Stores edge functions from the first procedure's entry to the second
-       procedure's entry where the d value of the second procedure's entry is
-       the given dl. *)
-    let entry_to_call_entry_cache :
-        (ID.t * Lambda.t * ID.t, D.t DlMap.t) Hashtbl.t =
+       procedure's entry, with a fixed dl value at the second procedure *)
+    let entry_to_call_entry_cache : (ID.t * DL.t * ID.t, D.t DlMap.t) Hashtbl.t
+        =
       Hashtbl.create 100
     in
     (* Stores edge functions from the entry of a procedure to the end of said procedure for a given d value at the entry *)
-    let entry_to_exit_cache : (ID.t * Lambda.t, D.t DlMap.t) Hashtbl.t =
+    let entry_to_exit_cache : (ID.t * DL.t, D.t DlMap.t) Hashtbl.t =
       Hashtbl.create 100
     in
     let get_summary loc = Hashtbl.get summaries loc |> Option.get_or ~default in
     let priority l = LM.find l order in
-    (*IDEGraph.G.fold_edges_e (fun e a -> Q.add worklist (e, (Lambda, Lambda) (priority e))) graph ();*)
-    Q.add worklist (start, (Lambda, Lambda)) (priority start);
+    Q.add worklist (start, Lambda, Lambda) (priority start);
     while not (Q.is_empty worklist) do
-      let (x : Loc.t * Lambda2.t) =
+      let (x : Loc.t * DL.t * DL.t) =
         Q.extract worklist |> Option.get_exn_or "queue empty"
       in
-      let l, (d1, d2) = x in
+      let l, d1, d2 = x in
       let ost = get_summary l in
       let e1 = dldlget d1 d2 ost in
       IDEGraph.G.succ_e graph l |> Iter.of_list
@@ -635,16 +638,19 @@ module IDE (D : IDEDomain) = struct
           let from, target = match e with from, _, target -> (from, target) in
           match IDEGraph.G.E.label e with
           | Stmts (phi, bs) ->
-              tf_stmts dir phi bs (Iter.singleton (d2, e1))
+              tf_stmts phi bs (Iter.singleton (d2, e1))
               |> Iter.map (fun (d3, e) -> ((d1, d3), e))
               |> propagate worklist summaries priority (get_summary target)
                    target
           | InterCall callinfo ->
-              D.compose_call callinfo d2
+              D.transfer_call callinfo d2
               |> Iter.iter (fun (d3, e2) ->
+                  (* Add the callee to the worklist with an id edge at its entry
+                     so that the entry_to_exit cache eventually summarises it. *)
                   propagate worklist summaries priority (get_summary target)
                     target
                     (Iter.singleton ((d3, d3), D.identity));
+                  (* Update the entry to call entry cache *)
                   let e21 = D.compose e2 e1 in
                   let k = (callinfo.caller, d3, callinfo.callee) in
                   let m =
@@ -653,7 +659,11 @@ module IDE (D : IDEDomain) = struct
                     |> DlMap.add d1 e21
                   in
                   Hashtbl.add entry_to_call_entry_cache k m;
-                  (* Surely there's a better way to do this... *)
+                  (* If we have entry to exit edge functions stored, propagate
+                     the composite of
+                     1. the edge function from the caller entry to callee entry
+                     2. edge functions through the callee procedure
+                     3. edge functions from the return of the callee to the caller *)
                   let aftercall = Loc.AfterCall callinfo.aftercall in
                   let _ =
                     Hashtbl.get entry_to_exit_cache (callinfo.callee, d3)
@@ -661,7 +671,7 @@ module IDE (D : IDEDomain) = struct
                         DlMap.to_iter m
                         |> Iter.iter (fun (d4, e3) ->
                             let e321 = D.compose e3 e21 in
-                            D.compose_return callinfo.ret d4
+                            D.transfer_return callinfo.ret d4
                             |> Iter.map (fun (d5, e4) ->
                                 ((d1, d5), D.compose e4 e321))
                             |> propagate worklist summaries priority
@@ -669,14 +679,20 @@ module IDE (D : IDEDomain) = struct
                   in
                   ())
           | InterReturn retinfo ->
-              (* Duplicate work warning!! we're saving the summary of the procedure we're returning from multiple times!! *)
+              (* Since we have reached the return block of a procedure, we
+                 have a complete summary of it! Store this in the entry exit cache *)
               let k = (retinfo.callee, d1) in
               let m =
                 Hashtbl.get_or entry_to_exit_cache k ~default:DlMap.empty
                 |> DlMap.add d2 e1
               in
               Hashtbl.add entry_to_exit_cache k m;
+              (* If we have an edge from the caller's entry to the callee's
+                 entry, we can propagate the same big composite as described
+                 in the InterCall branch.
 
+                 Note that we do not propagate to aftercalls of callers if the
+                 caller never propagated through its own InterCall edge *)
               let k = (retinfo.caller, d1, retinfo.callee) in
               let _ =
                 Hashtbl.get entry_to_call_entry_cache k
@@ -684,7 +700,7 @@ module IDE (D : IDEDomain) = struct
                     DlMap.to_iter m
                     |> Iter.iter (fun (d3, e2) ->
                         let e12 = D.compose e1 e2 in
-                        D.compose_return retinfo d2
+                        D.transfer_return retinfo d2
                         |> Iter.map (fun (d4, e3) ->
                             ((d3, d4), D.compose e3 e12))
                         |> propagate worklist summaries priority
@@ -692,7 +708,7 @@ module IDE (D : IDEDomain) = struct
               in
               ()
           | Call callstmt ->
-              D.compose_call_to_aftercall callstmt d2
+              D.transfer_call_to_aftercall callstmt d2
               |> Iter.map (fun (d3, e2) -> ((d1, d3), D.compose e2 e1))
               |> propagate worklist summaries priority (get_summary target)
                    target
@@ -702,9 +718,9 @@ module IDE (D : IDEDomain) = struct
     done;
     summaries
 
-  let phase2_solve order dir prog start_proc graph globals
+  (** Compute the analysis result using summaries from phase 1 *)
+  let phase2_solve order prog start_proc graph globals
       (summaries : (Loc.t, summary) Hashtbl.t) =
-    (* FIXME: use summaries ; propertly evaluate call edges first then fill in between*)
     Trace.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
     let module Q = IntPQueue.Plain in
     let states : (Loc.t, analysis_state) Hashtbl.t = Hashtbl.create 100 in
@@ -719,8 +735,10 @@ module IDE (D : IDEDomain) = struct
     in
     (* The first step is to initialise the entry nodes of each procedure with
        their initial value based on the entry procedure being initialised to
-       top, using the summary functions. *)
-    let (worklist : (Loc.t * Lambda.t) Q.t) = Q.create () in
+       bottom, using the summary functions. This is done by looking at all call
+       sites in a procedure and evaluating the composite of the summary to the
+       callsite and the transfer of the call edge (and reaching a fixpoint). *)
+    let (worklist : (Loc.t * DL.t) Q.t) = Q.create () in
     let calls_table = IDEGraph.proc_call_table dir graph prog in
     Hashtbl.get_or calls_table start_proc ~default:Iter.empty
     |> Iter.iter (fun l -> Q.add worklist (l, Lambda) (priority l));
@@ -741,7 +759,7 @@ module IDE (D : IDEDomain) = struct
               DlMap.get d summary |> Iter.of_opt
               |> Iter.flat_map DlMap.to_iter
               |> Iter.iter (fun (d2, e1) ->
-                  D.compose_call callinfo d2
+                  D.transfer_call callinfo d2
                   |> Iter.iter (fun (d3, e2) ->
                       (match d3 with
                       | Label v ->
@@ -754,7 +772,6 @@ module IDE (D : IDEDomain) = struct
                           if not (D.Value.equal j y) then (
                             let st' = VarMap.add v (D.Value.join y fd) st in
                             Hashtbl.add states target st';
-                            (* This should really add all calls in the target procedure to the worklist *)
                             Hashtbl.get_or calls_table callinfo.callee
                               ~default:Iter.empty
                             |> Iter.iter (fun c ->
@@ -764,7 +781,8 @@ module IDE (D : IDEDomain) = struct
                       ()))
           | _ -> ())
     done;
-    (* We then apply all summary functions to each location *)
+    (* We then apply all summary functions to each location to the initial
+       values of each procedure *)
     let entry_of (l : Loc.t) =
       match l with
       | IntraVertex { proc_id; v } -> Loc.IntraVertex { proc_id; v = Entry }
@@ -795,7 +813,7 @@ module IDE (D : IDEDomain) = struct
   let query r ~proc_id vert =
     Hashtbl.get r (Loc.IntraVertex { proc_id; v = vert })
 
-  let solve dir (prog : Program.t) =
+  let solve (prog : Program.t) =
     Trace.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
     let globals = prog.globals |> Var.Decls.to_iter |> Iter.map snd in
     let graph = IDEGraph.create prog dir in
@@ -811,9 +829,9 @@ module IDE (D : IDEDomain) = struct
     let start_proc =
       prog.entry_proc |> Option.get_exn_or "Missing entry procedure"
     in
-    let summary = phase1_solve order dir start graph globals DlMap.empty in
+    let summary = phase1_solve order start graph globals DlMap.empty in
     ( query @@ summary,
-      query @@ phase2_solve order dir prog start_proc graph globals summary )
+      query @@ phase2_solve order prog start_proc graph globals summary )
 
   module G = Procedure.RevG
   module ResultMap = Map.Make (G.V)
@@ -846,7 +864,7 @@ let transform (prog : Program.t) =
   let g = IDEGraph.create prog `Backwards in
   CCIO.with_out "idegraph.dot" (fun s ->
       IDEGraph.Vis.fprint_graph (Format.of_chan s) g);*)
-  let summary, r = IDELiveAnalysis.solve `Backwards prog in
+  let summary, r = IDELiveAnalysis.solve prog in
   ID.Map.to_iter prog.procs
   |> Iter.iter (fun (proc, proc_n) ->
       let n = ID.to_string proc in
