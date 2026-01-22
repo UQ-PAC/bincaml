@@ -283,4 +283,4 @@ let check_prog prog =
 let check prog p =
   let errs = check_prog prog in
   print_type_errors errs;
-  if Iter.length errs = 0 then false else true
+  not (Iter.is_empty errs)
