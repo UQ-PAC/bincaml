@@ -616,7 +616,7 @@ module IDE (D : IDEDomain) = struct
       Hashtbl.get summaries loc |> function
       | Some e -> e
       | None ->
-          print_endline @@ "summary undefined " ^ Loc.show loc;
+          (*print_endline @@ "summary undefined " ^ Loc.show loc;*)
           DlMap.empty
     in
     (* The first step is to initialise the entry nodes of each procedure with
