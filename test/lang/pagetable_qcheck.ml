@@ -1,4 +1,3 @@
-
 module Pagetable_sequential = STM_sequential.Make (Pagetable_spec.Spec)
 
 let _ =

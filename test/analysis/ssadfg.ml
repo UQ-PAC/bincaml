@@ -62,10 +62,9 @@ proc @main_4196260 () -> ()
   let prog = Bincaml.Passes.PassManager.run_batch ba prog in
   let proc = Program.proc prog (prog.entry_proc |> Option.get_exn_or "fail") in
   let ar = Analysis.Defuse_bool.analyse proc in
-  let ar = Option.get_exn_or "" ar in
 
   let f =
-    Analysis.Defuse_bool.Domain.to_iter ar
+    Analysis.Defuse_bool.Analysis.D.to_iter ar
     |> Iter.filter (function v, _ ->
         String.ends_with ~suffix:"_out" (Var.name v))
     |> Iter.to_string ~sep:"\n" (fun (k, v) ->

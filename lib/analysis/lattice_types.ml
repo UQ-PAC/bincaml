@@ -5,10 +5,9 @@ open Containers
 module type Lattice = sig
   val name : string
 
-  type t
+  include ORD_TYPE
+  include PRETTY with type t := t
 
-  val compare : t -> t -> int
-  val show : t -> string
   val bottom : t
   val join : t -> t -> t
   val equal : t -> t -> bool
@@ -38,10 +37,12 @@ module type StateAbstraction = sig
 
   val read : key_t -> t -> val_t
   val update : key_t -> val_t -> t -> t
+  val to_iter : t -> (key_t * val_t) Iter.t
 end
 
 module type Domain = sig
   include Lattice
 
   val transfer : t -> Program.stmt -> t
+  val init : Program.proc -> t
 end

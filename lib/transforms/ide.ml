@@ -11,7 +11,7 @@ let show_state (v : IDELiveAnalysis.analysis_state) =
 let print_live_vars_dot sum r fmt prog proc_id =
   let label (v : Procedure.G.vertex) = r v |> Option.map (fun s -> sum s) in
   let p = Program.proc prog proc_id in
-  Trace.with_span ~__FILE__ ~__LINE__ "dot-printer" @@ fun _ ->
+  Trace_core.with_span ~__FILE__ ~__LINE__ "dot-printer" @@ fun _ ->
   let (module M : Viscfg.ProcPrinter) = Viscfg.dot_labels label in
   Option.iter (fun g -> M.fprint_graph fmt g) (Procedure.graph p)
 

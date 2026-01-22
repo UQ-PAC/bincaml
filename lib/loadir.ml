@@ -789,7 +789,7 @@ let parse_single_block s : Program.bloc =
   load_single_block ~input lexbuf
 
 let ast_of_concrete_ast ~name m =
-  Trace.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->
+  Trace_core.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->
   BasilASTLoader.trans_program ~name m
 
 let ast_of_string ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
@@ -805,7 +805,7 @@ let ast_of_string ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
 
 let ast_of_channel ?input fname c =
   let m =
-    Trace.with_span ~__FILE__ ~__LINE__ "load-concrete-ast" @@ fun f ->
+    Trace_core.with_span ~__FILE__ ~__LINE__ "load-concrete-ast" @@ fun f ->
     let m = concrete_prog_ast_of_channel ?input ~filename:fname c in
     m
   in

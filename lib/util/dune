@@ -1,7 +1,16 @@
 (library
  (public_name bincaml.util)
  (name bincaml_util)
- (modules common var ID types bitvec zint reverse_graph recursionscheme)
+ (modules
+  mtypes
+  common
+  var
+  ID
+  types
+  bitvec
+  zint
+  reverse_graph
+  recursionscheme)
  (libraries
   iter
   containers

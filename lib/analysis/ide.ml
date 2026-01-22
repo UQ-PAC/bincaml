@@ -498,7 +498,7 @@ module IDE (D : IDEDomain) = struct
   let phase1_solve order start graph globals default =
     (* We compute summaries with a worklist fixpoint solver.
        TOOD perhaps a better solver could be used?*)
-    Trace.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
+    Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
     let module Q = IntPQueue.Plain in
     let (worklist : (Loc.t * DL.t * DL.t) Q.t) = Q.create () in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
@@ -612,7 +612,7 @@ module IDE (D : IDEDomain) = struct
   (** Compute the analysis result using summaries from phase 1 *)
   let phase2_solve order prog start_proc graph globals
       (summaries : (Loc.t, summary) Hashtbl.t) =
-    Trace.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
+    Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
     let module Q = IntPQueue.Plain in
     let states : (Loc.t, analysis_state) Hashtbl.t = Hashtbl.create 100 in
     let get_st l = Hashtbl.get_or states l ~default:VarMap.empty in
@@ -705,7 +705,7 @@ module IDE (D : IDEDomain) = struct
     Hashtbl.get r (Loc.IntraVertex { proc_id; v = vert })
 
   let solve (prog : Program.t) =
-    Trace.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
+    Trace_core.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
     let globals = prog.globals |> Var.Decls.to_iter |> Iter.map snd in
     let graph = IDEGraph.create prog dir in
     let order =

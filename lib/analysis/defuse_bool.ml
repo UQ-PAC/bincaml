@@ -10,6 +10,7 @@ module IsZeroLattice = struct
   [@@deriving ord, eq, show { with_path = false }]
 
   let bottom = Bot
+  let pretty t = Containers_pp.text (show t)
 
   let join a b =
     match (a, b) with
@@ -31,7 +32,10 @@ module IsZeroValueAbstraction = struct
     | `Bool true -> NonZero
     | `Bool false -> Zero
     | `Integer i -> if Z.equal Z.zero i then Zero else NonZero
-    | `Bitvector i -> if Z.equal Z.zero (Bitvec.value i) then Zero else NonZero
+    | `Bitvector i ->
+        if Bitvec.size i = 0 then Top
+        else if Z.equal Z.zero (Bitvec.value i) then Zero
+        else NonZero
 
   let eval_unop (op : Lang.Ops.AllOps.unary) a =
     match op with
@@ -111,46 +115,12 @@ module IsZeroValueAbstraction = struct
         else Top
 end
 
-module Domain = Intra_analysis.MapState (IsZeroLattice)
+module IsZeroValueAbstractionBasil = struct
+  include IsZeroValueAbstraction
 
-module Eval =
-  Intra_analysis.EvalStmt
-    (struct
-      include IsZeroValueAbstraction
-      module E = Lang.Expr.BasilExpr
-    end)
-    (Domain)
+  let top = IsZeroLattice.Top
 
-module TransferFunc = struct
-  open IsZeroLattice
-  include Domain
-
-  let transfer dom stmt =
-    let stmt = Eval.stmt_eval_fwd stmt dom in
-    let updates =
-      match stmt with
-      | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
-      | Lang.Stmt.Instr_Assert _ -> Iter.empty
-      | Lang.Stmt.Instr_Assume _ -> Iter.empty
-      | Lang.Stmt.Instr_Load { lhs } -> Iter.singleton (lhs, Top)
-      | Lang.Stmt.Instr_Store { lhs } -> Iter.singleton (lhs, Top)
-      | Lang.Stmt.Instr_IntrinCall { lhs } ->
-          StringMap.values lhs |> Iter.map (fun v -> (v, Top))
-      | Lang.Stmt.Instr_Call { lhs } ->
-          StringMap.values lhs |> Iter.map (fun v -> (v, Top))
-      | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
-    in
-    Iter.fold (fun a (k, v) -> Domain.update k v a) dom updates
+  module E = Lang.Expr.BasilExpr
 end
 
-module Analysis = Dataflow_graph.AnalysisFwd (TransferFunc)
-
-let analyse (p : Lang.Program.proc) =
-  let init p =
-    let vs = Lang.Procedure.formal_in_params p |> StringMap.values in
-    vs |> Iter.map (fun v -> (v, IsZeroLattice.Top))
-  in
-  Analysis.A.DFGChaoticIter.M.find_opt Return
-    (Analysis.analyse ~init
-       ~widen_set:(Graph.ChaoticIteration.Predicate (fun _ -> false))
-       ~delay_widen:0 p)
+include Dataflow_graph.EasyForwardAnalysisPack (IsZeroValueAbstractionBasil)

@@ -38,10 +38,10 @@ module LV =
 let run (p : Program.proc) =
   let analyse graph =
     let wto =
-      Trace.with_span ~__FILE__ ~__LINE__ "WTO" @@ fun _ ->
+      Trace_core.with_span ~__FILE__ ~__LINE__ "WTO" @@ fun _ ->
       Procedure.RevWTO.recursive_scc graph Procedure.Vert.Return
     in
-    Trace.with_span ~__FILE__ ~__LINE__ "live-vars-analysis" @@ fun _ ->
+    Trace_core.with_span ~__FILE__ ~__LINE__ "live-vars-analysis" @@ fun _ ->
     LV.recurse graph wto
       (function
         | Return ->
@@ -72,7 +72,7 @@ let print_g res = Viscfg.dot_labels (fun v -> Some (label res v))
 
 let print_live_vars_dot fmt p =
   let r = run p in
-  Trace.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
+  Trace_core.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
   let (module M : Viscfg.ProcPrinter) =
     Viscfg.dot_labels (fun v -> Some (label r v))
   in

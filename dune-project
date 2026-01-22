@@ -11,9 +11,6 @@
 
 (maintainers "Maintainer Name <maintainer@example.com>")
 
-(formatting
- (enabled_for dune))
-
 (license Apache-2.0)
 
 (documentation https://url/to/documentation)

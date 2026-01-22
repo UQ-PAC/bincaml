@@ -1,7 +1,9 @@
 name: build and test
 
 on:
-  - push
+  pull_request:
+  merge_group:
+  push:
 
 permissions: read-all
 
@@ -77,6 +79,7 @@ jobs:
         uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: 5.3.0
+      - run: opam install ocamlformat
       - uses: ocaml/setup-ocaml/lint-fmt@v3
 
   lint-opam:

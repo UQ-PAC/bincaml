@@ -45,6 +45,46 @@ Check whether these implement what you need before re-implementing standard algo
 
 {1 CookBook}
 
+{2 Implementing a Value Domain} 
+
++ Choose a good representation type and implement the lattice (order) operations, define
+  a module implementing the {! Analysis.Lattice_types.Lattice} signature. 
++ Implement the abstraction functions for each expression operation by
+  defining a module implementing the {! Analysis.Lattice_types.ValueAbstraction} signature
+  signature for [type t = YourLattice.t].
++ Set up a soundness test using the property framework as describe in {!section-testvaluedomain}.
++ Fill out the set of operations in your vaue abstraction to increase precision 
+
+It is a good idea to start with the lattice, ensure you have a good printer for
+the values, and define all the evaluation functions as returning Top, and set
+up the soundness test. You can then implement more operations and gradually
+increase precision using the test to ensure your domain is sound.
+
+{3 Run the analysis on an IL program}
+
++ Combine the Lattice ValueAbstraction these into an analysis using {! Analysis.Dataflow_graph.EasyForwardAnalysisPack}.
++ Set up a pass to run the analysis on an input file and print the result:
+  {[
+  let dfg_bool =
+    {
+      name = "demo-dfg-bool-analysis";
+      apply = DFGAnalysis (module Analysis.Defuse_bool.Analysis);
+      doc = "runs truthiness analysis on dataflow graph and prints results";
+    }
+  ]}
+  And add the pass (in this case [dfg_bool]) to the [passes] list.
++ Save and run the following script with [dune exec script scriptname.sexp] for your analysis name:
+
+{v
+(load-il "examples/irreducible_loop_1.il")
+(run-transforms "remove-unreachable-block" "cf-expressions" "intra-dead-store-elim")
+(run-transforms "ssa")
+(run-transforms "demo-dfg-bool-analysis")
+v}
+
+Find the complete example this guide refers in {{:https://github.com/agle/bincaml/blob/main/lib/analysis/defuse_bool.ml}lib/analysis/defuse_bool.ml}.
+
+
 {2 Implementing Analyses }
 
 1. An intraprocedural flow-insensitive single-pass analysis of an IR
@@ -115,6 +155,31 @@ let solve prog_proc =
 {2  Testing }
 
 We have multiple kinds of testing
+
+{4:testvaluedomain Value Abstraction Domain Soundness }
+
+When implementing a single value abstraction we have a simple property test
+framework set up to validate that the operator is sound according to the join.
+
+This can be seen here. As long as the domain implements {! Analysis.Lattice_types.ValueAbstraction},
+setting up this test is as simple as applying the functor and adding the resulting suite to the run list as 
+in [test/lang/value_soundness.ml].
+
+{[
+module TestBoolDom =
+  ValueAbstractionSoundness (Analysis.Defuse_bool.IsZeroValueAbstractionBasil)
+
+let _ =
+  Alcotest.run "value domain abstract eval soundness" [ TestBoolDom.suite ]
+]}
+
+{: https://github.com/agle/bincaml/blob/main/test/lang/value_soundness.ml#L54-L54}
+
+This test can be run in isolation with 
+
+{v
+dune exec test/lang/value_soundness.exe
+v}
 
 {4 Property tests}
 
@@ -200,15 +265,15 @@ Cheifly it comes down to
 - good tooling: the build system; dune, the langauge server, the compiler are
   all fast and interactive and well suited to the research-code use case.
 
-If you want more evangelism you can find it {{:https://xvw.lol/en/articles/why-ocaml.html}here}.
+If you want more OCaml evangelism you can find it {{:https://xvw.lol/en/articles/why-ocaml.html}here}.
 
 
 {3 Learning OCaml }
 
 We recommend the textbook to Cornell's CS3110 functional programming course,
 which is available for free on their
-{{:https://cs3110.github.io/textbook/ocaml_programming.pdf}website} and as
-{{:https://cs3110.github.io/textbook/cover.html} pdf}.
+{{:https://cs3110.github.io/textbook/cover.html}website} and as
+{{:https://cs3110.github.io/textbook/ocaml_programming.pdf}pdf}.
 
 Also consider reviewing the {{:https://ocaml.org/manual/5.3/index.html}OCaml manual}.
 

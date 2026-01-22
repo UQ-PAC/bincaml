@@ -37,7 +37,7 @@ let of_cmd st (e : Containers.Sexp.t) =
     | `List (`Atom cmd :: n) -> (cmd, n)
     | _ -> failwith "bad cmd structure"
   in
-  Trace.with_span ~__FILE__ ~__LINE__ ("runcmd::" ^ cmd) (fun _ ->
+  Trace_core.with_span ~__FILE__ ~__LINE__ ("runcmd::" ^ cmd) (fun _ ->
       match cmd with
       | "skip" -> st
       | "load-il" ->
