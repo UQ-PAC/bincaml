@@ -276,6 +276,7 @@ module IDEGraph = struct
       | _, _, _ -> failwith "bad proc edge"
     in
     (* add all vertices *)
+    (* TODO: missing stub procedure edges *)
     let intra_verts =
       Option.to_iter (Procedure.graph p)
       |> Iter.flat_map (fun graph ->
@@ -435,6 +436,10 @@ module IDE (D : IDEDomain) = struct
     in
     VarMap.add v j st
 
+  let join_add m d e =
+    let j = D.join e (DlMap.get_or d m ~default:D.bottom) in
+    if not (D.equal j D.bottom) then DlMap.add d j m else m
+
   (** Determine composites of edge functions through an intravertex block *)
   let tf_stmts phi bs i =
     let stmts i =
@@ -446,12 +451,10 @@ module IDE (D : IDEDomain) = struct
               |> Iter.fold
                    (fun m (d3, e2) ->
                      let e = D.compose e2 e1 in
-                     let j = D.join e (DlMap.get_or d3 m ~default:D.bottom) in
-                     if not (D.equal j D.bottom) then DlMap.add d3 j m else m)
+                     join_add m d3 e)
                    m)
             om DlMap.empty)
-        (* TODO Should be joining i *)
-        (DlMap.of_iter i)
+        (Iter.fold (fun m (d, e) -> join_add m d e) DlMap.empty i)
         bs
       |> DlMap.to_iter
     in
