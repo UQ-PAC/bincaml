@@ -2,7 +2,13 @@
  (public_name bincaml.analysis)
  (name analysis)
  (flags -w -27)
- (modules dataflow_graph intra_analysis defuse_bool lattice_types ide ide_live)
+ (modules
+  dataflow_graph
+  intra_analysis
+  defuse_bool
+  lattice_types
+  ide
+  ide_live)
  (libraries
   patricia-tree
   loader
