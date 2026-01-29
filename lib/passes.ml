@@ -363,6 +363,21 @@ module PassManager = struct
           "Remove store assignments to pure local variables which are never \
            read ";
       };
+      {
+        name = "inter-dead-store-elim";
+        apply =
+          Prog
+            (Transforms.Livevars.InterprocDSE.transform
+               (not % Bincaml_util.Var.is_local));
+        doc =
+          "Remove store assignments to pure local variables which are never \
+           read using an interprocedural analysis";
+      };
+      {
+        name = "type-inference";
+        apply = Prog Transforms.Type_inference.transform;
+        doc = "Perform type inferencing on program.";
+      };
       remove_unused;
       {
         name = "lambda-lifting";
