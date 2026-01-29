@@ -109,6 +109,11 @@ module PassManager = struct
         apply = Prog Transforms.Ide.transform;
         doc = "broken ide test analysis";
       };
+      {
+        name = "type-inference";
+        apply = Prog Transforms.Type_inference.transform;
+        doc = "Perform type inferencing on program.";
+      };
       remove_unused;
     ]
 
