@@ -205,6 +205,11 @@ module PassManager = struct
           "Write the results of an ide based live variable analysis to .dot \
            files";
       };
+      {
+        name = "type-inference";
+        apply = Prog Transforms.Type_inference.transform;
+        doc = "Perform type inferencing on program.";
+      };
       remove_unused;
     ]
 
