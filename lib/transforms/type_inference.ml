@@ -262,14 +262,26 @@ let constrained prog (st : constraint_state) stmt i =
               (TypeVar lhs))
         st ls
   (* Pointer stuff here *)
+  (* TODO: unsure about store but relativly confident about load *)
   | Stmt.Instr_Load { lhs; mem; cells; addr; endian } ->
-      let st = add_ub st (Var.name lhs) (TypeVar (Int.to_string i)) in
-      st
-  | Stmt.Instr_Store { lhs; mem; cells; value; addr; endian } -> st
+      let st =
+        add_ub st (Var.name lhs)
+          (Pointer
+             ( TypeVar (Int.to_string i ^ "a_load"),
+               TypeVar (Int.to_string i ^ "b_load") ))
+      in
+      add_ub st (Int.to_string i ^ "a_load")
+      @@ TypeVar (Int.to_string i ^ "b_load")
+  | Stmt.Instr_Store { lhs; mem; cells; value; addr; endian } ->
+      let st =
+        add_ub st (Var.name lhs)
+          (Pointer
+             ( TypeVar (Int.to_string i ^ "a_store"),
+               TypeVar (Int.to_string i ^ "b_store") ))
+      in
+      add_ub st (Int.to_string i ^ "a_store")
+      @@ TypeVar (Int.to_string i ^ "b_store")
   | Stmt.Instr_Call { lhs; args; procid } ->
-      (* LHS is a string map of arg name and the actual var *)
-      (* args is a string map of arg name and the  expr *)
-      (* ID.name procid will be the name of the thing im constraining agaisnt *)
       let args =
         StringMap.map (fun v -> constrain_expr st @@ BasilExpr.unfix v) args
       in
