@@ -8,11 +8,7 @@ open Expr
       - Registers are like python vars where they can be assigned to anything not matther the type
       - Stack variables might be the same, or at least need to be renamed as in each proc they are different
 
-      - They seem to be just the one type but idk if ali actually understood my question fully
-      
-    - Reason more about global variables
-      - See if a Var is a global, if it is it can be a Record instead of a TypeVar?
-
+      - They seem to be just the one type but idk if ali actually understood my question fully     
 *)
 
 type c_type = C_Int | C_Int64 | C_Float | C_Bool [@@deriving ord, eq]
@@ -37,7 +33,7 @@ type ty =
   | Field of field
   | Record of field list (* A list of fields in the record *)
   | TypeVar of string
-  | Recursive of ID.t
+  | Recursive of ty * ty
   | Atom of c_type
 
 and field = { offset : int; size : int; ty : ty }
@@ -47,7 +43,7 @@ let rec show_ty = function
   | Bottom -> "⊥"
   | Atom c -> show_c_type c
   | TypeVar id -> id
-  | Recursive id -> ID.to_string id
+  | Recursive (t1, t2) -> Printf.sprintf "μ%s.%s" (show_ty t1) (show_ty t2)
   | Paren ty -> Printf.sprintf "(%s)" @@ show_ty ty
   | Union (t1, t2) -> Printf.sprintf "%s ∪ %s" (show_ty t1) (show_ty t2)
   | Sect (t1, t2) -> Printf.sprintf "%s ∩ %s" (show_ty t1) (show_ty t2)
@@ -81,7 +77,9 @@ let rec compare_ty type1 type2 =
   | Top, Top | Bottom, Bottom -> 0
   | Atom a, Atom b -> compare_c_type a b
   | TypeVar a, TypeVar b -> String.compare a b
-  | Recursive a, Recursive b -> String.compare (ID.to_string a) (ID.to_string b)
+  | Recursive (a, b), Recursive (c, d) ->
+      let c = compare_ty a c in
+      if c <> 0 then c else compare_ty b d
   | Paren a, Paren b -> compare_ty a b
   | Union (a, b), Union (a2, b2) ->
       let c = compare_ty a a2 in
@@ -129,9 +127,43 @@ let show_constraint_state (m : type_constraint StringMap.t) : string =
         (show_ty_set ub))
   |> String.concat "\n"
 
-let coalesce_types constraints = []
+let show_coalesced_types (m : ty StringMap.t) : string =
+  StringMap.bindings m
+  |> List.map (fun (name, ty) -> Printf.sprintf "%s: %s" name (show_ty ty))
+  |> String.concat "\n"
 
-let gen_constraint_set prog (st : constraint_state) stmt stmt_number block_id =
+let rec coalesce_types (constraint_set : constraint_state)
+    (recursive_set : TySet.t) (polarity : int) (tau : ty) : ty =
+  let recursive_call =
+    coalesce_types constraint_set recursive_set (-polarity)
+  in
+  match tau with
+  | Pointer (a, b) -> Pointer (recursive_call a, recursive_call b)
+  | TypeVar a -> (
+      match TySet.find_opt tau recursive_set with
+      | Some c -> c
+      | None -> (
+          let bounds =
+            match StringMap.find_opt a constraint_set with
+            | Some { lb; ub } -> if polarity = 1 then lb else ub
+            | None -> TySet.empty (* TODO: Should never occur *)
+          in
+          let rec_check = TySet.find_opt tau bounds in
+          let recursive_set = TySet.add tau recursive_set in
+          let s =
+            TySet.fold
+              (fun x a ->
+                let y =
+                  coalesce_types constraint_set recursive_set polarity x
+                in
+                if polarity = 1 then Union (a, y) else Sect (a, y))
+              bounds tau
+          in
+          match rec_check with None -> s | Some c -> Recursive (tau, s)))
+  | _ -> Top
+
+let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
+    stmt_number block_id =
   let open AbstractExpr in
   let constrain_expr st (expr : 'e BasilExpr.abstract_expr) =
     match expr with
@@ -144,10 +176,19 @@ let gen_constraint_set prog (st : constraint_state) stmt stmt_number block_id =
           in
           TypeVar a
         else
-          let start = 0 in
-          let finish = 2 in
-          let size = finish - start in
-          (* TODO: Deal with globals etc. to see if they are a record *)
+          (* let splits = String.split_on_char '_' (Var.name a) in *)
+          (* let start = int_of_string @@ List.hd @@ List.tl splits in *)
+          (* let finish = int_of_string @@ List.hd @@ List.tl @@ List.tl splits in *)
+          (* let size = finish - start in *)
+          (* let global_addr = 131120 in *)
+          (* let offset = global_addr - start in *)
+          (* List.fold_left (fun acc hd -> print_string @@ Var.to_string (snd hd) ^ "\n" ) () @@ Var.Decls.to_list prog.globals; *)
+          (* (* *)
+            (* NOTE: Memory analysis has the information that can get extra *)
+                  (* detail here, however that information is not avaliable *)
+                  (* outs *)
+          (* *) *)
+          (* Field { size; offset; ty = TypeVar (Var.name a) } *)
           TypeVar (Var.name a)
     | Constant op -> (
         match op with
@@ -246,6 +287,7 @@ let gen_constraint_set prog (st : constraint_state) stmt stmt_number block_id =
         | Some { lb } ->
             TySet.fold (fun bound st -> constrain st bound type1) lb st
         | None -> st)
+    (* | Field b, TypeVar a -> st *)
     | _, TypeVar a -> (
         (* The right hand side is not a type variable *)
         let st = add_lb st a type0 in
@@ -285,11 +327,11 @@ let gen_constraint_set prog (st : constraint_state) stmt stmt_number block_id =
       let st =
         add_ub st (Var.name lhs)
           (Pointer
-             ( TypeVar (Int.to_string stmt_number ^ "a_load"),
-               TypeVar (Int.to_string stmt_number ^ "b_load") ))
+             ( TypeVar (Int.to_string stmt_number ^ "_a_load"),
+               TypeVar (Int.to_string stmt_number ^ "_b_load") ))
       in
-      add_ub st (Int.to_string stmt_number ^ "a_load")
-      @@ TypeVar (Int.to_string stmt_number ^ "b_load")
+      add_ub st (Int.to_string stmt_number ^ "_a_load")
+      @@ TypeVar (Int.to_string stmt_number ^ "_b_load")
   | Stmt.Instr_Store { lhs; mem; cells; value; addr; endian } ->
       let st =
         add_ub st (Var.name lhs)
@@ -324,6 +366,19 @@ let transform (prog : Program.t) =
   let type_constraint_map =
     ID.Map.values prog.procs |> Iter.fold (check_proc prog) StringMap.empty
   in
+  print_string "\n === Type Constraints === \n";
   print_string @@ show_constraint_state type_constraint_map;
-  let types = coalesce_types type_constraint_map in
+  (* WARN: I think the below code is off as I should start with the variables upper bounds instantly and union etc. them together *)
+  let types =
+    StringMap.mapi
+      (fun name { lb; ub } ->
+        TySet.fold
+          (fun ty (acc : ty) ->
+            let a = coalesce_types type_constraint_map TySet.empty (-1) ty in
+            match acc with Top -> a | _ -> Union (acc, a))
+          ub Top)
+      type_constraint_map
+  in
+  print_string "\n\n === Coalesced Types === \n";
+  print_string @@ show_coalesced_types types;
   prog
