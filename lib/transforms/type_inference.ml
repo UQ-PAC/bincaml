@@ -45,8 +45,8 @@ let rec show_ty = function
   | TypeVar id -> id
   | Recursive (t1, t2) -> Printf.sprintf "μ%s.%s" (show_ty t1) (show_ty t2)
   | Paren ty -> Printf.sprintf "(%s)" @@ show_ty ty
-  | Union (t1, t2) -> Printf.sprintf "%s ∪ %s" (show_ty t1) (show_ty t2)
-  | Sect (t1, t2) -> Printf.sprintf "%s ∩ %s" (show_ty t1) (show_ty t2)
+  | Union (t1, t2) -> Printf.sprintf "%s ⊔ %s" (show_ty t1) (show_ty t2)
+  | Sect (t1, t2) -> Printf.sprintf "%s ⊓ %s" (show_ty t1) (show_ty t2)
   | Pointer (lb, ub) -> Printf.sprintf "ptr(%s, %s)" (show_ty lb) (show_ty ub)
   | Function (name, ins, outs) ->
       Printf.sprintf "(%s) → (%s)"
@@ -127,6 +127,25 @@ let show_constraint_state (m : type_constraint StringMap.t) : string =
         (show_ty_set ub))
   |> String.concat "\n"
 
+type sigma =
+  | Ep
+  | StoreLabel
+  | LoadLabel
+  | Reclabel of int * int
+  | FnIn of int
+  | FnOut of int
+
+let show_sigma (sigma : sigma) =
+  match sigma with
+  | Ep -> "ε"
+  | StoreLabel -> "Store Label"
+  | LoadLabel -> "Load Label"
+  | Reclabel (n, m) -> Printf.sprintf "Record Label %d %d" n m
+  | FnIn n -> Printf.sprintf "Function in %d" n
+  | FnOut n -> Printf.sprintf "Function out %d" n
+
+let transfer_func state (input : sigma) = Top
+
 let show_coalesced_types (m : ty StringMap.t) : string =
   StringMap.bindings m
   |> List.map (fun (name, ty) -> Printf.sprintf "%s: %s" name (show_ty ty))
@@ -139,6 +158,16 @@ let rec coalesce_types (constraint_set : constraint_state)
   in
   match tau with
   | Pointer (a, b) -> Pointer (recursive_call a, recursive_call b)
+  | Function (name, ins, outs) ->
+      (* This might be useless, but just in case there are exprs in function calls *)
+      Function
+        ( name,
+          StringMap.map
+            (coalesce_types constraint_set recursive_set polarity)
+            ins,
+          StringMap.map 
+            (coalesce_types constraint_set recursive_set polarity)
+            outs)
   | TypeVar a -> (
       match TySet.find_opt tau recursive_set with
       | Some c -> c
@@ -347,7 +376,7 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
       in
       let rets = StringMap.map (fun v -> TypeVar (Var.name v)) lhs in
       let func = Function (ID.name procid, args, rets) in
-      add_lb st (ID.name procid) func
+      add_ub st (ID.name procid) func
   (* TODO: Will need to ask what these actually mean / do *)
   | Stmt.Instr_IntrinCall _ -> st
   | Stmt.Instr_IndirectCall _ -> st
@@ -375,7 +404,7 @@ let transform (prog : Program.t) =
         TySet.fold
           (fun ty (acc : ty) ->
             let a = coalesce_types type_constraint_map TySet.empty (-1) ty in
-            match acc with Top -> a | _ -> Union (acc, a))
+            match acc with Top -> a | _ -> Sect (acc, a))
           ub Top)
       type_constraint_map
   in
