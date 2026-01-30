@@ -43,6 +43,7 @@ let of_cmd st (e : Containers.Sexp.t) =
       | "load-il" ->
           let fname = List.hd (assert_atoms 1 args) in
           let p = Loader.Loadir.ast_of_fname fname in
+          print_endline "finished load";
           { st with prog = Some p.prog }
       | "list-procs" ->
           let open Program in
@@ -110,6 +111,7 @@ let of_cmd st (e : Containers.Sexp.t) =
       | "dump-il" ->
           let ofile = List.hd @@ assert_atoms 1 args in
           CCIO.with_out ofile (fun c -> Program.pretty_to_chan c (get_prog st));
+          print_endline "finished dump";
           st
       | "interp-out" ->
           let ofile = List.hd @@ assert_atoms 1 args in

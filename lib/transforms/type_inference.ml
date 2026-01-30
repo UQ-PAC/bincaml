@@ -19,6 +19,51 @@ let show_c_type = function
   | C_Float -> "float"
   | C_Bool -> "bool"
 
+module TypeVar = struct
+  module M = struct
+    type t = {
+      stmt : int;
+      name : string;
+      k : [ `Load | `Store | `Extract | `ID | `Param of ID.t ];
+    }
+    [@@deriving eq, ord, show]
+
+    let hash = function
+      | { stmt; name; k } ->
+          Hash.combine3 stmt (String.hash name) (Hashtbl.hash k)
+  end
+
+  module X = Fix.HashCons.ForHashedType (M)
+
+  type t = M.t Fix.HashCons.cell
+
+  include Fix.HashCons
+
+  let show x = M.show (data x)
+
+  let create ?op ?stmt name =
+    X.make
+      {
+        stmt = Option.get_or ~default:0 stmt;
+        name;
+        k = Option.get_or ~default:`ID op;
+      }
+
+  let to_int k = id k
+end
+
+(*module TVMap = Map.Make (TypeVar)*)
+module TVMap = struct
+  include PatriciaTree.MakeMap (TypeVar)
+
+  let equal = reflexive_equal
+  let compare = reflexive_compare
+  let to_iter m = Iter.from_iter (fun f -> iter (fun k v -> f (k, v)) m)
+  let values m = to_iter m |> Iter.map snd
+  let bindings m = to_iter
+  let of_iter i = Iter.fold (fun m (k, v) -> add k v m) empty i
+end
+
 type ty =
   | Top
   | Bottom
@@ -27,14 +72,13 @@ type ty =
   | Sect of ty * ty (* type ∩ type *)
   | Pointer of ty * ty (* ptr(lb, ub) *)
   | Function of
-      string
-      * ty StringMap.t
-      * ty StringMap.t (* list of inputs and list of outputs *)
+      string * ty TVMap.t * ty TVMap.t (* list of inputs and list of outputs *)
   | Field of field
   | Record of field list (* A list of fields in the record *)
-  | TypeVar of string
+  | TypeVar of TypeVar.t
   | Recursive of ty * ty
   | Atom of c_type
+[@@deriving eq, ord]
 
 and field = { offset : int; size : int; ty : ty }
 
@@ -42,7 +86,7 @@ let rec show_ty = function
   | Top -> "⊤"
   | Bottom -> "⊥"
   | Atom c -> show_c_type c
-  | TypeVar id -> id
+  | TypeVar id -> TypeVar.show id
   | Recursive (t1, t2) -> Printf.sprintf "μ%s.%s" (show_ty t1) (show_ty t2)
   | Paren ty -> Printf.sprintf "(%s)" @@ show_ty ty
   | Union (t1, t2) -> Printf.sprintf "%s ⊔ %s" (show_ty t1) (show_ty t2)
@@ -50,8 +94,8 @@ let rec show_ty = function
   | Pointer (lb, ub) -> Printf.sprintf "ptr(%s, %s)" (show_ty lb) (show_ty ub)
   | Function (name, ins, outs) ->
       Printf.sprintf "(%s) → (%s)"
-        (Iter.to_string show_ty (StringMap.values ins))
-        (Iter.to_string show_ty (StringMap.values outs))
+        (Iter.to_string show_ty (TVMap.values ins))
+        (Iter.to_string show_ty (TVMap.values outs))
   | Field field -> show_field field
   | Record fields -> Printf.sprintf "{ %s }" @@ List.to_string show_field fields
 
@@ -66,8 +110,8 @@ let rec fold_ty f acc ty =
   | Union (a, b) | Sect (a, b) -> fold_ty f (fold_ty f acc a) b
   | Pointer (lb, ub) -> fold_ty f (fold_ty f acc lb) ub
   | Function (name, ins, outs) ->
-      let acc = StringMap.fold (fun k v acc -> fold_ty f v acc) ins acc in
-      StringMap.fold (fun k v acc -> fold_ty f v acc) ins acc
+      let acc = TVMap.fold (fun k v acc -> fold_ty f v acc) ins acc in
+      TVMap.fold (fun k v acc -> fold_ty f v acc) ins acc
   | Field { ty } -> fold_ty f acc ty
   | Record fields ->
       List.fold_left (fun acc { ty } -> fold_ty f acc ty) acc fields
@@ -76,7 +120,7 @@ let rec compare_ty type1 type2 =
   match (type1, type2) with
   | Top, Top | Bottom, Bottom -> 0
   | Atom a, Atom b -> compare_c_type a b
-  | TypeVar a, TypeVar b -> String.compare a b
+  | TypeVar a, TypeVar b -> TypeVar.compare a b
   | Recursive (a, b), Recursive (c, d) ->
       let c = compare_ty a c in
       if c <> 0 then c else compare_ty b d
@@ -94,8 +138,8 @@ let rec compare_ty type1 type2 =
       let c = String.compare name name2 in
       if c <> 0 then c
       else
-        let c = StringMap.compare compare_ty ins ins2 in
-        if c <> 0 then c else StringMap.compare compare_ty outs outs2
+        let c = TVMap.compare compare_ty ins ins2 in
+        if c <> 0 then c else TVMap.compare compare_ty outs outs2
   | ( Field { offset; size; ty },
       Field { offset = offset2; size = size2; ty = ty2 } ) ->
       let c = compare offset offset2 in
@@ -116,16 +160,16 @@ module TySet = Set.Make (struct
 end)
 
 type type_constraint = { lb : TySet.t; ub : TySet.t }
-type constraint_state = type_constraint StringMap.t
+type constraint_state = type_constraint TVMap.t
 
 let show_ty_set ts = TySet.to_list ts |> List.map show_ty |> String.concat ", "
 
-let show_constraint_state (m : type_constraint StringMap.t) : string =
-  StringMap.bindings m
-  |> List.map (fun (name, { lb; ub }) ->
-      Printf.sprintf "%s: lower [%s], upper [%s]" name (show_ty_set lb)
-        (show_ty_set ub))
-  |> String.concat "\n"
+let show_constraint_state (m : type_constraint TVMap.t) : string =
+  TVMap.to_iter m
+  |> Iter.map (fun (name, { lb; ub }) ->
+      Printf.sprintf "%s: lower [%s], upper [%s]" (TypeVar.show name)
+        (show_ty_set lb) (show_ty_set ub))
+  |> Iter.concat_str
 
 type sigma =
   | Ep
@@ -146,10 +190,11 @@ let show_sigma (sigma : sigma) =
 
 let transfer_func state (input : sigma) = Top
 
-let show_coalesced_types (m : ty StringMap.t) : string =
-  StringMap.bindings m
-  |> List.map (fun (name, ty) -> Printf.sprintf "%s: %s" name (show_ty ty))
-  |> String.concat "\n"
+let show_coalesced_types (m : ty TVMap.t) : string =
+  TVMap.to_iter m
+  |> Iter.map (fun (name, ty) ->
+      Printf.sprintf "%s: %s" (TypeVar.show name) (show_ty ty))
+  |> Iter.to_string ~sep:"\n" id
 
 let rec coalesce_types (constraint_set : constraint_state)
     (recursive_set : TySet.t) (polarity : int) (tau : ty) : ty =
@@ -168,14 +213,14 @@ let rec coalesce_types (constraint_set : constraint_state)
       (* This might be useless, but just in case there are exprs in function calls *)
       Function
         ( name,
-          StringMap.map (recursive_call polarity) ins,
-          StringMap.map (recursive_call polarity) outs )
+          TVMap.map (recursive_call polarity) ins,
+          TVMap.map (recursive_call polarity) outs )
   | TypeVar a -> (
       match TySet.find_opt tau recursive_set with
       | Some c -> c
       | None -> (
           let bounds =
-            match StringMap.find_opt a constraint_set with
+            match TVMap.find_opt a constraint_set with
             | Some { lb; ub } -> if polarity = 1 then lb else ub
             | None -> TySet.empty (* TODO: Should never occur *)
           in
@@ -203,18 +248,18 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
         if Var.is_local a then
           let a =
             if String.starts_with ~prefix:"Stack" (Var.name a) then
-              Printf.sprintf "%s_%s" (Var.name a) (ID.name block_id)
-            else Var.name a
+              TypeVar.create (Var.name a) ~stmt:(ID.index block_id)
+            else TypeVar.create (Var.name a)
           in
           TypeVar a
         else
-        (*
+          (*
             NOTE:
                 Memory analysis has the information that can get extra
                 detail here, however that information is not avaliable
                 outs
         *)
-          TypeVar (Var.name a)
+          TypeVar (TypeVar.create (Var.name a))
     | Constant op -> (
         match op with
         | `Bool _ -> Atom C_Bool
@@ -232,7 +277,8 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
         | `Extract (finish, rt) ->
             let size = finish - rt in
             let name =
-              Printf.sprintf "Extraction_%d_%s" stmt_number (ID.name block_id)
+              TypeVar.create (ID.name block_id) ~op:`Extract
+              (*Printf.sprintf "Extraction_%d_%s" stmt_number (ID.name block_id)*)
             in
             let fields = [ { offset = rt; size; ty = TypeVar name } ] in
             Record fields
@@ -270,15 +316,15 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
     | ApplyFun (a, b) -> Top
     | Binding (vars, b) -> Top
   in
-  let add_ub st name ty =
-    StringMap.update name
+  let add_ub st (name : TypeVar.t) ty =
+    TVMap.update name
       (function
         | None -> Some { lb = TySet.empty; ub = TySet.singleton ty }
         | Some c -> Some { c with ub = TySet.add ty c.ub })
       st
   in
   let add_lb st name ty =
-    StringMap.update name
+    TVMap.update name
       (function
         | None -> Some { ub = TySet.empty; lb = TySet.singleton ty }
         | Some c -> Some { c with lb = TySet.add ty c.lb })
@@ -307,7 +353,7 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
     | TypeVar a, TypeVar b -> (
         (* The right hand side is a type variable *)
         let st = add_ub st a type1 in
-        let bounds = StringMap.get a st in
+        let bounds = TVMap.find_opt a st in
         match bounds with
         | Some { lb } ->
             TySet.fold (fun bound st -> constrain st bound type1) lb st
@@ -316,7 +362,7 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
     | _, TypeVar a -> (
         (* The right hand side is not a type variable *)
         let st = add_lb st a type0 in
-        let bounds = StringMap.get a st in
+        let bounds = TVMap.find_opt a st in
         match bounds with
         | Some { ub } ->
             TySet.fold (fun bound st -> constrain st type0 bound) ub st
@@ -339,9 +385,10 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
             let lhs =
               (* WARN: This exact code is used else where and can be made into a function probs *)
               if String.starts_with ~prefix:"Stack" (Var.name lhs) then
-                Printf.sprintf "%s_%s" (Var.name lhs) (ID.name block_id)
-              else Var.name lhs
+                TypeVar.create (Var.name lhs) ~stmt:(ID.index block_id)
+              else TypeVar.create (Var.name lhs)
             in
+
             constrain st
               (constrain_expr st (BasilExpr.unfix expr))
               (TypeVar lhs))
@@ -350,29 +397,41 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
   (* TODO: unsure about store but relativly confident about load *)
   | Stmt.Instr_Load { lhs; mem; cells; addr; endian } ->
       let st =
-        add_ub st (Var.name lhs)
+        add_ub st
+          (TypeVar.create (Var.name lhs))
           (Pointer
-             ( TypeVar (Int.to_string stmt_number ^ "_a_load"),
-               TypeVar (Int.to_string stmt_number ^ "_b_load") ))
+             ( TypeVar (TypeVar.create "a" ~op:`Load ~stmt:stmt_number),
+               TypeVar (TypeVar.create "b" ~op:`Load ~stmt:stmt_number) ))
       in
-      add_ub st (Int.to_string stmt_number ^ "_a_load")
-      @@ TypeVar (Int.to_string stmt_number ^ "_b_load")
+      add_ub st (TypeVar.create ~stmt:stmt_number ~op:`Load "a")
+      @@ TypeVar (TypeVar.create "b" ~stmt:stmt_number ~op:`Load)
   | Stmt.Instr_Store { lhs; mem; cells; value; addr; endian } ->
       let st =
-        add_ub st (Var.name lhs)
+        add_ub st
+          (TypeVar.create @@ Var.name lhs)
           (Pointer
-             ( TypeVar (Int.to_string stmt_number ^ "_a_store"),
-               TypeVar (Int.to_string stmt_number ^ "_b_store") ))
+             ( TypeVar (TypeVar.create "a" ~op:`Store ~stmt:stmt_number),
+               TypeVar (TypeVar.create "b" ~op:`Store ~stmt:stmt_number) ))
       in
-      add_ub st (Int.to_string stmt_number ^ "_a_store")
-      @@ TypeVar (Int.to_string stmt_number ^ "_b_store")
+      add_ub st (TypeVar.create "a" ~op:`Store ~stmt:stmt_number)
+      @@ TypeVar (TypeVar.create "b" ~op:`Store ~stmt:stmt_number)
   | Stmt.Instr_Call { lhs; args; procid } ->
       let args =
-        StringMap.map (fun v -> constrain_expr st @@ BasilExpr.unfix v) args
+        StringMap.to_iter args
+        |> Iter.map (fun (k, v) ->
+            ( TypeVar.create k ~op:(`Param procid),
+              constrain_expr st @@ BasilExpr.unfix v ))
+        |> TVMap.of_iter
       in
-      let rets = StringMap.map (fun v -> TypeVar (Var.name v)) lhs in
+      let rets =
+        StringMap.to_iter lhs
+        |> Iter.map (fun (k, v) ->
+            ( TypeVar.create k,
+              TypeVar (TypeVar.create ~op:(`Param procid) @@ Var.name v) ))
+        |> TVMap.of_iter
+      in
       let func = Function (ID.name procid, args, rets) in
-      add_ub st (ID.name procid) func
+      add_ub st (TypeVar.create @@ ID.name procid) func
   (* TODO: Will need to ask what these actually mean / do *)
   | Stmt.Instr_IntrinCall _ -> st
   | Stmt.Instr_IndirectCall _ -> st
@@ -389,20 +448,23 @@ let check_proc (prog : Program.t) st p =
 
 let transform (prog : Program.t) =
   let type_constraint_map =
-    ID.Map.values prog.procs |> Iter.fold (check_proc prog) StringMap.empty
+    ID.Map.values prog.procs |> Iter.fold (check_proc prog) TVMap.empty
   in
   print_string "\n === Type Constraints === \n";
   print_string @@ show_constraint_state type_constraint_map;
   (* WARN: I think the below code is off as I should start with the variables upper bounds instantly and union etc. them together *)
-  let types =
-    StringMap.mapi
-      (fun name { lb; ub } ->
-        TySet.fold
-          (fun ty (acc : ty) ->
-            let a = coalesce_types type_constraint_map TySet.empty (-1) ty in
-            match acc with Top -> a | _ -> Sect (acc, a))
-          ub Top)
-      type_constraint_map
+  let types : ty TVMap.t =
+    TVMap.to_iter type_constraint_map
+    |> Iter.map (fun (name, { lb; ub }) ->
+        let folded : ty =
+          TySet.fold
+            (fun ty (acc : ty) ->
+              let a = coalesce_types type_constraint_map TySet.empty (-1) ty in
+              match acc with Top -> a | _ -> Sect (acc, a))
+            ub Top
+        in
+        (name, folded))
+    |> TVMap.of_iter
   in
   print_string "\n\n === Coalesced Types === \n";
   print_string @@ show_coalesced_types types;
