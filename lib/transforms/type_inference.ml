@@ -153,21 +153,23 @@ let show_coalesced_types (m : ty StringMap.t) : string =
 
 let rec coalesce_types (constraint_set : constraint_state)
     (recursive_set : TySet.t) (polarity : int) (tau : ty) : ty =
-  let recursive_call =
-    coalesce_types constraint_set recursive_set (-polarity)
-  in
+  let recursive_call = coalesce_types constraint_set recursive_set in
   match tau with
-  | Pointer (a, b) -> Pointer (recursive_call a, recursive_call b)
+  | Field { ty } -> recursive_call polarity ty
+  | Record fields ->
+      Record
+        (List.map
+           (fun { offset; size; ty } ->
+             { offset; size; ty = recursive_call polarity ty })
+           fields)
+  | Pointer (a, b) ->
+      Pointer (recursive_call (-polarity) a, recursive_call (-polarity) b)
   | Function (name, ins, outs) ->
       (* This might be useless, but just in case there are exprs in function calls *)
       Function
         ( name,
-          StringMap.map
-            (coalesce_types constraint_set recursive_set polarity)
-            ins,
-          StringMap.map 
-            (coalesce_types constraint_set recursive_set polarity)
-            outs)
+          StringMap.map (recursive_call polarity) ins,
+          StringMap.map (recursive_call polarity) outs )
   | TypeVar a -> (
       match TySet.find_opt tau recursive_set with
       | Some c -> c
@@ -189,7 +191,8 @@ let rec coalesce_types (constraint_set : constraint_state)
               bounds tau
           in
           match rec_check with None -> s | Some c -> Recursive (tau, s)))
-  | _ -> Top
+  | Atom c -> tau
+  | _ -> Top (* Top, Bottom, Union, Sect, Paren *)
 
 let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
     stmt_number block_id =
@@ -205,19 +208,12 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
           in
           TypeVar a
         else
-          (* let splits = String.split_on_char '_' (Var.name a) in *)
-          (* let start = int_of_string @@ List.hd @@ List.tl splits in *)
-          (* let finish = int_of_string @@ List.hd @@ List.tl @@ List.tl splits in *)
-          (* let size = finish - start in *)
-          (* let global_addr = 131120 in *)
-          (* let offset = global_addr - start in *)
-          (* List.fold_left (fun acc hd -> print_string @@ Var.to_string (snd hd) ^ "\n" ) () @@ Var.Decls.to_list prog.globals; *)
-          (* (* *)
-            (* NOTE: Memory analysis has the information that can get extra *)
-                  (* detail here, however that information is not avaliable *)
-                  (* outs *)
-          (* *) *)
-          (* Field { size; offset; ty = TypeVar (Var.name a) } *)
+        (*
+            NOTE:
+                Memory analysis has the information that can get extra
+                detail here, however that information is not avaliable
+                outs
+        *)
           TypeVar (Var.name a)
     | Constant op -> (
         match op with
