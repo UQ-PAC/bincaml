@@ -259,7 +259,7 @@ module IDEGraph = struct
                (fun st (i, s) ->
                  let stmt_id : Loc.stmt_id = { proc_id; block; offset = i } in
                  match s with
-                 | Stmt.Instr_Call _ as c -> add_call dir prog st stmt_id c
+                 | Stmt.Instr_Call _ -> add_call dir prog st stmt_id s
                  | stmt ->
                      { st with stmts = (fst st.stmts, stmt :: snd st.stmts) })
                is
