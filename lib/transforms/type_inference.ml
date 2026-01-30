@@ -337,6 +337,8 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
   *)
   let rec constrain (st : constraint_state) (type0 : ty) (type1 : ty) :
       constraint_state =
+    let n = "constrain (" ^ show_ty type0 ^ ") (" ^ show_ty type1 ^ ")" in
+    Trace_core.with_span ~__FUNCTION__ ~__FILE__ ~__LINE__ n @@ fun _ ->
     match (type0, type1) with
     | Top, _ | _, Top | Bottom, _ | _, Bottom -> st
     (*
@@ -349,8 +351,11 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
     *)
     | Pointer (type0_a, type0_b), Pointer (type1_a, type1_b) ->
         (* Pointer constraints taken from BinSub *)
+        Trace_core.with_span ~__FILE__ ~__LINE__ "constrain_ptr" @@ fun _ ->
         constrain (constrain st type1_a type0_a) type0_b type1_b
     | TypeVar a, TypeVar b -> (
+        Trace_core.with_span ~__FILE__ ~__LINE__ "constrain_tvarpair"
+        @@ fun _ ->
         (* The right hand side is a type variable *)
         let st = add_ub st a type1 in
         let bounds = TVMap.find_opt a st in
@@ -377,6 +382,7 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
   | Stmt.Instr_Assert _ | Stmt.Instr_Assume _ -> st
   (* Deal with assignment cases *)
   | Stmt.Instr_Assign ls ->
+      Trace_core.with_span ~__FILE__ ~__LINE__ "constrain_assign" @@ fun _ ->
       List.fold_left
         (fun st (lhs, expr) ->
           (* Ignore _PC variables *)
@@ -396,6 +402,7 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
   (* Pointer stuff here *)
   (* TODO: unsure about store but relativly confident about load *)
   | Stmt.Instr_Load { lhs; mem; cells; addr; endian } ->
+      Trace_core.with_span ~__FILE__ ~__LINE__ "constrain_load" @@ fun _ ->
       let st =
         add_ub st
           (TypeVar.create (Var.name lhs))
@@ -406,6 +413,7 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
       add_ub st (TypeVar.create ~stmt:stmt_number ~op:`Load "a")
       @@ TypeVar (TypeVar.create "b" ~stmt:stmt_number ~op:`Load)
   | Stmt.Instr_Store { lhs; mem; cells; value; addr; endian } ->
+      Trace_core.with_span ~__FILE__ ~__LINE__ "constrain_store" @@ fun _ ->
       let st =
         add_ub st
           (TypeVar.create @@ Var.name lhs)
@@ -416,6 +424,7 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
       add_ub st (TypeVar.create "a" ~op:`Store ~stmt:stmt_number)
       @@ TypeVar (TypeVar.create "b" ~op:`Store ~stmt:stmt_number)
   | Stmt.Instr_Call { lhs; args; procid } ->
+      Trace_core.with_span ~__FILE__ ~__LINE__ "constrain_call" @@ fun _ ->
       let args =
         StringMap.to_iter args
         |> Iter.map (fun (k, v) ->
