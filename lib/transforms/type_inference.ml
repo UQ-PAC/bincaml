@@ -8,7 +8,9 @@ open Expr
       - Registers are like python vars where they can be assigned to anything not matther the type
       - Stack variables might be the same, or at least need to be renamed as in each proc they are different
 
-      - They seem to be just the one type but idk if ali actually understood my question fully     
+      - They seem to be just the one type but idk if ali actually understood my question fully
+
+    - Fully represent TypeVar's etc with IDs
 *)
 
 type c_type = C_Int | C_Int64 | C_Float | C_Bool [@@deriving ord, eq]
@@ -156,7 +158,7 @@ let rec coalesce_types (constraint_set : constraint_state)
     (recursive_set : TySet.t) (polarity : int) (tau : ty) : ty =
   let recursive_call = coalesce_types constraint_set recursive_set in
   match tau with
-  | Field _ | Record _ -> Top
+  | Field _ | Record _ -> tau
   | Pointer (a, b) ->
       Pointer (recursive_call (-polarity) a, recursive_call (-polarity) b)
   | Function (name, ins, outs) ->
@@ -167,25 +169,28 @@ let rec coalesce_types (constraint_set : constraint_state)
           StringMap.map (recursive_call polarity) outs )
   | TypeVar a -> (
       match TySet.find_opt tau recursive_set with
-      | Some c -> c
+      | Some c -> c (* Seen before *)
       | None -> (
+          (* Has not been seen *)
           let bounds =
+            (* Get the bounds for the variable depending on the polarity *)
             match StringMap.find_opt a constraint_set with
-            | Some { lb; ub } -> if polarity = 1 then lb else ub
-            | None -> TySet.empty (* TODO: Should never occur *)
+            | Some { lb; ub } -> if polarity <> 1 then lb else ub
+            | None -> TySet.empty
           in
+          (* If tau is in bounds then we have a recursive type *)
           let rec_check = TySet.find_opt tau bounds in
           let recursive_set = TySet.add tau recursive_set in
           let s =
             TySet.fold
-              (fun x a ->
+              (fun bound type_cons ->
                 let y =
-                  coalesce_types constraint_set recursive_set polarity x
+                  coalesce_types constraint_set recursive_set polarity bound
                 in
-                if polarity = 1 then Union (a, y) else Sect (a, y))
+                if polarity = 1 then Union (type_cons, y) else Sect (type_cons, y))
               bounds tau
           in
-          match rec_check with None -> s | Some c -> Recursive (tau, s)))
+          match rec_check with None -> s | Some _ -> Recursive (tau, s)))
   | Atom _ -> tau
   | _ -> Top (* Top, Bottom, Union, Sect, Paren *)
 
@@ -379,13 +384,11 @@ let transform (prog : Program.t) =
   let type_constraint_map =
     ID.Map.values prog.procs |> Iter.fold (check_proc prog) StringMap.empty
   in
-  Printf.printf "\n Type Constraints completed %!\n";
-  (* print_string "\n === Type Constraints === \n"; *)
-  (* print_string @@ show_constraint_state type_constraint_map; *)
-  (* WARN: I think the below code is off as I should start with the variables upper bounds instantly and union etc. them together *)
+  print_string "\n === Type Constraints === \n";
+  print_string @@ show_constraint_state type_constraint_map;
   let types =
     StringMap.mapi
-      (fun name { lb; ub } ->
+      (fun name { ub } ->
         TySet.fold
           (fun ty (acc : ty) ->
             let a = coalesce_types type_constraint_map TySet.empty (-1) ty in
