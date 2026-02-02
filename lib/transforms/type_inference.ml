@@ -4,12 +4,6 @@ open Expr
 
 (*
   TODO List:
-    - Ask about registers / stacks
-      - Registers are like python vars where they can be assigned to anything not matther the type
-      - Stack variables might be the same, or at least need to be renamed as in each proc they are different
-
-      - They seem to be just the one type but idk if ali actually understood my question fully
-
     - Fully represent TypeVar's etc with IDs
 *)
 
@@ -187,7 +181,8 @@ let rec coalesce_types (constraint_set : constraint_state)
                 let y =
                   coalesce_types constraint_set recursive_set polarity bound
                 in
-                if polarity = 1 then Union (type_cons, y) else Sect (type_cons, y))
+                if polarity = 1 then Union (type_cons, y)
+                else Sect (type_cons, y))
               bounds tau
           in
           match rec_check with None -> s | Some _ -> Recursive (tau, s)))
@@ -197,15 +192,17 @@ let rec coalesce_types (constraint_set : constraint_state)
 let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
     stmt_number block_id =
   let open AbstractExpr in
+  let rename_stack (name : string) : string =
+    if String.starts_with ~prefix:"Stack" name then
+      Printf.sprintf "%s_%s" name (ID.name block_id)
+    else name
+  in
+
   let constrain_expr (expr : 'e BasilExpr.abstract_expr) =
     match expr with
     | RVar a ->
         if Var.is_local a then
-          let a =
-            if String.starts_with ~prefix:"Stack" (Var.name a) then
-              Printf.sprintf "%s_%s" (Var.name a) (ID.name block_id)
-            else Var.name a
-          in
+          let a = rename_stack @@ Var.name a in
           TypeVar a
         else
           (*
@@ -222,12 +219,9 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
         | `Integer _ -> Atom C_Int)
     | UnaryExpr (op, a) -> (
         match op with
-        | `Forall -> Top
-        | `BVNEG -> Top
         | `BoolNOT -> Atom C_Bool
-        | `BOOLTOBV1 -> Atom C_Bool (* Unsure if this should be this *)
+        | `BOOLTOBV1 -> Atom C_Bool (* TODO: Unsure if this should be this *)
         | `INTNEG -> Atom C_Int
-        | `Old -> Top
         | `Exists -> Atom C_Bool (* TODO: Confirm *)
         | `Extract (finish, rt) ->
             let size = finish - rt in
@@ -237,12 +231,18 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
             (* Printf.printf "%s\n" name; *)
             let field = { offset = rt; size; tyName } in
             Field field
+        | `Old -> Top
+        | `Forall -> Top
+        | `BVNEG -> Top
         | `SignExtend _ -> Top
         | `BVNOT -> Top
         | `ZeroExtend _ -> Top
         | _ -> Top)
     | BinaryExpr (op, l, r) -> (
         match op with
+        | `INTMOD | `INTSUB | `INTDIV | `INTADD | `INTMUL -> Atom C_Int
+        | `NEQ | `EQ | `INTLT | `INTLE | `BVULE | `BVULT | `BVSLE | `BVSLT ->
+            Atom C_Bool
         (* Help *)
         | `IMPLIES -> Top
         (* Help *)
@@ -263,9 +263,6 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
         | `BVAND -> Top
         | `BVXOR -> Top
         | `BVOR -> Top
-        | `INTMOD | `INTSUB | `INTDIV | `INTADD | `INTMUL -> Atom C_Int
-        | `NEQ | `EQ | `INTLT | `INTLE | `BVULE | `BVULT | `BVSLE | `BVSLT ->
-            Atom C_Bool
         | _ -> Top)
     | ApplyIntrin (op, args) -> Top
     | ApplyFun (a, b) -> Top
@@ -331,10 +328,8 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
           if String.starts_with ~prefix:"_PC" (Var.name lhs) then st
           else
             let lhs =
+              rename_stack @@ Var.name lhs
               (* WARN: This exact code is used else where and can be made into a function probs *)
-              if String.starts_with ~prefix:"Stack" (Var.name lhs) then
-                Printf.sprintf "%s_%s" (Var.name lhs) (ID.name block_id)
-              else Var.name lhs
             in
             let constrained_expr = constrain_expr (BasilExpr.unfix expr) in
             constrain st constrained_expr (TypeVar lhs))
