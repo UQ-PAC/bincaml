@@ -11,18 +11,18 @@ let bv_ops_partial = [ `BVSREM; `BVSDIV; `BVUREM; `BVUDIV; `BVSMOD ]
 let bv_ops_total =
   [
     `BVADD;
-    `BVASHR;
+    `BVSUB;
     `BVMUL;
     `BVSHL;
     `BVNAND;
     `BVXOR;
     `BVOR;
-    `BVSUB;
     `BVLSHR;
     `BVASHR;
     `BVAND;
   ]
 
+let multi = [ `BVADD; `BVOR; `BVXOR; `BVAND ]
 let gen_width = int_range 1 62
 let arb_bv_op : Ops.BVOps.binary gen = oneof_list bv_ops_total
 
@@ -70,11 +70,18 @@ let gen_unop_advanced gen_bvexpr wd =
   let* extr_gen_w = int_range wd (wd + 64) in
   let* hi_excl = int_range wd extr_gen_w in
   let lo_incl = hi_excl - wd in
+  let multi () =
+    let nmu = int_range 2 12 in
+    let* op = oneof_list multi in
+    let* args = list_size nmu (gen_bvexpr wd) in
+    return (BasilExpr.applyintrin ~op @@ args)
+  in
   oneof
     ([
        gen_bvexpr w2 >|= BasilExpr.sign_extend ~n_prefix_bits:w1;
        gen_bvexpr w2 >|= BasilExpr.zero_extend ~n_prefix_bits:w1;
        BasilExpr.concat <$> gen_bvexpr w1 <*> gen_bvexpr w2;
+       multi ();
      ]
     @
     if wd > 0 then
