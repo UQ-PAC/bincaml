@@ -374,8 +374,8 @@ module BasilExpr = struct
   let sign_extend ~n_prefix_bits (e : t) : t =
     unexp ~op:(`SignExtend n_prefix_bits) e
 
-  let extract ~hi_incl ~lo_excl (e : t) : t =
-    unexp ~op:(`Extract (hi_incl, lo_excl)) e
+  let extract ~hi_excl ~lo_incl (e : t) : t =
+    unexp ~op:(`Extract (hi_excl, lo_incl)) e
 
   let concat (e : t) (f : t) : t = applyintrin ~op:`BVConcat [ e; f ]
   let forall ~bound p = unexp ~op:`Forall (binding bound p)

@@ -19,15 +19,26 @@ let bv_ops_total =
     `BVOR;
     `BVSUB;
     `BVLSHR;
+    `BVASHR;
     `BVAND;
   ]
 
 let gen_width = int_range 1 62
 let arb_bv_op : Ops.BVOps.binary gen = oneof_list bv_ops_total
 
+let random_binary_string st length =
+  (* 0b011101... *)
+  let s = Bytes.create (length + 2) in
+  Bytes.set s 0 '0';
+  Bytes.set s 1 'b';
+  for i = 0 to length - 1 do
+    Bytes.set s (i + 2) (if Random.State.bool st then '0' else '1')
+  done;
+  Bytes.unsafe_to_string s
+
 let gen_bv ?(min = 0) w =
-  let* v = int_range min (Bitvec.ones ~size:w |> Bitvec.value |> Z.to_int) in
-  return (Bitvec.of_int ~size:w v)
+  let* v = fun st -> Z.of_string @@ random_binary_string st w in
+  return (Bitvec.create ~size:w v)
 
 let gen_unop l =
   let* op = oneof_list bv_unop in
@@ -48,15 +59,27 @@ let gen_bvconst ?min w =
 let make_bvconst wd x = BasilExpr.bvconst @@ Bitvec.of_int ~size:wd x
 let ensure_nonzero wd e = BasilExpr.binexp ~op:`BVOR e (make_bvconst wd 1)
 
+let gen_extract w =
+  let* lo = int_range 0 w in
+  let* hi = int_range lo w in
+  return (`Extract (hi, lo))
+
 let gen_unop_advanced gen_bvexpr wd =
   let* w1 = int_range 0 wd in
   let w2 = wd - w1 in
+  let* extr_gen_w = int_range wd (wd + 64) in
+  let* hi_excl = int_range wd extr_gen_w in
+  let lo_incl = hi_excl - wd in
   oneof
-    [
-      gen_bvexpr w2 >|= BasilExpr.sign_extend ~n_prefix_bits:w1;
-      gen_bvexpr w2 >|= BasilExpr.zero_extend ~n_prefix_bits:w1;
-      BasilExpr.concat <$> gen_bvexpr w1 <*> gen_bvexpr w2;
-    ]
+    ([
+       gen_bvexpr w2 >|= BasilExpr.sign_extend ~n_prefix_bits:w1;
+       gen_bvexpr w2 >|= BasilExpr.zero_extend ~n_prefix_bits:w1;
+       BasilExpr.concat <$> gen_bvexpr w1 <*> gen_bvexpr w2;
+     ]
+    @
+    if wd > 0 then
+      [ gen_bvexpr extr_gen_w >|= BasilExpr.extract ~hi_excl ~lo_incl ]
+    else [])
 (* >|= fun e -> *)
 (* assert (BasilExpr.type_of e = Bitvector wd); *)
 (* e *)
