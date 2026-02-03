@@ -81,8 +81,7 @@ module PassManager = struct
     {
       name = "type-check";
       apply = ProcCheck Transforms.Type_check.check;
-      doc =
-        "Fail if the IR program is not type correct";
+      doc = "Fail if the IR program is not type correct";
     }
 
   let passes =

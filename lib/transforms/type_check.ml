@@ -9,7 +9,10 @@ type type_error = TypeError of { text : string }
 let type_err fmt stmt_id block_id =
   Printf.ksprintf
     (fun text ->
-      TypeError { text = Printf.sprintf "%s at statement %d in %s" text stmt_id block_id })
+      TypeError
+        {
+          text = Printf.sprintf "%s at statement %d in %s" text stmt_id block_id;
+        })
     fmt
 
 let show_type_error err = match err with TypeError { text } -> text
