@@ -45,6 +45,26 @@ module EvalExprLog (V : ValueAbstraction) = struct
     V.E.cata eval_alg expr
 end
 
+module EvalExprWithType
+    (V :
+      TypedValueAbstraction with module E = Expr.BasilExpr and type ty = Types.t) =
+struct
+  type t
+
+  let eval read expr =
+    let open Expr.AbstractExpr in
+    let eval_alg e =
+      match e with
+      | RVar v -> read v
+      | Constant c -> V.eval_const c
+      | UnaryExpr (op, e) -> V.eval_unop op e
+      | BinaryExpr (op, a, b) -> V.eval_binop op a b
+      | ApplyIntrin (op, es) -> V.eval_intrin op es
+      | _ -> failwith "unsupported"
+    in
+    Expr.BasilExpr.fold_with_type eval_alg expr
+end
+
 module EvalExpr (V : ValueAbstraction) = struct
   type t
 

@@ -27,6 +27,20 @@ module type ValueAbstraction = sig
   val eval_intrin : E.intrin -> t list -> t
 end
 
+module type TypedValueAbstraction = sig
+  include Lattice
+  module E : Expr.ExprType
+
+  type ty
+
+  (** evaluate operators *)
+
+  val eval_const : E.const -> t
+  val eval_unop : E.unary -> t * ty -> t
+  val eval_binop : E.binary -> t * ty -> t * ty -> t
+  val eval_intrin : E.intrin -> (t * ty) list -> t
+end
+
 (** a value abstraction providing variable store/load operations *)
 module type StateAbstraction = sig
   type val_t
@@ -46,3 +60,8 @@ module type Domain = sig
   val transfer : t -> Program.stmt -> t
   val init : Program.proc -> t
 end
+
+module EvalWithType
+    (D : Lattice)
+    (V : ValueAbstraction with type t = D.t * Types.t) =
+struct end
