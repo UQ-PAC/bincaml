@@ -150,8 +150,8 @@ type sigma =
   | StoreLabel
   | LoadLabel
   | Reclabel of int * int
-  | FnIn of int
-  | FnOut of int
+  | FnIn of string
+  | FnOut of string
 
 let show_sigma (sigma : sigma) =
   match sigma with
@@ -159,13 +159,51 @@ let show_sigma (sigma : sigma) =
   | StoreLabel -> "Store Label"
   | LoadLabel -> "Load Label"
   | Reclabel (n, m) -> Printf.sprintf "Record Label %d %d" n m
-  | FnIn n -> Printf.sprintf "Function in %d" n
-  | FnOut n -> Printf.sprintf "Function out %d" n
+  | FnIn n -> Printf.sprintf "Function in %s" n
+  | FnOut n -> Printf.sprintf "Function out %s" n
 
 let gen = ID.make_gen ()
-let transfer_func state (input : sigma) = Top
 
-let show_coalesced_types (m : ty StringMap.t) : string =
+let transfer_func (state : ty) (input : sigma) : ty =
+  let error =
+    Printf.sprintf "illegal input %s while in state %s" (show_sigma input)
+      (show_ty state)
+  in
+  match state with
+  | Pointer (ty0, ty1) -> (
+      match input with
+      | StoreLabel -> ty0
+      | LoadLabel -> ty1
+      | _ -> failwith error)
+  | Record field_list -> (
+      match input with
+      | Reclabel (n, m) -> (
+          let field_list =
+            List.filter
+              (fun { offset; size; tyName } -> n = offset && m = size)
+              field_list
+          in
+          match field_list with
+          | [ a ] -> Field a
+          | [] -> failwith error
+          | _ -> failwith "big oops")
+      | _ -> failwith error)
+  (*
+    WARN: I think this depends on polarity
+  *)
+  | Union (_, ty) | Sect (ty, _) | Recursive (_, ty) -> (
+      match input with Ep -> ty | _ -> failwith error)
+  | Function (_, ins, outs) -> (
+      match input with
+      (* I could deal with none etc, but I want it to fail *)
+      | FnIn n when StringMap.mem n ins -> StringMap.find n ins
+      | FnOut n when StringMap.mem n outs -> StringMap.find n outs
+      | _ -> failwith error)
+  | _ -> failwith error
+
+let minimise_type ty = Top
+
+let show_type_map (m : ty StringMap.t) : string =
   StringMap.bindings m
   |> List.map (fun (name, ty) -> Printf.sprintf "%s: %s" name (show_ty ty))
   |> String.concat "\n"
@@ -402,6 +440,19 @@ let transform (prog : Program.t) =
           ub Top)
       type_constraint_map
   in
-  print_string "\n\n === Coalesced Types === \n";
-  print_string @@ show_coalesced_types types;
+  print_string "\n === Coalesced Types === \n";
+  print_string @@ show_type_map types;
+
+  (*
+    Possible speed up stratergy would to only many as many automata as we need.
+
+    So make an automata, and remove the types that are included in that automata from the string map,
+      so we will have a list of automata, and then for every Var.decl grab the minimised type and then lower it
+
+    This needs to passes of the program but I think the only other way would be to pass the program for
+     every line in the program.
+  *)
+  let types = StringMap.mapi (fun name ty -> minimise_type ty) types in
+  print_string "\n === Type Automata === \n";
+  print_string @@ show_type_map types;
   prog
