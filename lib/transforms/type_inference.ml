@@ -10,15 +10,11 @@ open Expr
 (*
   TODO: change to be a variable length bv and step away from int16 in favour of bv16
 *)
-type c_type = C_Int | C_Int8 | C_Int16 | C_Int32 | C_Int64 | C_Float | C_Bool
-[@@deriving ord, eq]
+type c_type = C_Int | C_BV of int | C_Float | C_Bool [@@deriving ord, eq]
 
 let show_c_type = function
   | C_Int -> "int"
-  | C_Int8 -> "int8"
-  | C_Int16 -> "int16"
-  | C_Int32 -> "int32"
-  | C_Int64 -> "int64"
+  | C_BV size -> "bv" ^ string_of_int size
   | C_Float -> "float"
   | C_Bool -> "bool"
 
@@ -166,14 +162,6 @@ let show_sigma (sigma : sigma) =
   | FnIn n -> Printf.sprintf "Function in %d" n
   | FnOut n -> Printf.sprintf "Function out %d" n
 
-let size_to_c_type (size : int) : ty =
-  match size with
-  | 8 -> Atom C_Int8
-  | 16 -> Atom C_Int16
-  | 32 -> Atom C_Int32
-  | 64 -> Atom C_Int64
-  | _ -> Atom C_Int
-
 let gen = ID.make_gen ()
 let transfer_func state (input : sigma) = Top
 
@@ -249,7 +237,7 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
     | Constant op -> (
         match op with
         | `Bool _ -> Atom C_Bool
-        | `Bitvector bv -> size_to_c_type @@ Bitvec.size bv
+        | `Bitvector bv -> Atom (C_BV (Bitvec.size bv))
         | `Integer _ -> Atom C_Int)
     | UnaryExpr (op, a) -> (
         match op with
@@ -284,7 +272,7 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
         | `BVSMOD (* Unsure but i just asked so don't wanna again *) | `BVSHL
         | `BVLSHR | `BVASHR -> (
             match BasilExpr.type_of l with
-            | Bitvector size -> size_to_c_type size
+            | Bitvector size -> Atom (C_BV size)
             | _ -> Top)
         (* Help *)
         | `BVNAND -> Top
