@@ -121,8 +121,9 @@ end)
 type type_constraint = { lb : TySet.t; ub : TySet.t }
 type constraint_state = type_constraint StringMap.t
 
-let constraint_state_equals {lb; ub} {lb = lb2; ub = ub2} =
-  if TySet.equal lb lb2 then (if TySet.equal ub ub2 then true else false) else false
+let constraint_state_equals { lb; ub } { lb = lb2; ub = ub2 } =
+  if TySet.equal lb lb2 then if TySet.equal ub ub2 then true else false
+  else false
 
 let show_ty_set ts = TySet.to_list ts |> List.map show_ty |> String.concat ", "
 
@@ -222,8 +223,7 @@ let rec coalesce_types (constraint_set : constraint_state)
   | Atom _ -> tau
   | _ -> Top (* Top, Bottom, Union, Sect, Paren *)
 
-let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
-    stmt_number proc_id =
+let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
   let open AbstractExpr in
   let rename_variable (name : string) : string =
     Printf.sprintf "%s_%s" (ID.name proc_id) name
@@ -388,15 +388,15 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
   *)
   | Stmt.Instr_IndirectCall _ -> st
 
-let check_block prog p st (_, b) =
+let check_block p st (_, b) =
   Block.stmts_iter b
   |> Iter.foldi
        (fun st stmt_number stmt ->
-         gen_constraint_set prog st stmt stmt_number @@ Procedure.id p)
+         gen_constraint_set st stmt stmt_number @@ Procedure.id p)
        st
 
 let check_proc (prog : Program.t) st p =
-  Procedure.iter_blocks_topo_fwd p |> Iter.fold (check_block prog p) st
+  Procedure.iter_blocks_topo_fwd p |> Iter.fold (check_block p) st
 
 let transform (prog : Program.t) =
   let type_constraint_map =
