@@ -22,3 +22,68 @@ let%test_unit "add bounds" =
   in
   let st2 = StringMap.of_list ls in
   assert (StringMap.equal constraint_state_equals st st2)
+
+let%test_unit "basic consistent constraint set" =
+  (*
+    var a = b;
+    var b = c;
+    var c = true;
+
+    b <= a
+    c <= b
+
+    c <= a
+
+    a: lower = [bool], upper = []
+    b: lower = [bool],     upper = [a]
+    c: lower = [bool],    upper = [b]
+  *)
+  let block =
+    {|
+memory shared $mem : (bv64 -> bv8);
+var $XF: bv1;
+var $YF: bv1;
+var $ZF: bv1;
+
+prog entry @main_4196260;
+
+proc @main_4196260 () -> ()
+[
+  block %main_entry [
+    $XF:bv1 := $YF:bv1;
+    $YF:bv1 := $ZF:bv1;
+    $ZF:bv1 := booltobv1(true);
+    goto(%main_basil_return_1);
+  ];
+  block %main_basil_return_1 [
+    return ();
+  ]
+];
+
+    |}
+  in
+  let lst =
+    Loader.Loadir.ast_of_string ~__LINE__ ~__FILE__ ~__FUNCTION__ block
+  in
+  let prog = lst.prog in
+  let st =
+    ID.Map.values prog.procs |> Iter.fold (check_proc prog) StringMap.empty
+  in
+  let ls =
+    [
+      ( "@main_4196260_$XF",
+        { lb = TySet.singleton @@ Atom C_Bool; ub = TySet.empty } );
+      ( "@main_4196260_$YF",
+        {
+          lb = TySet.singleton @@ Atom C_Bool;
+          ub = TySet.singleton @@ TypeVar "@main_4196260_$XF";
+        } );
+      ( "@main_4196260_$ZF",
+        {
+          lb = TySet.singleton @@ Atom C_Bool;
+          ub = TySet.singleton @@ TypeVar "@main_4196260_$YF";
+        } );
+    ]
+  in
+  let st2 = StringMap.of_list ls in
+  assert (StringMap.equal constraint_state_equals st st2)
