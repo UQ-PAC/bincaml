@@ -7,10 +7,17 @@ open Expr
     - Fully represent TypeVar's etc with IDs
 *)
 
-type c_type = C_Int | C_Int64 | C_Float | C_Bool [@@deriving ord, eq]
+(*
+  TODO: change to be a variable length bv and step away from int16 in favour of bv16
+*)
+type c_type = C_Int | C_Int8 | C_Int16 | C_Int32 | C_Int64 | C_Float | C_Bool
+[@@deriving ord, eq]
 
 let show_c_type = function
   | C_Int -> "int"
+  | C_Int8 -> "int8"
+  | C_Int16 -> "int16"
+  | C_Int32 -> "int32"
   | C_Int64 -> "int64"
   | C_Float -> "float"
   | C_Bool -> "bool"
@@ -114,6 +121,9 @@ end)
 type type_constraint = { lb : TySet.t; ub : TySet.t }
 type constraint_state = type_constraint StringMap.t
 
+let constraint_state_equals {lb; ub} {lb = lb2; ub = ub2} =
+  if TySet.equal lb lb2 then (if TySet.equal ub ub2 then true else false) else false
+
 let show_ty_set ts = TySet.to_list ts |> List.map show_ty |> String.concat ", "
 
 let show_constraint_state (m : type_constraint StringMap.t) : string =
@@ -122,6 +132,21 @@ let show_constraint_state (m : type_constraint StringMap.t) : string =
       Printf.sprintf "%s: lower [%s], upper [%s]" name (show_ty_set lb)
         (show_ty_set ub))
   |> String.concat "\n"
+
+(* Helpers to actually add something to the upper / lower bounds *)
+let add_ub st name ty =
+  StringMap.update name
+    (function
+      | None -> Some { lb = TySet.empty; ub = TySet.singleton ty }
+      | Some c -> Some { c with ub = TySet.add ty c.ub })
+    st
+
+let add_lb st name ty =
+  StringMap.update name
+    (function
+      | None -> Some { ub = TySet.empty; lb = TySet.singleton ty }
+      | Some c -> Some { c with lb = TySet.add ty c.lb })
+    st
 
 type sigma =
   | Ep
@@ -139,6 +164,14 @@ let show_sigma (sigma : sigma) =
   | Reclabel (n, m) -> Printf.sprintf "Record Label %d %d" n m
   | FnIn n -> Printf.sprintf "Function in %d" n
   | FnOut n -> Printf.sprintf "Function out %d" n
+
+let size_to_c_type (size : int) : ty =
+  match size with
+  | 8 -> Atom C_Int8
+  | 16 -> Atom C_Int16
+  | 32 -> Atom C_Int32
+  | 64 -> Atom C_Int64
+  | _ -> Atom C_Int
 
 let gen = ID.make_gen ()
 let transfer_func state (input : sigma) = Top
@@ -190,53 +223,55 @@ let rec coalesce_types (constraint_set : constraint_state)
   | _ -> Top (* Top, Bottom, Union, Sect, Paren *)
 
 let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
-    stmt_number block_id =
+    stmt_number proc_id =
   let open AbstractExpr in
-  let rename_stack (name : string) : string =
-    if String.starts_with ~prefix:"Stack" name then
-      Printf.sprintf "%s_%s" name (ID.name block_id)
-    else name
+  let rename_variable (name : string) : string =
+    Printf.sprintf "%s_%s" (ID.name proc_id) name
   in
 
+  (*
+    TODO:
+          Restructure this function to actually allow constraints to be generated at this stage
+  *)
   let constrain_expr (expr : 'e BasilExpr.abstract_expr) =
     match expr with
     | RVar a ->
-        if Var.is_local a then
-          let a = rename_stack @@ Var.name a in
-          TypeVar a
+        let name = rename_variable @@ Var.name a in
+        if Var.is_local a then TypeVar name
         else
           (*
             NOTE:
                 Memory analysis has the information that can get extra
                 detail here, however that information is not avaliable
                 outs
-        *)
-          TypeVar (Var.name a)
+          *)
+          TypeVar name
     | Constant op -> (
         match op with
         | `Bool _ -> Atom C_Bool
-        | `Bitvector bv -> Top
+        | `Bitvector bv -> size_to_c_type @@ Bitvec.size bv
         | `Integer _ -> Atom C_Int)
     | UnaryExpr (op, a) -> (
         match op with
         | `BoolNOT -> Atom C_Bool
-        | `BOOLTOBV1 -> Atom C_Bool (* TODO: Unsure if this should be this *)
+        | `BOOLTOBV1 ->
+            Atom C_Bool
+            (* IDK, the input is constrained by bool but not output maybe *)
         | `INTNEG -> Atom C_Int
-        | `Exists -> Atom C_Bool (* TODO: Confirm *)
         | `Extract (finish, rt) ->
             let size = finish - rt in
             let tyName =
               Printf.sprintf "Extraction_%s" @@ ID.name @@ gen.fresh ()
             in
-            (* Printf.printf "%s\n" name; *)
             let field = { offset = rt; size; tyName } in
             Field field
-        | `Old -> Top
-        | `Forall -> Top
         | `BVNEG -> Top
         | `SignExtend _ -> Top
         | `BVNOT -> Top
         | `ZeroExtend _ -> Top
+        | `Exists -> Atom C_Bool (* TODO: Confirm *)
+        | `Old -> Top
+        | `Forall -> Top
         | _ -> Top)
     | BinaryExpr (op, l, r) -> (
         match op with
@@ -245,19 +280,12 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
             Atom C_Bool
         (* Help *)
         | `IMPLIES -> Top
-        (* Help *)
-        | `BVSREM -> Top
-        | `BVSDIV -> Top
-        | `BVADD -> Top
-        | `BVMUL -> Top
-        | `BVUREM -> Top
-        | `BVSUB -> Top
-        | `BVUDIV -> Top
-        | `BVSMOD -> Top
-        (* Help *)
-        | `BVSHL -> Top
-        | `BVLSHR -> Top
-        | `BVASHR -> Top
+        | `BVSREM | `BVSDIV | `BVADD | `BVMUL | `BVUREM | `BVSUB | `BVUDIV
+        | `BVSMOD (* Unsure but i just asked so don't wanna again *) | `BVSHL
+        | `BVLSHR | `BVASHR -> (
+            match BasilExpr.type_of l with
+            | Bitvector size -> size_to_c_type size
+            | _ -> Top)
         (* Help *)
         | `BVNAND -> Top
         | `BVAND -> Top
@@ -269,22 +297,6 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
     | Binding (vars, b) -> Top
   in
 
-  (* Helpers to actually add something to the upper / lower bounds *)
-  let add_ub st name ty =
-    StringMap.update name
-      (function
-        | None -> Some { lb = TySet.empty; ub = TySet.singleton ty }
-        | Some c -> Some { c with ub = TySet.add ty c.ub })
-      st
-  in
-  let add_lb st name ty =
-    StringMap.update name
-      (function
-        | None -> Some { ub = TySet.empty; lb = TySet.singleton ty }
-        | Some c -> Some { c with lb = TySet.add ty c.lb })
-      st
-  in
-
   (*
     Main function to generate consistent constraint set
   *)
@@ -294,6 +306,8 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
     | Top, _ | _, Top | Bottom, _ | _, Bottom -> st
     | Pointer (type0_a, type0_b), Pointer (type1_a, type1_b) ->
         constrain (constrain st type1_a type0_a) type0_b type1_b
+    | _, Pointer (type1_a, type1_b) ->
+        constrain (constrain st type0 type1_a) type0 type1_b
     | TypeVar a, TypeVar b | Field { tyName = a }, TypeVar b -> (
         (* The right hand side is a type variable, fields are pretty much variables *)
         let st = add_ub st a type1 in
@@ -301,7 +315,7 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
         match bounds with
         | Some { lb } ->
             TySet.to_iter lb
-            |> Iter.fold (fun st bound -> constrain st type1 bound) st
+            |> Iter.fold (fun st bound -> constrain st bound type1) st
         | None -> st)
     | _, TypeVar a -> (
         (* The right hand side is not a type variable *)
@@ -315,8 +329,8 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
     | _ ->
         (* You have to assign to a variable so this case should never occur *)
         failwith
-          (Printf.sprintf "Illegal constrain call type0: %s; type1: %s \n"
-             (show_ty type0) (show_ty type1))
+          (Printf.sprintf "Illegal constrain call type0: %s; type1: %s stmt: %s"
+             (show_ty type0) (show_ty type1) (Program.show_stmt stmt))
   in
   match stmt with
   | Stmt.Instr_Assert _ | Stmt.Instr_Assume _ -> st
@@ -327,18 +341,16 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
           (* Ignore _PC variables *)
           if String.starts_with ~prefix:"_PC" (Var.name lhs) then st
           else
-            let lhs =
-              rename_stack @@ Var.name lhs
-              (* WARN: This exact code is used else where and can be made into a function probs *)
-            in
+            let lhs = rename_variable @@ Var.name lhs in
             let constrained_expr = constrain_expr (BasilExpr.unfix expr) in
             constrain st constrained_expr (TypeVar lhs))
         st ls
   (* Pointer stuff here *)
   (* TODO: unsure about store but relativly confident about load *)
   | Stmt.Instr_Load { lhs; mem; cells; addr; endian } ->
+      let lhs = rename_variable @@ Var.name lhs in
       let st =
-        add_ub st (Var.name lhs)
+        add_ub st lhs
           (Pointer
              ( TypeVar (Int.to_string stmt_number ^ "_a_load"),
                TypeVar (Int.to_string stmt_number ^ "_b_load") ))
@@ -346,8 +358,9 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
       add_ub st (Int.to_string stmt_number ^ "_a_load")
       @@ TypeVar (Int.to_string stmt_number ^ "_b_load")
   | Stmt.Instr_Store { lhs; mem; cells; value; addr; endian } ->
+      let lhs = rename_variable @@ Var.name lhs in
       let st =
-        add_ub st (Var.name lhs)
+        add_ub st lhs
           (Pointer
              ( TypeVar (Int.to_string stmt_number ^ "_a_store"),
                TypeVar (Int.to_string stmt_number ^ "_b_store") ))
@@ -358,22 +371,32 @@ let gen_constraint_set (prog : Program.t) (st : constraint_state) stmt
       let args =
         StringMap.map (fun v -> constrain_expr @@ BasilExpr.unfix v) args
       in
-      let rets = StringMap.map (fun v -> TypeVar (Var.name v)) lhs in
+      let rets =
+        StringMap.map (fun v -> TypeVar (rename_variable (Var.name v))) lhs
+      in
       let func = Function (ID.name procid, args, rets) in
       add_ub st (ID.name procid) func
   (* TODO: Will need to ask what these actually mean / do *)
   | Stmt.Instr_IntrinCall _ -> st
+  (*
+    NOTE:
+        This is like a jump to, so it does not have args / ret
+
+        This might completely invalidate my whole stack stuff,
+          and maybe the variable renaming I do, however it should
+          either use the same vars or assign them before right?
+  *)
   | Stmt.Instr_IndirectCall _ -> st
 
-let check_block prog st (block_id, b) =
+let check_block prog p st (_, b) =
   Block.stmts_iter b
   |> Iter.foldi
        (fun st stmt_number stmt ->
-         gen_constraint_set prog st stmt stmt_number block_id)
+         gen_constraint_set prog st stmt stmt_number @@ Procedure.id p)
        st
 
 let check_proc (prog : Program.t) st p =
-  Procedure.iter_blocks_topo_fwd p |> Iter.fold (check_block prog) st
+  Procedure.iter_blocks_topo_fwd p |> Iter.fold (check_block prog p) st
 
 let transform (prog : Program.t) =
   let type_constraint_map =
