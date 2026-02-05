@@ -37,7 +37,7 @@ type ty =
   | Recursive of ty * ty
   | Atom of c_type
 
-and field = { offset : int; size : int; tyName : string }
+and field = { offset : int; size : int; ty : ty }
 
 let rec show_ty = function
   | Top -> "⊤"
@@ -56,8 +56,8 @@ let rec show_ty = function
   | Field field -> show_field field
   | Record fields -> Printf.sprintf "{ %s }" @@ List.to_string show_field fields
 
-and show_field { offset; size; tyName } =
-  Printf.sprintf "(%d, %d): %s" offset size tyName
+and show_field { offset; size; ty } =
+  Printf.sprintf "(%d, %d): %s" offset size (show_ty ty)
 
 let rec fold_ty f acc ty =
   let acc = f acc ty in
@@ -69,9 +69,9 @@ let rec fold_ty f acc ty =
   | Function (name, ins, outs) ->
       let acc = StringMap.fold (fun k v acc -> fold_ty f v acc) ins acc in
       StringMap.fold (fun k v acc -> fold_ty f v acc) ins acc
-  | Field { tyName } -> fold_ty f acc ty
+  | Field { ty } -> fold_ty f acc ty
   | Record fields ->
-      List.fold_left (fun acc { tyName } -> fold_ty f acc ty) acc fields
+      List.fold_left (fun acc { ty } -> fold_ty f acc ty) acc fields
 
 let rec compare_ty type1 type2 =
   match (type1, type2) with
@@ -97,17 +97,16 @@ let rec compare_ty type1 type2 =
       else
         let c = StringMap.compare compare_ty ins ins2 in
         if c <> 0 then c else StringMap.compare compare_ty outs outs2
-  | ( Field { offset; size; tyName },
-      Field { offset = offset2; size = size2; tyName = tyName2 } ) ->
+  | ( Field { offset; size; ty },
+      Field { offset = offset2; size = size2; ty = ty2 } ) ->
       let c = compare offset offset2 in
       if c <> 0 then c
       else
         let c = compare size size2 in
-        if c <> 0 then c else String.compare tyName tyName2
-  | Record fields, Record fields2 -> List.compare compare_field fields fields2
+        if c <> 0 then c else compare_ty ty ty2
+  | Record fields, Record fields2 ->
+      List.compare (fun { ty } { ty = ty2 } -> compare_ty ty ty2) fields fields2
   | _ -> 1
-
-and compare_field field field2 = compare_ty (Field field) (Field field2)
 
 (* left hand side maps to left hand side ty <= ty *)
 module TySet = Set.Make (struct
@@ -166,6 +165,51 @@ let show_sigma (sigma : sigma) =
 
 let gen = ID.make_gen ()
 
+let join (ty0 : ty) (ty1 : ty) : ty =
+  match (ty0, ty1) with
+  | Record fields0, Record fields1 ->
+      (* I think this could be improved, cause this is gross *)
+      let same_location o1 s1 o2 s2 = o1 = o2 && s1 = s2 in
+      let tmp = ref fields1 in
+      Record
+        (List.map
+           (fun { offset; size; ty } ->
+             let unioned_typ =
+               List.fold_left
+                 (fun typ { offset = offset2; size = size2; ty = ty2 } ->
+                   if same_location offset size offset2 size2 then (
+                     tmp :=
+                       List.filter
+                         (fun { offset = offset2; size = size2 } ->
+                           not @@ same_location offset size offset2 size2)
+                         !tmp;
+
+                     Union (typ, ty2))
+                   else typ)
+                 ty !tmp
+             in
+             { offset; size; ty = unioned_typ })
+           fields0
+        @ !tmp)
+  | Pointer (a, b), Pointer (c, d) ->
+      (* ptr((a u c) n (b n d), (b n d)) *)
+      Pointer (Sect (Union (a, c), Sect (b, d)), Sect (b, d))
+  (* WARN: this is not how BinSub did it, but I think I am just smarter and had better DS *)
+  | Function (name0, ins0, outs0), Function (name1, ins1, outs1) ->
+      if not @@ String.equal name0 name1 then failwith "BOOOOM"
+      else
+        (* args are the same just just union over the args *)
+        let ins =
+          StringMap.merge_safe
+            ~f:(fun _ b ->
+              match b with
+              | `Both (l, r) -> Some (Sect (l, r))
+              | _ -> failwith "BOOOMM")
+            ins0 ins1
+        in
+        Function (name0, ins, outs0)
+  | _ -> Union (ty0, ty1)
+
 let transfer_func (state : ty) (input : sigma) : ty =
   let error =
     Printf.sprintf "illegal input %s while in state %s" (show_sigma input)
@@ -182,7 +226,7 @@ let transfer_func (state : ty) (input : sigma) : ty =
       | Reclabel (n, m) -> (
           let field_list =
             List.filter
-              (fun { offset; size; tyName } -> n = offset && m = size)
+              (fun { offset; size } -> n = offset && m = size)
               field_list
           in
           match field_list with
@@ -289,10 +333,10 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
         | `INTNEG -> Atom C_Int
         | `Extract (finish, rt) ->
             let size = finish - rt in
-            let tyName =
-              Printf.sprintf "Extraction_%s" @@ ID.name @@ gen.fresh ()
+            let ty =
+              TypeVar (Printf.sprintf "Extraction_%s" @@ ID.name @@ gen.fresh ())
             in
-            let field = { offset = rt; size; tyName } in
+            let field = { offset = rt; size; ty } in
             Field field
         | `BVNEG -> Top
         | `SignExtend _ -> Top
@@ -337,7 +381,7 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
         constrain (constrain st type1_a type0_a) type0_b type1_b
     | _, Pointer (type1_a, type1_b) ->
         constrain (constrain st type0 type1_a) type0 type1_b
-    | TypeVar a, TypeVar b | Field { tyName = a }, TypeVar b -> (
+    | TypeVar a, TypeVar b -> (
         (* The right hand side is a type variable, fields are pretty much variables *)
         let st = add_ub st a type1 in
         let bounds = StringMap.get a st in
@@ -346,6 +390,18 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
             TySet.to_iter lb
             |> Iter.fold (fun st bound -> constrain st bound type1) st
         | None -> st)
+    | Field { ty }, TypeVar b -> (
+        (* The right hand side is a type variable, fields are pretty much variables *)
+        match ty with
+        | TypeVar a -> (
+            let st = add_ub st a type1 in
+            let bounds = StringMap.get a st in
+            match bounds with
+            | Some { lb } ->
+                TySet.to_iter lb
+                |> Iter.fold (fun st bound -> constrain st bound type1) st
+            | None -> st)
+        | _ -> st)
     | _, TypeVar a -> (
         (* The right hand side is not a type variable *)
         let st = add_lb st a type0 in
