@@ -87,3 +87,30 @@ proc @main_4196260 () -> ()
   in
   let st2 = StringMap.of_list ls in
   assert (StringMap.equal constraint_state_equals st st2)
+
+let%test_unit "test join function" =
+  let fields1 =
+    [
+      { offset = 0; size = 32; ty = TypeVar "a" };
+      { offset = 32; size = 32; ty = TypeVar "b" };
+    ]
+  in
+  let fields2 =
+    [
+      { offset = 0; size = 32; ty = TypeVar "c" };
+      { offset = 64; size = 32; ty = TypeVar "d" };
+    ]
+  in
+  let record1 = Record fields1 in
+  let record2 = Record fields2 in
+  let joined_record = join record1 record2 in
+
+  let test_fields = [
+      { offset = 0; size = 32; ty = Union (TypeVar "a", TypeVar "c") };
+      { offset = 32; size = 32; ty = TypeVar "b" };
+      { offset = 64; size = 32; ty = TypeVar "d" };
+    ]
+  in
+  let test_record = Record test_fields in
+  print_string @@ show_ty joined_record;
+  assert (compare_ty test_record joined_record = 0)

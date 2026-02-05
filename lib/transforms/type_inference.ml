@@ -169,28 +169,30 @@ let join (ty0 : ty) (ty1 : ty) : ty =
   match (ty0, ty1) with
   | Record fields0, Record fields1 ->
       (* I think this could be improved, cause this is gross *)
-      let same_location o1 s1 o2 s2 = o1 = o2 && s1 = s2 in
-      let tmp = ref fields1 in
-      Record
-        (List.map
-           (fun { offset; size; ty } ->
-             let unioned_typ =
-               List.fold_left
-                 (fun typ { offset = offset2; size = size2; ty = ty2 } ->
-                   if same_location offset size offset2 size2 then (
-                     tmp :=
-                       List.filter
-                         (fun { offset = offset2; size = size2 } ->
-                           not @@ same_location offset size offset2 size2)
-                         !tmp;
+      let module FieldMap = Map.Make (struct
+        type t = int * int
 
-                     Union (typ, ty2))
-                   else typ)
-                 ty !tmp
-             in
-             { offset; size; ty = unioned_typ })
-           fields0
-        @ !tmp)
+        let compare = Stdlib.compare
+      end) in
+      let fieldmap_to_field_list (map : ty FieldMap.t) =
+        FieldMap.bindings map |> List.map (fun ((offset, size), ty) -> {offset; size; ty})
+      in
+      let fieldmap_of_list (fields : field list) : ty FieldMap.t =
+        List.fold_left
+          (fun acc { offset; size; ty } -> FieldMap.add (offset, size) ty acc)
+          FieldMap.empty fields
+      in
+      let f0 = fieldmap_of_list fields0 in
+      let f1 = fieldmap_of_list fields1 in
+      let joined_map =
+        FieldMap.merge_safe
+          ~f:(fun (offset, size) v ->
+            match v with
+            | `Both (a, b) -> Some (Union (a, b))
+            | `Left a | `Right a -> Some a)
+          f0 f1
+      in
+      Record (fieldmap_to_field_list joined_map)
   | Pointer (a, b), Pointer (c, d) ->
       (* ptr((a u c) n (b n d), (b n d)) *)
       Pointer (Sect (Union (a, c), Sect (b, d)), Sect (b, d))
@@ -234,9 +236,7 @@ let transfer_func (state : ty) (input : sigma) : ty =
           | [] -> failwith error
           | _ -> failwith "big oops")
       | _ -> failwith error)
-  (*
-    WARN: I think this depends on polarity
-  *)
+  (* WARN: I think this depends on polarity *)
   | Union (_, ty) | Sect (ty, _) | Recursive (_, ty) -> (
       match input with Ep -> ty | _ -> failwith error)
   | Function (_, ins, outs) -> (
