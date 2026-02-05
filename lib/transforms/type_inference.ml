@@ -5,6 +5,8 @@ open Expr
 (*
   TODO List:
     - Fully represent TypeVar's etc with IDs
+      - Maybe I should not do this as I want to get stuff back
+        and currently my biggest concern is how do i get stuff back
 *)
 
 (*
@@ -209,18 +211,19 @@ let show_type_map (m : ty StringMap.t) : string =
   |> String.concat "\n"
 
 let rec coalesce_types (constraint_set : constraint_state)
-    (recursive_set : TySet.t) (polarity : int) (tau : ty) : ty =
+    (recursive_set : TySet.t) (pos_polarity : bool) (tau : ty) : ty =
   let recursive_call = coalesce_types constraint_set recursive_set in
   match tau with
   | Field _ | Record _ -> tau
   | Pointer (a, b) ->
-      Pointer (recursive_call (-polarity) a, recursive_call (-polarity) b)
+      Pointer
+        (recursive_call (not pos_polarity) a, recursive_call pos_polarity b)
   | Function (name, ins, outs) ->
       (* This might be useless, but just in case there are exprs in function calls *)
       Function
         ( name,
-          StringMap.map (recursive_call polarity) ins,
-          StringMap.map (recursive_call polarity) outs )
+          StringMap.map (recursive_call pos_polarity) ins,
+          StringMap.map (recursive_call pos_polarity) outs )
   | TypeVar a -> (
       match TySet.find_opt tau recursive_set with
       | Some c -> c (* Seen before *)
@@ -229,7 +232,7 @@ let rec coalesce_types (constraint_set : constraint_state)
           let bounds =
             (* Get the bounds for the variable depending on the polarity *)
             match StringMap.find_opt a constraint_set with
-            | Some { lb; ub } -> if polarity <> 1 then lb else ub
+            | Some { lb; ub } -> if pos_polarity then ub else lb
             | None -> TySet.empty
           in
           (* If tau is in bounds then we have a recursive type *)
@@ -239,9 +242,9 @@ let rec coalesce_types (constraint_set : constraint_state)
             TySet.fold
               (fun bound type_cons ->
                 let y =
-                  coalesce_types constraint_set recursive_set polarity bound
+                  coalesce_types constraint_set recursive_set pos_polarity bound
                 in
-                if polarity = 1 then Union (type_cons, y)
+                if pos_polarity then Union (type_cons, y)
                 else Sect (type_cons, y))
               bounds tau
           in
@@ -435,7 +438,7 @@ let transform (prog : Program.t) =
       (fun name { ub } ->
         TySet.fold
           (fun ty (acc : ty) ->
-            let a = coalesce_types type_constraint_map TySet.empty (-1) ty in
+            let a = coalesce_types type_constraint_map TySet.empty false ty in
             match acc with Top -> a | _ -> Sect (acc, a))
           ub Top)
       type_constraint_map
@@ -452,7 +455,7 @@ let transform (prog : Program.t) =
     This needs to passes of the program but I think the only other way would be to pass the program for
      every line in the program.
   *)
-  let types = StringMap.mapi (fun name ty -> minimise_type ty) types in
-  print_string "\n === Type Automata === \n";
-  print_string @@ show_type_map types;
+  (* let types = StringMap.mapi (fun name ty -> minimise_type ty) types in *)
+  (* print_string "\n === Type Automata === \n"; *)
+  (* print_string @@ show_type_map types; *)
   prog
