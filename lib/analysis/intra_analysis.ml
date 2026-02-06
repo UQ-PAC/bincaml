@@ -90,8 +90,6 @@ struct
 end
 
 module DiscardTypes (V : ValueAbstraction) = struct
-  type ty = Types.t
-
   include V
 
   let eval_const op rt = eval_const op
