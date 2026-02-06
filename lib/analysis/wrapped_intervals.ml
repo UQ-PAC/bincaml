@@ -814,7 +814,7 @@ module WrappedIntervalsLatticeOps = struct
       assert (hi <= w);
       truncate (lshr t (interval k k)) (hi - lo)
 
-  let concat s t =
+  let concat (s, _) (t, _) =
     match t.w with
     | None -> top
     | Some tw -> (
@@ -846,14 +846,14 @@ end
 module WrappedIntervalsValueAbstraction = struct
   include WrappedIntervalsLatticeOps
 
-  let eval_const (op : Lang.Ops.AllOps.const) =
+  let eval_const (op : Lang.Ops.AllOps.const) rt =
     match op with
     | `Bool _ -> { w = Some 1; v = Top }
     | `Integer _ -> { w = Some 0; v = Top }
     | `Bitvector bv ->
         if size bv = 0 then { w = Some 0; v = Top } else interval bv bv
 
-  let eval_unop (op : Lang.Ops.AllOps.unary) a =
+  let eval_unop (op : Lang.Ops.AllOps.unary) (a, t) rt =
     if Option.is_none a.w then top
     else
       match op with
@@ -865,7 +865,7 @@ module WrappedIntervalsValueAbstraction = struct
       | `BOOLTOBV1 -> { w = Some 1; v = Top }
       | _ -> infer a top |> snd
 
-  let eval_binop (op : Lang.Ops.AllOps.binary) a b =
+  let eval_binop (op : Lang.Ops.AllOps.binary) (a, ta) (b, tb) rt =
     let a, b = infer a b in
     if Option.is_none a.w then top
     else
@@ -884,23 +884,20 @@ module WrappedIntervalsValueAbstraction = struct
       | `BVSHL -> shl a b
       | _ -> infer a top |> snd
 
-  let eval_intrin (op : Lang.Ops.AllOps.intrin) args =
-    let op =
+  let eval_intrin (op : Lang.Ops.AllOps.intrin) args rt =
+    let args = List.map fst args in
+    let op a b =
       match op with
-      | `BVADD -> eval_binop `BVADD
-      | `BVOR -> eval_binop `BVOR
-      | `BVXOR -> eval_binop `BVXOR
-      | `BVAND -> eval_binop `BVAND
-      | `BVConcat -> concat
-      | _ -> fun _ _ -> top
+      | `BVADD -> (eval_binop `BVADD a b rt, rt)
+      | `BVOR -> (eval_binop `BVOR a b rt, rt)
+      | `BVXOR -> (eval_binop `BVXOR a b rt, rt)
+      | `BVAND -> (eval_binop `BVAND a b rt, rt)
+      | `BVConcat -> (concat a b, rt)
+      | _ -> (top, rt)
     in
-    List.map Option.some args
-    |> List.fold_left
-         (fun a b -> match a with Some a -> Option.map (op a) b | None -> b)
-         None
-    |> function
-    | Some res -> res
-    | None -> { w = Some 0; v = Top }
+    match args with
+    | h :: b :: tl -> fst @@ List.fold_left op (op h b) tl
+    | _ -> failwith "operators must have two operands"
 end
 
 module WrappedIntervalsValueAbstractionBasil = struct
