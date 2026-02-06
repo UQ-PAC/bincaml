@@ -551,9 +551,16 @@ module IDE (D : IDEDomain) = struct
         |> propagate target
     | Nop -> propagate target (Iter.singleton ((d1, d2), e1))
 
+  module P1K = struct
+    type t = Loc.t * DL.t * DL.t
+
+    (* What could go wrong..? *)
+    let compare a b = 0
+  end
+
   (** Propagate summaries into a new location and update the worklist *)
   let propagate worklist summaries priority summary loc updates =
-    let module Q = IntPQueue.Plain in
+    let module Q = Set.Make (P1K) in
     Iter.filter_map
       (fun ((d1, d3), e) ->
         let l = dldlget d1 d3 summary in
@@ -562,7 +569,7 @@ module IDE (D : IDEDomain) = struct
       updates
     |> Iter.fold
          (fun acc ((d1, d3), e) ->
-           Q.add worklist (loc, d1, d3) (priority loc);
+           worklist := Q.add (loc, d1, d3) !worklist;
            let m = DlMap.get_or d1 acc ~default:DlMap.empty in
            DlMap.add d1 (DlMap.add d3 e m) acc)
          summary
@@ -577,8 +584,8 @@ module IDE (D : IDEDomain) = struct
     (* We compute summaries with a worklist fixpoint solver.
        TOOD perhaps a better solver could be used?*)
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
-    let module Q = IntPQueue.Plain in
-    let (worklist : (Loc.t * DL.t * DL.t) Q.t) = Q.create () in
+    let module Q = Set.Make (P1K) in
+    let worklist = ref Q.empty in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
     Hashtbl.add summaries start
       (DlMap.singleton Lambda (DlMap.singleton Lambda D.identity));
@@ -595,11 +602,10 @@ module IDE (D : IDEDomain) = struct
     in
     let get_summary loc = Hashtbl.get summaries loc |> Option.get_or ~default in
     let priority l = LM.find l order in
-    Q.add worklist (start, Lambda, Lambda) (priority start);
-    while not (Q.is_empty worklist) do
-      let (x : Loc.t * DL.t * DL.t) =
-        Q.extract worklist |> Option.get_exn_or "queue empty"
-      in
+    worklist := Q.add (start, Lambda, Lambda) !worklist;
+    while not (Q.is_empty !worklist) do
+      let (x : Loc.t * DL.t * DL.t) = Q.choose !worklist in
+      worklist := Q.remove x !worklist;
       let l, d1, d2 = x in
       let ost = get_summary l in
       let e1 = dldlget d1 d2 ost in
@@ -636,14 +642,19 @@ module IDE (D : IDEDomain) = struct
             | _ -> ())
     | _ -> ()
 
+  module P2K = struct
+    type t = Loc.t * DL.t
+
+    let compare a b = 0
+  end
+
   (** Compute the analysis result using summaries from phase 1 *)
   let phase2_solve order prog start_proc graph globals
       (summaries : (Loc.t, summary) Hashtbl.t) =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
-    let module Q = IntPQueue.Plain in
+    let module Q = Set.Make (P2K) in
     let states : (Loc.t, analysis_state) Hashtbl.t = Hashtbl.create 100 in
     let get_st l = Hashtbl.get_or states l ~default:VarMap.empty in
-    let priority l = LM.find l order in
     let get_summary loc =
       Hashtbl.get summaries loc |> function
       | Some e -> e
@@ -656,12 +667,13 @@ module IDE (D : IDEDomain) = struct
        bottom, using the summary functions. This is done by looking at all call
        sites in a procedure and evaluating the composite of the summary to the
        callsite and the transfer of the call edge (and reaching a fixpoint). *)
-    let (worklist : (Loc.t * DL.t) Q.t) = Q.create () in
+    let worklist = ref Q.empty in
     let calls_table = IDEGraph.proc_call_table dir graph prog in
     Hashtbl.get_or calls_table start_proc ~default:Iter.empty
-    |> Iter.iter (fun l -> Q.add worklist (l, Lambda) (priority l));
-    while not (Q.is_empty worklist) do
-      let l, d = Q.extract worklist |> Option.get_exn_or "queue empty" in
+    |> Iter.iter (fun l -> worklist := Q.add (l, Lambda) !worklist);
+    while not (Q.is_empty !worklist) do
+      let l, d = Q.choose !worklist in
+      worklist := Q.remove (l, d) !worklist;
       let ost = get_st l in
       let md =
         match d with
@@ -671,7 +683,7 @@ module IDE (D : IDEDomain) = struct
       IDEGraph.G.succ_e graph l |> Iter.of_list
       |> Iter.iter
            (phase2_call_transfer get_summary
-              (fun (c, d) -> Q.add worklist (c, d) (priority c))
+              (fun (c, d) -> worklist := Q.add (c, d) !worklist)
               states calls_table d md)
     done;
     (* We then apply all summary functions to each location to the initial
