@@ -1,6 +1,8 @@
 open Bincaml_util.Common
 open Lang
 open Expr
+open Asd
+open Adt
 
 (*
   TODO List:
@@ -12,157 +14,6 @@ open Expr
 (*
   TODO: change to be a variable length bv and step away from int16 in favour of bv16
 *)
-type c_type = C_Int | C_BV of int | C_Float | C_Bool [@@deriving ord, eq]
-
-let show_c_type = function
-  | C_Int -> "int"
-  | C_BV size -> "bv" ^ string_of_int size
-  | C_Float -> "float"
-  | C_Bool -> "bool"
-
-type ty =
-  | Top
-  | Bottom
-  | Paren of ty
-  | Union of ty * ty (* type ∪ type *)
-  | Sect of ty * ty (* type ∩ type *)
-  | Pointer of ty * ty (* ptr(lb, ub) *)
-  | Function of
-      string
-      * ty StringMap.t
-      * ty StringMap.t (* list of inputs and list of outputs *)
-  | Field of field
-  | Record of field list (* A list of fields in the record *)
-  | TypeVar of string
-  | Recursive of ty * ty
-  | Atom of c_type
-
-and field = { offset : int; size : int; ty : ty }
-
-let rec show_ty = function
-  | Top -> "⊤"
-  | Bottom -> "⊥"
-  | Atom c -> show_c_type c
-  | TypeVar id -> id
-  | Recursive (t1, t2) -> Printf.sprintf "μ%s.%s" (show_ty t1) (show_ty t2)
-  | Paren ty -> Printf.sprintf "(%s)" @@ show_ty ty
-  | Union (t1, t2) -> Printf.sprintf "%s ⊔ %s" (show_ty t1) (show_ty t2)
-  | Sect (t1, t2) -> Printf.sprintf "%s ⊓ %s" (show_ty t1) (show_ty t2)
-  | Pointer (lb, ub) -> Printf.sprintf "ptr(%s, %s)" (show_ty lb) (show_ty ub)
-  | Function (name, ins, outs) ->
-      Printf.sprintf "(%s) → (%s)"
-        (Iter.to_string show_ty (StringMap.values ins))
-        (Iter.to_string show_ty (StringMap.values outs))
-  | Field field -> show_field field
-  | Record fields -> Printf.sprintf "{ %s }" @@ List.to_string show_field fields
-
-and show_field { offset; size; ty } =
-  Printf.sprintf "(%d, %d): %s" offset size (show_ty ty)
-
-let rec fold_ty f acc ty =
-  let acc = f acc ty in
-  match ty with
-  | Top | Bottom | Atom _ | TypeVar _ | Recursive _ -> acc
-  | Paren t -> fold_ty f acc t
-  | Union (a, b) | Sect (a, b) -> fold_ty f (fold_ty f acc a) b
-  | Pointer (lb, ub) -> fold_ty f (fold_ty f acc lb) ub
-  | Function (name, ins, outs) ->
-      let acc = StringMap.fold (fun k v acc -> fold_ty f v acc) ins acc in
-      StringMap.fold (fun k v acc -> fold_ty f v acc) ins acc
-  | Field { ty } -> fold_ty f acc ty
-  | Record fields ->
-      List.fold_left (fun acc { ty } -> fold_ty f acc ty) acc fields
-
-let rec compare_ty type1 type2 =
-  match (type1, type2) with
-  | Top, Top | Bottom, Bottom -> 0
-  | Atom a, Atom b -> compare_c_type a b
-  | TypeVar a, TypeVar b -> String.compare a b
-  | Recursive (a, b), Recursive (c, d) ->
-      let c = compare_ty a c in
-      if c <> 0 then c else compare_ty b d
-  | Paren a, Paren b -> compare_ty a b
-  | Union (a, b), Union (a2, b2) ->
-      let c = compare_ty a a2 in
-      if c <> 0 then c else compare_ty b b2
-  | Sect (a, b), Sect (a2, b2) ->
-      let c = compare_ty a a2 in
-      if c <> 0 then c else compare_ty b b2
-  | Pointer (a, b), Pointer (a2, b2) ->
-      let c = compare_ty a a2 in
-      if c <> 0 then c else compare_ty b b2
-  | Function (name, ins, outs), Function (name2, ins2, outs2) ->
-      let c = String.compare name name2 in
-      if c <> 0 then c
-      else
-        let c = StringMap.compare compare_ty ins ins2 in
-        if c <> 0 then c else StringMap.compare compare_ty outs outs2
-  | ( Field { offset; size; ty },
-      Field { offset = offset2; size = size2; ty = ty2 } ) ->
-      let c = compare offset offset2 in
-      if c <> 0 then c
-      else
-        let c = compare size size2 in
-        if c <> 0 then c else compare_ty ty ty2
-  | Record fields, Record fields2 ->
-      List.compare (fun { ty } { ty = ty2 } -> compare_ty ty ty2) fields fields2
-  | _ -> 1
-
-(* left hand side maps to left hand side ty <= ty *)
-module TySet = Set.Make (struct
-  type t = ty
-
-  let compare = compare_ty
-end)
-
-type type_constraint = { lb : TySet.t; ub : TySet.t }
-type constraint_state = type_constraint StringMap.t
-
-let constraint_state_equals { lb; ub } { lb = lb2; ub = ub2 } =
-  if TySet.equal lb lb2 then if TySet.equal ub ub2 then true else false
-  else false
-
-let show_ty_set ts = TySet.to_list ts |> List.map show_ty |> String.concat ", "
-
-let show_constraint_state (m : type_constraint StringMap.t) : string =
-  StringMap.bindings m
-  |> List.map (fun (name, { lb; ub }) ->
-      Printf.sprintf "%s: lower [%s], upper [%s]" name (show_ty_set lb)
-        (show_ty_set ub))
-  |> String.concat "\n"
-
-(* Helpers to actually add something to the upper / lower bounds *)
-let add_ub st name ty =
-  StringMap.update name
-    (function
-      | None -> Some { lb = TySet.empty; ub = TySet.singleton ty }
-      | Some c -> Some { c with ub = TySet.add ty c.ub })
-    st
-
-let add_lb st name ty =
-  StringMap.update name
-    (function
-      | None -> Some { ub = TySet.empty; lb = TySet.singleton ty }
-      | Some c -> Some { c with lb = TySet.add ty c.lb })
-    st
-
-type sigma =
-  | Ep
-  | StoreLabel
-  | LoadLabel
-  | Reclabel of int * int
-  | FnIn of string
-  | FnOut of string
-
-let show_sigma (sigma : sigma) =
-  match sigma with
-  | Ep -> "ε"
-  | StoreLabel -> "Store Label"
-  | LoadLabel -> "Load Label"
-  | Reclabel (n, m) -> Printf.sprintf "Record Label %d %d" n m
-  | FnIn n -> Printf.sprintf "Function in %s" n
-  | FnOut n -> Printf.sprintf "Function out %s" n
-
 let gen = ID.make_gen ()
 
 let join (ty0 : ty) (ty1 : ty) : ty =
@@ -175,7 +26,8 @@ let join (ty0 : ty) (ty1 : ty) : ty =
         let compare = Stdlib.compare
       end) in
       let fieldmap_to_field_list (map : ty FieldMap.t) =
-        FieldMap.bindings map |> List.map (fun ((offset, size), ty) -> {offset; size; ty})
+        FieldMap.bindings map
+        |> List.map (fun ((offset, size), ty) -> { offset; size; ty })
       in
       let fieldmap_of_list (fields : field list) : ty FieldMap.t =
         List.fold_left
@@ -212,42 +64,61 @@ let join (ty0 : ty) (ty1 : ty) : ty =
         Function (name0, ins, outs0)
   | _ -> Union (ty0, ty1)
 
-let transfer_func (state : ty) (input : sigma) : ty =
-  let error =
-    Printf.sprintf "illegal input %s while in state %s" (show_sigma input)
-      (show_ty state)
+let minimise_type ty =
+  let rec type_to_state_list (p : bool) (ty : ty)
+      ((ls, tbl) as acc : 's list * ('s, (sigma, 's) Hashtbl.t) Hashtbl.t) :
+      's list * ('s, ('e, 's) Hashtbl.t) Hashtbl.t =
+    match ty with
+    | Top | Atom _ | TypeVar _ | Bottom | Field _ -> ((p, ty) :: ls, tbl)
+    | Recursive (_, a) ->
+        let ls, tbl = type_to_state_list p a acc in
+        let edges = Hashtbl.create 1 in
+        Hashtbl.add edges Ep (p, a);
+        Hashtbl.add tbl (p, ty) edges;
+        ((p, ty) :: ls, tbl)
+    | Paren ty -> type_to_state_list p ty acc
+    | Union (a, b) | Sect (a, b) ->
+        let ((ls, tbl) as acc) = type_to_state_list p a acc in
+        let ls, tbl = type_to_state_list p b acc in
+        let edges = Hashtbl.create 2 in
+        Hashtbl.add edges Ep (p, a);
+        Hashtbl.add edges Ep (p, b);
+        Hashtbl.add tbl (p, ty) edges;
+        ((p, ty) :: ls, tbl)
+    | Function (_, ins, outs) ->
+        let acc =
+          StringMap.fold (fun _ -> type_to_state_list @@ not p) ins acc
+        in
+        let ls, tbl = StringMap.fold (fun _ -> type_to_state_list p) outs acc in
+        let edges = Hashtbl.create 30 in
+        List.iter (fun (n, ty) -> Hashtbl.add edges (FnIn n) (not p, ty))
+        @@ StringMap.to_list ins;
+        List.iter (fun (n, ty) -> Hashtbl.add edges (FnOut n) (p, ty))
+        @@ StringMap.to_list outs;
+        Hashtbl.add tbl (p, ty) edges;
+        ((p, ty) :: ls, tbl)
+    | Pointer (a, b) ->
+        let ((ls, tbl) as acc) = type_to_state_list p a acc in
+        let ls, tbl = type_to_state_list p b acc in
+        let edges = Hashtbl.create 2 in
+        Hashtbl.add edges StoreLabel (not p, a);
+        Hashtbl.add edges LoadLabel (p, b);
+        ((p, ty) :: ls, tbl)
+    | Record fields ->
+        let (ls, tbl) =
+          List.fold_left (fun acc {ty} -> type_to_state_list (not p) ty acc) acc fields
+        in
+        let edges = Hashtbl.create 30 in
+        List.iter (fun {offset;size;ty} -> Hashtbl.add edges (Reclabel (offset,size)) (p, ty)) fields;
+        Hashtbl.add tbl (p, ty) edges;
+        ((p, ty) :: ls, tbl)
   in
-  match state with
-  | Pointer (ty0, ty1) -> (
-      match input with
-      | StoreLabel -> ty0
-      | LoadLabel -> ty1
-      | _ -> failwith error)
-  | Record field_list -> (
-      match input with
-      | Reclabel (n, m) -> (
-          let field_list =
-            List.filter
-              (fun { offset; size } -> n = offset && m = size)
-              field_list
-          in
-          match field_list with
-          | [ a ] -> Field a
-          | [] -> failwith error
-          | _ -> failwith "big oops")
-      | _ -> failwith error)
-  (* WARN: I think this depends on polarity *)
-  | Union (_, ty) | Sect (ty, _) | Recursive (_, ty) -> (
-      match input with Ep -> ty | _ -> failwith error)
-  | Function (_, ins, outs) -> (
-      match input with
-      (* I could deal with none etc, but I want it to fail *)
-      | FnIn n when StringMap.mem n ins -> StringMap.find n ins
-      | FnOut n when StringMap.mem n outs -> StringMap.find n outs
-      | _ -> failwith error)
-  | _ -> failwith error
-
-let minimise_type ty = Top
+  let states, edges = type_to_state_list true ty ([], Hashtbl.create 10) in
+  (* states trans start fin *)
+  let automata = Adt.create_automata2 states edges (true, ty) [] in
+  Adt.remove_ep automata;
+  print_string @@ export_graphviz automata;
+  automata
 
 let show_type_map (m : ty StringMap.t) : string =
   StringMap.bindings m
@@ -511,7 +382,5 @@ let transform (prog : Program.t) =
     This needs to passes of the program but I think the only other way would be to pass the program for
      every line in the program.
   *)
-  (* let types = StringMap.mapi (fun name ty -> minimise_type ty) types in *)
-  (* print_string "\n === Type Automata === \n"; *)
-  (* print_string @@ show_type_map types; *)
+  let automatas = StringMap.mapi (fun name ty -> minimise_type ty) types in
   prog
