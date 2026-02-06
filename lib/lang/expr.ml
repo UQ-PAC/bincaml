@@ -172,6 +172,8 @@ module BasilExpr = struct
   type t = E of (const, Var.t, unary, binary, intrin, t) AbstractExpr.t
   [@@unboxed] [@@deriving eq, ord]
 
+  type ty = Types.t
+
   open struct
     (** leftover ; we could hash-cons the expression if we want *)
     module EHashed = struct
@@ -419,10 +421,16 @@ end
 module type ExprType = sig
   include Fix
 
+  type 'e abstract_expr
+
   include
     Bincaml_util.Recursionscheme.Recurseable
       with type 'a O.expr =
         (const, var, unary, binary, intrin, 'a) AbstractExpr.t
+
+  type ty
+
+  val type_alg : ty O.expr -> ty
 end
 
 module IVarFix = struct

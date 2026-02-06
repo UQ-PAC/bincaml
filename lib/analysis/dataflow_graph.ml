@@ -309,7 +309,7 @@ end
 
 (** Simple way to get started with forwards analysis on def-use graph *)
 module EasyForwardAnalysisPack (V : sig
-  include Lattice_types.ValueAbstraction with module E = Expr.BasilExpr
+  include Lattice_types.TypedValueAbstraction with module E = Expr.BasilExpr
 
   val top : t
 end) =

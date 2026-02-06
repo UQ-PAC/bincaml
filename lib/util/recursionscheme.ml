@@ -15,17 +15,56 @@ module type Recurseable = sig
   type 'a alg = 'a O.expr -> 'a
   type 'a coalg = 'a -> 'a O.expr
 
+  (** {1 Recursion schemes}
+
+      Recursion schemes abstract recursion for open-recursive types. This
+      enables us to write a function (an [alg]) which only describes how to
+      process one level of the type, without also describing the recursion to
+      its children.
+
+      Closed recursive types immediately fix the recursion, i.e.
+      [type a = A of a * a], whereas open recursive types are parametric in the
+      fixpoint type: [type 'child a = A of 'child * 'child | B ... ]. For
+      example we may define the fixed point: [type t = E of t expr [@@unboxed]].
+
+      The module type {! Fix} defines
+
+      1. the open recursive type ['a expr] 2. the fixed type [t] 3. an
+      [map_expr] function on the open recursive type (note we can use
+      [@@deriving map] on [expr] to define this) 4. a [fix] and [unfix] type
+      which convert between the back and forth from the open and fixed types.
+
+      With this we can define fucntions which fold a function over the type
+      ['a expr], and more. Functions for traversing a generic on ['a expr] for a
+      given fix point type [Fix.t].
+
+      See:
+
+      {{:https://arxiv.org/pdf/2202.13633v1} Fantastic Morphisms and Where to
+       Find Them}
+
+      {{:https://icfp24.sigplan.org/details/ocaml-2024-papers/11/Recursion-schemes-in-OCaml-An-experience-report}
+       Recursion Schemes in Ocaml: An Experience Report} *)
+
   val cata : 'a alg -> O.t -> 'a
+  (** Fold an algebra e -> 'a through the expression, from leaves to nodes to
+      return 'a. *)
+
   val ana : 'a coalg -> 'a -> O.t
+  (** ana coalg = Out◦ ◦ fmap_expr (ana coalg) ◦ coalg *)
 
   val map_fold :
     f:('a -> O.t O.expr -> 'a) -> alg:('a -> 'b O.expr -> 'b) -> 'a -> O.t -> 'b
+  (** Apply function ~f to the expression first, then pass it to alg. Its result
+      is accumulated down the expression tree. *)
 
   val mutu :
     ?cata:(('a * 'b) alg -> O.t -> 'a * 'b) ->
     (('a * 'b) O.expr -> 'a) ->
     (('a * 'b) O.expr -> 'b) ->
     (O.t -> 'a) * (O.t -> 'b)
+  (** mutual recursion: simultaneously evaluate two catamorphisms which can
+      depend on each-other's results. *)
 
   val zygo :
     ?cata:(('a * 'b) alg -> O.t -> 'a * 'b) ->
@@ -33,6 +72,10 @@ module type Recurseable = sig
     (('a * 'b) O.expr -> 'b) ->
     O.t ->
     'b
+  (** zygomorphism;
+
+      Perform two recursion simultaneously, passing the result of the first to
+      the second *)
 
   val zygo_l :
     ?cata:(('b * 'a) alg -> O.t -> 'b * 'a) ->
@@ -40,6 +83,10 @@ module type Recurseable = sig
     (('b * 'a) O.expr -> 'b) ->
     O.t ->
     'b
+  (** zygomorphism;
+
+      Perform two recursion simultaneously, passing the result of the second to
+      the first *)
 
   val map_fold2 :
     f:('a -> O.t O.expr -> 'a) ->
@@ -48,9 +95,16 @@ module type Recurseable = sig
     'a ->
     O.t ->
     'b
+  (** Apply function ~f to the expression first, then pass it to alg. Its result
+      is accumulated down the expression tree. *)
 
   val para_f : (('a * 'b) O.expr -> 'b) -> (O.t -> 'a) -> O.t -> 'b
+  (** catamorphism that also passes the original expression map_exprped through
+      a function argument *)
+
   val para : ((O.t * 'a) O.expr -> 'a) -> O.t -> 'a
+  (** catamorphism that passes through original expression *)
+
   val iter_children : (O.t O.expr -> unit) -> O.t -> unit
   val children_iter : O.t -> O.t O.expr Iter.t
 end

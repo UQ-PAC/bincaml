@@ -16,10 +16,7 @@ let bool = Boolean
 
 type func_type = { args : t list; return : t }
 
-let bit_width = function 
-  | Boolean -> Some 1
-  | Bitvector n -> Some n
-  | _ -> None
+let bit_width = function Boolean -> Some 1 | Bitvector n -> Some n | _ -> None
 
 (*
   Nothing < Unit < {boolean, integer, bitvector} < Top

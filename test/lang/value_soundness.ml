@@ -2,7 +2,9 @@ open Lang
 open Common
 
 module ValueAbstractionSoundness
-    (V : Analysis.Lattice_types.ValueAbstraction with module E = Expr.BasilExpr) =
+    (V :
+      Analysis.Lattice_types.TypedValueAbstraction
+        with module E = Expr.BasilExpr) =
 struct
   module Eval = Analysis.Intra_analysis.EvalExprLog (V)
 

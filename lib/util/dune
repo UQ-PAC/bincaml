@@ -4,6 +4,7 @@
  (modules
   mtypes
   common
+  unicode
   var
   ID
   types

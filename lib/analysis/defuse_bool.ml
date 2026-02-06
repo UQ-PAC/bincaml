@@ -117,10 +117,15 @@ end
 
 module IsZeroValueAbstractionBasil = struct
   include IsZeroValueAbstraction
-
-  let top = IsZeroLattice.Top
-
   module E = Lang.Expr.BasilExpr
+
+  type ty = Types.t
+
+  let eval_const op (rt : ty) = eval_const op
+  let eval_unop op arg rt = eval_unop op (fst arg)
+  let eval_binop op arg1 arg2 rt = eval_binop op (fst arg1) (fst arg2)
+  let eval_intrin op args rt = eval_intrin op (List.map fst args)
+  let top = IsZeroLattice.Top
 end
 
 include Dataflow_graph.EasyForwardAnalysisPack (IsZeroValueAbstractionBasil)
