@@ -814,7 +814,7 @@ module WrappedIntervalsLatticeOps = struct
       assert (hi <= w);
       truncate (lshr t (interval k k)) (hi - lo)
 
-  let concat (s, _) (t, _) =
+  let concat s t =
     match t.w with
     | None -> top
     | Some tw -> (
@@ -884,15 +884,14 @@ module WrappedIntervalsValueAbstraction = struct
       | `BVSHL -> shl a b
       | _ -> infer a top |> snd
 
-  let eval_intrin (op : Lang.Ops.AllOps.intrin) args rt =
-    let args = List.map fst args in
+  let eval_intrin (op : Lang.Ops.AllOps.intrin) (args : (t * Types.t) list) rt =
     let op a b =
       match op with
       | `BVADD -> (eval_binop `BVADD a b rt, rt)
       | `BVOR -> (eval_binop `BVOR a b rt, rt)
       | `BVXOR -> (eval_binop `BVXOR a b rt, rt)
       | `BVAND -> (eval_binop `BVAND a b rt, rt)
-      | `BVConcat -> (concat a b, rt)
+      | `BVConcat -> (concat (fst a) (fst b), rt)
       | _ -> (top, rt)
     in
     match args with
