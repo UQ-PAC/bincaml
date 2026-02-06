@@ -264,7 +264,13 @@ module IsKnownBitsValueAbstraction = struct
 end
 
 module IsKnownValueAbstractionBasil = struct
-  include IsKnownBitsValueAbstraction
+  include Intra_analysis.DiscardTypes (struct
+    include IsKnownBitsValueAbstraction
+    module E = Lang.Expr.BasilExpr
+  end)
+
+  let top = IsKnownLattice.Top
+
   module E = Lang.Expr.BasilExpr
 end
 
