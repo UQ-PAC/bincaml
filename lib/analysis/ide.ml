@@ -440,6 +440,8 @@ module IDE (D : IDEDomain) = struct
     let j = D.join e (DlMap.get_or d m ~default:D.bottom) in
     if not (D.equal j D.bottom) then DlMap.add d j m else m
 
+  let ( @. ) = D.compose
+
   (** Determine composites of edge functions through an intravertex block *)
   let tf_stmts phi bs i =
     let stmts i =
@@ -448,18 +450,14 @@ module IDE (D : IDEDomain) = struct
           DlMap.fold
             (fun d2 e1 m ->
               D.transfer stmt d2
-              |> Iter.fold
-                   (fun m (d3, e2) ->
-                     let e = D.compose e2 e1 in
-                     join_add m d3 e)
-                   m)
+              |> Iter.fold (fun m (d3, e2) -> join_add m d3 (e2 @. e1)) m)
             om DlMap.empty)
         (Iter.fold (fun m (d, e) -> join_add m d e) DlMap.empty i)
         bs
       |> DlMap.to_iter
     in
     (* TODO this might be more imprecise than joining on the opposite side of the phi node
-                 https://link.springer.com/chapter/10.1007/978-3-642-11970-5_8 reckons so *)
+       https://link.springer.com/chapter/10.1007/978-3-642-11970-5_8 reckons so *)
     let phis i =
       match dir with
       | `Forwards ->
@@ -492,6 +490,66 @@ module IDE (D : IDEDomain) = struct
     DlMap.get d1 summary
     |> Option.flat_map (DlMap.get d2)
     |> Option.get_or ~default:D.bottom
+
+  let phase1_transfer propagate entry2call entry2exit d1 d2 e1 e =
+    let from, _, target = e in
+    match IDEGraph.G.E.label e with
+    | Stmts (phi, bs) ->
+        tf_stmts phi bs (Iter.singleton (d2, e1))
+        |> Iter.map (fun (d3, e) -> ((d1, d3), e))
+        |> propagate target
+    | InterCall callinfo ->
+        D.transfer_call callinfo d2
+        |> Iter.iter (fun (d3, e2) ->
+            (* Add the callee to the worklist with an id edge at its entry
+               so that the entry_to_exit cache eventually summarises it. *)
+            propagate target (Iter.singleton ((d3, d3), D.identity));
+            (* Update the entry to call entry cache *)
+            let k = (callinfo.caller, d3, callinfo.callee) in
+            Hashtbl.get_or entry2call k ~default:DlMap.empty
+            |> DlMap.add d1 (e2 @. e1)
+            |> Hashtbl.add entry2call k;
+            (* If we have entry to exit edge functions stored, propagate
+               the composite of
+               1. the edge function from the caller entry to callee entry
+               2. edge functions through the callee procedure
+               3. edge functions from the return of the callee to the caller *)
+            let aftercall = Loc.AfterCall callinfo.aftercall in
+            Hashtbl.get entry2exit (callinfo.callee, d3)
+            |> Option.to_iter
+            |> Iter.flat_map DlMap.to_iter
+            |> Iter.flat_map (fun (d4, e3) ->
+                D.transfer_return callinfo.ret d4
+                |> Iter.map (fun (d5, e4) -> ((d1, d5), e4 @. e3 @. e2 @. e1)))
+            |> propagate aftercall)
+    | InterReturn retinfo ->
+        (* Since we have reached the return block of a procedure, we
+           have a complete summary of it! Store this in the entry exit cache *)
+        let k = (retinfo.callee, d1) in
+        Hashtbl.get_or entry2exit k ~default:DlMap.empty
+        |> DlMap.add d2 e1 |> Hashtbl.add entry2exit k;
+        (* If we have an edge from the caller's entry to the callee's
+           entry, we can propagate the same big composite as described
+           in the InterCall branch.
+
+           Note that we do not propagate to aftercalls of callers if the
+           caller never propagated through its own InterCall edge *)
+        let k = (retinfo.caller, d1, retinfo.callee) in
+        Hashtbl.get entry2call k |> Option.to_iter
+        |> Iter.flat_map DlMap.to_iter
+        |> Iter.flat_map (fun (d3, e2) ->
+            D.transfer_return retinfo d2
+            |> Iter.map (fun (d4, e3) -> ((d3, d4), e3 @. e1 @. e2)))
+        |> propagate target
+    | Call callstmt ->
+        D.transfer_call_to_aftercall callstmt d2
+        |> Iter.map (fun (d3, e2) -> ((d1, d3), e2 @. e1))
+        |> propagate target
+    | StubProc stubinfo ->
+        D.transfer_stub stubinfo d2
+        |> Iter.map (fun (d3, e2) -> ((d1, d3), e2 @. e1))
+        |> propagate target
+    | Nop -> propagate target (Iter.singleton ((d1, d2), e1))
 
   (** Propagate summaries into a new location and update the worklist *)
   let propagate worklist summaries priority summary loc updates =
@@ -530,7 +588,8 @@ module IDE (D : IDEDomain) = struct
         =
       Hashtbl.create 100
     in
-    (* Stores edge functions from the entry of a procedure to the end of said procedure for a given d value at the entry *)
+    (* Stores edge functions from the entry of a procedure to the end of said
+       procedure for a given d value at the entry *)
     let entry_to_exit_cache : (ID.t * DL.t, D.t DlMap.t) Hashtbl.t =
       Hashtbl.create 100
     in
@@ -545,94 +604,37 @@ module IDE (D : IDEDomain) = struct
       let ost = get_summary l in
       let e1 = dldlget d1 d2 ost in
       IDEGraph.G.succ_e graph l |> Iter.of_list
-      |> Iter.iter (fun e ->
-          let from, target = match e with from, _, target -> (from, target) in
-          match IDEGraph.G.E.label e with
-          | Stmts (phi, bs) ->
-              tf_stmts phi bs (Iter.singleton (d2, e1))
-              |> Iter.map (fun (d3, e) -> ((d1, d3), e))
-              |> propagate worklist summaries priority (get_summary target)
-                   target
-          | InterCall callinfo ->
-              D.transfer_call callinfo d2
-              |> Iter.iter (fun (d3, e2) ->
-                  (* Add the callee to the worklist with an id edge at its entry
-                     so that the entry_to_exit cache eventually summarises it. *)
-                  propagate worklist summaries priority (get_summary target)
-                    target
-                    (Iter.singleton ((d3, d3), D.identity));
-                  (* Update the entry to call entry cache *)
-                  let e21 = D.compose e2 e1 in
-                  let k = (callinfo.caller, d3, callinfo.callee) in
-                  let m =
-                    Hashtbl.get_or entry_to_call_entry_cache k
-                      ~default:DlMap.empty
-                    |> DlMap.add d1 e21
-                  in
-                  Hashtbl.add entry_to_call_entry_cache k m;
-                  (* If we have entry to exit edge functions stored, propagate
-                     the composite of
-                     1. the edge function from the caller entry to callee entry
-                     2. edge functions through the callee procedure
-                     3. edge functions from the return of the callee to the caller *)
-                  let aftercall = Loc.AfterCall callinfo.aftercall in
-                  let _ =
-                    Hashtbl.get entry_to_exit_cache (callinfo.callee, d3)
-                    |> Option.map (fun m ->
-                        DlMap.to_iter m
-                        |> Iter.iter (fun (d4, e3) ->
-                            let e321 = D.compose e3 e21 in
-                            D.transfer_return callinfo.ret d4
-                            |> Iter.map (fun (d5, e4) ->
-                                ((d1, d5), D.compose e4 e321))
-                            |> propagate worklist summaries priority
-                                 (get_summary aftercall) aftercall))
-                  in
-                  ())
-          | InterReturn retinfo ->
-              (* Since we have reached the return block of a procedure, we
-                 have a complete summary of it! Store this in the entry exit cache *)
-              let k = (retinfo.callee, d1) in
-              let m =
-                Hashtbl.get_or entry_to_exit_cache k ~default:DlMap.empty
-                |> DlMap.add d2 e1
-              in
-              Hashtbl.add entry_to_exit_cache k m;
-              (* If we have an edge from the caller's entry to the callee's
-                 entry, we can propagate the same big composite as described
-                 in the InterCall branch.
-
-                 Note that we do not propagate to aftercalls of callers if the
-                 caller never propagated through its own InterCall edge *)
-              let k = (retinfo.caller, d1, retinfo.callee) in
-              let _ =
-                Hashtbl.get entry_to_call_entry_cache k
-                |> Option.map (fun m ->
-                    DlMap.to_iter m
-                    |> Iter.iter (fun (d3, e2) ->
-                        let e12 = D.compose e1 e2 in
-                        D.transfer_return retinfo d2
-                        |> Iter.map (fun (d4, e3) ->
-                            ((d3, d4), D.compose e3 e12))
-                        |> propagate worklist summaries priority
-                             (get_summary target) target))
-              in
-              ()
-          | Call callstmt ->
-              D.transfer_call_to_aftercall callstmt d2
-              |> Iter.map (fun (d3, e2) -> ((d1, d3), D.compose e2 e1))
-              |> propagate worklist summaries priority (get_summary target)
-                   target
-          | StubProc stubinfo ->
-              D.transfer_stub stubinfo d2
-              |> Iter.map (fun (d3, e2) -> ((d1, d3), D.compose e2 e1))
-              |> propagate worklist summaries priority (get_summary target)
-                   target
-          | Nop ->
-              propagate worklist summaries priority (get_summary target) target
-                (Iter.singleton ((d1, d2), e1)))
+      |> Iter.iter
+           (phase1_transfer
+              (fun t -> propagate worklist summaries priority (get_summary t) t)
+              entry_to_call_entry_cache entry_to_exit_cache d1 d2 e1)
     done;
     summaries
+
+  let phase2_call_transfer get_summary add_q states calls_table d md e =
+    let l, _, target = e in
+    match IDEGraph.G.E.label e with
+    | InterCall callinfo ->
+        let summary = get_summary l in
+        DlMap.get d summary |> Iter.of_opt
+        |> Iter.flat_map DlMap.to_iter
+        |> Iter.flat_map (fun (d2, e1) ->
+            D.transfer_call callinfo d2
+            |> Iter.map (fun (d3, e2) -> (d3, e2 @. e1)))
+        |> Iter.iter (fun (d3, e21) ->
+            match d3 with
+            | Label v ->
+                let st = Hashtbl.get_or states target ~default:VarMap.empty in
+                let fd = D.eval e21 md in
+                let y = VarMap.get_or v st ~default:D.Value.bottom in
+                let j = D.Value.join y fd in
+                if not (D.Value.equal j y) then (
+                  VarMap.add v (D.Value.join y fd) st
+                  |> Hashtbl.add states target;
+                  Hashtbl.get_or calls_table callinfo.callee ~default:Iter.empty
+                  |> Iter.iter (fun c -> add_q (c, d3)))
+            | _ -> ())
+    | _ -> ()
 
   (** Compute the analysis result using summaries from phase 1 *)
   let phase2_solve order prog start_proc graph globals
@@ -646,8 +648,6 @@ module IDE (D : IDEDomain) = struct
       Hashtbl.get summaries loc |> function
       | Some e -> e
       | None ->
-          (* This issue occurs whenever there are unimplemented procedures.
-             There's a fix but I haven't written it yet. *)
           (*print_endline @@ "summary undefined " ^ Loc.show loc;*)
           DlMap.empty
     in
@@ -669,35 +669,10 @@ module IDE (D : IDEDomain) = struct
         | _ -> D.Value.bottom
       in
       IDEGraph.G.succ_e graph l |> Iter.of_list
-      |> Iter.iter (fun e ->
-          let target = match e with _, _, target -> target in
-          match IDEGraph.G.E.label e with
-          | InterCall callinfo ->
-              let summary = get_summary l in
-              DlMap.get d summary |> Iter.of_opt
-              |> Iter.flat_map DlMap.to_iter
-              |> Iter.iter (fun (d2, e1) ->
-                  D.transfer_call callinfo d2
-                  |> Iter.iter (fun (d3, e2) ->
-                      (match d3 with
-                      | Label v ->
-                          let st =
-                            Hashtbl.get_or states target ~default:VarMap.empty
-                          in
-                          let fd = D.eval e2 (D.eval e1 md) in
-                          let y = VarMap.get_or v st ~default:D.Value.bottom in
-                          let j = D.Value.join y fd in
-                          if not (D.Value.equal j y) then (
-                            let st' = VarMap.add v (D.Value.join y fd) st in
-                            Hashtbl.add states target st';
-                            Hashtbl.get_or calls_table callinfo.callee
-                              ~default:Iter.empty
-                            |> Iter.iter (fun c ->
-                                Q.add worklist (c, d3) (priority c)))
-                          else ()
-                      | _ -> ());
-                      ()))
-          | _ -> ())
+      |> Iter.iter
+           (phase2_call_transfer get_summary
+              (fun (c, d) -> Q.add worklist (c, d) (priority c))
+              states calls_table d md)
     done;
     (* We then apply all summary functions to each location to the initial
        values of each procedure *)
