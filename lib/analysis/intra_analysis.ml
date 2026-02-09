@@ -89,7 +89,7 @@ struct
   let eval read expr = Eval.eval read expr
 end
 
-module DiscardTypes (V : ValueAbstraction) = struct
+module ValueAbstractionIgnoringTypes (V : ValueAbstraction) = struct
   include V
 
   let eval_const op rt = eval_const op

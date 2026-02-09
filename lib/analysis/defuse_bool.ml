@@ -127,7 +127,9 @@ module IsZeroValueAbstractionUntyped = struct
 end
 
 module IsZeroValueAbstractionBasil = struct
-  include Intra_analysis.DiscardTypes (IsZeroValueAbstractionUntyped)
+  include
+    Intra_analysis.ValueAbstractionIgnoringTypes (IsZeroValueAbstractionUntyped)
+
   module E = Lang.Expr.BasilExpr
 
   let top = IsZeroLattice.Top

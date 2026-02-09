@@ -264,7 +264,7 @@ module IsKnownBitsValueAbstraction = struct
 end
 
 module IsKnownValueAbstractionBasil = struct
-  include Intra_analysis.DiscardTypes (struct
+  include Intra_analysis.ValueAbstractionIgnoringTypes (struct
     include IsKnownBitsValueAbstraction
     module E = Lang.Expr.BasilExpr
   end)
