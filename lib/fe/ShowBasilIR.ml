@@ -245,6 +245,7 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.Expr_SignExtend (intval, expr) -> s2s "Expr_SignExtend" >> c2s ' ' >> c2s '(' >> showIntVal intval  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_Extract (intval0, intval, expr) -> s2s "Expr_Extract" >> c2s ' ' >> c2s '(' >> showIntVal intval0  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_Concat exprs -> s2s "Expr_Concat" >> c2s ' ' >> c2s '(' >> showList showExpr exprs >> c2s ')'
+  |    AbsBasilIR.Expr_Repeat (intval, expr) -> s2s "Expr_Repeat" >> c2s ' ' >> c2s '(' >> showIntVal intval  >> s2s ", " >>  showExpr expr >> c2s ')'
 
 
 and showLambdaDef (e : AbsBasilIR.lambdaDef) : showable = match e with

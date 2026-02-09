@@ -237,7 +237,7 @@ module BasilASTLoader = struct
     | TypeMapType maptype -> transMapType maptype
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
 
-  and transIntVal (x : intVal) : PrimInt.t =
+  and trans_intval (x : intVal) : PrimInt.t =
     match x with
     | IntVal_Hex (IntegerHex (_, ihex)) -> Z.of_string ihex
     | IntVal_Dec (IntegerDec (_, i)) -> Z.of_string i
@@ -262,7 +262,7 @@ module BasilASTLoader = struct
     | Stmt_Load_Var (lvar, endian, var, expr, intval) ->
         let endian = trans_endian endian in
         let mem = trans_var p_st var in
-        let cells = transIntVal intval |> Z.to_int in
+        let cells = trans_intval intval |> Z.to_int in
         `Stmt
           (Instr_Load
              {
@@ -274,7 +274,7 @@ module BasilASTLoader = struct
              })
     | Stmt_Store_Var (lhs, endian, var, addr, value, intval) ->
         let endian = trans_endian endian in
-        let cells = transIntVal intval |> Z.to_int in
+        let cells = trans_intval intval |> Z.to_int in
         let mem = trans_var p_st var in
         let lhs = trans_lvar p_st lhs in
         `Stmt
@@ -302,7 +302,7 @@ module BasilASTLoader = struct
           Option.get_exn_or ("memory undefined: " ^ n)
           @@ Var.Decls.find_opt p_st.prog.globals n
         in
-        let cells = transIntVal intval |> Z.to_int in
+        let cells = trans_intval intval |> Z.to_int in
         `Stmt
           (Instr_Load
              {
@@ -314,7 +314,7 @@ module BasilASTLoader = struct
              })
     | Stmt_Store (endian, bident, addr, value, intval) ->
         let endian = trans_endian endian in
-        let cells = transIntVal intval |> Z.to_int in
+        let cells = trans_intval intval |> Z.to_int in
         let mem =
           let n = unsafe_unsigil (`Global bident) in
           Option.get_exn_or ("memory undefined: " ^ n)
@@ -529,25 +529,31 @@ module BasilASTLoader = struct
         BasilExpr.unexp ~op:(transUnOp unop) (trans_expr expr)
     | Expr_ZeroExtend (intval, expr) ->
         BasilExpr.zero_extend
-          ~n_prefix_bits:(Z.to_int @@ transIntVal intval)
+          ~n_prefix_bits:(Z.to_int @@ trans_intval intval)
           (trans_expr expr)
     | Expr_SignExtend (intval, expr) ->
         BasilExpr.sign_extend
-          ~n_prefix_bits:(Z.to_int @@ transIntVal intval)
+          ~n_prefix_bits:(Z.to_int @@ trans_intval intval)
           (trans_expr expr)
     | Expr_Extract (ival0, intval, expr) ->
         BasilExpr.extract
-          ~hi_excl:(transIntVal ival0 |> Z.to_int)
-          ~lo_incl:(transIntVal intval |> Z.to_int)
+          ~hi_excl:(trans_intval ival0 |> Z.to_int)
+          ~lo_incl:(trans_intval intval |> Z.to_int)
           (trans_expr expr)
+    | Expr_Repeat (repeats, n) ->
+        let repeats = trans_intval repeats in
+        let e = trans_expr n in
+        BasilExpr.applyintrin ~op:`BVConcat
+          (List.init (Z.to_int repeats) (fun _ -> e))
     | Expr_Concat exprs ->
         BasilExpr.applyintrin ~op:`BVConcat (List.map trans_expr exprs)
     | Expr_Literal (Value_BV (BVVal1 (intval, BVType1 bvtype))) ->
         BasilExpr.bvconst
           (match transBVTYPE bvtype with
-          | Bitvector size -> Bitvec.create ~size (transIntVal intval)
+          | Bitvector size -> Bitvec.create ~size (trans_intval intval)
           | _ -> failwith "unreachable")
-    | Expr_Literal (Value_Int intval) -> BasilExpr.intconst (transIntVal intval)
+    | Expr_Literal (Value_Int intval) ->
+        BasilExpr.intconst (trans_intval intval)
     | Expr_Literal Value_True -> BasilExpr.boolconst true
     | Expr_Literal Value_False -> BasilExpr.boolconst false
     | Expr_Old e -> BasilExpr.unexp ~op:`Old (trans_expr e)

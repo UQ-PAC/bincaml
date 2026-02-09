@@ -199,6 +199,7 @@ Expr_ZeroExtend . Expr ::= "zero_extend" "(" IntVal "," Expr ")" ;
 Expr_SignExtend . Expr ::= "sign_extend" "(" IntVal "," Expr ")" ;
 Expr_Extract    . Expr ::= "extract" "(" IntVal "," IntVal "," Expr ")" ;
 Expr_Concat     . Expr ::= "bvconcat"  "(" [Expr]  ")" ;
+Expr_Repeat . Expr ::= "repeat" "(" IntVal "," Expr ")" ;
 
 -- operators
 

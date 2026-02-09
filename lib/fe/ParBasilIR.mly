@@ -7,7 +7,7 @@ open AbsBasilIR
 open Lexing
 %}
 
-%token KW_axiom KW_memory KW_shared KW_var KW_prog KW_entry KW_proc KW_le KW_be KW_nop KW_load KW_store KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_old KW_boolnot KW_intneg KW_booltobv1 KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_invariant KW_rely KW_guarantee
+%token KW_axiom KW_memory KW_shared KW_var KW_prog KW_entry KW_proc KW_le KW_be KW_nop KW_load KW_store KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_old KW_boolnot KW_intneg KW_booltobv1 KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_repeat KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_invariant KW_rely KW_guarantee
 
 %token SYMB1 /* ; */
 %token SYMB2 /* , */
@@ -560,6 +560,7 @@ expr : value { Expr_Literal $1 }
   | KW_sign_extend SYMB5 intVal SYMB2 expr SYMB6 { Expr_SignExtend ($3, $5) }
   | KW_extract SYMB5 intVal SYMB2 intVal SYMB2 expr SYMB6 { Expr_Extract ($3, $5, $7) }
   | KW_bvconcat SYMB5 expr_list SYMB6 { Expr_Concat $3 }
+  | KW_repeat SYMB5 intVal SYMB2 expr SYMB6 { Expr_Repeat ($3, $5) }
   ;
 
 lambdaDef : SYMB5 localVar_list SYMB6 lambdaSep expr { LambdaDef1 ($2, $4, $5) }
