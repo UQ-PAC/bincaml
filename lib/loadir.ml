@@ -543,8 +543,10 @@ module BasilASTLoader = struct
     | Expr_Repeat (repeats, n) ->
         let repeats = trans_intval repeats in
         let e = trans_expr n in
-        BasilExpr.applyintrin ~op:`BVConcat
-          (List.init (Z.to_int repeats) (fun _ -> e))
+        if Z.equal Z.one repeats then e
+        else
+          BasilExpr.applyintrin ~op:`BVConcat
+            (List.init (Z.to_int repeats) (fun _ -> e))
     | Expr_Concat exprs ->
         BasilExpr.applyintrin ~op:`BVConcat (List.map trans_expr exprs)
     | Expr_Literal (Value_BV (BVVal1 (intval, BVType1 bvtype))) ->
