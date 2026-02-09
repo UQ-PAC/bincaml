@@ -260,13 +260,16 @@ include debug information.
 Use a lot of assertions, assertions are fantastic, even better use exceptions.
 
 Linux debugging tools are useful when dealing with logic errors that result in
-crashes in external C libraries (such as zarith) due to API misue. 
-Internal library errors can be investigated
-with `strace` (the syscall trace program); this can tell you, e.g. if  
+crashes in external C libraries (such as zarith) due to API misue. Internal
+library errors can be investigated with `strace` (the syscall trace program);
+this can show you the sequence of syscalls that lead to a failure (e.g. an
+extremely large allocation). 
 
 OCaml 5 supports {{:https://web.archive.org/web/20251222014345/https://lambdafoo.com/posts/2024-08-03-lldb-ocaml.html} LLDB} 
 and {{:https://web.archive.org/web/20251118091834/https://kcsrk.info/ocaml/gdb/2024/01/20/gdb-ocaml/} GDB}, 
 however the support value printing is limited.
+
+GDB is useful to have installed at least for the [pstack] command.
 
 {2 Performance}
 
@@ -296,7 +299,6 @@ There is a script which runs bincaml and produces a flamegraph (file [flamegraph
 e.g. [./tools/runperf.sh script examples/test.s] produces the following.
 
 {{image!doc/flamegraph.svg}Example flamegraph image}
-
 
 {2 Nontermination}
 
@@ -374,8 +376,6 @@ Use the following to build and open the documentation page for an installed pack
 odig doc containers
 v}
 
-
-{2  Repeating Module Interfaces }
 
 It is good practice to hide implementations by interfaces, however in practice this often requires
 a significant amount of code rewriting to define the module and its interface separately.
