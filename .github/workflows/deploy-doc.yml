@@ -42,7 +42,7 @@ jobs:
 
       - name: Build documentation
         run: |
-          opam exec -- dune build --ignore-promoted-rules @doc
+          opam exec -- dune build --ignore-promoted-rules
           opam exec -- dune install --ignore-promoted-rules
           opam exec -- odig odoc bincaml --cache-dir _html
 
@@ -52,7 +52,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _html
+          path: _html/html/bincaml
 
       - name: Deploy odoc to GitHub Pages
         id: deployment
