@@ -36,10 +36,15 @@ jobs:
           ocaml-compiler: 5.3.0
 
       - name: Install dependencies
-        run: opam install . --deps-only --with-doc
+        run: |
+          opam install . --deps-only --with-doc
+          opam install odig
 
       - name: Build documentation
-        run: opam exec -- dune build --ignore-promoted-rules @doc
+        run: |
+          opam exec -- dune build --ignore-promoted-rules @doc
+          opam exec -- dune install --ignore-promoted-rules
+          opam exec -- odig odoc bincaml --cache-dir _html
 
       - name: Set-up Pages
         uses: actions/configure-pages@v5
@@ -47,7 +52,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _build/default/_doc/_html
+          path: _html
 
       - name: Deploy odoc to GitHub Pages
         id: deployment
