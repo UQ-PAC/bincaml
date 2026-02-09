@@ -4,11 +4,6 @@ open Expr
 open Asd
 open Adt
 
-(*
-  TODO List:
-    RECURSION WITHIN EXPRESSIONS TO GET SIDE-EFFECT STUFF
-*)
-
 let gen = ID.make_gen ()
 
 let join (ty0 : ty) (ty1 : ty) : ty =
@@ -59,7 +54,7 @@ let join (ty0 : ty) (ty1 : ty) : ty =
         Function (name0, ins, outs0)
   | _ -> Union (ty0, ty1)
 
-let minimise_type ty =
+let minimise_type p ty name =
   let rec type_to_state_list (p : bool) (ty : ty)
       ((ls, tbl) as acc : 's list * ('s, (sigma, 's) Hashtbl.t) Hashtbl.t) :
       's list * ('s, ('e, 's) Hashtbl.t) Hashtbl.t =
@@ -113,9 +108,9 @@ let minimise_type ty =
         Hashtbl.add tbl (p, ty) edges;
         ((p, ty) :: ls, tbl)
   in
-  let states, edges = type_to_state_list true ty ([], Hashtbl.create 10) in
+  let states, edges = type_to_state_list p ty ([], Hashtbl.create 10) in
   (* states trans start fin *)
-  let automata = Adt.create_automata2 states edges (true, ty) [] in
+  let automata = Adt.create_automata2 states edges (true, ty) [] name in
   Adt.remove_ep automata;
   print_string @@ export_graphviz automata;
   automata
@@ -123,6 +118,13 @@ let minimise_type ty =
 let show_type_map (m : ty StringMap.t) : string =
   StringMap.bindings m
   |> List.map (fun (name, ty) -> Printf.sprintf "%s: %s" name (show_ty ty))
+  |> String.concat "\n"
+
+let show_type_map2 (m : (ty * ty) StringMap.t) : string =
+  StringMap.bindings m
+  |> List.map (fun (name, (ty1, ty2)) ->
+      Printf.sprintf "%s:\n   lower: %s\n   upper: %s" name (show_ty ty1)
+        (show_ty ty2))
   |> String.concat "\n"
 
 let rec coalesce_types (constraint_set : constraint_state)
@@ -290,8 +292,7 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
         | Some { lb } ->
             TySet.to_iter lb
             |> Iter.fold
-                 (fun st bound ->
-                   constrain st bound type1 TySet.empty)
+                 (fun st bound -> constrain st bound type1 TySet.empty)
                  st
         | None -> st)
     | Field { ty }, TypeVar b -> (
@@ -312,16 +313,16 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
         (* The right hand side is not a type variable *)
         let st = add_lb st a type0 in
         let bounds = StringMap.get a st in
-        if TySet.mem type0 rec_check then st else
-        let rec_check = TySet.add type0 rec_check in
-        match bounds with
-        | Some { ub } ->
-            TySet.to_iter ub
-            |> Iter.fold
-                 (fun st bound ->
-                   constrain st type0 bound rec_check)
-                 st
-        | None -> st)
+        if TySet.mem type0 rec_check then st
+        else
+          let rec_check = TySet.add type0 rec_check in
+          match bounds with
+          | Some { ub } ->
+              TySet.to_iter ub
+              |> Iter.fold
+                   (fun st bound -> constrain st type0 bound rec_check)
+                   st
+          | None -> st)
     | _ ->
         (* You have to assign to a variable so this case should never occur *)
         failwith
@@ -398,26 +399,37 @@ let check_proc (prog : Program.t) st p =
   Procedure.iter_blocks_topo_fwd p |> Iter.fold (check_block p) st
 
 let transform (prog : Program.t) =
+  print_string "\n === Type Constraints === \n";
   let type_constraint_map =
     ID.Map.values prog.procs |> Iter.fold (check_proc prog) StringMap.empty
   in
-  print_string "\n === Type Constraints === \n";
   print_string @@ show_constraint_state type_constraint_map;
+
+  print_string "\n === Coalesced Types === \n";
   let types =
     StringMap.mapi
-      (fun name { ub } ->
-        TySet.fold
-          (fun ty (acc : ty) ->
-            let a = coalesce_types type_constraint_map TySet.empty false ty in
-            match acc with Top -> a | _ -> Sect (acc, a))
-          ub Top)
+      (fun name { lb; ub } ->
+        let upper = (* Positive Occurences *)
+          TySet.fold
+            (fun ty (acc : ty) ->
+              let a = coalesce_types type_constraint_map TySet.empty false ty in
+              match acc with Top -> a | _ -> Sect (acc, a))
+            ub Top
+        in
+        let lower = (* Negative Occurences *)
+          TySet.fold
+            (fun ty (acc : ty) ->
+              let a = coalesce_types type_constraint_map TySet.empty false ty in
+              match acc with Top -> a | _ -> Union (acc, a))
+            lb Top
+        in
+        (lower, upper))
       type_constraint_map
   in
-  print_string "\n === Coalesced Types === \n";
-  print_string @@ show_type_map types;
+  print_string @@ show_type_map2 types;
 
   (*
-    Possible speed up stratergy would to only many as many automata as we need.
+    Possible speed up strat would to only many as many automata as we need.
 
     So make an automata, and remove the types that are included in that automata from the string map,
       so we will have a list of automata, and then for every Var.decl grab the minimised type and then lower it
@@ -425,5 +437,5 @@ let transform (prog : Program.t) =
     This needs to passes of the program but I think the only other way would be to pass the program for
      every line in the program.
   *)
-  let automatas = StringMap.mapi (fun name ty -> minimise_type ty) types in
+  (* let automatas = StringMap.mapi (fun name (lower_ty, upper_ty) -> (minimise_type true lower_ty name, minimise_type false upper_ty name)) types in *)
   prog
