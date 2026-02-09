@@ -27,5 +27,3 @@
   bincaml.ast
   trace.core))
 
-(documentation
- (package bincaml))
