@@ -6,14 +6,9 @@ open Adt
 
 (*
   TODO List:
-    - Fully represent TypeVar's etc with IDs
-      - Maybe I should not do this as I want to get stuff back
-        and currently my biggest concern is how do i get stuff back
+    RECURSION WITHIN EXPRESSIONS TO GET SIDE-EFFECT STUFF
 *)
 
-(*
-  TODO: change to be a variable length bv and step away from int16 in favour of bv16
-*)
 let gen = ID.make_gen ()
 
 let join (ty0 : ty) (ty1 : ty) : ty =
@@ -105,11 +100,16 @@ let minimise_type ty =
         Hashtbl.add edges LoadLabel (p, b);
         ((p, ty) :: ls, tbl)
     | Record fields ->
-        let (ls, tbl) =
-          List.fold_left (fun acc {ty} -> type_to_state_list (not p) ty acc) acc fields
+        let ls, tbl =
+          List.fold_left
+            (fun acc { ty } -> type_to_state_list (not p) ty acc)
+            acc fields
         in
         let edges = Hashtbl.create 30 in
-        List.iter (fun {offset;size;ty} -> Hashtbl.add edges (Reclabel (offset,size)) (p, ty)) fields;
+        List.iter
+          (fun { offset; size; ty } ->
+            Hashtbl.add edges (Reclabel (offset, size)) (p, ty))
+          fields;
         Hashtbl.add tbl (p, ty) edges;
         ((p, ty) :: ls, tbl)
   in
@@ -177,81 +177,111 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
     TODO:
           Restructure this function to actually allow constraints to be generated at this stage
   *)
-  let constrain_expr (expr : 'e BasilExpr.abstract_expr) =
+  let rec constrain_expr (st : constraint_state)
+      (expr : 'e BasilExpr.abstract_expr) =
+    let constrain_arg st l t =
+      let l = BasilExpr.unfix l in
+      match l with RVar a -> add_lb st (Var.name a) t | _ -> st
+    in
+    let constrain_args st l r t =
+      let st = constrain_arg st l t in
+      constrain_arg st r t
+    in
     match expr with
     | RVar a ->
         let name = rename_variable @@ Var.name a in
-        if Var.is_local a then TypeVar name
-        else
-          (*
-            NOTE:
-                Memory analysis has the information that can get extra
-                detail here, however that information is not avaliable
-                outs
-          *)
-          TypeVar name
-    | Constant op -> (
-        match op with
-        | `Bool _ -> Atom C_Bool
-        | `Bitvector bv -> Atom (C_BV (Bitvec.size bv))
-        | `Integer _ -> Atom C_Int)
+        (st, TypeVar name)
+    | Constant op ->
+        ( st,
+          match op with
+          | `Bool _ -> Atom C_Bool
+          | `Bitvector bv -> Atom (C_BV (Bitvec.size bv))
+          | `Integer _ -> Atom C_Int )
     | UnaryExpr (op, a) -> (
+        let st, _ = constrain_expr st (BasilExpr.unfix a) in
         match op with
-        | `BoolNOT -> Atom C_Bool
-        | `BOOLTOBV1 ->
-            Atom C_Bool
-            (* IDK, the input is constrained by bool but not output maybe *)
-        | `INTNEG -> Atom C_Int
+        | `BoolNOT -> (constrain_arg st a @@ Atom C_Bool, Atom C_Bool)
+        | `BOOLTOBV1 -> (constrain_arg st a @@ Atom C_Bool, Atom (C_BV 1))
+        | `INTNEG -> (constrain_arg st a @@ Atom C_Int, Atom C_Int)
+        | `BVNEG | `BVNOT ->
+            let typ =
+              match BasilExpr.type_of a with
+              | Bitvector size -> Atom (C_BV size)
+              | _ -> failwith "Bitvector operation without bitvector arguments"
+            in
+            (constrain_arg st a @@ typ, typ)
+        | `SignExtend b | `ZeroExtend b ->
+            let size =
+              match BasilExpr.type_of a with
+              | Bitvector size -> size
+              | _ -> failwith "Bitvector operation without bitvector arguments"
+            in
+            (constrain_arg st a @@ Atom (C_BV size), Atom (C_BV (size + b)))
+        | `Exists -> (st, Atom C_Bool) (* TODO: Confirm *)
+        | `Old -> (st, Top)
+        | `Forall -> (st, Top)
         | `Extract (finish, rt) ->
             let size = finish - rt in
             let ty =
               TypeVar (Printf.sprintf "Extraction_%s" @@ ID.name @@ gen.fresh ())
             in
             let field = { offset = rt; size; ty } in
-            Field field
-        | `BVNEG -> Top
-        | `SignExtend _ -> Top
-        | `BVNOT -> Top
-        | `ZeroExtend _ -> Top
-        | `Exists -> Atom C_Bool (* TODO: Confirm *)
-        | `Old -> Top
-        | `Forall -> Top
-        | _ -> Top)
+            (constrain_arg st a @@ Record [ field ], Field field))
     | BinaryExpr (op, l, r) -> (
+        let st, _ = constrain_expr st (BasilExpr.unfix l) in
+        let st, _ = constrain_expr st (BasilExpr.unfix r) in
         match op with
-        | `INTMOD | `INTSUB | `INTDIV | `INTADD | `INTMUL -> Atom C_Int
-        | `NEQ | `EQ | `INTLT | `INTLE | `BVULE | `BVULT | `BVSLE | `BVSLT ->
-            Atom C_Bool
-        (* Help *)
-        | `IMPLIES -> Top
-        | `BVSREM | `BVSDIV | `BVADD | `BVMUL | `BVUREM | `BVSUB | `BVUDIV
-        | `BVSMOD (* Unsure but i just asked so don't wanna again *) | `BVSHL
-        | `BVLSHR | `BVASHR -> (
+        | `INTMOD | `INTSUB | `INTDIV | `INTADD | `INTMUL ->
+            let st = constrain_args st l r @@ Atom C_Int in
+            (st, Atom C_Int)
+        | `NEQ | `EQ ->
+            (* TODO: Can most likely extract more information from this *)
+            (st, Atom C_Bool)
+        | `INTLT | `INTLE ->
+            let st = constrain_args st l r @@ Atom C_Int in
+            (st, Atom C_Bool)
+        | `BVULE | `BVULT | `BVSLE | `BVSLT -> (
             match BasilExpr.type_of l with
-            | Bitvector size -> Atom (C_BV size)
-            | _ -> Top)
-        (* Help *)
-        | `BVNAND -> Top
-        | `BVAND -> Top
-        | `BVXOR -> Top
-        | `BVOR -> Top
-        | _ -> Top)
-    | ApplyIntrin (op, args) -> Top
-    | ApplyFun (a, b) -> Top
-    | Binding (vars, b) -> Top
+            | Bitvector size ->
+                let st = constrain_args st l r @@ Atom (C_BV size) in
+                (st, Atom C_Bool)
+            | _ -> failwith "BV operation without BV arguments")
+        | `BVSREM | `BVSDIV | `BVADD | `BVMUL | `BVUREM | `BVSUB | `BVUDIV
+        | `BVSMOD | `BVSHL | `BVLSHR | `BVASHR | `BVNAND | `BVAND | `BVXOR
+        | `BVOR -> (
+            match BasilExpr.type_of l with
+            | Bitvector size ->
+                let typ = Atom (C_BV size) in
+                let st = constrain_args st l r typ in
+                (st, typ)
+            | _ -> failwith "BV operation without BV arguments")
+        (* WARN: I forgot what this was meant to be *)
+        | `IMPLIES -> (st, Top))
+    | ApplyIntrin (op, args) -> (st, Top) (* Concat *)
+    | ApplyFun (a, b) -> (st, Top)
+    | Binding (vars, b) -> (st, Top)
   in
 
   (*
     Main function to generate consistent constraint set
   *)
-  let rec constrain (st : constraint_state) (type0 : ty) (type1 : ty) :
-      constraint_state =
+  (*
+    WARN: I am extremely unhappy with the recurrence check
+      I am very much struggling to reason about it, I think I have
+      it as weak as possible while still catching the cntlm case
+
+    This will need much more reasoning to come
+  *)
+  let rec constrain (st : constraint_state) (type0 : ty) (type1 : ty)
+      (rec_check : TySet.t) : constraint_state =
     match (type0, type1) with
     | Top, _ | _, Top | Bottom, _ | _, Bottom -> st
     | Pointer (type0_a, type0_b), Pointer (type1_a, type1_b) ->
-        constrain (constrain st type1_a type0_a) type0_b type1_b
+        constrain
+          (constrain st type1_a type0_a rec_check)
+          type0_b type1_b rec_check
     | _, Pointer (type1_a, type1_b) ->
-        constrain (constrain st type0 type1_a) type0 type1_b
+        constrain (constrain st type0 type1_a rec_check) type0 type1_b rec_check
     | TypeVar a, TypeVar b -> (
         (* The right hand side is a type variable, fields are pretty much variables *)
         let st = add_ub st a type1 in
@@ -259,7 +289,10 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
         match bounds with
         | Some { lb } ->
             TySet.to_iter lb
-            |> Iter.fold (fun st bound -> constrain st bound type1) st
+            |> Iter.fold
+                 (fun st bound ->
+                   constrain st bound type1 TySet.empty)
+                 st
         | None -> st)
     | Field { ty }, TypeVar b -> (
         (* The right hand side is a type variable, fields are pretty much variables *)
@@ -270,17 +303,24 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
             match bounds with
             | Some { lb } ->
                 TySet.to_iter lb
-                |> Iter.fold (fun st bound -> constrain st bound type1) st
+                |> Iter.fold
+                     (fun st bound -> constrain st bound type1 TySet.empty)
+                     st
             | None -> st)
         | _ -> st)
     | _, TypeVar a -> (
         (* The right hand side is not a type variable *)
         let st = add_lb st a type0 in
         let bounds = StringMap.get a st in
+        if TySet.mem type0 rec_check then st else
+        let rec_check = TySet.add type0 rec_check in
         match bounds with
         | Some { ub } ->
             TySet.to_iter ub
-            |> Iter.fold (fun st bound -> constrain st type0 bound) st
+            |> Iter.fold
+                 (fun st bound ->
+                   constrain st type0 bound rec_check)
+                 st
         | None -> st)
     | _ ->
         (* You have to assign to a variable so this case should never occur *)
@@ -289,7 +329,7 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
              (show_ty type0) (show_ty type1) (Program.show_stmt stmt))
   in
   match stmt with
-  | Stmt.Instr_Assert _ | Stmt.Instr_Assume _ -> st
+  | Stmt.Instr_Assert _ | Stmt.Instr_Assume _ -> st (* TODO inner is bool? *)
   (* Deal with assignment cases *)
   | Stmt.Instr_Assign ls ->
       List.fold_left
@@ -298,8 +338,9 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
           if String.starts_with ~prefix:"_PC" (Var.name lhs) then st
           else
             let lhs = rename_variable @@ Var.name lhs in
-            let constrained_expr = constrain_expr (BasilExpr.unfix expr) in
-            constrain st constrained_expr (TypeVar lhs))
+            let st, constrain_expr = constrain_expr st (BasilExpr.unfix expr) in
+            Printf.printf "%s : %s \n%!" (show_ty constrain_expr) lhs;
+            constrain st constrain_expr (TypeVar lhs) TySet.empty)
         st ls
   (* Pointer stuff here *)
   (* TODO: unsure about store but relativly confident about load *)
@@ -325,7 +366,9 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
       @@ TypeVar (Int.to_string stmt_number ^ "_b_store")
   | Stmt.Instr_Call { lhs; args; procid } ->
       let args =
-        StringMap.map (fun v -> constrain_expr @@ BasilExpr.unfix v) args
+        StringMap.map
+          (fun v -> snd @@ constrain_expr st @@ BasilExpr.unfix v)
+          args
       in
       let rets =
         StringMap.map (fun v -> TypeVar (rename_variable (Var.name v))) lhs
