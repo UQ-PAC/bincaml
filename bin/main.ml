@@ -36,8 +36,10 @@ let dump_proc fname proc =
     let p = ID.Map.find id p.prog.procs in
     print_proc stdout p;
     Ok ()
-  with Loader.Loadir.ILBParseError _ as e ->
-    Error (Loader.Loadir.show_ilbparseerror e)
+  with
+  | (Loader.Loadir.ILBParseError _ | Loader.Loadir.LoadError _) as e ->
+      Error (Loader.Loadir.show_ilbparseerror e)
+  | Not_found -> Error ("no procedure \"" ^ proc ^ "\" in " ^ fname)
 
 let print_cfg fname proc =
   let prg = Loader.Loadir.ast_of_fname fname in

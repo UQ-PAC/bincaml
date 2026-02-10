@@ -17,6 +17,13 @@ end
 
 type textRange = (int * int) option [@@deriving show { with_path = false }, eq]
 
+exception
+  LoadError of {
+    token_char_offset_range : (int * int) option;
+    msg : string;
+    input : Pp_loc.Input.t option;
+  }
+
 module BasilASTLoader = struct
   open BasilIR.AbsBasilIR
 
@@ -25,7 +32,7 @@ module BasilASTLoader = struct
         (string
         * Var.t Block.phi list
         * [ `Stmt of Program.stmt | `Return of Program.e list ] list
-        * [ `Goto of string list | `None | `Return ])
+        * [ `Goto of blockIdent list | `None | `Return ])
 
   let conv_lblock formal_out_params_order p = function
     | LBlock (name, phis, stmts, succ) ->
@@ -217,7 +224,19 @@ module BasilASTLoader = struct
                   | `Goto tgts ->
                       let f = StringMap.find name block_label_id in
                       let succ =
-                        List.map (fun c -> StringMap.find c block_label_id) tgts
+                        tgts
+                        |> List.map (function BlockIdent (pos, c) ->
+                            (match StringMap.find_opt c block_label_id with
+                            | Some b -> b
+                            | None ->
+                                raise
+                                  (LoadError
+                                     {
+                                       input = None;
+                                       token_char_offset_range = Some pos;
+                                       msg =
+                                         Printf.sprintf "no such block: %s" c;
+                                     })))
                       in
                       Procedure.add_goto p ~from:f ~targets:succ))
             p blocks
@@ -332,7 +351,18 @@ module BasilASTLoader = struct
              })
     | Stmt_DirectCall (calllvars, bident, exprs) ->
         let n = unsafe_unsigil (`Proc bident) in
-        let procid = p_st.prog.proc_names.get_id n in
+        let procid =
+          try p_st.prog.proc_names.get_id n
+          with Not_found ->
+            raise
+              (LoadError
+                 {
+                   input = None;
+                   token_char_offset_range =
+                     Some (get_bident_loc (`Proc bident));
+                   msg = "no such procedure: " ^ n;
+                 })
+        in
         let in_param, out_param = Hashtbl.find p_st.params_order n in
         let lhs = trans_call_lhs p_st (List.map fst out_param) calllvars in
         let args = trans_call_rhs in_param exprs in
@@ -381,9 +411,7 @@ module BasilASTLoader = struct
   and trans_jump (x : BasilIR.AbsBasilIR.jumpWithAttrib) =
     let jump = match x with JumpWithAttrib1 (jump, _) -> jump in
     match jump with
-    | Jump_GoTo bidents ->
-        let get_id = function BlockIdent (pos, g) -> g in
-        `Goto (List.map get_id bidents)
+    | Jump_GoTo bidents -> `Goto bidents
     | Jump_Unreachable -> `None
     | Jump_Return exprs -> `Return (List.map trans_expr exprs)
     | Jump_ProcReturn -> `ProcReturn
@@ -482,6 +510,13 @@ module BasilASTLoader = struct
   and param_to_formal (pp : params) : string * Var.t =
     match pp with
     | Params1 (LocalIdent (pos, id), t) -> (id, Var.create id (trans_type t))
+
+  and get_bident_loc g =
+    match g with
+    | `Global (GlobalIdent (pos, g)) -> pos
+    | `Local (LocalIdent (pos, g)) -> pos
+    | `Proc (ProcIdent (pos, g)) -> pos
+    | `Block (BlockIdent (pos, g)) -> pos
 
   and unsafe_unsigil g : string =
     match g with
@@ -642,8 +677,31 @@ end
 
 exception ILBParseError of { input : Pp_loc.Input.t; lexbuf : Lexing.lexbuf }
 
+let format_ploc input =
+ fun f ->
+  Pp_loc.setup_highlight_tags f
+    ~single_line_underline:
+      {
+        open_tag =
+          (fun _ -> Format.ANSI_codes.string_of_style_list [ `Bold; `FG `Red ]);
+        close_tag = (fun _ -> Format.ANSI_codes.string_of_style `Reset);
+      }
+    ();
+
+  Pp_loc.pp ~input ~max_lines:5 f
+
 let show_ilbparseerror e =
   match e with
+  | LoadError { input = None; msg } -> msg
+  | LoadError
+      { input = Some input; msg; token_char_offset_range = Some (btok, etok) }
+    ->
+      let o =
+        Format.asprintf "Error: %s%a%a" msg Format.pp_print_newline ()
+          (format_ploc input)
+          [ (Pp_loc.Position.of_offset btok, Pp_loc.Position.of_offset etok) ]
+      in
+      o
   | ILBParseError { input; lexbuf } ->
       let loc =
         [
@@ -651,23 +709,11 @@ let show_ilbparseerror e =
             Pp_loc.Position.of_lexing @@ Lexing.lexeme_end_p lexbuf );
         ]
       in
+      let fname = (Lexing.lexeme_end_p lexbuf).pos_fname in
+      let lnum = (Lexing.lexeme_end_p lexbuf).pos_lnum in
       let o =
-        Format.asprintf "Parse error:  %s%a%a"
-          (Lexing.lexeme_end_p lexbuf).pos_fname Format.pp_print_newline ()
-          (fun f ->
-            Pp_loc.setup_highlight_tags f
-              ~single_line_underline:
-                {
-                  open_tag =
-                    (fun _ ->
-                      Format.ANSI_codes.string_of_style_list [ `Bold; `FG `Red ]);
-                  close_tag =
-                    (fun _ -> Format.ANSI_codes.string_of_style `Reset);
-                }
-              ();
-
-            Pp_loc.pp ~input ~max_lines:5 f)
-          loc
+        Format.asprintf "Parse error:  %s:%d%a%a" fname lnum
+          Format.pp_print_newline () (format_ploc input) loc
       in
       o
   | _ -> failwith "diff error"
@@ -680,6 +726,7 @@ let () =
         let col = b.pos_cnum - b.pos_bol in
         Some (Printf.sprintf "Parse error in \"%s\" line %d col %d" fname x col)
     | ILBParseError _ as e -> Some (show_ilbparseerror e)
+    | LoadError _ as e -> Some (show_ilbparseerror e)
     | _ -> None (* for other exceptions *))
 
 let concrete_prog_ast_of_channel ?input ?filename c =
@@ -813,7 +860,9 @@ let ast_of_channel ?input fname c =
     let m = concrete_prog_ast_of_channel ?input ~filename:fname c in
     m
   in
-  ast_of_concrete_ast ~name:fname m
+  try ast_of_concrete_ast ~name:fname m
+  with LoadError { token_char_offset_range; msg } ->
+    raise (LoadError { input; token_char_offset_range; msg })
 
 let ast_of_fname fname =
   IO.with_in fname (fun c ->

@@ -40,10 +40,16 @@ let of_cmd st (e : Containers.Sexp.t) =
   Trace_core.with_span ~__FILE__ ~__LINE__ ("runcmd::" ^ cmd) (fun _ ->
       match cmd with
       | "skip" -> st
-      | "load-il" ->
-          let fname = List.hd (assert_atoms 1 args) in
-          let p = Loader.Loadir.ast_of_fname fname in
-          { st with prog = Some p.prog }
+      | "load-il" -> (
+          try
+            let fname = List.hd (assert_atoms 1 args) in
+            let p = Loader.Loadir.ast_of_fname fname in
+            { st with prog = Some p.prog }
+          with
+          | (Loader.Loadir.ILBParseError _ | Loader.Loadir.LoadError _) as e ->
+            let msg = Loader.Loadir.show_ilbparseerror e in
+            raise
+              (Common.ReplError { msg; __FILE__; __LINE__; __FUNCTION__; cmd }))
       | "list-procs" ->
           let open Program in
           ID.Map.iter
