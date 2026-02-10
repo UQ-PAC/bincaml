@@ -642,6 +642,36 @@ end
 
 exception ILBParseError of { input : Pp_loc.Input.t; lexbuf : Lexing.lexbuf }
 
+let show_ilbparseerror e =
+  match e with
+  | ILBParseError { input; lexbuf } ->
+      let loc =
+        [
+          ( Pp_loc.Position.of_lexing @@ Lexing.lexeme_start_p lexbuf,
+            Pp_loc.Position.of_lexing @@ Lexing.lexeme_end_p lexbuf );
+        ]
+      in
+      let o =
+        Format.asprintf "Parse error:  %s%a%a"
+          (Lexing.lexeme_end_p lexbuf).pos_fname Format.pp_print_newline ()
+          (fun f ->
+            Pp_loc.setup_highlight_tags f
+              ~single_line_underline:
+                {
+                  open_tag =
+                    (fun _ ->
+                      Format.ANSI_codes.string_of_style_list [ `Bold; `FG `Red ]);
+                  close_tag =
+                    (fun _ -> Format.ANSI_codes.string_of_style `Reset);
+                }
+              ();
+
+            Pp_loc.pp ~input ~max_lines:5 f)
+          loc
+      in
+      o
+  | _ -> failwith "diff error"
+
 let () =
   Printexc.register_printer (function
     | BasilIR.BNFC_Util.Parse_error (b, e) ->
@@ -649,33 +679,7 @@ let () =
         let x = b.pos_lnum in
         let col = b.pos_cnum - b.pos_bol in
         Some (Printf.sprintf "Parse error in \"%s\" line %d col %d" fname x col)
-    | ILBParseError { input; lexbuf } ->
-        let loc =
-          [
-            ( Pp_loc.Position.of_lexing @@ Lexing.lexeme_start_p lexbuf,
-              Pp_loc.Position.of_lexing @@ Lexing.lexeme_end_p lexbuf );
-          ]
-        in
-        let o =
-          Format.asprintf "Parse error:  %s%a%a"
-            (Lexing.lexeme_end_p lexbuf).pos_fname Format.pp_print_newline ()
-            (fun f ->
-              Pp_loc.setup_highlight_tags f
-                ~single_line_underline:
-                  {
-                    open_tag =
-                      (fun _ ->
-                        Format.ANSI_codes.string_of_style_list
-                          [ `Bold; `FG `Red ]);
-                    close_tag =
-                      (fun _ -> Format.ANSI_codes.string_of_style `Reset);
-                  }
-                ();
-
-              Pp_loc.pp ~input ~max_lines:5 f)
-            loc
-        in
-        Some o
+    | ILBParseError _ as e -> Some (show_ilbparseerror e)
     | _ -> None (* for other exceptions *))
 
 let concrete_prog_ast_of_channel ?input ?filename c =
