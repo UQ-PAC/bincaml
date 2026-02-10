@@ -504,11 +504,10 @@ let pretty show_lvar show_var show_expr p =
             (id, get_block p id |> Option.get_exn_or "bad graph"))
         |> Iter.map (fun (id, block) -> pretty_block g id block)
         |> Iter.to_list
-    | None -> []
-  in
-  let blocks =
-    surround (text "[")
-      (nest 2 @@ newline ^ append_l ~sep:(text ";" ^ newline) blocks)
-      (newline ^ text "]")
+        |> fun blocks ->
+        surround (text "[")
+          (nest 2 @@ newline ^ append_l ~sep:(text ";" ^ newline) blocks)
+          (newline ^ text "]")
+    | None -> newline
   in
   header ^ nl ^ blocks

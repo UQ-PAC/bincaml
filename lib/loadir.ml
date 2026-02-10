@@ -656,8 +656,25 @@ let () =
               Pp_loc.Position.of_lexing @@ Lexing.lexeme_end_p lexbuf );
           ]
         in
+              Pp_loc.setup_highlight_tags Format.err_formatter
+                ~single_line_underline:
+                  {
+                    open_tag =
+                      (fun _ ->
+                        Format.ANSI_codes.string_of_style_list
+                          [ `Bold; `FG `Red ]);
+                    close_tag =
+                      (fun _ -> Format.ANSI_codes.string_of_style `Reset);
+                  }
+                ();
+
+      Pp_loc.pp ~input ~max_lines:5 Format.err_formatter loc;
+      Format.flush Format.err_formatter ();
+      output_string stderr "fdsa";
+      flush stderr;
+      flush stdout;
         let o =
-          Format.asprintf "Parse error:  %s%a%a"
+          Format.asprintf "Parse error: fdsa %s%a%a"
             (Lexing.lexeme_end_p lexbuf).pos_fname Format.pp_print_newline ()
             (fun f ->
               Pp_loc.setup_highlight_tags f
