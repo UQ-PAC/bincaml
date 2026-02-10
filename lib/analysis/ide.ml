@@ -498,23 +498,24 @@ module IDE (D : IDEDomain) = struct
     |> Option.flat_map (DlMap.get d2)
     |> Option.get_or ~default:D.bottom
 
-  let phase1_transfer propagate entry2call entry2exit d1 d2 e1 e =
+  (** Obtain all out edges following the ide edge (d1, e1, d2) after the
+      IDEGraph edge e. *)
+  let phase1_transfer entry2call entry2exit d1 d2 e1 e =
     match IDEGraph.G.E.label e with
     | Stmts (phi, bs) ->
         tf_stmts phi bs (Iter.singleton (d2, e1))
         |> Iter.map (fun (d3, e) -> ((d1, d3), e))
-        |> propagate
     | InterCall callinfo ->
         D.transfer_call callinfo d2
-        |> Iter.iter (fun (d3, e2) ->
-            (* Add the callee to the worklist with an id edge at its entry
-               so that the entry_to_exit cache eventually summarises it. *)
-            propagate (Iter.singleton ((d3, d3), D.identity));
+        |> Iter.flat_map (fun (d3, e2) ->
             (* Update the entry to call entry cache *)
             let k = (callinfo.caller, d3, callinfo.callee) in
             Hashtbl.get_or entry2call k ~default:DlMap.empty
             |> DlMap.add d1 (e2 @. e1)
-            |> Hashtbl.add entry2call k)
+            |> Hashtbl.add entry2call k;
+            (* Add the callee to the worklist with an id edge at its entry
+               so that the entry_to_exit cache eventually summarises it. *)
+            Iter.singleton ((d3, d3), D.identity))
     | InterReturn retinfo ->
         (* Since we have reached the return block of a procedure, we
            have a complete summary of it! Store this in the entry exit cache *)
@@ -533,31 +534,31 @@ module IDE (D : IDEDomain) = struct
         |> Iter.flat_map (fun (d3, e2) ->
             D.transfer_return retinfo d2
             |> Iter.map (fun (d4, e3) -> ((d3, d4), e3 @. e1 @. e2)))
-        |> propagate
     | Call callinfo ->
-        D.transfer_call callinfo d2
-        |> Iter.iter (fun (d3, e2) ->
-            (* If we have entry to exit edge functions stored, propagate
+        let summarised =
+          D.transfer_call callinfo d2
+          |> Iter.flat_map (fun (d3, e2) ->
+              (* If we have entry to exit edge functions stored, propagate
                the composite of
                1. the edge function from the caller entry to callee entry
                2. edge functions through the callee procedure
                3. edge functions from the return of the callee to the caller *)
-            Hashtbl.get entry2exit (callinfo.callee, d3)
-            |> Option.to_iter
-            |> Iter.flat_map DlMap.to_iter
-            |> Iter.flat_map (fun (d4, e3) ->
-                D.transfer_return callinfo.ret d4
-                |> Iter.map (fun (d5, e4) -> ((d1, d5), e4 @. e3 @. e2 @. e1)))
-            |> propagate);
-
-        D.transfer_call_to_aftercall callinfo d2
-        |> Iter.map (fun (d3, e2) -> ((d1, d3), e2 @. e1))
-        |> propagate
+              Hashtbl.get entry2exit (callinfo.callee, d3)
+              |> Option.to_iter
+              |> Iter.flat_map DlMap.to_iter
+              |> Iter.flat_map (fun (d4, e3) ->
+                  D.transfer_return callinfo.ret d4
+                  |> Iter.map (fun (d5, e4) -> ((d1, d5), e4 @. e3 @. e2 @. e1))))
+        in
+        let direct =
+          D.transfer_call_to_aftercall callinfo d2
+          |> Iter.map (fun (d3, e2) -> ((d1, d3), e2 @. e1))
+        in
+        Iter.append summarised direct
     | StubProc stubinfo ->
         D.transfer_stub stubinfo d2
         |> Iter.map (fun (d3, e2) -> ((d1, d3), e2 @. e1))
-        |> propagate
-    | Nop -> propagate (Iter.singleton ((d1, d2), e1))
+    | Nop -> Iter.singleton ((d1, d2), e1)
 
   module P1K = struct
     type t = Loc.t * DL.t * DL.t
@@ -622,9 +623,9 @@ module IDE (D : IDEDomain) = struct
       IDEGraph.G.succ_e graph l |> Iter.of_list
       |> Iter.iter (fun e ->
           let _, _, t = e in
-          phase1_transfer
-            (propagate worklist summaries priority (get_summary t) t)
-            entry_to_call_entry_cache entry_to_exit_cache d1 d2 e1 e)
+          phase1_transfer entry_to_call_entry_cache entry_to_exit_cache d1 d2 e1
+            e
+          |> propagate worklist summaries priority (get_summary t) t)
     done;
     summaries
 
