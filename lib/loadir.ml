@@ -852,7 +852,11 @@ let ast_of_string ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
     Some ("string at " ^ file ^ ":" ^ line ^ func)
   in
   let name = Option.get_or ~default:"<string>" name in
-  concrete_prog_ast_of_string ~filename:name string |> ast_of_concrete_ast ~name
+  let input = Pp_loc.Input.string string in
+  let conc = concrete_prog_ast_of_string ~input ~filename:name string in
+  try ast_of_concrete_ast ~name conc
+  with LoadError { token_char_offset_range; msg } ->
+    raise (LoadError { input = Some input; token_char_offset_range; msg })
 
 let ast_of_channel ?input fname c =
   let m =
@@ -867,3 +871,57 @@ let ast_of_channel ?input fname c =
 let ast_of_fname fname =
   IO.with_in fname (fun c ->
       ast_of_channel ~input:(Pp_loc.Input.file fname) fname c)
+
+let%expect_test "missing block" =
+  let _ =
+    ast_of_string
+      {|
+var $NF: bv1;
+var $ZF: bv1;
+
+prog entry @main_4196260;
+
+proc @main_4196260 () -> ()
+[
+  block %main_entry [
+    $NF:bv1 := 1:bv1;
+    $ZF:bv1 := 1:bv1;
+    goto(%main_7, %main_11);
+  ];
+  block %main_basil_return_1 [
+    return ();
+  ]
+];
+    |}
+  in
+  ()
+[@@expect.uncaught_exn {|
+  Error: no such block: %main_7
+  12 |     goto(%main_7, %main_11);
+                [1;31m^^^^^^^[0m
+  |}]
+
+let%expect_test "missing proc" =
+  let _ =
+    ast_of_string
+      {|
+prog entry @main_4196260;
+
+proc @main_4196260 () -> ()
+[
+  block %main_entry [
+    call @cat_4198032();
+    goto(%main_basil_return_1);
+  ];
+  block %main_basil_return_1 [
+    return ();
+  ]
+];
+    |}
+  in
+  ()
+[@@expect.uncaught_exn {|
+  Error: no such procedure: @cat_4198032
+  7 |     call @cat_4198032();
+               [1;31m^^^^^^^^^^^^[0m
+  |}]
