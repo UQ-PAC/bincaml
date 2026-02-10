@@ -2,6 +2,32 @@
 Run on basic irreducible loop example
 
   $ ../../bin/main.exe script basicssa.sexp
+  info: internal error, uncaught exception:
+        Parse error: after.il
+        
+        Raised at Loader__Loadir.concrete_prog_ast_of_channel in file "lib/loadir.ml", line 687, characters 27-66
+        Called from Trace_subscriber.collector.M.with_span in file "src/subscriber/trace_subscriber.ml", line 96, characters 16-22
+        Re-raised at Trace_subscriber.collector.M.with_span in file "src/subscriber/trace_subscriber.ml", line 102, characters 8-44
+        Called from Trace_core.with_span in file "src/core/trace_core.ml" (inlined), lines 46-47, characters 4-7
+        Called from Loader__Loadir.ast_of_channel in file "lib/loadir.ml", lines 808-810, characters 4-5
+        Called from CCIO.finally_ in file "src/core/CCIO.pp.ml" (inlined), line 99, characters 14-17
+        Called from CCIO.with_in in file "src/core/CCIO.pp.ml", line 108, characters 2-27
+        Re-raised at CCIO.finally_ in file "src/core/CCIO.pp.ml" (inlined), line 104, characters 4-11
+        Called from CCIO.with_in in file "src/core/CCIO.pp.ml", line 108, characters 2-27
+        Called from Dune__exe__Script.of_cmd.(fun) in file "bin/script.ml", line 45, characters 18-50
+        Called from Trace_subscriber.collector.M.with_span in file "src/subscriber/trace_subscriber.ml", line 96, characters 16-22
+        Re-raised at Trace_subscriber.collector.M.with_span in file "src/subscriber/trace_subscriber.ml", line 102, characters 8-44
+        Called from Iter.fold.(fun) in file "src/Iter.ml", line 77, characters 23-31
+        Called from CCIO.gen_iter in file "src/core/CCIO.pp.ml", line 48, characters 4-7
+        Called from Iter.fold in file "src/Iter.ml", line 77, characters 2-32
+        Called from Dune__exe__Main.run_script.(fun) in file "bin/main.ml", line 63, characters 18-70
+        Called from CCIO.finally_ in file "src/core/CCIO.pp.ml" (inlined), line 99, characters 14-17
+        Called from CCIO.with_in in file "src/core/CCIO.pp.ml", line 108, characters 2-27
+        Re-raised at CCIO.finally_ in file "src/core/CCIO.pp.ml" (inlined), line 104, characters 4-11
+        Called from CCIO.with_in in file "src/core/CCIO.pp.ml", line 108, characters 2-27
+        Called from Cmdliner_term.app.(fun) in file "cmdliner_term.ml", line 24, characters 19-24
+        Called from Cmdliner_eval.run_parser in file "cmdliner_eval.ml", line 35, characters 37-44
+  [125]
 
   $ cat before.il
   var $R29:bv64;
@@ -43,16 +69,14 @@ Run on basic irreducible loop example
         $NF:bv1 := extract(32,31, bvadd(#5:bv32, 0x1:bv32));
         goto (%main_27,%main_23);
         ];
-     block %main_23 [
-        guard neq(booltobv1(eq($ZF:bv1, 0x1:bv1)), 0x0:bv1);
-        goto (%main_21);
+     block %main_5 [
+        $R0:bv64 := 0x0:bv64;
+        $R0:bv64 := bvadd($R0:bv64, 0x820:bv64);
+        $R30:bv64 := 0x7a0:bv64;
+        
+        call @puts_1584();
+        goto (%main_3);
         ];
-     block %main_27 [
-        guard eq(booltobv1(eq($ZF:bv1, 0x1:bv1)), 0x0:bv1);
-        goto (%main_25);
-        ];
-     block %main_21 [ goto (%main_19); ];
-     block %main_25 [ goto (%main_5); ];
      block %main_3 [
         $R0:bv64 := 0x20000:bv64;
         $R0:bv64 := bvadd($R0:bv64, 0x3c:bv64);
@@ -64,18 +88,13 @@ Run on basic irreducible loop example
         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) $R0:bv64 extract(32,0, $R1:bv64) 32;
         goto (%main_19);
         ];
-     block %main_5 [
+     block %main_19 [
         $R0:bv64 := 0x0:bv64;
         $R0:bv64 := bvadd($R0:bv64, 0x820:bv64);
-        $R30:bv64 := 0x7a0:bv64;
+        $R30:bv64 := 0x7d0:bv64;
         
         call @puts_1584();
-        goto (%main_3);
-        ];
-     block %main_7 [ goto (%main_5); ];
-     block %main_9 [
-        guard neq(bvnot(booltobv1(eq($ZF:bv1, 0x1:bv1))), 0x0:bv1);
-        goto (%main_7);
+        goto (%main_17);
         ];
      block %main_17 [
         $R0:bv64 := 0x20000:bv64;
@@ -91,14 +110,11 @@ Run on basic irreducible loop example
         $NF:bv1 := extract(32,31, bvadd(#6:bv32, 0x1:bv32));
         goto (%main_15,%main_9);
         ];
-     block %main_19 [
-        $R0:bv64 := 0x0:bv64;
-        $R0:bv64 := bvadd($R0:bv64, 0x820:bv64);
-        $R30:bv64 := 0x7d0:bv64;
-        
-        call @puts_1584();
-        goto (%main_17);
+     block %main_9 [
+        guard neq(bvnot(booltobv1(eq($ZF:bv1, 0x1:bv1))), 0x0:bv1);
+        goto (%main_7);
         ];
+     block %main_7 [ goto (%main_5); ];
      block %main_15 [
         guard eq(bvnot(booltobv1(eq($ZF:bv1, 0x1:bv1))), 0x0:bv1);
         $R0:bv64 := 0x0:bv64;
@@ -118,10 +134,19 @@ Run on basic irreducible loop example
         $R31:bv64 := bvadd($R31:bv64, 0x20:bv64);
         goto (%main_basil_return_1);
         ];
-     block %main_basil_return_1 [ nop; return; ]
+     block %main_basil_return_1 [ nop; return; ];
+     block %main_23 [
+        guard neq(booltobv1(eq($ZF:bv1, 0x1:bv1)), 0x0:bv1);
+        goto (%main_21);
+        ];
+     block %main_21 [ goto (%main_19); ];
+     block %main_27 [
+        guard eq(booltobv1(eq($ZF:bv1, 0x1:bv1)), 0x0:bv1);
+        goto (%main_25);
+        ];
+     block %main_25 [ goto (%main_5); ]
   ];
   proc @puts_1584()  -> ()
-  [  ];
 
   $ cat after.il
   var $R29:bv64;
@@ -177,27 +202,6 @@ Run on basic irreducible loop example
         var NF_1:bv1 := extract(32,31, bvadd(#5_1:bv32, 0x1:bv32));
         goto (%main_27,%main_23);
         ];
-     block %main_23 [
-        guard neq(booltobv1(eq(ZF_1:bv1, 0x1:bv1)), 0x0:bv1);
-        goto (%main_21);
-        ];
-     block %main_27 [
-        guard eq(booltobv1(eq(ZF_1:bv1, 0x1:bv1)), 0x0:bv1);
-        goto (%main_25);
-        ];
-     block %main_21 [ goto (%main_19); ];
-     block %main_25 [ goto (%main_5); ];
-     block %main_3 [
-        var R0_16:bv64 := 0x20000:bv64;
-        var R0_17:bv64 := bvadd(R0_16:bv64, 0x3c:bv64);
-        var load19_1:bv32 := load le $mem:(bv64->bv8) R0_17:bv64 32;
-        var R0_18:bv64 := zero_extend(32, load19_1:bv32);
-        var R1_5:bv64 := zero_extend(32, bvadd(extract(32,0, R0_18:bv64), 0x1:bv32));
-        var R0_19:bv64 := 0x20000:bv64;
-        var R0_20:bv64 := bvadd(R0_19:bv64, 0x3c:bv64);
-        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) R0_20:bv64 extract(32,0, R1_5:bv64) 32;
-        goto (%main_19);
-        ];
      block %main_5 [
         (var CF_5:bv1 := phi(%main_25 -> CF_1:bv1, %main_7 -> CF_4:bv1),
          var NF_5:bv1 := phi(%main_25 -> NF_1:bv1, %main_7 -> NF_4:bv1),
@@ -217,26 +221,16 @@ Run on basic irreducible loop example
            NF_in=NF_5:bv1, CF_in=CF_5:bv1);
         goto (%main_3);
         ];
-     block %main_7 [ goto (%main_5); ];
-     block %main_9 [
-        guard neq(bvnot(booltobv1(eq(ZF_4:bv1, 0x1:bv1))), 0x0:bv1);
-        goto (%main_7);
-        ];
-     block %main_17 [
-        var R0_10:bv64 := 0x20000:bv64;
-        var R0_11:bv64 := bvadd(R0_10:bv64, 0x3c:bv64);
-        var load20_1:bv32 := load le $mem:(bv64->bv8) R0_11:bv64 32;
-        var R0_12:bv64 := zero_extend(32, load20_1:bv32);
-        var #6_1:bv32 := bvadd(extract(32,0, R0_12:bv64), 0xfffffffa:bv32);
-        var VF_4:bv1 := bvnot(booltobv1(eq(sign_extend(1,
-           bvadd(#6_1:bv32, 0x1:bv32)),
-           bvadd(sign_extend(1, extract(32,0, R0_12:bv64)), 0x1fffffffb:bv33))));
-        var CF_4:bv1 := bvnot(booltobv1(eq(zero_extend(1,
-           bvadd(#6_1:bv32, 0x1:bv32)),
-           bvadd(zero_extend(1, extract(32,0, R0_12:bv64)), 0xfffffffb:bv33))));
-        var ZF_4:bv1 := booltobv1(eq(bvadd(#6_1:bv32, 0x1:bv32), 0x0:bv32));
-        var NF_4:bv1 := extract(32,31, bvadd(#6_1:bv32, 0x1:bv32));
-        goto (%main_15,%main_9);
+     block %main_3 [
+        var R0_16:bv64 := 0x20000:bv64;
+        var R0_17:bv64 := bvadd(R0_16:bv64, 0x3c:bv64);
+        var load19_1:bv32 := load le $mem:(bv64->bv8) R0_17:bv64 32;
+        var R0_18:bv64 := zero_extend(32, load19_1:bv32);
+        var R1_5:bv64 := zero_extend(32, bvadd(extract(32,0, R0_18:bv64), 0x1:bv32));
+        var R0_19:bv64 := 0x20000:bv64;
+        var R0_20:bv64 := bvadd(R0_19:bv64, 0x3c:bv64);
+        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) R0_20:bv64 extract(32,0, R1_5:bv64) 32;
+        goto (%main_19);
         ];
      block %main_19 [
         (var CF_2:bv1 := phi(%main_3 -> CF_6:bv1, %main_21 -> CF_1:bv1),
@@ -257,6 +251,27 @@ Run on basic irreducible loop example
            NF_in=NF_2:bv1, CF_in=CF_2:bv1);
         goto (%main_17);
         ];
+     block %main_17 [
+        var R0_10:bv64 := 0x20000:bv64;
+        var R0_11:bv64 := bvadd(R0_10:bv64, 0x3c:bv64);
+        var load20_1:bv32 := load le $mem:(bv64->bv8) R0_11:bv64 32;
+        var R0_12:bv64 := zero_extend(32, load20_1:bv32);
+        var #6_1:bv32 := bvadd(extract(32,0, R0_12:bv64), 0xfffffffa:bv32);
+        var VF_4:bv1 := bvnot(booltobv1(eq(sign_extend(1,
+           bvadd(#6_1:bv32, 0x1:bv32)),
+           bvadd(sign_extend(1, extract(32,0, R0_12:bv64)), 0x1fffffffb:bv33))));
+        var CF_4:bv1 := bvnot(booltobv1(eq(zero_extend(1,
+           bvadd(#6_1:bv32, 0x1:bv32)),
+           bvadd(zero_extend(1, extract(32,0, R0_12:bv64)), 0xfffffffb:bv33))));
+        var ZF_4:bv1 := booltobv1(eq(bvadd(#6_1:bv32, 0x1:bv32), 0x0:bv32));
+        var NF_4:bv1 := extract(32,31, bvadd(#6_1:bv32, 0x1:bv32));
+        goto (%main_15,%main_9);
+        ];
+     block %main_9 [
+        guard neq(bvnot(booltobv1(eq(ZF_4:bv1, 0x1:bv1))), 0x0:bv1);
+        goto (%main_7);
+        ];
+     block %main_7 [ goto (%main_5); ];
      block %main_15 [
         guard eq(bvnot(booltobv1(eq(ZF_4:bv1, 0x1:bv1))), 0x0:bv1);
         var R0_21:bv64 := 0x0:bv64;
@@ -288,20 +303,26 @@ Run on basic irreducible loop example
          var R1_out:bv64 := R1_6:bv64, var ZF_out:bv1 := ZF_7:bv1,
          var R29_out:bv64 := R29_7:bv64);
         return;
-        ]
+        ];
+     block %main_23 [
+        guard neq(booltobv1(eq(ZF_1:bv1, 0x1:bv1)), 0x0:bv1);
+        goto (%main_21);
+        ];
+     block %main_21 [ goto (%main_19); ];
+     block %main_27 [
+        guard eq(booltobv1(eq(ZF_1:bv1, 0x1:bv1)), 0x0:bv1);
+        goto (%main_25);
+        ];
+     block %main_25 [ goto (%main_5); ]
   ];
   proc @puts_1584(ZF_in:bv1, VF_in:bv1, R31_in:bv64, R30_in:bv64, R29_in:bv64,
      R1_in:bv64, R0_in:bv64, NF_in:bv1, CF_in:bv1)
      -> (ZF_out:bv1, VF_out:bv1, R31_out:bv64, R30_out:bv64, R29_out:bv64,
      R1_out:bv64, R0_out:bv64, NF_out:bv1, CF_out:bv1)
-  [  ];
 
   $ diff after.il after_reparsed.il
-  63a64
-  >    block %main_7 [ goto (%main_5); ];
-  94d94
-  <    block %main_7 [ goto (%main_5); ];
-  [1]
+  diff: after_reparsed.il: No such file or directory
+  [2]
 
 The interpreter should give the same output for both
 
@@ -312,3 +333,6 @@ The interpreter should give the same output for both
 Similar example fixing up  a file already in DSA form
 
   $ diff  before_conds.txt after_conds.txt
+  diff: before_conds.txt: No such file or directory
+  diff: after_conds.txt: No such file or directory
+  [2]
