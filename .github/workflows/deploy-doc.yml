@@ -29,6 +29,7 @@ jobs:
 
       - name: Install dependencies
         run: |
+          opam option --global 'archive-mirrors+="opam.ocaml.org"'
           opam install . --deps-only --with-doc
           opam install odig
 
