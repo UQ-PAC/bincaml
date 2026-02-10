@@ -35,6 +35,7 @@ let pretty_phi show_lvar show_var v =
   lhs ^ text " := phi" ^ (bracket "(" (fill (text "," ^ newline) rhs)) ")"
 
 let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
+  Trace_core.with_span ~__FILE__ ~__LINE__ "pretty-block" @@ fun _ ->
   let open Containers_pp in
   let open Containers_pp.Infix in
   let phi =
