@@ -489,22 +489,22 @@ let pretty show_lvar show_var show_expr p =
   in
   let module Dom = Graph.Dominator.Make (G) in
   let blocks =
-    (match graph p with
-      | Some g ->
-          let idom = Dom.compute_idom g Entry in
-          let dom_tree = Dom.idom_to_dom_tree g idom in
-          let sorted_dom_tree v = dom_tree v |> List.sort Vert.compare in
-          let rec preorder f v =
-            f v;
-            sorted_dom_tree v |> List.iter (preorder f)
-          in
-          Iter.from_iter (fun f -> preorder f Entry)
-          |> Iter.filter_map (function Vert.Begin id -> Some id | _ -> None)
-          |> Iter.map (fun id ->
-              (id, get_block p id |> Option.get_exn_or "bad graph"))
-          |> Iter.map (fun (id, block) -> pretty_block g id block)
-      | None -> Iter.empty)
-    |> Iter.to_list
+    match graph p with
+    | Some g ->
+        let idom = Dom.compute_idom g Entry in
+        let dom_tree = Dom.idom_to_dom_tree g idom in
+        let sorted_dom_tree v = dom_tree v |> List.sort Vert.compare in
+        let rec preorder f v =
+          f v;
+          sorted_dom_tree v |> List.iter (preorder f)
+        in
+        Iter.from_iter (fun f -> preorder f Entry)
+        |> Iter.filter_map (function Vert.Begin id -> Some id | _ -> None)
+        |> Iter.map (fun id ->
+            (id, get_block p id |> Option.get_exn_or "bad graph"))
+        |> Iter.map (fun (id, block) -> pretty_block g id block)
+        |> Iter.to_list
+    | None -> []
   in
   let blocks =
     surround (text "[")
