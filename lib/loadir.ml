@@ -657,7 +657,7 @@ let () =
           ]
         in
         let o =
-          Format.asprintf "Parse error: fdsa %s%a%a"
+          Format.asprintf "Parse error: %s%a%a"
             (Lexing.lexeme_end_p lexbuf).pos_fname Format.pp_print_newline ()
             (fun f ->
               Pp_loc.setup_highlight_tags f
