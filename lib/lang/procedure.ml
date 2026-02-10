@@ -493,7 +493,11 @@ let pretty show_lvar show_var show_expr p =
     | Some g ->
         let idom = Dom.compute_idom g Entry in
         let dom_tree = Dom.idom_to_dom_tree g idom in
-        let sorted_dom_tree v = dom_tree v |> List.sort Vert.compare in
+        let cmp v =
+          CCOrd.map (fun succ -> (G.mem_edge g v succ, succ))
+          @@ CCOrd.(pair (opp bool) Vert.compare)
+        in
+        let sorted_dom_tree v = dom_tree v |> List.sort (cmp v) in
         let rec preorder f v =
           f v;
           sorted_dom_tree v |> List.iter (preorder f)

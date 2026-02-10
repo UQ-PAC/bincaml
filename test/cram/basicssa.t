@@ -43,6 +43,16 @@ Run on basic irreducible loop example
         $NF:bv1 := extract(32,31, bvadd(#5:bv32, 0x1:bv32));
         goto (%main_27,%main_23);
         ];
+     block %main_23 [
+        guard neq(booltobv1(eq($ZF:bv1, 0x1:bv1)), 0x0:bv1);
+        goto (%main_21);
+        ];
+     block %main_21 [ goto (%main_19); ];
+     block %main_27 [
+        guard eq(booltobv1(eq($ZF:bv1, 0x1:bv1)), 0x0:bv1);
+        goto (%main_25);
+        ];
+     block %main_25 [ goto (%main_5); ];
      block %main_5 [
         $R0:bv64 := 0x0:bv64;
         $R0:bv64 := bvadd($R0:bv64, 0x820:bv64);
@@ -108,17 +118,7 @@ Run on basic irreducible loop example
         $R31:bv64 := bvadd($R31:bv64, 0x20:bv64);
         goto (%main_basil_return_1);
         ];
-     block %main_basil_return_1 [ nop; return; ];
-     block %main_23 [
-        guard neq(booltobv1(eq($ZF:bv1, 0x1:bv1)), 0x0:bv1);
-        goto (%main_21);
-        ];
-     block %main_21 [ goto (%main_19); ];
-     block %main_27 [
-        guard eq(booltobv1(eq($ZF:bv1, 0x1:bv1)), 0x0:bv1);
-        goto (%main_25);
-        ];
-     block %main_25 [ goto (%main_5); ]
+     block %main_basil_return_1 [ nop; return; ]
   ];
   proc @puts_1584()  -> ()
   [ ];
@@ -177,6 +177,16 @@ Run on basic irreducible loop example
         var NF_1:bv1 := extract(32,31, bvadd(#5_1:bv32, 0x1:bv32));
         goto (%main_27,%main_23);
         ];
+     block %main_23 [
+        guard neq(booltobv1(eq(ZF_1:bv1, 0x1:bv1)), 0x0:bv1);
+        goto (%main_21);
+        ];
+     block %main_21 [ goto (%main_19); ];
+     block %main_27 [
+        guard eq(booltobv1(eq(ZF_1:bv1, 0x1:bv1)), 0x0:bv1);
+        goto (%main_25);
+        ];
+     block %main_25 [ goto (%main_5); ];
      block %main_5 [
         (var CF_5:bv1 := phi(%main_25 -> CF_1:bv1, %main_7 -> CF_4:bv1),
          var NF_5:bv1 := phi(%main_25 -> NF_1:bv1, %main_7 -> NF_4:bv1),
@@ -278,17 +288,7 @@ Run on basic irreducible loop example
          var R1_out:bv64 := R1_6:bv64, var ZF_out:bv1 := ZF_7:bv1,
          var R29_out:bv64 := R29_7:bv64);
         return;
-        ];
-     block %main_23 [
-        guard neq(booltobv1(eq(ZF_1:bv1, 0x1:bv1)), 0x0:bv1);
-        goto (%main_21);
-        ];
-     block %main_21 [ goto (%main_19); ];
-     block %main_27 [
-        guard eq(booltobv1(eq(ZF_1:bv1, 0x1:bv1)), 0x0:bv1);
-        goto (%main_25);
-        ];
-     block %main_25 [ goto (%main_5); ]
+        ]
   ];
   proc @puts_1584(ZF_in:bv1, VF_in:bv1, R31_in:bv64, R30_in:bv64, R29_in:bv64,
      R1_in:bv64, R0_in:bv64, NF_in:bv1, CF_in:bv1)
