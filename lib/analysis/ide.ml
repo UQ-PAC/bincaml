@@ -302,16 +302,15 @@ module IDEGraph = struct
     in
     Procedure.graph p
     |> Option.map (fun procg -> Procedure.G.fold_edges_e add_block_edge procg g)
-    |> Option.get_or
-         ~default:
-           (let formal_in =
-              Procedure.formal_in_params p |> StringMap.to_list |> List.map snd
-            in
-            let globals = prog.globals |> Hashtbl.to_list |> List.map snd in
-            add_edge_e_dir dir g
-              ( IntraVertex { proc_id; v = Entry },
-                StubProc { formal_in; globals },
-                IntraVertex { proc_id; v = Return } ))
+    |> Option.get_lazy (fun _ ->
+        let formal_in =
+          Procedure.formal_in_params p |> StringMap.to_list |> List.map snd
+        in
+        let globals = prog.globals |> Hashtbl.to_list |> List.map snd in
+        add_edge_e_dir dir g
+          ( IntraVertex { proc_id; v = Entry },
+            StubProc { formal_in; globals },
+            IntraVertex { proc_id; v = Return } ))
 
   let create (prog : Program.t) dir =
     ID.Map.to_iter prog.procs |> Iter.map snd
@@ -562,8 +561,12 @@ module IDE (D : IDEDomain) = struct
   module P1K = struct
     type t = Loc.t * DL.t * DL.t
 
-    (* What could go wrong..? *)
-    let compare a b = 0
+    let compare (a, b, c) (d, e, f) =
+      Pair.compare
+        (Pair.compare Loc.compare DL.compare)
+        DL.compare
+        ((a, b), c)
+        ((d, e), f)
   end
 
   (** Propagate summaries into a new location and update the worklist *)
@@ -651,7 +654,7 @@ module IDE (D : IDEDomain) = struct
   module P2K = struct
     type t = Loc.t * DL.t
 
-    let compare a b = 0
+    let compare = Pair.compare Loc.compare DL.compare
   end
 
   (** Compute the analysis result using summaries from phase 1 *)
