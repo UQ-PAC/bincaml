@@ -56,10 +56,13 @@ let prog_pretty (p : t) =
     |> Option.map (fun i -> text "prog entry " ^ text @@ ID.to_string i)
     |> Option.to_list
   in
-  let decls = globs @ n
-  @ List.map
-      (fun (_, p) -> proc_pretty p)
-      (ID.Map.to_list p.procs |> List.sort (fun (i, _) (j, _) -> ID.compare i j)) in
+  let decls =
+    globs @ n
+    @ List.map
+        (fun (_, p) -> proc_pretty p)
+        (ID.Map.to_list p.procs
+        |> List.sort (fun (i, _) (j, _) -> ID.compare i j))
+  in
 
   append_l ~sep:(text ";\n") decls ^ text ";\n"
 
