@@ -505,9 +505,9 @@ let pretty show_lvar show_var show_expr p =
         |> Iter.map (fun (id, block) -> pretty_block g id block)
         |> Iter.to_list
         |> fun blocks ->
-        surround (text "[")
+        nl ^ surround (text "[")
           (nest 2 @@ newline ^ append_l ~sep:(text ";" ^ newline) blocks)
           (newline ^ text "]")
-    | None -> newline
+    | None -> nil
   in
-  header ^ nl ^ blocks
+  header ^ blocks

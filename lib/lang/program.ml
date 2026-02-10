@@ -65,8 +65,10 @@ let prog_pretty (p : t) =
 
 let pretty_to_chan chan (p : t) =
   let p = prog_pretty p in
+  flush chan;
   let fmt = Format.formatter_of_out_channel chan in
-  Containers_pp.Pretty.to_format ~width:80 fmt p
+  Containers_pp.Pretty.to_format ~width:80 fmt p;
+  Format.flush fmt ()
 
 let decl_global p = Var.Decls.add p.globals
 

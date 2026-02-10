@@ -2,32 +2,6 @@
 Run on basic irreducible loop example
 
   $ ../../bin/main.exe script basicssa.sexp
-  info: internal error, uncaught exception:
-        Parse error: after.il
-        
-        Raised at Loader__Loadir.concrete_prog_ast_of_channel in file "lib/loadir.ml", line 687, characters 27-66
-        Called from Trace_subscriber.collector.M.with_span in file "src/subscriber/trace_subscriber.ml", line 96, characters 16-22
-        Re-raised at Trace_subscriber.collector.M.with_span in file "src/subscriber/trace_subscriber.ml", line 102, characters 8-44
-        Called from Trace_core.with_span in file "src/core/trace_core.ml" (inlined), lines 46-47, characters 4-7
-        Called from Loader__Loadir.ast_of_channel in file "lib/loadir.ml", lines 808-810, characters 4-5
-        Called from CCIO.finally_ in file "src/core/CCIO.pp.ml" (inlined), line 99, characters 14-17
-        Called from CCIO.with_in in file "src/core/CCIO.pp.ml", line 108, characters 2-27
-        Re-raised at CCIO.finally_ in file "src/core/CCIO.pp.ml" (inlined), line 104, characters 4-11
-        Called from CCIO.with_in in file "src/core/CCIO.pp.ml", line 108, characters 2-27
-        Called from Dune__exe__Script.of_cmd.(fun) in file "bin/script.ml", line 45, characters 18-50
-        Called from Trace_subscriber.collector.M.with_span in file "src/subscriber/trace_subscriber.ml", line 96, characters 16-22
-        Re-raised at Trace_subscriber.collector.M.with_span in file "src/subscriber/trace_subscriber.ml", line 102, characters 8-44
-        Called from Iter.fold.(fun) in file "src/Iter.ml", line 77, characters 23-31
-        Called from CCIO.gen_iter in file "src/core/CCIO.pp.ml", line 48, characters 4-7
-        Called from Iter.fold in file "src/Iter.ml", line 77, characters 2-32
-        Called from Dune__exe__Main.run_script.(fun) in file "bin/main.ml", line 63, characters 18-70
-        Called from CCIO.finally_ in file "src/core/CCIO.pp.ml" (inlined), line 99, characters 14-17
-        Called from CCIO.with_in in file "src/core/CCIO.pp.ml", line 108, characters 2-27
-        Re-raised at CCIO.finally_ in file "src/core/CCIO.pp.ml" (inlined), line 104, characters 4-11
-        Called from CCIO.with_in in file "src/core/CCIO.pp.ml", line 108, characters 2-27
-        Called from Cmdliner_term.app.(fun) in file "cmdliner_term.ml", line 24, characters 19-24
-        Called from Cmdliner_eval.run_parser in file "cmdliner_eval.ml", line 35, characters 37-44
-  [125]
 
   $ cat before.il
   var $R29:bv64;
@@ -146,7 +120,7 @@ Run on basic irreducible loop example
         ];
      block %main_25 [ goto (%main_5); ]
   ];
-  proc @puts_1584()  -> ()
+  proc @puts_1584()  -> ();
 
   $ cat after.il
   var $R29:bv64;
@@ -318,11 +292,19 @@ Run on basic irreducible loop example
   proc @puts_1584(ZF_in:bv1, VF_in:bv1, R31_in:bv64, R30_in:bv64, R29_in:bv64,
      R1_in:bv64, R0_in:bv64, NF_in:bv1, CF_in:bv1)
      -> (ZF_out:bv1, VF_out:bv1, R31_out:bv64, R30_out:bv64, R29_out:bv64,
-     R1_out:bv64, R0_out:bv64, NF_out:bv1, CF_out:bv1)
+     R1_out:bv64, R0_out:bv64, NF_out:bv1, CF_out:bv1);
 
   $ diff after.il after_reparsed.il
-  diff: after_reparsed.il: No such file or directory
-  [2]
+  167,170c167
+  < proc @puts_1584(ZF_in:bv1, VF_in:bv1, R31_in:bv64, R30_in:bv64, R29_in:bv64,
+  <    R1_in:bv64, R0_in:bv64, NF_in:bv1, CF_in:bv1)
+  <    -> (ZF_out:bv1, VF_out:bv1, R31_out:bv64, R30_out:bv64, R29_out:bv64,
+  <    R1_out:bv64, R0_out:bv64, NF_out:bv1, CF_out:bv1);
+  \ No newline at end of file
+  ---
+  > proc @puts_1584()  -> ();
+  \ No newline at end of file
+  [1]
 
 The interpreter should give the same output for both
 
@@ -333,6 +315,3 @@ The interpreter should give the same output for both
 Similar example fixing up  a file already in DSA form
 
   $ diff  before_conds.txt after_conds.txt
-  diff: before_conds.txt: No such file or directory
-  diff: after_conds.txt: No such file or directory
-  [2]
