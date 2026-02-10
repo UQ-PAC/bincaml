@@ -895,7 +895,8 @@ proc @main_4196260 () -> ()
     |}
   in
   ()
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   Error: no such block: %main_7
   12 |     goto(%main_7, %main_11);
                 [1;31m^^^^^^^[0m
@@ -920,7 +921,8 @@ proc @main_4196260 () -> ()
     |}
   in
   ()
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   Error: no such procedure: @cat_4198032
   7 |     call @cat_4198032();
                [1;31m^^^^^^^^^^^^[0m

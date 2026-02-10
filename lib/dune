@@ -4,7 +4,8 @@
  (flags -w -27)
  (modules loadir)
  (inline_tests)
- (preprocess (pps ppx_expect_nobase))
+ (preprocess
+  (pps ppx_expect_nobase))
  (libraries
   pp_loc
   BasilIR
