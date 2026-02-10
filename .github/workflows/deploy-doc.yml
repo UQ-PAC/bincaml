@@ -41,7 +41,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _html/html/bincaml
+          path: _html/html
 
   deploy-odoc:
     name: Deploy odoc to GitHub Pages
