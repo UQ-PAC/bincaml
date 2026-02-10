@@ -1,6 +1,8 @@
 name: docs
 
 on:
+  pull_request:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -8,22 +10,12 @@ on:
 permissions: read-all
 
 concurrency:
-  group: deploy-odoc
+  group: deploy-odoc-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  deploy-odoc:
-    name: Deploy odoc to GitHub Pages
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    permissions:
-      contents: read
-      id-token: write
-      pages: write
-
+  build-odoc:
+    name: Build odoc
     runs-on: ubuntu-latest
 
     steps:
@@ -42,18 +34,30 @@ jobs:
 
       - name: Build documentation
         run: |
-          opam exec -- dune build --ignore-promoted-rules
+          opam exec -- dune build @install --ignore-promoted-rules
           opam exec -- dune install --ignore-promoted-rules
           opam exec -- odig odoc bincaml --cache-dir _html
-
-      - name: Set-up Pages
-        uses: actions/configure-pages@v5
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: _html/html/bincaml
 
-      - name: Deploy odoc to GitHub Pages
+  deploy-odoc:
+    name: Deploy odoc to GitHub Pages
+    runs-on: ubuntu-latest
+    if: github.ref == "refs/heads/main"
+
+    needs: build-odoc
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    permissions:
+      id-token: write
+      pages: write
+
+    steps:
+      - uses: actions/deploy-pages@v4
         id: deployment
-        uses: actions/deploy-pages@v4
