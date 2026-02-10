@@ -46,7 +46,7 @@ jobs:
   deploy-odoc:
     name: Deploy odoc to GitHub Pages
     runs-on: ubuntu-latest
-    if: github.ref == "refs/heads/main"
+    if: ${{ github.ref == "refs/heads/main" }}
 
     needs: build-odoc
 
