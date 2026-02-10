@@ -49,12 +49,11 @@ let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
     Vector.to_list b.stmts
     |> List.map (Stmt.pretty show_lvar show_var show_expr)
   in
-  let stmts =
-    phi @ stmts @ terminator |> List.map (fun i -> i ^ text ";" ^ newline)
+  let stmts = phi @ stmts @ terminator |> List.map (fun i -> i ^ text ";") in
+  let bracket' l d r : t =
+    group (text l ^ nest (String.length l) d ^ nl ^ text r)
   in
-  let stmts =
-    bracket "[" (nest 2 @@ newline ^ append_l ~sep:(text "") stmts) "]"
-  in
+  let stmts = bracket' "[" (nest 2 @@ nl ^ append_nl stmts) "]" in
   let name =
     Option.map
       (fun id -> text "block " ^ text (ID.to_string id) ^ text " ")
