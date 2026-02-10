@@ -10,6 +10,15 @@ open Common
    edges somehow. I suspect this won't give a huge performance improvement since
    mose of the time in the solver is spent on evaluating transfer functions. *)
 (* TODO write a sample forwards analysis to test forwards correctness *)
+(* TODO write a better worklist or perhaps rewrite both phases to solve like
+   how chaotic iteration is implemented (I don't expect it to be easy to use
+   chaotic iteration directly. At the moment we don't order what edges we
+   iterate on with topological ordering... *)
+(* maybe TODO (perf) (api change?!?!) annotate in the transfer function which
+   data are modified by each statement, so that when we transfer over a block
+   of statements we can reuse most of the existing edge map from a previous
+   statement into the next without reconstructing edges coming from vertical
+   idedges. *)
 
 module Loc = struct
   type stmt_id = { proc_id : ID.t; block : ID.t; offset : int }
@@ -276,7 +285,6 @@ module IDEGraph = struct
       | _, _, _ -> failwith "bad proc edge"
     in
     (* add all vertices *)
-    (* TODO: missing stub procedure edges *)
     let intra_verts =
       Option.to_iter (Procedure.graph p)
       |> Iter.flat_map (fun graph ->
@@ -581,8 +589,6 @@ module IDE (D : IDEDomain) = struct
       to some location in the procedure that is equal to the join of all
       composite edge functions through paths to this location. *)
   let phase1_solve order start graph globals default =
-    (* We compute summaries with a worklist fixpoint solver.
-       TOOD perhaps a better solver could be used?*)
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
     let module Q = Set.Make (P1K) in
     let worklist = ref Q.empty in
