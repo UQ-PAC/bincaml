@@ -927,3 +927,31 @@ proc @main_4196260 () -> ()
   7 |     call @cat_4198032();
                [1;31m^^^^^^^^^^^^[0m
   |}]
+
+let%expect_test "syntax error" =
+  let _ =
+    ast_of_string
+      {|
+var $NF: bv1;
+var $ZF: bv1;
+prog entry @main_4196260;
+proc @main_4196260 () -> ()
+[
+  block %main_entry [
+    $NF:bv1 := 1:bv1;
+    $ZF:bv1 1:bv1;
+    goto(%main_basil_return_1);
+  ];
+  block %main_basil_return_1 [
+    return ();
+  ]
+];
+    |}
+  in
+  ()
+[@@expect.uncaught_exn
+  {|
+  Parse error:  <string>:9
+  9 |     $ZF:bv1 1:bv1;
+                  [1;31m^[0m
+  |}]
