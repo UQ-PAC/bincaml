@@ -508,6 +508,6 @@ let pretty show_lvar show_var show_expr p =
         nl ^ surround (text "[")
           (nest 2 @@ newline ^ append_l ~sep:(text ";" ^ newline) blocks)
           (newline ^ text "]")
-    | None -> nil
+    | None -> nl ^ text "[ ]"
   in
   header ^ blocks
