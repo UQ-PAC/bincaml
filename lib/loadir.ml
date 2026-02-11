@@ -116,7 +116,8 @@ module BasilASTLoader = struct
     | Decl_ProgEmpty (ProcIdent (_, id), attr) -> prog
     | Decl_ProgWithSpec (ProcIdent (_, id), attr, _, spec, _) -> prog
     | Decl_Proc
-        (ProcIdent (id_pos, id), in_params, out_params, attrib, spec, _def) ->
+        (ProcIdent (id_pos, id), in_params, out_params, attrib, spec, definition)
+      ->
         let proc_id = prog.prog.proc_names.decl_or_get id in
         let formal_in_params_order = List.map param_to_formal in_params in
         let formal_in_params = formal_in_params_order |> StringMap.of_list in
@@ -124,8 +125,10 @@ module BasilASTLoader = struct
         let formal_out_params = StringMap.of_list formal_out_params_order in
         Hashtbl.add prog.params_order id
           (formal_in_params_order, formal_out_params_order);
+        let is_stub = Stdlib.(definition = ProcDef_Empty) in
         let p =
-          Procedure.create proc_id ~formal_in_params ~formal_out_params ()
+          Procedure.create proc_id ~is_stub ~formal_in_params ~formal_out_params
+            ()
         in
         let prog =
           map_prog
