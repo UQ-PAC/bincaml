@@ -116,31 +116,7 @@ module BasilASTLoader = struct
     | Decl_ProgEmpty (ProcIdent (_, id), attr) -> prog
     | Decl_ProgWithSpec (ProcIdent (_, id), attr, _, spec, _) -> prog
     | Decl_Proc
-        ( ProcIdent (id_pos, id),
-          in_params,
-          out_params,
-          attrib,
-          spec,
-          ProcDef_Empty ) ->
-        let formal_in_params_order = List.map param_to_formal in_params in
-        let formal_out_params_order = List.map param_to_formal out_params in
-        let proc_id = prog.prog.proc_names.decl_or_get id in
-        Hashtbl.add prog.params_order id
-          (formal_in_params_order, formal_out_params_order);
-        let p = Procedure.create ~is_stub:true proc_id () in
-        let prog =
-          map_prog
-            (fun pr -> { pr with procs = ID.Map.add proc_id p pr.procs })
-            prog
-        in
-        prog
-    | Decl_Proc
-        ( ProcIdent (id_pos, id),
-          in_params,
-          out_params,
-          attrs,
-          spec_list,
-          ProcDef_Some (bl, blocks, el) ) ->
+        (ProcIdent (id_pos, id), in_params, out_params, attrib, spec, _def) ->
         let proc_id = prog.prog.proc_names.decl_or_get id in
         let formal_in_params_order = List.map param_to_formal in_params in
         let formal_in_params = formal_in_params_order |> StringMap.of_list in
@@ -955,3 +931,25 @@ proc @main_4196260 () -> ()
   9 |     $ZF:bv1 1:bv1;
                   [1;31m^[0m
   |}]
+
+let%expect_test "proc without body" =
+  let s = {|
+prog entry @f;
+proc @f (ZF_in:bv1, VF_in:bv1) -> ();
+    |} in
+  let prog = concrete_prog_ast_of_string s in
+
+  let buf = Buffer.create 100 in
+  BasilIR.ShowBasilIR.showModuleT prog buf;
+  Buffer.output_buffer stdout buf;
+  [%expect
+    {| Module1 ([Decl_ProgEmpty (ProcIdent "@f", AttribSet_Empty); Decl_Proc (ProcIdent "@f", [Params1 (LocalIdent "ZF_in", TypeBVType (BVType1 (BVTYPE "bv1"))); Params1 (LocalIdent "VF_in", TypeBVType (BVType1 (BVTYPE "bv1")))], [], AttribSet_Empty, [], ProcDef_Empty)]) |}];
+
+  let ast = ast_of_concrete_ast ~name:"boop" prog in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:80 (Program.prog_pretty ast.prog);
+  [%expect {|
+    prog entry @f;
+    proc @f(ZF_in:bv1, VF_in:bv1)  -> ()
+    [  ]
+    |}]
