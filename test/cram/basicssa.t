@@ -120,8 +120,7 @@ Run on basic irreducible loop example
      ];
      block %main_basil_return_1 [ nop; return; ]
   ];
-  proc @puts_1584()  -> ()
-  [ ];
+  proc @puts_1584()  -> ();
 
   $ cat after.il
   var $R29:bv64;
@@ -293,15 +292,17 @@ Run on basic irreducible loop example
   proc @puts_1584(ZF_in:bv1, VF_in:bv1, R31_in:bv64, R30_in:bv64, R29_in:bv64,
      R1_in:bv64, R0_in:bv64, NF_in:bv1, CF_in:bv1)
      -> (ZF_out:bv1, VF_out:bv1, R31_out:bv64, R30_out:bv64, R29_out:bv64,
-     R1_out:bv64, R0_out:bv64, NF_out:bv1, CF_out:bv1)
-  [ ];
+     R1_out:bv64, R0_out:bv64, NF_out:bv1, CF_out:bv1);
 
   $ diff after.il after_reparsed.il
-  171c171
-  < [ ];
+  167,170c167
+  < proc @puts_1584(ZF_in:bv1, VF_in:bv1, R31_in:bv64, R30_in:bv64, R29_in:bv64,
+  <    R1_in:bv64, R0_in:bv64, NF_in:bv1, CF_in:bv1)
+  <    -> (ZF_out:bv1, VF_out:bv1, R31_out:bv64, R30_out:bv64, R29_out:bv64,
+  <    R1_out:bv64, R0_out:bv64, NF_out:bv1, CF_out:bv1);
   \ No newline at end of file
   ---
-  > [  ];
+  > proc @puts_1584()  -> ();
   \ No newline at end of file
   [1]
 
