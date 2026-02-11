@@ -1060,7 +1060,8 @@ proc @main_4196260 () -> ()
   in
   Program.pretty_to_chan stdout p.prog;
   ();
-  [%expect {|
+  [%expect
+    {|
     var $ZF:bv1;
     var $NF:bv1;
     prog entry @main_4196260;
