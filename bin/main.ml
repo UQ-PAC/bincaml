@@ -30,11 +30,16 @@ let procs_cmd =
   Cmd.v info Term.(const list_procs $ fname)
 
 let dump_proc fname proc =
-  let p = Loader.Loadir.ast_of_fname fname in
-  let id = p.prog.proc_names.get_id proc in
-  let p = ID.Map.find id p.prog.procs in
-  print_proc stdout p;
-  Ok ()
+  try
+    let p = Loader.Loadir.ast_of_fname fname in
+    let id = p.prog.proc_names.get_id proc in
+    let p = ID.Map.find id p.prog.procs in
+    print_proc stdout p;
+    Ok ()
+  with
+  | (Loader.Loadir.ILBParseError _ | Loader.Loadir.LoadError _) as e ->
+      Error (Loader.Loadir.show_ilbparseerror e)
+  | Not_found -> Error ("no procedure \"" ^ proc ^ "\" in " ^ fname)
 
 let print_cfg fname proc =
   let prg = Loader.Loadir.ast_of_fname fname in
@@ -87,8 +92,8 @@ let script_cmd =
   Cmd.v info Term.(const run_script $ fname)
 
 let cmd =
-  let doc = "obasil" in
-  Cmd.group (Cmd.info "info" ~version:"%%VERSION%%" ~doc)
+  let doc = "bincaml" in
+  Cmd.group (Cmd.info "bincaml" ~version:"%%VERSION%%" ~doc)
   @@ [ procs_cmd; dump_proc_cmd; print_cfg_cmd; script_cmd ]
 
 let main () =
