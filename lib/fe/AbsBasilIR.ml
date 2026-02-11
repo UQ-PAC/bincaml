@@ -85,10 +85,12 @@ and stmt =
  | Stmt_Assert of expr
 
 and localVar =
-   LocalVar1 of localIdent * typeT
+   LocalTyped of localIdent * typeT
+ | LocalUntyped of localIdent
 
 and globalVar =
-   GlobalVar1 of globalIdent * typeT
+   GlobalTyped of globalIdent * typeT
+ | GlobalUntyped of globalIdent
 
 and var =
    VarLocalVar of localVar
@@ -147,6 +149,7 @@ and attr =
    Attr_Map of beginRec * attrKeyValue list * semicolons * endRec
  | Attr_List of beginList * attr list * endList
  | Attr_Lit of value
+ | Attr_Expr of expr
  | Attr_Str of str
 
 and params =
@@ -162,8 +165,9 @@ and expr =
    Expr_Literal of value
  | Expr_Local of localVar
  | Expr_Global of globalVar
- | Expr_Forall of lambdaDef
- | Expr_Exists of lambdaDef
+ | Expr_Forall of attribSet * lambdaDef
+ | Expr_Exists of attribSet * lambdaDef
+ | Expr_Lambda of attribSet * lambdaDef
  | Expr_Old of expr
  | Expr_FunctionOp of globalIdent * expr list
  | Expr_Binary of binOp * expr * expr
@@ -255,10 +259,23 @@ and ensureTok =
    EnsureTok_ensure
  | EnsureTok_ensures
 
+and relyTok =
+   RelyTok_rely
+ | RelyTok_relies
+
+and guarTok =
+   GuarTok_guarnatee
+ | GuarTok_guarantees
+
 and funSpec =
    FunSpec_Require of requireTok * expr
  | FunSpec_Ensure of ensureTok * expr
+ | FunSpec_Rely of relyTok * expr
+ | FunSpec_Guard of guarTok * expr
  | FunSpec_Invariant of blockIdent * expr
+
+and varSpec =
+   VarSpec_Classification of expr
 
 and progSpec =
    ProgSpec_Rely of expr

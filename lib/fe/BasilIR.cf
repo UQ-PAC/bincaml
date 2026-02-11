@@ -82,8 +82,11 @@ separator nonempty Assignment ",";
 Stmt_MultiAssign . Stmt ::= "(" [Assignment]  ")" ;
 
 
-rules LocalVar ::= LocalIdent ":" Type ;
-rules GlobalVar ::= GlobalIdent ":" Type ;
+LocalTyped . LocalVar ::= LocalIdent ":" Type ;
+LocalUntyped . LocalVar ::= LocalIdent ;
+
+GlobalTyped . GlobalVar ::= GlobalIdent ":" Type ;
+GlobalUntyped . GlobalVar ::= GlobalIdent;
 separator nonempty LocalVar ",";
 rules Var ::= LocalVar | GlobalVar ;
 
@@ -159,6 +162,7 @@ separator Attr ";" ;
 Attr_Map . Attr ::= BeginRec [ AttrKeyValue ] Semicolons EndRec ; 
 Attr_List . Attr ::= BeginList [ Attr ] EndList; 
 Attr_Lit . Attr ::= Value ; 
+Attr_Expr . Attr ::= Expr; 
 Attr_Str . Attr ::= Str ; 
 
 rules Params ::=  LocalIdent ":" Type ;
@@ -179,8 +183,9 @@ Expr_Global . Expr ::= GlobalVar;
 -- quantifiers
 
 rules LambdaDef ::= "(" [LocalVar] ")" LambdaSep Expr ;
-Expr_Forall . Expr ::= "forall" LambdaDef ;
-Expr_Exists . Expr ::= "exists" LambdaDef ;
+Expr_Forall . Expr ::= "forall" AttribSet LambdaDef ;
+Expr_Exists . Expr ::= "exists" AttribSet  LambdaDef ;
+Expr_Lambda . Expr ::= "lambda" AttribSet  LambdaDef ;
 Expr_Old . Expr       ::= "old" "(" Expr ")" ;
 
 -- uninterpreted functions
@@ -217,9 +222,18 @@ rules BoolBinOp ::=  "booland" | "boolor" | "boolimplies" ;
 
 rules RequireTok ::= "require" | "requires" ;
 rules EnsureTok ::= "ensure" | "ensures" ;
+rules RelyTok ::= "rely" | "relies";
+rules GuarTok ::= "guarnatee" | "guarantees";
 
 FunSpec_Require . FunSpec ::= RequireTok Expr;
 FunSpec_Ensure . FunSpec ::= EnsureTok Expr;
+FunSpec_Rely . FunSpec ::= RelyTok Expr;
+FunSpec_Guard . FunSpec ::= GuarTok Expr;
+
+
+VarSpec_Classification . VarSpec ::= "classification" Expr;
+
+
 FunSpec_Invariant . FunSpec ::= "invariant" BlockIdent Expr;
 
 ProgSpec_Rely . ProgSpec ::= "rely" Expr;

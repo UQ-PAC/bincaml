@@ -138,11 +138,13 @@ and showStmt (e : AbsBasilIR.stmt) : showable = match e with
 
 
 and showLocalVar (e : AbsBasilIR.localVar) : showable = match e with
-       AbsBasilIR.LocalVar1 (localident, type') -> s2s "LocalVar1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
+       AbsBasilIR.LocalTyped (localident, type') -> s2s "LocalTyped" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
+  |    AbsBasilIR.LocalUntyped localident -> s2s "LocalUntyped" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
 
 
 and showGlobalVar (e : AbsBasilIR.globalVar) : showable = match e with
-       AbsBasilIR.GlobalVar1 (globalident, type') -> s2s "GlobalVar1" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type' >> c2s ')'
+       AbsBasilIR.GlobalTyped (globalident, type') -> s2s "GlobalTyped" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type' >> c2s ')'
+  |    AbsBasilIR.GlobalUntyped globalident -> s2s "GlobalUntyped" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident >> c2s ')'
 
 
 and showVar (e : AbsBasilIR.var) : showable = match e with
@@ -216,6 +218,7 @@ and showAttr (e : AbsBasilIR.attr) : showable = match e with
        AbsBasilIR.Attr_Map (beginrec, attrkeyvalues, semicolons, endrec) -> s2s "Attr_Map" >> c2s ' ' >> c2s '(' >> showBeginRec beginrec  >> s2s ", " >>  showList showAttrKeyValue attrkeyvalues  >> s2s ", " >>  showSemicolons semicolons  >> s2s ", " >>  showEndRec endrec >> c2s ')'
   |    AbsBasilIR.Attr_List (beginlist, attrs, endlist) -> s2s "Attr_List" >> c2s ' ' >> c2s '(' >> showBeginList beginlist  >> s2s ", " >>  showList showAttr attrs  >> s2s ", " >>  showEndList endlist >> c2s ')'
   |    AbsBasilIR.Attr_Lit value -> s2s "Attr_Lit" >> c2s ' ' >> c2s '(' >> showValue value >> c2s ')'
+  |    AbsBasilIR.Attr_Expr expr -> s2s "Attr_Expr" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Attr_Str str -> s2s "Attr_Str" >> c2s ' ' >> c2s '(' >> showStr str >> c2s ')'
 
 
@@ -234,8 +237,9 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
        AbsBasilIR.Expr_Literal value -> s2s "Expr_Literal" >> c2s ' ' >> c2s '(' >> showValue value >> c2s ')'
   |    AbsBasilIR.Expr_Local localvar -> s2s "Expr_Local" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
   |    AbsBasilIR.Expr_Global globalvar -> s2s "Expr_Global" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
-  |    AbsBasilIR.Expr_Forall lambdadef -> s2s "Expr_Forall" >> c2s ' ' >> c2s '(' >> showLambdaDef lambdadef >> c2s ')'
-  |    AbsBasilIR.Expr_Exists lambdadef -> s2s "Expr_Exists" >> c2s ' ' >> c2s '(' >> showLambdaDef lambdadef >> c2s ')'
+  |    AbsBasilIR.Expr_Forall (attribset, lambdadef) -> s2s "Expr_Forall" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showLambdaDef lambdadef >> c2s ')'
+  |    AbsBasilIR.Expr_Exists (attribset, lambdadef) -> s2s "Expr_Exists" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showLambdaDef lambdadef >> c2s ')'
+  |    AbsBasilIR.Expr_Lambda (attribset, lambdadef) -> s2s "Expr_Lambda" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showLambdaDef lambdadef >> c2s ')'
   |    AbsBasilIR.Expr_Old expr -> s2s "Expr_Old" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_FunctionOp (globalident, exprs) -> s2s "Expr_FunctionOp" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showList showExpr exprs >> c2s ')'
   |    AbsBasilIR.Expr_Binary (binop, expr0, expr) -> s2s "Expr_Binary" >> c2s ' ' >> c2s '(' >> showBinOp binop  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
@@ -340,10 +344,26 @@ and showEnsureTok (e : AbsBasilIR.ensureTok) : showable = match e with
   |    AbsBasilIR.EnsureTok_ensures  -> s2s "EnsureTok_ensures"
 
 
+and showRelyTok (e : AbsBasilIR.relyTok) : showable = match e with
+       AbsBasilIR.RelyTok_rely  -> s2s "RelyTok_rely"
+  |    AbsBasilIR.RelyTok_relies  -> s2s "RelyTok_relies"
+
+
+and showGuarTok (e : AbsBasilIR.guarTok) : showable = match e with
+       AbsBasilIR.GuarTok_guarnatee  -> s2s "GuarTok_guarnatee"
+  |    AbsBasilIR.GuarTok_guarantees  -> s2s "GuarTok_guarantees"
+
+
 and showFunSpec (e : AbsBasilIR.funSpec) : showable = match e with
        AbsBasilIR.FunSpec_Require (requiretok, expr) -> s2s "FunSpec_Require" >> c2s ' ' >> c2s '(' >> showRequireTok requiretok  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.FunSpec_Ensure (ensuretok, expr) -> s2s "FunSpec_Ensure" >> c2s ' ' >> c2s '(' >> showEnsureTok ensuretok  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.FunSpec_Rely (relytok, expr) -> s2s "FunSpec_Rely" >> c2s ' ' >> c2s '(' >> showRelyTok relytok  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.FunSpec_Guard (guartok, expr) -> s2s "FunSpec_Guard" >> c2s ' ' >> c2s '(' >> showGuarTok guartok  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.FunSpec_Invariant (blockident, expr) -> s2s "FunSpec_Invariant" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showExpr expr >> c2s ')'
+
+
+and showVarSpec (e : AbsBasilIR.varSpec) : showable = match e with
+       AbsBasilIR.VarSpec_Classification expr -> s2s "VarSpec_Classification" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
 
 
 and showProgSpec (e : AbsBasilIR.progSpec) : showable = match e with

@@ -155,11 +155,13 @@ and transStmt (x : stmt) : result = match x with
 
 
 and transLocalVar (x : localVar) : result = match x with
-    LocalVar1 (localident, type') -> failure x
+    LocalTyped (localident, type') -> failure x
+  | LocalUntyped localident -> failure x
 
 
 and transGlobalVar (x : globalVar) : result = match x with
-    GlobalVar1 (globalident, type') -> failure x
+    GlobalTyped (globalident, type') -> failure x
+  | GlobalUntyped globalident -> failure x
 
 
 and transVar (x : var) : result = match x with
@@ -233,6 +235,7 @@ and transAttr (x : attr) : result = match x with
     Attr_Map (beginrec, attrkeyvalues, semicolons, endrec) -> failure x
   | Attr_List (beginlist, attrs, endlist) -> failure x
   | Attr_Lit value -> failure x
+  | Attr_Expr expr -> failure x
   | Attr_Str str -> failure x
 
 
@@ -251,8 +254,9 @@ and transExpr (x : expr) : result = match x with
     Expr_Literal value -> failure x
   | Expr_Local localvar -> failure x
   | Expr_Global globalvar -> failure x
-  | Expr_Forall lambdadef -> failure x
-  | Expr_Exists lambdadef -> failure x
+  | Expr_Forall (attribset, lambdadef) -> failure x
+  | Expr_Exists (attribset, lambdadef) -> failure x
+  | Expr_Lambda (attribset, lambdadef) -> failure x
   | Expr_Old expr -> failure x
   | Expr_FunctionOp (globalident, exprs) -> failure x
   | Expr_Binary (binop, expr0, expr) -> failure x
@@ -357,10 +361,26 @@ and transEnsureTok (x : ensureTok) : result = match x with
   | EnsureTok_ensures  -> failure x
 
 
+and transRelyTok (x : relyTok) : result = match x with
+    RelyTok_rely  -> failure x
+  | RelyTok_relies  -> failure x
+
+
+and transGuarTok (x : guarTok) : result = match x with
+    GuarTok_guarnatee  -> failure x
+  | GuarTok_guarantees  -> failure x
+
+
 and transFunSpec (x : funSpec) : result = match x with
     FunSpec_Require (requiretok, expr) -> failure x
   | FunSpec_Ensure (ensuretok, expr) -> failure x
+  | FunSpec_Rely (relytok, expr) -> failure x
+  | FunSpec_Guard (guartok, expr) -> failure x
   | FunSpec_Invariant (blockident, expr) -> failure x
+
+
+and transVarSpec (x : varSpec) : result = match x with
+    VarSpec_Classification expr -> failure x
 
 
 and transProgSpec (x : progSpec) : result = match x with

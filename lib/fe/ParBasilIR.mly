@@ -7,7 +7,7 @@ open AbsBasilIR
 open Lexing
 %}
 
-%token KW_axiom KW_memory KW_shared KW_var KW_prog KW_entry KW_proc KW_le KW_be KW_nop KW_load KW_store KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_old KW_boolnot KW_intneg KW_booltobv1 KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_invariant KW_rely KW_guarantee
+%token KW_axiom KW_memory KW_shared KW_var KW_prog KW_entry KW_proc KW_le KW_be KW_nop KW_load KW_store KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_lambda KW_old KW_boolnot KW_intneg KW_booltobv1 KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_rely KW_relies KW_guarnatee KW_guarantees KW_classification KW_invariant KW_guarantee
 
 %token SYMB1 /* ; */
 %token SYMB2 /* , */
@@ -43,7 +43,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pSemicolons pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr pLambdaDef pBinOp pUnOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pFunSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pSemicolons pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr pLambdaDef pBinOp pUnOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -106,7 +106,10 @@ open Lexing
 %type <AbsBasilIR.boolBinOp> pBoolBinOp
 %type <AbsBasilIR.requireTok> pRequireTok
 %type <AbsBasilIR.ensureTok> pEnsureTok
+%type <AbsBasilIR.relyTok> pRelyTok
+%type <AbsBasilIR.guarTok> pGuarTok
 %type <AbsBasilIR.funSpec> pFunSpec
+%type <AbsBasilIR.varSpec> pVarSpec
 %type <AbsBasilIR.progSpec> pProgSpec
 %type <AbsBasilIR.funSpec list> pFunSpec_list
 %type <AbsBasilIR.progSpec list> pProgSpec_list
@@ -173,7 +176,10 @@ open Lexing
 %type <AbsBasilIR.boolBinOp> boolBinOp
 %type <AbsBasilIR.requireTok> requireTok
 %type <AbsBasilIR.ensureTok> ensureTok
+%type <AbsBasilIR.relyTok> relyTok
+%type <AbsBasilIR.guarTok> guarTok
 %type <AbsBasilIR.funSpec> funSpec
+%type <AbsBasilIR.varSpec> varSpec
 %type <AbsBasilIR.progSpec> progSpec
 %type <AbsBasilIR.funSpec list> funSpec_list
 %type <AbsBasilIR.progSpec list> progSpec_list
@@ -321,7 +327,13 @@ pRequireTok : requireTok TOK_EOF { $1 };
 
 pEnsureTok : ensureTok TOK_EOF { $1 };
 
+pRelyTok : relyTok TOK_EOF { $1 };
+
+pGuarTok : guarTok TOK_EOF { $1 };
+
 pFunSpec : funSpec TOK_EOF { $1 };
+
+pVarSpec : varSpec TOK_EOF { $1 };
 
 pProgSpec : progSpec TOK_EOF { $1 };
 
@@ -420,10 +432,12 @@ assignment_list : assignment { (fun x -> [x]) $1 }
   | assignment SYMB2 assignment_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-localVar : localIdent SYMB3 typeT { LocalVar1 ($1, $3) }
+localVar : localIdent SYMB3 typeT { LocalTyped ($1, $3) }
+  | localIdent { LocalUntyped $1 }
   ;
 
-globalVar : globalIdent SYMB3 typeT { GlobalVar1 ($1, $3) }
+globalVar : globalIdent SYMB3 typeT { GlobalTyped ($1, $3) }
+  | globalIdent { GlobalUntyped $1 }
   ;
 
 localVar_list : localVar { (fun x -> [x]) $1 }
@@ -529,6 +543,7 @@ attr_list : /* empty */ { []  }
 attr : beginRec attrKeyValue_list semicolons endRec { Attr_Map ($1, $2, $3, $4) }
   | beginList attr_list endList { Attr_List ($1, $2, $3) }
   | value { Attr_Lit $1 }
+  | expr { Attr_Expr $1 }
   | str { Attr_Str $1 }
   ;
 
@@ -549,8 +564,9 @@ value : bVVal { Value_BV $1 }
 expr : value { Expr_Literal $1 }
   | localVar { Expr_Local $1 }
   | globalVar { Expr_Global $1 }
-  | KW_forall lambdaDef { Expr_Forall $2 }
-  | KW_exists lambdaDef { Expr_Exists $2 }
+  | KW_forall attribSet lambdaDef { Expr_Forall ($2, $3) }
+  | KW_exists attribSet lambdaDef { Expr_Exists ($2, $3) }
+  | KW_lambda attribSet lambdaDef { Expr_Lambda ($2, $3) }
   | KW_old SYMB5 expr SYMB6 { Expr_Old $3 }
   | globalIdent SYMB5 expr_list SYMB6 { Expr_FunctionOp ($1, $3) }
   | binOp SYMB5 expr SYMB2 expr SYMB6 { Expr_Binary ($1, $3, $5) }
@@ -643,9 +659,22 @@ ensureTok : KW_ensure { EnsureTok_ensure  }
   | KW_ensures { EnsureTok_ensures  }
   ;
 
+relyTok : KW_rely { RelyTok_rely  }
+  | KW_relies { RelyTok_relies  }
+  ;
+
+guarTok : KW_guarnatee { GuarTok_guarnatee  }
+  | KW_guarantees { GuarTok_guarantees  }
+  ;
+
 funSpec : requireTok expr { FunSpec_Require ($1, $2) }
   | ensureTok expr { FunSpec_Ensure ($1, $2) }
+  | relyTok expr { FunSpec_Rely ($1, $2) }
+  | guarTok expr { FunSpec_Guard ($1, $2) }
   | KW_invariant blockIdent expr { FunSpec_Invariant ($2, $3) }
+  ;
+
+varSpec : KW_classification expr { VarSpec_Classification $2 }
   ;
 
 progSpec : KW_rely expr { ProgSpec_Rely $2 }

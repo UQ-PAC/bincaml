@@ -3,7 +3,7 @@ open Containers
 
 module Maps = struct
   (* map, value -> result *)
-  type binary = [ `MapIndex ] [@@deriving show { with_path = false }, eq, ord]
+  type binary = [ `MapAccess ] [@@deriving show { with_path = false }, eq, ord]
   type intrin = [ `MapUpdate ] [@@deriving show { with_path = false }, eq, ord]
 
   let show = function
@@ -189,7 +189,7 @@ module IntOps = struct
 end
 
 module Spec = struct
-  type unary = [ `Forall | `Old | `Exists ]
+  type unary = [ `Forall | `Old | `Exists | `Lambda | `Classification ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let hash_intrin a = Hashtbl.hash a
@@ -291,6 +291,8 @@ module AllOps = struct
     | `BVSREM -> "bvsrem"
     | `BVSDIV -> "bvsdiv"
     | `Forall -> "forall"
+    | `Lambda -> "lambda"
+    | `Classification -> "classification"
     | `BVNEG -> "bvneg"
     | `Bool true -> "true"
     | `Bool false -> "false"

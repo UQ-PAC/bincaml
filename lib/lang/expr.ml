@@ -15,7 +15,7 @@ module AbstractExpr = struct
         (** application of a pure intrinsic function with n arguments *)
     | ApplyFun of string * 'e list
         (** application of a pure runtime-defined function with n arguments *)
-    | Binding of 'e list * 'e  (** syntactic binding in a nested scope *)
+    | Binding of 'var list * 'e  (** syntactic binding in a nested scope *)
   [@@deriving eq, ord, fold, map, iter]
 
   let id a b = a
@@ -125,8 +125,7 @@ module Make (O : Fix) = struct
     let alg e =
       match e with
       | RVar e -> VarSet.singleton e
-      | Binding (b, e) ->
-          VarSet.diff e (List.fold_left VarSet.union VarSet.empty b)
+      | Binding (b, e) -> VarSet.diff e (VarSet.add_list VarSet.empty b)
       | o -> fold (fun acc a -> VarSet.union a acc) VarSet.empty o
     in
     cata alg e
@@ -137,13 +136,7 @@ module Make (O : Fix) = struct
   let substitute (sub : var -> t option) (e : t) =
     let open AbstractExpr in
     let binding acc e =
-      match e with
-      | Binding (b, e) ->
-          let v =
-            List.map free_vars b |> List.fold_left VarSet.union VarSet.empty
-          in
-          VarSet.union acc v
-      | o -> acc
+      match e with Binding (b, e) -> VarSet.add_list acc b | o -> acc
     in
     let subst binding orig =
       match orig with
@@ -276,7 +269,8 @@ module BasilExpr = struct
           ]
     | ApplyFun (n, es) ->
         fill nil [ text n ^ bracket "(\n" (fill (text "," ^ newline) es) ")" ]
-    | Binding (vs, b) -> fill (text " ") vs ^ text " ::" ^ newline ^ b
+    | Binding (vs, b) ->
+        fill (text " ") (List.map Var.pretty vs) ^ text " ::" ^ newline ^ b
 
   (* printers *)
   let print_alg (e : string abstract_expr) =
@@ -295,7 +289,8 @@ module BasilExpr = struct
     | ApplyIntrin (op, es) ->
         AllOps.to_string op ^ "(" ^ String.concat ", " es ^ ")"
     | ApplyFun (n, es) -> n ^ "(" ^ String.concat ", " es ^ ")"
-    | Binding (vs, b) -> String.concat " " vs ^ " :: " ^ b
+    | Binding (vs, b) ->
+        String.concat " " (List.map Var.to_string vs) ^ " :: " ^ b
 
   let pretty s = cata pretty_alg s
   let to_string s = cata print_alg s
@@ -317,7 +312,7 @@ module BasilExpr = struct
     | BinaryExpr (op, l, r) -> ret_type_bin op l r |> get_ty
     | ApplyIntrin (op, args) -> ret_type_intrin op args |> get_ty
     | ApplyFun (a, b) -> Types.Top
-    | Binding (vars, b) -> Types.uncurry vars b
+    | Binding (vars, b) -> Types.uncurry (List.map Var.typ vars) b
 
   let type_of e = cata type_alg e
 
@@ -386,6 +381,7 @@ module BasilExpr = struct
   let intconst (v : PrimInt.t) : t = const (`Integer v)
   let boolconst (v : bool) : t = const (`Bool v)
   let bvconst (v : Bitvec.t) : t = const (`Bitvector v)
+  let lambda ~bound p = unexp ~op:`Lambda (binding bound p)
 
   let bv_of_int ~(size : int) (v : int) : t =
     const (`Bitvector (Bitvec.of_int ~size v))

@@ -48,7 +48,7 @@ let type_check stmt_id block_id expr =
                 ])
         | _ -> [ type_err "%s body is not a bitvector" @@ AllOps.to_string op ])
     | `Old -> []
-    | `Forall | `Exists -> []
+    | `Forall | `Exists | `Classification | `Lambda -> []
   in
 
   let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :
@@ -162,7 +162,7 @@ let type_check stmt_id block_id expr =
       | BinaryExpr (op, l, r) -> ret_type_bin op l r |> get_ty
       | ApplyIntrin (op, args) -> ret_type_intrin op args |> get_ty
       | ApplyFun (a, b) -> ([], Types.Top)
-      | Binding (vars, b) -> ([], Types.uncurry vars b)
+      | Binding (vars, b) -> ([], Types.uncurry (List.map Var.typ vars) b)
     in
     let typed_expr = AbstractExpr.map snd e in
     let new_errors : type_error list =

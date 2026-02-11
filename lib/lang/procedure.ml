@@ -337,6 +337,8 @@ let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
 let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
   update_block p id block
 
+let lookup_local_decl p v = Var.Decls.find (local_decls p) v
+
 let decl_local p v =
   let _ = (local_ids p).decl_or_get (Var.name v) in
   Var.Decls.add (local_decls p) v;
