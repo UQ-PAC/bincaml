@@ -29,8 +29,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          opam option --global 'archive-mirrors+="opam.ocaml.org"'
+          opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
           opam install . --deps-only --with-doc
+          opam install odoc
 
       - name: Build documentation
         run: |
