@@ -156,24 +156,25 @@ let type_check stmt_id block_id expr =
     in
     let inf_errors, rtype =
       match AbstractExpr.map snd e with
-      | RVar r -> ([], Var.typ r)
-      | Constant op -> ret_type_const op |> get_ty
-      | UnaryExpr (op, a) -> ret_type_unary op a |> get_ty
-      | BinaryExpr (op, l, r) -> ret_type_bin op l r |> get_ty
-      | ApplyIntrin (op, args) -> ret_type_intrin op args |> get_ty
-      | ApplyFun (a, b) -> ([], Types.Top)
-      | Binding (vars, b) -> ([], Types.uncurry (List.map Var.typ vars) b)
+      | RVar { id = r } -> ([], Var.typ r)
+      | Constant { const = op } -> ret_type_const op |> get_ty
+      | UnaryExpr { op; arg = a } -> ret_type_unary op a |> get_ty
+      | BinaryExpr { op; arg1 = l; arg2 = r } -> ret_type_bin op l r |> get_ty
+      | ApplyIntrin { op; args } -> ret_type_intrin op args |> get_ty
+      | ApplyFun _ -> ([], Types.Top)
+      | Binding { bound = vars; in_body = b } ->
+          ([], Types.uncurry (List.map Var.typ vars) b)
     in
     let typed_expr = AbstractExpr.map snd e in
     let new_errors : type_error list =
       match typed_expr with
-      | RVar r -> []
-      | Constant op -> []
-      | ApplyFun (a, b) -> []
-      | Binding (vars, b) -> []
-      | UnaryExpr (op, a) -> check_unary op a
-      | BinaryExpr (op, l, r) -> check_binary op l r
-      | ApplyIntrin (op, args) -> check_intrin op args
+      | RVar _ -> []
+      | Constant _ -> []
+      | ApplyFun _ -> []
+      | Binding _ -> []
+      | UnaryExpr { op; arg } -> check_unary op arg
+      | BinaryExpr { op; arg1 = l; arg2 = r } -> check_binary op l r
+      | ApplyIntrin { op; args } -> check_intrin op args
     in
     (inf_errors @ new_errors @ errors, rtype)
   in

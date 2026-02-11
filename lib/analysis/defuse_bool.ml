@@ -49,7 +49,7 @@ module IsZeroValueAbstraction = struct
     | `ZeroExtend size -> a
     | `Old -> Top
     | `Exists -> Top
-    | `Forall -> Top
+    | `Forall | `Lambda | `Classification -> Top
 
   let eval_binop (op : Lang.Ops.AllOps.binary) a b =
     match (op, a, b) with

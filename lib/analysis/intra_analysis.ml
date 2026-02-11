@@ -11,11 +11,11 @@ module EvalExpr (V : ValueAbstraction) = struct
   let alg read e =
     let open Expr.AbstractExpr in
     match e with
-    | RVar v -> read v
-    | Constant c -> V.eval_const c
-    | UnaryExpr (op, e) -> V.eval_unop op e
-    | BinaryExpr (op, a, b) -> V.eval_binop op a b
-    | ApplyIntrin (op, es) -> V.eval_intrin op es
+    | RVar { id } -> read id
+    | Constant { const } -> V.eval_const const
+    | UnaryExpr { op; arg } -> V.eval_unop op arg
+    | BinaryExpr { op; arg1 = a; arg2 = b } -> V.eval_binop op a b
+    | ApplyIntrin { op; args } -> V.eval_intrin op args
     | _ -> failwith "unsupported"
 
   let eval read expr = V.E.cata (alg read) expr
@@ -29,11 +29,11 @@ module EvalExprWithType (V : TypedValueAbstraction) = struct
     let tt = V.E.type_alg (Expr.AbstractExpr.map snd e) in
     let r =
       match e with
-      | RVar v -> read v
-      | Constant c -> V.eval_const c tt
-      | UnaryExpr (op, e) -> V.eval_unop op e tt
-      | BinaryExpr (op, a, b) -> V.eval_binop op a b tt
-      | ApplyIntrin (op, es) -> V.eval_intrin op es tt
+      | RVar { id } -> read id
+      | Constant { const } -> V.eval_const const tt
+      | UnaryExpr { op; arg } -> V.eval_unop op arg tt
+      | BinaryExpr { op; arg1 = a; arg2 = b } -> V.eval_binop op a b tt
+      | ApplyIntrin { op; args } -> V.eval_intrin op args tt
       | _ -> failwith "unsupported"
     in
     (r, tt)
@@ -61,11 +61,11 @@ module EvalExprLog (V : TypedValueAbstraction) = struct
           ")"
       in
       match e_pretty with
-      | RVar v -> eval_e ^ text @@ V.E.Var.show v
-      | Constant c -> eval_e ^ text @@ show_const c
-      | UnaryExpr (op, e) -> print (show_unop op) [ e ]
-      | BinaryExpr (op, a, b) -> print (show_binop op) [ a; b ]
-      | ApplyIntrin (op, es) -> print (show_intrin op) es
+      | RVar { id = v } -> eval_e ^ text @@ V.E.Var.show v
+      | Constant { const } -> eval_e ^ text @@ show_const const
+      | UnaryExpr { op; arg = e } -> print (show_unop op) [ e ]
+      | BinaryExpr { op; arg1 = a; arg2 = b } -> print (show_binop op) [ a; b ]
+      | ApplyIntrin { op; args } -> print (show_intrin op) args
       | _ -> failwith "unsupported"
     in
     (pretty, evaled)
@@ -120,7 +120,7 @@ let tf_forwards st (read_st : 'a -> Var.t -> 'b) (s : Program.stmt)
     (eval : ('b * Types.t) Expr.BasilExpr.abstract_expr -> 'b) tf_stmt =
   let open Expr in
   let open AbstractExpr in
-  let alg e = match e with RVar e -> (read_st st) e | o -> eval o in
+  let alg e = match e with RVar { id = e } -> (read_st st) e | o -> eval o in
   tf_stmt
   @@ Stmt.map ~f_rvar:(read_st st) ~f_lvar:id
        ~f_expr:(BasilExpr.fold_with_type alg)

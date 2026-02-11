@@ -290,6 +290,31 @@ module BasilASTLoader = struct
     | VarGlobalVar (GlobalUntyped globalVar) ->
         lookup_global_decl globalVar p_st
 
+  and trans_attr_kv p_st kv =
+    `Assoc
+      (List.map
+         (function
+           | AttrKeyValue1 (bident, attr) ->
+               (unsafe_unsigil (`Attr bident), trans_attr p_st attr))
+         kv)
+
+  and trans_str (s : str) = match s with Str s -> stripquote s
+
+  and trans_attr p_st (attr : attr) : [> Expr.BasilExpr.t Attrib.t ] =
+    match attr with
+    | Attr_Map (_, keyvals, _, _) -> trans_attr_kv p_st keyvals
+    | Attr_List (_, ls, _) -> `List (List.map (trans_attr p_st) ls)
+    | Attr_Lit v -> ( match trans_value v with #Ops.AllOps.const as v -> v)
+    | Attr_Expr expr -> `Expr (trans_expr p_st expr)
+    | Attr_Str s -> `String (trans_str s)
+
+  and trans_attrib_set p_st (atrs : attribSet) :
+      Expr.BasilExpr.t Attrib.t option =
+    match atrs with
+    | AttribSet_Empty -> None
+    | AttribSet_Some (_, attrKeyValue, _, _) ->
+        Some (trans_attr_kv p_st attrKeyValue)
+
   and trans_stmt (p_st : load_st) (x : BasilIR.AbsBasilIR.stmtWithAttrib) :
       load_st
       * [> `Call of (Var.t, 'a, BasilExpr.t) Stmt.t
@@ -575,12 +600,27 @@ module BasilASTLoader = struct
       let msg = "global variable used before declaration : " ^ vn in
       raise (LoadError { token_char_offset_range; msg; input = None })
 
+  and trans_bv_val v : Bitvec.t =
+    match v with
+    | BVVal1 (intval, BVType1 bvtype) -> (
+        match transBVTYPE bvtype with
+        | Bitvector size -> Bitvec.create ~size (transIntVal intval)
+        | _ -> failwith "unreachable")
+
+  and trans_value v : Ops.AllOps.const =
+    match v with
+    | Value_BV v -> `Bitvector (trans_bv_val v)
+    | Value_Int intval -> `Integer (transIntVal intval)
+    | Value_True -> `Bool true
+    | Value_False -> `Bool false
+
   and unsafe_unsigil g : string =
     match g with
     | `Global (GlobalIdent (pos, g)) -> g
     | `Local (LocalIdent (pos, g)) -> g
     | `Proc (ProcIdent (pos, g)) -> g
     | `Block (BlockIdent (pos, g)) -> g
+    | `Attr (BIdent (pos, g)) -> g
 
   and trans_expr (p_st : load_st) (x : BasilIR.AbsBasilIR.expr) : BasilExpr.t =
     let trans_expr = trans_expr p_st in
@@ -638,24 +678,18 @@ module BasilASTLoader = struct
           (trans_expr expr)
     | Expr_Concat exprs ->
         BasilExpr.applyintrin ~op:`BVConcat (List.map trans_expr exprs)
-    | Expr_Literal (Value_BV (BVVal1 (intval, BVType1 bvtype))) ->
-        BasilExpr.bvconst
-          (match transBVTYPE bvtype with
-          | Bitvector size -> Bitvec.create ~size (transIntVal intval)
-          | _ -> failwith "unreachable")
-    | Expr_Literal (Value_Int intval) -> BasilExpr.intconst (transIntVal intval)
-    | Expr_Literal Value_True -> BasilExpr.boolconst true
-    | Expr_Literal Value_False -> BasilExpr.boolconst false
+    | Expr_Literal v -> (
+        match trans_value v with #BasilExpr.const as v -> BasilExpr.const v)
     | Expr_Old e -> BasilExpr.unexp ~op:`Old (trans_expr e)
-    | Expr_Forall (_, LambdaDef1 (lv, _, e)) ->
+    | Expr_Forall (attrs, LambdaDef1 (lv, _, e)) ->
         BasilExpr.forall ~bound:(unpackLVars p_st lv) (trans_expr e)
-    | Expr_Lambda (_, LambdaDef1 (lv, _, e)) ->
+    | Expr_Lambda (attrs, LambdaDef1 (lv, _, e)) ->
         BasilExpr.forall ~bound:(unpackLVars p_st lv) (trans_expr e)
-    | Expr_Exists (_, LambdaDef1 (lv, _, e)) ->
+    | Expr_Exists (attrs, LambdaDef1 (lv, _, e)) ->
         BasilExpr.exists ~bound:(unpackLVars p_st lv) (trans_expr e)
     | Expr_FunctionOp (gi, args) ->
         BasilExpr.apply_fun
-          ~name:(unsafe_unsigil (`Global gi))
+          ~func:(BasilExpr.rvar @@ lookup_global_decl gi p_st)
           (List.map trans_expr args)
 
   and transBinOp (x : BasilIR.AbsBasilIR.binOp) =
