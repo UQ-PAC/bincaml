@@ -55,13 +55,13 @@
           qcheck-stm = "*";
           ocaml-lsp-server = "*";
           ocamlformat = "*";
+          basil_lsp = "*";
         };
         query = devPackagesQuery // {
           ocaml-compiler = "5.3.0";
           ocaml-variants = "5.3.0+options";
           ocaml-option-fp = "*";
           ocaml-option-flambda = "*";
-          basil_lsp = "*";
         };
         scope = on.buildOpamProject' {
           repos = [
@@ -85,7 +85,7 @@
 
         devShells.default = pkgs.mkShell {
           inputsFrom = [ main ];
-          buildInputs = devPackages ++ [ ];
+          buildInputs = devPackages ++ [ main ];
         };
       }
     );
