@@ -35,8 +35,7 @@ jobs:
 
       - name: Build documentation
         run: |
-          opam exec -- dune build @install --ignore-promoted-rules
-          opam exec -- dune install --ignore-promoted-rules
+          opam pin add .
           opam exec -- odoc_driver bincaml
 
       - name: Upload artifact
