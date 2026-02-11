@@ -43,7 +43,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pSemicolons pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr pLambdaDef pBinOp pUnOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pSemicolons pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr pLambdaDef pBinOp pUnOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pVarSpec_list pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -110,6 +110,7 @@ open Lexing
 %type <AbsBasilIR.guarTok> pGuarTok
 %type <AbsBasilIR.funSpec> pFunSpec
 %type <AbsBasilIR.varSpec> pVarSpec
+%type <AbsBasilIR.varSpec list> pVarSpec_list
 %type <AbsBasilIR.progSpec> pProgSpec
 %type <AbsBasilIR.funSpec list> pFunSpec_list
 %type <AbsBasilIR.progSpec list> pProgSpec_list
@@ -180,6 +181,7 @@ open Lexing
 %type <AbsBasilIR.guarTok> guarTok
 %type <AbsBasilIR.funSpec> funSpec
 %type <AbsBasilIR.varSpec> varSpec
+%type <AbsBasilIR.varSpec list> varSpec_list
 %type <AbsBasilIR.progSpec> progSpec
 %type <AbsBasilIR.funSpec list> funSpec_list
 %type <AbsBasilIR.progSpec list> progSpec_list
@@ -335,6 +337,8 @@ pFunSpec : funSpec TOK_EOF { $1 };
 
 pVarSpec : varSpec TOK_EOF { $1 };
 
+pVarSpec_list : varSpec_list TOK_EOF { $1 };
+
 pProgSpec : progSpec TOK_EOF { $1 };
 
 pFunSpec_list : funSpec_list TOK_EOF { $1 };
@@ -358,9 +362,9 @@ semicolons : /* empty */ { Semicolons_Empty  }
   ;
 
 decl : KW_axiom attribSet expr { Decl_Axiom ($2, $3) }
-  | KW_memory KW_shared globalIdent SYMB3 typeT { Decl_SharedMem ($3, $5) }
-  | KW_memory globalIdent SYMB3 typeT { Decl_UnsharedMem ($2, $4) }
-  | KW_var globalIdent SYMB3 typeT { Decl_Var ($2, $4) }
+  | KW_memory KW_shared globalIdent SYMB3 typeT varSpec { Decl_SharedMem ($3, $5, $6) }
+  | KW_memory globalIdent SYMB3 typeT varSpec { Decl_UnsharedMem ($2, $4, $5) }
+  | KW_var globalIdent SYMB3 typeT varSpec { Decl_Var ($2, $4, $5) }
   | SYMB4 attribSet globalIdent SYMB3 SYMB5 typeT_list SYMB6 SYMB7 typeT { Decl_UninterpFun ($2, $3, $6, $9) }
   | SYMB8 attribSet globalIdent SYMB5 params_list SYMB6 SYMB7 typeT SYMB9 expr { Decl_Fun ($2, $3, $5, $8, $10) }
   | KW_prog KW_entry procIdent attribSet { Decl_ProgEmpty ($3, $4) }
@@ -675,6 +679,11 @@ funSpec : requireTok expr { FunSpec_Require ($1, $2) }
   ;
 
 varSpec : KW_classification expr { VarSpec_Classification $2 }
+  | /* empty */ { VarSpec_Empty  }
+  ;
+
+varSpec_list : /* empty */ { []  }
+  | varSpec SYMB1 varSpec_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 progSpec : KW_rely expr { ProgSpec_Rely $2 }

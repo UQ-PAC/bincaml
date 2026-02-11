@@ -114,9 +114,14 @@ module BasilASTLoader = struct
         List.fold_left trans_declaration prog declarations |> fun p ->
         List.fold_left trans_definition p declarations
 
+  and trans_varspec prog (v : varSpec) =
+    match v with
+    | VarSpec_Classification v -> [ trans_expr prog v ]
+    | VarSpec_Empty -> []
+
   and trans_declaration prog (x : decl) : load_st =
     match x with
-    | Decl_SharedMem (bident, type') ->
+    | Decl_SharedMem (bident, type', spec) ->
         map_prog
           (fun p ->
             Program.decl_global p
@@ -125,7 +130,7 @@ module BasilASTLoader = struct
                  ~pure:false ~scope:Global (trans_type type'));
             p)
           prog
-    | Decl_UnsharedMem (bident, type') ->
+    | Decl_UnsharedMem (bident, type', spec) ->
         map_prog
           (fun p ->
             Program.decl_global p
@@ -134,7 +139,7 @@ module BasilASTLoader = struct
                  ~pure:false ~scope:Global (trans_type type'));
             p)
           prog
-    | Decl_Var (bident, type') ->
+    | Decl_Var (bident, type', spec) ->
         map_prog
           (fun p ->
             Program.decl_global p
@@ -143,11 +148,58 @@ module BasilASTLoader = struct
                  ~pure:true ~scope:Global (trans_type type'));
             p)
           prog
-    | Decl_UninterpFun (attrDefList, glident, argtypes, rettype) -> prog
-    | Decl_Fun (attrList, glident, params, rt, body) -> prog
-    | Decl_Axiom _ -> prog
-    | Decl_ProgEmpty (ProcIdent (_, id), attr) -> prog
-    | Decl_ProgWithSpec (ProcIdent (_, id), attr, _, spec, _) -> prog
+    | Decl_UninterpFun (attrDefList, glident, argtypes, rettype) ->
+        let typesig = List.map trans_type argtypes in
+        let rtype = trans_type rettype in
+        let ftype = Types.uncurry typesig rtype in
+        map_prog
+          (fun p ->
+            Program.decl_global p
+              (Var.create
+                 (unsafe_unsigil (`Global glident))
+                 ~pure:true ~scope:Global ftype);
+            p)
+          prog
+    | Decl_Fun (attrList, glident, params, rt, body) ->
+        (*let typesig = List.map trans_type params in*)
+        let params_in = List.map param_to_formal params |> List.map snd in
+        let argtypes = List.map Var.typ params_in in
+        let rtype = trans_type rt in
+        let ftype = Types.uncurry argtypes rtype in
+        let attrib = trans_attrib_set prog attrList in
+        let body = trans_expr ~binds:(VarSet.of_list params_in) prog body in
+        let bvar =
+          Var.create
+            (unsafe_unsigil (`Global glident))
+            ~pure:true ~scope:Global ftype
+        in
+        Program.decl_global prog.prog bvar;
+        let fundef : Program.pure_function_def =
+          { attrib; binding = bvar; definition = Some body }
+        in
+        map_prog
+          (fun prog ->
+            { prog with functions = VarMap.add bvar fundef prog.functions })
+          prog
+    | Decl_Axiom (attr, body) ->
+        let attrib = trans_attrib_set prog attr in
+        let predicate = trans_expr prog body in
+        map_prog
+          (fun prog ->
+            { prog with axioms = { attrib; predicate } :: prog.axioms })
+          prog
+    | Decl_ProgEmpty (ProcIdent (_, id), attr) ->
+        let nattrib = trans_attrib_set prog attr in
+        map_prog
+          (fun p ->
+            { p with attrib = Attrib.merge_map_shadow p.attrib nattrib })
+          prog
+    | Decl_ProgWithSpec (ProcIdent (_, id), attr, _, spec, _) ->
+        let nattrib = trans_attrib_set prog attr in
+        map_prog
+          (fun p ->
+            { p with attrib = Attrib.merge_map_shadow p.attrib nattrib })
+          prog
     | Decl_Proc
         (ProcIdent (id_pos, id), in_params, out_params, attrib, spec, definition)
       ->
@@ -169,6 +221,11 @@ module BasilASTLoader = struct
             prog
         in
         prog
+
+  and trans_progspec prog (p : progSpec) =
+    match p with
+    | ProgSpec_Rely b -> `Rely (trans_expr prog b)
+    | ProgSpec_Guarantee b -> `Guarantee (trans_expr prog b)
 
   and trans_definition prog (x : decl) : load_st =
     match x with
@@ -290,30 +347,29 @@ module BasilASTLoader = struct
     | VarGlobalVar (GlobalUntyped globalVar) ->
         lookup_global_decl globalVar p_st
 
-  and trans_attr_kv p_st kv =
-    `Assoc
-      (List.map
-         (function
-           | AttrKeyValue1 (bident, attr) ->
-               (unsafe_unsigil (`Attr bident), trans_attr p_st attr))
-         kv)
+  and trans_attr_kv p_st kv : Expr.BasilExpr.t Attrib.attrib_map =
+    List.map
+      (function
+        | AttrKeyValue1 (bident, attr) ->
+            (unsafe_unsigil (`Attr bident), trans_attr p_st attr))
+      kv
+    |> StringMap.of_list
 
   and trans_str (s : str) = match s with Str s -> stripquote s
 
   and trans_attr p_st (attr : attr) : [> Expr.BasilExpr.t Attrib.t ] =
     match attr with
-    | Attr_Map (_, keyvals, _, _) -> trans_attr_kv p_st keyvals
+    | Attr_Map (_, keyvals, _, _) -> `Assoc (trans_attr_kv p_st keyvals)
     | Attr_List (_, ls, _) -> `List (List.map (trans_attr p_st) ls)
     | Attr_Lit v -> ( match trans_value v with #Ops.AllOps.const as v -> v)
     | Attr_Expr expr -> `Expr (trans_expr p_st expr)
     | Attr_Str s -> `String (trans_str s)
 
   and trans_attrib_set p_st (atrs : attribSet) :
-      Expr.BasilExpr.t Attrib.t option =
+      Expr.BasilExpr.t Attrib.attrib_map =
     match atrs with
-    | AttribSet_Empty -> None
-    | AttribSet_Some (_, attrKeyValue, _, _) ->
-        Some (trans_attr_kv p_st attrKeyValue)
+    | AttribSet_Empty -> StringMap.empty
+    | AttribSet_Some (_, attrKeyValue, _, _) -> trans_attr_kv p_st attrKeyValue
 
   and trans_stmt (p_st : load_st) (x : BasilIR.AbsBasilIR.stmtWithAttrib) :
       load_st
@@ -454,7 +510,7 @@ module BasilASTLoader = struct
         let p_st, lvars = lvars |> List.fold_left f (prog, []) in
         StringMap.of_list lvars
 
-  and unpackLVars p_st lvs =
+  and unpackLVars ?(bound = VarSet.empty) p_st lvs =
     List.map
       (function
         | LocalTyped (i, t) ->
@@ -622,8 +678,11 @@ module BasilASTLoader = struct
     | `Block (BlockIdent (pos, g)) -> g
     | `Attr (BIdent (pos, g)) -> g
 
-  and trans_expr (p_st : load_st) (x : BasilIR.AbsBasilIR.expr) : BasilExpr.t =
-    let trans_expr = trans_expr p_st in
+  and trans_expr ?(binds = VarSet.empty) (p_st : load_st)
+      (x : BasilIR.AbsBasilIR.expr) : BasilExpr.t =
+    let trans_expr ?(nbinds = []) =
+      trans_expr ~binds:(VarSet.add_list binds nbinds) p_st
+    in
     let open Ops in
     match x with
     | Expr_Global (GlobalUntyped g) ->
@@ -682,11 +741,17 @@ module BasilASTLoader = struct
         match trans_value v with #BasilExpr.const as v -> BasilExpr.const v)
     | Expr_Old e -> BasilExpr.unexp ~op:`Old (trans_expr e)
     | Expr_Forall (attrs, LambdaDef1 (lv, _, e)) ->
-        BasilExpr.forall ~bound:(unpackLVars p_st lv) (trans_expr e)
+        let attrib = `Assoc (trans_attrib_set p_st attrs) in
+        let bound = unpackLVars ~bound:binds p_st lv in
+        BasilExpr.forall ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_Lambda (attrs, LambdaDef1 (lv, _, e)) ->
-        BasilExpr.forall ~bound:(unpackLVars p_st lv) (trans_expr e)
+        let attrib = `Assoc (trans_attrib_set p_st attrs) in
+        let bound = unpackLVars ~bound:binds p_st lv in
+        BasilExpr.forall ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_Exists (attrs, LambdaDef1 (lv, _, e)) ->
-        BasilExpr.exists ~bound:(unpackLVars p_st lv) (trans_expr e)
+        let attrib = `Assoc (trans_attrib_set p_st attrs) in
+        let bound = unpackLVars ~bound:binds p_st lv in
+        BasilExpr.exists ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_FunctionOp (gi, args) ->
         BasilExpr.apply_fun
           ~func:(BasilExpr.rvar @@ lookup_global_decl gi p_st)

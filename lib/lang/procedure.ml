@@ -65,6 +65,8 @@ module RevWTO = Graph.WeakTopological.Make (RevG)
 type ('v, 'e) proc_spec = {
   requires : BasilExpr.t list;
   ensures : BasilExpr.t list;
+  rely : BasilExpr.t list;
+  guarantee : BasilExpr.t list;
   captures_globs : 'v list;
   modifies_globs : 'v list;
 }
@@ -104,6 +106,8 @@ module PG : sig
     ?modifies_globs:'a list ->
     ?requires:BasilExpr.t list ->
     ?ensures:BasilExpr.t list ->
+    ?rely:BasilExpr.t list ->
+    ?guarantee:BasilExpr.t list ->
     unit ->
     ('a, 'b) t
 
@@ -203,8 +207,11 @@ end = struct
 
   let create id ?(is_stub = false) ?(formal_in_params = StringMap.empty)
       ?(formal_out_params = StringMap.empty) ?(captures_globs = [])
-      ?(modifies_globs = []) ?(requires = []) ?(ensures = []) () =
-    let specification = { captures_globs; modifies_globs; requires; ensures } in
+      ?(modifies_globs = []) ?(requires = []) ?(ensures = []) ?(rely = [])
+      ?(guarantee = []) () =
+    let specification =
+      { captures_globs; modifies_globs; requires; ensures; rely; guarantee }
+    in
     let graph = if is_stub then None else Some empty_graph in
     {
       id;

@@ -48,7 +48,7 @@ let type_check stmt_id block_id expr =
                 ])
         | _ -> [ type_err "%s body is not a bitvector" @@ AllOps.to_string op ])
     | `Old -> []
-    | `Forall | `Exists | `Classification | `Lambda -> []
+    | `Forall | `Exists | `Lambda -> []
   in
 
   let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :

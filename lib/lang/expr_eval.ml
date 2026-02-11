@@ -48,7 +48,6 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
       get_bool b >|= LogicalOps.eval_unary op >>= bool
   | UnaryExpr { op = `Forall } -> None
   | UnaryExpr { op = `Old } -> None
-  | UnaryExpr { op = `Classification } -> None
   | UnaryExpr { op = `Lambda } -> None
   | UnaryExpr { op = `Exists } -> None
   | UnaryExpr { op = #IntOps.unary as op; arg = b } ->

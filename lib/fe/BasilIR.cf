@@ -41,9 +41,9 @@ comment "/*" "*/" ;
 
 {- Top Level Declarations -}
 Decl_Axiom . Decl ::= "axiom" AttribSet Expr; 
-Decl_SharedMem . Decl ::= "memory" "shared" GlobalIdent ":" Type ;
-Decl_UnsharedMem . Decl ::= "memory" GlobalIdent ":" Type ;
-Decl_Var . Decl ::= "var" GlobalIdent ":" Type  ;
+Decl_SharedMem . Decl ::= "memory" "shared" GlobalIdent ":" Type VarSpec ;
+Decl_UnsharedMem . Decl ::= "memory" GlobalIdent ":" Type VarSpec;
+Decl_Var . Decl ::= "var" GlobalIdent ":" Type VarSpec ;
 
 separator Type ",";
 
@@ -232,6 +232,8 @@ FunSpec_Guard . FunSpec ::= GuarTok Expr;
 
 
 VarSpec_Classification . VarSpec ::= "classification" Expr;
+VarSpec_Empty . VarSpec ::= "";
+terminator VarSpec ";";
 
 
 FunSpec_Invariant . FunSpec ::= "invariant" BlockIdent Expr;

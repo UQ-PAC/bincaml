@@ -83,9 +83,9 @@ and transSemicolons (x : semicolons) : result = match x with
 
 and transDecl (x : decl) : result = match x with
     Decl_Axiom (attribset, expr) -> failure x
-  | Decl_SharedMem (globalident, type') -> failure x
-  | Decl_UnsharedMem (globalident, type') -> failure x
-  | Decl_Var (globalident, type') -> failure x
+  | Decl_SharedMem (globalident, type', varspec) -> failure x
+  | Decl_UnsharedMem (globalident, type', varspec) -> failure x
+  | Decl_Var (globalident, type', varspec) -> failure x
   | Decl_UninterpFun (attribset, globalident, types, type') -> failure x
   | Decl_Fun (attribset, globalident, paramss, type', expr) -> failure x
   | Decl_ProgEmpty (procident, attribset) -> failure x
@@ -381,6 +381,7 @@ and transFunSpec (x : funSpec) : result = match x with
 
 and transVarSpec (x : varSpec) : result = match x with
     VarSpec_Classification expr -> failure x
+  | VarSpec_Empty  -> failure x
 
 
 and transProgSpec (x : progSpec) : result = match x with

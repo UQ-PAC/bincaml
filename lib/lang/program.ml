@@ -25,8 +25,14 @@ let show_stmt =
 
 let pp_stmt fmt s = Format.pp_print_string fmt (show_stmt s)
 
-type pure_function_def = { binding : Var.t; definition : e option }
-type axiom_def = { predicate : e }
+type pure_function_def = {
+  attrib : Expr.BasilExpr.t Attrib.attrib_map;
+  binding : Var.t;
+  definition : e option;
+}
+
+type prog_spec = { rely : BasilExpr.t list; guarantee : BasilExpr.t list }
+type axiom_def = { attrib : Expr.BasilExpr.t Attrib.attrib_map; predicate : e }
 
 type t = {
   modulename : string;
@@ -34,8 +40,10 @@ type t = {
   entry_proc : ID.t option;
   procs : proc ID.Map.t;
   proc_names : ID.generator;
-  functions : pure_function_def ID.Map.t;
+  functions : pure_function_def VarMap.t;
   axioms : axiom_def list;
+  attrib : e Attrib.attrib_map;
+  spec : prog_spec;
 }
 
 let proc g p = ID.Map.find p g.procs
@@ -89,8 +97,10 @@ let create_single_proc ?(name = "<module>") () =
       globals = Var.Decls.empty ();
       procs = ID.Map.singleton procname proc;
       proc_names;
-      functions = ID.Map.empty;
+      functions = VarMap.empty;
       axioms = [];
+      attrib = StringMap.empty;
+      spec = { rely = []; guarantee = [] };
     }
   in
   (prog, proc)
@@ -103,8 +113,10 @@ let empty ?name () =
     globals = Var.Decls.empty ();
     procs = ID.Map.empty;
     proc_names = ID.make_gen ();
-    functions = ID.Map.empty;
+    functions = VarMap.empty;
     axioms = [];
+    attrib = StringMap.empty;
+    spec = { rely = []; guarantee = [] };
   }
 
 module CallGraph = struct

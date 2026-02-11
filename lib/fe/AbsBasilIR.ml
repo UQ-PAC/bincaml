@@ -25,9 +25,9 @@ and semicolons =
 
 and decl =
    Decl_Axiom of attribSet * expr
- | Decl_SharedMem of globalIdent * typeT
- | Decl_UnsharedMem of globalIdent * typeT
- | Decl_Var of globalIdent * typeT
+ | Decl_SharedMem of globalIdent * typeT * varSpec
+ | Decl_UnsharedMem of globalIdent * typeT * varSpec
+ | Decl_Var of globalIdent * typeT * varSpec
  | Decl_UninterpFun of attribSet * globalIdent * typeT list * typeT
  | Decl_Fun of attribSet * globalIdent * params list * typeT * expr
  | Decl_ProgEmpty of procIdent * attribSet
@@ -276,6 +276,7 @@ and funSpec =
 
 and varSpec =
    VarSpec_Classification of expr
+ | VarSpec_Empty
 
 and progSpec =
    ProgSpec_Rely of expr

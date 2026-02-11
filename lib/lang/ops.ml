@@ -189,7 +189,7 @@ module IntOps = struct
 end
 
 module Spec = struct
-  type unary = [ `Forall | `Old | `Exists | `Lambda | `Classification ]
+  type unary = [ `Forall | `Old | `Exists | `Lambda ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let hash_intrin a = Hashtbl.hash a
@@ -241,6 +241,7 @@ module AllOps = struct
     | `Exists -> return Boolean
     | `BVNOT -> return a
     | `BOOLTOBV1 -> return @@ Bitvector 1
+    | `Lambda -> let (args,ret) = (Types.curry a) in Fun {args; ret}
     | `Extract (hi, lo) -> return (Bitvector (hi - lo))
 
   let ret_type_bin (o : binary) l r =
@@ -292,7 +293,6 @@ module AllOps = struct
     | `BVSDIV -> "bvsdiv"
     | `Forall -> "forall"
     | `Lambda -> "lambda"
-    | `Classification -> "classification"
     | `BVNEG -> "bvneg"
     | `Bool true -> "true"
     | `Bool false -> "false"

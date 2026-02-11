@@ -430,15 +430,17 @@ module BasilExpr = struct
   let extract ~hi_excl ~lo_incl (e : t) : t =
     unexp ~op:(`Extract (hi_excl, lo_incl)) e
 
-  let concat (e : t) (f : t) : t = applyintrin ~op:`BVConcat [ e; f ]
-  let concatl (e : t list) : t = applyintrin ~op:`BVConcat e
-  let forall ?(attr = `List []) ~bound p = unexp ~op:`Forall (binding bound p)
-  let exists ?(attr = `List []) ~bound p = unexp ~op:`Exists (binding bound p)
-  let boolnot e = unexp ~op:`BoolNOT e
-  let intconst (v : PrimInt.t) : t = const (`Integer v)
-  let boolconst (v : bool) : t = const (`Bool v)
-  let bvconst (v : Bitvec.t) : t = const (`Bitvector v)
-  let lambda ~bound p = unexp ~op:`Lambda (binding bound p)
+  let concat ?attrib (e : t) (f : t) : t =
+    applyintrin ?attrib ~op:`BVConcat [ e; f ]
+
+  let concatl ?attrib (e : t list) : t = applyintrin ?attrib ~op:`BVConcat e
+  let forall ?attrib ~bound p = unexp ?attrib ~op:`Forall (binding bound p)
+  let exists ?attrib ~bound p = unexp ?attrib ~op:`Exists (binding bound p)
+  let boolnot ?attrib e = unexp ?attrib ~op:`BoolNOT e
+  let intconst ?attrib (v : PrimInt.t) : t = const ?attrib (`Integer v)
+  let boolconst ?attrib (v : bool) : t = const ?attrib (`Bool v)
+  let bvconst ?attrib (v : Bitvec.t) : t = const ?attrib (`Bitvector v)
+  let lambda ?attrib ~bound p = unexp ?attrib ~op:`Lambda (binding bound p)
 
   let bv_of_int ~(size : int) (v : int) : t =
     const (`Bitvector (Bitvec.of_int ~size v))

@@ -66,9 +66,9 @@ and showSemicolons (e : AbsBasilIR.semicolons) : showable = match e with
 
 and showDecl (e : AbsBasilIR.decl) : showable = match e with
        AbsBasilIR.Decl_Axiom (attribset, expr) -> s2s "Decl_Axiom" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showExpr expr >> c2s ')'
-  |    AbsBasilIR.Decl_SharedMem (globalident, type') -> s2s "Decl_SharedMem" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type' >> c2s ')'
-  |    AbsBasilIR.Decl_UnsharedMem (globalident, type') -> s2s "Decl_UnsharedMem" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type' >> c2s ')'
-  |    AbsBasilIR.Decl_Var (globalident, type') -> s2s "Decl_Var" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type' >> c2s ')'
+  |    AbsBasilIR.Decl_SharedMem (globalident, type', varspec) -> s2s "Decl_SharedMem" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
+  |    AbsBasilIR.Decl_UnsharedMem (globalident, type', varspec) -> s2s "Decl_UnsharedMem" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
+  |    AbsBasilIR.Decl_Var (globalident, type', varspec) -> s2s "Decl_Var" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
   |    AbsBasilIR.Decl_UninterpFun (attribset, globalident, types, type') -> s2s "Decl_UninterpFun" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showList showTypeT types  >> s2s ", " >>  showTypeT type' >> c2s ')'
   |    AbsBasilIR.Decl_Fun (attribset, globalident, paramss, type', expr) -> s2s "Decl_Fun" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showList showParams paramss  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Decl_ProgEmpty (procident, attribset) -> s2s "Decl_ProgEmpty" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showAttribSet attribset >> c2s ')'
@@ -364,6 +364,7 @@ and showFunSpec (e : AbsBasilIR.funSpec) : showable = match e with
 
 and showVarSpec (e : AbsBasilIR.varSpec) : showable = match e with
        AbsBasilIR.VarSpec_Classification expr -> s2s "VarSpec_Classification" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
+  |    AbsBasilIR.VarSpec_Empty  -> s2s "VarSpec_Empty"
 
 
 and showProgSpec (e : AbsBasilIR.progSpec) : showable = match e with
