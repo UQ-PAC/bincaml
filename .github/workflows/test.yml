@@ -32,6 +32,7 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.compiler_version }}
 
+      - run: opam option --global 'archive-mirrors+="opam.ocaml.org"'
       - run: opam install . --deps-only --with-test
       - run: opam exec -- dune build --ignore-promoted-rules
       - run: opam exec -- dune runtest --ignore-promoted-rules
