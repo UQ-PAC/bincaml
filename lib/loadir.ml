@@ -951,7 +951,8 @@ proc @f (ZF_in:bv1, VF_in:bv1) -> ();
   let ast = ast_of_concrete_ast ~name:"boop" prog in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Program.prog_pretty ast.prog);
-  [%expect {|
+  [%expect
+    {|
     prog entry @f;
     proc @f(ZF_in:bv1, VF_in:bv1)  -> ()
     [  ]
