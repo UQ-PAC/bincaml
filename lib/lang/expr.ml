@@ -3,6 +3,17 @@ open Containers
 open Ops
 
 module AbstractExpr = struct
+  type ('const, 'var, 'unary, 'binary, 'intrin, 'e) simple =
+    | V of 'var  (** variables *)
+    | C of 'const
+        (** constants; a pure intrinsic function with zero arguments *)
+    | Unary of 'unary * 'e
+        (** application of a pure intrinsic function with one arguments *)
+    | Binary of 'binary * 'e * 'e
+    | Intrin of 'intrin * 'e list
+    | FApply of 'e * 'e list
+    | Bound of 'var list * 'e
+
   type ('const, 'var, 'unary, 'binary, 'intrin, 'attrib, 'e) t =
     | RVar of { attrib : 'attrib option; id : 'var }  (** variables *)
     | Constant of { attrib : 'attrib option; const : 'const }
@@ -22,6 +33,28 @@ module AbstractExpr = struct
     | Binding of { attrib : 'attrib option; bound : 'var list; in_body : 'e }
         (** syntactic binding in a nested scope *)
   [@@deriving eq, ord, fold, map, iter]
+
+  let simple_view x : ('const, 'var, 'unary, 'binary, 'intrin, 'e) simple =
+    match x with
+    | RVar { id } -> V id
+    | Constant { const } -> C const
+    | UnaryExpr { op; arg } -> Unary (op, arg)
+    | BinaryExpr { op; arg1; arg2 } -> Binary (op, arg1, arg2)
+    | ApplyIntrin { op; args } -> Intrin (op, args)
+    | ApplyFun { func; args } -> FApply (func, args)
+    | Binding { bound; in_body } -> Bound (bound, in_body)
+
+  let of_simple_view (x : ('const, 'var, 'unary, 'binary, 'intrin, 'e) simple) :
+      ('const, 'var, 'unary, 'binary, 'intrin, 'attrib, 'e) t =
+    let attrib = None in
+    match x with
+    | V id -> RVar { id; attrib }
+    | C const -> Constant { const; attrib }
+    | Unary (op, arg) -> UnaryExpr { attrib; op; arg }
+    | Binary (op, arg1, arg2) -> BinaryExpr { attrib; op; arg1; arg2 }
+    | Intrin (op, args) -> ApplyIntrin { attrib; op; args }
+    | FApply (func, args) -> ApplyFun { attrib; func; args }
+    | Bound (bound, in_body) -> Binding { attrib; bound; in_body }
 
   let get_attrib x =
     match x with
