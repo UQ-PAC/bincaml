@@ -10,10 +10,9 @@ open Common
    edges somehow. I suspect this won't give a huge performance improvement since
    mose of the time in the solver is spent on evaluating transfer functions. *)
 (* TODO write a sample forwards analysis to test forwards correctness *)
-(* TODO write a better worklist or perhaps rewrite both phases to solve like
-   how chaotic iteration is implemented (I don't expect it to be easy to use
-   chaotic iteration directly. At the moment we don't order what edges we
-   iterate on with topological ordering... *)
+(* TODO perhaps rewrite both phases to solve like how chaotic iteration is
+   implemented? I tried this already once for phase 1 and the bottleneck seemed
+   to be on wto creation :( *)
 (* maybe TODO (perf) (api change?!?!) annotate in the transfer function which
    data are modified by each statement, so that when we transfer over a block
    of statements we can reuse most of the existing edge map from a previous
@@ -440,34 +439,16 @@ module IDE (D : IDEDomain) = struct
   module Worklist (D : Map.OrderedType) = struct
     module S = Set.Make (D)
 
-    module HD = struct
-      type t = int * D.t
+    type t = S.t ref
 
-      let leq (a, _) (b, _) = a <= b
-    end
-
-    module H = Heap.Make (HD)
-
-    type t = (S.t * H.t) ref * (D.t -> int)
-
-    let create order = (ref (S.empty, H.empty), order)
-
-    let non_empty (self : t) =
-      let w, _ = self in
-      not @@ S.is_empty (fst !w)
-
-    let add (self : t) d =
-      let w, order = self in
-      if not (S.mem d (fst !w)) then
-        let s, q = !w in
-        w := (S.add d s, H.add q (order d, d))
+    let create = ref S.empty
+    let cardinal (self : t) = S.cardinal !self
+    let non_empty (self : t) = not @@ S.is_empty !self
+    let add (self : t) d = self := S.add d !self
 
     let pop (self : t) =
-      let w, _ = self in
-      let s, h = !w in
-      let h, (_, d) = H.take h |> Option.get_exn_or "Worklist was empty" in
-      let s = S.remove d s in
-      w := (s, h);
+      let d = S.choose !self in
+      self := S.remove d !self;
       d
   end
 
@@ -609,7 +590,7 @@ module IDE (D : IDEDomain) = struct
   module W1 = Worklist (P1K)
 
   (** Propagate summaries into a new location and update the worklist *)
-  let propagate worklist summaries priority summary loc updates =
+  let propagate worklist summaries summary loc updates =
     Iter.filter_map
       (fun ((d1, d3), e) ->
         let l = dldlget d1 d3 summary in
@@ -631,7 +612,7 @@ module IDE (D : IDEDomain) = struct
       composite edge functions through paths to this location. *)
   let phase1_solve order start graph globals default =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
-    let worklist = W1.create (fun (l, _, _) -> LM.find l order) in
+    let worklist = W1.create in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
     Hashtbl.replace summaries start
       (DlMap.singleton Lambda (DlMap.singleton Lambda D.identity));
@@ -647,9 +628,10 @@ module IDE (D : IDEDomain) = struct
       Hashtbl.create 100
     in
     let get_summary loc = Hashtbl.get summaries loc |> Option.get_or ~default in
-    let priority l = LM.find l order in
     W1.add worklist (start, Lambda, Lambda);
+    let iters = ref 0 in
     while W1.non_empty worklist do
+      iters := succ !iters;
       let l, d1, d2 = W1.pop worklist in
       let ost = get_summary l in
       let e1 = dldlget d1 d2 ost in
@@ -658,8 +640,9 @@ module IDE (D : IDEDomain) = struct
           let _, _, t = e in
           phase1_transfer entry_to_call_entry_cache entry_to_exit_cache d1 d2 e1
             e
-          |> propagate worklist summaries priority (get_summary t) t)
+          |> propagate worklist summaries (get_summary t) t)
     done;
+    print_int !iters;
     summaries
 
   let phase2_call_transfer get_summary add_q states calls_table d md e =
@@ -693,11 +676,12 @@ module IDE (D : IDEDomain) = struct
     let compare = Pair.compare Loc.compare DL.compare
   end
 
+  module W2 = Worklist (P2K)
+
   (** Compute the analysis result using summaries from phase 1 *)
   let phase2_solve order prog start_proc graph globals
       (summaries : (Loc.t, summary) Hashtbl.t) =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
-    let module Q = Set.Make (P2K) in
     let states : (Loc.t, analysis_state) Hashtbl.t = Hashtbl.create 100 in
     let get_st l = Hashtbl.get_or states l ~default:VarMap.empty in
     let get_summary loc =
@@ -712,13 +696,12 @@ module IDE (D : IDEDomain) = struct
        bottom, using the summary functions. This is done by looking at all call
        sites in a procedure and evaluating the composite of the summary to the
        callsite and the transfer of the call edge (and reaching a fixpoint). *)
-    let worklist = ref Q.empty in
+    let worklist = W2.create in
     let calls_table = IDEGraph.proc_call_table dir graph prog in
     Hashtbl.get_or calls_table start_proc ~default:Iter.empty
-    |> Iter.iter (fun l -> worklist := Q.add (l, Lambda) !worklist);
-    while not (Q.is_empty !worklist) do
-      let l, d = Q.choose !worklist in
-      worklist := Q.remove (l, d) !worklist;
+    |> Iter.iter (fun l -> W2.add worklist (l, Lambda));
+    while W2.non_empty worklist do
+      let l, d = W2.pop worklist in
       let ost = get_st l in
       let md =
         match d with
@@ -728,7 +711,7 @@ module IDE (D : IDEDomain) = struct
       IDEGraph.G.succ_e graph l |> Iter.of_list
       |> Iter.iter
            (phase2_call_transfer get_summary
-              (fun (c, d) -> worklist := Q.add (c, d) !worklist)
+              (fun (c, d) -> W2.add worklist (c, d))
               states calls_table d md)
     done;
     (* We then apply all summary functions to each location to the initial
@@ -771,7 +754,7 @@ module IDE (D : IDEDomain) = struct
       Iter.from_iter (fun f -> IDEGraph.RevTop.iter f graph)
       |> Iter.zip_i
       |> Iter.map (fun (i, v) -> (v, i))
-      |> LM.of_iter
+      |> Hashtbl.of_iter
     in
     let start =
       match dir with `Forwards -> Loc.Entry | `Backwards -> Loc.Exit
