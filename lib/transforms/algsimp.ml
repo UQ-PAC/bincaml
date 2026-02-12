@@ -11,6 +11,51 @@ let algebraic_simplifications
   let open AbstractExpr in
   let open BasilExpr in
   let open Bitvec in
+  (* trying to make views of abstract exprs simpler; but avoid disacarding the attribs.
+     There's probably too much to think about still with writing rewriters like this. 
+
+     We can build this into fold_with_type/rewrite_typed I guess.
+   *)
+  let simple_e (a, b, c) = b in
+  let orig_e (a, b, c) = a in
+  let typ_e (a, b, c) = c in
+
+  (* orig expr, simplified view, expr type *)
+  let fix_s e = fix (AbstractExpr.of_simple_view e) in
+  let keep a = Some (fix (orig_e a)) in
+  let to_s (v, t) = (v, AbstractExpr.simple_view v, t) in
+  let s = AbstractExpr.simple_view (AbstractExpr.map to_s e) in
+  match s with
+  | Intrin (`BVConcat, (_, Intrin (`BVConcat, al), _) :: tl) ->
+      Some (fix_s (Intrin (`BVConcat, al @ List.map (orig_e %> fix) tl)))
+  | Binary (`BVADD, a, (_, C (`Bitvector i), _)) when is_zero i -> keep a
+  | Binary (`BVSUB, a, (_, C (`Bitvector i), _)) when is_zero i -> keep a
+  | Binary (`BVMUL, a, (_, C (`Bitvector i), _))
+    when equal i @@ of_int ~size:(size i) 1 ->
+      keep a
+  | Binary (`BVAND, a, (_, C (`Bitvector i), _)) when is_zero i ->
+      Some (bvconst (zero ~size:(size i)))
+  | Binary (`BVAND, a, (_, C (`Bitvector i), _))
+    when equal i (ones ~size:(size i)) ->
+      keep a
+  | Binary (`BVOR, a, (_, C (`Bitvector i), _))
+    when equal i (ones ~size:(size i)) ->
+      Some (bvconst @@ ones ~size:(size i))
+  | Binary (`BVOR, a, (_, C (`Bitvector i), _)) when is_zero i -> keep a
+  | Unary (`ZeroExtend 0, a) -> keep a
+  | Unary (`SignExtend 0, a) -> keep a
+  | Unary (`Extract (hi, 0), ((_, _, Bitvector sz) as a)) when hi = sz -> keep a
+  | Unary (`BVNOT, (_, Unary (`BVNOT, a), _)) -> Some a
+  | Unary (`BoolNOT, (_, Unary (`BoolNOT, a), _)) -> Some a
+  | _ -> None
+
+(*
+let algebraic_simplifications
+    (e :
+      (BasilExpr.t BasilExpr.abstract_expr * Types.t) BasilExpr.abstract_expr) =
+  let open AbstractExpr in
+  let open BasilExpr in
+  let open Bitvec in
   let keep a = Some (fix (fst a)) in
   match e with
   | ApplyIntrin
@@ -79,50 +124,7 @@ type 'e rewriter_expr = {
       AbstractExpr.simple )
     AbstractExpr.simple;
 }
-
-let algebraic_simplifications
-    (e :
-      (BasilExpr.t BasilExpr.abstract_expr * Types.t) BasilExpr.abstract_expr) =
-  let open AbstractExpr in
-  let open BasilExpr in
-  let open Bitvec in
-  (* trying to make views of abstract exprs simpler; but avoid disacarding the attribs.
-     There's probably too much to think about still with writing rewriters like this. 
-
-     We can build this into fold_with_type/rewrite_typed I guess.
-   *)
-  let simple_e (a, b, c) = b in
-  let orig_e (a, b, c) = a in
-  let typ_e (a, b, c) = c in
-
-  (* orig expr, simplified view, expr type *)
-  let fix_s e = fix (AbstractExpr.of_simple_view e) in
-  let keep a = Some (fix (orig_e a)) in
-  let to_s (v, t) = (v, AbstractExpr.simple_view v, t) in
-  let s = AbstractExpr.simple_view (AbstractExpr.map to_s e) in
-  match s with
-  | Intrin (`BVConcat, (_, Intrin (`BVConcat, al), _) :: tl) ->
-      Some (fix_s (Intrin (`BVConcat, al @ List.map (orig_e %> fix) tl)))
-  | Binary (`BVADD, a, (_, C (`Bitvector i), _)) when is_zero i -> keep a
-  | Binary (`BVSUB, a, (_, C (`Bitvector i), _)) when is_zero i -> keep a
-  | Binary (`BVMUL, a, (_, C (`Bitvector i), _))
-    when equal i @@ of_int ~size:(size i) 1 ->
-      keep a
-  | Binary (`BVAND, a, (_, C (`Bitvector i), _)) when is_zero i ->
-      Some (bvconst (zero ~size:(size i)))
-  | Binary (`BVAND, a, (_, C (`Bitvector i), _))
-    when equal i (ones ~size:(size i)) ->
-      keep a
-  | Binary (`BVOR, a, (_, C (`Bitvector i), _))
-    when equal i (ones ~size:(size i)) ->
-      Some (bvconst @@ ones ~size:(size i))
-  | Binary (`BVOR, a, (_, C (`Bitvector i), _)) when is_zero i -> keep a
-  | Unary (`ZeroExtend 0, a) -> keep a
-  | Unary (`SignExtend 0, a) -> keep a
-  | Unary (`Extract (hi, 0), ((_, _, Bitvector sz) as a)) when hi = sz -> keep a
-  | Unary (`BVNOT, (_, Unary (`BVNOT, a), _)) -> Some a
-  | Unary (`BoolNOT, (_, Unary (`BoolNOT, a), _)) -> Some a
-  | _ -> None
+*)
 
 let alg_simp_rewriter e =
   let partial_eval_expr e =
