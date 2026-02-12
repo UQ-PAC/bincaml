@@ -29,20 +29,19 @@ jobs:
 
       - name: Install dependencies
         run: |
-          opam option --global 'archive-mirrors+="opam.ocaml.org"'
+          opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
           opam install . --deps-only --with-doc
-          opam install odig
+          opam install odoc-driver
 
       - name: Build documentation
         run: |
-          opam exec -- dune build @install --ignore-promoted-rules
-          opam exec -- dune install --ignore-promoted-rules
-          opam exec -- odig odoc bincaml --cache-dir _html
+          opam pin add .
+          opam exec -- odoc_driver bincaml
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _html/html
+          path: _html
 
   deploy-odoc:
     name: Deploy odoc to GitHub Pages

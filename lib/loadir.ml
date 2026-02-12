@@ -1249,6 +1249,7 @@ proc @main_4196260 () -> ()
           ];
        block %main_basil_return_1 [ nop; return; ]
     ];
+    proc @f(ZF_in:bv1, VF_in:bv1)  -> ();
     |}]
 
 let%expect_test "callstuff" =
