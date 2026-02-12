@@ -325,7 +325,7 @@ module IDEGraph = struct
         match l with
         | CallSite s ->
             let cur = Hashtbl.get_or tbl s.proc_id ~default:Iter.empty in
-            Hashtbl.add tbl s.proc_id (Iter.cons (CallSite s) cur)
+            Hashtbl.replace tbl s.proc_id (Iter.cons (CallSite s) cur)
         | _ -> ())
       g;
     tbl
@@ -437,6 +437,40 @@ module IDE (D : IDEDomain) = struct
 
   type analysis_state = D.Value.t VarMap.t [@@deriving eq, ord]
 
+  module Worklist (D : Map.OrderedType) = struct
+    module S = Set.Make (D)
+
+    module HD = struct
+      type t = int * D.t
+
+      let leq (a, _) (b, _) = a <= b
+    end
+
+    module H = Heap.Make (HD)
+
+    type t = (S.t * H.t) ref * (D.t -> int)
+
+    let create order = (ref (S.empty, H.empty), order)
+
+    let non_empty (self : t) =
+      let w, _ = self in
+      not @@ S.is_empty (fst !w)
+
+    let add (self : t) d =
+      let w, order = self in
+      if not (S.mem d (fst !w)) then
+        let s, q = !w in
+        w := (S.add d s, H.add q (order d, d))
+
+    let pop (self : t) =
+      let w, _ = self in
+      let s, h = !w in
+      let h, (_, d) = H.take h |> Option.get_exn_or "Worklist was empty" in
+      let s = S.remove d s in
+      w := (s, h);
+      d
+  end
+
   let join_state_with st v x =
     let j =
       VarMap.get v st |> Option.map (D.Value.join x) |> Option.get_or ~default:x
@@ -512,7 +546,7 @@ module IDE (D : IDEDomain) = struct
             let k = (callinfo.caller, d3, callinfo.callee) in
             Hashtbl.get_or entry2call k ~default:DlMap.empty
             |> DlMap.add d1 (e2 @. e1)
-            |> Hashtbl.add entry2call k;
+            |> Hashtbl.replace entry2call k;
             (* Add the callee to the worklist with an id edge at its entry
                so that the entry_to_exit cache eventually summarises it. *)
             Iter.singleton ((d3, d3), D.identity))
@@ -521,7 +555,8 @@ module IDE (D : IDEDomain) = struct
            have a complete summary of it! Store this in the entry exit cache *)
         let k = (retinfo.callee, d1) in
         Hashtbl.get_or entry2exit k ~default:DlMap.empty
-        |> DlMap.add d2 e1 |> Hashtbl.add entry2exit k;
+        |> DlMap.add d2 e1
+        |> Hashtbl.replace entry2exit k;
         (* If we have an edge from the caller's entry to the callee's
            entry, we can propagate the same big composite as described
            in the InterCall branch.
@@ -571,9 +606,10 @@ module IDE (D : IDEDomain) = struct
         ((d, e), f)
   end
 
+  module W1 = Worklist (P1K)
+
   (** Propagate summaries into a new location and update the worklist *)
   let propagate worklist summaries priority summary loc updates =
-    let module Q = Set.Make (P1K) in
     Iter.filter_map
       (fun ((d1, d3), e) ->
         let l = dldlget d1 d3 summary in
@@ -582,11 +618,11 @@ module IDE (D : IDEDomain) = struct
       updates
     |> Iter.fold
          (fun acc ((d1, d3), e) ->
-           worklist := Q.add (loc, d1, d3) !worklist;
+           W1.add worklist (loc, d1, d3);
            let m = DlMap.get_or d1 acc ~default:DlMap.empty in
            DlMap.add d1 (DlMap.add d3 e m) acc)
          summary
-    |> Hashtbl.add summaries loc
+    |> Hashtbl.replace summaries loc
 
   (** Computes a table of summary edge functions
 
@@ -595,10 +631,9 @@ module IDE (D : IDEDomain) = struct
       composite edge functions through paths to this location. *)
   let phase1_solve order start graph globals default =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
-    let module Q = Set.Make (P1K) in
-    let worklist = ref Q.empty in
+    let worklist = W1.create (fun (l, _, _) -> LM.find l order) in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
-    Hashtbl.add summaries start
+    Hashtbl.replace summaries start
       (DlMap.singleton Lambda (DlMap.singleton Lambda D.identity));
     (* Stores edge functions from the first procedure's entry to the second
        procedure's entry, with a fixed dl value at the second procedure *)
@@ -613,11 +648,9 @@ module IDE (D : IDEDomain) = struct
     in
     let get_summary loc = Hashtbl.get summaries loc |> Option.get_or ~default in
     let priority l = LM.find l order in
-    worklist := Q.add (start, Lambda, Lambda) !worklist;
-    while not (Q.is_empty !worklist) do
-      let (x : Loc.t * DL.t * DL.t) = Q.choose !worklist in
-      worklist := Q.remove x !worklist;
-      let l, d1, d2 = x in
+    W1.add worklist (start, Lambda, Lambda);
+    while W1.non_empty worklist do
+      let l, d1, d2 = W1.pop worklist in
       let ost = get_summary l in
       let e1 = dldlget d1 d2 ost in
       IDEGraph.G.succ_e graph l |> Iter.of_list
@@ -648,7 +681,7 @@ module IDE (D : IDEDomain) = struct
                 let j = D.Value.join y fd in
                 if not (D.Value.equal j y) then (
                   VarMap.add v (D.Value.join y fd) st
-                  |> Hashtbl.add states target;
+                  |> Hashtbl.replace states target;
                   Hashtbl.get_or calls_table callinfo.callee ~default:Iter.empty
                   |> Iter.iter (fun c -> add_q (c, d3)))
             | _ -> ())
@@ -723,7 +756,7 @@ module IDE (D : IDEDomain) = struct
                 | Label v ->
                     let st = get_st l in
                     let y = D.eval e x in
-                    Hashtbl.add states l (join_state_with st v y)
+                    Hashtbl.replace states l (join_state_with st v y)
                 | _ -> ())));
     states
 
@@ -735,7 +768,7 @@ module IDE (D : IDEDomain) = struct
     let globals = prog.globals |> Var.Decls.to_iter |> Iter.map snd in
     let graph = IDEGraph.create prog dir in
     let order =
-      Iter.from_iter (fun f -> IDEGraph.Top.iter f graph)
+      Iter.from_iter (fun f -> IDEGraph.RevTop.iter f graph)
       |> Iter.zip_i
       |> Iter.map (fun (i, v) -> (v, i))
       |> LM.of_iter
