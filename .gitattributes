@@ -1,2 +1,4 @@
 tools/vendor/**    linguist-vendored
-lib/fe/**          linguist-vendored
+lib/fe/*.ml          linguist-vendored
+lib/fe/*.mly          linguist-vendored
+lib/fe/*.mll          linguist-vendored
