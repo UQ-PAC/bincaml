@@ -8,6 +8,16 @@ open Ide
 module IDELive = struct
   let direction = `Backwards
 
+  module Data = Var
+
+  (* DL and state_update were already defined! Is there a way to avoid
+     redefining them? *)
+  module DL = struct
+    type t = Label of Var.t | Lambda [@@deriving eq, ord, show]
+  end
+
+  type 'a state_update = (DL.t * 'a) Iter.t
+
   module Value = struct
     type t = bool [@@deriving eq, ord, show]
 

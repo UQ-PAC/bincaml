@@ -69,18 +69,17 @@ module type Lattice = sig
   val bottom : t
 end
 
-module DL = struct
-  (* TODO not Var.t (want more generality e.g. dsa uses symbolic addresses in scala code) *)
-  type t = Label of Var.t | Lambda [@@deriving eq, ord, show]
-end
-
-module DlMap = Map.Make (DL)
-
-type 'a state_update = (DL.t * 'a) Iter.t
-
 (** An IDE domain where values are edge functions *)
 module type IDEDomain = sig
   include Lattice
+
+  module Data : Map.OrderedType
+
+  module DL : sig
+    type t = Label of Data.t | Lambda [@@deriving eq, ord, show]
+  end
+
+  type 'a state_update = (DL.t * 'a) Iter.t
 
   val direction : [ `Forwards | `Backwards ]
   (** The direction this analysis should be performed in *)
@@ -415,6 +414,10 @@ end
       only ; composition across calls should include the globals *)
 
 module IDE (D : IDEDomain) = struct
+  module DL = D.DL
+  module DlMap = Map.Make (DL)
+  module DataMap = Map.Make (D.Data)
+
   type summary = D.t DlMap.t DlMap.t [@@deriving eq, ord]
   (** A summary associated to a location gives us all edge functions from the
       start/end of the procedure this location is in, to this location.
@@ -434,7 +437,7 @@ module IDE (D : IDEDomain) = struct
 
   let empty_summary = DlMap.empty
 
-  type analysis_state = D.Value.t VarMap.t [@@deriving eq, ord]
+  type analysis_state = D.Value.t DataMap.t [@@deriving eq, ord]
 
   module Worklist (D : Map.OrderedType) = struct
     module S = Set.Make (D)
@@ -454,9 +457,9 @@ module IDE (D : IDEDomain) = struct
 
   let join_state_with st v x =
     let j =
-      VarMap.get v st |> Option.map (D.Value.join x) |> Option.get_or ~default:x
+      DataMap.get v st |> Option.map (D.Value.join x) |> Option.get_or ~default:x
     in
-    VarMap.add v j st
+    DataMap.add v j st
 
   let join_add m d e =
     let j = D.join e (DlMap.get_or d m ~default:D.bottom) in
@@ -481,6 +484,7 @@ module IDE (D : IDEDomain) = struct
     (* TODO this might be more imprecise than joining on the opposite side of the phi node
        https://link.springer.com/chapter/10.1007/978-3-642-11970-5_8 reckons so *)
     let phis i =
+      (*
       match dir with
       | `Forwards ->
           List.fold_left
@@ -503,6 +507,8 @@ module IDE (D : IDEDomain) = struct
                   else Iter.singleton (d2, e))
                 i)
             i phi
+            *)
+      i
     in
     match dir with `Forwards -> stmts (phis i) | `Backwards -> phis (stmts i)
 
@@ -642,7 +648,6 @@ module IDE (D : IDEDomain) = struct
             e
           |> propagate worklist summaries (get_summary t) t)
     done;
-    print_int !iters;
     summaries
 
   let phase2_call_transfer get_summary add_q states calls_table d md e =
@@ -658,12 +663,12 @@ module IDE (D : IDEDomain) = struct
         |> Iter.iter (fun (d3, e21) ->
             match d3 with
             | Label v ->
-                let st = Hashtbl.get_or states target ~default:VarMap.empty in
+                let st = Hashtbl.get_or states target ~default:DataMap.empty in
                 let fd = D.eval e21 md in
-                let y = VarMap.get_or v st ~default:D.Value.bottom in
+                let y = DataMap.get_or v st ~default:D.Value.bottom in
                 let j = D.Value.join y fd in
                 if not (D.Value.equal j y) then (
-                  VarMap.add v (D.Value.join y fd) st
+                  DataMap.add v (D.Value.join y fd) st
                   |> Hashtbl.replace states target;
                   Hashtbl.get_or calls_table callinfo.callee ~default:Iter.empty
                   |> Iter.iter (fun c -> add_q (c, d3)))
@@ -683,7 +688,7 @@ module IDE (D : IDEDomain) = struct
       (summaries : (Loc.t, summary) Hashtbl.t) =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
     let states : (Loc.t, analysis_state) Hashtbl.t = Hashtbl.create 100 in
-    let get_st l = Hashtbl.get_or states l ~default:VarMap.empty in
+    let get_st l = Hashtbl.get_or states l ~default:DataMap.empty in
     let get_summary loc =
       Hashtbl.get summaries loc |> function
       | Some e -> e
@@ -705,7 +710,7 @@ module IDE (D : IDEDomain) = struct
       let ost = get_st l in
       let md =
         match d with
-        | Label v -> VarMap.get_or v ost ~default:D.Value.bottom
+        | Label v -> DataMap.get_or v ost ~default:D.Value.bottom
         | _ -> D.Value.bottom
       in
       IDEGraph.G.succ_e graph l |> Iter.of_list
@@ -731,7 +736,7 @@ module IDE (D : IDEDomain) = struct
         |> DlMap.iter (fun d1 ->
             let x =
               match d1 with
-              | Label v -> VarMap.get_or v pst ~default:D.Value.bottom
+              | Label v -> DataMap.get_or v pst ~default:D.Value.bottom
               | _ -> D.Value.bottom
             in
             DlMap.iter (fun d2 e ->
