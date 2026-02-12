@@ -17,7 +17,7 @@
 
 (package
  (name bincaml)
- (synopsis "A short synopsis")
+ (synopsis "program analysis tool")
  (description "A longer description")
  (depends
    menhir
@@ -46,6 +46,6 @@
    (qcheck-stm :with-test)
    )
  (tags
-  ("add topics" "to describe" your project)))
+  (program-analysis)))
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

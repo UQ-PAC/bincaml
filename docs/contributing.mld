@@ -246,6 +246,81 @@ output.
 
 More details are available in the {{:https://dune.readthedocs.io/en/stable/reference/cram.html}dune manual}.
 
+{1 Debugging}
+
+Ensure the opam switch is set up per the instructions in the readme: notably
+that frame pointers are enabled. {{:https://lambdafoo.com/posts/2025-02-24-ocaml-frame-pointers.html}
+This is the only reliable way to get stack samples on Ocaml 5}.
+
+When dune is built in the develpment profile, (the default with [dune build]), it should
+include debug information. 
+
+{2 Functional}
+
+Use a lot of assertions, assertions are fantastic, even better use exceptions.
+
+Linux debugging tools are useful when dealing with logic errors that result in
+crashes in external C libraries (such as zarith) due to API misue. Internal
+library errors can be investigated with `strace` (the syscall trace program);
+this can show you the sequence of syscalls that lead to a failure (e.g. an
+extremely large allocation). 
+
+OCaml 5 supports {{:https://web.archive.org/web/20251222014345/https://lambdafoo.com/posts/2024-08-03-lldb-ocaml.html} LLDB} 
+and {{:https://web.archive.org/web/20251118091834/https://kcsrk.info/ocaml/gdb/2024/01/20/gdb-ocaml/} GDB}, 
+however the support value printing is limited.
+
+GDB is useful to have installed at least for the [pstack] command.
+
+{2 Performance}
+
+{3 Trace Events}
+
+We use the {{:https://github.com/ocaml-tracing/ocaml-trace}trace library} to record coarse function runtimes, this is
+enabled by default and every run dumps the tef format [trace.json] file. This
+can be viewed in {{:ui.perfetto.dev} ui.perfetto.dev}. This provides coarse
+performance info at the level of analysis passes.
+
+Additional trace sections can be added like the following:
+
+{[
+let f x =
+  Trace_core.with_span ~__FILE__ ~__LINE__ "inside-f" @@ fun _sp ->
+  (* … code for f *)
+]}
+
+
+{3 Sampling}
+
+Linux [perf] can be used to do sampling profiling of OCaml native executables,
+this is covered in {{:https://ocaml.org/manual/5.4/profil.html#s:ocamlprof-profiling-perf} the manual}.
+This provides fine-grained information on where the program is spending time.
+
+There is a script which runs bincaml and produces a flamegraph (file [flamegraph.svg]) which can be viewed in a browser, 
+e.g. [./tools/runperf.sh script examples/test.s] produces the following.
+
+{{image!doc/flamegraph.svg}Example flamegraph image}
+
+{2 Nontermination}
+
+Often what will appear to be a performance bug is actually a nontermination correctness bug.
+One way to diagnose these is to print the stack while the program is running.  For example
+we can get a rough idea of where in the program it is spending time by repeatedly printing the stack 
+with [strace]:
+
+{v
+while true ; do pstack $(pgrep bincaml); sleep 0.5; done;
+v}
+
+(Here [pgrep bincaml] is finding the PID of the executable, you may need to adjust depending on how it was invoked.)
+
+Additionally, OCaml 5 stores call stacks on the heap, and sets a very large
+stack limit (500m), so reducing the stack limit  may help to debug by causing
+the program to fail sooner, this can be done by the [OCAMLRUNPARAM] environment
+variable.
+
+{v
+OCAMLRUNPARAM=l=1M dune exec bincaml script examples/test.s 
+v}
 
 {1 OCaml }
 
@@ -302,8 +377,6 @@ odig doc containers
 v}
 
 
-{2  Repeating Module Interfaces }
-
 It is good practice to hide implementations by interfaces, however in practice this often requires
 a significant amount of code rewriting to define the module and its interface separately.
 Some tricks can be used to simplify this process.
@@ -319,3 +392,7 @@ open struct
 end
 ]}
 
+{3 Documentation}
+
+See {{:https://ocaml.github.io/odoc/odoc/odoc_for_authors.html} Odoc For
+Authors for a guide to the documentation syntax.}

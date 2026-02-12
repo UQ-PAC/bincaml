@@ -160,10 +160,17 @@ let sle a b = map2_signed Z.leq a b
 let sge a b = map2_signed Z.geq a b
 
 let ashr a b =
-  create ~size:a.w @@ Z.shift_right (to_signed_bigint a) (Z.to_int b.v)
+  (* guard avoids overflows in second int argument of shift: should always fit in int*)
+  if Z.gt b.v (Z.of_int a.w) then
+    if Z.testbit a.v (a.w - 1) then ones ~size:a.w else zero ~size:a.w
+  else create ~size:a.w @@ Z.shift_right (to_signed_bigint a) (Z.to_int b.v)
 
 let lshr a b =
-  create ~size:a.w @@ Z.shift_right_trunc (to_unsigned_bigint a) (Z.to_int b.v)
+  (* guard avoids overflows in second int argument of shift: should always fit in int*)
+  if Z.gt b.v (Z.of_int a.w) then zero ~size:a.w
+  else
+    create ~size:a.w
+    @@ Z.shift_right_trunc (to_unsigned_bigint a) (Z.to_int b.v)
 
 let zero_extend ~(extension : int) b = create ~size:(b.w + extension) b.v
 

@@ -50,6 +50,14 @@ module PassManager = struct
       doc = "runs truthiness analysis on dataflow graph and prints results";
     }
 
+  let dfg_wrapped_int =
+    {
+      name = "demo-dfg-wrapped-int-analysis";
+      apply = DFGAnalysis (module Analysis.Wrapped_intervals.Analysis);
+      doc =
+        "Runs wrapped interval analysis on dataflow graph and prints results";
+    }
+
   let remove_unused =
     {
       name = "remove-unused-decls";
@@ -77,14 +85,23 @@ module PassManager = struct
          form)";
     }
 
+  let type_check =
+    {
+      name = "type-check";
+      apply = ProcCheck Transforms.Type_check.check;
+      doc = "Fail if the IR program is not type correct";
+    }
+
   let passes =
     [
       dfg_bool;
+      dfg_wrapped_int;
       sparams;
       read_uninit false;
       read_uninit true;
       sssa;
       full_ssa;
+      type_check;
       {
         name = "remove-unreachable-block";
         apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
@@ -156,9 +173,8 @@ module PassManager = struct
         |> Iter.iter (fun (pn, p) ->
             let g = Analysis.Dataflow_graph.create p in
             let r =
-              D.analyse
-                ~widen_set:(Graph.ChaoticIteration.Predicate (fun _ -> false))
-                ~delay_widen:0 g
+              D.analyse ~widen_set:Graph.ChaoticIteration.FromWto
+                ~delay_widen:10 g
             in
             print_endline (D.D.name ^ " :: " ^ ID.to_string pn);
             print_endline

@@ -1,0 +1,7 @@
+(documentation
+ (package bincaml))
+
+(install
+ (section doc)
+ (files
+  (asset/flamegraph.svg as flamegraph.svg)))

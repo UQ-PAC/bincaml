@@ -10,7 +10,8 @@
   livevars
   cleanup_cfg
   ide
-  may_read_uninit)
+  may_read_uninit
+  type_check)
  (libraries
   bincaml.analysis
   patricia-tree

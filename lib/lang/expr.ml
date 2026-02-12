@@ -172,6 +172,8 @@ module BasilExpr = struct
   type t = E of (const, Var.t, unary, binary, intrin, t) AbstractExpr.t
   [@@unboxed] [@@deriving eq, ord]
 
+  type ty = Types.t
+
   open struct
     (** leftover ; we could hash-cons the expression if we want *)
     module EHashed = struct
@@ -374,8 +376,8 @@ module BasilExpr = struct
   let sign_extend ~n_prefix_bits (e : t) : t =
     unexp ~op:(`SignExtend n_prefix_bits) e
 
-  let extract ~hi_incl ~lo_excl (e : t) : t =
-    unexp ~op:(`Extract (hi_incl, lo_excl)) e
+  let extract ~hi_excl ~lo_incl (e : t) : t =
+    unexp ~op:(`Extract (hi_excl, lo_incl)) e
 
   let concat (e : t) (f : t) : t = applyintrin ~op:`BVConcat [ e; f ]
   let forall ~bound p = unexp ~op:`Forall (binding bound p)
@@ -419,10 +421,16 @@ end
 module type ExprType = sig
   include Fix
 
+  type 'e abstract_expr
+
   include
     Bincaml_util.Recursionscheme.Recurseable
       with type 'a O.expr =
         (const, var, unary, binary, intrin, 'a) AbstractExpr.t
+
+  type ty
+
+  val type_alg : ty O.expr -> ty
 end
 
 module IVarFix = struct

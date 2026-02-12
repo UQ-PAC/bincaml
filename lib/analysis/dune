@@ -8,7 +8,9 @@
   defuse_bool
   lattice_types
   ide
-  ide_live)
+  ide_live
+  wrapped_intervals
+  known_bits)
  (libraries
   patricia-tree
   loader

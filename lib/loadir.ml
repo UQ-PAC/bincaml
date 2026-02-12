@@ -537,8 +537,8 @@ module BasilASTLoader = struct
           (trans_expr expr)
     | Expr_Extract (ival0, intval, expr) ->
         BasilExpr.extract
-          ~hi_incl:(transIntVal ival0 |> Z.to_int)
-          ~lo_excl:(transIntVal intval |> Z.to_int)
+          ~hi_excl:(transIntVal ival0 |> Z.to_int)
+          ~lo_incl:(transIntVal intval |> Z.to_int)
           (trans_expr expr)
     | Expr_Concat exprs ->
         BasilExpr.applyintrin ~op:`BVConcat (List.map trans_expr exprs)

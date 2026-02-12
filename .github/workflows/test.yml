@@ -3,7 +3,10 @@ name: build and test
 on:
   pull_request:
   merge_group:
+  workflow_dispatch:
   push:
+    branches:
+      - main
 
 permissions: read-all
 

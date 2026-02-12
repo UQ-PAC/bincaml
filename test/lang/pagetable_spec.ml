@@ -57,7 +57,7 @@ module Model = struct
     let* addr =
       match IntegerMap.bindings st |> List.map fst with
       | [] -> arb_zint_nonneg
-      | addrs -> oneof [ oneofl addrs; arb_zint_nonneg ]
+      | addrs -> oneof [ oneof_list addrs; arb_zint_nonneg ]
     in
     let+ fuzz = int_range (-10) 10 in
     Z.(max zero @@ (addr + ~$fuzz))
@@ -87,7 +87,7 @@ module Model = struct
     let open QCheck.Gen in
     QCheck.make ~print:show_cmd ~shrink:shrink_cmd
     @@
-    let* nbytes = small_nat >|= Int.add 1 in
+    let* nbytes = nat_small >|= Int.add 1 in
     let* addr = gen_addr st in
     oneof
       [
