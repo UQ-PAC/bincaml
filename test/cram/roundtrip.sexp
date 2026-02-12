@@ -2,3 +2,7 @@
 (dump-il "before.il")
 (load-il "before.il")
 (dump-il "after.il")
+(load-il "../../examples/x-output.il")
+(dump-il "before2.il")
+(load-il "before2.il")
+(dump-il "after2.il")
