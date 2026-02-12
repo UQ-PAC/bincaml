@@ -11,6 +11,8 @@
   ide
   may_read_uninit
   type_check
+  type_automata
+  asd
   type_inference)
  (libraries
   bincaml.analysis

@@ -2,57 +2,28 @@ open Bincaml_util.Common
 open Lang
 open Expr
 open Asd
-open Adt
+open Type_automata
+
+(*
+  TODO:
+
+      1) Do the example that they provide in BinSub as a test to see what it looks
+        like
+
+        i.e. run ADT stuff on this type
+
+        μα.α⊓stack_slot_2⊓ptr(a,{(4,4):b⊓(t1⊓α)})⊓ptr(c,{(0,4):d⊓(t2⊓int32)})⊓ptr({(0,4):e⊔int32, f )
+
+      2) Figure what IR stuff can actually result in recursive types so I can make
+        sure my code actually works with it
+
+      3) To continue with automata, I am up to the stage of actually joining the types I have been making
+
+      4) Ask about a = BVSHL(Extract()) stuff cause it makes sense that the a is also binded by the extract stuff
+*)
 
 let gen = ID.make_gen ()
 
-let join (ty0 : ty) (ty1 : ty) : ty =
-  match (ty0, ty1) with
-  | Record fields0, Record fields1 ->
-      (* I think this could be improved, cause this is gross *)
-      let module FieldMap = Map.Make (struct
-        type t = int * int
-
-        let compare = Stdlib.compare
-      end) in
-      let fieldmap_to_field_list (map : ty FieldMap.t) =
-        FieldMap.bindings map
-        |> List.map (fun ((offset, size), ty) -> { offset; size; ty })
-      in
-      let fieldmap_of_list (fields : field list) : ty FieldMap.t =
-        List.fold_left
-          (fun acc { offset; size; ty } -> FieldMap.add (offset, size) ty acc)
-          FieldMap.empty fields
-      in
-      let f0 = fieldmap_of_list fields0 in
-      let f1 = fieldmap_of_list fields1 in
-      let joined_map =
-        FieldMap.merge_safe
-          ~f:(fun (offset, size) v ->
-            match v with
-            | `Both (a, b) -> Some (Union (a, b))
-            | `Left a | `Right a -> Some a)
-          f0 f1
-      in
-      Record (fieldmap_to_field_list joined_map)
-  | Pointer (a, b), Pointer (c, d) ->
-      (* ptr((a u c) n (b n d), (b n d)) *)
-      Pointer (Sect (Union (a, c), Sect (b, d)), Sect (b, d))
-  (* WARN: this is not how BinSub did it, but I think I am just smarter and had better DS *)
-  | Function (name0, ins0, outs0), Function (name1, ins1, outs1) ->
-      if not @@ String.equal name0 name1 then failwith "BOOOOM"
-      else
-        (* args are the same just just union over the args *)
-        let ins =
-          StringMap.merge_safe
-            ~f:(fun _ b ->
-              match b with
-              | `Both (l, r) -> Some (Sect (l, r))
-              | _ -> failwith "BOOOMM")
-            ins0 ins1
-        in
-        Function (name0, ins, outs0)
-  | _ -> Union (ty0, ty1)
 
 let minimise_type p ty name =
   let rec type_to_state_list (p : bool) (ty : ty)
@@ -88,19 +59,20 @@ let minimise_type p ty name =
         Hashtbl.add tbl (p, ty) edges;
         ((p, ty) :: ls, tbl)
     | Pointer (a, b) ->
-        let ((ls, tbl) as acc) = type_to_state_list p a acc in
+        let ((ls, tbl) as acc) = type_to_state_list (not p) a acc in
         let ls, tbl = type_to_state_list p b acc in
         let edges = Hashtbl.create 2 in
         Hashtbl.add edges StoreLabel (not p, a);
         Hashtbl.add edges LoadLabel (p, b);
+        Hashtbl.add tbl (p, ty) edges;
         ((p, ty) :: ls, tbl)
     | Record fields ->
         let ls, tbl =
           List.fold_left
-            (fun acc { ty } -> type_to_state_list (not p) ty acc)
+            (fun acc { ty } -> type_to_state_list p ty acc)
             acc fields
         in
-        let edges = Hashtbl.create 30 in
+        let edges = Hashtbl.create 10 in
         List.iter
           (fun { offset; size; ty } ->
             Hashtbl.add edges (Reclabel (offset, size)) (p, ty))
@@ -109,10 +81,13 @@ let minimise_type p ty name =
         ((p, ty) :: ls, tbl)
   in
   let states, edges = type_to_state_list p ty ([], Hashtbl.create 10) in
-  (* states trans start fin *)
-  let automata = Adt.create_automata2 states edges (true, ty) [] name in
-  Adt.remove_ep automata;
-  print_string @@ export_graphviz automata;
+  (*  spaces so I ignore fmt          states trans    start  fin name *)
+  let automata = create_automata2 states edges (p, ty) [] name in
+  remove_ep automata;
+  merge_nodes automata;
+  (* NOTE: does not currently work *)
+  (* Adt.mini automata; *)
+  (* print_string @@ Adt.export_graphviz automata; *)
   automata
 
 let show_type_map (m : ty StringMap.t) : string =
@@ -167,7 +142,7 @@ let rec coalesce_types (constraint_set : constraint_state)
           in
           match rec_check with None -> s | Some _ -> Recursive (tau, s)))
   | Atom _ -> tau
-  | _ -> Top (* Top, Bottom, Union, Sect, Paren *)
+  | _ -> Top
 
 let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
   let open AbstractExpr in
@@ -175,10 +150,6 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
     Printf.sprintf "%s_%s" (ID.name proc_id) name
   in
 
-  (*
-    TODO:
-          Restructure this function to actually allow constraints to be generated at this stage
-  *)
   let rec constrain_expr (st : constraint_state)
       (expr : 'e BasilExpr.abstract_expr) =
     let constrain_arg st l t =
@@ -223,6 +194,7 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
         | `Old -> (st, Top)
         | `Forall -> (st, Top)
         | `Extract (finish, rt) ->
+            (* WARN: Is this actually constraining my field when they are used? *)
             let size = finish - rt in
             let ty =
               TypeVar (Printf.sprintf "Extraction_%s" @@ ID.name @@ gen.fresh ())
@@ -265,9 +237,6 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
   in
 
   (*
-    Main function to generate consistent constraint set
-  *)
-  (*
     WARN: I am extremely unhappy with the recurrence check
       I am very much struggling to reason about it, I think I have
       it as weak as possible while still catching the cntlm case
@@ -296,7 +265,7 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
                  st
         | None -> st)
     | Field { ty }, TypeVar b -> (
-        (* The right hand side is a type variable, fields are pretty much variables *)
+        (* Fields are pretty much variables *)
         match ty with
         | TypeVar a -> (
             let st = add_ub st a type1 in
@@ -315,7 +284,7 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
         let bounds = StringMap.get a st in
         if TySet.mem type0 rec_check then st
         else
-          let rec_check = TySet.add type0 rec_check in
+          let rec_check = TySet.add type1 rec_check in
           match bounds with
           | Some { ub } ->
               TySet.to_iter ub
@@ -330,7 +299,11 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
              (show_ty type0) (show_ty type1) (Program.show_stmt stmt))
   in
   match stmt with
-  | Stmt.Instr_Assert _ | Stmt.Instr_Assume _ -> st (* TODO inner is bool? *)
+  | Stmt.Instr_Assert { body } | Stmt.Instr_Assume { body } -> (
+      let st, constrain_expr = constrain_expr st (BasilExpr.unfix body) in
+      match constrain_expr with
+      | TypeVar a -> add_lb st a (Atom C_Bool)
+      | _ -> st)
   (* Deal with assignment cases *)
   | Stmt.Instr_Assign ls ->
       List.fold_left
@@ -340,7 +313,6 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
           else
             let lhs = rename_variable @@ Var.name lhs in
             let st, constrain_expr = constrain_expr st (BasilExpr.unfix expr) in
-            Printf.printf "%s : %s \n%!" (show_ty constrain_expr) lhs;
             constrain st constrain_expr (TypeVar lhs) TySet.empty)
         st ls
   (* Pointer stuff here *)
@@ -376,7 +348,6 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
       in
       let func = Function (ID.name procid, args, rets) in
       add_ub st (ID.name procid) func
-  (* TODO: Will need to ask what these actually mean / do *)
   | Stmt.Instr_IntrinCall _ -> st
   (*
     NOTE:
@@ -409,19 +380,21 @@ let transform (prog : Program.t) =
   let types =
     StringMap.mapi
       (fun name { lb; ub } ->
-        let upper = (* Positive Occurences *)
+        let lower =
+          (* Posistive Occurences *)
+          TySet.fold
+            (fun ty (acc : ty) ->
+              let a = coalesce_types type_constraint_map TySet.empty true ty in
+              match acc with Top -> a | _ -> Union (acc, a))
+            lb Top
+        in
+        let upper =
+          (* Negative Occurences *)
           TySet.fold
             (fun ty (acc : ty) ->
               let a = coalesce_types type_constraint_map TySet.empty false ty in
               match acc with Top -> a | _ -> Sect (acc, a))
             ub Top
-        in
-        let lower = (* Negative Occurences *)
-          TySet.fold
-            (fun ty (acc : ty) ->
-              let a = coalesce_types type_constraint_map TySet.empty false ty in
-              match acc with Top -> a | _ -> Union (acc, a))
-            lb Top
         in
         (lower, upper))
       type_constraint_map
@@ -437,5 +410,10 @@ let transform (prog : Program.t) =
     This needs to passes of the program but I think the only other way would be to pass the program for
      every line in the program.
   *)
-  (* let automatas = StringMap.mapi (fun name (lower_ty, upper_ty) -> (minimise_type true lower_ty name, minimise_type false upper_ty name)) types in *)
+  let automatas =
+    StringMap.mapi
+      (fun name (lower_ty, upper_ty) ->
+        (minimise_type true lower_ty name, minimise_type false upper_ty name))
+      types
+  in
   prog
