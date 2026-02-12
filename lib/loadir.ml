@@ -116,7 +116,8 @@ module BasilASTLoader = struct
 
   and trans_varspec prog (v : varSpec) =
     match v with
-    | VarSpec_Classification v -> [ trans_expr prog v ]
+    | VarSpec_Classification v ->
+        [ ("classification", `Expr (trans_expr prog v)) ]
     | VarSpec_Empty -> []
 
   and trans_declaration prog (x : decl) : load_st =
@@ -127,8 +128,7 @@ module BasilASTLoader = struct
             Program.decl_global p
               (Var.create
                  (unsafe_unsigil (`Global bident))
-                 ~pure:false ~scope:Global (trans_type type'));
-            p)
+                 ~pure:false ~scope:Global (trans_type type')))
           prog
     | Decl_UnsharedMem (bident, type', spec) ->
         map_prog
@@ -136,8 +136,7 @@ module BasilASTLoader = struct
             Program.decl_global p
               (Var.create
                  (unsafe_unsigil (`Global bident))
-                 ~pure:false ~scope:Global (trans_type type'));
-            p)
+                 ~pure:false ~scope:Global (trans_type type')))
           prog
     | Decl_Var (bident, type', spec) ->
         map_prog
@@ -145,8 +144,7 @@ module BasilASTLoader = struct
             Program.decl_global p
               (Var.create
                  (unsafe_unsigil (`Global bident))
-                 ~pure:true ~scope:Global (trans_type type'));
-            p)
+                 ~pure:true ~scope:Global (trans_type type')))
           prog
     | Decl_UninterpFun (attrDefList, glident, argtypes, rettype) ->
         let typesig = List.map trans_type argtypes in
@@ -157,8 +155,7 @@ module BasilASTLoader = struct
             Program.decl_global p
               (Var.create
                  (unsafe_unsigil (`Global glident))
-                 ~pure:true ~scope:Global ftype);
-            p)
+                 ~pure:true ~scope:Global ftype))
           prog
     | Decl_Fun (attrList, glident, params, rt, body) ->
         (*let typesig = List.map trans_type params in*)
@@ -173,13 +170,16 @@ module BasilASTLoader = struct
             (unsafe_unsigil (`Global glident))
             ~pure:true ~scope:Global ftype
         in
-        Program.decl_global prog.prog bvar;
-        let fundef : Program.pure_function_def =
-          { attrib; binding = bvar; definition = Some body }
+
+        let fundef : Program.declaration =
+          Function { attrib; binding = bvar; definition = Some body }
         in
         map_prog
           (fun prog ->
-            { prog with functions = VarMap.add bvar fundef prog.functions })
+            {
+              prog with
+              globals = StringMap.add (Var.name bvar) fundef prog.globals;
+            })
           prog
     | Decl_Axiom (attr, body) ->
         let attrib = trans_attrib_set prog attr in
@@ -421,11 +421,7 @@ module BasilASTLoader = struct
         (p_st, `Stmt (Instr_Assign (List.rev assigns)))
     | Stmt_Load (lvar, endian, bident, expr, intval) ->
         let endian = trans_endian endian in
-        let mem =
-          let n = unsafe_unsigil (`Global bident) in
-          Option.get_exn_or ("memory undefined: " ^ n)
-          @@ Var.Decls.find_opt p_st.prog.globals n
-        in
+        let mem = lookup_global_decl bident p_st in
         let addr = trans_expr p_st expr in
         let p_st, lhs = trans_lvar p_st lvar in
         let cells = transIntVal intval |> Z.to_int in
@@ -651,10 +647,12 @@ module BasilASTLoader = struct
   and lookup_global_decl ident p_st =
     let vn = unsafe_unsigil (`Global ident) in
     let token_char_offset_range = Some (get_bident_loc (`Global ident)) in
-    try Var.Decls.find p_st.prog.globals vn
-    with Not_found ->
-      let msg = "global variable used before declaration : " ^ vn in
-      raise (LoadError { token_char_offset_range; msg; input = None })
+    match StringMap.find vn p_st.prog.globals with
+    | Variable { binding } -> binding
+    | Function { binding } -> binding
+    | exception Not_found ->
+        let msg = "global variable used before declaration : " ^ vn in
+        raise (LoadError { token_char_offset_range; msg; input = None })
 
   and trans_bv_val v : Bitvec.t =
     match v with
@@ -978,8 +976,10 @@ let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
   let globals =
     Iter.append (Block.read_vars_iter bl) (Block.assigned_vars_iter bl)
     |> Iter.filter Var.is_global
-    |> Iter.map (fun v -> (Var.name v, v))
-    |> Var.Decls.of_iter
+    |> Iter.map (fun v ->
+        ( Var.name v,
+          Program.(Variable { binding = v; attrib = StringMap.empty }) ))
+    |> StringMap.of_iter
   in
   ({ prog with globals }, proc, bl)
 

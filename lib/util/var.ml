@@ -89,11 +89,12 @@ module Decls = struct
   let find_opt m name = Hashtbl.find_opt m name
   let empty () : 'v t = Hashtbl.create 30
 
-  let add m (v : 'v) =
-    let d = find_opt m (name v) in
+  (*let add m vn v =
+    let d = find_opt m (name vn) in
     match d with
     | Some e when equal e v -> ()
     | Some _ ->
         failwith @@ "Already declared diff var with that name: " ^ name v
-    | None -> Hashtbl.add m (name v) v
+    | None -> Hashtbl.add m (name vn) v
+    *)
 end

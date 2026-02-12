@@ -45,14 +45,24 @@ let drop_unused_var_declarations_prog (p : Program.t) =
       (fun i p acc -> VarSet.union acc (drop_unused_var_declarations_proc p))
       p.procs VarSet.empty
   in
-  Var.Decls.filter_map_inplace
-    (fun _ v -> if VarSet.mem v used then Some v else None)
-    p.globals;
-  p
+  let globals =
+    StringMap.filter_map
+      (fun _ v ->
+        match v with
+        | Program.(Variable { binding } as b) ->
+            if VarSet.mem binding used then Some b else None
+        | o -> Some o)
+      p.globals
+  in
+  { p with globals }
 
 let set_params (p : Program.t) =
   let globs =
-    p.globals |> Var.Decls.to_iter |> Iter.filter (fun (i, v) -> Var.pure v)
+    p.globals |> StringMap.to_iter
+    |> Iter.filter_map (function
+      | i, Program.(Variable { binding }) ->
+          if Var.pure binding then Some (i, binding) else None
+      | _ -> None)
   in
 
   let inparam =

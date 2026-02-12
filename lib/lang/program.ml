@@ -25,22 +25,32 @@ let show_stmt =
 
 let pp_stmt fmt s = Format.pp_print_string fmt (show_stmt s)
 
-type pure_function_def = {
-  attrib : Expr.BasilExpr.t Attrib.attrib_map;
-  binding : Var.t;
-  definition : e option;
-}
-
 type prog_spec = { rely : BasilExpr.t list; guarantee : BasilExpr.t list }
 type axiom_def = { attrib : Expr.BasilExpr.t Attrib.attrib_map; predicate : e }
 
+type declaration =
+  | Function of {
+      binding : Var.t;
+      attrib : Expr.BasilExpr.t Attrib.attrib_map;
+      definition : e option;
+    }
+  | Variable of { binding : Var.t; attrib : Expr.BasilExpr.t Attrib.attrib_map }
+
+let pretty_declaration d =
+  let open Containers_pp in
+  match d with
+  | Variable { binding } -> text @@ Var.to_decl_string_il binding
+  | Function { binding; attrib; definition } -> (
+      match definition with
+      | Some d -> text @@ Var.to_decl_string_il binding
+      | None -> text @@ Var.to_decl_string_il binding)
+
 type t = {
   modulename : string;
-  globals : Var.t Var.Decls.t;
+  globals : declaration StringMap.t;
   entry_proc : ID.t option;
   procs : proc ID.Map.t;
   proc_names : ID.generator;
-  functions : pure_function_def VarMap.t;
   axioms : axiom_def list;
   attrib : e Attrib.attrib_map;
   spec : prog_spec;
@@ -61,8 +71,7 @@ let prog_pretty (p : t) =
   let open Containers_pp in
   let open Containers_pp.Infix in
   let globs =
-    Var.Decls.to_list p.globals
-    |> List.map (fun (n, v) -> text @@ Var.to_decl_string_il v)
+    StringMap.to_list p.globals |> List.map (fun (n, v) -> pretty_declaration v)
   in
   let n =
     p.entry_proc
@@ -84,7 +93,9 @@ let pretty_to_chan chan (p : t) =
   output_string chan @@ Containers_pp.Pretty.to_string ~width:80 p;
   output_string chan ";"
 
-let decl_global p = Var.Decls.add p.globals
+let decl_global p v =
+  let decl = Variable { binding = v; attrib = StringMap.empty } in
+  { p with globals = StringMap.add (Var.name v) decl p.globals }
 
 let create_single_proc ?(name = "<module>") () =
   let proc_names = ID.make_gen () in
@@ -94,10 +105,9 @@ let create_single_proc ?(name = "<module>") () =
     {
       modulename = name;
       entry_proc = Some procname;
-      globals = Var.Decls.empty ();
+      globals = StringMap.empty;
       procs = ID.Map.singleton procname proc;
       proc_names;
-      functions = VarMap.empty;
       axioms = [];
       attrib = StringMap.empty;
       spec = { rely = []; guarantee = [] };
@@ -110,10 +120,9 @@ let empty ?name () =
   {
     modulename;
     entry_proc = None;
-    globals = Var.Decls.empty ();
+    globals = StringMap.empty;
     procs = ID.Map.empty;
     proc_names = ID.make_gen ();
-    functions = VarMap.empty;
     axioms = [];
     attrib = StringMap.empty;
     spec = { rely = []; guarantee = [] };

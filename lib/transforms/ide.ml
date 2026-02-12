@@ -430,7 +430,10 @@ module IDE (D : IDEDomain) = struct
 
   let proc_entry (prog : Program.t) (proc : Program.proc) =
     let globals =
-      prog.globals |> Hashtbl.to_list |> List.map snd
+      prog.globals |> StringMap.to_list
+      |> List.filter_map (function
+        | k, Program.(Variable { binding }) -> Some binding
+        | _ -> None)
       |> List.map (fun v -> (v, D.identity v))
     in
     let locals = Procedure.formal_in_params proc in
@@ -442,7 +445,10 @@ module IDE (D : IDEDomain) = struct
 
   let proc_return (prog : Program.t) (proc : Program.proc) =
     let globals =
-      prog.globals |> Hashtbl.to_list |> List.map snd
+      prog.globals |> StringMap.to_list
+      |> List.filter_map (function
+        | k, Program.(Variable { binding }) -> Some binding
+        | _ -> None)
       |> List.map (fun v -> (v, D.identity v))
     in
     let locals = Procedure.formal_out_params proc in
@@ -627,7 +633,12 @@ module IDE (D : IDEDomain) = struct
 
   let solve dir (prog : Program.t) =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
-    let globals = prog.globals |> Var.Decls.to_iter |> Iter.map snd in
+    let globals =
+      prog.globals |> StringMap.to_iter
+      |> Iter.filter_map (function
+        | k, Program.(Variable { binding }) -> Some binding
+        | _ -> None)
+    in
     let graph = IDEGraph.create prog in
     let order =
       (match dir with

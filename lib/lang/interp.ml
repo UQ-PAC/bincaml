@@ -467,7 +467,10 @@ module IState = struct
       }
     in
     let memories =
-      prog.globals |> Var.Decls.values
+      prog.globals |> StringMap.values
+      |> Iter.filter_map (function
+        | Program.(Variable { binding }) -> Some binding
+        | _ -> None)
       |> Iter.filter (fun v ->
           match Var.typ v with Map _ -> true | _ -> false)
       |> Iter.map (fun v -> (v, PageTable.create ()))
@@ -479,7 +482,10 @@ module IState = struct
       | None -> Z.zero
     in
     let globals =
-      prog.globals |> Var.Decls.values
+      prog.globals |> StringMap.values
+      |> Iter.filter_map (function
+        | Program.(Variable { binding }) -> Some binding
+        | _ -> None)
       |> Iter.filter (fun v ->
           match Var.typ v with Map _ -> false | _ -> true)
       |> Iter.map (fun v -> (v, init_glob v))
