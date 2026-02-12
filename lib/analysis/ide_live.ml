@@ -150,6 +150,13 @@ module IDELive = struct
           when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs ->
             DlMap.empty*)
         | _ -> Iter.singleton (Label v, IdEdge))
+
+  (* TODO test*)
+  let transfer_phi (phi : Var.t Block.phi) d =
+    match d with
+    | Label v when Var.equal phi.lhs v ->
+        Iter.of_list phi.rhs |> Iter.map (fun (_, v) -> (Label v, IdEdge))
+    | _ -> Iter.singleton (d, IdEdge)
 end
 
 module IDELiveAnalysis = IDE (IDELive)

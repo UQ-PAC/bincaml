@@ -110,6 +110,8 @@ module type IDEDomain = sig
 
   val transfer : Program.stmt -> DL.t -> t state_update
   (** update the state for a program statement *)
+
+  val transfer_phi : Var.t Block.phi -> DL.t -> t state_update
 end
 
 module IDEGraph = struct
@@ -484,32 +486,15 @@ module IDE (D : IDEDomain) = struct
     in
     (* TODO this might be more imprecise than joining on the opposite side of the phi node
        https://link.springer.com/chapter/10.1007/978-3-642-11970-5_8 reckons so *)
+    (* TODO this also might be really inefficient or wrong it hasn't been tested *)
     let phis i =
-      (*
-      match dir with
-      | `Forwards ->
-          List.fold_left
-            (fun i (p : Var.t Block.phi) ->
-              Iter.map
-                (fun (d2, e) ->
-                  if List.exists (fun (_, v) -> DL.equal (Label v) d2) p.rhs
-                  then (Label p.lhs, e)
-                  else (d2, e))
-                i)
-            i phi
-      | `Backwards ->
-          List.fold_left
-            (fun i (p : Var.t Block.phi) ->
-              Iter.flat_map
-                (fun (d2, e) ->
-                  if DL.equal (Label p.lhs) d2 then
-                    Iter.of_list p.rhs
-                    |> Iter.map (fun (_, d3) -> (Label d3, e))
-                  else Iter.singleton (d2, e))
-                i)
-            i phi
-            *)
-      i
+      List.fold_left
+        (fun i p ->
+          Iter.flat_map
+            (fun (d2, e1) ->
+              D.transfer_phi p d2 |> Iter.map (fun (d3, e2) -> (d3, e2 @. e1)))
+            i)
+        i phi
     in
     match dir with `Forwards -> stmts (phis i) | `Backwards -> phis (stmts i)
 
