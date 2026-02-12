@@ -161,9 +161,9 @@ module BasilASTLoader = struct
                  (unsafe_unsigil (`Global glident))
                  ~pure:true ~scope:Global ftype))
           prog
-    | Decl_Fun (attrList, glident, params, rt, body) ->
+    | Decl_Fun (glident, attrList, params, rt, body) ->
         (*let typesig = List.map trans_type params in*)
-        let params_in = List.map param_to_formal params in
+        let params_in = List.map fun_param_to_formal params in
         let argtypes = List.map (snd %> Var.typ) params_in in
         let rtype = trans_type rt in
         let ftype = Types.uncurry argtypes rtype in
@@ -171,7 +171,6 @@ module BasilASTLoader = struct
           trans_attrib_set ~binds:(StringMap.of_list params_in) prog attrList
         in
         let body = trans_expr ~binds:(StringMap.of_list params_in) prog body in
-        print_endline @@ Types.show ftype;
         let bvar =
           Var.create
             (unsafe_unsigil (`Global glident))
@@ -635,6 +634,11 @@ module BasilASTLoader = struct
     match pp with
     | Params1 (LocalIdent (pos, id), t) -> (id, Var.create id (trans_type t))
 
+  and fun_param_to_formal pp : string * Var.t =
+    match pp with
+    | FunParams1 (LocalIdent (pos, id), t) -> (id, Var.create id (trans_type t))
+    | FunParams2 (LocalIdent (pos, id), t) -> (id, Var.create id (trans_type t))
+
   and get_bident_loc g =
     match g with
     | `Global (GlobalIdent (pos, g)) -> pos
@@ -704,6 +708,7 @@ module BasilASTLoader = struct
     in
     let open Ops in
     match x with
+    | Expr_Paren e -> trans_expr e
     | Expr_Global (GlobalUntyped g) ->
         BasilExpr.rvar @@ lookup_global_decl g p_st
     | Expr_Local (LocalUntyped g) ->
@@ -767,7 +772,7 @@ module BasilASTLoader = struct
         in
         let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
         BasilExpr.forall ~attrib ~bound (trans_expr ~nbinds:bound e)
-    | Expr_Lambda (LambdaDef1 (lv, _, attrs, e)) ->
+    | Expr_Lambda (lv, attrs, e) ->
         let bound = unpack_local_lvars ~bound:binds p_st lv in
         let binds =
           StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)

@@ -29,7 +29,7 @@ and decl =
  | Decl_UnsharedMem of globalIdent * typeT * varSpec
  | Decl_Var of globalIdent * typeT * varSpec
  | Decl_UninterpFun of attribSet * globalIdent * typeT list * typeT
- | Decl_Fun of attribSet * globalIdent * params list * typeT * expr
+ | Decl_Fun of globalIdent * attribSet * funParams list * typeT * expr
  | Decl_ProgEmpty of procIdent * attribSet
  | Decl_ProgWithSpec of procIdent * attribSet * beginList * progSpec list * endList
  | Decl_Proc of procIdent * params list * params list * attribSet * funSpec list * procDef
@@ -155,6 +155,10 @@ and attr =
 and params =
    Params1 of localIdent * typeT
 
+and funParams =
+   FunParams1 of localIdent * typeT
+ | FunParams2 of localIdent * typeT
+
 and value =
    Value_BV of bVVal
  | Value_Int of intVal
@@ -163,11 +167,12 @@ and value =
 
 and expr =
    Expr_Literal of value
+ | Expr_Paren of expr
  | Expr_Local of localVar
  | Expr_Global of globalVar
  | Expr_Forall of lambdaDef
  | Expr_Exists of lambdaDef
- | Expr_Lambda of lambdaDef
+ | Expr_Lambda of localVar list * attribSet * expr
  | Expr_Old of expr
  | Expr_FunctionOp of globalIdent * expr list
  | Expr_Binary of binOp * expr * expr

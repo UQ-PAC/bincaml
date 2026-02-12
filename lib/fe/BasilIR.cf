@@ -47,8 +47,8 @@ Decl_Var . Decl ::= "var" GlobalIdent ":" Type VarSpec ;
 
 separator Type ",";
 
-Decl_UninterpFun . Decl ::= "declare-fun" AttribSet GlobalIdent ":" "(" [Type] ")" "->" Type ;
-Decl_Fun . Decl ::= "define-fun" AttribSet GlobalIdent"(" [Params] ")" "->" Type "=" Expr;
+Decl_UninterpFun . Decl ::= "declare-fun" AttribSet GlobalIdent  "(" [Type] ")" ":" Type ;
+Decl_Fun . Decl ::= "let" GlobalIdent AttribSet [FunParams]  ":" Type "=" Expr;
 Decl_ProgEmpty . Decl ::= "prog" "entry" ProcIdent AttribSet ;
 Decl_ProgWithSpec . Decl ::= "prog" "entry" ProcIdent AttribSet BeginList [ ProgSpec ] EndList ;
 Decl_Proc . Decl ::= "proc" ProcIdent "(" [Params] ")" "->" "(" [Params] ")" AttribSet [ FunSpec ] ProcDef ;
@@ -168,6 +168,9 @@ Attr_Str . Attr ::= Str ;
 rules Params ::=  LocalIdent ":" Type ;
 separator Params "," ;
 
+rules FunParams ::=  LocalIdent ":" Type | "(" LocalIdent ":" Type ")" ;
+separator FunParams " " ;
+
 {- EXPRESSIONS -}
 
 Value_BV . Value ::=  BVVal;
@@ -177,6 +180,8 @@ Value_False . Value ::= "false" ;
 
 Expr_Literal . Expr ::= Value; 
 
+Expr_Paren . Expr ::= "(" Expr ")";
+
 Expr_Local . Expr ::= LocalVar;
 Expr_Global . Expr ::= GlobalVar;
 
@@ -185,7 +190,7 @@ Expr_Global . Expr ::= GlobalVar;
 rules LambdaDef ::= "(" [LocalVar] ")" LambdaSep AttribSet Expr ;
 Expr_Forall . Expr ::= "forall" LambdaDef ;
 Expr_Exists . Expr ::= "exists" LambdaDef ;
-Expr_Lambda . Expr ::= "lambda" LambdaDef ;
+Expr_Lambda . Expr ::= "fun" [LocalVar] "->" AttribSet Expr ;
 Expr_Old . Expr       ::= "old" "(" Expr ")" ;
 
 -- uninterpreted functions

@@ -7,13 +7,13 @@
 open ParBasilIR
 open Lexing
 
-let symbol_table = Hashtbl.create 10
+let symbol_table = Hashtbl.create 9
 let _ = List.iter (fun (kwd, tok) -> Hashtbl.add symbol_table kwd tok)
-                  [(";", SYMB1);(",", SYMB2);(":", SYMB3);("declare-fun", SYMB4);("(", SYMB5);(")", SYMB6);("->", SYMB7);("define-fun", SYMB8);("=", SYMB9);(":=", SYMB10)]
+                  [(";", SYMB1);(",", SYMB2);(":", SYMB3);("declare-fun", SYMB4);("(", SYMB5);(")", SYMB6);("=", SYMB7);("->", SYMB8);(":=", SYMB9)]
 
-let resword_table = Hashtbl.create 88
+let resword_table = Hashtbl.create 89
 let _ = List.iter (fun (kwd, tok) -> Hashtbl.add resword_table kwd tok)
-                  [("axiom", KW_axiom);("memory", KW_memory);("shared", KW_shared);("var", KW_var);("prog", KW_prog);("entry", KW_entry);("proc", KW_proc);("le", KW_le);("be", KW_be);("nop", KW_nop);("load", KW_load);("store", KW_store);("call", KW_call);("indirect", KW_indirect);("assume", KW_assume);("guard", KW_guard);("assert", KW_assert);("goto", KW_goto);("unreachable", KW_unreachable);("return", KW_return);("phi", KW_phi);("block", KW_block);("true", KW_true);("false", KW_false);("forall", KW_forall);("exists", KW_exists);("lambda", KW_lambda);("old", KW_old);("boolnot", KW_boolnot);("intneg", KW_intneg);("booltobv1", KW_booltobv1);("zero_extend", KW_zero_extend);("sign_extend", KW_sign_extend);("extract", KW_extract);("bvconcat", KW_bvconcat);("eq", KW_eq);("neq", KW_neq);("bvnot", KW_bvnot);("bvneg", KW_bvneg);("bvand", KW_bvand);("bvor", KW_bvor);("bvadd", KW_bvadd);("bvmul", KW_bvmul);("bvudiv", KW_bvudiv);("bvurem", KW_bvurem);("bvshl", KW_bvshl);("bvlshr", KW_bvlshr);("bvnand", KW_bvnand);("bvnor", KW_bvnor);("bvxor", KW_bvxor);("bvxnor", KW_bvxnor);("bvcomp", KW_bvcomp);("bvsub", KW_bvsub);("bvsdiv", KW_bvsdiv);("bvsrem", KW_bvsrem);("bvsmod", KW_bvsmod);("bvashr", KW_bvashr);("bvule", KW_bvule);("bvugt", KW_bvugt);("bvuge", KW_bvuge);("bvult", KW_bvult);("bvslt", KW_bvslt);("bvsle", KW_bvsle);("bvsgt", KW_bvsgt);("bvsge", KW_bvsge);("intadd", KW_intadd);("intmul", KW_intmul);("intsub", KW_intsub);("intdiv", KW_intdiv);("intmod", KW_intmod);("intlt", KW_intlt);("intle", KW_intle);("intgt", KW_intgt);("intge", KW_intge);("booland", KW_booland);("boolor", KW_boolor);("boolimplies", KW_boolimplies);("require", KW_require);("requires", KW_requires);("ensure", KW_ensure);("ensures", KW_ensures);("rely", KW_rely);("relies", KW_relies);("guarnatee", KW_guarnatee);("guarantees", KW_guarantees);("classification", KW_classification);("invariant", KW_invariant);("guarantee", KW_guarantee)]
+                  [("axiom", KW_axiom);("memory", KW_memory);("shared", KW_shared);("var", KW_var);("let", KW_let);("prog", KW_prog);("entry", KW_entry);("proc", KW_proc);("le", KW_le);("be", KW_be);("nop", KW_nop);("load", KW_load);("store", KW_store);("call", KW_call);("indirect", KW_indirect);("assume", KW_assume);("guard", KW_guard);("assert", KW_assert);("goto", KW_goto);("unreachable", KW_unreachable);("return", KW_return);("phi", KW_phi);("block", KW_block);("true", KW_true);("false", KW_false);("forall", KW_forall);("exists", KW_exists);("fun", KW_fun);("old", KW_old);("boolnot", KW_boolnot);("intneg", KW_intneg);("booltobv1", KW_booltobv1);("zero_extend", KW_zero_extend);("sign_extend", KW_sign_extend);("extract", KW_extract);("bvconcat", KW_bvconcat);("eq", KW_eq);("neq", KW_neq);("bvnot", KW_bvnot);("bvneg", KW_bvneg);("bvand", KW_bvand);("bvor", KW_bvor);("bvadd", KW_bvadd);("bvmul", KW_bvmul);("bvudiv", KW_bvudiv);("bvurem", KW_bvurem);("bvshl", KW_bvshl);("bvlshr", KW_bvlshr);("bvnand", KW_bvnand);("bvnor", KW_bvnor);("bvxor", KW_bvxor);("bvxnor", KW_bvxnor);("bvcomp", KW_bvcomp);("bvsub", KW_bvsub);("bvsdiv", KW_bvsdiv);("bvsrem", KW_bvsrem);("bvsmod", KW_bvsmod);("bvashr", KW_bvashr);("bvule", KW_bvule);("bvugt", KW_bvugt);("bvuge", KW_bvuge);("bvult", KW_bvult);("bvslt", KW_bvslt);("bvsle", KW_bvsle);("bvsgt", KW_bvsgt);("bvsge", KW_bvsge);("intadd", KW_intadd);("intmul", KW_intmul);("intsub", KW_intsub);("intdiv", KW_intdiv);("intmod", KW_intmod);("intlt", KW_intlt);("intle", KW_intle);("intgt", KW_intgt);("intge", KW_intge);("booland", KW_booland);("boolor", KW_boolor);("boolimplies", KW_boolimplies);("require", KW_require);("requires", KW_requires);("ensure", KW_ensure);("ensures", KW_ensures);("rely", KW_rely);("relies", KW_relies);("guarnatee", KW_guarnatee);("guarantees", KW_guarantees);("classification", KW_classification);("invariant", KW_invariant);("guarantee", KW_guarantee)]
 
 let unescapeInitTail (s:string) : string =
   let rec unesc s = match s with
@@ -53,7 +53,7 @@ let _idchar = _letter | _digit | ['_' '\'']         (*  identifier character *)
 let _universal = _                                  (* universal: any character *)
 
 (* reserved words consisting of special symbols *)
-let rsyms = ";" | "," | ":" | "declare-fun" | "(" | ")" | "->" | "define-fun" | "=" | ":="
+let rsyms = ";" | "," | ":" | "declare-fun" | "(" | ")" | "=" | "->" | ":="
 
 (* user-defined token types *)
 let bVTYPE = "bv" _digit +

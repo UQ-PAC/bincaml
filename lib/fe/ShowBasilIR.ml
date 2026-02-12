@@ -70,7 +70,7 @@ and showDecl (e : AbsBasilIR.decl) : showable = match e with
   |    AbsBasilIR.Decl_UnsharedMem (globalident, type', varspec) -> s2s "Decl_UnsharedMem" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
   |    AbsBasilIR.Decl_Var (globalident, type', varspec) -> s2s "Decl_Var" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
   |    AbsBasilIR.Decl_UninterpFun (attribset, globalident, types, type') -> s2s "Decl_UninterpFun" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showList showTypeT types  >> s2s ", " >>  showTypeT type' >> c2s ')'
-  |    AbsBasilIR.Decl_Fun (attribset, globalident, paramss, type', expr) -> s2s "Decl_Fun" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showList showParams paramss  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.Decl_Fun (globalident, attribset, funparamss, type', expr) -> s2s "Decl_Fun" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showList showFunParams funparamss  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Decl_ProgEmpty (procident, attribset) -> s2s "Decl_ProgEmpty" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showAttribSet attribset >> c2s ')'
   |    AbsBasilIR.Decl_ProgWithSpec (procident, attribset, beginlist, progspecs, endlist) -> s2s "Decl_ProgWithSpec" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showProgSpec progspecs  >> s2s ", " >>  showEndList endlist >> c2s ')'
   |    AbsBasilIR.Decl_Proc (procident, paramss0, paramss, attribset, funspecs, procdef) -> s2s "Decl_Proc" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showList showParams paramss0  >> s2s ", " >>  showList showParams paramss  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showList showFunSpec funspecs  >> s2s ", " >>  showProcDef procdef >> c2s ')'
@@ -226,6 +226,11 @@ and showParams (e : AbsBasilIR.params) : showable = match e with
        AbsBasilIR.Params1 (localident, type') -> s2s "Params1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
 
 
+and showFunParams (e : AbsBasilIR.funParams) : showable = match e with
+       AbsBasilIR.FunParams1 (localident, type') -> s2s "FunParams1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
+  |    AbsBasilIR.FunParams2 (localident, type') -> s2s "FunParams2" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
+
+
 and showValue (e : AbsBasilIR.value) : showable = match e with
        AbsBasilIR.Value_BV bvval -> s2s "Value_BV" >> c2s ' ' >> c2s '(' >> showBVVal bvval >> c2s ')'
   |    AbsBasilIR.Value_Int intval -> s2s "Value_Int" >> c2s ' ' >> c2s '(' >> showIntVal intval >> c2s ')'
@@ -235,11 +240,12 @@ and showValue (e : AbsBasilIR.value) : showable = match e with
 
 and showExpr (e : AbsBasilIR.expr) : showable = match e with
        AbsBasilIR.Expr_Literal value -> s2s "Expr_Literal" >> c2s ' ' >> c2s '(' >> showValue value >> c2s ')'
+  |    AbsBasilIR.Expr_Paren expr -> s2s "Expr_Paren" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_Local localvar -> s2s "Expr_Local" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
   |    AbsBasilIR.Expr_Global globalvar -> s2s "Expr_Global" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
   |    AbsBasilIR.Expr_Forall lambdadef -> s2s "Expr_Forall" >> c2s ' ' >> c2s '(' >> showLambdaDef lambdadef >> c2s ')'
   |    AbsBasilIR.Expr_Exists lambdadef -> s2s "Expr_Exists" >> c2s ' ' >> c2s '(' >> showLambdaDef lambdadef >> c2s ')'
-  |    AbsBasilIR.Expr_Lambda lambdadef -> s2s "Expr_Lambda" >> c2s ' ' >> c2s '(' >> showLambdaDef lambdadef >> c2s ')'
+  |    AbsBasilIR.Expr_Lambda (localvars, attribset, expr) -> s2s "Expr_Lambda" >> c2s ' ' >> c2s '(' >> showList showLocalVar localvars  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_Old expr -> s2s "Expr_Old" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_FunctionOp (globalident, exprs) -> s2s "Expr_FunctionOp" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showList showExpr exprs >> c2s ')'
   |    AbsBasilIR.Expr_Binary (binop, expr0, expr) -> s2s "Expr_Binary" >> c2s ' ' >> c2s '(' >> showBinOp binop  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
