@@ -3,4 +3,3 @@
  (files
   (glob_files_rec
    (asset/* with_prefix .))))
-
