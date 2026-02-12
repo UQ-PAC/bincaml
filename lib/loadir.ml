@@ -1210,8 +1210,9 @@ proc @f (ZF_in:bv1, VF_in:bv1) -> ();
     {|
     prog entry @f;
     proc @f(ZF_in:bv1, VF_in:bv1)  -> ()
-    [  ]
-  |}]
+
+    ;
+    |}]
 
 let%expect_test "prop type from decl" =
   let p =
@@ -1241,15 +1242,17 @@ proc @main_4196260 () -> ()
     var $NF:bv1;
     prog entry @main_4196260;
     proc @main_4196260()  -> ()
+      modifies $NF:bv1, $ZF:bv1;
+      captures $NF:bv1, $ZF:bv1;
+
     [
        block %main_entry [
           $NF:bv1 := 0x1:bv1;
           $ZF:bv1 := $NF:bv1;
           goto (%main_basil_return_1);
-          ];
+       ];
        block %main_basil_return_1 [ nop; return; ]
     ];
-    proc @f(ZF_in:bv1, VF_in:bv1)  -> ();
     |}]
 
 let%expect_test "callstuff" =
