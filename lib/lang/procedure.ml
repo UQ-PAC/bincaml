@@ -460,13 +460,19 @@ let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
     ^ append_nl
         (ml
            (fun x ->
-             let x = List.sort (fun a b -> String.compare (Var.name a) (Var.name b)) x in
+             let x =
+               List.sort (fun a b -> String.compare (Var.name a) (Var.name b)) x
+             in
              text "modifies "
              ^ nest 2 (fill_map (text "," ^ newline) show_var x))
            p.modifies_globs
         @ ml
             (fun x ->
-             let x = List.sort (fun a b -> String.compare (Var.name a) (Var.name b)) x in
+              let x =
+                List.sort
+                  (fun a b -> String.compare (Var.name a) (Var.name b))
+                  x
+              in
               text "captures "
               ^ nest 2 (fill_map (text "," ^ newline) show_var x))
             p.captures_globs
