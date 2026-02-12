@@ -8,7 +8,9 @@
   defuse_bool
   lattice_types
   wrapped_intervals
-  known_bits)
+  known_bits
+  wp_dual
+  )
  (libraries
   patricia-tree
   loader

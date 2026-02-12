@@ -92,6 +92,13 @@ module PassManager = struct
       doc = "Fail if the IR program is not type correct";
     }
 
+  let function_summaries =
+    {
+      name = "function-summaries";
+      apply = Proc Transforms.Function_summaries.transform;
+      doc = "Generate function summaries for each procedure";
+    }
+
   let passes =
     [
       dfg_bool;
@@ -102,6 +109,7 @@ module PassManager = struct
       sssa;
       full_ssa;
       type_check;
+      function_summaries;
       {
         name = "remove-unreachable-block";
         apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;

@@ -308,7 +308,9 @@ module BasilExpr = struct
     let open AbstractExpr in
     let open Ops.AllOps in
     let get_ty o =
-      match o with Fun { ret } -> ret | _ -> failwith "type error"
+      match o with Fun { ret } -> ret | _ ->
+          print_endline @@ AllOps.show_op_fun_type o;
+          failwith "type error"
     in
     match e with
     | RVar r -> Var.typ r
@@ -330,7 +332,7 @@ module BasilExpr = struct
     let rw_alg e =
       let orig s = fix s in
       match rw_fun e with
-      | Some e' when Types.equal (type_of e') (type_of (orig e)) -> e'
+      | Some e' when Types.compare (type_of e') (type_of (orig e)) >= 0 -> e'
       | Some e' ->
           failwith
           @@ Printf.sprintf

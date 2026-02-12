@@ -212,6 +212,7 @@ module AllOps = struct
     | Fun of { args : Types.t list; ret : Types.t }
     (* list of expected type equalities *)
     | Conflict of (Types.t * string) list
+  [@@deriving show]
 
   let ret_type_const (o : const) =
     let open Types in

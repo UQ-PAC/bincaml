@@ -11,7 +11,8 @@
   cleanup_cfg
   ide
   may_read_uninit
-  type_check)
+  type_check
+  function_summaries)
  (libraries
   bincaml.analysis
   patricia-tree
