@@ -182,10 +182,10 @@ Expr_Global . Expr ::= GlobalVar;
 
 -- quantifiers
 
-rules LambdaDef ::= "(" [LocalVar] ")" LambdaSep Expr ;
-Expr_Forall . Expr ::= "forall" AttribSet LambdaDef ;
-Expr_Exists . Expr ::= "exists" AttribSet  LambdaDef ;
-Expr_Lambda . Expr ::= "lambda" AttribSet  LambdaDef ;
+rules LambdaDef ::= "(" [LocalVar] ")" LambdaSep AttribSet Expr ;
+Expr_Forall . Expr ::= "forall" LambdaDef ;
+Expr_Exists . Expr ::= "exists" LambdaDef ;
+Expr_Lambda . Expr ::= "lambda" LambdaDef ;
 Expr_Old . Expr       ::= "old" "(" Expr ")" ;
 
 -- uninterpreted functions

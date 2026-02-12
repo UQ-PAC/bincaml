@@ -355,9 +355,9 @@ and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
        AbsBasilIR.Expr_Literal value -> prPrec i 0 (concatD [prtValue 0 value])
   |    AbsBasilIR.Expr_Local localvar -> prPrec i 0 (concatD [prtLocalVar 0 localvar])
   |    AbsBasilIR.Expr_Global globalvar -> prPrec i 0 (concatD [prtGlobalVar 0 globalvar])
-  |    AbsBasilIR.Expr_Forall (attribset, lambdadef) -> prPrec i 0 (concatD [render "forall" ; prtAttribSet 0 attribset ; prtLambdaDef 0 lambdadef])
-  |    AbsBasilIR.Expr_Exists (attribset, lambdadef) -> prPrec i 0 (concatD [render "exists" ; prtAttribSet 0 attribset ; prtLambdaDef 0 lambdadef])
-  |    AbsBasilIR.Expr_Lambda (attribset, lambdadef) -> prPrec i 0 (concatD [render "lambda" ; prtAttribSet 0 attribset ; prtLambdaDef 0 lambdadef])
+  |    AbsBasilIR.Expr_Forall lambdadef -> prPrec i 0 (concatD [render "forall" ; prtLambdaDef 0 lambdadef])
+  |    AbsBasilIR.Expr_Exists lambdadef -> prPrec i 0 (concatD [render "exists" ; prtLambdaDef 0 lambdadef])
+  |    AbsBasilIR.Expr_Lambda lambdadef -> prPrec i 0 (concatD [render "lambda" ; prtLambdaDef 0 lambdadef])
   |    AbsBasilIR.Expr_Old expr -> prPrec i 0 (concatD [render "old" ; render "(" ; prtExpr 0 expr ; render ")"])
   |    AbsBasilIR.Expr_FunctionOp (globalident, exprs) -> prPrec i 0 (concatD [prtGlobalIdent 0 globalident ; render "(" ; prtExprListBNFC 0 exprs ; render ")"])
   |    AbsBasilIR.Expr_Binary (binop, expr1, expr2) -> prPrec i 0 (concatD [prtBinOp 0 binop ; render "(" ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; render ")"])
@@ -373,7 +373,7 @@ and prtExprListBNFC i es : doc = match (i, es) with
   | (_,[x]) -> (concatD [prtExpr 0 x])
   | (_,x::xs) -> (concatD [prtExpr 0 x ; render "," ; prtExprListBNFC 0 xs])
 and prtLambdaDef (i:int) (e : AbsBasilIR.lambdaDef) : doc = match e with
-       AbsBasilIR.LambdaDef1 (localvars, lambdasep, expr) -> prPrec i 0 (concatD [render "(" ; prtLocalVarListBNFC 0 localvars ; render ")" ; prtLambdaSep 0 lambdasep ; prtExpr 0 expr])
+       AbsBasilIR.LambdaDef1 (localvars, lambdasep, attribset, expr) -> prPrec i 0 (concatD [render "(" ; prtLocalVarListBNFC 0 localvars ; render ")" ; prtLambdaSep 0 lambdasep ; prtAttribSet 0 attribset ; prtExpr 0 expr])
 
 
 and prtBinOp (i:int) (e : AbsBasilIR.binOp) : doc = match e with

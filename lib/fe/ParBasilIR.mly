@@ -568,9 +568,9 @@ value : bVVal { Value_BV $1 }
 expr : value { Expr_Literal $1 }
   | localVar { Expr_Local $1 }
   | globalVar { Expr_Global $1 }
-  | KW_forall attribSet lambdaDef { Expr_Forall ($2, $3) }
-  | KW_exists attribSet lambdaDef { Expr_Exists ($2, $3) }
-  | KW_lambda attribSet lambdaDef { Expr_Lambda ($2, $3) }
+  | KW_forall lambdaDef { Expr_Forall $2 }
+  | KW_exists lambdaDef { Expr_Exists $2 }
+  | KW_lambda lambdaDef { Expr_Lambda $2 }
   | KW_old SYMB5 expr SYMB6 { Expr_Old $3 }
   | globalIdent SYMB5 expr_list SYMB6 { Expr_FunctionOp ($1, $3) }
   | binOp SYMB5 expr SYMB2 expr SYMB6 { Expr_Binary ($1, $3, $5) }
@@ -582,7 +582,7 @@ expr : value { Expr_Literal $1 }
   | KW_bvconcat SYMB5 expr_list SYMB6 { Expr_Concat $3 }
   ;
 
-lambdaDef : SYMB5 localVar_list SYMB6 lambdaSep expr { LambdaDef1 ($2, $4, $5) }
+lambdaDef : SYMB5 localVar_list SYMB6 lambdaSep attribSet expr { LambdaDef1 ($2, $4, $5, $6) }
   ;
 
 binOp : bVBinOp { BinOpBVBinOp $1 }

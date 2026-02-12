@@ -52,7 +52,7 @@ let rec curry ?(acc = []) (l : t) : t list * t =
 
 let uncurry (args : t list) (v : t) =
   match args with
-  | h :: tl -> List.fold_left (fun a p -> Map (a, p)) h tl
+  | h :: tl -> Map (List.fold_left (fun a p -> Map (a, p)) h tl, v)
   | [] -> v
 
 let rec to_string = function

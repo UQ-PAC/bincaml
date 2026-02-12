@@ -1,4 +1,10 @@
-memory shared $mem : (bv64 -> bv8);
+memory shared $mem : (bv64 -> bv8)
+ classification lambda (x:bv64)  :: true;
+
+
+
+define-fun $beans (a:bv64) -> bool = forall (x:bv64) :: {.trigger = $mem(x)} true ;
+
 memory $stack : (bv64 -> bv8);
 var $BTypeNext: bv2;
 var $CF: bv1;
@@ -31,7 +37,9 @@ var $R30: bv64;
 var $R31: bv64;
 var $R4: bv64;
 var $R5: bv64;
-var $R6: bv64;
+var $R6: bv64
+ classification true ;
+  
 var $R7: bv64;
 var $R8: bv64;
 var $R9: bv64;

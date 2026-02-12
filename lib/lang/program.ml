@@ -93,8 +93,8 @@ let pretty_to_chan chan (p : t) =
   output_string chan @@ Containers_pp.Pretty.to_string ~width:80 p;
   output_string chan ";"
 
-let decl_global p v =
-  let decl = Variable { binding = v; attrib = StringMap.empty } in
+let decl_global ?(attrib = StringMap.empty) p v =
+  let decl = Variable { binding = v; attrib } in
   { p with globals = StringMap.add (Var.name v) decl p.globals }
 
 let create_single_proc ?(name = "<module>") () =

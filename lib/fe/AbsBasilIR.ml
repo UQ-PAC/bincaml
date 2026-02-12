@@ -165,9 +165,9 @@ and expr =
    Expr_Literal of value
  | Expr_Local of localVar
  | Expr_Global of globalVar
- | Expr_Forall of attribSet * lambdaDef
- | Expr_Exists of attribSet * lambdaDef
- | Expr_Lambda of attribSet * lambdaDef
+ | Expr_Forall of lambdaDef
+ | Expr_Exists of lambdaDef
+ | Expr_Lambda of lambdaDef
  | Expr_Old of expr
  | Expr_FunctionOp of globalIdent * expr list
  | Expr_Binary of binOp * expr * expr
@@ -179,7 +179,7 @@ and expr =
  | Expr_Concat of expr list
 
 and lambdaDef =
-   LambdaDef1 of localVar list * lambdaSep * expr
+   LambdaDef1 of localVar list * lambdaSep * attribSet * expr
 
 and binOp =
    BinOpBVBinOp of bVBinOp

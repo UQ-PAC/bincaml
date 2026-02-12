@@ -123,48 +123,55 @@ module BasilASTLoader = struct
   and trans_declaration prog (x : decl) : load_st =
     match x with
     | Decl_SharedMem (bident, type', spec) ->
+        let attrib = StringMap.of_list (trans_varspec prog spec) in
         map_prog
           (fun p ->
-            Program.decl_global p
+            Program.decl_global ~attrib p
               (Var.create
                  (unsafe_unsigil (`Global bident))
                  ~pure:false ~scope:Global (trans_type type')))
           prog
     | Decl_UnsharedMem (bident, type', spec) ->
+        let attrib = StringMap.of_list (trans_varspec prog spec) in
         map_prog
           (fun p ->
-            Program.decl_global p
+            Program.decl_global p ~attrib
               (Var.create
                  (unsafe_unsigil (`Global bident))
                  ~pure:false ~scope:Global (trans_type type')))
           prog
     | Decl_Var (bident, type', spec) ->
+        let attrib = StringMap.of_list (trans_varspec prog spec) in
         map_prog
           (fun p ->
-            Program.decl_global p
+            Program.decl_global p ~attrib
               (Var.create
                  (unsafe_unsigil (`Global bident))
                  ~pure:true ~scope:Global (trans_type type')))
           prog
     | Decl_UninterpFun (attrDefList, glident, argtypes, rettype) ->
+        let attrib = trans_attrib_set ~binds:StringMap.empty prog attrDefList in
         let typesig = List.map trans_type argtypes in
         let rtype = trans_type rettype in
         let ftype = Types.uncurry typesig rtype in
         map_prog
           (fun p ->
-            Program.decl_global p
+            Program.decl_global p ~attrib
               (Var.create
                  (unsafe_unsigil (`Global glident))
                  ~pure:true ~scope:Global ftype))
           prog
     | Decl_Fun (attrList, glident, params, rt, body) ->
         (*let typesig = List.map trans_type params in*)
-        let params_in = List.map param_to_formal params |> List.map snd in
-        let argtypes = List.map Var.typ params_in in
+        let params_in = List.map param_to_formal params in
+        let argtypes = List.map (snd %> Var.typ) params_in in
         let rtype = trans_type rt in
         let ftype = Types.uncurry argtypes rtype in
-        let attrib = trans_attrib_set prog attrList in
-        let body = trans_expr ~binds:(VarSet.of_list params_in) prog body in
+        let attrib =
+          trans_attrib_set ~binds:(StringMap.of_list params_in) prog attrList
+        in
+        let body = trans_expr ~binds:(StringMap.of_list params_in) prog body in
+        print_endline @@ Types.show ftype;
         let bvar =
           Var.create
             (unsafe_unsigil (`Global glident))
@@ -182,20 +189,20 @@ module BasilASTLoader = struct
             })
           prog
     | Decl_Axiom (attr, body) ->
-        let attrib = trans_attrib_set prog attr in
+        let attrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         let predicate = trans_expr prog body in
         map_prog
           (fun prog ->
             { prog with axioms = { attrib; predicate } :: prog.axioms })
           prog
     | Decl_ProgEmpty (ProcIdent (_, id), attr) ->
-        let nattrib = trans_attrib_set prog attr in
+        let nattrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         map_prog
           (fun p ->
             { p with attrib = Attrib.merge_map_shadow p.attrib nattrib })
           prog
     | Decl_ProgWithSpec (ProcIdent (_, id), attr, _, spec, _) ->
-        let nattrib = trans_attrib_set prog attr in
+        let nattrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         map_prog
           (fun p ->
             { p with attrib = Attrib.merge_map_shadow p.attrib nattrib })
@@ -333,13 +340,14 @@ module BasilASTLoader = struct
   and trans_endian (x : BasilIR.AbsBasilIR.endian) =
     match x with Endian_Little -> `Little | Endian_Big -> `Big
 
-  and trans_var p_st (v : var) =
+  and trans_var ?(binds = StringMap.empty) p_st (v : var) =
     match v with
     | VarLocalVar (LocalTyped (localVar, ty)) ->
         Var.create ~scope:Local
           (unsafe_unsigil (`Local localVar))
           (trans_type ty)
-    | VarLocalVar (LocalUntyped localVar) -> lookup_local_decl localVar p_st
+    | VarLocalVar (LocalUntyped localVar) ->
+        lookup_local_decl ~binds localVar p_st
     | VarGlobalVar (GlobalTyped (globalVar, ty)) ->
         Var.create ~scope:Global
           (unsafe_unsigil (`Global globalVar))
@@ -347,29 +355,30 @@ module BasilASTLoader = struct
     | VarGlobalVar (GlobalUntyped globalVar) ->
         lookup_global_decl globalVar p_st
 
-  and trans_attr_kv p_st kv : Expr.BasilExpr.t Attrib.attrib_map =
+  and trans_attr_kv ~binds p_st kv : Expr.BasilExpr.t Attrib.attrib_map =
     List.map
       (function
         | AttrKeyValue1 (bident, attr) ->
-            (unsafe_unsigil (`Attr bident), trans_attr p_st attr))
+            (unsafe_unsigil (`Attr bident), trans_attr ~binds p_st attr))
       kv
     |> StringMap.of_list
 
   and trans_str (s : str) = match s with Str s -> stripquote s
 
-  and trans_attr p_st (attr : attr) : [> Expr.BasilExpr.t Attrib.t ] =
+  and trans_attr p_st ~binds (attr : attr) : [> Expr.BasilExpr.t Attrib.t ] =
     match attr with
-    | Attr_Map (_, keyvals, _, _) -> `Assoc (trans_attr_kv p_st keyvals)
-    | Attr_List (_, ls, _) -> `List (List.map (trans_attr p_st) ls)
+    | Attr_Map (_, keyvals, _, _) -> `Assoc (trans_attr_kv ~binds p_st keyvals)
+    | Attr_List (_, ls, _) -> `List (List.map (trans_attr ~binds p_st) ls)
     | Attr_Lit v -> ( match trans_value v with #Ops.AllOps.const as v -> v)
-    | Attr_Expr expr -> `Expr (trans_expr p_st expr)
+    | Attr_Expr expr -> `Expr (trans_expr ~binds p_st expr)
     | Attr_Str s -> `String (trans_str s)
 
-  and trans_attrib_set p_st (atrs : attribSet) :
+  and trans_attrib_set ~binds p_st (atrs : attribSet) :
       Expr.BasilExpr.t Attrib.attrib_map =
     match atrs with
     | AttribSet_Empty -> StringMap.empty
-    | AttribSet_Some (_, attrKeyValue, _, _) -> trans_attr_kv p_st attrKeyValue
+    | AttribSet_Some (_, attrKeyValue, _, _) ->
+        trans_attr_kv ~binds p_st attrKeyValue
 
   and trans_stmt (p_st : load_st) (x : BasilIR.AbsBasilIR.stmtWithAttrib) :
       load_st
@@ -488,7 +497,8 @@ module BasilASTLoader = struct
     match x with
     | LVars_Empty -> StringMap.empty
     | LVars_LocalList lvars ->
-        List.combine formal_out (unpackLVars prog lvars) |> StringMap.of_list
+        List.combine formal_out (unpack_local_lvars prog lvars)
+        |> StringMap.of_list
     | LVars_List lvars ->
         let f (prog, lvars) v =
           let prog, lvar = trans_lvar prog v in
@@ -506,13 +516,12 @@ module BasilASTLoader = struct
         let p_st, lvars = lvars |> List.fold_left f (prog, []) in
         StringMap.of_list lvars
 
-  and unpackLVars ?(bound = VarSet.empty) p_st lvs =
-    List.map
-      (function
-        | LocalTyped (i, t) ->
-            Var.create ~scope:Local (unsafe_unsigil (`Local i)) (trans_type t)
-        | LocalUntyped i -> lookup_local_decl i p_st)
-      lvs
+  and unpack_local_lvars ?(bound = StringMap.empty) p_st lvs : Var.t list =
+    lvs
+    |> List.map (function
+      | LocalTyped (i, t) ->
+          Var.create ~scope:Local (unsafe_unsigil (`Local i)) (trans_type t)
+      | LocalUntyped i -> lookup_local_decl ~binds:bound i p_st)
 
   and trans_jump p_st (x : BasilIR.AbsBasilIR.jumpWithAttrib) =
     let jump = match x with JumpWithAttrib1 (jump, _) -> jump in
@@ -633,16 +642,24 @@ module BasilASTLoader = struct
     | `Proc (ProcIdent (pos, g)) -> pos
     | `Block (BlockIdent (pos, g)) -> pos
 
-  and lookup_local_decl ident p_st =
+  and lookup_local_decl ?(binds = StringMap.empty) ident p_st =
     let vn = unsafe_unsigil (`Local ident) in
     let token_char_offset_range = Some (get_bident_loc (`Local ident)) in
     try
-      Procedure.lookup_local_decl
-        (Option.get_exn_or "no proc active" p_st.curr_proc)
-        vn
-    with Not_found ->
-      let msg = "local variable used before declaration : " ^ vn in
-      raise (LoadError { token_char_offset_range; msg; input = None })
+      match StringMap.find_opt vn binds with
+      | Some v -> v
+      | None ->
+          Procedure.lookup_local_decl
+            (Option.get_exn_or "variable not bound and not in proc scope"
+               p_st.curr_proc)
+            vn
+    with
+    | Not_found ->
+        let msg = "local variable used before declaration : " ^ vn in
+        raise (LoadError { token_char_offset_range; msg; input = None })
+    | Invalid_argument m ->
+        let msg = m ^ " " ^ vn in
+        raise (LoadError { token_char_offset_range; msg; input = None })
 
   and lookup_global_decl ident p_st =
     let vn = unsafe_unsigil (`Global ident) in
@@ -676,16 +693,21 @@ module BasilASTLoader = struct
     | `Block (BlockIdent (pos, g)) -> g
     | `Attr (BIdent (pos, g)) -> g
 
-  and trans_expr ?(binds = VarSet.empty) (p_st : load_st)
+  and trans_expr ?(binds = StringMap.empty) (p_st : load_st)
       (x : BasilIR.AbsBasilIR.expr) : BasilExpr.t =
     let trans_expr ?(nbinds = []) =
-      trans_expr ~binds:(VarSet.add_list binds nbinds) p_st
+      trans_expr
+        ~binds:
+          (StringMap.add_list binds
+             (List.map (fun v -> (Var.name v, v)) nbinds))
+        p_st
     in
     let open Ops in
     match x with
     | Expr_Global (GlobalUntyped g) ->
         BasilExpr.rvar @@ lookup_global_decl g p_st
-    | Expr_Local (LocalUntyped g) -> BasilExpr.rvar @@ lookup_local_decl g p_st
+    | Expr_Local (LocalUntyped g) ->
+        BasilExpr.rvar @@ lookup_local_decl ~binds g p_st
     | Expr_Global (GlobalTyped (g, type')) ->
         BasilExpr.rvar
         @@ Var.create ~scope:Global
@@ -738,17 +760,26 @@ module BasilASTLoader = struct
     | Expr_Literal v -> (
         match trans_value v with #BasilExpr.const as v -> BasilExpr.const v)
     | Expr_Old e -> BasilExpr.unexp ~op:`Old (trans_expr e)
-    | Expr_Forall (attrs, LambdaDef1 (lv, _, e)) ->
-        let attrib = `Assoc (trans_attrib_set p_st attrs) in
-        let bound = unpackLVars ~bound:binds p_st lv in
+    | Expr_Forall (LambdaDef1 (lv, _, attrs, e)) ->
+        let bound = unpack_local_lvars ~bound:binds p_st lv in
+        let binds =
+          StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
+        in
+        let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
         BasilExpr.forall ~attrib ~bound (trans_expr ~nbinds:bound e)
-    | Expr_Lambda (attrs, LambdaDef1 (lv, _, e)) ->
-        let attrib = `Assoc (trans_attrib_set p_st attrs) in
-        let bound = unpackLVars ~bound:binds p_st lv in
-        BasilExpr.forall ~attrib ~bound (trans_expr ~nbinds:bound e)
-    | Expr_Exists (attrs, LambdaDef1 (lv, _, e)) ->
-        let attrib = `Assoc (trans_attrib_set p_st attrs) in
-        let bound = unpackLVars ~bound:binds p_st lv in
+    | Expr_Lambda (LambdaDef1 (lv, _, attrs, e)) ->
+        let bound = unpack_local_lvars ~bound:binds p_st lv in
+        let binds =
+          StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
+        in
+        let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
+        BasilExpr.lambda ~attrib ~bound (trans_expr ~nbinds:bound e)
+    | Expr_Exists (LambdaDef1 (lv, _, attrs, e)) ->
+        let bound = unpack_local_lvars ~bound:binds p_st lv in
+        let binds =
+          StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
+        in
+        let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
         BasilExpr.exists ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_FunctionOp (gi, args) ->
         BasilExpr.apply_fun
