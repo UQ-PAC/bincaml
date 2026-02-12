@@ -72,7 +72,6 @@ end
 (** An IDE domain where values are edge functions *)
 module type IDEDomain = sig
   include Lattice
-
   module Data : Map.OrderedType
 
   module DL : sig
@@ -457,7 +456,9 @@ module IDE (D : IDEDomain) = struct
 
   let join_state_with st v x =
     let j =
-      DataMap.get v st |> Option.map (D.Value.join x) |> Option.get_or ~default:x
+      DataMap.get v st
+      |> Option.map (D.Value.join x)
+      |> Option.get_or ~default:x
     in
     DataMap.add v j st
 
