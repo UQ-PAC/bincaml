@@ -235,7 +235,10 @@ and prtGlobalVar (i:int) (e : AbsBasilIR.globalVar) : doc = match e with
        AbsBasilIR.GlobalTyped (globalident, type_) -> prPrec i 0 (concatD [prtGlobalIdent 0 globalident ; render ":" ; prtTypeT 0 type_])
   |    AbsBasilIR.GlobalUntyped globalident -> prPrec i 0 (concatD [prtGlobalIdent 0 globalident])
 
-
+and prtGlobalVarListBNFC i es : doc = match (i, es) with
+    (_,[]) -> (concatD [])
+  | (_,[x]) -> (concatD [prtGlobalVar 0 x])
+  | (_,x::xs) -> (concatD [prtGlobalVar 0 x ; render "," ; prtGlobalVarListBNFC 0 xs])
 and prtVar (i:int) (e : AbsBasilIR.var) : doc = match e with
        AbsBasilIR.VarLocalVar localvar -> prPrec i 0 (concatD [prtLocalVar 0 localvar])
   |    AbsBasilIR.VarGlobalVar globalvar -> prPrec i 0 (concatD [prtGlobalVar 0 globalvar])
@@ -487,7 +490,9 @@ and prtFunSpec (i:int) (e : AbsBasilIR.funSpec) : doc = match e with
        AbsBasilIR.FunSpec_Require (requiretok, expr) -> prPrec i 0 (concatD [prtRequireTok 0 requiretok ; prtExpr 0 expr])
   |    AbsBasilIR.FunSpec_Ensure (ensuretok, expr) -> prPrec i 0 (concatD [prtEnsureTok 0 ensuretok ; prtExpr 0 expr])
   |    AbsBasilIR.FunSpec_Rely (relytok, expr) -> prPrec i 0 (concatD [prtRelyTok 0 relytok ; prtExpr 0 expr])
-  |    AbsBasilIR.FunSpec_Guard (guartok, expr) -> prPrec i 0 (concatD [prtGuarTok 0 guartok ; prtExpr 0 expr])
+  |    AbsBasilIR.FunSpec_Guar (guartok, expr) -> prPrec i 0 (concatD [prtGuarTok 0 guartok ; prtExpr 0 expr])
+  |    AbsBasilIR.FunSpec_Captures globalvars -> prPrec i 0 (concatD [render "captures" ; prtGlobalVarListBNFC 0 globalvars])
+  |    AbsBasilIR.FunSpec_Modifies globalvars -> prPrec i 0 (concatD [render "modifies" ; prtGlobalVarListBNFC 0 globalvars])
   |    AbsBasilIR.FunSpec_Invariant (blockident, expr) -> prPrec i 0 (concatD [render "invariant" ; prtBlockIdent 0 blockident ; prtExpr 0 expr])
 
 and prtFunSpecListBNFC i es : doc = match (i, es) with

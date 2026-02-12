@@ -3,7 +3,13 @@ open Containers
 
 module Maps = struct
   (* map, value -> result *)
-  type binary = [ `MapAccess ] [@@deriving show { with_path = false }, eq, ord]
+
+  type endian = [ `Big | `Little ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type binary = [ `MapAccess | `Load of endian * int ]
+  [@@deriving show { with_path = false }, eq, ord]
+
   type intrin = [ `MapUpdate ] [@@deriving show { with_path = false }, eq, ord]
 
   let show = function
@@ -241,7 +247,9 @@ module AllOps = struct
     | `Exists -> return Boolean
     | `BVNOT -> return a
     | `BOOLTOBV1 -> return @@ Bitvector 1
-    | `Lambda -> let (args,ret) = (Types.curry a) in Fun {args; ret}
+    | `Lambda ->
+        let args, ret = Types.curry a in
+        Fun { args; ret }
     | `Extract (hi, lo) -> return (Bitvector (hi - lo))
 
   let ret_type_bin (o : binary) l r =

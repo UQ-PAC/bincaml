@@ -40,10 +40,16 @@ let pretty_declaration d =
   let open Containers_pp in
   match d with
   | Variable { binding } -> text @@ Var.to_decl_string_il binding
-  | Function { binding; attrib; definition } -> (
-      match definition with
-      | Some d -> text @@ Var.to_decl_string_il binding
+  | Function { binding; attrib; definition } ->
+      text @@ Var.to_decl_string_il binding
+
+(*match definition with
+      | Some d -> 
+      let param, rt = Types.curry (Var.typ binding) in
+      let param = 
+      text "let " ^ text (Var.name binding) ^ text (Var.to_decl_string_il binding)
       | None -> text @@ Var.to_decl_string_il binding)
+      *)
 
 type t = {
   modulename : string;

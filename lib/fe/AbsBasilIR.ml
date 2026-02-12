@@ -276,7 +276,9 @@ and funSpec =
    FunSpec_Require of requireTok * expr
  | FunSpec_Ensure of ensureTok * expr
  | FunSpec_Rely of relyTok * expr
- | FunSpec_Guard of guarTok * expr
+ | FunSpec_Guar of guarTok * expr
+ | FunSpec_Captures of globalVar list
+ | FunSpec_Modifies of globalVar list
  | FunSpec_Invariant of blockIdent * expr
 
 and varSpec =

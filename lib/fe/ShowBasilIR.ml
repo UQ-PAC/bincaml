@@ -364,7 +364,9 @@ and showFunSpec (e : AbsBasilIR.funSpec) : showable = match e with
        AbsBasilIR.FunSpec_Require (requiretok, expr) -> s2s "FunSpec_Require" >> c2s ' ' >> c2s '(' >> showRequireTok requiretok  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.FunSpec_Ensure (ensuretok, expr) -> s2s "FunSpec_Ensure" >> c2s ' ' >> c2s '(' >> showEnsureTok ensuretok  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.FunSpec_Rely (relytok, expr) -> s2s "FunSpec_Rely" >> c2s ' ' >> c2s '(' >> showRelyTok relytok  >> s2s ", " >>  showExpr expr >> c2s ')'
-  |    AbsBasilIR.FunSpec_Guard (guartok, expr) -> s2s "FunSpec_Guard" >> c2s ' ' >> c2s '(' >> showGuarTok guartok  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.FunSpec_Guar (guartok, expr) -> s2s "FunSpec_Guar" >> c2s ' ' >> c2s '(' >> showGuarTok guartok  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.FunSpec_Captures globalvars -> s2s "FunSpec_Captures" >> c2s ' ' >> c2s '(' >> showList showGlobalVar globalvars >> c2s ')'
+  |    AbsBasilIR.FunSpec_Modifies globalvars -> s2s "FunSpec_Modifies" >> c2s ' ' >> c2s '(' >> showList showGlobalVar globalvars >> c2s ')'
   |    AbsBasilIR.FunSpec_Invariant (blockident, expr) -> s2s "FunSpec_Invariant" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showExpr expr >> c2s ')'
 
 

@@ -446,8 +446,44 @@ let blocks_pred p i =
 let iter_blocks_topo_fwd p =
   Iter.from_iter (fun f -> fold_blocks_topo_fwd (fun acc a b -> f (a, b)) () p)
 
+let iter_stmt_topo_fwd p =
+  iter_blocks_topo_fwd p |> Iter.flat_map (fun (id, b) -> Block.stmts_iter b)
+
 let iter_blocks_topo_rev p =
   Iter.from_iter (fun f -> fold_blocks_topo_rev (fun acc a b -> f (a, b)) () p)
+
+let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
+  let open Containers_pp in
+  let ml f v = if List.is_empty v then [] else [ f v ^ text ";" ] in
+  nest 2
+    (newline
+    ^ append_nl
+        (ml
+           (fun x ->
+             text "modifies "
+             ^ nest 2 (fill_map (text "," ^ newline) show_var x))
+           p.modifies_globs
+        @ ml
+            (fun x ->
+              text "captures "
+              ^ nest 2 (fill_map (text "," ^ newline) show_var x))
+            p.captures_globs
+        @ ml
+            (fun x ->
+              append_nl (List.map (fun v -> text "requires " ^ show_expr v) x))
+            p.requires
+        @ ml
+            (fun x ->
+              append_nl (List.map (fun v -> text "ensures " ^ show_expr v) x))
+            p.ensures
+        @ ml
+            (fun x ->
+              append_nl (List.map (fun v -> text "rely " ^ show_expr v) x))
+            p.rely
+        @ ml
+            (fun x ->
+              append_nl (List.map (fun v -> text "guarantee " ^ show_expr v) x))
+            p.guarantee))
 
 let pretty show_lvar show_var show_expr p =
   let open Containers_pp in
@@ -465,6 +501,7 @@ let pretty show_lvar show_var show_expr p =
            [ params (formal_in_params p); params (formal_out_params p) ])
   in
   let return_stmt = text "return" in
+  let spec = pretty_spec show_var show_expr (specification p) in
   let pretty_block graph block_id block =
     let succ = G.succ_e graph (Vert.End block_id) in
     let succ =
@@ -511,4 +548,4 @@ let pretty show_lvar show_var show_expr p =
       (nest 2 @@ newline ^ append_l ~sep:(text ";" ^ newline) blocks)
       (newline ^ text "]")
   in
-  header ^ nl ^ blocks
+  header ^ spec ^ newline ^ blocks

@@ -120,7 +120,6 @@ let of_cmd st (e : Containers.Sexp.t) =
       | "interp-out" ->
           let ofile = List.hd @@ assert_atoms 1 args in
           let prog = get_prog st in
-          let prog = Transforms.Spec_modifies.set_modsets prog in
           let main =
             ID.Map.find (Option.get_exn_or "no" prog.entry_proc) prog.procs
           in

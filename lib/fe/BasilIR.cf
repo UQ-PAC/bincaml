@@ -90,6 +90,8 @@ GlobalUntyped . GlobalVar ::= GlobalIdent;
 separator nonempty LocalVar ",";
 rules Var ::= LocalVar | GlobalVar ;
 
+separator GlobalVar ",";
+
 
 Stmt_Load . Stmt ::= LVar ":=" "load" Endian GlobalIdent Expr IntVal;
 Stmt_Store . Stmt ::= "store" Endian GlobalIdent Expr Expr IntVal;
@@ -233,7 +235,9 @@ rules GuarTok ::= "guarnatee" | "guarantees";
 FunSpec_Require . FunSpec ::= RequireTok Expr;
 FunSpec_Ensure . FunSpec ::= EnsureTok Expr;
 FunSpec_Rely . FunSpec ::= RelyTok Expr;
-FunSpec_Guard . FunSpec ::= GuarTok Expr;
+FunSpec_Guar . FunSpec ::= GuarTok Expr;
+FunSpec_Captures . FunSpec ::= "captures" [GlobalVar];
+FunSpec_Modifies . FunSpec ::= "modifies" [GlobalVar];
 
 
 VarSpec_Classification . VarSpec ::= "classification" Expr;

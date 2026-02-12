@@ -109,10 +109,13 @@ module BasilASTLoader = struct
         curr_proc = None;
       }
     in
-    match x with
-    | Module1 declarations ->
-        List.fold_left trans_declaration prog declarations |> fun p ->
-        List.fold_left trans_definition p declarations
+    let prog =
+      match x with
+      | Module1 declarations ->
+          List.fold_left trans_declaration prog declarations |> fun p ->
+          List.fold_left trans_definition p declarations
+    in
+    map_prog (fun prog -> Spec_modifies.set_modsets prog) prog
 
   and trans_varspec prog (v : varSpec) =
     match v with
@@ -282,6 +285,14 @@ module BasilASTLoader = struct
               |> Procedure.map_graph (fun g ->
                   Procedure.G.add_edge g Entry (Begin entry))
         in
+
+        let spec = Procedure.specification p in
+        let spec =
+          List.fold_left
+            (trans_funspec prog (StringMap.of_list formal_out_params_order))
+            spec spec_list
+        in
+        let p = Procedure.set_specification p spec in
 
         (* add intraproc edges*)
         let p =
@@ -638,6 +649,35 @@ module BasilASTLoader = struct
     match pp with
     | FunParams1 (LocalIdent (pos, id), t) -> (id, Var.create id (trans_type t))
     | FunParams2 (LocalIdent (pos, id), t) -> (id, Var.create id (trans_type t))
+
+  and trans_funspec prog bound_post
+      (spec : (Var.t, BasilExpr.t) Procedure.proc_spec) (s : funSpec) :
+      (Var.t, BasilExpr.t) Procedure.proc_spec =
+    match s with
+    | FunSpec_Require (_, e) ->
+        { spec with requires = trans_expr prog e :: spec.requires }
+    | FunSpec_Ensure (_, e) ->
+        {
+          spec with
+          ensures = trans_expr ~binds:bound_post prog e :: spec.ensures;
+        }
+    | FunSpec_Rely (_, e) -> { spec with rely = trans_expr prog e :: spec.rely }
+    | FunSpec_Guar (_, e) -> { spec with rely = trans_expr prog e :: spec.rely }
+    | FunSpec_Captures v ->
+        {
+          spec with
+          captures_globs =
+            List.map (fun v -> trans_var prog (VarGlobalVar v)) v
+            @ spec.captures_globs;
+        }
+    | FunSpec_Modifies v ->
+        {
+          spec with
+          modifies_globs =
+            List.map (fun v -> trans_var prog (VarGlobalVar v)) v
+            @ spec.modifies_globs;
+        }
+    | FunSpec_Invariant (_, _) -> spec
 
   and get_bident_loc g =
     match g with
@@ -1210,3 +1250,58 @@ proc @main_4196260 () -> ()
        block %main_basil_return_1 [ nop; return; ]
     ];
     |}]
+
+let%expect_test "callstuff" =
+  let open Spec_modifies in
+  let prog =
+    ast_of_string ~__LINE__ ~__FILE__ ~__FUNCTION__
+      {|
+var $R0: bv64;
+var $R1: bv64;
+prog entry @entry;
+memory shared $mem : (bv64 -> bv8);
+
+proc @entry() -> ()
+[
+  block %entry  [
+    call @b();
+    var c:bv64 := 1:bv64;
+    var b:bv64 := c:bv64;
+    return ();
+  ]
+];
+proc @b() -> ()
+[
+  block %entry  [
+    $R0: bv64 := 0x1:bv64 { .comment = "op: 0x52800020" };
+    var beans:bv64 := 0x1:bv64;
+    store le $mem $R1:bv64 0x0:bv32 32;
+    call @c();
+    return ();
+  ]
+];
+proc @c() -> ()
+[
+  block %entry  [
+    store le $mem $R0:bv64 0x0:bv32 32;
+    return ();
+  ]
+];
+|}
+  in
+  let res = analyse prog.prog in
+  ID.Map.iter
+    (fun pid proc ->
+      print_endline (ID.to_string pid ^ ":\n" ^ (res pid |> RWSets.to_string)))
+    prog.prog.procs;
+  [%expect
+    {|
+    @entry:
+    read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
+    written: $R0:bv64,$mem:(bv64->bv8)
+    @b:
+    read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
+    written: $R0:bv64,$mem:(bv64->bv8)
+    @c:
+    read: $R0:bv64,$mem:(bv64->bv8)
+    written: $mem:(bv64->bv8) |}]

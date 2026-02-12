@@ -381,7 +381,9 @@ and transFunSpec (x : funSpec) : result = match x with
     FunSpec_Require (requiretok, expr) -> failure x
   | FunSpec_Ensure (ensuretok, expr) -> failure x
   | FunSpec_Rely (relytok, expr) -> failure x
-  | FunSpec_Guard (guartok, expr) -> failure x
+  | FunSpec_Guar (guartok, expr) -> failure x
+  | FunSpec_Captures globalvars -> failure x
+  | FunSpec_Modifies globalvars -> failure x
   | FunSpec_Invariant (blockident, expr) -> failure x
 
 
