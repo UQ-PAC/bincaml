@@ -45,6 +45,7 @@ module TypeAutomata = struct
 
   open struct
     let set_states m qs = m.states <- qs
+    let add_state m (s : State.t) = set_states m (s :: m.states)
 
     let get_transitions m =
       Hashtbl.fold
@@ -69,15 +70,6 @@ module TypeAutomata = struct
       set_states m (List.filter f m.states);
       Hashtbl.filter_map_inplace
         (fun s ts -> if f s then Some ts else None)
-        m.transitions
-
-    let merge_states_inplace m ((p1, ty1) as s1) ((p2, ty2) as s2) =
-      filter_states_inplace m (fun s3 -> State.equal s2 s3);
-      Hashtbl.iter
-        (fun _ v ->
-          Hashtbl.filter_map_inplace
-            (fun _ t -> Some (if Polarity.equal p1 p2 then s1 else t))
-            v)
         m.transitions
   end
 
@@ -106,36 +98,34 @@ module TypeAutomata = struct
   
         works
     *)
-    let removal =
-      let rec helper acc current_state =
-        (* Do the lower states first, I am scared about what happens if loop *)
-        let acc = Iter.fold helper acc @@ get_next_states m current_state in
-        let acc =
-          match Hashtbl.find_opt m.transitions current_state with
-          | None -> acc
-          | Some edges ->
-              Hashtbl.fold
-                (fun edge end_state acc ->
-                  if not @@ Sigma.is_epislon edge then acc
-                  (* There exists a epislon edge from start -> end *)
-                    else
-                    let orphans = Hashtbl.find_all m.transitions end_state in
-                    Hashtbl.remove m.transitions end_state;
-                    List.iter (Hashtbl.iter (Hashtbl.add edges)) orphans;
-                    end_state :: acc)
-                edges acc
-        in
+    let rec helper acc current_state =
+      (* Do the lower states first, I am scared about what happens if loop *)
+      let acc = Iter.fold helper acc @@ get_next_states m current_state in
+      let acc =
         match Hashtbl.find_opt m.transitions current_state with
         | None -> acc
         | Some edges ->
-            let eps = Hashtbl.find_all edges Ep in
-            for i = 0 to List.length eps do
-              Hashtbl.remove (Hashtbl.find m.transitions current_state) Ep
-            done;
-            acc
+            Hashtbl.fold
+              (fun edge end_state acc ->
+                if not @@ Sigma.is_epislon edge then acc
+                (* There exists a epislon edge from start -> end *)
+                  else
+                  let orphans = Hashtbl.find_all m.transitions end_state in
+                  Hashtbl.remove m.transitions end_state;
+                  List.iter (Hashtbl.iter (Hashtbl.add edges)) orphans;
+                  end_state :: acc)
+              edges acc
       in
-      helper [] m.start
+      match Hashtbl.find_opt m.transitions current_state with
+      | None -> acc
+      | Some edges ->
+          let eps = Hashtbl.find_all edges Ep in
+          for i = 0 to List.length eps do
+            Hashtbl.remove (Hashtbl.find m.transitions current_state) Ep
+          done;
+          acc
     in
+    let removal = helper [] m.start in
     filter_states_inplace m (fun state ->
         not
         @@ List.mem
@@ -144,7 +134,8 @@ module TypeAutomata = struct
              state removal)
 
   let merge_nodes m =
-    let join (ty0 : InferredType.t) (ty1 : InferredType.t) : InferredType.t =
+    let rec join (ty0 : InferredType.t) (ty1 : InferredType.t) : InferredType.t
+        =
       match (ty0, ty1) with
       | Record fields0, Record fields1 ->
           (* WARN: I think this could be improved, cause this is gross *)
@@ -178,7 +169,7 @@ module TypeAutomata = struct
           Record (fieldmap_to_field_list joined_map)
       | Pointer (a, b), Pointer (c, d) ->
           (* ptr((a u c) n (b n d), (b n d)) *)
-          Pointer (Sect (Union (a, c), Sect (b, d)), Sect (b, d))
+          Pointer (join (Union (a, c)) (join b d), join b d)
       (* WARN: this is not how BinSub did it, but I think I am just smarter and had better DS *)
       | Function (name0, ins0, outs0), Function (name1, ins1, outs1) ->
           if not @@ String.equal name0 name1 then failwith "BOOOOM"
@@ -188,32 +179,46 @@ module TypeAutomata = struct
               StringMap.merge_safe
                 ~f:(fun _ b ->
                   match b with
-                  | `Both (l, r) -> Some (InferredType.Sect (l, r))
+                  | `Both (l, r) -> Some (join l r)
                   | _ -> failwith "BOOOMM")
                 ins0 ins1
             in
             Function (name0, ins, outs0)
-      | _ -> Union (ty0, ty1)
+      | a, Bottom | Bottom, a -> a
+      | _ -> Sect (ty0, ty1)
     in
-    (* TODO: this needs to be redone in a similar way to how remove_ep was done *)
-    Hashtbl.iter
-      (fun (p, start_state) edges_tbl ->
-        let edges = Hashtbl.keys edges_tbl in
-        Iter.iter
-          (fun edge ->
-            let ads =
-              List.fold_left
-                (fun acc (p, head) ->
-                  Hashtbl.remove edges_tbl edge;
-                  join head acc)
-                Top
-                (Hashtbl.find_all edges_tbl edge)
-            in
-            m.states <- (p, ads) :: m.states;
-            Hashtbl.add edges_tbl edge (p, ads))
-          edges;
-        ())
-      m.transitions
+    let rec helper current_state =
+      Iter.iter helper @@ get_next_states m current_state;
+      match Hashtbl.find_opt m.transitions current_state with
+      | None -> ()
+      | Some edges ->
+          Iter.iter (fun edge ->
+              let curr_states = Hashtbl.find_all edges edge in
+              if List.length curr_states <= 1 then ()
+              else (
+                set_states m
+                  (List.filter
+                     (fun state ->
+                       not @@ List.mem ~eq:State.equal state curr_states)
+                     m.states);
+                let new_tbl = Hashtbl.create 2 in
+                let new_state =
+                  List.fold_left
+                    (fun (_, new_typ) ((p, typ) as end_state) ->
+                      let orphans = Hashtbl.find_all m.transitions end_state in
+                      List.iter (Hashtbl.iter (Hashtbl.replace new_tbl)) orphans;
+                      Hashtbl.remove edges edge;
+                      Hashtbl.remove m.transitions end_state;
+                      (p, join typ new_typ))
+                    (Polarity.Pos, InferredType.Bottom)
+                  @@ curr_states
+                in
+                Hashtbl.add edges edge new_state;
+                Hashtbl.add m.transitions new_state new_tbl;
+                add_state m new_state))
+          @@ Hashtbl.keys edges
+    in
+    helper m.start
 
   let export_graphviz n =
     Printf.sprintf
