@@ -24,7 +24,6 @@ open Type_automata
 
 let gen = ID.make_gen ()
 
-
 let minimise_type p ty name =
   let rec type_to_state_list (p : bool) (ty : ty)
       ((ls, tbl) as acc : 's list * ('s, (sigma, 's) Hashtbl.t) Hashtbl.t) :
@@ -90,32 +89,35 @@ let minimise_type p ty name =
   (* print_string @@ Adt.export_graphviz automata; *)
   automata
 
-let show_type_map (m : ty StringMap.t) : string =
+let show_type_map (m : InferredType.t StringMap.t) : string =
   StringMap.bindings m
-  |> List.map (fun (name, ty) -> Printf.sprintf "%s: %s" name (show_ty ty))
+  |> List.map (fun (name, ty) ->
+      Printf.sprintf "%s: %s" name (InferredType.show ty))
   |> String.concat "\n"
 
-let show_type_map2 (m : (ty * ty) StringMap.t) : string =
+let show_type_map2 (m : (InferredType.t * InferredType.t) StringMap.t) : string
+    =
   StringMap.bindings m
   |> List.map (fun (name, (ty1, ty2)) ->
-      Printf.sprintf "%s:\n   lower: %s\n   upper: %s" name (show_ty ty1)
-        (show_ty ty2))
+      Printf.sprintf "%s:\n   lower: %s\n   upper: %s" name
+        (InferredType.show ty1) (InferredType.show ty2))
   |> String.concat "\n"
 
-let rec coalesce_types (constraint_set : constraint_state)
-    (recursive_set : TySet.t) (pos_polarity : bool) (tau : ty) : ty =
+let rec coalesce_types (constraint_set : ConstraintState.t)
+    (recursive_set : TySet.t) (polarity : Polarity.t) (tau : InferredType.t) :
+    InferredType.t =
   let recursive_call = coalesce_types constraint_set recursive_set in
   match tau with
   | Field _ | Record _ -> tau
   | Pointer (a, b) ->
       Pointer
-        (recursive_call (not pos_polarity) a, recursive_call pos_polarity b)
+        (recursive_call (Polarity.not polarity) a, recursive_call polarity b)
   | Function (name, ins, outs) ->
       (* This might be useless, but just in case there are exprs in function calls *)
       Function
         ( name,
-          StringMap.map (recursive_call pos_polarity) ins,
-          StringMap.map (recursive_call pos_polarity) outs )
+          StringMap.map (recursive_call polarity) ins,
+          StringMap.map (recursive_call polarity) outs )
   | TypeVar a -> (
       match TySet.find_opt tau recursive_set with
       | Some c -> c (* Seen before *)
@@ -124,7 +126,7 @@ let rec coalesce_types (constraint_set : constraint_state)
           let bounds =
             (* Get the bounds for the variable depending on the polarity *)
             match StringMap.find_opt a constraint_set with
-            | Some { lb; ub } -> if pos_polarity then ub else lb
+            | Some { lb; ub } -> if Polarity.positive polarity then ub else lb
             | None -> TySet.empty
           in
           (* If tau is in bounds then we have a recursive type *)
@@ -134,9 +136,10 @@ let rec coalesce_types (constraint_set : constraint_state)
             TySet.fold
               (fun bound type_cons ->
                 let y =
-                  coalesce_types constraint_set recursive_set pos_polarity bound
+                  coalesce_types constraint_set recursive_set polarity bound
                 in
-                if pos_polarity then Union (type_cons, y)
+                if Polarity.positive polarity then
+                  InferredType.Union (type_cons, y)
                 else Sect (type_cons, y))
               bounds tau
           in
@@ -144,17 +147,20 @@ let rec coalesce_types (constraint_set : constraint_state)
   | Atom _ -> tau
   | _ -> Top
 
-let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
+let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
   let open AbstractExpr in
+  let open InferredType in
   let rename_variable (name : string) : string =
     Printf.sprintf "%s_%s" (ID.name proc_id) name
   in
 
-  let rec constrain_expr (st : constraint_state)
+  let rec constrain_expr (st : ConstraintState.t)
       (expr : 'e BasilExpr.abstract_expr) =
     let constrain_arg st l t =
       let l = BasilExpr.unfix l in
-      match l with RVar a -> add_lb st (Var.name a) t | _ -> st
+      match l with
+      | RVar a -> ConstraintState.add_lb st (Var.name a) t
+      | _ -> st
     in
     let constrain_args st l r t =
       let st = constrain_arg st l t in
@@ -243,8 +249,8 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
 
     This will need much more reasoning to come
   *)
-  let rec constrain (st : constraint_state) (type0 : ty) (type1 : ty)
-      (rec_check : TySet.t) : constraint_state =
+  let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
+      (type1 : InferredType.t) (rec_check : TySet.t) : ConstraintState.t =
     match (type0, type1) with
     | Top, _ | _, Top | Bottom, _ | _, Bottom -> st
     | Pointer (type0_a, type0_b), Pointer (type1_a, type1_b) ->
@@ -255,7 +261,7 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
         constrain (constrain st type0 type1_a rec_check) type0 type1_b rec_check
     | TypeVar a, TypeVar b -> (
         (* The right hand side is a type variable, fields are pretty much variables *)
-        let st = add_ub st a type1 in
+        let st = ConstraintState.add_ub st a type1 in
         let bounds = StringMap.get a st in
         match bounds with
         | Some { lb } ->
@@ -268,7 +274,7 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
         (* Fields are pretty much variables *)
         match ty with
         | TypeVar a -> (
-            let st = add_ub st a type1 in
+            let st = ConstraintState.add_ub st a type1 in
             let bounds = StringMap.get a st in
             match bounds with
             | Some { lb } ->
@@ -280,7 +286,7 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
         | _ -> st)
     | _, TypeVar a -> (
         (* The right hand side is not a type variable *)
-        let st = add_lb st a type0 in
+        let st = ConstraintState.add_lb st a type0 in
         let bounds = StringMap.get a st in
         if TySet.mem type0 rec_check then st
         else
@@ -296,13 +302,14 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
         (* You have to assign to a variable so this case should never occur *)
         failwith
           (Printf.sprintf "Illegal constrain call type0: %s; type1: %s stmt: %s"
-             (show_ty type0) (show_ty type1) (Program.show_stmt stmt))
+             (InferredType.show type0) (InferredType.show type1)
+             (Program.show_stmt stmt))
   in
   match stmt with
   | Stmt.Instr_Assert { body } | Stmt.Instr_Assume { body } -> (
       let st, constrain_expr = constrain_expr st (BasilExpr.unfix body) in
       match constrain_expr with
-      | TypeVar a -> add_lb st a (Atom C_Bool)
+      | TypeVar a -> ConstraintState.add_lb st a (Atom C_Bool)
       | _ -> st)
   (* Deal with assignment cases *)
   | Stmt.Instr_Assign ls ->
@@ -320,22 +327,22 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
   | Stmt.Instr_Load { lhs; mem; cells; addr; endian } ->
       let lhs = rename_variable @@ Var.name lhs in
       let st =
-        add_ub st lhs
+        ConstraintState.add_ub st lhs
           (Pointer
              ( TypeVar (Int.to_string stmt_number ^ "_a_load"),
                TypeVar (Int.to_string stmt_number ^ "_b_load") ))
       in
-      add_ub st (Int.to_string stmt_number ^ "_a_load")
+      ConstraintState.add_ub st (Int.to_string stmt_number ^ "_a_load")
       @@ TypeVar (Int.to_string stmt_number ^ "_b_load")
   | Stmt.Instr_Store { lhs; mem; cells; value; addr; endian } ->
       let lhs = rename_variable @@ Var.name lhs in
       let st =
-        add_ub st lhs
+        ConstraintState.add_ub st lhs
           (Pointer
              ( TypeVar (Int.to_string stmt_number ^ "_a_store"),
                TypeVar (Int.to_string stmt_number ^ "_b_store") ))
       in
-      add_ub st (Int.to_string stmt_number ^ "_a_store")
+      ConstraintState.add_ub st (Int.to_string stmt_number ^ "_a_store")
       @@ TypeVar (Int.to_string stmt_number ^ "_b_store")
   | Stmt.Instr_Call { lhs; args; procid } ->
       let args =
@@ -347,7 +354,7 @@ let gen_constraint_set (st : constraint_state) stmt stmt_number proc_id =
         StringMap.map (fun v -> TypeVar (rename_variable (Var.name v))) lhs
       in
       let func = Function (ID.name procid, args, rets) in
-      add_ub st (ID.name procid) func
+      ConstraintState.add_ub st (ID.name procid) func
   | Stmt.Instr_IntrinCall _ -> st
   (*
     NOTE:
@@ -371,28 +378,28 @@ let check_proc (prog : Program.t) st p =
 
 let transform (prog : Program.t) =
   print_string "\n === Type Constraints === \n";
-  let type_constraint_map =
+  let type_constraint_map: ConstraintState.t =
     ID.Map.values prog.procs |> Iter.fold (check_proc prog) StringMap.empty
   in
-  print_string @@ show_constraint_state type_constraint_map;
+  print_string @@ ConstraintState.show type_constraint_map;
 
   print_string "\n === Coalesced Types === \n";
   let types =
     StringMap.mapi
-      (fun name { lb; ub } ->
+      (fun name ({ lb; ub }: ConstraintState.TypeConstraint.t) ->
         let lower =
           (* Posistive Occurences *)
           TySet.fold
-            (fun ty (acc : ty) ->
-              let a = coalesce_types type_constraint_map TySet.empty true ty in
+            (fun ty (acc : InferredType.t) ->
+              let a = coalesce_types type_constraint_map TySet.empty Polarity.Pos ty in
               match acc with Top -> a | _ -> Union (acc, a))
             lb Top
         in
         let upper =
           (* Negative Occurences *)
           TySet.fold
-            (fun ty (acc : ty) ->
-              let a = coalesce_types type_constraint_map TySet.empty false ty in
+            (fun ty (acc : InferredType.t) ->
+              let a = coalesce_types type_constraint_map TySet.empty Polarity.Neg ty in
               match acc with Top -> a | _ -> Sect (acc, a))
             ub Top
         in
@@ -413,7 +420,7 @@ let transform (prog : Program.t) =
   let automatas =
     StringMap.mapi
       (fun name (lower_ty, upper_ty) ->
-        (minimise_type true lower_ty name, minimise_type false upper_ty name))
+        (minimise_type Polarity.Pos lower_ty name, minimise_type false Polarity.Neg name))
       types
   in
   prog
