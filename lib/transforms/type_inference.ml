@@ -88,7 +88,7 @@ let minimise_type p ty name =
     TypeAutomata.create_type_automata states edges (p, ty) [] name
   in
   TypeAutomata.remove_ep automata;
-  (* TypeAutomata.merge_nodes automata; *)
+  TypeAutomata.merge_nodes automata;
   automata
 
 let show_type_map (m : InferredType.t StringMap.t) : string =
