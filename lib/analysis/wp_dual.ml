@@ -27,7 +27,7 @@ module Domain = struct
                  (ApplyIntrin (`OR, List.remove ~eq:BasilExpr.equal ~key:top l)))
         | ApplyIntrin (`OR, l) when List.mem ~eq:BasilExpr.equal (BasilExpr.boolconst true) l ->
             Some (BasilExpr.boolconst true)
-        | ApplyIntrin (`OR, []) -> Some (BasilExpr.boolconst true)
+        | ApplyIntrin (`OR, []) -> Some (BasilExpr.boolconst false)
         | BinaryExpr (`EQ, a, b) when BasilExpr.equal a b ->
             Some (BasilExpr.boolconst true)
         | UnaryExpr (`BoolNOT, a)
