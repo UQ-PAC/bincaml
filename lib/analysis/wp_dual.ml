@@ -15,24 +15,32 @@ module Domain = struct
   let pretty = BasilExpr.pretty
   let bottom = BasilExpr.boolconst true
   let top = BasilExpr.boolconst false
+  let e_true = BasilExpr.boolconst true
+  let e_false = BasilExpr.boolconst false
 
   let simplify e =
     let open AbstractExpr in
     BasilExpr.rewrite
       ~rw_fun:(function
         | ApplyIntrin (op, [ l ]) -> Some l
-        | ApplyIntrin (`OR, l) when List.mem ~eq:BasilExpr.equal (BasilExpr.boolconst false) l ->
+        | ApplyIntrin (`OR, l) when List.mem ~eq:BasilExpr.equal e_false l ->
             Some
               (BasilExpr.fix
-                 (ApplyIntrin (`OR, List.remove ~eq:BasilExpr.equal ~key:top l)))
-        | ApplyIntrin (`OR, l) when List.mem ~eq:BasilExpr.equal (BasilExpr.boolconst true) l ->
-            Some (BasilExpr.boolconst true)
-        | ApplyIntrin (`OR, []) -> Some (BasilExpr.boolconst false)
-        | BinaryExpr (`EQ, a, b) when BasilExpr.equal a b ->
-            Some (BasilExpr.boolconst true)
-        | UnaryExpr (`BoolNOT, a)
-          when BasilExpr.equal a (BasilExpr.boolconst true) ->
-            Some (BasilExpr.boolconst false)
+                 (ApplyIntrin
+                    (`OR, List.remove ~eq:BasilExpr.equal ~key:e_false l)))
+        | ApplyIntrin (`AND, l) when List.mem ~eq:BasilExpr.equal e_true l ->
+            Some
+              (BasilExpr.fix
+                 (ApplyIntrin
+                    (`OR, List.remove ~eq:BasilExpr.equal ~key:e_true l)))
+        | ApplyIntrin (`OR, l) when List.mem ~eq:BasilExpr.equal e_true l ->
+            Some e_true
+        | ApplyIntrin (`AND, l) when List.mem ~eq:BasilExpr.equal e_false l ->
+            Some e_false
+        | ApplyIntrin (`OR, []) -> Some e_false
+        | ApplyIntrin (`AND, []) -> Some e_true
+        | BinaryExpr (`EQ, a, b) when BasilExpr.equal a b -> Some e_true
+        | UnaryExpr (`BoolNOT, a) when BasilExpr.equal a e_true -> Some e_false
         | _ -> None)
       e
 
