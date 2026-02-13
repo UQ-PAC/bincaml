@@ -12,26 +12,30 @@ and beginList = BeginList of ((int * int) * string)
 and endList = EndList of ((int * int) * string)
 and beginRec = BeginRec of ((int * int) * string)
 and endRec = EndRec of ((int * int) * string)
-and lambdaSep = LambdaSep of string
 and str = Str of string
 and integerHex = IntegerHex of ((int * int) * string)
 and integerDec = IntegerDec of ((int * int) * string)
 and moduleT =
    Module1 of decl list
 
+and lambdaSep =
+   LambdaSep1
+ | LambdaSep2
+
 and semicolons =
    Semicolons_Empty
  | Semicolons_Some of semicolons
 
 and decl =
-   Decl_Axiom of attribSet * expr
+   Decl_Axiom of globalIdent * attribSet * expr
  | Decl_SharedMem of globalIdent * typeT * varSpec
  | Decl_UnsharedMem of globalIdent * typeT * varSpec
  | Decl_Var of globalIdent * typeT * varSpec
- | Decl_UninterpFun of attribSet * globalIdent * typeT list * typeT
- | Decl_Fun of globalIdent * attribSet * funParams list * typeT * expr
+ | Decl_UninterpFun of globalIdent * attribSet * typeT
+ | Decl_Fun of globalIdent * attribSet * typeT * expr
+ | Decl_FunNoType of globalIdent * attribSet * expr
  | Decl_ProgEmpty of procIdent * attribSet
- | Decl_ProgWithSpec of procIdent * attribSet * beginList * progSpec list * endList
+ | Decl_ProgWithSpec of procIdent * attribSet * progSpec list
  | Decl_Proc of procIdent * params list * params list * attribSet * funSpec list * procDef
 
 and procDef =
@@ -55,6 +59,7 @@ and typeT =
  | TypeBoolType of boolType
  | TypeMapType of mapType
  | TypeBVType of bVType
+ | Type1 of typeT
 
 and intVal =
    IntVal_Hex of integerHex
@@ -172,7 +177,7 @@ and expr =
  | Expr_Global of globalVar
  | Expr_Forall of lambdaDef
  | Expr_Exists of lambdaDef
- | Expr_Lambda of localVar list * attribSet * expr
+ | Expr_Lambda of lambdaDef
  | Expr_Old of expr
  | Expr_FunctionOp of globalIdent * expr list
  | Expr_Binary of binOp * expr * expr
@@ -183,8 +188,12 @@ and expr =
  | Expr_Extract of intVal * intVal * expr
  | Expr_Concat of expr list
 
+and lParen =
+   LParenLocalVar of localVar
+ | LParen1 of localVar
+
 and lambdaDef =
-   LambdaDef1 of localVar list * lambdaSep * attribSet * expr
+   LambdaDef1 of lParen list * lambdaSep * attribSet * expr
 
 and binOp =
    BinOpBVBinOp of bVBinOp

@@ -24,7 +24,7 @@ position token BeginList '[' ;
 position token EndList ']' ;
 position token BeginRec '{' ;
 position token EndRec '}' ;
-token LambdaSep ({"::"} | {"->"}) ;
+rules LambdaSep ::= "->" | "::" ;
 
 {- Literals -}
 
@@ -40,17 +40,19 @@ comment "//" ;
 comment "/*" "*/" ;
 
 {- Top Level Declarations -}
-Decl_Axiom . Decl ::= "axiom" AttribSet Expr; 
+Decl_Axiom . Decl ::= "axiom" GlobalIdent AttribSet Expr; 
 Decl_SharedMem . Decl ::= "memory" "shared" GlobalIdent ":" Type VarSpec ;
 Decl_UnsharedMem . Decl ::= "memory" GlobalIdent ":" Type VarSpec;
 Decl_Var . Decl ::= "var" GlobalIdent ":" Type VarSpec ;
 
 separator Type ",";
 
-Decl_UninterpFun . Decl ::= "declare-fun" AttribSet GlobalIdent  "(" [Type] ")" ":" Type ;
-Decl_Fun . Decl ::= "let" GlobalIdent AttribSet [FunParams]  ":" Type "=" Expr;
+Decl_UninterpFun . Decl ::= "val" GlobalIdent AttribSet ":" Type ;
+
+Decl_Fun . Decl ::= "let" GlobalIdent AttribSet ":" Type "=" Expr;
+Decl_FunNoType . Decl ::= "let" GlobalIdent AttribSet "=" Expr;
 Decl_ProgEmpty . Decl ::= "prog" "entry" ProcIdent AttribSet ;
-Decl_ProgWithSpec . Decl ::= "prog" "entry" ProcIdent AttribSet BeginList [ ProgSpec ] EndList ;
+Decl_ProgWithSpec . Decl ::= "prog" "entry" ProcIdent AttribSet [ ProgSpec ] ;
 Decl_Proc . Decl ::= "proc" ProcIdent "(" [Params] ")" "->" "(" [Params] ")" AttribSet [ FunSpec ] ProcDef ;
 
 ProcDef_Empty . ProcDef ::= "";
@@ -58,10 +60,10 @@ ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
-MapType1 . MapType ::=  "(" Type "->" Type ")";
+MapType1 . MapType ::=  Type "->" Type ;
 BVType1 . BVType ::= BVTYPE ;
 
-rules Type ::= IntType | BoolType | MapType | BVType ; 
+rules Type ::= IntType | BoolType | MapType | BVType | "(" Type ")"; 
 
 separator Expr "," ;
 
@@ -189,10 +191,13 @@ Expr_Global . Expr ::= GlobalVar;
 
 -- quantifiers
 
-rules LambdaDef ::= "(" [LocalVar] ")" LambdaSep AttribSet Expr ;
+rules LParen ::= LocalVar | "(" LocalVar ")" ;
+separator LParen ",";
+
+rules LambdaDef ::=  [LParen]  LambdaSep AttribSet Expr ;
 Expr_Forall . Expr ::= "forall" LambdaDef ;
 Expr_Exists . Expr ::= "exists" LambdaDef ;
-Expr_Lambda . Expr ::= "fun" [LocalVar] "->" AttribSet Expr ;
+Expr_Lambda . Expr ::= "fun" LambdaDef ;
 Expr_Old . Expr       ::= "old" "(" Expr ")" ;
 
 -- uninterpreted functions
@@ -251,7 +256,9 @@ ProgSpec_Rely . ProgSpec ::= "rely" Expr;
 ProgSpec_Guarantee . ProgSpec ::= "guarantee" Expr;
 
 terminator FunSpec ";";
-terminator ProgSpec ";";
+
+{- last semicolon terminates the prog definitino -}
+separator ProgSpec ";";
 
 
 

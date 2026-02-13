@@ -56,10 +56,6 @@ and transEndRec (x : endRec) : result = match x with
     EndRec string -> failure x
 
 
-and transLambdaSep (x : lambdaSep) : result = match x with
-    LambdaSep string -> failure x
-
-
 and transStr (x : str) : result = match x with
     Str string -> failure x
 
@@ -76,20 +72,26 @@ and transModule (x : moduleT) : result = match x with
     Module1 decls -> failure x
 
 
+and transLambdaSep (x : lambdaSep) : result = match x with
+    LambdaSep1  -> failure x
+  | LambdaSep2  -> failure x
+
+
 and transSemicolons (x : semicolons) : result = match x with
     Semicolons_Empty  -> failure x
   | Semicolons_Some semicolons -> failure x
 
 
 and transDecl (x : decl) : result = match x with
-    Decl_Axiom (attribset, expr) -> failure x
+    Decl_Axiom (globalident, attribset, expr) -> failure x
   | Decl_SharedMem (globalident, type', varspec) -> failure x
   | Decl_UnsharedMem (globalident, type', varspec) -> failure x
   | Decl_Var (globalident, type', varspec) -> failure x
-  | Decl_UninterpFun (attribset, globalident, types, type') -> failure x
-  | Decl_Fun (globalident, attribset, funparamss, type', expr) -> failure x
+  | Decl_UninterpFun (globalident, attribset, type') -> failure x
+  | Decl_Fun (globalident, attribset, type', expr) -> failure x
+  | Decl_FunNoType (globalident, attribset, expr) -> failure x
   | Decl_ProgEmpty (procident, attribset) -> failure x
-  | Decl_ProgWithSpec (procident, attribset, beginlist, progspecs, endlist) -> failure x
+  | Decl_ProgWithSpec (procident, attribset, progspecs) -> failure x
   | Decl_Proc (procident, paramss0, paramss, attribset, funspecs, procdef) -> failure x
 
 
@@ -119,6 +121,7 @@ and transType (x : typeT) : result = match x with
   | TypeBoolType booltype -> failure x
   | TypeMapType maptype -> failure x
   | TypeBVType bvtype -> failure x
+  | Type1 type' -> failure x
 
 
 and transIntVal (x : intVal) : result = match x with
@@ -262,7 +265,7 @@ and transExpr (x : expr) : result = match x with
   | Expr_Global globalvar -> failure x
   | Expr_Forall lambdadef -> failure x
   | Expr_Exists lambdadef -> failure x
-  | Expr_Lambda (localvars, attribset, expr) -> failure x
+  | Expr_Lambda lambdadef -> failure x
   | Expr_Old expr -> failure x
   | Expr_FunctionOp (globalident, exprs) -> failure x
   | Expr_Binary (binop, expr0, expr) -> failure x
@@ -274,8 +277,13 @@ and transExpr (x : expr) : result = match x with
   | Expr_Concat exprs -> failure x
 
 
+and transLParen (x : lParen) : result = match x with
+    LParenLocalVar localvar -> failure x
+  | LParen1 localvar -> failure x
+
+
 and transLambdaDef (x : lambdaDef) : result = match x with
-    LambdaDef1 (localvars, lambdasep, attribset, expr) -> failure x
+    LambdaDef1 (lparens, lambdasep, attribset, expr) -> failure x
 
 
 and transBinOp (x : binOp) : result = match x with

@@ -330,6 +330,12 @@ module BasilExpr = struct
     match e with
     | RVar { id } -> text @@ Var.to_string id
     | Constant { const } -> text @@ AllOps.to_string const
+    | UnaryExpr { op = `Lambda as op; arg } ->
+        text (AllOps.to_string op) ^ text " " ^ arg
+    | UnaryExpr { op = `Forall as op; arg } ->
+        text (AllOps.to_string op) ^ text " " ^ arg
+    | UnaryExpr { op = `Exists as op; arg } ->
+        text (AllOps.to_string op) ^ text " " ^ arg
     | UnaryExpr { op = `ZeroExtend bits; arg } ->
         fill
           (text "," ^ newline)
@@ -357,31 +363,11 @@ module BasilExpr = struct
     | ApplyFun { func = n; args = es } ->
         fill nil [ n ^ bracket "(\n" (fill (text "," ^ newline) es) ")" ]
     | Binding { bound = vs; in_body = b } ->
-        fill (text " ") (List.map Var.pretty vs) ^ text " ::" ^ newline ^ b
-
-  (* printers *)
-  let print_alg (e : string abstract_expr) =
-    let open AbstractExpr in
-    match e with
-    | RVar { id } -> Var.to_string id
-    | Constant { const = c } -> AllOps.to_string c
-    | UnaryExpr { op = `ZeroExtend bits; arg = e } ->
-        Printf.sprintf "zero_extend(%d, " bits ^ e ^ ")"
-    | UnaryExpr { op = `SignExtend bits; arg = e } ->
-        Printf.sprintf "sign_extend(%d, " bits ^ e ^ ")"
-    | UnaryExpr { op = `Extract (hi, lo); arg = e } ->
-        Printf.sprintf "extract(%d, %d, " hi lo ^ e ^ ")"
-    | UnaryExpr { op; arg = e } -> AllOps.to_string op ^ "(" ^ e ^ ")"
-    | BinaryExpr { op; arg1 = e; arg2 = e2 } ->
-        AllOps.to_string op ^ "(" ^ e ^ ", " ^ e2 ^ ")"
-    | ApplyIntrin { op; args = es } ->
-        AllOps.to_string op ^ "(" ^ String.concat ", " es ^ ")"
-    | ApplyFun { func = n; args = es } -> n ^ "(" ^ String.concat ", " es ^ ")"
-    | Binding { bound = vs; in_body = b } ->
-        String.concat " " (List.map Var.to_string vs) ^ " :: " ^ b
+        fill (text " ") (List.map (fun v -> bracket "(" (Var.pretty v) ")") vs)
+        ^ text " ::" ^ bracket "(" b ")"
 
   let pretty s = cata pretty_alg s
-  let to_string s = cata print_alg s
+  let to_string s = Containers_pp.Pretty.to_string ~width:80 (cata pretty_alg s)
   let pp fmt s = Format.pp_print_string fmt @@ to_string s
 
   (** {1 Typing}*)

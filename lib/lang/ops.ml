@@ -300,7 +300,7 @@ module AllOps = struct
     | `BVSREM -> "bvsrem"
     | `BVSDIV -> "bvsdiv"
     | `Forall -> "forall"
-    | `Lambda -> "lambda"
+    | `Lambda -> "fun"
     | `BVNEG -> "bvneg"
     | `Bool true -> "true"
     | `Bool false -> "false"

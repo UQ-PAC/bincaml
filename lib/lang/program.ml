@@ -26,22 +26,32 @@ let show_stmt =
 let pp_stmt fmt s = Format.pp_print_string fmt (show_stmt s)
 
 type prog_spec = { rely : BasilExpr.t list; guarantee : BasilExpr.t list }
-type axiom_def = { attrib : Expr.BasilExpr.t Attrib.attrib_map; predicate : e }
+type func_type = Axiom of e | Uninterpreted | Function of e
 
 type declaration =
   | Function of {
       binding : Var.t;
       attrib : Expr.BasilExpr.t Attrib.attrib_map;
-      definition : e option;
-    }
+      definition : func_type;
+    }  (** pure functions *)
   | Variable of { binding : Var.t; attrib : Expr.BasilExpr.t Attrib.attrib_map }
+      (** mutable state *)
 
 let pretty_declaration d =
   let open Containers_pp in
   match d with
   | Variable { binding } -> text @@ Var.to_decl_string_il binding
-  | Function { binding; attrib; definition } ->
-      text @@ Var.to_decl_string_il binding
+  | Function { binding; attrib; definition = Axiom body } ->
+      text "axiom "
+      ^ text (Var.name binding)
+      ^ text " " ^ Expr.BasilExpr.pretty body
+  | Function { binding; attrib; definition = Uninterpreted } ->
+      text "val" ^ text (Var.to_string binding)
+  | Function { binding; attrib; definition = Function body } ->
+      text "let "
+      ^ text (Var.to_string binding)
+      ^ text " = "
+      ^ nest 2 (Expr.BasilExpr.pretty body)
 
 (*match definition with
       | Some d -> 
@@ -57,7 +67,6 @@ type t = {
   entry_proc : ID.t option;
   procs : proc ID.Map.t;
   proc_names : ID.generator;
-  axioms : axiom_def list;
   attrib : e Attrib.attrib_map;
   spec : prog_spec;
 }
@@ -105,6 +114,9 @@ let decl_global ?(attrib = StringMap.empty) p v =
   let decl = Variable { binding = v; attrib } in
   { p with globals = StringMap.add (Var.name v) decl p.globals }
 
+let add_decl ?(attrib = StringMap.empty) p v decl =
+  { p with globals = StringMap.add (Var.name v) decl p.globals }
+
 let create_single_proc ?(name = "<module>") () =
   let proc_names = ID.make_gen () in
   let procname = proc_names.fresh ~name () in
@@ -116,7 +128,6 @@ let create_single_proc ?(name = "<module>") () =
       globals = StringMap.empty;
       procs = ID.Map.singleton procname proc;
       proc_names;
-      axioms = [];
       attrib = StringMap.empty;
       spec = { rely = []; guarantee = [] };
     }
@@ -131,7 +142,6 @@ let empty ?name () =
     globals = StringMap.empty;
     procs = ID.Map.empty;
     proc_names = ID.make_gen ();
-    axioms = [];
     attrib = StringMap.empty;
     spec = { rely = []; guarantee = [] };
   }
