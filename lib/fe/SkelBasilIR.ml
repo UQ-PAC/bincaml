@@ -272,6 +272,8 @@ and transExpr (x : expr) : result = match x with
   | Expr_Binary (binop, expr0, expr) -> failure x
   | Expr_Assoc (boolbinop, exprs) -> failure x
   | Expr_Unary (unop, expr) -> failure x
+  | Expr_LoadBe (intval, expr0, expr) -> failure x
+  | Expr_LoadLe (intval, expr0, expr) -> failure x
   | Expr_ZeroExtend (intval, expr) -> failure x
   | Expr_SignExtend (intval, expr) -> failure x
   | Expr_Extract (intval0, intval, expr) -> failure x
@@ -301,6 +303,8 @@ and transUnOp (x : unOp) : result = match x with
   | UnOp_boolnot  -> failure x
   | UnOp_intneg  -> failure x
   | UnOp_booltobv1  -> failure x
+  | UnOp_gamma  -> failure x
+  | UnOp_classification  -> failure x
 
 
 and transEqOp (x : eqOp) : result = match x with

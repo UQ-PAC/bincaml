@@ -46,7 +46,7 @@ let pretty_declaration d =
       ^ text (Var.name binding)
       ^ text " " ^ Expr.BasilExpr.pretty body
   | Function { binding; attrib; definition = Uninterpreted } ->
-      text "val" ^ text (Var.to_string binding)
+      text "val " ^ text (Var.to_string binding)
   | Function { binding; attrib; definition = Function body } ->
       text "let "
       ^ text (Var.to_string binding)

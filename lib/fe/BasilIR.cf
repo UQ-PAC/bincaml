@@ -210,8 +210,11 @@ rules BinOp ::= BVBinOp | BVLogicalBinOp | BoolBinOp | IntLogicalBinOp | IntBinO
 Expr_Binary . Expr       ::= BinOp "(" Expr "," Expr ")" ;
 Expr_Assoc . Expr       ::= BoolBinOp "(" [Expr] ")" ;
 
-rules UnOp ::= BVUnOp | "boolnot" | "intneg" | "booltobv1";
+rules UnOp ::= BVUnOp | "boolnot" | "intneg" | "booltobv1" | "gamma" | "classification";
 Expr_Unary . Expr       ::= UnOp "(" Expr ")" ;
+
+Expr_LoadBe . Expr ::= "load_be" "(" IntVal "," Expr "," Expr ")" ;
+Expr_LoadLe . Expr ::= "load_le" "(" IntVal "," Expr "," Expr ")" ;
 
 Expr_ZeroExtend . Expr ::= "zero_extend" "(" IntVal "," Expr ")" ;
 Expr_SignExtend . Expr ::= "sign_extend" "(" IntVal "," Expr ")" ;

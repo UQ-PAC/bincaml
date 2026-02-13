@@ -379,6 +379,8 @@ and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
   |    AbsBasilIR.Expr_Binary (binop, expr1, expr2) -> prPrec i 0 (concatD [prtBinOp 0 binop ; render "(" ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; render ")"])
   |    AbsBasilIR.Expr_Assoc (boolbinop, exprs) -> prPrec i 0 (concatD [prtBoolBinOp 0 boolbinop ; render "(" ; prtExprListBNFC 0 exprs ; render ")"])
   |    AbsBasilIR.Expr_Unary (unop, expr) -> prPrec i 0 (concatD [prtUnOp 0 unop ; render "(" ; prtExpr 0 expr ; render ")"])
+  |    AbsBasilIR.Expr_LoadBe (intval, expr1, expr2) -> prPrec i 0 (concatD [render "load_be" ; render "(" ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; render ")"])
+  |    AbsBasilIR.Expr_LoadLe (intval, expr1, expr2) -> prPrec i 0 (concatD [render "load_le" ; render "(" ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; render ")"])
   |    AbsBasilIR.Expr_ZeroExtend (intval, expr) -> prPrec i 0 (concatD [render "zero_extend" ; render "(" ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; render ")"])
   |    AbsBasilIR.Expr_SignExtend (intval, expr) -> prPrec i 0 (concatD [render "sign_extend" ; render "(" ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; render ")"])
   |    AbsBasilIR.Expr_Extract (intval1, intval2, expr) -> prPrec i 0 (concatD [render "extract" ; render "(" ; prtIntVal 0 intval1 ; render "," ; prtIntVal 0 intval2 ; render "," ; prtExpr 0 expr ; render ")"])
@@ -414,6 +416,8 @@ and prtUnOp (i:int) (e : AbsBasilIR.unOp) : doc = match e with
   |    AbsBasilIR.UnOp_boolnot  -> prPrec i 0 (concatD [render "boolnot"])
   |    AbsBasilIR.UnOp_intneg  -> prPrec i 0 (concatD [render "intneg"])
   |    AbsBasilIR.UnOp_booltobv1  -> prPrec i 0 (concatD [render "booltobv1"])
+  |    AbsBasilIR.UnOp_gamma  -> prPrec i 0 (concatD [render "gamma"])
+  |    AbsBasilIR.UnOp_classification  -> prPrec i 0 (concatD [render "classification"])
 
 
 and prtEqOp (i:int) (e : AbsBasilIR.eqOp) : doc = match e with

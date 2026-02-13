@@ -195,7 +195,13 @@ module IntOps = struct
 end
 
 module Spec = struct
-  type unary = [ `Forall | `Old | `Exists | `Lambda ]
+  type endian = [ `Big | `Little ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type binary = [ `MapAccess | `Load of endian * int ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type unary = [ `Forall | `Old | `Exists | `Lambda | `Classification | `Gamma ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let hash_intrin a = Hashtbl.hash a
@@ -208,7 +214,8 @@ module AllOps = struct
   type unary = [ IntOps.unary | BVOps.unary | Spec.unary | LogicalOps.unary ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type binary = [ IntOps.binary | BVOps.binary | LogicalOps.binary ]
+  type binary =
+    [ IntOps.binary | BVOps.binary | LogicalOps.binary | Spec.binary ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type intrin = [ BVOps.intrin | LogicalOps.intrin ]
@@ -251,6 +258,14 @@ module AllOps = struct
         let args, ret = Types.curry a in
         Fun { args; ret }
     | `Extract (hi, lo) -> return (Bitvector (hi - lo))
+    | `Gamma ->
+        let args, r = Types.curry a in
+        let t = Types.uncurry args Boolean in
+        return t
+    | `Classification -> 
+        let args, r = Types.curry a in
+        let t = Types.uncurry args Boolean in
+        return t
 
   let ret_type_bin (o : binary) l r =
     let open Types in
@@ -263,6 +278,10 @@ module AllOps = struct
     | `BVAND | `BVOR | `BVADD | `BVMUL | `BVUDIV | `BVUREM | `BVSHL | `BVLSHR
     | `BVNAND | `BVXOR | `BVSUB | `BVSDIV | `BVSREM | `BVSMOD | `BVASHR ->
         return l
+    | `MapAccess ->
+        let m, r = Types.curry l in
+        return r
+    | `Load (e, i) -> return (Bitvector i)
 
   let ret_type_intrin (o : intrin) args =
     let open Types in
@@ -344,6 +363,11 @@ module AllOps = struct
     | `BOOLTOBV1 -> "booltobv1"
     | `BoolNOT -> "boolnot"
     | `BVSLT -> "bvslt"
+    | `Classification -> "classification"
+    | `Gamma -> "gamma"
+    | `Load (`Big, sz)-> Printf.sprintf "load_be_%d" sz
+    | `Load (`Little, sz)-> Printf.sprintf "load_le_%d" sz
+    | `MapAccess -> "get"
 
   let eval_equal (a : const) (b : const) =
     match (a, b) with

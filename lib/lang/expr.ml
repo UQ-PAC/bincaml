@@ -349,6 +349,16 @@ module BasilExpr = struct
         fill nil [ text "extract" ^ a ^ textpf "(%d,%d, " hi lo ^ e ^ text ")" ]
     | UnaryExpr { op; arg = e } ->
         text (AllOps.to_string op) ^ a ^ bracket "(" e ")"
+    | BinaryExpr { op = `Load (endian, bits); arg1; arg2 } ->
+        let endian =
+          text @@ match endian with `Big -> "be" | `Little -> "le"
+        in
+        fill
+          (text "," ^ newline)
+          [
+            text "load_" ^ endian ^ a ^ (textpf "(%d") bits;
+            arg1 ^ text ", " ^ arg2 ^ text ")";
+          ]
     | BinaryExpr { op; arg1 = e; arg2 = e2 } ->
         fill nil
           [
@@ -462,6 +472,9 @@ module BasilExpr = struct
 
   let sign_extend ~n_prefix_bits (e : t) : t =
     unexp ~op:(`SignExtend n_prefix_bits) e
+
+  let load ~bits endian (m : t) (ind : t) : t =
+    binexp ~op:(`Load (endian, bits)) m ind
 
   let extract ~hi_excl ~lo_incl (e : t) : t =
     unexp ~op:(`Extract (hi_excl, lo_incl)) e

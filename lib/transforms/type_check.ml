@@ -25,6 +25,8 @@ let type_check stmt_id block_id expr =
   let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
     let open Ops in
     match op with
+    | `Classification -> []
+    | `Gamma -> []
     | `BoolNOT | `BOOLTOBV1 ->
         if Types.equal arg Types.Boolean then []
         else [ type_err "%s body is not a boolean" @@ AllOps.to_string op ]
@@ -93,6 +95,16 @@ let type_check stmt_id block_id expr =
             type_err "Arguments are not of the same type in %s"
             @@ AllOps.to_string op;
           ]
+    | `Load (e, sz) -> []
+    | `MapAccess -> (
+        let a, r = Types.curry arg1 in
+        match a with
+        | [ arg ] when not (Types.equal arg arg2) ->
+            [
+              type_err "Argument does not match map type %s"
+              @@ AllOps.to_string op;
+            ]
+        | _ -> [])
     | `IMPLIES -> binary_bool_types arg1 arg2
     | `BVSREM | `BVSDIV | `BVADD | `BVASHR | `BVMUL | `BVSHL | `BVNAND | `BVSLE
     | `BVUREM | `BVXOR | `BVOR | `BVSUB | `BVUDIV | `BVLSHR | `BVAND | `BVSMOD

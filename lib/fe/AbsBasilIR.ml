@@ -184,6 +184,8 @@ and expr =
  | Expr_Binary of binOp * expr * expr
  | Expr_Assoc of boolBinOp * expr list
  | Expr_Unary of unOp * expr
+ | Expr_LoadBe of intVal * expr * expr
+ | Expr_LoadLe of intVal * expr * expr
  | Expr_ZeroExtend of intVal * expr
  | Expr_SignExtend of intVal * expr
  | Expr_Extract of intVal * intVal * expr
@@ -209,6 +211,8 @@ and unOp =
  | UnOp_boolnot
  | UnOp_intneg
  | UnOp_booltobv1
+ | UnOp_gamma
+ | UnOp_classification
 
 and eqOp =
    EqOp_eq

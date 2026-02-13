@@ -7,7 +7,7 @@ open AbsBasilIR
 open Lexing
 %}
 
-%token KW_axiom KW_memory KW_shared KW_var KW_val KW_let KW_prog KW_entry KW_proc KW_le KW_be KW_nop KW_load KW_store KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_fun KW_old KW_boolnot KW_intneg KW_booltobv1 KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_rely KW_relies KW_guarnatee KW_guarantees KW_captures KW_modifies KW_classification KW_invariant KW_guarantee
+%token KW_axiom KW_memory KW_shared KW_var KW_val KW_let KW_prog KW_entry KW_proc KW_le KW_be KW_nop KW_load KW_store KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_fun KW_old KW_boolnot KW_intneg KW_booltobv1 KW_gamma KW_classification KW_load_be KW_load_le KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_rely KW_relies KW_guarnatee KW_guarantees KW_captures KW_modifies KW_invariant KW_guarantee
 
 %token SYMB1 /* ; */
 %token SYMB2 /* , */
@@ -618,6 +618,8 @@ expr : value { Expr_Literal $1 }
   | binOp SYMB7 expr SYMB2 expr SYMB8 { Expr_Binary ($1, $3, $5) }
   | boolBinOp SYMB7 expr_list SYMB8 { Expr_Assoc ($1, $3) }
   | unOp SYMB7 expr SYMB8 { Expr_Unary ($1, $3) }
+  | KW_load_be SYMB7 intVal SYMB2 expr SYMB2 expr SYMB8 { Expr_LoadBe ($3, $5, $7) }
+  | KW_load_le SYMB7 intVal SYMB2 expr SYMB2 expr SYMB8 { Expr_LoadLe ($3, $5, $7) }
   | KW_zero_extend SYMB7 intVal SYMB2 expr SYMB8 { Expr_ZeroExtend ($3, $5) }
   | KW_sign_extend SYMB7 intVal SYMB2 expr SYMB8 { Expr_SignExtend ($3, $5) }
   | KW_extract SYMB7 intVal SYMB2 intVal SYMB2 expr SYMB8 { Expr_Extract ($3, $5, $7) }
@@ -648,6 +650,8 @@ unOp : bVUnOp { UnOpBVUnOp $1 }
   | KW_boolnot { UnOp_boolnot  }
   | KW_intneg { UnOp_intneg  }
   | KW_booltobv1 { UnOp_booltobv1  }
+  | KW_gamma { UnOp_gamma  }
+  | KW_classification { UnOp_classification  }
   ;
 
 eqOp : KW_eq { EqOp_eq  }

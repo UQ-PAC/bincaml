@@ -237,51 +237,50 @@ module BasilASTLoader = struct
                 { spec with guarantee = trans_expr p_st b :: spec.guarantee };
             })
 
+  and create_fun prog glident attrList typ body =
+    let definition : Program.func_type =
+      match body with
+      | Some e -> Function (trans_expr prog e)
+      | None -> Uninterpreted
+    in
+    let rtype =
+      match typ with
+      | Some typ -> trans_type typ
+      | None -> (
+          match definition with
+          | Function e -> BasilExpr.type_of e
+          | _ ->
+              raise
+                (LoadError
+                   {
+                     input = None;
+                     token_char_offset_range =
+                       Some (get_bident_loc (`Global glident));
+                     msg = Printf.sprintf "no type defined";
+                   }))
+    in
+    let attrib = trans_attrib_set ~binds:StringMap.empty prog attrList in
+    let binding =
+      Var.create
+        (unsafe_unsigil (`Global glident))
+        ~pure:true ~scope:Global rtype
+    in
+
+    let fundef : Program.declaration =
+      Function { attrib; binding; definition }
+    in
+    map_prog (fun prog -> Program.add_decl prog binding fundef) prog
+
   and trans_definition prog (x : decl) : load_st =
     match x with
     | Decl_UninterpFun (glident, attrDefList, rettype) ->
-        let attrib = trans_attrib_set ~binds:StringMap.empty prog attrDefList in
-        let ftype = trans_type rettype in
-        map_prog
-          (fun p ->
-            Program.decl_global p ~attrib
-              (Var.create
-                 (unsafe_unsigil (`Global glident))
-                 ~pure:true ~scope:Global ftype))
-          prog
+        create_fun prog glident attrDefList (Some rettype) None
     | Decl_FunNoType (glident, attrList, body) ->
-        (*let typesig = List.map trans_type params in*)
-        let attrib = trans_attrib_set ~binds:StringMap.empty prog attrList in
-        let body = trans_expr prog body in
-        let rtype = BasilExpr.type_of body in
-        let bvar =
-          Var.create
-            (unsafe_unsigil (`Global glident))
-            ~pure:true ~scope:Global rtype
-        in
-
-        let fundef : Program.declaration =
-          Function { attrib; binding = bvar; definition = Function body }
-        in
-        map_prog (fun prog -> Program.add_decl prog bvar fundef) prog
+        create_fun prog glident attrList None (Some body)
     | Decl_Fun (glident, attrList, typ, body) ->
-        (*let typesig = List.map trans_type params in*)
-        let rtype = trans_type typ in
-        let attrib = trans_attrib_set ~binds:StringMap.empty prog attrList in
-        let body = trans_expr prog body in
-        let bvar =
-          Var.create
-            (unsafe_unsigil (`Global glident))
-            ~pure:true ~scope:Global rtype
-        in
-
-        let fundef : Program.declaration =
-          Function { attrib; binding = bvar; definition = Function body }
-        in
-        map_prog (fun prog -> Program.add_decl prog bvar fundef) prog
+        create_fun prog glident attrList (Some typ) (Some body)
     | Decl_Axiom (name, attr, body) ->
         let attrib = trans_attrib_set ~binds:StringMap.empty prog attr in
-        let predicate = trans_expr prog body in
         let body = trans_expr prog body in
         let bvar =
           Var.create
@@ -867,6 +866,14 @@ module BasilASTLoader = struct
           ~hi_excl:(transIntVal ival0 |> Z.to_int)
           ~lo_incl:(transIntVal intval |> Z.to_int)
           (trans_expr expr)
+    | Expr_LoadLe (intval, a1, a2) ->
+        BasilExpr.load
+          ~bits:(Z.to_int @@ transIntVal intval)
+          `Little (trans_expr a1) (trans_expr a2)
+    | Expr_LoadBe (intval, a1, a2) ->
+        BasilExpr.load
+          ~bits:(Z.to_int @@ transIntVal intval)
+          `Big (trans_expr a1) (trans_expr a2)
     | Expr_Concat exprs ->
         BasilExpr.applyintrin ~op:`BVConcat (List.map trans_expr exprs)
     | Expr_Literal v -> (
@@ -916,6 +923,8 @@ module BasilASTLoader = struct
     | UnOp_boolnot -> `BoolNOT
     | UnOp_intneg -> `INTNEG
     | UnOp_booltobv1 -> `BOOLTOBV1
+    | UnOp_gamma -> `Gamma
+    | UnOp_classification -> `Classification
 
   and transBVUnOp (x : bVUnOp) =
     match x with BVUnOp_bvnot -> `BVNOT | BVUnOp_bvneg -> `BVNEG

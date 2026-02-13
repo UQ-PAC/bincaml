@@ -258,6 +258,8 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.Expr_Binary (binop, expr0, expr) -> s2s "Expr_Binary" >> c2s ' ' >> c2s '(' >> showBinOp binop  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_Assoc (boolbinop, exprs) -> s2s "Expr_Assoc" >> c2s ' ' >> c2s '(' >> showBoolBinOp boolbinop  >> s2s ", " >>  showList showExpr exprs >> c2s ')'
   |    AbsBasilIR.Expr_Unary (unop, expr) -> s2s "Expr_Unary" >> c2s ' ' >> c2s '(' >> showUnOp unop  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.Expr_LoadBe (intval, expr0, expr) -> s2s "Expr_LoadBe" >> c2s ' ' >> c2s '(' >> showIntVal intval  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.Expr_LoadLe (intval, expr0, expr) -> s2s "Expr_LoadLe" >> c2s ' ' >> c2s '(' >> showIntVal intval  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_ZeroExtend (intval, expr) -> s2s "Expr_ZeroExtend" >> c2s ' ' >> c2s '(' >> showIntVal intval  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_SignExtend (intval, expr) -> s2s "Expr_SignExtend" >> c2s ' ' >> c2s '(' >> showIntVal intval  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_Extract (intval0, intval, expr) -> s2s "Expr_Extract" >> c2s ' ' >> c2s '(' >> showIntVal intval0  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr >> c2s ')'
@@ -287,6 +289,8 @@ and showUnOp (e : AbsBasilIR.unOp) : showable = match e with
   |    AbsBasilIR.UnOp_boolnot  -> s2s "UnOp_boolnot"
   |    AbsBasilIR.UnOp_intneg  -> s2s "UnOp_intneg"
   |    AbsBasilIR.UnOp_booltobv1  -> s2s "UnOp_booltobv1"
+  |    AbsBasilIR.UnOp_gamma  -> s2s "UnOp_gamma"
+  |    AbsBasilIR.UnOp_classification  -> s2s "UnOp_classification"
 
 
 and showEqOp (e : AbsBasilIR.eqOp) : showable = match e with
