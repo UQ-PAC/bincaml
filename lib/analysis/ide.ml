@@ -31,21 +31,7 @@ module Loc = struct
     | Exit
   [@@deriving eq, ord, show]
 
-  let hash (l : t) =
-    (*
-    match l with
-    | IntraVertex { proc_id; v } ->
-        Hash.combine3 1 (ID.hash proc_id) (Procedure.Vert.hash v)
-    | CallSite s ->
-        Hash.combine4 3 (ID.hash s.proc_id) (ID.hash s.block)
-          (Hash.int s.offset)
-    | AfterCall s ->
-        Hash.combine4 5 (ID.hash s.proc_id) (ID.hash s.block)
-          (Hash.int s.offset)
-    | Entry -> Hash.combine2 31 1
-    | Exit -> Hash.combine2 37 1
-    *)
-    Hashtbl.hash l
+  let hash (l : t) = Hashtbl.hash l
 end
 
 type ret_info = {
@@ -90,8 +76,6 @@ module type IDEDomain = sig
 
   module DL : sig
     type t = Label of Data.t | Lambda [@@deriving eq, ord, show]
-
-    val hash : t -> int
   end
 
   type 'a state_update = (DL.t * 'a) Iter.t
@@ -456,23 +440,22 @@ module IDE (D : IDEDomain) = struct
 
   type analysis_state = D.Value.t DataMap.t [@@deriving eq, ord]
 
-  module Worklist (D : Hashset.HashedType) = struct
-    module HS = Hashset.Make (D)
+  module Worklist (D : Heap.TOTAL_ORD) = struct
+    module PQ = Heap.Make_from_compare (D)
 
-    type t = HS.t * D.t Stack.t
+    type t = PQ.t ref
 
-    let create : t = (HS.create 100, Stack.create ())
-    let cardinal ((set, stack) : t) = Stack.length stack
-    let non_empty ((set, stack) : t) = not @@ Stack.is_empty stack
+    let create : t = ref PQ.empty
+    let cardinal (q : t) = PQ.size !q
+    let non_empty (q : t) = not @@ PQ.is_empty !q
+    let add (q : t) d = q := PQ.add !q d
 
-    let add ((set, stack) : t) d =
-      if not @@ HS.mem set d then (
-        HS.add set d;
-        Stack.push d stack)
-
-    let pop ((set, stack) : t) =
-      let d = Stack.pop stack in
-      HS.remove set d;
+    let pop (q : t) =
+      let q', d = PQ.take_exn !q in
+      q := q';
+      while non_empty q && D.compare (PQ.find_min_exn !q) d = 0 do
+        q := fst @@ PQ.take_exn !q
+      done;
       d
   end
 
@@ -591,8 +574,12 @@ module IDE (D : IDEDomain) = struct
   module P1K = struct
     type t = Loc.t * DL.t * DL.t
 
-    let equal = Equal.triple Loc.equal DL.equal DL.equal
-    let hash = Hash.triple Loc.hash DL.hash DL.hash
+    let compare (a, b, c) (d, e, f) =
+      Pair.compare
+        (Pair.compare Loc.compare DL.compare)
+        DL.compare
+        ((a, b), c)
+        ((d, e), f)
   end
 
   module W1 = Worklist (P1K)
@@ -678,8 +665,7 @@ module IDE (D : IDEDomain) = struct
   module P2K = struct
     type t = Loc.t * DL.t
 
-    let equal = Equal.pair Loc.equal DL.equal
-    let hash = Hash.pair Loc.hash DL.hash
+    let compare = Pair.compare Loc.compare DL.compare
   end
 
   module W2 = Worklist (P2K)

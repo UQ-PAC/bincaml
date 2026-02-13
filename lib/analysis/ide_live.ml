@@ -14,10 +14,6 @@ module IDELive = struct
      redefining them? *)
   module DL = struct
     type t = Label of Var.t | Lambda [@@deriving eq, ord, show]
-
-    let hash v = match v with
-      | Label v -> Hash.combine2 43 (Var.hash v)
-      | Lambda -> 42
   end
 
   type 'a state_update = (DL.t * 'a) Iter.t
