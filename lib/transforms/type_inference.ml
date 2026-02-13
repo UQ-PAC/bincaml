@@ -25,15 +25,17 @@ open Type_automata
 let gen = ID.make_gen ()
 
 let minimise_type p ty name =
-  let rec type_to_state_list (p : bool) (ty : ty)
-      ((ls, tbl) as acc : 's list * ('s, (sigma, 's) Hashtbl.t) Hashtbl.t) :
-      's list * ('s, ('e, 's) Hashtbl.t) Hashtbl.t =
+  let rec type_to_state_list (p : Polarity.t) (ty : InferredType.t)
+      ((ls, tbl) as acc :
+        State.t list * (State.t, (Sigma.t, State.t) Hashtbl.t) Hashtbl.t) :
+      State.t list * (State.t, (Sigma.t, State.t) Hashtbl.t) Hashtbl.t =
+    let open Sigma in
     match ty with
     | Top | Atom _ | TypeVar _ | Bottom | Field _ -> ((p, ty) :: ls, tbl)
     | Recursive (_, a) ->
         let ls, tbl = type_to_state_list p a acc in
         let edges = Hashtbl.create 1 in
-        Hashtbl.add edges Ep (p, a);
+        Hashtbl.add edges Sigma.Ep (p, a);
         Hashtbl.add tbl (p, ty) edges;
         ((p, ty) :: ls, tbl)
     | Paren ty -> type_to_state_list p ty acc
@@ -47,46 +49,46 @@ let minimise_type p ty name =
         ((p, ty) :: ls, tbl)
     | Function (_, ins, outs) ->
         let acc =
-          StringMap.fold (fun _ -> type_to_state_list @@ not p) ins acc
+          StringMap.fold (fun _ -> type_to_state_list @@ Polarity.not p) ins acc
         in
         let ls, tbl = StringMap.fold (fun _ -> type_to_state_list p) outs acc in
         let edges = Hashtbl.create 30 in
-        List.iter (fun (n, ty) -> Hashtbl.add edges (FnIn n) (not p, ty))
+        List.iter (fun (n, ty) ->
+            Hashtbl.add edges (FnIn n) (Polarity.not p, ty))
         @@ StringMap.to_list ins;
         List.iter (fun (n, ty) -> Hashtbl.add edges (FnOut n) (p, ty))
         @@ StringMap.to_list outs;
         Hashtbl.add tbl (p, ty) edges;
         ((p, ty) :: ls, tbl)
     | Pointer (a, b) ->
-        let ((ls, tbl) as acc) = type_to_state_list (not p) a acc in
+        let ((ls, tbl) as acc) = type_to_state_list (Polarity.not p) a acc in
         let ls, tbl = type_to_state_list p b acc in
         let edges = Hashtbl.create 2 in
-        Hashtbl.add edges StoreLabel (not p, a);
+        Hashtbl.add edges StoreLabel (Polarity.not p, a);
         Hashtbl.add edges LoadLabel (p, b);
         Hashtbl.add tbl (p, ty) edges;
         ((p, ty) :: ls, tbl)
     | Record fields ->
         let ls, tbl =
           List.fold_left
-            (fun acc { ty } -> type_to_state_list p ty acc)
+            (fun acc ({ ty } : InferredType.field) ->
+              type_to_state_list p ty acc)
             acc fields
         in
         let edges = Hashtbl.create 10 in
         List.iter
-          (fun { offset; size; ty } ->
+          (fun ({ offset; size; ty } : InferredType.field) ->
             Hashtbl.add edges (Reclabel (offset, size)) (p, ty))
           fields;
         Hashtbl.add tbl (p, ty) edges;
         ((p, ty) :: ls, tbl)
   in
   let states, edges = type_to_state_list p ty ([], Hashtbl.create 10) in
-  (*  spaces so I ignore fmt          states trans    start  fin name *)
-  let automata = create_automata2 states edges (p, ty) [] name in
-  remove_ep automata;
-  merge_nodes automata;
-  (* NOTE: does not currently work *)
-  (* Adt.mini automata; *)
-  (* print_string @@ Adt.export_graphviz automata; *)
+  let automata =
+    TypeAutomata.create_type_automata states edges (p, ty) [] name
+  in
+  TypeAutomata.remove_ep automata;
+  (* TypeAutomata.merge_nodes automata; *)
   automata
 
 let show_type_map (m : InferredType.t StringMap.t) : string =
@@ -378,7 +380,7 @@ let check_proc (prog : Program.t) st p =
 
 let transform (prog : Program.t) =
   print_string "\n === Type Constraints === \n";
-  let type_constraint_map: ConstraintState.t =
+  let type_constraint_map : ConstraintState.t =
     ID.Map.values prog.procs |> Iter.fold (check_proc prog) StringMap.empty
   in
   print_string @@ ConstraintState.show type_constraint_map;
@@ -386,12 +388,14 @@ let transform (prog : Program.t) =
   print_string "\n === Coalesced Types === \n";
   let types =
     StringMap.mapi
-      (fun name ({ lb; ub }: ConstraintState.TypeConstraint.t) ->
+      (fun name ({ lb; ub } : ConstraintState.TypeConstraint.t) ->
         let lower =
           (* Posistive Occurences *)
           TySet.fold
             (fun ty (acc : InferredType.t) ->
-              let a = coalesce_types type_constraint_map TySet.empty Polarity.Pos ty in
+              let a =
+                coalesce_types type_constraint_map TySet.empty Polarity.Pos ty
+              in
               match acc with Top -> a | _ -> Union (acc, a))
             lb Top
         in
@@ -399,7 +403,9 @@ let transform (prog : Program.t) =
           (* Negative Occurences *)
           TySet.fold
             (fun ty (acc : InferredType.t) ->
-              let a = coalesce_types type_constraint_map TySet.empty Polarity.Neg ty in
+              let a =
+                coalesce_types type_constraint_map TySet.empty Polarity.Neg ty
+              in
               match acc with Top -> a | _ -> Sect (acc, a))
             ub Top
         in
@@ -420,7 +426,8 @@ let transform (prog : Program.t) =
   let automatas =
     StringMap.mapi
       (fun name (lower_ty, upper_ty) ->
-        (minimise_type Polarity.Pos lower_ty name, minimise_type false Polarity.Neg name))
+        ( minimise_type Polarity.Pos lower_ty name,
+          minimise_type Polarity.Neg upper_ty name ))
       types
   in
   prog
