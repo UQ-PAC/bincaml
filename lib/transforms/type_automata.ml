@@ -43,41 +43,43 @@ module TypeAutomata = struct
     name : string;
   }
 
-  let set_states m qs = m.states <- qs
+  open struct
+    let set_states m qs = m.states <- qs
 
-  let get_transitions m =
-    Hashtbl.fold
-      (fun s ats acc ->
-        Hashtbl.fold (fun a t acc' -> (s, a, t) :: acc') ats acc)
-      m.transitions []
+    let get_transitions m =
+      Hashtbl.fold
+        (fun s ats acc ->
+          Hashtbl.fold (fun a t acc' -> (s, a, t) :: acc') ats acc)
+        m.transitions []
 
-  let get_next_states m s =
-    match Hashtbl.find_opt m.transitions s with
-    | None -> Iter.empty
-    | Some states -> Hashtbl.values states
+    let get_next_states m s =
+      match Hashtbl.find_opt m.transitions s with
+      | None -> Iter.empty
+      | Some states -> Hashtbl.values states
 
-  let get_prev_states m t =
-    Hashtbl.fold
-      (fun s v acc ->
-        Hashtbl.fold
-          (fun a' t' acc' -> if State.equal t t' then s :: acc' else acc')
-          v acc)
-      m.transitions []
+    let get_prev_states m t =
+      Hashtbl.fold
+        (fun s v acc ->
+          Hashtbl.fold
+            (fun a' t' acc' -> if State.equal t t' then s :: acc' else acc')
+            v acc)
+        m.transitions []
 
-  let filter_states_inplace m f =
-    set_states m (List.filter f m.states);
-    Hashtbl.filter_map_inplace
-      (fun s ts -> if f s then Some ts else None)
-      m.transitions
+    let filter_states_inplace m f =
+      set_states m (List.filter f m.states);
+      Hashtbl.filter_map_inplace
+        (fun s ts -> if f s then Some ts else None)
+        m.transitions
 
-  let merge_states_inplace m ((p1, ty1) as s1) ((p2, ty2) as s2) =
-    filter_states_inplace m (fun s3 -> State.equal s2 s3);
-    Hashtbl.iter
-      (fun _ v ->
-        Hashtbl.filter_map_inplace
-          (fun _ t -> Some (if Polarity.equal p1 p2 then s1 else t))
-          v)
-      m.transitions
+    let merge_states_inplace m ((p1, ty1) as s1) ((p2, ty2) as s2) =
+      filter_states_inplace m (fun s3 -> State.equal s2 s3);
+      Hashtbl.iter
+        (fun _ v ->
+          Hashtbl.filter_map_inplace
+            (fun _ t -> Some (if Polarity.equal p1 p2 then s1 else t))
+            v)
+        m.transitions
+  end
 
   let remove_ep m =
     (*
@@ -141,58 +143,59 @@ module TypeAutomata = struct
                InferredType.equal ty1 ty2 && Polarity.equal p1 p2)
              state removal)
 
-  let join (ty0 : InferredType.t) (ty1 : InferredType.t) : InferredType.t =
-    match (ty0, ty1) with
-    | Record fields0, Record fields1 ->
-        (* I think this could be improved, cause this is gross *)
-        let module FieldMap = Map.Make (struct
-          type t = int * int
-
-          let compare = Stdlib.compare
-        end) in
-        let fieldmap_to_field_list (map : InferredType.t FieldMap.t) =
-          FieldMap.bindings map
-          |> List.map (fun ((offset, size), ty) ->
-              ({ offset; size; ty } : InferredType.field))
-        in
-        let fieldmap_of_list (fields : InferredType.field list) :
-            InferredType.t FieldMap.t =
-          List.fold_left
-            (fun acc ({ offset; size; ty } : InferredType.field) ->
-              FieldMap.add (offset, size) ty acc)
-            FieldMap.empty fields
-        in
-        let f0 = fieldmap_of_list fields0 in
-        let f1 = fieldmap_of_list fields1 in
-        let joined_map =
-          FieldMap.merge_safe
-            ~f:(fun (offset, size) v ->
-              match v with
-              | `Both (a, b) -> Some (InferredType.Union (a, b))
-              | `Left a | `Right a -> Some a)
-            f0 f1
-        in
-        Record (fieldmap_to_field_list joined_map)
-    | Pointer (a, b), Pointer (c, d) ->
-        (* ptr((a u c) n (b n d), (b n d)) *)
-        Pointer (Sect (Union (a, c), Sect (b, d)), Sect (b, d))
-    (* WARN: this is not how BinSub did it, but I think I am just smarter and had better DS *)
-    | Function (name0, ins0, outs0), Function (name1, ins1, outs1) ->
-        if not @@ String.equal name0 name1 then failwith "BOOOOM"
-        else
-          (* args are the same just just union over the args *)
-          let ins =
-            StringMap.merge_safe
-              ~f:(fun _ b ->
-                match b with
-                | `Both (l, r) -> Some (InferredType.Sect (l, r))
-                | _ -> failwith "BOOOMM")
-              ins0 ins1
-          in
-          Function (name0, ins, outs0)
-    | _ -> Union (ty0, ty1)
-
   let merge_nodes m =
+    let join (ty0 : InferredType.t) (ty1 : InferredType.t) : InferredType.t =
+      match (ty0, ty1) with
+      | Record fields0, Record fields1 ->
+          (* WARN: I think this could be improved, cause this is gross *)
+          let module FieldMap = Map.Make (struct
+            type t = int * int
+
+            let compare = Stdlib.compare
+          end) in
+          let fieldmap_to_field_list (map : InferredType.t FieldMap.t) =
+            FieldMap.bindings map
+            |> List.map (fun ((offset, size), ty) ->
+                ({ offset; size; ty } : InferredType.field))
+          in
+          let fieldmap_of_list (fields : InferredType.field list) :
+              InferredType.t FieldMap.t =
+            List.fold_left
+              (fun acc ({ offset; size; ty } : InferredType.field) ->
+                FieldMap.add (offset, size) ty acc)
+              FieldMap.empty fields
+          in
+          let f0 = fieldmap_of_list fields0 in
+          let f1 = fieldmap_of_list fields1 in
+          let joined_map =
+            FieldMap.merge_safe
+              ~f:(fun (offset, size) v ->
+                match v with
+                | `Both (a, b) -> Some (InferredType.Union (a, b))
+                | `Left a | `Right a -> Some a)
+              f0 f1
+          in
+          Record (fieldmap_to_field_list joined_map)
+      | Pointer (a, b), Pointer (c, d) ->
+          (* ptr((a u c) n (b n d), (b n d)) *)
+          Pointer (Sect (Union (a, c), Sect (b, d)), Sect (b, d))
+      (* WARN: this is not how BinSub did it, but I think I am just smarter and had better DS *)
+      | Function (name0, ins0, outs0), Function (name1, ins1, outs1) ->
+          if not @@ String.equal name0 name1 then failwith "BOOOOM"
+          else
+            (* args are the same just just union over the args *)
+            let ins =
+              StringMap.merge_safe
+                ~f:(fun _ b ->
+                  match b with
+                  | `Both (l, r) -> Some (InferredType.Sect (l, r))
+                  | _ -> failwith "BOOOMM")
+                ins0 ins1
+            in
+            Function (name0, ins, outs0)
+      | _ -> Union (ty0, ty1)
+    in
+    (* TODO: this needs to be redone in a similar way to how remove_ep was done *)
     Hashtbl.iter
       (fun (p, start_state) edges_tbl ->
         let edges = Hashtbl.keys edges_tbl in

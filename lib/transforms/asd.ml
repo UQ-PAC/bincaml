@@ -21,7 +21,7 @@ module InferredType = struct
   type t =
     | Top
     | Bottom
-    | Paren of t
+    | Paren of t (* TODO: Remove *)
     | Union of t * t (* type ∪ type *)
     | Sect of t * t (* type ∩ type *)
     | Pointer of t * t (* ptr(lb, ub) *)
