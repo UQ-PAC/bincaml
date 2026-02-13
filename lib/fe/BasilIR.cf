@@ -202,6 +202,7 @@ Expr_Old . Expr       ::= "old" "(" Expr ")" ;
 
 -- uninterpreted functions
 Expr_FunctionOp . Expr       ::= GlobalIdent "(" [Expr] ")";
+Expr_Apply . Expr       ::= Expr Expr;
 
 -- binary expr
 

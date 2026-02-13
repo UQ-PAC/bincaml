@@ -254,6 +254,7 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.Expr_Lambda lambdadef -> s2s "Expr_Lambda" >> c2s ' ' >> c2s '(' >> showLambdaDef lambdadef >> c2s ')'
   |    AbsBasilIR.Expr_Old expr -> s2s "Expr_Old" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_FunctionOp (globalident, exprs) -> s2s "Expr_FunctionOp" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showList showExpr exprs >> c2s ')'
+  |    AbsBasilIR.Expr_Apply (expr0, expr) -> s2s "Expr_Apply" >> c2s ' ' >> c2s '(' >> showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_Binary (binop, expr0, expr) -> s2s "Expr_Binary" >> c2s ' ' >> c2s '(' >> showBinOp binop  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_Assoc (boolbinop, exprs) -> s2s "Expr_Assoc" >> c2s ' ' >> c2s '(' >> showBoolBinOp boolbinop  >> s2s ", " >>  showList showExpr exprs >> c2s ')'
   |    AbsBasilIR.Expr_Unary (unop, expr) -> s2s "Expr_Unary" >> c2s ' ' >> c2s '(' >> showUnOp unop  >> s2s ", " >>  showExpr expr >> c2s ')'

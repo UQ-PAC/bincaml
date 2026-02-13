@@ -853,6 +853,8 @@ module BasilASTLoader = struct
         BasilExpr.apply_fun
           ~func:(BasilExpr.rvar @@ lookup_global_decl gi p_st)
           (List.map trans_expr args)
+    | Expr_Apply (func, arg) ->
+        BasilExpr.apply_fun ~func:(trans_expr func) [ trans_expr arg ]
 
   and transBinOp (x : BasilIR.AbsBasilIR.binOp) =
     match x with

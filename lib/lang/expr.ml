@@ -385,7 +385,9 @@ module BasilExpr = struct
     | UnaryExpr { op; arg } -> ret_type_unary op arg |> get_ty
     | BinaryExpr { op; arg1 = l; arg2 = r } -> ret_type_bin op l r |> get_ty
     | ApplyIntrin { op; args } -> ret_type_intrin op args |> get_ty
-    | ApplyFun { func; args } -> Types.Top
+    | ApplyFun { func; args } ->
+        let _, rt = Types.curry func in
+        rt
     | Binding { bound = vars; in_body = b } ->
         Types.uncurry (List.map Var.typ vars) b
 

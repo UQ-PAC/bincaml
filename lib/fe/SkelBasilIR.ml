@@ -268,6 +268,7 @@ and transExpr (x : expr) : result = match x with
   | Expr_Lambda lambdadef -> failure x
   | Expr_Old expr -> failure x
   | Expr_FunctionOp (globalident, exprs) -> failure x
+  | Expr_Apply (expr0, expr) -> failure x
   | Expr_Binary (binop, expr0, expr) -> failure x
   | Expr_Assoc (boolbinop, exprs) -> failure x
   | Expr_Unary (unop, expr) -> failure x

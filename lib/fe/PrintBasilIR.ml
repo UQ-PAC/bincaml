@@ -375,6 +375,7 @@ and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
   |    AbsBasilIR.Expr_Lambda lambdadef -> prPrec i 0 (concatD [render "fun" ; prtLambdaDef 0 lambdadef])
   |    AbsBasilIR.Expr_Old expr -> prPrec i 0 (concatD [render "old" ; render "(" ; prtExpr 0 expr ; render ")"])
   |    AbsBasilIR.Expr_FunctionOp (globalident, exprs) -> prPrec i 0 (concatD [prtGlobalIdent 0 globalident ; render "(" ; prtExprListBNFC 0 exprs ; render ")"])
+  |    AbsBasilIR.Expr_Apply (expr1, expr2) -> prPrec i 0 (concatD [prtExpr 0 expr1 ; prtExpr 0 expr2])
   |    AbsBasilIR.Expr_Binary (binop, expr1, expr2) -> prPrec i 0 (concatD [prtBinOp 0 binop ; render "(" ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; render ")"])
   |    AbsBasilIR.Expr_Assoc (boolbinop, exprs) -> prPrec i 0 (concatD [prtBoolBinOp 0 boolbinop ; render "(" ; prtExprListBNFC 0 exprs ; render ")"])
   |    AbsBasilIR.Expr_Unary (unop, expr) -> prPrec i 0 (concatD [prtUnOp 0 unop ; render "(" ; prtExpr 0 expr ; render ")"])

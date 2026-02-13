@@ -161,7 +161,9 @@ let type_check stmt_id block_id expr =
       | UnaryExpr { op; arg = a } -> ret_type_unary op a |> get_ty
       | BinaryExpr { op; arg1 = l; arg2 = r } -> ret_type_bin op l r |> get_ty
       | ApplyIntrin { op; args } -> ret_type_intrin op args |> get_ty
-      | ApplyFun _ -> ([], Types.Top)
+      | ApplyFun { func; args } ->
+          let _, rt = Types.curry func in
+          ([], rt)
       | Binding { bound = vars; in_body = b } ->
           ([], Types.uncurry (List.map Var.typ vars) b)
     in
@@ -194,8 +196,10 @@ let check_stmt_types stmt (pt : Program.t) stmt_id block_id =
           else
             type_err
               "Paramters for the function has a type mismatch: type of %s != \
-               type of %s"
+               type of %s (%s != %s)"
               (BasilExpr.to_string e) (Var.to_string lvar)
+              (Types.to_string rtype)
+              (Types.to_string (Var.typ lvar))
             :: acc)
         [] ls
   | Stmt.Instr_Assert { body = e } | Stmt.Instr_Assume { body = e } ->

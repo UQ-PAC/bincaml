@@ -180,6 +180,7 @@ and expr =
  | Expr_Lambda of lambdaDef
  | Expr_Old of expr
  | Expr_FunctionOp of globalIdent * expr list
+ | Expr_Apply of expr * expr
  | Expr_Binary of binOp * expr * expr
  | Expr_Assoc of boolBinOp * expr list
  | Expr_Unary of unOp * expr

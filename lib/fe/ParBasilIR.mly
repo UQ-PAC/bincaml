@@ -614,6 +614,7 @@ expr : value { Expr_Literal $1 }
   | KW_fun lambdaDef { Expr_Lambda $2 }
   | KW_old SYMB7 expr SYMB8 { Expr_Old $3 }
   | globalIdent SYMB7 expr_list SYMB8 { Expr_FunctionOp ($1, $3) }
+  | expr expr { Expr_Apply ($1, $2) }
   | binOp SYMB7 expr SYMB2 expr SYMB8 { Expr_Binary ($1, $3, $5) }
   | boolBinOp SYMB7 expr_list SYMB8 { Expr_Assoc ($1, $3) }
   | unOp SYMB7 expr SYMB8 { Expr_Unary ($1, $3) }
