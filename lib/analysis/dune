@@ -14,7 +14,6 @@
  (libraries
   patricia-tree
   loader
-  intPQueue
   lang
   zarith
   fix
@@ -23,6 +22,7 @@
   containers-data
   iter
   containers.pp
+  hashset
   trace.core)
  (inline_tests)
  (preprocess

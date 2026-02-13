@@ -31,11 +31,11 @@
    containers-data
    ppx_deriving
    ocamlgraph
-   intPQueue
    cmdliner
    pp_loc
    fmt
    patricia-tree
+   hashset
    (ocamlformat :with-dev-setup)
    (odig :with-dev-setup)
    (sherlodoc :with-doc)

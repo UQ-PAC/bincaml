@@ -31,7 +31,21 @@ module Loc = struct
     | Exit
   [@@deriving eq, ord, show]
 
-  let hash = Hashtbl.hash
+  let hash (l : t) =
+    (*
+    match l with
+    | IntraVertex { proc_id; v } ->
+        Hash.combine3 1 (ID.hash proc_id) (Procedure.Vert.hash v)
+    | CallSite s ->
+        Hash.combine4 3 (ID.hash s.proc_id) (ID.hash s.block)
+          (Hash.int s.offset)
+    | AfterCall s ->
+        Hash.combine4 5 (ID.hash s.proc_id) (ID.hash s.block)
+          (Hash.int s.offset)
+    | Entry -> Hash.combine2 31 1
+    | Exit -> Hash.combine2 37 1
+    *)
+    Hashtbl.hash l
 end
 
 type ret_info = {
@@ -76,6 +90,8 @@ module type IDEDomain = sig
 
   module DL : sig
     type t = Label of Data.t | Lambda [@@deriving eq, ord, show]
+
+    val hash : t -> int
   end
 
   type 'a state_update = (DL.t * 'a) Iter.t
@@ -440,19 +456,23 @@ module IDE (D : IDEDomain) = struct
 
   type analysis_state = D.Value.t DataMap.t [@@deriving eq, ord]
 
-  module Worklist (D : Map.OrderedType) = struct
-    module S = Set.Make (D)
+  module Worklist (D : Hashset.HashedType) = struct
+    module HS = Hashset.Make (D)
 
-    type t = S.t ref
+    type t = HS.t * D.t Stack.t
 
-    let create = ref S.empty
-    let cardinal (self : t) = S.cardinal !self
-    let non_empty (self : t) = not @@ S.is_empty !self
-    let add (self : t) d = self := S.add d !self
+    let create : t = (HS.create 100, Stack.create ())
+    let cardinal ((set, stack) : t) = Stack.length stack
+    let non_empty ((set, stack) : t) = not @@ Stack.is_empty stack
 
-    let pop (self : t) =
-      let d = S.choose !self in
-      self := S.remove d !self;
+    let add ((set, stack) : t) d =
+      if not @@ HS.mem set d then (
+        HS.add set d;
+        Stack.push d stack)
+
+    let pop ((set, stack) : t) =
+      let d = Stack.pop stack in
+      HS.remove set d;
       d
   end
 
@@ -571,12 +591,8 @@ module IDE (D : IDEDomain) = struct
   module P1K = struct
     type t = Loc.t * DL.t * DL.t
 
-    let compare (a, b, c) (d, e, f) =
-      Pair.compare
-        (Pair.compare Loc.compare DL.compare)
-        DL.compare
-        ((a, b), c)
-        ((d, e), f)
+    let equal = Equal.triple Loc.equal DL.equal DL.equal
+    let hash = Hash.triple Loc.hash DL.hash DL.hash
   end
 
   module W1 = Worklist (P1K)
@@ -621,9 +637,7 @@ module IDE (D : IDEDomain) = struct
     in
     let get_summary loc = Hashtbl.get summaries loc |> Option.get_or ~default in
     W1.add worklist (start, Lambda, Lambda);
-    let iters = ref 0 in
     while W1.non_empty worklist do
-      iters := succ !iters;
       let l, d1, d2 = W1.pop worklist in
       let ost = get_summary l in
       let e1 = dldlget d1 d2 ost in
@@ -664,7 +678,8 @@ module IDE (D : IDEDomain) = struct
   module P2K = struct
     type t = Loc.t * DL.t
 
-    let compare = Pair.compare Loc.compare DL.compare
+    let equal = Equal.pair Loc.equal DL.equal
+    let hash = Hash.pair Loc.hash DL.hash
   end
 
   module W2 = Worklist (P2K)
