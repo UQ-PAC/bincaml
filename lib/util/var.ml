@@ -72,7 +72,7 @@ include (
 
 let is_local (v : t) = equal_declaration_scope (scope v) Local
 let is_global (v : t) = equal_declaration_scope (scope v) Global
-let to_string_il_rvar v = name v
+let to_string_il_rvar v = to_string v
 
 let to_string_il_lvar v =
   match scope v with Local -> "var " ^ to_string v | Global -> to_string v
