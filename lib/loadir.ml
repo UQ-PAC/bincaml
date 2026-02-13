@@ -216,12 +216,13 @@ module BasilASTLoader = struct
         let formal_in_params = formal_in_params_order |> StringMap.of_list in
         let formal_out_params_order = List.map param_to_formal out_params in
         let formal_out_params = StringMap.of_list formal_out_params_order in
+        let attrib = trans_attrib_set prog ~binds:formal_in_params attrib in
         Hashtbl.add prog.params_order id
           (formal_in_params_order, formal_out_params_order);
         let is_stub = Stdlib.(definition = ProcDef_Empty) in
         let p =
-          Procedure.create proc_id ~is_stub ~formal_in_params ~formal_out_params
-            ()
+          Procedure.create proc_id ~attrib ~is_stub ~formal_in_params
+            ~formal_out_params ()
         in
         let prog =
           map_prog

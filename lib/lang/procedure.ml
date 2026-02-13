@@ -108,8 +108,13 @@ module PG : sig
     ?ensures:BasilExpr.t list ->
     ?rely:BasilExpr.t list ->
     ?guarantee:BasilExpr.t list ->
+    ?attrib:BasilExpr.t Attrib.attrib_map ->
     unit ->
     ('a, 'b) t
+
+  val attrib : ('a, 'b) t -> BasilExpr.t Attrib.attrib_map
+  val set_attrib : ('a, 'b) t -> BasilExpr.t Attrib.t -> string -> ('a, 'b) t
+  val set_attribs : ('a, 'b) t -> BasilExpr.t Attrib.attrib_map -> ('a, 'b) t
 
   val set_specification : ('a, 'b) t -> ('a, 'c) proc_spec -> ('a, 'c) t
   (** set the procedure's specification/contract *)
@@ -157,8 +162,12 @@ end = struct
     local_ids : ID.generator;
     block_ids : ID.generator;
     specification : ('v, 'e) proc_spec;
+    attrib : BasilExpr.t Attrib.attrib_map;
   }
 
+  let attrib p = p.attrib
+  let set_attrib p k v = { p with attrib = StringMap.add v k p.attrib }
+  let set_attribs p attrib = { p with attrib }
   let set_specification p specification = { p with specification }
   let specification p = p.specification
   let id p = p.id
@@ -208,13 +217,14 @@ end = struct
   let create id ?(is_stub = false) ?(formal_in_params = StringMap.empty)
       ?(formal_out_params = StringMap.empty) ?(captures_globs = [])
       ?(modifies_globs = []) ?(requires = []) ?(ensures = []) ?(rely = [])
-      ?(guarantee = []) () =
+      ?(guarantee = []) ?(attrib = Attrib.empty) () =
     let specification =
       { captures_globs; modifies_globs; requires; ensures; rely; guarantee }
     in
     let graph = if is_stub then None else Some empty_graph in
     {
       id;
+      attrib;
       formal_in_params;
       formal_out_params;
       graph;
@@ -508,6 +518,8 @@ let pretty show_lvar show_var show_expr p =
         (fill
            (newline ^ text " -> ")
            [ params (formal_in_params p); params (formal_out_params p) ])
+    ^ text " "
+    ^ Attrib.attrib_pretty show_expr (`Assoc (attrib p))
   in
   let return_stmt = text "return" in
   let spec = pretty_spec show_var show_expr (specification p) in
