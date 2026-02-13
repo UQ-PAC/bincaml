@@ -370,9 +370,9 @@ and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
   |    AbsBasilIR.Expr_Paren expr -> prPrec i 0 (concatD [render "(" ; prtExpr 0 expr ; render ")"])
   |    AbsBasilIR.Expr_Local localvar -> prPrec i 0 (concatD [prtLocalVar 0 localvar])
   |    AbsBasilIR.Expr_Global globalvar -> prPrec i 0 (concatD [prtGlobalVar 0 globalvar])
-  |    AbsBasilIR.Expr_Forall lambdadef -> prPrec i 0 (concatD [render "forall" ; prtLambdaDef 0 lambdadef])
-  |    AbsBasilIR.Expr_Exists lambdadef -> prPrec i 0 (concatD [render "exists" ; prtLambdaDef 0 lambdadef])
-  |    AbsBasilIR.Expr_Lambda lambdadef -> prPrec i 0 (concatD [render "fun" ; prtLambdaDef 0 lambdadef])
+  |    AbsBasilIR.Expr_Forall (attribset, lambdadef) -> prPrec i 0 (concatD [render "forall" ; prtAttribSet 0 attribset ; prtLambdaDef 0 lambdadef])
+  |    AbsBasilIR.Expr_Exists (attribset, lambdadef) -> prPrec i 0 (concatD [render "exists" ; prtAttribSet 0 attribset ; prtLambdaDef 0 lambdadef])
+  |    AbsBasilIR.Expr_Lambda (attribset, lambdadef) -> prPrec i 0 (concatD [render "fun" ; prtAttribSet 0 attribset ; prtLambdaDef 0 lambdadef])
   |    AbsBasilIR.Expr_Old expr -> prPrec i 0 (concatD [render "old" ; render "(" ; prtExpr 0 expr ; render ")"])
   |    AbsBasilIR.Expr_FunctionOp (globalident, exprs) -> prPrec i 0 (concatD [prtGlobalIdent 0 globalident ; render "(" ; prtExprListBNFC 0 exprs ; render ")"])
   |    AbsBasilIR.Expr_Apply (expr1, expr2) -> prPrec i 0 (concatD [prtExpr 0 expr1 ; prtExpr 0 expr2])
@@ -397,7 +397,7 @@ and prtLParenListBNFC i es : doc = match (i, es) with
   | (_,[x]) -> (concatD [prtLParen 0 x])
   | (_,x::xs) -> (concatD [prtLParen 0 x ; render "," ; prtLParenListBNFC 0 xs])
 and prtLambdaDef (i:int) (e : AbsBasilIR.lambdaDef) : doc = match e with
-       AbsBasilIR.LambdaDef1 (lparens, lambdasep, attribset, expr) -> prPrec i 0 (concatD [prtLParenListBNFC 0 lparens ; prtLambdaSep 0 lambdasep ; prtAttribSet 0 attribset ; prtExpr 0 expr])
+       AbsBasilIR.LambdaDef1 (lparens, lambdasep, expr) -> prPrec i 0 (concatD [prtLParenListBNFC 0 lparens ; prtLambdaSep 0 lambdasep ; prtExpr 0 expr])
 
 
 and prtBinOp (i:int) (e : AbsBasilIR.binOp) : doc = match e with

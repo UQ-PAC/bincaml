@@ -194,10 +194,10 @@ Expr_Global . Expr ::= GlobalVar;
 rules LParen ::= LocalVar | "(" LocalVar ")" ;
 separator LParen ",";
 
-rules LambdaDef ::=  [LParen]  LambdaSep AttribSet Expr ;
-Expr_Forall . Expr ::= "forall" LambdaDef ;
-Expr_Exists . Expr ::= "exists" LambdaDef ;
-Expr_Lambda . Expr ::= "fun" LambdaDef ;
+rules LambdaDef ::=  [LParen]  LambdaSep Expr ;
+Expr_Forall . Expr ::= "forall" AttribSet   LambdaDef ;
+Expr_Exists . Expr ::= "exists" AttribSet  LambdaDef ;
+Expr_Lambda . Expr ::= "fun" AttribSet  LambdaDef ;
 Expr_Old . Expr       ::= "old" "(" Expr ")" ;
 
 -- uninterpreted functions

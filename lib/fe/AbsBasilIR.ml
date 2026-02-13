@@ -175,9 +175,9 @@ and expr =
  | Expr_Paren of expr
  | Expr_Local of localVar
  | Expr_Global of globalVar
- | Expr_Forall of lambdaDef
- | Expr_Exists of lambdaDef
- | Expr_Lambda of lambdaDef
+ | Expr_Forall of attribSet * lambdaDef
+ | Expr_Exists of attribSet * lambdaDef
+ | Expr_Lambda of attribSet * lambdaDef
  | Expr_Old of expr
  | Expr_FunctionOp of globalIdent * expr list
  | Expr_Apply of expr * expr
@@ -194,7 +194,7 @@ and lParen =
  | LParen1 of localVar
 
 and lambdaDef =
-   LambdaDef1 of lParen list * lambdaSep * attribSet * expr
+   LambdaDef1 of lParen list * lambdaSep * expr
 
 and binOp =
    BinOpBVBinOp of bVBinOp

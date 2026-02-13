@@ -263,9 +263,9 @@ and transExpr (x : expr) : result = match x with
   | Expr_Paren expr -> failure x
   | Expr_Local localvar -> failure x
   | Expr_Global globalvar -> failure x
-  | Expr_Forall lambdadef -> failure x
-  | Expr_Exists lambdadef -> failure x
-  | Expr_Lambda lambdadef -> failure x
+  | Expr_Forall (attribset, lambdadef) -> failure x
+  | Expr_Exists (attribset, lambdadef) -> failure x
+  | Expr_Lambda (attribset, lambdadef) -> failure x
   | Expr_Old expr -> failure x
   | Expr_FunctionOp (globalident, exprs) -> failure x
   | Expr_Apply (expr0, expr) -> failure x
@@ -284,7 +284,7 @@ and transLParen (x : lParen) : result = match x with
 
 
 and transLambdaDef (x : lambdaDef) : result = match x with
-    LambdaDef1 (lparens, lambdasep, attribset, expr) -> failure x
+    LambdaDef1 (lparens, lambdasep, expr) -> failure x
 
 
 and transBinOp (x : binOp) : result = match x with

@@ -152,6 +152,93 @@ module BasilASTLoader = struct
                  (unsafe_unsigil (`Global bident))
                  ~pure:true ~scope:Global (trans_type type')))
           prog
+    | Decl_ProgEmpty (ProcIdent (_, id), attr) -> prog
+    | Decl_ProgWithSpec (ProcIdent (_, id), attr, spec) -> prog
+    | Decl_UninterpFun (glident, _, rettype) ->
+        let ftype = trans_type rettype in
+        map_prog
+          (fun p ->
+            Program.decl_global p
+              (Var.create
+                 (unsafe_unsigil (`Global glident))
+                 ~pure:true ~scope:Global ftype))
+          prog
+    | Decl_FunNoType (glident, _, _) -> prog
+    | Decl_Fun (glident, _, typ, _) ->
+        let rtype = trans_type typ in
+        let bvar =
+          Var.create
+            (unsafe_unsigil (`Global glident))
+            ~pure:true ~scope:Global rtype
+        in
+
+        let fundef : Program.declaration =
+          Function
+            {
+              attrib = StringMap.empty;
+              binding = bvar;
+              definition = Uninterpreted;
+            }
+        in
+        map_prog (fun prog -> Program.add_decl prog bvar fundef) prog
+    | Decl_Axiom (name, _, _) ->
+        let bvar =
+          Var.create
+            (unsafe_unsigil (`Global name))
+            ~pure:true ~scope:Global Boolean
+        in
+
+        let fundef : Program.declaration =
+          Function
+            {
+              attrib = StringMap.empty;
+              binding = bvar;
+              definition = Uninterpreted;
+            }
+        in
+        map_prog (fun prog -> Program.add_decl prog bvar fundef) prog
+    | Decl_Proc
+        (ProcIdent (id_pos, id), in_params, out_params, attrib, spec, definition)
+      ->
+        let proc_id = prog.prog.proc_names.decl_or_get id in
+        let formal_in_params_order = List.map param_to_formal in_params in
+        let formal_in_params = formal_in_params_order |> StringMap.of_list in
+        let formal_out_params_order = List.map param_to_formal out_params in
+        let formal_out_params = StringMap.of_list formal_out_params_order in
+        let attrib = trans_attrib_set prog ~binds:formal_in_params attrib in
+        Hashtbl.add prog.params_order id
+          (formal_in_params_order, formal_out_params_order);
+        let is_stub = Stdlib.(definition = ProcDef_Empty) in
+        let p =
+          Procedure.create proc_id ~attrib ~is_stub ~formal_in_params
+            ~formal_out_params ()
+        in
+        let prog =
+          map_prog
+            (fun pr -> { pr with procs = ID.Map.add proc_id p pr.procs })
+            prog
+        in
+        prog
+
+  and trans_progspec p_st (p : progSpec) =
+    p_st
+    |> map_prog (fun prog ->
+        let spec = prog.spec in
+        match p with
+        | ProgSpec_Rely b ->
+            {
+              prog with
+              spec = { spec with rely = trans_expr p_st b :: spec.rely };
+            }
+        | ProgSpec_Guarantee b ->
+            {
+              prog with
+              spec =
+                { spec with guarantee = trans_expr p_st b :: spec.guarantee };
+            })
+
+  and trans_definition prog (x : decl) : load_st =
+    match x with
     | Decl_UninterpFun (glident, attrDefList, rettype) ->
         let attrib = trans_attrib_set ~binds:StringMap.empty prog attrDefList in
         let ftype = trans_type rettype in
@@ -206,50 +293,6 @@ module BasilASTLoader = struct
           Function { attrib; binding = bvar; definition = Axiom body }
         in
         map_prog (fun prog -> Program.add_decl prog bvar fundef) prog
-    | Decl_ProgEmpty (ProcIdent (_, id), attr) -> prog
-    | Decl_ProgWithSpec (ProcIdent (_, id), attr, spec) -> prog
-    | Decl_Proc
-        (ProcIdent (id_pos, id), in_params, out_params, attrib, spec, definition)
-      ->
-        let proc_id = prog.prog.proc_names.decl_or_get id in
-        let formal_in_params_order = List.map param_to_formal in_params in
-        let formal_in_params = formal_in_params_order |> StringMap.of_list in
-        let formal_out_params_order = List.map param_to_formal out_params in
-        let formal_out_params = StringMap.of_list formal_out_params_order in
-        let attrib = trans_attrib_set prog ~binds:formal_in_params attrib in
-        Hashtbl.add prog.params_order id
-          (formal_in_params_order, formal_out_params_order);
-        let is_stub = Stdlib.(definition = ProcDef_Empty) in
-        let p =
-          Procedure.create proc_id ~attrib ~is_stub ~formal_in_params
-            ~formal_out_params ()
-        in
-        let prog =
-          map_prog
-            (fun pr -> { pr with procs = ID.Map.add proc_id p pr.procs })
-            prog
-        in
-        prog
-
-  and trans_progspec p_st (p : progSpec) =
-    p_st
-    |> map_prog (fun prog ->
-        let spec = prog.spec in
-        match p with
-        | ProgSpec_Rely b ->
-            {
-              prog with
-              spec = { spec with rely = trans_expr p_st b :: spec.rely };
-            }
-        | ProgSpec_Guarantee b ->
-            {
-              prog with
-              spec =
-                { spec with guarantee = trans_expr p_st b :: spec.guarantee };
-            })
-
-  and trans_definition prog (x : decl) : load_st =
-    match x with
     | Decl_ProgEmpty (ProcIdent (_, id), attr) ->
         let nattrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         prog
@@ -829,21 +872,21 @@ module BasilASTLoader = struct
     | Expr_Literal v -> (
         match trans_value v with #BasilExpr.const as v -> BasilExpr.const v)
     | Expr_Old e -> BasilExpr.unexp ~op:`Old (trans_expr e)
-    | Expr_Forall (LambdaDef1 (lv, _, attrs, e)) ->
+    | Expr_Forall (attrs, LambdaDef1 (lv, _, e)) ->
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
         let binds =
           StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
         in
         let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
         BasilExpr.forall ~attrib ~bound (trans_expr ~nbinds:bound e)
-    | Expr_Lambda (LambdaDef1 (lv, _, attrs, e)) ->
+    | Expr_Lambda (attrs, LambdaDef1 (lv, _, e)) ->
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
         let binds =
           StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
         in
         let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
         BasilExpr.lambda ~attrib ~bound (trans_expr ~nbinds:bound e)
-    | Expr_Exists (LambdaDef1 (lv, _, attrs, e)) ->
+    | Expr_Exists (attrs, LambdaDef1 (lv, _, e)) ->
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
         let binds =
           StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)

@@ -609,9 +609,9 @@ expr : value { Expr_Literal $1 }
   | SYMB7 expr SYMB8 { Expr_Paren $2 }
   | localVar { Expr_Local $1 }
   | globalVar { Expr_Global $1 }
-  | KW_forall lambdaDef { Expr_Forall $2 }
-  | KW_exists lambdaDef { Expr_Exists $2 }
-  | KW_fun lambdaDef { Expr_Lambda $2 }
+  | KW_forall attribSet lambdaDef { Expr_Forall ($2, $3) }
+  | KW_exists attribSet lambdaDef { Expr_Exists ($2, $3) }
+  | KW_fun attribSet lambdaDef { Expr_Lambda ($2, $3) }
   | KW_old SYMB7 expr SYMB8 { Expr_Old $3 }
   | globalIdent SYMB7 expr_list SYMB8 { Expr_FunctionOp ($1, $3) }
   | expr expr { Expr_Apply ($1, $2) }
@@ -633,7 +633,7 @@ lParen_list : /* empty */ { []  }
   | lParen SYMB2 lParen_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-lambdaDef : lParen_list lambdaSep attribSet expr { LambdaDef1 ($1, $2, $3, $4) }
+lambdaDef : lParen_list lambdaSep expr { LambdaDef1 ($1, $2, $3) }
   ;
 
 binOp : bVBinOp { BinOpBVBinOp $1 }

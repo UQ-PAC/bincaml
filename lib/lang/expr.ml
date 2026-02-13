@@ -323,51 +323,66 @@ module BasilExpr = struct
 
   (** {1 Printing}*)
 
-  let pretty_alg (e : Containers_pp.t abstract_expr) =
+  let pretty_alg pattrib (e : Containers_pp.t abstract_expr) =
     let open AbstractExpr in
     let open Containers_pp in
     let open Containers_pp.Infix in
+    let a = AbstractExpr.get_attrib e |> pattrib in
     match e with
-    | RVar { id } -> text @@ Var.to_string id
-    | Constant { const } -> text @@ AllOps.to_string const
+    | RVar { id; attrib } -> text (Var.name id) ^ a
+    | Constant { const } -> text (AllOps.to_string const) ^ a
     | UnaryExpr { op = `Lambda as op; arg } ->
-        text (AllOps.to_string op) ^ text " " ^ arg
+        text (AllOps.to_string op) ^ a ^ text " " ^ arg
     | UnaryExpr { op = `Forall as op; arg } ->
-        text (AllOps.to_string op) ^ text " " ^ arg
+        text (AllOps.to_string op) ^ a ^ text " " ^ arg
     | UnaryExpr { op = `Exists as op; arg } ->
-        text (AllOps.to_string op) ^ text " " ^ arg
+        text (AllOps.to_string op) ^ a ^ text " " ^ arg
     | UnaryExpr { op = `ZeroExtend bits; arg } ->
         fill
           (text "," ^ newline)
-          [ (textpf "zero_extend(%d") bits; arg ^ text ")" ]
+          [ text "zero_extend" ^ a ^ (textpf "(%d") bits; arg ^ text ")" ]
     | UnaryExpr { op = `SignExtend bits; arg } ->
         fill
           (text "," ^ newline)
-          [ (textpf "sign_extend(%d") bits; arg ^ text ")" ]
+          [ text "sign_extend" ^ a ^ (textpf "(%d") bits; arg ^ text ")" ]
     | UnaryExpr { op = `Extract (hi, lo); arg = e } ->
-        fill nil [ textpf "extract(%d,%d, " hi lo ^ e ^ text ")" ]
+        fill nil [ text "extract" ^ a ^ textpf "(%d,%d, " hi lo ^ e ^ text ")" ]
     | UnaryExpr { op; arg = e } ->
-        text (AllOps.to_string op) ^ bracket "(" e ")"
+        text (AllOps.to_string op) ^ a ^ bracket "(" e ")"
     | BinaryExpr { op; arg1 = e; arg2 = e2 } ->
         fill nil
           [
             text (AllOps.to_string op)
+            ^ a
             ^ bracket "(" (fill (text "," ^ newline) [ e; e2 ]) ")";
           ]
     | ApplyIntrin { op; args = es } ->
         fill nil
           [
             text (AllOps.to_string op)
+            ^ a
             ^ bracket "(" (fill (text "," ^ newline) es) ")";
           ]
     | ApplyFun { func = n; args = es } ->
-        fill nil [ n ^ bracket "(\n" (fill (text "," ^ newline) es) ")" ]
+        fill nil
+          [ n ^ a ^ bracket "(" (nest 2 (fill (text "," ^ newline) es)) ")" ]
     | Binding { bound = vs; in_body = b } ->
         fill (text " ") (List.map (fun v -> bracket "(" (Var.pretty v) ")") vs)
-        ^ text " ::" ^ bracket "(" b ")"
+        ^ text " :: " ^ a ^ bracket "(" b ")"
 
-  let pretty s = cata pretty_alg s
-  let to_string s = Containers_pp.Pretty.to_string ~width:80 (cata pretty_alg s)
+  let pretty_drop_attrib s =
+    cata (pretty_alg (fun x -> Containers_pp.text "")) s
+
+  let pretty s =
+    let open Containers_pp in
+    let pretty_attr = function
+      | Some (`Assoc e) when StringMap.is_empty e -> text ""
+      | Some e -> text " " ^ Attrib.attrib_pretty pretty_drop_attrib e
+      | None -> text ""
+    in
+    cata (pretty_alg pretty_attr) s
+
+  let to_string s = Containers_pp.Pretty.to_string ~width:80 (pretty s)
   let pp fmt s = Format.pp_print_string fmt @@ to_string s
 
   (** {1 Typing}*)
@@ -457,11 +472,11 @@ module BasilExpr = struct
   let concatl ?attrib (e : t list) : t = applyintrin ?attrib ~op:`BVConcat e
   let forall ?attrib ~bound p = unexp ?attrib ~op:`Forall (binding bound p)
   let exists ?attrib ~bound p = unexp ?attrib ~op:`Exists (binding bound p)
+  let lambda ?attrib ~bound p = unexp ?attrib ~op:`Lambda (binding bound p)
   let boolnot ?attrib e = unexp ?attrib ~op:`BoolNOT e
   let intconst ?attrib (v : PrimInt.t) : t = const ?attrib (`Integer v)
   let boolconst ?attrib (v : bool) : t = const ?attrib (`Bool v)
   let bvconst ?attrib (v : Bitvec.t) : t = const ?attrib (`Bitvector v)
-  let lambda ?attrib ~bound p = unexp ?attrib ~op:`Lambda (binding bound p)
 
   let bv_of_int ~(size : int) (v : int) : t =
     const (`Bitvector (Bitvec.of_int ~size v))

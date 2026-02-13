@@ -25,14 +25,16 @@ let rec attrib_pretty pretty_expr (e : 'e t) : Containers_pp.t =
   | `Integer bv -> text @@ Z.to_string bv
   | `List s ->
       nest 2
-      @@ bracket "[" (fill (text ";" ^ newline) (List.map attrib_pretty s)) "]"
+      @@ bracket "[ "
+           (fill (text ";" ^ newline) (List.map attrib_pretty s))
+           " ]"
   | `Assoc sm ->
       let pairs =
         StringMap.to_list sm
         |> List.map (function k, v -> text k ^ text " = " ^ attrib_pretty v)
       in
       let int = fill (text ";" ^ newline) pairs in
-      nest 2 (bracket "{" int "}")
+      nest 2 (bracket "{ " int " }")
 
 type 'e attrib_map = 'e t StringMap.t [@@deriving eq, ord]
 

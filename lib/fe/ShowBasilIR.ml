@@ -249,9 +249,9 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.Expr_Paren expr -> s2s "Expr_Paren" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_Local localvar -> s2s "Expr_Local" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
   |    AbsBasilIR.Expr_Global globalvar -> s2s "Expr_Global" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
-  |    AbsBasilIR.Expr_Forall lambdadef -> s2s "Expr_Forall" >> c2s ' ' >> c2s '(' >> showLambdaDef lambdadef >> c2s ')'
-  |    AbsBasilIR.Expr_Exists lambdadef -> s2s "Expr_Exists" >> c2s ' ' >> c2s '(' >> showLambdaDef lambdadef >> c2s ')'
-  |    AbsBasilIR.Expr_Lambda lambdadef -> s2s "Expr_Lambda" >> c2s ' ' >> c2s '(' >> showLambdaDef lambdadef >> c2s ')'
+  |    AbsBasilIR.Expr_Forall (attribset, lambdadef) -> s2s "Expr_Forall" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showLambdaDef lambdadef >> c2s ')'
+  |    AbsBasilIR.Expr_Exists (attribset, lambdadef) -> s2s "Expr_Exists" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showLambdaDef lambdadef >> c2s ')'
+  |    AbsBasilIR.Expr_Lambda (attribset, lambdadef) -> s2s "Expr_Lambda" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showLambdaDef lambdadef >> c2s ')'
   |    AbsBasilIR.Expr_Old expr -> s2s "Expr_Old" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_FunctionOp (globalident, exprs) -> s2s "Expr_FunctionOp" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showList showExpr exprs >> c2s ')'
   |    AbsBasilIR.Expr_Apply (expr0, expr) -> s2s "Expr_Apply" >> c2s ' ' >> c2s '(' >> showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
@@ -270,7 +270,7 @@ and showLParen (e : AbsBasilIR.lParen) : showable = match e with
 
 
 and showLambdaDef (e : AbsBasilIR.lambdaDef) : showable = match e with
-       AbsBasilIR.LambdaDef1 (lparens, lambdasep, attribset, expr) -> s2s "LambdaDef1" >> c2s ' ' >> c2s '(' >> showList showLParen lparens  >> s2s ", " >>  showLambdaSep lambdasep  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showExpr expr >> c2s ')'
+       AbsBasilIR.LambdaDef1 (lparens, lambdasep, expr) -> s2s "LambdaDef1" >> c2s ' ' >> c2s '(' >> showList showLParen lparens  >> s2s ", " >>  showLambdaSep lambdasep  >> s2s ", " >>  showExpr expr >> c2s ')'
 
 
 and showBinOp (e : AbsBasilIR.binOp) : showable = match e with

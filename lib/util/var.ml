@@ -72,14 +72,12 @@ include (
 
 let is_local (v : t) = equal_declaration_scope (scope v) Local
 let is_global (v : t) = equal_declaration_scope (scope v) Global
-let to_string_il_rvar v = to_string v
+let to_string_il_rvar v = name v
 
 let to_string_il_lvar v =
   match scope v with Local -> "var " ^ to_string v | Global -> to_string v
 
-let to_decl_string_il v =
-  let decl_n = match typ v with Types.Map _ -> "memory" | _ -> "var" in
-  decl_n ^ " " ^ to_string v
+let to_decl_string_il v = "var " ^ to_string v
 
 module Decls = struct
   include Hashtbl
