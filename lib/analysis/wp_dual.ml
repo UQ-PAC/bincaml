@@ -48,8 +48,6 @@ module Domain = struct
   let widening a b = top
   let init proc = bottom
 
-  open Stmt
-
   (* FIXME gamma *)
   let low_expr (e : Program.e) =
     BasilExpr.free_vars_iter e
@@ -58,7 +56,9 @@ module Domain = struct
     |> Iter.to_list
     |> BasilExpr.applyintrin ~op:`OR
 
-  let transfer p = function
+  let transfer p stmt =
+    let open Stmt in
+    match stmt with
     | Instr_Assign a ->
         BasilExpr.substitute
           (fun v ->
@@ -76,6 +76,9 @@ module Domain = struct
         |> simplify
     | Instr_IndirectCall _ | Instr_Call _ | Instr_IntrinCall _ -> top
     | _ -> p
+
+  let to_pred (p : t) = BasilExpr.boolnot p
+  (** Encode an abstract state as a predicate *)
 end
 
 module Analysis = Intra_analysis.Backwards (Domain)

@@ -9,8 +9,14 @@ let transform (proc : Program.proc) =
       ~init:(fun _ -> Expr.BasilExpr.boolconst false)
       ~widening_set:Graph.ChaoticIteration.FromWto ~widening_delay:5 proc
   in
-  let n = ID.to_string @@ Procedure.id proc in
-  CCIO.with_out
-    ("wpdual" ^ n ^ ".dot")
-    (fun s -> Analysis.print_dot (Format.of_chan s) proc result);
-  proc
+  let r =
+    Analysis.A.M.find_opt Procedure.Vert.Entry result
+    |> Option.map Domain.to_pred
+  in
+  match r with
+  | Some r ->
+      let spec = Procedure.specification proc in
+      let requires = r :: spec.requires in
+      let spec = { spec with requires } in
+      Procedure.set_specification proc spec
+  | _ -> proc
