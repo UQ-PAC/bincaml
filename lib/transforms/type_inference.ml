@@ -25,6 +25,13 @@ open Type_automata
 let gen = ID.make_gen ()
 
 let minimise_type p ty name =
+  let recursives = Hashtbl.create 2 in
+  InferredType.iter
+    (fun ty ->
+      match ty with
+      | InferredType.Recursive (a, b) -> Hashtbl.add recursives a (gen.fresh ())
+      | _ -> ())
+    ty;
   let rec type_to_state_list (p : Polarity.t) (ty : InferredType.t)
       ((ls, tbl) as acc :
         State.t list * (State.t, (Sigma.t, State.t) Hashtbl.t) Hashtbl.t) :
@@ -32,7 +39,7 @@ let minimise_type p ty name =
     let open Sigma in
     match ty with
     | Top | Atom _ | TypeVar _ | Bottom | Field _ -> ((p, ty) :: ls, tbl)
-    | Recursive (_, a) ->
+    | Recursive (a, _) ->
         let ls, tbl = type_to_state_list p a acc in
         let edges = Hashtbl.create 1 in
         Hashtbl.add edges Sigma.Ep (p, a);
@@ -75,7 +82,7 @@ let minimise_type p ty name =
               type_to_state_list p ty acc)
             acc fields
         in
-        let edges = Hashtbl.create 10 in
+        let edges = Hashtbl.create 4 in
         List.iter
           (fun ({ offset; size; ty } : InferredType.field) ->
             Hashtbl.add edges (Reclabel (offset, size)) (p, ty))
@@ -91,6 +98,7 @@ let minimise_type p ty name =
   TypeAutomata.merge_nodes automata;
   automata
 
+(* TODO: Could move these inside of InferredType module *)
 let show_type_map (m : InferredType.t StringMap.t) : string =
   StringMap.bindings m
   |> List.map (fun (name, ty) ->
@@ -123,16 +131,16 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
   | TypeVar a -> (
       match TySet.find_opt tau recursive_set with
       | Some c -> c (* Seen before *)
-      | None -> (
+      | None ->
           (* Has not been seen *)
           let bounds =
             (* Get the bounds for the variable depending on the polarity *)
             match StringMap.find_opt a constraint_set with
-            | Some { lb; ub } -> if Polarity.positive polarity then ub else lb
+            | Some { lb; ub } -> if Polarity.positive polarity then lb else ub
             | None -> TySet.empty
           in
           (* If tau is in bounds then we have a recursive type *)
-          let rec_check = TySet.find_opt tau bounds in
+          let rec_check = TySet.mem tau bounds in
           let recursive_set = TySet.add tau recursive_set in
           let s =
             TySet.fold
@@ -145,7 +153,7 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
                 else Sect (type_cons, y))
               bounds tau
           in
-          match rec_check with None -> s | Some _ -> Recursive (tau, s)))
+          if rec_check then Recursive (tau, s) else s)
   | Atom _ -> tau
   | _ -> Top
 
@@ -262,16 +270,18 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
     | _, Pointer (type1_a, type1_b) ->
         constrain (constrain st type0 type1_a rec_check) type0 type1_b rec_check
     | TypeVar a, TypeVar b -> (
-        (* The right hand side is a type variable, fields are pretty much variables *)
-        let st = ConstraintState.add_ub st a type1 in
-        let bounds = StringMap.get a st in
-        match bounds with
-        | Some { lb } ->
-            TySet.to_iter lb
-            |> Iter.fold
-                 (fun st bound -> constrain st bound type1 TySet.empty)
-                 st
-        | None -> st)
+        if String.equal a b then st
+        else
+          (* The right hand side is a type variable, fields are pretty much variables *)
+          let st = ConstraintState.add_ub st a type1 in
+          let bounds = StringMap.get a st in
+          match bounds with
+          | Some { lb } ->
+              TySet.to_iter lb
+              |> Iter.fold
+                   (fun st bound -> constrain st bound type1 TySet.empty)
+                   st
+          | None -> st)
     | Field { ty }, TypeVar b -> (
         (* Fields are pretty much variables *)
         match ty with
@@ -326,6 +336,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
         st ls
   (* Pointer stuff here *)
   (* TODO: unsure about store but relativly confident about load *)
+  (* TODO: This looks off, make it addr, cells in a record *)
   | Stmt.Instr_Load { lhs; mem; cells; addr; endian } ->
       let lhs = rename_variable @@ Var.name lhs in
       let st =
@@ -423,11 +434,11 @@ let transform (prog : Program.t) =
     This needs to passes of the program but I think the only other way would be to pass the program for
      every line in the program.
   *)
-  let automatas =
-    StringMap.mapi
-      (fun name (lower_ty, upper_ty) ->
-        ( minimise_type Polarity.Pos lower_ty name,
-          minimise_type Polarity.Neg upper_ty name ))
-      types
-  in
+  (* let automatas = *)
+  (* StringMap.mapi *)
+  (* (fun name (lower_ty, upper_ty) -> *)
+  (* ( minimise_type Polarity.Pos lower_ty name, *)
+  (* minimise_type Polarity.Neg upper_ty name )) *)
+  (* types *)
+  (* in *)
   prog

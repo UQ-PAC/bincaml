@@ -93,7 +93,38 @@ module InferredType = struct
         List.compare (fun { ty } { ty = ty2 } -> compare ty ty2) fields fields2
     | _ -> 1
 
-  let equal a b = Stdlib.(==) 0 @@ compare a b
+  let equal a b = Stdlib.( == ) 0 @@ compare a b
+
+  let rec fold f acc (ty : t) =
+    let acc = f acc ty in
+    match ty with
+    | Top | Bottom | Atom _ | TypeVar _ | Recursive _ -> acc
+    | Paren t -> fold f acc t
+    | Union (a, b) | Sect (a, b) -> fold f (fold f acc a) b
+    | Pointer (lb, ub) -> fold f (fold f acc lb) ub
+    | Function (_, ins, outs) ->
+        let acc = StringMap.fold (fun _ v acc -> fold f acc v) ins acc in
+        StringMap.fold (fun _ v acc -> fold f acc v) outs acc
+    | Field { ty } -> fold f acc ty
+    | Record fields ->
+        List.fold_left (fun acc { ty } -> fold f acc ty) acc fields
+
+  let rec iter f (ty : t) =
+    f ty;
+    match ty with
+    | Top | Bottom | Atom _ | TypeVar _ | Recursive _ -> ()
+    | Paren t -> iter f t
+    | Union (a, b) | Sect (a, b) ->
+        iter f b;
+        iter f a
+    | Pointer (lb, ub) ->
+        iter f ub;
+        iter f lb
+    | Function (_, ins, outs) ->
+        StringMap.iter (fun _ v -> iter f v) ins;
+        StringMap.iter (fun _ v -> iter f v) outs
+    | Field { ty } -> iter f ty
+    | Record fields -> List.iter (fun { ty } -> iter f ty) fields
 end
 
 module TySet = struct
