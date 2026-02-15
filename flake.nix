@@ -1,6 +1,8 @@
 {
   inputs = {
+    flake-utils.url = "github:numtide/flake-utils";
     opam-nix.url = "github:tweag/opam-nix";
+    opam-nix.inputs.flake-utils.follows = "flake-utils";
     opam-nix.inputs.opam-repository.follows = "opam-repository";
     opam-repository = {
       url = "github:ocaml/opam-repository";
@@ -10,7 +12,6 @@
       url = "github:uq-pac/opam-repository";
       flake = false;
     };
-    flake-utils.url = "github:numtide/flake-utils";
     nixpkgs.follows = "opam-nix/nixpkgs";
   };
   outputs =
@@ -71,7 +72,7 @@
         } ./. query;
         overlay = final: prev: {
           ${package} = prev.${package}.overrideAttrs (_: {
-            doNixSupport = false;
+            doNixSupport = true;
           });
         };
         scope' = scope.overrideScope overlay;
