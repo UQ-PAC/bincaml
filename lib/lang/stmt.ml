@@ -102,6 +102,7 @@ let iter_lvar stmt =
 
 (** Get pretty-printer for il format*)
 let pretty show_lvar show_var show_expr s =
+  Trace_core.with_span ~__FILE__ ~__LINE__ "pretty-stmt" @@ fun _ ->
   let open Containers_pp in
   let open Containers_pp.Infix in
   let r_param_list l =

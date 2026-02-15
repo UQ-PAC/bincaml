@@ -56,20 +56,22 @@ let prog_pretty (p : t) =
     |> Option.map (fun i -> text "prog entry " ^ text @@ ID.to_string i)
     |> Option.to_list
   in
-  let pretty =
-    append_l ~sep:(text ";\n")
-    @@ globs @ n
+  let decls =
+    globs @ n
     @ List.map
         (fun (_, p) -> proc_pretty p)
         (ID.Map.to_list p.procs
         |> List.sort (fun (i, _) (j, _) -> ID.compare i j))
   in
-  pretty
+
+  append_l ~sep:(text ";\n") decls ^ text ";\n"
 
 let pretty_to_chan chan (p : t) =
   let p = prog_pretty p in
-  output_string chan @@ Containers_pp.Pretty.to_string ~width:80 p;
-  output_string chan ";"
+  flush chan;
+  let fmt = Format.formatter_of_out_channel chan in
+  Containers_pp.Pretty.to_format ~width:80 fmt p;
+  Format.flush fmt ()
 
 let decl_global p = Var.Decls.add p.globals
 

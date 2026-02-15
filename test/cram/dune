@@ -3,6 +3,7 @@
   ../../examples/irreducible_loop_1.il
   ../../examples/cat.il
   ../../examples/cntlm-output.il
+  ../../examples/cntlm-simp-output.il
   incorrect_types.il
   ../../examples/x-output.il
   typefail.sexp

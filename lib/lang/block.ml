@@ -35,6 +35,7 @@ let pretty_phi show_lvar show_var v =
   lhs ^ text " := phi" ^ (bracket "(" (fill (text "," ^ newline) rhs)) ")"
 
 let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
+  Trace_core.with_span ~__FILE__ ~__LINE__ "pretty-block" @@ fun _ ->
   let open Containers_pp in
   let open Containers_pp.Infix in
   let phi =
@@ -48,12 +49,11 @@ let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
     Vector.to_list b.stmts
     |> List.map (Stmt.pretty show_lvar show_var show_expr)
   in
-  let stmts =
-    phi @ stmts @ terminator |> List.map (fun i -> i ^ text ";" ^ newline)
+  let stmts = phi @ stmts @ terminator |> List.map (fun i -> i ^ text ";") in
+  let bracket' l d r : t =
+    group (text l ^ nest (String.length l) d ^ nl ^ text r)
   in
-  let stmts =
-    bracket "[" (nest 2 @@ newline ^ append_l ~sep:(text "") stmts) "]"
-  in
+  let stmts = bracket' "[" (nest 2 @@ nl ^ append_nl stmts) "]" in
   let name =
     Option.map
       (fun id -> text "block " ^ text (ID.to_string id) ^ text " ")

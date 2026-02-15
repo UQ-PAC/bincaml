@@ -4,3 +4,5 @@
 (run-transforms "type-check")
 (load-il "../../examples/irreducible_loop_1.il")
 (run-transforms "type-check")
+(load-il "../../examples/cntlm-simp-output.il")
+(run-transforms "type-check")
