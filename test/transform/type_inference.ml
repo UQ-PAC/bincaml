@@ -116,7 +116,7 @@ let%test_unit "Yippie" =
 
 let%test_unit "BinSub type ADT" =
   (*
-    μα.α⊓stack_slot_2⊓ptr(a,{(4,4):b⊓(t1⊓α)})⊓ptr(c,{(0,4):d⊓(t2⊓int32)})⊓ptr({(0,4):e⊔int32, f )
+    μα.α⊓stack_slot_2⊓ptr(a,{(4,4):b⊓(t1⊓α)})⊓ptr(c,{(0,4):d⊓(t2⊓int32)})⊓ptr({(0,4):e⊔int32, f)
   *)
   let alpha = TypeVar "alpha" in
   let stack_slot_2 = TypeVar "stack_slot_2" in
