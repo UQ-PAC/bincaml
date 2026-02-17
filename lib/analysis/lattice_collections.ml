@@ -1,9 +1,15 @@
-(* Lattice map type with a specified Top value *)
-
 open Lattice_types
 open Bincaml_util.Common
 
-module LatticeMap (K : PatriciaTree.KEY) (V : Lattice) = struct
+module type MapKey = sig
+  include PatriciaTree.KEY
+
+  val show : t -> string
+  val pretty : t -> Containers_pp.t
+end
+
+(** Lattice map type with a specified Top value *)
+module LatticeMap (K : MapKey) (V : Lattice) = struct
   module KM = PatriciaTree.MakeMap (K)
 
   type t = BotMap of V.t KM.t | TopMap of V.t KM.t
@@ -21,9 +27,16 @@ module LatticeMap (K : PatriciaTree.KEY) (V : Lattice) = struct
     (* if j = top then None else Some j *)
     Some j
 
-  let show a = ""
+  let show a =
+    let m, s =
+      match a with BotMap m -> (m, "BotMap ") | TopMap m -> (m, "Topmap ")
+    in
+    s
+    ^ (Iter.from_iter (fun f -> KM.iter (fun k v -> f (k, v)) m)
+      |> Iter.to_string ~sep:", " (fun (k, v) ->
+          Printf.sprintf "%s->%s" (K.show k) (V.show v)))
 
-  let pretty a = Containers_pp.text ""
+  let pretty = Containers_pp.text % show
 
   let compare a b =
     match (a, b) with
