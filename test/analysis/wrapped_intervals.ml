@@ -11,8 +11,9 @@ let dbg_list = List.map dbg
 let%test_unit "cardinality" =
   let ( = ) a b = Z.equal a (Z.of_int b) in
   let iv a b = interval (Bitvec.of_int ~size:4 a) (Bitvec.of_int ~size:4 b) in
+  let cardinality = cardinality ~width:4 in
   assert (cardinality bottom = 0);
-  assert (cardinality { w = Some 4; v = Top } = 16);
+  assert (cardinality top = 16);
   assert (cardinality (iv 0 15) = 16);
   assert (cardinality (iv 3 12) = 10);
   assert (cardinality (iv 15 0) = 2);
@@ -94,64 +95,64 @@ open WrappedIntervalsValueAbstraction
 let%test_unit "mul" =
   let ( = ) = equal in
   let iv a b = interval (Bitvec.of_int ~size:4 a) (Bitvec.of_int ~size:4 b) in
-  assert (mul (iv 15 9) (iv 0 1) = iv 15 9)
+  assert (mul ~width:4 (iv 15 9) (iv 0 1) = iv 15 9)
 
 let%test_unit "truncate" =
   let ( = ) = equal in
   let iv ~w a b =
     interval (Bitvec.of_int ~size:w a) (Bitvec.of_int ~size:w b)
   in
-  assert (truncate (iv ~w:4 7 15) 2 = { w = Some 2; v = Top });
+  assert (truncate (iv ~w:4 7 15) 2 = top);
   assert (truncate (iv ~w:4 4 5) 2 = iv ~w:2 0 1)
 
 let%test_unit "shl" =
   let ( = ) = equal in
   let iv a b = interval (Bitvec.of_int ~size:4 a) (Bitvec.of_int ~size:4 b) in
-  assert (shl (iv 2 4) (iv 1 1) = iv 4 8);
-  assert (shl (iv 4 8) (iv 2 2) = iv 0 12)
+  assert (shl ~width:4 (iv 2 4) (iv 1 1) = iv 4 8);
+  assert (shl ~width:4 (iv 4 8) (iv 2 2) = iv 0 12)
 
 let%test_unit "lshr" =
   let ( = ) = equal in
   let iv a b = interval (Bitvec.of_int ~size:4 a) (Bitvec.of_int ~size:4 b) in
-  assert (lshr (iv 3 12) (iv 1 1) = iv 1 6);
-  assert (lshr (iv 15 5) (iv 2 2) = iv 0 3)
+  assert (lshr ~width:4 (iv 3 12) (iv 1 1) = iv 1 6);
+  assert (lshr ~width:4 (iv 15 5) (iv 2 2) = iv 0 3)
 
 let%test_unit "ashr" =
   let ( = ) = equal in
   let iv a b = interval (Bitvec.of_int ~size:4 a) (Bitvec.of_int ~size:4 b) in
-  assert (ashr (iv 15 3) (iv 1 1) = iv 15 1);
-  assert (ashr (iv 3 10) (iv 2 2) = iv 12 3)
+  assert (ashr ~width:4 (iv 15 3) (iv 1 1) = iv 15 1);
+  assert (ashr ~width:4 (iv 3 10) (iv 2 2) = iv 12 3)
 
 let%test_unit "extract" =
   let ( = ) = equal in
   let iv ~w a b =
     interval (Bitvec.of_int ~size:w a) (Bitvec.of_int ~size:w b)
   in
-  assert (extract ~hi:5 ~lo:2 @@ iv ~w:6 13 63 = { w = Some 3; v = Top });
-  assert (extract ~hi:3 ~lo:1 @@ iv ~w:4 4 7 = iv ~w:2 2 3);
-  assert (extract ~hi:3 ~lo:0 @@ iv ~w:3 3 3 = iv ~w:3 3 3)
+  assert (extract ~width:6 ~hi:5 ~lo:2 @@ iv ~w:6 13 63 = top);
+  assert (extract ~width:4 ~hi:3 ~lo:1 @@ iv ~w:4 4 7 = iv ~w:2 2 3);
+  assert (extract ~width:3 ~hi:3 ~lo:0 @@ iv ~w:3 3 3 = iv ~w:3 3 3)
 
 let%test_unit "concat" =
   let ( = ) = equal in
   let iv ~w a b =
     interval (Bitvec.of_int ~size:w a) (Bitvec.of_int ~size:w b)
   in
-  assert (concat (iv ~w:2 1 3) (iv ~w:2 0 2) = iv ~w:4 4 14);
-  assert (concat (iv ~w:2 3 0) (iv ~w:2 0 2) = iv ~w:4 12 2)
+  assert (concat (iv ~w:2 1 3, 2) (iv ~w:2 0 2, 2) = iv ~w:4 4 14);
+  assert (concat (iv ~w:2 3 0, 2) (iv ~w:2 0 2, 2) = iv ~w:4 12 2)
 
 let%test_unit "zero_extend" =
   let ( = ) = equal in
   let iv ~w a b =
     interval (Bitvec.of_int ~size:w a) (Bitvec.of_int ~size:w b)
   in
-  assert (zero_extend (iv ~w:3 0 1) 3 = iv ~w:6 0 1)
+  assert (zero_extend ~width:3 (iv ~w:3 0 1) 3 = iv ~w:6 0 1)
 
 let%test_unit "sign_extend" =
   let ( = ) = equal in
   let iv ~w a b =
     interval (Bitvec.of_int ~size:w a) (Bitvec.of_int ~size:w b)
   in
-  assert (sign_extend (iv ~w:3 0 1) 3 = iv ~w:6 0 1)
+  assert (sign_extend ~width:3 (iv ~w:3 0 1) 3 = iv ~w:6 0 1)
 
 let%test "mul2" =
   let iv ~w a b =
@@ -179,5 +180,4 @@ let%test "mul2" =
 
 let%test "udiv_top_top" =
   let ( = ) = equal in
-  let top = { w = Some 4; v = Top } in
-  top = udiv top top
+  top = udiv ~width:4 top top

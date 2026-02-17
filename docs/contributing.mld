@@ -298,7 +298,7 @@ This provides fine-grained information on where the program is spending time.
 There is a script which runs bincaml and produces a flamegraph (file [flamegraph.svg]) which can be viewed in a browser, 
 e.g. [./tools/runperf.sh script examples/test.s] produces the following.
 
-{{image!doc/flamegraph.svg}Example flamegraph image}
+{{image!flamegraph.svg}Example flamegraph image}
 
 {2 Nontermination}
 

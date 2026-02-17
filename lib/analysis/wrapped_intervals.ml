@@ -23,77 +23,47 @@ open Bitvec
 module WrappedIntervalsLattice = struct
   let name = "wrappedIntervals"
 
-  type l = Top | Interval of { lower : Bitvec.t; upper : Bitvec.t } | Bot
+  type t = Top | Interval of { lower : Bitvec.t; upper : Bitvec.t } | Bot
   [@@deriving eq]
 
-  type t = { w : int option; v : l }
-
-  let show_l l =
+  let show l =
     match l with
-    | Bot -> "⊥"
-    | Top -> "⊤"
+    | Bot -> Bincaml_util.Unicode.bot_char
+    | Top -> Bincaml_util.Unicode.top_char
     | Interval { lower; upper } -> "⟦" ^ show lower ^ ", " ^ show upper ^ "⟧"
-
-  let show t =
-    let value = show_l t.v in
-    let width = match t.w with Some w -> Int.to_string w | None -> "?" in
-    value ^ ":w" ^ width
-
-  let equal s t = equal_l s.v t.v
 
   let interval lower upper =
     size_is_equal lower upper;
-    {
-      w = Some (size lower);
-      v =
-        (if Bitvec.(equal lower (add upper (of_int ~size:(size upper) 1))) then
-           Top
-         else Interval { lower; upper });
-    }
+    if Bitvec.(equal lower (add upper (of_int ~size:(size upper) 1))) then Top
+    else Interval { lower; upper }
 
-  let infer a b =
-    let w =
-      match (a.w, b.w) with
-      | Some a, Some b ->
-          assert (a = b);
-          Some a
-      | Some a, None | None, Some a -> Some a
-      | None, None -> None
-    in
-    ({ a with w }, { b with w })
-
-  let umin width = zero ~size:width
-  let umax width = ones ~size:width
-  let smin width = concat (ones ~size:1) (zero ~size:(width - 1))
-  let smax width = zero_extend ~extension:1 (ones ~size:(width - 1))
-  let sp width = interval (umax width) (umin width)
-  let np width = interval (smax width) (smin width)
-  let top = { w = None; v = Top }
-  let bottom = { w = None; v = Bot }
+  let umin ~width = zero ~size:width
+  let umax ~width = ones ~size:width
+  let smin ~width = concat (ones ~size:1) (zero ~size:(width - 1))
+  let smax ~width = zero_extend ~extension:1 (ones ~size:(width - 1))
+  let sp ~width = interval (umax ~width) (umin ~width)
+  let np ~width = interval (smax ~width) (smin ~width)
+  let top = Top
+  let bottom = Bot
   let pretty t = Containers_pp.text (show t)
 
-  let cardinality { w; v } =
+  let cardinality ~width v =
     match v with
     | Bot -> Z.of_int 0
-    | Top -> (
-        match w with
-        | Some w -> Z.pow (Z.of_int 2) w
-        | None -> failwith "Cannot determine cardinality for Top without width")
+    | Top -> Z.pow (Z.of_int 2) width
     | Interval { lower; upper } ->
         sub upper lower |> to_unsigned_bigint |> Z.add (Z.of_int 1)
 
-  let is_singleton { w; v } =
+  let is_singleton v =
     match v with
     | Bot | Top -> None
     | Interval { lower; upper } ->
         if Bitvec.equal lower upper then Some lower else None
 
-  let compare_size s t = Z.compare (cardinality s) (cardinality t)
-
-  let complement { w; v } =
+  let complement v =
     match v with
-    | Bot -> { w; v = Top }
-    | Top -> { w; v = Bot }
+    | Bot -> Top
+    | Top -> Bot
     | Interval { lower; upper } ->
         let new_lower = add upper (of_int ~size:(size upper) 1) in
         let new_upper = sub lower (of_int ~size:(size lower) 1) in
@@ -108,13 +78,11 @@ module WrappedIntervalsLattice = struct
         size_is_equal upper e;
         ule (sub e lower) (sub upper lower)
 
-  let compare_l a b =
+  let compare a b =
     match (a, b) with
-    | a, b when equal_l a b -> 0
-    | Top, _ -> 1
-    | Bot, _ -> -1
-    | _, Top -> -1
-    | _, Bot -> 1
+    | a, b when equal a b -> 0
+    | Top, _ | _, Bot -> 1
+    | Bot, _ | _, Top -> -1
     | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
       ->
         if
@@ -123,14 +91,9 @@ module WrappedIntervalsLattice = struct
         then -1
         else 1
 
-  let compare s t = compare_l s.v t.v
-
-  let join s t =
-    let s, t = infer s t in
-    let { v = a; _ } = s in
-    let { v = b; _ } = t in
-    if compare s t <= 0 then t
-    else if compare t s <= 0 then s
+  let join a b =
+    if compare a b <= 0 then b
+    else if compare b a <= 0 then a
     else
       match (a, b) with
       | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
@@ -139,13 +102,13 @@ module WrappedIntervalsLattice = struct
           let au_mem = member b au in
           let bl_mem = member a bl in
           let bu_mem = member a bu in
-          if al_mem && au_mem && bl_mem && bu_mem then
-            { w = Some (size al); v = Top }
+          if al_mem && au_mem && bl_mem && bu_mem then top
           else if au_mem && bl_mem then interval al bu
           else if al_mem && bu_mem then interval bl au
           else
-            let inner_span = cardinality (interval au bl) in
-            let outer_span = cardinality (interval bu al) in
+            let width = size al in
+            let inner_span = cardinality ~width (interval au bl) in
+            let outer_span = cardinality ~width (interval bu al) in
             if
               Z.lt inner_span outer_span
               || (Z.equal inner_span outer_span && ule al bl)
@@ -156,21 +119,21 @@ module WrappedIntervalsLattice = struct
   (* Join for multiple intervals to increase precision (join is not monotone) *)
   let lub (ints : t list) =
     let bigger a b =
-      match (a.v, b.v) with
-      | x, y when equal_l x y -> a
-      | Bot, _ -> b
-      | _, Bot -> a
-      | Top, _ -> a
-      | _, Top -> b
-      | _ -> if compare_size a b < 0 then b else a
+      match (a, b) with
+      | x, y when equal x y -> a
+      | Bot, _ | _, Top -> b
+      | _, Bot | Top, _ -> a
+      | Interval { lower }, _ ->
+          let width = size lower in
+          if Z.compare (cardinality ~width a) (cardinality ~width b) < 0 then b
+          else a
     in
     let gap a b =
-      let a, b = infer a b in
-      match (a.v, b.v) with
+      match (a, b) with
       | Interval { upper = au; _ }, Interval { lower = bl; _ }
-        when (not (member b.v au)) && not (member a.v bl) ->
+        when (not (member b au)) && not (member a bl) ->
           complement (interval bl au)
-      | _, _ -> infer a bottom |> snd
+      | _, _ -> bottom
     in
     (*
       Paper mentions last cases of join are omitted for extend, but does not specify which cases.
@@ -180,46 +143,40 @@ module WrappedIntervalsLattice = struct
     let sorted =
       List.sort
         (fun s t ->
-          match (s.v, t.v) with
+          match (s, t) with
           | Interval { lower = al; _ }, Interval { lower = bl; _ } ->
               Bitvec.compare al bl
-          | _, _ -> compare_l s.v t.v)
+          | _, _ -> compare s t)
         ints
     in
     let f1 =
       List.fold_left
         (fun acc t ->
-          match t.v with
+          match t with
           | Interval { lower; upper } when ule upper lower -> extend acc t
           | _ -> acc)
         bottom sorted
     in
     let g, f =
       List.fold_left
-        (fun (g, f) t -> (bigger g (gap f t), extend f t))
+        (fun (g, f) t -> (bigger g @@ gap f t, extend f t))
         (bottom, f1) sorted
     in
     complement (bigger g (complement f))
 
-  let widening s t =
-    let s, t = infer s t in
-    let { v = a; _ } = s in
-    let { v = b; _ } = t in
+  let widening a b =
     match (a, b) with
-    | _, Bot -> s
-    | Bot, _ -> t
-    | _, Top -> t
-    | Top, _ -> s
+    | _, Bot | Top, _ -> a
+    | Bot, _ | _, Top -> b
     | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
       ->
         size_is_equal al bl;
         size_is_equal au bu;
         let width = size al in
-        if compare t s <= 0 then s
-        else if Z.geq (cardinality s) (Z.pow (Z.of_int 2) width) then
-          { w = Some width; v = Top }
+        if compare b a <= 0 then a
+        else if Z.geq (cardinality ~width a) (Z.pow (Z.of_int 2) width) then top
         else
-          let joined = join s t in
+          let joined = join a b in
           if equal joined (interval al bu) then
             join joined
               (interval al
@@ -233,25 +190,20 @@ module WrappedIntervalsLattice = struct
                     (of_int ~size:width 1))
                  au)
           else if member b al && member b au then
-            join t
+            join b
               (interval bl
                  (sub
                     (bl
                     |> add (mul au (of_int ~size:width 2))
                     |> add (of_int ~size:width 1))
                     (mul al (of_int ~size:width 2))))
-          else { w = Some width; v = Top }
+          else top
 
-  let intersect s t =
-    let s, t = infer s t in
-    let { v = a; _ } = s in
-    let { v = b; _ } = t in
+  let intersect a b =
     match (a, b) with
-    | Bot, _ -> []
-    | _, Bot -> []
-    | Top, _ -> [ t ]
-    | a, b when equal_l a b -> [ t ]
-    | _, Top -> [ s ]
+    | Bot, _ | _, Bot -> []
+    | Top, x | x, Top -> [ x ]
+    | a, b when equal a b -> [ b ]
     | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
       ->
         let al_mem = member b al in
@@ -261,143 +213,126 @@ module WrappedIntervalsLattice = struct
         let a_in_b = al_mem && au_mem in
         let b_in_a = bl_mem && bu_mem in
         if a_in_b && b_in_a then [ interval al bu; interval bl au ]
-        else if a_in_b then [ s ]
-        else if b_in_a then [ t ]
+        else if a_in_b then [ a ]
+        else if b_in_a then [ b ]
         else if al_mem && (not au_mem) && (not bl_mem) && bu_mem then
           [ interval al bu ]
         else if (not al_mem) && au_mem && bl_mem && not bu_mem then
           [ interval bl au ]
         else []
 
-  let nsplit t =
-    match t.v with
+  let nsplit ~width t =
+    match t with
     | Bot -> []
-    | Top -> (
-        match t.w with
-        | Some w -> [ interval (umin w) (smax w); interval (smin w) (umax w) ]
-        | None -> failwith "Cannot determine nsplit for Top without width")
+    | Top ->
+        [
+          interval (umin ~width) (smax ~width);
+          interval (smin ~width) (umax ~width);
+        ]
     | Interval { lower; upper } ->
         let width = size lower in
-        let np = np width in
+        let np = np ~width in
         if compare np t <= 0 then
-          [ interval lower (smax width); interval (smin width) upper ]
+          [ interval lower (smax ~width); interval (smin ~width) upper ]
         else [ t ]
 
-  let ssplit t =
-    match t.v with
+  let ssplit ~width t =
+    match t with
     | Bot -> []
-    | Top -> (
-        match t.w with
-        | Some w -> [ interval (umin w) (smax w); interval (smin w) (umax w) ]
-        | None -> failwith "Cannot determine ssplit for Top without width")
+    | Top ->
+        [
+          interval (umin ~width) (smax ~width);
+          interval (smin ~width) (umax ~width);
+        ]
     | Interval { lower; upper } ->
         let width = size lower in
-        let sp = sp width in
+        let sp = sp ~width in
         if compare sp t <= 0 then
-          [ interval lower (umax width); interval (umin width) upper ]
+          [ interval lower (umax ~width); interval (umin ~width) upper ]
         else [ t ]
 
-  let cut t = List.concat_map ssplit (nsplit t)
+  let cut ~width t = List.concat_map (ssplit ~width) (nsplit ~width t)
 end
 
 module WrappedIntervalsLatticeOps = struct
   include WrappedIntervalsLattice
 
   let bind1 f t =
-    {
-      w = t.w;
-      v =
-        (match t.v with
-        | Bot -> Bot
-        | Top -> Top
-        | Interval { lower; upper } -> f lower upper);
-    }
+    match t with
+    | Bot -> Bot
+    | Top -> Top
+    | Interval { lower; upper } -> f lower upper
 
-  let neg = bind1 (fun l u -> Interval { lower = neg u; upper = neg l })
+  let neg = bind1 (fun l u -> interval (neg u) (neg l))
+  let bitnot = bind1 (fun l u -> interval (bitnot u) (bitnot l))
 
-  let bitnot =
-    bind1 (fun l u -> Interval { lower = bitnot u; upper = bitnot l })
-
-  let sign_extend t k =
-    if Option.equal Int.equal t.w (Some 0) then { w = Some k; v = Top }
+  let sign_extend ~width t k =
+    if width = 0 then Top
     else
-      List.filter_map
-        (fun t ->
-          match t.v with
-          | Interval { lower; upper } ->
-              Some
-                (interval
-                   (sign_extend ~extension:k lower)
-                   (sign_extend ~extension:k upper))
-          | _ -> None)
-        (nsplit t)
-      |> lub
-      |> fun s ->
-      {
-        v = s.v;
-        w =
-          (match s.w with Some _ -> s.w | None -> Option.map (Int.add k) t.w);
-      }
+      lub
+      @@ List.filter_map
+           (fun t ->
+             match t with
+             | Interval { lower; upper } ->
+                 Some
+                   (interval
+                      (sign_extend ~extension:k lower)
+                      (sign_extend ~extension:k upper))
+             | _ -> None)
+           (nsplit ~width t)
 
-  let zero_extend t k =
-    if Option.equal Int.equal t.w (Some 0) then
+  let zero_extend ~width t k =
+    if width = 0 then
       let zeros = zero ~size:k in
       interval zeros zeros
     else
-      List.filter_map
-        (fun t ->
-          match t.v with
-          | Interval { lower; upper } ->
-              Some
-                (interval
-                   (zero_extend ~extension:k lower)
-                   (zero_extend ~extension:k upper))
-          | _ -> None)
-        (ssplit t)
-      |> lub
-      |> fun s ->
-      {
-        v = s.v;
-        w =
-          (match s.w with Some _ -> s.w | None -> Option.map (Int.add k) t.w);
-      }
+      lub
+      @@ List.filter_map
+           (fun t ->
+             match t with
+             | Interval { lower; upper } ->
+                 Some
+                   (interval
+                      (zero_extend ~extension:k lower)
+                      (zero_extend ~extension:k upper))
+             | _ -> None)
+           (ssplit ~width t)
 
-  let add s t =
-    let top = infer s top |> snd in
-    match (s.v, t.v) with
-    | Bot, _ -> s
-    | _, Bot -> t
+  let add ~width s t =
+    match (s, t) with
+    | Bot, _ | _, Bot -> bottom
     | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
       ->
-        if Z.(leq (add (cardinality s) (cardinality t)) (cardinality top)) then
-          interval (add al bl) (add au bu)
+        if
+          Z.(
+            leq
+              (add (cardinality ~width s) (cardinality ~width t))
+              (cardinality ~width top))
+        then interval (add al bl) (add au bu)
         else top
     | _, _ -> top
 
-  let sub s t =
-    let top = infer s top |> snd in
-    match (s.v, t.v) with
-    | Bot, _ -> s
-    | _, Bot -> t
+  let sub ~width s t =
+    match (s, t) with
+    | Bot, _ | _, Bot -> bottom
     | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
       ->
-        if Z.(leq (add (cardinality s) (cardinality t)) (cardinality top)) then
-          interval (sub al bu) (sub au bl)
+        if
+          Z.(
+            leq
+              (add (cardinality ~width s) (cardinality ~width t))
+              (cardinality ~width top))
+        then interval (sub al bu) (sub au bl)
         else top
     | _, _ -> top
 
-  let mul s t =
+  let mul ~width s t =
     let rusmul s t =
-      let top = infer s top |> snd in
-      let w =
-        match s.w with
-        | Some w -> w
-        | None -> failwith "Cannot multiply without known width"
-      in
       let umul =
-        match (s.v, t.v) with
+        match (s, t) with
         | ( Interval { lower = al; upper = au },
             Interval { lower = bl; upper = bu } ) ->
+            let w = size al in
             let cond =
               let al = to_unsigned_bigint al in
               let au = to_unsigned_bigint au in
@@ -409,9 +344,10 @@ module WrappedIntervalsLatticeOps = struct
         | _, _ -> top
       in
       let smul =
-        match (s.v, t.v) with
+        match (s, t) with
         | ( Interval { lower = al; upper = au },
             Interval { lower = bl; upper = bu } ) ->
+            let w = size al in
             let msb_hi b =
               Bitvec.(equal (extract ~hi:w ~lo:(w - 1) b) (ones ~size:1))
             in
@@ -450,73 +386,59 @@ module WrappedIntervalsLatticeOps = struct
       in
       intersect umul smul
     in
-    infer s
-    @@ lub
-         (List.concat_map
-            (fun a -> List.concat_map (fun b -> rusmul a b) (cut t))
-            (cut s))
-    |> snd
+    lub
+    @@ List.concat_map
+         (fun a -> List.concat_map (fun b -> rusmul a b) (cut ~width t))
+         (cut ~width s)
 
   (* 
     Division implementation derived from Crab
     https://github.com/seahorn/crab/blob/418b63c66b91f04bf36ae59d5eecb936c48836ee/include/crab/domains/wrapped_interval_impl.hpp#L1034-L1091
     https://github.com/seahorn/crab/blob/418b63c66b91f04bf36ae59d5eecb936c48836ee/include/crab/domains/wrapped_interval_impl.hpp#L210-L297
   *)
-  let trim_zeroes t =
-    let w =
-      match t.w with
-      | Some w -> w
-      | None -> failwith "Cannot trim zeroes without known width"
-    in
-    let zero = zero ~size:w in
-    match t.v with
+  let trim_zeroes ~width t =
+    let zero = zero ~size:width in
+    match t with
     | Bot -> []
-    | Top -> [ interval (of_int ~size:w 1) (umax w) ]
+    | Top -> [ interval (of_int ~size:width 1) (umax ~width) ]
     | Interval { lower; upper } ->
         let equal = Bitvec.equal in
         if equal lower zero && equal upper zero then []
-        else if equal lower zero then [ interval (of_int ~size:w 1) upper ]
-        else if equal upper zero then [ interval lower (umax w) ]
-        else if member t.v zero then
-          [ interval lower (umax w); interval (of_int ~size:w 1) upper ]
+        else if equal lower zero then [ interval (of_int ~size:width 1) upper ]
+        else if equal upper zero then [ interval lower (umax ~width) ]
+        else if member t zero then
+          [
+            interval lower (umax ~width); interval (of_int ~size:width 1) upper;
+          ]
         else [ t ]
 
-  let udiv s t =
+  let udiv ~width s t =
     let divide s t =
-      let top = infer s top |> snd in
-      match (s.v, t.v) with
+      match (s, t) with
       | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
         ->
           interval (udiv al bu) (udiv au bl)
       | _, _ -> top
     in
-    infer s
-    @@ lub
-         (List.concat_map
-            (fun a ->
-              List.concat_map
-                (fun bs -> List.map (fun b -> divide a b) (trim_zeroes bs))
-                (ssplit t))
-            (ssplit s))
-    |> snd
+    lub
+    @@ List.concat_map
+         (fun a ->
+           List.concat_map
+             (fun bs -> List.map (fun b -> divide a b) (trim_zeroes ~width bs))
+             (ssplit ~width t))
+         (ssplit ~width s)
 
-  let sdiv s t =
+  let sdiv ~width s t =
     let divide s t =
-      let top = infer s top |> snd in
-
-      match (s.v, t.v) with
+      match (s, t) with
       | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
         -> (
-          let w =
-            match s.w with
-            | Some w -> w
-            | None -> failwith "Cannot signed divide without known width"
-          in
+          let w = size al in
           let msb_hi b =
             Bitvec.(equal (extract ~hi:w ~lo:(w - 1) b) (ones ~size:1))
           in
           let ( = ) = Bitvec.equal in
-          let smin, neg1 = (smin w, umax w) in
+          let smin, neg1 = (smin ~width:w, umax ~width:w) in
           match (msb_hi al, msb_hi bl) with
           | true, true
             when not ((au = smin && bl = neg1) || (al = smin && bu = neg1)) ->
@@ -533,30 +455,26 @@ module WrappedIntervalsLatticeOps = struct
           | _, _ -> top)
       | _, _ -> top
     in
-    infer s
-    @@ lub
-         (List.concat_map
-            (fun a ->
-              List.concat_map
-                (fun bs -> List.map (fun b -> divide a b) (trim_zeroes bs))
-                (cut t))
-            (cut s))
-    |> snd
+    lub
+    @@ List.concat_map
+         (fun a ->
+           List.concat_map
+             (fun bs -> List.map (fun b -> divide a b) (trim_zeroes ~width bs))
+             (cut ~width t))
+         (cut ~width s)
 
-  let bitlogop min max s t =
+  let bitlogop ~width min max s t =
     let pre s t =
-      match (s.v, t.v) with
+      match (s, t) with
       | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
         ->
           interval (min (al, au) (bl, bu)) (max (al, au) (bl, bu))
-      | _, _ -> infer s top |> snd
+      | _, _ -> top
     in
-    infer s
-    @@ lub
-         (List.concat_map
-            (fun a -> List.map (fun b -> pre a b) (ssplit t))
-            (ssplit s))
-    |> snd
+    lub
+    @@ List.concat_map
+         (fun a -> List.map (fun b -> pre a b) (ssplit ~width t))
+         (ssplit ~width s)
 
   let bitor =
     let min_or (al, au) (bl, bu) =
@@ -573,7 +491,7 @@ module WrappedIntervalsLatticeOps = struct
           if ule temp bu then bitor al temp else recurse ()
         else recurse ()
       in
-      let init = smin (size al) in
+      let init = smin ~width:(size al) in
       min_or_aux init
     in
 
@@ -591,7 +509,7 @@ module WrappedIntervalsLatticeOps = struct
           else recurse ()
         else recurse ()
       in
-      let init = smin (size al) in
+      let init = smin ~width:(size al) in
       max_or_aux init
     in
     bitlogop min_or max_or
@@ -610,7 +528,7 @@ module WrappedIntervalsLatticeOps = struct
           else recurse ()
         else recurse ()
       in
-      let init = smin (size al) in
+      let init = smin ~width:(size al) in
       min_and_aux init
     in
 
@@ -628,7 +546,7 @@ module WrappedIntervalsLatticeOps = struct
           if uge temp bl then bitand au temp else recurse ()
         else recurse ()
       in
-      let init = smin (size al) in
+      let init = smin ~width:(size al) in
       max_and_aux init
     in
     bitlogop min_and max_and
@@ -649,7 +567,7 @@ module WrappedIntervalsLatticeOps = struct
           recurse (al, au) (bl, bu)
         else recurse (al, au) (bl, bu)
       in
-      let init = smin (size al) in
+      let init = smin ~width:(size al) in
       min_xor_aux init (al, au) (bl, bu)
     in
 
@@ -670,21 +588,17 @@ module WrappedIntervalsLatticeOps = struct
           recurse (al, au) (bl, bu)
         else recurse (al, au) (bl, bu)
       in
-      let init = smin (size al) in
+      let init = smin ~width:(size al) in
       max_xor_aux init (al, au) (bl, bu)
     in
     bitlogop min_xor max_xor
 
   let truncate t k =
-    match t.v with
-    | Bot -> { w = Some k; v = Bot }
-    | Top -> { w = Some k; v = Top }
+    match t with
+    | Bot -> bottom
+    | Top -> top
     | Interval { lower; upper } ->
-        let w =
-          match t.w with
-          | Some w -> w
-          | None -> failwith "Cannot truncate without known width"
-        in
+        let w = size lower in
         if w < k then interval (zero ~size:0) (zero ~size:0)
         else
           let truncl = extract ~hi:k ~lo:0 lower in
@@ -697,150 +611,86 @@ module WrappedIntervalsLatticeOps = struct
               || equal (add shiftl (of_int ~size:w 1)) shiftu
                  && ugt truncl truncu)
           then interval truncl truncu
-          else { w = Some k; v = Top }
+          else top
 
-  let shl t k =
-    let shl_const t k =
-      if equal_l t.v Bot then t
-      else
-        let w =
-          match t.w with
-          | Some w -> w
-          | None -> failwith "Cannot shift left without known width"
-        in
-        let k = if w < k then w else k in
-        match (truncate t (w - k)).v with
+  let bitshop ~width f t k =
+    if equal t Bot then t
+    else
+      Option.map_or ~default:top (fun k ->
+          let k =
+            to_unsigned_bigint k |> fun k ->
+            if Z.fits_int k then Z.to_int k else width + 1
+          in
+          f ~width t k)
+      @@ is_singleton k
+
+  let shl =
+    bitshop (fun ~width t k ->
+        let k = if width < k then width else k in
+        match truncate t (width - k) with
         | Interval { lower; upper } ->
             let lower = Bitvec.zero_extend ~extension:k lower in
             let upper = Bitvec.zero_extend ~extension:k upper in
             interval
-              (shl lower (of_int ~size:w k))
-              (shl upper (of_int ~size:w k))
+              (shl lower (of_int ~size:width k))
+              (shl upper (of_int ~size:width k))
         | _ ->
-            interval (zero ~size:w) (concat (ones ~size:(w - k)) (zero ~size:k))
-    in
-    match is_singleton k with
-    | Some k ->
-        shl_const t
-          ( to_unsigned_bigint k |> fun k ->
-            if Z.fits_int k then Z.to_int k
-            else
-              match t.w with
-              | Some w -> w + 1
-              | None -> failwith "Cannot shift left without known width" )
-    | None -> { w = t.w; v = Top }
+            interval (zero ~size:width)
+              (concat (ones ~size:(width - k)) (zero ~size:k)))
 
-  let lshr t k =
-    let lshr_const t k =
-      if equal_l t.v Bot then t
-      else
-        let w =
-          match t.w with
-          | Some w -> w
-          | None -> failwith "Cannot logical shift right without known width"
-        in
+  let lshr =
+    bitshop (fun ~width t k ->
         let fallback =
-          interval (zero ~size:w) (concat (zero ~size:k) (ones ~size:(w - k)))
+          interval (zero ~size:width)
+            (concat (zero ~size:k) (ones ~size:(width - k)))
         in
-        if compare (sp w) t <= 0 then fallback
+        if compare (sp ~width) t <= 0 then fallback
         else
-          match t.v with
+          match t with
           | Interval { lower; upper } ->
               interval
-                (lshr lower (of_int ~size:w k))
-                (lshr upper (of_int ~size:w k))
-          | _ -> fallback
-    in
-    match is_singleton k with
-    | Some k ->
-        lshr_const t
-          ( to_unsigned_bigint k |> fun k ->
-            if Z.fits_int k then Z.to_int k
-            else
-              match t.w with
-              | Some w -> w + 1
-              | None ->
-                  failwith "Cannot logical shift right without known width" )
-    | None -> { w = t.w; v = Top }
+                (lshr lower (of_int ~size:width k))
+                (lshr upper (of_int ~size:width k))
+          | _ -> fallback)
 
-  let ashr t k =
-    let ashr_const t k =
-      if equal_l t.v Bot then t
-      else
-        let w =
-          match t.w with
-          | Some w -> w
-          | None -> failwith "Cannot arithmetic shift right without known width"
-        in
+  let ashr =
+    bitshop (fun ~width t k ->
         let fallback =
-          let k = min k w in
+          let k = min k width in
           interval
-            (concat (ones ~size:k) (zero ~size:(w - k)))
-            (concat (zero ~size:k) (ones ~size:(w - k)))
+            (concat (ones ~size:k) (zero ~size:(width - k)))
+            (concat (zero ~size:k) (ones ~size:(width - k)))
         in
-        if compare (np w) t <= 0 then fallback
+        if compare (np ~width) t <= 0 then fallback
         else
-          match t.v with
+          match t with
           | Interval { lower; upper } ->
               interval
-                (ashr lower (of_int ~size:w k))
-                (ashr upper (of_int ~size:w k))
-          | _ -> fallback
-    in
-    match is_singleton k with
-    | Some k ->
-        ashr_const t
-          ( to_unsigned_bigint k |> fun k ->
-            if Z.fits_int k then Z.to_int k
-            else
-              match t.w with
-              | Some w -> w + 1
-              | None ->
-                  failwith "Cannot arithmetic shift right without known width"
-          )
-    | None -> { w = t.w; v = Top }
+                (ashr lower (of_int ~size:width k))
+                (ashr upper (of_int ~size:width k))
+          | _ -> fallback)
 
-  let extract ~hi ~lo t =
+  let extract ~width ~hi ~lo t =
     assert (0 <= lo);
     assert (lo <= hi);
-    if hi <= lo then { w = Some 0; v = Bot }
+    assert (hi <= width);
+    if hi <= lo then bottom
     else
-      let w =
-        match t.w with
-        | Some w -> w
-        | None -> failwith "Cannot extract without known width"
-      in
-      let k = of_int ~size:w lo in
-      assert (hi <= w);
-      truncate (lshr t (interval k k)) (hi - lo)
+      let k = of_int ~size:width lo in
+      truncate (lshr ~width t (interval k k)) (hi - lo)
 
-  let concat s t =
-    match t.w with
-    | None -> top
-    | Some tw -> (
-        let t = if compare (sp tw) t <= 0 then { w = t.w; v = Top } else t in
-        match (s.v, t.v) with
-        | Bot, _ | _, Bot ->
-            {
-              w = Option.bind s.w (fun u -> Option.map (Int.add u) t.w);
-              v = Bot;
-            }
-        | Top, Top ->
-            {
-              w = Option.bind s.w (fun u -> Option.map (Int.add u) t.w);
-              v = Top;
-            }
-        | ( Interval { lower = al; upper = au },
-            Interval { lower = bl; upper = bu } ) ->
-            interval (concat al bl) (concat au bu)
-        | Interval { lower = al; upper = au }, Top ->
-            interval (concat al (zero ~size:tw)) (concat au (ones ~size:tw))
-        | Top, Interval { lower = bl; upper = bu } -> (
-            match s.w with
-            | None -> top
-            | Some sw ->
-                interval (concat (zero ~size:sw) bl) (concat (ones ~size:sw) bu)
-            ))
+  let concat (s, sw) (t, tw) =
+    let t = if compare (sp ~width:tw) t <= 0 then top else t in
+    match (s, t) with
+    | Bot, _ | _, Bot -> bottom
+    | Top, Top -> top
+    | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
+      ->
+        interval (concat al bl) (concat au bu)
+    | Interval { lower = al; upper = au }, Top ->
+        interval (concat al (zero ~size:tw)) (concat au (ones ~size:tw))
+    | Top, Interval { lower = bl; upper = bu } ->
+        interval (concat (zero ~size:sw) bl) (concat (ones ~size:sw) bu)
 end
 
 module WrappedIntervalsValueAbstraction = struct
@@ -848,41 +698,40 @@ module WrappedIntervalsValueAbstraction = struct
 
   let eval_const (op : Lang.Ops.AllOps.const) rt =
     match op with
-    | `Bool _ -> { w = Some 1; v = Top }
-    | `Integer _ -> { w = Some 0; v = Top }
-    | `Bitvector bv ->
-        if size bv = 0 then { w = Some 0; v = Top } else interval bv bv
+    | `Bool _ -> top
+    | `Integer _ -> top
+    | `Bitvector bv -> if size bv = 0 then top else interval bv bv
 
   let eval_unop (op : Lang.Ops.AllOps.unary) (a, t) rt =
-    if Option.is_none a.w then top
-    else
-      match op with
-      | `BVNEG -> neg a
-      | `BVNOT -> bitnot a
-      | `ZeroExtend k -> zero_extend a k
-      | `SignExtend k -> sign_extend a k
-      | `Extract (hi, lo) -> extract ~hi ~lo a
-      | `BOOLTOBV1 -> { w = Some 1; v = Top }
-      | _ -> infer a top |> snd
+    match t with
+    | Types.Bitvector width -> (
+        match op with
+        | `BVNEG -> neg a
+        | `BVNOT -> bitnot a
+        | `ZeroExtend k -> zero_extend ~width a k
+        | `SignExtend k -> sign_extend ~width a k
+        | `Extract (hi, lo) -> extract ~width ~hi ~lo a
+        | _ -> top)
+    | _ -> top
 
   let eval_binop (op : Lang.Ops.AllOps.binary) (a, ta) (b, tb) rt =
-    let a, b = infer a b in
-    if Option.is_none a.w then top
-    else
-      match op with
-      | `BVADD -> add a b
-      | `BVSUB -> sub a b
-      | `BVMUL -> mul a b
-      | `BVUDIV -> udiv a b
-      | `BVSDIV -> sdiv a b
-      | `BVOR -> bitor a b
-      | `BVAND -> bitand a b
-      | `BVNAND -> bitand a b |> bitnot
-      | `BVXOR -> bitxor a b
-      | `BVASHR -> ashr a b
-      | `BVLSHR -> lshr a b
-      | `BVSHL -> shl a b
-      | _ -> infer a top |> snd
+    match (ta, ta) with
+    | Types.Bitvector width, Types.Bitvector w2 when width = w2 -> (
+        match op with
+        | `BVADD -> add ~width a b
+        | `BVSUB -> sub ~width a b
+        | `BVMUL -> mul ~width a b
+        | `BVUDIV -> udiv ~width a b
+        | `BVSDIV -> sdiv ~width a b
+        | `BVOR -> bitor ~width a b
+        | `BVAND -> bitand ~width a b
+        | `BVNAND -> bitand ~width a b |> bitnot
+        | `BVXOR -> bitxor ~width a b
+        | `BVASHR -> ashr ~width a b
+        | `BVLSHR -> lshr ~width a b
+        | `BVSHL -> shl ~width a b
+        | _ -> top)
+    | _ -> top
 
   let eval_intrin (op : Lang.Ops.AllOps.intrin) (args : (t * Types.t) list) rt =
     let op a b =
@@ -891,7 +740,12 @@ module WrappedIntervalsValueAbstraction = struct
       | `BVOR -> (eval_binop `BVOR a b rt, rt)
       | `BVXOR -> (eval_binop `BVXOR a b rt, rt)
       | `BVAND -> (eval_binop `BVAND a b rt, rt)
-      | `BVConcat -> (concat (fst a) (fst b), rt)
+      | `BVConcat ->
+          ( (match (snd a, snd b) with
+            | Types.Bitvector wa, Types.Bitvector wb ->
+                concat (fst a, wa) (fst b, wb)
+            | _ -> top),
+            rt )
       | _ -> (top, rt)
     in
     match args with
