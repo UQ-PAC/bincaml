@@ -74,11 +74,12 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
 end
 
 module LatticeMapState (V : TopLattice) = struct
-  open LatticeMap (Var) (V)
+  include LatticeMap (Var) (V)
 
   type val_t = V.t
   type key_t = Var.t
 
+  module V = V
   open V
 
   let read k = function
