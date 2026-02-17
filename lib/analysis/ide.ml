@@ -572,7 +572,7 @@ module IDE (D : IDEDomain) = struct
       A summary edge function is an edge function from the start of a procedure
       to some location in the procedure that is equal to the join of all
       composite edge functions through paths to this location. *)
-  let phase1_solve order start graph globals default =
+  let phase1_solve start graph globals default =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
     let worklist = W1.create in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
@@ -638,7 +638,7 @@ module IDE (D : IDEDomain) = struct
   module W2 = Worklist (P2K)
 
   (** Compute the analysis result using summaries from phase 1 *)
-  let phase2_solve order prog start_proc graph globals
+  let phase2_solve prog start_proc graph globals
       (summaries : (Loc.t, summary) Hashtbl.t) =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
     let states : (Loc.t, analysis_state) Hashtbl.t = Hashtbl.create 100 in
@@ -709,21 +709,15 @@ module IDE (D : IDEDomain) = struct
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
     let globals = prog.globals |> Var.Decls.to_iter |> Iter.map snd in
     let graph = IDEGraph.create prog dir in
-    let order =
-      Iter.from_iter (fun f -> IDEGraph.RevTop.iter f graph)
-      |> Iter.zip_i
-      |> Iter.map (fun (i, v) -> (v, i))
-      |> Hashtbl.of_iter
-    in
     let start =
       match dir with `Forwards -> Loc.Entry | `Backwards -> Loc.Exit
     in
     let start_proc =
       prog.entry_proc |> Option.get_exn_or "Missing entry procedure"
     in
-    let summary = phase1_solve order start graph globals DlMap.empty in
+    let summary = phase1_solve start graph globals DlMap.empty in
     ( query @@ summary,
-      query @@ phase2_solve order prog start_proc graph globals summary )
+      query @@ phase2_solve prog start_proc graph globals summary )
 
   module G = Procedure.RevG
   module ResultMap = Map.Make (G.V)

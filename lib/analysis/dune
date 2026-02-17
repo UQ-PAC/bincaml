@@ -22,7 +22,6 @@
   containers-data
   iter
   containers.pp
-  hashset
   trace.core)
  (inline_tests)
  (preprocess
