@@ -78,6 +78,7 @@ module LatticeMapState (V : TopLattice) = struct
 
   type val_t = V.t
   type key_t = Var.t
+  type t = M.t
 
   open V
 
