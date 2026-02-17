@@ -74,23 +74,22 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
 end
 
 module LatticeMapState (V : TopLattice) = struct
-  module M = LatticeMap (Var) (V)
+  open LatticeMap (Var) (V)
 
   type val_t = V.t
   type key_t = Var.t
-  type t = M.t
 
   open V
 
   let read k = function
-    | M.BotMap m -> M.KM.find_opt k m |> Option.get_or ~default:V.bottom
-    | M.TopMap m -> M.KM.find_opt k m |> Option.get_or ~default:V.top
+    | BotMap m -> KM.find_opt k m |> Option.get_or ~default:V.bottom
+    | TopMap m -> KM.find_opt k m |> Option.get_or ~default:V.top
 
   let update k v = function
-    | M.BotMap m -> M.BotMap (M.KM.add k v m)
-    | M.TopMap m -> M.TopMap (M.KM.add k v m)
+    | BotMap m -> BotMap (KM.add k v m)
+    | TopMap m -> TopMap (KM.add k v m)
 
   let to_iter = function
-    | M.BotMap m | M.TopMap m ->
-        Iter.from_iter (fun f -> M.KM.iter (fun k v -> f (k, v)) m)
+    | BotMap m | TopMap m ->
+        Iter.from_iter (fun f -> KM.iter (fun k v -> f (k, v)) m)
 end
