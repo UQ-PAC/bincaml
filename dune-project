@@ -30,7 +30,7 @@
   fix
   trace
   trace-tef
-  (containers (>= "3.17"))
+  (containers (<= "3.17"))
   iter
   containers-data
   ppx_deriving
