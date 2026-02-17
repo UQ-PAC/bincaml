@@ -35,7 +35,7 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
 
   let show a =
     let m, s =
-      match a with BotMap m -> (m, "BotMap ") | TopMap m -> (m, "Topmap ")
+      match a with BotMap m -> (m, "BotMap ") | TopMap m -> (m, "TopMap ")
     in
     s
     ^ (Iter.from_iter (fun f -> KM.iter (fun k v -> f (k, v)) m)

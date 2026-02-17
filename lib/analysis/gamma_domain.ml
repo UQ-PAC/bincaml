@@ -9,11 +9,12 @@ module GammaSet = struct
   type t = Fin of VarSet.t | Top [@@deriving eq, ord]
 
   let show = function
-    | Fin a -> "Fin " ^ VarSet.to_string Var.to_string a
+    | Fin a -> "Fin " ^ VarSet.to_string ~start:"{" ~stop:"}" Var.show a
     | Top -> "Top"
 
   let pretty = Containers_pp.text % show
   let bottom = Fin VarSet.empty
+  let top = Top
 
   let join a b =
     match (a, b) with
@@ -25,7 +26,7 @@ module GammaSet = struct
 end
 
 module Domain = struct
-  include Intra_analysis.MapState (GammaSet)
+  include Lattice_collections.LatticeMapState (GammaSet)
 
   let name = "Gamma domain"
 
@@ -47,12 +48,9 @@ module Domain = struct
               |> Iter.fold (fun s v' -> V.join (read v' m) s) V.bottom)
               m)
           m a
-    (* TODO go to top (need a top map...) *)
-    | Instr_Call { lhs } ->
-        StringMap.values lhs |> Iter.fold (fun m v -> update v GammaSet.Top m) m
-    | Instr_IntrinCall { lhs } ->
-        StringMap.values lhs |> Iter.fold (fun m v -> update v GammaSet.Top m) m
-    | Instr_IndirectCall _ -> assert false
+    (* TODO calls can be more precise with modifies information (only send outputs + modifies to top) *)
+    | Instr_Call _ | Instr_IntrinCall _ | Instr_IndirectCall _ ->
+        TopMap KM.empty
     | _ -> m
 end
 
