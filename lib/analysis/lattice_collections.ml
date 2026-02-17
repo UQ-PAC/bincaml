@@ -1,6 +1,12 @@
 open Lattice_types
 open Bincaml_util.Common
 
+module type TopLattice = sig
+  include Lattice
+
+  val top : t
+end
+
 module type MapKey = sig
   include PatriciaTree.KEY
 
@@ -9,7 +15,7 @@ module type MapKey = sig
 end
 
 (** Lattice map type with a specified Top value *)
-module LatticeMap (K : MapKey) (V : Lattice) = struct
+module LatticeMap (K : MapKey) (V : TopLattice) = struct
   module KM = PatriciaTree.MakeMap (K)
 
   type t = BotMap of V.t KM.t | TopMap of V.t KM.t
@@ -65,4 +71,25 @@ module LatticeMap (K : MapKey) (V : Lattice) = struct
         TopMap (KM.difference top_vwidening b a)
     | TopMap a, TopMap b ->
         TopMap (KM.idempotent_inter_filter top_vwidening a b)
+end
+
+module LatticeMapState (V : TopLattice) = struct
+  module M = LatticeMap (Var) (V)
+
+  type val_t = V.t
+  type key_t = Var.t
+
+  open V
+
+  let read k = function
+    | M.BotMap m -> M.KM.find_opt k m |> Option.get_or ~default:V.bottom
+    | M.TopMap m -> M.KM.find_opt k m |> Option.get_or ~default:V.top
+
+  let update k v = function
+    | M.BotMap m -> M.BotMap (M.KM.add k v m)
+    | M.TopMap m -> M.TopMap (M.KM.add k v m)
+
+  let to_iter = function
+    | M.BotMap m | M.TopMap m ->
+        Iter.from_iter (fun f -> M.KM.iter (fun k v -> f (k, v)) m)
 end
