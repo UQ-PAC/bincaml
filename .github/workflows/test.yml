@@ -58,6 +58,7 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.compiler_version }}
 
+      - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
       - run: opam install . --deps-only --with-test
       - run: opam exec -- dune build --ignore-promoted-rules
       - run: sudo apt-get install cvc5 -y
@@ -72,6 +73,7 @@ jobs:
         uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: 5.3.0
+      - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
       - uses: ocaml/setup-ocaml/lint-doc@v3
 
   lint-fmt:
@@ -83,6 +85,7 @@ jobs:
         uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: 5.3.0
+      - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
       - run: opam install ocamlformat
       - uses: ocaml/setup-ocaml/lint-fmt@v3
 
@@ -95,4 +98,5 @@ jobs:
         uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: 5.3.0
+      - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
       - uses: ocaml/setup-ocaml/lint-opam@v3
