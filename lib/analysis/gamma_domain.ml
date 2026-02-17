@@ -3,20 +3,29 @@
 include Lang
 include Common
 
+module GammaSet = struct
+  let name = "Gamma set"
+
+  type t = Fin of VarSet.t | Top [@@deriving eq, ord]
+
+  let show = function
+    | Fin a -> "Fin " ^ VarSet.to_string Var.to_string a
+    | Top -> "Top"
+
+  let pretty = Containers_pp.text % show
+  let bottom = Fin VarSet.empty
+
+  let join a b =
+    match (a, b) with
+    | Top, _ -> Top
+    | _, Top -> Top
+    | Fin a, Fin b -> Fin (VarSet.union a b)
+
+  let widening = join
+end
+
 module Domain = struct
-  include Intra_analysis.MapState (struct
-    let name = "Gamma set"
-
-    type t = VarSet.t
-
-    let show = VarSet.to_string Var.to_string
-    let pretty = Containers_pp.text % show
-    let bottom = VarSet.empty
-    let equal = VarSet.equal
-    let compare = VarSet.compare
-    let join = VarSet.union
-    let widening = join
-  end)
+  include Intra_analysis.MapState (GammaSet)
 
   let name = "Gamma domain"
 
@@ -24,7 +33,7 @@ module Domain = struct
   let init proc =
     Procedure.formal_in_params proc
     |> StringMap.values
-    |> Iter.map (fun v -> (v, VarSet.singleton v))
+    |> Iter.map (fun v -> (v, GammaSet.Fin (VarSet.singleton v)))
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
   let transfer m (stmt : Program.stmt) =
@@ -38,8 +47,12 @@ module Domain = struct
               |> Iter.fold (fun s v' -> V.join (read v' m) s) V.bottom)
               m)
           m a
-    (* TODO go to top *)
-    | Instr_Call _ | Instr_IndirectCall _ -> m
+    (* TODO go to top (need a top map...) *)
+    | Instr_Call { lhs } ->
+        StringMap.values lhs |> Iter.fold (fun m v -> update v GammaSet.Top m) m
+    | Instr_IntrinCall { lhs } ->
+        StringMap.values lhs |> Iter.fold (fun m v -> update v GammaSet.Top m) m
+    | Instr_IndirectCall _ -> assert false
     | _ -> m
 end
 

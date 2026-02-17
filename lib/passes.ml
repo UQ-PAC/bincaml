@@ -103,6 +103,11 @@ module PassManager = struct
       full_ssa;
       type_check;
       {
+          name = "gamma-domain";
+          apply = Proc Analysis.Gamma_domain.transform;
+          doc = "test the gamma domain";
+      };
+      {
         name = "remove-unreachable-block";
         apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
         doc = "Remove blocks unreachable from entry";
