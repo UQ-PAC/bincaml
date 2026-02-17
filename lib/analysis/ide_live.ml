@@ -119,9 +119,8 @@ module IDELive = struct
         | Instr_Assign _ -> Iter.singleton (d, IdEdge)
         | _ ->
             Stmt.free_vars_iter stmt
-            |> Iter.fold
-                 (fun i v -> Iter.cons (Label v, ConstEdge live) i)
-                 (Iter.singleton (d, IdEdge)))
+            |> Iter.map (fun v -> (Label v, ConstEdge live))
+            |> Iter.cons (d, IdEdge))
     | Label v -> (
         match stmt with
         | Instr_Assign assigns ->
@@ -146,10 +145,11 @@ module IDELive = struct
         | Instr_Call c when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs
           ->
             Iter.empty
-        (*| Instr_IndirectCall c
-          when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs ->
-            DlMap.empty*)
-        | _ -> Iter.singleton (Label v, IdEdge))
+        (*| Instr_IndirectCall c -> top *)
+        | Instr_IndirectCall c -> Iter.singleton (Label v, IdEdge) (* Unsound *)
+        | Instr_Assert _ | Instr_Assume _ | Instr_Load _ | Instr_Store _
+        | Instr_Call _ | Instr_IntrinCall _ ->
+            Iter.singleton (Label v, IdEdge))
 
   (* TODO test*)
   let transfer_phi (phi : Var.t Block.phi) d =

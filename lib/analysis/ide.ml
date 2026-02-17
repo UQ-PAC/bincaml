@@ -13,11 +13,6 @@ open Common
 (* TODO perhaps rewrite both phases to solve like how chaotic iteration is
    implemented? I tried this already once for phase 1 and the bottleneck seemed
    to be on wto creation :( *)
-(* maybe TODO (perf) (api change?!?!) annotate in the transfer function which
-   data are modified by each statement, so that when we transfer over a block
-   of statements we can reuse most of the existing edge map from a previous
-   statement into the next without reconstructing edges coming from vertical
-   idedges. *)
 
 module Loc = struct
   type stmt_id = { proc_id : ID.t; block : ID.t; offset : int }
@@ -329,24 +324,6 @@ module IDEGraph = struct
       g;
     tbl
 
-  module RevTop = Graph.Topological.Make (struct
-    type t = G.t
-
-    module V = G.V
-
-    module E = struct
-      include G.E
-
-      let src = G.E.dst
-      let dst = G.E.src
-    end
-
-    let iter_vertex = G.iter_vertex
-    let iter_succ = G.iter_pred
-  end)
-
-  module Top = Graph.Topological.Make (G)
-
   module Vis = Graph.Graphviz.Dot (struct
     include G
     open G.V
@@ -408,11 +385,6 @@ module IDEGraph = struct
     let get_subgraph _ = None
   end)
 end
-
-(** FIXME:
-    - properly handle global variables / local variables across procedure calls;
-      procedure summaries should be in terms of globals and formal paramters
-      only ; composition across calls should include the globals *)
 
 module IDE (D : IDEDomain) = struct
   module DL = D.DL
@@ -574,12 +546,7 @@ module IDE (D : IDEDomain) = struct
   module P1K = struct
     type t = Loc.t * DL.t * DL.t
 
-    let compare (a, b, c) (d, e, f) =
-      Pair.compare
-        (Pair.compare Loc.compare DL.compare)
-        DL.compare
-        ((a, b), c)
-        ((d, e), f)
+    let compare = Ord.triple Loc.compare DL.compare DL.compare
   end
 
   module W1 = Worklist (P1K)
