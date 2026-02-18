@@ -875,7 +875,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Error: no such block: %main_7\
    \n12 |     goto(%main_7, %main_11);\
    \n              \027[1;31m^^^^^^^\027[0m\
@@ -902,7 +903,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Error: no such procedure: @cat_4198032\
    \n7 |     call @cat_4198032();\
    \n             \027[1;31m^^^^^^^^^^^^\027[0m\
@@ -931,7 +933,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Parse error:  <string>:9\
    \n9 |     $ZF:bv1 1:bv1;\
    \n                \027[1;31m^\027[0m\
