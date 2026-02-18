@@ -954,5 +954,5 @@ proc @f (ZF_in:bv1, VF_in:bv1) -> ();
   [%expect
     {|
     prog entry @f;
-    proc @f(ZF_in:bv1, VF_in:bv1)  -> ();
+    proc @f(VF_in:bv1, ZF_in:bv1)  -> ();
     |}]
