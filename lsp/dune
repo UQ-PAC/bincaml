@@ -1,7 +1,6 @@
 (library
  (public_name bincaml_lsp)
  (name bincaml_lsp)
- (modules process_doc semantic_tokens tokens kwtypes util)
 (libraries
            linol-lwt
            linol
