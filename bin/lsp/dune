@@ -1,0 +1,18 @@
+(documentation
+ (package bincaml_lsp)
+  (mld_files index))
+
+(executable
+ (name main)
+ (public_name bincaml_lsp.lsp)
+ (package bincaml_lsp)
+ (flags
+  (-w -27 ))
+ (modules main)
+ (preprocess (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord))
+ (libraries
+  linol
+  linol-lwt
+  lsp
+  bincaml_lsp ))
+

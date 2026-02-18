@@ -51,4 +51,14 @@
   (qcheck-stm :with-test))
  (tags (program-analysis)))
 
+(package
+ (name bincaml_lsp)
+ (synopsis "Language server for Bincaml IL files")
+ (depends
+   bincaml
+  (ocamlformat :with-dev-setup)
+  (odig :with-dev-setup)
+  (sherlodoc :with-doc))
+ (tags (lsp)))
+
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

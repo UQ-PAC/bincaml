@@ -1,0 +1,32 @@
+
+{0 Basil IR Language server }
+
+
+This is a simple language server for the {{: https://github.com/UQ-PAC/BASIL} Basil}
+intermediate language.
+
+It provides the following basic functionality:
+
+- syntax checking
+- goto-definition for block and procedure labels
+- symbol list
+- semantic highlighting
+
+To use it set the lsp binary to [basilLSP] for the language detected for [.il] files.
+
+It can be configured in neovim with:
+
+{[
+    servers = {
+       "basillsp"
+    },
+    config = {
+      basillsp = { cmd={"basilLSP"}, filetypes={"skill"}, root_dir = require("lspconfig.util").root_pattern("."),},
+    },
+]}
+
+
+{1 Modules}
+
+- {!module:Basillsp}
+
