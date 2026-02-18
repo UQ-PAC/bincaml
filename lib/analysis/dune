@@ -32,4 +32,4 @@
    ppx_deriving.iter
    ppx_deriving.fold
    ppx_deriving.enum
-   ppx_expect_nobase)))
+   ppx_expect)))

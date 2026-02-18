@@ -43,7 +43,7 @@
   (ocamlformat :with-dev-setup)
   (odig :with-dev-setup)
   (sherlodoc :with-doc)
-  (ppx_expect_nobase
+  (ppx_expect
    (>= "0.17.2.2"))
   (alcotest :with-test)
   (qcheck-core :with-test)
