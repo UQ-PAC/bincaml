@@ -15,12 +15,12 @@ module SymBase = struct
     | GlobSym of { interval : WrappedIntervalsLattice.t }
     | Constant (* WARN: Constant is obj in scala not a class *)
     (* Unknown *)
-    | Par of { name : string; param_name : string }
+    | Par of { name : string; param : Var.t }
     | Ret of {
         name : string;
         target_name : string;
         label : string;
-        param_name : string;
+        param : Var.t;
       }
     | Loaded of { name : string; label : string }
   [@@deriving ord, eq]
@@ -30,9 +30,10 @@ module SymBase = struct
     | Heap { name; label } -> Printf.sprintf "Heap(%s_%s)" name label
     | GlobSym _ -> "Global"
     | Constant -> "Constant"
-    | Par { name; param_name } -> Printf.sprintf "Par(%s_%s)" name param_name
-    | Ret { name; target_name; label; param_name } ->
-        Printf.sprintf "Ret(%s_%s_%s_%s)" name target_name label param_name
+    | Par { name; param } -> Printf.sprintf "Par(%s_%s)" name (Var.show param)
+    | Ret { name; target_name; label; param } ->
+        Printf.sprintf "Ret(%s_%s_%s_%s)" name target_name label
+          (Var.show param)
     | Loaded { name; label } -> Printf.sprintf "Loaded(%s_%s)" name label
 
   let place_holder = function
@@ -92,14 +93,17 @@ end
 module SymValSet (O : OffsetDomain) = struct
   module SymBaseMap = Map.Make (SymBase)
 
-  type state = O.t SymBaseMap.t
+  type t = O.t SymBaseMap.t
 
   let transform s f =
     SymBaseMap.map (fun (base, offsets) -> (base, O.transform offsets f)) s
+
+  let compare a b = 1
 end
 
 module SymValSetDomain (O : OffsetDomain) = struct
   open SymValSet (O)
+
   type t = Top | O | Bottom
 
   let join a b pos = a
@@ -111,6 +115,58 @@ module SymValSetDomain (O : OffsetDomain) = struct
   let transform_t a f = a
 end
 
+let get_constants (expr : 'e Expr.BasilExpr.abstract_expr) =
+  Expr.AbstractExpr.fold
+    (fun acc e ->
+      match e with
+      | Expr.AbstractExpr.Constant c ->
+          (match c with
+          | `Bool b ->
+              if b then Bitvec.create ~size:1 Z.one
+              else Bitvec.create ~size:1 Z.zero
+          (* TODO: Probably want this to be in decimal *)
+          | `Bitvector bv -> bv
+          | `Integer c -> Bitvec.create ~size:64 @@ Z.of_int c)
+          :: acc
+      | _ -> acc)
+    [] expr
 
-let lit_to_int lit = 
-  | 
+module SymValuesDomain (O : OffsetDomain) = struct
+  let stack_pointer = Var.create ~scope:Local "R31_IN" @@ Bitvector 64
+  let link_register = Var.create ~scope:Local "R30_IN" @@ Bitvector 64
+  let frame_pointer = Var.create ~scope:Local "R29_IN" @@ Bitvector 64
+
+  let call_preserve =
+    List.init 11 (fun i -> 19 + i) |> fun lst ->
+    31 :: lst |> List.map (fun i -> "R" ^ string_of_int i)
+
+  let implicit_form = [ stack_pointer; link_register; frame_pointer ]
+  let widen a b pos = a
+
+  open VarMap
+  open SymValSetDomain (O)
+
+  (*
+    WARN:
+      In the BASIL version this takes in blocks,
+       but in bincaml there is no block -> proc
+  *)
+  let procInitState (proc : Program.proc) =
+    let name = ID.name @@ Procedure.id proc in
+    let params =
+      StringMap.filter (fun param _ ->
+          List.fold_left
+            (fun acc a ->
+              if String.starts_with param ~prefix:a then acc else false)
+            false call_preserve)
+      @@ Procedure.formal_in_params proc
+      |> StringMap.to_iter
+      |> Iter.map (fun (_, param) -> (param, init (Par { name; param })))
+    in
+    let map =
+      VarMap.singleton stack_pointer (init (Stack name))
+      |> VarMap.add link_register (init (Par { name; param = link_register }))
+      |> VarMap.add frame_pointer (init (Par { name; param = frame_pointer }))
+    in
+    VarMap.add_iter map params
+end
