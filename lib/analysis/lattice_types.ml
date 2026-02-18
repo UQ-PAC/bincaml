@@ -10,6 +10,7 @@ module type Lattice = sig
   val bottom : t
   val join : t -> t -> t
   val equal : t -> t -> bool
+  val leq : t -> t -> bool
   val widening : t -> t -> t
 end
 
@@ -124,6 +125,14 @@ struct
   let map f a = bind (fun x -> V (f x)) a
   let map2 f a b = bind2 (fun x y -> V (f x y)) a b
   let join a b = match (a, b) with Top, _ -> Top | _, Top -> Top | _ -> Bot
+
+  let leq a b =
+    match (a, b) with
+    | a, b when equal a b -> true
+    | Bot, _ | _, Top -> true
+    | _, Bot | Top, _ -> false
+    | _ -> false
+
   let widening a b = join a b
 end
 

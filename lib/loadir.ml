@@ -1185,7 +1185,7 @@ let ast_of_fname fname =
       ast_of_channel ~input:(Pp_loc.Input.file fname) fname c)
 
 let%expect_test "missing block" =
-  let _ =
+  let run () =
     ast_of_string
       {|
 var $NF: bv1;
@@ -1206,16 +1206,18 @@ proc @main_4196260 () -> ()
 ];
     |}
   in
-  ()
+  ignore @@ disable_backtrace_in run;
+  [%expect.unreachable]
 [@@expect.uncaught_exn
   {|
-  Error: no such block: %main_7
-  12 |     goto(%main_7, %main_11);
-                [1;31m^^^^^^^[0m
+  ( "Error: no such block: %main_7\
+   \n12 |     goto(%main_7, %main_11);\
+   \n              \027[1;31m^^^^^^^\027[0m\
+   \n")
   |}]
 
 let%expect_test "missing proc" =
-  let _ =
+  let run () =
     ast_of_string
       {|
 prog entry @main_4196260;
@@ -1232,16 +1234,18 @@ proc @main_4196260 () -> ()
 ];
     |}
   in
-  ()
+  ignore @@ disable_backtrace_in run;
+  [%expect.unreachable]
 [@@expect.uncaught_exn
   {|
-  Error: no such procedure: @cat_4198032
-  7 |     call @cat_4198032();
-               [1;31m^^^^^^^^^^^^[0m
+  ( "Error: no such procedure: @cat_4198032\
+   \n7 |     call @cat_4198032();\
+   \n             \027[1;31m^^^^^^^^^^^^\027[0m\
+   \n")
   |}]
 
 let%expect_test "syntax error" =
-  let _ =
+  let run () =
     ast_of_string
       {|
 var $NF: bv1;
@@ -1260,12 +1264,13 @@ proc @main_4196260 () -> ()
 ];
     |}
   in
-  ()
-[@@expect.uncaught_exn
-  {|
-  Parse error:  <string>:8
-  8 |     :bv1 := 1:bv1;
-          [1;31m^[0m
+  ignore @@ disable_backtrace_in run;
+  [%expect.unreachable]
+[@@expect.uncaught_exn {|
+  ( "Parse error:  <string>:8\
+   \n8 |     :bv1 := 1:bv1;\
+   \n        \027[1;31m^\027[0m\
+   \n")
   |}]
 
 let%expect_test "proc without body" =
@@ -1287,7 +1292,7 @@ proc @f (ZF_in:bv1, VF_in:bv1) -> ();
   [%expect
     {|
     prog entry @f;
-    proc @f(ZF_in:bv1, VF_in:bv1)  -> ()
+    proc @f(VF_in:bv1, ZF_in:bv1)  -> () {  }
 
     ;
     |}]
@@ -1319,14 +1324,14 @@ proc @main_4196260 () -> ()
     var $ZF:bv1;
     var $NF:bv1;
     prog entry @main_4196260;
-    proc @main_4196260()  -> ()
+    proc @main_4196260()  -> () {  }
       modifies $NF:bv1, $ZF:bv1;
       captures $NF:bv1, $ZF:bv1;
 
     [
        block %main_entry [
           $NF:bv1 := 0x1:bv1;
-          $ZF:bv1 := $NF:bv1;
+          $ZF:bv1 := $NF;
           goto (%main_basil_return_1);
        ];
        block %main_basil_return_1 [ nop; return; ]

@@ -22,6 +22,13 @@ module IsZeroLattice = struct
     | _ -> Top
 
   let widening a b = join a b
+
+  let leq a b =
+    match (a, b) with
+    | a, b when equal a b -> true
+    | Bot, _ | _, Top -> true
+    | _, Bot | Top, _ -> false
+    | _ -> false
 end
 
 module IsZeroValueAbstraction = struct

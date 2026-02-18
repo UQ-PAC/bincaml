@@ -16,9 +16,7 @@ let algebraic_simplifications
 
      We can build this into fold_with_type/rewrite_typed I guess.
    *)
-  let simple_e (a, b, c) = b in
   let orig_e (a, b, c) = a in
-  let typ_e (a, b, c) = c in
 
   (* orig expr, simplified view, expr type *)
   let fix_s e = fix (AbstractExpr.of_simple_view e) in

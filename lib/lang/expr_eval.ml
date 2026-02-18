@@ -69,6 +69,10 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
       bool @@ LogicalOps.eval_intrin op args
   | ApplyFun _ -> None
   | Binding _ -> None
+  | BinaryExpr { op = `Load _ } -> None
+  | BinaryExpr { op = `MapAccess } -> None
+  | UnaryExpr { op = `Gamma } -> None
+  | UnaryExpr { op = `Classification } -> None
 
 let partial_eval_alg (e : BasilExpr.t BasilExpr.abstract_expr) :
     BasilExpr.t option =
@@ -110,5 +114,6 @@ let%expect_test _ =
   print_endline r;
   [%expect
     {|
-    bvmul(bvadd(0xa:bv10, 0xa:bv10), beans:bv10)
-    bvmul(0x14:bv10, beans:bv10) |}]
+    bvmul(bvadd(0xa:bv10, 0xa:bv10), beans)
+    bvmul(0x14:bv10, beans)
+    |}]

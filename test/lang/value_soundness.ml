@@ -70,7 +70,7 @@ struct
   let is_sound (_, _, abstract, concrete) =
     let abstract = fst @@ Lazy.force abstract in
     let concrete = fst @@ Lazy.force concrete in
-    V.equal abstract (V.join abstract concrete)
+    V.leq concrete abstract
 
   let suite =
     let open QCheck in

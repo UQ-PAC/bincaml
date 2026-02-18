@@ -9,4 +9,4 @@
   bincaml
   bincaml.analysis)
  (preprocess
-  (pps ppx_expect_nobase)))
+  (pps ppx_expect)))
