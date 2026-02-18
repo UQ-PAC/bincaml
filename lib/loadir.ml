@@ -115,7 +115,7 @@ module BasilASTLoader = struct
           List.fold_left trans_declaration prog declarations |> fun p ->
           List.fold_left trans_definition p declarations
     in
-    map_prog (fun prog -> Spec_modifies.set_modsets prog) prog
+    map_prog (fun prog -> Spec_modifies.set_modsets ~add_only:true prog) prog
 
   and trans_varspec prog (v : varSpec) =
     match v with
@@ -644,15 +644,6 @@ module BasilASTLoader = struct
 
   and trans_block (prog : load_st) (x : BasilIR.AbsBasilIR.block) =
     let tx name (phis : phiAssign list) statements jump =
-      let prog, stmts = sequence_st prog trans_stmt statements in
-      let stmts =
-        List.filter_map
-          (function
-            | `Call c -> Some (`Stmt c)
-            | `Stmt c -> Some (`Stmt c)
-            | `None -> None)
-          stmts
-      in
       let find_block_ident name =
         (Procedure.block_ids
            (prog.curr_proc |> Option.get_exn_or "currproc not set"))
@@ -674,6 +665,15 @@ module BasilASTLoader = struct
             (p_st, { lhs; rhs })
       in
       let p_st, phis = sequence_st prog tx_phi phis in
+      let prog, stmts = sequence_st prog trans_stmt statements in
+      let stmts =
+        List.filter_map
+          (function
+            | `Call c -> Some (`Stmt c)
+            | `Stmt c -> Some (`Stmt c)
+            | `None -> None)
+          stmts
+      in
       let succ = trans_jump prog jump in
       let succ, stmts =
         match (succ, stmts) with
@@ -1266,7 +1266,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Parse error:  <string>:8\
    \n8 |     :bv1 := 1:bv1;\
    \n        \027[1;31m^\027[0m\

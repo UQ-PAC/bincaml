@@ -221,6 +221,16 @@ end = struct
     let specification =
       { captures_globs; modifies_globs; requires; ensures; rely; guarantee }
     in
+    let local_ids = ID.make_gen () in
+    let block_ids = ID.make_gen () in
+    StringMap.iter (fun k v -> ignore @@ local_ids.decl_exn k) formal_in_params;
+    StringMap.iter (fun k v -> ignore @@ local_ids.decl_exn k) formal_out_params;
+    let locals = Var.Decls.empty () in
+    Var.Decls.add_iter locals
+      (Iter.append
+         (StringMap.to_iter formal_in_params)
+         (StringMap.to_iter formal_out_params));
+
     let graph = if is_stub then None else Some empty_graph in
     {
       id;
@@ -228,9 +238,9 @@ end = struct
       formal_in_params;
       formal_out_params;
       graph;
-      locals = Var.Decls.empty ();
-      local_ids = ID.make_gen ();
-      block_ids = ID.make_gen ();
+      locals;
+      local_ids;
+      block_ids;
       specification;
       topo_fwd =
         lazy
@@ -470,19 +480,11 @@ let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
     ^ append_nl
         (ml
            (fun x ->
-             let x =
-               List.sort (fun a b -> String.compare (Var.name a) (Var.name b)) x
-             in
              text "modifies "
              ^ nest 2 (fill_map (text "," ^ newline) show_var x))
            p.modifies_globs
         @ ml
             (fun x ->
-              let x =
-                List.sort
-                  (fun a b -> String.compare (Var.name a) (Var.name b))
-                  x
-              in
               text "captures "
               ^ nest 2 (fill_map (text "," ^ newline) show_var x))
             p.captures_globs

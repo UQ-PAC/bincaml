@@ -2,11 +2,6 @@
 Run on basic irreducible loop example
 
   $ ../../bin/main.exe script basicssa.sexp
-  bincaml: Error in (load-il after.il): Error: local variable used before declaration : CF_in
-           25 |       (var CF:bv1 := CF_in, var NF:bv1 := NF_in, var R0:bv64 := R0_in,
-                                     ^^^^^
-            at Dune__exe__Script.of_cmd.(fun) bin/script.ml:54
-  [123]
 
   $ cat before.il
   var $stack:(bv64->bv8);
@@ -23,10 +18,10 @@ Run on basic irreducible loop example
   prog entry @main_1876;
   proc @main_1876()  -> () { .returnBlock = "main_basil_return_1"; .name = "main";
       .address = 1876 }
-    modifies $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
-      $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8);
-    captures $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
-      $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8);
+    modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+    captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
   
   [
      block %main_entry [
@@ -153,10 +148,10 @@ Run on basic irreducible loop example
      -> (CF_out:bv1, NF_out:bv1, R0_out:bv64, R1_out:bv64, R29_out:bv64,
      R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1) { .returnBlock = "main_basil_return_1";
       .name = "main"; .address = 1876 }
-    modifies $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
-      $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8);
-    captures $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
-      $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8);
+    modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+    captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
   
   [
      block %inputs [
@@ -306,8 +301,17 @@ Run on basic irreducible loop example
   ;
 
   $ diff after.il after_reparsed.il
-  diff: after_reparsed.il: No such file or directory
-  [2]
+  18,21c18,21
+  <   modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+  <   captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+  ---
+  >   modifies $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
+  >     $VF:bv1, $ZF:bv1, $stack:(bv64->bv8), $mem:(bv64->bv8);
+  >   captures $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
+  >     $VF:bv1, $ZF:bv1, $stack:(bv64->bv8), $mem:(bv64->bv8);
+  [1]
 
 The interpreter should give the same output for both
 
@@ -318,6 +322,3 @@ The interpreter should give the same output for both
 Similar example fixing up  a file already in DSA form
 
   $ diff  before_conds.txt after_conds.txt
-  diff: before_conds.txt: No such file or directory
-  diff: after_conds.txt: No such file or directory
-  [2]

@@ -53,14 +53,27 @@ let solve (prog : Program.t) =
   in
   FixProp.lfp local_rw
 
-let set_modsets prog =
+let set_modsets ?(add_only = false) prog =
   let rwset = solve prog in
   let procs =
     ID.Map.mapi
       (fun i p ->
         let read, written = rwset i in
-        let captures_globs = VarSet.to_list @@ VarSet.union read written in
-        let modifies_globs = VarSet.to_list written in
+        let spec = Procedure.specification p in
+        let exist_modifies =
+          if add_only then VarSet.of_list spec.modifies_globs else VarSet.empty
+        in
+        let exist_captures =
+          if add_only then VarSet.of_list spec.captures_globs else VarSet.empty
+        in
+        let captures_globs =
+          VarSet.elements
+          @@ VarSet.union exist_captures
+          @@ VarSet.union read written
+        in
+        let modifies_globs =
+          VarSet.elements @@ VarSet.union exist_modifies written
+        in
         let spec : (Var.t, Program.e) Procedure.proc_spec =
           Procedure.specification p
         in

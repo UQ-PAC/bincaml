@@ -1,14 +1,19 @@
 
   $ ../../bin/main.exe script roundtrip.sexp
-  bincaml: Error in (load-il before2.il): Error: local variable used before declaration : R0_in
-           14 |        0xfffffffffffffffc:bv64) extract(32,0, R0_in) 32;
-                                                              ^^^^^
-            at Dune__exe__Script.of_cmd.(fun) bin/script.ml:54
-  [123]
 
 The serialise -> parse serialise loop should be idempotent
 
   $ diff before.il after.il
+  15,18c15,18
+  <   modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+  <   captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+  ---
+  >   modifies $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
+  >     $VF:bv1, $ZF:bv1, $stack:(bv64->bv8), $mem:(bv64->bv8);
+  >   captures $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
+  >     $VF:bv1, $ZF:bv1, $stack:(bv64->bv8), $mem:(bv64->bv8);
   121c121
   <    block %main_basil_return_1 [ nop; return; ]
   ---
@@ -16,5 +21,10 @@ The serialise -> parse serialise loop should be idempotent
   [1]
 
   $ diff before2.il after2.il
-  diff: after2.il: No such file or directory
-  [2]
+  7,8c7,8
+  <   modifies $mem:(bv64->bv8), $stack:(bv64->bv8);
+  <   captures $mem:(bv64->bv8), $stack:(bv64->bv8);
+  ---
+  >   modifies $stack:(bv64->bv8), $mem:(bv64->bv8);
+  >   captures $stack:(bv64->bv8), $mem:(bv64->bv8);
+  [1]
