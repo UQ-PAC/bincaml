@@ -1,6 +1,7 @@
 (library
  (public_name bincaml_lsp)
  (name bincaml_lsp)
+ (modules raw_tokens)
 (libraries
            linol-lwt
            linol

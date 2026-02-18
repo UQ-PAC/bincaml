@@ -8,7 +8,7 @@
    Here we expect a few things:
    - a type to represent a state/environment that results from processing an
      input file
-   - a function procdessing an input file (given the file contents as a string),
+   - a function processing an input file (given the file contents as a string),
      which return a state/environment
    - a function to extract a list of diagnostics from a state/environment.
      Diagnostics includes all the warnings, errors and messages that the processing
@@ -17,18 +17,23 @@
 
 module Lsp = Linol.Lsp
 
-type state_after_processing = unit
+(* type state_after_processing = Bincaml_lsp.Raw_tokens.raw_token list *)
+type state_after_processing = Bincaml_lsp.Raw_tokens.token_with_pos list
 
-let process_some_input_file (_file_contents : string) : state_after_processing =
-  ()
+let process_some_input_file (file_contents : string) : state_after_processing =
+  let lexbuf = Lexing.from_string ~with_positions:true file_contents in
+  Bincaml_lsp.Raw_tokens.extract_all_tokens lexbuf |> Iter.to_list
 
-let diagnostics (_state : state_after_processing) : Lsp.Types.Diagnostic.t list
-    =
-  let pos = Lsp.Types.Position.create ~character:1 ~line:1 in
-  let range = Lsp.Types.Range.create ~end_:pos ~start:pos in
-  [
-    Lsp.Types.Diagnostic.create ~message:(`String "hi!!!!!!!!!") ~range ()
-  ]
+let diagnostics (state : state_after_processing) : Lsp.Types.Diagnostic.t list =
+  state
+  |> List.map (fun (x : Bincaml_lsp.Raw_tokens.token_with_pos) ->
+      let pos (p : Lexing.position) =
+        Lsp.Types.Position.create ~character:(p.pos_cnum - p.pos_bol) ~line:(p.pos_lnum - 1)
+      in
+      let start = pos x.startpos in
+      let end_ = pos x.endpos in
+      let range = Lsp.Types.Range.create ~start ~end_ in
+      Lsp.Types.Diagnostic.create ~message:(`String x.str) ~range ())
 
 (* Lsp server class
 
@@ -94,9 +99,9 @@ let run () =
   match Linol_lwt.run task with
   | () -> ()
   | exception e ->
-    let e = Printexc.to_string e in
-    Printf.eprintf "error: %s\n%!" e;
-    exit 1
+      let e = Printexc.to_string e in
+      Printf.eprintf "error: %s\n%!" e;
+      exit 1
 
 (* Finally, we actually run the server *)
 let () = run ()
