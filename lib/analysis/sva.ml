@@ -1,69 +1,33 @@
-(*
-  SVA analysis
-    - Based off of the DSA paper
-      the first iteration I believe as newer one have had the SVA sections reduced
-
-  Note: This does not result in amazing results currently, may need a paper focused
-    on SVA or more research to improve it, it only really works with mallocs (for
-    type inference use case) 
-*)
+(** SVA analysis *)
 
 open Lang
 open Containers
 open Common
 open Wrapped_intervals
+module BVSet = Set.Make (Bitvec)
 
-(*
-  TODO
-    Figure out what the SymBases should actually have in them, is it just for cute printing?
-*)
+module type OffsetDomain = sig
+  type t
 
-module SymBase = struct
-  type t =
-    (* Known *)
-    | Stack of string
-    | Heap of { name : string }
-    | GlobSym
-    | Constant
-    (* Unknown *)
-    | Par of { name : string; param : Var.t }
-    | Ret of { name : string; param : Var.t }
-    | Loaded
-  [@@deriving ord, eq]
-
-  let show = function
-    | Stack name -> Printf.sprintf "Stack(%s)" name
-    | Heap { name } -> Printf.sprintf "Heap(%s)" name
-    | GlobSym -> "Global"
-    | Constant -> "Constant"
-    | Par { name; param } -> Printf.sprintf "Par(%s_%s)" name (Var.show param)
-    | Ret { name; param } -> Printf.sprintf "Ret(%s_%s)" name (Var.show param)
-    | Loaded -> Printf.sprintf "Loaded"
-
-  let is_place_holder = function
-    | Stack _ | Heap _ | GlobSym | Constant -> false
-    | Ret _ | Par _ | Loaded -> true
-
-  let to_int = Hashtbl.hash
-  let pretty a = Containers_pp.text @@ show a
-  let is_stack = function Stack _ -> true | _ -> false
+  val init : Bitvec.t -> t
+  val init_set : BVSet.t -> t
+  val should_widen : t -> bool
+  val transform : t -> (Bitvec.t -> Bitvec.t) -> t
+  val transform_t : t -> (t -> t) -> t
+  val add : t -> t -> bool -> t
 end
 
-module IntervalDomain = struct
-  open WrappedIntervalsLattice
+module IntervalDomain : OffsetDomain = struct
+  include WrappedIntervalsLattice
 
-  type t = WrappedIntervalsLattice.t [@@deriving eq, ord]
-
-  let name = "interval offsets domain "
-  let pretty = WrappedIntervalsLattice.pretty
-  let show = WrappedIntervalsLattice.show
-  let bottom = WrappedIntervalsLattice.bottom
-  let leq = WrappedIntervalsLattice.leq
-  let widening = WrappedIntervalsLattice.widening
-  let join = WrappedIntervalsLattice.join
-  let top = WrappedIntervalsLattice.Top
-  let neg = WrappedIntervalsLatticeOps.neg
-  let init ?(vertex = None) a = interval a a
+  let init i = interval i i
+  let init_set set = interval (BVSet.min_elt set) @@ BVSet.max_elt set
+  let should_widen t = true
+  let transform t f = t
+  let transform_t t f = t
+  let add t t' neg = match (t, t') with
+    | Top, _ | _, Top -> Top
+    | _, _ -> Bot
 end
 
 module SymAddrSetLattice = struct
@@ -172,7 +136,7 @@ module Domain = struct
     List.init 11 (fun i -> 19 + i) |> fun lst ->
     31 :: lst |> List.map (fun i -> "R" ^ string_of_int i)
 
-  let init ?(vertex = None) proc =
+  let init proc =
     let open Option in
     let name = ID.name @@ Procedure.id proc in
     StringMap.filter (fun param _ ->
