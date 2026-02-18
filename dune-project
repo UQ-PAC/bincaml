@@ -21,7 +21,7 @@
 
 (package
  (name bincaml)
- (synopsis "program analysis tool")
+ (synopsis "Program analysis tool.")
  (description "A longer description")
  (depends
   menhir
