@@ -9,10 +9,12 @@ module IntervalLatticeSet = Set.Make (WrappedIntervalsLattice)
 
 module SymBase = struct
   type t =
+    (* Known *)
     | Stack of string
     | Heap of { name : string; label : string }
     | GlobSym of { interval : WrappedIntervalsLattice.t }
-    | Constant
+    | Constant (* WARN: Constant is obj in scala not a class *)
+    (* Unknown *)
     | Par of { name : string; param_name : string }
     | Ret of {
         name : string;
@@ -21,6 +23,7 @@ module SymBase = struct
         param_name : string;
       }
     | Loaded of { name : string; label : string }
+  [@@deriving ord, eq]
 
   let show = function
     | Stack name -> Printf.sprintf "Stack(%s)" name
@@ -84,3 +87,30 @@ module IntervalDomain : OffsetDomain = struct
         let o4 = Bitvec.add upper lower2 in
         init_set @@ BVSet.of_list [ o1; o2; o3; o4 ]
 end
+
+(* I don't know if this is really smart to call this a Set when its state is a Map *)
+module SymValSet (O : OffsetDomain) = struct
+  module SymBaseMap = Map.Make (SymBase)
+
+  type state = O.t SymBaseMap.t
+
+  let transform s f =
+    SymBaseMap.map (fun (base, offsets) -> (base, O.transform offsets f)) s
+end
+
+module SymValSetDomain (O : OffsetDomain) = struct
+  open SymValSet (O)
+  type t = Top | O | Bottom
+
+  let join a b pos = a
+  let widen a b pos = a
+  let init a v = SymBaseMap.singleton a @@ O.init v
+  let init_set a v = SymBaseMap.singleton a @@ O.init_set v
+  let transfer a f = failwith "asd"
+  let transform a f = a
+  let transform_t a f = a
+end
+
+
+let lit_to_int lit = 
+  | 
