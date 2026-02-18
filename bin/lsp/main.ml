@@ -45,6 +45,8 @@ let diagnostics (state : state_after_processing) : Lsp.Types.Diagnostic.t list =
    changes, etc.. By default, the method predefined does nothing (or errors out ?),
    so that users only need to override methods that they want the server to
    actually meaningfully interpret and respond to.
+
+    https://c-cube.github.io/linol/linol/Linol/Jsonrpc2/module-type-S/class-server/index.html
 *)
 class lsp_server =
   object (self)
