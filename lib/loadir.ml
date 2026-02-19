@@ -827,6 +827,32 @@ module BasilASTLoader = struct
     | `Block (BlockIdent (pos, g)) -> g
     | `Attr (BIdent (pos, g)) -> g
 
+  and trans_cases p_st c =
+    let cases =
+      c
+      |> List.map (function
+        | CaseCase (o, e) ->
+            BasilExpr.binexp ~op:`IfThen (trans_expr p_st o) (trans_expr p_st e)
+        | CaseDefault e ->
+            BasilExpr.binexp ~op:`IfThen (BasilExpr.boolconst true)
+              (trans_expr p_st e))
+    in
+    BasilExpr.applyintrin ~op:`Cases cases
+
+  and trans_match p_st arg c =
+    let cases =
+      c
+      |> List.map (function
+        | CaseCase (o, e) ->
+            BasilExpr.binexp ~op:`IfThen
+              (BasilExpr.binexp ~op:`EQ arg (trans_expr p_st o))
+              (trans_expr p_st e)
+        | CaseDefault e ->
+            BasilExpr.binexp ~op:`IfThen (BasilExpr.boolconst true)
+              (trans_expr p_st e))
+    in
+    BasilExpr.applyintrin ~op:`Cases cases
+
   and trans_expr ?(binds = StringMap.empty) (p_st : load_st)
       (x : BasilIR.AbsBasilIR.expr) : BasilExpr.t =
     let trans_expr ?(nbinds = []) =
@@ -838,6 +864,10 @@ module BasilASTLoader = struct
     in
     let open Ops in
     match x with
+    | Expr_Match (e, o, cases, c) ->
+        let e = trans_expr e in
+        trans_match p_st e cases
+    | Expr_Cases (o, cases, c) -> trans_cases p_st cases
     | Expr_Paren (o, e, c) ->
         trans_expr e |> BasilExpr.unfix
         |> AbstractExpr.map_attrib (function

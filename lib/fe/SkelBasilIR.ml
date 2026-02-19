@@ -286,6 +286,8 @@ and transExpr (x : expr) : result = match x with
   | Expr_SignExtend (openparen, intval, expr, closeparen) -> failure x
   | Expr_Extract (openparen, intval0, intval, expr, closeparen) -> failure x
   | Expr_Concat (openparen, exprs, closeparen) -> failure x
+  | Expr_Match (expr, openparen, cases, closeparen) -> failure x
+  | Expr_Cases (openparen, cases, closeparen) -> failure x
 
 
 and transLParen (x : lParen) : result = match x with
@@ -313,6 +315,11 @@ and transUnOp (x : unOp) : result = match x with
   | UnOp_booltobv1  -> failure x
   | UnOp_gamma  -> failure x
   | UnOp_classification  -> failure x
+
+
+and transCase (x : case) : result = match x with
+    CaseCase (expr0, expr) -> failure x
+  | CaseDefault expr -> failure x
 
 
 and transEqOp (x : eqOp) : result = match x with

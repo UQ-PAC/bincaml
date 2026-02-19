@@ -198,7 +198,16 @@ module Spec = struct
   type endian = [ `Big | `Little ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type binary = [ `MapAccess | `Load of endian * int ]
+  type binary =
+    [ `MapAccess  (** access a value from a map*)
+    | `Load of endian * int
+      (** load many value from a map assuming values are concatable *)
+    | `IfThen
+      (** if first arg evaluates to true then return second arg, otherwise halt
+          and catch fire *) ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type intrin = [ `Cases  (** choose first argument that is defined *) ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type unary = [ `Forall | `Old | `Exists | `Lambda | `Classification | `Gamma ]
@@ -218,7 +227,7 @@ module AllOps = struct
     [ IntOps.binary | BVOps.binary | LogicalOps.binary | Spec.binary ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type intrin = [ BVOps.intrin | LogicalOps.intrin ]
+  type intrin = [ BVOps.intrin | LogicalOps.intrin | Spec.intrin ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type op_fun_type =
@@ -282,11 +291,13 @@ module AllOps = struct
         let m, r = Types.curry l in
         return r
     | `Load (e, i) -> return (Bitvector i)
+    | `IfThen -> return r
 
   let ret_type_intrin (o : intrin) args =
     let open Types in
     let return ret = Fun { args; ret } in
     match o with
+    | `Cases -> return @@ List.hd @@ List.tl args
     | `BVADD -> return @@ List.hd args
     | `BVOR -> return @@ List.hd args
     | `BVXOR -> return @@ List.hd args
@@ -368,6 +379,8 @@ module AllOps = struct
     | `Load (`Big, sz) -> Printf.sprintf "load_be_%d" sz
     | `Load (`Little, sz) -> Printf.sprintf "load_le_%d" sz
     | `MapAccess -> "get"
+    | `IfThen -> "case"
+    | `Cases -> "match"
 
   let eval_equal (a : const) (b : const) =
     match (a, b) with

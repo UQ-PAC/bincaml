@@ -192,6 +192,8 @@ and expr =
  | Expr_SignExtend of openParen * intVal * expr * closeParen
  | Expr_Extract of openParen * intVal * intVal * expr * closeParen
  | Expr_Concat of openParen * expr list * closeParen
+ | Expr_Match of expr * openParen * case list * closeParen
+ | Expr_Cases of openParen * case list * closeParen
 
 and lParen =
    LParenLocalVar of localVar
@@ -215,6 +217,10 @@ and unOp =
  | UnOp_booltobv1
  | UnOp_gamma
  | UnOp_classification
+
+and case =
+   CaseCase of expr * expr
+ | CaseDefault of expr
 
 and eqOp =
    EqOp_eq

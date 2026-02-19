@@ -391,6 +391,8 @@ and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
   |    AbsBasilIR.Expr_SignExtend (openparen, intval, expr, closeparen) -> prPrec i 0 (concatD [render "sign_extend" ; prtOpenParen 0 openparen ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Extract (openparen, intval1, intval2, expr, closeparen) -> prPrec i 0 (concatD [render "extract" ; prtOpenParen 0 openparen ; prtIntVal 0 intval1 ; render "," ; prtIntVal 0 intval2 ; render "," ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Concat (openparen, exprs, closeparen) -> prPrec i 0 (concatD [render "bvconcat" ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_Match (expr, openparen, cases, closeparen) -> prPrec i 0 (concatD [render "match" ; prtExpr 0 expr ; render "with" ; prtOpenParen 0 openparen ; prtCaseListBNFC 0 cases ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_Cases (openparen, cases, closeparen) -> prPrec i 0 (concatD [render "cases" ; prtOpenParen 0 openparen ; prtCaseListBNFC 0 cases ; prtCloseParen 0 closeparen])
 
 and prtExprListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
@@ -426,6 +428,14 @@ and prtUnOp (i:int) (e : AbsBasilIR.unOp) : doc = match e with
   |    AbsBasilIR.UnOp_classification  -> prPrec i 0 (concatD [render "classification"])
 
 
+and prtCase (i:int) (e : AbsBasilIR.case) : doc = match e with
+       AbsBasilIR.CaseCase (expr1, expr2) -> prPrec i 0 (concatD [prtExpr 0 expr1 ; render "->" ; prtExpr 0 expr2])
+  |    AbsBasilIR.CaseDefault expr -> prPrec i 0 (concatD [render "_" ; render "->" ; prtExpr 0 expr])
+
+and prtCaseListBNFC i es : doc = match (i, es) with
+    (_,[]) -> (concatD [])
+  | (_,[x]) -> (concatD [prtCase 0 x])
+  | (_,x::xs) -> (concatD [prtCase 0 x ; render "|" ; prtCaseListBNFC 0 xs])
 and prtEqOp (i:int) (e : AbsBasilIR.eqOp) : doc = match e with
        AbsBasilIR.EqOp_eq  -> prPrec i 0 (concatD [render "eq"])
   |    AbsBasilIR.EqOp_neq  -> prPrec i 0 (concatD [render "neq"])

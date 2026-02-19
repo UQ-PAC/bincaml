@@ -266,6 +266,8 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.Expr_SignExtend (openparen, intval, expr, closeparen) -> s2s "Expr_SignExtend" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Extract (openparen, intval0, intval, expr, closeparen) -> s2s "Expr_Extract" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval0  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Concat (openparen, exprs, closeparen) -> s2s "Expr_Concat" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showExpr exprs  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.Expr_Match (expr, openparen, cases, closeparen) -> s2s "Expr_Match" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showCase cases  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.Expr_Cases (openparen, cases, closeparen) -> s2s "Expr_Cases" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showCase cases  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
 and showLParen (e : AbsBasilIR.lParen) : showable = match e with
@@ -293,6 +295,11 @@ and showUnOp (e : AbsBasilIR.unOp) : showable = match e with
   |    AbsBasilIR.UnOp_booltobv1  -> s2s "UnOp_booltobv1"
   |    AbsBasilIR.UnOp_gamma  -> s2s "UnOp_gamma"
   |    AbsBasilIR.UnOp_classification  -> s2s "UnOp_classification"
+
+
+and showCase (e : AbsBasilIR.case) : showable = match e with
+       AbsBasilIR.CaseCase (expr0, expr) -> s2s "CaseCase" >> c2s ' ' >> c2s '(' >> showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.CaseDefault expr -> s2s "CaseDefault" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
 
 
 and showEqOp (e : AbsBasilIR.eqOp) : showable = match e with

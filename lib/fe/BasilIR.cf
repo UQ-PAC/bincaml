@@ -225,6 +225,13 @@ Expr_SignExtend . Expr ::= "sign_extend" OpenParen IntVal "," Expr CloseParen ;
 Expr_Extract    . Expr ::= "extract" OpenParen IntVal "," IntVal "," Expr CloseParen ;
 Expr_Concat     . Expr ::= "bvconcat"  OpenParen [Expr]  CloseParen ;
 
+CaseCase . Case ::= Expr "->" Expr  ;
+CaseDefault . Case ::=  "_" "->" Expr ;
+separator Case "|" ;
+
+Expr_Match . Expr ::= "match" Expr "with" OpenParen [Case] CloseParen ;
+Expr_Cases . Expr ::= "cases" OpenParen [Case] CloseParen ;
+
 -- operators
 
 rules EqOp ::= "eq" | "neq" ;
