@@ -16,7 +16,6 @@
   bincaml.analysis
   patricia-tree
   loader
-  intPQueue
   lang
   zarith
   fix

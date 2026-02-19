@@ -124,7 +124,9 @@ module PassManager = struct
       {
         name = "ide-live";
         apply = Prog Transforms.Ide.transform;
-        doc = "broken ide test analysis";
+        doc =
+          "Write the results of an ide based live variable analysis to .dot \
+           files";
       };
       remove_unused;
     ]
