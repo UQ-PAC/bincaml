@@ -7,6 +7,50 @@ module type TopLattice = sig
   val top : t
 end
 
+module type SetElem = sig
+  include Set.OrderedType
+
+  val name : string
+  val show : t -> string
+  val pretty : t -> Containers_pp.t
+end
+
+module LatticeSet (T : SetElem) = struct
+  module TSet = Set.Make (T)
+
+  type t = Fin of TSet.t | Top [@@deriving eq, ord]
+
+  module T = T
+
+  let name = T.name ^ "LatticeSet"
+
+  let show = function
+    | Fin s -> TSet.to_string ~start:"{" ~stop:"}" T.show s
+    | Top -> "Top"
+
+  (* TODO *)
+  let pretty = Containers_pp.text % show
+  let bottom = Fin TSet.empty
+  let top = Top
+
+  let join a b =
+    match (a, b) with
+    | Fin a, Fin b -> Fin (TSet.union a b)
+    | Top, Fin _ | _, Top -> Top
+
+  let leq a b =
+    match (a, b) with
+    | Fin a, Fin b -> TSet.subset a b
+    | Top, Fin _ -> false
+    | _, Top -> true
+
+  let widening = join
+
+  let mem x = function
+      | Top -> true
+      | Fin s -> TSet.mem x s
+end
+
 module type MapKey = sig
   include PatriciaTree.KEY
 
@@ -35,13 +79,14 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
 
   let show a =
     let m, s =
-      match a with BotMap m -> (m, "BotMap ") | TopMap m -> (m, "Topmap ")
+      match a with BotMap m -> (m, "BotMap ") | TopMap m -> (m, "TopMap ")
     in
     s
     ^ (Iter.from_iter (fun f -> KM.iter (fun k v -> f (k, v)) m)
       |> Iter.to_string ~sep:", " (fun (k, v) ->
           Printf.sprintf "%s->%s" (K.show k) (V.show v)))
 
+  (* TODO *)
   let pretty = Containers_pp.text % show
 
   let compare a b =
