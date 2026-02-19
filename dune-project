@@ -56,6 +56,11 @@
  (synopsis "Language server for Bincaml IL files")
  (depends
    bincaml
+   logs
+   iter
+   containers
+   ppx_deriving
+   ; and probably a bunch of bincaml dependencies...
   (ocamlformat :with-dev-setup)
   (odig :with-dev-setup)
   (sherlodoc :with-doc))

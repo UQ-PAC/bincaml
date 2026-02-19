@@ -12,6 +12,10 @@ bug-reports: "https://github.com/username/reponame/issues"
 depends: [
   "dune" {>= "3.19"}
   "bincaml"
+  "logs"
+  "iter"
+  "containers"
+  "ppx_deriving"
   "ocamlformat" {with-dev-setup}
   "odig" {with-dev-setup}
   "sherlodoc" {with-doc}

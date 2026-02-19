@@ -33,7 +33,8 @@ let diagnostics (state : state_after_processing) : Lsp.Types.Diagnostic.t list =
       let start = pos x.startpos in
       let end_ = pos x.endpos in
       let range = Lsp.Types.Range.create ~start ~end_ in
-      Lsp.Types.Diagnostic.create ~message:(`String x.str) ~range ())
+      let str = x.str in
+      Lsp.Types.Diagnostic.create ~message:(`String str) ~range ())
 
 (* Lsp server class
 
@@ -92,6 +93,13 @@ class lsp_server =
    This is the code that creates an instance of the lsp server class
    and runs it as a task. *)
 let run () =
+  Logs.set_level (Some Logs.Debug);
+  Logs.set_reporter (Bincaml_lsp.Logs.file_reporter ());
+  (* Logs.set_reporter (Bincaml_lsp.Logs.lwt_reporter ()); *)
+  Logs.info (fun m -> m "bincaml_lsp starting");
+  Logs.app (fun m -> m "asd2");
+  Logs.app (fun m -> m "asd2");
+
   let s = new lsp_server in
   let server = Linol_lwt.Jsonrpc2.create_stdio ~env:() s in
   let task =
