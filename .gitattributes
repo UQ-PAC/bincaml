@@ -1,4 +1,4 @@
 tools/vendor/**    linguist-vendored
-lib/fe/*.ml          linguist-vendored
-lib/fe/*.mly          linguist-vendored
-lib/fe/*.mll          linguist-vendored
+lib/fe/*.ml          linguist-generated
+lib/fe/*.mly          linguist-generated
+lib/fe/*.mll          linguist-generated
