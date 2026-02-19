@@ -86,7 +86,8 @@ let prog_pretty (p : t) =
   let open Containers_pp in
   let open Containers_pp.Infix in
   let globs =
-    StringMap.to_list p.globals |> List.map (fun (n, v) -> pretty_declaration v)
+    StringMap.bindings p.globals
+    |> List.map (fun (n, v) -> pretty_declaration v)
   in
   let n =
     p.entry_proc
@@ -97,7 +98,7 @@ let prog_pretty (p : t) =
     globs @ n
     @ List.map
         (fun (_, p) -> proc_pretty p)
-        (ID.Map.to_list p.procs
+        (ID.Map.bindings p.procs
         |> List.sort (fun (i, _) (j, _) -> ID.compare i j))
   in
 

@@ -1359,8 +1359,8 @@ proc @main_4196260 () -> ()
   ();
   [%expect
     {|
-    var $ZF:bv1;
     var $NF:bv1;
+    var $ZF:bv1;
     prog entry @main_4196260;
     proc @main_4196260()  -> () {  }
       modifies $NF:bv1, $ZF:bv1;
