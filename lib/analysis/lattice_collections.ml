@@ -145,7 +145,14 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
 end
 
 module LatticeMapState (V : TopLattice) = struct
-  include LatticeMap (Var) (V)
+  include
+    LatticeMap
+      (struct
+        include Var
+
+        let show = name
+      end)
+      (V)
 
   type val_t = V.t
   type key_t = Var.t

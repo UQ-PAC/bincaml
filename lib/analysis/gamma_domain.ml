@@ -2,31 +2,22 @@
 
 include Lang
 include Common
+include Lattice_collections
 
 module GammaSet = struct
+  include LatticeSet (struct
+    include Var
+
+    let show = name
+
+    let name = "variable"
+  end)
+
   let name = "Gamma set"
-
-  type t = Fin of VarSet.t | Top [@@deriving eq, ord]
-
-  let show = function
-    | Fin a -> "Fin " ^ VarSet.to_string ~start:"{" ~stop:"}" Var.show a
-    | Top -> "Top"
-
-  let pretty = Containers_pp.text % show
-  let bottom = Fin VarSet.empty
-  let top = Top
-
-  let join a b =
-    match (a, b) with
-    | Top, _ -> Top
-    | _, Top -> Top
-    | Fin a, Fin b -> Fin (VarSet.union a b)
-
-  let widening = join
 end
 
 module Domain = struct
-  include Lattice_collections.LatticeMapState (GammaSet)
+  include LatticeMapState (GammaSet)
 
   let name = "Gamma domain"
 
@@ -34,7 +25,7 @@ module Domain = struct
   let init proc =
     Procedure.formal_in_params proc
     |> StringMap.values
-    |> Iter.map (fun v -> (v, GammaSet.Fin (VarSet.singleton v)))
+    |> Iter.map (fun v -> (v, GammaSet.singleton v))
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
   let transfer m (stmt : Program.stmt) =
