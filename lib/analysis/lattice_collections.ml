@@ -35,6 +35,8 @@ module LatticeSet (T : SetElem) = struct
           text "Fin" ^ fill (text ",") (TSet.to_list s |> List.map T.pretty))
     | Top -> Containers_pp.text "Top"
 
+  let mem x = function Top -> true | Fin s -> TSet.mem x s
+  let singleton x = Fin (TSet.singleton x)
   let bottom = Fin TSet.empty
   let top = Top
 
@@ -50,7 +52,6 @@ module LatticeSet (T : SetElem) = struct
     | _, Top -> true
 
   let widening = join
-  let mem x = function Top -> true | Fin s -> TSet.mem x s
 end
 
 module type MapKey = sig
