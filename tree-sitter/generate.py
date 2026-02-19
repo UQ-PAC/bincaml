@@ -25,9 +25,9 @@ for i, (token, kind) in enumerate(tokens):
     if token == r'/\*((.)(?<!\*))*\*((.)(?<![\*/])((.)(?<!\*))*\*|\*)*/':
         tokens[i] = (r'/\*.*?\*/', kind)
     elif token == r'"((.)(?<!["\\])|\\["\\nt])*"' or token == r'"((.)(?<!["\\])|\\["\\fnrt])*"':
-        tokens[i] = (r'"([^\"]|\\[^"])*"', kind)
+        tokens[i] = (r'"(?:[^\\"]|\\.)*"', kind)
     elif token == r'\'((.)(?<![\'\\])|\\[\'\\nt])\'':
-        tokens[i] = (r"'([^\']|\\[^'])*'", kind)
+        tokens[i] = (r"'(?:[^\\']|\\.)*'", kind)
     elif token.startswith('$'):
         tokens[i] = ('\\' + token, kind)
 
