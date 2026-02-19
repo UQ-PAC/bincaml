@@ -262,7 +262,7 @@ module AllOps = struct
         let args, r = Types.curry a in
         let t = Types.uncurry args Boolean in
         return t
-    | `Classification -> 
+    | `Classification ->
         let args, r = Types.curry a in
         let t = Types.uncurry args Boolean in
         return t
@@ -365,8 +365,8 @@ module AllOps = struct
     | `BVSLT -> "bvslt"
     | `Classification -> "classification"
     | `Gamma -> "gamma"
-    | `Load (`Big, sz)-> Printf.sprintf "load_be_%d" sz
-    | `Load (`Little, sz)-> Printf.sprintf "load_le_%d" sz
+    | `Load (`Big, sz) -> Printf.sprintf "load_be_%d" sz
+    | `Load (`Little, sz) -> Printf.sprintf "load_le_%d" sz
     | `MapAccess -> "get"
 
   let eval_equal (a : const) (b : const) =
