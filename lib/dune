@@ -5,7 +5,7 @@
  (modules loadir)
  (inline_tests)
  (preprocess
-  (pps ppx_expect_nobase))
+  (pps ppx_expect))
  (libraries
   pp_loc
   BasilIR

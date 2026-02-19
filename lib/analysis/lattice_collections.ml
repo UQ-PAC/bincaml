@@ -7,6 +7,52 @@ module type TopLattice = sig
   val top : t
 end
 
+module type SetElem = sig
+  include Set.OrderedType
+
+  val name : string
+  val show : t -> string
+  val pretty : t -> Containers_pp.t
+end
+
+(** LatticeSet with specified top value representing the universe *)
+module LatticeSet (T : SetElem) = struct
+  module TSet = Set.Make (T)
+
+  type t = Fin of TSet.t | Top [@@deriving eq, ord]
+
+  module T = T
+
+  let name = T.name ^ "LatticeSet"
+
+  let show = function
+    | Fin s -> TSet.to_string ~start:"{" ~stop:"}" T.show s
+    | Top -> "Top"
+
+  let pretty = function
+    | Fin s ->
+        Containers_pp.(
+          text "Fin" ^ fill (text ",") (TSet.to_list s |> List.map T.pretty))
+    | Top -> Containers_pp.text "Top"
+
+  let bottom = Fin TSet.empty
+  let top = Top
+
+  let join a b =
+    match (a, b) with
+    | Fin a, Fin b -> Fin (TSet.union a b)
+    | Top, Fin _ | _, Top -> Top
+
+  let leq a b =
+    match (a, b) with
+    | Fin a, Fin b -> TSet.subset a b
+    | Top, Fin _ -> false
+    | _, Top -> true
+
+  let widening = join
+  let mem x = function Top -> true | Fin s -> TSet.mem x s
+end
+
 module type MapKey = sig
   include PatriciaTree.KEY
 
@@ -25,13 +71,11 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
 
   let top_vjoin _ x y =
     let j = V.join x y in
-    (* if j = top then None else Some j but what is top... *)
-    Some j
+    if V.equal j V.top then None else Some j
 
   let top_vwidening _ x y =
     let j = V.widening x y in
-    (* if j = top then None else Some j *)
-    Some j
+    if V.equal j V.top then None else Some j
 
   let show a =
     let m, s =
@@ -42,7 +86,15 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
       |> Iter.to_string ~sep:", " (fun (k, v) ->
           Printf.sprintf "%s->%s" (K.show k) (V.show v)))
 
-  let pretty = Containers_pp.text % show
+  let pretty a =
+    Containers_pp.(
+      let m, s =
+        match a with BotMap m -> (m, "BotMap ") | TopMap m -> (m, "TopMap ")
+      in
+      text s
+      ^ fill (text ",")
+          (KM.to_list m
+          |> List.map (fun (k, v) -> K.pretty k ^ text "->" ^ V.pretty v)))
 
   let compare a b =
     match (a, b) with
@@ -71,16 +123,6 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
         TopMap (KM.difference top_vwidening b a)
     | TopMap a, TopMap b ->
         TopMap (KM.idempotent_inter_filter top_vwidening a b)
-end
-
-module LatticeMapState (V : TopLattice) = struct
-  include LatticeMap (Var) (V)
-
-  type val_t = V.t
-  type key_t = Var.t
-
-  module V = V
-  open V
 
   let read k = function
     | BotMap m -> KM.find_opt k m |> Option.get_or ~default:V.bottom
@@ -93,4 +135,14 @@ module LatticeMapState (V : TopLattice) = struct
   let to_iter = function
     | BotMap m | TopMap m ->
         Iter.from_iter (fun f -> KM.iter (fun k v -> f (k, v)) m)
+end
+
+module LatticeMapState (V : TopLattice) = struct
+  include LatticeMap (Var) (V)
+
+  type val_t = V.t
+  type key_t = Var.t
+
+  module V = V
+  open V
 end
