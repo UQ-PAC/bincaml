@@ -9,4 +9,4 @@
  (modules test_expr_print)
  (libraries)
  (preprocess
-  (pps ppx_expect_nobase)))
+  (pps ppx_expect)))

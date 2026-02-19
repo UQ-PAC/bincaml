@@ -6,7 +6,7 @@ status: very early stages work-in progress.
 
 ### Setup
 
-Supports Linux (at least amd64) and MacOS (arm64) with OCaml 5.3.0, 4.14 (and possibly versions in between).
+Supports Linux (at least amd64) and MacOS (arm64) with OCaml 5.3.0.
 Windows is explicitly not supported outside of WSL.
 
 - enable frame pointers on opam switch for performance recording

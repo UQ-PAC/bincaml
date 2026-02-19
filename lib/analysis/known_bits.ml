@@ -9,7 +9,7 @@ module IsKnownLattice = struct
   let name = "tnum"
 
   type t = Bot | TNum of { value : Bitvec.t; mask : Bitvec.t } | Top
-  [@@deriving eq]
+  [@@deriving ord, eq]
 
   let tnum v m =
     assert (is_zero (bitand v m));
@@ -39,18 +39,18 @@ module IsKnownLattice = struct
         in
         result "" 0 v m
 
-  let compare a b =
-    if equal a b then 0
+  let leq a b =
+    if equal a b then true
     else
       match (a, b) with
       | TNum { value = av; mask = am }, TNum { value = bv; mask = bm } ->
           if
             (is_zero @@ bitand am (bitnot bm))
             && Bitvec.equal (bitand av (bitnot am)) (bitand bv (bitnot bm))
-          then -1
-          else 1
-      | Bot, _ | _, Top -> -1
-      | _, Bot | Top, _ -> 1
+          then true
+          else false
+      | Bot, _ | _, Top -> true
+      | _, Bot | Top, _ -> false
 
   let bottom = Bot
   let top = Top

@@ -139,6 +139,9 @@ module MapState (V : Lattice) = struct
       let join a b = M.idempotent_union (fun v a b -> V.join a b) a b
       let equal a b = M.reflexive_equal V.equal a b
 
+      let leq a b =
+        M.reflexive_subset_domain_for_all2 (fun _ a b -> V.leq a b) a b
+
       let show m =
         Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
         |> Iter.to_string ~sep:", " (fun (k, v) ->

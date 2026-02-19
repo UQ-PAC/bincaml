@@ -435,7 +435,7 @@ module IDE (D : IDEDomain) = struct
     in
     let locals = Procedure.formal_in_params proc in
     let locals =
-      StringMap.to_list locals |> List.map snd
+      StringMap.bindings locals |> List.map snd
       |> List.map (fun v -> (v, D.identity v))
     in
     globals @ locals
