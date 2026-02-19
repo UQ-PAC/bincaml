@@ -81,7 +81,7 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
 
   let show a =
     let m, s =
-      match a with BotMap m -> (m, "BotMap ") | TopMap m -> (m, "TopMap ")
+      match a with BotMap m -> (m, "") | TopMap m -> (m, "TopMap ")
     in
     s
     ^ (Iter.from_iter (fun f -> KM.iter (fun k v -> f (k, v)) m)
@@ -91,7 +91,7 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
   let pretty a =
     Containers_pp.(
       let m, s =
-        match a with BotMap m -> (m, "BotMap ") | TopMap m -> (m, "TopMap ")
+        match a with BotMap m -> (m, "") | TopMap m -> (m, "TopMap ")
       in
       text s
       ^ fill (text ",")
@@ -157,21 +157,4 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
   let to_iter = function
     | BotMap m | TopMap m ->
         Iter.from_iter (fun f -> KM.iter (fun k v -> f (k, v)) m)
-end
-
-module LatticeMapState (V : TopLattice) = struct
-  include
-    LatticeMap
-      (struct
-        include Var
-
-        let show = name
-      end)
-      (V)
-
-  type val_t = V.t
-  type key_t = Var.t
-
-  module V = V
-  open V
 end
