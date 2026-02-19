@@ -109,7 +109,7 @@ let pretty show_lvar show_var show_expr s =
     if StringMap.is_empty l then text "()"
     else
       let l =
-        StringMap.to_list l |> List.map (fun (i, t) -> text i ^ text "=" ^ t)
+        StringMap.bindings l |> List.map (fun (i, t) -> text i ^ text "=" ^ t)
       in
       bracket "(" (nest 2 (fill (text "," ^ newline_or_spaces 1) l)) ")"
   in
@@ -117,7 +117,7 @@ let pretty show_lvar show_var show_expr s =
     if StringMap.is_empty l then text ""
     else
       let l =
-        StringMap.to_list l |> List.map (fun (i, t) -> t ^ text "=" ^ text i)
+        StringMap.bindings l |> List.map (fun (i, t) -> t ^ text "=" ^ text i)
       in
       bracket "(" (nest 2 (fill (text "," ^ newline_or_spaces 1) l)) ") := "
   in

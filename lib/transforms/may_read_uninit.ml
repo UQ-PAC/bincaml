@@ -25,6 +25,13 @@ module ReadUninit = struct
     | Bot, a -> a
     | Write, Write -> Write
 
+  let leq a b =
+    match (a, b) with
+    | a, b when equal a b -> true
+    | Bot, _ | _, ReadUninit -> true
+    | _, Bot | ReadUninit, _ -> false
+    | _ -> false
+
   let show v = match v with ReadUninit -> "RU" | Bot -> "bot" | Write -> "W"
   let pretty v = Containers_pp.text (show v)
   let widening = join

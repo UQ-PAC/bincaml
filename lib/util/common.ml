@@ -36,3 +36,10 @@ module VarSet = Set.Make (Var)
 
 module Bitvec = Bitvec
 module PrimInt = Zint
+
+let disable_backtrace_in f =
+  let old = Printexc.backtrace_status () in
+  Printexc.record_backtrace false;
+  let r = f () in
+  Printexc.record_backtrace old;
+  r

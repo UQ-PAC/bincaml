@@ -298,7 +298,7 @@ module IDEGraph = struct
     |> Option.map (fun procg -> Procedure.G.fold_edges_e add_block_edge procg g)
     |> Option.get_lazy (fun _ ->
         let formal_in =
-          Procedure.formal_in_params p |> StringMap.to_list |> List.map snd
+          Procedure.formal_in_params p |> StringMap.bindings |> List.map snd
         in
         let globals = prog.globals |> Hashtbl.to_list |> List.map snd in
         add_edge_e_dir dir g

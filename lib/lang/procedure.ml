@@ -445,7 +445,7 @@ let pretty show_lvar show_var show_expr p =
   let open Containers_pp in
   let open Containers_pp.Infix in
   let params m =
-    StringMap.to_list m |> List.map (function i, p -> show_var p) |> fun s ->
+    StringMap.bindings m |> List.map (function i, p -> show_var p) |> fun s ->
     bracket "(" (fill (text "," ^ newline_or_spaces 1) s) ")"
   in
   let header =

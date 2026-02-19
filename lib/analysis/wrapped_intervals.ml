@@ -24,7 +24,7 @@ module WrappedIntervalsLattice = struct
   let name = "wrappedIntervals"
 
   type t = Top | Interval of { lower : Bitvec.t; upper : Bitvec.t } | Bot
-  [@@deriving eq]
+  [@@deriving ord, eq]
 
   let show l =
     match l with
@@ -78,22 +78,18 @@ module WrappedIntervalsLattice = struct
         size_is_equal upper e;
         ule (sub e lower) (sub upper lower)
 
-  let compare a b =
+  let leq a b =
     match (a, b) with
-    | a, b when equal a b -> 0
-    | Top, _ | _, Bot -> 1
-    | Bot, _ | _, Top -> -1
+    | a, b when equal a b -> true
+    | Bot, _ | _, Top -> true
+    | Top, _ | _, Bot -> false
     | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
       ->
-        if
-          member b al && member b au
-          && ((not (member a bl)) || not (member a bu))
-        then -1
-        else 1
+        member b al && member b au && ((not (member a bl)) || not (member a bu))
 
   let join a b =
-    if compare a b <= 0 then b
-    else if compare b a <= 0 then a
+    if leq a b then b
+    else if leq b a then a
     else
       match (a, b) with
       | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
@@ -146,7 +142,7 @@ module WrappedIntervalsLattice = struct
           match (s, t) with
           | Interval { lower = al; _ }, Interval { lower = bl; _ } ->
               Bitvec.compare al bl
-          | _, _ -> compare s t)
+          | _, _ -> if equal s t then 0 else if leq s t then -1 else 1)
         ints
     in
     let f1 =
@@ -173,7 +169,7 @@ module WrappedIntervalsLattice = struct
         size_is_equal al bl;
         size_is_equal au bu;
         let width = size al in
-        if compare b a <= 0 then a
+        if leq b a then a
         else if Z.geq (cardinality ~width a) (Z.pow (Z.of_int 2) width) then top
         else
           let joined = join a b in
@@ -232,7 +228,7 @@ module WrappedIntervalsLattice = struct
     | Interval { lower; upper } ->
         let width = size lower in
         let np = np ~width in
-        if compare np t <= 0 then
+        if leq np t then
           [ interval lower (smax ~width); interval (smin ~width) upper ]
         else [ t ]
 
@@ -247,7 +243,7 @@ module WrappedIntervalsLattice = struct
     | Interval { lower; upper } ->
         let width = size lower in
         let sp = sp ~width in
-        if compare sp t <= 0 then
+        if leq sp t then
           [ interval lower (umax ~width); interval (umin ~width) upper ]
         else [ t ]
 
@@ -644,7 +640,7 @@ module WrappedIntervalsLatticeOps = struct
           interval (zero ~size:width)
             (concat (zero ~size:k) (ones ~size:(width - k)))
         in
-        if compare (sp ~width) t <= 0 then fallback
+        if leq (sp ~width) t then fallback
         else
           match t with
           | Interval { lower; upper } ->
@@ -661,7 +657,7 @@ module WrappedIntervalsLatticeOps = struct
             (concat (ones ~size:k) (zero ~size:(width - k)))
             (concat (zero ~size:k) (ones ~size:(width - k)))
         in
-        if compare (np ~width) t <= 0 then fallback
+        if leq (np ~width) t then fallback
         else
           match t with
           | Interval { lower; upper } ->
@@ -680,7 +676,7 @@ module WrappedIntervalsLatticeOps = struct
       truncate (lshr ~width t (interval k k)) (hi - lo)
 
   let concat (s, sw) (t, tw) =
-    let t = if compare (sp ~width:tw) t <= 0 then top else t in
+    let t = if leq (sp ~width:tw) t then top else t in
     match (s, t) with
     | Bot, _ | _, Bot -> bottom
     | Top, Top -> top
