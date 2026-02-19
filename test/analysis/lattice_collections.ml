@@ -40,7 +40,8 @@ module TestLattice = struct
       make generator |> set_print show |> set_small size |> set_shrink shrink)
 
   let idem =
-    QCheck.Test.make ~name:"set_idempotent_join" arbitrary (fun s -> equal (join s s) s)
+    QCheck.Test.make ~name:"set_idempotent_join" arbitrary (fun s ->
+        equal (join s s) s)
 
   let union_prop =
     QCheck.Test.make ~name:"union" (QCheck.tup3 arbitrary arbitrary QCheck.int)
@@ -74,7 +75,8 @@ module TestMap = struct
       |> set_shrink shrink)
 
   let idem =
-    QCheck.Test.make ~name:"map_idempotent_join" arbitrary (fun m -> equal m (join m m))
+    QCheck.Test.make ~name:"map_idempotent_join" arbitrary (fun m ->
+        equal m (join m m))
 
   let pointwise_join =
     QCheck.Test.make ~name:"pointwise_join"
