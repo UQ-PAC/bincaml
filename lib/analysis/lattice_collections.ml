@@ -64,6 +64,7 @@ end
 (** Lattice map type with a specified Top value *)
 module LatticeMap (K : MapKey) (V : TopLattice) = struct
   module KM = PatriciaTree.MakeMap (K)
+  module V = V
 
   type t = BotMap of V.t KM.t | TopMap of V.t KM.t
 
@@ -97,10 +98,22 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
           (KM.to_list m
           |> List.map (fun (k, v) -> K.pretty k ^ text "->" ^ V.pretty v)))
 
+  let underlying = function TopMap m | BotMap m -> m
+
   let leq a b =
+    let am, bm = (underlying a, underlying b) in
+    let a_overlap = KM.idempotent_inter (fun _ x _ -> x) am bm in
     match (a, b) with
-    | BotMap a, BotMap b | BotMap a, TopMap b | TopMap a, TopMap b ->
-        KM.reflexive_subset_domain_for_all2 (const V.leq) a b
+    | BotMap a, BotMap b ->
+        let a_left = KM.difference (fun _ _ _ -> None) am bm in
+        KM.reflexive_subset_domain_for_all2 (const V.leq) a_overlap b
+        && KM.for_all (fun _ x -> V.equal x V.bottom) a_left
+    | BotMap a, TopMap b ->
+        KM.reflexive_subset_domain_for_all2 (const V.leq) a_overlap b
+    | TopMap a, TopMap b ->
+        let b_left = KM.difference (fun _ _ _ -> None) bm am in
+        KM.reflexive_subset_domain_for_all2 (const V.leq) a_overlap b
+        && KM.for_all (fun _ x -> V.equal x V.top) b_left
     | TopMap _, BotMap _ -> false
 
   let compare a b =
@@ -136,6 +149,8 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
     | TopMap m -> KM.find_opt k m |> Option.get_or ~default:V.top
 
   let update k v = function
+    | BotMap m when V.equal v V.bottom -> BotMap (KM.remove k m)
+    | TopMap m when V.equal v V.top -> TopMap (KM.remove k m)
     | BotMap m -> BotMap (KM.add k v m)
     | TopMap m -> TopMap (KM.add k v m)
 
@@ -145,7 +160,14 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
 end
 
 module LatticeMapState (V : TopLattice) = struct
-  include LatticeMap (Var) (V)
+  include
+    LatticeMap
+      (struct
+        include Var
+
+        let show = name
+      end)
+      (V)
 
   type val_t = V.t
   type key_t = Var.t
