@@ -1,7 +1,5 @@
 (documentation
- (package bincaml))
-
-(install
- (section doc)
+ (package bincaml)
  (files
-  (asset/flamegraph.svg as flamegraph.svg)))
+  (glob_files_rec
+   (asset/* with_prefix .))))

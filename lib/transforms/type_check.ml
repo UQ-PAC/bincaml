@@ -294,10 +294,7 @@ let check_block prog (id, b) =
 let check_proc prog p =
   Procedure.iter_blocks_topo_fwd p |> Iter.flat_map (check_block prog)
 
-let check_prog prog =
-  ID.Map.values prog.procs |> Iter.flat_map (check_proc prog)
-
 let check prog p =
-  let errs = check_prog prog in
+  let errs = check_proc prog p in
   print_type_errors errs;
   not (Iter.is_empty errs)
