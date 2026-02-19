@@ -46,17 +46,24 @@ module TestLattice = struct
     QCheck.Test.make ~name:"union" (QCheck.tup3 arbitrary arbitrary QCheck.int)
       (fun (a, b, x) -> Bool.equal (mem x (join a b)) (mem x a || mem x b))
 
-  let _ = QCheck_base_runner.run_tests [ idem; union_prop ]
+  let join_leq =
+    QCheck.Test.make ~name:"join_leq" (QCheck.pair arbitrary arbitrary)
+      (fun (a, b) -> Bool.equal (leq a b) (equal (join a b) b))
+
+  let _ = QCheck_base_runner.run_tests [ idem; union_prop; join_leq ]
 end
 
 module TestMap = struct
   include LatticeMap (TestKey) (TestLattice)
 
+  let topmake m = TopMap (KM.filter (fun _ x -> not @@ V.equal x V.top) m)
+  let botmake m = BotMap (KM.filter (fun _ x -> not @@ V.equal x V.bottom) m)
+
   let generator =
     QCheck.Gen.(
       pair nat_small TestLattice.generator
       |> list_size nat_small |> map KM.of_list
-      |> fun f -> oneof [ (f >|= fun m -> TopMap m); (f >|= fun m -> BotMap m) ])
+      |> fun f -> oneof [ f >|= topmake; f >|= botmake ])
 
   let size = function TopMap m | BotMap m -> KM.cardinal m
 
@@ -67,7 +74,7 @@ module TestMap = struct
       |> list ~shrink:(pair int TestLattice.shrink)
       |> Iter.map KM.of_list
       |> Iter.map (fun m ->
-          match lm with TopMap _ -> TopMap m | BotMap _ -> BotMap m))
+          match lm with TopMap _ -> topmake m | BotMap _ -> botmake m))
 
   let arbitrary =
     QCheck.(
@@ -84,7 +91,7 @@ module TestMap = struct
           (TestLattice.join (read k a) (read k b)))
 
   let pointwise_update =
-    QCheck.Test.make ~name:"pointwise_join"
+    QCheck.Test.make ~name:"pointwise_update"
       (QCheck.tup4 arbitrary QCheck.nat_small QCheck.nat_small
          TestLattice.arbitrary) (fun (a, k, k', s) ->
         let b = update k s a in
@@ -92,5 +99,11 @@ module TestMap = struct
         | true -> TestLattice.equal s (read k' b)
         | false -> TestLattice.equal (read k' a) (read k' b))
 
-  let _ = QCheck_base_runner.run_tests [ idem; pointwise_join; pointwise_update ]
+  let join_leq =
+    QCheck.Test.make ~name:"join_leq" (QCheck.pair arbitrary arbitrary)
+      (fun (a, b) -> Bool.equal (leq a b) (equal (join a b) b))
+
+  let _ =
+    QCheck_base_runner.run_tests
+      [ idem; pointwise_join; pointwise_update; join_leq ]
 end

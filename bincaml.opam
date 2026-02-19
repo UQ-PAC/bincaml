@@ -23,7 +23,6 @@ depends: [
   "containers-data"
   "ppx_deriving"
   "ocamlgraph"
-  "intPQueue"
   "cmdliner"
   "pp_loc"
   "fmt"
