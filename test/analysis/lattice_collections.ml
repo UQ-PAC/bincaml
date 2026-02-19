@@ -63,7 +63,7 @@ module TestMap = struct
     QCheck.Gen.(
       pair nat_small TestLattice.generator
       |> list_size nat_small |> map KM.of_list
-      |> fun f -> oneof [ (f >|= topmake); (f >|= botmake) ])
+      |> fun f -> oneof [ f >|= topmake; f >|= botmake ])
 
   let size = function TopMap m | BotMap m -> KM.cardinal m
 
