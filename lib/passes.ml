@@ -121,6 +121,13 @@ module PassManager = struct
           "Remove store assignments to pure local variables which are never \
            read ";
       };
+      {
+        name = "ide-live";
+        apply = Prog Transforms.Ide.transform;
+        doc =
+          "Write the results of an ide based live variable analysis to .dot \
+           files";
+      };
       remove_unused;
     ]
 
