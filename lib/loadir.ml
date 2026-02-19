@@ -1322,7 +1322,7 @@ proc @f (ZF_in:bv1, VF_in:bv1) -> ();
   BasilIR.ShowBasilIR.showModuleT prog buf;
   Buffer.output_buffer stdout buf;
   [%expect
-    {| Module1 ([Decl_ProgEmpty (ProcIdent "@f", AttribSet_Empty); Decl_Proc (ProcIdent "@f", [Params1 (LocalIdent "ZF_in", TypeBVType (BVType1 (BVTYPE "bv1"))); Params1 (LocalIdent "VF_in", TypeBVType (BVType1 (BVTYPE "bv1")))], [], AttribSet_Empty, [], ProcDef_Empty)]) |}];
+    {| Module1 ([Decl_ProgEmpty (ProcIdent "@f", AttribSet_Empty); Decl_Proc (ProcIdent "@f", OpenParen "(", [Params1 (LocalIdent "ZF_in", TypeBVType (BVType1 (BVTYPE "bv1"))); Params1 (LocalIdent "VF_in", TypeBVType (BVType1 (BVTYPE "bv1")))], CloseParen ")", OpenParen "(", [], CloseParen ")", AttribSet_Empty, [], ProcDef_Empty)]) |}];
 
   let ast = ast_of_concrete_ast ~name:"boop" prog in
   print_endline

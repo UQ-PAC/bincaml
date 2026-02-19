@@ -16,8 +16,8 @@ Run on basic irreducible loop example
   var $NF:bv1;
   var $CF:bv1;
   prog entry @main_1876;
-  proc @main_1876()  -> () { .returnBlock = "main_basil_return_1"; .name = "main";
-      .address = 1876 }
+  proc @main_1876()  -> () { .address = 1876; .name = "main";
+      .returnBlock = "main_basil_return_1" }
     modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
       $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
     captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
@@ -126,7 +126,7 @@ Run on basic irreducible loop example
      ];
      block %main_basil_return_1 [ nop; return; ]
   ];
-  proc @puts_1584()  -> () { .name = "puts"; .address = 1584 }
+  proc @puts_1584()  -> () { .address = 1584; .name = "puts" }
     
   ;
 
@@ -146,8 +146,8 @@ Run on basic irreducible loop example
   proc @main_1876(CF_in:bv1, NF_in:bv1, R0_in:bv64, R1_in:bv64, R29_in:bv64,
      R30_in:bv64, R31_in:bv64, VF_in:bv1, ZF_in:bv1)
      -> (CF_out:bv1, NF_out:bv1, R0_out:bv64, R1_out:bv64, R29_out:bv64,
-     R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1) { .returnBlock = "main_basil_return_1";
-      .name = "main"; .address = 1876 }
+     R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1) { .address = 1876;
+      .name = "main"; .returnBlock = "main_basil_return_1" }
     modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
       $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
     captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
@@ -295,8 +295,8 @@ Run on basic irreducible loop example
   proc @puts_1584(CF_in:bv1, NF_in:bv1, R0_in:bv64, R1_in:bv64, R29_in:bv64,
      R30_in:bv64, R31_in:bv64, VF_in:bv1, ZF_in:bv1)
      -> (CF_out:bv1, NF_out:bv1, R0_out:bv64, R1_out:bv64, R29_out:bv64,
-     R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1) { .name = "puts";
-      .address = 1584 }
+     R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1) { .address = 1584;
+      .name = "puts" }
     
   ;
 
