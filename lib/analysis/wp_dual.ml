@@ -48,6 +48,11 @@ module Domain = struct
   let widening a b = top
   let init proc = bottom
 
+  let leq a b =
+    raise
+      (Failure
+         "(unimplemented) SMT query required to determine leq of predicates")
+
   (* FIXME gamma *)
   let low_expr (e : Program.e) =
     BasilExpr.free_vars_iter e
@@ -77,8 +82,8 @@ module Domain = struct
     | Instr_IndirectCall _ | Instr_Call _ | Instr_IntrinCall _ -> top
     | _ -> p
 
-  let to_pred (p : t) = BasilExpr.boolnot p
   (** Encode an abstract state as a predicate *)
+  let to_pred (p : t) = BasilExpr.boolnot p
 end
 
 module Analysis = Intra_analysis.Backwards (Domain)
