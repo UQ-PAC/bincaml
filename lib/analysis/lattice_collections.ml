@@ -97,6 +97,12 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
           (KM.to_list m
           |> List.map (fun (k, v) -> K.pretty k ^ text "->" ^ V.pretty v)))
 
+  let leq a b =
+    match (a, b) with
+    | BotMap a, BotMap b | BotMap a, TopMap b | TopMap a, TopMap b ->
+        KM.reflexive_subset_domain_for_all2 (const V.leq) a b
+    | TopMap _, BotMap _ -> false
+
   let compare a b =
     match (a, b) with
     | BotMap a, BotMap b -> KM.reflexive_compare V.compare a b
