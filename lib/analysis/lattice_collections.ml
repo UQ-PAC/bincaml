@@ -74,6 +74,7 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
 
       let name = V.name ^ "maplattice"
       let bottom = BotMap KM.empty
+      let top = TopMap KM.empty
 
       let top_vjoin _ x y =
         let j = V.join x y in
@@ -181,6 +182,7 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
       sig
         include StateAbstraction with type val_t = V.t and type key_t = K.t
 
+        val top : t
         val of_list_top : (K.t * V.t) list -> t
         val of_list_bot : (K.t * V.t) list -> t
         val cardinal : t -> int
