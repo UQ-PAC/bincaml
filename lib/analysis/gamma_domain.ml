@@ -2,6 +2,7 @@
 
 include Lang
 include Common
+include Intra_analysis
 include Lattice_collections
 
 module GammaSet = struct
@@ -9,7 +10,6 @@ module GammaSet = struct
     include Var
 
     let show = name
-
     let name = "variable"
   end)
 
@@ -17,7 +17,7 @@ module GammaSet = struct
 end
 
 module Domain = struct
-  include LatticeMapState (GammaSet)
+  include MapState (GammaSet)
 
   let name = "Gamma domain"
 
@@ -40,12 +40,11 @@ module Domain = struct
               m)
           m a
     (* TODO calls can be more precise with modifies information (only send outputs + modifies to top) *)
-    | Instr_Call _ | Instr_IntrinCall _ | Instr_IndirectCall _ ->
-        TopMap KM.empty
+    | Instr_Call _ | Instr_IntrinCall _ | Instr_IndirectCall _ -> top
     | _ -> m
 end
 
-module Analysis = Intra_analysis.Forwards (Domain)
+module Analysis = Forwards (Domain)
 
 let transform proc =
   let r = Analysis.analyse proc in
