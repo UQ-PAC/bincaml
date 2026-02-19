@@ -13,7 +13,10 @@ type 'e t =
   | `List of 'e t list ]
 [@@deriving eq, ord]
 
-let rec attrib_pretty pretty_expr (e : 'e t) : Containers_pp.t =
+let location_key = "text_range"
+
+let rec attrib_pretty ?(internal = [ location_key ]) pretty_expr (e : 'e t) :
+    Containers_pp.t =
   let open Containers_pp in
   let attrib_pretty = attrib_pretty pretty_expr in
   match e with
@@ -30,7 +33,10 @@ let rec attrib_pretty pretty_expr (e : 'e t) : Containers_pp.t =
            " ]"
   | `Assoc sm ->
       let pairs =
-        StringMap.to_list sm
+        sm
+        |> StringMap.filter (fun i _ ->
+            not @@ List.exists (String.equal i) internal)
+        |> StringMap.bindings
         |> List.map (function k, v -> text k ^ text " = " ^ attrib_pretty v)
       in
       let int = fill (text ";" ^ newline) pairs in
@@ -44,17 +50,12 @@ type loc = int * int
 
 let attr_of_loc l =
   let s, e = l in
-  `List [ `CamlInt s; `CamlInt e ]
+  `Assoc (StringMap.singleton location_key (`List [ `CamlInt s; `CamlInt e ]))
 
 let loc_of_attr l =
   match l with
   | `List [ `CamlInt s; `CamlInt e ] -> (s, e)
   | _ -> failwith "bad structure"
-
-let find a (k : string) =
-  (match a with
-    | `Assoc ks -> List.find_opt (fun (v, vlue) -> String.equal k v) ks)
-  |> Option.map snd
 
 let merge_map_shadow (a : 'a attrib_map) (b : 'a attrib_map) =
   StringMap.merge
@@ -64,3 +65,19 @@ let merge_map_shadow (a : 'a attrib_map) (b : 'a attrib_map) =
       | Some a, None -> Some a
       | None, None -> None)
     a b
+
+let merge_assoc_shadow a b =
+  match (a, b) with
+  | `Assoc a, `Assoc b -> `Assoc (merge_map_shadow a b)
+  | _ -> failwith "not an assoc"
+
+let set_assoc k v a =
+  match a with
+  | `Assoc a -> `Assoc (StringMap.add k v a)
+  | _ -> failwith "not an assoc"
+
+let find_opt k (e : 'a t option) =
+  Option.bind e (function `Assoc es -> StringMap.find_opt k es | _ -> None)
+
+let find_loc_opt (e : 'a t option) =
+  find_opt location_key e |> Option.map loc_of_attr

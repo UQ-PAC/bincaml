@@ -5,6 +5,22 @@ open Lang
 open Expr
 open Ops
 
+let normalise_alg
+    (e : BasilExpr.t BasilExpr.abstract_expr BasilExpr.abstract_expr) =
+  let open AbstractExpr in
+  let open BasilExpr in
+  let open Bitvec in
+  match e with
+  | BinaryExpr { op = `IMPLIES; arg1 = a; arg2 = b } ->
+      Some (BasilExpr.applyintrin ~op:`OR [ fix a; BasilExpr.boolnot (fix b) ])
+  | UnaryExpr { op = `BoolNOT; arg = UnaryExpr { op = `BoolNOT; arg } } ->
+      Some arg
+  | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `AND; args } } ->
+      Some (BasilExpr.applyintrin ~op:`OR (List.map BasilExpr.boolnot args))
+  | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `OR; args } } ->
+      Some (BasilExpr.applyintrin ~op:`AND (List.map BasilExpr.boolnot args))
+  | _ -> None
+
 let algebraic_simplifications
     (e :
       (BasilExpr.t BasilExpr.abstract_expr * Types.t) BasilExpr.abstract_expr) =
@@ -129,3 +145,26 @@ let alg_simp_rewriter e =
     BasilExpr.rewrite ~rw_fun:Lang.Expr_eval.partial_eval_alg e
   in
   BasilExpr.rewrite_typed_two algebraic_simplifications (partial_eval_expr e)
+
+let normamlise e =
+  let e = alg_simp_rewriter e in
+  BasilExpr.rewrite_two normalise_alg e
+
+let%expect_test "normalise" =
+  let e =
+    BasilExpr.boolnot @@ BasilExpr.boolnot @@ BasilExpr.boolnot
+    @@ BasilExpr.applyintrin ~op:`AND
+         [
+           BasilExpr.boolnot
+             (BasilExpr.boolnot (BasilExpr.rvar (Var.create "b" Boolean)));
+           BasilExpr.rvar (Var.create "a" Boolean);
+         ]
+  in
+  print_endline (BasilExpr.to_string e);
+  let e = normamlise e in
+  print_endline (BasilExpr.to_string e);
+  [%expect
+    {|
+    boolnot(boolnot(boolnot(booland(boolnot(boolnot(b:bool)), a:bool))))
+    boolor(boolnot(b:bool), boolnot(a:bool))
+    |}]

@@ -8,6 +8,8 @@ and localIdent = LocalIdent of ((int * int) * string)
 and globalIdent = GlobalIdent of ((int * int) * string)
 and blockIdent = BlockIdent of ((int * int) * string)
 and procIdent = ProcIdent of ((int * int) * string)
+and openParen = OpenParen of ((int * int) * string)
+and closeParen = CloseParen of ((int * int) * string)
 and beginList = BeginList of ((int * int) * string)
 and endList = EndList of ((int * int) * string)
 and beginRec = BeginRec of ((int * int) * string)
@@ -36,7 +38,7 @@ and decl =
  | Decl_FunNoType of globalIdent * attribSet * expr
  | Decl_ProgEmpty of procIdent * attribSet
  | Decl_ProgWithSpec of procIdent * attribSet * progSpec list
- | Decl_Proc of procIdent * params list * params list * attribSet * funSpec list * procDef
+ | Decl_Proc of procIdent * openParen * params list * closeParen * openParen * params list * closeParen * attribSet * funSpec list * procDef
 
 and procDef =
    ProcDef_Empty
@@ -59,7 +61,7 @@ and typeT =
  | TypeBoolType of boolType
  | TypeMapType of mapType
  | TypeBVType of bVType
- | Type1 of typeT
+ | Type1 of openParen * typeT * closeParen
 
 and intVal =
    IntVal_Hex of integerHex
@@ -78,12 +80,12 @@ and assignment =
 and stmt =
    Stmt_Nop
  | Stmt_SingleAssign of assignment
- | Stmt_MultiAssign of assignment list
+ | Stmt_MultiAssign of openParen * assignment list * closeParen
  | Stmt_Load of lVar * endian * globalIdent * expr * intVal
  | Stmt_Store of endian * globalIdent * expr * expr * intVal
  | Stmt_Load_Var of lVar * endian * var * expr * intVal
  | Stmt_Store_Var of lVar * endian * var * expr * expr * intVal
- | Stmt_DirectCall of lVars * procIdent * callParams
+ | Stmt_DirectCall of lVars * procIdent * openParen * callParams * closeParen
  | Stmt_IndirectCall of expr
  | Stmt_Assume of expr
  | Stmt_Guard of expr
@@ -106,9 +108,9 @@ and namedCallReturn =
 
 and lVars =
    LVars_Empty
- | LVars_LocalList of localVar list
- | LVars_List of lVar list
- | NamedLVars_List of namedCallReturn list
+ | LVars_LocalList of openParen * localVar list * closeParen
+ | LVars_List of openParen * lVar list * closeParen
+ | NamedLVars_List of openParen * namedCallReturn list * closeParen
 
 and namedCallArg =
    NamedCallArg1 of localIdent * expr
@@ -118,9 +120,9 @@ and callParams =
  | CallParams_Named of namedCallArg list
 
 and jump =
-   Jump_GoTo of blockIdent list
+   Jump_GoTo of openParen * blockIdent list * closeParen
  | Jump_Unreachable
- | Jump_Return of expr list
+ | Jump_Return of openParen * expr list * closeParen
  | Jump_ProcReturn
 
 and lVar =
@@ -137,11 +139,11 @@ and phiExpr =
    PhiExpr1 of blockIdent * var
 
 and phiAssign =
-   PhiAssign1 of lVar * phiExpr list
+   PhiAssign1 of lVar * openParen * phiExpr list * closeParen
 
 and block =
    Block_NoPhi of blockIdent * attribSet * beginList * stmtWithAttrib list * jumpWithAttrib * endList
- | Block_Phi of blockIdent * attribSet * beginList * phiAssign list * stmtWithAttrib list * jumpWithAttrib * endList
+ | Block_Phi of blockIdent * attribSet * beginList * openParen * phiAssign list * closeParen * stmtWithAttrib list * jumpWithAttrib * endList
 
 and attrKeyValue =
    AttrKeyValue1 of bIdent * attr
@@ -162,7 +164,7 @@ and params =
 
 and funParams =
    FunParams1 of localIdent * typeT
- | FunParams2 of localIdent * typeT
+ | FunParams2 of openParen * localIdent * typeT * closeParen
 
 and value =
    Value_BV of bVVal
@@ -172,28 +174,28 @@ and value =
 
 and expr =
    Expr_Literal of value
- | Expr_Paren of expr
+ | Expr_Paren of openParen * expr * closeParen
  | Expr_Local of localVar
  | Expr_Global of globalVar
  | Expr_Forall of attribSet * lambdaDef
  | Expr_Exists of attribSet * lambdaDef
  | Expr_Lambda of attribSet * lambdaDef
- | Expr_Old of expr
- | Expr_FunctionOp of globalIdent * expr list
+ | Expr_Old of openParen * expr * closeParen
+ | Expr_FunctionOp of globalIdent * openParen * expr list * closeParen
  | Expr_Apply of expr * expr
- | Expr_Binary of binOp * expr * expr
- | Expr_Assoc of boolBinOp * expr list
- | Expr_Unary of unOp * expr
- | Expr_LoadBe of intVal * expr * expr
- | Expr_LoadLe of intVal * expr * expr
- | Expr_ZeroExtend of intVal * expr
- | Expr_SignExtend of intVal * expr
- | Expr_Extract of intVal * intVal * expr
- | Expr_Concat of expr list
+ | Expr_Binary of binOp * openParen * expr * expr * closeParen
+ | Expr_Assoc of boolBinOp * openParen * expr list * closeParen
+ | Expr_Unary of unOp * openParen * expr * closeParen
+ | Expr_LoadBe of openParen * intVal * expr * expr * closeParen
+ | Expr_LoadLe of openParen * intVal * expr * expr * closeParen
+ | Expr_ZeroExtend of openParen * intVal * expr * closeParen
+ | Expr_SignExtend of openParen * intVal * expr * closeParen
+ | Expr_Extract of openParen * intVal * intVal * expr * closeParen
+ | Expr_Concat of openParen * expr list * closeParen
 
 and lParen =
    LParenLocalVar of localVar
- | LParen1 of localVar
+ | LParen1 of openParen * localVar * closeParen
 
 and lambdaDef =
    LambdaDef1 of lParen list * lambdaSep * expr

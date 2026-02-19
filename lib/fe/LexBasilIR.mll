@@ -7,9 +7,9 @@
 open ParBasilIR
 open Lexing
 
-let symbol_table = Hashtbl.create 9
+let symbol_table = Hashtbl.create 7
 let _ = List.iter (fun (kwd, tok) -> Hashtbl.add symbol_table kwd tok)
-                  [(";", SYMB1);(",", SYMB2);("->", SYMB3);("::", SYMB4);(":", SYMB5);("=", SYMB6);("(", SYMB7);(")", SYMB8);(":=", SYMB9)]
+                  [(";", SYMB1);(",", SYMB2);("->", SYMB3);("::", SYMB4);(":", SYMB5);("=", SYMB6);(":=", SYMB7)]
 
 let resword_table = Hashtbl.create 95
 let _ = List.iter (fun (kwd, tok) -> Hashtbl.add resword_table kwd tok)
@@ -53,7 +53,7 @@ let _idchar = _letter | _digit | ['_' '\'']         (*  identifier character *)
 let _universal = _                                  (* universal: any character *)
 
 (* reserved words consisting of special symbols *)
-let rsyms = ";" | "," | "->" | "::" | ":" | "=" | "(" | ")" | ":="
+let rsyms = ";" | "," | "->" | "::" | ":" | "=" | ":="
 
 (* user-defined token types *)
 let bVTYPE = "bv" _digit +
@@ -64,6 +64,8 @@ let localIdent = ('#' | '_' | _letter)('#' | '$' | '.' | '_' | (_digit | _letter
 let globalIdent = '$' ('#' | '$' | '.' | '_' | (_digit | _letter)) +
 let blockIdent = '%' ('#' | '$' | '.' | '_' | (_digit | _letter)) +
 let procIdent = '@' ('#' | '$' | '.' | '_' | (_digit | _letter)) +
+let openParen = '('
+let closeParen = ')'
 let beginList = '['
 let endList = ']'
 let beginRec = '{'
@@ -92,6 +94,10 @@ rule token =
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_BlockIdent ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
       | procIdent
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_ProcIdent ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
+      | openParen
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_OpenParen ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
+      | closeParen
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_CloseParen ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
       | beginList
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_BeginList ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
       | endList { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_EndList ((lexeme_start lexbuf, lexeme_end lexbuf), l) }

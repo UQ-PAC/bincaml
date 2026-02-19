@@ -56,6 +56,16 @@ module AbstractExpr = struct
     | FApply (func, args) -> ApplyFun { attrib; func; args }
     | Bound (bound, in_body) -> Binding { attrib; bound; in_body }
 
+  let map_attrib f x =
+    match x with
+    | RVar x -> RVar { x with attrib = f x.attrib }
+    | Constant x -> Constant { x with attrib = f x.attrib }
+    | UnaryExpr x -> UnaryExpr { x with attrib = f x.attrib }
+    | BinaryExpr x -> BinaryExpr { x with attrib = f x.attrib }
+    | ApplyIntrin x -> ApplyIntrin { x with attrib = f x.attrib }
+    | ApplyFun x -> ApplyFun { x with attrib = f x.attrib }
+    | Binding x -> Binding { x with attrib = f x.attrib }
+
   let get_attrib x =
     match x with
     | RVar { attrib } -> attrib
@@ -176,6 +186,7 @@ module Make (O : Fix) = struct
     let binding ?attrib bound in_body = fix (Binding { attrib; bound; in_body })
     let applyintrin ?attrib ~op args = fix (ApplyIntrin { attrib; op; args })
     let apply_fun ?attrib ~func args = fix (ApplyFun { attrib; func; args })
+    let attrib e = unfix e |> AbstractExpr.get_attrib
   end
 
   (* dont know
@@ -386,7 +397,15 @@ module BasilExpr = struct
   let pretty s =
     let open Containers_pp in
     let pretty_attr = function
-      | Some (`Assoc e) when StringMap.is_empty e -> text ""
+      | Some (`Assoc e) ->
+          let attrib =
+            StringMap.filter
+              (fun k v -> not @@ String.equal k Attrib.location_key)
+              e
+          in
+          if StringMap.is_empty attrib then text ""
+          else
+            text " " ^ Attrib.attrib_pretty pretty_drop_attrib (`Assoc attrib)
       | Some e -> text " " ^ Attrib.attrib_pretty pretty_drop_attrib e
       | None -> text ""
     in
@@ -438,6 +457,14 @@ module BasilExpr = struct
     in
     cata rw_alg expr
 
+  let rewrite_two (f : t abstract_expr abstract_expr -> t option) (expr : t) =
+    let rw_alg e =
+      let unfold = AbstractExpr.map unfix e in
+      let orig s = lazy (fix s) in
+      match f unfold with Some e -> e | None -> Lazy.force @@ orig e
+    in
+    cata rw_alg expr
+
   let rewrite_typed (f : (t * Types.t) abstract_expr -> t option) (expr : t) =
     let rw_alg e =
       let orig s = fix @@ AbstractExpr.map fst s in
@@ -467,17 +494,17 @@ module BasilExpr = struct
 
   include R.Constructors
 
-  let zero_extend ~n_prefix_bits (e : t) : t =
-    unexp ~op:(`ZeroExtend n_prefix_bits) e
+  let zero_extend ?attrib ~n_prefix_bits (e : t) : t =
+    unexp ?attrib ~op:(`ZeroExtend n_prefix_bits) e
 
-  let sign_extend ~n_prefix_bits (e : t) : t =
-    unexp ~op:(`SignExtend n_prefix_bits) e
+  let sign_extend ?attrib ~n_prefix_bits (e : t) : t =
+    unexp ?attrib ~op:(`SignExtend n_prefix_bits) e
 
-  let load ~bits endian (m : t) (ind : t) : t =
-    binexp ~op:(`Load (endian, bits)) m ind
+  let load ?attrib ~bits endian (m : t) (ind : t) : t =
+    binexp ?attrib ~op:(`Load (endian, bits)) m ind
 
-  let extract ~hi_excl ~lo_incl (e : t) : t =
-    unexp ~op:(`Extract (hi_excl, lo_incl)) e
+  let extract ?attrib ~hi_excl ~lo_incl (e : t) : t =
+    unexp ?attrib ~op:(`Extract (hi_excl, lo_incl)) e
 
   let concat ?attrib (e : t) (f : t) : t =
     applyintrin ?attrib ~op:`BVConcat [ e; f ]
