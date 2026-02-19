@@ -127,26 +127,14 @@ let tf_forwards st (read_st : 'a -> Var.t -> 'b) (s : Program.stmt)
        s
 
 module MapState (V : Lattice_collections.TopLattice) = struct
-  include (
-    struct
-      include
-        Lattice_collections.LatticeMap
-          (struct
-            include Var
+  include
+    Lattice_collections.LatticeMap
+      (struct
+        include Var
 
-            let show = name
-          end)
-          (V)
-
-      type val_t = V.t
-      type key_t = Var.t
-    end :
-      StateAbstraction with type val_t = V.t and type key_t = Var.t)
-
-  type val_t = V.t
-  type key_t = Var.t
-
-  module V = V
+        let show = name
+      end)
+      (V)
 end
 
 module Forwards (D : Domain) = struct

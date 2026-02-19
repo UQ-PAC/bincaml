@@ -63,98 +63,129 @@ end
 
 (** Lattice map type with a specified Top value *)
 module LatticeMap (K : MapKey) (V : TopLattice) = struct
-  module KM = PatriciaTree.MakeMap (K)
+  include (
+    struct
+      module KM = PatriciaTree.MakeMap (K)
+      module V = V
+
+      type val_t = V.t
+      type key_t = K.t
+      type t = BotMap of V.t KM.t | TopMap of V.t KM.t
+
+      let name = V.name ^ "maplattice"
+      let bottom = BotMap KM.empty
+
+      let top_vjoin _ x y =
+        let j = V.join x y in
+        if V.equal j V.top then None else Some j
+
+      let top_vwidening _ x y =
+        let j = V.widening x y in
+        if V.equal j V.top then None else Some j
+
+      let show a =
+        let m, s =
+          match a with BotMap m -> (m, "") | TopMap m -> (m, "TopMap ")
+        in
+        s
+        ^ (Iter.from_iter (fun f -> KM.iter (fun k v -> f (k, v)) m)
+          |> Iter.to_string ~sep:", " (fun (k, v) ->
+              Printf.sprintf "%s->%s" (K.show k) (V.show v)))
+
+      let pretty a =
+        Containers_pp.(
+          let m, s =
+            match a with BotMap m -> (m, "") | TopMap m -> (m, "TopMap ")
+          in
+          text s
+          ^ fill (text ",")
+              (KM.to_list m
+              |> List.map (fun (k, v) -> K.pretty k ^ text "->" ^ V.pretty v)))
+
+      let underlying = function TopMap m | BotMap m -> m
+
+      let leq a b =
+        let am, bm = (underlying a, underlying b) in
+        let a_overlap = KM.idempotent_inter (fun _ x _ -> x) am bm in
+        match (a, b) with
+        | BotMap a, BotMap b ->
+            let a_left = KM.difference (fun _ _ _ -> None) am bm in
+            KM.reflexive_subset_domain_for_all2 (const V.leq) a_overlap b
+            && KM.for_all (fun _ x -> V.equal x V.bottom) a_left
+        | BotMap a, TopMap b ->
+            KM.reflexive_subset_domain_for_all2 (const V.leq) a_overlap b
+        | TopMap a, TopMap b ->
+            let b_left = KM.difference (fun _ _ _ -> None) bm am in
+            KM.reflexive_subset_domain_for_all2 (const V.leq) a_overlap b
+            && KM.for_all (fun _ x -> V.equal x V.top) b_left
+        | TopMap _, BotMap _ -> false
+
+      let compare a b =
+        match (a, b) with
+        | BotMap a, BotMap b -> KM.reflexive_compare V.compare a b
+        | BotMap a, TopMap b -> KM.reflexive_compare V.compare a b
+        | TopMap a, BotMap b -> -KM.reflexive_compare V.compare b a
+        | TopMap a, TopMap b -> KM.reflexive_compare V.compare a b
+
+      let equal a b =
+        match (a, b) with
+        | BotMap a, BotMap b -> KM.reflexive_equal V.equal a b
+        | TopMap a, TopMap b -> KM.reflexive_equal V.equal a b
+        | _ -> false
+
+      let join a b =
+        match (a, b) with
+        | BotMap a, BotMap b -> BotMap (KM.idempotent_union (const V.join) a b)
+        | BotMap a, TopMap b | TopMap b, BotMap a ->
+            TopMap (KM.difference top_vjoin b a)
+        | TopMap a, TopMap b ->
+            TopMap (KM.idempotent_inter_filter top_vjoin a b)
+
+      let widening a b =
+        match (a, b) with
+        | BotMap a, BotMap b ->
+            BotMap (KM.idempotent_union (const V.widening) a b)
+        | BotMap a, TopMap b | TopMap b, BotMap a ->
+            TopMap (KM.difference top_vwidening b a)
+        | TopMap a, TopMap b ->
+            TopMap (KM.idempotent_inter_filter top_vwidening a b)
+
+      let read k = function
+        | BotMap m -> KM.find_opt k m |> Option.get_or ~default:V.bottom
+        | TopMap m -> KM.find_opt k m |> Option.get_or ~default:V.top
+
+      let update k v = function
+        | BotMap m when V.equal v V.bottom -> BotMap (KM.remove k m)
+        | TopMap m when V.equal v V.top -> TopMap (KM.remove k m)
+        | BotMap m -> BotMap (KM.add k v m)
+        | TopMap m -> TopMap (KM.add k v m)
+
+      let to_iter = function
+        | BotMap m | TopMap m ->
+            Iter.from_iter (fun f -> KM.iter (fun k v -> f (k, v)) m)
+
+      let of_list_top l =
+        TopMap
+          (List.filter (fun (_, x) -> not @@ V.equal x V.top) l |> KM.of_list)
+
+      let of_list_bot l =
+        BotMap
+          (List.filter (fun (_, x) -> not @@ V.equal x V.bottom) l |> KM.of_list)
+
+      let cardinal = underlying %> KM.cardinal
+
+      let to_list = function
+        | BotMap m -> (`Bottom, KM.to_list m)
+        | TopMap m -> (`Top, KM.to_list m)
+    end :
+      sig
+        include StateAbstraction with type val_t = V.t and type key_t = K.t
+
+        val of_list_top : (K.t * V.t) list -> t
+        val of_list_bot : (K.t * V.t) list -> t
+        val cardinal : t -> int
+        val to_list : t -> [ `Bottom | `Top ] * (K.t * V.t) list
+      end)
+
   module V = V
-
-  type t = BotMap of V.t KM.t | TopMap of V.t KM.t
-
-  let name = V.name ^ "maplattice"
-  let bottom = BotMap KM.empty
-
-  let top_vjoin _ x y =
-    let j = V.join x y in
-    if V.equal j V.top then None else Some j
-
-  let top_vwidening _ x y =
-    let j = V.widening x y in
-    if V.equal j V.top then None else Some j
-
-  let show a =
-    let m, s =
-      match a with BotMap m -> (m, "") | TopMap m -> (m, "TopMap ")
-    in
-    s
-    ^ (Iter.from_iter (fun f -> KM.iter (fun k v -> f (k, v)) m)
-      |> Iter.to_string ~sep:", " (fun (k, v) ->
-          Printf.sprintf "%s->%s" (K.show k) (V.show v)))
-
-  let pretty a =
-    Containers_pp.(
-      let m, s =
-        match a with BotMap m -> (m, "") | TopMap m -> (m, "TopMap ")
-      in
-      text s
-      ^ fill (text ",")
-          (KM.to_list m
-          |> List.map (fun (k, v) -> K.pretty k ^ text "->" ^ V.pretty v)))
-
-  let underlying = function TopMap m | BotMap m -> m
-
-  let leq a b =
-    let am, bm = (underlying a, underlying b) in
-    let a_overlap = KM.idempotent_inter (fun _ x _ -> x) am bm in
-    match (a, b) with
-    | BotMap a, BotMap b ->
-        let a_left = KM.difference (fun _ _ _ -> None) am bm in
-        KM.reflexive_subset_domain_for_all2 (const V.leq) a_overlap b
-        && KM.for_all (fun _ x -> V.equal x V.bottom) a_left
-    | BotMap a, TopMap b ->
-        KM.reflexive_subset_domain_for_all2 (const V.leq) a_overlap b
-    | TopMap a, TopMap b ->
-        let b_left = KM.difference (fun _ _ _ -> None) bm am in
-        KM.reflexive_subset_domain_for_all2 (const V.leq) a_overlap b
-        && KM.for_all (fun _ x -> V.equal x V.top) b_left
-    | TopMap _, BotMap _ -> false
-
-  let compare a b =
-    match (a, b) with
-    | BotMap a, BotMap b -> KM.reflexive_compare V.compare a b
-    | BotMap a, TopMap b -> KM.reflexive_compare V.compare a b
-    | TopMap a, BotMap b -> -KM.reflexive_compare V.compare b a
-    | TopMap a, TopMap b -> KM.reflexive_compare V.compare a b
-
-  let equal a b =
-    match (a, b) with
-    | BotMap a, BotMap b -> KM.reflexive_equal V.equal a b
-    | TopMap a, TopMap b -> KM.reflexive_equal V.equal a b
-    | _ -> false
-
-  let join a b =
-    match (a, b) with
-    | BotMap a, BotMap b -> BotMap (KM.idempotent_union (const V.join) a b)
-    | BotMap a, TopMap b | TopMap b, BotMap a ->
-        TopMap (KM.difference top_vjoin b a)
-    | TopMap a, TopMap b -> TopMap (KM.idempotent_inter_filter top_vjoin a b)
-
-  let widening a b =
-    match (a, b) with
-    | BotMap a, BotMap b -> BotMap (KM.idempotent_union (const V.widening) a b)
-    | BotMap a, TopMap b | TopMap b, BotMap a ->
-        TopMap (KM.difference top_vwidening b a)
-    | TopMap a, TopMap b ->
-        TopMap (KM.idempotent_inter_filter top_vwidening a b)
-
-  let read k = function
-    | BotMap m -> KM.find_opt k m |> Option.get_or ~default:V.bottom
-    | TopMap m -> KM.find_opt k m |> Option.get_or ~default:V.top
-
-  let update k v = function
-    | BotMap m when V.equal v V.bottom -> BotMap (KM.remove k m)
-    | TopMap m when V.equal v V.top -> TopMap (KM.remove k m)
-    | BotMap m -> BotMap (KM.add k v m)
-    | TopMap m -> TopMap (KM.add k v m)
-
-  let to_iter = function
-    | BotMap m | TopMap m ->
-        Iter.from_iter (fun f -> KM.iter (fun k v -> f (k, v)) m)
 end
