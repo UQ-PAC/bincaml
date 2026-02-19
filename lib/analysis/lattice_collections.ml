@@ -45,10 +45,7 @@ module LatticeSet (T : SetElem) = struct
     | _, Top -> true
 
   let widening = join
-
-  let mem x = function
-      | Top -> true
-      | Fin s -> TSet.mem x s
+  let mem x = function Top -> true | Fin s -> TSet.mem x s
 end
 
 module type MapKey = sig
@@ -116,16 +113,6 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
         TopMap (KM.difference top_vwidening b a)
     | TopMap a, TopMap b ->
         TopMap (KM.idempotent_inter_filter top_vwidening a b)
-end
-
-module LatticeMapState (V : TopLattice) = struct
-  include LatticeMap (Var) (V)
-
-  type val_t = V.t
-  type key_t = Var.t
-
-  module V = V
-  open V
 
   let read k = function
     | BotMap m -> KM.find_opt k m |> Option.get_or ~default:V.bottom
@@ -138,4 +125,14 @@ module LatticeMapState (V : TopLattice) = struct
   let to_iter = function
     | BotMap m | TopMap m ->
         Iter.from_iter (fun f -> KM.iter (fun k v -> f (k, v)) m)
+end
+
+module LatticeMapState (V : TopLattice) = struct
+  include LatticeMap (Var) (V)
+
+  type val_t = V.t
+  type key_t = Var.t
+
+  module V = V
+  open V
 end
