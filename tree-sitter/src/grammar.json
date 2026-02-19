@@ -1,0 +1,476 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/grammar.schema.json",
+  "name": "basilir",
+  "rules": {
+    "source_file": {
+      "type": "REPEAT",
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "SYMBOL",
+            "name": "keyword"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "other"
+          }
+        ]
+      }
+    },
+    "keyword": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "assert"
+        },
+        {
+          "type": "STRING",
+          "value": "assume"
+        },
+        {
+          "type": "STRING",
+          "value": "axiom"
+        },
+        {
+          "type": "STRING",
+          "value": "be"
+        },
+        {
+          "type": "STRING",
+          "value": "block"
+        },
+        {
+          "type": "STRING",
+          "value": "booland"
+        },
+        {
+          "type": "STRING",
+          "value": "boolimplies"
+        },
+        {
+          "type": "STRING",
+          "value": "boolnot"
+        },
+        {
+          "type": "STRING",
+          "value": "boolor"
+        },
+        {
+          "type": "STRING",
+          "value": "booltobv1"
+        },
+        {
+          "type": "STRING",
+          "value": "bvadd"
+        },
+        {
+          "type": "STRING",
+          "value": "bvand"
+        },
+        {
+          "type": "STRING",
+          "value": "bvashr"
+        },
+        {
+          "type": "STRING",
+          "value": "bvcomp"
+        },
+        {
+          "type": "STRING",
+          "value": "bvconcat"
+        },
+        {
+          "type": "STRING",
+          "value": "bvlshr"
+        },
+        {
+          "type": "STRING",
+          "value": "bvmul"
+        },
+        {
+          "type": "STRING",
+          "value": "bvnand"
+        },
+        {
+          "type": "STRING",
+          "value": "bvneg"
+        },
+        {
+          "type": "STRING",
+          "value": "bvnor"
+        },
+        {
+          "type": "STRING",
+          "value": "bvnot"
+        },
+        {
+          "type": "STRING",
+          "value": "bvor"
+        },
+        {
+          "type": "STRING",
+          "value": "bvsdiv"
+        },
+        {
+          "type": "STRING",
+          "value": "bvsge"
+        },
+        {
+          "type": "STRING",
+          "value": "bvsgt"
+        },
+        {
+          "type": "STRING",
+          "value": "bvshl"
+        },
+        {
+          "type": "STRING",
+          "value": "bvsle"
+        },
+        {
+          "type": "STRING",
+          "value": "bvslt"
+        },
+        {
+          "type": "STRING",
+          "value": "bvsmod"
+        },
+        {
+          "type": "STRING",
+          "value": "bvsrem"
+        },
+        {
+          "type": "STRING",
+          "value": "bvsub"
+        },
+        {
+          "type": "STRING",
+          "value": "bvudiv"
+        },
+        {
+          "type": "STRING",
+          "value": "bvuge"
+        },
+        {
+          "type": "STRING",
+          "value": "bvugt"
+        },
+        {
+          "type": "STRING",
+          "value": "bvule"
+        },
+        {
+          "type": "STRING",
+          "value": "bvult"
+        },
+        {
+          "type": "STRING",
+          "value": "bvurem"
+        },
+        {
+          "type": "STRING",
+          "value": "bvxnor"
+        },
+        {
+          "type": "STRING",
+          "value": "bvxor"
+        },
+        {
+          "type": "STRING",
+          "value": "call"
+        },
+        {
+          "type": "STRING",
+          "value": "ensure"
+        },
+        {
+          "type": "STRING",
+          "value": "ensures"
+        },
+        {
+          "type": "STRING",
+          "value": "entry"
+        },
+        {
+          "type": "STRING",
+          "value": "eq"
+        },
+        {
+          "type": "STRING",
+          "value": "exists"
+        },
+        {
+          "type": "STRING",
+          "value": "extract"
+        },
+        {
+          "type": "STRING",
+          "value": "false"
+        },
+        {
+          "type": "STRING",
+          "value": "forall"
+        },
+        {
+          "type": "STRING",
+          "value": "goto"
+        },
+        {
+          "type": "STRING",
+          "value": "guarantee"
+        },
+        {
+          "type": "STRING",
+          "value": "guard"
+        },
+        {
+          "type": "STRING",
+          "value": "indirect"
+        },
+        {
+          "type": "STRING",
+          "value": "intadd"
+        },
+        {
+          "type": "STRING",
+          "value": "intdiv"
+        },
+        {
+          "type": "STRING",
+          "value": "intge"
+        },
+        {
+          "type": "STRING",
+          "value": "intgt"
+        },
+        {
+          "type": "STRING",
+          "value": "intle"
+        },
+        {
+          "type": "STRING",
+          "value": "intlt"
+        },
+        {
+          "type": "STRING",
+          "value": "intmod"
+        },
+        {
+          "type": "STRING",
+          "value": "intmul"
+        },
+        {
+          "type": "STRING",
+          "value": "intneg"
+        },
+        {
+          "type": "STRING",
+          "value": "intsub"
+        },
+        {
+          "type": "STRING",
+          "value": "invariant"
+        },
+        {
+          "type": "STRING",
+          "value": "le"
+        },
+        {
+          "type": "STRING",
+          "value": "load"
+        },
+        {
+          "type": "STRING",
+          "value": "memory"
+        },
+        {
+          "type": "STRING",
+          "value": "neq"
+        },
+        {
+          "type": "STRING",
+          "value": "nop"
+        },
+        {
+          "type": "STRING",
+          "value": "old"
+        },
+        {
+          "type": "STRING",
+          "value": "phi"
+        },
+        {
+          "type": "STRING",
+          "value": "proc"
+        },
+        {
+          "type": "STRING",
+          "value": "prog"
+        },
+        {
+          "type": "STRING",
+          "value": "rely"
+        },
+        {
+          "type": "STRING",
+          "value": "require"
+        },
+        {
+          "type": "STRING",
+          "value": "requires"
+        },
+        {
+          "type": "STRING",
+          "value": "return"
+        },
+        {
+          "type": "STRING",
+          "value": "shared"
+        },
+        {
+          "type": "STRING",
+          "value": "sign_extend"
+        },
+        {
+          "type": "STRING",
+          "value": "store"
+        },
+        {
+          "type": "STRING",
+          "value": "true"
+        },
+        {
+          "type": "STRING",
+          "value": "unreachable"
+        },
+        {
+          "type": "STRING",
+          "value": "var"
+        },
+        {
+          "type": "STRING",
+          "value": "zero_extend"
+        }
+      ]
+    },
+    "other": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "PATTERN",
+          "value": "//.*\\n"
+        },
+        {
+          "type": "PATTERN",
+          "value": "/\\*.*?\\*/"
+        },
+        {
+          "type": "PATTERN",
+          "value": "bv(\\d)+"
+        },
+        {
+          "type": "PATTERN",
+          "value": "int"
+        },
+        {
+          "type": "PATTERN",
+          "value": "bool"
+        },
+        {
+          "type": "PATTERN",
+          "value": "\\.(_|[a-zA-Z])([#$\\._~]|\\d|[a-zA-Z])*"
+        },
+        {
+          "type": "PATTERN",
+          "value": "([#_]|[a-zA-Z])([#$\\._]|\\d|[a-zA-Z])*"
+        },
+        {
+          "type": "PATTERN",
+          "value": "\\$([#$\\._]|\\d|[a-zA-Z])+"
+        },
+        {
+          "type": "PATTERN",
+          "value": "%([#$\\._]|\\d|[a-zA-Z])+"
+        },
+        {
+          "type": "PATTERN",
+          "value": "@([#$\\._]|\\d|[a-zA-Z])+"
+        },
+        {
+          "type": "PATTERN",
+          "value": "\\["
+        },
+        {
+          "type": "PATTERN",
+          "value": "\\]"
+        },
+        {
+          "type": "PATTERN",
+          "value": "\\{"
+        },
+        {
+          "type": "PATTERN",
+          "value": "\\}"
+        },
+        {
+          "type": "PATTERN",
+          "value": "::|->"
+        },
+        {
+          "type": "PATTERN",
+          "value": "\"([^\\\"]|\\\\[^\"])*\""
+        },
+        {
+          "type": "PATTERN",
+          "value": "0x([abcdef]|\\d)+"
+        },
+        {
+          "type": "PATTERN",
+          "value": "(\\d)+"
+        },
+        {
+          "type": "PATTERN",
+          "value": "[a-zA-Z]([a-zA-Z]|\\d|_|\\')*"
+        },
+        {
+          "type": "PATTERN",
+          "value": ";|,|:|declare-fun|\\(|\\)|->|define-fun|=|:="
+        },
+        {
+          "type": "PATTERN",
+          "value": "(\\d)+"
+        },
+        {
+          "type": "PATTERN",
+          "value": "(\\d)+\\.(\\d)+(e(-)?(\\d)+)?"
+        },
+        {
+          "type": "PATTERN",
+          "value": "\"([^\\\"]|\\\\[^\"])*\""
+        },
+        {
+          "type": "PATTERN",
+          "value": "'([^\\']|\\\\[^'])*'"
+        },
+        {
+          "type": "PATTERN",
+          "value": "\\s+"
+        }
+      ]
+    }
+  },
+  "extras": [
+    {
+      "type": "PATTERN",
+      "value": "\\s"
+    }
+  ],
+  "conflicts": [],
+  "precedences": [],
+  "externals": [],
+  "inline": [],
+  "supertypes": [],
+  "reserved": {}
+}

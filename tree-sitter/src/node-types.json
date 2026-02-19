@@ -1,0 +1,364 @@
+[
+  {
+    "type": "keyword",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "other",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "source_file",
+    "named": true,
+    "root": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "keyword",
+          "named": true
+        },
+        {
+          "type": "other",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "assert",
+    "named": false
+  },
+  {
+    "type": "assume",
+    "named": false
+  },
+  {
+    "type": "axiom",
+    "named": false
+  },
+  {
+    "type": "be",
+    "named": false
+  },
+  {
+    "type": "block",
+    "named": false
+  },
+  {
+    "type": "booland",
+    "named": false
+  },
+  {
+    "type": "boolimplies",
+    "named": false
+  },
+  {
+    "type": "boolnot",
+    "named": false
+  },
+  {
+    "type": "boolor",
+    "named": false
+  },
+  {
+    "type": "booltobv1",
+    "named": false
+  },
+  {
+    "type": "bvadd",
+    "named": false
+  },
+  {
+    "type": "bvand",
+    "named": false
+  },
+  {
+    "type": "bvashr",
+    "named": false
+  },
+  {
+    "type": "bvcomp",
+    "named": false
+  },
+  {
+    "type": "bvconcat",
+    "named": false
+  },
+  {
+    "type": "bvlshr",
+    "named": false
+  },
+  {
+    "type": "bvmul",
+    "named": false
+  },
+  {
+    "type": "bvnand",
+    "named": false
+  },
+  {
+    "type": "bvneg",
+    "named": false
+  },
+  {
+    "type": "bvnor",
+    "named": false
+  },
+  {
+    "type": "bvnot",
+    "named": false
+  },
+  {
+    "type": "bvor",
+    "named": false
+  },
+  {
+    "type": "bvsdiv",
+    "named": false
+  },
+  {
+    "type": "bvsge",
+    "named": false
+  },
+  {
+    "type": "bvsgt",
+    "named": false
+  },
+  {
+    "type": "bvshl",
+    "named": false
+  },
+  {
+    "type": "bvsle",
+    "named": false
+  },
+  {
+    "type": "bvslt",
+    "named": false
+  },
+  {
+    "type": "bvsmod",
+    "named": false
+  },
+  {
+    "type": "bvsrem",
+    "named": false
+  },
+  {
+    "type": "bvsub",
+    "named": false
+  },
+  {
+    "type": "bvudiv",
+    "named": false
+  },
+  {
+    "type": "bvuge",
+    "named": false
+  },
+  {
+    "type": "bvugt",
+    "named": false
+  },
+  {
+    "type": "bvule",
+    "named": false
+  },
+  {
+    "type": "bvult",
+    "named": false
+  },
+  {
+    "type": "bvurem",
+    "named": false
+  },
+  {
+    "type": "bvxnor",
+    "named": false
+  },
+  {
+    "type": "bvxor",
+    "named": false
+  },
+  {
+    "type": "call",
+    "named": false
+  },
+  {
+    "type": "ensure",
+    "named": false
+  },
+  {
+    "type": "ensures",
+    "named": false
+  },
+  {
+    "type": "entry",
+    "named": false
+  },
+  {
+    "type": "eq",
+    "named": false
+  },
+  {
+    "type": "exists",
+    "named": false
+  },
+  {
+    "type": "extract",
+    "named": false
+  },
+  {
+    "type": "false",
+    "named": false
+  },
+  {
+    "type": "forall",
+    "named": false
+  },
+  {
+    "type": "goto",
+    "named": false
+  },
+  {
+    "type": "guarantee",
+    "named": false
+  },
+  {
+    "type": "guard",
+    "named": false
+  },
+  {
+    "type": "indirect",
+    "named": false
+  },
+  {
+    "type": "intadd",
+    "named": false
+  },
+  {
+    "type": "intdiv",
+    "named": false
+  },
+  {
+    "type": "intge",
+    "named": false
+  },
+  {
+    "type": "intgt",
+    "named": false
+  },
+  {
+    "type": "intle",
+    "named": false
+  },
+  {
+    "type": "intlt",
+    "named": false
+  },
+  {
+    "type": "intmod",
+    "named": false
+  },
+  {
+    "type": "intmul",
+    "named": false
+  },
+  {
+    "type": "intneg",
+    "named": false
+  },
+  {
+    "type": "intsub",
+    "named": false
+  },
+  {
+    "type": "invariant",
+    "named": false
+  },
+  {
+    "type": "le",
+    "named": false
+  },
+  {
+    "type": "load",
+    "named": false
+  },
+  {
+    "type": "memory",
+    "named": false
+  },
+  {
+    "type": "neq",
+    "named": false
+  },
+  {
+    "type": "nop",
+    "named": false
+  },
+  {
+    "type": "old",
+    "named": false
+  },
+  {
+    "type": "phi",
+    "named": false
+  },
+  {
+    "type": "proc",
+    "named": false
+  },
+  {
+    "type": "prog",
+    "named": false
+  },
+  {
+    "type": "rely",
+    "named": false
+  },
+  {
+    "type": "require",
+    "named": false
+  },
+  {
+    "type": "requires",
+    "named": false
+  },
+  {
+    "type": "return",
+    "named": false
+  },
+  {
+    "type": "shared",
+    "named": false
+  },
+  {
+    "type": "sign_extend",
+    "named": false
+  },
+  {
+    "type": "store",
+    "named": false
+  },
+  {
+    "type": "true",
+    "named": false
+  },
+  {
+    "type": "unreachable",
+    "named": false
+  },
+  {
+    "type": "var",
+    "named": false
+  },
+  {
+    "type": "zero_extend",
+    "named": false
+  }
+]
