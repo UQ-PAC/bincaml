@@ -40,14 +40,15 @@ module TestLattice = struct
       make generator |> set_print show |> set_small size |> set_shrink shrink)
 
   let idem =
-    QCheck.Test.make ~name:"idempotent" arbitrary (fun s -> equal (join s s) s)
+    QCheck.Test.make ~name:"set_idempotent_join" arbitrary (fun s ->
+        equal (join s s) s)
 
   let union_prop =
     QCheck.Test.make ~name:"union" (QCheck.tup3 arbitrary arbitrary QCheck.int)
       (fun (a, b, x) -> Bool.equal (mem x (join a b)) (mem x a || mem x b))
 
   let join_leq =
-    QCheck.Test.make ~name:"join_leq" (QCheck.pair arbitrary arbitrary)
+    QCheck.Test.make ~name:"set_join_leq" (QCheck.pair arbitrary arbitrary)
       (fun (a, b) -> Bool.equal (leq a b) (equal (join a b) b))
 
   let _ = QCheck_base_runner.run_tests [ idem; union_prop; join_leq ]
@@ -56,32 +57,26 @@ end
 module TestMap = struct
   include LatticeMap (TestKey) (TestLattice)
 
-  let topmake m = TopMap (KM.filter (fun _ x -> not @@ V.equal x V.top) m)
-  let botmake m = BotMap (KM.filter (fun _ x -> not @@ V.equal x V.bottom) m)
-
   let generator =
     QCheck.Gen.(
-      pair nat_small TestLattice.generator
-      |> list_size nat_small |> map KM.of_list
-      |> fun f -> oneof [ f >|= topmake; f >|= botmake ])
-
-  let size = function TopMap m | BotMap m -> KM.cardinal m
+      pair nat_small TestLattice.generator |> list_size nat_small |> fun f ->
+      oneof [ f >|= of_list_top; f >|= of_list_bot ])
 
   let shrink lm =
-    let m = match lm with TopMap m | BotMap m -> m in
+    let t, l = to_list lm in
     QCheck.Shrink.(
-      KM.to_list m
-      |> list ~shrink:(pair int TestLattice.shrink)
-      |> Iter.map KM.of_list
+      list ~shrink:(pair int TestLattice.shrink) l
       |> Iter.map (fun m ->
-          match lm with TopMap _ -> topmake m | BotMap _ -> botmake m))
+          match t with `Top -> of_list_top m | `Bottom -> of_list_bot m))
 
   let arbitrary =
     QCheck.(
-      make generator |> set_print show |> set_small size |> set_shrink shrink)
+      make generator |> set_print show |> set_small cardinal
+      |> set_shrink shrink)
 
   let idem =
-    QCheck.Test.make ~name:"idempotent" arbitrary (fun m -> equal m (join m m))
+    QCheck.Test.make ~name:"map_idempotent_join" arbitrary (fun m ->
+        equal m (join m m))
 
   let pointwise_join =
     QCheck.Test.make ~name:"pointwise_join"
@@ -100,7 +95,7 @@ module TestMap = struct
         | false -> TestLattice.equal (read k' a) (read k' b))
 
   let join_leq =
-    QCheck.Test.make ~name:"join_leq" (QCheck.pair arbitrary arbitrary)
+    QCheck.Test.make ~name:"map_join_leq" (QCheck.pair arbitrary arbitrary)
       (fun (a, b) -> Bool.equal (leq a b) (equal (join a b) b))
 
   let _ =

@@ -36,6 +36,7 @@ module ReadUninit = struct
   let pretty v = Containers_pp.text (show v)
   let widening = join
   let bottom = Bot
+  let top = ReadUninit
   let analyze (e : Lang.Procedure.G.edge) d = d
 end
 

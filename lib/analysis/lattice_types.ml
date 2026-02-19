@@ -149,6 +149,16 @@ module LiftLattice (L : Lattice) : Lattice = struct
     | Bot, _ -> Bot
     | _, Bot -> Bot
     | V a, V b -> V (L.join a b)
+
+  let leq a b =
+    match (a, b) with
+    | Bot, _ -> true
+    | _, Bot -> false
+    | _, Top -> true
+    | Top, _ -> false
+    | V a, V b -> L.leq a b
+
+  let top = Top
 end
 
 (*

@@ -126,52 +126,15 @@ let tf_forwards st (read_st : 'a -> Var.t -> 'b) (s : Program.stmt)
        ~f_expr:(BasilExpr.fold_with_type alg)
        s
 
-module MapState (V : Lattice) = struct
-  include (
-    struct
-      module M = PatriciaTree.MakeMap (Var)
+module MapState (V : Lattice_collections.TopLattice) = struct
+  include
+    Lattice_collections.LatticeMap
+      (struct
+        include Var
 
-      type t = V.t M.t
-
-      let name = V.name ^ "maplattice"
-      let compare a b = M.reflexive_compare V.compare a b
-      let bottom = M.empty
-      let join a b = M.idempotent_union (fun v a b -> V.join a b) a b
-      let equal a b = M.reflexive_equal V.equal a b
-
-      let leq a b =
-        M.reflexive_subset_domain_for_all2 (fun _ a b -> V.leq a b) a b
-
-      let show m =
-        Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
-        |> Iter.to_string ~sep:", " (fun (k, v) ->
-            Printf.sprintf "%s->%s" (Var.name k) (V.show v))
-
-      let pretty v =
-        let lst = M.to_list v in
-        Containers_pp.(
-          fill
-            (text "," ^ newline)
-            (List.map
-               (fun (k, v) -> textpf "%s->%s" (Var.name k) (V.show v))
-               lst))
-
-      let to_iter m = Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
-      let read (v : Var.t) m = M.find_opt v m |> Option.get_or ~default:V.bottom
-      let update k v m = M.add k v m
-      let widening a b = M.idempotent_union (fun v a b -> V.widening a b) a b
-
-      type val_t = V.t
-      type key_t = Var.t
-
-      module V = V
-    end :
-      StateAbstraction with type val_t = V.t and type key_t = Var.t)
-
-  type val_t = V.t
-  type key_t = Var.t
-
-  module V = V
+        let show = name
+      end)
+      (V)
 end
 
 module Forwards (D : Domain) = struct
