@@ -340,7 +340,7 @@ module BasilExpr = struct
     let open Containers_pp.Infix in
     let a = AbstractExpr.get_attrib e |> pattrib in
     match e with
-    | RVar { id; attrib } -> text (Var.name id) ^ a
+    | RVar { id; attrib } -> text (Var.to_string id) ^ a
     | Constant { const } -> text (AllOps.to_string const) ^ a
     | UnaryExpr { op = `Lambda as op; arg } ->
         text (AllOps.to_string op) ^ a ^ text " " ^ arg

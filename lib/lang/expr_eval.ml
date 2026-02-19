@@ -114,6 +114,6 @@ let%expect_test _ =
   print_endline r;
   [%expect
     {|
-    bvmul(bvadd(0xa:bv10, 0xa:bv10), beans)
-    bvmul(0x14:bv10, beans)
+    bvmul(bvadd(0xa:bv10, 0xa:bv10), beans:bv10)
+    bvmul(0x14:bv10, beans:bv10)
     |}]

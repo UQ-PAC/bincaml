@@ -165,6 +165,6 @@ let%expect_test "normalise" =
   print_endline (BasilExpr.to_string e);
   [%expect
     {|
-    boolnot(boolnot(boolnot(booland(boolnot(boolnot(b)), a))))
-    boolor(boolnot(b), boolnot(a))
+    boolnot(boolnot(boolnot(booland(boolnot(boolnot(b:bool)), a:bool))))
+    boolor(boolnot(b:bool), boolnot(a:bool))
     |}]
