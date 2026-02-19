@@ -15,6 +15,7 @@ module type SetElem = sig
   val pretty : t -> Containers_pp.t
 end
 
+(** LatticeSet with specified top value representing the universe *)
 module LatticeSet (T : SetElem) = struct
   module TSet = Set.Make (T)
 
@@ -28,8 +29,12 @@ module LatticeSet (T : SetElem) = struct
     | Fin s -> TSet.to_string ~start:"{" ~stop:"}" T.show s
     | Top -> "Top"
 
-  (* TODO *)
-  let pretty = Containers_pp.text % show
+  let pretty = function
+    | Fin s ->
+        Containers_pp.(
+          text "Fin" ^ fill (text ",") (TSet.to_list s |> List.map T.pretty))
+    | Top -> Containers_pp.text "Top"
+
   let bottom = Fin TSet.empty
   let top = Top
 
@@ -66,13 +71,11 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
 
   let top_vjoin _ x y =
     let j = V.join x y in
-    (* if j = top then None else Some j but what is top... *)
-    Some j
+    if V.equal j V.top then None else Some j
 
   let top_vwidening _ x y =
     let j = V.widening x y in
-    (* if j = top then None else Some j *)
-    Some j
+    if V.equal j V.top then None else Some j
 
   let show a =
     let m, s =
@@ -83,8 +86,15 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
       |> Iter.to_string ~sep:", " (fun (k, v) ->
           Printf.sprintf "%s->%s" (K.show k) (V.show v)))
 
-  (* TODO *)
-  let pretty = Containers_pp.text % show
+  let pretty a =
+    Containers_pp.(
+      let m, s =
+        match a with BotMap m -> (m, "BotMap ") | TopMap m -> (m, "TopMap ")
+      in
+      text s
+      ^ fill (text ",")
+          (KM.to_list m
+          |> List.map (fun (k, v) -> K.pretty k ^ text "->" ^ V.pretty v)))
 
   let compare a b =
     match (a, b) with
