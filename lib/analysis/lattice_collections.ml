@@ -75,7 +75,7 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
       type key_t = K.t
       type t = BotMap of V.t KM.t | TopMap of V.t KM.t
 
-      let name = V.name ^ "maplattice"
+      let name = V.name ^ "MapLattice"
       let bottom = BotMap KM.empty
       let top = TopMap KM.empty
 
