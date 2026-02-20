@@ -27,13 +27,13 @@ module LatticeSet (T : SetElem) = struct
 
   let show = function
     | Fin s -> TSet.to_string ~start:"{" ~stop:"}" T.show s
-    | Top -> "Top"
+    | Top -> Bincaml_util.Unicode.top_char
 
   let pretty = function
     | Fin s ->
         Containers_pp.(
-          text "Fin" ^ fill (text ",") (TSet.to_list s |> List.map T.pretty))
-    | Top -> Containers_pp.text "Top"
+          text "Fin" ^ fill (text "," ^ newline) (TSet.to_list s |> List.map T.pretty))
+    | Top -> Containers_pp.text Bincaml_util.Unicode.top_char
 
   let mem x = function Top -> true | Fin s -> TSet.mem x s
   let singleton x = Fin (TSet.singleton x)
@@ -99,7 +99,7 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
             match a with BotMap m -> (m, "") | TopMap m -> (m, "TopMap ")
           in
           text s
-          ^ fill (text ",")
+          ^ fill (text "," ^ newline)
               (KM.to_list m
               |> List.map (fun (k, v) -> K.pretty k ^ text "->" ^ V.pretty v)))
 
