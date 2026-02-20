@@ -37,6 +37,7 @@ let of_cmd st (e : Containers.Sexp.t) =
     | `List (`Atom cmd :: n) -> (cmd, n)
     | _ -> failwith "bad cmd structure"
   in
+  let full_cmd = Sexp.to_string e in
   Trace_core.with_span ~__FILE__ ~__LINE__ ("runcmd::" ^ cmd) (fun _ ->
       match cmd with
       | "skip" -> st
@@ -49,7 +50,8 @@ let of_cmd st (e : Containers.Sexp.t) =
           | (Loader.Loadir.ILBParseError _ | Loader.Loadir.LoadError _) as e ->
             let msg = Loader.Loadir.show_ilbparseerror e in
             raise
-              (Common.ReplError { msg; __FILE__; __LINE__; __FUNCTION__; cmd }))
+              (Common.ReplError
+                 { msg; __FILE__; __LINE__; __FUNCTION__; cmd = full_cmd }))
       | "list-procs" ->
           let open Program in
           ID.Map.iter
@@ -120,7 +122,6 @@ let of_cmd st (e : Containers.Sexp.t) =
       | "interp-out" ->
           let ofile = List.hd @@ assert_atoms 1 args in
           let prog = get_prog st in
-          let prog = Transforms.Spec_modifies.set_modsets prog in
           let main =
             ID.Map.find (Option.get_exn_or "no" prog.entry_proc) prog.procs
           in

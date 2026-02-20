@@ -85,19 +85,21 @@ let%expect_test _ =
   let v3 = Var.create "v3" (Types.bv 0x1) in
 
   let e1 =
-    BasilExpr.forall
-      ~bound:[ rvar v2 ]
+    BasilExpr.forall ~bound:[ v2 ]
       (applyintrin ~op:`AND [ rvar v1; rvar v2; rvar v3 ])
   in
-  let exp = BasilExpr.forall ~bound:[ rvar v1 ] (binexp ~op:`EQ (rvar v2) e1) in
+  let exp = BasilExpr.forall ~bound:[ v1 ] (binexp ~op:`EQ (rvar v2) e1) in
   print_endline (to_string exp);
   let sub v = Some (bvconst (Bitvec.of_int ~size:5 150)) in
   let e2 = BasilExpr.substitute sub exp in
   print_endline (to_string e2);
   [%expect
     {|
-    forall(v1:bv1 :: eq(v2:bv1, forall(v2:bv1 :: booland(v1:bv1, v2:bv1, v3:bv1))))
-    forall(v1:bv1 :: eq(0x16:bv5, forall(v2:bv1 :: booland(v1:bv1, v2:bv1, 0x16:bv5)))) |}]
+    forall (v1:bv1) :: (eq(v2:bv1,
+      forall (v2:bv1) :: (booland(v1:bv1, v2:bv1, v3:bv1))))
+    forall (v1:bv1) :: (eq(0x16:bv5,
+      forall (v2:bv1) :: (booland(v1:bv1, v2:bv1, 0x16:bv5))))
+    |}]
 
 module DSE = struct
   (** Dead-store elimination for local variables based on intraprocedural live

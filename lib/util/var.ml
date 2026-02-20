@@ -77,9 +77,7 @@ let to_string_il_rvar v = to_string v
 let to_string_il_lvar v =
   match scope v with Local -> "var " ^ to_string v | Global -> to_string v
 
-let to_decl_string_il v =
-  let decl_n = match typ v with Types.Map _ -> "memory" | _ -> "var" in
-  decl_n ^ " " ^ to_string v
+let to_decl_string_il v = "var " ^ to_string v
 
 module Decls = struct
   include Hashtbl
@@ -89,11 +87,12 @@ module Decls = struct
   let find_opt m name = Hashtbl.find_opt m name
   let empty () : 'v t = Hashtbl.create 30
 
-  let add m (v : 'v) =
-    let d = find_opt m (name v) in
+  (*let add m vn v =
+    let d = find_opt m (name vn) in
     match d with
     | Some e when equal e v -> ()
     | Some _ ->
         failwith @@ "Already declared diff var with that name: " ^ name v
-    | None -> Hashtbl.add m (name v) v
+    | None -> Hashtbl.add m (name vn) v
+    *)
 end

@@ -160,27 +160,28 @@ module SMTLib2 = struct
 
   let smt_alg (e : sexp t BasilExpr.abstract_expr) =
     match e with
-    | Constant o ->
+    | Constant { const = o } ->
         let* o = add_logic_const o in
         return (of_op o)
-    | RVar e -> get_var e
-    | UnaryExpr (o, e) ->
+    | RVar { id } -> get_var id
+    | UnaryExpr { op = o; arg = e } ->
         let* e = e in
         return @@ list [ of_op o; e ]
-    | BinaryExpr (o, l, r) ->
+    | BinaryExpr { op = o; arg1 = l; arg2 = r } ->
         let* l = l in
         let* r = r in
         return @@ list [ of_op o; l; r ]
     (* TODO: bool2bv1 *)
-    | ApplyIntrin (o, args) ->
+    | ApplyIntrin { op = o; args } ->
         let* args = sequence args in
         return (list (of_op o :: args))
     (* TODO: fundecls*)
-    | ApplyFun (n, args) ->
+    | ApplyFun { func; args } ->
         let* args = sequence args in
-        return @@ list (atom n :: args)
+        let* func = func in
+        return @@ list (func :: args)
     (* TODO: bindings *)
-    | Binding (_, _) -> failwith "unsupp"
+    | Binding _ -> failwith "unsupp"
 
   let of_bexpr e = (BasilExpr.cata smt_alg e) init
 

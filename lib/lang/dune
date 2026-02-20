@@ -2,6 +2,7 @@
  (public_name bincaml.ast)
  (name lang)
  (modules
+  attrib
   expr
   algsimp
   common

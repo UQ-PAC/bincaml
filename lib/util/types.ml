@@ -8,7 +8,7 @@ type t =
   | Top
   | Nothing
   | Map of t * t
-[@@deriving eq]
+[@@deriving eq, ord]
 
 let bv i = Bitvector i
 let int = Integer
@@ -45,14 +45,17 @@ let rec compare_partial (a : t) (b : t) =
   | Map _, _ -> None
   | _, Map _ -> None
 
-let compare a b = compare_partial a b |> Option.get_or ~default:0
+let leq a b =
+  compare_partial a b |> function Some a when a <= 0 -> true | _ -> false
 
-let rec curry ?(acc = []) (l : t) : t list * t =
-  match l with Map (l, ts) -> curry ~acc:(l :: acc) ts | l -> (List.rev acc, l)
+let rec uncurry ?(acc = []) (l : t) : t list * t =
+  match l with
+  | Map (l, ts) -> uncurry ~acc:(l :: acc) ts
+  | l -> (List.rev acc, l)
 
-let uncurry (args : t list) (v : t) =
+let curry (args : t list) (v : t) =
   match args with
-  | h :: tl -> List.fold_left (fun a p -> Map (a, p)) h tl
+  | h :: tl -> Map (List.fold_left (fun a p -> Map (a, p)) h tl, v)
   | [] -> v
 
 let rec to_string = function

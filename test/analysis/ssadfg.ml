@@ -74,12 +74,12 @@ proc @main_4196260 () -> ()
   print_endline f;
   [%expect
     {|
-    R30_out->Top
-    NF_out->NonZero
     CF_out->Top
-    VF_out->Top
+    NF_out->NonZero
     R0_out->Zero
     R1_out->Zero
+    R30_out->Top
+    VF_out->Top
     ZF_out->NonZero
     _PC_out->NonZero
     |}]

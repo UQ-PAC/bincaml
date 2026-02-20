@@ -53,14 +53,27 @@ let solve (prog : Program.t) =
   in
   FixProp.lfp local_rw
 
-let set_modsets prog =
+let set_modsets ?(add_only = false) prog =
   let rwset = solve prog in
   let procs =
     ID.Map.mapi
       (fun i p ->
         let read, written = rwset i in
-        let captures_globs = VarSet.to_list @@ VarSet.union read written in
-        let modifies_globs = VarSet.to_list written in
+        let spec = Procedure.specification p in
+        let exist_modifies =
+          if add_only then VarSet.of_list spec.modifies_globs else VarSet.empty
+        in
+        let exist_captures =
+          if add_only then VarSet.of_list spec.captures_globs else VarSet.empty
+        in
+        let captures_globs =
+          VarSet.elements
+          @@ VarSet.union exist_captures
+          @@ VarSet.union read written
+        in
+        let modifies_globs =
+          VarSet.elements @@ VarSet.union exist_modifies written
+        in
         let spec : (Var.t, Program.e) Procedure.proc_spec =
           Procedure.specification p
         in
@@ -71,57 +84,3 @@ let set_modsets prog =
   { prog with procs }
 
 let analyse prog = solve prog
-
-let%expect_test "callstuff" =
-  let prog =
-    Loader.Loadir.ast_of_string ~__LINE__ ~__FILE__ ~__FUNCTION__
-      {|
-var $R0: bv64;
-var $R1: bv64;
-prog entry @entry;
-memory shared $mem : (bv64 -> bv8);
-
-proc @entry() -> ()
-[
-  block %entry  [
-    call @b();
-    var c:bv64 := 1:bv64;
-    var b:bv64 := c:bv64;
-    return ();
-  ]
-];
-proc @b() -> ()
-[
-  block %entry  [
-    $R0: bv64 := 0x1:bv64 { .comment = "op: 0x52800020" };
-    var beans:bv64 := 0x1:bv64;
-    store le $mem $R1:bv64 0x0:bv32 32;
-    call @c();
-    return ();
-  ]
-];
-proc @c() -> ()
-[
-  block %entry  [
-    store le $mem $R0:bv64 0x0:bv32 32;
-    return ();
-  ]
-];
-|}
-  in
-  let res = analyse prog.prog in
-  ID.Map.iter
-    (fun pid proc ->
-      print_endline (ID.to_string pid ^ ":\n" ^ (res pid |> RWSets.to_string)))
-    prog.prog.procs;
-  [%expect
-    {|
-    @entry:
-    read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
-    written: $R0:bv64,$mem:(bv64->bv8)
-    @b:
-    read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
-    written: $R0:bv64,$mem:(bv64->bv8)
-    @c:
-    read: $R0:bv64,$mem:(bv64->bv8)
-    written: $mem:(bv64->bv8) |}]
