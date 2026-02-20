@@ -1,0 +1,242 @@
+\documentclass{article}
+\usepackage{graphicx} 
+
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{tikz}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{mathtools}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{algpseudocode}
+
+\usetikzlibrary{arrows,positioning,shapes}
+
+\lstset{
+    language=ML,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    breaklines=true
+}
+
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{invariant}{Invariant}
+
+\title{Implementing Value Abstractions in BinCaml:\\The Known Bits Domain}
+\author{Sneha Zazen}
+\date{January 2026}
+
+\begin{document}
+
+\maketitle
+
+\section*{Introduction}
+
+The Known Bits domain (TNum) represents sets of bitvectors by tracking which bits are known (0 or 1) and which are unknown (can be either 0 or 1). The implementation uses two bitvectors: \texttt{value} contains the known bit values, and \texttt{mask} indicates which bits are unknown (1 = unknown, 0 = known).
+
+The domain is defined as:
+\begin{align*}
+t ::= \text{Bot} \mid \text{TNum of } \{\text{value}: \text{Bitvec.t}, \text{mask}: \text{Bitvec.t}\} \mid \text{Top}
+\end{align*}
+
+\subsection*{Examples}
+
+\begin{enumerate}[noitemsep]
+    \item \textbf{Exactly 5 (binary: 0101): all bits known} \\
+    \texttt{value: 0101, mask: 0000} 
+    
+    \item \textbf{All even numbers (last bit is 0 - $\mu$$\mu$$\mu$0):} \\
+    \texttt{value: 0000, mask: 1110} (only last bit known)
+    
+    \item \textbf{All values where bits 0 and 2 are set: $\mu$1$\mu$0} \\
+    \texttt{value: 0100, mask: 1010}
+\end{enumerate}
+
+\begin{invariant}
+The core invariant for tnums is: $\texttt{value} \land \texttt{mask} = 0$. A bit is either \textit{known} or \textit{unknown} ($\mu$): a known bit is represented by its value in \texttt{value} with the corresponding \texttt{mask} bit set to 0, while an unknown bit is represented by \texttt{value} = 0 and \texttt{mask} = 1. At no point should both \texttt{value} and \texttt{mask} have a 1 at the same bit position.
+
+The constructor \texttt{tnum} enforces this invariant by asserting that the bitwise AND of \texttt{value} and \texttt{mask} is zero, and verifying that both bitvectors are of equal size. Every tnum produced by an operation is returned through \texttt{tnum}, ensuring uniform construction throughout the implementation. Intermediate steps in each operation may extract the \texttt{value} and \texttt{mask} bitvectors separately, but the final result is always reconstructed via \texttt{tnum} to guarantee the invariant holds.
+\end{invariant}
+
+\section*{Lattice Structure}
+
+The Known Bits domain forms a complete lattice $(L, \sqsubseteq, \bot, \top, \sqcup)$, allowing for sound abstract interpretation.
+\begin{enumerate}
+
+
+\textbf{    \item {Partial Order}}
+
+The partial order $a \sqsubseteq b$ represents ``$a$ is atleast as precise as $b$'' or equivalently ``$a$ represents a subset of $b$'s values.'' Our implementation of the \texttt{compare} function gives this ordering by checking two conditions for TNum elements as given in the reference material\cite{vishwanathan2022sound}. 
+
+First, we verify that $a$'s unknown bits form a subset of $b$'s unknown bits, by checking that
+$\texttt{mask}_a \land \lnot\texttt{mask}_b = 0$, ensuring every unknown bit in $a$ is also unknown in $b$.
+Second, for all known bits (where $\texttt{mask}_b = 0$), the values must agree. We compute
+$\texttt{shared\_known} = \texttt{mask}_a \lor \lnot\texttt{mask}_b$, which identifies all bit positions
+that are known in $b$, and verify that $\texttt{value}_a \land \texttt{shared\_known} = \texttt{value}_b \land \texttt{shared\_known}$.
+\textbf{  \item {Join Operation}}
+
+The join operation $a \sqcup b$ computes the least upper bound, representing the union of value sets. For two TNum elements, the new mask identifies bits that differ between operands or are already unknown in either: $\text{mask}_{result} = (\text{value}_a \oplus \text{value}_b) \lor \text{mask}_a \lor \text{mask}_b$. The new value retains only bits that are known and agree in both operands: $\text{value}_{result} = \neg\text{mask}_{result} \land (\text{value}_a \land \text{value}_b)$.
+
+\textbf{widening:}  It is identical to join. This works because the Known Bits lattice has finite height (bounded by bitvector size), ensuring all ascending chains stabilize without requiring a separate widening operator. For domains with infinite ascending chains, widening would accelerate convergence by jumping to a safe overapproximation.
+Figure \ref{fig:lattice} illustrates the lattice structure for a single bit in the Known Bits domain.
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+    node distance=1.5cm and 2cm,
+    every node/.style={draw, circle, minimum size=0.8cm, font=\small}
+]
+% Lifted top (universal)
+\node (LiftedTop) at (0,0) {$\top$};
+% Domain top (unknown, size-consistent)
+\node (top) at (0,-2) {$\mu$};
+
+\node (val0) at (-1.5,-4) {\small $0$};
+\node (val1) at (1.5,-4) {\small $1$};
+
+\node (bot) at (0,-6) {$\bot$};
+\draw (LiftedTop) -- (top);
+\draw (top) -- (val0);
+\draw (top) -- (val1);
+\draw (val0) -- (bot);
+\draw (val1) -- (bot);
+\end{tikzpicture}
+\caption{Lattice structure for Known Bits domain.}
+\begin{itemize}
+    \item Lifted Top ($\top$): The universal top element, representing the absence of any size information --- used before a width is established.
+    \item Domain Top ($\mu$): The unknown element of a fixed width, where all mask bits are set to 1 and all value bits are 0 (\texttt{value: 0, mask: 1}). The width is inferred from context, e.g.\ \texttt{unknown \textasciitilde width} constructs this as \texttt{tnum (zero \textasciitilde size:width) (ones \textasciitilde size:width)}.
+    \item Left node: The certain value 0 at that position (\texttt{value: 0, mask: 0}).
+    \item Right node: The certain value 1 at that position (\texttt{value: 1, mask: 0}).
+    \item Bottom ($\bot$): The bottom element, representing an unreachable or contradictory state.
+\end{itemize}
+\label{fig:lattice}
+\end{figure}
+\end{enumerate}
+
+\section*{Operations on Abstract Values}
+\begin{enumerate}
+ 
+
+The implementation uses higher-order functions to abstract common patterns, keeping it consistent and reducing redundancy. The \texttt{bind1} combinator lifts unary operations on bitvector pairs (value, mask) to operations on the abstract domain. Similarly, \texttt{bind2} handles binary operations. The helper functions \texttt{bind1} and \texttt{bind2} are used to destructure so that we can extract components and apply operations, handling the lattice structure uniformly.
+
+The design and implementation of operations are informed by existing formulations of the \texttt{tnum} abstraction in the Linux kernel and by the Known Bits domain implementation in BASIL. The logic for mask and value propagation closely follows the semantics described in the Linux kernel's \texttt{tnum} implementation \cite{linux-tnum} and the Scala-based Known Bits analysis in BASIL \cite{basil-knownbits}.
+
+\textbf{    \item {Bitwise Operations}}
+
+Bitwise operations have straightforward implementations in the Known Bits domain. 
+Extension operations handle both zero-extension and sign-extension. 
+
+\textbf{Zero-extension} simply extends both value and mask with zeros—the extended bits are known.
+
+\textbf{Sign-extension} extends the value and mask by replicating the sign bit. Bit extraction slices both the value and mask at the specified range.
+
+ \textbf{Bitwise NOT}, we flip all known bits while preserving unknown bits unchanged—the mask remains identical.
+
+\textbf{Bitwise AND }propagates known zeros: if either operand has a known 0 bit, the result has a known 0; otherwise the bit may be unknown. The implementation computes the result value as the AND of input values, and the result mask as the OR of input masks.
+
+\textbf{Bitwise OR} dually propagates known ones: if either operand has a known 1 bit, the result has a known 1. The implementation sets result bits to 1 where either input has 1, then marks as unknown only those bits that were unknown in both operands but didn't produce a known 1.
+
+\textbf{Bitwise XOR} can be computed exactly for known bits, but produces unknown results whenever either input bit is unknown. 
+
+Shift operations share a common structure: if the shift amount $b$ is unknown (i.e.\ $\texttt{mask}_b \neq 0$),
+the result is fully unknown, since we cannot determine how far the bits have moved. If the shift amount
+is known (i.e.\ $\texttt{mask}_b = 0$), we apply the shift directly to both \texttt{value} and \texttt{mask}
+by the concrete amount $\texttt{value}_b$, preserving the known/unknown structure of $a$.
+
+\textbf{ Logical left shift} (\texttt{tnum\_shl}) shifts both \texttt{value} and
+\texttt{mask} left by $\texttt{value}_b$, filling the vacated low bits with known zeros. 
+
+\textbf{Logical right shift} (\texttt{tnum\_lshr}) shifts both right by $\texttt{value}_b$, filling the vacated high bits with
+known zeros. 
+
+\textbf{Arithmetic right shift }(\texttt{tnum\_ashr}) shifts both right by $\texttt{value}_b$,
+replicating the sign bit of \texttt{value} and \texttt{mask} respectively into the vacated high bits,
+preserving sign information where it is known.
+
+\textbf{    \item {Arithmetic Operations}}
+
+Arithmetic operations are more complex due to carry and borrow propagation. Addition computes carry chains by analyzing where unknown bits might generate carries. The implementation sums the masks (potential variation), adds this to the sum of values, and uses XOR to identify bits affected by carries. These affected bits, combined with originally unknown bits, form the result mask.
+
+Subtraction similarly tracks borrow propagation using bitwise operations to identify which bits might be affected.
+Negation is implemented as subtraction from zero. Using simple bitwise operations gives us computational efficiency and accuracy, the logic is blatantly taken from reference papers to avoid silly developer bugs. 
+
+\textbf{    \item {Multiplication}}
+
+The multiplication implementation was a little tricky but with generous support it was implemented effectively. The implementation is based
+on the soundness reasoning given in \cite{vishwanathan2022sound}
+and closely follows the kernel implementation as of February 2026 \cite{linux-tnum},
+adapted to be easier to reason about in a functional context.
+
+\newpage
+\begin{algorithm}
+\caption{Tnum Multiplication}
+\begin{algorithmic}[1]
+\Require $a = (\texttt{av}, \texttt{am})$, $b = (\texttt{bv}, \texttt{bm})$ are tnums of width $w$
+\Ensure Returns $a \times b$ as a tnum
+\State $\texttt{acc} \gets \texttt{known}(0_w)$
+\Procedure{TnumMulAux}{$\texttt{acc},\ a,\ b$}
+    \If{$\texttt{av} \lor \texttt{am} = 0$} \Comment{all remaining bits of $a$ are known zero}
+        \State \Return $\texttt{acc}$
+    \EndIf
+    \If{$\texttt{av} \land 1 \neq 0$} \Comment{LSB of $a$ is a known 1}
+        \State $\texttt{acc'} \gets \texttt{tnum\_add}(\texttt{acc},\ b)$
+    \ElsIf{$\texttt{am} \land 1 \neq 0$} \Comment{LSB of $a$ is unknown}
+        \State $\texttt{acc'} \gets \texttt{join}(\texttt{acc},\ \texttt{tnum\_add}(\texttt{acc},\ b))$
+    \Else \Comment{LSB of $a$ is a known 0}
+        \State $\texttt{acc'} \gets \texttt{acc}$
+    \EndIf
+    \State $a \gets \texttt{tnum\_lshr}(a,\ 1)$ \Comment{advance to next bit of $a$}
+    \State $b \gets \texttt{tnum\_shl}(b,\ 1)$ \Comment{shift $b$ up by one position}
+    \State \Return \Call{TnumMulAux}{$\texttt{acc'},\ a,\ b$}
+\EndProcedure
+\State \Return \Call{TnumMulAux}{$\texttt{acc},\ a,\ b$}
+\end{algorithmic}
+\end{algorithm}
+
+The idea is supported by a value-mask decomposition that separates certain and uncertain bit contributions,
+using \texttt{tnum\_add} and \texttt{join} to compute the final result iteratively. At each step,
+we take the least significant bit (LSB) of $a$ and multiply it by $b$, accumulating the result:
+
+\begin{itemize}
+    \item If $\text{LSB}(a)$ is a \textit{known} 0: the current accumulator is unchanged.
+    \item If $\text{LSB}(a)$ is a \textit{known} 1: $b$ is added to the current accumulator via \texttt{tnum\_add}.
+    \item If $\text{LSB}(a)$ is \textit{unknown}: we join the current accumulator with the sum of the accumulator and $b$, reflecting that the bit may or may not contribute.
+\end{itemize}
+
+We iterate through the bits of $a$ to build the product incrementally. At each stage, both $a$ is logically shifted to the right reducing size of a at each step and
+$b$ are shifted to left to emulate multiplication as series of addition collected in the accumulator as at each bit position. An early termination condition fires when
+$\texttt{value}_a \lor \texttt{mask}_a = 0$, i.e.\ all remaining bits of $a$ are known zeros,
+allowing the recursion to stop before processing all bits.
+\end{enumerate}
+\section*{Value Abstraction}
+\begin{enumerate}
+The value abstraction evaluate an expression from the IR in abstract space.
+\textbf{\item{Constants}}
+    The \texttt{eval\_const} function abstracts constant values. Concrete bitvectors become fully-known TNum elements using the \texttt{known} constructor. Boolean values map to single-bit bitvectors (1 for true, 0 for false). All other constant types that don't have natural bitvector representations return Top.
+  \textbf{\item{Unary Operations}}
+ The \texttt{eval\_unop} function builds on the operation type. Supported operations include bitwise NOT, zero-extension, sign-extension, bit extraction, and negation—each delegating to the corresponding domain operation. Unsupported unary operations conservatively return Top to maintain soundness.
+  \textbf{\item {Binary Operations}}
+    The \texttt{eval\_binop} function similarly uses binary operations. The implementation supports arithmetic operations (addition, subtraction), bitwise operations (AND, OR, XOR, NAND), and shift operations (logical and arithmetic shifts). As of now complex operations like division and modulo return Top, to keep it sound.
+\end{enumerate}
+
+\section*{Code Structure}
+
+\sloppy 
+The implementation uses a modular architecture with nested modules. \texttt{KnownBitLattice} defines the core lattice structure. \texttt{KnownBitsOps} extends this with bitvector-specific operations. \texttt{KnownBitsValueAbstraction} adds the expression language interface. Finally, \texttt{KnownValueAbstractionBasil} instantiates the analysis for BinCaml's expression language, and the \texttt{EasyForwardAnalysisPack} functor integrates it into the dataflow framework.
+
+The Known Bits domain gave developers a great opportunity to work together and learn. This domain was used alongside Wrapped interval to get a more precise value in reduce product domain analysis.
+
+\addcontentsline{toc}{section}{References}
+\bibliographystyle{plain}
+\bibliography{known-bits}
+
+\end{document}
+Thanks everyone 
+and Hayden (who helped me with with all git issues despite hating on my laptop)

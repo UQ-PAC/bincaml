@@ -112,6 +112,21 @@ module KnownBitsOps = struct
         let v = bitand (bitxor av bv) (bitnot @@ bitor am bm) in
         tnum v (bitor am bm))
 
+  let tnum_shl =
+    bind2 (fun (av, am) (bv, bm) ->
+        if is_nonzero bm then unknown ~width:(size av)
+        else tnum (shl av bv) (shl am bv))
+
+  let tnum_lshr =
+    bind2 (fun (av, am) (bv, bm) ->
+        if is_nonzero bm then unknown ~width:(size av)
+        else tnum (lshr av bv) (lshr am bv))
+
+  let tnum_ashr =
+    bind2 (fun (av, am) (bv, bm) ->
+        if is_nonzero bm then unknown ~width:(size av)
+        else tnum (ashr av bv) (ashr am bv))
+
   let tnum_add =
     bind2 (fun (av, am) (bv, bm) ->
         let sm = add am bm in
@@ -135,44 +150,26 @@ module KnownBitsOps = struct
         let zero = zero ~size:(size v) in
         tnum_sub (known zero) (tnum v m))
 
-  let tnum_shl =
-    bind2 (fun (av, am) (bv, bm) ->
-        if is_nonzero bm then Top else tnum (shl av bv) (shl am bv))
+  (* This implementation is based on the soundness reasoning given in https://arxiv.org/pdf/2105.05398.
+     The value-mask decomposition separates certain and uncertain bit contributions,
+     using tnum_add and join operations to compute the final result recursively.
+     The paper contrasts multiple algorithms; the final implementation in the kernel differs slightly.
 
-  let tnum_lshr =
-    bind2 (fun (av, am) (bv, bm) ->
-        if is_nonzero bm then Top else tnum (lshr av bv) (lshr am bv))
+     At each step, we take the LSB of a and multiply it by b, adding the result to the accumulator:
+       - If LSB(a) is a known 0: keep the current accumulator
+       - If LSB(a) is a known 1: add b to the current accumulator
+       - If LSB(a) is unknown: join the previous and sum of previous acc and tnum b
 
-  let tnum_ashr =
-    bind2 (fun (av, am) (bv, bm) ->
-        if is_nonzero bm then Top else tnum (ashr av bv) (ashr am bv))
+     We iterate through the bits to build the certain-bit product incrementally
+     via recursive additions and joins. An early termination condition fires when
+     (is_zero @@ bitor av am); at each stage the arguments are shifted to compute
+     each step of the multiplication process.
 
-  (* This implementation is based on soundness resoning give in https://arxiv.org/pdf/2105.05398.
-   The value-mask decomposition allows separating certain and 
-   uncertain bit contributions, and using bitwise operations to compute final result
-   recursively. the paper has multiple algorithms mentioned and contrasted and the final implementation
-   in the kernel is slightly different 
+     The OCaml implementation closely follows the kernel implementation as of February 2026:
+     https://github.com/torvalds/linux/blob/master/kernel/bpf/tnum.c
+     It has been adapted to be easier to reason about in a functional context.
+  *)
 
-   iterating through the bits to build the certain-bit product 
-   incrementally through recursive additions and join
-
-   ocaml implementation closely resembles the actual implementation from the kernel as dated februvary 2026 https://github.com/torvalds/linux/blob/master/kernel/bpf/tnum.c
-   we have an early termination condition: if (is_zero @@ bitor av am), and at each stage the arguments are updated with shifts to compute each steps in the multiplication process and te acc adds it accordingly 
-   we take lsb of a and multiply it to b and add the result to the acc 
-
-
-
-
-   if LSB(a) is a known 0, keep current accumulator
-if LSB(a) is a known 1, add b to current accumulator
-if LSB(a) is unknown, take a join of the prev acc and current acc
-
-
-   It was adapted for it to be easier to reason about in a functional context.
-   
-  
-
-    *)
   let tnum_mul =
     bind2 (fun (av, am) (bv, bm) ->
         let t_zero = known (of_int ~size:(size av) 0) in
