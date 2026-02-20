@@ -147,20 +147,32 @@ module KnownBitsOps = struct
     bind2 (fun (av, am) (bv, bm) ->
         if is_nonzero bm then Top else tnum (ashr av bv) (ashr am bv))
 
-  (* This implementation resembles Listing 3 (our_mul_simplified) from https://arxiv.org/pdf/2105.05398.
-   The value-mask decomposition (accv, accm) allows separating certain and 
-   uncertain bit contributions, postponing the addition of uncertain bits 
-   until the final step, making it easier to reason about in a functional context.
+  (* This implementation is based on soundness resoning give in https://arxiv.org/pdf/2105.05398.
+   The value-mask decomposition allows separating certain and 
+   uncertain bit contributions, and using bitwise operations to compute final result
+   recursively. the paper has multiple algorithms mentioned and contrasted and the final implementation
+   in the kernel is slightly different 
+
+   iterating through the bits to build the certain-bit product 
+   incrementally through recursive additions and join
+
+   ocaml implementation closely resembles the actual implementation from the kernel as dated februvary 2026 https://github.com/torvalds/linux/blob/master/kernel/bpf/tnum.c
+   we have an early termination condition: if (is_zero @@ bitor av am), and at each stage the arguments are updated with shifts to compute each steps in the multiplication process and te acc adds it accordingly 
+   we take lsb of a and multiply it to b and add the result to the acc 
+
+
+
+
+   if LSB(a) is a known 0, keep current accumulator
+if LSB(a) is a known 1, add b to current accumulator
+if LSB(a) is unknown, take a join of the prev acc and current acc
+
+
+   It was adapted for it to be easier to reason about in a functional context.
    
-   The key optimization from Listing 4 (our_mul) that is incorporated here is
-   the early termination condition: if (is_zero @@ bitor av am), which checks 
-   if both av and am are zero. This stops iterating when there are no more bits 
-   to process in P, rather than always running for exactly bitwidth iterations 
-   like Listing 3.
-   
-   Unlike Listing 4, the OCaml implementation avoids the direct multiplication 
-   optimization (ACCv := P.v * Q.v) and instead builds the certain-bit product 
-   incrementally through recursive additions. *)
+  
+
+    *)
   let tnum_mul =
     bind2 (fun (av, am) (bv, bm) ->
         let t_zero = known (of_int ~size:(size av) 0) in
@@ -173,7 +185,8 @@ module KnownBitsOps = struct
           else
             let acc' =
               if is_nonzero (bitand av one) then tnum_add acc (tnum bv bm)
-              else if is_nonzero (bitand am one) then join acc (tnum_add acc (tnum bv bm))
+              else if is_nonzero (bitand am one) then
+                join acc (tnum_add acc (tnum bv bm))
               else acc
             in
             let a_next = tnum_lshr (tnum av am) (known one) in
