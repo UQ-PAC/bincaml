@@ -124,8 +124,8 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
       let compare a b =
         match (a, b) with
         | BotMap a, BotMap b -> KM.reflexive_compare V.compare a b
-        | BotMap a, TopMap b -> KM.reflexive_compare V.compare a b
-        | TopMap a, BotMap b -> -KM.reflexive_compare V.compare b a
+        | BotMap a, TopMap b -> 1
+        | TopMap a, BotMap b -> -1
         | TopMap a, TopMap b -> KM.reflexive_compare V.compare a b
 
       let equal a b =
