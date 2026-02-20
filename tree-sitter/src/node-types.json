@@ -1,33 +1,1250 @@
 [
   {
-    "type": "keyword",
+    "type": "Assignment",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Expr",
+          "named": true
+        },
+        {
+          "type": "LVar",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "Attr",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "ListAttrKeyValue",
+          "named": true
+        },
+        {
+          "type": "Value",
+          "named": true
+        },
+        {
+          "type": "list_Attr",
+          "named": true
+        },
+        {
+          "type": "token_BeginList",
+          "named": true
+        },
+        {
+          "type": "token_BeginRec",
+          "named": true
+        },
+        {
+          "type": "token_EndList",
+          "named": true
+        },
+        {
+          "type": "token_EndRec",
+          "named": true
+        },
+        {
+          "type": "token_Str",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "AttrKeyValue",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Attr",
+          "named": true
+        },
+        {
+          "type": "token_BIdent",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "AttribSet",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "ListAttrKeyValue",
+          "named": true
+        },
+        {
+          "type": "token_BeginRec",
+          "named": true
+        },
+        {
+          "type": "token_EndRec",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "BVBinOp",
     "named": true,
     "fields": {}
   },
   {
-    "type": "other",
+    "type": "BVLogicalBinOp",
     "named": true,
     "fields": {}
   },
   {
-    "type": "source_file",
+    "type": "BVType",
     "named": true,
-    "root": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "token_BVTYPE",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "BVUnOp",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "BVVal",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "BVType",
+          "named": true
+        },
+        {
+          "type": "IntVal",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "BinOp",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "BVBinOp",
+          "named": true
+        },
+        {
+          "type": "BVLogicalBinOp",
+          "named": true
+        },
+        {
+          "type": "EqOp",
+          "named": true
+        },
+        {
+          "type": "IntBinOp",
+          "named": true
+        },
+        {
+          "type": "IntLogicalBinOp",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "Block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "AttribSet",
+          "named": true
+        },
+        {
+          "type": "JumpWithAttrib",
+          "named": true
+        },
+        {
+          "type": "list_PhiAssign",
+          "named": true
+        },
+        {
+          "type": "list_StmtWithAttrib",
+          "named": true
+        },
+        {
+          "type": "token_BeginList",
+          "named": true
+        },
+        {
+          "type": "token_BlockIdent",
+          "named": true
+        },
+        {
+          "type": "token_EndList",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "BoolBinOp",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "BoolType",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "token_BOOLTYPE",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "CallParams",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "list_Expr",
+          "named": true
+        },
+        {
+          "type": "list_NamedCallArg",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "Decl",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "AttribSet",
+          "named": true
+        },
+        {
+          "type": "Expr",
+          "named": true
+        },
+        {
+          "type": "ProcDef",
+          "named": true
+        },
+        {
+          "type": "Type",
+          "named": true
+        },
+        {
+          "type": "list_FunSpec",
+          "named": true
+        },
+        {
+          "type": "list_Params",
+          "named": true
+        },
+        {
+          "type": "list_ProgSpec",
+          "named": true
+        },
+        {
+          "type": "list_Type",
+          "named": true
+        },
+        {
+          "type": "token_BeginList",
+          "named": true
+        },
+        {
+          "type": "token_EndList",
+          "named": true
+        },
+        {
+          "type": "token_GlobalIdent",
+          "named": true
+        },
+        {
+          "type": "token_ProcIdent",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "Endian",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "EnsureTok",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "EqOp",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "Expr",
+    "named": true,
     "fields": {},
     "children": {
       "multiple": true,
       "required": false,
       "types": [
         {
-          "type": "keyword",
+          "type": "BinOp",
           "named": true
         },
         {
-          "type": "other",
+          "type": "BoolBinOp",
+          "named": true
+        },
+        {
+          "type": "Expr",
+          "named": true
+        },
+        {
+          "type": "GlobalVar",
+          "named": true
+        },
+        {
+          "type": "IntVal",
+          "named": true
+        },
+        {
+          "type": "LambdaDef",
+          "named": true
+        },
+        {
+          "type": "LocalVar",
+          "named": true
+        },
+        {
+          "type": "UnOp",
+          "named": true
+        },
+        {
+          "type": "Value",
+          "named": true
+        },
+        {
+          "type": "list_Expr",
+          "named": true
+        },
+        {
+          "type": "token_GlobalIdent",
           "named": true
         }
       ]
     }
+  },
+  {
+    "type": "FunSpec",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "EnsureTok",
+          "named": true
+        },
+        {
+          "type": "Expr",
+          "named": true
+        },
+        {
+          "type": "RequireTok",
+          "named": true
+        },
+        {
+          "type": "token_BlockIdent",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "GlobalVar",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Type",
+          "named": true
+        },
+        {
+          "type": "token_GlobalIdent",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "IntBinOp",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "IntLogicalBinOp",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "IntType",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "token_INTTYPE",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "IntVal",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "token_IntegerDec",
+          "named": true
+        },
+        {
+          "type": "token_IntegerHex",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "Jump",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "list_Expr",
+          "named": true
+        },
+        {
+          "type": "list_token_BlockIdent",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "JumpWithAttrib",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "AttribSet",
+          "named": true
+        },
+        {
+          "type": "Jump",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "LVar",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "GlobalVar",
+          "named": true
+        },
+        {
+          "type": "LocalVar",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "LVars",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "list_LVar",
+          "named": true
+        },
+        {
+          "type": "list_LocalVar",
+          "named": true
+        },
+        {
+          "type": "list_NamedCallReturn",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "LambdaDef",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Expr",
+          "named": true
+        },
+        {
+          "type": "list_LocalVar",
+          "named": true
+        },
+        {
+          "type": "token_LambdaSep",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "ListAttrKeyValue",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "AttrKeyValue",
+          "named": true
+        },
+        {
+          "type": "Semicolons",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "LocalVar",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Type",
+          "named": true
+        },
+        {
+          "type": "token_LocalIdent",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "MapType",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Type",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "Module",
+    "named": true,
+    "root": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "list_Decl",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "NamedCallArg",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Expr",
+          "named": true
+        },
+        {
+          "type": "token_LocalIdent",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "NamedCallReturn",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "LVar",
+          "named": true
+        },
+        {
+          "type": "token_LocalIdent",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "Params",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Type",
+          "named": true
+        },
+        {
+          "type": "token_LocalIdent",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "PhiAssign",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "LVar",
+          "named": true
+        },
+        {
+          "type": "list_PhiExpr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "PhiExpr",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Var",
+          "named": true
+        },
+        {
+          "type": "token_BlockIdent",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "ProcDef",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "list_Block",
+          "named": true
+        },
+        {
+          "type": "token_BeginList",
+          "named": true
+        },
+        {
+          "type": "token_EndList",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "ProgSpec",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "Expr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "RequireTok",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "Semicolons",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "Semicolons",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "Stmt",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "Assignment",
+          "named": true
+        },
+        {
+          "type": "CallParams",
+          "named": true
+        },
+        {
+          "type": "Endian",
+          "named": true
+        },
+        {
+          "type": "Expr",
+          "named": true
+        },
+        {
+          "type": "IntVal",
+          "named": true
+        },
+        {
+          "type": "LVar",
+          "named": true
+        },
+        {
+          "type": "LVars",
+          "named": true
+        },
+        {
+          "type": "Var",
+          "named": true
+        },
+        {
+          "type": "list_Assignment",
+          "named": true
+        },
+        {
+          "type": "token_GlobalIdent",
+          "named": true
+        },
+        {
+          "type": "token_ProcIdent",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "StmtWithAttrib",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "AttribSet",
+          "named": true
+        },
+        {
+          "type": "Stmt",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "Type",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "BVType",
+          "named": true
+        },
+        {
+          "type": "BoolType",
+          "named": true
+        },
+        {
+          "type": "IntType",
+          "named": true
+        },
+        {
+          "type": "MapType",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "UnOp",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "BVUnOp",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "Value",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "BVVal",
+          "named": true
+        },
+        {
+          "type": "IntVal",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "Var",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "GlobalVar",
+          "named": true
+        },
+        {
+          "type": "LocalVar",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_Assignment",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Assignment",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_Attr",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Attr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_Block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Block",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_Decl",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Decl",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_Expr",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Expr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_FunSpec",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "FunSpec",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_LVar",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "LVar",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_LocalVar",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "LocalVar",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_NamedCallArg",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "NamedCallArg",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_NamedCallReturn",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "NamedCallReturn",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_Params",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Params",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_PhiAssign",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "PhiAssign",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_PhiExpr",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "PhiExpr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_ProgSpec",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "ProgSpec",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_StmtWithAttrib",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "StmtWithAttrib",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_Type",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "Type",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "list_token_BlockIdent",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "token_BlockIdent",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "(",
+    "named": false
+  },
+  {
+    "type": ")",
+    "named": false
+  },
+  {
+    "type": ",",
+    "named": false
+  },
+  {
+    "type": "->",
+    "named": false
+  },
+  {
+    "type": ":",
+    "named": false
+  },
+  {
+    "type": ":=",
+    "named": false
+  },
+  {
+    "type": ";",
+    "named": false
+  },
+  {
+    "type": "=",
+    "named": false
   },
   {
     "type": "assert",
@@ -190,6 +1407,14 @@
     "named": false
   },
   {
+    "type": "declare-fun",
+    "named": false
+  },
+  {
+    "type": "define-fun",
+    "named": false
+  },
+  {
     "type": "ensure",
     "named": false
   },
@@ -344,6 +1569,70 @@
   {
     "type": "store",
     "named": false
+  },
+  {
+    "type": "token_BIdent",
+    "named": true
+  },
+  {
+    "type": "token_BOOLTYPE",
+    "named": true
+  },
+  {
+    "type": "token_BVTYPE",
+    "named": true
+  },
+  {
+    "type": "token_BeginList",
+    "named": true
+  },
+  {
+    "type": "token_BeginRec",
+    "named": true
+  },
+  {
+    "type": "token_BlockIdent",
+    "named": true
+  },
+  {
+    "type": "token_EndList",
+    "named": true
+  },
+  {
+    "type": "token_EndRec",
+    "named": true
+  },
+  {
+    "type": "token_GlobalIdent",
+    "named": true
+  },
+  {
+    "type": "token_INTTYPE",
+    "named": true
+  },
+  {
+    "type": "token_IntegerDec",
+    "named": true
+  },
+  {
+    "type": "token_IntegerHex",
+    "named": true
+  },
+  {
+    "type": "token_LambdaSep",
+    "named": true
+  },
+  {
+    "type": "token_LocalIdent",
+    "named": true
+  },
+  {
+    "type": "token_ProcIdent",
+    "named": true
+  },
+  {
+    "type": "token_Str",
+    "named": true
   },
   {
     "type": "true",
