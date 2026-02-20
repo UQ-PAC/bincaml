@@ -156,16 +156,21 @@ module.exports = grammar({
       seq($.token_BIdent,"=",$.Attr),
     list_AttrKeyValue: $ =>
       seq($.AttrKeyValue,repeat(seq(";",$.AttrKeyValue))),
+    ListAttrKeyValue: $ =>
+      choice(
+        seq($.list_AttrKeyValue,optional($.Semicolons)),
+        choice()
+      ),
     AttribSet: $ =>
       choice(
-        seq($.token_BeginRec,optional($.list_AttrKeyValue),optional($.Semicolons),$.token_EndRec),
+        seq($.token_BeginRec,optional($.ListAttrKeyValue),$.token_EndRec),
         choice()
       ),
     list_Attr: $ =>
       seq($.Attr,repeat(seq(";",$.Attr))),
     Attr: $ =>
       choice(
-        seq($.token_BeginRec,optional($.list_AttrKeyValue),optional($.Semicolons),$.token_EndRec),
+        seq($.token_BeginRec,optional($.ListAttrKeyValue),$.token_EndRec),
         seq($.token_BeginList,optional($.list_Attr),$.token_EndList),
         $.Value,
         $.token_Str
