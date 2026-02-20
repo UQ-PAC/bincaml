@@ -79,6 +79,18 @@ let proc_pretty p =
   let show_expr e = BasilExpr.pretty e in
   Procedure.pretty show_lvar show_var show_expr p
 
+let global_vars prog =
+  StringMap.values prog.globals
+  |> Iter.filter_map (function
+    | Variable { binding } -> Some binding
+    | _ -> None)
+
+let global_constants prog =
+  StringMap.values prog.globals
+  |> Iter.filter_map (function
+    | Function { binding } -> Some binding
+    | _ -> None)
+
 let output_proc_pretty chan p =
   output_string chan @@ Containers_pp.Pretty.to_string ~width:80 (proc_pretty p)
 
