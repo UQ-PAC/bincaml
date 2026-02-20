@@ -162,15 +162,16 @@ module WrappedIntervalsLattice = struct
 
   let widening a b =
     match (a, b) with
-    | _, Bot | Top, _ -> a
-    | Bot, _ | _, Top -> b
+    | Bot, s | s, Bot -> s
+    | Top, _ | _, Top -> Top
     | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
       ->
         size_is_equal al bl;
         size_is_equal au bu;
         let width = size al in
-        if leq b a then a
-        else if Z.geq (cardinality ~width a) (Z.pow (Z.of_int 2) width) then top
+        if compare b a <= 0 then a
+        else if Z.geq (cardinality ~width a) (Z.pow (Z.of_int 2) (width - 1))
+        then top
         else
           let joined = join a b in
           if equal joined (interval al bu) then
@@ -773,13 +774,180 @@ module Domain = struct
     |> Iter.map (fun v -> (v, top_val))
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
-  let transfer dom stmt =
-    let stmt = Eval.stmt_eval_fwd stmt dom in
-    let updates =
+  open struct
+    type bin_pred =
+      [ `EQ | `NEQ | `ULE | `ULT | `UGT | `UGE | `SLE | `SLT | `SGT | `SGE ]
+
+    let from_op op =
+      match op with
+      | `EQ -> Some `EQ
+      | `NEQ -> Some `NEQ
+      | `BVULE -> Some `ULE
+      | `BVULT -> Some `ULT
+      | `BVSLE -> Some `SLE
+      | `BVSLT -> Some `SLT
+      | _ -> None
+
+    let invert p =
+      match p with
+      | `EQ -> `NEQ
+      | `NEQ -> `EQ
+      | `ULE -> `UGT
+      | `ULT -> `UGE
+      | `UGT -> `ULE
+      | `UGE -> `ULT
+      | `SLE -> `SGT
+      | `SLT -> `SGE
+      | `SGT -> `SLE
+      | `SGE -> `SLT
+
+    let swap p =
+      match p with
+      | `EQ -> `EQ
+      | `NEQ -> `NEQ
+      | `ULE -> `UGE
+      | `ULT -> `UGT
+      | `UGT -> `ULT
+      | `UGE -> `ULE
+      | `SLE -> `SGE
+      | `SLT -> `SGT
+      | `SGT -> `SLT
+      | `SGE -> `SLE
+
+    let reduce_bin_left op s t =
+      let open WrappedIntervalsLattice in
+      let meet s t = lub @@ intersect s t in
+      let bind f =
+        match t with
+        | Bot -> Bot
+        | Top -> s
+        | Interval { lower; upper } -> f lower upper
+      in
+      let ineq min max op =
+        match op with
+        | `LE ->
+            bind (fun _ b ->
+                let width = size b in
+                if member t (max ~width) then s
+                else meet s @@ interval (min ~width) b)
+        | `LT ->
+            bind (fun _ b ->
+                let width = size b in
+                if member t (max ~width) then
+                  meet s
+                  @@ interval (min ~width)
+                       Bitvec.(sub (max ~width) @@ of_int ~size:width 1)
+                else if Bitvec.equal b (min ~width) then Bot
+                else
+                  meet s
+                  @@ interval (min ~width)
+                       Bitvec.(sub b @@ of_int ~size:width 1))
+        | `GE ->
+            bind (fun a _ ->
+                let width = size a in
+                if member t (min ~width) then s
+                else meet s @@ interval a (max ~width))
+        | `GT ->
+            bind (fun a _ ->
+                let width = size a in
+                if member t (min ~width) then
+                  meet s
+                  @@ interval
+                       Bitvec.(add (min ~width) (of_int ~size:width 1))
+                       (max ~width)
+                else if Bitvec.equal a (max ~width) then Bot
+                else meet s @@ interval a (max ~width))
+      in
+      let uineq = ineq umin umax in
+      let sineq = ineq smin smax in
+      match op with
+      | `EQ -> meet s t
+      | `NEQ -> meet s @@ complement t
+      | `ULE -> uineq `LE
+      | `ULT -> uineq `LT
+      | `UGE -> uineq `GE
+      | `UGT -> uineq `GT
+      | `SLE -> sineq `LE
+      | `SLT -> sineq `LT
+      | `SGE -> sineq `GE
+      | `SGT -> sineq `GT
+
+    let reduce_bin ~read op l r =
+      let abstract_eval expr =
+        Eval.EV.eval read (Lang.Expr.BasilExpr.fix expr)
+      in
+      let open WrappedIntervalsLattice in
+      let open Lang.Expr.AbstractExpr in
+      match (l, r) with
+      | RVar lv, RVar rv ->
+          let l = read lv in
+          let r = read rv in
+          Iter.of_list
+            [
+              (lv, reduce_bin_left op l r); (rv, reduce_bin_left (swap op) r l);
+            ]
+      | RVar lv, re ->
+          let l = read lv in
+          let r = abstract_eval re in
+          Iter.singleton (lv, reduce_bin_left op l r)
+      | le, RVar rv ->
+          let l = abstract_eval le in
+          let r = read rv in
+          Iter.singleton (rv, reduce_bin_left (swap op) r l)
+      | _ -> Iter.empty
+
+    let rec reduce_expr ~read expr =
+      let open Lang.Expr in
+      let open WrappedIntervalsLattice in
+      let into_varmap =
+        Iter.fold
+          (fun acc (v, e) ->
+            VarMap.update v
+              (function Some l -> Some (e :: l) | None -> Some [ e ])
+              acc)
+          VarMap.empty
+      in
+      let meet s t = lub @@ intersect s t in
+      let glb ints = List.map complement ints |> lub |> complement in
+      match AbstractExpr.map BasilExpr.unfix (BasilExpr.unfix expr) with
+      | BinaryExpr (op, l, r) ->
+          from_op op
+          |> Option.map_or ~default:Iter.empty (fun op ->
+              reduce_bin ~read op l r)
+      | UnaryExpr (`BoolNOT, BinaryExpr (op, l, r)) ->
+          from_op op
+          |> Option.map_or ~default:Iter.empty (fun op ->
+              reduce_bin ~read (invert op) (BasilExpr.unfix l)
+                (BasilExpr.unfix r))
+      | ApplyIntrin (`AND, args) ->
+          List.map BasilExpr.fix args
+          |> Iter.of_list
+          |> Iter.flat_map (reduce_expr ~read)
+          |> into_varmap |> VarMap.map glb |> VarMap.to_iter
+      | ApplyIntrin (`OR, args) ->
+          List.map BasilExpr.fix args
+          |> Iter.of_list
+          |> Iter.flat_map (reduce_expr ~read)
+          |> into_varmap
+          |> VarMap.mapi (fun v rs ->
+              let s = read v in
+              if List.length rs = List.length args then meet s (lub rs) else s)
+          |> VarMap.to_iter
+      | _ -> Iter.empty
+  end
+
+  let tf ~read stmt evald_stmt =
+    let open Lang.Expr in
+    let pred_updates =
       match stmt with
+      | Lang.Stmt.Instr_Assert { body } | Lang.Stmt.Instr_Assume { body } ->
+          reduce_expr ~read @@ Lang.Algsimp.normalise body
+      | _ -> Iter.empty
+    in
+    let updates =
+      match evald_stmt with
       | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
-      | Lang.Stmt.Instr_Assert _ -> Iter.empty
-      | Lang.Stmt.Instr_Assume _ -> Iter.empty
+      | Lang.Stmt.Instr_Assert _ | Lang.Stmt.Instr_Assume _ -> Iter.empty
       | Lang.Stmt.Instr_Load { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_Store { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_IntrinCall { lhs } ->
@@ -788,11 +956,16 @@ module Domain = struct
           StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
       | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
     in
-    Iter.fold (fun a (k, v) -> update k v a) dom updates
+    Iter.append updates pred_updates
+
+  let transfer dom stmt =
+    let evald_stmt = Eval.stmt_eval_fwd stmt dom in
+    Iter.fold (fun a (k, v) -> update k v a) dom
+    @@ tf ~read:(flip read dom) stmt evald_stmt
 end
 
-module Analysis = Dataflow_graph.AnalysisFwd (Domain)
+module Analysis = Intra_analysis.Forwards (Domain)
 
 let analyse (p : Lang.Program.proc) =
-  let g = Dataflow_graph.create p in
-  Analysis.analyse ~widen_set:Graph.ChaoticIteration.FromWto ~delay_widen:50 g
+  Analysis.analyse ~widening_set:Graph.ChaoticIteration.FromWto
+    ~widening_delay:50 p

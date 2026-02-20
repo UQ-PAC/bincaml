@@ -4,6 +4,7 @@
  (modules
   attrib
   expr
+  algsimp
   common
   ops
   viscfg

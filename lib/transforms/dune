@@ -4,7 +4,6 @@
  (flags -w -27)
  (modules
   ssa
-  algsimp
   cf_tx
   livevars
   cleanup_cfg
