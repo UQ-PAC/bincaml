@@ -1664,27 +1664,52 @@
       ]
     },
     "list_AttrKeyValue": {
-      "type": "SEQ",
+      "type": "CHOICE",
+      "members": []
+    },
+    "ListAttrKeyValue": {
+      "type": "CHOICE",
       "members": [
         {
-          "type": "SYMBOL",
-          "name": "AttrKeyValue"
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "AttrKeyValue"
+            },
+            {
+              "type": "REPEAT",
+              "content": {
+                "type": "SEQ",
+                "members": [
+                  {
+                    "type": "STRING",
+                    "value": ";"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "AttrKeyValue"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "Semicolons"
+                },
+                {
+                  "type": "BLANK"
+                }
+              ]
+            }
+          ]
         },
         {
-          "type": "REPEAT",
-          "content": {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "STRING",
-                "value": ";"
-              },
-              {
-                "type": "SYMBOL",
-                "name": "AttrKeyValue"
-              }
-            ]
-          }
+          "type": "CHOICE",
+          "members": []
         }
       ]
     },
@@ -1703,19 +1728,7 @@
               "members": [
                 {
                   "type": "SYMBOL",
-                  "name": "list_AttrKeyValue"
-                },
-                {
-                  "type": "BLANK"
-                }
-              ]
-            },
-            {
-              "type": "CHOICE",
-              "members": [
-                {
-                  "type": "SYMBOL",
-                  "name": "Semicolons"
+                  "name": "ListAttrKeyValue"
                 },
                 {
                   "type": "BLANK"
@@ -1774,19 +1787,7 @@
               "members": [
                 {
                   "type": "SYMBOL",
-                  "name": "list_AttrKeyValue"
-                },
-                {
-                  "type": "BLANK"
-                }
-              ]
-            },
-            {
-              "type": "CHOICE",
-              "members": [
-                {
-                  "type": "SYMBOL",
-                  "name": "Semicolons"
+                  "name": "ListAttrKeyValue"
                 },
                 {
                   "type": "BLANK"
