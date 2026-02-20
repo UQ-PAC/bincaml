@@ -87,7 +87,7 @@ module type IDEDomain = sig
   val compose : t -> t -> t
   (** the composite of edge functions *)
 
-  val eval : t -> Value.t -> Value.t
+  val eval : Value.t -> t -> Value.t
   (** evaluate an edge function *)
 
   val transfer_call : call_info -> DL.t -> t state_update
@@ -618,7 +618,7 @@ module IDE (D : IDEDomain) = struct
             match d3 with
             | Label v ->
                 let st = Hashtbl.get_or states target ~default:DataMap.empty in
-                let fd = D.eval e21 md in
+                let fd = D.eval md e21 in
                 let y = DataMap.get_or v st ~default:D.Value.bottom in
                 let j = D.Value.join y fd in
                 if not (D.Value.equal j y) then (
@@ -697,7 +697,7 @@ module IDE (D : IDEDomain) = struct
                 match d2 with
                 | Label v ->
                     let st = get_st l in
-                    let y = D.eval e x in
+                    let y = D.eval x e in
                     Hashtbl.replace states l (join_state_with st v y)
                 | _ -> ())));
     states

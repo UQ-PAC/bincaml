@@ -39,13 +39,9 @@ module IDELive = struct
 
   open Value
 
-  type t = IdEdge | ConstEdge of Value.t [@@deriving eq, ord]
+  type t = IdEdge | ConstEdge of Value.t [@@deriving eq, ord, show]
 
   let bottom = ConstEdge bottom
-
-  let show v =
-    match v with IdEdge -> "IdEdge" | ConstEdge v -> "ConstEdge " ^ show v
-
   let pp fmt v = Format.pp_print_string fmt (show v)
   let identity = IdEdge
 
@@ -64,7 +60,7 @@ module IDELive = struct
     | IdEdge, ConstEdge false -> IdEdge
     | IdEdge, IdEdge -> IdEdge
 
-  let eval f v = match f with IdEdge -> v | ConstEdge v -> v
+  let eval v f = match f with IdEdge -> v | ConstEdge v -> v
 
   open DL
 
