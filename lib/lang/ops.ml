@@ -3,7 +3,13 @@ open Containers
 
 module Maps = struct
   (* map, value -> result *)
-  type binary = [ `MapIndex ] [@@deriving show { with_path = false }, eq, ord]
+
+  type endian = [ `Big | `Little ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type binary = [ `MapAccess | `Load of endian * int ]
+  [@@deriving show { with_path = false }, eq, ord]
+
   type intrin = [ `MapUpdate ] [@@deriving show { with_path = false }, eq, ord]
 
   let show = function
@@ -189,7 +195,22 @@ module IntOps = struct
 end
 
 module Spec = struct
-  type unary = [ `Forall | `Old | `Exists ]
+  type endian = [ `Big | `Little ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type binary =
+    [ `MapAccess  (** access a value from a map*)
+    | `Load of endian * int
+      (** load many value from a map assuming values are concatable *)
+    | `IfThen
+      (** if first arg evaluates to true then return second arg, otherwise halt
+          and catch fire *) ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type intrin = [ `Cases  (** choose first argument that is defined *) ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type unary = [ `Forall | `Old | `Exists | `Lambda | `Classification | `Gamma ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let hash_intrin a = Hashtbl.hash a
@@ -202,10 +223,11 @@ module AllOps = struct
   type unary = [ IntOps.unary | BVOps.unary | Spec.unary | LogicalOps.unary ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type binary = [ IntOps.binary | BVOps.binary | LogicalOps.binary ]
+  type binary =
+    [ IntOps.binary | BVOps.binary | LogicalOps.binary | Spec.binary ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type intrin = [ BVOps.intrin | LogicalOps.intrin ]
+  type intrin = [ BVOps.intrin | LogicalOps.intrin | Spec.intrin ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type op_fun_type =
@@ -241,7 +263,18 @@ module AllOps = struct
     | `Exists -> return Boolean
     | `BVNOT -> return a
     | `BOOLTOBV1 -> return @@ Bitvector 1
+    | `Lambda ->
+        let args, ret = Types.uncurry a in
+        Fun { args; ret }
     | `Extract (hi, lo) -> return (Bitvector (hi - lo))
+    | `Gamma ->
+        let args, r = Types.uncurry a in
+        let t = Types.curry args Boolean in
+        return t
+    | `Classification ->
+        let args, r = Types.uncurry a in
+        let t = Types.curry args Boolean in
+        return t
 
   let ret_type_bin (o : binary) l r =
     let open Types in
@@ -254,11 +287,17 @@ module AllOps = struct
     | `BVAND | `BVOR | `BVADD | `BVMUL | `BVUDIV | `BVUREM | `BVSHL | `BVLSHR
     | `BVNAND | `BVXOR | `BVSUB | `BVSDIV | `BVSREM | `BVSMOD | `BVASHR ->
         return l
+    | `MapAccess ->
+        let m, r = Types.uncurry l in
+        return r
+    | `Load (e, i) -> return (Bitvector i)
+    | `IfThen -> return r
 
   let ret_type_intrin (o : intrin) args =
     let open Types in
     let return ret = Fun { args; ret } in
     match o with
+    | `Cases -> return @@ List.hd @@ List.tl args
     | `BVADD -> return @@ List.hd args
     | `BVOR -> return @@ List.hd args
     | `BVXOR -> return @@ List.hd args
@@ -291,6 +330,7 @@ module AllOps = struct
     | `BVSREM -> "bvsrem"
     | `BVSDIV -> "bvsdiv"
     | `Forall -> "forall"
+    | `Lambda -> "fun"
     | `BVNEG -> "bvneg"
     | `Bool true -> "true"
     | `Bool false -> "false"
@@ -334,6 +374,13 @@ module AllOps = struct
     | `BOOLTOBV1 -> "booltobv1"
     | `BoolNOT -> "boolnot"
     | `BVSLT -> "bvslt"
+    | `Classification -> "classification"
+    | `Gamma -> "gamma"
+    | `Load (`Big, sz) -> Printf.sprintf "load_be_%d" sz
+    | `Load (`Little, sz) -> Printf.sprintf "load_le_%d" sz
+    | `MapAccess -> "get"
+    | `IfThen -> "case"
+    | `Cases -> "match"
 
   let eval_equal (a : const) (b : const) =
     match (a, b) with

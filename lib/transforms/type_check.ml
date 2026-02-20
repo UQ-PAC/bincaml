@@ -25,6 +25,8 @@ let type_check stmt_id block_id expr =
   let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
     let open Ops in
     match op with
+    | `Classification -> []
+    | `Gamma -> []
     | `BoolNOT | `BOOLTOBV1 ->
         if Types.equal arg Types.Boolean then []
         else [ type_err "%s body is not a boolean" @@ AllOps.to_string op ]
@@ -48,7 +50,7 @@ let type_check stmt_id block_id expr =
                 ])
         | _ -> [ type_err "%s body is not a bitvector" @@ AllOps.to_string op ])
     | `Old -> []
-    | `Forall | `Exists -> []
+    | `Forall | `Exists | `Lambda -> []
   in
 
   let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :
@@ -93,6 +95,16 @@ let type_check stmt_id block_id expr =
             type_err "Arguments are not of the same type in %s"
             @@ AllOps.to_string op;
           ]
+    | `Load (e, sz) -> []
+    | `MapAccess -> (
+        let a, r = Types.uncurry arg1 in
+        match a with
+        | [ arg ] when not (Types.equal arg arg2) ->
+            [
+              type_err "Argument does not match map type %s"
+              @@ AllOps.to_string op;
+            ]
+        | _ -> [])
     | `IMPLIES -> binary_bool_types arg1 arg2
     | `BVSREM | `BVSDIV | `BVADD | `BVASHR | `BVMUL | `BVSHL | `BVNAND | `BVSLE
     | `BVUREM | `BVXOR | `BVOR | `BVSUB | `BVUDIV | `BVLSHR | `BVAND | `BVSMOD
@@ -104,6 +116,10 @@ let type_check stmt_id block_id expr =
               type_err "%s is not of bitvector type in %s"
                 (Types.to_string arg1) (Ops.AllOps.to_string op);
             ])
+    | `IfThen ->
+        if not @@ Types.equal Types.Boolean arg1 then
+          [ type_err "condition is not boolean" ]
+        else []
   in
 
   let check_intrin (op : Ops.AllOps.intrin) (args : Types.t list) :
@@ -139,6 +155,20 @@ let type_check stmt_id block_id expr =
                 (Ops.AllOps.to_string op)
               :: acc)
           [] args
+    | `Cases -> (
+        match args with
+        | [] -> []
+        | h :: tl ->
+            fst
+            @@ List.fold_left
+                 (fun (errs, ty) b ->
+                   if Types.equal ty b then (errs, ty)
+                   else
+                     ( type_err "non-equal branch : %s %s" (Types.to_string ty)
+                         (Types.to_string b)
+                       :: errs,
+                       ty ))
+                 ([], h) tl)
   in
 
   let type_error_alg e =
@@ -156,24 +186,27 @@ let type_check stmt_id block_id expr =
     in
     let inf_errors, rtype =
       match AbstractExpr.map snd e with
-      | RVar r -> ([], Var.typ r)
-      | Constant op -> ret_type_const op |> get_ty
-      | UnaryExpr (op, a) -> ret_type_unary op a |> get_ty
-      | BinaryExpr (op, l, r) -> ret_type_bin op l r |> get_ty
-      | ApplyIntrin (op, args) -> ret_type_intrin op args |> get_ty
-      | ApplyFun (a, b) -> ([], Types.Top)
-      | Binding (vars, b) -> ([], Types.uncurry vars b)
+      | RVar { id = r } -> ([], Var.typ r)
+      | Constant { const = op } -> ret_type_const op |> get_ty
+      | UnaryExpr { op; arg = a } -> ret_type_unary op a |> get_ty
+      | BinaryExpr { op; arg1 = l; arg2 = r } -> ret_type_bin op l r |> get_ty
+      | ApplyIntrin { op; args } -> ret_type_intrin op args |> get_ty
+      | ApplyFun { func; args } ->
+          let _, rt = Types.uncurry func in
+          ([], rt)
+      | Binding { bound = vars; in_body = b } ->
+          ([], Types.curry (List.map Var.typ vars) b)
     in
     let typed_expr = AbstractExpr.map snd e in
     let new_errors : type_error list =
       match typed_expr with
-      | RVar r -> []
-      | Constant op -> []
-      | ApplyFun (a, b) -> []
-      | Binding (vars, b) -> []
-      | UnaryExpr (op, a) -> check_unary op a
-      | BinaryExpr (op, l, r) -> check_binary op l r
-      | ApplyIntrin (op, args) -> check_intrin op args
+      | RVar _ -> []
+      | Constant _ -> []
+      | ApplyFun _ -> []
+      | Binding _ -> []
+      | UnaryExpr { op; arg } -> check_unary op arg
+      | BinaryExpr { op; arg1 = l; arg2 = r } -> check_binary op l r
+      | ApplyIntrin { op; args } -> check_intrin op args
     in
     (inf_errors @ new_errors @ errors, rtype)
   in
@@ -193,8 +226,10 @@ let check_stmt_types stmt (pt : Program.t) stmt_id block_id =
           else
             type_err
               "Paramters for the function has a type mismatch: type of %s != \
-               type of %s"
+               type of %s (%s != %s)"
               (BasilExpr.to_string e) (Var.to_string lvar)
+              (Types.to_string rtype)
+              (Types.to_string (Var.typ lvar))
             :: acc)
         [] ls
   | Stmt.Instr_Assert { body = e } | Stmt.Instr_Assume { body = e } ->

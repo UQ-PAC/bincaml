@@ -5,7 +5,7 @@
   Arguments are not of the same type in neq at statement 3 in %main_entry
   Arguments are not of the same type in eq at statement 4 in %main_entry
   Arguments are not of the same type in neq at statement 5 in %main_entry
-  Paramters for the function has a type mismatch: type of intneg(0x1:bv32) != type of $NF:bv1 at statement 6 in %main_entry
+  Paramters for the function has a type mismatch: type of intneg(0x1:bv32) != type of $NF:bv1 (int != bv1) at statement 6 in %main_entry
   intneg body is not a integer at statement 6 in %main_entry
   bv32 is not the correct type of int for intadd at statement 7 in %main_entry
   bv32 is not the correct type of int for intdiv at statement 8 in %main_entry
@@ -14,14 +14,14 @@
   bv32 is not the correct type of int for intsub at statement 11 in %main_entry
   bv32 is not the correct type of int for intlt at statement 12 in %main_entry
   bv32 is not the correct type of int for intle at statement 13 in %main_entry
-  Paramters for the function has a type mismatch: type of bvnot(1) != type of $NF:bv1 at statement 14 in %main_entry
+  Paramters for the function has a type mismatch: type of bvnot(1) != type of $NF:bv1 (int != bv1) at statement 14 in %main_entry
   bvnot body is not a bitvector at statement 14 in %main_entry
-  Paramters for the function has a type mismatch: type of bvneg(1) != type of $NF:bv1 at statement 15 in %main_entry
+  Paramters for the function has a type mismatch: type of bvneg(1) != type of $NF:bv1 (int != bv1) at statement 15 in %main_entry
   bvneg body is not a bitvector at statement 15 in %main_entry
-  Paramters for the function has a type mismatch: type of zero_extend(32, 2) != type of $NF:bv64 at statement 16 in %main_entry
+  Paramters for the function has a type mismatch: type of zero_extend(32, 2) != type of $NF:bv64 (⊥ != bv64) at statement 16 in %main_entry
   Nothing type encountered in operator at statement 16 in %main_entry
   zero_extend_32 body is not a bitvector at statement 16 in %main_entry
-  Paramters for the function has a type mismatch: type of sign_extend(32, 2) != type of $NF:bv64 at statement 17 in %main_entry
+  Paramters for the function has a type mismatch: type of sign_extend(32, 2) != type of $NF:bv64 (⊥ != bv64) at statement 17 in %main_entry
   Nothing type encountered in operator at statement 17 in %main_entry
   sign_extend_32 body is not a bitvector at statement 17 in %main_entry
   extract_32_31  body is not a bitvector at statement 18 in %main_entry
@@ -31,7 +31,7 @@
   bv32 is not the correct type of bv64 for bvslt at statement 22 in %main_entry
   int is not of bitvector type in bvult at statement 23 in %main_entry
   int is not of bitvector type in bvule at statement 24 in %main_entry
-  Paramters for the function has a type mismatch: type of bvand(1, 0x1:bv32) != type of $NF:bool at statement 25 in %main_entry
+  Paramters for the function has a type mismatch: type of bvand(1, 0x1:bv32) != type of $NF:bool (int != bool) at statement 25 in %main_entry
   int is not of bitvector type in bvand at statement 25 in %main_entry
   bool is not of bitvector type in bvor at statement 26 in %main_entry
   bool is not of bitvector type in bvadd at statement 27 in %main_entry

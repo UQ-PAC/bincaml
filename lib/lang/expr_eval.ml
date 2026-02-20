@@ -20,61 +20,65 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
   let open Option.Infix in
   match e with
   | RVar _ -> None
-  | Constant v -> Some v
-  | BinaryExpr (`EQ, a, b) ->
+  | Constant { const } -> Some const
+  | BinaryExpr { op = `EQ; arg1 = a; arg2 = b } ->
       let* a = a in
       let* b = b in
       bool (AllOps.eval_equal a b)
-  | BinaryExpr (`NEQ, a, b) ->
+  | BinaryExpr { op = `NEQ; arg1 = a; arg2 = b } ->
       let* a = a in
       let* b = b in
       bool (not @@ AllOps.eval_equal a b)
-  | UnaryExpr ((#BVOps.unary_unif as op), b) ->
+  | UnaryExpr { op = #BVOps.unary_unif as op; arg = b } ->
       get_bv b >|= BVOps.eval_unary_unif op >|= bv
-  | UnaryExpr ((#BVOps.unary_bool as op), b) ->
+  | UnaryExpr { op = #BVOps.unary_bool as op; arg = b } ->
       get_bool b >|= BVOps.eval_unary_bool op >|= bv
-  | BinaryExpr ((#BVOps.binary_unif as op), a, b) ->
+  | BinaryExpr { op = #BVOps.binary_unif as op; arg1 = a; arg2 = b } ->
       let* a = get_bv a in
       let* b = get_bv b in
       Some (bv (BVOps.eval_binary_unif op a b))
-  | BinaryExpr ((#BVOps.binary_pred as op), a, b) ->
+  | BinaryExpr { op = #BVOps.binary_pred as op; arg1 = a; arg2 = b } ->
       let* a = get_bv a in
       let* b = get_bv b in
       bool (BVOps.eval_binary_pred op a b)
-  | ApplyIntrin ((#BVOps.intrin as op), args) ->
+  | ApplyIntrin { op = #BVOps.intrin as op; args } ->
       let* args = all_args get_bv args in
       Some (bv (BVOps.eval_intrin op args))
-  | UnaryExpr ((#LogicalOps.unary as op), b) ->
+  | UnaryExpr { op = #LogicalOps.unary as op; arg = b } ->
       get_bool b >|= LogicalOps.eval_unary op >>= bool
-  | UnaryExpr (`Forall, b) -> None
-  | UnaryExpr (`Old, b) -> None
-  | UnaryExpr (`Exists, b) -> None
-  | UnaryExpr ((#IntOps.unary as op), b) ->
+  | UnaryExpr { op = `Forall } -> None
+  | UnaryExpr { op = `Old } -> None
+  | UnaryExpr { op = `Lambda } -> None
+  | UnaryExpr { op = `Exists } -> None
+  | UnaryExpr { op = #IntOps.unary as op; arg = b } ->
       get_int b >|= IntOps.eval_unary op >|= fun b -> `Integer b
-  | BinaryExpr ((#IntOps.binary_unif as op), a, b) ->
+  | BinaryExpr { op = #IntOps.binary_unif as op; arg1 = a; arg2 = b } ->
       let* a = get_int a in
       let* b = get_int b in
       z (IntOps.eval_binary_unif op a b)
-  | BinaryExpr ((#IntOps.binary_pred as op), a, b) ->
+  | BinaryExpr { op = #IntOps.binary_pred as op; arg1 = a; arg2 = b } ->
       let* a = get_int a in
       let* b = get_int b in
       bool (IntOps.eval_binary_pred op a b)
-  | BinaryExpr (`IMPLIES, a, b) ->
+  | BinaryExpr { op = `IMPLIES; arg1 = a; arg2 = b } ->
       let* a = get_bool a in
       let* b = get_bool b in
       bool (b || not a)
-  | ApplyIntrin ((#LogicalOps.intrin as op), args) ->
+  | ApplyIntrin { op = #LogicalOps.intrin as op; args } ->
       let* args = all_args get_bool args in
       bool @@ LogicalOps.eval_intrin op args
   | ApplyFun _ -> None
   | Binding _ -> None
+  | UnaryExpr { op = #Ops.Spec.unary } -> None
+  | BinaryExpr { op = #Ops.Spec.binary } -> None
+  | ApplyIntrin { op = #Ops.Spec.intrin } -> None
 
 let partial_eval_alg (e : BasilExpr.t BasilExpr.abstract_expr) :
     BasilExpr.t option =
   let open AbstractExpr in
   let open Option.Infix in
   let is_const e =
-    match BasilExpr.unfix e with Constant e -> Some e | _ -> None
+    match BasilExpr.unfix e with Constant { const } -> Some const | _ -> None
   in
   let e = AbstractExpr.map is_const e in
   eval_expr_alg e >|= BasilExpr.const
@@ -110,4 +114,5 @@ let%expect_test _ =
   [%expect
     {|
     bvmul(bvadd(0xa:bv10, 0xa:bv10), beans:bv10)
-    bvmul(0x14:bv10, beans:bv10) |}]
+    bvmul(0x14:bv10, beans:bv10)
+    |}]

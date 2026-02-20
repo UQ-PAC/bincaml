@@ -40,6 +40,14 @@ and transProcIdent (x : procIdent) : result = match x with
     ProcIdent string -> failure x
 
 
+and transOpenParen (x : openParen) : result = match x with
+    OpenParen string -> failure x
+
+
+and transCloseParen (x : closeParen) : result = match x with
+    CloseParen string -> failure x
+
+
 and transBeginList (x : beginList) : result = match x with
     BeginList string -> failure x
 
@@ -54,10 +62,6 @@ and transBeginRec (x : beginRec) : result = match x with
 
 and transEndRec (x : endRec) : result = match x with
     EndRec string -> failure x
-
-
-and transLambdaSep (x : lambdaSep) : result = match x with
-    LambdaSep string -> failure x
 
 
 and transStr (x : str) : result = match x with
@@ -76,21 +80,27 @@ and transModule (x : moduleT) : result = match x with
     Module1 decls -> failure x
 
 
+and transLambdaSep (x : lambdaSep) : result = match x with
+    LambdaSep1  -> failure x
+  | LambdaSep2  -> failure x
+
+
 and transSemicolons (x : semicolons) : result = match x with
     Semicolons_Empty  -> failure x
   | Semicolons_Some semicolons -> failure x
 
 
 and transDecl (x : decl) : result = match x with
-    Decl_Axiom (attribset, expr) -> failure x
-  | Decl_SharedMem (globalident, type') -> failure x
-  | Decl_UnsharedMem (globalident, type') -> failure x
-  | Decl_Var (globalident, type') -> failure x
-  | Decl_UninterpFun (attribset, globalident, types, type') -> failure x
-  | Decl_Fun (attribset, globalident, paramss, type', expr) -> failure x
+    Decl_Axiom (globalident, attribset, expr) -> failure x
+  | Decl_SharedMem (globalident, type', varspec) -> failure x
+  | Decl_UnsharedMem (globalident, type', varspec) -> failure x
+  | Decl_Var (globalident, type', varspec) -> failure x
+  | Decl_UninterpFun (globalident, attribset, type') -> failure x
+  | Decl_Fun (globalident, attribset, type', expr) -> failure x
+  | Decl_FunNoType (globalident, attribset, expr) -> failure x
   | Decl_ProgEmpty (procident, attribset) -> failure x
-  | Decl_ProgWithSpec (procident, attribset, beginlist, progspecs, endlist) -> failure x
-  | Decl_Proc (procident, paramss0, paramss, attribset, funspecs, procdef) -> failure x
+  | Decl_ProgWithSpec (procident, attribset, progspecs) -> failure x
+  | Decl_Proc (procident, openparen0, paramss1, closeparen2, openparen, paramss, closeparen, attribset, funspecs, procdef) -> failure x
 
 
 and transProcDef (x : procDef) : result = match x with
@@ -119,6 +129,7 @@ and transType (x : typeT) : result = match x with
   | TypeBoolType booltype -> failure x
   | TypeMapType maptype -> failure x
   | TypeBVType bvtype -> failure x
+  | Type1 (openparen, type', closeparen) -> failure x
 
 
 and transIntVal (x : intVal) : result = match x with
@@ -142,12 +153,12 @@ and transAssignment (x : assignment) : result = match x with
 and transStmt (x : stmt) : result = match x with
     Stmt_Nop  -> failure x
   | Stmt_SingleAssign assignment -> failure x
-  | Stmt_MultiAssign assignments -> failure x
+  | Stmt_MultiAssign (openparen, assignments, closeparen) -> failure x
   | Stmt_Load (lvar, endian, globalident, expr, intval) -> failure x
   | Stmt_Store (endian, globalident, expr0, expr, intval) -> failure x
   | Stmt_Load_Var (lvar, endian, var, expr, intval) -> failure x
   | Stmt_Store_Var (lvar, endian, var, expr0, expr, intval) -> failure x
-  | Stmt_DirectCall (lvars, procident, callparams) -> failure x
+  | Stmt_DirectCall (lvars, procident, openparen, callparams, closeparen) -> failure x
   | Stmt_IndirectCall expr -> failure x
   | Stmt_Assume expr -> failure x
   | Stmt_Guard expr -> failure x
@@ -155,11 +166,13 @@ and transStmt (x : stmt) : result = match x with
 
 
 and transLocalVar (x : localVar) : result = match x with
-    LocalVar1 (localident, type') -> failure x
+    LocalTyped (localident, type') -> failure x
+  | LocalUntyped localident -> failure x
 
 
 and transGlobalVar (x : globalVar) : result = match x with
-    GlobalVar1 (globalident, type') -> failure x
+    GlobalTyped (globalident, type') -> failure x
+  | GlobalUntyped globalident -> failure x
 
 
 and transVar (x : var) : result = match x with
@@ -173,9 +186,9 @@ and transNamedCallReturn (x : namedCallReturn) : result = match x with
 
 and transLVars (x : lVars) : result = match x with
     LVars_Empty  -> failure x
-  | LVars_LocalList localvars -> failure x
-  | LVars_List lvars -> failure x
-  | NamedLVars_List namedcallreturns -> failure x
+  | LVars_LocalList (openparen, localvars, closeparen) -> failure x
+  | LVars_List (openparen, lvars, closeparen) -> failure x
+  | NamedLVars_List (openparen, namedcallreturns, closeparen) -> failure x
 
 
 and transNamedCallArg (x : namedCallArg) : result = match x with
@@ -188,9 +201,9 @@ and transCallParams (x : callParams) : result = match x with
 
 
 and transJump (x : jump) : result = match x with
-    Jump_GoTo blockidents -> failure x
+    Jump_GoTo (openparen, blockidents, closeparen) -> failure x
   | Jump_Unreachable  -> failure x
-  | Jump_Return exprs -> failure x
+  | Jump_Return (openparen, exprs, closeparen) -> failure x
   | Jump_ProcReturn  -> failure x
 
 
@@ -212,12 +225,12 @@ and transPhiExpr (x : phiExpr) : result = match x with
 
 
 and transPhiAssign (x : phiAssign) : result = match x with
-    PhiAssign1 (lvar, phiexprs) -> failure x
+    PhiAssign1 (lvar, openparen, phiexprs, closeparen) -> failure x
 
 
 and transBlock (x : block) : result = match x with
     Block_NoPhi (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> failure x
-  | Block_Phi (blockident, attribset, beginlist, phiassigns, stmtwithattribs, jumpwithattrib, endlist) -> failure x
+  | Block_Phi (blockident, attribset, beginlist, openparen, phiassigns, closeparen, stmtwithattribs, jumpwithattrib, endlist) -> failure x
 
 
 and transAttrKeyValue (x : attrKeyValue) : result = match x with
@@ -233,11 +246,17 @@ and transAttr (x : attr) : result = match x with
     Attr_Map (beginrec, attrkeyvalues, semicolons, endrec) -> failure x
   | Attr_List (beginlist, attrs, endlist) -> failure x
   | Attr_Lit value -> failure x
+  | Attr_Expr expr -> failure x
   | Attr_Str str -> failure x
 
 
 and transParams (x : params) : result = match x with
     Params1 (localident, type') -> failure x
+
+
+and transFunParams (x : funParams) : result = match x with
+    FunParams1 (localident, type') -> failure x
+  | FunParams2 (openparen, localident, type', closeparen) -> failure x
 
 
 and transValue (x : value) : result = match x with
@@ -249,23 +268,35 @@ and transValue (x : value) : result = match x with
 
 and transExpr (x : expr) : result = match x with
     Expr_Literal value -> failure x
+  | Expr_Paren (openparen, expr, closeparen) -> failure x
   | Expr_Local localvar -> failure x
   | Expr_Global globalvar -> failure x
-  | Expr_Forall lambdadef -> failure x
-  | Expr_Exists lambdadef -> failure x
-  | Expr_Old expr -> failure x
-  | Expr_FunctionOp (globalident, exprs) -> failure x
-  | Expr_Binary (binop, expr0, expr) -> failure x
-  | Expr_Assoc (boolbinop, exprs) -> failure x
-  | Expr_Unary (unop, expr) -> failure x
-  | Expr_ZeroExtend (intval, expr) -> failure x
-  | Expr_SignExtend (intval, expr) -> failure x
-  | Expr_Extract (intval0, intval, expr) -> failure x
-  | Expr_Concat exprs -> failure x
+  | Expr_Forall (attribset, lambdadef) -> failure x
+  | Expr_Exists (attribset, lambdadef) -> failure x
+  | Expr_Lambda (attribset, lambdadef) -> failure x
+  | Expr_Old (openparen, expr, closeparen) -> failure x
+  | Expr_FunctionOp (globalident, openparen, exprs, closeparen) -> failure x
+  | Expr_Apply (expr0, expr) -> failure x
+  | Expr_Binary (binop, openparen, expr0, expr, closeparen) -> failure x
+  | Expr_Assoc (boolbinop, openparen, exprs, closeparen) -> failure x
+  | Expr_Unary (unop, openparen, expr, closeparen) -> failure x
+  | Expr_LoadBe (openparen, intval, expr0, expr, closeparen) -> failure x
+  | Expr_LoadLe (openparen, intval, expr0, expr, closeparen) -> failure x
+  | Expr_ZeroExtend (openparen, intval, expr, closeparen) -> failure x
+  | Expr_SignExtend (openparen, intval, expr, closeparen) -> failure x
+  | Expr_Extract (openparen, intval0, intval, expr, closeparen) -> failure x
+  | Expr_Concat (openparen, exprs, closeparen) -> failure x
+  | Expr_Match (expr, openparen, cases, closeparen) -> failure x
+  | Expr_Cases (openparen, cases, closeparen) -> failure x
+
+
+and transLParen (x : lParen) : result = match x with
+    LParenLocalVar localvar -> failure x
+  | LParen1 (openparen, localvar, closeparen) -> failure x
 
 
 and transLambdaDef (x : lambdaDef) : result = match x with
-    LambdaDef1 (localvars, lambdasep, expr) -> failure x
+    LambdaDef1 (lparens, lambdasep, expr) -> failure x
 
 
 and transBinOp (x : binOp) : result = match x with
@@ -282,6 +313,13 @@ and transUnOp (x : unOp) : result = match x with
   | UnOp_boolnot  -> failure x
   | UnOp_intneg  -> failure x
   | UnOp_booltobv1  -> failure x
+  | UnOp_gamma  -> failure x
+  | UnOp_classification  -> failure x
+
+
+and transCase (x : case) : result = match x with
+    CaseCase (expr0, expr) -> failure x
+  | CaseDefault expr -> failure x
 
 
 and transEqOp (x : eqOp) : result = match x with
@@ -357,10 +395,29 @@ and transEnsureTok (x : ensureTok) : result = match x with
   | EnsureTok_ensures  -> failure x
 
 
+and transRelyTok (x : relyTok) : result = match x with
+    RelyTok_rely  -> failure x
+  | RelyTok_relies  -> failure x
+
+
+and transGuarTok (x : guarTok) : result = match x with
+    GuarTok_guarnatee  -> failure x
+  | GuarTok_guarantees  -> failure x
+
+
 and transFunSpec (x : funSpec) : result = match x with
     FunSpec_Require (requiretok, expr) -> failure x
   | FunSpec_Ensure (ensuretok, expr) -> failure x
+  | FunSpec_Rely (relytok, expr) -> failure x
+  | FunSpec_Guar (guartok, expr) -> failure x
+  | FunSpec_Captures globalvars -> failure x
+  | FunSpec_Modifies globalvars -> failure x
   | FunSpec_Invariant (blockident, expr) -> failure x
+
+
+and transVarSpec (x : varSpec) : result = match x with
+    VarSpec_Classification expr -> failure x
+  | VarSpec_Empty  -> failure x
 
 
 and transProgSpec (x : progSpec) : result = match x with

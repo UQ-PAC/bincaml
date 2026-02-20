@@ -108,6 +108,12 @@ let rec prtBlockIdentListBNFC i es : doc = match (i, es) with
 let prtProcIdent _ (AbsBasilIR.ProcIdent (_,i)) : doc = render i
 
 
+let prtOpenParen _ (AbsBasilIR.OpenParen (_,i)) : doc = render i
+
+
+let prtCloseParen _ (AbsBasilIR.CloseParen (_,i)) : doc = render i
+
+
 let prtBeginList _ (AbsBasilIR.BeginList (_,i)) : doc = render i
 
 
@@ -118,9 +124,6 @@ let prtBeginRec _ (AbsBasilIR.BeginRec (_,i)) : doc = render i
 
 
 let prtEndRec _ (AbsBasilIR.EndRec (_,i)) : doc = render i
-
-
-let prtLambdaSep _ (AbsBasilIR.LambdaSep i) : doc = render i
 
 
 let prtStr _ (AbsBasilIR.Str i) : doc = render i
@@ -137,21 +140,27 @@ let rec prtModuleT (i:int) (e : AbsBasilIR.moduleT) : doc = match e with
        AbsBasilIR.Module1 decls -> prPrec i 0 (concatD [prtDeclListBNFC 0 decls])
 
 
+and prtLambdaSep (i:int) (e : AbsBasilIR.lambdaSep) : doc = match e with
+       AbsBasilIR.LambdaSep1  -> prPrec i 0 (concatD [render "->"])
+  |    AbsBasilIR.LambdaSep2  -> prPrec i 0 (concatD [render "::"])
+
+
 and prtSemicolons (i:int) (e : AbsBasilIR.semicolons) : doc = match e with
        AbsBasilIR.Semicolons_Empty  -> prPrec i 0 (concatD [])
   |    AbsBasilIR.Semicolons_Some semicolons -> prPrec i 0 (concatD [prtSemicolons 0 semicolons ; render ";"])
 
 
 and prtDecl (i:int) (e : AbsBasilIR.decl) : doc = match e with
-       AbsBasilIR.Decl_Axiom (attribset, expr) -> prPrec i 0 (concatD [render "axiom" ; prtAttribSet 0 attribset ; prtExpr 0 expr])
-  |    AbsBasilIR.Decl_SharedMem (globalident, type_) -> prPrec i 0 (concatD [render "memory" ; render "shared" ; prtGlobalIdent 0 globalident ; render ":" ; prtTypeT 0 type_])
-  |    AbsBasilIR.Decl_UnsharedMem (globalident, type_) -> prPrec i 0 (concatD [render "memory" ; prtGlobalIdent 0 globalident ; render ":" ; prtTypeT 0 type_])
-  |    AbsBasilIR.Decl_Var (globalident, type_) -> prPrec i 0 (concatD [render "var" ; prtGlobalIdent 0 globalident ; render ":" ; prtTypeT 0 type_])
-  |    AbsBasilIR.Decl_UninterpFun (attribset, globalident, types, type_) -> prPrec i 0 (concatD [render "declare-fun" ; prtAttribSet 0 attribset ; prtGlobalIdent 0 globalident ; render ":" ; render "(" ; prtTypeTListBNFC 0 types ; render ")" ; render "->" ; prtTypeT 0 type_])
-  |    AbsBasilIR.Decl_Fun (attribset, globalident, paramss, type_, expr) -> prPrec i 0 (concatD [render "define-fun" ; prtAttribSet 0 attribset ; prtGlobalIdent 0 globalident ; render "(" ; prtParamsListBNFC 0 paramss ; render ")" ; render "->" ; prtTypeT 0 type_ ; render "=" ; prtExpr 0 expr])
+       AbsBasilIR.Decl_Axiom (globalident, attribset, expr) -> prPrec i 0 (concatD [render "axiom" ; prtGlobalIdent 0 globalident ; prtAttribSet 0 attribset ; prtExpr 0 expr])
+  |    AbsBasilIR.Decl_SharedMem (globalident, type_, varspec) -> prPrec i 0 (concatD [render "memory" ; render "shared" ; prtGlobalIdent 0 globalident ; render ":" ; prtTypeT 0 type_ ; prtVarSpec 0 varspec])
+  |    AbsBasilIR.Decl_UnsharedMem (globalident, type_, varspec) -> prPrec i 0 (concatD [render "memory" ; prtGlobalIdent 0 globalident ; render ":" ; prtTypeT 0 type_ ; prtVarSpec 0 varspec])
+  |    AbsBasilIR.Decl_Var (globalident, type_, varspec) -> prPrec i 0 (concatD [render "var" ; prtGlobalIdent 0 globalident ; render ":" ; prtTypeT 0 type_ ; prtVarSpec 0 varspec])
+  |    AbsBasilIR.Decl_UninterpFun (globalident, attribset, type_) -> prPrec i 0 (concatD [render "val" ; prtGlobalIdent 0 globalident ; prtAttribSet 0 attribset ; render ":" ; prtTypeT 0 type_])
+  |    AbsBasilIR.Decl_Fun (globalident, attribset, type_, expr) -> prPrec i 0 (concatD [render "let" ; prtGlobalIdent 0 globalident ; prtAttribSet 0 attribset ; render ":" ; prtTypeT 0 type_ ; render "=" ; prtExpr 0 expr])
+  |    AbsBasilIR.Decl_FunNoType (globalident, attribset, expr) -> prPrec i 0 (concatD [render "let" ; prtGlobalIdent 0 globalident ; prtAttribSet 0 attribset ; render "=" ; prtExpr 0 expr])
   |    AbsBasilIR.Decl_ProgEmpty (procident, attribset) -> prPrec i 0 (concatD [render "prog" ; render "entry" ; prtProcIdent 0 procident ; prtAttribSet 0 attribset])
-  |    AbsBasilIR.Decl_ProgWithSpec (procident, attribset, beginlist, progspecs, endlist) -> prPrec i 0 (concatD [render "prog" ; render "entry" ; prtProcIdent 0 procident ; prtAttribSet 0 attribset ; prtBeginList 0 beginlist ; prtProgSpecListBNFC 0 progspecs ; prtEndList 0 endlist])
-  |    AbsBasilIR.Decl_Proc (procident, paramss1, paramss2, attribset, funspecs, procdef) -> prPrec i 0 (concatD [render "proc" ; prtProcIdent 0 procident ; render "(" ; prtParamsListBNFC 0 paramss1 ; render ")" ; render "->" ; render "(" ; prtParamsListBNFC 0 paramss2 ; render ")" ; prtAttribSet 0 attribset ; prtFunSpecListBNFC 0 funspecs ; prtProcDef 0 procdef])
+  |    AbsBasilIR.Decl_ProgWithSpec (procident, attribset, progspecs) -> prPrec i 0 (concatD [render "prog" ; render "entry" ; prtProcIdent 0 procident ; prtAttribSet 0 attribset ; prtProgSpecListBNFC 0 progspecs])
+  |    AbsBasilIR.Decl_Proc (procident, openparen1, paramss1, closeparen1, openparen2, paramss2, closeparen2, attribset, funspecs, procdef) -> prPrec i 0 (concatD [render "proc" ; prtProcIdent 0 procident ; prtOpenParen 0 openparen1 ; prtParamsListBNFC 0 paramss1 ; prtCloseParen 0 closeparen1 ; render "->" ; prtOpenParen 0 openparen2 ; prtParamsListBNFC 0 paramss2 ; prtCloseParen 0 closeparen2 ; prtAttribSet 0 attribset ; prtFunSpecListBNFC 0 funspecs ; prtProcDef 0 procdef])
 
 and prtDeclListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
@@ -170,7 +179,7 @@ and prtBoolType (i:int) (e : AbsBasilIR.boolType) : doc = match e with
 
 
 and prtMapType (i:int) (e : AbsBasilIR.mapType) : doc = match e with
-       AbsBasilIR.MapType1 (type_1, type_2) -> prPrec i 0 (concatD [render "(" ; prtTypeT 0 type_1 ; render "->" ; prtTypeT 0 type_2 ; render ")"])
+       AbsBasilIR.MapType1 (type_1, type_2) -> prPrec i 0 (concatD [prtTypeT 0 type_1 ; render "->" ; prtTypeT 0 type_2])
 
 
 and prtBVType (i:int) (e : AbsBasilIR.bVType) : doc = match e with
@@ -182,6 +191,7 @@ and prtTypeT (i:int) (e : AbsBasilIR.typeT) : doc = match e with
   |    AbsBasilIR.TypeBoolType booltype -> prPrec i 0 (concatD [prtBoolType 0 booltype])
   |    AbsBasilIR.TypeMapType maptype -> prPrec i 0 (concatD [prtMapType 0 maptype])
   |    AbsBasilIR.TypeBVType bvtype -> prPrec i 0 (concatD [prtBVType 0 bvtype])
+  |    AbsBasilIR.Type1 (openparen, type_, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
 
 and prtTypeTListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
@@ -211,12 +221,12 @@ and prtAssignmentListBNFC i es : doc = match (i, es) with
 and prtStmt (i:int) (e : AbsBasilIR.stmt) : doc = match e with
        AbsBasilIR.Stmt_Nop  -> prPrec i 0 (concatD [render "nop"])
   |    AbsBasilIR.Stmt_SingleAssign assignment -> prPrec i 0 (concatD [prtAssignment 0 assignment])
-  |    AbsBasilIR.Stmt_MultiAssign assignments -> prPrec i 0 (concatD [render "(" ; prtAssignmentListBNFC 0 assignments ; render ")"])
+  |    AbsBasilIR.Stmt_MultiAssign (openparen, assignments, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtAssignmentListBNFC 0 assignments ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Stmt_Load (lvar, endian, globalident, expr, intval) -> prPrec i 0 (concatD [prtLVar 0 lvar ; render ":=" ; render "load" ; prtEndian 0 endian ; prtGlobalIdent 0 globalident ; prtExpr 0 expr ; prtIntVal 0 intval])
   |    AbsBasilIR.Stmt_Store (endian, globalident, expr1, expr2, intval) -> prPrec i 0 (concatD [render "store" ; prtEndian 0 endian ; prtGlobalIdent 0 globalident ; prtExpr 0 expr1 ; prtExpr 0 expr2 ; prtIntVal 0 intval])
   |    AbsBasilIR.Stmt_Load_Var (lvar, endian, var, expr, intval) -> prPrec i 0 (concatD [prtLVar 0 lvar ; render ":=" ; render "load" ; prtEndian 0 endian ; prtVar 0 var ; prtExpr 0 expr ; prtIntVal 0 intval])
   |    AbsBasilIR.Stmt_Store_Var (lvar, endian, var, expr1, expr2, intval) -> prPrec i 0 (concatD [prtLVar 0 lvar ; render ":=" ; render "store" ; prtEndian 0 endian ; prtVar 0 var ; prtExpr 0 expr1 ; prtExpr 0 expr2 ; prtIntVal 0 intval])
-  |    AbsBasilIR.Stmt_DirectCall (lvars, procident, callparams) -> prPrec i 0 (concatD [prtLVars 0 lvars ; render "call" ; prtProcIdent 0 procident ; render "(" ; prtCallParams 0 callparams ; render ")"])
+  |    AbsBasilIR.Stmt_DirectCall (lvars, procident, openparen, callparams, closeparen) -> prPrec i 0 (concatD [prtLVars 0 lvars ; render "call" ; prtProcIdent 0 procident ; prtOpenParen 0 openparen ; prtCallParams 0 callparams ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Stmt_IndirectCall expr -> prPrec i 0 (concatD [render "indirect" ; render "call" ; prtExpr 0 expr])
   |    AbsBasilIR.Stmt_Assume expr -> prPrec i 0 (concatD [render "assume" ; prtExpr 0 expr])
   |    AbsBasilIR.Stmt_Guard expr -> prPrec i 0 (concatD [render "guard" ; prtExpr 0 expr])
@@ -224,16 +234,21 @@ and prtStmt (i:int) (e : AbsBasilIR.stmt) : doc = match e with
 
 
 and prtLocalVar (i:int) (e : AbsBasilIR.localVar) : doc = match e with
-       AbsBasilIR.LocalVar1 (localident, type_) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render ":" ; prtTypeT 0 type_])
+       AbsBasilIR.LocalTyped (localident, type_) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render ":" ; prtTypeT 0 type_])
+  |    AbsBasilIR.LocalUntyped localident -> prPrec i 0 (concatD [prtLocalIdent 0 localident])
 
 and prtLocalVarListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
   | (_,[x]) -> (concatD [prtLocalVar 0 x])
   | (_,x::xs) -> (concatD [prtLocalVar 0 x ; render "," ; prtLocalVarListBNFC 0 xs])
 and prtGlobalVar (i:int) (e : AbsBasilIR.globalVar) : doc = match e with
-       AbsBasilIR.GlobalVar1 (globalident, type_) -> prPrec i 0 (concatD [prtGlobalIdent 0 globalident ; render ":" ; prtTypeT 0 type_])
+       AbsBasilIR.GlobalTyped (globalident, type_) -> prPrec i 0 (concatD [prtGlobalIdent 0 globalident ; render ":" ; prtTypeT 0 type_])
+  |    AbsBasilIR.GlobalUntyped globalident -> prPrec i 0 (concatD [prtGlobalIdent 0 globalident])
 
-
+and prtGlobalVarListBNFC i es : doc = match (i, es) with
+    (_,[]) -> (concatD [])
+  | (_,[x]) -> (concatD [prtGlobalVar 0 x])
+  | (_,x::xs) -> (concatD [prtGlobalVar 0 x ; render "," ; prtGlobalVarListBNFC 0 xs])
 and prtVar (i:int) (e : AbsBasilIR.var) : doc = match e with
        AbsBasilIR.VarLocalVar localvar -> prPrec i 0 (concatD [prtLocalVar 0 localvar])
   |    AbsBasilIR.VarGlobalVar globalvar -> prPrec i 0 (concatD [prtGlobalVar 0 globalvar])
@@ -248,9 +263,9 @@ and prtNamedCallReturnListBNFC i es : doc = match (i, es) with
   | (_,x::xs) -> (concatD [prtNamedCallReturn 0 x ; render "," ; prtNamedCallReturnListBNFC 0 xs])
 and prtLVars (i:int) (e : AbsBasilIR.lVars) : doc = match e with
        AbsBasilIR.LVars_Empty  -> prPrec i 0 (concatD [])
-  |    AbsBasilIR.LVars_LocalList localvars -> prPrec i 0 (concatD [render "var" ; render "(" ; prtLocalVarListBNFC 0 localvars ; render ")" ; render ":="])
-  |    AbsBasilIR.LVars_List lvars -> prPrec i 0 (concatD [render "(" ; prtLVarListBNFC 0 lvars ; render ")" ; render ":="])
-  |    AbsBasilIR.NamedLVars_List namedcallreturns -> prPrec i 0 (concatD [render "(" ; prtNamedCallReturnListBNFC 0 namedcallreturns ; render ")" ; render ":="])
+  |    AbsBasilIR.LVars_LocalList (openparen, localvars, closeparen) -> prPrec i 0 (concatD [render "var" ; prtOpenParen 0 openparen ; prtLocalVarListBNFC 0 localvars ; prtCloseParen 0 closeparen ; render ":="])
+  |    AbsBasilIR.LVars_List (openparen, lvars, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtLVarListBNFC 0 lvars ; prtCloseParen 0 closeparen ; render ":="])
+  |    AbsBasilIR.NamedLVars_List (openparen, namedcallreturns, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtNamedCallReturnListBNFC 0 namedcallreturns ; prtCloseParen 0 closeparen ; render ":="])
 
 
 and prtNamedCallArg (i:int) (e : AbsBasilIR.namedCallArg) : doc = match e with
@@ -266,9 +281,9 @@ and prtCallParams (i:int) (e : AbsBasilIR.callParams) : doc = match e with
 
 
 and prtJump (i:int) (e : AbsBasilIR.jump) : doc = match e with
-       AbsBasilIR.Jump_GoTo blockidents -> prPrec i 0 (concatD [render "goto" ; render "(" ; prtBlockIdentListBNFC 0 blockidents ; render ")"])
+       AbsBasilIR.Jump_GoTo (openparen, blockidents, closeparen) -> prPrec i 0 (concatD [render "goto" ; prtOpenParen 0 openparen ; prtBlockIdentListBNFC 0 blockidents ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Jump_Unreachable  -> prPrec i 0 (concatD [render "unreachable"])
-  |    AbsBasilIR.Jump_Return exprs -> prPrec i 0 (concatD [render "return" ; render "(" ; prtExprListBNFC 0 exprs ; render ")"])
+  |    AbsBasilIR.Jump_Return (openparen, exprs, closeparen) -> prPrec i 0 (concatD [render "return" ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Jump_ProcReturn  -> prPrec i 0 (concatD [render "return"])
 
 
@@ -298,7 +313,7 @@ and prtPhiExprListBNFC i es : doc = match (i, es) with
   | (_,[x]) -> (concatD [prtPhiExpr 0 x])
   | (_,x::xs) -> (concatD [prtPhiExpr 0 x ; render "," ; prtPhiExprListBNFC 0 xs])
 and prtPhiAssign (i:int) (e : AbsBasilIR.phiAssign) : doc = match e with
-       AbsBasilIR.PhiAssign1 (lvar, phiexprs) -> prPrec i 0 (concatD [prtLVar 0 lvar ; render ":=" ; render "phi" ; render "(" ; prtPhiExprListBNFC 0 phiexprs ; render ")"])
+       AbsBasilIR.PhiAssign1 (lvar, openparen, phiexprs, closeparen) -> prPrec i 0 (concatD [prtLVar 0 lvar ; render ":=" ; render "phi" ; prtOpenParen 0 openparen ; prtPhiExprListBNFC 0 phiexprs ; prtCloseParen 0 closeparen])
 
 and prtPhiAssignListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
@@ -306,7 +321,7 @@ and prtPhiAssignListBNFC i es : doc = match (i, es) with
   | (_,x::xs) -> (concatD [prtPhiAssign 0 x ; render "," ; prtPhiAssignListBNFC 0 xs])
 and prtBlock (i:int) (e : AbsBasilIR.block) : doc = match e with
        AbsBasilIR.Block_NoPhi (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> prPrec i 0 (concatD [render "block" ; prtBlockIdent 0 blockident ; prtAttribSet 0 attribset ; prtBeginList 0 beginlist ; prtStmtWithAttribListBNFC 0 stmtwithattribs ; prtJumpWithAttrib 0 jumpwithattrib ; render ";" ; prtEndList 0 endlist])
-  |    AbsBasilIR.Block_Phi (blockident, attribset, beginlist, phiassigns, stmtwithattribs, jumpwithattrib, endlist) -> prPrec i 0 (concatD [render "block" ; prtBlockIdent 0 blockident ; prtAttribSet 0 attribset ; prtBeginList 0 beginlist ; render "(" ; prtPhiAssignListBNFC 0 phiassigns ; render ")" ; render ";" ; prtStmtWithAttribListBNFC 0 stmtwithattribs ; prtJumpWithAttrib 0 jumpwithattrib ; render ";" ; prtEndList 0 endlist])
+  |    AbsBasilIR.Block_Phi (blockident, attribset, beginlist, openparen, phiassigns, closeparen, stmtwithattribs, jumpwithattrib, endlist) -> prPrec i 0 (concatD [render "block" ; prtBlockIdent 0 blockident ; prtAttribSet 0 attribset ; prtBeginList 0 beginlist ; prtOpenParen 0 openparen ; prtPhiAssignListBNFC 0 phiassigns ; prtCloseParen 0 closeparen ; render ";" ; prtStmtWithAttribListBNFC 0 stmtwithattribs ; prtJumpWithAttrib 0 jumpwithattrib ; render ";" ; prtEndList 0 endlist])
 
 and prtBlockListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
@@ -328,6 +343,7 @@ and prtAttr (i:int) (e : AbsBasilIR.attr) : doc = match e with
        AbsBasilIR.Attr_Map (beginrec, attrkeyvalues, semicolons, endrec) -> prPrec i 0 (concatD [prtBeginRec 0 beginrec ; prtAttrKeyValueListBNFC 0 attrkeyvalues ; prtSemicolons 0 semicolons ; prtEndRec 0 endrec])
   |    AbsBasilIR.Attr_List (beginlist, attrs, endlist) -> prPrec i 0 (concatD [prtBeginList 0 beginlist ; prtAttrListBNFC 0 attrs ; prtEndList 0 endlist])
   |    AbsBasilIR.Attr_Lit value -> prPrec i 0 (concatD [prtValue 0 value])
+  |    AbsBasilIR.Attr_Expr expr -> prPrec i 0 (concatD [prtExpr 0 expr])
   |    AbsBasilIR.Attr_Str str -> prPrec i 0 (concatD [prtStr 0 str])
 
 and prtAttrListBNFC i es : doc = match (i, es) with
@@ -341,6 +357,13 @@ and prtParamsListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
   | (_,[x]) -> (concatD [prtParams 0 x])
   | (_,x::xs) -> (concatD [prtParams 0 x ; render "," ; prtParamsListBNFC 0 xs])
+and prtFunParams (i:int) (e : AbsBasilIR.funParams) : doc = match e with
+       AbsBasilIR.FunParams1 (localident, type_) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render ":" ; prtTypeT 0 type_])
+  |    AbsBasilIR.FunParams2 (openparen, localident, type_, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtLocalIdent 0 localident ; render ":" ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
+
+and prtFunParamsListBNFC i es : doc = match (i, es) with
+    (_,[]) -> (concatD [])
+  | (_,x::xs) -> (concatD [prtFunParams 0 x ; render " " ; prtFunParamsListBNFC 0 xs])
 and prtValue (i:int) (e : AbsBasilIR.value) : doc = match e with
        AbsBasilIR.Value_BV bvval -> prPrec i 0 (concatD [prtBVVal 0 bvval])
   |    AbsBasilIR.Value_Int intval -> prPrec i 0 (concatD [prtIntVal 0 intval])
@@ -350,26 +373,41 @@ and prtValue (i:int) (e : AbsBasilIR.value) : doc = match e with
 
 and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
        AbsBasilIR.Expr_Literal value -> prPrec i 0 (concatD [prtValue 0 value])
+  |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Local localvar -> prPrec i 0 (concatD [prtLocalVar 0 localvar])
   |    AbsBasilIR.Expr_Global globalvar -> prPrec i 0 (concatD [prtGlobalVar 0 globalvar])
-  |    AbsBasilIR.Expr_Forall lambdadef -> prPrec i 0 (concatD [render "forall" ; prtLambdaDef 0 lambdadef])
-  |    AbsBasilIR.Expr_Exists lambdadef -> prPrec i 0 (concatD [render "exists" ; prtLambdaDef 0 lambdadef])
-  |    AbsBasilIR.Expr_Old expr -> prPrec i 0 (concatD [render "old" ; render "(" ; prtExpr 0 expr ; render ")"])
-  |    AbsBasilIR.Expr_FunctionOp (globalident, exprs) -> prPrec i 0 (concatD [prtGlobalIdent 0 globalident ; render "(" ; prtExprListBNFC 0 exprs ; render ")"])
-  |    AbsBasilIR.Expr_Binary (binop, expr1, expr2) -> prPrec i 0 (concatD [prtBinOp 0 binop ; render "(" ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; render ")"])
-  |    AbsBasilIR.Expr_Assoc (boolbinop, exprs) -> prPrec i 0 (concatD [prtBoolBinOp 0 boolbinop ; render "(" ; prtExprListBNFC 0 exprs ; render ")"])
-  |    AbsBasilIR.Expr_Unary (unop, expr) -> prPrec i 0 (concatD [prtUnOp 0 unop ; render "(" ; prtExpr 0 expr ; render ")"])
-  |    AbsBasilIR.Expr_ZeroExtend (intval, expr) -> prPrec i 0 (concatD [render "zero_extend" ; render "(" ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; render ")"])
-  |    AbsBasilIR.Expr_SignExtend (intval, expr) -> prPrec i 0 (concatD [render "sign_extend" ; render "(" ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; render ")"])
-  |    AbsBasilIR.Expr_Extract (intval1, intval2, expr) -> prPrec i 0 (concatD [render "extract" ; render "(" ; prtIntVal 0 intval1 ; render "," ; prtIntVal 0 intval2 ; render "," ; prtExpr 0 expr ; render ")"])
-  |    AbsBasilIR.Expr_Concat exprs -> prPrec i 0 (concatD [render "bvconcat" ; render "(" ; prtExprListBNFC 0 exprs ; render ")"])
+  |    AbsBasilIR.Expr_Forall (attribset, lambdadef) -> prPrec i 0 (concatD [render "forall" ; prtAttribSet 0 attribset ; prtLambdaDef 0 lambdadef])
+  |    AbsBasilIR.Expr_Exists (attribset, lambdadef) -> prPrec i 0 (concatD [render "exists" ; prtAttribSet 0 attribset ; prtLambdaDef 0 lambdadef])
+  |    AbsBasilIR.Expr_Lambda (attribset, lambdadef) -> prPrec i 0 (concatD [render "fun" ; prtAttribSet 0 attribset ; prtLambdaDef 0 lambdadef])
+  |    AbsBasilIR.Expr_Old (openparen, expr, closeparen) -> prPrec i 0 (concatD [render "old" ; prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_FunctionOp (globalident, openparen, exprs, closeparen) -> prPrec i 0 (concatD [prtGlobalIdent 0 globalident ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_Apply (expr1, expr2) -> prPrec i 0 (concatD [prtExpr 0 expr1 ; prtExpr 0 expr2])
+  |    AbsBasilIR.Expr_Binary (binop, openparen, expr1, expr2, closeparen) -> prPrec i 0 (concatD [prtBinOp 0 binop ; prtOpenParen 0 openparen ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_Assoc (boolbinop, openparen, exprs, closeparen) -> prPrec i 0 (concatD [prtBoolBinOp 0 boolbinop ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_Unary (unop, openparen, expr, closeparen) -> prPrec i 0 (concatD [prtUnOp 0 unop ; prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_LoadBe (openparen, intval, expr1, expr2, closeparen) -> prPrec i 0 (concatD [render "load_be" ; prtOpenParen 0 openparen ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_LoadLe (openparen, intval, expr1, expr2, closeparen) -> prPrec i 0 (concatD [render "load_le" ; prtOpenParen 0 openparen ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_ZeroExtend (openparen, intval, expr, closeparen) -> prPrec i 0 (concatD [render "zero_extend" ; prtOpenParen 0 openparen ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_SignExtend (openparen, intval, expr, closeparen) -> prPrec i 0 (concatD [render "sign_extend" ; prtOpenParen 0 openparen ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_Extract (openparen, intval1, intval2, expr, closeparen) -> prPrec i 0 (concatD [render "extract" ; prtOpenParen 0 openparen ; prtIntVal 0 intval1 ; render "," ; prtIntVal 0 intval2 ; render "," ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_Concat (openparen, exprs, closeparen) -> prPrec i 0 (concatD [render "bvconcat" ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_Match (expr, openparen, cases, closeparen) -> prPrec i 0 (concatD [render "match" ; prtExpr 0 expr ; render "with" ; prtOpenParen 0 openparen ; prtCaseListBNFC 0 cases ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_Cases (openparen, cases, closeparen) -> prPrec i 0 (concatD [render "cases" ; prtOpenParen 0 openparen ; prtCaseListBNFC 0 cases ; prtCloseParen 0 closeparen])
 
 and prtExprListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
   | (_,[x]) -> (concatD [prtExpr 0 x])
   | (_,x::xs) -> (concatD [prtExpr 0 x ; render "," ; prtExprListBNFC 0 xs])
+and prtLParen (i:int) (e : AbsBasilIR.lParen) : doc = match e with
+       AbsBasilIR.LParenLocalVar localvar -> prPrec i 0 (concatD [prtLocalVar 0 localvar])
+  |    AbsBasilIR.LParen1 (openparen, localvar, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtLocalVar 0 localvar ; prtCloseParen 0 closeparen])
+
+and prtLParenListBNFC i es : doc = match (i, es) with
+    (_,[]) -> (concatD [])
+  | (_,[x]) -> (concatD [prtLParen 0 x])
+  | (_,x::xs) -> (concatD [prtLParen 0 x ; render "," ; prtLParenListBNFC 0 xs])
 and prtLambdaDef (i:int) (e : AbsBasilIR.lambdaDef) : doc = match e with
-       AbsBasilIR.LambdaDef1 (localvars, lambdasep, expr) -> prPrec i 0 (concatD [render "(" ; prtLocalVarListBNFC 0 localvars ; render ")" ; prtLambdaSep 0 lambdasep ; prtExpr 0 expr])
+       AbsBasilIR.LambdaDef1 (lparens, lambdasep, expr) -> prPrec i 0 (concatD [prtLParenListBNFC 0 lparens ; prtLambdaSep 0 lambdasep ; prtExpr 0 expr])
 
 
 and prtBinOp (i:int) (e : AbsBasilIR.binOp) : doc = match e with
@@ -386,8 +424,18 @@ and prtUnOp (i:int) (e : AbsBasilIR.unOp) : doc = match e with
   |    AbsBasilIR.UnOp_boolnot  -> prPrec i 0 (concatD [render "boolnot"])
   |    AbsBasilIR.UnOp_intneg  -> prPrec i 0 (concatD [render "intneg"])
   |    AbsBasilIR.UnOp_booltobv1  -> prPrec i 0 (concatD [render "booltobv1"])
+  |    AbsBasilIR.UnOp_gamma  -> prPrec i 0 (concatD [render "gamma"])
+  |    AbsBasilIR.UnOp_classification  -> prPrec i 0 (concatD [render "classification"])
 
 
+and prtCase (i:int) (e : AbsBasilIR.case) : doc = match e with
+       AbsBasilIR.CaseCase (expr1, expr2) -> prPrec i 0 (concatD [prtExpr 0 expr1 ; render "->" ; prtExpr 0 expr2])
+  |    AbsBasilIR.CaseDefault expr -> prPrec i 0 (concatD [render "_" ; render "->" ; prtExpr 0 expr])
+
+and prtCaseListBNFC i es : doc = match (i, es) with
+    (_,[]) -> (concatD [])
+  | (_,[x]) -> (concatD [prtCase 0 x])
+  | (_,x::xs) -> (concatD [prtCase 0 x ; render "|" ; prtCaseListBNFC 0 xs])
 and prtEqOp (i:int) (e : AbsBasilIR.eqOp) : doc = match e with
        AbsBasilIR.EqOp_eq  -> prPrec i 0 (concatD [render "eq"])
   |    AbsBasilIR.EqOp_neq  -> prPrec i 0 (concatD [render "neq"])
@@ -461,19 +509,41 @@ and prtEnsureTok (i:int) (e : AbsBasilIR.ensureTok) : doc = match e with
   |    AbsBasilIR.EnsureTok_ensures  -> prPrec i 0 (concatD [render "ensures"])
 
 
+and prtRelyTok (i:int) (e : AbsBasilIR.relyTok) : doc = match e with
+       AbsBasilIR.RelyTok_rely  -> prPrec i 0 (concatD [render "rely"])
+  |    AbsBasilIR.RelyTok_relies  -> prPrec i 0 (concatD [render "relies"])
+
+
+and prtGuarTok (i:int) (e : AbsBasilIR.guarTok) : doc = match e with
+       AbsBasilIR.GuarTok_guarnatee  -> prPrec i 0 (concatD [render "guarnatee"])
+  |    AbsBasilIR.GuarTok_guarantees  -> prPrec i 0 (concatD [render "guarantees"])
+
+
 and prtFunSpec (i:int) (e : AbsBasilIR.funSpec) : doc = match e with
        AbsBasilIR.FunSpec_Require (requiretok, expr) -> prPrec i 0 (concatD [prtRequireTok 0 requiretok ; prtExpr 0 expr])
   |    AbsBasilIR.FunSpec_Ensure (ensuretok, expr) -> prPrec i 0 (concatD [prtEnsureTok 0 ensuretok ; prtExpr 0 expr])
+  |    AbsBasilIR.FunSpec_Rely (relytok, expr) -> prPrec i 0 (concatD [prtRelyTok 0 relytok ; prtExpr 0 expr])
+  |    AbsBasilIR.FunSpec_Guar (guartok, expr) -> prPrec i 0 (concatD [prtGuarTok 0 guartok ; prtExpr 0 expr])
+  |    AbsBasilIR.FunSpec_Captures globalvars -> prPrec i 0 (concatD [render "captures" ; prtGlobalVarListBNFC 0 globalvars])
+  |    AbsBasilIR.FunSpec_Modifies globalvars -> prPrec i 0 (concatD [render "modifies" ; prtGlobalVarListBNFC 0 globalvars])
   |    AbsBasilIR.FunSpec_Invariant (blockident, expr) -> prPrec i 0 (concatD [render "invariant" ; prtBlockIdent 0 blockident ; prtExpr 0 expr])
 
 and prtFunSpecListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
   | (_,x::xs) -> (concatD [prtFunSpec 0 x ; render ";" ; prtFunSpecListBNFC 0 xs])
+and prtVarSpec (i:int) (e : AbsBasilIR.varSpec) : doc = match e with
+       AbsBasilIR.VarSpec_Classification expr -> prPrec i 0 (concatD [render "classification" ; prtExpr 0 expr])
+  |    AbsBasilIR.VarSpec_Empty  -> prPrec i 0 (concatD [])
+
+and prtVarSpecListBNFC i es : doc = match (i, es) with
+    (_,[]) -> (concatD [])
+  | (_,x::xs) -> (concatD [prtVarSpec 0 x ; render ";" ; prtVarSpecListBNFC 0 xs])
 and prtProgSpec (i:int) (e : AbsBasilIR.progSpec) : doc = match e with
        AbsBasilIR.ProgSpec_Rely expr -> prPrec i 0 (concatD [render "rely" ; prtExpr 0 expr])
   |    AbsBasilIR.ProgSpec_Guarantee expr -> prPrec i 0 (concatD [render "guarantee" ; prtExpr 0 expr])
 
 and prtProgSpecListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
+  | (_,[x]) -> (concatD [prtProgSpec 0 x])
   | (_,x::xs) -> (concatD [prtProgSpec 0 x ; render ";" ; prtProgSpecListBNFC 0 xs])
 

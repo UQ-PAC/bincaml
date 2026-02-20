@@ -4,19 +4,25 @@ Run on basic irreducible loop example
   $ ../../bin/main.exe script basicssa.sexp
 
   $ cat before.il
-  var $R29:bv64;
-  var $ZF:bv1;
-  var $R1:bv64;
-  memory $stack:(bv64->bv8);
-  var $R31:bv64;
-  var $R0:bv64;
-  var $VF:bv1;
-  memory $mem:(bv64->bv8);
   var $CF:bv1;
   var $NF:bv1;
+  var $R0:bv64;
+  var $R1:bv64;
+  var $R29:bv64;
   var $R30:bv64;
+  var $R31:bv64;
+  var $VF:bv1;
+  var $ZF:bv1;
+  var $mem:(bv64->bv8);
+  var $stack:(bv64->bv8);
   prog entry @main_1876;
-  proc @main_1876()  -> ()
+  proc @main_1876()  -> () { .address = 1876; .name = "main";
+      .returnBlock = "main_basil_return_1" }
+    modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+    captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+  
   [
      block %main_entry [
         var #4:bv64 := bvadd($R31:bv64, 0xffffffffffffffe0:bv64);
@@ -120,31 +126,39 @@ Run on basic irreducible loop example
      ];
      block %main_basil_return_1 [ nop; return; ]
   ];
-  proc @puts_1584()  -> ();
+  proc @puts_1584()  -> () { .address = 1584; .name = "puts" }
+    
+  ;
 
   $ cat after.il
-  var $R29:bv64;
-  var $ZF:bv1;
-  var $R1:bv64;
-  memory $stack:(bv64->bv8);
-  var $R31:bv64;
-  var $R0:bv64;
-  var $VF:bv1;
-  memory $mem:(bv64->bv8);
   var $CF:bv1;
   var $NF:bv1;
+  var $R0:bv64;
+  var $R1:bv64;
+  var $R29:bv64;
   var $R30:bv64;
+  var $R31:bv64;
+  var $VF:bv1;
+  var $ZF:bv1;
+  var $mem:(bv64->bv8);
+  var $stack:(bv64->bv8);
   prog entry @main_1876;
   proc @main_1876(CF_in:bv1, NF_in:bv1, R0_in:bv64, R1_in:bv64, R29_in:bv64,
      R30_in:bv64, R31_in:bv64, VF_in:bv1, ZF_in:bv1)
      -> (CF_out:bv1, NF_out:bv1, R0_out:bv64, R1_out:bv64, R29_out:bv64,
-     R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1)
+     R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1) { .address = 1876;
+      .name = "main"; .returnBlock = "main_basil_return_1" }
+    modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+    captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+  
   [
      block %inputs [
-        (var R30:bv64 := R30_in:bv64, var NF:bv1 := NF_in:bv1,
-         var CF:bv1 := CF_in:bv1, var VF:bv1 := VF_in:bv1, var R0:bv64 := R0_in:bv64,
-         var R31:bv64 := R31_in:bv64, var R1:bv64 := R1_in:bv64,
-         var ZF:bv1 := ZF_in:bv1, var R29:bv64 := R29_in:bv64);
+        (var CF:bv1 := CF_in:bv1, var NF:bv1 := NF_in:bv1, var R0:bv64 := R0_in:bv64,
+         var R1:bv64 := R1_in:bv64, var R29:bv64 := R29_in:bv64,
+         var R30:bv64 := R30_in:bv64, var R31:bv64 := R31_in:bv64,
+         var VF:bv1 := VF_in:bv1, var ZF:bv1 := ZF_in:bv1);
         goto (%main_entry);
      ];
      block %main_entry [
@@ -281,20 +295,34 @@ Run on basic irreducible loop example
      ];
      block %main_basil_return_1 [ goto (%returns); ];
      block %returns [
-        (var R30_out:bv64 := R30_7:bv64, var NF_out:bv1 := NF_7:bv1,
-         var CF_out:bv1 := CF_7:bv1, var VF_out:bv1 := VF_7:bv1,
-         var R0_out:bv64 := R0_24:bv64, var R31_out:bv64 := R31_7:bv64,
-         var R1_out:bv64 := R1_6:bv64, var ZF_out:bv1 := ZF_7:bv1,
-         var R29_out:bv64 := R29_7:bv64);
+        (var CF_out:bv1 := CF_7:bv1, var NF_out:bv1 := NF_7:bv1,
+         var R0_out:bv64 := R0_24:bv64, var R1_out:bv64 := R1_6:bv64,
+         var R29_out:bv64 := R29_7:bv64, var R30_out:bv64 := R30_7:bv64,
+         var R31_out:bv64 := R31_7:bv64, var VF_out:bv1 := VF_7:bv1,
+         var ZF_out:bv1 := ZF_7:bv1);
         return;
      ]
   ];
   proc @puts_1584(CF_in:bv1, NF_in:bv1, R0_in:bv64, R1_in:bv64, R29_in:bv64,
      R30_in:bv64, R31_in:bv64, VF_in:bv1, ZF_in:bv1)
      -> (CF_out:bv1, NF_out:bv1, R0_out:bv64, R1_out:bv64, R29_out:bv64,
-     R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1);
+     R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1) { .address = 1584;
+      .name = "puts" }
+    
+  ;
 
   $ diff after.il after_reparsed.il
+  18,21c18,21
+  <   modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+  <   captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+  ---
+  >   modifies $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
+  >     $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8);
+  >   captures $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
+  >     $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8);
+  [1]
 
 The interpreter should give the same output for both
 
