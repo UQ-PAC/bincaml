@@ -1,5 +1,6 @@
 open Lattice_types
 open Bincaml_util.Common
+open Bincaml_util.Unicode
 
 module type TopLattice = sig
   include Lattice
@@ -27,13 +28,15 @@ module LatticeSet (T : SetElem) = struct
 
   let show = function
     | Fin s -> TSet.to_string ~start:"{" ~stop:"}" T.show s
-    | Top -> Bincaml_util.Unicode.top_char
+    | Top -> top_char
 
   let pretty = function
     | Fin s ->
         Containers_pp.(
-          text "Fin" ^ fill (text "," ^ newline) (TSet.to_list s |> List.map T.pretty))
-    | Top -> Containers_pp.text Bincaml_util.Unicode.top_char
+          surround (text "{")
+            (fill (text "," ^ newline) (TSet.to_list s |> List.map T.pretty))
+            (text "}"))
+    | Top -> Containers_pp.text top_char
 
   let mem x = function Top -> true | Fin s -> TSet.mem x s
   let singleton x = Fin (TSet.singleton x)
@@ -84,26 +87,40 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
         let j = V.widening x y in
         if V.equal j V.top then None else Some j
 
+      let underlying = function TopMap m | BotMap m -> m
+
       let show a =
         let m, s =
           match a with BotMap m -> (m, "") | TopMap m -> (m, "TopMap ")
         in
-        s
-        ^ (Iter.from_iter (fun f -> KM.iter (fun k v -> f (k, v)) m)
+        "("
+        ^ (Iter.from_iter (fun f ->
+               KM.iter (fun k v -> f (K.show k, V.show v)) m)
+          |> flip Iter.snoc
+               (match a with
+               | BotMap _ -> ("_", bot_char)
+               | TopMap _ -> ("_", top_char))
           |> Iter.to_string ~sep:", " (fun (k, v) ->
-              Printf.sprintf "%s->%s" (K.show k) (V.show v)))
+              Printf.sprintf "%s->%s" k v))
+        ^ ")"
 
       let pretty a =
         Containers_pp.(
-          let m, s =
-            match a with BotMap m -> (m, "") | TopMap m -> (m, "TopMap ")
-          in
-          text s
-          ^ fill (text "," ^ newline)
-              (KM.to_list m
-              |> List.map (fun (k, v) -> K.pretty k ^ text "->" ^ V.pretty v)))
-
-      let underlying = function TopMap m | BotMap m -> m
+          surround (text "(")
+            (fill
+               (text "," ^ newline)
+               (KM.to_list (underlying a)
+               |> List.map (fun (k, v) -> (K.pretty k, V.pretty v))
+               |> List.append
+                    [
+                      ( text "_",
+                        text
+                          (match a with
+                          | BotMap _ -> bot_char
+                          | TopMap _ -> top_char) );
+                    ]
+               |> List.map (fun (k, v) -> k ^ text "->" ^ v)))
+            (text ")"))
 
       let leq a b =
         let am, bm = (underlying a, underlying b) in
