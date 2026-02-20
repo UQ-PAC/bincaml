@@ -879,21 +879,21 @@ module Domain = struct
       let open WrappedIntervalsLattice in
       let open Lang.Expr.AbstractExpr in
       match (l, r) with
-      | RVar lv, RVar rv ->
+      | RVar { id = lv }, RVar { id = rv } ->
           let l = read lv in
           let r = read rv in
           Iter.of_list
             [
               (lv, reduce_bin_left op l r); (rv, reduce_bin_left (swap op) r l);
             ]
-      | RVar lv, re ->
-          let l = read lv in
+      | RVar { id }, re ->
+          let l = read id in
           let r = abstract_eval re in
-          Iter.singleton (lv, reduce_bin_left op l r)
-      | le, RVar rv ->
+          Iter.singleton (id, reduce_bin_left op l r)
+      | le, RVar { id } ->
           let l = abstract_eval le in
-          let r = read rv in
-          Iter.singleton (rv, reduce_bin_left (swap op) r l)
+          let r = read id in
+          Iter.singleton (id, reduce_bin_left (swap op) r l)
       | _ -> Iter.empty
 
     let rec reduce_expr ~read expr =
@@ -910,21 +910,22 @@ module Domain = struct
       let meet s t = lub @@ intersect s t in
       let glb ints = List.map complement ints |> lub |> complement in
       match AbstractExpr.map BasilExpr.unfix (BasilExpr.unfix expr) with
-      | BinaryExpr (op, l, r) ->
+      | BinaryExpr { op; arg1; arg2 } ->
           from_op op
           |> Option.map_or ~default:Iter.empty (fun op ->
-              reduce_bin ~read op l r)
-      | UnaryExpr (`BoolNOT, BinaryExpr (op, l, r)) ->
+              reduce_bin ~read op arg1 arg2)
+      | UnaryExpr { op = `BoolNOT; arg = BinaryExpr { op; arg1 = l; arg2 = r } }
+        ->
           from_op op
           |> Option.map_or ~default:Iter.empty (fun op ->
               reduce_bin ~read (invert op) (BasilExpr.unfix l)
                 (BasilExpr.unfix r))
-      | ApplyIntrin (`AND, args) ->
+      | ApplyIntrin { op = `AND; args } ->
           List.map BasilExpr.fix args
           |> Iter.of_list
           |> Iter.flat_map (reduce_expr ~read)
           |> into_varmap |> VarMap.map glb |> VarMap.to_iter
-      | ApplyIntrin (`OR, args) ->
+      | ApplyIntrin { op = `OR; args } ->
           List.map BasilExpr.fix args
           |> Iter.of_list
           |> Iter.flat_map (reduce_expr ~read)

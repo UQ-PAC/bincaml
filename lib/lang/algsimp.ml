@@ -10,13 +10,16 @@ let normalise_bool
   let open BasilExpr in
   let open Bitvec in
   match e with
-  | BinaryExpr (`IMPLIES, a, b) ->
-      Some (BasilExpr.applyintrin ~op:`OR [ fix a; BasilExpr.boolnot (fix b) ])
-  | UnaryExpr (`BoolNOT, UnaryExpr (`BoolNOT, b)) -> Some b
-  | UnaryExpr (`BoolNOT, ApplyIntrin (`AND, b)) ->
-      Some (BasilExpr.applyintrin ~op:`OR (List.map BasilExpr.boolnot b))
-  | UnaryExpr (`BoolNOT, ApplyIntrin (`OR, b)) ->
-      Some (BasilExpr.applyintrin ~op:`AND (List.map BasilExpr.boolnot b))
+  | BinaryExpr { op = `IMPLIES; arg1; arg2 } ->
+      Some
+        (BasilExpr.applyintrin ~op:`OR
+           [ fix arg1; BasilExpr.boolnot (fix arg2) ])
+  | UnaryExpr { op = `BoolNOT; arg = UnaryExpr { op = `BoolNOT; arg } } ->
+      Some arg
+  | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `AND; args } } ->
+      Some (BasilExpr.applyintrin ~op:`OR (List.map BasilExpr.boolnot args))
+  | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `OR; args } } ->
+      Some (BasilExpr.applyintrin ~op:`AND (List.map BasilExpr.boolnot args))
   | _ -> None
 
 let algebraic_simplifications
