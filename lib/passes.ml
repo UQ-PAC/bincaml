@@ -72,8 +72,8 @@ module PassManager = struct
         Proc
           (fun p ->
             let r = Analysis.Tnum_wint_reduced_product.analyse p in
-            (* Analysis.Tnum_wint_reduced_product.Analysis.print_dot
-              (Format.of_chan stdout) p r; *)
+            Analysis.Tnum_wint_reduced_product.Analysis.print_dot
+              (Format.of_chan stdout) p r;
             p);
       doc =
         "Runs known bits and wrapped interval reduced product analysis on \

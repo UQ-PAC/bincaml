@@ -19,8 +19,7 @@ end
 module TnumWintReducedProductLattice = struct
   let name = "tnumWintReduceProduct"
 
-  type t = { tnum : KnownBitsLattice.t; wint : WrappedIntervalsLattice.t }
-  [@@deriving ord, eq]
+  type t = { tnum : KBL.t; wint : WIL.t } [@@deriving ord, eq]
 
   let bottom = { tnum = KBL.bottom; wint = WIL.bottom }
   let top = { tnum = KBL.top; wint = WIL.top }
@@ -42,8 +41,7 @@ module TnumWintReducedProductLattice = struct
     | Top -> Top
     | Interval { lower; upper } ->
         let w = size lower in
-
-        if WrappedIntervalsLattice.leq (sp ~width:w) wint then
+        if WIL.leq (sp ~width:w) wint then
           TNum { value = zero ~size:w; mask = ones ~size:w }
         else
           let diff = bitxor lower upper in
@@ -54,55 +52,41 @@ module TnumWintReducedProductLattice = struct
             let value = bitand lower @@ bitnot mask in
             tnum value mask
 
-  let leq s t =
-    KnownBitsLattice.leq s.tnum t.tnum
-    && WrappedIntervalsLattice.leq s.wint t.wint
+  let leq s t = KBL.leq s.tnum t.tnum && WIL.leq s.wint t.wint
 
   let reduce_wint wint tnum =
     let mssb x =
-      let w = size x in
-      let k = Z.numbits @@ to_unsigned_bigint x in
-      if k = 0 then zero ~size:w
-      else concat (zero ~size:(w - k + 1)) (ones ~size:(k - 1))
+      if is_zero x then x
+      else
+        let w = size x in
+        let k = Z.numbits @@ to_unsigned_bigint x in
+        create ~size:w @@ Z.(pow (of_int 2) k)
     in
     let lssb x = bitand x (bitnot x) in
     let above p = bitnot (bitor p (sub p (ones ~size:(size p)))) in
     let below p = sub p (ones ~size:(size p)) in
     let mergeon a b p = bitor (bitand a (above p)) (bitand b (below p)) in
     let refine_lower_bound a tnum =
-      match tnum with
-      | Bot -> a
-      | Top -> a
-      | TNum { value = v; mask = m } -> (
+      match (tnum, tnum_to_wint tnum) with
+      | TNum { value = v; mask = m }, Interval { lower = tmin } ->
           let diff = mssb (bitand (bitxor a v) (bitnot m)) in
-          let wint_result = tnum_to_wint tnum in
-          match wint_result with
-          | Bot -> a
-          | Top -> a
-          | Interval { lower = tmin; upper = _ } ->
-              if is_zero diff then a
-              else if is_zero (bitand a diff) then
-                bitor diff (mergeon a tmin diff)
-              else
-                let carry = lssb (bitand (bitand (above diff) (bitnot a)) m) in
-                bitor carry (mergeon a tmin carry))
+          if is_zero diff then a
+          else if is_zero (bitand a diff) then bitor diff (mergeon a tmin diff)
+          else
+            let carry = lssb (bitand (bitand (above diff) (bitnot a)) m) in
+            bitor carry (mergeon a tmin carry)
+      | _ -> a
     in
     let refine_upper_bound b tnum =
-      match tnum with
-      | Bot -> b
-      | Top -> b
-      | TNum { value = v; mask = m } -> (
+      match (tnum, tnum_to_wint tnum) with
+      | TNum { value = v; mask = m }, Interval { upper = tmax } ->
           let diff = mssb (bitand (bitxor b v) (bitnot m)) in
-          let wint_result = tnum_to_wint tnum in
-          match wint_result with
-          | Bot -> b
-          | Top -> b
-          | Interval { lower = _; upper = tmax } ->
-              if is_zero diff then b
-              else if not (is_zero (bitand b diff)) then mergeon b tmax diff
-              else
-                let borrow = lssb (bitand (bitand (above diff) b) m) in
-                mergeon b tmax borrow)
+          if is_zero diff then b
+          else if not (is_zero (bitand b diff)) then mergeon b tmax diff
+          else
+            let borrow = lssb (bitand (bitand (above diff) b) m) in
+            mergeon b tmax borrow
+      | _ -> b
     in
     match tnum with
     | Bot | Top -> wint
@@ -133,46 +117,37 @@ module TnumWintReducedProductLattice = struct
     { wint = wint'; tnum = tnum' }
 
   let join s t =
-    let tnum_joined = KnownBitsLattice.join s.tnum t.tnum in
-    let wint_joined = WrappedIntervalsLattice.join s.wint t.wint in
-    reduce { tnum = tnum_joined; wint = wint_joined }
+    reduce { tnum = KBL.join s.tnum t.tnum; wint = WIL.join s.wint t.wint }
 
   let widening s t =
-    let tnum = KnownBitsLattice.widening s.tnum t.tnum in
-    let wint = WrappedIntervalsLattice.widening s.wint t.wint in
-    { tnum; wint }
+    { tnum = KBL.widening s.tnum t.tnum; wint = WIL.widening s.wint t.wint }
 end
 
 module TnumWintValueAbstraction = struct
   include TnumWintReducedProductLattice
 
   let eval_const (op : Lang.Ops.AllOps.const) rt =
-    let tnum = KnownBitsValueAbstraction.eval_const op rt in
-    let wint = WrappedIntervalsValueAbstraction.eval_const op rt in
+    let tnum = KBVA.eval_const op rt in
+    let wint = WIVA.eval_const op rt in
     { tnum; wint }
 
   let eval_unop (op : Lang.Ops.AllOps.unary) (a, ta) rt =
-    let tnum = KnownBitsValueAbstraction.eval_unop op (a.tnum, ta) rt in
-    let wint = WrappedIntervalsValueAbstraction.eval_unop op (a.wint, ta) rt in
-    { tnum; wint }
+    let tnum = KBVA.eval_unop op (a.tnum, ta) rt in
+    let wint = WIVA.eval_unop op (a.wint, ta) rt in
+    reduce { tnum; wint }
 
   let eval_binop (op : Lang.Ops.AllOps.binary) (a, ta) (b, tb) rt =
-    let tnum =
-      KnownBitsValueAbstraction.eval_binop op (a.tnum, ta) (b.tnum, tb) rt
-    in
-    let wint =
-      WrappedIntervalsValueAbstraction.eval_binop op (a.wint, ta) (b.wint, tb)
-        rt
-    in
-    { tnum; wint }
+    let tnum = KBVA.eval_binop op (a.tnum, ta) (b.tnum, tb) rt in
+    let wint = WIVA.eval_binop op (a.wint, ta) (b.wint, tb) rt in
+    reduce { tnum; wint }
 
   let eval_intrin (op : Lang.Ops.AllOps.intrin) (args : (t * Types.t) list) rt =
     let tnum_args = List.map (fun (arg, ty) -> (arg.tnum, ty)) args in
     let wint_args = List.map (fun (arg, ty) -> (arg.wint, ty)) args in
 
-    let tnum = KnownBitsValueAbstraction.eval_intrin op tnum_args rt in
-    let wint = WrappedIntervalsValueAbstraction.eval_intrin op wint_args rt in
-    { tnum; wint }
+    let tnum = KBVA.eval_intrin op tnum_args rt in
+    let wint = WIVA.eval_intrin op wint_args rt in
+    reduce { tnum; wint }
 end
 
 module TnumWintReducedProductValueAbstractionBasil = struct
