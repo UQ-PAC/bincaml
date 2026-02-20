@@ -100,8 +100,7 @@ module IsZeroValueAbstraction = struct
     | `INTSUB, _, _ -> Top
     | `BVSLT, Zero, Zero -> Zero
     | `BVSLT, _, _ -> Top
-    | `Load _, _, _ -> Top
-    | `MapAccess, _, _ -> Top
+    | #Lang.Ops.Spec.binary, _, _ -> Top
 
   let eval_intrin (op : Lang.Ops.AllOps.intrin) (args : t list) =
     match op with
@@ -122,6 +121,7 @@ module IsZeroValueAbstraction = struct
         else if List.for_all (equal NonZero) args then NonZero
         else if List.for_all (equal Bot) args then Bot
         else Top
+    | #Lang.Ops.Spec.intrin -> Top
 end
 
 module IsZeroValueAbstractionUntyped = struct

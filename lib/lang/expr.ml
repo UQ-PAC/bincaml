@@ -430,10 +430,10 @@ module BasilExpr = struct
     | BinaryExpr { op; arg1 = l; arg2 = r } -> ret_type_bin op l r |> get_ty
     | ApplyIntrin { op; args } -> ret_type_intrin op args |> get_ty
     | ApplyFun { func; args } ->
-        let _, rt = Types.curry func in
+        let _, rt = Types.uncurry func in
         rt
     | Binding { bound = vars; in_body = b } ->
-        Types.uncurry (List.map Var.typ vars) b
+        Types.curry (List.map Var.typ vars) b
 
   let type_of e = cata type_alg e
 

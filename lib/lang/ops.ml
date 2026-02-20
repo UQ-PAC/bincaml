@@ -264,16 +264,16 @@ module AllOps = struct
     | `BVNOT -> return a
     | `BOOLTOBV1 -> return @@ Bitvector 1
     | `Lambda ->
-        let args, ret = Types.curry a in
+        let args, ret = Types.uncurry a in
         Fun { args; ret }
     | `Extract (hi, lo) -> return (Bitvector (hi - lo))
     | `Gamma ->
-        let args, r = Types.curry a in
-        let t = Types.uncurry args Boolean in
+        let args, r = Types.uncurry a in
+        let t = Types.curry args Boolean in
         return t
     | `Classification ->
-        let args, r = Types.curry a in
-        let t = Types.uncurry args Boolean in
+        let args, r = Types.uncurry a in
+        let t = Types.curry args Boolean in
         return t
 
   let ret_type_bin (o : binary) l r =
@@ -288,7 +288,7 @@ module AllOps = struct
     | `BVNAND | `BVXOR | `BVSUB | `BVSDIV | `BVSREM | `BVSMOD | `BVASHR ->
         return l
     | `MapAccess ->
-        let m, r = Types.curry l in
+        let m, r = Types.uncurry l in
         return r
     | `Load (e, i) -> return (Bitvector i)
     | `IfThen -> return r

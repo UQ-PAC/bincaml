@@ -55,7 +55,7 @@ let pretty_declaration d =
 
 (*match definition with
       | Some d -> 
-      let param, rt = Types.curry (Var.typ binding) in
+      let param, rt = Types.uncurry (Var.typ binding) in
       let param = 
       text "let " ^ text (Var.name binding) ^ text (Var.to_decl_string_il binding)
       | None -> text @@ Var.to_decl_string_il binding)
@@ -98,7 +98,7 @@ let prog_pretty (p : t) =
     globs @ n
     @ List.map
         (fun (_, p) -> proc_pretty p)
-        (ID.Map.bindings p.procs
+        (ID.Map.to_list p.procs
         |> List.sort (fun (i, _) (j, _) -> ID.compare i j))
   in
 

@@ -97,7 +97,7 @@ let type_check stmt_id block_id expr =
           ]
     | `Load (e, sz) -> []
     | `MapAccess -> (
-        let a, r = Types.curry arg1 in
+        let a, r = Types.uncurry arg1 in
         match a with
         | [ arg ] when not (Types.equal arg arg2) ->
             [
@@ -116,6 +116,10 @@ let type_check stmt_id block_id expr =
               type_err "%s is not of bitvector type in %s"
                 (Types.to_string arg1) (Ops.AllOps.to_string op);
             ])
+    | `IfThen ->
+        if not @@ Types.equal Types.Boolean arg1 then
+          [ type_err "condition is not boolean" ]
+        else []
   in
 
   let check_intrin (op : Ops.AllOps.intrin) (args : Types.t list) :
@@ -151,6 +155,20 @@ let type_check stmt_id block_id expr =
                 (Ops.AllOps.to_string op)
               :: acc)
           [] args
+    | `Cases -> (
+        match args with
+        | [] -> []
+        | h :: tl ->
+            fst
+            @@ List.fold_left
+                 (fun (errs, ty) b ->
+                   if Types.equal ty b then (errs, ty)
+                   else
+                     ( type_err "non-equal branch : %s %s" (Types.to_string ty)
+                         (Types.to_string b)
+                       :: errs,
+                       ty ))
+                 ([], h) tl)
   in
 
   let type_error_alg e =
@@ -174,10 +192,10 @@ let type_check stmt_id block_id expr =
       | BinaryExpr { op; arg1 = l; arg2 = r } -> ret_type_bin op l r |> get_ty
       | ApplyIntrin { op; args } -> ret_type_intrin op args |> get_ty
       | ApplyFun { func; args } ->
-          let _, rt = Types.curry func in
+          let _, rt = Types.uncurry func in
           ([], rt)
       | Binding { bound = vars; in_body = b } ->
-          ([], Types.uncurry (List.map Var.typ vars) b)
+          ([], Types.curry (List.map Var.typ vars) b)
     in
     let typed_expr = AbstractExpr.map snd e in
     let new_errors : type_error list =

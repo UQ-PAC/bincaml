@@ -69,10 +69,9 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
       bool @@ LogicalOps.eval_intrin op args
   | ApplyFun _ -> None
   | Binding _ -> None
-  | BinaryExpr { op = `Load _ } -> None
-  | BinaryExpr { op = `MapAccess } -> None
-  | UnaryExpr { op = `Gamma } -> None
-  | UnaryExpr { op = `Classification } -> None
+  | UnaryExpr { op = #Ops.Spec.unary } -> None
+  | BinaryExpr { op = #Ops.Spec.binary } -> None
+  | ApplyIntrin { op = #Ops.Spec.intrin } -> None
 
 let partial_eval_alg (e : BasilExpr.t BasilExpr.abstract_expr) :
     BasilExpr.t option =
