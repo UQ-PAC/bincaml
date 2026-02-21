@@ -5,7 +5,7 @@ module.exports = grammar({
   extras: $ =>[
     /\s/,
     /\/\*[^*]*\*([^\*\/][^*]*\*|\*)*\//,
-    /\/\/.*/,
+    /\/\/.*\n/,
   ],
   inline: $ => [$.list_AttrKeyValue],
   rules: {

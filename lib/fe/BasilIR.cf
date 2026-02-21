@@ -1,4 +1,5 @@
 rules Module ::= [Decl] ;
+entrypoints Module;
 
 terminator Decl ";";
 
@@ -151,12 +152,12 @@ Block_Phi . Block ::= "block" BlockIdent AttribSet BeginList
 rules AttrKeyValue ::= BIdent "=" Attr ;
 separator AttrKeyValue ";";
 
-AttribSet_Some . AttribSet ::= BeginRec [ AttrKeyValue ] Semicolons EndRec;
+AttribSet_Some . AttribSet ::= BeginRec [ AttrKeyValue ] EndRec;
 AttribSet_Empty . AttribSet ::= "" ;
 
 separator Attr ";" ;
 
-Attr_Map . Attr ::= BeginRec [ AttrKeyValue ] Semicolons EndRec ; 
+Attr_Map . Attr ::= BeginRec [ AttrKeyValue ] EndRec ; 
 Attr_List . Attr ::= BeginList [ Attr ] EndList; 
 Attr_Lit . Attr ::= Value ; 
 Attr_Str . Attr ::= Str ; 
@@ -188,7 +189,7 @@ Expr_FunctionOp . Expr       ::= GlobalIdent "(" [Expr] ")";
 
 -- binary expr
 
-rules BinOp ::= BVBinOp | BVLogicalBinOp | BoolBinOp | IntLogicalBinOp | IntBinOp | EqOp ;
+rules BinOp ::= BVBinOp | BVLogicalBinOp | IntLogicalBinOp | IntBinOp | EqOp ;
 Expr_Binary . Expr       ::= BinOp "(" Expr "," Expr ")" ;
 Expr_Assoc . Expr       ::= BoolBinOp "(" [Expr] ")" ;
 
