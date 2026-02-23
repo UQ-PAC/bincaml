@@ -1,0 +1,87 @@
+{0 Bincaml-related tooling}
+
+{1 Tree-sitter grammar}
+
+There is a Tree-sitter grammar stored in this repository in the
+{{: https://github.com/agle/bincaml/tree/main/tree-sitter} [tree-sitter/] folder}.
+This can be used to add syntax highlighting of Basil IL files to your editor. 
+
+The configuration will be editor-specific and we will go through some examples
+below, but first some general notes:
+{ul
+  {- The grammar lives in a {i subfolder} of the repository, so make sure to point
+      your editor to the right place. }
+  {- The repository does {i not} have pre-built copies of [src/grammar.json] and [src/parser.c].
+      Tree-sitter can generate these files from the [grammar.js], but some editors may
+      need an option to generate these. Alternatively, you can locally run
+      [tree-sitter generate] in the directory to generate the files. }
+  {- The name of the grammar is [basilir] in lowercase with no spaces. If you see odd
+      dynamic linking errors about missing symbols like [tree_sitter_basil_ir], this might
+      be due to your editor having the name set differently, like [basil_ir]. }
+  {- Most likely, you will also have to add "Basil IL" as a filetype in your editor with
+      the appropriate file extension ([.il]). }
+}
+
+{2 Limitations}
+The grammar itself is complete because it is generated from the [BasilIR.cf] file
+using BNFC. However, setting up the grammar to do useful things and extract information
+from it needs manual work.
+{ul
+  {- At the moment, the highlighting is fairly basic and might be incomplete. If you see
+      something that's not highlighted but should be (or is highlighted wrong), you can
+      change the [highlights.scm] file and send a pull request.
+      See {: https://tree-sitter.github.io/tree-sitter/3-syntax-highlighting.html}. }
+  {- The Tree-sitter grammar can also (apparently) be used to implement "go to definition" by
+      marking certain identifiers as definitions. This would be exciting to have, but we don't
+      have it yet. See {: https://tree-sitter.github.io/tree-sitter/4-code-navigation.html}
+      and feel free to work on this if you want :) }
+}
+
+{2 Neovim}
+
+Neovim has {{: https://neovim.io/doc/user/treesitter.html} native support for Treesitter},
+but it needs you to manually build the shared library and place it into the right place.
+
+Plugins like {{: https://github.com/nvim-treesitter/nvim-treesitter} nvim-treesitter} exist
+to automate some of these steps. If you're using nvim-treesitter, be aware that the default
+"main" branch is a rewrite of the project and the "master" branch is before the rewrite. 
+Depending on how old your plugin is, you should make sure to follow the right steps for your
+version of the plugin, as the options are quite incompatible.
+See the readme instructions for the
+{{: https://github.com/nvim-treesitter/nvim-treesitter#adding-custom-languages}
+"main" version},
+and the older 
+{{: https://github.com/nvim-treesitter/nvim-treesitter/blob/master/README.md#adding-parsers }
+"master" version}.
+
+For AstroNvim {b v4} (with old nvim-treesitter and lazy.nvim), 
+you can add the filetype by adding a line to
+[~/.config/nvim/lua/polish.lua]:
+{v
+vim.filetype.add({ extension = { il = 'basilir' } })
+v}
+Then, this Lua code placed in [~/.config/nvim/lua/plugins/treesitter.lua]
+seems to work:
+{v
+return {
+  "nvim-treesitter/nvim-treesitter",
+  opts = {
+    ensure_installed = {
+      "lua",
+      "vim",
+    },
+  },
+  config = function(_, opts)
+    local parser_config = require("nvim-treesitter.parsers").get_parser_configs()
+
+    parser_config.basilir = {
+      install_info = {
+        url = "~/progs/obasil/tree-sitter",
+      },
+      filetype = "basilir",
+    }
+
+    require("nvim-treesitter.configs").setup(opts)
+  end,
+}
+v}
