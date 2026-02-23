@@ -71,6 +71,7 @@ module SymAddrSetLattice = struct
   type t = IntervalDomain.t SymBaseMap.t [@@deriving eq, ord]
 
   let bottom = SymBaseMap.empty
+  let top = bottom
 
   let show a =
     if SymBaseMap.cardinal a = 0 then " ⊥" else
@@ -302,12 +303,11 @@ module Domain = struct
       | Stmt.Instr_IndirectCall _ -> Iter.empty
       | Stmt.Instr_IntrinCall _ -> Iter.empty
     in
-    (* Iter.iter (fun (a,b) -> print_string @@ Var.show a; print_endline @@ SymAddrSetLattice.show b) updates; *)
     Iter.fold (fun a (k, v) -> update k v a) domain updates
 end
 
-module Analysis = Dataflow_graph.AnalysisFwd (Domain)
+module Analysis = Intra_analysis.Forwards (Domain)
 
 let analyse (p : Lang.Program.proc) =
-  let g = Dataflow_graph.create p in
-  Analysis.analyse ~widen_set:Graph.ChaoticIteration.FromWto ~delay_widen:50 g
+  Analysis.analyse ~widening_set:Graph.ChaoticIteration.FromWto
+    ~widening_delay:50 p

@@ -169,7 +169,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
     let constrain_arg st l t =
       let l = BasilExpr.unfix l in
       match l with
-      | RVar a -> ConstraintState.add_lb st (Var.name a) t
+      | RVar { id } -> ConstraintState.add_lb st (Var.name id) t
       | _ -> st
     in
     let constrain_args st l r t =
@@ -177,16 +177,16 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
       constrain_arg st r t
     in
     match expr with
-    | RVar a ->
-        let name = rename_variable @@ Var.name a in
+    | RVar { id } ->
+        let name = rename_variable @@ Var.name id in
         (st, TypeVar name)
-    | Constant op ->
+    | Constant { const } ->
         ( st,
-          match op with
+          match const with
           | `Bool _ -> Atom C_Bool
           | `Bitvector bv -> Atom (C_BV (Bitvec.size bv))
           | `Integer _ -> Atom C_Int )
-    | UnaryExpr (op, a) -> (
+    | UnaryExpr { op; arg = a } -> (
         let st, _ = constrain_expr st (BasilExpr.unfix a) in
         match op with
         | `BoolNOT -> (constrain_arg st a @@ Atom C_Bool, Atom C_Bool)
@@ -209,6 +209,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
         | `Exists -> (st, Atom C_Bool) (* TODO: Confirm *)
         | `Old -> (st, Top)
         | `Forall -> (st, Top)
+        | `Lambda | `Classification | `Gamma -> (st, Top)
         | `Extract (finish, rt) ->
             (* WARN: Is this actually constraining my field when they are used? *)
             let size = finish - rt in
@@ -217,7 +218,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
             in
             let field = { offset = rt; size; ty } in
             (constrain_arg st a @@ Record [ field ], Field field))
-    | BinaryExpr (op, l, r) -> (
+    | BinaryExpr { op; arg1 = l; arg2 = r } -> (
         let st, _ = constrain_expr st (BasilExpr.unfix l) in
         let st, _ = constrain_expr st (BasilExpr.unfix r) in
         match op with
@@ -245,11 +246,12 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
                 let st = constrain_args st l r typ in
                 (st, typ)
             | _ -> failwith "BV operation without BV arguments")
+        | `Load _ | `IfThen | `MapAccess -> (st, Top)
         (* WARN: I forgot what this was meant to be *)
         | `IMPLIES -> (st, Top))
-    | ApplyIntrin (op, args) -> (st, Top) (* Concat *)
-    | ApplyFun (a, b) -> (st, Top)
-    | Binding (vars, b) -> (st, Top)
+    | ApplyIntrin _ -> (st, Top) (* Concat *)
+    | ApplyFun _ -> (st, Top)
+    | Binding _ -> (st, Top)
   in
 
   (*
