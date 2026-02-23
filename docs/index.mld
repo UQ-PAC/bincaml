@@ -1,6 +1,6 @@
 {0 Bincaml }
 
-See {{!contributing} contibuting to bincaml}.
+See {{!contributing} contibuting to bincaml}, and {{!tooling} editor setup}.
 
 Bincaml is structured as follows.
 Below, the name beginning with a capital is the module name—use this to access
