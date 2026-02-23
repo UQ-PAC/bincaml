@@ -4,13 +4,14 @@ open Lang
 open Containers
 open Common
 open Wrapped_intervals
-module BVSet = Set.Make (Bitvec)
-module IntervalLatticeSet = Set.Make (WrappedIntervalsLattice)
 
 (*
   TODO
 
     Figure out what the SymBases should actually have in them, is it just for cute printing?
+
+    Deal with placeholders needing to store operations on them
+      for now having them as Top is sound and ok but reduces possible information
 *)
 
 module SymBase = struct
@@ -18,7 +19,7 @@ module SymBase = struct
     (* Known *)
     | Stack of string
     | Heap of { name : string; label : string }
-    | GlobSym of { interval : WrappedIntervalsLattice.t }
+    | GlobSym
     | Constant (* WARN: Constant is obj in scala not a class *)
     (* Unknown *)
     | Par of { name : string; param : Var.t }
@@ -34,7 +35,7 @@ module SymBase = struct
   let show = function
     | Stack name -> Printf.sprintf "Stack(%s)" name
     | Heap { name; label } -> Printf.sprintf "Heap(%s_%s)" name label
-    | GlobSym _ -> "Global"
+    | GlobSym -> "Global"
     | Constant -> "Constant"
     | Par { name; param } -> Printf.sprintf "Par(%s_%s)" name (Var.show param)
     | Ret { name; target_name; label; param } ->
@@ -42,118 +43,146 @@ module SymBase = struct
           (Var.show param)
     | Loaded { name; label } -> Printf.sprintf "Loaded(%s_%s)" name label
 
-  let place_holder = function
-    | Stack _ | Heap _ | GlobSym _ | Constant -> false
+  let is_place_holder = function
+    | Stack _ | Heap _ | GlobSym | Constant -> false
     | Ret _ | Par _ | Loaded _ -> true
 end
 
-module type Offsets = sig
-  val toOffsets : BVSet.t
-  val toIntervals : IntervalLatticeSet.t
-end
-
-module type OffsetDomain = sig
-  type t
-
-  val init : Bitvec.t -> t
-  val init_set : BVSet.t -> t
-  val should_widen : t -> bool
-  val transform : t -> (Bitvec.t -> Bitvec.t) -> t
-  val transform_t : t -> (t -> t) -> t
-  val add : bool -> t -> t -> t
-end
-
-module IntervalDomain : OffsetDomain = struct
+module IntervalDomain = struct
   open WrappedIntervalsLattice
 
-  type t = WrappedIntervalsLattice.t
+  type t = WrappedIntervalsLattice.t [@@deriving eq, ord]
 
-  let init i = interval i i
-  let init_set set = interval (BVSet.min_elt set) @@ BVSet.max_elt set
-  let should_widen t = false
-
-  let transform t f =
-    match t with
-    | Top | Bot -> t
-    | Interval { lower; upper } -> Interval { lower = f lower; upper = f upper }
-
-  let transform_t t f = f t
-
-  let add neg t t' =
-    match (t, t') with
-    | Top, _ | _, Top -> Top
-    | a, Bot | Bot, a -> a
-    | Interval { lower; upper }, Interval { lower = lower2; upper = upper2 } ->
-        let lower2, upper2 =
-          if neg then (Bitvec.neg lower2, Bitvec.neg upper2)
-          else (lower2, upper2)
-        in
-        let o1 = Bitvec.add lower upper2 in
-        let o2 = Bitvec.add lower lower2 in
-        let o3 = Bitvec.add upper upper2 in
-        let o4 = Bitvec.add upper lower2 in
-        init_set @@ BVSet.of_list [ o1; o2; o3; o4 ]
+  let name = "interval offsets domain"
+  let pretty = WrappedIntervalsLattice.pretty
+  let show = WrappedIntervalsLattice.show
+  let bottom = WrappedIntervalsLattice.bottom
+  let leq = WrappedIntervalsLattice.leq
+  let widening = WrappedIntervalsLattice.widening
+  let join = WrappedIntervalsLattice.join
+  let init a = interval a a
 end
 
-(* I don't know if this is really smart to call this a Set when its a Map *)
-module SymValSet (O : OffsetDomain) = struct
+module SymAddrSetLattice = struct
   module SymBaseMap = Map.Make (SymBase)
 
-  type t = O.t SymBaseMap.t
+  let name = "symbol base address set"
 
-  let transform s f =
-    SymBaseMap.map (fun (base, offsets) -> (base, O.transform offsets f)) s
+  type t = IntervalDomain.t SymBaseMap.t [@@deriving eq, ord]
 
-  let compare a b = 1
+  let bottom = SymBaseMap.empty
+
+  let show a =
+    if SymBaseMap.cardinal a = 0 then " ⊥" else
+    SymBaseMap.fold
+      (fun k v acc ->
+        acc ^ Printf.sprintf " %s: %s" (SymBase.show k) @@ IntervalDomain.show v)
+      a ""
+
+  let pretty a = Containers_pp.int 1
+  (* TODO *)
+  let leq a b = true
+
+  let join (a : t) (b : t) : t =
+    match (a, b) with
+    | a, b ->
+        SymBaseMap.merge_safe
+          ~f:(fun k v ->
+            match v with
+            | `Both (a, b) -> Some (IntervalDomain.join a b)
+            | `Left a | `Right a -> Some a)
+          a b
+
+  (* TODO *)
+  let widening a b = a
+  let init a v = SymBaseMap.singleton a @@ IntervalDomain.init v
 end
 
-module SymValSetDomain (O : OffsetDomain) = struct
-  open SymValSet (O)
+module SVAAbstraction = struct
+  include SymAddrSetLattice
+  open WrappedIntervalsValueAbstractionBasil
 
-  type t = Top | O | Bottom
+  (* WARN: Basil one does scary stuff here *)
+  let eval_const (op : Lang.Ops.AllOps.const) rt =
+    SymBaseMap.singleton Constant @@ eval_const op rt
 
-  let join a b pos = a
-  let widen a b pos = a
-  let init a v = SymBaseMap.singleton a @@ O.init v
-  let init_set a v = SymBaseMap.singleton a @@ O.init_set v
-  let transfer a f = failwith "asd"
-  let transform a f = a
-  let transform_t a f = a
+  let eval_unop (op : Lang.Ops.AllOps.unary) (a, t) rt =
+    SymBaseMap.mapi
+      (fun sb1 vs1 ->
+        match sb1 with
+        | GlobSym | Constant -> eval_unop op (vs1, t) rt
+        | _ -> Top)
+      a
+
+  let eval_binop op (a, ta) (b, tb) rt =
+    SymBaseMap.fold
+      (fun sb1 vs1 map ->
+        SymBaseMap.fold
+          (fun sb2 vs2 map ->
+            match (sb1, sb2) with
+            (* NOTE: OCaml compiler complains when these cases are merged *)
+            | (GlobSym | Constant), sb when not @@ SymBase.is_place_holder sb ->
+                SymBaseMap.add sb (eval_binop op (vs1, ta) (vs2, tb) rt) map
+            | sb, (GlobSym | Constant) when not @@ SymBase.is_place_holder sb ->
+                SymBaseMap.add sb (eval_binop op (vs1, ta) (vs2, tb) rt) map
+            | _, _ -> SymBaseMap.add sb1 Top @@ SymBaseMap.add sb2 Top map)
+          b map)
+      a SymBaseMap.empty
+
+  let eval_intrin op args rt =
+    let op a b =
+      match op with
+      | `BVADD -> (eval_binop `BVADD a b rt, rt)
+      | `BVOR -> (eval_binop `BVOR a b rt, rt)
+      | `BVXOR -> (eval_binop `BVXOR a b rt, rt)
+      | `BVAND -> (eval_binop `BVAND a b rt, rt)
+      (* | `BVConcat -> ( *)
+          (* List.iter (fun a -> print_endline @@ Types.show @@ snd a) args; *)
+          (* ( SymBaseMap.fold *)
+              (* (fun sb1 vs1 acc -> *)
+                (* SymBaseMap.fold *)
+                  (* (fun sb2 vs2 map -> *)
+                    (* match (sb1, sb2) with *)
+                    (* NOTE: OCaml compiler complains when these cases are merged *)
+                    (* | (GlobSym | Constant), sb *)
+                      (* when not @@ SymBase.is_place_holder sb -> *)
+                        (* SymBaseMap.add sb *)
+                          (* (WrappedIntervalsValueAbstractionBasil.eval_intrin op *)
+                             (* [ (vs1, rt); (vs2, rt) ] *)
+                             (* rt) *)
+                          (* map *)
+                    (* | sb, (GlobSym | Constant) *)
+                      (* when not @@ SymBase.is_place_holder sb -> *)
+                        (* SymBaseMap.add sb *)
+                          (* (WrappedIntervalsValueAbstractionBasil.eval_intrin op *)
+                             (* [ (vs1, rt); (vs2, rt) ] *)
+                             (* rt) *)
+                          (* map *)
+                    (* | _, _ -> *)
+                        (* SymBaseMap.add sb1 Top @@ SymBaseMap.add sb2 Top map) *)
+                  (* (fst b) acc) *)
+              (* (fst a) SymBaseMap.empty, *)
+            (* rt )) *)
+      | _ ->
+          ( SymBaseMap.merge_safe ~f:(const @@ const @@ Some Top) (fst a) (fst b),
+            rt )
+    in
+    match args with
+    | h :: b :: tl -> fst @@ List.fold_left op (op h b) tl
+    | _ -> failwith "operators must have two operands"
 end
 
-module SymValues (O : OffsetDomain) = struct
-  type t = SymValSet(O).t VarMap.t
-
-  let apply (lvar : Var.t) (map : t) = VarMap.find_opt lvar map
-  let sort = failwith "unimplemented"
-  let get = failwith "unimplemented"
-  let get_sorted = failwith "unimplemented"
-  let pretty = failwith "unimplemented"
-  let constants_to_symvalset = failwith "unimplemented"
-
-  let expr_to_symvalset (t : t) (rhs : Expr.BasilExpr.t) =
-    failwith "unimplemented"
+module SVAAbstractionBasil = struct
+  include SVAAbstraction
+  module E = Lang.Expr.BasilExpr
 end
 
-let get_constants (expr : 'e Expr.BasilExpr.abstract_expr) =
-  Expr.AbstractExpr.fold
-    (fun acc e ->
-      match e with
-      | Expr.AbstractExpr.Constant c ->
-          (match c with
-          | `Bool b ->
-              if b then Bitvec.create ~size:1 Z.one
-              else Bitvec.create ~size:1 Z.zero
-          (* TODO: Probably want this to be in decimal *)
-          | `Bitvector bv -> bv
-          | `Integer c -> Bitvec.create ~size:64 @@ Z.of_int c)
-          :: acc
-      | _ -> acc)
-    [] expr
+module StateAbstraction = Intra_analysis.MapState (SVAAbstractionBasil)
+module Eval = Intra_analysis.EvalStmt (SVAAbstractionBasil) (StateAbstraction)
 
-module SymValuesDomain (O : OffsetDomain) = struct
-  let top = failwith "BOOOM"
-  let bot = VarMap.empty
+module Domain = struct
+  include StateAbstraction
+
   let stack_pointer = Var.create ~scope:Local "R31_IN" @@ Bitvector 64
   let link_register = Var.create ~scope:Local "R30_IN" @@ Bitvector 64
   let frame_pointer = Var.create ~scope:Local "R29_IN" @@ Bitvector 64
@@ -163,80 +192,122 @@ module SymValuesDomain (O : OffsetDomain) = struct
     31 :: lst |> List.map (fun i -> "R" ^ string_of_int i)
 
   let implicit_form = [ stack_pointer; link_register; frame_pointer ]
-  let widen a b pos = a
 
-  module SymValSetDomain = SymValSetDomain (O)
-  module SymValues = SymValues (O)
-
-  (*
-    WARN:
-      In the BASIL version this takes in blocks,
-       but in bincaml there is no block -> proc
-  *)
-  let proc_init_state (proc : Program.proc) =
+  let init proc =
     let name = ID.name @@ Procedure.id proc in
-    let params =
-      StringMap.filter (fun param _ ->
-          List.fold_left
-            (fun acc a ->
-              if String.starts_with param ~prefix:a then acc else false)
-            false call_preserve)
-      @@ Procedure.formal_in_params proc
-      |> StringMap.to_iter
-      |> Iter.map (fun (_, param) ->
-          (param, SymValSetDomain.init (Par { name; param })))
-    in
-    let map =
-      VarMap.singleton stack_pointer (SymValSetDomain.init (Stack name))
-      |> VarMap.add link_register
-           (SymValSetDomain.init (Par { name; param = link_register }))
-      |> VarMap.add frame_pointer
-           (SymValSetDomain.init (Par { name; param = frame_pointer }))
-    in
-    VarMap.add_iter map params
-
-  (* WARN remove this in favour of a direct call to proc_init_state *)
-  let init (entry : bool) (proc : Program.proc) =
-    if entry then proc_init_state proc else bot
-
-  (* WARN: pos may need to be proc *)
-  let join (pos : Program.bloc) (a : SymValues.t) (b : SymValues.t) = a
-
-  let transfer (a : SymValues.t) (stmt : Program.stmt) (block : Program.bloc)
-      (proc : Program.proc) : SymValues.t =
-    match stmt with
-    | Stmt.Instr_Assert _ | Stmt.Instr_Assume _ -> a
-    | Stmt.Instr_Assign assignments ->
-        join block a
-          (List.fold_left
-             (fun acc (lhs, rhs) ->
-               if Var.is_local lhs then
-                 VarMap.add lhs (SymValues.expr_to_symvalset a rhs) acc
-               else acc)
-             VarMap.empty assignments)
-    | Stmt.Instr_Load { lhs; addr; cells } ->
-        join block a
-          (VarMap.singleton lhs
-             (SymValSetDomain.init (Loaded { name = "load"; label = "load" })
-             @@ Bitvec.zero ~size:cells))
-    | Stmt.Instr_Call { lhs; procid }
-      when (String.equal "malloc" @@ ID.name procid)
-           || (String.equal "calloc" @@ ID.name procid) ->
-        let malloc =
-          Iter.filter (fun var ->
-              String.starts_with ~prefix:"R0" @@ Var.name var)
-          @@ StringMap.values lhs
+    StringMap.filter (fun param _ ->
+        List.fold_left
+          (fun acc a ->
+            if String.starts_with param ~prefix:a then acc else false)
+          false call_preserve)
+    @@ Procedure.formal_in_params proc
+    |> StringMap.to_iter
+    |> Iter.map (fun (_, param) ->
+        let size =
+          match Var.typ param with
+          | Types.Boolean -> 1
+          | Types.Integer -> 32
+          | Types.Bitvector size -> size
+          | _ -> failwith "boom"
         in
-        (* TODO: Add logger here to ensure malloc size is 1 *)
-        print_endline "Malloc call had more than one thing named R0 on lhs";
-        join block a
-        @@ VarMap.singleton (Iter.head_exn malloc)
-        @@ SymValSetDomain.init
-             (SymBase.Heap { name = "heap"; label = "heap" })
-             (Bitvec.zero ~size:1)
-    | Stmt.Instr_Call _ -> a
-    | Stmt.Instr_Store _ -> a
-    (* TODO: (From Scala code) "possibly map every live variable to top"*)
-    | Stmt.Instr_IndirectCall _ -> a
-    | Stmt.Instr_IntrinCall _ -> a
+        ( param,
+          SymAddrSetLattice.init (Par { name; param }) @@ Bitvec.zero ~size ))
+    |> Iter.fold (fun m (v, d) -> update v d m) bottom
+
+  let transfer domain stmt =
+    let stmt = Eval.stmt_eval_fwd stmt domain in
+    let updates =
+      match stmt with
+      | Stmt.Instr_Assign assignments ->
+          List.iter (fun (lhs, rhs) -> print_endline @@ Var.to_string lhs) assignments;
+          List.to_iter assignments
+      | Stmt.Instr_Load { lhs; addr; cells } ->
+          Iter.singleton
+            ( lhs,
+              SymAddrSetLattice.init (Loaded { name = "load"; label = "load" })
+              @@ Bitvec.zero ~size:cells )
+      | Stmt.Instr_Call { lhs; procid }
+        when (String.equal "malloc" @@ ID.name procid)
+             || (String.equal "calloc" @@ ID.name procid) ->
+          let malloc =
+            Iter.filter (fun var ->
+                String.starts_with ~prefix:"R0" @@ Var.name var)
+            @@ StringMap.values lhs
+          in
+          (* TODO: Add check here to ensure malloc size is 1 *)
+          let var = Iter.head_exn malloc in
+          let size =
+            match Var.typ var with
+            | Types.Boolean -> 1
+            | Types.Integer -> 32
+            | Types.Bitvector size -> size
+            | _ -> failwith "boom"
+          in
+
+          Iter.singleton
+            ( var,
+              SymAddrSetLattice.init
+                (SymBase.Heap { name = "heap"; label = "heap" })
+              @@ Bitvec.zero ~size )
+      | Stmt.Instr_Call { lhs; args } ->
+          let unchanged = [ "R29"; "R30"; "R31" ] in
+          let maintained, unmaintained =
+            List.partition (fun (var : Var.t) ->
+                List.mem
+                  ~eq:(fun var r -> String.starts_with ~prefix:r var)
+                  (Var.name var) unchanged)
+            @@ Iter.to_list @@ StringMap.values lhs
+          in
+          Iter.append
+            (List.to_iter
+            @@ List.map
+                 (fun l ->
+                   ( l,
+                     match
+                       StringMap.find_first_opt
+                         (fun name ->
+                           String.equal
+                             (String.take 3 @@ Var.name l)
+                             (String.take 3 name))
+                         args
+                     with
+                     | Some (name, expr) -> expr
+                     | None -> failwith "Boom?" ))
+                 maintained)
+          @@ List.to_iter
+          @@ List.map
+               (fun param ->
+                 let size =
+                   match Var.typ param with
+                   | Types.Boolean -> 1
+                   | Types.Integer -> 32
+                   | Types.Bitvector size -> size
+                   | _ -> failwith "boom"
+                 in
+
+                 ( param,
+                   SymAddrSetLattice.init
+                     (Ret
+                        {
+                          name = "hi";
+                          label = "bye";
+                          param;
+                          target_name = "pew";
+                        })
+                   @@ Bitvec.zero ~size ))
+               unmaintained
+      | Stmt.Instr_Assert _ | Stmt.Instr_Assume _ -> Iter.empty
+      | Stmt.Instr_Store _ -> Iter.empty
+      (* TODO: (From Scala code) "possibly map every live variable to top" *)
+      | Stmt.Instr_IndirectCall _ -> Iter.empty
+      | Stmt.Instr_IntrinCall _ -> Iter.empty
+    in
+    (* Iter.iter (fun (a,b) -> print_string @@ Var.show a; print_endline @@ SymAddrSetLattice.show b) updates; *)
+    Iter.fold (fun a (k, v) -> update k v a) domain updates
 end
+
+module Analysis = Dataflow_graph.AnalysisFwd (Domain)
+
+let analyse (p : Lang.Program.proc) =
+  let g = Dataflow_graph.create p in
+  Analysis.analyse ~widen_set:Graph.ChaoticIteration.FromWto ~delay_widen:50 g
