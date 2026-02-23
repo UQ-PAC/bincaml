@@ -106,7 +106,6 @@ module PassManager = struct
         "Runs wrapped interval analysis on control flow graph and prints \
          results";
     }
-
   let cfg_tnum_wint_reduced =
     {
       name = "demo-cfg-tnum-wint-reduced-analysis";
@@ -123,7 +122,13 @@ module PassManager = struct
   let sva =
     {
       name = "sva";
-      apply = DFGAnalysis (module Analysis.Sva.Analysis);
+      apply =
+        Proc
+          (fun p ->
+            let r = Analysis.Sva.analyse p in
+            (* Analysis.Wrapped_intervals.Analysis.print_dot *)
+              (* (Format.of_chan stdout) p r; *)
+            p);
       doc =
         "Runs symbolic value analysis and prints stuff out after";
     }
