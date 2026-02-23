@@ -119,7 +119,13 @@ module PassManager = struct
             p);
       doc =
         "Runs known bits and wrapped interval reduced product analysis on \
-         control flow graph and prints results";
+         control flow graph and prints results";}
+  let sva =
+    {
+      name = "sva";
+      apply = DFGAnalysis (module Analysis.Sva.Analysis);
+      doc =
+        "Runs symbolic value analysis and prints stuff out after";
     }
 
   let sva =
@@ -332,6 +338,7 @@ module PassManager = struct
       cfg_wrapped_int;
       cfg_tnum_wint_reduced;
       demo_dfg_gamma;
+      sva;
       sparams;
       read_uninit false;
       read_uninit true;
