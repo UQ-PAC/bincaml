@@ -1,5 +1,7 @@
 * text=auto eol=lf
 
+grammar.js linguist-generated
+
 # Generated source files
 src/*.json linguist-generated
 src/parser.c linguist-generated
