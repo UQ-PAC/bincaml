@@ -42,20 +42,29 @@ let online_check visit (solver : Bincaml_util.Solver.solver)
   let res : Solver.result = Solver.check solver in
   (match res with
   | Sat ->
-      let m = Solver.get_model solver in
-      visit (Some m) r
+      let from =
+        Solver.get_expr solver (fst @@ Expr_smt.SMTLib2.of_bexpr r.from)
+      in
+      let into =
+        Solver.get_expr solver (fst @@ Expr_smt.SMTLib2.of_bexpr r.into)
+      in
+      visit (Some (from, into)) r
   | Unsat -> ()
   | Unknown -> visit None r);
-  let r = solver.command (Solver.pop 1) in
+  let _ = solver.command (Solver.pop 1) in
   ()
 
 let online_check_all visit rws =
   let solver = Bincaml_util.Solver.new_solver Bincaml_util.Solver.cvc5 in
-  List.iter (online_check visit solver) rws;
-  solver.stop ()
+  List.iter (online_check visit solver) rws
 
 let print_error model (rw : Expr.BasilExpr.rwinfo) =
-  let m = model |> Option.map Sexp.to_string |> Option.get_or ~default:"" in
+  let m =
+    model
+    |> Option.map (function a, b ->
+        "  counterexample: " ^ Sexp.to_string a ^ " != " ^ Sexp.to_string b)
+    |> Option.get_or ~default:""
+  in
   Printf.fprintf stdout "%s\n\n"
   @@ "unsound rewrite "
   ^ Option.get_or ~default:"" rw.__FILE__
