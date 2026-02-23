@@ -74,14 +74,14 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
   | ApplyIntrin { op = #Ops.Spec.intrin } -> None
 
 let partial_eval_alg (e : BasilExpr.t BasilExpr.abstract_expr) :
-    BasilExpr.t option =
+    BasilExpr.rewrite =
   let open AbstractExpr in
   let open Option.Infix in
   let is_const e =
     match BasilExpr.unfix e with Constant { const } -> Some const | _ -> None
   in
   let e = AbstractExpr.map is_const e in
-  eval_expr_alg e >|= BasilExpr.const
+  eval_expr_alg e >|= BasilExpr.const |> BasilExpr.replace_opt
 
 let partial_eval_expr e = BasilExpr.rewrite ~rw_fun:partial_eval_alg e
 let eval_expr e = BasilExpr.cata eval_expr_alg e

@@ -115,6 +115,13 @@ module PassManager = struct
         doc = "Remove blocks unreachable from entry";
       };
       {
+        name = "cf-expressions-smtcheck";
+        apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;
+        doc =
+          "Perform intra-expression simplifications and constant folding for \
+           whole program and write smt log of rewrites to a file.";
+      };
+      {
         name = "cf-expressions";
         apply = Proc Transforms.Cf_tx.simplify_proc_exprs;
         doc =
