@@ -48,3 +48,4 @@ zig-out/
 
 src
 bindings
+tree-sitter-basil-ir
