@@ -482,8 +482,7 @@ let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
            (fun x ->
              text "modifies "
              ^ nest 2 (fill_map (text "," ^ newline) show_var x)
-             ^ text ";"
-             )
+             ^ text ";")
            p.modifies_globs
         @ ml
             (fun x ->
@@ -493,23 +492,27 @@ let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
             p.captures_globs
         @ ml
             (fun x ->
-              append_nl (List.map (fun v -> text "requires " ^ show_expr v
-            ^ text ";") x))
+              append_nl
+                (List.map
+                   (fun v -> text "requires " ^ show_expr v ^ text ";")
+                   x))
             p.requires
         @ ml
             (fun x ->
-              append_nl (List.map (fun v -> text "ensures " ^ show_expr v
-            ^ text ";") x))
+              append_nl
+                (List.map (fun v -> text "ensures " ^ show_expr v ^ text ";") x))
             p.ensures
         @ ml
             (fun x ->
-              append_nl (List.map (fun v -> text "rely " ^ show_expr v
-            ^ text ";") x))
+              append_nl
+                (List.map (fun v -> text "rely " ^ show_expr v ^ text ";") x))
             p.rely
         @ ml
             (fun x ->
-              append_nl (List.map (fun v -> text "guarantee " ^ show_expr v
-            ^ text ";") x))
+              append_nl
+                (List.map
+                   (fun v -> text "guarantee " ^ show_expr v ^ text ";")
+                   x))
             p.guarantee))
 
 let pretty show_lvar show_var show_expr p =
