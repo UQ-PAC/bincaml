@@ -26,6 +26,8 @@ module Domain = struct
   let init proc =
     Procedure.formal_in_params proc
     |> StringMap.values
+    |> Iter.append
+         ((Procedure.specification proc).captures_globs |> Iter.of_list)
     |> Iter.map (fun v -> (v, GammaSet.singleton v))
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
@@ -48,6 +50,16 @@ end
 module Analysis = Forwards (Domain)
 open Ide
 
+(* TODO IDE solver assumes program entry, but for summary generation we are more concerned with entry per procedure
+ and this requires a pretty different way to use the IDE solver where we generate complete phase 1 summaries per procedure
+ instead of just summaries of variables the solver finds to be relevant. Phase 2 also should assume inputs per proc
+ have lattice value v |-> {v}, not whatever the solver decides.
+
+ In BASIL we instead run many IDE analyses, one per procedure, bottom up along the call graph sccs. The ide solver is only
+ relevant for nontrivial sccs, otherwise we use already known relationships of in out vars to compose calls. This feels
+ wasteful since the IDE solver should be able to do everything in one pass, but maybe it can turn out to be better for
+ a hidden reason?! *)
+(*
 module IDEDomain = struct
   let direction = `Forwards
 
@@ -102,7 +114,7 @@ module IDEDomain = struct
 
   open DL
 
-  let tranfer_call (c : call_info) d =
+  let transfer_call (c : call_info) d =
     match d with
     | Lambda -> Iter.singleton (d, IdEdge)
     | Label v when Var.is_global v -> Iter.singleton (d, IdEdge)
@@ -179,6 +191,9 @@ module IDEDomain = struct
         Iter.singleton (Label phi.lhs, IdEdge)
     | _ -> Iter.singleton (d, IdEdge)
 end
+
+module IDEAnalysis = IDE (IDEDomain)
+*)
 
 let transform proc =
   let r = Analysis.analyse proc in
