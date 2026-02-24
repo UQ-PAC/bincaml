@@ -189,6 +189,8 @@ module CallGraph = struct
 
   module G = Graph.Persistent.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
 
+  module Scc = Graph.Components.Make (G)
+
   let make_call_graph t =
     let called_by (p : proc) =
       Procedure.blocks_to_list p |> List.to_iter |> Iter.map snd

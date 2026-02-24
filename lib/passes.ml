@@ -102,7 +102,7 @@ module PassManager = struct
   let function_summaries =
     {
       name = "function-summaries";
-      apply = Proc Transforms.Function_summaries.transform;
+      apply = Prog Transforms.Function_summaries.interproc_transform;
       doc = "Generate function summaries for each procedure";
     }
 
