@@ -300,7 +300,7 @@ module IDEGraph = struct
         let formal_in =
           Procedure.formal_in_params p |> StringMap.bindings |> List.map snd
         in
-        let globals = prog.globals |> Hashtbl.to_list |> List.map snd in
+        let globals = Program.global_vars prog |> Iter.to_list in
         add_edge_e_dir dir g
           ( IntraVertex { proc_id; v = Entry },
             StubProc { formal_in; globals },
@@ -707,7 +707,7 @@ module IDE (D : IDEDomain) = struct
 
   let solve (prog : Program.t) =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
-    let globals = prog.globals |> Var.Decls.to_iter |> Iter.map snd in
+    let globals = Program.global_vars prog in
     let graph = IDEGraph.create prog dir in
     let start =
       match dir with `Forwards -> Loc.Entry | `Backwards -> Loc.Exit

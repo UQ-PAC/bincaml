@@ -4,9 +4,7 @@
  (flags -w -27)
  (modules
   ssa
-  algsimp
   cf_tx
-  spec_modifies
   livevars
   cleanup_cfg
   ide

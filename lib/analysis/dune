@@ -9,6 +9,7 @@
   lattice_types
   ide
   ide_live
+  lattice_collections
   wrapped_intervals
   known_bits
   wp_dual

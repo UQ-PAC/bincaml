@@ -20,11 +20,15 @@ separator BlockIdent ",";
 
 position token ProcIdent '@' ((upper | letter | digit | ["_.$#"])+);
 
+
+position token OpenParen '(' ;
+position token CloseParen ')' ;
+
 position token BeginList '[' ;
 position token EndList ']' ;
 position token BeginRec '{' ;
 position token EndRec '}' ;
-token LambdaSep ({"::"} | {"->"}) ;
+rules LambdaSep ::= "->" | "::" ;
 
 {- Literals -}
 
@@ -40,28 +44,30 @@ comment "//" ;
 comment "/*" "*/" ;
 
 {- Top Level Declarations -}
-Decl_Axiom . Decl ::= "axiom" AttribSet Expr; 
-Decl_SharedMem . Decl ::= "memory" "shared" GlobalIdent ":" Type ;
-Decl_UnsharedMem . Decl ::= "memory" GlobalIdent ":" Type ;
-Decl_Var . Decl ::= "var" GlobalIdent ":" Type  ;
+Decl_Axiom . Decl ::= "axiom" GlobalIdent AttribSet Expr; 
+Decl_SharedMem . Decl ::= "memory" "shared" GlobalIdent ":" Type VarSpec ;
+Decl_UnsharedMem . Decl ::= "memory" GlobalIdent ":" Type VarSpec;
+Decl_Var . Decl ::= "var" GlobalIdent ":" Type VarSpec ;
 
 separator Type ",";
 
-Decl_UninterpFun . Decl ::= "declare-fun" AttribSet GlobalIdent ":" "(" [Type] ")" "->" Type ;
-Decl_Fun . Decl ::= "define-fun" AttribSet GlobalIdent"(" [Params] ")" "->" Type "=" Expr;
+Decl_UninterpFun . Decl ::= "val" GlobalIdent AttribSet ":" Type ;
+
+Decl_Fun . Decl ::= "let" GlobalIdent AttribSet ":" Type "=" Expr;
+Decl_FunNoType . Decl ::= "let" GlobalIdent AttribSet "=" Expr;
 Decl_ProgEmpty . Decl ::= "prog" "entry" ProcIdent AttribSet ;
-Decl_ProgWithSpec . Decl ::= "prog" "entry" ProcIdent AttribSet BeginList [ ProgSpec ] EndList ;
-Decl_Proc . Decl ::= "proc" ProcIdent "(" [Params] ")" "->" "(" [Params] ")" AttribSet [ FunSpec ] ProcDef ;
+Decl_ProgWithSpec . Decl ::= "prog" "entry" ProcIdent AttribSet [ ProgSpec ] ;
+Decl_Proc . Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [ FunSpec ] ProcDef ;
 
 ProcDef_Empty . ProcDef ::= "";
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
-MapType1 . MapType ::=  "(" Type "->" Type ")";
+MapType1 . MapType ::=  Type "->" Type ;
 BVType1 . BVType ::= BVTYPE ;
 
-rules Type ::= IntType | BoolType | MapType | BVType ; 
+rules Type ::= IntType | BoolType | MapType | BVType | OpenParen Type CloseParen; 
 
 separator Expr "," ;
 
@@ -79,13 +85,18 @@ Stmt_Nop . Stmt ::= "nop";
 Stmt_SingleAssign . Stmt ::= Assignment ;
 
 separator nonempty Assignment ",";
-Stmt_MultiAssign . Stmt ::= "(" [Assignment]  ")" ;
+Stmt_MultiAssign . Stmt ::= OpenParen [Assignment]  CloseParen ;
 
 
-rules LocalVar ::= LocalIdent ":" Type ;
-rules GlobalVar ::= GlobalIdent ":" Type ;
+LocalTyped . LocalVar ::= LocalIdent ":" Type ;
+LocalUntyped . LocalVar ::= LocalIdent ;
+
+GlobalTyped . GlobalVar ::= GlobalIdent ":" Type ;
+GlobalUntyped . GlobalVar ::= GlobalIdent;
 separator nonempty LocalVar ",";
 rules Var ::= LocalVar | GlobalVar ;
+
+separator GlobalVar ",";
 
 
 Stmt_Load . Stmt ::= LVar ":=" "load" Endian GlobalIdent Expr IntVal;
@@ -98,9 +109,9 @@ rules NamedCallReturn ::= LVar "=" LocalIdent;
 separator NamedCallReturn "," ;
 
 LVars_Empty . LVars ::= "";
-LVars_LocalList . LVars ::= "var" "(" [ LocalVar ] ")" ":=" ;
-LVars_List . LVars ::= "(" [ LVar ]  ")" ":=";
-NamedLVars_List . LVars ::= "(" [NamedCallReturn]  ")" ":=";
+LVars_LocalList . LVars ::= "var" OpenParen [ LocalVar ] CloseParen ":=" ;
+LVars_List . LVars ::= OpenParen [ LVar ]  CloseParen ":=";
+NamedLVars_List . LVars ::= OpenParen [NamedCallReturn]  CloseParen ":=";
 
 rules NamedCallArg ::= LocalIdent "=" Expr;
 separator NamedCallArg "," ;
@@ -108,16 +119,16 @@ separator NamedCallArg "," ;
 CallParams_Exprs . CallParams ::= [Expr];
 CallParams_Named . CallParams ::= [NamedCallArg];
 
-Stmt_DirectCall . Stmt ::= LVars "call" ProcIdent "(" CallParams ")" ;
+Stmt_DirectCall . Stmt ::= LVars "call" ProcIdent OpenParen CallParams CloseParen ;
 Stmt_IndirectCall . Stmt ::= "indirect" "call" Expr ;
 
 Stmt_Assume . Stmt ::= "assume" Expr ;
 Stmt_Guard . Stmt ::= "guard" Expr ;
 Stmt_Assert . Stmt ::= "assert" Expr ;
 
-Jump_GoTo . Jump ::= "goto" "(" [BlockIdent] ")" ;
+Jump_GoTo . Jump ::= "goto" OpenParen [BlockIdent] CloseParen ;
 Jump_Unreachable . Jump ::= "unreachable" ;
-Jump_Return . Jump ::= "return" "(" [Expr] ")" ;
+Jump_Return . Jump ::= "return" OpenParen [Expr] CloseParen ;
 Jump_ProcReturn. Jump ::= "return"  ;
 
 LVar_Local . LVar ::= "var" LocalVar;
@@ -135,7 +146,7 @@ rules JumpWithAttrib ::= Jump AttribSet ;
 rules PhiExpr ::= BlockIdent "->" Var ;
 separator PhiExpr "," ;
 
-rules PhiAssign ::= LVar ":=" "phi" "(" [ PhiExpr ] ")";
+rules PhiAssign ::= LVar ":=" "phi" OpenParen [ PhiExpr ] CloseParen;
 separator PhiAssign ",";
 
 
@@ -144,7 +155,7 @@ Block_NoPhi . Block ::= "block" BlockIdent AttribSet BeginList
   EndList ;
 
 Block_Phi . Block ::= "block" BlockIdent AttribSet BeginList 
-  "(" [PhiAssign] ")" ";"
+  OpenParen [PhiAssign] CloseParen ";"
   [StmtWithAttrib] JumpWithAttrib ";"
   EndList ;
 
@@ -159,10 +170,14 @@ separator Attr ";" ;
 Attr_Map . Attr ::= BeginRec [ AttrKeyValue ] Semicolons EndRec ; 
 Attr_List . Attr ::= BeginList [ Attr ] EndList; 
 Attr_Lit . Attr ::= Value ; 
+Attr_Expr . Attr ::= Expr; 
 Attr_Str . Attr ::= Str ; 
 
 rules Params ::=  LocalIdent ":" Type ;
 separator Params "," ;
+
+rules FunParams ::=  LocalIdent ":" Type | OpenParen LocalIdent ":" Type CloseParen ;
+separator FunParams " " ;
 
 {- EXPRESSIONS -}
 
@@ -173,32 +188,49 @@ Value_False . Value ::= "false" ;
 
 Expr_Literal . Expr ::= Value; 
 
+Expr_Paren . Expr ::= OpenParen  Expr CloseParen; 
+
 Expr_Local . Expr ::= LocalVar;
 Expr_Global . Expr ::= GlobalVar;
 
 -- quantifiers
 
-rules LambdaDef ::= "(" [LocalVar] ")" LambdaSep Expr ;
-Expr_Forall . Expr ::= "forall" LambdaDef ;
-Expr_Exists . Expr ::= "exists" LambdaDef ;
-Expr_Old . Expr       ::= "old" "(" Expr ")" ;
+rules LParen ::= LocalVar | OpenParen LocalVar CloseParen ;
+separator LParen ",";
+
+rules LambdaDef ::=  [LParen]  LambdaSep Expr ;
+Expr_Forall . Expr ::= "forall" AttribSet   LambdaDef ;
+Expr_Exists . Expr ::= "exists" AttribSet  LambdaDef ;
+Expr_Lambda . Expr ::= "fun" AttribSet  LambdaDef ;
+Expr_Old . Expr       ::= "old" OpenParen Expr CloseParen ;
 
 -- uninterpreted functions
-Expr_FunctionOp . Expr       ::= GlobalIdent "(" [Expr] ")";
+Expr_FunctionOp . Expr       ::= GlobalIdent OpenParen [Expr] CloseParen;
+Expr_Apply . Expr       ::= Expr Expr;
 
 -- binary expr
 
 rules BinOp ::= BVBinOp | BVLogicalBinOp | BoolBinOp | IntLogicalBinOp | IntBinOp | EqOp ;
-Expr_Binary . Expr       ::= BinOp "(" Expr "," Expr ")" ;
-Expr_Assoc . Expr       ::= BoolBinOp "(" [Expr] ")" ;
+Expr_Binary . Expr       ::= BinOp OpenParen Expr "," Expr CloseParen ;
+Expr_Assoc . Expr       ::= BoolBinOp OpenParen [Expr] CloseParen ;
 
-rules UnOp ::= BVUnOp | "boolnot" | "intneg" | "booltobv1";
-Expr_Unary . Expr       ::= UnOp "(" Expr ")" ;
+rules UnOp ::= BVUnOp | "boolnot" | "intneg" | "booltobv1" | "gamma" | "classification";
+Expr_Unary . Expr       ::= UnOp OpenParen Expr CloseParen ;
 
-Expr_ZeroExtend . Expr ::= "zero_extend" "(" IntVal "," Expr ")" ;
-Expr_SignExtend . Expr ::= "sign_extend" "(" IntVal "," Expr ")" ;
-Expr_Extract    . Expr ::= "extract" "(" IntVal "," IntVal "," Expr ")" ;
-Expr_Concat     . Expr ::= "bvconcat"  "(" [Expr]  ")" ;
+Expr_LoadBe . Expr ::= "load_be" OpenParen IntVal "," Expr "," Expr CloseParen ;
+Expr_LoadLe . Expr ::= "load_le" OpenParen IntVal "," Expr "," Expr CloseParen ;
+
+Expr_ZeroExtend . Expr ::= "zero_extend" OpenParen IntVal "," Expr CloseParen ;
+Expr_SignExtend . Expr ::= "sign_extend" OpenParen IntVal "," Expr CloseParen ;
+Expr_Extract    . Expr ::= "extract" OpenParen IntVal "," IntVal "," Expr CloseParen ;
+Expr_Concat     . Expr ::= "bvconcat"  OpenParen [Expr]  CloseParen ;
+
+CaseCase . Case ::= Expr "->" Expr  ;
+CaseDefault . Case ::=  "_" "->" Expr ;
+separator Case "|" ;
+
+Expr_Match . Expr ::= "match" Expr "with" OpenParen [Case] CloseParen ;
+Expr_Cases . Expr ::= "cases" OpenParen [Case] CloseParen ;
 
 -- operators
 
@@ -217,16 +249,31 @@ rules BoolBinOp ::=  "booland" | "boolor" | "boolimplies" ;
 
 rules RequireTok ::= "require" | "requires" ;
 rules EnsureTok ::= "ensure" | "ensures" ;
+rules RelyTok ::= "rely" | "relies";
+rules GuarTok ::= "guarnatee" | "guarantees";
 
 FunSpec_Require . FunSpec ::= RequireTok Expr;
 FunSpec_Ensure . FunSpec ::= EnsureTok Expr;
+FunSpec_Rely . FunSpec ::= RelyTok Expr;
+FunSpec_Guar . FunSpec ::= GuarTok Expr;
+FunSpec_Captures . FunSpec ::= "captures" [GlobalVar];
+FunSpec_Modifies . FunSpec ::= "modifies" [GlobalVar];
+
+
+VarSpec_Classification . VarSpec ::= "classification" Expr;
+VarSpec_Empty . VarSpec ::= "";
+terminator VarSpec ";";
+
+
 FunSpec_Invariant . FunSpec ::= "invariant" BlockIdent Expr;
 
 ProgSpec_Rely . ProgSpec ::= "rely" Expr;
 ProgSpec_Guarantee . ProgSpec ::= "guarantee" Expr;
 
 terminator FunSpec ";";
-terminator ProgSpec ";";
+
+{- last semicolon terminates the prog definitino -}
+separator ProgSpec ";";
 
 
 

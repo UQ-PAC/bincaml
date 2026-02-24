@@ -8,31 +8,37 @@ and localIdent = LocalIdent of ((int * int) * string)
 and globalIdent = GlobalIdent of ((int * int) * string)
 and blockIdent = BlockIdent of ((int * int) * string)
 and procIdent = ProcIdent of ((int * int) * string)
+and openParen = OpenParen of ((int * int) * string)
+and closeParen = CloseParen of ((int * int) * string)
 and beginList = BeginList of ((int * int) * string)
 and endList = EndList of ((int * int) * string)
 and beginRec = BeginRec of ((int * int) * string)
 and endRec = EndRec of ((int * int) * string)
-and lambdaSep = LambdaSep of string
 and str = Str of string
 and integerHex = IntegerHex of ((int * int) * string)
 and integerDec = IntegerDec of ((int * int) * string)
 and moduleT =
    Module1 of decl list
 
+and lambdaSep =
+   LambdaSep1
+ | LambdaSep2
+
 and semicolons =
    Semicolons_Empty
  | Semicolons_Some of semicolons
 
 and decl =
-   Decl_Axiom of attribSet * expr
- | Decl_SharedMem of globalIdent * typeT
- | Decl_UnsharedMem of globalIdent * typeT
- | Decl_Var of globalIdent * typeT
- | Decl_UninterpFun of attribSet * globalIdent * typeT list * typeT
- | Decl_Fun of attribSet * globalIdent * params list * typeT * expr
+   Decl_Axiom of globalIdent * attribSet * expr
+ | Decl_SharedMem of globalIdent * typeT * varSpec
+ | Decl_UnsharedMem of globalIdent * typeT * varSpec
+ | Decl_Var of globalIdent * typeT * varSpec
+ | Decl_UninterpFun of globalIdent * attribSet * typeT
+ | Decl_Fun of globalIdent * attribSet * typeT * expr
+ | Decl_FunNoType of globalIdent * attribSet * expr
  | Decl_ProgEmpty of procIdent * attribSet
- | Decl_ProgWithSpec of procIdent * attribSet * beginList * progSpec list * endList
- | Decl_Proc of procIdent * params list * params list * attribSet * funSpec list * procDef
+ | Decl_ProgWithSpec of procIdent * attribSet * progSpec list
+ | Decl_Proc of procIdent * openParen * params list * closeParen * openParen * params list * closeParen * attribSet * funSpec list * procDef
 
 and procDef =
    ProcDef_Empty
@@ -55,6 +61,7 @@ and typeT =
  | TypeBoolType of boolType
  | TypeMapType of mapType
  | TypeBVType of bVType
+ | Type1 of openParen * typeT * closeParen
 
 and intVal =
    IntVal_Hex of integerHex
@@ -73,22 +80,24 @@ and assignment =
 and stmt =
    Stmt_Nop
  | Stmt_SingleAssign of assignment
- | Stmt_MultiAssign of assignment list
+ | Stmt_MultiAssign of openParen * assignment list * closeParen
  | Stmt_Load of lVar * endian * globalIdent * expr * intVal
  | Stmt_Store of endian * globalIdent * expr * expr * intVal
  | Stmt_Load_Var of lVar * endian * var * expr * intVal
  | Stmt_Store_Var of lVar * endian * var * expr * expr * intVal
- | Stmt_DirectCall of lVars * procIdent * callParams
+ | Stmt_DirectCall of lVars * procIdent * openParen * callParams * closeParen
  | Stmt_IndirectCall of expr
  | Stmt_Assume of expr
  | Stmt_Guard of expr
  | Stmt_Assert of expr
 
 and localVar =
-   LocalVar1 of localIdent * typeT
+   LocalTyped of localIdent * typeT
+ | LocalUntyped of localIdent
 
 and globalVar =
-   GlobalVar1 of globalIdent * typeT
+   GlobalTyped of globalIdent * typeT
+ | GlobalUntyped of globalIdent
 
 and var =
    VarLocalVar of localVar
@@ -99,9 +108,9 @@ and namedCallReturn =
 
 and lVars =
    LVars_Empty
- | LVars_LocalList of localVar list
- | LVars_List of lVar list
- | NamedLVars_List of namedCallReturn list
+ | LVars_LocalList of openParen * localVar list * closeParen
+ | LVars_List of openParen * lVar list * closeParen
+ | NamedLVars_List of openParen * namedCallReturn list * closeParen
 
 and namedCallArg =
    NamedCallArg1 of localIdent * expr
@@ -111,9 +120,9 @@ and callParams =
  | CallParams_Named of namedCallArg list
 
 and jump =
-   Jump_GoTo of blockIdent list
+   Jump_GoTo of openParen * blockIdent list * closeParen
  | Jump_Unreachable
- | Jump_Return of expr list
+ | Jump_Return of openParen * expr list * closeParen
  | Jump_ProcReturn
 
 and lVar =
@@ -130,11 +139,11 @@ and phiExpr =
    PhiExpr1 of blockIdent * var
 
 and phiAssign =
-   PhiAssign1 of lVar * phiExpr list
+   PhiAssign1 of lVar * openParen * phiExpr list * closeParen
 
 and block =
    Block_NoPhi of blockIdent * attribSet * beginList * stmtWithAttrib list * jumpWithAttrib * endList
- | Block_Phi of blockIdent * attribSet * beginList * phiAssign list * stmtWithAttrib list * jumpWithAttrib * endList
+ | Block_Phi of blockIdent * attribSet * beginList * openParen * phiAssign list * closeParen * stmtWithAttrib list * jumpWithAttrib * endList
 
 and attrKeyValue =
    AttrKeyValue1 of bIdent * attr
@@ -147,10 +156,15 @@ and attr =
    Attr_Map of beginRec * attrKeyValue list * semicolons * endRec
  | Attr_List of beginList * attr list * endList
  | Attr_Lit of value
+ | Attr_Expr of expr
  | Attr_Str of str
 
 and params =
    Params1 of localIdent * typeT
+
+and funParams =
+   FunParams1 of localIdent * typeT
+ | FunParams2 of openParen * localIdent * typeT * closeParen
 
 and value =
    Value_BV of bVVal
@@ -160,22 +174,33 @@ and value =
 
 and expr =
    Expr_Literal of value
+ | Expr_Paren of openParen * expr * closeParen
  | Expr_Local of localVar
  | Expr_Global of globalVar
- | Expr_Forall of lambdaDef
- | Expr_Exists of lambdaDef
- | Expr_Old of expr
- | Expr_FunctionOp of globalIdent * expr list
- | Expr_Binary of binOp * expr * expr
- | Expr_Assoc of boolBinOp * expr list
- | Expr_Unary of unOp * expr
- | Expr_ZeroExtend of intVal * expr
- | Expr_SignExtend of intVal * expr
- | Expr_Extract of intVal * intVal * expr
- | Expr_Concat of expr list
+ | Expr_Forall of attribSet * lambdaDef
+ | Expr_Exists of attribSet * lambdaDef
+ | Expr_Lambda of attribSet * lambdaDef
+ | Expr_Old of openParen * expr * closeParen
+ | Expr_FunctionOp of globalIdent * openParen * expr list * closeParen
+ | Expr_Apply of expr * expr
+ | Expr_Binary of binOp * openParen * expr * expr * closeParen
+ | Expr_Assoc of boolBinOp * openParen * expr list * closeParen
+ | Expr_Unary of unOp * openParen * expr * closeParen
+ | Expr_LoadBe of openParen * intVal * expr * expr * closeParen
+ | Expr_LoadLe of openParen * intVal * expr * expr * closeParen
+ | Expr_ZeroExtend of openParen * intVal * expr * closeParen
+ | Expr_SignExtend of openParen * intVal * expr * closeParen
+ | Expr_Extract of openParen * intVal * intVal * expr * closeParen
+ | Expr_Concat of openParen * expr list * closeParen
+ | Expr_Match of expr * openParen * case list * closeParen
+ | Expr_Cases of openParen * case list * closeParen
+
+and lParen =
+   LParenLocalVar of localVar
+ | LParen1 of openParen * localVar * closeParen
 
 and lambdaDef =
-   LambdaDef1 of localVar list * lambdaSep * expr
+   LambdaDef1 of lParen list * lambdaSep * expr
 
 and binOp =
    BinOpBVBinOp of bVBinOp
@@ -190,6 +215,12 @@ and unOp =
  | UnOp_boolnot
  | UnOp_intneg
  | UnOp_booltobv1
+ | UnOp_gamma
+ | UnOp_classification
+
+and case =
+   CaseCase of expr * expr
+ | CaseDefault of expr
 
 and eqOp =
    EqOp_eq
@@ -255,10 +286,26 @@ and ensureTok =
    EnsureTok_ensure
  | EnsureTok_ensures
 
+and relyTok =
+   RelyTok_rely
+ | RelyTok_relies
+
+and guarTok =
+   GuarTok_guarnatee
+ | GuarTok_guarantees
+
 and funSpec =
    FunSpec_Require of requireTok * expr
  | FunSpec_Ensure of ensureTok * expr
+ | FunSpec_Rely of relyTok * expr
+ | FunSpec_Guar of guarTok * expr
+ | FunSpec_Captures of globalVar list
+ | FunSpec_Modifies of globalVar list
  | FunSpec_Invariant of blockIdent * expr
+
+and varSpec =
+   VarSpec_Classification of expr
+ | VarSpec_Empty
 
 and progSpec =
    ProgSpec_Rely of expr

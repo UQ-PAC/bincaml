@@ -25,12 +25,50 @@ let show_stmt =
 
 let pp_stmt fmt s = Format.pp_print_string fmt (show_stmt s)
 
+type prog_spec = { rely : BasilExpr.t list; guarantee : BasilExpr.t list }
+type func_type = Axiom of e | Uninterpreted | Function of e
+
+type declaration =
+  | Function of {
+      binding : Var.t;
+      attrib : Expr.BasilExpr.t Attrib.attrib_map;
+      definition : func_type;
+    }  (** pure functions *)
+  | Variable of { binding : Var.t; attrib : Expr.BasilExpr.t Attrib.attrib_map }
+      (** mutable state *)
+
+let pretty_declaration d =
+  let open Containers_pp in
+  match d with
+  | Variable { binding } -> text @@ Var.to_decl_string_il binding
+  | Function { binding; attrib; definition = Axiom body } ->
+      text "axiom "
+      ^ text (Var.name binding)
+      ^ text " " ^ Expr.BasilExpr.pretty body
+  | Function { binding; attrib; definition = Uninterpreted } ->
+      text "val " ^ text (Var.to_string binding)
+  | Function { binding; attrib; definition = Function body } ->
+      text "let "
+      ^ text (Var.to_string binding)
+      ^ text " = "
+      ^ nest 2 (Expr.BasilExpr.pretty body)
+
+(*match definition with
+      | Some d -> 
+      let param, rt = Types.uncurry (Var.typ binding) in
+      let param = 
+      text "let " ^ text (Var.name binding) ^ text (Var.to_decl_string_il binding)
+      | None -> text @@ Var.to_decl_string_il binding)
+      *)
+
 type t = {
   modulename : string;
-  globals : Var.t Var.Decls.t;
+  globals : declaration StringMap.t;
   entry_proc : ID.t option;
   procs : proc ID.Map.t;
   proc_names : ID.generator;
+  attrib : e Attrib.attrib_map;
+  spec : prog_spec;
 }
 
 let proc g p = ID.Map.find p g.procs
@@ -41,6 +79,18 @@ let proc_pretty p =
   let show_expr e = BasilExpr.pretty e in
   Procedure.pretty show_lvar show_var show_expr p
 
+let global_vars prog =
+  StringMap.values prog.globals
+  |> Iter.filter_map (function
+    | Variable { binding } -> Some binding
+    | _ -> None)
+
+let global_constants prog =
+  StringMap.values prog.globals
+  |> Iter.filter_map (function
+    | Function { binding } -> Some binding
+    | _ -> None)
+
 let output_proc_pretty chan p =
   output_string chan @@ Containers_pp.Pretty.to_string ~width:80 (proc_pretty p)
 
@@ -48,8 +98,8 @@ let prog_pretty (p : t) =
   let open Containers_pp in
   let open Containers_pp.Infix in
   let globs =
-    Var.Decls.to_list p.globals
-    |> List.map (fun (n, v) -> text @@ Var.to_decl_string_il v)
+    StringMap.bindings p.globals
+    |> List.map (fun (n, v) -> pretty_declaration v)
   in
   let n =
     p.entry_proc
@@ -73,7 +123,12 @@ let pretty_to_chan chan (p : t) =
   Containers_pp.Pretty.to_format ~width:80 fmt p;
   Format.flush fmt ()
 
-let decl_global p = Var.Decls.add p.globals
+let decl_global ?(attrib = StringMap.empty) p v =
+  let decl = Variable { binding = v; attrib } in
+  { p with globals = StringMap.add (Var.name v) decl p.globals }
+
+let add_decl ?(attrib = StringMap.empty) p v decl =
+  { p with globals = StringMap.add (Var.name v) decl p.globals }
 
 let create_single_proc ?(name = "<module>") () =
   let proc_names = ID.make_gen () in
@@ -83,9 +138,11 @@ let create_single_proc ?(name = "<module>") () =
     {
       modulename = name;
       entry_proc = Some procname;
-      globals = Var.Decls.empty ();
+      globals = StringMap.empty;
       procs = ID.Map.singleton procname proc;
       proc_names;
+      attrib = StringMap.empty;
+      spec = { rely = []; guarantee = [] };
     }
   in
   (prog, proc)
@@ -95,9 +152,11 @@ let empty ?name () =
   {
     modulename;
     entry_proc = None;
-    globals = Var.Decls.empty ();
+    globals = StringMap.empty;
     procs = ID.Map.empty;
     proc_names = ID.make_gen ();
+    attrib = StringMap.empty;
+    spec = { rely = []; guarantee = [] };
   }
 
 module CallGraph = struct
