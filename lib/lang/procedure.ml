@@ -474,35 +474,42 @@ let iter_blocks_topo_rev p =
 
 let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
   let open Containers_pp in
-  let ml f v = if List.is_empty v then [] else [ f v ^ text ";" ] in
+  let ml f v = if List.is_empty v then [] else [ f v ] in
   nest 2
     (newline
     ^ append_nl
         (ml
            (fun x ->
              text "modifies "
-             ^ nest 2 (fill_map (text "," ^ newline) show_var x))
+             ^ nest 2 (fill_map (text "," ^ newline) show_var x)
+             ^ text ";"
+             )
            p.modifies_globs
         @ ml
             (fun x ->
               text "captures "
-              ^ nest 2 (fill_map (text "," ^ newline) show_var x))
+              ^ nest 2 (fill_map (text "," ^ newline) show_var x)
+              ^ text ";")
             p.captures_globs
         @ ml
             (fun x ->
-              append_nl (List.map (fun v -> text "requires " ^ show_expr v) x))
+              append_nl (List.map (fun v -> text "requires " ^ show_expr v
+            ^ text ";") x))
             p.requires
         @ ml
             (fun x ->
-              append_nl (List.map (fun v -> text "ensures " ^ show_expr v) x))
+              append_nl (List.map (fun v -> text "ensures " ^ show_expr v
+            ^ text ";") x))
             p.ensures
         @ ml
             (fun x ->
-              append_nl (List.map (fun v -> text "rely " ^ show_expr v) x))
+              append_nl (List.map (fun v -> text "rely " ^ show_expr v
+            ^ text ";") x))
             p.rely
         @ ml
             (fun x ->
-              append_nl (List.map (fun v -> text "guarantee " ^ show_expr v) x))
+              append_nl (List.map (fun v -> text "guarantee " ^ show_expr v
+            ^ text ";") x))
             p.guarantee))
 
 let pretty show_lvar show_var show_expr p =
