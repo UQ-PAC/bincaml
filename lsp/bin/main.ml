@@ -18,23 +18,29 @@
 module Lsp = Linol.Lsp
 
 (* type state_after_processing = Bincaml_lsp.Raw_tokens.raw_token list *)
-type state_after_processing = Bincaml_lsp.Raw_tokens.token_with_pos list
+type state_after_processing = {
+  contents : string;
+  mutable debug_highlight : bool;
+}
 
-let process_some_input_file (file_contents : string) : state_after_processing =
-  let lexbuf = Lexing.from_string ~with_positions:true file_contents in
+let iter_tokens st : 'a list =
+  let lexbuf = Lexing.from_string ~with_positions:true st.contents in
   Bincaml_lsp.Raw_tokens.extract_all_tokens lexbuf |> Iter.to_list
 
-let diagnostics (state : state_after_processing) : Lsp.Types.Diagnostic.t list =
-  state
-  |> List.map (fun (x : Bincaml_lsp.Raw_tokens.token_with_pos) ->
-      let pos (p : Lexing.position) =
-        Lsp.Types.Position.create ~character:(p.pos_cnum - p.pos_bol) ~line:(p.pos_lnum - 1)
-      in
-      let start = pos x.startpos in
-      let end_ = pos x.endpos in
-      let range = Lsp.Types.Range.create ~start ~end_ in
-      let str = x.str in
-      Lsp.Types.Diagnostic.create ~message:(`String str) ~range ())
+let process_some_input_file (contents : string) : state_after_processing =
+  { contents; debug_highlight = false }
+
+let to_diagnostic (x : Bincaml_lsp.Raw_tokens.token_with_pos) :
+    Lsp.Types.Diagnostic.t =
+  let pos (p : Lexing.position) =
+    Lsp.Types.Position.create ~character:(p.pos_cnum - p.pos_bol)
+      ~line:(p.pos_lnum - 1)
+  in
+  let start = pos x.startpos in
+  let end_ = pos x.endpos in
+  let range = Lsp.Types.Range.create ~start ~end_ in
+  let str = x.str in
+  Lsp.Types.Diagnostic.create ~message:(`String str) ~range ()
 
 (* Lsp server class
 
@@ -51,12 +57,13 @@ let diagnostics (state : state_after_processing) : Lsp.Types.Diagnostic.t list =
 *)
 class lsp_server =
   object (self)
-    inherit Linol_lwt.Jsonrpc2.server
+    inherit Linol_lwt.Jsonrpc2.server as super
 
     (* one env per document *)
     val buffers : (Lsp.Types.DocumentUri.t, state_after_processing) Hashtbl.t =
       Hashtbl.create 32
 
+    method get uri = Hashtbl.find buffers uri
     method spawn_query_handler f = Linol_lwt.spawn f
 
     (* We define here a helper method that will:
@@ -68,8 +75,7 @@ class lsp_server =
         (uri : Lsp.Types.DocumentUri.t) (contents : string) =
       let new_state = process_some_input_file contents in
       Hashtbl.replace buffers uri new_state;
-      let diags = diagnostics new_state in
-      notify_back#send_diagnostic diags
+      Lwt.return ()
 
     (* We now override the [on_notify_doc_did_open] method that will be called
        by the server each time a new document is opened. *)
@@ -87,13 +93,63 @@ class lsp_server =
     method on_notif_doc_did_close ~notify_back:_ d : unit Linol_lwt.t =
       Hashtbl.remove buffers d.uri;
       Linol_lwt.return ()
+
+    method! config_code_lens_options =
+      Some (Linol_lsp.Lsp.Types.CodeLensOptions.create ())
+
+    method toggle_highlight_command ~uri () =
+      Linol_lsp.Lsp.Types.Command.create ~command:"toggle-highlight"
+        ~title:"Toggle debug token highlighting"
+        ~arguments:[ Linol_lsp.Lsp.Types.DocumentUri.yojson_of_t uri ]
+        ()
+
+    method toggle_highlight_code_action ~uri () =
+      let open Linol_lsp.Lsp.Types.CodeActionKind in
+      Linol_lsp.Lsp.Types.CodeAction.create ~kind:Empty
+        ~command:(self#toggle_highlight_command ~uri ())
+        ~title:(self#toggle_highlight_command ~uri ()).title ()
+
+    method! config_list_commands = [ "toggle-highlight" ]
+    method! config_code_action_provider =
+      let open Linol_lsp.Lsp.Types.CodeActionKind in
+      `Bool true
+
+    method! on_req_execute_command ~notify_back ~id ~workDoneToken cmd args =
+      Logs.app (fun m -> m "execute");
+      match (cmd, args) with
+      | "toggle-highlight", Some [ uri ] ->
+          let uri = Linol_lsp.Lsp.Types.DocumentUri.t_of_yojson uri in
+          let st = self#get uri in
+          st.debug_highlight <- not st.debug_highlight;
+
+          notify_back#set_uri uri;
+          let open Lwt.Syntax in
+          let* diags =
+            if st.debug_highlight then
+              iter_tokens (self#get uri)
+              |> Lwt_list.map_p (fun x -> x |> to_diagnostic |> Lwt.return)
+            else Lwt.return []
+          in
+          let+ () = notify_back#send_diagnostic diags in
+          Yojson.Safe.(`Null)
+      | _ ->
+          super#on_req_execute_command ~notify_back ~id ~workDoneToken cmd args
+
+    method! on_req_code_action ~notify_back ~id params =
+      Logs.app (fun m -> m "reqcodeaction");
+      let uri = params.textDocument.uri in
+      Lwt.return
+        (Some [ `CodeAction (self#toggle_highlight_code_action ~uri ()) ])
+
+    (* method! on_req_code_lens_resolve ~notify_back ~id code_lens = *)
+    (*   Lwt.return code_lens *)
   end
 
 (* Main code
    This is the code that creates an instance of the lsp server class
    and runs it as a task. *)
 let run () =
-  Logs.set_level (Some Logs.Debug);
+  Logs.set_level (Some Logs.Info);
   Logs.set_reporter (Bincaml_lsp.Logs.file_reporter ());
   (* Logs.set_reporter (Bincaml_lsp.Logs.lwt_reporter ()); *)
   Logs.info (fun m -> m "bincaml_lsp starting");
@@ -101,7 +157,9 @@ let run () =
   Logs.app (fun m -> m "asd2");
 
   let s = new lsp_server in
-  let server = Linol_lwt.Jsonrpc2.create_stdio ~env:() s in
+  let server =
+    Linol_lwt.Jsonrpc2.create_stdio ~env:() (s :> Linol_lwt.Jsonrpc2.server)
+  in
   let task =
     let shutdown () = s#get_status = `ReceivedExit in
     Linol_lwt.Jsonrpc2.run ~shutdown server

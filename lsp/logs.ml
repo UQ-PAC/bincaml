@@ -24,7 +24,7 @@ let lwt_reporter () =
   { Deps.Logs.report = report }
 
 let file_reporter () =
-  let app = Format.formatter_of_out_channel (open_out "bincaml_lsp.out") in
-  let dst = Format.formatter_of_out_channel (open_out "bincaml_lsp.err") in
+  let app = Format.formatter_of_out_channel (open_out "/home/rina/progs/obasil/lsp/bincaml_lsp.out") in
+  let dst = Format.formatter_of_out_channel (open_out "/home/rina/progs/obasil/lsp/bincaml_lsp.err") in
   Deps.Logs.format_reporter ~app ~dst ()
 
