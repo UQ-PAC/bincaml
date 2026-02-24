@@ -48,7 +48,7 @@ let simplify_concat
            (List.map (fst %> fix) tl) ->
       let count = n + List.length tl in
       replace [%here]
-        (BasilExpr.zero_extend ~n_prefix_bits:count (fix @@ fst arg2))
+        (BasilExpr.sign_extend ~n_prefix_bits:count (fix @@ fst arg2))
   | UnaryExpr
       { op = `Extract (1, 0); arg = BinaryExpr { op = `BVLSHR; arg1; arg2 }, _ }
     ->
