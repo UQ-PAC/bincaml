@@ -204,8 +204,9 @@ to install the [highlights.scm] yourself.
 
 The full steps are:
 {ol
-  {- Checkout the bincaml repository. }
-  {- Inside the tree-sitter subfolder, run [tree-sitter generate]. }
+  {- Checkout the bincaml repository. Pointing to the online repository will not work
+      because it doesn't have src/parser.c and Helix expects this file to be pre-build. }
+  {- Inside the tree-sitter subfolder, run [tree-sitter generate] to generate src/parser.c. }
   {- Add this to your Helix config to configure Tree-sitter and the file type. This can be local to this repository.
      
     {v
