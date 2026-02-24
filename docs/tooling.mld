@@ -37,10 +37,113 @@ from it needs manual work.
       and feel free to work on this if you want :) }
 }
 
-{2 Checklist}
-Tree-sitter is actually a complicated pipeline of steps, each of which can fail in dif
+{2:trouble Troubleshooting checklist}
+Tree-sitter is a complicated pipeline of steps, each of which can fail
+in exciting ways. This table tries to cover each of the steps in order and
+describes some likely problems in each step.
 
-{2 Editor setup: Neovim}
+{table
+  {tr
+    {th Step}
+    {th Possible issues and symptoms}
+    {th Remedy}
+    }
+  {tr
+    {td 1. Editor configuration}
+    {td {b Invalid editor or plugin configuration:}
+    Errors when trying to install and errors are missing fields or unexpected type,
+        e.g., Neovim Lua error like "install.lua:93: files: expected table, got nil". }
+    {td Double-check configuration with official documentation. For nvim-treesitter,
+        check you are using the right instructions for main vs master versions (see {!section:neovim}).}
+    }
+  {tr
+    {td 2. Fetch grammar}
+    {td {b Cannot find grammar:}
+      Fails to find [grammar.js] or [tree-sitter.json]. }
+    {td Make sure the configured URL is pointing to the right place, noting that the grammar
+        lives in a subfolder of the bincaml repo. }
+    }
+  {tr
+    {td 3. Generate C files from grammar}
+    {td {b Failure to generate C files:}
+      Possibly due to command not found. 
+    }
+    {td Make sure the [tree-sitter] is command is installed. Make sure the editor is
+        {i not} configured to use NPM for this grammar, as it's not needed. }
+    }
+  {tr
+    {td }
+    {td {b Attempt to use pre-built grammar.json:}
+      Errors mentioning "grammar.json not found".
+    }
+    {td This grammar does not come with a pre-built grammar.json, and it should
+        be generated from grammar.js. Make sure your editor is configured as such.
+        If no such option exists, you might need to manually
+        checkout the repo and run [tree-sitter generate] inside the [tree-sitter/] subfolder. }
+    }
+  {tr
+    {td 4. Build C files into executable parser}
+    {td {b C files have not been generated:}
+    In Helix, errors like "Failed to compare source and binary timestamps. Error: 1 grammars failed to build".
+    In Neovim, errors like "src/parser.c: No such file or directory".
+    }
+    {td Helix does not auto-generate the C files. For Helix, you will need to checkout the repo and
+        run [tree-sitter generate] manually, inside the [tree-sitter/] subfolder. 
+
+        For Neovim, check the tree-sitter configuration and make sure that relevant options are set to
+        enable generating from grammar. }
+    }
+  {tr
+    {td }
+    {td {b Using incorrect C files:}
+    Similar errors to above, but instead mentioning "src/scanner.c" not found or "no input files".
+    }
+    {td If your editor has an option to configure "files", make sure that only "src/parser.c" is
+        being used and no other files. This grammar does not use a custom scanner.c. }
+    }
+  {tr
+    {td 5. Editor detects file type}
+    {td {b Misconfigured file type:}
+        If your editor does not detect Basil IR as a file type. Usually, if it is detected, the
+        file type is shown in the status bar. }
+    {td Add a Basil IR file type to your editor, with at least the [.il] file extension.
+        If needed, associate it with the tree-sitter grammar configuration. }
+    }
+  {tr
+    {td 6. Editor loads tree-sitter library}
+    {td {b Undefined symbol errors:}
+        Errors like [basil_il.so: undefined symbol: tree_sitter_basil_il], possibly
+        with a different [.so] file or different symbol name. }
+    {td The grammar {b only} exports the symbol [tree_sitter_basilir]. Editors will 
+        use the configured grammar name to determine the symbol name to load. 
+        Make sure the name of the grammar in your editor is set to [basilir]
+        (no underscores and "ir" instead of "il"). }
+    }
+  {tr
+    {td 7. Editor applies highlighting rules}
+    {td {b Highlighting rules not installed:}
+        If the grammar is loaded and {i no} highlighting is visible, this case applies.
+
+        In Neovim, you can check whether the grammar is loaded by using [:InspectTree] inside a [.il].
+        This will show the parsed syntax tree of the file, if the grammar is loaded.
+        In Helix, you can use [hx --health languages] and observe the language exists but has a cross in
+        the highlights column. }
+    {td The repository has the highlight queries in the standard location, [queries/highlights.scm].
+        Despite this, some editors (like Helix) need the highlights file in a central location.
+        Check your editor documentation and copy or symlink the highlights.scm if needed. }
+    }
+  {tr
+    {td }
+    {td {b Highlighting rules incomplete:}
+        This applies if {i some} highlighting is visible, but some things are not highlighted. }
+    {td The [highlights.scm] may be missing rules for a particular token, or your editor may use
+        different highlighting groups. Check the [highlights.scm] for the unhighlighted token
+        and see if it has a rule. Add or modify the rule and submit a PR! }
+    }
+}
+
+
+{2:neovim Editor setup: Neovim}
 
 Neovim has {{: https://neovim.io/doc/user/treesitter.html} native support for Treesitter},
 but it needs you to manually build the shared library and place it into the right place.
@@ -91,3 +194,46 @@ return {
   end,
 }
 v}
+
+{2:neovim Editor setup: Helix}
+
+See {{: https://docs.helix-editor.com/guides/adding_languages.html} the
+documentation for adding a new language}. In Helix, you need to make sure to do
+some manual steps: you have to [tree-sitter generate] yourself, and you have
+to install the [highlights.scm] yourself.
+
+The full steps are:
+{ol
+  {- Checkout the bincaml repository. }
+  {- Inside the tree-sitter subfolder, run [tree-sitter generate]. }
+  {- Add this to your Helix config to configure Tree-sitter and the file type. This can be local to this repository.
+     
+    {v
+    [[language]]
+    name = "basil-il"
+    file-types = ["il"]
+    scope = "source.il"
+    grammar = "basilir"
+
+    # for language server:
+    # language-servers = ["basil-il-lsp"]
+    
+    # for language server:
+    # [language-server.basil-il-lsp]
+    # command = "basilLSP"
+    
+    [[grammar]]
+    name = "basilir"
+    source.path = "/path/to/bincaml/tree-sitter"
+    v}
+    }
+  {- Copy or link the highlights.scm from [tree-sitter/queries/highlights.scm] to
+     [~/.config/helix/runtime/queries/LANGUAGE/highlights.scm], where LANGUAGE is
+     the name of the language defined above ([basil-il] in this example).
+  }
+  {- Run [hx -g fetch] and [hx -g build].}
+}
+
+You can check that it is installed with [hx --health languages]. If things are
+not working as expected, check the log and start the {!trouble}.
+
