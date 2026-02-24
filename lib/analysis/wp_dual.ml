@@ -4,7 +4,11 @@ open Lang
 open Common
 open Expr
 
-module Domain = struct
+module type RequiresAnnotation = sig
+  val requires : ID.t -> BasilExpr.t list
+end
+
+module Domain (S : RequiresAnnotation) = struct
   let name = "WP dual domain"
 
   type t = Program.e
@@ -18,43 +22,48 @@ module Domain = struct
   let e_true = BasilExpr.boolconst true
   let e_false = BasilExpr.boolconst false
 
+  (** Custom simplifier for this domain *)
   let simplify =
     let open AbstractExpr in
-    BasilExpr.rewrite ~rw_fun:(function
-      | ApplyIntrin { op; args = [ l ] } -> Some l
-      | ApplyIntrin { attrib; op = `OR; args }
-        when List.mem ~eq:BasilExpr.equal e_false args ->
-          Some
-            (BasilExpr.fix
-               (ApplyIntrin
-                  {
-                    attrib;
-                    op = `OR;
-                    args = List.remove ~eq:BasilExpr.equal ~key:e_false args;
-                  }))
-      | ApplyIntrin { attrib; op = `AND; args }
-        when List.mem ~eq:BasilExpr.equal e_true args ->
-          Some
-            (BasilExpr.fix
-               (ApplyIntrin
-                  {
-                    attrib;
-                    op = `OR;
-                    args = List.remove ~eq:BasilExpr.equal ~key:e_true args;
-                  }))
-      | ApplyIntrin { op = `OR; args }
-        when List.mem ~eq:BasilExpr.equal e_true args ->
-          Some e_true
-      | ApplyIntrin { op = `AND; args }
-        when List.mem ~eq:BasilExpr.equal e_false args ->
-          Some e_false
-      | ApplyIntrin { op = `OR; args = [] } -> Some e_false
-      | ApplyIntrin { op = `AND; args = [] } -> Some e_true
-      | BinaryExpr { op = `EQ; arg1; arg2 } when BasilExpr.equal arg1 arg2 ->
-          Some e_true
-      | UnaryExpr { op = `BoolNOT; arg } when BasilExpr.equal arg e_true ->
-          Some e_false
-      | _ -> None)
+    let rw =
+      BasilExpr.rewrite ~rw_fun:(function
+        | ApplyIntrin { op; args = [ l ] } -> Some l
+        | ApplyIntrin { attrib; op = `OR; args }
+          when List.mem ~eq:BasilExpr.equal e_false args ->
+            Some
+              (BasilExpr.fix
+                 (ApplyIntrin
+                    {
+                      attrib;
+                      op = `OR;
+                      args = List.remove ~eq:BasilExpr.equal ~key:e_false args;
+                    }))
+        | ApplyIntrin { attrib; op = `AND; args }
+          when List.mem ~eq:BasilExpr.equal e_true args ->
+            Some
+              (BasilExpr.fix
+                 (ApplyIntrin
+                    {
+                      attrib;
+                      op = `OR;
+                      args = List.remove ~eq:BasilExpr.equal ~key:e_true args;
+                    }))
+        | ApplyIntrin { op = `OR; args }
+          when List.mem ~eq:BasilExpr.equal e_true args ->
+            Some e_true
+        | ApplyIntrin { op = `AND; args }
+          when List.mem ~eq:BasilExpr.equal e_false args ->
+            Some e_false
+        | ApplyIntrin { op = `OR; args = [] } -> Some e_false
+        | ApplyIntrin { op = `AND; args = [] } -> Some e_true
+        | BinaryExpr { op = `EQ; arg1; arg2 } when BasilExpr.equal arg1 arg2 ->
+            Some e_true
+        | UnaryExpr { op = `BoolNOT; arg } when BasilExpr.equal arg e_true ->
+            Some e_false
+        | _ -> None)
+      (* ummm this was needed to collapse empty ors *)
+    in
+    rw % rw
 
   let join a b = BasilExpr.applyintrin ~op:`OR [ a; b ] |> simplify
   let widening a b = top
@@ -86,11 +95,17 @@ module Domain = struct
         (if branch then BasilExpr.applyintrin ~op:`OR [ p; low_expr body ]
          else p)
         |> simplify
-    | Instr_IndirectCall _ | Instr_Call _ | Instr_IntrinCall _ -> top
+    | Instr_Call { procid } ->
+        BasilExpr.applyintrin ~op:`AND (p :: S.requires procid)
+    | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
     | _ -> p
 
   (** Encode an abstract state as a predicate *)
   let to_pred (p : t) = BasilExpr.boolnot p
 end
 
-module Analysis = Intra_analysis.Backwards (Domain)
+module IntraDomain = Domain (struct
+  let requires = const []
+end)
+
+module IntraAnalysis = Intra_analysis.Backwards (IntraDomain)
