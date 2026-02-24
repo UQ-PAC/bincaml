@@ -11,4 +11,5 @@
   typepass.sexp
   basicssa.sexp
   ../../bin/main.exe
-  roundtrip.sexp))
+  roundtrip.sexp
+  concat.il))
