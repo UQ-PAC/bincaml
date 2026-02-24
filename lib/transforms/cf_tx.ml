@@ -34,28 +34,36 @@ let to_smt (r : Expr.BasilExpr.rwinfo) =
   let smt = snd @@ SMTLib2.assert_bexpr cexpr SMTLib2.empty in
   smt |> SMTLib2.to_sexp ~set_logic:false
 
-let online_check visit (solver : Bincaml_util.Solver.solver)
+let online_check visit (solver : Bincaml_util.Smt.Solver.t)
     (r : Expr.BasilExpr.rwinfo) =
-  let open Bincaml_util in
-  let _ = solver.command (Solver.push 1) in
-  to_smt r |> Iter.iter (fun i -> ignore @@ solver.command i);
+  let open Bincaml_util.Smt in
+  let _ = Solver.push solver in
+  to_smt r |> Iter.iter (fun i -> ignore @@ Solver.add_command solver i);
   let res : Solver.result = Solver.check solver in
   (match res with
   | Sat ->
       let from =
-        Solver.get_expr solver (fst @@ Expr_smt.SMTLib2.of_bexpr r.from)
+        Solver.eval_expr solver (fst @@ Expr_smt.SMTLib2.of_bexpr r.from)
       in
       let into =
-        Solver.get_expr solver (fst @@ Expr_smt.SMTLib2.of_bexpr r.into)
+        Solver.eval_expr solver (fst @@ Expr_smt.SMTLib2.of_bexpr r.into)
       in
       visit (Some (from, into)) r
   | Unsat -> ()
   | Unknown -> visit None r);
-  let _ = solver.command (Solver.pop 1) in
+  let _ = Solver.pop solver in
   ()
 
-let online_check_all visit rws =
-  let solver = Bincaml_util.Solver.new_solver Bincaml_util.Solver.cvc5 in
+let online_check_all ?(debug = false) visit rws =
+  let solver =
+    Bincaml_util.Smt.Solver.create
+      {
+        Bincaml_util.Smt.Config.cvc5 with
+        log =
+          (if debug then Bincaml_util.Smt.Config.printf_log
+           else Bincaml_util.Smt.Config.quiet_log);
+      }
+  in
   List.iter (online_check visit solver) rws
 
 let print_error model (rw : Expr.BasilExpr.rwinfo) =
@@ -85,10 +93,16 @@ let write_smt_checks ls fname =
 
 let simplify_prog_with_smt_check x =
   let rewrites = ref [] in
+  let failures = ref [] in
   let visit (x : Expr.BasilExpr.rwinfo) =
     rewrites := x :: !rewrites;
     ()
   in
   let prog = simplify_prog_exprs ~visit x in
-  online_check_all print_error !rewrites;
+  let verror m e =
+    failures := e :: !failures;
+    print_error m e
+  in
+  online_check_all verror !rewrites;
+  if not @@ List.is_empty !failures then raise (Failure "rewrite error");
   prog

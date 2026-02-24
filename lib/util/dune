@@ -10,7 +10,7 @@
   types
   bitvec
   zint
-  solver
+  smt
   reverse_graph
   recursionscheme)
  (libraries
