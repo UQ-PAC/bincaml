@@ -1,6 +1,6 @@
 (cram
  (deps
-   expr_smt_check.sexp
+  expr_smt_check.sexp
   ../../examples/irreducible_loop_1.il
   ../../examples/cat.il
   ../../examples/cntlm-output.il
