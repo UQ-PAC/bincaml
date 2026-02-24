@@ -2,7 +2,7 @@
  (public_name bincaml.transforms)
  (name transforms)
  (flags -w -27)
- (modules ssa cf_tx livevars cleanup_cfg ide may_read_uninit type_check)
+ (modules ssa cf_tx livevars cleanup_cfg ide may_read_uninit type_check lambda_lifting)
  (libraries
   bincaml.analysis
   patricia-tree

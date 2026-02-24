@@ -206,6 +206,11 @@ module PassManager = struct
            files";
       };
       remove_unused;
+      {
+        name = "lambda-lifting";
+        apply = Prog Transforms.Lambda_lifting.transform;
+        doc = "Replaces global variables with explicit parameters";
+      };
     ]
 
   let print_passes =
