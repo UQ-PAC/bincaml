@@ -3,22 +3,15 @@ open Lang
 open Common
 open Analysis
 
+type summary = {
+  requires : Expr.BasilExpr.t list;
+  ensures : Expr.BasilExpr.t list;
+}
+
 module type FunctionSummaryAnnotation = sig
   val requires : ID.t -> Expr.BasilExpr.t list
   val ensures : ID.t -> Expr.BasilExpr.t list
 end
-
-let wp_dual_requires (module S : FunctionSummaryAnnotation)
-    (proc : Program.proc) =
-  let module Domain = Wp_dual.Domain (S) in
-  let module Analysis = Intra_analysis.Backwards (Domain) in
-  let result =
-    Analysis.analyse
-      ~init:(fun _ -> Expr.BasilExpr.boolconst false)
-      ~widening_set:Graph.ChaoticIteration.FromWto ~widening_delay:5 proc
-  in
-  Analysis.A.M.find_opt Procedure.Vert.Entry result
-  |> Option.map Domain.to_pred |> Option.to_list
 
 (** `redundant p ps` returns true if the conjunction of `p :: ps` is equivalent
     to that of `ps`. *)
@@ -38,23 +31,42 @@ let redundant (solver : Bincaml_util.Smt.Solver.t) p ps =
   let _ = Solver.pop solver in
   match res with Unsat -> true | Sat -> false | Unknown -> false
 
-let annotate_proc (solver : Bincaml_util.Smt.Solver.t)
-    (s : (module FunctionSummaryAnnotation)) (proc : Program.proc) =
-  let r = wp_dual_requires s proc in
+let wp_dual_requires (module S : FunctionSummaryAnnotation)
+    (proc : Program.proc) =
+  let module Domain = Wp_dual.Domain (S) in
+  let module Analysis = Intra_analysis.Backwards (Domain) in
+  let result =
+    Analysis.analyse
+      ~init:(fun _ -> Expr.BasilExpr.boolconst false)
+      ~widening_set:Graph.ChaoticIteration.FromWto ~widening_delay:5 proc
+  in
+  Analysis.A.M.find_opt Procedure.Vert.Entry result
+  |> Option.map Domain.to_pred |> Option.to_list
+
+let new_summary (solver : Bincaml_util.Smt.Solver.t)
+    (module S : FunctionSummaryAnnotation) (proc : Program.proc) =
   (* TODO implement a sample ensures clause generator and some sort of analysis
      pass runner *)
-  List.fold_left
-    (fun proc r ->
-      let spec = Procedure.specification proc in
-      let requires =
-        if redundant solver r spec.requires then spec.requires
-        else r :: spec.requires
-      in
-      let spec = { spec with requires } in
-      Procedure.set_specification proc spec)
-    proc r
+  let cur_req = S.requires (Procedure.id proc) in
+  let requires =
+    wp_dual_requires (module S) proc
+    |> List.fold_left
+         (fun cur_req r ->
+           if redundant solver r cur_req then cur_req else r :: cur_req)
+         cur_req
+  in
+  { requires; ensures = S.ensures (Procedure.id proc) }
 
-let transform =
+let annotate_proc (solver : Bincaml_util.Smt.Solver.t)
+    (s : (module FunctionSummaryAnnotation)) (proc : Program.proc) =
+  let summary = new_summary solver s proc in
+  let spec = Procedure.specification proc in
+  let spec =
+    { spec with requires = summary.requires; ensures = summary.ensures }
+  in
+  Procedure.set_specification proc spec
+
+let transform proc =
   let solver =
     Bincaml_util.Smt.Solver.create
       {
@@ -64,37 +76,72 @@ let transform =
   in
   annotate_proc solver
     (module struct
-      let requires _ = []
-      let ensures _ = []
+      let requires id =
+        if ID.equal id (Procedure.id proc) then
+          (Procedure.specification proc).requires
+        else []
+
+      let ensures id =
+        if ID.equal id (Procedure.id proc) then
+          (Procedure.specification proc).ensures
+        else []
     end : FunctionSummaryAnnotation)
+    proc
 
-let annotate_component (solver : Bincaml_util.Smt.Solver.t) _g
-    (prog : Program.t) component =
-  (* TODO will want to use an smt solver to perform leq checks then do a data
-       flow analysis on the component, but for now can just do a linear pass *)
-  let open Program.CallGraph.Vert in
+let annotate_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
+    component =
   let procs = prog.procs in
-  let procs =
-    List.fold_left
-      (fun procs -> function
-        | ProcBegin pid ->
-            let proc = ID.Map.find pid procs in
-            let proc' =
-              annotate_proc solver
-                (module struct
-                  let requires id =
-                    ID.Map.find id procs |> Procedure.specification |> fun s ->
-                    s.requires
+  let component =
+    List.filter_map
+      (function Program.CallGraph.Vert.ProcBegin pid -> Some pid | _ -> None)
+      component
+    |> ID.Set.of_list
+  in
+  let module Domain = struct
+    type property = summary
 
-                  let ensures id =
-                    ID.Map.find id procs |> Procedure.specification |> fun s ->
-                    s.ensures
-                end : FunctionSummaryAnnotation)
-                proc
-            in
-            ID.Map.add (Procedure.id proc) proc' procs
-        | _ -> procs)
-      procs component
+    let bottom = { requires = []; ensures = [] }
+
+    let equal a b =
+      List.equal Expr.BasilExpr.equal a.requires b.requires
+      && List.equal Expr.BasilExpr.equal a.ensures b.ensures
+
+    let is_maximal _ = false
+  end in
+  let module FixSummaries = Fix.Fix.ForHashedType (ID) (Domain) in
+  let eqs (pid : ID.t) (vals : FixSummaries.valuation) =
+    let annotations =
+      (module struct
+        (* TODO redundant requires are still added, see cntlm fmtfdinit
+           I suspect this comes from these annotations containing redundancy maybe? *)
+        let requires id =
+          List.append
+            ( ID.Map.find id procs |> Procedure.specification |> fun s ->
+              s.requires )
+            (vals id).requires
+
+        let ensures id =
+          List.append
+            ( ID.Map.find id procs |> Procedure.specification |> fun s ->
+              s.ensures )
+            (vals id).ensures
+      end : FunctionSummaryAnnotation)
+    in
+    new_summary solver annotations (ID.Map.find pid procs)
+  in
+  let sol = FixSummaries.lfp eqs in
+  let procs =
+    ID.Set.fold
+      (fun pid procs ->
+        let proc = ID.Map.find pid procs in
+        let spec = Procedure.specification proc in
+        let sum = sol pid in
+        let spec =
+          { spec with requires = sum.requires; ensures = sum.ensures }
+        in
+        let proc' = Procedure.set_specification proc spec in
+        ID.Map.add pid proc' procs)
+      component procs
   in
   { prog with procs }
 
