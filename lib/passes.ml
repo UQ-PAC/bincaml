@@ -125,12 +125,12 @@ module PassManager = struct
         Proc
           (fun p ->
             let r = Analysis.Sva.analyse p in
-            Analysis.Sva.Analysis.print_dot
-              (Format.of_chan stdout) p r;
+            (* Analysis.Sva.Analysis.print_dot *)
+            (* (Format.of_chan stdout) p r; *)
             p);
-      doc =
-        "Runs symbolic value analysis and prints stuff out after";
+      doc = "Runs symbolic value analysis and prints stuff out after";
     }
+
   let remove_unused =
     {
       name = "remove-unused-decls";

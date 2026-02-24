@@ -1,4 +1,8 @@
-(** SVA analysis *)
+(*
+  SVA analysis
+    - Based off of the DSA paper
+      the first iteration I believe as newer one have had the SVA sections reduced
+*)
 
 open Lang
 open Containers
@@ -12,6 +16,9 @@ open Wrapped_intervals
 
     Deal with placeholders needing to store operations on them
       for now having them as Top is sound and ok but reduces possible information
+
+      IDE pass should remove most of the placeholders but the load stuff is still
+       there
 *)
 
 module SymBase = struct
@@ -83,7 +90,6 @@ module SVAAbstraction = struct
   (* SymBaseMap.singleton Constant @@ eval_const op rt *)
 
   let eval_unop (op : Lang.Ops.AllOps.unary) (a, t) rt =
-    (* print_endline @@ Lang.Ops.AllOps.show_unary op; *)
     SymAddrSetLattice.mapi
       (fun sb1 vs1 ->
         match sb1 with
