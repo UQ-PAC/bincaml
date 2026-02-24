@@ -110,9 +110,7 @@ class lsp_server =
         ~title:(self#toggle_highlight_command ~uri ()).title ()
 
     method! config_list_commands = [ "toggle-highlight" ]
-    method! config_code_action_provider =
-      let open Linol_lsp.Lsp.Types.CodeActionKind in
-      `Bool true
+    method! config_code_action_provider = `Bool true
 
     method! on_req_execute_command ~notify_back ~id ~workDoneToken cmd args =
       Logs.app (fun m -> m "execute");
