@@ -195,7 +195,7 @@ return {
 }
 v}
 
-{2:neovim Editor setup: Helix}
+{2 Editor setup: Helix}
 
 See {{: https://docs.helix-editor.com/guides/adding_languages.html} the
 documentation for adding a new language}. In Helix, you need to make sure to do
