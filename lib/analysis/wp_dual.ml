@@ -60,6 +60,17 @@ module Domain (S : RequiresAnnotation) = struct
             Some e_true
         | UnaryExpr { op = `BoolNOT; arg } when BasilExpr.equal arg e_true ->
             Some e_false
+        | UnaryExpr { attrib; op = `Gamma; arg } ->
+            Some
+              (BasilExpr.fix
+                 (ApplyIntrin
+                    {
+                      attrib;
+                      op = `OR;
+                      args =
+                        BasilExpr.free_vars arg |> VarSet.to_list
+                        |> List.map (BasilExpr.unexp ~op:`Gamma % BasilExpr.rvar);
+                    }))
         | _ -> None)
       (* ummm this was needed to collapse empty ors *)
     in
@@ -88,6 +99,8 @@ module Domain (S : RequiresAnnotation) = struct
     | Instr_Load l -> top
     | Instr_Assert { body } -> join p (BasilExpr.unexp ~op:`BoolNOT body)
     | Instr_Assume { body; branch } ->
+        (* NOTE: if security conditions are added into the ir with a transform
+           then this match case is incorrect and should be ignored *)
         let p =
           BasilExpr.applyintrin ~op:`AND
             [ p; BasilExpr.unexp ~op:`BoolNOT body ]
@@ -101,7 +114,9 @@ module Domain (S : RequiresAnnotation) = struct
     | _ -> p
 
   (** Encode an abstract state as a predicate *)
-  let to_pred (p : t) = BasilExpr.boolnot p
+  (* We use the Algsimp simplifier as a big simplifier pass at the end to make
+     cleaner summaries. It may be worth using an external smt simplifier *)
+  let to_pred = Algsimp.alg_simp_rewriter % BasilExpr.boolnot
 end
 
 module IntraDomain = Domain (struct
