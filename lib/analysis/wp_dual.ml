@@ -25,12 +25,13 @@ module Domain (S : RequiresAnnotation) = struct
   (** Custom simplifier for this domain *)
   let simplify =
     let open AbstractExpr in
+    let open BasilExpr in
     let rw =
       BasilExpr.rewrite ~rw_fun:(function
-        | ApplyIntrin { op; args = [ l ] } -> Some l
+        | ApplyIntrin { op; args = [ l ] } -> replace [%here] l
         | ApplyIntrin { attrib; op = `OR; args }
           when List.mem ~eq:BasilExpr.equal e_false args ->
-            Some
+            replace [%here]
               (BasilExpr.fix
                  (ApplyIntrin
                     {
@@ -40,7 +41,7 @@ module Domain (S : RequiresAnnotation) = struct
                     }))
         | ApplyIntrin { attrib; op = `AND; args }
           when List.mem ~eq:BasilExpr.equal e_true args ->
-            Some
+            replace [%here]
               (BasilExpr.fix
                  (ApplyIntrin
                     {
@@ -50,18 +51,18 @@ module Domain (S : RequiresAnnotation) = struct
                     }))
         | ApplyIntrin { op = `OR; args }
           when List.mem ~eq:BasilExpr.equal e_true args ->
-            Some e_true
+            replace [%here] e_true
         | ApplyIntrin { op = `AND; args }
           when List.mem ~eq:BasilExpr.equal e_false args ->
-            Some e_false
-        | ApplyIntrin { op = `OR; args = [] } -> Some e_false
-        | ApplyIntrin { op = `AND; args = [] } -> Some e_true
+            replace [%here] e_false
+        | ApplyIntrin { op = `OR; args = [] } -> replace [%here] e_false
+        | ApplyIntrin { op = `AND; args = [] } -> replace [%here] e_true
         | BinaryExpr { op = `EQ; arg1; arg2 } when BasilExpr.equal arg1 arg2 ->
-            Some e_true
+            replace [%here] e_true
         | UnaryExpr { op = `BoolNOT; arg } when BasilExpr.equal arg e_true ->
-            Some e_false
+            replace [%here] e_false
         | UnaryExpr { attrib; op = `Gamma; arg } ->
-            Some
+            replace [%here]
               (BasilExpr.fix
                  (ApplyIntrin
                     {
@@ -114,9 +115,9 @@ module Domain (S : RequiresAnnotation) = struct
     | _ -> p
 
   (** Encode an abstract state as a predicate *)
+  let to_pred = Algsimp.alg_simp_rewriter % BasilExpr.boolnot
   (* We use the Algsimp simplifier as a big simplifier pass at the end to make
      cleaner summaries. It may be worth using an external smt simplifier *)
-  let to_pred = Algsimp.alg_simp_rewriter % BasilExpr.boolnot
 end
 
 module IntraDomain = Domain (struct
