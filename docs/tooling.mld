@@ -37,7 +37,10 @@ from it needs manual work.
       and feel free to work on this if you want :) }
 }
 
-{2 Neovim}
+{2 Checklist}
+Tree-sitter is actually a complicated pipeline of steps, each of which can fail in dif
+
+{2 Editor setup: Neovim}
 
 Neovim has {{: https://neovim.io/doc/user/treesitter.html} native support for Treesitter},
 but it needs you to manually build the shared library and place it into the right place.
@@ -77,6 +80,9 @@ return {
     parser_config.basilir = {
       install_info = {
         url = "~/progs/obasil/tree-sitter",
+        files = {"src/parser.c"},
+        generate_requires_npm = false,
+        requires_generate_from_grammar = true,
       },
       filetype = "basilir",
     }
