@@ -1,7 +1,7 @@
 
 Run on basic irreducible loop example
 
-  $ ../../bin/main.exe script basicssa.sexp
+  $ bincaml script basicssa.sexp
 
   $ cat before.il
   var $CF:bv1;

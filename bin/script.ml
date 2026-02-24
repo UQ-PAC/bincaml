@@ -31,13 +31,13 @@ let init_st = { prog = None; line = 0 }
 let get_prog s = Option.get_exn_or "no program loaded" s.prog
 
 let of_cmd st (e : Containers.Sexp.t) =
+  let full_cmd = Sexp.to_string e in
   let cmd, args =
     match e with
     | `List [] -> ("skip", [])
     | `List (`Atom cmd :: n) -> (cmd, n)
-    | _ -> failwith "bad cmd structure"
+    | _ -> failwith @@ "bad cmd structure " ^ full_cmd
   in
-  let full_cmd = Sexp.to_string e in
   Trace_core.with_span ~__FILE__ ~__LINE__ ("runcmd::" ^ cmd) (fun _ ->
       match cmd with
       | "skip" -> st

@@ -57,6 +57,7 @@ let create ~(size : int) (v : Z.t) : t =
   { w = size; v = z_extract v 0 size }
 
 let of_int ~(size : int) i = create ~size (Z.of_int i)
+let one ~(size : int) = create ~size Z.one
 
 let of_string i =
   let vty = String.split_on_char ':' i in

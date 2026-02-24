@@ -494,9 +494,9 @@ module WrappedIntervalsLatticeOps = struct
 
     let max_or (al, au) (bl, bu) =
       let rec max_or_aux m =
+        let open Bitvec in
         let one = of_int ~size:(size m) 1 in
         let recurse _ = max_or_aux (lshr m one) in
-        let open Bitvec in
         if is_zero m then bitor au bu
         else if is_nonzero (bitand au bu |> bitand m) then
           let tempau = bitor (sub au m) (sub m one) in
@@ -531,9 +531,9 @@ module WrappedIntervalsLatticeOps = struct
 
     let max_and (al, au) (bl, bu) =
       let rec max_and_aux m =
-        let one = of_int ~size:(size m) 1 in
         let recurse _ = max_and_aux (lshr m (of_int ~size:(size m) 1)) in
         let open Bitvec in
+        let one = of_int ~size:(size m) 1 in
         if is_zero m then bitand au bu
         else if is_nonzero (bitand au (bitnot bu) |> bitand m) then
           let temp = bitor (bitand au (bitnot m)) (sub m one) in
@@ -570,9 +570,9 @@ module WrappedIntervalsLatticeOps = struct
 
     let max_xor (al, au) (bl, bu) =
       let rec max_xor_aux m (al, au) (bl, bu) =
+        let open Bitvec in
         let one = of_int ~size:(size m) 1 in
         let recurse = max_xor_aux (lshr m one) in
-        let open Bitvec in
         if is_zero m then bitxor au bu
         else if is_nonzero (bitand au bu |> bitand m) then
           let tempau = bitor (sub au m) (sub m one) in

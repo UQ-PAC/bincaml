@@ -1,5 +1,16 @@
 (cram
+ (applies_to expr_smt)
+ (enabled_if %{bin-available:cvc5})
  (deps
+  %{bin:bincaml}
+  ../../examples/cntlm-output.il
+  expr_smt_check.sexp
+  concat.il))
+
+(cram
+ (applies_to * \ expr_smt)
+ (deps
+  %{bin:bincaml}
   ../../examples/irreducible_loop_1.il
   ../../examples/cat.il
   ../../examples/cntlm-output.il
@@ -9,5 +20,4 @@
   typefail.sexp
   typepass.sexp
   basicssa.sexp
-  ../../bin/main.exe
   roundtrip.sexp))
