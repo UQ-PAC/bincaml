@@ -157,7 +157,7 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
   | Atom _ -> tau
   | _ -> Top
 
-let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
+let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc_id =
   let open AbstractExpr in
   let open InferredType in
   let rename_variable (name : string) : string =
@@ -249,7 +249,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
         | `Load _ | `IfThen | `MapAccess -> (st, Top)
         (* WARN: I forgot what this was meant to be *)
         | `IMPLIES -> (st, Top))
-    | ApplyIntrin _ -> (st, Top) (* Concat *)
+    | ApplyIntrin _ -> (st, Top)
     | ApplyFun _ -> (st, Top)
     | Binding _ -> (st, Top)
   in
@@ -274,7 +274,6 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
     | TypeVar a, TypeVar b -> (
         if String.equal a b then st
         else
-          (* The right hand side is a type variable, fields are pretty much variables *)
           let st = ConstraintState.add_ub st a type1 in
           let bounds = StringMap.get a st in
           match bounds with
@@ -285,7 +284,6 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
                    st
           | None -> st)
     | Field { ty }, TypeVar b -> (
-        (* Fields are pretty much variables *)
         match ty with
         | TypeVar a -> (
             let st = ConstraintState.add_ub st a type1 in
@@ -302,7 +300,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
         (* The right hand side is not a type variable *)
         let st = ConstraintState.add_lb st a type0 in
         let bounds = StringMap.get a st in
-        if TySet.mem type0 rec_check then st
+        if TySet.mem type1 rec_check then st
         else
           let rec_check = TySet.add type1 rec_check in
           match bounds with
@@ -313,7 +311,9 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
                    st
           | None -> st)
     | _ ->
-        (* You have to assign to a variable so this case should never occur *)
+        (*
+          You have to assign to a variable (or something similar) so this case should never occur
+        *)
         failwith
           (Printf.sprintf "Illegal constrain call type0: %s; type1: %s stmt: %s"
              (InferredType.show type0) (InferredType.show type1)
@@ -360,6 +360,31 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
       ConstraintState.add_ub st (Int.to_string stmt_number ^ "_a_store")
       @@ TypeVar (Int.to_string stmt_number ^ "_b_store")
   | Stmt.Instr_Call { lhs; args; procid } ->
+      let formal_in = Procedure.formal_in_params @@ Program.proc prog procid in
+      let formal_out =
+        Procedure.formal_out_params @@ Program.proc prog procid
+      in
+      let st =
+        StringMap.fold
+          (fun k v acc ->
+            match constrain_expr acc @@ BasilExpr.unfix v with
+            | acc, TypeVar a ->
+                constrain acc
+                  (TypeVar (Var.name @@ StringMap.find k formal_in))
+                  (TypeVar a) TySet.empty
+            | acc, a ->
+                ConstraintState.add_ub acc
+                  (Var.name @@ StringMap.find k formal_in)
+                  a)
+          args
+        @@ StringMap.fold
+             (fun k v acc ->
+               constrain acc
+                 (TypeVar (Var.name @@ StringMap.find k formal_out))
+                 (TypeVar (Var.name v))
+                 TySet.empty)
+             lhs st
+      in
       let args =
         StringMap.map
           (fun v -> snd @@ constrain_expr st @@ BasilExpr.unfix v)
@@ -381,24 +406,24 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number proc_id =
   *)
   | Stmt.Instr_IndirectCall _ -> st
 
-let check_block p st (_, b) =
+let check_block p prog st (_, b) =
   Block.stmts_iter b
   |> Iter.foldi
        (fun st stmt_number stmt ->
-         gen_constraint_set st stmt stmt_number @@ Procedure.id p)
+         gen_constraint_set st stmt stmt_number prog @@ Procedure.id p)
        st
 
 let check_proc (prog : Program.t) st p =
-  Procedure.iter_blocks_topo_fwd p |> Iter.fold (check_block p) st
+  Procedure.iter_blocks_topo_fwd p |> Iter.fold (check_block p prog) st
 
 let transform (prog : Program.t) =
-  print_string "\n === Type Constraints === \n";
+  print_endline "\n === Type Constraints === \n";
   let type_constraint_map : ConstraintState.t =
     ID.Map.values prog.procs |> Iter.fold (check_proc prog) StringMap.empty
   in
-  print_string @@ ConstraintState.show type_constraint_map;
+  print_endline @@ ConstraintState.show type_constraint_map;
 
-  print_string "\n === Coalesced Types === \n";
+  print_endline "\n === Coalesced Types === \n";
   let types =
     StringMap.mapi
       (fun name ({ lb; ub } : ConstraintState.TypeConstraint.t) ->
@@ -425,7 +450,7 @@ let transform (prog : Program.t) =
         (lower, upper))
       type_constraint_map
   in
-  print_string @@ show_type_map2 types;
+  print_endline @@ show_type_map2 types;
 
   (*
     Possible speed up strat would to only many as many automata as we need.
