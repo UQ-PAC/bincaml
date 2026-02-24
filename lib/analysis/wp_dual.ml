@@ -18,31 +18,43 @@ module Domain = struct
   let e_true = BasilExpr.boolconst true
   let e_false = BasilExpr.boolconst false
 
-  let simplify e =
+  let simplify =
     let open AbstractExpr in
-    BasilExpr.rewrite
-      ~rw_fun:(function
-        | ApplyIntrin (op, [ l ]) -> Some l
-        | ApplyIntrin (`OR, l) when List.mem ~eq:BasilExpr.equal e_false l ->
-            Some
-              (BasilExpr.fix
-                 (ApplyIntrin
-                    (`OR, List.remove ~eq:BasilExpr.equal ~key:e_false l)))
-        | ApplyIntrin (`AND, l) when List.mem ~eq:BasilExpr.equal e_true l ->
-            Some
-              (BasilExpr.fix
-                 (ApplyIntrin
-                    (`OR, List.remove ~eq:BasilExpr.equal ~key:e_true l)))
-        | ApplyIntrin (`OR, l) when List.mem ~eq:BasilExpr.equal e_true l ->
-            Some e_true
-        | ApplyIntrin (`AND, l) when List.mem ~eq:BasilExpr.equal e_false l ->
-            Some e_false
-        | ApplyIntrin (`OR, []) -> Some e_false
-        | ApplyIntrin (`AND, []) -> Some e_true
-        | BinaryExpr (`EQ, a, b) when BasilExpr.equal a b -> Some e_true
-        | UnaryExpr (`BoolNOT, a) when BasilExpr.equal a e_true -> Some e_false
-        | _ -> None)
-      e
+    BasilExpr.rewrite ~rw_fun:(function
+      | ApplyIntrin { op; args = [ l ] } -> Some l
+      | ApplyIntrin { attrib; op = `OR; args }
+        when List.mem ~eq:BasilExpr.equal e_false args ->
+          Some
+            (BasilExpr.fix
+               (ApplyIntrin
+                  {
+                    attrib;
+                    op = `OR;
+                    args = List.remove ~eq:BasilExpr.equal ~key:e_false args;
+                  }))
+      | ApplyIntrin { attrib; op = `AND; args }
+        when List.mem ~eq:BasilExpr.equal e_true args ->
+          Some
+            (BasilExpr.fix
+               (ApplyIntrin
+                  {
+                    attrib;
+                    op = `OR;
+                    args = List.remove ~eq:BasilExpr.equal ~key:e_true args;
+                  }))
+      | ApplyIntrin { op = `OR; args }
+        when List.mem ~eq:BasilExpr.equal e_true args ->
+          Some e_true
+      | ApplyIntrin { op = `AND; args }
+        when List.mem ~eq:BasilExpr.equal e_false args ->
+          Some e_false
+      | ApplyIntrin { op = `OR; args = [] } -> Some e_false
+      | ApplyIntrin { op = `AND; args = [] } -> Some e_true
+      | BinaryExpr { op = `EQ; arg1; arg2 } when BasilExpr.equal arg1 arg2 ->
+          Some e_true
+      | UnaryExpr { op = `BoolNOT; arg } when BasilExpr.equal arg e_true ->
+          Some e_false
+      | _ -> None)
 
   let join a b = BasilExpr.applyintrin ~op:`OR [ a; b ] |> simplify
   let widening a b = top
@@ -53,13 +65,7 @@ module Domain = struct
       (Failure
          "(unimplemented) SMT query required to determine leq of predicates")
 
-  (* FIXME gamma *)
-  let low_expr (e : Program.e) =
-    BasilExpr.free_vars_iter e
-    |> Iter.map (fun v ->
-        BasilExpr.apply_fun ~name:"gamma" [ BasilExpr.rvar v ])
-    |> Iter.to_list
-    |> BasilExpr.applyintrin ~op:`OR
+  let low_expr = Expr.BasilExpr.unexp ~op:`Gamma
 
   let transfer p stmt =
     let open Stmt in
@@ -69,6 +75,7 @@ module Domain = struct
           (fun v ->
             List.find_map (fun (v', e) -> Option.return_if (Var.equal v v') e) a)
           p
+        |> simplify
     | Instr_Load l -> top
     | Instr_Assert { body } -> join p (BasilExpr.unexp ~op:`BoolNOT body)
     | Instr_Assume { body; branch } ->
