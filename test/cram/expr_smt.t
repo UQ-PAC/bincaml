@@ -2,7 +2,7 @@
 
 Should output no errors
 
-  $  ../../bin/main.exe script expr_smt_check.sexp 
+  $  bincaml script expr_smt_check.sexp 
 
 Check concat rewrites work
 

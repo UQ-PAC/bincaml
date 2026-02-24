@@ -1,1 +1,1 @@
-  $ ../../bin/main.exe script ./typepass.sexp
+  $ bincaml script ./typepass.sexp

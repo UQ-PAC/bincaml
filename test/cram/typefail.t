@@ -1,4 +1,4 @@
-  $ ../../bin/main.exe script ./typefail.sexp 2>/dev/null
+  $ bincaml script ./typefail.sexp 2>/dev/null
   Arguments are not of the same type in eq at statement 0 in %main_entry
   Arguments are not of the same type in neq at statement 1 in %main_entry
   Arguments are not of the same type in eq at statement 2 in %main_entry
