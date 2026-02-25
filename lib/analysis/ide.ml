@@ -412,25 +412,6 @@ module IDE (D : IDEDomain) = struct
 
   type analysis_state = D.Value.t DataMap.t [@@deriving eq, ord]
 
-  module Worklist (D : Heap.TOTAL_ORD) = struct
-    module PQ = Heap.Make_from_compare (D)
-
-    type t = PQ.t ref
-
-    let create : t = ref PQ.empty
-    let cardinal (q : t) = PQ.size !q
-    let non_empty (q : t) = not @@ PQ.is_empty !q
-    let add (q : t) d = q := PQ.add !q d
-
-    let pop (q : t) =
-      let q', d = PQ.take_exn !q in
-      q := q';
-      while non_empty q && D.compare (PQ.find_min_exn !q) d = 0 do
-        q := fst @@ PQ.take_exn !q
-      done;
-      d
-  end
-
   let join_state_with st v x =
     let j =
       DataMap.get v st
@@ -549,7 +530,7 @@ module IDE (D : IDEDomain) = struct
     let compare = Ord.triple Loc.compare DL.compare DL.compare
   end
 
-  module W1 = Worklist (P1K)
+  module W1 = Worklist.Make (P1K)
 
   (** Propagate summaries into a new location and update the worklist *)
   let propagate worklist summaries summary loc updates =
@@ -574,7 +555,7 @@ module IDE (D : IDEDomain) = struct
       composite edge functions through paths to this location. *)
   let phase1_solve start graph globals default =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
-    let worklist = W1.create in
+    let worklist = W1.create () in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
     Hashtbl.replace summaries start
       (DlMap.singleton Lambda (DlMap.singleton Lambda D.identity));
@@ -635,7 +616,7 @@ module IDE (D : IDEDomain) = struct
     let compare = Pair.compare Loc.compare DL.compare
   end
 
-  module W2 = Worklist (P2K)
+  module W2 = Worklist.Make (P2K)
 
   (** Compute the analysis result using summaries from phase 1 *)
   let phase2_solve prog start_proc graph globals
@@ -655,7 +636,7 @@ module IDE (D : IDEDomain) = struct
        bottom, using the summary functions. This is done by looking at all call
        sites in a procedure and evaluating the composite of the summary to the
        callsite and the transfer of the call edge (and reaching a fixpoint). *)
-    let worklist = W2.create in
+    let worklist = W2.create () in
     let calls_table = IDEGraph.proc_call_table dir graph prog in
     Hashtbl.get_or calls_table start_proc ~default:Iter.empty
     |> Iter.iter (fun l -> W2.add worklist (l, Lambda));

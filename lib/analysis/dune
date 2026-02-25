@@ -13,6 +13,7 @@
   wrapped_intervals
   known_bits)
  (libraries
+  intPQueue
   patricia-tree
   loader
   lang

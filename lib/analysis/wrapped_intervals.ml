@@ -758,10 +758,7 @@ end
 module StateAbstraction =
   Intra_analysis.MapState (WrappedIntervalsValueAbstractionBasil)
 
-module Eval =
-  Intra_analysis.EvalStmt
-    (WrappedIntervalsValueAbstractionBasil)
-    (StateAbstraction)
+module Eval = Intra_analysis.EvalStmt (WrappedIntervalsValueAbstractionBasil)
 
 module Domain = struct
   include StateAbstraction
@@ -937,12 +934,13 @@ module Domain = struct
       | _ -> Iter.empty
   end
 
-  let tf ~read stmt evald_stmt =
+  let transfer_state read stmt =
+    let evald_stmt = Eval.stmt_eval_fwd read stmt in
     let open Lang.Expr in
     let pred_updates =
       match stmt with
       | Lang.Stmt.Instr_Assert { body } | Lang.Stmt.Instr_Assume { body } ->
-          reduce_expr ~read @@ Lang.Algsimp.normalise body
+          reduce_expr ~read body
       | _ -> Iter.empty
     in
     let updates =
@@ -960,11 +958,11 @@ module Domain = struct
     Iter.append updates pred_updates
 
   let transfer dom stmt =
-    let evald_stmt = Eval.stmt_eval_fwd stmt dom in
     Iter.fold (fun a (k, v) -> update k v a) dom
-    @@ tf ~read:(flip read dom) stmt evald_stmt
+    @@ transfer_state (flip read dom) stmt
 end
 
+module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
 module Analysis = Intra_analysis.Forwards (Domain)
 
 let analyse (p : Lang.Program.proc) =

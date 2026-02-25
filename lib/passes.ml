@@ -56,9 +56,16 @@ module PassManager = struct
       apply =
         Proc
           (fun p ->
-            let r = Analysis.Wrapped_intervals.analyse p in
-            Analysis.Wrapped_intervals.Analysis.print_dot
-              (Format.of_chan stdout) p r;
+            (*Trace_core.with_span ~__FILE__ ~__LINE__ "dfg_flow_sensitive"
+            @@ fun _ ->*)
+            (*let r = Analysis.Wrapped_intervals.analyse p in*)
+            let r2 =
+              Trace_core.with_span ~__FILE__ ~__LINE__ "dfg_flow_insensitive"
+              @@ fun _ ->
+              Analysis.Wrapped_intervals.DFGAnalysis.flow_insensitive p
+            in
+            (*Analysis.Wrapped_intervals.Analysis.print_dot
+              (Format.of_chan stdout) p r;*)
             p);
       doc =
         "Runs wrapped interval analysis on control flow graph and prints \
@@ -194,10 +201,15 @@ module PassManager = struct
               D.analyse ~widen_set:Graph.ChaoticIteration.FromWto
                 ~delay_widen:10 g
             in
+            let r2 = D.flow_insensitive p in
             print_endline (D.D.name ^ " :: " ^ ID.to_string pn);
             print_endline
               Containers_pp.(
-                Pretty.to_string ~width:80 @@ nest 4 (D.D.pretty r)));
+                Pretty.to_string ~width:80 @@ nest 4 (D.D.pretty r));
+            print_endline "insens";
+            print_endline
+              Containers_pp.(
+                Pretty.to_string ~width:80 @@ nest 4 (D.D.pretty r2)));
         p
     | ProcCheck app ->
         let _ =

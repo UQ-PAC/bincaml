@@ -404,25 +404,31 @@ let iter_blocks p =
 
 (** Fold over blocks in forwards weak topological order (boundocle). The order
     is *not* stable *)
-let fold_blocks_topo_fwd (f : 'a -> ID.t -> Edge.block -> 'a) init p =
+let fold_blocks_topo_fwd_headers
+    (f : 'a -> [ `Vert | `Header ] -> ID.t -> Edge.block -> 'a) init p =
   let open Graph.WeakTopological in
-  let f acc e =
+  let f acc v e =
     match e with
     | Vert.Begin id ->
-        Option.map (f acc id) (get_block p id) |> Option.get_or ~default:acc
+        Option.map (f acc v id) (get_block p id) |> Option.get_or ~default:acc
     | _ -> acc
   in
   let rec ff acc e =
     match e with
-    | Vertex a -> f acc a
+    | Vertex a -> f acc `Vert a
     | Component (a, e) ->
-        let acc = f acc a in
+        let acc = f acc `Header a in
         Graph.WeakTopological.fold_left ff acc e
   in
   if graph p |> Option.is_some then
     let topo = topo_fwd p in
     Graph.WeakTopological.fold_left ff init topo
   else init
+
+(** Fold over blocks in forwards weak topological order (boundocle). The order
+    is *not* stable *)
+let fold_blocks_topo_fwd (f : 'a -> ID.t -> Edge.block -> 'a) init p =
+  fold_blocks_topo_fwd_headers (fun acc i -> f acc) init p
 
 (** Fold over blocks in reverse weak topological order (boundocle). The order is
     *not* stable *)
@@ -487,6 +493,10 @@ let blocks_pred p i =
 
 let iter_blocks_topo_fwd p =
   Iter.from_iter (fun f -> fold_blocks_topo_fwd (fun acc a b -> f (a, b)) () p)
+
+let iter_blocks_topo_fwd_headers p =
+  Iter.from_iter (fun f ->
+      fold_blocks_topo_fwd_headers (fun acc h a b -> f (a, h, b)) () p)
 
 let iter_stmt_topo_fwd p =
   iter_blocks_topo_fwd p |> Iter.flat_map (fun (id, b) -> Block.stmts_iter b)
