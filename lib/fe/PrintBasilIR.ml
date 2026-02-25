@@ -222,6 +222,8 @@ and prtStmt (i:int) (e : AbsBasilIR.stmt) : doc = match e with
        AbsBasilIR.Stmt_Nop  -> prPrec i 0 (concatD [render "nop"])
   |    AbsBasilIR.Stmt_SingleAssign assignment -> prPrec i 0 (concatD [prtAssignment 0 assignment])
   |    AbsBasilIR.Stmt_MemAssign (lvar, expr) -> prPrec i 0 (concatD [prtLVar 0 lvar ; render "mem:=" ; prtExpr 0 expr])
+  |    AbsBasilIR.Stmt_ScalarStore (lvar, expr) -> prPrec i 0 (concatD [prtLVar 0 lvar ; render ":=" ; render "store" ; prtExpr 0 expr])
+  |    AbsBasilIR.Stmt_ScalarLoad (lvar, var) -> prPrec i 0 (concatD [prtLVar 0 lvar ; render ":=" ; render "load" ; prtVar 0 var])
   |    AbsBasilIR.Stmt_MultiAssign (openparen, assignments, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtAssignmentListBNFC 0 assignments ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Stmt_Load (lvar, endian, globalident, expr, intval) -> prPrec i 0 (concatD [prtLVar 0 lvar ; render ":=" ; render "load" ; prtEndian 0 endian ; prtGlobalIdent 0 globalident ; prtExpr 0 expr ; prtIntVal 0 intval])
   |    AbsBasilIR.Stmt_Store (endian, globalident, expr1, expr2, intval) -> prPrec i 0 (concatD [render "store" ; prtEndian 0 endian ; prtGlobalIdent 0 globalident ; prtExpr 0 expr1 ; prtExpr 0 expr2 ; prtIntVal 0 intval])

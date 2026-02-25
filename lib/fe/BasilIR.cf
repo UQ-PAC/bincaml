@@ -84,6 +84,8 @@ rules Assignment ::= LVar ":=" Expr ;
 Stmt_Nop . Stmt ::= "nop";
 Stmt_SingleAssign . Stmt ::= Assignment ;
 Stmt_MemAssign . Stmt ::= LVar "mem:=" Expr;
+Stmt_ScalarStore . Stmt ::= LVar ":=" "store" Expr;
+Stmt_ScalarLoad . Stmt ::= LVar ":=" "load" Var ;
 
 separator nonempty Assignment ",";
 Stmt_MultiAssign . Stmt ::= OpenParen [Assignment]  CloseParen ;

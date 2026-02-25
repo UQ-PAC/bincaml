@@ -136,8 +136,8 @@ let pretty show_lvar show_var show_expr s =
       lhs ^ text " := " ^ text "load "
       ^ text (show_endian endian)
       ^ text " " ^ rhs ^ text " " ^ addr ^ text " " ^ int size
-  | Instr_Store { lhs; rhs; addr = Scalar } ->
-      lhs ^ text " := " ^ text "store " ^ text " " ^ rhs
+  | Instr_Store { lhs; rhs; value; addr = Scalar } ->
+      lhs ^ text " := " ^ text "store " ^ text " " ^ value
   | Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } } ->
       lhs ^ text " := " ^ text "store "
       ^ text (show_endian endian)

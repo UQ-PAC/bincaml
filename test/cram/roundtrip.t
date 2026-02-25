@@ -21,3 +21,8 @@ The serialise -> parse serialise loop should be idempotent
   [1]
 
   $ diff before2.il after2.il
+
+Memassign repr
+
+  $ diff beforemem.il aftermem.il
+

@@ -510,6 +510,16 @@ module BasilASTLoader = struct
         ( p_st,
           `Stmt
             (Instr_Store { lhs = lv; rhs = lv; value = expr; addr = Scalar }) )
+    | Stmt_ScalarStore (lvar, expr) ->
+        let expr = trans_expr p_st expr in
+        let p_st, lv = trans_lvar p_st lvar in
+        ( p_st,
+          `Stmt
+            (Instr_Store { lhs = lv; rhs = lv; value = expr; addr = Scalar }) )
+    | Stmt_ScalarLoad (lvar, rvar) ->
+        let rhs = trans_var p_st rvar in
+        let p_st, lv = trans_lvar p_st lvar in
+        (p_st, `Stmt (Instr_Load { lhs = lv; rhs; addr = Scalar }))
     | Stmt_MultiAssign (o, assigns, c) ->
         let f (p_st, assigns) v =
           match v with

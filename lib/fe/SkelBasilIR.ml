@@ -154,6 +154,8 @@ and transStmt (x : stmt) : result = match x with
     Stmt_Nop  -> failure x
   | Stmt_SingleAssign assignment -> failure x
   | Stmt_MemAssign (lvar, expr) -> failure x
+  | Stmt_ScalarStore (lvar, expr) -> failure x
+  | Stmt_ScalarLoad (lvar, var) -> failure x
   | Stmt_MultiAssign (openparen, assignments, closeparen) -> failure x
   | Stmt_Load (lvar, endian, globalident, expr, intval) -> failure x
   | Stmt_Store (endian, globalident, expr0, expr, intval) -> failure x
