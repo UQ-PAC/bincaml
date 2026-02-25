@@ -340,12 +340,7 @@ let ssa ?(skip_observable = true) (in_proc : Program.proc) =
           Hashtbl.add phis block_id joined_phis;
 
           let renames = VarMap.mapi (fun i (v, t) -> v) joined_phis in
-          ( renames,
-            VarMap.values joined_phis
-            |> Iter.map (function lhs, rhs ->
-                let open Block in
-                { lhs; rhs })
-            |> Iter.to_list )
+          (renames, phi_to_def joined_phis)
     in
 
     let renames, nb =
@@ -411,8 +406,7 @@ let ssa ?(skip_observable = true) (in_proc : Program.proc) =
                  print_endline @@ " new PHIS "
                  ^ (phis
                    |> List.to_string (fun b -> (Block.show_phi Var.pretty) b)));
-             Procedure.update_block proc succ_bid
-               { eblock with phis = phi_to_def nphis })
+             Procedure.update_block proc succ_bid { eblock with phis })
            proc
     else proc
   in
