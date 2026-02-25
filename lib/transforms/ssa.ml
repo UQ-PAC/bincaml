@@ -426,6 +426,6 @@ let ssa ?(skip_observable = true) (in_proc : Program.proc) =
         preg)
     |> List.for_all id
   in
-  ignore (Procedure.iter_blocks_topo_fwd proc |> Iter.for_all check_bl);
+  assert (Procedure.iter_blocks_topo_fwd proc |> Iter.for_all check_bl);
   check_ssa proc;
   proc
