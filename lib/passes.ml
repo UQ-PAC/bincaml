@@ -83,10 +83,18 @@ module PassManager = struct
          definitions from parameters";
     }
 
+  let cleanup_cfg =
+    {
+      name = "remove-unreachable-block";
+      apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
+      doc = "Remove blocks unreachable from entry";
+    }
+
   let full_ssa =
     {
       name = "ssa";
-      apply = Batch [ sparams; read_uninit true; sssa; remove_unused ];
+      apply =
+        Batch [ cleanup_cfg; sparams; read_uninit true; sssa; remove_unused ];
       doc =
         "Complete SSA pipeline for early IR (global register parameterless \
          form)";
@@ -101,6 +109,7 @@ module PassManager = struct
 
   let passes =
     [
+      cleanup_cfg;
       dfg_bool;
       cfg_wrapped_int;
       sparams;
@@ -109,11 +118,6 @@ module PassManager = struct
       sssa;
       full_ssa;
       type_check;
-      {
-        name = "remove-unreachable-block";
-        apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
-        doc = "Remove blocks unreachable from entry";
-      };
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;
