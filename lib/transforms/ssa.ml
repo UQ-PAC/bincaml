@@ -267,9 +267,12 @@ let ssa ?(skip_observable = true) (in_proc : Program.proc) =
     | `Left phi ->
         failwith @@ "undef pred" ^ Var.to_string v ^ "  " ^ ID.to_string block
     | `Right rn ->
-        failwith @@ "cannot join as no phi defined for variable : "
-        ^ Var.to_string v ^ " " ^ " block phi " ^ ID.to_string target_block
-        ^ ID.to_string block
+        dbg (fun () ->
+            print_endline
+            @@ "cannot join as no phi defined for variable -> should be dead \
+                :: : " ^ Var.to_string v ^ " " ^ " block phi "
+            ^ ID.to_string target_block ^ ID.to_string block);
+        None
   in
 
   let merge_phi block v r =
