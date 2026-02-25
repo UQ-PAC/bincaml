@@ -129,7 +129,8 @@ describes some likely problems in each step.
         In Helix, you can use [hx --health languages] and observe the language exists but has a cross in
         the highlights column. }
     {td The repository has the highlight queries in the standard location, [queries/highlights.scm].
-        Despite this, some editors (like Helix) need the highlights file in a central location.
+        Despite this, some editors need the highlights file to be manually installed to a central location.
+        This is known to be the case for Helix and for Neovim (unless you have the latest nvim-treesitter).
         Check your editor documentation and copy or symlink the highlights.scm if needed. }
     }
   {tr
@@ -194,6 +195,19 @@ return {
   end,
 }
 v}
+
+With old nvim-treesitter, you will additionally need to add the highlights file
+manually. Find the runtime path with 
+{v
+:echo nvim_list_runtime_paths()
+v}
+and add [queries/basilir/highlights.scm] within one of the folders listed
+there. Generally, these paths are included in the runtime path and should work:
+{v
+~/.config/nvim/queries/basilir/highlights.scm
+~/.local/share/nvim/site/queries/basilir/highlights.scm
+v}
+The subfolder within [queries] should be named to match the Tree-sitter grammar.
 
 {2 Editor setup: Helix}
 
