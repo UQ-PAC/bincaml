@@ -133,6 +133,7 @@ and showAssignment (e : AbsBasilIR.assignment) : showable = match e with
 and showStmt (e : AbsBasilIR.stmt) : showable = match e with
        AbsBasilIR.Stmt_Nop  -> s2s "Stmt_Nop"
   |    AbsBasilIR.Stmt_SingleAssign assignment -> s2s "Stmt_SingleAssign" >> c2s ' ' >> c2s '(' >> showAssignment assignment >> c2s ')'
+  |    AbsBasilIR.Stmt_MemAssign (lvar, expr) -> s2s "Stmt_MemAssign" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Stmt_MultiAssign (openparen, assignments, closeparen) -> s2s "Stmt_MultiAssign" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showAssignment assignments  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Stmt_Load (lvar, endian, globalident, expr, intval) -> s2s "Stmt_Load" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
   |    AbsBasilIR.Stmt_Store (endian, globalident, expr0, expr, intval) -> s2s "Stmt_Store" >> c2s ' ' >> c2s '(' >> showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'

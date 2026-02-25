@@ -502,6 +502,10 @@ module BasilASTLoader = struct
         let expr = trans_expr p_st expr in
         let p_st, lv = trans_lvar p_st lvar in
         (p_st, `Stmt (Instr_Assign [ (lv, expr) ]))
+    | Stmt_MemAssign (lvar, expr) ->
+        let expr = trans_expr p_st expr in
+        let p_st, lv = trans_lvar p_st lvar in
+        (p_st, `Stmt (Instr_Assign [ (lv, expr) ]))
     | Stmt_MultiAssign (o, assigns, c) ->
         let f (p_st, assigns) v =
           match v with

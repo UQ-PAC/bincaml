@@ -16,8 +16,9 @@ open Lexing
 %token SYMB5 /* : */
 %token SYMB6 /* = */
 %token SYMB7 /* := */
-%token SYMB8 /* _ */
-%token SYMB9 /* | */
+%token SYMB8 /* mem:= */
+%token SYMB9 /* _ */
+%token SYMB10 /* | */
 
 %token TOK_EOF
 %token <string> TOK_Ident
@@ -459,6 +460,7 @@ assignment : lVar SYMB7 expr { Assignment1 ($1, $3) }
 
 stmt : KW_nop { Stmt_Nop  }
   | assignment { Stmt_SingleAssign $1 }
+  | lVar SYMB8 expr { Stmt_MemAssign ($1, $3) }
   | openParen assignment_list closeParen { Stmt_MultiAssign ($1, $2, $3) }
   | lVar SYMB7 KW_load endian globalIdent expr intVal { Stmt_Load ($1, $4, $5, $6, $7) }
   | KW_store endian globalIdent expr expr intVal { Stmt_Store ($2, $3, $4, $5, $6) }
@@ -669,12 +671,12 @@ unOp : bVUnOp { UnOpBVUnOp $1 }
   ;
 
 case : expr SYMB3 expr { CaseCase ($1, $3) }
-  | SYMB8 SYMB3 expr { CaseDefault $3 }
+  | SYMB9 SYMB3 expr { CaseDefault $3 }
   ;
 
 case_list : /* empty */ { []  }
   | case { (fun x -> [x]) $1 }
-  | case SYMB9 case_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | case SYMB10 case_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 eqOp : KW_eq { EqOp_eq  }

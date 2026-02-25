@@ -80,6 +80,7 @@ and assignment =
 and stmt =
    Stmt_Nop
  | Stmt_SingleAssign of assignment
+ | Stmt_MemAssign of lVar * expr
  | Stmt_MultiAssign of openParen * assignment list * closeParen
  | Stmt_Load of lVar * endian * globalIdent * expr * intVal
  | Stmt_Store of endian * globalIdent * expr * expr * intVal
