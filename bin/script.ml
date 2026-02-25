@@ -22,7 +22,17 @@ let print_blocks_topo_fwd chan p =
     ids_rev
 
 let assert_atoms n args =
-  assert (List.length args = n);
+  if List.length args < n then
+    raise
+      (Common.ReplError
+         {
+           msg =
+             Printf.sprintf "expected %d args but got %d" n (List.length args);
+           cmd = "unk";
+           __FILE__;
+           __FUNCTION__;
+           __LINE__;
+         });
   List.map (function `Atom n -> n | _ -> failwith "expected atom") args
 
 type dsl_st = { prog : Program.t option; line : int }

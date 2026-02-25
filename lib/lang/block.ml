@@ -32,7 +32,10 @@ let pretty_phi show_lvar show_var v =
         | bid, v -> (text @@ ID.to_string bid) ^ text " -> " ^ show_var v)
       v.rhs
   in
-  lhs ^ text " := phi" ^ (bracket "(" (fill (text "," ^ newline) rhs)) ")"
+  lhs ^ text " := phi" ^ (bracket "(" (nest 2 (fill (text ", ") rhs))) ")"
+
+let show_phi show_var =
+  pretty_phi show_var show_var %> Containers_pp.Pretty.to_string ~width:80
 
 let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
   Trace_core.with_span ~__FILE__ ~__LINE__ "pretty-block" @@ fun _ ->
@@ -43,7 +46,7 @@ let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
     | [] -> []
     | o ->
         let phi = List.map (pretty_phi show_lvar show_var) o in
-        [ bracket "(" (fill (text "," ^ newline) phi) ")" ]
+        [ bracket "(" (fill (text ", ") phi) ")" ]
   in
   let stmts =
     Vector.to_list b.stmts

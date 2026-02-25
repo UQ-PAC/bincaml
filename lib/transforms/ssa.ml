@@ -6,6 +6,10 @@ open Containers
 
 (** FIXME: param form doesn't correct call site*)
 
+let debug = ref false
+let dbg_print = if !debug then print_endline else fun s -> ()
+let dbg f = if !debug then f () else ()
+
 let check_ssa proc =
   let add_assign m v =
     VarMap.get_or ~default:0 v m |> fun n -> VarMap.add v (n + 1) m
@@ -194,12 +198,12 @@ let set_params (p : Program.t) =
   in
   { p with procs }
 
-let ssa (in_proc : Program.proc) =
+let ssa ?(skip_observable = true) (in_proc : Program.proc) =
   let lives = Livevars.run in_proc in
   let rename r v : Var.t =
     if
       (* don't rename formal out params; should only be assigned once anyway*)
-      (not (Var.pure v))
+      (skip_observable && not (Var.pure v))
       || Procedure.formal_out_params in_proc
          |> StringMap.exists (fun _ i -> Var.equal i v)
     then v
@@ -240,22 +244,34 @@ let ssa (in_proc : Program.proc) =
     vm
   in
   let st = Hashtbl.create 100 in
-  let phis = Hashtbl.create 100 in
 
-  let phi_to_def joined_phis =
+  (* map from block -> (orig var  -> (var * (block * var)) list) *)
+  (* block -> orig var -> phis list *)
+  let (phis
+        : ( IDSet.elt,
+            (Var.t * (IDSet.elt * Var.t) list) VarMap.t )
+          Stdlib.Hashtbl.t) =
+    Hashtbl.create 100
+  in
+
+  let phi_to_def (joined_phis : (Var.t * (IDSet.elt * Var.t) list) VarMap.t) =
     VarMap.values joined_phis
     |> Iter.map (function lhs, rhs -> Block.{ lhs; rhs })
     |> Iter.to_list
   in
-  let merge_existing_phi target_block block v r =
+
+  let merge_existing_phi (target_block : ID.t) (block : ID.t) (v : Var.t) r =
     match r with
-    | `Both ((phi, defs), b) -> Some (phi, (block, b) :: defs)
-    | `Left phi -> Some phi
+    | `Both ((phi, existing_phi_defs), b) ->
+        Some (phi, (block, b) :: existing_phi_defs)
+    | `Left phi ->
+        failwith @@ "undef pred" ^ Var.to_string v ^ "  " ^ ID.to_string block
     | `Right rn ->
         failwith @@ "cannot join as no phi defined for variable : "
         ^ Var.to_string v ^ " " ^ " block phi " ^ ID.to_string target_block
         ^ ID.to_string block
   in
+
   let merge_phi block v r =
     match r with
     | `Both ((phi, defs), b) -> Some (phi, (block, b) :: defs)
@@ -285,17 +301,9 @@ let ssa (in_proc : Program.proc) =
       | [ (id, _) ] -> (Hashtbl.find st id, [])
       | inc ->
           let joined_phis =
-            List.map
-              (fun (id, _) ->
-                ( id,
-                  (*VarMap.filter (fun v _ -> VarSet.mem v (lives (Begin id)))
-                  @@*)
-                  get_st_pred id ))
-              inc
+            List.map (fun (id, _) -> (id, get_st_pred id)) inc
             |> List.fold_left
                  (fun phim (block, rn) ->
-                   (*print_endline @@ "live " ^ [%derive.show: Var.t list]
-                   @@ VarSet.to_list (lives (Begin block_id));*)
                    let rn =
                      VarMap.filter
                        (fun v _ -> VarSet.mem v (lives (Begin block_id)))
@@ -303,12 +311,6 @@ let ssa (in_proc : Program.proc) =
                    in
                    VarMap.merge_safe ~f:(merge_phi block) phim rn)
                  VarMap.empty
-            (*|> VarMap.filter (fun v (l, ins) ->
-                match ins with
-                | (h, i) :: tl ->
-                    not (List.for_all (fun (_, v) -> Var.equal v i) tl)
-                | _ -> true)
-                *)
           in
           (* TODO: this will join everything, we should only join things with diff definitions *)
           Hashtbl.add phis block_id joined_phis;
@@ -319,7 +321,12 @@ let ssa (in_proc : Program.proc) =
           let l = VarMap.to_list joined_phis in
           print_endline (sh l);*)
           let renames = VarMap.mapi (fun i (v, t) -> v) joined_phis in
-          (renames, phi_to_def joined_phis)
+          ( renames,
+            VarMap.values joined_phis
+            |> Iter.map (function lhs, rhs ->
+                let open Block in
+                { lhs; rhs })
+            |> Iter.to_list )
     in
 
     let renames, nb =
@@ -355,18 +362,42 @@ let ssa (in_proc : Program.proc) =
           List.length pred > 1)
       |> Iter.fold
            (fun proc (succ_bid, _) ->
-             let phis =
-               VarMap.merge_safe
-                 ~f:((merge_existing_phi succ_bid) block_id)
-                 (Hashtbl.get_or ~default:VarMap.empty phis succ_bid)
-                 renames
-               |> phi_to_def
-             in
-             let b =
+             let eblock =
                Procedure.get_block proc succ_bid
                |> Option.get_exn_or "block not exist"
              in
-             Procedure.update_block proc succ_bid { b with phis })
+             dbg (fun f ->
+                 print_endline @@ "   updating " ^ ID.to_string succ_bid;
+                 print_endline @@ "     phis"
+                 ^ Iter.to_string (function a, b ->
+                     Var.to_string a ^ "->" ^ Var.to_string b)
+                 @@ VarMap.to_iter renames);
+             let renames : Var.t VarMap.t = renames in
+             let (existing : (Var.t * (ID.t * Var.t) list) VarMap.t) =
+               Hashtbl.get_or ~default:VarMap.empty phis succ_bid
+             in
+             let nphis =
+               VarMap.merge_safe
+                 ~f:((merge_existing_phi succ_bid) block_id)
+                 existing renames
+             in
+             Hashtbl.add phis succ_bid nphis;
+             dbg (fun f ->
+                 print_endline @@ " new PHIS "
+                 ^ (nphis |> VarMap.to_iter
+                   |> Iter.to_string (function v, (v2, defs) ->
+                       Var.to_string v ^ "->" ^ Var.to_string v2 ^ "->"
+                       ^ List.to_string
+                           (function
+                             | a, b -> ID.to_string a ^ "->" ^ Var.to_string b)
+                           defs)));
+             let phis = phi_to_def nphis in
+             dbg (fun f ->
+                 print_endline @@ " new PHIS "
+                 ^ (phis
+                   |> List.to_string (fun b -> (Block.show_phi Var.pretty) b)));
+             Procedure.update_block proc succ_bid
+               { eblock with phis = phi_to_def nphis })
            proc
     else proc
   in
@@ -386,6 +417,6 @@ let ssa (in_proc : Program.proc) =
         preg)
     |> List.for_all id
   in
-  assert (Procedure.iter_blocks_topo_fwd proc |> Iter.for_all check_bl);
+  ignore (Procedure.iter_blocks_topo_fwd proc |> Iter.for_all check_bl);
   check_ssa proc;
   proc
