@@ -333,3 +333,34 @@ The interpreter should give the same output for both
 Similar example fixing up  a file already in DSA form
 
   $ diff  before_conds.txt after_conds.txt
+
+
+Multiple loops dependencies of loops etc are handled correctly
+
+  $ diff ssa-multi-before.il ssa-multi-after.il
+  1d0
+  < var $R0:bv64;
+  3c2
+  < proc @main()  -> () {  }
+  ---
+  > proc @main(R0_in:bv64)  -> (R0_out:bv64) {  }
+  7a7
+  >    block %inputs [ var R0:bv64 := R0_in:bv64; goto (%e); ];
+  9,12c9,19
+  <    block %e1 [ $R0:bv64 := 0x1:bv64; goto (%e2); ];
+  <    block %e2 [ goto (%e4,%e1); ];
+  <    block %e3 [ $R0:bv64 := 0x3:bv64; goto (%e4,%e1); ];
+  <    block %e4 [ return; ]
+  ---
+  >    block %e1 [ var R0_2:bv64 := 0x1:bv64; goto (%e2); ];
+  >    block %e2 [
+  >       (var R0_3:bv64 := phi(%e1 -> R0_2:bv64, %e -> R0:bv64));
+  >       goto (%e4,%e1);
+  >    ];
+  >    block %e3 [ var R0_1:bv64 := 0x3:bv64; goto (%e4,%e1); ];
+  >    block %e4 [
+  >       (var R0_4:bv64 := phi(%e2 -> R0_3:bv64, %e3 -> R0_1:bv64, %e2 -> R0_3:bv64));
+  >       goto (%returns);
+  >    ];
+  >    block %returns [ var R0_out:bv64 := R0_4:bv64; return; ]
+  [1]
