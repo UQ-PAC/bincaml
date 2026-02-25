@@ -98,6 +98,14 @@ let map_fold_forwards ~(phi : 'acc -> 'v phi list -> 'acc * 'v phi list)
 let map ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
   { stmts = Vector.map f b.stmts; phis = phi b.phis }
 
+let flat_map ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
+  {
+    stmts =
+      Vector.to_iter b.stmts |> Iter.flat_map f |> Vector.of_iter
+      |> Vector.freeze;
+    phis = phi b.phis;
+  }
+
 let foldi_backwards ~(f : 'acc -> int * ('v, 'v, 'e) Stmt.t -> 'acc)
     ~(phi : 'acc -> 'v phi list -> 'acc) ~(init : 'a) (b : ('v, 'e) t) : 'acc =
   Iter.fold f init

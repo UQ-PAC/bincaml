@@ -389,6 +389,19 @@ let blocks_to_list p =
   |> Option.map (fun g -> G.fold_edges_e collect_edge g [])
   |> Option.get_or ~default:[]
 
+let iter_blocks p =
+  let iter visit =
+    let collect_edge edge =
+      let id = G.V.label (G.E.src edge) in
+      let edge = G.E.label edge in
+      match (id, edge) with
+      | Vert.(Begin id), Edge.(Block b) -> visit (id, b)
+      | _ -> ()
+    in
+    graph p |> Option.iter (fun g -> G.iter_edges_e collect_edge g)
+  in
+  Iter.from_iter (fun f -> iter f)
+
 (** Fold over blocks in forwards weak topological order (boundocle). The order
     is *not* stable *)
 let fold_blocks_topo_fwd (f : 'a -> ID.t -> Edge.block -> 'a) init p =
@@ -432,6 +445,15 @@ let fold_blocks_topo_rev (f : 'a -> ID.t -> Edge.block -> 'a) init p =
     let topo = topo_rev p in
     Graph.WeakTopological.fold_left ff init topo
   else init
+
+let map_blocks_nondet f p =
+  iter_blocks p
+  |> Iter.fold
+       (fun (p : ('a, 'b) t) (id, b) ->
+         let updated = f (id, b) in
+         if not @@ Equal.physical updated b then update_block p id updated
+         else p)
+       p
 
 let map_blocks_topo_fwd f p =
   fold_blocks_topo_fwd

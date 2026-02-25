@@ -10,6 +10,26 @@ let debug = ref false
 let dbg_print = if !debug then print_endline else fun s -> ()
 let dbg f = if !debug then f () else ()
 
+(** Introduce a self-copy before every assume or assert that contains one
+    variable, so that ssa has branch condition flow-sensitivity.
+
+    https://dspace.mit.edu/bitstream/handle/1721.1/86578/48072795-MIT.pdf *)
+let intro_ssi_assigns proc =
+  let f b =
+    b
+    |> Block.flat_map ~phi:id
+         Stmt.(
+           function
+           | (Instr_Assert { body } | Instr_Assume { body }) as a ->
+               let fv = Expr.BasilExpr.free_vars body in
+               if fv |> VarSet.cardinal |> Int.equal 1 then
+                 let v = VarSet.choose fv in
+                 Iter.doubleton (Instr_Assign [ (v, Expr.BasilExpr.rvar v) ]) a
+               else Iter.singleton a
+           | b -> Iter.singleton b)
+  in
+  Procedure.map_blocks_nondet (function id, b -> f b) proc
+
 let check_ssa proc =
   let add_assign m v =
     VarMap.get_or ~default:0 v m |> fun n -> VarMap.add v (n + 1) m
@@ -199,6 +219,7 @@ let set_params (p : Program.t) =
   { p with procs }
 
 let ssa ?(skip_observable = true) (in_proc : Program.proc) =
+  let in_proc = intro_ssi_assigns in_proc in
   let lives = Livevars.run in_proc in
   let rename r v : Var.t =
     if
@@ -318,11 +339,6 @@ let ssa ?(skip_observable = true) (in_proc : Program.proc) =
           (* TODO: this will join everything, we should only join things with diff definitions *)
           Hashtbl.add phis block_id joined_phis;
 
-          (*let sh =
-            [%derive.show: (Var.t * (Var.t * (ID.t * Var.t) list)) list]
-          in
-          let l = VarMap.to_list joined_phis in
-          print_endline (sh l);*)
           let renames = VarMap.mapi (fun i (v, t) -> v) joined_phis in
           ( renames,
             VarMap.values joined_phis
@@ -340,13 +356,9 @@ let ssa ?(skip_observable = true) (in_proc : Program.proc) =
     in
     let renames =
       let l = lives (End block_id) in
-      (*print_endline @@ "live " ^ [%derive.show: Var.t list] @@ VarSet.to_list l;*)
       VarMap.filter (fun v a -> VarSet.mem v l) renames
     in
     Hashtbl.add st block_id renames;
-    (*print_endline
-      ("set " ^ ID.to_string block_id ^ "  "
-      ^ (VarMap.cardinal renames |> Int.to_string));*)
     Procedure.update_block proc block_id { nb with phis = bl_phis }
   in
 
