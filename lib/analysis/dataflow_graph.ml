@@ -40,6 +40,8 @@ module Vertex = struct
 
   type t = int * vt [@@deriving ord, eq, show { with_path = false }]
 
+  let to_int = fst
+
   let hash v =
     match v with
     | i, Stmt s -> Hash.combine3 251 i (Hashtbl.hash s)
@@ -51,14 +53,20 @@ module Vertex = struct
     | i, Stmt (Instr_Assume _ as s) -> Stmt.free_vars_iter s
     | i, Stmt (Instr_Assert _ as s) -> Stmt.free_vars_iter s
     | i, Stmt s -> Stmt.iter_assigned s
-    | i, Entry -> Procedure.formal_in_params p |> StringMap.values
+    | i, Entry ->
+        Iter.append
+          (List.to_iter (Procedure.specification p).captures_globs)
+          (Procedure.formal_in_params p |> StringMap.values)
     | i, Return -> Iter.empty
 
   let uses p = function
     | i, Phi (_, rhs) -> List.to_iter rhs
     | i, Stmt s -> Stmt.free_vars_iter s
     | i, Entry -> Iter.empty
-    | i, Return -> Procedure.formal_out_params p |> StringMap.values
+    | i, Return ->
+        Iter.append
+          (List.to_iter (Procedure.specification p).modifies_globs)
+          (Procedure.formal_out_params p |> StringMap.values)
 end
 
 module DFGraph = Graph.Persistent.Digraph.ConcreteBidirectional (Vertex)
@@ -97,9 +105,11 @@ let get_dfg_vertices p : Vertex.t Iter.t =
     Procedure.iter_blocks_topo_fwd_headers p
     |> Iter.flat_map (fun (id, header, (b : Program.bloc)) ->
         add_header header;
+        block_index := !block_index + 1;
         let phi_def_use =
           List.to_iter b.phis
           |> Iter.map (function { lhs; rhs } ->
+              block_index := !block_index + 1;
               (!block_index, Vertex.Phi (lhs, List.map snd rhs)))
         in
         let block_def_use =
@@ -108,11 +118,16 @@ let get_dfg_vertices p : Vertex.t Iter.t =
             | Stmt.Instr_Assign assigns ->
                 List.to_iter assigns
                 |> Iter.map (fun (lhs, rhs) ->
+                    block_index := !block_index + 1;
                     ( !block_index,
                       Vertex.Stmt (Stmt.Instr_Assign [ (lhs, rhs) ]) ))
-            | stmt -> Iter.singleton (!block_index, Vertex.Stmt stmt))
+            | stmt ->
+                block_index := !block_index + 1;
+                Iter.singleton (!block_index, Vertex.Stmt stmt))
         in
         Iter.append phi_def_use block_def_use))
+  |> Iter.append
+       (Iter.of_list [ (0, Vertex.Entry); (Int.max_int, Vertex.Return) ])
   |> Iter.persistent
 
 (** return the vertex dependency maps {! defuse} for a procedure *)
@@ -146,15 +161,19 @@ module SimpleSolver = struct
     let compare a b = compare b a
   end)
 
+  module PQueue = Worklist.Make (struct
+    include Vertex
+  end)
+
   let deps (dir : [ `Backwards | `Forwards ]) p lookup v =
     let all_deps =
       match (v, dir) with
       | v, `Forwards ->
           Vertex.defines p v
-          |> Iter.flat_map (fun v -> MDeps.find_iter lookup.var_to_def v)
+          |> Iter.flat_map (fun v -> MDeps.find_iter lookup.var_to_use v)
       | v, `Backwards ->
           Vertex.uses p v
-          |> Iter.flat_map (fun v -> MDeps.find_iter lookup.var_to_use v)
+          |> Iter.flat_map (fun v -> MDeps.find_iter lookup.var_to_def v)
     in
     match v with
     | _, Stmt (Instr_Assert _) | _, Stmt (Instr_Assume _) ->
@@ -164,12 +183,11 @@ module SimpleSolver = struct
   type vm = (Vertex.t, Int.t) Hashtbl.t
 
   let fixpoint_proc (module WL : Worklist.IFace with type elt = Vertex.t)
-      transfer initial p deps =
-    let widen_thresh = 15 in
-    let def_use = get_dfg_vertices p in
+      transfer initial starting p deps def_use =
+    let widen_thresh = 155 in
     let lookup = def_use_maps ~def_use p in
     let worklist = WL.create () in
-    WL.add_iter worklist def_use;
+    WL.add_iter worklist (deps p lookup starting);
 
     let visited = Hashtbl.create (Iter.length def_use) in
 
@@ -184,7 +202,6 @@ module SimpleSolver = struct
       let s = WL.pop worklist in
       let widen = visit s > widen_thresh in
       let state' = transfer ~widen !state s in
-
       match state' with
       | Some st ->
           state := st;
@@ -194,10 +211,23 @@ module SimpleSolver = struct
     !state
 
   let fixpoint_fwd ~transfer ~initial p =
-    fixpoint_proc (module WLR) transfer initial p (deps `Forwards)
+    let def_use = get_dfg_vertices p in
+    fixpoint_proc
+      (module PQueue)
+      transfer initial (0, Vertex.Entry) p (deps `Forwards) def_use
 
   let fixpoint_rev ~transfer ~initial p =
-    fixpoint_proc (module WL) transfer initial p (deps `Backwards)
+    let def_use = get_dfg_vertices p in
+    let max =
+      def_use
+      |> Iter.max ~lt:(fun a b -> match (a, b) with (i, _), (j, _) -> i < j)
+      |> Option.map fst |> Option.get_or ~default:0
+    in
+    let def_use = Iter.map (function v, vt -> (max - v, vt)) def_use in
+
+    fixpoint_proc
+      (module WLR)
+      transfer initial (0, Vertex.Return) p (deps `Backwards) def_use
 end
 
 (** Return a {! DFGraph.t} representing the dataflow. Vertices are phi nodes or
@@ -225,10 +255,6 @@ let create p =
         |> Iter.fold (fun g def -> DFGBuilder.add_edge g def vert) graph
       in
       graph
-    in
-    let def_use_vert =
-      Iter.append def_use_vert
-        (Iter.of_list [ (0, Vertex.Entry); (Int.max_int, Vertex.Return) ])
     in
     let graph = def_use_vert |> Iter.fold add_vert DFGraph.empty in
     (* topological order only visits vertices dominated by the root, hence this
@@ -326,7 +352,8 @@ open struct
               in
               if Iter.is_empty s' then None
               else Some (s' |> Iter.fold (fun acc (k, v) -> update k v acc) data)
-          | _ -> None
+          | Entry -> None
+          | Return -> None
         in
         r
 

@@ -50,6 +50,13 @@ module PassManager = struct
       doc = "runs truthiness analysis on dataflow graph and prints results";
     }
 
+  let dfg_ival =
+    {
+      name = "demo-dfg-ival-analysis";
+      apply = DFGAnalysis (module Analysis.Wrapped_intervals.DFGAnalysis);
+      doc = "runs interavl analysis on dataflow graph and prints results";
+    }
+
   let cfg_wrapped_int =
     {
       name = "demo-cfg-wrapped-int-analysis";
@@ -118,6 +125,7 @@ module PassManager = struct
     [
       cleanup_cfg;
       dfg_bool;
+      dfg_ival;
       cfg_wrapped_int;
       sparams;
       read_uninit false;
