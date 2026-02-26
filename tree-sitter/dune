@@ -7,5 +7,12 @@
   (progn
    (copy %{deps} basilir.cf)
    (run bnfc --tree-sitter --tree-sitter-word LocalIdent basilir.cf --makefile)
-   (run make -C tree-sitter-basilir) ; check tree-sitter is valid and unambiguous
    (no-infer (copy tree-sitter-basilir/grammar.js grammar.js)))))
+
+; checks tree-sitter is valid and unambiguous
+(rule
+ (deps grammar.js)
+ (alias runtest)
+ (enabled_if %{bin-available:tree-sitter})
+ (action
+  (run tree-sitter generate grammar.js)))
