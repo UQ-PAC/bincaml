@@ -257,9 +257,7 @@ module KnownValueAbstractionBasil = struct
 end
 
 module StateAbstraction = Intra_analysis.MapState (KnownValueAbstractionBasil)
-
-module Eval =
-  Intra_analysis.EvalStmt (KnownValueAbstractionBasil) (StateAbstraction)
+module Eval = Intra_analysis.EvalStmt (KnownValueAbstractionBasil)
 
 module Domain = struct
   let top_val = KnownBitsLattice.top
@@ -272,8 +270,9 @@ module Domain = struct
     |> Iter.map (fun v -> (v, top_val))
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
-  let tf evald_stmt =
-    match evald_stmt with
+  let transfer_state read stmt =
+    let stmt = Eval.stmt_eval_fwd read stmt in
+    match stmt with
     | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
     | Lang.Stmt.Instr_Assert _ -> Iter.empty
     | Lang.Stmt.Instr_Assume _ -> Iter.empty
@@ -286,7 +285,7 @@ module Domain = struct
     | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
 
   let transfer dom stmt =
-    let updates = tf @@ Eval.stmt_eval_fwd stmt dom in
+    let updates = transfer_state (fun a -> read a dom) stmt in
     Iter.fold (fun a (k, v) -> update k v a) dom updates
 end
 
