@@ -135,9 +135,9 @@ module PassManager = struct
       full_ssa;
       type_check;
       {
-          name = "gamma-domain";
-          apply = Proc Analysis.Gamma_domain.transform;
-          doc = "test the gamma domain";
+        name = "gamma-domain";
+        apply = Proc Analysis.Gamma_domain.transform;
+        doc = "test the gamma domain";
       };
       {
         name = "cf-expressions-smtcheck";
