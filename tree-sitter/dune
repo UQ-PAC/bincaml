@@ -1,0 +1,10 @@
+(rule
+ (deps %{project_root}/lib/fe/BasilIR.cf)
+ (enabled_if %{env:BINCAML_BNFC_TREESITTER=false})
+ (targets grammar.js)
+ (mode promote)
+ (action
+  (progn
+   (copy %{deps} basilir.cf)
+   (run bnfc --tree-sitter basilir.cf)
+   (copy tree-sitter-basilir/grammar.js grammar.js))))
