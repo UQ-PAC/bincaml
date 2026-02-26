@@ -72,7 +72,6 @@ module Domain (S : RequiresAnnotation) = struct
                                 (BasilExpr.unexp ~op:`Gamma % BasilExpr.rvar);
                        }))
         | _ -> None)
-      (* ummm this was needed to collapse empty ors *)
     in
     rw % rw
 
@@ -114,7 +113,7 @@ module Domain (S : RequiresAnnotation) = struct
     | _ -> p
 
   (** Encode an abstract state as a predicate *)
-  let to_pred = Algsimp.normalise % Algsimp.normalise % BasilExpr.boolnot
+  let to_pred = Algsimp.normalise % BasilExpr.boolnot
   (* We use the Algsimp simplifier as a big simplifier pass at the end to make
      cleaner summaries. It may be worth using an external smt simplifier *)
 end
