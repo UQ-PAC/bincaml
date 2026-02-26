@@ -59,12 +59,12 @@ module TnumWintReducedProductLattice = struct
       if is_zero x then x
       else
         let w = size x in
-        let k = Z.numbits @@ to_unsigned_bigint x in
+        let k = (Z.numbits @@ to_unsigned_bigint x) - 1 in
         create ~size:w @@ Z.(pow (of_int 2) k)
     in
     let lssb x = bitand x (bitnot x) in
-    let above p = bitnot (bitor p (sub p (ones ~size:(size p)))) in
-    let below p = sub p (ones ~size:(size p)) in
+    let above p = bitnot (bitor p (sub p (of_int 1 ~size:(size p)))) in
+    let below p = sub p (of_int 1 ~size:(size p)) in
     let mergeon a b p = bitor (bitand a (above p)) (bitand b (below p)) in
     let refine_lower_bound a tnum =
       match (tnum, tnum_to_wint tnum) with
@@ -105,7 +105,8 @@ module TnumWintReducedProductLattice = struct
     | Bot, _ | _, Bot -> KnownBitsLattice.Bot
     | Top, t | t, Top -> t
     | TNum { value = av; mask = am }, TNum { value = bv; mask = bm } ->
-        if is_nonzero (bitxor (bitand av am) (bitand bv bm)) then Bot
+        let int_m = bitnot @@ bitor am bm in
+        if is_nonzero (bitxor (bitand av int_m) (bitand bv int_m)) then Bot
         else
           let m = bitand am bm in
           let v = bitand (bitor av bv) (bitnot m) in
