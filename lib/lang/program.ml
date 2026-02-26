@@ -45,7 +45,7 @@ let pretty_declaration d =
         StringMap.find_opt "classification" attrib
         |> Option.to_list
         |> List.flat_map (function
-          | `Expr e -> [ text "classification " ^ Expr.BasilExpr.pretty e ]
+          | `Expr e -> [ text " classification " ^ Expr.BasilExpr.pretty e ]
           | _ -> [])
         |> append_l
       in

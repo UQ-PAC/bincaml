@@ -1,10 +1,5 @@
 
   $ bincaml script roundtrip.sexp
-  bincaml: Error in (load-il beforemem.il): Parse error:  beforemem.il:1
-           1 | var observable $Global_4325420_4325424:bv32classification true;
-                                                      ^^^^^^^^^^^^^^^^^^
-            at Dune__exe__Script.of_cmd.(fun) bin/script.ml:64
-  [123]
 
 The serialise -> parse serialise loop should be idempotent
 
@@ -37,6 +32,4 @@ The serialise -> parse serialise loop should be idempotent
 Memassign repr
 
   $ diff beforemem.il aftermem.il
-  diff: aftermem.il: No such file or directory
-  [2]
 
