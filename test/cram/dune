@@ -24,4 +24,8 @@
   typefail.sexp
   typepass.sexp
   basicssa.sexp
+  ll_simple.il
+  ll_simple.sexp
+  ll_real.sexp
+  ../../bin/main.exe
   roundtrip.sexp))
