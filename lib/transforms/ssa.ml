@@ -15,7 +15,7 @@ let dbg f = if !debug then f () else ()
 
     https://dspace.mit.edu/bitstream/handle/1721.1/86578/48072795-MIT.pdf *)
 let intro_ssi_assigns proc =
-  let f b =
+  let fix_block (_, b) =
     b
     |> Block.flat_map ~phi:id
          Stmt.(
@@ -28,7 +28,7 @@ let intro_ssi_assigns proc =
                else Iter.singleton a
            | b -> Iter.singleton b)
   in
-  Procedure.map_blocks_nondet (function id, b -> f b) proc
+  Procedure.map_blocks_nondet fix_block proc
 
 let check_ssa proc =
   let add_assign m v =

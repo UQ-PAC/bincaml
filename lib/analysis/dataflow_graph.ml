@@ -39,6 +39,7 @@ module Vertex = struct
   [@@deriving ord, eq, show { with_path = false }]
 
   type t = int * vt [@@deriving ord, eq, show { with_path = false }]
+  (** first element of pair used to store the priority *)
 
   let to_int = fst
 
@@ -84,7 +85,8 @@ type defuse = { var_to_use : MDeps.t; var_to_def : MDeps.t }
     them resp.*)
 
 (** Return a persistent iterator of dfgraph vertices for a procedure, first elem
-    of pair is the weaktopo index of the block.
+    of pair is the weaktopo index of the block used as a priority. This is using
+    control flow topo sort an approximation of the DFG topo sort.
 
     This is an approximated program representation for abstract semantics which
     assumes phi nodes compute the union of incoming states.
@@ -129,6 +131,23 @@ let get_dfg_vertices p : Vertex.t Iter.t =
   |> Iter.append
        (Iter.of_list [ (0, Vertex.Entry); (Int.max_int, Vertex.Return) ])
   |> Iter.persistent
+
+(** Reverses the index on everything *)
+let reverse_dfg_vertices_priority def_use =
+  let max =
+    def_use
+    |> Iter.filter (function _, Vertex.Return -> false | _ -> true)
+    |> Iter.max ~lt:(fun a b -> match (a, b) with (i, _), (j, _) -> i < j)
+    |> Option.map fst |> Option.get_or ~default:0
+  in
+  let max = max + 1 in
+  let def_use =
+    Iter.map
+      (function
+        | _, Vertex.Return -> (0, Vertex.Return) | v, vt -> (max - v, vt))
+      def_use
+  in
+  def_use
 
 (** return the vertex dependency maps {! defuse} for a procedure *)
 let def_use_maps ?(require_full_ssa = false) ?def_use p =
@@ -217,13 +236,7 @@ module SimpleSolver = struct
       transfer initial (0, Vertex.Entry) p (deps `Forwards) def_use
 
   let fixpoint_rev ~transfer ~initial p =
-    let def_use = get_dfg_vertices p in
-    let max =
-      def_use
-      |> Iter.max ~lt:(fun a b -> match (a, b) with (i, _), (j, _) -> i < j)
-      |> Option.map fst |> Option.get_or ~default:0
-    in
-    let def_use = Iter.map (function v, vt -> (max - v, vt)) def_use in
+    let def_use = get_dfg_vertices p |> reverse_dfg_vertices_priority in
 
     fixpoint_proc
       (module WLR)
@@ -327,6 +340,8 @@ open struct
 
       type edge = G.edge
 
+      (** Analysis function specificatlly for the flow insensitive fixed point,
+          hence incorporates joins etc. *)
       let analyze_vert_intra ~widen data (v : Vertex.t) =
         let join = if widen then V.widening else V.join in
         let r =
@@ -403,7 +418,7 @@ module AnalysisRev (D : DFAnalysis) = struct
   (** Construct run dataflow analysis over a {!DFGraph.t}. *)
   let analyse ~widen_set ~delay_widen (g : graph) : D.t =
     A.DFGChaoticIter.M.find_opt (0, Entry)
-    @@ A.analyse (Int.max_int, Return)
+    @@ A.analyse (0, Return)
          ~init:(D.init (fst g))
          ~widen_set ~delay_widen
          (Lazy.force (snd g))
