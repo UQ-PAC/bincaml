@@ -425,9 +425,7 @@ module BasilExpr = struct
     let open AbstractExpr in
     let open Ops.AllOps in
     let get_ty o =
-      match o with Fun { ret } -> ret | _ ->
-          print_endline @@ AllOps.show_op_fun_type o;
-          failwith "type error"
+      match o with Fun { ret } -> ret | _ -> failwith "type error"
     in
     match e with
     | RVar { id } -> Var.typ id
