@@ -416,6 +416,10 @@ module BasilExpr = struct
 
   (** {1 Typing}*)
 
+  type rewrite =
+    | SomeInfo of { v : t; __LINE__ : int; __FILE__ : string }
+    | None
+
   (** Algebra that infers types of expressions *)
   let type_alg (e : Types.t abstract_expr) =
     let open AbstractExpr in
@@ -441,27 +445,50 @@ module BasilExpr = struct
 
   let fold_with_type (alg : 'e abstract_expr -> 'a) = zygo_l ~cata type_alg alg
 
+  type rwinfo = {
+    from : t;
+    into : t;
+    __LINE__ : int option;
+    __FILE__ : string option;
+  }
+
+  let show_rwinfo = function
+    | { from; into } -> to_string from ^ " ~> " ^ to_string into
+
+  open struct
+    let log_rw visit ?__LINE__ ?__FILE__ o e =
+      Option.iter
+        (fun f ->
+          let a = type_of o in
+          let b = type_of e in
+          if not @@ Types.equal a b then
+            raise
+              (Failure
+                 ("ill-typed rewrite " ^ Types.to_string a ^ " ~> "
+                ^ Types.to_string b ^ " "
+                 ^ Option.get_or ~default:"" __FILE__
+                 ^ ":" ^ Option.get_or ~default:""
+                 @@ Option.map Int.to_string __LINE__));
+          f { __LINE__; __FILE__; from = o; into = e })
+        visit;
+      e
+  end
+
   (** substitute subexpression sbased on parameter *)
-  let rewrite ~(rw_fun : t abstract_expr -> t option) (expr : t) =
+  let rewrite ?visit ~(rw_fun : t abstract_expr -> rewrite) (expr : t) =
     let rw_alg e =
       let orig s = fix s in
       match rw_fun e with
-      | Some e' when Types.equal (type_of e') (type_of (orig e)) -> e'
-      | Some e' ->
+      | SomeInfo { v; __LINE__; __FILE__ }
+        when Types.equal (type_of v) (type_of (orig e)) ->
+          log_rw visit ~__LINE__ ~__FILE__ (fix e) v
+      | SomeInfo { v; __LINE__; __FILE__ } ->
           failwith
           @@ Printf.sprintf
                "improper rewrite type: attempt to rewrite %s into %s"
                (to_string (orig e))
-               (to_string e')
+               (to_string v)
       | None -> orig e
-    in
-    cata rw_alg expr
-
-  let rewrite_two (f : t abstract_expr abstract_expr -> t option) (expr : t) =
-    let rw_alg e =
-      let unfold = AbstractExpr.map unfix e in
-      let orig s = lazy (fix s) in
-      match f unfold with Some e -> e | None -> Lazy.force @@ orig e
     in
     cata rw_alg expr
 
@@ -480,13 +507,30 @@ module BasilExpr = struct
     in
     fold_with_type rw_alg expr
 
+  let[@inline] replace (here : Lexing.position) v =
+    SomeInfo { v; __LINE__ = here.pos_lnum; __FILE__ = here.pos_fname }
+
+  let replace_opt = function
+    | Some v -> SomeInfo { v; __LINE__; __FILE__ }
+    | None -> None
+  [@@inline always]
+
   (** typed rewriter that expands two layers deep into the expression *)
-  let rewrite_typed_two
-      (f : (t abstract_expr * Types.t) abstract_expr -> t option) (expr : t) =
+  let rewrite_typed_two ?visit
+      (f : (t abstract_expr * Types.t) abstract_expr -> rewrite) (expr : t) =
     let rw_alg e =
       let unfold = AbstractExpr.map (fun (e, t) -> (unfix e, t)) e in
       let orig s = fix @@ AbstractExpr.map fst s in
-      match f unfold with Some e -> e | None -> orig e
+      match f unfold with
+      (*| Some n ->
+         Option.iter
+            (fun f ->
+              f { from = orig e; into = n; __LINE__ = None; __FILE__ = None })
+            visit;
+          n *)
+      | SomeInfo { v; __LINE__; __FILE__ } ->
+          log_rw visit ~__LINE__ ~__FILE__ (orig e) v
+      | None -> orig e
     in
     fold_with_type rw_alg expr
 

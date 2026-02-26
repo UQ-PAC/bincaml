@@ -95,9 +95,6 @@ end
 
 let check ?(include_locals = false) (p : Program.proc) =
   let result = A.analyse p in
-  CCIO.with_out
-    (ID.to_string (Procedure.id p) ^ "ru.dot")
-    (fun o -> A.print_dot (Format.of_chan o) p result);
   let it =
     Option.to_iter (Procedure.graph p)
     |> Iter.flat_map (fun gr ->

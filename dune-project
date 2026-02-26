@@ -39,6 +39,7 @@
   pp_loc
   fmt
   patricia-tree
+  ppx_here
   (ocamlformat :with-dev-setup)
   (odig :with-dev-setup)
   (sherlodoc :with-doc)

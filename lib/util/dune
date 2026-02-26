@@ -10,12 +10,14 @@
   types
   bitvec
   zint
+  smt
   reverse_graph
   recursionscheme)
  (libraries
   iter
   containers
   fix
+  containers.unix
   containers.pp
   containers-data
   zarith

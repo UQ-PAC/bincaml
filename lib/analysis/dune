@@ -11,6 +11,8 @@
   ide_live
   lattice_collections
   wrapped_intervals
+  known_bits
+  tnum_wint_reduced_product
   known_bits)
  (libraries
   patricia-tree

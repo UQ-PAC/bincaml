@@ -32,7 +32,11 @@ let pretty_phi show_lvar show_var v =
         | bid, v -> (text @@ ID.to_string bid) ^ text " -> " ^ show_var v)
       v.rhs
   in
-  lhs ^ text " := phi" ^ (bracket "(" (fill (text "," ^ newline) rhs)) ")"
+  lhs ^ text " := phi"
+  ^ (bracket "(" (nest 2 (fill (text "," ^ newline) rhs))) ")"
+
+let show_phi show_var =
+  pretty_phi show_var show_var %> Containers_pp.Pretty.to_string ~width:80
 
 let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
   Trace_core.with_span ~__FILE__ ~__LINE__ "pretty-block" @@ fun _ ->
@@ -93,6 +97,14 @@ let map_fold_forwards ~(phi : 'acc -> 'v phi list -> 'acc * 'v phi list)
 
 let map ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
   { stmts = Vector.map f b.stmts; phis = phi b.phis }
+
+let flat_map ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
+  {
+    stmts =
+      Vector.to_iter b.stmts |> Iter.flat_map f |> Vector.of_iter
+      |> Vector.freeze;
+    phis = phi b.phis;
+  }
 
 let foldi_backwards ~(f : 'acc -> int * ('v, 'v, 'e) Stmt.t -> 'acc)
     ~(phi : 'acc -> 'v phi list -> 'acc) ~(init : 'a) (b : ('v, 'e) t) : 'acc =
