@@ -1,4 +1,5 @@
-var $Global_4325420_4325424: bv32;
+var shared $Global_4325420_4325424: bv32
+  classification true;
 
 prog entry @main_4196164;
 

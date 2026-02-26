@@ -90,11 +90,15 @@ and transSemicolons (x : semicolons) : result = match x with
   | Semicolons_Some semicolons -> failure x
 
 
+and transVarModifiers (x : varModifiers) : result = match x with
+    Shared  -> failure x
+  | Observable  -> failure x
+
+
 and transDecl (x : decl) : result = match x with
     Decl_Axiom (globalident, attribset, expr) -> failure x
-  | Decl_SharedMem (globalident, type', varspec) -> failure x
-  | Decl_UnsharedMem (globalident, type', varspec) -> failure x
-  | Decl_Var (globalident, type', varspec) -> failure x
+  | Decl_Mem (varmodifierss, globalident, type', varspec) -> failure x
+  | Decl_Var (varmodifierss, globalident, type', varspec) -> failure x
   | Decl_UninterpFun (globalident, attribset, type') -> failure x
   | Decl_Fun (globalident, attribset, type', expr) -> failure x
   | Decl_FunNoType (globalident, attribset, expr) -> failure x

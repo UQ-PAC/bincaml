@@ -7,7 +7,7 @@ open AbsBasilIR
 open Lexing
 %}
 
-%token KW_axiom KW_memory KW_shared KW_var KW_val KW_let KW_prog KW_entry KW_proc KW_le KW_be KW_nop KW_store KW_load KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_fun KW_old KW_boolnot KW_intneg KW_booltobv1 KW_gamma KW_classification KW_load_be KW_load_le KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_match KW_with KW_cases KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_rely KW_relies KW_guarnatee KW_guarantees KW_captures KW_modifies KW_invariant KW_guarantee
+%token KW_shared KW_observable KW_axiom KW_memory KW_var KW_val KW_let KW_prog KW_entry KW_proc KW_le KW_be KW_nop KW_store KW_load KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_fun KW_old KW_boolnot KW_intneg KW_booltobv1 KW_gamma KW_classification KW_load_be KW_load_le KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_match KW_with KW_cases KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_rely KW_relies KW_guarnatee KW_guarantees KW_captures KW_modifies KW_invariant KW_guarantee
 
 %token SYMB1 /* ; */
 %token SYMB2 /* , */
@@ -44,12 +44,14 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pSemicolons pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pFunParams pFunParams_list pValue pExpr pLParen pLParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pVarSpec_list pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pSemicolons pVarModifiers pVarModifiers_list pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pFunParams pFunParams_list pValue pExpr pLParen pLParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
 %type <AbsBasilIR.lambdaSep> pLambdaSep
 %type <AbsBasilIR.semicolons> pSemicolons
+%type <AbsBasilIR.varModifiers> pVarModifiers
+%type <AbsBasilIR.varModifiers list> pVarModifiers_list
 %type <AbsBasilIR.decl> pDecl
 %type <AbsBasilIR.typeT list> pTypeT_list
 %type <AbsBasilIR.procDef> pProcDef
@@ -119,7 +121,6 @@ open Lexing
 %type <AbsBasilIR.guarTok> pGuarTok
 %type <AbsBasilIR.funSpec> pFunSpec
 %type <AbsBasilIR.varSpec> pVarSpec
-%type <AbsBasilIR.varSpec list> pVarSpec_list
 %type <AbsBasilIR.progSpec> pProgSpec
 %type <AbsBasilIR.funSpec list> pFunSpec_list
 %type <AbsBasilIR.progSpec list> pProgSpec_list
@@ -129,6 +130,8 @@ open Lexing
 %type <AbsBasilIR.blockIdent list> blockIdent_list
 %type <AbsBasilIR.lambdaSep> lambdaSep
 %type <AbsBasilIR.semicolons> semicolons
+%type <AbsBasilIR.varModifiers> varModifiers
+%type <AbsBasilIR.varModifiers list> varModifiers_list
 %type <AbsBasilIR.decl> decl
 %type <AbsBasilIR.typeT list> typeT_list
 %type <AbsBasilIR.procDef> procDef
@@ -198,7 +201,6 @@ open Lexing
 %type <AbsBasilIR.guarTok> guarTok
 %type <AbsBasilIR.funSpec> funSpec
 %type <AbsBasilIR.varSpec> varSpec
-%type <AbsBasilIR.varSpec list> varSpec_list
 %type <AbsBasilIR.progSpec> progSpec
 %type <AbsBasilIR.funSpec list> funSpec_list
 %type <AbsBasilIR.progSpec list> progSpec_list
@@ -232,6 +234,10 @@ pBlockIdent_list : blockIdent_list TOK_EOF { $1 };
 pLambdaSep : lambdaSep TOK_EOF { $1 };
 
 pSemicolons : semicolons TOK_EOF { $1 };
+
+pVarModifiers : varModifiers TOK_EOF { $1 };
+
+pVarModifiers_list : varModifiers_list TOK_EOF { $1 };
 
 pDecl : decl TOK_EOF { $1 };
 
@@ -371,8 +377,6 @@ pFunSpec : funSpec TOK_EOF { $1 };
 
 pVarSpec : varSpec TOK_EOF { $1 };
 
-pVarSpec_list : varSpec_list TOK_EOF { $1 };
-
 pProgSpec : progSpec TOK_EOF { $1 };
 
 pFunSpec_list : funSpec_list TOK_EOF { $1 };
@@ -399,10 +403,17 @@ semicolons : /* empty */ { Semicolons_Empty  }
   | semicolons SYMB1 { Semicolons_Some $1 }
   ;
 
+varModifiers : KW_shared { Shared  }
+  | KW_observable { Observable  }
+  ;
+
+varModifiers_list : /* empty */ { []  }
+  | varModifiers varModifiers_list { (fun (x,xs) -> x::xs) ($1, $2) }
+  ;
+
 decl : KW_axiom globalIdent attribSet expr { Decl_Axiom ($2, $3, $4) }
-  | KW_memory KW_shared globalIdent SYMB5 typeT varSpec { Decl_SharedMem ($3, $5, $6) }
-  | KW_memory globalIdent SYMB5 typeT varSpec { Decl_UnsharedMem ($2, $4, $5) }
-  | KW_var globalIdent SYMB5 typeT varSpec { Decl_Var ($2, $4, $5) }
+  | KW_memory varModifiers_list globalIdent SYMB5 typeT varSpec { Decl_Mem ($2, $3, $5, $6) }
+  | KW_var varModifiers_list globalIdent SYMB5 typeT varSpec { Decl_Var ($2, $3, $5, $6) }
   | KW_val globalIdent attribSet SYMB5 typeT { Decl_UninterpFun ($2, $3, $5) }
   | KW_let globalIdent attribSet SYMB5 typeT SYMB6 expr { Decl_Fun ($2, $3, $5, $7) }
   | KW_let globalIdent attribSet SYMB6 expr { Decl_FunNoType ($2, $3, $5) }
@@ -764,10 +775,6 @@ funSpec : requireTok expr { FunSpec_Require ($1, $2) }
 
 varSpec : KW_classification expr { VarSpec_Classification $2 }
   | /* empty */ { VarSpec_Empty  }
-  ;
-
-varSpec_list : /* empty */ { []  }
-  | varSpec SYMB1 varSpec_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 progSpec : KW_rely expr { ProgSpec_Rely $2 }

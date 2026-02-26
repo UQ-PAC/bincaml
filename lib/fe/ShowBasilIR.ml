@@ -70,11 +70,15 @@ and showSemicolons (e : AbsBasilIR.semicolons) : showable = match e with
   |    AbsBasilIR.Semicolons_Some semicolons -> s2s "Semicolons_Some" >> c2s ' ' >> c2s '(' >> showSemicolons semicolons >> c2s ')'
 
 
+and showVarModifiers (e : AbsBasilIR.varModifiers) : showable = match e with
+       AbsBasilIR.Shared  -> s2s "Shared"
+  |    AbsBasilIR.Observable  -> s2s "Observable"
+
+
 and showDecl (e : AbsBasilIR.decl) : showable = match e with
        AbsBasilIR.Decl_Axiom (globalident, attribset, expr) -> s2s "Decl_Axiom" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showExpr expr >> c2s ')'
-  |    AbsBasilIR.Decl_SharedMem (globalident, type', varspec) -> s2s "Decl_SharedMem" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
-  |    AbsBasilIR.Decl_UnsharedMem (globalident, type', varspec) -> s2s "Decl_UnsharedMem" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
-  |    AbsBasilIR.Decl_Var (globalident, type', varspec) -> s2s "Decl_Var" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
+  |    AbsBasilIR.Decl_Mem (varmodifierss, globalident, type', varspec) -> s2s "Decl_Mem" >> c2s ' ' >> c2s '(' >> showList showVarModifiers varmodifierss  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
+  |    AbsBasilIR.Decl_Var (varmodifierss, globalident, type', varspec) -> s2s "Decl_Var" >> c2s ' ' >> c2s '(' >> showList showVarModifiers varmodifierss  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
   |    AbsBasilIR.Decl_UninterpFun (globalident, attribset, type') -> s2s "Decl_UninterpFun" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showTypeT type' >> c2s ')'
   |    AbsBasilIR.Decl_Fun (globalident, attribset, type', expr) -> s2s "Decl_Fun" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Decl_FunNoType (globalident, attribset, expr) -> s2s "Decl_FunNoType" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showExpr expr >> c2s ')'

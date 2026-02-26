@@ -117,40 +117,39 @@ module BasilASTLoader = struct
     in
     map_prog (fun prog -> Spec_modifies.set_modsets ~add_only:true prog) prog
 
+  and var_modifiers_pure (m : varModifiers list) =
+    not @@ List.exists (function Shared | Observable -> true) m
+
   and trans_varspec prog (v : varSpec) =
-    match v with
-    | VarSpec_Classification v ->
-        [ ("classification", `Expr (trans_expr prog v)) ]
-    | VarSpec_Empty -> []
+    let trans_one v =
+      match v with
+      | VarSpec_Classification v ->
+          [ ("classification", `Expr (trans_expr prog v)) ]
+      | VarSpec_Empty -> []
+    in
+    trans_one v
 
   and trans_declaration prog (x : decl) : load_st =
     match x with
-    | Decl_SharedMem (bident, type', spec) ->
+    | Decl_Mem (modifiers, bident, type', spec) ->
         let attrib = StringMap.of_list (trans_varspec prog spec) in
-        map_prog
-          (fun p ->
-            Program.decl_global ~attrib p
-              (Var.create
-                 (unsafe_unsigil (`Global bident))
-                 ~pure:false ~scope:Global (trans_type type')))
-          prog
-    | Decl_UnsharedMem (bident, type', spec) ->
-        let attrib = StringMap.of_list (trans_varspec prog spec) in
+        let pure = var_modifiers_pure modifiers in
         map_prog
           (fun p ->
             Program.decl_global p ~attrib
               (Var.create
                  (unsafe_unsigil (`Global bident))
-                 ~pure:false ~scope:Global (trans_type type')))
+                 ~pure ~scope:Global (trans_type type')))
           prog
-    | Decl_Var (bident, type', spec) ->
+    | Decl_Var (modifiers, bident, type', spec) ->
         let attrib = StringMap.of_list (trans_varspec prog spec) in
+        let pure = var_modifiers_pure modifiers in
         map_prog
           (fun p ->
             Program.decl_global p ~attrib
               (Var.create
                  (unsafe_unsigil (`Global bident))
-                 ~pure:true ~scope:Global (trans_type type')))
+                 ~pure ~scope:Global (trans_type type')))
           prog
     | Decl_ProgEmpty (ProcIdent (_, id), attr) -> prog
     | Decl_ProgWithSpec (ProcIdent (_, id), attr, spec) -> prog

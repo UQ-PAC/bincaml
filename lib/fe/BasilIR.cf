@@ -44,10 +44,14 @@ comment "//" ;
 comment "/*" "*/" ;
 
 {- Top Level Declarations -}
+
+Shared . VarModifiers ::= "shared" ;
+Observable . VarModifiers ::= "observable";
+separator VarModifiers "" ;
+
 Decl_Axiom . Decl ::= "axiom" GlobalIdent AttribSet Expr; 
-Decl_SharedMem . Decl ::= "memory" "shared" GlobalIdent ":" Type VarSpec ;
-Decl_UnsharedMem . Decl ::= "memory" GlobalIdent ":" Type VarSpec;
-Decl_Var . Decl ::= "var" GlobalIdent ":" Type VarSpec ;
+Decl_Mem . Decl ::= "memory" [VarModifiers] GlobalIdent ":" Type VarSpec ;
+Decl_Var . Decl ::= "var" [VarModifiers] GlobalIdent ":" Type VarSpec ;
 
 separator Type ",";
 
@@ -265,7 +269,6 @@ FunSpec_Modifies . FunSpec ::= "modifies" [GlobalVar];
 
 VarSpec_Classification . VarSpec ::= "classification" Expr;
 VarSpec_Empty . VarSpec ::= "";
-terminator VarSpec ";";
 
 
 FunSpec_Invariant . FunSpec ::= "invariant" BlockIdent Expr;
