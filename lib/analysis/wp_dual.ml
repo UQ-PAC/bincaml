@@ -115,9 +115,10 @@ module Domain (S : RequiresAnnotation) = struct
     | _ -> p
 
   (** Encode an abstract state as a predicate *)
-  let to_pred = Algsimp.normalise % BasilExpr.boolnot
+  let to_pred = Algsimp.normalise % Algsimp.normalise % BasilExpr.boolnot
   (* We use the Algsimp simplifier as a big simplifier pass at the end to make
-     cleaner summaries. It may be worth using an external smt simplifier *)
+     cleaner summaries. It may be worth using an external smt simplifier. The
+     double normalise was needed to get rid of double nots. *)
 end
 
 module IntraDomain = Domain (struct
@@ -125,3 +126,44 @@ module IntraDomain = Domain (struct
 end)
 
 module IntraAnalysis = Intra_analysis.Backwards (IntraDomain)
+
+let%expect_test "wp_dual" =
+  let prog =
+    (Loader.Loadir.ast_of_string
+       {|
+prog entry @main;
+proc @main () -> ()
+[
+    block %main_entry [
+        goto(%main_1, %main_2);
+    ];
+    block %main_1 [
+        $x:bv64 := a:bv64;
+        goto(%main_2);
+    ];
+    block %main_2 [
+        $x:bv64 := bvadd($x:bv64, a:bv64);
+        assert eq($x:bv64,0);
+        assume neq(e:bv64,0);
+        goto(%main_return);
+    ];
+    block %main_return [
+        return();
+    ];
+];
+    |})
+      .prog
+  in
+  let proc =
+    ID.Map.find
+      (prog.entry_proc |> Option.get_exn_or "no entry proc")
+      prog.procs
+  in
+  let res =
+    IntraAnalysis.analyse
+      ~init:(fun _ -> Expr.BasilExpr.boolconst false)
+      ~widening_set:Graph.ChaoticIteration.FromWto ~widening_delay:5 proc
+  in
+  IntraAnalysis.A.M.find Procedure.Vert.Entry res
+  |> IntraDomain.to_pred |> BasilExpr.to_string |> print_endline;
+  [%expect {| booland(eq(bvadd($x:bv64, a:bv64), 0), eq(bvadd(a:bv64, a:bv64), 0)) |}]
