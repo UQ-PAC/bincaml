@@ -19,6 +19,7 @@ module type FunctionSummaryAnnotation = sig
   val ensures : ID.t -> Expr.BasilExpr.t list
 end
 
+(** Replace gamma expressions with gamma variables for an smt query *)
 let normalise_gamma =
   let open Expr.AbstractExpr in
   let open Expr.BasilExpr in
@@ -75,6 +76,7 @@ let wp_dual_requires (module S : FunctionSummaryAnnotation)
   Analysis.A.M.find_opt Procedure.Vert.Entry result
   |> Option.map Domain.to_pred |> Option.to_list
 
+(** Compute an extension of the given procedure's summary *)
 let extra_summary (solver : Bincaml_util.Smt.Solver.t)
     (module S : FunctionSummaryAnnotation) (proc : Program.proc) =
   (* TODO implement a sample ensures clause generator and some sort of analysis
@@ -89,9 +91,14 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
   in
   { requires; ensures = [] }
 
-let annotate_proc (solver : Bincaml_util.Smt.Solver.t)
-    (s : (module FunctionSummaryAnnotation)) (proc : Program.proc) =
-  let summary = extra_summary solver s proc in
+let set_summary summary (proc : Program.proc) =
+  let spec = Procedure.specification proc in
+  let spec =
+    { spec with requires = summary.requires; ensures = summary.ensures }
+  in
+  Procedure.set_specification proc spec
+
+let add_summary summary (proc : Program.proc) =
   let spec = Procedure.specification proc in
   let spec =
     {
@@ -110,21 +117,24 @@ let intraproc_transform proc =
         log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
-  annotate_proc solver
-    (module struct
-      let requires id =
-        if ID.equal id (Procedure.id proc) then
-          (Procedure.specification proc).requires
-        else []
+  let summary =
+    extra_summary solver
+      (module struct
+        let requires id =
+          if ID.equal id (Procedure.id proc) then
+            (Procedure.specification proc).requires
+          else []
 
-      let ensures id =
-        if ID.equal id (Procedure.id proc) then
-          (Procedure.specification proc).ensures
-        else []
-    end : FunctionSummaryAnnotation)
-    proc
+        let ensures id =
+          if ID.equal id (Procedure.id proc) then
+            (Procedure.specification proc).ensures
+          else []
+      end : FunctionSummaryAnnotation)
+      proc
+  in
+  add_summary summary proc
 
-let annotate_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
+let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
     res component =
   let procs = prog.procs in
   let component =
@@ -150,12 +160,10 @@ let annotate_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
       let annotations =
         (module struct
           let requires id =
-            List.append (ID.Map.get_or id res ~default:Domain.bottom).requires
-              (vals id).requires
+            List.append (ID.Map.find id res).requires (vals id).requires
 
           let ensures id =
-            List.append (ID.Map.get_or id res ~default:Domain.bottom).ensures
-              (vals id).ensures
+            List.append (ID.Map.find id res).ensures (vals id).ensures
         end : FunctionSummaryAnnotation)
       in
       let extra = extra_summary solver annotations (ID.Map.find pid procs) in
@@ -185,16 +193,12 @@ let interproc_transform (prog : Program.t) =
         { requires = spec.requires; ensures = spec.ensures })
   in
   let summaries =
-    List.fold_left (annotate_component solver call_graph prog) summaries sccs
+    List.fold_left (solve_component solver call_graph prog) summaries sccs
   in
   ID.Map.fold
     (fun pid summary (prog : Program.t) ->
       let proc = ID.Map.find pid prog.procs in
-      let spec = Procedure.specification proc in
-      let spec =
-        { spec with requires = summary.requires; ensures = summary.ensures }
-      in
-      let proc' = Procedure.set_specification proc spec in
+      let proc' = set_summary summary proc in
       let procs = ID.Map.add pid proc' prog.procs in
       { prog with procs })
     summaries prog
