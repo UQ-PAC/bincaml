@@ -122,9 +122,16 @@ module PassManager = struct
       doc = "Fail if the IR program is not type correct";
     }
 
-  let function_summaries =
+  let intra_function_summaries =
     {
-      name = "function-summaries";
+      name = "intra-function-summaries";
+      apply = Proc Transforms.Function_summaries.intraproc_transform;
+      doc = "Generate function summaries for each procedure";
+    }
+
+  let inter_function_summaries =
+    {
+      name = "inter-function-summaries";
       apply = Prog Transforms.Function_summaries.interproc_transform;
       doc = "Generate function summaries for each procedure";
     }
@@ -141,7 +148,8 @@ module PassManager = struct
       sssa;
       full_ssa;
       type_check;
-      function_summaries;
+      intra_function_summaries;
+      inter_function_summaries;
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;

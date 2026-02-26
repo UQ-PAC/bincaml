@@ -102,7 +102,7 @@ let annotate_proc (solver : Bincaml_util.Smt.Solver.t)
   in
   Procedure.set_specification proc spec
 
-let transform proc =
+let intraproc_transform proc =
   let solver =
     Bincaml_util.Smt.Solver.create
       {
