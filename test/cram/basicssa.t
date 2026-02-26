@@ -191,12 +191,14 @@ Run on basic irreducible loop example
         goto (%main_27,%main_23);
      ];
      block %main_23 [
-        guard neq(booltobv1(eq(ZF_1:bv1, 0x1:bv1)), 0x0:bv1);
+        var ZF_3:bv1 := ZF_1:bv1;
+        guard neq(booltobv1(eq(ZF_3:bv1, 0x1:bv1)), 0x0:bv1);
         goto (%main_21);
      ];
      block %main_21 [ goto (%main_19); ];
      block %main_27 [
-        guard eq(booltobv1(eq(ZF_1:bv1, 0x1:bv1)), 0x0:bv1);
+        var ZF_2:bv1 := ZF_1:bv1;
+        guard eq(booltobv1(eq(ZF_2:bv1, 0x1:bv1)), 0x0:bv1);
         goto (%main_25);
      ];
      block %main_25 [ goto (%main_5); ];
@@ -207,16 +209,16 @@ Run on basic irreducible loop example
          var R29_4:bv64 := phi(%main_25 -> R29_1:bv64, %main_7 -> R29_3:bv64),
          var R31_4:bv64 := phi(%main_25 -> R31_1:bv64, %main_7 -> R31_3:bv64),
          var VF_5:bv1 := phi(%main_25 -> VF_1:bv1, %main_7 -> VF_4:bv1),
-         var ZF_5:bv1 := phi(%main_25 -> ZF_1:bv1, %main_7 -> ZF_4:bv1));
+         var ZF_8:bv1 := phi(%main_25 -> ZF_2:bv1, %main_7 -> ZF_7:bv1));
         var R0_13:bv64 := 0x0:bv64;
         var R0_14:bv64 := bvadd(R0_13:bv64, 0x820:bv64);
         var R30_3:bv64 := 0x7a0:bv64;
         (var CF_6:bv1=CF_out, var NF_6:bv1=NF_out, var R0_15:bv64=R0_out,
            var R1_4:bv64=R1_out, var R29_5:bv64=R29_out, var R30_4:bv64=R30_out,
-           var R31_5:bv64=R31_out, var VF_6:bv1=VF_out, var ZF_6:bv1=ZF_out) := 
+           var R31_5:bv64=R31_out, var VF_6:bv1=VF_out, var ZF_9:bv1=ZF_out) := 
         call @puts_1584(CF_in=CF_5:bv1, NF_in=NF_5:bv1, R0_in=R0_14:bv64,
            R1_in=R1_3:bv64, R29_in=R29_4:bv64, R30_in=R30_3:bv64, R31_in=R31_4:bv64,
-           VF_in=VF_5:bv1, ZF_in=ZF_5:bv1);
+           VF_in=VF_5:bv1, ZF_in=ZF_8:bv1);
         goto (%main_3);
      ];
      block %main_3 [
@@ -237,16 +239,16 @@ Run on basic irreducible loop example
          var R29_2:bv64 := phi(%main_3 -> R29_5:bv64, %main_21 -> R29_1:bv64),
          var R31_2:bv64 := phi(%main_3 -> R31_5:bv64, %main_21 -> R31_1:bv64),
          var VF_2:bv1 := phi(%main_3 -> VF_6:bv1, %main_21 -> VF_1:bv1),
-         var ZF_2:bv1 := phi(%main_3 -> ZF_6:bv1, %main_21 -> ZF_1:bv1));
+         var ZF_4:bv1 := phi(%main_3 -> ZF_9:bv1, %main_21 -> ZF_3:bv1));
         var R0_7:bv64 := 0x0:bv64;
         var R0_8:bv64 := bvadd(R0_7:bv64, 0x820:bv64);
         var R30_1:bv64 := 0x7d0:bv64;
         (var CF_3:bv1=CF_out, var NF_3:bv1=NF_out, var R0_9:bv64=R0_out,
            var R1_2:bv64=R1_out, var R29_3:bv64=R29_out, var R30_2:bv64=R30_out,
-           var R31_3:bv64=R31_out, var VF_3:bv1=VF_out, var ZF_3:bv1=ZF_out) := 
+           var R31_3:bv64=R31_out, var VF_3:bv1=VF_out, var ZF_5:bv1=ZF_out) := 
         call @puts_1584(CF_in=CF_2:bv1, NF_in=NF_2:bv1, R0_in=R0_8:bv64,
            R1_in=R1_1:bv64, R29_in=R29_2:bv64, R30_in=R30_1:bv64, R31_in=R31_2:bv64,
-           VF_in=VF_2:bv1, ZF_in=ZF_2:bv1);
+           VF_in=VF_2:bv1, ZF_in=ZF_4:bv1);
         goto (%main_17);
      ];
      block %main_17 [
@@ -261,26 +263,28 @@ Run on basic irreducible loop example
         var CF_4:bv1 := bvnot(booltobv1(eq(zero_extend(1,
            bvadd(#6_1:bv32, 0x1:bv32)),
            bvadd(zero_extend(1, extract(32,0, R0_12:bv64)), 0xfffffffb:bv33))));
-        var ZF_4:bv1 := booltobv1(eq(bvadd(#6_1:bv32, 0x1:bv32), 0x0:bv32));
+        var ZF_6:bv1 := booltobv1(eq(bvadd(#6_1:bv32, 0x1:bv32), 0x0:bv32));
         var NF_4:bv1 := extract(32,31, bvadd(#6_1:bv32, 0x1:bv32));
         goto (%main_15,%main_9);
      ];
      block %main_9 [
-        guard neq(bvnot(booltobv1(eq(ZF_4:bv1, 0x1:bv1))), 0x0:bv1);
+        var ZF_7:bv1 := ZF_6:bv1;
+        guard neq(bvnot(booltobv1(eq(ZF_7:bv1, 0x1:bv1))), 0x0:bv1);
         goto (%main_7);
      ];
      block %main_7 [ goto (%main_5); ];
      block %main_15 [
-        guard eq(bvnot(booltobv1(eq(ZF_4:bv1, 0x1:bv1))), 0x0:bv1);
+        var ZF_10:bv1 := ZF_6:bv1;
+        guard eq(bvnot(booltobv1(eq(ZF_10:bv1, 0x1:bv1))), 0x0:bv1);
         var R0_21:bv64 := 0x0:bv64;
         var R0_22:bv64 := bvadd(R0_21:bv64, 0x828:bv64);
         var R30_5:bv64 := 0x7f4:bv64;
         (var CF_7:bv1=CF_out, var NF_7:bv1=NF_out, var R0_23:bv64=R0_out,
            var R1_6:bv64=R1_out, var R29_6:bv64=R29_out, var R30_6:bv64=R30_out,
-           var R31_6:bv64=R31_out, var VF_7:bv1=VF_out, var ZF_7:bv1=ZF_out) := 
+           var R31_6:bv64=R31_out, var VF_7:bv1=VF_out, var ZF_11:bv1=ZF_out) := 
         call @puts_1584(CF_in=CF_4:bv1, NF_in=NF_4:bv1, R0_in=R0_22:bv64,
            R1_in=R1_2:bv64, R29_in=R29_3:bv64, R30_in=R30_5:bv64, R31_in=R31_3:bv64,
-           VF_in=VF_4:bv1, ZF_in=ZF_4:bv1);
+           VF_in=VF_4:bv1, ZF_in=ZF_10:bv1);
         goto (%main_13);
      ];
      block %main_13 [ goto (%main_11); ];
@@ -299,7 +303,7 @@ Run on basic irreducible loop example
          var R0_out:bv64 := R0_24:bv64, var R1_out:bv64 := R1_6:bv64,
          var R29_out:bv64 := R29_7:bv64, var R30_out:bv64 := R30_7:bv64,
          var R31_out:bv64 := R31_7:bv64, var VF_out:bv1 := VF_7:bv1,
-         var ZF_out:bv1 := ZF_7:bv1);
+         var ZF_out:bv1 := ZF_11:bv1);
         return;
      ]
   ];
@@ -333,3 +337,34 @@ The interpreter should give the same output for both
 Similar example fixing up  a file already in DSA form
 
   $ diff  before_conds.txt after_conds.txt
+
+
+Multiple loops dependencies of loops etc are handled correctly
+
+  $ diff ssa-multi-before.il ssa-multi-after.il
+  1d0
+  < var $R0:bv64;
+  3c2
+  < proc @main()  -> () {  }
+  ---
+  > proc @main(R0_in:bv64)  -> (R0_out:bv64) {  }
+  7a7
+  >    block %inputs [ var R0:bv64 := R0_in:bv64; goto (%e); ];
+  9,12c9,19
+  <    block %e1 [ $R0:bv64 := 0x1:bv64; goto (%e2); ];
+  <    block %e2 [ goto (%e4,%e1); ];
+  <    block %e3 [ $R0:bv64 := 0x3:bv64; goto (%e4,%e1); ];
+  <    block %e4 [ return; ]
+  ---
+  >    block %e1 [ var R0_2:bv64 := 0x1:bv64; goto (%e2); ];
+  >    block %e2 [
+  >       (var R0_3:bv64 := phi(%e1 -> R0_2:bv64, %e -> R0:bv64));
+  >       goto (%e4,%e1);
+  >    ];
+  >    block %e3 [ var R0_1:bv64 := 0x3:bv64; goto (%e4,%e1); ];
+  >    block %e4 [
+  >       (var R0_4:bv64 := phi(%e2 -> R0_3:bv64, %e3 -> R0_1:bv64, %e2 -> R0_3:bv64));
+  >       goto (%returns);
+  >    ];
+  >    block %returns [ var R0_out:bv64 := R0_4:bv64; return; ]
+  [1]

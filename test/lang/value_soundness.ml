@@ -97,12 +97,22 @@ module TestBoolDom =
   ValueAbstractionSoundness (Analysis.Defuse_bool.IsZeroValueAbstractionBasil)
 
 module TestIsKnownDom =
-  ValueAbstractionSoundness (Analysis.Known_bits.IsKnownValueAbstractionBasil)
+  ValueAbstractionSoundness (Analysis.Known_bits.KnownValueAbstractionBasil)
 
 module TestWrappedIntervalDom =
   ValueAbstractionSoundness
     (Analysis.Wrapped_intervals.WrappedIntervalsValueAbstractionBasil)
 
+module TestTnumWintReducedDom =
+  ValueAbstractionSoundness
+    (Analysis.Tnum_wint_reduced_product
+     .TnumWintReducedProductValueAbstractionBasil)
+
 let _ =
   Alcotest.run "value domain abstract eval soundness"
-    [ TestBoolDom.suite; TestWrappedIntervalDom.suite; TestIsKnownDom.suite ]
+    [
+      TestBoolDom.suite;
+      TestWrappedIntervalDom.suite;
+      TestIsKnownDom.suite;
+      TestTnumWintReducedDom.suite;
+    ]

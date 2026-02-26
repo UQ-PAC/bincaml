@@ -65,6 +65,21 @@ module PassManager = struct
          results";
     }
 
+  let cfg_tnum_wint_reduced =
+    {
+      name = "demo-cfg-tnum-wint-reduced-analysis";
+      apply =
+        Proc
+          (fun p ->
+            let r = Analysis.Tnum_wint_reduced_product.analyse p in
+            Analysis.Tnum_wint_reduced_product.Analysis.print_dot
+              (Format.of_chan stdout) p r;
+            p);
+      doc =
+        "Runs known bits and wrapped interval reduced product analysis on \
+         control flow graph and prints results";
+    }
+
   let remove_unused =
     {
       name = "remove-unused-decls";
@@ -83,10 +98,18 @@ module PassManager = struct
          definitions from parameters";
     }
 
+  let cleanup_cfg =
+    {
+      name = "remove-unreachable-block";
+      apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
+      doc = "Remove blocks unreachable from entry";
+    }
+
   let full_ssa =
     {
       name = "ssa";
-      apply = Batch [ sparams; read_uninit true; sssa; remove_unused ];
+      apply =
+        Batch [ cleanup_cfg; sparams; read_uninit true; sssa; remove_unused ];
       doc =
         "Complete SSA pipeline for early IR (global register parameterless \
          form)";
@@ -108,8 +131,10 @@ module PassManager = struct
 
   let passes =
     [
+      cleanup_cfg;
       dfg_bool;
       cfg_wrapped_int;
+      cfg_tnum_wint_reduced;
       sparams;
       read_uninit false;
       read_uninit true;
@@ -117,11 +142,6 @@ module PassManager = struct
       full_ssa;
       type_check;
       function_summaries;
-      {
-        name = "remove-unreachable-block";
-        apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
-        doc = "Remove blocks unreachable from entry";
-      };
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;

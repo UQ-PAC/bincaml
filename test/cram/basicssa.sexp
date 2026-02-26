@@ -16,3 +16,13 @@
 (interp-out "before_conds.txt")
 (run-transforms "simple-ssa")
 (interp-out "after_conds.txt")
+
+
+; multi ssa form
+
+(load-il "ssa-multi-deps.il")
+(run-transforms "remove-unreachable-block" "cf-expressions" "intra-dead-store-elim")
+(dump-il "ssa-multi-before.il")
+(run-transforms "ssa")
+(dump-il "ssa-multi-after.il")
+

@@ -12,8 +12,9 @@
   lattice_collections
   wrapped_intervals
   known_bits
-  wp_dual
-  )
+  tnum_wint_reduced_product
+  known_bits
+  wp_dual)
  (libraries
   patricia-tree
   loader
