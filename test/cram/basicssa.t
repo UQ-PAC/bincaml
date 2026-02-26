@@ -13,7 +13,7 @@ Run on basic irreducible loop example
   var $R31:bv64;
   var $VF:bv1;
   var $ZF:bv1;
-  var $mem:(bv64->bv8);
+  var observable $mem:(bv64->bv8);
   var $stack:(bv64->bv8);
   prog entry @main_1876;
   proc @main_1876()  -> () { .address = 1876; .name = "main";
@@ -140,7 +140,7 @@ Run on basic irreducible loop example
   var $R31:bv64;
   var $VF:bv1;
   var $ZF:bv1;
-  var $mem:(bv64->bv8);
+  var observable $mem:(bv64->bv8);
   var $stack:(bv64->bv8);
   prog entry @main_1876;
   proc @main_1876(CF_in:bv1, NF_in:bv1, R0_in:bv64, R1_in:bv64, R29_in:bv64,
@@ -322,10 +322,10 @@ Run on basic irreducible loop example
   <   captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
   <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
   ---
-  >   modifies $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
-  >     $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8);
-  >   captures $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
-  >     $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8);
+  >   modifies $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64,
+  >     $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8);
+  >   captures $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64,
+  >     $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8);
   [1]
 
 The interpreter should give the same output for both

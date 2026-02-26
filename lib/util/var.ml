@@ -77,7 +77,9 @@ let to_string_il_rvar v = to_string v
 let to_string_il_lvar v =
   match scope v with Local -> "var " ^ to_string v | Global -> to_string v
 
-let to_decl_string_il v = "var " ^ to_string v
+let to_decl_string_il v =
+  let modifiers = if not (pure v) then "observable " else "" in
+  "var " ^ modifiers ^ to_string v
 
 module Decls = struct
   include Hashtbl

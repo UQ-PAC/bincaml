@@ -70,11 +70,15 @@ and showSemicolons (e : AbsBasilIR.semicolons) : showable = match e with
   |    AbsBasilIR.Semicolons_Some semicolons -> s2s "Semicolons_Some" >> c2s ' ' >> c2s '(' >> showSemicolons semicolons >> c2s ')'
 
 
+and showVarModifiers (e : AbsBasilIR.varModifiers) : showable = match e with
+       AbsBasilIR.Shared  -> s2s "Shared"
+  |    AbsBasilIR.Observable  -> s2s "Observable"
+
+
 and showDecl (e : AbsBasilIR.decl) : showable = match e with
        AbsBasilIR.Decl_Axiom (globalident, attribset, expr) -> s2s "Decl_Axiom" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showExpr expr >> c2s ')'
-  |    AbsBasilIR.Decl_SharedMem (globalident, type', varspec) -> s2s "Decl_SharedMem" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
-  |    AbsBasilIR.Decl_UnsharedMem (globalident, type', varspec) -> s2s "Decl_UnsharedMem" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
-  |    AbsBasilIR.Decl_Var (globalident, type', varspec) -> s2s "Decl_Var" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
+  |    AbsBasilIR.Decl_Mem (varmodifierss, globalident, type', varspec) -> s2s "Decl_Mem" >> c2s ' ' >> c2s '(' >> showList showVarModifiers varmodifierss  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
+  |    AbsBasilIR.Decl_Var (varmodifierss, globalident, type', varspec) -> s2s "Decl_Var" >> c2s ' ' >> c2s '(' >> showList showVarModifiers varmodifierss  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showVarSpec varspec >> c2s ')'
   |    AbsBasilIR.Decl_UninterpFun (globalident, attribset, type') -> s2s "Decl_UninterpFun" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showTypeT type' >> c2s ')'
   |    AbsBasilIR.Decl_Fun (globalident, attribset, type', expr) -> s2s "Decl_Fun" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Decl_FunNoType (globalident, attribset, expr) -> s2s "Decl_FunNoType" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showExpr expr >> c2s ')'
@@ -133,6 +137,9 @@ and showAssignment (e : AbsBasilIR.assignment) : showable = match e with
 and showStmt (e : AbsBasilIR.stmt) : showable = match e with
        AbsBasilIR.Stmt_Nop  -> s2s "Stmt_Nop"
   |    AbsBasilIR.Stmt_SingleAssign assignment -> s2s "Stmt_SingleAssign" >> c2s ' ' >> c2s '(' >> showAssignment assignment >> c2s ')'
+  |    AbsBasilIR.Stmt_MemAssign (lvar, expr) -> s2s "Stmt_MemAssign" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.Stmt_ScalarStore (lvar, expr) -> s2s "Stmt_ScalarStore" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.Stmt_ScalarLoad (lvar, var) -> s2s "Stmt_ScalarLoad" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showVar var >> c2s ')'
   |    AbsBasilIR.Stmt_MultiAssign (openparen, assignments, closeparen) -> s2s "Stmt_MultiAssign" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showAssignment assignments  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Stmt_Load (lvar, endian, globalident, expr, intval) -> s2s "Stmt_Load" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
   |    AbsBasilIR.Stmt_Store (endian, globalident, expr0, expr, intval) -> s2s "Stmt_Store" >> c2s ' ' >> c2s '(' >> showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
