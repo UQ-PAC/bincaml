@@ -20,7 +20,7 @@ module SMTLib2 = struct
     logics : LSet.t;
   }
 
-  let init =
+  let empty =
     {
       preamble = [];
       commands = [];
@@ -74,14 +74,23 @@ module SMTLib2 = struct
   let add_preamble (v : Sexp.t) (s : builder) =
     (v, { s with preamble = v :: s.preamble })
 
-  let extract s =
-    let* b = get s in
+  let to_sexp ?(set_logic = true) b =
     let open Iter.Infix in
-    let logic = list [ atom "set-logic"; atom (get_logic_string b.logics) ] in
-    let preamble = List.to_iter (logic :: b.preamble) in
+    let logic =
+      if set_logic then
+        [ list [ atom "set-logic"; atom (get_logic_string b.logics) ] ]
+      else []
+    in
+    let preamble = List.to_iter (logic @ b.preamble) in
     let decls = VarMap.to_iter b.var_decls >|= fun (v, d) -> d.decl_cmd in
     let commands = List.rev b.commands |> List.to_iter in
-    return (preamble <+> decls <+> commands)
+    preamble <+> decls <+> commands
+
+  let run (e : 'e t) = e empty
+
+  let extract s =
+    let* b = get s in
+    return @@ to_sexp b
 
   let rec of_typ (ty : Types.t) =
     match ty with
@@ -153,6 +162,8 @@ module SMTLib2 = struct
           ]
     | `EQ -> atom "="
     | `BoolNOT -> atom "not"
+    | `NEQ -> failwith "undef"
+    | `AND -> atom "and"
     | #Ops.AllOps.unary as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.const as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.binary as o -> atom @@ Ops.AllOps.to_string o
@@ -164,9 +175,23 @@ module SMTLib2 = struct
         let* o = add_logic_const o in
         return (of_op o)
     | RVar { id } -> get_var id
+    | UnaryExpr { op = `BOOLTOBV1; arg = e } ->
+        let* e = e in
+        return
+        @@ list
+             [
+               atom "ite";
+               e;
+               of_op (`Bitvector (Bitvec.one ~size:1));
+               of_op (`Bitvector (Bitvec.zero ~size:1));
+             ]
     | UnaryExpr { op = o; arg = e } ->
         let* e = e in
         return @@ list [ of_op o; e ]
+    | BinaryExpr { op = `NEQ; arg1 = l; arg2 = r } ->
+        let* l = l in
+        let* r = r in
+        return @@ list [ of_op `BoolNOT; list [ of_op `EQ; l; r ] ]
     | BinaryExpr { op = o; arg1 = l; arg2 = r } ->
         let* l = l in
         let* r = r in
@@ -183,23 +208,26 @@ module SMTLib2 = struct
     (* TODO: bindings *)
     | Binding _ -> failwith "unsupp"
 
-  let of_bexpr e = (BasilExpr.cata smt_alg e) init
+  let of_bexpr e = (BasilExpr.cata smt_alg e) empty
 
   let assert_bexpr e =
     let* s = BasilExpr.cata smt_alg e in
     add_assert s
+
+  let push = add_command (list [ atom "push" ])
+  let pop = add_command (list [ atom "pop" ])
+  let check_sat = add_command (list [ atom "check-sat" ])
 
   let check_sat_bexpr e =
     let x =
       let* _ = assert_bexpr e in
       add_command (list [ atom "check-sat" ])
     in
-    let ex = (extract x) init in
+    let ex = (extract x) empty in
     fst ex
 
-  let assert_bexpr e = fst @@ (assert_bexpr e |> extract) init
-
   let%expect_test _ =
+    let assert_bexpr e = fst @@ (assert_bexpr e |> extract) empty in
     let open BasilExpr in
     let e =
       binexp ~op:`EQ

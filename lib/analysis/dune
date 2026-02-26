@@ -12,7 +12,8 @@
   lattice_collections
   wrapped_intervals
   known_bits
-  gamma_domain)
+  gamma_domain
+  tnum_wint_reduced_product)
  (libraries
   patricia-tree
   loader

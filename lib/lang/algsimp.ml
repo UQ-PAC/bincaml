@@ -4,23 +4,72 @@ open Bincaml_util.Common
 open Expr
 open Ops
 
-let normalise_bool
-    (e : BasilExpr.t BasilExpr.abstract_expr BasilExpr.abstract_expr) =
+let normalise_bool e =
+  let open AbstractExpr in
+  let open BasilExpr in
+  let open Bitvec in
+  let e = AbstractExpr.map fst e in
+  match e with
+  | BinaryExpr { op = `IMPLIES; arg1; arg2 } ->
+      replace [%here]
+        (BasilExpr.applyintrin ~op:`OR
+           [ fix arg1; BasilExpr.boolnot (fix arg2) ])
+  | UnaryExpr { op = `BoolNOT; arg = UnaryExpr { op = `BoolNOT; arg } } ->
+      replace [%here] arg
+  | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `AND; args } } ->
+      replace [%here]
+        (BasilExpr.applyintrin ~op:`OR (List.map BasilExpr.boolnot args))
+  | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `OR; args } } ->
+      replace [%here]
+        (BasilExpr.applyintrin ~op:`AND (List.map BasilExpr.boolnot args))
+  | _ -> None
+
+let simplify_concat
+    (e :
+      (BasilExpr.t BasilExpr.abstract_expr * Types.t) BasilExpr.abstract_expr) =
   let open AbstractExpr in
   let open BasilExpr in
   let open Bitvec in
   match e with
-  | BinaryExpr { op = `IMPLIES; arg1; arg2 } ->
-      Some
-        (BasilExpr.applyintrin ~op:`OR
-           [ fix arg1; BasilExpr.boolnot (fix arg2) ])
-  | UnaryExpr { op = `BoolNOT; arg = UnaryExpr { op = `BoolNOT; arg } } ->
-      Some arg
-  | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `AND; args } } ->
-      Some (BasilExpr.applyintrin ~op:`OR (List.map BasilExpr.boolnot args))
-  | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `OR; args } } ->
-      Some (BasilExpr.applyintrin ~op:`AND (List.map BasilExpr.boolnot args))
+  | ApplyIntrin { op = `BVConcat; args = (arg1, Bitvector 1) :: tl }
+    when List.for_all (BasilExpr.equal (fix arg1)) (List.map (fst %> fix) tl) ->
+      let count = List.length tl in
+      replace [%here] (BasilExpr.sign_extend ~n_prefix_bits:count (fix arg1))
+  | ApplyIntrin
+      {
+        op = `BVConcat;
+        args =
+          (UnaryExpr { op = `SignExtend ext; arg = arg1 }, Bitvector n)
+          :: ((UnaryExpr { op = `Extract _; arg = v }, Bitvector 1) as arg2)
+          :: tl;
+      }
+    when List.for_all
+           (BasilExpr.equal (fix @@ fst arg2))
+           (List.map (fst %> fix) tl) ->
+      let count = n + List.length tl in
+      replace [%here]
+        (BasilExpr.sign_extend ~n_prefix_bits:count (fix @@ fst arg2))
+  | UnaryExpr
+      { op = `Extract (1, 0); arg = BinaryExpr { op = `BVLSHR; arg1; arg2 }, _ }
+    ->
+      let rshift =
+        match unfix arg2 with
+        | Constant { const = `Bitvector a } -> Z.to_int @@ Bitvec.value a
+        | _ -> failwith ""
+      in
+      replace [%here]
+        (BasilExpr.extract ~hi_excl:(rshift + 1) ~lo_incl:rshift arg1)
   | _ -> None
+
+let to_steady equal f x =
+  let rec loop x =
+    let n = f x in
+    if equal n x then n else loop n
+  in
+  loop x
+
+let simp_concat_fix e =
+  to_steady BasilExpr.equal (BasilExpr.rewrite_typed_two simplify_concat) e
 
 let algebraic_simplifications
     (e :
@@ -37,31 +86,35 @@ let algebraic_simplifications
 
   (* orig expr, simplified view, expr type *)
   let fix_s e = fix (AbstractExpr.of_simple_view e) in
-  let keep a = Some (fix (orig_e a)) in
+  let keep here a = replace here (fix (orig_e a)) in
   let to_s (v, t) = (v, AbstractExpr.simple_view v, t) in
   let s = AbstractExpr.simple_view (AbstractExpr.map to_s e) in
   match s with
   | Intrin (`BVConcat, (_, Intrin (`BVConcat, al), _) :: tl) ->
-      Some (fix_s (Intrin (`BVConcat, al @ List.map (orig_e %> fix) tl)))
-  | Binary (`BVADD, a, (_, C (`Bitvector i), _)) when is_zero i -> keep a
-  | Binary (`BVSUB, a, (_, C (`Bitvector i), _)) when is_zero i -> keep a
+      replace [%here]
+        (fix_s (Intrin (`BVConcat, al @ List.map (orig_e %> fix) tl)))
+  | Binary (`BVADD, a, (_, C (`Bitvector i), _)) when is_zero i ->
+      keep [%here] a
+  | Binary (`BVSUB, a, (_, C (`Bitvector i), _)) when is_zero i ->
+      keep [%here] a
   | Binary (`BVMUL, a, (_, C (`Bitvector i), _))
     when equal i @@ of_int ~size:(size i) 1 ->
-      keep a
+      keep [%here] a
   | Binary (`BVAND, a, (_, C (`Bitvector i), _)) when is_zero i ->
-      Some (bvconst (zero ~size:(size i)))
+      replace [%here] (bvconst (zero ~size:(size i)))
   | Binary (`BVAND, a, (_, C (`Bitvector i), _))
     when equal i (ones ~size:(size i)) ->
-      keep a
+      keep [%here] a
   | Binary (`BVOR, a, (_, C (`Bitvector i), _))
     when equal i (ones ~size:(size i)) ->
-      Some (bvconst @@ ones ~size:(size i))
-  | Binary (`BVOR, a, (_, C (`Bitvector i), _)) when is_zero i -> keep a
-  | Unary (`ZeroExtend 0, a) -> keep a
-  | Unary (`SignExtend 0, a) -> keep a
-  | Unary (`Extract (hi, 0), ((_, _, Bitvector sz) as a)) when hi = sz -> keep a
-  | Unary (`BVNOT, (_, Unary (`BVNOT, a), _)) -> Some a
-  | Unary (`BoolNOT, (_, Unary (`BoolNOT, a), _)) -> Some a
+      replace [%here] (bvconst @@ ones ~size:(size i))
+  | Binary (`BVOR, a, (_, C (`Bitvector i), _)) when is_zero i -> keep [%here] a
+  | Unary (`ZeroExtend 0, a) -> keep [%here] a
+  | Unary (`SignExtend 0, a) -> keep [%here] a
+  | Unary (`Extract (hi, 0), ((_, _, Bitvector sz) as a)) when hi = sz ->
+      keep [%here] a
+  | Unary (`BVNOT, (_, Unary (`BVNOT, a), _)) -> replace [%here] a
+  | Unary (`BoolNOT, (_, Unary (`BoolNOT, a), _)) -> replace [%here] a
   | _ -> None
 
 (*
@@ -141,15 +194,23 @@ type 'e rewriter_expr = {
 }
 *)
 
-let alg_simp_rewriter e =
+let sequence (a : 'a -> BasilExpr.rewrite) (b : 'a -> BasilExpr.rewrite) e =
+  match a e with None -> b e | e -> e
+
+let alg_simp_rewriter ?visit e =
   let partial_eval_expr e =
-    BasilExpr.rewrite ~rw_fun:Expr_eval.partial_eval_alg e
+    BasilExpr.rewrite ?visit ~rw_fun:Expr_eval.partial_eval_alg e
   in
-  BasilExpr.rewrite_typed_two algebraic_simplifications (partial_eval_expr e)
+  let open Option.Infix in
+  e
+  |> ( to_steady BasilExpr.equal @@ fun e ->
+       e |> partial_eval_expr |> simp_concat_fix )
+  |> BasilExpr.rewrite_typed_two ?visit
+       (sequence simplify_concat algebraic_simplifications)
 
 let normalise e =
   let e = alg_simp_rewriter e in
-  BasilExpr.rewrite_two normalise_bool e
+  BasilExpr.rewrite_typed_two normalise_bool e
 
 let%expect_test "normalise" =
   let e =
