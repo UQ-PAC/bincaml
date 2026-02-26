@@ -194,11 +194,3 @@ end
 
 module IDEAnalysis = IDE (IDEDomain)
 *)
-
-let transform proc =
-  let r = Analysis.analyse proc in
-  let n = Procedure.id proc |> ID.to_string in
-  CCIO.with_out
-    ("gammadomain" ^ n ^ ".dot")
-    (fun s -> Analysis.print_dot (Format.of_chan s) proc r);
-  proc
