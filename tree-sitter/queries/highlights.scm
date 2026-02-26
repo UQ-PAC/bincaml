@@ -21,36 +21,37 @@
 ; ((other) @x
 ;   (#match? @x "^block")) @keyword.conditional
 
-"goto" @keyword.return
-"unreachable" @keyword.return
-"return" @keyword.return
+(Jump "goto" @keyword)
+(Jump "unreachable" @keyword)
+(Jump "return" @keyword.return)
 
-"call" @function.call
-"indirect" @function.call
+(Stmt "call" @keyword.function)
+(Stmt "indirect" @keyword.function)
+(Stmt "nop" @keyword)
+(Stmt "load" @keyword)
+(Stmt "store" @keyword)
+(Stmt "guard" @keyword)
+(Stmt "assert" @keyword)
+(Stmt "assume" @keyword)
 
-"nop" @keyword
-"load" @keyword
-"store" @keyword
-"guard" @keyword
-"assert" @keyword
-"assume" @keyword
-"var" @keyword
-"memory" @keyword
-"shared" @keyword
+(Decl "var" @keyword)
+(Decl "memory" @keyword)
+(Decl "shared" @keyword)
 
 (IntVal) @constant
 "true" @constant
 "false" @constant
 
 (Type) @type
-(token_BVTYPE) @type.builtin
-(token_INTTYPE) @type.builtin
-(token_BOOLTYPE) @type.builtin
+(BVType) @type.builtin
+(IntType) @type.builtin
+(BoolType) @type.builtin
 (token_BIdent) @constant
 
 (token_BlockIdent) @function.call
 "block" @keyword.conditional
 
+(token_LocalIdent) @variable
 (token_ProcIdent) @function.call
 "proc" @function.def
 
