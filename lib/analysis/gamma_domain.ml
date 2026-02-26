@@ -42,7 +42,7 @@ module Domain = struct
               |> Iter.fold (fun s v' -> V.join (read v' m) s) V.bottom)
               m)
           m a
-    (* TODO calls can be more precise with modifies information (only send outputs + modifies to top) *)
+    (* TODO calls can be more precise with modifies information (only send outputs + modifies to top) but this requires spec info *)
     | Instr_Call _ | Instr_IntrinCall _ | Instr_IndirectCall _ -> top
     | _ -> m
 end
