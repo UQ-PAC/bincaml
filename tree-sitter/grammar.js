@@ -4,8 +4,8 @@ module.exports = grammar({
   name: "basilir",
   extras: $ =>[
     /\s/,
-    /\/\/.*\n/,
-    /\/\*[^*]*\*([^\*\/][^*]*\*|\*)*\//,
+    $.token_CommentSingle,
+    $.token_CommentMulti,
   ],
   word: $ => $.token_LocalIdent,
   rules: {
@@ -33,6 +33,13 @@ module.exports = grammar({
         // (:). [BlockIdent] ::= BlockIdent "," [BlockIdent] ;
         seq($.token_BlockIdent, ",", optional($.list_token_BlockIdent))
       ),
+    LambdaSep: $ =>
+      choice(
+        // LambdaSep1. LambdaSep ::= "->" ;
+        "->",
+        // LambdaSep2. LambdaSep ::= "::" ;
+        "::"
+      ),
     Semicolons: $ =>
       choice(
         // Semicolons_Empty. Semicolons ::= ;
@@ -40,26 +47,40 @@ module.exports = grammar({
         // Semicolons_Some. Semicolons ::= Semicolons ";" ;
         seq(optional($.Semicolons), ";")
       ),
+    VarModifiers: $ =>
+      choice(
+        // Shared. VarModifiers ::= "shared" ;
+        "shared",
+        // Observable. VarModifiers ::= "observable" ;
+        "observable"
+      ),
+    list_VarModifiers: $ =>
+      choice(
+        // []. [VarModifiers] ::= ;
+        choice(),
+        // (:). [VarModifiers] ::= VarModifiers [VarModifiers] ;
+        seq($.VarModifiers, optional($.list_VarModifiers))
+      ),
     Decl: $ =>
       choice(
-        // Decl_Axiom. Decl ::= "axiom" AttribSet Expr ;
-        seq("axiom", optional($.AttribSet), $.Expr),
-        // Decl_SharedMem. Decl ::= "memory" "shared" GlobalIdent ":" Type ;
-        seq("memory", "shared", $.token_GlobalIdent, ":", $.Type),
-        // Decl_UnsharedMem. Decl ::= "memory" GlobalIdent ":" Type ;
-        seq("memory", $.token_GlobalIdent, ":", $.Type),
-        // Decl_Var. Decl ::= "var" GlobalIdent ":" Type ;
-        seq("var", $.token_GlobalIdent, ":", $.Type),
-        // Decl_UninterpFun. Decl ::= "declare-fun" AttribSet GlobalIdent ":" "(" [Type] ")" "->" Type ;
-        seq("declare-fun", optional($.AttribSet), $.token_GlobalIdent, ":", "(", optional($.list_Type), ")", "->", $.Type),
-        // Decl_Fun. Decl ::= "define-fun" AttribSet GlobalIdent "(" [Params] ")" "->" Type "=" Expr ;
-        seq("define-fun", optional($.AttribSet), $.token_GlobalIdent, "(", optional($.list_Params), ")", "->", $.Type, "=", $.Expr),
+        // Decl_Axiom. Decl ::= "axiom" GlobalIdent AttribSet Expr ;
+        seq("axiom", $.token_GlobalIdent, optional($.AttribSet), $.Expr),
+        // Decl_Mem. Decl ::= "memory" [VarModifiers] GlobalIdent ":" Type VarSpec ;
+        seq("memory", optional($.list_VarModifiers), $.token_GlobalIdent, ":", $.Type, optional($.VarSpec)),
+        // Decl_Var. Decl ::= "var" [VarModifiers] GlobalIdent ":" Type VarSpec ;
+        seq("var", optional($.list_VarModifiers), $.token_GlobalIdent, ":", $.Type, optional($.VarSpec)),
+        // Decl_UninterpFun. Decl ::= "val" GlobalIdent AttribSet ":" Type ;
+        seq("val", $.token_GlobalIdent, optional($.AttribSet), ":", $.Type),
+        // Decl_Fun. Decl ::= "let" GlobalIdent AttribSet ":" Type "=" Expr ;
+        seq("let", $.token_GlobalIdent, optional($.AttribSet), ":", $.Type, "=", $.Expr),
+        // Decl_FunNoType. Decl ::= "let" GlobalIdent AttribSet "=" Expr ;
+        seq("let", $.token_GlobalIdent, optional($.AttribSet), "=", $.Expr),
         // Decl_ProgEmpty. Decl ::= "prog" "entry" ProcIdent AttribSet ;
         seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet)),
-        // Decl_ProgWithSpec. Decl ::= "prog" "entry" ProcIdent AttribSet BeginList [ProgSpec] EndList ;
-        seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), $.token_BeginList, optional($.list_ProgSpec), $.token_EndList),
-        // Decl_Proc. Decl ::= "proc" ProcIdent "(" [Params] ")" "->" "(" [Params] ")" AttribSet [FunSpec] ProcDef ;
-        seq("proc", $.token_ProcIdent, "(", optional($.list_Params), ")", "->", "(", optional($.list_Params), ")", optional($.AttribSet), optional($.list_FunSpec), optional($.ProcDef))
+        // Decl_ProgWithSpec. Decl ::= "prog" "entry" ProcIdent AttribSet [ProgSpec] ;
+        seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), optional($.list_ProgSpec)),
+        // Decl_Proc. Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [FunSpec] ProcDef ;
+        seq("proc", $.token_ProcIdent, $.token_OpenParen, optional($.list_Params), $.token_CloseParen, "->", $.token_OpenParen, optional($.list_Params), $.token_CloseParen, optional($.AttribSet), optional($.list_FunSpec), optional($.ProcDef))
       ),
     list_Type: $ =>
       choice(
@@ -84,8 +105,8 @@ module.exports = grammar({
       // BoolType1. BoolType ::= BOOLTYPE ;
       $.token_BOOLTYPE,
     MapType: $ =>
-      // MapType1. MapType ::= "(" Type "->" Type ")" ;
-      seq("(", $.Type, "->", $.Type, ")"),
+      // MapType1. MapType ::= Type "->" Type ;
+      seq($.Type, "->", $.Type),
     BVType: $ =>
       // BVType1. BVType ::= BVTYPE ;
       $.token_BVTYPE,
@@ -98,7 +119,9 @@ module.exports = grammar({
         // TypeMapType. Type ::= MapType ;
         $.MapType,
         // TypeBVType. Type ::= BVType ;
-        $.BVType
+        $.BVType,
+        // Type1. Type ::= OpenParen Type CloseParen ;
+        seq($.token_OpenParen, $.Type, $.token_CloseParen)
       ),
     list_Expr: $ =>
       choice(
@@ -135,8 +158,14 @@ module.exports = grammar({
         "nop",
         // Stmt_SingleAssign. Stmt ::= Assignment ;
         $.Assignment,
-        // Stmt_MultiAssign. Stmt ::= "(" [Assignment] ")" ;
-        seq("(", $.list_Assignment, ")"),
+        // Stmt_MemAssign. Stmt ::= LVar "mem:=" Expr ;
+        seq($.LVar, "mem:=", $.Expr),
+        // Stmt_ScalarStore. Stmt ::= LVar ":=" "store" Expr ;
+        seq($.LVar, ":=", "store", $.Expr),
+        // Stmt_ScalarLoad. Stmt ::= LVar ":=" "load" Var ;
+        seq($.LVar, ":=", "load", $.Var),
+        // Stmt_MultiAssign. Stmt ::= OpenParen [Assignment] CloseParen ;
+        seq($.token_OpenParen, $.list_Assignment, $.token_CloseParen),
         // Stmt_Load. Stmt ::= LVar ":=" "load" Endian GlobalIdent Expr IntVal ;
         seq($.LVar, ":=", "load", $.Endian, $.token_GlobalIdent, $.Expr, $.IntVal),
         // Stmt_Store. Stmt ::= "store" Endian GlobalIdent Expr Expr IntVal ;
@@ -145,8 +174,8 @@ module.exports = grammar({
         seq($.LVar, ":=", "load", $.Endian, $.Var, $.Expr, $.IntVal),
         // Stmt_Store_Var. Stmt ::= LVar ":=" "store" Endian Var Expr Expr IntVal ;
         seq($.LVar, ":=", "store", $.Endian, $.Var, $.Expr, $.Expr, $.IntVal),
-        // Stmt_DirectCall. Stmt ::= LVars "call" ProcIdent "(" CallParams ")" ;
-        seq(optional($.LVars), "call", $.token_ProcIdent, "(", optional($.CallParams), ")"),
+        // Stmt_DirectCall. Stmt ::= LVars "call" ProcIdent OpenParen CallParams CloseParen ;
+        seq(optional($.LVars), "call", $.token_ProcIdent, $.token_OpenParen, optional($.CallParams), $.token_CloseParen),
         // Stmt_IndirectCall. Stmt ::= "indirect" "call" Expr ;
         seq("indirect", "call", $.Expr),
         // Stmt_Assume. Stmt ::= "assume" Expr ;
@@ -164,11 +193,19 @@ module.exports = grammar({
         seq($.Assignment, ",", $.list_Assignment)
       ),
     LocalVar: $ =>
-      // LocalVar1. LocalVar ::= LocalIdent ":" Type ;
-      seq($.token_LocalIdent, ":", $.Type),
+      choice(
+        // LocalTyped. LocalVar ::= LocalIdent ":" Type ;
+        seq($.token_LocalIdent, ":", $.Type),
+        // LocalUntyped. LocalVar ::= LocalIdent ;
+        $.token_LocalIdent
+      ),
     GlobalVar: $ =>
-      // GlobalVar1. GlobalVar ::= GlobalIdent ":" Type ;
-      seq($.token_GlobalIdent, ":", $.Type),
+      choice(
+        // GlobalTyped. GlobalVar ::= GlobalIdent ":" Type ;
+        seq($.token_GlobalIdent, ":", $.Type),
+        // GlobalUntyped. GlobalVar ::= GlobalIdent ;
+        $.token_GlobalIdent
+      ),
     list_LocalVar: $ =>
       choice(
         // (:[]). [LocalVar] ::= LocalVar ;
@@ -182,6 +219,15 @@ module.exports = grammar({
         $.LocalVar,
         // VarGlobalVar. Var ::= GlobalVar ;
         $.GlobalVar
+      ),
+    list_GlobalVar: $ =>
+      choice(
+        // []. [GlobalVar] ::= ;
+        choice(),
+        // (:[]). [GlobalVar] ::= GlobalVar ;
+        $.GlobalVar,
+        // (:). [GlobalVar] ::= GlobalVar "," [GlobalVar] ;
+        seq($.GlobalVar, ",", optional($.list_GlobalVar))
       ),
     NamedCallReturn: $ =>
       // NamedCallReturn1. NamedCallReturn ::= LVar "=" LocalIdent ;
@@ -199,12 +245,12 @@ module.exports = grammar({
       choice(
         // LVars_Empty. LVars ::= ;
         choice(),
-        // LVars_LocalList. LVars ::= "var" "(" [LocalVar] ")" ":=" ;
-        seq("var", "(", $.list_LocalVar, ")", ":="),
-        // LVars_List. LVars ::= "(" [LVar] ")" ":=" ;
-        seq("(", $.list_LVar, ")", ":="),
-        // NamedLVars_List. LVars ::= "(" [NamedCallReturn] ")" ":=" ;
-        seq("(", optional($.list_NamedCallReturn), ")", ":=")
+        // LVars_LocalList. LVars ::= "var" OpenParen [LocalVar] CloseParen ":=" ;
+        seq("var", $.token_OpenParen, $.list_LocalVar, $.token_CloseParen, ":="),
+        // LVars_List. LVars ::= OpenParen [LVar] CloseParen ":=" ;
+        seq($.token_OpenParen, $.list_LVar, $.token_CloseParen, ":="),
+        // NamedLVars_List. LVars ::= OpenParen [NamedCallReturn] CloseParen ":=" ;
+        seq($.token_OpenParen, optional($.list_NamedCallReturn), $.token_CloseParen, ":=")
       ),
     NamedCallArg: $ =>
       // NamedCallArg1. NamedCallArg ::= LocalIdent "=" Expr ;
@@ -227,12 +273,12 @@ module.exports = grammar({
       ),
     Jump: $ =>
       choice(
-        // Jump_GoTo. Jump ::= "goto" "(" [BlockIdent] ")" ;
-        seq("goto", "(", optional($.list_token_BlockIdent), ")"),
+        // Jump_GoTo. Jump ::= "goto" OpenParen [BlockIdent] CloseParen ;
+        seq("goto", $.token_OpenParen, optional($.list_token_BlockIdent), $.token_CloseParen),
         // Jump_Unreachable. Jump ::= "unreachable" ;
         "unreachable",
-        // Jump_Return. Jump ::= "return" "(" [Expr] ")" ;
-        seq("return", "(", optional($.list_Expr), ")"),
+        // Jump_Return. Jump ::= "return" OpenParen [Expr] CloseParen ;
+        seq("return", $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
         // Jump_ProcReturn. Jump ::= "return" ;
         "return"
       ),
@@ -285,8 +331,8 @@ module.exports = grammar({
         seq($.PhiExpr, ",", optional($.list_PhiExpr))
       ),
     PhiAssign: $ =>
-      // PhiAssign1. PhiAssign ::= LVar ":=" "phi" "(" [PhiExpr] ")" ;
-      seq($.LVar, ":=", "phi", "(", optional($.list_PhiExpr), ")"),
+      // PhiAssign1. PhiAssign ::= LVar ":=" "phi" OpenParen [PhiExpr] CloseParen ;
+      seq($.LVar, ":=", "phi", $.token_OpenParen, optional($.list_PhiExpr), $.token_CloseParen),
     list_PhiAssign: $ =>
       choice(
         // []. [PhiAssign] ::= ;
@@ -300,8 +346,8 @@ module.exports = grammar({
       choice(
         // Block_NoPhi. Block ::= "block" BlockIdent AttribSet BeginList [StmtWithAttrib] JumpWithAttrib ";" EndList ;
         seq("block", $.token_BlockIdent, optional($.AttribSet), $.token_BeginList, optional($.list_StmtWithAttrib), $.JumpWithAttrib, ";", $.token_EndList),
-        // Block_Phi. Block ::= "block" BlockIdent AttribSet BeginList "(" [PhiAssign] ")" ";" [StmtWithAttrib] JumpWithAttrib ";" EndList ;
-        seq("block", $.token_BlockIdent, optional($.AttribSet), $.token_BeginList, "(", optional($.list_PhiAssign), ")", ";", optional($.list_StmtWithAttrib), $.JumpWithAttrib, ";", $.token_EndList)
+        // Block_Phi. Block ::= "block" BlockIdent AttribSet BeginList OpenParen [PhiAssign] CloseParen ";" [StmtWithAttrib] JumpWithAttrib ";" EndList ;
+        seq("block", $.token_BlockIdent, optional($.AttribSet), $.token_BeginList, $.token_OpenParen, optional($.list_PhiAssign), $.token_CloseParen, ";", optional($.list_StmtWithAttrib), $.JumpWithAttrib, ";", $.token_EndList)
       ),
     AttrKeyValue: $ =>
       // AttrKeyValue1. AttrKeyValue ::= BIdent "=" Attr ;
@@ -317,8 +363,8 @@ module.exports = grammar({
       ),
     AttribSet: $ =>
       choice(
-        // AttribSet_Some. AttribSet ::= BeginRec [AttrKeyValue] EndRec ;
-        seq($.token_BeginRec, optional($.list_AttrKeyValue), $.token_EndRec),
+        // AttribSet_Some. AttribSet ::= BeginRec [AttrKeyValue] Semicolons EndRec ;
+        seq($.token_BeginRec, optional($.list_AttrKeyValue), optional($.Semicolons), $.token_EndRec),
         // AttribSet_Empty. AttribSet ::= ;
         choice()
       ),
@@ -333,12 +379,14 @@ module.exports = grammar({
       ),
     Attr: $ =>
       choice(
-        // Attr_Map. Attr ::= BeginRec [AttrKeyValue] EndRec ;
-        seq($.token_BeginRec, optional($.list_AttrKeyValue), $.token_EndRec),
+        // Attr_Map. Attr ::= BeginRec [AttrKeyValue] Semicolons EndRec ;
+        seq($.token_BeginRec, optional($.list_AttrKeyValue), optional($.Semicolons), $.token_EndRec),
         // Attr_List. Attr ::= BeginList [Attr] EndList ;
         seq($.token_BeginList, optional($.list_Attr), $.token_EndList),
         // Attr_Lit. Attr ::= Value ;
         $.Value,
+        // Attr_Expr. Attr ::= Expr ;
+        $.Expr,
         // Attr_Str. Attr ::= Str ;
         $.token_Str
       ),
@@ -353,6 +401,20 @@ module.exports = grammar({
         $.Params,
         // (:). [Params] ::= Params "," [Params] ;
         seq($.Params, ",", optional($.list_Params))
+      ),
+    FunParams: $ =>
+      choice(
+        // FunParams1. FunParams ::= LocalIdent ":" Type ;
+        seq($.token_LocalIdent, ":", $.Type),
+        // FunParams2. FunParams ::= OpenParen LocalIdent ":" Type CloseParen ;
+        seq($.token_OpenParen, $.token_LocalIdent, ":", $.Type, $.token_CloseParen)
+      ),
+    list_FunParams: $ =>
+      choice(
+        // []. [FunParams] ::= ;
+        choice(),
+        // (:). [FunParams] ::= FunParams [FunParams] ;
+        seq($.FunParams, optional($.list_FunParams))
       ),
     Value: $ =>
       choice(
@@ -369,42 +431,74 @@ module.exports = grammar({
       choice(
         // Expr_Literal. Expr ::= Value ;
         $.Value,
+        // Expr_Paren. Expr ::= OpenParen Expr CloseParen ;
+        seq($.token_OpenParen, $.Expr, $.token_CloseParen),
         // Expr_Local. Expr ::= LocalVar ;
         $.LocalVar,
         // Expr_Global. Expr ::= GlobalVar ;
         $.GlobalVar,
-        // Expr_Forall. Expr ::= "forall" LambdaDef ;
-        seq("forall", $.LambdaDef),
-        // Expr_Exists. Expr ::= "exists" LambdaDef ;
-        seq("exists", $.LambdaDef),
-        // Expr_Old. Expr ::= "old" "(" Expr ")" ;
-        seq("old", "(", $.Expr, ")"),
-        // Expr_FunctionOp. Expr ::= GlobalIdent "(" [Expr] ")" ;
-        seq($.token_GlobalIdent, "(", optional($.list_Expr), ")"),
-        // Expr_Binary. Expr ::= BinOp "(" Expr "," Expr ")" ;
-        seq($.BinOp, "(", $.Expr, ",", $.Expr, ")"),
-        // Expr_Assoc. Expr ::= BoolBinOp "(" [Expr] ")" ;
-        seq($.BoolBinOp, "(", optional($.list_Expr), ")"),
-        // Expr_Unary. Expr ::= UnOp "(" Expr ")" ;
-        seq($.UnOp, "(", $.Expr, ")"),
-        // Expr_ZeroExtend. Expr ::= "zero_extend" "(" IntVal "," Expr ")" ;
-        seq("zero_extend", "(", $.IntVal, ",", $.Expr, ")"),
-        // Expr_SignExtend. Expr ::= "sign_extend" "(" IntVal "," Expr ")" ;
-        seq("sign_extend", "(", $.IntVal, ",", $.Expr, ")"),
-        // Expr_Extract. Expr ::= "extract" "(" IntVal "," IntVal "," Expr ")" ;
-        seq("extract", "(", $.IntVal, ",", $.IntVal, ",", $.Expr, ")"),
-        // Expr_Concat. Expr ::= "bvconcat" "(" [Expr] ")" ;
-        seq("bvconcat", "(", optional($.list_Expr), ")")
+        // Expr_Forall. Expr ::= "forall" AttribSet LambdaDef ;
+        seq("forall", optional($.AttribSet), $.LambdaDef),
+        // Expr_Exists. Expr ::= "exists" AttribSet LambdaDef ;
+        seq("exists", optional($.AttribSet), $.LambdaDef),
+        // Expr_Lambda. Expr ::= "fun" AttribSet LambdaDef ;
+        seq("fun", optional($.AttribSet), $.LambdaDef),
+        // Expr_Old. Expr ::= "old" OpenParen Expr CloseParen ;
+        seq("old", $.token_OpenParen, $.Expr, $.token_CloseParen),
+        // Expr_FunctionOp. Expr ::= GlobalIdent OpenParen [Expr] CloseParen ;
+        seq($.token_GlobalIdent, $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
+        // Expr_Apply. Expr ::= Expr Expr ;
+        seq($.Expr, $.Expr),
+        // Expr_Binary. Expr ::= BinOp OpenParen Expr "," Expr CloseParen ;
+        seq($.BinOp, $.token_OpenParen, $.Expr, ",", $.Expr, $.token_CloseParen),
+        // Expr_Assoc. Expr ::= BoolBinOp OpenParen [Expr] CloseParen ;
+        seq($.BoolBinOp, $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
+        // Expr_Unary. Expr ::= UnOp OpenParen Expr CloseParen ;
+        seq($.UnOp, $.token_OpenParen, $.Expr, $.token_CloseParen),
+        // Expr_LoadBe. Expr ::= "load_be" OpenParen IntVal "," Expr "," Expr CloseParen ;
+        seq("load_be", $.token_OpenParen, $.IntVal, ",", $.Expr, ",", $.Expr, $.token_CloseParen),
+        // Expr_LoadLe. Expr ::= "load_le" OpenParen IntVal "," Expr "," Expr CloseParen ;
+        seq("load_le", $.token_OpenParen, $.IntVal, ",", $.Expr, ",", $.Expr, $.token_CloseParen),
+        // Expr_ZeroExtend. Expr ::= "zero_extend" OpenParen IntVal "," Expr CloseParen ;
+        seq("zero_extend", $.token_OpenParen, $.IntVal, ",", $.Expr, $.token_CloseParen),
+        // Expr_SignExtend. Expr ::= "sign_extend" OpenParen IntVal "," Expr CloseParen ;
+        seq("sign_extend", $.token_OpenParen, $.IntVal, ",", $.Expr, $.token_CloseParen),
+        // Expr_Extract. Expr ::= "extract" OpenParen IntVal "," IntVal "," Expr CloseParen ;
+        seq("extract", $.token_OpenParen, $.IntVal, ",", $.IntVal, ",", $.Expr, $.token_CloseParen),
+        // Expr_Concat. Expr ::= "bvconcat" OpenParen [Expr] CloseParen ;
+        seq("bvconcat", $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
+        // Expr_Match. Expr ::= "match" Expr "with" OpenParen [Case] CloseParen ;
+        seq("match", $.Expr, "with", $.token_OpenParen, optional($.list_Case), $.token_CloseParen),
+        // Expr_Cases. Expr ::= "cases" OpenParen [Case] CloseParen ;
+        seq("cases", $.token_OpenParen, optional($.list_Case), $.token_CloseParen)
+      ),
+    LParen: $ =>
+      choice(
+        // LParenLocalVar. LParen ::= LocalVar ;
+        $.LocalVar,
+        // LParen1. LParen ::= OpenParen LocalVar CloseParen ;
+        seq($.token_OpenParen, $.LocalVar, $.token_CloseParen)
+      ),
+    list_LParen: $ =>
+      choice(
+        // []. [LParen] ::= ;
+        choice(),
+        // (:[]). [LParen] ::= LParen ;
+        $.LParen,
+        // (:). [LParen] ::= LParen "," [LParen] ;
+        seq($.LParen, ",", optional($.list_LParen))
       ),
     LambdaDef: $ =>
-      // LambdaDef1. LambdaDef ::= "(" [LocalVar] ")" LambdaSep Expr ;
-      seq("(", $.list_LocalVar, ")", $.token_LambdaSep, $.Expr),
+      // LambdaDef1. LambdaDef ::= [LParen] LambdaSep Expr ;
+      seq(optional($.list_LParen), $.LambdaSep, $.Expr),
     BinOp: $ =>
       choice(
         // BinOpBVBinOp. BinOp ::= BVBinOp ;
         $.BVBinOp,
         // BinOpBVLogicalBinOp. BinOp ::= BVLogicalBinOp ;
         $.BVLogicalBinOp,
+        // BinOpBoolBinOp. BinOp ::= BoolBinOp ;
+        $.BoolBinOp,
         // BinOpIntLogicalBinOp. BinOp ::= IntLogicalBinOp ;
         $.IntLogicalBinOp,
         // BinOpIntBinOp. BinOp ::= IntBinOp ;
@@ -421,7 +515,27 @@ module.exports = grammar({
         // UnOp_intneg. UnOp ::= "intneg" ;
         "intneg",
         // UnOp_booltobv1. UnOp ::= "booltobv1" ;
-        "booltobv1"
+        "booltobv1",
+        // UnOp_gamma. UnOp ::= "gamma" ;
+        "gamma",
+        // UnOp_classification. UnOp ::= "classification" ;
+        "classification"
+      ),
+    Case: $ =>
+      choice(
+        // CaseCase. Case ::= Expr "->" Expr ;
+        seq($.Expr, "->", $.Expr),
+        // CaseDefault. Case ::= "_" "->" Expr ;
+        seq("_", "->", $.Expr)
+      ),
+    list_Case: $ =>
+      choice(
+        // []. [Case] ::= ;
+        choice(),
+        // (:[]). [Case] ::= Case ;
+        $.Case,
+        // (:). [Case] ::= Case "|" [Case] ;
+        seq($.Case, "|", optional($.list_Case))
       ),
     EqOp: $ =>
       choice(
@@ -542,14 +656,43 @@ module.exports = grammar({
         // EnsureTok_ensures. EnsureTok ::= "ensures" ;
         "ensures"
       ),
+    RelyTok: $ =>
+      choice(
+        // RelyTok_rely. RelyTok ::= "rely" ;
+        "rely",
+        // RelyTok_relies. RelyTok ::= "relies" ;
+        "relies"
+      ),
+    GuarTok: $ =>
+      choice(
+        // GuarTok_guarnatee. GuarTok ::= "guarnatee" ;
+        "guarnatee",
+        // GuarTok_guarantees. GuarTok ::= "guarantees" ;
+        "guarantees"
+      ),
     FunSpec: $ =>
       choice(
         // FunSpec_Require. FunSpec ::= RequireTok Expr ;
         seq($.RequireTok, $.Expr),
         // FunSpec_Ensure. FunSpec ::= EnsureTok Expr ;
         seq($.EnsureTok, $.Expr),
+        // FunSpec_Rely. FunSpec ::= RelyTok Expr ;
+        seq($.RelyTok, $.Expr),
+        // FunSpec_Guar. FunSpec ::= GuarTok Expr ;
+        seq($.GuarTok, $.Expr),
+        // FunSpec_Captures. FunSpec ::= "captures" [GlobalVar] ;
+        seq("captures", optional($.list_GlobalVar)),
+        // FunSpec_Modifies. FunSpec ::= "modifies" [GlobalVar] ;
+        seq("modifies", optional($.list_GlobalVar)),
         // FunSpec_Invariant. FunSpec ::= "invariant" BlockIdent Expr ;
         seq("invariant", $.token_BlockIdent, $.Expr)
+      ),
+    VarSpec: $ =>
+      choice(
+        // VarSpec_Classification. VarSpec ::= "classification" Expr ;
+        seq("classification", $.Expr),
+        // VarSpec_Empty. VarSpec ::= ;
+        choice()
       ),
     ProgSpec: $ =>
       choice(
@@ -569,6 +712,8 @@ module.exports = grammar({
       choice(
         // []. [ProgSpec] ::= ;
         choice(),
+        // (:[]). [ProgSpec] ::= ProgSpec ;
+        $.ProgSpec,
         // (:). [ProgSpec] ::= ProgSpec ";" [ProgSpec] ;
         seq($.ProgSpec, ";", optional($.list_ProgSpec))
       ),
@@ -588,6 +733,10 @@ module.exports = grammar({
       /%([#\$\._]|(\d|[a-zA-Z]))+/,
     token_ProcIdent: $ =>
       /@([#\$\._]|(\d|[a-zA-Z]))+/,
+    token_OpenParen: $ =>
+      /\(/,
+    token_CloseParen: $ =>
+      /\)/,
     token_BeginList: $ =>
       /\[/,
     token_EndList: $ =>
@@ -596,13 +745,15 @@ module.exports = grammar({
       /\{/,
     token_EndRec: $ =>
       /\}/,
-    token_LambdaSep: $ =>
-      /::|->/,
     token_Str: $ =>
       /"([^"\\]|\\["\\fnrt])*"/,
     token_IntegerHex: $ =>
       /0x([abcdef]|\d)+/,
     token_IntegerDec: $ =>
       /\d+/,
+    token_CommentSingle: $ =>
+      /\/\/.*\n/,
+    token_CommentMulti: $ =>
+      /\/\*[^*]*\*([^\*\/][^*]*\*|\*)*\//,
   },
 });

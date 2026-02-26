@@ -6,5 +6,6 @@
  (action
   (progn
    (copy %{deps} basilir.cf)
-   (run bnfc --tree-sitter basilir.cf)
-   (copy tree-sitter-basilir/grammar.js grammar.js))))
+   (run bnfc --tree-sitter --tree-sitter-word LocalIdent basilir.cf --makefile)
+   (run make -C tree-sitter-basilir) ; check tree-sitter is valid and unambiguous
+   (no-infer (copy tree-sitter-basilir/grammar.js grammar.js)))))
