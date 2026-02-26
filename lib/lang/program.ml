@@ -189,7 +189,17 @@ module CallGraph = struct
 
   module G = Graph.Persistent.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
 
-  module Scc = Graph.Components.Make (G)
+  module Scc = Graph.Components.Make (struct
+    include G
+
+    (* Don't include return edges *)
+    let iter_succ f g = function
+      | Vert.ProcReturn proc as v ->
+          G.iter_succ
+            (fun v' -> if Vert.equal v' Vert.Return then f v' else ())
+            g v
+      | v -> G.iter_succ f g v
+  end)
 
   let make_call_graph t =
     let called_by (p : proc) =

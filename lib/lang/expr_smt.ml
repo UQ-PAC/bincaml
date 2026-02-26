@@ -164,6 +164,7 @@ module SMTLib2 = struct
     | `BoolNOT -> atom "not"
     | `NEQ -> failwith "undef"
     | `AND -> atom "and"
+    | `OR -> atom "or"
     | #Ops.AllOps.unary as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.const as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.binary as o -> atom @@ Ops.AllOps.to_string o
