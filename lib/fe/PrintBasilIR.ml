@@ -145,11 +145,6 @@ and prtLambdaSep (i:int) (e : AbsBasilIR.lambdaSep) : doc = match e with
   |    AbsBasilIR.LambdaSep2  -> prPrec i 0 (concatD [render "::"])
 
 
-and prtSemicolons (i:int) (e : AbsBasilIR.semicolons) : doc = match e with
-       AbsBasilIR.Semicolons_Empty  -> prPrec i 0 (concatD [])
-  |    AbsBasilIR.Semicolons_Some semicolons -> prPrec i 0 (concatD [prtSemicolons 0 semicolons ; render ";"])
-
-
 and prtVarModifiers (i:int) (e : AbsBasilIR.varModifiers) : doc = match e with
        AbsBasilIR.Shared  -> prPrec i 0 (concatD [render "shared"])
   |    AbsBasilIR.Observable  -> prPrec i 0 (concatD [render "observable"])
@@ -344,12 +339,12 @@ and prtAttrKeyValueListBNFC i es : doc = match (i, es) with
   | (_,[x]) -> (concatD [prtAttrKeyValue 0 x])
   | (_,x::xs) -> (concatD [prtAttrKeyValue 0 x ; render ";" ; prtAttrKeyValueListBNFC 0 xs])
 and prtAttribSet (i:int) (e : AbsBasilIR.attribSet) : doc = match e with
-       AbsBasilIR.AttribSet_Some (beginrec, attrkeyvalues, semicolons, endrec) -> prPrec i 0 (concatD [prtBeginRec 0 beginrec ; prtAttrKeyValueListBNFC 0 attrkeyvalues ; prtSemicolons 0 semicolons ; prtEndRec 0 endrec])
+       AbsBasilIR.AttribSet_Some (beginrec, attrkeyvalues, endrec) -> prPrec i 0 (concatD [prtBeginRec 0 beginrec ; prtAttrKeyValueListBNFC 0 attrkeyvalues ; prtEndRec 0 endrec])
   |    AbsBasilIR.AttribSet_Empty  -> prPrec i 0 (concatD [])
 
 
 and prtAttr (i:int) (e : AbsBasilIR.attr) : doc = match e with
-       AbsBasilIR.Attr_Map (beginrec, attrkeyvalues, semicolons, endrec) -> prPrec i 0 (concatD [prtBeginRec 0 beginrec ; prtAttrKeyValueListBNFC 0 attrkeyvalues ; prtSemicolons 0 semicolons ; prtEndRec 0 endrec])
+       AbsBasilIR.Attr_Map (beginrec, attrkeyvalues, endrec) -> prPrec i 0 (concatD [prtBeginRec 0 beginrec ; prtAttrKeyValueListBNFC 0 attrkeyvalues ; prtEndRec 0 endrec])
   |    AbsBasilIR.Attr_List (beginlist, attrs, endlist) -> prPrec i 0 (concatD [prtBeginList 0 beginlist ; prtAttrListBNFC 0 attrs ; prtEndList 0 endlist])
   |    AbsBasilIR.Attr_Lit value -> prPrec i 0 (concatD [prtValue 0 value])
   |    AbsBasilIR.Attr_Expr expr -> prPrec i 0 (concatD [prtExpr 0 expr])
@@ -389,8 +384,7 @@ and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
   |    AbsBasilIR.Expr_Exists (attribset, lambdadef) -> prPrec i 0 (concatD [render "exists" ; prtAttribSet 0 attribset ; prtLambdaDef 0 lambdadef])
   |    AbsBasilIR.Expr_Lambda (attribset, lambdadef) -> prPrec i 0 (concatD [render "fun" ; prtAttribSet 0 attribset ; prtLambdaDef 0 lambdadef])
   |    AbsBasilIR.Expr_Old (openparen, expr, closeparen) -> prPrec i 0 (concatD [render "old" ; prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
-  |    AbsBasilIR.Expr_FunctionOp (globalident, openparen, exprs, closeparen) -> prPrec i 0 (concatD [prtGlobalIdent 0 globalident ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
-  |    AbsBasilIR.Expr_Apply (expr1, expr2) -> prPrec i 0 (concatD [prtExpr 0 expr1 ; prtExpr 0 expr2])
+  |    AbsBasilIR.Expr_FunctionOp (expr, openparen, exprs, closeparen) -> prPrec i 0 (concatD [prtExpr 0 expr ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Binary (binop, openparen, expr1, expr2, closeparen) -> prPrec i 0 (concatD [prtBinOp 0 binop ; prtOpenParen 0 openparen ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Assoc (boolbinop, openparen, exprs, closeparen) -> prPrec i 0 (concatD [prtBoolBinOp 0 boolbinop ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Unary (unop, openparen, expr, closeparen) -> prPrec i 0 (concatD [prtUnOp 0 unop ; prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
@@ -422,7 +416,6 @@ and prtLambdaDef (i:int) (e : AbsBasilIR.lambdaDef) : doc = match e with
 and prtBinOp (i:int) (e : AbsBasilIR.binOp) : doc = match e with
        AbsBasilIR.BinOpBVBinOp bvbinop -> prPrec i 0 (concatD [prtBVBinOp 0 bvbinop])
   |    AbsBasilIR.BinOpBVLogicalBinOp bvlogicalbinop -> prPrec i 0 (concatD [prtBVLogicalBinOp 0 bvlogicalbinop])
-  |    AbsBasilIR.BinOpBoolBinOp boolbinop -> prPrec i 0 (concatD [prtBoolBinOp 0 boolbinop])
   |    AbsBasilIR.BinOpIntLogicalBinOp intlogicalbinop -> prPrec i 0 (concatD [prtIntLogicalBinOp 0 intlogicalbinop])
   |    AbsBasilIR.BinOpIntBinOp intbinop -> prPrec i 0 (concatD [prtIntBinOp 0 intbinop])
   |    AbsBasilIR.BinOpEqOp eqop -> prPrec i 0 (concatD [prtEqOp 0 eqop])

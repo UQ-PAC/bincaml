@@ -85,11 +85,6 @@ and transLambdaSep (x : lambdaSep) : result = match x with
   | LambdaSep2  -> failure x
 
 
-and transSemicolons (x : semicolons) : result = match x with
-    Semicolons_Empty  -> failure x
-  | Semicolons_Some semicolons -> failure x
-
-
 and transVarModifiers (x : varModifiers) : result = match x with
     Shared  -> failure x
   | Observable  -> failure x
@@ -245,12 +240,12 @@ and transAttrKeyValue (x : attrKeyValue) : result = match x with
 
 
 and transAttribSet (x : attribSet) : result = match x with
-    AttribSet_Some (beginrec, attrkeyvalues, semicolons, endrec) -> failure x
+    AttribSet_Some (beginrec, attrkeyvalues, endrec) -> failure x
   | AttribSet_Empty  -> failure x
 
 
 and transAttr (x : attr) : result = match x with
-    Attr_Map (beginrec, attrkeyvalues, semicolons, endrec) -> failure x
+    Attr_Map (beginrec, attrkeyvalues, endrec) -> failure x
   | Attr_List (beginlist, attrs, endlist) -> failure x
   | Attr_Lit value -> failure x
   | Attr_Expr expr -> failure x
@@ -282,8 +277,7 @@ and transExpr (x : expr) : result = match x with
   | Expr_Exists (attribset, lambdadef) -> failure x
   | Expr_Lambda (attribset, lambdadef) -> failure x
   | Expr_Old (openparen, expr, closeparen) -> failure x
-  | Expr_FunctionOp (globalident, openparen, exprs, closeparen) -> failure x
-  | Expr_Apply (expr0, expr) -> failure x
+  | Expr_FunctionOp (expr, openparen, exprs, closeparen) -> failure x
   | Expr_Binary (binop, openparen, expr0, expr, closeparen) -> failure x
   | Expr_Assoc (boolbinop, openparen, exprs, closeparen) -> failure x
   | Expr_Unary (unop, openparen, expr, closeparen) -> failure x
@@ -309,7 +303,6 @@ and transLambdaDef (x : lambdaDef) : result = match x with
 and transBinOp (x : binOp) : result = match x with
     BinOpBVBinOp bvbinop -> failure x
   | BinOpBVLogicalBinOp bvlogicalbinop -> failure x
-  | BinOpBoolBinOp boolbinop -> failure x
   | BinOpIntLogicalBinOp intlogicalbinop -> failure x
   | BinOpIntBinOp intbinop -> failure x
   | BinOpEqOp eqop -> failure x

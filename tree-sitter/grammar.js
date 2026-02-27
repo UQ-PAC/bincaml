@@ -40,13 +40,6 @@ module.exports = grammar({
         // LambdaSep2. LambdaSep ::= "::" ;
         "::"
       ),
-    Semicolons: $ =>
-      choice(
-        // Semicolons_Empty. Semicolons ::= ;
-        choice(),
-        // Semicolons_Some. Semicolons ::= Semicolons ";" ;
-        seq(optional($.Semicolons), ";")
-      ),
     VarModifiers: $ =>
       choice(
         // Shared. VarModifiers ::= "shared" ;
@@ -78,7 +71,7 @@ module.exports = grammar({
         // Decl_ProgEmpty. Decl ::= "prog" "entry" ProcIdent AttribSet ;
         seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet)),
         // Decl_ProgWithSpec. Decl ::= "prog" "entry" ProcIdent AttribSet [ProgSpec] ;
-        seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), optional($.list_ProgSpec)),
+        seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), $.list_ProgSpec),
         // Decl_Proc. Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [FunSpec] ProcDef ;
         seq("proc", $.token_ProcIdent, $.token_OpenParen, optional($.list_Params), $.token_CloseParen, "->", $.token_OpenParen, optional($.list_Params), $.token_CloseParen, optional($.AttribSet), optional($.list_FunSpec), optional($.ProcDef))
       ),
@@ -363,8 +356,8 @@ module.exports = grammar({
       ),
     AttribSet: $ =>
       choice(
-        // AttribSet_Some. AttribSet ::= BeginRec [AttrKeyValue] Semicolons EndRec ;
-        seq($.token_BeginRec, optional($.list_AttrKeyValue), optional($.Semicolons), $.token_EndRec),
+        // AttribSet_Some. AttribSet ::= BeginRec [AttrKeyValue] EndRec ;
+        seq($.token_BeginRec, optional($.list_AttrKeyValue), $.token_EndRec),
         // AttribSet_Empty. AttribSet ::= ;
         choice()
       ),
@@ -379,8 +372,8 @@ module.exports = grammar({
       ),
     Attr: $ =>
       choice(
-        // Attr_Map. Attr ::= BeginRec [AttrKeyValue] Semicolons EndRec ;
-        seq($.token_BeginRec, optional($.list_AttrKeyValue), optional($.Semicolons), $.token_EndRec),
+        // Attr_Map. Attr ::= BeginRec [AttrKeyValue] EndRec ;
+        seq($.token_BeginRec, optional($.list_AttrKeyValue), $.token_EndRec),
         // Attr_List. Attr ::= BeginList [Attr] EndList ;
         seq($.token_BeginList, optional($.list_Attr), $.token_EndList),
         // Attr_Lit. Attr ::= Value ;
@@ -445,10 +438,8 @@ module.exports = grammar({
         seq("fun", optional($.AttribSet), $.LambdaDef),
         // Expr_Old. Expr ::= "old" OpenParen Expr CloseParen ;
         seq("old", $.token_OpenParen, $.Expr, $.token_CloseParen),
-        // Expr_FunctionOp. Expr ::= GlobalIdent OpenParen [Expr] CloseParen ;
-        seq($.token_GlobalIdent, $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
-        // Expr_Apply. Expr ::= Expr Expr ;
-        seq($.Expr, $.Expr),
+        // Expr_FunctionOp. Expr ::= Expr OpenParen [Expr] CloseParen ;
+        seq($.Expr, $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
         // Expr_Binary. Expr ::= BinOp OpenParen Expr "," Expr CloseParen ;
         seq($.BinOp, $.token_OpenParen, $.Expr, ",", $.Expr, $.token_CloseParen),
         // Expr_Assoc. Expr ::= BoolBinOp OpenParen [Expr] CloseParen ;
@@ -497,8 +488,6 @@ module.exports = grammar({
         $.BVBinOp,
         // BinOpBVLogicalBinOp. BinOp ::= BVLogicalBinOp ;
         $.BVLogicalBinOp,
-        // BinOpBoolBinOp. BinOp ::= BoolBinOp ;
-        $.BoolBinOp,
         // BinOpIntLogicalBinOp. BinOp ::= IntLogicalBinOp ;
         $.IntLogicalBinOp,
         // BinOpIntBinOp. BinOp ::= IntBinOp ;
@@ -710,12 +699,10 @@ module.exports = grammar({
       ),
     list_ProgSpec: $ =>
       choice(
-        // []. [ProgSpec] ::= ;
-        choice(),
         // (:[]). [ProgSpec] ::= ProgSpec ;
         $.ProgSpec,
         // (:). [ProgSpec] ::= ProgSpec ";" [ProgSpec] ;
-        seq($.ProgSpec, ";", optional($.list_ProgSpec))
+        seq($.ProgSpec, ";", $.list_ProgSpec)
       ),
     token_BVTYPE: $ =>
       /bv\d+/,

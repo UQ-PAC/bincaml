@@ -24,10 +24,6 @@ and lambdaSep =
    LambdaSep1
  | LambdaSep2
 
-and semicolons =
-   Semicolons_Empty
- | Semicolons_Some of semicolons
-
 and varModifiers =
    Shared
  | Observable
@@ -155,11 +151,11 @@ and attrKeyValue =
    AttrKeyValue1 of bIdent * attr
 
 and attribSet =
-   AttribSet_Some of beginRec * attrKeyValue list * semicolons * endRec
+   AttribSet_Some of beginRec * attrKeyValue list * endRec
  | AttribSet_Empty
 
 and attr =
-   Attr_Map of beginRec * attrKeyValue list * semicolons * endRec
+   Attr_Map of beginRec * attrKeyValue list * endRec
  | Attr_List of beginList * attr list * endList
  | Attr_Lit of value
  | Attr_Expr of expr
@@ -187,8 +183,7 @@ and expr =
  | Expr_Exists of attribSet * lambdaDef
  | Expr_Lambda of attribSet * lambdaDef
  | Expr_Old of openParen * expr * closeParen
- | Expr_FunctionOp of globalIdent * openParen * expr list * closeParen
- | Expr_Apply of expr * expr
+ | Expr_FunctionOp of expr * openParen * expr list * closeParen
  | Expr_Binary of binOp * openParen * expr * expr * closeParen
  | Expr_Assoc of boolBinOp * openParen * expr list * closeParen
  | Expr_Unary of unOp * openParen * expr * closeParen
@@ -211,7 +206,6 @@ and lambdaDef =
 and binOp =
    BinOpBVBinOp of bVBinOp
  | BinOpBVLogicalBinOp of bVLogicalBinOp
- | BinOpBoolBinOp of boolBinOp
  | BinOpIntLogicalBinOp of intLogicalBinOp
  | BinOpIntBinOp of intBinOp
  | BinOpEqOp of eqOp

@@ -36,10 +36,6 @@ token Str '"' ((char - ["\"\\"]) | ('\\' ["\"\\tnrf"]))* '"' ;
 position token IntegerHex ('0' 'x' (digit | ["abcdef"])+);
 position token IntegerDec (digit+);
 
--- gobble extra semicolons 
-Semicolons_Empty . Semicolons ::= "";
-Semicolons_Some . Semicolons ::= Semicolons  ";" ;
-
 comment "//" ;
 comment "/*" "*/" ;
 
@@ -168,13 +164,14 @@ Block_Phi . Block ::= "block" BlockIdent AttribSet BeginList
 
 rules AttrKeyValue ::= BIdent "=" Attr ;
 separator AttrKeyValue ";";
+-- in BNFC, `separator` also allows trailing
 
-AttribSet_Some . AttribSet ::= BeginRec [ AttrKeyValue ] Semicolons EndRec;
+AttribSet_Some . AttribSet ::= BeginRec [ AttrKeyValue ] EndRec;
 AttribSet_Empty . AttribSet ::= "" ;
 
 separator Attr ";" ;
 
-Attr_Map . Attr ::= BeginRec [ AttrKeyValue ] Semicolons EndRec ; 
+Attr_Map . Attr ::= BeginRec [ AttrKeyValue ] EndRec ; 
 Attr_List . Attr ::= BeginList [ Attr ] EndList; 
 Attr_Lit . Attr ::= Value ; 
 Attr_Expr . Attr ::= Expr; 
@@ -212,12 +209,11 @@ Expr_Lambda . Expr ::= "fun" AttribSet  LambdaDef ;
 Expr_Old . Expr       ::= "old" OpenParen Expr CloseParen ;
 
 -- uninterpreted functions
-Expr_FunctionOp . Expr       ::= GlobalIdent OpenParen [Expr] CloseParen;
-Expr_Apply . Expr       ::= Expr Expr;
+Expr_FunctionOp . Expr       ::= Expr OpenParen [Expr] CloseParen;
 
 -- binary expr
 
-rules BinOp ::= BVBinOp | BVLogicalBinOp | BoolBinOp | IntLogicalBinOp | IntBinOp | EqOp ;
+rules BinOp ::= BVBinOp | BVLogicalBinOp | IntLogicalBinOp | IntBinOp | EqOp ;
 Expr_Binary . Expr       ::= BinOp OpenParen Expr "," Expr CloseParen ;
 Expr_Assoc . Expr       ::= BoolBinOp OpenParen [Expr] CloseParen ;
 
@@ -279,7 +275,7 @@ ProgSpec_Guarantee . ProgSpec ::= "guarantee" Expr;
 terminator FunSpec ";";
 
 {- last semicolon terminates the prog definitino -}
-separator ProgSpec ";";
+separator nonempty ProgSpec ";";
 
 
 

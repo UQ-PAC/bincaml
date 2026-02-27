@@ -44,12 +44,11 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pSemicolons pVarModifiers pVarModifiers_list pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pFunParams pFunParams_list pValue pExpr pLParen pLParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pFunParams pFunParams_list pValue pExpr pLParen pLParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
 %type <AbsBasilIR.lambdaSep> pLambdaSep
-%type <AbsBasilIR.semicolons> pSemicolons
 %type <AbsBasilIR.varModifiers> pVarModifiers
 %type <AbsBasilIR.varModifiers list> pVarModifiers_list
 %type <AbsBasilIR.decl> pDecl
@@ -129,7 +128,6 @@ open Lexing
 %type <AbsBasilIR.decl list> decl_list
 %type <AbsBasilIR.blockIdent list> blockIdent_list
 %type <AbsBasilIR.lambdaSep> lambdaSep
-%type <AbsBasilIR.semicolons> semicolons
 %type <AbsBasilIR.varModifiers> varModifiers
 %type <AbsBasilIR.varModifiers list> varModifiers_list
 %type <AbsBasilIR.decl> decl
@@ -232,8 +230,6 @@ pDecl_list : decl_list TOK_EOF { $1 };
 pBlockIdent_list : blockIdent_list TOK_EOF { $1 };
 
 pLambdaSep : lambdaSep TOK_EOF { $1 };
-
-pSemicolons : semicolons TOK_EOF { $1 };
 
 pVarModifiers : varModifiers TOK_EOF { $1 };
 
@@ -397,10 +393,6 @@ blockIdent_list : /* empty */ { []  }
 
 lambdaSep : SYMB3 { LambdaSep1  }
   | SYMB4 { LambdaSep2  }
-  ;
-
-semicolons : /* empty */ { Semicolons_Empty  }
-  | semicolons SYMB1 { Semicolons_Some $1 }
   ;
 
 varModifiers : KW_shared { Shared  }
@@ -594,7 +586,7 @@ attrKeyValue_list : /* empty */ { []  }
   | attrKeyValue SYMB1 attrKeyValue_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-attribSet : beginRec attrKeyValue_list semicolons endRec { AttribSet_Some ($1, $2, $3, $4) }
+attribSet : beginRec attrKeyValue_list endRec { AttribSet_Some ($1, $2, $3) }
   | /* empty */ { AttribSet_Empty  }
   ;
 
@@ -603,7 +595,7 @@ attr_list : /* empty */ { []  }
   | attr SYMB1 attr_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-attr : beginRec attrKeyValue_list semicolons endRec { Attr_Map ($1, $2, $3, $4) }
+attr : beginRec attrKeyValue_list endRec { Attr_Map ($1, $2, $3) }
   | beginList attr_list endList { Attr_List ($1, $2, $3) }
   | value { Attr_Lit $1 }
   | expr { Attr_Expr $1 }
@@ -640,8 +632,7 @@ expr : value { Expr_Literal $1 }
   | KW_exists attribSet lambdaDef { Expr_Exists ($2, $3) }
   | KW_fun attribSet lambdaDef { Expr_Lambda ($2, $3) }
   | KW_old openParen expr closeParen { Expr_Old ($2, $3, $4) }
-  | globalIdent openParen expr_list closeParen { Expr_FunctionOp ($1, $2, $3, $4) }
-  | expr expr { Expr_Apply ($1, $2) }
+  | expr openParen expr_list closeParen { Expr_FunctionOp ($1, $2, $3, $4) }
   | binOp openParen expr SYMB2 expr closeParen { Expr_Binary ($1, $2, $3, $5, $6) }
   | boolBinOp openParen expr_list closeParen { Expr_Assoc ($1, $2, $3, $4) }
   | unOp openParen expr closeParen { Expr_Unary ($1, $2, $3, $4) }
@@ -669,7 +660,6 @@ lambdaDef : lParen_list lambdaSep expr { LambdaDef1 ($1, $2, $3) }
 
 binOp : bVBinOp { BinOpBVBinOp $1 }
   | bVLogicalBinOp { BinOpBVLogicalBinOp $1 }
-  | boolBinOp { BinOpBoolBinOp $1 }
   | intLogicalBinOp { BinOpIntLogicalBinOp $1 }
   | intBinOp { BinOpIntBinOp $1 }
   | eqOp { BinOpEqOp $1 }
@@ -785,8 +775,7 @@ funSpec_list : /* empty */ { []  }
   | funSpec SYMB1 funSpec_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-progSpec_list : /* empty */ { []  }
-  | progSpec { (fun x -> [x]) $1 }
+progSpec_list : progSpec { (fun x -> [x]) $1 }
   | progSpec SYMB1 progSpec_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 

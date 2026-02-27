@@ -450,7 +450,7 @@ module BasilASTLoader = struct
 
   and trans_attr p_st ~binds (attr : attr) : [> Expr.BasilExpr.t Attrib.t ] =
     match attr with
-    | Attr_Map (_, keyvals, _, _) -> `Assoc (trans_attr_kv ~binds p_st keyvals)
+    | Attr_Map (_, keyvals, _) -> `Assoc (trans_attr_kv ~binds p_st keyvals)
     | Attr_List (_, ls, _) -> `List (List.map (trans_attr ~binds p_st) ls)
     | Attr_Lit v -> ( match trans_value v with #Ops.AllOps.const as v -> v)
     | Attr_Expr expr -> `Expr (trans_expr ~binds p_st expr)
@@ -460,7 +460,7 @@ module BasilASTLoader = struct
       Expr.BasilExpr.t Attrib.attrib_map =
     match atrs with
     | AttribSet_Empty -> StringMap.empty
-    | AttribSet_Some (_, attrKeyValue, _, _) ->
+    | AttribSet_Some (_, attrKeyValue, _) ->
         trans_attr_kv ~binds p_st attrKeyValue
 
   and trans_stmt (p_st : load_st) (x : BasilIR.AbsBasilIR.stmtWithAttrib) :
@@ -978,23 +978,15 @@ module BasilASTLoader = struct
         in
         let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
         BasilExpr.exists ~attrib ~bound (trans_expr ~nbinds:bound e)
-    | Expr_FunctionOp (gi, o, args, c) ->
-        BasilExpr.apply_fun ~attrib:(expr_range_attr o c)
-          ~func:(BasilExpr.rvar @@ lookup_global_decl gi p_st)
-          (List.map trans_expr args)
-    | Expr_Apply (func, arg) ->
+    | Expr_FunctionOp (func, o, args, c) ->
         let func = trans_expr func in
-        let arg = trans_expr arg in
-        let attrib =
-          join_ranges (BasilExpr.attrib func) (BasilExpr.attrib arg)
-        in
-        BasilExpr.apply_fun ~attrib ~func [ arg ]
+        BasilExpr.apply_fun ~func ~attrib:(expr_range_attr o c)
+          (List.map trans_expr args)
 
   and transBinOp (x : BasilIR.AbsBasilIR.binOp) =
     match x with
     | BinOpBVBinOp bvbinop -> transBVBinOp bvbinop
     | BinOpBVLogicalBinOp bvlogicalbinop -> transBVLogicalBinOp bvlogicalbinop
-    | BinOpBoolBinOp boolbinop -> transBoolBinOp boolbinop
     | BinOpIntLogicalBinOp intlogicalbinop ->
         transIntLogicalBinOp intlogicalbinop
     | BinOpIntBinOp intbinop -> transIntBinOp intbinop
