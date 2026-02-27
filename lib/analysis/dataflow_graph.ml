@@ -29,7 +29,7 @@
 open Lang
 open Lang.Common
 
-let debug = ref false
+let debug = ref true
 let log_debug f = if !debug then print_endline (f ()) else ()
 
 (** {1 Building dataflow graphs for procedures}*)
@@ -41,7 +41,7 @@ module Vertex = struct
   type vt =
     | Entry
     | Return
-    | Stmt of Program.stmt
+    | Stmt of bool * Program.stmt
     | Phi of { lhs : Var.t; rhs : Var.t list; widen_point : bool }
   [@@deriving ord, eq, show { with_path = false }]
 
@@ -52,16 +52,16 @@ module Vertex = struct
 
   let hash v =
     match v with
-    | i, Stmt s -> Hash.combine3 251 i (Hashtbl.hash s)
+    | i, Stmt (_, s) -> Hash.combine3 251 i (Hashtbl.hash s)
     | i, Phi { lhs; rhs } ->
         Hash.combine4 271 i (Var.hash lhs) (Hash.list Var.hash rhs)
     | o -> Hashtbl.hash o
 
   let defines p = function
     | i, Phi { lhs } -> Iter.singleton lhs
-    | i, Stmt (Instr_Assume _ as s) -> Stmt.free_vars_iter s
-    | i, Stmt (Instr_Assert _ as s) -> Stmt.free_vars_iter s
-    | i, Stmt s -> Stmt.iter_assigned s
+    | i, Stmt (_, (Instr_Assume _ as s)) -> Stmt.free_vars_iter s
+    | i, Stmt (_, (Instr_Assert _ as s)) -> Stmt.free_vars_iter s
+    | i, Stmt (_, s) -> Stmt.iter_assigned s
     | i, Entry ->
         Iter.append
           (List.to_iter (Procedure.specification p).captures_globs)
@@ -70,7 +70,7 @@ module Vertex = struct
 
   let uses p = function
     | i, Phi { rhs } -> List.to_iter rhs
-    | i, Stmt s -> Stmt.free_vars_iter s
+    | i, Stmt (_, s) -> Stmt.free_vars_iter s
     | i, Entry -> Iter.empty
     | i, Return ->
         Iter.append
@@ -148,10 +148,12 @@ let get_dfg_vertices ~(direction : [ `Forwards | `Backwards ]) p :
                 |> Iter.map (fun (lhs, rhs) ->
                     block_index := !block_index + 1;
                     ( !block_index,
-                      Vertex.Stmt (Stmt.Instr_Assign [ (lhs, rhs) ]) ))
+                      Vertex.Stmt
+                        (is_header header, Stmt.Instr_Assign [ (lhs, rhs) ]) ))
             | stmt ->
                 block_index := !block_index + 1;
-                Iter.singleton (!block_index, Vertex.Stmt stmt))
+                Iter.singleton
+                  (!block_index, Vertex.Stmt (is_header header, stmt)))
         in
         Iter.append phi_def_use block_def_use))
   |> Iter.append (Iter.of_list [ first; last ])
@@ -201,19 +203,42 @@ let def_use_maps ?(require_full_ssa = false) ?def_use p =
 module SimpleSolver = struct
   module WL = Worklist.Make (Vertex)
 
-  let deps (dir : [ `Backwards | `Forwards ]) p lookup v =
+  let deps ~assume_ssi (dir : [ `Backwards | `Forwards ]) p lookup v =
+    (* this is hacky to support ssi without proper sigma nodes in the IR; we should add them to block 
+       type probably *)
     let all_deps =
+      let defines (v : Vertex.t) =
+        match v with
+        | (_, Stmt (_, Instr_Assert _) | _, Stmt (_, Instr_Assume _))
+          when not assume_ssi ->
+            Iter.empty
+        | _ -> Vertex.defines p v
+      in
+
       match (v, dir) with
-      | v, `Forwards ->
-          Vertex.defines p v
+      | _, `Forwards ->
+          defines v
+          |> Iter.filter (Var.is_global %> not)
+             (* don't add globals as not subject to ssa form *)
           |> Iter.flat_map (fun v -> MDeps.find_iter lookup.var_to_use v)
-      | v, `Backwards ->
+          (* get every statement that is dependent on the defined *)
+      | _, `Backwards ->
           Vertex.uses p v
+          |> Iter.filter (Var.is_global %> not)
+             (* don't add globals as not subject to ssa form *)
           |> Iter.flat_map (fun v -> MDeps.find_iter lookup.var_to_def v)
+      (* get every statement that defines the variable used *)
+    in
+    let is_assert =
+      Vertex.(
+        function
+        | i, Stmt (_, Instr_Assert _) | i, Stmt (_, Instr_Assume _) -> true
+        | _ -> false)
     in
     match v with
-    | _, Stmt (Instr_Assert _) | _, Stmt (Instr_Assume _) ->
-        Iter.filter (Vertex.equal v %> not) all_deps
+    | (i, _) as s when is_assert s ->
+        (* only include lower-priority (lexically later) assertions/or assumes : attempt break cycles *)
+        Iter.filter (fun nv -> not @@ (is_assert nv && fst nv >= i)) all_deps
     | _ -> all_deps
 
   type vm = (Vertex.t, Int.t) Hashtbl.t
@@ -230,7 +255,9 @@ module SimpleSolver = struct
 
     let need_widen v =
       match v with
-      | _, Vertex.Phi { widen_point = true } ->
+      | _, Vertex.Phi { widen_point = true }
+      | _, Vertex.Stmt (true, Stmt.Instr_Assume _)
+      | _, Vertex.Stmt (true, Stmt.Instr_Assert _) ->
           let vl = Hashtbl.find_opt visited v |> Option.get_or ~default:0 in
           Hashtbl.replace visited v (vl + 1);
           vl + 1 > widen_threshold
@@ -257,17 +284,21 @@ module SimpleSolver = struct
             Int.to_string v ^ " " ^ Vertex.show k));
     !state
 
-  let fixpoint_fwd ~transfer ~initial ?widen_threshold p =
+  let fixpoint_fwd ~transfer ~initial ?(assume_ssi = true) ?widen_threshold p =
     let def_use = get_dfg_vertices ~direction:`Forwards p in
     fixpoint_proc
       (module WL)
-      transfer initial ?widen_threshold p (deps `Forwards) def_use
+      transfer initial ?widen_threshold p
+      (deps ~assume_ssi `Forwards)
+      def_use
 
-  let fixpoint_rev ~transfer ~initial ?widen_threshold p =
+  let fixpoint_rev ~transfer ~initial ?(assume_ssi = true) ?widen_threshold p =
     let def_use = get_dfg_vertices ~direction:`Backwards p in
     fixpoint_proc
       (module WL)
-      transfer initial p (deps `Backwards) ?widen_threshold def_use
+      transfer initial p
+      (deps ~assume_ssi `Backwards)
+      ?widen_threshold def_use
 end
 
 (** Return a {! DFGraph.t} representing the dataflow. Vertices are phi nodes or
@@ -383,16 +414,22 @@ open struct
               in
               let v = join olhs nlhs in
               if not (D.V.equal olhs v) then Some (update lhs v data) else None
-          | Vertex.(Stmt stmt) ->
+          | Vertex.(Stmt (_, stmt)) ->
               let read v = D.read v data in
               let s' =
                 D.transfer_state read stmt
                 |> Iter.filter_map (fun (v, s) ->
                     let vv = read v in
+                    let s = if widen then V.widening vv s else s in
                     if V.equal vv s then None else Some (v, s))
               in
               if Iter.is_empty s' then None
-              else Some (s' |> Iter.fold (fun acc (k, v) -> update k v acc) data)
+              else (
+                log_debug (fun () ->
+                    Iter.to_string
+                      (function k, vvv -> Var.to_string k ^ "->" ^ V.show vvv)
+                      s');
+                Some (s' |> Iter.fold (fun acc (k, v) -> update k v acc) data))
           | Entry -> None
           | Return -> None
         in

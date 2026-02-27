@@ -52,7 +52,7 @@ module PassManager = struct
 
   let dfg_ival_wint_product =
     {
-      name = "demoprint-dfg-ival-analysis";
+      name = "demoprint-dfg-ivalbits-product";
       apply =
         DFGAnalysis (module Analysis.Tnum_wint_reduced_product.DFGAnalysis);
       doc = "runs interavl analysis on dataflow graph and prints results";
@@ -149,8 +149,7 @@ module PassManager = struct
   let full_ssa =
     {
       name = "ssa";
-      apply =
-        Batch [ cleanup_cfg; sparams; read_uninit true; sssa; remove_unused ];
+      apply = Batch [ cleanup_cfg; sparams; sssa; remove_unused ];
       doc =
         "Complete SSA pipeline for early IR (global register parameterless \
          form)";
@@ -237,7 +236,11 @@ module PassManager = struct
     |> fill (newline ^ newline)
 
   let batch_of_list pass =
-    List.map (fun n -> List.find (fun t -> String.equal t.name n) passes) pass
+    List.map
+      (fun n ->
+        Option.get_exn_or ("not found: " ^ n)
+        @@ List.find_opt (fun t -> String.equal t.name n) passes)
+      pass
 
   let rec run_transform (p : Program.t) (tf : pass) =
     Trace_core.with_span ~__FILE__ ~__LINE__ ("transform-prog::" ^ tf.name)

@@ -22,9 +22,12 @@ let intro_ssi_assigns proc =
            function
            | (Instr_Assert { body } | Instr_Assume { body }) as a ->
                let fv = Expr.BasilExpr.free_vars body in
-               if fv |> VarSet.cardinal |> Int.equal 1 then
-                 let v = VarSet.choose fv in
-                 Iter.doubleton (Instr_Assign [ (v, Expr.BasilExpr.rvar v) ]) a
+               if VarSet.cardinal fv > 0 then
+                 Iter.doubleton
+                   (Instr_Assign
+                      (VarSet.to_list fv
+                      |> List.map (fun v -> (v, Expr.BasilExpr.rvar v))))
+                   a
                else Iter.singleton a
            | b -> Iter.singleton b)
   in

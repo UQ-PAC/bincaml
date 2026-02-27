@@ -21,7 +21,6 @@ proc @main () -> () [
   ];
   block %loop_false [
     guard (bvuge($R0, 10:bv64));
-    assert($R0);
     return ();
   ];
 
