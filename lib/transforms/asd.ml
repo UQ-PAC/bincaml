@@ -21,7 +21,6 @@ module InferredType = struct
   type t =
     | Top
     | Bottom
-    | Paren of t (* TODO: Remove *)
     | Union of t * t (* type ∪ type *)
     | Sect of t * t (* type ∩ type *)
     | Pointer of t * t (* ptr(lb, ub) *)
@@ -43,7 +42,6 @@ module InferredType = struct
     | Atom c -> CType.show c
     | TypeVar id -> Printf.sprintf "TypeVar %s" id
     | Recursive (t1, t2) -> Printf.sprintf "μ%s.%s" (show t1) (show t2)
-    | Paren ty -> Printf.sprintf "(%s)" @@ show ty
     | Union (t1, t2) -> Printf.sprintf "%s ⊔ %s" (show t1) (show t2)
     | Sect (t1, t2) -> Printf.sprintf "%s ⊓ %s" (show t1) (show t2)
     | Pointer (lb, ub) -> Printf.sprintf "ptr(%s, %s)" (show lb) (show ub)
@@ -66,7 +64,6 @@ module InferredType = struct
     | Recursive (a, b), Recursive (c, d) ->
         let c = compare a c in
         if c <> 0 then c else compare b d
-    | Paren a, Paren b -> compare a b
     | Union (a, b), Union (a2, b2) ->
         let c = compare a a2 in
         if c <> 0 then c else compare b b2
@@ -99,7 +96,6 @@ module InferredType = struct
     let acc = f acc ty in
     match ty with
     | Top | Bottom | Atom _ | TypeVar _ | Recursive _ -> acc
-    | Paren t -> fold f acc t
     | Union (a, b) | Sect (a, b) -> fold f (fold f acc a) b
     | Pointer (lb, ub) -> fold f (fold f acc lb) ub
     | Function (_, ins, outs) ->
@@ -113,7 +109,6 @@ module InferredType = struct
     f ty;
     match ty with
     | Top | Bottom | Atom _ | TypeVar _ | Recursive _ -> ()
-    | Paren t -> iter f t
     | Union (a, b) | Sect (a, b) ->
         iter f b;
         iter f a

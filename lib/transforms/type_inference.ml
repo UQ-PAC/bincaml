@@ -329,7 +329,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc_id =
   (* Pointer stuff here *)
   (* TODO: unsure about store but relativly confident about load *)
   (* TODO: This looks off, make it addr, cells in a record *)
-  | Stmt.Instr_Load { lhs; mem; cells; addr; endian } ->
+  | Stmt.Instr_Load { lhs } ->
       let lhs = rename_variable @@ Var.name lhs in
       let st =
         ConstraintState.add_ub st lhs
@@ -339,7 +339,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc_id =
       in
       ConstraintState.add_ub st (Int.to_string stmt_number ^ "_a_load")
       @@ TypeVar (Int.to_string stmt_number ^ "_b_load")
-  | Stmt.Instr_Store { lhs; mem; cells; value; addr; endian } ->
+  | Stmt.Instr_Store { lhs } ->
       let lhs = rename_variable @@ Var.name lhs in
       let st =
         ConstraintState.add_ub st lhs
@@ -451,11 +451,11 @@ let transform (prog : Program.t) =
     This needs to passes of the program but I think the only other way would be to pass the program for
      every line in the program.
   *)
-  (* let automatas = *)
-  (* StringMap.mapi *)
-  (* (fun name (lower_ty, upper_ty) -> *)
-  (* ( minimise_type Polarity.Pos lower_ty name, *)
-  (* minimise_type Polarity.Neg upper_ty name )) *)
-  (* types *)
-  (* in *)
+  let automatas =
+    StringMap.mapi
+      (fun name (lower_ty, upper_ty) ->
+        ( minimise_type Polarity.Pos lower_ty name,
+          minimise_type Polarity.Neg upper_ty name ))
+      types
+  in
   prog
