@@ -180,11 +180,8 @@ module PassManager = struct
       demo_ival_wint_cfg;
       demo_ival_wint_dfg;
       cfg_wrapped_int;
-<<<<<<< HEAD
       cfg_tnum_wint_reduced;
-=======
       sva;
->>>>>>> 4895726 (sva almost done)
       sparams;
       read_uninit false;
       read_uninit true;
