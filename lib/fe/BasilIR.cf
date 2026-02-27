@@ -199,13 +199,13 @@ Expr_Global . Expr ::= GlobalVar;
 
 -- quantifiers
 
-rules LParen ::= LocalVar | OpenParen LocalVar CloseParen ;
-separator LParen ",";
+rules LambdaParen ::= LocalVar | OpenParen LocalVar CloseParen ;
+separator LambdaParen ",";
 
-rules LambdaDef ::=  [LParen]  LambdaSep Expr ;
-Expr_Forall . Expr ::= "forall" AttribSet   LambdaDef ;
-Expr_Exists . Expr ::= "exists" AttribSet  LambdaDef ;
-Expr_Lambda . Expr ::= "fun" AttribSet  LambdaDef ;
+rules LambdaDef ::=  [LambdaParen]  LambdaSep Expr ;
+Expr_Forall . Expr ::= "forall" AttribSet LambdaDef ;
+Expr_Exists . Expr ::= "exists" AttribSet LambdaDef ;
+Expr_Lambda . Expr ::= "fun"    AttribSet LambdaDef ;
 Expr_Old . Expr       ::= "old" OpenParen Expr CloseParen ;
 
 -- uninterpreted functions
@@ -272,10 +272,10 @@ FunSpec_Invariant . FunSpec ::= "invariant" BlockIdent Expr;
 ProgSpec_Rely . ProgSpec ::= "rely" Expr;
 ProgSpec_Guarantee . ProgSpec ::= "guarantee" Expr;
 
-terminator FunSpec ";";
+terminator FunSpec "\n";
 
 {- last semicolon terminates the prog definitino -}
-separator nonempty ProgSpec ";";
+separator nonempty ProgSpec "\n";
 
 
 

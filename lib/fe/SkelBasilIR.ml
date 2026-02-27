@@ -291,13 +291,13 @@ and transExpr (x : expr) : result = match x with
   | Expr_Cases (openparen, cases, closeparen) -> failure x
 
 
-and transLParen (x : lParen) : result = match x with
-    LParenLocalVar localvar -> failure x
-  | LParen1 (openparen, localvar, closeparen) -> failure x
+and transLambdaParen (x : lambdaParen) : result = match x with
+    LambdaParenLocalVar localvar -> failure x
+  | LambdaParen1 (openparen, localvar, closeparen) -> failure x
 
 
 and transLambdaDef (x : lambdaDef) : result = match x with
-    LambdaDef1 (lparens, lambdasep, expr) -> failure x
+    LambdaDef1 (lambdaparens, lambdasep, expr) -> failure x
 
 
 and transBinOp (x : binOp) : result = match x with

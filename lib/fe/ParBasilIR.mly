@@ -44,7 +44,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pFunParams pFunParams_list pValue pExpr pLParen pLParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pProcDef pIntType pBoolType pMapType pBVType pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pFunParams pFunParams_list pValue pExpr pLambdaParen pLambdaParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -100,8 +100,8 @@ open Lexing
 %type <AbsBasilIR.funParams list> pFunParams_list
 %type <AbsBasilIR.value> pValue
 %type <AbsBasilIR.expr> pExpr
-%type <AbsBasilIR.lParen> pLParen
-%type <AbsBasilIR.lParen list> pLParen_list
+%type <AbsBasilIR.lambdaParen> pLambdaParen
+%type <AbsBasilIR.lambdaParen list> pLambdaParen_list
 %type <AbsBasilIR.lambdaDef> pLambdaDef
 %type <AbsBasilIR.binOp> pBinOp
 %type <AbsBasilIR.unOp> pUnOp
@@ -179,8 +179,8 @@ open Lexing
 %type <AbsBasilIR.funParams list> funParams_list
 %type <AbsBasilIR.value> value
 %type <AbsBasilIR.expr> expr
-%type <AbsBasilIR.lParen> lParen
-%type <AbsBasilIR.lParen list> lParen_list
+%type <AbsBasilIR.lambdaParen> lambdaParen
+%type <AbsBasilIR.lambdaParen list> lambdaParen_list
 %type <AbsBasilIR.lambdaDef> lambdaDef
 %type <AbsBasilIR.binOp> binOp
 %type <AbsBasilIR.unOp> unOp
@@ -333,9 +333,9 @@ pValue : value TOK_EOF { $1 };
 
 pExpr : expr TOK_EOF { $1 };
 
-pLParen : lParen TOK_EOF { $1 };
+pLambdaParen : lambdaParen TOK_EOF { $1 };
 
-pLParen_list : lParen_list TOK_EOF { $1 };
+pLambdaParen_list : lambdaParen_list TOK_EOF { $1 };
 
 pLambdaDef : lambdaDef TOK_EOF { $1 };
 
@@ -646,16 +646,16 @@ expr : value { Expr_Literal $1 }
   | KW_cases openParen case_list closeParen { Expr_Cases ($2, $3, $4) }
   ;
 
-lParen : localVar { LParenLocalVar $1 }
-  | openParen localVar closeParen { LParen1 ($1, $2, $3) }
+lambdaParen : localVar { LambdaParenLocalVar $1 }
+  | openParen localVar closeParen { LambdaParen1 ($1, $2, $3) }
   ;
 
-lParen_list : /* empty */ { []  }
-  | lParen { (fun x -> [x]) $1 }
-  | lParen SYMB2 lParen_list { (fun (x,xs) -> x::xs) ($1, $3) }
+lambdaParen_list : /* empty */ { []  }
+  | lambdaParen { (fun x -> [x]) $1 }
+  | lambdaParen SYMB2 lambdaParen_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-lambdaDef : lParen_list lambdaSep expr { LambdaDef1 ($1, $2, $3) }
+lambdaDef : lambdaParen_list lambdaSep expr { LambdaDef1 ($1, $2, $3) }
   ;
 
 binOp : bVBinOp { BinOpBVBinOp $1 }
@@ -772,11 +772,11 @@ progSpec : KW_rely expr { ProgSpec_Rely $2 }
   ;
 
 funSpec_list : /* empty */ { []  }
-  | funSpec SYMB1 funSpec_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | funSpec funSpec_list { (fun (x,xs) -> x::xs) ($1, $2) }
   ;
 
 progSpec_list : progSpec { (fun x -> [x]) $1 }
-  | progSpec SYMB1 progSpec_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | progSpec progSpec_list { (fun (x,xs) -> x::xs) ($1, $2) }
   ;
 
 bVTYPE : TOK_BVTYPE { BVTYPE ($1)};

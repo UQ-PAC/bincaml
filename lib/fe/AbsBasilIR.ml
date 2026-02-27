@@ -196,12 +196,12 @@ and expr =
  | Expr_Match of expr * openParen * case list * closeParen
  | Expr_Cases of openParen * case list * closeParen
 
-and lParen =
-   LParenLocalVar of localVar
- | LParen1 of openParen * localVar * closeParen
+and lambdaParen =
+   LambdaParenLocalVar of localVar
+ | LambdaParen1 of openParen * localVar * closeParen
 
 and lambdaDef =
-   LambdaDef1 of lParen list * lambdaSep * expr
+   LambdaDef1 of lambdaParen list * lambdaSep * expr
 
 and binOp =
    BinOpBVBinOp of bVBinOp

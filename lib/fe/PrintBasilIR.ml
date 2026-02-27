@@ -401,16 +401,16 @@ and prtExprListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
   | (_,[x]) -> (concatD [prtExpr 0 x])
   | (_,x::xs) -> (concatD [prtExpr 0 x ; render "," ; prtExprListBNFC 0 xs])
-and prtLParen (i:int) (e : AbsBasilIR.lParen) : doc = match e with
-       AbsBasilIR.LParenLocalVar localvar -> prPrec i 0 (concatD [prtLocalVar 0 localvar])
-  |    AbsBasilIR.LParen1 (openparen, localvar, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtLocalVar 0 localvar ; prtCloseParen 0 closeparen])
+and prtLambdaParen (i:int) (e : AbsBasilIR.lambdaParen) : doc = match e with
+       AbsBasilIR.LambdaParenLocalVar localvar -> prPrec i 0 (concatD [prtLocalVar 0 localvar])
+  |    AbsBasilIR.LambdaParen1 (openparen, localvar, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtLocalVar 0 localvar ; prtCloseParen 0 closeparen])
 
-and prtLParenListBNFC i es : doc = match (i, es) with
+and prtLambdaParenListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
-  | (_,[x]) -> (concatD [prtLParen 0 x])
-  | (_,x::xs) -> (concatD [prtLParen 0 x ; render "," ; prtLParenListBNFC 0 xs])
+  | (_,[x]) -> (concatD [prtLambdaParen 0 x])
+  | (_,x::xs) -> (concatD [prtLambdaParen 0 x ; render "," ; prtLambdaParenListBNFC 0 xs])
 and prtLambdaDef (i:int) (e : AbsBasilIR.lambdaDef) : doc = match e with
-       AbsBasilIR.LambdaDef1 (lparens, lambdasep, expr) -> prPrec i 0 (concatD [prtLParenListBNFC 0 lparens ; prtLambdaSep 0 lambdasep ; prtExpr 0 expr])
+       AbsBasilIR.LambdaDef1 (lambdaparens, lambdasep, expr) -> prPrec i 0 (concatD [prtLambdaParenListBNFC 0 lambdaparens ; prtLambdaSep 0 lambdasep ; prtExpr 0 expr])
 
 
 and prtBinOp (i:int) (e : AbsBasilIR.binOp) : doc = match e with
@@ -532,7 +532,8 @@ and prtFunSpec (i:int) (e : AbsBasilIR.funSpec) : doc = match e with
 
 and prtFunSpecListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
-  | (_,x::xs) -> (concatD [prtFunSpec 0 x ; render ";" ; prtFunSpecListBNFC 0 xs])
+  | (_,x::xs) -> (concatD [prtFunSpec 0 x ; render "
+" ; prtFunSpecListBNFC 0 xs])
 and prtVarSpec (i:int) (e : AbsBasilIR.varSpec) : doc = match e with
        AbsBasilIR.VarSpec_Classification expr -> prPrec i 0 (concatD [render "classification" ; prtExpr 0 expr])
   |    AbsBasilIR.VarSpec_Empty  -> prPrec i 0 (concatD [])
@@ -544,6 +545,8 @@ and prtProgSpec (i:int) (e : AbsBasilIR.progSpec) : doc = match e with
 
 and prtProgSpecListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
-  | (_,[x]) -> (concatD [prtProgSpec 0 x])
-  | (_,x::xs) -> (concatD [prtProgSpec 0 x ; render ";" ; prtProgSpecListBNFC 0 xs])
+  | (_,[x]) -> (concatD [prtProgSpec 0 x ; render "
+"])
+  | (_,x::xs) -> (concatD [prtProgSpec 0 x ; render "
+" ; prtProgSpecListBNFC 0 xs])
 

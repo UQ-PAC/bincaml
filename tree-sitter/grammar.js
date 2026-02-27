@@ -99,7 +99,7 @@ module.exports = grammar({
       $.token_BOOLTYPE,
     MapType: $ =>
       // MapType1. MapType ::= Type "->" Type ;
-      seq($.Type, "->", $.Type),
+      prec.right(101, seq($.Type, "->", $.Type)),
     BVType: $ =>
       // BVType1. BVType ::= BVTYPE ;
       $.token_BVTYPE,
@@ -377,7 +377,7 @@ module.exports = grammar({
         // Attr_List. Attr ::= BeginList [Attr] EndList ;
         seq($.token_BeginList, optional($.list_Attr), $.token_EndList),
         // Attr_Lit. Attr ::= Value ;
-        $.Value,
+        // $.Value,
         // Attr_Expr. Attr ::= Expr ;
         $.Expr,
         // Attr_Str. Attr ::= Str ;
@@ -463,25 +463,25 @@ module.exports = grammar({
         // Expr_Cases. Expr ::= "cases" OpenParen [Case] CloseParen ;
         seq("cases", $.token_OpenParen, optional($.list_Case), $.token_CloseParen)
       ),
-    LParen: $ =>
+    LambdaParen: $ =>
       choice(
-        // LParenLocalVar. LParen ::= LocalVar ;
-        $.LocalVar,
-        // LParen1. LParen ::= OpenParen LocalVar CloseParen ;
+        // LambdaParenLocalVar. LambdaParen ::= LocalVar ;
+        // $.LocalVar,
+        // LambdaParen1. LambdaParen ::= OpenParen LocalVar CloseParen ;
         seq($.token_OpenParen, $.LocalVar, $.token_CloseParen)
       ),
-    list_LParen: $ =>
+    list_LambdaParen: $ =>
       choice(
-        // []. [LParen] ::= ;
+        // []. [LambdaParen] ::= ;
         choice(),
-        // (:[]). [LParen] ::= LParen ;
-        $.LParen,
-        // (:). [LParen] ::= LParen "," [LParen] ;
-        seq($.LParen, ",", optional($.list_LParen))
+        // (:[]). [LambdaParen] ::= LambdaParen ;
+        $.LambdaParen,
+        // (:). [LambdaParen] ::= LambdaParen "," [LambdaParen] ;
+        seq($.LambdaParen, ",", optional($.list_LambdaParen))
       ),
     LambdaDef: $ =>
-      // LambdaDef1. LambdaDef ::= [LParen] LambdaSep Expr ;
-      seq(optional($.list_LParen), $.LambdaSep, $.Expr),
+      // LambdaDef1. LambdaDef ::= [LambdaParen] LambdaSep Expr ;
+       prec.right(100, seq(optional($.list_LambdaParen), $.LambdaSep, $.Expr)),
     BinOp: $ =>
       choice(
         // BinOpBVBinOp. BinOp ::= BVBinOp ;
@@ -694,15 +694,15 @@ module.exports = grammar({
       choice(
         // []. [FunSpec] ::= ;
         choice(),
-        // (:). [FunSpec] ::= FunSpec ";" [FunSpec] ;
-        seq($.FunSpec, ";", optional($.list_FunSpec))
+        // (:). [FunSpec] ::= FunSpec [FunSpec] ;
+        seq($.FunSpec, optional($.list_FunSpec))
       ),
     list_ProgSpec: $ =>
       choice(
         // (:[]). [ProgSpec] ::= ProgSpec ;
         $.ProgSpec,
-        // (:). [ProgSpec] ::= ProgSpec ";" [ProgSpec] ;
-        seq($.ProgSpec, ";", $.list_ProgSpec)
+        // (:). [ProgSpec] ::= ProgSpec [ProgSpec] ;
+        seq($.ProgSpec, $.list_ProgSpec)
       ),
     token_BVTYPE: $ =>
       /bv\d+/,
