@@ -720,48 +720,61 @@ module IDE (D : IDEDomain) = struct
   let query r ~proc_id vert =
     Hashtbl.get r (Loc.IntraVertex { proc_id; v = vert })
 
+  let scc_order (prog : Program.t) graph =
+    let components, call_graph_scc =
+      Program.CallGraph.make_call_graph prog |> Program.CallGraph.Scc.scc
+    in
+    flip IDEGraph.G.iter_vertex graph
+    |> Iter.from_iter
+    |> Iter.map (fun vert ->
+        match vert with
+        | Loc.IntraVertex { proc_id }
+        | Loc.CallSite { proc_id }
+        | Loc.AfterCall { proc_id } ->
+            (vert, call_graph_scc (Program.CallGraph.Vert.ProcBegin proc_id))
+        | Loc.Entry -> (vert, components + 1)
+        | Loc.Exit -> (vert, components + 1))
+    |> LM.of_iter
+
+  let p1_start_vals (prog : Program.t) globals =
+    ID.Map.values prog.procs
+    |> Iter.flat_map (fun proc ->
+        let vert =
+          Loc.IntraVertex
+            {
+              proc_id = Procedure.id proc;
+              v =
+                (match D.direction with
+                | `Forwards -> Procedure.Vert.Entry
+                | `Backwards -> Procedure.Vert.Return);
+            }
+        in
+        Iter.cons
+          (vert, DL.Lambda, DL.Lambda)
+          (D.init_data globals proc
+          |> Iter.map (fun v -> (vert, Label v, Label v))))
+    |> Iter.cons
+         (match dir with
+         | `Forwards -> (Loc.Entry, Lambda, Lambda)
+         | `Backwards -> (Loc.Exit, Lambda, Lambda))
+
+  (** Generate just the summaries (phase 1) of the IDE analysis performed on the
+      given program *)
+  let solve_summaries (prog : Program.t) =
+    Trace_core.with_span ~__FILE__ ~__LINE__ "ide-solve_summaries" @@ fun _ ->
+    let globals = Program.global_vars prog in
+    let graph = IDEGraph.create prog dir in
+    let start = p1_start_vals prog globals in
+    let order = scc_order prog graph in
+    let summary = phase1_solve start graph globals order DlMap.empty in
+    query @@ summary
+
   let solve (prog : Program.t) =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
     let globals = Program.global_vars prog in
     let graph = IDEGraph.create prog dir in
-    let start =
-      ID.Map.values prog.procs
-      |> Iter.flat_map (fun proc ->
-          let vert =
-            Loc.IntraVertex
-              {
-                proc_id = Procedure.id proc;
-                v =
-                  (match D.direction with
-                  | `Forwards -> Procedure.Vert.Entry
-                  | `Backwards -> Procedure.Vert.Return);
-              }
-          in
-          Iter.cons
-            (vert, DL.Lambda, DL.Lambda)
-            (D.init_data globals proc
-            |> Iter.map (fun v -> (vert, Label v, Label v))))
-      |> Iter.cons
-           (match dir with
-           | `Forwards -> (Loc.Entry, Lambda, Lambda)
-           | `Backwards -> (Loc.Exit, Lambda, Lambda))
-    in
-    let components, call_graph_scc =
-      Program.CallGraph.make_call_graph prog |> Program.CallGraph.Scc.scc
-    in
-    let order =
-      flip IDEGraph.G.iter_vertex graph
-      |> Iter.from_iter
-      |> Iter.map (fun vert ->
-          match vert with
-          | Loc.IntraVertex { proc_id }
-          | Loc.CallSite { proc_id }
-          | Loc.AfterCall { proc_id } ->
-              (vert, call_graph_scc (Program.CallGraph.Vert.ProcBegin proc_id))
-          | Loc.Entry -> (vert, components + 1)
-          | Loc.Exit -> (vert, components + 1))
-      |> LM.of_iter
-    in
+    let start = p1_start_vals prog globals in
+    let order = scc_order prog graph in
     let start_proc =
       prog.entry_proc |> Option.get_exn_or "Missing entry procedure"
     in
