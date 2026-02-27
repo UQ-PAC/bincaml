@@ -7,6 +7,7 @@ module.exports = grammar({
     /\/\/.*\n/,
     /\/\*[^*]*\*([^\*\/][^*]*\*|\*)*\//,
   ],
+  word: $ => $.token_LocalIdent,
   rules: {
     BNFCStart: $ =>
       optional(

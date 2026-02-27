@@ -30,26 +30,6 @@ let intro_ssi_assigns proc =
   in
   Procedure.map_blocks_nondet (function id, b -> f b) proc
 
-let check_ssa proc =
-  let add_assign m v =
-    VarMap.get_or ~default:0 v m |> fun n -> VarMap.add v (n + 1) m
-  in
-  let assigns =
-    Procedure.fold_blocks_topo_fwd
-      (fun acc idbl bl ->
-        let acc =
-          List.fold_left
-            (fun acc (phi : Var.t Block.phi) -> add_assign acc phi.lhs)
-            acc bl.phis
-        in
-        Block.stmts_iter bl
-        |> Iter.fold
-             (fun acc stmt -> Stmt.iter_lvar stmt |> Iter.fold add_assign acc)
-             acc)
-      VarMap.empty proc
-  in
-  assert (VarMap.for_all (fun v i -> (not (Var.pure v)) || i = 1) assigns)
-
 let drop_unused_var_declarations_proc p =
   let used =
     Procedure.fold_blocks_topo_fwd
@@ -80,12 +60,44 @@ let drop_unused_var_declarations_prog (p : Program.t) =
   in
   { p with globals }
 
-let set_params (p : Program.t) =
+let should_lift ~skip_observable ~skip_maps v =
+  let skip =
+    (skip_observable && not (Var.pure v))
+    || (skip_maps && Var.typ v |> function Map _ -> true | _ -> false)
+  in
+  not skip
+
+let check_ssa ~skip_observable ~skip_maps proc =
+  let add_assign m v =
+    VarMap.get_or ~default:0 v m |> fun n -> VarMap.add v (n + 1) m
+  in
+  let assigns =
+    Procedure.fold_blocks_topo_fwd
+      (fun acc idbl bl ->
+        let acc =
+          List.fold_left
+            (fun acc (phi : Var.t Block.phi) -> add_assign acc phi.lhs)
+            acc bl.phis
+        in
+        Block.stmts_iter bl
+        |> Iter.fold
+             (fun acc stmt -> Stmt.iter_lvar stmt |> Iter.fold add_assign acc)
+             acc)
+      VarMap.empty proc
+  in
+  assert (
+    VarMap.for_all
+      (fun v i -> (not (should_lift ~skip_observable ~skip_maps v)) || i = 1)
+      assigns)
+
+let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
   let globs =
     p.globals |> StringMap.to_iter
     |> Iter.filter_map (function
       | i, Program.(Variable { binding }) ->
-          if Var.pure binding then Some (i, binding) else None
+          if should_lift ~skip_observable ~skip_maps binding then
+            Some (i, binding)
+          else None
       | _ -> None)
   in
 
@@ -218,13 +230,13 @@ let set_params (p : Program.t) =
   in
   { p with procs }
 
-let ssa ?(skip_observable = true) (in_proc : Program.proc) =
+let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
   let in_proc = intro_ssi_assigns in_proc in
   let lives = Livevars.run in_proc in
   let rename r v : Var.t =
     if
       (* don't rename formal out params; should only be assigned once anyway*)
-      (skip_observable && not (Var.pure v))
+      (not @@ should_lift ~skip_observable ~skip_maps v)
       || Procedure.formal_out_params in_proc
          |> StringMap.exists (fun _ i -> Var.equal i v)
     then v
@@ -238,7 +250,7 @@ let ssa ?(skip_observable = true) (in_proc : Program.proc) =
     let read v =
       try VarMap.find v rr with
       | Not_found
-        when (not @@ Var.pure v)
+        when (not @@ should_lift ~skip_observable ~skip_maps v)
              || StringMap.exists
                   (fun i j -> Var.equal j v)
                   (Procedure.formal_out_params in_proc)
@@ -427,5 +439,5 @@ let ssa ?(skip_observable = true) (in_proc : Program.proc) =
     |> List.for_all id
   in
   assert (Procedure.iter_blocks_topo_fwd proc |> Iter.for_all check_bl);
-  check_ssa proc;
+  check_ssa ~skip_observable ~skip_maps proc;
   proc

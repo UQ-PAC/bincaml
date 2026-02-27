@@ -28,11 +28,14 @@ and semicolons =
    Semicolons_Empty
  | Semicolons_Some of semicolons
 
+and varModifiers =
+   Shared
+ | Observable
+
 and decl =
    Decl_Axiom of globalIdent * attribSet * expr
- | Decl_SharedMem of globalIdent * typeT * varSpec
- | Decl_UnsharedMem of globalIdent * typeT * varSpec
- | Decl_Var of globalIdent * typeT * varSpec
+ | Decl_Mem of varModifiers list * globalIdent * typeT * varSpec
+ | Decl_Var of varModifiers list * globalIdent * typeT * varSpec
  | Decl_UninterpFun of globalIdent * attribSet * typeT
  | Decl_Fun of globalIdent * attribSet * typeT * expr
  | Decl_FunNoType of globalIdent * attribSet * expr
@@ -80,6 +83,9 @@ and assignment =
 and stmt =
    Stmt_Nop
  | Stmt_SingleAssign of assignment
+ | Stmt_MemAssign of lVar * expr
+ | Stmt_ScalarStore of lVar * expr
+ | Stmt_ScalarLoad of lVar * var
  | Stmt_MultiAssign of openParen * assignment list * closeParen
  | Stmt_Load of lVar * endian * globalIdent * expr * intVal
  | Stmt_Store of endian * globalIdent * expr * expr * intVal

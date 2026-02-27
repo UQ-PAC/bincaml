@@ -40,7 +40,16 @@ type declaration =
 let pretty_declaration d =
   let open Containers_pp in
   match d with
-  | Variable { binding } -> text @@ Var.to_decl_string_il binding
+  | Variable { binding; attrib } ->
+      let classification =
+        StringMap.find_opt "classification" attrib
+        |> Option.to_list
+        |> List.flat_map (function
+          | `Expr e -> [ text " classification " ^ Expr.BasilExpr.pretty e ]
+          | _ -> [])
+        |> append_l
+      in
+      text (Var.to_decl_string_il binding) ^ classification
   | Function { binding; attrib; definition = Axiom body } ->
       text "axiom "
       ^ text (Var.name binding)
