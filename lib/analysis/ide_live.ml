@@ -13,7 +13,7 @@ module IDELive = struct
   (* DL and state_update were already defined! Is there a way to avoid
      redefining them? *)
   module DL = struct
-    type t = Label of Var.t | Lambda [@@deriving eq, ord, show]
+    type t = Lambda | Label of Var.t [@@deriving eq, ord, show]
   end
 
   type 'a state_update = (DL.t * 'a) Iter.t
@@ -98,7 +98,11 @@ module IDELive = struct
     | Lambda -> Iter.singleton (d, IdEdge)
     | Label v
       when Var.is_local v
-           && (not @@ List.exists (fun (a, _) -> Var.equal a v) c.lhs) ->
+           && (not @@ List.exists (fun (a, _) -> Var.equal a v) c.lhs)
+           && not
+              @@ List.exists
+                   (fun (_, e) -> VarSet.mem v (Expr.BasilExpr.free_vars e))
+                   c.rhs ->
         Iter.singleton (d, IdEdge)
     | Label _ -> Iter.empty
 
@@ -138,6 +142,8 @@ module IDELive = struct
                   i)
               (Iter.singleton (d, IdEdge))
               assigns
+        (* If a variable is marked live then don't transfer relations too *)
+        | _ when VarSet.mem v @@ Stmt.free_vars VarSet.empty stmt -> Iter.empty
         (* The index variables of a memory read are always live regardless of if
            the lhs was dead, since there are still side effects of reading
            memory ? *)

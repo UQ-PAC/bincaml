@@ -70,7 +70,7 @@ module type IDEDomain = sig
   module Data : Map.OrderedType
 
   module DL : sig
-    type t = Label of Data.t | Lambda [@@deriving eq, ord, show]
+    type t = Lambda | Label of Data.t [@@deriving eq, ord, show]
   end
 
   type 'a state_update = (DL.t * 'a) Iter.t
@@ -564,9 +564,15 @@ module IDE (D : IDEDomain) = struct
       updates
     |> Iter.fold
          (fun acc ((d1, d3), e) ->
-           W1.add worklist (get_order loc, (loc, d1, d3));
+           let base = dldlget Lambda d3 summary in
            let m = DlMap.get_or d1 acc ~default:DlMap.empty in
-           DlMap.add d1 (DlMap.add d3 e m) acc)
+           match d1 with
+           | Label v when D.equal base (D.join e base) ->
+               (* If Lambda already propagates something >= this, remove this from the summary. *)
+               DlMap.add d1 (DlMap.remove d3 m) acc
+           | _ ->
+               W1.add worklist (get_order loc, (loc, d1, d3));
+               DlMap.add d1 (DlMap.add d3 e m) acc)
          summary
     |> Hashtbl.replace summaries loc
 
@@ -614,6 +620,13 @@ module IDE (D : IDEDomain) = struct
           |> propagate worklist summaries (get_summary t) t get_order)
     done;
     print_endline @@ Int.to_string !iters;
+    print_endline @@ Int.to_string
+    @@ Hashtbl.fold
+         (fun l m n -> DlMap.fold (fun _ m n -> n + DlMap.cardinal m) m n)
+         summaries 0;
+    (*Hashtbl.iter (fun l m -> print_endline @@ Loc.show l ^ ": " ^ show_summary m) summaries;*)
+    (*Hashtbl.iter (fun l m -> print_endline @@ Loc.show l ^ ": " ^ Int.to_string @@ DlMap.fold (fun _ m n -> n + DlMap.cardinal m) m 0) summaries;*)
+    (*print_endline @@ Int.to_string @@ Hashtbl.length summaries; *)
     summaries
 
   let phase2_call_transfer get_summary add_q states calls_table d md e =
