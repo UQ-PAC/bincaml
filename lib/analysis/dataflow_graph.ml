@@ -29,7 +29,7 @@
 open Lang
 open Lang.Common
 
-let debug = ref true
+let debug = ref false
 let log_debug f = if !debug then print_endline (f ()) else ()
 
 (** {1 Building dataflow graphs for procedures}*)
