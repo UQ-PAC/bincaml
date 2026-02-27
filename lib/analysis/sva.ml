@@ -25,37 +25,29 @@ module SymBase = struct
   type t =
     (* Known *)
     | Stack of string
-    | Heap of { name : string; label : string }
+    | Heap of { name : string }
     | GlobSym
     | Constant
     (* Unknown *)
     | Par of { name : string; param : Var.t }
-    | Ret of {
-        name : string;
-        target_name : string;
-        label : string;
-        param : Var.t;
-      }
-    | Loaded of { name : string; label : string }
+    | Ret of { name : string; param : Var.t }
+    | Loaded
   [@@deriving ord, eq]
 
   let show = function
     | Stack name -> Printf.sprintf "Stack(%s)" name
-    | Heap { name; label } -> Printf.sprintf "Heap(%s_%s)" name label
+    | Heap { name } -> Printf.sprintf "Heap(%s)" name
     | GlobSym -> "Global"
     | Constant -> "Constant"
     | Par { name; param } -> Printf.sprintf "Par(%s_%s)" name (Var.show param)
-    | Ret { name; target_name; label; param } ->
-        Printf.sprintf "Ret(%s_%s_%s_%s)" name target_name label
-          (Var.show param)
-    | Loaded { name; label } -> Printf.sprintf "Loaded(%s_%s)" name label
+    | Ret { name; param } -> Printf.sprintf "Ret(%s_%s)" name (Var.show param)
+    | Loaded -> Printf.sprintf "Loaded"
 
   let is_place_holder = function
     | Stack _ | Heap _ | GlobSym | Constant -> false
-    | Ret _ | Par _ | Loaded _ -> true
+    | Ret _ | Par _ | Loaded -> true
 
-  let to_int a = Hashtbl.hash a
-
+  let to_int = Hashtbl.hash
   let pretty a = Containers_pp.int 1
 end
 
@@ -72,6 +64,7 @@ module IntervalDomain = struct
   let widening = WrappedIntervalsLattice.widening
   let join = WrappedIntervalsLattice.join
   let top = WrappedIntervalsLattice.Top
+  let neg = WrappedIntervalsLatticeOps.neg
   let init a = interval a a
 end
 
@@ -83,7 +76,6 @@ module SVAAbstraction = struct
   include SymAddrSetLattice
   open WrappedIntervalsValueAbstractionBasil
 
-  (* WARN: Basil one does scary stuff here *)
   let eval_const (op : Lang.Ops.AllOps.const) rt =
     SymAddrSetLattice.singleton SymBase.Constant @@ eval_const op rt
 
@@ -95,24 +87,32 @@ module SVAAbstraction = struct
         | _ -> Top)
       a
 
-  let eval_binop op (a, ta) (b, tb) rt =
+  let eval_binop (op : E.binary) (a, ta) (b, tb) rt =
     SymAddrSetLattice.fold
       (fun sb1 vs1 map ->
         SymAddrSetLattice.fold
           (fun sb2 vs2 map ->
-            match (sb1, sb2) with
-            (* NOTE: OCaml compiler complains when these cases are merged *)
-            | (SymBase.GlobSym | Constant), sb
-              when not @@ SymBase.is_place_holder sb ->
-                SymAddrSetLattice.update sb
-                  (eval_binop op (vs1, ta) (vs2, tb) rt)
-                  map
-            | sb, (SymBase.GlobSym | Constant)
-              when not @@ SymBase.is_place_holder sb ->
-                SymAddrSetLattice.update sb
-                  (eval_binop op (vs1, ta) (vs2, tb) rt)
-                  map
-            | _, _ ->
+            match op with
+            | `BVADD | `BVSUB -> (
+                match (sb1, sb2) with
+                (* WARN: not 100% sure about this case but makes sense in head we would prefer one over the other? *)
+                | (SymBase.GlobSym | Constant), (SymBase.GlobSym | Constant) ->
+                    let sb =
+                      if SymBase.equal sb1 GlobSym || SymBase.equal sb2 GlobSym
+                      then SymBase.GlobSym
+                      else Constant
+                    in
+                    SymAddrSetLattice.singleton sb
+                      (eval_binop op (vs1, ta) (vs2, tb) rt)
+                | (SymBase.GlobSym | Constant), sb
+                | sb, (SymBase.GlobSym | Constant) ->
+                    SymAddrSetLattice.update sb
+                      (eval_binop op (vs1, ta) (vs2, tb) rt)
+                      map
+                | _, _ ->
+                    SymAddrSetLattice.update sb1 Top
+                    @@ SymAddrSetLattice.update sb2 Top map)
+            | _ ->
                 SymAddrSetLattice.update sb1 Top
                 @@ SymAddrSetLattice.update sb2 Top map)
           b map)
@@ -122,41 +122,6 @@ module SVAAbstraction = struct
     let op a b =
       match op with
       | `BVADD -> (eval_binop `BVADD a b rt, rt)
-      | `BVOR -> (eval_binop `BVOR a b rt, rt)
-      | `BVXOR -> (eval_binop `BVXOR a b rt, rt)
-      | `BVAND -> (eval_binop `BVAND a b rt, rt)
-      | `BVConcat ->
-          ( SymAddrSetLattice.fold
-              (fun sb1 vs1 acc ->
-                SymAddrSetLattice.fold
-                  (fun sb2 vs2 map ->
-                    let return_size =
-                      match (snd a, snd b) with
-                      | Bitvector a, Types.Bitvector b -> Types.Bitvector (a + b)
-                      | _ -> failwith "boom"
-                    in
-                    match (sb1, sb2) with
-                    (* NOTE: OCaml compiler complains when these cases are merged *)
-                    | (SymBase.GlobSym | Constant), sb
-                      when not @@ SymBase.is_place_holder sb ->
-                        SymAddrSetLattice.update sb
-                          (WrappedIntervalsValueAbstractionBasil.eval_intrin op
-                             [ (vs1, snd a); (vs2, snd b) ]
-                             return_size)
-                          map
-                    | sb, (SymBase.GlobSym | Constant)
-                      when not @@ SymBase.is_place_holder sb ->
-                        SymAddrSetLattice.update sb
-                          (WrappedIntervalsValueAbstractionBasil.eval_intrin op
-                             [ (vs1, snd a); (vs2, snd b) ]
-                             return_size)
-                          map
-                    | _, _ ->
-                        SymAddrSetLattice.update sb1 Top
-                        @@ SymAddrSetLattice.update sb2 Top map)
-                  (fst b) acc)
-              (fst a) SymAddrSetLattice.bottom,
-            rt )
       | _ -> (SymAddrSetLattice.top, rt)
     in
     match args with
@@ -219,16 +184,15 @@ module Domain = struct
           | Scalar -> (lhs, rhs)
           | Addr { size } ->
               ( lhs,
-                SymAddrSetLattice.singleton
-                  (Loaded { name = "load"; label = "load" })
+                SymAddrSetLattice.singleton Loaded
                 @@ IntervalDomain.init @@ Bitvec.zero ~size ))
       | Stmt.Instr_Store { lhs; addr; rhs } -> (
           match addr with
           | Scalar -> Iter.singleton (lhs, rhs)
           | Addr { size } -> Iter.empty)
       | Stmt.Instr_Call { lhs; procid }
-        when (String.equal "malloc" @@ ID.name procid)
-             || (String.equal "calloc" @@ ID.name procid) ->
+        when (String.equal "@malloc" @@ ID.name procid)
+             || (String.equal "@calloc" @@ ID.name procid) ->
           let malloc =
             Iter.filter (fun var ->
                 String.starts_with ~prefix:"R0" @@ Var.name var)
@@ -247,9 +211,9 @@ module Domain = struct
           Iter.singleton
             ( var,
               SymAddrSetLattice.singleton
-                (SymBase.Heap { name = "heap"; label = "heap" })
+                (SymBase.Heap { name = ID.name procid })
               @@ IntervalDomain.init @@ Bitvec.zero ~size )
-      | Stmt.Instr_Call { lhs; args } ->
+      | Stmt.Instr_Call { lhs; args; procid } ->
           Iter.map (fun param ->
               let size =
                 match Var.typ param with
@@ -260,8 +224,7 @@ module Domain = struct
               in
               ( param,
                 SymAddrSetLattice.singleton
-                  (Ret
-                     { name = "hi"; label = "bye"; param; target_name = "pew" })
+                  (Ret { name = ID.name procid; param })
                 @@ IntervalDomain.init @@ Bitvec.zero ~size ))
           @@ StringMap.values lhs
       | Stmt.Instr_Assert _ | Stmt.Instr_Assume _ -> Iter.empty

@@ -1,3 +1,4 @@
+memory shared $mem : (bv64 -> bv8);
 var $Global_131120_131124: bv32;
 var $Global_131124_131128: bv32;
 var $Global_131128_131132: bv32;
@@ -16,6 +17,7 @@ proc @main_2148
     var var2_2340_bv32_1: bv32 := $Global_131120_131124:bv32;
     var var2_2372_bv32_1: bv32 := $Global_131124_131128:bv32;
     var a:bv32 := var2_2372_bv32_1: bv32;
+    store le $mem a:bv32 0x0:bv64 64 { .comment = "op: 0xf900267f" };
     $Global_131124_131128:bv32 := a: bv32;
     var R2_3: bv64 := zero_extend(32, var2_2372_bv32_1:bv32);
     var var2_2404_bv32_1: bv32 := extract(32, 0, $Global_131128_131132:bv32);
