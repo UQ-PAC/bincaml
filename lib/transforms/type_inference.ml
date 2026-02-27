@@ -1,18 +1,47 @@
+(*
+
+  Useful things to note before reading the code:
+
+    Negative polarity are stores and are the upper bounds and is intersection
+
+    Positive polarity are loads and are the lower bounds and is union
+
+
+
+
+
+  TODO:
+
+    Ask if I should make it more general and work with less type information
+      or should prio speed / space instead
+*)
+
 open Bincaml_util.Common
 open Lang
 open Expr
 open Asd
 open Type_automata
 
-(*
-  TODO:
-
-    Ask if I should make it more general and work with less type information
-      or should prio speed / space instead
-    
-*)
+let var_proc_to_uid (var : Var.t) (proc : Program.proc) : string =
+  if Var.is_global var then Var.name var
+  else Var.name var ^ "_" ^ ID.name @@ Procedure.id proc
 
 let gen = ID.make_gen ()
+
+(* TODO: Could move these inside of InferredType module *)
+let show_type_map (m : InferredType.t StringMap.t) : string =
+  StringMap.bindings m
+  |> List.map (fun (name, ty) ->
+      Printf.sprintf "%s: %s" name (InferredType.show ty))
+  |> String.concat "\n"
+
+let show_type_map2 (m : (InferredType.t * InferredType.t) StringMap.t) : string
+    =
+  StringMap.bindings m
+  |> List.map (fun (name, (ty1, ty2)) ->
+      Printf.sprintf "%s:\n   lower: %s\n   upper: %s" name
+        (InferredType.show ty1) (InferredType.show ty2))
+  |> String.concat "\n"
 
 let minimise_type p ty name =
   let recursives = Hashtbl.create 2 in
@@ -35,7 +64,6 @@ let minimise_type p ty name =
         Hashtbl.add edges Sigma.Ep (p, a);
         Hashtbl.add tbl (p, ty) edges;
         ((p, ty) :: ls, tbl)
-    | Paren ty -> type_to_state_list p ty acc
     | Union (a, b) | Sect (a, b) ->
         let ((ls, tbl) as acc) = type_to_state_list p a acc in
         let ls, tbl = type_to_state_list p b acc in
@@ -88,21 +116,28 @@ let minimise_type p ty name =
   TypeAutomata.merge_nodes automata;
   automata
 
-(* TODO: Could move these inside of InferredType module *)
-let show_type_map (m : InferredType.t StringMap.t) : string =
-  StringMap.bindings m
-  |> List.map (fun (name, ty) ->
-      Printf.sprintf "%s: %s" name (InferredType.show ty))
-  |> String.concat "\n"
+(*
+  Given a type tau get all bounds (depending on polarity) and make a combined
+    type out of them using u or n (depending on polarity).
 
-let show_type_map2 (m : (InferredType.t * InferredType.t) StringMap.t) : string
-    =
-  StringMap.bindings m
-  |> List.map (fun (name, (ty1, ty2)) ->
-      Printf.sprintf "%s:\n   lower: %s\n   upper: %s" name
-        (InferredType.show ty1) (InferredType.show ty2))
-  |> String.concat "\n"
+    This recurses into the bounds of their bounds, etc. so that the type
+      constraints are represented in the single type now instead of two lists
+      of types (lower and upper bounds)
 
+  For example:
+
+  a: lower [bv32]
+     upper [b]
+  b: lower [bv32]
+     upper [c]
+  c: lower [bv32]
+     upper []
+
+  Coalesce starting at 'a', with negative polarity (upper bounds) would be
+    b n c
+  Coalesce starting at 'a', with positive polarity (upper bounds) would be
+    bv32
+*)
 let rec coalesce_types (constraint_set : ConstraintState.t)
     (recursive_set : TySet.t) (polarity : Polarity.t) (tau : InferredType.t) :
     InferredType.t =
@@ -147,19 +182,19 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
   | Atom _ -> tau
   | _ -> Top
 
-let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc_id =
+(*
+  Given a statement constrain the variables involed (based on the expression)
+*)
+let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc =
   let open AbstractExpr in
   let open InferredType in
-  let rename_variable (name : string) : string =
-    Printf.sprintf "%s_%s" (ID.name proc_id) name
-  in
-
+  (* Given a expression constrain the variables involed *)
   let rec constrain_expr (st : ConstraintState.t)
       (expr : 'e BasilExpr.abstract_expr) =
     let constrain_arg st l t =
       let l = BasilExpr.unfix l in
       match l with
-      | RVar { id } -> ConstraintState.add_lb st (Var.name id) t
+      | RVar { id } -> ConstraintState.add_lb st (var_proc_to_uid id proc) t
       | _ -> st
     in
     let constrain_args st l r t =
@@ -167,9 +202,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc_id =
       constrain_arg st r t
     in
     match expr with
-    | RVar { id } ->
-        let name = rename_variable @@ Var.name id in
-        (st, TypeVar name)
+    | RVar { id } -> (st, TypeVar (var_proc_to_uid id proc))
     | Constant { const } ->
         ( st,
           match const with
@@ -216,7 +249,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc_id =
             let st = constrain_args st l r @@ Atom C_Int in
             (st, Atom C_Int)
         | `NEQ | `EQ ->
-            (* TODO: Can most likely extract more information from this *)
+            (* TODO: Merge the type constraints of the two variables *)
             (st, Atom C_Bool)
         | `INTLT | `INTLE ->
             let st = constrain_args st l r @@ Atom C_Int in
@@ -239,6 +272,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc_id =
         | `Load _ | `IfThen | `MapAccess -> (st, Top)
         (* WARN: I forgot what this was meant to be *)
         | `IMPLIES -> (st, Top))
+    (* TODO: Do intrins *)
     | ApplyIntrin _ -> (st, Top)
     | ApplyFun _ -> (st, Top)
     | Binding _ -> (st, Top)
@@ -315,22 +349,21 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc_id =
       match constrain_expr with
       | TypeVar a -> ConstraintState.add_lb st a (Atom C_Bool)
       | _ -> st)
-  (* Deal with assignment cases *)
   | Stmt.Instr_Assign ls ->
       List.fold_left
         (fun st (lhs, expr) ->
           (* Ignore _PC variables *)
-          if String.starts_with ~prefix:"_PC" (Var.name lhs) then st
+          if String.starts_with ~prefix:"_PC" @@ Var.name lhs then st
           else
-            let lhs = rename_variable @@ Var.name lhs in
-            let st, constrain_expr = constrain_expr st (BasilExpr.unfix expr) in
+            let lhs = var_proc_to_uid lhs proc in
+            let st, constrain_expr =
+              constrain_expr st @@ BasilExpr.unfix expr
+            in
             constrain st constrain_expr (TypeVar lhs) TySet.empty)
         st ls
-  (* Pointer stuff here *)
-  (* TODO: unsure about store but relativly confident about load *)
-  (* TODO: This looks off, make it addr, cells in a record *)
+  (* TODO: SVA *)
   | Stmt.Instr_Load { lhs } ->
-      let lhs = rename_variable @@ Var.name lhs in
+      let lhs = var_proc_to_uid lhs proc in
       let st =
         ConstraintState.add_ub st lhs
           (Pointer
@@ -340,7 +373,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc_id =
       ConstraintState.add_ub st (Int.to_string stmt_number ^ "_a_load")
       @@ TypeVar (Int.to_string stmt_number ^ "_b_load")
   | Stmt.Instr_Store { lhs } ->
-      let lhs = rename_variable @@ Var.name lhs in
+      let lhs = var_proc_to_uid lhs proc in
       let st =
         ConstraintState.add_ub st lhs
           (Pointer
@@ -380,40 +413,27 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc_id =
           (fun v -> snd @@ constrain_expr st @@ BasilExpr.unfix v)
           args
       in
-      let rets =
-        StringMap.map (fun v -> TypeVar (rename_variable (Var.name v))) lhs
-      in
+      let rets = StringMap.map (fun v -> TypeVar (var_proc_to_uid v proc)) lhs in
       let func = Function (ID.name procid, args, rets) in
       ConstraintState.add_ub st (ID.name procid) func
   | Stmt.Instr_IntrinCall _ -> st
-  (*
-    NOTE:
-        This is like a jump to, so it does not have args / ret
-
-        This might completely invalidate my whole stack stuff,
-          and maybe the variable renaming I do, however it should
-          either use the same vars or assign them before right?
-  *)
+  (* NOTE: This is like a jump to, so it does not have args / ret *)
   | Stmt.Instr_IndirectCall _ -> st
 
 let check_block p prog st (_, b) =
   Block.stmts_iter b
   |> Iter.foldi
        (fun st stmt_number stmt ->
-         gen_constraint_set st stmt stmt_number prog @@ Procedure.id p)
+         gen_constraint_set st stmt stmt_number prog p)
        st
 
 let check_proc (prog : Program.t) st p =
   Procedure.iter_blocks_topo_fwd p |> Iter.fold (check_block p prog) st
 
 let transform (prog : Program.t) =
-  print_endline "\n === Type Constraints === \n";
-  let type_constraint_map : ConstraintState.t =
+  let type_constraint_map =
     ID.Map.values prog.procs |> Iter.fold (check_proc prog) StringMap.empty
   in
-  print_endline @@ ConstraintState.show type_constraint_map;
-
-  print_endline "\n === Coalesced Types === \n";
   let types =
     StringMap.mapi
       (fun name ({ lb; ub } : ConstraintState.TypeConstraint.t) ->
