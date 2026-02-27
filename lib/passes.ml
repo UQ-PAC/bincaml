@@ -50,17 +50,17 @@ module PassManager = struct
       doc = "runs truthiness analysis on dataflow graph and prints results";
     }
 
-  let dfg_ival =
+  let dfg_ival_wint_product =
     {
-      name = "demo-dfg-ival-analysis";
+      name = "demoprint-dfg-ival-analysis";
       apply =
         DFGAnalysis (module Analysis.Tnum_wint_reduced_product.DFGAnalysis);
       doc = "runs interavl analysis on dataflow graph and prints results";
     }
 
-  let cfg_wrapped_flow_sensitive =
+  let demo_ival_wint_cfg =
     {
-      name = "demo-product-cfg";
+      name = "demo-ivalwint-product-cfg";
       apply =
         Proc
           (fun p ->
@@ -73,9 +73,9 @@ module PassManager = struct
          results";
     }
 
-  let cfg_wrapped_flow_insensitive =
+  let demo_ival_wint_dfg =
     {
-      name = "demo-product-dfg";
+      name = "demo-ivalwint-product-dfg";
       apply =
         Proc
           (fun p ->
@@ -172,9 +172,9 @@ module PassManager = struct
     [
       cleanup_cfg;
       dfg_bool;
-      dfg_ival;
-      cfg_wrapped_flow_sensitive;
-      cfg_wrapped_flow_insensitive;
+      dfg_ival_wint_product;
+      demo_ival_wint_cfg;
+      demo_ival_wint_dfg;
       cfg_wrapped_int;
       cfg_tnum_wint_reduced;
       sparams;
@@ -254,16 +254,16 @@ module PassManager = struct
         ID.Map.to_iter p.procs
         |> Iter.filter (fun (_, p) -> Procedure.graph p |> Option.is_some)
         |> Iter.iter (fun (pn, p) ->
-            let g = Analysis.Dataflow_graph.create p in
             (*let r =
               D.analyse ~widen_set:Graph.ChaoticIteration.FromWto
                 ~delay_widen:10 g
             in*)
-            let r2 = D.flow_insensitive p in
-            (*print_endline (D.D.name ^ " :: " ^ ID.to_string pn);
+            let r = D.flow_insensitive p in
+            print_endline (D.D.name ^ " :: " ^ ID.to_string pn);
             print_endline
               Containers_pp.(
                 Pretty.to_string ~width:80 @@ nest 4 (D.D.pretty r));
+            (*
             print_endline "insens";
             print_endline
               Containers_pp.(

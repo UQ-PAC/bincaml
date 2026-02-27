@@ -109,7 +109,7 @@ let get_dfg_vertices ~(direction : [ `Forwards | `Backwards ]) p :
   let iter =
     match direction with
     | `Forwards -> Procedure.iter_blocks_topo_fwd_headers
-    | `Backwards -> Procedure.iter_blocks_topo_fwd_headers
+    | `Backwards -> Procedure.iter_blocks_topo_rev_headers
   in
 
   let first =
@@ -201,16 +201,6 @@ let def_use_maps ?(require_full_ssa = false) ?def_use p =
 module SimpleSolver = struct
   module WL = Worklist.Make (Vertex)
 
-  module WLR = Worklist.Make (struct
-    include Vertex
-
-    let compare a b = compare b a
-  end)
-
-  module PQueue = Worklist.Make (struct
-    include Vertex
-  end)
-
   let deps (dir : [ `Backwards | `Forwards ]) p lookup v =
     let all_deps =
       match (v, dir) with
@@ -228,7 +218,7 @@ module SimpleSolver = struct
 
   type vm = (Vertex.t, Int.t) Hashtbl.t
 
-  let fixpoint_proc ?(widen_threshold = 10)
+  let fixpoint_proc ?(widen_threshold = 50)
       (module WL : Worklist.IFace with type elt = Vertex.t) transfer initial p
       deps (def_use : Vertex.t Iter.t) =
     let lookup = def_use_maps ~def_use p in
@@ -267,14 +257,17 @@ module SimpleSolver = struct
             Int.to_string v ^ " " ^ Vertex.show k));
     !state
 
-  let fixpoint_fwd ~transfer ~initial p =
+  let fixpoint_fwd ~transfer ~initial ?widen_threshold p =
     let def_use = get_dfg_vertices ~direction:`Forwards p in
-    fixpoint_proc (module WL) transfer initial p (deps `Forwards) def_use
+    fixpoint_proc
+      (module WL)
+      transfer initial ?widen_threshold p (deps `Forwards) def_use
 
-  let fixpoint_rev ~transfer ~initial p =
+  let fixpoint_rev ~transfer ~initial ?widen_threshold p =
     let def_use = get_dfg_vertices ~direction:`Backwards p in
-
-    fixpoint_proc (module WL) transfer initial p (deps `Backwards) def_use
+    fixpoint_proc
+      (module WL)
+      transfer initial p (deps `Backwards) ?widen_threshold def_use
 end
 
 (** Return a {! DFGraph.t} representing the dataflow. Vertices are phi nodes or
