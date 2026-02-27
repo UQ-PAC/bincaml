@@ -58,16 +58,47 @@ module PassManager = struct
       doc = "runs interavl analysis on dataflow graph and prints results";
     }
 
+  let cfg_wrapped_flow_sensitive =
+    {
+      name = "demo-product-cfg";
+      apply =
+        Proc
+          (fun p ->
+            ignore @@ Analysis.Wrapped_intervals.analyse p;
+            (*Analysis.Wrapped_intervals.Analysis.print_dot
+              (Format.of_chan stdout) p r;*)
+            p);
+      doc =
+        "Runs wrapped interval analysis on control flow graph and prints \
+         results";
+    }
+
+  let cfg_wrapped_flow_insensitive =
+    {
+      name = "demo-product-dfg";
+      apply =
+        Proc
+          (fun p ->
+            let _ = Analysis.Wrapped_intervals.DFGAnalysis.flow_insensitive p in
+            (*Analysis.Wrapped_intervals.Analysis.print_dot
+              (Format.of_chan stdout) p r;*)
+            p);
+      doc =
+        "Runs wrapped interval analysis on control flow graph and prints \
+         results";
+    }
+
   let cfg_wrapped_int =
     {
       name = "demo-cfg-wrapped-int-analysis";
       apply =
         Proc
           (fun p ->
-            (*Trace_core.with_span ~__FILE__ ~__LINE__ "dfg_flow_sensitive"
-            @@ fun _ ->*)
-            (*let r = Analysis.Wrapped_intervals.analyse p in*)
-            let r2 =
+            let _ =
+              Trace_core.with_span ~__FILE__ ~__LINE__ "dfg_flow_sensitive"
+              @@ fun _ -> Analysis.Wrapped_intervals.analyse p
+            in
+            let _ =
               Trace_core.with_span ~__FILE__ ~__LINE__ "dfg_flow_insensitive"
               @@ fun _ ->
               Analysis.Wrapped_intervals.DFGAnalysis.flow_insensitive p
@@ -142,6 +173,8 @@ module PassManager = struct
       cleanup_cfg;
       dfg_bool;
       dfg_ival;
+      cfg_wrapped_flow_sensitive;
+      cfg_wrapped_flow_insensitive;
       cfg_wrapped_int;
       cfg_tnum_wint_reduced;
       sparams;
