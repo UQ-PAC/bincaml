@@ -53,7 +53,8 @@ module PassManager = struct
   let dfg_ival =
     {
       name = "demo-dfg-ival-analysis";
-      apply = DFGAnalysis (module Analysis.Wrapped_intervals.DFGAnalysis);
+      apply =
+        DFGAnalysis (module Analysis.Tnum_wint_reduced_product.DFGAnalysis);
       doc = "runs interavl analysis on dataflow graph and prints results";
     }
 
@@ -221,19 +222,20 @@ module PassManager = struct
         |> Iter.filter (fun (_, p) -> Procedure.graph p |> Option.is_some)
         |> Iter.iter (fun (pn, p) ->
             let g = Analysis.Dataflow_graph.create p in
-            let r =
+            (*let r =
               D.analyse ~widen_set:Graph.ChaoticIteration.FromWto
                 ~delay_widen:10 g
-            in
+            in*)
             let r2 = D.flow_insensitive p in
-            print_endline (D.D.name ^ " :: " ^ ID.to_string pn);
+            (*print_endline (D.D.name ^ " :: " ^ ID.to_string pn);
             print_endline
               Containers_pp.(
                 Pretty.to_string ~width:80 @@ nest 4 (D.D.pretty r));
             print_endline "insens";
             print_endline
               Containers_pp.(
-                Pretty.to_string ~width:80 @@ nest 4 (D.D.pretty r2)));
+                Pretty.to_string ~width:80 @@ nest 4 (D.D.pretty r2)) *)
+            ());
         p
     | ProcCheck app ->
         let _ =

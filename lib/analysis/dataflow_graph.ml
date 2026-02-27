@@ -29,13 +29,20 @@
 open Lang
 open Lang.Common
 
+let debug = ref false
+let log_debug f = if !debug then print_endline (f ()) else ()
+
 (** {1 Building dataflow graphs for procedures}*)
 
 module Vertex = struct
   (** Vertices in the intraprocedural dataflow graph represent executable
       statements or phi nodes.*)
 
-  type vt = Entry | Return | Stmt of Program.stmt | Phi of Var.t * Var.t list
+  type vt =
+    | Entry
+    | Return
+    | Stmt of Program.stmt
+    | Phi of { lhs : Var.t; rhs : Var.t list; widen_point : bool }
   [@@deriving ord, eq, show { with_path = false }]
 
   type t = int * vt [@@deriving ord, eq, show { with_path = false }]
@@ -46,11 +53,12 @@ module Vertex = struct
   let hash v =
     match v with
     | i, Stmt s -> Hash.combine3 251 i (Hashtbl.hash s)
-    | i, Phi (l, r) -> Hash.combine3 271 i (Hash.list Var.hash r)
+    | i, Phi { lhs; rhs } ->
+        Hash.combine4 271 i (Var.hash lhs) (Hash.list Var.hash rhs)
     | o -> Hashtbl.hash o
 
   let defines p = function
-    | i, Phi (lhs, _) -> Iter.singleton lhs
+    | i, Phi { lhs } -> Iter.singleton lhs
     | i, Stmt (Instr_Assume _ as s) -> Stmt.free_vars_iter s
     | i, Stmt (Instr_Assert _ as s) -> Stmt.free_vars_iter s
     | i, Stmt s -> Stmt.iter_assigned s
@@ -61,7 +69,7 @@ module Vertex = struct
     | i, Return -> Iter.empty
 
   let uses p = function
-    | i, Phi (_, rhs) -> List.to_iter rhs
+    | i, Phi { rhs } -> List.to_iter rhs
     | i, Stmt s -> Stmt.free_vars_iter s
     | i, Entry -> Iter.empty
     | i, Return ->
@@ -93,26 +101,44 @@ type defuse = { var_to_use : MDeps.t; var_to_def : MDeps.t }
 
     possible future work: encode the reachability of definitions a la TV paper
     to make phis precise conditionals. *)
-let get_dfg_vertices p : Vertex.t Iter.t =
+let get_dfg_vertices ~(direction : [ `Forwards | `Backwards ]) p :
+    Vertex.t Iter.t =
   let block_index = ref 0 in
-  let widen_at = ref [] in
+  let is_header header = match header with `Header -> true | _ -> false in
 
-  let add_header header =
-    match header with
-    | `Header -> widen_at := !block_index :: !widen_at
-    | _ -> ()
+  let iter =
+    match direction with
+    | `Forwards -> Procedure.iter_blocks_topo_fwd_headers
+    | `Backwards -> Procedure.iter_blocks_topo_fwd_headers
+  in
+
+  let first =
+    Vertex.(
+      match direction with `Forwards -> (0, Entry) | `Backwards -> (0, Return))
+  in
+  let last =
+    Vertex.(
+      match direction with
+      | `Forwards -> (Int.max_int, Return)
+      | `Backwards -> (Int.max_int, Entry))
   in
 
   Block.(
-    Procedure.iter_blocks_topo_fwd_headers p
+    iter p
     |> Iter.flat_map (fun (id, header, (b : Program.bloc)) ->
-        add_header header;
         block_index := !block_index + 1;
         let phi_def_use =
           List.to_iter b.phis
           |> Iter.map (function { lhs; rhs } ->
               block_index := !block_index + 1;
-              (!block_index, Vertex.Phi (lhs, List.map snd rhs)))
+              ( !block_index,
+                Vertex.Phi
+                  {
+                    lhs;
+                    rhs = List.map snd rhs;
+                    widen_point = is_header header;
+                    (* apply widening based on wto; may not make sense backwards  *)
+                  } ))
         in
         let block_def_use =
           Block.stmts_iter b
@@ -128,8 +154,7 @@ let get_dfg_vertices p : Vertex.t Iter.t =
                 Iter.singleton (!block_index, Vertex.Stmt stmt))
         in
         Iter.append phi_def_use block_def_use))
-  |> Iter.append
-       (Iter.of_list [ (0, Vertex.Entry); (Int.max_int, Vertex.Return) ])
+  |> Iter.append (Iter.of_list [ first; last ])
   |> Iter.persistent
 
 (** Reverses the index on everything *)
@@ -151,7 +176,9 @@ let reverse_dfg_vertices_priority def_use =
 
 (** return the vertex dependency maps {! defuse} for a procedure *)
 let def_use_maps ?(require_full_ssa = false) ?def_use p =
-  let def_use_vert = Option.get_or ~default:(get_dfg_vertices p) def_use in
+  let def_use_vert =
+    Option.get_or ~default:(get_dfg_vertices ~direction:`Forwards p) def_use
+  in
   let to_def =
     def_use_vert
     |> Iter.flat_map (fun v -> Vertex.defines p v |> Iter.map (fun s -> (s, v)))
@@ -201,53 +228,60 @@ module SimpleSolver = struct
 
   type vm = (Vertex.t, Int.t) Hashtbl.t
 
-  let fixpoint_proc (module WL : Worklist.IFace with type elt = Vertex.t)
-      transfer initial starting p deps def_use =
-    let widen_thresh = 155 in
+  let fixpoint_proc ?(widen_threshold = 10)
+      (module WL : Worklist.IFace with type elt = Vertex.t) transfer initial p
+      deps (def_use : Vertex.t Iter.t) =
     let lookup = def_use_maps ~def_use p in
     let worklist = WL.create () in
-    WL.add_iter worklist (deps p lookup starting);
+    (* we need to add all as not everything is a successor of entry; *)
+    WL.add_iter worklist def_use;
 
     let visited = Hashtbl.create (Iter.length def_use) in
 
-    let visit v =
-      let vl = Hashtbl.find_opt visited v |> Option.get_or ~default:0 in
-      Hashtbl.replace visited v (vl + 1);
-      vl + 1
+    let need_widen v =
+      match v with
+      | _, Vertex.Phi { widen_point = true } ->
+          let vl = Hashtbl.find_opt visited v |> Option.get_or ~default:0 in
+          Hashtbl.replace visited v (vl + 1);
+          vl + 1 > widen_threshold
+      | _ -> false
     in
 
     let state = ref initial in
     while WL.non_empty worklist do
       let s = WL.pop worklist in
-      let widen = visit s > widen_thresh in
+      let widen = need_widen s in
       let state' = transfer ~widen !state s in
+      log_debug (fun () -> Vertex.show s);
       match state' with
       | Some st ->
           state := st;
-          WL.add_iter worklist (deps p lookup s)
+          let d = deps p lookup s in
+          log_debug (fun () -> "next: " ^ Iter.to_string Vertex.show d);
+          WL.add_iter worklist d
       | None -> ()
     done;
+    log_debug (fun () ->
+        Hashtbl.to_iter visited
+        |> Iter.to_string ~sep:"\n" (function k, v ->
+            Int.to_string v ^ " " ^ Vertex.show k));
     !state
 
   let fixpoint_fwd ~transfer ~initial p =
-    let def_use = get_dfg_vertices p in
-    fixpoint_proc
-      (module PQueue)
-      transfer initial (0, Vertex.Entry) p (deps `Forwards) def_use
+    let def_use = get_dfg_vertices ~direction:`Forwards p in
+    fixpoint_proc (module WL) transfer initial p (deps `Forwards) def_use
 
   let fixpoint_rev ~transfer ~initial p =
-    let def_use = get_dfg_vertices p |> reverse_dfg_vertices_priority in
+    let def_use = get_dfg_vertices ~direction:`Backwards p in
 
-    fixpoint_proc
-      (module WLR)
-      transfer initial (0, Vertex.Return) p (deps `Backwards) def_use
+    fixpoint_proc (module WL) transfer initial p (deps `Backwards) def_use
 end
 
 (** Return a {! DFGraph.t} representing the dataflow. Vertices are phi nodes or
     program statements, edges are directed from definitions to their uses. *)
 let create p =
   let make_graph () =
-    let def_use_vert = get_dfg_vertices p in
+    let def_use_vert = get_dfg_vertices ~direction:`Forwards p in
     let to_use, to_def =
       def_use_maps ~def_use:def_use_vert p |> function
       | { var_to_use; var_to_def } -> (var_to_use, var_to_def)
@@ -343,10 +377,10 @@ open struct
       (** Analysis function specificatlly for the flow insensitive fixed point,
           hence incorporates joins etc. *)
       let analyze_vert_intra ~widen data (v : Vertex.t) =
-        let join = if widen then V.widening else V.join in
         let r =
           match snd v with
-          | Vertex.(Phi (lhs, rhs)) ->
+          | Vertex.(Phi { lhs; rhs }) ->
+              let join = if widen then V.widening else V.join in
               let olhs = D.read lhs data in
               let nlhs =
                 rhs
@@ -362,7 +396,6 @@ open struct
                 D.transfer_state read stmt
                 |> Iter.filter_map (fun (v, s) ->
                     let vv = read v in
-                    let s = join vv s in
                     if V.equal vv s then None else Some (v, s))
               in
               if Iter.is_empty s' then None

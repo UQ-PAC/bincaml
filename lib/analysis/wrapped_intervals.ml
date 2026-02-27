@@ -955,7 +955,7 @@ module Domain = struct
           StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
       | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
     in
-    Iter.append updates pred_updates
+    Iter.append pred_updates updates
 
   let transfer dom stmt =
     Iter.fold (fun a (k, v) -> update k v a) dom

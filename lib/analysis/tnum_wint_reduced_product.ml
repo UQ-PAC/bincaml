@@ -195,6 +195,7 @@ module Domain = struct
     |> Iter.fold (fun dom (k, v) -> update k v dom) dom
 end
 
+module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
 module Analysis = Intra_analysis.Forwards (Domain)
 
 let analyse (p : Lang.Program.proc) =
