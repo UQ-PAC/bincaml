@@ -90,7 +90,7 @@ module type IDEDomain = sig
   val eval : t -> Value.t -> Value.t
   (** evaluate an edge function *)
 
-  val init_data : Program.proc -> Data.t Iter.t
+  val init_data : Var.t Iter.t -> Program.proc -> Data.t Iter.t
 
   val transfer_call : call_info -> DL.t -> t state_update
   (** edge calling a procedure (to the return block when backwards) *)
@@ -726,11 +726,18 @@ module IDE (D : IDEDomain) = struct
       |> Iter.flat_map (fun proc ->
           let vert =
             Loc.IntraVertex
-              { proc_id = Procedure.id proc; v = Procedure.Vert.Entry }
+              {
+                proc_id = Procedure.id proc;
+                v =
+                  (match D.direction with
+                  | `Forwards -> Procedure.Vert.Entry
+                  | `Backwards -> Procedure.Vert.Return);
+              }
           in
           Iter.cons
             (vert, DL.Lambda, DL.Lambda)
-            (D.init_data proc |> Iter.map (fun v -> (vert, Label v, Label v))))
+            (D.init_data globals proc
+            |> Iter.map (fun v -> (vert, Label v, Label v))))
       |> Iter.cons
            (match dir with
            | `Forwards -> (Loc.Entry, Lambda, Lambda)
