@@ -20,6 +20,7 @@ let transform (prog : Program.t) =
   CCIO.with_out "idegraph.dot" (fun s ->
       Analysis.Ide.IDEGraph.Vis.fprint_graph (Format.of_chan s) g);
   let summary, r = IDELiveAnalysis.solve prog in
+  (*
   ID.Map.to_iter prog.procs
   |> Iter.iter (fun (proc, proc_n) ->
       let n = ID.to_string proc in
@@ -33,4 +34,5 @@ let transform (prog : Program.t) =
         (fun s ->
           print_live_vars_dot show_state (r ~proc_id:proc) (Format.of_chan s)
             prog proc));
+            *)
   prog

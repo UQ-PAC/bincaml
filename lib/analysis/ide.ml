@@ -90,6 +90,8 @@ module type IDEDomain = sig
   val eval : t -> Value.t -> Value.t
   (** evaluate an edge function *)
 
+  val init_data : Program.proc -> Data.t Iter.t
+
   val transfer_call : call_info -> DL.t -> t state_update
   (** edge calling a procedure (to the return block when backwards) *)
 
@@ -544,15 +546,16 @@ module IDE (D : IDEDomain) = struct
     | Nop -> Iter.singleton ((d1, d2), e1)
 
   module P1K = struct
-    type t = Loc.t * DL.t * DL.t
+    type t = int * (Loc.t * DL.t * DL.t)
 
-    let compare = Ord.triple Loc.compare DL.compare DL.compare
+    let compare =
+      Ord.pair Ord.int (Ord.triple Loc.compare DL.compare DL.compare)
   end
 
   module W1 = Worklist (P1K)
 
   (** Propagate summaries into a new location and update the worklist *)
-  let propagate worklist summaries summary loc updates =
+  let propagate worklist summaries summary loc get_order updates =
     Iter.filter_map
       (fun ((d1, d3), e) ->
         let l = dldlget d1 d3 summary in
@@ -561,7 +564,7 @@ module IDE (D : IDEDomain) = struct
       updates
     |> Iter.fold
          (fun acc ((d1, d3), e) ->
-           W1.add worklist (loc, d1, d3);
+           W1.add worklist (get_order loc, (loc, d1, d3));
            let m = DlMap.get_or d1 acc ~default:DlMap.empty in
            DlMap.add d1 (DlMap.add d3 e m) acc)
          summary
@@ -572,12 +575,11 @@ module IDE (D : IDEDomain) = struct
       A summary edge function is an edge function from the start of a procedure
       to some location in the procedure that is equal to the join of all
       composite edge functions through paths to this location. *)
-  let phase1_solve start graph globals default =
+  let phase1_solve start graph globals order default =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
+    let get_order l = LM.get_or l order ~default:99999999 in
     let worklist = W1.create in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
-    Hashtbl.replace summaries start
-      (DlMap.singleton Lambda (DlMap.singleton Lambda D.identity));
     (* Stores edge functions from the first procedure's entry to the second
        procedure's entry, with a fixed dl value at the second procedure *)
     let entry_to_call_entry_cache : (ID.t * DL.t * ID.t, D.t DlMap.t) Hashtbl.t
@@ -590,9 +592,18 @@ module IDE (D : IDEDomain) = struct
       Hashtbl.create 100
     in
     let get_summary loc = Hashtbl.get summaries loc |> Option.get_or ~default in
-    W1.add worklist (start, Lambda, Lambda);
+    Iter.iter
+      (fun (v, a, b) ->
+        W1.add worklist (get_order v, (v, a, b));
+        let m1 = get_summary v in
+        let m2 = DlMap.get_or a m1 ~default:DlMap.empty in
+        let m1 = DlMap.add a (DlMap.add b D.identity m2) m1 in
+        Hashtbl.replace summaries v m1)
+      start;
+    let iters = ref 0 in
     while W1.non_empty worklist do
-      let l, d1, d2 = W1.pop worklist in
+      iters := succ !iters;
+      let _, (l, d1, d2) = W1.pop worklist in
       let ost = get_summary l in
       let e1 = dldlget d1 d2 ost in
       IDEGraph.G.succ_e graph l |> Iter.of_list
@@ -600,8 +611,9 @@ module IDE (D : IDEDomain) = struct
           let _, _, t = e in
           phase1_transfer entry_to_call_entry_cache entry_to_exit_cache d1 d2 e1
             e
-          |> propagate worklist summaries (get_summary t) t)
+          |> propagate worklist summaries (get_summary t) t get_order)
     done;
+    print_endline @@ Int.to_string !iters;
     summaries
 
   let phase2_call_transfer get_summary add_q states calls_table d md e =
@@ -710,12 +722,40 @@ module IDE (D : IDEDomain) = struct
     let globals = Program.global_vars prog in
     let graph = IDEGraph.create prog dir in
     let start =
-      match dir with `Forwards -> Loc.Entry | `Backwards -> Loc.Exit
+      ID.Map.values prog.procs
+      |> Iter.flat_map (fun proc ->
+          let vert =
+            Loc.IntraVertex
+              { proc_id = Procedure.id proc; v = Procedure.Vert.Entry }
+          in
+          Iter.cons
+            (vert, DL.Lambda, DL.Lambda)
+            (D.init_data proc |> Iter.map (fun v -> (vert, Label v, Label v))))
+      |> Iter.cons
+           (match dir with
+           | `Forwards -> (Loc.Entry, Lambda, Lambda)
+           | `Backwards -> (Loc.Exit, Lambda, Lambda))
+    in
+    let components, call_graph_scc =
+      Program.CallGraph.make_call_graph prog |> Program.CallGraph.Scc.scc
+    in
+    let order =
+      flip IDEGraph.G.iter_vertex graph
+      |> Iter.from_iter
+      |> Iter.map (fun vert ->
+          match vert with
+          | Loc.IntraVertex { proc_id }
+          | Loc.CallSite { proc_id }
+          | Loc.AfterCall { proc_id } ->
+              (vert, call_graph_scc (Program.CallGraph.Vert.ProcBegin proc_id))
+          | Loc.Entry -> (vert, components + 1)
+          | Loc.Exit -> (vert, components + 1))
+      |> LM.of_iter
     in
     let start_proc =
       prog.entry_proc |> Option.get_exn_or "Missing entry procedure"
     in
-    let summary = phase1_solve start graph globals DlMap.empty in
+    let summary = phase1_solve start graph globals order DlMap.empty in
     ( query @@ summary,
       query @@ phase2_solve prog start_proc graph globals summary )
 

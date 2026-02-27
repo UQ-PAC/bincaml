@@ -66,6 +66,9 @@ module IDELive = struct
 
   let eval f v = match f with IdEdge -> v | ConstEdge v -> v
 
+  let init_data (proc : Program.proc) =
+    Procedure.formal_in_params proc |> StringMap.values
+
   open DL
 
   let transfer_call (c : call_info) d =
