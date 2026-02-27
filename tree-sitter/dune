@@ -1,14 +1,3 @@
-(rule
- (deps %{project_root}/lib/fe/BasilIR.cf)
- (enabled_if %{env:BINCAML_BNFC_TREESITTER=false})
- (targets grammar.js)
- (mode promote)
- (action
-  (progn
-   (copy %{deps} basilir.cf)
-   (run bnfc --tree-sitter --tree-sitter-word LocalIdent basilir.cf --makefile)
-   (no-infer (copy tree-sitter-basilir/grammar.js grammar.js)))))
-
 ; checks tree-sitter is valid and unambiguous
 (rule
  (deps grammar.js)
@@ -16,3 +5,15 @@
  (enabled_if %{bin-available:tree-sitter})
  (action
   (run tree-sitter generate grammar.js)))
+
+; check that grammar.js is up to date.
+; requires `bnfc-treesitter` from pac-nix.
+(rule
+ (alias runtest)
+ (deps %{project_root}/lib/fe/BasilIR.cf)
+ (enabled_if %{bin-available:bnfc})
+ (action
+  (progn
+   (copy %{deps} basilir.cf)
+   (run bnfc --tree-sitter --tree-sitter-word LocalIdent basilir.cf --makefile)
+   (diff? grammar.js tree-sitter-basilir/grammar.js))))
