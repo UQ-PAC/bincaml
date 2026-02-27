@@ -7,19 +7,9 @@ open Type_automata
 (*
   TODO:
 
-      1) Do the example that they provide in BinSub as a test to see what it looks
-        like
-
-        i.e. run ADT stuff on this type
-
-        μα.α⊓stack_slot_2⊓ptr(a,{(4,4):b⊓(t1⊓α)})⊓ptr(c,{(0,4):d⊓(t2⊓int32)})⊓ptr({(0,4):e⊔int32, f )
-
-      2) Figure what IR stuff can actually result in recursive types so I can make
-        sure my code actually works with it
-
-      3) To continue with automata, I am up to the stage of actually joining the types I have been making
-
-      4) Ask about a = BVSHL(Extract()) stuff cause it makes sense that the a is also binded by the extract stuff
+    Ask if I should make it more general and work with less type information
+      or should prio speed / space instead
+    
 *)
 
 let gen = ID.make_gen ()
