@@ -162,7 +162,7 @@ module ConstraintState = struct
         | Some c -> Some { c with ub = TySet.add ty c.ub })
       st
 
-  let add_lb st name ty =
+  let add_lb (st: t) name  ty =
     StringMap.update name
       (function
         | None ->

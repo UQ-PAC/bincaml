@@ -13,10 +13,7 @@
   wrapped_intervals
   tnum_wint_reduced_product
   known_bits
-  sva
-  type_inference
-  asd
-  type_automata)
+  sva)
  (libraries
   intPQueue
   patricia-tree

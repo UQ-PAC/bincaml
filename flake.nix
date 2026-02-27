@@ -91,6 +91,7 @@
             main
             pkgs.perf
             pkgs.tree-sitter
+            pkgs.nodejs
           ];
         };
       }
