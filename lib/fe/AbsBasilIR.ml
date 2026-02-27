@@ -49,18 +49,40 @@ and intType =
 and boolType =
    BoolType1 of bOOLTYPE
 
-and mapType =
-   MapType1 of typeT * typeT
-
 and bVType =
    BVType1 of bVTYPE
 
+and mapType =
+   MapType1 of typeT * typeT
+
 and typeT =
-   TypeIntType of intType
- | TypeBoolType of boolType
+   Type1IntType of intType
+ | Type1BoolType of boolType
+ | Type1BVType of bVType
+ | Type1Paren of openParen * typeT * closeParen
  | TypeMapType of mapType
- | TypeBVType of bVType
- | Type1 of openParen * typeT * closeParen
+
+and expr =
+   Expr_Literal of value
+ | Expr_Paren of openParen * expr * closeParen
+ | Expr_Local of localVar
+ | Expr_Global of globalVar
+ | Expr_Forall of attribSet * lambdaDef
+ | Expr_Exists of attribSet * lambdaDef
+ | Expr_Lambda of attribSet * lambdaDef
+ | Expr_Old of openParen * expr * closeParen
+ | Expr_FunctionOp of expr * openParen * expr list * closeParen
+ | Expr_Binary of binOp * openParen * expr * expr * closeParen
+ | Expr_Assoc of boolBinOp * openParen * expr list * closeParen
+ | Expr_Unary of unOp * openParen * expr * closeParen
+ | Expr_LoadBe of openParen * intVal * expr * expr * closeParen
+ | Expr_LoadLe of openParen * intVal * expr * expr * closeParen
+ | Expr_ZeroExtend of openParen * intVal * expr * closeParen
+ | Expr_SignExtend of openParen * intVal * expr * closeParen
+ | Expr_Extract of openParen * intVal * intVal * expr * closeParen
+ | Expr_Concat of openParen * expr list * closeParen
+ | Expr_Match of expr * openParen * case list * closeParen
+ | Expr_Cases of openParen * case list * closeParen
 
 and intVal =
    IntVal_Hex of integerHex
@@ -83,10 +105,8 @@ and stmt =
  | Stmt_ScalarStore of lVar * expr
  | Stmt_ScalarLoad of lVar * var
  | Stmt_MultiAssign of openParen * assignment list * closeParen
- | Stmt_Load of lVar * endian * globalIdent * expr * intVal
- | Stmt_Store of endian * globalIdent * expr * expr * intVal
- | Stmt_Load_Var of lVar * endian * var * expr * intVal
- | Stmt_Store_Var of lVar * endian * var * expr * expr * intVal
+ | Stmt_Load of lVar * endian * var * expr * intVal
+ | Stmt_Store of lVar * endian * var * expr * expr * intVal
  | Stmt_DirectCall of lVars * procIdent * openParen * callParams * closeParen
  | Stmt_IndirectCall of expr
  | Stmt_Assume of expr
@@ -157,7 +177,6 @@ and attribSet =
 and attr =
    Attr_Map of beginRec * attrKeyValue list * endRec
  | Attr_List of beginList * attr list * endList
- | Attr_Lit of value
  | Attr_Expr of expr
  | Attr_Str of str
 
@@ -173,28 +192,6 @@ and value =
  | Value_Int of intVal
  | Value_True
  | Value_False
-
-and expr =
-   Expr_Literal of value
- | Expr_Paren of openParen * expr * closeParen
- | Expr_Local of localVar
- | Expr_Global of globalVar
- | Expr_Forall of attribSet * lambdaDef
- | Expr_Exists of attribSet * lambdaDef
- | Expr_Lambda of attribSet * lambdaDef
- | Expr_Old of openParen * expr * closeParen
- | Expr_FunctionOp of expr * openParen * expr list * closeParen
- | Expr_Binary of binOp * openParen * expr * expr * closeParen
- | Expr_Assoc of boolBinOp * openParen * expr list * closeParen
- | Expr_Unary of unOp * openParen * expr * closeParen
- | Expr_LoadBe of openParen * intVal * expr * expr * closeParen
- | Expr_LoadLe of openParen * intVal * expr * expr * closeParen
- | Expr_ZeroExtend of openParen * intVal * expr * closeParen
- | Expr_SignExtend of openParen * intVal * expr * closeParen
- | Expr_Extract of openParen * intVal * intVal * expr * closeParen
- | Expr_Concat of openParen * expr list * closeParen
- | Expr_Match of expr * openParen * case list * closeParen
- | Expr_Cases of openParen * case list * closeParen
 
 and lambdaParen =
    LambdaParenLocalVar of localVar

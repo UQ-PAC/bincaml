@@ -115,20 +115,43 @@ and transBoolType (x : boolType) : result = match x with
     BoolType1 booltype -> failure x
 
 
-and transMapType (x : mapType) : result = match x with
-    MapType1 (type'0, type') -> failure x
-
-
 and transBVType (x : bVType) : result = match x with
     BVType1 bvtype -> failure x
 
 
+and transMapType (x : mapType) : result = match x with
+    MapType1 (type'0, type') -> failure x
+
+
 and transType (x : typeT) : result = match x with
-    TypeIntType inttype -> failure x
-  | TypeBoolType booltype -> failure x
+    Type1IntType inttype -> failure x
+  | Type1BoolType booltype -> failure x
+  | Type1BVType bvtype -> failure x
+  | Type1Paren (openparen, type', closeparen) -> failure x
   | TypeMapType maptype -> failure x
-  | TypeBVType bvtype -> failure x
-  | Type1 (openparen, type', closeparen) -> failure x
+
+
+and transExpr (x : expr) : result = match x with
+    Expr_Literal value -> failure x
+  | Expr_Paren (openparen, expr, closeparen) -> failure x
+  | Expr_Local localvar -> failure x
+  | Expr_Global globalvar -> failure x
+  | Expr_Forall (attribset, lambdadef) -> failure x
+  | Expr_Exists (attribset, lambdadef) -> failure x
+  | Expr_Lambda (attribset, lambdadef) -> failure x
+  | Expr_Old (openparen, expr, closeparen) -> failure x
+  | Expr_FunctionOp (expr, openparen, exprs, closeparen) -> failure x
+  | Expr_Binary (binop, openparen, expr0, expr, closeparen) -> failure x
+  | Expr_Assoc (boolbinop, openparen, exprs, closeparen) -> failure x
+  | Expr_Unary (unop, openparen, expr, closeparen) -> failure x
+  | Expr_LoadBe (openparen, intval, expr0, expr, closeparen) -> failure x
+  | Expr_LoadLe (openparen, intval, expr0, expr, closeparen) -> failure x
+  | Expr_ZeroExtend (openparen, intval, expr, closeparen) -> failure x
+  | Expr_SignExtend (openparen, intval, expr, closeparen) -> failure x
+  | Expr_Extract (openparen, intval0, intval, expr, closeparen) -> failure x
+  | Expr_Concat (openparen, exprs, closeparen) -> failure x
+  | Expr_Match (expr, openparen, cases, closeparen) -> failure x
+  | Expr_Cases (openparen, cases, closeparen) -> failure x
 
 
 and transIntVal (x : intVal) : result = match x with
@@ -156,10 +179,8 @@ and transStmt (x : stmt) : result = match x with
   | Stmt_ScalarStore (lvar, expr) -> failure x
   | Stmt_ScalarLoad (lvar, var) -> failure x
   | Stmt_MultiAssign (openparen, assignments, closeparen) -> failure x
-  | Stmt_Load (lvar, endian, globalident, expr, intval) -> failure x
-  | Stmt_Store (endian, globalident, expr0, expr, intval) -> failure x
-  | Stmt_Load_Var (lvar, endian, var, expr, intval) -> failure x
-  | Stmt_Store_Var (lvar, endian, var, expr0, expr, intval) -> failure x
+  | Stmt_Load (lvar, endian, var, expr, intval) -> failure x
+  | Stmt_Store (lvar, endian, var, expr0, expr, intval) -> failure x
   | Stmt_DirectCall (lvars, procident, openparen, callparams, closeparen) -> failure x
   | Stmt_IndirectCall expr -> failure x
   | Stmt_Assume expr -> failure x
@@ -247,7 +268,6 @@ and transAttribSet (x : attribSet) : result = match x with
 and transAttr (x : attr) : result = match x with
     Attr_Map (beginrec, attrkeyvalues, endrec) -> failure x
   | Attr_List (beginlist, attrs, endlist) -> failure x
-  | Attr_Lit value -> failure x
   | Attr_Expr expr -> failure x
   | Attr_Str str -> failure x
 
@@ -266,29 +286,6 @@ and transValue (x : value) : result = match x with
   | Value_Int intval -> failure x
   | Value_True  -> failure x
   | Value_False  -> failure x
-
-
-and transExpr (x : expr) : result = match x with
-    Expr_Literal value -> failure x
-  | Expr_Paren (openparen, expr, closeparen) -> failure x
-  | Expr_Local localvar -> failure x
-  | Expr_Global globalvar -> failure x
-  | Expr_Forall (attribset, lambdadef) -> failure x
-  | Expr_Exists (attribset, lambdadef) -> failure x
-  | Expr_Lambda (attribset, lambdadef) -> failure x
-  | Expr_Old (openparen, expr, closeparen) -> failure x
-  | Expr_FunctionOp (expr, openparen, exprs, closeparen) -> failure x
-  | Expr_Binary (binop, openparen, expr0, expr, closeparen) -> failure x
-  | Expr_Assoc (boolbinop, openparen, exprs, closeparen) -> failure x
-  | Expr_Unary (unop, openparen, expr, closeparen) -> failure x
-  | Expr_LoadBe (openparen, intval, expr0, expr, closeparen) -> failure x
-  | Expr_LoadLe (openparen, intval, expr0, expr, closeparen) -> failure x
-  | Expr_ZeroExtend (openparen, intval, expr, closeparen) -> failure x
-  | Expr_SignExtend (openparen, intval, expr, closeparen) -> failure x
-  | Expr_Extract (openparen, intval0, intval, expr, closeparen) -> failure x
-  | Expr_Concat (openparen, exprs, closeparen) -> failure x
-  | Expr_Match (expr, openparen, cases, closeparen) -> failure x
-  | Expr_Cases (openparen, cases, closeparen) -> failure x
 
 
 and transLambdaParen (x : lambdaParen) : result = match x with
