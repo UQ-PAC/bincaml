@@ -606,9 +606,7 @@ module IDE (D : IDEDomain) = struct
         let m1 = DlMap.add a (DlMap.add b D.identity m2) m1 in
         Hashtbl.replace summaries v m1)
       start;
-    let iters = ref 0 in
     while W1.non_empty worklist do
-      iters := succ !iters;
       let _, (l, d1, d2) = W1.pop worklist in
       let ost = get_summary l in
       let e1 = dldlget d1 d2 ost in
@@ -619,14 +617,6 @@ module IDE (D : IDEDomain) = struct
             e
           |> propagate worklist summaries (get_summary t) t get_order)
     done;
-    print_endline @@ Int.to_string !iters;
-    print_endline @@ Int.to_string
-    @@ Hashtbl.fold
-         (fun l m n -> DlMap.fold (fun _ m n -> n + DlMap.cardinal m) m n)
-         summaries 0;
-    (*Hashtbl.iter (fun l m -> print_endline @@ Loc.show l ^ ": " ^ show_summary m) summaries;*)
-    (*Hashtbl.iter (fun l m -> print_endline @@ Loc.show l ^ ": " ^ Int.to_string @@ DlMap.fold (fun _ m n -> n + DlMap.cardinal m) m 0) summaries;*)
-    (*print_endline @@ Int.to_string @@ Hashtbl.length summaries; *)
     summaries
 
   let phase2_call_transfer get_summary add_q states calls_table d md e =
