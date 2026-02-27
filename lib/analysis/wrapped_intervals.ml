@@ -947,6 +947,10 @@ module Domain = struct
       match evald_stmt with
       | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
       | Lang.Stmt.Instr_Assert _ | Lang.Stmt.Instr_Assume _ -> Iter.empty
+      | Lang.Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
+          Iter.singleton (lhs, rhs)
+      | Lang.Stmt.Instr_Store { lhs; value; addr = Scalar } ->
+          Iter.singleton (lhs, value)
       | Lang.Stmt.Instr_Load { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_Store { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_IntrinCall { lhs } ->

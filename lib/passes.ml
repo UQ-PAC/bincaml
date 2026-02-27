@@ -98,11 +98,6 @@ module PassManager = struct
               Trace_core.with_span ~__FILE__ ~__LINE__ "dfg_flow_sensitive"
               @@ fun _ -> Analysis.Wrapped_intervals.analyse p
             in
-            let _ =
-              Trace_core.with_span ~__FILE__ ~__LINE__ "dfg_flow_insensitive"
-              @@ fun _ ->
-              Analysis.Wrapped_intervals.DFGAnalysis.flow_insensitive p
-            in
             (*Analysis.Wrapped_intervals.Analysis.print_dot
               (Format.of_chan stdout) p r;*)
             p);
