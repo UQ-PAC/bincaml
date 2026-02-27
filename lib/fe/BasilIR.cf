@@ -64,12 +64,18 @@ ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
-MapType1 . MapType ::=  Type "->" Type ;
 BVType1 . BVType ::= BVTYPE ;
+-- map types are right associative. left of -> cannot be another MapType.
+MapType1 . MapType ::=  Type1 "->" Type ; 
 
-rules Type ::= IntType | BoolType | MapType | BVType | OpenParen Type CloseParen; 
+rules Type1 ::= IntType | BoolType | BVType ;
+Type1Paren . Type1 ::= OpenParen Type CloseParen; 
+
+rules Type ::= MapType;
+_ . Type ::= Type1;
 
 separator Expr "," ;
+coercions Expr 2;
 
 IntVal_Hex . IntVal ::= IntegerHex ;
 IntVal_Dec . IntVal ::=  IntegerDec ;
@@ -91,22 +97,21 @@ separator nonempty Assignment ",";
 Stmt_MultiAssign . Stmt ::= OpenParen [Assignment]  CloseParen ;
 
 
-LocalTyped . LocalVar ::= LocalIdent ":" Type ;
+LocalTyped . LocalVar ::= LocalIdent ":" Type1 ;
 LocalUntyped . LocalVar ::= LocalIdent ;
 
-GlobalTyped . GlobalVar ::= GlobalIdent ":" Type ;
+GlobalTyped . GlobalVar ::= GlobalIdent ":" Type1 ;
 GlobalUntyped . GlobalVar ::= GlobalIdent;
 separator nonempty LocalVar ",";
 rules Var ::= LocalVar | GlobalVar ;
 
 separator GlobalVar ",";
 
+--                    lvar               endian mem addr   size
+Stmt_Load  . Stmt ::= LVar ":="   "load" Endian Var Expr IntVal;
 
-Stmt_Load . Stmt ::= LVar ":=" "load" Endian GlobalIdent Expr IntVal;
-Stmt_Store . Stmt ::= "store" Endian GlobalIdent Expr Expr IntVal;
-
-Stmt_Load_Var . Stmt ::= LVar ":=" "load" Endian Var Expr IntVal;
-Stmt_Store_Var . Stmt ::= LVar ":="  "store" Endian Var Expr Expr IntVal;
+--                     lhs               endian rhs addr  value   size
+Stmt_Store . Stmt ::= LVar ":="  "store" Endian Var Expr2  Expr IntVal;
 
 rules NamedCallReturn ::= LVar "=" LocalIdent;
 separator NamedCallReturn "," ;
@@ -173,7 +178,6 @@ separator Attr ";" ;
 
 Attr_Map . Attr ::= BeginRec [ AttrKeyValue ] EndRec ; 
 Attr_List . Attr ::= BeginList [ Attr ] EndList; 
-Attr_Lit . Attr ::= Value ; 
 Attr_Expr . Attr ::= Expr; 
 Attr_Str . Attr ::= Str ; 
 
@@ -209,7 +213,7 @@ Expr_Lambda . Expr ::= "fun"    AttribSet LambdaDef ;
 Expr_Old . Expr       ::= "old" OpenParen Expr CloseParen ;
 
 -- uninterpreted functions
-Expr_FunctionOp . Expr       ::= Expr OpenParen [Expr] CloseParen;
+Expr_FunctionOp . Expr1       ::= Expr1 OpenParen [Expr] CloseParen;
 
 -- binary expr
 
