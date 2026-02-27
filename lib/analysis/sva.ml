@@ -27,7 +27,7 @@ module SymBase = struct
     | Stack of string
     | Heap of { name : string; label : string }
     | GlobSym
-    | Constant (* WARN: Constant is obj in scala not a class *)
+    | Constant
     (* Unknown *)
     | Par of { name : string; param : Var.t }
     | Ret of {
@@ -54,9 +54,8 @@ module SymBase = struct
     | Stack _ | Heap _ | GlobSym | Constant -> false
     | Ret _ | Par _ | Loaded _ -> true
 
-  let to_int a = 0
+  let to_int a = Hashtbl.hash a
 
-  (* let pretty a = "" *)
   let pretty a = Containers_pp.int 1
 end
 
@@ -87,7 +86,6 @@ module SVAAbstraction = struct
   (* WARN: Basil one does scary stuff here *)
   let eval_const (op : Lang.Ops.AllOps.const) rt =
     SymAddrSetLattice.singleton SymBase.Constant @@ eval_const op rt
-  (* SymBaseMap.singleton Constant @@ eval_const op rt *)
 
   let eval_unop (op : Lang.Ops.AllOps.unary) (a, t) rt =
     SymAddrSetLattice.mapi
@@ -214,12 +212,20 @@ module Domain = struct
     let updates =
       match stmt with
       | Stmt.Instr_Assign assignments -> List.to_iter assignments
-      | Stmt.Instr_Load { lhs; addr; cells } ->
+      | Stmt.Instr_Load { lhs; addr; rhs } -> (
           Iter.singleton
-            ( lhs,
-              SymAddrSetLattice.singleton
-                (Loaded { name = "load"; label = "load" })
-              @@ IntervalDomain.init @@ Bitvec.zero ~size:cells )
+          @@
+          match addr with
+          | Scalar -> (lhs, rhs)
+          | Addr { size } ->
+              ( lhs,
+                SymAddrSetLattice.singleton
+                  (Loaded { name = "load"; label = "load" })
+                @@ IntervalDomain.init @@ Bitvec.zero ~size ))
+      | Stmt.Instr_Store { lhs; addr; rhs } -> (
+          match addr with
+          | Scalar -> Iter.singleton (lhs, rhs)
+          | Addr { size } -> Iter.empty)
       | Stmt.Instr_Call { lhs; procid }
         when (String.equal "malloc" @@ ID.name procid)
              || (String.equal "calloc" @@ ID.name procid) ->
@@ -259,7 +265,6 @@ module Domain = struct
                 @@ IntervalDomain.init @@ Bitvec.zero ~size ))
           @@ StringMap.values lhs
       | Stmt.Instr_Assert _ | Stmt.Instr_Assume _ -> Iter.empty
-      | Stmt.Instr_Store _ -> Iter.empty
       (* TODO: (From Scala code) "possibly map every live variable to top" *)
       | Stmt.Instr_IndirectCall _ -> Iter.empty
       | Stmt.Instr_IntrinCall _ -> Iter.empty
