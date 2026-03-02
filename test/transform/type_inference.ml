@@ -87,15 +87,18 @@ proc @main_4196260 () -> ()
   let ls =
     [
       ( VarId.fresh_id "$XF",
-        { lb = TySet.singleton @@ CType C_Bool; ub = TySet.empty } );
+        {
+          lb = TySet.of_list [ CType C_Bool; CType (C_BV 1) ];
+          ub = TySet.empty;
+        } );
       ( VarId.fresh_id "$YF",
         {
-          lb = TySet.singleton @@ CType C_Bool;
+          lb = TySet.of_list [ CType C_Bool; CType (C_BV 1) ];
           ub = TySet.singleton @@ TypeVar (VarId.fresh_id "$XF");
         } );
       ( VarId.fresh_id "$ZF",
         {
-          lb = TySet.singleton @@ CType C_Bool;
+          lb = TySet.of_list [ CType C_Bool; CType (C_BV 1) ];
           ub = TySet.singleton @@ TypeVar (VarId.fresh_id "$YF");
         } );
     ]

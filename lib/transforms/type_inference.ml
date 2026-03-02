@@ -167,7 +167,6 @@ module InferredType = struct
     | Field { ty } -> iter f ty
     | Record fields -> List.iter (fun { ty } -> iter f ty) fields
 
-  (* TODO: Temporary *)
   let rec inferred_to_real : t -> Types.t = function
     | Top | Bottom | TypeVar _ | Recursive _ | Union _ | Sect _ | Function _ ->
         failwith "These types should have been removed prior to transform!"
@@ -399,7 +398,9 @@ module TypeAutomata = struct
           Pointer (join (Union (a, c)) (join b d), join b d)
       (* WARN: this is not how BinSub did it, but I think I am just smarter and had better DS *)
       | Function (name0, ins0, outs0), Function (name1, ins1, outs1) ->
-          if not @@ String.equal name0 name1 then failwith "BOOOOM"
+          if not @@ String.equal name0 name1 then
+            failwith
+              "Function names do not match and a join between them occured"
           else
             (* args are the same just just union over the args *)
             let ins =
@@ -407,7 +408,8 @@ module TypeAutomata = struct
                 ~f:(fun _ b ->
                   match b with
                   | `Both (l, r) -> Some (join l r)
-                  | _ -> failwith "BOOOMM")
+                  | _ ->
+                      failwith "Function declartion differs to function usage")
                 ins0 ins1
             in
             Function (name0, ins, outs0)
@@ -647,7 +649,16 @@ let gen_constraint_set prog proc (st : ConstraintState.t) stmt_number stmt =
       constrain_arg st r t
     in
     match expr with
-    | RVar { id } -> (st, TypeVar (VarId.var_proc_to_uid id proc))
+    | RVar { id } ->
+        let typ =
+          match Var.typ id with
+          | Integer -> CType C_Int
+          | Boolean -> CType C_Bool
+          | Bitvector sz -> CType (C_BV sz)
+          | _ -> failwith "Illegal variable type"
+        in
+        ( constrain_arg st (BasilExpr.fix expr) typ,
+          TypeVar (VarId.var_proc_to_uid id proc) )
     | Constant { const } ->
         ( st,
           match const with
@@ -679,7 +690,7 @@ let gen_constraint_set prog proc (st : ConstraintState.t) stmt_number stmt =
         | `Forall -> (st, Top)
         | `Lambda | `Classification | `Gamma -> (st, Top)
         | `Extract (finish, rt) ->
-            (* WARN: This seems hard to determine what type is within a record *)
+            (* NOTE: This seems hard to determine what type is within a record *)
             let size = finish - rt in
             let name =
               VarId.fresh_id
