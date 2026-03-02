@@ -28,4 +28,6 @@
   ll_simple.il
   ll_simple.sexp
   ll_real.sexp
+  ll_spec.il
+  ll_spec.sexp
   ../../bin/main.exe))

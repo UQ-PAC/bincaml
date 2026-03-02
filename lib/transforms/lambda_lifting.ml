@@ -113,6 +113,95 @@ let transform (p : Program.t) : Program.t =
                 graph)
               proc
         in
+
+        (* Map from global variable name to its in-param variable, used to
+           rewrite Old(e) → e[g ↦ in_param(g)]. *)
+        let glob_to_inparam =
+          List.fold_left
+            (fun m (_, v, g) -> StringMap.add (Var.name g) v m)
+            StringMap.empty in_triples
+        in
+
+        (* Rewrite Old(e) → e[g ↦ in_param(g)].
+           The catamorphism is bottom-up: rw_fun returns None for RVar nodes
+           outside Old, so by the time it sees the Old node its arg is the
+           original (unmodified) inner expression.  We then apply an inner
+           rewrite that substitutes captured globals with their in-params and
+           return the result without the Old wrapper. *)
+        let rewrite_old_expr expr =
+          let open Expr.AbstractExpr in
+          let open Expr.BasilExpr in
+          rewrite ~rw_fun:(fun node ->
+            match node with
+            | UnaryExpr { op = `Old; arg } ->
+                let substituted =
+                  rewrite ~rw_fun:(fun n ->
+                    match n with
+                    | RVar { id } -> (
+                        match StringMap.find_opt (Var.name id) glob_to_inparam with
+                        | Some v -> replace [%here] (rvar v)
+                        | None -> None)
+                    | _ -> None)
+                    arg
+                in
+                replace [%here] substituted
+            | _ -> None)
+            expr
+        in
+
+        (* In a requires clause every variable reference denotes the
+           procedure's pre-state, so ALL captured globals are replaced by
+           their in-params (not only those under Old).  Any Old wrapper is
+           stripped afterwards as it is redundant once globals are
+           substituted. The catamorphism processes RVar nodes first, so by
+           the time Old(arg) is seen, arg already has globals substituted. *)
+        let rewrite_requires_expr expr =
+          let open Expr.AbstractExpr in
+          let open Expr.BasilExpr in
+          rewrite ~rw_fun:(fun node ->
+            match node with
+            | RVar { id } -> (
+                match StringMap.find_opt (Var.name id) glob_to_inparam with
+                | Some v -> replace [%here] (rvar v)
+                | None -> None)
+            | UnaryExpr { op = `Old; arg } -> replace [%here] arg
+            | _ -> None)
+            expr
+        in
+
+        (* Apply Old-rewriting to all contract clauses in the spec.
+           Precondition: rely and guarantee must be empty — lambda lifting
+           does not support them. *)
+        let proc =
+          let spec = Procedure.specification proc in
+          if not (List.is_empty spec.rely) then
+            failwith
+              (Printf.sprintf
+                 "lambda-lifting: procedure %s has non-empty rely clause \
+                  (unsupported)"
+                 (ID.name (Procedure.id proc)));
+          if not (List.is_empty spec.guarantee) then
+            failwith
+              (Printf.sprintf
+                 "lambda-lifting: procedure %s has non-empty guarantee clause \
+                  (unsupported)"
+                 (ID.name (Procedure.id proc)));
+          Procedure.set_specification proc
+            { spec with
+              requires = List.map rewrite_requires_expr spec.requires;
+              ensures  = List.map rewrite_old_expr spec.ensures;
+            }
+        in
+
+        (* Apply Old-rewriting to every expression in every statement. *)
+        let proc =
+          Procedure.map_blocks_topo_fwd
+            (fun _bid b ->
+              Block.map ~phi:Fun.id
+                (Stmt.map ~f_lvar:Fun.id ~f_expr:rewrite_old_expr ~f_rvar:Fun.id)
+                b)
+            proc
+        in
         proc)
       p.procs
   in
