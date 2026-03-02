@@ -118,3 +118,5 @@
   (token_EndList) ] @punctuation.bracket
 
 (token_Str) @string
+(token_CommentMulti) @comment
+(token_CommentSingle) @comment
