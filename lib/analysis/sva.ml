@@ -11,14 +11,7 @@ open Wrapped_intervals
 
 (*
   TODO
-
     Figure out what the SymBases should actually have in them, is it just for cute printing?
-
-    Deal with placeholders needing to store operations on them
-      for now having them as Top is sound and ok but reduces possible information
-
-      IDE pass should remove most of the placeholders but the load stuff is still
-       there
 *)
 
 module SymBase = struct
@@ -126,7 +119,7 @@ module SVAAbstraction = struct
     in
     match args with
     | h :: b :: tl -> fst @@ List.fold_left op (op h b) tl
-    | _ -> failwith "operators must have two operands"
+    | _ -> failwith "Operators must have two operands"
 end
 
 module SVAAbstractionBasil = struct
@@ -165,7 +158,7 @@ module Domain = struct
           | Types.Boolean -> 1
           | Types.Integer -> 32
           | Types.Bitvector size -> size
-          | _ -> failwith "boom"
+          | _ -> failwith "Illegal function parameter type"
         in
         ( param,
           SymAddrSetLattice.singleton (Par { name; param })
@@ -198,14 +191,11 @@ module Domain = struct
                 String.starts_with ~prefix:"R0" @@ Var.name var)
             @@ StringMap.values lhs
           in
-          (* TODO: Add check here to ensure malloc size is 1 *)
           let var = Iter.head_exn malloc in
           let size =
             match Var.typ var with
-            | Types.Boolean -> 1
-            | Types.Integer -> 32
             | Types.Bitvector size -> size
-            | _ -> failwith "boom"
+            | _ -> failwith "Illegal malloc/calloc return type"
           in
 
           Iter.singleton
@@ -220,7 +210,7 @@ module Domain = struct
                 | Types.Boolean -> 1
                 | Types.Integer -> 32
                 | Types.Bitvector size -> size
-                | _ -> failwith "boom"
+                | _ -> failwith "Illegal function parameter type"
               in
               ( param,
                 SymAddrSetLattice.singleton
