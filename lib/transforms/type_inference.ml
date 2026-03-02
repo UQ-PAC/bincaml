@@ -52,7 +52,7 @@ end = struct
 
   let var_procid_to_uid (var : Var.t) (procId : ID.t) : t =
     if Var.is_global var then Var.name var
-    else Var.name var ^ "_" ^ ID.name procId
+    else ID.name procId ^ "_" ^ Var.name var
 
   let var_proc_to_uid (var : Var.t) (proc : Program.proc) : t =
     var_procid_to_uid var (Procedure.id proc)
@@ -199,16 +199,16 @@ module ConstraintState = struct
 
   type t = TypeConstraint.t VarIdMap.t
 
-  let equal = StringMap.equal TypeConstraint.equal
+  let equal (a : t) (b : t) = VarIdMap.equal TypeConstraint.equal a b
 
-  let show m =
-    StringMap.bindings m
+  let show (m : t) =
+    VarIdMap.bindings m
     |> List.map (fun (name, ({ lb; ub } : TypeConstraint.t)) ->
-        Printf.sprintf "%s: lower [%s], upper [%s]" name (TySet.show lb)
-          (TySet.show ub))
+        Printf.sprintf "%s: lower [%s], upper [%s]" (VarId.show name)
+          (TySet.show lb) (TySet.show ub))
     |> String.concat "\n"
 
-  let add_ub st name ty =
+  let add_ub (st : t) name ty =
     VarIdMap.update name
       (function
         | None ->
