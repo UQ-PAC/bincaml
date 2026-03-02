@@ -8,12 +8,25 @@
     - Every global in [modifies_globs] becomes an out-parameter (keeping the
       original variable, e.g. [R0]).
     - A fresh initialisation block is spliced in after Entry that assigns each
-      captured global its in-param value ([R0 := R0_in]), so the body continues
+      modified global its in-param value ([R0 := R0_in]), so the body continues
       to read/write the original variable throughout.
 
     Call sites are updated to:
     - Pass the current value of each captured global as an argument.
     - Receive each modified global back as an lhs assignment target.
+
+    [Old] expressions are rewritten as follows:
+    - In the procedure body and [ensures] clauses: [Old(e)] is replaced by [e]
+      with every captured global [g] substituted by its in-parameter.  This is
+      correct because the in-parameter holds the value of [g] at procedure
+      entry, which is exactly what [Old(g)] denotes.
+    - In [requires] clauses: every captured global reference (not just those
+      under [Old]) is replaced by the corresponding in-parameter, and any
+      remaining [Old] wrappers are stripped.  This is valid because a
+      precondition is evaluated entirely at procedure entry, so all variable
+      references already denote the pre-state.
+
+    Preconditions: [rely] and [guarantee] clauses must be empty (unsupported).
 
     After transformation [captures_globs]/[modifies_globs] are cleared and all
     [Variable] globals are removed from the program. *)
