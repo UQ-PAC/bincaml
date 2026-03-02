@@ -3,9 +3,9 @@
     [Function] globals are left unchanged.
 
     For each procedure:
-    - Every global in [captures_globs] becomes an in-parameter.
-      If the global is also in [modifies_globs] the in-param key gets an [_in]
-      suffix (e.g. [R0_in]) so it is distinct from the out-param.
+    - Every global in [captures_globs] becomes an in-parameter. If the global is
+      also in [modifies_globs] the in-param key gets an [_in] suffix (e.g.
+      [R0_in]) so it is distinct from the out-param.
     - Every global in [modifies_globs] becomes an out-parameter (keeping the
       original variable, e.g. [R0]).
     - A fresh initialisation block is spliced in after Entry that assigns each
@@ -18,12 +18,12 @@
 
     [Old] expressions are rewritten as follows:
     - In the procedure body and [ensures] clauses: [Old(e)] is replaced by [e]
-      with every captured global [g] substituted by its in-parameter.  This is
+      with every captured global [g] substituted by its in-parameter. This is
       correct because the in-parameter holds the value of [g] at procedure
       entry, which is exactly what [Old(g)] denotes.
     - In [requires] clauses: every captured global reference (not just those
       under [Old]) is replaced by the corresponding in-parameter, and any
-      remaining [Old] wrappers are stripped.  This is valid because a
+      remaining [Old] wrappers are stripped. This is valid because a
       precondition is evaluated entirely at procedure entry, so all variable
       references already denote the pre-state.
 
@@ -37,8 +37,7 @@ open Lang.Common
 open Containers
 
 (** In-param key for global [g] given a procedure's set of modified globals. *)
-let in_key g mods =
-  if VarSet.mem g mods then Var.name g ^ "_in" else Var.name g
+let in_key g mods = if VarSet.mem g mods then Var.name g ^ "_in" else Var.name g
 
 let transform (p : Program.t) : Program.t =
   (* ------------------------------------------------------------------ *)
@@ -61,8 +60,8 @@ let transform (p : Program.t) : Program.t =
             (fun g ->
               let key = in_key g mods in
               let v =
-                if VarSet.mem g mods
-                then Procedure.fresh_var ~name:key proc (Var.typ g)
+                if VarSet.mem g mods then
+                  Procedure.fresh_var ~name:key proc (Var.typ g)
                 else g
               in
               (key, v, g))
@@ -145,21 +144,25 @@ let transform (p : Program.t) : Program.t =
         let rewrite_old_expr expr =
           let open Expr.AbstractExpr in
           let open Expr.BasilExpr in
-          rewrite ~rw_fun:(fun node ->
-            match node with
-            | UnaryExpr { op = `Old; arg } ->
-                let substituted =
-                  rewrite ~rw_fun:(fun n ->
-                    match n with
-                    | RVar { id } -> (
-                        match StringMap.find_opt (Var.name id) glob_to_inparam with
-                        | Some v -> replace [%here] (rvar v)
-                        | None -> None)
-                    | _ -> None)
-                    arg
-                in
-                replace [%here] substituted
-            | _ -> None)
+          rewrite
+            ~rw_fun:(fun node ->
+              match node with
+              | UnaryExpr { op = `Old; arg } ->
+                  let substituted =
+                    rewrite
+                      ~rw_fun:(fun n ->
+                        match n with
+                        | RVar { id } -> (
+                            match
+                              StringMap.find_opt (Var.name id) glob_to_inparam
+                            with
+                            | Some v -> replace [%here] (rvar v)
+                            | None -> None)
+                        | _ -> None)
+                      arg
+                  in
+                  replace [%here] substituted
+              | _ -> None)
             expr
         in
 
@@ -172,14 +175,15 @@ let transform (p : Program.t) : Program.t =
         let rewrite_requires_expr expr =
           let open Expr.AbstractExpr in
           let open Expr.BasilExpr in
-          rewrite ~rw_fun:(fun node ->
-            match node with
-            | RVar { id } -> (
-                match StringMap.find_opt (Var.name id) glob_to_inparam with
-                | Some v -> replace [%here] (rvar v)
-                | None -> None)
-            | UnaryExpr { op = `Old; arg } -> replace [%here] arg
-            | _ -> None)
+          rewrite
+            ~rw_fun:(fun node ->
+              match node with
+              | RVar { id } -> (
+                  match StringMap.find_opt (Var.name id) glob_to_inparam with
+                  | Some v -> replace [%here] (rvar v)
+                  | None -> None)
+              | UnaryExpr { op = `Old; arg } -> replace [%here] arg
+              | _ -> None)
             expr
         in
 
@@ -201,9 +205,10 @@ let transform (p : Program.t) : Program.t =
                   (unsupported)"
                  (ID.name (Procedure.id proc)));
           Procedure.set_specification proc
-            { spec with
+            {
+              spec with
               requires = List.map rewrite_requires_expr spec.requires;
-              ensures  = List.map rewrite_old_expr spec.ensures;
+              ensures = List.map rewrite_old_expr spec.ensures;
             }
         in
 
@@ -242,8 +247,7 @@ let transform (p : Program.t) : Program.t =
                           List.fold_left
                             (fun m g ->
                               StringMap.add (in_key g cmods)
-                                (Expr.BasilExpr.rvar g)
-                                m)
+                                (Expr.BasilExpr.rvar g) m)
                             args cspec.captures_globs
                         in
                         (* Receive each modified global back. *)
@@ -274,8 +278,7 @@ let transform (p : Program.t) : Program.t =
 
   let globals =
     StringMap.filter
-      (fun _ decl ->
-        match decl with Program.Variable _ -> false | _ -> true)
+      (fun _ decl -> match decl with Program.Variable _ -> false | _ -> true)
       p.globals
   in
 
