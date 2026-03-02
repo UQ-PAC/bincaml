@@ -63,13 +63,17 @@ end
 module VarIdMap = Map.Make (VarId)
 
 module CType = struct
-  type t = C_Int | C_BV of int | C_Float | C_Bool [@@deriving ord, eq]
+  type t = C_Int | C_BV of int | C_Bool [@@deriving ord, eq]
 
   let show = function
     | C_Int -> "int"
     | C_BV size -> "bv" ^ string_of_int size
-    | C_Float -> "float"
     | C_Bool -> "bool"
+
+  let c_to_type : t -> Types.t = function
+    | C_Int -> Types.Integer
+    | C_BV sz -> Types.Bitvector sz
+    | C_Bool -> Types.Boolean
 end
 
 module InferredType = struct
@@ -87,15 +91,15 @@ module InferredType = struct
     | Record of field list (* A list of fields in the record *)
     | TypeVar of VarId.t
     | Recursive of t * t
-    | Atom of CType.t
+    | CType of CType.t
 
   and field = { offset : int; size : int; ty : t }
 
   let rec show = function
     | Top -> "⊤"
     | Bottom -> "⊥"
-    | Atom c -> CType.show c
-    | TypeVar id -> Printf.sprintf "TypeVar %s" @@ VarId.show id
+    | CType c -> CType.show c
+    | TypeVar id -> Printf.sprintf "%s" @@ VarId.show id
     | Recursive (t1, t2) -> Printf.sprintf "μ%s.%s" (show t1) (show t2)
     | Union (t1, t2) -> Printf.sprintf "%s ⊔ %s" (show t1) (show t2)
     | Sect (t1, t2) -> Printf.sprintf "%s ⊓ %s" (show t1) (show t2)
@@ -114,7 +118,7 @@ module InferredType = struct
   let rec compare type1 type2 =
     match (type1, type2) with
     | Top, Top | Bottom, Bottom -> 0
-    | Atom a, Atom b -> CType.compare a b
+    | CType a, CType b -> CType.compare a b
     | TypeVar a, TypeVar b -> VarId.compare a b
     | Recursive (a, b), Recursive (c, d) ->
         let c = compare a c in
@@ -150,7 +154,7 @@ module InferredType = struct
   let rec iter f (ty : t) =
     f ty;
     match ty with
-    | Top | Bottom | Atom _ | TypeVar _ | Recursive _ -> ()
+    | Top | Bottom | CType _ | TypeVar _ | Recursive _ -> ()
     | Union (a, b) | Sect (a, b) ->
         iter f b;
         iter f a
@@ -163,17 +167,14 @@ module InferredType = struct
     | Field { ty } -> iter f ty
     | Record fields -> List.iter (fun { ty } -> iter f ty) fields
 
-  let show_type_map (m : t StringMap.t) : string =
-    StringMap.bindings m
-    |> List.map (fun (name, ty) -> Printf.sprintf "%s: %s" name (show ty))
-    |> String.concat "\n"
-
-  let show_type_map2 (m : (t * t) StringMap.t) : string =
-    StringMap.bindings m
-    |> List.map (fun (name, (ty1, ty2)) ->
-        Printf.sprintf "%s:\n   lower: %s\n   upper: %s" name (show ty1)
-          (show ty2))
-    |> String.concat "\n"
+  (* TODO: Temporary *)
+  let rec inferred_to_real : t -> Types.t = function
+    | Top | Bottom | TypeVar _ | Recursive _ | Union _ | Sect _ | Function _ ->
+        failwith "These types should have been removed prior to transform!"
+    | Pointer (lb, ub) -> Types.Integer
+    | Record fields -> Types.Boolean
+    | CType a -> CType.c_to_type a
+    | Field { ty } -> inferred_to_real ty
 end
 
 module TySet = struct
@@ -224,6 +225,31 @@ module ConstraintState = struct
               ({ ub = TySet.empty; lb = TySet.singleton ty } : TypeConstraint.t)
         | Some c -> Some { c with lb = TySet.add ty c.lb })
       st
+
+  let export_graph_viz (t : t) : string =
+    Printf.sprintf "\ndigraph G {\n%s\n%s\n}"
+      (Iter.fold
+         (fun a ty ->
+           Printf.sprintf
+             "%s\"%s\" [shape=circle style=filled, fillcolor=\"#c4a7e7\"];\n" a
+             (VarId.show ty))
+         ""
+      @@ VarIdMap.keys t)
+      (VarIdMap.fold
+         (fun k ({ lb; ub } : TypeConstraint.t) acc ->
+           let acc =
+             TySet.fold
+               (fun ty acc ->
+                 Printf.sprintf "%s\"%s\" -> \"%s\" [];\n" acc (VarId.show k)
+                   (InferredType.show ty))
+               lb acc
+           in
+           TySet.fold
+             (fun ty acc ->
+               Printf.sprintf "%s\"%s\" -> \"%s\" [];\n" acc
+                 (InferredType.show ty) (VarId.show k))
+             ub acc)
+         t "")
 end
 
 module Sigma = struct
@@ -424,7 +450,7 @@ module TypeAutomata = struct
   let rec type_to_state_list p (ty : InferredType.t) ((ls, tbl) as acc) =
     let open Sigma in
     match ty with
-    | Top | Atom _ | TypeVar _ | Bottom | Field _ -> ((p, ty) :: ls, tbl)
+    | Top | CType _ | TypeVar _ | Bottom | Field _ -> ((p, ty) :: ls, tbl)
     | Recursive (a, _) ->
         let ls, tbl = type_to_state_list p a acc in
         let edges = Hashtbl.create 1 in
@@ -512,20 +538,6 @@ end
 
 let gen = ID.make_gen ()
 
-(*
-  4 main steps
-
-  1) Turn the types into an automata
-  2) Remove the ep edges from said automata
-  3) DFA (not done, but lowkey don't see any case where it is needed at the moment)
-  4) Merge the nodes that can be merged (handles more cases than DFA so idk)
-
-  A possible improvement would to be never include ep edges when making the automata
-    and as such saving a pass.
-
-    I might need to restructure the algorithm to make this work though, would need
-      some time to plan that out nicely
-*)
 let minimise_type p ty name =
   let recursives = Hashtbl.create 2 in
   InferredType.iter
@@ -566,9 +578,16 @@ let minimise_type p ty name =
 let rec coalesce_types (constraint_set : ConstraintState.t)
     (recursive_set : TySet.t) (polarity : Polarity.t) (tau : InferredType.t) :
     InferredType.t =
+  let open InferredType in
   let recursive_call = coalesce_types constraint_set recursive_set in
   match tau with
-  | Field _ | Record _ -> tau
+  | Record fields ->
+      Record
+        (List.map
+           (fun { size; offset; ty } ->
+             { size; offset; ty = recursive_call polarity ty })
+           fields)
+  | Field { ty } -> recursive_call polarity ty
   | Pointer (a, b) ->
       Pointer
         (recursive_call (Polarity.not polarity) a, recursive_call polarity b)
@@ -604,7 +623,7 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
               bounds tau
           in
           if rec_check then Recursive (tau, s) else s)
-  | Atom _ -> tau
+  | CType _ -> tau
   | _ -> Top
 
 (*
@@ -632,19 +651,19 @@ let gen_constraint_set prog proc (st : ConstraintState.t) stmt_number stmt =
     | Constant { const } ->
         ( st,
           match const with
-          | `Bool _ -> Atom C_Bool
-          | `Bitvector bv -> Atom (C_BV (Bitvec.size bv))
-          | `Integer _ -> Atom C_Int )
+          | `Bool _ -> CType C_Bool
+          | `Bitvector bv -> CType (C_BV (Bitvec.size bv))
+          | `Integer _ -> CType C_Int )
     | UnaryExpr { op; arg = a } -> (
         let st, _ = constrain_expr st (BasilExpr.unfix a) in
         match op with
-        | `BoolNOT -> (constrain_arg st a @@ Atom C_Bool, Atom C_Bool)
-        | `BOOLTOBV1 -> (constrain_arg st a @@ Atom C_Bool, Atom (C_BV 1))
-        | `INTNEG -> (constrain_arg st a @@ Atom C_Int, Atom C_Int)
+        | `BoolNOT -> (constrain_arg st a @@ CType C_Bool, CType C_Bool)
+        | `BOOLTOBV1 -> (constrain_arg st a @@ CType C_Bool, CType (C_BV 1))
+        | `INTNEG -> (constrain_arg st a @@ CType C_Int, CType C_Int)
         | `BVNEG | `BVNOT ->
             let typ =
               match BasilExpr.type_of a with
-              | Bitvector size -> Atom (C_BV size)
+              | Bitvector size -> CType (C_BV size)
               | _ -> failwith "Bitvector operation without bitvector arguments"
             in
             (constrain_arg st a @@ typ, typ)
@@ -654,47 +673,48 @@ let gen_constraint_set prog proc (st : ConstraintState.t) stmt_number stmt =
               | Bitvector size -> size
               | _ -> failwith "Bitvector operation without bitvector arguments"
             in
-            (constrain_arg st a @@ Atom (C_BV size), Atom (C_BV (size + b)))
-        | `Exists -> (st, Atom C_Bool) (* TODO: Confirm *)
+            (constrain_arg st a @@ CType (C_BV size), CType (C_BV (size + b)))
+        | `Exists -> (st, CType C_Bool) (* TODO: Confirm *)
         | `Old -> (st, Top)
         | `Forall -> (st, Top)
         | `Lambda | `Classification | `Gamma -> (st, Top)
         | `Extract (finish, rt) ->
-            (* WARN: Is this actually constraining my field when they are used? *)
+            (* WARN: This seems hard to determine what type is within a record *)
             let size = finish - rt in
-            let ty =
-              TypeVar
-                (VarId.fresh_id
-                @@ Printf.sprintf "Extraction_%s"
-                @@ ID.name @@ gen.fresh ())
+            let name =
+              VarId.fresh_id
+              @@ Printf.sprintf "Extraction_%s"
+              @@ ID.name @@ gen.fresh ()
             in
+            let ty = TypeVar name in
             let field = { offset = rt; size; ty } in
+            let st = ConstraintState.add_lb st name (CType (C_BV size)) in
             (constrain_arg st a @@ Record [ field ], Field field))
     | BinaryExpr { op; arg1 = l; arg2 = r } -> (
         let st, _ = constrain_expr st (BasilExpr.unfix l) in
         let st, _ = constrain_expr st (BasilExpr.unfix r) in
         match op with
         | `INTMOD | `INTSUB | `INTDIV | `INTADD | `INTMUL ->
-            let st = constrain_args st l r @@ Atom C_Int in
-            (st, Atom C_Int)
+            let st = constrain_args st l r @@ CType C_Int in
+            (st, CType C_Int)
         | `NEQ | `EQ ->
             (* TODO: Merge the type constraints of the two variables *)
-            (st, Atom C_Bool)
+            (st, CType C_Bool)
         | `INTLT | `INTLE ->
-            let st = constrain_args st l r @@ Atom C_Int in
-            (st, Atom C_Bool)
+            let st = constrain_args st l r @@ CType C_Int in
+            (st, CType C_Bool)
         | `BVULE | `BVULT | `BVSLE | `BVSLT -> (
             match BasilExpr.type_of l with
             | Bitvector size ->
-                let st = constrain_args st l r @@ Atom (C_BV size) in
-                (st, Atom C_Bool)
+                let st = constrain_args st l r @@ CType (C_BV size) in
+                (st, CType C_Bool)
             | _ -> failwith "BV operation without BV arguments")
         | `BVSREM | `BVSDIV | `BVADD | `BVMUL | `BVUREM | `BVSUB | `BVUDIV
         | `BVSMOD | `BVSHL | `BVLSHR | `BVASHR | `BVNAND | `BVAND | `BVXOR
         | `BVOR -> (
             match BasilExpr.type_of l with
             | Bitvector size ->
-                let typ = Atom (C_BV size) in
+                let typ = CType (C_BV size) in
                 let st = constrain_args st l r typ in
                 (st, typ)
             | _ -> failwith "BV operation without BV arguments")
@@ -785,7 +805,7 @@ let gen_constraint_set prog proc (st : ConstraintState.t) stmt_number stmt =
   | Stmt.Instr_Assert { body } | Stmt.Instr_Assume { body } -> (
       let st, constrain_expr = constrain_expr st (BasilExpr.unfix body) in
       match constrain_expr with
-      | TypeVar a -> ConstraintState.add_lb st a (Atom C_Bool)
+      | TypeVar a -> ConstraintState.add_lb st a (CType C_Bool)
       | _ -> st)
   | Stmt.Instr_Assign ls ->
       List.fold_left
@@ -883,7 +903,7 @@ let transform (prog : Program.t) =
                 acc)
          VarIdMap.empty
   in
-
+  print_endline @@ ConstraintState.export_graph_viz type_constraint_map;
   let types =
     VarIdMap.mapi
       (fun name ({ lb; ub } : ConstraintState.TypeConstraint.t) ->
@@ -911,6 +931,7 @@ let transform (prog : Program.t) =
         (lower, upper))
       type_constraint_map
   in
+
   (*
     Possible speed up strat would to only many as many automata as we need.
 
