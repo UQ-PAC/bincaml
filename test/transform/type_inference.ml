@@ -6,7 +6,7 @@ open InferredType
 
 let gen = ID.make_gen ()
 
-let%test_unit "add bounds" =
+let%test_unit "Add bounds" =
   let st = VarIdMap.empty in
   let st = add_ub st (VarId.fresh_id "c") Top in
   let st = add_lb st (VarId.fresh_id "c") Bottom in
@@ -27,7 +27,7 @@ let%test_unit "add bounds" =
   let st2 = VarIdMap.of_list ls in
   assert (ConstraintState.equal st st2)
 
-let%test_unit "basic consistent constraint set" =
+let%test_unit "Basic consistent constraint set" =
   (*
     var a = b;
     var b = c;
@@ -103,7 +103,7 @@ proc @main_4196260 () -> ()
   let st2 = VarIdMap.of_list ls in
   assert (ConstraintState.equal st st2)
 
-let%test_unit "Yippie" =
+let%test_unit "Record joining" =
   let fields1 =
     [
       { offset = 0; size = 32; ty = TypeVar (VarId.fresh_id "a") };
