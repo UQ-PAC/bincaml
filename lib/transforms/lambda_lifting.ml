@@ -234,9 +234,8 @@ let transform (p : Program.t) : Program.t =
         Procedure.map_blocks_topo_fwd
           (fun _bid (b : Program.bloc) ->
             Block.map ~phi:Fun.id
-              (fun stmt ->
-                match stmt with
-                | Stmt.Instr_Call { procid; lhs; args } -> (
+              (function
+                | Stmt.Instr_Call { procid; lhs; args } as stmt -> (
                     match ID.Map.find_opt procid procs with
                     | None -> stmt (* external callee – leave as-is *)
                     | Some callee ->
