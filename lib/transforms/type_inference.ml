@@ -12,12 +12,12 @@
       - Lower bounds
       - Union
 
+  Paper this work is based on: https://arxiv.org/abs/2409.01841
 
 
 
 
   TODO:
-
     Ask if I should make it more general and work with less type information
       or should prio speed / space instead
 *)
@@ -630,8 +630,10 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
 
 (*
   Given a statement constrain the variables involed (based on the expression)
+
+  Prefer giving upper bounds when possible
 *)
-let gen_constraint_set prog proc (st : ConstraintState.t) stmt_number stmt =
+let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
   let open AbstractExpr in
   let open InferredType in
   (* Given a expression constrain the variables involed *)
@@ -748,11 +750,13 @@ let gen_constraint_set prog proc (st : ConstraintState.t) stmt_number stmt =
   in
 
   (*
-    WARN: I am extremely unhappy with the recurrence check
-      I am very much struggling to reason about it, I think I have
-      it as weak as possible while still catching the cntlm case
+    WARN: Not certain on this recurence check but seems to work
 
-    This will need much more reasoning to come
+    Idea behind it is, if a variable has been constrained by another variable already
+      there is no need to do it again.
+
+    Transistive closure will be maintained as anything new being in added in, would be
+      constrained as it is being added in anyway.
   *)
   let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
       (type1 : InferredType.t) (rec_check : TySet.t) : ConstraintState.t =
@@ -806,11 +810,18 @@ let gen_constraint_set prog proc (st : ConstraintState.t) stmt_number stmt =
     | _ ->
         (*
           You have to assign to a variable (or something similar) so this case should never occur
+
+          Very restricting having this fail, would be nice just to ignore it
         *)
-        failwith
-          (Printf.sprintf "Illegal constrain call type0: %s; type1: %s stmt: %s"
-             (InferredType.show type0) (InferredType.show type1)
-             (Program.show_stmt stmt))
+        (* Printf.printf *)
+          (* "Illegal constrain call type0: %s; type1: %s stmt: %s \n\n\n%!" *)
+          (* (InferredType.show type0) (InferredType.show type1) *)
+          (* (Program.show_stmt stmt); *)
+        (* st *)
+    failwith
+    (Printf.sprintf "Illegal constrain call type0: %s; type1: %s stmt: %s"
+    (InferredType.show type0) (InferredType.show type1)
+    (Program.show_stmt stmt))
   in
   match stmt with
   | Stmt.Instr_Assert { body } | Stmt.Instr_Assume { body } -> (
@@ -831,7 +842,19 @@ let gen_constraint_set prog proc (st : ConstraintState.t) stmt_number stmt =
             constrain st constrain_expr (TypeVar lhs) TySet.empty)
         st ls
   (* TODO: SVA *)
-  | Stmt.Instr_Load { lhs } ->
+  | Stmt.Instr_Store { lhs; rhs; addr = Scalar }
+  | Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
+      if String.starts_with ~prefix:"_PC" @@ Var.name lhs then st
+      else
+        let lhs = VarId.var_proc_to_uid lhs proc in
+        let rhs = VarId.var_proc_to_uid rhs proc in
+        constrain st (TypeVar rhs) (TypeVar lhs) TySet.empty
+  | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr } } ->
+      print_endline @@ Var.show lhs;
+      print_endline @@ Analysis.Sva.SymAddrSetLattice.show
+      @@ Analysis.Sva.Eval.EV.eval
+           ((flip Analysis.Sva.StateAbstraction.read) sva)
+           addr;
       let lhs = VarId.var_proc_to_uid lhs proc in
       let st =
         ConstraintState.add_ub st lhs
@@ -843,7 +866,12 @@ let gen_constraint_set prog proc (st : ConstraintState.t) stmt_number stmt =
       ConstraintState.add_ub st
         (VarId.fresh_id @@ Int.to_string stmt_number ^ "_a_load")
       @@ TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_b_load")
-  | Stmt.Instr_Store { lhs } ->
+  | Stmt.Instr_Store { lhs; rhs; addr = Addr { addr } } ->
+      print_endline @@ Var.show lhs;
+      print_endline @@ Analysis.Sva.SymAddrSetLattice.show
+      @@ Analysis.Sva.Eval.EV.eval
+           ((flip Analysis.Sva.StateAbstraction.read) sva)
+           addr;
       let lhs = VarId.var_proc_to_uid lhs proc in
       let st =
         ConstraintState.add_ub st lhs
@@ -906,15 +934,16 @@ let transform (prog : Program.t) =
     ID.Map.values prog.procs
     |> Iter.fold
          (fun acc proc ->
+           let sva = Analysis.Sva.DFGAnalysis.flow_insensitive proc in
            Procedure.iter_blocks_topo_fwd proc
            |> Iter.fold
                 (fun acc (_, b) ->
                   Block.stmts_iter b
-                  |> Iter.foldi (gen_constraint_set prog proc) acc)
+                  |> Iter.foldi (gen_constraint_set prog proc sva) acc)
                 acc)
          VarIdMap.empty
   in
-  print_endline @@ ConstraintState.export_graph_viz type_constraint_map;
+  (* print_endline @@ ConstraintState.export_graph_viz type_constraint_map; *)
   let types =
     VarIdMap.mapi
       (fun name ({ lb; ub } : ConstraintState.TypeConstraint.t) ->

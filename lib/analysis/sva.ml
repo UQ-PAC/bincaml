@@ -2,6 +2,10 @@
   SVA analysis
     - Based off of the DSA paper
       the first iteration I believe as newer one have had the SVA sections reduced
+
+  Note: This does not result in amazing results currently, may need a paper focused
+    on SVA or more research to improve it, it only really works with mallocs (for
+    type inference use case) 
 *)
 
 open Lang
@@ -85,27 +89,22 @@ module SVAAbstraction = struct
       (fun sb1 vs1 map ->
         SymAddrSetLattice.fold
           (fun sb2 vs2 map ->
-            match op with
-            | `BVADD | `BVSUB -> (
-                match (sb1, sb2) with
-                (* WARN: not 100% sure about this case but makes sense in head we would prefer one over the other? *)
-                | (SymBase.GlobSym | Constant), (SymBase.GlobSym | Constant) ->
-                    let sb =
-                      if SymBase.equal sb1 GlobSym || SymBase.equal sb2 GlobSym
-                      then SymBase.GlobSym
-                      else Constant
-                    in
-                    SymAddrSetLattice.singleton sb
-                      (eval_binop op (vs1, ta) (vs2, tb) rt)
-                | (SymBase.GlobSym | Constant), sb
-                | sb, (SymBase.GlobSym | Constant) ->
-                    SymAddrSetLattice.update sb
-                      (eval_binop op (vs1, ta) (vs2, tb) rt)
-                      map
-                | _, _ ->
-                    SymAddrSetLattice.update sb1 Top
-                    @@ SymAddrSetLattice.update sb2 Top map)
-            | _ ->
+            match (sb1, sb2) with
+            (* WARN: not 100% sure about this case but makes sense in head we would prefer one over the other? *)
+            | (SymBase.GlobSym | Constant), (SymBase.GlobSym | Constant) ->
+                let sb =
+                  if SymBase.equal sb1 GlobSym || SymBase.equal sb2 GlobSym then
+                    SymBase.GlobSym
+                  else Constant
+                in
+                SymAddrSetLattice.singleton sb
+                  (eval_binop op (vs1, ta) (vs2, tb) rt)
+            | (SymBase.GlobSym | Constant), sb | sb, (SymBase.GlobSym | Constant)
+              ->
+                SymAddrSetLattice.update sb
+                  (eval_binop op (vs1, ta) (vs2, tb) rt)
+                  map
+            | _, _ ->
                 SymAddrSetLattice.update sb1 Top
                 @@ SymAddrSetLattice.update sb2 Top map)
           b map)
