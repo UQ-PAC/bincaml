@@ -135,7 +135,7 @@ module SVAAbstractionBasil = struct
 end
 
 module StateAbstraction = Intra_analysis.MapState (SVAAbstractionBasil)
-module Eval = Intra_analysis.EvalStmt (SVAAbstractionBasil) (StateAbstraction)
+module Eval = Intra_analysis.EvalStmt (SVAAbstractionBasil)
 
 module Domain = struct
   include StateAbstraction
@@ -172,8 +172,8 @@ module Domain = struct
           @@ IntervalDomain.init @@ Bitvec.zero ~size ))
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
-  let transfer domain stmt =
-    let stmt = Eval.stmt_eval_fwd stmt domain in
+  let transfer_state read stmt =
+    let stmt = Eval.stmt_eval_fwd read stmt in
     let updates =
       match stmt with
       | Stmt.Instr_Assign assignments -> List.to_iter assignments
@@ -232,11 +232,11 @@ module Domain = struct
       | Stmt.Instr_IndirectCall _ -> Iter.empty
       | Stmt.Instr_IntrinCall _ -> Iter.empty
     in
-    Iter.fold (fun a (k, v) -> update k v a) domain updates
+    updates
+
+  let transfer dom stmt =
+    Iter.fold (fun a (k, v) -> update k v a) dom
+    @@ transfer_state (flip read dom) stmt
 end
 
-module Analysis = Intra_analysis.Forwards (Domain)
-
-let analyse (p : Lang.Program.proc) =
-  Analysis.analyse ~widening_set:Graph.ChaoticIteration.FromWto
-    ~widening_delay:50 p
+module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
