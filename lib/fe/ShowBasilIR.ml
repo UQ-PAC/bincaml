@@ -104,10 +104,10 @@ and showMapType (e : AbsBasilIR.mapType) : showable = match e with
 
 
 and showTypeT (e : AbsBasilIR.typeT) : showable = match e with
-       AbsBasilIR.Type1IntType inttype -> s2s "Type1IntType" >> c2s ' ' >> c2s '(' >> showIntType inttype >> c2s ')'
-  |    AbsBasilIR.Type1BoolType booltype -> s2s "Type1BoolType" >> c2s ' ' >> c2s '(' >> showBoolType booltype >> c2s ')'
-  |    AbsBasilIR.Type1BVType bvtype -> s2s "Type1BVType" >> c2s ' ' >> c2s '(' >> showBVType bvtype >> c2s ')'
-  |    AbsBasilIR.Type1Paren (openparen, type', closeparen) -> s2s "Type1Paren" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+       AbsBasilIR.TypeIntType inttype -> s2s "TypeIntType" >> c2s ' ' >> c2s '(' >> showIntType inttype >> c2s ')'
+  |    AbsBasilIR.TypeBoolType booltype -> s2s "TypeBoolType" >> c2s ' ' >> c2s '(' >> showBoolType booltype >> c2s ')'
+  |    AbsBasilIR.TypeBVType bvtype -> s2s "TypeBVType" >> c2s ' ' >> c2s '(' >> showBVType bvtype >> c2s ')'
+  |    AbsBasilIR.TypeParen (openparen, type', closeparen) -> s2s "TypeParen" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.TypeMapType maptype -> s2s "TypeMapType" >> c2s ' ' >> c2s '(' >> showMapType maptype >> c2s ')'
 
 

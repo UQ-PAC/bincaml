@@ -413,7 +413,7 @@ module BasilASTLoader = struct
     | TypeBoolType booltype -> Boolean
     | TypeMapType maptype -> transMapType maptype
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
-    | Type1 (_, typeT, _) -> trans_type typeT
+    | TypeParen (_, typeT, _) -> trans_type typeT
 
   and transIntVal (x : intVal) : PrimInt.t =
     match x with
@@ -452,7 +452,6 @@ module BasilASTLoader = struct
     match attr with
     | Attr_Map (_, keyvals, _) -> `Assoc (trans_attr_kv ~binds p_st keyvals)
     | Attr_List (_, ls, _) -> `List (List.map (trans_attr ~binds p_st) ls)
-    | Attr_Lit v -> ( match trans_value v with #Ops.AllOps.const as v -> v)
     | Attr_Expr expr -> `Expr (trans_expr ~binds p_st expr)
     | Attr_Str s -> `String (trans_str s)
 
@@ -472,7 +471,7 @@ module BasilASTLoader = struct
     let open Stmt in
     match stmt with
     | Stmt_Nop -> (p_st, `None)
-    | Stmt_Load_Var (lvar, endian, var, expr, intval) ->
+    | Stmt_Load (lvar, endian, var, expr, intval) ->
         let endian = trans_endian endian in
         let rhs = trans_var p_st var in
         let size = transIntVal intval |> Z.to_int in
@@ -485,7 +484,7 @@ module BasilASTLoader = struct
                  rhs;
                  addr = Addr { addr = trans_expr p_st expr; endian; size };
                }) )
-    | Stmt_Store_Var (lhs, endian, var, addr, value, intval) ->
+    | Stmt_Store (lhs, endian, var, addr, value, intval) ->
         let endian = trans_endian endian in
         let size = transIntVal intval |> Z.to_int in
         let rhs = trans_var p_st var in
@@ -529,27 +528,6 @@ module BasilASTLoader = struct
         in
         let p_st, assigns = List.fold_left f (p_st, []) assigns in
         (p_st, `Stmt (Instr_Assign (List.rev assigns)))
-    | Stmt_Load (lvar, endian, bident, expr, intval) ->
-        let endian = trans_endian endian in
-        let rhs = lookup_global_decl bident p_st in
-        let addr = trans_expr p_st expr in
-        let p_st, lhs = trans_lvar p_st lvar in
-        let size = transIntVal intval |> Z.to_int in
-        ( p_st,
-          `Stmt (Instr_Load { lhs; rhs; addr = Addr { addr; endian; size } }) )
-    | Stmt_Store (endian, bident, addr, value, intval) ->
-        let endian = trans_endian endian in
-        let size = transIntVal intval |> Z.to_int in
-        let mem = lookup_global_decl bident p_st in
-        ( p_st,
-          `Stmt
-            (Instr_Store
-               {
-                 lhs = mem;
-                 rhs = mem;
-                 value = trans_expr p_st value;
-                 addr = Addr { addr = trans_expr p_st addr; size; endian };
-               }) )
     | Stmt_DirectCall (calllvars, bident, o, exprs, c) ->
         let n = unsafe_unsigil (`Proc bident) in
         let procid =

@@ -56,10 +56,10 @@ and mapType =
    MapType1 of typeT * typeT
 
 and typeT =
-   Type1IntType of intType
- | Type1BoolType of boolType
- | Type1BVType of bVType
- | Type1Paren of openParen * typeT * closeParen
+   TypeIntType of intType
+ | TypeBoolType of boolType
+ | TypeBVType of bVType
+ | TypeParen of openParen * typeT * closeParen
  | TypeMapType of mapType
 
 and expr =

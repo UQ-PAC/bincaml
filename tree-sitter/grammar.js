@@ -105,13 +105,13 @@ module.exports = grammar({
       seq($.Type1, "->", $.Type),
     Type1: $ =>
       choice(
-        // Type1IntType. Type1 ::= IntType ;
+        // TypeIntType. Type1 ::= IntType ;
         $.IntType,
-        // Type1BoolType. Type1 ::= BoolType ;
+        // TypeBoolType. Type1 ::= BoolType ;
         $.BoolType,
-        // Type1BVType. Type1 ::= BVType ;
+        // TypeBVType. Type1 ::= BVType ;
         $.BVType,
-        // Type1Paren. Type1 ::= OpenParen Type CloseParen ;
+        // TypeParen. Type1 ::= OpenParen Type CloseParen ;
         seq($.token_OpenParen, $.Type, $.token_CloseParen)
       ),
     Type: $ =>

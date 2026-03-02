@@ -188,10 +188,10 @@ and prtMapType (i:int) (e : AbsBasilIR.mapType) : doc = match e with
 
 
 and prtTypeT (i:int) (e : AbsBasilIR.typeT) : doc = match e with
-       AbsBasilIR.Type1IntType inttype -> prPrec i 1 (concatD [prtIntType 0 inttype])
-  |    AbsBasilIR.Type1BoolType booltype -> prPrec i 1 (concatD [prtBoolType 0 booltype])
-  |    AbsBasilIR.Type1BVType bvtype -> prPrec i 1 (concatD [prtBVType 0 bvtype])
-  |    AbsBasilIR.Type1Paren (openparen, type_, closeparen) -> prPrec i 1 (concatD [prtOpenParen 0 openparen ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
+       AbsBasilIR.TypeIntType inttype -> prPrec i 1 (concatD [prtIntType 0 inttype])
+  |    AbsBasilIR.TypeBoolType booltype -> prPrec i 1 (concatD [prtBoolType 0 booltype])
+  |    AbsBasilIR.TypeBVType bvtype -> prPrec i 1 (concatD [prtBVType 0 bvtype])
+  |    AbsBasilIR.TypeParen (openparen, type_, closeparen) -> prPrec i 1 (concatD [prtOpenParen 0 openparen ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.TypeMapType maptype -> prPrec i 0 (concatD [prtMapType 0 maptype])
 
 and prtTypeTListBNFC i es : doc = match (i, es) with

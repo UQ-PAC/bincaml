@@ -124,10 +124,10 @@ and transMapType (x : mapType) : result = match x with
 
 
 and transType (x : typeT) : result = match x with
-    Type1IntType inttype -> failure x
-  | Type1BoolType booltype -> failure x
-  | Type1BVType bvtype -> failure x
-  | Type1Paren (openparen, type', closeparen) -> failure x
+    TypeIntType inttype -> failure x
+  | TypeBoolType booltype -> failure x
+  | TypeBVType bvtype -> failure x
+  | TypeParen (openparen, type', closeparen) -> failure x
   | TypeMapType maptype -> failure x
 
 

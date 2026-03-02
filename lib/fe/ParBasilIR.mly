@@ -449,10 +449,10 @@ bVType : bVTYPE { BVType1 $1 }
 mapType : type1 SYMB3 typeT { MapType1 ($1, $3) }
   ;
 
-type1 : intType { Type1IntType $1 }
-  | boolType { Type1BoolType $1 }
-  | bVType { Type1BVType $1 }
-  | openParen typeT closeParen { Type1Paren ($1, $2, $3) }
+type1 : intType { TypeIntType $1 }
+  | boolType { TypeBoolType $1 }
+  | bVType { TypeBVType $1 }
+  | openParen typeT closeParen { TypeParen ($1, $2, $3) }
   ;
 
 typeT : mapType { TypeMapType $1 }

@@ -68,8 +68,10 @@ BVType1 . BVType ::= BVTYPE ;
 -- map types are right associative. left of -> cannot be another MapType.
 MapType1 . MapType ::=  Type1 "->" Type ; 
 
-rules Type1 ::= IntType | BoolType | BVType ;
-Type1Paren . Type1 ::= OpenParen Type CloseParen; 
+TypeIntType  . Type1 ::= IntType ;
+TypeBoolType . Type1 ::= BoolType ;
+TypeBVType   . Type1 ::= BVType ;
+TypeParen   . Type1 ::= OpenParen Type CloseParen; 
 
 rules Type ::= MapType;
 _ . Type ::= Type1;
