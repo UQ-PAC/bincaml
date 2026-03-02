@@ -1,5 +1,6 @@
-(** Lambda lifting: remove non-const globals by converting them into explicit
+(** Lambda lifting: remove [Variable] globals by converting them into explicit
     in/out parameters, driven by each procedure's captures/modifies spec.
+    [Function] globals are left unchanged.
 
     For each procedure:
     - Every global in [captures_globs] becomes an in-parameter.
