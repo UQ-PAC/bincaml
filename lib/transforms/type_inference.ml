@@ -25,7 +25,206 @@
 open Bincaml_util.Common
 open Lang
 open Expr
-open Asd
+
+module Polarity = struct
+  type t = Pos | Neg [@@deriving ord, eq, show]
+
+  let not p = match p with Pos -> Neg | Neg -> Pos
+  let positive = equal Pos
+end
+
+(* NOTE: Sig is needed to string and t can't be the same type *)
+module VarId : sig
+  type t
+
+  val compare : t -> t -> int
+  val equal : t -> t -> bool
+  val show : t -> string
+  val var_proc_to_uid : Var.t -> Program.proc -> t
+  val var_procid_to_uid : Var.t -> ID.t -> t
+  val fresh_id : string -> t
+end = struct
+  type t = string
+
+  let compare = String.compare
+  let equal = String.equal
+  let show = id
+
+  let var_procid_to_uid (var : Var.t) (procId : ID.t) : t =
+    if Var.is_global var then Var.name var
+    else Var.name var ^ "_" ^ ID.name procId
+
+  let var_proc_to_uid (var : Var.t) (proc : Program.proc) : t =
+    var_procid_to_uid var (Procedure.id proc)
+
+  let fresh_id hint = hint
+end
+
+module VarIdMap = Map.Make (VarId)
+
+module CType = struct
+  type t = C_Int | C_BV of int | C_Float | C_Bool [@@deriving ord, eq]
+
+  let show = function
+    | C_Int -> "int"
+    | C_BV size -> "bv" ^ string_of_int size
+    | C_Float -> "float"
+    | C_Bool -> "bool"
+end
+
+module InferredType = struct
+  type t =
+    | Top
+    | Bottom
+    | Union of t * t (* type ∪ type *)
+    | Sect of t * t (* type ∩ type *)
+    | Pointer of t * t (* ptr(lb, ub) *)
+    | Function of
+        string
+        * t StringMap.t
+        * t StringMap.t (* list of inputs and list of outputs *)
+    | Field of field
+    | Record of field list (* A list of fields in the record *)
+    | TypeVar of VarId.t
+    | Recursive of t * t
+    | Atom of CType.t
+
+  and field = { offset : int; size : int; ty : t }
+
+  let rec show = function
+    | Top -> "⊤"
+    | Bottom -> "⊥"
+    | Atom c -> CType.show c
+    | TypeVar id -> Printf.sprintf "TypeVar %s" @@ VarId.show id
+    | Recursive (t1, t2) -> Printf.sprintf "μ%s.%s" (show t1) (show t2)
+    | Union (t1, t2) -> Printf.sprintf "%s ⊔ %s" (show t1) (show t2)
+    | Sect (t1, t2) -> Printf.sprintf "%s ⊓ %s" (show t1) (show t2)
+    | Pointer (lb, ub) -> Printf.sprintf "ptr(%s, %s)" (show lb) (show ub)
+    | Function (name, ins, outs) ->
+        Printf.sprintf "(%s) → (%s)"
+          (Iter.to_string show (StringMap.values ins))
+          (Iter.to_string show (StringMap.values outs))
+    | Field field -> show_field field
+    | Record fields ->
+        Printf.sprintf "{ %s }" @@ List.to_string show_field fields
+
+  and show_field { offset; size; ty } =
+    Printf.sprintf "(%d, %d): %s" offset size (show ty)
+
+  let rec compare type1 type2 =
+    match (type1, type2) with
+    | Top, Top | Bottom, Bottom -> 0
+    | Atom a, Atom b -> CType.compare a b
+    | TypeVar a, TypeVar b -> VarId.compare a b
+    | Recursive (a, b), Recursive (c, d) ->
+        let c = compare a c in
+        if c <> 0 then c else compare b d
+    | Union (a, b), Union (a2, b2) ->
+        let c = compare a a2 in
+        if c <> 0 then c else compare b b2
+    | Sect (a, b), Sect (a2, b2) ->
+        let c = compare a a2 in
+        if c <> 0 then c else compare b b2
+    | Pointer (a, b), Pointer (a2, b2) ->
+        let c = compare a a2 in
+        if c <> 0 then c else compare b b2
+    | Function (name, ins, outs), Function (name2, ins2, outs2) ->
+        let c = String.compare name name2 in
+        if c <> 0 then c
+        else
+          let c = StringMap.compare compare ins ins2 in
+          if c <> 0 then c else StringMap.compare compare outs outs2
+    | ( Field { offset; size; ty },
+        Field { offset = offset2; size = size2; ty = ty2 } ) ->
+        let c = Int.compare offset offset2 in
+        if c <> 0 then c
+        else
+          let c = Int.compare size size2 in
+          if c <> 0 then c else compare ty ty2
+    | Record fields, Record fields2 ->
+        List.compare (fun { ty } { ty = ty2 } -> compare ty ty2) fields fields2
+    | _ -> 1
+
+  let equal a b = Stdlib.( == ) 0 @@ compare a b
+
+  let rec iter f (ty : t) =
+    f ty;
+    match ty with
+    | Top | Bottom | Atom _ | TypeVar _ | Recursive _ -> ()
+    | Union (a, b) | Sect (a, b) ->
+        iter f b;
+        iter f a
+    | Pointer (lb, ub) ->
+        iter f ub;
+        iter f lb
+    | Function (_, ins, outs) ->
+        StringMap.iter (fun _ v -> iter f v) ins;
+        StringMap.iter (fun _ v -> iter f v) outs
+    | Field { ty } -> iter f ty
+    | Record fields -> List.iter (fun { ty } -> iter f ty) fields
+
+  let show_type_map (m : t StringMap.t) : string =
+    StringMap.bindings m
+    |> List.map (fun (name, ty) -> Printf.sprintf "%s: %s" name (show ty))
+    |> String.concat "\n"
+
+  let show_type_map2 (m : (t * t) StringMap.t) : string =
+    StringMap.bindings m
+    |> List.map (fun (name, (ty1, ty2)) ->
+        Printf.sprintf "%s:\n   lower: %s\n   upper: %s" name (show ty1)
+          (show ty2))
+    |> String.concat "\n"
+end
+
+module TySet = struct
+  module S = Set.Make (struct
+    type t = InferredType.t
+
+    let compare = InferredType.compare
+  end)
+
+  include S
+
+  let show ts = to_list ts |> List.map InferredType.show |> String.concat ", "
+end
+
+module ConstraintState = struct
+  module TypeConstraint = struct
+    type t = { lb : TySet.t; ub : TySet.t }
+
+    let equal { lb; ub } { lb = lb2; ub = ub2 } =
+      TySet.equal lb lb2 && TySet.equal ub ub2
+  end
+
+  type t = TypeConstraint.t VarIdMap.t
+
+  let equal = StringMap.equal TypeConstraint.equal
+
+  let show m =
+    StringMap.bindings m
+    |> List.map (fun (name, ({ lb; ub } : TypeConstraint.t)) ->
+        Printf.sprintf "%s: lower [%s], upper [%s]" name (TySet.show lb)
+          (TySet.show ub))
+    |> String.concat "\n"
+
+  let add_ub st name ty =
+    VarIdMap.update name
+      (function
+        | None ->
+            Some
+              ({ lb = TySet.empty; ub = TySet.singleton ty } : TypeConstraint.t)
+        | Some c -> Some { c with ub = TySet.add ty c.ub })
+      st
+
+  let add_lb (st : t) name ty =
+    VarIdMap.update name
+      (function
+        | None ->
+            Some
+              ({ ub = TySet.empty; lb = TySet.singleton ty } : TypeConstraint.t)
+        | Some c -> Some { c with lb = TySet.add ty c.lb })
+      st
+end
 
 module Sigma = struct
   type t =
@@ -100,30 +299,6 @@ module TypeAutomata = struct
   end
 
   let remove_ep m =
-    (*
-      NOTE:
-        If there is an epilson edge like below
-  
-        start -- ep --> bad boy -- a --> end
-  
-        then start must raise the bad boy's children i.e.
-  
-        start -- a --> end
-  
-        If there are no kids, just kill
-  
-        start -- ep --> bad boy
-  
-        start
-  
-        What about a bigger case?
-  
-        start -- ep --> middle -- ep --> middle2 -- a --> end
-  
-        start -- a --> end
-  
-        works
-    *)
     let rec helper acc current_state =
       (* Do the lower states first, I am scared about what happens if loop *)
       let acc = Iter.fold helper acc @@ get_next_states m current_state in
@@ -246,38 +421,7 @@ module TypeAutomata = struct
     in
     helper m.start
 
-  let export_graphviz n =
-    Printf.sprintf
-      "\n\
-       digraph G {\n\
-      \ \"%s\" [height=0, width=0, style=filled, fillcolor=\"#c4a7e7\" ]\n\
-       %s\n\
-       \"%s\" -> %s;\n\
-       %s\n\
-       }"
-      n.name
-      (List.fold_left
-         (fun a (polarity, typ) ->
-           let shape =
-             if Polarity.positive polarity then "house" else "invhouse"
-           in
-           Printf.sprintf
-             "%s\"%s\" [shape=%s style=filled, fillcolor=\"#c4a7e7\"];\n" a
-             (InferredType.show @@ typ) shape)
-         "" n.states)
-      n.name
-      (Printf.sprintf "\"%s\"" @@ InferredType.show @@ snd n.start)
-      (List.fold_left
-         (fun acc ((_, s), a, (_, t)) ->
-           Printf.sprintf "%s\"%s\" -> \"%s\" [label=\"%s\", ];\n" acc
-             (InferredType.show s) (InferredType.show t)
-           @@ Sigma.show a)
-         "" (get_transitions n))
-
-  let rec type_to_state_list (p : Polarity.t) (ty : InferredType.t)
-      ((ls, tbl) as acc :
-        State.t list * (State.t, (Sigma.t, State.t) Hashtbl.t) Hashtbl.t) :
-      State.t list * (State.t, (Sigma.t, State.t) Hashtbl.t) Hashtbl.t =
+  let rec type_to_state_list p (ty : InferredType.t) ((ls, tbl) as acc) =
     let open Sigma in
     match ty with
     | Top | Atom _ | TypeVar _ | Bottom | Field _ -> ((p, ty) :: ls, tbl)
@@ -336,28 +480,37 @@ module TypeAutomata = struct
       type_to_state_list polarity ty ([], Hashtbl.create 10)
     in
     { states; transitions; start = init; name }
+
+  let export_graphviz n =
+    Printf.sprintf
+      "\n\
+       digraph G {\n\
+      \ \"%s\" [height=0, width=0, style=filled, fillcolor=\"#c4a7e7\" ]\n\
+       %s\n\
+       \"%s\" -> %s;\n\
+       %s\n\
+       }"
+      n.name
+      (List.fold_left
+         (fun a (polarity, typ) ->
+           let shape =
+             if Polarity.positive polarity then "house" else "invhouse"
+           in
+           Printf.sprintf
+             "%s\"%s\" [shape=%s style=filled, fillcolor=\"#c4a7e7\"];\n" a
+             (InferredType.show @@ typ) shape)
+         "" n.states)
+      n.name
+      (Printf.sprintf "\"%s\"" @@ InferredType.show @@ snd n.start)
+      (List.fold_left
+         (fun acc ((_, s), a, (_, t)) ->
+           Printf.sprintf "%s\"%s\" -> \"%s\" [label=\"%s\", ];\n" acc
+             (InferredType.show s) (InferredType.show t)
+           @@ Sigma.show a)
+         "" (get_transitions n))
 end
 
-let var_proc_to_uid (var : Var.t) (proc : Program.proc) : string =
-  if Var.is_global var then Var.name var
-  else Var.name var ^ "_" ^ ID.name @@ Procedure.id proc
-
 let gen = ID.make_gen ()
-
-(* TODO: Could move these inside of InferredType module *)
-let show_type_map (m : InferredType.t StringMap.t) : string =
-  StringMap.bindings m
-  |> List.map (fun (name, ty) ->
-      Printf.sprintf "%s: %s" name (InferredType.show ty))
-  |> String.concat "\n"
-
-let show_type_map2 (m : (InferredType.t * InferredType.t) StringMap.t) : string
-    =
-  StringMap.bindings m
-  |> List.map (fun (name, (ty1, ty2)) ->
-      Printf.sprintf "%s:\n   lower: %s\n   upper: %s" name
-        (InferredType.show ty1) (InferredType.show ty2))
-  |> String.concat "\n"
 
 (*
   4 main steps
@@ -381,7 +534,9 @@ let minimise_type p ty name =
       | InferredType.Recursive (a, b) -> Hashtbl.add recursives a (gen.fresh ())
       | _ -> ())
     ty;
-  let automata = TypeAutomata.create_type_automata p ty (p, ty) name in
+  let automata =
+    TypeAutomata.create_type_automata p ty (p, ty) (VarId.show name)
+  in
   TypeAutomata.remove_ep automata;
   TypeAutomata.merge_nodes automata;
   automata
@@ -430,7 +585,7 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
           (* Has not been seen *)
           let bounds =
             (* Get the bounds for the variable depending on the polarity *)
-            match StringMap.find_opt a constraint_set with
+            match VarIdMap.find_opt a constraint_set with
             | Some { lb; ub } -> if Polarity.positive polarity then lb else ub
             | None -> TySet.empty
           in
@@ -455,7 +610,7 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
 (*
   Given a statement constrain the variables involed (based on the expression)
 *)
-let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc =
+let gen_constraint_set prog proc (st : ConstraintState.t) stmt_number stmt =
   let open AbstractExpr in
   let open InferredType in
   (* Given a expression constrain the variables involed *)
@@ -464,7 +619,8 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc =
     let constrain_arg st l t =
       let l = BasilExpr.unfix l in
       match l with
-      | RVar { id } -> ConstraintState.add_lb st (var_proc_to_uid id proc) t
+      | RVar { id } ->
+          ConstraintState.add_lb st (VarId.var_proc_to_uid id proc) t
       | _ -> st
     in
     let constrain_args st l r t =
@@ -472,7 +628,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc =
       constrain_arg st r t
     in
     match expr with
-    | RVar { id } -> (st, TypeVar (var_proc_to_uid id proc))
+    | RVar { id } -> (st, TypeVar (VarId.var_proc_to_uid id proc))
     | Constant { const } ->
         ( st,
           match const with
@@ -507,7 +663,10 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc =
             (* WARN: Is this actually constraining my field when they are used? *)
             let size = finish - rt in
             let ty =
-              TypeVar (Printf.sprintf "Extraction_%s" @@ ID.name @@ gen.fresh ())
+              TypeVar
+                (VarId.fresh_id
+                @@ Printf.sprintf "Extraction_%s"
+                @@ ID.name @@ gen.fresh ())
             in
             let field = { offset = rt; size; ty } in
             (constrain_arg st a @@ Record [ field ], Field field))
@@ -575,10 +734,10 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc =
     | _, Pointer (type1_a, type1_b) ->
         constrain (constrain st type0 type1_a rec_check) type0 type1_b rec_check
     | TypeVar a, TypeVar b -> (
-        if String.equal a b then st
+        if VarId.equal a b then st
         else
           let st = ConstraintState.add_ub st a type1 in
-          let bounds = StringMap.get a st in
+          let bounds = VarIdMap.get a st in
           match bounds with
           | Some { lb } ->
               TySet.to_iter lb
@@ -590,7 +749,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc =
         match ty with
         | TypeVar a -> (
             let st = ConstraintState.add_ub st a type1 in
-            let bounds = StringMap.get a st in
+            let bounds = VarIdMap.get a st in
             match bounds with
             | Some { lb } ->
                 TySet.to_iter lb
@@ -602,7 +761,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc =
     | _, TypeVar a -> (
         (* The right hand side is not a type variable *)
         let st = ConstraintState.add_lb st a type0 in
-        let bounds = StringMap.get a st in
+        let bounds = VarIdMap.get a st in
         if TySet.mem type1 rec_check then st
         else
           let rec_check = TySet.add type1 rec_check in
@@ -634,7 +793,7 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc =
           (* Ignore _PC variables *)
           if String.starts_with ~prefix:"_PC" @@ Var.name lhs then st
           else
-            let lhs = var_proc_to_uid lhs proc in
+            let lhs = VarId.var_proc_to_uid lhs proc in
             let st, constrain_expr =
               constrain_expr st @@ BasilExpr.unfix expr
             in
@@ -642,25 +801,29 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc =
         st ls
   (* TODO: SVA *)
   | Stmt.Instr_Load { lhs } ->
-      let lhs = var_proc_to_uid lhs proc in
+      let lhs = VarId.var_proc_to_uid lhs proc in
       let st =
         ConstraintState.add_ub st lhs
           (Pointer
-             ( TypeVar (Int.to_string stmt_number ^ "_a_load"),
-               TypeVar (Int.to_string stmt_number ^ "_b_load") ))
+             ( TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_a_load"),
+               TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_b_load")
+             ))
       in
-      ConstraintState.add_ub st (Int.to_string stmt_number ^ "_a_load")
-      @@ TypeVar (Int.to_string stmt_number ^ "_b_load")
+      ConstraintState.add_ub st
+        (VarId.fresh_id @@ Int.to_string stmt_number ^ "_a_load")
+      @@ TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_b_load")
   | Stmt.Instr_Store { lhs } ->
-      let lhs = var_proc_to_uid lhs proc in
+      let lhs = VarId.var_proc_to_uid lhs proc in
       let st =
         ConstraintState.add_ub st lhs
           (Pointer
-             ( TypeVar (Int.to_string stmt_number ^ "_a_store"),
-               TypeVar (Int.to_string stmt_number ^ "_b_store") ))
+             ( TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_a_store"),
+               TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_b_store")
+             ))
       in
-      ConstraintState.add_ub st (Int.to_string stmt_number ^ "_a_store")
-      @@ TypeVar (Int.to_string stmt_number ^ "_b_store")
+      ConstraintState.add_ub st
+        (VarId.fresh_id @@ Int.to_string stmt_number ^ "_a_store")
+      @@ TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_b_store")
   | Stmt.Instr_Call { lhs; args; procid } ->
       let formal_in = Procedure.formal_in_params @@ Program.proc prog procid in
       let formal_out =
@@ -672,18 +835,24 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc =
             match constrain_expr acc @@ BasilExpr.unfix v with
             | acc, TypeVar a ->
                 constrain acc
-                  (TypeVar (Var.name @@ StringMap.find k formal_in))
+                  (TypeVar
+                     (VarId.var_procid_to_uid
+                        (StringMap.find k formal_in)
+                        procid))
                   (TypeVar a) TySet.empty
             | acc, a ->
                 ConstraintState.add_ub acc
-                  (Var.name @@ StringMap.find k formal_in)
+                  (VarId.var_procid_to_uid (StringMap.find k formal_in) procid)
                   a)
           args
         @@ StringMap.fold
              (fun k v acc ->
                constrain acc
-                 (TypeVar (Var.name @@ StringMap.find k formal_out))
-                 (TypeVar (Var.name v))
+                 (TypeVar
+                    (VarId.var_procid_to_uid
+                       (StringMap.find k formal_out)
+                       procid))
+                 (TypeVar (VarId.var_proc_to_uid v proc))
                  TySet.empty)
              lhs st
       in
@@ -693,31 +862,30 @@ let gen_constraint_set (st : ConstraintState.t) stmt stmt_number prog proc =
           args
       in
       let rets =
-        StringMap.map (fun v -> TypeVar (var_proc_to_uid v proc)) lhs
+        StringMap.map (fun v -> TypeVar (VarId.var_proc_to_uid v proc)) lhs
       in
       let func = Function (ID.name procid, args, rets) in
-      ConstraintState.add_ub st (ID.name procid) func
+      ConstraintState.add_ub st (VarId.fresh_id @@ ID.name procid) func
   | Stmt.Instr_IntrinCall _ -> st
   (* NOTE: This is like a jump to, so it does not have args / ret *)
   | Stmt.Instr_IndirectCall _ -> st
 
-let check_block p prog st (_, b) =
-  Block.stmts_iter b
-  |> Iter.foldi
-       (fun st stmt_number stmt ->
-         gen_constraint_set st stmt stmt_number prog p)
-       st
-
-let check_proc (prog : Program.t) st p =
-  Procedure.iter_blocks_topo_fwd p |> Iter.fold (check_block p prog) st
-
 let transform (prog : Program.t) =
-  (* TODO: I might wanna change this to be cleaner and just a series of pipes *)
   let type_constraint_map =
-    ID.Map.values prog.procs |> Iter.fold (check_proc prog) StringMap.empty
+    ID.Map.values prog.procs
+    |> Iter.fold
+         (fun acc proc ->
+           Procedure.iter_blocks_topo_fwd proc
+           |> Iter.fold
+                (fun acc (_, b) ->
+                  Block.stmts_iter b
+                  |> Iter.foldi (gen_constraint_set prog proc) acc)
+                acc)
+         VarIdMap.empty
   in
+
   let types =
-    StringMap.mapi
+    VarIdMap.mapi
       (fun name ({ lb; ub } : ConstraintState.TypeConstraint.t) ->
         (* TODO this could be cleaner by making it a function or sum *)
         let lower =
@@ -750,7 +918,7 @@ let transform (prog : Program.t) =
       so we will have a list of automata, and then for every Var.decl grab the minimised type and then lower it
   *)
   let automatas =
-    StringMap.mapi
+    VarIdMap.mapi
       (fun name (lower_ty, upper_ty) ->
         ( minimise_type Polarity.Pos lower_ty name,
           minimise_type Polarity.Neg upper_ty name ))
