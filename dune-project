@@ -40,6 +40,7 @@
   fmt
   patricia-tree
   ppx_here
+  intPQueue
   (ocamlformat :with-dev-setup)
   (odig :with-dev-setup)
   (sherlodoc :with-doc)

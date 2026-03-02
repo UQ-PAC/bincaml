@@ -15,20 +15,23 @@ let dbg f = if !debug then f () else ()
 
     https://dspace.mit.edu/bitstream/handle/1721.1/86578/48072795-MIT.pdf *)
 let intro_ssi_assigns proc =
-  let f b =
+  let fix_block (_, b) =
     b
     |> Block.flat_map ~phi:id
          Stmt.(
            function
            | (Instr_Assert { body } | Instr_Assume { body }) as a ->
                let fv = Expr.BasilExpr.free_vars body in
-               if fv |> VarSet.cardinal |> Int.equal 1 then
-                 let v = VarSet.choose fv in
-                 Iter.doubleton (Instr_Assign [ (v, Expr.BasilExpr.rvar v) ]) a
+               if VarSet.cardinal fv > 0 then
+                 Iter.doubleton
+                   (Instr_Assign
+                      (VarSet.to_list fv
+                      |> List.map (fun v -> (v, Expr.BasilExpr.rvar v))))
+                   a
                else Iter.singleton a
            | b -> Iter.singleton b)
   in
-  Procedure.map_blocks_nondet (function id, b -> f b) proc
+  Procedure.map_blocks_nondet fix_block proc
 
 let drop_unused_var_declarations_proc p =
   let used =
