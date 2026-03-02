@@ -39,6 +39,40 @@ open Containers
 (** In-param key for global [g] given a procedure's set of modified globals. *)
 let in_key g mods = if VarSet.mem g mods then Var.name g ^ "_in" else Var.name g
 
+(** Rewrite a single call-site statement to pass/receive globals for known
+    callees. External callees (not in [procs]) are left unchanged. *)
+let rewrite_call_stmt procs = function
+  | Stmt.Instr_Call { procid; lhs; args } as stmt -> (
+      match ID.Map.find_opt procid procs with
+      | None -> stmt (* external callee – leave as-is *)
+      | Some callee ->
+          let cspec = Procedure.specification callee in
+          let cmods = VarSet.of_list cspec.modifies_globs in
+          (* Pass current value of each captured global. *)
+          let new_args =
+            List.fold_left
+              (fun m g ->
+                StringMap.add (in_key g cmods) (Expr.BasilExpr.rvar g) m)
+              args cspec.captures_globs
+          in
+          (* Receive each modified global back. *)
+          let new_lhs =
+            List.fold_left
+              (fun m g -> StringMap.add (Var.name g) g m)
+              lhs cspec.modifies_globs
+          in
+          Stmt.Instr_Call { procid; lhs = new_lhs; args = new_args })
+  | s -> s
+
+(** Pass 2 – update all call sites in every procedure. *)
+let rewrite_call_sites procs =
+  ID.Map.map
+    (fun proc ->
+      Procedure.map_blocks_topo_fwd
+        (fun _bid b -> Block.map ~phi:Fun.id (rewrite_call_stmt procs) b)
+        proc)
+    procs
+
 let transform (p : Program.t) : Program.t =
   (* ------------------------------------------------------------------ *)
   (* Pass 1 – update signatures and insert initialisation blocks        *)
@@ -228,40 +262,7 @@ let transform (p : Program.t) : Program.t =
   (* ------------------------------------------------------------------ *)
   (* Pass 2 – update call sites                                         *)
   (* ------------------------------------------------------------------ *)
-  let procs =
-    ID.Map.map
-      (fun proc ->
-        Procedure.map_blocks_topo_fwd
-          (fun _bid (b : Program.bloc) ->
-            Block.map ~phi:Fun.id
-              (function
-                | Stmt.Instr_Call { procid; lhs; args } as stmt -> (
-                    match ID.Map.find_opt procid procs with
-                    | None -> stmt (* external callee – leave as-is *)
-                    | Some callee ->
-                        let cspec = Procedure.specification callee in
-                        let cmods = VarSet.of_list cspec.modifies_globs in
-                        (* Pass current value of each captured global. *)
-                        let new_args =
-                          List.fold_left
-                            (fun m g ->
-                              StringMap.add (in_key g cmods)
-                                (Expr.BasilExpr.rvar g) m)
-                            args cspec.captures_globs
-                        in
-                        (* Receive each modified global back. *)
-                        let new_lhs =
-                          List.fold_left
-                            (fun m g -> StringMap.add (Var.name g) g m)
-                            lhs cspec.modifies_globs
-                        in
-                        Stmt.Instr_Call
-                          { procid; lhs = new_lhs; args = new_args })
-                | s -> s)
-              b)
-          proc)
-      procs
-  in
+  let procs = rewrite_call_sites procs in
 
   (* ------------------------------------------------------------------ *)
   (* Final – clear specs and remove Variable globals                    *)
