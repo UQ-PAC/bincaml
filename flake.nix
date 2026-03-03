@@ -50,7 +50,7 @@
           patricia-tree = "*";
           odig = "*";
           sherlodoc = "*";
-          ppx_expect_nobase = "*";
+          ppx_expect = "*";
           alcotest = "*";
           qcheck-core = "*";
           qcheck-alcotest = "*";
@@ -60,8 +60,8 @@
           basil_lsp = "*";
         };
         query = devPackagesQuery // {
-          ocaml-compiler = "5.3.0";
-          ocaml-variants = "5.3.0+options";
+          ocaml-compiler = "5.4.0";
+          ocaml-variants = "5.4.0+options";
           ocaml-option-fp = "*";
           ocaml-option-flambda = "*";
         };
