@@ -523,7 +523,8 @@ and prtFunSpec (i:int) (e : AbsBasilIR.funSpec) : doc = match e with
 
 and prtFunSpecListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
-  | (_,x::xs) -> (concatD [prtFunSpec 0 x ; render ";" ; prtFunSpecListBNFC 0 xs])
+  | (_,x::xs) -> (concatD [prtFunSpec 0 x ; render "
+" ; prtFunSpecListBNFC 0 xs])
 and prtVarSpec (i:int) (e : AbsBasilIR.varSpec) : doc = match e with
        AbsBasilIR.VarSpec_Classification expr -> prPrec i 0 (concatD [render "classification" ; prtExpr 0 expr])
   |    AbsBasilIR.VarSpec_Empty  -> prPrec i 0 (concatD [])
@@ -535,8 +536,6 @@ and prtProgSpec (i:int) (e : AbsBasilIR.progSpec) : doc = match e with
 
 and prtProgSpecListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
-  | (_,[x]) -> (concatD [prtProgSpec 0 x ; render "
-"])
   | (_,x::xs) -> (concatD [prtProgSpec 0 x ; render "
 " ; prtProgSpecListBNFC 0 xs])
 

@@ -71,7 +71,7 @@ module.exports = grammar({
         // Decl_ProgEmpty. Decl ::= "prog" "entry" ProcIdent AttribSet ;
         seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet)),
         // Decl_ProgWithSpec. Decl ::= "prog" "entry" ProcIdent AttribSet [ProgSpec] ;
-        seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), $.list_ProgSpec),
+        seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), optional($.list_ProgSpec)),
         // Decl_Proc. Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [FunSpec] ProcDef ;
         seq("proc", $.token_ProcIdent, $.token_OpenParen, optional($.list_Params), $.token_CloseParen, "->", $.token_OpenParen, optional($.list_Params), $.token_CloseParen, optional($.AttribSet), optional($.list_FunSpec), optional($.ProcDef))
       ),
@@ -689,15 +689,15 @@ module.exports = grammar({
       choice(
         // []. [FunSpec] ::= ;
         choice(),
-        // (:). [FunSpec] ::= FunSpec ";" [FunSpec] ;
-        seq($.FunSpec, ";", optional($.list_FunSpec))
+        // (:). [FunSpec] ::= FunSpec [FunSpec] ;
+        seq($.FunSpec, optional($.list_FunSpec))
       ),
     list_ProgSpec: $ =>
       choice(
-        // (:[]). [ProgSpec] ::= ProgSpec ;
-        $.ProgSpec,
+        // []. [ProgSpec] ::= ;
+        choice(),
         // (:). [ProgSpec] ::= ProgSpec [ProgSpec] ;
-        seq($.ProgSpec, $.list_ProgSpec)
+        seq($.ProgSpec, optional($.list_ProgSpec))
       ),
     token_BVTYPE: $ =>
       /bv\d+/,
