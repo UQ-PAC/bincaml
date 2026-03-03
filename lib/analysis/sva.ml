@@ -110,11 +110,44 @@ module SVAAbstraction = struct
           b map)
       a SymAddrSetLattice.bottom
 
-  let eval_intrin op args rt =
+  let eval_intrin (op : E.intrin) args rt =
     let op a b =
       match op with
-      | `BVADD -> (eval_binop `BVADD a b rt, rt)
-      | _ -> (SymAddrSetLattice.top, rt)
+      | (`BVADD | `BVOR | `BVXOR | `BVAND) as op -> (eval_binop op a b rt, rt)
+      | `OR | `AND | `Cases -> (SymAddrSetLattice.top, rt)
+      | `BVConcat ->
+          ( SymAddrSetLattice.fold
+              (fun sb1 vs1 acc ->
+                SymAddrSetLattice.fold
+                  (fun sb2 vs2 map ->
+                    let return_size =
+                      match (snd a, snd b) with
+                      | Types.Bitvector a, Types.Bitvector b ->
+                          Types.Bitvector (a + b)
+                      | _ -> failwith "boom"
+                    in
+                    match (sb1, sb2) with
+                    (* NOTE: OCaml compiler complains when these cases are merged *)
+                    | (SymBase.GlobSym | Constant), sb
+                      when not @@ SymBase.is_place_holder sb ->
+                        SymAddrSetLattice.update sb
+                          (WrappedIntervalsValueAbstractionBasil.eval_intrin op
+                             [ (vs1, snd a); (vs2, snd b) ]
+                             return_size)
+                          map
+                    | sb, (SymBase.GlobSym | Constant)
+                      when not @@ SymBase.is_place_holder sb ->
+                        SymAddrSetLattice.update sb
+                          (WrappedIntervalsValueAbstractionBasil.eval_intrin op
+                             [ (vs1, snd a); (vs2, snd b) ]
+                             return_size)
+                          map
+                    | _, _ ->
+                        SymAddrSetLattice.update sb1 Top
+                        @@ SymAddrSetLattice.update sb2 Top map)
+                  (fst b) acc)
+              (fst a) SymAddrSetLattice.bottom,
+            rt )
     in
     match args with
     | h :: b :: tl -> fst @@ List.fold_left op (op h b) tl
@@ -168,11 +201,13 @@ module Domain = struct
            @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
     |> Iter.cons
          ( link_register,
-           SymAddrSetLattice.singleton (SymBase.Par {name; param=link_register})
+           SymAddrSetLattice.singleton
+             (SymBase.Par { name; param = link_register })
            @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
     |> Iter.cons
          ( frame_pointer,
-           SymAddrSetLattice.singleton (SymBase.Par {name; param=frame_pointer})
+           SymAddrSetLattice.singleton
+             (SymBase.Par { name; param = frame_pointer })
            @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
