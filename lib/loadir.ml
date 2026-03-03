@@ -117,40 +117,39 @@ module BasilASTLoader = struct
     in
     map_prog (fun prog -> Spec_modifies.set_modsets ~add_only:true prog) prog
 
+  and var_modifiers_pure (m : varModifiers list) =
+    not @@ List.exists (function Shared | Observable -> true) m
+
   and trans_varspec prog (v : varSpec) =
-    match v with
-    | VarSpec_Classification v ->
-        [ ("classification", `Expr (trans_expr prog v)) ]
-    | VarSpec_Empty -> []
+    let trans_one v =
+      match v with
+      | VarSpec_Classification v ->
+          [ ("classification", `Expr (trans_expr prog v)) ]
+      | VarSpec_Empty -> []
+    in
+    trans_one v
 
   and trans_declaration prog (x : decl) : load_st =
     match x with
-    | Decl_SharedMem (bident, type', spec) ->
+    | Decl_Mem (modifiers, bident, type', spec) ->
         let attrib = StringMap.of_list (trans_varspec prog spec) in
-        map_prog
-          (fun p ->
-            Program.decl_global ~attrib p
-              (Var.create
-                 (unsafe_unsigil (`Global bident))
-                 ~pure:false ~scope:Global (trans_type type')))
-          prog
-    | Decl_UnsharedMem (bident, type', spec) ->
-        let attrib = StringMap.of_list (trans_varspec prog spec) in
+        let pure = var_modifiers_pure modifiers in
         map_prog
           (fun p ->
             Program.decl_global p ~attrib
               (Var.create
                  (unsafe_unsigil (`Global bident))
-                 ~pure:false ~scope:Global (trans_type type')))
+                 ~pure ~scope:Global (trans_type type')))
           prog
-    | Decl_Var (bident, type', spec) ->
+    | Decl_Var (modifiers, bident, type', spec) ->
         let attrib = StringMap.of_list (trans_varspec prog spec) in
+        let pure = var_modifiers_pure modifiers in
         map_prog
           (fun p ->
             Program.decl_global p ~attrib
               (Var.create
                  (unsafe_unsigil (`Global bident))
-                 ~pure:true ~scope:Global (trans_type type')))
+                 ~pure ~scope:Global (trans_type type')))
           prog
     | Decl_ProgEmpty (ProcIdent (_, id), attr) -> prog
     | Decl_ProgWithSpec (ProcIdent (_, id), attr, spec) -> prog
@@ -475,33 +474,51 @@ module BasilASTLoader = struct
     | Stmt_Nop -> (p_st, `None)
     | Stmt_Load_Var (lvar, endian, var, expr, intval) ->
         let endian = trans_endian endian in
-        let mem = trans_var p_st var in
-        let cells = transIntVal intval |> Z.to_int in
+        let rhs = trans_var p_st var in
+        let size = transIntVal intval |> Z.to_int in
         let p_st, lhs = trans_lvar p_st lvar in
         ( p_st,
           `Stmt
-            (Instr_Load { lhs; mem; addr = trans_expr p_st expr; endian; cells })
-        )
+            (Instr_Load
+               {
+                 lhs;
+                 rhs;
+                 addr = Addr { addr = trans_expr p_st expr; endian; size };
+               }) )
     | Stmt_Store_Var (lhs, endian, var, addr, value, intval) ->
         let endian = trans_endian endian in
-        let cells = transIntVal intval |> Z.to_int in
-        let mem = trans_var p_st var in
+        let size = transIntVal intval |> Z.to_int in
+        let rhs = trans_var p_st var in
         let p_st, lhs = trans_lvar p_st lhs in
         ( p_st,
           `Stmt
             (Instr_Store
                {
                  lhs;
-                 mem;
-                 addr = trans_expr p_st addr;
+                 rhs;
                  value = trans_expr p_st value;
-                 cells;
-                 endian;
+                 addr = Addr { addr = trans_expr p_st addr; size; endian };
                }) )
     | Stmt_SingleAssign (Assignment1 (lvar, expr)) ->
         let expr = trans_expr p_st expr in
         let p_st, lv = trans_lvar p_st lvar in
         (p_st, `Stmt (Instr_Assign [ (lv, expr) ]))
+    | Stmt_MemAssign (lvar, expr) ->
+        let expr = trans_expr p_st expr in
+        let p_st, lv = trans_lvar p_st lvar in
+        ( p_st,
+          `Stmt
+            (Instr_Store { lhs = lv; rhs = lv; value = expr; addr = Scalar }) )
+    | Stmt_ScalarStore (lvar, expr) ->
+        let expr = trans_expr p_st expr in
+        let p_st, lv = trans_lvar p_st lvar in
+        ( p_st,
+          `Stmt
+            (Instr_Store { lhs = lv; rhs = lv; value = expr; addr = Scalar }) )
+    | Stmt_ScalarLoad (lvar, rvar) ->
+        let rhs = trans_var p_st rvar in
+        let p_st, lv = trans_lvar p_st lvar in
+        (p_st, `Stmt (Instr_Load { lhs = lv; rhs; addr = Scalar }))
     | Stmt_MultiAssign (o, assigns, c) ->
         let f (p_st, assigns) v =
           match v with
@@ -514,25 +531,24 @@ module BasilASTLoader = struct
         (p_st, `Stmt (Instr_Assign (List.rev assigns)))
     | Stmt_Load (lvar, endian, bident, expr, intval) ->
         let endian = trans_endian endian in
-        let mem = lookup_global_decl bident p_st in
+        let rhs = lookup_global_decl bident p_st in
         let addr = trans_expr p_st expr in
         let p_st, lhs = trans_lvar p_st lvar in
-        let cells = transIntVal intval |> Z.to_int in
-        (p_st, `Stmt (Instr_Load { lhs; mem; addr; endian; cells }))
+        let size = transIntVal intval |> Z.to_int in
+        ( p_st,
+          `Stmt (Instr_Load { lhs; rhs; addr = Addr { addr; endian; size } }) )
     | Stmt_Store (endian, bident, addr, value, intval) ->
         let endian = trans_endian endian in
-        let cells = transIntVal intval |> Z.to_int in
+        let size = transIntVal intval |> Z.to_int in
         let mem = lookup_global_decl bident p_st in
         ( p_st,
           `Stmt
             (Instr_Store
                {
                  lhs = mem;
-                 mem;
-                 addr = trans_expr p_st addr;
+                 rhs = mem;
                  value = trans_expr p_st value;
-                 cells;
-                 endian;
+                 addr = Addr { addr = trans_expr p_st addr; size; endian };
                }) )
     | Stmt_DirectCall (calllvars, bident, o, exprs, c) ->
         let n = unsafe_unsigil (`Proc bident) in

@@ -15,6 +15,7 @@
   gamma_domain
   tnum_wint_reduced_product)
  (libraries
+  intPQueue
   patricia-tree
   loader
   lang

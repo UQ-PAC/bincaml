@@ -3,6 +3,11 @@ open Containers
 open Expr
 open Stmt
 
+(*
+type 'var sigma = { rhs : 'var; lhs : (ID.t * 'var) list }
+[@@deriving eq, ord, show]
+*)
+
 type 'var phi = { lhs : 'var; rhs : (ID.t * 'var) list }
 [@@deriving eq, ord, show]
 (** a phi node representing the join of incoming edges assigned to a lhs

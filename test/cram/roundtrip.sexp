@@ -6,3 +6,8 @@
 (dump-il "before2.il")
 (load-il "before2.il")
 (dump-il "after2.il")
+
+(load-il "memassign.il")
+(dump-il "beforemem.il")
+(load-il "beforemem.il")
+(dump-il "aftermem.il")

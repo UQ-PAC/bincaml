@@ -10,8 +10,11 @@
 (cram
  (applies_to * \ expr_smt)
  (deps
+  loop_dfg.sexp
+  ../../examples/loop.il
   %{bin:bincaml}
   ssa-multi-deps.il
+  memassign.il
   ../../examples/irreducible_loop_1.il
   ../../examples/cat.il
   ../../examples/cntlm-output.il
