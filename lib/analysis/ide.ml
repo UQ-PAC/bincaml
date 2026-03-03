@@ -741,14 +741,24 @@ module IDE (D : IDEDomain) = struct
 
   (** Generate just the summaries (phase 1) of the IDE analysis performed on the
       given program *)
-  let solve_summaries (prog : Program.t) =
+  let solve_summaries (prog : Program.t) : Program.proc -> summary option =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-solve_summaries" @@ fun _ ->
     let globals = Program.global_vars prog in
     let graph = IDEGraph.create prog dir in
     let start = p1_start_vals prog globals in
     let order = scc_order prog graph in
     let summary = phase1_solve start graph globals order DlMap.empty in
-    query @@ summary
+    fun proc ->
+      let v =
+        match D.direction with
+        | `Backwards ->
+            Loc.IntraVertex
+              { proc_id = Procedure.id proc; v = Procedure.Vert.Entry }
+        | `Forwards ->
+            Loc.IntraVertex
+              { proc_id = Procedure.id proc; v = Procedure.Vert.Return }
+      in
+      Hashtbl.get summary v
 
   let solve (prog : Program.t) =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
