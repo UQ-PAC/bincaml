@@ -31,23 +31,41 @@ module Domain = struct
     |> Iter.map (fun v -> (v, GammaSet.singleton v))
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
+  let transfer_state m stmt =
+    let open Stmt in
+    let eval_expr e =
+      Expr.BasilExpr.free_vars_iter e
+      |> Iter.fold (fun s v' -> V.join (m v') s) V.bottom
+    in
+    match stmt with
+    | Instr_Assign a ->
+        Iter.of_list a |> Iter.map (fun (v, e) -> (v, eval_expr e))
+    | Instr_Assert _ -> Iter.empty
+    | Instr_Assume _ -> Iter.empty
+    | Instr_Load { lhs; rhs; addr = Scalar } -> Iter.singleton (lhs, m rhs)
+    | Instr_Store { lhs; value; addr = Scalar } ->
+        Iter.singleton (lhs, eval_expr value)
+    | Instr_Load { lhs; rhs } -> Iter.singleton (lhs, m rhs)
+    | Instr_Store { lhs; value } ->
+        Iter.singleton (lhs, V.join (m lhs) (eval_expr value))
+    | Instr_Call { lhs } | Instr_IntrinCall { lhs } ->
+        StringMap.values lhs |> Iter.map (fun v -> (v, GammaSet.top))
+    (* need to globally go to top which the transfer_state api doesn't support *)
+    (*| Instr_IndirectCall c -> raise (Failure "unsupported")*)
+    | Instr_IndirectCall _ -> Iter.empty
+
   let transfer m (stmt : Program.stmt) =
     let open Stmt in
     match stmt with
-    | Instr_Assign a ->
-        List.fold_left
-          (fun m (v, e) ->
-            update v
-              (Expr.BasilExpr.free_vars_iter e
-              |> Iter.fold (fun s v' -> V.join (read v' m) s) V.bottom)
-              m)
-          m a
     (* TODO calls can be more precise with modifies information (only send outputs + modifies to top) but this requires spec info *)
     | Instr_Call _ | Instr_IntrinCall _ | Instr_IndirectCall _ -> top
-    | _ -> m
+    | s ->
+        transfer_state (fun v -> read v m) s
+        |> Iter.fold (fun m (v, s) -> update v s m) m
 end
 
 module Analysis = Forwards (Domain)
+module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
 open Ide
 
 (* TODO IDE solver assumes program entry, but for summary generation we are more concerned with entry per procedure
