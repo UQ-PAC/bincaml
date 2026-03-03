@@ -637,6 +637,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
   let open AbstractExpr in
   let open InferredType in
   (* Given a expression constrain the variables involed *)
+  let sva_results = Analysis.Sva.DFGAnalysis.flow_insensitive proc in
   let rec constrain_expr (st : ConstraintState.t)
       (expr : 'e BasilExpr.abstract_expr) =
     let constrain_arg st l t =
@@ -814,14 +815,14 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
           Very restricting having this fail, would be nice just to ignore it
         *)
         (* Printf.printf *)
-          (* "Illegal constrain call type0: %s; type1: %s stmt: %s \n\n\n%!" *)
-          (* (InferredType.show type0) (InferredType.show type1) *)
-          (* (Program.show_stmt stmt); *)
+        (* "Illegal constrain call type0: %s; type1: %s stmt: %s \n\n\n%!" *)
+        (* (InferredType.show type0) (InferredType.show type1) *)
+        (* (Program.show_stmt stmt); *)
         (* st *)
-    failwith
-    (Printf.sprintf "Illegal constrain call type0: %s; type1: %s stmt: %s"
-    (InferredType.show type0) (InferredType.show type1)
-    (Program.show_stmt stmt))
+        failwith
+          (Printf.sprintf "Illegal constrain call type0: %s; type1: %s stmt: %s"
+             (InferredType.show type0) (InferredType.show type1)
+             (Program.show_stmt stmt))
   in
   match stmt with
   | Stmt.Instr_Assert { body } | Stmt.Instr_Assume { body } -> (
