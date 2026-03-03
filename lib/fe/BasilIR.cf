@@ -263,7 +263,7 @@ rules BoolBinOp ::=  "booland" | "boolor" | "boolimplies" ;
 rules RequireTok ::= "require" | "requires" ;
 rules EnsureTok ::= "ensure" | "ensures" ;
 rules RelyTok ::= "rely" | "relies";
-rules GuarTok ::= "guarnatee" | "guarantees";
+rules GuarTok ::= "guarantee" | "guarantees";
 
 FunSpec_Require . FunSpec ::= RequireTok Expr;
 FunSpec_Ensure . FunSpec ::= EnsureTok Expr;
@@ -279,8 +279,8 @@ VarSpec_Empty . VarSpec ::= ;
 
 FunSpec_Invariant . FunSpec ::= "invariant" BlockIdent Expr;
 
-ProgSpec_Rely . ProgSpec ::= "rely" Expr;
-ProgSpec_Guarantee . ProgSpec ::= "guarantee" Expr;
+ProgSpec_Rely . ProgSpec ::= RelyTok Expr;
+ProgSpec_Guarantee . ProgSpec ::= GuarTok Expr;
 
 terminator FunSpec "\n";
 

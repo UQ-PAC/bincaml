@@ -508,7 +508,7 @@ and prtRelyTok (i:int) (e : AbsBasilIR.relyTok) : doc = match e with
 
 
 and prtGuarTok (i:int) (e : AbsBasilIR.guarTok) : doc = match e with
-       AbsBasilIR.GuarTok_guarnatee  -> prPrec i 0 (concatD [render "guarnatee"])
+       AbsBasilIR.GuarTok_guarantee  -> prPrec i 0 (concatD [render "guarantee"])
   |    AbsBasilIR.GuarTok_guarantees  -> prPrec i 0 (concatD [render "guarantees"])
 
 
@@ -531,8 +531,8 @@ and prtVarSpec (i:int) (e : AbsBasilIR.varSpec) : doc = match e with
 
 
 and prtProgSpec (i:int) (e : AbsBasilIR.progSpec) : doc = match e with
-       AbsBasilIR.ProgSpec_Rely expr -> prPrec i 0 (concatD [render "rely" ; prtExpr 0 expr])
-  |    AbsBasilIR.ProgSpec_Guarantee expr -> prPrec i 0 (concatD [render "guarantee" ; prtExpr 0 expr])
+       AbsBasilIR.ProgSpec_Rely (relytok, expr) -> prPrec i 0 (concatD [prtRelyTok 0 relytok ; prtExpr 0 expr])
+  |    AbsBasilIR.ProgSpec_Guarantee (guartok, expr) -> prPrec i 0 (concatD [prtGuarTok 0 guartok ; prtExpr 0 expr])
 
 and prtProgSpecListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])

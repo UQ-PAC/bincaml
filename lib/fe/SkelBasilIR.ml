@@ -394,7 +394,7 @@ and transRelyTok (x : relyTok) : result = match x with
 
 
 and transGuarTok (x : guarTok) : result = match x with
-    GuarTok_guarnatee  -> failure x
+    GuarTok_guarantee  -> failure x
   | GuarTok_guarantees  -> failure x
 
 
@@ -414,8 +414,8 @@ and transVarSpec (x : varSpec) : result = match x with
 
 
 and transProgSpec (x : progSpec) : result = match x with
-    ProgSpec_Rely expr -> failure x
-  | ProgSpec_Guarantee expr -> failure x
+    ProgSpec_Rely (relytok, expr) -> failure x
+  | ProgSpec_Guarantee (guartok, expr) -> failure x
 
 
 

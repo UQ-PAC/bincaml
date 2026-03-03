@@ -13,23 +13,35 @@
 
 "nop" @keyword
 "load" @keyword
-"le" @keyword
-"be" @keyword
+"le" @keyword.modifier
+"be" @keyword.modifier
 "store" @keyword
 "guard" @keyword
 "assert" @keyword
 "assume" @keyword
 "var" @keyword
 "memory" @keyword
-"shared" @keyword
-"rely" @keyword
-"guarantee" @keyword
-"modifies" @keyword
-"captures" @keyword
-"forall" @keyword
-"exists" @keyword
-"fun" @keyword
-"old" @keyword
+"shared" @keyword.modifier
+[ "rely"
+  "relies"
+  "guarantee"
+  "guarantee"
+  "require"
+  "requires"
+  "ensures"
+  "ensure"
+  "captures"
+  "modifies"
+  "classification"
+  "invariant" ] @keyword
+[ "forall"
+  "exists"
+  "fun"
+  "old" ] @keyword.operator
+
+[ "match"
+  "with"
+  "cases" ] @keyword.conditional
 
 (IntVal) @number
 (token_IntegerHex) @number
@@ -59,6 +71,9 @@
 (BoolBinOp) @function.builtin
 (UnOp) @function.builtin
 (EqOp) @function.builtin
+
+"load_be" @function.builtin
+"load_le" @function.builtin
 
 "boolnot" @function.builtin
 "intneg" @function.builtin

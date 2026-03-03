@@ -374,7 +374,7 @@ and showRelyTok (e : AbsBasilIR.relyTok) : showable = match e with
 
 
 and showGuarTok (e : AbsBasilIR.guarTok) : showable = match e with
-       AbsBasilIR.GuarTok_guarnatee  -> s2s "GuarTok_guarnatee"
+       AbsBasilIR.GuarTok_guarantee  -> s2s "GuarTok_guarantee"
   |    AbsBasilIR.GuarTok_guarantees  -> s2s "GuarTok_guarantees"
 
 
@@ -394,8 +394,8 @@ and showVarSpec (e : AbsBasilIR.varSpec) : showable = match e with
 
 
 and showProgSpec (e : AbsBasilIR.progSpec) : showable = match e with
-       AbsBasilIR.ProgSpec_Rely expr -> s2s "ProgSpec_Rely" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
-  |    AbsBasilIR.ProgSpec_Guarantee expr -> s2s "ProgSpec_Guarantee" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
+       AbsBasilIR.ProgSpec_Rely (relytok, expr) -> s2s "ProgSpec_Rely" >> c2s ' ' >> c2s '(' >> showRelyTok relytok  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.ProgSpec_Guarantee (guartok, expr) -> s2s "ProgSpec_Guarantee" >> c2s ' ' >> c2s '(' >> showGuarTok guartok  >> s2s ", " >>  showExpr expr >> c2s ')'
 
 
 

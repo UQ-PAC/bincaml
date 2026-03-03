@@ -285,7 +285,7 @@ and relyTok =
  | RelyTok_relies
 
 and guarTok =
-   GuarTok_guarnatee
+   GuarTok_guarantee
  | GuarTok_guarantees
 
 and funSpec =
@@ -302,6 +302,6 @@ and varSpec =
  | VarSpec_Empty
 
 and progSpec =
-   ProgSpec_Rely of expr
- | ProgSpec_Guarantee of expr
+   ProgSpec_Rely of relyTok * expr
+ | ProgSpec_Guarantee of guarTok * expr
 

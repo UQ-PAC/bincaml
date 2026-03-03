@@ -232,12 +232,12 @@ module BasilASTLoader = struct
     |> map_prog (fun prog ->
         let spec = prog.spec in
         match p with
-        | ProgSpec_Rely b ->
+        | ProgSpec_Rely (_, b) ->
             {
               prog with
               spec = { spec with rely = trans_expr p_st b :: spec.rely };
             }
-        | ProgSpec_Guarantee b ->
+        | ProgSpec_Guarantee (_, b) ->
             {
               prog with
               spec =

@@ -649,8 +649,8 @@ module.exports = grammar({
       ),
     GuarTok: $ =>
       choice(
-        // GuarTok_guarnatee. GuarTok ::= "guarnatee" ;
-        "guarnatee",
+        // GuarTok_guarantee. GuarTok ::= "guarantee" ;
+        "guarantee",
         // GuarTok_guarantees. GuarTok ::= "guarantees" ;
         "guarantees"
       ),
@@ -680,10 +680,10 @@ module.exports = grammar({
       ),
     ProgSpec: $ =>
       choice(
-        // ProgSpec_Rely. ProgSpec ::= "rely" Expr ;
-        seq("rely", $.Expr),
-        // ProgSpec_Guarantee. ProgSpec ::= "guarantee" Expr ;
-        seq("guarantee", $.Expr)
+        // ProgSpec_Rely. ProgSpec ::= RelyTok Expr ;
+        seq($.RelyTok, $.Expr),
+        // ProgSpec_Guarantee. ProgSpec ::= GuarTok Expr ;
+        seq($.GuarTok, $.Expr)
       ),
     list_FunSpec: $ =>
       choice(
