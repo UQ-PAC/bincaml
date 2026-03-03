@@ -42,7 +42,7 @@ module VarId : sig
   val show : t -> string
   val var_proc_to_uid : Var.t -> Program.proc -> t
   val var_procid_to_uid : Var.t -> ID.t -> t
-  val fresh_id : string -> t
+  val make_id : string -> t
 end = struct
   type t = string
 
@@ -57,7 +57,7 @@ end = struct
   let var_proc_to_uid (var : Var.t) (proc : Program.proc) : t =
     var_procid_to_uid var (Procedure.id proc)
 
-  let fresh_id hint = hint
+  let make_id hint = hint
 end
 
 module VarIdMap = Map.Make (VarId)
@@ -93,7 +93,7 @@ module InferredType = struct
     | Recursive of t * t
     | CType of CType.t
 
-  and field = { offset : int; size : int; ty : t }
+  and field = { offset : Z.t; size : int; ty : t }
 
   let rec show = function
     | Top -> "⊤"
@@ -113,7 +113,7 @@ module InferredType = struct
         Printf.sprintf "{ %s }" @@ List.to_string show_field fields
 
   and show_field { offset; size; ty } =
-    Printf.sprintf "(%d, %d): %s" offset size (show ty)
+    Printf.sprintf "(%s, %d): %s" (Z.to_string offset) size (show ty)
 
   let rec compare type1 type2 =
     match (type1, type2) with
@@ -140,7 +140,7 @@ module InferredType = struct
           if c <> 0 then c else StringMap.compare compare outs outs2
     | ( Field { offset; size; ty },
         Field { offset = offset2; size = size2; ty = ty2 } ) ->
-        let c = Int.compare offset offset2 in
+        let c = Z.compare offset offset2 in
         if c <> 0 then c
         else
           let c = Int.compare size size2 in
@@ -256,7 +256,7 @@ module Sigma = struct
     | Ep
     | StoreLabel
     | LoadLabel
-    | Reclabel of int * int
+    | Reclabel of Z.t * int
     | FnIn of string
     | FnOut of string
 
@@ -264,14 +264,14 @@ module Sigma = struct
     | Ep -> "ε"
     | StoreLabel -> "Store Label"
     | LoadLabel -> "Load Label"
-    | Reclabel (n, m) -> Printf.sprintf "Record Label %d %d" n m
+    | Reclabel (n, m) -> Printf.sprintf "Record Label %s %d" (Z.to_string n) m
     | FnIn n -> Printf.sprintf "Function in %s" n
     | FnOut n -> Printf.sprintf "Function out %s" n
 
   let equal a b =
     match (a, b) with
     | Ep, Ep | StoreLabel, StoreLabel | LoadLabel, LoadLabel -> true
-    | Reclabel (n, m), Reclabel (n1, m1) -> n = n1 && m = m1
+    | Reclabel (n, m), Reclabel (n1, m1) -> Z.equal n n1 && m = m1
     | FnIn n, FnIn n1 | FnOut n, FnOut n1 -> String.equal n n1
     | _ -> false
 
@@ -366,7 +366,7 @@ module TypeAutomata = struct
       | Record fields0, Record fields1 ->
           (* WARN: I think this could be improved, cause this is gross *)
           let module FieldMap = Map.Make (struct
-            type t = int * int
+            type t = Z.t * int
 
             let compare = Stdlib.compare
           end) in
@@ -637,7 +637,6 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
   let open AbstractExpr in
   let open InferredType in
   (* Given a expression constrain the variables involed *)
-  let sva_results = Analysis.Sva.DFGAnalysis.flow_insensitive proc in
   let rec constrain_expr (st : ConstraintState.t)
       (expr : 'e BasilExpr.abstract_expr) =
     let constrain_arg st l t =
@@ -696,12 +695,12 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
             (* NOTE: This seems hard to determine what type is within a record *)
             let size = finish - rt in
             let name =
-              VarId.fresh_id
+              VarId.make_id
               @@ Printf.sprintf "Extraction_%s"
               @@ ID.name @@ gen.fresh ()
             in
             let ty = TypeVar name in
-            let field = { offset = rt; size; ty } in
+            let field = { offset = Z.of_int rt; size; ty } in
             let st = ConstraintState.add_lb st name (CType (C_BV size)) in
             (constrain_arg st a @@ Record [ field ], Field field))
     | BinaryExpr { op; arg1 = l; arg2 = r } -> (
@@ -850,42 +849,114 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
         let lhs = VarId.var_proc_to_uid lhs proc in
         let rhs = VarId.var_proc_to_uid rhs proc in
         constrain st (TypeVar rhs) (TypeVar lhs) TySet.empty
-  | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr } } ->
-      print_endline "=========";
-      print_endline @@ Var.show lhs;
-      print_endline @@ Analysis.Sva.SymAddrSetLattice.show
-      @@ Analysis.Sva.Eval.EV.eval
-           ((flip Analysis.Sva.StateAbstraction.read) sva)
-           addr;
-      let lhs = VarId.var_proc_to_uid lhs proc in
-      let st =
-        ConstraintState.add_ub st lhs
-          (Pointer
-             ( TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_a_load"),
-               TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_b_load")
-             ))
+  | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size } } ->
+      let sva_res =
+        Analysis.Sva.Eval.EV.eval
+          ((flip Analysis.Sva.StateAbstraction.read) sva)
+          addr
       in
-      ConstraintState.add_ub st
-        (VarId.fresh_id @@ Int.to_string stmt_number ^ "_a_load")
-      @@ TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_b_load")
-  | Stmt.Instr_Store { lhs; rhs; addr = Addr { addr } } ->
-      print_endline "=========";
-      print_endline @@ Var.show lhs;
-      print_endline @@ Analysis.Sva.SymAddrSetLattice.show
-      @@ Analysis.Sva.Eval.EV.eval
-           ((flip Analysis.Sva.StateAbstraction.read) sva)
-           addr;
       let lhs = VarId.var_proc_to_uid lhs proc in
-      let st =
-        ConstraintState.add_ub st lhs
-          (Pointer
-             ( TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_a_store"),
-               TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_b_store")
-             ))
+      if
+        (* If there is more than one entry or it is top / bot, there is no info *)
+        Analysis.Sva.SymAddrSetLattice.cardinal sva_res <> 1
+        || Analysis.Wrapped_intervals.WrappedIntervalsLattice.equal
+             (snd @@ List.hd @@ snd
+             @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res)
+             Analysis.Wrapped_intervals.WrappedIntervalsLattice.Top
+        || Analysis.Wrapped_intervals.WrappedIntervalsLattice.equal
+             (snd @@ List.hd @@ snd
+             @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res)
+             Analysis.Wrapped_intervals.WrappedIntervalsLattice.Bot
+      then
+        (*
+          No information case
+
+          Simply just a ptr(a,b) where a <= b
+        *)
+        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_a_load" in
+        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_b_load" in
+        let st =
+          ConstraintState.add_ub st lhs (Pointer (TypeVar lb, TypeVar ub))
+        in
+        ConstraintState.add_ub st lb @@ TypeVar ub
+      else
+        (*
+          Some information case
+
+          ptr with the upper bound as a record with the offset as the offset,
+            and size of load as the size, type is var atm and gets constrained
+            to lhs
+        *)
+        let res =
+          snd @@ List.hd @@ snd
+          @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res
+        in
+        let offset =
+          match res with
+          | Interval { lower } -> Bitvec.to_signed_bigint lower
+          | _ -> failwith "impossible"
+        in
+        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_a_load" in
+        let ty =
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_b_load")
+        in
+        let ub = Record [ { size; offset; ty } ] in
+        let st = ConstraintState.add_ub st lhs (Pointer (TypeVar lb, ub)) in
+        ConstraintState.add_ub st lb ub
+  | Stmt.Instr_Store { lhs; rhs; addr = Addr { addr; size } } ->
+      let sva_res =
+        Analysis.Sva.Eval.EV.eval
+          ((flip Analysis.Sva.StateAbstraction.read) sva)
+          addr
       in
-      ConstraintState.add_ub st
-        (VarId.fresh_id @@ Int.to_string stmt_number ^ "_a_store")
-      @@ TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_b_store")
+      let lhs = VarId.var_proc_to_uid lhs proc in
+      if
+        (* If there is more than one entry or it is top / bot, there is no info *)
+        Analysis.Sva.SymAddrSetLattice.cardinal sva_res <> 1
+        || Analysis.Wrapped_intervals.WrappedIntervalsLattice.equal
+             (snd @@ List.hd @@ snd
+             @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res)
+             Analysis.Wrapped_intervals.WrappedIntervalsLattice.Top
+        || Analysis.Wrapped_intervals.WrappedIntervalsLattice.equal
+             (snd @@ List.hd @@ snd
+             @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res)
+             Analysis.Wrapped_intervals.WrappedIntervalsLattice.Bot
+      then
+        (*
+          No information case
+
+          Simply just a ptr(a,b) where a <= b
+        *)
+        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_a_load" in
+        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_b_load" in
+        let st =
+          ConstraintState.add_ub st lhs (Pointer (TypeVar lb, TypeVar ub))
+        in
+        ConstraintState.add_ub st lb @@ TypeVar ub
+      else
+        (*
+          Some information case
+
+          ptr with the upper bound as a record with the offset as the offset,
+            and size of load as the size, type is var atm and gets constrained
+            to lhs
+        *)
+        let res =
+          snd @@ List.hd @@ snd
+          @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res
+        in
+        let offset =
+          match res with
+          | Interval { lower } -> Bitvec.to_signed_bigint lower
+          | _ -> failwith "impossible"
+        in
+        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_a_load" in
+        let ty =
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_b_load")
+        in
+        let lb = Record [ { size; offset; ty } ] in
+        let st = ConstraintState.add_ub st lhs (Pointer (lb, TypeVar ub)) in
+        ConstraintState.add_ub st ub lb
   | Stmt.Instr_Call { lhs; args; procid } ->
       let formal_in = Procedure.formal_in_params @@ Program.proc prog procid in
       let formal_out =
@@ -927,7 +998,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
         StringMap.map (fun v -> TypeVar (VarId.var_proc_to_uid v proc)) lhs
       in
       let func = Function (ID.name procid, args, rets) in
-      ConstraintState.add_ub st (VarId.fresh_id @@ ID.name procid) func
+      ConstraintState.add_ub st (VarId.make_id @@ ID.name procid) func
   | Stmt.Instr_IntrinCall _ -> st
   (* NOTE: This is like a jump to, so it does not have args / ret *)
   | Stmt.Instr_IndirectCall _ -> st
