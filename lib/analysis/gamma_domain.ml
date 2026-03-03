@@ -64,27 +64,21 @@ module Domain = struct
         |> Iter.fold (fun m (v, s) -> update v s m) m
 end
 
-module Analysis = Forwards (Domain)
+module CFGAnalysis = Forwards (Domain)
 module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
 open Ide
 
-(* TODO IDE solver assumes program entry, but for summary generation we are more concerned with entry per procedure
- and this requires a pretty different way to use the IDE solver where we generate complete phase 1 summaries per procedure
- instead of just summaries of variables the solver finds to be relevant. Phase 2 also should assume inputs per proc
- have lattice value v |-> {v}, not whatever the solver decides.
-
- In BASIL we instead run many IDE analyses, one per procedure, bottom up along the call graph sccs. The ide solver is only
- relevant for nontrivial sccs, otherwise we use already known relationships of in out vars to compose calls. This feels
- wasteful since the IDE solver should be able to do everything in one pass, but maybe it can turn out to be better for
- a hidden reason?! *)
-(*
+(* TODO modifies set on statements to avoid doing lots of trivial id transfers
+   on unchanged ssa vars alternatively summaries for dead variables (referring
+   to a live var analysis) could be dropped *)
 module IDEDomain = struct
   let direction = `Forwards
 
   module Data = Var
 
   module DL = struct
-    type t = Label of Var.t | Lambda [@@deriving eq, ord, show]
+    type t = Label of Var.t | Lambda
+    [@@deriving eq, ord, show { with_path = false }]
   end
 
   type 'a state_update = (DL.t * 'a) Iter.t
@@ -96,10 +90,10 @@ module IDEDomain = struct
     |> Iter.to_string ~sep:", " (fun (v, s) ->
         Var.to_string v ^ "->" ^ GammaSet.show s)
 
-  type t = IdEdge | ConstEdge of Value.t | JoinEdge of Value.t
-  [@@deriving eq, ord, show]
+  type t = BottomEdge | IdEdge | TopEdge
+  [@@deriving eq, ord, show { with_path = false }]
 
-  let bottom = ConstEdge Value.bottom
+  let bottom = BottomEdge
   let pp fmt v = Format.pp_print_string fmt (show v)
   let identity = IdEdge
 
@@ -107,28 +101,19 @@ module IDEDomain = struct
     match (a, b) with
     | IdEdge, b -> b
     | a, IdEdge -> a
-    | ConstEdge c, _ -> ConstEdge c
-    | JoinEdge c, ConstEdge c' -> ConstEdge (Value.join c c')
-    | JoinEdge c, JoinEdge c' -> JoinEdge (Value.join c c')
+    | BottomEdge, _ -> BottomEdge
+    | TopEdge, _ -> TopEdge
 
   let join a b =
     match (a, b) with
-    | JoinEdge c, ConstEdge c'
-    | JoinEdge c, JoinEdge c'
-    | ConstEdge c', JoinEdge c ->
-        JoinEdge (Value.join c c')
-    | JoinEdge c, IdEdge
-    | IdEdge, JoinEdge c
-    | ConstEdge c, IdEdge
-    | IdEdge, ConstEdge c ->
-        JoinEdge c
-    | ConstEdge c, ConstEdge c' -> ConstEdge (Value.join c c')
+    | BottomEdge, e | e, BottomEdge -> e
+    | TopEdge, _ | _, TopEdge -> TopEdge
     | IdEdge, IdEdge -> IdEdge
 
   let eval s = function
+    | BottomEdge -> Value.bottom
     | IdEdge -> s
-    | ConstEdge s' -> s'
-    | JoinEdge s' -> Value.join s s'
+    | TopEdge -> Value.top
 
   open DL
 
@@ -167,7 +152,7 @@ module IDEDomain = struct
         |> Iter.append
              (Iter.of_list s.formal_in
              |> Iter.append (Iter.of_list s.globals)
-             |> Iter.map (fun v -> (Label v, ConstEdge Value.top)))
+             |> Iter.map (fun v -> (Label v, TopEdge)))
     | _ -> Iter.empty
 
   let transfer stmt d =
@@ -188,15 +173,15 @@ module IDEDomain = struct
         | Label v when VarSet.mem v (Expr.BasilExpr.free_vars body) ->
             Iter.empty
         | _ -> Iter.singleton (d, IdEdge))
-    | Instr_Load { lhs; mem } -> (
+    | Instr_Load { lhs; rhs } -> (
         match d with
-        | Label v when Var.equal v mem ->
+        | Label v when Var.equal v rhs ->
             Iter.of_list [ (d, IdEdge); (Label lhs, IdEdge) ]
         | Label v when Var.equal v lhs -> Iter.empty
         | _ -> Iter.singleton (d, IdEdge))
-    | Instr_Store { lhs; mem; value } -> (
+    | Instr_Store { lhs; rhs; value } -> (
         match d with
-        | Label v when Var.equal v mem -> Iter.singleton (Label lhs, IdEdge)
+        | Label v when Var.equal v rhs -> Iter.singleton (Label lhs, IdEdge)
         | Label v when VarSet.mem v (Expr.BasilExpr.free_vars value) ->
             Iter.of_list [ (d, IdEdge); (Label lhs, IdEdge) ]
         | _ -> Iter.singleton (d, IdEdge))
@@ -211,4 +196,3 @@ module IDEDomain = struct
 end
 
 module IDEAnalysis = IDE (IDEDomain)
-*)

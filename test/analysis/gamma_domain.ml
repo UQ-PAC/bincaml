@@ -1,10 +1,10 @@
 open Analysis.Gamma_domain
 open Bincaml_util.Common
 
-let intra_results proc = Analysis.analyse proc
+let intra_results proc = CFGAnalysis.analyse proc
 
 let print_intra_results res =
-  Analysis.A.M.find Procedure.Vert.Return res |> Domain.show |> print_endline
+  CFGAnalysis.A.M.find Procedure.Vert.Return res |> Domain.show |> print_endline
 
 let%expect_test "loop" =
   let lst =
