@@ -45,5 +45,6 @@
  (package bincaml)
  (modes exe byte)
  (modules TestBasilIR)
- (flags (:standard -open BasilIR))
+ (flags
+  (:standard -open BasilIR))
  (libraries bincaml.basilir))

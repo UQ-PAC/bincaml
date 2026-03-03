@@ -1270,7 +1270,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Error: no such block: %main_7\
    \n12 |     goto(%main_7, %main_11);\
    \n              \027[1;31m^^^^^^^\027[0m\
@@ -1297,7 +1298,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Error: no such procedure: @cat_4198032\
    \n7 |     call @cat_4198032();\
    \n             \027[1;31m^^^^^^^^^^^^\027[0m\
@@ -1326,7 +1328,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Parse error:  <string>:8\
    \n8 |     :bv1 := 1:bv1;\
    \n        \027[1;31m^\027[0m\
@@ -1343,12 +1346,14 @@ proc @f (ZF_in:bv1, VF_in:bv1) -> ();
   let buf = Buffer.create 100 in
   BasilIR.ShowBasilIR.showModuleT prog buf;
   Buffer.output_buffer stdout buf;
-  [%expect {| Module1 ([Decl_ProgEmpty (ProcIdent "@f", AttribSet_Empty); Decl_Proc (ProcIdent "@f", OpenParen "(", [Params1 (LocalIdent "ZF_in", TypeBVType (BVType1 (BVTYPE "bv1"))); Params1 (LocalIdent "VF_in", TypeBVType (BVType1 (BVTYPE "bv1")))], CloseParen ")", OpenParen "(", [], CloseParen ")", AttribSet_Empty, [], ProcDef_Empty)]) |}];
+  [%expect
+    {| Module1 ([Decl_ProgEmpty (ProcIdent "@f", AttribSet_Empty); Decl_Proc (ProcIdent "@f", OpenParen "(", [Params1 (LocalIdent "ZF_in", TypeBVType (BVType1 (BVTYPE "bv1"))); Params1 (LocalIdent "VF_in", TypeBVType (BVType1 (BVTYPE "bv1")))], CloseParen ")", OpenParen "(", [], CloseParen ")", AttribSet_Empty, [], ProcDef_Empty)]) |}];
 
   let ast = ast_of_concrete_ast ~name:"boop" prog in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Program.prog_pretty ast.prog);
-  [%expect {|
+  [%expect
+    {|
     prog entry @f;
     proc @f(VF_in:bv1, ZF_in:bv1)  -> () {  }
 
@@ -1377,7 +1382,8 @@ proc @main_4196260 () -> ()
   in
   Program.pretty_to_chan stdout p.prog;
   ();
-  [%expect {|
+  [%expect
+    {|
     var $NF:bv1;
     var $ZF:bv1;
     prog entry @main_4196260;
@@ -1438,7 +1444,8 @@ proc @c() -> ()
     (fun pid proc ->
       print_endline (ID.to_string pid ^ ":\n" ^ (res pid |> RWSets.to_string)))
     prog.prog.procs;
-  [%expect {|
+  [%expect
+    {|
     @entry:
     read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
     written: $R0:bv64,$mem:(bv64->bv8)

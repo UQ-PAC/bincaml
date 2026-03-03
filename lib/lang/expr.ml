@@ -386,7 +386,10 @@ module BasilExpr = struct
           ]
     | ApplyFun { func = n; args = es } ->
         fill nil
-          [ bracket "(" n ")" ^ a ^ bracket "(" (nest 2 (fill (text "," ^ newline) es)) ")" ]
+          [
+            bracket "(" n ")" ^ a
+            ^ bracket "(" (nest 2 (fill (text "," ^ newline) es)) ")";
+          ]
     | Binding { bound = vs; in_body = b } ->
         fill (text " ") (List.map (fun v -> bracket "(" (Var.pretty v) ")") vs)
         ^ text " :: " ^ a ^ bracket "(" b ")"

@@ -146,7 +146,8 @@ let%expect_test "fold_block" =
       ~phi:(fun a i -> a)
       ReadUninitAnalysis.bottom block
   in
-  [%expect {|
+  [%expect
+    {|
     ($stack->RU, R31_in->RU, R0_in->RU, _->⊥)
     ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, _->⊥)
     ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, _->⊥)
