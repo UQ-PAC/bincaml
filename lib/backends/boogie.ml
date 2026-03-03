@@ -3,70 +3,6 @@ open Bincaml_util.Common
 
 exception BoogieException of string
 
-(* let prog_pretty (p : t) = *)
-(* let open Containers_pp in *)
-(* let open Containers_pp.Infix in *)
-(* let globs = *)
-(* StringMap.bindings p.globals *)
-(* |> List.map (fun (n, v) -> pretty_declaration v) *)
-(* in *)
-(* let n = *)
-(* p.entry_proc *)
-(* |> Option.map (fun i -> text "prog entry " ^ text @@ ID.to_string i) *)
-(* |> Option.to_list *)
-(* in *)
-(* let decls = *)
-(* globs @ n *)
-(* @ List.map *)
-(* (fun (_, p) -> proc_pretty p) *)
-(* (ID.Map.to_list p.procs *)
-(* |> List.sort (fun (i, _) (j, _) -> ID.compare i j)) *)
-(* in *)
-
-(* append_l ~sep:(text ";\n") decls ^ text ";\n" *)
-
-(* let pretty_declaration d = *)
-(* let open Containers_pp in *)
-(* match d with *)
-(* | Variable { binding; attrib } -> *)
-(* let classification = *)
-(* StringMap.find_opt "classification" attrib *)
-(* |> Option.to_list *)
-(* |> List.flat_map (function *)
-(* | `Expr e -> [ text " classification " ^ Expr.BasilExpr.pretty e ] *)
-(* | _ -> []) *)
-(* |> append_l *)
-(* in *)
-(* text (Var.to_decl_string_il binding) ^ classification *)
-(* | Function { binding; attrib; definition = Axiom body } -> *)
-(* text "axiom " *)
-(* ^ text (Var.name binding) *)
-(* ^ text " " ^ Expr.BasilExpr.pretty body *)
-(* | Function { binding; attrib; definition = Uninterpreted } -> *)
-(* text "val " ^ text (Var.to_string binding) *)
-(* | Function { binding; attrib; definition = Function body } -> *)
-(* text "let " *)
-(* ^ text (Var.to_string binding) *)
-(* ^ text " = " *)
-(* ^ nest 2 (Expr.BasilExpr.pretty body) *)
-
-(* let to_string_il_lvar v = *)
-(* match scope v with Local -> "var " ^ to_string v | Global -> to_string v *)
-
-(* let to_decl_string_il v = *)
-(* let modifiers = if not (pure v) then "observable " else "" in *)
-(* "var " ^ modifiers ^ to_string v *)
-
-(* type t = *)
-(* | Boolean *)
-(* | Integer *)
-(* | Bitvector of int *)
-(* | Unit *)
-(* | Top *)
-(* | Nothing *)
-(* | Map of t * t *)
-(* [@@deriving eq, ord] *)
-
 let rec type_to_string (t : Types.t) =
   match t with
   | Types.Boolean -> "bool"
@@ -170,13 +106,6 @@ and pretty_expr (Lang.Expr.BasilExpr.E e) =
   | Constant { attrib; const } -> pretty_const const
   | UnaryExpr { op; arg } -> pretty_unary_expr op arg
   | BinaryExpr { op; arg1; arg2 } -> pretty_binary_expr op arg1 arg2
-  (* | ApplyFun _ -> text "apply" *)
-  (* fill nil *)
-  (* [ *)
-  (* text (AllOps.to_string op) *)
-  (* ^ a *)
-  (* ^ bracket "(" (fill (text "," ^ newline) es) ")"; *)
-  (* ] *)
   | ApplyIntrin { op; args } -> pretty_apply_intrinsic op args
   | _ -> raise (BoogieException "Unsupported expression")
 
@@ -224,32 +153,11 @@ let pretty_declaration (d : Lang.Program.declaration) =
           ")"
       ^ bracket " returns (" (text (type_to_string rt)) ")"
 
-(* | Function { binding; attrib; definition = Axiom body } -> *)
-(* text "axiom " *)
-(* ^ text (Var.name binding) *)
-(* ^ text " " ^ Expr.BasilExpr.pretty body *)
-(* | Function { binding; attrib; definition = Uninterpreted } -> *)
-(* text "val " ^ text (Var.to_string binding) *)
-(* | Function { binding; attrib; definition = Function body } -> *)
-(* text "let " *)
-(* ^ text (Var.to_string binding) *)
-(* ^ text " = " *)
-(* ^ nest 2 (Expr.BasilExpr.pretty body) *)
+let pretty_block b = b
 
-(* { *)
-(* binding : Var.t; *)
-(* attrib : Expr.BasilExpr.t Attrib.attrib_map; *)
-(* definition : func_type; *)
-(* } *)
-(* | _ -> text "ah" *)
-
-let pretty_procedure (p : Lang.Program.proc) =
+let pretty_procedure_header (s : string) (p : Lang.Program.proc) =
   let open Containers_pp in
   let open Containers_pp.Infix in
-  (* let params m = *)
-  (* StringMap.bindings m |> List.map (function i, p -> show_var p) |> fun s -> *)
-  (* bracket "(" (fill (text "," ^ newline_or_spaces 1) s) ")" *)
-  (* in *)
   let param_list sm =
     StringMap.bindings sm
     |> List.map (function i, p -> pretty_variable_typed p)
@@ -264,33 +172,69 @@ let pretty_procedure (p : Lang.Program.proc) =
     else text ""
   in
   let header =
-    text "procedure"
-    ^+ text (ID.to_string (Lang.Procedure.id p))
-    ^ args ^ returns
-    ^ nest 2
-        (newline
-        ^ append_l ~sep:newline [ text "magic"; text "not magic"; text "WHYY?" ]
-        )
-    (* ^ nest 2 (fill (newline ^ text " returns ") []) *)
-    (* ^ nest 2 *)
-    (* (fill *)
-    (* (newline ^ text " -> ") *)
-    (* [ params (formal_in_params p); params (formal_out_params p) ]) *)
-    (* ^ text " " *)
-    (* ^ Attrib.attrib_pretty show_expr (`Assoc (attrib p)) *)
+    text s ^+ text (ID.to_string (Lang.Procedure.id p)) ^ args ^ returns
   in
   header
 
+let pretty_procedure_decl (p : Lang.Program.proc) =
+  let open Containers_pp in
+  let open Containers_pp.Infix in
+  let header = pretty_procedure_header "procedure" p in
+  let modifies = text "modifies _" in
+  let requires = text "requires _" in
+  let ensures = text "ensures _" in
+  let body = append_l ~sep:(text ";\n") [ modifies; requires; ensures ] in
+  nest 2 @@ header ^ text ";" ^/ body
+
+let pretty_procedure_impl (p : Lang.Program.proc) =
+  let open Containers_pp in
+  let open Containers_pp.Infix in
+  let in_params = Lang.Procedure.formal_in_params p in
+  let out_params = Lang.Procedure.formal_out_params p in
+  let local_decls =
+    append_l ~sep:(text ";\n")
+    @@ List.map
+         (fun (k, v) -> pretty_variable_declaration v)
+         (Hashtbl.to_list @@ Lang.Procedure.local_decls p
+         |> List.filter (fun (k, v) ->
+             (Option.is_none @@ StringMap.get k in_params)
+             && (Option.is_none @@ StringMap.get k out_params)))
+  in
+  (* ^/ append_l ~sep:(text ";\n") @@ List.map (fun t -> text t) (Hashtbl.keys_list local_decls) *)
+  let header = pretty_procedure_header "implementation" p in
+  let body = local_decls in
+  header ^+ surround ~width:2 (text "{") (newline ^ body) (newline ^ text "}")
+
+let pretty_procedure (p : Lang.Program.proc) =
+  let open Containers_pp in
+  append_l ~sep:(text ";\n")
+    [ pretty_procedure_decl p; pretty_procedure_impl p ]
+
 let pretty_program (p : Lang.Program.t) =
   let open Containers_pp in
-  let globs =
+  let sep l = append_l ~sep:(text ";\n") l ^ text ";\n" in
+  let glob_vars =
     StringMap.bindings p.globals
-    |> List.map (fun (n, v) -> pretty_declaration v)
+    |> List.filter_map (fun (n, v) ->
+        match v with
+        | Lang.Program.Variable _ -> Some (pretty_declaration v)
+        | _ -> None)
+    |> sep
   in
-  let decls =
-    globs @ List.map (fun (_, p) -> pretty_procedure p) (ID.Map.to_list p.procs)
+  let glob_funs =
+    StringMap.bindings p.globals
+    |> List.filter_map (fun (n, v) ->
+        match v with
+        | Lang.Program.Function _ -> Some (pretty_declaration v)
+        | _ -> None)
+    |> sep
   in
-  append_l ~sep:(text ";\n") decls ^ text ";\n"
+  let procs =
+    append_l ~sep:(text ";\n\n")
+      (List.map (fun (_, p) -> pretty_procedure p) (ID.Map.to_list p.procs))
+    ^ text ";\n"
+  in
+  append_l ~sep:newline [ glob_vars; glob_funs; procs ]
 
 let pretty_to_chan chan (p : Lang.Program.t) =
   let p = pretty_program p in
