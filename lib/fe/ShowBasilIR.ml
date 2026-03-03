@@ -243,7 +243,6 @@ and showValue (e : AbsBasilIR.value) : showable = match e with
 
 and showExpr (e : AbsBasilIR.expr) : showable = match e with
        AbsBasilIR.Expr_Literal value -> s2s "Expr_Literal" >> c2s ' ' >> c2s '(' >> showValue value >> c2s ')'
-  |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> s2s "Expr_Paren" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Local localvar -> s2s "Expr_Local" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
   |    AbsBasilIR.Expr_Global globalvar -> s2s "Expr_Global" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
   |    AbsBasilIR.Expr_Forall (attribset, lambdadef) -> s2s "Expr_Forall" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showLambdaDef lambdadef >> c2s ')'
@@ -262,6 +261,7 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.Expr_Concat (openparen, exprs, closeparen) -> s2s "Expr_Concat" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showExpr exprs  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Match (expr, openparen, cases, closeparen) -> s2s "Expr_Match" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showCase cases  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Cases (openparen, cases, closeparen) -> s2s "Expr_Cases" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showCase cases  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> s2s "Expr_Paren" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
 and showLambdaParen (e : AbsBasilIR.lambdaParen) : showable = match e with

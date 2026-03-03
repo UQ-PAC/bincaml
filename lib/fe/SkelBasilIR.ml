@@ -263,7 +263,6 @@ and transValue (x : value) : result = match x with
 
 and transExpr (x : expr) : result = match x with
     Expr_Literal value -> failure x
-  | Expr_Paren (openparen, expr, closeparen) -> failure x
   | Expr_Local localvar -> failure x
   | Expr_Global globalvar -> failure x
   | Expr_Forall (attribset, lambdadef) -> failure x
@@ -282,6 +281,7 @@ and transExpr (x : expr) : result = match x with
   | Expr_Concat (openparen, exprs, closeparen) -> failure x
   | Expr_Match (expr, openparen, cases, closeparen) -> failure x
   | Expr_Cases (openparen, cases, closeparen) -> failure x
+  | Expr_Paren (openparen, expr, closeparen) -> failure x
 
 
 and transLambdaParen (x : lambdaParen) : result = match x with

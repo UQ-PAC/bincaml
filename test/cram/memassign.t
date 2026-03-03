@@ -6,5 +6,5 @@
   
   --
      block %main_entry [
-        $Global_4325420_4325424:bv32 := store  0x2a:bv32;
-        goto (%main_return);
+       $Global_4325420_4325424:bv32 := store  0x2a:bv32;
+       goto (%main_return);

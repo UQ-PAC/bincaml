@@ -58,11 +58,11 @@ let%expect_test "fold_block" =
     var load46_1:bv32 := load le $mem:(bv64->bv8) 0x42002c:bv64 32
     var R0_10:bv64 := zero_extend(32, load46_1:bv32)
     [
-       $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in:bv64, 0xfffffffffffffffc:bv64) extract(32,0, R0_in:bv64) 32;
-       load45_1:bv32 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64, 0xfffffffffffffffc:bv64) 32;
-       R1_4:bv64 := zero_extend(32, load45_1:bv32);
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x420034:bv64 extract(32,0, R1_4:bv64) 32;
-       load46_1:bv32 := load le $mem:(bv64->bv8) 0x42002c:bv64 32;
-       R0_10:bv64 := zero_extend(32, load46_1:bv32);
+      $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in:bv64, 0xfffffffffffffffc:bv64) extract(32,0, R0_in:bv64) 32;
+      load45_1:bv32 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64, 0xfffffffffffffffc:bv64) 32;
+      R1_4:bv64 := zero_extend(32, load45_1:bv32);
+      $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x420034:bv64 extract(32,0, R1_4:bv64) 32;
+      load46_1:bv32 := load le $mem:(bv64->bv8) 0x42002c:bv64 32;
+      R0_10:bv64 := zero_extend(32, load46_1:bv32);
     ]
     |}]

@@ -1393,9 +1393,9 @@ proc @main_4196260 () -> ()
 
     [
        block %main_entry [
-          $NF:bv1 := 0x1:bv1;
-          $ZF:bv1 := $NF:bv1;
-          goto (%main_basil_return_1);
+         $NF:bv1 := 0x1:bv1;
+         $ZF:bv1 := $NF:bv1;
+         goto (%main_basil_return_1);
        ];
        block %main_basil_return_1 [ nop; return; ]
     ];

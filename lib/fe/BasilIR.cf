@@ -72,9 +72,8 @@ TypeIntType  . Type1 ::= IntType ;
 TypeBoolType . Type1 ::= BoolType ;
 TypeBVType   . Type1 ::= BVType ;
 TypeParen    . Type1 ::= OpenParen Type CloseParen; 
-
 TypeMapType . Type ::= MapType;
-coercions Type 1;
+_ . Type ::= Type1;
 
 IntVal_Hex . IntVal ::= IntegerHex ;
 IntVal_Dec . IntVal ::=  IntegerDec ;
@@ -198,11 +197,12 @@ Value_False . Value ::= "false" ;
 -- quantified statements continue to the end of the expression or paren.
 -- In certain places, only stronger precedence things are allowed.
 separator Expr "," ;
-coercions Expr 2;
+
+_ . Expr ::= Expr1;
+_ . Expr1 ::= Expr2;
 
 Expr_Literal . Expr2 ::= Value; 
 
-Expr_Paren   . Expr2 ::= OpenParen Expr CloseParen; 
 Expr_Local   . Expr2 ::= LocalVar;
 Expr_Global  . Expr2 ::= GlobalVar;
 
@@ -243,6 +243,7 @@ separator Case "|" ;
 
 Expr_Match . Expr2 ::= "match" Expr "with" OpenParen [Case] CloseParen ;
 Expr_Cases . Expr2 ::= "cases" OpenParen [Case] CloseParen ;
+Expr_Paren . Expr2 ::= OpenParen Expr CloseParen ;
 
 -- operators
 

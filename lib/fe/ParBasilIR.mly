@@ -15,12 +15,10 @@ open Lexing
 %token SYMB4 /* :: */
 %token SYMB5 /* : */
 %token SYMB6 /* = */
-%token SYMB7 /* ( */
-%token SYMB8 /* ) */
-%token SYMB9 /* := */
-%token SYMB10 /* mem:= */
-%token SYMB11 /* _ */
-%token SYMB12 /* | */
+%token SYMB7 /* := */
+%token SYMB8 /* mem:= */
+%token SYMB9 /* _ */
+%token SYMB10 /* | */
 
 %token TOK_EOF
 %token <string> TOK_Ident
@@ -445,7 +443,6 @@ type1 : intType { TypeIntType $1 }
   | boolType { TypeBoolType $1 }
   | bVType { TypeBVType $1 }
   | openParen typeT closeParen { TypeParen ($1, $2, $3) }
-  | SYMB7 typeT SYMB8 {  $2 }
   ;
 
 typeT : mapType { TypeMapType $1 }
@@ -463,17 +460,17 @@ endian : KW_le { Endian_Little  }
   | KW_be { Endian_Big  }
   ;
 
-assignment : lVar SYMB9 expr { Assignment1 ($1, $3) }
+assignment : lVar SYMB7 expr { Assignment1 ($1, $3) }
   ;
 
 stmt : KW_nop { Stmt_Nop  }
   | assignment { Stmt_SingleAssign $1 }
-  | lVar SYMB10 expr { Stmt_MemAssign ($1, $3) }
-  | lVar SYMB9 KW_store expr { Stmt_ScalarStore ($1, $4) }
-  | lVar SYMB9 KW_load var { Stmt_ScalarLoad ($1, $4) }
+  | lVar SYMB8 expr { Stmt_MemAssign ($1, $3) }
+  | lVar SYMB7 KW_store expr { Stmt_ScalarStore ($1, $4) }
+  | lVar SYMB7 KW_load var { Stmt_ScalarLoad ($1, $4) }
   | openParen assignment_list closeParen { Stmt_MultiAssign ($1, $2, $3) }
-  | lVar SYMB9 KW_load endian var expr intVal { Stmt_Load_Var ($1, $4, $5, $6, $7) }
-  | lVar SYMB9 KW_store endian var expr2 expr intVal { Stmt_Store_Var ($1, $4, $5, $6, $7, $8) }
+  | lVar SYMB7 KW_load endian var expr intVal { Stmt_Load_Var ($1, $4, $5, $6, $7) }
+  | lVar SYMB7 KW_store endian var expr2 expr intVal { Stmt_Store_Var ($1, $4, $5, $6, $7, $8) }
   | KW_store endian globalIdent expr2 expr intVal { Stmt_Store ($2, $3, $4, $5, $6) }
   | lVars KW_call procIdent openParen callParams closeParen { Stmt_DirectCall ($1, $3, $4, $5, $6) }
   | KW_indirect KW_call expr { Stmt_IndirectCall $3 }
@@ -516,9 +513,9 @@ namedCallReturn_list : /* empty */ { []  }
   ;
 
 lVars : /* empty */ { LVars_Empty  }
-  | KW_var openParen localVar_list closeParen SYMB9 { LVars_LocalList ($2, $3, $4) }
-  | openParen lVar_list closeParen SYMB9 { LVars_List ($1, $2, $3) }
-  | openParen namedCallReturn_list closeParen SYMB9 { NamedLVars_List ($1, $2, $3) }
+  | KW_var openParen localVar_list closeParen SYMB7 { LVars_LocalList ($2, $3, $4) }
+  | openParen lVar_list closeParen SYMB7 { LVars_List ($1, $2, $3) }
+  | openParen namedCallReturn_list closeParen SYMB7 { NamedLVars_List ($1, $2, $3) }
   ;
 
 namedCallArg : localIdent SYMB6 expr { NamedCallArg1 ($1, $3) }
@@ -569,7 +566,7 @@ phiExpr_list : /* empty */ { []  }
   | phiExpr SYMB2 phiExpr_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-phiAssign : lVar SYMB9 KW_phi openParen phiExpr_list closeParen { PhiAssign1 ($1, $4, $5, $6) }
+phiAssign : lVar SYMB7 KW_phi openParen phiExpr_list closeParen { PhiAssign1 ($1, $4, $5, $6) }
   ;
 
 phiAssign_list : /* empty */ { []  }
@@ -633,9 +630,7 @@ expr1 : expr2 {  $1 }
   | expr1 openParen expr_list closeParen { Expr_FunctionOp ($1, $2, $3, $4) }
   ;
 
-expr2 : SYMB7 expr SYMB8 {  $2 }
-  | value { Expr_Literal $1 }
-  | openParen expr closeParen { Expr_Paren ($1, $2, $3) }
+expr2 : value { Expr_Literal $1 }
   | localVar { Expr_Local $1 }
   | globalVar { Expr_Global $1 }
   | KW_old openParen expr closeParen { Expr_Old ($2, $3, $4) }
@@ -650,6 +645,7 @@ expr2 : SYMB7 expr SYMB8 {  $2 }
   | KW_bvconcat openParen expr_list closeParen { Expr_Concat ($2, $3, $4) }
   | KW_match expr KW_with openParen case_list closeParen { Expr_Match ($2, $4, $5, $6) }
   | KW_cases openParen case_list closeParen { Expr_Cases ($2, $3, $4) }
+  | openParen expr closeParen { Expr_Paren ($1, $2, $3) }
   ;
 
 lambdaParen : localVar { LambdaParenLocalVar $1 }
@@ -680,12 +676,12 @@ unOp : bVUnOp { UnOpBVUnOp $1 }
   ;
 
 case : expr SYMB3 expr { CaseCase ($1, $3) }
-  | SYMB11 SYMB3 expr { CaseDefault $3 }
+  | SYMB9 SYMB3 expr { CaseDefault $3 }
   ;
 
 case_list : /* empty */ { []  }
   | case { (fun x -> [x]) $1 }
-  | case SYMB12 case_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | case SYMB10 case_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 eqOp : KW_eq { EqOp_eq  }

@@ -112,9 +112,7 @@ module.exports = grammar({
         // TypeBVType. Type1 ::= BVType ;
         $.BVType,
         // TypeParen. Type1 ::= OpenParen Type CloseParen ;
-        seq($.token_OpenParen, $.Type, $.token_CloseParen),
-        // _. Type1 ::= "(" Type ")" ;
-        seq("(", $.Type, ")")
+        seq($.token_OpenParen, $.Type, $.token_CloseParen)
       ),
     Type: $ =>
       choice(
@@ -427,12 +425,8 @@ module.exports = grammar({
       ),
     Expr2: $ =>
       choice(
-        // _. Expr2 ::= "(" Expr ")" ;
-        seq("(", $.Expr, ")"),
         // Expr_Literal. Expr2 ::= Value ;
         $.Value,
-        // Expr_Paren. Expr2 ::= OpenParen Expr CloseParen ;
-        seq($.token_OpenParen, $.Expr, $.token_CloseParen),
         // Expr_Local. Expr2 ::= LocalVar ;
         $.LocalVar,
         // Expr_Global. Expr2 ::= GlobalVar ;
@@ -460,7 +454,9 @@ module.exports = grammar({
         // Expr_Match. Expr2 ::= "match" Expr "with" OpenParen [Case] CloseParen ;
         seq("match", $.Expr, "with", $.token_OpenParen, optional($.list_Case), $.token_CloseParen),
         // Expr_Cases. Expr2 ::= "cases" OpenParen [Case] CloseParen ;
-        seq("cases", $.token_OpenParen, optional($.list_Case), $.token_CloseParen)
+        seq("cases", $.token_OpenParen, optional($.list_Case), $.token_CloseParen),
+        // Expr_Paren. Expr2 ::= OpenParen Expr CloseParen ;
+        seq($.token_OpenParen, $.Expr, $.token_CloseParen)
       ),
     LambdaParen: $ =>
       choice(

@@ -368,7 +368,6 @@ and prtValue (i:int) (e : AbsBasilIR.value) : doc = match e with
 
 and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
        AbsBasilIR.Expr_Literal value -> prPrec i 2 (concatD [prtValue 0 value])
-  |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> prPrec i 2 (concatD [prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Local localvar -> prPrec i 2 (concatD [prtLocalVar 0 localvar])
   |    AbsBasilIR.Expr_Global globalvar -> prPrec i 2 (concatD [prtGlobalVar 0 globalvar])
   |    AbsBasilIR.Expr_Forall (attribset, lambdadef) -> prPrec i 0 (concatD [render "forall" ; prtAttribSet 0 attribset ; prtLambdaDef 0 lambdadef])
@@ -387,6 +386,7 @@ and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
   |    AbsBasilIR.Expr_Concat (openparen, exprs, closeparen) -> prPrec i 2 (concatD [render "bvconcat" ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Match (expr, openparen, cases, closeparen) -> prPrec i 2 (concatD [render "match" ; prtExpr 0 expr ; render "with" ; prtOpenParen 0 openparen ; prtCaseListBNFC 0 cases ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Cases (openparen, cases, closeparen) -> prPrec i 2 (concatD [render "cases" ; prtOpenParen 0 openparen ; prtCaseListBNFC 0 cases ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> prPrec i 2 (concatD [prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
 
 and prtExprListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])

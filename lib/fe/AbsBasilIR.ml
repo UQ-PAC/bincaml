@@ -170,7 +170,6 @@ and value =
 
 and expr =
    Expr_Literal of value
- | Expr_Paren of openParen * expr * closeParen
  | Expr_Local of localVar
  | Expr_Global of globalVar
  | Expr_Forall of attribSet * lambdaDef
@@ -189,6 +188,7 @@ and expr =
  | Expr_Concat of openParen * expr list * closeParen
  | Expr_Match of expr * openParen * case list * closeParen
  | Expr_Cases of openParen * case list * closeParen
+ | Expr_Paren of openParen * expr * closeParen
 
 and lambdaParen =
    LambdaParenLocalVar of localVar

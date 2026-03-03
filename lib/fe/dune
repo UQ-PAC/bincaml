@@ -34,10 +34,7 @@
  (mode promote)
  (action
   (progn
-   (run bnfc --ocaml-menhir -o . BasilIR.cf)
-   ; HACK: BNFC incorrectly treats "(" ")" as a resword which prevents it
-   ; being lexed as an OpenParen/CloseParen which we need.
-   (run sed -i.bak "s_| \"(\" | \")\"__" LexBasilIR.mll))))
+   (run bnfc --ocaml-menhir -o . BasilIR.cf))))
 
 (executable
  (name TestBasilIR)
