@@ -233,7 +233,7 @@ and showPhiAssign (e : AbsBasilIR.phiAssign) : showable = match e with
 
 and showBlock (e : AbsBasilIR.block) : showable = match e with
        AbsBasilIR.Block_NoPhi (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> s2s "Block_NoPhi" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showStmtWithAttrib stmtwithattribs  >> s2s ", " >>  showJumpWithAttrib jumpwithattrib  >> s2s ", " >>  showEndList endlist >> c2s ')'
-  |    AbsBasilIR.Block_Phi (blockident, attribset, beginlist, openparen, phiassigns, closeparen, stmtwithattribs, jumpwithattrib, endlist) -> s2s "Block_Phi" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showPhiAssign phiassigns  >> s2s ", " >>  showCloseParen closeparen  >> s2s ", " >>  showList showStmtWithAttrib stmtwithattribs  >> s2s ", " >>  showJumpWithAttrib jumpwithattrib  >> s2s ", " >>  showEndList endlist >> c2s ')'
+  |    AbsBasilIR.Block_Phi (blockident, attribset, openparen, phiassigns, closeparen, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> s2s "Block_Phi" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showPhiAssign phiassigns  >> s2s ", " >>  showCloseParen closeparen  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showStmtWithAttrib stmtwithattribs  >> s2s ", " >>  showJumpWithAttrib jumpwithattrib  >> s2s ", " >>  showEndList endlist >> c2s ')'
 
 
 and showAttrKeyValue (e : AbsBasilIR.attrKeyValue) : showable = match e with
@@ -254,11 +254,6 @@ and showAttr (e : AbsBasilIR.attr) : showable = match e with
 
 and showParams (e : AbsBasilIR.params) : showable = match e with
        AbsBasilIR.Params1 (localident, type') -> s2s "Params1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
-
-
-and showFunParams (e : AbsBasilIR.funParams) : showable = match e with
-       AbsBasilIR.FunParams1 (localident, type') -> s2s "FunParams1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
-  |    AbsBasilIR.FunParams2 (openparen, localident, type', closeparen) -> s2s "FunParams2" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showLocalIdent localident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
 and showValue (e : AbsBasilIR.value) : showable = match e with

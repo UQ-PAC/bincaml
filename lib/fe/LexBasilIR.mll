@@ -53,7 +53,7 @@ let _idchar = _letter | _digit | ['_' '\'']         (*  identifier character *)
 let _universal = _                                  (* universal: any character *)
 
 (* reserved words consisting of special symbols *)
-let rsyms = ";" | "," | "->" | "::" | ":" | "=" | "(" | ")" | ":=" | "mem:=" | "_" | "|"
+let rsyms = ";" | "," | "->" | "::" | ":" | "="  | ":=" | "mem:=" | "_" | "|"
 
 (* user-defined token types *)
 let bVTYPE = "bv" _digit +

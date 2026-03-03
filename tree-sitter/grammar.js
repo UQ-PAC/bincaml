@@ -306,12 +306,10 @@ module.exports = grammar({
       seq($.token_LocalIdent, "=", $.Expr),
     list_NamedCallArg: $ =>
       choice(
-        // []. [NamedCallArg] ::= ;
-        choice(),
         // (:[]). [NamedCallArg] ::= NamedCallArg ;
         $.NamedCallArg,
         // (:). [NamedCallArg] ::= NamedCallArg "," [NamedCallArg] ;
-        seq($.NamedCallArg, ",", optional($.list_NamedCallArg))
+        seq($.NamedCallArg, ",", $.list_NamedCallArg)
       ),
     CallParams: $ =>
       choice(
@@ -395,8 +393,8 @@ module.exports = grammar({
       choice(
         // Block_NoPhi. Block ::= "block" BlockIdent AttribSet BeginList [StmtWithAttrib] JumpWithAttrib ";" EndList ;
         seq("block", $.token_BlockIdent, optional($.AttribSet), $.token_BeginList, optional($.list_StmtWithAttrib), $.JumpWithAttrib, ";", $.token_EndList),
-        // Block_Phi. Block ::= "block" BlockIdent AttribSet BeginList OpenParen [PhiAssign] CloseParen ";" [StmtWithAttrib] JumpWithAttrib ";" EndList ;
-        seq("block", $.token_BlockIdent, optional($.AttribSet), $.token_BeginList, $.token_OpenParen, optional($.list_PhiAssign), $.token_CloseParen, ";", optional($.list_StmtWithAttrib), $.JumpWithAttrib, ";", $.token_EndList)
+        // Block_Phi. Block ::= "block" BlockIdent AttribSet OpenParen [PhiAssign] CloseParen BeginList [StmtWithAttrib] JumpWithAttrib ";" EndList ;
+        seq("block", $.token_BlockIdent, optional($.AttribSet), $.token_OpenParen, optional($.list_PhiAssign), $.token_CloseParen, $.token_BeginList, optional($.list_StmtWithAttrib), $.JumpWithAttrib, ";", $.token_EndList)
       ),
     AttrKeyValue: $ =>
       // AttrKeyValue1. AttrKeyValue ::= BIdent "=" Attr ;
@@ -448,20 +446,6 @@ module.exports = grammar({
         $.Params,
         // (:). [Params] ::= Params "," [Params] ;
         seq($.Params, ",", optional($.list_Params))
-      ),
-    FunParams: $ =>
-      choice(
-        // FunParams1. FunParams ::= LocalIdent ":" Type ;
-        seq($.token_LocalIdent, ":", $.Type),
-        // FunParams2. FunParams ::= OpenParen LocalIdent ":" Type CloseParen ;
-        seq($.token_OpenParen, $.token_LocalIdent, ":", $.Type, $.token_CloseParen)
-      ),
-    list_FunParams: $ =>
-      choice(
-        // []. [FunParams] ::= ;
-        choice(),
-        // (:). [FunParams] ::= FunParams [FunParams] ;
-        seq($.FunParams, optional($.list_FunParams))
       ),
     Value: $ =>
       choice(

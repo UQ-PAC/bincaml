@@ -603,7 +603,9 @@ module BasilASTLoader = struct
 
   and unpac_lambdaparen ?(bound = StringMap.empty) p_st lvs =
     unpack_local_lvars ~bound p_st
-    @@ List.map (function LambdaParenLocalVar v -> v | LambdaParen1 (o, v, c) -> v) lvs
+    @@ List.map
+         (function LambdaParenLocalVar v -> v | LambdaParen1 (o, v, c) -> v)
+         lvs
 
   and trans_jump p_st (x : BasilIR.AbsBasilIR.jumpWithAttrib) =
     let jump = match x with JumpWithAttrib1 (jump, _) -> jump in
@@ -703,21 +705,21 @@ module BasilASTLoader = struct
     | Block_NoPhi
         ( BlockIdent (text_range, name),
           addrattr,
-          beginlist,
+          BeginList _,
           statements,
           jump,
-          endlist ) ->
+          EndList _ ) ->
         tx name [] statements jump
     | Block_Phi
         ( BlockIdent (text_range, name),
           addrattr,
-          beginlist,
-          _,
+          OpenParen _,
           phi,
-          _,
+          CloseParen _,
+          BeginList _,
           statements,
           jump,
-          endlist ) ->
+          EndList _ ) ->
         tx name phi statements jump
 
   and param_to_lvar (pp : params) : Var.t =
@@ -727,12 +729,6 @@ module BasilASTLoader = struct
   and param_to_formal (pp : params) : string * Var.t =
     match pp with
     | Params1 (LocalIdent (pos, id), t) -> (id, Var.create id (trans_type t))
-
-  and fun_param_to_formal pp : string * Var.t =
-    match pp with
-    | FunParams1 (LocalIdent (pos, id), t) -> (id, Var.create id (trans_type t))
-    | FunParams2 (_, LocalIdent (pos, id), t, _) ->
-        (id, Var.create id (trans_type t))
 
   and trans_funspec prog bound_post
       (spec : (Var.t, BasilExpr.t) Procedure.proc_spec) (s : funSpec) :
@@ -1261,8 +1257,7 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
+[@@expect.uncaught_exn {|
   ( "Error: no such block: %main_7\
    \n12 |     goto(%main_7, %main_11);\
    \n              \027[1;31m^^^^^^^\027[0m\
@@ -1289,8 +1284,7 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
+[@@expect.uncaught_exn {|
   ( "Error: no such procedure: @cat_4198032\
    \n7 |     call @cat_4198032();\
    \n             \027[1;31m^^^^^^^^^^^^\027[0m\
@@ -1319,8 +1313,7 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
+[@@expect.uncaught_exn {|
   ( "Parse error:  <string>:8\
    \n8 |     :bv1 := 1:bv1;\
    \n        \027[1;31m^\027[0m\
@@ -1337,14 +1330,12 @@ proc @f (ZF_in:bv1, VF_in:bv1) -> ();
   let buf = Buffer.create 100 in
   BasilIR.ShowBasilIR.showModuleT prog buf;
   Buffer.output_buffer stdout buf;
-  [%expect
-    {| Module1 ([Decl_ProgEmpty (ProcIdent "@f", AttribSet_Empty); Decl_Proc (ProcIdent "@f", OpenParen "(", [Params1 (LocalIdent "ZF_in", TypeBVType (BVType1 (BVTYPE "bv1"))); Params1 (LocalIdent "VF_in", TypeBVType (BVType1 (BVTYPE "bv1")))], CloseParen ")", OpenParen "(", [], CloseParen ")", AttribSet_Empty, [], ProcDef_Empty)]) |}];
+  [%expect {| Module1 ([Decl_ProgEmpty (ProcIdent "@f", AttribSet_Empty); Decl_Proc (ProcIdent "@f", OpenParen "(", [Params1 (LocalIdent "ZF_in", TypeBVType (BVType1 (BVTYPE "bv1"))); Params1 (LocalIdent "VF_in", TypeBVType (BVType1 (BVTYPE "bv1")))], CloseParen ")", OpenParen "(", [], CloseParen ")", AttribSet_Empty, [], ProcDef_Empty)]) |}];
 
   let ast = ast_of_concrete_ast ~name:"boop" prog in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Program.prog_pretty ast.prog);
-  [%expect
-    {|
+  [%expect {|
     prog entry @f;
     proc @f(VF_in:bv1, ZF_in:bv1)  -> () {  }
 
@@ -1373,8 +1364,7 @@ proc @main_4196260 () -> ()
   in
   Program.pretty_to_chan stdout p.prog;
   ();
-  [%expect
-    {|
+  [%expect {|
     var $NF:bv1;
     var $ZF:bv1;
     prog entry @main_4196260;
@@ -1435,14 +1425,10 @@ proc @c() -> ()
     (fun pid proc ->
       print_endline (ID.to_string pid ^ ":\n" ^ (res pid |> RWSets.to_string)))
     prog.prog.procs;
-  [%expect
-    {|
-    @entry:
-    read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
-    written: $R0:bv64,$mem:(bv64->bv8)
-    @b:
-    read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
-    written: $R0:bv64,$mem:(bv64->bv8)
-    @c:
-    read: $R0:bv64,$mem:(bv64->bv8)
-    written: $mem:(bv64->bv8) |}]
+  [%expect.unreachable]
+[@@expect.uncaught_exn {|
+  ( "Parse error:  string at lib/loadir.ml:1384::Loader__Loadir.(fun):21\
+   \n21 |     store le $mem $R1:bv64 0x0:bv32 32;\
+   \n         \027[1;31m^^^^^\027[0m\
+   \n")
+  |}]

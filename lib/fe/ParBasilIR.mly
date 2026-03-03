@@ -46,7 +46,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pProcDef pIntType pBoolType pBVType pMapType pType1 pTypeT pExpr_list pExpr pExpr1 pExpr2 pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pFunParams pFunParams_list pValue pLambdaParen pLambdaParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pProcDef pIntType pBoolType pBVType pMapType pType1 pTypeT pExpr_list pExpr pExpr1 pExpr2 pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pLambdaParen pLambdaParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -102,8 +102,6 @@ open Lexing
 %type <AbsBasilIR.attr> pAttr
 %type <AbsBasilIR.params> pParams
 %type <AbsBasilIR.params list> pParams_list
-%type <AbsBasilIR.funParams> pFunParams
-%type <AbsBasilIR.funParams list> pFunParams_list
 %type <AbsBasilIR.value> pValue
 %type <AbsBasilIR.lambdaParen> pLambdaParen
 %type <AbsBasilIR.lambdaParen list> pLambdaParen_list
@@ -184,8 +182,6 @@ open Lexing
 %type <AbsBasilIR.attr> attr
 %type <AbsBasilIR.params> params
 %type <AbsBasilIR.params list> params_list
-%type <AbsBasilIR.funParams> funParams
-%type <AbsBasilIR.funParams list> funParams_list
 %type <AbsBasilIR.value> value
 %type <AbsBasilIR.lambdaParen> lambdaParen
 %type <AbsBasilIR.lambdaParen list> lambdaParen_list
@@ -340,10 +336,6 @@ pAttr : attr TOK_EOF { $1 };
 pParams : params TOK_EOF { $1 };
 
 pParams_list : params_list TOK_EOF { $1 };
-
-pFunParams : funParams TOK_EOF { $1 };
-
-pFunParams_list : funParams_list TOK_EOF { $1 };
 
 pValue : value TOK_EOF { $1 };
 
@@ -565,8 +557,7 @@ lVars : /* empty */ { LVars_Empty  }
 namedCallArg : localIdent SYMB6 expr { NamedCallArg1 ($1, $3) }
   ;
 
-namedCallArg_list : /* empty */ { []  }
-  | namedCallArg { (fun x -> [x]) $1 }
+namedCallArg_list : namedCallArg { (fun x -> [x]) $1 }
   | namedCallArg SYMB2 namedCallArg_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
@@ -620,7 +611,7 @@ phiAssign_list : /* empty */ { []  }
   ;
 
 block : KW_block blockIdent attribSet beginList stmtWithAttrib_list jumpWithAttrib SYMB1 endList { Block_NoPhi ($2, $3, $4, $5, $6, $8) }
-  | KW_block blockIdent attribSet beginList openParen phiAssign_list closeParen SYMB1 stmtWithAttrib_list jumpWithAttrib SYMB1 endList { Block_Phi ($2, $3, $4, $5, $6, $7, $9, $10, $12) }
+  | KW_block blockIdent attribSet openParen phiAssign_list closeParen beginList stmtWithAttrib_list jumpWithAttrib SYMB1 endList { Block_Phi ($2, $3, $4, $5, $6, $7, $8, $9, $11) }
   ;
 
 attrKeyValue : bIdent SYMB6 attr { AttrKeyValue1 ($1, $3) }
@@ -652,14 +643,6 @@ params : localIdent SYMB5 typeT { Params1 ($1, $3) }
 params_list : /* empty */ { []  }
   | params { (fun x -> [x]) $1 }
   | params SYMB2 params_list { (fun (x,xs) -> x::xs) ($1, $3) }
-  ;
-
-funParams : localIdent SYMB5 typeT { FunParams1 ($1, $3) }
-  | openParen localIdent SYMB5 typeT closeParen { FunParams2 ($1, $2, $4, $5) }
-  ;
-
-funParams_list : /* empty */ { []  }
-  | funParams funParams_list { (fun (x,xs) -> x::xs) ($1, $2) }
   ;
 
 value : bVVal { Value_BV $1 }

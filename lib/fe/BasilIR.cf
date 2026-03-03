@@ -59,7 +59,7 @@ Decl_ProgEmpty . Decl ::= "prog" "entry" ProcIdent AttribSet ;
 Decl_ProgWithSpec . Decl ::= "prog" "entry" ProcIdent AttribSet [ ProgSpec ] ;
 Decl_Proc . Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [ FunSpec ] ProcDef ;
 
-ProcDef_Empty . ProcDef ::= "";
+ProcDef_Empty . ProcDef ::= ;
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
 IntType1 . IntType ::= INTTYPE ;
@@ -118,13 +118,13 @@ Stmt_Store . Stmt ::= LVar ":="  "store" Endian Var Expr2  Expr IntVal;
 rules NamedCallReturn ::= LVar "=" LocalIdent;
 separator NamedCallReturn "," ;
 
-LVars_Empty . LVars ::= "";
+LVars_Empty . LVars ::= ;
 LVars_LocalList . LVars ::= "var" OpenParen [ LocalVar ] CloseParen ":=" ;
 LVars_List . LVars ::= OpenParen [ LVar ]  CloseParen ":=";
 NamedLVars_List . LVars ::= OpenParen [NamedCallReturn]  CloseParen ":=";
 
 rules NamedCallArg ::= LocalIdent "=" Expr;
-separator NamedCallArg "," ;
+separator nonempty NamedCallArg "," ;
 
 CallParams_Exprs . CallParams ::= [Expr];
 CallParams_Named . CallParams ::= [NamedCallArg];
@@ -164,8 +164,9 @@ Block_NoPhi . Block ::= "block" BlockIdent AttribSet BeginList
   [StmtWithAttrib] JumpWithAttrib ";"
   EndList ;
 
-Block_Phi . Block ::= "block" BlockIdent AttribSet BeginList 
-  OpenParen [PhiAssign] CloseParen ";"
+Block_Phi . Block ::= "block" BlockIdent AttribSet 
+  OpenParen [PhiAssign] CloseParen
+  BeginList 
   [StmtWithAttrib] JumpWithAttrib ";"
   EndList ;
 
@@ -174,7 +175,7 @@ separator AttrKeyValue ";";
 -- in BNFC, `separator` also allows trailing
 
 AttribSet_Some . AttribSet ::= BeginRec [ AttrKeyValue ] EndRec;
-AttribSet_Empty . AttribSet ::= "" ;
+AttribSet_Empty . AttribSet ::= ;
 
 separator Attr ";" ;
 
@@ -267,7 +268,7 @@ FunSpec_Modifies . FunSpec ::= "modifies" [GlobalVar];
 
 
 VarSpec_Classification . VarSpec ::= "classification" Expr;
-VarSpec_Empty . VarSpec ::= "";
+VarSpec_Empty . VarSpec ::= ;
 
 
 FunSpec_Invariant . FunSpec ::= "invariant" BlockIdent Expr;

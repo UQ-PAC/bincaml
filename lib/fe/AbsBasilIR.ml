@@ -165,7 +165,7 @@ and phiAssign =
 
 and block =
    Block_NoPhi of blockIdent * attribSet * beginList * stmtWithAttrib list * jumpWithAttrib * endList
- | Block_Phi of blockIdent * attribSet * beginList * openParen * phiAssign list * closeParen * stmtWithAttrib list * jumpWithAttrib * endList
+ | Block_Phi of blockIdent * attribSet * openParen * phiAssign list * closeParen * beginList * stmtWithAttrib list * jumpWithAttrib * endList
 
 and attrKeyValue =
    AttrKeyValue1 of bIdent * attr
@@ -182,10 +182,6 @@ and attr =
 
 and params =
    Params1 of localIdent * typeT
-
-and funParams =
-   FunParams1 of localIdent * typeT
- | FunParams2 of openParen * localIdent * typeT * closeParen
 
 and value =
    Value_BV of bVVal

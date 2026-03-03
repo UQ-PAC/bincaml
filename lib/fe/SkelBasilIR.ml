@@ -253,7 +253,7 @@ and transPhiAssign (x : phiAssign) : result = match x with
 
 and transBlock (x : block) : result = match x with
     Block_NoPhi (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> failure x
-  | Block_Phi (blockident, attribset, beginlist, openparen, phiassigns, closeparen, stmtwithattribs, jumpwithattrib, endlist) -> failure x
+  | Block_Phi (blockident, attribset, openparen, phiassigns, closeparen, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> failure x
 
 
 and transAttrKeyValue (x : attrKeyValue) : result = match x with
@@ -274,11 +274,6 @@ and transAttr (x : attr) : result = match x with
 
 and transParams (x : params) : result = match x with
     Params1 (localident, type') -> failure x
-
-
-and transFunParams (x : funParams) : result = match x with
-    FunParams1 (localident, type') -> failure x
-  | FunParams2 (openparen, localident, type', closeparen) -> failure x
 
 
 and transValue (x : value) : result = match x with

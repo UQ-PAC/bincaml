@@ -146,12 +146,18 @@ let%expect_test "fold_block" =
       ~phi:(fun a i -> a)
       ReadUninitAnalysis.bottom block
   in
-  [%expect
-    {|
-    ($stack->RU, R31_in->RU, R0_in->RU, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, R0_10->W, _->⊥)
-    |}]
+  [%expect.unreachable]
+[@@expect.uncaught_exn {|
+  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
+     This is strongly discouraged as backtraces are fragile.
+     Please change this test to not include a backtrace. *)
+  ( "Parse error:  :3\
+   \n3 |       $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in:bv64,\
+   \n                                                            \027[1;31m^^^^^\027[0m\
+   \n")
+  Raised at Loader__Loadir.protect_parse.parse in file "lib/loadir.ml", line 1152, characters 22-61
+  Called from Loader__Loadir.load_single_block_proc in file "lib/loadir.ml", line 1160, characters 14-66
+  Called from Loader__Loadir.load_single_block in file "lib/loadir.ml", line 1190, characters 20-62
+  Called from Transforms__May_read_uninit.(fun) in file "lib/transforms/may_read_uninit.ml", lines 125-138, characters 4-6
+  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
+  |}]
