@@ -2,9 +2,9 @@
 Run on basic irreducible loop example
 
   $ bincaml script basicssa.sexp
-  bincaml: Error in (load-il after.il): Parse error:  after.il:33
-           33 |       $stack:(bv64->bv8) := store le $stack:(bv64->bv8) #4_1:bv64 R29:bv64 64;
-                                                                        ^^^^
+  bincaml: Error in (load-il after.il): Parse error:  after.il:73
+           73 |       (var CF_5:bv1 := phi(%main_25 -> CF_1:bv1, %main_7 -> CF_4:bv1),
+                                       ^^^
             at Dune__exe__Script.of_cmd.(fun) bin/script.ml:64
   [123]
 

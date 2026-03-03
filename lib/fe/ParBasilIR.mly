@@ -46,7 +46,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pProcDef pIntType pBoolType pBVType pMapType pType1 pTypeT pExpr_list pExpr pExpr1 pExpr2 pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pLambdaParen pLambdaParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pProcDef pIntType pBoolType pBVType pMapType pType1 pTypeT pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaParen pLambdaParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -62,10 +62,6 @@ open Lexing
 %type <AbsBasilIR.mapType> pMapType
 %type <AbsBasilIR.typeT> pType1
 %type <AbsBasilIR.typeT> pTypeT
-%type <AbsBasilIR.expr list> pExpr_list
-%type <AbsBasilIR.expr> pExpr
-%type <AbsBasilIR.expr> pExpr1
-%type <AbsBasilIR.expr> pExpr2
 %type <AbsBasilIR.intVal> pIntVal
 %type <AbsBasilIR.bVVal> pBVVal
 %type <AbsBasilIR.endian> pEndian
@@ -103,6 +99,10 @@ open Lexing
 %type <AbsBasilIR.params> pParams
 %type <AbsBasilIR.params list> pParams_list
 %type <AbsBasilIR.value> pValue
+%type <AbsBasilIR.expr list> pExpr_list
+%type <AbsBasilIR.expr> pExpr
+%type <AbsBasilIR.expr> pExpr1
+%type <AbsBasilIR.expr> pExpr2
 %type <AbsBasilIR.lambdaParen> pLambdaParen
 %type <AbsBasilIR.lambdaParen list> pLambdaParen_list
 %type <AbsBasilIR.lambdaDef> pLambdaDef
@@ -142,10 +142,6 @@ open Lexing
 %type <AbsBasilIR.mapType> mapType
 %type <AbsBasilIR.typeT> type1
 %type <AbsBasilIR.typeT> typeT
-%type <AbsBasilIR.expr list> expr_list
-%type <AbsBasilIR.expr> expr
-%type <AbsBasilIR.expr> expr1
-%type <AbsBasilIR.expr> expr2
 %type <AbsBasilIR.intVal> intVal
 %type <AbsBasilIR.bVVal> bVVal
 %type <AbsBasilIR.endian> endian
@@ -183,6 +179,10 @@ open Lexing
 %type <AbsBasilIR.params> params
 %type <AbsBasilIR.params list> params_list
 %type <AbsBasilIR.value> value
+%type <AbsBasilIR.expr list> expr_list
+%type <AbsBasilIR.expr> expr
+%type <AbsBasilIR.expr> expr1
+%type <AbsBasilIR.expr> expr2
 %type <AbsBasilIR.lambdaParen> lambdaParen
 %type <AbsBasilIR.lambdaParen list> lambdaParen_list
 %type <AbsBasilIR.lambdaDef> lambdaDef
@@ -257,14 +257,6 @@ pType1 : type1 TOK_EOF { $1 };
 
 pTypeT : typeT TOK_EOF { $1 };
 
-pExpr_list : expr_list TOK_EOF { $1 };
-
-pExpr : expr TOK_EOF { $1 };
-
-pExpr1 : expr1 TOK_EOF { $1 };
-
-pExpr2 : expr2 TOK_EOF { $1 };
-
 pIntVal : intVal TOK_EOF { $1 };
 
 pBVVal : bVVal TOK_EOF { $1 };
@@ -338,6 +330,14 @@ pParams : params TOK_EOF { $1 };
 pParams_list : params_list TOK_EOF { $1 };
 
 pValue : value TOK_EOF { $1 };
+
+pExpr_list : expr_list TOK_EOF { $1 };
+
+pExpr : expr TOK_EOF { $1 };
+
+pExpr1 : expr1 TOK_EOF { $1 };
+
+pExpr2 : expr2 TOK_EOF { $1 };
 
 pLambdaParen : lambdaParen TOK_EOF { $1 };
 
@@ -452,40 +452,6 @@ typeT : mapType { TypeMapType $1 }
   | type1 {  $1 }
   ;
 
-expr_list : /* empty */ { []  }
-  | expr { (fun x -> [x]) $1 }
-  | expr SYMB2 expr_list { (fun (x,xs) -> x::xs) ($1, $3) }
-  ;
-
-expr : expr1 {  $1 }
-  | value { Expr_Literal $1 }
-  | openParen expr closeParen { Expr_Paren ($1, $2, $3) }
-  | localVar { Expr_Local $1 }
-  | globalVar { Expr_Global $1 }
-  | KW_forall attribSet lambdaDef { Expr_Forall ($2, $3) }
-  | KW_exists attribSet lambdaDef { Expr_Exists ($2, $3) }
-  | KW_fun attribSet lambdaDef { Expr_Lambda ($2, $3) }
-  | KW_old openParen expr closeParen { Expr_Old ($2, $3, $4) }
-  | binOp openParen expr SYMB2 expr closeParen { Expr_Binary ($1, $2, $3, $5, $6) }
-  | boolBinOp openParen expr_list closeParen { Expr_Assoc ($1, $2, $3, $4) }
-  | unOp openParen expr closeParen { Expr_Unary ($1, $2, $3, $4) }
-  | KW_load_be openParen intVal SYMB2 expr SYMB2 expr closeParen { Expr_LoadBe ($2, $3, $5, $7, $8) }
-  | KW_load_le openParen intVal SYMB2 expr SYMB2 expr closeParen { Expr_LoadLe ($2, $3, $5, $7, $8) }
-  | KW_zero_extend openParen intVal SYMB2 expr closeParen { Expr_ZeroExtend ($2, $3, $5, $6) }
-  | KW_sign_extend openParen intVal SYMB2 expr closeParen { Expr_SignExtend ($2, $3, $5, $6) }
-  | KW_extract openParen intVal SYMB2 intVal SYMB2 expr closeParen { Expr_Extract ($2, $3, $5, $7, $8) }
-  | KW_bvconcat openParen expr_list closeParen { Expr_Concat ($2, $3, $4) }
-  | KW_match expr KW_with openParen case_list closeParen { Expr_Match ($2, $4, $5, $6) }
-  | KW_cases openParen case_list closeParen { Expr_Cases ($2, $3, $4) }
-  ;
-
-expr1 : expr2 {  $1 }
-  | expr1 openParen expr_list closeParen { Expr_FunctionOp ($1, $2, $3, $4) }
-  ;
-
-expr2 : SYMB7 expr SYMB8 {  $2 }
-  ;
-
 intVal : integerHex { IntVal_Hex $1 }
   | integerDec { IntVal_Dec $1 }
   ;
@@ -508,7 +474,7 @@ stmt : KW_nop { Stmt_Nop  }
   | openParen assignment_list closeParen { Stmt_MultiAssign ($1, $2, $3) }
   | lVar SYMB9 KW_load endian var expr intVal { Stmt_Load_Var ($1, $4, $5, $6, $7) }
   | lVar SYMB9 KW_store endian var expr2 expr intVal { Stmt_Store_Var ($1, $4, $5, $6, $7, $8) }
-  | KW_store endian globalIdent expr expr intVal { Stmt_Store ($2, $3, $4, $5, $6) }
+  | KW_store endian globalIdent expr2 expr intVal { Stmt_Store ($2, $3, $4, $5, $6) }
   | lVars KW_call procIdent openParen callParams closeParen { Stmt_DirectCall ($1, $3, $4, $5, $6) }
   | KW_indirect KW_call expr { Stmt_IndirectCall $3 }
   | KW_assume expr { Stmt_Assume $2 }
@@ -650,6 +616,40 @@ value : bVVal { Value_BV $1 }
   | intVal { Value_Int $1 }
   | KW_true { Value_True  }
   | KW_false { Value_False  }
+  ;
+
+expr_list : /* empty */ { []  }
+  | expr { (fun x -> [x]) $1 }
+  | expr SYMB2 expr_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  ;
+
+expr : expr1 {  $1 }
+  | KW_forall attribSet lambdaDef { Expr_Forall ($2, $3) }
+  | KW_exists attribSet lambdaDef { Expr_Exists ($2, $3) }
+  | KW_fun attribSet lambdaDef { Expr_Lambda ($2, $3) }
+  ;
+
+expr1 : expr2 {  $1 }
+  | expr1 openParen expr_list closeParen { Expr_FunctionOp ($1, $2, $3, $4) }
+  ;
+
+expr2 : SYMB7 expr SYMB8 {  $2 }
+  | value { Expr_Literal $1 }
+  | openParen expr closeParen { Expr_Paren ($1, $2, $3) }
+  | localVar { Expr_Local $1 }
+  | globalVar { Expr_Global $1 }
+  | KW_old openParen expr closeParen { Expr_Old ($2, $3, $4) }
+  | binOp openParen expr SYMB2 expr closeParen { Expr_Binary ($1, $2, $3, $5, $6) }
+  | boolBinOp openParen expr_list closeParen { Expr_Assoc ($1, $2, $3, $4) }
+  | unOp openParen expr closeParen { Expr_Unary ($1, $2, $3, $4) }
+  | KW_load_be openParen intVal SYMB2 expr SYMB2 expr closeParen { Expr_LoadBe ($2, $3, $5, $7, $8) }
+  | KW_load_le openParen intVal SYMB2 expr SYMB2 expr closeParen { Expr_LoadLe ($2, $3, $5, $7, $8) }
+  | KW_zero_extend openParen intVal SYMB2 expr closeParen { Expr_ZeroExtend ($2, $3, $5, $6) }
+  | KW_sign_extend openParen intVal SYMB2 expr closeParen { Expr_SignExtend ($2, $3, $5, $6) }
+  | KW_extract openParen intVal SYMB2 intVal SYMB2 expr closeParen { Expr_Extract ($2, $3, $5, $7, $8) }
+  | KW_bvconcat openParen expr_list closeParen { Expr_Concat ($2, $3, $4) }
+  | KW_match expr KW_with openParen case_list closeParen { Expr_Match ($2, $4, $5, $6) }
+  | KW_cases openParen case_list closeParen { Expr_Cases ($2, $3, $4) }
   ;
 
 lambdaParen : localVar { LambdaParenLocalVar $1 }
