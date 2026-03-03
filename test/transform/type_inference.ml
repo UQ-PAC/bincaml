@@ -8,18 +8,18 @@ let gen = ID.make_gen ()
 
 let%test_unit "Add bounds" =
   let st = VarIdMap.empty in
-  let st = add_ub st (VarId.fresh_id "c") Top in
-  let st = add_lb st (VarId.fresh_id "c") Bottom in
-  let st = add_lb st (VarId.fresh_id "d") @@ TypeVar (VarId.fresh_id "e") in
-  let st = add_ub st (VarId.fresh_id "d") @@ CType C_Bool in
+  let st = add_ub st (VarId.make_id "c") Top in
+  let st = add_lb st (VarId.make_id "c") Bottom in
+  let st = add_lb st (VarId.make_id "d") @@ TypeVar (VarId.make_id "e") in
+  let st = add_ub st (VarId.make_id "d") @@ CType C_Bool in
 
   let ls =
     [
-      ( VarId.fresh_id "c",
+      ( VarId.make_id "c",
         { ub = TySet.singleton Top; lb = TySet.singleton Bottom } );
-      ( VarId.fresh_id "d",
+      ( VarId.make_id "d",
         {
-          lb = TySet.singleton @@ TypeVar (VarId.fresh_id "e");
+          lb = TySet.singleton @@ TypeVar (VarId.make_id "e");
           ub = TySet.singleton @@ CType C_Bool;
         } );
     ]
@@ -75,31 +75,32 @@ proc @main_4196260 () -> ()
     ID.Map.values prog.procs
     |> Iter.fold
          (fun acc proc ->
+           let sva = Analysis.Sva.DFGAnalysis.flow_insensitive proc in
            Lang.Procedure.iter_blocks_topo_fwd proc
            |> Iter.fold
                 (fun acc (_, b) ->
                   Lang.Block.stmts_iter b
-                  |> Iter.foldi (gen_constraint_set prog proc) acc)
+                  |> Iter.foldi (gen_constraint_set prog proc sva) acc)
                 acc)
          VarIdMap.empty
   in
 
   let ls =
     [
-      ( VarId.fresh_id "$XF",
+      ( VarId.make_id "$XF",
         {
           lb = TySet.of_list [ CType C_Bool; CType (C_BV 1) ];
           ub = TySet.empty;
         } );
-      ( VarId.fresh_id "$YF",
+      ( VarId.make_id "$YF",
         {
           lb = TySet.of_list [ CType C_Bool; CType (C_BV 1) ];
-          ub = TySet.singleton @@ TypeVar (VarId.fresh_id "$XF");
+          ub = TySet.singleton @@ TypeVar (VarId.make_id "$XF");
         } );
-      ( VarId.fresh_id "$ZF",
+      ( VarId.make_id "$ZF",
         {
           lb = TySet.of_list [ CType C_Bool; CType (C_BV 1) ];
-          ub = TySet.singleton @@ TypeVar (VarId.fresh_id "$YF");
+          ub = TySet.singleton @@ TypeVar (VarId.make_id "$YF");
         } );
     ]
   in
@@ -109,21 +110,21 @@ proc @main_4196260 () -> ()
 let%test_unit "Record joining" =
   let fields1 =
     [
-      { offset = 0; size = 32; ty = TypeVar (VarId.fresh_id "a") };
-      { offset = 32; size = 32; ty = TypeVar (VarId.fresh_id "b") };
+      { offset = Z.zero; size = 32; ty = TypeVar (VarId.make_id "a") };
+      { offset = Z.of_int 32; size = 32; ty = TypeVar (VarId.make_id "b") };
     ]
   in
   let fields2 =
     [
-      { offset = 0; size = 32; ty = TypeVar (VarId.fresh_id "c") };
-      { offset = 64; size = 32; ty = TypeVar (VarId.fresh_id "d") };
+      { offset = Z.zero; size = 32; ty = TypeVar (VarId.make_id "c") };
+      { offset = Z.of_int 64; size = 32; ty = TypeVar (VarId.make_id "d") };
     ]
   in
   let record1 = Record fields1 in
   let record2 = Record fields2 in
   let joined_record = Union (record1, record2) in
 
-  let m = minimise_type Polarity.Pos joined_record (VarId.fresh_id "meow") in
+  let m = minimise_type Polarity.Pos joined_record (VarId.make_id "meow") in
   let res =
     {|
 digraph G {
@@ -147,21 +148,25 @@ let%test_unit "BinSub type ADT" =
   (*
     μα.α⊓stack_slot_2⊓ptr(a,{(4,4):b⊓(t1⊓α)})⊓ptr(c,{(0,4):d⊓(t2⊓int32)})⊓ptr({(0,4):e⊔int32, f)
   *)
-  let alpha = TypeVar (VarId.fresh_id "alpha") in
-  let stack_slot_2 = TypeVar (VarId.fresh_id "stack_slot_2") in
-  let a = TypeVar (VarId.fresh_id "a") in
-  let b = TypeVar (VarId.fresh_id "b") in
-  let c = TypeVar (VarId.fresh_id "c") in
-  let d = TypeVar (VarId.fresh_id "d") in
-  let e = TypeVar (VarId.fresh_id "e") in
-  let f = TypeVar (VarId.fresh_id "f") in
-  let t1 = TypeVar (VarId.fresh_id "t1") in
-  let t2 = TypeVar (VarId.fresh_id "t2") in
+  let alpha = TypeVar (VarId.make_id "alpha") in
+  let stack_slot_2 = TypeVar (VarId.make_id "stack_slot_2") in
+  let a = TypeVar (VarId.make_id "a") in
+  let b = TypeVar (VarId.make_id "b") in
+  let c = TypeVar (VarId.make_id "c") in
+  let d = TypeVar (VarId.make_id "d") in
+  let e = TypeVar (VarId.make_id "e") in
+  let f = TypeVar (VarId.make_id "f") in
+  let t1 = TypeVar (VarId.make_id "t1") in
+  let t2 = TypeVar (VarId.make_id "t2") in
   let int32 = CType (C_BV 32) in
 
-  let fields1 = [ { offset = 4; size = 4; ty = Sect (b, Sect (t1, alpha)) } ] in
-  let fields2 = [ { offset = 0; size = 4; ty = Sect (d, Sect (t2, int32)) } ] in
-  let fields3 = [ { offset = 0; size = 4; ty = Union (e, int32) } ] in
+  let fields1 =
+    [ { offset = Z.of_int 4; size = 4; ty = Sect (b, Sect (t1, alpha)) } ]
+  in
+  let fields2 =
+    [ { offset = Z.zero; size = 4; ty = Sect (d, Sect (t2, int32)) } ]
+  in
+  let fields3 = [ { offset = Z.zero; size = 4; ty = Union (e, int32) } ] in
   let record1 = Record fields1 in
   let record2 = Record fields2 in
   let record3 = Record fields3 in
@@ -178,7 +183,7 @@ let%test_unit "BinSub type ADT" =
   in
 
   let m =
-    minimise_type Polarity.Neg joined_type (VarId.fresh_id "stack_slot_1")
+    minimise_type Polarity.Neg joined_type (VarId.make_id "stack_slot_1")
   in
   let res =
     {|

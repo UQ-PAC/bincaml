@@ -4,7 +4,7 @@
 ; (load-il "examples/cntlm-simp-output.il")
 ; (load-il "examples/cat.il")
 (load-il "examples/malloc-simp-output.il")
-(run-transforms "cf-expressions")
+; (run-transforms "cf-expressions")
 ; (run-transforms "ssa")
 (run-transforms "type-check")
 (run-transforms "type-inference")
