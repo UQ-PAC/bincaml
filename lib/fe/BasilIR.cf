@@ -278,7 +278,7 @@ FunSpec_Invariant . FunSpec ::= "invariant" BlockIdent Expr;
 ProgSpec_Rely . ProgSpec ::= "rely" Expr;
 ProgSpec_Guarantee . ProgSpec ::= "guarantee" Expr;
 
-terminator FunSpec "\n";
+terminator FunSpec ";";
 
 {- last semicolon terminates the prog definitino -}
 separator nonempty ProgSpec "\n";

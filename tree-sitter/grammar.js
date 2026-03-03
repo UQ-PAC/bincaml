@@ -703,8 +703,8 @@ module.exports = grammar({
       choice(
         // []. [FunSpec] ::= ;
         choice(),
-        // (:). [FunSpec] ::= FunSpec [FunSpec] ;
-        seq($.FunSpec, optional($.list_FunSpec))
+        // (:). [FunSpec] ::= FunSpec ";" [FunSpec] ;
+        seq($.FunSpec, ";", optional($.list_FunSpec))
       ),
     list_ProgSpec: $ =>
       choice(

@@ -793,7 +793,7 @@ progSpec : KW_rely expr { ProgSpec_Rely $2 }
   ;
 
 funSpec_list : /* empty */ { []  }
-  | funSpec funSpec_list { (fun (x,xs) -> x::xs) ($1, $2) }
+  | funSpec SYMB1 funSpec_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 progSpec_list : progSpec { (fun x -> [x]) $1 }

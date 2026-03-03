@@ -22,12 +22,20 @@
 "var" @keyword
 "memory" @keyword
 "shared" @keyword
+"rely" @keyword
+"guarantee" @keyword
+"modifies" @keyword
+"captures" @keyword
+"forall" @keyword
+"exists" @keyword
+"fun" @keyword
+"old" @keyword
 
-(IntVal) @constant
-(token_IntegerHex) @constant
-(token_IntegerDec) @constant
-"true" @constant
-"false" @constant
+(IntVal) @number
+(token_IntegerHex) @number
+(token_IntegerDec) @number
+"true" @constant.builtin
+"false" @constant.builtin
 
 (Type) @type
 (token_BVTYPE) @type.builtin
@@ -107,10 +115,12 @@
   (token_EndList)
   (token_BeginRec)
   (token_EndRec)
+  (token_OpenParen)
+  (token_CloseParen)
 ] @punctuation.bracket
 
 [ ";" "," ] @punctuation.delimiter
-[ ":" "=" ":=" ] @punctuation
+[ ":" "=" ":=" "::" ] @punctuation
 [ "(" ")"
   (token_BeginRec)
   (token_EndRec)
