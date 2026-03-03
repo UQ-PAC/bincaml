@@ -206,9 +206,13 @@ let pretty_procedure_impl (p : Lang.Program.proc) =
              (Option.is_none @@ StringMap.get k in_params)
              && (Option.is_none @@ StringMap.get k out_params)))
   in
+  let blocks =
+    append_l ~sep:(text ";\n")
+    @@ List.map (fun (e, b) ->  text "block") (Lang.Procedure.blocks_to_list p)
+  in
   (* ^/ append_l ~sep:(text ";\n") @@ List.map (fun t -> text t) (Hashtbl.keys_list local_decls) *)
   let header = pretty_procedure_header "implementation" p in
-  let body = local_decls in
+  let body = local_decls ^/ blocks in
   header ^+ surround ~width:2 (text "{") (newline ^ body) (newline ^ text "}")
 
 let pretty_procedure (p : Lang.Program.proc) =
