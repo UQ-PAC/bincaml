@@ -71,7 +71,7 @@ MapType1 . MapType ::=  Type1 "->" Type ;
 TypeIntType  . Type1 ::= IntType ;
 TypeBoolType . Type1 ::= BoolType ;
 TypeBVType   . Type1 ::= BVType ;
-TypeParen   . Type1 ::= OpenParen Type CloseParen; 
+TypeParen    . Type1 ::= OpenParen Type CloseParen; 
 
 TypeMapType . Type ::= MapType;
 coercions Type 1;
@@ -185,9 +185,6 @@ Attr_Str . Attr ::= Str ;
 
 rules Params ::=  LocalIdent ":" Type ;
 separator Params "," ;
-
-rules FunParams ::=  LocalIdent ":" Type | OpenParen LocalIdent ":" Type CloseParen ;
-separator FunParams " " ;
 
 {- EXPRESSIONS -}
 
