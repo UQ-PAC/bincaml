@@ -506,8 +506,9 @@ stmt : KW_nop { Stmt_Nop  }
   | lVar SYMB9 KW_store expr { Stmt_ScalarStore ($1, $4) }
   | lVar SYMB9 KW_load var { Stmt_ScalarLoad ($1, $4) }
   | openParen assignment_list closeParen { Stmt_MultiAssign ($1, $2, $3) }
-  | lVar SYMB9 KW_load endian var expr intVal { Stmt_Load ($1, $4, $5, $6, $7) }
-  | lVar SYMB9 KW_store endian var expr2 expr intVal { Stmt_Store ($1, $4, $5, $6, $7, $8) }
+  | lVar SYMB9 KW_load endian var expr intVal { Stmt_Load_Var ($1, $4, $5, $6, $7) }
+  | lVar SYMB9 KW_store endian var expr2 expr intVal { Stmt_Store_Var ($1, $4, $5, $6, $7, $8) }
+  | KW_store endian globalIdent expr expr intVal { Stmt_Store ($2, $3, $4, $5, $6) }
   | lVars KW_call procIdent openParen callParams closeParen { Stmt_DirectCall ($1, $3, $4, $5, $6) }
   | KW_indirect KW_call expr { Stmt_IndirectCall $3 }
   | KW_assume expr { Stmt_Assume $2 }

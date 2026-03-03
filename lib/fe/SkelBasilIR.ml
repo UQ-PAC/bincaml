@@ -179,8 +179,9 @@ and transStmt (x : stmt) : result = match x with
   | Stmt_ScalarStore (lvar, expr) -> failure x
   | Stmt_ScalarLoad (lvar, var) -> failure x
   | Stmt_MultiAssign (openparen, assignments, closeparen) -> failure x
-  | Stmt_Load (lvar, endian, var, expr, intval) -> failure x
-  | Stmt_Store (lvar, endian, var, expr0, expr, intval) -> failure x
+  | Stmt_Load_Var (lvar, endian, var, expr, intval) -> failure x
+  | Stmt_Store_Var (lvar, endian, var, expr0, expr, intval) -> failure x
+  | Stmt_Store (endian, globalident, expr0, expr, intval) -> failure x
   | Stmt_DirectCall (lvars, procident, openparen, callparams, closeparen) -> failure x
   | Stmt_IndirectCall expr -> failure x
   | Stmt_Assume expr -> failure x

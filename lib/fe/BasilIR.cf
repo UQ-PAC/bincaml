@@ -109,11 +109,12 @@ rules Var ::= LocalVar | GlobalVar ;
 
 separator GlobalVar ",";
 
---                    lvar               endian mem addr   size
-Stmt_Load  . Stmt ::= LVar ":="   "load" Endian Var Expr IntVal;
+--                        lvar               endian mem addr   size
+Stmt_Load_Var  . Stmt ::= LVar ":="   "load" Endian Var Expr IntVal;
 
---                     lhs               endian rhs addr  value   size
-Stmt_Store . Stmt ::= LVar ":="  "store" Endian Var Expr2  Expr IntVal;
+--                         lhs               endian rhs addr  value   size
+Stmt_Store_Var . Stmt ::= LVar ":="  "store" Endian Var Expr2  Expr IntVal;
+Stmt_Store . Stmt ::= "store" Endian GlobalIdent Expr Expr IntVal;
 
 rules NamedCallReturn ::= LVar "=" LocalIdent;
 separator NamedCallReturn "," ;

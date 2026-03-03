@@ -471,7 +471,7 @@ module BasilASTLoader = struct
     let open Stmt in
     match stmt with
     | Stmt_Nop -> (p_st, `None)
-    | Stmt_Load (lvar, endian, var, expr, intval) ->
+    | Stmt_Load_Var (lvar, endian, var, expr, intval) ->
         let endian = trans_endian endian in
         let rhs = trans_var p_st var in
         let size = transIntVal intval |> Z.to_int in
@@ -484,7 +484,7 @@ module BasilASTLoader = struct
                  rhs;
                  addr = Addr { addr = trans_expr p_st expr; endian; size };
                }) )
-    | Stmt_Store (lhs, endian, var, addr, value, intval) ->
+    | Stmt_Store_Var (lhs, endian, var, addr, value, intval) ->
         let endian = trans_endian endian in
         let size = transIntVal intval |> Z.to_int in
         let rhs = trans_var p_st var in
@@ -495,6 +495,19 @@ module BasilASTLoader = struct
                {
                  lhs;
                  rhs;
+                 value = trans_expr p_st value;
+                 addr = Addr { addr = trans_expr p_st addr; size; endian };
+               }) )
+    | Stmt_Store (endian, bident, addr, value, intval) ->
+        let endian = trans_endian endian in
+        let size = transIntVal intval |> Z.to_int in
+        let mem = lookup_global_decl bident p_st in
+        ( p_st,
+          `Stmt
+            (Instr_Store
+               {
+                 lhs = mem;
+                 rhs = mem;
                  value = trans_expr p_st value;
                  addr = Addr { addr = trans_expr p_st addr; size; endian };
                }) )
@@ -1425,10 +1438,14 @@ proc @c() -> ()
     (fun pid proc ->
       print_endline (ID.to_string pid ^ ":\n" ^ (res pid |> RWSets.to_string)))
     prog.prog.procs;
-  [%expect.unreachable]
-[@@expect.uncaught_exn {|
-  ( "Parse error:  string at lib/loadir.ml:1384::Loader__Loadir.(fun):21\
-   \n21 |     store le $mem $R1:bv64 0x0:bv32 32;\
-   \n         \027[1;31m^^^^^\027[0m\
-   \n")
-  |}]
+  [%expect {|
+    @entry:
+    read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
+    written: $R0:bv64,$mem:(bv64->bv8)
+    @b:
+    read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
+    written: $R0:bv64,$mem:(bv64->bv8)
+    @c:
+    read: $R0:bv64,$mem:(bv64->bv8)
+    written: $mem:(bv64->bv8)
+    |}]

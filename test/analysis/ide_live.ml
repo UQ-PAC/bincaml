@@ -42,20 +42,16 @@ proc @main () -> ()
   let _, results = IDELiveAnalysis.solve program in
   let main = program.entry_proc |> Option.get_exn_or "No entry proc" in
   print_lives results main;
-  [%expect.unreachable]
-[@@expect.uncaught_exn {|
-  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-     This is strongly discouraged as backtraces are fragile.
-     Please change this test to not include a backtrace. *)
-  ( "Parse error:  <string>:20\
-   \n20 |         store le $mem $z:bv64 d:bv64 64;\
-   \n             \027[1;31m^^^^^\027[0m\
-   \n")
-  Raised at Loader__Loadir.concrete_prog_ast_of_string in file "lib/loadir.ml", line 1105, characters 27-66
-  Called from Loader__Loadir.ast_of_string in file "lib/loadir.ml", line 1217, characters 13-69
-  Called from Bincaml_analysis_test__Ide_live.(fun) in file "test/analysis/ide_live.ml", lines 12-39, characters 4-6
-  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
-  |}]
+  [%expect {|
+    @main
+    $mem:(bv64->bv8)
+    $x:bv64
+    a:bv64
+    e:bv64
+    b:bv64
+    c:bv64
+    d:bv64
+    |}]
 
 let%expect_test "simple_call" =
   let lst =

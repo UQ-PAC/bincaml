@@ -105,8 +105,9 @@ and stmt =
  | Stmt_ScalarStore of lVar * expr
  | Stmt_ScalarLoad of lVar * var
  | Stmt_MultiAssign of openParen * assignment list * closeParen
- | Stmt_Load of lVar * endian * var * expr * intVal
- | Stmt_Store of lVar * endian * var * expr * expr * intVal
+ | Stmt_Load_Var of lVar * endian * var * expr * intVal
+ | Stmt_Store_Var of lVar * endian * var * expr * expr * intVal
+ | Stmt_Store of endian * globalIdent * expr * expr * intVal
  | Stmt_DirectCall of lVars * procIdent * openParen * callParams * closeParen
  | Stmt_IndirectCall of expr
  | Stmt_Assume of expr

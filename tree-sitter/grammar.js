@@ -219,10 +219,12 @@ module.exports = grammar({
         seq($.LVar, ":=", "load", $.Var),
         // Stmt_MultiAssign. Stmt ::= OpenParen [Assignment] CloseParen ;
         seq($.token_OpenParen, $.list_Assignment, $.token_CloseParen),
-        // Stmt_Load. Stmt ::= LVar ":=" "load" Endian Var Expr IntVal ;
+        // Stmt_Load_Var. Stmt ::= LVar ":=" "load" Endian Var Expr IntVal ;
         seq($.LVar, ":=", "load", $.Endian, $.Var, $.Expr, $.IntVal),
-        // Stmt_Store. Stmt ::= LVar ":=" "store" Endian Var Expr2 Expr IntVal ;
+        // Stmt_Store_Var. Stmt ::= LVar ":=" "store" Endian Var Expr2 Expr IntVal ;
         seq($.LVar, ":=", "store", $.Endian, $.Var, $.Expr2, $.Expr, $.IntVal),
+        // Stmt_Store. Stmt ::= "store" Endian GlobalIdent Expr Expr IntVal ;
+        seq("store", $.Endian, $.token_GlobalIdent, $.Expr, $.Expr, $.IntVal),
         // Stmt_DirectCall. Stmt ::= LVars "call" ProcIdent OpenParen CallParams CloseParen ;
         seq(optional($.LVars), "call", $.token_ProcIdent, $.token_OpenParen, optional($.CallParams), $.token_CloseParen),
         // Stmt_IndirectCall. Stmt ::= "indirect" "call" Expr ;
