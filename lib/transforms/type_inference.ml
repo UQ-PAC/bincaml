@@ -851,6 +851,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
         let rhs = VarId.var_proc_to_uid rhs proc in
         constrain st (TypeVar rhs) (TypeVar lhs) TySet.empty
   | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr } } ->
+      print_endline "=========";
       print_endline @@ Var.show lhs;
       print_endline @@ Analysis.Sva.SymAddrSetLattice.show
       @@ Analysis.Sva.Eval.EV.eval
@@ -868,6 +869,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
         (VarId.fresh_id @@ Int.to_string stmt_number ^ "_a_load")
       @@ TypeVar (VarId.fresh_id @@ Int.to_string stmt_number ^ "_b_load")
   | Stmt.Instr_Store { lhs; rhs; addr = Addr { addr } } ->
+      print_endline "=========";
       print_endline @@ Var.show lhs;
       print_endline @@ Analysis.Sva.SymAddrSetLattice.show
       @@ Analysis.Sva.Eval.EV.eval
