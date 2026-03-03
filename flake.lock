@@ -52,16 +52,16 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1751792365,
-        "narHash": "sha256-J1kI6oAj25IG4EdVlg2hQz8NZTBNYvIS0l4wpr9KcUo=",
+        "lastModified": 1771423170,
+        "narHash": "sha256-K7Dg9TQ0mOcAtWTO/FX/FaprtWQ8BmEXTpLIaNRhEwU=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "1fd8bada0b6117e6c7eb54aad5813023eed37ccb",
+        "rev": "bcc4a9d9533c033d806a46b37dc444f9b0da49dd",
         "type": "github"
       },
       "original": {
         "owner": "nixos",
-        "ref": "nixos-unstable",
+        "ref": "nixpkgs-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -73,7 +73,9 @@
           "flake-utils"
         ],
         "mirage-opam-overlays": "mirage-opam-overlays",
-        "nixpkgs": "nixpkgs",
+        "nixpkgs": [
+          "nixpkgs"
+        ],
         "opam-overlays": "opam-overlays",
         "opam-repository": [
           "opam-repository"
@@ -113,11 +115,11 @@
     "opam-repository": {
       "flake": false,
       "locked": {
-        "lastModified": 1771457088,
-        "narHash": "sha256-ZxsPHDhooFMFR9XMEFZX1PTO3rws+AsizqUuh5je1Tc=",
+        "lastModified": 1771880240,
+        "narHash": "sha256-Pv9VqyCtscg+tmcA/RBVB98I9rd9TIUyE9OAM2lP2hY=",
         "owner": "ocaml",
         "repo": "opam-repository",
-        "rev": "a3da08eb2e90b5a5ba205957e036c59d1409525b",
+        "rev": "14b04dced95f8148774b19a9c7a809cc9e68a845",
         "type": "github"
       },
       "original": {
@@ -167,10 +169,7 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "nixpkgs": [
-          "opam-nix",
-          "nixpkgs"
-        ],
+        "nixpkgs": "nixpkgs",
         "opam-nix": "opam-nix",
         "opam-repository": "opam-repository",
         "pac-opam": "pac-opam"
