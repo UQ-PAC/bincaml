@@ -132,9 +132,9 @@ module Eval = Intra_analysis.EvalStmt (SVAAbstractionBasil)
 module Domain = struct
   include StateAbstraction
 
-  let stack_pointer = Var.create ~scope:Local "R31_IN" @@ Bitvector 64
-  let link_register = Var.create ~scope:Local "R30_IN" @@ Bitvector 64
-  let frame_pointer = Var.create ~scope:Local "R29_IN" @@ Bitvector 64
+  let stack_pointer = Var.create ~scope:Local "R31_in" @@ Bitvector 64
+  let link_register = Var.create ~scope:Local "R30_in" @@ Bitvector 64
+  let frame_pointer = Var.create ~scope:Local "R29_in" @@ Bitvector 64
 
   let call_preserve =
     List.init 11 (fun i -> 19 + i) |> fun lst ->
@@ -162,6 +162,18 @@ module Domain = struct
         ( param,
           SymAddrSetLattice.singleton (Par { name; param })
           @@ IntervalDomain.init @@ Bitvec.zero ~size ))
+    |> Iter.cons
+         ( stack_pointer,
+           SymAddrSetLattice.singleton (SymBase.Stack name)
+           @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
+    |> Iter.cons
+         ( link_register,
+           SymAddrSetLattice.singleton (SymBase.Par {name; param=link_register})
+           @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
+    |> Iter.cons
+         ( frame_pointer,
+           SymAddrSetLattice.singleton (SymBase.Par {name; param=frame_pointer})
+           @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
   let transfer_state read stmt =
