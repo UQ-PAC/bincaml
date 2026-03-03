@@ -6,15 +6,13 @@
 "unreachable" @keyword.return
 "return" @keyword.return
 
-["ensures" "ensure" "requires" "require"] @keyword
-
 "call" @keyword.function
 "indirect" @keyword.function
 
 "nop" @keyword
 "load" @keyword
-"le" @keyword.modifier
-"be" @keyword.modifier
+"le" @keyword
+"be" @keyword
 "store" @keyword
 "guard" @keyword
 "assert" @keyword
