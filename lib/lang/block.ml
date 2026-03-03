@@ -42,14 +42,15 @@ let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
   Trace_core.with_span ~__FILE__ ~__LINE__ "pretty-block" @@ fun _ ->
   let open Containers_pp in
   let open Containers_pp.Infix in
-  let bracket' ~n l d r : t =
-    group (text l ^ nest n (nl ^ d) ^ nl ^ text r) in
+  let bracket' ~n l d r : t = group (text l ^ nest n (nl ^ d) ^ nl ^ text r) in
   let phi =
     match b.phis with
     | [] -> nil
     | o ->
         let phi = List.map (pretty_phi show_lvar show_var) o in
-        bracket' ~n:2 "(" (append_l ~sep:(text "," ^ nl) (List.map group phi)) ") "
+        bracket' ~n:2 "("
+          (append_l ~sep:(text "," ^ nl) (List.map group phi))
+          ") "
   in
   let stmts =
     Vector.to_list b.stmts
