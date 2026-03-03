@@ -102,9 +102,7 @@ and pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
               acc_s + s ))
           mapped
       in
-      surround ~width:2 (text "(")
-        (newline_or_spaces 0 ^ body)
-        (newline_or_spaces 0 ^ text ")")
+      surround ~width:0 (text "(") body (text ")")
   | _ -> raise (BoogieException "Unsupported intrinsic application")
 
 and pretty_expr (Lang.Expr.BasilExpr.E e) =
