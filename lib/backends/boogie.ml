@@ -67,7 +67,10 @@ and pretty_binary_expr (op : Lang.Ops.AllOps.binary) (arg1 : Lang.Program.e)
   | `NEQ -> pretty_expr arg1 ^ sp ^ text "!=" ^ sp ^ pretty_expr arg2
   | _ ->
       pretty_binary_op op arg1 arg2
-      ^ bracket "(" (pretty_expr arg1 ^ text "," ^ pretty_expr arg2) ")"
+      ^ surround ~width:2 (text "(")
+          (newline_or_spaces 0 ^ pretty_expr arg1 ^ text ","
+         ^ newline_or_spaces 1 ^ pretty_expr arg2)
+          (newline_or_spaces 0 ^ text ")")
 
 and pretty_unary_expr (op : Lang.Ops.AllOps.unary) (arg : Lang.Program.e) =
   let open Containers_pp in
@@ -90,13 +93,18 @@ and pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
       let body, _ =
         List.reduce_exn
           (fun (acc_t, acc_s) (t, s) ->
-            ( bracket "(" (acc_t ^ sp ^ text "++" ^ sp ^ t) "):"
+            ( surround ~width:2 (text "(")
+                (newline_or_spaces 0 ^ acc_t ^ newline_or_spaces 0 ^ text "++"
+               ^ newline_or_spaces 0 ^ t)
+                (newline_or_spaces 0 ^ text "):")
               ^+ text "bv" ^ text
               @@ string_of_int (acc_s + s),
               acc_s + s ))
           mapped
       in
-      bracket "(" body ")"
+      surround ~width:2 (text "(")
+        (newline_or_spaces 0 ^ body)
+        (newline_or_spaces 0 ^ text ")")
   | _ -> raise (BoogieException "Unsupported intrinsic application")
 
 and pretty_expr (Lang.Expr.BasilExpr.E e) =
