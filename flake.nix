@@ -27,49 +27,38 @@
       opam-repository,
       ...
     }:
-    let
-      deps = opam-nix.opamListToQuery (opam-nix.importOpam ./opam.export).installed;
-    in
-    let
-      package = "bincaml";
-    in
     flake-utils.lib.eachDefaultSystem (
       system:
       let
+        export = opam-nix.lib.${pkgs.system}.importOpam ./opam.export;
+        implicit-deps =
+          builtins.removeAttrs (opam-nix.lib.${pkgs.system}.opamListToQuery export.installed)
+            [
+              "check_opam_switch"
+            ];
+        extra-packages = {
+          ocaml-lsp-server = "*";
+        };
+        deps = opam-nix.lib.${pkgs.system}.opamListToQuery (export).installed;
         pkgs = nixpkgs.legacyPackages.${system};
-        on = opam-nix.lib.${system};
-        base-libs = dune-nix.lib.${pkgs.system}.squashOpamNixDeps scope.ocaml.version (
+        repos = [
+          pac-opam
+          opam-repository
+        ];
+        scope = opam-nix.lib.${pkgs.system}.applyOverlays (opam-nix.lib.${pkgs.system}.__overlays) (
+          opam-nix.lib.${pkgs.system}.defsToScope pkgs { } (
+            opam-nix.lib.${pkgs.system}.queryToDefs repos (extra-packages // implicit-deps)
+          )
+        );
+        base-libs = dune-nix.lib.${pkgs.stdenv.hostPlatform.system}.squashOpamNixDeps scope.ocaml.version (
           pkgs.lib.attrVals (builtins.attrNames deps) scope
         );
-        query = base-libs // {
-          ocaml-compiler = "5.3.0";
-          ocaml-variants = "5.3.0+options";
-          ocaml-option-fp = "*";
-          ocaml-option-flambda = "*";
-        };
-        scope = on.buildOpamProject' {
-          repos = [
-            pac-opam
-            opam-repository
-          ];
-        } ./. query;
-        overlay = final: prev: {
-          ${package} = prev.${package}.overrideAttrs (_: {
-            doNixSupport = true;
-          });
-        };
-        scope' = scope.overrideScope overlay;
-        main = scope'.${package};
       in
       {
-        legacyPackages = scope';
-
-        packages.default = main;
 
         devShells.default = pkgs.mkShell {
-          inputsFrom = [ main ];
-          buildInputs = base-libs ++ [
-            main
+          buildInputs = [
+            base-libs
             pkgs.perf
             pkgs.tree-sitter
             pkgs.nodejs
