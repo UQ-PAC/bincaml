@@ -453,6 +453,7 @@ type1 : intType { TypeIntType $1 }
   | boolType { TypeBoolType $1 }
   | bVType { TypeBVType $1 }
   | openParen typeT closeParen { TypeParen ($1, $2, $3) }
+  | SYMB7 typeT SYMB8 {  $2 }
   ;
 
 typeT : mapType { TypeMapType $1 }

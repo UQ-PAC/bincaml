@@ -73,8 +73,8 @@ TypeBoolType . Type1 ::= BoolType ;
 TypeBVType   . Type1 ::= BVType ;
 TypeParen   . Type1 ::= OpenParen Type CloseParen; 
 
-rules Type ::= MapType;
-_ . Type ::= Type1;
+TypeMapType . Type ::= MapType;
+coercions Type 1;
 
 separator Expr "," ;
 coercions Expr 2;

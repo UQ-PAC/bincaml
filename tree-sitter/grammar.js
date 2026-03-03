@@ -112,7 +112,9 @@ module.exports = grammar({
         // TypeBVType. Type1 ::= BVType ;
         $.BVType,
         // TypeParen. Type1 ::= OpenParen Type CloseParen ;
-        seq($.token_OpenParen, $.Type, $.token_CloseParen)
+        seq($.token_OpenParen, $.Type, $.token_CloseParen),
+        // _. Type1 ::= "(" Type ")" ;
+        seq("(", $.Type, ")")
       ),
     Type: $ =>
       choice(
