@@ -1,0 +1,7 @@
+(library
+ (public_name bincaml.backends)
+ (name backends)
+ (flags -w -27)
+ (modules boogie)
+ (libraries containers containers-data containers.pp lang)
+ (inline_tests))
