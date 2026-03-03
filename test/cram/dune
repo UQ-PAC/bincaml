@@ -10,6 +10,8 @@
 (cram
  (applies_to * \ expr_smt)
  (deps
+  loop_dfg.sexp
+  ../../examples/loop.il
   %{bin:bincaml}
   ssa-multi-deps.il
   memassign.il

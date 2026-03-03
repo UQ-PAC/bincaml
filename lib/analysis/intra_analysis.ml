@@ -98,22 +98,20 @@ module ValueAbstractionIgnoringTypes (V : ValueAbstraction) = struct
   let eval_intrin op args rt = eval_intrin op (List.map fst args)
 end
 
-module EvalStmt
-    (V : TypedValueAbstraction with module E = Expr.BasilExpr)
-    (S : StateAbstraction with type val_t = V.t with type key_t = V.E.var) =
+module EvalStmt (V : TypedValueAbstraction with module E = Expr.BasilExpr) =
 struct
   type t
 
   module EV = EvalExprWithType (V)
 
-  let stmt_eval_fwd stmt dom =
+  let stmt_eval_fwd read stmt =
     Stmt.map ~f_lvar:id
-      ~f_rvar:(fun v -> S.read v dom)
-      ~f_expr:(EV.eval (fun v -> S.read v dom))
+      ~f_rvar:(fun v -> read v)
+      ~f_expr:(EV.eval (fun v -> read v))
       stmt
 
-  let stmt_eval_rev stmt dom =
-    Stmt.map ~f_lvar:(fun v -> S.read v dom) ~f_rvar:id ~f_expr:id stmt
+  let stmt_eval_rev read stmt =
+    Stmt.map ~f_lvar:(fun v -> read v) ~f_rvar:id ~f_expr:id stmt
 end
 
 let tf_forwards st (read_st : 'a -> Var.t -> 'b) (s : Program.stmt)
