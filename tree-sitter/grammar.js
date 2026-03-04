@@ -21,8 +21,8 @@ module.exports = grammar({
       choice(
         // []. [Decl] ::= ;
         choice(),
-        // (:). [Decl] ::= Decl [Decl] ;
-        seq($.Decl, optional($.list_Decl))
+        // (:). [Decl] ::= Decl ";" [Decl] ;
+        seq($.Decl, ";", optional($.list_Decl))
       ),
     list_token_BlockIdent: $ =>
       choice(
@@ -56,22 +56,22 @@ module.exports = grammar({
       ),
     Decl: $ =>
       choice(
-        // Decl_Axiom. Decl ::= "axiom" GlobalIdent AttribSet Expr ";" ;
-        seq("axiom", $.token_GlobalIdent, optional($.AttribSet), $.Expr, ";"),
-        // Decl_Mem. Decl ::= "memory" [VarModifiers] GlobalIdent ":" Type VarSpec ";" ;
-        seq("memory", optional($.list_VarModifiers), $.token_GlobalIdent, ":", $.Type, optional($.VarSpec), ";"),
-        // Decl_Var. Decl ::= "var" [VarModifiers] GlobalIdent ":" Type VarSpec ";" ;
-        seq("var", optional($.list_VarModifiers), $.token_GlobalIdent, ":", $.Type, optional($.VarSpec), ";"),
-        // Decl_UninterpFun. Decl ::= "val" GlobalIdent AttribSet ":" Type ";" ;
-        seq("val", $.token_GlobalIdent, optional($.AttribSet), ":", $.Type, ";"),
-        // Decl_Fun. Decl ::= "let" GlobalIdent AttribSet ":" Type "=" Expr ";" ;
-        seq("let", $.token_GlobalIdent, optional($.AttribSet), ":", $.Type, "=", $.Expr, ";"),
-        // Decl_FunNoType. Decl ::= "let" GlobalIdent AttribSet "=" Expr ";" ;
-        seq("let", $.token_GlobalIdent, optional($.AttribSet), "=", $.Expr, ";"),
-        // Decl_ProgEmpty. Decl ::= "prog" "entry" ProcIdent AttribSet ";" ;
-        seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), ";"),
+        // Decl_Axiom. Decl ::= "axiom" GlobalIdent AttribSet Expr ;
+        seq("axiom", $.token_GlobalIdent, optional($.AttribSet), $.Expr),
+        // Decl_Mem. Decl ::= "memory" [VarModifiers] GlobalIdent ":" Type VarSpec ;
+        seq("memory", optional($.list_VarModifiers), $.token_GlobalIdent, ":", $.Type, optional($.VarSpec)),
+        // Decl_Var. Decl ::= "var" [VarModifiers] GlobalIdent ":" Type VarSpec ;
+        seq("var", optional($.list_VarModifiers), $.token_GlobalIdent, ":", $.Type, optional($.VarSpec)),
+        // Decl_UninterpFun. Decl ::= "val" GlobalIdent AttribSet ":" Type ;
+        seq("val", $.token_GlobalIdent, optional($.AttribSet), ":", $.Type),
+        // Decl_Fun. Decl ::= "let" GlobalIdent AttribSet ":" Type "=" Expr ;
+        seq("let", $.token_GlobalIdent, optional($.AttribSet), ":", $.Type, "=", $.Expr),
+        // Decl_FunNoType. Decl ::= "let" GlobalIdent AttribSet "=" Expr ;
+        seq("let", $.token_GlobalIdent, optional($.AttribSet), "=", $.Expr),
+        // Decl_ProgEmpty. Decl ::= "prog" "entry" ProcIdent AttribSet ;
+        seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet)),
         // Decl_ProgWithSpec. Decl ::= "prog" "entry" ProcIdent AttribSet [ProgSpec] ;
-        seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), $.list_ProgSpec),
+        seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), optional($.list_ProgSpec)),
         // Decl_Proc. Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [FunSpec] ProcDef ;
         seq("proc", $.token_ProcIdent, $.token_OpenParen, optional($.list_Params), $.token_CloseParen, "->", $.token_OpenParen, optional($.list_Params), $.token_CloseParen, optional($.AttribSet), optional($.list_FunSpec), optional($.ProcDef))
       ),
@@ -88,8 +88,8 @@ module.exports = grammar({
       choice(
         // ProcDef_Empty. ProcDef ::= ;
         choice(),
-        // ProcDef_Some. ProcDef ::= BeginList [Block] EndList ";" ;
-        seq($.token_BeginList, optional($.list_Block), $.token_EndList, ";")
+        // ProcDef_Some. ProcDef ::= BeginList [Block] EndList ;
+        seq($.token_BeginList, optional($.list_Block), $.token_EndList)
       ),
     IntType: $ =>
       // IntType1. IntType ::= INTTYPE ;
@@ -689,15 +689,15 @@ module.exports = grammar({
       choice(
         // []. [FunSpec] ::= ;
         choice(),
-        // (:). [FunSpec] ::= FunSpec ";" [FunSpec] ;
-        seq($.FunSpec, ";", optional($.list_FunSpec))
+        // (:). [FunSpec] ::= FunSpec [FunSpec] ;
+        seq($.FunSpec, optional($.list_FunSpec))
       ),
     list_ProgSpec: $ =>
       choice(
-        // (:[]). [ProgSpec] ::= ProgSpec ";" ;
-        seq($.ProgSpec, ";"),
-        // (:). [ProgSpec] ::= ProgSpec ";" [ProgSpec] ;
-        seq($.ProgSpec, ";", $.list_ProgSpec)
+        // []. [ProgSpec] ::= ;
+        choice(),
+        // (:). [ProgSpec] ::= ProgSpec [ProgSpec] ;
+        seq($.ProgSpec, optional($.list_ProgSpec))
       ),
     token_BVTYPE: $ =>
       /bv\d+/,

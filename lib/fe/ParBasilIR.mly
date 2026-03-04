@@ -9,10 +9,10 @@ open Lexing
 
 %token KW_shared KW_observable KW_axiom KW_memory KW_var KW_val KW_let KW_prog KW_entry KW_proc KW_le KW_be KW_nop KW_store KW_load KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_fun KW_old KW_boolnot KW_intneg KW_booltobv1 KW_gamma KW_classification KW_load_be KW_load_le KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_match KW_with KW_cases KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_require KW_requires KW_ensure KW_ensures KW_rely KW_relies KW_guarantee KW_guarantees KW_captures KW_modifies KW_invariant
 
-%token SYMB1 /* , */
-%token SYMB2 /* -> */
-%token SYMB3 /* :: */
-%token SYMB4 /* ; */
+%token SYMB1 /* ; */
+%token SYMB2 /* , */
+%token SYMB3 /* -> */
+%token SYMB4 /* :: */
 %token SYMB5 /* : */
 %token SYMB6 /* = */
 %token SYMB7 /* := */
@@ -387,16 +387,16 @@ moduleT : decl_list { Module1 $1 }
   ;
 
 decl_list : /* empty */ { []  }
-  | decl decl_list { (fun (x,xs) -> x::xs) ($1, $2) }
+  | decl SYMB1 decl_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 blockIdent_list : /* empty */ { []  }
   | blockIdent { (fun x -> [x]) $1 }
-  | blockIdent SYMB1 blockIdent_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | blockIdent SYMB2 blockIdent_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-lambdaSep : SYMB2 { LambdaSep1  }
-  | SYMB3 { LambdaSep2  }
+lambdaSep : SYMB3 { LambdaSep1  }
+  | SYMB4 { LambdaSep2  }
   ;
 
 varModifiers : KW_shared { Shared  }
@@ -407,24 +407,24 @@ varModifiers_list : /* empty */ { []  }
   | varModifiers varModifiers_list { (fun (x,xs) -> x::xs) ($1, $2) }
   ;
 
-decl : KW_axiom globalIdent attribSet expr SYMB4 { Decl_Axiom ($2, $3, $4) }
-  | KW_memory varModifiers_list globalIdent SYMB5 typeT varSpec SYMB4 { Decl_Mem ($2, $3, $5, $6) }
-  | KW_var varModifiers_list globalIdent SYMB5 typeT varSpec SYMB4 { Decl_Var ($2, $3, $5, $6) }
-  | KW_val globalIdent attribSet SYMB5 typeT SYMB4 { Decl_UninterpFun ($2, $3, $5) }
-  | KW_let globalIdent attribSet SYMB5 typeT SYMB6 expr SYMB4 { Decl_Fun ($2, $3, $5, $7) }
-  | KW_let globalIdent attribSet SYMB6 expr SYMB4 { Decl_FunNoType ($2, $3, $5) }
-  | KW_prog KW_entry procIdent attribSet SYMB4 { Decl_ProgEmpty ($3, $4) }
+decl : KW_axiom globalIdent attribSet expr { Decl_Axiom ($2, $3, $4) }
+  | KW_memory varModifiers_list globalIdent SYMB5 typeT varSpec { Decl_Mem ($2, $3, $5, $6) }
+  | KW_var varModifiers_list globalIdent SYMB5 typeT varSpec { Decl_Var ($2, $3, $5, $6) }
+  | KW_val globalIdent attribSet SYMB5 typeT { Decl_UninterpFun ($2, $3, $5) }
+  | KW_let globalIdent attribSet SYMB5 typeT SYMB6 expr { Decl_Fun ($2, $3, $5, $7) }
+  | KW_let globalIdent attribSet SYMB6 expr { Decl_FunNoType ($2, $3, $5) }
+  | KW_prog KW_entry procIdent attribSet { Decl_ProgEmpty ($3, $4) }
   | KW_prog KW_entry procIdent attribSet progSpec_list { Decl_ProgWithSpec ($3, $4, $5) }
-  | KW_proc procIdent openParen params_list closeParen SYMB2 openParen params_list closeParen attribSet funSpec_list procDef { Decl_Proc ($2, $3, $4, $5, $7, $8, $9, $10, $11, $12) }
+  | KW_proc procIdent openParen params_list closeParen SYMB3 openParen params_list closeParen attribSet funSpec_list procDef { Decl_Proc ($2, $3, $4, $5, $7, $8, $9, $10, $11, $12) }
   ;
 
 typeT_list : /* empty */ { []  }
   | typeT { (fun x -> [x]) $1 }
-  | typeT SYMB1 typeT_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | typeT SYMB2 typeT_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 procDef : /* empty */ { ProcDef_Empty  }
-  | beginList block_list endList SYMB4 { ProcDef_Some ($1, $2, $3) }
+  | beginList block_list endList { ProcDef_Some ($1, $2, $3) }
   ;
 
 intType : iNTTYPE { IntType1 $1 }
@@ -436,7 +436,7 @@ boolType : bOOLTYPE { BoolType1 $1 }
 bVType : bVTYPE { BVType1 $1 }
   ;
 
-mapType : type1 SYMB2 typeT { MapType1 ($1, $3) }
+mapType : type1 SYMB3 typeT { MapType1 ($1, $3) }
   ;
 
 type1 : intType { TypeIntType $1 }
@@ -480,7 +480,7 @@ stmt : KW_nop { Stmt_Nop  }
   ;
 
 assignment_list : assignment { (fun x -> [x]) $1 }
-  | assignment SYMB1 assignment_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | assignment SYMB2 assignment_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 localVar : localIdent SYMB5 type1 { LocalTyped ($1, $3) }
@@ -492,7 +492,7 @@ globalVar : globalIdent SYMB5 type1 { GlobalTyped ($1, $3) }
   ;
 
 localVar_list : localVar { (fun x -> [x]) $1 }
-  | localVar SYMB1 localVar_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | localVar SYMB2 localVar_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 var : localVar { VarLocalVar $1 }
@@ -501,7 +501,7 @@ var : localVar { VarLocalVar $1 }
 
 globalVar_list : /* empty */ { []  }
   | globalVar { (fun x -> [x]) $1 }
-  | globalVar SYMB1 globalVar_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | globalVar SYMB2 globalVar_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 namedCallReturn : lVar SYMB6 localIdent { NamedCallReturn1 ($1, $3) }
@@ -509,7 +509,7 @@ namedCallReturn : lVar SYMB6 localIdent { NamedCallReturn1 ($1, $3) }
 
 namedCallReturn_list : /* empty */ { []  }
   | namedCallReturn { (fun x -> [x]) $1 }
-  | namedCallReturn SYMB1 namedCallReturn_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | namedCallReturn SYMB2 namedCallReturn_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 lVars : /* empty */ { LVars_Empty  }
@@ -522,7 +522,7 @@ namedCallArg : localIdent SYMB6 expr { NamedCallArg1 ($1, $3) }
   ;
 
 namedCallArg_list : namedCallArg { (fun x -> [x]) $1 }
-  | namedCallArg SYMB1 namedCallArg_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | namedCallArg SYMB2 namedCallArg_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 callParams : expr_list { CallParams_Exprs $1 }
@@ -540,30 +540,30 @@ lVar : KW_var localVar { LVar_Local $2 }
   ;
 
 lVar_list : lVar { (fun x -> [x]) $1 }
-  | lVar SYMB1 lVar_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | lVar SYMB2 lVar_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 block_list : /* empty */ { []  }
   | block { (fun x -> [x]) $1 }
-  | block SYMB4 block_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | block SYMB1 block_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 stmtWithAttrib : stmt attribSet { StmtWithAttrib1 ($1, $2) }
   ;
 
 stmtWithAttrib_list : /* empty */ { []  }
-  | stmtWithAttrib SYMB4 stmtWithAttrib_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | stmtWithAttrib SYMB1 stmtWithAttrib_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 jumpWithAttrib : jump attribSet { JumpWithAttrib1 ($1, $2) }
   ;
 
-phiExpr : blockIdent SYMB2 var { PhiExpr1 ($1, $3) }
+phiExpr : blockIdent SYMB3 var { PhiExpr1 ($1, $3) }
   ;
 
 phiExpr_list : /* empty */ { []  }
   | phiExpr { (fun x -> [x]) $1 }
-  | phiExpr SYMB1 phiExpr_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | phiExpr SYMB2 phiExpr_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 phiAssign : lVar SYMB7 KW_phi openParen phiExpr_list closeParen { PhiAssign1 ($1, $4, $5, $6) }
@@ -571,11 +571,11 @@ phiAssign : lVar SYMB7 KW_phi openParen phiExpr_list closeParen { PhiAssign1 ($1
 
 phiAssign_list : /* empty */ { []  }
   | phiAssign { (fun x -> [x]) $1 }
-  | phiAssign SYMB1 phiAssign_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | phiAssign SYMB2 phiAssign_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-block : KW_block blockIdent attribSet beginList stmtWithAttrib_list jumpWithAttrib SYMB4 endList { Block_NoPhi ($2, $3, $4, $5, $6, $8) }
-  | KW_block blockIdent attribSet openParen phiAssign_list closeParen beginList stmtWithAttrib_list jumpWithAttrib SYMB4 endList { Block_Phi ($2, $3, $4, $5, $6, $7, $8, $9, $11) }
+block : KW_block blockIdent attribSet beginList stmtWithAttrib_list jumpWithAttrib SYMB1 endList { Block_NoPhi ($2, $3, $4, $5, $6, $8) }
+  | KW_block blockIdent attribSet openParen phiAssign_list closeParen beginList stmtWithAttrib_list jumpWithAttrib SYMB1 endList { Block_Phi ($2, $3, $4, $5, $6, $7, $8, $9, $11) }
   ;
 
 attrKeyValue : bIdent SYMB6 attr { AttrKeyValue1 ($1, $3) }
@@ -583,7 +583,7 @@ attrKeyValue : bIdent SYMB6 attr { AttrKeyValue1 ($1, $3) }
 
 attrKeyValue_list : /* empty */ { []  }
   | attrKeyValue { (fun x -> [x]) $1 }
-  | attrKeyValue SYMB4 attrKeyValue_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | attrKeyValue SYMB1 attrKeyValue_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 attribSet : beginRec attrKeyValue_list endRec { AttribSet_Some ($1, $2, $3) }
@@ -592,7 +592,7 @@ attribSet : beginRec attrKeyValue_list endRec { AttribSet_Some ($1, $2, $3) }
 
 attr_list : /* empty */ { []  }
   | attr { (fun x -> [x]) $1 }
-  | attr SYMB4 attr_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | attr SYMB1 attr_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 attr : beginRec attrKeyValue_list endRec { Attr_Map ($1, $2, $3) }
@@ -606,7 +606,7 @@ params : localIdent SYMB5 typeT { Params1 ($1, $3) }
 
 params_list : /* empty */ { []  }
   | params { (fun x -> [x]) $1 }
-  | params SYMB1 params_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | params SYMB2 params_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 value : bVVal { Value_BV $1 }
@@ -617,7 +617,7 @@ value : bVVal { Value_BV $1 }
 
 expr_list : /* empty */ { []  }
   | expr { (fun x -> [x]) $1 }
-  | expr SYMB1 expr_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | expr SYMB2 expr_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 expr : expr1 {  $1 }
@@ -634,14 +634,14 @@ expr2 : value { Expr_Literal $1 }
   | localVar { Expr_Local $1 }
   | globalVar { Expr_Global $1 }
   | KW_old openParen expr closeParen { Expr_Old ($2, $3, $4) }
-  | binOp openParen expr SYMB1 expr closeParen { Expr_Binary ($1, $2, $3, $5, $6) }
+  | binOp openParen expr SYMB2 expr closeParen { Expr_Binary ($1, $2, $3, $5, $6) }
   | boolBinOp openParen expr_list closeParen { Expr_Assoc ($1, $2, $3, $4) }
   | unOp openParen expr closeParen { Expr_Unary ($1, $2, $3, $4) }
-  | KW_load_be openParen intVal SYMB1 expr SYMB1 expr closeParen { Expr_LoadBe ($2, $3, $5, $7, $8) }
-  | KW_load_le openParen intVal SYMB1 expr SYMB1 expr closeParen { Expr_LoadLe ($2, $3, $5, $7, $8) }
-  | KW_zero_extend openParen intVal SYMB1 expr closeParen { Expr_ZeroExtend ($2, $3, $5, $6) }
-  | KW_sign_extend openParen intVal SYMB1 expr closeParen { Expr_SignExtend ($2, $3, $5, $6) }
-  | KW_extract openParen intVal SYMB1 intVal SYMB1 expr closeParen { Expr_Extract ($2, $3, $5, $7, $8) }
+  | KW_load_be openParen intVal SYMB2 expr SYMB2 expr closeParen { Expr_LoadBe ($2, $3, $5, $7, $8) }
+  | KW_load_le openParen intVal SYMB2 expr SYMB2 expr closeParen { Expr_LoadLe ($2, $3, $5, $7, $8) }
+  | KW_zero_extend openParen intVal SYMB2 expr closeParen { Expr_ZeroExtend ($2, $3, $5, $6) }
+  | KW_sign_extend openParen intVal SYMB2 expr closeParen { Expr_SignExtend ($2, $3, $5, $6) }
+  | KW_extract openParen intVal SYMB2 intVal SYMB2 expr closeParen { Expr_Extract ($2, $3, $5, $7, $8) }
   | KW_bvconcat openParen expr_list closeParen { Expr_Concat ($2, $3, $4) }
   | KW_match expr KW_with openParen case_list closeParen { Expr_Match ($2, $4, $5, $6) }
   | KW_cases openParen case_list closeParen { Expr_Cases ($2, $3, $4) }
@@ -654,7 +654,7 @@ lambdaParen : localVar { LambdaParenLocalVar $1 }
 
 lambdaParen_list : /* empty */ { []  }
   | lambdaParen { (fun x -> [x]) $1 }
-  | lambdaParen SYMB1 lambdaParen_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | lambdaParen SYMB2 lambdaParen_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 lambdaDef : lambdaParen_list lambdaSep expr { LambdaDef1 ($1, $2, $3) }
@@ -675,8 +675,8 @@ unOp : bVUnOp { UnOpBVUnOp $1 }
   | KW_classification { UnOp_classification  }
   ;
 
-case : expr SYMB2 expr { CaseCase ($1, $3) }
-  | SYMB9 SYMB2 expr { CaseDefault $3 }
+case : expr SYMB3 expr { CaseCase ($1, $3) }
+  | SYMB9 SYMB3 expr { CaseDefault $3 }
   ;
 
 case_list : /* empty */ { []  }
@@ -774,11 +774,11 @@ progSpec : relyTok expr { ProgSpec_Rely ($1, $2) }
   ;
 
 funSpec_list : /* empty */ { []  }
-  | funSpec SYMB4 funSpec_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | funSpec funSpec_list { (fun (x,xs) -> x::xs) ($1, $2) }
   ;
 
-progSpec_list : progSpec SYMB4 { (fun x -> [x]) $1 }
-  | progSpec SYMB4 progSpec_list { (fun (x,xs) -> x::xs) ($1, $3) }
+progSpec_list : /* empty */ { []  }
+  | progSpec progSpec_list { (fun (x,xs) -> x::xs) ($1, $2) }
   ;
 
 bVTYPE : TOK_BVTYPE { BVTYPE ($1)};
