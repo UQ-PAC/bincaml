@@ -648,6 +648,26 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
 let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
   let open AbstractExpr in
   let open InferredType in
+  (*
+    When dealing with load or store statements, sva results are used
+
+    Before they can be used, they need to be checked to see if useful.
+
+    They should be not top or bottom, with only one SymBase that is not Stack.
+  *)
+  let sva_res_check sva_res addr =
+    let open Analysis.Sva in
+    let open Analysis.Wrapped_intervals in
+    SymAddrSetLattice.cardinal sva_res <> 1
+    || WrappedIntervalsLattice.equal
+         (snd @@ List.hd @@ snd @@ SymAddrSetLattice.to_list sva_res)
+         WrappedIntervalsLattice.Top
+    || SymBase.is_stack
+         (fst @@ List.hd @@ snd @@ SymAddrSetLattice.to_list sva_res)
+    || WrappedIntervalsLattice.equal
+         (snd @@ List.hd @@ snd @@ SymAddrSetLattice.to_list sva_res)
+         WrappedIntervalsLattice.Bot
+  in
   (* Given a expression constrain the variables involed *)
   let rec constrain_expr (st : ConstraintState.t)
       (expr : 'e BasilExpr.abstract_expr) =
@@ -789,16 +809,6 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
     | ApplyFun _ -> (st, Top)
     | Binding _ -> (st, Top)
   in
-
-  (*
-    WARN: Not certain on this recurence check but seems to work
-
-    Idea behind it is, if a variable has been constrained by another variable already
-      there is no need to do it again.
-
-    Transistive closure will be maintained as anything new being in added in, would be
-      constrained as it is being added in anyway.
-  *)
   let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
       (type1 : InferredType.t) : ConstraintState.t =
     match (type0, type1) with
@@ -871,24 +881,13 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
         let rhs = VarId.var_proc_to_uid rhs proc in
         constrain st (TypeVar rhs) (TypeVar lhs)
   | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size } } ->
+      let lhs = VarId.var_proc_to_uid lhs proc in
       let sva_res =
         Analysis.Sva.Eval.EV.eval
           ((flip Analysis.Sva.StateAbstraction.read) sva)
           addr
       in
-      let lhs = VarId.var_proc_to_uid lhs proc in
-      if
-        (* If there is more than one entry or it is top / bot, there is no info *)
-        Analysis.Sva.SymAddrSetLattice.cardinal sva_res <> 1
-        || Analysis.Wrapped_intervals.WrappedIntervalsLattice.equal
-             (snd @@ List.hd @@ snd
-             @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res)
-             Analysis.Wrapped_intervals.WrappedIntervalsLattice.Top
-        || Analysis.Wrapped_intervals.WrappedIntervalsLattice.equal
-             (snd @@ List.hd @@ snd
-             @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res)
-             Analysis.Wrapped_intervals.WrappedIntervalsLattice.Bot
-      then
+      if sva_res_check sva_res addr then
         (*
           No information case
 
@@ -917,9 +916,9 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
           | Interval { lower } -> Bitvec.to_signed_bigint lower
           | _ -> failwith "impossible"
         in
-        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_a_load" in
+        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_load" in
         let ty =
-          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_b_load")
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_load")
         in
         let ub = Record [ { size; offset; ty } ] in
         let st = ConstraintState.add_ub st lhs (Pointer (TypeVar lb, ub)) in
@@ -931,25 +930,14 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
           addr
       in
       let lhs = VarId.var_proc_to_uid lhs proc in
-      if
-        (* If there is more than one entry or it is top / bot, there is no info *)
-        Analysis.Sva.SymAddrSetLattice.cardinal sva_res <> 1
-        || Analysis.Wrapped_intervals.WrappedIntervalsLattice.equal
-             (snd @@ List.hd @@ snd
-             @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res)
-             Analysis.Wrapped_intervals.WrappedIntervalsLattice.Top
-        || Analysis.Wrapped_intervals.WrappedIntervalsLattice.equal
-             (snd @@ List.hd @@ snd
-             @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res)
-             Analysis.Wrapped_intervals.WrappedIntervalsLattice.Bot
-      then
+      if sva_res_check sva_res addr then
         (*
           No information case
 
           Simply just a ptr(a,b) where a <= b
         *)
-        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_a_load" in
-        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_b_load" in
+        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_load" in
+        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_load" in
         let st =
           ConstraintState.add_ub st lhs (Pointer (TypeVar lb, TypeVar ub))
         in
@@ -1037,7 +1025,7 @@ let transform (prog : Program.t) =
                 acc)
          VarIdMap.empty
   in
-  (* print_endline @@ ConstraintState.export_graph_viz type_constraint_map; *)
+  print_endline @@ ConstraintState.export_graph_viz type_constraint_map;
   let types =
     VarIdMap.mapi
       (fun name ({ lb; ub } : ConstraintState.TypeConstraint.t) ->
