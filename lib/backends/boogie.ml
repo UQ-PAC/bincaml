@@ -305,11 +305,16 @@ let pretty_procedure_header (s : string) (p : Lang.Program.proc) =
   in
   header
 
-let pretty_procedure_decl (p : Lang.Program.proc) =
+let pretty_modifies (p : Lang.Program.proc) =
+  let open Containers_pp in
+  let spec = Lang.Procedure.specification p in
+  spec.modifies_globs |> List.map pretty_variable |> fill (text "," ^ sp)
+
+let pretty_procedure_spec (p : Lang.Program.proc) =
   let open Containers_pp in
   let open Containers_pp.Infix in
   let header = pretty_procedure_header "procedure" p in
-  let modifies = text "modifies _" in
+  let modifies = text "modifies" ^+ pretty_modifies p in
   let requires = text "requires _" in
   let ensures = text "ensures _" in
   let body = join_lines [ modifies; requires; ensures ] in
@@ -341,7 +346,7 @@ let pretty_procedure_impl (p : Lang.Program.proc) =
 let pretty_procedure (p : Lang.Program.proc) =
   let open Containers_pp in
   join_lines
-  @@ [ pretty_procedure_decl p ]
+  @@ [ pretty_procedure_spec p ]
   @
   if negate List.is_empty @@ Lang.Procedure.blocks_to_list p then
     [ pretty_procedure_impl p ]
