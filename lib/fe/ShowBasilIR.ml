@@ -161,13 +161,23 @@ and showVar (e : AbsBasilIR.var) : showable = match e with
   |    AbsBasilIR.VarGlobalVar globalvar -> s2s "VarGlobalVar" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
 
 
+and showLocalVarParen (e : AbsBasilIR.localVarParen) : showable = match e with
+       AbsBasilIR.LocalVarParenLocalVar localvar -> s2s "LocalVarParenLocalVar" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
+  |    AbsBasilIR.LocalVarParen1 (openparen, localident, type', closeparen) -> s2s "LocalVarParen1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showLocalIdent localident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+
+
+and showGlobalVarParen (e : AbsBasilIR.globalVarParen) : showable = match e with
+       AbsBasilIR.GlobalVarParenGlobalVar globalvar -> s2s "GlobalVarParenGlobalVar" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
+  |    AbsBasilIR.GlobalVarParen1 (openparen, globalident, type', closeparen) -> s2s "GlobalVarParen1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+
+
 and showNamedCallReturn (e : AbsBasilIR.namedCallReturn) : showable = match e with
        AbsBasilIR.NamedCallReturn1 (lvar, localident) -> s2s "NamedCallReturn1" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showLocalIdent localident >> c2s ')'
 
 
 and showLVars (e : AbsBasilIR.lVars) : showable = match e with
        AbsBasilIR.LVars_Empty  -> s2s "LVars_Empty"
-  |    AbsBasilIR.LVars_LocalList (openparen, localvars, closeparen) -> s2s "LVars_LocalList" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showLocalVar localvars  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.LVars_LocalList (openparen, localvarparens, closeparen) -> s2s "LVars_LocalList" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showLocalVarParen localvarparens  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.LVars_List (openparen, lvars, closeparen) -> s2s "LVars_List" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showLVar lvars  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.NamedLVars_List (openparen, namedcallreturns, closeparen) -> s2s "NamedLVars_List" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showNamedCallReturn namedcallreturns  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
@@ -189,7 +199,7 @@ and showJump (e : AbsBasilIR.jump) : showable = match e with
 
 
 and showLVar (e : AbsBasilIR.lVar) : showable = match e with
-       AbsBasilIR.LVar_Local localvar -> s2s "LVar_Local" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
+       AbsBasilIR.LVar_Local localvarparen -> s2s "LVar_Local" >> c2s ' ' >> c2s '(' >> showLocalVarParen localvarparen >> c2s ')'
   |    AbsBasilIR.LVar_Global globalvar -> s2s "LVar_Global" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
 
 
@@ -264,13 +274,8 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> s2s "Expr_Paren" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
-and showLambdaParen (e : AbsBasilIR.lambdaParen) : showable = match e with
-       AbsBasilIR.LambdaParenLocalVar localvar -> s2s "LambdaParenLocalVar" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
-  |    AbsBasilIR.LambdaParen1 (openparen, localvar, closeparen) -> s2s "LambdaParen1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showLocalVar localvar  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
-
-
 and showLambdaDef (e : AbsBasilIR.lambdaDef) : showable = match e with
-       AbsBasilIR.LambdaDef1 (lambdaparens, lambdasep, expr) -> s2s "LambdaDef1" >> c2s ' ' >> c2s '(' >> showList showLambdaParen lambdaparens  >> s2s ", " >>  showLambdaSep lambdasep  >> s2s ", " >>  showExpr expr >> c2s ')'
+       AbsBasilIR.LambdaDef1 (localvarparens, lambdasep, expr) -> s2s "LambdaDef1" >> c2s ' ' >> c2s '(' >> showList showLocalVarParen localvarparens  >> s2s ", " >>  showLambdaSep lambdasep  >> s2s ", " >>  showExpr expr >> c2s ')'
 
 
 and showBinOp (e : AbsBasilIR.binOp) : showable = match e with

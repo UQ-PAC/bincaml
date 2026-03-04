@@ -97,13 +97,20 @@ Stmt_MultiAssign . Stmt ::= OpenParen [Assignment]  CloseParen ;
 
 LocalTyped . LocalVar ::= LocalIdent ":" Type1 ;
 LocalUntyped . LocalVar ::= LocalIdent ;
+separator nonempty LocalVar ",";
 
 GlobalTyped . GlobalVar ::= GlobalIdent ":" Type1 ;
 GlobalUntyped . GlobalVar ::= GlobalIdent;
-separator nonempty LocalVar ",";
+separator GlobalVar ",";
+
 rules Var ::= LocalVar | GlobalVar ;
 
-separator GlobalVar ",";
+-- Variant of LocalVar / GlobalVar which can be wrapped in parens and
+-- can contain any type.
+rules LocalVarParen ::= LocalVar | OpenParen LocalIdent ":" Type CloseParen ;
+rules GlobalVarParen ::= GlobalVar | OpenParen GlobalIdent ":" Type CloseParen ;
+separator LocalVarParen ",";
+
 
 --                        lvar               endian mem addr   size
 Stmt_Load_Var  . Stmt ::= LVar ":="   "load" Endian Var Expr IntVal;
@@ -116,7 +123,7 @@ rules NamedCallReturn ::= LVar "=" LocalIdent;
 separator NamedCallReturn "," ;
 
 LVars_Empty . LVars ::= ;
-LVars_LocalList . LVars ::= "var" OpenParen [ LocalVar ] CloseParen ":=" ;
+LVars_LocalList . LVars ::= "var" OpenParen [ LocalVarParen ] CloseParen ":=" ;
 LVars_List . LVars ::= OpenParen [ LVar ]  CloseParen ":=";
 NamedLVars_List . LVars ::= OpenParen [NamedCallReturn]  CloseParen ":=";
 
@@ -138,7 +145,7 @@ Jump_Unreachable . Jump ::= "unreachable" ;
 Jump_Return . Jump ::= "return" OpenParen [Expr] CloseParen ;
 Jump_ProcReturn. Jump ::= "return"  ;
 
-LVar_Local . LVar ::= "var" LocalVar;
+LVar_Local . LVar ::= "var" LocalVarParen;
 LVar_Global . LVar ::= GlobalVar;
 
 separator nonempty LVar "," ;
@@ -208,10 +215,7 @@ Expr_Global  . Expr2 ::= GlobalVar;
 
 -- quantifiers
 
-rules LambdaParen ::= LocalVar | OpenParen LocalVar CloseParen ;
-separator LambdaParen ",";
-
-rules LambdaDef ::=  [LambdaParen]  LambdaSep Expr ;
+rules LambdaDef     ::=  [LocalVarParen] LambdaSep Expr ;
 Expr_Forall . Expr  ::= "forall" AttribSet LambdaDef ;
 Expr_Exists . Expr  ::= "exists" AttribSet LambdaDef ;
 Expr_Lambda . Expr  ::= "fun"    AttribSet LambdaDef ;
