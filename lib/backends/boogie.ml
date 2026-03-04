@@ -218,9 +218,7 @@ let rec pretty_statement (s : Lang.Program.stmt) =
                  (Lang.Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
                  [ Lang.Expr.BasilExpr.rvar rhs; addr ] );
            ])
-  | Instr_IntrinCall { lhs; name; args } -> text "INTRIN CALL"
-  | Instr_IndirectCall { target } -> text "INDIRECT CALL"
-  | Instr_Call { lhs; procid; args } ->
+  | Instr_IntrinCall { lhs; name; args } ->
       let lhs =
         if StringMap.cardinal lhs > 0 then
           (StringMap.bindings lhs
@@ -234,9 +232,11 @@ let rec pretty_statement (s : Lang.Program.stmt) =
         |> List.map (compose snd pretty_expr)
         |> fill (text "," ^ newline_or_spaces 1)
       in
-      nest 2 @@ text "call" ^+ lhs ^ text "p"
-      ^ text (ID.name procid)
-      ^ bracket "(" rhs ")"
+      nest 2 @@ text "call" ^+ lhs ^ text "p" ^ text name ^ bracket "(" rhs ")"
+  | Instr_IndirectCall { target } -> text "INDIRECT CALL"
+  | Instr_Call { lhs; procid; args } ->
+      pretty_statement
+      @@ Lang.Stmt.Instr_IntrinCall { lhs; name = ID.name procid; args }
 
 let pretty_block (v : Lang.Procedure.Vert.t) (b : Lang.Procedure.Edge.block) =
   let open Containers_pp in
