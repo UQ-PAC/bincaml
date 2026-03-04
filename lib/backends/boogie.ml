@@ -113,6 +113,13 @@ and pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
       surround ~width:0 (text "(") body (text ")")
   | _ -> raise (BoogieException "Unsupported intrinsic application")
 
+and pretty_apply_function (func : Lang.Program.e) (args : Lang.Program.e list) =
+  let open Containers_pp in
+  pretty_expr func
+  ^ surround ~width:2 (text "(")
+      (fill (text "," ^ sp) (List.map pretty_expr args))
+      (newline_or_spaces 0 ^ text ")")
+
 and pretty_expr (Lang.Expr.BasilExpr.E e) =
   let open Containers_pp in
   match e with
@@ -121,6 +128,7 @@ and pretty_expr (Lang.Expr.BasilExpr.E e) =
   | UnaryExpr { op; arg } -> pretty_unary_expr op arg
   | BinaryExpr { op; arg1; arg2 } -> pretty_binary_expr op arg1 arg2
   | ApplyIntrin { op; args } -> pretty_apply_intrinsic op args
+  | ApplyFun { func; args } -> pretty_apply_function func args
   | _ -> raise (BoogieException "Unsupported expression")
 
 let rec pretty_function_args (Lang.Expr.BasilExpr.E e) =
@@ -167,7 +175,77 @@ let pretty_declaration (d : Lang.Program.declaration) =
           ")"
       ^ bracket " returns (" (text (type_to_string rt)) ")"
 
-let pretty_block b = b
+let rec pretty_statement (s : Lang.Program.stmt) =
+  let open Containers_pp in
+  let open List.Infix in
+  match s with
+  | Instr_Assign [] -> text ""
+  | Instr_Assign ls ->
+      let lhs =
+        ls
+        >|= compose fst pretty_variable
+        |> fill (text "," ^ newline_or_spaces 1)
+      in
+      let rhs =
+        ls >|= compose snd pretty_expr |> fill (text "," ^ newline_or_spaces 1)
+      in
+      nest 2 @@ lhs ^+ text ":=" ^+ rhs
+  | Instr_Assert { body } -> text "assert" ^+ pretty_expr body
+  | Instr_Assume { body; branch } -> text "assume" ^+ pretty_expr body
+  | Instr_Store { lhs; rhs; value; addr = Scalar } -> text "STORE SCALAR"
+  | Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } } ->
+      let fn_name =
+        Printf.sprintf "store%d_%s" size (Lang.Stmt.show_endian endian)
+      in
+      pretty_statement
+        (Lang.Stmt.Instr_Assign
+           [
+             ( lhs,
+               Lang.Expr.BasilExpr.fapply
+                 (Lang.Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
+                 [ Lang.Expr.BasilExpr.rvar rhs; addr; value ] );
+           ])
+  | Instr_Load { lhs; rhs; addr = Scalar } -> text "LOAD SCALAR"
+  | Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->
+      let fn_name =
+        Printf.sprintf "load%d_%s" size (Lang.Stmt.show_endian endian)
+      in
+      pretty_statement
+        (Lang.Stmt.Instr_Assign
+           [
+             ( lhs,
+               Lang.Expr.BasilExpr.fapply
+                 (Lang.Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
+                 [ Lang.Expr.BasilExpr.rvar rhs; addr ] );
+           ])
+  | Instr_IntrinCall { lhs; name; args } -> text "INTRIN CALL"
+  | Instr_IndirectCall { target } -> text "INDIRECT CALL"
+  | Instr_Call { lhs; procid; args } ->
+      let lhs =
+        if StringMap.cardinal lhs > 0 then
+          (StringMap.bindings lhs
+          |> List.map (compose snd pretty_variable)
+          |> fill (text "," ^ newline_or_spaces 1))
+          ^+ text ":=" ^ sp
+        else text ""
+      in
+      let rhs =
+        StringMap.bindings args
+        |> List.map (compose snd pretty_expr)
+        |> fill (text "," ^ newline_or_spaces 1)
+      in
+      nest 2 @@ text "call" ^+ lhs ^ text "p"
+      ^ text (ID.name procid)
+      ^ bracket "(" rhs ")"
+
+let pretty_block (v : Lang.Procedure.Vert.t) (b : Lang.Procedure.Edge.block) =
+  let open Containers_pp in
+  let name = text "b" ^ text (Lang.Procedure.Vert.block_id_string v) in
+  let stmts =
+    Lang.Block.stmts_iter b |> Iter.map pretty_statement |> Iter.to_list
+  in
+  let body = [] @ stmts |> join_lines in
+  name ^ text ":" ^/ body |> nest 2
 
 let pretty_procedure_header (s : string) (p : Lang.Program.proc) =
   let open Containers_pp in
@@ -186,7 +264,9 @@ let pretty_procedure_header (s : string) (p : Lang.Program.proc) =
     else text ""
   in
   let header =
-    text s ^+ text (ID.to_string (Lang.Procedure.id p)) ^ args ^ returns
+    text s ^+ text "p"
+    ^ text (ID.to_string (Lang.Procedure.id p))
+    ^ args ^ returns
   in
   header
 
@@ -216,7 +296,7 @@ let pretty_procedure_impl (p : Lang.Program.proc) =
   in
   let blocks =
     Lang.Procedure.blocks_to_list p
-    |> List.map (fun (e, b) -> text "block")
+    |> List.rev_map (fun (v, b) -> pretty_block v b)
     |> join_lines_end
   in
   let header = pretty_procedure_header "implementation" p in
@@ -235,7 +315,7 @@ let pretty_procedure (p : Lang.Program.proc) =
 let pretty_program (p : Lang.Program.t) =
   let open Containers_pp in
   let glob_vars, glob_funs =
-    p.globals |> StringMap.values |> Iter.to_list
+    p.globals |> StringMap.bindings |> List.map snd
     |> List.partition_filter_map (fun d ->
         let p = pretty_declaration d in
         match d with
