@@ -170,34 +170,20 @@ let transform (p : Program.t) : Program.t =
         in
 
         (* Rewrite Old(e) → e[g ↦ in_param(g)].
-           The catamorphism is bottom-up: rw_fun returns None for RVar nodes
-           outside Old, so by the time it sees the Old node its arg is the
-           original (unmodified) inner expression.  We then apply an inner
-           rewrite that substitutes captured globals with their in-params and
-           return the result without the Old wrapper. *)
+           We use map unfix to unwrap one layer of the argument so we can
+           match on Old(RVar {id}) directly, avoiding a nested rewrite. *)
         let rewrite_old_expr expr =
           let open Expr.AbstractExpr in
           let open Expr.BasilExpr in
-          rewrite
-            ~rw_fun:(fun node ->
-              match node with
-              | UnaryExpr { op = `Old; arg } ->
-                  let substituted =
-                    rewrite
-                      ~rw_fun:(fun n ->
-                        match n with
-                        | RVar { id } -> (
-                            match
-                              StringMap.find_opt (Var.name id) glob_to_inparam
-                            with
-                            | Some v -> replace [%here] (rvar v)
-                            | None -> None)
-                        | _ -> None)
-                      arg
-                  in
-                  replace [%here] substituted
-              | _ -> None)
-            expr
+          let alg node =
+            match map unfix node with
+            | UnaryExpr { op = `Old; arg = RVar { id } } -> (
+                match StringMap.find_opt (Var.name id) glob_to_inparam with
+                | Some v -> replace [%here] (rvar v)
+                | None -> None)
+            | _ -> None
+          in
+          rewrite ~rw_fun:alg expr
         in
 
         (* In a requires clause every variable reference denotes the
@@ -209,16 +195,16 @@ let transform (p : Program.t) : Program.t =
         let rewrite_requires_expr expr =
           let open Expr.AbstractExpr in
           let open Expr.BasilExpr in
-          rewrite
-            ~rw_fun:(fun node ->
-              match node with
-              | RVar { id } -> (
-                  match StringMap.find_opt (Var.name id) glob_to_inparam with
-                  | Some v -> replace [%here] (rvar v)
-                  | None -> None)
-              | UnaryExpr { op = `Old; arg } -> replace [%here] arg
-              | _ -> None)
-            expr
+          let alg node =
+            match map unfix node with
+            | RVar { id } -> (
+                match StringMap.find_opt (Var.name id) glob_to_inparam with
+                | Some v -> replace [%here] (rvar v)
+                | None -> None)
+            | UnaryExpr { op = `Old; arg } -> replace [%here] (fix arg)
+            | _ -> None
+          in
+          rewrite ~rw_fun:alg expr
         in
 
         (* Apply Old-rewriting to all contract clauses in the spec.
