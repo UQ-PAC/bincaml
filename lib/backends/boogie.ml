@@ -249,27 +249,23 @@ let rec pretty_statement (s : Lang.Program.stmt) =
 let pretty_terminator (p : Lang.Program.proc) (i : IDSet.elt)
     (b : Lang.Procedure.Edge.block) =
   let open Containers_pp in
-  let x =
-    Lang.Procedure.graph p
-    |> Option.map (fun g ->
-        match Lang.Procedure.G.succ_e g (Lang.Procedure.Vert.End i) with
-        | [] -> text "Unreachable"
-        | [ (b, re, Return) ] -> text "return"
-        | succ ->
-            text "goto"
-            ^+ fill
-                 (text "," ^ sp)
-                 (List.map
-                    (fun (_, e, v) ->
-                      match v with
-                      | Lang.Procedure.Vert.Begin i ->
-                          block_name
-                            (text (Lang.Procedure.Vert.block_id_string v))
-                      | _ -> text "BAD")
-                    succ))
-    |> Option.get_or ~default:(text "AH")
-  in
-  x
+  Lang.Procedure.graph p
+  |> Option.map (fun g ->
+      match Lang.Procedure.G.succ_e g (Lang.Procedure.Vert.End i) with
+      | [] -> text "Unreachable"
+      | [ (b, re, Return) ] -> text "return"
+      | succ ->
+          let succ =
+            List.map
+              (fun (_, e, v) ->
+                match v with
+                | Lang.Procedure.Vert.Begin i ->
+                    block_name (text (Lang.Procedure.Vert.block_id_string v))
+                | _ -> raise (BoogieException "Bad graph structure"))
+              succ
+          in
+          text "goto" ^+ fill (text "," ^ sp) succ)
+  |> Option.get
 
 let pretty_block (p : Lang.Program.proc) (i : IDSet.elt)
     (b : Lang.Procedure.Edge.block) =
