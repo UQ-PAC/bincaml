@@ -3,6 +3,14 @@ open Bincaml_util.Common
 
 exception BoogieException of string
 
+let proc_name p =
+  let open Containers_pp in
+  text "p" ^ p
+
+let block_name b =
+  let open Containers_pp in
+  text "b" ^ b
+
 let join_lines ?(s = "") ls =
   let open Containers_pp in
   append_l ~sep:(text ";\n") ls
@@ -232,19 +240,50 @@ let rec pretty_statement (s : Lang.Program.stmt) =
         |> List.map (compose snd pretty_expr)
         |> fill (text "," ^ newline_or_spaces 1)
       in
-      nest 2 @@ text "call" ^+ lhs ^ text "p" ^ text name ^ bracket "(" rhs ")"
+      nest 2 @@ text "call" ^+ lhs ^ proc_name (text name) ^ bracket "(" rhs ")"
   | Instr_IndirectCall { target } -> text "INDIRECT CALL"
   | Instr_Call { lhs; procid; args } ->
       pretty_statement
       @@ Lang.Stmt.Instr_IntrinCall { lhs; name = ID.name procid; args }
 
-let pretty_block (v : Lang.Procedure.Vert.t) (b : Lang.Procedure.Edge.block) =
+let pretty_terminator (p : Lang.Program.proc) (i : IDSet.elt)
+    (b : Lang.Procedure.Edge.block) =
   let open Containers_pp in
-  let name = text "b" ^ text (Lang.Procedure.Vert.block_id_string v) in
+  let x =
+    Lang.Procedure.graph p
+    |> Option.map (fun g ->
+        match Lang.Procedure.G.succ_e g (Lang.Procedure.Vert.End i) with
+        | [] -> text "Unreachable"
+        | [ (b, re, Return) ] -> text "return"
+        | succ ->
+            text "goto"
+            ^+ fill
+                 (text "," ^ sp)
+                 (List.map
+                    (fun (_, e, v) ->
+                      match v with
+                      | Lang.Procedure.Vert.Begin i ->
+                          block_name
+                            (text (Lang.Procedure.Vert.block_id_string v))
+                      | _ -> text "BAD")
+                    succ))
+    |> Option.get_or ~default:(text "AH")
+  in
+  x
+
+let pretty_block (p : Lang.Program.proc) (i : IDSet.elt)
+    (b : Lang.Procedure.Edge.block) =
+  let open Containers_pp in
+  let g = Lang.Procedure.graph p in
+  let name =
+    block_name
+      (text (Lang.Procedure.Vert.block_id_string (Lang.Procedure.Vert.Begin i)))
+  in
   let stmts =
     Lang.Block.stmts_iter b |> Iter.map pretty_statement |> Iter.to_list
   in
-  let body = [] @ stmts |> join_lines in
+  let terminator = [ pretty_terminator p i b ] in
+  let body = stmts @ terminator |> join_lines in
   name ^ text ":" ^/ body |> nest 2
 
 let pretty_procedure_header (s : string) (p : Lang.Program.proc) =
@@ -264,8 +303,8 @@ let pretty_procedure_header (s : string) (p : Lang.Program.proc) =
     else text ""
   in
   let header =
-    text s ^+ text "p"
-    ^ text (ID.to_string (Lang.Procedure.id p))
+    text s
+    ^+ proc_name (text (ID.to_string (Lang.Procedure.id p)))
     ^ args ^ returns
   in
   header
@@ -295,9 +334,9 @@ let pretty_procedure_impl (p : Lang.Program.proc) =
     |> join_lines_end
   in
   let blocks =
-    Lang.Procedure.blocks_to_list p
-    |> List.rev_map (fun (v, b) -> pretty_block v b)
-    |> join_lines_end
+    Lang.Procedure.iter_blocks_topo_fwd p
+    |> Iter.map (fun (i, b) -> pretty_block p i b)
+    |> Iter.to_list |> join_lines_end
   in
   let header = pretty_procedure_header "implementation" p in
   let body = local_decls ^/ blocks in
