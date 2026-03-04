@@ -1390,8 +1390,8 @@ proc @main_4196260 () -> ()
     var $ZF:bv1;
     prog entry @main_4196260;
     proc @main_4196260()  -> () {  }
-      modifies $NF:bv1, $ZF:bv1;
-      captures $NF:bv1, $ZF:bv1;
+      modifies $NF:bv1, $ZF:bv1
+      captures $NF:bv1, $ZF:bv1
 
     [
        block %main_entry [
