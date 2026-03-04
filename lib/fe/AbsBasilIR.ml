@@ -190,12 +190,13 @@ and expr =
  | Expr_Cases of openParen * case list * closeParen
  | Expr_Paren of openParen * expr * closeParen
 
-and lambdaParen =
-   LambdaParenLocalVar of localVar
- | LambdaParen1 of openParen * localVar * closeParen
+and lambdaParam =
+   LambdaParamLocalIdent of localIdent
+ | LambdaParam1 of localIdent * typeT
+ | LambdaParam2 of openParen * localVar * closeParen
 
 and lambdaDef =
-   LambdaDef1 of lambdaParen list * lambdaSep * expr
+   LambdaDef1 of lambdaParam list * lambdaSep * expr
 
 and binOp =
    BinOpBVBinOp of bVBinOp
