@@ -57,10 +57,11 @@ Decl_Fun . Decl ::= "let" GlobalIdent AttribSet ":" Type "=" Expr ";";
 Decl_FunNoType . Decl ::= "let" GlobalIdent AttribSet "=" Expr ";";
 Decl_ProgEmpty . Decl ::= "prog" "entry" ProcIdent AttribSet ";";
 Decl_ProgWithSpec . Decl ::= "prog" "entry" ProcIdent AttribSet [ ProgSpec ] ;
-Decl_Proc . Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [ FunSpec ] ProcDef ;
+Decl_Proc . Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet ProcDef ;
 
-ProcDef_Empty . ProcDef ::= ; -- semicolon terminator in FunSpec
-ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ";";
+ProcDef_Empty . ProcDef ::= ";"; 
+ProcDef_SpecOnly . ProcDef ::= [ FunSpec ]; -- FunSpec has terminator semicolon
+ProcDef_Some  . ProcDef ::= OptionalFunSpec BeginList [Block] EndList ";";
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
@@ -282,7 +283,8 @@ FunSpec_Invariant . FunSpec ::= "invariant" BlockIdent Expr;
 ProgSpec_Rely . ProgSpec ::= RelyTok Expr;
 ProgSpec_Guarantee . ProgSpec ::= GuarTok Expr;
 
-terminator FunSpec ";";
+terminator nonempty FunSpec ";";
+rules OptionalFunSpec ::= [ FunSpec ] | ;
 
 {- last semicolon terminates the prog definitino -}
 terminator nonempty ProgSpec ";";

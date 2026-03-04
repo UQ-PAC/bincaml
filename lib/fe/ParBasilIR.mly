@@ -44,7 +44,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pProcDef pIntType pBoolType pBVType pMapType pType1 pTypeT pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaParen pLambdaParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pProcDef pIntType pBoolType pBVType pMapType pType1 pTypeT pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaParen pLambdaParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pOptionalFunSpec pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -123,6 +123,7 @@ open Lexing
 %type <AbsBasilIR.varSpec> pVarSpec
 %type <AbsBasilIR.progSpec> pProgSpec
 %type <AbsBasilIR.funSpec list> pFunSpec_list
+%type <AbsBasilIR.optionalFunSpec> pOptionalFunSpec
 %type <AbsBasilIR.progSpec list> pProgSpec_list
 
 %type <AbsBasilIR.moduleT> moduleT
@@ -203,6 +204,7 @@ open Lexing
 %type <AbsBasilIR.varSpec> varSpec
 %type <AbsBasilIR.progSpec> progSpec
 %type <AbsBasilIR.funSpec list> funSpec_list
+%type <AbsBasilIR.optionalFunSpec> optionalFunSpec
 %type <AbsBasilIR.progSpec list> progSpec_list
 
 %type <AbsBasilIR.bVTYPE> bVTYPE
@@ -381,6 +383,8 @@ pProgSpec : progSpec TOK_EOF { $1 };
 
 pFunSpec_list : funSpec_list TOK_EOF { $1 };
 
+pOptionalFunSpec : optionalFunSpec TOK_EOF { $1 };
+
 pProgSpec_list : progSpec_list TOK_EOF { $1 };
 
 moduleT : decl_list { Module1 $1 }
@@ -415,7 +419,7 @@ decl : KW_axiom globalIdent attribSet expr SYMB4 { Decl_Axiom ($2, $3, $4) }
   | KW_let globalIdent attribSet SYMB6 expr SYMB4 { Decl_FunNoType ($2, $3, $5) }
   | KW_prog KW_entry procIdent attribSet SYMB4 { Decl_ProgEmpty ($3, $4) }
   | KW_prog KW_entry procIdent attribSet progSpec_list { Decl_ProgWithSpec ($3, $4, $5) }
-  | KW_proc procIdent openParen params_list closeParen SYMB2 openParen params_list closeParen attribSet funSpec_list procDef { Decl_Proc ($2, $3, $4, $5, $7, $8, $9, $10, $11, $12) }
+  | KW_proc procIdent openParen params_list closeParen SYMB2 openParen params_list closeParen attribSet procDef { Decl_Proc ($2, $3, $4, $5, $7, $8, $9, $10, $11) }
   ;
 
 typeT_list : /* empty */ { []  }
@@ -423,8 +427,9 @@ typeT_list : /* empty */ { []  }
   | typeT SYMB1 typeT_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-procDef : /* empty */ { ProcDef_Empty  }
-  | beginList block_list endList SYMB4 { ProcDef_Some ($1, $2, $3) }
+procDef : SYMB4 { ProcDef_Empty  }
+  | funSpec_list { ProcDef_SpecOnly $1 }
+  | optionalFunSpec beginList block_list endList SYMB4 { ProcDef_Some ($1, $2, $3, $4) }
   ;
 
 intType : iNTTYPE { IntType1 $1 }
@@ -773,8 +778,12 @@ progSpec : relyTok expr { ProgSpec_Rely ($1, $2) }
   | guarTok expr { ProgSpec_Guarantee ($1, $2) }
   ;
 
-funSpec_list : /* empty */ { []  }
+funSpec_list : funSpec SYMB4 { (fun x -> [x]) $1 }
   | funSpec SYMB4 funSpec_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  ;
+
+optionalFunSpec : funSpec_list { OptionalFunSpec1 $1 }
+  | /* empty */ { OptionalFunSpec2  }
   ;
 
 progSpec_list : progSpec SYMB4 { (fun x -> [x]) $1 }

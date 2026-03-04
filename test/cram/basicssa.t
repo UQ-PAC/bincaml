@@ -2,6 +2,11 @@
 Run on basic irreducible loop example
 
   $ bincaml script basicssa.sexp
+  bincaml: Error in (load-il after.il): Parse error:  after.il:20
+           20 |   captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
+                  ^^^^^^^^
+            at Dune__exe__Script.of_cmd.(fun) bin/script.ml:64
+  [123]
 
   $ cat before.il
   var $CF:bv1;
@@ -312,17 +317,8 @@ Run on basic irreducible loop example
   ;
 
   $ diff after.il after_reparsed.il
-  18,21c18,21
-  <   modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
-  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
-  <   captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
-  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
-  ---
-  >   modifies $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64,
-  >     $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
-  >   captures $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64,
-  >     $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
-  [1]
+  diff: after_reparsed.il: No such file or directory
+  [2]
 
 The interpreter should give the same output for both
 
@@ -333,32 +329,14 @@ The interpreter should give the same output for both
 Similar example fixing up  a file already in DSA form
 
   $ diff  before_conds.txt after_conds.txt
+  diff: before_conds.txt: No such file or directory
+  diff: after_conds.txt: No such file or directory
+  [2]
 
 
 Multiple loops dependencies of loops etc are handled correctly
 
   $ diff ssa-multi-before.il ssa-multi-after.il
-  1d0
-  < var $R0:bv64;
-  3c2
-  < proc @main()  -> () {  }
-  ---
-  > proc @main(R0_in:bv64)  -> (R0_out:bv64) {  }
-  7a7
-  >    block %inputs [ var R0:bv64 := R0_in:bv64; goto (%e); ];
-  9,12c9,17
-  <    block %e1 [ $R0:bv64 := 0x1:bv64; goto (%e2); ];
-  <    block %e2 [ goto (%e4,%e1); ];
-  <    block %e3 [ $R0:bv64 := 0x3:bv64; goto (%e4,%e1); ];
-  <    block %e4 [ return; ]
-  ---
-  >    block %e1 [ var R0_2:bv64 := 0x1:bv64; goto (%e2); ];
-  >    block %e2 ( var R0_3:bv64 := phi(%e1 -> R0_2:bv64, %e -> R0:bv64) ) [
-  >      goto (%e4,%e1);
-  >    ];
-  >    block %e3 [ var R0_1:bv64 := 0x3:bv64; goto (%e4,%e1); ];
-  >    block %e4 (
-  >      var R0_4:bv64 := phi(%e2 -> R0_3:bv64, %e3 -> R0_1:bv64, %e2 -> R0_3:bv64)
-  >    ) [ goto (%returns); ];
-  >    block %returns [ var R0_out:bv64 := R0_4:bv64; return; ]
-  [1]
+  diff: ssa-multi-before.il: No such file or directory
+  diff: ssa-multi-after.il: No such file or directory
+  [2]

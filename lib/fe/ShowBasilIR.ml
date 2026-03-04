@@ -79,12 +79,13 @@ and showDecl (e : AbsBasilIR.decl) : showable = match e with
   |    AbsBasilIR.Decl_FunNoType (globalident, attribset, expr) -> s2s "Decl_FunNoType" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Decl_ProgEmpty (procident, attribset) -> s2s "Decl_ProgEmpty" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showAttribSet attribset >> c2s ')'
   |    AbsBasilIR.Decl_ProgWithSpec (procident, attribset, progspecs) -> s2s "Decl_ProgWithSpec" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showList showProgSpec progspecs >> c2s ')'
-  |    AbsBasilIR.Decl_Proc (procident, openparen0, paramss1, closeparen2, openparen, paramss, closeparen, attribset, funspecs, procdef) -> s2s "Decl_Proc" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showOpenParen openparen0  >> s2s ", " >>  showList showParams paramss1  >> s2s ", " >>  showCloseParen closeparen2  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showParams paramss  >> s2s ", " >>  showCloseParen closeparen  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showList showFunSpec funspecs  >> s2s ", " >>  showProcDef procdef >> c2s ')'
+  |    AbsBasilIR.Decl_Proc (procident, openparen0, paramss1, closeparen2, openparen, paramss, closeparen, attribset, procdef) -> s2s "Decl_Proc" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showOpenParen openparen0  >> s2s ", " >>  showList showParams paramss1  >> s2s ", " >>  showCloseParen closeparen2  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showParams paramss  >> s2s ", " >>  showCloseParen closeparen  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showProcDef procdef >> c2s ')'
 
 
 and showProcDef (e : AbsBasilIR.procDef) : showable = match e with
        AbsBasilIR.ProcDef_Empty  -> s2s "ProcDef_Empty"
-  |    AbsBasilIR.ProcDef_Some (beginlist, blocks, endlist) -> s2s "ProcDef_Some" >> c2s ' ' >> c2s '(' >> showBeginList beginlist  >> s2s ", " >>  showList showBlock blocks  >> s2s ", " >>  showEndList endlist >> c2s ')'
+  |    AbsBasilIR.ProcDef_SpecOnly funspecs -> s2s "ProcDef_SpecOnly" >> c2s ' ' >> c2s '(' >> showList showFunSpec funspecs >> c2s ')'
+  |    AbsBasilIR.ProcDef_Some (optionalfunspec, beginlist, blocks, endlist) -> s2s "ProcDef_Some" >> c2s ' ' >> c2s '(' >> showOptionalFunSpec optionalfunspec  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showBlock blocks  >> s2s ", " >>  showEndList endlist >> c2s ')'
 
 
 and showIntType (e : AbsBasilIR.intType) : showable = match e with
@@ -396,6 +397,11 @@ and showVarSpec (e : AbsBasilIR.varSpec) : showable = match e with
 and showProgSpec (e : AbsBasilIR.progSpec) : showable = match e with
        AbsBasilIR.ProgSpec_Rely (relytok, expr) -> s2s "ProgSpec_Rely" >> c2s ' ' >> c2s '(' >> showRelyTok relytok  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.ProgSpec_Guarantee (guartok, expr) -> s2s "ProgSpec_Guarantee" >> c2s ' ' >> c2s '(' >> showGuarTok guartok  >> s2s ", " >>  showExpr expr >> c2s ')'
+
+
+and showOptionalFunSpec (e : AbsBasilIR.optionalFunSpec) : showable = match e with
+       AbsBasilIR.OptionalFunSpec1 funspecs -> s2s "OptionalFunSpec1" >> c2s ' ' >> c2s '(' >> showList showFunSpec funspecs >> c2s ')'
+  |    AbsBasilIR.OptionalFunSpec2  -> s2s "OptionalFunSpec2"
 
 
 
