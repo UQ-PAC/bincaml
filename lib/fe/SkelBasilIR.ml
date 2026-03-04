@@ -181,23 +181,13 @@ and transVar (x : var) : result = match x with
   | VarGlobalVar globalvar -> failure x
 
 
-and transLocalVarParen (x : localVarParen) : result = match x with
-    LocalVarParenLocalVar localvar -> failure x
-  | LocalVarParen1 (openparen, localident, type', closeparen) -> failure x
-
-
-and transGlobalVarParen (x : globalVarParen) : result = match x with
-    GlobalVarParenGlobalVar globalvar -> failure x
-  | GlobalVarParen1 (openparen, globalident, type', closeparen) -> failure x
-
-
 and transNamedCallReturn (x : namedCallReturn) : result = match x with
     NamedCallReturn1 (lvar, localident) -> failure x
 
 
 and transLVars (x : lVars) : result = match x with
     LVars_Empty  -> failure x
-  | LVars_LocalList (openparen, localvarparens, closeparen) -> failure x
+  | LVars_LocalList (openparen, localvars, closeparen) -> failure x
   | LVars_List (openparen, lvars, closeparen) -> failure x
   | NamedLVars_List (openparen, namedcallreturns, closeparen) -> failure x
 
@@ -219,7 +209,7 @@ and transJump (x : jump) : result = match x with
 
 
 and transLVar (x : lVar) : result = match x with
-    LVar_Local localvarparen -> failure x
+    LVar_Local localvar -> failure x
   | LVar_Global globalvar -> failure x
 
 
@@ -294,8 +284,13 @@ and transExpr (x : expr) : result = match x with
   | Expr_Paren (openparen, expr, closeparen) -> failure x
 
 
+and transLambdaParen (x : lambdaParen) : result = match x with
+    LambdaParenLocalVar localvar -> failure x
+  | LambdaParen1 (openparen, localvar, closeparen) -> failure x
+
+
 and transLambdaDef (x : lambdaDef) : result = match x with
-    LambdaDef1 (localvarparens, lambdasep, expr) -> failure x
+    LambdaDef1 (lambdaparens, lambdasep, expr) -> failure x
 
 
 and transBinOp (x : binOp) : result = match x with

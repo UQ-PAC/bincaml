@@ -186,6 +186,13 @@ module.exports = grammar({
         // LocalUntyped. LocalVar ::= LocalIdent ;
         $.token_LocalIdent
       ),
+    GlobalVar: $ =>
+      choice(
+        // GlobalTyped. GlobalVar ::= GlobalIdent ":" Type1 ;
+        seq($.token_GlobalIdent, ":", $.Type1),
+        // GlobalUntyped. GlobalVar ::= GlobalIdent ;
+        $.token_GlobalIdent
+      ),
     list_LocalVar: $ =>
       choice(
         // (:[]). [LocalVar] ::= LocalVar ;
@@ -193,12 +200,12 @@ module.exports = grammar({
         // (:). [LocalVar] ::= LocalVar "," [LocalVar] ;
         seq($.LocalVar, ",", $.list_LocalVar)
       ),
-    GlobalVar: $ =>
+    Var: $ =>
       choice(
-        // GlobalTyped. GlobalVar ::= GlobalIdent ":" Type1 ;
-        seq($.token_GlobalIdent, ":", $.Type1),
-        // GlobalUntyped. GlobalVar ::= GlobalIdent ;
-        $.token_GlobalIdent
+        // VarLocalVar. Var ::= LocalVar ;
+        $.LocalVar,
+        // VarGlobalVar. Var ::= GlobalVar ;
+        $.GlobalVar
       ),
     list_GlobalVar: $ =>
       choice(
@@ -208,36 +215,6 @@ module.exports = grammar({
         $.GlobalVar,
         // (:). [GlobalVar] ::= GlobalVar "," [GlobalVar] ;
         seq($.GlobalVar, ",", optional($.list_GlobalVar))
-      ),
-    Var: $ =>
-      choice(
-        // VarLocalVar. Var ::= LocalVar ;
-        $.LocalVar,
-        // VarGlobalVar. Var ::= GlobalVar ;
-        $.GlobalVar
-      ),
-    LocalVarParen: $ =>
-      choice(
-        // LocalVarParenLocalVar. LocalVarParen ::= LocalVar ;
-        $.LocalVar,
-        // LocalVarParen1. LocalVarParen ::= OpenParen LocalIdent ":" Type CloseParen ;
-        seq($.token_OpenParen, $.token_LocalIdent, ":", $.Type, $.token_CloseParen)
-      ),
-    GlobalVarParen: $ =>
-      choice(
-        // GlobalVarParenGlobalVar. GlobalVarParen ::= GlobalVar ;
-        $.GlobalVar,
-        // GlobalVarParen1. GlobalVarParen ::= OpenParen GlobalIdent ":" Type CloseParen ;
-        seq($.token_OpenParen, $.token_GlobalIdent, ":", $.Type, $.token_CloseParen)
-      ),
-    list_LocalVarParen: $ =>
-      choice(
-        // []. [LocalVarParen] ::= ;
-        choice(),
-        // (:[]). [LocalVarParen] ::= LocalVarParen ;
-        $.LocalVarParen,
-        // (:). [LocalVarParen] ::= LocalVarParen "," [LocalVarParen] ;
-        seq($.LocalVarParen, ",", optional($.list_LocalVarParen))
       ),
     NamedCallReturn: $ =>
       // NamedCallReturn1. NamedCallReturn ::= LVar "=" LocalIdent ;
@@ -255,8 +232,8 @@ module.exports = grammar({
       choice(
         // LVars_Empty. LVars ::= ;
         choice(),
-        // LVars_LocalList. LVars ::= "var" OpenParen [LocalVarParen] CloseParen ":=" ;
-        seq("var", $.token_OpenParen, optional($.list_LocalVarParen), $.token_CloseParen, ":="),
+        // LVars_LocalList. LVars ::= "var" OpenParen [LocalVar] CloseParen ":=" ;
+        seq("var", $.token_OpenParen, $.list_LocalVar, $.token_CloseParen, ":="),
         // LVars_List. LVars ::= OpenParen [LVar] CloseParen ":=" ;
         seq($.token_OpenParen, $.list_LVar, $.token_CloseParen, ":="),
         // NamedLVars_List. LVars ::= OpenParen [NamedCallReturn] CloseParen ":=" ;
@@ -292,8 +269,8 @@ module.exports = grammar({
       ),
     LVar: $ =>
       choice(
-        // LVar_Local. LVar ::= "var" LocalVarParen ;
-        seq("var", $.LocalVarParen),
+        // LVar_Local. LVar ::= "var" LocalVar ;
+        seq("var", $.LocalVar),
         // LVar_Global. LVar ::= GlobalVar ;
         $.GlobalVar
       ),
@@ -481,9 +458,25 @@ module.exports = grammar({
         // Expr_Paren. Expr2 ::= OpenParen Expr CloseParen ;
         seq($.token_OpenParen, $.Expr, $.token_CloseParen)
       ),
+    LambdaParen: $ =>
+      choice(
+        // LambdaParenLocalVar. LambdaParen ::= LocalVar ;
+        $.LocalVar,
+        // LambdaParen1. LambdaParen ::= OpenParen LocalVar CloseParen ;
+        seq($.token_OpenParen, $.LocalVar, $.token_CloseParen)
+      ),
+    list_LambdaParen: $ =>
+      choice(
+        // []. [LambdaParen] ::= ;
+        choice(),
+        // (:[]). [LambdaParen] ::= LambdaParen ;
+        $.LambdaParen,
+        // (:). [LambdaParen] ::= LambdaParen "," [LambdaParen] ;
+        seq($.LambdaParen, ",", optional($.list_LambdaParen))
+      ),
     LambdaDef: $ =>
-      // LambdaDef1. LambdaDef ::= [LocalVarParen] LambdaSep Expr ;
-      seq(optional($.list_LocalVarParen), $.LambdaSep, $.Expr),
+      // LambdaDef1. LambdaDef ::= [LambdaParen] LambdaSep Expr ;
+      seq(optional($.list_LambdaParen), $.LambdaSep, $.Expr),
     BinOp: $ =>
       choice(
         // BinOpBVBinOp. BinOp ::= BVBinOp ;
