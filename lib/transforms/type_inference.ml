@@ -781,13 +781,17 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
   let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
       (type1 : InferredType.t) : ConstraintState.t =
     match (type0, type1) with
+    (* TODO: Cascade top and bottom *)
     | Top, _ | _, Top | Bottom, _ | _, Bottom -> st
     | Pointer (type0_a, type0_b), Pointer (type1_a, type1_b) ->
         constrain (constrain st type1_a type0_a) type0_b type1_b
     | _, Pointer (type1_a, type1_b) ->
         constrain (constrain st type0 type1_a) type0 type1_b
     | TypeVar a, TypeVar b -> (
-        if VarId.equal a b then st
+        if
+          VarId.equal a b
+          || ConstraintState.check_bounded st a type1 Polarity.Neg
+        then st
         else
           let st = ConstraintState.add_ub st a type1 in
           let bounds = VarIdMap.get a st in
@@ -808,7 +812,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
             | None -> st)
         | _ -> st)
     | _, TypeVar a -> (
-        if ConstraintState.check_bounded st a type0 Polarity.Neg then st
+        if ConstraintState.check_bounded st a type0 Polarity.Pos then st
         else
           (* The right hand side is not a type variable *)
           let st = ConstraintState.add_lb st a type0 in
@@ -818,16 +822,8 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
               TySet.to_iter ub
               |> Iter.fold (fun st bound -> constrain st type0 bound) st
           | None -> st)
-    | _ ->
-        (*
-          You have to assign to a variable (or something similar) so this case should never occur
-
-          Very restricting having this fail, would be nice just to ignore it
-        *)
-        failwith
-          (Printf.sprintf "Illegal constrain call type0: %s; type1: %s stmt: %s"
-             (InferredType.show type0) (InferredType.show type1)
-             (Program.show_stmt stmt))
+    | CType _, CType _ -> st
+    | _ -> failwith "Illegal types at this stage"
   in
   match stmt with
   | Stmt.Instr_Assert { body } | Stmt.Instr_Assume { body } -> (
