@@ -1,21 +1,5 @@
 (*
-
-  Useful things to note before reading the code:
-
-    Negative polarity
-      - Stores
-      - Upper bounds
-      - Intersection
-
-    Positive polarity
-      - Loads
-      - Lower bounds
-      - Union
-
   Paper this work is based on: https://arxiv.org/abs/2409.01841
-
-
-
 
   TODO:
     Ask if I should make it more general and work with less type information
@@ -27,14 +11,29 @@ open Lang
 open Expr
 
 module Polarity = struct
+  (*
+    Negative polarity
+      - Stores
+      - Upper bounds
+      - Intersection
+
+    Positive polarity
+      - Loads
+      - Lower bounds
+      - Union
+  *)
   type t = Pos | Neg [@@deriving ord, eq, show]
 
   let not p = match p with Pos -> Neg | Neg -> Pos
   let positive = equal Pos
 end
 
-(* NOTE: Sig is needed to string and t can't be the same type *)
 module VarId : sig
+  (*
+    Creates a unique way to look at variables by combining procedure and variable name
+  
+    NOTE: Sig is needed to string and t can't be the same type
+  *)
   type t
 
   val compare : t -> t -> int
@@ -62,24 +61,24 @@ end
 
 module VarIdMap = Map.Make (VarId)
 
-module CType = struct
-  type t = C_Int | C_BV of int | C_Bool [@@deriving ord, eq]
+module BinCamlType = struct
+  type t = BinCaml_Int | BinCaml_BV of int | BinCaml_Bool [@@deriving ord, eq]
 
   let show = function
-    | C_Int -> "int"
-    | C_BV size -> "bv" ^ string_of_int size
-    | C_Bool -> "bool"
+    | BinCaml_Int -> "int"
+    | BinCaml_BV size -> "bv" ^ string_of_int size
+    | BinCaml_Bool -> "bool"
 
   let c_to_type : t -> Types.t = function
-    | C_Int -> Types.Integer
-    | C_BV sz -> Types.Bitvector sz
-    | C_Bool -> Types.Boolean
+    | BinCaml_Int -> Types.Integer
+    | BinCaml_BV sz -> Types.Bitvector sz
+    | BinCaml_Bool -> Types.Boolean
 
   let type_to_c : Types.t -> t = function
-    | Types.Integer -> C_Int
-    | Types.Bitvector s -> C_BV s
-    | Types.Boolean -> C_Bool
-    | _ -> failwith "no CType"
+    | Types.Integer -> BinCaml_Int
+    | Types.Bitvector s -> BinCaml_BV s
+    | Types.Boolean -> BinCaml_Bool
+    | _ -> failwith "no BinCamlType"
 end
 
 module InferredType = struct
@@ -97,14 +96,14 @@ module InferredType = struct
     | Record of field list (* A list of fields in the record *)
     | TypeVar of VarId.t
     | Recursive of t * t
-    | CType of CType.t
+    | BinCamlType of BinCamlType.t
 
   and field = { offset : Z.t; size : int; ty : t }
 
   let rec show = function
     | Top -> "⊤"
     | Bottom -> "⊥"
-    | CType c -> CType.show c
+    | BinCamlType c -> BinCamlType.show c
     | TypeVar id -> Printf.sprintf "%s" @@ VarId.show id
     | Recursive (t1, t2) -> Printf.sprintf "μ%s.%s" (show t1) (show t2)
     | Union (t1, t2) -> Printf.sprintf "%s ⊔ %s" (show t1) (show t2)
@@ -124,7 +123,7 @@ module InferredType = struct
   let rec compare type1 type2 =
     match (type1, type2) with
     | Top, Top | Bottom, Bottom -> 0
-    | CType a, CType b -> CType.compare a b
+    | BinCamlType a, BinCamlType b -> BinCamlType.compare a b
     | TypeVar a, TypeVar b -> VarId.compare a b
     | Recursive (a, b), Recursive (c, d) ->
         let c = compare a c in
@@ -160,7 +159,7 @@ module InferredType = struct
   let rec iter f (ty : t) =
     f ty;
     match ty with
-    | Top | Bottom | CType _ | TypeVar _ | Recursive _ -> ()
+    | Top | Bottom | BinCamlType _ | TypeVar _ | Recursive _ -> ()
     | Union (a, b) | Sect (a, b) ->
         iter f b;
         iter f a
@@ -178,7 +177,7 @@ module InferredType = struct
         failwith "These types should have been removed prior to transform!"
     | Pointer (lb, ub) -> Types.Integer
     | Record fields -> Types.Boolean
-    | CType a -> CType.c_to_type a
+    | BinCamlType a -> BinCamlType.c_to_type a
     | Field { ty } -> inferred_to_real ty
 end
 
@@ -251,19 +250,25 @@ module ConstraintState = struct
            let acc =
              TySet.fold
                (fun ty acc ->
-                 Printf.sprintf "%s\"%s\" -> \"%s\" [];\n" acc (VarId.show k)
+                 Printf.sprintf "%s\"%s\" -> \"%s\";\n" acc (VarId.show k)
                    (InferredType.show ty))
                lb acc
            in
            TySet.fold
              (fun ty acc ->
-               Printf.sprintf "%s\"%s\" -> \"%s\" [];\n" acc
-                 (InferredType.show ty) (VarId.show k))
+               Printf.sprintf "%s\"%s\" -> \"%s\";\n" acc (InferredType.show ty)
+                 (VarId.show k))
              ub acc)
          t "")
 end
 
 module Sigma = struct
+  (*
+    Edges for type automata
+
+    RecLabel is offset, size
+    FnIn / FnOut is name of the parameter
+  *)
   type t =
     | Ep
     | StoreLabel
@@ -291,6 +296,11 @@ module Sigma = struct
 end
 
 module State = struct
+  (*
+    States for type automata
+
+    Made up of a polarity and a type
+  *)
   type t = Polarity.t * InferredType.t
 
   let equal (p1, ty1) (p2, ty2) =
@@ -461,10 +471,15 @@ module TypeAutomata = struct
     in
     helper m.start
 
+  (*
+    NOTE:
+      May be possible to not generate ep edges
+       and just deal with them here, saving a pass
+  *)
   let rec type_to_state_list p (ty : InferredType.t) ((ls, tbl) as acc) =
     let open Sigma in
     match ty with
-    | Top | CType _ | TypeVar _ | Bottom | Field _ -> ((p, ty) :: ls, tbl)
+    | Top | BinCamlType _ | TypeVar _ | Bottom | Field _ -> ((p, ty) :: ls, tbl)
     | Recursive (a, _) ->
         let ls, tbl = type_to_state_list p a acc in
         let edges = Hashtbl.create 1 in
@@ -550,8 +565,28 @@ module TypeAutomata = struct
          "" (get_transitions n))
 end
 
+(* Needed for extraction calls etc. *)
 let gen = ID.make_gen ()
 
+(*
+
+  Start of actual type inferencing algorithm
+  ==========================================
+
+  Three main functions
+
+  1) gen_constraint_set
+    Runs over each statement in the program and generates the initial constraints
+
+  2) coalesce_types
+    Takes constraints over variables and changes it to be one combined type that is not constrained
+
+  3) minimise type
+    Takes a (coalesced) type and returns an automata that represents that type
+    Has side effects (removing epsilon edges and that have the same incoming edges where possible)
+    
+
+*)
 let minimise_type p ty name =
   let recursives = Hashtbl.create 2 in
   InferredType.iter
@@ -637,7 +672,7 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
               bounds tau
           in
           if rec_check then Recursive (tau, s) else s)
-  | CType _ -> tau
+  | BinCamlType _ -> tau
   | _ -> Top
 
 (*
@@ -686,9 +721,9 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
     | RVar { id } ->
         let typ =
           match Var.typ id with
-          | Integer -> CType C_Int
-          | Boolean -> CType C_Bool
-          | Bitvector sz -> CType (C_BV sz)
+          | Integer -> BinCamlType BinCaml_Int
+          | Boolean -> BinCamlType BinCaml_Bool
+          | Bitvector sz -> BinCamlType (BinCaml_BV sz)
           | _ -> failwith "Illegal variable type"
         in
         ( constrain_arg st (BasilExpr.fix expr) typ,
@@ -696,19 +731,25 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
     | Constant { const } ->
         ( st,
           match const with
-          | `Bool _ -> CType C_Bool
-          | `Bitvector bv -> CType (C_BV (Bitvec.size bv))
-          | `Integer _ -> CType C_Int )
+          | `Bool _ -> BinCamlType BinCaml_Bool
+          | `Bitvector bv -> BinCamlType (BinCaml_BV (Bitvec.size bv))
+          | `Integer _ -> BinCamlType BinCaml_Int )
     | UnaryExpr { op; arg = a } -> (
         let st, _ = constrain_expr st (BasilExpr.unfix a) in
         match op with
-        | `BoolNOT -> (constrain_arg st a @@ CType C_Bool, CType C_Bool)
-        | `BOOLTOBV1 -> (constrain_arg st a @@ CType C_Bool, CType (C_BV 1))
-        | `INTNEG -> (constrain_arg st a @@ CType C_Int, CType C_Int)
+        | `BoolNOT ->
+            ( constrain_arg st a @@ BinCamlType BinCaml_Bool,
+              BinCamlType BinCaml_Bool )
+        | `BOOLTOBV1 ->
+            ( constrain_arg st a @@ BinCamlType BinCaml_Bool,
+              BinCamlType (BinCaml_BV 1) )
+        | `INTNEG ->
+            ( constrain_arg st a @@ BinCamlType BinCaml_Int,
+              BinCamlType BinCaml_Int )
         | `BVNEG | `BVNOT ->
             let typ =
               match BasilExpr.type_of a with
-              | Bitvector size -> CType (C_BV size)
+              | Bitvector size -> BinCamlType (BinCaml_BV size)
               | _ -> failwith "Bitvector operation without bitvector arguments"
             in
             (constrain_arg st a @@ typ, typ)
@@ -718,8 +759,9 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
               | Bitvector size -> size
               | _ -> failwith "Bitvector operation without bitvector arguments"
             in
-            (constrain_arg st a @@ CType (C_BV size), CType (C_BV (size + b)))
-        | `Exists -> (st, CType C_Bool) (* TODO: Confirm *)
+            ( constrain_arg st a @@ BinCamlType (BinCaml_BV size),
+              BinCamlType (BinCaml_BV (size + b)) )
+        | `Exists -> (st, BinCamlType BinCaml_Bool) (* TODO: Confirm *)
         | `Old -> (st, Top)
         | `Forall -> (st, Top)
         | `Lambda | `Classification | `Gamma -> (st, Top)
@@ -733,15 +775,17 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
             in
             let ty = TypeVar name in
             let field = { offset = Z.of_int rt; size; ty } in
-            let st = ConstraintState.add_lb st name (CType (C_BV size)) in
+            let st =
+              ConstraintState.add_lb st name (BinCamlType (BinCaml_BV size))
+            in
             (constrain_arg st a @@ Record [ field ], Field field))
     | BinaryExpr { op; arg1 = l; arg2 = r } -> (
         let st, _ = constrain_expr st (BasilExpr.unfix l) in
         let st, _ = constrain_expr st (BasilExpr.unfix r) in
         match op with
         | `INTMOD | `INTSUB | `INTDIV | `INTADD | `INTMUL ->
-            let st = constrain_args st l r @@ CType C_Int in
-            (st, CType C_Int)
+            let st = constrain_args st l r @@ BinCamlType BinCaml_Int in
+            (st, BinCamlType BinCaml_Int)
         | `NEQ | `EQ -> (
             match (BasilExpr.unfix l, BasilExpr.unfix r) with
             | RVar { id = a }, RVar { id = b } ->
@@ -751,29 +795,31 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
                 let st = ConstraintState.add_ub st a_id (TypeVar b_id) in
                 let st = ConstraintState.add_lb st b_id (TypeVar a_id) in
                 let st = ConstraintState.add_ub st b_id (TypeVar a_id) in
-                (st, CType C_Bool)
+                (st, BinCamlType BinCaml_Bool)
             | RVar { id }, a | a, RVar { id } ->
                 let id = VarId.var_proc_to_uid id proc in
                 let st, expr = constrain_expr st a in
                 let st = ConstraintState.add_lb st id expr in
                 let st = ConstraintState.add_ub st id expr in
-                (st, CType C_Bool)
-            | _, _ -> (st, CType C_Bool))
+                (st, BinCamlType BinCaml_Bool)
+            | _, _ -> (st, BinCamlType BinCaml_Bool))
         | `INTLT | `INTLE ->
-            let st = constrain_args st l r @@ CType C_Int in
-            (st, CType C_Bool)
+            let st = constrain_args st l r @@ BinCamlType BinCaml_Int in
+            (st, BinCamlType BinCaml_Bool)
         | `BVULE | `BVULT | `BVSLE | `BVSLT -> (
             match BasilExpr.type_of l with
             | Bitvector size ->
-                let st = constrain_args st l r @@ CType (C_BV size) in
-                (st, CType C_Bool)
+                let st =
+                  constrain_args st l r @@ BinCamlType (BinCaml_BV size)
+                in
+                (st, BinCamlType BinCaml_Bool)
             | _ -> failwith "BV operation without BV arguments")
         | `BVSREM | `BVSDIV | `BVADD | `BVMUL | `BVUREM | `BVSUB | `BVUDIV
         | `BVSMOD | `BVSHL | `BVLSHR | `BVASHR | `BVNAND | `BVAND | `BVXOR
         | `BVOR -> (
             match BasilExpr.type_of l with
             | Bitvector size ->
-                let typ = CType (C_BV size) in
+                let typ = BinCamlType (BinCaml_BV size) in
                 let st = constrain_args st l r typ in
                 (st, typ)
             | _ -> failwith "BV operation without BV arguments")
@@ -786,7 +832,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
         | `BVOR | `BVXOR | `BVAND | `BVADD -> (
             match BasilExpr.type_of (List.hd args) with
             | Bitvector size ->
-                let typ = CType (C_BV size) in
+                let typ = BinCamlType (BinCaml_BV size) in
                 let st =
                   List.fold_left (fun acc a -> constrain_arg st a typ) st args
                 in
@@ -795,7 +841,8 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
         | `OR | `AND ->
             (* All types need to be the same *)
             let typ =
-              CType (CType.type_to_c (BasilExpr.type_of (List.hd args)))
+              BinCamlType
+                (BinCamlType.type_to_c (BasilExpr.type_of (List.hd args)))
             in
             let st =
               List.fold_left (fun acc a -> constrain_arg st a typ) st args
@@ -804,7 +851,8 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
         | `Cases -> (st, Top)
         | `BVConcat ->
             ( st,
-              CType (CType.type_to_c @@ BasilExpr.type_of (BasilExpr.fix expr))
+              BinCamlType
+                (BinCamlType.type_to_c @@ BasilExpr.type_of (BasilExpr.fix expr))
             ))
     | ApplyFun _ -> (st, Top)
     | Binding _ -> (st, Top)
@@ -852,14 +900,14 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
               TySet.to_iter ub
               |> Iter.fold (fun st bound -> constrain st type0 bound) st
           | None -> st)
-    | CType _, CType _ -> st
+    | BinCamlType _, BinCamlType _ -> st
     | _ -> failwith "Illegal types at this stage"
   in
   match stmt with
   | Stmt.Instr_Assert { body } | Stmt.Instr_Assume { body } -> (
       let st, constrain_expr = constrain_expr st (BasilExpr.unfix body) in
       match constrain_expr with
-      | TypeVar a -> ConstraintState.add_lb st a (CType C_Bool)
+      | TypeVar a -> ConstraintState.add_lb st a (BinCamlType BinCaml_Bool)
       | _ -> st)
   | Stmt.Instr_Assign ls ->
       List.fold_left
@@ -893,8 +941,8 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
 
           Simply just a ptr(a,b) where a <= b
         *)
-        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_a_load" in
-        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_b_load" in
+        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_lower_load" in
+        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_upper_load" in
         let st =
           ConstraintState.add_ub st lhs (Pointer (TypeVar lb, TypeVar ub))
         in
@@ -916,9 +964,9 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
           | Interval { lower } -> Bitvec.to_signed_bigint lower
           | _ -> failwith "impossible"
         in
-        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_load" in
+        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_lower_load" in
         let ty =
-          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_load")
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_upper_load")
         in
         let ub = Record [ { size; offset; ty } ] in
         let st = ConstraintState.add_ub st lhs (Pointer (TypeVar lb, ub)) in
@@ -936,8 +984,8 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
 
           Simply just a ptr(a,b) where a <= b
         *)
-        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_load" in
-        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_load" in
+        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_lower_store" in
+        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_upper_store" in
         let st =
           ConstraintState.add_ub st lhs (Pointer (TypeVar lb, TypeVar ub))
         in
@@ -959,9 +1007,9 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
           | Interval { lower } -> Bitvec.to_signed_bigint lower
           | _ -> failwith "impossible"
         in
-        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_a_load" in
+        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_upper_store" in
         let ty =
-          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_b_load")
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_lower_store")
         in
         let lb = Record [ { size; offset; ty } ] in
         let st = ConstraintState.add_ub st lhs (Pointer (lb, TypeVar ub)) in
@@ -1025,7 +1073,7 @@ let transform (prog : Program.t) =
                 acc)
          VarIdMap.empty
   in
-  (* print_endline @@ ConstraintState.export_graph_viz type_constraint_map; *)
+  print_endline @@ ConstraintState.export_graph_viz type_constraint_map;
   let types =
     VarIdMap.mapi
       (fun name ({ lb; ub } : ConstraintState.TypeConstraint.t) ->
