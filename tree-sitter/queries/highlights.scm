@@ -134,8 +134,7 @@
 
 [ ";" "," ] @punctuation.delimiter
 [ ":" "=" ":=" "::" ] @punctuation
-[ "(" ")"
-  (token_BeginRec)
+[ (token_BeginRec)
   (token_EndRec)
   (token_BeginList)
   (token_EndList) ] @punctuation.bracket
