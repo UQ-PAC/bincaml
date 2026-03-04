@@ -226,8 +226,6 @@ module ConstraintState = struct
       st
 
   let check_bounded (st : t) var typ bound =
-    not
-    @@
     match VarIdMap.find_opt var st with
     | None -> false
     | Some { lb; ub } ->
@@ -718,9 +716,23 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
         | `INTMOD | `INTSUB | `INTDIV | `INTADD | `INTMUL ->
             let st = constrain_args st l r @@ CType C_Int in
             (st, CType C_Int)
-        | `NEQ | `EQ ->
-            (* TODO: Merge the type constraints of the two variables *)
-            (st, CType C_Bool)
+        | `NEQ | `EQ -> (
+            match (BasilExpr.unfix l, BasilExpr.unfix r) with
+            | RVar { id = a }, RVar { id = b } ->
+                let a_id = VarId.var_proc_to_uid a proc in
+                let b_id = VarId.var_proc_to_uid b proc in
+                let st = ConstraintState.add_lb st a_id (TypeVar b_id) in
+                let st = ConstraintState.add_ub st a_id (TypeVar b_id) in
+                let st = ConstraintState.add_lb st b_id (TypeVar a_id) in
+                let st = ConstraintState.add_ub st b_id (TypeVar a_id) in
+                (st, CType C_Bool)
+            | RVar { id }, a | a, RVar { id } ->
+                let id = VarId.var_proc_to_uid id proc in
+                let st, expr = constrain_expr st a in
+                let st = ConstraintState.add_lb st id expr in
+                let st = ConstraintState.add_ub st id expr in
+                (st, CType C_Bool)
+            | _, _ -> (st, CType C_Bool))
         | `INTLT | `INTLE ->
             let st = constrain_args st l r @@ CType C_Int in
             (st, CType C_Bool)
@@ -739,9 +751,9 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
                 let st = constrain_args st l r typ in
                 (st, typ)
             | _ -> failwith "BV operation without BV arguments")
-        | `Load _ | `IfThen | `MapAccess -> (st, Top)
         (* WARN: I forgot what this was meant to be *)
-        | `IMPLIES -> (st, Top))
+        | `IMPLIES -> (st, Top)
+        | `Load _ | `IfThen | `MapAccess -> (st, Top))
     (* TODO: Do intrins *)
     | ApplyIntrin { op; args } -> (
         match op with
@@ -796,11 +808,9 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
             | None -> st)
         | _ -> st)
     | _, TypeVar a -> (
-        if
-          (* The right hand side is not a type variable *)
-          ConstraintState.check_bounded st a type1 Polarity.Neg
-        then st
+        if ConstraintState.check_bounded st a type0 Polarity.Neg then st
         else
+          (* The right hand side is not a type variable *)
           let st = ConstraintState.add_lb st a type0 in
           let bounds = VarIdMap.get a st in
           match bounds with
