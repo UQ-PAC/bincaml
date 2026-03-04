@@ -67,8 +67,7 @@
     "root": {
       "inputs": {
         "infuse-src": "infuse-src",
-        "nixpkgs": "nixpkgs",
-        "pac-nix": "pac-nix"
+        "nixpkgs": "nixpkgs"
       }
     }
   },

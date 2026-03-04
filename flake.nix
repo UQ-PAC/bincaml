@@ -1,20 +1,14 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-
-    pac-nix.url = "github:katrinafyi/pac-nix";
-    # WARNING: this follows won't work because it causes bnfc build failure
-    # pac-nix.inputs.nixpkgs.follows = "nixpkgs";
-
     infuse-src.url = "https://codeberg.org/awarina/infuse.nix/archive/trunk.tar.gz";
     infuse-src.flake = false;
   };
   outputs =
     {
       self,
-      infuse-src,
       nixpkgs,
-      pac-nix,
+      infuse-src,
     }@args:
     let
       inherit (nixpkgs) lib;
@@ -34,70 +28,57 @@
 
     in
     flake-for-all-systems args {
-      overlays = {
-        addBincamlPackages = ofinal: _: {
-          bincaml = ofinal.callPackage ./nix/bincaml.nix { };
-          bincaml_lsp = ofinal.callPackage ./nix/bincaml-lsp.nix { };
-          hector = ofinal.callPackage ./nix/hector.nix { };
-          intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
-        };
-
-        enableOcamlFramePointer =
-          ofinal:
-          infuse-with {
-            # https://github.com/NixOS/nixpkgs/blob/aca4d95fce4914b3892661bcb80b8087293536c6/pkgs/development/compilers/ocaml/generic.nix#L30
-            ocaml.__input.flambdaSupport.__assign = true;
-            ocaml.__input.framePointerSupport.__assign = true;
-            ocaml.__attrs.doCheck.__assign = false; # speeds up and avoids test file bug
-          };
-      };
-
       systems = [
-        "aarch64-linux"
         "x86_64-linux"
+        "aarch64-linux"
         "aarch64-darwin"
         "x86_64-darwin"
       ];
-      perSystem =
-        {
-          self,
-          system,
-          nixpkgs,
-          pac-nix,
-          ...
-        }:
+      outputs =
+        { self, nixpkgs, ... }:
         let
-          inherit (pac-nix.legacyPackages) bnfc-treesitter;
-
           pkgs = nixpkgs.legacyPackages;
           selfOcamlPackages = pkgs.ocamlPackages.overrideScope self.overlays.addBincamlPackages;
           fpOcamlPackages = selfOcamlPackages.overrideScope self.overlays.enableOcamlFramePointer;
         in
         {
           defaultPackage = selfOcamlPackages.bincaml;
+          overlays = {
+            addBincamlPackages = ofinal: _: {
+              bincaml = ofinal.callPackage ./nix/bincaml.nix { };
+              hector = ofinal.callPackage ./nix/hector.nix { };
+              intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
+            };
+
+            enableOcamlFramePointer =
+              ofinal:
+              infuse-with {
+                # https://github.com/NixOS/nixpkgs/blob/aca4d95fce4914b3892661bcb80b8087293536c6/pkgs/development/compilers/ocaml/generic.nix#L30
+                ocaml.__input.flambdaSupport.__assign = true;
+                ocaml.__input.framePointerSupport.__assign = true;
+                ocaml.__attrs.patches.__append = [
+                  (pkgs.fetchpatch {
+                    url = "https://github.com/ocaml/ocaml/commit/c2eec4dd1de7d0da2d2f76e5e7f2b567901f4e2c.patch";
+                    hash = "sha256-qDx8saOLhFMYaK4PLsSvHnDBYKvRSMmPtdVa/IqkQSI=";
+                  })
+                ];
+              };
+          };
 
           legacyPackages = {
             bincaml = selfOcamlPackages.bincaml;
-            bincaml_lsp = selfOcamlPackages.bincaml_lsp;
             intPQueue = selfOcamlPackages.intPQueue;
             hector = selfOcamlPackages.hector;
 
             fp.bincaml = fpOcamlPackages.bincaml;
-            fp.bincaml_lsp = fpOcamlPackages.bincaml_lsp;
             fp.intPQueue = fpOcamlPackages.intPQueue;
             fp.hector = fpOcamlPackages.hector;
           };
 
           devShells = {
             default = self.devShells.fp;
-            fp = fpOcamlPackages.callPackage ./nix/shell.nix {
-              inherit bnfc-treesitter;
-              z3 = pkgs.z3.out;
-            };
-            no-fp = selfOcamlPackages.callPackage ./nix/shell.nix {
-              inherit bnfc-treesitter;
-              z3 = pkgs.z3.out;
-            };
+            fp = fpOcamlPackages.callPackage ./nix/shell.nix { };
+            no-fp = selfOcamlPackages.callPackage ./nix/shell.nix { };
           };
         };
     };
