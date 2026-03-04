@@ -8,9 +8,6 @@
 
 (generate_opam_files true)
 
-(formatting
- (enabled_for dune))
-
 (source
  (github username/reponame))
 

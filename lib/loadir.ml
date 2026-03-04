@@ -215,9 +215,11 @@ module BasilASTLoader = struct
         Hashtbl.add prog.params_order id
           (formal_in_params_order, formal_out_params_order);
         (* TODO: spec is currently dropped from ProcDef_SpecOnly cases. this should get merged!! *)
-        let is_stub = match definition with
-          |ProcDef_Some _ -> false
-    | ProcDef_Empty | ProcDef_SpecOnly _ -> true in
+        let is_stub =
+          match definition with
+          | ProcDef_Some _ -> false
+          | ProcDef_Empty | ProcDef_SpecOnly _ -> true
+        in
         let p =
           Procedure.create proc_id ~attrib ~is_stub ~formal_in_params
             ~formal_out_params ()
@@ -359,10 +361,11 @@ module BasilASTLoader = struct
                   Procedure.G.add_edge g Entry (Begin entry))
         in
 
-        let spec_list = match spec_list with
-        |  OptionalFunSpec1 xs -> xs
-        | OptionalFunSpec2 -> []
-      in
+        let spec_list =
+          match spec_list with
+          | OptionalFunSpec1 xs -> xs
+          | OptionalFunSpec2 -> []
+        in
 
         let spec = Procedure.specification p in
         let spec =
@@ -1276,7 +1279,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Error: no such block: %main_7\
    \n12 |     goto(%main_7, %main_11);\
    \n              \027[1;31m^^^^^^^\027[0m\
@@ -1303,7 +1307,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Error: no such procedure: @cat_4198032\
    \n7 |     call @cat_4198032();\
    \n             \027[1;31m^^^^^^^^^^^^\027[0m\
@@ -1332,7 +1337,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Parse error:  <string>:8\
    \n8 |     :bv1 := 1:bv1;\
    \n        \027[1;31m^\027[0m\
@@ -1385,7 +1391,8 @@ proc @main_4196260 () -> ()
   in
   Program.pretty_to_chan stdout p.prog;
   ();
-  [%expect {|
+  [%expect
+    {|
     var $NF:bv1;
     var $ZF:bv1;
     prog entry @main_4196260;
@@ -1446,7 +1453,8 @@ proc @c() -> ()
     (fun pid proc ->
       print_endline (ID.to_string pid ^ ":\n" ^ (res pid |> RWSets.to_string)))
     prog.prog.procs;
-  [%expect {|
+  [%expect
+    {|
     @entry:
     read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
     written: $R0:bv64,$mem:(bv64->bv8)
