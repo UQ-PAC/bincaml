@@ -7,7 +7,7 @@ proc @main_4196164
   (R0_in:bv64, R1_in:bv64, R30_in:bv64, R31_in:bv64, _PC_in:bv64)
     -> (R0_out:bv64, R1_out:bv64, _PC_out:bv64)
   { .name = "main"; .address = 0x400744 }
-  require bvsge(R31_in:bv64, bvsub(R31_in:bv64, 0x10:bv64))
+  require bvsge(R31_in:bv64, bvsub(R31_in:bv64, 0x10:bv64));
 [
   block %main_entry {.address = 0x400744; .originalLabel = "G8B0Q6XuSneDgqpNFr1sUQ=="} [
     store le $stack bvadd(R31_in:bv64, 0xfffffffffffffffc:bv64) extract(32, 0, R0_in:bv64) 32 { .label = "4196168_0" };

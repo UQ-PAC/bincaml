@@ -14,8 +14,8 @@ prog entry @main_4196260;
 
 proc @main_4196260 () -> ()
   { .name = "main"; .address = 0x4007a4; .returnBlock = "main_basil_return_1" }
-  require eq($_PC:bv64, 0x4007a4:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x4007a4:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %main_entry {.address = 0x4007a4; .originalLabel = "rlVqjjqoR6uHwOYvPCS15g=="} [
     assert eq($_PC:bv64, 0x4007a4:bv64);

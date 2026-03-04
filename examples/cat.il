@@ -48,8 +48,8 @@ prog entry @main_4197696;
 
 proc @main_4197696 () -> ()
   { .name = "main"; .address = 0x400d40; .returnBlock = "main_basil_return_1" }
-  require eq($_PC:bv64, 0x400d40:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x400d40:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %main_entry {.address = 0x400d40; .originalLabel = "KXhc9Fe2Qva4qWVLC1eV+w=="} [
     assert eq($_PC:bv64, 0x400d40:bv64);
@@ -86,8 +86,8 @@ proc @exit () -> ()
 
 proc @exitcode_4198816 () -> ()
   { .name = "exitcode"; .address = 0x4011a0; .returnBlock = "exitcode_basil_return_1" }
-  require eq($_PC:bv64, 0x4011a0:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x4011a0:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %exitcode_entry {.address = 0x4011a0; .originalLabel = "Hr3XvFHLQ62ROxw2L+L+kg=="} [
     assert eq($_PC:bv64, 0x4011a0:bv64);
@@ -109,8 +109,8 @@ proc @exitcode_4198816 () -> ()
 
 proc @exits_4198688 () -> ()
   { .name = "exits"; .address = 0x401120; .returnBlock = "exits_basil_return_1" }
-  require eq($_PC:bv64, 0x401120:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401120:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %exits_entry {.address = 0x401120; .originalLabel = "OamxgWkAT5S7lYhJLb34Bw=="} [
     var R30_begin_exits_4198688: bv64 := $R30:bv64;
@@ -449,8 +449,8 @@ proc @exits_4198688 () -> ()
 
 proc @fmtlocaleinit_4209552 () -> ()
   { .name = "fmtlocaleinit"; .address = 0x403b90; .returnBlock = "fmtlocaleinit_basil_return_1" }
-  require eq($_PC:bv64, 0x403b90:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x403b90:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %fmtlocaleinit_entry {.address = 0x403b90; .originalLabel = "LJeXYGqvSDa8MTgV+KKKNg=="} [
     assert eq($_PC:bv64, 0x403b90:bv64);
@@ -611,8 +611,8 @@ proc @fmtlocaleinit_4209552 () -> ()
 
 proc @fmtfdinit_4209364 () -> ()
   { .name = "fmtfdinit"; .address = 0x403ad4; .returnBlock = "fmtfdinit_basil_return_1" }
-  require eq($_PC:bv64, 0x403ad4:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x403ad4:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %fmtfdinit_entry {.address = 0x403ad4; .originalLabel = "Ase3rrH2SOSuhunVYXYBhg=="} [
     assert eq($_PC:bv64, 0x403ad4:bv64);
@@ -715,8 +715,8 @@ proc @write () -> ()
 
 proc @__fmtFdFlush_4209456 () -> ()
   { .name = "__fmtFdFlush"; .address = 0x403b30; .returnBlock = "__fmtFdFlush_basil_return_1" }
-  require eq($_PC:bv64, 0x403b30:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x403b30:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %__fmtFdFlush_entry {.address = 0x403b30; .originalLabel = "I+YOj/gGRqS87EwafUF4WA=="} [
     assert eq($_PC:bv64, 0x403b30:bv64);
@@ -914,8 +914,8 @@ proc @__fmtFdFlush_4209456 () -> ()
 
 proc @__flagfmt_4208112 () -> ()
   { .name = "__flagfmt"; .address = 0x4035f0; .returnBlock = "__flagfmt_basil_return_1" }
-  require eq($_PC:bv64, 0x4035f0:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x4035f0:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %__flagfmt_entry {.address = 0x4035f0; .originalLabel = "Md5qE+eiRf+m/NPBkVuT3g=="} [
     assert eq($_PC:bv64, 0x4035f0:bv64);
@@ -1454,8 +1454,8 @@ proc @__flagfmt_4208112 () -> ()
 
 proc @__rfmtpad_4203024 () -> ()
   { .name = "__rfmtpad"; .address = 0x402210; .returnBlock = "__rfmtpad_basil_return_1" }
-  require eq($_PC:bv64, 0x402210:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x402210:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %__rfmtpad_entry {.address = 0x402210; .originalLabel = "FnHqSK+lTxq6YDUq7NvnJg=="} [
     assert eq($_PC:bv64, 0x402210:bv64);
@@ -1940,8 +1940,8 @@ proc @__rfmtpad_4203024 () -> ()
 
 proc @runelen_4210048 () -> ()
   { .name = "runelen"; .address = 0x403d80; .returnBlock = "runelen_basil_return_1" }
-  require eq($_PC:bv64, 0x403d80:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x403d80:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %runelen_entry {.address = 0x403d80; .originalLabel = "o0lVyZ2GT4mJNVkb5e5Vuw=="} [
     assert eq($_PC:bv64, 0x403d80:bv64);
@@ -2022,8 +2022,8 @@ proc @runelen_4210048 () -> ()
 
 proc @fullrune_4210160 () -> ()
   { .name = "fullrune"; .address = 0x403df0; .returnBlock = "fullrune_basil_return_1" }
-  require eq($_PC:bv64, 0x403df0:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x403df0:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %fullrune_entry {.address = 0x403df0; .originalLabel = "ycUhyOy1TNW1hp1YrdP0uw=="} [
     assert eq($_PC:bv64, 0x403df0:bv64);
@@ -2178,8 +2178,8 @@ proc @fullrune_4210160 () -> ()
 
 proc @__fmtpad_4202756 () -> ()
   { .name = "__fmtpad"; .address = 0x402104; .returnBlock = "__fmtpad_basil_return_1" }
-  require eq($_PC:bv64, 0x402104:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x402104:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %__fmtpad_entry {.address = 0x402104; .originalLabel = "DS7w57znRnmBsFkYW6cA+Q=="} [
     assert eq($_PC:bv64, 0x402104:bv64);
@@ -2663,8 +2663,8 @@ proc @__fmtpad_4202756 () -> ()
 
 proc @runetochar_4209936 () -> ()
   { .name = "runetochar"; .address = 0x403d10; .returnBlock = "runetochar_basil_return_1" }
-  require eq($_PC:bv64, 0x403d10:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x403d10:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %runetochar_entry {.address = 0x403d10; .originalLabel = "Rkek/d08TK2mkJ7PEcm6mg=="} [
     assert eq($_PC:bv64, 0x403d10:bv64);
@@ -2816,8 +2816,8 @@ proc @runetochar_4209936 () -> ()
 
 proc @__fmtflush_4202032 () -> ()
   { .name = "__fmtflush"; .address = 0x401e30; .returnBlock = "__fmtflush_basil_return_1" }
-  require eq($_PC:bv64, 0x401e30:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401e30:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %__fmtflush_entry {.address = 0x401e30; .originalLabel = "Osy3QCRQRpSd5aY0vW+qkQ=="} [
     assert eq($_PC:bv64, 0x401e30:bv64);
@@ -3092,8 +3092,8 @@ proc @__fmtflush_4202032 () -> ()
 
 proc @chartorune_4209760 () -> ()
   { .name = "chartorune"; .address = 0x403c60; .returnBlock = "chartorune_basil_return_1" }
-  require eq($_PC:bv64, 0x403c60:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x403c60:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %chartorune_entry {.address = 0x403c60; .originalLabel = "+s65+r9uRzKHgPS/OxqX3g=="} [
     assert eq($_PC:bv64, 0x403c60:bv64);
@@ -3398,8 +3398,8 @@ proc @chartorune_4209760 () -> ()
 
 proc @__fmtcpy_4203296 () -> ()
   { .name = "__fmtcpy"; .address = 0x402320; .returnBlock = "__fmtcpy_basil_return_1" }
-  require eq($_PC:bv64, 0x402320:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x402320:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %__fmtcpy_entry {.address = 0x402320; .originalLabel = "onW0wUQSS+CWRE3FG7sZVA=="} [
     assert eq($_PC:bv64, 0x402320:bv64);
@@ -4774,8 +4774,8 @@ proc @__fmtcpy_4203296 () -> ()
 
 proc @__badfmt_4208400 () -> ()
   { .name = "__badfmt"; .address = 0x403710; .returnBlock = "__badfmt_basil_return_1" }
-  require eq($_PC:bv64, 0x403710:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x403710:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %__badfmt_entry {.address = 0x403710; .originalLabel = "VsS7dlFoQ3et0t9jIUUtyw=="} [
     assert eq($_PC:bv64, 0x403710:bv64);
@@ -4852,8 +4852,8 @@ proc @__badfmt_4208400 () -> ()
 
 proc @getcallerpc_4201920 () -> ()
   { .name = "getcallerpc"; .address = 0x401dc0; .returnBlock = "getcallerpc_basil_return_1" }
-  require eq($_PC:bv64, 0x401dc0:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401dc0:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %getcallerpc_entry {.address = 0x401dc0; .originalLabel = "/lgI4FfjS+yfGYqEtnuiGw=="} [
     assert eq($_PC:bv64, 0x401dc0:bv64);
@@ -4879,8 +4879,8 @@ proc @getcallerpc_4201920 () -> ()
 
 proc @unlock_4199332 () -> ()
   { .name = "unlock"; .address = 0x4013a4; .returnBlock = "unlock_basil_return_1" }
-  require eq($_PC:bv64, 0x4013a4:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x4013a4:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %unlock_entry {.address = 0x4013a4; .originalLabel = "V0jFzXuITMiNHr/kb8xG4g=="} [
     assert eq($_PC:bv64, 0x4013a4:bv64);
@@ -5022,8 +5022,8 @@ proc @unlock_4199332 () -> ()
 
 proc @__fmtunlock_4209744 () -> ()
   { .name = "__fmtunlock"; .address = 0x403c50; .returnBlock = "__fmtunlock_basil_return_1" }
-  require eq($_PC:bv64, 0x403c50:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x403c50:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %__fmtunlock_entry {.address = 0x403c50; .originalLabel = "LHWtkP5rQmqxTbinnC1hLw=="} [
     var R30_begin___fmtunlock_4209744: bv64 := $R30:bv64;
@@ -5051,8 +5051,8 @@ proc @__fmtunlock_4209744 () -> ()
 
 proc @lock_4199120 () -> ()
   { .name = "lock"; .address = 0x4012d0; .returnBlock = "lock_basil_return_1" }
-  require eq($_PC:bv64, 0x4012d0:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x4012d0:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %lock_entry {.address = 0x4012d0; .originalLabel = "EL5Ky+1GSIeJ6nw6JbZnPg=="} [
     assert eq($_PC:bv64, 0x4012d0:bv64);
@@ -5204,8 +5204,8 @@ proc @lock_4199120 () -> ()
 
 proc @__fmtlock_4209728 () -> ()
   { .name = "__fmtlock"; .address = 0x403c40; .returnBlock = "__fmtlock_basil_return_1" }
-  require eq($_PC:bv64, 0x403c40:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x403c40:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %__fmtlock_entry {.address = 0x403c40; .originalLabel = "n9+4iNtqRLu7+3FBjvBlSg=="} [
     var R30_begin___fmtlock_4209728: bv64 := $R30:bv64;
@@ -5233,8 +5233,8 @@ proc @__fmtlock_4209728 () -> ()
 
 proc @__fmtinstall_4208464 () -> ()
   { .name = "__fmtinstall"; .address = 0x403750; .returnBlock = "__fmtinstall_basil_return_1" }
-  require eq($_PC:bv64, 0x403750:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x403750:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %__fmtinstall_entry {.address = 0x403750; .originalLabel = "4vz6BXioRXa/LaTzSs8GSg=="} [
     assert eq($_PC:bv64, 0x403750:bv64);
@@ -5516,8 +5516,8 @@ proc @__fmtinstall_4208464 () -> ()
 
 proc @__fmtdispatch_4208688 () -> ()
   { .name = "__fmtdispatch"; .address = 0x403830; .returnBlock = "__fmtdispatch_basil_return_1" }
-  require eq($_PC:bv64, 0x403830:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x403830:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %__fmtdispatch_entry {.address = 0x403830; .originalLabel = "J5JvET/ORDyFBY1+xoNLkA=="} [
     assert eq($_PC:bv64, 0x403830:bv64);
@@ -6659,8 +6659,8 @@ proc @__fmtdispatch_4208688 () -> ()
 
 proc @dofmt_4202176 () -> ()
   { .name = "dofmt"; .address = 0x401ec0; .returnBlock = "dofmt_basil_return_1" }
-  require eq($_PC:bv64, 0x401ec0:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401ec0:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %dofmt_entry {.address = 0x401ec0; .originalLabel = "ptCQBLyvTM22JSPE/cK18w=="} [
     assert eq($_PC:bv64, 0x401ec0:bv64);
@@ -7699,8 +7699,8 @@ proc @dofmt_4202176 () -> ()
 
 proc @vfprint_4201072 () -> ()
   { .name = "vfprint"; .address = 0x401a70; .returnBlock = "vfprint_basil_return_1" }
-  require eq($_PC:bv64, 0x401a70:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401a70:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %vfprint_entry {.address = 0x401a70; .originalLabel = "kh4iUxoKQMenD77ljouyEQ=="} [
     assert eq($_PC:bv64, 0x401a70:bv64);
@@ -7882,8 +7882,8 @@ proc @vfprint_4201072 () -> ()
 
 proc @fprint_4200960 () -> ()
   { .name = "fprint"; .address = 0x401a00; .returnBlock = "fprint_basil_return_1" }
-  require eq($_PC:bv64, 0x401a00:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401a00:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %fprint_entry {.address = 0x401a00; .originalLabel = "fQteMOadSm+stHHR3jx4Qw=="} [
     assert eq($_PC:bv64, 0x401a00:bv64);
@@ -7986,8 +7986,8 @@ proc @fprint_4200960 () -> ()
 
 proc @__fixargv0_4198400 () -> ()
   { .name = "__fixargv0"; .address = 0x401000; .returnBlock = "__fixargv0_basil_return_1" }
-  require eq($_PC:bv64, 0x401000:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401000:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %__fixargv0_entry {.address = 0x401000; .originalLabel = "78skE39ZS92hlwuQoG/N1g=="} [
     assert eq($_PC:bv64, 0x401000:bv64);
@@ -8007,8 +8007,8 @@ proc @__fixargv0_4198400 () -> ()
 
 proc @vseprint_4201184 () -> ()
   { .name = "vseprint"; .address = 0x401ae0; .returnBlock = "vseprint_basil_return_1" }
-  require eq($_PC:bv64, 0x401ae0:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401ae0:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %vseprint_entry {.address = 0x401ae0; .originalLabel = "xuA0Edh9S8yFZV1Qu/Jgqw=="} [
     assert eq($_PC:bv64, 0x401ae0:bv64);
@@ -8169,8 +8169,8 @@ proc @vseprint_4201184 () -> ()
 
 proc @sysfatal_4200560 () -> ()
   { .name = "sysfatal"; .address = 0x401870; .returnBlock = "sysfatal_basil_return_1" }
-  require eq($_PC:bv64, 0x401870:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401870:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %sysfatal_entry {.address = 0x401870; .originalLabel = "HN8ZNDP1RUKhvFhL/Qx3ng=="} [
     var R30_begin_sysfatal_4200560: bv64 := $R30:bv64;
@@ -8471,8 +8471,8 @@ proc @memccpy () -> ()
 
 proc @strecpy_4201936 () -> ()
   { .name = "strecpy"; .address = 0x401dd0; .returnBlock = "strecpy_basil_return_1" }
-  require eq($_PC:bv64, 0x401dd0:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401dd0:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %strecpy_entry {.address = 0x401dd0; .originalLabel = "gS9qAucpRMKJD8TibWbm5A=="} [
     assert eq($_PC:bv64, 0x401dd0:bv64);
@@ -8680,8 +8680,8 @@ proc @strerror () -> ()
 
 proc @rerrstr_4201312 () -> ()
   { .name = "rerrstr"; .address = 0x401b60; .returnBlock = "rerrstr_basil_return_1" }
-  require eq($_PC:bv64, 0x401b60:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401b60:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %rerrstr_entry {.address = 0x401b60; .originalLabel = "ldWhLOMYSKyYFGShQwXqIg=="} [
     var R30_begin_rerrstr_4201312: bv64 := $R30:bv64;
@@ -9214,8 +9214,8 @@ proc @rerrstr_4201312 () -> ()
 
 proc @errstr_4201540 () -> ()
   { .name = "errstr"; .address = 0x401c44; .returnBlock = "errstr_basil_return_1" }
-  require eq($_PC:bv64, 0x401c44:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401c44:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %errstr_entry {.address = 0x401c44; .originalLabel = "3ReV3l3lTEWXlI8dRV4Pcw=="} [
     assert eq($_PC:bv64, 0x401c44:bv64);
@@ -9454,8 +9454,8 @@ proc @errstr_4201540 () -> ()
 
 proc @werrstr_4201780 () -> ()
   { .name = "werrstr"; .address = 0x401d34; .returnBlock = "werrstr_basil_return_1" }
-  require eq($_PC:bv64, 0x401d34:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401d34:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %werrstr_entry {.address = 0x401d34; .originalLabel = "EsiP/3+hSbS6DhsMqrwxFA=="} [
     assert eq($_PC:bv64, 0x401d34:bv64);
@@ -9607,8 +9607,8 @@ proc @open64 () -> ()
 
 proc @p9open_4198832 () -> ()
   { .name = "p9open"; .address = 0x4011b0; .returnBlock = "p9open_basil_return_1" }
-  require eq($_PC:bv64, 0x4011b0:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x4011b0:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %p9open_entry {.address = 0x4011b0; .originalLabel = "DYW7Gbw6QwK5DzhE/cGL7w=="} [
     assert eq($_PC:bv64, 0x4011b0:bv64);
@@ -10273,8 +10273,8 @@ proc @p9open_4198832 () -> ()
 
 proc @p9write_4200816 () -> ()
   { .name = "p9write"; .address = 0x401970; .returnBlock = "p9write_basil_return_1" }
-  require eq($_PC:bv64, 0x401970:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x401970:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %p9write_entry {.address = 0x401970; .originalLabel = "qVvzznzaToayt5BQelE/sg=="} [
     assert eq($_PC:bv64, 0x401970:bv64);
@@ -10571,8 +10571,8 @@ proc @read () -> ()
 
 proc @cat_4198032 () -> ()
   { .name = "cat"; .address = 0x400e90; .returnBlock = "cat_basil_return_1" }
-  require eq($_PC:bv64, 0x400e90:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x400e90:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %cat_entry {.address = 0x400e90; .originalLabel = "OMO2ysIfSmeORBpBsr5OIQ=="} [
     var R30_begin_cat_4198032: bv64 := $R30:bv64;
@@ -10826,8 +10826,8 @@ proc @cat_4198032 () -> ()
 
 proc @p9main_4198208 () -> ()
   { .name = "p9main"; .address = 0x400f40; .returnBlock = "p9main_basil_return_1" }
-  require eq($_PC:bv64, 0x400f40:bv64)
-  ensures eq($_PC:bv64, old($R30:bv64))
+  require eq($_PC:bv64, 0x400f40:bv64);
+  ensures eq($_PC:bv64, old($R30:bv64));
 [
   block %p9main_entry {.address = 0x400f40; .originalLabel = "FGQT8qmESb6FIwl/znG8jA=="} [
     var R30_begin_p9main_4198208: bv64 := $R30:bv64;
