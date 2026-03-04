@@ -95,10 +95,10 @@ separator nonempty Assignment ",";
 Stmt_MultiAssign . Stmt ::= OpenParen [Assignment]  CloseParen ;
 
 
-LocalTyped . LocalVar ::= LocalIdent ":" Type ;
+LocalTyped . LocalVar ::= LocalIdent ":" Type1 ;
 LocalUntyped . LocalVar ::= LocalIdent ;
 
-GlobalTyped . GlobalVar ::= GlobalIdent ":" Type ;
+GlobalTyped . GlobalVar ::= GlobalIdent ":" Type1 ;
 GlobalUntyped . GlobalVar ::= GlobalIdent;
 separator nonempty LocalVar ",";
 rules Var ::= LocalVar | GlobalVar ;
@@ -208,10 +208,10 @@ Expr_Global  . Expr2 ::= GlobalVar;
 
 -- quantifiers
 
-rules LambdaParam ::= LocalIdent | LocalIdent ":" Type1 | OpenParen LocalVar CloseParen ;
-separator LambdaParam ",";
+rules LambdaParen ::= LocalVar | OpenParen LocalVar CloseParen ;
+separator LambdaParen ",";
 
-rules LambdaDef ::=  [LambdaParam]  LambdaSep Expr ;
+rules LambdaDef ::=  [LambdaParen]  LambdaSep Expr ;
 Expr_Forall . Expr  ::= "forall" AttribSet LambdaDef ;
 Expr_Exists . Expr  ::= "exists" AttribSet LambdaDef ;
 Expr_Lambda . Expr  ::= "fun"    AttribSet LambdaDef ;

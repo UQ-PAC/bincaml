@@ -284,14 +284,13 @@ and transExpr (x : expr) : result = match x with
   | Expr_Paren (openparen, expr, closeparen) -> failure x
 
 
-and transLambdaParam (x : lambdaParam) : result = match x with
-    LambdaParamLocalIdent localident -> failure x
-  | LambdaParam1 (localident, type') -> failure x
-  | LambdaParam2 (openparen, localvar, closeparen) -> failure x
+and transLambdaParen (x : lambdaParen) : result = match x with
+    LambdaParenLocalVar localvar -> failure x
+  | LambdaParen1 (openparen, localvar, closeparen) -> failure x
 
 
 and transLambdaDef (x : lambdaDef) : result = match x with
-    LambdaDef1 (lambdaparams, lambdasep, expr) -> failure x
+    LambdaDef1 (lambdaparens, lambdasep, expr) -> failure x
 
 
 and transBinOp (x : binOp) : result = match x with

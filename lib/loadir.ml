@@ -617,9 +617,7 @@ module BasilASTLoader = struct
   and unpac_lambdaparen ?(bound = StringMap.empty) p_st lvs =
     unpack_local_lvars ~bound p_st
     @@ List.map
-         (function LambdaParamLocalIdent v -> LocalUntyped v
-        | LambdaParam1 (i, t) -> LocalTyped (i, t)
-        | LambdaParam2 (_, v, _) -> v)
+         (function LambdaParenLocalVar v -> v | LambdaParen1 (o, v, c) -> v)
          lvs
 
   and trans_jump p_st (x : BasilIR.AbsBasilIR.jumpWithAttrib) =

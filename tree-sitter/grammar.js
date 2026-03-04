@@ -181,15 +181,15 @@ module.exports = grammar({
       ),
     LocalVar: $ =>
       choice(
-        // LocalTyped. LocalVar ::= LocalIdent ":" Type ;
-        seq($.token_LocalIdent, ":", $.Type),
+        // LocalTyped. LocalVar ::= LocalIdent ":" Type1 ;
+        seq($.token_LocalIdent, ":", $.Type1),
         // LocalUntyped. LocalVar ::= LocalIdent ;
         $.token_LocalIdent
       ),
     GlobalVar: $ =>
       choice(
-        // GlobalTyped. GlobalVar ::= GlobalIdent ":" Type ;
-        seq($.token_GlobalIdent, ":", $.Type),
+        // GlobalTyped. GlobalVar ::= GlobalIdent ":" Type1 ;
+        seq($.token_GlobalIdent, ":", $.Type1),
         // GlobalUntyped. GlobalVar ::= GlobalIdent ;
         $.token_GlobalIdent
       ),
@@ -458,27 +458,25 @@ module.exports = grammar({
         // Expr_Paren. Expr2 ::= OpenParen Expr CloseParen ;
         seq($.token_OpenParen, $.Expr, $.token_CloseParen)
       ),
-    LambdaParam: $ =>
+    LambdaParen: $ =>
       choice(
-        // LambdaParamLocalIdent. LambdaParam ::= LocalIdent ;
-        $.token_LocalIdent,
-        // LambdaParam1. LambdaParam ::= LocalIdent ":" Type1 ;
-        seq($.token_LocalIdent, ":", $.Type1),
-        // LambdaParam2. LambdaParam ::= OpenParen LocalVar CloseParen ;
+        // LambdaParenLocalVar. LambdaParen ::= LocalVar ;
+        $.LocalVar,
+        // LambdaParen1. LambdaParen ::= OpenParen LocalVar CloseParen ;
         seq($.token_OpenParen, $.LocalVar, $.token_CloseParen)
       ),
-    list_LambdaParam: $ =>
+    list_LambdaParen: $ =>
       choice(
-        // []. [LambdaParam] ::= ;
+        // []. [LambdaParen] ::= ;
         choice(),
-        // (:[]). [LambdaParam] ::= LambdaParam ;
-        $.LambdaParam,
-        // (:). [LambdaParam] ::= LambdaParam "," [LambdaParam] ;
-        seq($.LambdaParam, ",", optional($.list_LambdaParam))
+        // (:[]). [LambdaParen] ::= LambdaParen ;
+        $.LambdaParen,
+        // (:). [LambdaParen] ::= LambdaParen "," [LambdaParen] ;
+        seq($.LambdaParen, ",", optional($.list_LambdaParen))
       ),
     LambdaDef: $ =>
-      // LambdaDef1. LambdaDef ::= [LambdaParam] LambdaSep Expr ;
-      seq(optional($.list_LambdaParam), $.LambdaSep, $.Expr),
+      // LambdaDef1. LambdaDef ::= [LambdaParen] LambdaSep Expr ;
+      seq(optional($.list_LambdaParen), $.LambdaSep, $.Expr),
     BinOp: $ =>
       choice(
         // BinOpBVBinOp. BinOp ::= BVBinOp ;
