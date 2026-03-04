@@ -3,6 +3,14 @@ open Bincaml_util.Common
 
 exception BoogieException of string
 
+let join_lines ?(s = "") ls =
+  let open Containers_pp in
+  append_l ~sep:(text ";\n") ls
+
+let join_lines_end ?(s = "") ls =
+  let open Containers_pp in
+  append_l ~sep:(text @@ Printf.sprintf ";\n%s" s) ls ^ text ";"
+
 let rec type_to_string (t : Types.t) =
   match t with
   | Types.Boolean -> "bool"
@@ -189,8 +197,8 @@ let pretty_procedure_decl (p : Lang.Program.proc) =
   let modifies = text "modifies _" in
   let requires = text "requires _" in
   let ensures = text "ensures _" in
-  let body = append_l ~sep:(text ";\n") [ modifies; requires; ensures ] in
-  nest 2 @@ header ^ text ";" ^/ body
+  let body = join_lines [ modifies; requires; ensures ] in
+  join_lines [ header; body ] |> nest 2
 
 let pretty_procedure_impl (p : Lang.Program.proc) =
   let open Containers_pp in
@@ -198,53 +206,52 @@ let pretty_procedure_impl (p : Lang.Program.proc) =
   let in_params = Lang.Procedure.formal_in_params p in
   let out_params = Lang.Procedure.formal_out_params p in
   let local_decls =
-    append_l ~sep:(text ";\n")
-    @@ List.map
-         (fun (k, v) -> pretty_variable_declaration v)
-         (Hashtbl.to_list @@ Lang.Procedure.local_decls p
-         |> List.filter (fun (k, v) ->
-             (Option.is_none @@ StringMap.get k in_params)
-             && (Option.is_none @@ StringMap.get k out_params)))
+    Lang.Procedure.local_decls p
+    |> Hashtbl.to_list
+    |> List.filter (fun (k, v) ->
+        (Option.is_none @@ StringMap.get k in_params)
+        && (Option.is_none @@ StringMap.get k out_params))
+    |> List.map (fun (k, v) -> pretty_variable_declaration v)
+    |> join_lines_end
   in
   let blocks =
-    append_l ~sep:(text ";\n")
-    @@ List.map (fun (e, b) ->  text "block") (Lang.Procedure.blocks_to_list p)
+    Lang.Procedure.blocks_to_list p
+    |> List.map (fun (e, b) -> text "block")
+    |> join_lines_end
   in
-  (* ^/ append_l ~sep:(text ";\n") @@ List.map (fun t -> text t) (Hashtbl.keys_list local_decls) *)
   let header = pretty_procedure_header "implementation" p in
   let body = local_decls ^/ blocks in
   header ^+ surround ~width:2 (text "{") (newline ^ body) (newline ^ text "}")
 
 let pretty_procedure (p : Lang.Program.proc) =
   let open Containers_pp in
-  append_l ~sep:(text ";\n")
-    [ pretty_procedure_decl p; pretty_procedure_impl p ]
+  join_lines
+  @@ [ pretty_procedure_decl p ]
+  @
+  if negate List.is_empty @@ Lang.Procedure.blocks_to_list p then
+    [ pretty_procedure_impl p ]
+  else []
 
 let pretty_program (p : Lang.Program.t) =
   let open Containers_pp in
-  let sep l = append_l ~sep:(text ";\n") l ^ text ";\n" in
-  let glob_vars =
-    StringMap.bindings p.globals
-    |> List.filter_map (fun (n, v) ->
-        match v with
-        | Lang.Program.Variable _ -> Some (pretty_declaration v)
-        | _ -> None)
-    |> sep
+  let glob_vars, glob_funs =
+    p.globals |> StringMap.values |> Iter.to_list
+    |> List.partition_filter_map (fun d ->
+        let p = pretty_declaration d in
+        match d with
+        | Lang.Program.Variable _
+        | Lang.Program.Function { definition = Axiom _ } ->
+            `Left p
+        | _ -> `Right p)
   in
-  let glob_funs =
-    StringMap.bindings p.globals
-    |> List.filter_map (fun (n, v) ->
-        match v with
-        | Lang.Program.Function _ -> Some (pretty_declaration v)
-        | _ -> None)
-    |> sep
-  in
+  let glob_vars = join_lines_end glob_vars in
+  let glob_funs = join_lines_end glob_funs in
   let procs =
-    append_l ~sep:(text ";\n\n")
-      (List.map (fun (_, p) -> pretty_procedure p) (ID.Map.to_list p.procs))
-    ^ text ";\n"
+    p.procs |> ID.Map.to_list
+    |> List.map (fun (_, p) -> pretty_procedure p)
+    |> join_lines_end ~s:"\n"
   in
-  append_l ~sep:newline [ glob_vars; glob_funs; procs ]
+  append_l ~sep:(newline ^ newline) [ glob_vars; glob_funs; procs ]
 
 let pretty_to_chan chan (p : Lang.Program.t) =
   let p = pretty_program p in
