@@ -71,7 +71,7 @@ module.exports = grammar({
         // Decl_ProgEmpty. Decl ::= "prog" "entry" ProcIdent AttribSet ;
         seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet)),
         // Decl_ProgWithSpec. Decl ::= "prog" "entry" ProcIdent AttribSet [ProgSpec] ;
-        seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), optional($.list_ProgSpec)),
+        seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), $.list_ProgSpec),
         // Decl_Proc. Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [FunSpec] ProcDef ;
         seq("proc", $.token_ProcIdent, $.token_OpenParen, optional($.list_Params), $.token_CloseParen, "->", $.token_OpenParen, optional($.list_Params), $.token_CloseParen, optional($.AttribSet), optional($.list_FunSpec), optional($.ProcDef))
       ),
@@ -255,8 +255,8 @@ module.exports = grammar({
       choice(
         // LVars_Empty. LVars ::= ;
         choice(),
-        // LVars_LocalList. LVars ::= "var" OpenParen [LocalVarParen] CloseParen ":=" ;
-        seq("var", $.token_OpenParen, optional($.list_LocalVarParen), $.token_CloseParen, ":="),
+        // LVars_LocalList. LVars ::= "var" OpenParen [LocalVar] CloseParen ":=" ;
+        seq("var", $.token_OpenParen, $.list_LocalVar, $.token_CloseParen, ":="),
         // LVars_List. LVars ::= OpenParen [LVar] CloseParen ":=" ;
         seq($.token_OpenParen, $.list_LVar, $.token_CloseParen, ":="),
         // NamedLVars_List. LVars ::= OpenParen [NamedCallReturn] CloseParen ":=" ;
@@ -292,8 +292,8 @@ module.exports = grammar({
       ),
     LVar: $ =>
       choice(
-        // LVar_Local. LVar ::= "var" LocalVarParen ;
-        seq("var", $.LocalVarParen),
+        // LVar_Local. LVar ::= "var" LocalVar ;
+        seq("var", $.LocalVar),
         // LVar_Global. LVar ::= GlobalVar ;
         $.GlobalVar
       ),
@@ -701,10 +701,10 @@ module.exports = grammar({
       ),
     list_ProgSpec: $ =>
       choice(
-        // []. [ProgSpec] ::= ;
-        choice(),
+        // (:[]). [ProgSpec] ::= ProgSpec ;
+        $.ProgSpec,
         // (:). [ProgSpec] ::= ProgSpec [ProgSpec] ;
-        seq($.ProgSpec, optional($.list_ProgSpec))
+        seq($.ProgSpec, $.list_ProgSpec)
       ),
     token_BVTYPE: $ =>
       /bv\d+/,

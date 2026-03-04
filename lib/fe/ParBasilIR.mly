@@ -530,7 +530,7 @@ namedCallReturn_list : /* empty */ { []  }
   ;
 
 lVars : /* empty */ { LVars_Empty  }
-  | KW_var openParen localVarParen_list closeParen SYMB7 { LVars_LocalList ($2, $3, $4) }
+  | KW_var openParen localVar_list closeParen SYMB7 { LVars_LocalList ($2, $3, $4) }
   | openParen lVar_list closeParen SYMB7 { LVars_List ($1, $2, $3) }
   | openParen namedCallReturn_list closeParen SYMB7 { NamedLVars_List ($1, $2, $3) }
   ;
@@ -552,7 +552,7 @@ jump : KW_goto openParen blockIdent_list closeParen { Jump_GoTo ($2, $3, $4) }
   | KW_return { Jump_ProcReturn  }
   ;
 
-lVar : KW_var localVarParen { LVar_Local $2 }
+lVar : KW_var localVar { LVar_Local $2 }
   | globalVar { LVar_Global $1 }
   ;
 
@@ -785,7 +785,7 @@ funSpec_list : /* empty */ { []  }
   | funSpec funSpec_list { (fun (x,xs) -> x::xs) ($1, $2) }
   ;
 
-progSpec_list : /* empty */ { []  }
+progSpec_list : progSpec { (fun x -> [x]) $1 }
   | progSpec progSpec_list { (fun (x,xs) -> x::xs) ($1, $2) }
   ;
 

@@ -123,7 +123,7 @@ rules NamedCallReturn ::= LVar "=" LocalIdent;
 separator NamedCallReturn "," ;
 
 LVars_Empty . LVars ::= ;
-LVars_LocalList . LVars ::= "var" OpenParen [ LocalVarParen ] CloseParen ":=" ;
+LVars_LocalList . LVars ::= "var" OpenParen [ LocalVar ] CloseParen ":=" ;
 LVars_List . LVars ::= OpenParen [ LVar ]  CloseParen ":=";
 NamedLVars_List . LVars ::= OpenParen [NamedCallReturn]  CloseParen ":=";
 
@@ -145,7 +145,7 @@ Jump_Unreachable . Jump ::= "unreachable" ;
 Jump_Return . Jump ::= "return" OpenParen [Expr] CloseParen ;
 Jump_ProcReturn. Jump ::= "return"  ;
 
-LVar_Local . LVar ::= "var" LocalVarParen;
+LVar_Local . LVar ::= "var" LocalVar;
 LVar_Global . LVar ::= GlobalVar;
 
 separator nonempty LVar "," ;
@@ -289,7 +289,7 @@ ProgSpec_Guarantee . ProgSpec ::= GuarTok Expr;
 terminator FunSpec "\n";
 
 {- last semicolon terminates the prog definitino -}
-terminator ProgSpec "\n";
+terminator nonempty ProgSpec "\n";
 
 
 

@@ -610,9 +610,17 @@ module BasilASTLoader = struct
   and unpack_local_lvars ?(bound = StringMap.empty) p_st lvs : Var.t list =
     lvs
     |> List.map (function
-      | (LocalVarParenLocalVar (LocalTyped (i, t)) | LocalVarParen1 (_, i, t, _)) ->
+      | LocalTyped (i, t) ->
           Var.create ~scope:Local (unsafe_unsigil (`Local i)) (trans_type t)
-      | LocalVarParenLocalVar (LocalUntyped i) -> lookup_local_decl ~binds:bound i p_st)
+      | LocalUntyped i -> lookup_local_decl ~binds:bound i p_st)
+
+  and unpac_lambdaparen ?(bound = StringMap.empty) p_st lvs =
+    unpack_local_lvars ~bound p_st
+    @@ List.map
+         (function
+           | LocalVarParenLocalVar v -> v
+           | LocalVarParen1 (_, i, t, _) -> LocalTyped (i, t))
+         lvs
 
   and trans_jump p_st (x : BasilIR.AbsBasilIR.jumpWithAttrib) =
     let jump = match x with JumpWithAttrib1 (jump, _) -> jump in
@@ -630,7 +638,7 @@ module BasilASTLoader = struct
 
   and trans_lvar prog (x : BasilIR.AbsBasilIR.lVar) : load_st * Var.t =
     match x with
-    | LVar_Local (LocalVarParenLocalVar (LocalTyped (bident, type')) | LocalVarParen1 (_, bident, type', _)) ->
+    | LVar_Local (LocalTyped (bident, type')) ->
         assign_var prog
           (Var.create ~scope:Local
              (unsafe_unsigil (`Local bident))
@@ -640,7 +648,7 @@ module BasilASTLoader = struct
           (Var.create
              (unsafe_unsigil (`Global bident))
              (trans_type type') ~scope:Global)
-    | LVar_Local (LocalVarParenLocalVar (LocalUntyped bident)) ->
+    | LVar_Local (LocalUntyped bident) ->
         let v = lookup_local_decl bident prog in
         assign_var prog v
     | LVar_Global (GlobalUntyped bident) ->
@@ -939,21 +947,21 @@ module BasilASTLoader = struct
     | Expr_Old (o, e, c) ->
         BasilExpr.unexp ~attrib:(expr_range_attr o c) ~op:`Old (trans_expr e)
     | Expr_Forall (attrs, LambdaDef1 (lv, _, e)) ->
-        let bound = unpack_local_lvars ~bound:StringMap.empty p_st lv in
+        let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
         let binds =
           StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
         in
         let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
         BasilExpr.forall ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_Lambda (attrs, LambdaDef1 (lv, _, e)) ->
-        let bound = unpack_local_lvars ~bound:StringMap.empty p_st lv in
+        let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
         let binds =
           StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
         in
         let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
         BasilExpr.lambda ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_Exists (attrs, LambdaDef1 (lv, _, e)) ->
-        let bound = unpack_local_lvars ~bound:StringMap.empty p_st lv in
+        let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
         let binds =
           StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
         in
@@ -1450,3 +1458,16 @@ proc @c() -> ()
     read: $R0:bv64,$mem:(bv64->bv8)
     written: $mem:(bv64->bv8)
     |}]
+
+let%test_unit "parses parenthesised lambda param" =
+  let s =
+    {|
+    let $memory_load32_le : (bv64 -> bv8) -> bv64 -> bv32 = fun (#memory: bv64 -> bv8), (#index: bv64) ::
+      (bvconcat(load_le(8, #memory, bvadd(#index, 3:bv64)),
+        bvconcat((load_le(8, #memory, bvadd(#index, 2:bv64))),
+        bvconcat((load_le(8, #memory, bvadd(#index, 1:bv64))),
+        load_le(8, #memory, #index)))));
+    |}
+  in
+  let _ = ast_of_string ~__LINE__ ~__FILE__ ~__FUNCTION__ s in
+  ()

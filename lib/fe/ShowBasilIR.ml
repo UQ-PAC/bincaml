@@ -177,7 +177,7 @@ and showNamedCallReturn (e : AbsBasilIR.namedCallReturn) : showable = match e wi
 
 and showLVars (e : AbsBasilIR.lVars) : showable = match e with
        AbsBasilIR.LVars_Empty  -> s2s "LVars_Empty"
-  |    AbsBasilIR.LVars_LocalList (openparen, localvarparens, closeparen) -> s2s "LVars_LocalList" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showLocalVarParen localvarparens  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.LVars_LocalList (openparen, localvars, closeparen) -> s2s "LVars_LocalList" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showLocalVar localvars  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.LVars_List (openparen, lvars, closeparen) -> s2s "LVars_List" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showLVar lvars  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.NamedLVars_List (openparen, namedcallreturns, closeparen) -> s2s "NamedLVars_List" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showNamedCallReturn namedcallreturns  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
@@ -199,7 +199,7 @@ and showJump (e : AbsBasilIR.jump) : showable = match e with
 
 
 and showLVar (e : AbsBasilIR.lVar) : showable = match e with
-       AbsBasilIR.LVar_Local localvarparen -> s2s "LVar_Local" >> c2s ' ' >> c2s '(' >> showLocalVarParen localvarparen >> c2s ')'
+       AbsBasilIR.LVar_Local localvar -> s2s "LVar_Local" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
   |    AbsBasilIR.LVar_Global globalvar -> s2s "LVar_Global" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
 
 
