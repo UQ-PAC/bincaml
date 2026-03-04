@@ -1,23 +1,29 @@
 open Containers
 
-(** 
-    This represents type right expressions (i.e. not declarations), we expand this
-    in the future to allow declarations to be polymorphic.
+(** This represents type right expressions (i.e. not declarations), we expand
+    this in the future to allow declarations to be polymorphic.
 
-    Scalar types:  Boolean, Integer, Bitvector, Unit
-    Opaque uninterpreted sort: Datatype {name; []}
-    Top type: greater than all other types
-    Nothing type: less than all other types: inhabited by no values (synonymous with a type conflict/error)
-    Function type: Map: used to represent maps and arrays as well
+    Scalar types: [Boolean], [Integer], [Bitvector], [Unit]
 
-    Sum type: DataType
-    Product type: Record
+    Opaque uninterpreted sort: [Datatype {name; []}]
 
-    Records/Datatypes are designed to fit the SMTLib theory of datatypes:
+    [Top] type: greater than all other types
 
-    https://cvc5.github.io/docs/cvc5-1.2.1/theories/datatypes.html#datatype-updaters
+    [Nothing] type: less than all other types: inhabited by no values
+    (synonymous with a type conflict/error)
 
-    https://microsoft.github.io/z3guide/docs/theories/Datatypes/ *)
+    Function type: [Map]: used to represent maps and arrays as well
+
+    Sum type: [DataType]
+
+    Product type: [Record]
+
+    Records/Datatypes are designed to fit the nonstandard extension SMTLib
+    theory of datatypes:
+
+    {:https://cvc5.github.io/docs/cvc5-1.2.1/theories/datatypes.html}
+
+    {:https://microsoft.github.io/z3guide/docs/theories/Datatypes/} *)
 type t =
   | Boolean
   | Integer
