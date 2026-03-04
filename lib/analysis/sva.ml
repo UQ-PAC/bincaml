@@ -46,7 +46,7 @@ module SymBase = struct
 
   let to_int = Hashtbl.hash
   let pretty a = Containers_pp.int 1
-  let is_stack = function | Stack _ -> true | _ -> false  
+  let is_stack = function Stack _ -> true | _ -> false
 end
 
 module IntervalDomain = struct
