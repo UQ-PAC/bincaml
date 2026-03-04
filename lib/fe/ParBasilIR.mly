@@ -44,7 +44,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pProcDef pIntType pBoolType pBVType pMapType pType1 pTypeT pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaParen pLambdaParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pProcDef pIntType pBoolType pBVType pMapType pType1 pTypeT pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -67,10 +67,13 @@ open Lexing
 %type <AbsBasilIR.stmt> pStmt
 %type <AbsBasilIR.assignment list> pAssignment_list
 %type <AbsBasilIR.localVar> pLocalVar
-%type <AbsBasilIR.globalVar> pGlobalVar
 %type <AbsBasilIR.localVar list> pLocalVar_list
-%type <AbsBasilIR.var> pVar
+%type <AbsBasilIR.globalVar> pGlobalVar
 %type <AbsBasilIR.globalVar list> pGlobalVar_list
+%type <AbsBasilIR.var> pVar
+%type <AbsBasilIR.localVarParen> pLocalVarParen
+%type <AbsBasilIR.globalVarParen> pGlobalVarParen
+%type <AbsBasilIR.localVarParen list> pLocalVarParen_list
 %type <AbsBasilIR.namedCallReturn> pNamedCallReturn
 %type <AbsBasilIR.namedCallReturn list> pNamedCallReturn_list
 %type <AbsBasilIR.lVars> pLVars
@@ -101,8 +104,6 @@ open Lexing
 %type <AbsBasilIR.expr> pExpr
 %type <AbsBasilIR.expr> pExpr1
 %type <AbsBasilIR.expr> pExpr2
-%type <AbsBasilIR.lambdaParen> pLambdaParen
-%type <AbsBasilIR.lambdaParen list> pLambdaParen_list
 %type <AbsBasilIR.lambdaDef> pLambdaDef
 %type <AbsBasilIR.binOp> pBinOp
 %type <AbsBasilIR.unOp> pUnOp
@@ -147,10 +148,13 @@ open Lexing
 %type <AbsBasilIR.stmt> stmt
 %type <AbsBasilIR.assignment list> assignment_list
 %type <AbsBasilIR.localVar> localVar
-%type <AbsBasilIR.globalVar> globalVar
 %type <AbsBasilIR.localVar list> localVar_list
-%type <AbsBasilIR.var> var
+%type <AbsBasilIR.globalVar> globalVar
 %type <AbsBasilIR.globalVar list> globalVar_list
+%type <AbsBasilIR.var> var
+%type <AbsBasilIR.localVarParen> localVarParen
+%type <AbsBasilIR.globalVarParen> globalVarParen
+%type <AbsBasilIR.localVarParen list> localVarParen_list
 %type <AbsBasilIR.namedCallReturn> namedCallReturn
 %type <AbsBasilIR.namedCallReturn list> namedCallReturn_list
 %type <AbsBasilIR.lVars> lVars
@@ -181,8 +185,6 @@ open Lexing
 %type <AbsBasilIR.expr> expr
 %type <AbsBasilIR.expr> expr1
 %type <AbsBasilIR.expr> expr2
-%type <AbsBasilIR.lambdaParen> lambdaParen
-%type <AbsBasilIR.lambdaParen list> lambdaParen_list
 %type <AbsBasilIR.lambdaDef> lambdaDef
 %type <AbsBasilIR.binOp> binOp
 %type <AbsBasilIR.unOp> unOp
@@ -269,13 +271,19 @@ pAssignment_list : assignment_list TOK_EOF { $1 };
 
 pLocalVar : localVar TOK_EOF { $1 };
 
+pLocalVar_list : localVar_list TOK_EOF { $1 };
+
 pGlobalVar : globalVar TOK_EOF { $1 };
 
-pLocalVar_list : localVar_list TOK_EOF { $1 };
+pGlobalVar_list : globalVar_list TOK_EOF { $1 };
 
 pVar : var TOK_EOF { $1 };
 
-pGlobalVar_list : globalVar_list TOK_EOF { $1 };
+pLocalVarParen : localVarParen TOK_EOF { $1 };
+
+pGlobalVarParen : globalVarParen TOK_EOF { $1 };
+
+pLocalVarParen_list : localVarParen_list TOK_EOF { $1 };
 
 pNamedCallReturn : namedCallReturn TOK_EOF { $1 };
 
@@ -336,10 +344,6 @@ pExpr : expr TOK_EOF { $1 };
 pExpr1 : expr1 TOK_EOF { $1 };
 
 pExpr2 : expr2 TOK_EOF { $1 };
-
-pLambdaParen : lambdaParen TOK_EOF { $1 };
-
-pLambdaParen_list : lambdaParen_list TOK_EOF { $1 };
 
 pLambdaDef : lambdaDef TOK_EOF { $1 };
 
@@ -487,21 +491,34 @@ localVar : localIdent SYMB5 type1 { LocalTyped ($1, $3) }
   | localIdent { LocalUntyped $1 }
   ;
 
+localVar_list : localVar { (fun x -> [x]) $1 }
+  | localVar SYMB2 localVar_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  ;
+
 globalVar : globalIdent SYMB5 type1 { GlobalTyped ($1, $3) }
   | globalIdent { GlobalUntyped $1 }
   ;
 
-localVar_list : localVar { (fun x -> [x]) $1 }
-  | localVar SYMB2 localVar_list { (fun (x,xs) -> x::xs) ($1, $3) }
+globalVar_list : /* empty */ { []  }
+  | globalVar { (fun x -> [x]) $1 }
+  | globalVar SYMB2 globalVar_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 var : localVar { VarLocalVar $1 }
   | globalVar { VarGlobalVar $1 }
   ;
 
-globalVar_list : /* empty */ { []  }
-  | globalVar { (fun x -> [x]) $1 }
-  | globalVar SYMB2 globalVar_list { (fun (x,xs) -> x::xs) ($1, $3) }
+localVarParen : localVar { LocalVarParenLocalVar $1 }
+  | openParen localIdent SYMB5 typeT closeParen { LocalVarParen1 ($1, $2, $4, $5) }
+  ;
+
+globalVarParen : globalVar { GlobalVarParenGlobalVar $1 }
+  | openParen globalIdent SYMB5 typeT closeParen { GlobalVarParen1 ($1, $2, $4, $5) }
+  ;
+
+localVarParen_list : /* empty */ { []  }
+  | localVarParen { (fun x -> [x]) $1 }
+  | localVarParen SYMB2 localVarParen_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 namedCallReturn : lVar SYMB6 localIdent { NamedCallReturn1 ($1, $3) }
@@ -513,7 +530,7 @@ namedCallReturn_list : /* empty */ { []  }
   ;
 
 lVars : /* empty */ { LVars_Empty  }
-  | KW_var openParen localVar_list closeParen SYMB7 { LVars_LocalList ($2, $3, $4) }
+  | KW_var openParen localVarParen_list closeParen SYMB7 { LVars_LocalList ($2, $3, $4) }
   | openParen lVar_list closeParen SYMB7 { LVars_List ($1, $2, $3) }
   | openParen namedCallReturn_list closeParen SYMB7 { NamedLVars_List ($1, $2, $3) }
   ;
@@ -535,7 +552,7 @@ jump : KW_goto openParen blockIdent_list closeParen { Jump_GoTo ($2, $3, $4) }
   | KW_return { Jump_ProcReturn  }
   ;
 
-lVar : KW_var localVar { LVar_Local $2 }
+lVar : KW_var localVarParen { LVar_Local $2 }
   | globalVar { LVar_Global $1 }
   ;
 
@@ -648,16 +665,7 @@ expr2 : value { Expr_Literal $1 }
   | openParen expr closeParen { Expr_Paren ($1, $2, $3) }
   ;
 
-lambdaParen : localVar { LambdaParenLocalVar $1 }
-  | openParen localVar closeParen { LambdaParen1 ($1, $2, $3) }
-  ;
-
-lambdaParen_list : /* empty */ { []  }
-  | lambdaParen { (fun x -> [x]) $1 }
-  | lambdaParen SYMB2 lambdaParen_list { (fun (x,xs) -> x::xs) ($1, $3) }
-  ;
-
-lambdaDef : lambdaParen_list lambdaSep expr { LambdaDef1 ($1, $2, $3) }
+lambdaDef : localVarParen_list lambdaSep expr { LambdaDef1 ($1, $2, $3) }
   ;
 
 binOp : bVBinOp { BinOpBVBinOp $1 }

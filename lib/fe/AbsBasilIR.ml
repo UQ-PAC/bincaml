@@ -104,12 +104,20 @@ and var =
    VarLocalVar of localVar
  | VarGlobalVar of globalVar
 
+and localVarParen =
+   LocalVarParenLocalVar of localVar
+ | LocalVarParen1 of openParen * localIdent * typeT * closeParen
+
+and globalVarParen =
+   GlobalVarParenGlobalVar of globalVar
+ | GlobalVarParen1 of openParen * globalIdent * typeT * closeParen
+
 and namedCallReturn =
    NamedCallReturn1 of lVar * localIdent
 
 and lVars =
    LVars_Empty
- | LVars_LocalList of openParen * localVar list * closeParen
+ | LVars_LocalList of openParen * localVarParen list * closeParen
  | LVars_List of openParen * lVar list * closeParen
  | NamedLVars_List of openParen * namedCallReturn list * closeParen
 
@@ -127,7 +135,7 @@ and jump =
  | Jump_ProcReturn
 
 and lVar =
-   LVar_Local of localVar
+   LVar_Local of localVarParen
  | LVar_Global of globalVar
 
 and stmtWithAttrib =
@@ -190,12 +198,8 @@ and expr =
  | Expr_Cases of openParen * case list * closeParen
  | Expr_Paren of openParen * expr * closeParen
 
-and lambdaParen =
-   LambdaParenLocalVar of localVar
- | LambdaParen1 of openParen * localVar * closeParen
-
 and lambdaDef =
-   LambdaDef1 of lambdaParen list * lambdaSep * expr
+   LambdaDef1 of localVarParen list * lambdaSep * expr
 
 and binOp =
    BinOpBVBinOp of bVBinOp
