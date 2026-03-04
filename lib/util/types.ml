@@ -1,5 +1,23 @@
 open Containers
 
+(** 
+    This represents type right expressions (i.e. not declarations), we expand this
+    in the future to allow declarations to be polymorphic.
+
+    Scalar types:  Boolean, Integer, Bitvector, Unit
+    Opaque uninterpreted sort: Datatype {name; []}
+    Top type: greater than all other types
+    Nothing type: less than all other types: inhabited by no values (synonymous with a type conflict/error)
+    Function type: Map: used to represent maps and arrays as well
+
+    Sum type: DataType
+    Product type: Record
+
+    Records/Datatypes are designed to fit the SMTLib theory of datatypes:
+
+    https://cvc5.github.io/docs/cvc5-1.2.1/theories/datatypes.html#datatype-updaters
+
+    https://microsoft.github.io/z3guide/docs/theories/Datatypes/ *)
 type t =
   | Boolean
   | Integer
@@ -19,6 +37,8 @@ let bool = Boolean
 type func_type = { args : t list; return : t }
 
 let bit_width = function Boolean -> Some 1 | Bitvector n -> Some n | _ -> None
+
+(** Get the type for an opaque sort *)
 let mk_sort name = DataType { name; variants = [] }
 
 (*
