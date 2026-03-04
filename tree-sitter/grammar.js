@@ -72,8 +72,8 @@ module.exports = grammar({
         seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), ";"),
         // Decl_ProgWithSpec. Decl ::= "prog" "entry" ProcIdent AttribSet [ProgSpec] ;
         seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), $.list_ProgSpec),
-        // Decl_Proc. Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet ProcDef ;
-        seq("proc", $.token_ProcIdent, $.token_OpenParen, optional($.list_Params), $.token_CloseParen, "->", $.token_OpenParen, optional($.list_Params), $.token_CloseParen, optional($.AttribSet), $.ProcDef)
+        // Decl_Proc. Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [FunSpec] ProcDef ;
+        seq("proc", $.token_ProcIdent, $.token_OpenParen, optional($.list_Params), $.token_CloseParen, "->", $.token_OpenParen, optional($.list_Params), $.token_CloseParen, optional($.AttribSet), optional($.list_FunSpec), optional($.ProcDef))
       ),
     list_Type: $ =>
       choice(
@@ -86,12 +86,10 @@ module.exports = grammar({
       ),
     ProcDef: $ =>
       choice(
-        // ProcDef_Empty. ProcDef ::= ";" ;
-        ";",
-        // ProcDef_SpecOnly. ProcDef ::= [FunSpec] ;
-        $.list_FunSpec,
-        // ProcDef_Some. ProcDef ::= OptionalFunSpec BeginList [Block] EndList ";" ;
-        seq(optional($.OptionalFunSpec), $.token_BeginList, optional($.list_Block), $.token_EndList, ";")
+        // ProcDef_Empty. ProcDef ::= ;
+        choice(),
+        // ProcDef_Some. ProcDef ::= BeginList [Block] EndList ";" ;
+        seq($.token_BeginList, optional($.list_Block), $.token_EndList, ";")
       ),
     IntType: $ =>
       // IntType1. IntType ::= INTTYPE ;
@@ -689,17 +687,10 @@ module.exports = grammar({
       ),
     list_FunSpec: $ =>
       choice(
-        // (:[]). [FunSpec] ::= FunSpec ";" ;
-        seq($.FunSpec, ";"),
+        // []. [FunSpec] ::= ;
+        choice(),
         // (:). [FunSpec] ::= FunSpec ";" [FunSpec] ;
-        seq($.FunSpec, ";", $.list_FunSpec)
-      ),
-    OptionalFunSpec: $ =>
-      choice(
-        // OptionalFunSpec1. OptionalFunSpec ::= [FunSpec] ;
-        $.list_FunSpec,
-        // OptionalFunSpec2. OptionalFunSpec ::= ;
-        choice()
+        seq($.FunSpec, ";", optional($.list_FunSpec))
       ),
     list_ProgSpec: $ =>
       choice(

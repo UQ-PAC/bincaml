@@ -205,6 +205,7 @@ module BasilASTLoader = struct
           out_params,
           _,
           attrib,
+          spec,
           definition ) ->
         let proc_id = prog.prog.proc_names.decl_or_get id in
         let formal_in_params_order = List.map param_to_formal in_params in
@@ -214,10 +215,7 @@ module BasilASTLoader = struct
         let attrib = trans_attrib_set prog ~binds:formal_in_params attrib in
         Hashtbl.add prog.params_order id
           (formal_in_params_order, formal_out_params_order);
-        (* TODO: spec is currently dropped from ProcDef_SpecOnly cases. this should get merged!! *)
-        let is_stub = match definition with
-          |ProcDef_Some _ -> false
-    | ProcDef_Empty | ProcDef_SpecOnly _ -> true in
+        let is_stub = Stdlib.(definition = ProcDef_Empty) in
         let p =
           Procedure.create proc_id ~attrib ~is_stub ~formal_in_params
             ~formal_out_params ()
@@ -325,7 +323,8 @@ module BasilASTLoader = struct
           out_params,
           _,
           attrs,
-          ProcDef_Some (spec_list, BeginList _, blocks, EndList _) ) ->
+          spec_list,
+          ProcDef_Some (bl, blocks, el) ) ->
         let proc_id = prog.prog.proc_names.decl_or_get id in
         let p = ID.Map.find proc_id prog.prog.procs in
         let prog = { prog with curr_proc = Some p } in
@@ -358,11 +357,6 @@ module BasilASTLoader = struct
               |> Procedure.map_graph (fun g ->
                   Procedure.G.add_edge g Entry (Begin entry))
         in
-
-        let spec_list = match spec_list with
-        |  OptionalFunSpec1 xs -> xs
-        | OptionalFunSpec2 -> []
-      in
 
         let spec = Procedure.specification p in
         let spec =
@@ -1276,7 +1270,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Error: no such block: %main_7\
    \n12 |     goto(%main_7, %main_11);\
    \n              \027[1;31m^^^^^^^\027[0m\
@@ -1303,7 +1298,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Error: no such procedure: @cat_4198032\
    \n7 |     call @cat_4198032();\
    \n             \027[1;31m^^^^^^^^^^^^\027[0m\
@@ -1332,7 +1328,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Parse error:  <string>:8\
    \n8 |     :bv1 := 1:bv1;\
    \n        \027[1;31m^\027[0m\
@@ -1350,7 +1347,7 @@ proc @f (ZF_in:bv1, VF_in:bv1) -> ();
   BasilIR.ShowBasilIR.showModuleT prog buf;
   Buffer.output_buffer stdout buf;
   [%expect
-    {| Module1 ([Decl_ProgEmpty (ProcIdent "@f", AttribSet_Empty); Decl_Proc (ProcIdent "@f", OpenParen "(", [Params1 (LocalIdent "ZF_in", TypeBVType (BVType1 (BVTYPE "bv1"))); Params1 (LocalIdent "VF_in", TypeBVType (BVType1 (BVTYPE "bv1")))], CloseParen ")", OpenParen "(", [], CloseParen ")", AttribSet_Empty, ProcDef_Empty)]) |}];
+    {| Module1 ([Decl_ProgEmpty (ProcIdent "@f", AttribSet_Empty); Decl_Proc (ProcIdent "@f", OpenParen "(", [Params1 (LocalIdent "ZF_in", TypeBVType (BVType1 (BVTYPE "bv1"))); Params1 (LocalIdent "VF_in", TypeBVType (BVType1 (BVTYPE "bv1")))], CloseParen ")", OpenParen "(", [], CloseParen ")", AttribSet_Empty, [], ProcDef_Empty)]) |}];
 
   let ast = ast_of_concrete_ast ~name:"boop" prog in
   print_endline
@@ -1385,7 +1382,8 @@ proc @main_4196260 () -> ()
   in
   Program.pretty_to_chan stdout p.prog;
   ();
-  [%expect {|
+  [%expect
+    {|
     var $NF:bv1;
     var $ZF:bv1;
     prog entry @main_4196260;
@@ -1446,7 +1444,8 @@ proc @c() -> ()
     (fun pid proc ->
       print_endline (ID.to_string pid ^ ":\n" ^ (res pid |> RWSets.to_string)))
     prog.prog.procs;
-  [%expect {|
+  [%expect
+    {|
     @entry:
     read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
     written: $R0:bv64,$mem:(bv64->bv8)

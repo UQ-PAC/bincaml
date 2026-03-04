@@ -99,13 +99,12 @@ and transDecl (x : decl) : result = match x with
   | Decl_FunNoType (globalident, attribset, expr) -> failure x
   | Decl_ProgEmpty (procident, attribset) -> failure x
   | Decl_ProgWithSpec (procident, attribset, progspecs) -> failure x
-  | Decl_Proc (procident, openparen0, paramss1, closeparen2, openparen, paramss, closeparen, attribset, procdef) -> failure x
+  | Decl_Proc (procident, openparen0, paramss1, closeparen2, openparen, paramss, closeparen, attribset, funspecs, procdef) -> failure x
 
 
 and transProcDef (x : procDef) : result = match x with
     ProcDef_Empty  -> failure x
-  | ProcDef_SpecOnly funspecs -> failure x
-  | ProcDef_Some (optionalfunspec, beginlist, blocks, endlist) -> failure x
+  | ProcDef_Some (beginlist, blocks, endlist) -> failure x
 
 
 and transIntType (x : intType) : result = match x with
@@ -417,11 +416,6 @@ and transVarSpec (x : varSpec) : result = match x with
 and transProgSpec (x : progSpec) : result = match x with
     ProgSpec_Rely (relytok, expr) -> failure x
   | ProgSpec_Guarantee (guartok, expr) -> failure x
-
-
-and transOptionalFunSpec (x : optionalFunSpec) : result = match x with
-    OptionalFunSpec1 funspecs -> failure x
-  | OptionalFunSpec2  -> failure x
 
 
 

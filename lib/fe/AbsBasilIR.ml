@@ -37,12 +37,11 @@ and decl =
  | Decl_FunNoType of globalIdent * attribSet * expr
  | Decl_ProgEmpty of procIdent * attribSet
  | Decl_ProgWithSpec of procIdent * attribSet * progSpec list
- | Decl_Proc of procIdent * openParen * params list * closeParen * openParen * params list * closeParen * attribSet * procDef
+ | Decl_Proc of procIdent * openParen * params list * closeParen * openParen * params list * closeParen * attribSet * funSpec list * procDef
 
 and procDef =
    ProcDef_Empty
- | ProcDef_SpecOnly of funSpec list
- | ProcDef_Some of optionalFunSpec * beginList * block list * endList
+ | ProcDef_Some of beginList * block list * endList
 
 and intType =
    IntType1 of iNTTYPE
@@ -305,8 +304,4 @@ and varSpec =
 and progSpec =
    ProgSpec_Rely of relyTok * expr
  | ProgSpec_Guarantee of guarTok * expr
-
-and optionalFunSpec =
-   OptionalFunSpec1 of funSpec list
- | OptionalFunSpec2
 
