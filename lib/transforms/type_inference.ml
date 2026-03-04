@@ -74,6 +74,12 @@ module CType = struct
     | C_Int -> Types.Integer
     | C_BV sz -> Types.Bitvector sz
     | C_Bool -> Types.Boolean
+
+  let type_to_c : Types.t -> t = function
+    | Types.Integer -> C_Int
+    | Types.Bitvector s -> C_BV s
+    | Types.Boolean -> C_Bool
+    | _ -> failwith "no CType"
 end
 
 module InferredType = struct
@@ -754,17 +760,32 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
         (* WARN: I forgot what this was meant to be *)
         | `IMPLIES -> (st, Top)
         | `Load _ | `IfThen | `MapAccess -> (st, Top))
-    (* TODO: Do intrins *)
     | ApplyIntrin { op; args } -> (
         match op with
         (* output is constrain by every input, heurtistic deals with offset + ptr *)
-        | `BVADD -> (st, Top)
-        (* Maybe combine the bottom two cases *)
-        | `BVOR | `BVXOR | `BVAND ->
-            (st, Top) (* All types need to be the same *)
-        | `OR | `AND -> (st, Top) (* All types need to be the same *)
+        | `BVOR | `BVXOR | `BVAND | `BVADD -> (
+            match BasilExpr.type_of (List.hd args) with
+            | Bitvector size ->
+                let typ = CType (C_BV size) in
+                let st =
+                  List.fold_left (fun acc a -> constrain_arg st a typ) st args
+                in
+                (st, typ)
+            | _ -> failwith "BV operation without BV arguments")
+        | `OR | `AND ->
+            (* All types need to be the same *)
+            let typ =
+              CType (CType.type_to_c (BasilExpr.type_of (List.hd args)))
+            in
+            let st =
+              List.fold_left (fun acc a -> constrain_arg st a typ) st args
+            in
+            (st, typ)
         | `Cases -> (st, Top)
-        | `BVConcat -> (st, Top))
+        | `BVConcat ->
+            ( st,
+              CType (CType.type_to_c @@ BasilExpr.type_of (BasilExpr.fix expr))
+            ))
     | ApplyFun _ -> (st, Top)
     | Binding _ -> (st, Top)
   in
@@ -782,7 +803,6 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
       (type1 : InferredType.t) : ConstraintState.t =
     match (type0, type1) with
     (* TODO: Cascade top and bottom *)
-    | Top, _ | _, Top | Bottom, _ | _, Bottom -> st
     | Pointer (type0_a, type0_b), Pointer (type1_a, type1_b) ->
         constrain (constrain st type1_a type0_a) type0_b type1_b
     | _, Pointer (type1_a, type1_b) ->
@@ -843,7 +863,6 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
             in
             constrain st constrain_expr (TypeVar lhs))
         st ls
-  (* TODO: SVA *)
   | Stmt.Instr_Store { lhs; rhs; addr = Scalar }
   | Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
       if String.starts_with ~prefix:"_PC" @@ Var.name lhs then st
@@ -1022,7 +1041,6 @@ let transform (prog : Program.t) =
   let types =
     VarIdMap.mapi
       (fun name ({ lb; ub } : ConstraintState.TypeConstraint.t) ->
-        (* TODO this could be cleaner by making it a function or sum *)
         let lower =
           (* Posistive Occurences *)
           TySet.fold
