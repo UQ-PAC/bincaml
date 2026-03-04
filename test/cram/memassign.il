@@ -1,6 +1,17 @@
 var shared $Global_4325420_4325424: bv32
   classification true;
 
+type UninterpSort;
+
+type opaque = A | B | C;
+
+type variants = A of {a: bv64} | B of {b:bv32} | C of {c: bv8};
+
+type record = Record of {a : bv64; b: bv32; c:bv64};
+
+type ilist = Cons of {head:bv64; tail:ilist} | Nil ;
+
+
 prog entry @main_4196164;
 
 proc @main_4196164

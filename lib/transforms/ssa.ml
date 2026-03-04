@@ -444,3 +444,6 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
   assert (Procedure.iter_blocks_topo_fwd proc |> Iter.for_all check_bl);
   check_ssa ~skip_observable ~skip_maps proc;
   proc
+
+let ssa_prog ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
+  { p with procs = ID.Map.map (ssa ~skip_observable ~skip_maps) p.procs }

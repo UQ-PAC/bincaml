@@ -44,20 +44,6 @@ var $ZF: bv1;
 var $_PC: bv64;
 var $__BranchTaken: bv1;
 
-
-
-let $memory_load32_le = fun (#memory: bv64 -> bv8), (#index: bv64) :: 
-  (bvconcat(load_le(8, #memory, bvadd(#index, 3:bv64)),  
-    bvconcat((load_le(8, #memory, bvadd(#index, 2:bv64))), 
-    bvconcat((load_le(8, #memory, bvadd(#index, 1:bv64))), 
-    load_le(8, #memory, #index)))));
-
-let $memory_load32_le:(((bv64->bv8))->((bv64->bv32))) = fun (#memory:(bv64->bv8)), (#index:bv64) :: (bvconcat(load_le(8,
-    #memory:(bv64->bv8), bvadd(#index:bv64, 0x3:bv64)),
-    bvconcat(load_le(8, #memory:(bv64->bv8), bvadd(#index:bv64, 0x2:bv64)),
-     bvconcat(load_le(8, #memory:(bv64->bv8), bvadd(#index:bv64, 0x1:bv64)),
-      load_le(8, #memory:(bv64->bv8), #index:bv64)))));
-
 prog entry @main_4197696;
 
 proc @main_4197696 () -> ()

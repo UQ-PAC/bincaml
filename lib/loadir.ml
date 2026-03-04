@@ -129,8 +129,25 @@ module BasilASTLoader = struct
     in
     trans_one v
 
+  and trans_typedecl t =
+    match t with
+    | TypeDeclCase1 (localIdent, typeT) ->
+        (unsafe_unsigil (`Local localIdent), trans_type typeT)
+
   and trans_declaration prog (x : decl) : load_st =
     match x with
+    | Decl_UninterpSort typedecl ->
+        let binding, ts = trans_sort typedecl in
+        let typ = Types.DataType [ (binding, ts) ] in
+        let def : Program.declaration = Type { binding; typ } in
+        map_prog (fun prog -> Program.add_decl prog binding def) prog
+    | Decl_Type types ->
+        let types = List.map trans_typedecl types in
+        List.fold_left
+          (fun prog (binding, typ) ->
+            let def : Program.declaration = Type { binding; typ } in
+            map_prog (fun prog -> Program.add_decl prog binding def) prog)
+          prog types
     | Decl_Mem (modifiers, bident, type', spec) ->
         let attrib = StringMap.of_list (trans_varspec prog spec) in
         let pure = var_modifiers_pure modifiers in
@@ -179,7 +196,7 @@ module BasilASTLoader = struct
               definition = Uninterpreted;
             }
         in
-        map_prog (fun prog -> Program.add_decl prog bvar fundef) prog
+        map_prog (fun prog -> Program.add_decl prog (Var.name bvar) fundef) prog
     | Decl_Axiom (name, _, _) ->
         let bvar =
           Var.create
@@ -195,7 +212,7 @@ module BasilASTLoader = struct
               definition = Uninterpreted;
             }
         in
-        map_prog (fun prog -> Program.add_decl prog bvar fundef) prog
+        map_prog (fun prog -> Program.add_decl prog (Var.name bvar) fundef) prog
     | Decl_Proc
         ( ProcIdent (id_pos, id),
           _,
@@ -276,7 +293,7 @@ module BasilASTLoader = struct
     let fundef : Program.declaration =
       Function { attrib; binding; definition }
     in
-    map_prog (fun prog -> Program.add_decl prog binding fundef) prog
+    map_prog (fun prog -> Program.add_decl prog (Var.name binding) fundef) prog
 
   and trans_definition prog (x : decl) : load_st =
     match x with
@@ -298,7 +315,7 @@ module BasilASTLoader = struct
         let fundef : Program.declaration =
           Function { attrib; binding = bvar; definition = Axiom body }
         in
-        map_prog (fun prog -> Program.add_decl prog bvar fundef) prog
+        map_prog (fun prog -> Program.add_decl prog (Var.name bvar) fundef) prog
     | Decl_ProgEmpty (ProcIdent (_, id), attr) ->
         let nattrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         prog
@@ -407,13 +424,24 @@ module BasilASTLoader = struct
   and transMapType (x : mapType) : Types.t =
     match x with MapType1 (t0, t1) -> Map (trans_type t0, trans_type t1)
 
+  and trans_sort sort =
+    match sort with
+    | SortType id -> (unsafe_unsigil (`Local id), [])
+    | VariantCase (id, _, types, _) ->
+        (unsafe_unsigil (`Local id), List.map trans_recordfield types)
+
+  and trans_recordfield field =
+    match field with
+    | RecordField1 (id, ty) -> (unsafe_unsigil (`Local id), trans_type ty)
+
   and trans_type (x : typeT) : Types.t =
     match x with
     | TypeIntType inttype -> Integer
     | TypeBoolType booltype -> Boolean
     | TypeMapType maptype -> transMapType maptype
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
-    | Type1 (_, typeT, _) -> trans_type typeT
+    | TypeParen (_, typeT, _) -> trans_type typeT
+    | TypeSumType (SumType1 sorts) -> DataType (List.map trans_sort sorts)
 
   and transIntVal (x : intVal) : PrimInt.t =
     match x with
@@ -817,6 +845,9 @@ module BasilASTLoader = struct
     match StringMap.find vn p_st.prog.globals with
     | Variable { binding } -> binding
     | Function { binding } -> binding
+    | Type _ ->
+        let msg = "found type declaration when looking for variable:" ^ vn in
+        raise (LoadError { token_char_offset_range; msg; input = None })
     | exception Not_found ->
         let msg = "global variable used before declaration : " ^ vn in
         raise (LoadError { token_char_offset_range; msg; input = None })
