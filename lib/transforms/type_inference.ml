@@ -225,6 +225,14 @@ module ConstraintState = struct
         | Some c -> Some { c with lb = TySet.add ty c.lb })
       st
 
+  let check_bounded (st : t) var typ bound =
+    not
+    @@
+    match VarIdMap.find_opt var st with
+    | None -> false
+    | Some { lb; ub } ->
+        if Polarity.positive bound then TySet.mem typ lb else TySet.mem typ ub
+
   let export_graph_viz (t : t) : string =
     Printf.sprintf "\ndigraph G {\n%s\n%s\n}"
       (Iter.fold
@@ -759,15 +767,13 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
       constrained as it is being added in anyway.
   *)
   let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
-      (type1 : InferredType.t) (rec_check : TySet.t) : ConstraintState.t =
+      (type1 : InferredType.t) : ConstraintState.t =
     match (type0, type1) with
     | Top, _ | _, Top | Bottom, _ | _, Bottom -> st
     | Pointer (type0_a, type0_b), Pointer (type1_a, type1_b) ->
-        constrain
-          (constrain st type1_a type0_a rec_check)
-          type0_b type1_b rec_check
+        constrain (constrain st type1_a type0_a) type0_b type1_b
     | _, Pointer (type1_a, type1_b) ->
-        constrain (constrain st type0 type1_a rec_check) type0 type1_b rec_check
+        constrain (constrain st type0 type1_a) type0 type1_b
     | TypeVar a, TypeVar b -> (
         if VarId.equal a b then st
         else
@@ -776,9 +782,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
           match bounds with
           | Some { lb } ->
               TySet.to_iter lb
-              |> Iter.fold
-                   (fun st bound -> constrain st bound type1 TySet.empty)
-                   st
+              |> Iter.fold (fun st bound -> constrain st bound type1) st
           | None -> st)
     | Field { ty }, TypeVar b -> (
         match ty with
@@ -788,24 +792,21 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
             match bounds with
             | Some { lb } ->
                 TySet.to_iter lb
-                |> Iter.fold
-                     (fun st bound -> constrain st bound type1 TySet.empty)
-                     st
+                |> Iter.fold (fun st bound -> constrain st bound type1) st
             | None -> st)
         | _ -> st)
     | _, TypeVar a -> (
-        (* The right hand side is not a type variable *)
-        let st = ConstraintState.add_lb st a type0 in
-        let bounds = VarIdMap.get a st in
-        if TySet.mem type1 rec_check then st
+        if
+          (* The right hand side is not a type variable *)
+          ConstraintState.check_bounded st a type1 Polarity.Neg
+        then st
         else
-          let rec_check = TySet.add type1 rec_check in
+          let st = ConstraintState.add_lb st a type0 in
+          let bounds = VarIdMap.get a st in
           match bounds with
           | Some { ub } ->
               TySet.to_iter ub
-              |> Iter.fold
-                   (fun st bound -> constrain st type0 bound rec_check)
-                   st
+              |> Iter.fold (fun st bound -> constrain st type0 bound) st
           | None -> st)
     | _ ->
         (*
@@ -813,11 +814,6 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
 
           Very restricting having this fail, would be nice just to ignore it
         *)
-        (* Printf.printf *)
-        (* "Illegal constrain call type0: %s; type1: %s stmt: %s \n\n\n%!" *)
-        (* (InferredType.show type0) (InferredType.show type1) *)
-        (* (Program.show_stmt stmt); *)
-        (* st *)
         failwith
           (Printf.sprintf "Illegal constrain call type0: %s; type1: %s stmt: %s"
              (InferredType.show type0) (InferredType.show type1)
@@ -839,7 +835,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
             let st, constrain_expr =
               constrain_expr st @@ BasilExpr.unfix expr
             in
-            constrain st constrain_expr (TypeVar lhs) TySet.empty)
+            constrain st constrain_expr (TypeVar lhs))
         st ls
   (* TODO: SVA *)
   | Stmt.Instr_Store { lhs; rhs; addr = Scalar }
@@ -848,7 +844,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
       else
         let lhs = VarId.var_proc_to_uid lhs proc in
         let rhs = VarId.var_proc_to_uid rhs proc in
-        constrain st (TypeVar rhs) (TypeVar lhs) TySet.empty
+        constrain st (TypeVar rhs) (TypeVar lhs)
   | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size } } ->
       let sva_res =
         Analysis.Sva.Eval.EV.eval
@@ -972,7 +968,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
                      (VarId.var_procid_to_uid
                         (StringMap.find k formal_in)
                         procid))
-                  (TypeVar a) TySet.empty
+                  (TypeVar a)
             | acc, a ->
                 ConstraintState.add_ub acc
                   (VarId.var_procid_to_uid (StringMap.find k formal_in) procid)
@@ -985,8 +981,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
                     (VarId.var_procid_to_uid
                        (StringMap.find k formal_out)
                        procid))
-                 (TypeVar (VarId.var_proc_to_uid v proc))
-                 TySet.empty)
+                 (TypeVar (VarId.var_proc_to_uid v proc)))
              lhs st
       in
       let args =
