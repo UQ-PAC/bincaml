@@ -1025,7 +1025,7 @@ let transform (prog : Program.t) =
                 acc)
          VarIdMap.empty
   in
-  print_endline @@ ConstraintState.export_graph_viz type_constraint_map;
+  (* print_endline @@ ConstraintState.export_graph_viz type_constraint_map; *)
   let types =
     VarIdMap.mapi
       (fun name ({ lb; ub } : ConstraintState.TypeConstraint.t) ->
