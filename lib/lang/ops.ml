@@ -194,6 +194,30 @@ module IntOps = struct
     | #binary as b -> show_binary b
 end
 
+module RecordOps = struct
+  type unary = [ `FACCESS of Z.t ] [@@deriving eq, ord]
+  type binary = [ `FSET of Z.t ] [@@deriving eq, ord]
+
+  let show_unary = function
+    | `FACCESS offset -> "`FACCESS " ^ Z.to_string offset
+
+  let show_binary = function `FSET offset -> "`FSET " ^ Z.to_string offset
+  let eval_unary (u : unary) = failwith "boom"
+  let eval_unary (u : binary) = failwith "boom"
+
+  let show = function
+    | #unary as u -> show_unary u
+    | #binary as b -> show_binary b
+end
+
+module PointerOps = struct
+  type binary = [ `PTRADD | `PTRSUB ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  let eval_binary (u : binary) = failwith "boom"
+  let show = function #binary as u -> show_binary u
+end
+
 module Spec = struct
   type endian = [ `Big | `Little ]
   [@@deriving show { with_path = false }, eq, ord]

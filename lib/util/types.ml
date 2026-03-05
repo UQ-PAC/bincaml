@@ -33,9 +33,13 @@ type t =
   | Nothing
   | Map of t * t
   | Sort of string * variant list
+  | Record of field list
+  | Pointer of t * t
 
 and variant = { variant : string; fields : field list }
 and field = { field : string; typ : t } [@@deriving eq, ord]
+
+and field2 = { offset : Z.t; size : int; t : t }
 
 let bv i = Bitvector i
 let int = Integer
@@ -72,7 +76,7 @@ let mk_adt name (variants : (string * field list) list) =
     (name, variants |> List.map (fun (variant, fields) -> { variant; fields }))
 
 (*
-  Nothing < Unit < {boolean, integer, bitvector} < Top
+  Nothing < Unit < {boolean, integer, bitvector, record, pointer} < Top
   *)
 let rec compare_partial (a : t) (b : t) =
   match (a, b) with
@@ -86,17 +90,45 @@ let rec compare_partial (a : t) (b : t) =
   | _, Unit -> Some 1
   | Boolean, Integer -> None
   | Integer, Boolean -> None
+  | Integer, Record _ -> None
+  | Integer, Pointer _ -> None
   | Boolean, Bitvector _ -> None
+  | Boolean, Pointer _ -> None
+  | Boolean, Record _ -> None
   | Bitvector _, Boolean -> None
   | Boolean, Boolean -> None
   | Integer, Bitvector _ -> None
   | Bitvector _, Integer -> None
+  | Bitvector _, Record _ -> None
+  | Bitvector _, Pointer _ -> None
+  | Record _, Bitvector _ -> None
+  | Record _, Integer -> None
+  | Record _, Boolean -> None
+  | Record _, Pointer _ -> None
+  | Pointer _, Bitvector _ -> None
+  | Pointer _, Integer -> None
+  | Pointer _, Boolean -> None
+  | Pointer _, Record _ -> None
+  | Pointer (l, u), Pointer (l2, u2) -> (
+      compare_partial l l2 |> function Some 0 -> compare_partial u u2 | o -> o)
+  | Record fields, Record fields2 ->
+      Some
+        (List.compare
+           (fun a b ->
+             match field_equal_partial a b with Some a -> a | None -> -1)
+           fields fields2)
   | Bitvector a, Bitvector b -> Some (Int.compare a b)
   | Sort (n1, _), Sort (n2, _) -> if String.equal n1 n2 then Some 0 else None
   | Integer, Integer -> Some 0
   | Map (k, v), Map (k2, v2) -> (
       compare_partial k k2 |> function Some 0 -> compare_partial v v2 | o -> o)
   | _, _ -> None
+
+and field_equal_partial { offset; size; t }
+    { offset = offset1; size = size1; t = t1 } =
+  if Z.compare offset1 offset <> 0 then
+    if Int.compare size size1 <> 0 then compare_partial t t1 else Some 0
+  else Some 0
 
 let leq a b =
   compare_partial a b |> function Some a when a <= 0 -> true | _ -> false
@@ -118,6 +150,15 @@ let rec to_string = function
   | Unit -> "()"
   | Top -> "⊤"
   | Nothing -> "⊥"
+  | Pointer (l, u) -> Printf.sprintf "ptr(%s, %s)" (to_string l) (to_string u)
+  | Record fields ->
+      List.fold_left
+        (fun acc { offset; size; t } ->
+          acc
+          ^ Printf.sprintf "(%s, %d) : %s" (Z.to_string offset) size
+              (to_string t))
+        "{" fields
+      ^ "}"
   | Map ((Map _ as a), (Map _ as b)) ->
       "(" ^ "(" ^ to_string a ^ ")" ^ "->" ^ "(" ^ to_string b ^ ")" ^ ")"
   | Map ((Map _ as a), b) ->

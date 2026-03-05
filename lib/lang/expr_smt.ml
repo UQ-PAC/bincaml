@@ -99,6 +99,25 @@ module SMTLib2 = struct
     | Bitvector i ->
         ( list [ atom "_"; atom "BitVec"; atom @@ Int.to_string i ],
           LSet.singleton BV )
+    | Record fields ->
+        (* Each field in record has three atoms? Offset, size, type *)
+        let of_field ({ offset; size; t } : Types.field) =
+          let t_sexp, t_set = of_typ t in
+          (list [ atom @@ Z.to_string offset; of_int size; t_sexp ], t_set)
+        in
+        (* The fold keeps track of the set and the map makes it a sexp list *)
+        let lset, sexp =
+          List.fold_left_map
+            (fun set field ->
+              let field_sexp, field_set = of_field field in
+              (LSet.union set field_set, field_sexp))
+            LSet.empty fields
+        in
+        (list sexp, lset)
+    | Pointer (l, u) ->
+        let l_sexp, l_set = of_typ l in
+        let u_sexp, u_set = of_typ u in
+        (list [ l_sexp; u_sexp ], LSet.union l_set u_set)
     | Types.Unit -> (atom "Unit", LSet.singleton DT)
     | Types.Top -> (atom "Any", LSet.singleton DT)
     | Types.Nothing -> (atom "Nothing", LSet.singleton DT)
