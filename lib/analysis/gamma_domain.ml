@@ -77,7 +77,7 @@ module IDEDomain = struct
   module Data = Var
 
   module DL = struct
-    type t = Label of Var.t | Lambda
+    type t = Lambda | Label of Var.t
     [@@deriving eq, ord, show { with_path = false }]
   end
 
@@ -114,6 +114,9 @@ module IDEDomain = struct
     | BottomEdge -> Value.bottom
     | IdEdge -> s
     | TopEdge -> Value.top
+
+  let init_data globals (proc : Program.proc) =
+    Procedure.formal_out_params proc |> StringMap.values |> Iter.append globals
 
   open DL
 
@@ -155,6 +158,8 @@ module IDEDomain = struct
              |> Iter.map (fun v -> (Label v, TopEdge)))
     | _ -> Iter.empty
 
+  let modifies = Stmt.free_vars_iter
+
   let transfer stmt d =
     let open Stmt in
     match stmt with
@@ -188,10 +193,9 @@ module IDEDomain = struct
     | Instr_Assume _ | Instr_Assert _ -> Iter.singleton (d, IdEdge)
     | Instr_Call _ | Instr_IntrinCall _ | Instr_IndirectCall _ -> Iter.empty
 
-  let transfer_phi (phi : Var.t Block.phi) d =
+  let transfer_phi (phi : Var.t VarMap.t) d =
     match d with
-    | Label v when List.exists (fun (_, v') -> Var.equal v v') phi.rhs ->
-        Iter.singleton (Label phi.lhs, IdEdge)
+    | Label v -> Iter.singleton (Label (VarMap.get_or v phi ~default:v), IdEdge)
     | _ -> Iter.singleton (d, IdEdge)
 end
 
