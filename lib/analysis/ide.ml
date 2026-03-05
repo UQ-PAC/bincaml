@@ -63,7 +63,8 @@ type phi_info =
         |> Iter.to_string ~sep:"," (fun (v, v') ->
             Var.show v' ^ " -> " ^ Var.show v))])
 [@@deriving eq, ord, show { with_path = false }]
-(* x = phi(y, z) would have x in lhs and y/z in rhs *)
+(** The order of mapping depends on analysis direction. If forwards, we map
+    assignees to assigned, else we do the opposite. *)
 
 module LSet = Set.Make (Loc)
 module LM = Map.Make (Loc)
@@ -102,6 +103,7 @@ module type IDEDomain = sig
   (** evaluate an edge function *)
 
   val init_data : Var.t Iter.t -> Program.proc -> Data.t Iter.t
+  (** data that each procedure should summarise, the given vars are globals *)
 
   val transfer_call : call_info -> DL.t -> t state_update
   (** edge calling a procedure (to the return block when backwards) *)
@@ -262,7 +264,9 @@ module IDEGraph = struct
                  (fun m (phi : Var.t Block.phi) ->
                    List.find_opt (fun (bid, v') -> ID.equal bid in_bid) phi.rhs
                    |> Option.map_or ~default:m (fun (_, v') ->
-                       VarMap.add phi.lhs v' m))
+                       match dir with
+                       | `Forwards -> VarMap.add v' phi.lhs m
+                       | `Backwards -> VarMap.add phi.lhs v' m))
                  VarMap.empty
           in
           add_edge_e_dir dir g
