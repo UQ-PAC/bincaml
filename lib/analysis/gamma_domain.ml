@@ -98,11 +98,7 @@ module IDEDomain = struct
   let identity = IdEdge
 
   let compose a b =
-    match (a, b) with
-    | IdEdge, b -> b
-    | a, IdEdge -> a
-    | BottomEdge, _ -> BottomEdge
-    | TopEdge, _ -> TopEdge
+    match a with IdEdge -> b | BottomEdge -> BottomEdge | TopEdge -> TopEdge
 
   let join a b =
     match (a, b) with
@@ -194,7 +190,8 @@ module IDEDomain = struct
         | _ -> Iter.singleton (d, IdEdge))
     | Instr_Assume _ | Instr_Assert _ -> Iter.singleton (d, IdEdge)
     | Instr_Call _ | Instr_IntrinCall _ | Instr_IndirectCall _ ->
-        raise (Failure "ide graph should not contain call statements")
+        (* raise (Failure "ide graph should not contain call statements") nope indirect calls exist *)
+        Iter.empty
 
   let transfer_phi (phi : Var.t VarMap.t) d =
     match d with

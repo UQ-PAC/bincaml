@@ -583,7 +583,7 @@ module IDE (D : IDEDomain) = struct
       updates
     |> Iter.fold
          (fun acc ((d1, d3), e) ->
-           let base = dldlget Lambda d3 summary in
+           let base = dldlget Lambda d3 acc in
            let m = DlMap.get_or d1 acc ~default:DlMap.empty in
            match d1 with
            | Label v when D.equal base (D.join e base) ->
