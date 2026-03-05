@@ -544,6 +544,12 @@ module BasilExpr = struct
   let zero_extend ?attrib ~n_prefix_bits (e : t) : t =
     unexp ?attrib ~op:(`ZeroExtend n_prefix_bits) e
 
+  let fset ?attrib ~(offset : Z.t) (record : t) (e : t) : t =
+    binexp ?attrib ~op:(`FSET offset) record e
+
+  let faccess ?attrib ~(offset : Z.t) (record : t) : t =
+    unexp ?attrib ~op:(`FACCESS offset) record
+
   let sign_extend ?attrib ~n_prefix_bits (e : t) : t =
     unexp ?attrib ~op:(`SignExtend n_prefix_bits) e
 

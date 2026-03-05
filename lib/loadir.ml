@@ -436,6 +436,8 @@ module BasilASTLoader = struct
     match field with
     | RecordField1 (id, ty) ->
         Types.mk_field (unsafe_unsigil (`Local id)) (trans_type ty)
+  and transRECORDTYPE (fields : field list) = failwith "TODO"
+  and transPOINTERTYPE (l : typeT) (u : typeT) = failwith "TODO"
 
   and trans_type (x : typeT) : Types.t =
     match x with
@@ -445,6 +447,8 @@ module BasilASTLoader = struct
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
     | TypeParen (_, typeT, _) -> trans_type typeT
     | TypeSort t -> Types.Sort (unsafe_unsigil (`Local t), [])
+    | TypeRecordType (RecordType1 (_, fields, _)) -> transRECORDTYPE fields
+    | TypePointerType (PointerType1 (_, _, l, u, _)) -> transPOINTERTYPE l u
 
   and transIntVal (x : intVal) : PrimInt.t =
     match x with
@@ -965,6 +969,12 @@ module BasilASTLoader = struct
           ~hi_excl:(transIntVal ival0 |> Z.to_int)
           ~lo_incl:(transIntVal intval |> Z.to_int)
           (trans_expr expr)
+    | Expr_FAccess (o, offset, record, c) ->
+        BasilExpr.faccess ~attrib:(expr_range_attr o c)
+          ~offset:(transIntVal offset) (trans_expr record)
+    | Expr_FSet (o, offset, record, expr, c) ->
+        BasilExpr.fset ~attrib:(expr_range_attr o c)
+          ~offset:(transIntVal offset) (trans_expr record) (trans_expr expr)
     | Expr_LoadLe (o, intval, a1, a2, c) ->
         BasilExpr.load ~attrib:(expr_range_attr o c)
           ~bits:(Z.to_int @@ transIntVal intval)
@@ -1014,6 +1024,7 @@ module BasilASTLoader = struct
         transIntLogicalBinOp intlogicalbinop
     | BinOpIntBinOp intbinop -> transIntBinOp intbinop
     | BinOpEqOp equop -> transEqOp equop
+    | BinOpPointerBinOp pointerBinOp -> transPointerBinOp pointerBinOp
 
   and transUnOp (x : BasilIR.AbsBasilIR.unOp) =
     match x with
@@ -1068,6 +1079,8 @@ module BasilASTLoader = struct
     | IntBinOp_intsub -> `INTSUB
     | IntBinOp_intdiv -> `INTDIV
     | IntBinOp_intmod -> `INTMOD
+
+  and transPointerBinOp (x : pointerBinOp) = failwith "TODO"
 
   and transIntLogicalBinOp (x : intLogicalBinOp) =
     match x with

@@ -195,15 +195,23 @@ module IntOps = struct
 end
 
 module RecordOps = struct
-  type unary = [ `FACCESS of Z.t ] [@@deriving eq, ord]
-  type binary = [ `FSET of Z.t ] [@@deriving eq, ord]
+  type unary =
+    ([ `FACCESS of Z.t ]
+    [@printer
+      fun fmt m -> match m with `FACCESS offset -> Z.pp_print fmt offset])
+  [@@deriving show { with_path = false }, eq, ord]
 
-  let show_unary = function
+  type binary =
+    ([ `FSET of Z.t ]
+    [@printer fun fmt m -> match m with `FSET offset -> Z.pp_print fmt offset])
+  [@@deriving show { with_path = false }, eq, ord]
+
+  let to_string_unary = function
     | `FACCESS offset -> "`FACCESS " ^ Z.to_string offset
 
   let show_binary = function `FSET offset -> "`FSET " ^ Z.to_string offset
-  let eval_unary (u : unary) = failwith "boom"
-  let eval_unary (u : binary) = failwith "boom"
+  let eval_unary (u : unary) = failwith "TODO"
+  let eval_unary (u : binary) = failwith "TODO"
 
   let show = function
     | #unary as u -> show_unary u
@@ -214,7 +222,7 @@ module PointerOps = struct
   type binary = [ `PTRADD | `PTRSUB ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  let eval_binary (u : binary) = failwith "boom"
+  let eval_binary (u : binary) = failwith "TODO"
   let show = function #binary as u -> show_binary u
 end
 
@@ -244,11 +252,21 @@ module AllOps = struct
   type const = [ IntOps.const | BVOps.const | LogicalOps.const ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type unary = [ IntOps.unary | BVOps.unary | Spec.unary | LogicalOps.unary ]
+  type unary =
+    [ IntOps.unary
+    | BVOps.unary
+    | Spec.unary
+    | LogicalOps.unary
+    | RecordOps.unary ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type binary =
-    [ IntOps.binary | BVOps.binary | LogicalOps.binary | Spec.binary ]
+    [ IntOps.binary
+    | BVOps.binary
+    | LogicalOps.binary
+    | Spec.binary
+    | RecordOps.binary
+    | PointerOps.binary ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type intrin = [ BVOps.intrin | LogicalOps.intrin | Spec.intrin ]
@@ -280,6 +298,10 @@ module AllOps = struct
         match a with
         | Bitvector s -> return @@ Bitvector (sz + s)
         | o -> Conflict [ (o, "<bitvector") ])
+    | `FACCESS offset -> (
+        match get_field offset a with
+        | None -> failwith @@ "No field at offset: " ^ Z.to_string offset
+        | Some ({ t; _ } : field2) -> return t)
     | `Forall -> return Boolean
     | `BVNEG -> return a
     | `INTNEG -> return Integer
@@ -312,6 +334,8 @@ module AllOps = struct
     | `BVAND | `BVOR | `BVADD | `BVMUL | `BVUDIV | `BVUREM | `BVSHL | `BVLSHR
     | `BVNAND | `BVXOR | `BVSUB | `BVSDIV | `BVSREM | `BVSMOD | `BVASHR ->
         return l
+    | `FSET _ -> return r
+    | `PTRADD | `PTRSUB -> return l
     | `MapAccess ->
         let m, r = Types.uncurry l in
         return r
@@ -370,6 +394,10 @@ module AllOps = struct
     | `Exists -> "exists"
     | `SignExtend n -> Printf.sprintf "sign_extend_%d" n
     | `ZeroExtend n -> Printf.sprintf "zero_extend_%d" n
+    | `FSET offset -> Printf.sprintf "fset_%s" @@ Z.to_string offset
+    | `FACCESS offset -> Printf.sprintf "faccess_%s" @@ Z.to_string offset
+    | `PTRADD -> "ptradd"
+    | `PTRSUB -> "ptrsub"
     | `EQ -> "eq"
     | `INTADD -> "intadd"
     | `BVNAND -> "bvnand"

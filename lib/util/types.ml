@@ -33,7 +33,7 @@ type t =
   | Nothing
   | Map of t * t
   | Sort of string * variant list
-  | Record of field list
+  | Record of field2 list
   | Pointer of t * t
 
 and variant = { variant : string; fields : field list }
@@ -75,6 +75,12 @@ let mk_adt name (variants : (string * field list) list) =
   Sort
     (name, variants |> List.map (fun (variant, fields) -> { variant; fields }))
 
+let get_field offset1 record : field2 option =
+  match record with
+  | Record fields ->
+      List.find_opt (fun { offset; _ } -> Z.equal offset offset1) fields
+  | _ -> failwith "Not record type"
+
 (*
   Nothing < Unit < {boolean, integer, bitvector, record, pointer} < Top
   *)
@@ -88,27 +94,6 @@ let rec compare_partial (a : t) (b : t) =
   | _, Nothing -> Some 1
   | Unit, _ -> Some (-1)
   | _, Unit -> Some 1
-  | Boolean, Integer -> None
-  | Integer, Boolean -> None
-  | Integer, Record _ -> None
-  | Integer, Pointer _ -> None
-  | Boolean, Bitvector _ -> None
-  | Boolean, Pointer _ -> None
-  | Boolean, Record _ -> None
-  | Bitvector _, Boolean -> None
-  | Boolean, Boolean -> None
-  | Integer, Bitvector _ -> None
-  | Bitvector _, Integer -> None
-  | Bitvector _, Record _ -> None
-  | Bitvector _, Pointer _ -> None
-  | Record _, Bitvector _ -> None
-  | Record _, Integer -> None
-  | Record _, Boolean -> None
-  | Record _, Pointer _ -> None
-  | Pointer _, Bitvector _ -> None
-  | Pointer _, Integer -> None
-  | Pointer _, Boolean -> None
-  | Pointer _, Record _ -> None
   | Pointer (l, u), Pointer (l2, u2) -> (
       compare_partial l l2 |> function Some 0 -> compare_partial u u2 | o -> o)
   | Record fields, Record fields2 ->
