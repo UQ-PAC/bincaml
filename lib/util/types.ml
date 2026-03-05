@@ -39,7 +39,7 @@ type t =
 and variant = { variant : string; fields : field list }
 and field = { field : string; typ : t } [@@deriving eq, ord]
 
-and field2 = { offset : Z.t; size : int; t : t }
+and field2 = { offset : Z.t; t : t }
 
 let bv i = Bitvector i
 let int = Integer
@@ -109,11 +109,8 @@ let rec compare_partial (a : t) (b : t) =
       compare_partial k k2 |> function Some 0 -> compare_partial v v2 | o -> o)
   | _, _ -> None
 
-and field_equal_partial { offset; size; t }
-    { offset = offset1; size = size1; t = t1 } =
-  if Z.compare offset1 offset <> 0 then
-    if Int.compare size size1 <> 0 then compare_partial t t1 else Some 0
-  else Some 0
+and field_equal_partial { offset; t } { offset = offset1; t = t1 } =
+  if Z.compare offset1 offset <> 0 then compare_partial t t1 else Some 0
 
 let leq a b =
   compare_partial a b |> function Some a when a <= 0 -> true | _ -> false
@@ -138,10 +135,8 @@ let rec to_string = function
   | Pointer (l, u) -> Printf.sprintf "ptr(%s, %s)" (to_string l) (to_string u)
   | Record fields ->
       List.fold_left
-        (fun acc { offset; size; t } ->
-          acc
-          ^ Printf.sprintf "(%s, %d) : %s" (Z.to_string offset) size
-              (to_string t))
+        (fun acc { offset; t } ->
+          acc ^ Printf.sprintf "%s : %s," (Z.to_string offset) (to_string t))
         "{" fields
       ^ "}"
   | Map ((Map _ as a), (Map _ as b)) ->

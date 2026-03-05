@@ -436,8 +436,16 @@ module BasilASTLoader = struct
     match field with
     | RecordField1 (id, ty) ->
         Types.mk_field (unsafe_unsigil (`Local id)) (trans_type ty)
-  and transRECORDTYPE (fields : field list) = failwith "TODO"
-  and transPOINTERTYPE (l : typeT) (u : typeT) = failwith "TODO"
+  and transRECORDTYPE (fields : field list) =
+    Types.Record
+      (List.map
+         (function
+           | Field1 (offset, t) ->
+               ({ offset = transIntVal offset; t = trans_type t } : Types.field2))
+         fields)
+
+  and transPOINTERTYPE (l : typeT) (u : typeT) =
+    Types.Pointer (trans_type l, trans_type u)
 
   and trans_type (x : typeT) : Types.t =
     match x with

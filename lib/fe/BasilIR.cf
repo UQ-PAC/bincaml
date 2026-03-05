@@ -73,7 +73,7 @@ ProcDef_Empty . ProcDef ::= ;
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
 separator Field "," ;
-Field1 . Field ::= OpenParen IntVal "," IntVal CloseParen ":" Type "," ;
+Field1 . Field ::= IntVal ":" Type ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;

@@ -118,7 +118,7 @@ and transProcDef (x : procDef) : result = match x with
 
 
 and transField (x : field) : result = match x with
-    Field1 (openparen, intval0, intval, closeparen, type') -> failure x
+    Field1 (intval, type') -> failure x
 
 
 and transIntType (x : intType) : result = match x with

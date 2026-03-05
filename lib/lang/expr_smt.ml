@@ -101,9 +101,9 @@ module SMTLib2 = struct
           LSet.singleton BV )
     | Record fields ->
         (* Each field in record has three atoms? Offset, size, type *)
-        let of_field ({ offset; size; t } : Types.field2) =
+        let of_field ({ offset; t } : Types.field2) =
           let t_sexp, t_set = of_typ t in
-          (list [ atom @@ Z.to_string offset; of_int size; t_sexp ], t_set)
+          (list [ atom @@ Z.to_string offset; t_sexp ], t_set)
         in
         (* The fold keeps track of the set and the map makes it a sexp list *)
         let lset, sexp =

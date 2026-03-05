@@ -184,7 +184,7 @@ and prtProcDef (i:int) (e : AbsBasilIR.procDef) : doc = match e with
 
 
 and prtField (i:int) (e : AbsBasilIR.field) : doc = match e with
-       AbsBasilIR.Field1 (openparen, intval1, intval2, closeparen, type_) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtIntVal 0 intval1 ; render "," ; prtIntVal 0 intval2 ; prtCloseParen 0 closeparen ; render ":" ; prtTypeT 0 type_ ; render ","])
+       AbsBasilIR.Field1 (intval, type_) -> prPrec i 0 (concatD [prtIntVal 0 intval ; render ":" ; prtTypeT 0 type_])
 
 and prtFieldListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])

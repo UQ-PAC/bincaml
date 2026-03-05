@@ -50,7 +50,7 @@ and procDef =
  | ProcDef_Some of beginList * block list * endList
 
 and field =
-   Field1 of openParen * intVal * intVal * closeParen * typeT
+   Field1 of intVal * typeT
 
 and intType =
    IntType1 of iNTTYPE
