@@ -94,6 +94,9 @@ and intVal =
 and bVVal =
    BVVal1 of intVal * bVType
 
+and fieldVal =
+   FieldVal1 of intVal * bVVal
+
 and endian =
    Endian_Little
  | Endian_Big
@@ -198,6 +201,8 @@ and params =
 and value =
    Value_BV of bVVal
  | Value_Int of intVal
+ | Value_Record of openParen * fieldVal list * closeParen
+ | Value_Pointer of bVVal
  | Value_True
  | Value_False
 

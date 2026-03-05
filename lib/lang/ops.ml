@@ -195,6 +195,9 @@ module IntOps = struct
 end
 
 module RecordOps = struct
+  type const = [ `Record of Record.t ]
+  [@@deriving show { with_path = false }, eq, ord]
+
   type unary =
     ([ `FACCESS of Z.t ]
     [@printer
@@ -219,6 +222,9 @@ module RecordOps = struct
 end
 
 module PointerOps = struct
+  type const = [ `Pointer of Bitvec.t ]
+  [@@deriving show { with_path = false }, eq, ord]
+
   type binary = [ `PTRADD | `PTRSUB ]
   [@@deriving show { with_path = false }, eq, ord]
 
@@ -249,7 +255,12 @@ module Spec = struct
 end
 
 module AllOps = struct
-  type const = [ IntOps.const | BVOps.const | LogicalOps.const ]
+  type const =
+    [ IntOps.const
+    | BVOps.const
+    | LogicalOps.const
+    | RecordOps.const
+    | PointerOps.const ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type unary =
@@ -298,10 +309,7 @@ module AllOps = struct
         match a with
         | Bitvector s -> return @@ Bitvector (sz + s)
         | o -> Conflict [ (o, "<bitvector") ])
-    | `FACCESS offset -> (
-        match get_field offset a with
-        | None -> failwith @@ "No field at offset: " ^ Z.to_string offset
-        | Some ({ t; _ } : field2) -> return t)
+    | `FACCESS offset -> return @@ get_field offset a
     | `Forall -> return Boolean
     | `BVNEG -> return a
     | `INTNEG -> return Integer
@@ -415,6 +423,8 @@ module AllOps = struct
     | `BVAND -> "bvand"
     | `INTMUL -> "intmul"
     | `Bitvector z -> Bitvec.to_string z
+    | `Pointer z -> "ptr:" ^ Bitvec.to_string z
+    | `Record fields -> Record.to_string fields
     | `BVSMOD -> "bvsmod"
     | `INTLT -> "intlt"
     | `IMPLIES -> "implies"

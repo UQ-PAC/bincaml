@@ -10,6 +10,7 @@
   ID
   types
   bitvec
+  record
   zint
   smt
   reverse_graph

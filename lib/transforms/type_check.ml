@@ -27,6 +27,12 @@ let type_check stmt_id block_id expr =
     match op with
     | `Classification -> []
     | `Gamma -> []
+    | `Old -> []
+    | `Forall | `Exists | `Lambda -> []
+    | `FACCESS _ -> (
+        match arg with
+        | Record _ -> []
+        | _ -> [ type_err "FACCESS body is not a record type" ])
     | `BoolNOT | `BOOLTOBV1 ->
         if Types.equal arg Types.Boolean then []
         else [ type_err "%s body is not a boolean" @@ AllOps.to_string op ]
@@ -49,8 +55,6 @@ let type_check stmt_id block_id expr =
                   @@ AllOps.to_string op;
                 ])
         | _ -> [ type_err "%s body is not a bitvector" @@ AllOps.to_string op ])
-    | `Old -> []
-    | `Forall | `Exists | `Lambda -> []
   in
 
   let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :
@@ -86,6 +90,33 @@ let type_check stmt_id block_id expr =
     let binary_bool_types = binary_same_types Types.Boolean in
     let open Ops in
     match op with
+    | `PTRADD | `PTRSUB -> (
+        let err =
+          match arg2 with
+          | Bitvector _ -> []
+          | _ ->
+              [ type_err "%s is not of bitvector type" @@ Types.to_string arg1 ]
+        in
+        match arg1 with
+        | Pointer _ -> err
+        | _ ->
+            err
+            @ [ type_err "%s is not of pointer type" @@ Types.to_string arg2 ])
+    | `FSET offset ->
+        let err =
+          match arg1 with
+          | Record _ -> []
+          | _ -> [ type_err "%s is not of record type" @@ Types.to_string arg1 ]
+        in
+        if
+          List.length err = 1
+          || (Types.equal arg2 @@ Types.get_field offset arg1)
+        then err
+        else
+          [
+            type_err "%s is not of %s type" (Types.to_string arg1)
+              (Types.to_string @@ Types.get_field offset arg1);
+          ]
     | `INTADD | `INTMUL | `INTSUB | `INTDIV | `INTMOD | `INTLT | `INTLE ->
         binary_int_types arg1 arg2
     | (`EQ | `NEQ) as op ->

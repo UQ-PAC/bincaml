@@ -75,10 +75,14 @@ let mk_adt name (variants : (string * field list) list) =
   Sort
     (name, variants |> List.map (fun (variant, fields) -> { variant; fields }))
 
-let get_field offset1 record : field2 option =
+let get_field offset1 record : t =
   match record with
-  | Record fields ->
-      List.find_opt (fun { offset; _ } -> Z.equal offset offset1) fields
+  | Record fields -> (
+      match
+        List.find_opt (fun { offset; _ } -> Z.equal offset offset1) fields
+      with
+      | None -> failwith @@ "No field at offset " ^ Z.to_string offset1
+      | Some { t; _ } -> t)
   | _ -> failwith "Not record type"
 
 (*

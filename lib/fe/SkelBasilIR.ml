@@ -174,6 +174,10 @@ and transBVVal (x : bVVal) : result = match x with
     BVVal1 (intval, bvtype) -> failure x
 
 
+and transFieldVal (x : fieldVal) : result = match x with
+    FieldVal1 (intval, bvval) -> failure x
+
+
 and transEndian (x : endian) : result = match x with
     Endian_Little  -> failure x
   | Endian_Big  -> failure x
@@ -301,6 +305,8 @@ and transParams (x : params) : result = match x with
 and transValue (x : value) : result = match x with
     Value_BV bvval -> failure x
   | Value_Int intval -> failure x
+  | Value_Record (openparen, fieldvals, closeparen) -> failure x
+  | Value_Pointer bvval -> failure x
   | Value_True  -> failure x
   | Value_False  -> failure x
 

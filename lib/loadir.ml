@@ -869,6 +869,15 @@ module BasilASTLoader = struct
     | Value_Int intval -> `Integer (transIntVal intval)
     | Value_True -> `Bool true
     | Value_False -> `Bool false
+    | Value_Pointer v -> `Pointer (trans_bv_val v)
+    | Value_Record (_, fields, _) ->
+        `Record
+          (List.map
+             (function
+               | FieldVal1 (offset, value) ->
+                   ({ offset = transIntVal offset; value = trans_bv_val value }
+                     : Record.field))
+             fields)
 
   and unsafe_unsigil g : string =
     match g with
