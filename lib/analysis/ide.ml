@@ -54,6 +54,17 @@ type call_info = {
 type stub_info = { formal_in : Var.t list; globals : Var.t list }
 [@@deriving eq, ord, show { with_path = false }]
 
+type phi_info =
+  (Var.t VarMap.t
+  [@printer
+    fun fmt m ->
+      Format.pp_print_string fmt
+        (VarMap.to_iter m
+        |> Iter.to_string ~sep:"," (fun (v, v') ->
+            Var.show v' ^ " -> " ^ Var.show v))])
+[@@deriving eq, ord, show { with_path = false }]
+(* x = phi(y, z) would have x in lhs and y/z in rhs *)
+
 module LSet = Set.Make (Loc)
 module LM = Map.Make (Loc)
 
@@ -108,7 +119,7 @@ module type IDEDomain = sig
   val transfer : Program.stmt -> DL.t -> t state_update
   (** update the state for a program statement *)
 
-  val transfer_phi : Var.t Block.phi -> DL.t -> t state_update
+  val transfer_phi : phi_info -> DL.t -> t state_update
 end
 
 module IDEGraph = struct
@@ -120,11 +131,12 @@ module IDEGraph = struct
 
   module Edge = struct
     type t =
-      | Stmts of Var.t Block.phi list * Program.stmt list
+      | Stmts of Program.stmt list
       | InterCall of call_info
       | InterReturn of ret_info
       | Call of call_info
       | StubProc of stub_info
+      | Phi of phi_info
       | Nop
     [@@deriving eq, ord, show]
 
@@ -158,8 +170,8 @@ module IDEGraph = struct
   let push_edge dir (ending : Loc.t) (g : bstate) =
     match g with
     | { graph; last_vert; stmts } ->
-        let phi, stmts = (fst stmts, List.rev (snd stmts)) in
-        let e1 = (last_vert, Edge.Stmts (phi, stmts), ending) in
+        let stmts = List.rev (snd stmts) in
+        let e1 = (last_vert, Edge.Stmts stmts, ending) in
         {
           graph = add_edge_e_dir `Forwards graph e1;
           stmts = ([], []);
@@ -232,6 +244,27 @@ module IDEGraph = struct
     let proc_id = Procedure.id p in
     let add_block_edge b graph =
       match b with
+      | ( (Procedure.Vert.End in_bid as v1),
+          Procedure.Edge.Jump,
+          (Procedure.Vert.Begin bid as v2) ) ->
+          let block =
+            Procedure.get_block p bid
+            |> Option.get_exn_or "Block vertex with invalid block"
+          in
+          let assignment =
+            block.phis
+            |> List.fold_left
+                 (fun m (phi : Var.t Block.phi) ->
+                   List.find_opt (fun (bid, v') -> ID.equal bid in_bid) phi.rhs
+                   |> Option.map_or ~default:m (fun (_, v') ->
+                       VarMap.add phi.lhs v' m))
+                 VarMap.empty
+          in
+          add_edge_e_dir dir g
+            Loc.
+              ( IntraVertex { proc_id; v = v1 },
+                Phi assignment,
+                IntraVertex { proc_id; v = v2 } )
       | v1, Procedure.Edge.Jump, v2 ->
           add_edge_e_dir dir g
             Loc.
@@ -379,6 +412,7 @@ module IDEGraph = struct
         | _, InterReturn _, _ -> "InterReturn"
         | _, Call _, _ -> "Call"
         | _, Nop, _ -> ""
+        | _, Phi _, _ -> "Phi"
         | _, StubProc _, _ -> "StubProc"
       in
       [ `Label l ]
@@ -429,32 +463,17 @@ module IDE (D : IDEDomain) = struct
   let ( @. ) = D.compose
 
   (** Determine composites of edge functions through an intravertex block *)
-  let tf_stmts phi bs i =
-    let stmts i =
-      List.fold_left
-        (fun om stmt ->
-          DlMap.fold
-            (fun d2 e1 m ->
-              D.transfer stmt d2
-              |> Iter.fold (fun m (d3, e2) -> join_add m d3 (e2 @. e1)) m)
-            om DlMap.empty)
-        (Iter.fold (fun m (d, e) -> join_add m d e) DlMap.empty i)
-        bs
-      |> DlMap.to_iter
-    in
-    (* TODO this might be more imprecise than joining on the opposite side of the phi node
-       https://link.springer.com/chapter/10.1007/978-3-642-11970-5_8 reckons so *)
-    (* TODO this also might be really inefficient or wrong it hasn't been tested *)
-    let phis i =
-      List.fold_left
-        (fun i p ->
-          Iter.flat_map
-            (fun (d2, e1) ->
-              D.transfer_phi p d2 |> Iter.map (fun (d3, e2) -> (d3, e2 @. e1)))
-            i)
-        i phi
-    in
-    match dir with `Forwards -> stmts (phis i) | `Backwards -> phis (stmts i)
+  let tf_stmts bs i =
+    List.fold_left
+      (fun om stmt ->
+        DlMap.fold
+          (fun d2 e1 m ->
+            D.transfer stmt d2
+            |> Iter.fold (fun m (d3, e2) -> join_add m d3 (e2 @. e1)) m)
+          om DlMap.empty)
+      (Iter.fold (fun m (d, e) -> join_add m d e) DlMap.empty i)
+      bs
+    |> DlMap.to_iter
 
   type edge = Loc.t * IDEGraph.Edge.t * Loc.t
 
@@ -467,9 +486,10 @@ module IDE (D : IDEDomain) = struct
       IDEGraph edge e. *)
   let phase1_transfer entry2call entry2exit d1 d2 e1 e =
     match IDEGraph.G.E.label e with
-    | Stmts (phi, bs) ->
-        tf_stmts phi bs (Iter.singleton (d2, e1))
+    | Stmts bs ->
+        tf_stmts bs (Iter.singleton (d2, e1))
         |> Iter.map (fun (d3, e) -> ((d1, d3), e))
+    | Phi l -> D.transfer_phi l d2 |> Iter.map (fun (d3, e) -> ((d1, d3), e))
     | InterCall callinfo ->
         D.transfer_call callinfo d2
         |> Iter.flat_map (fun (d3, e2) ->

@@ -160,11 +160,10 @@ module IDELive = struct
         | Instr_Call _ | Instr_IntrinCall _ ->
             Iter.singleton (Label v, IdEdge))
 
-  (* TODO test*)
-  let transfer_phi (phi : Var.t Block.phi) d =
+  let transfer_phi (phi : Var.t VarMap.t) d =
     match d with
-    | Label v when Var.equal phi.lhs v ->
-        Iter.of_list phi.rhs |> Iter.map (fun (_, v) -> (Label v, IdEdge))
+    | Label v ->
+        Iter.singleton (Label (VarMap.get_or v phi ~default:v), IdEdge)
     | _ -> Iter.singleton (d, IdEdge)
 end
 
