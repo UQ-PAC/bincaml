@@ -3,7 +3,7 @@ open Expr
 open CCSexp
 
 module SMTLib2 = struct
-  type logic = UF | Int | Prop | BV | Record |Array | DT [@@deriving ord]
+  type logic = UF | Int | Prop | BV | Record | Array | DT [@@deriving ord]
 
   module LSet = Set.Make (struct
     type t = logic
