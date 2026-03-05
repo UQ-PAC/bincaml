@@ -258,7 +258,7 @@ and prtFieldVal (i:int) (e : AbsBasilIR.fieldVal) : doc = match e with
 and prtFieldValListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
   | (_,[x]) -> (concatD [prtFieldVal 0 x])
-  | (_,x::xs) -> (concatD [prtFieldVal 0 x ; render "f" ; prtFieldValListBNFC 0 xs])
+  | (_,x::xs) -> (concatD [prtFieldVal 0 x ; render "," ; prtFieldValListBNFC 0 xs])
 and prtEndian (i:int) (e : AbsBasilIR.endian) : doc = match e with
        AbsBasilIR.Endian_Little  -> prPrec i 0 (concatD [render "le"])
   |    AbsBasilIR.Endian_Big  -> prPrec i 0 (concatD [render "be"])

@@ -107,7 +107,7 @@ IntVal_Dec . IntVal ::=  IntegerDec ;
 
 rules BVVal ::=  IntVal ":" BVType ;
 
-separator FieldVal "f" ;
+separator FieldVal "," ;
 rules FieldVal ::= IntVal ":" BVVal ;
 
 Endian_Little . Endian ::= "le" ;
