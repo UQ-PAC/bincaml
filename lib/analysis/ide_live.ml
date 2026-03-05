@@ -13,7 +13,7 @@ module IDELive = struct
   (* DL and state_update were already defined! Is there a way to avoid
      redefining them? *)
   module DL = struct
-    type t = Label of Var.t | Lambda [@@deriving eq, ord, show]
+    type t = Lambda | Label of Var.t [@@deriving eq, ord, show]
   end
 
   type 'a state_update = (DL.t * 'a) Iter.t
@@ -62,6 +62,9 @@ module IDELive = struct
 
   let eval v f = match f with IdEdge -> v | ConstEdge v -> v
 
+  let init_data globals (proc : Program.proc) =
+    Procedure.formal_out_params proc |> StringMap.values |> Iter.append globals
+
   open DL
 
   let transfer_call (c : call_info) d =
@@ -91,7 +94,11 @@ module IDELive = struct
     | Lambda -> Iter.singleton (d, IdEdge)
     | Label v
       when Var.is_local v
-           && (not @@ List.exists (fun (a, _) -> Var.equal a v) c.lhs) ->
+           && (not @@ List.exists (fun (a, _) -> Var.equal a v) c.lhs)
+           && not
+              @@ List.exists
+                   (fun (_, e) -> VarSet.mem v (Expr.BasilExpr.free_vars e))
+                   c.rhs ->
         Iter.singleton (d, IdEdge)
     | Label _ -> Iter.empty
 
@@ -106,6 +113,9 @@ module IDELive = struct
              (Iter.of_list s.globals
              |> Iter.map (fun v -> (Label v, ConstEdge live)))
     | _ -> Iter.empty
+
+  (* Only propagate from assigned vars and Lambda *)
+  let modifies stmt = Stmt.iter_assigned stmt
 
   let transfer stmt d =
     let open Stmt in
@@ -131,6 +141,8 @@ module IDELive = struct
                   i)
               (Iter.singleton (d, IdEdge))
               assigns
+        (* If a variable is marked live then don't transfer relations too *)
+        | _ when VarSet.mem v @@ Stmt.free_vars VarSet.empty stmt -> Iter.empty
         (* The index variables of a memory read are always live regardless of if
            the lhs was dead, since there are still side effects of reading
            memory ? *)
@@ -147,11 +159,9 @@ module IDELive = struct
         | Instr_Call _ | Instr_IntrinCall _ ->
             Iter.singleton (Label v, IdEdge))
 
-  (* TODO test*)
-  let transfer_phi (phi : Var.t Block.phi) d =
+  let transfer_phi (phi : Var.t VarMap.t) d =
     match d with
-    | Label v when Var.equal phi.lhs v ->
-        Iter.of_list phi.rhs |> Iter.map (fun (_, v) -> (Label v, IdEdge))
+    | Label v -> Iter.singleton (Label (VarMap.get_or v phi ~default:v), IdEdge)
     | _ -> Iter.singleton (d, IdEdge)
 end
 
