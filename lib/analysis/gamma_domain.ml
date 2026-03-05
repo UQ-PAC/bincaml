@@ -68,9 +68,13 @@ module CFGAnalysis = Forwards (Domain)
 module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
 open Ide
 
-(* TODO modifies set on statements to avoid doing lots of trivial id transfers
-   on unchanged ssa vars alternatively summaries for dead variables (referring
-   to a live var analysis) could be dropped *)
+(* TODO The analysis is currently very very slow (1.5 minute runtime on this
+   laptop). Optimisations are needed! One potential significant option is to
+   drop edges that go to dead variables, but this would require a statement
+   precise live var result table stored somewhere. This would help a huge
+   amount since currently all dead variables are fully propagated to the end of
+   the procedure, including being put into the worklist of the phase 1 solver.
+   *)
 module IDEDomain = struct
   let direction = `Forwards
 
@@ -112,7 +116,7 @@ module IDEDomain = struct
     | TopEdge -> Value.top
 
   let init_data globals (proc : Program.proc) =
-    Procedure.formal_out_params proc |> StringMap.values |> Iter.append globals
+    Procedure.formal_in_params proc |> StringMap.values |> Iter.append globals
 
   open DL
 
@@ -166,10 +170,12 @@ module IDEDomain = struct
             Iter.of_list a
             |> Iter.flat_map (fun (v', e) ->
                 match v with
-                | v when Var.equal v v' -> Iter.empty
                 | v when VarSet.mem v (Expr.BasilExpr.free_vars e) ->
-                    Iter.singleton (d, IdEdge)
-                | v -> Iter.singleton (d, IdEdge)))
+                    Iter.singleton (Label v', IdEdge)
+                | v -> Iter.empty)
+            |> fun i ->
+            if List.exists (fun (v', _) -> Var.equal v v') a then i
+            else Iter.cons (d, IdEdge) i)
     | Instr_Assume { body; branch } when branch -> (
         match d with
         (* If a variable has to be low, force it to bottom *)
