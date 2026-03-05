@@ -163,15 +163,17 @@ module IDEDomain = struct
   let transfer stmt d =
     let open Stmt in
     match stmt with
-    | Instr_Assign a ->
-        Iter.of_list a
-        |> Iter.flat_map (fun (v', e) ->
-            match d with
-            | Lambda -> Iter.singleton (d, IdEdge)
-            | Label v when Var.equal v v' -> Iter.empty
-            | Label v when VarSet.mem v (Expr.BasilExpr.free_vars e) ->
-                Iter.singleton (d, IdEdge)
-            | Label v -> Iter.singleton (d, IdEdge))
+    | Instr_Assign a -> (
+        match d with
+        | Lambda -> Iter.singleton (d, IdEdge)
+        | Label v ->
+            Iter.of_list a
+            |> Iter.flat_map (fun (v', e) ->
+                match v with
+                | v when Var.equal v v' -> Iter.empty
+                | v when VarSet.mem v (Expr.BasilExpr.free_vars e) ->
+                    Iter.singleton (d, IdEdge)
+                | v -> Iter.singleton (d, IdEdge)))
     | Instr_Assume { body; branch } when branch -> (
         match d with
         (* If a variable has to be low, force it to bottom *)
@@ -191,7 +193,8 @@ module IDEDomain = struct
             Iter.of_list [ (d, IdEdge); (Label lhs, IdEdge) ]
         | _ -> Iter.singleton (d, IdEdge))
     | Instr_Assume _ | Instr_Assert _ -> Iter.singleton (d, IdEdge)
-    | Instr_Call _ | Instr_IntrinCall _ | Instr_IndirectCall _ -> Iter.empty
+    | Instr_Call _ | Instr_IntrinCall _ | Instr_IndirectCall _ ->
+        raise (Failure "ide graph should not contain call statements")
 
   let transfer_phi (phi : Var.t VarMap.t) d =
     match d with
