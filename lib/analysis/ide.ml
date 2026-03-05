@@ -116,10 +116,15 @@ module type IDEDomain = sig
   val transfer_stub : stub_info -> DL.t -> t state_update
   (** edge from entry to exit (or reversed when backwards) of stub procedure *)
 
+  val modifies : Program.stmt -> Data.t Iter.t
+  (** the data values that will be modified (not return a vertical identity
+      edge) by this statement *)
+
   val transfer : Program.stmt -> DL.t -> t state_update
   (** update the state for a program statement *)
 
   val transfer_phi : phi_info -> DL.t -> t state_update
+  (** edge through phi information *)
 end
 
 module IDEGraph = struct
@@ -466,11 +471,19 @@ module IDE (D : IDEDomain) = struct
   let tf_stmts bs i =
     List.fold_left
       (fun om stmt ->
-        DlMap.fold
-          (fun d2 e1 m ->
-            D.transfer stmt d2
-            |> Iter.fold (fun m (d3, e2) -> join_add m d3 (e2 @. e1)) m)
-          om DlMap.empty)
+        let modif =
+          D.modifies stmt |> Iter.map (fun v -> Label v) |> Iter.cons Lambda
+        in
+        let m = Iter.fold (fun m d -> DlMap.remove d m) om modif in
+        Iter.fold
+          (fun m d2 ->
+            let e1 = DlMap.get d2 om in
+            match e1 with
+            | Some e1 ->
+                D.transfer stmt d2
+                |> Iter.fold (fun m (d3, e2) -> join_add m d3 (e2 @. e1)) m
+            | None -> m)
+          m modif)
       (Iter.fold (fun m (d, e) -> join_add m d e) DlMap.empty i)
       bs
     |> DlMap.to_iter

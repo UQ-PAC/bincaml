@@ -90,8 +90,7 @@ proc @main (x_in:bv64) -> ()
   let _, results = IDELiveAnalysis.solve program in
   let main = program.entry_proc |> Option.get_exn_or "No entry proc" in
   print_lives results main;
-  [%expect
-    {|
+  [%expect {|
     @main
     $mem:(bv64->bv8)
     x_in:bv64

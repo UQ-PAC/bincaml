@@ -118,6 +118,9 @@ module IDELive = struct
              |> Iter.map (fun v -> (Label v, ConstEdge live)))
     | _ -> Iter.empty
 
+  (* Only propagate from assigned vars and Lambda *)
+  let modifies stmt = Stmt.iter_assigned stmt
+
   let transfer stmt d =
     let open Stmt in
     match d with
@@ -162,8 +165,7 @@ module IDELive = struct
 
   let transfer_phi (phi : Var.t VarMap.t) d =
     match d with
-    | Label v ->
-        Iter.singleton (Label (VarMap.get_or v phi ~default:v), IdEdge)
+    | Label v -> Iter.singleton (Label (VarMap.get_or v phi ~default:v), IdEdge)
     | _ -> Iter.singleton (d, IdEdge)
 end
 
