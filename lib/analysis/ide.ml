@@ -506,7 +506,8 @@ module IDE (D : IDEDomain) = struct
     | Stmts bs ->
         tf_stmts bs (Iter.singleton (d2, e1))
         |> Iter.map (fun (d3, e) -> ((d1, d3), e))
-    | Phi l -> D.transfer_phi l d2 |> Iter.map (fun (d3, e) -> ((d1, d3), e))
+    | Phi l ->
+        D.transfer_phi l d2 |> Iter.map (fun (d3, e) -> ((d1, d3), e @. e1))
     | InterCall callinfo ->
         D.transfer_call callinfo d2
         |> Iter.flat_map (fun (d3, e2) ->
