@@ -203,7 +203,7 @@ and prtRecordType (i:int) (e : AbsBasilIR.recordType) : doc = match e with
 
 
 and prtPointerType (i:int) (e : AbsBasilIR.pointerType) : doc = match e with
-       AbsBasilIR.PointerType1 (pointertype, openparen, type_1, type_2, closeparen) -> prPrec i 0 (concatD [prtPOINTERTYPE 0 pointertype ; prtOpenParen 0 openparen ; prtTypeT 0 type_1 ; render "," ; prtTypeT 0 type_2 ; prtCloseParen 0 closeparen])
+       AbsBasilIR.PointerType1 (openparen, type_1, type_2, closeparen) -> prPrec i 0 (concatD [render "ptr" ; prtOpenParen 0 openparen ; prtTypeT 0 type_1 ; render "," ; prtTypeT 0 type_2 ; prtCloseParen 0 closeparen])
 
 
 and prtBVType (i:int) (e : AbsBasilIR.bVType) : doc = match e with

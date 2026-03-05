@@ -62,7 +62,7 @@ and recordType =
    RecordType1 of beginRec * field list * endRec
 
 and pointerType =
-   PointerType1 of pOINTERTYPE * openParen * typeT * typeT * closeParen
+   PointerType1 of openParen * typeT * typeT * closeParen
 
 and bVType =
    BVType1 of bVTYPE

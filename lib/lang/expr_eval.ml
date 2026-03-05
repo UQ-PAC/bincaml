@@ -40,16 +40,18 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
   | BinaryExpr { op = `FSET offset; arg1 = a; arg2 = b } ->
       let* a = get_record a in
       let* b = get_bv b in
-      record a
-  | UnaryExpr { op = `FACCESS offset; arg = a } -> failwith "TODO"
+      record (Record.set_field offset b a)
+  | UnaryExpr { op = `FACCESS offset; arg = a } ->
+      let* a = get_record a in
+      Some (bv (Record.get_field offset a))
   | BinaryExpr { op = `PTRADD; arg1 = a; arg2 = b } ->
       let* a = get_pointer a in
       let* b = get_bv b in
-      pointer a
+      pointer (BVOps.eval_binary_unif `BVADD a b)
   | BinaryExpr { op = `PTRSUB; arg1 = a; arg2 = b } ->
       let* a = get_pointer a in
       let* b = get_bv b in
-      pointer a
+      pointer (BVOps.eval_binary_unif `BVSUB a b)
   | BinaryExpr { op = #BVOps.binary_unif as op; arg1 = a; arg2 = b } ->
       let* a = get_bv a in
       let* b = get_bv b in
