@@ -3,7 +3,7 @@ open Expr
 open CCSexp
 
 module SMTLib2 = struct
-  type logic = UF | Int | Prop | BV | Record | Array | DT [@@deriving ord]
+  type logic = UF | Int | Prop | BV | Array | DT [@@deriving ord]
 
   module LSet = Set.Make (struct
     type t = logic
@@ -99,24 +99,6 @@ module SMTLib2 = struct
     | Bitvector i ->
         ( list [ atom "_"; atom "BitVec"; atom @@ Int.to_string i ],
           LSet.singleton BV )
-    | Record fields ->
-        (* Each field in record has two atoms? Offset, type *)
-        let of_field offset t =
-          let t_sexp, t_set = of_typ t in
-          ([ atom @@ Z.to_string offset; t_sexp ], t_set)
-        in
-        let lset, sexp =
-          ZMap.fold
-            (fun offset t (set, sexp_list) ->
-              let field_sexp, field_set = of_field offset t in
-              (LSet.union set field_set, sexp_list @ field_sexp))
-            fields (LSet.empty, [])
-        in
-        (list sexp, lset)
-    | Pointer { lower; upper } ->
-        let l_sexp, l_set = of_typ lower in
-        let u_sexp, u_set = of_typ upper in
-        (list [ l_sexp; u_sexp ], LSet.union l_set u_set)
     | Types.Unit -> (atom "Unit", LSet.singleton DT)
     | Types.Top -> (atom "Any", LSet.singleton DT)
     | Types.Nothing -> (atom "Nothing", LSet.singleton DT)
@@ -143,9 +125,6 @@ module SMTLib2 = struct
       | `Bitvector _ -> add_logic BV
       | `Integer _ -> add_logic Int
       | `Bool _ -> return ()
-      (* NOTE: Will need some help here *)
-      | `Record _ -> add_logic Record
-      | `Pointer _ -> add_logic BV
     in
     return v
 

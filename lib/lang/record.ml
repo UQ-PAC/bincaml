@@ -1,4 +1,4 @@
-module ZMap = Map.Make (Z)
+open Bincaml_util.Common
 
 type t = field ZMap.t [@@deriving eq, ord]
 and field = { value : Bitvec.t; typ : Types.t }
@@ -16,10 +16,9 @@ let show_field { value; typ } =
   Printf.sprintf "(%s, %s)" (Bitvec.to_string value) @@ Types.to_string typ
 
 let show (record : t) =
-  ZMap.fold
-    (fun offset field acc ->
-      acc ^ Z.to_string offset ^ " : " ^ show_field field ^ ", ")
-    record ""
+  record |> ZMap.bindings
+  |> List.map (fun (k, v) -> Z.to_string k ^ ": " ^ show_field v)
+  |> String.concat ", "
 
 let to_string v = show v
 let pp fmt b = Format.pp_print_string fmt (show b)
