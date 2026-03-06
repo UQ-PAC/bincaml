@@ -37,7 +37,8 @@ module IValue = struct
     | `Pointer (bv, _) -> bv
     | `Record fields ->
         ZMap.fold
-          (fun _ ({ value; _ } : Record.field) acc -> Bitvec.concat acc value)
+          (fun _ ({ value; _ } : Ops.Record.field) acc ->
+            Bitvec.concat acc value)
           fields Bitvec.empty
 
   let of_constant (v : Ops.AllOps.const) =

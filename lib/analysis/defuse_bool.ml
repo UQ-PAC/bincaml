@@ -46,7 +46,7 @@ module IsZeroValueAbstraction = struct
         else NonZero
     | `Record fields ->
         ZMap.fold
-          (fun _ ({ value = i; _ } : Lang.Record.field) acc ->
+          (fun _ ({ value = i; _ } : Lang.Ops.Record.field) acc ->
             if Bitvec.size i = 0 then Top
             else if Z.equal Z.zero (Bitvec.value i) then join acc Zero
             else join acc NonZero)

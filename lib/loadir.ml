@@ -878,7 +878,7 @@ module BasilASTLoader = struct
                   | FieldVal1 (_, offset, value, typ, _) ->
                       ( transIntVal offset,
                         ({ value = trans_bv_val value; typ = trans_type typ }
-                          : Record.field) ))
+                          : Ops.Record.field) ))
                 fields))
 
   and unsafe_unsigil g : string =

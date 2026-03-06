@@ -141,11 +141,12 @@ let rec to_string = function
   | Nothing -> "⊥"
   | Pointer { lower; upper } ->
       Printf.sprintf "ptr(%s, %s)" (to_string lower) (to_string upper)
-  | Record fields ->
-      ZMap.fold
-        (fun offset t acc ->
-          acc ^ Printf.sprintf "(%s : %s)," (Z.to_string offset) (to_string t))
-        fields "{"
+  | Record record ->
+      "{"
+      ^ (ZMap.bindings record
+        |> List.map (fun (k, v) ->
+            "(" ^ Z.to_string k ^ ": " ^ to_string v ^ ")")
+        |> String.concat ", ")
       ^ "}"
   | Map ((Map _ as a), (Map _ as b)) ->
       "(" ^ "(" ^ to_string a ^ ")" ^ "->" ^ "(" ^ to_string b ^ ")" ^ ")"

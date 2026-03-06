@@ -1,4 +1,4 @@
-var $rec:{(0 : bv32),};
+var $rec:{(0 : bv32)};
 prog entry @main_4196164;
 proc @main_4196164(R0_in:bv64, R10_in:bv64, R11_in:bv64, R12_in:bv64, R13_in:bv64,
    R14_in:bv64, R15_in:bv64, R16_in:bv64, R17_in:bv64, R18_in:bv64, R1_in:bv64,
