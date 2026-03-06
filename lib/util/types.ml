@@ -33,8 +33,10 @@ type t =
   | Top
   | Nothing
   | Map of t * t
-  | DataType of (string * (string * t) list) list
-[@@deriving eq, ord]
+  | DataType of variant list
+
+and variant = { variant : string; fields : field list }
+and field = { field : string; typ : t } [@@deriving eq, ord]
 
 let bv i = Bitvector i
 let int = Integer
@@ -45,7 +47,16 @@ type func_type = { args : t list; return : t }
 let bit_width = function Boolean -> Some 1 | Bitvector n -> Some n | _ -> None
 
 (** Get the type for an opaque sort *)
-let mk_sort name = DataType [ (name, []) ]
+let mk_sort name = DataType [ { variant = name; fields = [] } ]
+
+let mk_enum (cases : string list) =
+  DataType (List.map (fun variant -> { variant; fields = [] }) cases)
+
+let mk_field field typ = { field; typ }
+let mk_variant name fields = { variant = name; fields }
+
+let mk_adt (variants : (string * field list) list) =
+  DataType (variants |> List.map (fun (variant, fields) -> { variant; fields }))
 
 (*
   Nothing < Unit < {boolean, integer, bitvector} < Top
@@ -105,7 +116,7 @@ let rec to_string = function
   | DataType variants ->
       let pfields fields =
         List.to_string ~sep:"; " ~start:"{" ~stop:"}"
-          (function name, t -> name ^ ": " ^ to_string t)
+          (function { field; typ } -> field ^ ": " ^ to_string typ)
           fields
       in
       let fsort name variants =
@@ -113,15 +124,22 @@ let rec to_string = function
       in
 
       List.to_string ~sep:" | " ~start:"" ~stop:""
-        (function name, variants -> fsort name variants)
+        (function { variant; fields } -> fsort variant fields)
         variants
 
 let%expect_test "dtp" =
   let lst =
     DataType
       [
-        ("cons", [ ("head", mk_sort "E"); ("tail", mk_sort "list") ]);
-        ("nil", []);
+        {
+          variant = "cons";
+          fields =
+            [
+              { field = "head"; typ = mk_sort "E" };
+              { field = "tail"; typ = mk_sort "list" };
+            ];
+        };
+        { variant = "nil"; fields = [] };
       ]
   in
   print_endline @@ to_string lst;

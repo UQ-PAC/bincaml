@@ -137,10 +137,10 @@ module BasilASTLoader = struct
   and trans_declaration prog (x : decl) : load_st =
     match x with
     | Decl_UninterpSort typedecl ->
-        let binding, ts = trans_sort typedecl in
-        let typ = Types.DataType [ (binding, ts) ] in
-        let def : Program.declaration = Type { binding; typ } in
-        map_prog (fun prog -> Program.add_decl prog binding def) prog
+        let ts = trans_sort typedecl in
+        let typ = Types.mk_sort ts.variant in
+        let def : Program.declaration = Type { binding = ts.variant; typ } in
+        map_prog (fun prog -> Program.add_decl prog ts.variant def) prog
     | Decl_Type types ->
         let types = List.map trans_typedecl types in
         List.fold_left
@@ -424,15 +424,18 @@ module BasilASTLoader = struct
   and transMapType (x : mapType) : Types.t =
     match x with MapType1 (t0, t1) -> Map (trans_type t0, trans_type t1)
 
-  and trans_sort sort =
+  and trans_sort sort : Types.variant =
     match sort with
-    | SortType id -> (unsafe_unsigil (`Local id), [])
+    | SortType id -> Types.mk_variant (unsafe_unsigil (`Local id)) []
     | VariantCase (id, _, types, _) ->
-        (unsafe_unsigil (`Local id), List.map trans_recordfield types)
+        Types.mk_variant
+          (unsafe_unsigil (`Local id))
+          (List.map trans_recordfield types)
 
   and trans_recordfield field =
     match field with
-    | RecordField1 (id, ty) -> (unsafe_unsigil (`Local id), trans_type ty)
+    | RecordField1 (id, ty) ->
+        Types.mk_field (unsafe_unsigil (`Local id)) (trans_type ty)
 
   and trans_type (x : typeT) : Types.t =
     match x with

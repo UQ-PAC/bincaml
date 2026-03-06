@@ -102,7 +102,7 @@ module SMTLib2 = struct
     | Types.Unit -> (atom "Unit", LSet.singleton DT)
     | Types.Top -> (atom "Any", LSet.singleton DT)
     | Types.Nothing -> (atom "Nothing", LSet.singleton DT)
-    | Types.DataType [ (name, []) ] -> (atom name, LSet.singleton UF)
+    | Types.DataType [ { variant } ] -> (atom variant, LSet.singleton UF)
     | Types.Map (l, r) ->
         let tl, ll = of_typ l in
         let tr, lr = of_typ r in
@@ -217,15 +217,18 @@ module SMTLib2 = struct
   let trans_decl (decl : Program.declaration) =
     let* x = return () in
     match decl with
-    | Type { binding; typ = DataType [ (name, []) ] } ->
-        return (Bincaml_util.Smt.Expr.declare_sort name 0)
+    | Type { binding; typ = DataType [ { variant } ] } ->
+        return (Bincaml_util.Smt.Expr.declare_sort variant 0)
     | Type { binding; typ = DataType vs } ->
         let fields =
           List.map
-            (fun (variant, fields) ->
-              ( variant,
-                List.map (fun (field, typ) -> (field, fst @@ of_typ typ)) fields
-              ))
+            Types.(
+              function
+              | { variant; fields } ->
+                  ( variant,
+                    List.map
+                      (fun { field; typ } -> (field, fst @@ of_typ typ))
+                      fields ))
             vs
         in
         return (Bincaml_util.Smt.Expr.declare_datatype binding [] fields)
@@ -286,17 +289,20 @@ end
 
 let%expect_test "datatypes" =
   let x : Program.declaration =
-    Type { binding = "test"; typ = DataType [ ("Opaque", []) ] }
+    Type { binding = "test"; typ = Types.mk_sort "Opaque" }
   in
   let y : Program.declaration =
     Type
       {
         binding = "list";
         typ =
-          DataType
+          Types.mk_adt
             [
               ( "Cons",
-                [ ("head", Bitvector 63); ("tail", Types.mk_sort "list") ] );
+                [
+                  Types.mk_field "head" (Bitvector 63);
+                  Types.mk_field "tail" (Types.mk_sort "list");
+                ] );
               ("Nil", []);
             ];
       }
@@ -304,7 +310,8 @@ let%expect_test "datatypes" =
 
   fst @@ SMTLib2.trans_decl x SMTLib2.empty |> Sexp.to_string |> print_endline;
   fst @@ SMTLib2.trans_decl y SMTLib2.empty |> Sexp.to_string |> print_endline;
-  [%expect {|
+  [%expect
+    {|
     (declare-sort Opaque 0)
     (declare-datatype list ((Cons (head (_ BitVec 63)) (tail list)) (Nil)))
     |}]
