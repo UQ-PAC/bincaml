@@ -174,7 +174,8 @@ and prtDeclListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
   | (_,x::xs) -> (concatD [prtDecl 0 x ; render ";" ; prtDeclListBNFC 0 xs])
 and prtTypeDeclCase (i:int) (e : AbsBasilIR.typeDeclCase) : doc = match e with
-       AbsBasilIR.TypeDeclCase1 (localident, type_) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "=" ; prtTypeT 0 type_])
+       AbsBasilIR.TypeDeclCase1 (localident, sumcases) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "=" ; prtSumCaseListBNFC 0 sumcases])
+  |    AbsBasilIR.TypeDeclCaseLocalIdent localident -> prPrec i 0 (concatD [prtLocalIdent 0 localident])
 
 and prtTypeDeclCaseListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
@@ -216,17 +217,13 @@ and prtSumCaseListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
   | (_,[x]) -> (concatD [prtSumCase 0 x])
   | (_,x::xs) -> (concatD [prtSumCase 0 x ; render "|" ; prtSumCaseListBNFC 0 xs])
-and prtSumType (i:int) (e : AbsBasilIR.sumType) : doc = match e with
-       AbsBasilIR.SumType1 sumcases -> prPrec i 0 (concatD [prtSumCaseListBNFC 0 sumcases])
-
-
 and prtTypeT (i:int) (e : AbsBasilIR.typeT) : doc = match e with
        AbsBasilIR.TypeIntType inttype -> prPrec i 1 (concatD [prtIntType 0 inttype])
   |    AbsBasilIR.TypeBoolType booltype -> prPrec i 1 (concatD [prtBoolType 0 booltype])
   |    AbsBasilIR.TypeBVType bvtype -> prPrec i 1 (concatD [prtBVType 0 bvtype])
   |    AbsBasilIR.TypeParen (openparen, type_, closeparen) -> prPrec i 1 (concatD [prtOpenParen 0 openparen ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.TypeSort localident -> prPrec i 1 (concatD [prtLocalIdent 0 localident])
   |    AbsBasilIR.TypeMapType maptype -> prPrec i 0 (concatD [prtMapType 0 maptype])
-  |    AbsBasilIR.TypeSumType sumtype -> prPrec i 0 (concatD [prtSumType 0 sumtype])
 
 and prtTypeTListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])

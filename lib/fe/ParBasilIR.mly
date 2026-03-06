@@ -44,7 +44,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pSemicolons pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeDeclCase pTypeDeclCase_list pProcDef pIntType pBoolType pMapType pBVType pRecordField pRecordField_list pSumCase pSumCase_list pSumType pType1 pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pFunParams pFunParams_list pValue pExpr pLParen pLParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pSemicolons pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeDeclCase pTypeDeclCase_list pProcDef pIntType pBoolType pMapType pBVType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pExpr_list pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pGlobalVar pLocalVar_list pVar pGlobalVar_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pFunParams pFunParams_list pValue pExpr pLParen pLParen_list pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -65,7 +65,6 @@ open Lexing
 %type <AbsBasilIR.recordField list> pRecordField_list
 %type <AbsBasilIR.sumCase> pSumCase
 %type <AbsBasilIR.sumCase list> pSumCase_list
-%type <AbsBasilIR.sumType> pSumType
 %type <AbsBasilIR.typeT> pType1
 %type <AbsBasilIR.typeT> pTypeT
 %type <AbsBasilIR.expr list> pExpr_list
@@ -153,7 +152,6 @@ open Lexing
 %type <AbsBasilIR.recordField list> recordField_list
 %type <AbsBasilIR.sumCase> sumCase
 %type <AbsBasilIR.sumCase list> sumCase_list
-%type <AbsBasilIR.sumType> sumType
 %type <AbsBasilIR.typeT> type1
 %type <AbsBasilIR.typeT> typeT
 %type <AbsBasilIR.expr list> expr_list
@@ -280,8 +278,6 @@ pRecordField_list : recordField_list TOK_EOF { $1 };
 pSumCase : sumCase TOK_EOF { $1 };
 
 pSumCase_list : sumCase_list TOK_EOF { $1 };
-
-pSumType : sumType TOK_EOF { $1 };
 
 pType1 : type1 TOK_EOF { $1 };
 
@@ -463,7 +459,8 @@ typeT_list : /* empty */ { []  }
   | typeT SYMB2 typeT_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-typeDeclCase : localIdent SYMB6 typeT { TypeDeclCase1 ($1, $3) }
+typeDeclCase : localIdent SYMB6 sumCase_list { TypeDeclCase1 ($1, $3) }
+  | localIdent { TypeDeclCaseLocalIdent $1 }
   ;
 
 typeDeclCase_list : typeDeclCase { (fun x -> [x]) $1 }
@@ -501,17 +498,14 @@ sumCase_list : sumCase { (fun x -> [x]) $1 }
   | sumCase SYMB7 sumCase_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-sumType : sumCase_list { SumType1 $1 }
-  ;
-
 type1 : intType { TypeIntType $1 }
   | boolType { TypeBoolType $1 }
   | bVType { TypeBVType $1 }
   | openParen typeT closeParen { TypeParen ($1, $2, $3) }
+  | localIdent { TypeSort $1 }
   ;
 
 typeT : mapType { TypeMapType $1 }
-  | sumType { TypeSumType $1 }
   | type1 {  $1 }
   ;
 

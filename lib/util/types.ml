@@ -14,16 +14,15 @@ open Containers
 
     Function type: [Map]: used to represent maps and arrays as well
 
-    Sum type: [DataType]
-
-    Product type: [Record]
-
-    Records/Datatypes are designed to fit the nonstandard extension SMTLib
+    Records/Datatypes/Sort are designed to fit the nonstandard extension SMTLib
     theory of datatypes:
 
     {:https://cvc5.github.io/docs/cvc5-1.2.1/theories/datatypes.html}
 
-    {:https://microsoft.github.io/z3guide/docs/theories/Datatypes/} *)
+    {:https://microsoft.github.io/z3guide/docs/theories/Datatypes/}
+
+    For now we don't define polymorphic sorts or datatype: i.e. declarations of
+    the form [(declare-sort Name 3)] and uses [(Name Int Int Bool)]. *)
 
 type t =
   | Boolean
@@ -33,7 +32,7 @@ type t =
   | Top
   | Nothing
   | Map of t * t
-  | DataType of variant list
+  | Sort of string * variant list
 
 and variant = { variant : string; fields : field list }
 and field = { field : string; typ : t } [@@deriving eq, ord]
@@ -47,16 +46,17 @@ type func_type = { args : t list; return : t }
 let bit_width = function Boolean -> Some 1 | Bitvector n -> Some n | _ -> None
 
 (** Get the type for an opaque sort *)
-let mk_sort name = DataType [ { variant = name; fields = [] } ]
+let mk_sort name = Sort (name, [])
 
-let mk_enum (cases : string list) =
-  DataType (List.map (fun variant -> { variant; fields = [] }) cases)
+let mk_enum name (cases : string list) =
+  Sort (name, List.map (fun variant -> { variant; fields = [] }) cases)
 
 let mk_field field typ = { field; typ }
 let mk_variant name fields = { variant = name; fields }
 
-let mk_adt (variants : (string * field list) list) =
-  DataType (variants |> List.map (fun (variant, fields) -> { variant; fields }))
+let mk_adt name (variants : (string * field list) list) =
+  Sort
+    (name, variants |> List.map (fun (variant, fields) -> { variant; fields }))
 
 (*
   Nothing < Unit < {boolean, integer, bitvector} < Top
@@ -79,8 +79,7 @@ let rec compare_partial (a : t) (b : t) =
   | Integer, Bitvector _ -> None
   | Bitvector _, Integer -> None
   | Bitvector a, Bitvector b -> Some (Int.compare a b)
-  | (DataType _ as d1), (DataType _ as d2) ->
-      if equal d1 d2 then Some 0 else None
+  | Sort (n1, _), Sort (n2, _) -> if String.equal n1 n2 then Some 0 else None
   | Integer, Integer -> Some 0
   | Map (k, v), Map (k2, v2) -> (
       compare_partial k k2 |> function Some 0 -> compare_partial v v2 | o -> o)
@@ -113,7 +112,8 @@ let rec to_string = function
   | Map (a, (Map _ as b)) ->
       "(" ^ ("(" ^ to_string a ^ ")" ^ "->" ^ to_string b) ^ ")"
   | Map (a, b) -> "(" ^ (to_string a ^ "->" ^ to_string b) ^ ")"
-  | DataType variants ->
+  | Sort (name, []) -> name
+  | Sort (name, variants) ->
       let pfields fields =
         List.to_string ~sep:"; " ~start:"{" ~stop:"}"
           (function { field; typ } -> field ^ ": " ^ to_string typ)
@@ -123,27 +123,29 @@ let rec to_string = function
         name ^ match variants with [] -> "" | o -> " of " ^ pfields o
       in
 
-      List.to_string ~sep:" | " ~start:"" ~stop:""
-        (function { variant; fields } -> fsort variant fields)
-        variants
+      name ^ " = "
+      ^ List.to_string ~sep:" | " ~start:"" ~stop:""
+          (function { variant; fields } -> fsort variant fields)
+          variants
 
 let%expect_test "dtp" =
   let lst =
-    DataType
-      [
-        {
-          variant = "cons";
-          fields =
-            [
-              { field = "head"; typ = mk_sort "E" };
-              { field = "tail"; typ = mk_sort "list" };
-            ];
-        };
-        { variant = "nil"; fields = [] };
-      ]
+    Sort
+      ( "list",
+        [
+          {
+            variant = "cons";
+            fields =
+              [
+                { field = "head"; typ = mk_sort "E" };
+                { field = "tail"; typ = mk_sort "list" };
+              ];
+          };
+          { variant = "nil"; fields = [] };
+        ] )
   in
   print_endline @@ to_string lst;
-  [%expect {| cons of {head: E; tail: list} | nil |}]
+  [%expect {| list = cons of {head: E; tail: list} | nil |}]
 
 let show (b : t) = to_string b
 let pp fmt b = Format.pp_print_string fmt (show b)

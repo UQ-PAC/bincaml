@@ -132,7 +132,18 @@ module BasilASTLoader = struct
   and trans_typedecl t =
     match t with
     | TypeDeclCase1 (localIdent, typeT) ->
-        (unsafe_unsigil (`Local localIdent), trans_type typeT)
+        let n = unsafe_unsigil (`Local localIdent) in
+        ( n,
+          Types.mk_adt n
+            (typeT
+            |> List.map (function
+              | SortType variant -> (unsafe_unsigil (`Local variant), [])
+              | VariantCase (variant, _, fields, _) ->
+                  ( unsafe_unsigil (`Local variant),
+                    List.map trans_recordfield fields ))) )
+    | TypeDeclCaseLocalIdent localIdent ->
+        let n = unsafe_unsigil (`Local localIdent) in
+        (n, Types.mk_sort n)
 
   and trans_declaration prog (x : decl) : load_st =
     match x with
@@ -444,7 +455,7 @@ module BasilASTLoader = struct
     | TypeMapType maptype -> transMapType maptype
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
     | TypeParen (_, typeT, _) -> trans_type typeT
-    | TypeSumType (SumType1 sorts) -> DataType (List.map trans_sort sorts)
+    | TypeSort t -> Types.Sort (unsafe_unsigil (`Local t), [])
 
   and transIntVal (x : intVal) : PrimInt.t =
     match x with

@@ -110,7 +110,8 @@ and transDecl (x : decl) : result = match x with
 
 
 and transTypeDeclCase (x : typeDeclCase) : result = match x with
-    TypeDeclCase1 (localident, type') -> failure x
+    TypeDeclCase1 (localident, sumcases) -> failure x
+  | TypeDeclCaseLocalIdent localident -> failure x
 
 
 and transProcDef (x : procDef) : result = match x with
@@ -143,17 +144,13 @@ and transSumCase (x : sumCase) : result = match x with
   | VariantCase (localident, beginrec, recordfields, endrec) -> failure x
 
 
-and transSumType (x : sumType) : result = match x with
-    SumType1 sumcases -> failure x
-
-
 and transType (x : typeT) : result = match x with
     TypeIntType inttype -> failure x
   | TypeBoolType booltype -> failure x
   | TypeBVType bvtype -> failure x
   | TypeParen (openparen, type', closeparen) -> failure x
+  | TypeSort localident -> failure x
   | TypeMapType maptype -> failure x
-  | TypeSumType sumtype -> failure x
 
 
 and transIntVal (x : intVal) : result = match x with

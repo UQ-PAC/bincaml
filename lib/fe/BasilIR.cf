@@ -65,7 +65,7 @@ Decl_ProgWithSpec . Decl ::= "prog" "entry" ProcIdent AttribSet [ ProgSpec ] ;
 Decl_Proc . Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [ FunSpec ] ProcDef ;
 
 
-rules TypeDeclCase ::= LocalIdent "=" Type;
+rules TypeDeclCase ::= LocalIdent "=" [SumCase] | LocalIdent;
 separator nonempty TypeDeclCase  "and";
 Decl_Type . Decl ::= "type" [TypeDeclCase] ;
 Decl_UninterpSort . Decl ::= "type" SumCase;
@@ -87,15 +87,14 @@ VariantCase . SumCase ::= LocalIdent "of" BeginRec [RecordField] EndRec;
 
 separator nonempty SumCase "|";
 
-rules SumType ::= [SumCase];
 
 
 TypeIntType  . Type1 ::= IntType ;
 TypeBoolType . Type1 ::= BoolType ;
 TypeBVType   . Type1 ::= BVType ;
 TypeParen    . Type1 ::= OpenParen Type CloseParen; 
+TypeSort . Type1 ::= LocalIdent;
 TypeMapType . Type ::= MapType;
-TypeSumType . Type ::= SumType;
 _ . Type ::= Type1;
 
 separator nonempty Type ",";

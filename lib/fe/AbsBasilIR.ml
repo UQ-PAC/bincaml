@@ -46,7 +46,8 @@ and decl =
  | Decl_UninterpSort of sumCase
 
 and typeDeclCase =
-   TypeDeclCase1 of localIdent * typeT
+   TypeDeclCase1 of localIdent * sumCase list
+ | TypeDeclCaseLocalIdent of localIdent
 
 and procDef =
    ProcDef_Empty
@@ -71,16 +72,13 @@ and sumCase =
    SortType of localIdent
  | VariantCase of localIdent * beginRec * recordField list * endRec
 
-and sumType =
-   SumType1 of sumCase list
-
 and typeT =
    TypeIntType of intType
  | TypeBoolType of boolType
  | TypeBVType of bVType
  | TypeParen of openParen * typeT * closeParen
+ | TypeSort of localIdent
  | TypeMapType of mapType
- | TypeSumType of sumType
 
 and intVal =
    IntVal_Hex of integerHex

@@ -62,8 +62,7 @@ let pretty_declaration d =
       ^ text (Var.to_string binding)
       ^ text " = "
       ^ nest 2 (Expr.BasilExpr.pretty body)
-  | Type { binding; typ } ->
-      text "type " ^ text binding ^ text " = " ^ text (Types.to_string typ)
+  | Type { binding; typ } -> text "type " ^ text (Types.to_string typ)
 
 (*match definition with
       | Some d -> 

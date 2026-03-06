@@ -102,13 +102,13 @@ module SMTLib2 = struct
     | Types.Unit -> (atom "Unit", LSet.singleton DT)
     | Types.Top -> (atom "Any", LSet.singleton DT)
     | Types.Nothing -> (atom "Nothing", LSet.singleton DT)
-    | Types.DataType [ { variant } ] -> (atom variant, LSet.singleton UF)
+    | Types.Sort (name, []) -> (atom name, LSet.singleton UF)
+    | Types.Sort (name, _) -> (atom name, LSet.singleton DT)
     | Types.Map (l, r) ->
         let tl, ll = of_typ l in
         let tr, lr = of_typ r in
         let log = LSet.union (LSet.singleton Array) (LSet.union ll lr) in
         (list [ atom "Array"; tl; tr ], log)
-    | Types.DataType _ -> failwith ""
 
   let add_logic l s = ((), { s with logics = LSet.add l s.logics })
 
@@ -217,9 +217,11 @@ module SMTLib2 = struct
   let trans_decl (decl : Program.declaration) =
     let* x = return () in
     match decl with
-    | Type { binding; typ = DataType [ { variant } ] } ->
+    | Type { binding; typ = Sort (name, [ { variant } ]) } ->
         return (Bincaml_util.Smt.Expr.declare_sort variant 0)
-    | Type { binding; typ = DataType vs } ->
+    | Type { binding; typ = Sort (name, []) } ->
+        return (Bincaml_util.Smt.Expr.declare_sort name 0)
+    | Type { binding; typ = Sort (name, vs) } ->
         let fields =
           List.map
             Types.(
@@ -231,7 +233,7 @@ module SMTLib2 = struct
                       fields ))
             vs
         in
-        return (Bincaml_util.Smt.Expr.declare_datatype binding [] fields)
+        return (Bincaml_util.Smt.Expr.declare_datatype name [] fields)
     | Type { binding; typ } ->
         return (list [ atom "decl-sort"; fst @@ of_typ typ ])
     | Function { binding; attrib; definition = Function body } ->
@@ -296,7 +298,7 @@ let%expect_test "datatypes" =
       {
         binding = "list";
         typ =
-          Types.mk_adt
+          Types.mk_adt "list"
             [
               ( "Cons",
                 [

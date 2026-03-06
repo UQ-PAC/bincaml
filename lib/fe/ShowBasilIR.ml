@@ -90,7 +90,8 @@ and showDecl (e : AbsBasilIR.decl) : showable = match e with
 
 
 and showTypeDeclCase (e : AbsBasilIR.typeDeclCase) : showable = match e with
-       AbsBasilIR.TypeDeclCase1 (localident, type') -> s2s "TypeDeclCase1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
+       AbsBasilIR.TypeDeclCase1 (localident, sumcases) -> s2s "TypeDeclCase1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showList showSumCase sumcases >> c2s ')'
+  |    AbsBasilIR.TypeDeclCaseLocalIdent localident -> s2s "TypeDeclCaseLocalIdent" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
 
 
 and showProcDef (e : AbsBasilIR.procDef) : showable = match e with
@@ -123,17 +124,13 @@ and showSumCase (e : AbsBasilIR.sumCase) : showable = match e with
   |    AbsBasilIR.VariantCase (localident, beginrec, recordfields, endrec) -> s2s "VariantCase" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showBeginRec beginrec  >> s2s ", " >>  showList showRecordField recordfields  >> s2s ", " >>  showEndRec endrec >> c2s ')'
 
 
-and showSumType (e : AbsBasilIR.sumType) : showable = match e with
-       AbsBasilIR.SumType1 sumcases -> s2s "SumType1" >> c2s ' ' >> c2s '(' >> showList showSumCase sumcases >> c2s ')'
-
-
 and showTypeT (e : AbsBasilIR.typeT) : showable = match e with
        AbsBasilIR.TypeIntType inttype -> s2s "TypeIntType" >> c2s ' ' >> c2s '(' >> showIntType inttype >> c2s ')'
   |    AbsBasilIR.TypeBoolType booltype -> s2s "TypeBoolType" >> c2s ' ' >> c2s '(' >> showBoolType booltype >> c2s ')'
   |    AbsBasilIR.TypeBVType bvtype -> s2s "TypeBVType" >> c2s ' ' >> c2s '(' >> showBVType bvtype >> c2s ')'
   |    AbsBasilIR.TypeParen (openparen, type', closeparen) -> s2s "TypeParen" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.TypeSort localident -> s2s "TypeSort" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
   |    AbsBasilIR.TypeMapType maptype -> s2s "TypeMapType" >> c2s ' ' >> c2s '(' >> showMapType maptype >> c2s ')'
-  |    AbsBasilIR.TypeSumType sumtype -> s2s "TypeSumType" >> c2s ' ' >> c2s '(' >> showSumType sumtype >> c2s ')'
 
 
 and showIntVal (e : AbsBasilIR.intVal) : showable = match e with
