@@ -32,7 +32,6 @@ The serialise -> parse serialise loop should be idempotent
 Memassign repr
 
   $ diff beforemem.il aftermem.il
-  
 Record and Pointer
 
   $ diff ptrrec1.il ptrrec2.il
