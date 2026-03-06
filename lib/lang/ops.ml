@@ -213,8 +213,15 @@ module RecordOps = struct
     | `FACCESS offset -> "`FACCESS " ^ Z.to_string offset
 
   let show_binary = function `FSET offset -> "`FSET " ^ Z.to_string offset
-  let eval_unary (u : unary) = failwith "TODO"
-  let eval_unary (u : binary) = failwith "TODO"
+
+  let eval_unary (u : unary) record =
+    match u with
+    | `FACCESS offset ->
+        let { value; _ } : Record.field = Record.get_field offset record in
+        value
+
+  let eval_binary (u : binary) =
+    match u with `FSET offset -> Record.set_field offset
 
   let show = function
     | #unary as u -> show_unary u
@@ -228,7 +235,9 @@ module PointerOps = struct
   type binary = [ `PTRADD | `PTRSUB ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  let eval_binary (u : binary) = failwith "TODO"
+  let eval_binary (u : binary) (bv, _) =
+    match u with `PTRADD -> Bitvec.add bv | `PTRSUB -> Bitvec.sub bv
+
   let show = function #binary as u -> show_binary u
 end
 

@@ -40,7 +40,7 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
   | BinaryExpr { op = `FSET offset; arg1 = a; arg2 = b } ->
       let* a = get_record a in
       let* b = get_bv b in
-      record (Record.set_field offset b a)
+      record (Record.set_field offset a b)
   | UnaryExpr { op = `FACCESS offset; arg = a } ->
       let* a = get_record a in
       let { value; _ } : Record.field = Record.get_field offset a in

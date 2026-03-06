@@ -8,7 +8,7 @@ let get_field offset record : field =
   | None -> failwith @@ "No field at offset " ^ Z.to_string offset
   | Some f -> f
 
-let set_field offset value record =
+let set_field offset record value =
   let { typ; _ } = get_field offset record in
   ZMap.add offset { typ; value } record
 
