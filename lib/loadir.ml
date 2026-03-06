@@ -439,7 +439,7 @@ module BasilASTLoader = struct
   and transRECORDTYPE (fields : field list) =
     Types.Record
       (ZMap.of_list
-         ((List.map (function Field1 (offset, t) ->
+         ((List.map (function Field1 (_, offset, t, _) ->
               (transIntVal offset, trans_type t)))
             fields))
 

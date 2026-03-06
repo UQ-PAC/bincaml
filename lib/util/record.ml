@@ -13,7 +13,7 @@ let set_field offset record value =
   ZMap.add offset { typ; value } record
 
 let show_field { value; typ } =
-  Bitvec.to_string value ^ " , " ^ Types.to_string typ
+  Printf.sprintf "(%s, %s)" (Bitvec.to_string value) @@ Types.to_string typ
 
 let show (record : t) =
   ZMap.fold

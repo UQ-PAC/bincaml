@@ -209,11 +209,6 @@ module RecordOps = struct
     [@printer fun fmt m -> match m with `FSET offset -> Z.pp_print fmt offset])
   [@@deriving show { with_path = false }, eq, ord]
 
-  let to_string_unary = function
-    | `FACCESS offset -> "`FACCESS " ^ Z.to_string offset
-
-  let show_binary = function `FSET offset -> "`FSET " ^ Z.to_string offset
-
   let eval_unary (u : unary) record =
     match u with
     | `FACCESS offset ->
@@ -416,7 +411,7 @@ module AllOps = struct
     | `SignExtend n -> Printf.sprintf "sign_extend_%d" n
     | `ZeroExtend n -> Printf.sprintf "zero_extend_%d" n
     | `FSET offset -> Printf.sprintf "fset_%s" @@ Z.to_string offset
-    | `FACCESS offset -> Printf.sprintf "faccess_%s" @@ Z.to_string offset
+    | `FACCESS offset -> Printf.sprintf "asdfaccess_%s" @@ Z.to_string offset
     | `PTRADD -> "ptradd"
     | `PTRSUB -> "ptrsub"
     | `EQ -> "eq"

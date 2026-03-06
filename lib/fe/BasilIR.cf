@@ -73,7 +73,7 @@ ProcDef_Empty . ProcDef ::= ;
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
 separator Field "," ;
-Field1 . Field ::= IntVal ":" Type ;
+Field1 . Field ::= OpenParen IntVal ":" Type CloseParen ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
@@ -273,7 +273,7 @@ Expr_SignExtend . Expr2 ::= "sign_extend" OpenParen IntVal "," Expr CloseParen ;
 Expr_Extract    . Expr2 ::= "extract" OpenParen IntVal "," IntVal "," Expr CloseParen ;
 Expr_Concat     . Expr2 ::= "bvconcat"  OpenParen [Expr]  CloseParen ;
 Expr_FSet       . Expr ::= "fset" OpenParen IntVal "," Expr "," Expr CloseParen ;
-Expr_FAccess    . Expr ::= "facces" OpenParen IntVal "," Expr CloseParen ;
+Expr_FAccess    . Expr ::= "faccess" OpenParen IntVal "," Expr CloseParen ;
 
 CaseCase . Case ::= Expr "->" Expr  ;
 CaseDefault . Case ::=  "_" "->" Expr ;

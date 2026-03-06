@@ -144,7 +144,7 @@ let rec to_string = function
   | Record fields ->
       ZMap.fold
         (fun offset t acc ->
-          acc ^ Printf.sprintf "%s : %s," (Z.to_string offset) (to_string t))
+          acc ^ Printf.sprintf "(%s : %s)," (Z.to_string offset) (to_string t))
         fields "{"
       ^ "}"
   | Map ((Map _ as a), (Map _ as b)) ->

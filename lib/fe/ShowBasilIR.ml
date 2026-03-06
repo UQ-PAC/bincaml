@@ -95,7 +95,7 @@ and showProcDef (e : AbsBasilIR.procDef) : showable = match e with
 
 
 and showField (e : AbsBasilIR.field) : showable = match e with
-       AbsBasilIR.Field1 (intval, type') -> s2s "Field1" >> c2s ' ' >> c2s '(' >> showIntVal intval  >> s2s ", " >>  showTypeT type' >> c2s ')'
+       AbsBasilIR.Field1 (openparen, intval, type', closeparen) -> s2s "Field1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
 and showIntType (e : AbsBasilIR.intType) : showable = match e with
