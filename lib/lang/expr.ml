@@ -370,7 +370,7 @@ module BasilExpr = struct
           (text "," ^ newline)
           [
             text "fset" ^ a ^ (textpf "(%s") (Z.to_string offset);
-            arg1 ^ arg2 ^ text ")";
+            arg1 ^ text ", " ^ arg2 ^ text ")";
           ]
     | UnaryExpr { op; arg = e } ->
         text (AllOps.to_string op) ^ a ^ bracket "(" e ")"
