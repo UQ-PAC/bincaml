@@ -48,11 +48,24 @@ let bit_width = function Boolean -> Some 1 | Bitvector n -> Some n | _ -> None
 (** Get the type for an opaque sort *)
 let mk_sort name = Sort (name, [])
 
+let mk_field field typ = { field; typ }
+let mk_variant name fields = { variant = name; fields }
+
 let mk_enum name (cases : string list) =
   Sort (name, List.map (fun variant -> { variant; fields = [] }) cases)
 
-let mk_field field typ = { field; typ }
-let mk_variant name fields = { variant = name; fields }
+let mk_record name (fields : field list) =
+  Sort (name, [ mk_variant ("Record" ^ name) fields ])
+
+let record_field name t =
+  match t with
+  | Sort (sort_name, [ { variant; fields } ])
+    when String.equal variant ("Record" ^ sort_name) ->
+      fields
+      |> List.find_map (function
+        | { field; typ } when String.equal field name -> Some typ
+        | _ -> None)
+  | _ -> None
 
 let mk_adt name (variants : (string * field list) list) =
   Sort
@@ -144,8 +157,15 @@ let%expect_test "dtp" =
           { variant = "nil"; fields = [] };
         ] )
   in
+  let rc =
+    mk_record "recs" [ mk_field "a" (Bitvector 12); mk_field "b" Boolean ]
+  in
   print_endline @@ to_string lst;
-  [%expect {| list = cons of {head: E; tail: list} | nil |}]
+  print_endline @@ to_string rc;
+  [%expect {|
+    list = cons of {head: E; tail: list} | nil
+    recs = Recordrecs of {a: bv12; b: bool}
+    |}]
 
 let show (b : t) = to_string b
 let pp fmt b = Format.pp_print_string fmt (show b)
