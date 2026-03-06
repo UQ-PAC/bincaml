@@ -697,7 +697,8 @@ module WrappedIntervalsValueAbstraction = struct
     match op with
     | `Bool _ -> top
     | `Integer _ -> top
-    | `Bitvector bv | `Pointer bv -> if size bv = 0 then top else interval bv bv
+    | `Bitvector bv | `Pointer (bv, _) ->
+        if size bv = 0 then top else interval bv bv
     (* NOTE: This kind of thing happens frequently, should I go through all of the fields and make a intervals out of those bvs?*)
     | `Record fields -> top
 

@@ -1,4 +1,5 @@
 open Containers
+module ZMap = Map.Make (Z)
 
 (** This represents type right expressions (i.e. not declarations), we expand
     this in the future to allow declarations to be polymorphic.
@@ -33,13 +34,18 @@ type t =
   | Nothing
   | Map of t * t
   | Sort of string * variant list
-  | Record of field2 list
-  | Pointer of t * t
+  | Record of t ZMap.t
+  | Pointer of pointer
 
 and variant = { variant : string; fields : field list }
 and field = { field : string; typ : t } [@@deriving eq, ord]
-
 and field2 = { offset : Z.t; t : t }
+
+(*
+  Lower type represents types the pointer could load
+  Upper type represents types the pointer could store
+*)
+and pointer = { lower : t; upper : t } [@@deriving eq, ord]
 
 let bv i = Bitvector i
 let int = Integer
@@ -78,11 +84,9 @@ let mk_adt name (variants : (string * field list) list) =
 let get_field offset1 record : t =
   match record with
   | Record fields -> (
-      match
-        List.find_opt (fun { offset; _ } -> Z.equal offset offset1) fields
-      with
+      match ZMap.find_opt offset1 fields with
       | None -> failwith @@ "No field at offset " ^ Z.to_string offset1
-      | Some { t; _ } -> t)
+      | Some t -> t)
   | _ -> failwith "Not record type"
 
 (*
@@ -98,13 +102,15 @@ let rec compare_partial (a : t) (b : t) =
   | _, Nothing -> Some 1
   | Unit, _ -> Some (-1)
   | _, Unit -> Some 1
-  | Pointer (l, u), Pointer (l2, u2) -> (
-      compare_partial l l2 |> function Some 0 -> compare_partial u u2 | o -> o)
+  | Pointer { lower; upper }, Pointer { lower = lower1; upper = upper1 } -> (
+      compare_partial lower lower1 |> function
+      | Some 0 -> compare_partial upper upper1
+      | o -> o)
   | Record fields, Record fields2 ->
       Some
-        (List.compare
+        (ZMap.compare
            (fun a b ->
-             match field_equal_partial a b with Some a -> a | None -> -1)
+             match compare_partial a b with Some a -> a | None -> -1)
            fields fields2)
   | Bitvector a, Bitvector b -> Some (Int.compare a b)
   | Sort (n1, _), Sort (n2, _) -> if String.equal n1 n2 then Some 0 else None
@@ -112,9 +118,6 @@ let rec compare_partial (a : t) (b : t) =
   | Map (k, v), Map (k2, v2) -> (
       compare_partial k k2 |> function Some 0 -> compare_partial v v2 | o -> o)
   | _, _ -> None
-
-and field_equal_partial { offset; t } { offset = offset1; t = t1 } =
-  if Z.compare offset1 offset <> 0 then compare_partial t t1 else Some 0
 
 let leq a b =
   compare_partial a b |> function Some a when a <= 0 -> true | _ -> false
@@ -136,12 +139,13 @@ let rec to_string = function
   | Unit -> "()"
   | Top -> "⊤"
   | Nothing -> "⊥"
-  | Pointer (l, u) -> Printf.sprintf "ptr(%s, %s)" (to_string l) (to_string u)
+  | Pointer { lower; upper } ->
+      Printf.sprintf "ptr(%s, %s)" (to_string lower) (to_string upper)
   | Record fields ->
-      List.fold_left
-        (fun acc { offset; t } ->
+      ZMap.fold
+        (fun offset t acc ->
           acc ^ Printf.sprintf "%s : %s," (Z.to_string offset) (to_string t))
-        "{" fields
+        fields "{"
       ^ "}"
   | Map ((Map _ as a), (Map _ as b)) ->
       "(" ^ "(" ^ to_string a ^ ")" ^ "->" ^ "(" ^ to_string b ^ ")" ^ ")"
@@ -187,10 +191,18 @@ let%expect_test "dtp" =
   in
   print_endline @@ to_string lst;
   print_endline @@ to_string rc;
-  [%expect {|
+  [%expect
+    {|
     list = cons of {head: E; tail: list} | nil
     recs = Recordrecs of {a: bv12; b: bool}
     |}]
 
 let show (b : t) = to_string b
+
+let show_pointer { lower; upper } =
+  Printf.sprintf "{ lower = %s; upper = %s }" (show lower) (show upper)
+
 let pp fmt b = Format.pp_print_string fmt (show b)
+
+let pp_pointer fmt { lower; upper } =
+  Format.fprintf fmt "{ lower = %s; upper = %s }" (show lower) (show upper)

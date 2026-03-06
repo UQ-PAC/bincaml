@@ -108,7 +108,7 @@ IntVal_Dec . IntVal ::=  IntegerDec ;
 rules BVVal ::=  IntVal ":" BVType ;
 
 separator FieldVal "," ;
-rules FieldVal ::= IntVal ":" BVVal ;
+rules FieldVal ::= OpenParen IntVal ":" BVVal "," Type CloseParen;
 
 Endian_Little . Endian ::= "le" ;
 Endian_Big . Endian ::= "be" ;
@@ -226,7 +226,7 @@ separator Params "," ;
 Value_BV . Value ::=  BVVal;
 Value_Int . Value ::= IntVal;
 Value_Record . Value ::= OpenParen [FieldVal] CloseParen;
-Value_Pointer . Value ::= "ptr" BVVal ;
+Value_Pointer . Value ::= "ptr" OpenParen BVVal "," PointerType CloseParen;
 Value_True . Value ::= "true" ;
 Value_False . Value ::= "false" ;
 

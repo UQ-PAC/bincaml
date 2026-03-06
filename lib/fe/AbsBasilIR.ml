@@ -95,7 +95,7 @@ and bVVal =
    BVVal1 of intVal * bVType
 
 and fieldVal =
-   FieldVal1 of intVal * bVVal
+   FieldVal1 of openParen * intVal * bVVal * typeT * closeParen
 
 and endian =
    Endian_Little
@@ -202,7 +202,7 @@ and value =
    Value_BV of bVVal
  | Value_Int of intVal
  | Value_Record of openParen * fieldVal list * closeParen
- | Value_Pointer of bVVal
+ | Value_Pointer of openParen * bVVal * pointerType * closeParen
  | Value_True
  | Value_False
 

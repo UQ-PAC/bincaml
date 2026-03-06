@@ -152,7 +152,7 @@ and showBVVal (e : AbsBasilIR.bVVal) : showable = match e with
 
 
 and showFieldVal (e : AbsBasilIR.fieldVal) : showable = match e with
-       AbsBasilIR.FieldVal1 (intval, bvval) -> s2s "FieldVal1" >> c2s ' ' >> c2s '(' >> showIntVal intval  >> s2s ", " >>  showBVVal bvval >> c2s ')'
+       AbsBasilIR.FieldVal1 (openparen, intval, bvval, type', closeparen) -> s2s "FieldVal1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showBVVal bvval  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
 and showEndian (e : AbsBasilIR.endian) : showable = match e with
@@ -283,7 +283,7 @@ and showValue (e : AbsBasilIR.value) : showable = match e with
        AbsBasilIR.Value_BV bvval -> s2s "Value_BV" >> c2s ' ' >> c2s '(' >> showBVVal bvval >> c2s ')'
   |    AbsBasilIR.Value_Int intval -> s2s "Value_Int" >> c2s ' ' >> c2s '(' >> showIntVal intval >> c2s ')'
   |    AbsBasilIR.Value_Record (openparen, fieldvals, closeparen) -> s2s "Value_Record" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showFieldVal fieldvals  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
-  |    AbsBasilIR.Value_Pointer bvval -> s2s "Value_Pointer" >> c2s ' ' >> c2s '(' >> showBVVal bvval >> c2s ')'
+  |    AbsBasilIR.Value_Pointer (openparen, bvval, pointertype, closeparen) -> s2s "Value_Pointer" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showBVVal bvval  >> s2s ", " >>  showPointerType pointertype  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Value_True  -> s2s "Value_True"
   |    AbsBasilIR.Value_False  -> s2s "Value_False"
 

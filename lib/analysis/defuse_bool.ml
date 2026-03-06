@@ -40,17 +40,17 @@ module IsZeroValueAbstraction = struct
     | `Bool true -> NonZero
     | `Bool false -> Zero
     | `Integer i -> if Z.equal Z.zero i then Zero else NonZero
-    | `Bitvector i | `Pointer i ->
+    | `Bitvector i | `Pointer (i, _) ->
         if Bitvec.size i = 0 then Top
         else if Z.equal Z.zero (Bitvec.value i) then Zero
         else NonZero
     | `Record fields ->
-        List.fold_left
-          (fun acc ({ value = i; _ } : Record.field) ->
+        ZMap.fold
+          (fun _ ({ value = i; _ } : Record.field) acc ->
             if Bitvec.size i = 0 then Top
             else if Z.equal Z.zero (Bitvec.value i) then join acc Zero
             else join acc NonZero)
-          Zero fields
+          fields Zero
 
   let eval_unop (op : Lang.Ops.AllOps.unary) a =
     match op with

@@ -222,7 +222,7 @@ module RecordOps = struct
 end
 
 module PointerOps = struct
-  type const = [ `Pointer of Bitvec.t ]
+  type const = [ `Pointer of Bitvec.t * Types.pointer ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type binary = [ `PTRADD | `PTRSUB ]
@@ -296,6 +296,10 @@ module AllOps = struct
     | `Bool _ -> return Boolean
     | `Integer _ -> return Integer
     | `Bitvector v -> return (Bitvector (Bitvec.size v))
+    | `Pointer (v, ty) -> return (Pointer ty)
+    | `Record fields ->
+        return
+        @@ Record (ZMap.map (fun ({ value; typ } : Record.field) -> typ) fields)
 
   let ret_type_unary (o : [< unary ]) a =
     let open Types in
@@ -423,7 +427,9 @@ module AllOps = struct
     | `BVAND -> "bvand"
     | `INTMUL -> "intmul"
     | `Bitvector z -> Bitvec.to_string z
-    | `Pointer z -> "ptr:" ^ Bitvec.to_string z
+    | `Pointer (value, typ) ->
+        Printf.sprintf "ptr(%s, %s)" (Bitvec.show value)
+          (Types.show_pointer typ)
     | `Record fields -> Record.to_string fields
     | `BVSMOD -> "bvsmod"
     | `INTLT -> "intlt"

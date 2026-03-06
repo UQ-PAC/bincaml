@@ -11,7 +11,7 @@ type 'e t =
   | `CamlInt of int
   | `Bitvector of Bitvec.t
   | `Record of Record.t
-  | `Pointer of Bitvec.t
+  | `Pointer of Bitvec.t * Types.pointer
   | `List of 'e t list ]
 [@@deriving eq, ord]
 
@@ -27,7 +27,8 @@ let rec attrib_pretty ?(internal = [ location_key ]) pretty_expr (e : 'e t) :
   | `Bool b -> bool b
   | `Expr e -> pretty_expr e
   | `Bitvector bv -> text @@ Bitvec.to_string bv
-  | `Pointer bv -> text @@ Bitvec.to_string bv
+  | `Pointer (bv, typ) ->
+      text (String.cat (Bitvec.to_string bv) @@ Types.show_pointer typ)
   | `Record record -> text @@ Record.to_string record
   | `Integer bv -> text @@ Z.to_string bv
   | `List s ->

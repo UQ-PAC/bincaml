@@ -560,7 +560,7 @@ fieldVal_list : /* empty */ { []  }
   | fieldVal SYMB2 fieldVal_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-fieldVal : intVal SYMB5 bVVal { FieldVal1 ($1, $3) }
+fieldVal : openParen intVal SYMB5 bVVal SYMB2 typeT closeParen { FieldVal1 ($1, $2, $4, $6, $7) }
   ;
 
 endian : KW_le { Endian_Little  }
@@ -732,7 +732,7 @@ params_list : /* empty */ { []  }
 value : bVVal { Value_BV $1 }
   | intVal { Value_Int $1 }
   | openParen fieldVal_list closeParen { Value_Record ($1, $2, $3) }
-  | KW_ptr bVVal { Value_Pointer $2 }
+  | KW_ptr openParen bVVal SYMB2 pointerType closeParen { Value_Pointer ($2, $3, $5, $6) }
   | KW_true { Value_True  }
   | KW_false { Value_False  }
   ;

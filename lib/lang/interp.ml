@@ -34,11 +34,11 @@ module IValue = struct
     | `Integer v -> Bitvec.create ~size:int_size v
     | `Bool true -> Bitvec.create ~size:8 Z.one
     | `Bool false -> Bitvec.create ~size:8 Z.zero
-    | `Pointer bv -> bv
+    | `Pointer (bv, _) -> bv
     | `Record fields ->
-        List.fold_left
-          (fun acc ({ value; _ } : Record.field) -> Bitvec.concat acc value)
-          Bitvec.empty fields
+        ZMap.fold
+          (fun _ ({ value; _ } : Record.field) acc -> Bitvec.concat acc value)
+          fields Bitvec.empty
 
   let of_constant (v : Ops.AllOps.const) =
     let open Expr.BasilExpr in
@@ -47,7 +47,7 @@ module IValue = struct
     | `Bitvector bv -> bv_value bv
     | `Integer v -> int_value v
     | `Bool b -> if b then true_value else false_value
-    | `Pointer bv -> bv_value bv
+    | `Pointer (bv, _) -> bv_value bv
     | `Record fields -> bv_value @@ bv_of_constant v
 
   (** conversion to basil values *)

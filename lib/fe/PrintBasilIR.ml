@@ -253,7 +253,7 @@ and prtBVVal (i:int) (e : AbsBasilIR.bVVal) : doc = match e with
 
 
 and prtFieldVal (i:int) (e : AbsBasilIR.fieldVal) : doc = match e with
-       AbsBasilIR.FieldVal1 (intval, bvval) -> prPrec i 0 (concatD [prtIntVal 0 intval ; render ":" ; prtBVVal 0 bvval])
+       AbsBasilIR.FieldVal1 (openparen, intval, bvval, type_, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtIntVal 0 intval ; render ":" ; prtBVVal 0 bvval ; render "," ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
 
 and prtFieldValListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
@@ -428,7 +428,7 @@ and prtValue (i:int) (e : AbsBasilIR.value) : doc = match e with
        AbsBasilIR.Value_BV bvval -> prPrec i 0 (concatD [prtBVVal 0 bvval])
   |    AbsBasilIR.Value_Int intval -> prPrec i 0 (concatD [prtIntVal 0 intval])
   |    AbsBasilIR.Value_Record (openparen, fieldvals, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtFieldValListBNFC 0 fieldvals ; prtCloseParen 0 closeparen])
-  |    AbsBasilIR.Value_Pointer bvval -> prPrec i 0 (concatD [render "ptr" ; prtBVVal 0 bvval])
+  |    AbsBasilIR.Value_Pointer (openparen, bvval, pointertype, closeparen) -> prPrec i 0 (concatD [render "ptr" ; prtOpenParen 0 openparen ; prtBVVal 0 bvval ; render "," ; prtPointerType 0 pointertype ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Value_True  -> prPrec i 0 (concatD [render "true"])
   |    AbsBasilIR.Value_False  -> prPrec i 0 (concatD [render "false"])
 
