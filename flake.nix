@@ -70,9 +70,13 @@
           shellHook = ''
             export ODIG_CACHE_DIR=~/.cache/odig
 
-            # ocaml_hash="$(echo "$OCAMLPATH" | sha1sum | cut -d' ' -f1)"
-            # [[ -n "$ocaml_hash" ]]
-            export ODIG_LIB_DIR="$(mktemp -d)"
+            ocaml_hash="$(echo "$OCAMLPATH" | sha1sum | cut -d' ' -f1)"
+            if [[ -z "$ocaml_hash" ]]; then
+              echo 'cannot make ocaml hash - cannot cache odig'
+              export ODIG_LIB_DIR="$(mktemp -d)/lib"
+            else
+              export ODIG_LIB_DIR="$ODIG_CACHE_DIG/$ocaml_hash"
+            fi
 
             if ! [[ -d "$ODIG_LIB_DIR" ]]; then
               mkdir -p "$ODIG_LIB_DIR"
