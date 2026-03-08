@@ -8,7 +8,7 @@
 
 buildDunePackage {
   pname = "hector";
-  version = "0.0";
+  version = "20241208";
 
   minimalOCamlVersion = "4.14";
 
