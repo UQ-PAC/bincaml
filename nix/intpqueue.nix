@@ -6,7 +6,7 @@
 , hector
 }:
 
-buildDunePackage {
+buildDunePackage (self: {
   pname = "intPQueue";
   version = "20250925";
 
@@ -15,8 +15,8 @@ buildDunePackage {
   src = fetchFromGitHub {
     owner = "fpottier";
     repo = "intPQueue";
-    rev = "867de385bab00833a5919ac8ec148b5f8bd81900";
-    hash = "sha256-fycOdbQ+Fm5nJnDdbCmF0pTUNG8Uh+kQnAoWDnpJ6tY=";
+    rev = self.version;
+    hash = "sha256-nnFh/Urnf3oT/s1WcXuo/zLu9A6yIRzUB2dEpTwKqF0=";
   };
 
   checkInputs = [ ];
@@ -31,4 +31,4 @@ buildDunePackage {
     description = "A fast and compact priority queue with low integer keys";
     maintainers = with lib.maintainers; [ katrinafyi ];
   };
-}
+})

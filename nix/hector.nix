@@ -6,7 +6,7 @@
 , cppo
 }:
 
-buildDunePackage (final: {
+buildDunePackage (self: {
   pname = "hector";
   version = "20241208";
 
@@ -15,7 +15,7 @@ buildDunePackage (final: {
   src = fetchFromGitHub {
     owner = "fpottier";
     repo = "hector";
-    rev = final.version;
+    rev = self.version;
     hash = "sha256-sTNPt5s0lBUZ6+bUV36LYdBj71q5EzlJaj1duIqqtZQ=";
   };
 
