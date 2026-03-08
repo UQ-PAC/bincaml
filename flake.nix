@@ -24,6 +24,13 @@
             selfPackages = self.packages.${system};
 
             selfOcamlPackages = pkgs.ocamlPackages.overrideScope (ofinal: oprev: {
+
+              # https://github.com/NixOS/nixpkgs/blob/aca4d95fce4914b3892661bcb80b8087293536c6/pkgs/development/compilers/ocaml/generic.nix#L30
+              ocaml = oprev.ocaml.override {
+                flambdaSupport = true;
+                framePointerSupport = true;
+              };
+
               bincaml = ofinal.callPackage ./nix/bincaml.nix { };
               hector = ofinal.callPackage ./nix/hector.nix { };
               intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
