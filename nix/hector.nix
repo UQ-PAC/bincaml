@@ -6,7 +6,7 @@
 , cppo
 }:
 
-buildDunePackage {
+buildDunePackage (final: {
   pname = "hector";
   version = "20241208";
 
@@ -15,8 +15,8 @@ buildDunePackage {
   src = fetchFromGitHub {
     owner = "fpottier";
     repo = "hector";
-    rev = "87ef35d18a8661e48b650959c20faba8f52dde08";
-    hash = "sha256-yFFgZOIzOloJmc8wm0VoOTJYK/NWUV0mBNEmZE7t500=";
+    rev = final.version;
+    hash = "sha256-sTNPt5s0lBUZ6+bUV36LYdBj71q5EzlJaj1duIqqtZQ=";
   };
 
   checkInputs = [ ];
@@ -31,4 +31,4 @@ buildDunePackage {
     description = "A vector library for OCaml";
     maintainers = with lib.maintainers; [ katrinafyi ];
   };
-}
+})
