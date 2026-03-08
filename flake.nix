@@ -75,7 +75,7 @@
               echo 'cannot make ocaml hash - cannot cache odig'
               export ODIG_LIB_DIR="$(mktemp -d)/lib"
             else
-              export ODIG_LIB_DIR="$ODIG_CACHE_DIG/$ocaml_hash"
+              export ODIG_LIB_DIR="$ODIG_CACHE_DIR/$ocaml_hash"
             fi
 
             if ! [[ -d "$ODIG_LIB_DIR" ]]; then
