@@ -1,5 +1,19 @@
 {
   "nodes": {
+    "infuse-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768766368,
+        "narHash": "sha256-GW7S5dsFiQChSbGESrkFyNSzDLKGNH3H0EMeY+NLefY=",
+        "rev": "e837ece1b9de6ebcb7abd261f54a09bad3a2f820",
+        "type": "tarball",
+        "url": "https://codeberg.org/api/v1/repos/amjoseph/infuse.nix/archive/e837ece1b9de6ebcb7abd261f54a09bad3a2f820.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://codeberg.org/amjoseph/infuse.nix/archive/trunk.tar.gz"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1772525000,
@@ -18,6 +32,7 @@
     },
     "root": {
       "inputs": {
+        "infuse-src": "infuse-src",
         "nixpkgs": "nixpkgs"
       }
     }

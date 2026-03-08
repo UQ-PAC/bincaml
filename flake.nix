@@ -1,76 +1,75 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    infuse-src.url = "https://codeberg.org/amjoseph/infuse.nix/archive/trunk.tar.gz";
+    infuse-src.flake = false;
   };
   outputs =
     { self
     , nixpkgs
-    }:
+    , infuse-src
+    }@args:
     let
-      supported-systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-        "aarch64-darwin"
-        "x86_64-darwin"
-      ];
+      lib = nixpkgs.lib;
 
-      makeBincamlOcamlPackages = ofinal: oprev: {
-        bincaml = ofinal.callPackage ./nix/bincaml.nix { };
-        hector = ofinal.callPackage ./nix/hector.nix { };
-        intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
-      };
+      inherit (import ./nix/infuse.nix {
+        lib = lib;
+        infuse-src = infuse-src;
+      }) infuse infuse-with;
 
-      forAllSystems =
-        f:
-        nixpkgs.lib.genAttrs supported-systems (
-          system:
-          f rec {
-            inherit system;
+    in infuse args {
+      __forAllSystems.systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin"];
+      __forAllSystems.outputs = { self, nixpkgs, ... }:
+        let
+          pkgs = nixpkgs.legacyPackages;
+          selfOcamlPackages = self.legacyPackages.selfOcamlPackages;
+          fpOcamlPackages = self.legacyPackages.fpOcamlPackages;
+        in
+        {
+          defaultPackage = selfOcamlPackages.bincaml;
 
-            pkgs = nixpkgs.legacyPackages.${system};
-            selfPackages = self.legacyPackages.${system};
+          overlays = {
+            addBincamlPackages = ofinal: _: {
+              bincaml = ofinal.callPackage ./nix/bincaml.nix { };
+              hector = ofinal.callPackage ./nix/hector.nix { };
+              intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
+            };
 
-            selfOcamlPackages =
-              pkgs.ocamlPackages.overrideScope makeBincamlOcamlPackages;
-
-            # frame pointer enabled. slower build.
-            fpOcamlPackages = selfOcamlPackages.overrideScope (ofinal: oprev: {
+            enableOcamlFramePointer = ofinal: infuse-with {
               # https://github.com/NixOS/nixpkgs/blob/aca4d95fce4914b3892661bcb80b8087293536c6/pkgs/development/compilers/ocaml/generic.nix#L30
-              ocaml = (oprev.ocaml.override {
+              ocaml.__input.flambdaSupport.__assign = true;
+              ocaml.__input.framePointerSupport.__assign = true;
+              ocaml.__output.patches.__append = [
+                (pkgs.fetchpatch {
+                  url = "https://github.com/ocaml/ocaml/commit/c2eec4dd1de7d0da2d2f76e5e7f2b567901f4e2c.patch";
+                  hash = "sha256-qDx8saOLhFMYaK4PLsSvHnDBYKvRSMmPtdVa/IqkQSI=";
+                })
+              ];
+            };
+          };
 
-                flambdaSupport = true;
-                framePointerSupport = true;
+          legacyPackages = {
+            selfOcamlPackages =
+              pkgs.ocamlPackages.overrideScope self.overlays.addBincamlPackages;
+            fpOcamlPackages =
+              selfOcamlPackages.overrideScope self.overlays.enableOcamlFramePointer;
 
-              }).overrideAttrs (ocaml: {
+            bincaml = selfOcamlPackages.bincaml;
+            intPQueue = selfOcamlPackages.intPQueue;
+            hector = selfOcamlPackages.hector;
 
-                patches = ocaml.patches ++ [
-                  (pkgs.fetchpatch {
-                    url = "https://github.com/ocaml/ocaml/commit/c2eec4dd1de7d0da2d2f76e5e7f2b567901f4e2c.patch";
-                    hash = "sha256-qDx8saOLhFMYaK4PLsSvHnDBYKvRSMmPtdVa/IqkQSI=";
-                  })
-                ];
+            fp.bincaml = fpOcamlPackages.bincaml;
+            fp.intPQueue = fpOcamlPackages.intPQueue;
+            fp.hector = fpOcamlPackages.hector;
+          };
 
-              });
-            });
-          }
-        );
-    in
-    {
-      defaultPackage = forAllSystems ({ selfPackages, ...}: selfPackages.bincaml);
+          devShells = {
+            default = selfOcamlPackages.callPackage ./nix/shell.nix { };
+            fp = fpOcamlPackages.callPackage ./nix/shell.nix { };
+          };
 
-      legacyPackages = forAllSystems ({ selfOcamlPackages, fpOcamlPackages, ... }: {
-        bincaml = selfOcamlPackages.bincaml;
-        intPQueue = selfOcamlPackages.intPQueue;
-        hector = selfOcamlPackages.hector;
-
-        fp.bincaml = fpOcamlPackages.bincaml;
-        fp.intPQueue = fpOcamlPackages.intPQueue;
-        fp.hector = fpOcamlPackages.hector;
-      });
-
-      devShells = forAllSystems ({ selfOcamlPackages, fpOcamlPackages, ... }: {
-        default = selfOcamlPackages.callPackage ./nix/shell.nix { };
-        fp = fpOcamlPackages.callPackage ./nix/shell.nix { };
-      });
-    };
+        }
+      ;
+    }
+  ;
 }
