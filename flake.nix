@@ -26,7 +26,7 @@
             selfOcamlPackages = pkgs.ocamlPackages.overrideScope (ofinal: oprev: {
               bincaml = ofinal.callPackage ./nix/bincaml.nix { };
               hector = ofinal.callPackage ./nix/hector.nix { };
-              intPQueue = ofinal.callPackage ./nix/intPQueue.nix { };
+              intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
             });
           }
         );
