@@ -3,13 +3,20 @@ open Bincaml_util.Common
 
 exception BoogieException of string
 
-let proc_name p =
+let function_name name =
   let open Containers_pp in
-  text "p" ^ p
+  text "f" ^ text name
 
-let block_name b =
+let proc_name name =
   let open Containers_pp in
-  text "b" ^ b
+  let name = String.map (fun c -> match c with '@' -> '$' | _ -> c) name in
+  text "p" ^ text name
+
+let block_name v =
+  let open Containers_pp in
+  let name = Lang.Procedure.Vert.block_id_string v in
+  let name = String.map (fun c -> match c with '%' -> '#' | _ -> c) name in
+  text "b" ^ text name
 
 let join_lines ?(s = "") ls =
   let open Containers_pp in
@@ -163,7 +170,7 @@ let pretty_declaration (d : Lang.Program.declaration) =
       pretty_variable_declaration binding
   | Lang.Program.Function { binding; attrib; definition = Function t } ->
       text "function"
-      ^+ text (Var.name binding)
+      ^+ (function_name @@ Var.name binding)
       ^ bracket "(" (pretty_function_args t) ")"
       ^+ text "returns"
       ^+ bracket "(" (text (type_to_string @@ Var.typ binding)) ")"
@@ -175,13 +182,14 @@ let pretty_declaration (d : Lang.Program.declaration) =
   | Lang.Program.Function { binding; attrib; definition = Uninterpreted } ->
       let param, rt = Types.uncurry (Var.typ binding) in
       text "function "
-      ^ text (Var.name binding)
+      ^ (function_name @@ Var.name binding)
       ^ bracket "("
           (fill
              (text "," ^ sp)
              (List.map (fun t -> text @@ type_to_string t) param))
           ")"
       ^ bracket " returns (" (text (type_to_string rt)) ")"
+         ^ text ";"
 
 let rec pretty_statement (s : Lang.Program.stmt) =
   let open Containers_pp in
@@ -240,7 +248,7 @@ let rec pretty_statement (s : Lang.Program.stmt) =
         |> List.map (compose snd pretty_expr)
         |> fill (text "," ^ newline_or_spaces 1)
       in
-      nest 2 @@ text "call" ^+ lhs ^ proc_name (text name) ^ bracket "(" rhs ")"
+      nest 2 @@ text "call" ^+ lhs ^ (proc_name name) ^ bracket "(" rhs ")"
   | Instr_IndirectCall { target } -> text "INDIRECT CALL"
   | Instr_Call { lhs; procid; args } ->
       pretty_statement
@@ -259,8 +267,7 @@ let pretty_terminator (p : Lang.Program.proc) (i : IDSet.elt)
             List.map
               (fun (_, e, v) ->
                 match v with
-                | Lang.Procedure.Vert.Begin i ->
-                    block_name (text (Lang.Procedure.Vert.block_id_string v))
+                | Lang.Procedure.Vert.Begin i -> block_name v
                 | _ -> raise (BoogieException "Bad graph structure"))
               succ
           in
@@ -271,10 +278,7 @@ let pretty_block (p : Lang.Program.proc) (i : IDSet.elt)
     (b : Lang.Procedure.Edge.block) =
   let open Containers_pp in
   let g = Lang.Procedure.graph p in
-  let name =
-    block_name
-      (text (Lang.Procedure.Vert.block_id_string (Lang.Procedure.Vert.Begin i)))
-  in
+  let name = block_name (Lang.Procedure.Vert.Begin i) in
   let stmts =
     Lang.Block.stmts_iter b |> Iter.map pretty_statement |> Iter.to_list
   in
@@ -298,11 +302,7 @@ let pretty_procedure_header (s : string) (p : Lang.Program.proc) =
       sp ^ text "returns" ^+ bracket "(" (param_list out_params) ")"
     else text ""
   in
-  let header =
-    text s
-    ^+ proc_name (text (ID.to_string (Lang.Procedure.id p)))
-    ^ args ^ returns
-  in
+  let header = text s ^+ proc_name (ID.name @@ Lang.Procedure.id p) ^ args ^ returns in
   header
 
 let pretty_modifies (p : Lang.Program.proc) =
@@ -335,7 +335,7 @@ let pretty_procedure_spec (p : Lang.Program.proc) =
   let modifies = pretty_modifies p in
   let ensures = pretty_ensures p in
   let requires = pretty_requires p in
-  nest 2 @@ join_lines ([header] @ modifies @ ensures @ requires)
+  nest 2 @@ join_lines ([ header ] @ modifies @ ensures @ requires)
 
 let pretty_procedure_impl (p : Lang.Program.proc) =
   let open Containers_pp in
@@ -382,7 +382,7 @@ let pretty_program (p : Lang.Program.t) =
         | _ -> `Right p)
   in
   let glob_vars = join_lines_end glob_vars in
-  let glob_funs = join_lines_end glob_funs in
+  let glob_funs = append_nl glob_funs in
   let procs =
     p.procs |> ID.Map.to_list
     |> List.map (fun (_, p) -> pretty_procedure p)
