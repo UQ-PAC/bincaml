@@ -32,12 +32,32 @@
         );
     in
     {
-      packages = forAllSystems ({ pkgs, selfPackages, selfOcamlPackages, ... }: rec {
+      packages = forAllSystems ({ pkgs, selfPackages, selfOcamlPackages, ... }: {
         default = selfOcamlPackages.bincaml;
         bincaml = selfOcamlPackages.bincaml;
         intPQueue = selfOcamlPackages.intPQueue;
         hector = selfOcamlPackages.hector;
-        nix-update = pkgs.nix-update;
+      });
+
+      devShells = forAllSystems ({ pkgs, selfPackages, selfOcamlPackages, ... }: {
+
+        default = pkgs.mkShell {
+
+          packages = with selfOcamlPackages; [
+            odig ocaml-lsp ocamlformat
+            pkgs.tree-sitter
+            # sherlodoc
+          ] ++ pkgs.lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.perf;
+
+          inputsFrom = [
+            selfOcamlPackages.bincaml
+          ];
+
+          shellHook = ''
+            export ODIG_CACHE_DIR=~/.cache/odig
+          '';
+        };
+
       });
     };
 }
