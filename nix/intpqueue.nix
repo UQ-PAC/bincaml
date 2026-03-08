@@ -8,7 +8,7 @@
 
 buildDunePackage {
   pname = "intPQueue";
-  version = "0.0";
+  version = "20250925";
 
   minimalOCamlVersion = "4.14";
 
