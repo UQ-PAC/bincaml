@@ -32,11 +32,12 @@
         );
     in
     {
-      packages = forAllSystems ({ selfOcamlPackages, ... }: rec {
+      packages = forAllSystems ({ pkgs, selfPackages, selfOcamlPackages, ... }: rec {
         default = selfOcamlPackages.bincaml;
         bincaml = selfOcamlPackages.bincaml;
         intPQueue = selfOcamlPackages.intPQueue;
         hector = selfOcamlPackages.hector;
+        nix-update = pkgs.nix-update;
       });
     };
 }
