@@ -14,8 +14,7 @@
   block
   procedure
   interp
-  program
-  record)
+  program)
  (flags -w -27) ; unused var
  (libraries
   zarith
