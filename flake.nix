@@ -26,10 +26,10 @@
             selfOcamlPackages = pkgs.ocamlPackages.overrideScope (ofinal: oprev: {
 
               # https://github.com/NixOS/nixpkgs/blob/aca4d95fce4914b3892661bcb80b8087293536c6/pkgs/development/compilers/ocaml/generic.nix#L30
-              ocaml = oprev.ocaml.override {
-                flambdaSupport = true;
-                framePointerSupport = true;
-              };
+              # ocaml = (oprev.ocaml.override {
+              #   flambdaSupport = true;
+              #   framePointerSupport = true;
+              # }).overrideAttrs  { doCheck = false; };
 
               bincaml = ofinal.callPackage ./nix/bincaml.nix { };
               hector = ofinal.callPackage ./nix/hector.nix { };
@@ -52,7 +52,7 @@
 
           packages = with selfOcamlPackages; [
             odoc odig ocaml-lsp ocamlformat
-            pkgs.tree-sitter
+            pkgs.tree-sitter pkgs.nodejs-slim
             # sherlodoc
           ] ++ pkgs.lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.perf;
 
