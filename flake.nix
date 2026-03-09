@@ -12,19 +12,23 @@
     let
       inherit (nixpkgs) lib;
 
-      infuse-lib =import ./nix/infuse-lib.nix {
+      inherit (import ./nix/infuse-lib.nix {
         lib = lib;
         infuse-src = infuse-src;
-      };
-      inherit (infuse-lib) infuse infuse-with;
+      }) infuse infuse-with;
 
-    in infuse args {
-      __forAllSystems.systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin"];
-      __forAllSystems.outputs = { self, nixpkgs, ... }:
+      inherit (import ./nix/flake-for-all-systems.nix { lib = lib; })
+        flake-for-all-systems;
+
+    in flake-for-all-systems args {
+      systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin"];
+      outputs = { self, nixpkgs, ... }:
         let
           pkgs = nixpkgs.legacyPackages;
-          selfOcamlPackages = self.legacyPackages.selfOcamlPackages;
-          fpOcamlPackages = self.legacyPackages.fpOcamlPackages;
+          selfOcamlPackages =
+            pkgs.ocamlPackages.overrideScope self.overlays.addBincamlPackages;
+          fpOcamlPackages =
+            selfOcamlPackages.overrideScope self.overlays.enableOcamlFramePointer;
         in
         {
           defaultPackage = selfOcamlPackages.bincaml;
@@ -50,11 +54,6 @@
           };
 
           legacyPackages = {
-            selfOcamlPackages =
-              pkgs.ocamlPackages.overrideScope self.overlays.addBincamlPackages;
-            fpOcamlPackages =
-              selfOcamlPackages.overrideScope self.overlays.enableOcamlFramePointer;
-
             bincaml = selfOcamlPackages.bincaml;
             intPQueue = selfOcamlPackages.intPQueue;
             hector = selfOcamlPackages.hector;
@@ -68,7 +67,6 @@
             default = selfOcamlPackages.callPackage ./nix/shell.nix { };
             fp = fpOcamlPackages.callPackage ./nix/shell.nix { };
           };
-
         }
       ;
     }
