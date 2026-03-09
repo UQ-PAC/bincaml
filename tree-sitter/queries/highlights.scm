@@ -6,8 +6,6 @@
 "unreachable" @keyword.return
 "return" @keyword.return
 
-["ensures" "ensure" "requires" "require"] @keyword
-
 "call" @keyword.function
 "indirect" @keyword.function
 
@@ -21,13 +19,33 @@
 "assume" @keyword
 "var" @keyword
 "memory" @keyword
-"shared" @keyword
+"shared" @keyword.modifier
+[ "rely"
+  "relies"
+  "guarantee"
+  "guarantee"
+  "require"
+  "requires"
+  "ensures"
+  "ensure"
+  "captures"
+  "modifies"
+  "classification"
+  "invariant" ] @keyword
+[ "forall"
+  "exists"
+  "fun"
+  "old" ] @keyword.operator
 
-(IntVal) @constant
-(token_IntegerHex) @constant
-(token_IntegerDec) @constant
-"true" @constant
-"false" @constant
+[ "match"
+  "with"
+  "cases" ] @keyword.conditional
+
+(IntVal) @number
+(token_IntegerHex) @number
+(token_IntegerDec) @number
+"true" @constant.builtin
+"false" @constant.builtin
 
 (Type) @type
 (token_BVTYPE) @type.builtin
@@ -51,6 +69,9 @@
 (BoolBinOp) @function.builtin
 (UnOp) @function.builtin
 (EqOp) @function.builtin
+
+"load_be" @function.builtin
+"load_le" @function.builtin
 
 "boolnot" @function.builtin
 "intneg" @function.builtin
@@ -107,14 +128,17 @@
   (token_EndList)
   (token_BeginRec)
   (token_EndRec)
+  (token_OpenParen)
+  (token_CloseParen)
 ] @punctuation.bracket
 
 [ ";" "," ] @punctuation.delimiter
-[ ":" "=" ":=" ] @punctuation
-[ "(" ")"
-  (token_BeginRec)
+[ ":" "=" ":=" "::" ] @punctuation
+[ (token_BeginRec)
   (token_EndRec)
   (token_BeginList)
   (token_EndList) ] @punctuation.bracket
 
 (token_Str) @string
+(token_CommentMulti) @comment
+(token_CommentSingle) @comment
