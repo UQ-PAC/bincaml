@@ -1100,8 +1100,7 @@ module BasilASTLoader = struct
     | IntBinOp_intmod -> `INTMOD
 
   and transPointerBinOp (x : pointerBinOp) =
-    match x with
-    | PointerBinOp_ptradd -> `PTRADD
+    match x with PointerBinOp_ptradd -> `PTRADD
 
   and transIntLogicalBinOp (x : intLogicalBinOp) =
     match x with
