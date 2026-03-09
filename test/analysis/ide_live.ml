@@ -66,8 +66,9 @@ proc @main (x_in:bv64) -> ()
     block %main_entry [
         goto(%loop_head);
     ];
-    block %loop_head [
-        (var x_1:bv64 := phi(%main_entry -> x_in:bv64, %main_1 -> x_2:bv64, %main_2 -> x_3:bv64));
+    block %loop_head (
+        var x_1:bv64 := phi(%main_entry -> x_in:bv64, %main_1 -> x_2:bv64, %main_2 -> x_3:bv64)
+    ) [
         goto(%main_1, %main_2, %main_return);
     ];
     block %main_1 [
