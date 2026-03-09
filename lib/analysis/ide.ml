@@ -54,6 +54,18 @@ type call_info = {
 type stub_info = { formal_in : Var.t list; globals : Var.t list }
 [@@deriving eq, ord, show { with_path = false }]
 
+type phi_info =
+  (Var.t VarMap.t
+  [@printer
+    fun fmt m ->
+      Format.pp_print_string fmt
+        (VarMap.to_iter m
+        |> Iter.to_string ~sep:"," (fun (v, v') ->
+            Var.show v' ^ " -> " ^ Var.show v))])
+[@@deriving eq, ord, show { with_path = false }]
+(** The order of mapping depends on analysis direction. If forwards, we map
+    assignees to assigned, else we do the opposite. *)
+
 module LSet = Set.Make (Loc)
 module LM = Map.Make (Loc)
 
@@ -70,7 +82,7 @@ module type IDEDomain = sig
   module Data : Map.OrderedType
 
   module DL : sig
-    type t = Label of Data.t | Lambda [@@deriving eq, ord, show]
+    type t = Lambda | Label of Data.t [@@deriving eq, ord, show]
   end
 
   type 'a state_update = (DL.t * 'a) Iter.t
@@ -90,6 +102,9 @@ module type IDEDomain = sig
   val eval : t -> Value.t -> Value.t
   (** evaluate an edge function *)
 
+  val init_data : Var.t Iter.t -> Program.proc -> Data.t Iter.t
+  (** data that each procedure should summarise, the given vars are globals *)
+
   val transfer_call : call_info -> DL.t -> t state_update
   (** edge calling a procedure (to the return block when backwards) *)
 
@@ -103,10 +118,15 @@ module type IDEDomain = sig
   val transfer_stub : stub_info -> DL.t -> t state_update
   (** edge from entry to exit (or reversed when backwards) of stub procedure *)
 
+  val modifies : Program.stmt -> Data.t Iter.t
+  (** the data values that will be modified (not return a vertical identity
+      edge) by this statement *)
+
   val transfer : Program.stmt -> DL.t -> t state_update
   (** update the state for a program statement *)
 
-  val transfer_phi : Var.t Block.phi -> DL.t -> t state_update
+  val transfer_phi : phi_info -> DL.t -> t state_update
+  (** edge through phi information *)
 end
 
 module IDEGraph = struct
@@ -118,11 +138,12 @@ module IDEGraph = struct
 
   module Edge = struct
     type t =
-      | Stmts of Var.t Block.phi list * Program.stmt list
+      | Stmts of Program.stmt list
       | InterCall of call_info
       | InterReturn of ret_info
       | Call of call_info
       | StubProc of stub_info
+      | Phi of phi_info
       | Nop
     [@@deriving eq, ord, show]
 
@@ -156,8 +177,8 @@ module IDEGraph = struct
   let push_edge dir (ending : Loc.t) (g : bstate) =
     match g with
     | { graph; last_vert; stmts } ->
-        let phi, stmts = (fst stmts, List.rev (snd stmts)) in
-        let e1 = (last_vert, Edge.Stmts (phi, stmts), ending) in
+        let stmts = List.rev (snd stmts) in
+        let e1 = (last_vert, Edge.Stmts stmts, ending) in
         {
           graph = add_edge_e_dir `Forwards graph e1;
           stmts = ([], []);
@@ -230,6 +251,29 @@ module IDEGraph = struct
     let proc_id = Procedure.id p in
     let add_block_edge b graph =
       match b with
+      | ( (Procedure.Vert.End in_bid as v1),
+          Procedure.Edge.Jump,
+          (Procedure.Vert.Begin bid as v2) ) ->
+          let block =
+            Procedure.get_block p bid
+            |> Option.get_exn_or "Block vertex with invalid block"
+          in
+          let assignment =
+            block.phis
+            |> List.fold_left
+                 (fun m (phi : Var.t Block.phi) ->
+                   List.find_opt (fun (bid, v') -> ID.equal bid in_bid) phi.rhs
+                   |> Option.map_or ~default:m (fun (_, v') ->
+                       match dir with
+                       | `Forwards -> VarMap.add v' phi.lhs m
+                       | `Backwards -> VarMap.add phi.lhs v' m))
+                 VarMap.empty
+          in
+          add_edge_e_dir dir g
+            Loc.
+              ( IntraVertex { proc_id; v = v1 },
+                Phi assignment,
+                IntraVertex { proc_id; v = v2 } )
       | v1, Procedure.Edge.Jump, v2 ->
           add_edge_e_dir dir g
             Loc.
@@ -377,6 +421,7 @@ module IDEGraph = struct
         | _, InterReturn _, _ -> "InterReturn"
         | _, Call _, _ -> "Call"
         | _, Nop, _ -> ""
+        | _, Phi _, _ -> "Phi"
         | _, StubProc _, _ -> "StubProc"
       in
       [ `Label l ]
@@ -427,32 +472,25 @@ module IDE (D : IDEDomain) = struct
   let ( @. ) = D.compose
 
   (** Determine composites of edge functions through an intravertex block *)
-  let tf_stmts phi bs i =
-    let stmts i =
-      List.fold_left
-        (fun om stmt ->
-          DlMap.fold
-            (fun d2 e1 m ->
-              D.transfer stmt d2
-              |> Iter.fold (fun m (d3, e2) -> join_add m d3 (e2 @. e1)) m)
-            om DlMap.empty)
-        (Iter.fold (fun m (d, e) -> join_add m d e) DlMap.empty i)
-        bs
-      |> DlMap.to_iter
-    in
-    (* TODO this might be more imprecise than joining on the opposite side of the phi node
-       https://link.springer.com/chapter/10.1007/978-3-642-11970-5_8 reckons so *)
-    (* TODO this also might be really inefficient or wrong it hasn't been tested *)
-    let phis i =
-      List.fold_left
-        (fun i p ->
-          Iter.flat_map
-            (fun (d2, e1) ->
-              D.transfer_phi p d2 |> Iter.map (fun (d3, e2) -> (d3, e2 @. e1)))
-            i)
-        i phi
-    in
-    match dir with `Forwards -> stmts (phis i) | `Backwards -> phis (stmts i)
+  let tf_stmts bs i =
+    List.fold_left
+      (fun om stmt ->
+        let modif =
+          D.modifies stmt |> Iter.map (fun v -> Label v) |> Iter.cons Lambda
+        in
+        let m = Iter.fold (fun m d -> DlMap.remove d m) om modif in
+        Iter.fold
+          (fun m d2 ->
+            let e1 = DlMap.get d2 om in
+            match e1 with
+            | Some e1 ->
+                D.transfer stmt d2
+                |> Iter.fold (fun m (d3, e2) -> join_add m d3 (e2 @. e1)) m
+            | None -> m)
+          m modif)
+      (Iter.fold (fun m (d, e) -> join_add m d e) DlMap.empty i)
+      bs
+    |> DlMap.to_iter
 
   type edge = Loc.t * IDEGraph.Edge.t * Loc.t
 
@@ -465,9 +503,11 @@ module IDE (D : IDEDomain) = struct
       IDEGraph edge e. *)
   let phase1_transfer entry2call entry2exit d1 d2 e1 e =
     match IDEGraph.G.E.label e with
-    | Stmts (phi, bs) ->
-        tf_stmts phi bs (Iter.singleton (d2, e1))
+    | Stmts bs ->
+        tf_stmts bs (Iter.singleton (d2, e1))
         |> Iter.map (fun (d3, e) -> ((d1, d3), e))
+    | Phi l ->
+        D.transfer_phi l d2 |> Iter.map (fun (d3, e) -> ((d1, d3), e @. e1))
     | InterCall callinfo ->
         D.transfer_call callinfo d2
         |> Iter.flat_map (fun (d3, e2) ->
@@ -525,15 +565,16 @@ module IDE (D : IDEDomain) = struct
     | Nop -> Iter.singleton ((d1, d2), e1)
 
   module P1K = struct
-    type t = Loc.t * DL.t * DL.t
+    type t = int * (Loc.t * DL.t * DL.t)
 
-    let compare = Ord.triple Loc.compare DL.compare DL.compare
+    let compare =
+      Ord.pair Ord.int (Ord.triple Loc.compare DL.compare DL.compare)
   end
 
   module W1 = Worklist.Make (P1K)
 
   (** Propagate summaries into a new location and update the worklist *)
-  let propagate worklist summaries summary loc updates =
+  let propagate worklist summaries summary loc get_order updates =
     Iter.filter_map
       (fun ((d1, d3), e) ->
         let l = dldlget d1 d3 summary in
@@ -542,9 +583,15 @@ module IDE (D : IDEDomain) = struct
       updates
     |> Iter.fold
          (fun acc ((d1, d3), e) ->
-           W1.add worklist (loc, d1, d3);
+           let base = dldlget Lambda d3 summary in
            let m = DlMap.get_or d1 acc ~default:DlMap.empty in
-           DlMap.add d1 (DlMap.add d3 e m) acc)
+           match d1 with
+           | Label v when D.equal base (D.join e base) ->
+               (* If Lambda already propagates something >= this, remove this from the summary. *)
+               DlMap.add d1 (DlMap.remove d3 m) acc
+           | _ ->
+               W1.add worklist (get_order loc, (loc, d1, d3));
+               DlMap.add d1 (DlMap.add d3 e m) acc)
          summary
     |> Hashtbl.replace summaries loc
 
@@ -553,12 +600,11 @@ module IDE (D : IDEDomain) = struct
       A summary edge function is an edge function from the start of a procedure
       to some location in the procedure that is equal to the join of all
       composite edge functions through paths to this location. *)
-  let phase1_solve start graph globals default =
+  let phase1_solve start graph globals order default =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase1" @@ fun _ ->
+    let get_order l = LM.get_or l order ~default:99999999 in
     let worklist = W1.create () in
     let summaries : (Loc.t, summary) Hashtbl.t = Hashtbl.create 100 in
-    Hashtbl.replace summaries start
-      (DlMap.singleton Lambda (DlMap.singleton Lambda D.identity));
     (* Stores edge functions from the first procedure's entry to the second
        procedure's entry, with a fixed dl value at the second procedure *)
     let entry_to_call_entry_cache : (ID.t * DL.t * ID.t, D.t DlMap.t) Hashtbl.t
@@ -571,9 +617,16 @@ module IDE (D : IDEDomain) = struct
       Hashtbl.create 100
     in
     let get_summary loc = Hashtbl.get summaries loc |> Option.get_or ~default in
-    W1.add worklist (start, Lambda, Lambda);
+    Iter.iter
+      (fun (v, a, b) ->
+        W1.add worklist (get_order v, (v, a, b));
+        let m1 = get_summary v in
+        let m2 = DlMap.get_or a m1 ~default:DlMap.empty in
+        let m1 = DlMap.add a (DlMap.add b D.identity m2) m1 in
+        Hashtbl.replace summaries v m1)
+      start;
     while W1.non_empty worklist do
-      let l, d1, d2 = W1.pop worklist in
+      let _, (l, d1, d2) = W1.pop worklist in
       let ost = get_summary l in
       let e1 = dldlget d1 d2 ost in
       IDEGraph.G.succ_e graph l |> Iter.of_list
@@ -581,7 +634,7 @@ module IDE (D : IDEDomain) = struct
           let _, _, t = e in
           phase1_transfer entry_to_call_entry_cache entry_to_exit_cache d1 d2 e1
             e
-          |> propagate worklist summaries (get_summary t) t)
+          |> propagate worklist summaries (get_summary t) t get_order)
     done;
     summaries
 
@@ -686,17 +739,75 @@ module IDE (D : IDEDomain) = struct
   let query r ~proc_id vert =
     Hashtbl.get r (Loc.IntraVertex { proc_id; v = vert })
 
+  let scc_order (prog : Program.t) graph =
+    let components, call_graph_scc =
+      Program.CallGraph.make_call_graph prog |> Program.CallGraph.Scc.scc
+    in
+    flip IDEGraph.G.iter_vertex graph
+    |> Iter.from_iter
+    |> Iter.map (fun vert ->
+        match vert with
+        | Loc.IntraVertex { proc_id }
+        | Loc.CallSite { proc_id }
+        | Loc.AfterCall { proc_id } ->
+            (vert, call_graph_scc (Program.CallGraph.Vert.ProcBegin proc_id))
+        | Loc.Entry -> (vert, components + 1)
+        | Loc.Exit -> (vert, components + 1))
+    |> LM.of_iter
+
+  let p1_start_vals (prog : Program.t) globals =
+    ID.Map.values prog.procs
+    |> Iter.flat_map (fun proc ->
+        let vert =
+          Loc.IntraVertex
+            {
+              proc_id = Procedure.id proc;
+              v =
+                (match D.direction with
+                | `Forwards -> Procedure.Vert.Entry
+                | `Backwards -> Procedure.Vert.Return);
+            }
+        in
+        Iter.cons
+          (vert, DL.Lambda, DL.Lambda)
+          (D.init_data globals proc
+          |> Iter.map (fun v -> (vert, Label v, Label v))))
+    |> Iter.cons
+         (match dir with
+         | `Forwards -> (Loc.Entry, Lambda, Lambda)
+         | `Backwards -> (Loc.Exit, Lambda, Lambda))
+
+  (** Generate just the summaries (phase 1) of the IDE analysis performed on the
+      given program *)
+  let solve_summaries (prog : Program.t) : Program.proc -> summary option =
+    Trace_core.with_span ~__FILE__ ~__LINE__ "ide-solve_summaries" @@ fun _ ->
+    let globals = Program.global_vars prog in
+    let graph = IDEGraph.create prog dir in
+    let start = p1_start_vals prog globals in
+    let order = scc_order prog graph in
+    let summary = phase1_solve start graph globals order DlMap.empty in
+    fun proc ->
+      let v =
+        match D.direction with
+        | `Backwards ->
+            Loc.IntraVertex
+              { proc_id = Procedure.id proc; v = Procedure.Vert.Entry }
+        | `Forwards ->
+            Loc.IntraVertex
+              { proc_id = Procedure.id proc; v = Procedure.Vert.Return }
+      in
+      Hashtbl.get summary v
+
   let solve (prog : Program.t) =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
     let globals = Program.global_vars prog in
     let graph = IDEGraph.create prog dir in
-    let start =
-      match dir with `Forwards -> Loc.Entry | `Backwards -> Loc.Exit
-    in
+    let start = p1_start_vals prog globals in
+    let order = scc_order prog graph in
     let start_proc =
       prog.entry_proc |> Option.get_exn_or "Missing entry procedure"
     in
-    let summary = phase1_solve start graph globals DlMap.empty in
+    let summary = phase1_solve start graph globals order DlMap.empty in
     ( query @@ summary,
       query @@ phase2_solve prog start_proc graph globals summary )
 
