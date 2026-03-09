@@ -268,12 +268,12 @@ Expr_Unary  . Expr2      ::= UnOp OpenParen Expr CloseParen ;
 Expr_LoadBe . Expr2 ::= "load_be" OpenParen IntVal "," Expr "," Expr CloseParen ;
 Expr_LoadLe . Expr2 ::= "load_le" OpenParen IntVal "," Expr "," Expr CloseParen ;
 
-Expr_ZeroExtend . Expr ::= "zero_extend" OpenParen IntVal "," Expr CloseParen ;
-Expr_SignExtend . Expr ::= "sign_extend" OpenParen IntVal "," Expr CloseParen ;
-Expr_Extract    . Expr ::= "extract" OpenParen IntVal "," IntVal "," Expr CloseParen ;
-Expr_Concat     . Expr ::= "bvconcat"  OpenParen [Expr]  CloseParen ;
-Expr_FSet       . Expr ::= "fset" OpenParen Str "," Expr "," Expr CloseParen ;
-Expr_FAccess    . Expr ::= "faccess" OpenParen Str "," Expr CloseParen ;
+Expr_ZeroExtend . Expr2 ::= "zero_extend" OpenParen IntVal "," Expr CloseParen ;
+Expr_SignExtend . Expr2 ::= "sign_extend" OpenParen IntVal "," Expr CloseParen ;
+Expr_Extract    . Expr2 ::= "extract" OpenParen IntVal "," IntVal "," Expr CloseParen ;
+Expr_Concat     . Expr2 ::= "bvconcat"  OpenParen [Expr]  CloseParen ;
+Expr_FSet       . Expr2 ::= "fset" OpenParen Str "," Expr "," Expr CloseParen ;
+Expr_FAccess    . Expr2 ::= "faccess" OpenParen Str "," Expr CloseParen ;
 
 CaseCase . Case ::= Expr "->" Expr  ;
 CaseDefault . Case ::=  "_" "->" Expr ;
