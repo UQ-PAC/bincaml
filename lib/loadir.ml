@@ -438,9 +438,9 @@ module BasilASTLoader = struct
         Types.mk_field (unsafe_unsigil (`Local id)) (trans_type ty)
   and transRECORDTYPE (fields : field list) =
     Types.Record
-      (ZMap.of_list
+      (StringMap.of_list
          ((List.map (function Field1 (_, offset, t, _) ->
-              (transIntVal offset, trans_type t)))
+              (transStr offset, trans_type t)))
             fields))
 
   and transPOINTERTYPE (l : typeT) (u : typeT) =
@@ -455,7 +455,7 @@ module BasilASTLoader = struct
     | TypeParen (_, typeT, _) -> trans_type typeT
     | TypeSort t -> Types.Sort (unsafe_unsigil (`Local t), [])
     | TypeRecordType (RecordType1 (_, fields, _)) -> transRECORDTYPE fields
-    | TypePointerType (PointerType1 (_, _, l, u, _)) -> transPOINTERTYPE l u
+    | TypePointerType (PointerType1 (_, l, u, _)) -> transPOINTERTYPE l u
 
   and transIntVal (x : intVal) : PrimInt.t =
     match x with
@@ -872,11 +872,11 @@ module BasilASTLoader = struct
         `Pointer (trans_bv_val v, { lower = trans_type l; upper = trans_type u })
     | Value_Record (_, fields, _) ->
         `Record
-          (ZMap.of_list
+          (StringMap.of_list
              (List.map
                 (function
                   | FieldVal1 (_, offset, value, typ, _) ->
-                      ( transIntVal offset,
+                      ( transStr offset,
                         ({ value = trans_bv_val value; typ = trans_type typ }
                           : Ops.Record.field) ))
                 fields))
@@ -990,10 +990,10 @@ module BasilASTLoader = struct
           (trans_expr expr)
     | Expr_FAccess (o, offset, record, c) ->
         BasilExpr.faccess ~attrib:(expr_range_attr o c)
-          ~offset:(transIntVal offset) (trans_expr record)
+          ~offset:(transStr offset) (trans_expr record)
     | Expr_FSet (o, offset, record, expr, c) ->
-        BasilExpr.fset ~attrib:(expr_range_attr o c)
-          ~offset:(transIntVal offset) (trans_expr record) (trans_expr expr)
+        BasilExpr.fset ~attrib:(expr_range_attr o c) ~offset:(transStr offset)
+          (trans_expr record) (trans_expr expr)
     | Expr_LoadLe (o, intval, a1, a2, c) ->
         BasilExpr.load ~attrib:(expr_range_attr o c)
           ~bits:(Z.to_int @@ transIntVal intval)

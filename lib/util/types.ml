@@ -1,5 +1,5 @@
 open Containers
-module ZMap = Map.Make (Z)
+module StringMap = Map.Make (String)
 
 (** This represents type right expressions (i.e. not declarations), we expand
     this in the future to allow declarations to be polymorphic.
@@ -34,12 +34,12 @@ type t =
   | Nothing
   | Map of t * t
   | Sort of string * variant list
-  | Record of t ZMap.t
+  | Record of t StringMap.t
   | Pointer of pointer
 
 and variant = { variant : string; fields : field list }
 and field = { field : string; typ : t } [@@deriving eq, ord]
-and field2 = { offset : Z.t; t : t }
+and field2 = { offset : Z.t; t : t; size : int }
 
 (*
   Lower type represents types the pointer could load
@@ -81,11 +81,11 @@ let mk_adt name (variants : (string * field list) list) =
   Sort
     (name, variants |> List.map (fun (variant, fields) -> { variant; fields }))
 
-let get_field offset1 record : t =
+let get_field field_name record : t =
   match record with
   | Record fields -> (
-      match ZMap.find_opt offset1 fields with
-      | None -> failwith @@ "No field at offset " ^ Z.to_string offset1
+      match StringMap.find_opt field_name fields with
+      | None -> failwith @@ "No field at offset " ^ field_name
       | Some t -> t)
   | _ -> failwith "Not record type"
 
@@ -108,7 +108,7 @@ let rec compare_partial (a : t) (b : t) =
       | o -> o)
   | Record fields, Record fields2 ->
       Some
-        (ZMap.compare
+        (StringMap.compare
            (fun a b ->
              match compare_partial a b with Some a -> a | None -> -1)
            fields fields2)
@@ -143,9 +143,8 @@ let rec to_string = function
       Printf.sprintf "ptr(%s, %s)" (to_string lower) (to_string upper)
   | Record record ->
       "{"
-      ^ (ZMap.bindings record
-        |> List.map (fun (k, v) ->
-            "(" ^ Z.to_string k ^ ": " ^ to_string v ^ ")")
+      ^ (StringMap.bindings record
+        |> List.map (fun (k, v) -> "(\"" ^ k ^ "\": " ^ to_string v ^ ")")
         |> String.concat ", ")
       ^ "}"
   | Map ((Map _ as a), (Map _ as b)) ->

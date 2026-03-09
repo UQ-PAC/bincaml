@@ -499,7 +499,7 @@ field_list : /* empty */ { []  }
   | field SYMB2 field_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-field : openParen intVal SYMB5 typeT closeParen { Field1 ($1, $2, $4, $5) }
+field : openParen str SYMB5 typeT closeParen { Field1 ($1, $2, $4, $5) }
   ;
 
 intType : iNTTYPE { IntType1 $1 }
@@ -560,7 +560,7 @@ fieldVal_list : /* empty */ { []  }
   | fieldVal SYMB2 fieldVal_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-fieldVal : openParen intVal SYMB5 bVVal SYMB2 typeT closeParen { FieldVal1 ($1, $2, $4, $6, $7) }
+fieldVal : openParen str SYMB5 bVVal SYMB2 typeT closeParen { FieldVal1 ($1, $2, $4, $6, $7) }
   ;
 
 endian : KW_le { Endian_Little  }
@@ -746,8 +746,12 @@ expr : expr1 {  $1 }
   | KW_forall attribSet lambdaDef { Expr_Forall ($2, $3) }
   | KW_exists attribSet lambdaDef { Expr_Exists ($2, $3) }
   | KW_fun attribSet lambdaDef { Expr_Lambda ($2, $3) }
-  | KW_fset openParen intVal SYMB2 expr SYMB2 expr closeParen { Expr_FSet ($2, $3, $5, $7, $8) }
-  | KW_faccess openParen intVal SYMB2 expr closeParen { Expr_FAccess ($2, $3, $5, $6) }
+  | KW_zero_extend openParen intVal SYMB2 expr closeParen { Expr_ZeroExtend ($2, $3, $5, $6) }
+  | KW_sign_extend openParen intVal SYMB2 expr closeParen { Expr_SignExtend ($2, $3, $5, $6) }
+  | KW_extract openParen intVal SYMB2 intVal SYMB2 expr closeParen { Expr_Extract ($2, $3, $5, $7, $8) }
+  | KW_bvconcat openParen expr_list closeParen { Expr_Concat ($2, $3, $4) }
+  | KW_fset openParen str SYMB2 expr SYMB2 expr closeParen { Expr_FSet ($2, $3, $5, $7, $8) }
+  | KW_faccess openParen str SYMB2 expr closeParen { Expr_FAccess ($2, $3, $5, $6) }
   ;
 
 expr1 : expr2 {  $1 }
@@ -763,10 +767,6 @@ expr2 : value { Expr_Literal $1 }
   | unOp openParen expr closeParen { Expr_Unary ($1, $2, $3, $4) }
   | KW_load_be openParen intVal SYMB2 expr SYMB2 expr closeParen { Expr_LoadBe ($2, $3, $5, $7, $8) }
   | KW_load_le openParen intVal SYMB2 expr SYMB2 expr closeParen { Expr_LoadLe ($2, $3, $5, $7, $8) }
-  | KW_zero_extend openParen intVal SYMB2 expr closeParen { Expr_ZeroExtend ($2, $3, $5, $6) }
-  | KW_sign_extend openParen intVal SYMB2 expr closeParen { Expr_SignExtend ($2, $3, $5, $6) }
-  | KW_extract openParen intVal SYMB2 intVal SYMB2 expr closeParen { Expr_Extract ($2, $3, $5, $7, $8) }
-  | KW_bvconcat openParen expr_list closeParen { Expr_Concat ($2, $3, $4) }
   | KW_match expr KW_with openParen case_list closeParen { Expr_Match ($2, $4, $5, $6) }
   | KW_cases openParen case_list closeParen { Expr_Cases ($2, $3, $4) }
   | openParen expr closeParen { Expr_Paren ($1, $2, $3) }

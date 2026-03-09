@@ -36,7 +36,7 @@ module IValue = struct
     | `Bool false -> Bitvec.create ~size:8 Z.zero
     | `Pointer (bv, _) -> bv
     | `Record fields ->
-        ZMap.fold
+        StringMap.fold
           (fun _ ({ value; _ } : Ops.Record.field) acc ->
             Bitvec.concat acc value)
           fields Bitvec.empty

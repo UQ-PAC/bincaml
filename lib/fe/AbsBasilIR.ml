@@ -50,7 +50,7 @@ and procDef =
  | ProcDef_Some of beginList * block list * endList
 
 and field =
-   Field1 of openParen * intVal * typeT * closeParen
+   Field1 of openParen * str * typeT * closeParen
 
 and intType =
    IntType1 of iNTTYPE
@@ -95,7 +95,7 @@ and bVVal =
    BVVal1 of intVal * bVType
 
 and fieldVal =
-   FieldVal1 of openParen * intVal * bVVal * typeT * closeParen
+   FieldVal1 of openParen * str * bVVal * typeT * closeParen
 
 and endian =
    Endian_Little
@@ -224,8 +224,8 @@ and expr =
  | Expr_SignExtend of openParen * intVal * expr * closeParen
  | Expr_Extract of openParen * intVal * intVal * expr * closeParen
  | Expr_Concat of openParen * expr list * closeParen
- | Expr_FSet of openParen * intVal * expr * expr * closeParen
- | Expr_FAccess of openParen * intVal * expr * closeParen
+ | Expr_FSet of openParen * str * expr * expr * closeParen
+ | Expr_FAccess of openParen * str * expr * closeParen
  | Expr_Match of expr * openParen * case list * closeParen
  | Expr_Cases of openParen * case list * closeParen
  | Expr_Paren of openParen * expr * closeParen

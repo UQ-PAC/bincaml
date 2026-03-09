@@ -2,26 +2,25 @@ open Common
 open Containers
 
 module Record = struct
-  type t = field ZMap.t [@@deriving eq, ord]
+  type t = field StringMap.t [@@deriving eq, ord]
   and field = { value : Bitvec.t; typ : Types.t }
 
   let get_field offset record : field =
-    match ZMap.find_opt offset record with
-    | None -> failwith @@ "No field at offset " ^ Z.to_string offset
+    match StringMap.find_opt offset record with
+    | None -> failwith @@ "No field at offset " ^ offset
     | Some f -> f
 
   let set_field offset record value =
     let { typ; _ } = get_field offset record in
-    ZMap.add offset { typ; value } record
+    StringMap.add offset { typ; value } record
 
   let show_field { value; typ } =
     Printf.sprintf "(%s, %s)" (Bitvec.to_string value) @@ Types.to_string typ
 
   let show (record : t) =
     "{"
-    ^ (ZMap.bindings record
-      |> List.map (fun (k, v) ->
-          "(" ^ Z.to_string k ^ ": " ^ show_field v ^ ")")
+    ^ (StringMap.bindings record
+      |> List.map (fun (k, v) -> "(\"" ^ k ^ "\": " ^ show_field v ^ ")")
       |> String.concat ", ")
     ^ "}"
 
@@ -226,15 +225,10 @@ module RecordOps = struct
   type const = [ `Record of Record.t ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type unary =
-    ([ `FACCESS of Z.t ]
-    [@printer
-      fun fmt m -> match m with `FACCESS offset -> Z.pp_print fmt offset])
+  type unary = [ `FACCESS of string ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type binary =
-    ([ `FSET of Z.t ]
-    [@printer fun fmt m -> match m with `FSET offset -> Z.pp_print fmt offset])
+  type binary = [ `FSET of string ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let eval_unary (u : unary) record =
@@ -328,7 +322,8 @@ module AllOps = struct
     | `Pointer (v, ty) -> return (Pointer ty)
     | `Record fields ->
         return
-        @@ Record (ZMap.map (fun ({ value; typ } : Record.field) -> typ) fields)
+        @@ Record
+             (StringMap.map (fun ({ value; typ } : Record.field) -> typ) fields)
 
   let ret_type_unary (o : [< unary ]) a =
     let open Types in
@@ -435,10 +430,9 @@ module AllOps = struct
     | `Exists -> "exists"
     | `SignExtend n -> Printf.sprintf "sign_extend_%d" n
     | `ZeroExtend n -> Printf.sprintf "zero_extend_%d" n
-    | `FSET offset -> Printf.sprintf "fset_%s" @@ Z.to_string offset
-    | `FACCESS offset -> Printf.sprintf "asdfaccess_%s" @@ Z.to_string offset
+    | `FSET offset -> Printf.sprintf "fset_%s" offset
+    | `FACCESS offset -> Printf.sprintf "asdfaccess_%s" offset
     | `PTRADD -> "ptradd"
-    | `PTRSUB -> "ptrsub"
     | `EQ -> "eq"
     | `INTADD -> "intadd"
     | `BVNAND -> "bvnand"

@@ -118,7 +118,7 @@ and transProcDef (x : procDef) : result = match x with
 
 
 and transField (x : field) : result = match x with
-    Field1 (openparen, intval, type', closeparen) -> failure x
+    Field1 (openparen, str, type', closeparen) -> failure x
 
 
 and transIntType (x : intType) : result = match x with
@@ -175,7 +175,7 @@ and transBVVal (x : bVVal) : result = match x with
 
 
 and transFieldVal (x : fieldVal) : result = match x with
-    FieldVal1 (openparen, intval, bvval, type', closeparen) -> failure x
+    FieldVal1 (openparen, str, bvval, type', closeparen) -> failure x
 
 
 and transEndian (x : endian) : result = match x with
@@ -329,8 +329,8 @@ and transExpr (x : expr) : result = match x with
   | Expr_SignExtend (openparen, intval, expr, closeparen) -> failure x
   | Expr_Extract (openparen, intval0, intval, expr, closeparen) -> failure x
   | Expr_Concat (openparen, exprs, closeparen) -> failure x
-  | Expr_FSet (openparen, intval, expr0, expr, closeparen) -> failure x
-  | Expr_FAccess (openparen, intval, expr, closeparen) -> failure x
+  | Expr_FSet (openparen, str, expr0, expr, closeparen) -> failure x
+  | Expr_FAccess (openparen, str, expr, closeparen) -> failure x
   | Expr_Match (expr, openparen, cases, closeparen) -> failure x
   | Expr_Cases (openparen, cases, closeparen) -> failure x
   | Expr_Paren (openparen, expr, closeparen) -> failure x
