@@ -3,15 +3,15 @@
     "infuse-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1768766368,
-        "narHash": "sha256-GW7S5dsFiQChSbGESrkFyNSzDLKGNH3H0EMeY+NLefY=",
-        "rev": "e837ece1b9de6ebcb7abd261f54a09bad3a2f820",
+        "lastModified": 1773019533,
+        "narHash": "sha256-A64LGUnvoMH/YNfC6/N8XWOSfJCxyy3gAL/l3Kc3o6I=",
+        "rev": "aeac34ccc42fd4c4a22fdf6c908affcfd4cf0ef5",
         "type": "tarball",
-        "url": "https://codeberg.org/api/v1/repos/amjoseph/infuse.nix/archive/e837ece1b9de6ebcb7abd261f54a09bad3a2f820.tar.gz"
+        "url": "https://codeberg.org/api/v1/repos/awarina/infuse.nix/archive/aeac34ccc42fd4c4a22fdf6c908affcfd4cf0ef5.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://codeberg.org/amjoseph/infuse.nix/archive/trunk.tar.gz"
+        "url": "https://codeberg.org/awarina/infuse.nix/archive/trunk.tar.gz"
       }
     },
     "nixpkgs": {

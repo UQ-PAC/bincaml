@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-    infuse-src.url = "https://codeberg.org/amjoseph/infuse.nix/archive/trunk.tar.gz";
+    infuse-src.url = "https://codeberg.org/awarina/infuse.nix/archive/trunk.tar.gz";
     infuse-src.flake = false;
   };
   outputs =
