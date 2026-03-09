@@ -4,7 +4,7 @@
 {
   flake-for-all-systems =
     { ... }@args:
-    { systems, outputs }:
+    { systems, outputs }@flake:
     let
       systemAttrs =
         ["packages" "legacyPackages" "devShells" "defaultPackage" "formatter"
@@ -35,6 +35,8 @@
       allOutputFields =
         lib.mergeAttrsList (builtins.attrValues systemOutputs);
     in
+      flake
+      //
       systemOutputs.${firstSystem}
       //
       lib.genAttrs (builtins.filter (k: allOutputFields ? ${k}) systemAttrs)
