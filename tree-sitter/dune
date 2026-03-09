@@ -13,6 +13,7 @@
 ; bnfc tree-sitter backend is only run if BINCAML_BNFC_TREESITTER
 ; is set to true, and it is false by default. this lets us use
 ; upstream bnfc for the main ocaml generation.
+
 (rule
  (alias runtest)
  (deps %{project_root}/lib/fe/BasilIR.cf)
