@@ -10,12 +10,13 @@
     , infuse-src
     }@args:
     let
-      lib = nixpkgs.lib;
+      inherit (nixpkgs) lib;
 
-      inherit (import ./nix/infuse.nix {
+      infuse-lib =import ./nix/infuse-lib.nix {
         lib = lib;
         infuse-src = infuse-src;
-      }) infuse infuse-with;
+      };
+      inherit (infuse-lib) infuse infuse-with;
 
     in infuse args {
       __forAllSystems.systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin"];
@@ -39,7 +40,7 @@
               # https://github.com/NixOS/nixpkgs/blob/aca4d95fce4914b3892661bcb80b8087293536c6/pkgs/development/compilers/ocaml/generic.nix#L30
               ocaml.__input.flambdaSupport.__assign = true;
               ocaml.__input.framePointerSupport.__assign = true;
-              ocaml.__output.patches.__append = [
+              ocaml.__attrs.patches.__append = [
                 (pkgs.fetchpatch {
                   url = "https://github.com/ocaml/ocaml/commit/c2eec4dd1de7d0da2d2f76e5e7f2b567901f4e2c.patch";
                   hash = "sha256-qDx8saOLhFMYaK4PLsSvHnDBYKvRSMmPtdVa/IqkQSI=";
