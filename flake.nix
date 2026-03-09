@@ -64,8 +64,9 @@
           };
 
           devShells = {
-            default = selfOcamlPackages.callPackage ./nix/shell.nix { };
+            default = self.devShells.fp;
             fp = fpOcamlPackages.callPackage ./nix/shell.nix { };
+            no-fp = selfOcamlPackages.callPackage ./nix/shell.nix { };
           };
         }
       ;

@@ -13,13 +13,16 @@ added to bincaml, this is the place they must be added.
 There are also useful dev shells for working on the project. These
 provide the build-dependencies for bincaml, as well as useful tools
 like the ocaml-lsp.
-- `nix develop .` for default shell. fast without frame pointer.
-- `nix develop .#fp` for frame-pointer + flambda enabled shell.
-  builds all ocaml dependencies from scratch.
+- `nix develop .` for default shell.
+  frame-pointer + flambda enabled for easier debugging, but will take
+  ~10 minutes on first build.
+- `nix develop .#no-fp` for shell without frame-pointer or flambda.
+  faster for a cold start as it can use the central nixpkgs cache.
 
-See `shell.nix` for the shell definition and included packages.
-Feel free to add
+Once inside the shell, you can use `dune build` and other dune commands
+to work on the project.
 
+See `shell.nix` for the shell definition and currently included packages.
 
 # updating a package
 
