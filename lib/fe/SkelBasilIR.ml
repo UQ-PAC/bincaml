@@ -428,7 +428,6 @@ and transBoolBinOp (x : boolBinOp) : result = match x with
 
 and transPointerBinOp (x : pointerBinOp) : result = match x with
     PointerBinOp_ptradd  -> failure x
-  | PointerBinOp_ptrsub  -> failure x
 
 
 and transRequireTok (x : requireTok) : result = match x with

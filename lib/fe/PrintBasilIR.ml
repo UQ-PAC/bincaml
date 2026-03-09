@@ -556,7 +556,6 @@ and prtBoolBinOp (i:int) (e : AbsBasilIR.boolBinOp) : doc = match e with
 
 and prtPointerBinOp (i:int) (e : AbsBasilIR.pointerBinOp) : doc = match e with
        AbsBasilIR.PointerBinOp_ptradd  -> prPrec i 0 (concatD [render "ptradd"])
-  |    AbsBasilIR.PointerBinOp_ptrsub  -> prPrec i 0 (concatD [render "ptrsub"])
 
 
 and prtRequireTok (i:int) (e : AbsBasilIR.requireTok) : doc = match e with

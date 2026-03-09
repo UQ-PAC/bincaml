@@ -49,10 +49,6 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
       let* a, typ = get_pointer a in
       let* b = get_bv b in
       pointer (BVOps.eval_binary_unif `BVADD a b, typ)
-  | BinaryExpr { op = `PTRSUB; arg1 = a; arg2 = b } ->
-      let* a, typ = get_pointer a in
-      let* b = get_bv b in
-      pointer (BVOps.eval_binary_unif `BVSUB a b, typ)
   | BinaryExpr { op = #BVOps.binary_unif as op; arg1 = a; arg2 = b } ->
       let* a = get_bv a in
       let* b = get_bv b in

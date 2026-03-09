@@ -74,10 +74,8 @@ module IsZeroValueAbstraction = struct
     | `BVSDIV, _, _ -> Top
     | `BVADD, Zero, Zero -> Zero
     | `PTRADD, Zero, Zero -> Zero
-    | `PTRSUB, Zero, Zero -> Zero
     | `BVADD, _, _ -> Top
     | `PTRADD, _, _ -> Top
-    | `PTRSUB, _, _ -> Top
     | `NEQ, Zero, Zero -> Zero
     | `NEQ, _, _ -> Top
     | `BVASHR, _, _ -> Top

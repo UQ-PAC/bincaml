@@ -294,7 +294,7 @@ rules BVLogicalBinOp ::= "bvule" |  "bvugt" |  "bvuge" | "bvult" | "bvslt" |  "b
 rules IntBinOp ::= "intadd" | "intmul" | "intsub" | "intdiv" | "intmod"  ;
 rules IntLogicalBinOp ::=  "intlt" | "intle" | "intgt" | "intge" ;
 rules BoolBinOp ::=  "booland" | "boolor" | "boolimplies" ;
-rules PointerBinOp ::= "ptradd" | "ptrsub" ;
+rules PointerBinOp ::= "ptradd" ;
 
 {- SPECIFICATION -}
 

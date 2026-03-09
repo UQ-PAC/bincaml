@@ -405,7 +405,6 @@ and showBoolBinOp (e : AbsBasilIR.boolBinOp) : showable = match e with
 
 and showPointerBinOp (e : AbsBasilIR.pointerBinOp) : showable = match e with
        AbsBasilIR.PointerBinOp_ptradd  -> s2s "PointerBinOp_ptradd"
-  |    AbsBasilIR.PointerBinOp_ptrsub  -> s2s "PointerBinOp_ptrsub"
 
 
 and showRequireTok (e : AbsBasilIR.requireTok) : showable = match e with

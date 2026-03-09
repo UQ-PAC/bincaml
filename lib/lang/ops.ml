@@ -255,12 +255,9 @@ module PointerOps = struct
   type const = [ `Pointer of Bitvec.t * Types.pointer ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type binary = [ `PTRADD | `PTRSUB ]
-  [@@deriving show { with_path = false }, eq, ord]
+  type binary = [ `PTRADD ] [@@deriving show { with_path = false }, eq, ord]
 
-  let eval_binary (u : binary) (bv, _) =
-    match u with `PTRADD -> Bitvec.add bv | `PTRSUB -> Bitvec.sub bv
-
+  let eval_binary (u : binary) (bv, _) = match u with `PTRADD -> Bitvec.add bv
   let show = function #binary as u -> show_binary u
 end
 
@@ -379,7 +376,7 @@ module AllOps = struct
     | `BVNAND | `BVXOR | `BVSUB | `BVSDIV | `BVSREM | `BVSMOD | `BVASHR ->
         return l
     | `FSET _ -> return r
-    | `PTRADD | `PTRSUB -> return l
+    | `PTRADD -> return l
     | `MapAccess ->
         let m, r = Types.uncurry l in
         return r

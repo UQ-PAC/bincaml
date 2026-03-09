@@ -90,7 +90,7 @@ let type_check stmt_id block_id expr =
     let binary_bool_types = binary_same_types Types.Boolean in
     let open Ops in
     match op with
-    | `PTRADD | `PTRSUB -> (
+    | `PTRADD -> (
         let err =
           match arg2 with
           | Bitvector _ -> []

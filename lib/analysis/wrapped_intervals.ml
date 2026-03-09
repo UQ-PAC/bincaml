@@ -719,7 +719,7 @@ module WrappedIntervalsValueAbstraction = struct
     | Types.Bitvector width, Types.Bitvector w2 when width = w2 -> (
         match op with
         | `BVADD | `PTRADD -> add ~width a b
-        | `BVSUB | `PTRSUB -> sub ~width a b
+        | `BVSUB -> sub ~width a b
         | `BVMUL -> mul ~width a b
         | `BVUDIV -> udiv ~width a b
         | `BVSDIV -> sdiv ~width a b

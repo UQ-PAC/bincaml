@@ -311,7 +311,6 @@ and boolBinOp =
 
 and pointerBinOp =
    PointerBinOp_ptradd
- | PointerBinOp_ptrsub
 
 and requireTok =
    RequireTok_require
