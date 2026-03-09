@@ -48,15 +48,22 @@
 
 (rule
  (target has-bnfc-tree-sitter)
- (enabled_if (not %{bin-available:bnfc}))
- (action (with-stdout-to %{target} (echo "false"))))
+ (enabled_if
+  (not %{bin-available:bnfc}))
+ (action
+  (with-stdout-to
+   %{target}
+   (echo "false"))))
 
 (rule
  (target has-bnfc-tree-sitter)
  (enabled_if %{bin-available:bnfc})
  (deps %{bin:bnfc})
  (action
-  (with-stdout-to %{target}
-   (bash "bnfc --help | { if grep -q -- --tree-sitter; then printf true; else printf false; fi }"))))
+  (with-stdout-to
+   %{target}
+   (bash
+    "bnfc --help | { if grep -q -- --tree-sitter; then printf true; else printf false; fi }"))))
+
 ; bash pipe structure is so that if `bnfc` exits with an error, we report that error and fail.
 ; "false" is only written if bnfc succeeds but tree-sitter was not found.

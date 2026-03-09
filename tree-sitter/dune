@@ -13,6 +13,7 @@
 ; bnfc tree-sitter backend is only run if tree-sitter is detected
 ; in the output of bnfc --help. this lets us use upstream bnfc
 ; for the main ocaml generation.
+
 (rule
  (alias runtest)
  (deps %{project_root}/lib/fe/BasilIR.cf)
@@ -32,8 +33,9 @@
 (rule
  (alias runtest)
  (deps (universe))
- (enabled_if (not %{read:../lib/fe/has-bnfc-tree-sitter}))
+ (enabled_if
+  (not %{read:../lib/fe/has-bnfc-tree-sitter}))
  (action
   (echo
-    "tree-sitter/dune: bnfc tree-sitter generation skipped,"
-    "because the installed bnfc doesn't support it.\n")))
+   "tree-sitter/dune: bnfc tree-sitter generation skipped,"
+   "because the installed bnfc doesn't support it.\n")))
