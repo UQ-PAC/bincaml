@@ -10,9 +10,9 @@
 ; check that grammar.js is up to date.
 ; requires `bnfc-treesitter` from pac-nix.
 
-; bnfc tree-sitter backend is only run if tree-sitter is detected
-; in the output of bnfc --help. this lets us use upstream bnfc
-; for the main ocaml generation.
+; bnfc tree-sitter backend is only run if the fixed tree-sitter fork is
+; detected in the output of bnfc --help. this lets us use upstream
+; bnfc for the main ocaml parser.
 
 (rule
  (alias runtest)

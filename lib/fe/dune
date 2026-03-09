@@ -64,7 +64,7 @@
    (pipe-stdout
     (run bnfc --help)
     (bash
-     "if grep -q -- --tree-sitter; then printf true; else printf false; fi")))))
+     "if grep -q -- --tree-sitter-word; then printf true; else printf false; fi")))))
 
 ; if `bnfc` exits with an error, we report that error and fail.
 ; "false" is only written if bnfc succeeds but tree-sitter was not found.
