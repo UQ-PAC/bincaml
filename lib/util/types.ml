@@ -39,7 +39,6 @@ type t =
 
 and variant = { variant : string; fields : field list }
 and field = { field : string; typ : t } [@@deriving eq, ord]
-and field2 = { offset : Z.t; t : t; size : int }
 
 (*
   Lower type represents types the pointer could load
