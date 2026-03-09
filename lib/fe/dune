@@ -45,3 +45,9 @@
  (flags
   (:standard -open BasilIR))
  (libraries bincaml.basilir))
+
+(rule
+ (deps (universe))
+ (action
+  (with-stdout-to tree-sitter-available
+   (bash "if bnfc --help | grep -q -- --tree-sitter; then printf true; else printf false; fi"))))
