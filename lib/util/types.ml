@@ -57,15 +57,18 @@ let bit_width = function Boolean -> Some 1 | Bitvector n -> Some n | _ -> None
 (** Get the type for an opaque sort *)
 let mk_sort name = Sort (name, [])
 
+(* ADT not Record type *)
 let mk_field field typ = { field; typ }
 let mk_variant name fields = { variant = name; fields }
 
 let mk_enum name (cases : string list) =
   Sort (name, List.map (fun variant -> { variant; fields = [] }) cases)
 
+(* ADT not Record type *)
 let mk_record name (fields : field list) =
   Sort (name, [ mk_variant ("Record" ^ name) fields ])
 
+(* ADT not Record type *)
 let record_field name t =
   match t with
   | Sort (sort_name, [ { variant; fields } ])
