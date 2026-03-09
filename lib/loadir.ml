@@ -232,12 +232,12 @@ module BasilASTLoader = struct
     |> map_prog (fun prog ->
         let spec = prog.spec in
         match p with
-        | ProgSpec_Rely b ->
+        | ProgSpec_Rely (_, b) ->
             {
               prog with
               spec = { spec with rely = trans_expr p_st b :: spec.rely };
             }
-        | ProgSpec_Guarantee b ->
+        | ProgSpec_Guarantee (_, b) ->
             {
               prog with
               spec =
@@ -413,7 +413,7 @@ module BasilASTLoader = struct
     | TypeBoolType booltype -> Boolean
     | TypeMapType maptype -> transMapType maptype
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
-    | Type1 (_, typeT, _) -> trans_type typeT
+    | TypeParen (_, typeT, _) -> trans_type typeT
 
   and transIntVal (x : intVal) : PrimInt.t =
     match x with
@@ -450,9 +450,8 @@ module BasilASTLoader = struct
 
   and trans_attr p_st ~binds (attr : attr) : [> Expr.BasilExpr.t Attrib.t ] =
     match attr with
-    | Attr_Map (_, keyvals, _, _) -> `Assoc (trans_attr_kv ~binds p_st keyvals)
+    | Attr_Map (_, keyvals, _) -> `Assoc (trans_attr_kv ~binds p_st keyvals)
     | Attr_List (_, ls, _) -> `List (List.map (trans_attr ~binds p_st) ls)
-    | Attr_Lit v -> ( match trans_value v with #Ops.AllOps.const as v -> v)
     | Attr_Expr expr -> `Expr (trans_expr ~binds p_st expr)
     | Attr_Str s -> `String (trans_str s)
 
@@ -460,7 +459,7 @@ module BasilASTLoader = struct
       Expr.BasilExpr.t Attrib.attrib_map =
     match atrs with
     | AttribSet_Empty -> StringMap.empty
-    | AttribSet_Some (_, attrKeyValue, _, _) ->
+    | AttribSet_Some (_, attrKeyValue, _) ->
         trans_attr_kv ~binds p_st attrKeyValue
 
   and trans_stmt (p_st : load_st) (x : BasilIR.AbsBasilIR.stmtWithAttrib) :
@@ -499,6 +498,19 @@ module BasilASTLoader = struct
                  value = trans_expr p_st value;
                  addr = Addr { addr = trans_expr p_st addr; size; endian };
                }) )
+    | Stmt_Store (endian, bident, addr, value, intval) ->
+        let endian = trans_endian endian in
+        let size = transIntVal intval |> Z.to_int in
+        let mem = lookup_global_decl bident p_st in
+        ( p_st,
+          `Stmt
+            (Instr_Store
+               {
+                 lhs = mem;
+                 rhs = mem;
+                 value = trans_expr p_st value;
+                 addr = Addr { addr = trans_expr p_st addr; size; endian };
+               }) )
     | Stmt_SingleAssign (Assignment1 (lvar, expr)) ->
         let expr = trans_expr p_st expr in
         let p_st, lv = trans_lvar p_st lvar in
@@ -529,27 +541,6 @@ module BasilASTLoader = struct
         in
         let p_st, assigns = List.fold_left f (p_st, []) assigns in
         (p_st, `Stmt (Instr_Assign (List.rev assigns)))
-    | Stmt_Load (lvar, endian, bident, expr, intval) ->
-        let endian = trans_endian endian in
-        let rhs = lookup_global_decl bident p_st in
-        let addr = trans_expr p_st expr in
-        let p_st, lhs = trans_lvar p_st lvar in
-        let size = transIntVal intval |> Z.to_int in
-        ( p_st,
-          `Stmt (Instr_Load { lhs; rhs; addr = Addr { addr; endian; size } }) )
-    | Stmt_Store (endian, bident, addr, value, intval) ->
-        let endian = trans_endian endian in
-        let size = transIntVal intval |> Z.to_int in
-        let mem = lookup_global_decl bident p_st in
-        ( p_st,
-          `Stmt
-            (Instr_Store
-               {
-                 lhs = mem;
-                 rhs = mem;
-                 value = trans_expr p_st value;
-                 addr = Addr { addr = trans_expr p_st addr; size; endian };
-               }) )
     | Stmt_DirectCall (calllvars, bident, o, exprs, c) ->
         let n = unsafe_unsigil (`Proc bident) in
         let procid =
@@ -625,7 +616,11 @@ module BasilASTLoader = struct
 
   and unpac_lambdaparen ?(bound = StringMap.empty) p_st lvs =
     unpack_local_lvars ~bound p_st
-    @@ List.map (function LParenLocalVar v -> v | LParen1 (o, v, c) -> v) lvs
+    @@ List.map
+         (function
+           | LocalVarParenLocalVar v -> v
+           | LocalVarParen1 (_, i, t, _) -> LocalTyped (i, t))
+         lvs
 
   and trans_jump p_st (x : BasilIR.AbsBasilIR.jumpWithAttrib) =
     let jump = match x with JumpWithAttrib1 (jump, _) -> jump in
@@ -725,21 +720,21 @@ module BasilASTLoader = struct
     | Block_NoPhi
         ( BlockIdent (text_range, name),
           addrattr,
-          beginlist,
+          BeginList _,
           statements,
           jump,
-          endlist ) ->
+          EndList _ ) ->
         tx name [] statements jump
     | Block_Phi
         ( BlockIdent (text_range, name),
           addrattr,
-          beginlist,
-          _,
+          OpenParen _,
           phi,
-          _,
+          CloseParen _,
+          BeginList _,
           statements,
           jump,
-          endlist ) ->
+          EndList _ ) ->
         tx name phi statements jump
 
   and param_to_lvar (pp : params) : Var.t =
@@ -749,12 +744,6 @@ module BasilASTLoader = struct
   and param_to_formal (pp : params) : string * Var.t =
     match pp with
     | Params1 (LocalIdent (pos, id), t) -> (id, Var.create id (trans_type t))
-
-  and fun_param_to_formal pp : string * Var.t =
-    match pp with
-    | FunParams1 (LocalIdent (pos, id), t) -> (id, Var.create id (trans_type t))
-    | FunParams2 (_, LocalIdent (pos, id), t, _) ->
-        (id, Var.create id (trans_type t))
 
   and trans_funspec prog bound_post
       (spec : (Var.t, BasilExpr.t) Procedure.proc_spec) (s : funSpec) :
@@ -978,23 +967,15 @@ module BasilASTLoader = struct
         in
         let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
         BasilExpr.exists ~attrib ~bound (trans_expr ~nbinds:bound e)
-    | Expr_FunctionOp (gi, o, args, c) ->
-        BasilExpr.apply_fun ~attrib:(expr_range_attr o c)
-          ~func:(BasilExpr.rvar @@ lookup_global_decl gi p_st)
-          (List.map trans_expr args)
-    | Expr_Apply (func, arg) ->
+    | Expr_FunctionOp (func, o, args, c) ->
         let func = trans_expr func in
-        let arg = trans_expr arg in
-        let attrib =
-          join_ranges (BasilExpr.attrib func) (BasilExpr.attrib arg)
-        in
-        BasilExpr.apply_fun ~attrib ~func [ arg ]
+        BasilExpr.apply_fun ~func ~attrib:(expr_range_attr o c)
+          (List.map trans_expr args)
 
   and transBinOp (x : BasilIR.AbsBasilIR.binOp) =
     match x with
     | BinOpBVBinOp bvbinop -> transBVBinOp bvbinop
     | BinOpBVLogicalBinOp bvlogicalbinop -> transBVLogicalBinOp bvlogicalbinop
-    | BinOpBoolBinOp boolbinop -> transBoolBinOp boolbinop
     | BinOpIntLogicalBinOp intlogicalbinop ->
         transIntLogicalBinOp intlogicalbinop
     | BinOpIntBinOp intbinop -> transIntBinOp intbinop
@@ -1409,14 +1390,14 @@ proc @main_4196260 () -> ()
     var $ZF:bv1;
     prog entry @main_4196260;
     proc @main_4196260()  -> () {  }
-      modifies $NF:bv1, $ZF:bv1;
-      captures $NF:bv1, $ZF:bv1;
+      modifies $NF:bv1, $ZF:bv1
+      captures $NF:bv1, $ZF:bv1
 
     [
        block %main_entry [
-          $NF:bv1 := 0x1:bv1;
-          $ZF:bv1 := $NF:bv1;
-          goto (%main_basil_return_1);
+         $NF:bv1 := 0x1:bv1;
+         $ZF:bv1 := $NF:bv1;
+         goto (%main_basil_return_1);
        ];
        block %main_basil_return_1 [ nop; return; ]
     ];
@@ -1475,4 +1456,18 @@ proc @c() -> ()
     written: $R0:bv64,$mem:(bv64->bv8)
     @c:
     read: $R0:bv64,$mem:(bv64->bv8)
-    written: $mem:(bv64->bv8) |}]
+    written: $mem:(bv64->bv8)
+    |}]
+
+let%test_unit "parses parenthesised lambda param" =
+  let s =
+    {|
+    let $memory_load32_le : (bv64 -> bv8) -> bv64 -> bv32 = fun (#memory: bv64 -> bv8), (#index: bv64) ::
+      (bvconcat(load_le(8, #memory, bvadd(#index, 3:bv64)),
+        bvconcat((load_le(8, #memory, bvadd(#index, 2:bv64))),
+        bvconcat((load_le(8, #memory, bvadd(#index, 1:bv64))),
+        load_le(8, #memory, #index)))));
+    |}
+  in
+  let _ = ast_of_string ~__LINE__ ~__FILE__ ~__FUNCTION__ s in
+  ()

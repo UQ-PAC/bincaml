@@ -33,4 +33,15 @@
   ParBasilIR.mly)
  (mode promote)
  (action
-  (run bnfc --ocaml-menhir -o . BasilIR.cf)))
+  (progn
+   (run bnfc --ocaml-menhir -o . BasilIR.cf))))
+
+(executable
+ (name TestBasilIR)
+ (public_name TestBasilIR)
+ (package bincaml)
+ (modes exe byte)
+ (modules TestBasilIR)
+ (flags
+  (:standard -open BasilIR))
+ (libraries bincaml.basilir))

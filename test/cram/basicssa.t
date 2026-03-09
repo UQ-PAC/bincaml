@@ -19,110 +19,110 @@ Run on basic irreducible loop example
   proc @main_1876()  -> () { .address = 1876; .name = "main";
       .returnBlock = "main_basil_return_1" }
     modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
-      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
     captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
-      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
   
   [
      block %main_entry [
-        var #4:bv64 := bvadd($R31:bv64, 0xffffffffffffffe0:bv64);
-        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) #4:bv64 $R29:bv64 64;
-        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(#4:bv64, 0x8:bv64) $R30:bv64 64;
-        $R31:bv64 := #4:bv64;
-        $R29:bv64 := $R31:bv64;
-        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd($R31:bv64, 0x1c:bv64) extract(32,0, $R0:bv64) 32;
-        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd($R31:bv64, 0x10:bv64) $R1:bv64 64;
-        $R0:bv64 := 0x20000:bv64;
-        $R0:bv64 := bvadd($R0:bv64, 0x3c:bv64);
-        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) $R0:bv64 0x0:bv32 32;
-        $R0:bv64 := 0x20000:bv64;
-        $R0:bv64 := bvadd($R0:bv64, 0x40:bv64);
-        var load18:bv32 := load le $mem:(bv64->bv8) $R0:bv64 32;
-        $R0:bv64 := zero_extend(32, load18:bv32);
-        $R0:bv64 := zero_extend(32, bvconcat(0x0:bv31, extract(1,0, $R0:bv64)));
-        var #5:bv32 := bvadd(extract(32,0, $R0:bv64), 0xffffffff:bv32);
-        $VF:bv1 := bvnot(booltobv1(eq(sign_extend(1, bvadd(#5:bv32, 0x1:bv32)),
-           bvadd(sign_extend(1, extract(32,0, $R0:bv64)), 0x0:bv33))));
-        $CF:bv1 := bvnot(booltobv1(eq(zero_extend(1, bvadd(#5:bv32, 0x1:bv32)),
-           bvadd(zero_extend(1, extract(32,0, $R0:bv64)), 0x100000000:bv33))));
-        $ZF:bv1 := booltobv1(eq(bvadd(#5:bv32, 0x1:bv32), 0x0:bv32));
-        $NF:bv1 := extract(32,31, bvadd(#5:bv32, 0x1:bv32));
-        goto (%main_27,%main_23);
+       var #4:bv64 := bvadd($R31:bv64, 0xffffffffffffffe0:bv64);
+       $stack:(bv64->bv8) := store le $stack:(bv64->bv8) #4:bv64 $R29:bv64 64;
+       $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(#4:bv64, 0x8:bv64) $R30:bv64 64;
+       $R31:bv64 := #4:bv64;
+       $R29:bv64 := $R31:bv64;
+       $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd($R31:bv64, 0x1c:bv64) extract(32,0, $R0:bv64) 32;
+       $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd($R31:bv64, 0x10:bv64) $R1:bv64 64;
+       $R0:bv64 := 0x20000:bv64;
+       $R0:bv64 := bvadd($R0:bv64, 0x3c:bv64);
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) $R0:bv64 0x0:bv32 32;
+       $R0:bv64 := 0x20000:bv64;
+       $R0:bv64 := bvadd($R0:bv64, 0x40:bv64);
+       var load18:bv32 := load le $mem:(bv64->bv8) $R0:bv64 32;
+       $R0:bv64 := zero_extend(32, load18:bv32);
+       $R0:bv64 := zero_extend(32, bvconcat(0x0:bv31, extract(1,0, $R0:bv64)));
+       var #5:bv32 := bvadd(extract(32,0, $R0:bv64), 0xffffffff:bv32);
+       $VF:bv1 := bvnot(booltobv1(eq(sign_extend(1, bvadd(#5:bv32, 0x1:bv32)),
+          bvadd(sign_extend(1, extract(32,0, $R0:bv64)), 0x0:bv33))));
+       $CF:bv1 := bvnot(booltobv1(eq(zero_extend(1, bvadd(#5:bv32, 0x1:bv32)),
+          bvadd(zero_extend(1, extract(32,0, $R0:bv64)), 0x100000000:bv33))));
+       $ZF:bv1 := booltobv1(eq(bvadd(#5:bv32, 0x1:bv32), 0x0:bv32));
+       $NF:bv1 := extract(32,31, bvadd(#5:bv32, 0x1:bv32));
+       goto (%main_27,%main_23);
      ];
      block %main_23 [
-        guard neq(booltobv1(eq($ZF:bv1, 0x1:bv1)), 0x0:bv1);
-        goto (%main_21);
+       guard neq(booltobv1(eq($ZF:bv1, 0x1:bv1)), 0x0:bv1);
+       goto (%main_21);
      ];
      block %main_21 [ goto (%main_19); ];
      block %main_27 [
-        guard eq(booltobv1(eq($ZF:bv1, 0x1:bv1)), 0x0:bv1);
-        goto (%main_25);
+       guard eq(booltobv1(eq($ZF:bv1, 0x1:bv1)), 0x0:bv1);
+       goto (%main_25);
      ];
      block %main_25 [ goto (%main_5); ];
      block %main_5 [
-        $R0:bv64 := 0x0:bv64;
-        $R0:bv64 := bvadd($R0:bv64, 0x820:bv64);
-        $R30:bv64 := 0x7a0:bv64;
-        
-        call @puts_1584();
-        goto (%main_3);
+       $R0:bv64 := 0x0:bv64;
+       $R0:bv64 := bvadd($R0:bv64, 0x820:bv64);
+       $R30:bv64 := 0x7a0:bv64;
+       
+       call @puts_1584();
+       goto (%main_3);
      ];
      block %main_3 [
-        $R0:bv64 := 0x20000:bv64;
-        $R0:bv64 := bvadd($R0:bv64, 0x3c:bv64);
-        var load19:bv32 := load le $mem:(bv64->bv8) $R0:bv64 32;
-        $R0:bv64 := zero_extend(32, load19:bv32);
-        $R1:bv64 := zero_extend(32, bvadd(extract(32,0, $R0:bv64), 0x1:bv32));
-        $R0:bv64 := 0x20000:bv64;
-        $R0:bv64 := bvadd($R0:bv64, 0x3c:bv64);
-        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) $R0:bv64 extract(32,0, $R1:bv64) 32;
-        goto (%main_19);
+       $R0:bv64 := 0x20000:bv64;
+       $R0:bv64 := bvadd($R0:bv64, 0x3c:bv64);
+       var load19:bv32 := load le $mem:(bv64->bv8) $R0:bv64 32;
+       $R0:bv64 := zero_extend(32, load19:bv32);
+       $R1:bv64 := zero_extend(32, bvadd(extract(32,0, $R0:bv64), 0x1:bv32));
+       $R0:bv64 := 0x20000:bv64;
+       $R0:bv64 := bvadd($R0:bv64, 0x3c:bv64);
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) $R0:bv64 extract(32,0, $R1:bv64) 32;
+       goto (%main_19);
      ];
      block %main_19 [
-        $R0:bv64 := 0x0:bv64;
-        $R0:bv64 := bvadd($R0:bv64, 0x820:bv64);
-        $R30:bv64 := 0x7d0:bv64;
-        
-        call @puts_1584();
-        goto (%main_17);
+       $R0:bv64 := 0x0:bv64;
+       $R0:bv64 := bvadd($R0:bv64, 0x820:bv64);
+       $R30:bv64 := 0x7d0:bv64;
+       
+       call @puts_1584();
+       goto (%main_17);
      ];
      block %main_17 [
-        $R0:bv64 := 0x20000:bv64;
-        $R0:bv64 := bvadd($R0:bv64, 0x3c:bv64);
-        var load20:bv32 := load le $mem:(bv64->bv8) $R0:bv64 32;
-        $R0:bv64 := zero_extend(32, load20:bv32);
-        var #6:bv32 := bvadd(extract(32,0, $R0:bv64), 0xfffffffa:bv32);
-        $VF:bv1 := bvnot(booltobv1(eq(sign_extend(1, bvadd(#6:bv32, 0x1:bv32)),
-           bvadd(sign_extend(1, extract(32,0, $R0:bv64)), 0x1fffffffb:bv33))));
-        $CF:bv1 := bvnot(booltobv1(eq(zero_extend(1, bvadd(#6:bv32, 0x1:bv32)),
-           bvadd(zero_extend(1, extract(32,0, $R0:bv64)), 0xfffffffb:bv33))));
-        $ZF:bv1 := booltobv1(eq(bvadd(#6:bv32, 0x1:bv32), 0x0:bv32));
-        $NF:bv1 := extract(32,31, bvadd(#6:bv32, 0x1:bv32));
-        goto (%main_15,%main_9);
+       $R0:bv64 := 0x20000:bv64;
+       $R0:bv64 := bvadd($R0:bv64, 0x3c:bv64);
+       var load20:bv32 := load le $mem:(bv64->bv8) $R0:bv64 32;
+       $R0:bv64 := zero_extend(32, load20:bv32);
+       var #6:bv32 := bvadd(extract(32,0, $R0:bv64), 0xfffffffa:bv32);
+       $VF:bv1 := bvnot(booltobv1(eq(sign_extend(1, bvadd(#6:bv32, 0x1:bv32)),
+          bvadd(sign_extend(1, extract(32,0, $R0:bv64)), 0x1fffffffb:bv33))));
+       $CF:bv1 := bvnot(booltobv1(eq(zero_extend(1, bvadd(#6:bv32, 0x1:bv32)),
+          bvadd(zero_extend(1, extract(32,0, $R0:bv64)), 0xfffffffb:bv33))));
+       $ZF:bv1 := booltobv1(eq(bvadd(#6:bv32, 0x1:bv32), 0x0:bv32));
+       $NF:bv1 := extract(32,31, bvadd(#6:bv32, 0x1:bv32));
+       goto (%main_15,%main_9);
      ];
      block %main_9 [
-        guard neq(bvnot(booltobv1(eq($ZF:bv1, 0x1:bv1))), 0x0:bv1);
-        goto (%main_7);
+       guard neq(bvnot(booltobv1(eq($ZF:bv1, 0x1:bv1))), 0x0:bv1);
+       goto (%main_7);
      ];
      block %main_7 [ goto (%main_5); ];
      block %main_15 [
-        guard eq(bvnot(booltobv1(eq($ZF:bv1, 0x1:bv1))), 0x0:bv1);
-        $R0:bv64 := 0x0:bv64;
-        $R0:bv64 := bvadd($R0:bv64, 0x828:bv64);
-        $R30:bv64 := 0x7f4:bv64;
-        
-        call @puts_1584();
-        goto (%main_13);
+       guard eq(bvnot(booltobv1(eq($ZF:bv1, 0x1:bv1))), 0x0:bv1);
+       $R0:bv64 := 0x0:bv64;
+       $R0:bv64 := bvadd($R0:bv64, 0x828:bv64);
+       $R30:bv64 := 0x7f4:bv64;
+       
+       call @puts_1584();
+       goto (%main_13);
      ];
      block %main_13 [ goto (%main_11); ];
      block %main_11 [
-        $R0:bv64 := 0x0:bv64;
-        var load21:bv64 := load le $stack:(bv64->bv8) $R31:bv64 64;
-        $R29:bv64 := load21:bv64;
-        var load22:bv64 := load le $stack:(bv64->bv8) bvadd($R31:bv64, 0x8:bv64) 64;
-        $R30:bv64 := load22:bv64;
-        $R31:bv64 := bvadd($R31:bv64, 0x20:bv64);
-        goto (%main_basil_return_1);
+       $R0:bv64 := 0x0:bv64;
+       var load21:bv64 := load le $stack:(bv64->bv8) $R31:bv64 64;
+       $R29:bv64 := load21:bv64;
+       var load22:bv64 := load le $stack:(bv64->bv8) bvadd($R31:bv64, 0x8:bv64) 64;
+       $R30:bv64 := load22:bv64;
+       $R31:bv64 := bvadd($R31:bv64, 0x20:bv64);
+       goto (%main_basil_return_1);
      ];
      block %main_basil_return_1 [ nop; return; ]
   ];
@@ -149,162 +149,158 @@ Run on basic irreducible loop example
      R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1) { .address = 1876;
       .name = "main"; .returnBlock = "main_basil_return_1" }
     modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
-      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
     captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
-      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
   
   [
      block %inputs [
-        (var CF:bv1 := CF_in:bv1, var NF:bv1 := NF_in:bv1, var R0:bv64 := R0_in:bv64,
-         var R1:bv64 := R1_in:bv64, var R29:bv64 := R29_in:bv64,
-         var R30:bv64 := R30_in:bv64, var R31:bv64 := R31_in:bv64,
-         var VF:bv1 := VF_in:bv1, var ZF:bv1 := ZF_in:bv1);
-        goto (%main_entry);
+       (var CF:bv1 := CF_in:bv1, var NF:bv1 := NF_in:bv1, var R0:bv64 := R0_in:bv64,
+        var R1:bv64 := R1_in:bv64, var R29:bv64 := R29_in:bv64,
+        var R30:bv64 := R30_in:bv64, var R31:bv64 := R31_in:bv64,
+        var VF:bv1 := VF_in:bv1, var ZF:bv1 := ZF_in:bv1);
+       goto (%main_entry);
      ];
      block %main_entry [
-        var #4_1:bv64 := bvadd(R31:bv64, 0xffffffffffffffe0:bv64);
-        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) #4_1:bv64 R29:bv64 64;
-        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(#4_1:bv64, 0x8:bv64) R30:bv64 64;
-        var R31_1:bv64 := #4_1:bv64;
-        var R29_1:bv64 := R31_1:bv64;
-        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_1:bv64,
-         0x1c:bv64) extract(32,0, R0:bv64) 32;
-        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_1:bv64,
-         0x10:bv64) R1:bv64 64;
-        var R0_1:bv64 := 0x20000:bv64;
-        var R0_2:bv64 := bvadd(R0_1:bv64, 0x3c:bv64);
-        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) R0_2:bv64 0x0:bv32 32;
-        var R0_3:bv64 := 0x20000:bv64;
-        var R0_4:bv64 := bvadd(R0_3:bv64, 0x40:bv64);
-        var load18_1:bv32 := load le $mem:(bv64->bv8) R0_4:bv64 32;
-        var R0_5:bv64 := zero_extend(32, load18_1:bv32);
-        var R0_6:bv64 := zero_extend(32,
-        bvconcat(0x0:bv31, extract(1,0, R0_5:bv64)));
-        var #5_1:bv32 := bvadd(extract(32,0, R0_6:bv64), 0xffffffff:bv32);
-        var VF_1:bv1 := bvnot(booltobv1(eq(sign_extend(1,
-           bvadd(#5_1:bv32, 0x1:bv32)), sign_extend(1, extract(32,0, R0_6:bv64)))));
-        var CF_1:bv1 := bvnot(booltobv1(eq(zero_extend(1,
-           bvadd(#5_1:bv32, 0x1:bv32)),
-           bvadd(zero_extend(1, extract(32,0, R0_6:bv64)), 0x100000000:bv33))));
-        var ZF_1:bv1 := booltobv1(eq(bvadd(#5_1:bv32, 0x1:bv32), 0x0:bv32));
-        var NF_1:bv1 := extract(32,31, bvadd(#5_1:bv32, 0x1:bv32));
-        goto (%main_27,%main_23);
+       var #4_1:bv64 := bvadd(R31:bv64, 0xffffffffffffffe0:bv64);
+       $stack:(bv64->bv8) := store le $stack:(bv64->bv8) #4_1:bv64 R29:bv64 64;
+       $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(#4_1:bv64, 0x8:bv64) R30:bv64 64;
+       var R31_1:bv64 := #4_1:bv64;
+       var R29_1:bv64 := R31_1:bv64;
+       $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_1:bv64, 0x1c:bv64) extract(32,0, R0:bv64) 32;
+       $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_1:bv64, 0x10:bv64) R1:bv64 64;
+       var R0_1:bv64 := 0x20000:bv64;
+       var R0_2:bv64 := bvadd(R0_1:bv64, 0x3c:bv64);
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) R0_2:bv64 0x0:bv32 32;
+       var R0_3:bv64 := 0x20000:bv64;
+       var R0_4:bv64 := bvadd(R0_3:bv64, 0x40:bv64);
+       var load18_1:bv32 := load le $mem:(bv64->bv8) R0_4:bv64 32;
+       var R0_5:bv64 := zero_extend(32, load18_1:bv32);
+       var R0_6:bv64 := zero_extend(32, bvconcat(0x0:bv31, extract(1,0, R0_5:bv64)));
+       var #5_1:bv32 := bvadd(extract(32,0, R0_6:bv64), 0xffffffff:bv32);
+       var VF_1:bv1 := bvnot(booltobv1(eq(sign_extend(1, bvadd(#5_1:bv32, 0x1:bv32)),
+          sign_extend(1, extract(32,0, R0_6:bv64)))));
+       var CF_1:bv1 := bvnot(booltobv1(eq(zero_extend(1, bvadd(#5_1:bv32, 0x1:bv32)),
+          bvadd(zero_extend(1, extract(32,0, R0_6:bv64)), 0x100000000:bv33))));
+       var ZF_1:bv1 := booltobv1(eq(bvadd(#5_1:bv32, 0x1:bv32), 0x0:bv32));
+       var NF_1:bv1 := extract(32,31, bvadd(#5_1:bv32, 0x1:bv32));
+       goto (%main_27,%main_23);
      ];
      block %main_23 [
-        var ZF_3:bv1 := ZF_1:bv1;
-        guard neq(booltobv1(eq(ZF_3:bv1, 0x1:bv1)), 0x0:bv1);
-        goto (%main_21);
+       var ZF_3:bv1 := ZF_1:bv1;
+       guard neq(booltobv1(eq(ZF_3:bv1, 0x1:bv1)), 0x0:bv1);
+       goto (%main_21);
      ];
      block %main_21 [ goto (%main_19); ];
      block %main_27 [
-        var ZF_2:bv1 := ZF_1:bv1;
-        guard eq(booltobv1(eq(ZF_2:bv1, 0x1:bv1)), 0x0:bv1);
-        goto (%main_25);
+       var ZF_2:bv1 := ZF_1:bv1;
+       guard eq(booltobv1(eq(ZF_2:bv1, 0x1:bv1)), 0x0:bv1);
+       goto (%main_25);
      ];
      block %main_25 [ goto (%main_5); ];
-     block %main_5 [
-        (var CF_5:bv1 := phi(%main_25 -> CF_1:bv1, %main_7 -> CF_4:bv1),
-         var NF_5:bv1 := phi(%main_25 -> NF_1:bv1, %main_7 -> NF_4:bv1),
-         var R1_3:bv64 := phi(%main_25 -> R1:bv64, %main_7 -> R1_2:bv64),
-         var R29_4:bv64 := phi(%main_25 -> R29_1:bv64, %main_7 -> R29_3:bv64),
-         var R31_4:bv64 := phi(%main_25 -> R31_1:bv64, %main_7 -> R31_3:bv64),
-         var VF_5:bv1 := phi(%main_25 -> VF_1:bv1, %main_7 -> VF_4:bv1),
-         var ZF_8:bv1 := phi(%main_25 -> ZF_2:bv1, %main_7 -> ZF_7:bv1));
-        var R0_13:bv64 := 0x0:bv64;
-        var R0_14:bv64 := bvadd(R0_13:bv64, 0x820:bv64);
-        var R30_3:bv64 := 0x7a0:bv64;
-        (var CF_6:bv1=CF_out, var NF_6:bv1=NF_out, var R0_15:bv64=R0_out,
-           var R1_4:bv64=R1_out, var R29_5:bv64=R29_out, var R30_4:bv64=R30_out,
-           var R31_5:bv64=R31_out, var VF_6:bv1=VF_out, var ZF_9:bv1=ZF_out) := 
-        call @puts_1584(CF_in=CF_5:bv1, NF_in=NF_5:bv1, R0_in=R0_14:bv64,
-           R1_in=R1_3:bv64, R29_in=R29_4:bv64, R30_in=R30_3:bv64, R31_in=R31_4:bv64,
-           VF_in=VF_5:bv1, ZF_in=ZF_8:bv1);
-        goto (%main_3);
+     block %main_5 (
+       var CF_5:bv1 := phi(%main_25 -> CF_1:bv1, %main_7 -> CF_4:bv1),
+       var NF_5:bv1 := phi(%main_25 -> NF_1:bv1, %main_7 -> NF_4:bv1),
+       var R1_3:bv64 := phi(%main_25 -> R1:bv64, %main_7 -> R1_2:bv64),
+       var R29_4:bv64 := phi(%main_25 -> R29_1:bv64, %main_7 -> R29_3:bv64),
+       var R31_4:bv64 := phi(%main_25 -> R31_1:bv64, %main_7 -> R31_3:bv64),
+       var VF_5:bv1 := phi(%main_25 -> VF_1:bv1, %main_7 -> VF_4:bv1),
+       var ZF_8:bv1 := phi(%main_25 -> ZF_2:bv1, %main_7 -> ZF_7:bv1)
+     ) [
+       var R0_13:bv64 := 0x0:bv64;
+       var R0_14:bv64 := bvadd(R0_13:bv64, 0x820:bv64);
+       var R30_3:bv64 := 0x7a0:bv64;
+       (var CF_6:bv1=CF_out, var NF_6:bv1=NF_out, var R0_15:bv64=R0_out,
+          var R1_4:bv64=R1_out, var R29_5:bv64=R29_out, var R30_4:bv64=R30_out,
+          var R31_5:bv64=R31_out, var VF_6:bv1=VF_out, var ZF_9:bv1=ZF_out) := 
+       call @puts_1584(CF_in=CF_5:bv1, NF_in=NF_5:bv1, R0_in=R0_14:bv64,
+          R1_in=R1_3:bv64, R29_in=R29_4:bv64, R30_in=R30_3:bv64, R31_in=R31_4:bv64,
+          VF_in=VF_5:bv1, ZF_in=ZF_8:bv1);
+       goto (%main_3);
      ];
      block %main_3 [
-        var R0_16:bv64 := 0x20000:bv64;
-        var R0_17:bv64 := bvadd(R0_16:bv64, 0x3c:bv64);
-        var load19_1:bv32 := load le $mem:(bv64->bv8) R0_17:bv64 32;
-        var R0_18:bv64 := zero_extend(32, load19_1:bv32);
-        var R1_5:bv64 := zero_extend(32, bvadd(extract(32,0, R0_18:bv64), 0x1:bv32));
-        var R0_19:bv64 := 0x20000:bv64;
-        var R0_20:bv64 := bvadd(R0_19:bv64, 0x3c:bv64);
-        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) R0_20:bv64 extract(32,0, R1_5:bv64) 32;
-        goto (%main_19);
+       var R0_16:bv64 := 0x20000:bv64;
+       var R0_17:bv64 := bvadd(R0_16:bv64, 0x3c:bv64);
+       var load19_1:bv32 := load le $mem:(bv64->bv8) R0_17:bv64 32;
+       var R0_18:bv64 := zero_extend(32, load19_1:bv32);
+       var R1_5:bv64 := zero_extend(32, bvadd(extract(32,0, R0_18:bv64), 0x1:bv32));
+       var R0_19:bv64 := 0x20000:bv64;
+       var R0_20:bv64 := bvadd(R0_19:bv64, 0x3c:bv64);
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) R0_20:bv64 extract(32,0, R1_5:bv64) 32;
+       goto (%main_19);
      ];
-     block %main_19 [
-        (var CF_2:bv1 := phi(%main_3 -> CF_6:bv1, %main_21 -> CF_1:bv1),
-         var NF_2:bv1 := phi(%main_3 -> NF_6:bv1, %main_21 -> NF_1:bv1),
-         var R1_1:bv64 := phi(%main_3 -> R1_5:bv64, %main_21 -> R1:bv64),
-         var R29_2:bv64 := phi(%main_3 -> R29_5:bv64, %main_21 -> R29_1:bv64),
-         var R31_2:bv64 := phi(%main_3 -> R31_5:bv64, %main_21 -> R31_1:bv64),
-         var VF_2:bv1 := phi(%main_3 -> VF_6:bv1, %main_21 -> VF_1:bv1),
-         var ZF_4:bv1 := phi(%main_3 -> ZF_9:bv1, %main_21 -> ZF_3:bv1));
-        var R0_7:bv64 := 0x0:bv64;
-        var R0_8:bv64 := bvadd(R0_7:bv64, 0x820:bv64);
-        var R30_1:bv64 := 0x7d0:bv64;
-        (var CF_3:bv1=CF_out, var NF_3:bv1=NF_out, var R0_9:bv64=R0_out,
-           var R1_2:bv64=R1_out, var R29_3:bv64=R29_out, var R30_2:bv64=R30_out,
-           var R31_3:bv64=R31_out, var VF_3:bv1=VF_out, var ZF_5:bv1=ZF_out) := 
-        call @puts_1584(CF_in=CF_2:bv1, NF_in=NF_2:bv1, R0_in=R0_8:bv64,
-           R1_in=R1_1:bv64, R29_in=R29_2:bv64, R30_in=R30_1:bv64, R31_in=R31_2:bv64,
-           VF_in=VF_2:bv1, ZF_in=ZF_4:bv1);
-        goto (%main_17);
+     block %main_19 (
+       var CF_2:bv1 := phi(%main_3 -> CF_6:bv1, %main_21 -> CF_1:bv1),
+       var NF_2:bv1 := phi(%main_3 -> NF_6:bv1, %main_21 -> NF_1:bv1),
+       var R1_1:bv64 := phi(%main_3 -> R1_5:bv64, %main_21 -> R1:bv64),
+       var R29_2:bv64 := phi(%main_3 -> R29_5:bv64, %main_21 -> R29_1:bv64),
+       var R31_2:bv64 := phi(%main_3 -> R31_5:bv64, %main_21 -> R31_1:bv64),
+       var VF_2:bv1 := phi(%main_3 -> VF_6:bv1, %main_21 -> VF_1:bv1),
+       var ZF_4:bv1 := phi(%main_3 -> ZF_9:bv1, %main_21 -> ZF_3:bv1)
+     ) [
+       var R0_7:bv64 := 0x0:bv64;
+       var R0_8:bv64 := bvadd(R0_7:bv64, 0x820:bv64);
+       var R30_1:bv64 := 0x7d0:bv64;
+       (var CF_3:bv1=CF_out, var NF_3:bv1=NF_out, var R0_9:bv64=R0_out,
+          var R1_2:bv64=R1_out, var R29_3:bv64=R29_out, var R30_2:bv64=R30_out,
+          var R31_3:bv64=R31_out, var VF_3:bv1=VF_out, var ZF_5:bv1=ZF_out) := 
+       call @puts_1584(CF_in=CF_2:bv1, NF_in=NF_2:bv1, R0_in=R0_8:bv64,
+          R1_in=R1_1:bv64, R29_in=R29_2:bv64, R30_in=R30_1:bv64, R31_in=R31_2:bv64,
+          VF_in=VF_2:bv1, ZF_in=ZF_4:bv1);
+       goto (%main_17);
      ];
      block %main_17 [
-        var R0_10:bv64 := 0x20000:bv64;
-        var R0_11:bv64 := bvadd(R0_10:bv64, 0x3c:bv64);
-        var load20_1:bv32 := load le $mem:(bv64->bv8) R0_11:bv64 32;
-        var R0_12:bv64 := zero_extend(32, load20_1:bv32);
-        var #6_1:bv32 := bvadd(extract(32,0, R0_12:bv64), 0xfffffffa:bv32);
-        var VF_4:bv1 := bvnot(booltobv1(eq(sign_extend(1,
-           bvadd(#6_1:bv32, 0x1:bv32)),
-           bvadd(sign_extend(1, extract(32,0, R0_12:bv64)), 0x1fffffffb:bv33))));
-        var CF_4:bv1 := bvnot(booltobv1(eq(zero_extend(1,
-           bvadd(#6_1:bv32, 0x1:bv32)),
-           bvadd(zero_extend(1, extract(32,0, R0_12:bv64)), 0xfffffffb:bv33))));
-        var ZF_6:bv1 := booltobv1(eq(bvadd(#6_1:bv32, 0x1:bv32), 0x0:bv32));
-        var NF_4:bv1 := extract(32,31, bvadd(#6_1:bv32, 0x1:bv32));
-        goto (%main_15,%main_9);
+       var R0_10:bv64 := 0x20000:bv64;
+       var R0_11:bv64 := bvadd(R0_10:bv64, 0x3c:bv64);
+       var load20_1:bv32 := load le $mem:(bv64->bv8) R0_11:bv64 32;
+       var R0_12:bv64 := zero_extend(32, load20_1:bv32);
+       var #6_1:bv32 := bvadd(extract(32,0, R0_12:bv64), 0xfffffffa:bv32);
+       var VF_4:bv1 := bvnot(booltobv1(eq(sign_extend(1, bvadd(#6_1:bv32, 0x1:bv32)),
+          bvadd(sign_extend(1, extract(32,0, R0_12:bv64)), 0x1fffffffb:bv33))));
+       var CF_4:bv1 := bvnot(booltobv1(eq(zero_extend(1, bvadd(#6_1:bv32, 0x1:bv32)),
+          bvadd(zero_extend(1, extract(32,0, R0_12:bv64)), 0xfffffffb:bv33))));
+       var ZF_6:bv1 := booltobv1(eq(bvadd(#6_1:bv32, 0x1:bv32), 0x0:bv32));
+       var NF_4:bv1 := extract(32,31, bvadd(#6_1:bv32, 0x1:bv32));
+       goto (%main_15,%main_9);
      ];
      block %main_9 [
-        var ZF_7:bv1 := ZF_6:bv1;
-        guard neq(bvnot(booltobv1(eq(ZF_7:bv1, 0x1:bv1))), 0x0:bv1);
-        goto (%main_7);
+       var ZF_7:bv1 := ZF_6:bv1;
+       guard neq(bvnot(booltobv1(eq(ZF_7:bv1, 0x1:bv1))), 0x0:bv1);
+       goto (%main_7);
      ];
      block %main_7 [ goto (%main_5); ];
      block %main_15 [
-        var ZF_10:bv1 := ZF_6:bv1;
-        guard eq(bvnot(booltobv1(eq(ZF_10:bv1, 0x1:bv1))), 0x0:bv1);
-        var R0_21:bv64 := 0x0:bv64;
-        var R0_22:bv64 := bvadd(R0_21:bv64, 0x828:bv64);
-        var R30_5:bv64 := 0x7f4:bv64;
-        (var CF_7:bv1=CF_out, var NF_7:bv1=NF_out, var R0_23:bv64=R0_out,
-           var R1_6:bv64=R1_out, var R29_6:bv64=R29_out, var R30_6:bv64=R30_out,
-           var R31_6:bv64=R31_out, var VF_7:bv1=VF_out, var ZF_11:bv1=ZF_out) := 
-        call @puts_1584(CF_in=CF_4:bv1, NF_in=NF_4:bv1, R0_in=R0_22:bv64,
-           R1_in=R1_2:bv64, R29_in=R29_3:bv64, R30_in=R30_5:bv64, R31_in=R31_3:bv64,
-           VF_in=VF_4:bv1, ZF_in=ZF_10:bv1);
-        goto (%main_13);
+       var ZF_10:bv1 := ZF_6:bv1;
+       guard eq(bvnot(booltobv1(eq(ZF_10:bv1, 0x1:bv1))), 0x0:bv1);
+       var R0_21:bv64 := 0x0:bv64;
+       var R0_22:bv64 := bvadd(R0_21:bv64, 0x828:bv64);
+       var R30_5:bv64 := 0x7f4:bv64;
+       (var CF_7:bv1=CF_out, var NF_7:bv1=NF_out, var R0_23:bv64=R0_out,
+          var R1_6:bv64=R1_out, var R29_6:bv64=R29_out, var R30_6:bv64=R30_out,
+          var R31_6:bv64=R31_out, var VF_7:bv1=VF_out, var ZF_11:bv1=ZF_out) := 
+       call @puts_1584(CF_in=CF_4:bv1, NF_in=NF_4:bv1, R0_in=R0_22:bv64,
+          R1_in=R1_2:bv64, R29_in=R29_3:bv64, R30_in=R30_5:bv64, R31_in=R31_3:bv64,
+          VF_in=VF_4:bv1, ZF_in=ZF_10:bv1);
+       goto (%main_13);
      ];
      block %main_13 [ goto (%main_11); ];
      block %main_11 [
-        var R0_24:bv64 := 0x0:bv64;
-        var load21_1:bv64 := load le $stack:(bv64->bv8) R31_6:bv64 64;
-        var R29_7:bv64 := load21_1:bv64;
-        var load22_1:bv64 := load le $stack:(bv64->bv8) bvadd(R31_6:bv64, 0x8:bv64) 64;
-        var R30_7:bv64 := load22_1:bv64;
-        var R31_7:bv64 := bvadd(R31_6:bv64, 0x20:bv64);
-        goto (%main_basil_return_1);
+       var R0_24:bv64 := 0x0:bv64;
+       var load21_1:bv64 := load le $stack:(bv64->bv8) R31_6:bv64 64;
+       var R29_7:bv64 := load21_1:bv64;
+       var load22_1:bv64 := load le $stack:(bv64->bv8) bvadd(R31_6:bv64, 0x8:bv64) 64;
+       var R30_7:bv64 := load22_1:bv64;
+       var R31_7:bv64 := bvadd(R31_6:bv64, 0x20:bv64);
+       goto (%main_basil_return_1);
      ];
      block %main_basil_return_1 [ goto (%returns); ];
      block %returns [
-        (var CF_out:bv1 := CF_7:bv1, var NF_out:bv1 := NF_7:bv1,
-         var R0_out:bv64 := R0_24:bv64, var R1_out:bv64 := R1_6:bv64,
-         var R29_out:bv64 := R29_7:bv64, var R30_out:bv64 := R30_7:bv64,
-         var R31_out:bv64 := R31_7:bv64, var VF_out:bv1 := VF_7:bv1,
-         var ZF_out:bv1 := ZF_11:bv1);
-        return;
+       (var CF_out:bv1 := CF_7:bv1, var NF_out:bv1 := NF_7:bv1,
+        var R0_out:bv64 := R0_24:bv64, var R1_out:bv64 := R1_6:bv64,
+        var R29_out:bv64 := R29_7:bv64, var R30_out:bv64 := R30_7:bv64,
+        var R31_out:bv64 := R31_7:bv64, var VF_out:bv1 := VF_7:bv1,
+        var ZF_out:bv1 := ZF_11:bv1);
+       return;
      ]
   ];
   proc @puts_1584(CF_in:bv1, NF_in:bv1, R0_in:bv64, R1_in:bv64, R29_in:bv64,
@@ -318,14 +314,14 @@ Run on basic irreducible loop example
   $ diff after.il after_reparsed.il
   18,21c18,21
   <   modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
-  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
   <   captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
-  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1;
+  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
   ---
   >   modifies $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64,
-  >     $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8);
+  >     $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
   >   captures $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64,
-  >     $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8);
+  >     $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
   [1]
 
 The interpreter should give the same output for both
@@ -350,21 +346,19 @@ Multiple loops dependencies of loops etc are handled correctly
   > proc @main(R0_in:bv64)  -> (R0_out:bv64) {  }
   7a7
   >    block %inputs [ var R0:bv64 := R0_in:bv64; goto (%e); ];
-  9,12c9,19
+  9,12c9,17
   <    block %e1 [ $R0:bv64 := 0x1:bv64; goto (%e2); ];
   <    block %e2 [ goto (%e4,%e1); ];
   <    block %e3 [ $R0:bv64 := 0x3:bv64; goto (%e4,%e1); ];
   <    block %e4 [ return; ]
   ---
   >    block %e1 [ var R0_2:bv64 := 0x1:bv64; goto (%e2); ];
-  >    block %e2 [
-  >       (var R0_3:bv64 := phi(%e1 -> R0_2:bv64, %e -> R0:bv64));
-  >       goto (%e4,%e1);
+  >    block %e2 ( var R0_3:bv64 := phi(%e1 -> R0_2:bv64, %e -> R0:bv64) ) [
+  >      goto (%e4,%e1);
   >    ];
   >    block %e3 [ var R0_1:bv64 := 0x3:bv64; goto (%e4,%e1); ];
-  >    block %e4 [
-  >       (var R0_4:bv64 := phi(%e2 -> R0_3:bv64, %e3 -> R0_1:bv64, %e2 -> R0_3:bv64));
-  >       goto (%returns);
-  >    ];
+  >    block %e4 (
+  >      var R0_4:bv64 := phi(%e2 -> R0_3:bv64, %e3 -> R0_1:bv64, %e2 -> R0_3:bv64)
+  >    ) [ goto (%returns); ];
   >    block %returns [ var R0_out:bv64 := R0_4:bv64; return; ]
   [1]
