@@ -80,6 +80,12 @@ and showDecl (e : AbsBasilIR.decl) : showable = match e with
   |    AbsBasilIR.Decl_ProgEmpty (procident, attribset) -> s2s "Decl_ProgEmpty" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showAttribSet attribset >> c2s ')'
   |    AbsBasilIR.Decl_ProgWithSpec (procident, attribset, progspecs) -> s2s "Decl_ProgWithSpec" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showList showProgSpec progspecs >> c2s ')'
   |    AbsBasilIR.Decl_Proc (procident, openparen0, paramss1, closeparen2, openparen, paramss, closeparen, attribset, funspecs, procdef) -> s2s "Decl_Proc" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showOpenParen openparen0  >> s2s ", " >>  showList showParams paramss1  >> s2s ", " >>  showCloseParen closeparen2  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showParams paramss  >> s2s ", " >>  showCloseParen closeparen  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showList showFunSpec funspecs  >> s2s ", " >>  showProcDef procdef >> c2s ')'
+  |    AbsBasilIR.Decl_RecType typeassigns -> s2s "Decl_RecType" >> c2s ' ' >> c2s '(' >> showList showTypeAssign typeassigns >> c2s ')'
+  |    AbsBasilIR.Decl_Type localident -> s2s "Decl_Type" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
+
+
+and showTypeAssign (e : AbsBasilIR.typeAssign) : showable = match e with
+       AbsBasilIR.TypeAssign_Sum (localident, sumcases) -> s2s "TypeAssign_Sum" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showList showSumCase sumcases >> c2s ')'
 
 
 and showProcDef (e : AbsBasilIR.procDef) : showable = match e with
@@ -103,11 +109,21 @@ and showMapType (e : AbsBasilIR.mapType) : showable = match e with
        AbsBasilIR.MapType1 (type'0, type') -> s2s "MapType1" >> c2s ' ' >> c2s '(' >> showTypeT type'0  >> s2s ", " >>  showTypeT type' >> c2s ')'
 
 
+and showRecordField (e : AbsBasilIR.recordField) : showable = match e with
+       AbsBasilIR.RecordField1 (localident, type') -> s2s "RecordField1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
+
+
+and showSumCase (e : AbsBasilIR.sumCase) : showable = match e with
+       AbsBasilIR.SortType localident -> s2s "SortType" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
+  |    AbsBasilIR.VariantCase (localident, beginrec, recordfields, endrec) -> s2s "VariantCase" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showBeginRec beginrec  >> s2s ", " >>  showList showRecordField recordfields  >> s2s ", " >>  showEndRec endrec >> c2s ')'
+
+
 and showTypeT (e : AbsBasilIR.typeT) : showable = match e with
        AbsBasilIR.TypeIntType inttype -> s2s "TypeIntType" >> c2s ' ' >> c2s '(' >> showIntType inttype >> c2s ')'
   |    AbsBasilIR.TypeBoolType booltype -> s2s "TypeBoolType" >> c2s ' ' >> c2s '(' >> showBoolType booltype >> c2s ')'
   |    AbsBasilIR.TypeBVType bvtype -> s2s "TypeBVType" >> c2s ' ' >> c2s '(' >> showBVType bvtype >> c2s ')'
   |    AbsBasilIR.TypeParen (openparen, type', closeparen) -> s2s "TypeParen" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.TypeSort localident -> s2s "TypeSort" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
   |    AbsBasilIR.TypeMapType maptype -> s2s "TypeMapType" >> c2s ' ' >> c2s '(' >> showMapType maptype >> c2s ')'
 
 

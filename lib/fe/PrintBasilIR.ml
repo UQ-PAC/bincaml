@@ -162,10 +162,19 @@ and prtDecl (i:int) (e : AbsBasilIR.decl) : doc = match e with
   |    AbsBasilIR.Decl_ProgEmpty (procident, attribset) -> prPrec i 0 (concatD [render "prog" ; render "entry" ; prtProcIdent 0 procident ; prtAttribSet 0 attribset])
   |    AbsBasilIR.Decl_ProgWithSpec (procident, attribset, progspecs) -> prPrec i 0 (concatD [render "prog" ; render "entry" ; prtProcIdent 0 procident ; prtAttribSet 0 attribset ; prtProgSpecListBNFC 0 progspecs])
   |    AbsBasilIR.Decl_Proc (procident, openparen1, paramss1, closeparen1, openparen2, paramss2, closeparen2, attribset, funspecs, procdef) -> prPrec i 0 (concatD [render "proc" ; prtProcIdent 0 procident ; prtOpenParen 0 openparen1 ; prtParamsListBNFC 0 paramss1 ; prtCloseParen 0 closeparen1 ; render "->" ; prtOpenParen 0 openparen2 ; prtParamsListBNFC 0 paramss2 ; prtCloseParen 0 closeparen2 ; prtAttribSet 0 attribset ; prtFunSpecListBNFC 0 funspecs ; prtProcDef 0 procdef])
+  |    AbsBasilIR.Decl_RecType typeassigns -> prPrec i 0 (concatD [render "type" ; prtTypeAssignListBNFC 0 typeassigns])
+  |    AbsBasilIR.Decl_Type localident -> prPrec i 0 (concatD [render "type" ; prtLocalIdent 0 localident])
 
 and prtDeclListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
   | (_,x::xs) -> (concatD [prtDecl 0 x ; render ";" ; prtDeclListBNFC 0 xs])
+and prtTypeAssign (i:int) (e : AbsBasilIR.typeAssign) : doc = match e with
+       AbsBasilIR.TypeAssign_Sum (localident, sumcases) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "=" ; prtSumCaseListBNFC 0 sumcases])
+
+and prtTypeAssignListBNFC i es : doc = match (i, es) with
+    (_,[]) -> (concatD [])
+  | (_,[x]) -> (concatD [prtTypeAssign 0 x])
+  | (_,x::xs) -> (concatD [prtTypeAssign 0 x ; render "and" ; prtTypeAssignListBNFC 0 xs])
 and prtProcDef (i:int) (e : AbsBasilIR.procDef) : doc = match e with
        AbsBasilIR.ProcDef_Empty  -> prPrec i 0 (concatD [])
   |    AbsBasilIR.ProcDef_Some (beginlist, blocks, endlist) -> prPrec i 0 (concatD [prtBeginList 0 beginlist ; prtBlockListBNFC 0 blocks ; prtEndList 0 endlist])
@@ -187,11 +196,27 @@ and prtMapType (i:int) (e : AbsBasilIR.mapType) : doc = match e with
        AbsBasilIR.MapType1 (type_1, type_2) -> prPrec i 0 (concatD [prtTypeT 1 type_1 ; render "->" ; prtTypeT 0 type_2])
 
 
+and prtRecordField (i:int) (e : AbsBasilIR.recordField) : doc = match e with
+       AbsBasilIR.RecordField1 (localident, type_) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render ":" ; prtTypeT 0 type_])
+
+and prtRecordFieldListBNFC i es : doc = match (i, es) with
+    (_,[]) -> (concatD [])
+  | (_,[x]) -> (concatD [prtRecordField 0 x])
+  | (_,x::xs) -> (concatD [prtRecordField 0 x ; render ";" ; prtRecordFieldListBNFC 0 xs])
+and prtSumCase (i:int) (e : AbsBasilIR.sumCase) : doc = match e with
+       AbsBasilIR.SortType localident -> prPrec i 0 (concatD [prtLocalIdent 0 localident])
+  |    AbsBasilIR.VariantCase (localident, beginrec, recordfields, endrec) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "of" ; prtBeginRec 0 beginrec ; prtRecordFieldListBNFC 0 recordfields ; prtEndRec 0 endrec])
+
+and prtSumCaseListBNFC i es : doc = match (i, es) with
+    (_,[]) -> (concatD [])
+  | (_,[x]) -> (concatD [prtSumCase 0 x])
+  | (_,x::xs) -> (concatD [prtSumCase 0 x ; render "|" ; prtSumCaseListBNFC 0 xs])
 and prtTypeT (i:int) (e : AbsBasilIR.typeT) : doc = match e with
        AbsBasilIR.TypeIntType inttype -> prPrec i 1 (concatD [prtIntType 0 inttype])
   |    AbsBasilIR.TypeBoolType booltype -> prPrec i 1 (concatD [prtBoolType 0 booltype])
   |    AbsBasilIR.TypeBVType bvtype -> prPrec i 1 (concatD [prtBVType 0 bvtype])
   |    AbsBasilIR.TypeParen (openparen, type_, closeparen) -> prPrec i 1 (concatD [prtOpenParen 0 openparen ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.TypeSort localident -> prPrec i 1 (concatD [prtLocalIdent 0 localident])
   |    AbsBasilIR.TypeMapType maptype -> prPrec i 0 (concatD [prtMapType 0 maptype])
 
 and prtTypeTListBNFC i es : doc = match (i, es) with

@@ -100,6 +100,12 @@ and transDecl (x : decl) : result = match x with
   | Decl_ProgEmpty (procident, attribset) -> failure x
   | Decl_ProgWithSpec (procident, attribset, progspecs) -> failure x
   | Decl_Proc (procident, openparen0, paramss1, closeparen2, openparen, paramss, closeparen, attribset, funspecs, procdef) -> failure x
+  | Decl_RecType typeassigns -> failure x
+  | Decl_Type localident -> failure x
+
+
+and transTypeAssign (x : typeAssign) : result = match x with
+    TypeAssign_Sum (localident, sumcases) -> failure x
 
 
 and transProcDef (x : procDef) : result = match x with
@@ -123,11 +129,21 @@ and transMapType (x : mapType) : result = match x with
     MapType1 (type'0, type') -> failure x
 
 
+and transRecordField (x : recordField) : result = match x with
+    RecordField1 (localident, type') -> failure x
+
+
+and transSumCase (x : sumCase) : result = match x with
+    SortType localident -> failure x
+  | VariantCase (localident, beginrec, recordfields, endrec) -> failure x
+
+
 and transType (x : typeT) : result = match x with
     TypeIntType inttype -> failure x
   | TypeBoolType booltype -> failure x
   | TypeBVType bvtype -> failure x
   | TypeParen (openparen, type', closeparen) -> failure x
+  | TypeSort localident -> failure x
   | TypeMapType maptype -> failure x
 
 

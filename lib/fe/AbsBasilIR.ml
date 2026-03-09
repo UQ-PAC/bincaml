@@ -38,6 +38,11 @@ and decl =
  | Decl_ProgEmpty of procIdent * attribSet
  | Decl_ProgWithSpec of procIdent * attribSet * progSpec list
  | Decl_Proc of procIdent * openParen * params list * closeParen * openParen * params list * closeParen * attribSet * funSpec list * procDef
+ | Decl_RecType of typeAssign list
+ | Decl_Type of localIdent
+
+and typeAssign =
+   TypeAssign_Sum of localIdent * sumCase list
 
 and procDef =
    ProcDef_Empty
@@ -55,11 +60,19 @@ and bVType =
 and mapType =
    MapType1 of typeT * typeT
 
+and recordField =
+   RecordField1 of localIdent * typeT
+
+and sumCase =
+   SortType of localIdent
+ | VariantCase of localIdent * beginRec * recordField list * endRec
+
 and typeT =
    TypeIntType of intType
  | TypeBoolType of boolType
  | TypeBVType of bVType
  | TypeParen of openParen * typeT * closeParen
+ | TypeSort of localIdent
  | TypeMapType of mapType
 
 and intVal =

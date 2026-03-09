@@ -73,7 +73,11 @@ module.exports = grammar({
         // Decl_ProgWithSpec. Decl ::= "prog" "entry" ProcIdent AttribSet [ProgSpec] ;
         seq("prog", "entry", $.token_ProcIdent, optional($.AttribSet), $.list_ProgSpec),
         // Decl_Proc. Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [FunSpec] ProcDef ;
-        seq("proc", $.token_ProcIdent, $.token_OpenParen, optional($.list_Params), $.token_CloseParen, "->", $.token_OpenParen, optional($.list_Params), $.token_CloseParen, optional($.AttribSet), optional($.list_FunSpec), optional($.ProcDef))
+        seq("proc", $.token_ProcIdent, $.token_OpenParen, optional($.list_Params), $.token_CloseParen, "->", $.token_OpenParen, optional($.list_Params), $.token_CloseParen, optional($.AttribSet), optional($.list_FunSpec), optional($.ProcDef)),
+        // Decl_RecType. Decl ::= "type" [TypeAssign] ;
+        seq("type", $.list_TypeAssign),
+        // Decl_Type. Decl ::= "type" LocalIdent ;
+        seq("type", $.token_LocalIdent)
       ),
     list_Type: $ =>
       choice(
@@ -83,6 +87,16 @@ module.exports = grammar({
         $.Type,
         // (:). [Type] ::= Type "," [Type] ;
         seq($.Type, ",", optional($.list_Type))
+      ),
+    TypeAssign: $ =>
+      // TypeAssign_Sum. TypeAssign ::= LocalIdent "=" [SumCase] ;
+      seq($.token_LocalIdent, "=", $.list_SumCase),
+    list_TypeAssign: $ =>
+      choice(
+        // (:[]). [TypeAssign] ::= TypeAssign ;
+        $.TypeAssign,
+        // (:). [TypeAssign] ::= TypeAssign "and" [TypeAssign] ;
+        seq($.TypeAssign, "and", $.list_TypeAssign)
       ),
     ProcDef: $ =>
       choice(
@@ -103,6 +117,30 @@ module.exports = grammar({
     MapType: $ =>
       // MapType1. MapType ::= Type1 "->" Type ;
       seq($.Type1, "->", $.Type),
+    RecordField: $ =>
+      // RecordField1. RecordField ::= LocalIdent ":" Type ;
+      seq($.token_LocalIdent, ":", $.Type),
+    list_RecordField: $ =>
+      choice(
+        // (:[]). [RecordField] ::= RecordField ;
+        $.RecordField,
+        // (:). [RecordField] ::= RecordField ";" [RecordField] ;
+        seq($.RecordField, ";", $.list_RecordField)
+      ),
+    SumCase: $ =>
+      choice(
+        // SortType. SumCase ::= LocalIdent ;
+        $.token_LocalIdent,
+        // VariantCase. SumCase ::= LocalIdent "of" BeginRec [RecordField] EndRec ;
+        seq($.token_LocalIdent, "of", $.token_BeginRec, $.list_RecordField, $.token_EndRec)
+      ),
+    list_SumCase: $ =>
+      choice(
+        // (:[]). [SumCase] ::= SumCase ;
+        $.SumCase,
+        // (:). [SumCase] ::= SumCase "|" [SumCase] ;
+        seq($.SumCase, "|", $.list_SumCase)
+      ),
     Type1: $ =>
       choice(
         // TypeIntType. Type1 ::= IntType ;
@@ -112,7 +150,9 @@ module.exports = grammar({
         // TypeBVType. Type1 ::= BVType ;
         $.BVType,
         // TypeParen. Type1 ::= OpenParen Type CloseParen ;
-        seq($.token_OpenParen, $.Type, $.token_CloseParen)
+        seq($.token_OpenParen, $.Type, $.token_CloseParen),
+        // TypeSort. Type1 ::= LocalIdent ;
+        $.token_LocalIdent
       ),
     Type: $ =>
       choice(

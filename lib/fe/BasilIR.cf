@@ -45,6 +45,7 @@ Shared . VarModifiers ::= "shared" ;
 Observable . VarModifiers ::= "observable";
 separator VarModifiers "" ;
 
+
 Decl_Axiom . Decl ::= "axiom" GlobalIdent AttribSet Expr; 
 Decl_Mem . Decl ::= "memory" [VarModifiers] GlobalIdent ":" Type VarSpec ;
 Decl_Var . Decl ::= "var" [VarModifiers] GlobalIdent ":" Type VarSpec ;
@@ -59,6 +60,14 @@ Decl_ProgEmpty . Decl ::= "prog" "entry" ProcIdent AttribSet ;
 Decl_ProgWithSpec . Decl ::= "prog" "entry" ProcIdent AttribSet [ ProgSpec ] ;
 Decl_Proc . Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [ FunSpec ] ProcDef ;
 
+
+
+TypeAssign_Sum. TypeAssign ::= LocalIdent "=" [SumCase] ;
+
+separator nonempty TypeAssign "and";
+Decl_RecType . Decl ::= "type" [TypeAssign] ;
+Decl_Type . Decl ::= "type" LocalIdent ;
+
 ProcDef_Empty . ProcDef ::= ;
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
@@ -68,10 +77,21 @@ BVType1 . BVType ::= BVTYPE ;
 -- map types are right associative. left of -> cannot be another MapType.
 MapType1 . MapType ::=  Type1 "->" Type ; 
 
+rules RecordField ::= LocalIdent ":" Type ;
+separator nonempty RecordField ";";
+
+SortType    . SumCase    ::= LocalIdent;
+VariantCase . SumCase    ::= LocalIdent "of" BeginRec [RecordField] EndRec;
+
+separator nonempty SumCase "|";
+
+
 TypeIntType  . Type1 ::= IntType ;
 TypeBoolType . Type1 ::= BoolType ;
 TypeBVType   . Type1 ::= BVType ;
 TypeParen    . Type1 ::= OpenParen Type CloseParen; 
+TypeSort . Type1 ::= LocalIdent;
+
 TypeMapType . Type ::= MapType;
 _ . Type ::= Type1;
 
