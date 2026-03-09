@@ -10,13 +10,13 @@
 ; check that grammar.js is up to date.
 ; requires `bnfc-treesitter` from pac-nix.
 
-; bnfc tree-sitter backend is only run if BINCAML_BNFC_TREESITTER
-; is set to true, and it is false by default. this lets us use
-; upstream bnfc for the main ocaml generation.
+; bnfc tree-sitter backend is only run if tree-sitter is detected
+; in the output of bnfc --help. this lets us use upstream bnfc
+; for the main ocaml generation.
 (rule
  (alias runtest)
  (deps %{project_root}/lib/fe/BasilIR.cf)
- (enabled_if %{read:../lib/fe/tree-sitter-available})
+ (enabled_if %{read:../lib/fe/has-bnfc-tree-sitter})
  (action
   (progn
    (copy %{deps} basilir.cf)
@@ -32,7 +32,7 @@
 (rule
  (alias runtest)
  (deps (universe))
- (enabled_if (not %{read:../lib/fe/tree-sitter-available}))
+ (enabled_if (not %{read:../lib/fe/has-bnfc-tree-sitter}))
  (action
   (echo
     "tree-sitter/dune: bnfc tree-sitter generation skipped,"
