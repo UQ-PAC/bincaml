@@ -126,9 +126,9 @@ module PassManager = struct
     {
       name = "sva";
       apply =
-        Proc
+        Prog
           (fun p ->
-            let r = Analysis.Sva.DFGAnalysis.flow_insensitive p in
+            let r = Analysis.Sva.sva p in
             print_endline @@ Analysis.Sva.StateAbstraction.show r;
             p);
       doc = "Runs symbolic value analysis and prints stuff out after";
