@@ -21,8 +21,28 @@
         flake-for-all-systems;
 
     in flake-for-all-systems args {
+      overlays = {
+        addBincamlPackages = ofinal: _: {
+          bincaml = ofinal.callPackage ./nix/bincaml.nix { };
+          hector = ofinal.callPackage ./nix/hector.nix { };
+          intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
+        };
+
+        enableOcamlFramePointer = ofinal: infuse-with {
+          # https://github.com/NixOS/nixpkgs/blob/aca4d95fce4914b3892661bcb80b8087293536c6/pkgs/development/compilers/ocaml/generic.nix#L30
+          ocaml.__input.flambdaSupport.__assign = true;
+          ocaml.__input.framePointerSupport.__assign = true;
+          ocaml.__attrs.patches.__append = [
+            (ofinal.callPackage ({ fetchpatch }: fetchpatch {
+              url = "https://github.com/ocaml/ocaml/commit/c2eec4dd1de7d0da2d2f76e5e7f2b567901f4e2c.patch";
+              hash = "sha256-qDx8saOLhFMYaK4PLsSvHnDBYKvRSMmPtdVa/IqkQSI=";
+            }) { })
+          ];
+        };
+      };
+
       systems = ["aarch64-linux" "x86_64-linux" "aarch64-darwin" "x86_64-darwin"];
-      outputs = { self, nixpkgs, ... }:
+      perSystem = { self, nixpkgs, ... }:
         let
           pkgs = nixpkgs.legacyPackages;
           selfOcamlPackages =
@@ -32,26 +52,6 @@
         in
         {
           defaultPackage = selfOcamlPackages.bincaml;
-
-          overlays = {
-            addBincamlPackages = ofinal: _: {
-              bincaml = ofinal.callPackage ./nix/bincaml.nix { };
-              hector = ofinal.callPackage ./nix/hector.nix { };
-              intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
-            };
-
-            enableOcamlFramePointer = ofinal: infuse-with {
-              # https://github.com/NixOS/nixpkgs/blob/aca4d95fce4914b3892661bcb80b8087293536c6/pkgs/development/compilers/ocaml/generic.nix#L30
-              ocaml.__input.flambdaSupport.__assign = true;
-              ocaml.__input.framePointerSupport.__assign = true;
-              ocaml.__attrs.patches.__append = [
-                (ofinal.callPackage ({ fetchpatch }: fetchpatch {
-                  url = "https://github.com/ocaml/ocaml/commit/c2eec4dd1de7d0da2d2f76e5e7f2b567901f4e2c.patch";
-                  hash = "sha256-qDx8saOLhFMYaK4PLsSvHnDBYKvRSMmPtdVa/IqkQSI=";
-                }) { })
-              ];
-            };
-          };
 
           legacyPackages = {
             bincaml = selfOcamlPackages.bincaml;

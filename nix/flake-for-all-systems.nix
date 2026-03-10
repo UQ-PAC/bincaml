@@ -5,7 +5,7 @@ let
   this = lib.makeScope lib.callPackageWith makeThisScope;
   makeThisScope = this: {
 
-    systemAttrs =
+    defaultPerSystemOutputs =
       ["packages" "legacyPackages" "devShells" "defaultPackage" "formatter"
         "apps" "checks"];
 
@@ -14,13 +14,13 @@ let
       "from a non-system-specific context."
     ];
 
-    narrowFlakeInput = system: inputName: input:
+    inputForSystem' = systemAttrs: system: inputName: input:
       if input._type or "" == "flake" then
         { original = input; }
         //
         (builtins.mapAttrs
           (k: v:
-            if builtins.elem k this.systemAttrs
+            if builtins.elem k systemAttrs
               then if v ? ${system}
                 then v.${system}
                 else "Input attribute does not exist: ${inputName}.${k}.${system}"
@@ -30,35 +30,42 @@ let
       else
         input;
 
-    narrowFlakeInputs = system: inputs:
-      builtins.mapAttrs (this.narrowFlakeInput system) inputs;
+    inputsForSystem = this.inputsForSystem' this.defaultPerSystemOutputs;
+
+    inputsForSystem' = systemAttrs: system: inputs:
+      builtins.mapAttrs (this.inputForSystem' systemAttrs system) inputs;
 
     flake-for-all-systems =
       { ... }@args:
-      { systems, outputs }@flake:
+      { systems, perSystem, perSystemOutputs ? this.defaultPerSystemOutputs , ... }@flake:
       let
         systems' = [ this.unspecifiedSystem ] ++ systems;
 
         systemSelfArgs = lib.genAttrs systems' (system:
-          let args' = this.narrowFlakeInputs system args;
+          let args' = this.inputsForSystem' perSystemOutputs system args;
           in { system = system; } // args'
         );
 
         # map: system -> output set
         systemOutputs = lib.genAttrs systems' (system:
-          outputs (systemSelfArgs.${system})
+          perSystem (systemSelfArgs.${system})
         );
 
         allOutputFields =
           builtins.attrNames (lib.mergeAttrsList (builtins.attrValues systemOutputs));
 
         partitionedOutputAttrs =
-          builtins.partition (k: builtins.elem k this.systemAttrs) allOutputFields;
+          builtins.partition (k: builtins.elem k perSystemOutputs) allOutputFields;
+
+        wrongJson = builtins.toJSON partitionedOutputAttrs.wrong;
+        checkBadAttrs = lib.optionalAttrs (partitionedOutputAttrs.wrong != [])
+          (throw ("Non-system-specific flake outputs ${wrongJson} are defined within 'perSystem'. "
+            + "These outputs should be defined outside of 'perSystem'. Or, add ${wrongJson} "
+            + "to 'perSystemOutputs' if it should be a system-specific output."));
       in
-        flake
+        checkBadAttrs
         //
-        lib.genAttrs partitionedOutputAttrs.wrong
-          (attr: systemOutputs.${this.unspecifiedSystem}.${attr})
+        flake
         //
         lib.genAttrs partitionedOutputAttrs.right
           (attr:
