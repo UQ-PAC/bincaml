@@ -113,6 +113,8 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
     p.procs
     |> ID.Map.mapi (fun procid proc ->
         let spec = Procedure.specification proc in
+        (* We cannot lift variables in rely/guarantee clauses. This check
+        assumes that only observable variables appear in these clauses. *)
         if not skip_observable then begin
           if not (List.is_empty spec.rely) then
             failwith
