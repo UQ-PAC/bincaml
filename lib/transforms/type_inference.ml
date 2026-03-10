@@ -69,12 +69,12 @@ module BinCamlType = struct
     | BinCaml_BV size -> "bv" ^ string_of_int size
     | BinCaml_Bool -> "bool"
 
-  let c_to_type : t -> Types.t = function
+  let bincaml_type_to_type : t -> Types.t = function
     | BinCaml_Int -> Types.Integer
     | BinCaml_BV sz -> Types.Bitvector sz
     | BinCaml_Bool -> Types.Boolean
 
-  let type_to_c : Types.t -> t = function
+  let type_to_bincaml_type : Types.t -> t = function
     | Types.Integer -> BinCaml_Int
     | Types.Bitvector s -> BinCaml_BV s
     | Types.Boolean -> BinCaml_Bool
@@ -172,13 +172,17 @@ module InferredType = struct
     | Field { ty } -> iter f ty
     | Record fields -> List.iter (fun { ty } -> iter f ty) fields
 
-  let rec inferred_to_real : t -> Types.t = function
-    | Top | Bottom | TypeVar _ | Recursive _ | Union _ | Sect _ | Function _ ->
+  (* Top and type_var might be valid, and maybe even bottom and then those can just default to whatever type it had prior *)
+  let rec inferred_to_real typ : t -> Types.t = function
+    | Top | Bottom | TypeVar _ -> typ
+    | Recursive _ | Union _ | Sect _ | Function _ ->
         failwith "These types should have been removed prior to transform!"
     | Pointer (lb, ub) -> Types.Integer
+    (* Types.Pointer (lb, ub) *)
     | Record fields -> Types.Boolean
-    | BinCamlType a -> BinCamlType.c_to_type a
-    | Field { ty } -> inferred_to_real ty
+    (* Types.Record StringMap.of_list @@ List.map (fun {offset; t} -> (Z.to_string offset, inferred_to_real t)) fields *)
+    | BinCamlType a -> BinCamlType.bincaml_type_to_type a
+    | Field { ty } -> inferred_to_real typ ty
 end
 
 module TySet = struct
@@ -293,6 +297,9 @@ module Sigma = struct
     | _ -> false
 
   let is_epislon = equal Ep
+  let is_record edge = match edge with Reclabel _ -> true | _ -> false
+  let is_fn edge = match edge with FnIn _ | FnOut _ -> true | _ -> false
+  let is_ptr edge = equal LoadLabel edge || equal StoreLabel edge
 end
 
 module State = struct
@@ -324,6 +331,9 @@ module TypeAutomata = struct
         (fun s ats acc ->
           Hashtbl.fold (fun a t acc' -> (s, a, t) :: acc') ats acc)
         m.transitions []
+
+    let get_transitions_from m s =
+      Hashtbl.to_iter @@ Hashtbl.find m.transitions s
 
     let get_next_states m s =
       match Hashtbl.find_opt m.transitions s with
@@ -530,11 +540,128 @@ module TypeAutomata = struct
         Hashtbl.add tbl (p, ty) edges;
         ((p, ty) :: ls, tbl)
 
-  let create_type_automata polarity ty init name =
+  let type_to_automata polarity ty init name =
     let states, transitions =
       type_to_state_list polarity ty ([], Hashtbl.create 10)
     in
     { states; transitions; start = init; name }
+
+  (*
+    From start node, look at all edges, and see what the highest
+      one is from below ordering
+
+    1) Record (RecLabel)
+    2) Pointer (LoadLabel / StoreLabel)
+    3) Function (FnIn / FnOut)
+    4) Atom (No edges)
+
+    Take that node to be that type and 'gather' the types of the nodes
+      that are from those edges, i.e. in the record case, get all the rec labels
+      and see what type they are, when you get to the leaves, you can start
+      reconstructing the type.
+
+    NOTE: Is there a reason this can't be in the same pass as merging the nodes?
+
+      Pros: Faster since there is less passes over each automata
+      Cons: Extremely messy
+
+      Maybe the better thing to do is just to re-order it so the nodes are merged,
+        after the heuristic is done, as the type automatas, should be smaller.
+      Though this would just add to this function being longer, though it ignores
+        certain edges regardless so sometimes way faster, i.e. if there is 1 record
+        label and 100 pointer labels, all pointer labels are ignored.
+  *)
+  let automata_to_type n =
+    (* Look at edges and make a list of them + the type field to make a field *)
+    let make_record types : InferredType.t =
+      InferredType.Record
+        (List.map
+           (fun (edge, ty) ->
+             match edge with
+             | Sigma.Reclabel (offset, size) ->
+                 ({ offset; size; ty } : InferredType.field)
+             | _ -> failwith "Illegal edge in record list")
+           types)
+    in
+    (* Assume the list is only of two things *)
+    let make_pointer types : InferredType.t =
+      match types with
+      | [ (Sigma.StoreLabel, lb); (LoadLabel, ub) ]
+      | [ (LoadLabel, ub); (StoreLabel, lb) ] ->
+          Pointer (lb, ub)
+      | _ -> failwith "Illegal types in pointer list"
+    in
+    (* Check the FnIn / FnOut and construct it accordingly *)
+    let make_function types =
+      let ins, outs =
+        List.partition_filter_map
+          (fun (edge, ty) ->
+            match edge with
+            | Sigma.FnIn name -> `Left (name, ty)
+            | FnOut name -> `Right (name, ty)
+            | _ -> failwith "Illegal type in function list")
+          types
+      in
+      InferredType.Function
+        ("meow", StringMap.of_list ins, StringMap.of_list outs)
+    in
+    let make_type (types : (Sigma.t * InferredType.t) list) ((_, ty) : State.t)
+        : InferredType.t =
+      (* Figure out what constructor to use *)
+      match types with
+      | [] -> ty
+      | (Reclabel _, _) :: _ -> make_record types
+      | ((StoreLabel | LoadLabel), _) :: _ -> make_pointer types
+      | ((FnIn _ | FnOut _), _) :: _ -> make_function types
+      | (Ep, _) :: _ -> failwith "Should have been removed"
+    in
+    let rec construct_type (state : State.t) : InferredType.t =
+      let edges = get_transitions_from n state in
+      let highest_edges =
+        Iter.fold
+          (fun acc ((edge, state) as a) ->
+            match (acc, edge) with
+            | _, Sigma.Ep -> failwith "Should have been removed"
+            (* Empty acc, add anything *)
+            | [], _ -> [ (edge, state) ]
+            (* Record label in acc and record label edge *)
+            | (Sigma.Reclabel _, _) :: _, Sigma.Reclabel _ -> a :: acc
+            (* Record label in acc and non record label edge *)
+            | (Sigma.Reclabel _, _) :: _, _ -> acc
+            (* Pointer label in acc and pointer label edge *)
+            | ( ((Sigma.StoreLabel | Sigma.LoadLabel), _) :: _,
+                (Sigma.StoreLabel | Sigma.LoadLabel) ) ->
+                a :: acc
+            (* Pointer label in acc and record label edge *)
+            | ((Sigma.StoreLabel | Sigma.LoadLabel), _) :: _, Sigma.Reclabel _
+              ->
+                [ a ]
+            (* Pointer label in acc and non pointer label edge *)
+            | ((Sigma.StoreLabel | Sigma.LoadLabel), _) :: _, _ -> acc
+            (* Function label in acc and function label edge *)
+            | ( ((Sigma.FnIn _ | Sigma.FnOut _), _) :: _,
+                (Sigma.FnIn _ | Sigma.FnOut _) ) ->
+                a :: acc
+            (* Function label in acc and higher than function label edge *)
+            | ( ((Sigma.FnIn _ | Sigma.FnOut _), _) :: _,
+                (Sigma.Reclabel _ | Sigma.StoreLabel | Sigma.LoadLabel) ) ->
+                [ a ]
+            (* Atoms in acc and non-atom edge *)
+            | ( _,
+                ( Sigma.FnIn _ | Sigma.FnOut _ | Sigma.LoadLabel
+                | Sigma.StoreLabel | Sigma.Reclabel _ ) ) ->
+                [ a ])
+          [] edges
+      in
+      (* WARN: will have to partition here to seperate fnin and fnout *)
+      let children_types =
+        List.map
+          (fun (edge, state) -> (edge, construct_type state))
+          highest_edges
+      in
+      make_type children_types state
+    in
+    construct_type n.start
 
   let export_graphviz n =
     Printf.sprintf
@@ -595,9 +722,7 @@ let minimise_type p ty name =
       | InferredType.Recursive (a, b) -> Hashtbl.add recursives a (gen.fresh ())
       | _ -> ())
     ty;
-  let automata =
-    TypeAutomata.create_type_automata p ty (p, ty) (VarId.show name)
-  in
+  let automata = TypeAutomata.type_to_automata p ty (p, ty) (VarId.show name) in
   TypeAutomata.remove_ep automata;
   TypeAutomata.merge_nodes automata;
   automata
@@ -842,7 +967,8 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
             (* All types need to be the same *)
             let typ =
               BinCamlType
-                (BinCamlType.type_to_c (BasilExpr.type_of (List.hd args)))
+                (BinCamlType.type_to_bincaml_type
+                   (BasilExpr.type_of (List.hd args)))
             in
             let st =
               List.fold_left (fun acc a -> constrain_arg st a typ) st args
@@ -852,8 +978,8 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
         | `BVConcat ->
             ( st,
               BinCamlType
-                (BinCamlType.type_to_c @@ BasilExpr.type_of (BasilExpr.fix expr))
-            ))
+                (BinCamlType.type_to_bincaml_type
+                @@ BasilExpr.type_of (BasilExpr.fix expr)) ))
     | ApplyFun _ -> (st, Top)
     | Binding _ -> (st, Top)
   in
