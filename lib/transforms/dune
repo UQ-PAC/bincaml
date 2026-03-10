@@ -9,8 +9,7 @@
   cleanup_cfg
   ide
   may_read_uninit
-  type_check
-  lambda_lifting)
+  type_check)
  (libraries
   bincaml.analysis
   patricia-tree
