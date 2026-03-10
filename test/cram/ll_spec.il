@@ -4,8 +4,8 @@ var $y: bv32;
 prog entry @caller;
 
 proc @callee () -> ()
-  requires eq($x:bv32, 0x1:bv32);
-  ensures eq($x:bv32, bvadd(old($x:bv32), $y:bv32));
+  requires eq($x:bv32, 0x1:bv32)
+  ensures eq($x:bv32, bvadd(old($x:bv32), $y:bv32))
 [
   block %entry [
     assert eq($x:bv32, old($x:bv32));

@@ -11,24 +11,24 @@ written by @caller.  After the pass:
   var $y:bv32;
   prog entry @caller;
   proc @callee()  -> () {  }
-    modifies $x:bv32;
-    captures $x:bv32, $y:bv32;
+    modifies $x:bv32
+    captures $x:bv32, $y:bv32
   
   [
      block %entry [ $x:bv32 := bvadd($x:bv32, $y:bv32); goto (%ret); ];
      block %ret [ nop; return; ]
   ];
   proc @caller()  -> () {  }
-    modifies $x:bv32, $y:bv32;
-    captures $x:bv32, $y:bv32;
+    modifies $x:bv32, $y:bv32
+    captures $x:bv32, $y:bv32
   
   [
      block %entry [
-        $y:bv32 := 0x0:bv32;
-        $x:bv32 := 0x1:bv32;
-        
-        call @callee();
-        goto (%ret);
+       $y:bv32 := 0x0:bv32;
+       $x:bv32 := 0x1:bv32;
+       
+       call @callee();
+       goto (%ret);
      ];
      block %ret [ nop; return; ]
   ];
@@ -38,30 +38,38 @@ written by @caller.  After the pass:
 
   $ cat after_ll.il
   prog entry @caller;
-  proc @callee(x_in:bv32, $y:bv32)  -> ($x:bv32) {  }
+  proc @callee(x_in:bv32, y_in:bv32)  -> (x_out:bv32) {  }
     
   
   [
-     block %ll_init [ $x:bv32 := x_in:bv32; goto (%entry); ];
-     block %entry [ $x:bv32 := bvadd($x:bv32, $y:bv32); goto (%ret); ];
-     block %ret [ nop; return; ]
+     block %inputs [
+       (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32);
+       goto (%entry);
+     ];
+     block %entry [ var x:bv32 := bvadd(x:bv32, y:bv32); goto (%ret); ];
+     block %ret [ nop; goto (%returns); ];
+     block %returns [ var x_out:bv32 := x:bv32; return; ]
   ];
-  proc @caller(x_in:bv32, y_in:bv32)  -> ($x:bv32, $y:bv32) {  }
+  proc @caller(x_in:bv32, y_in:bv32)  -> (x_out:bv32, y_out:bv32) {  }
     
   
   [
-     block %ll_init [
-        ($x:bv32 := x_in:bv32, $y:bv32 := y_in:bv32);
-        goto (%entry);
+     block %inputs [
+       (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32);
+       goto (%entry);
      ];
      block %entry [
-        $y:bv32 := 0x0:bv32;
-        $x:bv32 := 0x1:bv32;
-        ($x:bv32=$x) := 
-        call @callee($x_in=$x:bv32, $y=$y:bv32);
-        goto (%ret);
+       var y:bv32 := 0x0:bv32;
+       var x:bv32 := 0x1:bv32;
+       (var x:bv32=x_out) := 
+       call @callee(x_in=x:bv32, y_in=y:bv32);
+       goto (%ret);
      ];
-     block %ret [ nop; return; ]
+     block %ret [ nop; goto (%returns); ];
+     block %returns [
+       (var x_out:bv32 := x:bv32, var y_out:bv32 := y:bv32);
+       return;
+     ]
   ];
 
 
@@ -79,65 +87,73 @@ all global refs in requires (not just those under Old) become in-params.
   var $y:bv32;
   prog entry @caller;
   proc @callee()  -> () {  }
-    modifies $x:bv32;
-    captures $x:bv32, $y:bv32;
-    requires eq($x:bv32, 0x1:bv32);
-    ensures eq($x:bv32, bvadd(old($x:bv32), $y:bv32));
+    modifies $x:bv32
+    captures $x:bv32, $y:bv32
+    requires eq($x:bv32, 0x1:bv32)
+    ensures eq($x:bv32, bvadd(old($x:bv32), $y:bv32))
   
   [
      block %entry [
-        assert eq($x:bv32, old($x:bv32));
-        $x:bv32 := bvadd($x:bv32, $y:bv32);
-        goto (%ret);
+       assert eq($x:bv32, old($x:bv32));
+       $x:bv32 := bvadd($x:bv32, $y:bv32);
+       goto (%ret);
      ];
      block %ret [ nop; return; ]
   ];
   proc @caller()  -> () {  }
-    modifies $x:bv32, $y:bv32;
-    captures $x:bv32, $y:bv32;
+    modifies $x:bv32, $y:bv32
+    captures $x:bv32, $y:bv32
   
   [
      block %entry [
-        $y:bv32 := 0x0:bv32;
-        $x:bv32 := 0x1:bv32;
-        
-        call @callee();
-        goto (%ret);
+       $y:bv32 := 0x0:bv32;
+       $x:bv32 := 0x1:bv32;
+       
+       call @callee();
+       goto (%ret);
      ];
      block %ret [ nop; return; ]
   ];
 
   $ cat after_ll_spec.il
   prog entry @caller;
-  proc @callee(x_in:bv32, $y:bv32)  -> ($x:bv32) {  }
-    requires eq(x_in:bv32, 0x1:bv32);
-    ensures eq($x:bv32, bvadd(x_in:bv32, $y:bv32));
+  proc @callee(x_in:bv32, y_in:bv32)  -> (x_out:bv32) {  }
+    requires eq(x_in:bv32, 0x1:bv32)
+    ensures eq($x:bv32, bvadd(x_in:bv32, $y:bv32))
   
   [
-     block %ll_init [ $x:bv32 := x_in:bv32; goto (%entry); ];
-     block %entry [
-        assert eq($x:bv32, x_in:bv32);
-        $x:bv32 := bvadd($x:bv32, $y:bv32);
-        goto (%ret);
+     block %inputs [
+       (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32);
+       goto (%entry);
      ];
-     block %ret [ nop; return; ]
+     block %entry [
+       assert eq(x:bv32, x_in:bv32);
+       var x:bv32 := bvadd(x:bv32, y:bv32);
+       goto (%ret);
+     ];
+     block %ret [ nop; goto (%returns); ];
+     block %returns [ var x_out:bv32 := x:bv32; return; ]
   ];
-  proc @caller(x_in:bv32, y_in:bv32)  -> ($x:bv32, $y:bv32) {  }
+  proc @caller(x_in:bv32, y_in:bv32)  -> (x_out:bv32, y_out:bv32) {  }
     
   
   [
-     block %ll_init [
-        ($x:bv32 := x_in:bv32, $y:bv32 := y_in:bv32);
-        goto (%entry);
+     block %inputs [
+       (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32);
+       goto (%entry);
      ];
      block %entry [
-        $y:bv32 := 0x0:bv32;
-        $x:bv32 := 0x1:bv32;
-        ($x:bv32=$x) := 
-        call @callee($x_in=$x:bv32, $y=$y:bv32);
-        goto (%ret);
+       var y:bv32 := 0x0:bv32;
+       var x:bv32 := 0x1:bv32;
+       (var x:bv32=x_out) := 
+       call @callee(x_in=x:bv32, y_in=y:bv32);
+       goto (%ret);
      ];
-     block %ret [ nop; return; ]
+     block %ret [ nop; goto (%returns); ];
+     block %returns [
+       (var x_out:bv32 := x:bv32, var y_out:bv32 := y:bv32);
+       return;
+     ]
   ];
 
 Lambda lifting – real example (irreducible_loop_1.il).
