@@ -1,48 +1,71 @@
 { lib
 }:
 
-{
-  flake-for-all-systems =
-    { ... }@args:
-    { systems, outputs }@flake:
-    let
-      systemAttrs =
-        ["packages" "legacyPackages" "devShells" "defaultPackage" "formatter"
-          "apps" "checks"];
-      firstSystem = builtins.head systems;
+let
+  this = lib.makeScope lib.callPackageWith makeThisScope;
+  makeThisScope = this: {
 
-      systemSelfArgs = lib.genAttrs systems (system:
-        let
-          # scopes all flake arguments to refer to the relevant system
-          args' = builtins.mapAttrs (_: self:
-            if self._type or "" == "flake" then
-              { original = self; }
-              // (builtins.mapAttrs
-                (k: v: if builtins.elem k systemAttrs then v.${system} else v)
-                self)
-            else
-              self
-          ) args;
-        in
-          { system = system; } // args'
-      );
+    systemAttrs =
+      ["packages" "legacyPackages" "devShells" "defaultPackage" "formatter"
+        "apps" "checks"];
 
-      # map: system -> output set
-      systemOutputs = lib.genAttrs systems (system:
-        outputs (systemSelfArgs.${system})
-      );
+    unspecifiedSystem = builtins.concatStringsSep " " [
+      "(unspecified-system). Cannot access this system-specific attribute"
+      "from a non-system-specific context."
+    ];
 
-      allOutputFields =
-        lib.mergeAttrsList (builtins.attrValues systemOutputs);
-    in
-      flake
-      //
-      systemOutputs.${firstSystem}
-      //
-      lib.genAttrs (builtins.filter (k: allOutputFields ? ${k}) systemAttrs)
-        (attr:
-          let
-            systems' = builtins.filter (s: systemOutputs ? ${s}.${attr}) systems;
-          in
-            lib.genAttrs systems' (sys: systemOutputs.${sys}.${attr}));
-}
+    narrowFlakeInput = system: inputName: input:
+      if input._type or "" == "flake" then
+        { original = input; }
+        //
+        (builtins.mapAttrs
+          (k: v:
+            if builtins.elem k this.systemAttrs
+              then if v ? ${system}
+                then v.${system}
+                else "Input attribute does not exist: ${inputName}.${k}.${system}"
+              else
+                v)
+          input)
+      else
+        input;
+
+    narrowFlakeInputs = system: inputs:
+      builtins.mapAttrs (this.narrowFlakeInput system) inputs;
+
+    flake-for-all-systems =
+      { ... }@args:
+      { systems, outputs }@flake:
+      let
+        systems' = [ this.unspecifiedSystem ] ++ systems;
+
+        systemSelfArgs = lib.genAttrs systems' (system:
+          let args' = this.narrowFlakeInputs system args;
+          in { system = system; } // args'
+        );
+
+        # map: system -> output set
+        systemOutputs = lib.genAttrs systems' (system:
+          outputs (systemSelfArgs.${system})
+        );
+
+        allOutputFields =
+          builtins.attrNames (lib.mergeAttrsList (builtins.attrValues systemOutputs));
+
+        partitionedOutputAttrs =
+          builtins.partition (k: builtins.elem k this.systemAttrs) allOutputFields;
+      in
+        flake
+        //
+        lib.genAttrs partitionedOutputAttrs.wrong
+          (attr: systemOutputs.${this.unspecifiedSystem}.${attr})
+        //
+        lib.genAttrs partitionedOutputAttrs.right
+          (attr:
+            let
+              systems' = builtins.filter (s: systemOutputs ? ${s}.${attr}) systems;
+            in
+              lib.genAttrs systems' (sys: systemOutputs.${sys}.${attr}));
+  };
+in
+  this
