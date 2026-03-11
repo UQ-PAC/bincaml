@@ -4,9 +4,8 @@ open Bincaml_util.Common
 open Lang
 open Expr_eval
 
-let simplify_proc_exprs ?visit p =
+let simplify_proc_exprs ?visit rewriter p =
   let blocks = Procedure.blocks_to_list p in
-
   let open Procedure.Edge in
   List.fold_left
     (fun p e ->
@@ -14,17 +13,19 @@ let simplify_proc_exprs ?visit p =
       | Procedure.Vert.Begin bid, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
           let stmts =
             Vector.map
-              (Stmt.map ~f_lvar:id ~f_rvar:id
-                 ~f_expr:(Algsimp.alg_simp_rewriter ?visit))
+              (Stmt.map ~f_lvar:id ~f_rvar:id ~f_expr:(rewriter ?visit))
               b.stmts
           in
           Procedure.update_block p bid { b with stmts }
       | _ -> p)
     p blocks
 
-let simplify_prog_exprs ?visit (p : Program.t) =
+let simplify_proc_exprs_default ?visit p =
+  simplify_proc_exprs ?visit Algsimp.alg_simp_rewriter p
+
+let simplify_prog_exprs rewriter ?visit (p : Program.t) =
   let procs =
-    ID.Map.map (fun proc -> simplify_proc_exprs ?visit proc) p.procs
+    ID.Map.map (fun proc -> simplify_proc_exprs rewriter ?visit proc) p.procs
   in
   { p with procs }
 
@@ -98,7 +99,7 @@ let simplify_prog_with_smt_check x =
     rewrites := x :: !rewrites;
     ()
   in
-  let prog = simplify_prog_exprs ~visit x in
+  let prog = simplify_prog_exprs Algsimp.alg_simp_rewriter ~visit x in
   let verror m e =
     failures := e :: !failures;
     print_error m e

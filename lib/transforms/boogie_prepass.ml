@@ -66,19 +66,22 @@ module Builtins = struct
     | `Load (`Little, i) -> Printf.sprintf "load%d_le" i
 
   (** Returns the monomorphized builtin name *)
-  let monomorphize_builtin (op : builtin) (ret : Types.t) =
+  let monomorphize_builtin (op : builtin) targs =
+    let args = String.concat "_" (List.map Types.to_string targs) in
     Printf.sprintf "%s_%s"
       (String.replace ~sub:" " ~by:"_" (builtin_name op))
-      (Types.to_string ret)
+      args
 
   let name
       (op :
         [< Lang.Ops.AllOps.binary
         | Lang.Ops.AllOps.unary
         | Lang.Ops.AllOps.intrin
-        | builtin ]) (ret : Types.t) =
+        | builtin ]) args =
     match op with
-    | #builtin as op -> Function (monomorphize_builtin op ret)
+    | (`BVADD | `BVAND | `BVNOT | `BVNEG | `BVMUL | `BVOR) as op ->
+        Function (monomorphize_builtin op (List.take 1 args))
+    | #builtin as op -> Function (monomorphize_builtin op args)
     | `EQ -> Infix "=="
     | `NEQ -> Infix "!="
     | `INTADD -> Infix "+"
@@ -147,7 +150,7 @@ module Builtins = struct
            attrib = attribs;
            binding =
              Var.create
-               (match name op ret with Function s -> s | _ -> "")
+               (match name op (args @ [ ret ]) with Function s -> s | _ -> "")
                (Types.curry args ret);
            definition = Uninterpreted;
          }
@@ -323,8 +326,92 @@ module Instructions = struct
          prog
 end
 
+module Normalise = struct
+  open Lang
+  open Expr
+  open AbstractExpr
+  open BasilExpr
+  open Bitvec
+
+  let normalise_for_boogie (e : BasilExpr.t BasilExpr.abstract_expr) =
+    let to_binary op base args =
+      match args with
+      | [] -> base
+      | h :: tl ->
+          List.fold_left (fun a b -> BasilExpr.applyintrin ~op [ a; b ]) h tl
+    in
+
+    match e with
+    | ApplyIntrin { op = `AND; args } ->
+        replace [%here] ((to_binary `AND (BasilExpr.boolconst true)) args)
+    | ApplyIntrin { op = `OR; args } ->
+        replace [%here] ((to_binary `OR (BasilExpr.boolconst false)) args)
+    | ApplyIntrin { op = `BVConcat; args } ->
+        replace [%here]
+          (to_binary `BVConcat (BasilExpr.bvconst (Bitvec.zero ~size:0)) args)
+    | ApplyIntrin { op = `BVOR; args } ->
+        replace [%here]
+          (to_binary `BVOR (BasilExpr.bvconst (Bitvec.zero ~size:0)) args)
+    | ApplyIntrin { op = `BVAND; args } ->
+        replace [%here]
+          (to_binary `BVAND (BasilExpr.bvconst (Bitvec.zero ~size:0)) args)
+    | ApplyIntrin { op = `BVXOR; args } ->
+        replace [%here]
+          (to_binary `BVXOR (BasilExpr.bvconst (Bitvec.zero ~size:0)) args)
+    | _ -> None
+
+  open Stmt
+
+  let replace_stmt (s : Program.stmt) =
+    match s with
+    | Instr_IndirectCall _ -> Instr_Assert { body = BasilExpr.boolconst false }
+    | Instr_Load { lhs; rhs; addr = Scalar } ->
+        Instr_Assign [ (lhs, BasilExpr.rvar rhs) ]
+    | Instr_Store { lhs; value; addr = Scalar } -> Instr_Assign [ (lhs, value) ]
+    | Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->
+        let fn_name =
+          Printf.sprintf "load%d_%s" size (Lang.Stmt.show_endian endian)
+        in
+        Instr_Assign
+          [
+            ( lhs,
+              Lang.Expr.BasilExpr.fapply
+                (Lang.Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
+                [ Lang.Expr.BasilExpr.rvar rhs; addr ] );
+          ]
+    | Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } } ->
+        let fn_name =
+          Printf.sprintf "store%d_%s" size (Lang.Stmt.show_endian endian)
+        in
+        Lang.Stmt.Instr_Assign
+          [
+            ( lhs,
+              Lang.Expr.BasilExpr.fapply
+                (Lang.Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
+                [ Lang.Expr.BasilExpr.rvar rhs; addr; value ] );
+          ]
+    | o -> o
+
+  let rewriter ?visit e =
+    BasilExpr.rewrite ?visit ~rw_fun:normalise_for_boogie e
+
+  let pass = Cf_tx.simplify_prog_exprs rewriter
+
+  let replace_stmts (p : Program.t) =
+    let procs =
+      p.procs
+      |> ID.Map.map (fun p ->
+          Procedure.map_blocks_nondet
+            (fun (id, b) -> Block.map ~phi:Fun.id replace_stmt b)
+            p)
+    in
+    { p with procs }
+end
+
 let transform (p : Lang.Program.t) =
   (* let _ = Instructions.unique_stores_loads p in *)
-  let p = Builtins.transform_add_builtin_decls p in
+  (*let p = Normalise.pass p in*)
   let p = Instructions.transform_add_store_load_decls p in
+  let p = Normalise.replace_stmts p in
+  let p = Builtins.transform_add_builtin_decls p in
   p

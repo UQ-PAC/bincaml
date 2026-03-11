@@ -63,56 +63,54 @@ let pretty_const (c : Lang.Ops.AllOps.const) =
   | `Bitvector bv -> text @@ Printf.sprintf "%sbv%d" (Z.format "%d" bv.v) bv.w
   | `Bool b -> text @@ string_of_bool b
 
-let rec pretty_call_args (args : Lang.Program.e list) =
+let pretty_call_args (args : Containers_pp.t list) =
   let open Containers_pp in
   surround ~width:2 (text "(")
-    (newline_or_spaces 0
-    ^ pretty_expr (List.hd args)
+    (newline_or_spaces 0 ^ List.hd args
     ^ append_l
         (List.map
-           (fun arg -> text "," ^ newline_or_spaces 1 ^ pretty_expr arg)
+           (fun arg -> text "," ^ newline_or_spaces 1 ^ arg)
            (List.tl args)))
     (newline_or_spaces 0 ^ text ")")
 
-and pretty_binary_expr (op : Lang.Ops.AllOps.binary) (arg1 : Lang.Program.e)
-    (arg2 : Lang.Program.e) (t : Types.t) =
-  let open Containers_pp in
-  match op with
-  | `MapAccess -> pretty_expr arg1 ^ bracket "[" (pretty_expr arg2) "]"
-  | _ -> (
-      match Transforms.Boogie_prepass.Builtins.name op t with
-      | Function name -> text name ^ pretty_call_args [ arg1; arg2 ]
-      | Infix name -> pretty_expr arg1 ^+ text name ^+ pretty_expr arg2
-      | _ -> failwith "Unsupported binary expr")
-
-and pretty_unary_expr (op : Lang.Ops.AllOps.unary) (arg : Lang.Program.e)
+let pretty_binary_expr (op : Lang.Ops.AllOps.binary) (ty1, arg1) (ty2, arg2)
     (t : Types.t) =
   let open Containers_pp in
   match op with
-  | `BOOLTOBV1 ->
-      bracket "(if (" (pretty_expr arg) ")" ^+ text "then (1bv1) else (0bv1))"
+  | `MapAccess -> arg1 ^ bracket "[" arg2 "]"
   | _ -> (
-      match Transforms.Boogie_prepass.Builtins.name op t with
+      match Transforms.Boogie_prepass.Builtins.name op [ ty1; ty2; t ] with
+      | Function name -> text name ^ pretty_call_args [ arg1; arg2 ]
+      | Infix name -> arg1 ^+ text name ^+ arg2
+      | _ -> failwith "Unsupported binary expr")
+
+let pretty_unary_expr (op : Lang.Ops.AllOps.unary) (ty, arg) (rt : Types.t) =
+  let open Containers_pp in
+  match op with
+  | `BOOLTOBV1 -> bracket "(if (" arg ")" ^+ text "then (1bv1) else (0bv1))"
+  | `BoolNOT -> bracket "(!(" arg "))"
+  | `Old -> bracket "old(" arg ")"
+  | _ -> (
+      match Transforms.Boogie_prepass.Builtins.name op [ ty; rt ] with
       | Function name -> text name ^ pretty_call_args [ arg ]
-      | Prefix name -> text name ^ pretty_expr arg
+      | Prefix name -> text name ^ arg
       | Infix name -> text name ^ text "XNOPYT XNOPTY XNOPYT"
-      | Postfix name -> pretty_expr arg ^ text name
+      | Postfix name -> arg ^ text name
       | _ ->
           failwith
           @@ Printf.sprintf "Unsupported unary expr: %s"
           @@ Lang.Ops.AllOps.to_string op)
 
-and pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
-    (args : Lang.Program.e list) =
+let pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
+    (args : (Types.t * Containers_pp.t) list) =
   let open Containers_pp in
   match op with
-  (* BVConcat has special handling because of a bug in boogie, yay *)
+  (* BVConcat has explicit type annotations on each intermediate expression because of a bug in boogie, yay *)
   | `BVConcat ->
       let mapped =
         List.map
-          (fun e ->
-            match Lang.Expr.BasilExpr.type_of e with
-            | Bitvector size -> (pretty_expr e, size)
+          (function
+            | Types.Bitvector size, e -> (e, size)
             | _ -> raise (BoogieException "May only concat bitvecs"))
           args
       in
@@ -130,45 +128,62 @@ and pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
       in
       surround ~width:0 (text "(") body (text ")")
   | `MapUpdate ->
-      pretty_expr (List.hd args)
+      let args = List.map snd args in
+      List.hd args
       ^ surround ~width:0 (text "[")
-          (pretty_expr (List.nth args 1)
-          ^+ text ":="
-          ^+ pretty_expr (List.nth args 2))
+          (List.nth args 1 ^+ text ":=" ^+ List.nth args 2)
           (text "]")
-  | _ -> raise (BoogieException "Unsupported intrinsic application")
+  | `AND -> bracket "(" (append_l ~sep:(text "&&") (List.map snd args)) ")"
+  | `OR -> bracket "(" (append_l ~sep:(text "||") (List.map snd args)) ")"
+  | e ->
+      let x = Lang.Ops.AllOps.to_string e in
+      raise
+        String.(
+          BoogieException (String.cat "Unsupported intrinsic application " x))
 
-and pretty_apply_function (func : Lang.Program.e) (args : Lang.Program.e list) =
+let pretty_apply_function (func : Containers_pp.t)
+    (args : (Types.t * Containers_pp.t) list) =
   let open Containers_pp in
-  pretty_expr func ^ pretty_call_args args
+  func ^ pretty_call_args (List.map snd args)
 
-and pretty_expr (e : Lang.Program.e) =
+let type_of e = Lang.Expr.BasilExpr.type_alg (Lang.Expr.AbstractExpr.map fst e)
+
+let pretty_expr_alg
+    (e : (Types.t * Containers_pp.t) Lang.Expr.BasilExpr.abstract_expr) =
   let open Containers_pp in
-  match Lang.Expr.BasilExpr.unfix e with
+  match e with
   | RVar { attrib; id } -> pretty_variable id
   | Constant { attrib; const } -> pretty_const const
-  | UnaryExpr { op; arg } ->
-      pretty_unary_expr op arg (Lang.Expr.BasilExpr.type_of e)
-  | BinaryExpr { op; arg1; arg2 } ->
-      pretty_binary_expr op arg1 arg2 (Lang.Expr.BasilExpr.type_of e)
+  | UnaryExpr { op; arg } -> pretty_unary_expr op arg (type_of e)
+  | BinaryExpr { op; arg1; arg2 } -> pretty_binary_expr op arg1 arg2 (type_of e)
   | ApplyIntrin { op; args } -> pretty_apply_intrinsic op args
-  | ApplyFun { func; args } -> pretty_apply_function func args
-  | _ -> raise (BoogieException "Unsupported expression")
+  | ApplyFun { func; args } -> pretty_apply_function (snd func) args
+  | Binding { bound; in_body } -> text "bound"
+(*raise (BoogieException "Unsupported expression: Binding")*)
 
-let rec pretty_function_args (e : Lang.Program.e) =
+let pretty_function_args (e : Lang.Program.e) =
   let open Containers_pp in
-  match Lang.Expr.BasilExpr.unfix e with
-  | UnaryExpr { attrib; op = `Lambda; arg } -> pretty_function_args arg
-  | Binding { attrib; bound = vs; in_body } ->
-      fill (text "," ^ sp) (List.map pretty_variable_typed vs)
+  let pretty bound =
+    fill (text "," ^ sp) (List.map pretty_variable_typed bound)
+  in
+  match Lang.Expr.BasilExpr.unfix2 e with
+  | UnaryExpr { op = `Lambda; arg = Binding { bound; in_body } } -> pretty bound
+  | Binding { bound } -> pretty bound
   | _ -> raise (BoogieException "Unsupported expression as function args")
 
-let rec pretty_function_body (e : Lang.Program.e) =
+let pretty_expr e = Lang.Expr.BasilExpr.fold_with_type_r pretty_expr_alg e
+
+let pretty_function_body (e : Lang.Program.e) =
   let open Containers_pp in
-  match Lang.Expr.BasilExpr.unfix e with
-  | UnaryExpr { attrib; op = `Lambda; arg } -> pretty_function_body arg
-  | Binding { attrib; bound = vs; in_body } -> pretty_expr in_body
-  | _ -> raise (BoogieException "Unsupported expression as function body")
+  match Lang.Expr.BasilExpr.unfix2 e with
+  | UnaryExpr { attrib; op = `Lambda; arg = Binding { in_body } } ->
+      pretty_expr in_body
+  | Binding { in_body } -> pretty_expr (Lang.Expr.BasilExpr.fix in_body)
+  | _ ->
+      raise
+        (BoogieException
+           (String.cat "Unsupported expression as function body: "
+              (Pretty.to_string ~width:80 (pretty_expr e))))
 
 let rec pretty_attribute (attr : Lang.Program.e Lang.Attrib.t) =
   let open Containers_pp in
@@ -238,32 +253,6 @@ let rec pretty_statement (s : Lang.Program.stmt) =
       nest 2 @@ lhs ^+ text ":=" ^+ rhs
   | Instr_Assert { body } -> text "assert" ^+ pretty_expr body
   | Instr_Assume { body; branch } -> text "assume" ^+ pretty_expr body
-  | Instr_Store { lhs; rhs; value; addr = Scalar } -> text "STORE SCALAR"
-  | Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } } ->
-      let fn_name =
-        Printf.sprintf "store%d_%s" size (Lang.Stmt.show_endian endian)
-      in
-      pretty_statement
-        (Lang.Stmt.Instr_Assign
-           [
-             ( lhs,
-               Lang.Expr.BasilExpr.fapply
-                 (Lang.Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
-                 [ Lang.Expr.BasilExpr.rvar rhs; addr; value ] );
-           ])
-  | Instr_Load { lhs; rhs; addr = Scalar } -> text "LOAD SCALAR"
-  | Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->
-      let fn_name =
-        Printf.sprintf "load%d_%s" size (Lang.Stmt.show_endian endian)
-      in
-      pretty_statement
-        (Lang.Stmt.Instr_Assign
-           [
-             ( lhs,
-               Lang.Expr.BasilExpr.fapply
-                 (Lang.Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
-                 [ Lang.Expr.BasilExpr.rvar rhs; addr ] );
-           ])
   | Instr_IntrinCall { lhs; name; args } ->
       let lhs =
         if StringMap.cardinal lhs > 0 then
@@ -279,10 +268,16 @@ let rec pretty_statement (s : Lang.Program.stmt) =
         |> fill (text "," ^ newline_or_spaces 1)
       in
       nest 2 @@ text "call" ^+ lhs ^ proc_name name ^ bracket "(" rhs ")"
-  | Instr_IndirectCall { target } -> text "INDIRECT CALL"
   | Instr_Call { lhs; procid; args } ->
       pretty_statement
       @@ Lang.Stmt.Instr_IntrinCall { lhs; name = ID.name procid; args }
+  | stmt ->
+      raise
+        (BoogieException
+           (Printf.sprintf
+              "Unsupported statement: expected boogie pre pass to remove:\n\t%s"
+              (Lang.Stmt.to_string Var.pretty Var.pretty
+                 Lang.Expr.BasilExpr.pretty stmt)))
 
 let pretty_terminator (p : Lang.Program.proc) (i : IDSet.elt)
     (b : Lang.Procedure.Edge.block) =
