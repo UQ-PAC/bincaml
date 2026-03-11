@@ -3,35 +3,6 @@ open Bincaml_util.Common
 
 exception BoogieException of string
 
-(* type bvbuiltin_binary = *)
-(* [ `BVAND *)
-(* | `BVOR *)
-(* | `BVADD *)
-(* | `BVMUL *)
-(* | `BVUDIV *)
-(* | `BVUREM *)
-(* | `BVSHL *)
-(* | `BVLSHR *)
-(* | `BVNAND *)
-(* | `BVXOR *)
-(* | `BVSUB *)
-(* | `BVSDIV *)
-(* | `BVSREM *)
-(* | `BVSMOD *)
-(* | `BVASHR *)
-(* | `BVULT *)
-(* | `BVULE *)
-(* | `BVSLT *)
-(* | `BVSLE *)
-(* | `Load of [ `Little | `Big ] * int ] *)
-
-(* type bvbuiltin_unary = *)
-(* [ `BVNOT | `BVNEG | `ZeroExtend of int | `SignExtend of int ] *)
-
-(* type builtin_unary = [ | bvbuiltin_unary ] *)
-(* type builtin_binary = [ | bvbuiltin_binary ] *)
-(* type builtin = [ builtin_unary | builtin_binary ] *)
-
 let function_name name =
   let open Containers_pp in
   let name =
@@ -70,45 +41,6 @@ let rec type_to_string (t : Types.t) =
       raise
         (BoogieException (String.cat "Unsupported type" (Types.to_string t)))
 
-(* let builtin_foreign (op : [> builtin ]) = *)
-(* Printf.sprintf "\"%s\"" *)
-(* @@ *)
-(* match op with *)
-(* | `BVAND -> "bvand" *)
-(* | `BVOR -> "bvor" *)
-(* | `BVADD -> "bvadd" *)
-(* | `BVMUL -> "bvmul" *)
-(* | `BVUDIV -> "bvudiv" *)
-(* | `BVUREM -> "bvurem" *)
-(* | `BVSHL -> "bvshl" *)
-(* | `BVLSHR -> "bvlshr" *)
-(* | `BVNAND -> "bvnand" *)
-(* | `BVXOR -> "bvxor" *)
-(* | `BVSUB -> "bvsub" *)
-(* | `BVSDIV -> "bvsdiv" *)
-(* | `BVSREM -> "bvsrem" *)
-(* | `BVSMOD -> "bvsmod" *)
-(* | `BVASHR -> "bvashr" *)
-(* | `BVULT -> "bvult" *)
-(* | `BVULE -> "bvule" *)
-(* | `BVSLT -> "bvslt" *)
-(* | `BVSLE -> "bvsle" *)
-(* | `BVNOT -> "bvnot" *)
-(* | `BVNEG -> "bvneg" *)
-(* | `ZeroExtend sz -> Printf.sprintf "zero_extend %d" sz *)
-(* | `SignExtend sz -> Printf.sprintf "sign_extend %d" sz *)
-(* | `Load (`Big, i) -> Printf.sprintf "load_be_%d" i *)
-(* | `Load (`Little, i) -> Printf.sprintf "load_le_%d" i *)
-(* | _ -> raise (BoogieException "Unsupported builtin") *)
-
-(* let builtin_body (op : [> builtin ]) : Lang.Program.func_type = *)
-(* match op with *)
-(* | `EXAMPLE -> Lang.Program.Function (Lang.Expr.BasilExpr.binding [] (Lang.Expr.BasilExpr.boolconst true)) *)
-(* | _ -> Lang.Program.Uninterpreted *)
-
-let builtin_local op ret =
-  Printf.sprintf "%s_%s" (Lang.Ops.AllOps.to_string op) (type_to_string ret)
-
 let pretty_variable_declaration (v : Var.t) =
   let open Containers_pp in
   text "var "
@@ -145,15 +77,18 @@ let rec pretty_call_args (args : Lang.Program.e list) =
 and pretty_binary_expr (op : Lang.Ops.AllOps.binary) (arg1 : Lang.Program.e)
     (arg2 : Lang.Program.e) (t : Types.t) =
   let open Containers_pp in
-  match Transforms.Boogie_prepass.Op.name op t with
-  | Function name -> text name ^ pretty_call_args [ arg1; arg2 ]
-  | Infix name -> pretty_expr arg1 ^+ text name ^+ pretty_expr arg2
-  | _ -> failwith "Unsupported binary expr"
+  match op with
+  | `MapAccess -> pretty_expr arg1 ^ bracket "[" (pretty_expr arg2) "]"
+  | _ -> (
+      match Transforms.Boogie_prepass.Builtins.name op t with
+      | Function name -> text name ^ pretty_call_args [ arg1; arg2 ]
+      | Infix name -> pretty_expr arg1 ^+ text name ^+ pretty_expr arg2
+      | _ -> failwith "Unsupported binary expr")
 
 and pretty_unary_expr (op : Lang.Ops.AllOps.unary) (arg : Lang.Program.e)
     (t : Types.t) =
   let open Containers_pp in
-  match Transforms.Boogie_prepass.Op.name op t with
+  match Transforms.Boogie_prepass.Builtins.name op t with
   | Function name -> text name ^ pretty_call_args [ arg ]
   | Prefix name -> text name ^ pretty_expr arg
   | Infix name -> text name ^ text "XNOPYT XNOPTY XNOPYT"
@@ -190,6 +125,13 @@ and pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
           mapped
       in
       surround ~width:0 (text "(") body (text ")")
+  | `MapUpdate ->
+      pretty_expr (List.hd args)
+      ^ surround ~width:0 (text "[")
+          (pretty_expr (List.nth args 1)
+          ^+ text ":="
+          ^+ pretty_expr (List.nth args 2))
+          (text "]")
   | _ -> raise (BoogieException "Unsupported intrinsic application")
 
 and pretty_apply_function (func : Lang.Program.e) (args : Lang.Program.e list) =
