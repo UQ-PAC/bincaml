@@ -3,9 +3,42 @@ open Bincaml_util.Common
 
 exception BoogieException of string
 
+(* type bvbuiltin_binary = *)
+(* [ `BVAND *)
+(* | `BVOR *)
+(* | `BVADD *)
+(* | `BVMUL *)
+(* | `BVUDIV *)
+(* | `BVUREM *)
+(* | `BVSHL *)
+(* | `BVLSHR *)
+(* | `BVNAND *)
+(* | `BVXOR *)
+(* | `BVSUB *)
+(* | `BVSDIV *)
+(* | `BVSREM *)
+(* | `BVSMOD *)
+(* | `BVASHR *)
+(* | `BVULT *)
+(* | `BVULE *)
+(* | `BVSLT *)
+(* | `BVSLE *)
+(* | `Load of [ `Little | `Big ] * int ] *)
+
+(* type bvbuiltin_unary = *)
+(* [ `BVNOT | `BVNEG | `ZeroExtend of int | `SignExtend of int ] *)
+
+(* type builtin_unary = [ | bvbuiltin_unary ] *)
+(* type builtin_binary = [ | bvbuiltin_binary ] *)
+(* type builtin = [ builtin_unary | builtin_binary ] *)
+
 let function_name name =
   let open Containers_pp in
-  text "f" ^ text name
+  let name =
+    if String.starts_with ~prefix:"$" name then String.concat "" [ "f"; name ]
+    else name
+  in
+  text name
 
 let proc_name name =
   let open Containers_pp in
@@ -37,6 +70,45 @@ let rec type_to_string (t : Types.t) =
       raise
         (BoogieException (String.cat "Unsupported type" (Types.to_string t)))
 
+(* let builtin_foreign (op : [> builtin ]) = *)
+(* Printf.sprintf "\"%s\"" *)
+(* @@ *)
+(* match op with *)
+(* | `BVAND -> "bvand" *)
+(* | `BVOR -> "bvor" *)
+(* | `BVADD -> "bvadd" *)
+(* | `BVMUL -> "bvmul" *)
+(* | `BVUDIV -> "bvudiv" *)
+(* | `BVUREM -> "bvurem" *)
+(* | `BVSHL -> "bvshl" *)
+(* | `BVLSHR -> "bvlshr" *)
+(* | `BVNAND -> "bvnand" *)
+(* | `BVXOR -> "bvxor" *)
+(* | `BVSUB -> "bvsub" *)
+(* | `BVSDIV -> "bvsdiv" *)
+(* | `BVSREM -> "bvsrem" *)
+(* | `BVSMOD -> "bvsmod" *)
+(* | `BVASHR -> "bvashr" *)
+(* | `BVULT -> "bvult" *)
+(* | `BVULE -> "bvule" *)
+(* | `BVSLT -> "bvslt" *)
+(* | `BVSLE -> "bvsle" *)
+(* | `BVNOT -> "bvnot" *)
+(* | `BVNEG -> "bvneg" *)
+(* | `ZeroExtend sz -> Printf.sprintf "zero_extend %d" sz *)
+(* | `SignExtend sz -> Printf.sprintf "sign_extend %d" sz *)
+(* | `Load (`Big, i) -> Printf.sprintf "load_be_%d" i *)
+(* | `Load (`Little, i) -> Printf.sprintf "load_le_%d" i *)
+(* | _ -> raise (BoogieException "Unsupported builtin") *)
+
+(* let builtin_body (op : [> builtin ]) : Lang.Program.func_type = *)
+(* match op with *)
+(* | `EXAMPLE -> Lang.Program.Function (Lang.Expr.BasilExpr.binding [] (Lang.Expr.BasilExpr.boolconst true)) *)
+(* | _ -> Lang.Program.Uninterpreted *)
+
+let builtin_local op ret =
+  Printf.sprintf "%s_%s" (Lang.Ops.AllOps.to_string op) (type_to_string ret)
+
 let pretty_variable_declaration (v : Var.t) =
   let open Containers_pp in
   text "var "
@@ -58,52 +130,44 @@ let pretty_const (c : Lang.Ops.AllOps.const) =
   | `Integer i -> text @@ Z.format "%d" i
   | `Bitvector bv -> text @@ Printf.sprintf "%sbv%d" (Z.format "%d" bv.v) bv.w
   | `Bool b -> text @@ string_of_bool b
-  | _ -> raise (BoogieException "Unsupported constant")
 
-let rec pretty_binary_op (op : Lang.Ops.AllOps.binary) arg1 arg2 =
+let rec pretty_call_args (args : Lang.Program.e list) =
   let open Containers_pp in
-  match op with
-  | #Lang.Ops.BVOps.binary ->
-      (text @@ Lang.Ops.AllOps.to_string op)
-      ^ text "_"
-      ^ fill (text "_")
-          [
-            text @@ type_to_string @@ Lang.Expr.BasilExpr.type_of arg1;
-            text @@ type_to_string @@ Lang.Expr.BasilExpr.type_of arg2;
-          ]
-  | _ -> text @@ Lang.Ops.AllOps.to_string op
-
-and pretty_unary_op (op : Lang.Ops.AllOps.unary) arg =
-  let open Containers_pp in
-  match op with
-  | #Lang.Ops.BVOps.unary ->
-      (text @@ Lang.Ops.AllOps.to_string op)
-      ^ text "_" ^ text @@ type_to_string
-      @@ Lang.Expr.BasilExpr.type_of arg
-  | _ -> text @@ Lang.Ops.AllOps.to_string op
+  surround ~width:2 (text "(")
+    (newline_or_spaces 0
+    ^ pretty_expr (List.hd args)
+    ^ append_l
+        (List.map
+           (fun arg -> text "," ^ newline_or_spaces 1 ^ pretty_expr arg)
+           (List.tl args)))
+    (newline_or_spaces 0 ^ text ")")
 
 and pretty_binary_expr (op : Lang.Ops.AllOps.binary) (arg1 : Lang.Program.e)
-    (arg2 : Lang.Program.e) =
+    (arg2 : Lang.Program.e) (t : Types.t) =
   let open Containers_pp in
-  match op with
-  | `EQ -> pretty_expr arg1 ^ sp ^ text "==" ^ sp ^ pretty_expr arg2
-  | `NEQ -> pretty_expr arg1 ^ sp ^ text "!=" ^ sp ^ pretty_expr arg2
-  | _ ->
-      pretty_binary_op op arg1 arg2
-      ^ surround ~width:2 (text "(")
-          (newline_or_spaces 0 ^ pretty_expr arg1 ^ text ","
-         ^ newline_or_spaces 1 ^ pretty_expr arg2)
-          (newline_or_spaces 0 ^ text ")")
+  match Transforms.Boogie_prepass.Op.name op t with
+  | Function name -> text name ^ pretty_call_args [ arg1; arg2 ]
+  | Infix name -> pretty_expr arg1 ^+ text name ^+ pretty_expr arg2
+  | _ -> failwith "Unsupported binary expr"
 
-and pretty_unary_expr (op : Lang.Ops.AllOps.unary) (arg : Lang.Program.e) =
+and pretty_unary_expr (op : Lang.Ops.AllOps.unary) (arg : Lang.Program.e)
+    (t : Types.t) =
   let open Containers_pp in
-  match op with
-  | _ -> pretty_unary_op op arg ^ bracket "(" (pretty_expr arg) ")"
+  match Transforms.Boogie_prepass.Op.name op t with
+  | Function name -> text name ^ pretty_call_args [ arg ]
+  | Prefix name -> text name ^ pretty_expr arg
+  | Infix name -> text name ^ text "XNOPYT XNOPTY XNOPYT"
+  | Postfix name -> pretty_expr arg ^ text name
+  | _ ->
+      failwith
+      @@ Printf.sprintf "Unsupported unary expr: %s"
+      @@ Lang.Ops.AllOps.to_string op
 
 and pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
     (args : Lang.Program.e list) =
   let open Containers_pp in
   match op with
+  (* BVConcat has special handling because of a bug in boogie, yay *)
   | `BVConcat ->
       let mapped =
         List.map
@@ -130,38 +194,54 @@ and pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
 
 and pretty_apply_function (func : Lang.Program.e) (args : Lang.Program.e list) =
   let open Containers_pp in
-  pretty_expr func
-  ^ surround ~width:2 (text "(")
-      (fill (text "," ^ sp) (List.map pretty_expr args))
-      (newline_or_spaces 0 ^ text ")")
+  pretty_expr func ^ pretty_call_args args
 
-and pretty_expr (Lang.Expr.BasilExpr.E e) =
+and pretty_expr (e : Lang.Program.e) =
   let open Containers_pp in
-  match e with
+  match Lang.Expr.BasilExpr.unfix e with
   | RVar { attrib; id } -> pretty_variable id
   | Constant { attrib; const } -> pretty_const const
-  | UnaryExpr { op; arg } -> pretty_unary_expr op arg
-  | BinaryExpr { op; arg1; arg2 } -> pretty_binary_expr op arg1 arg2
+  | UnaryExpr { op; arg } ->
+      pretty_unary_expr op arg (Lang.Expr.BasilExpr.type_of e)
+  | BinaryExpr { op; arg1; arg2 } ->
+      pretty_binary_expr op arg1 arg2 (Lang.Expr.BasilExpr.type_of e)
   | ApplyIntrin { op; args } -> pretty_apply_intrinsic op args
   | ApplyFun { func; args } -> pretty_apply_function func args
   | _ -> raise (BoogieException "Unsupported expression")
 
-let rec pretty_function_args (Lang.Expr.BasilExpr.E e) =
+let rec pretty_function_args (e : Lang.Program.e) =
   let open Containers_pp in
-  match e with
+  match Lang.Expr.BasilExpr.unfix e with
   | UnaryExpr { attrib; op = `Lambda; arg } -> pretty_function_args arg
   | Binding { attrib; bound = vs; in_body } ->
       fill (text "," ^ sp) (List.map pretty_variable_typed vs)
   | _ -> raise (BoogieException "Unsupported expression as function args")
 
-let rec pretty_function_body (Lang.Expr.BasilExpr.E e) =
+let rec pretty_function_body (e : Lang.Program.e) =
   let open Containers_pp in
-  match e with
+  match Lang.Expr.BasilExpr.unfix e with
   | UnaryExpr { attrib; op = `Lambda; arg } -> pretty_function_body arg
   | Binding { attrib; bound = vs; in_body } -> pretty_expr in_body
   | _ -> raise (BoogieException "Unsupported expression as function body")
 
-(* type func_type = Axiom of e | Uninterpreted | Function of e *)
+let rec pretty_attribute (attr : Lang.Program.e Lang.Attrib.t) =
+  let open Containers_pp in
+  match attr with
+  | `List l -> List.flat_map pretty_attribute l
+  | `String s -> [ text s ]
+  | _ -> []
+
+let rec pretty_attribute_map (a : Lang.Program.e Lang.Attrib.attrib_map) =
+  let open Containers_pp in
+  StringMap.find_opt ".boogie" a
+  |> Option.to_list
+  |> List.flat_map (function `Assoc m -> StringMap.to_list m | _ -> [])
+  |> List.map (function k, f ->
+      bracket "{"
+        (text ":" ^ text (String.drop 1 k) ^+ append_sp @@ pretty_attribute f)
+        "}")
+  |> append_sp
+
 let pretty_declaration (d : Lang.Program.declaration) =
   let open Containers_pp in
   let open Containers_pp.Infix in
@@ -170,6 +250,7 @@ let pretty_declaration (d : Lang.Program.declaration) =
       pretty_variable_declaration binding
   | Lang.Program.Function { binding; attrib; definition = Function t } ->
       text "function"
+      ^+ pretty_attribute_map attrib
       ^+ (function_name @@ Var.name binding)
       ^ bracket "(" (pretty_function_args t) ")"
       ^+ text "returns"
@@ -181,21 +262,22 @@ let pretty_declaration (d : Lang.Program.declaration) =
       fill sp [ text "axiom"; bracket "(" (pretty_expr t) ")" ]
   | Lang.Program.Function { binding; attrib; definition = Uninterpreted } ->
       let param, rt = Types.uncurry (Var.typ binding) in
-      text "function "
-      ^ (function_name @@ Var.name binding)
+      text "function"
+      ^+ pretty_attribute_map attrib
+      ^+ (function_name @@ Var.name binding)
       ^ bracket "("
           (fill
              (text "," ^ sp)
              (List.map (fun t -> text @@ type_to_string t) param))
           ")"
       ^ bracket " returns (" (text (type_to_string rt)) ")"
-         ^ text ";"
+      ^ text ";"
 
 let rec pretty_statement (s : Lang.Program.stmt) =
   let open Containers_pp in
   let open List.Infix in
   match s with
-  | Instr_Assign [] -> text ""
+  | Instr_Assign [] -> text "assert true"
   | Instr_Assign ls ->
       let lhs =
         ls
@@ -248,7 +330,7 @@ let rec pretty_statement (s : Lang.Program.stmt) =
         |> List.map (compose snd pretty_expr)
         |> fill (text "," ^ newline_or_spaces 1)
       in
-      nest 2 @@ text "call" ^+ lhs ^ (proc_name name) ^ bracket "(" rhs ")"
+      nest 2 @@ text "call" ^+ lhs ^ proc_name name ^ bracket "(" rhs ")"
   | Instr_IndirectCall { target } -> text "INDIRECT CALL"
   | Instr_Call { lhs; procid; args } ->
       pretty_statement
@@ -277,7 +359,6 @@ let pretty_terminator (p : Lang.Program.proc) (i : IDSet.elt)
 let pretty_block (p : Lang.Program.proc) (i : IDSet.elt)
     (b : Lang.Procedure.Edge.block) =
   let open Containers_pp in
-  let g = Lang.Procedure.graph p in
   let name = block_name (Lang.Procedure.Vert.Begin i) in
   let stmts =
     Lang.Block.stmts_iter b |> Iter.map pretty_statement |> Iter.to_list
@@ -302,7 +383,9 @@ let pretty_procedure_header (s : string) (p : Lang.Program.proc) =
       sp ^ text "returns" ^+ bracket "(" (param_list out_params) ")"
     else text ""
   in
-  let header = text s ^+ proc_name (ID.name @@ Lang.Procedure.id p) ^ args ^ returns in
+  let header =
+    text s ^+ proc_name (ID.name @@ Lang.Procedure.id p) ^ args ^ returns
+  in
   header
 
 let pretty_modifies (p : Lang.Program.proc) =
@@ -335,7 +418,7 @@ let pretty_procedure_spec (p : Lang.Program.proc) =
   let modifies = pretty_modifies p in
   let ensures = pretty_ensures p in
   let requires = pretty_requires p in
-  nest 2 @@ join_lines ([ header ] @ modifies @ ensures @ requires)
+  nest 2 @@ join_lines_end ([ header ] @ modifies @ ensures @ requires)
 
 let pretty_procedure_impl (p : Lang.Program.proc) =
   let open Containers_pp in
@@ -362,7 +445,7 @@ let pretty_procedure_impl (p : Lang.Program.proc) =
 
 let pretty_procedure (p : Lang.Program.proc) =
   let open Containers_pp in
-  join_lines
+  append_nl
   @@ [ pretty_procedure_spec p ]
   @
   if negate List.is_empty @@ Lang.Procedure.blocks_to_list p then
@@ -386,11 +469,12 @@ let pretty_program (p : Lang.Program.t) =
   let procs =
     p.procs |> ID.Map.to_list
     |> List.map (fun (_, p) -> pretty_procedure p)
-    |> join_lines_end ~s:"\n"
+    |> append_l ~sep:(newline ^ newline)
   in
   append_l ~sep:(newline ^ newline) [ glob_vars; glob_funs; procs ]
 
 let pretty_to_chan chan (p : Lang.Program.t) =
+  let p = Transforms.Boogie_prepass.transform p in
   let p = pretty_program p in
   flush chan;
   let fmt = Format.formatter_of_out_channel chan in

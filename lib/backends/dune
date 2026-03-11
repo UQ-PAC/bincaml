@@ -3,5 +3,5 @@
  (name backends)
  (flags -w -27)
  (modules boogie)
- (libraries containers containers-data containers.pp lang)
+ (libraries containers containers-data containers.pp lang transforms)
  (inline_tests))
