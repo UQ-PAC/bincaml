@@ -119,7 +119,7 @@ all global refs in requires (not just those under Old) become in-params.
   prog entry @caller;
   proc @callee(x_in:bv32, y_in:bv32)  -> (x_out:bv32) {  }
     requires eq(x_in:bv32, 0x1:bv32)
-    ensures eq($x:bv32, bvadd(x_in:bv32, $y:bv32))
+    ensures eq(x_out:bv32, bvadd(x_in:bv32, y_in:bv32))
   
   [
      block %inputs [

@@ -246,13 +246,18 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
                 fop (to_formal outparam))
             proc
         in
-        (* Map from global name to its in-param var, used for Old rewriting *)
+        (* Maps from global name to in-/out-param vars, used for spec rewriting *)
         let glob_to_inparam =
           List.fold_left
             (fun m (_, g, v) -> StringMap.add (Var.name g) v m)
             StringMap.empty inparam
         in
-        (* Rewrite Old(g) → g_in in ensures and body.
+        let glob_to_outparam =
+          List.fold_left
+            (fun m (_, g, v) -> StringMap.add (Var.name g) v m)
+            StringMap.empty outparam
+        in
+        (* Rewrite Old(g) → g_in in body statements.
            Must run before body substitution so Old(g) is still recognisable. *)
         let rewrite_old_expr expr =
           let open Expr.AbstractExpr in
@@ -283,13 +288,33 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
           in
           rewrite ~rw_fun:alg expr
         in
+        (* Rewrite ensures: Old(g) → g_in (entry value); bare modified g →
+           g_out (exit value); bare captured-only g → g_in (unchanged).
+           Old(g) is handled first so the bare-g pass doesn't clobber it. *)
+        let rewrite_ensures_expr expr =
+          let open Expr.AbstractExpr in
+          let open Expr.BasilExpr in
+          let expr = rewrite_old_expr expr in
+          let alg node =
+            match map unfix node with
+            | RVar { id } -> (
+                match StringMap.find_opt (Var.name id) glob_to_outparam with
+                | Some v -> replace [%here] (rvar v)
+                | None -> (
+                    match StringMap.find_opt (Var.name id) glob_to_inparam with
+                    | Some v -> replace [%here] (rvar v)
+                    | None -> None))
+            | _ -> None
+          in
+          rewrite ~rw_fun:alg expr
+        in
         let proc =
           let spec = Procedure.specification proc in
           Procedure.set_specification proc
             {
               spec with
               requires = List.map rewrite_requires_expr spec.requires;
-              ensures = List.map rewrite_old_expr spec.ensures;
+              ensures = List.map rewrite_ensures_expr spec.ensures;
             }
         in
         let proc =
