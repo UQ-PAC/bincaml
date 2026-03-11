@@ -36,9 +36,11 @@ open struct
           (** generate and return unique integer identifier throwing if it
               already exists*)
       get_declared : unit -> M.t;
+      sigil : char option;
+          (** remove the sigil from the start of the identifier *)
     }
 
-    val make_gen : unit -> generator
+    val make_gen : ?sigil:char -> unit -> generator
   end
 end
 
@@ -54,12 +56,16 @@ module ID : ID_Pub = struct
   let create_unsafe n i : t = (n, i)
 
   type cache = {
+    sigil : char option;
     names : M.t ref;
     gen : Fix.Gensym.gensym;
     name_counts : (string, int) Hashtbl.t;
   }
 
-  let get_id c name : t = create_unsafe name (M.find_left name !(c.names))
+  let get_id c name : t =
+    let name = Sigils.apply_sigil c.sigil name in
+    create_unsafe name (M.find_left name !(c.names))
+
   let get_name c id : t = create_unsafe (M.find_right id !(c.names)) id
 
   let name_indexed (str : string) : string * int option =
@@ -101,6 +107,7 @@ module ID : ID_Pub = struct
         different unique index *)
   let fresh c ?(name : string option) () =
     let name = Option.get_or ~default:"v" name in
+    let name = Sigils.apply_sigil c.sigil name in
     let uniq_name =
       if M.mem_left name !(c.names) then
         name_indexed_to_unique c.name_counts name
@@ -120,6 +127,7 @@ module ID : ID_Pub = struct
 
   (** the unique id for a name, creating one if it doesnt exist *)
   let decl_or_get_id c name : t =
+    let name = Sigils.apply_sigil c.sigil name in
     if M.mem_left name !(c.names) then get_id c name
     else
       let n, i = name_indexed name in
@@ -131,6 +139,7 @@ module ID : ID_Pub = struct
       create_unsafe name id
 
   let decl_exn c name : string * int =
+    let name = Sigils.apply_sigil c.sigil name in
     if M.mem_left name !(c.names) then failwith @@ "already declared: " ^ name
     else
       let n, i = name_indexed name in
@@ -153,13 +162,15 @@ module ID : ID_Pub = struct
         (** generate and return unique integer identifier throwing if it already
             exists*)
     get_declared : unit -> M.t;
+    sigil : char option;  (** get the sigil/namespace of for this generator *)
   }
 
   (** return a generator for unique hash-consed string identifiers. general
       implementation of a declaration *)
-  let make_gen () : generator =
+  let make_gen ?sigil () : generator =
     let c =
       {
+        sigil;
         names = ref M.empty;
         gen = Fix.Gensym.make ();
         name_counts = Hashtbl.create 30;
@@ -172,6 +183,7 @@ module ID : ID_Pub = struct
       decl_or_get = decl_or_get_id c;
       decl_exn = decl_exn c;
       get_declared = (fun () -> !(c.names));
+      sigil = c.sigil;
     }
 end
 

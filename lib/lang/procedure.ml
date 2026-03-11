@@ -221,8 +221,8 @@ end = struct
     let specification =
       { captures_globs; modifies_globs; requires; ensures; rely; guarantee }
     in
-    let local_ids = ID.make_gen () in
-    let block_ids = ID.make_gen () in
+    let local_ids = ID.make_gen ?sigil:Bincaml_util.Sigils.sigil_local () in
+    let block_ids = ID.make_gen ?sigil:Bincaml_util.Sigils.sigil_block () in
     StringMap.iter (fun k v -> ignore @@ local_ids.decl_exn k) formal_in_params;
     StringMap.iter (fun k v -> ignore @@ local_ids.decl_exn k) formal_out_params;
     let locals = Var.Decls.empty () in

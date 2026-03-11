@@ -142,7 +142,7 @@ let add_decl ?(attrib = StringMap.empty) p v decl =
   { p with globals = StringMap.add v decl p.globals }
 
 let create_single_proc ?(name = "<module>") () =
-  let proc_names = ID.make_gen () in
+  let proc_names = ID.make_gen ?sigil:Bincaml_util.Sigils.sigil_proc () in
   let procname = proc_names.fresh ~name () in
   let proc = Procedure.create procname () in
   let prog =
@@ -165,7 +165,7 @@ let empty ?name () =
     entry_proc = None;
     globals = StringMap.empty;
     procs = ID.Map.empty;
-    proc_names = ID.make_gen ();
+    proc_names = ID.make_gen ?sigil:Bincaml_util.Sigils.sigil_proc ();
     attrib = StringMap.empty;
     spec = { rely = []; guarantee = [] };
   }

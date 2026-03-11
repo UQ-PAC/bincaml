@@ -858,13 +858,33 @@ module BasilASTLoader = struct
     | Value_True -> `Bool true
     | Value_False -> `Bool false
 
+  and check_sigil s pos ident =
+    if not (Bincaml_util.Sigils.has_sigil s ident) then
+      raise
+        (LoadError
+           {
+             input = None;
+             token_char_offset_range = Some pos;
+             msg =
+               Printf.sprintf "Identifier requires prefix sigil: '"
+               ^ (Option.get s |> String.of_char)
+               ^ "'";
+           })
+    else ident
+
   and unsafe_unsigil g : string =
+    (* this is already enforced by the grammar *)
     match g with
-    | `Global (GlobalIdent (pos, g)) -> g
-    | `Local (LocalIdent (pos, g)) -> g
-    | `Proc (ProcIdent (pos, g)) -> g
-    | `Block (BlockIdent (pos, g)) -> g
-    | `Attr (BIdent (pos, g)) -> g
+    | `Global (GlobalIdent (pos, g)) ->
+        check_sigil Bincaml_util.Sigils.sigil_global pos g
+    | `Local (LocalIdent (pos, g)) ->
+        check_sigil Bincaml_util.Sigils.sigil_local pos g
+    | `Proc (ProcIdent (pos, g)) ->
+        check_sigil Bincaml_util.Sigils.sigil_proc pos g
+    | `Block (BlockIdent (pos, g)) ->
+        check_sigil Bincaml_util.Sigils.sigil_block pos g
+    | `Attr (BIdent (pos, g)) ->
+        check_sigil Bincaml_util.Sigils.sigil_attrib pos g
 
   and trans_cases p_st c =
     let cases =
