@@ -343,8 +343,9 @@ module TypeAutomata = struct
           @@ Edges.values states
   end
 
-  let dfa_and_merge_nodes (m : t) : t = m
-  let simplify_automata (m : t) : t = dfa_and_merge_nodes m
+  let merge_nodes (m : t) : t = m
+  let dfa (m : t) : t = m
+  let simplify_automata (m : t) : t = merge_nodes m |> dfa
 
   let type_to_automata (polarity : Polarity.t) ty init name =
     let rec type_to_state_list p (ty : InferredType.t) ((ls, tbl) as acc) =
@@ -354,9 +355,9 @@ module TypeAutomata = struct
         | Top | BinCamlType _ | TypeVar _ | Bottom | Field _ -> ([], [])
         | Recursive (a, _) ->
             (*
-            WARN: This will need to change but is nice to have incase
-             I ever get recursive stuff
-          *)
+              WARN: This will need to change but is nice to have incase
+               I ever get recursive stuff
+            *)
             ([], [])
         | Union (a, b) | Sect (a, b) ->
             let ty1, edge1 = grab_edges a in
@@ -505,7 +506,11 @@ module TypeAutomata = struct
           types
       in
       InferredType.Function
-        ("meow", StringMap.of_list ins, StringMap.of_list outs)
+        ( "lowkirkenuily dont think this field matters at this stage, but if \
+           it does it should not be that much more effort just to cascade the \
+           name to here",
+          StringMap.of_list ins,
+          StringMap.of_list outs )
     in
     let make_type (types : (Sigma.t * InferredType.t) list) ((_, ty) : State.t)
         : InferredType.t =
@@ -627,10 +632,7 @@ let gen = ID.make_gen ()
 
 *)
 let minimise_type p ty name =
-  let m = TypeAutomata.type_to_automata p ty (p, ty) (VarId.show name) in
-  print_endline @@ TypeAutomata.export_graphviz m;
-  failwith "bom" m
-(* TypeAutomata.create_simple_type p ty (p, ty) (VarId.show name) *)
+  TypeAutomata.create_simple_type p ty (p, ty) (VarId.show name)
 
 (*
   Given a type tau get all bounds (depending on polarity) and make a combined
