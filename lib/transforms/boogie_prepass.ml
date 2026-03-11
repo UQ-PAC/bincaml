@@ -62,8 +62,8 @@ module Builtins = struct
     | `BVNEG -> "bvneg"
     | `ZeroExtend sz -> Printf.sprintf "zero_extend %d" sz
     | `SignExtend sz -> Printf.sprintf "sign_extend %d" sz
-    | `Load (`Big, i) -> Printf.sprintf "load_be_%d" i
-    | `Load (`Little, i) -> Printf.sprintf "load_le_%d" i
+    | `Load (`Big, i) -> Printf.sprintf "load%d_be" i
+    | `Load (`Little, i) -> Printf.sprintf "load%d_le" i
 
   (** Returns the monomorphized builtin name *)
   let monomorphize_builtin (op : builtin) (ret : Types.t) =
@@ -270,7 +270,7 @@ module Instructions = struct
                  Var.create
                    (Printf.sprintf "store%d_%s" size
                       (Lang.Stmt.show_endian endian))
-                   Types.Boolean;
+                   (Var.typ lhs);
                definition =
                  Function
                    (store_body (Var.typ rhs)
@@ -295,7 +295,7 @@ module Instructions = struct
                  Var.create
                    (Printf.sprintf "load%d_%s" size
                       (Lang.Stmt.show_endian endian))
-                   Types.Boolean;
+                   (Var.typ lhs);
                definition =
                  Function
                    (load_body (Var.typ rhs)

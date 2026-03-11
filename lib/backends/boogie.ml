@@ -88,15 +88,19 @@ and pretty_binary_expr (op : Lang.Ops.AllOps.binary) (arg1 : Lang.Program.e)
 and pretty_unary_expr (op : Lang.Ops.AllOps.unary) (arg : Lang.Program.e)
     (t : Types.t) =
   let open Containers_pp in
-  match Transforms.Boogie_prepass.Builtins.name op t with
-  | Function name -> text name ^ pretty_call_args [ arg ]
-  | Prefix name -> text name ^ pretty_expr arg
-  | Infix name -> text name ^ text "XNOPYT XNOPTY XNOPYT"
-  | Postfix name -> pretty_expr arg ^ text name
-  | _ ->
-      failwith
-      @@ Printf.sprintf "Unsupported unary expr: %s"
-      @@ Lang.Ops.AllOps.to_string op
+  match op with
+  | `BOOLTOBV1 ->
+      bracket "(if (" (pretty_expr arg) ")" ^+ text "then (1bv1) else (0bv1))"
+  | _ -> (
+      match Transforms.Boogie_prepass.Builtins.name op t with
+      | Function name -> text name ^ pretty_call_args [ arg ]
+      | Prefix name -> text name ^ pretty_expr arg
+      | Infix name -> text name ^ text "XNOPYT XNOPTY XNOPYT"
+      | Postfix name -> pretty_expr arg ^ text name
+      | _ ->
+          failwith
+          @@ Printf.sprintf "Unsupported unary expr: %s"
+          @@ Lang.Ops.AllOps.to_string op)
 
 and pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
     (args : Lang.Program.e list) =
@@ -203,7 +207,9 @@ let pretty_declaration (d : Lang.Program.declaration) =
   | Lang.Program.Function { binding; attrib; definition = Axiom t } ->
       fill sp [ text "axiom"; bracket "(" (pretty_expr t) ")" ]
   | Lang.Program.Function { binding; attrib; definition = Uninterpreted } ->
+      (* let _ = print_endline (Var.to_string binding) in *)
       let param, rt = Types.uncurry (Var.typ binding) in
+      (* let _ = print_endline (List.to_string Types.to_string param) in *)
       text "function"
       ^+ pretty_attribute_map attrib
       ^+ (function_name @@ Var.name binding)
