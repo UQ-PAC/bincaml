@@ -136,7 +136,7 @@ module Builtins = struct
       StringMap.of_list
         [
           (".extern", `List []);
-          ( ".builtin",
+          ( ".bvbuiltin",
             `List [ `String (Printf.sprintf "\"%s\"" @@ builtin_name op) ] );
         ]
     in
@@ -258,10 +258,10 @@ module Instructions = struct
     match s with
     | Lang.Stmt.Instr_Store
         { lhs; rhs; value; addr = Addr { addr; size; endian } } ->
-        let boogie_attribs = StringMap.of_list [ (".extern", `List []) ] in
-        let attribs =
-          StringMap.of_list [ (".boogie", `Assoc boogie_attribs) ]
+        let boogie_attribs =
+          StringMap.of_list [ (".extern", `List []); (".define", `List []) ]
         in
+        let attribs = StringMap.singleton ".boogie" (`Assoc boogie_attribs) in
         Some
           (Function
              {
