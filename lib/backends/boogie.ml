@@ -117,12 +117,11 @@ let pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
       let body, _ =
         List.reduce_exn
           (fun (acc_t, acc_s) (t, s) ->
-            ( surround ~width:2 (text "(")
-                (newline_or_spaces 0 ^ acc_t ^ newline_or_spaces 0 ^ text "++"
-               ^ newline_or_spaces 0 ^ t)
-                (newline_or_spaces 0 ^ text "):")
-              ^+ text "bv" ^ text
-              @@ string_of_int (acc_s + s),
+            ( group
+                (text "("
+                ^ (acc_t ^ text " ++ " ^ t)
+                ^ text "):" ^+ text "bv" ^ text
+                @@ string_of_int (acc_s + s)),
               acc_s + s ))
           mapped
       in
