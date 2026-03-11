@@ -280,6 +280,7 @@ module Sigma = struct
     | Reclabel of Z.t * int
     | FnIn of string
     | FnOut of string
+  [@@deriving eq, ord]
 
   let show = function
     | Ep -> "ε"
@@ -288,13 +289,6 @@ module Sigma = struct
     | Reclabel (n, m) -> Printf.sprintf "Record Label %s %d" (Z.to_string n) m
     | FnIn n -> Printf.sprintf "Function in %s" n
     | FnOut n -> Printf.sprintf "Function out %s" n
-
-  let equal a b =
-    match (a, b) with
-    | Ep, Ep | StoreLabel, StoreLabel | LoadLabel, LoadLabel -> true
-    | Reclabel (n, m), Reclabel (n1, m1) -> Z.equal n n1 && m = m1
-    | FnIn n, FnIn n1 | FnOut n, FnOut n1 -> String.equal n n1
-    | _ -> false
 
   let is_epislon = equal Ep
   let is_record edge = match edge with Reclabel _ -> true | _ -> false
@@ -308,269 +302,177 @@ module State = struct
 
     Made up of a polarity and a type
   *)
-  type t = Polarity.t * InferredType.t
-
-  let equal (p1, ty1) (p2, ty2) =
-    InferredType.equal ty1 ty2 && Polarity.equal p1 p2
+  type t = Polarity.t * InferredType.t [@@deriving eq, ord]
 end
 
 module TypeAutomata = struct
+  module StateEdges = Map.Make (State)
+  module Edges = Map.Make (Sigma)
+
   type t = {
-    mutable states : State.t list;
-    transitions : (State.t, (Sigma.t, State.t) Hashtbl.t) Hashtbl.t;
+    states : State.t list;
+    transitions : State.t list Edges.t StateEdges.t;
     start : State.t;
     name : string;
   }
 
   open struct
-    let set_states m qs = m.states <- qs
-    let add_state m (s : State.t) = set_states m (s :: m.states)
-
-    let get_transitions m =
-      Hashtbl.fold
-        (fun s ats acc ->
-          Hashtbl.fold (fun a t acc' -> (s, a, t) :: acc') ats acc)
+    let get_transitions m : (State.t * Sigma.t * State.t) list =
+      StateEdges.fold
+        (fun state edges acc ->
+          Edges.fold
+            (fun sigma end_states acc ->
+              List.fold_left
+                (fun acc end_state -> (state, sigma, end_state) :: acc)
+                acc end_states)
+            edges acc)
         m.transitions []
 
     let get_transitions_from m s =
-      Hashtbl.to_iter @@ Hashtbl.find m.transitions s
+      match StateEdges.find_opt s m.transitions with
+      | None -> Iter.empty
+      | Some a -> Edges.to_iter a
 
     let get_next_states m s =
-      match Hashtbl.find_opt m.transitions s with
+      match StateEdges.find_opt s m.transitions with
       | None -> Iter.empty
-      | Some states -> Hashtbl.values states
-
-    let get_prev_states m t =
-      Hashtbl.fold
-        (fun s v acc ->
-          Hashtbl.fold
-            (fun a' t' acc' -> if State.equal t t' then s :: acc' else acc')
-            v acc)
-        m.transitions []
-
-    let filter_states_inplace m f =
-      set_states m (List.filter f m.states);
-      Hashtbl.filter_map_inplace
-        (fun s ts -> if f s then Some ts else None)
-        m.transitions
+      | Some states ->
+          Iter.fold
+            (fun acc states -> Iter.append acc (List.to_iter states))
+            Iter.empty
+          @@ Edges.values states
   end
 
-  let remove_ep m =
-    let rec helper acc current_state =
-      (* Do the lower states first, I am scared about what happens if loop *)
-      let acc = Iter.fold helper acc @@ get_next_states m current_state in
-      let acc =
-        match Hashtbl.find_opt m.transitions current_state with
-        | None -> acc
-        | Some edges ->
-            Hashtbl.fold
-              (fun edge end_state acc ->
-                if not @@ Sigma.is_epislon edge then acc
-                (* There exists a epislon edge from start -> end *)
-                  else
-                  let orphans = Hashtbl.find_all m.transitions end_state in
-                  Hashtbl.remove m.transitions end_state;
-                  List.iter (Hashtbl.iter (Hashtbl.add edges)) orphans;
-                  end_state :: acc)
-              edges acc
-      in
-      match Hashtbl.find_opt m.transitions current_state with
-      | None -> acc
-      | Some edges ->
-          let eps = Hashtbl.find_all edges Ep in
-          for i = 0 to List.length eps do
-            Hashtbl.remove (Hashtbl.find m.transitions current_state) Ep
-          done;
-          acc
-    in
-    let removal = helper [] m.start in
-    filter_states_inplace m (fun state ->
-        not
-        @@ List.mem
-             ~eq:(fun (p1, ty1) (p2, ty2) ->
-               InferredType.equal ty1 ty2 && Polarity.equal p1 p2)
-             state removal)
+  let dfa_and_merge_nodes (m : t) : t = m
+  let simplify_automata (m : t) : t = dfa_and_merge_nodes m
 
-  let merge_nodes m =
-    let rec join (ty0 : InferredType.t) (ty1 : InferredType.t) : InferredType.t
-        =
-      match (ty0, ty1) with
-      | Record fields0, Record fields1 ->
-          (* WARN: I think this could be improved, cause this is gross *)
-          let module FieldMap = Map.Make (struct
-            type t = Z.t * int
-
-            let compare = Stdlib.compare
-          end) in
-          let fieldmap_to_field_list (map : InferredType.t FieldMap.t) =
-            FieldMap.bindings map
-            |> List.map (fun ((offset, size), ty) ->
-                ({ offset; size; ty } : InferredType.field))
-          in
-          let fieldmap_of_list (fields : InferredType.field list) :
-              InferredType.t FieldMap.t =
-            List.fold_left
-              (fun acc ({ offset; size; ty } : InferredType.field) ->
-                FieldMap.add (offset, size) ty acc)
-              FieldMap.empty fields
-          in
-          let f0 = fieldmap_of_list fields0 in
-          let f1 = fieldmap_of_list fields1 in
-          let joined_map =
-            FieldMap.merge_safe
-              ~f:(fun (offset, size) v ->
-                match v with
-                | `Both (a, b) -> Some (InferredType.Union (a, b))
-                | `Left a | `Right a -> Some a)
-              f0 f1
-          in
-          Record (fieldmap_to_field_list joined_map)
-      | Pointer (a, b), Pointer (c, d) ->
-          (* ptr((a u c) n (b n d), (b n d)) *)
-          Pointer (join (Union (a, c)) (join b d), join b d)
-      (* WARN: this is not how BinSub did it, but I think I am just smarter and had better DS *)
-      | Function (name0, ins0, outs0), Function (name1, ins1, outs1) ->
-          if not @@ String.equal name0 name1 then
-            failwith
-              "Function names do not match and a join between them occured"
-          else
-            (* args are the same just just union over the args *)
-            let ins =
-              StringMap.merge_safe
-                ~f:(fun _ b ->
-                  match b with
-                  | `Both (l, r) -> Some (join l r)
-                  | _ ->
-                      failwith "Function declartion differs to function usage")
-                ins0 ins1
+  let type_to_automata (polarity : Polarity.t) ty init name =
+    let rec type_to_state_list p (ty : InferredType.t) ((ls, tbl) as acc) =
+      let rec grab_edges (ty : InferredType.t) :
+          InferredType.t list * (Sigma.t * State.t) list =
+        match ty with
+        | Top | BinCamlType _ | TypeVar _ | Bottom | Field _ -> ([], [])
+        | Recursive (a, _) ->
+            (*
+            WARN: This will need to change but is nice to have incase
+             I ever get recursive stuff
+          *)
+            ([], [])
+        | Union (a, b) | Sect (a, b) ->
+            let ty1, edge1 = grab_edges a in
+            let ty2, edge2 = grab_edges b in
+            (ty1 @ ty2, edge1 @ edge2)
+        | Function (_, ins, outs) ->
+            let _ =
+              List.fold_left_map
+                (fun acc (n, ty) ->
+                  (ty :: acc, (Sigma.FnIn n, (Polarity.not p, ty))))
+                [] (StringMap.to_list ins)
             in
-            Function (name0, ins, outs0)
-      | a, Bottom | Bottom, a -> a
-      | _ -> Sect (ty0, ty1)
+            let _ =
+              List.fold_left_map
+                (fun acc (n, ty) ->
+                  (ty :: acc, (Sigma.FnOut n, (Polarity.not p, ty))))
+                []
+              @@ StringMap.to_list outs
+            in
+            ([], [])
+        | Pointer (a, b) ->
+            ( [ a; b ],
+              [ (Sigma.LoadLabel, (p, b)); (StoreLabel, (Polarity.not p, a)) ]
+            )
+        | Record fields ->
+            List.fold_left_map
+              (fun acc ({ offset; size; ty } : InferredType.field) ->
+                (ty :: acc, (Sigma.Reclabel (offset, size), (p, ty))))
+              [] fields
+      in
+      let open Sigma in
+      match ty with
+      | Top | BinCamlType _ | TypeVar _ | Bottom | Field _ ->
+          ((p, ty) :: ls, tbl)
+      | Recursive (a, _) ->
+          (*
+            WARN: This will need to change but is nice to have incase
+             I ever get recursive stuff
+          *)
+          let ls, tbl = type_to_state_list p a acc in
+          let edges = Edges.add_to_list Sigma.Ep (p, a) Edges.empty in
+          let tbl = StateEdges.add (p, ty) edges tbl in
+          ((p, ty) :: ls, tbl)
+      | Union (a, b) | Sect (a, b) ->
+          let next1, edges1 = grab_edges a in
+          let next2, edges2 = grab_edges b in
+          let next, edges = (next1 @ next2, edges1 @ edges2) in
+          let ls, tbl =
+            List.fold_left
+              (fun acc typ -> type_to_state_list (Polarity.not p) typ acc)
+              acc next
+          in
+          let edges =
+            List.fold_left
+              (fun edges (edge, state) -> Edges.add_to_list edge state edges)
+              Edges.empty edges
+          in
+          let tbl = StateEdges.add (p, ty) edges tbl in
+          ((p, ty) :: ls, tbl)
+      | Function (_, ins, outs) ->
+          let acc =
+            StringMap.fold
+              (fun _ -> type_to_state_list @@ Polarity.not p)
+              ins acc
+          in
+          let ls, tbl =
+            StringMap.fold (fun _ -> type_to_state_list p) outs acc
+          in
+          let edges =
+            List.fold_left
+              (fun edges (n, ty) ->
+                (* TODO wrong polarity for one of these *)
+                Edges.add_to_list (FnIn n) (Polarity.not p, ty) edges)
+              Edges.empty
+            @@ StringMap.to_list ins
+          in
+          let edges =
+            List.fold_left
+              (fun edges (n, ty) ->
+                (* TODO wrong polarity for one of these *)
+                Edges.add_to_list (FnOut n) (Polarity.not p, ty) edges)
+              edges
+            @@ StringMap.to_list outs
+          in
+          let tbl = StateEdges.add (p, ty) edges tbl in
+          ((p, ty) :: ls, tbl)
+      | Pointer (a, b) ->
+          let ((ls, tbl) as acc) = type_to_state_list (Polarity.not p) a acc in
+          let ls, tbl = type_to_state_list p b acc in
+          let edges =
+            Edges.add_to_list LoadLabel (p, b)
+            @@ Edges.add_to_list StoreLabel (Polarity.not p, a) Edges.empty
+          in
+          let tbl = StateEdges.add (p, ty) edges tbl in
+          ((p, ty) :: ls, tbl)
+      | Record fields ->
+          let ls, tbl =
+            List.fold_left
+              (fun acc ({ ty } : InferredType.field) ->
+                type_to_state_list p ty acc)
+              acc fields
+          in
+          let edges =
+            List.fold_left
+              (fun edges ({ offset; size; ty } : InferredType.field) ->
+                Edges.add_to_list (Reclabel (offset, size)) (p, ty) edges)
+              Edges.empty fields
+          in
+          let tbl = StateEdges.add (p, ty) edges tbl in
+          ((p, ty) :: ls, tbl)
     in
-    let rec helper current_state =
-      Iter.iter helper @@ get_next_states m current_state;
-      match Hashtbl.find_opt m.transitions current_state with
-      | None -> ()
-      | Some edges ->
-          Iter.iter (fun edge ->
-              let curr_states = Hashtbl.find_all edges edge in
-              if List.length curr_states <= 1 then ()
-              else (
-                set_states m
-                  (List.filter
-                     (fun state ->
-                       not @@ List.mem ~eq:State.equal state curr_states)
-                     m.states);
-                let new_tbl = Hashtbl.create 2 in
-                let new_state =
-                  List.fold_left
-                    (fun (_, new_typ) ((p, typ) as end_state) ->
-                      let orphans = Hashtbl.find_all m.transitions end_state in
-                      List.iter (Hashtbl.iter (Hashtbl.replace new_tbl)) orphans;
-                      Hashtbl.remove edges edge;
-                      Hashtbl.remove m.transitions end_state;
-                      (p, join typ new_typ))
-                    (Polarity.Pos, InferredType.Bottom)
-                  @@ curr_states
-                in
-                Hashtbl.add edges edge new_state;
-                Hashtbl.add m.transitions new_state new_tbl;
-                add_state m new_state))
-          @@ Hashtbl.keys edges
-    in
-    helper m.start
-
-  (*
-    NOTE:
-      May be possible to not generate ep edges
-       and just deal with them here, saving a pass
-  *)
-  let rec type_to_state_list p (ty : InferredType.t) ((ls, tbl) as acc) =
-    let open Sigma in
-    match ty with
-    | Top | BinCamlType _ | TypeVar _ | Bottom | Field _ -> ((p, ty) :: ls, tbl)
-    | Recursive (a, _) ->
-        let ls, tbl = type_to_state_list p a acc in
-        let edges = Hashtbl.create 1 in
-        Hashtbl.add edges Sigma.Ep (p, a);
-        Hashtbl.add tbl (p, ty) edges;
-        ((p, ty) :: ls, tbl)
-    | Union (a, b) | Sect (a, b) ->
-        let ((ls, tbl) as acc) = type_to_state_list p a acc in
-        let ls, tbl = type_to_state_list p b acc in
-        let edges = Hashtbl.create 2 in
-        Hashtbl.add edges Ep (p, a);
-        Hashtbl.add edges Ep (p, b);
-        Hashtbl.add tbl (p, ty) edges;
-        ((p, ty) :: ls, tbl)
-    | Function (_, ins, outs) ->
-        let acc =
-          StringMap.fold (fun _ -> type_to_state_list @@ Polarity.not p) ins acc
-        in
-        let ls, tbl = StringMap.fold (fun _ -> type_to_state_list p) outs acc in
-        let edges = Hashtbl.create 30 in
-        List.iter (fun (n, ty) ->
-            Hashtbl.add edges (FnIn n) (Polarity.not p, ty))
-        @@ StringMap.to_list ins;
-        List.iter (fun (n, ty) -> Hashtbl.add edges (FnOut n) (p, ty))
-        @@ StringMap.to_list outs;
-        Hashtbl.add tbl (p, ty) edges;
-        ((p, ty) :: ls, tbl)
-    | Pointer (a, b) ->
-        let ((ls, tbl) as acc) = type_to_state_list (Polarity.not p) a acc in
-        let ls, tbl = type_to_state_list p b acc in
-        let edges = Hashtbl.create 2 in
-        Hashtbl.add edges StoreLabel (Polarity.not p, a);
-        Hashtbl.add edges LoadLabel (p, b);
-        Hashtbl.add tbl (p, ty) edges;
-        ((p, ty) :: ls, tbl)
-    | Record fields ->
-        let ls, tbl =
-          List.fold_left
-            (fun acc ({ ty } : InferredType.field) ->
-              type_to_state_list p ty acc)
-            acc fields
-        in
-        let edges = Hashtbl.create 4 in
-        List.iter
-          (fun ({ offset; size; ty } : InferredType.field) ->
-            Hashtbl.add edges (Reclabel (offset, size)) (p, ty))
-          fields;
-        Hashtbl.add tbl (p, ty) edges;
-        ((p, ty) :: ls, tbl)
-
-  let type_to_automata polarity ty init name =
     let states, transitions =
-      type_to_state_list polarity ty ([], Hashtbl.create 10)
+      type_to_state_list polarity ty ([], StateEdges.empty)
     in
     { states; transitions; start = init; name }
 
-  (*
-    From start node, look at all edges, and see what the highest
-      one is from below ordering
-
-    1) Record (RecLabel)
-    2) Pointer (LoadLabel / StoreLabel)
-    3) Function (FnIn / FnOut)
-    4) Atom (No edges)
-
-    Take that node to be that type and 'gather' the types of the nodes
-      that are from those edges, i.e. in the record case, get all the rec labels
-      and see what type they are, when you get to the leaves, you can start
-      reconstructing the type.
-
-    NOTE: Is there a reason this can't be in the same pass as merging the nodes?
-
-      Pros: Faster since there is less passes over each automata
-      Cons: Extremely messy
-
-      Maybe the better thing to do is just to re-order it so the nodes are merged,
-        after the heuristic is done, as the type automatas, should be smaller.
-      Though this would just add to this function being longer, though it ignores
-        certain edges regardless so sometimes way faster, i.e. if there is 1 record
-        label and 100 pointer labels, all pointer labels are ignored.
-  *)
   let automata_to_type n =
     (* Look at edges and make a list of them + the type field to make a field *)
     let make_record types : InferredType.t =
@@ -653,15 +555,25 @@ module TypeAutomata = struct
                 [ a ])
           [] edges
       in
-      (* WARN: will have to partition here to seperate fnin and fnout *)
       let children_types =
         List.map
-          (fun (edge, state) -> (edge, construct_type state))
+          (fun (edge, state) ->
+            let state =
+              match state with
+              | state :: [] -> state
+              | [] -> failwith "Map wasn't removed when edges were removed"
+              | _ -> failwith "A list of states here means they weren't merged"
+            in
+            (edge, construct_type state))
           highest_edges
       in
       make_type children_types state
     in
     construct_type n.start
+
+  let create_simple_type (polarity : Polarity.t) ty init name : InferredType.t =
+    type_to_automata polarity ty init name
+    |> simplify_automata |> automata_to_type
 
   let export_graphviz n =
     Printf.sprintf
@@ -715,17 +627,10 @@ let gen = ID.make_gen ()
 
 *)
 let minimise_type p ty name =
-  let recursives = Hashtbl.create 2 in
-  InferredType.iter
-    (fun ty ->
-      match ty with
-      | InferredType.Recursive (a, b) -> Hashtbl.add recursives a (gen.fresh ())
-      | _ -> ())
-    ty;
-  let automata = TypeAutomata.type_to_automata p ty (p, ty) (VarId.show name) in
-  TypeAutomata.remove_ep automata;
-  TypeAutomata.merge_nodes automata;
-  automata
+  let m = TypeAutomata.type_to_automata p ty (p, ty) (VarId.show name) in
+  print_endline @@ TypeAutomata.export_graphviz m;
+  failwith "bom" m
+(* TypeAutomata.create_simple_type p ty (p, ty) (VarId.show name) *)
 
 (*
   Given a type tau get all bounds (depending on polarity) and make a combined
@@ -1199,7 +1104,6 @@ let transform (prog : Program.t) =
                 acc)
          VarIdMap.empty
   in
-  print_endline @@ ConstraintState.export_graph_viz type_constraint_map;
   let types =
     VarIdMap.mapi
       (fun name ({ lb; ub } : ConstraintState.TypeConstraint.t) ->
@@ -1233,12 +1137,17 @@ let transform (prog : Program.t) =
     So make an automata, and remove the types that are included in that automata from the string map,
       so we will have a list of automata, and then for every Var.decl grab the minimised type and then lower it
   *)
-  let automatas =
+  let types =
     VarIdMap.mapi
       (fun name (lower_ty, upper_ty) ->
         ( minimise_type Polarity.Pos lower_ty name,
           minimise_type Polarity.Neg upper_ty name ))
       types
   in
+  (* VarIdMap.iter *)
+  (* (fun id (lower, upper) -> *)
+  (* Printf.printf "\n%s: \n\t\t lower: %s\n\t\t upper: %s" (VarId.show id) *)
+  (* (InferredType.show lower) (InferredType.show upper)) *)
+  (* types; *)
   (* transform time *)
   prog
