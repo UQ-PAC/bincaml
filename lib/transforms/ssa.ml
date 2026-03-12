@@ -100,9 +100,9 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
     ID.Map.fold
       (fun _ proc acc ->
         List.fold_left
-          (fun s g -> if should_lift ~skip_observable ~skip_maps g then g :: s else s)
-          acc
-          (Procedure.specification proc).captures_globs)
+          (fun s g ->
+            if should_lift ~skip_observable ~skip_maps g then g :: s else s)
+          acc (Procedure.specification proc).captures_globs)
       p.procs []
   in
   (* ------------------------------------------------------------------ *)
@@ -130,11 +130,13 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
                  (ID.name procid))
         end;
         let captures =
-          List.filter (should_lift ~skip_observable ~skip_maps)
+          List.filter
+            (should_lift ~skip_observable ~skip_maps)
             spec.captures_globs
         in
         let modifies =
-          List.filter (should_lift ~skip_observable ~skip_maps)
+          List.filter
+            (should_lift ~skip_observable ~skip_maps)
             spec.modifies_globs
         in
         (* (param_key, original_global, fresh_param_var) triples *)
@@ -166,9 +168,7 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
             (fun m (g, lv) -> StringMap.add (Var.name g) lv m)
             StringMap.empty glob_to_local
         in
-        let local_of g =
-          StringMap.find (Var.name g) glob_to_local_map
-        in
+        let local_of g = StringMap.find (Var.name g) glob_to_local_map in
         let to_formal triples =
           List.fold_left
             (fun m (name, _, v) -> StringMap.add name v m)
@@ -176,11 +176,15 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
         in
         (* %inputs block: g_local := g_in for each captured global *)
         let assigns_in =
-          List.map (fun (_, g, v) -> (local_of g, Expr.BasilExpr.rvar v)) inparam
+          List.map
+            (fun (_, g, v) -> (local_of g, Expr.BasilExpr.rvar v))
+            inparam
         in
         (* %returns block: g_out := g_local for each modified global *)
         let assigns_out =
-          List.map (fun (_, g, v) -> (v, Expr.BasilExpr.rvar (local_of g))) outparam
+          List.map
+            (fun (_, g, v) -> (v, Expr.BasilExpr.rvar (local_of g)))
+            outparam
         in
         let proc =
           Procedure.map_graph
@@ -190,7 +194,8 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
                 else
                   let graph, inbl =
                     Procedure.fresh_block_graph proc graph ~name:"%inputs"
-                      ~stmts:[ Stmt.Instr_Assign assigns_in ] ()
+                      ~stmts:[ Stmt.Instr_Assign assigns_in ]
+                      ()
                   in
                   let open Procedure.Vert in
                   let edges = Procedure.G.succ_e graph Entry in
@@ -210,7 +215,8 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
                 else
                   let graph, outbl =
                     Procedure.fresh_block_graph proc graph ~name:"%returns"
-                      ~stmts:[ Stmt.Instr_Assign assigns_out ] ()
+                      ~stmts:[ Stmt.Instr_Assign assigns_out ]
+                      ()
                   in
                   let open Procedure.Vert in
                   let edges = Procedure.G.pred_e graph Return in
@@ -255,6 +261,7 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
             (fun m (_, g, v) -> StringMap.add (Var.name g) v m)
             StringMap.empty outparam
         in
+        let skip_any = skip_observable || skip_maps in
         (* Rewrite Old(g) → g_in in body statements.
            Must run before body substitution so Old(g) is still recognisable. *)
         let rewrite_old_expr expr =
@@ -265,8 +272,12 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
             | UnaryExpr { op = `Old; arg = RVar { id } } -> (
                 match StringMap.find_opt (Var.name id) glob_to_inparam with
                 | Some v -> replace [%here] (rvar v)
-                | None -> None)
-            | _ -> None
+                | None when skip_any ->
+                    failwith
+                      "Variable in contract but is not captured or modified by \
+                       procedure"
+                | None -> Keep)
+            | _ -> Keep
           in
           rewrite ~rw_fun:alg expr
         in
@@ -280,9 +291,13 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
             | RVar { id } -> (
                 match StringMap.find_opt (Var.name id) glob_to_inparam with
                 | Some v -> replace [%here] (rvar v)
-                | None -> None)
+                | None when skip_any ->
+                    failwith
+                      "Variable in contract but is not captured or modified by \
+                       procedure"
+                | None -> Keep)
             | UnaryExpr { op = `Old; arg } -> replace [%here] (fix arg)
-            | _ -> None
+            | _ -> Keep
           in
           rewrite ~rw_fun:alg expr
         in
@@ -301,8 +316,8 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
                 | None -> (
                     match StringMap.find_opt (Var.name id) glob_to_inparam with
                     | Some v -> replace [%here] (rvar v)
-                    | None -> None))
-            | _ -> None
+                    | None -> Keep))
+            | _ -> Keep
           in
           rewrite ~rw_fun:alg expr
         in
@@ -319,8 +334,7 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
           Procedure.map_blocks_topo_fwd
             (fun _bid b ->
               Block.map ~phi:Fun.id
-                (Stmt.map ~f_lvar:Fun.id ~f_expr:rewrite_old_expr
-                   ~f_rvar:Fun.id)
+                (Stmt.map ~f_lvar:Fun.id ~f_expr:rewrite_old_expr ~f_rvar:Fun.id)
                 b)
             proc
         in
@@ -340,7 +354,8 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
                           let new_args =
                             List.fold_left
                               (fun m g ->
-                                if should_lift ~skip_observable ~skip_maps g then
+                                if should_lift ~skip_observable ~skip_maps g
+                                then
                                   StringMap.add (param_name "_in" g)
                                     (Expr.BasilExpr.rvar g) m
                                 else m)
@@ -349,8 +364,8 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
                           let new_lhs =
                             List.fold_left
                               (fun m g ->
-                                if should_lift ~skip_observable ~skip_maps g then
-                                  StringMap.add (param_name "_out" g) g m
+                                if should_lift ~skip_observable ~skip_maps g
+                                then StringMap.add (param_name "_out" g) g m
                                 else m)
                               lhs cspec.modifies_globs
                           in
@@ -377,8 +392,7 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
           Procedure.map_blocks_topo_fwd
             (fun _bid b ->
               Block.map ~phi:Fun.id
-                (Stmt.map ~f_lvar:subst_var ~f_expr:subst_expr
-                   ~f_rvar:subst_var)
+                (Stmt.map ~f_lvar:subst_var ~f_expr:subst_expr ~f_rvar:subst_var)
                 b)
             proc
         in
