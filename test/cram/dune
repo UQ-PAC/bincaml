@@ -21,7 +21,9 @@
   ../../examples/cntlm-simp-output.il
   incorrect_types.il
   ../../examples/x-output.il
+  inter_dead.il
   typefail.sexp
   typepass.sexp
   basicssa.sexp
-  roundtrip.sexp))
+  roundtrip.sexp
+  inter_dead.sexp))
