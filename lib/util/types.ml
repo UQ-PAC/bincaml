@@ -36,6 +36,7 @@ type t =
   | Sort of string * variant list
   | Record of t StringMap.t
   | Pointer of pointer
+  | Variable of string (* Possibly a name of a type declartion *)
 
 and variant = { variant : string; fields : field list }
 and field = { field : string; typ : t } [@@deriving eq, ord]
@@ -141,6 +142,7 @@ let rec to_string = function
   | Unit -> "()"
   | Top -> "⊤"
   | Nothing -> "⊥"
+  | Variable name -> name
   | Pointer { lower; upper } ->
       Printf.sprintf "ptr(%s, %s)" (to_string lower) (to_string upper)
   | Record record ->
