@@ -99,7 +99,7 @@ module Builtins = struct
       ->
         Unsup
 
-  let type_alg f (e : Types.t Lang.Expr.BasilExpr.abstract_expr) =
+  let visit_expr_ops f (e : Types.t Lang.Expr.BasilExpr.abstract_expr) =
     let open Lang.Expr.AbstractExpr in
     let open Lang.Ops.AllOps in
     let get_ty (op : [ const | unary | binary | intrin ]) o =
@@ -124,15 +124,24 @@ module Builtins = struct
     | Binding { bound = vars; in_body = b; _ } ->
         Types.curry (List.map Var.typ vars) b
 
+  let iexpr f e = Lang.Expr.BasilExpr.cata (visit_expr_ops f) e |> ignore
+
   let istmt f (s : Lang.Program.stmt) =
-    Lang.Stmt.iter_rexpr s (function
-      | `Expr e -> Lang.Expr.BasilExpr.cata (type_alg f) e |> ignore
-      | _ -> ())
+    Lang.Stmt.iter_rexpr s (function `Expr e -> iexpr f e | _ -> ())
 
   let iprog f (p : Lang.Program.t) =
     ID.Map.values p.procs
     |> Iter.flat_map Lang.Procedure.iter_stmt_topo_fwd
-    |> Iter.iter (istmt f)
+    |> Iter.iter (istmt f);
+    p.procs |> ID.Map.values
+    |> Iter.iter (fun v ->
+        let spec = Lang.Procedure.specification v in
+        List.iter (iexpr f) spec.requires;
+        List.iter (iexpr f) spec.ensures;
+        List.iter (iexpr f) spec.rely;
+        List.iter (iexpr f) spec.guarantee);
+    p.spec.rely |> List.iter (iexpr f);
+    p.spec.guarantee |> List.iter (iexpr f)
 
   let transform_op_to_decl op args ret =
     let boogie_attribs =
