@@ -113,7 +113,7 @@ module IsZeroValueAbstraction = struct
     | `BVSLT, Zero, Zero -> Zero
     | `BVSLT, _, _ -> Top
     | `FSET _, Zero, Zero -> Zero
-    | `FSET _, NonZero, NonZero -> NonZero
+    | `FSET _, _, NonZero -> NonZero
     (* Larger refactor would be needed to reason about individual fields *)
     | `FSET _, _, _ -> Top
     | #Lang.Ops.Spec.binary, _, _ -> Top
