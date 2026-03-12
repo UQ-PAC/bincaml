@@ -13,13 +13,14 @@ module IDELive = struct
   (* DL and state_update were already defined! Is there a way to avoid
      redefining them? *)
   module DL = struct
-    type t = Lambda | Label of Var.t [@@deriving eq, ord, show]
+    type t = Lambda | Label of Var.t
+    [@@deriving eq, ord, show { with_path = false }]
   end
 
   type 'a state_update = (DL.t * 'a) Iter.t
 
   module Value = struct
-    type t = bool [@@deriving eq, ord, show]
+    type t = bool [@@deriving eq, ord, show { with_path = false }]
 
     let bottom = false
     let live : t = true
@@ -39,14 +40,10 @@ module IDELive = struct
 
   open Value
 
-  type t = IdEdge | ConstEdge of Value.t [@@deriving eq, ord]
+  type t = IdEdge | ConstEdge of Value.t
+  [@@deriving eq, ord, show { with_path = false }]
 
   let bottom = ConstEdge bottom
-
-  let show v =
-    match v with IdEdge -> "IdEdge" | ConstEdge v -> "ConstEdge " ^ show v
-
-  let pp fmt v = Format.pp_print_string fmt (show v)
   let identity = IdEdge
 
   let compose a b =
@@ -167,6 +164,12 @@ module IDELive = struct
     match d with
     | Label v -> Iter.singleton (Label (VarMap.get_or v phi ~default:v), IdEdge)
     | _ -> Iter.singleton (d, IdEdge)
+
+  let init_p2 globals (proc : Program.proc) =
+    Procedure.formal_out_params proc
+    |> StringMap.values
+    |> Iter.append globals
+    |> Iter.map (fun v -> (v, true))
 end
 
 module IDELiveAnalysis = IDE (IDELive)
