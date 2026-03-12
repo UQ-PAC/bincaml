@@ -213,8 +213,7 @@ module InterprocDSE = struct
     List.fold_left
       (fun p b ->
         match b with
-        | (Procedure.Vert.Begin id), (b : (Var.t, Expr.BasilExpr.t) Block.t)
-          ->
+        | Procedure.Vert.Begin id, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
             let v = Procedure.Vert.End id in
             let stmts =
               filter_dead prog keep summaries
