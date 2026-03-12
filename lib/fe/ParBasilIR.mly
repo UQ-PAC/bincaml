@@ -45,7 +45,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pPointerType pBVType pVarType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pFieldVal_list pFieldVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pPointerType pBVType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pFieldVal_list pFieldVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -64,7 +64,6 @@ open Lexing
 %type <AbsBasilIR.recordType> pRecordType
 %type <AbsBasilIR.pointerType> pPointerType
 %type <AbsBasilIR.bVType> pBVType
-%type <AbsBasilIR.varType> pVarType
 %type <AbsBasilIR.mapType> pMapType
 %type <AbsBasilIR.recordField> pRecordField
 %type <AbsBasilIR.recordField list> pRecordField_list
@@ -159,7 +158,6 @@ open Lexing
 %type <AbsBasilIR.recordType> recordType
 %type <AbsBasilIR.pointerType> pointerType
 %type <AbsBasilIR.bVType> bVType
-%type <AbsBasilIR.varType> varType
 %type <AbsBasilIR.mapType> mapType
 %type <AbsBasilIR.recordField> recordField
 %type <AbsBasilIR.recordField list> recordField_list
@@ -292,8 +290,6 @@ pRecordType : recordType TOK_EOF { $1 };
 pPointerType : pointerType TOK_EOF { $1 };
 
 pBVType : bVType TOK_EOF { $1 };
-
-pVarType : varType TOK_EOF { $1 };
 
 pMapType : mapType TOK_EOF { $1 };
 
@@ -521,9 +517,6 @@ pointerType : KW_ptr openParen typeT SYMB2 typeT closeParen { PointerType1 ($2, 
 bVType : bVTYPE { BVType1 $1 }
   ;
 
-varType : str { VarType1 $1 }
-  ;
-
 mapType : type1 SYMB3 typeT { MapType1 ($1, $3) }
   ;
 
@@ -547,9 +540,8 @@ type1 : intType { TypeIntType $1 }
   | bVType { TypeBVType $1 }
   | pointerType { TypePointerType $1 }
   | recordType { TypeRecordType $1 }
-  | varType { TypeVarType $1 }
+  | localIdent { TypeVarType $1 }
   | openParen typeT closeParen { TypeParen ($1, $2, $3) }
-  | localIdent { TypeSort $1 }
   ;
 
 typeT : mapType { TypeMapType $1 }

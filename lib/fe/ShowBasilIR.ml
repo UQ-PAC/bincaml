@@ -118,10 +118,6 @@ and showBVType (e : AbsBasilIR.bVType) : showable = match e with
        AbsBasilIR.BVType1 bvtype -> s2s "BVType1" >> c2s ' ' >> c2s '(' >> showBVTYPE bvtype >> c2s ')'
 
 
-and showVarType (e : AbsBasilIR.varType) : showable = match e with
-       AbsBasilIR.VarType1 str -> s2s "VarType1" >> c2s ' ' >> c2s '(' >> showStr str >> c2s ')'
-
-
 and showMapType (e : AbsBasilIR.mapType) : showable = match e with
        AbsBasilIR.MapType1 (type'0, type') -> s2s "MapType1" >> c2s ' ' >> c2s '(' >> showTypeT type'0  >> s2s ", " >>  showTypeT type' >> c2s ')'
 
@@ -141,9 +137,8 @@ and showTypeT (e : AbsBasilIR.typeT) : showable = match e with
   |    AbsBasilIR.TypeBVType bvtype -> s2s "TypeBVType" >> c2s ' ' >> c2s '(' >> showBVType bvtype >> c2s ')'
   |    AbsBasilIR.TypePointerType pointertype -> s2s "TypePointerType" >> c2s ' ' >> c2s '(' >> showPointerType pointertype >> c2s ')'
   |    AbsBasilIR.TypeRecordType recordtype -> s2s "TypeRecordType" >> c2s ' ' >> c2s '(' >> showRecordType recordtype >> c2s ')'
-  |    AbsBasilIR.TypeVarType vartype -> s2s "TypeVarType" >> c2s ' ' >> c2s '(' >> showVarType vartype >> c2s ')'
+  |    AbsBasilIR.TypeVarType localident -> s2s "TypeVarType" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
   |    AbsBasilIR.TypeParen (openparen, type', closeparen) -> s2s "TypeParen" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
-  |    AbsBasilIR.TypeSort localident -> s2s "TypeSort" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
   |    AbsBasilIR.TypeMapType maptype -> s2s "TypeMapType" >> c2s ' ' >> c2s '(' >> showMapType maptype >> c2s ')'
 
 

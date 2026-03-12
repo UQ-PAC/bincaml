@@ -67,9 +67,6 @@ and pointerType =
 and bVType =
    BVType1 of bVTYPE
 
-and varType =
-   VarType1 of str
-
 and mapType =
    MapType1 of typeT * typeT
 
@@ -86,9 +83,8 @@ and typeT =
  | TypeBVType of bVType
  | TypePointerType of pointerType
  | TypeRecordType of recordType
- | TypeVarType of varType
+ | TypeVarType of localIdent
  | TypeParen of openParen * typeT * closeParen
- | TypeSort of localIdent
  | TypeMapType of mapType
 
 and intVal =

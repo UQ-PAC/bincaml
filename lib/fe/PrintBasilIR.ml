@@ -210,10 +210,6 @@ and prtBVType (i:int) (e : AbsBasilIR.bVType) : doc = match e with
        AbsBasilIR.BVType1 bvtype -> prPrec i 0 (concatD [prtBVTYPE 0 bvtype])
 
 
-and prtVarType (i:int) (e : AbsBasilIR.varType) : doc = match e with
-       AbsBasilIR.VarType1 str -> prPrec i 0 (concatD [prtStr 0 str])
-
-
 and prtMapType (i:int) (e : AbsBasilIR.mapType) : doc = match e with
        AbsBasilIR.MapType1 (type_1, type_2) -> prPrec i 0 (concatD [prtTypeT 1 type_1 ; render "->" ; prtTypeT 0 type_2])
 
@@ -239,9 +235,8 @@ and prtTypeT (i:int) (e : AbsBasilIR.typeT) : doc = match e with
   |    AbsBasilIR.TypeBVType bvtype -> prPrec i 1 (concatD [prtBVType 0 bvtype])
   |    AbsBasilIR.TypePointerType pointertype -> prPrec i 1 (concatD [prtPointerType 0 pointertype])
   |    AbsBasilIR.TypeRecordType recordtype -> prPrec i 1 (concatD [prtRecordType 0 recordtype])
-  |    AbsBasilIR.TypeVarType vartype -> prPrec i 1 (concatD [prtVarType 0 vartype])
+  |    AbsBasilIR.TypeVarType localident -> prPrec i 1 (concatD [prtLocalIdent 0 localident])
   |    AbsBasilIR.TypeParen (openparen, type_, closeparen) -> prPrec i 1 (concatD [prtOpenParen 0 openparen ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
-  |    AbsBasilIR.TypeSort localident -> prPrec i 1 (concatD [prtLocalIdent 0 localident])
   |    AbsBasilIR.TypeMapType maptype -> prPrec i 0 (concatD [prtMapType 0 maptype])
 
 and prtTypeTListBNFC i es : doc = match (i, es) with

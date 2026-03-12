@@ -454,10 +454,9 @@ module BasilASTLoader = struct
     | TypeMapType maptype -> transMapType maptype
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
     | TypeParen (_, typeT, _) -> trans_type typeT
-    | TypeSort t -> Types.Sort (unsafe_unsigil (`Local t), [])
+    | TypeVarType name -> Types.Variable (unsafe_unsigil (`Local name))
     | TypeRecordType (RecordType1 (_, fields, _)) -> transRECORDTYPE fields
     | TypePointerType (PointerType1 (_, l, u, _)) -> transPOINTERTYPE l u
-    | TypeVarType (VarType1 name) -> Types.Variable (transStr name)
 
   and transIntVal (x : intVal) : PrimInt.t =
     match x with

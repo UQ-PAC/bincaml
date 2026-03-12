@@ -80,7 +80,6 @@ BoolType1. BoolType ::= BOOLTYPE ;
 RecordType1 . RecordType ::= BeginRec [Field] EndRec ;
 PointerType1 . PointerType ::= "ptr" OpenParen Type "," Type CloseParen ;
 BVType1 . BVType ::= BVTYPE ;
-VarType1 . VarType ::= Str ;
 -- map types are right associative. left of -> cannot be another MapType.
 MapType1 . MapType ::=  Type1 "->" Type ; 
 
@@ -98,9 +97,8 @@ TypeBoolType    . Type1 ::= BoolType ;
 TypeBVType      . Type1 ::= BVType ;
 TypePointerType . Type1 ::= PointerType ;
 TypeRecordType  . Type1 ::= RecordType ;
-TypeVarType     . Type1 ::= VarType ;
+TypeVarType     . Type1 ::= LocalIdent ;
 TypeParen       . Type1 ::= OpenParen Type CloseParen; 
-TypeSort        . Type1 ::= LocalIdent;
 TypeMapType     . Type ::= MapType;
 _ . Type ::= Type1;
 
