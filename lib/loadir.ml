@@ -436,6 +436,7 @@ module BasilASTLoader = struct
     match field with
     | RecordField1 (id, ty) ->
         Types.mk_field (unsafe_unsigil (`Local id)) (trans_type ty)
+
   and transRECORDTYPE (fields : field list) =
     Types.Record
       (StringMap.of_list
@@ -456,6 +457,7 @@ module BasilASTLoader = struct
     | TypeSort t -> Types.Sort (unsafe_unsigil (`Local t), [])
     | TypeRecordType (RecordType1 (_, fields, _)) -> transRECORDTYPE fields
     | TypePointerType (PointerType1 (_, l, u, _)) -> transPOINTERTYPE l u
+    | TypeVarType (VarType1 name) -> Types.Variable (transStr name)
 
   and transIntVal (x : intVal) : PrimInt.t =
     match x with

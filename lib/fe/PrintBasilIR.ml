@@ -210,6 +210,10 @@ and prtBVType (i:int) (e : AbsBasilIR.bVType) : doc = match e with
        AbsBasilIR.BVType1 bvtype -> prPrec i 0 (concatD [prtBVTYPE 0 bvtype])
 
 
+and prtVarType (i:int) (e : AbsBasilIR.varType) : doc = match e with
+       AbsBasilIR.VarType1 str -> prPrec i 0 (concatD [prtStr 0 str])
+
+
 and prtMapType (i:int) (e : AbsBasilIR.mapType) : doc = match e with
        AbsBasilIR.MapType1 (type_1, type_2) -> prPrec i 0 (concatD [prtTypeT 1 type_1 ; render "->" ; prtTypeT 0 type_2])
 
@@ -235,6 +239,7 @@ and prtTypeT (i:int) (e : AbsBasilIR.typeT) : doc = match e with
   |    AbsBasilIR.TypeBVType bvtype -> prPrec i 1 (concatD [prtBVType 0 bvtype])
   |    AbsBasilIR.TypePointerType pointertype -> prPrec i 1 (concatD [prtPointerType 0 pointertype])
   |    AbsBasilIR.TypeRecordType recordtype -> prPrec i 1 (concatD [prtRecordType 0 recordtype])
+  |    AbsBasilIR.TypeVarType vartype -> prPrec i 1 (concatD [prtVarType 0 vartype])
   |    AbsBasilIR.TypeParen (openparen, type_, closeparen) -> prPrec i 1 (concatD [prtOpenParen 0 openparen ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.TypeSort localident -> prPrec i 1 (concatD [prtLocalIdent 0 localident])
   |    AbsBasilIR.TypeMapType maptype -> prPrec i 0 (concatD [prtMapType 0 maptype])
@@ -447,12 +452,12 @@ and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
   |    AbsBasilIR.Expr_Unary (unop, openparen, expr, closeparen) -> prPrec i 2 (concatD [prtUnOp 0 unop ; prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_LoadBe (openparen, intval, expr1, expr2, closeparen) -> prPrec i 2 (concatD [render "load_be" ; prtOpenParen 0 openparen ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_LoadLe (openparen, intval, expr1, expr2, closeparen) -> prPrec i 2 (concatD [render "load_le" ; prtOpenParen 0 openparen ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; prtCloseParen 0 closeparen])
-  |    AbsBasilIR.Expr_ZeroExtend (openparen, intval, expr, closeparen) -> prPrec i 0 (concatD [render "zero_extend" ; prtOpenParen 0 openparen ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
-  |    AbsBasilIR.Expr_SignExtend (openparen, intval, expr, closeparen) -> prPrec i 0 (concatD [render "sign_extend" ; prtOpenParen 0 openparen ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
-  |    AbsBasilIR.Expr_Extract (openparen, intval1, intval2, expr, closeparen) -> prPrec i 0 (concatD [render "extract" ; prtOpenParen 0 openparen ; prtIntVal 0 intval1 ; render "," ; prtIntVal 0 intval2 ; render "," ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
-  |    AbsBasilIR.Expr_Concat (openparen, exprs, closeparen) -> prPrec i 0 (concatD [render "bvconcat" ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
-  |    AbsBasilIR.Expr_FSet (openparen, str, expr1, expr2, closeparen) -> prPrec i 0 (concatD [render "fset" ; prtOpenParen 0 openparen ; prtStr 0 str ; render "," ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; prtCloseParen 0 closeparen])
-  |    AbsBasilIR.Expr_FAccess (openparen, str, expr, closeparen) -> prPrec i 0 (concatD [render "faccess" ; prtOpenParen 0 openparen ; prtStr 0 str ; render "," ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_ZeroExtend (openparen, intval, expr, closeparen) -> prPrec i 2 (concatD [render "zero_extend" ; prtOpenParen 0 openparen ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_SignExtend (openparen, intval, expr, closeparen) -> prPrec i 2 (concatD [render "sign_extend" ; prtOpenParen 0 openparen ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_Extract (openparen, intval1, intval2, expr, closeparen) -> prPrec i 2 (concatD [render "extract" ; prtOpenParen 0 openparen ; prtIntVal 0 intval1 ; render "," ; prtIntVal 0 intval2 ; render "," ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_Concat (openparen, exprs, closeparen) -> prPrec i 2 (concatD [render "bvconcat" ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_FSet (openparen, str, expr1, expr2, closeparen) -> prPrec i 2 (concatD [render "fset" ; prtOpenParen 0 openparen ; prtStr 0 str ; render "," ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Expr_FAccess (openparen, str, expr, closeparen) -> prPrec i 2 (concatD [render "faccess" ; prtOpenParen 0 openparen ; prtStr 0 str ; render "," ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Match (expr, openparen, cases, closeparen) -> prPrec i 2 (concatD [render "match" ; prtExpr 0 expr ; render "with" ; prtOpenParen 0 openparen ; prtCaseListBNFC 0 cases ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Cases (openparen, cases, closeparen) -> prPrec i 2 (concatD [render "cases" ; prtOpenParen 0 openparen ; prtCaseListBNFC 0 cases ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> prPrec i 2 (concatD [prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])

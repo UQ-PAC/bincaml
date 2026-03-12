@@ -141,6 +141,10 @@ and transBVType (x : bVType) : result = match x with
     BVType1 bvtype -> failure x
 
 
+and transVarType (x : varType) : result = match x with
+    VarType1 str -> failure x
+
+
 and transMapType (x : mapType) : result = match x with
     MapType1 (type'0, type') -> failure x
 
@@ -160,6 +164,7 @@ and transType (x : typeT) : result = match x with
   | TypeBVType bvtype -> failure x
   | TypePointerType pointertype -> failure x
   | TypeRecordType recordtype -> failure x
+  | TypeVarType vartype -> failure x
   | TypeParen (openparen, type', closeparen) -> failure x
   | TypeSort localident -> failure x
   | TypeMapType maptype -> failure x

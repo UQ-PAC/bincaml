@@ -45,7 +45,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pPointerType pBVType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pFieldVal_list pFieldVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pPointerType pBVType pVarType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pFieldVal_list pFieldVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pBoolBinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -64,6 +64,7 @@ open Lexing
 %type <AbsBasilIR.recordType> pRecordType
 %type <AbsBasilIR.pointerType> pPointerType
 %type <AbsBasilIR.bVType> pBVType
+%type <AbsBasilIR.varType> pVarType
 %type <AbsBasilIR.mapType> pMapType
 %type <AbsBasilIR.recordField> pRecordField
 %type <AbsBasilIR.recordField list> pRecordField_list
@@ -158,6 +159,7 @@ open Lexing
 %type <AbsBasilIR.recordType> recordType
 %type <AbsBasilIR.pointerType> pointerType
 %type <AbsBasilIR.bVType> bVType
+%type <AbsBasilIR.varType> varType
 %type <AbsBasilIR.mapType> mapType
 %type <AbsBasilIR.recordField> recordField
 %type <AbsBasilIR.recordField list> recordField_list
@@ -290,6 +292,8 @@ pRecordType : recordType TOK_EOF { $1 };
 pPointerType : pointerType TOK_EOF { $1 };
 
 pBVType : bVType TOK_EOF { $1 };
+
+pVarType : varType TOK_EOF { $1 };
 
 pMapType : mapType TOK_EOF { $1 };
 
@@ -517,6 +521,9 @@ pointerType : KW_ptr openParen typeT SYMB2 typeT closeParen { PointerType1 ($2, 
 bVType : bVTYPE { BVType1 $1 }
   ;
 
+varType : str { VarType1 $1 }
+  ;
+
 mapType : type1 SYMB3 typeT { MapType1 ($1, $3) }
   ;
 
@@ -540,6 +547,7 @@ type1 : intType { TypeIntType $1 }
   | bVType { TypeBVType $1 }
   | pointerType { TypePointerType $1 }
   | recordType { TypeRecordType $1 }
+  | varType { TypeVarType $1 }
   | openParen typeT closeParen { TypeParen ($1, $2, $3) }
   | localIdent { TypeSort $1 }
   ;
@@ -746,12 +754,6 @@ expr : expr1 {  $1 }
   | KW_forall attribSet lambdaDef { Expr_Forall ($2, $3) }
   | KW_exists attribSet lambdaDef { Expr_Exists ($2, $3) }
   | KW_fun attribSet lambdaDef { Expr_Lambda ($2, $3) }
-  | KW_zero_extend openParen intVal SYMB2 expr closeParen { Expr_ZeroExtend ($2, $3, $5, $6) }
-  | KW_sign_extend openParen intVal SYMB2 expr closeParen { Expr_SignExtend ($2, $3, $5, $6) }
-  | KW_extract openParen intVal SYMB2 intVal SYMB2 expr closeParen { Expr_Extract ($2, $3, $5, $7, $8) }
-  | KW_bvconcat openParen expr_list closeParen { Expr_Concat ($2, $3, $4) }
-  | KW_fset openParen str SYMB2 expr SYMB2 expr closeParen { Expr_FSet ($2, $3, $5, $7, $8) }
-  | KW_faccess openParen str SYMB2 expr closeParen { Expr_FAccess ($2, $3, $5, $6) }
   ;
 
 expr1 : expr2 {  $1 }
@@ -767,6 +769,12 @@ expr2 : value { Expr_Literal $1 }
   | unOp openParen expr closeParen { Expr_Unary ($1, $2, $3, $4) }
   | KW_load_be openParen intVal SYMB2 expr SYMB2 expr closeParen { Expr_LoadBe ($2, $3, $5, $7, $8) }
   | KW_load_le openParen intVal SYMB2 expr SYMB2 expr closeParen { Expr_LoadLe ($2, $3, $5, $7, $8) }
+  | KW_zero_extend openParen intVal SYMB2 expr closeParen { Expr_ZeroExtend ($2, $3, $5, $6) }
+  | KW_sign_extend openParen intVal SYMB2 expr closeParen { Expr_SignExtend ($2, $3, $5, $6) }
+  | KW_extract openParen intVal SYMB2 intVal SYMB2 expr closeParen { Expr_Extract ($2, $3, $5, $7, $8) }
+  | KW_bvconcat openParen expr_list closeParen { Expr_Concat ($2, $3, $4) }
+  | KW_fset openParen str SYMB2 expr SYMB2 expr closeParen { Expr_FSet ($2, $3, $5, $7, $8) }
+  | KW_faccess openParen str SYMB2 expr closeParen { Expr_FAccess ($2, $3, $5, $6) }
   | KW_match expr KW_with openParen case_list closeParen { Expr_Match ($2, $4, $5, $6) }
   | KW_cases openParen case_list closeParen { Expr_Cases ($2, $3, $4) }
   | openParen expr closeParen { Expr_Paren ($1, $2, $3) }
