@@ -209,6 +209,12 @@ module PassManager = struct
            read using an interprocedural analysis";
       };
       remove_unused;
+      {
+        name = "lambda-lifting";
+        apply =
+          Prog (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
+        doc = "Replaces captured global variables with explicit parameters";
+      };
     ]
 
   let print_passes =
