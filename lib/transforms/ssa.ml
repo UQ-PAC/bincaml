@@ -183,52 +183,50 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
           List.map (fun (_, g, v) -> (v, Expr.BasilExpr.rvar (local_of g))) outparam
         in
         let proc =
-          if Option.is_none (Procedure.graph proc) then proc
-          else
-            Procedure.map_graph
-              (fun graph ->
-                let graph =
-                  if List.is_empty assigns_in then graph
-                  else
-                    let graph, inbl =
-                      Procedure.fresh_block_graph proc graph ~name:"%inputs"
-                        ~stmts:[ Stmt.Instr_Assign assigns_in ] ()
-                    in
-                    let open Procedure.Vert in
-                    let edges = Procedure.G.succ_e graph Entry in
-                    let graph =
-                      List.fold_left Procedure.G.remove_edge_e graph edges
-                    in
-                    let new_edges =
-                      List.map (fun (_, l, e) -> (End inbl, l, e)) edges
-                    in
-                    let graph =
-                      List.fold_left Procedure.G.add_edge_e graph new_edges
-                    in
-                    Procedure.G.add_edge graph Entry (Begin inbl)
-                in
-                let graph =
-                  if List.is_empty assigns_out then graph
-                  else
-                    let graph, outbl =
-                      Procedure.fresh_block_graph proc graph ~name:"%returns"
-                        ~stmts:[ Stmt.Instr_Assign assigns_out ] ()
-                    in
-                    let open Procedure.Vert in
-                    let edges = Procedure.G.pred_e graph Return in
-                    let graph =
-                      List.fold_left Procedure.G.remove_edge_e graph edges
-                    in
-                    let new_edges =
-                      List.map (fun (b, l, _) -> (b, l, Begin outbl)) edges
-                    in
-                    let graph =
-                      List.fold_left Procedure.G.add_edge_e graph new_edges
-                    in
-                    Procedure.G.add_edge graph (End outbl) Return
-                in
-                graph)
-              proc
+          Procedure.map_graph
+            (fun graph ->
+              let graph =
+                if List.is_empty assigns_in then graph
+                else
+                  let graph, inbl =
+                    Procedure.fresh_block_graph proc graph ~name:"%inputs"
+                      ~stmts:[ Stmt.Instr_Assign assigns_in ] ()
+                  in
+                  let open Procedure.Vert in
+                  let edges = Procedure.G.succ_e graph Entry in
+                  let graph =
+                    List.fold_left Procedure.G.remove_edge_e graph edges
+                  in
+                  let new_edges =
+                    List.map (fun (_, l, e) -> (End inbl, l, e)) edges
+                  in
+                  let graph =
+                    List.fold_left Procedure.G.add_edge_e graph new_edges
+                  in
+                  Procedure.G.add_edge graph Entry (Begin inbl)
+              in
+              let graph =
+                if List.is_empty assigns_out then graph
+                else
+                  let graph, outbl =
+                    Procedure.fresh_block_graph proc graph ~name:"%returns"
+                      ~stmts:[ Stmt.Instr_Assign assigns_out ] ()
+                  in
+                  let open Procedure.Vert in
+                  let edges = Procedure.G.pred_e graph Return in
+                  let graph =
+                    List.fold_left Procedure.G.remove_edge_e graph edges
+                  in
+                  let new_edges =
+                    List.map (fun (b, l, _) -> (b, l, Begin outbl)) edges
+                  in
+                  let graph =
+                    List.fold_left Procedure.G.add_edge_e graph new_edges
+                  in
+                  Procedure.G.add_edge graph (End outbl) Return
+              in
+              graph)
+            proc
         in
         let proc =
           Procedure.map_formal_in_params
