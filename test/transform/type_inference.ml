@@ -89,17 +89,23 @@ proc @main_4196260 () -> ()
     [
       ( VarId.make_id "$XF",
         {
-          lb = TySet.of_list [ BinCamlType BinCaml_Bool; BinCamlType (BinCaml_BV 1) ];
+          lb =
+            TySet.of_list
+              [ BinCamlType BinCaml_Bool; BinCamlType (BinCaml_BV 1) ];
           ub = TySet.empty;
         } );
       ( VarId.make_id "$YF",
         {
-          lb = TySet.of_list [ BinCamlType BinCaml_Bool; BinCamlType (BinCaml_BV 1) ];
+          lb =
+            TySet.of_list
+              [ BinCamlType BinCaml_Bool; BinCamlType (BinCaml_BV 1) ];
           ub = TySet.singleton @@ TypeVar (VarId.make_id "$XF");
         } );
       ( VarId.make_id "$ZF",
         {
-          lb = TySet.of_list [ BinCamlType BinCaml_Bool; BinCamlType (BinCaml_BV 1) ];
+          lb =
+            TySet.of_list
+              [ BinCamlType BinCaml_Bool; BinCamlType (BinCaml_BV 1) ];
           ub = TySet.singleton @@ TypeVar (VarId.make_id "$YF");
         } );
     ]
@@ -124,7 +130,12 @@ let%test_unit "Record joining" =
   let record2 = Record fields2 in
   let joined_record = Union (record1, record2) in
 
-  let m = minimise_type Polarity.Pos joined_record (VarId.make_id "meow") in
+  let m =
+    TypeAutomata.type_to_automata Polarity.Pos joined_record
+      (Polarity.Pos, joined_record)
+      "meow"
+    |> TypeAutomata.simplify_automata
+  in
   let res =
     {|
 digraph G {
@@ -148,7 +159,7 @@ let%test_unit "BinSub type ADT" =
   (*
     μα.α⊓stack_slot_2⊓ptr(a,{(4,4):b⊓(t1⊓α)})⊓ptr(c,{(0,4):d⊓(t2⊓int32)})⊓ptr({(0,4):e⊔int32, f)
   *)
-  let alpha = TypeVar (VarId.make_id "alpha") in
+  let alpha = VarId.make_id "alpha" in
   let stack_slot_2 = TypeVar (VarId.make_id "stack_slot_2") in
   let a = TypeVar (VarId.make_id "a") in
   let b = TypeVar (VarId.make_id "b") in
@@ -161,7 +172,9 @@ let%test_unit "BinSub type ADT" =
   let int32 = BinCamlType (BinCaml_BV 32) in
 
   let fields1 =
-    [ { offset = Z.of_int 4; size = 4; ty = Sect (b, Sect (t1, alpha)) } ]
+    [
+      { offset = Z.of_int 4; size = 4; ty = Sect (b, Sect (t1, TypeVar alpha)) };
+    ]
   in
   let fields2 =
     [ { offset = Z.zero; size = 4; ty = Sect (d, Sect (t2, int32)) } ]
@@ -171,19 +184,20 @@ let%test_unit "BinSub type ADT" =
   let record2 = Record fields2 in
   let record3 = Record fields3 in
 
-  let recursive_type = Recursive (alpha, alpha) in
   let pointer1 = Pointer (a, record1) in
   let pointer2 = Pointer (c, record2) in
   let pointer3 = Pointer (record3, f) in
 
   let joined_type =
-    Union
-      ( recursive_type,
-        Union (stack_slot_2, Union (pointer1, Union (pointer2, pointer3))) )
+    Recursive
+      (alpha, Union (stack_slot_2, Union (pointer1, Union (pointer2, pointer3))))
   in
 
   let m =
-    minimise_type Polarity.Neg joined_type (VarId.make_id "stack_slot_1")
+    TypeAutomata.type_to_automata Polarity.Neg joined_type
+      (Polarity.Neg, joined_type)
+      "stack_slot_1"
+    |> TypeAutomata.simplify_automata
   in
   let res =
     {|
@@ -205,4 +219,5 @@ digraph G {
 
 }|}
   in
+  print_endline @@ TypeAutomata.export_graphviz m;
   assert (String.equal res @@ TypeAutomata.export_graphviz m)

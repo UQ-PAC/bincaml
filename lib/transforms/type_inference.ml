@@ -2,8 +2,7 @@
   Paper this work is based on: https://arxiv.org/abs/2409.01841
 
   TODO:
-    Ask if I should make it more general and work with less type information
-      or should prio speed / space instead
+    Don't rely on full type information
 *)
 
 open Bincaml_util.Common
@@ -95,7 +94,7 @@ module InferredType = struct
     | Field of field
     | Record of field list (* A list of fields in the record *)
     | TypeVar of VarId.t
-    | Recursive of t * t
+    | Recursive of VarId.t * t
     | BinCamlType of BinCamlType.t
 
   and field = { offset : Z.t; size : int; ty : t }
@@ -105,7 +104,7 @@ module InferredType = struct
     | Bottom -> "⊥"
     | BinCamlType c -> BinCamlType.show c
     | TypeVar id -> Printf.sprintf "%s" @@ VarId.show id
-    | Recursive (t1, t2) -> Printf.sprintf "μ%s.%s" (show t1) (show t2)
+    | Recursive (t1, t2) -> Printf.sprintf "μ%s.%s" (VarId.show t1) (show t2)
     | Union (t1, t2) -> Printf.sprintf "%s ⊔ %s" (show t1) (show t2)
     | Sect (t1, t2) -> Printf.sprintf "%s ⊓ %s" (show t1) (show t2)
     | Pointer (lb, ub) -> Printf.sprintf "ptr(%s, %s)" (show lb) (show ub)
@@ -126,7 +125,7 @@ module InferredType = struct
     | BinCamlType a, BinCamlType b -> BinCamlType.compare a b
     | TypeVar a, TypeVar b -> VarId.compare a b
     | Recursive (a, b), Recursive (c, d) ->
-        let c = compare a c in
+        let c = VarId.compare a c in
         if c <> 0 then c else compare b d
     | Union (a, b), Union (a2, b2) ->
         let c = compare a a2 in
@@ -291,9 +290,6 @@ module Sigma = struct
     | FnOut n -> Printf.sprintf "Function out %s" n
 
   let is_epislon = equal Ep
-  let is_record edge = match edge with Reclabel _ -> true | _ -> false
-  let is_fn edge = match edge with FnIn _ | FnOut _ -> true | _ -> false
-  let is_ptr edge = equal LoadLabel edge || equal StoreLabel edge
 end
 
 module State = struct
@@ -347,13 +343,29 @@ module TypeAutomata = struct
   let dfa (m : t) : t = m
   let simplify_automata (m : t) : t = merge_nodes m |> dfa
 
+  (*
+    Two mutually recursive functions that take a given InferredType.t
+      and make it into an automata.
+
+    grab_edges is like a worker of type_to_automata, with the sole job of
+      recursing down paths that would lead to epsilon edges and returning the
+      states that won't and any edges that need to be added.
+
+      This has the benefit of never needing to remove epsilon edges, as
+        none are ever made, saving an entire pass of the types.
+
+    type_to_automata takes a given type structure and decomposes it into
+      states and edges, when union / intersection are encounted, grab_edges
+      steps in to deal with epsilon edges and then provides a list of types that
+      act as the next types to deconstruct since grab_edges skips some types.
+  *)
   let type_to_automata (polarity : Polarity.t) ty init name =
     let rec type_to_state_list p (ty : InferredType.t) ((ls, tbl) as acc) =
       let rec grab_edges (ty : InferredType.t) :
           InferredType.t list * (Sigma.t * State.t) list =
         match ty with
         | Top | BinCamlType _ | TypeVar _ | Bottom | Field _ -> ([], [])
-        | Recursive (a, _) ->
+        | Recursive (a, ty) ->
             (*
               WARN: This will need to change but is nice to have incase
                I ever get recursive stuff
@@ -372,8 +384,7 @@ module TypeAutomata = struct
             in
             let _ =
               List.fold_left_map
-                (fun acc (n, ty) ->
-                  (ty :: acc, (Sigma.FnOut n, (Polarity.not p, ty))))
+                (fun acc (n, ty) -> (ty :: acc, (Sigma.FnOut n, (p, ty))))
                 []
               @@ StringMap.to_list outs
             in
@@ -392,13 +403,21 @@ module TypeAutomata = struct
       match ty with
       | Top | BinCamlType _ | TypeVar _ | Bottom | Field _ ->
           ((p, ty) :: ls, tbl)
-      | Recursive (a, _) ->
+      | Recursive (id, typ) ->
           (*
-            WARN: This will need to change but is nice to have incase
-             I ever get recursive stuff
+            NOTE: I think it is easiest to deal with recursives with type decls
           *)
-          let ls, tbl = type_to_state_list p a acc in
-          let edges = Edges.add_to_list Sigma.Ep (p, a) Edges.empty in
+          let next, edges = grab_edges typ in
+          let ls, tbl =
+            List.fold_left
+              (fun acc typ -> type_to_state_list (Polarity.not p) typ acc)
+              acc next
+          in
+          let edges =
+            List.fold_left
+              (fun edges (edge, state) -> Edges.add_to_list edge state edges)
+              Edges.empty edges
+          in
           let tbl = StateEdges.add (p, ty) edges tbl in
           ((p, ty) :: ls, tbl)
       | Union (a, b) | Sect (a, b) ->
@@ -436,9 +455,7 @@ module TypeAutomata = struct
           in
           let edges =
             List.fold_left
-              (fun edges (n, ty) ->
-                (* TODO wrong polarity for one of these *)
-                Edges.add_to_list (FnOut n) (Polarity.not p, ty) edges)
+              (fun edges (n, ty) -> Edges.add_to_list (FnOut n) (p, ty) edges)
               edges
             @@ StringMap.to_list outs
           in
@@ -593,10 +610,10 @@ module TypeAutomata = struct
       (List.fold_left
          (fun a (polarity, typ) ->
            let shape =
-             if Polarity.positive polarity then "house" else "invhouse"
+             if Polarity.positive polarity then "c4a7e7" else "eb6f92"
            in
            Printf.sprintf
-             "%s\"%s\" [shape=%s style=filled, fillcolor=\"#c4a7e7\"];\n" a
+             "%s\"%s\" [shape=circle style=filled, fillcolor=\"#%s\"];\n" a
              (InferredType.show @@ typ) shape)
          "" n.states)
       n.name
@@ -703,7 +720,7 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
                 else Sect (type_cons, y))
               bounds tau
           in
-          if rec_check then Recursive (tau, s) else s)
+          if rec_check then Recursive (a, s) else s)
   | BinCamlType _ -> tau
   | _ -> Top
 
