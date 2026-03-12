@@ -148,10 +148,10 @@ let%expect_test "fold_block" =
   in
   [%expect
     {|
-    ($stack->RU, R0_in->RU, R31_in->RU, _->⊥)
-    ($stack->RU, R0_in->RU, R31_in->RU, load45_1->W, _->⊥)
-    ($stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, _->⊥)
-    ($stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, $mem->RU, _->⊥)
-    ($stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, _->⊥)
-    ($stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, R0_10->W, _->⊥)
+    ($stack->RU, R31_in->RU, R0_in->RU, _->⊥)
+    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, _->⊥)
+    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, _->⊥)
+    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, _->⊥)
+    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, _->⊥)
+    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, R0_10->W, _->⊥)
     |}]

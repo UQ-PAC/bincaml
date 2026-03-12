@@ -9,6 +9,7 @@ module IsZeroLattice = struct
   type t = Top | Zero | NonZero | Bot
   [@@deriving ord, eq, show { with_path = false }]
 
+  let top = Top
   let bottom = Bot
   let pretty t = Containers_pp.text (show t)
 

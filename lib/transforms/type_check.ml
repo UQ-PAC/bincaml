@@ -212,8 +212,14 @@ let type_check stmt_id block_id expr =
   in
   BasilExpr.cata type_error_alg expr
 
-let check_stmt_types stmt (pt : Program.t) stmt_id block_id =
+let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
   let type_err fmt = type_err fmt stmt_id block_id in
+  let expect_equal msg a b (s : type_error list) =
+    if Types.equal a b then s
+    else
+      type_err "%s : (%s != %s)" msg (Types.to_string a) (Types.to_string b)
+      :: s
+  in
   let type_check = type_check stmt_id block_id in
   match stmt with
   | Stmt.Instr_IntrinCall _ -> []
@@ -232,22 +238,31 @@ let check_stmt_types stmt (pt : Program.t) stmt_id block_id =
               (Types.to_string (Var.typ lvar))
             :: acc)
         [] ls
+  | Stmt.Instr_Store { lhs; rhs; value; addr = Scalar } ->
+      let terror, rtype = type_check value in
+      terror
+      |> expect_equal "rhs value not equal to lhs" rtype (Var.typ lhs)
+      |> expect_equal "rhs value not equal to rhs mem" rtype (Var.typ rhs)
+  | Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
+      []
+      |> expect_equal "lhs type not equal to rhs type" (Var.typ lhs)
+           (Var.typ rhs)
   | Stmt.Instr_Assert { body = e } | Stmt.Instr_Assume { body = e } ->
       let expr_errors, rtype = type_check e in
       if Types.equal rtype Types.Boolean then expr_errors
       else
         type_err "Body of %s is not a Boolean" (BasilExpr.to_string e)
         :: expr_errors
-  | Stmt.Instr_Load { lhs; cells; mem; addr } -> (
+  | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size } } -> (
       let errors, rtype = type_check addr in
       let errors =
-        if Types.equal (Var.typ lhs) (Types.bv cells) then errors
+        if Types.equal (Var.typ lhs) (Types.bv size) then errors
         else
-          type_err "Load size (%d) doesn't match lhs (%s) type" cells
+          type_err "Load size (%d) doesn't match lhs (%s) type" size
             (Var.to_string lhs)
           :: errors
       in
-      match Var.typ mem with
+      match Var.typ rhs with
       | Map (Bitvector addressSize, _)
         when Types.equal (Types.bv addressSize) rtype ->
           errors
@@ -257,21 +272,21 @@ let check_stmt_types stmt (pt : Program.t) stmt_id block_id =
           :: errors
       | _ ->
           (type_err "Invalid field for addressSize in mem %s"
-          @@ Var.to_string mem)
+          @@ Var.to_string rhs)
           :: errors)
-  | Stmt.Instr_Store { value; cells; mem; addr } -> (
+  | Stmt.Instr_Store { lhs; value; rhs; addr = Addr { addr; size } } -> (
       let val_errors, val_rtype = type_check value in
       let addr_errors, addr_rtype = type_check addr in
       let errors = List.append addr_errors val_errors in
       let errors =
-        if Types.equal val_rtype (Types.bv cells) then errors
+        if Types.equal val_rtype (Types.bv size) then errors
         else
           type_err "Store size (%s) doesn't match lhs (%s) type"
-            (Types.to_string (Types.bv cells))
+            (Types.to_string (Types.bv size))
             (Types.to_string val_rtype)
           :: errors
       in
-      match Var.typ mem with
+      match Var.typ rhs with
       | Map (Bitvector addressSize, _)
         when Types.equal (Types.bv addressSize) addr_rtype ->
           errors
@@ -281,7 +296,7 @@ let check_stmt_types stmt (pt : Program.t) stmt_id block_id =
           :: errors
       | _ ->
           (type_err "Invalid field for addressSize in mem %s"
-          @@ Var.to_string mem)
+          @@ Var.to_string rhs)
           :: errors)
   | Stmt.Instr_IndirectCall { target } ->
       let expr_errors, rtype = type_check target in

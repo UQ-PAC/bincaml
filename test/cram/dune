@@ -10,8 +10,11 @@
 (cram
  (applies_to * \ expr_smt)
  (deps
+  loop_dfg.sexp
+  ../../examples/loop.il
   %{bin:bincaml}
   ssa-multi-deps.il
+  memassign.il
   ../../examples/irreducible_loop_1.il
   ../../examples/cat.il
   ../../examples/cntlm-output.il
@@ -21,4 +24,10 @@
   typefail.sexp
   typepass.sexp
   basicssa.sexp
-  roundtrip.sexp))
+  roundtrip.sexp
+  ll_simple.il
+  ll_simple.sexp
+  ll_real.sexp
+  ll_spec.il
+  ll_spec.sexp
+  ../../bin/main.exe))

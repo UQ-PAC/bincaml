@@ -7,6 +7,7 @@ module type Lattice = sig
   include ORD_TYPE
   include PRETTY with type t := t
 
+  val top : t
   val bottom : t
   val join : t -> t -> t
   val equal : t -> t -> bool
@@ -79,6 +80,13 @@ module type StateAbstraction = sig
   val read : key_t -> t -> val_t
   val update : key_t -> val_t -> t -> t
   val to_iter : t -> (key_t * val_t) Iter.t
+end
+
+module type StateDomain = sig
+  include StateAbstraction
+
+  val init : Program.proc -> t
+  val transfer_state : (Var.t -> V.t) -> Program.stmt -> (Var.t * V.t) Iter.t
 end
 
 module type Domain = sig

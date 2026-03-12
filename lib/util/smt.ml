@@ -49,7 +49,12 @@ module Config = struct
     }
 
   let cvc5 : solver_config =
-    { exe = "cvc5"; opts = [ "--incremental" ]; exts = CVC5; log = quiet_log }
+    {
+      exe = "cvc5";
+      opts = [ "--incremental"; "--force-logic=ALL" ];
+      exts = CVC5;
+      log = quiet_log;
+    }
 
   let z3 : solver_config =
     { exe = "z3"; opts = [ "-in"; "-smt2" ]; exts = Z3; log = quiet_log }

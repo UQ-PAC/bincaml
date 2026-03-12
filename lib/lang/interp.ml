@@ -405,12 +405,16 @@ module IState = struct
     let open Expr.AbstractExpr in
     let log = add_event st in
     match stmt with
-    | Stmt.Instr_Load { mem; addr; cells; endian } ->
-        log @@ Load { mem = Var.name mem; addr }
-    | Stmt.Instr_Store { mem; addr; value } ->
-        log @@ Store { mem = Var.name mem; addr; value }
+    | Stmt.Instr_Load { rhs; addr = Addr { addr; size; endian } } ->
+        log @@ Load { mem = Var.name rhs; addr }
+    | Stmt.Instr_Store { rhs; value; addr = Addr { addr; size; endian } } ->
+        log @@ Store { mem = Var.name rhs; addr; value }
     | Stmt.Instr_Call { procid; args } ->
         log @@ Call { procid; args = StringMap.values args |> Iter.to_list }
+    | Stmt.Instr_Load { rhs; addr = Scalar } ->
+        log @@ Load { mem = Var.name rhs; addr = `Bool false }
+    | Stmt.Instr_Store { rhs; value; addr = Scalar } ->
+        log @@ Store { mem = Var.name rhs; addr = `Bool false; value }
     | _ -> st
 
   let show ?(show_stack = true) st =
@@ -593,6 +597,9 @@ module IState = struct
     match stmt' with
     | Stmt.Instr_Assign assigns ->
         List.to_iter assigns |> Iter.fold (fun st (l, r) -> write_var l r st) st
+    | Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
+        write_var lhs (read_var rhs st) st
+    | Stmt.Instr_Store { lhs; value; addr = Scalar } -> write_var lhs value st
     | Stmt.Instr_Assert { body } -> (
         IValue.of_constant body |> IValue.as_bool |> function
         | true -> st
@@ -601,17 +608,18 @@ module IState = struct
         IValue.of_constant body |> IValue.as_bool |> function
         | true -> st
         | false -> raise_notrace (AssumeFail stmt))
-    | Stmt.Instr_Load { lhs; mem; addr; cells; endian } -> begin
-        let m = lookup_memory mem st in
-        let nbits = cells in
+    | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } -> begin
+        let m = lookup_memory rhs st in
+        let nbits = size in
         let addr = IValue.of_constant addr in
         let res = `Bitvector (PageTable.read_bv m ~addr ~nbits) in
         let st = write_var lhs res st in
         st
       end
-    | Stmt.Instr_Store { lhs; mem; addr; value; cells; endian } ->
-        let m = lookup_memory mem st in
-        let lhs = lookup_memory mem st in
+    | Stmt.Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } }
+      ->
+        let m = lookup_memory rhs st in
+        let lhs = lookup_memory rhs st in
         assert (CCEqual.physical lhs m);
         let addr = IValue.of_constant addr in
         let value = IValue.bv_of_constant value in
