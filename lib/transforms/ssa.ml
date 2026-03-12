@@ -1,10 +1,8 @@
-(** Naive paramerter and SSA transform *)
+(** Naive parameter and SSA transform *)
 
 open Lang.Common
 open Lang
 open Containers
-
-(** FIXME: param form doesn't correct call site*)
 
 let debug = ref false
 let dbg_print = if !debug then print_endline else fun s -> ()
@@ -93,145 +91,333 @@ let check_ssa ~skip_observable ~skip_maps proc =
       (fun v i -> (not (should_lift ~skip_observable ~skip_maps v)) || i = 1)
       assigns)
 
+let param_name suffix g =
+  String.drop_while (function '$' -> true | _ -> false) (Var.name g) ^ suffix
+
 let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
-  let globs =
-    p.globals |> StringMap.to_iter
-    |> Iter.filter_map (function
-      | i, Program.(Variable { binding }) ->
-          if should_lift ~skip_observable ~skip_maps binding then
-            Some (i, binding)
-          else None
-      | _ -> None)
+  (* Collect all globals being lifted, for removal from p.globals at the end *)
+  let all_lifted =
+    ID.Map.fold
+      (fun _ proc acc ->
+        List.fold_left
+          (fun s g -> if should_lift ~skip_observable ~skip_maps g then g :: s else s)
+          acc
+          (Procedure.specification proc).captures_globs)
+      p.procs []
   in
-
-  let inparam =
-    globs
-    |> Iter.map (fun (n, global) ->
-        let name =
-          String.drop_while (function '$' -> true | _ -> false) n ^ "_in"
-        in
-        (name, global))
-  in
-  let outparam =
-    globs
-    |> Iter.map (fun (n, global) ->
-        let name =
-          String.drop_while (function '$' -> true | _ -> false) n ^ "_out"
-        in
-        (name, global))
-  in
-
-  let actual_lhs = StringMap.of_iter outparam in
-  let actual_rhs =
-    inparam
-    |> Iter.map (fun (i, j) -> (i, Expr.BasilExpr.rvar j))
-    |> StringMap.of_iter
-  in
-  let set_params_calls_block blockid (b : Program.bloc) =
-    let lhs = actual_lhs in
-    let args = actual_rhs in
-    Block.map ~phi:id
-      (function
-        | Stmt.Instr_Call { procid } -> Instr_Call { lhs; args; procid }
-        | i -> i)
-      b
-  in
+  (* ------------------------------------------------------------------ *)
+  (* Pass 1 – per procedure: add parameters, init/return blocks,        *)
+  (*          rewrite specs/Old, rewrite call sites, substitute locals  *)
+  (* ------------------------------------------------------------------ *)
   let procs =
     p.procs
     |> ID.Map.mapi (fun procid proc ->
+        let spec = Procedure.specification proc in
+        (* We cannot lift variables in rely/guarantee clauses. This check
+        assumes that only observable variables appear in these clauses. *)
+        if not skip_observable then begin
+          if not (List.is_empty spec.rely) then
+            failwith
+              (Printf.sprintf
+                 "set_params: procedure %s has non-empty rely clause \
+                  (unsupported)"
+                 (ID.name procid));
+          if not (List.is_empty spec.guarantee) then
+            failwith
+              (Printf.sprintf
+                 "set_params: procedure %s has non-empty guarantee clause \
+                  (unsupported)"
+                 (ID.name procid))
+        end;
+        let captures =
+          List.filter (should_lift ~skip_observable ~skip_maps)
+            spec.captures_globs
+        in
+        let modifies =
+          List.filter (should_lift ~skip_observable ~skip_maps)
+            spec.modifies_globs
+        in
+        (* (param_key, original_global, fresh_param_var) triples *)
         let inparam =
-          inparam
-          |> Iter.map (fun (name, global) ->
-              let v = Procedure.fresh_var ~name proc (Var.typ global) in
-              (name, global, v))
-          |> Iter.persistent
-          (* don't re-increment on next iteration *)
+          List.map
+            (fun g ->
+              let name = param_name "_in" g in
+              (name, g, Procedure.fresh_var ~name proc (Var.typ g)))
+            captures
         in
         let outparam =
-          outparam
-          |> Iter.map (fun (name, global) ->
-              (name, global, Procedure.fresh_var ~name proc (Var.typ global)))
-          |> Iter.persistent
-          (* don't re-increment on next iteration *)
+          List.map
+            (fun g ->
+              let name = param_name "_out" g in
+              (name, g, Procedure.fresh_var ~name proc (Var.typ g)))
+            modifies
         in
-        let to_block l = [ Stmt.Instr_Assign l ] in
-        let to_formal param =
-          param
-          |> Iter.map (function name, orig, param -> (name, param))
-          |> StringMap.of_iter
+        (* Fresh local variable for each captured global – replaces the global
+           in the procedure body so it is no longer referenced as a global. *)
+        let glob_to_local =
+          List.map
+            (fun g ->
+              let name = param_name "" g in
+              (g, Procedure.fresh_var ~name proc (Var.typ g)))
+            captures
         in
+        let glob_to_local_map =
+          List.fold_left
+            (fun m (g, lv) -> StringMap.add (Var.name g) lv m)
+            StringMap.empty glob_to_local
+        in
+        let local_of g =
+          StringMap.find (Var.name g) glob_to_local_map
+        in
+        let to_formal triples =
+          List.fold_left
+            (fun m (name, _, v) -> StringMap.add name v m)
+            StringMap.empty triples
+        in
+        (* %inputs block: g_local := g_in for each captured global *)
         let assigns_in =
-          inparam
-          |> Iter.map (function name, orig, param ->
-              (orig, Expr.BasilExpr.rvar param))
-          |> Iter.to_list |> to_block
+          List.map (fun (_, g, v) -> (local_of g, Expr.BasilExpr.rvar v)) inparam
         in
+        (* %returns block: g_out := g_local for each modified global *)
         let assigns_out =
-          outparam
-          |> Iter.map (function name, orig, param ->
-              (param, Expr.BasilExpr.rvar orig))
-          |> Iter.to_list |> to_block
+          List.map (fun (_, g, v) -> (v, Expr.BasilExpr.rvar (local_of g))) outparam
         in
-
-        let add_formal_assigns graph =
-          let graph, inbl =
-            Procedure.fresh_block_graph proc graph ~name:"%inputs"
-              ~stmts:assigns_in ()
-          in
-          let graph, outbl =
-            Procedure.fresh_block_graph proc graph ~name:"%returns"
-              ~stmts:assigns_out ()
-          in
-          let graph =
-            let edges = Procedure.G.succ_e graph Procedure.Vert.Entry in
-            let graph = List.fold_left Procedure.G.remove_edge_e graph edges in
-            let new_edges =
-              List.map
-                (fun (b, l, e) -> (Procedure.Vert.(End inbl), l, e))
-                edges
-            in
-            let graph = List.fold_left Procedure.G.add_edge_e graph new_edges in
-            Procedure.G.add_edge graph Entry (Begin inbl)
-          in
-          let graph =
-            let edges = Procedure.G.pred_e graph Procedure.Vert.Return in
-            let graph = List.fold_left Procedure.G.remove_edge_e graph edges in
-            let new_edges =
-              List.map
-                (fun (b, l, e) -> (b, l, Procedure.Vert.Begin outbl))
-                edges
-            in
-            let graph = List.fold_left Procedure.G.add_edge_e graph new_edges in
-            Procedure.G.add_edge graph (End outbl) Return
-          in
-          graph
+        let proc =
+          Procedure.map_graph
+            (fun graph ->
+              let graph =
+                if List.is_empty assigns_in then graph
+                else
+                  let graph, inbl =
+                    Procedure.fresh_block_graph proc graph ~name:"%inputs"
+                      ~stmts:[ Stmt.Instr_Assign assigns_in ] ()
+                  in
+                  let open Procedure.Vert in
+                  let edges = Procedure.G.succ_e graph Entry in
+                  let graph =
+                    List.fold_left Procedure.G.remove_edge_e graph edges
+                  in
+                  let new_edges =
+                    List.map (fun (_, l, e) -> (End inbl, l, e)) edges
+                  in
+                  let graph =
+                    List.fold_left Procedure.G.add_edge_e graph new_edges
+                  in
+                  Procedure.G.add_edge graph Entry (Begin inbl)
+              in
+              let graph =
+                if List.is_empty assigns_out then graph
+                else
+                  let graph, outbl =
+                    Procedure.fresh_block_graph proc graph ~name:"%returns"
+                      ~stmts:[ Stmt.Instr_Assign assigns_out ] ()
+                  in
+                  let open Procedure.Vert in
+                  let edges = Procedure.G.pred_e graph Return in
+                  let graph =
+                    List.fold_left Procedure.G.remove_edge_e graph edges
+                  in
+                  let new_edges =
+                    List.map (fun (b, l, _) -> (b, l, Begin outbl)) edges
+                  in
+                  let graph =
+                    List.fold_left Procedure.G.add_edge_e graph new_edges
+                  in
+                  Procedure.G.add_edge graph (End outbl) Return
+              in
+              graph)
+            proc
         in
-        let proc = Procedure.map_graph add_formal_assigns proc in
         let proc =
           Procedure.map_formal_in_params
-            (fun i ->
+            (fun fip ->
               StringMap.union
-                (fun n i j -> failwith @@ "Existing param with name: " ^ n)
-                i
-              @@ to_formal inparam)
+                (fun n _ _ -> failwith @@ "Existing param with name: " ^ n)
+                fip (to_formal inparam))
             proc
         in
         let proc =
           Procedure.map_formal_out_params
-            (fun i ->
+            (fun fop ->
               StringMap.union
-                (fun n i j -> failwith @@ "Existing param with name: " ^ n)
-                i (to_formal outparam))
+                (fun n _ _ -> failwith @@ "Existing param with name: " ^ n)
+                fop (to_formal outparam))
+            proc
+        in
+        (* Maps from global name to in-/out-param vars, used for spec rewriting *)
+        let glob_to_inparam =
+          List.fold_left
+            (fun m (_, g, v) -> StringMap.add (Var.name g) v m)
+            StringMap.empty inparam
+        in
+        let glob_to_outparam =
+          List.fold_left
+            (fun m (_, g, v) -> StringMap.add (Var.name g) v m)
+            StringMap.empty outparam
+        in
+        (* Rewrite Old(g) → g_in in body statements.
+           Must run before body substitution so Old(g) is still recognisable. *)
+        let rewrite_old_expr expr =
+          let open Expr.AbstractExpr in
+          let open Expr.BasilExpr in
+          let alg node =
+            match map unfix node with
+            | UnaryExpr { op = `Old; arg = RVar { id } } -> (
+                match StringMap.find_opt (Var.name id) glob_to_inparam with
+                | Some v -> replace [%here] (rvar v)
+                | None -> None)
+            | _ -> None
+          in
+          rewrite ~rw_fun:alg expr
+        in
+        (* Rewrite requires: replace all captured globals with in-params and
+           strip any Old wrappers (all refs already denote the pre-state) *)
+        let rewrite_requires_expr expr =
+          let open Expr.AbstractExpr in
+          let open Expr.BasilExpr in
+          let alg node =
+            match map unfix node with
+            | RVar { id } -> (
+                match StringMap.find_opt (Var.name id) glob_to_inparam with
+                | Some v -> replace [%here] (rvar v)
+                | None -> None)
+            | UnaryExpr { op = `Old; arg } -> replace [%here] (fix arg)
+            | _ -> None
+          in
+          rewrite ~rw_fun:alg expr
+        in
+        (* Rewrite ensures: Old(g) → g_in (entry value); bare modified g →
+           g_out (exit value); bare captured-only g → g_in (unchanged).
+           Old(g) is handled first so the bare-g pass doesn't clobber it. *)
+        let rewrite_ensures_expr expr =
+          let open Expr.AbstractExpr in
+          let open Expr.BasilExpr in
+          let expr = rewrite_old_expr expr in
+          let alg node =
+            match map unfix node with
+            | RVar { id } -> (
+                match StringMap.find_opt (Var.name id) glob_to_outparam with
+                | Some v -> replace [%here] (rvar v)
+                | None -> (
+                    match StringMap.find_opt (Var.name id) glob_to_inparam with
+                    | Some v -> replace [%here] (rvar v)
+                    | None -> None))
+            | _ -> None
+          in
+          rewrite ~rw_fun:alg expr
+        in
+        let proc =
+          let spec = Procedure.specification proc in
+          Procedure.set_specification proc
+            {
+              spec with
+              requires = List.map rewrite_requires_expr spec.requires;
+              ensures = List.map rewrite_ensures_expr spec.ensures;
+            }
+        in
+        let proc =
+          Procedure.map_blocks_topo_fwd
+            (fun _bid b ->
+              Block.map ~phi:Fun.id
+                (Stmt.map ~f_lvar:Fun.id ~f_expr:rewrite_old_expr
+                   ~f_rvar:Fun.id)
+                b)
+            proc
+        in
+        (* Rewrite call sites using the original p.procs specs, emitting
+           g (the global) in args/lhs.  The body substitution below then
+           turns those into g_local automatically. *)
+        let proc =
+          Procedure.map_blocks_topo_fwd
+            (fun _bid b ->
+              Block.map ~phi:Fun.id
+                (function
+                  | Stmt.Instr_Call { procid; lhs; args } as stmt -> (
+                      match ID.Map.find_opt procid p.procs with
+                      | None -> stmt
+                      | Some callee ->
+                          let cspec = Procedure.specification callee in
+                          let new_args =
+                            List.fold_left
+                              (fun m g ->
+                                if should_lift ~skip_observable ~skip_maps g then
+                                  StringMap.add (param_name "_in" g)
+                                    (Expr.BasilExpr.rvar g) m
+                                else m)
+                              args cspec.captures_globs
+                          in
+                          let new_lhs =
+                            List.fold_left
+                              (fun m g ->
+                                if should_lift ~skip_observable ~skip_maps g then
+                                  StringMap.add (param_name "_out" g) g m
+                                else m)
+                              lhs cspec.modifies_globs
+                          in
+                          Stmt.Instr_Call
+                            { procid; lhs = new_lhs; args = new_args })
+                  | s -> s)
+                b)
+            proc
+        in
+        (* Substitute g → g_local throughout the body (including the call
+           args/lhs emitted above), eliminating all global references. *)
+        let subst_var v =
+          Option.value ~default:v
+            (StringMap.find_opt (Var.name v) glob_to_local_map)
+        in
+        let subst_expr e =
+          Expr.BasilExpr.substitute
+            (fun v ->
+              Option.map Expr.BasilExpr.rvar
+                (StringMap.find_opt (Var.name v) glob_to_local_map))
+            e
+        in
+        let proc =
+          Procedure.map_blocks_topo_fwd
+            (fun _bid b ->
+              Block.map ~phi:Fun.id
+                (Stmt.map ~f_lvar:subst_var ~f_expr:subst_expr
+                   ~f_rvar:subst_var)
+                b)
             proc
         in
         proc)
   in
+  (* ------------------------------------------------------------------ *)
+  (* Pass 2 – remove lifted globals from captures/modifies specs        *)
+  (* ------------------------------------------------------------------ *)
   let procs =
-    procs
-    |> ID.Map.mapi (fun procid proc ->
-        Procedure.map_blocks_topo_fwd set_params_calls_block proc)
+    ID.Map.map
+      (fun proc ->
+        let spec = Procedure.specification proc in
+        Procedure.set_specification proc
+          {
+            spec with
+            captures_globs =
+              List.filter
+                (fun g -> not (should_lift ~skip_observable ~skip_maps g))
+                spec.captures_globs;
+            modifies_globs =
+              List.filter
+                (fun g -> not (should_lift ~skip_observable ~skip_maps g))
+                spec.modifies_globs;
+          })
+      procs
   in
-  { p with procs }
+  (* ------------------------------------------------------------------ *)
+  (* Remove lifted Variable globals from the program                    *)
+  (* ------------------------------------------------------------------ *)
+  let globals =
+    StringMap.filter
+      (fun _ decl ->
+        match decl with
+        | Program.Variable { binding } ->
+            not (List.exists (Var.equal binding) all_lifted)
+        | _ -> true)
+      p.globals
+  in
+  { p with procs; globals }
 
 let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
   let in_proc = intro_ssi_assigns in_proc in
@@ -444,3 +630,6 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
   assert (Procedure.iter_blocks_topo_fwd proc |> Iter.for_all check_bl);
   check_ssa ~skip_observable ~skip_maps proc;
   proc
+
+let ssa_prog ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
+  { p with procs = ID.Map.map (ssa ~skip_observable ~skip_maps) p.procs }

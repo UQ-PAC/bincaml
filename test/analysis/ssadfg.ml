@@ -72,14 +72,11 @@ proc @main_4196260 () -> ()
           (Analysis.Defuse_bool.IsZeroLattice.show v))
   in
   print_endline f;
-  [%expect
-    {|
-    CF_out->Top
+  [%expect {|
     NF_out->NonZero
     R0_out->Zero
     R1_out->Zero
     R30_out->Top
-    VF_out->Top
     ZF_out->NonZero
     _PC_out->NonZero
     |}]

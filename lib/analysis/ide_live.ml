@@ -65,6 +65,9 @@ module IDELive = struct
   let init_data globals (proc : Program.proc) =
     Procedure.formal_out_params proc |> StringMap.values |> Iter.append globals
 
+  let init_data globals (proc : Program.proc) =
+    Procedure.formal_out_params proc |> StringMap.values |> Iter.append globals
+
   open DL
 
   let transfer_call (c : call_info) d =

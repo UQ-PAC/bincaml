@@ -20,6 +20,12 @@ module Byte_slice = struct
     Bytes.blit src.bs src.off dest dest_pos src.len
 end
 
+module Z = struct
+  include Z
+
+  let pp = pp_print
+end
+
 include Mtypes
 (** Types *)
 

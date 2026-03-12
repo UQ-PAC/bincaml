@@ -7,6 +7,7 @@ module type Lattice = sig
   include ORD_TYPE
   include PRETTY with type t := t
 
+  val top : t
   val bottom : t
   val join : t -> t -> t
   val equal : t -> t -> bool

@@ -234,8 +234,9 @@ module AllOps = struct
     | Fun of { args : Types.t list; ret : Types.t }
     (* list of expected type equalities *)
     | Conflict of (Types.t * string) list
+  [@@deriving eq, show]
 
-  let ret_type_const (o : const) =
+  let ret_type_const (o : [< const ]) =
     let open Types in
     let return ret = Fun { args = []; ret } in
     match o with
@@ -243,7 +244,7 @@ module AllOps = struct
     | `Integer _ -> return Integer
     | `Bitvector v -> return (Bitvector (Bitvec.size v))
 
-  let ret_type_unary (o : unary) a =
+  let ret_type_unary (o : [< unary ]) a =
     let open Types in
     let return ret = Fun { args = [ a ]; ret } in
     match o with
@@ -388,6 +389,14 @@ module AllOps = struct
     | `Integer a, `Integer b -> Z.equal a b
     | `Bool a, `Bool b -> Bool.equal a b
     | _, _ -> false
+
+  let equal a b =
+    match (a, b) with
+    | (#const as c), (#const as c2) -> equal_const c c2
+    | (#unary as u), (#unary as u2) -> equal_unary u u2
+    | (#binary as b), (#binary as b2) -> equal_binary b b2
+    | (#intrin as b), (#intrin as b2) -> equal_intrin b b2
+    | _ -> false
 
   let hash_const = Hashtbl.hash
   let hash_unary = Hashtbl.hash
