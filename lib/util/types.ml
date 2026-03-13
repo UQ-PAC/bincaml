@@ -149,8 +149,9 @@ let rec to_string = function
   | Record record ->
       "{"
       ^ (StringMap.bindings record
-        |> List.map (fun (k, ({ typ = v; _ } : record_field)) ->
-            "(\"" ^ k ^ "\": " ^ to_string v ^ ")")
+        |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->
+            Printf.sprintf "(\"%s\": (%s, %s))" k (to_string v)
+              (Z.to_string offset))
         |> String.concat ", ")
       ^ "}"
   | Map ((Map _ as a), (Map _ as b)) ->
