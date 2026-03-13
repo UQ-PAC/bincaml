@@ -187,7 +187,7 @@ module InferredType = struct
           @@ List.map
                (fun ({ offset; ty } : field) ->
                  ( Z.to_string offset,
-                   ({ typ = inferred_to_real ty; offset } : Types.field2) ))
+                   ({ typ = inferred_to_real ty; offset } : Types.record_field) ))
                fields)
     | Field { ty } -> inferred_to_real ty
     | Recursive _ | Union _ | Sect _ ->
@@ -830,7 +830,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
         let st, _ = constrain_expr st (BasilExpr.unfix a) in
         match op with
         | `FACCESS offset ->
-            let { typ; offset } : Types.field2 =
+            let { typ; offset } : Types.record_field =
               Types.get_field offset (BasilExpr.type_of a)
             in
             (st, type_to_inferred typ)
@@ -882,7 +882,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
         match op with
         | `FSET offset ->
             (* TODO: constrain the r to be the type of that field in the record l*)
-            let { typ } : Types.field2 =
+            let { typ } : Types.record_field =
               Types.get_field offset (BasilExpr.type_of r)
             in
             let st = constrain_arg st r @@ InferredType.type_to_inferred typ in
