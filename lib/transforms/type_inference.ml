@@ -172,16 +172,41 @@ module InferredType = struct
     | Record fields -> List.iter (fun { ty } -> iter f ty) fields
 
   (* Top and type_var might be valid, and maybe even bottom and then those can just default to whatever type it had prior *)
-  let rec inferred_to_real typ : t -> Types.t = function
-    | Top | Bottom | TypeVar _ -> typ
-    | Recursive _ | Union _ | Sect _ | Function _ ->
-        failwith "These types should have been removed prior to transform!"
-    | Pointer (lb, ub) -> Types.Integer
-    (* Types.Pointer (lb, ub) *)
-    | Record fields -> Types.Boolean
-    (* Types.Record StringMap.of_list @@ List.map (fun {offset; t} -> (Z.to_string offset, inferred_to_real t)) fields *)
+  let rec inferred_to_real typ : Types.t =
+    match typ with
+    | Top -> Types.Top
+    | Bottom -> Types.Nothing
+    | TypeVar a -> Types.Variable (VarId.show a)
     | BinCamlType a -> BinCamlType.bincaml_type_to_type a
-    | Field { ty } -> inferred_to_real typ ty
+    | Pointer (lower, upper) ->
+        Types.Pointer
+          { lower = inferred_to_real lower; upper = inferred_to_real upper }
+    | Record fields ->
+        Types.Record
+          (StringMap.of_list
+          @@ List.map
+               (fun ({ offset; ty } : field) ->
+                 ( Z.to_string offset,
+                   ({ typ = inferred_to_real ty; offset } : Types.field2) ))
+               fields)
+    | Field { ty } -> inferred_to_real ty
+    | Recursive _ | Union _ | Sect _ ->
+        failwith "These types should have been removed prior to transform!"
+    | Function _ ->
+        failwith "This type probably should not be converted to a real type"
+
+  let rec type_to_inferred (typ : Types.t) : t =
+    match typ with
+    | Top -> Top
+    | Nothing -> Bottom
+    | Variable a -> TypeVar (VarId.make_id a)
+    | Pointer { lower; upper } ->
+        Pointer (type_to_inferred lower, type_to_inferred upper)
+    | Record fields -> failwith "TODO"
+    | Bitvector bv -> BinCamlType (BinCaml_BV bv)
+    | Boolean -> BinCamlType BinCaml_Bool
+    | Integer -> BinCamlType BinCaml_Int
+    | Unit | Map _ | Sort _ -> failwith "No inferred type mapping"
 end
 
 module TySet = struct
@@ -728,8 +753,21 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
   Given a statement constrain the variables involed (based on the expression)
 
   Prefer giving upper bounds when possible
+
+  NOTE: This could possibly be used else where some what easily
+
+        By providing an empty constraint state and a statement you can generate
+          all typing constraints a particular statement can generate
+
+        Might need to make SVA an option type to better support this, however
+          no-sva leads to bad types when sva is needed.
+
+        Program is needed for formal params
+
+        Procedure is needed for unique IDs for local variables
 *)
-let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
+let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
+    ConstraintState.t =
   let open AbstractExpr in
   let open InferredType in
   (*
@@ -782,10 +820,20 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
           match const with
           | `Bool _ -> BinCamlType BinCaml_Bool
           | `Bitvector bv -> BinCamlType (BinCaml_BV (Bitvec.size bv))
-          | `Integer _ -> BinCamlType BinCaml_Int )
+          | `Integer _ -> BinCamlType BinCaml_Int
+          | `Record (_, typ) -> InferredType.type_to_inferred typ
+          | `Pointer (bv, { lower; upper }) ->
+              InferredType.Pointer
+                ( InferredType.type_to_inferred lower,
+                  InferredType.type_to_inferred upper ) )
     | UnaryExpr { op; arg = a } -> (
         let st, _ = constrain_expr st (BasilExpr.unfix a) in
         match op with
+        | `FACCESS offset ->
+            let { typ; offset } : Types.field2 =
+              Types.get_field offset (BasilExpr.type_of a)
+            in
+            (st, type_to_inferred typ)
         | `BoolNOT ->
             ( constrain_arg st a @@ BinCamlType BinCaml_Bool,
               BinCamlType BinCaml_Bool )
@@ -832,6 +880,16 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt =
         let st, _ = constrain_expr st (BasilExpr.unfix l) in
         let st, _ = constrain_expr st (BasilExpr.unfix r) in
         match op with
+        | `FSET offset ->
+            (* TODO: constrain the r to be the type of that field in the record l*)
+            let { typ } : Types.field2 =
+              Types.get_field offset (BasilExpr.type_of r)
+            in
+            let st = constrain_arg st r @@ InferredType.type_to_inferred typ in
+            (st, type_to_inferred @@ BasilExpr.type_of l)
+        | `PTRADD ->
+            (* The pointer is the the left pointer but with the offsets translated by the right value, use SVA to see if we know the right ptr? *)
+            (st, Pointer (Top, Top))
         | `INTMOD | `INTSUB | `INTDIV | `INTADD | `INTMUL ->
             let st = constrain_args st l r @@ BinCamlType BinCaml_Int in
             (st, BinCamlType BinCaml_Int)
