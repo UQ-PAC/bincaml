@@ -22,7 +22,7 @@ let normalise_bool e =
   | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `OR; args } } ->
       replace [%here]
         (BasilExpr.applyintrin ~op:`AND (List.map BasilExpr.boolnot args))
-  | _ -> None
+  | _ -> Keep
 
 let simplify_concat
     (e :
@@ -59,7 +59,7 @@ let simplify_concat
       in
       replace [%here]
         (BasilExpr.extract ~hi_excl:(rshift + 1) ~lo_incl:rshift arg1)
-  | _ -> None
+  | _ -> Keep
 
 let to_steady equal f x =
   let rec loop x =
@@ -115,7 +115,7 @@ let algebraic_simplifications
       keep [%here] a
   | Unary (`BVNOT, (_, Unary (`BVNOT, a), _)) -> replace [%here] a
   | Unary (`BoolNOT, (_, Unary (`BoolNOT, a), _)) -> replace [%here] a
-  | _ -> None
+  | _ -> Keep
 
 (*
 let algebraic_simplifications
@@ -195,7 +195,7 @@ type 'e rewriter_expr = {
 *)
 
 let sequence (a : 'a -> BasilExpr.rewrite) (b : 'a -> BasilExpr.rewrite) e =
-  match a e with None -> b e | e -> e
+  match a e with Keep -> b e | e -> e
 
 let alg_simp_rewriter ?visit e =
   let partial_eval_expr e =

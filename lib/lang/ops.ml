@@ -271,7 +271,8 @@ module Spec = struct
   type intrin = [ `Cases  (** choose first argument that is defined *) ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type unary = [ `Forall | `Old | `Exists | `Lambda | `Classification | `Gamma ]
+  type unary =
+    [ `Forall | `Old | `Exists | `Lambda | `Let | `Classification | `Gamma ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let hash_intrin a = Hashtbl.hash a
@@ -349,6 +350,9 @@ module AllOps = struct
     | `Lambda ->
         let args, ret = Types.uncurry a in
         Fun { args; ret }
+    | `Let ->
+        let args, ret = Types.uncurry a in
+        Fun { args; ret }
     | `Extract (hi, lo) -> return (Bitvector (hi - lo))
     | `Gamma ->
         let args, r = Types.uncurry a in
@@ -411,6 +415,7 @@ module AllOps = struct
 
   let to_string (op : [< const | unary | binary | intrin ]) =
     match op with
+    | `Let -> "let"
     | `BVADD -> "bvadd"
     | `BVSREM -> "bvsrem"
     | `BVSDIV -> "bvsdiv"

@@ -15,10 +15,14 @@ type 'e t =
   | `List of 'e t list ]
 [@@deriving eq, ord]
 
-let location_key = "text_range"
+let is_internal_key = String.starts_with ~prefix:"__"
+let location_key = "__text_range"
 
-let rec attrib_pretty ?(internal = [ location_key ]) pretty_expr (e : 'e t) :
-    Containers_pp.t =
+(** stores the token used to separate the binding to preserve the input format
+    when printed *)
+let binding_sep_key = "__binding_sep_token"
+
+let rec attrib_pretty pretty_expr (e : 'e t) : Containers_pp.t =
   let open Containers_pp in
   let attrib_pretty = attrib_pretty pretty_expr in
   match e with
@@ -40,7 +44,7 @@ let rec attrib_pretty ?(internal = [ location_key ]) pretty_expr (e : 'e t) :
       let pairs =
         sm
         |> StringMap.filter (fun i _ ->
-            not @@ List.exists (String.equal i) internal)
+            not @@ String.starts_with ~prefix:"__" i)
         |> StringMap.bindings
         |> List.map (function k, v -> text k ^ text " = " ^ attrib_pretty v)
       in
@@ -83,6 +87,20 @@ let set_assoc k v a =
 
 let find_opt k (e : 'a t option) =
   Option.bind e (function `Assoc es -> StringMap.find_opt k es | _ -> None)
+
+let find_str_opt k (e : 'a t option) =
+  let open Option in
+  (e >>= function `Assoc es -> StringMap.find_opt k es | _ -> None)
+  >>= function
+  | `String s -> Some s
+  | _ -> None
+
+let find_int_opt k (e : 'a t option) =
+  let open Option in
+  (e >>= function `Assoc es -> StringMap.find_opt k es | _ -> None)
+  >>= function
+  | `Integer i -> Some i
+  | _ -> None
 
 let find_loc_opt (e : 'a t option) =
   find_opt location_key e |> Option.map loc_of_attr

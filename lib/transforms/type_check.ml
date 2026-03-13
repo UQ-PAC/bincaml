@@ -225,8 +225,8 @@ let type_check stmt_id block_id expr =
       | ApplyFun { func; args } ->
           let _, rt = Types.uncurry func in
           ([], rt)
-      | Binding { bound = vars; in_body = b } ->
-          ([], Types.curry (List.map Var.typ vars) b)
+      | Binding { bound_vars; in_body = b } ->
+          ([], Types.curry (List.map Var.typ bound_vars) b)
     in
     let typed_expr = AbstractExpr.map snd e in
     let new_errors : type_error list =

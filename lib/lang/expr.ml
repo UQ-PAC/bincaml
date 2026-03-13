@@ -12,7 +12,7 @@ module AbstractExpr = struct
     | Binary of 'binary * 'e * 'e
     | Intrin of 'intrin * 'e list
     | FApply of 'e * 'e list
-    | Bound of 'var list * 'e
+    | Bound of 'var list * 'e list option * 'e
 
   type ('const, 'var, 'unary, 'binary, 'intrin, 'attrib, 'e) t =
     | RVar of { attrib : 'attrib option; id : 'var }  (** variables *)
@@ -30,8 +30,12 @@ module AbstractExpr = struct
         (** application of a pure intrinsic function with n arguments *)
     | ApplyFun of { attrib : 'attrib option; func : 'e; args : 'e list }
         (** application of a pure runtime-defined function with n arguments *)
-    | Binding of { attrib : 'attrib option; bound : 'var list; in_body : 'e }
-        (** syntactic binding in a nested scope *)
+    | Binding of {
+        attrib : 'attrib option;
+        bound_vars : 'var list;
+        bound_exprs : 'e list option;
+        in_body : 'e;
+      }  (** syntactic binding in a nested scope *)
   [@@deriving eq, ord, fold, map, iter]
 
   let simple_view x : ('const, 'var, 'unary, 'binary, 'intrin, 'e) simple =
@@ -42,7 +46,8 @@ module AbstractExpr = struct
     | BinaryExpr { op; arg1; arg2 } -> Binary (op, arg1, arg2)
     | ApplyIntrin { op; args } -> Intrin (op, args)
     | ApplyFun { func; args } -> FApply (func, args)
-    | Binding { bound; in_body } -> Bound (bound, in_body)
+    | Binding { bound_vars; bound_exprs; in_body } ->
+        Bound (bound_vars, bound_exprs, in_body)
 
   let of_simple_view (x : ('const, 'var, 'unary, 'binary, 'intrin, 'e) simple) :
       ('const, 'var, 'unary, 'binary, 'intrin, 'attrib, 'e) t =
@@ -54,7 +59,8 @@ module AbstractExpr = struct
     | Binary (op, arg1, arg2) -> BinaryExpr { attrib; op; arg1; arg2 }
     | Intrin (op, args) -> ApplyIntrin { attrib; op; args }
     | FApply (func, args) -> ApplyFun { attrib; func; args }
-    | Bound (bound, in_body) -> Binding { attrib; bound; in_body }
+    | Bound (bound_vars, bound_exprs, in_body) ->
+        Binding { attrib; bound_vars; bound_exprs; in_body }
 
   let map_attrib f x =
     match x with
@@ -102,8 +108,11 @@ module AbstractExpr = struct
     | Constant { const } -> Hash.(combine2 7 (poly const))
     | ApplyIntrin { op; args } -> Hash.(combine3 11 (poly op) (list hash args))
     | ApplyFun { func; args } -> Hash.(combine3 13 (hash func) (list hash args))
-    | Binding { bound; in_body } ->
-        Hash.(combine3 17 (list poly bound) (hash in_body))
+    | Binding { bound_vars; bound_exprs; in_body } ->
+        Hash.(
+          combine4 17 (list poly bound_vars)
+            (opt (list hash) bound_exprs)
+            (hash in_body))
 end
 
 module Alges = struct
@@ -111,24 +120,6 @@ module Alges = struct
 
   let children_alg a =
     let alg a = fold (fun acc a -> a @ acc) [] a in
-    alg
-
-  let hash_alg (hash_const : 'a -> int) (hash_var : 'b -> int) =
-    let alg a =
-      match a with
-      | RVar { id } -> hash_var id
-      | Constant { const } -> hash_const const
-      | UnaryExpr { op; arg } ->
-          Hash.pair Hashtbl.hash Fun.id (Hashtbl.hash op, arg)
-      | BinaryExpr { op; arg1; arg2 } ->
-          Hash.triple Hashtbl.hash Fun.id Fun.id (Hashtbl.hash op, arg1, arg2)
-      | ApplyIntrin { op; args } ->
-          Hash.pair Hashtbl.hash (Hash.list Fun.id) (op, args)
-      | ApplyFun { func; args } ->
-          Hash.pair Hash.int (Hash.list Fun.id) (func, args)
-      | Binding { bound; in_body } ->
-          Hash.pair (Hash.list hash_var) Fun.id (bound, in_body)
-    in
     alg
 end
 
@@ -183,7 +174,10 @@ module Make (O : Fix) = struct
 
     let unexp ?attrib ~op arg = fix (UnaryExpr { attrib; op; arg })
     let fapply ?attrib func args = fix (ApplyFun { attrib; func; args })
-    let binding ?attrib bound in_body = fix (Binding { attrib; bound; in_body })
+
+    let binding ?attrib bound_vars bound_exprs in_body =
+      fix (Binding { attrib; bound_vars; bound_exprs; in_body })
+
     let applyintrin ?attrib ~op args = fix (ApplyIntrin { attrib; op; args })
     let apply_fun ?attrib ~func args = fix (ApplyFun { attrib; func; args })
     let attrib e = unfix e |> AbstractExpr.get_attrib
@@ -215,8 +209,13 @@ module Make (O : Fix) = struct
     let alg e =
       match e with
       | RVar { id } -> VarSet.singleton id
-      | Binding { bound; in_body } ->
-          VarSet.diff in_body (VarSet.add_list VarSet.empty bound)
+      | Binding { bound_vars; bound_exprs; in_body } ->
+          let bindees =
+            List.fold_left VarSet.union VarSet.empty
+              (Option.get_or ~default:[] bound_exprs)
+          in
+          VarSet.union bindees
+            (VarSet.diff in_body (VarSet.add_list VarSet.empty bound_vars))
       | o -> fold (fun acc a -> VarSet.union a acc) VarSet.empty o
     in
     cata alg e
@@ -226,16 +225,20 @@ module Make (O : Fix) = struct
   (* substite variables for expressions *)
   let substitute (sub : var -> t option) (e : t) =
     let open AbstractExpr in
-    let binding acc e =
-      match e with Binding { bound } -> VarSet.add_list acc bound | o -> acc
+    let rec subst bound orig =
+      let exp = unfix orig in
+      match exp with
+      | RVar { id } when VarSet.find_opt id bound |> Option.is_none -> (
+          match sub id with Some r -> r | None -> orig)
+      | Binding { bound_vars; bound_exprs; in_body; attrib } ->
+          (* exprs to bind are evaluated outside the bound *)
+          let bound_exprs = Option.map (List.map (subst bound)) bound_exprs in
+          let bound = VarSet.add_list bound bound_vars in
+          let in_body = subst bound in_body in
+          fix (Binding { bound_vars; bound_exprs; in_body; attrib })
+      | o -> fix @@ AbstractExpr.map (subst bound) o
     in
-    let subst binding orig =
-      match orig with
-      | RVar { id } when VarSet.find_opt id binding |> Option.is_none -> (
-          match sub id with Some r -> r | None -> fix orig)
-      | o -> fix o
-    in
-    map_fold ~f:binding ~alg:subst VarSet.empty e
+    subst VarSet.empty e
 
   (** get list of child expressions *)
   let children e = cata Alges.children_alg e
@@ -342,7 +345,7 @@ module BasilExpr = struct
     match e with
     | RVar { id; attrib } -> text (Var.to_string id) ^ a
     | Constant { const } -> text (AllOps.to_string const) ^ a
-    | UnaryExpr { op = `Lambda as op; arg } ->
+    | UnaryExpr { op = (`Lambda | `Let) as op; arg } ->
         text (AllOps.to_string op) ^ a ^ text " " ^ arg
     | UnaryExpr { op = `Forall as op; arg } ->
         text (AllOps.to_string op) ^ a ^ text " " ^ arg
@@ -401,9 +404,19 @@ module BasilExpr = struct
             bracket "(" n ")" ^ a
             ^ bracket "(" (nest 2 (fill (text "," ^ newline) es)) ")";
           ]
-    | Binding { bound = vs; in_body = b } ->
-        fill (text " ") (List.map (fun v -> bracket "(" (Var.pretty v) ")") vs)
-        ^ text " :: " ^ a ^ bracket "(" b ")"
+    | Binding { bound_vars; bound_exprs; in_body = b; attrib } ->
+        let sep =
+          Attrib.find_str_opt Attrib.binding_sep_key attrib
+          |> Option.get_or ~default:"::"
+        in
+        fill (text " ")
+          (match bound_exprs with
+          | Some e ->
+              List.combine bound_vars e
+              |> List.map (fun (v, e) -> Var.pretty v ^ text " = " ^ e)
+          | None ->
+              List.map (fun v -> bracket "(" (Var.pretty v) ")") bound_vars)
+        ^+ text sep ^+ a ^ bracket "(" b ")"
 
   let pretty_drop_attrib s =
     cata (pretty_alg (fun x -> Containers_pp.text "")) s
@@ -413,9 +426,7 @@ module BasilExpr = struct
     let pretty_attr = function
       | Some (`Assoc e) ->
           let attrib =
-            StringMap.filter
-              (fun k v -> not @@ String.equal k Attrib.location_key)
-              e
+            StringMap.filter (fun k v -> not @@ Attrib.is_internal_key k) e
           in
           if StringMap.is_empty attrib then text ""
           else
@@ -432,7 +443,7 @@ module BasilExpr = struct
 
   type rewrite =
     | SomeInfo of { v : t; __LINE__ : int; __FILE__ : string }
-    | None
+    | Keep
 
   (** Algebra that infers types of expressions *)
   let type_alg (e : Types.t abstract_expr) =
@@ -450,8 +461,8 @@ module BasilExpr = struct
     | ApplyFun { func; args } ->
         let _, rt = Types.uncurry func in
         rt
-    | Binding { bound = vars; in_body = b } ->
-        Types.curry (List.map Var.typ vars) b
+    | Binding { bound_vars; in_body = b } ->
+        Types.curry (List.map Var.typ bound_vars) b
 
   let type_of e = cata type_alg e
 
@@ -502,7 +513,7 @@ module BasilExpr = struct
                "improper rewrite type: attempt to rewrite %s into %s"
                (to_string (orig e))
                (to_string v)
-      | None -> orig e
+      | Keep -> orig e
     in
     cata rw_alg expr
 
@@ -526,7 +537,7 @@ module BasilExpr = struct
 
   let replace_opt = function
     | Some v -> SomeInfo { v; __LINE__; __FILE__ }
-    | None -> None
+    | None -> Keep
   [@@inline always]
 
   (** typed rewriter that expands two layers deep into the expression *)
@@ -544,7 +555,7 @@ module BasilExpr = struct
           n *)
       | SomeInfo { v; __LINE__; __FILE__ } ->
           log_rw visit ~__LINE__ ~__FILE__ (orig e) v
-      | None -> orig e
+      | Keep -> orig e
     in
     fold_with_type rw_alg expr
 
@@ -574,9 +585,9 @@ module BasilExpr = struct
     applyintrin ?attrib ~op:`BVConcat [ e; f ]
 
   let concatl ?attrib (e : t list) : t = applyintrin ?attrib ~op:`BVConcat e
-  let forall ?attrib ~bound p = unexp ?attrib ~op:`Forall (binding bound p)
-  let exists ?attrib ~bound p = unexp ?attrib ~op:`Exists (binding bound p)
-  let lambda ?attrib ~bound p = unexp ?attrib ~op:`Lambda (binding bound p)
+  let forall ?attrib ~bound p = unexp ?attrib ~op:`Forall (binding bound None p)
+  let exists ?attrib ~bound p = unexp ?attrib ~op:`Exists (binding bound None p)
+  let lambda ?attrib ~bound p = unexp ?attrib ~op:`Lambda (binding bound None p)
   let boolnot ?attrib e = unexp ?attrib ~op:`BoolNOT e
   let intconst ?attrib (v : PrimInt.t) : t = const ?attrib (`Integer v)
   let boolconst ?attrib (v : bool) : t = const ?attrib (`Bool v)
