@@ -180,6 +180,22 @@ module SMTLib2 = struct
     | #Ops.AllOps.binary as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.intrin as o -> atom @@ Ops.AllOps.to_string o
 
+  let let_binding bound_vars exprs in_body =
+    let vs = List.map Var.name bound_vars in
+    let* binds = sequence exprs in
+    let binds = List.combine vs binds in
+    let* body = in_body in
+    return @@ Bincaml_util.Smt.Expr.let_ binds body
+
+  let quantifier quant bound_vars in_body =
+    let names = List.map (Var.name %> atom) bound_vars in
+    let types = List.map (Var.typ %> of_typ %> fst) bound_vars in
+    let binds =
+      List.combine names types |> List.map (fun (a, b) -> list [ a; b ])
+    in
+    let* body = in_body in
+    return @@ list [ quant; list binds; body ]
+
   let smt_alg (e : sexp t BasilExpr.abstract_expr) =
     match e with
     | Constant { const = o } ->
@@ -196,6 +212,27 @@ module SMTLib2 = struct
                of_op (`Bitvector (Bitvec.one ~size:1));
                of_op (`Bitvector (Bitvec.zero ~size:1));
              ]
+    | UnaryExpr { op = (`Forall | `Exists) as op; arg = e } -> (
+        (* TODO: trigger *)
+        let* e = e in
+        let o = match op with `Forall -> "forall" | `Exists -> "exists" in
+        match e with
+        | `List [ `List binds; `List args; in_body ] ->
+            let binds =
+              List.combine binds args
+              |> List.map (function
+                | `List [ a; b ], e -> list [ a; e ]
+                | _ -> failwith "bad binding structure")
+            in
+            return @@ list [ atom o; list binds; in_body ]
+        | _ -> failwith "unsupp")
+    | UnaryExpr { op = `Let; arg = e } -> (
+        (* TODO: trigger *)
+        let* e = e in
+        match e with
+        | `List [ binds; _; in_body ] ->
+            return @@ list [ atom "let"; binds; in_body ]
+        | _ -> failwith "unsupp")
     | UnaryExpr { op = o; arg = e } ->
         let* e = e in
         return @@ list [ of_op o; e ]
@@ -207,7 +244,6 @@ module SMTLib2 = struct
         let* l = l in
         let* r = r in
         return @@ list [ of_op o; l; r ]
-    (* TODO: bool2bv1 *)
     | ApplyIntrin { op = o; args } ->
         let* args = sequence args in
         return (list (of_op o :: args))
@@ -216,8 +252,17 @@ module SMTLib2 = struct
         let* args = sequence args in
         let* func = func in
         return @@ list (func :: args)
-    (* TODO: bindings *)
-    | Binding _ -> failwith "unsupp"
+    | Binding { bound_vars; bound_exprs; in_body } ->
+        let names = List.map (Var.name %> atom) bound_vars in
+        let types = List.map (Var.typ %> of_typ %> fst) bound_vars in
+        let* bound_exprs =
+          match bound_exprs with Some l -> sequence l | None -> return []
+        in
+        let binds =
+          List.combine names types |> List.map (fun (a, b) -> list [ a; b ])
+        in
+        let* in_body = in_body in
+        return @@ list [ list binds; list bound_exprs; in_body ]
 
   let of_bexpr e = fst @@ (BasilExpr.cata smt_alg e) empty
   let bind_of_bexpr e b = BasilExpr.cata smt_alg e b
