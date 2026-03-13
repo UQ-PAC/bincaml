@@ -109,6 +109,12 @@ module SMTLib2 = struct
         let tr, lr = of_typ r in
         let log = LSet.union (LSet.singleton Array) (LSet.union ll lr) in
         (list [ atom "Array"; tl; tr ], log)
+    | Types.Variable v -> (atom v, LSet.empty)
+    | Types.Record e ->
+        failwith "unsupported: must be lowered to Sort/ADT/Datatype first"
+    | Types.Pointer { upper; lower } ->
+        ( list [ atom "Pointer "; fst (of_typ upper); fst (of_typ lower) ],
+          LSet.singleton UF )
 
   let add_logic l s = ((), { s with logics = LSet.add l s.logics })
 
@@ -125,6 +131,8 @@ module SMTLib2 = struct
       | `Bitvector _ -> add_logic BV
       | `Integer _ -> add_logic Int
       | `Bool _ -> return ()
+      | `Record _ -> add_logic DT
+      | `Pointer _ -> add_logic UF
     in
     return v
 
