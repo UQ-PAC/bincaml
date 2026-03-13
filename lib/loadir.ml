@@ -437,6 +437,16 @@ module BasilASTLoader = struct
     | RecordField1 (id, ty) ->
         Types.mk_field (unsafe_unsigil (`Local id)) (trans_type ty)
 
+  and transRECORDTYPE (fields : field list) =
+    Types.Record
+      (StringMap.of_list
+         ((List.map (function Field1 (_, offset, t, _) ->
+              (transStr offset, trans_type t)))
+            fields))
+
+  and transPOINTERTYPE (l : typeT) (u : typeT) =
+    Types.Pointer { lower = trans_type l; upper = trans_type u }
+
   and trans_type (x : typeT) : Types.t =
     match x with
     | TypeIntType inttype -> Integer
@@ -444,7 +454,9 @@ module BasilASTLoader = struct
     | TypeMapType maptype -> transMapType maptype
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
     | TypeParen (_, typeT, _) -> trans_type typeT
-    | TypeSort t -> Types.Sort (unsafe_unsigil (`Local t), [])
+    | TypeVarType name -> Types.Variable (unsafe_unsigil (`Local name))
+    | TypeRecordType (RecordType1 (_, fields, _)) -> transRECORDTYPE fields
+    | TypePointerType (PointerType1 (_, l, u, _)) -> transPOINTERTYPE l u
 
   and transIntVal (x : intVal) : PrimInt.t =
     match x with
@@ -857,6 +869,18 @@ module BasilASTLoader = struct
     | Value_Int intval -> `Integer (transIntVal intval)
     | Value_True -> `Bool true
     | Value_False -> `Bool false
+    | Value_Pointer (_, v, PointerType1 (_, l, u, _), _) ->
+        `Pointer (trans_bv_val v, { lower = trans_type l; upper = trans_type u })
+    | Value_Record (_, fields, _) ->
+        `Record
+          (StringMap.of_list
+             (List.map
+                (function
+                  | FieldVal1 (_, offset, value, typ, _) ->
+                      ( transStr offset,
+                        ({ value = trans_bv_val value; typ = trans_type typ }
+                          : Ops.Record.field) ))
+                fields))
 
   and unsafe_unsigil g : string =
     match g with
@@ -965,6 +989,12 @@ module BasilASTLoader = struct
           ~hi_excl:(transIntVal ival0 |> Z.to_int)
           ~lo_incl:(transIntVal intval |> Z.to_int)
           (trans_expr expr)
+    | Expr_FAccess (o, offset, record, c) ->
+        BasilExpr.faccess ~attrib:(expr_range_attr o c)
+          ~offset:(transStr offset) (trans_expr record)
+    | Expr_FSet (o, offset, record, expr, c) ->
+        BasilExpr.fset ~attrib:(expr_range_attr o c) ~offset:(transStr offset)
+          (trans_expr record) (trans_expr expr)
     | Expr_LoadLe (o, intval, a1, a2, c) ->
         BasilExpr.load ~attrib:(expr_range_attr o c)
           ~bits:(Z.to_int @@ transIntVal intval)
@@ -1014,6 +1044,7 @@ module BasilASTLoader = struct
         transIntLogicalBinOp intlogicalbinop
     | BinOpIntBinOp intbinop -> transIntBinOp intbinop
     | BinOpEqOp equop -> transEqOp equop
+    | BinOpPointerBinOp pointerBinOp -> transPointerBinOp pointerBinOp
 
   and transUnOp (x : BasilIR.AbsBasilIR.unOp) =
     match x with
@@ -1068,6 +1099,9 @@ module BasilASTLoader = struct
     | IntBinOp_intsub -> `INTSUB
     | IntBinOp_intdiv -> `INTDIV
     | IntBinOp_intmod -> `INTMOD
+
+  and transPointerBinOp (x : pointerBinOp) =
+    match x with PointerBinOp_ptradd -> `PTRADD
 
   and transIntLogicalBinOp (x : intLogicalBinOp) =
     match x with

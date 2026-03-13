@@ -358,6 +358,17 @@ module BasilExpr = struct
           [ text "sign_extend" ^ a ^ (textpf "(%d") bits; arg ^ text ")" ]
     | UnaryExpr { op = `Extract (hi, lo); arg = e } ->
         fill nil [ text "extract" ^ a ^ textpf "(%d,%d, " hi lo ^ e ^ text ")" ]
+    | UnaryExpr { op = `FACCESS offset; arg } ->
+        fill
+          (text "," ^ newline)
+          [ text "faccess" ^ a ^ (textpf "(\"%s\"") offset; arg ^ text ")" ]
+    | BinaryExpr { op = `FSET offset; arg1; arg2 } ->
+        fill
+          (text "," ^ newline)
+          [
+            text "fset" ^ a ^ (textpf "(\"%s\"") offset;
+            arg1 ^ text ", " ^ arg2 ^ text ")";
+          ]
     | UnaryExpr { op; arg = e } ->
         text (AllOps.to_string op) ^ a ^ bracket "(" e ")"
     | BinaryExpr { op = `Load (endian, bits); arg1; arg2 } ->
@@ -543,6 +554,12 @@ module BasilExpr = struct
 
   let zero_extend ?attrib ~n_prefix_bits (e : t) : t =
     unexp ?attrib ~op:(`ZeroExtend n_prefix_bits) e
+
+  let fset ?attrib ~(offset : string) (record : t) (e : t) : t =
+    binexp ?attrib ~op:(`FSET offset) record e
+
+  let faccess ?attrib ~(offset : string) (record : t) : t =
+    unexp ?attrib ~op:(`FACCESS offset) record
 
   let sign_extend ?attrib ~n_prefix_bits (e : t) : t =
     unexp ?attrib ~op:(`SignExtend n_prefix_bits) e

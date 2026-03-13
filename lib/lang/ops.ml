@@ -1,6 +1,33 @@
 open Common
 open Containers
 
+module Record = struct
+  type t = field StringMap.t [@@deriving eq, ord]
+  and field = { value : Bitvec.t; typ : Types.t }
+
+  let get_field offset record : field =
+    match StringMap.find_opt offset record with
+    | None -> failwith @@ "No field at offset " ^ offset
+    | Some f -> f
+
+  let set_field offset record value =
+    let { typ; _ } = get_field offset record in
+    StringMap.add offset { typ; value } record
+
+  let show_field { value; typ } =
+    Printf.sprintf "(%s, %s)" (Bitvec.to_string value) @@ Types.to_string typ
+
+  let show (record : t) =
+    "{"
+    ^ (StringMap.bindings record
+      |> List.map (fun (k, v) -> "(\"" ^ k ^ "\": " ^ show_field v ^ ")")
+      |> String.concat ", ")
+    ^ "}"
+
+  let to_string v = show v
+  let pp fmt b = Format.pp_print_string fmt (show b)
+end
+
 module Maps = struct
   (* map, value -> result *)
 
@@ -194,6 +221,40 @@ module IntOps = struct
     | #binary as b -> show_binary b
 end
 
+module RecordOps = struct
+  type const = [ `Record of Record.t ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type unary = [ `FACCESS of string ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type binary = [ `FSET of string ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  let eval_unary (u : unary) record =
+    match u with
+    | `FACCESS offset ->
+        let { value; _ } : Record.field = Record.get_field offset record in
+        value
+
+  let eval_binary (u : binary) =
+    match u with `FSET offset -> Record.set_field offset
+
+  let show = function
+    | #unary as u -> show_unary u
+    | #binary as b -> show_binary b
+end
+
+module PointerOps = struct
+  type const = [ `Pointer of Bitvec.t * Types.pointer ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type binary = [ `PTRADD ] [@@deriving show { with_path = false }, eq, ord]
+
+  let eval_binary (u : binary) (bv, _) = match u with `PTRADD -> Bitvec.add bv
+  let show = function #binary as u -> show_binary u
+end
+
 module Spec = struct
   type endian = [ `Big | `Little ]
   [@@deriving show { with_path = false }, eq, ord]
@@ -217,14 +278,29 @@ module Spec = struct
 end
 
 module AllOps = struct
-  type const = [ IntOps.const | BVOps.const | LogicalOps.const ]
+  type const =
+    [ IntOps.const
+    | BVOps.const
+    | LogicalOps.const
+    | RecordOps.const
+    | PointerOps.const ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type unary = [ IntOps.unary | BVOps.unary | Spec.unary | LogicalOps.unary ]
+  type unary =
+    [ IntOps.unary
+    | BVOps.unary
+    | Spec.unary
+    | LogicalOps.unary
+    | RecordOps.unary ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type binary =
-    [ IntOps.binary | BVOps.binary | LogicalOps.binary | Spec.binary ]
+    [ IntOps.binary
+    | BVOps.binary
+    | LogicalOps.binary
+    | Spec.binary
+    | RecordOps.binary
+    | PointerOps.binary ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type intrin = [ BVOps.intrin | LogicalOps.intrin | Spec.intrin ]
@@ -243,6 +319,11 @@ module AllOps = struct
     | `Bool _ -> return Boolean
     | `Integer _ -> return Integer
     | `Bitvector v -> return (Bitvector (Bitvec.size v))
+    | `Pointer (v, ty) -> return (Pointer ty)
+    | `Record fields ->
+        return
+        @@ Record
+             (StringMap.map (fun ({ value; typ } : Record.field) -> typ) fields)
 
   let ret_type_unary (o : [< unary ]) a =
     let open Types in
@@ -256,6 +337,7 @@ module AllOps = struct
         match a with
         | Bitvector s -> return @@ Bitvector (sz + s)
         | o -> Conflict [ (o, "<bitvector") ])
+    | `FACCESS offset -> return @@ get_field offset a
     | `Forall -> return Boolean
     | `BVNEG -> return a
     | `INTNEG -> return Integer
@@ -288,6 +370,8 @@ module AllOps = struct
     | `BVAND | `BVOR | `BVADD | `BVMUL | `BVUDIV | `BVUREM | `BVSHL | `BVLSHR
     | `BVNAND | `BVXOR | `BVSUB | `BVSDIV | `BVSREM | `BVSMOD | `BVASHR ->
         return l
+    | `FSET _ -> return r
+    | `PTRADD -> return l
     | `MapAccess ->
         let m, r = Types.uncurry l in
         return r
@@ -346,6 +430,9 @@ module AllOps = struct
     | `Exists -> "exists"
     | `SignExtend n -> Printf.sprintf "sign_extend_%d" n
     | `ZeroExtend n -> Printf.sprintf "zero_extend_%d" n
+    | `FSET offset -> Printf.sprintf "fset_%s" offset
+    | `FACCESS offset -> Printf.sprintf "asdfaccess_%s" offset
+    | `PTRADD -> "ptradd"
     | `EQ -> "eq"
     | `INTADD -> "intadd"
     | `BVNAND -> "bvnand"
@@ -363,6 +450,10 @@ module AllOps = struct
     | `BVAND -> "bvand"
     | `INTMUL -> "intmul"
     | `Bitvector z -> Bitvec.to_string z
+    | `Pointer (value, typ) ->
+        Printf.sprintf "ptr(%s, %s)" (Bitvec.show value)
+          (Types.show_pointer typ)
+    | `Record record -> Record.to_string record
     | `BVSMOD -> "bvsmod"
     | `INTLT -> "intlt"
     | `IMPLIES -> "implies"
