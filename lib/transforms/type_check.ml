@@ -27,8 +27,6 @@ let type_check stmt_id block_id expr =
     match op with
     | `Classification -> []
     | `Gamma -> []
-    | `Old -> []
-    | `Forall | `Exists | `Lambda -> []
     | `FACCESS _ -> (
         match arg with
         | Record _ -> []
@@ -55,6 +53,7 @@ let type_check stmt_id block_id expr =
                   @@ AllOps.to_string op;
                 ])
         | _ -> [ type_err "%s body is not a bitvector" @@ AllOps.to_string op ])
+    | `Old | `Forall | `Exists | `Lambda | `Let -> []
   in
 
   let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :

@@ -64,9 +64,8 @@ module IsZeroValueAbstraction = struct
     | `ZeroExtend size -> a
     | `Old -> Top
     | `Exists -> Top
-    | `Forall | `Lambda | `Gamma | `Classification -> Top
-    (* NOTE: More effort would be needed to be able to say is this one field zero or not *)
     | `FACCESS offset -> ( match a with Zero -> Zero | _ -> Top)
+    | `Forall | `Lambda | `Gamma | `Classification | `Let -> Top
 
   let eval_binop (op : Lang.Ops.AllOps.binary) a b =
     match (op, a, b) with
