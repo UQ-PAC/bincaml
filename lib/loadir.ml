@@ -1049,16 +1049,13 @@ module BasilASTLoader = struct
           | args -> BasilExpr.lambda ~bound (trans_expr ~nbinds:bound body)
         in
         let in_expr = trans_expr ~nbinds:[ funvar ] in_expr in
-        let attrib =
-          `Assoc (StringMap.singleton Attrib.binding_sep_key (`String "in"))
-        in
         (* desugaring:
         BasilExpr.apply_fun
           ~func:(BasilExpr.lambda ~bound:[ funvar ] in_expr)
           [ func ]
         *)
         BasilExpr.unexp ~op:`Let
-          (BasilExpr.binding ~attrib [ funvar ] (Some [ func ]) in_expr)
+          (BasilExpr.binding [ funvar ] (Some [ func ]) in_expr)
     | Expr_Exists (attrs, LambdaDef1 (lv, _, e)) ->
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
         let binds =

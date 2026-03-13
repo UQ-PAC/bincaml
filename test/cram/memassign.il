@@ -11,8 +11,8 @@ type record = Record of {a : bv64; b: bv32; c:bv64};
 
 type ilist = Cons of {head:bv64; tail:ilist} | Nil ;
 
-let $mul_2 (a:bv64) : bv64 = bvmul(1, 2:bv64) ;
-let $three = let func (a:bv64) : bv64 = bvadd(a, 1:bv64) in func(2:bv64);
+let $mul_2 (a:bv64), (b:bv64) : bv64 = bvadd(b, bvmul(a, 2:bv64));
+let $three = let func (a:bv64) : bv64 = bvadd(a, 1:bv64) in func($mul_2(2:bv64, 1:bv64));
 
 
 prog entry @main_4196164;

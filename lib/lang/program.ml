@@ -58,10 +58,31 @@ let pretty_declaration d =
   | Function { binding; attrib; definition = Uninterpreted } ->
       text "val " ^ text (Var.to_string binding)
   | Function { binding; attrib; definition = Function body } ->
+      let open AbstractExpr in
+      let args, body, rtype =
+        match AbstractExpr.map BasilExpr.unfix @@ BasilExpr.unfix body with
+        | UnaryExpr
+            {
+              op = `Lambda;
+              arg = Binding { bound_vars; bound_exprs = None; in_body };
+            } ->
+            bound_vars
+            |> List.map (fun v ->
+                bracket "("
+                  (text (Var.name v)
+                  ^ text ":"
+                  ^ text (Types.to_string (Var.typ v)))
+                  ")")
+            |> append_l ~sep:(text ", ")
+            |> fun x -> (text " " ^ x, in_body, Expr.BasilExpr.type_of in_body)
+        | _ -> (text "", body, Var.typ binding)
+      in
       text "let "
-      ^ text (Var.to_string binding)
-      ^ text " = "
-      ^ nest 2 (Expr.BasilExpr.pretty body)
+      ^ text (Var.name binding)
+      ^ args ^+ text ":"
+      ^+ text (Types.to_string rtype)
+      ^+ text "="
+      ^+ nest 2 (Expr.BasilExpr.pretty body)
   | Type { binding; typ } -> text "type " ^ text (Types.to_string typ)
 
 (*match definition with

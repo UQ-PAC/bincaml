@@ -18,10 +18,6 @@ type 'e t =
 let is_internal_key = String.starts_with ~prefix:"__"
 let location_key = "__text_range"
 
-(** stores the token used to separate the binding to preserve the input format
-    when printed *)
-let binding_sep_key = "__binding_sep_token"
-
 let rec attrib_pretty pretty_expr (e : 'e t) : Containers_pp.t =
   let open Containers_pp in
   let attrib_pretty = attrib_pretty pretty_expr in

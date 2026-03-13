@@ -337,89 +337,154 @@ module BasilExpr = struct
 
   (** {1 Printing}*)
 
-  let pretty_alg pattrib (e : Containers_pp.t abstract_expr) =
+  type 'a pretty_d = (Containers_pp.t, 'a abstract_expr) result
+
+  let pretty_alg pattrib
+      (expr : Containers_pp.t pretty_d pretty_d pretty_d abstract_expr) :
+      Containers_pp.t pretty_d pretty_d pretty_d =
     let open AbstractExpr in
     let open Containers_pp in
     let open Containers_pp.Infix in
-    let a = AbstractExpr.get_attrib e |> pattrib in
-    match e with
-    | RVar { id; attrib } -> text (Var.to_string id) ^ a
-    | Constant { const } -> text (AllOps.to_string const) ^ a
-    | UnaryExpr { op = (`Lambda | `Let) as op; arg } ->
-        text (AllOps.to_string op) ^ a ^ text " " ^ arg
-    | UnaryExpr { op = `Forall as op; arg } ->
-        text (AllOps.to_string op) ^ a ^ text " " ^ arg
-    | UnaryExpr { op = `Exists as op; arg } ->
-        text (AllOps.to_string op) ^ a ^ text " " ^ arg
-    | UnaryExpr { op = `ZeroExtend bits; arg } ->
-        fill
-          (text "," ^ newline)
-          [ text "zero_extend" ^ a ^ (textpf "(%d") bits; arg ^ text ")" ]
-    | UnaryExpr { op = `SignExtend bits; arg } ->
-        fill
-          (text "," ^ newline)
-          [ text "sign_extend" ^ a ^ (textpf "(%d") bits; arg ^ text ")" ]
-    | UnaryExpr { op = `Extract (hi, lo); arg = e } ->
-        fill nil [ text "extract" ^ a ^ textpf "(%d,%d, " hi lo ^ e ^ text ")" ]
-    | UnaryExpr { op = `FACCESS offset; arg } ->
-        fill
-          (text "," ^ newline)
-          [ text "faccess" ^ a ^ (textpf "(\"%s\"") offset; arg ^ text ")" ]
-    | BinaryExpr { op = `FSET offset; arg1; arg2 } ->
-        fill
-          (text "," ^ newline)
-          [
-            text "fset" ^ a ^ (textpf "(\"%s\"") offset;
-            arg1 ^ text ", " ^ arg2 ^ text ")";
-          ]
-    | UnaryExpr { op; arg = e } ->
-        text (AllOps.to_string op) ^ a ^ bracket "(" e ")"
-    | BinaryExpr { op = `Load (endian, bits); arg1; arg2 } ->
-        let endian =
-          text @@ match endian with `Big -> "be" | `Little -> "le"
+    (* printer for a single level *)
+    let pretty_alg_prim (e : Containers_pp.t pretty_d abstract_expr) :
+        Containers_pp.t pretty_d =
+      let a = AbstractExpr.get_attrib e |> pattrib in
+      match e with
+      | Binding _ -> Error (AbstractExpr.map Result.get_ok e)
+      | UnaryExpr { op = `Lambda | `Let | `Forall | `Exists } ->
+          Error (AbstractExpr.map Result.get_ok e)
+      | RVar { id; attrib } -> Ok (text (Var.to_string id) ^ a)
+      | Constant { const } -> Ok (text (AllOps.to_string const) ^ a)
+      | UnaryExpr { op = `ZeroExtend bits; arg = Ok arg } ->
+          Ok
+            (fill
+               (text "," ^ newline)
+               [ text "zero_extend" ^ a ^ (textpf "(%d") bits; arg ^ text ")" ])
+      | UnaryExpr { op = `SignExtend bits; arg = Ok arg } ->
+          Ok
+            (fill
+               (text "," ^ newline)
+               [ text "sign_extend" ^ a ^ (textpf "(%d") bits; arg ^ text ")" ])
+      | UnaryExpr { op = `Extract (hi, lo); arg = Ok e } ->
+          Ok
+            (fill nil
+               [ text "extract" ^ a ^ textpf "(%d,%d, " hi lo ^ e ^ text ")" ])
+      | UnaryExpr { op = `FACCESS offset; arg = Ok arg } ->
+          Ok
+            (fill
+               (text "," ^ newline)
+               [
+                 text "faccess" ^ a ^ (textpf "(\"%s\"") offset; arg ^ text ")";
+               ])
+      | BinaryExpr { op = `FSET offset; arg1 = Ok arg1; arg2 = Ok arg2 } ->
+          Ok
+            (fill
+               (text "," ^ newline)
+               [
+                 text "fset" ^ a ^ (textpf "(\"%s\"") offset;
+                 arg1 ^ text ", " ^ arg2 ^ text ")";
+               ])
+      | UnaryExpr { op; arg = Ok e } ->
+          Ok (text (AllOps.to_string op) ^ a ^ bracket "(" e ")")
+      | BinaryExpr { op = `Load (endian, bits); arg1 = Ok arg1; arg2 = Ok arg2 }
+        ->
+          Ok
+            (let endian =
+               text @@ match endian with `Big -> "be" | `Little -> "le"
+             in
+             fill
+               (text "," ^ newline)
+               [
+                 text "load_" ^ endian ^ a ^ (textpf "(%d") bits;
+                 arg1 ^ text ", " ^ arg2 ^ text ")";
+               ])
+      | BinaryExpr { op; arg1 = Ok e; arg2 = Ok e2 } ->
+          Ok
+            (fill nil
+               [
+                 text (AllOps.to_string op)
+                 ^ a
+                 ^ bracket "(" (fill (text "," ^ newline) [ e; e2 ]) ")";
+               ])
+      | ApplyIntrin { op; args = es } when List.for_all Result.is_ok es ->
+          Ok
+            (fill nil
+               [
+                 text (AllOps.to_string op)
+                 ^ a
+                 ^ bracket "("
+                     (fill (text "," ^ newline) (List.map Result.get_ok es))
+                     ")";
+               ])
+      | ApplyFun { func = Ok n; args = es } when List.for_all Result.is_ok es ->
+          Ok
+            (fill nil
+               [
+                 bracket "(" n ")" ^ a
+                 ^ bracket "("
+                     (nest 2
+                        (fill (text "," ^ newline) (List.map Result.get_ok es)))
+                     ")";
+               ])
+      | _ -> Error (AbstractExpr.map Result.get_ok e)
+    in
+
+    let a = AbstractExpr.get_attrib expr |> pattrib in
+    match expr with
+    | UnaryExpr
+        {
+          attrib = unary_attrib;
+          op = (`Forall | `Exists | `Lambda | `Let) as op;
+          arg =
+            Error
+              (Binding
+                 {
+                   bound_vars;
+                   bound_exprs;
+                   in_body = Ok b;
+                   attrib = binding_attrib;
+                 });
+        } ->
+        let sep = match op with `Let -> "in" | _ -> "::" in
+        let op = Ops.AllOps.to_string op in
+        let binding =
+          fill (text " ")
+            (match bound_exprs with
+            | Some e ->
+                let e : Containers_pp.t list = List.map Result.get_ok e in
+                List.combine bound_vars e
+                |> List.map (fun (v, e) -> Var.pretty v ^ text " = " ^ e)
+            | None ->
+                List.map (fun v -> bracket "(" (Var.pretty v) ")") bound_vars)
+          ^+ text sep ^+ a ^ bracket "(" b ")"
         in
-        fill
-          (text "," ^ newline)
-          [
-            text "load_" ^ endian ^ a ^ (textpf "(%d") bits;
-            arg1 ^ text ", " ^ arg2 ^ text ")";
-          ]
-    | BinaryExpr { op; arg1 = e; arg2 = e2 } ->
-        fill nil
-          [
-            text (AllOps.to_string op)
-            ^ a
-            ^ bracket "(" (fill (text "," ^ newline) [ e; e2 ]) ")";
-          ]
-    | ApplyIntrin { op; args = es } ->
-        fill nil
-          [
-            text (AllOps.to_string op)
-            ^ a
-            ^ bracket "(" (fill (text "," ^ newline) es) ")";
-          ]
-    | ApplyFun { func = n; args = es } ->
-        fill nil
-          [
-            bracket "(" n ")" ^ a
-            ^ bracket "(" (nest 2 (fill (text "," ^ newline) es)) ")";
-          ]
-    | Binding { bound_vars; bound_exprs; in_body = b; attrib } ->
-        let sep =
-          Attrib.find_str_opt Attrib.binding_sep_key attrib
-          |> Option.get_or ~default:"::"
+        Ok (text op ^ a ^ text " " ^ binding)
+    | RVar _ | Constant _ | UnaryExpr _ | BinaryExpr _ | ApplyIntrin _
+    | ApplyFun _ ->
+        (* assume subexprs are defined so that pretty_alg_prim is total *)
+        let expr = AbstractExpr.map (Result.get_ok %> fun e -> Ok e) expr in
+        Ok (pretty_alg_prim expr |> Result.get_ok)
+    | Binding { bound_exprs; bound_vars; in_body; attrib } ->
+        let f (e : Containers_pp.t pretty_d pretty_d abstract_expr) :
+            Containers_pp.t pretty_d abstract_expr =
+          e
+          |> AbstractExpr.map (function
+            | Ok e -> Ok e
+            | Error e -> pretty_alg_prim e)
         in
-        fill (text " ")
-          (match bound_exprs with
-          | Some e ->
-              List.combine bound_vars e
-              |> List.map (fun (v, e) -> Var.pretty v ^ text " = " ^ e)
-          | None ->
-              List.map (fun v -> bracket "(" (Var.pretty v) ")") bound_vars)
-        ^+ text sep ^+ a ^ bracket "(" b ")"
+        let bound_exprs : Containers_pp.t pretty_d pretty_d list option =
+          Option.map (List.map (Result.map_error (fun e -> f e))) bound_exprs
+        in
+        let in_body : Containers_pp.t pretty_d pretty_d =
+          Result.map_error f in_body
+        in
+
+        (*(AbstractExpr.map
+                  (Result.get_error %> AbstractExpr.map pretty_one_layer))*)
+        Error (Binding { bound_exprs; bound_vars; in_body; attrib })
 
   let pretty_drop_attrib s =
-    cata (pretty_alg (fun x -> Containers_pp.text "")) s
+    cata (pretty_alg (fun x -> Containers_pp.text "")) s |> Result.get_ok
 
   let pretty s =
     let open Containers_pp in
@@ -434,7 +499,7 @@ module BasilExpr = struct
       | Some e -> text " " ^ Attrib.attrib_pretty pretty_drop_attrib e
       | None -> text ""
     in
-    cata (pretty_alg pretty_attr) s
+    cata (pretty_alg pretty_attr) s |> Result.get_ok
 
   let to_string s = Containers_pp.Pretty.to_string ~width:80 (pretty s)
   let pp fmt s = Format.pp_print_string fmt @@ to_string s
@@ -468,6 +533,7 @@ module BasilExpr = struct
 
   (** {1 Additional traversals}*)
 
+  let idk alg = para alg
   let fold_with_type (alg : 'e abstract_expr -> 'a) = zygo_l ~cata type_alg alg
 
   type rwinfo = {
