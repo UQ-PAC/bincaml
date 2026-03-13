@@ -499,7 +499,7 @@ field_list : /* empty */ { []  }
   | field SYMB2 field_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-field : openParen str SYMB5 typeT closeParen { Field1 ($1, $2, $4, $5) }
+field : openParen str SYMB5 openParen typeT SYMB2 intVal closeParen closeParen { Field1 ($1, $2, $4, $5, $7, $8, $9) }
   ;
 
 intType : iNTTYPE { IntType1 $1 }
@@ -731,7 +731,7 @@ params_list : /* empty */ { []  }
 
 value : bVVal { Value_BV $1 }
   | intVal { Value_Int $1 }
-  | openParen fieldVal_list closeParen { Value_Record ($1, $2, $3) }
+  | openParen beginRec fieldVal_list endRec SYMB2 typeT closeParen { Value_Record ($1, $2, $3, $4, $6, $7) }
   | KW_ptr openParen bVVal SYMB2 pointerType closeParen { Value_Pointer ($2, $3, $5, $6) }
   | KW_true { Value_True  }
   | KW_false { Value_False  }

@@ -108,14 +108,12 @@ let type_check stmt_id block_id expr =
           | Record _ -> []
           | _ -> [ type_err "%s is not of record type" @@ Types.to_string arg1 ]
         in
-        if
-          List.length err = 1
-          || (Types.equal arg2 @@ Types.get_field offset arg1)
-        then err
+        let { typ } : Types.record_field = Types.get_field offset arg1 in
+        if List.length err = 1 || Types.equal arg2 typ then err
         else
           [
             type_err "%s is not of %s type" (Types.to_string arg1)
-              (Types.to_string @@ Types.get_field offset arg1);
+              (Types.to_string typ);
           ]
     | `INTADD | `INTMUL | `INTSUB | `INTDIV | `INTMOD | `INTLT | `INTLE ->
         binary_int_types arg1 arg2

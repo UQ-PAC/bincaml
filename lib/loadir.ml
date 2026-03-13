@@ -440,8 +440,10 @@ module BasilASTLoader = struct
   and transRECORDTYPE (fields : field list) =
     Types.Record
       (StringMap.of_list
-         ((List.map (function Field1 (_, offset, t, _) ->
-              (transStr offset, trans_type t)))
+         ((List.map (function Field1 (_, field_name, _, t, offset, _, _) ->
+              ( transStr field_name,
+                ({ typ = trans_type t; offset = transIntVal offset }
+                  : Types.record_field) )))
             fields))
 
   and transPOINTERTYPE (l : typeT) (u : typeT) =
@@ -871,16 +873,17 @@ module BasilASTLoader = struct
     | Value_False -> `Bool false
     | Value_Pointer (_, v, PointerType1 (_, l, u, _), _) ->
         `Pointer (trans_bv_val v, { lower = trans_type l; upper = trans_type u })
-    | Value_Record (_, fields, _) ->
+    | Value_Record (_, _, fields, _, typ, _) ->
         `Record
-          (StringMap.of_list
-             (List.map
-                (function
-                  | FieldVal1 (_, offset, value, typ, _) ->
-                      ( transStr offset,
-                        ({ value = trans_bv_val value; typ = trans_type typ }
-                          : Ops.Record.field) ))
-                fields))
+          ( StringMap.of_list
+              (List.map
+                 (function
+                   | FieldVal1 (_, offset, value, typ, _) ->
+                       ( transStr offset,
+                         ({ value = trans_bv_val value; typ = trans_type typ }
+                           : Ops.Record.field) ))
+                 fields),
+            trans_type typ )
 
   and unsafe_unsigil g : string =
     match g with
