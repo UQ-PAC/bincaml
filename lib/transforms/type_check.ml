@@ -169,6 +169,29 @@ let type_check stmt_id block_id expr =
                        :: errs,
                        ty ))
                  ([], h) tl)
+    | `MapUpdate -> (
+        let arg0 = List.hd args in
+        let arg1 = List.nth args 1 in
+        let arg2 = List.nth args 2 in
+        match List.hd args with
+        | Types.Map (k, v) ->
+            []
+            @
+            if Types.equal k arg1 then []
+            else
+              [
+                type_err "map update expected key type %s but got %s"
+                  (Types.to_string k) (Types.to_string arg1);
+              ]
+              @ if Types.equal v arg2 then [] else [
+                type_err "map update expected value type %s but got %s"
+                  (Types.to_string v) (Types.to_string arg2);
+              ]
+        | _ ->
+            [
+              type_err "%s is not of map type in %s" (Types.to_string arg0)
+                (Ops.AllOps.to_string op);
+            ])
   in
 
   let type_error_alg e =
