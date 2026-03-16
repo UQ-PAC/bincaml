@@ -447,7 +447,7 @@ module Normalise = struct
     | o -> o
 
   let rewriter ?visit e = BasilExpr.rewrite ?visit ~rw_fun:replace_expr e
-  let replace_exprs = Cf_tx.simplify_prog_exprs rewriter
+  let replace_exprs = compose (Cf_tx.simplify_prog_spec_exprs rewriter) (Cf_tx.simplify_prog_exprs rewriter)
 
   let replace_stmts (p : Program.t) =
     let procs =

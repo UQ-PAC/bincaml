@@ -23,6 +23,25 @@ let simplify_proc_exprs ?visit rewriter p =
 let simplify_proc_exprs_default ?visit p =
   simplify_proc_exprs ?visit Algsimp.alg_simp_rewriter p
 
+let simplify_proc_spec_exprs ?visit rewriter p =
+  let s = Procedure.specification p in
+  let s =
+    {
+      s with
+      requires = List.map (rewriter ?visit) s.requires;
+      ensures = List.map (rewriter ?visit) s.ensures;
+      rely = List.map (rewriter ?visit) s.rely;
+      guarantee = List.map (rewriter ?visit) s.guarantee;
+    }
+  in
+  Procedure.set_specification p s
+
+let simplify_prog_spec_exprs rewriter ?visit (p : Program.t) =
+  let procs =
+    ID.Map.map (fun proc -> simplify_proc_spec_exprs rewriter ?visit proc) p.procs
+  in
+  { p with procs }
+
 let simplify_prog_exprs rewriter ?visit (p : Program.t) =
   let procs =
     ID.Map.map (fun proc -> simplify_proc_exprs rewriter ?visit proc) p.procs
