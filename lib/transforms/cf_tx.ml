@@ -62,12 +62,8 @@ let online_check visit (solver : Bincaml_util.Smt.Solver.t)
   let res : Solver.result = Solver.check solver in
   (match res with
   | Sat ->
-      let from =
-        Solver.eval_expr solver (fst @@ Expr_smt.SMTLib2.of_bexpr r.from)
-      in
-      let into =
-        Solver.eval_expr solver (fst @@ Expr_smt.SMTLib2.of_bexpr r.into)
-      in
+      let from = Solver.eval_expr solver (Expr_smt.SMTLib2.of_bexpr r.from) in
+      let into = Solver.eval_expr solver (Expr_smt.SMTLib2.of_bexpr r.into) in
       visit (Some (from, into)) r
   | Unsat -> ()
   | Unknown -> visit None r);

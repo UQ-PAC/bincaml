@@ -3,6 +3,7 @@
 type bVTYPE = BVTYPE of ((int * int) * string)
 and iNTTYPE = INTTYPE of ((int * int) * string)
 and bOOLTYPE = BOOLTYPE of ((int * int) * string)
+and pOINTERTYPE = POINTERTYPE of ((int * int) * string)
 and bIdent = BIdent of ((int * int) * string)
 and localIdent = LocalIdent of ((int * int) * string)
 and globalIdent = GlobalIdent of ((int * int) * string)
@@ -24,10 +25,6 @@ and lambdaSep =
    LambdaSep1
  | LambdaSep2
 
-and semicolons =
-   Semicolons_Empty
- | Semicolons_Some of semicolons
-
 and varModifiers =
    Shared
  | Observable
@@ -42,10 +39,18 @@ and decl =
  | Decl_ProgEmpty of procIdent * attribSet
  | Decl_ProgWithSpec of procIdent * attribSet * progSpec list
  | Decl_Proc of procIdent * openParen * params list * closeParen * openParen * params list * closeParen * attribSet * funSpec list * procDef
+ | Decl_RecType of typeAssign list
+ | Decl_Type of localIdent
+
+and typeAssign =
+   TypeAssign_Sum of localIdent * sumCase list
 
 and procDef =
    ProcDef_Empty
  | ProcDef_Some of beginList * block list * endList
+
+and field =
+   Field1 of openParen * str * openParen * typeT * intVal * closeParen * closeParen
 
 and intType =
    IntType1 of iNTTYPE
@@ -53,18 +58,34 @@ and intType =
 and boolType =
    BoolType1 of bOOLTYPE
 
-and mapType =
-   MapType1 of typeT * typeT
+and recordType =
+   RecordType1 of beginRec * field list * endRec
+
+and pointerType =
+   PointerType1 of openParen * typeT * typeT * closeParen
 
 and bVType =
    BVType1 of bVTYPE
 
+and mapType =
+   MapType1 of typeT * typeT
+
+and recordField =
+   RecordField1 of localIdent * typeT
+
+and sumCase =
+   SortType of localIdent
+ | VariantCase of localIdent * beginRec * recordField list * endRec
+
 and typeT =
    TypeIntType of intType
  | TypeBoolType of boolType
- | TypeMapType of mapType
  | TypeBVType of bVType
- | Type1 of openParen * typeT * closeParen
+ | TypePointerType of pointerType
+ | TypeRecordType of recordType
+ | TypeVarType of localIdent
+ | TypeParen of openParen * typeT * closeParen
+ | TypeMapType of mapType
 
 and intVal =
    IntVal_Hex of integerHex
@@ -72,6 +93,9 @@ and intVal =
 
 and bVVal =
    BVVal1 of intVal * bVType
+
+and fieldVal =
+   FieldVal1 of openParen * str * bVVal * typeT * closeParen
 
 and endian =
    Endian_Little
@@ -87,10 +111,9 @@ and stmt =
  | Stmt_ScalarStore of lVar * expr
  | Stmt_ScalarLoad of lVar * var
  | Stmt_MultiAssign of openParen * assignment list * closeParen
- | Stmt_Load of lVar * endian * globalIdent * expr * intVal
- | Stmt_Store of endian * globalIdent * expr * expr * intVal
  | Stmt_Load_Var of lVar * endian * var * expr * intVal
  | Stmt_Store_Var of lVar * endian * var * expr * expr * intVal
+ | Stmt_Store of endian * globalIdent * expr * expr * intVal
  | Stmt_DirectCall of lVars * procIdent * openParen * callParams * closeParen
  | Stmt_IndirectCall of expr
  | Stmt_Assume of expr
@@ -108,6 +131,14 @@ and globalVar =
 and var =
    VarLocalVar of localVar
  | VarGlobalVar of globalVar
+
+and localVarParen =
+   LocalVarParenLocalVar of localVar
+ | LocalVarParen1 of openParen * localIdent * typeT * closeParen
+
+and globalVarParen =
+   GlobalVarParenGlobalVar of globalVar
+ | GlobalVarParen1 of openParen * globalIdent * typeT * closeParen
 
 and namedCallReturn =
    NamedCallReturn1 of lVar * localIdent
@@ -149,46 +180,41 @@ and phiAssign =
 
 and block =
    Block_NoPhi of blockIdent * attribSet * beginList * stmtWithAttrib list * jumpWithAttrib * endList
- | Block_Phi of blockIdent * attribSet * beginList * openParen * phiAssign list * closeParen * stmtWithAttrib list * jumpWithAttrib * endList
+ | Block_Phi of blockIdent * attribSet * openParen * phiAssign list * closeParen * beginList * stmtWithAttrib list * jumpWithAttrib * endList
 
 and attrKeyValue =
    AttrKeyValue1 of bIdent * attr
 
 and attribSet =
-   AttribSet_Some of beginRec * attrKeyValue list * semicolons * endRec
+   AttribSet_Some of beginRec * attrKeyValue list * endRec
  | AttribSet_Empty
 
 and attr =
-   Attr_Map of beginRec * attrKeyValue list * semicolons * endRec
+   Attr_Map of beginRec * attrKeyValue list * endRec
  | Attr_List of beginList * attr list * endList
- | Attr_Lit of value
  | Attr_Expr of expr
  | Attr_Str of str
 
 and params =
    Params1 of localIdent * typeT
 
-and funParams =
-   FunParams1 of localIdent * typeT
- | FunParams2 of openParen * localIdent * typeT * closeParen
-
 and value =
    Value_BV of bVVal
  | Value_Int of intVal
+ | Value_Record of openParen * beginRec * fieldVal list * endRec * typeT * closeParen
+ | Value_Pointer of openParen * bVVal * pointerType * closeParen
  | Value_True
  | Value_False
 
 and expr =
    Expr_Literal of value
- | Expr_Paren of openParen * expr * closeParen
  | Expr_Local of localVar
  | Expr_Global of globalVar
  | Expr_Forall of attribSet * lambdaDef
  | Expr_Exists of attribSet * lambdaDef
  | Expr_Lambda of attribSet * lambdaDef
  | Expr_Old of openParen * expr * closeParen
- | Expr_FunctionOp of globalIdent * openParen * expr list * closeParen
- | Expr_Apply of expr * expr
+ | Expr_FunctionOp of expr * openParen * expr list * closeParen
  | Expr_Binary of binOp * openParen * expr * expr * closeParen
  | Expr_Assoc of boolBinOp * openParen * expr list * closeParen
  | Expr_Unary of unOp * openParen * expr * closeParen
@@ -198,23 +224,22 @@ and expr =
  | Expr_SignExtend of openParen * intVal * expr * closeParen
  | Expr_Extract of openParen * intVal * intVal * expr * closeParen
  | Expr_Concat of openParen * expr list * closeParen
+ | Expr_FSet of openParen * str * expr * expr * closeParen
+ | Expr_FAccess of openParen * str * expr * closeParen
  | Expr_Match of expr * openParen * case list * closeParen
  | Expr_Cases of openParen * case list * closeParen
-
-and lParen =
-   LParenLocalVar of localVar
- | LParen1 of openParen * localVar * closeParen
+ | Expr_Paren of openParen * expr * closeParen
 
 and lambdaDef =
-   LambdaDef1 of lParen list * lambdaSep * expr
+   LambdaDef1 of localVarParen list * lambdaSep * expr
 
 and binOp =
    BinOpBVBinOp of bVBinOp
  | BinOpBVLogicalBinOp of bVLogicalBinOp
- | BinOpBoolBinOp of boolBinOp
  | BinOpIntLogicalBinOp of intLogicalBinOp
  | BinOpIntBinOp of intBinOp
  | BinOpEqOp of eqOp
+ | BinOpPointerBinOp of pointerBinOp
 
 and unOp =
    UnOpBVUnOp of bVUnOp
@@ -284,6 +309,9 @@ and boolBinOp =
  | BoolBinOp_boolor
  | BoolBinOp_boolimplies
 
+and pointerBinOp =
+   PointerBinOp_ptradd
+
 and requireTok =
    RequireTok_require
  | RequireTok_requires
@@ -297,7 +325,7 @@ and relyTok =
  | RelyTok_relies
 
 and guarTok =
-   GuarTok_guarnatee
+   GuarTok_guarantee
  | GuarTok_guarantees
 
 and funSpec =
@@ -314,6 +342,6 @@ and varSpec =
  | VarSpec_Empty
 
 and progSpec =
-   ProgSpec_Rely of expr
- | ProgSpec_Guarantee of expr
+   ProgSpec_Rely of relyTok * expr
+ | ProgSpec_Guarantee of guarTok * expr
 

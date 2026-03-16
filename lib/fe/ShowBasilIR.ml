@@ -41,6 +41,7 @@ let showFloat (f:float) : showable = s2s (string_of_float f)
 let rec showBVTYPE (AbsBasilIR.BVTYPE (_,i)) : showable = s2s "BVTYPE " >> showString i
 let rec showINTTYPE (AbsBasilIR.INTTYPE (_,i)) : showable = s2s "INTTYPE " >> showString i
 let rec showBOOLTYPE (AbsBasilIR.BOOLTYPE (_,i)) : showable = s2s "BOOLTYPE " >> showString i
+let rec showPOINTERTYPE (AbsBasilIR.POINTERTYPE (_,i)) : showable = s2s "POINTERTYPE " >> showString i
 let rec showBIdent (AbsBasilIR.BIdent (_,i)) : showable = s2s "BIdent " >> showString i
 let rec showLocalIdent (AbsBasilIR.LocalIdent (_,i)) : showable = s2s "LocalIdent " >> showString i
 let rec showGlobalIdent (AbsBasilIR.GlobalIdent (_,i)) : showable = s2s "GlobalIdent " >> showString i
@@ -65,11 +66,6 @@ and showLambdaSep (e : AbsBasilIR.lambdaSep) : showable = match e with
   |    AbsBasilIR.LambdaSep2  -> s2s "LambdaSep2"
 
 
-and showSemicolons (e : AbsBasilIR.semicolons) : showable = match e with
-       AbsBasilIR.Semicolons_Empty  -> s2s "Semicolons_Empty"
-  |    AbsBasilIR.Semicolons_Some semicolons -> s2s "Semicolons_Some" >> c2s ' ' >> c2s '(' >> showSemicolons semicolons >> c2s ')'
-
-
 and showVarModifiers (e : AbsBasilIR.varModifiers) : showable = match e with
        AbsBasilIR.Shared  -> s2s "Shared"
   |    AbsBasilIR.Observable  -> s2s "Observable"
@@ -85,11 +81,21 @@ and showDecl (e : AbsBasilIR.decl) : showable = match e with
   |    AbsBasilIR.Decl_ProgEmpty (procident, attribset) -> s2s "Decl_ProgEmpty" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showAttribSet attribset >> c2s ')'
   |    AbsBasilIR.Decl_ProgWithSpec (procident, attribset, progspecs) -> s2s "Decl_ProgWithSpec" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showList showProgSpec progspecs >> c2s ')'
   |    AbsBasilIR.Decl_Proc (procident, openparen0, paramss1, closeparen2, openparen, paramss, closeparen, attribset, funspecs, procdef) -> s2s "Decl_Proc" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showOpenParen openparen0  >> s2s ", " >>  showList showParams paramss1  >> s2s ", " >>  showCloseParen closeparen2  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showParams paramss  >> s2s ", " >>  showCloseParen closeparen  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showList showFunSpec funspecs  >> s2s ", " >>  showProcDef procdef >> c2s ')'
+  |    AbsBasilIR.Decl_RecType typeassigns -> s2s "Decl_RecType" >> c2s ' ' >> c2s '(' >> showList showTypeAssign typeassigns >> c2s ')'
+  |    AbsBasilIR.Decl_Type localident -> s2s "Decl_Type" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
+
+
+and showTypeAssign (e : AbsBasilIR.typeAssign) : showable = match e with
+       AbsBasilIR.TypeAssign_Sum (localident, sumcases) -> s2s "TypeAssign_Sum" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showList showSumCase sumcases >> c2s ')'
 
 
 and showProcDef (e : AbsBasilIR.procDef) : showable = match e with
        AbsBasilIR.ProcDef_Empty  -> s2s "ProcDef_Empty"
   |    AbsBasilIR.ProcDef_Some (beginlist, blocks, endlist) -> s2s "ProcDef_Some" >> c2s ' ' >> c2s '(' >> showBeginList beginlist  >> s2s ", " >>  showList showBlock blocks  >> s2s ", " >>  showEndList endlist >> c2s ')'
+
+
+and showField (e : AbsBasilIR.field) : showable = match e with
+       AbsBasilIR.Field1 (openparen0, str, openparen, type', intval, closeparen1, closeparen) -> s2s "Field1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen0  >> s2s ", " >>  showStr str  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showCloseParen closeparen1  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
 and showIntType (e : AbsBasilIR.intType) : showable = match e with
@@ -100,20 +106,40 @@ and showBoolType (e : AbsBasilIR.boolType) : showable = match e with
        AbsBasilIR.BoolType1 booltype -> s2s "BoolType1" >> c2s ' ' >> c2s '(' >> showBOOLTYPE booltype >> c2s ')'
 
 
-and showMapType (e : AbsBasilIR.mapType) : showable = match e with
-       AbsBasilIR.MapType1 (type'0, type') -> s2s "MapType1" >> c2s ' ' >> c2s '(' >> showTypeT type'0  >> s2s ", " >>  showTypeT type' >> c2s ')'
+and showRecordType (e : AbsBasilIR.recordType) : showable = match e with
+       AbsBasilIR.RecordType1 (beginrec, fields, endrec) -> s2s "RecordType1" >> c2s ' ' >> c2s '(' >> showBeginRec beginrec  >> s2s ", " >>  showList showField fields  >> s2s ", " >>  showEndRec endrec >> c2s ')'
+
+
+and showPointerType (e : AbsBasilIR.pointerType) : showable = match e with
+       AbsBasilIR.PointerType1 (openparen, type'0, type', closeparen) -> s2s "PointerType1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showTypeT type'0  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
 and showBVType (e : AbsBasilIR.bVType) : showable = match e with
        AbsBasilIR.BVType1 bvtype -> s2s "BVType1" >> c2s ' ' >> c2s '(' >> showBVTYPE bvtype >> c2s ')'
 
 
+and showMapType (e : AbsBasilIR.mapType) : showable = match e with
+       AbsBasilIR.MapType1 (type'0, type') -> s2s "MapType1" >> c2s ' ' >> c2s '(' >> showTypeT type'0  >> s2s ", " >>  showTypeT type' >> c2s ')'
+
+
+and showRecordField (e : AbsBasilIR.recordField) : showable = match e with
+       AbsBasilIR.RecordField1 (localident, type') -> s2s "RecordField1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
+
+
+and showSumCase (e : AbsBasilIR.sumCase) : showable = match e with
+       AbsBasilIR.SortType localident -> s2s "SortType" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
+  |    AbsBasilIR.VariantCase (localident, beginrec, recordfields, endrec) -> s2s "VariantCase" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showBeginRec beginrec  >> s2s ", " >>  showList showRecordField recordfields  >> s2s ", " >>  showEndRec endrec >> c2s ')'
+
+
 and showTypeT (e : AbsBasilIR.typeT) : showable = match e with
        AbsBasilIR.TypeIntType inttype -> s2s "TypeIntType" >> c2s ' ' >> c2s '(' >> showIntType inttype >> c2s ')'
   |    AbsBasilIR.TypeBoolType booltype -> s2s "TypeBoolType" >> c2s ' ' >> c2s '(' >> showBoolType booltype >> c2s ')'
-  |    AbsBasilIR.TypeMapType maptype -> s2s "TypeMapType" >> c2s ' ' >> c2s '(' >> showMapType maptype >> c2s ')'
   |    AbsBasilIR.TypeBVType bvtype -> s2s "TypeBVType" >> c2s ' ' >> c2s '(' >> showBVType bvtype >> c2s ')'
-  |    AbsBasilIR.Type1 (openparen, type', closeparen) -> s2s "Type1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.TypePointerType pointertype -> s2s "TypePointerType" >> c2s ' ' >> c2s '(' >> showPointerType pointertype >> c2s ')'
+  |    AbsBasilIR.TypeRecordType recordtype -> s2s "TypeRecordType" >> c2s ' ' >> c2s '(' >> showRecordType recordtype >> c2s ')'
+  |    AbsBasilIR.TypeVarType localident -> s2s "TypeVarType" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
+  |    AbsBasilIR.TypeParen (openparen, type', closeparen) -> s2s "TypeParen" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.TypeMapType maptype -> s2s "TypeMapType" >> c2s ' ' >> c2s '(' >> showMapType maptype >> c2s ')'
 
 
 and showIntVal (e : AbsBasilIR.intVal) : showable = match e with
@@ -123,6 +149,10 @@ and showIntVal (e : AbsBasilIR.intVal) : showable = match e with
 
 and showBVVal (e : AbsBasilIR.bVVal) : showable = match e with
        AbsBasilIR.BVVal1 (intval, bvtype) -> s2s "BVVal1" >> c2s ' ' >> c2s '(' >> showIntVal intval  >> s2s ", " >>  showBVType bvtype >> c2s ')'
+
+
+and showFieldVal (e : AbsBasilIR.fieldVal) : showable = match e with
+       AbsBasilIR.FieldVal1 (openparen, str, bvval, type', closeparen) -> s2s "FieldVal1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showStr str  >> s2s ", " >>  showBVVal bvval  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
 and showEndian (e : AbsBasilIR.endian) : showable = match e with
@@ -141,10 +171,9 @@ and showStmt (e : AbsBasilIR.stmt) : showable = match e with
   |    AbsBasilIR.Stmt_ScalarStore (lvar, expr) -> s2s "Stmt_ScalarStore" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Stmt_ScalarLoad (lvar, var) -> s2s "Stmt_ScalarLoad" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showVar var >> c2s ')'
   |    AbsBasilIR.Stmt_MultiAssign (openparen, assignments, closeparen) -> s2s "Stmt_MultiAssign" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showAssignment assignments  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
-  |    AbsBasilIR.Stmt_Load (lvar, endian, globalident, expr, intval) -> s2s "Stmt_Load" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
-  |    AbsBasilIR.Stmt_Store (endian, globalident, expr0, expr, intval) -> s2s "Stmt_Store" >> c2s ' ' >> c2s '(' >> showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
   |    AbsBasilIR.Stmt_Load_Var (lvar, endian, var, expr, intval) -> s2s "Stmt_Load_Var" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showEndian endian  >> s2s ", " >>  showVar var  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
   |    AbsBasilIR.Stmt_Store_Var (lvar, endian, var, expr0, expr, intval) -> s2s "Stmt_Store_Var" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showEndian endian  >> s2s ", " >>  showVar var  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
+  |    AbsBasilIR.Stmt_Store (endian, globalident, expr0, expr, intval) -> s2s "Stmt_Store" >> c2s ' ' >> c2s '(' >> showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
   |    AbsBasilIR.Stmt_DirectCall (lvars, procident, openparen, callparams, closeparen) -> s2s "Stmt_DirectCall" >> c2s ' ' >> c2s '(' >> showLVars lvars  >> s2s ", " >>  showProcIdent procident  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showCallParams callparams  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Stmt_IndirectCall expr -> s2s "Stmt_IndirectCall" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Stmt_Assume expr -> s2s "Stmt_Assume" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
@@ -165,6 +194,16 @@ and showGlobalVar (e : AbsBasilIR.globalVar) : showable = match e with
 and showVar (e : AbsBasilIR.var) : showable = match e with
        AbsBasilIR.VarLocalVar localvar -> s2s "VarLocalVar" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
   |    AbsBasilIR.VarGlobalVar globalvar -> s2s "VarGlobalVar" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
+
+
+and showLocalVarParen (e : AbsBasilIR.localVarParen) : showable = match e with
+       AbsBasilIR.LocalVarParenLocalVar localvar -> s2s "LocalVarParenLocalVar" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
+  |    AbsBasilIR.LocalVarParen1 (openparen, localident, type', closeparen) -> s2s "LocalVarParen1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showLocalIdent localident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+
+
+and showGlobalVarParen (e : AbsBasilIR.globalVarParen) : showable = match e with
+       AbsBasilIR.GlobalVarParenGlobalVar globalvar -> s2s "GlobalVarParenGlobalVar" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
+  |    AbsBasilIR.GlobalVarParen1 (openparen, globalident, type', closeparen) -> s2s "GlobalVarParen1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
 and showNamedCallReturn (e : AbsBasilIR.namedCallReturn) : showable = match e with
@@ -217,7 +256,7 @@ and showPhiAssign (e : AbsBasilIR.phiAssign) : showable = match e with
 
 and showBlock (e : AbsBasilIR.block) : showable = match e with
        AbsBasilIR.Block_NoPhi (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> s2s "Block_NoPhi" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showStmtWithAttrib stmtwithattribs  >> s2s ", " >>  showJumpWithAttrib jumpwithattrib  >> s2s ", " >>  showEndList endlist >> c2s ')'
-  |    AbsBasilIR.Block_Phi (blockident, attribset, beginlist, openparen, phiassigns, closeparen, stmtwithattribs, jumpwithattrib, endlist) -> s2s "Block_Phi" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showPhiAssign phiassigns  >> s2s ", " >>  showCloseParen closeparen  >> s2s ", " >>  showList showStmtWithAttrib stmtwithattribs  >> s2s ", " >>  showJumpWithAttrib jumpwithattrib  >> s2s ", " >>  showEndList endlist >> c2s ')'
+  |    AbsBasilIR.Block_Phi (blockident, attribset, openparen, phiassigns, closeparen, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> s2s "Block_Phi" >> c2s ' ' >> c2s '(' >> showBlockIdent blockident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showPhiAssign phiassigns  >> s2s ", " >>  showCloseParen closeparen  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showList showStmtWithAttrib stmtwithattribs  >> s2s ", " >>  showJumpWithAttrib jumpwithattrib  >> s2s ", " >>  showEndList endlist >> c2s ')'
 
 
 and showAttrKeyValue (e : AbsBasilIR.attrKeyValue) : showable = match e with
@@ -225,14 +264,13 @@ and showAttrKeyValue (e : AbsBasilIR.attrKeyValue) : showable = match e with
 
 
 and showAttribSet (e : AbsBasilIR.attribSet) : showable = match e with
-       AbsBasilIR.AttribSet_Some (beginrec, attrkeyvalues, semicolons, endrec) -> s2s "AttribSet_Some" >> c2s ' ' >> c2s '(' >> showBeginRec beginrec  >> s2s ", " >>  showList showAttrKeyValue attrkeyvalues  >> s2s ", " >>  showSemicolons semicolons  >> s2s ", " >>  showEndRec endrec >> c2s ')'
+       AbsBasilIR.AttribSet_Some (beginrec, attrkeyvalues, endrec) -> s2s "AttribSet_Some" >> c2s ' ' >> c2s '(' >> showBeginRec beginrec  >> s2s ", " >>  showList showAttrKeyValue attrkeyvalues  >> s2s ", " >>  showEndRec endrec >> c2s ')'
   |    AbsBasilIR.AttribSet_Empty  -> s2s "AttribSet_Empty"
 
 
 and showAttr (e : AbsBasilIR.attr) : showable = match e with
-       AbsBasilIR.Attr_Map (beginrec, attrkeyvalues, semicolons, endrec) -> s2s "Attr_Map" >> c2s ' ' >> c2s '(' >> showBeginRec beginrec  >> s2s ", " >>  showList showAttrKeyValue attrkeyvalues  >> s2s ", " >>  showSemicolons semicolons  >> s2s ", " >>  showEndRec endrec >> c2s ')'
+       AbsBasilIR.Attr_Map (beginrec, attrkeyvalues, endrec) -> s2s "Attr_Map" >> c2s ' ' >> c2s '(' >> showBeginRec beginrec  >> s2s ", " >>  showList showAttrKeyValue attrkeyvalues  >> s2s ", " >>  showEndRec endrec >> c2s ')'
   |    AbsBasilIR.Attr_List (beginlist, attrs, endlist) -> s2s "Attr_List" >> c2s ' ' >> c2s '(' >> showBeginList beginlist  >> s2s ", " >>  showList showAttr attrs  >> s2s ", " >>  showEndList endlist >> c2s ')'
-  |    AbsBasilIR.Attr_Lit value -> s2s "Attr_Lit" >> c2s ' ' >> c2s '(' >> showValue value >> c2s ')'
   |    AbsBasilIR.Attr_Expr expr -> s2s "Attr_Expr" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Attr_Str str -> s2s "Attr_Str" >> c2s ' ' >> c2s '(' >> showStr str >> c2s ')'
 
@@ -241,29 +279,24 @@ and showParams (e : AbsBasilIR.params) : showable = match e with
        AbsBasilIR.Params1 (localident, type') -> s2s "Params1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
 
 
-and showFunParams (e : AbsBasilIR.funParams) : showable = match e with
-       AbsBasilIR.FunParams1 (localident, type') -> s2s "FunParams1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
-  |    AbsBasilIR.FunParams2 (openparen, localident, type', closeparen) -> s2s "FunParams2" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showLocalIdent localident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
-
-
 and showValue (e : AbsBasilIR.value) : showable = match e with
        AbsBasilIR.Value_BV bvval -> s2s "Value_BV" >> c2s ' ' >> c2s '(' >> showBVVal bvval >> c2s ')'
   |    AbsBasilIR.Value_Int intval -> s2s "Value_Int" >> c2s ' ' >> c2s '(' >> showIntVal intval >> c2s ')'
+  |    AbsBasilIR.Value_Record (openparen, beginrec, fieldvals, endrec, type', closeparen) -> s2s "Value_Record" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showBeginRec beginrec  >> s2s ", " >>  showList showFieldVal fieldvals  >> s2s ", " >>  showEndRec endrec  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.Value_Pointer (openparen, bvval, pointertype, closeparen) -> s2s "Value_Pointer" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showBVVal bvval  >> s2s ", " >>  showPointerType pointertype  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Value_True  -> s2s "Value_True"
   |    AbsBasilIR.Value_False  -> s2s "Value_False"
 
 
 and showExpr (e : AbsBasilIR.expr) : showable = match e with
        AbsBasilIR.Expr_Literal value -> s2s "Expr_Literal" >> c2s ' ' >> c2s '(' >> showValue value >> c2s ')'
-  |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> s2s "Expr_Paren" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Local localvar -> s2s "Expr_Local" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
   |    AbsBasilIR.Expr_Global globalvar -> s2s "Expr_Global" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
   |    AbsBasilIR.Expr_Forall (attribset, lambdadef) -> s2s "Expr_Forall" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showLambdaDef lambdadef >> c2s ')'
   |    AbsBasilIR.Expr_Exists (attribset, lambdadef) -> s2s "Expr_Exists" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showLambdaDef lambdadef >> c2s ')'
   |    AbsBasilIR.Expr_Lambda (attribset, lambdadef) -> s2s "Expr_Lambda" >> c2s ' ' >> c2s '(' >> showAttribSet attribset  >> s2s ", " >>  showLambdaDef lambdadef >> c2s ')'
   |    AbsBasilIR.Expr_Old (openparen, expr, closeparen) -> s2s "Expr_Old" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
-  |    AbsBasilIR.Expr_FunctionOp (globalident, openparen, exprs, closeparen) -> s2s "Expr_FunctionOp" >> c2s ' ' >> c2s '(' >> showGlobalIdent globalident  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showExpr exprs  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
-  |    AbsBasilIR.Expr_Apply (expr0, expr) -> s2s "Expr_Apply" >> c2s ' ' >> c2s '(' >> showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.Expr_FunctionOp (expr, openparen, exprs, closeparen) -> s2s "Expr_FunctionOp" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showExpr exprs  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Binary (binop, openparen, expr0, expr, closeparen) -> s2s "Expr_Binary" >> c2s ' ' >> c2s '(' >> showBinOp binop  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Assoc (boolbinop, openparen, exprs, closeparen) -> s2s "Expr_Assoc" >> c2s ' ' >> c2s '(' >> showBoolBinOp boolbinop  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showExpr exprs  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Unary (unop, openparen, expr, closeparen) -> s2s "Expr_Unary" >> c2s ' ' >> c2s '(' >> showUnOp unop  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
@@ -273,26 +306,24 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.Expr_SignExtend (openparen, intval, expr, closeparen) -> s2s "Expr_SignExtend" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Extract (openparen, intval0, intval, expr, closeparen) -> s2s "Expr_Extract" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval0  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Concat (openparen, exprs, closeparen) -> s2s "Expr_Concat" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showExpr exprs  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.Expr_FSet (openparen, str, expr0, expr, closeparen) -> s2s "Expr_FSet" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showStr str  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.Expr_FAccess (openparen, str, expr, closeparen) -> s2s "Expr_FAccess" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showStr str  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Match (expr, openparen, cases, closeparen) -> s2s "Expr_Match" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showCase cases  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Cases (openparen, cases, closeparen) -> s2s "Expr_Cases" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showCase cases  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
-
-
-and showLParen (e : AbsBasilIR.lParen) : showable = match e with
-       AbsBasilIR.LParenLocalVar localvar -> s2s "LParenLocalVar" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
-  |    AbsBasilIR.LParen1 (openparen, localvar, closeparen) -> s2s "LParen1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showLocalVar localvar  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> s2s "Expr_Paren" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
 and showLambdaDef (e : AbsBasilIR.lambdaDef) : showable = match e with
-       AbsBasilIR.LambdaDef1 (lparens, lambdasep, expr) -> s2s "LambdaDef1" >> c2s ' ' >> c2s '(' >> showList showLParen lparens  >> s2s ", " >>  showLambdaSep lambdasep  >> s2s ", " >>  showExpr expr >> c2s ')'
+       AbsBasilIR.LambdaDef1 (localvarparens, lambdasep, expr) -> s2s "LambdaDef1" >> c2s ' ' >> c2s '(' >> showList showLocalVarParen localvarparens  >> s2s ", " >>  showLambdaSep lambdasep  >> s2s ", " >>  showExpr expr >> c2s ')'
 
 
 and showBinOp (e : AbsBasilIR.binOp) : showable = match e with
        AbsBasilIR.BinOpBVBinOp bvbinop -> s2s "BinOpBVBinOp" >> c2s ' ' >> c2s '(' >> showBVBinOp bvbinop >> c2s ')'
   |    AbsBasilIR.BinOpBVLogicalBinOp bvlogicalbinop -> s2s "BinOpBVLogicalBinOp" >> c2s ' ' >> c2s '(' >> showBVLogicalBinOp bvlogicalbinop >> c2s ')'
-  |    AbsBasilIR.BinOpBoolBinOp boolbinop -> s2s "BinOpBoolBinOp" >> c2s ' ' >> c2s '(' >> showBoolBinOp boolbinop >> c2s ')'
   |    AbsBasilIR.BinOpIntLogicalBinOp intlogicalbinop -> s2s "BinOpIntLogicalBinOp" >> c2s ' ' >> c2s '(' >> showIntLogicalBinOp intlogicalbinop >> c2s ')'
   |    AbsBasilIR.BinOpIntBinOp intbinop -> s2s "BinOpIntBinOp" >> c2s ' ' >> c2s '(' >> showIntBinOp intbinop >> c2s ')'
   |    AbsBasilIR.BinOpEqOp eqop -> s2s "BinOpEqOp" >> c2s ' ' >> c2s '(' >> showEqOp eqop >> c2s ')'
+  |    AbsBasilIR.BinOpPointerBinOp pointerbinop -> s2s "BinOpPointerBinOp" >> c2s ' ' >> c2s '(' >> showPointerBinOp pointerbinop >> c2s ')'
 
 
 and showUnOp (e : AbsBasilIR.unOp) : showable = match e with
@@ -372,6 +403,10 @@ and showBoolBinOp (e : AbsBasilIR.boolBinOp) : showable = match e with
   |    AbsBasilIR.BoolBinOp_boolimplies  -> s2s "BoolBinOp_boolimplies"
 
 
+and showPointerBinOp (e : AbsBasilIR.pointerBinOp) : showable = match e with
+       AbsBasilIR.PointerBinOp_ptradd  -> s2s "PointerBinOp_ptradd"
+
+
 and showRequireTok (e : AbsBasilIR.requireTok) : showable = match e with
        AbsBasilIR.RequireTok_require  -> s2s "RequireTok_require"
   |    AbsBasilIR.RequireTok_requires  -> s2s "RequireTok_requires"
@@ -388,7 +423,7 @@ and showRelyTok (e : AbsBasilIR.relyTok) : showable = match e with
 
 
 and showGuarTok (e : AbsBasilIR.guarTok) : showable = match e with
-       AbsBasilIR.GuarTok_guarnatee  -> s2s "GuarTok_guarnatee"
+       AbsBasilIR.GuarTok_guarantee  -> s2s "GuarTok_guarantee"
   |    AbsBasilIR.GuarTok_guarantees  -> s2s "GuarTok_guarantees"
 
 
@@ -408,8 +443,8 @@ and showVarSpec (e : AbsBasilIR.varSpec) : showable = match e with
 
 
 and showProgSpec (e : AbsBasilIR.progSpec) : showable = match e with
-       AbsBasilIR.ProgSpec_Rely expr -> s2s "ProgSpec_Rely" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
-  |    AbsBasilIR.ProgSpec_Guarantee expr -> s2s "ProgSpec_Guarantee" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
+       AbsBasilIR.ProgSpec_Rely (relytok, expr) -> s2s "ProgSpec_Rely" >> c2s ' ' >> c2s '(' >> showRelyTok relytok  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.ProgSpec_Guarantee (guartok, expr) -> s2s "ProgSpec_Guarantee" >> c2s ' ' >> c2s '(' >> showGuarTok guartok  >> s2s ", " >>  showExpr expr >> c2s ')'
 
 
 

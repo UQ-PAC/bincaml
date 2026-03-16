@@ -1,93 +1,86 @@
 {
   inputs = {
-    flake-utils.url = "github:numtide/flake-utils";
-
-    opam-repository = {
-      url = "github:ocaml/opam-repository";
-      flake = false;
-    };
-
-    pac-opam = {
-      url = "github:uq-pac/opam-repository";
-      flake = false;
-    };
-
-    opam-nix = {
-      url = "github:tweag/opam-nix";
-      inputs.flake-utils.follows = "flake-utils";
-      inputs.opam-repository.follows = "opam-repository";
-    };
-
-    nixpkgs.follows = "opam-nix/nixpkgs";
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    infuse-src.url = "https://codeberg.org/awarina/infuse.nix/archive/trunk.tar.gz";
+    infuse-src.flake = false;
   };
   outputs =
     {
-      flake-utils,
-      opam-nix,
+      self,
       nixpkgs,
-      pac-opam,
-      opam-repository,
-      ...
-    }:
+      infuse-src,
+    }@args:
     let
-      package = "bincaml";
+      inherit (nixpkgs) lib;
+
+      inherit
+        (import ./nix/infuse-lib.nix {
+          lib = lib;
+          infuse-src = infuse-src;
+        })
+        infuse
+        infuse-with
+        ;
+
+      inherit (import ./nix/flake-for-all-systems.nix { lib = lib; })
+        flake-for-all-systems
+        ;
+
     in
-    flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-        on = opam-nix.lib.${system};
-        devPackagesQuery = {
-          menhir = "*";
-          zarith = "*";
-          fix = "*";
-          trace = "*";
-          trace-tef = "*";
-          containers = "*";
-          iter = "*";
-          containers-data = "*";
-          ppx_deriving = "*";
-          ocamlgraph = "*";
-          intPQueue = "*";
-          cmdliner = "*";
-          pp_loc = "*";
-          fmt = "*";
-          patricia-tree = "*";
-          odig = "*";
-          sherlodoc = "*";
-          ppx_expect = "*";
-          alcotest = "*";
-          qcheck-core = "*";
-          qcheck-alcotest = "*";
-          qcheck-stm = "*";
-          ocaml-lsp-server = "*";
-          ocamlformat = "*";
-          basil_lsp = "*";
-        };
-        query = devPackagesQuery // {
-          ocaml-compiler = "5.4.0";
-          ocaml-variants = "5.4.0+options";
-          ocaml-option-fp = "*";
-          ocaml-option-flambda = "*";
-        };
-        scope = on.buildOpamProject' {
-          repos = [
-            pac-opam
-            opam-repository
-          ];
-        } ./. query;
-        main = scope.${package};
-        devPackages = builtins.attrValues (pkgs.lib.getAttrs (builtins.attrNames devPackagesQuery) scope);
-      in
-      {
-        legacyPackages = scope;
+    flake-for-all-systems args {
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "aarch64-darwin"
+        "x86_64-darwin"
+      ];
+      outputs =
+        { self, nixpkgs, ... }:
+        let
+          pkgs = nixpkgs.legacyPackages;
+          selfOcamlPackages = pkgs.ocamlPackages.overrideScope self.overlays.addBincamlPackages;
+          fpOcamlPackages = selfOcamlPackages.overrideScope self.overlays.enableOcamlFramePointer;
+        in
+        {
+          defaultPackage = selfOcamlPackages.bincaml;
 
-        packages.default = main;
+          overlays = {
+            addBincamlPackages = ofinal: _: {
+              bincaml = ofinal.callPackage ./nix/bincaml.nix { };
+              hector = ofinal.callPackage ./nix/hector.nix { };
+              intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
+            };
 
-        devShells.default = pkgs.mkShell {
-          inputsFrom = [ main ];
-          buildInputs = devPackages ++ [ main ];
+            enableOcamlFramePointer =
+              ofinal:
+              infuse-with {
+                # https://github.com/NixOS/nixpkgs/blob/aca4d95fce4914b3892661bcb80b8087293536c6/pkgs/development/compilers/ocaml/generic.nix#L30
+                ocaml.__input.flambdaSupport.__assign = true;
+                ocaml.__input.framePointerSupport.__assign = true;
+                ocaml.__attrs.patches.__append = [
+                  (pkgs.fetchpatch {
+                    url = "https://github.com/ocaml/ocaml/commit/c2eec4dd1de7d0da2d2f76e5e7f2b567901f4e2c.patch";
+                    hash = "sha256-qDx8saOLhFMYaK4PLsSvHnDBYKvRSMmPtdVa/IqkQSI=";
+                  })
+                ];
+              };
+          };
+
+          legacyPackages = {
+            bincaml = selfOcamlPackages.bincaml;
+            intPQueue = selfOcamlPackages.intPQueue;
+            hector = selfOcamlPackages.hector;
+
+            fp.bincaml = fpOcamlPackages.bincaml;
+            fp.intPQueue = fpOcamlPackages.intPQueue;
+            fp.hector = fpOcamlPackages.hector;
+          };
+
+          devShells = {
+            default = self.devShells.fp;
+            fp = fpOcamlPackages.callPackage ./nix/shell.nix { };
+            no-fp = selfOcamlPackages.callPackage ./nix/shell.nix { };
+          };
         };
-      }
-    );
+    };
 }

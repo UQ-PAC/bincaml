@@ -42,8 +42,7 @@ proc @main () -> ()
   let _, results = IDELiveAnalysis.solve program in
   let main = program.entry_proc |> Option.get_exn_or "No entry proc" in
   print_lives results main;
-  [%expect
-    {|
+  [%expect {|
     @main
     $mem:(bv64->bv8)
     $x:bv64
@@ -52,6 +51,50 @@ proc @main () -> ()
     b:bv64
     c:bv64
     d:bv64
+    |}]
+
+let%expect_test "phi_loop" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+memory shared $mem : (bv64 -> bv8);
+
+prog entry @main;
+
+proc @main (x_in:bv64) -> ()
+[
+    block %main_entry [
+        goto(%loop_head);
+    ];
+    block %loop_head (
+        var x_1:bv64 := phi(%main_entry -> x_in:bv64, %main_1 -> x_2:bv64, %main_2 -> x_3:bv64)
+    ) [
+        goto(%main_1, %main_2, %main_return);
+    ];
+    block %main_1 [
+        var x_2:bv64 := bvadd(x_1:bv64, 1:bv64);
+        goto(%loop_head);
+    ];
+    block %main_2 [
+        var x_3:bv64 := bvsub(x_1:bv64, 1:bv64);
+        goto(%loop_head);
+    ];
+    block %main_return [
+        store le $mem x_1:bv64 addr:bv64 64;
+        return();
+    ];
+];
+    |}
+  in
+  let program = lst.prog in
+  let _, results = IDELiveAnalysis.solve program in
+  let main = program.entry_proc |> Option.get_exn_or "No entry proc" in
+  print_lives results main;
+  [%expect {|
+    @main
+    $mem:(bv64->bv8)
+    x_in:bv64
+    addr:bv64
     |}]
 
 let%expect_test "simple_call" =
@@ -82,8 +125,7 @@ proc @fun (c:bv64, d:bv64) -> (out:bv64)
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
   ID.Map.iter (fun id _ -> print_lives results id) program.procs;
-  [%expect
-    {|
+  [%expect {|
     @main
     b:bv64
     y:bv64
@@ -131,8 +173,7 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
   ID.Map.iter (fun id _ -> print_lives results id) program.procs;
-  [%expect
-    {|
+  [%expect {|
     @main
     b:bv64
     y:bv64
@@ -197,8 +238,7 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
   ID.Map.iter (fun id _ -> print_lives results id) program.procs;
-  [%expect
-    {|
+  [%expect {|
     @main
     b:bv64
     y:bv64

@@ -75,7 +75,7 @@ let iter_rexpr stmt =
   | Instr_Assume { body } -> Iter.singleton (`Expr body)
   | Instr_Load { lhs; rhs; addr = Addr { addr } } ->
       Iter.doubleton (`Expr addr) (`Var rhs)
-  | Instr_Load { lhs; rhs; addr } -> Iter.singleton (`Var rhs)
+  | Instr_Load { lhs; rhs; addr = Scalar } -> Iter.singleton (`Var rhs)
   | Instr_Store { lhs; rhs; addr = Addr { addr }; value } ->
       Iter.of_list [ `Expr value; `Expr addr; `Var rhs ]
   | Instr_Store { lhs; rhs; addr = Scalar; value } ->

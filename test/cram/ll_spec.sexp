@@ -1,0 +1,5 @@
+(load-il "ll_spec.il")
+(dump-il "before_ll_spec.il")
+(run-transforms "lambda-lifting")
+(run-transforms "type-check")
+(dump-il "after_ll_spec.il")

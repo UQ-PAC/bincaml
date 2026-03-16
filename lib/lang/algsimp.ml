@@ -207,6 +207,8 @@ let alg_simp_rewriter ?visit e =
        e |> partial_eval_expr |> simp_concat_fix )
   |> BasilExpr.rewrite_typed_two ?visit
        (sequence simplify_concat algebraic_simplifications)
+  |> to_steady BasilExpr.equal
+       (BasilExpr.rewrite_typed_two ?visit normalise_bool)
 
 let normalise e =
   let e = alg_simp_rewriter e in

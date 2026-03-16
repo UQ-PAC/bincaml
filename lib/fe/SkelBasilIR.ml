@@ -20,6 +20,10 @@ and transBOOLTYPE (x : bOOLTYPE) : result = match x with
     BOOLTYPE string -> failure x
 
 
+and transPOINTERTYPE (x : pOINTERTYPE) : result = match x with
+    POINTERTYPE string -> failure x
+
+
 and transBIdent (x : bIdent) : result = match x with
     BIdent string -> failure x
 
@@ -85,11 +89,6 @@ and transLambdaSep (x : lambdaSep) : result = match x with
   | LambdaSep2  -> failure x
 
 
-and transSemicolons (x : semicolons) : result = match x with
-    Semicolons_Empty  -> failure x
-  | Semicolons_Some semicolons -> failure x
-
-
 and transVarModifiers (x : varModifiers) : result = match x with
     Shared  -> failure x
   | Observable  -> failure x
@@ -105,11 +104,21 @@ and transDecl (x : decl) : result = match x with
   | Decl_ProgEmpty (procident, attribset) -> failure x
   | Decl_ProgWithSpec (procident, attribset, progspecs) -> failure x
   | Decl_Proc (procident, openparen0, paramss1, closeparen2, openparen, paramss, closeparen, attribset, funspecs, procdef) -> failure x
+  | Decl_RecType typeassigns -> failure x
+  | Decl_Type localident -> failure x
+
+
+and transTypeAssign (x : typeAssign) : result = match x with
+    TypeAssign_Sum (localident, sumcases) -> failure x
 
 
 and transProcDef (x : procDef) : result = match x with
     ProcDef_Empty  -> failure x
   | ProcDef_Some (beginlist, blocks, endlist) -> failure x
+
+
+and transField (x : field) : result = match x with
+    Field1 (openparen0, str, openparen, type', intval, closeparen1, closeparen) -> failure x
 
 
 and transIntType (x : intType) : result = match x with
@@ -120,20 +129,40 @@ and transBoolType (x : boolType) : result = match x with
     BoolType1 booltype -> failure x
 
 
-and transMapType (x : mapType) : result = match x with
-    MapType1 (type'0, type') -> failure x
+and transRecordType (x : recordType) : result = match x with
+    RecordType1 (beginrec, fields, endrec) -> failure x
+
+
+and transPointerType (x : pointerType) : result = match x with
+    PointerType1 (openparen, type'0, type', closeparen) -> failure x
 
 
 and transBVType (x : bVType) : result = match x with
     BVType1 bvtype -> failure x
 
 
+and transMapType (x : mapType) : result = match x with
+    MapType1 (type'0, type') -> failure x
+
+
+and transRecordField (x : recordField) : result = match x with
+    RecordField1 (localident, type') -> failure x
+
+
+and transSumCase (x : sumCase) : result = match x with
+    SortType localident -> failure x
+  | VariantCase (localident, beginrec, recordfields, endrec) -> failure x
+
+
 and transType (x : typeT) : result = match x with
     TypeIntType inttype -> failure x
   | TypeBoolType booltype -> failure x
-  | TypeMapType maptype -> failure x
   | TypeBVType bvtype -> failure x
-  | Type1 (openparen, type', closeparen) -> failure x
+  | TypePointerType pointertype -> failure x
+  | TypeRecordType recordtype -> failure x
+  | TypeVarType localident -> failure x
+  | TypeParen (openparen, type', closeparen) -> failure x
+  | TypeMapType maptype -> failure x
 
 
 and transIntVal (x : intVal) : result = match x with
@@ -143,6 +172,10 @@ and transIntVal (x : intVal) : result = match x with
 
 and transBVVal (x : bVVal) : result = match x with
     BVVal1 (intval, bvtype) -> failure x
+
+
+and transFieldVal (x : fieldVal) : result = match x with
+    FieldVal1 (openparen, str, bvval, type', closeparen) -> failure x
 
 
 and transEndian (x : endian) : result = match x with
@@ -161,10 +194,9 @@ and transStmt (x : stmt) : result = match x with
   | Stmt_ScalarStore (lvar, expr) -> failure x
   | Stmt_ScalarLoad (lvar, var) -> failure x
   | Stmt_MultiAssign (openparen, assignments, closeparen) -> failure x
-  | Stmt_Load (lvar, endian, globalident, expr, intval) -> failure x
-  | Stmt_Store (endian, globalident, expr0, expr, intval) -> failure x
   | Stmt_Load_Var (lvar, endian, var, expr, intval) -> failure x
   | Stmt_Store_Var (lvar, endian, var, expr0, expr, intval) -> failure x
+  | Stmt_Store (endian, globalident, expr0, expr, intval) -> failure x
   | Stmt_DirectCall (lvars, procident, openparen, callparams, closeparen) -> failure x
   | Stmt_IndirectCall expr -> failure x
   | Stmt_Assume expr -> failure x
@@ -185,6 +217,16 @@ and transGlobalVar (x : globalVar) : result = match x with
 and transVar (x : var) : result = match x with
     VarLocalVar localvar -> failure x
   | VarGlobalVar globalvar -> failure x
+
+
+and transLocalVarParen (x : localVarParen) : result = match x with
+    LocalVarParenLocalVar localvar -> failure x
+  | LocalVarParen1 (openparen, localident, type', closeparen) -> failure x
+
+
+and transGlobalVarParen (x : globalVarParen) : result = match x with
+    GlobalVarParenGlobalVar globalvar -> failure x
+  | GlobalVarParen1 (openparen, globalident, type', closeparen) -> failure x
 
 
 and transNamedCallReturn (x : namedCallReturn) : result = match x with
@@ -237,7 +279,7 @@ and transPhiAssign (x : phiAssign) : result = match x with
 
 and transBlock (x : block) : result = match x with
     Block_NoPhi (blockident, attribset, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> failure x
-  | Block_Phi (blockident, attribset, beginlist, openparen, phiassigns, closeparen, stmtwithattribs, jumpwithattrib, endlist) -> failure x
+  | Block_Phi (blockident, attribset, openparen, phiassigns, closeparen, beginlist, stmtwithattribs, jumpwithattrib, endlist) -> failure x
 
 
 and transAttrKeyValue (x : attrKeyValue) : result = match x with
@@ -245,14 +287,13 @@ and transAttrKeyValue (x : attrKeyValue) : result = match x with
 
 
 and transAttribSet (x : attribSet) : result = match x with
-    AttribSet_Some (beginrec, attrkeyvalues, semicolons, endrec) -> failure x
+    AttribSet_Some (beginrec, attrkeyvalues, endrec) -> failure x
   | AttribSet_Empty  -> failure x
 
 
 and transAttr (x : attr) : result = match x with
-    Attr_Map (beginrec, attrkeyvalues, semicolons, endrec) -> failure x
+    Attr_Map (beginrec, attrkeyvalues, endrec) -> failure x
   | Attr_List (beginlist, attrs, endlist) -> failure x
-  | Attr_Lit value -> failure x
   | Attr_Expr expr -> failure x
   | Attr_Str str -> failure x
 
@@ -261,29 +302,24 @@ and transParams (x : params) : result = match x with
     Params1 (localident, type') -> failure x
 
 
-and transFunParams (x : funParams) : result = match x with
-    FunParams1 (localident, type') -> failure x
-  | FunParams2 (openparen, localident, type', closeparen) -> failure x
-
-
 and transValue (x : value) : result = match x with
     Value_BV bvval -> failure x
   | Value_Int intval -> failure x
+  | Value_Record (openparen, beginrec, fieldvals, endrec, type', closeparen) -> failure x
+  | Value_Pointer (openparen, bvval, pointertype, closeparen) -> failure x
   | Value_True  -> failure x
   | Value_False  -> failure x
 
 
 and transExpr (x : expr) : result = match x with
     Expr_Literal value -> failure x
-  | Expr_Paren (openparen, expr, closeparen) -> failure x
   | Expr_Local localvar -> failure x
   | Expr_Global globalvar -> failure x
   | Expr_Forall (attribset, lambdadef) -> failure x
   | Expr_Exists (attribset, lambdadef) -> failure x
   | Expr_Lambda (attribset, lambdadef) -> failure x
   | Expr_Old (openparen, expr, closeparen) -> failure x
-  | Expr_FunctionOp (globalident, openparen, exprs, closeparen) -> failure x
-  | Expr_Apply (expr0, expr) -> failure x
+  | Expr_FunctionOp (expr, openparen, exprs, closeparen) -> failure x
   | Expr_Binary (binop, openparen, expr0, expr, closeparen) -> failure x
   | Expr_Assoc (boolbinop, openparen, exprs, closeparen) -> failure x
   | Expr_Unary (unop, openparen, expr, closeparen) -> failure x
@@ -293,26 +329,24 @@ and transExpr (x : expr) : result = match x with
   | Expr_SignExtend (openparen, intval, expr, closeparen) -> failure x
   | Expr_Extract (openparen, intval0, intval, expr, closeparen) -> failure x
   | Expr_Concat (openparen, exprs, closeparen) -> failure x
+  | Expr_FSet (openparen, str, expr0, expr, closeparen) -> failure x
+  | Expr_FAccess (openparen, str, expr, closeparen) -> failure x
   | Expr_Match (expr, openparen, cases, closeparen) -> failure x
   | Expr_Cases (openparen, cases, closeparen) -> failure x
-
-
-and transLParen (x : lParen) : result = match x with
-    LParenLocalVar localvar -> failure x
-  | LParen1 (openparen, localvar, closeparen) -> failure x
+  | Expr_Paren (openparen, expr, closeparen) -> failure x
 
 
 and transLambdaDef (x : lambdaDef) : result = match x with
-    LambdaDef1 (lparens, lambdasep, expr) -> failure x
+    LambdaDef1 (localvarparens, lambdasep, expr) -> failure x
 
 
 and transBinOp (x : binOp) : result = match x with
     BinOpBVBinOp bvbinop -> failure x
   | BinOpBVLogicalBinOp bvlogicalbinop -> failure x
-  | BinOpBoolBinOp boolbinop -> failure x
   | BinOpIntLogicalBinOp intlogicalbinop -> failure x
   | BinOpIntBinOp intbinop -> failure x
   | BinOpEqOp eqop -> failure x
+  | BinOpPointerBinOp pointerbinop -> failure x
 
 
 and transUnOp (x : unOp) : result = match x with
@@ -392,6 +426,10 @@ and transBoolBinOp (x : boolBinOp) : result = match x with
   | BoolBinOp_boolimplies  -> failure x
 
 
+and transPointerBinOp (x : pointerBinOp) : result = match x with
+    PointerBinOp_ptradd  -> failure x
+
+
 and transRequireTok (x : requireTok) : result = match x with
     RequireTok_require  -> failure x
   | RequireTok_requires  -> failure x
@@ -408,7 +446,7 @@ and transRelyTok (x : relyTok) : result = match x with
 
 
 and transGuarTok (x : guarTok) : result = match x with
-    GuarTok_guarnatee  -> failure x
+    GuarTok_guarantee  -> failure x
   | GuarTok_guarantees  -> failure x
 
 
@@ -428,8 +466,8 @@ and transVarSpec (x : varSpec) : result = match x with
 
 
 and transProgSpec (x : progSpec) : result = match x with
-    ProgSpec_Rely expr -> failure x
-  | ProgSpec_Guarantee expr -> failure x
+    ProgSpec_Rely (relytok, expr) -> failure x
+  | ProgSpec_Guarantee (guartok, expr) -> failure x
 
 
 

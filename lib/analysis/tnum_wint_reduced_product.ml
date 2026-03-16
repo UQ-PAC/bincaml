@@ -160,9 +160,7 @@ module StateAbstraction =
   Intra_analysis.MapState (TnumWintReducedProductValueAbstractionBasil)
 
 module Eval =
-  Intra_analysis.EvalStmt
-    (TnumWintReducedProductValueAbstractionBasil)
-    (StateAbstraction)
+  Intra_analysis.EvalStmt (TnumWintReducedProductValueAbstractionBasil)
 
 module Domain = struct
   include StateAbstraction
@@ -175,45 +173,29 @@ module Domain = struct
     |> Iter.map (fun v -> (v, top_val))
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
+  let transfer_state (read : Var.t -> TnumWintReducedProductLattice.t) stmt =
+    let read_tnum v = (read v).tnum in
+    let read_wint v = (read v).wint in
+    let tnum' = Known_bits.Domain.transfer_state read_tnum stmt in
+    let wint' = Wrapped_intervals.Domain.transfer_state read_wint stmt in
+
+    let merge =
+      TnumWintReducedProductLattice.(
+        fun v tnum wint ->
+          match (List.map snd tnum, List.map snd wint) with
+          | [ tnum ], [ wint ] -> Some (v, reduce { tnum; wint })
+          | [ tnum ], [] -> Some (v, reduce { tnum; wint = read_wint v })
+          | [], [ wint ] -> Some (v, reduce { tnum = read_tnum v; wint })
+          | _ -> None)
+    in
+    Iter.join_all_by ~eq:Var.equal ~hash:Var.hash fst fst ~merge tnum' wint'
+
   let transfer dom stmt =
-    let evald_stmt = Eval.stmt_eval_fwd stmt dom in
-    let evald_stmt_wint =
-      Lang.Stmt.map ~f_lvar:id ~f_rvar:id
-        ~f_expr:(fun (e : TnumWintReducedProductLattice.t) -> e.wint)
-        evald_stmt
-    in
-    let evald_stmt_tnum =
-      Lang.Stmt.map ~f_lvar:id ~f_rvar:id
-        ~f_expr:(fun (e : TnumWintReducedProductLattice.t) -> e.tnum)
-        evald_stmt
-    in
-    let read_wint v = (read v dom).wint in
-    let tnum' = Known_bits.Domain.tf evald_stmt_tnum in
-    let wint' =
-      Wrapped_intervals.Domain.tf ~read:read_wint stmt evald_stmt_wint
-    in
-    let updated_tnum =
-      Iter.fold
-        (fun acc (k, v) -> update k { tnum = v; wint = (read k dom).wint } acc)
-        dom tnum'
-    in
-    let dom =
-      Iter.fold
-        (fun acc (k, v) ->
-          update k { tnum = (read k updated_tnum).tnum; wint = v } acc)
-        updated_tnum wint'
-    in
-    match stmt with
-    | Lang.Stmt.Instr_Assert _ | Lang.Stmt.Instr_Assume _ ->
-        Iter.append (Iter.map fst tnum') (Iter.map fst wint')
-        |> Iter.uniq ~eq:Var.equal
-        |> Iter.fold
-             (fun acc k ->
-               update k (TnumWintReducedProductLattice.reduce @@ read k acc) acc)
-             dom
-    | _ -> dom
+    transfer_state (fun v -> read v dom) stmt
+    |> Iter.fold (fun dom (k, v) -> update k v dom) dom
 end
 
+module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
 module Analysis = Intra_analysis.Forwards (Domain)
 
 let analyse (p : Lang.Program.proc) =

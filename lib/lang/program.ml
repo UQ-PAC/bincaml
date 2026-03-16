@@ -29,6 +29,7 @@ type prog_spec = { rely : BasilExpr.t list; guarantee : BasilExpr.t list }
 type func_type = Axiom of e | Uninterpreted | Function of e
 
 type declaration =
+  | Type of { binding : string; typ : Types.t }
   | Function of {
       binding : Var.t;
       attrib : Expr.BasilExpr.t Attrib.attrib_map;
@@ -61,6 +62,7 @@ let pretty_declaration d =
       ^ text (Var.to_string binding)
       ^ text " = "
       ^ nest 2 (Expr.BasilExpr.pretty body)
+  | Type { binding; typ } -> text "type " ^ text (Types.to_string typ)
 
 (*match definition with
       | Some d -> 
@@ -137,7 +139,7 @@ let decl_global ?(attrib = StringMap.empty) p v =
   { p with globals = StringMap.add (Var.name v) decl p.globals }
 
 let add_decl ?(attrib = StringMap.empty) p v decl =
-  { p with globals = StringMap.add (Var.name v) decl p.globals }
+  { p with globals = StringMap.add v decl p.globals }
 
 let create_single_proc ?(name = "<module>") () =
   let proc_names = ID.make_gen () in
@@ -197,6 +199,18 @@ module CallGraph = struct
   end
 
   module G = Graph.Persistent.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
+
+  module Scc = Graph.Components.Make (struct
+    include G
+
+    (* Don't include return edges *)
+    let iter_succ f g = function
+      | Vert.ProcReturn proc as v ->
+          G.iter_succ
+            (fun v' -> if Vert.equal v' Vert.Return then f v' else ())
+            g v
+      | v -> G.iter_succ f g v
+  end)
 
   let make_call_graph t =
     let called_by (p : proc) =

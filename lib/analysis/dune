@@ -15,6 +15,7 @@
   tnum_wint_reduced_product
   known_bits)
  (libraries
+  intPQueue
   patricia-tree
   loader
   lang

@@ -8,6 +8,9 @@
 
 (generate_opam_files true)
 
+(formatting
+ (enabled_for dune))
+
 (source
  (github username/reponame))
 
@@ -40,6 +43,7 @@
   fmt
   patricia-tree
   ppx_here
+  intPQueue
   (ocamlformat :with-dev-setup)
   (odig :with-dev-setup)
   (sherlodoc :with-doc)
