@@ -388,7 +388,7 @@ module PassManager = struct
       };
       {
         name = "type-inference";
-        apply = Prog Transforms.Type_inference.transform;
+        apply = Prog Transforms.Type_inference.infer_types;
         doc = "Perform type inferencing on program.";
       };
       remove_unused;
