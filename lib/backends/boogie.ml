@@ -170,11 +170,12 @@ and pretty_triggers attrib =
       @@ pretty_attribute attrib)
   |> Option.get_or ~default:(text "")
 
-and pretty_binding_expr ?(attrib : Lang.Program.e Lang.Attrib.t option)
-    bound in_body =
+and pretty_binding_expr ?(attrib : Lang.Program.e Lang.Attrib.t option) bound
+    in_body =
   let open Containers_pp in
   pretty_call_args_no_brackets (List.map pretty_variable_typed bound)
-  ^+ text "::" ^+ pretty_triggers attrib ^+ snd in_body
+  ^+ text "::" ^+ newline_or_spaces 0 ^ pretty_triggers attrib
+  ^+ newline_or_spaces 0 ^ snd in_body
 
 and pretty_expr_alg
     (e : (Types.t * Containers_pp.t) Lang.Expr.BasilExpr.abstract_expr) =
@@ -193,7 +194,7 @@ and pretty_expr_alg
   | ApplyIntrin { op; args } -> pretty_apply_intrinsic op args (type_of e)
   | ApplyFun { func; args } -> pretty_apply_function (snd func) args
   | Binding { attrib; bound; in_body } ->
-      pretty_binding_expr ?attrib:attrib bound in_body
+      pretty_binding_expr ?attrib bound in_body
 
 and pretty_expr e = Lang.Expr.BasilExpr.fold_with_type_r pretty_expr_alg e
 
