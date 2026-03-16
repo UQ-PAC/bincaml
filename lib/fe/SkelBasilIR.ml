@@ -118,7 +118,7 @@ and transProcDef (x : procDef) : result = match x with
 
 
 and transField (x : field) : result = match x with
-    Field1 (openparen, str, type', closeparen) -> failure x
+    Field1 (openparen0, str, openparen, type', intval, closeparen1, closeparen) -> failure x
 
 
 and transIntType (x : intType) : result = match x with
@@ -305,7 +305,7 @@ and transParams (x : params) : result = match x with
 and transValue (x : value) : result = match x with
     Value_BV bvval -> failure x
   | Value_Int intval -> failure x
-  | Value_Record (openparen, fieldvals, closeparen) -> failure x
+  | Value_Record (openparen, beginrec, fieldvals, endrec, type', closeparen) -> failure x
   | Value_Pointer (openparen, bvval, pointertype, closeparen) -> failure x
   | Value_True  -> failure x
   | Value_False  -> failure x

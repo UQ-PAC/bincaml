@@ -73,7 +73,7 @@ ProcDef_Empty . ProcDef ::= ;
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
 separator Field "," ;
-Field1 . Field ::= OpenParen Str ":" Type CloseParen ;
+Field1 . Field ::= OpenParen Str ":" OpenParen Type "," IntVal CloseParen CloseParen ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
@@ -225,7 +225,7 @@ separator Params "," ;
 
 Value_BV . Value ::=  BVVal;
 Value_Int . Value ::= IntVal;
-Value_Record . Value ::= OpenParen [FieldVal] CloseParen;
+Value_Record . Value ::= OpenParen BeginRec [FieldVal] EndRec "," Type CloseParen ;
 Value_Pointer . Value ::= "ptr" OpenParen BVVal "," PointerType CloseParen;
 Value_True . Value ::= "true" ;
 Value_False . Value ::= "false" ;
