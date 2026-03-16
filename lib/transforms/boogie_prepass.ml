@@ -1,5 +1,12 @@
 open Bincaml_util.Common
 
+let function_name name =
+  let name =
+    if String.starts_with ~prefix:"$" name then String.concat "" [ "f"; name ]
+    else name
+  in
+  name
+
 module Builtins = struct
   type t =
     | Function of string
@@ -93,6 +100,7 @@ module Builtins = struct
     | `INTLE -> Infix "<="
     | `INTNEG -> Prefix "-"
     | `BVConcat -> Infix "++"
+    | `IMPLIES -> Infix "==>"
     | `Extract (hi, lo) -> Postfix (Printf.sprintf "[%d:%d]" hi lo)
     | `BOOLTOBV1 -> Function "bool_to_bv1"
     | #Lang.Ops.AllOps.binary | #Lang.Ops.AllOps.unary | #Lang.Ops.AllOps.intrin
@@ -342,31 +350,68 @@ module Normalise = struct
   open BasilExpr
   open Bitvec
 
-  let normalise_for_boogie (e : BasilExpr.t BasilExpr.abstract_expr) =
-    let to_binary op base args =
+  let replace_expr (e : BasilExpr.t BasilExpr.abstract_expr) =
+    let normalise_intrinsic op base args =
       match args with
       | [] -> base
       | h :: tl ->
           List.fold_left (fun a b -> BasilExpr.applyintrin ~op [ a; b ]) h tl
     in
 
+    let rec apply_fun_to_map base args =
+      match args with
+      | [] -> base
+      | h :: tl -> BasilExpr.binexp ~op:`MapAccess (apply_fun_to_map base tl) h
+    in
+
     match e with
+    (* function application in boogie becomes a map access when on lambdas (identified by local vars) *)
+    | ApplyFun { func; args } -> (
+        match unfix func with
+        | RVar { attrib; id } when Stdlib.( == ) (Var.scope id) Var.Global ->
+            replace [%here]
+              (BasilExpr.apply_fun ?attrib
+                 ~func:
+                   (BasilExpr.rvar ?attrib
+                      (Var.create
+                         (function_name @@ Var.name id)
+                         ~pure:(Var.pure id) ~scope:(Var.scope id) (Var.typ id)))
+                 args)
+        | _ -> replace [%here] (apply_fun_to_map func args))
+    (* Move the attributes on forall and exists into the bindings *)
+    | UnaryExpr
+        {
+          attrib;
+          op = `Forall | `Exists as op;
+          arg = Expr.BasilExpr.E (Expr.AbstractExpr.Binding {attrib=attrib2; bound; in_body});
+        } ->
+        replace [%here] (Expr.BasilExpr.unexp ~op:op ?attrib:attrib (Expr.BasilExpr.binding ?attrib:attrib bound in_body))
     | ApplyIntrin { op = `AND; args } ->
-        replace [%here] ((to_binary `AND (BasilExpr.boolconst true)) args)
+        replace [%here]
+          ((normalise_intrinsic `AND (BasilExpr.boolconst true)) args)
     | ApplyIntrin { op = `OR; args } ->
-        replace [%here] ((to_binary `OR (BasilExpr.boolconst false)) args)
+        replace [%here]
+          ((normalise_intrinsic `OR (BasilExpr.boolconst false)) args)
     | ApplyIntrin { op = `BVConcat; args } ->
         replace [%here]
-          (to_binary `BVConcat (BasilExpr.bvconst (Bitvec.zero ~size:0)) args)
+          (normalise_intrinsic `BVConcat
+             (BasilExpr.bvconst (Bitvec.zero ~size:0))
+             args)
     | ApplyIntrin { op = `BVOR; args } ->
         replace [%here]
-          (to_binary `BVOR (BasilExpr.bvconst (Bitvec.zero ~size:0)) args)
+          (normalise_intrinsic `BVOR
+             (BasilExpr.bvconst (Bitvec.zero ~size:0))
+             args)
     | ApplyIntrin { op = `BVAND; args } ->
         replace [%here]
-          (to_binary `BVAND (BasilExpr.bvconst (Bitvec.zero ~size:0)) args)
+          (normalise_intrinsic `BVAND
+             (BasilExpr.bvconst (Bitvec.zero ~size:0))
+             args)
     | ApplyIntrin { op = `BVXOR; args } ->
         replace [%here]
-          (to_binary `BVXOR (BasilExpr.bvconst (Bitvec.zero ~size:0)) args)
+          (normalise_intrinsic `BVXOR
+             (BasilExpr.bvconst (Bitvec.zero ~size:0))
+             args)
     | _ -> None
 
   open Stmt
@@ -401,10 +446,8 @@ module Normalise = struct
           ]
     | o -> o
 
-  let rewriter ?visit e =
-    BasilExpr.rewrite ?visit ~rw_fun:normalise_for_boogie e
-
-  let pass = Cf_tx.simplify_prog_exprs rewriter
+  let rewriter ?visit e = BasilExpr.rewrite ?visit ~rw_fun:replace_expr e
+  let replace_exprs = Cf_tx.simplify_prog_exprs rewriter
 
   let replace_stmts (p : Program.t) =
     let procs =
@@ -418,9 +461,5 @@ module Normalise = struct
 end
 
 let transform (p : Lang.Program.t) =
-  (* let _ = Instructions.unique_stores_loads p in *)
-  (*let p = Normalise.pass p in*)
-  let p = Instructions.transform_add_store_load_decls p in
-  let p = Normalise.replace_stmts p in
-  let p = Builtins.transform_add_builtin_decls p in
-  p
+  p |> Normalise.replace_exprs |> Instructions.transform_add_store_load_decls
+  |> Normalise.replace_stmts |> Builtins.transform_add_builtin_decls

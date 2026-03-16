@@ -63,6 +63,14 @@ let pretty_const (c : Lang.Ops.AllOps.const) =
   | `Bitvector bv -> text @@ Printf.sprintf "%sbv%d" (Z.format "%d" bv.v) bv.w
   | `Bool b -> text @@ string_of_bool b
 
+let pretty_call_args_no_brackets (args : Containers_pp.t list) =
+  let open Containers_pp in
+  newline_or_spaces 0 ^ List.hd args
+  ^ append_l
+      (List.map
+         (fun arg -> text "," ^ newline_or_spaces 1 ^ arg)
+         (List.tl args))
+
 let pretty_call_args (args : Containers_pp.t list) =
   let open Containers_pp in
   surround ~width:2 (text "(")
@@ -81,7 +89,7 @@ let pretty_binary_expr (op : Lang.Ops.AllOps.binary) (ty1, arg1) (ty2, arg2)
   | _ -> (
       match Transforms.Boogie_prepass.Builtins.name op [ ty1; ty2; t ] with
       | Function name -> text name ^ pretty_call_args [ arg1; arg2 ]
-      | Infix name -> arg1 ^+ text name ^+ arg2
+      | Infix name -> bracket "(" (arg1 ^+ text name ^+ arg2) ")"
       | _ -> failwith "Unsupported binary expr")
 
 let pretty_unary_expr (op : Lang.Ops.AllOps.unary) (ty, arg) (rt : Types.t) =
@@ -94,7 +102,7 @@ let pretty_unary_expr (op : Lang.Ops.AllOps.unary) (ty, arg) (rt : Types.t) =
       match Transforms.Boogie_prepass.Builtins.name op [ ty; rt ] with
       | Function name -> text name ^ pretty_call_args [ arg ]
       | Prefix name -> text name ^ arg
-      | Infix name -> text name ^ text "XNOPYT XNOPTY XNOPYT"
+      | Infix name -> failwith "Unary expressions may not be infix"
       | Postfix name -> arg ^ text name
       | _ ->
           failwith
@@ -102,30 +110,17 @@ let pretty_unary_expr (op : Lang.Ops.AllOps.unary) (ty, arg) (rt : Types.t) =
           @@ Lang.Ops.AllOps.to_string op)
 
 let pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
-    (args : (Types.t * Containers_pp.t) list) =
+    (args : (Types.t * Containers_pp.t) list) (t : Types.t) =
   let open Containers_pp in
   match op with
   (* BVConcat has explicit type annotations on each intermediate expression because of a bug in boogie, yay *)
   | `BVConcat ->
-      let mapped =
-        List.map
-          (function
-            | Types.Bitvector size, e -> (e, size)
-            | _ -> raise (BoogieException "May only concat bitvecs"))
-          args
-      in
-      let body, _ =
-        List.reduce_exn
-          (fun (acc_t, acc_s) (t, s) ->
-            ( group
-                (text "("
-                ^ (acc_t ^ text " ++ " ^ t)
-                ^ text "):" ^+ text "bv" ^ text
-                @@ string_of_int (acc_s + s)),
-              acc_s + s ))
-          mapped
-      in
-      surround ~width:0 (text "(") body (text ")")
+      bracket "("
+        (append_l
+           ~sep:(newline_or_spaces 1 ^ text "++" ^ newline_or_spaces 1)
+           (List.map snd args))
+        ")"
+      ^ text ":" ^+ text @@ type_to_string @@ t
   | `MapUpdate ->
       let args = List.map snd args in
       List.hd args
@@ -147,18 +142,60 @@ let pretty_apply_function (func : Containers_pp.t)
 
 let type_of e = Lang.Expr.BasilExpr.type_alg (Lang.Expr.AbstractExpr.map fst e)
 
-let pretty_expr_alg
+let rec pretty_attribute (attr : Lang.Program.e Lang.Attrib.t) =
+  let open Containers_pp in
+  match attr with
+  | `List l -> List.flat_map pretty_attribute l
+  | `String s -> [ text s ]
+  | `Expr e -> [ pretty_expr e ]
+  | _ -> []
+
+and pretty_attribute_map (key : string)
+    (a : Lang.Program.e Lang.Attrib.attrib_map) =
+  let open Containers_pp in
+  StringMap.find_opt key a |> Option.to_list
+  |> List.flat_map (function `Assoc m -> StringMap.to_list m | _ -> [])
+  |> List.map (function k, f ->
+      bracket "{"
+        (text ":" ^ text (String.drop 1 k) ^+ append_sp @@ pretty_attribute f)
+        "}")
+  |> append_sp
+
+and pretty_triggers attrib =
+  let open Containers_pp in
+  Lang.Attrib.find_opt ".triggers" attrib
+  |> Option.map (fun attrib ->
+      append_sp
+      @@ List.map (fun b -> bracket "{" b "}")
+      @@ pretty_attribute attrib)
+  |> Option.get_or ~default:(text "")
+
+and pretty_binding_expr ?(attrib : Lang.Program.e Lang.Attrib.t option)
+    bound in_body =
+  let open Containers_pp in
+  pretty_call_args_no_brackets (List.map pretty_variable_typed bound)
+  ^+ text "::" ^+ pretty_triggers attrib ^+ snd in_body
+
+and pretty_expr_alg
     (e : (Types.t * Containers_pp.t) Lang.Expr.BasilExpr.abstract_expr) =
   let open Containers_pp in
   match e with
   | RVar { attrib; id } -> pretty_variable id
   | Constant { attrib; const } -> pretty_const const
+  | UnaryExpr { attrib; op = `Forall; arg } ->
+      bracket "(" (text "forall" ^+ snd arg) ")"
+  | UnaryExpr { attrib; op = `Exists; arg } ->
+      bracket "(" (text "exists" ^+ snd arg) ")"
+  | UnaryExpr { op = `Lambda; arg } ->
+      bracket "(" (text "lambda" ^+ snd arg) ")"
   | UnaryExpr { op; arg } -> pretty_unary_expr op arg (type_of e)
   | BinaryExpr { op; arg1; arg2 } -> pretty_binary_expr op arg1 arg2 (type_of e)
-  | ApplyIntrin { op; args } -> pretty_apply_intrinsic op args
+  | ApplyIntrin { op; args } -> pretty_apply_intrinsic op args (type_of e)
   | ApplyFun { func; args } -> pretty_apply_function (snd func) args
-  | Binding { bound; in_body } -> text "bound"
-(*raise (BoogieException "Unsupported expression: Binding")*)
+  | Binding { attrib; bound; in_body } ->
+      pretty_binding_expr ?attrib:attrib bound in_body
+
+and pretty_expr e = Lang.Expr.BasilExpr.fold_with_type_r pretty_expr_alg e
 
 let pretty_function_args (e : Lang.Program.e) =
   let open Containers_pp in
@@ -169,8 +206,6 @@ let pretty_function_args (e : Lang.Program.e) =
   | UnaryExpr { op = `Lambda; arg = Binding { bound; in_body } } -> pretty bound
   | Binding { bound } -> pretty bound
   | _ -> raise (BoogieException "Unsupported expression as function args")
-
-let pretty_expr e = Lang.Expr.BasilExpr.fold_with_type_r pretty_expr_alg e
 
 let pretty_function_body (e : Lang.Program.e) =
   let open Containers_pp in
@@ -184,24 +219,6 @@ let pretty_function_body (e : Lang.Program.e) =
            (String.cat "Unsupported expression as function body: "
               (Pretty.to_string ~width:80 (pretty_expr e))))
 
-let rec pretty_attribute (attr : Lang.Program.e Lang.Attrib.t) =
-  let open Containers_pp in
-  match attr with
-  | `List l -> List.flat_map pretty_attribute l
-  | `String s -> [ text s ]
-  | _ -> []
-
-let rec pretty_attribute_map (a : Lang.Program.e Lang.Attrib.attrib_map) =
-  let open Containers_pp in
-  StringMap.find_opt ".boogie" a
-  |> Option.to_list
-  |> List.flat_map (function `Assoc m -> StringMap.to_list m | _ -> [])
-  |> List.map (function k, f ->
-      bracket "{"
-        (text ":" ^ text (String.drop 1 k) ^+ append_sp @@ pretty_attribute f)
-        "}")
-  |> append_sp
-
 let pretty_declaration (d : Lang.Program.declaration) =
   let open Containers_pp in
   let open Containers_pp.Infix in
@@ -210,7 +227,7 @@ let pretty_declaration (d : Lang.Program.declaration) =
       pretty_variable_declaration binding
   | Lang.Program.Function { binding; attrib; definition = Function t } ->
       text "function"
-      ^+ pretty_attribute_map attrib
+      ^+ pretty_attribute_map ".boogie" attrib
       ^+ (function_name @@ Var.name binding)
       ^ bracket "(" (pretty_function_args t) ")"
       ^+ text "returns"
@@ -221,11 +238,9 @@ let pretty_declaration (d : Lang.Program.declaration) =
   | Lang.Program.Function { binding; attrib; definition = Axiom t } ->
       fill sp [ text "axiom"; bracket "(" (pretty_expr t) ")" ]
   | Lang.Program.Function { binding; attrib; definition = Uninterpreted } ->
-      (* let _ = print_endline (Var.to_string binding) in *)
       let param, rt = Types.uncurry (Var.typ binding) in
-      (* let _ = print_endline (List.to_string Types.to_string param) in *)
       text "function"
-      ^+ pretty_attribute_map attrib
+      ^+ pretty_attribute_map ".boogie" attrib
       ^+ (function_name @@ Var.name binding)
       ^ bracket "("
           (fill
