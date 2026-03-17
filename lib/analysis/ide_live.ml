@@ -5,7 +5,7 @@ open Containers
 open Common
 open Ide
 
-module IDELive = struct
+module IDELiveCommon = struct
   let direction = `Backwards
 
   module Data = Var
@@ -15,8 +15,6 @@ module IDELive = struct
   module DL = struct
     type t = Lambda | Label of Var.t [@@deriving eq, ord, show]
   end
-
-  type 'a state_update = (DL.t * 'a) Iter.t
 
   module Value = struct
     type t = bool [@@deriving eq, ord, show]
@@ -65,9 +63,16 @@ module IDELive = struct
     | IdEdge, IdEdge -> IdEdge
 
   let eval f v = match f with IdEdge -> v | ConstEdge v -> v
+end
+
+module IDELive = struct
+  include IDELiveCommon
+  open Value
 
   let init_data globals (proc : Program.proc) =
     Procedure.formal_out_params proc |> StringMap.values |> Iter.append globals
+
+  type 'a state_update = (DL.t * 'a) Iter.t
 
   open DL
 
@@ -170,3 +175,28 @@ module IDELive = struct
 end
 
 module IDELiveAnalysis = IDE (IDELive)
+open Idessi
+
+module IDELiveSSI : IDESSIDomain = struct
+  include IDELiveCommon
+
+  let init_data (proc : Program.proc) =
+    Procedure.formal_out_params proc |> StringMap.values
+
+  type state_update = (DL.t * t) Iter.t
+
+  open DL
+
+  let transfer_call call_info d =
+    match d with
+    | Lambda -> Iter.empty
+    | Label v ->
+        Iter.of_list call_info
+        |> Iter.filter (fun (v', _) -> Var.equal v v')
+        |> Iter.flat_map (fun (_, e) -> Expr.BasilExpr.free_vars_iter e)
+        |> Iter.map (fun v' -> (Label v', IdEdge))
+
+  let transfer s d =
+    let open Stmt in
+    match s with _ -> failwith "todo"
+end
