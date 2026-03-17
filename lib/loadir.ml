@@ -101,11 +101,11 @@ module BasilASTLoader = struct
   and transStr (x : str) : string =
     match x with Str string -> stripquote string
 
-  and trans_program ?(prog : Lang.Program.t option) ?(name = "<module>") (x : moduleT)
+  and trans_program ?(lst : load_st option) ?(name = "<module>") (x : moduleT)
       : load_st =
     let prog =
-      match prog with
-      | Some p -> { (load_st_empty ~name ()) with prog=p }
+      match lst with
+      | Some lst -> lst
       | None -> load_st_empty ~name ()
     in
     let prog =
@@ -141,8 +141,6 @@ module BasilASTLoader = struct
                   ( unsafe_unsigil (`Local variant),
                     List.map trans_recordfield fields ))) )
 
-  (** First pass; process like forward declaration: only add the information
-      needed to do non-local reslolution of names such as for procedure calls *)
   and trans_declaration prog (x : decl) : load_st =
     match x with
     | Decl_Type sort ->
@@ -304,7 +302,6 @@ module BasilASTLoader = struct
     in
     map_prog (fun prog -> Program.add_decl prog (Var.name binding) fundef) prog
 
-  (** Second pass: resolve the full definition of all declarations. *)
   and trans_definition prog (x : decl) : load_st =
     match x with
     | Decl_UninterpFun (glident, attrDefList, rettype) ->
@@ -351,15 +348,11 @@ module BasilASTLoader = struct
           _,
           attrs,
           spec_list,
-          proc_def ) ->
+          ProcDef_Some (bl, blocks, el) ) ->
         let proc_id = prog.prog.proc_names.decl_or_get id in
         let p = ID.Map.find proc_id prog.prog.procs in
         let prog = { prog with curr_proc = Some p } in
-        let prog, blocks =
-          match proc_def with
-          | ProcDef_Some (bl, blocks, el) -> sequence_st prog trans_block blocks
-          | ProcDef_Empty -> (prog, [])
-        in
+        let prog, blocks = sequence_st prog trans_block blocks in
         let p =
           if List.is_empty blocks then p else Procedure.add_empty_impl p
         in
@@ -433,9 +426,7 @@ module BasilASTLoader = struct
         map_prog
           (fun prog -> { prog with procs = ID.Map.add proc_id p prog.procs })
           prog
-    | Decl_Mem _ | Decl_Var _ | Decl_RecType _ | Decl_Type _ ->
-        (* declarations only: handled by first pass *)
-        prog
+    | _ -> prog
 
   and transMapType (x : mapType) : Types.t =
     match x with MapType1 (t0, t1) -> Map (trans_type t0, trans_type t1)
@@ -1302,11 +1293,11 @@ let parse_single_block s : Program.bloc =
   let input = Pp_loc.Input.string s in
   load_single_block ~input lexbuf
 
-let ast_of_concrete_ast ?(prog : Lang.Program.t option) ~name m =
+let ast_of_concrete_ast ?(lst : load_st option) ~name m =
   Trace_core.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->
-  BasilASTLoader.trans_program ?prog ~name m
+  BasilASTLoader.trans_program ?lst ~name m
 
-let ast_of_string ?(prog : Lang.Program.t option) ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
+let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
   let name =
     let open Option.Infix in
     let* line = __LINE__ >|= Int.to_string in
@@ -1317,23 +1308,23 @@ let ast_of_string ?(prog : Lang.Program.t option) ?__LINE__ ?__FILE__ ?__FUNCTIO
   let name = Option.get_or ~default:"<string>" name in
   let input = Pp_loc.Input.string string in
   let conc = concrete_prog_ast_of_string ~input ~filename:name string in
-  try ast_of_concrete_ast ?prog ~name conc
+  try ast_of_concrete_ast ?lst ~name conc
   with LoadError { token_char_offset_range; msg } ->
     raise (LoadError { input = Some input; token_char_offset_range; msg })
 
-let ast_of_channel ?(prog : Lang.Program.t option) ?input fname c =
+let ast_of_channel ?(lst: load_st option) ?input fname c =
   let m =
     Trace_core.with_span ~__FILE__ ~__LINE__ "load-concrete-ast" @@ fun f ->
     let m = concrete_prog_ast_of_channel ?input ~filename:fname c in
     m
   in
-  try ast_of_concrete_ast ?prog ~name:fname m
+  try ast_of_concrete_ast ?lst ~name:fname m
   with LoadError { token_char_offset_range; msg } ->
     raise (LoadError { input; token_char_offset_range; msg })
 
-let ast_of_fname ?(prog : Lang.Program.t option) fname =
+let ast_of_fname ?(lst : load_st option) fname =
   IO.with_in fname (fun c ->
-      ast_of_channel ?prog ~input:(Pp_loc.Input.file fname) fname c)
+      ast_of_channel ?lst ~input:(Pp_loc.Input.file fname) fname c)
 
 let%expect_test "missing block" =
   let run () =
@@ -1558,31 +1549,3 @@ let%test_unit "parses parenthesised lambda param" =
   in
   let _ = ast_of_string ~__LINE__ ~__FILE__ ~__FUNCTION__ s in
   ()
-
-let%expect_test "proc declaration without body" =
-  let p =
-    ast_of_string
-      {|
-var $R0: bv64;
-var $R1: bv64;
-
-proc @test1() -> ()
-	{ .name = "test1" }
-	modifies $R0
-	ensures eq($R1, 0x0:bv64)
-	requires eq($R1, 0x0:bv64);
-
-    |}
-  in
-  Program.pretty_to_chan stdout p.prog;
-  ();
-  [%expect
-    {|
-    var $R0:bv64;
-    var $R1:bv64;
-    proc @test1()  -> () { .name = "test1" }
-      modifies $R0:bv64
-      requires eq($R1:bv64, 0x0:bv64)
-      ensures eq($R1:bv64, 0x0:bv64)
-    ;
-    |}]
