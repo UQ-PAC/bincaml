@@ -389,6 +389,7 @@ let pretty_procedure_impl (p : Lang.Program.proc) =
   let in_params = Lang.Procedure.formal_in_params p in
   let out_params = Lang.Procedure.formal_out_params p in
   let local_decls =
+    if ((StringMap.cardinal in_params + StringMap.cardinal out_params) > 0) then
     Lang.Procedure.local_decls p
     |> Hashtbl.to_list
     |> List.filter (fun (k, v) ->
@@ -396,6 +397,7 @@ let pretty_procedure_impl (p : Lang.Program.proc) =
         && (Option.is_none @@ StringMap.get k out_params))
     |> List.map (fun (k, v) -> pretty_variable_declaration v)
     |> join_lines_end
+  else text ""
   in
   let blocks =
     Lang.Procedure.iter_blocks_topo_fwd p
