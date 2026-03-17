@@ -214,7 +214,8 @@ let type_check stmt_id block_id expr =
               type_err "map update expected value type %s but got %s"
                 (Types.to_string v) (Types.to_string arg2)
               :: err
-        | [ a; b; c ] ->[
+        | [ a; b; c ] ->
+            [
               type_err "%s is not of map type in %s" (Types.to_string a)
                 (Ops.AllOps.to_string op);
             ]

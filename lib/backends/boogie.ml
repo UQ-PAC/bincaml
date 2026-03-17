@@ -62,6 +62,8 @@ let pretty_const (c : Lang.Ops.AllOps.const) =
   | `Integer i -> text @@ Z.format "%d" i
   | `Bitvector bv -> text @@ Printf.sprintf "%sbv%d" (Z.format "%d" bv.v) bv.w
   | `Bool b -> text @@ string_of_bool b
+  | `Record _ -> raise (BoogieException "records unsupported by boogie backend")
+  | `Pointer _ -> raise (BoogieException "pointers unsupported by boogie backend")
 
 let pretty_call_args_no_brackets (args : Containers_pp.t list) =
   let open Containers_pp in
@@ -250,6 +252,7 @@ let pretty_declaration (d : Lang.Program.declaration) =
           ")"
       ^ bracket " returns (" (text (type_to_string rt)) ")"
       ^ text ";"
+  | Lang.Program.Type _ -> raise (BoogieException "generation of boogie datatypes is unsupported for now")
 
 let rec pretty_statement (s : Lang.Program.stmt) =
   let open Containers_pp in
@@ -297,22 +300,24 @@ let rec pretty_statement (s : Lang.Program.stmt) =
 let pretty_terminator (p : Lang.Program.proc) (i : IDSet.elt)
     (b : Lang.Procedure.Edge.block) =
   let open Containers_pp in
-  Lang.Procedure.graph p
-  |> Option.map (fun g ->
-      match Lang.Procedure.G.succ_e g (Lang.Procedure.Vert.End i) with
-      | [] -> text "Unreachable"
-      | [ (b, re, Return) ] -> text "return"
-      | succ ->
-          let succ =
-            List.map
-              (fun (_, e, v) ->
-                match v with
-                | Lang.Procedure.Vert.Begin i -> block_name v
-                | _ -> raise (BoogieException "Bad graph structure"))
-              succ
-          in
-          text "goto" ^+ fill (text "," ^ sp) succ)
-  |> Option.get
+  match
+    Lang.Procedure.graph p
+  with
+  | Some a -> (
+        match Lang.Procedure.G.succ_e a (Lang.Procedure.Vert.End i) with
+        | [] -> text "Unreachable"
+        | [ (b, re, Return) ] -> text "return"
+        | succ ->
+            let succ =
+              List.map
+                (fun (_, e, v) ->
+                  match v with
+                  | Lang.Procedure.Vert.Begin i -> block_name v
+                  | _ -> raise (BoogieException "Bad graph structure"))
+                succ
+            in
+            text "goto" ^+ fill (text "," ^ sp) succ)
+  | _ -> failwith "no procedure graph"
 
 let pretty_block (p : Lang.Program.proc) (i : IDSet.elt)
     (b : Lang.Procedure.Edge.block) =

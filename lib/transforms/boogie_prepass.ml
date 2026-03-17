@@ -188,8 +188,9 @@ module Builtins = struct
          (fun acc d ->
            Lang.Program.add_decl acc
              (match d with
-             | Lang.Program.Function { binding } -> binding
-             | Lang.Program.Variable { binding } -> binding)
+             | Lang.Program.Function { binding } -> Var.name binding
+             | Lang.Program.Variable { binding } -> Var.name binding
+             | Lang.Program.Type { binding } -> binding)
              d)
          p
 end
@@ -337,8 +338,9 @@ module Instructions = struct
          (fun acc d ->
            Lang.Program.add_decl acc
              (match d with
-             | Lang.Program.Function { binding } -> binding
-             | Lang.Program.Variable { binding } -> binding)
+             | Lang.Program.Function { binding } -> Var.name binding
+             | Lang.Program.Variable { binding } -> Var.name binding
+             | Lang.Program.Type { binding } -> binding)
              d)
          prog
 end
@@ -382,10 +384,14 @@ module Normalise = struct
     | UnaryExpr
         {
           attrib;
-          op = `Forall | `Exists as op;
-          arg = Expr.BasilExpr.E (Expr.AbstractExpr.Binding {attrib=attrib2; bound; in_body});
+          op = (`Forall | `Exists) as op;
+          arg =
+            Expr.BasilExpr.E
+              (Expr.AbstractExpr.Binding { attrib = attrib2; bound; in_body });
         } ->
-        replace [%here] (Expr.BasilExpr.unexp ~op:op ?attrib:attrib (Expr.BasilExpr.binding ?attrib:attrib bound in_body))
+        replace [%here]
+          (Expr.BasilExpr.unexp ~op ?attrib
+             (Expr.BasilExpr.binding ?attrib bound in_body))
     | ApplyIntrin { op = `AND; args } ->
         replace [%here]
           ((normalise_intrinsic `AND (BasilExpr.boolconst true)) args)
@@ -447,7 +453,11 @@ module Normalise = struct
     | o -> o
 
   let rewriter ?visit e = BasilExpr.rewrite ?visit ~rw_fun:replace_expr e
-  let replace_exprs = compose (Cf_tx.simplify_prog_spec_exprs rewriter) (Cf_tx.simplify_prog_exprs rewriter)
+
+  let replace_exprs =
+    compose
+      (Cf_tx.simplify_prog_spec_exprs rewriter)
+      (Cf_tx.simplify_prog_exprs rewriter)
 
   let replace_stmts (p : Program.t) =
     let procs =
