@@ -434,7 +434,9 @@ module BasilASTLoader = struct
         map_prog
           (fun prog -> { prog with procs = ID.Map.add proc_id p prog.procs })
           prog
-    | _ -> prog
+    | Decl_Mem _ | Decl_Var _ | Decl_RecType _ | Decl_Type _ ->
+        (* declarations only: handled by first pass *)
+        prog
 
   and transMapType (x : mapType) : Types.t =
     match x with MapType1 (t0, t1) -> Map (trans_type t0, trans_type t1)
