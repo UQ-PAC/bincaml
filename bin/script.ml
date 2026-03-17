@@ -53,11 +53,15 @@ let of_cmd st (e : Containers.Sexp.t) =
       | "skip" -> st
       | "load-il" -> (
           try
-            let fname = List.hd (assert_atoms 1 args) in
-            let p =
-              Loader.Loadir.ast_of_fname ?prog:st.prog fname
+            let args = assert_atoms (List.length args) args in
+            let st =
+              List.fold_left
+                (fun acc fname ->
+                  let p = Loader.Loadir.ast_of_fname ?prog:acc.prog fname in
+                  { acc with prog = Some p.prog })
+                { st with prog = None } args
             in
-            { st with prog = Some p.prog }
+            st
           with
           | (Loader.Loadir.ILBParseError _ | Loader.Loadir.LoadError _) as e ->
             let msg = Loader.Loadir.show_ilbparseerror e in
