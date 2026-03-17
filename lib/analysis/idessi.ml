@@ -48,6 +48,7 @@ module type IDESSIDomain = sig
 
   val transfer_call : call_info -> DL.t -> state_update
   val transfer : Program.stmt -> DL.t -> state_update
+  val transfer_phi : Var.t -> Var.t list -> DL.t -> state_update
 end
 
 module IDESSI (D : IDESSIDomain) = struct
@@ -96,10 +97,11 @@ module IDESSI (D : IDESSIDomain) = struct
     let open Stmt in
     match v with
     | _, Vertex.Stmt (_, (Instr_Call c as s)) ->
+        let caller = ID.Map.find c.procid prog.procs in
         let ci =
           c.args |> StringMap.to_list
           |> List.map (fun (s, e) ->
-              (Procedure.formal_in_params proc |> StringMap.find s, e))
+              (Procedure.formal_in_params caller |> StringMap.find s, e))
         in
         (match D.direction with
           | `Forwards -> D.transfer_call ci d2
@@ -107,20 +109,28 @@ module IDESSI (D : IDESSIDomain) = struct
               match d2 with
               | Lambda -> Iter.singleton (Lambda, D.identity)
               | Label v ->
-                  StringMap.values c.lhs
-                  |> Iter.filter (fun v' -> Var.equal v v')
-                  |> Iter.map (fun v -> (Label v, e1))))
+                  StringMap.to_iter c.lhs
+                  |> Iter.filter (fun (s, v') -> Var.equal v v')
+                  |> Iter.map (fun (s, _) ->
+                      ( Label
+                          (Procedure.formal_out_params caller
+                          |> StringMap.find s),
+                        e1 ))))
         |> Iter.flat_map (fun (d, e1) ->
             (* update the entry2call cache *)
             let k = (d, c.procid) in
+            print_endline @@ DL.show d1 ^ DL.show d ^ ID.show pid ^ ID.show c.procid;
             Hashtbl.get_or entry2call k ~default:ID.Map.empty
-            |> ID.Map.update pid (Option.map (DlMap.add d1 (e1, s)))
+            |> ID.Map.update pid (function
+                | Some m -> Some(DlMap.add d1 (e1, s) m)
+                | None -> Some(DlMap.singleton d1 (e1, s)))
             |> Hashtbl.replace entry2call k;
             (* If a summary of the caller exists, propagate through it *)
             Hashtbl.get_or summaries c.procid ~default:DlMap.empty
             |> DlMap.get_or d ~default:DlMap.empty
             |> DlMap.to_iter
             |> Iter.filter_map (fun (d', e') ->
+                print_endline @@ DL.show d';
                 match d' with
                 | Lambda -> None
                 | Label v -> is_output proc v |> flip Option.return_if (v, e'))
@@ -133,10 +143,10 @@ module IDESSI (D : IDESSIDomain) = struct
                   | `Backwards -> D.transfer_call ci (Label v3))
                 |> Iter.map (fun (d4, e3) -> (d1, pid, d4, e3 @. e2 @. e1))))
     | _, Vertex.Stmt (_, s) ->
-        D.transfer s d2
-        |> Iter.flat_map (fun (d3, e2) ->
-            Iter.singleton (d1, pid, d3, e2 @. e1))
-    | _, Vertex.Phi p -> Iter.singleton (d1, pid, Label p.lhs, e1)
+        D.transfer s d2 |> Iter.map (fun (d3, e2) -> (d1, pid, d3, e2 @. e1))
+    | _, Vertex.Phi p ->
+        D.transfer_phi p.lhs p.rhs d2
+        |> Iter.map (fun (d3, e2) -> (d1, pid, d3, e2 @. e1))
     | _, Vertex.Entry | _, Vertex.Return -> (
         match d2 with
         | Label v2 when is_output proc v2 ->
@@ -146,6 +156,7 @@ module IDESSI (D : IDESSIDomain) = struct
             Hashtbl.get_or entry2call (d1, pid) ~default:ID.Map.empty
             |> ID.Map.to_iter
             |> Iter.flat_map (fun (callee_id, m) ->
+                print_endline @@ DL.show d2 ^ ID.show pid;
                 DlMap.to_iter m
                 |> Iter.flat_map (fun (d1, (e1, s)) ->
                     match s with
@@ -248,5 +259,5 @@ module IDESSI (D : IDESSIDomain) = struct
         (fun summaries scc -> p1_solve_scc prog defuses summaries scc)
         (Hashtbl.create 20) call_graph_sccs
     in
-    failwith "todo"
+    p1_summaries
 end

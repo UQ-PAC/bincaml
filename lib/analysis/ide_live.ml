@@ -13,7 +13,10 @@ module IDELiveCommon = struct
   (* DL and state_update were already defined! Is there a way to avoid
      redefining them? *)
   module DL = struct
-    type t = Lambda | Label of Var.t [@@deriving eq, ord, show]
+    type t = Lambda | Label of Var.t
+    [@@deriving eq, ord, show { with_path = false }]
+
+    let show = function Lambda -> "L" | Label v -> Var.name v
   end
 
   module Value = struct
@@ -67,7 +70,6 @@ end
 
 module IDELive = struct
   include IDELiveCommon
-  open Value
 
   let init_data globals (proc : Program.proc) =
     Procedure.formal_out_params proc |> StringMap.values |> Iter.append globals
@@ -117,10 +119,10 @@ module IDELive = struct
         Iter.singleton (d, IdEdge)
         |> Iter.append
              (Iter.of_list s.formal_in
-             |> Iter.map (fun v -> (Label v, ConstEdge live)))
+             |> Iter.map (fun v -> (Label v, ConstEdge Value.live)))
         |> Iter.append
              (Iter.of_list s.globals
-             |> Iter.map (fun v -> (Label v, ConstEdge live)))
+             |> Iter.map (fun v -> (Label v, ConstEdge Value.live)))
     | _ -> Iter.empty
 
   (* Only propagate from assigned vars and Lambda *)
@@ -134,7 +136,7 @@ module IDELive = struct
         | Instr_Assign _ -> Iter.singleton (d, IdEdge)
         | _ ->
             Stmt.free_vars_iter stmt
-            |> Iter.map (fun v -> (Label v, ConstEdge live))
+            |> Iter.map (fun v -> (Label v, ConstEdge Value.live))
             |> Iter.cons (d, IdEdge))
     | Label v -> (
         match stmt with
@@ -198,5 +200,163 @@ module IDELiveSSI : IDESSIDomain = struct
 
   let transfer s d =
     let open Stmt in
-    match s with _ -> failwith "todo"
+    match d with
+    | Lambda -> (
+        match s with
+        | Instr_Assign _ -> Iter.empty
+        | _ ->
+            Stmt.free_vars_iter s
+            |> Iter.map (fun v -> (Label v, ConstEdge Value.live)))
+    | Label v -> (
+        match s with
+        | Instr_Assign assigns ->
+            Iter.of_list assigns
+            |> Iter.flat_map (fun (v', ex) ->
+                if Var.equal v v' then
+                  Expr.BasilExpr.free_vars_iter ex
+                  |> Iter.map (fun v' -> (Label v', IdEdge))
+                else Iter.empty)
+        (* If a variable is marked live then don't transfer relations too *)
+        | _ when VarSet.mem v @@ Stmt.free_vars VarSet.empty s -> Iter.empty
+        (* The index variables of a memory read are always live regardless of if
+           the lhs was dead, since there are still side effects of reading
+           memory ? *)
+        | Instr_Load l when Var.equal l.lhs v -> Iter.empty
+        | Instr_IntrinCall c
+          when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs ->
+            Iter.empty
+        | Instr_Call c when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs
+          ->
+            Iter.empty
+        (*| Instr_IndirectCall c -> top *)
+        | Instr_IndirectCall c -> Iter.empty (* Unsound *)
+        | Instr_Assert _ | Instr_Assume _ | Instr_Load _ | Instr_Store _
+        | Instr_Call _ | Instr_IntrinCall _ ->
+            Iter.empty)
+
+  let transfer_phi lhs rhs d =
+    Iter.of_list rhs |> Iter.map (fun v -> (Label v, IdEdge))
 end
+
+module IDELiveSSIAnalysis = IDESSI (IDELiveSSI)
+
+let%expect_test "show_me_results" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+prog entry @main;
+proc @main(b:bv64, global_in:bv64, y:bv64)  -> () {  }
+  
+
+[
+   block %inputs [ var global_1:bv64 := global_in:bv64; goto (%main_entry); ];
+   block %main_entry [
+     (var a:bv64=out2) := 
+     call @fun2(f=b:bv64, global_in=global_1:bv64);
+     (var x:bv64=out) := 
+     call @fun1(c=a:bv64, d=b:bv64, global_in=global_1:bv64);
+     (var b_1:bv64 := b:bv64, var x_1:bv64 := x:bv64);
+     assert eq(x_1:bv64, bvadd(b_1:bv64, b_1:bv64));
+     var y_1:bv64 := y:bv64;
+     assert eq(y_1:bv64, 0);
+     nop;
+     return;
+   ]
+];
+proc @fun1(c:bv64, d:bv64, global_in:bv64)  -> (out:bv64) {  }
+  
+
+[
+   block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun1_entry); ];
+   block %fun1_entry [
+     (var e:bv64=out2) := 
+     call @fun2(f=d:bv64, global_in=global_1:bv64);
+     var out:bv64 := bvsub(c:bv64, e:bv64);
+     return;
+   ]
+];
+proc @fun2(f:bv64, global_in:bv64)  -> (out2:bv64) {  }
+  
+
+[
+   block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun2_entry); ];
+   block %fun2_entry [ goto (%fun2_b,%fun2_a); ];
+   block %fun2_a [
+     var f_2:bv64 := f:bv64;
+     guard bvsle(f_2:bv64, 0);
+     (var g_2:bv64=out) := 
+     call @fun1(c=f_2:bv64, d=1, global_in=global_1:bv64);
+     goto (%fun2_return);
+   ];
+   block %fun2_b [
+     var f_1:bv64 := f:bv64;
+     guard boolnot(bvsle(f_1:bv64, 0));
+     var g_1:bv64 := global_1:bv64;
+     goto (%fun2_return);
+   ];
+   block %fun2_return (
+     var f_3:bv64 := phi(%fun2_b -> f_1:bv64, %fun2_a -> f_2:bv64),
+     var g_3:bv64 := phi(%fun2_b -> g_1:bv64, %fun2_a -> g_2:bv64)
+   ) [ var out2:bv64 := bvadd(f_3:bv64, g_3:bv64); return; ]
+];
+    |}
+  in
+  let program = lst.prog in
+  let results = IDELiveSSIAnalysis.solve program in
+  Hashtbl.iter
+    (fun pid summary ->
+      print_endline @@ ID.name pid;
+      print_endline @@ IDELiveSSIAnalysis.show_summary summary)
+    results;
+  [%expect
+    {|
+    LL("@fun1", 1)("@fun2", 2)
+    L
+    LL("@fun2", 2)("@fun1", 1)
+    L
+    f("@fun2", 2)
+    d("@fun1", 1)
+    Lout("@fun2", 2)("@fun1", 1)
+    out
+    global_in("@fun2", 2)
+    global_in("@fun1", 1)
+    c("@fun1", 1)
+    outout2("@fun1", 1)("@fun2", 2)
+    out2
+    f("@fun2", 2)
+    d("@fun1", 1)
+    out2out("@fun2", 2)("@fun1", 1)
+    c
+    d
+    out
+    e
+    global_in("@fun2", 2)
+    global_in("@fun1", 1)
+    LL("@main", 0)("@fun2", 2)
+    L
+    global_in
+    f
+    global_1
+    f_2
+    g_2
+    f_1
+    g_1
+    LL("@main", 0)("@fun1", 1)
+    L
+    global_in
+    d
+    global_1
+    Lout("@main", 0)("@fun1", 1)
+    global_in
+    c
+    d
+    out
+    global_1
+    e
+    @fun2
+    (L,L->IdEdge), (L,global_in->IdEdge), (L,f->ConstEdge true), (L,global_1->IdEdge), (L,f_2->ConstEdge true), (L,g_2->IdEdge), (L,f_1->ConstEdge true), (L,g_1->IdEdge), (out2,global_in->IdEdge), (out2,f->IdEdge), (out2,out2->IdEdge), (out2,global_1->IdEdge), (out2,f_2->IdEdge), (out2,g_2->IdEdge), (out2,f_1->IdEdge), (out2,g_1->IdEdge), (out2,f_3->IdEdge), (out2,g_3->IdEdge)
+    @main
+    (L,L->IdEdge), (L,b->ConstEdge true), (L,global_in->ConstEdge true), (L,y->ConstEdge true), (L,global_1->ConstEdge true), (L,x->ConstEdge true), (L,b_1->ConstEdge true), (L,x_1->ConstEdge true), (L,y_1->ConstEdge true)
+    @fun1
+    (L,L->IdEdge), (L,global_in->IdEdge), (L,d->IdEdge), (L,global_1->IdEdge), (out,global_in->IdEdge), (out,c->IdEdge), (out,d->IdEdge), (out,out->IdEdge), (out,global_1->IdEdge), (out,e->IdEdge)
+    |}]
