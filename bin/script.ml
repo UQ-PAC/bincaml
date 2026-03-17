@@ -129,6 +129,11 @@ let of_cmd st (e : Containers.Sexp.t) =
           let ofile = List.hd @@ assert_atoms 1 args in
           CCIO.with_out ofile (fun c -> Program.pretty_to_chan c (get_prog st));
           st
+      | "dump-boogie" ->
+          let ofile = List.hd @@ assert_atoms 1 args in
+          CCIO.with_out ofile (fun c ->
+              Backends.Boogie.pretty_to_chan c (get_prog st));
+          st
       | "interp-out" ->
           let ofile = List.hd @@ assert_atoms 1 args in
           let prog = get_prog st in

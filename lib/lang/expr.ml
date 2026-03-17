@@ -312,6 +312,9 @@ module BasilExpr = struct
   (** create abstract type from fixed type *)
   let unfix i = match i with E i -> i
 
+  let unfix2 e = AbstractExpr.map unfix (unfix e)
+  let unfix3 e = AbstractExpr.map unfix2 (unfix e)
+
   open struct
     module E = struct
       include AllOps
@@ -458,6 +461,7 @@ module BasilExpr = struct
   (** {1 Additional traversals}*)
 
   let fold_with_type (alg : 'e abstract_expr -> 'a) = zygo_l ~cata type_alg alg
+  let fold_with_type_r (alg : 'e abstract_expr -> 'a) = zygo ~cata type_alg alg
 
   type rwinfo = {
     from : t;

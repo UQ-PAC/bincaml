@@ -303,7 +303,7 @@ module AllOps = struct
     | PointerOps.binary ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type intrin = [ BVOps.intrin | LogicalOps.intrin | Spec.intrin ]
+  type intrin = [ BVOps.intrin | LogicalOps.intrin | Spec.intrin | Maps.intrin ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type op_fun_type =
@@ -405,6 +405,7 @@ module AllOps = struct
               0 args
           in
           return (Bitvector w)
+    | `MapUpdate -> return @@ List.hd args
 
   (** ops returning booleans *)
 
@@ -470,6 +471,7 @@ module AllOps = struct
     | `Load (`Big, sz) -> Printf.sprintf "load_be_%d" sz
     | `Load (`Little, sz) -> Printf.sprintf "load_le_%d" sz
     | `MapAccess -> "get"
+    | `MapUpdate -> "update"
     | `IfThen -> "case"
     | `Cases -> "match"
 

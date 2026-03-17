@@ -601,7 +601,9 @@ module BasilASTLoader = struct
                  })
         in
         let in_param, out_param = Hashtbl.find p_st.params_order n in
-        let lhs = trans_call_lhs p_st (List.map fst out_param) calllvars in
+        let p_st, lhs =
+          trans_call_lhs p_st (List.map fst out_param) calllvars
+        in
         let args = trans_call_rhs p_st in_param exprs in
         (p_st, `Call (Instr_Call { lhs; procid; args }))
     | Stmt_IndirectCall expr ->
@@ -629,28 +631,34 @@ module BasilASTLoader = struct
         |> StringMap.of_list
 
   and trans_call_lhs prog (formal_out : string list) (x : lVars) :
-      Var.t StringMap.t =
-    match x with
-    | LVars_Empty -> StringMap.empty
-    | LVars_LocalList (_, lvars, _) ->
-        List.combine formal_out (unpack_local_lvars prog lvars)
-        |> StringMap.of_list
-    | LVars_List (_, lvars, _) ->
-        let f (prog, lvars) v =
-          let prog, lvar = trans_lvar prog v in
-          (prog, lvar :: lvars)
-        in
-        let prog, lvars = List.fold_left f (prog, []) lvars in
-        List.combine formal_out (List.rev lvars) |> StringMap.of_list
-    | NamedLVars_List (_, lvars, _) ->
-        let f (p_st, ls) v =
-          match v with
-          | NamedCallReturn1 (lVar, ident) ->
-              let p_st, v = trans_lvar prog lVar in
-              (p_st, (unsafe_unsigil (`Local ident), v) :: ls)
-        in
-        let p_st, lvars = lvars |> List.fold_left f (prog, []) in
-        StringMap.of_list lvars
+      load_st * Var.t StringMap.t =
+    let vars =
+      match x with
+      | LVars_Empty -> StringMap.empty
+      | LVars_LocalList (_, lvars, _) ->
+          List.combine formal_out (unpack_local_lvars prog lvars)
+          |> StringMap.of_list
+      | LVars_List (_, lvars, _) ->
+          let f (prog, lvars) v =
+            let prog, lvar = trans_lvar prog v in
+            (prog, lvar :: lvars)
+          in
+          let prog, lvars = List.fold_left f (prog, []) lvars in
+          List.combine formal_out (List.rev lvars) |> StringMap.of_list
+      | NamedLVars_List (_, lvars, _) ->
+          let f (p_st, ls) v =
+            match v with
+            | NamedCallReturn1 (lVar, ident) ->
+                let p_st, v = trans_lvar prog lVar in
+                (p_st, (unsafe_unsigil (`Local ident), v) :: ls)
+          in
+          let p_st, lvars = lvars |> List.fold_left f (prog, []) in
+          StringMap.of_list lvars
+    in
+    let prog =
+      StringMap.values vars |> Iter.fold (fun a b -> assign_var a b |> fst) prog
+    in
+    (prog, vars)
 
   and unpack_local_lvars ?(bound = StringMap.empty) p_st lvs : Var.t list =
     lvs
@@ -675,7 +683,7 @@ module BasilASTLoader = struct
     | Jump_Return (_, exprs, _) -> `Return (List.map (trans_expr p_st) exprs)
     | Jump_ProcReturn -> `ProcReturn
 
-  and assign_var prog v =
+  and assign_var (prog : load_st) v =
     let p = Option.get_exn_or "no active proc" prog.curr_proc in
     match Var.scope v with
     | Var.Local -> (prog, Procedure.decl_local p v) (* decl is side-effecting *)
