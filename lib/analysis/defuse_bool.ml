@@ -138,7 +138,11 @@ module IsZeroValueAbstraction = struct
         else if List.for_all (equal Bot) args then Bot
         else Top
     | #Lang.Ops.Spec.intrin -> Top
-    | `MapUpdate -> ( match args with [ Zero; _; Zero ] -> Zero | _ -> Top)
+    | `MapUpdate -> (
+        match args with
+        | [ Zero; _; Zero ] -> Zero
+        | [ Zero; _; NonZero ] -> NonZero
+        | _ -> Top)
 end
 
 module IsZeroValueAbstractionUntyped = struct
