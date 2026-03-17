@@ -101,13 +101,12 @@ module BasilASTLoader = struct
   and transStr (x : str) : string =
     match x with Str string -> stripquote string
 
-  and trans_program ?(name = "<module>") (x : moduleT) : load_st =
+  and trans_program ?(prog : Lang.Program.t option) ?(name = "<module>") (x : moduleT)
+      : load_st =
     let prog =
-      {
-        prog = Program.empty ~name ();
-        params_order = Hashtbl.create 30;
-        curr_proc = None;
-      }
+      match prog with
+      | Some p -> { (load_st_empty ~name ()) with prog=p }
+      | None -> load_st_empty ~name ()
     in
     let prog =
       match x with
@@ -1294,11 +1293,11 @@ let parse_single_block s : Program.bloc =
   let input = Pp_loc.Input.string s in
   load_single_block ~input lexbuf
 
-let ast_of_concrete_ast ~name m =
+let ast_of_concrete_ast ?(prog : Lang.Program.t option) ~name m =
   Trace_core.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->
-  BasilASTLoader.trans_program ~name m
+  BasilASTLoader.trans_program ?prog ~name m
 
-let ast_of_string ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
+let ast_of_string ?(prog : Lang.Program.t option) ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
   let name =
     let open Option.Infix in
     let* line = __LINE__ >|= Int.to_string in
@@ -1309,23 +1308,23 @@ let ast_of_string ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
   let name = Option.get_or ~default:"<string>" name in
   let input = Pp_loc.Input.string string in
   let conc = concrete_prog_ast_of_string ~input ~filename:name string in
-  try ast_of_concrete_ast ~name conc
+  try ast_of_concrete_ast ?prog ~name conc
   with LoadError { token_char_offset_range; msg } ->
     raise (LoadError { input = Some input; token_char_offset_range; msg })
 
-let ast_of_channel ?input fname c =
+let ast_of_channel ?(prog : Lang.Program.t option) ?input fname c =
   let m =
     Trace_core.with_span ~__FILE__ ~__LINE__ "load-concrete-ast" @@ fun f ->
     let m = concrete_prog_ast_of_channel ?input ~filename:fname c in
     m
   in
-  try ast_of_concrete_ast ~name:fname m
+  try ast_of_concrete_ast ?prog ~name:fname m
   with LoadError { token_char_offset_range; msg } ->
     raise (LoadError { input; token_char_offset_range; msg })
 
-let ast_of_fname fname =
+let ast_of_fname ?(prog : Lang.Program.t option) fname =
   IO.with_in fname (fun c ->
-      ast_of_channel ~input:(Pp_loc.Input.file fname) fname c)
+      ast_of_channel ?prog ~input:(Pp_loc.Input.file fname) fname c)
 
 let%expect_test "missing block" =
   let run () =

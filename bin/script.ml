@@ -54,7 +54,9 @@ let of_cmd st (e : Containers.Sexp.t) =
       | "load-il" -> (
           try
             let fname = List.hd (assert_atoms 1 args) in
-            let p = Loader.Loadir.ast_of_fname fname in
+            let p =
+              Loader.Loadir.ast_of_fname ?prog:st.prog fname
+            in
             { st with prog = Some p.prog }
           with
           | (Loader.Loadir.ILBParseError _ | Loader.Loadir.LoadError _) as e ->
