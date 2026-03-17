@@ -162,6 +162,13 @@ module PassManager = struct
       doc = "Fail if the IR program is not type correct";
     }
 
+  let memory_encoding =
+    {
+      name = "memory-encoding";
+      apply = Prog Transforms.Memory_encoding.transform;
+      doc = "Performs memory encoding";
+    }
+
   let passes =
     [
       cleanup_cfg;
@@ -177,6 +184,7 @@ module PassManager = struct
       sssa;
       full_ssa;
       type_check;
+      memory_encoding;
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;

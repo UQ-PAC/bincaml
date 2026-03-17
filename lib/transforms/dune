@@ -10,7 +10,8 @@
   ide
   may_read_uninit
   type_check
-  boogie_prepass)
+  boogie_prepass
+  memory_encoding)
  (libraries
   bincaml.analysis
   patricia-tree
