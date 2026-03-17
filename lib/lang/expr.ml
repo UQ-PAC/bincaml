@@ -337,40 +337,83 @@ module BasilExpr = struct
 
   (** {1 Printing}*)
 
-  type 'a pretty_d = {
-    ok : Containers_pp.t option;
-    inner : 'a abstract_expr option;
-  }
+  module FoldN = struct
+    (** module defining set of algebras for folding n layers of the expression
+        at a time, exposing more context (where n is 1-5)
 
-  let map_inner f (e : 'a pretty_d) =
-    { e with inner = Option.map (AbstractExpr.map f) e.inner }
+        This is achieved by the record which tracks both the value at each
+        level, and the values for all subexpressions of that level.
 
-  let flatten1 (e : Containers_pp.t pretty_d pretty_d) :
-      Containers_pp.t pretty_d =
-    let exception Failed in
-    try
-      let ne =
-        map_inner (function { ok = Some e } -> e | _ -> raise Failed) e
-      in
-      { ok = e.ok; inner = ne.inner }
-    with Failed -> { ok = e.ok; inner = None }
+        This is a pain to pattern match on, and quite expensive, so unclear if a
+        great idea.
 
-  let get_ok e = e.ok |> Option.get_exn_or "failed"
-  let is_def e = Option.is_some e.ok
-  let mk_undef e = { ok = None; inner = e }
+        . *)
 
-  let pretty_alg pattrib
-      (expr : Containers_pp.t pretty_d pretty_d pretty_d pretty_d abstract_expr)
-      : Containers_pp.t pretty_d pretty_d pretty_d pretty_d =
+    type ('a, 'e) t = { ok : 'a option; inner : 'e abstract_expr option }
+    type 'a t1 = ('a, 'a) t
+    type 'a t2 = ('a, 'a t1) t
+    type 'a t3 = ('a, 'a t2) t
+    type 'a t4 = ('a, 'a t3) t
+    type 'a t5 = ('a, 'a t4) t
+
+    let map_inner f (e : ('a, 'b) t) =
+      { e with inner = Option.map (AbstractExpr.map f) e.inner }
+
+    let flatten1 (e : 'a t2) : 'a t1 =
+      let exception Failed in
+      try
+        let ne =
+          map_inner (function { ok = Some e } -> e | _ -> raise Failed) e
+        in
+        { ok = e.ok; inner = ne.inner }
+      with Failed -> { ok = e.ok; inner = None }
+
+    let get_ok e = e.ok |> Option.get_exn_or "failed"
+    let is_def e = Option.is_some e.ok
+    let mk_undef e = { ok = None; inner = e }
+
+    let drop_1 e : Containers_pp.t t1 =
+      { ok = None; inner = Some (AbstractExpr.map get_ok e) }
+
+    let lift_1 n e : Containers_pp.t t1 =
+      { ok = None; inner = Some (AbstractExpr.map get_ok e) }
+
+    let lift_2 n e : Containers_pp.t t2 =
+      { ok = Some n; inner = Some (AbstractExpr.map flatten1 e) }
+
+    let drop_2 e : Containers_pp.t t2 =
+      { ok = None; inner = Some (AbstractExpr.map flatten1 e) }
+
+    let lift_3 n e : Containers_pp.t t3 =
+      { ok = Some n; inner = Some (AbstractExpr.map (map_inner flatten1) e) }
+
+    let drop_3 e : Containers_pp.t t3 =
+      { ok = None; inner = Some (AbstractExpr.map (map_inner flatten1) e) }
+
+    let drop_4 e : Containers_pp.t t4 =
+      {
+        ok = None;
+        inner = Some (AbstractExpr.map (map_inner (map_inner flatten1)) e);
+      }
+
+    let lift_4 n e : Containers_pp.t t4 =
+      {
+        ok = Some n;
+        inner = Some (AbstractExpr.map (map_inner (map_inner flatten1)) e);
+      }
+  end
+
+  let pretty_alg pattrib (expr : Containers_pp.t FoldN.t4 abstract_expr) :
+      Containers_pp.t FoldN.t4 =
     let open AbstractExpr in
     let open Containers_pp in
     let open Containers_pp.Infix in
     (* printer for a single level *)
-    let pretty_alg_prim (e : Containers_pp.t pretty_d pretty_d abstract_expr) :
-        Containers_pp.t pretty_d pretty_d =
+    let pretty_alg_prim (e : Containers_pp.t FoldN.t2 abstract_expr) :
+        Containers_pp.t FoldN.t2 =
       let a = AbstractExpr.get_attrib e |> pattrib in
-      let pass () = { ok = None; inner = Some (AbstractExpr.map flatten1 e) } in
-      let ok n = { ok = Some n; inner = Some (AbstractExpr.map flatten1 e) } in
+      let pass () = FoldN.drop_2 e in
+      let ok n = FoldN.lift_2 n e in
       match e with
       | Binding _ | UnaryExpr { op = `Lambda | `Let | `Forall | `Exists } ->
           pass ()
@@ -436,38 +479,31 @@ module BasilExpr = struct
                  ^ a
                  ^ bracket "(" (fill (text "," ^ newline) [ e; e2 ]) ")";
                ])
-      | ApplyIntrin { op; args = es } when List.for_all is_def es ->
+      | ApplyIntrin { op; args = es } when List.for_all FoldN.is_def es ->
           ok
             (fill nil
                [
                  text (AllOps.to_string op)
                  ^ a
                  ^ bracket "("
-                     (fill (text "," ^ newline) (List.map get_ok es))
+                     (fill (text "," ^ newline) (List.map FoldN.get_ok es))
                      ")";
                ])
       | ApplyFun { func = { ok = Some n }; args = es }
-        when List.for_all is_def es ->
+        when List.for_all FoldN.is_def es ->
           ok
             (fill nil
                [
                  bracket "(" n ")" ^ a
                  ^ bracket "("
-                     (nest 2 (fill (text "," ^ newline) (List.map get_ok es)))
+                     (nest 2
+                        (fill (text "," ^ newline) (List.map FoldN.get_ok es)))
                      ")";
                ])
       | _ -> pass ()
     in
-    let pass () : Containers_pp.t pretty_d pretty_d pretty_d pretty_d =
-      {
-        ok = None;
-        inner = Some (AbstractExpr.map (map_inner (map_inner flatten1)) expr);
-      }
-    in
-    let ok n : Containers_pp.t pretty_d pretty_d pretty_d pretty_d =
-      let e = pass () in
-      { e with ok = Some n }
-    in
+    let pass () : Containers_pp.t FoldN.t4 = FoldN.drop_4 expr in
+    let ok n = FoldN.lift_4 n expr in
 
     let a = AbstractExpr.get_attrib expr |> pattrib in
     match expr with
@@ -545,7 +581,7 @@ module BasilExpr = struct
           fill (text " ")
             (match bound_exprs with
             | Some e ->
-                let e : Containers_pp.t list = List.map get_ok e in
+                let e : Containers_pp.t list = List.map FoldN.get_ok e in
                 List.combine bound_vars e
                 |> List.map (fun (v, e) -> Var.pretty v ^ text " = " ^ e)
             | None ->
@@ -559,13 +595,13 @@ module BasilExpr = struct
         (*let expr = AbstractExpr.map (get_ok %> fun e -> Ok e) expr in*)
         let e =
           pretty_alg_prim
-          @@ AbstractExpr.map (map_inner (map_inner get_ok)) expr
+          @@ FoldN.(AbstractExpr.map (map_inner (map_inner get_ok))) expr
         in
-        ok (get_ok e)
+        ok (FoldN.get_ok e)
     | Binding { bound_exprs; bound_vars; in_body; attrib } -> pass ()
 
   let pretty_drop_attrib s =
-    cata (pretty_alg (fun x -> Containers_pp.text "")) s |> get_ok
+    cata (pretty_alg (fun x -> Containers_pp.text "")) s |> FoldN.get_ok
 
   let pretty s =
     let open Containers_pp in
@@ -580,7 +616,7 @@ module BasilExpr = struct
       | Some e -> text " " ^ Attrib.attrib_pretty pretty_drop_attrib e
       | None -> text ""
     in
-    cata (pretty_alg pretty_attr) s |> get_ok
+    cata (pretty_alg pretty_attr) s |> FoldN.get_ok
 
   let to_string s = Containers_pp.Pretty.to_string ~width:80 (pretty s)
   let pp fmt s = Format.pp_print_string fmt @@ to_string s
