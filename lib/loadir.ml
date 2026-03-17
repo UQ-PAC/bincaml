@@ -141,6 +141,8 @@ module BasilASTLoader = struct
                   ( unsafe_unsigil (`Local variant),
                     List.map trans_recordfield fields ))) )
 
+  (** First pass; process like forward declaration: only add the information
+      needed to do non-local reslolution of names such as for procedure calls *)
   and trans_declaration prog (x : decl) : load_st =
     match x with
     | Decl_Type sort ->
@@ -302,6 +304,7 @@ module BasilASTLoader = struct
     in
     map_prog (fun prog -> Program.add_decl prog (Var.name binding) fundef) prog
 
+  (** Second pass: resolve the full definition of all declarations. *)
   and trans_definition prog (x : decl) : load_st =
     match x with
     | Decl_UninterpFun (glident, attrDefList, rettype) ->
@@ -348,11 +351,15 @@ module BasilASTLoader = struct
           _,
           attrs,
           spec_list,
-          ProcDef_Some (bl, blocks, el) ) ->
+          proc_def ) ->
         let proc_id = prog.prog.proc_names.decl_or_get id in
         let p = ID.Map.find proc_id prog.prog.procs in
         let prog = { prog with curr_proc = Some p } in
-        let prog, blocks = sequence_st prog trans_block blocks in
+        let prog, blocks =
+          match proc_def with
+          | ProcDef_Some (bl, blocks, el) -> sequence_st prog trans_block blocks
+          | ProcDef_Empty -> (prog, [])
+        in
         let p =
           if List.is_empty blocks then p else Procedure.add_empty_impl p
         in
@@ -426,7 +433,9 @@ module BasilASTLoader = struct
         map_prog
           (fun prog -> { prog with procs = ID.Map.add proc_id p prog.procs })
           prog
-    | _ -> prog
+    | Decl_Mem _ | Decl_Var _ | Decl_RecType _ | Decl_Type _ ->
+        (* declarations only: handled by first pass *)
+        prog
 
   and transMapType (x : mapType) : Types.t =
     match x with MapType1 (t0, t1) -> Map (trans_type t0, trans_type t1)
@@ -1549,3 +1558,31 @@ let%test_unit "parses parenthesised lambda param" =
   in
   let _ = ast_of_string ~__LINE__ ~__FILE__ ~__FUNCTION__ s in
   ()
+
+let%expect_test "proc declaration without body" =
+  let p =
+    ast_of_string
+      {|
+var $R0: bv64;
+var $R1: bv64;
+
+proc @test1() -> ()
+	{ .name = "test1" }
+	modifies $R0
+	ensures eq($R1, 0x0:bv64)
+	requires eq($R1, 0x0:bv64);
+
+    |}
+  in
+  Program.pretty_to_chan stdout p.prog;
+  ();
+  [%expect
+    {|
+    var $R0:bv64;
+    var $R1:bv64;
+    proc @test1()  -> () { .name = "test1" }
+      modifies $R0:bv64
+      requires eq($R1:bv64, 0x0:bv64)
+      ensures eq($R1:bv64, 0x0:bv64)
+    ;
+    |}]
