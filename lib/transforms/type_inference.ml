@@ -38,7 +38,7 @@ module VarId : sig
   val compare : t -> t -> int
   val equal : t -> t -> bool
   val show : t -> string
-  val var_proc_to_uid : Var.t -> Program.proc -> t
+  val var_proc_to_uid : Var.t -> Program.proc option -> t
   val var_procid_to_uid : Var.t -> ID.t -> t
   val make_id : string -> t
 end = struct
@@ -52,8 +52,10 @@ end = struct
     if Var.is_global var then Var.name var
     else ID.name procId ^ "_" ^ Var.name var
 
-  let var_proc_to_uid (var : Var.t) (proc : Program.proc) : t =
-    var_procid_to_uid var (Procedure.id proc)
+  let var_proc_to_uid (var : Var.t) (proc : Program.proc option) : t =
+    match proc with
+    | None -> Var.name var
+    | Some proc -> var_procid_to_uid var (Procedure.id proc)
 
   let make_id hint = hint
 end
@@ -191,10 +193,9 @@ module InferredType = struct
                  ))
                fields)
     | Field { ty } -> inferred_to_real ty
-    | Recursive _ | Union _ | Sect _ ->
-        failwith "These types should have been removed prior to transform!"
-    | Function _ ->
-        failwith "This type probably should not be converted to a real type"
+    | Recursive _ -> Top (* TODO *)
+    | Union (a, b) | Sect (a, b) -> inferred_to_real a (* TODO *)
+    | Function _ -> Top
 
   let rec type_to_inferred (typ : Types.t) : t =
     match typ with
@@ -427,7 +428,7 @@ module TypeAutomata = struct
               ins0 ins1
           in
           Function (name0, ins, outs0)
-    | _ -> failwith "Cannot join non-like edges"
+    | a, b -> Sect (a, b)
 
   (*
     If the edges are the same you can just join all the states
@@ -864,6 +865,54 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
 
         Procedure is needed for unique IDs for local variables
 *)
+let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
+    (type1 : InferredType.t) : ConstraintState.t =
+  match (type0, type1) with
+  | Pointer (type0_a, type0_b), Pointer (type1_a, type1_b) ->
+      constrain (constrain st type1_a type0_a) type0_b type1_b
+  | _, Pointer (type1_a, type1_b) ->
+      constrain (constrain st type0 type1_a) type0 type1_b
+  | TypeVar a, TypeVar b -> (
+      if
+        VarId.equal a b || ConstraintState.check_bounded st a type1 Polarity.Neg
+      then st
+      else
+        let st = ConstraintState.add_ub st a type1 in
+        let bounds = VarIdMap.get a st in
+        match bounds with
+        | Some { lb } ->
+            TySet.to_iter lb
+            |> Iter.fold (fun st bound -> constrain st bound type1) st
+        | None -> st)
+  | Field { ty }, TypeVar b -> (
+      match ty with
+      | TypeVar a -> (
+          let st = ConstraintState.add_ub st a type1 in
+          let bounds = VarIdMap.get a st in
+          match bounds with
+          | Some { lb } ->
+              TySet.to_iter lb
+              |> Iter.fold (fun st bound -> constrain st bound type1) st
+          | None -> st)
+      | _ -> st)
+  | _, TypeVar a -> (
+      if ConstraintState.check_bounded st a type0 Polarity.Pos then st
+      else
+        (* The right hand side is not a type variable *)
+        let st = ConstraintState.add_lb st a type0 in
+        let bounds = VarIdMap.get a st in
+        match bounds with
+        | Some { ub } ->
+            TySet.to_iter ub
+            |> Iter.fold (fun st bound -> constrain st type0 bound) st
+        | None -> st)
+  | BinCamlType a, BinCamlType b when BinCamlType.equal a b -> st
+  | BinCamlType a, BinCamlType b ->
+      failwith
+        (Printf.sprintf "Attempted to constrain to disjoint bincamltypes: %s %s"
+           (BinCamlType.show a) (BinCamlType.show b))
+  | _ -> failwith "Illegal types at this stage"
+
 let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
     ConstraintState.t =
   let open AbstractExpr in
@@ -1063,56 +1112,6 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
     | ApplyFun _ -> (st, Top)
     | Binding _ -> (st, Top)
   in
-  let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
-      (type1 : InferredType.t) : ConstraintState.t =
-    match (type0, type1) with
-    | Pointer (type0_a, type0_b), Pointer (type1_a, type1_b) ->
-        constrain (constrain st type1_a type0_a) type0_b type1_b
-    | _, Pointer (type1_a, type1_b) ->
-        constrain (constrain st type0 type1_a) type0 type1_b
-    | TypeVar a, TypeVar b -> (
-        if
-          VarId.equal a b
-          || ConstraintState.check_bounded st a type1 Polarity.Neg
-        then st
-        else
-          let st = ConstraintState.add_ub st a type1 in
-          let bounds = VarIdMap.get a st in
-          match bounds with
-          | Some { lb } ->
-              TySet.to_iter lb
-              |> Iter.fold (fun st bound -> constrain st bound type1) st
-          | None -> st)
-    | Field { ty }, TypeVar b -> (
-        match ty with
-        | TypeVar a -> (
-            let st = ConstraintState.add_ub st a type1 in
-            let bounds = VarIdMap.get a st in
-            match bounds with
-            | Some { lb } ->
-                TySet.to_iter lb
-                |> Iter.fold (fun st bound -> constrain st bound type1) st
-            | None -> st)
-        | _ -> st)
-    | _, TypeVar a -> (
-        if ConstraintState.check_bounded st a type0 Polarity.Pos then st
-        else
-          (* The right hand side is not a type variable *)
-          let st = ConstraintState.add_lb st a type0 in
-          let bounds = VarIdMap.get a st in
-          match bounds with
-          | Some { ub } ->
-              TySet.to_iter ub
-              |> Iter.fold (fun st bound -> constrain st type0 bound) st
-          | None -> st)
-    | BinCamlType a, BinCamlType b when BinCamlType.equal a b -> st
-    | BinCamlType a, BinCamlType b ->
-        failwith
-          (Printf.sprintf
-             "Attempted to constrain to disjoint bincamltypes: %s %s"
-             (BinCamlType.show a) (BinCamlType.show b))
-    | _ -> failwith "Illegal types at this stage"
-  in
   match stmt with
   | Stmt.Instr_Assert { body } | Stmt.Instr_Assume { body } -> (
       let st, constrain_expr = constrain_expr st (BasilExpr.unfix body) in
@@ -1256,9 +1255,21 @@ let analyse (prog : Program.t) : (Types.t * Types.t) VarIdMap.t =
            let sva = Analysis.Sva.DFGAnalysis.flow_insensitive proc in
            Procedure.iter_blocks_topo_fwd proc
            |> Iter.fold
-                (fun acc (_, b) ->
+                (fun acc (_, (b : Program.bloc)) ->
+                  let acc =
+                    List.fold_left
+                      (fun acc ({ lhs; rhs } : Var.t Block.phi) ->
+                        let lhs = VarId.var_proc_to_uid lhs (Some proc) in
+                        List.fold_left
+                          (fun acc (_, rhs) ->
+                            let rhs = VarId.var_proc_to_uid rhs (Some proc) in
+                            constrain acc (TypeVar rhs) (TypeVar lhs))
+                          acc rhs)
+                      acc
+                    @@ b.phis
+                  in
                   Block.stmts_iter b
-                  |> Iter.foldi (gen_constraint_set prog proc sva) acc)
+                  |> Iter.foldi (gen_constraint_set prog (Some proc) sva) acc)
                 acc)
          VarIdMap.empty
   in
@@ -1308,27 +1319,97 @@ let analyse (prog : Program.t) : (Types.t * Types.t) VarIdMap.t =
   (* types; *)
   types
 
-let map_var (typ : Types.t) (var : Var.t) : Var.t =
-  Var.create (Var.name var) ~pure:(Var.pure var) ~scope:(Var.scope var) typ
+let get_type results proc var : Types.t * Types.t =
+  match VarIdMap.find_opt (VarId.var_proc_to_uid var proc) results with
+  | Some a -> a
+  | None -> failwith "Global variable was not in the type constraint list"
 
-let map_stmt results stmt = failwith "Unimplemented"
+(* TODO: This might make more sense to be the meet of the lower and upper bounds *)
+let get_lower_type results proc : Var.t -> Types.t = fst % get_type results proc
+let get_upper_type results proc : Var.t -> Types.t = snd % get_type results proc
 
-let map_decl results (decl : Program.declaration) : Program.declaration =
+let map_var results proc (var : Var.t) : Var.t =
+  Var.create (Var.name var) ~pure:(Var.pure var) ~scope:(Var.scope var)
+  @@ get_lower_type results proc var
+
+let map_expr results proc (abstract_expr : 'e BasilExpr.abstract_expr) :
+    BasilExpr.rewrite =
+  match abstract_expr with
+  | AbstractExpr.RVar { id; attrib } ->
+      BasilExpr.replace [%here]
+        (BasilExpr.rvar ?attrib @@ map_var results proc id)
+  (* TODO: Is this the best way to do no changes *)
+  | _ -> BasilExpr.replace [%here] @@ BasilExpr.fix abstract_expr
+
+let map_stmt results proc (stmt : Program.stmt) : Program.stmt =
+  match stmt with
+  | Stmt.Instr_Assign assignments ->
+      Stmt.Instr_Assign
+        (List.map
+           (fun (lvar, expr) ->
+             ( map_var results proc lvar,
+               Lang.Expr.BasilExpr.rewrite ~rw_fun:(map_expr results proc) expr
+             ))
+           assignments)
+  | Stmt.Instr_Assume { body; branch } ->
+      Stmt.Instr_Assume
+        {
+          branch;
+          body =
+            Lang.Expr.BasilExpr.rewrite ~rw_fun:(map_expr results proc) body;
+        }
+  | Stmt.Instr_Assert { body } ->
+      Stmt.Instr_Assert
+        {
+          body =
+            Lang.Expr.BasilExpr.rewrite ~rw_fun:(map_expr results proc) body;
+        }
+  | Stmt.Instr_Load _ -> stmt
+  | Stmt.Instr_Store _ -> stmt
+  | Stmt.Instr_IntrinCall _ -> stmt
+  | Stmt.Instr_Call _ -> stmt
+  | Stmt.Instr_IndirectCall _ -> stmt
+
+let map_decl results proc (decl : Program.declaration) : Program.declaration =
   match decl with
   (* Leave these alone, could have a pass that removes dead ones *)
   | Program.Type _ -> decl
+  (* TODO: confused *)
   | Program.Function { definition; _ } -> decl
   | Program.Variable { binding; attrib } ->
-      let typ =
-        match VarIdMap.find_opt (VarId.make_id (Var.name binding)) results with
-        | Some a -> a
-        | None -> failwith "Global variable was not in the type constraint list"
-      in
-      Variable { binding = map_var typ binding; attrib }
+      Variable { binding = map_var results proc binding; attrib }
+
+let declare_typ (typ : Types.t) : (string * Types.t) option * Types.t =
+  match typ with
+  | Record _ ->
+      let name = "record_" ^ Int.to_string @@ Hashtbl.hash typ in
+      (Some (name, typ), Variable name)
+  | Pointer _ ->
+      let name = "pointer_" ^ Int.to_string @@ Hashtbl.hash typ in
+      (Some (name, typ), Variable name)
+  | _ -> (None, typ)
 
 let transform (prog : Program.t) (results : (Types.t * Types.t) VarIdMap.t) :
     Program.t =
-  let mapped_globals = StringMap.map (map_decl results) prog.globals in
+  let decls, results =
+    List.fold_left_map
+      (fun acc (id, (lt, ut)) ->
+        let name_l, lt = declare_typ lt in
+        let name_u, ut = declare_typ ut in
+        (name_l :: name_u :: acc, (id, (lt, ut))))
+      [] (VarIdMap.to_list results)
+  in
+  let results = VarIdMap.of_list results in
+  let decls =
+    List.filter_map
+      (fun a ->
+        match a with
+        | Some (binding, typ) ->
+            Some (binding, (Type { typ; binding } : Program.declaration))
+        | None -> None)
+      decls
+  in
+  let mapped_globals = StringMap.map (map_decl results None) prog.globals in
   {
     prog with
     procs =
@@ -1337,8 +1418,18 @@ let transform (prog : Program.t) (results : (Types.t * Types.t) VarIdMap.t) :
           Procedure.map_blocks_nondet
             (fun (id, block) ->
               Block.map (* TODO: Needs to change the vars in phi nods*)
-                ~phi:Fun.id
-                (fun stmt -> map_stmt results stmt)
+                ~phi:
+                  (List.map (fun ({ lhs; rhs } : Var.t Block.phi) ->
+                       ({
+                          lhs = map_var results (Some proc) lhs;
+                          rhs =
+                            List.map
+                              (fun (id, var) ->
+                                (id, map_var results (Some proc) var))
+                              rhs;
+                        }
+                         : Var.t Block.phi)))
+                (fun stmt -> map_stmt results (Some proc) stmt)
                 block)
             proc)
         prog.procs;
@@ -1347,7 +1438,7 @@ let transform (prog : Program.t) (results : (Types.t * Types.t) VarIdMap.t) :
       Change function formal ins/outs
       Add type decls
     *)
-    globals = mapped_globals;
+    globals = StringMap.add_list mapped_globals decls;
   }
 
 let infer_types (prog : Program.t) = analyse prog |> transform prog

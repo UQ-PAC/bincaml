@@ -698,16 +698,9 @@ module BasilExpr = struct
     let rw_alg e =
       let orig s = fix s in
       match rw_fun e with
-      | SomeInfo { v; __LINE__; __FILE__ }
-        when Types.equal (type_of v) (type_of (orig e)) ->
-          log_rw visit ~__LINE__ ~__FILE__ (fix e) v
       | SomeInfo { v; __LINE__; __FILE__ } ->
-          failwith
-          @@ Printf.sprintf
-               "improper rewrite type: attempt to rewrite %s into %s"
-               (to_string (orig e))
-               (to_string v)
-      | Keep -> orig e
+          log_rw visit ~__LINE__ ~__FILE__ (fix e) v
+      | None -> orig e
     in
     cata rw_alg expr
 

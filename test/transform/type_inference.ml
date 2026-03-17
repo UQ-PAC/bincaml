@@ -80,7 +80,7 @@ proc @main_4196260 () -> ()
            |> Iter.fold
                 (fun acc (_, b) ->
                   Lang.Block.stmts_iter b
-                  |> Iter.foldi (gen_constraint_set prog proc sva) acc)
+                  |> Iter.foldi (gen_constraint_set prog (Some proc) sva) acc)
                 acc)
          VarIdMap.empty
   in
