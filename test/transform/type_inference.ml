@@ -140,10 +140,10 @@ let%test_unit "Record joining" =
     {|
 digraph G {
  "meow" [height=0, width=0, style=filled, fillcolor="#c4a7e7" ]
-"c ⊓ a" [shape=house style=filled, fillcolor="#c4a7e7"];
-"{ (0, 32): a, (32, 32): b } ⊔ { (0, 32): c, (64, 32): d }" [shape=house style=filled, fillcolor="#c4a7e7"];
-"d" [shape=house style=filled, fillcolor="#c4a7e7"];
-"b" [shape=house style=filled, fillcolor="#c4a7e7"];
+"{ (0, 32): a, (32, 32): b } ⊔ { (0, 32): c, (64, 32): d }" [shape=oval style=filled, fillcolor="#c4a7e7"];
+"c ⊓ a" [shape=oval style=filled, fillcolor="#c4a7e7"];
+"b" [shape=oval style=filled, fillcolor="#c4a7e7"];
+"d" [shape=oval style=filled, fillcolor="#c4a7e7"];
 
 "meow" -> "{ (0, 32): a, (32, 32): b } ⊔ { (0, 32): c, (64, 32): d }";
 "{ (0, 32): a, (32, 32): b } ⊔ { (0, 32): c, (64, 32): d }" -> "d" [label="Record Label 64 32", ];
@@ -203,21 +203,23 @@ let%test_unit "BinSub type ADT" =
     {|
 digraph G {
  "stack_slot_1" [height=0, width=0, style=filled, fillcolor="#c4a7e7" ]
-"c ⊓ { (0, 4): e ⊔ bv32 } ⊓ a" [shape=house style=filled, fillcolor="#c4a7e7"];
-"{ (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ f ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" [shape=invhouse style=filled, fillcolor="#c4a7e7"];
-"μalpha.alpha ⊔ stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)" [shape=invhouse style=filled, fillcolor="#c4a7e7"];
-"e ⊔ bv32" [shape=house style=filled, fillcolor="#c4a7e7"];
-"d ⊓ t2 ⊓ bv32" [shape=invhouse style=filled, fillcolor="#c4a7e7"];
-"b ⊓ t1 ⊓ alpha" [shape=invhouse style=filled, fillcolor="#c4a7e7"];
+"μalpha.stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)" [shape=oval style=filled, fillcolor="#eb6f92"];
+"e ⊔ bv32" [shape=oval style=filled, fillcolor="#c4a7e7"];
+"{ (0, 4): e ⊔ bv32 } ⊓ c ⊓ a" [shape=oval style=filled, fillcolor="#c4a7e7"];
+"b ⊓ t1 ⊓ alpha" [shape=oval style=filled, fillcolor="#eb6f92"];
+"d ⊓ t2 ⊓ bv32" [shape=oval style=filled, fillcolor="#eb6f92"];
+"f ⊓ { (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" [shape=oval style=filled, fillcolor="#eb6f92"];
 
-"stack_slot_1" -> "μalpha.alpha ⊔ stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)";
-"c ⊓ { (0, 4): e ⊔ bv32 } ⊓ a" -> "e ⊔ bv32" [label="Record Label 0 4", ];
-"μalpha.alpha ⊔ stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)" -> "c ⊓ { (0, 4): e ⊔ bv32 } ⊓ a" [label="Store Label", ];
-"μalpha.alpha ⊔ stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)" -> "{ (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ f ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" [label="Load Label", ];
-"{ (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ f ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" -> "b ⊓ t1 ⊓ alpha" [label="Record Label 4 4", ];
-"{ (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ f ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" -> "d ⊓ t2 ⊓ bv32" [label="Record Label 0 4", ];
+"stack_slot_1" -> "μalpha.stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)";
+"f ⊓ { (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" -> "b ⊓ t1 ⊓ alpha" [label="Record Label 4 4", ];
+"f ⊓ { (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" -> "d ⊓ t2 ⊓ bv32" [label="Record Label 0 4", ];
+"μalpha.stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)" -> "f ⊓ { (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" [label="Load Label", ];
+"μalpha.stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)" -> "{ (0, 4): e ⊔ bv32 } ⊓ c ⊓ a" [label="Store Label", ];
+"{ (0, 4): d ⊓ t2 ⊓ bv32 }" -> "d ⊓ t2 ⊓ bv32" [label="Record Label 0 4", ];
+"{ (4, 4): b ⊓ t1 ⊓ alpha }" -> "b ⊓ t1 ⊓ alpha" [label="Record Label 4 4", ];
+"{ (0, 4): e ⊔ bv32 } ⊓ c ⊓ a" -> "e ⊔ bv32" [label="Record Label 0 4", ];
+"{ (0, 4): e ⊔ bv32 }" -> "e ⊔ bv32" [label="Record Label 0 4", ];
 
 }|}
   in
-  print_endline @@ TypeAutomata.export_graphviz m;
   assert (String.equal res @@ TypeAutomata.export_graphviz m)

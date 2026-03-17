@@ -13,12 +13,12 @@ module Polarity = struct
   (*
     Negative polarity
       - Stores
-      - Upper bounds
+      - Lower bounds
       - Intersection
 
     Positive polarity
       - Loads
-      - Lower bounds
+      - Upper bounds
       - Union
   *)
   type t = Pos | Neg [@@deriving ord, eq, show]
@@ -326,6 +326,9 @@ module State = struct
     Made up of a polarity and a type
   *)
   type t = Polarity.t * InferredType.t [@@deriving eq, ord]
+
+  let show (p, ty) =
+    Printf.sprintf "(%s, %s)" (Polarity.show p) (InferredType.show ty)
 end
 
 module TypeAutomata = struct
@@ -366,16 +369,17 @@ module TypeAutomata = struct
 
     let get_states m : State.t Iter.t =
       let module StateSet = Set.Make (State) in
-      StateSet.to_iter
-        (StateEdges.fold
-           (fun _ edges set ->
-             Edges.fold
-               (fun _ end_states set ->
-                 List.fold_left
-                   (fun set end_state -> StateSet.add end_state set)
-                   set end_states)
-               edges set)
-           m.transitions StateSet.empty)
+      Iter.cons m.start
+      @@ StateSet.to_iter
+           (StateEdges.fold
+              (fun _ edges set ->
+                Edges.fold
+                  (fun _ end_states set ->
+                    List.fold_left
+                      (fun set end_state -> StateSet.add end_state set)
+                      set end_states)
+                  edges set)
+              m.transitions StateSet.empty)
   end
 
   let rec join (ty0 : InferredType.t) (ty1 : InferredType.t) : InferredType.t =
@@ -431,27 +435,55 @@ module TypeAutomata = struct
     | a, b -> Sect (a, b)
 
   (*
-    If the edges are the same you can just join all the states
+    Meow meow meow
   *)
   let merge_nodes (m : t) : t =
-    let transitions =
-      StateEdges.map
-        (fun edges ->
-          Edges.filter_map
-            (fun _ -> function
-              | [] -> None
-              (*
-                Polarity is only changed with different edges
-                  so this is fine to do
-              *)
-              | [ a ] -> Some [ a ]
-              | (p, x) :: tl ->
-                  Some
-                    [ (p, List.fold_left (fun acc (_, x) -> join acc x) x tl) ])
-            edges)
-        m.transitions
+    let rec helper (m : t) (curr_state : State.t) : t =
+      (* Get outgoing edges from curr_state *)
+      let edges = get_transitions_from m curr_state in
+      let edges, trans =
+        (* Map those edges so that there is one state per edge *)
+        List.fold_filter_map
+          (fun (trans : State.t list Edges.t StateEdges.t) edge ->
+            match edge with
+            (* Edge but no state is filtered *)
+            | _, [] -> (trans, None)
+            (* Already one state *)
+            | edge, [ a ] -> (trans, Some (edge, [ a ]))
+            (* Join all states together *)
+            | edge, (p, h) :: tl ->
+                let edges, state =
+                  List.fold_left
+                    (fun (edges, acc) ((_, typ) as state) ->
+                      (*
+                        If the end state from the edge has edges,
+                          they should be attached to the new state
+                      *)
+                      let children = get_transitions_from m state in
+                      (Iter.append children edges, join acc typ))
+                    (get_transitions_from m (p, h), h)
+                    tl
+                in
+                let trans =
+                  (* print_endline @@ InferredType.show state; *)
+                  (* Iter.iter *)
+                  (* (fun (sigma, state) -> *)
+                  (* List.iter *)
+                  (* (fun state -> print_endline @@ State.show state) *)
+                  (* state) *)
+                  (* edges; *)
+                  StateEdges.add (p, state) (Edges.of_iter edges) trans
+                in
+                (trans, Some (edge, [ (p, state) ])))
+          m.transitions
+        @@ List.of_iter edges
+      in
+      let transitions = StateEdges.add curr_state (Edges.of_list trans) edges in
+      let m = { m with transitions } in
+      let children = get_next_states m curr_state in
+      Iter.fold helper m children
     in
-    { m with transitions }
+    helper m m.start
 
   let dfa (m : t) : t = m
   let simplify_automata (m : t) : t = merge_nodes m |> dfa
@@ -483,45 +515,45 @@ module TypeAutomata = struct
         so messy
   *)
   let type_to_automata (polarity : Polarity.t) ty init name =
-    let rec type_to_state_list p (ty : InferredType.t) ((ls, tbl) as acc) =
-      let rec grab_edges (ty : InferredType.t) :
-          InferredType.t list * (Sigma.t * State.t) list =
-        match ty with
-        | Top | BinCamlType _ | TypeVar _ | Bottom | Field _ -> ([], [])
-        | Recursive (a, ty) ->
-            (*
-              WARN: This will need to change but is nice to have incase
-               I ever get recursive stuff
+    let rec grab_edges (ty : InferredType.t) p :
+        (Polarity.t * InferredType.t) list * (Sigma.t * State.t) list =
+      match ty with
+      | Top | BinCamlType _ | TypeVar _ | Bottom | Field _ -> ([], [])
+      | Recursive (a, ty) ->
+          (*
+              WARN: IDK
             *)
-            ([], [])
-        | Union (a, b) | Sect (a, b) ->
-            let ty1, edge1 = grab_edges a in
-            let ty2, edge2 = grab_edges b in
-            (ty1 @ ty2, edge1 @ edge2)
-        | Function (_, ins, outs) ->
-            let _ =
-              List.fold_left_map
-                (fun acc (n, ty) ->
-                  (ty :: acc, (Sigma.FnIn n, (Polarity.not p, ty))))
-                [] (StringMap.to_list ins)
-            in
-            let _ =
-              List.fold_left_map
-                (fun acc (n, ty) -> (ty :: acc, (Sigma.FnOut n, (p, ty))))
-                []
-              @@ StringMap.to_list outs
-            in
-            ([], [])
-        | Pointer (a, b) ->
-            ( [ a; b ],
-              [ (Sigma.LoadLabel, (p, b)); (StoreLabel, (Polarity.not p, a)) ]
-            )
-        | Record fields ->
+          (* ([], []) *)
+          grab_edges ty p
+      | Union (a, b) | Sect (a, b) ->
+          let ty1, edge1 = grab_edges a p in
+          let ty2, edge2 = grab_edges b p in
+          (ty1 @ ty2, edge1 @ edge2)
+      | Function (_, ins, outs) ->
+          let np = Polarity.not p in
+          let a1, a2 =
             List.fold_left_map
-              (fun acc ({ offset; size; ty } : InferredType.field) ->
-                (ty :: acc, (Sigma.Reclabel (offset, size), (p, ty))))
-              [] fields
-      in
+              (fun acc (n, ty) ->
+                ((np, ty) :: acc, (Sigma.FnIn n, (Polarity.not p, ty))))
+              [] (StringMap.to_list ins)
+          in
+          let b1, b2 =
+            List.fold_left_map
+              (fun acc (n, ty) -> ((p, ty) :: acc, (Sigma.FnOut n, (p, ty))))
+              []
+            @@ StringMap.to_list outs
+          in
+          (a1 @ b1, a2 @ b2)
+      | Pointer (a, b) ->
+          ( [ (p, b); (Polarity.not p, a) ],
+            [ (Sigma.LoadLabel, (p, b)); (StoreLabel, (Polarity.not p, a)) ] )
+      | Record fields ->
+          List.fold_left_map
+            (fun acc ({ offset; size; ty } : InferredType.field) ->
+              ((p, ty) :: acc, (Sigma.Reclabel (offset, size), (p, ty))))
+            [] fields
+    in
+    let rec type_to_state_list p (ty : InferredType.t) ((ls, tbl) as acc) =
       let open Sigma in
       match ty with
       | Top | BinCamlType _ | TypeVar _ | Bottom | Field _ ->
@@ -530,10 +562,10 @@ module TypeAutomata = struct
           (*
             NOTE: I think it is easiest to deal with recursives with type decls
           *)
-          let next, edges = grab_edges typ in
+          let next, edges = grab_edges typ p in
           let ls, tbl =
             List.fold_left
-              (fun acc typ -> type_to_state_list (Polarity.not p) typ acc)
+              (fun acc (p, typ) -> type_to_state_list p typ acc)
               acc next
           in
           let edges =
@@ -544,12 +576,12 @@ module TypeAutomata = struct
           let tbl = StateEdges.add (p, ty) edges tbl in
           ((p, ty) :: ls, tbl)
       | Union (a, b) | Sect (a, b) ->
-          let next1, edges1 = grab_edges a in
-          let next2, edges2 = grab_edges b in
+          let next1, edges1 = grab_edges a p in
+          let next2, edges2 = grab_edges b p in
           let next, edges = (next1 @ next2, edges1 @ edges2) in
           let ls, tbl =
             List.fold_left
-              (fun acc typ -> type_to_state_list p typ acc)
+              (fun acc (p, typ) -> type_to_state_list p typ acc)
               acc next
           in
           let edges =
@@ -571,7 +603,6 @@ module TypeAutomata = struct
           let edges =
             List.fold_left
               (fun edges (n, ty) ->
-                (* TODO wrong polarity for one of these *)
                 Edges.add_to_list (FnIn n) (Polarity.not p, ty) edges)
               Edges.empty
             @@ StringMap.to_list ins
@@ -585,8 +616,8 @@ module TypeAutomata = struct
           let tbl = StateEdges.add (p, ty) edges tbl in
           ((p, ty) :: ls, tbl)
       | Pointer (a, b) ->
-          let ((ls, tbl) as acc) = type_to_state_list (Polarity.not p) a acc in
-          let ls, tbl = type_to_state_list p b acc in
+          let ((ls, tbl) as acc) = type_to_state_list p b acc in
+          let ls, tbl = type_to_state_list (Polarity.not p) a acc in
           let edges =
             Edges.add_to_list LoadLabel (p, b)
             @@ Edges.add_to_list StoreLabel (Polarity.not p, a) Edges.empty
@@ -736,7 +767,7 @@ module TypeAutomata = struct
              if Polarity.positive polarity then "c4a7e7" else "eb6f92"
            in
            Printf.sprintf
-             "%s\"%s\" [shape=circle style=filled, fillcolor=\"#%s\"];\n" a
+             "%s\"%s\" [shape=oval style=filled, fillcolor=\"#%s\"];\n" a
              (InferredType.show @@ typ) shape)
          "" (get_states n))
       n.name
@@ -1278,23 +1309,21 @@ let analyse (prog : Program.t) : (Types.t * Types.t) VarIdMap.t =
     VarIdMap.mapi
       (fun name ({ lb; ub } : ConstraintState.TypeConstraint.t) ->
         let lower =
-          (* Posistive Occurences *)
-          TySet.fold
-            (fun ty (acc : InferredType.t) ->
-              let a =
-                coalesce_types type_constraint_map TySet.empty Polarity.Pos ty
-              in
-              match acc with Top -> a | _ -> Union (acc, a))
-            lb Top
-        in
-        let upper =
-          (* Negative Occurences *)
           TySet.fold
             (fun ty (acc : InferredType.t) ->
               let a =
                 coalesce_types type_constraint_map TySet.empty Polarity.Neg ty
               in
               match acc with Top -> a | _ -> Sect (acc, a))
+            lb Top
+        in
+        let upper =
+          TySet.fold
+            (fun ty (acc : InferredType.t) ->
+              let a =
+                coalesce_types type_constraint_map TySet.empty Polarity.Pos ty
+              in
+              match acc with Top -> a | _ -> Union (acc, a))
             ub Top
         in
         (lower, upper))
