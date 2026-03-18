@@ -86,6 +86,7 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
   | UnaryExpr { op = #Ops.Spec.unary } -> None
   | BinaryExpr { op = #Ops.Spec.binary } -> None
   | ApplyIntrin { op = #Ops.Spec.intrin } -> None
+  | ApplyIntrin { op = #Ops.Maps.intrin } -> None
 
 let partial_eval_alg (e : BasilExpr.t BasilExpr.abstract_expr) :
     BasilExpr.rewrite =

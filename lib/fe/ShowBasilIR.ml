@@ -95,7 +95,7 @@ and showProcDef (e : AbsBasilIR.procDef) : showable = match e with
 
 
 and showField (e : AbsBasilIR.field) : showable = match e with
-       AbsBasilIR.Field1 (openparen, str, type', closeparen) -> s2s "Field1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showStr str  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+       AbsBasilIR.Field1 (openparen0, str, openparen, type', intval, closeparen1, closeparen) -> s2s "Field1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen0  >> s2s ", " >>  showStr str  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showCloseParen closeparen1  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
 and showIntType (e : AbsBasilIR.intType) : showable = match e with
@@ -281,7 +281,7 @@ and showParams (e : AbsBasilIR.params) : showable = match e with
 and showValue (e : AbsBasilIR.value) : showable = match e with
        AbsBasilIR.Value_BV bvval -> s2s "Value_BV" >> c2s ' ' >> c2s '(' >> showBVVal bvval >> c2s ')'
   |    AbsBasilIR.Value_Int intval -> s2s "Value_Int" >> c2s ' ' >> c2s '(' >> showIntVal intval >> c2s ')'
-  |    AbsBasilIR.Value_Record (openparen, fieldvals, closeparen) -> s2s "Value_Record" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showFieldVal fieldvals  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.Value_Record (openparen, beginrec, fieldvals, endrec, type', closeparen) -> s2s "Value_Record" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showBeginRec beginrec  >> s2s ", " >>  showList showFieldVal fieldvals  >> s2s ", " >>  showEndRec endrec  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Value_Pointer (openparen, bvval, pointertype, closeparen) -> s2s "Value_Pointer" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showBVVal bvval  >> s2s ", " >>  showPointerType pointertype  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Value_True  -> s2s "Value_True"
   |    AbsBasilIR.Value_False  -> s2s "Value_False"

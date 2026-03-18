@@ -115,8 +115,8 @@ module.exports = grammar({
         seq($.Field, ",", optional($.list_Field))
       ),
     Field: $ =>
-      // Field1. Field ::= OpenParen Str ":" Type CloseParen ;
-      seq($.token_OpenParen, $.token_Str, ":", $.Type, $.token_CloseParen),
+      // Field1. Field ::= OpenParen Str ":" OpenParen Type "," IntVal CloseParen CloseParen ;
+      seq($.token_OpenParen, $.token_Str, ":", $.token_OpenParen, $.Type, ",", $.IntVal, $.token_CloseParen, $.token_CloseParen),
     IntType: $ =>
       // IntType1. IntType ::= INTTYPE ;
       $.token_INTTYPE,
@@ -484,8 +484,8 @@ module.exports = grammar({
         $.BVVal,
         // Value_Int. Value ::= IntVal ;
         $.IntVal,
-        // Value_Record. Value ::= OpenParen [FieldVal] CloseParen ;
-        seq($.token_OpenParen, optional($.list_FieldVal), $.token_CloseParen),
+        // Value_Record. Value ::= OpenParen BeginRec [FieldVal] EndRec "," Type CloseParen ;
+        seq($.token_OpenParen, $.token_BeginRec, optional($.list_FieldVal), $.token_EndRec, ",", $.Type, $.token_CloseParen),
         // Value_Pointer. Value ::= "ptr" OpenParen BVVal "," PointerType CloseParen ;
         seq("ptr", $.token_OpenParen, $.BVVal, ",", $.PointerType, $.token_CloseParen),
         // Value_True. Value ::= "true" ;

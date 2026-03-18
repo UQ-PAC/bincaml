@@ -33,6 +33,16 @@ include (
     let create name ?(pure = true) ?(scope = Local) typ =
       H.make { name; typ; pure; scope }
 
+    let copy ?name ?pure ?scope ?typ (v : t) =
+      let v = Fix.HashCons.data v in
+      H.make
+        {
+          name = Option.get_or ~default:v.name name;
+          typ = Option.get_or ~default:v.typ typ;
+          pure = Option.get_or ~default:v.pure pure;
+          scope = Option.get_or ~default:v.scope scope;
+        }
+
     let to_int (v : V.t Fix.HashCons.cell) = v.id
 
     let show v =
@@ -68,6 +78,14 @@ include (
       val typ : t -> Types.t
       val pure : t -> bool
       val hash : t -> int
+
+      val copy :
+        ?name:string ->
+        ?pure:bool ->
+        ?scope:declaration_scope ->
+        ?typ:Types.t ->
+        t ->
+        t
     end)
 
 let is_local (v : t) = equal_declaration_scope (scope v) Local

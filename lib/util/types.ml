@@ -34,12 +34,13 @@ type t =
   | Nothing
   | Map of t * t
   | Sort of string * variant list
-  | Record of t StringMap.t
+  | Record of record_field StringMap.t
   | Pointer of pointer
   | Variable of string (* Possibly a name of a type declartion *)
 
 and variant = { variant : string; fields : field list }
 and field = { field : string; typ : t } [@@deriving eq, ord]
+and record_field = { offset : Z.t; typ : t } [@@deriving eq, ord]
 
 (*
   Lower type represents types the pointer could load
@@ -84,7 +85,7 @@ let mk_adt name (variants : (string * field list) list) =
   Sort
     (name, variants |> List.map (fun (variant, fields) -> { variant; fields }))
 
-let get_field field_name record : t =
+let get_field field_name record : record_field =
   match record with
   | Record fields -> (
       match StringMap.find_opt field_name fields with
@@ -112,7 +113,7 @@ let rec compare_partial (a : t) (b : t) =
   | Record fields, Record fields2 ->
       Some
         (StringMap.compare
-           (fun a b ->
+           (fun ({ typ = a; _ } : record_field) { typ = b; _ } ->
              match compare_partial a b with Some a -> a | None -> -1)
            fields fields2)
   | Bitvector a, Bitvector b -> Some (Int.compare a b)
@@ -146,7 +147,9 @@ let rec to_string = function
   | Record record ->
       "{"
       ^ (StringMap.bindings record
-        |> List.map (fun (k, v) -> "(\"" ^ k ^ "\": " ^ to_string v ^ ")")
+        |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->
+            Printf.sprintf "(\"%s\": (%s, %s))" k (to_string v)
+              (Z.to_string offset))
         |> String.concat ", ")
       ^ "}"
   | Map ((Map _ as a), (Map _ as b)) ->

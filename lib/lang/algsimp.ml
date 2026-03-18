@@ -4,6 +4,76 @@ open Bincaml_util.Common
 open Expr
 open Ops
 
+let to_steady equal f x =
+  let rec loop x =
+    let n = f x in
+    if equal n x then n else loop n
+  in
+  loop x
+
+let apply_fun in_body args =
+  let args = args |> VarMap.of_list |> fun m v -> VarMap.find_opt v m in
+  BasilExpr.substitute args in_body
+
+let rec inline_let_rec e =
+  let open AbstractExpr in
+  match BasilExpr.unfix e with
+  | Let { bound_vars; in_body } ->
+      inline_let_rec @@ apply_fun in_body bound_vars
+  | ApplyFun { func; args } -> (
+      match BasilExpr.unfix func with
+      | Lambda { bound_vars; in_body } ->
+          inline_let_rec @@ apply_fun in_body @@ List.combine bound_vars args
+      | _ -> e)
+  | BinaryExpr { op = `MapAccess; arg1 = func; arg2 } -> (
+      (* a bit odd but why not*)
+      match BasilExpr.unfix func with
+      | Lambda { bound_vars; in_body } ->
+          inline_let_rec @@ apply_fun in_body
+          @@ List.combine bound_vars [ arg2 ]
+      | _ -> e)
+  | _ -> e
+
+let inline_let_alg e : BasilExpr.rewrite =
+  let open AbstractExpr in
+  match e with
+  | Let { bound_vars; in_body } ->
+      let e = apply_fun in_body bound_vars in
+      BasilExpr.replace [%here] e
+  | ApplyFun { func; args } -> (
+      match BasilExpr.unfix func with
+      | Lambda { bound_vars; in_body } ->
+          BasilExpr.replace [%here]
+            (apply_fun in_body @@ List.combine bound_vars args)
+      | _ -> Keep)
+  | BinaryExpr { op = `MapAccess; arg1 = func; arg2 } -> (
+      match BasilExpr.unfix func with
+      | Lambda { bound_vars; in_body } ->
+          BasilExpr.replace [%here]
+            (apply_fun in_body @@ List.combine bound_vars [ arg2 ])
+      | _ -> Keep)
+  | _ -> Keep
+
+let desugar_let_alg e : BasilExpr.rewrite =
+  let open AbstractExpr in
+  match e with
+  | Let { bound_vars; in_body } ->
+      (* desugar let to func
+            
+            let a = e and b = c in d ~> (fun a b -> d)(e)(c)
+           *)
+      let args = bound_vars |> List.map fst in
+      let func = BasilExpr.lambda ~bound:args in_body in
+      let app_args = bound_vars |> List.map snd in
+      BasilExpr.replace [%here] (BasilExpr.apply_fun ~func app_args)
+  | _ -> Keep
+
+let desugar_let ?visit =
+  to_steady BasilExpr.equal @@ BasilExpr.rewrite ?visit ~rw_fun:desugar_let_alg
+
+let inline_let ?visit =
+  to_steady BasilExpr.equal (BasilExpr.rewrite ?visit ~rw_fun:inline_let_alg)
+
 let normalise_bool e =
   let open AbstractExpr in
   let open BasilExpr in
@@ -60,13 +130,6 @@ let simplify_concat
       replace [%here]
         (BasilExpr.extract ~hi_excl:(rshift + 1) ~lo_incl:rshift arg1)
   | _ -> Keep
-
-let to_steady equal f x =
-  let rec loop x =
-    let n = f x in
-    if equal n x then n else loop n
-  in
-  loop x
 
 let simp_concat_fix e =
   to_steady BasilExpr.equal (BasilExpr.rewrite_typed_two simplify_concat) e

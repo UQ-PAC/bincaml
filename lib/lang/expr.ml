@@ -249,6 +249,11 @@ module Make (O : Fix) = struct
           let bound = VarSet.add_list bound bound_vars in
           let in_body = subst bound in_body in
           fix (Lambda { op; bound_vars; in_body; attrib })
+      | Let { bound_vars; in_body; attrib } ->
+          (* exprs to bind are evaluated outside the bound *)
+          let bound = VarSet.add_list bound (List.map fst bound_vars) in
+          let in_body = subst bound in_body in
+          fix (Let { bound_vars; in_body; attrib })
       | o -> fix @@ AbstractExpr.map (subst bound) o
     in
     subst VarSet.empty e
@@ -327,6 +332,9 @@ module BasilExpr = struct
 
   (** create abstract type from fixed type *)
   let unfix i = match i with E i -> i
+
+  let unfix2 e = AbstractExpr.map unfix (unfix e)
+  let unfix3 e = AbstractExpr.map unfix2 (unfix e)
 
   open struct
     module E = struct
@@ -642,6 +650,7 @@ module BasilExpr = struct
 
   let idk alg = para alg
   let fold_with_type (alg : 'e abstract_expr -> 'a) = zygo_l ~cata type_alg alg
+  let fold_with_type_r (alg : 'e abstract_expr -> 'a) = zygo ~cata type_alg alg
 
   type rwinfo = {
     from : t;

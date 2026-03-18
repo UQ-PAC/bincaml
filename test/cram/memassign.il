@@ -1,15 +1,7 @@
 var shared $Global_4325420_4325424: bv32
   classification true;
 
-type UninterpSort;
-
-type opaque = A | B | C;
-
-type variants = A of {a: bv64} | B of {b:bv32} | C of {c: bv8};
-
-type record = Record of {a : bv64; b: bv32; c:bv64};
-
-type ilist = Cons of {head:bv64; tail:ilist} | Nil ;
+let $test = 1:bv64;
 
 let $mul_2 (a:bv64), (b:bv64) : bv64 = bvadd(b, bvmul(a, 2:bv64));
 let $three = let func (a:bv64) : bv64 = bvadd(a, 1:bv64) in func($mul_2(2:bv64, 1:bv64));

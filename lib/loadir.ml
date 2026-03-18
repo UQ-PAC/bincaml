@@ -101,13 +101,12 @@ module BasilASTLoader = struct
   and transStr (x : str) : string =
     match x with Str string -> stripquote string
 
-  and trans_program ?(name = "<module>") (x : moduleT) : load_st =
+  and trans_program ?(lst : load_st option) ?(name = "<module>") (x : moduleT)
+      : load_st =
     let prog =
-      {
-        prog = Program.empty ~name ();
-        params_order = Hashtbl.create 30;
-        curr_proc = None;
-      }
+      match lst with
+      | Some lst -> lst
+      | None -> load_st_empty ~name ()
     in
     let prog =
       match x with
@@ -142,6 +141,8 @@ module BasilASTLoader = struct
                   ( unsafe_unsigil (`Local variant),
                     List.map trans_recordfield fields ))) )
 
+  (** First pass; process like forward declaration: only add the information
+      needed to do non-local reslolution of names such as for procedure calls *)
   and trans_declaration prog (x : decl) : load_st =
     match x with
     | Decl_Type sort ->
@@ -318,6 +319,7 @@ module BasilASTLoader = struct
     in
     map_prog (fun prog -> Program.add_decl prog (Var.name binding) fundef) prog
 
+  (** Second pass: resolve the full definition of all declarations. *)
   and trans_definition prog (x : decl) : load_st =
     match x with
     | Decl_UninterpFun (glident, attrDefList, rettype) ->
@@ -364,11 +366,15 @@ module BasilASTLoader = struct
           _,
           attrs,
           spec_list,
-          ProcDef_Some (bl, blocks, el) ) ->
+          proc_def ) ->
         let proc_id = prog.prog.proc_names.decl_or_get id in
         let p = ID.Map.find proc_id prog.prog.procs in
         let prog = { prog with curr_proc = Some p } in
-        let prog, blocks = sequence_st prog trans_block blocks in
+        let prog, blocks =
+          match proc_def with
+          | ProcDef_Some (bl, blocks, el) -> sequence_st prog trans_block blocks
+          | ProcDef_Empty -> (prog, [])
+        in
         let p =
           if List.is_empty blocks then p else Procedure.add_empty_impl p
         in
@@ -442,7 +448,9 @@ module BasilASTLoader = struct
         map_prog
           (fun prog -> { prog with procs = ID.Map.add proc_id p prog.procs })
           prog
-    | _ -> prog
+    | Decl_Mem _ | Decl_Var _ | Decl_RecType _ | Decl_Type _ ->
+        (* declarations only: handled by first pass *)
+        prog
 
   and transMapType (x : mapType) : Types.t =
     match x with MapType1 (t0, t1) -> Map (trans_type t0, trans_type t1)
@@ -455,8 +463,10 @@ module BasilASTLoader = struct
   and transRECORDTYPE (fields : field list) =
     Types.Record
       (StringMap.of_list
-         ((List.map (function Field1 (_, offset, t, _) ->
-              (transStr offset, trans_type t)))
+         ((List.map (function Field1 (_, field_name, _, t, offset, _, _) ->
+              ( transStr field_name,
+                ({ typ = trans_type t; offset = transIntVal offset }
+                  : Types.record_field) )))
             fields))
 
   and transPOINTERTYPE (l : typeT) (u : typeT) =
@@ -614,7 +624,9 @@ module BasilASTLoader = struct
                  })
         in
         let in_param, out_param = Hashtbl.find p_st.params_order n in
-        let lhs = trans_call_lhs p_st (List.map fst out_param) calllvars in
+        let p_st, lhs =
+          trans_call_lhs p_st (List.map fst out_param) calllvars
+        in
         let args = trans_call_rhs p_st in_param exprs in
         (p_st, `Call (Instr_Call { lhs; procid; args }))
     | Stmt_IndirectCall expr ->
@@ -642,28 +654,34 @@ module BasilASTLoader = struct
         |> StringMap.of_list
 
   and trans_call_lhs prog (formal_out : string list) (x : lVars) :
-      Var.t StringMap.t =
-    match x with
-    | LVars_Empty -> StringMap.empty
-    | LVars_LocalList (_, lvars, _) ->
-        List.combine formal_out (unpack_local_lvars prog lvars)
-        |> StringMap.of_list
-    | LVars_List (_, lvars, _) ->
-        let f (prog, lvars) v =
-          let prog, lvar = trans_lvar prog v in
-          (prog, lvar :: lvars)
-        in
-        let prog, lvars = List.fold_left f (prog, []) lvars in
-        List.combine formal_out (List.rev lvars) |> StringMap.of_list
-    | NamedLVars_List (_, lvars, _) ->
-        let f (p_st, ls) v =
-          match v with
-          | NamedCallReturn1 (lVar, ident) ->
-              let p_st, v = trans_lvar prog lVar in
-              (p_st, (unsafe_unsigil (`Local ident), v) :: ls)
-        in
-        let p_st, lvars = lvars |> List.fold_left f (prog, []) in
-        StringMap.of_list lvars
+      load_st * Var.t StringMap.t =
+    let vars =
+      match x with
+      | LVars_Empty -> StringMap.empty
+      | LVars_LocalList (_, lvars, _) ->
+          List.combine formal_out (unpack_local_lvars prog lvars)
+          |> StringMap.of_list
+      | LVars_List (_, lvars, _) ->
+          let f (prog, lvars) v =
+            let prog, lvar = trans_lvar prog v in
+            (prog, lvar :: lvars)
+          in
+          let prog, lvars = List.fold_left f (prog, []) lvars in
+          List.combine formal_out (List.rev lvars) |> StringMap.of_list
+      | NamedLVars_List (_, lvars, _) ->
+          let f (p_st, ls) v =
+            match v with
+            | NamedCallReturn1 (lVar, ident) ->
+                let p_st, v = trans_lvar prog lVar in
+                (p_st, (unsafe_unsigil (`Local ident), v) :: ls)
+          in
+          let p_st, lvars = lvars |> List.fold_left f (prog, []) in
+          StringMap.of_list lvars
+    in
+    let prog =
+      StringMap.values vars |> Iter.fold (fun a b -> assign_var a b |> fst) prog
+    in
+    (prog, vars)
 
   and unpack_local_lvars ?(bound = StringMap.empty) p_st lvs : Var.t list =
     lvs
@@ -686,7 +704,7 @@ module BasilASTLoader = struct
     | Jump_Return (_, exprs, _) -> `Return (List.map (trans_expr p_st) exprs)
     | Jump_ProcReturn -> `ProcReturn
 
-  and assign_var prog v =
+  and assign_var (prog : load_st) v =
     let p = Option.get_exn_or "no active proc" prog.curr_proc in
     match Var.scope v with
     | Var.Local -> (prog, Procedure.decl_local p v) (* decl is side-effecting *)
@@ -884,16 +902,17 @@ module BasilASTLoader = struct
     | Value_False -> `Bool false
     | Value_Pointer (_, v, PointerType1 (_, l, u, _), _) ->
         `Pointer (trans_bv_val v, { lower = trans_type l; upper = trans_type u })
-    | Value_Record (_, fields, _) ->
+    | Value_Record (_, _, fields, _, typ, _) ->
         `Record
-          (StringMap.of_list
-             (List.map
-                (function
-                  | FieldVal1 (_, offset, value, typ, _) ->
-                      ( transStr offset,
-                        ({ value = trans_bv_val value; typ = trans_type typ }
-                          : Ops.Record.field) ))
-                fields))
+          ( StringMap.of_list
+              (List.map
+                 (function
+                   | FieldVal1 (_, offset, value, typ, _) ->
+                       ( transStr offset,
+                         ({ value = trans_bv_val value; typ = trans_type typ }
+                           : Ops.Record.field) ))
+                 fields),
+            trans_type typ )
 
   and unsafe_unsigil g : string =
     match g with
@@ -1308,11 +1327,11 @@ let parse_single_block s : Program.bloc =
   let input = Pp_loc.Input.string s in
   load_single_block ~input lexbuf
 
-let ast_of_concrete_ast ~name m =
+let ast_of_concrete_ast ?(lst : load_st option) ~name m =
   Trace_core.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->
-  BasilASTLoader.trans_program ~name m
+  BasilASTLoader.trans_program ?lst ~name m
 
-let ast_of_string ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
+let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
   let name =
     let open Option.Infix in
     let* line = __LINE__ >|= Int.to_string in
@@ -1323,23 +1342,23 @@ let ast_of_string ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
   let name = Option.get_or ~default:"<string>" name in
   let input = Pp_loc.Input.string string in
   let conc = concrete_prog_ast_of_string ~input ~filename:name string in
-  try ast_of_concrete_ast ~name conc
+  try ast_of_concrete_ast ?lst ~name conc
   with LoadError { token_char_offset_range; msg } ->
     raise (LoadError { input = Some input; token_char_offset_range; msg })
 
-let ast_of_channel ?input fname c =
+let ast_of_channel ?(lst: load_st option) ?input fname c =
   let m =
     Trace_core.with_span ~__FILE__ ~__LINE__ "load-concrete-ast" @@ fun f ->
     let m = concrete_prog_ast_of_channel ?input ~filename:fname c in
     m
   in
-  try ast_of_concrete_ast ~name:fname m
+  try ast_of_concrete_ast ?lst ~name:fname m
   with LoadError { token_char_offset_range; msg } ->
     raise (LoadError { input; token_char_offset_range; msg })
 
-let ast_of_fname fname =
+let ast_of_fname ?(lst : load_st option) fname =
   IO.with_in fname (fun c ->
-      ast_of_channel ~input:(Pp_loc.Input.file fname) fname c)
+      ast_of_channel ?lst ~input:(Pp_loc.Input.file fname) fname c)
 
 let%expect_test "missing block" =
   let run () =
@@ -1564,3 +1583,31 @@ let%test_unit "parses parenthesised lambda param" =
   in
   let _ = ast_of_string ~__LINE__ ~__FILE__ ~__FUNCTION__ s in
   ()
+
+let%expect_test "proc declaration without body" =
+  let p =
+    ast_of_string
+      {|
+var $R0: bv64;
+var $R1: bv64;
+
+proc @test1() -> ()
+	{ .name = "test1" }
+	modifies $R0
+	ensures eq($R1, 0x0:bv64)
+	requires eq($R1, 0x0:bv64);
+
+    |}
+  in
+  Program.pretty_to_chan stdout p.prog;
+  ();
+  [%expect
+    {|
+    var $R0:bv64;
+    var $R1:bv64;
+    proc @test1()  -> () { .name = "test1" }
+      modifies $R0:bv64
+      requires eq($R1:bv64, 0x0:bv64)
+      ensures eq($R1:bv64, 0x0:bv64)
+    ;
+    |}]

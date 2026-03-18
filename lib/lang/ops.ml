@@ -2,22 +2,22 @@ open Common
 open Containers
 
 module Record = struct
-  type t = field StringMap.t [@@deriving eq, ord]
+  type t = field StringMap.t * Types.t [@@deriving eq, ord]
   and field = { value : Bitvec.t; typ : Types.t }
 
-  let get_field offset record : field =
+  let get_field offset (record, _) : field =
     match StringMap.find_opt offset record with
     | None -> failwith @@ "No field at offset " ^ offset
     | Some f -> f
 
-  let set_field offset record value =
-    let { typ; _ } = get_field offset record in
-    StringMap.add offset { typ; value } record
+  let set_field field_name (record, typ) value =
+    let { typ; _ } = get_field field_name (record, typ) in
+    (StringMap.add field_name { typ; value } record, typ)
 
   let show_field { value; typ } =
     Printf.sprintf "(%s, %s)" (Bitvec.to_string value) @@ Types.to_string typ
 
-  let show (record : t) =
+  let show (record, _) =
     "{"
     ^ (StringMap.bindings record
       |> List.map (fun (k, v) -> "(\"" ^ k ^ "\": " ^ show_field v ^ ")")
@@ -306,7 +306,7 @@ module AllOps = struct
     | PointerOps.binary ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type intrin = [ BVOps.intrin | LogicalOps.intrin | Spec.intrin ]
+  type intrin = [ BVOps.intrin | LogicalOps.intrin | Spec.intrin | Maps.intrin ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type lambda = Spec.lambda [@@deriving show { with_path = false }, eq, ord]
@@ -325,10 +325,7 @@ module AllOps = struct
     | `Integer _ -> return Integer
     | `Bitvector v -> return (Bitvector (Bitvec.size v))
     | `Pointer (v, ty) -> return (Pointer ty)
-    | `Record fields ->
-        return
-        @@ Record
-             (StringMap.map (fun ({ value; typ } : Record.field) -> typ) fields)
+    | `Record ((fields, typ) : Record.t) -> return typ
 
   let ret_type_lambda (o : [< lambda ]) args a =
     let open Types in
@@ -350,7 +347,10 @@ module AllOps = struct
         match a with
         | Bitvector s -> return @@ Bitvector (sz + s)
         | o -> Conflict [ (o, "<bitvector") ])
-    | `FACCESS offset -> return @@ get_field offset a
+    | `FACCESS offset ->
+        let { typ; _ } = get_field offset a in
+        return typ
+    | `Forall -> return Boolean
     | `BVNEG -> return a
     | `INTNEG -> return Integer
     | `Old -> return a
@@ -414,6 +414,7 @@ module AllOps = struct
               0 args
           in
           return (Bitvector w)
+    | `MapUpdate -> return @@ List.hd args
 
   (** ops returning booleans *)
 
@@ -479,6 +480,7 @@ module AllOps = struct
     | `Load (`Big, sz) -> Printf.sprintf "load_be_%d" sz
     | `Load (`Little, sz) -> Printf.sprintf "load_le_%d" sz
     | `MapAccess -> "get"
+    | `MapUpdate -> "update"
     | `IfThen -> "case"
     | `Cases -> "match"
 
