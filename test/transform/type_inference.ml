@@ -152,7 +152,6 @@ digraph G {
 
 }|}
   in
-
   assert (String.equal res @@ TypeAutomata.export_graphviz m)
 
 let%test_unit "BinSub type ADT" =
@@ -206,19 +205,16 @@ digraph G {
 "μalpha.stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)" [shape=oval style=filled, fillcolor="#eb6f92"];
 "e ⊔ bv32" [shape=oval style=filled, fillcolor="#c4a7e7"];
 "{ (0, 4): e ⊔ bv32 } ⊓ c ⊓ a" [shape=oval style=filled, fillcolor="#c4a7e7"];
+"f ⊓ { (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" [shape=oval style=filled, fillcolor="#eb6f92"];
 "b ⊓ t1 ⊓ alpha" [shape=oval style=filled, fillcolor="#eb6f92"];
 "d ⊓ t2 ⊓ bv32" [shape=oval style=filled, fillcolor="#eb6f92"];
-"f ⊓ { (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" [shape=oval style=filled, fillcolor="#eb6f92"];
 
 "stack_slot_1" -> "μalpha.stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)";
-"f ⊓ { (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" -> "b ⊓ t1 ⊓ alpha" [label="Record Label 4 4", ];
-"f ⊓ { (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" -> "d ⊓ t2 ⊓ bv32" [label="Record Label 0 4", ];
 "μalpha.stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)" -> "f ⊓ { (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" [label="Load Label", ];
 "μalpha.stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)" -> "{ (0, 4): e ⊔ bv32 } ⊓ c ⊓ a" [label="Store Label", ];
-"{ (0, 4): d ⊓ t2 ⊓ bv32 }" -> "d ⊓ t2 ⊓ bv32" [label="Record Label 0 4", ];
-"{ (4, 4): b ⊓ t1 ⊓ alpha }" -> "b ⊓ t1 ⊓ alpha" [label="Record Label 4 4", ];
+"f ⊓ { (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" -> "b ⊓ t1 ⊓ alpha" [label="Record Label 4 4", ];
+"f ⊓ { (0, 4): d ⊓ t2 ⊓ bv32 } ⊓ { (4, 4): b ⊓ t1 ⊓ alpha }" -> "d ⊓ t2 ⊓ bv32" [label="Record Label 0 4", ];
 "{ (0, 4): e ⊔ bv32 } ⊓ c ⊓ a" -> "e ⊔ bv32" [label="Record Label 0 4", ];
-"{ (0, 4): e ⊔ bv32 }" -> "e ⊔ bv32" [label="Record Label 0 4", ];
 
 }|}
   in

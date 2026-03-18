@@ -98,6 +98,7 @@ module InferredType = struct
     | TypeVar of VarId.t
     | Recursive of VarId.t * t
     | BinCamlType of BinCamlType.t
+  [@@deriving ord, eq]
 
   and field = { offset : Z.t; size : int; ty : t }
 
@@ -120,42 +121,6 @@ module InferredType = struct
 
   and show_field { offset; size; ty } =
     Printf.sprintf "(%s, %d): %s" (Z.to_string offset) size (show ty)
-
-  let rec compare type1 type2 =
-    match (type1, type2) with
-    | Top, Top | Bottom, Bottom -> 0
-    | BinCamlType a, BinCamlType b -> BinCamlType.compare a b
-    | TypeVar a, TypeVar b -> VarId.compare a b
-    | Recursive (a, b), Recursive (c, d) ->
-        let c = VarId.compare a c in
-        if c <> 0 then c else compare b d
-    | Union (a, b), Union (a2, b2) ->
-        let c = compare a a2 in
-        if c <> 0 then c else compare b b2
-    | Sect (a, b), Sect (a2, b2) ->
-        let c = compare a a2 in
-        if c <> 0 then c else compare b b2
-    | Pointer (a, b), Pointer (a2, b2) ->
-        let c = compare a a2 in
-        if c <> 0 then c else compare b b2
-    | Function (name, ins, outs), Function (name2, ins2, outs2) ->
-        let c = String.compare name name2 in
-        if c <> 0 then c
-        else
-          let c = StringMap.compare compare ins ins2 in
-          if c <> 0 then c else StringMap.compare compare outs outs2
-    | ( Field { offset; size; ty },
-        Field { offset = offset2; size = size2; ty = ty2 } ) ->
-        let c = Z.compare offset offset2 in
-        if c <> 0 then c
-        else
-          let c = Int.compare size size2 in
-          if c <> 0 then c else compare ty ty2
-    | Record fields, Record fields2 ->
-        List.compare (fun { ty } { ty = ty2 } -> compare ty ty2) fields fields2
-    | _ -> 1
-
-  let equal a b = Stdlib.( == ) 0 @@ compare a b
 
   let rec iter f (ty : t) =
     f ty;
@@ -360,12 +325,8 @@ module TypeAutomata = struct
 
     let get_next_states m s =
       match StateEdges.find_opt s m.transitions with
-      | None -> Iter.empty
-      | Some states ->
-          Iter.fold
-            (fun acc states -> Iter.append acc (List.to_iter states))
-            Iter.empty
-          @@ Edges.values states
+      | None -> []
+      | Some states -> List.concat (Iter.to_list @@ Edges.values states)
 
     let get_states m : State.t Iter.t =
       let module StateSet = Set.Make (State) in
@@ -417,7 +378,11 @@ module TypeAutomata = struct
     | Pointer (a, b), Pointer (c, d) ->
         (* ptr((a u c) n (b n d), (b n d)) *)
         Pointer (join (Union (a, c)) (join b d), join b d)
-    (* WARN: this is not how BinSub did it, but I think I am just smarter and had better DS *)
+    (*
+      WARN:
+        This is not how BinSub did it
+        I think I am just smarter and had better DS
+    *)
     | Function (name0, ins0, outs0), Function (name1, ins1, outs1) ->
         if not @@ String.equal name0 name1 then
           failwith "Function names do not match and a join between them occured"
@@ -438,10 +403,11 @@ module TypeAutomata = struct
     Meow meow meow
   *)
   let merge_nodes (m : t) : t =
-    let rec helper (m : t) (curr_state : State.t) : t =
+    let rec helper (trans : State.t list Edges.t StateEdges.t)
+        (curr_state : State.t) =
       (* Get outgoing edges from curr_state *)
       let edges = get_transitions_from m curr_state in
-      let edges, trans =
+      let trans, edge_list =
         (* Map those edges so that there is one state per edge *)
         List.fold_filter_map
           (fun (trans : State.t list Edges.t StateEdges.t) edge ->
@@ -465,28 +431,34 @@ module TypeAutomata = struct
                     tl
                 in
                 let trans =
-                  (* print_endline @@ InferredType.show state; *)
-                  (* Iter.iter *)
-                  (* (fun (sigma, state) -> *)
-                  (* List.iter *)
-                  (* (fun state -> print_endline @@ State.show state) *)
-                  (* state) *)
-                  (* edges; *)
                   StateEdges.add (p, state) (Edges.of_iter edges) trans
                 in
                 (trans, Some (edge, [ (p, state) ])))
-          m.transitions
+          trans
         @@ List.of_iter edges
       in
-      let transitions = StateEdges.add curr_state (Edges.of_list trans) edges in
-      let m = { m with transitions } in
+      let trans = StateEdges.add curr_state (Edges.of_list edge_list) trans in
       let children = get_next_states m curr_state in
-      Iter.fold helper m children
+      List.fold_left helper trans children
     in
-    helper m m.start
+    let transitions = helper m.transitions m.start in
+    { m with transitions }
 
-  let dfa (m : t) : t = m
-  let simplify_automata (m : t) : t = merge_nodes m |> dfa
+  let remove_unreachable (m : t) : t =
+    let rec helper acc curr : State.t list Edges.t StateEdges.t =
+      let edges = get_transitions_from m curr in
+      Iter.fold
+        (fun acc (sigma, states) ->
+          List.fold_left
+            (fun acc state -> helper acc state)
+            (StateEdges.add curr (Edges.of_iter edges) acc)
+            states)
+        acc edges
+    in
+    let good = helper StateEdges.empty m.start in
+    { m with transitions = good }
+
+  let simplify_automata (m : t) : t = merge_nodes m |> remove_unreachable
 
   (*
     Two mutually recursive functions that take a given InferredType.t
