@@ -105,9 +105,6 @@ module type Recurseable = sig
   val para : ((O.t * 'a) O.expr -> 'a) -> O.t -> 'a
   (** catamorphism that passes through original expression *)
 
-  val cata_context : ((O.t O.expr O.expr * 'a) O.expr -> 'a) -> O.t -> 'a
-  (** catamorphism that passes through original expression unfolded twice *)
-
   val iter_children : (O.t O.expr -> unit) -> O.t -> unit
   val children_iter : O.t -> O.t O.expr Iter.t
 end
@@ -154,9 +151,6 @@ module Recursion (O : Fix) = struct
   (** Fold an algebra e -> 'a through the expression, from leaves to nodes to
       return 'a. *)
   let rec cata (alg : 'a alg) e = (unfix %> map_expr (cata alg) %> alg) e
-
-  let cata2 (alg : 'a expr expr -> 'a expr) alg2 e : 'a =
-    alg2 @@ (unfix %> map_expr (cata alg) %> alg) e
 
   (* ana coalg = Out◦ ◦ fmap_expr (ana coalg) ◦ coalg *)
   let rec ana (coalg : 'a coalg) e = (coalg %> map_expr (ana coalg) %> fix) e

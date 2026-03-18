@@ -39,8 +39,7 @@ let rec attrib_pretty pretty_expr (e : 'e t) : Containers_pp.t =
   | `Assoc sm ->
       let pairs =
         sm
-        |> StringMap.filter (fun i _ ->
-            not @@ String.starts_with ~prefix:"__" i)
+        |> StringMap.filter (fun i _ -> not @@ is_internal_key i)
         |> StringMap.bindings
         |> List.map (function k, v -> text k ^ text " = " ^ attrib_pretty v)
       in
