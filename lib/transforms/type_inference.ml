@@ -174,6 +174,66 @@ module InferredType = struct
     | Boolean -> BinCamlType BinCaml_Bool
     | Integer -> BinCamlType BinCaml_Int
     | Unit | Map _ | Sort _ -> failwith "No inferred type mapping"
+
+  let rec join (ty0 : t) (ty1 : t) : t =
+    match (ty0, ty1) with
+    | Record fields0, Record fields1 ->
+        (* WARN: I think this could be improved, cause this is gross *)
+        let module FieldMap = Map.Make (struct
+          type t = Z.t * int
+
+          let compare = Stdlib.compare
+        end) in
+        let fieldmap_to_field_list (map : t FieldMap.t) =
+          FieldMap.bindings map
+          |> List.map (fun ((offset, size), ty) ->
+              ({ offset; size; ty } : field))
+        in
+        let fieldmap_of_list (fields : field list) : t FieldMap.t =
+          List.fold_left
+            (fun acc ({ offset; size; ty } : field) ->
+              FieldMap.add (offset, size) ty acc)
+            FieldMap.empty fields
+        in
+        let f0 = fieldmap_of_list fields0 in
+        let f1 = fieldmap_of_list fields1 in
+        let joined_map =
+          FieldMap.merge_safe
+            ~f:(fun (offset, size) v ->
+              match v with
+              | `Both (a, b) -> Some (Union (a, b))
+              | `Left a | `Right a -> Some a)
+            f0 f1
+        in
+        Record (fieldmap_to_field_list joined_map)
+    | (Record _ as a), _ | _, (Record _ as a) -> a
+    | Pointer (a, b), Pointer (c, d) ->
+        (* ptr((a u c) n (b n d), (b n d)) *)
+        Pointer (join (Union (a, c)) (join b d), join b d)
+    | (Pointer _ as a), _ | _, (Pointer _ as a) -> a
+    (*
+      WARN:
+        This is not how BinSub did it
+        I think I am just smarter and had better DS
+    *)
+    | Function (name0, ins0, outs0), Function (name1, ins1, outs1) ->
+        if not @@ String.equal name0 name1 then
+          failwith "Function names do not match and a join between them occured"
+        else
+          (* args are the same just just union over the args *)
+          let ins =
+            StringMap.merge_safe
+              ~f:(fun _ b ->
+                match b with
+                | `Both (l, r) -> Some (join l r)
+                | _ -> failwith "Function declartion differs to function usage")
+              ins0 ins1
+          in
+          Function (name0, ins, outs0)
+    | (Function _ as a), _ | _, (Function _ as a) -> a
+    | Top, a | a, Top -> a
+    | Bottom, a | a, Bottom -> Bottom
+    | a, b -> Sect (a, b)
 end
 
 module TySet = struct
@@ -185,6 +245,7 @@ module TySet = struct
 
   include S
 
+  (* TODO *)
   let show ts = to_list ts |> List.map InferredType.show |> String.concat ", "
 end
 
@@ -343,62 +404,6 @@ module TypeAutomata = struct
               m.transitions StateSet.empty)
   end
 
-  let rec join (ty0 : InferredType.t) (ty1 : InferredType.t) : InferredType.t =
-    match (ty0, ty1) with
-    | Record fields0, Record fields1 ->
-        (* WARN: I think this could be improved, cause this is gross *)
-        let module FieldMap = Map.Make (struct
-          type t = Z.t * int
-
-          let compare = Stdlib.compare
-        end) in
-        let fieldmap_to_field_list (map : InferredType.t FieldMap.t) =
-          FieldMap.bindings map
-          |> List.map (fun ((offset, size), ty) ->
-              ({ offset; size; ty } : InferredType.field))
-        in
-        let fieldmap_of_list (fields : InferredType.field list) :
-            InferredType.t FieldMap.t =
-          List.fold_left
-            (fun acc ({ offset; size; ty } : InferredType.field) ->
-              FieldMap.add (offset, size) ty acc)
-            FieldMap.empty fields
-        in
-        let f0 = fieldmap_of_list fields0 in
-        let f1 = fieldmap_of_list fields1 in
-        let joined_map =
-          FieldMap.merge_safe
-            ~f:(fun (offset, size) v ->
-              match v with
-              | `Both (a, b) -> Some (InferredType.Union (a, b))
-              | `Left a | `Right a -> Some a)
-            f0 f1
-        in
-        Record (fieldmap_to_field_list joined_map)
-    | Pointer (a, b), Pointer (c, d) ->
-        (* ptr((a u c) n (b n d), (b n d)) *)
-        Pointer (join (Union (a, c)) (join b d), join b d)
-    (*
-      WARN:
-        This is not how BinSub did it
-        I think I am just smarter and had better DS
-    *)
-    | Function (name0, ins0, outs0), Function (name1, ins1, outs1) ->
-        if not @@ String.equal name0 name1 then
-          failwith "Function names do not match and a join between them occured"
-        else
-          (* args are the same just just union over the args *)
-          let ins =
-            StringMap.merge_safe
-              ~f:(fun _ b ->
-                match b with
-                | `Both (l, r) -> Some (join l r)
-                | _ -> failwith "Function declartion differs to function usage")
-              ins0 ins1
-          in
-          Function (name0, ins, outs0)
-    | a, b -> Sect (a, b)
-
   (*
     Meow meow meow
   *)
@@ -426,7 +431,7 @@ module TypeAutomata = struct
                           they should be attached to the new state
                       *)
                       let children = get_transitions_from m state in
-                      (Iter.append children edges, join acc typ))
+                      (Iter.append children edges, InferredType.join acc typ))
                     (get_transitions_from m (p, h), h)
                     tl
                 in
@@ -719,9 +724,9 @@ module TypeAutomata = struct
     in
     construct_type n.start
 
-  let create_simple_type (polarity : Polarity.t) ty init name : Types.t =
+  let create_simple_type (polarity : Polarity.t) ty init name : InferredType.t =
     type_to_automata polarity ty init name
-    |> simplify_automata |> automata_to_type |> InferredType.inferred_to_real
+    |> simplify_automata |> automata_to_type
 
   let export_graphviz n =
     Printf.sprintf
@@ -1249,7 +1254,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
   | Stmt.Instr_IndirectCall _ -> st
 
 (* Passes through a given program and returns a given constraint set *)
-let analyse (prog : Program.t) : (Types.t * Types.t) VarIdMap.t =
+let analyse (prog : Program.t) : Types.t VarIdMap.t =
   (* Generate constraint set *)
   let type_constraint_map =
     ID.Map.values prog.procs
@@ -1309,8 +1314,10 @@ let analyse (prog : Program.t) : (Types.t * Types.t) VarIdMap.t =
   let types =
     VarIdMap.mapi
       (fun name (lower_ty, upper_ty) ->
-        ( minimise_type Polarity.Pos lower_ty name,
-          minimise_type Polarity.Neg upper_ty name ))
+        InferredType.inferred_to_real
+        @@ InferredType.join
+             (minimise_type Polarity.Pos lower_ty name)
+             (minimise_type Polarity.Neg upper_ty name))
       types
   in
   (* VarIdMap.iter *)
@@ -1320,18 +1327,14 @@ let analyse (prog : Program.t) : (Types.t * Types.t) VarIdMap.t =
   (* types; *)
   types
 
-let get_type results proc var : Types.t * Types.t =
+let get_type results proc var : Types.t =
   match VarIdMap.find_opt (VarId.var_proc_to_uid var proc) results with
   | Some a -> a
   | None -> failwith "Global variable was not in the type constraint list"
 
-(* TODO: This might make more sense to be the meet of the lower and upper bounds *)
-let get_lower_type results proc : Var.t -> Types.t = fst % get_type results proc
-let get_upper_type results proc : Var.t -> Types.t = snd % get_type results proc
-
 let map_var results proc (var : Var.t) : Var.t =
   Var.create (Var.name var) ~pure:(Var.pure var) ~scope:(Var.scope var)
-  @@ get_lower_type results proc var
+  @@ get_type results proc var
 
 let map_expr results proc (abstract_expr : 'e BasilExpr.abstract_expr) :
     BasilExpr.rewrite =
@@ -1390,14 +1393,12 @@ let declare_typ (typ : Types.t) : (string * Types.t) option * Types.t =
       (Some (name, typ), Variable name)
   | _ -> (None, typ)
 
-let transform (prog : Program.t) (results : (Types.t * Types.t) VarIdMap.t) :
-    Program.t =
+let transform (prog : Program.t) (results : Types.t VarIdMap.t) : Program.t =
   let decls, results =
     List.fold_left_map
-      (fun acc (id, (lt, ut)) ->
-        let name_l, lt = declare_typ lt in
-        let name_u, ut = declare_typ ut in
-        (name_l :: name_u :: acc, (id, (lt, ut))))
+      (fun acc (id, typ) ->
+        let name, typ = declare_typ typ in
+        (name :: acc, (id, typ)))
       [] (VarIdMap.to_list results)
   in
   let results = VarIdMap.of_list results in
