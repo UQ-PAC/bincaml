@@ -1038,7 +1038,6 @@ module BasilASTLoader = struct
         let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
         BasilExpr.lambda ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_Let (id, param, rt, body, in_expr) ->
-        (* desugar to lambda *)
         let id = unsafe_unsigil (`Local id) in
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st param in
         let funct = Types.curry (List.map Var.typ bound) (trans_type rt) in
@@ -1049,13 +1048,7 @@ module BasilASTLoader = struct
           | args -> BasilExpr.lambda ~bound (trans_expr ~nbinds:bound body)
         in
         let in_expr = trans_expr ~nbinds:[ funvar ] in_expr in
-        (* desugaring:
-        BasilExpr.apply_fun
-          ~func:(BasilExpr.lambda ~bound:[ funvar ] in_expr)
-          [ func ]
-        *)
-        BasilExpr.unexp ~op:`Let
-          (BasilExpr.binding [ funvar ] (Some [ func ]) in_expr)
+        BasilExpr.letexp [ (funvar, func) ] in_expr
     | Expr_Exists (attrs, LambdaDef1 (lv, _, e)) ->
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
         let binds =

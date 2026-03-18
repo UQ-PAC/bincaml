@@ -259,6 +259,9 @@ module Spec = struct
   type endian = [ `Big | `Little ]
   [@@deriving show { with_path = false }, eq, ord]
 
+  type lambda = [ `Forall | `Exists | `Lambda ]
+  [@@deriving show { with_path = false }, eq, ord]
+
   type binary =
     [ `MapAccess  (** access a value from a map*)
     | `Load of endian * int
@@ -271,8 +274,7 @@ module Spec = struct
   type intrin = [ `Cases  (** choose first argument that is defined *) ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type unary =
-    [ `Forall | `Old | `Exists | `Lambda | `Let | `Classification | `Gamma ]
+  type unary = [ `Old | `Classification | `Gamma ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let hash_intrin a = Hashtbl.hash a
@@ -307,6 +309,8 @@ module AllOps = struct
   type intrin = [ BVOps.intrin | LogicalOps.intrin | Spec.intrin ]
   [@@deriving show { with_path = false }, eq, ord]
 
+  type lambda = Spec.lambda [@@deriving show { with_path = false }, eq, ord]
+
   type op_fun_type =
     | Fun of { args : Types.t list; ret : Types.t }
     (* list of expected type equalities *)
@@ -326,6 +330,14 @@ module AllOps = struct
         @@ Record
              (StringMap.map (fun ({ value; typ } : Record.field) -> typ) fields)
 
+  let ret_type_lambda (o : [< lambda ]) args a =
+    let open Types in
+    let return ret = Fun { args = [ a ]; ret } in
+    match o with
+    | `Forall -> return Boolean
+    | `Exists -> return Boolean
+    | `Lambda -> Fun { args; ret = a }
+
   let ret_type_unary (o : [< unary ]) a =
     let open Types in
     let return ret = Fun { args = [ a ]; ret } in
@@ -339,20 +351,12 @@ module AllOps = struct
         | Bitvector s -> return @@ Bitvector (sz + s)
         | o -> Conflict [ (o, "<bitvector") ])
     | `FACCESS offset -> return @@ get_field offset a
-    | `Forall -> return Boolean
     | `BVNEG -> return a
     | `INTNEG -> return Integer
     | `Old -> return a
     | `BoolNOT -> return Boolean
-    | `Exists -> return Boolean
     | `BVNOT -> return a
     | `BOOLTOBV1 -> return @@ Bitvector 1
-    | `Lambda ->
-        let args, ret = Types.uncurry a in
-        Fun { args; ret }
-    | `Let ->
-        let args, ret = Types.uncurry a in
-        Fun { args; ret }
     | `Extract (hi, lo) -> return (Bitvector (hi - lo))
     | `Gamma ->
         let args, r = Types.uncurry a in
@@ -413,9 +417,8 @@ module AllOps = struct
 
   (** ops returning booleans *)
 
-  let to_string (op : [< const | unary | binary | intrin ]) =
+  let to_string (op : [< const | unary | binary | intrin | lambda ]) =
     match op with
-    | `Let -> "let"
     | `BVADD -> "bvadd"
     | `BVSREM -> "bvsrem"
     | `BVSDIV -> "bvsdiv"
