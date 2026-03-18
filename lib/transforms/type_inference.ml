@@ -878,8 +878,6 @@ let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
   match (type0, type1) with
   | Pointer (type0_a, type0_b), Pointer (type1_a, type1_b) ->
       constrain (constrain st type1_a type0_a) type0_b type1_b
-  | _, Pointer (type1_a, type1_b) ->
-      constrain (constrain st type0 type1_a) type0 type1_b
   | TypeVar a, TypeVar b -> (
       if
         VarId.equal a b || ConstraintState.check_bounded st a type1 Polarity.Neg
@@ -919,7 +917,11 @@ let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
       failwith
         (Printf.sprintf "Attempted to constrain to disjoint bincamltypes: %s %s"
            (BinCamlType.show a) (BinCamlType.show b))
-  | _ -> failwith "Illegal types at this stage"
+  | _, BinCamlType b -> st
+  | _ ->
+      failwith
+      @@ Printf.sprintf "Illegal types at this stage: %s %s"
+           (InferredType.show type0) (InferredType.show type1)
 
 let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
     ConstraintState.t =
@@ -1148,9 +1150,8 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
         let lhs = VarId.var_proc_to_uid lhs proc in
         let rhs = VarId.var_proc_to_uid rhs proc in
         constrain st (TypeVar rhs) (TypeVar lhs)
-  | Stmt.Instr_Load { lhs; addr = Addr { addr; size } }
-  | Stmt.Instr_Store { lhs; addr = Addr { addr; size } } ->
-      let store = match stmt with Stmt.Instr_Store _ -> true | _ -> false in
+  (* TODO: These should probably be constrain calls and joined somehow *)
+  | Stmt.Instr_Load { lhs; addr = Addr { addr; size } } ->
       let sva_res =
         Analysis.Sva.Eval.EV.eval
           ((flip Analysis.Sva.StateAbstraction.read) sva)
@@ -1163,12 +1164,12 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
 
           Simply just a ptr(a,b) where a <= b
         *)
-        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_load/store" in
-        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_load/store" in
-        let st =
-          ConstraintState.add_ub st lhs (Pointer (TypeVar lb, TypeVar ub))
-        in
-        ConstraintState.add_ub st lb @@ TypeVar ub
+        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_load" in
+        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_load" in
+        let st, addr = constrain_expr st (BasilExpr.unfix addr) in
+        let st = constrain st (Pointer (TypeVar lb, TypeVar ub)) addr in
+        let st = constrain st (TypeVar lb) @@ TypeVar ub in
+        constrain st (TypeVar ub) (TypeVar lhs)
       else
         (*
           Some information case
@@ -1187,17 +1188,67 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
           | _ -> failwith "impossible"
         in
         let ty =
-          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_load/store")
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_load")
+        in
+        let ub = Record [ { size; offset; ty } ] in
+        let lb =
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_load")
+        in
+        let st, addr = constrain_expr st (BasilExpr.unfix addr) in
+        let st = constrain st (Pointer (lb, ub)) addr in
+        let st = constrain st ub lb in
+        constrain st ty (TypeVar lhs)
+  | Stmt.Instr_Store { lhs; addr = Addr { addr; size } } ->
+      let sva_res =
+        Analysis.Sva.Eval.EV.eval
+          ((flip Analysis.Sva.StateAbstraction.read) sva)
+          addr
+      in
+      let lhs = TypeVar (VarId.var_proc_to_uid lhs proc) in
+      if sva_res_check sva_res addr then
+        (*
+          No information case
+
+          Simply just a ptr(a,b) where a <= b
+        *)
+        let lb =
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_store")
+        in
+        let ub =
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_store")
+        in
+        let st, addr = constrain_expr st (BasilExpr.unfix addr) in
+        let st = constrain st (Pointer (lb, ub)) addr in
+        let st = constrain st lb ub in
+        constrain st lhs lb
+      else
+        (*
+          Some information case
+
+          ptr with the upper bound as a record with the offset as the offset,
+            and size of load as the size, type is var atm and gets constrained
+            to lhs
+        *)
+        let res =
+          snd @@ List.hd @@ snd
+          @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res
+        in
+        let offset =
+          match res with
+          | Interval { lower } -> Bitvec.to_signed_bigint lower
+          | _ -> failwith "impossible"
+        in
+        let ty =
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_store")
         in
         let lb = Record [ { size; offset; ty } ] in
-        let ub_name =
-          VarId.make_id @@ Int.to_string stmt_number ^ "_load/store"
+        let ub =
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_store")
         in
-        let lb, ub =
-          if store then (TypeVar ub_name, lb) else (lb, TypeVar ub_name)
-        in
-        let st = ConstraintState.add_ub st lhs (Pointer (lb, ub)) in
-        ConstraintState.add_ub st ub_name lb
+        let st, addr = constrain_expr st (BasilExpr.unfix addr) in
+        let st = constrain st (Pointer (lb, ub)) addr in
+        let st = constrain st lb ub in
+        constrain st lhs ty
   | Stmt.Instr_Call { lhs; args; procid } ->
       let formal_in = Procedure.formal_in_params @@ Program.proc prog procid in
       let formal_out =
@@ -1330,13 +1381,17 @@ let analyse (prog : Program.t) : Types.t VarIdMap.t =
 let get_type results proc var : Types.t =
   match VarIdMap.find_opt (VarId.var_proc_to_uid var proc) results with
   | Some a -> a
-  | None -> failwith "Global variable was not in the type constraint list"
+  | None ->
+      failwith
+      @@ Printf.sprintf
+           "Global variable was not in the type constraint list: %s"
+           (Var.name var)
 
 let map_var results proc (var : Var.t) : Var.t =
   Var.create (Var.name var) ~pure:(Var.pure var) ~scope:(Var.scope var)
   @@ get_type results proc var
 
-let map_expr results proc (abstract_expr : 'e BasilExpr.abstract_expr) :
+let expr_rewriter results proc (abstract_expr : 'e BasilExpr.abstract_expr) :
     BasilExpr.rewrite =
   match abstract_expr with
   | AbstractExpr.RVar { id; attrib } ->
@@ -1345,34 +1400,67 @@ let map_expr results proc (abstract_expr : 'e BasilExpr.abstract_expr) :
   (* TODO: Is this the best way to do no changes *)
   | _ -> BasilExpr.replace [%here] @@ BasilExpr.fix abstract_expr
 
+let map_expr results proc =
+  BasilExpr.rewrite ~rw_fun:(expr_rewriter results proc)
+
 let map_stmt results proc (stmt : Program.stmt) : Program.stmt =
   match stmt with
   | Stmt.Instr_Assign assignments ->
       Stmt.Instr_Assign
         (List.map
            (fun (lvar, expr) ->
-             ( map_var results proc lvar,
-               Lang.Expr.BasilExpr.rewrite ~rw_fun:(map_expr results proc) expr
-             ))
+             (map_var results proc lvar, map_expr results proc expr))
            assignments)
   | Stmt.Instr_Assume { body; branch } ->
-      Stmt.Instr_Assume
-        {
-          branch;
-          body =
-            Lang.Expr.BasilExpr.rewrite ~rw_fun:(map_expr results proc) body;
-        }
+      Stmt.Instr_Assume { branch; body = map_expr results proc body }
   | Stmt.Instr_Assert { body } ->
-      Stmt.Instr_Assert
+      Stmt.Instr_Assert { body = map_expr results proc body }
+  | Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
+      Stmt.Instr_Load
         {
-          body =
-            Lang.Expr.BasilExpr.rewrite ~rw_fun:(map_expr results proc) body;
+          lhs = map_var results proc lhs;
+          rhs = map_var results proc rhs;
+          addr = Scalar;
         }
-  | Stmt.Instr_Load _ -> stmt
-  | Stmt.Instr_Store _ -> stmt
-  | Stmt.Instr_IntrinCall _ -> stmt
-  | Stmt.Instr_Call _ -> stmt
-  | Stmt.Instr_IndirectCall _ -> stmt
+  | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->
+      Stmt.Instr_Load
+        {
+          lhs = map_var results proc lhs;
+          rhs = map_var results proc rhs;
+          addr = Addr { size; endian; addr = map_expr results proc addr };
+        }
+  | Stmt.Instr_Store { lhs; rhs; value; addr = Scalar } ->
+      Stmt.Instr_Store
+        {
+          lhs = map_var results proc lhs;
+          rhs = map_var results proc rhs;
+          value = map_expr results proc value;
+          addr = Scalar;
+        }
+  | Stmt.Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } } ->
+      Stmt.Instr_Store
+        {
+          lhs = map_var results proc lhs;
+          rhs = map_var results proc rhs;
+          addr = Addr { size; endian; addr = map_expr results proc addr };
+          value = map_expr results proc value;
+        }
+  | Stmt.Instr_IntrinCall { lhs; args; name } ->
+      Stmt.Instr_IntrinCall
+        {
+          lhs = StringMap.map (map_var results proc) lhs;
+          args = StringMap.map (map_expr results proc) args;
+          name;
+        }
+  | Stmt.Instr_Call { lhs; procid; args } ->
+      Stmt.Instr_Call
+        {
+          lhs = StringMap.map (map_var results proc) lhs;
+          args = StringMap.map (map_expr results proc) args;
+          procid;
+        }
+  | Stmt.Instr_IndirectCall { target } ->
+      Stmt.Instr_IndirectCall { target = map_expr results proc target }
 
 let map_decl results proc (decl : Program.declaration) : Program.declaration =
   match decl with
