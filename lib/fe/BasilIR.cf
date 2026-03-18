@@ -7,6 +7,7 @@ terminator Decl ";";
 position token BVTYPE ('b' 'v' digit+) ;
 position token INTTYPE {"int"} ;
 position token BOOLTYPE {"bool"} ;
+position token POINTERTYPE {"ptr"} ;
 
 {- position token UserIdent '`' ((upper | letter | '_' | '#')(upper | letter | digit | ["_.$#"])*) '`'; -}
 position token BIdent '.'((upper | letter | '_')(upper | letter | digit | ["_.$#~"])*) ;
@@ -71,8 +72,13 @@ Decl_Type . Decl ::= "type" LocalIdent ;
 ProcDef_Empty . ProcDef ::= ;
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
+separator Field "," ;
+Field1 . Field ::= OpenParen Str ":" OpenParen Type "," IntVal CloseParen CloseParen ;
+
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
+RecordType1 . RecordType ::= BeginRec [Field] EndRec ;
+PointerType1 . PointerType ::= "ptr" OpenParen Type "," Type CloseParen ;
 BVType1 . BVType ::= BVTYPE ;
 -- map types are right associative. left of -> cannot be another MapType.
 MapType1 . MapType ::=  Type1 "->" Type ; 
@@ -86,19 +92,23 @@ VariantCase . SumCase    ::= LocalIdent "of" BeginRec [RecordField] EndRec;
 separator nonempty SumCase "|";
 
 
-TypeIntType  . Type1 ::= IntType ;
-TypeBoolType . Type1 ::= BoolType ;
-TypeBVType   . Type1 ::= BVType ;
-TypeParen    . Type1 ::= OpenParen Type CloseParen; 
-TypeSort . Type1 ::= LocalIdent;
-
-TypeMapType . Type ::= MapType;
+TypeIntType     . Type1 ::= IntType ;
+TypeBoolType    . Type1 ::= BoolType ;
+TypeBVType      . Type1 ::= BVType ;
+TypePointerType . Type1 ::= PointerType ;
+TypeRecordType  . Type1 ::= RecordType ;
+TypeVarType     . Type1 ::= LocalIdent ;
+TypeParen       . Type1 ::= OpenParen Type CloseParen; 
+TypeMapType     . Type ::= MapType;
 _ . Type ::= Type1;
 
 IntVal_Hex . IntVal ::= IntegerHex ;
 IntVal_Dec . IntVal ::=  IntegerDec ;
 
 rules BVVal ::=  IntVal ":" BVType ;
+
+separator FieldVal "," ;
+rules FieldVal ::= OpenParen Str ":" BVVal "," Type CloseParen;
 
 Endian_Little . Endian ::= "le" ;
 Endian_Big . Endian ::= "be" ;
@@ -215,6 +225,8 @@ separator Params "," ;
 
 Value_BV . Value ::=  BVVal;
 Value_Int . Value ::= IntVal;
+Value_Record . Value ::= OpenParen BeginRec [FieldVal] EndRec "," Type CloseParen ;
+Value_Pointer . Value ::= "ptr" OpenParen BVVal "," PointerType CloseParen;
 Value_True . Value ::= "true" ;
 Value_False . Value ::= "false" ;
 
@@ -246,7 +258,7 @@ Expr_FunctionOp . Expr1       ::= Expr1 OpenParen [Expr] CloseParen;
 
 -- binary expr
 
-rules BinOp ::= BVBinOp | BVLogicalBinOp | IntLogicalBinOp | IntBinOp | EqOp ;
+rules BinOp ::= BVBinOp | BVLogicalBinOp | IntLogicalBinOp | IntBinOp | EqOp | PointerBinOp ;
 Expr_Binary . Expr2      ::= BinOp OpenParen Expr "," Expr CloseParen ;
 Expr_Assoc  . Expr2      ::= BoolBinOp OpenParen [Expr] CloseParen ;
 
@@ -260,6 +272,8 @@ Expr_ZeroExtend . Expr2 ::= "zero_extend" OpenParen IntVal "," Expr CloseParen ;
 Expr_SignExtend . Expr2 ::= "sign_extend" OpenParen IntVal "," Expr CloseParen ;
 Expr_Extract    . Expr2 ::= "extract" OpenParen IntVal "," IntVal "," Expr CloseParen ;
 Expr_Concat     . Expr2 ::= "bvconcat"  OpenParen [Expr]  CloseParen ;
+Expr_FSet       . Expr2 ::= "fset" OpenParen Str "," Expr "," Expr CloseParen ;
+Expr_FAccess    . Expr2 ::= "faccess" OpenParen Str "," Expr CloseParen ;
 
 CaseCase . Case ::= Expr "->" Expr  ;
 CaseDefault . Case ::=  "_" "->" Expr ;
@@ -280,7 +294,7 @@ rules BVLogicalBinOp ::= "bvule" |  "bvugt" |  "bvuge" | "bvult" | "bvslt" |  "b
 rules IntBinOp ::= "intadd" | "intmul" | "intsub" | "intdiv" | "intmod"  ;
 rules IntLogicalBinOp ::=  "intlt" | "intle" | "intgt" | "intge" ;
 rules BoolBinOp ::=  "booland" | "boolor" | "boolimplies" ;
-
+rules PointerBinOp ::= "ptradd" ;
 
 {- SPECIFICATION -}
 

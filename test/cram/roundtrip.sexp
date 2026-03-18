@@ -11,3 +11,8 @@
 (dump-il "beforemem.il")
 (load-il "beforemem.il")
 (dump-il "aftermem.il")
+
+(load-il "ptrrec1.il")
+(dump-il "ptrrec2.il")
+(load-il "ptrrec2.il")
+(dump-il "ptrrec3.il")

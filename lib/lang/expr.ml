@@ -312,6 +312,9 @@ module BasilExpr = struct
   (** create abstract type from fixed type *)
   let unfix i = match i with E i -> i
 
+  let unfix2 e = AbstractExpr.map unfix (unfix e)
+  let unfix3 e = AbstractExpr.map unfix2 (unfix e)
+
   open struct
     module E = struct
       include AllOps
@@ -358,6 +361,17 @@ module BasilExpr = struct
           [ text "sign_extend" ^ a ^ (textpf "(%d") bits; arg ^ text ")" ]
     | UnaryExpr { op = `Extract (hi, lo); arg = e } ->
         fill nil [ text "extract" ^ a ^ textpf "(%d,%d, " hi lo ^ e ^ text ")" ]
+    | UnaryExpr { op = `FACCESS offset; arg } ->
+        fill
+          (text "," ^ newline)
+          [ text "faccess" ^ a ^ (textpf "(\"%s\"") offset; arg ^ text ")" ]
+    | BinaryExpr { op = `FSET offset; arg1; arg2 } ->
+        fill
+          (text "," ^ newline)
+          [
+            text "fset" ^ a ^ (textpf "(\"%s\"") offset;
+            arg1 ^ text ", " ^ arg2 ^ text ")";
+          ]
     | UnaryExpr { op; arg = e } ->
         text (AllOps.to_string op) ^ a ^ bracket "(" e ")"
     | BinaryExpr { op = `Load (endian, bits); arg1; arg2 } ->
@@ -447,6 +461,7 @@ module BasilExpr = struct
   (** {1 Additional traversals}*)
 
   let fold_with_type (alg : 'e abstract_expr -> 'a) = zygo_l ~cata type_alg alg
+  let fold_with_type_r (alg : 'e abstract_expr -> 'a) = zygo ~cata type_alg alg
 
   type rwinfo = {
     from : t;
@@ -543,6 +558,12 @@ module BasilExpr = struct
 
   let zero_extend ?attrib ~n_prefix_bits (e : t) : t =
     unexp ?attrib ~op:(`ZeroExtend n_prefix_bits) e
+
+  let fset ?attrib ~(offset : string) (record : t) (e : t) : t =
+    binexp ?attrib ~op:(`FSET offset) record e
+
+  let faccess ?attrib ~(offset : string) (record : t) : t =
+    unexp ?attrib ~op:(`FACCESS offset) record
 
   let sign_extend ?attrib ~n_prefix_bits (e : t) : t =
     unexp ?attrib ~op:(`SignExtend n_prefix_bits) e

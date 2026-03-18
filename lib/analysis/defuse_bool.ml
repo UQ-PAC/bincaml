@@ -40,10 +40,17 @@ module IsZeroValueAbstraction = struct
     | `Bool true -> NonZero
     | `Bool false -> Zero
     | `Integer i -> if Z.equal Z.zero i then Zero else NonZero
-    | `Bitvector i ->
+    | `Bitvector i | `Pointer (i, _) ->
         if Bitvec.size i = 0 then Top
         else if Z.equal Z.zero (Bitvec.value i) then Zero
         else NonZero
+    | `Record (fields, _) ->
+        StringMap.fold
+          (fun _ ({ value = i; _ } : Lang.Ops.Record.field) acc ->
+            if Bitvec.size i = 0 then Top
+            else if Z.equal Z.zero (Bitvec.value i) then join acc Zero
+            else join acc NonZero)
+          fields Zero
 
   let eval_unop (op : Lang.Ops.AllOps.unary) a =
     match op with
@@ -58,13 +65,17 @@ module IsZeroValueAbstraction = struct
     | `Old -> Top
     | `Exists -> Top
     | `Forall | `Lambda | `Gamma | `Classification -> Top
+    (* NOTE: More effort would be needed to be able to say is this one field zero or not *)
+    | `FACCESS offset -> ( match a with Zero -> Zero | _ -> Top)
 
   let eval_binop (op : Lang.Ops.AllOps.binary) a b =
     match (op, a, b) with
     | `BVSREM, _, _ -> Top
     | `BVSDIV, _, _ -> Top
     | `BVADD, Zero, Zero -> Zero
+    | `PTRADD, Zero, Zero -> Zero
     | `BVADD, _, _ -> Top
+    | `PTRADD, _, _ -> Top
     | `NEQ, Zero, Zero -> Zero
     | `NEQ, _, _ -> Top
     | `BVASHR, _, _ -> Top
@@ -101,6 +112,10 @@ module IsZeroValueAbstraction = struct
     | `INTSUB, _, _ -> Top
     | `BVSLT, Zero, Zero -> Zero
     | `BVSLT, _, _ -> Top
+    | `FSET _, Zero, Zero -> Zero
+    | `FSET _, _, NonZero -> NonZero
+    (* Larger refactor would be needed to reason about individual fields *)
+    | `FSET _, _, _ -> Top
     | #Lang.Ops.Spec.binary, _, _ -> Top
 
   let eval_intrin (op : Lang.Ops.AllOps.intrin) (args : t list) =
@@ -123,6 +138,11 @@ module IsZeroValueAbstraction = struct
         else if List.for_all (equal Bot) args then Bot
         else Top
     | #Lang.Ops.Spec.intrin -> Top
+    | `MapUpdate -> (
+        match args with
+        | [ Zero; _; Zero ] -> Zero
+        | [ Zero; _; NonZero ] -> NonZero
+        | _ -> Top)
 end
 
 module IsZeroValueAbstractionUntyped = struct

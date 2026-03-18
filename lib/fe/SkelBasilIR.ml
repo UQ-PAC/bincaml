@@ -20,6 +20,10 @@ and transBOOLTYPE (x : bOOLTYPE) : result = match x with
     BOOLTYPE string -> failure x
 
 
+and transPOINTERTYPE (x : pOINTERTYPE) : result = match x with
+    POINTERTYPE string -> failure x
+
+
 and transBIdent (x : bIdent) : result = match x with
     BIdent string -> failure x
 
@@ -113,12 +117,24 @@ and transProcDef (x : procDef) : result = match x with
   | ProcDef_Some (beginlist, blocks, endlist) -> failure x
 
 
+and transField (x : field) : result = match x with
+    Field1 (openparen0, str, openparen, type', intval, closeparen1, closeparen) -> failure x
+
+
 and transIntType (x : intType) : result = match x with
     IntType1 inttype -> failure x
 
 
 and transBoolType (x : boolType) : result = match x with
     BoolType1 booltype -> failure x
+
+
+and transRecordType (x : recordType) : result = match x with
+    RecordType1 (beginrec, fields, endrec) -> failure x
+
+
+and transPointerType (x : pointerType) : result = match x with
+    PointerType1 (openparen, type'0, type', closeparen) -> failure x
 
 
 and transBVType (x : bVType) : result = match x with
@@ -142,8 +158,10 @@ and transType (x : typeT) : result = match x with
     TypeIntType inttype -> failure x
   | TypeBoolType booltype -> failure x
   | TypeBVType bvtype -> failure x
+  | TypePointerType pointertype -> failure x
+  | TypeRecordType recordtype -> failure x
+  | TypeVarType localident -> failure x
   | TypeParen (openparen, type', closeparen) -> failure x
-  | TypeSort localident -> failure x
   | TypeMapType maptype -> failure x
 
 
@@ -154,6 +172,10 @@ and transIntVal (x : intVal) : result = match x with
 
 and transBVVal (x : bVVal) : result = match x with
     BVVal1 (intval, bvtype) -> failure x
+
+
+and transFieldVal (x : fieldVal) : result = match x with
+    FieldVal1 (openparen, str, bvval, type', closeparen) -> failure x
 
 
 and transEndian (x : endian) : result = match x with
@@ -283,6 +305,8 @@ and transParams (x : params) : result = match x with
 and transValue (x : value) : result = match x with
     Value_BV bvval -> failure x
   | Value_Int intval -> failure x
+  | Value_Record (openparen, beginrec, fieldvals, endrec, type', closeparen) -> failure x
+  | Value_Pointer (openparen, bvval, pointertype, closeparen) -> failure x
   | Value_True  -> failure x
   | Value_False  -> failure x
 
@@ -305,6 +329,8 @@ and transExpr (x : expr) : result = match x with
   | Expr_SignExtend (openparen, intval, expr, closeparen) -> failure x
   | Expr_Extract (openparen, intval0, intval, expr, closeparen) -> failure x
   | Expr_Concat (openparen, exprs, closeparen) -> failure x
+  | Expr_FSet (openparen, str, expr0, expr, closeparen) -> failure x
+  | Expr_FAccess (openparen, str, expr, closeparen) -> failure x
   | Expr_Match (expr, openparen, cases, closeparen) -> failure x
   | Expr_Cases (openparen, cases, closeparen) -> failure x
   | Expr_Paren (openparen, expr, closeparen) -> failure x
@@ -320,6 +346,7 @@ and transBinOp (x : binOp) : result = match x with
   | BinOpIntLogicalBinOp intlogicalbinop -> failure x
   | BinOpIntBinOp intbinop -> failure x
   | BinOpEqOp eqop -> failure x
+  | BinOpPointerBinOp pointerbinop -> failure x
 
 
 and transUnOp (x : unOp) : result = match x with
@@ -397,6 +424,10 @@ and transBoolBinOp (x : boolBinOp) : result = match x with
     BoolBinOp_booland  -> failure x
   | BoolBinOp_boolor  -> failure x
   | BoolBinOp_boolimplies  -> failure x
+
+
+and transPointerBinOp (x : pointerBinOp) : result = match x with
+    PointerBinOp_ptradd  -> failure x
 
 
 and transRequireTok (x : requireTok) : result = match x with
