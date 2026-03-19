@@ -9,7 +9,8 @@ open Containers
 open Common
 open Dataflow_graph
 
-type call_info = (Var.t * Expr.BasilExpr.t) list
+type call_info = Expr.BasilExpr.t StringMap.t
+type param_info = Var.t StringMap.t
 
 module type Lattice = sig
   include ORD_TYPE
@@ -35,6 +36,9 @@ module type IDESSIDomain = sig
   val identity : t
   (** identity edge function *)
 
+  val top : t
+  (** top edge function *)
+
   val compose : t -> t -> t
   (** the composite of edge functions *)
 
@@ -46,7 +50,7 @@ module type IDESSIDomain = sig
   val init_data : Program.proc -> Var.t Iter.t
   (** data that each procedure should summarise *)
 
-  val transfer_call : call_info -> DL.t -> state_update
+  val transfer_call : call_info -> param_info -> DL.t -> state_update
   val transfer : Program.stmt -> DL.t -> state_update
   val transfer_phi : Var.t -> Var.t list -> DL.t -> state_update
 end
@@ -80,6 +84,12 @@ module IDESSI (D : IDESSIDomain) = struct
         let j = D.join e e' in
         (not (D.equal e' j)) |> flip Option.return_if (d1, pid, d2, j))
       updates
+    |> Iter.filter (fun (d1, pid, d2, e) ->
+        let base = get_summary pid Lambda d2 in
+        match d1 with
+        (* If Lambda already propagates something >= this, remove this from the summary. *)
+        | Label v when D.equal base (D.join e base) -> false
+        | _ -> true)
     |> Iter.iter (fun (d1, pid, d2, e) ->
         W1.add worklist (d1, pid, d2);
         update_summary pid d1 d2 e)
@@ -98,13 +108,9 @@ module IDESSI (D : IDESSIDomain) = struct
     match v with
     | _, Vertex.Stmt (_, (Instr_Call c as s)) ->
         let caller = ID.Map.find c.procid prog.procs in
-        let ci =
-          c.args |> StringMap.to_list
-          |> List.map (fun (s, e) ->
-              (Procedure.formal_in_params caller |> StringMap.find s, e))
-        in
         (match D.direction with
-          | `Forwards -> D.transfer_call ci d2
+          | `Forwards ->
+              D.transfer_call c.args (Procedure.formal_in_params proc) d2
           | `Backwards -> (
               match d2 with
               | Lambda -> Iter.singleton (Lambda, D.identity)
@@ -133,7 +139,10 @@ module IDESSI (D : IDESSIDomain) = struct
                       StringMap.get (Var.name v3) c.lhs
                       |> Option.to_iter
                       |> Iter.map (fun v4 -> (Label v4, D.identity))
-                  | `Backwards -> D.transfer_call ci (Label v3))
+                  | `Backwards ->
+                      D.transfer_call c.args
+                        (Procedure.formal_in_params proc)
+                        (Label v3))
                 |> Iter.map (fun (d4, e3) -> (d1, pid, d4, e3 @. e2 @. e1))))
     | _, Vertex.Stmt (_, s) ->
         D.transfer s d2 |> Iter.map (fun (d3, e2) -> (d1, pid, d3, e2 @. e1))
@@ -158,19 +167,15 @@ module IDESSI (D : IDESSIDomain) = struct
                 |> Iter.flat_map (fun (d1, (e1, s)) ->
                     match s with
                     | Instr_Call c ->
-                        let ci =
-                          c.args |> StringMap.to_list
-                          |> List.map (fun (s, e) ->
-                              ( Procedure.formal_in_params proc
-                                |> StringMap.find s,
-                                e ))
-                        in
                         (match D.direction with
                           | `Forwards ->
                               StringMap.get (Var.name v2) c.lhs
                               |> Option.to_iter
                               |> Iter.map (fun v3 -> (Label v3, D.identity))
-                          | `Backwards -> D.transfer_call ci (Label v2))
+                          | `Backwards ->
+                              D.transfer_call c.args
+                                (Procedure.formal_in_params proc)
+                                (Label v2))
                         |> Iter.map (fun (d3, e2) ->
                             (d1, callee_id, d3, e2 @. e1))
                     | _ -> Iter.empty))
@@ -196,7 +201,7 @@ module IDESSI (D : IDESSIDomain) = struct
        value at the start of the second procedure *)
     let entry_to_call_entry_cache :
         (DL.t * ID.t, (D.t * Program.stmt) DlMap.t ID.Map.t) Hashtbl.t =
-      Hashtbl.create 100
+      Hashtbl.create 20
     in
     let worklist = W1.create () in
     List.iter
@@ -231,16 +236,40 @@ module IDESSI (D : IDESSIDomain) = struct
     done
 
   let compute_defuses (prog : Program.t) : (ID.t, MDeps.t) Hashtbl.t =
-    let relevant_stmts = Hashtbl.create 20 in
+    let defuses = Hashtbl.create 20 in
     ID.Map.iter
       (fun pid proc ->
-        Hashtbl.add relevant_stmts pid
+        Hashtbl.add defuses pid
           (let defuse = def_use_maps proc in
            match D.direction with
            | `Forwards -> defuse.var_to_use
            | `Backwards -> defuse.var_to_def))
       prog.procs;
-    relevant_stmts
+    defuses
+
+  let gen_stub_summaries (prog : Program.t) summaries =
+    let update_summary pid d1 d2 e =
+      let summary = Hashtbl.get_or summaries pid ~default:DlMap.empty in
+      let m = DlMap.get_or d1 summary ~default:DlMap.empty in
+      let m = DlMap.add d2 e m in
+      let summary = DlMap.add d1 m summary in
+      Hashtbl.replace summaries pid summary
+    in
+    ID.Map.iter
+      (fun pid proc ->
+        match Procedure.graph proc with
+        | Some _ -> ()
+        | None ->
+            let init =
+              D.init_data proc
+              |> Iter.map (fun v -> Label v)
+              |> Iter.cons Lambda
+            in
+            Iter.for_each init (fun d ->
+                Procedure.formal_out_params proc
+                |> StringMap.values
+                |> Iter.iter (fun out -> update_summary pid d (Label out) D.top)))
+      prog.procs
 
   let solve (prog : Program.t) =
     let call_graph_sccs =
@@ -255,6 +284,9 @@ module IDESSI (D : IDESSIDomain) = struct
     (* Stores summaries of a procedure (for this scc) about only input-output relations *)
     let entry_to_exit_cache = Hashtbl.create 20 in
     let summaries = Hashtbl.create 20 in
+    (* Initialise stub summaries *)
+    gen_stub_summaries prog summaries;
+    (* Solve p1 *)
     List.iter
       (fun scc -> p1_solve_scc prog defuses entry_to_exit_cache summaries scc)
       call_graph_sccs;

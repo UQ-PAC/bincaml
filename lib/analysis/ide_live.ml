@@ -23,6 +23,7 @@ module IDELiveCommon = struct
     type t = bool [@@deriving eq, ord, show]
 
     let bottom = false
+    let top = true
     let live : t = true
     let dead : t = false
 
@@ -43,6 +44,7 @@ module IDELiveCommon = struct
   type t = IdEdge | ConstEdge of Value.t [@@deriving eq, ord]
 
   let bottom = ConstEdge bottom
+  let top = ConstEdge top
 
   let show v =
     match v with IdEdge -> "IdEdge" | ConstEdge v -> "ConstEdge " ^ show v
@@ -189,14 +191,10 @@ module IDELiveSSI : IDESSIDomain = struct
 
   open DL
 
-  let transfer_call call_info d =
+  let transfer_call call_info arg_info d =
     match d with
     | Lambda -> Iter.empty
-    | Label v ->
-        Iter.of_list call_info
-        |> Iter.filter (fun (v', _) -> Var.equal v v')
-        |> Iter.flat_map (fun (_, e) -> Expr.BasilExpr.free_vars_iter e)
-        |> Iter.map (fun v' -> (Label v', IdEdge))
+    | Label v -> StringMap.find (Var.name v) call_info |> Expr.BasilExpr.free_vars_iter |> Iter.map (fun v' -> (Label v', IdEdge))
 
   let transfer s d =
     let open Stmt in
@@ -319,5 +317,5 @@ proc @fun2(f:bv64, global_in:bv64)  -> (out2:bv64) {  }
     |}]
 
 let ide_test (p : Program.t) =
-    let _ = IDELiveSSIAnalysis.solve p in
-    p
+  let _ = IDELiveSSIAnalysis.solve p in
+  p
