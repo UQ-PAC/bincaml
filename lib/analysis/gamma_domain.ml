@@ -66,7 +66,7 @@ end
 
 module CFGAnalysis = Forwards (Domain)
 module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
-open Ide
+open Idessi
 
 (* TODO The analysis is currently very very slow (1.5 minute runtime on this
    laptop). Optimisations are needed! One potential significant option is to
@@ -75,7 +75,7 @@ open Ide
    amount since currently all dead variables are fully propagated to the end of
    the procedure, including being put into the worklist of the phase 1 solver.
    *)
-module IDEDomain = struct
+module IDEDomain : IDESSIDomain = struct
   let direction = `Forwards
 
   module Data = Var
@@ -84,8 +84,6 @@ module IDEDomain = struct
     type t = Lambda | Label of Var.t
     [@@deriving eq, ord, show { with_path = false }]
   end
-
-  type 'a state_update = (DL.t * 'a) Iter.t
 
   module Value = GammaSet
 
@@ -97,9 +95,10 @@ module IDEDomain = struct
   type t = BottomEdge | IdEdge | TopEdge
   [@@deriving eq, ord, show { with_path = false }]
 
-  let bottom = BottomEdge
   let pp fmt v = Format.pp_print_string fmt (show v)
   let identity = IdEdge
+  let bottom = BottomEdge
+  let top = TopEdge
 
   let compose a b =
     match a with IdEdge -> b | BottomEdge -> BottomEdge | TopEdge -> TopEdge
@@ -115,12 +114,15 @@ module IDEDomain = struct
     | IdEdge -> s
     | TopEdge -> Value.top
 
-  let init_data globals (proc : Program.proc) =
-    Procedure.formal_in_params proc |> StringMap.values |> Iter.append globals
+  let init_data (proc : Program.proc) =
+    Procedure.formal_in_params proc |> StringMap.values
+
+  type state_update = (DL.t * t) Iter.t
 
   open DL
 
-  let transfer_call (c : call_info) d =
+  let transfer_call c p d =
+    (*
     match d with
     | Lambda -> Iter.singleton (d, IdEdge)
     | Label v when Var.is_global v -> Iter.singleton (d, IdEdge)
@@ -128,37 +130,8 @@ module IDEDomain = struct
         Iter.of_list c.rhs
         |> Iter.filter_map (fun (d, e) ->
             Expr.BasilExpr.free_vars e |> VarSet.mem v
-            |> flip Option.return_if (Label d, IdEdge))
-
-  let transfer_return (r : ret_info) d =
-    match d with
-    | Lambda -> Iter.singleton (d, IdEdge)
-    | Label v when Var.is_global v -> Iter.singleton (d, IdEdge)
-    | Label v ->
-        Iter.of_list r.lhs
-        |> Iter.filter_map (fun (a, f) ->
-            Var.equal f v |> flip Option.return_if (Label a, IdEdge))
-
-  let transfer_call_to_aftercall (c : call_info) d =
-    match d with
-    | Lambda -> Iter.singleton (d, IdEdge)
-    | Label v
-      when Var.is_local v
-           && (not @@ List.exists (fun (a, _) -> Var.equal a v) c.lhs) ->
-        Iter.singleton (d, IdEdge)
-    | _ -> Iter.empty
-
-  let transfer_stub (s : stub_info) d =
-    match d with
-    | Lambda ->
-        Iter.singleton (d, IdEdge)
-        |> Iter.append
-             (Iter.of_list s.formal_in
-             |> Iter.append (Iter.of_list s.globals)
-             |> Iter.map (fun v -> (Label v, TopEdge)))
-    | _ -> Iter.empty
-
-  let modifies = Stmt.free_vars_iter
+            |> flip Option.return_if (Label d, IdEdge))*)
+    failwith "todo"
 
   let transfer stmt d =
     let open Stmt in
@@ -199,10 +172,8 @@ module IDEDomain = struct
         (* raise (Failure "ide graph should not contain call statements") nope indirect calls exist *)
         Iter.empty
 
-  let transfer_phi (phi : Var.t VarMap.t) d =
-    match d with
-    | Label v -> Iter.singleton (Label (VarMap.get_or v phi ~default:v), IdEdge)
-    | _ -> Iter.singleton (d, IdEdge)
+  let transfer_phi lhs rhs d = failwith "todo"
+  let init_p2 = failwith "todo"
 end
 
-module IDEAnalysis = IDE (IDEDomain)
+module IDEAnalysis = IDESSI (IDEDomain)
