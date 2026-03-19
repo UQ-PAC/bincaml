@@ -97,13 +97,6 @@ module IDESSI (D : IDESSIDomain) = struct
         W1.add worklist (d1, pid, d2);
         update_summary pid d1 d2 e)
 
-  let is_output proc v =
-    match D.direction with
-    | `Forwards ->
-        Procedure.formal_out_params proc |> StringMap.mem (Var.name v)
-    | `Backwards ->
-        Procedure.formal_in_params proc |> StringMap.mem (Var.name v)
-
   let p1_transfer (prog : Program.t) summaries entry2call entry2exit pid
       (v : Vertex.t) d1 d2 e1 =
     let proc = ID.Map.find pid prog.procs in
@@ -113,7 +106,7 @@ module IDESSI (D : IDESSIDomain) = struct
         let caller = ID.Map.find c.procid prog.procs in
         (match D.direction with
           | `Forwards ->
-              D.transfer_call c.args (Procedure.formal_in_params proc) d2
+              D.transfer_call c.args (Procedure.formal_in_params caller) d2
               |> Iter.map (fun (d, e2) -> (d, e2 @. e1))
           | `Backwards -> (
               match d2 with
@@ -140,9 +133,8 @@ module IDESSI (D : IDESSIDomain) = struct
             |> Iter.flat_map (fun (v3, e2) ->
                 (match D.direction with
                   | `Forwards ->
-                      StringMap.get (Var.name v3) c.lhs
-                      |> Option.to_iter
-                      |> Iter.map (fun v4 -> (Label v4, D.identity))
+                      let v4 = StringMap.find (Var.name v3) c.lhs in
+                      Iter.singleton (Label v4, D.identity)
                   | `Backwards ->
                       D.transfer_call c.args
                         (Procedure.formal_in_params proc)
@@ -155,7 +147,7 @@ module IDESSI (D : IDESSIDomain) = struct
         |> Iter.map (fun (d3, e2) -> (d1, pid, d3, e2 @. e1))
     | _, Vertex.Entry | _, Vertex.Return -> (
         match d2 with
-        | Label v2 when is_output proc v2 ->
+        | Label v2 ->
             (* d2 is an output variable, so e1 is a summary of pid. We first
              * update the entry2exit cache *)
             let k = (pid, d1) in
@@ -173,9 +165,8 @@ module IDESSI (D : IDESSIDomain) = struct
                     | Instr_Call c ->
                         (match D.direction with
                           | `Forwards ->
-                              StringMap.get (Var.name v2) c.lhs
-                              |> Option.to_iter
-                              |> Iter.map (fun v3 -> (Label v3, D.identity))
+                              let v3 = StringMap.find (Var.name v2) c.lhs in
+                              Iter.singleton (Label v3, D.identity)
                           | `Backwards ->
                               D.transfer_call c.args
                                 (Procedure.formal_in_params proc)

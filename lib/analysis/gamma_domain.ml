@@ -68,19 +68,15 @@ module CFGAnalysis = Forwards (Domain)
 module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
 open Idessi
 
-(* TODO The analysis is currently very very slow (1.5 minute runtime on this
-   laptop). Optimisations are needed! One potential significant option is to
-   drop edges that go to dead variables, but this would require a statement
-   precise live var result table stored somewhere. This would help a huge
-   amount since currently all dead variables are fully propagated to the end of
-   the procedure, including being put into the worklist of the phase 1 solver.
-   *)
+(* TODO handle memory nicely *)
 module IDEDomain : IDESSIDomain = struct
   let direction = `Forwards
 
   module DL = struct
     type t = Lambda | Label of Var.t
     [@@deriving eq, ord, show { with_path = false }]
+
+    let show = function Lambda -> "L" | Label v -> Var.name v
   end
 
   module Value = GammaSet
@@ -131,7 +127,10 @@ module IDEDomain : IDESSIDomain = struct
   let transfer stmt d =
     let open Stmt in
     match d with
-    | Lambda -> Iter.empty
+    | Lambda -> (
+        match stmt with
+        | Instr_Load l -> Iter.singleton (Label l.lhs, TopEdge)
+        | _ -> Iter.empty)
     | Label v -> (
         match stmt with
         | Instr_Assign a ->
@@ -141,51 +140,11 @@ module IDEDomain : IDESSIDomain = struct
                   Iter.singleton (Label v', IdEdge)
                 else Iter.empty)
         | _ -> Iter.empty)
-  (*
-    match stmt with
-    | Instr_Assign a -> (
-        match d with
-        | Lambda -> Iter.singleton (d, IdEdge)
-        | Label v ->
-            Iter.of_list a
-            |> Iter.flat_map (fun (v', e) ->
-                match v with
-                | v when VarSet.mem v (Expr.BasilExpr.free_vars e) ->
-                    Iter.singleton (Label v', IdEdge)
-                | v -> Iter.empty)
-            |> fun i ->
-            if List.exists (fun (v', _) -> Var.equal v v') a then i
-            else Iter.cons (d, IdEdge) i)
-    | Instr_Assume { body; branch } when branch -> (
-        match d with
-        (* If a variable has to be low, force it to bottom *)
-        | Label v when VarSet.mem v (Expr.BasilExpr.free_vars body) ->
-            Iter.empty
-        | _ -> Iter.singleton (d, IdEdge))
-    | Instr_Load { lhs; rhs } -> (
-        match d with
-        | Label v when Var.equal v rhs ->
-            Iter.of_list [ (d, IdEdge); (Label lhs, IdEdge) ]
-        | Label v when Var.equal v lhs -> Iter.empty
-        | _ -> Iter.singleton (d, IdEdge))
-    | Instr_Store { lhs; rhs; value } -> (
-        match d with
-        | Label v when Var.equal v rhs -> Iter.singleton (Label lhs, IdEdge)
-        | Label v when VarSet.mem v (Expr.BasilExpr.free_vars value) ->
-            Iter.of_list [ (d, IdEdge); (Label lhs, IdEdge) ]
-        | _ -> Iter.singleton (d, IdEdge))
-    | Instr_Assume _ | Instr_Assert _ -> Iter.singleton (d, IdEdge)
-    | Instr_Call _ | Instr_IntrinCall _ | Instr_IndirectCall _ ->
-        (* raise (Failure "ide graph should not contain call statements") nope indirect calls exist *)
-        Iter.empty
-        *)
 
   let transfer_phi lhs rhs d =
     match d with
     | Lambda -> Iter.empty
-    | Label v ->
-        if List.mem ~eq:Var.equal v rhs then Iter.singleton (Label lhs, IdEdge)
-        else Iter.empty
+    | Label v -> Iter.singleton (Label lhs, IdEdge)
 
   let init_p2 (proc : Program.proc) =
     Procedure.formal_in_params proc
@@ -194,3 +153,16 @@ module IDEDomain : IDESSIDomain = struct
 end
 
 module IDEAnalysis = IDESSI (IDEDomain)
+
+let test (p : Program.t) =
+  let summaries, res = IDEAnalysis.solve p in
+  ID.Map.iter
+    (fun pid res ->
+      print_endline @@ ID.name pid;
+      print_endline @@ IDEAnalysis.show_summary @@ Hashtbl.find summaries pid;
+      VarMap.to_iter res
+      |> Iter.to_string (fun (v, s) ->
+          Var.name v ^ "->" ^ IDEDomain.Value.show s)
+      |> print_endline)
+    res;
+  p
