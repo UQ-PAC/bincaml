@@ -332,7 +332,3 @@ proc @fun2(f:bv64, global_in:bv64)  -> (out2:bv64) {  }
     (L,L->IdEdge), (L,d->ConstEdge true), (out,global_in->IdEdge), (out,c->IdEdge), (out,out->IdEdge), (out,global_1->IdEdge), (out,e->IdEdge)
     global_in, c, d, out, global_1, e
     |}]
-
-let ide_test (p : Program.t) =
-  let _ = IDELiveSSIAnalysis.solve p in
-  p

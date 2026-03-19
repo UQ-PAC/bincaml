@@ -212,12 +212,6 @@ module PassManager = struct
           Prog (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
       };
-      {
-        name = "idessi-test";
-        apply =
-          Prog (Analysis.Ide_live.ide_test);
-        doc = "test idessi";
-      };
     ]
 
   let print_passes =
