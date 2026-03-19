@@ -944,6 +944,9 @@ let rec constrain_expr proc (st : ConstraintState.t)
     (expr : 'e BasilExpr.abstract_expr) =
   let open InferredType in
   match expr with
+  (* TODO *)
+  | Lambda _ -> (st, Top)
+  | Let _ -> (st, Top)
   | RVar { id } ->
       let typ =
         match Var.typ id with
@@ -997,10 +1000,9 @@ let rec constrain_expr proc (st : ConstraintState.t)
           in
           ( constrain_arg proc st a @@ BinCamlType (BinCaml_BV size),
             BinCamlType (BinCaml_BV (size + b)) )
-      | `Exists -> (st, BinCamlType BinCaml_Bool) (* TODO: Confirm *)
       | `Old -> (st, Top)
-      | `Forall -> (st, Top)
-      | `Lambda | `Classification | `Gamma -> (st, Top)
+      | `Gamma -> (st, Top)
+      | `Classification -> (st, Top)
       | `Extract (finish, rt) ->
           (* NOTE: This seems hard to determine what type is within a record *)
           let size = finish - rt in
@@ -1100,13 +1102,13 @@ let rec constrain_expr proc (st : ConstraintState.t)
           in
           (st, typ)
       | `Cases -> (st, Top)
+      | `MapUpdate -> (st, Top)
       | `BVConcat ->
           ( st,
             BinCamlType
               (BinCamlType.type_to_bincaml_type
               @@ BasilExpr.type_of (BasilExpr.fix expr)) ))
   | ApplyFun _ -> (st, Top)
-  | Binding _ -> (st, Top)
 
 let constraint_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt :
     ConstraintState.t =
