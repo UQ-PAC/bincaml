@@ -229,8 +229,7 @@ module IDELiveSSI : IDESSIDomain = struct
         | Instr_Call c when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs
           ->
             Iter.empty
-        (*| Instr_IndirectCall c -> top *)
-        | Instr_IndirectCall c -> Iter.empty (* Unsound *)
+        | Instr_IndirectCall c -> failwith "unreachable"
         | Instr_Assert _ | Instr_Assume _ | Instr_Load _ | Instr_Store _
         | Instr_Call _ | Instr_IntrinCall _ ->
             Iter.empty)
