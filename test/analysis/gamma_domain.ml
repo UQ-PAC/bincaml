@@ -1,17 +1,20 @@
 open Analysis.Gamma_domain
 open Bincaml_util.Common
 
-let intra_results proc = CFGAnalysis.analyse proc
+let intra_results proc = DFGAnalysis.flow_insensitive proc
 let inter_results prog = IDEAnalysis.solve prog
 
 let print_intra_results res =
-  CFGAnalysis.A.M.find Procedure.Vert.Return res |> Domain.show |> print_endline
+  DFGAnalysis.D.to_iter res
+  |> Iter.to_string (fun (v, s) -> Var.name v ^ "->" ^ GammaSet.show s)
+  |> print_endline
 
 let print_inter_results =
   ID.Map.iter (fun pid res ->
       print_endline @@ ID.name pid;
       VarMap.to_iter res
-      |> Iter.to_string (fun (v, s) -> Var.name v ^ "->" ^ IDEDomain.Value.show s)
+      |> Iter.to_string (fun (v, s) ->
+          Var.name v ^ "->" ^ IDEDomain.Value.show s)
       |> print_endline)
 
 let%expect_test "loop" =
@@ -50,16 +53,16 @@ proc @main(a_in:bv64, b_in:bv64, x_in:bv64)  -> (x_out:bv64) {  }
     |}
   in
   let prog = lst.prog in
-  (*
   let main =
     prog.entry_proc |> Option.get_exn_or "No entry proc" |> Program.proc prog
   in
   let intra = intra_results main in
   print_intra_results intra;
-  *)
   let _, results = inter_results prog in
   print_inter_results results;
-  [%expect {|
+  [%expect
+    {|
+    a_in->{a_in}, b_in->{b_in}, x_in->{x_in}, x_out->{a_in,b_in,x_in}, x_1->{x_in}, a_1->{a_in}, b_1->{b_in}, x_3->{b_in,x_in}, x_2->{b_in,x_in}, a_2->{a_in}, b_2->{b_in}, x_4->{a_in,b_in,x_in}, x_5->{a_in,b_in,x_in}
     @main
     a_in->{a_in}, b_in->{b_in}, x_in->{x_in}, x_out->{a_in,b_in,x_in}, x_1->{x_in}, a_1->{a_in}, b_1->{b_in}, x_3->{b_in,x_in}, x_2->{b_in,x_in}, a_2->{a_in}, b_2->{b_in}, x_4->{a_in,b_in,x_in}, x_5->{a_in,b_in,x_in}
     |}]
