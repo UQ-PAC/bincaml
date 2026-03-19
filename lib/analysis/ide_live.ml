@@ -233,7 +233,9 @@ module IDELiveSSI : IDESSIDomain = struct
             Iter.empty)
 
   let transfer_phi lhs rhs d =
-    Iter.of_list rhs |> Iter.map (fun v -> (Label v, IdEdge))
+    match d with
+    | Lambda -> Iter.empty
+    | _ -> Iter.of_list rhs |> Iter.map (fun v -> (Label v, IdEdge))
 end
 
 module IDELiveSSIAnalysis = IDESSI (IDELiveSSI)
@@ -309,11 +311,11 @@ proc @fun2(f:bv64, global_in:bv64)  -> (out2:bv64) {  }
   [%expect
     {|
     @fun2
-    (L,L->IdEdge), (L,global_in->IdEdge), (L,f->ConstEdge true), (L,global_1->IdEdge), (L,f_2->ConstEdge true), (L,g_2->IdEdge), (L,f_1->ConstEdge true), (L,g_1->IdEdge), (out2,global_in->IdEdge), (out2,f->IdEdge), (out2,out2->IdEdge), (out2,global_1->IdEdge), (out2,f_2->IdEdge), (out2,g_2->IdEdge), (out2,f_1->IdEdge), (out2,g_1->IdEdge), (out2,f_3->IdEdge), (out2,g_3->IdEdge)
+    (L,L->IdEdge), (L,f->ConstEdge true), (L,f_2->ConstEdge true), (L,f_1->ConstEdge true), (out2,global_in->IdEdge), (out2,out2->IdEdge), (out2,global_1->IdEdge), (out2,g_2->IdEdge), (out2,g_1->IdEdge), (out2,f_3->IdEdge), (out2,g_3->IdEdge)
     @main
     (L,L->IdEdge), (L,b->ConstEdge true), (L,global_in->ConstEdge true), (L,y->ConstEdge true), (L,global_1->ConstEdge true), (L,a->ConstEdge true), (L,x->ConstEdge true), (L,b_1->ConstEdge true), (L,x_1->ConstEdge true), (L,y_1->ConstEdge true)
     @fun1
-    (L,L->IdEdge), (L,global_in->IdEdge), (L,d->IdEdge), (L,global_1->IdEdge), (out,global_in->IdEdge), (out,c->IdEdge), (out,d->IdEdge), (out,out->IdEdge), (out,global_1->IdEdge), (out,e->IdEdge)
+    (L,L->IdEdge), (L,d->ConstEdge true), (out,global_in->IdEdge), (out,c->IdEdge), (out,out->IdEdge), (out,global_1->IdEdge), (out,e->IdEdge)
     |}]
 
 let ide_test (p : Program.t) =

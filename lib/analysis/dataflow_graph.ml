@@ -178,7 +178,7 @@ let reverse_dfg_vertices_priority def_use =
 
 let use_to_def_map ?(require_full_ssa = false) ?def_use p =
   let def_use_vert =
-    Option.get_or ~default:(get_dfg_vertices ~direction:`Forwards p) def_use
+    Option.get_lazy (fun _ -> get_dfg_vertices ~direction:`Forwards p) def_use
   in
   let to_def =
     def_use_vert
@@ -196,7 +196,7 @@ let use_to_def_map ?(require_full_ssa = false) ?def_use p =
 
 let def_to_use_map ?def_use p =
   let def_use_vert =
-    Option.get_or ~default:(get_dfg_vertices ~direction:`Forwards p) def_use
+    Option.get_lazy (fun _ -> get_dfg_vertices ~direction:`Forwards p) def_use
   in
   def_use_vert
   |> Iter.flat_map (fun v -> Vertex.uses p v |> Iter.map (fun s -> (s, v)))
@@ -205,7 +205,7 @@ let def_to_use_map ?def_use p =
 (** return the vertex dependency maps {! defuse} for a procedure *)
 let def_use_maps ?(require_full_ssa = false) ?def_use p =
   let def_use_vert =
-    Option.get_or ~default:(get_dfg_vertices ~direction:`Forwards p) def_use
+    Option.get_lazy (fun _ -> get_dfg_vertices ~direction:`Forwards p) def_use
   in
   let to_def = use_to_def_map ~require_full_ssa ~def_use:def_use_vert p in
   let to_use = def_to_use_map ~def_use:def_use_vert p in

@@ -111,6 +111,7 @@ module IDESSI (D : IDESSIDomain) = struct
         (match D.direction with
           | `Forwards ->
               D.transfer_call c.args (Procedure.formal_in_params proc) d2
+              |> Iter.map (fun (d, e2) -> (d, e2 @. e1))
           | `Backwards -> (
               match d2 with
               | Lambda -> Iter.singleton (Lambda, D.identity)
@@ -164,7 +165,7 @@ module IDESSI (D : IDESSIDomain) = struct
             |> ID.Map.to_iter
             |> Iter.flat_map (fun (callee_id, m) ->
                 DlMap.to_iter m
-                |> Iter.flat_map (fun (d1, (e1, s)) ->
+                |> Iter.flat_map (fun (d0, (e0, s)) ->
                     match s with
                     | Instr_Call c ->
                         (match D.direction with
@@ -177,7 +178,7 @@ module IDESSI (D : IDESSIDomain) = struct
                                 (Procedure.formal_in_params proc)
                                 (Label v2))
                         |> Iter.map (fun (d3, e2) ->
-                            (d1, callee_id, d3, e2 @. e1))
+                            (d0, callee_id, d3, e2 @. e1 @. e0))
                     | _ -> Iter.empty))
         | _ -> Iter.empty)
 
