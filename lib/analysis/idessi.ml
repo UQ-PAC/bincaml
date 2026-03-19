@@ -91,8 +91,8 @@ module IDESSI (D : IDESSIDomain) = struct
     | `Backwards ->
         Procedure.formal_in_params proc |> StringMap.mem (Var.name v)
 
-  let p1_transfer (prog : Program.t) summaries entry2call pid (v : Vertex.t) d1
-      d2 e1 =
+  let p1_transfer (prog : Program.t) summaries entry2call entry2exit pid
+      (v : Vertex.t) d1 d2 e1 =
     let proc = ID.Map.find pid prog.procs in
     let open Stmt in
     match v with
@@ -119,21 +119,14 @@ module IDESSI (D : IDESSIDomain) = struct
         |> Iter.flat_map (fun (d, e1) ->
             (* update the entry2call cache *)
             let k = (d, c.procid) in
-            print_endline @@ DL.show d1 ^ DL.show d ^ ID.show pid ^ ID.show c.procid;
             Hashtbl.get_or entry2call k ~default:ID.Map.empty
             |> ID.Map.update pid (function
-                | Some m -> Some(DlMap.add d1 (e1, s) m)
-                | None -> Some(DlMap.singleton d1 (e1, s)))
+              | Some m -> Some (DlMap.add d1 (e1, s) m)
+              | None -> Some (DlMap.singleton d1 (e1, s)))
             |> Hashtbl.replace entry2call k;
             (* If a summary of the caller exists, propagate through it *)
-            Hashtbl.get_or summaries c.procid ~default:DlMap.empty
-            |> DlMap.get_or d ~default:DlMap.empty
-            |> DlMap.to_iter
-            |> Iter.filter_map (fun (d', e') ->
-                print_endline @@ DL.show d';
-                match d' with
-                | Lambda -> None
-                | Label v -> is_output proc v |> flip Option.return_if (v, e'))
+            Hashtbl.get_or entry2exit (c.procid, d) ~default:VarMap.empty
+            |> VarMap.to_iter
             |> Iter.flat_map (fun (v3, e2) ->
                 (match D.direction with
                   | `Forwards ->
@@ -150,13 +143,17 @@ module IDESSI (D : IDESSIDomain) = struct
     | _, Vertex.Entry | _, Vertex.Return -> (
         match d2 with
         | Label v2 when is_output proc v2 ->
-            (* d3 is an output variable, so e2 is a summary of pid. We now
-             * propagate to all callees of this procedure that are stored in
-             * the cache *)
+            (* d2 is an output variable, so e1 is a summary of pid. We first
+             * update the entry2exit cache *)
+            let k = (pid, d1) in
+            Hashtbl.get_or entry2exit k ~default:VarMap.empty
+            |> VarMap.add v2 e1
+            |> Hashtbl.replace entry2exit k;
+            (* We now propagate to all callees of this procedure that are
+             * stored in the cache *)
             Hashtbl.get_or entry2call (d1, pid) ~default:ID.Map.empty
             |> ID.Map.to_iter
             |> Iter.flat_map (fun (callee_id, m) ->
-                print_endline @@ DL.show d2 ^ ID.show pid;
                 DlMap.to_iter m
                 |> Iter.flat_map (fun (d1, (e1, s)) ->
                     match s with
@@ -180,7 +177,8 @@ module IDESSI (D : IDESSIDomain) = struct
         | _ -> Iter.empty)
 
   let p1_solve_scc (prog : Program.t) (defuses : (ID.t, MDeps.t) Hashtbl.t)
-      (summaries : (ID.t, summary) Hashtbl.t) scc : (ID.t, summary) Hashtbl.t =
+      (entry_to_exit_cache : (ID.t * DL.t, D.t VarMap.t) Hashtbl.t)
+      (summaries : (ID.t, summary) Hashtbl.t) scc =
     let get_summary pid d1 d2 =
       Hashtbl.get_or summaries pid ~default:DlMap.empty
       |> DlMap.get_or d1 ~default:DlMap.empty
@@ -227,10 +225,10 @@ module IDESSI (D : IDESSIDomain) = struct
             |> get_dfg_vertices ~direction:D.direction
         | Label v2 -> MDeps.find_iter def_use v2)
       |> Iter.iter (fun v ->
-          p1_transfer prog summaries entry_to_call_entry_cache pid v d1 d2 e1
+          p1_transfer prog summaries entry_to_call_entry_cache
+            entry_to_exit_cache pid v d1 d2 e1
           |> propagate worklist summaries get_summary update_summary)
-    done;
-    summaries
+    done
 
   let compute_defuses (prog : Program.t) : (ID.t, MDeps.t) Hashtbl.t =
     let relevant_stmts = Hashtbl.create 20 in
@@ -254,10 +252,11 @@ module IDESSI (D : IDESSIDomain) = struct
              | _ -> None))
     in
     let defuses = compute_defuses prog in
-    let p1_summaries =
-      List.fold_left
-        (fun summaries scc -> p1_solve_scc prog defuses summaries scc)
-        (Hashtbl.create 20) call_graph_sccs
-    in
-    p1_summaries
+    (* Stores summaries of a procedure (for this scc) about only input-output relations *)
+    let entry_to_exit_cache = Hashtbl.create 20 in
+    let summaries = Hashtbl.create 20 in
+    List.iter
+      (fun scc -> p1_solve_scc prog defuses entry_to_exit_cache summaries scc)
+      call_graph_sccs;
+    summaries
 end
