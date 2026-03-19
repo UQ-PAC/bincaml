@@ -31,23 +31,29 @@ let solve (prog : Program.t) =
   let local_rw (p : ID.t) (valuations : FixProp.valuation) =
     let p = ID.Map.find p prog.procs in
     let read, written =
-      Procedure.fold_blocks_topo_fwd
-        (fun a bid block ->
-          let local =
-            ( Block.read_vars_iter block |> Iter.filter Var.is_global
-              |> VarSet.of_iter,
-              VarSet.of_iter
-                (Block.assigned_vars_iter block |> Iter.filter Var.is_global) )
-          in
-          let calls =
-            Block.stmts_iter block
-            |> Iter.filter_map (function
-              | Stmt.Instr_Call { procid } -> Some (valuations procid)
-              | _ -> None)
-          in
-          Iter.cons local calls |> Iter.fold RWSets.leq_join a)
-        (VarSet.empty, VarSet.empty)
-        p
+      match Procedure.graph p with
+      | Some _ ->
+          Procedure.fold_blocks_topo_fwd
+            (fun a bid block ->
+              let local =
+                ( Block.read_vars_iter block |> Iter.filter Var.is_global
+                  |> VarSet.of_iter,
+                  VarSet.of_iter
+                    (Block.assigned_vars_iter block |> Iter.filter Var.is_global)
+                )
+              in
+              let calls =
+                Block.stmts_iter block
+                |> Iter.filter_map (function
+                  | Stmt.Instr_Call { procid } -> Some (valuations procid)
+                  | _ -> None)
+              in
+              Iter.cons local calls |> Iter.fold RWSets.leq_join a)
+            (VarSet.empty, VarSet.empty)
+            p
+      | None ->
+          let globs = Program.global_vars prog |> VarSet.of_iter in
+          (globs, globs)
     in
     (read, written)
   in

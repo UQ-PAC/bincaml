@@ -62,10 +62,7 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
       Some (bv (BVOps.eval_intrin op args))
   | UnaryExpr { op = #LogicalOps.unary as op; arg = b } ->
       get_bool b >|= LogicalOps.eval_unary op >>= bool
-  | UnaryExpr { op = `Forall } -> None
   | UnaryExpr { op = `Old } -> None
-  | UnaryExpr { op = `Lambda } -> None
-  | UnaryExpr { op = `Exists } -> None
   | UnaryExpr { op = #IntOps.unary as op; arg = b } ->
       get_int b >|= IntOps.eval_unary op >|= fun b -> `Integer b
   | BinaryExpr { op = #IntOps.binary_unif as op; arg1 = a; arg2 = b } ->
@@ -84,7 +81,8 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
       let* args = all_args get_bool args in
       bool @@ LogicalOps.eval_intrin op args
   | ApplyFun _ -> None
-  | Binding _ -> None
+  | Lambda _ -> None
+  | Let _ -> None
   | UnaryExpr { op = #Ops.Spec.unary } -> None
   | BinaryExpr { op = #Ops.Spec.binary } -> None
   | ApplyIntrin { op = #Ops.Spec.intrin } -> None

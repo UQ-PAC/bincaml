@@ -109,6 +109,12 @@ module SMTLib2 = struct
         let tr, lr = of_typ r in
         let log = LSet.union (LSet.singleton Array) (LSet.union ll lr) in
         (list [ atom "Array"; tl; tr ], log)
+    | Types.Variable v -> (atom v, LSet.empty)
+    | Types.Record e ->
+        failwith "unsupported: must be lowered to Sort/ADT/Datatype first"
+    | Types.Pointer { upper; lower } ->
+        ( list [ atom "Pointer "; fst (of_typ upper); fst (of_typ lower) ],
+          LSet.singleton UF )
 
   let add_logic l s = ((), { s with logics = LSet.add l s.logics })
 
@@ -125,6 +131,8 @@ module SMTLib2 = struct
       | `Bitvector _ -> add_logic BV
       | `Integer _ -> add_logic Int
       | `Bool _ -> return ()
+      | `Record _ -> add_logic DT
+      | `Pointer _ -> add_logic UF
     in
     return v
 
@@ -172,6 +180,22 @@ module SMTLib2 = struct
     | #Ops.AllOps.binary as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.intrin as o -> atom @@ Ops.AllOps.to_string o
 
+  let let_binding bound_vars exprs in_body =
+    let vs = List.map Var.name bound_vars in
+    let* binds = sequence exprs in
+    let binds = List.combine vs binds in
+    let* body = in_body in
+    return @@ Bincaml_util.Smt.Expr.let_ binds body
+
+  let quantifier quant bound_vars in_body =
+    let names = List.map (Var.name %> atom) bound_vars in
+    let types = List.map (Var.typ %> of_typ %> fst) bound_vars in
+    let binds =
+      List.combine names types |> List.map (fun (a, b) -> list [ a; b ])
+    in
+    let* body = in_body in
+    return @@ list [ quant; list binds; body ]
+
   let smt_alg (e : sexp t BasilExpr.abstract_expr) =
     match e with
     | Constant { const = o } ->
@@ -188,6 +212,33 @@ module SMTLib2 = struct
                of_op (`Bitvector (Bitvec.one ~size:1));
                of_op (`Bitvector (Bitvec.zero ~size:1));
              ]
+    | Lambda { op; bound_vars; in_body } ->
+        (* TODO: trigger *)
+        let names = List.map (Var.name %> atom) bound_vars in
+        let types = List.map (Var.typ %> of_typ %> fst) bound_vars in
+        let binds =
+          List.combine names types |> List.map (fun (a, b) -> list [ a; b ])
+        in
+        let* in_body = in_body in
+        let o =
+          match op with
+          | `Forall -> "forall"
+          | `Exists -> "exists"
+          | `Lambda -> "lambda"
+        in
+        return @@ list [ atom o; list binds; in_body ]
+    | Let { bound_vars; in_body } ->
+        (* TODO: trigger *)
+        let* in_body = in_body in
+        let* binds =
+          sequence
+          @@ List.map
+               (fun (v, b) ->
+                 let* b = b in
+                 return @@ list [ atom @@ Var.name v; b ])
+               bound_vars
+        in
+        return @@ list [ atom "let"; list binds; in_body ]
     | UnaryExpr { op = o; arg = e } ->
         let* e = e in
         return @@ list [ of_op o; e ]
@@ -199,7 +250,6 @@ module SMTLib2 = struct
         let* l = l in
         let* r = r in
         return @@ list [ of_op o; l; r ]
-    (* TODO: bool2bv1 *)
     | ApplyIntrin { op = o; args } ->
         let* args = sequence args in
         return (list (of_op o :: args))
@@ -208,8 +258,6 @@ module SMTLib2 = struct
         let* args = sequence args in
         let* func = func in
         return @@ list (func :: args)
-    (* TODO: bindings *)
-    | Binding _ -> failwith "unsupp"
 
   let of_bexpr e = fst @@ (BasilExpr.cata smt_alg e) empty
   let bind_of_bexpr e b = BasilExpr.cata smt_alg e b

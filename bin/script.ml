@@ -172,8 +172,9 @@ let of_cmd st (e : Containers.Sexp.t) =
                         k ^ "=" ^ Lang.Ops.AllOps.to_string v))
                 in
                 params ^ "\n" ^ state
-            | Error st ->
-                "ERROR STATE " ^ Lang.Interp.IState.show ~show_stack:true st
+            | Error (st, msg) ->
+                "ERROR " ^ msg ^ " after state "
+                ^ Lang.Interp.IState.show ~show_stack:true st
           in
           CCIO.with_out ofile (fun c -> output_string c ist);
           st

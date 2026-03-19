@@ -189,14 +189,15 @@ module BasilASTLoader = struct
                  ~pure:true ~scope:Global ftype))
           prog
     | Decl_FunNoType (glident, _, _) -> prog
-    | Decl_Fun (glident, _, typ, _) ->
-        let rtype = trans_type typ in
+    | Decl_Fun (glident, params, _, typ, _) ->
+        let bound = unpac_lambdaparen ~bound:StringMap.empty prog params in
+        let arg_types = List.map Var.typ bound in
+        let rtype = Types.curry arg_types (trans_type typ) in
         let bvar =
           Var.create
             (unsafe_unsigil (`Global glident))
             ~pure:true ~scope:Global rtype
         in
-
         let fundef : Program.declaration =
           Function
             {
@@ -270,15 +271,29 @@ module BasilASTLoader = struct
                 { spec with guarantee = trans_expr p_st b :: spec.guarantee };
             })
 
-  and create_fun prog glident attrList typ body =
+  (** desugar let definition function *)
+  and create_fun prog glident args attrList typ body =
+    let bound = unpac_lambdaparen ~bound:StringMap.empty prog args in
     let definition : Program.func_type =
       match body with
-      | Some e -> Function (trans_expr prog e)
+      | Some e -> (
+          match bound with
+          | [] -> Function (trans_expr prog e)
+          | args ->
+              let binds =
+                StringMap.of_list (List.map (fun v -> (Var.name v, v)) args)
+              in
+              let body =
+                BasilExpr.lambda ~bound:args (trans_expr ~binds prog e)
+              in
+              Function body)
       | None -> Uninterpreted
     in
     let rtype =
       match typ with
-      | Some typ -> trans_type typ
+      | Some typ ->
+          let arg_types = List.map Var.typ bound in
+          Types.curry arg_types (trans_type typ)
       | None -> (
           match definition with
           | Function e -> BasilExpr.type_of e
@@ -308,11 +323,11 @@ module BasilASTLoader = struct
   and trans_definition prog (x : decl) : load_st =
     match x with
     | Decl_UninterpFun (glident, attrDefList, rettype) ->
-        create_fun prog glident attrDefList (Some rettype) None
+        create_fun prog glident [] attrDefList (Some rettype) None
     | Decl_FunNoType (glident, attrList, body) ->
-        create_fun prog glident attrList None (Some body)
-    | Decl_Fun (glident, attrList, typ, body) ->
-        create_fun prog glident attrList (Some typ) (Some body)
+        create_fun prog glident [] attrList None (Some body)
+    | Decl_Fun (glident, args, attrList, typ, body) ->
+        create_fun prog glident args attrList (Some typ) (Some body)
     | Decl_Axiom (name, attr, body) ->
         let attrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         let body = trans_expr prog body in
@@ -675,12 +690,10 @@ module BasilASTLoader = struct
           Var.create ~scope:Local (unsafe_unsigil (`Local i)) (trans_type t)
       | LocalUntyped i -> lookup_local_decl ~binds:bound i p_st)
 
-  and unpac_lambdaparen ?(bound = StringMap.empty) p_st lvs =
+  and unpac_lambdaparen ?(bound = StringMap.empty) p_st lvs : Var.t list =
     unpack_local_lvars ~bound p_st
     @@ List.map
-         (function
-           | LocalVarParenLocalVar v -> v
-           | LocalVarParen1 (_, i, t, _) -> LocalTyped (i, t))
+         (function LocalVarParen1 (_, i, t, _) -> LocalTyped (i, t))
          lvs
 
   and trans_jump p_st (x : BasilIR.AbsBasilIR.jumpWithAttrib) =
@@ -1043,6 +1056,18 @@ module BasilASTLoader = struct
         in
         let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
         BasilExpr.lambda ~attrib ~bound (trans_expr ~nbinds:bound e)
+    | Expr_Let (id, param, rt, body, in_expr) ->
+        let id = unsafe_unsigil (`Local id) in
+        let bound = unpac_lambdaparen ~bound:StringMap.empty p_st param in
+        let funct = Types.curry (List.map Var.typ bound) (trans_type rt) in
+        let funvar = Var.create id funct ~scope:Local in
+        let func =
+          match bound with
+          | [] -> trans_expr ~nbinds:bound body
+          | args -> BasilExpr.lambda ~bound (trans_expr ~nbinds:bound body)
+        in
+        let in_expr = trans_expr ~nbinds:[ funvar ] in_expr in
+        BasilExpr.letexp [ (funvar, func) ] in_expr
     | Expr_Exists (attrs, LambdaDef1 (lv, _, e)) ->
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
         let binds =
@@ -1581,7 +1606,8 @@ proc @test1() -> ()
     var $R0:bv64;
     var $R1:bv64;
     proc @test1()  -> () { .name = "test1" }
-      modifies $R0:bv64
+      modifies $R0:bv64, $R1:bv64
+      captures $R0:bv64, $R1:bv64
       requires eq($R1:bv64, 0x0:bv64)
       ensures eq($R1:bv64, 0x0:bv64)
     ;
