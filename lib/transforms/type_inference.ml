@@ -139,28 +139,32 @@ module InferredType = struct
     | Record fields -> List.iter (fun { ty } -> iter f ty) fields
 
   (* Top and type_var might be valid, and maybe even bottom and then those can just default to whatever type it had prior *)
-  let rec inferred_to_real typ : Types.t =
+  let rec inferred_to_real recursives typ : (VarId.t * Types.t) list * Types.t =
     match typ with
-    | Top -> Types.Top
-    | Bottom -> Types.Nothing
-    | TypeVar a -> Types.Variable (VarId.show a)
-    | BinCamlType a -> BinCamlType.bincaml_type_to_type a
+    | Top -> (recursives, Types.Top)
+    | Bottom -> (recursives, Types.Nothing)
+    | TypeVar a -> (recursives, Types.Variable (VarId.show a))
+    | BinCamlType a -> (recursives, BinCamlType.bincaml_type_to_type a)
     | Pointer (lower, upper) ->
-        Types.Pointer
-          { lower = inferred_to_real lower; upper = inferred_to_real upper }
+        let recursives, lower = inferred_to_real recursives lower in
+        let recursives, upper = inferred_to_real recursives upper in
+        (recursives, Types.Pointer { lower; upper })
     | Record fields ->
-        Types.Record
-          (StringMap.of_list
-          @@ List.map
-               (fun ({ offset; ty } : field) ->
-                 ( Z.to_string offset,
-                   ({ typ = inferred_to_real ty; offset } : Types.record_field)
-                 ))
-               fields)
-    | Field { ty } -> inferred_to_real ty
-    | Recursive _ -> Top (* TODO *)
-    | Union (a, b) | Sect (a, b) -> inferred_to_real a (* TODO *)
-    | Function _ -> Top
+        let recursives, fields =
+          List.fold_left_map
+            (fun recursives ({ offset; ty } : field) ->
+              let recursives, typ = inferred_to_real recursives ty in
+              ( recursives,
+                (Z.to_string offset, ({ typ; offset } : Types.record_field)) ))
+            recursives fields
+        in
+        (recursives, Types.Record (StringMap.of_list fields))
+    | Field { ty } -> inferred_to_real recursives ty
+    | Recursive (varid, typ) ->
+        let recursives, typ = inferred_to_real recursives typ in
+        ((varid, typ) :: recursives, Types.Variable (VarId.show varid))
+    | Union (a, b) | Sect (a, b) -> inferred_to_real recursives a (* TODO *)
+    | Function _ -> (recursives, Top)
 
   let rec type_to_inferred (typ : Types.t) : t =
     match typ with
@@ -1305,7 +1309,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
   | Stmt.Instr_IndirectCall _ -> st
 
 (* Passes through a given program and returns a given constraint set *)
-let analyse (prog : Program.t) : Types.t VarIdMap.t =
+let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
   (* Generate constraint set *)
   let type_constraint_map =
     ID.Map.values prog.procs
@@ -1362,21 +1366,32 @@ let analyse (prog : Program.t) : Types.t VarIdMap.t =
     What would happen if we made one huge automata and tried to solve it like that?
   *)
   (* Make the types simpler *)
-  let types =
-    VarIdMap.mapi
-      (fun name (lower_ty, upper_ty) ->
-        InferredType.inferred_to_real
-        @@ InferredType.join
-             (minimise_type Polarity.Pos lower_ty name)
-             (minimise_type Polarity.Neg upper_ty name))
-      types
+  let ( (recursives : (VarId.t * Types.t) list),
+        (types : (VarId.t * Types.t) list) ) =
+    VarIdMap.fold
+      (fun name (lower_ty, upper_ty) (recursives, types) ->
+        let recursives2, types2 =
+          InferredType.inferred_to_real recursives
+          @@ InferredType.join
+               (minimise_type Polarity.Pos lower_ty name)
+               (minimise_type Polarity.Neg upper_ty name)
+        in
+        (recursives, (name, types2) :: types))
+      types ([], [])
   in
   (* VarIdMap.iter *)
   (* (fun id (lower, upper) -> *)
   (* Printf.printf "\n%s: \n\t\t lower: %s\n\t\t upper: %s" (VarId.show id) *)
   (* (InferredType.show lower) (InferredType.show upper)) *)
   (* types; *)
-  types
+  (VarIdMap.of_list types, recursives)
+
+(*
+  Transform Section
+  =================
+
+  Actual transform to replace the types in stmt / exprs etc. with inferred types  
+*)
 
 let get_type results proc var : Types.t =
   match VarIdMap.find_opt (VarId.var_proc_to_uid var proc) results with
@@ -1391,16 +1406,16 @@ let map_var results proc (var : Var.t) : Var.t =
   Var.create (Var.name var) ~pure:(Var.pure var) ~scope:(Var.scope var)
   @@ get_type results proc var
 
-let expr_rewriter results proc (abstract_expr : 'e BasilExpr.abstract_expr) :
-    BasilExpr.rewrite =
-  match abstract_expr with
-  | AbstractExpr.RVar { id; attrib } ->
-      BasilExpr.replace [%here]
-        (BasilExpr.rvar ?attrib @@ map_var results proc id)
-  (* TODO: Is this the best way to do no changes *)
-  | _ -> BasilExpr.replace [%here] @@ BasilExpr.fix abstract_expr
-
 let map_expr results proc =
+  let expr_rewriter results proc (abstract_expr : 'e BasilExpr.abstract_expr) :
+      BasilExpr.rewrite =
+    match abstract_expr with
+    | AbstractExpr.RVar { id; attrib } ->
+        BasilExpr.replace [%here]
+          (BasilExpr.rvar ?attrib @@ map_var results proc id)
+    (* TODO: Is this the best way to do no changes *)
+    | _ -> BasilExpr.replace [%here] @@ BasilExpr.fix abstract_expr
+  in
   BasilExpr.rewrite ~rw_fun:(expr_rewriter results proc)
 
 let map_stmt results proc (stmt : Program.stmt) : Program.stmt =
@@ -1464,10 +1479,21 @@ let map_stmt results proc (stmt : Program.stmt) : Program.stmt =
 
 let map_decl results proc (decl : Program.declaration) : Program.declaration =
   match decl with
-  (* Leave these alone, could have a pass that removes dead ones *)
+  (* Leave type decls alone, could have a pass that removes dead ones *)
   | Program.Type _ -> decl
   (* TODO: confused *)
-  | Program.Function { definition; _ } -> decl
+  | Program.Function { definition; attrib; binding } ->
+      Function
+        {
+          attrib;
+          (* TODO: Ask Ali if this should be mapped *)
+          binding;
+          definition =
+            (match definition with
+            | Axiom e -> Axiom (map_expr results proc e)
+            | Function e -> Function (map_expr results proc e)
+            | Uninterpreted -> Uninterpreted);
+        }
   | Program.Variable { binding; attrib } ->
       Variable { binding = map_var results proc binding; attrib }
 
@@ -1481,7 +1507,16 @@ let declare_typ (typ : Types.t) : (string * Types.t) option * Types.t =
       (Some (name, typ), Variable name)
   | _ -> (None, typ)
 
-let transform (prog : Program.t) (results : Types.t VarIdMap.t) : Program.t =
+let declare_recursive_typs (recursives : (VarId.t * Types.t) list) :
+    (string * Program.declaration) list =
+  List.map
+    (fun (varid, typ) ->
+      let binding = VarId.show varid in
+      (binding, (Type { typ; binding } : Program.declaration)))
+    recursives
+
+let transform (prog : Program.t) (results : Types.t VarIdMap.t)
+    (recursives : (VarId.t * Types.t) list) : Program.t =
   let decls, results =
     List.fold_left_map
       (fun acc (id, typ) ->
@@ -1505,23 +1540,27 @@ let transform (prog : Program.t) (results : Types.t VarIdMap.t) : Program.t =
     procs =
       ID.Map.map
         (fun proc ->
-          Procedure.map_blocks_nondet
-            (fun (id, block) ->
-              Block.map (* TODO: Needs to change the vars in phi nods*)
-                ~phi:
-                  (List.map (fun ({ lhs; rhs } : Var.t Block.phi) ->
-                       ({
-                          lhs = map_var results (Some proc) lhs;
-                          rhs =
-                            List.map
-                              (fun (id, var) ->
-                                (id, map_var results (Some proc) var))
-                              rhs;
-                        }
-                         : Var.t Block.phi)))
-                (fun stmt -> map_stmt results (Some proc) stmt)
-                block)
-            proc)
+          Procedure.map_formal_in_params
+            (StringMap.map (map_var results (Some proc)))
+          @@ Procedure.map_formal_out_params
+               (StringMap.map (map_var results (Some proc)))
+          @@ Procedure.map_blocks_nondet
+               (fun (id, block) ->
+                 Block.map (* TODO: Needs to change the vars in phi nods*)
+                   ~phi:
+                     (List.map (fun ({ lhs; rhs } : Var.t Block.phi) ->
+                          ({
+                             lhs = map_var results (Some proc) lhs;
+                             rhs =
+                               List.map
+                                 (fun (id, var) ->
+                                   (id, map_var results (Some proc) var))
+                                 rhs;
+                           }
+                            : Var.t Block.phi)))
+                   (fun stmt -> map_stmt results (Some proc) stmt)
+                   block)
+               proc)
         prog.procs;
     (*
       Change global variable types
@@ -1531,4 +1570,6 @@ let transform (prog : Program.t) (results : Types.t VarIdMap.t) : Program.t =
     globals = StringMap.add_list mapped_globals decls;
   }
 
-let infer_types (prog : Program.t) = analyse prog |> transform prog
+let infer_types (prog : Program.t) =
+  let results, recursives = analyse prog in
+  transform prog results recursives
