@@ -26,9 +26,10 @@ let join_lines ?(s = "") ls =
   let open Containers_pp in
   append_l ~sep:(text ";\n") ls
 
-let join_lines_end ?(s = "") ls =
+let join_lines_end ls =
   let open Containers_pp in
-  append_l ~sep:(text @@ Printf.sprintf ";\n%s" s) ls ^ text ";"
+  let ls = List.map (fun t -> t ^ text ";") ls in
+  append_l ~sep:newline ls
 
 let rec type_to_string (t : Types.t) =
   match t with
@@ -41,9 +42,9 @@ let rec type_to_string (t : Types.t) =
       raise
         (BoogieException (String.cat "Unsupported type" (Types.to_string t)))
 
-let pretty_variable_declaration (v : Var.t) =
+let pretty_variable_declaration ?(const = false) (v : Var.t) =
   let open Containers_pp in
-  text "var "
+  (if const then text "const " else text "var ")
   ^ text (Var.name v)
   ^ text ": "
   ^ text (type_to_string @@ Var.typ v)
@@ -63,7 +64,8 @@ let pretty_const (c : Lang.Ops.AllOps.const) =
   | `Bitvector bv -> text @@ Printf.sprintf "%sbv%d" (Z.format "%d" bv.v) bv.w
   | `Bool b -> text @@ string_of_bool b
   | `Record _ -> raise (BoogieException "records unsupported by boogie backend")
-  | `Pointer _ -> raise (BoogieException "pointers unsupported by boogie backend")
+  | `Pointer _ ->
+      raise (BoogieException "pointers unsupported by boogie backend")
 
 let pretty_call_args_no_brackets (args : Containers_pp.t list) =
   let open Containers_pp in
@@ -185,42 +187,43 @@ and pretty_expr_alg
   match e with
   | RVar { attrib; id } -> pretty_variable id
   | Constant { attrib; const } -> pretty_const const
-  | UnaryExpr { attrib; op = `Forall; arg } ->
-      bracket "(" (text "forall" ^+ snd arg) ")"
-  | UnaryExpr { attrib; op = `Exists; arg } ->
-      bracket "(" (text "exists" ^+ snd arg) ")"
-  | UnaryExpr { op = `Lambda; arg } ->
-      bracket "(" (text "lambda" ^+ snd arg) ")"
+  | Lambda { attrib; op; bound_vars; in_body } ->
+      let op =
+        text
+        @@
+        match op with
+        | `Forall -> "forall"
+        | `Exists -> "exists"
+        | `Lambda -> "lambda"
+      in
+      bracket "(" (op ^+ pretty_binding_expr bound_vars in_body) ")"
   | UnaryExpr { op; arg } -> pretty_unary_expr op arg (type_of e)
   | BinaryExpr { op; arg1; arg2 } -> pretty_binary_expr op arg1 arg2 (type_of e)
   | ApplyIntrin { op; args } -> pretty_apply_intrinsic op args (type_of e)
   | ApplyFun { func; args } -> pretty_apply_function (snd func) args
-  | Binding { attrib; bound; in_body } ->
-      pretty_binding_expr ?attrib bound in_body
+  | Let _ -> failwith "removed in prepass"
 
 and pretty_expr e = Lang.Expr.BasilExpr.fold_with_type_r pretty_expr_alg e
 
 let pretty_function_args (e : Lang.Program.e) =
   let open Containers_pp in
-  let pretty bound =
-    fill (text "," ^ sp) (List.map pretty_variable_typed bound)
-  in
   match Lang.Expr.BasilExpr.unfix2 e with
-  | UnaryExpr { op = `Lambda; arg = Binding { bound; in_body } } -> pretty bound
-  | Binding { bound } -> pretty bound
+  | Lambda { bound_vars } ->
+      fill (text "," ^ sp) (List.map pretty_variable_typed bound_vars)
   | _ -> raise (BoogieException "Unsupported expression as function args")
 
-let pretty_function_body (e : Lang.Program.e) =
+let pretty_function_body funcname (e : Lang.Program.e) =
   let open Containers_pp in
-  match Lang.Expr.BasilExpr.unfix2 e with
-  | UnaryExpr { attrib; op = `Lambda; arg = Binding { in_body } } ->
-      pretty_expr in_body
-  | Binding { in_body } -> pretty_expr (Lang.Expr.BasilExpr.fix in_body)
+  match Lang.Expr.BasilExpr.unfix e with
+  | Lambda { attrib; op = `Lambda; bound_vars; in_body } ->
+      let _, rt = Types.uncurry (Var.typ funcname) in
+      (pretty_expr in_body, text @@ type_to_string rt)
   | _ ->
       raise
         (BoogieException
-           (String.cat "Unsupported expression as function body: "
-              (Pretty.to_string ~width:80 (pretty_expr e))))
+           (Printf.sprintf "Unsupported expression as function body of %s: %s"
+              (Var.to_string funcname)
+              (Lang.Expr.BasilExpr.to_string e)))
 
 let pretty_declaration (d : Lang.Program.declaration) =
   let open Containers_pp in
@@ -229,17 +232,20 @@ let pretty_declaration (d : Lang.Program.declaration) =
   | Lang.Program.Variable { binding; attrib } ->
       pretty_variable_declaration binding
   | Lang.Program.Function { binding; attrib; definition = Function t } ->
+      let func_body, return_type = pretty_function_body binding t in
+
       text "function"
       ^+ pretty_attribute_map ".boogie" attrib
       ^+ (function_name @@ Var.name binding)
       ^ bracket "(" (pretty_function_args t) ")"
       ^+ text "returns"
-      ^+ bracket "(" (text (type_to_string @@ Var.typ binding)) ")"
-      ^+ surround ~width:2 (text "{")
-           (newline ^ pretty_function_body t)
-           (newline ^ text "}")
+      ^+ bracket "(" return_type ")"
+      ^+ surround ~width:2 (text "{") (newline ^ func_body) (newline ^ text "}")
   | Lang.Program.Function { binding; attrib; definition = Axiom t } ->
       fill sp [ text "axiom"; bracket "(" (pretty_expr t) ")" ]
+  | Lang.Program.Function { binding; attrib; definition = Uninterpreted }
+    when List.is_empty (fst @@ Types.uncurry (Var.typ binding)) ->
+      pretty_variable_declaration ~const:true binding ^ text ";"
   | Lang.Program.Function { binding; attrib; definition = Uninterpreted } ->
       let param, rt = Types.uncurry (Var.typ binding) in
       text "function"
@@ -252,7 +258,9 @@ let pretty_declaration (d : Lang.Program.declaration) =
           ")"
       ^ bracket " returns (" (text (type_to_string rt)) ")"
       ^ text ";"
-  | Lang.Program.Type _ -> raise (BoogieException "generation of boogie datatypes is unsupported for now")
+  | Lang.Program.Type _ ->
+      raise
+        (BoogieException "generation of boogie datatypes is unsupported for now")
 
 let rec pretty_statement (s : Lang.Program.stmt) =
   let open Containers_pp in
@@ -300,23 +308,21 @@ let rec pretty_statement (s : Lang.Program.stmt) =
 let pretty_terminator (p : Lang.Program.proc) (i : IDSet.elt)
     (b : Lang.Procedure.Edge.block) =
   let open Containers_pp in
-  match
-    Lang.Procedure.graph p
-  with
+  match Lang.Procedure.graph p with
   | Some a -> (
-        match Lang.Procedure.G.succ_e a (Lang.Procedure.Vert.End i) with
-        | [] -> text "Unreachable"
-        | [ (b, re, Return) ] -> text "return"
-        | succ ->
-            let succ =
-              List.map
-                (fun (_, e, v) ->
-                  match v with
-                  | Lang.Procedure.Vert.Begin i -> block_name v
-                  | _ -> raise (BoogieException "Bad graph structure"))
-                succ
-            in
-            text "goto" ^+ fill (text "," ^ sp) succ)
+      match Lang.Procedure.G.succ_e a (Lang.Procedure.Vert.End i) with
+      | [] -> text "Unreachable"
+      | [ (b, re, Return) ] -> text "return"
+      | succ ->
+          let succ =
+            List.map
+              (fun (_, e, v) ->
+                match v with
+                | Lang.Procedure.Vert.Begin i -> block_name v
+                | _ -> raise (BoogieException "Bad graph structure"))
+              succ
+          in
+          text "goto" ^+ fill (text "," ^ sp) succ)
   | _ -> failwith "no procedure graph"
 
 let pretty_block (p : Lang.Program.proc) (i : IDSet.elt)
@@ -389,15 +395,15 @@ let pretty_procedure_impl (p : Lang.Program.proc) =
   let in_params = Lang.Procedure.formal_in_params p in
   let out_params = Lang.Procedure.formal_out_params p in
   let local_decls =
-    if ((StringMap.cardinal in_params + StringMap.cardinal out_params) > 0) then
-    Lang.Procedure.local_decls p
-    |> Hashtbl.to_list
-    |> List.filter (fun (k, v) ->
-        (Option.is_none @@ StringMap.get k in_params)
-        && (Option.is_none @@ StringMap.get k out_params))
-    |> List.map (fun (k, v) -> pretty_variable_declaration v)
-    |> join_lines_end
-  else text ""
+    if StringMap.cardinal in_params + StringMap.cardinal out_params > 0 then
+      Lang.Procedure.local_decls p
+      |> Hashtbl.to_list
+      |> List.filter (fun (k, v) ->
+          (Option.is_none @@ StringMap.get k in_params)
+          && (Option.is_none @@ StringMap.get k out_params))
+      |> List.map (fun (k, v) -> pretty_variable_declaration v)
+      |> join_lines_end
+    else text ""
   in
   let blocks =
     Lang.Procedure.iter_blocks_topo_fwd p
