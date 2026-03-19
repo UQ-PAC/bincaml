@@ -5,7 +5,12 @@
       "name": "basilir",
       "camelcase": "basilir",
       "title": "Basil IR",
-      "scope": "source.basilir"
+      "scope": "source.basilir",
+      "path": ".",
+      "file-types": [
+        "il"
+      ],
+    "highlights": "./queries/highlights.scm"
     }
   ],
   "metadata": {
