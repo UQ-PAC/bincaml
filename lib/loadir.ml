@@ -1581,7 +1581,8 @@ proc @test1() -> ()
     var $R0:bv64;
     var $R1:bv64;
     proc @test1()  -> () { .name = "test1" }
-      modifies $R0:bv64
+      modifies $R0:bv64, $R1:bv64
+      captures $R0:bv64, $R1:bv64
       requires eq($R1:bv64, 0x0:bv64)
       ensures eq($R1:bv64, 0x0:bv64)
     ;
