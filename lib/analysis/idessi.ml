@@ -240,10 +240,9 @@ module IDESSI (D : IDESSIDomain) = struct
     ID.Map.iter
       (fun pid proc ->
         Hashtbl.add defuses pid
-          (let defuse = def_use_maps proc in
-           match D.direction with
-           | `Forwards -> defuse.var_to_use
-           | `Backwards -> defuse.var_to_def))
+          (match D.direction with
+          | `Forwards -> def_to_use_map proc
+          | `Backwards -> use_to_def_map proc))
       prog.procs;
     defuses
 
