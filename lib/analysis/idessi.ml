@@ -62,6 +62,8 @@ module IDESSI (D : IDESSIDomain) = struct
   open DL
 
   type summary = D.t DlMap.t DlMap.t
+  (** Edge function from an input variable (first argument) to any variable in
+      the procedure (second argument) *)
 
   let show_summary s =
     DlMap.to_iter s
@@ -292,7 +294,9 @@ module IDESSI (D : IDESSIDomain) = struct
                 |> Iter.iter (fun out -> update_summary pid d (Label out) D.top)))
       prog.procs
 
-  let solve_summaries (prog : Program.t) =
+  (** Generates edge function summaries for every procedure in the given
+      program. *)
+  let solve_summaries (prog : Program.t) : (ID.t, summary) Hashtbl.t =
     let call_graph_sccs =
       Program.CallGraph.make_call_graph prog
       |> Program.CallGraph.Scc.scc_list
@@ -313,7 +317,10 @@ module IDESSI (D : IDESSIDomain) = struct
       call_graph_sccs;
     summaries
 
-  let solve (prog : Program.t) =
+  (** Compute edge function summaries and analysis results for every procedure
+      in the given program. *)
+  let solve (prog : Program.t) :
+      (ID.t, summary) Hashtbl.t * D.Value.t VarMap.t ID.Map.t =
     (* Solve phase 1 *)
     let summaries = solve_summaries prog in
     (* Solve phase 2 *)
