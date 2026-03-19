@@ -199,11 +199,11 @@ and prtBoolType (i:int) (e : AbsBasilIR.boolType) : doc = match e with
 
 
 and prtRecordType (i:int) (e : AbsBasilIR.recordType) : doc = match e with
-       AbsBasilIR.RecordType1 (beginrec, fields, endrec) -> prPrec i 0 (concatD [prtBeginRec 0 beginrec ; prtFieldListBNFC 0 fields ; prtEndRec 0 endrec])
+       AbsBasilIR.RecordType1 (localident, beginrec, fields, endrec) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "of" ; prtBeginRec 0 beginrec ; prtFieldListBNFC 0 fields ; prtEndRec 0 endrec])
 
 
 and prtPointerType (i:int) (e : AbsBasilIR.pointerType) : doc = match e with
-       AbsBasilIR.PointerType1 (openparen, type_1, type_2, closeparen) -> prPrec i 0 (concatD [render "ptr" ; prtOpenParen 0 openparen ; prtTypeT 0 type_1 ; render "," ; prtTypeT 0 type_2 ; prtCloseParen 0 closeparen])
+       AbsBasilIR.PointerType1 (localident, openparen, type_1, type_2, closeparen) -> prPrec i 0 (concatD [render "ptr" ; prtLocalIdent 0 localident ; render "of" ; prtOpenParen 0 openparen ; prtTypeT 0 type_1 ; render "," ; prtTypeT 0 type_2 ; prtCloseParen 0 closeparen])
 
 
 and prtBVType (i:int) (e : AbsBasilIR.bVType) : doc = match e with

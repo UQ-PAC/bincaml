@@ -130,11 +130,11 @@ and transBoolType (x : boolType) : result = match x with
 
 
 and transRecordType (x : recordType) : result = match x with
-    RecordType1 (beginrec, fields, endrec) -> failure x
+    RecordType1 (localident, beginrec, fields, endrec) -> failure x
 
 
 and transPointerType (x : pointerType) : result = match x with
-    PointerType1 (openparen, type'0, type', closeparen) -> failure x
+    PointerType1 (localident, openparen, type'0, type', closeparen) -> failure x
 
 
 and transBVType (x : bVType) : result = match x with

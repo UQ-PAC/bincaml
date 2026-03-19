@@ -59,10 +59,10 @@ and boolType =
    BoolType1 of bOOLTYPE
 
 and recordType =
-   RecordType1 of beginRec * field list * endRec
+   RecordType1 of localIdent * beginRec * field list * endRec
 
 and pointerType =
-   PointerType1 of openParen * typeT * typeT * closeParen
+   PointerType1 of localIdent * openParen * typeT * typeT * closeParen
 
 and bVType =
    BVType1 of bVTYPE

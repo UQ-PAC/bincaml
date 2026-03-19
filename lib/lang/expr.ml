@@ -700,7 +700,7 @@ module BasilExpr = struct
       match rw_fun e with
       | SomeInfo { v; __LINE__; __FILE__ } ->
           log_rw visit ~__LINE__ ~__FILE__ (fix e) v
-      | None -> orig e
+      | Keep -> orig e
     in
     cata rw_alg expr
 

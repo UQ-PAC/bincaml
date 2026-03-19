@@ -148,8 +148,11 @@ module InferredType = struct
     | Pointer (lower, upper) ->
         let recursives, lower = inferred_to_real recursives lower in
         let recursives, upper = inferred_to_real recursives upper in
-        (recursives, Types.Pointer { lower; upper })
+        let name = "pointer_" ^ Int.to_string @@ Hashtbl.hash typ in
+
+        (recursives, Types.Pointer { name; lower; upper })
     | Record fields ->
+        let name = "record_" ^ Int.to_string @@ Hashtbl.hash typ in
         let recursives, fields =
           List.fold_left_map
             (fun recursives ({ offset; ty } : field) ->
@@ -158,7 +161,7 @@ module InferredType = struct
                 (Z.to_string offset, ({ typ; offset } : Types.record_field)) ))
             recursives fields
         in
-        (recursives, Types.Record (StringMap.of_list fields))
+        (recursives, Types.Record (name, StringMap.of_list fields))
     | Field { ty } -> inferred_to_real recursives ty
     | Recursive (varid, typ) ->
         let recursives, typ = inferred_to_real recursives typ in
@@ -173,7 +176,7 @@ module InferredType = struct
     | Variable a -> TypeVar (VarId.make_id a)
     | Pointer { lower; upper } ->
         Pointer (type_to_inferred lower, type_to_inferred upper)
-    | Record fields -> failwith "TODO"
+    | Record (name, fields) -> failwith "TODO"
     | Bitvector bv -> BinCamlType (BinCaml_BV bv)
     | Boolean -> BinCamlType BinCaml_Bool
     | Integer -> BinCamlType BinCaml_Int
@@ -927,18 +930,196 @@ let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
       @@ Printf.sprintf "Illegal types at this stage: %s %s"
            (InferredType.show type0) (InferredType.show type1)
 
-let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
+let constrain_arg proc st l t =
+  let l = BasilExpr.unfix l in
+  match l with
+  | RVar { id } -> ConstraintState.add_lb st (VarId.var_proc_to_uid id proc) t
+  | _ -> st
+
+let constrain_args proc st l r t =
+  let st = constrain_arg proc st l t in
+  constrain_arg proc st r t
+
+let rec constrain_expr proc (st : ConstraintState.t)
+    (expr : 'e BasilExpr.abstract_expr) =
+  let open InferredType in
+  match expr with
+  | RVar { id } ->
+      let typ =
+        match Var.typ id with
+        | Integer -> BinCamlType BinCaml_Int
+        | Boolean -> BinCamlType BinCaml_Bool
+        | Bitvector sz -> BinCamlType (BinCaml_BV sz)
+        | _ -> failwith "Illegal variable type"
+      in
+      ( constrain_arg proc st (BasilExpr.fix expr) typ,
+        TypeVar (VarId.var_proc_to_uid id proc) )
+  | Constant { const } ->
+      ( st,
+        match const with
+        | `Bool _ -> BinCamlType BinCaml_Bool
+        | `Bitvector bv -> BinCamlType (BinCaml_BV (Bitvec.size bv))
+        | `Integer _ -> BinCamlType BinCaml_Int
+        | `Record (_, typ) -> InferredType.type_to_inferred typ
+        | `Pointer (bv, { lower; upper }) ->
+            InferredType.Pointer
+              ( InferredType.type_to_inferred lower,
+                InferredType.type_to_inferred upper ) )
+  | UnaryExpr { op; arg = a } -> (
+      let st, _ = constrain_expr proc st (BasilExpr.unfix a) in
+      match op with
+      | `FACCESS offset ->
+          let { typ; offset } : Types.record_field =
+            Types.get_field offset (BasilExpr.type_of a)
+          in
+          (st, type_to_inferred typ)
+      | `BoolNOT ->
+          ( constrain_arg proc st a @@ BinCamlType BinCaml_Bool,
+            BinCamlType BinCaml_Bool )
+      | `BOOLTOBV1 ->
+          ( constrain_arg proc st a @@ BinCamlType BinCaml_Bool,
+            BinCamlType (BinCaml_BV 1) )
+      | `INTNEG ->
+          ( constrain_arg proc st a @@ BinCamlType BinCaml_Int,
+            BinCamlType BinCaml_Int )
+      | `BVNEG | `BVNOT ->
+          let typ =
+            match BasilExpr.type_of a with
+            | Bitvector size -> BinCamlType (BinCaml_BV size)
+            | _ -> failwith "Bitvector operation without bitvector arguments"
+          in
+          (constrain_arg proc st a @@ typ, typ)
+      | `SignExtend b | `ZeroExtend b ->
+          let size =
+            match BasilExpr.type_of a with
+            | Bitvector size -> size
+            | _ -> failwith "Bitvector operation without bitvector arguments"
+          in
+          ( constrain_arg proc st a @@ BinCamlType (BinCaml_BV size),
+            BinCamlType (BinCaml_BV (size + b)) )
+      | `Exists -> (st, BinCamlType BinCaml_Bool) (* TODO: Confirm *)
+      | `Old -> (st, Top)
+      | `Forall -> (st, Top)
+      | `Lambda | `Classification | `Gamma -> (st, Top)
+      | `Extract (finish, rt) ->
+          (* NOTE: This seems hard to determine what type is within a record *)
+          let size = finish - rt in
+          let name =
+            VarId.make_id
+            @@ Printf.sprintf "Extraction_%s"
+            @@ ID.name @@ gen.fresh ()
+          in
+          let ty = TypeVar name in
+          let field = { offset = Z.of_int rt; size; ty } in
+          let st =
+            ConstraintState.add_lb st name (BinCamlType (BinCaml_BV size))
+          in
+          (constrain_arg proc st a @@ Record [ field ], Field field))
+  | BinaryExpr { op; arg1 = l; arg2 = r } -> (
+      let st, _ = constrain_expr proc st (BasilExpr.unfix l) in
+      let st, _ = constrain_expr proc st (BasilExpr.unfix r) in
+      match op with
+      | `FSET offset ->
+          (* TODO: constrain the r to be the type of that field in the record l*)
+          let { typ } : Types.record_field =
+            Types.get_field offset (BasilExpr.type_of r)
+          in
+          let st =
+            constrain_arg proc st r @@ InferredType.type_to_inferred typ
+          in
+          (st, type_to_inferred @@ BasilExpr.type_of l)
+      | `PTRADD ->
+          (* The pointer is the the left pointer but with the offsets translated by the right value, use SVA to see if we know the right ptr? *)
+          (st, Pointer (Top, Top))
+      | `INTMOD | `INTSUB | `INTDIV | `INTADD | `INTMUL ->
+          let st = constrain_args proc st l r @@ BinCamlType BinCaml_Int in
+          (st, BinCamlType BinCaml_Int)
+      | `NEQ | `EQ -> (
+          match (BasilExpr.unfix l, BasilExpr.unfix r) with
+          | RVar { id = a }, RVar { id = b } ->
+              let a_id = VarId.var_proc_to_uid a proc in
+              let b_id = VarId.var_proc_to_uid b proc in
+              let st = ConstraintState.add_lb st a_id (TypeVar b_id) in
+              let st = ConstraintState.add_ub st a_id (TypeVar b_id) in
+              let st = ConstraintState.add_lb st b_id (TypeVar a_id) in
+              let st = ConstraintState.add_ub st b_id (TypeVar a_id) in
+              (st, BinCamlType BinCaml_Bool)
+          | RVar { id }, a | a, RVar { id } ->
+              let id = VarId.var_proc_to_uid id proc in
+              let st, expr = constrain_expr proc st a in
+              let st = ConstraintState.add_lb st id expr in
+              let st = ConstraintState.add_ub st id expr in
+              (st, BinCamlType BinCaml_Bool)
+          | _, _ -> (st, BinCamlType BinCaml_Bool))
+      | `INTLT | `INTLE ->
+          let st = constrain_args proc st l r @@ BinCamlType BinCaml_Int in
+          (st, BinCamlType BinCaml_Bool)
+      | `BVULE | `BVULT | `BVSLE | `BVSLT -> (
+          match BasilExpr.type_of l with
+          | Bitvector size ->
+              let st =
+                constrain_args proc st l r @@ BinCamlType (BinCaml_BV size)
+              in
+              (st, BinCamlType BinCaml_Bool)
+          | _ -> failwith "BV operation without BV arguments")
+      | `BVSREM | `BVSDIV | `BVADD | `BVMUL | `BVUREM | `BVSUB | `BVUDIV
+      | `BVSMOD | `BVSHL | `BVLSHR | `BVASHR | `BVNAND | `BVAND | `BVXOR | `BVOR
+        -> (
+          match BasilExpr.type_of l with
+          | Bitvector size ->
+              let typ = BinCamlType (BinCaml_BV size) in
+              let st = constrain_args proc st l r typ in
+              (st, typ)
+          | _ -> failwith "BV operation without BV arguments")
+      (* WARN: I forgot what this was meant to be *)
+      | `IMPLIES -> (st, Top)
+      | `Load _ | `IfThen | `MapAccess -> (st, Top))
+  | ApplyIntrin { op; args } -> (
+      match op with
+      (* output is constrain by every input *)
+      | `BVOR | `BVXOR | `BVAND | `BVADD -> (
+          match BasilExpr.type_of (List.hd args) with
+          | Bitvector size ->
+              let typ = BinCamlType (BinCaml_BV size) in
+              let st =
+                List.fold_left
+                  (fun acc a -> constrain_arg proc st a typ)
+                  st args
+              in
+              (st, typ)
+          | _ -> failwith "BV operation without BV arguments")
+      | `OR | `AND ->
+          (* All types need to be the same *)
+          let typ =
+            BinCamlType
+              (BinCamlType.type_to_bincaml_type
+                 (BasilExpr.type_of (List.hd args)))
+          in
+          let st =
+            List.fold_left (fun acc a -> constrain_arg proc st a typ) st args
+          in
+          (st, typ)
+      | `Cases -> (st, Top)
+      | `BVConcat ->
+          ( st,
+            BinCamlType
+              (BinCamlType.type_to_bincaml_type
+              @@ BasilExpr.type_of (BasilExpr.fix expr)) ))
+  | ApplyFun _ -> (st, Top)
+  | Binding _ -> (st, Top)
+
+let constraint_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt :
     ConstraintState.t =
   let open AbstractExpr in
   let open InferredType in
-  (*
-    When dealing with load or store statements, sva results are used
-
-    Before they can be used, they need to be checked to see if useful.
-
-    They should be not top or bottom, with only one SymBase that is not Stack.
-  *)
   let sva_res_check sva_res addr =
+    (*
+      When dealing with load or store statements, sva results are used
+
+      Before they can be used, they need to be checked to see if useful.
+
+      They should be not top or bottom, with only one SymBase that is not Stack.
+    *)
     let open Analysis.Sva in
     let open Analysis.Wrapped_intervals in
     SymAddrSetLattice.cardinal sva_res <> 1
@@ -952,190 +1133,10 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
          WrappedIntervalsLattice.Bot
   in
   (* Given a expression constrain the variables involed *)
-  let rec constrain_expr (st : ConstraintState.t)
-      (expr : 'e BasilExpr.abstract_expr) =
-    let constrain_arg st l t =
-      let l = BasilExpr.unfix l in
-      match l with
-      | RVar { id } ->
-          ConstraintState.add_lb st (VarId.var_proc_to_uid id proc) t
-      | _ -> st
-    in
-    let constrain_args st l r t =
-      let st = constrain_arg st l t in
-      constrain_arg st r t
-    in
-    match expr with
-    | RVar { id } ->
-        let typ =
-          match Var.typ id with
-          | Integer -> BinCamlType BinCaml_Int
-          | Boolean -> BinCamlType BinCaml_Bool
-          | Bitvector sz -> BinCamlType (BinCaml_BV sz)
-          | _ -> failwith "Illegal variable type"
-        in
-        ( constrain_arg st (BasilExpr.fix expr) typ,
-          TypeVar (VarId.var_proc_to_uid id proc) )
-    | Constant { const } ->
-        ( st,
-          match const with
-          | `Bool _ -> BinCamlType BinCaml_Bool
-          | `Bitvector bv -> BinCamlType (BinCaml_BV (Bitvec.size bv))
-          | `Integer _ -> BinCamlType BinCaml_Int
-          | `Record (_, typ) -> InferredType.type_to_inferred typ
-          | `Pointer (bv, { lower; upper }) ->
-              InferredType.Pointer
-                ( InferredType.type_to_inferred lower,
-                  InferredType.type_to_inferred upper ) )
-    | UnaryExpr { op; arg = a } -> (
-        let st, _ = constrain_expr st (BasilExpr.unfix a) in
-        match op with
-        | `FACCESS offset ->
-            let { typ; offset } : Types.record_field =
-              Types.get_field offset (BasilExpr.type_of a)
-            in
-            (st, type_to_inferred typ)
-        | `BoolNOT ->
-            ( constrain_arg st a @@ BinCamlType BinCaml_Bool,
-              BinCamlType BinCaml_Bool )
-        | `BOOLTOBV1 ->
-            ( constrain_arg st a @@ BinCamlType BinCaml_Bool,
-              BinCamlType (BinCaml_BV 1) )
-        | `INTNEG ->
-            ( constrain_arg st a @@ BinCamlType BinCaml_Int,
-              BinCamlType BinCaml_Int )
-        | `BVNEG | `BVNOT ->
-            let typ =
-              match BasilExpr.type_of a with
-              | Bitvector size -> BinCamlType (BinCaml_BV size)
-              | _ -> failwith "Bitvector operation without bitvector arguments"
-            in
-            (constrain_arg st a @@ typ, typ)
-        | `SignExtend b | `ZeroExtend b ->
-            let size =
-              match BasilExpr.type_of a with
-              | Bitvector size -> size
-              | _ -> failwith "Bitvector operation without bitvector arguments"
-            in
-            ( constrain_arg st a @@ BinCamlType (BinCaml_BV size),
-              BinCamlType (BinCaml_BV (size + b)) )
-        | `Exists -> (st, BinCamlType BinCaml_Bool) (* TODO: Confirm *)
-        | `Old -> (st, Top)
-        | `Forall -> (st, Top)
-        | `Lambda | `Classification | `Gamma -> (st, Top)
-        | `Extract (finish, rt) ->
-            (* NOTE: This seems hard to determine what type is within a record *)
-            let size = finish - rt in
-            let name =
-              VarId.make_id
-              @@ Printf.sprintf "Extraction_%s"
-              @@ ID.name @@ gen.fresh ()
-            in
-            let ty = TypeVar name in
-            let field = { offset = Z.of_int rt; size; ty } in
-            let st =
-              ConstraintState.add_lb st name (BinCamlType (BinCaml_BV size))
-            in
-            (constrain_arg st a @@ Record [ field ], Field field))
-    | BinaryExpr { op; arg1 = l; arg2 = r } -> (
-        let st, _ = constrain_expr st (BasilExpr.unfix l) in
-        let st, _ = constrain_expr st (BasilExpr.unfix r) in
-        match op with
-        | `FSET offset ->
-            (* TODO: constrain the r to be the type of that field in the record l*)
-            let { typ } : Types.record_field =
-              Types.get_field offset (BasilExpr.type_of r)
-            in
-            let st = constrain_arg st r @@ InferredType.type_to_inferred typ in
-            (st, type_to_inferred @@ BasilExpr.type_of l)
-        | `PTRADD ->
-            (* The pointer is the the left pointer but with the offsets translated by the right value, use SVA to see if we know the right ptr? *)
-            (st, Pointer (Top, Top))
-        | `INTMOD | `INTSUB | `INTDIV | `INTADD | `INTMUL ->
-            let st = constrain_args st l r @@ BinCamlType BinCaml_Int in
-            (st, BinCamlType BinCaml_Int)
-        | `NEQ | `EQ -> (
-            match (BasilExpr.unfix l, BasilExpr.unfix r) with
-            | RVar { id = a }, RVar { id = b } ->
-                let a_id = VarId.var_proc_to_uid a proc in
-                let b_id = VarId.var_proc_to_uid b proc in
-                let st = ConstraintState.add_lb st a_id (TypeVar b_id) in
-                let st = ConstraintState.add_ub st a_id (TypeVar b_id) in
-                let st = ConstraintState.add_lb st b_id (TypeVar a_id) in
-                let st = ConstraintState.add_ub st b_id (TypeVar a_id) in
-                (st, BinCamlType BinCaml_Bool)
-            | RVar { id }, a | a, RVar { id } ->
-                let id = VarId.var_proc_to_uid id proc in
-                let st, expr = constrain_expr st a in
-                let st = ConstraintState.add_lb st id expr in
-                let st = ConstraintState.add_ub st id expr in
-                (st, BinCamlType BinCaml_Bool)
-            | _, _ -> (st, BinCamlType BinCaml_Bool))
-        | `INTLT | `INTLE ->
-            let st = constrain_args st l r @@ BinCamlType BinCaml_Int in
-            (st, BinCamlType BinCaml_Bool)
-        | `BVULE | `BVULT | `BVSLE | `BVSLT -> (
-            match BasilExpr.type_of l with
-            | Bitvector size ->
-                let st =
-                  constrain_args st l r @@ BinCamlType (BinCaml_BV size)
-                in
-                (st, BinCamlType BinCaml_Bool)
-            | _ -> failwith "BV operation without BV arguments")
-        | `BVSREM | `BVSDIV | `BVADD | `BVMUL | `BVUREM | `BVSUB | `BVUDIV
-        | `BVSMOD | `BVSHL | `BVLSHR | `BVASHR | `BVNAND | `BVAND | `BVXOR
-        | `BVOR -> (
-            match BasilExpr.type_of l with
-            | Bitvector size ->
-                let typ = BinCamlType (BinCaml_BV size) in
-                let st = constrain_args st l r typ in
-                (st, typ)
-            | _ -> failwith "BV operation without BV arguments")
-        (* WARN: I forgot what this was meant to be *)
-        | `IMPLIES -> (st, Top)
-        | `Load _ | `IfThen | `MapAccess -> (st, Top))
-    | ApplyIntrin { op; args } -> (
-        match op with
-        (* output is constrain by every input *)
-        | `BVOR | `BVXOR | `BVAND | `BVADD -> (
-            match BasilExpr.type_of (List.hd args) with
-            | Bitvector size ->
-                let typ = BinCamlType (BinCaml_BV size) in
-                let st =
-                  List.fold_left (fun acc a -> constrain_arg st a typ) st args
-                in
-                (st, typ)
-            | _ -> failwith "BV operation without BV arguments")
-        | `OR | `AND ->
-            (* All types need to be the same *)
-            let typ =
-              BinCamlType
-                (BinCamlType.type_to_bincaml_type
-                   (BasilExpr.type_of (List.hd args)))
-            in
-            let st =
-              List.fold_left (fun acc a -> constrain_arg st a typ) st args
-            in
-            (st, typ)
-        | `Cases -> (st, Top)
-        | `BVConcat ->
-            ( st,
-              BinCamlType
-                (BinCamlType.type_to_bincaml_type
-                @@ BasilExpr.type_of (BasilExpr.fix expr)) ))
-    | ApplyFun _ -> (st, Top)
-    | Binding _ -> (st, Top)
-  in
   match stmt with
-  | Stmt.Instr_Assert { body } | Stmt.Instr_Assume { body } -> (
-      let st, constrain_expr = constrain_expr st (BasilExpr.unfix body) in
-      match constrain_expr with
-      | TypeVar a -> ConstraintState.add_lb st a (BinCamlType BinCaml_Bool)
-      | Field { ty } -> (
-          match ty with
-          | TypeVar a -> ConstraintState.add_lb st a (BinCamlType BinCaml_Bool)
-          | _ -> st)
-      | _ -> st)
+  | Stmt.Instr_Assert { body } | Stmt.Instr_Assume { body } ->
+      let st, constrain_expr = constrain_expr proc st (BasilExpr.unfix body) in
+      constrain st constrain_expr (BinCamlType BinCaml_Bool)
   | Stmt.Instr_Assign ls ->
       List.fold_left
         (fun st (lhs, expr) ->
@@ -1143,7 +1144,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
           else
             let lhs = VarId.var_proc_to_uid lhs proc in
             let st, constrain_expr =
-              constrain_expr st @@ BasilExpr.unfix expr
+              constrain_expr proc st @@ BasilExpr.unfix expr
             in
             constrain st constrain_expr (TypeVar lhs))
         st ls
@@ -1170,7 +1171,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
         *)
         let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_load" in
         let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_load" in
-        let st, addr = constrain_expr st (BasilExpr.unfix addr) in
+        let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
         let st = constrain st (Pointer (TypeVar lb, TypeVar ub)) addr in
         let st = constrain st (TypeVar lb) @@ TypeVar ub in
         constrain st (TypeVar ub) (TypeVar lhs)
@@ -1198,7 +1199,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
         let lb =
           TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_load")
         in
-        let st, addr = constrain_expr st (BasilExpr.unfix addr) in
+        let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
         let st = constrain st (Pointer (lb, ub)) addr in
         let st = constrain st ub lb in
         constrain st ty (TypeVar lhs)
@@ -1221,7 +1222,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
         let ub =
           TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_store")
         in
-        let st, addr = constrain_expr st (BasilExpr.unfix addr) in
+        let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
         let st = constrain st (Pointer (lb, ub)) addr in
         let st = constrain st lb ub in
         constrain st lhs lb
@@ -1249,7 +1250,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
         let ub =
           TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_store")
         in
-        let st, addr = constrain_expr st (BasilExpr.unfix addr) in
+        let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
         let st = constrain st (Pointer (lb, ub)) addr in
         let st = constrain st lb ub in
         constrain st lhs ty
@@ -1261,7 +1262,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
       let st =
         StringMap.fold
           (fun k v acc ->
-            match constrain_expr acc @@ BasilExpr.unfix v with
+            match constrain_expr proc acc @@ BasilExpr.unfix v with
             | acc, TypeVar a ->
                 constrain acc
                   (TypeVar
@@ -1286,7 +1287,7 @@ let gen_constraint_set prog proc sva (st : ConstraintState.t) stmt_number stmt :
       in
       let args =
         StringMap.map
-          (fun v -> snd @@ constrain_expr st @@ BasilExpr.unfix v)
+          (fun v -> snd @@ constrain_expr proc st @@ BasilExpr.unfix v)
           args
       in
       let rets =
@@ -1332,7 +1333,7 @@ let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
                     @@ b.phis
                   in
                   Block.stmts_iter b
-                  |> Iter.foldi (gen_constraint_set prog (Some proc) sva) acc)
+                  |> Iter.foldi (constraint_stmt prog (Some proc) sva) acc)
                 acc)
          VarIdMap.empty
   in
@@ -1413,6 +1414,15 @@ let map_expr results proc =
     | AbstractExpr.RVar { id; attrib } ->
         BasilExpr.replace [%here]
           (BasilExpr.rvar ?attrib @@ map_var results proc id)
+    | AbstractExpr.BinaryExpr { op = `BVADD; arg1; arg2 } -> (
+        match (BasilExpr.type_of arg1, BasilExpr.type_of arg2) with
+        | Types.Pointer _, Types.Pointer _ ->
+            failwith "Two pointer types adding"
+        | Types.Pointer _, _ ->
+            BasilExpr.replace [%here] (BasilExpr.binexp ~op:`PTRADD arg1 arg2)
+        | _, Types.Pointer _ ->
+            BasilExpr.replace [%here] (BasilExpr.binexp ~op:`PTRADD arg2 arg1)
+        | _ -> BasilExpr.replace [%here] @@ BasilExpr.fix abstract_expr)
     (* TODO: Is this the best way to do no changes *)
     | _ -> BasilExpr.replace [%here] @@ BasilExpr.fix abstract_expr
   in
@@ -1499,12 +1509,7 @@ let map_decl results proc (decl : Program.declaration) : Program.declaration =
 
 let declare_typ (typ : Types.t) : (string * Types.t) option * Types.t =
   match typ with
-  | Record _ ->
-      let name = "record_" ^ Int.to_string @@ Hashtbl.hash typ in
-      (Some (name, typ), Variable name)
-  | Pointer _ ->
-      let name = "pointer_" ^ Int.to_string @@ Hashtbl.hash typ in
-      (Some (name, typ), Variable name)
+  | Record (name, _) | Pointer { name } -> (Some (name, typ), typ)
   | _ -> (None, typ)
 
 let declare_recursive_typs (recursives : (VarId.t * Types.t) list) :
