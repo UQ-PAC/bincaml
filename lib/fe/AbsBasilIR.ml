@@ -224,11 +224,13 @@ and expr =
  | Expr_SignExtend of openParen * intVal * expr * closeParen
  | Expr_Extract of openParen * intVal * intVal * expr * closeParen
  | Expr_Concat of openParen * expr list * closeParen
- | Expr_FSet of openParen * str * expr * expr * closeParen
- | Expr_FAccess of openParen * str * expr * closeParen
+ | Expr_Ite of expr * expr * expr
  | Expr_Match of expr * openParen * case list * closeParen
  | Expr_Cases of openParen * case list * closeParen
  | Expr_Paren of openParen * expr * closeParen
+ | Expr_Field of expr * bIdent
+ | Expr_FieldSet of expr * expr
+ | SortValRec of localIdent * beginRec * fieldAssign list * endRec
 
 and lambdaDef =
    LambdaDef1 of localVarParen list * lambdaSep * expr
@@ -252,6 +254,9 @@ and unOp =
 and case =
    CaseCase of expr * expr
  | CaseDefault of expr
+
+and fieldAssign =
+   FieldAssign1 of localIdent * expr
 
 and eqOp =
    EqOp_eq

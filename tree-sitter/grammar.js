@@ -513,7 +513,13 @@ module.exports = grammar({
         // Expr_Lambda. Expr ::= "fun" AttribSet LambdaDef ;
         seq("fun", optional($.AttribSet), $.LambdaDef),
         // Expr_Let. Expr ::= "let" LocalIdent [LocalVarParen] ":" Type "=" Expr "in" Expr ;
-        seq("let", $.token_LocalIdent, optional($.list_LocalVarParen), ":", $.Type, "=", $.Expr, "in", $.Expr)
+        seq("let", $.token_LocalIdent, optional($.list_LocalVarParen), ":", $.Type, "=", $.Expr, "in", $.Expr),
+        // Expr_Field. Expr ::= Expr2 BIdent ;
+        seq($.Expr2, $.token_BIdent),
+        // Expr_FieldSet. Expr ::= Expr "<-" Expr2 ;
+        seq($.Expr, "<-", $.Expr2),
+        // SortValRec. Expr ::= LocalIdent BeginRec [FieldAssign] EndRec ;
+        seq($.token_LocalIdent, $.token_BeginRec, optional($.list_FieldAssign), $.token_EndRec)
       ),
     Expr1: $ =>
       choice(
@@ -550,10 +556,8 @@ module.exports = grammar({
         seq("extract", $.token_OpenParen, $.IntVal, ",", $.IntVal, ",", $.Expr, $.token_CloseParen),
         // Expr_Concat. Expr2 ::= "bvconcat" OpenParen [Expr] CloseParen ;
         seq("bvconcat", $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
-        // Expr_FSet. Expr2 ::= "fset" OpenParen Str "," Expr "," Expr CloseParen ;
-        seq("fset", $.token_OpenParen, $.token_Str, ",", $.Expr, ",", $.Expr, $.token_CloseParen),
-        // Expr_FAccess. Expr2 ::= "faccess" OpenParen Str "," Expr CloseParen ;
-        seq("faccess", $.token_OpenParen, $.token_Str, ",", $.Expr, $.token_CloseParen),
+        // Expr_Ite. Expr2 ::= "if" Expr "then" Expr "else" Expr ;
+        seq("if", $.Expr, "then", $.Expr, "else", $.Expr),
         // Expr_Match. Expr2 ::= "match" Expr "with" OpenParen [Case] CloseParen ;
         seq("match", $.Expr, "with", $.token_OpenParen, optional($.list_Case), $.token_CloseParen),
         // Expr_Cases. Expr2 ::= "cases" OpenParen [Case] CloseParen ;
@@ -609,6 +613,18 @@ module.exports = grammar({
         $.Case,
         // (:). [Case] ::= Case "|" [Case] ;
         seq($.Case, "|", optional($.list_Case))
+      ),
+    FieldAssign: $ =>
+      // FieldAssign1. FieldAssign ::= LocalIdent "=" Expr ;
+      seq($.token_LocalIdent, "=", $.Expr),
+    list_FieldAssign: $ =>
+      choice(
+        // []. [FieldAssign] ::= ;
+        choice(),
+        // (:[]). [FieldAssign] ::= FieldAssign ;
+        $.FieldAssign,
+        // (:). [FieldAssign] ::= FieldAssign ";" [FieldAssign] ;
+        seq($.FieldAssign, ";", optional($.list_FieldAssign))
       ),
     EqOp: $ =>
       choice(

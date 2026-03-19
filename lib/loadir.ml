@@ -146,8 +146,7 @@ module BasilASTLoader = struct
     | Decl_Type sort ->
         let name = unsafe_unsigil (`Local sort) in
         let typ = Types.mk_sort name in
-        let def : Program.declaration = Type { binding = name; typ } in
-        map_prog (fun prog -> Program.add_decl prog name def) prog
+        map_prog (fun prog -> Program.decl_typ prog typ) prog
     | Decl_RecType types ->
         let types = List.map trans_typedecl types in
         List.fold_left
@@ -872,6 +871,30 @@ module BasilASTLoader = struct
         let msg = m ^ " " ^ vn in
         raise (LoadError { token_char_offset_range; msg; input = None })
 
+  and lookup_constructor p_st ident =
+    let vn = unsafe_unsigil (`Local ident) in
+    match StringMap.find_opt vn p_st.prog.implicit_decls with
+    | Program.(Some (VariantCase { constructor })) -> constructor
+    | _ ->
+        let token_char_offset_range = Some (get_bident_loc (`Local ident)) in
+        let msg = "Unable to find constructor for:" ^ vn in
+        raise (LoadError { token_char_offset_range; msg; input = None })
+
+  and lookup_type p_st ident =
+    let vn = unsafe_unsigil (`Local ident) in
+    let token_char_offset_range = Some (get_bident_loc (`Local ident)) in
+    let fail () =
+      let msg = "Unable to find type declaration for:" ^ vn in
+      raise (LoadError { token_char_offset_range; msg; input = None })
+    in
+    match StringMap.find_opt vn p_st.prog.globals with
+    | Some (Type { typ }) -> typ
+    | None -> (
+        match StringMap.find_opt vn p_st.prog.implicit_decls with
+        | Program.(Some (VariantCase { belongs_to })) -> belongs_to
+        | _ -> fail ())
+    | _ -> fail ()
+
   and lookup_global_decl ident p_st =
     let vn = unsafe_unsigil (`Global ident) in
     let token_char_offset_range = Some (get_bident_loc (`Global ident)) in
@@ -946,6 +969,10 @@ module BasilASTLoader = struct
     in
     BasilExpr.applyintrin ~op:`Cases cases
 
+  and trans_field_assign trans_expr (f : fieldAssign) =
+    match f with
+    | FieldAssign1 (k, v) -> (unsafe_unsigil (`Local k), trans_expr v)
+
   and trans_expr ?(binds = StringMap.empty) (p_st : load_st)
       (x : BasilIR.AbsBasilIR.expr) : BasilExpr.t =
     let trans_expr ?(nbinds = []) =
@@ -1019,12 +1046,33 @@ module BasilASTLoader = struct
           ~hi_excl:(transIntVal ival0 |> Z.to_int)
           ~lo_incl:(transIntVal intval |> Z.to_int)
           (trans_expr expr)
-    | Expr_FAccess (o, offset, record, c) ->
-        BasilExpr.faccess ~attrib:(expr_range_attr o c)
-          ~offset:(transStr offset) (trans_expr record)
-    | Expr_FSet (o, offset, record, expr, c) ->
-        BasilExpr.fset ~attrib:(expr_range_attr o c) ~offset:(transStr offset)
-          (trans_expr record) (trans_expr expr)
+    | Expr_FieldSet (Expr_Field (record, fname), value) ->
+        let fname =
+          String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Attr fname)
+          |> Option.get_exn_or "safe by parser"
+        in
+        BasilExpr.field_store ~field:fname (trans_expr record)
+          (trans_expr value)
+    | Expr_FieldSet (e, _) ->
+        let e = trans_expr e in
+        let token_char_offset_range =
+          BasilExpr.unfix e |> AbstractExpr.get_attrib
+          |> Option.map Attrib.loc_of_attr
+        in
+        let msg = "Arguemnt to set is not a field." in
+        raise (LoadError { token_char_offset_range; msg; input = None })
+    | Expr_Field (record, fname) ->
+        let fname =
+          String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Attr fname)
+          |> Option.get_exn_or "safe by parser"
+        in
+        BasilExpr.field_read ~field:fname (trans_expr record)
+    | SortValRec (variant, bi, fields, ei) ->
+        let f = BasilExpr.rvar @@ lookup_constructor p_st variant in
+        BasilExpr.apply_fun ~func:f
+          (List.map (trans_field_assign trans_expr) fields |> List.map snd)
+    | Expr_Ite (cond, t, e) ->
+        BasilExpr.ifthenelse (trans_expr cond) (trans_expr t) (trans_expr e)
     | Expr_LoadLe (o, intval, a1, a2, c) ->
         BasilExpr.load ~attrib:(expr_range_attr o c)
           ~bits:(Z.to_int @@ transIntVal intval)

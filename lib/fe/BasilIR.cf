@@ -273,16 +273,26 @@ Expr_ZeroExtend . Expr2 ::= "zero_extend" OpenParen IntVal "," Expr CloseParen ;
 Expr_SignExtend . Expr2 ::= "sign_extend" OpenParen IntVal "," Expr CloseParen ;
 Expr_Extract    . Expr2 ::= "extract" OpenParen IntVal "," IntVal "," Expr CloseParen ;
 Expr_Concat     . Expr2 ::= "bvconcat"  OpenParen [Expr]  CloseParen ;
-Expr_FSet       . Expr2 ::= "fset" OpenParen Str "," Expr "," Expr CloseParen ;
-Expr_FAccess    . Expr2 ::= "faccess" OpenParen Str "," Expr CloseParen ;
+
 
 CaseCase . Case ::= Expr "->" Expr  ;
 CaseDefault . Case ::=  "_" "->" Expr ;
 separator Case "|" ;
 
+Expr_Ite . Expr2 ::= "if" Expr "then" Expr "else" Expr ;
 Expr_Match . Expr2 ::= "match" Expr "with" OpenParen [Case] CloseParen ;
 Expr_Cases . Expr2 ::= "cases" OpenParen [Case] CloseParen ;
 Expr_Paren . Expr2 ::= OpenParen Expr CloseParen ;
+
+
+Expr_Field      . Expr ::= Expr2 BIdent;
+Expr_FieldSet   . Expr ::= Expr "<-" Expr2 ;
+
+rules FieldAssign ::= LocalIdent "=" Expr ;
+separator FieldAssign ";";
+
+SortValRec . Expr ::= LocalIdent BeginRec [FieldAssign] EndRec;
+
 
 -- operators
 
