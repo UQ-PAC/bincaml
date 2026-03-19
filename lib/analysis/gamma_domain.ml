@@ -78,8 +78,6 @@ open Idessi
 module IDEDomain : IDESSIDomain = struct
   let direction = `Forwards
 
-  module Data = Var
-
   module DL = struct
     type t = Lambda | Label of Var.t
     [@@deriving eq, ord, show { with_path = false }]
@@ -121,20 +119,29 @@ module IDEDomain : IDESSIDomain = struct
 
   open DL
 
-  let transfer_call c p d =
-    (*
+  let transfer_call call params d =
     match d with
     | Lambda -> Iter.singleton (d, IdEdge)
-    | Label v when Var.is_global v -> Iter.singleton (d, IdEdge)
     | Label v ->
-        Iter.of_list c.rhs
-        |> Iter.filter_map (fun (d, e) ->
-            Expr.BasilExpr.free_vars e |> VarSet.mem v
-            |> flip Option.return_if (Label d, IdEdge))*)
-    failwith "todo"
+        StringMap.to_iter call
+        |> Iter.filter (fun (_, e) ->
+            Expr.BasilExpr.free_vars e |> VarSet.mem v)
+        |> Iter.map (fun (s, _) -> (Label (StringMap.find s params), IdEdge))
 
   let transfer stmt d =
     let open Stmt in
+    match d with
+    | Lambda -> Iter.empty
+    | Label v -> (
+        match stmt with
+        | Instr_Assign a ->
+            Iter.of_list a
+            |> Iter.flat_map (fun (v', e) ->
+                if VarSet.mem v (Expr.BasilExpr.free_vars e) then
+                  Iter.singleton (Label v', IdEdge)
+                else Iter.empty)
+        | _ -> Iter.empty)
+  (*
     match stmt with
     | Instr_Assign a -> (
         match d with
@@ -171,9 +178,19 @@ module IDEDomain : IDESSIDomain = struct
     | Instr_Call _ | Instr_IntrinCall _ | Instr_IndirectCall _ ->
         (* raise (Failure "ide graph should not contain call statements") nope indirect calls exist *)
         Iter.empty
+        *)
 
-  let transfer_phi lhs rhs d = failwith "todo"
-  let init_p2 = failwith "todo"
+  let transfer_phi lhs rhs d =
+    match d with
+    | Lambda -> Iter.empty
+    | Label v ->
+        if List.mem ~eq:Var.equal v rhs then Iter.singleton (Label lhs, IdEdge)
+        else Iter.empty
+
+  let init_p2 (proc : Program.proc) =
+    Procedure.formal_in_params proc
+    |> StringMap.values
+    |> Iter.map (fun v -> (v, Value.singleton v))
 end
 
 module IDEAnalysis = IDESSI (IDEDomain)
