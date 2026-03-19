@@ -48,7 +48,7 @@ and record_field = { offset : Z.t; typ : t } [@@deriving eq, ord]
   Lower type represents types the pointer could load
   Upper type represents types the pointer could store
 *)
-and pointer = { lower : t; upper : t } [@@deriving eq, ord]
+and pointer = { name : string; lower : t; upper : t } [@@deriving eq, ord]
 
 let bv i = Bitvector i
 let int = Integer
@@ -88,7 +88,11 @@ let bv_min_width_for_nat n = Bitvector (Z.of_int n |> Z.numbits)
 
 let struct_field field_name record : record_field =
   match record with
+<<<<<<< HEAD
   | Struct fields -> (
+=======
+  | Record (_, fields) -> (
+>>>>>>> 70095a6 (bmp)
       match StringMap.find_opt field_name fields with
       | None -> failwith @@ "No field at offset " ^ field_name
       | Some t -> t)
@@ -107,11 +111,16 @@ let rec compare_partial (a : t) (b : t) =
   | _, Nothing -> Some 1
   | Unit, _ -> Some (-1)
   | _, Unit -> Some 1
-  | Pointer { lower; upper }, Pointer { lower = lower1; upper = upper1 } -> (
+  | Pointer { lower; upper; _ }, Pointer { lower = lower1; upper = upper1; _ }
+    -> (
       compare_partial lower lower1 |> function
       | Some 0 -> compare_partial upper upper1
       | o -> o)
+<<<<<<< HEAD
   | Struct fields, Struct fields2 ->
+=======
+  | Record (_, fields), Record (_, fields2) ->
+>>>>>>> 70095a6 (bmp)
       Some
         (StringMap.compare
            (fun ({ typ = a; _ } : record_field) { typ = b; _ } ->
@@ -143,9 +152,15 @@ let rec to_string = function
   | Top -> "⊤"
   | Nothing -> "⊥"
   | Variable name -> name
+<<<<<<< HEAD
   | Pointer { lower; upper } ->
       Printf.sprintf "ptr(%s, %s)" (to_string lower) (to_string upper)
   | Struct record ->
+=======
+  | Pointer { lower; upper; name } ->
+      Printf.sprintf "ptr_%s(%s, %s)" name (to_string lower) (to_string upper)
+  | Record (_, record) ->
+>>>>>>> 70095a6 (bmp)
       "{"
       ^ (StringMap.bindings record
         |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->
@@ -214,10 +229,12 @@ let%expect_test "dtp" =
 
 let show (b : t) = to_string b
 
-let show_pointer { lower; upper } =
-  Printf.sprintf "{ lower = %s; upper = %s }" (show lower) (show upper)
+let show_pointer { lower; upper; name } =
+  Printf.sprintf "%s : { lower = %s; upper = %s }" name (show lower)
+    (show upper)
 
 let pp fmt b = Format.pp_print_string fmt (show b)
 
-let pp_pointer fmt { lower; upper } =
-  Format.fprintf fmt "{ lower = %s; upper = %s }" (show lower) (show upper)
+let pp_pointer fmt { lower; upper; name } =
+  Format.fprintf fmt "%s : { lower = %s; upper = %s }" name (show lower)
+    (show upper)
