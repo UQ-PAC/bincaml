@@ -526,14 +526,14 @@ module BasilExpr = struct
         return
           (fill nil
              [ text "extract" ^ a ^ textpf "(%d,%d, " hi lo ^ e ^ text ")" ])
-    | UnaryExpr { op = `FACCESS offset; arg = { this = Some arg } } ->
+    | UnaryExpr { op = `ReadField offset; arg = { this = Some arg } } ->
         return
           (fill
              (text "," ^ newline)
              [ text "faccess" ^ a ^ (textpf "(\"%s\"") offset; arg ^ text ")" ])
     | BinaryExpr
         {
-          op = `FSET offset;
+          op = `WriteField offset;
           arg1 = { this = Some arg1 };
           arg2 = { this = Some arg2 };
         } ->
@@ -749,10 +749,10 @@ module BasilExpr = struct
     unexp ?attrib ~op:(`ZeroExtend n_prefix_bits) e
 
   let fset ?attrib ~(offset : string) (record : t) (e : t) : t =
-    binexp ?attrib ~op:(`FSET offset) record e
+    binexp ?attrib ~op:(`WriteField offset) record e
 
   let faccess ?attrib ~(offset : string) (record : t) : t =
-    unexp ?attrib ~op:(`FACCESS offset) record
+    unexp ?attrib ~op:(`ReadField offset) record
 
   let sign_extend ?attrib ~n_prefix_bits (e : t) : t =
     unexp ?attrib ~op:(`SignExtend n_prefix_bits) e

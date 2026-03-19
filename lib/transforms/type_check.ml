@@ -27,10 +27,11 @@ let type_check stmt_id block_id expr =
     match op with
     | `Classification -> []
     | `Gamma -> []
-    | `FACCESS _ -> (
+    | `Old -> []
+    | `ReadField _ -> (
         match arg with
-        | Record _ -> []
-        | _ -> [ type_err "FACCESS body is not a record type" ])
+        | Struct _ -> []
+        | _ -> [ type_err "ReadField body is not a record type" ])
     | `BoolNOT | `BOOLTOBV1 ->
         if Types.equal arg Types.Boolean then []
         else [ type_err "%s body is not a boolean" @@ AllOps.to_string op ]
@@ -53,7 +54,6 @@ let type_check stmt_id block_id expr =
                   @@ AllOps.to_string op;
                 ])
         | _ -> [ type_err "%s body is not a bitvector" @@ AllOps.to_string op ])
-    | `Old -> []
   in
 
   let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :
@@ -101,13 +101,13 @@ let type_check stmt_id block_id expr =
         | _ ->
             err
             @ [ type_err "%s is not of pointer type" @@ Types.to_string arg2 ])
-    | `FSET offset ->
+    | `WriteField offset ->
         let err =
           match arg1 with
-          | Record _ -> []
+          | Struct _ -> []
           | _ -> [ type_err "%s is not of record type" @@ Types.to_string arg1 ]
         in
-        let { typ } : Types.record_field = Types.get_field offset arg1 in
+        let { typ } : Types.record_field = Types.struct_field offset arg1 in
         if List.length err = 1 || Types.equal arg2 typ then err
         else
           [
