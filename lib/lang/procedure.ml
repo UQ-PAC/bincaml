@@ -368,7 +368,7 @@ let lookup_local_decl p v = Var.Decls.find (local_decls p) v
 
 let decl_local p v =
   let _ = (local_ids p).decl_or_get (Var.name v) in
-  Var.Decls.add (local_decls p) (Var.name v) v;
+  Var.Decls.replace (local_decls p) (Var.name v) v;
   v
 
 let fresh_var p ?(pure = true) ?name typ : Var.t =
@@ -376,7 +376,7 @@ let fresh_var p ?(pure = true) ?name typ : Var.t =
   let name = Option.get_or ~default:"v" name in
   let n = ID.name @@ (local_ids p).fresh ~name () in
   let v = Var.create n typ ~pure in
-  Var.Decls.add (local_decls p) (Var.name v) v;
+  Var.Decls.replace (local_decls p) (Var.name v) v;
   v
 
 let blocks_to_list p =
