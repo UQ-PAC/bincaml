@@ -259,6 +259,9 @@ module IDESSI (D : IDESSIDomain) = struct
                | Lambda -> m))
          summary
 
+  (** Compute a defuse graph for all procedures in a given program, in the
+      direction of the analysis. This can be kept to reuse with the solver
+      functions. *)
   let compute_defuses (prog : Program.t) : (ID.t, MDeps.t) Hashtbl.t =
     let defuses = Hashtbl.create 20 in
     ID.Map.iter
@@ -296,7 +299,8 @@ module IDESSI (D : IDESSIDomain) = struct
 
   (** Generates edge function summaries for every procedure in the given
       program. *)
-  let solve_summaries (prog : Program.t) : (ID.t, summary) Hashtbl.t =
+  let solve_summaries ?(defuses : (ID.t, MDeps.t) Hashtbl.t option)
+      (prog : Program.t) : (ID.t, summary) Hashtbl.t =
     let call_graph_sccs =
       Program.CallGraph.make_call_graph prog
       |> Program.CallGraph.Scc.scc_list
@@ -305,7 +309,7 @@ module IDESSI (D : IDESSIDomain) = struct
              | Program.CallGraph.Vert.ProcBegin id -> Some id
              | _ -> None))
     in
-    let defuses = compute_defuses prog in
+    let defuses = Option.get_lazy (fun _ -> compute_defuses prog) defuses in
     (* Stores summaries of a procedure (for this scc) about only input-output relations *)
     let entry_to_exit_cache = Hashtbl.create 20 in
     let summaries = Hashtbl.create 20 in
@@ -319,10 +323,10 @@ module IDESSI (D : IDESSIDomain) = struct
 
   (** Compute edge function summaries and analysis results for every procedure
       in the given program. *)
-  let solve (prog : Program.t) :
+  let solve ?(defuses : (ID.t, MDeps.t) Hashtbl.t option) (prog : Program.t) :
       (ID.t, summary) Hashtbl.t * D.Value.t VarMap.t ID.Map.t =
     (* Solve phase 1 *)
-    let summaries = solve_summaries prog in
+    let summaries = solve_summaries ?defuses prog in
     (* Solve phase 2 *)
     let p2_res =
       ID.Map.mapi
