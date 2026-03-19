@@ -292,7 +292,7 @@ module IDESSI (D : IDESSIDomain) = struct
                 |> Iter.iter (fun out -> update_summary pid d (Label out) D.top)))
       prog.procs
 
-  let solve (prog : Program.t) =
+  let solve_summaries (prog : Program.t) =
     let call_graph_sccs =
       Program.CallGraph.make_call_graph prog
       |> Program.CallGraph.Scc.scc_list
@@ -311,7 +311,12 @@ module IDESSI (D : IDESSIDomain) = struct
     List.iter
       (fun scc -> p1_solve_scc prog defuses entry_to_exit_cache summaries scc)
       call_graph_sccs;
-    (* Solve p2 *)
+    summaries
+
+  let solve (prog : Program.t) =
+    (* Solve phase 1 *)
+    let summaries = solve_summaries prog in
+    (* Solve phase 2 *)
     let p2_res =
       ID.Map.mapi
         (fun pid proc ->
