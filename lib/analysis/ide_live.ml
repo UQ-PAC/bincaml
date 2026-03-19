@@ -194,7 +194,10 @@ module IDELiveSSI : IDESSIDomain = struct
   let transfer_call call_info arg_info d =
     match d with
     | Lambda -> Iter.empty
-    | Label v -> StringMap.find (Var.name v) call_info |> Expr.BasilExpr.free_vars_iter |> Iter.map (fun v' -> (Label v', IdEdge))
+    | Label v ->
+        StringMap.find (Var.name v) call_info
+        |> Expr.BasilExpr.free_vars_iter
+        |> Iter.map (fun v' -> (Label v', IdEdge))
 
   let transfer s d =
     let open Stmt in
@@ -236,6 +239,11 @@ module IDELiveSSI : IDESSIDomain = struct
     match d with
     | Lambda -> Iter.empty
     | _ -> Iter.of_list rhs |> Iter.map (fun v -> (Label v, IdEdge))
+
+  let init_p2 (proc : Program.proc) =
+    Procedure.formal_out_params proc
+    |> StringMap.values
+    |> Iter.map (fun v -> (v, Value.live))
 end
 
 module IDELiveSSIAnalysis = IDESSI (IDELiveSSI)
@@ -302,11 +310,15 @@ proc @fun2(f:bv64, global_in:bv64)  -> (out2:bv64) {  }
     |}
   in
   let program = lst.prog in
-  let results = IDELiveSSIAnalysis.solve program in
+  let results, p2_results = IDELiveSSIAnalysis.solve program in
   Hashtbl.iter
     (fun pid summary ->
       print_endline @@ ID.name pid;
-      print_endline @@ IDELiveSSIAnalysis.show_summary summary)
+      print_endline @@ IDELiveSSIAnalysis.show_summary summary;
+      print_endline
+      @@ Iter.to_string (fun (v, r) -> Var.name v)
+      @@ VarMap.to_iter
+      @@ ID.Map.get_or pid p2_results ~default:VarMap.empty)
     results;
   [%expect
     {|

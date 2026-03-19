@@ -53,6 +53,7 @@ module type IDESSIDomain = sig
   val transfer_call : call_info -> param_info -> DL.t -> state_update
   val transfer : Program.stmt -> DL.t -> state_update
   val transfer_phi : Var.t -> Var.t list -> DL.t -> state_update
+  val init_p2 : Program.proc -> (Var.t * Value.t) Iter.t
 end
 
 module IDESSI (D : IDESSIDomain) = struct
@@ -236,6 +237,26 @@ module IDESSI (D : IDESSIDomain) = struct
           |> propagate worklist summaries get_summary update_summary)
     done
 
+  let p2_solve_proc (summary : summary) proc : D.Value.t VarMap.t =
+    D.init_p2 proc |> VarMap.of_iter
+    |> DlMap.fold
+         (fun d ->
+           DlMap.fold (fun d2 ef m ->
+               match d2 with
+               | Label v ->
+                   let x =
+                     match d with
+                     | Lambda -> D.eval ef D.Value.bottom
+                     | Label v' ->
+                         D.eval ef (VarMap.get_or v' m ~default:D.Value.bottom)
+                   in
+                   let j =
+                     D.Value.join (VarMap.get_or v m ~default:D.Value.bottom) x
+                   in
+                   VarMap.add v j m
+               | Lambda -> m))
+         summary
+
   let compute_defuses (prog : Program.t) : (ID.t, MDeps.t) Hashtbl.t =
     let defuses = Hashtbl.create 20 in
     ID.Map.iter
@@ -290,5 +311,13 @@ module IDESSI (D : IDESSIDomain) = struct
     List.iter
       (fun scc -> p1_solve_scc prog defuses entry_to_exit_cache summaries scc)
       call_graph_sccs;
-    summaries
+    (* Solve p2 *)
+    let p2_res =
+      ID.Map.mapi
+        (fun pid proc ->
+          let summary = Hashtbl.get_or summaries pid ~default:DlMap.empty in
+          p2_solve_proc summary proc)
+        prog.procs
+    in
+    (summaries, p2_res)
 end
