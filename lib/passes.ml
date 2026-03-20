@@ -186,7 +186,7 @@ module PassManager = struct
       };
       {
         name = "cf-expressions";
-        apply = Proc Transforms.Cf_tx.simplify_proc_exprs;
+        apply = Proc Transforms.Cf_tx.simplify_proc_exprs_default;
         doc =
           "Perform intra-expression simplifications and constant folding for \
            whole program";

@@ -200,6 +200,9 @@ module Recursion (O : Fix) = struct
   (** catamorphism that passes through original expression *)
   let para alg e = para_f alg Fun.id e
 
+  (** catamorphism that passes through original expression unfolded twice *)
+  let cata_context alg e = para_f alg (unfix %> map_expr unfix) e
+
   let iter_children (visit : t expr -> unit) e =
     let alg a = map_expr fst a |> visit in
     para alg e

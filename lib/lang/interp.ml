@@ -4,13 +4,20 @@ exception ConversionError of string
 exception AssertFailure of Program.stmt
 exception AssumeFail of Program.stmt
 exception ReadUninit of Var.t
+exception Timeout
 
 let () =
   Printexc.register_printer (function
     | AssumeFail stmt -> Some ("Assumption failed: " ^ Program.show_stmt stmt)
     | AssertFailure e -> Some ("AssertFailure : " ^ Program.show_stmt e)
     | ReadUninit e -> Some ("ReadUninitialised : " ^ Var.to_string e)
+    | Timeout -> Some "Fuel exhausted"
     | _ -> None)
+
+(** TODO: our interpreter only supports bitvector-coercible values currently;
+
+    - newly-added higher-level language features that appear in spec may want to
+      be supported. *)
 
 module IValue = struct
   type t = Z.t
@@ -34,6 +41,12 @@ module IValue = struct
     | `Integer v -> Bitvec.create ~size:int_size v
     | `Bool true -> Bitvec.create ~size:8 Z.one
     | `Bool false -> Bitvec.create ~size:8 Z.zero
+    | `Pointer (bv, _) -> bv
+    | `Record (fields, _) ->
+        StringMap.fold
+          (fun _ ({ value; _ } : Ops.Record.field) acc ->
+            Bitvec.concat acc value)
+          fields Bitvec.empty
 
   let of_constant (v : Ops.AllOps.const) =
     let open Expr.BasilExpr in
@@ -42,6 +55,8 @@ module IValue = struct
     | `Bitvector bv -> bv_value bv
     | `Integer v -> int_value v
     | `Bool b -> if b then true_value else false_value
+    | `Pointer (bv, _) -> bv_value bv
+    | `Record fields -> bv_value @@ bv_of_constant v
 
   (** conversion to basil values *)
 
@@ -146,6 +161,7 @@ module PageTable = struct
     }
 
   let clone tbl = { tbl with table = Hashtbl.create 10; parent = Some tbl }
+  let clobbered tbl = { tbl with table = Hashtbl.create 10; parent = None }
 
   let page_range_iter st i j yield =
     let k = ref (Z.div i (Z.of_int st.page_len)) in
@@ -397,7 +413,16 @@ module IState = struct
     last_block : ID.t option;
     events : event list;
     random_gen : Random.State.t option;
+    fuel : int option;
   }
+
+  exception InterpreterError of (t * string)
+
+  let tick st =
+    match st.fuel with
+    | None -> st
+    | Some n when n <= 0 -> raise Timeout
+    | Some n -> { st with fuel = Some (n - 1) }
 
   let add_event st e = { st with events = e :: st.events }
 
@@ -459,7 +484,7 @@ module IState = struct
 
   (** create a new state for prog that is either zero-intiialised or randomly
       initialised based on whether the random geenrator is passed *)
-  let create ?random (prog : Program.t) =
+  let create ?(fuel = 10000) ?random (prog : Program.t) =
     let stack = [] in
     let pc =
       {
@@ -477,7 +502,7 @@ module IState = struct
         | _ -> None)
       |> Iter.filter (fun v ->
           match Var.typ v with Map _ -> true | _ -> false)
-      |> Iter.map (fun v -> (v, PageTable.create ()))
+      |> Iter.map (fun v -> (v, PageTable.create ?use_random_init:random ()))
       |> VarMap.of_iter
     in
     let init_glob g =
@@ -505,6 +530,7 @@ module IState = struct
       events = [];
       last_block = None;
       random_gen = random;
+      fuel = Some fuel;
     }
 
   type decisions = { choices_remaining : decisions list; choice : t }
@@ -589,11 +615,12 @@ module IState = struct
     | Choose of t * t list
   [@@derving eq]
 
-  let rec eval_stmt (stmt : Program.stmt) (st : t) =
+  let rec eval_stmt_unsafe (stmt : Program.stmt) (st : t) =
     let stmt' =
       Stmt.map ~f_lvar:id ~f_rvar:id ~f_expr:(fun e -> eval_expr e st) stmt
     in
     let st = add_event_stmt st stmt' in
+    let st = tick st in
     match stmt' with
     | Stmt.Instr_Assign assigns ->
         List.to_iter assigns |> Iter.fold (fun st (l, r) -> write_var l r st) st
@@ -636,6 +663,11 @@ module IState = struct
         in
         st
     | Stmt.Instr_IndirectCall _ -> failwith "unsupported"
+
+  and eval_stmt (stmt : Program.stmt) (st : t) =
+    try eval_stmt_unsafe stmt st with
+    | AssumeFail _ as e -> raise e
+    | e -> raise (InterpreterError (st, Printexc.to_string e))
 
   and exec_edge st e =
     let b, l, e = e in
@@ -723,10 +755,29 @@ module IState = struct
     | _ when Option.is_some st.random_gen ->
         let rand = Option.get_exn_or "" st.random_gen in
         let st =
-          (Procedure.specification p).modifies_globs
-          |> List.fold_left
-               (fun st v -> write_var v (IValue.random rand (Var.typ v)) st)
-               st
+          let mem, globs =
+            (Procedure.specification p).modifies_globs
+            |> List.partition (fun v ->
+                match Var.typ v with
+                | Map (Bitvector _, Bitvector _) -> true
+                | _ -> false)
+          in
+          let st =
+            List.fold_left
+              (fun st v -> write_var v (IValue.random rand (Var.typ v)) st)
+              st globs
+          in
+          let st =
+            List.fold_left
+              (fun st v ->
+                let m = VarMap.find v st.memories in
+                let memories =
+                  VarMap.add v (PageTable.clobbered m) st.memories
+                in
+                { st with memories })
+              st mem
+          in
+          st
         in
         ( st,
           Procedure.formal_out_params p
@@ -791,7 +842,8 @@ let test_run_proc ~(seed : int) prog proc =
     |> StringMap.map (fun arg -> IValue.random rs (Var.typ arg))
   in
   let st = IState.create ~random:rs prog in
-  Ok (IState.exec_proc st proc args)
+  try Ok (IState.exec_proc st proc args)
+  with IState.InterpreterError (st, msg) -> Error (st, msg)
 
 let run_proc prog ?(args = StringMap.empty) proc =
   let st = IState.create prog in
