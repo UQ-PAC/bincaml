@@ -47,6 +47,7 @@ module Domain = struct
     | Instr_Load { lhs; rhs } -> Iter.singleton (lhs, m rhs)
     | Instr_Store { lhs; value } ->
         Iter.singleton (lhs, V.join (m lhs) (eval_expr value))
+    (* could use IDE summaries, but that requires access to formal in params of caller *)
     | Instr_Call { lhs } | Instr_IntrinCall { lhs } ->
         StringMap.values lhs |> Iter.map (fun v -> (v, GammaSet.top))
     (* need to globally go to top which the transfer_state api doesn't support *)
