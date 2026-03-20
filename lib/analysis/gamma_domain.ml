@@ -1,4 +1,4 @@
-(* The forwards overappraximating gamma domain. *)
+(* The forwards overappraximating gamma domain. It is assumed that the program is in ssa form. *)
 
 include Lang
 include Common
@@ -22,7 +22,6 @@ module Domain = struct
 
   let name = "Gamma domain"
 
-  (* TODO globals *)
   let init proc =
     Procedure.formal_in_params proc
     |> StringMap.values
