@@ -756,7 +756,6 @@ expr : expr1 {  $1 }
   | KW_fun attribSet lambdaDef { Expr_Lambda ($2, $3) }
   | KW_let localIdent localVarParen_list SYMB5 typeT SYMB6 expr KW_in expr { Expr_Let ($2, $3, $5, $7, $9) }
   | expr2 bIdent { Expr_Field ($1, $2) }
-  | expr SYMB11 expr2 { Expr_FieldSet ($1, $3) }
   | localIdent beginRec fieldAssign_list endRec { SortValRec ($1, $2, $3, $4) }
   ;
 
@@ -781,6 +780,7 @@ expr2 : value { Expr_Literal $1 }
   | KW_match expr KW_with openParen case_list closeParen { Expr_Match ($2, $4, $5, $6) }
   | KW_cases openParen case_list closeParen { Expr_Cases ($2, $3, $4) }
   | openParen expr closeParen { Expr_Paren ($1, $2, $3) }
+  | expr SYMB11 expr2 { Expr_FieldSet ($1, $3) }
   ;
 
 lambdaDef : localVarParen_list lambdaSep expr { LambdaDef1 ($1, $2, $3) }

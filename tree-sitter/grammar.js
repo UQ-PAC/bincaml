@@ -516,8 +516,6 @@ module.exports = grammar({
         seq("let", $.token_LocalIdent, optional($.list_LocalVarParen), ":", $.Type, "=", $.Expr, "in", $.Expr),
         // Expr_Field. Expr ::= Expr2 BIdent ;
         seq($.Expr2, $.token_BIdent),
-        // Expr_FieldSet. Expr ::= Expr "<-" Expr2 ;
-        seq($.Expr, "<-", $.Expr2),
         // SortValRec. Expr ::= LocalIdent BeginRec [FieldAssign] EndRec ;
         seq($.token_LocalIdent, $.token_BeginRec, optional($.list_FieldAssign), $.token_EndRec)
       ),
@@ -563,7 +561,9 @@ module.exports = grammar({
         // Expr_Cases. Expr2 ::= "cases" OpenParen [Case] CloseParen ;
         seq("cases", $.token_OpenParen, optional($.list_Case), $.token_CloseParen),
         // Expr_Paren. Expr2 ::= OpenParen Expr CloseParen ;
-        seq($.token_OpenParen, $.Expr, $.token_CloseParen)
+        seq($.token_OpenParen, $.Expr, $.token_CloseParen),
+        // Expr_FieldSet. Expr2 ::= Expr "<-" Expr2 ;
+        seq($.Expr, "<-", $.Expr2)
       ),
     LambdaDef: $ =>
       // LambdaDef1. LambdaDef ::= [LocalVarParen] LambdaSep Expr ;

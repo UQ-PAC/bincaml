@@ -456,7 +456,7 @@ and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
   |    AbsBasilIR.Expr_Cases (openparen, cases, closeparen) -> prPrec i 2 (concatD [render "cases" ; prtOpenParen 0 openparen ; prtCaseListBNFC 0 cases ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> prPrec i 2 (concatD [prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Field (expr, bident) -> prPrec i 0 (concatD [prtExpr 2 expr ; prtBIdent 0 bident])
-  |    AbsBasilIR.Expr_FieldSet (expr1, expr2) -> prPrec i 0 (concatD [prtExpr 0 expr1 ; render "<-" ; prtExpr 2 expr2])
+  |    AbsBasilIR.Expr_FieldSet (expr1, expr2) -> prPrec i 2 (concatD [prtExpr 0 expr1 ; render "<-" ; prtExpr 2 expr2])
   |    AbsBasilIR.SortValRec (localident, beginrec, fieldassigns, endrec) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; prtBeginRec 0 beginrec ; prtFieldAssignListBNFC 0 fieldassigns ; prtEndRec 0 endrec])
 
 and prtExprListBNFC i es : doc = match (i, es) with
