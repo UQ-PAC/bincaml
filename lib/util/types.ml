@@ -88,11 +88,7 @@ let bv_min_width_for_nat n = Bitvector (Z.of_int n |> Z.numbits)
 
 let struct_field field_name record : record_field =
   match record with
-<<<<<<< HEAD
   | Struct fields -> (
-=======
-  | Record (_, fields) -> (
->>>>>>> 70095a6 (bmp)
       match StringMap.find_opt field_name fields with
       | None -> failwith @@ "No field at offset " ^ field_name
       | Some t -> t)
@@ -159,9 +155,14 @@ let rec to_string = function
 =======
   | Pointer { lower; upper; name } ->
       Printf.sprintf "ptr_%s(%s, %s)" name (to_string lower) (to_string upper)
+<<<<<<< HEAD
   | Record (_, record) ->
 >>>>>>> 70095a6 (bmp)
       "{"
+=======
+  | Record (name, record) ->
+      name ^ "{"
+>>>>>>> 977c758 (bmp)
       ^ (StringMap.bindings record
         |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->
             Printf.sprintf "\"%s\": (%s, %s)" k (to_string v)

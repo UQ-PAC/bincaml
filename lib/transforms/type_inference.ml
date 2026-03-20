@@ -1416,14 +1416,30 @@ let map_expr results proc =
     | AbstractExpr.RVar { id; attrib } ->
         BasilExpr.replace [%here]
           (BasilExpr.rvar ?attrib @@ map_var results proc id)
-    | AbstractExpr.BinaryExpr { op = `BVADD; arg1; arg2 } -> (
+    | AbstractExpr.UnaryExpr { op = `Extract (_, offset1); arg; attrib } -> (
+        (* arg is a Record, I love records *)
+        match BasilExpr.type_of arg with
+        | Types.Record (_, fields) ->
+            let field, _ =
+              List.find (fun (_, ({ offset } : Types.record_field)) ->
+                  Z.equal offset @@ Z.of_int offset1)
+              @@ StringMap.bindings fields
+            in
+            print_endline field;
+            print_endline @@ BasilExpr.to_string arg;
+            BasilExpr.replace [%here]
+              (BasilExpr.unexp ?attrib ~op:(`FACCESS field) arg)
+        | _ -> BasilExpr.replace [%here] @@ BasilExpr.fix abstract_expr)
+    | AbstractExpr.BinaryExpr { op = `BVADD; arg1; arg2; attrib } -> (
         match (BasilExpr.type_of arg1, BasilExpr.type_of arg2) with
         | Types.Pointer _, Types.Pointer _ ->
             failwith "Two pointer types adding"
         | Types.Pointer _, _ ->
-            BasilExpr.replace [%here] (BasilExpr.binexp ~op:`PTRADD arg1 arg2)
+            BasilExpr.replace [%here]
+              (BasilExpr.binexp ?attrib ~op:`PTRADD arg1 arg2)
         | _, Types.Pointer _ ->
-            BasilExpr.replace [%here] (BasilExpr.binexp ~op:`PTRADD arg2 arg1)
+            BasilExpr.replace [%here]
+              (BasilExpr.binexp ?attrib ~op:`PTRADD arg2 arg1)
         | _ -> BasilExpr.replace [%here] @@ BasilExpr.fix abstract_expr)
     (* TODO: Is this the best way to do no changes *)
     | _ -> BasilExpr.replace [%here] @@ BasilExpr.fix abstract_expr
