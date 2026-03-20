@@ -221,7 +221,6 @@ module PassManager = struct
             (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
       };
-      { name = "gamma-test"; apply = Prog Analysis.Gamma_domain.test; doc = "" };
     ]
 
   let print_passes =

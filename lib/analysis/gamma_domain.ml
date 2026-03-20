@@ -153,16 +153,3 @@ module IDEDomain : IDESSIDomain = struct
 end
 
 module IDEAnalysis = IDESSI (IDEDomain)
-
-let test (p : Program.t) =
-  let summaries, res = IDEAnalysis.solve p in
-  ID.Map.iter
-    (fun pid res ->
-      print_endline @@ ID.name pid;
-      print_endline @@ IDEAnalysis.show_summary @@ Hashtbl.find summaries pid;
-      VarMap.to_iter res
-      |> Iter.to_string (fun (v, s) ->
-          Var.name v ^ "->" ^ IDEDomain.Value.show s)
-      |> print_endline)
-    res;
-  p
