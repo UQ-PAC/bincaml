@@ -70,7 +70,7 @@ module IDELiveCommon = struct
     | IdEdge, ConstEdge false -> IdEdge
     | IdEdge, IdEdge -> IdEdge
 
-  let eval f v = match f with IdEdge -> v | ConstEdge v -> v
+  let eval f v = match f with IdEdge -> v | ConstEdge c -> c
 end
 
 module IDELive = struct
@@ -189,7 +189,7 @@ end
 module IDELiveAnalysis = IDE (IDELive)
 open Idessi
 
-module IDELiveSSI : IDESSIDomain = struct
+module IDELiveSSI = struct
   include IDELiveCommon
 
   let init_data (proc : Program.proc) =

@@ -81,6 +81,12 @@ module IDESSI (D : IDESSIDomain) = struct
   end)
 
   let propagate worklist summaries get_summary update_summary updates =
+    (* PERF: Things could be sped up by a bit if we didn't do two table/map
+       look ups per operation. Most of the time we'll be using the same first
+       key anyways, so querying twice every time is very redundant. It looks
+       like this filter map is the biggest performance bottleneck of the solver
+       atm (9% of the 26% of the runtime) since we propagate to already marked
+       variables whenever they are used. *)
     Iter.filter_map
       (fun (d1, pid, d2, e) ->
         let e' = get_summary pid d1 d2 in
@@ -113,7 +119,7 @@ module IDESSI (D : IDESSIDomain) = struct
         let caller = ID.Map.find c.procid prog.procs in
         (match D.direction with
           | `Forwards ->
-              D.transfer_call c.args (Procedure.formal_in_params proc) d2
+              D.transfer_call c.args (Procedure.formal_in_params caller) d2
               |> Iter.map (fun (d, e2) -> (d, e2 @. e1))
           | `Backwards -> (
               match d2 with
@@ -215,14 +221,7 @@ module IDESSI (D : IDESSIDomain) = struct
           D.init_data proc |> Iter.map (fun v -> Label v) |> Iter.cons Lambda
         in
         init |> Iter.map (fun v -> (v, pid, v)) |> W1.add_iter worklist;
-        let summary = Hashtbl.get_or summaries pid ~default:DlMap.empty in
-        let summary =
-          Iter.fold
-            (fun summary v ->
-              DlMap.add v (DlMap.singleton v D.identity) summary)
-            summary init
-        in
-        Hashtbl.replace summaries pid summary)
+        init |> Iter.iter (fun v -> update_summary pid v v D.identity))
       scc;
     while W1.non_empty worklist do
       let d1, pid, d2 = W1.pop worklist in
@@ -273,7 +272,7 @@ module IDESSI (D : IDESSIDomain) = struct
       prog.procs;
     defuses
 
-  let gen_stub_summaries (prog : Program.t) summaries =
+  let gen_stub_summaries (prog : Program.t) summaries entry2exit =
     let update_summary pid d1 d2 e =
       let summary = Hashtbl.get_or summaries pid ~default:DlMap.empty in
       let m = DlMap.get_or d1 summary ~default:DlMap.empty in
@@ -292,9 +291,16 @@ module IDESSI (D : IDESSIDomain) = struct
               |> Iter.cons Lambda
             in
             Iter.for_each init (fun d ->
-                Procedure.formal_out_params proc
+                (match D.direction with
+                  | `Forwards -> Procedure.formal_out_params proc
+                  | `Backwards -> Procedure.formal_in_params proc)
                 |> StringMap.values
-                |> Iter.iter (fun out -> update_summary pid d (Label out) D.top)))
+                |> Iter.iter (fun out ->
+                    let k = (pid, d) in
+                    Hashtbl.get_or entry2exit k ~default:VarMap.empty
+                    |> VarMap.add out D.top
+                    |> Hashtbl.replace entry2exit k;
+                    update_summary pid d (Label out) D.top)))
       prog.procs
 
   (** Generates edge function summaries for every procedure in the given
@@ -314,7 +320,7 @@ module IDESSI (D : IDESSIDomain) = struct
     let entry_to_exit_cache = Hashtbl.create 20 in
     let summaries = Hashtbl.create 20 in
     (* Initialise stub summaries *)
-    gen_stub_summaries prog summaries;
+    gen_stub_summaries prog summaries entry_to_exit_cache;
     (* Solve p1 *)
     List.iter
       (fun scc -> p1_solve_scc prog defuses entry_to_exit_cache summaries scc)

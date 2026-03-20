@@ -148,7 +148,7 @@ module InterprocDSE = struct
 
   let filter_dead prog keep live (block : Program.bloc) =
     Block.fold_backwards
-      ~f:(fun (live, acc) s ->
+      ~f:(fun acc s ->
         let omit, new_s =
           match s with
           | Stmt.Instr_Assign a ->
@@ -158,11 +158,10 @@ module InterprocDSE = struct
               (List.is_empty a, Stmt.Instr_Assign a)
           | _ -> (false, s)
         in
-        let live = tf_stmt_live live s in
-        if omit then (live, acc) else (live, new_s :: acc))
+        if omit then acc else new_s :: acc)
       ~phi:(fun x a -> x)
-      ~init:(live, []) block
-    |> snd |> Vector.of_list
+      ~init:[] block
+    |> Vector.of_list
 
   let transform_proc prog keep live_param_strs results proc =
     (* Remove dead parameters *)
@@ -205,24 +204,19 @@ module InterprocDSE = struct
     (* Remove dead stores. We don't need to use any interprocedural results
        here as all interprocedural results come from input parameters being
        dead, which we have removed. *)
+    let live =
+      ID.Map.find (Procedure.id proc) results
+      |> VarMap.to_iter
+      |> Iter.filter_map (fun (v, t) -> Option.return_if t v)
+      |> VarSet.of_iter
+    in
     let blocks = Procedure.blocks_to_list proc in
     let proc =
       List.fold_left
         (fun p b ->
           match b with
           | Procedure.Vert.Begin id, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
-              let v = Procedure.Vert.End id in
-              let stmts =
-                filter_dead prog keep
-                  (results ~proc_id:(Procedure.id proc) v
-                  |> Option.map (fun m ->
-                      IDELiveAnalysis.DataMap.to_iter m
-                      |> Iter.filter_map (fun (v, x) ->
-                          if x then Some v else None)
-                      |> VarSet.of_iter)
-                  |> Option.get_or ~default:VarSet.empty)
-                  b
-              in
+              let stmts = filter_dead prog keep live b in
               Procedure.update_block p id { b with stmts }
           | _ -> p)
         proc blocks
@@ -232,16 +226,13 @@ module InterprocDSE = struct
   let transform (keep : Var.t -> bool) (p : Program.t) =
     let _, results =
       Trace_core.with_span ~__FILE__ ~__LINE__ "ide live vars" @@ fun _ ->
-      IDELiveAnalysis.solve p
+      IDELiveSSIAnalysis.solve p
     in
 
     let live_param_strs : StringSet.t ID.Map.t =
-      ID.Map.map
-        (fun proc ->
-          let res =
-            results ~proc_id:(Procedure.id proc) Procedure.Vert.Entry
-            |> Option.get_or ~default:VarMap.empty
-          in
+      ID.Map.mapi
+        (fun pid proc ->
+          let res = ID.Map.find pid results in
           Procedure.formal_in_params proc
           |> StringMap.filter (fun _ v -> VarMap.get_or v res ~default:false)
           |> StringMap.keys |> StringSet.of_iter)
