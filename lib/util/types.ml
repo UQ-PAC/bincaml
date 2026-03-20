@@ -26,10 +26,10 @@ module StringMap = Map.Make (String)
     the form [(declare-sort Name 3)] and uses [(Name Int Int Bool)]. *)
 
 type t =
-  | Boolean 
-  | Integer (** mathematical integer type (Z)*)
-  | Bitvector of int (** bitvector of a given width *)
-  | Unit (** type inhabited by unit value *)
+  | Boolean
+  | Integer  (** mathematical integer type (Z)*)
+  | Bitvector of int  (** bitvector of a given width *)
+  | Unit  (** type inhabited by unit value *)
   | Top  (** greatest type *)
   | Nothing  (** least type / empty set *)
   | Map of t * t  (** function type *)
@@ -37,7 +37,7 @@ type t =
   | Struct of record_field StringMap.t
       (** a struct is a product type of a known layout that is representible as
           a finite byte/bit sequence *)
-  | Pointer of pointer (** pointer type *)
+  | Pointer of pointer  (** pointer type *)
   | Variable of string (* Possibly a name of a type declartion *)
 
 and variant = { variant : string; fields : field list }
@@ -173,6 +173,12 @@ let rec to_string = function
       ^ List.to_string ~sep:" | " ~start:"" ~stop:""
           (function { variant; fields } -> fsort variant fields)
           variants
+
+let to_string_rexp = function
+  | ( Boolean | Integer | Bitvector _ | Unit | Top | Nothing | Variable _
+    | Pointer _ | Struct _ | Map _ ) as e ->
+      to_string e
+  | Sort (name, _) -> name
 
 let%expect_test "dtp" =
   let lst =

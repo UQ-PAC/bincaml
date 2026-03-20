@@ -311,7 +311,7 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.Expr_Cases (openparen, cases, closeparen) -> s2s "Expr_Cases" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showCase cases  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> s2s "Expr_Paren" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Field (expr, bident) -> s2s "Expr_Field" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showBIdent bident >> c2s ')'
-  |    AbsBasilIR.Expr_FieldSet (expr0, expr) -> s2s "Expr_FieldSet" >> c2s ' ' >> c2s '(' >> showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.Expr_FieldSet (expr0, localident, expr) -> s2s "Expr_FieldSet" >> c2s ' ' >> c2s '(' >> showExpr expr0  >> s2s ", " >>  showLocalIdent localident  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.SortValRec (localident, beginrec, fieldassigns, endrec) -> s2s "SortValRec" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showBeginRec beginrec  >> s2s ", " >>  showList showFieldAssign fieldassigns  >> s2s ", " >>  showEndRec endrec >> c2s ')'
 
 

@@ -7,9 +7,9 @@
 open ParBasilIR
 open Lexing
 
-let symbol_table = Hashtbl.create 11
+let symbol_table = Hashtbl.create 10
 let _ = List.iter (fun (kwd, tok) -> Hashtbl.add symbol_table kwd tok)
-                  [(";", SYMB1);(",", SYMB2);("->", SYMB3);("::", SYMB4);(":", SYMB5);("=", SYMB6);("|", SYMB7);(":=", SYMB8);("mem:=", SYMB9);("_", SYMB10);("<-", SYMB11)]
+                  [(";", SYMB1);(",", SYMB2);("->", SYMB3);("::", SYMB4);(":", SYMB5);("=", SYMB6);("|", SYMB7);(":=", SYMB8);("mem:=", SYMB9);("_", SYMB10)]
 
 let resword_table = Hashtbl.create 107
 let _ = List.iter (fun (kwd, tok) -> Hashtbl.add resword_table kwd tok)
@@ -53,7 +53,7 @@ let _idchar = _letter | _digit | ['_' '\'']         (*  identifier character *)
 let _universal = _                                  (* universal: any character *)
 
 (* reserved words consisting of special symbols *)
-let rsyms = ";" | "," | "->" | "::" | ":" | "=" | "|" | ":=" | "mem:=" | "_" | "<-"
+let rsyms = ";" | "," | "->" | "::" | ":" | "=" | "|" | ":=" | "mem:=" | "_"
 
 (* user-defined token types *)
 let bVTYPE = "bv" _digit +

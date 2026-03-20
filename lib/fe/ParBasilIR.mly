@@ -19,7 +19,6 @@ open Lexing
 %token SYMB8 /* := */
 %token SYMB9 /* mem:= */
 %token SYMB10 /* _ */
-%token SYMB11 /* <- */
 
 %token TOK_EOF
 %token <string> TOK_Ident
@@ -780,7 +779,7 @@ expr2 : value { Expr_Literal $1 }
   | KW_match expr KW_with openParen case_list closeParen { Expr_Match ($2, $4, $5, $6) }
   | KW_cases openParen case_list closeParen { Expr_Cases ($2, $3, $4) }
   | openParen expr closeParen { Expr_Paren ($1, $2, $3) }
-  | expr SYMB11 expr2 { Expr_FieldSet ($1, $3) }
+  | expr2 KW_with localIdent SYMB6 expr { Expr_FieldSet ($1, $3, $5) }
   ;
 
 lambdaDef : localVarParen_list lambdaSep expr { LambdaDef1 ($1, $2, $3) }

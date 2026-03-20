@@ -155,6 +155,18 @@ let decl_global ?(attrib = StringMap.empty) p v =
 
 let decl_typ ?(attrib = StringMap.empty) p t =
   match t with
+  | Sort (name, []) as s ->
+      {
+        p with
+        globals =
+          StringMap.add name (Type { binding = name; typ = s }) p.globals;
+        implicit_decls =
+          StringMap.add name
+            (let ty = Types.curry [] s in
+             let constructor = Var.create name ty ~scope:Global in
+             VariantCase { variant = name; belongs_to = s; constructor })
+            p.implicit_decls;
+      }
   | Sort (name, variants) as s ->
       {
         p with

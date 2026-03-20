@@ -229,7 +229,7 @@ and expr =
  | Expr_Cases of openParen * case list * closeParen
  | Expr_Paren of openParen * expr * closeParen
  | Expr_Field of expr * bIdent
- | Expr_FieldSet of expr * expr
+ | Expr_FieldSet of expr * localIdent * expr
  | SortValRec of localIdent * beginRec * fieldAssign list * endRec
 
 and lambdaDef =

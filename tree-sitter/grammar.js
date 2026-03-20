@@ -562,8 +562,8 @@ module.exports = grammar({
         seq("cases", $.token_OpenParen, optional($.list_Case), $.token_CloseParen),
         // Expr_Paren. Expr2 ::= OpenParen Expr CloseParen ;
         seq($.token_OpenParen, $.Expr, $.token_CloseParen),
-        // Expr_FieldSet. Expr2 ::= Expr "<-" Expr2 ;
-        seq($.Expr, "<-", $.Expr2)
+        // Expr_FieldSet. Expr2 ::= Expr2 "with" LocalIdent "=" Expr ;
+        seq($.Expr2, "with", $.token_LocalIdent, "=", $.Expr)
       ),
     LambdaDef: $ =>
       // LambdaDef1. LambdaDef ::= [LocalVarParen] LambdaSep Expr ;

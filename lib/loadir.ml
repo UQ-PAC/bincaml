@@ -151,8 +151,7 @@ module BasilASTLoader = struct
         let types = List.map trans_typedecl types in
         List.fold_left
           (fun prog (binding, typ) ->
-            let def : Program.declaration = Type { binding; typ } in
-            map_prog (fun prog -> Program.add_decl prog binding def) prog)
+            map_prog (fun prog -> Program.decl_typ prog typ) prog)
           prog types
     | Decl_Mem (modifiers, bident, type', spec) ->
         let attrib = StringMap.of_list (trans_varspec prog spec) in
@@ -1046,21 +1045,13 @@ module BasilASTLoader = struct
           ~hi_excl:(transIntVal ival0 |> Z.to_int)
           ~lo_incl:(transIntVal intval |> Z.to_int)
           (trans_expr expr)
-    | Expr_FieldSet (Expr_Field (record, fname), value) ->
+    | Expr_FieldSet (record, fname, value) ->
         let fname =
-          String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Attr fname)
+          String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Local fname)
           |> Option.get_exn_or "safe by parser"
         in
         BasilExpr.field_store ~field:fname (trans_expr record)
           (trans_expr value)
-    | Expr_FieldSet (e, _) ->
-        let e = trans_expr e in
-        let token_char_offset_range =
-          BasilExpr.unfix e |> AbstractExpr.get_attrib
-          |> Option.map Attrib.loc_of_attr
-        in
-        let msg = "Arguemnt to set is not a field." in
-        raise (LoadError { token_char_offset_range; msg; input = None })
     | Expr_Field (record, fname) ->
         let fname =
           String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Attr fname)
@@ -1555,7 +1546,7 @@ proc @main_4196260 () -> ()
     [
        block %main_entry [
          $NF:bv1 := 0x1:bv1;
-         $ZF:bv1 := $NF:bv1;
+         $ZF:bv1 := $NF;
          goto (%main_basil_return_1);
        ];
        block %main_basil_return_1 [ nop; return; ]
@@ -1655,7 +1646,7 @@ proc @test1() -> ()
     proc @test1()  -> () { .name = "test1" }
       modifies $R0:bv64, $R1:bv64
       captures $R0:bv64, $R1:bv64
-      requires eq($R1:bv64, 0x0:bv64)
-      ensures eq($R1:bv64, 0x0:bv64)
+      requires eq($R1, 0x0:bv64)
+      ensures eq($R1, 0x0:bv64)
     ;
     |}]

@@ -469,13 +469,13 @@ module BasilExpr = struct
             let _, rtype = Types.uncurry (Var.typ name) in
             text (Var.name name)
             ^+ binding ^+ text ":"
-            ^+ text (Types.to_string rtype)
+            ^+ text (Types.to_string_rexp rtype)
             ^+ text "=" ^+ bracket "(" in_body ")"
         | name, { this = Some e } ->
             let rtype = Var.typ name in
             text (Var.name name)
             ^+ attrib ^+ text ":"
-            ^+ text (Types.to_string rtype)
+            ^+ text (Types.to_string_rexp rtype)
             ^+ text "=" ^ bracket "(" e ")"
         | _ -> failwith "undefined ")
     in
@@ -510,7 +510,7 @@ module BasilExpr = struct
         return (text op ^ a ^ text " " ^ binding)
     | Lambda { bound_vars; in_body; attrib } -> pass ()
     | Let { bound_vars; in_body; attrib } -> pass ()
-    | RVar { id; attrib } -> return (text (Var.to_string id) ^ a)
+    | RVar { id; attrib } -> return (text (Var.name id) ^ a)
     | Constant { const } -> return (text (AllOps.to_string const) ^ a)
     | UnaryExpr { op = `ZeroExtend bits; arg = { this = Some arg } } ->
         return

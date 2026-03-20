@@ -286,7 +286,7 @@ Expr_Paren . Expr2 ::= OpenParen Expr CloseParen ;
 
 
 Expr_Field      . Expr ::= Expr2 BIdent;
-Expr_FieldSet   . Expr2 ::= Expr "<-" Expr2 ;
+Expr_FieldSet   . Expr2 ::= Expr2 "with" LocalIdent "=" Expr ;
 
 rules FieldAssign ::= LocalIdent "=" Expr ;
 separator FieldAssign ";";

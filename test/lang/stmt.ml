@@ -20,7 +20,7 @@ let%expect_test "frees" =
   print_endline @@ Iter.to_string ~sep:"," Var.to_string (iter_lvar s);
   [%expect
     {|
-    (v1:bool := v2:bool, v3:bool := v4:bool)
+    (v1:bool := v2, v3:bool := v4)
     Rvars: v2:bool,v4:bool
     Lvars: v1:bool,v3:bool
     |}]
@@ -49,20 +49,20 @@ let%expect_test "fold_block" =
   print_endline (Block.to_string block);
   ();
   [%expect {|
-    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in:bv64,
-     0xfffffffffffffffc:bv64) extract(32,0, R0_in:bv64) 32
-    var load45_1:bv32 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in,
+     0xfffffffffffffffc:bv64) extract(32,0, R0_in) 32
+    var load45_1:bv32 := load le $stack:(bv64->bv8) bvadd(R31_in,
      0xfffffffffffffffc:bv64) 32
-    var R1_4:bv64 := zero_extend(32, load45_1:bv32)
-    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x420034:bv64 extract(32,0, R1_4:bv64) 32
+    var R1_4:bv64 := zero_extend(32, load45_1)
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x420034:bv64 extract(32,0, R1_4) 32
     var load46_1:bv32 := load le $mem:(bv64->bv8) 0x42002c:bv64 32
-    var R0_10:bv64 := zero_extend(32, load46_1:bv32)
+    var R0_10:bv64 := zero_extend(32, load46_1)
     [
-      $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in:bv64, 0xfffffffffffffffc:bv64) extract(32,0, R0_in:bv64) 32;
-      load45_1:bv32 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64, 0xfffffffffffffffc:bv64) 32;
-      R1_4:bv64 := zero_extend(32, load45_1:bv32);
-      $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x420034:bv64 extract(32,0, R1_4:bv64) 32;
+      $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in, 0xfffffffffffffffc:bv64) extract(32,0, R0_in) 32;
+      load45_1:bv32 := load le $stack:(bv64->bv8) bvadd(R31_in, 0xfffffffffffffffc:bv64) 32;
+      R1_4:bv64 := zero_extend(32, load45_1);
+      $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x420034:bv64 extract(32,0, R1_4) 32;
       load46_1:bv32 := load le $mem:(bv64->bv8) 0x42002c:bv64 32;
-      R0_10:bv64 := zero_extend(32, load46_1:bv32);
+      R0_10:bv64 := zero_extend(32, load46_1);
     ]
     |}]
