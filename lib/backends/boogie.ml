@@ -38,6 +38,7 @@ let rec type_to_string (t : Types.t) =
   | Types.Bitvector i -> String.cat "bv" (Int.to_string i)
   | Types.Map (i, o) ->
       String.concat "" [ "["; type_to_string i; "]"; type_to_string o ]
+  | Types.Variable s -> s
   | t ->
       raise
         (BoogieException (String.cat "Unsupported type" (Types.to_string t)))
@@ -225,6 +226,26 @@ let pretty_function_body funcname (e : Lang.Program.e) =
               (Var.to_string funcname)
               (Lang.Expr.BasilExpr.to_string e)))
 
+let pretty_variant_declaration (v : Types.variant) =
+  let open Containers_pp in
+  text v.variant
+  ^ bracket "("
+      (append_l
+         ~sep:(text "," ^ sp)
+         (List.map
+            (fun (f : Types.field) ->
+              text f.field ^ text ":" ^+ text (type_to_string f.typ))
+            v.fields))
+      ")"
+
+let pretty_type_declaration (binding : string) (typ : Types.t) =
+  let open Containers_pp in
+  match typ with
+  | Types.Sort (s, vs) ->
+      text "datatype" ^+ text binding
+      ^+ bracket "{" (append_sp (List.map pretty_variant_declaration vs)) "}"
+  | _ -> raise (BoogieException "Unsupported type declaration")
+
 let pretty_declaration (d : Lang.Program.declaration) =
   let open Containers_pp in
   let open Containers_pp.Infix in
@@ -258,9 +279,7 @@ let pretty_declaration (d : Lang.Program.declaration) =
           ")"
       ^ bracket " returns (" (text (type_to_string rt)) ")"
       ^ text ";"
-  | Lang.Program.Type _ ->
-      raise
-        (BoogieException "generation of boogie datatypes is unsupported for now")
+  | Lang.Program.Type { binding; typ } -> pretty_type_declaration binding typ
 
 let rec pretty_statement (s : Lang.Program.stmt) =
   let open Containers_pp in
