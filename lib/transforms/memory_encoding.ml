@@ -37,7 +37,7 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
                (Lang.Expr.BasilExpr.type_of body);
            attrib;
            definition : Lang.Program.func_type =
-             Function (Lang.Expr.BasilExpr.binding bindings body);
+             Function (Lang.Expr.BasilExpr.binding ~op:`Lambda bindings body);
          })
 
   let add_mem_encoding p =
