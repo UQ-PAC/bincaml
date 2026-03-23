@@ -58,7 +58,13 @@
         "x86_64-darwin"
       ];
       perSystem =
-        { self, system, nixpkgs, pac-nix, ... }:
+        {
+          self,
+          system,
+          nixpkgs,
+          pac-nix,
+          ...
+        }:
         let
           inherit (pac-nix.legacyPackages) bnfc-treesitter;
 
