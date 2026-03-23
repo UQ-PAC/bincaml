@@ -30,10 +30,27 @@
         "type": "github"
       }
     },
+    "pac-nix-for-bnfc-treesitter": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1774230759,
+        "narHash": "sha256-59UoGRNQQtmN0FIOT4X6p1ysZ/9IeeNOIrrtBnySHiA=",
+        "owner": "katrinafyi",
+        "repo": "pac-nix",
+        "rev": "4bddb337696a615f9ea9871c5fcfbdb796d6f632",
+        "type": "github"
+      },
+      "original": {
+        "owner": "katrinafyi",
+        "repo": "pac-nix",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "infuse-src": "infuse-src",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "pac-nix-for-bnfc-treesitter": "pac-nix-for-bnfc-treesitter"
       }
     }
   },
