@@ -7,7 +7,7 @@ open AbsBasilIR
 open Lexing
 %}
 
-%token KW_shared KW_observable KW_axiom KW_memory KW_var KW_val KW_let KW_prog KW_entry KW_proc KW_and KW_type KW_ptr KW_of KW_le KW_be KW_nop KW_store KW_load KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_fun KW_old KW_boolnot KW_intneg KW_booltobv1 KW_gamma KW_classification KW_load_be KW_load_le KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_fset KW_faccess KW_match KW_with KW_cases KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_ptradd KW_require KW_requires KW_ensure KW_ensures KW_rely KW_relies KW_guarantee KW_guarantees KW_captures KW_modifies KW_invariant
+%token KW_shared KW_observable KW_axiom KW_memory KW_var KW_val KW_let KW_prog KW_entry KW_proc KW_and KW_type KW_ptr KW_of KW_le KW_be KW_nop KW_store KW_load KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_fun KW_in KW_old KW_boolnot KW_intneg KW_booltobv1 KW_gamma KW_classification KW_load_be KW_load_le KW_zero_extend KW_sign_extend KW_extract KW_bvconcat KW_fset KW_faccess KW_match KW_with KW_cases KW_eq KW_neq KW_bvnot KW_bvneg KW_bvand KW_bvor KW_bvadd KW_bvmul KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_boolimplies KW_ptradd KW_require KW_requires KW_ensure KW_ensures KW_rely KW_relies KW_guarantee KW_guarantees KW_captures KW_modifies KW_invariant
 
 %token SYMB1 /* ; */
 %token SYMB2 /* , */
@@ -469,7 +469,7 @@ decl : KW_axiom globalIdent attribSet expr { Decl_Axiom ($2, $3, $4) }
   | KW_memory varModifiers_list globalIdent SYMB5 typeT varSpec { Decl_Mem ($2, $3, $5, $6) }
   | KW_var varModifiers_list globalIdent SYMB5 typeT varSpec { Decl_Var ($2, $3, $5, $6) }
   | KW_val globalIdent attribSet SYMB5 typeT { Decl_UninterpFun ($2, $3, $5) }
-  | KW_let globalIdent attribSet SYMB5 typeT SYMB6 expr { Decl_Fun ($2, $3, $5, $7) }
+  | KW_let globalIdent localVarParen_list attribSet SYMB5 typeT SYMB6 expr { Decl_Fun ($2, $3, $4, $6, $8) }
   | KW_let globalIdent attribSet SYMB6 expr { Decl_FunNoType ($2, $3, $5) }
   | KW_prog KW_entry procIdent attribSet { Decl_ProgEmpty ($3, $4) }
   | KW_prog KW_entry procIdent attribSet progSpec_list { Decl_ProgWithSpec ($3, $4, $5) }
@@ -611,8 +611,7 @@ var : localVar { VarLocalVar $1 }
   | globalVar { VarGlobalVar $1 }
   ;
 
-localVarParen : localVar { LocalVarParenLocalVar $1 }
-  | openParen localIdent SYMB5 typeT closeParen { LocalVarParen1 ($1, $2, $4, $5) }
+localVarParen : openParen localIdent SYMB5 typeT closeParen { LocalVarParen1 ($1, $2, $4, $5) }
   ;
 
 globalVarParen : globalVar { GlobalVarParenGlobalVar $1 }
@@ -746,6 +745,7 @@ expr : expr1 {  $1 }
   | KW_forall attribSet lambdaDef { Expr_Forall ($2, $3) }
   | KW_exists attribSet lambdaDef { Expr_Exists ($2, $3) }
   | KW_fun attribSet lambdaDef { Expr_Lambda ($2, $3) }
+  | KW_let localIdent localVarParen_list SYMB5 typeT SYMB6 expr KW_in expr { Expr_Let ($2, $3, $5, $7, $9) }
   ;
 
 expr1 : expr2 {  $1 }

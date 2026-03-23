@@ -64,8 +64,8 @@ module.exports = grammar({
         seq("var", optional($.list_VarModifiers), $.token_GlobalIdent, ":", $.Type, optional($.VarSpec)),
         // Decl_UninterpFun. Decl ::= "val" GlobalIdent AttribSet ":" Type ;
         seq("val", $.token_GlobalIdent, optional($.AttribSet), ":", $.Type),
-        // Decl_Fun. Decl ::= "let" GlobalIdent AttribSet ":" Type "=" Expr ;
-        seq("let", $.token_GlobalIdent, optional($.AttribSet), ":", $.Type, "=", $.Expr),
+        // Decl_Fun. Decl ::= "let" GlobalIdent [LocalVarParen] AttribSet ":" Type "=" Expr ;
+        seq("let", $.token_GlobalIdent, optional($.list_LocalVarParen), optional($.AttribSet), ":", $.Type, "=", $.Expr),
         // Decl_FunNoType. Decl ::= "let" GlobalIdent AttribSet "=" Expr ;
         seq("let", $.token_GlobalIdent, optional($.AttribSet), "=", $.Expr),
         // Decl_ProgEmpty. Decl ::= "prog" "entry" ProcIdent AttribSet ;
@@ -291,12 +291,8 @@ module.exports = grammar({
         $.GlobalVar
       ),
     LocalVarParen: $ =>
-      choice(
-        // LocalVarParenLocalVar. LocalVarParen ::= LocalVar ;
-        $.LocalVar,
-        // LocalVarParen1. LocalVarParen ::= OpenParen LocalIdent ":" Type CloseParen ;
-        seq($.token_OpenParen, $.token_LocalIdent, ":", $.Type, $.token_CloseParen)
-      ),
+      // LocalVarParen1. LocalVarParen ::= OpenParen LocalIdent ":" Type CloseParen ;
+      seq($.token_OpenParen, $.token_LocalIdent, ":", $.Type, $.token_CloseParen),
     GlobalVarParen: $ =>
       choice(
         // GlobalVarParenGlobalVar. GlobalVarParen ::= GlobalVar ;
@@ -515,7 +511,9 @@ module.exports = grammar({
         // Expr_Exists. Expr ::= "exists" AttribSet LambdaDef ;
         seq("exists", optional($.AttribSet), $.LambdaDef),
         // Expr_Lambda. Expr ::= "fun" AttribSet LambdaDef ;
-        seq("fun", optional($.AttribSet), $.LambdaDef)
+        seq("fun", optional($.AttribSet), $.LambdaDef),
+        // Expr_Let. Expr ::= "let" LocalIdent [LocalVarParen] ":" Type "=" Expr "in" Expr ;
+        seq("let", $.token_LocalIdent, optional($.list_LocalVarParen), ":", $.Type, "=", $.Expr, "in", $.Expr)
       ),
     Expr1: $ =>
       choice(

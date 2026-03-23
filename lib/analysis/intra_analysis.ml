@@ -34,7 +34,8 @@ module EvalExprWithType (V : TypedValueAbstraction) = struct
       | UnaryExpr { op; arg } -> V.eval_unop op arg tt
       | BinaryExpr { op; arg1 = a; arg2 = b } -> V.eval_binop op a b tt
       | ApplyIntrin { op; args } -> V.eval_intrin op args tt
-      | Binding _ -> failwith ""
+      | Lambda _ -> failwith ""
+      | Let _ -> failwith ""
       | ApplyFun { func; args } -> V.top
     in
     (r, tt)

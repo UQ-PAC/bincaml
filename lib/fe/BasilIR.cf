@@ -55,7 +55,7 @@ separator Type ",";
 
 Decl_UninterpFun . Decl ::= "val" GlobalIdent AttribSet ":" Type ;
 
-Decl_Fun . Decl ::= "let" GlobalIdent AttribSet ":" Type "=" Expr;
+Decl_Fun . Decl ::= "let" GlobalIdent [LocalVarParen] AttribSet ":" Type "=" Expr;
 Decl_FunNoType . Decl ::= "let" GlobalIdent AttribSet "=" Expr;
 Decl_ProgEmpty . Decl ::= "prog" "entry" ProcIdent AttribSet ;
 Decl_ProgWithSpec . Decl ::= "prog" "entry" ProcIdent AttribSet [ ProgSpec ] ;
@@ -137,7 +137,7 @@ rules Var ::= LocalVar | GlobalVar ;
 
 -- Variant of LocalVar / GlobalVar which can be wrapped in parens and
 -- can contain any type.
-rules LocalVarParen ::= LocalVar | OpenParen LocalIdent ":" Type CloseParen ;
+rules LocalVarParen ::= OpenParen LocalIdent ":" Type CloseParen ;
 rules GlobalVarParen ::= GlobalVar | OpenParen GlobalIdent ":" Type CloseParen ;
 separator LocalVarParen ",";
 
@@ -251,6 +251,7 @@ rules LambdaDef     ::=  [LocalVarParen] LambdaSep Expr ;
 Expr_Forall . Expr  ::= "forall" AttribSet LambdaDef ;
 Expr_Exists . Expr  ::= "exists" AttribSet LambdaDef ;
 Expr_Lambda . Expr  ::= "fun"    AttribSet LambdaDef ;
+Expr_Let    . Expr  ::= "let" LocalIdent [LocalVarParen] ":" Type "=" Expr "in" Expr;
 Expr_Old    . Expr2 ::= "old"    OpenParen Expr CloseParen ;
 
 -- uninterpreted functions

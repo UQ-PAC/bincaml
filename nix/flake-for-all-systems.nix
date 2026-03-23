@@ -1,46 +1,74 @@
 { lib
 }:
 
-{
+lib.makeScope lib.callPackageWith (this: {
+
+  defaultPerSystemOutputs =
+    ["packages" "legacyPackages" "devShells" "defaultPackage" "formatter"
+      "apps" "checks"];
+
+  unspecifiedSystem = builtins.concatStringsSep " " [
+    "(unspecified-system). Cannot access this system-specific attribute"
+    "from a non-system-specific context."
+  ];
+
+  inputForSystem' = systemAttrs: system: inputName: input:
+    if input._type or "" == "flake" then
+      { original = input; }
+      //
+      (builtins.mapAttrs
+        (k: v:
+          if builtins.elem k systemAttrs
+            then if v ? ${system}
+              then v.${system}
+              else "Input attribute does not exist: ${inputName}.${k}.${system}"
+            else
+              v)
+        input)
+    else
+      input;
+
+  inputsForSystem = this.inputsForSystem' this.defaultPerSystemOutputs;
+
+  inputsForSystem' = systemAttrs: system: inputs:
+    builtins.mapAttrs (this.inputForSystem' systemAttrs system) inputs;
+
   flake-for-all-systems =
     { ... }@args:
-    { systems, outputs }:
+    { systems, perSystem, perSystemOutputs ? this.defaultPerSystemOutputs , ... }@flake:
     let
-      systemAttrs =
-        ["packages" "legacyPackages" "devShells" "defaultPackage" "formatter"
-          "apps" "checks"];
-      firstSystem = builtins.head systems;
+      systems' = [ this.unspecifiedSystem ] ++ systems;
 
-      systemSelfArgs = lib.genAttrs systems (system:
-        let
-          # scopes all flake arguments to refer to the relevant system
-          args' = builtins.mapAttrs (_: self:
-            if self._type or "" == "flake" then
-              { original = self; }
-              // (builtins.mapAttrs
-                (k: v: if builtins.elem k systemAttrs then v.${system} else v)
-                self)
-            else
-              self
-          ) args;
-        in
-          { system = system; } // args'
+      systemSelfArgs = lib.genAttrs systems' (system:
+        let args' = this.inputsForSystem' perSystemOutputs system args;
+        in { system = system; } // args'
       );
 
       # map: system -> output set
-      systemOutputs = lib.genAttrs systems (system:
-        outputs (systemSelfArgs.${system})
+      systemOutputs = lib.genAttrs systems' (system:
+        perSystem (systemSelfArgs.${system})
       );
 
       allOutputFields =
-        lib.mergeAttrsList (builtins.attrValues systemOutputs);
+        builtins.attrNames (lib.mergeAttrsList (builtins.attrValues systemOutputs));
+
+      partitionedOutputAttrs =
+        builtins.partition (k: builtins.elem k perSystemOutputs) allOutputFields;
+
+      wrongJson = builtins.toJSON partitionedOutputAttrs.wrong;
+      checkBadAttrs = lib.optionalAttrs (partitionedOutputAttrs.wrong != [])
+        (throw ("Non-system-specific flake outputs ${wrongJson} are defined within 'perSystem'. "
+          + "These outputs should be defined outside of 'perSystem'. Or, add ${wrongJson} "
+          + "to 'perSystemOutputs' if it should be a system-specific output."));
     in
-      systemOutputs.${firstSystem}
+      checkBadAttrs
       //
-      lib.genAttrs (builtins.filter (k: allOutputFields ? ${k}) systemAttrs)
+      flake
+      //
+      lib.genAttrs partitionedOutputAttrs.right
         (attr:
           let
             systems' = builtins.filter (s: systemOutputs ? ${s}.${attr}) systems;
           in
             lib.genAttrs systems' (sys: systemOutputs.${sys}.${attr}));
-}
+})

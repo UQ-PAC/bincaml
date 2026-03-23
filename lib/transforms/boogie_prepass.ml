@@ -110,7 +110,7 @@ module Builtins = struct
   let visit_expr_ops f (e : Types.t Lang.Expr.BasilExpr.abstract_expr) =
     let open Lang.Expr.AbstractExpr in
     let open Lang.Ops.AllOps in
-    let get_ty (op : [ const | unary | binary | intrin ]) o =
+    let get_ty (op : [ const | unary | binary | intrin | lambda ]) o =
       match o with
       | Fun { ret; args } ->
           f (op, args, ret);
@@ -129,8 +129,9 @@ module Builtins = struct
     | ApplyFun { func; _ } ->
         let _, rt = Types.uncurry func in
         rt
-    | Binding { bound = vars; in_body = b; _ } ->
-        Types.curry (List.map Var.typ vars) b
+    | Lambda { op = #lambda as op; bound_vars; in_body; _ } ->
+        ret_type_lambda op (List.map Var.typ bound_vars) in_body |> get_ty op
+    | Let _ -> failwith "unsupported: prepass remove"
 
   let iexpr f e = Lang.Expr.BasilExpr.cata (visit_expr_ops f) e |> ignore
 
@@ -141,6 +142,11 @@ module Builtins = struct
     ID.Map.values p.procs
     |> Iter.flat_map Lang.Procedure.iter_stmt_topo_fwd
     |> Iter.iter (istmt f);
+    StringMap.values p.globals
+    |> Iter.iter (function
+      | Lang.Program.Function { definition = Axiom e } -> (iexpr f) e
+      | Lang.Program.Function { definition = Function e } -> (iexpr f) e
+      | _ -> ());
     p.procs |> ID.Map.values
     |> Iter.iter (fun v ->
         let spec = Lang.Procedure.specification v in
@@ -242,7 +248,7 @@ module Instructions = struct
                ])
            (Lang.Expr.BasilExpr.rvar memory)
     in
-    Lang.Expr.BasilExpr.binding [ memory; index; value ] body
+    Lang.Expr.BasilExpr.binding ~op:`Lambda [ memory; index; value ] body
 
   let load_body ?(be = false) mem_typ val_size addr_size =
     let memory = Var.create ~scope:Var.Local "#memory" mem_typ in
@@ -273,7 +279,7 @@ module Instructions = struct
                     (Bitvec.of_int ~size:addr_size
                        (if be then steps - 1 else 0)))))
     in
-    Lang.Expr.BasilExpr.binding [ memory; index ] body
+    Lang.Expr.BasilExpr.binding ~op:`Lambda [ memory; index ] body
 
   let store_load_decl (s : Lang.Program.stmt) =
     match s with
@@ -380,18 +386,6 @@ module Normalise = struct
                          ~pure:(Var.pure id) ~scope:(Var.scope id) (Var.typ id)))
                  args)
         | _ -> replace [%here] (apply_fun_to_map func args))
-    (* Move the attributes on forall and exists into the bindings *)
-    | UnaryExpr
-        {
-          attrib;
-          op = (`Forall | `Exists) as op;
-          arg =
-            Expr.BasilExpr.E
-              (Expr.AbstractExpr.Binding { attrib = attrib2; bound; in_body });
-        } ->
-        replace [%here]
-          (Expr.BasilExpr.unexp ~op ?attrib
-             (Expr.BasilExpr.binding ?attrib bound in_body))
     | ApplyIntrin { op = `AND; args } ->
         replace [%here]
           ((normalise_intrinsic `AND (BasilExpr.boolconst true)) args)
@@ -418,7 +412,7 @@ module Normalise = struct
           (normalise_intrinsic `BVXOR
              (BasilExpr.bvconst (Bitvec.zero ~size:0))
              args)
-    | _ -> None
+    | _ -> Keep
 
   open Stmt
 
@@ -452,12 +446,52 @@ module Normalise = struct
           ]
     | o -> o
 
-  let rewriter ?visit e = BasilExpr.rewrite ?visit ~rw_fun:replace_expr e
+  let rewriter = BasilExpr.rewrite ~rw_fun:replace_expr
 
   let replace_exprs =
-    compose
-      (Cf_tx.simplify_prog_spec_exprs rewriter)
-      (Cf_tx.simplify_prog_exprs rewriter)
+    (* have to inline let because rewriter converts to map access *)
+    Cf_tx.simplify_prog_spec_exprs Algsimp.inline_let
+    %> Cf_tx.simplify_prog_exprs Algsimp.inline_let
+    %> Cf_tx.simplify_prog_spec_exprs rewriter
+    %> Cf_tx.simplify_prog_exprs rewriter
+
+  let replace_functions (p : Program.t) =
+    let globals =
+      p.globals |> StringMap.to_iter
+      |> Iter.flat_map
+           Program.(
+             function
+             | k, Function { binding; attrib; definition } -> (
+                 let keep =
+                   Iter.singleton (k, Function { binding; attrib; definition })
+                 in
+                 match definition with
+                 | Function b -> (
+                     match BasilExpr.unfix b with
+                     | Lambda { bound_vars; in_body } -> keep
+                     | body ->
+                         let axiom_name = k ^ "_funvalue" in
+                         Iter.doubleton
+                           ( k,
+                             Function
+                               { binding; definition = Uninterpreted; attrib }
+                           )
+                           ( axiom_name,
+                             Function
+                               {
+                                 binding = Var.copy ~name:axiom_name binding;
+                                 definition =
+                                   Axiom
+                                     (BasilExpr.binexp ~op:`EQ
+                                        (BasilExpr.rvar binding)
+                                        (BasilExpr.fix body));
+                                 attrib;
+                               } ))
+                 | o -> keep)
+             | e -> Iter.singleton e)
+      |> StringMap.of_iter
+    in
+    { p with globals }
 
   let replace_stmts (p : Program.t) =
     let procs =
@@ -471,5 +505,6 @@ module Normalise = struct
 end
 
 let transform (p : Lang.Program.t) =
-  p |> Normalise.replace_exprs |> Instructions.transform_add_store_load_decls
-  |> Normalise.replace_stmts |> Builtins.transform_add_builtin_decls
+  p |> Normalise.replace_functions |> Normalise.replace_exprs
+  |> Instructions.transform_add_store_load_decls |> Normalise.replace_stmts
+  |> Builtins.transform_add_builtin_decls
