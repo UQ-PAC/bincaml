@@ -11,7 +11,8 @@
   may_read_uninit
   type_check
   boogie_prepass
-  memory_encoding)
+  memory_encoding
+  memory_specification)
  (libraries
   bincaml.analysis
   patricia-tree

@@ -166,7 +166,14 @@ module PassManager = struct
     {
       name = "memory-encoding";
       apply = Prog Transforms.Memory_encoding.transform;
-      doc = "Performs memory encoding";
+      doc = "Generates memory encoding/model";
+    }
+
+  let memory_specification =
+    {
+      name = "memory-specification";
+      apply = Prog Transforms.Memory_specification.transform;
+      doc = "Specifies programs for memory safety";
     }
 
   let passes =
@@ -185,6 +192,7 @@ module PassManager = struct
       full_ssa;
       type_check;
       memory_encoding;
+      memory_specification;
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;

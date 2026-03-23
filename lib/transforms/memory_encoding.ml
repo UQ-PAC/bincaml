@@ -130,17 +130,17 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
       p
       [
         add_mem_encoding;
-        (* add_addr_offset; *)
-        (* add_alloc_base; *)
-        (* add_can_allocate; *)
-        (* add_alloc_live; *)
-        (* add_alloc_size; *)
-        (* add_addr_alloc; *)
-        (* add_addr_is_heap; *)
-        (* add_alloc_size_update; *)
-        (* add_alloc_live_update; *)
-        (* add_allocate; *)
-        (* add_init_encoding; *)
+        add_addr_offset;
+        add_alloc_base;
+        add_can_allocate;
+        add_alloc_live;
+        add_alloc_size;
+        add_addr_alloc;
+        add_addr_is_heap;
+        add_alloc_size_update;
+        add_alloc_live_update;
+        add_allocate;
+        add_init_encoding;
         add_valid_access_body;
       ]
 
