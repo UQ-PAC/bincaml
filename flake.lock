@@ -16,28 +16,30 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1772525000,
-        "narHash": "sha256-M7kpjimt0jdEQzmin6ptszf8ev7TVzibyZNSLaLquMM=",
+        "lastModified": 1748026106,
+        "narHash": "sha256-6m1Y3/4pVw1RWTsrkAK2VMYSzG4MMIj7sqUy7o8th1o=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "72b1d820cb0149b40a35aa077b4b6d60cd1b23c3",
+        "rev": "063f43f2dbdef86376cc29ad646c45c46e93234c",
         "type": "github"
       },
       "original": {
         "owner": "nixos",
-        "ref": "nixpkgs-unstable",
+        "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
     },
-    "pac-nix-for-bnfc-treesitter": {
-      "flake": false,
+    "pac-nix": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
       "locked": {
-        "lastModified": 1774230759,
-        "narHash": "sha256-59UoGRNQQtmN0FIOT4X6p1ysZ/9IeeNOIrrtBnySHiA=",
+        "lastModified": 1773815390,
+        "narHash": "sha256-bSarXWqhjZ34G0xWbcMydqSpfejV2Ph4UkgxgP8M1co=",
         "owner": "katrinafyi",
         "repo": "pac-nix",
-        "rev": "4bddb337696a615f9ea9871c5fcfbdb796d6f632",
+        "rev": "67e71eeb03a9fc5e571563354c0f46b3f4994346",
         "type": "github"
       },
       "original": {
@@ -49,8 +51,7 @@
     "root": {
       "inputs": {
         "infuse-src": "infuse-src",
-        "nixpkgs": "nixpkgs",
-        "pac-nix-for-bnfc-treesitter": "pac-nix-for-bnfc-treesitter"
+        "pac-nix": "pac-nix"
       }
     }
   },

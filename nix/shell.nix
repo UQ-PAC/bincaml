@@ -13,6 +13,7 @@
 , tree-sitter
 , nodejs-slim
 , perf
+, bnfc-treesitter
 
 }:
 
@@ -20,7 +21,8 @@ mkShell {
   packages = [
     odoc odig ocaml-lsp ocamlformat
     tree-sitter nodejs-slim
-    # sherlodoc
+    bnfc-treesitter
+    # sherlodoc - not in nixpkgs?
   ] ++ lib.optional stdenv.hostPlatform.isLinux perf;
 
   inputsFrom = [

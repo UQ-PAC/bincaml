@@ -1,16 +1,18 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    pac-nix.url = "github:katrinafyi/pac-nix";
+
     infuse-src.url = "https://codeberg.org/awarina/infuse.nix/archive/trunk.tar.gz";
     infuse-src.flake = false;
   };
   outputs =
     {
       self,
-      nixpkgs,
       infuse-src,
+      pac-nix,
     }@args:
     let
+      inherit (pac-nix.inputs) nixpkgs;
       inherit (nixpkgs) lib;
 
       inherit
@@ -27,7 +29,7 @@
         ;
 
     in
-    flake-for-all-systems args {
+    flake-for-all-systems (args // { inherit nixpkgs; }) {
       overlays = {
         addBincamlPackages = ofinal: _: {
           bincaml = ofinal.callPackage ./nix/bincaml.nix { };
@@ -52,9 +54,14 @@
         "x86_64-darwin"
       ];
       perSystem =
-        { self, nixpkgs, ... }:
+        { self, system, nixpkgs, pac-nix, ... }:
         let
-          pkgs = nixpkgs.legacyPackages;
+          bnfc-treesitter-pkgs = { inherit (pac-nix.legacyPackages) bnfc-treesitter; };
+
+          pkgs = import nixpkgs {
+            system = system;
+            config.packageOverrides = _: bnfc-treesitter-pkgs;
+          };
           selfOcamlPackages = pkgs.ocamlPackages.overrideScope self.overlays.addBincamlPackages;
           fpOcamlPackages = selfOcamlPackages.overrideScope self.overlays.enableOcamlFramePointer;
         in
