@@ -126,23 +126,20 @@ module FlatMemory : MemoryEncoding = struct
 
     (* sketchy workaround for the current lack of sort field accesses *)
     let alloc_live_access =
-      Var.create "mem_encoding->mem_encoding" ~scope:Var.Local
-        (Types.Map (Types.Bitvector 64, Types.Bitvector 2))
+      BasilExpr.unexp ~op:(`FACCESS "alloc_live") (BasilExpr.rvar mem_encoding)
 
     let alloc_size_access =
-      Var.create "mem_encoding->alloc_size" ~scope:Var.Local
-        (Types.Map (Types.Bitvector 64, Types.Bitvector 64))
+      BasilExpr.unexp ~op:(`FACCESS "alloc_size") (BasilExpr.rvar mem_encoding)
 
     let addr_is_heap_access =
-      Var.create "mem_encoding->addr_is_heap" ~scope:Var.Local
-        (Types.Map (Types.Bitvector 64, Types.Boolean))
+      BasilExpr.unexp ~op:(`FACCESS "addr_is_heap")
+        (BasilExpr.rvar mem_encoding)
   end
 
   let can_allocate_body = BasilExpr.boolconst true
 
   let alloc_size_body =
-    BasilExpr.binexp ~op:`MapAccess
-      (BasilExpr.rvar Locals.alloc_size_access)
+    BasilExpr.binexp ~op:`MapAccess Locals.alloc_size_access
       (BasilExpr.rvar Locals.alloc)
 
   let alloc_base_body =
@@ -155,8 +152,7 @@ module FlatMemory : MemoryEncoding = struct
   let addr_alloc_body = BasilExpr.rvar Locals.addr
 
   let alloc_live_body =
-    BasilExpr.binexp ~op:`MapAccess
-      (BasilExpr.rvar Locals.alloc_live_access)
+    BasilExpr.binexp ~op:`MapAccess Locals.alloc_live_access
       (BasilExpr.rvar Locals.alloc)
 
   let addr_offset_body =
@@ -165,9 +161,8 @@ module FlatMemory : MemoryEncoding = struct
       (BasilExpr.bv_of_int ~size:64 0xfffffffff)
 
   let addr_is_heap_body =
-    BasilExpr.binexp ~op:`MapAccess
-      (BasilExpr.rvar Locals.addr_is_heap_access)
-     (BasilExpr.rvar Locals.addr)
+    BasilExpr.binexp ~op:`MapAccess Locals.addr_is_heap_access
+      (BasilExpr.rvar Locals.addr)
 
   let alloc_size_update_body = BasilExpr.boolconst true
   let alloc_live_update_body = BasilExpr.boolconst true
