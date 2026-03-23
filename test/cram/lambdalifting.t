@@ -17,30 +17,24 @@ written by @caller.  After the pass:
   ---
   > proc @callee(x_in:bv32, y_in:bv32)  -> (x_out:bv32) {  }
   >   
-  9,10c6,12
-  <    block %entry [ $x:bv32 := bvadd($x:bv32, $y:bv32); goto (%ret); ];
+  9,10c6,9
+  <    block %entry [ $x:bv32 := bvadd($x, $y); goto (%ret); ];
   <    block %ret [ nop; return; ]
   ---
-  >    block %inputs [
-  >      (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32);
-  >      goto (%entry);
-  >    ];
-  >    block %entry [ var x:bv32 := bvadd(x:bv32, y:bv32); goto (%ret); ];
+  >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
+  >    block %entry [ var x:bv32 := bvadd(x, y); goto (%ret); ];
   >    block %ret [ nop; goto (%returns); ];
-  >    block %returns [ var x_out:bv32 := x:bv32; return; ]
-  12,14c14,15
+  >    block %returns [ var x_out:bv32 := x; return; ]
+  12,14c11,12
   < proc @caller()  -> () {  }
   <   modifies $x:bv32, $y:bv32
   <   captures $x:bv32, $y:bv32
   ---
   > proc @caller(x_in:bv32, y_in:bv32)  -> (x_out:bv32, y_out:bv32) {  }
   >   
-  16a18,21
-  >    block %inputs [
-  >      (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32);
-  >      goto (%entry);
-  >    ];
-  18,21c23,26
+  16a15
+  >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
+  18,21c17,20
   <      $y:bv32 := 0x0:bv32;
   <      $x:bv32 := 0x1:bv32;
   <      
@@ -49,15 +43,12 @@ written by @caller.  After the pass:
   >      var y:bv32 := 0x0:bv32;
   >      var x:bv32 := 0x1:bv32;
   >      (var x:bv32=x_out) := 
-  >      call @callee(x_in=x:bv32, y_in=y:bv32);
-  24c29,33
+  >      call @callee(x_in=x, y_in=y);
+  24c23,24
   <    block %ret [ nop; return; ]
   ---
   >    block %ret [ nop; goto (%returns); ];
-  >    block %returns [
-  >      (var x_out:bv32 := x:bv32, var y_out:bv32 := y:bv32);
-  >      return;
-  >    ]
+  >    block %returns [ (var x_out:bv32 := x, var y_out:bv32 := y); return; ]
   [1]
 
 
@@ -77,41 +68,34 @@ all global refs in requires (not just those under Old) become in-params.
   < proc @callee()  -> () {  }
   <   modifies $x:bv32
   <   captures $x:bv32, $y:bv32
-  <   requires eq($x:bv32, 0x1:bv32)
-  <   ensures eq($x:bv32, bvadd(old($x:bv32), $y:bv32))
+  <   requires eq($x, 0x1:bv32)
+  <   ensures eq($x, bvadd(old($x), $y))
   ---
   > proc @callee(x_in:bv32, y_in:bv32)  -> (x_out:bv32) {  }
-  >   requires eq(x_in:bv32, 0x1:bv32)
-  >   ensures eq(x_out:bv32, bvadd(x_in:bv32, y_in:bv32))
-  10a7,10
-  >    block %inputs [
-  >      (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32);
-  >      goto (%entry);
-  >    ];
-  12,13c12,13
-  <      assert eq($x:bv32, old($x:bv32));
-  <      $x:bv32 := bvadd($x:bv32, $y:bv32);
-  ---
-  >      assert eq(x:bv32, x_in:bv32);
-  >      var x:bv32 := bvadd(x:bv32, y:bv32);
-  16c16,17
+  >   requires eq(x_in, 0x1:bv32)
+  >   ensures eq(x_out, bvadd(x_in, y_in))
+  11,16c7,10
+  <    block %entry [
+  <      assert eq($x, old($x));
+  <      $x:bv32 := bvadd($x, $y);
+  <      goto (%ret);
+  <    ];
   <    block %ret [ nop; return; ]
   ---
+  >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
+  >    block %entry [ assert eq(x, x_in); var x:bv32 := bvadd(x, y); goto (%ret); ];
   >    block %ret [ nop; goto (%returns); ];
-  >    block %returns [ var x_out:bv32 := x:bv32; return; ]
-  18,20c19,20
+  >    block %returns [ var x_out:bv32 := x; return; ]
+  18,20c12,13
   < proc @caller()  -> () {  }
   <   modifies $x:bv32, $y:bv32
   <   captures $x:bv32, $y:bv32
   ---
   > proc @caller(x_in:bv32, y_in:bv32)  -> (x_out:bv32, y_out:bv32) {  }
   >   
-  22a23,26
-  >    block %inputs [
-  >      (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32);
-  >      goto (%entry);
-  >    ];
-  24,27c28,31
+  22a16
+  >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
+  24,27c18,21
   <      $y:bv32 := 0x0:bv32;
   <      $x:bv32 := 0x1:bv32;
   <      
@@ -120,15 +104,12 @@ all global refs in requires (not just those under Old) become in-params.
   >      var y:bv32 := 0x0:bv32;
   >      var x:bv32 := 0x1:bv32;
   >      (var x:bv32=x_out) := 
-  >      call @callee(x_in=x:bv32, y_in=y:bv32);
-  30c34,38
+  >      call @callee(x_in=x, y_in=y);
+  30c24,25
   <    block %ret [ nop; return; ]
   ---
   >    block %ret [ nop; goto (%returns); ];
-  >    block %returns [
-  >      (var x_out:bv32 := x:bv32, var y_out:bv32 := y:bv32);
-  >      return;
-  >    ]
+  >    block %returns [ (var x_out:bv32 := x, var y_out:bv32 := y); return; ]
   [1]
 
 

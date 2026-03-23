@@ -101,12 +101,10 @@ module BasilASTLoader = struct
   and transStr (x : str) : string =
     match x with Str string -> stripquote string
 
-  and trans_program ?(lst : load_st option) ?(name = "<module>") (x : moduleT)
-      : load_st =
+  and trans_program ?(lst : load_st option) ?(name = "<module>") (x : moduleT) :
+      load_st =
     let prog =
-      match lst with
-      | Some lst -> lst
-      | None -> load_st_empty ~name ()
+      match lst with Some lst -> lst | None -> load_st_empty ~name ()
     in
     let prog =
       match x with
@@ -148,14 +146,12 @@ module BasilASTLoader = struct
     | Decl_Type sort ->
         let name = unsafe_unsigil (`Local sort) in
         let typ = Types.mk_sort name in
-        let def : Program.declaration = Type { binding = name; typ } in
-        map_prog (fun prog -> Program.add_decl prog name def) prog
+        map_prog (fun prog -> Program.decl_typ prog typ) prog
     | Decl_RecType types ->
         let types = List.map trans_typedecl types in
         List.fold_left
           (fun prog (binding, typ) ->
-            let def : Program.declaration = Type { binding; typ } in
-            map_prog (fun prog -> Program.add_decl prog binding def) prog)
+            map_prog (fun prog -> Program.decl_typ prog typ) prog)
           prog types
     | Decl_Mem (modifiers, bident, type', spec) ->
         let attrib = StringMap.of_list (trans_varspec prog spec) in
@@ -461,7 +457,7 @@ module BasilASTLoader = struct
         Types.mk_field (unsafe_unsigil (`Local id)) (trans_type ty)
 
   and transRECORDTYPE (fields : field list) =
-    Types.Record
+    Types.Struct
       (StringMap.of_list
          ((List.map (function Field1 (_, field_name, _, t, offset, _, _) ->
               ( transStr field_name,
@@ -874,6 +870,30 @@ module BasilASTLoader = struct
         let msg = m ^ " " ^ vn in
         raise (LoadError { token_char_offset_range; msg; input = None })
 
+  and lookup_constructor p_st ident =
+    let vn = unsafe_unsigil (`Local ident) in
+    match StringMap.find_opt vn p_st.prog.implicit_decls with
+    | Program.(Some (VariantCase { constructor })) -> constructor
+    | _ ->
+        let token_char_offset_range = Some (get_bident_loc (`Local ident)) in
+        let msg = "Unable to find constructor for:" ^ vn in
+        raise (LoadError { token_char_offset_range; msg; input = None })
+
+  and lookup_type p_st ident =
+    let vn = unsafe_unsigil (`Local ident) in
+    let token_char_offset_range = Some (get_bident_loc (`Local ident)) in
+    let fail () =
+      let msg = "Unable to find type declaration for:" ^ vn in
+      raise (LoadError { token_char_offset_range; msg; input = None })
+    in
+    match StringMap.find_opt vn p_st.prog.globals with
+    | Some (Type { typ }) -> typ
+    | None -> (
+        match StringMap.find_opt vn p_st.prog.implicit_decls with
+        | Program.(Some (VariantCase { belongs_to })) -> belongs_to
+        | _ -> fail ())
+    | _ -> fail ()
+
   and lookup_global_decl ident p_st =
     let vn = unsafe_unsigil (`Global ident) in
     let token_char_offset_range = Some (get_bident_loc (`Global ident)) in
@@ -948,6 +968,10 @@ module BasilASTLoader = struct
     in
     BasilExpr.applyintrin ~op:`Cases cases
 
+  and trans_field_assign trans_expr (f : fieldAssign) =
+    match f with
+    | FieldAssign1 (k, v) -> (unsafe_unsigil (`Local k), trans_expr v)
+
   and trans_expr ?(binds = StringMap.empty) (p_st : load_st)
       (x : BasilIR.AbsBasilIR.expr) : BasilExpr.t =
     let trans_expr ?(nbinds = []) =
@@ -1021,12 +1045,25 @@ module BasilASTLoader = struct
           ~hi_excl:(transIntVal ival0 |> Z.to_int)
           ~lo_incl:(transIntVal intval |> Z.to_int)
           (trans_expr expr)
-    | Expr_FAccess (o, offset, record, c) ->
-        BasilExpr.faccess ~attrib:(expr_range_attr o c)
-          ~offset:(transStr offset) (trans_expr record)
-    | Expr_FSet (o, offset, record, expr, c) ->
-        BasilExpr.fset ~attrib:(expr_range_attr o c) ~offset:(transStr offset)
-          (trans_expr record) (trans_expr expr)
+    | Expr_FieldSet (record, fname, value) ->
+        let fname =
+          String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Local fname)
+          |> Option.get_exn_or "safe by parser"
+        in
+        BasilExpr.field_store ~field:fname (trans_expr record)
+          (trans_expr value)
+    | Expr_Field (record, fname) ->
+        let fname =
+          String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Attr fname)
+          |> Option.get_exn_or "safe by parser"
+        in
+        BasilExpr.field_read ~field:fname (trans_expr record)
+    | SortValRec (variant, bi, fields, ei) ->
+        let f = BasilExpr.rvar @@ lookup_constructor p_st variant in
+        BasilExpr.apply_fun ~func:f
+          (List.map (trans_field_assign trans_expr) fields |> List.map snd)
+    | Expr_Ite (cond, t, e) ->
+        BasilExpr.ifthenelse (trans_expr cond) (trans_expr t) (trans_expr e)
     | Expr_LoadLe (o, intval, a1, a2, c) ->
         BasilExpr.load ~attrib:(expr_range_attr o c)
           ~bits:(Z.to_int @@ transIntVal intval)
@@ -1331,7 +1368,8 @@ let ast_of_concrete_ast ?(lst : load_st option) ~name m =
   Trace_core.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->
   BasilASTLoader.trans_program ?lst ~name m
 
-let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
+let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__
+    string =
   let name =
     let open Option.Infix in
     let* line = __LINE__ >|= Int.to_string in
@@ -1346,7 +1384,7 @@ let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__ stri
   with LoadError { token_char_offset_range; msg } ->
     raise (LoadError { input = Some input; token_char_offset_range; msg })
 
-let ast_of_channel ?(lst: load_st option) ?input fname c =
+let ast_of_channel ?(lst : load_st option) ?input fname c =
   let m =
     Trace_core.with_span ~__FILE__ ~__LINE__ "load-concrete-ast" @@ fun f ->
     let m = concrete_prog_ast_of_channel ?input ~filename:fname c in
@@ -1508,7 +1546,7 @@ proc @main_4196260 () -> ()
     [
        block %main_entry [
          $NF:bv1 := 0x1:bv1;
-         $ZF:bv1 := $NF:bv1;
+         $ZF:bv1 := $NF;
          goto (%main_basil_return_1);
        ];
        block %main_basil_return_1 [ nop; return; ]
@@ -1608,7 +1646,7 @@ proc @test1() -> ()
     proc @test1()  -> () { .name = "test1" }
       modifies $R0:bv64, $R1:bv64
       captures $R0:bv64, $R1:bv64
-      requires eq($R1:bv64, 0x0:bv64)
-      ensures eq($R1:bv64, 0x0:bv64)
+      requires eq($R1, 0x0:bv64)
+      ensures eq($R1, 0x0:bv64)
     ;
     |}]

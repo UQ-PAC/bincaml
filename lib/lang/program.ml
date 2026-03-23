@@ -28,6 +28,13 @@ let pp_stmt fmt s = Format.pp_print_string fmt (show_stmt s)
 type prog_spec = { rely : BasilExpr.t list; guarantee : BasilExpr.t list }
 type func_type = Axiom of e | Uninterpreted | Function of e
 
+type implicit_declaration =
+  | VariantCase of {
+      variant : string;
+      belongs_to : Types.t;
+      constructor : Var.t; (* function to construct a value of this case *)
+    }
+
 type declaration =
   | Type of { binding : string; typ : Types.t }
   | Function of {
@@ -82,6 +89,7 @@ let pretty_declaration d =
 type t = {
   modulename : string;
   globals : declaration StringMap.t;
+  implicit_decls : implicit_declaration StringMap.t;
   entry_proc : ID.t option;
   procs : proc ID.Map.t;
   proc_names : ID.generator;
@@ -145,6 +153,37 @@ let decl_global ?(attrib = StringMap.empty) p v =
   let decl = Variable { binding = v; attrib } in
   { p with globals = StringMap.add (Var.name v) decl p.globals }
 
+let decl_typ ?(attrib = StringMap.empty) p t =
+  match t with
+  | Sort (name, []) as s ->
+      {
+        p with
+        globals =
+          StringMap.add name (Type { binding = name; typ = s }) p.globals;
+        implicit_decls =
+          StringMap.add name
+            (let ty = Types.curry [] s in
+             let constructor = Var.create name ty ~scope:Global in
+             VariantCase { variant = name; belongs_to = s; constructor })
+            p.implicit_decls;
+      }
+  | Sort (name, variants) as s ->
+      {
+        p with
+        globals =
+          StringMap.add name (Type { binding = name; typ = s }) p.globals;
+        implicit_decls =
+          StringMap.add_list p.implicit_decls
+            (variants
+            |> List.map (function { variant; fields } ->
+                let args = List.map (function { field; typ } -> typ) fields in
+                let ty = Types.curry args s in
+                let constructor = Var.create variant ty ~scope:Global in
+                (variant, VariantCase { variant; belongs_to = s; constructor }))
+            );
+      }
+  | _ -> failwith "not declarable type"
+
 let add_decl ?(attrib = StringMap.empty) p v decl =
   { p with globals = StringMap.add v decl p.globals }
 
@@ -157,6 +196,7 @@ let create_single_proc ?(name = "<module>") () =
       modulename = name;
       entry_proc = Some procname;
       globals = StringMap.empty;
+      implicit_decls = StringMap.empty;
       procs = ID.Map.singleton procname proc;
       proc_names;
       attrib = StringMap.empty;
@@ -171,6 +211,7 @@ let empty ?name () =
     modulename;
     entry_proc = None;
     globals = StringMap.empty;
+    implicit_decls = StringMap.empty;
     procs = ID.Map.empty;
     proc_names = ID.make_gen ();
     attrib = StringMap.empty;
