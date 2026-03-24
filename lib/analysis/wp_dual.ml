@@ -71,7 +71,7 @@ module Domain (S : RequiresAnnotation) = struct
                            |> List.map
                                 (BasilExpr.unexp ~op:`Gamma % BasilExpr.rvar);
                        }))
-        | _ -> None)
+        | _ -> Keep)
     in
     rw % rw
 

@@ -38,7 +38,7 @@ let normalise_gamma =
         | v :: [] -> replace [%here] @@ make_gamma_var v
         | vs ->
             replace [%here] @@ applyintrin ~op:`OR (List.map make_gamma_var vs))
-    | _ -> None)
+    | _ -> Keep)
 
 (** `redundant p ps` returns true if the conjunction of `p :: ps` is equivalent
     to that of `ps`. *)
