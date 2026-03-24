@@ -83,7 +83,7 @@ module Calls = struct
     BasilExpr.apply_fun
       ~func:
         (BasilExpr.rvar
-           (Var.create "me_can_alloc" ~scope:Var.Global Types.Boolean))
+           (Var.create "me_can_allocate" ~scope:Var.Global Types.Boolean))
       args
 
   let init_encoding args =

@@ -249,7 +249,20 @@ module Instructions = struct
                ])
            (Lang.Expr.BasilExpr.rvar memory)
     in
-    Lang.Expr.BasilExpr.binding ~op:`Lambda [ memory; index; value ] body
+    let _ =
+      print_endline
+        (Printf.sprintf "\nTHING: %s\n"
+           (Types.to_string @@ Lang.Expr.BasilExpr.type_of body))
+    in
+    let out =
+      Lang.Expr.BasilExpr.binding ~op:`Lambda [ memory; index; value ] body
+    in
+    let _ =
+      print_endline
+        (Printf.sprintf "THING2: %s\n"
+           (Types.to_string @@ Lang.Expr.BasilExpr.type_of out))
+    in
+    out
 
   let load_body ?(be = false) mem_typ val_size addr_size =
     let memory = Var.create ~scope:Var.Local "#memory" mem_typ in
@@ -290,24 +303,29 @@ module Instructions = struct
           StringMap.of_list [ (".extern", `List []); (".define", `List []) ]
         in
         let attribs = StringMap.singleton ".boogie" (`Assoc boogie_attribs) in
+        let body =
+          store_body (Var.typ rhs)
+            (match Lang.Expr.BasilExpr.type_of value with
+            | Types.Bitvector s -> s
+            | _ -> failwith "Expected bitvec type")
+            (match Lang.Expr.BasilExpr.type_of addr with
+            | Types.Bitvector s -> s
+            | _ -> failwith "Expected bitvec type")
+        in
         Some
           (Function
              {
                attrib = attribs;
                binding =
-                 Var.create
-                   (Printf.sprintf "store%d_%s" size
-                      (Lang.Stmt.show_endian endian))
-                   (Var.typ lhs);
-               definition =
-                 Function
-                   (store_body (Var.typ rhs)
-                      (match Lang.Expr.BasilExpr.type_of value with
-                      | Types.Bitvector s -> s
-                      | _ -> failwith "Expected bitvec type")
-                      (match Lang.Expr.BasilExpr.type_of addr with
-                      | Types.Bitvector s -> s
-                      | _ -> failwith "Expected bitvec type"));
+                 (let _ =
+                    print_endline
+                      (Printf.sprintf "%s" @@ Types.to_string @@ Var.typ lhs)
+                  in
+                  Var.create
+                    (Printf.sprintf "store%d_%s" size
+                       (Lang.Stmt.show_endian endian))
+                    (Lang.Expr.BasilExpr.type_of body));
+               definition = Lang.Program.Function body;
              }
             : Lang.Program.declaration)
     | Lang.Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->

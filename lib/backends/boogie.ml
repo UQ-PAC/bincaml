@@ -39,7 +39,7 @@ let rec type_to_string (t : Types.t) =
   | Types.Map (i, o) ->
       String.concat "" [ "["; type_to_string i; "]"; type_to_string o ]
   | Types.Variable s -> s
-  | Types.Sort (s,vs) -> s
+  | Types.Sort (s, vs) -> s
   | t ->
       raise
         (BoogieException (String.cat "Unsupported type" (Types.to_string t)))
@@ -92,7 +92,8 @@ let pretty_binary_expr (op : Lang.Ops.AllOps.binary) (ty1, arg1) (ty2, arg2)
   let open Containers_pp in
   match op with
   | `MapAccess -> arg1 ^ bracket "[" arg2 "]"
-  | `WriteField s -> arg1 ^ text "->" ^ bracket "(" (text s ^+ text ":=" ^+ arg2) ")"
+  | `WriteField s ->
+      arg1 ^ text "->" ^ bracket "(" (text s ^+ text ":=" ^+ arg2) ")"
   | _ -> (
       match Transforms.Boogie_prepass.Builtins.name op [ ty1; ty2; t ] with
       | Function name -> text name ^ pretty_call_args [ arg1; arg2 ]
@@ -257,6 +258,13 @@ let pretty_declaration (d : Lang.Program.declaration) =
   | Lang.Program.Function { binding; attrib; definition = Function t } ->
       let func_body, return_type = pretty_function_body binding t in
 
+      (* why this shadowing of return_type? *)
+      (* while the above would be ideal, if you uncurry something that returns a map *)
+      (* the returned map type cannot be distinguished from just another argument and itself *)
+      (* gets uncurried. Instead we just use the type of the body which SHOULD always be correct. *)
+      let return_type = Lang.Expr.BasilExpr.type_of t in
+      let return_type = text @@ type_to_string return_type in
+
       text "function"
       ^+ pretty_attribute_map ".boogie" attrib
       ^+ (function_name @@ Var.name binding)
@@ -416,15 +424,13 @@ let pretty_procedure_impl (p : Lang.Program.proc) =
   let in_params = Lang.Procedure.formal_in_params p in
   let out_params = Lang.Procedure.formal_out_params p in
   let local_decls =
-    if StringMap.cardinal in_params + StringMap.cardinal out_params > 0 then
-      Lang.Procedure.local_decls p
-      |> Hashtbl.to_list
-      |> List.filter (fun (k, v) ->
-          (Option.is_none @@ StringMap.get k in_params)
-          && (Option.is_none @@ StringMap.get k out_params))
-      |> List.map (fun (k, v) -> pretty_variable_declaration v)
-      |> join_lines_end
-    else text ""
+    Lang.Procedure.local_decls p
+    |> Hashtbl.to_list
+    |> List.filter (fun (k, v) ->
+        (Option.is_none @@ StringMap.get k in_params)
+        && (Option.is_none @@ StringMap.get k out_params))
+    |> List.map (fun (k, v) -> pretty_variable_declaration v)
+    |> join_lines_end
   in
   let blocks =
     Lang.Procedure.iter_blocks_topo_fwd p

@@ -19,6 +19,7 @@ let transform_main p =
       requires =
         spec.requires
         @ [ Calls.init_encoding [ BasilExpr.rvar Globals.mem_encoding ] ];
+      modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
     }
 
 let transform_malloc p =
