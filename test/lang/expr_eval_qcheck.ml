@@ -75,6 +75,34 @@ let partial_eval_test =
 
 let () = Printexc.record_backtrace true
 
+module StringMap = Map.Make (String)
+
+let check_smt =
+  let gen =
+    let open QCheck.Gen in
+    let* wd = Expr_gen.gen_width in
+    let* e = Expr_gen.gen_bvexpr (1, wd) in
+    let smt = Expr_smt.SMTLib2.of_bexpr e in
+    let parsed = Expr_smt.SMTLib2.expr_of_smt StringMap.empty smt in
+    return (e, smt, parsed)
+  in
+
+  let arb =
+    QCheck.make
+      ~print:(fun (a, s, e) ->
+        Expr.BasilExpr.to_string a ^ " -> " ^ Sexp.to_string s ^ " -> "
+        ^ match e with None -> "none" | Some e -> Expr.BasilExpr.to_string e)
+      gen
+  in
+
+  let predicate (e, smt, p) =
+    let e = Expr.BasilExpr.drop_attrib e in
+    p |> Option.exists (fun p -> Expr.BasilExpr.equal e p)
+  in
+
+  QCheck.Test.make ~name:"expr smt roundtrip" ~count:1000 ~max_fail:3 arb
+    predicate
+
 let _ =
-  let suite = List.map QCheck_alcotest.to_alcotest [ partial_eval_test ] in
-  Alcotest.run "smteval cvc qcheck" [ ("bv", suite) ]
+  let suite = List.map QCheck_alcotest.to_alcotest [ check_smt ] in
+  Alcotest.run "smtlib exprs" [ ("bv", suite) ]
