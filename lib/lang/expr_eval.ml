@@ -7,8 +7,12 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
   let bool e = Some (`Bool e) in
   let bv e = `Bitvector e in
   let z e = Some (`Integer e) in
+  let record e = Some (`Record e) in
+  let pointer e = Some (`Pointer e) in
 
   let get_bv = function Some (`Bitvector b) -> Some b | _ -> None in
+  let get_record = function Some (`Record b) -> Some b | _ -> None in
+  let get_pointer = function Some (`Pointer b) -> Some b | _ -> None in
   let get_bool = function Some (`Bool b) -> Some b | _ -> None in
   let get_int = function Some (`Integer b) -> Some b | _ -> None in
 
@@ -33,6 +37,18 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
       get_bv b >|= BVOps.eval_unary_unif op >|= bv
   | UnaryExpr { op = #BVOps.unary_bool as op; arg = b } ->
       get_bool b >|= BVOps.eval_unary_bool op >|= bv
+  | BinaryExpr { op = `FSET offset; arg1 = a; arg2 = b } ->
+      let* a = get_record a in
+      let* b = get_bv b in
+      record (Record.set_field offset a b)
+  | UnaryExpr { op = `FACCESS offset; arg = a } ->
+      let* a = get_record a in
+      let { value; _ } : Record.field = Record.get_field offset a in
+      Some (bv value)
+  | BinaryExpr { op = `PTRADD; arg1 = a; arg2 = b } ->
+      let* a, typ = get_pointer a in
+      let* b = get_bv b in
+      pointer (BVOps.eval_binary_unif `BVADD a b, typ)
   | BinaryExpr { op = #BVOps.binary_unif as op; arg1 = a; arg2 = b } ->
       let* a = get_bv a in
       let* b = get_bv b in
@@ -46,10 +62,7 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
       Some (bv (BVOps.eval_intrin op args))
   | UnaryExpr { op = #LogicalOps.unary as op; arg = b } ->
       get_bool b >|= LogicalOps.eval_unary op >>= bool
-  | UnaryExpr { op = `Forall } -> None
   | UnaryExpr { op = `Old } -> None
-  | UnaryExpr { op = `Lambda } -> None
-  | UnaryExpr { op = `Exists } -> None
   | UnaryExpr { op = #IntOps.unary as op; arg = b } ->
       get_int b >|= IntOps.eval_unary op >|= fun b -> `Integer b
   | BinaryExpr { op = #IntOps.binary_unif as op; arg1 = a; arg2 = b } ->
@@ -68,10 +81,12 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
       let* args = all_args get_bool args in
       bool @@ LogicalOps.eval_intrin op args
   | ApplyFun _ -> None
-  | Binding _ -> None
+  | Lambda _ -> None
+  | Let _ -> None
   | UnaryExpr { op = #Ops.Spec.unary } -> None
   | BinaryExpr { op = #Ops.Spec.binary } -> None
   | ApplyIntrin { op = #Ops.Spec.intrin } -> None
+  | ApplyIntrin { op = #Ops.Maps.intrin } -> None
 
 let partial_eval_alg (e : BasilExpr.t BasilExpr.abstract_expr) :
     BasilExpr.rewrite =

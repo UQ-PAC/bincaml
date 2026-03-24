@@ -64,8 +64,8 @@ module.exports = grammar({
         seq("var", optional($.list_VarModifiers), $.token_GlobalIdent, ":", $.Type, optional($.VarSpec)),
         // Decl_UninterpFun. Decl ::= "val" GlobalIdent AttribSet ":" Type ;
         seq("val", $.token_GlobalIdent, optional($.AttribSet), ":", $.Type),
-        // Decl_Fun. Decl ::= "let" GlobalIdent AttribSet ":" Type "=" Expr ;
-        seq("let", $.token_GlobalIdent, optional($.AttribSet), ":", $.Type, "=", $.Expr),
+        // Decl_Fun. Decl ::= "let" GlobalIdent [LocalVarParen] AttribSet ":" Type "=" Expr ;
+        seq("let", $.token_GlobalIdent, optional($.list_LocalVarParen), optional($.AttribSet), ":", $.Type, "=", $.Expr),
         // Decl_FunNoType. Decl ::= "let" GlobalIdent AttribSet "=" Expr ;
         seq("let", $.token_GlobalIdent, optional($.AttribSet), "=", $.Expr),
         // Decl_ProgEmpty. Decl ::= "prog" "entry" ProcIdent AttribSet ;
@@ -105,12 +105,30 @@ module.exports = grammar({
         // ProcDef_Some. ProcDef ::= BeginList [Block] EndList ;
         seq($.token_BeginList, optional($.list_Block), $.token_EndList)
       ),
+    list_Field: $ =>
+      choice(
+        // []. [Field] ::= ;
+        choice(),
+        // (:[]). [Field] ::= Field ;
+        $.Field,
+        // (:). [Field] ::= Field "," [Field] ;
+        seq($.Field, ",", optional($.list_Field))
+      ),
+    Field: $ =>
+      // Field1. Field ::= OpenParen Str ":" OpenParen Type "," IntVal CloseParen CloseParen ;
+      seq($.token_OpenParen, $.token_Str, ":", $.token_OpenParen, $.Type, ",", $.IntVal, $.token_CloseParen, $.token_CloseParen),
     IntType: $ =>
       // IntType1. IntType ::= INTTYPE ;
       $.token_INTTYPE,
     BoolType: $ =>
       // BoolType1. BoolType ::= BOOLTYPE ;
       $.token_BOOLTYPE,
+    RecordType: $ =>
+      // RecordType1. RecordType ::= BeginRec [Field] EndRec ;
+      seq($.token_BeginRec, optional($.list_Field), $.token_EndRec),
+    PointerType: $ =>
+      // PointerType1. PointerType ::= "ptr" OpenParen Type "," Type CloseParen ;
+      seq("ptr", $.token_OpenParen, $.Type, ",", $.Type, $.token_CloseParen),
     BVType: $ =>
       // BVType1. BVType ::= BVTYPE ;
       $.token_BVTYPE,
@@ -149,10 +167,14 @@ module.exports = grammar({
         $.BoolType,
         // TypeBVType. Type1 ::= BVType ;
         $.BVType,
+        // TypePointerType. Type1 ::= PointerType ;
+        $.PointerType,
+        // TypeRecordType. Type1 ::= RecordType ;
+        $.RecordType,
+        // TypeVarType. Type1 ::= LocalIdent ;
+        $.token_LocalIdent,
         // TypeParen. Type1 ::= OpenParen Type CloseParen ;
-        seq($.token_OpenParen, $.Type, $.token_CloseParen),
-        // TypeSort. Type1 ::= LocalIdent ;
-        $.token_LocalIdent
+        seq($.token_OpenParen, $.Type, $.token_CloseParen)
       ),
     Type: $ =>
       choice(
@@ -171,6 +193,18 @@ module.exports = grammar({
     BVVal: $ =>
       // BVVal1. BVVal ::= IntVal ":" BVType ;
       seq($.IntVal, ":", $.BVType),
+    list_FieldVal: $ =>
+      choice(
+        // []. [FieldVal] ::= ;
+        choice(),
+        // (:[]). [FieldVal] ::= FieldVal ;
+        $.FieldVal,
+        // (:). [FieldVal] ::= FieldVal "," [FieldVal] ;
+        seq($.FieldVal, ",", optional($.list_FieldVal))
+      ),
+    FieldVal: $ =>
+      // FieldVal1. FieldVal ::= OpenParen Str ":" BVVal "," Type CloseParen ;
+      seq($.token_OpenParen, $.token_Str, ":", $.BVVal, ",", $.Type, $.token_CloseParen),
     Endian: $ =>
       choice(
         // Endian_Little. Endian ::= "le" ;
@@ -257,12 +291,8 @@ module.exports = grammar({
         $.GlobalVar
       ),
     LocalVarParen: $ =>
-      choice(
-        // LocalVarParenLocalVar. LocalVarParen ::= LocalVar ;
-        $.LocalVar,
-        // LocalVarParen1. LocalVarParen ::= OpenParen LocalIdent ":" Type CloseParen ;
-        seq($.token_OpenParen, $.token_LocalIdent, ":", $.Type, $.token_CloseParen)
-      ),
+      // LocalVarParen1. LocalVarParen ::= OpenParen LocalIdent ":" Type CloseParen ;
+      seq($.token_OpenParen, $.token_LocalIdent, ":", $.Type, $.token_CloseParen),
     GlobalVarParen: $ =>
       choice(
         // GlobalVarParenGlobalVar. GlobalVarParen ::= GlobalVar ;
@@ -454,6 +484,10 @@ module.exports = grammar({
         $.BVVal,
         // Value_Int. Value ::= IntVal ;
         $.IntVal,
+        // Value_Record. Value ::= OpenParen BeginRec [FieldVal] EndRec "," Type CloseParen ;
+        seq($.token_OpenParen, $.token_BeginRec, optional($.list_FieldVal), $.token_EndRec, ",", $.Type, $.token_CloseParen),
+        // Value_Pointer. Value ::= "ptr" OpenParen BVVal "," PointerType CloseParen ;
+        seq("ptr", $.token_OpenParen, $.BVVal, ",", $.PointerType, $.token_CloseParen),
         // Value_True. Value ::= "true" ;
         "true",
         // Value_False. Value ::= "false" ;
@@ -477,7 +511,9 @@ module.exports = grammar({
         // Expr_Exists. Expr ::= "exists" AttribSet LambdaDef ;
         seq("exists", optional($.AttribSet), $.LambdaDef),
         // Expr_Lambda. Expr ::= "fun" AttribSet LambdaDef ;
-        seq("fun", optional($.AttribSet), $.LambdaDef)
+        seq("fun", optional($.AttribSet), $.LambdaDef),
+        // Expr_Let. Expr ::= "let" LocalIdent [LocalVarParen] ":" Type "=" Expr "in" Expr ;
+        seq("let", $.token_LocalIdent, optional($.list_LocalVarParen), ":", $.Type, "=", $.Expr, "in", $.Expr)
       ),
     Expr1: $ =>
       choice(
@@ -514,6 +550,10 @@ module.exports = grammar({
         seq("extract", $.token_OpenParen, $.IntVal, ",", $.IntVal, ",", $.Expr, $.token_CloseParen),
         // Expr_Concat. Expr2 ::= "bvconcat" OpenParen [Expr] CloseParen ;
         seq("bvconcat", $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
+        // Expr_FSet. Expr2 ::= "fset" OpenParen Str "," Expr "," Expr CloseParen ;
+        seq("fset", $.token_OpenParen, $.token_Str, ",", $.Expr, ",", $.Expr, $.token_CloseParen),
+        // Expr_FAccess. Expr2 ::= "faccess" OpenParen Str "," Expr CloseParen ;
+        seq("faccess", $.token_OpenParen, $.token_Str, ",", $.Expr, $.token_CloseParen),
         // Expr_Match. Expr2 ::= "match" Expr "with" OpenParen [Case] CloseParen ;
         seq("match", $.Expr, "with", $.token_OpenParen, optional($.list_Case), $.token_CloseParen),
         // Expr_Cases. Expr2 ::= "cases" OpenParen [Case] CloseParen ;
@@ -535,7 +575,9 @@ module.exports = grammar({
         // BinOpIntBinOp. BinOp ::= IntBinOp ;
         $.IntBinOp,
         // BinOpEqOp. BinOp ::= EqOp ;
-        $.EqOp
+        $.EqOp,
+        // BinOpPointerBinOp. BinOp ::= PointerBinOp ;
+        $.PointerBinOp
       ),
     UnOp: $ =>
       choice(
@@ -673,6 +715,9 @@ module.exports = grammar({
         // BoolBinOp_boolimplies. BoolBinOp ::= "boolimplies" ;
         "boolimplies"
       ),
+    PointerBinOp: $ =>
+      // PointerBinOp_ptradd. PointerBinOp ::= "ptradd" ;
+      "ptradd",
     RequireTok: $ =>
       choice(
         // RequireTok_require. RequireTok ::= "require" ;
@@ -752,6 +797,8 @@ module.exports = grammar({
       /int/,
     token_BOOLTYPE: $ =>
       /bool/,
+    token_POINTERTYPE: $ =>
+      /ptr/,
     token_BIdent: $ =>
       /\.(_|[a-zA-Z])([#\$\._~]|(\d|[a-zA-Z]))*/,
     token_LocalIdent: $ =>
