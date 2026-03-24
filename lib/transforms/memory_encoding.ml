@@ -17,49 +17,49 @@ module Calls = struct
     BasilExpr.apply_fun
       ~func:
         (BasilExpr.rvar
-           (Var.create "me_addr_is_heap" ~scope:Var.Local Types.Boolean))
+           (Var.create "me_addr_is_heap" ~scope:Var.Global Types.Boolean))
       args
 
   let alloc_base args =
     BasilExpr.apply_fun
       ~func:
         (BasilExpr.rvar
-           (Var.create "me_alloc_base" ~scope:Var.Local (Types.Bitvector 64)))
+           (Var.create "me_alloc_base" ~scope:Var.Global (Types.Bitvector 64)))
       args
 
   let alloc_live args =
     BasilExpr.apply_fun
       ~func:
         (BasilExpr.rvar
-           (Var.create "me_alloc_live" ~scope:Var.Local (Types.Bitvector 2)))
+           (Var.create "me_alloc_live" ~scope:Var.Global (Types.Bitvector 2)))
       args
 
   let alloc_size args =
     BasilExpr.apply_fun
       ~func:
         (BasilExpr.rvar
-           (Var.create "me_alloc_size" ~scope:Var.Local (Types.Bitvector 64)))
+           (Var.create "me_alloc_size" ~scope:Var.Global (Types.Bitvector 64)))
       args
 
   let addr_alloc args =
     BasilExpr.apply_fun
       ~func:
         (BasilExpr.rvar
-           (Var.create "me_addr_alloc" ~scope:Var.Local (Types.Bitvector 64)))
+           (Var.create "me_addr_alloc" ~scope:Var.Global (Types.Bitvector 64)))
       args
 
   let addr_offset args =
     BasilExpr.apply_fun
       ~func:
         (BasilExpr.rvar
-           (Var.create "me_addr_offset" ~scope:Var.Local (Types.Bitvector 64)))
+           (Var.create "me_addr_offset" ~scope:Var.Global (Types.Bitvector 64)))
       args
 
   let alloc_size_update args =
     BasilExpr.apply_fun
       ~func:
         (BasilExpr.rvar
-           (Var.create "me_alloc_size_update" ~scope:Var.Local
+           (Var.create "me_alloc_size_update" ~scope:Var.Global
               (Types.Variable "MemEncoding")))
       args
 
@@ -67,7 +67,7 @@ module Calls = struct
     BasilExpr.apply_fun
       ~func:
         (BasilExpr.rvar
-           (Var.create "me_alloc_live_update" ~scope:Var.Local
+           (Var.create "me_alloc_live_update" ~scope:Var.Global
               (Types.Variable "MemEncoding")))
       args
 
@@ -75,7 +75,7 @@ module Calls = struct
     BasilExpr.apply_fun
       ~func:
         (BasilExpr.rvar
-           (Var.create "me_allocate" ~scope:Var.Local
+           (Var.create "me_allocate" ~scope:Var.Global
               (Types.Variable "MemEncoding")))
       args
 
@@ -83,14 +83,14 @@ module Calls = struct
     BasilExpr.apply_fun
       ~func:
         (BasilExpr.rvar
-           (Var.create "me_can_alloc" ~scope:Var.Local Types.Boolean))
+           (Var.create "me_can_alloc" ~scope:Var.Global Types.Boolean))
       args
 
   let init_encoding args =
     BasilExpr.apply_fun
       ~func:
         (BasilExpr.rvar
-           (Var.create "me_init_encoding" ~scope:Var.Local Types.Boolean))
+           (Var.create "me_init_encoding" ~scope:Var.Global Types.Boolean))
       args
 end
 

@@ -39,6 +39,7 @@ let rec type_to_string (t : Types.t) =
   | Types.Map (i, o) ->
       String.concat "" [ "["; type_to_string i; "]"; type_to_string o ]
   | Types.Variable s -> s
+  | Types.Sort (s,vs) -> s
   | t ->
       raise
         (BoogieException (String.cat "Unsupported type" (Types.to_string t)))
@@ -91,6 +92,7 @@ let pretty_binary_expr (op : Lang.Ops.AllOps.binary) (ty1, arg1) (ty2, arg2)
   let open Containers_pp in
   match op with
   | `MapAccess -> arg1 ^ bracket "[" arg2 "]"
+  | `WriteField s -> arg1 ^ text "->" ^ bracket "(" (text s ^+ text ":=" ^+ arg2) ")"
   | _ -> (
       match Transforms.Boogie_prepass.Builtins.name op [ ty1; ty2; t ] with
       | Function name -> text name ^ pretty_call_args [ arg1; arg2 ]
