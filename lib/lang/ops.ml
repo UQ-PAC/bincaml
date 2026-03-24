@@ -424,7 +424,7 @@ module AllOps = struct
     | `BVAND | `BVOR | `BVADD | `BVMUL | `BVUDIV | `BVUREM | `BVSHL | `BVLSHR
     | `BVNAND | `BVXOR | `BVSUB | `BVSDIV | `BVSREM | `BVSMOD | `BVASHR ->
         return l
-    | `WriteField _ -> return r
+    | `WriteField _ -> return l
     | `PTRADD -> return l
     | `MapAccess ->
         let m, r = Types.uncurry l in

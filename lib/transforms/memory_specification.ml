@@ -2,24 +2,105 @@ open Lang
 open Lang.Common
 open Lang.Expr
 open Ops
+open Memory_encoding
 
-(* specifies memory? *)
-(* memory_encoding produces the memory encoding declarations for a particular implementation *)
-(* memory_specification uses the encoding to specify memory, adding in asserts/assumes and procedure specifications *)
+let old e = BasilExpr.unexp ~op:`Old e
+
+let r n =
+  BasilExpr.rvar
+    (Var.create ~scope:Var.Global (Printf.sprintf "$R%d" n) (Types.Bitvector 64))
+
+let transform_main p =
+  (* TODO: Specify Gammas Oneday *)
+  let spec = Procedure.specification p in
+  Procedure.set_specification p
+    {
+      spec with
+      requires =
+        spec.requires
+        @ [ Calls.init_encoding [ BasilExpr.rvar Globals.mem_encoding ] ];
+    }
+
+let transform_malloc p =
+  (* TODO: Specify Gammas Oneday *)
+  let spec = Procedure.specification p in
+  Procedure.set_specification p
+    {
+      spec with
+      ensures =
+        spec.ensures
+        @ [
+            (* Can allocate at new r0 with size old r0 *)
+            Calls.can_alloc
+              [ BasilExpr.rvar Globals.mem_encoding; r 0; old @@ r 0 ];
+            (* Offset of return address r0 is 0 *)
+            BasilExpr.binexp ~op:`EQ
+              (Calls.addr_offset [ BasilExpr.rvar Globals.mem_encoding; r 0 ])
+              (BasilExpr.bv_of_int ~size:64 0);
+            (* Base of associated allocation is r(0) *)
+            BasilExpr.binexp ~op:`EQ
+              (Calls.alloc_base
+                 [
+                   BasilExpr.rvar Globals.mem_encoding;
+                   Calls.addr_alloc [ BasilExpr.rvar Globals.mem_encoding; r 0 ];
+                 ])
+              (r 0);
+            (* Update the memory encoding: *)
+            BasilExpr.binexp ~op:`EQ
+              (BasilExpr.rvar Globals.mem_encoding)
+              (Calls.allocate
+                 [ BasilExpr.rvar Globals.mem_encoding; r 0; old @@ r 0 ]);
+          ];
+      modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
+    }
+
+let transform_free p =
+  (* TODO: Specify Gammas Oneday *)
+  let spec = Procedure.specification p in
+  Procedure.set_specification p
+    {
+      spec with
+      requires =
+        spec.requires
+        @ [
+            (* Only free heap values *)
+            Calls.addr_is_heap
+              [ BasilExpr.rvar Globals.mem_encoding; old @@ r 0 ];
+            (* Only free if offset is 0 *)
+            BasilExpr.binexp ~op:`EQ
+              (BasilExpr.bv_of_int ~size:64 0)
+              (Calls.addr_offset
+                 [ BasilExpr.rvar Globals.mem_encoding; old @@ r 0 ]);
+            (* The object must be live to free *)
+            BasilExpr.binexp ~op:`EQ
+              (Calls.alloc_live
+                 [
+                   BasilExpr.rvar Globals.mem_encoding;
+                   Calls.addr_alloc
+                     [ BasilExpr.rvar Globals.mem_encoding; old @@ r 0 ];
+                 ])
+              (BasilExpr.bvconst live);
+          ];
+      modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
+    }
+
+let transform_stmt s =
+  match s with
+  | Stmt.Instr_Store { lhs; rhs; value; addr } -> s
+  | Stmt.Instr_Load { lhs; rhs; addr } -> s
+  | _ -> s
 
 let transform_proc (p : Program.proc) =
+  let p =
+    Procedure.map_blocks_nondet
+      (fun (i, b) -> Block.map ~phi:Fun.id transform_stmt b)
+      p
+  in
   let name = ID.name (Procedure.id p) in
   match name with
-  | "@malloc" ->
-      Procedure.set_specification p
-        {
-          requires = [];
-          ensures = List.repeat 10 [BasilExpr.boolconst true];
-          rely = [];
-          guarantee = [];
-          captures_globs = [];
-          modifies_globs = [];
-        }
+  | "@main" -> transform_main p
+  | "@malloc" -> transform_malloc p
+  | "@free" -> transform_free p
   | _ -> p
 
 let transform (p : Program.t) =
