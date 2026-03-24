@@ -1,27 +1,34 @@
-{ lib
-, stdenv
-, mkShell
+{
+  lib,
+  stdenv,
+  mkShell,
 
-# ocaml packages
-, bincaml
-, odoc
-, odig
-, ocaml-lsp
-, ocamlformat
+  # ocaml packages
+  bincaml,
+  odoc,
+  odig,
+  ocaml-lsp,
+  ocamlformat,
 
-# dev packages
-, tree-sitter
-, nodejs-slim
-, perf
-
+  # dev packages
+  tree-sitter,
+  nodejs-slim,
+  perf,
+  boogie,
 }:
 
 mkShell {
   packages = [
-    odoc odig ocaml-lsp ocamlformat
-    tree-sitter nodejs-slim
+    odoc
+    odig
+    ocaml-lsp
+    ocamlformat
+    tree-sitter
+    nodejs-slim
+    boogie
     # sherlodoc
-  ] ++ lib.optional stdenv.hostPlatform.isLinux perf;
+  ]
+  ++ lib.optional stdenv.hostPlatform.isLinux perf;
 
   inputsFrom = [
     bincaml
