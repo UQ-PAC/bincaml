@@ -66,19 +66,19 @@ let transform_free p =
         @ [
             (* Only free heap values *)
             Calls.addr_is_heap
-              [ BasilExpr.rvar Globals.mem_encoding; old @@ r 0 ];
+              [ BasilExpr.rvar Globals.mem_encoding; r 0 ];
             (* Only free if offset is 0 *)
             BasilExpr.binexp ~op:`EQ
               (BasilExpr.bv_of_int ~size:64 0)
               (Calls.addr_offset
-                 [ BasilExpr.rvar Globals.mem_encoding; old @@ r 0 ]);
+                 [ BasilExpr.rvar Globals.mem_encoding; r 0 ]);
             (* The object must be live to free *)
             BasilExpr.binexp ~op:`EQ
               (Calls.alloc_live
                  [
                    BasilExpr.rvar Globals.mem_encoding;
                    Calls.addr_alloc
-                     [ BasilExpr.rvar Globals.mem_encoding; old @@ r 0 ];
+                     [ BasilExpr.rvar Globals.mem_encoding; r 0 ];
                  ])
               (BasilExpr.bvconst live);
           ];
