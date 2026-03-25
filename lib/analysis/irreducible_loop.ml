@@ -299,6 +299,13 @@ module TraverseLoops = struct
 
   type continuation_stack = (arg * block_loop_state list) list
 
+  let rec iter_snocs l f =
+    match l with
+    | h :: tl ->
+        f tl h;
+        iter_snocs tl f
+    | [] -> ()
+
   let rec trav_loops st (input : c) (continuations : continuation_stack) =
     let open Iter in
     let exception Ret of block_loop_state option in
@@ -322,13 +329,6 @@ module TraverseLoops = struct
             (b0, dfsp_pos, it, rest)
           end
         | Return return, [] -> raise (Ret return)
-      in
-      let rec iter_snocs l f =
-        match l with
-        | h :: tl ->
-            f tl h;
-            iter_snocs tl f
-        | [] -> ()
       in
       iter_snocs it (fun it ->
           (function
@@ -361,4 +361,10 @@ module TraverseLoops = struct
     try run () with
     | Ret r -> r
     | Recurse (c, continuations) -> trav_loops st c continuations
+
+  let analyse p =
+    let st = create p in
+    Procedure.get_entry_block p
+    |> Option.map (fun entry ->
+        trav_loops st (Call { block = st.l entry; dfsp_pos = 1 }) [])
 end

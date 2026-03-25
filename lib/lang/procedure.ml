@@ -324,14 +324,18 @@ let fresh_block p ?name ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
   let id = (block_ids p).fresh ~name () in
   (add_block p id ~phis ~stmts ~successors (), id)
 
-let get_entry_block p id =
+let get_entry_block p =
   let open Edge in
   let open G in
   try
     graph p
     |> Option.flat_map (fun g ->
-        let id = G.find_edge g Entry (Begin id) in
-        Some id)
+        let id =
+          G.succ g Entry
+          |> List.filter_map (function Vert.Begin id -> Some id | _ -> None)
+        in
+        assert (List.length id = 1);
+        Some (List.hd id))
   with Not_found -> None
 
 let get_block p id =
@@ -532,26 +536,22 @@ let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
             p.captures_globs
         @ ml
             (fun x ->
-              append_l
-                ~sep:newline
+              append_l ~sep:newline
                 (List.map (fun v -> text "requires " ^ show_expr v) x))
             p.requires
         @ ml
             (fun x ->
-              append_l
-                ~sep:newline
+              append_l ~sep:newline
                 (List.map (fun v -> text "ensures " ^ show_expr v) x))
             p.ensures
         @ ml
             (fun x ->
-              append_l
-                ~sep:newline
+              append_l ~sep:newline
                 (List.map (fun v -> text "rely " ^ show_expr v) x))
             p.rely
         @ ml
             (fun x ->
-              append_l
-                ~sep:newline
+              append_l ~sep:newline
                 (List.map (fun v -> text "guarantee " ^ show_expr v) x))
             p.guarantee))
 
