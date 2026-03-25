@@ -68,6 +68,7 @@ let pretty_const (c : Lang.Ops.AllOps.const) =
   | `Record _ -> raise (BoogieException "records unsupported by boogie backend")
   | `Pointer _ ->
       raise (BoogieException "pointers unsupported by boogie backend")
+  | `Sort _ -> raise (BoogieException "const sorts unsupported by boogie backend")
 
 let pretty_call_args_no_brackets (args : Containers_pp.t list) =
   let open Containers_pp in
@@ -154,7 +155,7 @@ let rec pretty_attribute (attr : Lang.Program.e Lang.Attrib.t) =
   let open Containers_pp in
   match attr with
   | `List l -> List.flat_map pretty_attribute l
-  | `String s -> let _ = print_endline s in [ text s ]
+  | `String s -> [ text s ]
   | `Expr e -> [ pretty_expr e ]
   | _ -> []
 

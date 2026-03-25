@@ -249,20 +249,7 @@ module Instructions = struct
                ])
            (Lang.Expr.BasilExpr.rvar memory)
     in
-    let _ =
-      print_endline
-        (Printf.sprintf "\nTHING: %s\n"
-           (Types.to_string @@ Lang.Expr.BasilExpr.type_of body))
-    in
-    let out =
-      Lang.Expr.BasilExpr.binding ~op:`Lambda [ memory; index; value ] body
-    in
-    let _ =
-      print_endline
-        (Printf.sprintf "THING2: %s\n"
-           (Types.to_string @@ Lang.Expr.BasilExpr.type_of out))
-    in
-    out
+    Lang.Expr.BasilExpr.binding ~op:`Lambda [ memory; index; value ] body
 
   let load_body ?(be = false) mem_typ val_size addr_size =
     let memory = Var.create ~scope:Var.Local "#memory" mem_typ in
@@ -317,14 +304,10 @@ module Instructions = struct
              {
                attrib = attribs;
                binding =
-                 (let _ =
-                    print_endline
-                      (Printf.sprintf "%s" @@ Types.to_string @@ Var.typ lhs)
-                  in
-                  Var.create
-                    (Printf.sprintf "store%d_%s" size
-                       (Lang.Stmt.show_endian endian))
-                    (Lang.Expr.BasilExpr.type_of body));
+                 Var.create
+                   (Printf.sprintf "store%d_%s" size
+                      (Lang.Stmt.show_endian endian))
+                   (Lang.Expr.BasilExpr.type_of body);
                definition = Lang.Program.Function body;
              }
             : Lang.Program.declaration)
