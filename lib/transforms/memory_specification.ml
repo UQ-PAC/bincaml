@@ -65,36 +65,61 @@ let transform_free p =
         spec.requires
         @ [
             (* Only free heap values *)
-            Calls.addr_is_heap
-              [ BasilExpr.rvar Globals.mem_encoding; r 0 ];
+            Calls.addr_is_heap [ BasilExpr.rvar Globals.mem_encoding; r 0 ];
             (* Only free if offset is 0 *)
             BasilExpr.binexp ~op:`EQ
               (BasilExpr.bv_of_int ~size:64 0)
-              (Calls.addr_offset
-                 [ BasilExpr.rvar Globals.mem_encoding; r 0 ]);
+              (Calls.addr_offset [ BasilExpr.rvar Globals.mem_encoding; r 0 ]);
             (* The object must be live to free *)
             BasilExpr.binexp ~op:`EQ
               (Calls.alloc_live
                  [
                    BasilExpr.rvar Globals.mem_encoding;
-                   Calls.addr_alloc
-                     [ BasilExpr.rvar Globals.mem_encoding; r 0 ];
+                   Calls.addr_alloc [ BasilExpr.rvar Globals.mem_encoding; r 0 ];
                  ])
               (BasilExpr.bvconst live);
           ];
       modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
     }
 
-let transform_stmt s =
-  match s with
-  | Stmt.Instr_Store { lhs; rhs; value; addr } -> s
-  | Stmt.Instr_Load { lhs; rhs; addr } -> s
-  | _ -> s
+let transform_stmt (s : Program.stmt) =
+  (match s with
+    | Stmt.Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } }
+      -> (
+        let valid_assert =
+          Stmt.Instr_Assert
+            {
+              body =
+                Calls.valid_access
+                  [
+                    BasilExpr.rvar Globals.mem_encoding;
+                    addr;
+                    BasilExpr.bv_of_int ~size:64 (size / 8);
+                  ];
+            }
+        in
+        match Var.name rhs with "$mem" -> [ valid_assert; s ] | _ -> [ s ])
+    | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } -> (
+        let valid_assert =
+          Stmt.Instr_Assert
+            {
+              body =
+                Calls.valid_access
+                  [
+                    BasilExpr.rvar Globals.mem_encoding;
+                    addr;
+                    BasilExpr.bv_of_int ~size:64 (size / 8);
+                  ];
+            }
+        in
+        match Var.name rhs with "$mem" -> [ valid_assert; s ] | _ -> [ s ])
+    | _ -> [ s ])
+  |> List.to_iter
 
 let transform_proc (p : Program.proc) =
   let p =
     Procedure.map_blocks_nondet
-      (fun (i, b) -> Block.map ~phi:Fun.id transform_stmt b)
+      (fun (i, b) -> Block.flat_map ~phi:Fun.id transform_stmt b)
       p
   in
   let name = ID.name (Procedure.id p) in

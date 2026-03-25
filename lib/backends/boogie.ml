@@ -154,7 +154,7 @@ let rec pretty_attribute (attr : Lang.Program.e Lang.Attrib.t) =
   let open Containers_pp in
   match attr with
   | `List l -> List.flat_map pretty_attribute l
-  | `String s -> [ text s ]
+  | `String s -> let _ = print_endline s in [ text s ]
   | `Expr e -> [ pretty_expr e ]
   | _ -> []
 
@@ -169,7 +169,7 @@ and pretty_attribute_map (key : string)
         "}")
   |> append_sp
 
-and pretty_triggers attrib =
+and pretty_triggers (attrib : Lang.Program.e Lang.Attrib.t option) =
   let open Containers_pp in
   Lang.Attrib.find_opt ".triggers" attrib
   |> Option.map (fun attrib ->
@@ -177,6 +177,7 @@ and pretty_triggers attrib =
       @@ List.map (fun b -> bracket "{" b "}")
       @@ pretty_attribute attrib)
   |> Option.get_or ~default:(text "")
+  (* Option.map (Lang.Attrib.attrib_pretty Lang.Expr.BasilExpr.pretty) attrib |> Option.get_or ~default:(text "MAGIC") *)
 
 and pretty_binding_expr ?(attrib : Lang.Program.e Lang.Attrib.t option) bound
     in_body =
@@ -200,7 +201,7 @@ and pretty_expr_alg
         | `Exists -> "exists"
         | `Lambda -> "lambda"
       in
-      bracket "(" (op ^+ pretty_binding_expr bound_vars in_body) ")"
+      bracket "(" (op ^+ pretty_binding_expr ?attrib bound_vars in_body) ")"
   | UnaryExpr { op; arg } -> pretty_unary_expr op arg (type_of e)
   | BinaryExpr { op; arg1; arg2 } -> pretty_binary_expr op arg1 arg2 (type_of e)
   | ApplyIntrin { op; args } -> pretty_apply_intrinsic op args (type_of e)

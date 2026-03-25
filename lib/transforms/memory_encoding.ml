@@ -92,6 +92,13 @@ module Calls = struct
         (BasilExpr.rvar
            (Var.create "me_init_encoding" ~scope:Var.Global Types.Boolean))
       args
+
+  let valid_access args =
+    BasilExpr.apply_fun
+      ~func:
+        (BasilExpr.rvar
+           (Var.create "me_valid_access" ~scope:Var.Global Types.Boolean))
+      args
 end
 
 module type MemoryEncoding = sig
@@ -121,7 +128,7 @@ end
 module MemoryEncoder (Encoding : MemoryEncoding) = struct
   let add_decl ?(attrib = Attrib.empty) (p : Program.t) (name : string)
       (bindings : Var.t list) (body : BasilExpr.t) =
-    Lang.Program.add_decl p name
+    Lang.Program.add_decl ~attrib p name
       (Lang.Program.Function
          {
            binding =
@@ -145,52 +152,65 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
     in
     p
 
+  let attrib =
+    StringMap.of_list
+      [
+        ( ".boogie",
+          `Assoc
+            (StringMap.of_list
+               [
+                 (".inline", `List []);
+                 (".extern", `List []);
+                 (* (".define", `List []) *)
+               ]) );
+      ]
+
   let add_can_allocate p =
-    add_decl p "me_can_allocate"
+    add_decl ~attrib p "me_can_allocate"
       [
         Encoding.Locals.mem_encoding; Encoding.Locals.addr; Encoding.Locals.size;
       ]
       Encoding.can_allocate_body
 
   let add_allocate p =
-    add_decl p "me_allocate"
+    add_decl ~attrib p "me_allocate"
       [
         Encoding.Locals.mem_encoding; Encoding.Locals.addr; Encoding.Locals.size;
       ]
       Encoding.allocate_body
 
   let add_alloc_size p =
-    add_decl p "me_alloc_size"
+    add_decl ~attrib p "me_alloc_size"
       [ Encoding.Locals.mem_encoding; Encoding.Locals.alloc ]
       Encoding.alloc_size_body
 
   let add_addr_alloc p =
-    add_decl p "me_addr_alloc"
+    add_decl ~attrib p "me_addr_alloc"
       [ Encoding.Locals.mem_encoding; Encoding.Locals.addr ]
       Encoding.addr_alloc_body
 
   let add_alloc_live p =
-    add_decl p "me_alloc_live"
+    add_decl ~attrib p "me_alloc_live"
       [ Encoding.Locals.mem_encoding; Encoding.Locals.alloc ]
       Encoding.alloc_live_body
 
   let add_addr_offset p =
-    add_decl p "me_addr_offset"
+    add_decl ~attrib p "me_addr_offset"
       [ Encoding.Locals.mem_encoding; Encoding.Locals.addr ]
       Encoding.addr_offset_body
 
   let add_alloc_base p =
-    add_decl p "me_alloc_base"
+    add_decl ~attrib p "me_alloc_base"
       [ Encoding.Locals.mem_encoding; Encoding.Locals.alloc ]
       Encoding.alloc_base_body
 
   let add_addr_is_heap p =
-    add_decl p "me_addr_is_heap"
+    add_decl ~attrib p "me_addr_is_heap"
       [ Encoding.Locals.mem_encoding; Encoding.Locals.addr ]
       Encoding.addr_is_heap_body
 
   let add_alloc_size_update p =
-    add_decl p "me_alloc_size_update"
+    add_decl ~attrib p "me_alloc_size_update"
       [
         Encoding.Locals.mem_encoding;
         Encoding.Locals.alloc;
@@ -199,7 +219,7 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
       Encoding.alloc_size_update_body
 
   let add_alloc_live_update p =
-    add_decl p "me_alloc_live_update"
+    add_decl ~attrib p "me_alloc_live_update"
       [
         Encoding.Locals.mem_encoding;
         Encoding.Locals.alloc;
@@ -208,12 +228,12 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
       Encoding.alloc_live_update_body
 
   let add_init_encoding p =
-    add_decl p "me_init_encoding"
+    add_decl ~attrib p "me_init_encoding"
       [ Encoding.Locals.mem_encoding ]
       Encoding.init_encoding_body
 
   let add_valid_access_body p =
-    add_decl p "me_valid_access"
+    add_decl ~attrib p "me_valid_access"
       [
         Encoding.Locals.mem_encoding; Encoding.Locals.addr; Encoding.Locals.size;
       ]
@@ -403,7 +423,8 @@ module SplitMemory : MemoryEncoding = struct
           ~bound:[ i ]
           (BasilExpr.binexp ~op:`EQ
              (BasilExpr.binexp ~op:`BVULT
-                (BasilExpr.bv_of_int 10000 ~size:64)
+                (* TODO compute this value somehow *)
+                (BasilExpr.bv_of_int 100000000 ~size:64)
                 (BasilExpr.rvar i))
              (Calls.addr_is_heap
                 [ BasilExpr.rvar Locals.mem_encoding; BasilExpr.rvar i ]));
