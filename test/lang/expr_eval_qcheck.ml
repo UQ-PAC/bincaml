@@ -1,5 +1,6 @@
 open Lang
 open Containers
+open Fun
 
 (** `Extract (hi, lo); `SignExtend n; `ZeroExtend n; `Integer i; `Bitvector z;
     `Forall; `Old; `INTNEG; `Exists; `IMPLIES; `INTLE; `AND; `OR; `INTLT;
@@ -16,7 +17,7 @@ module EvalExprGen = struct
   let eval_expr =
     let open QCheck.Gen in
     let* wd = Expr_gen.gen_width in
-    Expr_gen.gen_bvexpr (2, wd)
+    Expr_gen.gen_bvexpr (1, wd)
 
   let arb_bvexpr = QCheck.make ~print:Expr.BasilExpr.to_string eval_expr
 
@@ -32,16 +33,40 @@ module EvalExprGen = struct
     return (exp, partial)
 end
 
+let check_success_smt query =
+  let stdout, stderr, _ = CCUnix.call ~stdin:(`Str query) "cvc5" in
+  match String.lines (String.trim stdout) |> List.rev with
+  | "success" :: _ -> true
+  | e :: _
+    when CCString.mem ~sub:"invalid argument '0' for 'size'"
+           (String.lowercase_ascii e) ->
+      QCheck.assume_fail ()
+  | o :: _ -> failwith ("smt error: " ^ o)
+  | o -> failwith stdout
+
 let run_smt query =
   let stdout, stderr, _ = CCUnix.call ~stdin:(`Str query) "cvc5" in
   match String.trim stdout with
   | "unsat" -> `UNSAT
   | "sat" -> `SAT query
-  | e -> `UNKNOWN (e, stderr)
+  | e -> `UNKNOWN (e, stdout ^ stderr)
+
+let check_res res =
+  match res with
+  | `UNSAT -> true
+  | `SAT q ->
+      print_endline q;
+      print_endline "";
+      false
+  | `UNKNOWN (e, stderr)
+    when CCString.mem ~sub:"invalid argument '0' for 'size'"
+           (String.lowercase_ascii e) ->
+      QCheck.assume_fail ()
+  | `UNKNOWN (e, stderr) -> failwith (e ^ "\n" ^ stderr)
 
 let partial_eval_test =
   let open QCheck in
-  Test.make ~name:"partial eval test" ~count:1000 ~max_fail:3
+  Test.make ~name:"partial eval matches smt" ~count:300 ~max_fail:3
     EvalExprGen.arb_partial_eval_bvexpr
   @@ fun (exp, evaled) ->
   let evaled =
@@ -59,29 +84,19 @@ let partial_eval_test =
     comparison |> Expr_smt.SMTLib2.check_sat_bexpr |> Iter.map Sexp.to_string
     |> String.concat_iter ~sep:"\n"
   in
-  let res = run_smt smt in
-  (*let smt = Lang.Expr_smt.*)
-  match res with
-  | `UNSAT -> true
-  | `SAT q ->
-      print_endline q;
-      print_endline "";
-      false
-  | `UNKNOWN (e, stderr)
-    when CCString.mem ~sub:"invalid argument '0' for 'size'"
-           (String.lowercase_ascii e) ->
-      assume_fail ()
-  | `UNKNOWN (e, stderr) -> failwith (e ^ "\n" ^ stderr)
+  check_res (run_smt (smt ^ "\n(exit)"))
+(*let smt = Lang.Expr_smt.*)
 
 let () = Printexc.record_backtrace true
 
 module StringMap = Map.Make (String)
+module SMT = Bincaml_util.Smt.Solver
 
 let check_smt =
   let gen =
     let open QCheck.Gen in
-    let* wd = Expr_gen.gen_width in
-    let* e = Expr_gen.gen_bvexpr (1, wd) in
+    let* e = Expr_gen.gen_expr in
+    let e = (Expr.BasilExpr.rewrite_typed_two Algsimp.drop_assoc) e in
     let smt = Expr_smt.SMTLib2.of_bexpr e in
     let parsed = Expr_smt.SMTLib2.expr_of_smt StringMap.empty smt in
     return (e, smt, parsed)
@@ -95,14 +110,38 @@ let check_smt =
       gen
   in
 
-  let predicate (e, smt, p) =
-    let e = Expr.BasilExpr.drop_attrib e in
-    p |> Option.exists (fun p -> Expr.BasilExpr.equal e p)
+  let valid_predicate (e, smt, p) =
+    let check_p =
+      Expr_smt.SMTLib2.of_bexpr
+      @@ Expr.BasilExpr.boolnot (Expr.BasilExpr.binexp ~op:`EQ e e)
+    in
+    let query =
+      "(set-logic QF_BV)\n(set-option :print-success true)\n"
+      ^ Sexp.to_string
+          (Expr_smt.SMTLib2.add_assert check_p Expr_smt.SMTLib2.empty |> fst)
+      ^ "\n(exit)"
+    in
+    check_success_smt query
   in
 
-  QCheck.Test.make ~name:"expr smt roundtrip" ~count:1000 ~max_fail:3 arb
-    predicate
+  let roundtrip_predicate (e, smt, p) =
+    p
+    |> Option.exists
+         (Expr.BasilExpr.rewrite_typed_two Algsimp.drop_assoc
+         %> Expr.BasilExpr.equal e)
+  in
+
+  [
+    QCheck.Test.make ~name:"expr smt roundtrip" ~count:1000 ~max_fail:1 arb
+      roundtrip_predicate;
+    QCheck.Test.make ~name:"expr valid smt" ~count:30 ~max_fail:1 arb
+      valid_predicate;
+  ]
 
 let _ =
-  let suite = List.map QCheck_alcotest.to_alcotest [ check_smt ] in
+  let suite =
+    List.map
+      (QCheck_alcotest.to_alcotest ~long:true ~speed_level:`Slow ~verbose:true)
+      (partial_eval_test :: check_smt)
+  in
   Alcotest.run "smtlib exprs" [ ("bv", suite) ]

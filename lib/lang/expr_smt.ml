@@ -159,6 +159,10 @@ module SMTLib2 = struct
       | "bvsub" -> Some `BVSUB
       | "bvudiv" -> Some `BVUDIV
       | "bvlshr" -> Some `BVLSHR
+      | "bvsle" -> Some `BVSLE
+      | "bvule" -> Some `BVULE
+      | "bvult" -> Some `BVULT
+      | "bvslt" -> Some `BVSLT
       | _ -> None
 
     let of_unop a : Ops.AllOps.unary option =
@@ -174,7 +178,7 @@ module SMTLib2 = struct
     let module T = List.Traverse (Option) in
     match e with
     | `Atom "true" -> Some (BasilExpr.boolconst true)
-    | `Atom "false" -> Some (BasilExpr.boolconst true)
+    | `Atom "false" -> Some (BasilExpr.boolconst false)
     | `Atom e when Int.of_string e |> Option.is_some ->
         Some (BasilExpr.intconst (Z.of_string e))
     | `Atom e -> StringMap.find_opt e vardefs

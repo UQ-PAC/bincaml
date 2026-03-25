@@ -8,6 +8,9 @@ type 'a gen = 'a QCheck.Gen.t
 let bv_unop = [ `BVNOT; `BVNEG ]
 let bv_ops_partial = [ `BVSREM; `BVSDIV; `BVUREM; `BVUDIV; `BVSMOD ]
 
+let bv_binops_pred : Ops.BVOps.binary_pred list =
+  [ `EQ; `BVSLT; `BVSLE; `BVULT; `BVULE ]
+
 let bv_ops_total =
   [
     `BVSUB;
@@ -112,3 +115,52 @@ let gen_bvexpr =
                 let* r = self wd >|= ensure_nonzero wd in
                 gen_binop_partial l r );
             ])
+
+let gen_bool =
+  let* b = bool in
+  return @@ Expr.BasilExpr.boolconst b
+
+let gen_not f =
+  let* u = f in
+  return @@ BasilExpr.unexp ~op:`BoolNOT u
+
+module LT = List.Traverse (QCheck.Gen)
+
+let gen_bv_pred =
+  let* w = int_range 2 32 in
+  let* a = gen_bvexpr (2, w) in
+  let* b = gen_bvexpr (2, w) in
+  let* op = oneof_list bv_binops_pred in
+  return @@ BasilExpr.binexp ~op a b
+
+let gen_pred f =
+  let* a = int_range 1 10 in
+  let* args = LT.map_m (fun _ -> f) (List.init a Fun.id) in
+  let* op = oneof_list [ `AND; `OR ] in
+  return @@ BasilExpr.applyintrin ~op args
+
+let gen_pred_expr =
+  fix (fun self size ->
+      let self = self (size / 2) in
+      match size with
+      | 0 -> gen_bool
+      | size ->
+          oneof_weighted
+            [
+              (1, gen_bool);
+              (2, gen_bv_pred);
+              (2, gen_not self);
+              (2, gen_pred self);
+            ])
+
+let gen_expr =
+  let gbv =
+    let* wd = int_range 2 65 in
+    let* c = int_bound 3 in
+    gen_bvexpr (wd, c)
+  in
+  let gpred =
+    let* c = int_bound 3 in
+    gen_pred_expr c
+  in
+  oneof_weighted [ (1, gpred); (1, gbv) ]
