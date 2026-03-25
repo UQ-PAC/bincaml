@@ -14,6 +14,7 @@
   tree-sitter,
   nodejs-slim,
   perf,
+  bnfc-treesitter,
   boogie,
 }:
 
@@ -25,8 +26,9 @@ mkShell {
     ocamlformat
     tree-sitter
     nodejs-slim
+    bnfc-treesitter
     boogie
-    # sherlodoc
+    # sherlodoc - not in nixpkgs?
   ]
   ++ lib.optional stdenv.hostPlatform.isLinux perf;
 

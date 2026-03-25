@@ -4,6 +4,7 @@ open Lang.Expr
 open Ops
 open Memory_encoding
 
+(* TODO: Support simplify, have this produce _out vars appropriately? *)
 let old e = BasilExpr.unexp ~op:`Old e
 
 let r n =

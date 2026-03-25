@@ -260,10 +260,8 @@ let pretty_declaration (d : Lang.Program.declaration) =
   | Lang.Program.Function { binding; attrib; definition = Function t } ->
       let func_body, return_type = pretty_function_body binding t in
 
-      (* why this shadowing of return_type? *)
-      (* while the above would be ideal, if you uncurry something that returns a map *)
-      (* the returned map type cannot be distinguished from just another argument and itself *)
-      (* gets uncurried. Instead we just use the type of the body which SHOULD always be correct. *)
+      (* Ideally use above return type
+       * but unfortunately curry will uncurry returned maps... :( *) 
       let return_type = Lang.Expr.BasilExpr.type_of t in
       let return_type = text @@ type_to_string return_type in
 
