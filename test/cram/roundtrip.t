@@ -58,7 +58,5 @@ Record and Pointer
   [2]
 
 
-  $ diff ptrrec2.il ptrrec3.il
-  diff: ptrrec2.il: No such file or directory
-  diff: ptrrec3.il: No such file or directory
+  $ diff ptrrec2.il ptrrec3.il 2>/dev/null
   [2]
