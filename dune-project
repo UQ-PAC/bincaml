@@ -62,7 +62,10 @@
    bincaml
    logs
    iter
+   linol
+   linol-lwt
    containers
+   lwt_react
    ppx_deriving
    ; and probably a bunch of bincaml dependencies...
   (ocamlformat :with-dev-setup)

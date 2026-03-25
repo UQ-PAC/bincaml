@@ -14,7 +14,10 @@ depends: [
   "bincaml"
   "logs"
   "iter"
+  "linol"
+  "linol-lwt"
   "containers"
+  "lwt_react"
   "ppx_deriving"
   "ocamlformat" {with-dev-setup}
   "odig" {with-dev-setup}
