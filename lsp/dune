@@ -1,7 +1,7 @@
 (library
  (public_name bincaml_lsp)
  (name bincaml_lsp)
- (modules raw_tokens logs)
+ (modules raw_tokens lsp_logs)
  (root_module Deps)
 (libraries
            linol-lwt

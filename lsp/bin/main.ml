@@ -19,16 +19,17 @@ module Lsp = Linol.Lsp
 
 (* type state_after_processing = Bincaml_lsp.Raw_tokens.raw_token list *)
 type state_after_processing = {
-  contents : string;
-  mutable debug_highlight : bool;
+  notify_back : Linol_lwt.Jsonrpc2.notify_back option ref;
+  contents : string Lwt_react.signal;
+  set_contents : string -> unit;
+  debug_highlight_signal : bool Lwt_react.signal;
+  set_debug_highlight : bool -> unit;
+  diagnostics : Lsp.Types.Diagnostic.t list Lwt_react.signal;
 }
 
-let iter_tokens st : 'a list =
-  let lexbuf = Lexing.from_string ~with_positions:true st.contents in
+let iter_tokens (contents : string) : 'a list =
+  let lexbuf = Lexing.from_string ~with_positions:true contents in
   Bincaml_lsp.Raw_tokens.extract_all_tokens lexbuf |> Iter.to_list
-
-let process_some_input_file (contents : string) : state_after_processing =
-  { contents; debug_highlight = false }
 
 let to_diagnostic (x : Bincaml_lsp.Raw_tokens.token_with_pos) :
     Lsp.Types.Diagnostic.t =
@@ -41,6 +42,33 @@ let to_diagnostic (x : Bincaml_lsp.Raw_tokens.token_with_pos) :
   let range = Lsp.Types.Range.create ~start ~end_ in
   let str = x.str in
   Lsp.Types.Diagnostic.create ~message:(`String str) ~range ()
+
+let new_state (contents : string) : state_after_processing =
+  let contents, set_contents = Lwt_react.S.create contents in
+  let debug_highlight_signal, set_debug_highlight = Lwt_react.S.create false in
+  let debug_highlight_signal =
+    Lwt_react.S.map
+      (fun x ->
+        Logs.app (fun m -> m "debug highlight set");
+        x)
+      debug_highlight_signal
+  in
+  let diagnostics =
+    Lwt_react.S.l2
+      (function
+        | false -> Fun.const []
+        | true -> Fun.compose (List.map to_diagnostic) iter_tokens)
+      debug_highlight_signal contents
+  in
+  {
+    contents;
+    set_contents;
+    debug_highlight_signal;
+    set_debug_highlight;
+    diagnostics;
+    (* diagnostics_notifier = Lwt_react.E.never; *)
+    notify_back = ref None;
+  }
 
 (* Lsp server class
 
@@ -73,8 +101,15 @@ class lsp_server =
     *)
     method private _on_doc ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
         (uri : Lsp.Types.DocumentUri.t) (contents : string) =
-      let new_state = process_some_input_file contents in
-      Hashtbl.replace buffers uri new_state;
+      let st =
+        match Hashtbl.find_opt buffers uri with
+        | Some st ->
+            Logs.app (fun m -> m "setting new contents");
+            st.set_contents contents;
+            st
+        | None -> new_state contents
+      in
+      Hashtbl.replace buffers uri st;
       Lwt.return ()
 
     (* We now override the [on_notify_doc_did_open] method that will be called
@@ -113,23 +148,21 @@ class lsp_server =
     method! config_code_action_provider = `Bool true
 
     method! on_req_execute_command ~notify_back ~id ~workDoneToken cmd args =
+      let open Lwt.Infix in
       Logs.app (fun m -> m "execute");
       match (cmd, args) with
       | "toggle-highlight", Some [ uri ] ->
           let uri = Linol_lsp.Lsp.Types.DocumentUri.t_of_yojson uri in
-          let st = self#get uri in
-          st.debug_highlight <- not st.debug_highlight;
-
           notify_back#set_uri uri;
-          let open Lwt.Syntax in
-          let* diags =
-            if st.debug_highlight then
-              iter_tokens (self#get uri)
-              |> Lwt_list.map_p (fun x -> x |> to_diagnostic |> Lwt.return)
-            else Lwt.return []
+          let st = self#get uri in
+          st.notify_back := Some notify_back;
+          let resp =
+            st.diagnostics |> Lwt_react.S.changes |> Lwt_react.E.next
+            >>= notify_back#send_diagnostic
+            >|= Fun.const Yojson.Safe.(`Null)
           in
-          let+ () = notify_back#send_diagnostic diags in
-          Yojson.Safe.(`Null)
+          st.set_debug_highlight (not (React.S.value st.debug_highlight_signal));
+          resp
       | _ ->
           super#on_req_execute_command ~notify_back ~id ~workDoneToken cmd args
 
@@ -148,7 +181,7 @@ class lsp_server =
    and runs it as a task. *)
 let run () =
   Logs.set_level (Some Logs.Info);
-  Logs.set_reporter (Bincaml_lsp.Logs.file_reporter ());
+  Logs.set_reporter (Bincaml_lsp.Lsp_logs.file_reporter ());
   (* Logs.set_reporter (Bincaml_lsp.Logs.lwt_reporter ()); *)
   Logs.info (fun m -> m "bincaml_lsp starting");
   Logs.app (fun m -> m "asd2");

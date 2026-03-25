@@ -169,4 +169,5 @@ let next_token (buf : Lexing.lexbuf) () : token_with_pos =
 
 let extract_all_tokens buf =
   Iter.forever (next_token buf)
-  |> Iter.take_while (fun x -> x.token != BasilIR.ParBasilIR.TOK_EOF)
+  |> Iter.take_while (fun x ->
+    x.token != BasilIR.ParBasilIR.TOK_EOF)
