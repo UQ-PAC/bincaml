@@ -3,6 +3,11 @@ open Containers
 open Expr
 open Stmt
 
+(*
+type 'var sigma = { rhs : 'var; lhs : (ID.t * 'var) list }
+[@@deriving eq, ord, show]
+*)
+
 type 'var phi = { lhs : 'var; rhs : (ID.t * 'var) list }
 [@@deriving eq, ord, show]
 (** a phi node representing the join of incoming edges assigned to a lhs
@@ -32,28 +37,32 @@ let pretty_phi show_lvar show_var v =
         | bid, v -> (text @@ ID.to_string bid) ^ text " -> " ^ show_var v)
       v.rhs
   in
-  lhs ^ text " := phi" ^ (bracket "(" (fill (text "," ^ newline) rhs)) ")"
+  lhs ^ text " := phi"
+  ^ (bracket "(" (nest 2 (fill (text "," ^ newline) rhs))) ")"
+
+let show_phi show_var =
+  pretty_phi show_var show_var %> Containers_pp.Pretty.to_string ~width:80
 
 let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
   Trace_core.with_span ~__FILE__ ~__LINE__ "pretty-block" @@ fun _ ->
   let open Containers_pp in
   let open Containers_pp.Infix in
+  let bracket' ~n l d r : t = group (text l ^ nest n (nl ^ d) ^ nl ^ text r) in
   let phi =
     match b.phis with
-    | [] -> []
+    | [] -> nil
     | o ->
         let phi = List.map (pretty_phi show_lvar show_var) o in
-        [ bracket "(" (fill (text "," ^ newline) phi) ")" ]
+        bracket' ~n:2 "("
+          (append_l ~sep:(text "," ^ nl) (List.map group phi))
+          ") "
   in
   let stmts =
     Vector.to_list b.stmts
     |> List.map (Stmt.pretty show_lvar show_var show_expr)
   in
-  let stmts = phi @ stmts @ terminator |> List.map (fun i -> i ^ text ";") in
-  let bracket' l d r : t =
-    group (text l ^ nest (String.length l) d ^ nl ^ text r)
-  in
-  let stmts = bracket' "[" (nest 2 @@ nl ^ append_nl stmts) "]" in
+  let stmts = stmts @ terminator |> List.map (fun i -> i ^ text ";") in
+  let stmts = phi ^ bracket' ~n:2 "[" (append_nl stmts) "]" in
   let name =
     Option.map
       (fun id -> text "block " ^ text (ID.to_string id) ^ text " ")
@@ -93,6 +102,14 @@ let map_fold_forwards ~(phi : 'acc -> 'v phi list -> 'acc * 'v phi list)
 
 let map ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
   { stmts = Vector.map f b.stmts; phis = phi b.phis }
+
+let flat_map ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
+  {
+    stmts =
+      Vector.to_iter b.stmts |> Iter.flat_map f |> Vector.of_iter
+      |> Vector.freeze;
+    phis = phi b.phis;
+  }
 
 let foldi_backwards ~(f : 'acc -> int * ('v, 'v, 'e) Stmt.t -> 'acc)
     ~(phi : 'acc -> 'v phi list -> 'acc) ~(init : 'a) (b : ('v, 'e) t) : 'acc =

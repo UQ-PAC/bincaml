@@ -7,9 +7,11 @@ module type Lattice = sig
   include ORD_TYPE
   include PRETTY with type t := t
 
+  val top : t
   val bottom : t
   val join : t -> t -> t
   val equal : t -> t -> bool
+  val leq : t -> t -> bool
   val widening : t -> t -> t
 end
 
@@ -80,6 +82,13 @@ module type StateAbstraction = sig
   val to_iter : t -> (key_t * val_t) Iter.t
 end
 
+module type StateDomain = sig
+  include StateAbstraction
+
+  val init : Program.proc -> t
+  val transfer_state : (Var.t -> V.t) -> Program.stmt -> (Var.t * V.t) Iter.t
+end
+
 module type Domain = sig
   include Lattice
 
@@ -124,6 +133,14 @@ struct
   let map f a = bind (fun x -> V (f x)) a
   let map2 f a b = bind2 (fun x y -> V (f x y)) a b
   let join a b = match (a, b) with Top, _ -> Top | _, Top -> Top | _ -> Bot
+
+  let leq a b =
+    match (a, b) with
+    | a, b when equal a b -> true
+    | Bot, _ | _, Top -> true
+    | _, Bot | Top, _ -> false
+    | _ -> false
+
   let widening a b = join a b
 end
 
@@ -140,6 +157,16 @@ module LiftLattice (L : Lattice) : Lattice = struct
     | Bot, _ -> Bot
     | _, Bot -> Bot
     | V a, V b -> V (L.join a b)
+
+  let leq a b =
+    match (a, b) with
+    | Bot, _ -> true
+    | _, Bot -> false
+    | _, Top -> true
+    | Top, _ -> false
+    | V a, V b -> L.leq a b
+
+  let top = Top
 end
 
 (*

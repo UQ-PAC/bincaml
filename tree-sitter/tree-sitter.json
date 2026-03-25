@@ -3,14 +3,14 @@
   "grammars": [
     {
       "name": "basilir",
-      "camelcase": "BasilIR",
+      "camelcase": "basilir",
       "title": "Basil IR",
       "scope": "source.basilir",
+      "path": ".",
       "file-types": [
         "il"
       ],
-      "injection-regex": "^basilir$",
-      "class-name": "TreeSitterBasilir"
+    "highlights": "./queries/highlights.scm"
     }
   ],
   "metadata": {

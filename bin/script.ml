@@ -22,34 +22,67 @@ let print_blocks_topo_fwd chan p =
     ids_rev
 
 let assert_atoms n args =
-  assert (List.length args = n);
+  if List.length args < n then
+    raise
+      (Common.ReplError
+         {
+           msg =
+             Printf.sprintf "expected %d args but got %d" n (List.length args);
+           cmd = "unk";
+           __FILE__;
+           __FUNCTION__;
+           __LINE__;
+         });
   List.map (function `Atom n -> n | _ -> failwith "expected atom") args
 
-type dsl_st = { prog : Program.t option; line : int }
+type dsl_st = { load_st : Loader.Loadir.load_st option; line : int }
 
-let init_st = { prog = None; line = 0 }
-let get_prog s = Option.get_exn_or "no program loaded" s.prog
+let init_st = { load_st = None; line = 0 }
+
+let get_prog s =
+  s.load_st
+  |> Option.map (fun (lst : Loader.Loadir.load_st) -> lst.prog)
+  |> Option.get_exn_or "no program loaded"
+
+let set_prog s prog =
+  match prog with
+  | Some prog ->
+      {
+        s with
+        load_st =
+          s.load_st
+          |> Option.map (fun (lst : Loader.Loadir.load_st) -> { lst with prog });
+      }
+  | _ -> s
 
 let of_cmd st (e : Containers.Sexp.t) =
+  let full_cmd = Sexp.to_string e in
   let cmd, args =
     match e with
     | `List [] -> ("skip", [])
     | `List (`Atom cmd :: n) -> (cmd, n)
-    | _ -> failwith "bad cmd structure"
+    | _ -> failwith @@ "bad cmd structure " ^ full_cmd
   in
   Trace_core.with_span ~__FILE__ ~__LINE__ ("runcmd::" ^ cmd) (fun _ ->
       match cmd with
       | "skip" -> st
       | "load-il" -> (
           try
-            let fname = List.hd (assert_atoms 1 args) in
-            let p = Loader.Loadir.ast_of_fname fname in
-            { st with prog = Some p.prog }
+            let args = assert_atoms (List.length args) args in
+            let st =
+              List.fold_left
+                (fun acc fname ->
+                  let st = Loader.Loadir.ast_of_fname ?lst:acc.load_st fname in
+                  { acc with load_st = Some st })
+                { st with load_st = None } args
+            in
+            st
           with
           | (Loader.Loadir.ILBParseError _ | Loader.Loadir.LoadError _) as e ->
             let msg = Loader.Loadir.show_ilbparseerror e in
             raise
-              (Common.ReplError { msg; __FILE__; __LINE__; __FUNCTION__; cmd }))
+              (Common.ReplError
+                 { msg; __FILE__; __LINE__; __FUNCTION__; cmd = full_cmd }))
       | "list-procs" ->
           let open Program in
           ID.Map.iter
@@ -117,10 +150,14 @@ let of_cmd st (e : Containers.Sexp.t) =
           let ofile = List.hd @@ assert_atoms 1 args in
           CCIO.with_out ofile (fun c -> Program.pretty_to_chan c (get_prog st));
           st
+      | "dump-boogie" ->
+          let ofile = List.hd @@ assert_atoms 1 args in
+          CCIO.with_out ofile (fun c ->
+              Backends.Boogie.pretty_to_chan c (get_prog st));
+          st
       | "interp-out" ->
           let ofile = List.hd @@ assert_atoms 1 args in
           let prog = get_prog st in
-          let prog = Transforms.Spec_modifies.set_modsets prog in
           let main =
             ID.Map.find (Option.get_exn_or "no" prog.entry_proc) prog.procs
           in
@@ -135,8 +172,9 @@ let of_cmd st (e : Containers.Sexp.t) =
                         k ^ "=" ^ Lang.Ops.AllOps.to_string v))
                 in
                 params ^ "\n" ^ state
-            | Error st ->
-                "ERROR STATE " ^ Lang.Interp.IState.show ~show_stack:true st
+            | Error (st, msg) ->
+                "ERROR " ^ msg ^ " after state "
+                ^ Lang.Interp.IState.show ~show_stack:true st
           in
           CCIO.with_out ofile (fun c -> output_string c ist);
           st
@@ -146,14 +184,14 @@ let of_cmd st (e : Containers.Sexp.t) =
           let prog =
             Some (Bincaml.Passes.PassManager.run_batch ba (get_prog st))
           in
-          { st with prog }
+          set_prog st prog
       | "run-transform" ->
           let args = assert_atoms 1 args in
           let ba = Bincaml.Passes.PassManager.batch_of_list args in
           let prog =
             Some (Bincaml.Passes.PassManager.run_batch ba (get_prog st))
           in
-          { st with prog }
+          set_prog st prog
       | "list-passes" ->
           Bincaml.Passes.PassManager.print_passes
           |> Containers_pp.Pretty.to_string ~width:80

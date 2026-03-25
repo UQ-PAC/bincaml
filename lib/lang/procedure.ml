@@ -65,6 +65,8 @@ module RevWTO = Graph.WeakTopological.Make (RevG)
 type ('v, 'e) proc_spec = {
   requires : BasilExpr.t list;
   ensures : BasilExpr.t list;
+  rely : BasilExpr.t list;
+  guarantee : BasilExpr.t list;
   captures_globs : 'v list;
   modifies_globs : 'v list;
 }
@@ -104,8 +106,15 @@ module PG : sig
     ?modifies_globs:'a list ->
     ?requires:BasilExpr.t list ->
     ?ensures:BasilExpr.t list ->
+    ?rely:BasilExpr.t list ->
+    ?guarantee:BasilExpr.t list ->
+    ?attrib:BasilExpr.t Attrib.attrib_map ->
     unit ->
     ('a, 'b) t
+
+  val attrib : ('a, 'b) t -> BasilExpr.t Attrib.attrib_map
+  val set_attrib : ('a, 'b) t -> BasilExpr.t Attrib.t -> string -> ('a, 'b) t
+  val set_attribs : ('a, 'b) t -> BasilExpr.t Attrib.attrib_map -> ('a, 'b) t
 
   val set_specification : ('a, 'b) t -> ('a, 'c) proc_spec -> ('a, 'c) t
   (** set the procedure's specification/contract *)
@@ -153,8 +162,12 @@ end = struct
     local_ids : ID.generator;
     block_ids : ID.generator;
     specification : ('v, 'e) proc_spec;
+    attrib : BasilExpr.t Attrib.attrib_map;
   }
 
+  let attrib p = p.attrib
+  let set_attrib p k v = { p with attrib = StringMap.add v k p.attrib }
+  let set_attribs p attrib = { p with attrib }
   let set_specification p specification = { p with specification }
   let specification p = p.specification
   let id p = p.id
@@ -203,17 +216,31 @@ end = struct
 
   let create id ?(is_stub = false) ?(formal_in_params = StringMap.empty)
       ?(formal_out_params = StringMap.empty) ?(captures_globs = [])
-      ?(modifies_globs = []) ?(requires = []) ?(ensures = []) () =
-    let specification = { captures_globs; modifies_globs; requires; ensures } in
+      ?(modifies_globs = []) ?(requires = []) ?(ensures = []) ?(rely = [])
+      ?(guarantee = []) ?(attrib = Attrib.empty) () =
+    let specification =
+      { captures_globs; modifies_globs; requires; ensures; rely; guarantee }
+    in
+    let local_ids = ID.make_gen () in
+    let block_ids = ID.make_gen () in
+    StringMap.iter (fun k v -> ignore @@ local_ids.decl_exn k) formal_in_params;
+    StringMap.iter (fun k v -> ignore @@ local_ids.decl_exn k) formal_out_params;
+    let locals = Var.Decls.empty () in
+    Var.Decls.add_iter locals
+      (Iter.append
+         (StringMap.to_iter formal_in_params)
+         (StringMap.to_iter formal_out_params));
+
     let graph = if is_stub then None else Some empty_graph in
     {
       id;
+      attrib;
       formal_in_params;
       formal_out_params;
       graph;
-      locals = Var.Decls.empty ();
-      local_ids = ID.make_gen ();
-      block_ids = ID.make_gen ();
+      locals;
+      local_ids;
+      block_ids;
       specification;
       topo_fwd =
         lazy
@@ -337,9 +364,11 @@ let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
 let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
   update_block p id block
 
+let lookup_local_decl p v = Var.Decls.find (local_decls p) v
+
 let decl_local p v =
   let _ = (local_ids p).decl_or_get (Var.name v) in
-  Var.Decls.add (local_decls p) v;
+  Var.Decls.replace (local_decls p) (Var.name v) v;
   v
 
 let fresh_var p ?(pure = true) ?name typ : Var.t =
@@ -347,7 +376,7 @@ let fresh_var p ?(pure = true) ?name typ : Var.t =
   let name = Option.get_or ~default:"v" name in
   let n = ID.name @@ (local_ids p).fresh ~name () in
   let v = Var.create n typ ~pure in
-  Var.Decls.add (local_decls p) v;
+  Var.Decls.replace (local_decls p) (Var.name v) v;
   v
 
 let blocks_to_list p =
@@ -360,21 +389,35 @@ let blocks_to_list p =
   |> Option.map (fun g -> G.fold_edges_e collect_edge g [])
   |> Option.get_or ~default:[]
 
+let iter_blocks p =
+  let iter visit =
+    let collect_edge edge =
+      let id = G.V.label (G.E.src edge) in
+      let edge = G.E.label edge in
+      match (id, edge) with
+      | Vert.(Begin id), Edge.(Block b) -> visit (id, b)
+      | _ -> ()
+    in
+    graph p |> Option.iter (fun g -> G.iter_edges_e collect_edge g)
+  in
+  Iter.from_iter (fun f -> iter f)
+
 (** Fold over blocks in forwards weak topological order (boundocle). The order
     is *not* stable *)
-let fold_blocks_topo_fwd (f : 'a -> ID.t -> Edge.block -> 'a) init p =
+let fold_blocks_topo_fwd_headers
+    (f : 'a -> [ `Vert | `Header ] -> ID.t -> Edge.block -> 'a) init p =
   let open Graph.WeakTopological in
-  let f acc e =
+  let f acc v e =
     match e with
     | Vert.Begin id ->
-        Option.map (f acc id) (get_block p id) |> Option.get_or ~default:acc
+        Option.map (f acc v id) (get_block p id) |> Option.get_or ~default:acc
     | _ -> acc
   in
   let rec ff acc e =
     match e with
-    | Vertex a -> f acc a
+    | Vertex a -> f acc `Vert a
     | Component (a, e) ->
-        let acc = f acc a in
+        let acc = f acc `Header a in
         Graph.WeakTopological.fold_left ff acc e
   in
   if graph p |> Option.is_some then
@@ -382,27 +425,47 @@ let fold_blocks_topo_fwd (f : 'a -> ID.t -> Edge.block -> 'a) init p =
     Graph.WeakTopological.fold_left ff init topo
   else init
 
+(** Fold over blocks in forwards weak topological order (boundocle). The order
+    is *not* stable *)
+let fold_blocks_topo_fwd (f : 'a -> ID.t -> Edge.block -> 'a) init p =
+  fold_blocks_topo_fwd_headers (fun acc i -> f acc) init p
+
 (** Fold over blocks in reverse weak topological order (boundocle). The order is
     *not* stable *)
-let fold_blocks_topo_rev (f : 'a -> ID.t -> Edge.block -> 'a) init p =
+let fold_blocks_topo_rev_headers
+    (f : 'a -> [ `Vert | `Header ] -> ID.t -> Edge.block -> 'a) init p =
   let open Graph.WeakTopological in
-  let f acc e =
+  let f acc h e =
     match e with
     | Vert.Begin id ->
-        Option.map (f acc id) (get_block p id) |> Option.get_or ~default:acc
+        Option.map (f acc h id) (get_block p id) |> Option.get_or ~default:acc
     | _ -> acc
   in
   let rec ff acc e =
     match e with
-    | Vertex a -> f acc a
+    | Vertex a -> f acc `Vert a
     | Component (a, e) ->
         let acc = Graph.WeakTopological.fold_left ff acc e in
-        f acc a
+        f acc `Header a
   in
   if graph p |> Option.is_some then
     let topo = topo_rev p in
     Graph.WeakTopological.fold_left ff init topo
   else init
+
+(** Fold over blocks in forwards weak topological order (boundocle). The order
+    is *not* stable *)
+let fold_blocks_topo_rev (f : 'a -> ID.t -> Edge.block -> 'a) init p =
+  fold_blocks_topo_rev_headers (fun acc i -> f acc) init p
+
+let map_blocks_nondet f p =
+  iter_blocks p
+  |> Iter.fold
+       (fun (p : ('a, 'b) t) (id, b) ->
+         let updated = f (id, b) in
+         if not @@ Equal.physical updated b then update_block p id updated
+         else p)
+       p
 
 let map_blocks_topo_fwd f p =
   fold_blocks_topo_fwd
@@ -437,8 +500,60 @@ let blocks_pred p i =
 let iter_blocks_topo_fwd p =
   Iter.from_iter (fun f -> fold_blocks_topo_fwd (fun acc a b -> f (a, b)) () p)
 
+let iter_blocks_topo_fwd_headers p =
+  Iter.from_iter (fun f ->
+      fold_blocks_topo_fwd_headers (fun acc h a b -> f (a, h, b)) () p)
+
+let iter_blocks_topo_rev_headers p =
+  Iter.from_iter (fun f ->
+      fold_blocks_topo_rev_headers (fun acc h a b -> f (a, h, b)) () p)
+
+let iter_stmt_topo_fwd p =
+  iter_blocks_topo_fwd p |> Iter.flat_map (fun (id, b) -> Block.stmts_iter b)
+
 let iter_blocks_topo_rev p =
   Iter.from_iter (fun f -> fold_blocks_topo_rev (fun acc a b -> f (a, b)) () p)
+
+let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
+  let open Containers_pp in
+  let ml f v = if List.is_empty v then [] else [ f v ] in
+  nest 2
+    (newline
+    ^ append_nl
+        (ml
+           (fun x ->
+             text "modifies "
+             ^ nest 2 (fill_map (text "," ^ newline) show_var x))
+           p.modifies_globs
+        @ ml
+            (fun x ->
+              text "captures "
+              ^ nest 2 (fill_map (text "," ^ newline) show_var x))
+            p.captures_globs
+        @ ml
+            (fun x ->
+              append_l
+                ~sep:newline
+                (List.map (fun v -> text "requires " ^ show_expr v) x))
+            p.requires
+        @ ml
+            (fun x ->
+              append_l
+                ~sep:newline
+                (List.map (fun v -> text "ensures " ^ show_expr v) x))
+            p.ensures
+        @ ml
+            (fun x ->
+              append_l
+                ~sep:newline
+                (List.map (fun v -> text "rely " ^ show_expr v) x))
+            p.rely
+        @ ml
+            (fun x ->
+              append_l
+                ~sep:newline
+                (List.map (fun v -> text "guarantee " ^ show_expr v) x))
+            p.guarantee))
 
 let pretty show_lvar show_var show_expr p =
   Trace_core.with_span ~__FILE__ ~__LINE__ "pretty-proc" @@ fun _ ->
@@ -455,8 +570,11 @@ let pretty show_lvar show_var show_expr p =
         (fill
            (newline ^ text " -> ")
            [ params (formal_in_params p); params (formal_out_params p) ])
+    ^ text " "
+    ^ Attrib.attrib_pretty show_expr (`Assoc (attrib p))
   in
   let return_stmt = text "return" in
+  let spec = pretty_spec show_var show_expr (specification p) in
   let pretty_block graph block_id block =
     let succ = G.succ_e graph (Vert.End block_id) in
     let succ =
@@ -515,4 +633,4 @@ let pretty show_lvar show_var show_expr p =
             (newline ^ text "]")
     | None -> nil
   in
-  header ^ blocks
+  header ^ spec ^ newline ^ blocks

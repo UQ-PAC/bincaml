@@ -50,12 +50,75 @@ module PassManager = struct
       doc = "runs truthiness analysis on dataflow graph and prints results";
     }
 
-  let dfg_wrapped_int =
+  let dfg_ival_wint_product =
     {
-      name = "demo-dfg-wrapped-int-analysis";
-      apply = DFGAnalysis (module Analysis.Wrapped_intervals.Analysis);
+      name = "demoprint-dfg-ivalbits-product";
+      apply =
+        DFGAnalysis (module Analysis.Tnum_wint_reduced_product.DFGAnalysis);
+      doc = "runs interavl analysis on dataflow graph and prints results";
+    }
+
+  let demo_ival_wint_cfg =
+    {
+      name = "demo-ivalwint-product-cfg";
+      apply =
+        Proc
+          (fun p ->
+            ignore @@ Analysis.Wrapped_intervals.analyse p;
+            (*Analysis.Wrapped_intervals.Analysis.print_dot
+              (Format.of_chan stdout) p r;*)
+            p);
       doc =
-        "Runs wrapped interval analysis on dataflow graph and prints results";
+        "Runs wrapped interval analysis on control flow graph and prints \
+         results";
+    }
+
+  let demo_ival_wint_dfg =
+    {
+      name = "demo-ivalwint-product-dfg";
+      apply =
+        Proc
+          (fun p ->
+            let _ = Analysis.Wrapped_intervals.DFGAnalysis.flow_insensitive p in
+            (*Analysis.Wrapped_intervals.Analysis.print_dot
+              (Format.of_chan stdout) p r;*)
+            p);
+      doc =
+        "Runs wrapped interval analysis on control flow graph and prints \
+         results";
+    }
+
+  let cfg_wrapped_int =
+    {
+      name = "demo-cfg-wrapped-int-analysis";
+      apply =
+        Proc
+          (fun p ->
+            let _ =
+              Trace_core.with_span ~__FILE__ ~__LINE__ "dfg_flow_sensitive"
+              @@ fun _ -> Analysis.Wrapped_intervals.analyse p
+            in
+            (*Analysis.Wrapped_intervals.Analysis.print_dot
+              (Format.of_chan stdout) p r;*)
+            p);
+      doc =
+        "Runs wrapped interval analysis on control flow graph and prints \
+         results";
+    }
+
+  let cfg_tnum_wint_reduced =
+    {
+      name = "demo-cfg-tnum-wint-reduced-analysis";
+      apply =
+        Proc
+          (fun p ->
+            let r = Analysis.Tnum_wint_reduced_product.analyse p in
+            Analysis.Tnum_wint_reduced_product.Analysis.print_dot
+              (Format.of_chan stdout) p r;
+            p);
+      doc =
+        "Runs known bits and wrapped interval reduced product analysis on \
+         control flow graph and prints results";
     }
 
   let remove_unused =
@@ -76,10 +139,17 @@ module PassManager = struct
          definitions from parameters";
     }
 
+  let cleanup_cfg =
+    {
+      name = "remove-unreachable-block";
+      apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
+      doc = "Remove blocks unreachable from entry";
+    }
+
   let full_ssa =
     {
       name = "ssa";
-      apply = Batch [ sparams; read_uninit true; sssa; remove_unused ];
+      apply = Batch [ cleanup_cfg; sparams; sssa; remove_unused ];
       doc =
         "Complete SSA pipeline for early IR (global register parameterless \
          form)";
@@ -94,8 +164,13 @@ module PassManager = struct
 
   let passes =
     [
+      cleanup_cfg;
       dfg_bool;
-      dfg_wrapped_int;
+      dfg_ival_wint_product;
+      demo_ival_wint_cfg;
+      demo_ival_wint_dfg;
+      cfg_wrapped_int;
+      cfg_tnum_wint_reduced;
       sparams;
       read_uninit false;
       read_uninit true;
@@ -103,13 +178,15 @@ module PassManager = struct
       full_ssa;
       type_check;
       {
-        name = "remove-unreachable-block";
-        apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
-        doc = "Remove blocks unreachable from entry";
+        name = "cf-expressions-smtcheck";
+        apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;
+        doc =
+          "Perform intra-expression simplifications and constant folding for \
+           whole program and write smt log of rewrites to a file.";
       };
       {
         name = "cf-expressions";
-        apply = Proc Transforms.Cf_tx.simplify_proc_exprs;
+        apply = Proc Transforms.Cf_tx.simplify_proc_exprs_default;
         doc =
           "Perform intra-expression simplifications and constant folding for \
            whole program";
@@ -124,9 +201,17 @@ module PassManager = struct
       {
         name = "ide-live";
         apply = Prog Transforms.Ide.transform;
-        doc = "broken ide test analysis";
+        doc =
+          "Write the results of an ide based live variable analysis to .dot \
+           files";
       };
       remove_unused;
+      {
+        name = "lambda-lifting";
+        apply =
+          Prog (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
+        doc = "Replaces captured global variables with explicit parameters";
+      };
     ]
 
   let print_passes =
@@ -157,7 +242,11 @@ module PassManager = struct
     |> fill (newline ^ newline)
 
   let batch_of_list pass =
-    List.map (fun n -> List.find (fun t -> String.equal t.name n) passes) pass
+    List.map
+      (fun n ->
+        Option.get_exn_or ("not found: " ^ n)
+        @@ List.find_opt (fun t -> String.equal t.name n) passes)
+      pass
 
   let rec run_transform (p : Program.t) (tf : pass) =
     Trace_core.with_span ~__FILE__ ~__LINE__ ("transform-prog::" ^ tf.name)
@@ -169,15 +258,21 @@ module PassManager = struct
         ID.Map.to_iter p.procs
         |> Iter.filter (fun (_, p) -> Procedure.graph p |> Option.is_some)
         |> Iter.iter (fun (pn, p) ->
-            let g = Analysis.Dataflow_graph.create p in
-            let r =
+            (*let r =
               D.analyse ~widen_set:Graph.ChaoticIteration.FromWto
                 ~delay_widen:10 g
-            in
+            in*)
+            let r = D.flow_insensitive p in
             print_endline (D.D.name ^ " :: " ^ ID.to_string pn);
             print_endline
               Containers_pp.(
-                Pretty.to_string ~width:80 @@ nest 4 (D.D.pretty r)));
+                Pretty.to_string ~width:80 @@ nest 4 (D.D.pretty r));
+            (*
+            print_endline "insens";
+            print_endline
+              Containers_pp.(
+                Pretty.to_string ~width:80 @@ nest 4 (D.D.pretty r2)) *)
+            ());
         p
     | ProcCheck app ->
         let _ =

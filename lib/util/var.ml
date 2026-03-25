@@ -33,6 +33,16 @@ include (
     let create name ?(pure = true) ?(scope = Local) typ =
       H.make { name; typ; pure; scope }
 
+    let copy ?name ?pure ?scope ?typ (v : t) =
+      let v = Fix.HashCons.data v in
+      H.make
+        {
+          name = Option.get_or ~default:v.name name;
+          typ = Option.get_or ~default:v.typ typ;
+          pure = Option.get_or ~default:v.pure pure;
+          scope = Option.get_or ~default:v.scope scope;
+        }
+
     let to_int (v : V.t Fix.HashCons.cell) = v.id
 
     let show v =
@@ -68,6 +78,14 @@ include (
       val typ : t -> Types.t
       val pure : t -> bool
       val hash : t -> int
+
+      val copy :
+        ?name:string ->
+        ?pure:bool ->
+        ?scope:declaration_scope ->
+        ?typ:Types.t ->
+        t ->
+        t
     end)
 
 let is_local (v : t) = equal_declaration_scope (scope v) Local
@@ -78,8 +96,8 @@ let to_string_il_lvar v =
   match scope v with Local -> "var " ^ to_string v | Global -> to_string v
 
 let to_decl_string_il v =
-  let decl_n = match typ v with Types.Map _ -> "memory" | _ -> "var" in
-  decl_n ^ " " ^ to_string v
+  let modifiers = if not (pure v) then "observable " else "" in
+  "var " ^ modifiers ^ to_string v
 
 module Decls = struct
   include Hashtbl
@@ -89,11 +107,12 @@ module Decls = struct
   let find_opt m name = Hashtbl.find_opt m name
   let empty () : 'v t = Hashtbl.create 30
 
-  let add m (v : 'v) =
-    let d = find_opt m (name v) in
+  (*let add m vn v =
+    let d = find_opt m (name vn) in
     match d with
     | Some e when equal e v -> ()
     | Some _ ->
         failwith @@ "Already declared diff var with that name: " ^ name v
-    | None -> Hashtbl.add m (name v) v
+    | None -> Hashtbl.add m (name vn) v
+    *)
 end

@@ -19,6 +19,7 @@ jobs:
           - macos-latest
         compiler_version:
           - 5.3.0
+          - 5.4.0
 
     runs-on: ${{ matrix.os }}
 
@@ -44,6 +45,7 @@ jobs:
           - ubuntu-latest
         compiler_version:
           - 5.3.0
+          - 5.4.0
 
     runs-on: ${{ matrix.os }}
 
@@ -70,7 +72,7 @@ jobs:
       - name: Set-up OCaml
         uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: 5.3.0
+          ocaml-compiler: 5.4.0
       - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
       - uses: ocaml/setup-ocaml/lint-doc@v3
 
@@ -82,7 +84,7 @@ jobs:
       - name: Set-up OCaml
         uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: 5.3.0
+          ocaml-compiler: 5.4.0
       - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
       - run: opam install ocamlformat
       - uses: ocaml/setup-ocaml/lint-fmt@v3
@@ -95,6 +97,6 @@ jobs:
       - name: Set-up OCaml
         uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: 5.3.0
+          ocaml-compiler: 5.4.0
       - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
       - uses: ocaml/setup-ocaml/lint-opam@v3

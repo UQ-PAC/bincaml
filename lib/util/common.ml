@@ -9,6 +9,7 @@ module StringMap = Map.Make (String)
 module IntMap = Map.Make (Int)
 module StringSet = Set.Make (String)
 module IntSet = Set.Make (Int)
+module Worklist = Worklist
 
 (* Byte_slice extension for blitting to Bytes *)
 
@@ -17,6 +18,12 @@ module Byte_slice = struct
 
   let blit_to src dest dest_pos =
     Bytes.blit src.bs src.off dest dest_pos src.len
+end
+
+module Z = struct
+  include Z
+
+  let pp = pp_print
 end
 
 include Mtypes
@@ -36,3 +43,10 @@ module VarSet = Set.Make (Var)
 
 module Bitvec = Bitvec
 module PrimInt = Zint
+
+let disable_backtrace_in f =
+  let old = Printexc.backtrace_status () in
+  Printexc.record_backtrace false;
+  let r = f () in
+  Printexc.record_backtrace old;
+  r

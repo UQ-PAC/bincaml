@@ -2,3 +2,17 @@
 (dump-il "before.il")
 (load-il "before.il")
 (dump-il "after.il")
+(load-il "../../examples/x-output.il")
+(dump-il "before2.il")
+(load-il "before2.il")
+(dump-il "after2.il")
+
+(load-il "memassign.il")
+(dump-il "beforemem.il")
+(load-il "beforemem.il")
+(dump-il "aftermem.il")
+
+(load-il "ptrrec1.il")
+(dump-il "ptrrec2.il")
+(load-il "ptrrec2.il")
+(dump-il "ptrrec3.il")

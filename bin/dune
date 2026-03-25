@@ -9,6 +9,7 @@
   bincaml.util
   bincaml.loader
   bincaml.transforms
+  bincaml.backends
   bincaml
   cmdliner
   iter

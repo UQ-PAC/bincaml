@@ -11,11 +11,11 @@ module EvalExpr (V : ValueAbstraction) = struct
   let alg read e =
     let open Expr.AbstractExpr in
     match e with
-    | RVar v -> read v
-    | Constant c -> V.eval_const c
-    | UnaryExpr (op, e) -> V.eval_unop op e
-    | BinaryExpr (op, a, b) -> V.eval_binop op a b
-    | ApplyIntrin (op, es) -> V.eval_intrin op es
+    | RVar { id } -> read id
+    | Constant { const } -> V.eval_const const
+    | UnaryExpr { op; arg } -> V.eval_unop op arg
+    | BinaryExpr { op; arg1 = a; arg2 = b } -> V.eval_binop op a b
+    | ApplyIntrin { op; args } -> V.eval_intrin op args
     | _ -> failwith "unsupported"
 
   let eval read expr = V.E.cata (alg read) expr
@@ -29,12 +29,14 @@ module EvalExprWithType (V : TypedValueAbstraction) = struct
     let tt = V.E.type_alg (Expr.AbstractExpr.map snd e) in
     let r =
       match e with
-      | RVar v -> read v
-      | Constant c -> V.eval_const c tt
-      | UnaryExpr (op, e) -> V.eval_unop op e tt
-      | BinaryExpr (op, a, b) -> V.eval_binop op a b tt
-      | ApplyIntrin (op, es) -> V.eval_intrin op es tt
-      | _ -> failwith "unsupported"
+      | RVar { id } -> read id
+      | Constant { const } -> V.eval_const const tt
+      | UnaryExpr { op; arg } -> V.eval_unop op arg tt
+      | BinaryExpr { op; arg1 = a; arg2 = b } -> V.eval_binop op a b tt
+      | ApplyIntrin { op; args } -> V.eval_intrin op args tt
+      | Lambda _ -> failwith ""
+      | Let _ -> failwith ""
+      | ApplyFun { func; args } -> V.top
     in
     (r, tt)
 
@@ -61,11 +63,11 @@ module EvalExprLog (V : TypedValueAbstraction) = struct
           ")"
       in
       match e_pretty with
-      | RVar v -> eval_e ^ text @@ V.E.Var.show v
-      | Constant c -> eval_e ^ text @@ show_const c
-      | UnaryExpr (op, e) -> print (show_unop op) [ e ]
-      | BinaryExpr (op, a, b) -> print (show_binop op) [ a; b ]
-      | ApplyIntrin (op, es) -> print (show_intrin op) es
+      | RVar { id = v } -> eval_e ^ text @@ V.E.Var.show v
+      | Constant { const } -> eval_e ^ text @@ show_const const
+      | UnaryExpr { op; arg = e } -> print (show_unop op) [ e ]
+      | BinaryExpr { op; arg1 = a; arg2 = b } -> print (show_binop op) [ a; b ]
+      | ApplyIntrin { op; args } -> print (show_intrin op) args
       | _ -> failwith "unsupported"
     in
     (pretty, evaled)
@@ -98,77 +100,41 @@ module ValueAbstractionIgnoringTypes (V : ValueAbstraction) = struct
   let eval_intrin op args rt = eval_intrin op (List.map fst args)
 end
 
-module EvalStmt
-    (V : TypedValueAbstraction with module E = Expr.BasilExpr)
-    (S : StateAbstraction with type val_t = V.t with type key_t = V.E.var) =
+module EvalStmt (V : TypedValueAbstraction with module E = Expr.BasilExpr) =
 struct
   type t
 
   module EV = EvalExprWithType (V)
 
-  let stmt_eval_fwd stmt dom =
+  let stmt_eval_fwd read stmt =
     Stmt.map ~f_lvar:id
-      ~f_rvar:(fun v -> S.read v dom)
-      ~f_expr:(EV.eval (fun v -> S.read v dom))
+      ~f_rvar:(fun v -> read v)
+      ~f_expr:(EV.eval (fun v -> read v))
       stmt
 
-  let stmt_eval_rev stmt dom =
-    Stmt.map ~f_lvar:(fun v -> S.read v dom) ~f_rvar:id ~f_expr:id stmt
+  let stmt_eval_rev read stmt =
+    Stmt.map ~f_lvar:(fun v -> read v) ~f_rvar:id ~f_expr:id stmt
 end
 
 let tf_forwards st (read_st : 'a -> Var.t -> 'b) (s : Program.stmt)
     (eval : ('b * Types.t) Expr.BasilExpr.abstract_expr -> 'b) tf_stmt =
   let open Expr in
   let open AbstractExpr in
-  let alg e = match e with RVar e -> (read_st st) e | o -> eval o in
+  let alg e = match e with RVar { id = e } -> (read_st st) e | o -> eval o in
   tf_stmt
   @@ Stmt.map ~f_rvar:(read_st st) ~f_lvar:id
        ~f_expr:(BasilExpr.fold_with_type alg)
        s
 
-module MapState (V : Lattice) = struct
-  include (
-    struct
-      module M = PatriciaTree.MakeMap (Var)
+module MapState (V : Lattice_collections.TopLattice) = struct
+  include
+    Lattice_collections.LatticeMap
+      (struct
+        include Var
 
-      type t = V.t M.t
-
-      let name = V.name ^ "maplattice"
-      let compare a b = M.reflexive_compare V.compare a b
-      let bottom = M.empty
-      let join a b = M.idempotent_union (fun v a b -> V.join a b) a b
-      let equal a b = M.reflexive_equal V.equal a b
-
-      let show m =
-        Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
-        |> Iter.to_string ~sep:", " (fun (k, v) ->
-            Printf.sprintf "%s->%s" (Var.name k) (V.show v))
-
-      let pretty v =
-        let lst = M.to_list v in
-        Containers_pp.(
-          fill
-            (text "," ^ newline)
-            (List.map
-               (fun (k, v) -> textpf "%s->%s" (Var.name k) (V.show v))
-               lst))
-
-      let to_iter m = Iter.from_iter (fun f -> M.iter (fun k v -> f (k, v)) m)
-      let read (v : Var.t) m = M.find_opt v m |> Option.get_or ~default:V.bottom
-      let update k v m = M.add k v m
-      let widening a b = M.idempotent_union (fun v a b -> V.widening a b) a b
-
-      type val_t = V.t
-      type key_t = Var.t
-
-      module V = V
-    end :
-      StateAbstraction with type val_t = V.t and type key_t = Var.t)
-
-  type val_t = V.t
-  type key_t = Var.t
-
-  module V = V
+        let show = name
+      end)
+      (V)
 end
 
 module Forwards (D : Domain) = struct

@@ -24,11 +24,14 @@ let%expect_test "shift_right negative bug" =
   [%expect
     {|
     original:
-    bvnand(bvnot(0x1c6a4ec2b:bv33), bvashr(bvudiv(0x1:bv33, bvor(0x1633f1dbc:bv33, 0x1:bv33)), bvashr(0x3:bv33, 0x5222e27c:bv33)))
+    bvnand(bvnot(0x1c6a4ec2b:bv33),
+     bvashr(bvudiv(0x1:bv33, bvor(0x1633f1dbc:bv33, 0x1:bv33)),
+      bvashr(0x3:bv33, 0x5222e27c:bv33)))
     partial:
     0x1ffffffff:bv33
     eval:
-    Some `Bitvector (0x1ffffffff:bv33) |}]
+    Some `Bitvector (0x1ffffffff:bv33)
+    |}]
 
 let%expect_test "shift_right negative bug 2" =
   partial_and_full_eval

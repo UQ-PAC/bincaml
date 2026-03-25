@@ -8,6 +8,9 @@
 
 (generate_opam_files true)
 
+(formatting
+ (enabled_for dune))
+
 (source
  (github username/reponame))
 
@@ -21,7 +24,7 @@
 
 (package
  (name bincaml)
- (synopsis "program analysis tool")
+ (synopsis "Program analysis tool.")
  (description "A longer description")
  (depends
   menhir
@@ -35,15 +38,16 @@
   containers-data
   ppx_deriving
   ocamlgraph
-  intPQueue
   cmdliner
   pp_loc
   fmt
   patricia-tree
+  ppx_here
+  intPQueue
   (ocamlformat :with-dev-setup)
   (odig :with-dev-setup)
   (sherlodoc :with-doc)
-  (ppx_expect_nobase
+  (ppx_expect
    (>= "0.17.2.2"))
   (alcotest :with-test)
   (qcheck-core :with-test)

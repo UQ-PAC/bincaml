@@ -1,0 +1,41 @@
+; checks tree-sitter is valid and unambiguous
+
+(rule
+ (deps grammar.js)
+ (alias runtest)
+ (enabled_if %{bin-available:tree-sitter})
+ (action
+  (run tree-sitter generate grammar.js)))
+
+; check that grammar.js is up to date.
+; requires `bnfc-treesitter` from pac-nix.
+
+; bnfc tree-sitter backend is only run if the fixed tree-sitter fork is
+; detected in the output of bnfc --help. this lets us use upstream
+; bnfc for the main ocaml parser.
+
+(rule
+ (alias runtest)
+ (deps %{project_root}/lib/fe/BasilIR.cf)
+ (enabled_if %{read:../lib/fe/has-bnfc-tree-sitter})
+ (action
+  (progn
+   (copy %{deps} basilir.cf)
+   (run
+    bnfc
+    --tree-sitter
+    --tree-sitter-word
+    LocalIdent
+    basilir.cf
+    --makefile)
+   (diff? grammar.js tree-sitter-basilir/grammar.js))))
+
+(rule
+ (alias runtest)
+ (deps (universe))
+ (enabled_if
+  (not %{read:../lib/fe/has-bnfc-tree-sitter}))
+ (action
+  (echo
+   "tree-sitter/dune: bnfc tree-sitter generation skipped,"
+   "because the installed bnfc doesn't support it.\n")))

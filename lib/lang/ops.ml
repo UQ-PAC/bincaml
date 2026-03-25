@@ -1,9 +1,42 @@
 open Common
 open Containers
 
+module Record = struct
+  type t = field StringMap.t * Types.t [@@deriving eq, ord]
+  and field = { value : Bitvec.t; typ : Types.t }
+
+  let get_field offset (record, _) : field =
+    match StringMap.find_opt offset record with
+    | None -> failwith @@ "No field at offset " ^ offset
+    | Some f -> f
+
+  let set_field field_name (record, typ) value =
+    let { typ; _ } = get_field field_name (record, typ) in
+    (StringMap.add field_name { typ; value } record, typ)
+
+  let show_field { value; typ } =
+    Printf.sprintf "(%s, %s)" (Bitvec.to_string value) @@ Types.to_string typ
+
+  let show (record, _) =
+    "{"
+    ^ (StringMap.bindings record
+      |> List.map (fun (k, v) -> "(\"" ^ k ^ "\": " ^ show_field v ^ ")")
+      |> String.concat ", ")
+    ^ "}"
+
+  let to_string v = show v
+  let pp fmt b = Format.pp_print_string fmt (show b)
+end
+
 module Maps = struct
   (* map, value -> result *)
-  type binary = [ `MapIndex ] [@@deriving show { with_path = false }, eq, ord]
+
+  type endian = [ `Big | `Little ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type binary = [ `MapAccess | `Load of endian * int ]
+  [@@deriving show { with_path = false }, eq, ord]
+
   type intrin = [ `MapUpdate ] [@@deriving show { with_path = false }, eq, ord]
 
   let show = function
@@ -188,40 +221,121 @@ module IntOps = struct
     | #binary as b -> show_binary b
 end
 
+module RecordOps = struct
+  type const = [ `Record of Record.t ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type unary = [ `FACCESS of string ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type binary = [ `FSET of string ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  let eval_unary (u : unary) record =
+    match u with
+    | `FACCESS offset ->
+        let { value; _ } : Record.field = Record.get_field offset record in
+        value
+
+  let eval_binary (u : binary) =
+    match u with `FSET offset -> Record.set_field offset
+
+  let show = function
+    | #unary as u -> show_unary u
+    | #binary as b -> show_binary b
+end
+
+module PointerOps = struct
+  type const = [ `Pointer of Bitvec.t * Types.pointer ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type binary = [ `PTRADD ] [@@deriving show { with_path = false }, eq, ord]
+
+  let eval_binary (u : binary) (bv, _) = match u with `PTRADD -> Bitvec.add bv
+  let show = function #binary as u -> show_binary u
+end
+
 module Spec = struct
-  type unary = [ `Forall | `Old | `Exists ]
+  type endian = [ `Big | `Little ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type lambda = [ `Forall | `Exists | `Lambda ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type binary =
+    [ `MapAccess  (** access a value from a map*)
+    | `Load of endian * int
+      (** load many value from a map assuming values are concatable *)
+    | `IfThen
+      (** if first arg evaluates to true then return second arg, otherwise halt
+          and catch fire *) ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type intrin = [ `Cases  (** choose first argument that is defined *) ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type unary = [ `Old | `Classification | `Gamma ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let hash_intrin a = Hashtbl.hash a
 end
 
 module AllOps = struct
-  type const = [ IntOps.const | BVOps.const | LogicalOps.const ]
+  type const =
+    [ IntOps.const
+    | BVOps.const
+    | LogicalOps.const
+    | RecordOps.const
+    | PointerOps.const ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type unary = [ IntOps.unary | BVOps.unary | Spec.unary | LogicalOps.unary ]
+  type unary =
+    [ IntOps.unary
+    | BVOps.unary
+    | Spec.unary
+    | LogicalOps.unary
+    | RecordOps.unary ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type binary = [ IntOps.binary | BVOps.binary | LogicalOps.binary ]
+  type binary =
+    [ IntOps.binary
+    | BVOps.binary
+    | LogicalOps.binary
+    | Spec.binary
+    | RecordOps.binary
+    | PointerOps.binary ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type intrin = [ BVOps.intrin | LogicalOps.intrin ]
+  type intrin = [ BVOps.intrin | LogicalOps.intrin | Spec.intrin | Maps.intrin ]
   [@@deriving show { with_path = false }, eq, ord]
+
+  type lambda = Spec.lambda [@@deriving show { with_path = false }, eq, ord]
 
   type op_fun_type =
     | Fun of { args : Types.t list; ret : Types.t }
     (* list of expected type equalities *)
     | Conflict of (Types.t * string) list
+  [@@deriving eq, show]
 
-  let ret_type_const (o : const) =
+  let ret_type_const (o : [< const ]) =
     let open Types in
     let return ret = Fun { args = []; ret } in
     match o with
     | `Bool _ -> return Boolean
     | `Integer _ -> return Integer
     | `Bitvector v -> return (Bitvector (Bitvec.size v))
+    | `Pointer (v, ty) -> return (Pointer ty)
+    | `Record ((fields, typ) : Record.t) -> return typ
 
-  let ret_type_unary (o : unary) a =
+  let ret_type_lambda (o : [< lambda ]) args a =
+    let open Types in
+    let return ret = Fun { args = [ a ]; ret } in
+    match o with
+    | `Forall -> return Boolean
+    | `Exists -> return Boolean
+    | `Lambda -> Fun { args; ret = a }
+
+  let ret_type_unary (o : [< unary ]) a =
     let open Types in
     let return ret = Fun { args = [ a ]; ret } in
     match o with
@@ -233,15 +347,25 @@ module AllOps = struct
         match a with
         | Bitvector s -> return @@ Bitvector (sz + s)
         | o -> Conflict [ (o, "<bitvector") ])
+    | `FACCESS offset ->
+        let { typ; _ } = get_field offset a in
+        return typ
     | `Forall -> return Boolean
     | `BVNEG -> return a
     | `INTNEG -> return Integer
     | `Old -> return a
     | `BoolNOT -> return Boolean
-    | `Exists -> return Boolean
     | `BVNOT -> return a
     | `BOOLTOBV1 -> return @@ Bitvector 1
     | `Extract (hi, lo) -> return (Bitvector (hi - lo))
+    | `Gamma ->
+        let args, r = Types.uncurry a in
+        let t = Types.curry args Boolean in
+        return t
+    | `Classification ->
+        let args, r = Types.uncurry a in
+        let t = Types.curry args Boolean in
+        return t
 
   let ret_type_bin (o : binary) l r =
     let open Types in
@@ -254,11 +378,19 @@ module AllOps = struct
     | `BVAND | `BVOR | `BVADD | `BVMUL | `BVUDIV | `BVUREM | `BVSHL | `BVLSHR
     | `BVNAND | `BVXOR | `BVSUB | `BVSDIV | `BVSREM | `BVSMOD | `BVASHR ->
         return l
+    | `FSET _ -> return r
+    | `PTRADD -> return l
+    | `MapAccess ->
+        let m, r = Types.uncurry l in
+        return r
+    | `Load (e, i) -> return (Bitvector i)
+    | `IfThen -> return r
 
   let ret_type_intrin (o : intrin) args =
     let open Types in
     let return ret = Fun { args; ret } in
     match o with
+    | `Cases -> return @@ List.hd @@ List.tl args
     | `BVADD -> return @@ List.hd args
     | `BVOR -> return @@ List.hd args
     | `BVXOR -> return @@ List.hd args
@@ -282,15 +414,17 @@ module AllOps = struct
               0 args
           in
           return (Bitvector w)
+    | `MapUpdate -> return @@ List.hd args
 
   (** ops returning booleans *)
 
-  let to_string (op : [< const | unary | binary | intrin ]) =
+  let to_string (op : [< const | unary | binary | intrin | lambda ]) =
     match op with
     | `BVADD -> "bvadd"
     | `BVSREM -> "bvsrem"
     | `BVSDIV -> "bvsdiv"
     | `Forall -> "forall"
+    | `Lambda -> "fun"
     | `BVNEG -> "bvneg"
     | `Bool true -> "true"
     | `Bool false -> "false"
@@ -305,6 +439,9 @@ module AllOps = struct
     | `Exists -> "exists"
     | `SignExtend n -> Printf.sprintf "sign_extend_%d" n
     | `ZeroExtend n -> Printf.sprintf "zero_extend_%d" n
+    | `FSET offset -> Printf.sprintf "fset_%s" offset
+    | `FACCESS offset -> Printf.sprintf "asdfaccess_%s" offset
+    | `PTRADD -> "ptradd"
     | `EQ -> "eq"
     | `INTADD -> "intadd"
     | `BVNAND -> "bvnand"
@@ -322,6 +459,10 @@ module AllOps = struct
     | `BVAND -> "bvand"
     | `INTMUL -> "intmul"
     | `Bitvector z -> Bitvec.to_string z
+    | `Pointer (value, typ) ->
+        Printf.sprintf "ptr(%s, %s)" (Bitvec.show value)
+          (Types.show_pointer typ)
+    | `Record record -> Record.to_string record
     | `BVSMOD -> "bvsmod"
     | `INTLT -> "intlt"
     | `IMPLIES -> "implies"
@@ -334,6 +475,14 @@ module AllOps = struct
     | `BOOLTOBV1 -> "booltobv1"
     | `BoolNOT -> "boolnot"
     | `BVSLT -> "bvslt"
+    | `Classification -> "classification"
+    | `Gamma -> "gamma"
+    | `Load (`Big, sz) -> Printf.sprintf "load_be_%d" sz
+    | `Load (`Little, sz) -> Printf.sprintf "load_le_%d" sz
+    | `MapAccess -> "get"
+    | `MapUpdate -> "update"
+    | `IfThen -> "case"
+    | `Cases -> "match"
 
   let eval_equal (a : const) (b : const) =
     match (a, b) with
@@ -341,6 +490,14 @@ module AllOps = struct
     | `Integer a, `Integer b -> Z.equal a b
     | `Bool a, `Bool b -> Bool.equal a b
     | _, _ -> false
+
+  let equal a b =
+    match (a, b) with
+    | (#const as c), (#const as c2) -> equal_const c c2
+    | (#unary as u), (#unary as u2) -> equal_unary u u2
+    | (#binary as b), (#binary as b2) -> equal_binary b b2
+    | (#intrin as b), (#intrin as b2) -> equal_intrin b b2
+    | _ -> false
 
   let hash_const = Hashtbl.hash
   let hash_unary = Hashtbl.hash

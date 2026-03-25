@@ -7,12 +7,18 @@
   intra_analysis
   defuse_bool
   lattice_types
+  ide
+  idessi
+  ide_live
+  lattice_collections
   wrapped_intervals
+  known_bits
+  tnum_wint_reduced_product
   known_bits)
  (libraries
+  intPQueue
   patricia-tree
   loader
-  intPQueue
   lang
   zarith
   fix
@@ -32,4 +38,4 @@
    ppx_deriving.iter
    ppx_deriving.fold
    ppx_deriving.enum
-   ppx_expect_nobase)))
+   ppx_expect)))

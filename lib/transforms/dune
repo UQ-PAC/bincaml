@@ -4,19 +4,17 @@
  (flags -w -27)
  (modules
   ssa
-  algsimp
   cf_tx
-  spec_modifies
   livevars
   cleanup_cfg
   ide
   may_read_uninit
-  type_check)
+  type_check
+  boogie_prepass)
  (libraries
   bincaml.analysis
   patricia-tree
   loader
-  intPQueue
   lang
   zarith
   fix
@@ -30,6 +28,7 @@
  (inline_tests)
  (preprocess
   (pps
+   ppx_here
    ppx_deriving.show
    ppx_deriving.eq
    ppx_deriving.ord
@@ -37,4 +36,4 @@
    ppx_deriving.iter
    ppx_deriving.fold
    ppx_deriving.enum
-   ppx_expect_nobase)))
+   ppx_expect)))

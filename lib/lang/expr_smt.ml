@@ -20,7 +20,7 @@ module SMTLib2 = struct
     logics : LSet.t;
   }
 
-  let init =
+  let empty =
     {
       preamble = [];
       commands = [];
@@ -74,14 +74,23 @@ module SMTLib2 = struct
   let add_preamble (v : Sexp.t) (s : builder) =
     (v, { s with preamble = v :: s.preamble })
 
-  let extract s =
-    let* b = get s in
+  let to_sexp ?(set_logic = true) b =
     let open Iter.Infix in
-    let logic = list [ atom "set-logic"; atom (get_logic_string b.logics) ] in
-    let preamble = List.to_iter (logic :: b.preamble) in
+    let logic =
+      if set_logic then
+        [ list [ atom "set-logic"; atom (get_logic_string b.logics) ] ]
+      else []
+    in
+    let preamble = List.to_iter (logic @ b.preamble) in
     let decls = VarMap.to_iter b.var_decls >|= fun (v, d) -> d.decl_cmd in
     let commands = List.rev b.commands |> List.to_iter in
-    return (preamble <+> decls <+> commands)
+    preamble <+> decls <+> commands
+
+  let run (e : 'e t) = e empty
+
+  let extract s =
+    let* b = get s in
+    return @@ to_sexp b
 
   let rec of_typ (ty : Types.t) =
     match ty with
@@ -93,11 +102,19 @@ module SMTLib2 = struct
     | Types.Unit -> (atom "Unit", LSet.singleton DT)
     | Types.Top -> (atom "Any", LSet.singleton DT)
     | Types.Nothing -> (atom "Nothing", LSet.singleton DT)
+    | Types.Sort (name, []) -> (atom name, LSet.singleton UF)
+    | Types.Sort (name, _) -> (atom name, LSet.singleton DT)
     | Types.Map (l, r) ->
         let tl, ll = of_typ l in
         let tr, lr = of_typ r in
         let log = LSet.union (LSet.singleton Array) (LSet.union ll lr) in
         (list [ atom "Array"; tl; tr ], log)
+    | Types.Variable v -> (atom v, LSet.empty)
+    | Types.Record e ->
+        failwith "unsupported: must be lowered to Sort/ADT/Datatype first"
+    | Types.Pointer { upper; lower } ->
+        ( list [ atom "Pointer "; fst (of_typ upper); fst (of_typ lower) ],
+          LSet.singleton UF )
 
   let add_logic l s = ((), { s with logics = LSet.add l s.logics })
 
@@ -114,6 +131,8 @@ module SMTLib2 = struct
       | `Bitvector _ -> add_logic BV
       | `Integer _ -> add_logic Int
       | `Bool _ -> return ()
+      | `Record _ -> add_logic DT
+      | `Pointer _ -> add_logic UF
     in
     return v
 
@@ -153,52 +172,155 @@ module SMTLib2 = struct
           ]
     | `EQ -> atom "="
     | `BoolNOT -> atom "not"
+    | `NEQ -> failwith "undef"
+    | `AND -> atom "and"
+    | `OR -> atom "or"
     | #Ops.AllOps.unary as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.const as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.binary as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.intrin as o -> atom @@ Ops.AllOps.to_string o
 
+  let let_binding bound_vars exprs in_body =
+    let vs = List.map Var.name bound_vars in
+    let* binds = sequence exprs in
+    let binds = List.combine vs binds in
+    let* body = in_body in
+    return @@ Bincaml_util.Smt.Expr.let_ binds body
+
+  let quantifier quant bound_vars in_body =
+    let names = List.map (Var.name %> atom) bound_vars in
+    let types = List.map (Var.typ %> of_typ %> fst) bound_vars in
+    let binds =
+      List.combine names types |> List.map (fun (a, b) -> list [ a; b ])
+    in
+    let* body = in_body in
+    return @@ list [ quant; list binds; body ]
+
   let smt_alg (e : sexp t BasilExpr.abstract_expr) =
     match e with
-    | Constant o ->
+    | Constant { const = o } ->
         let* o = add_logic_const o in
         return (of_op o)
-    | RVar e -> get_var e
-    | UnaryExpr (o, e) ->
+    | RVar { id } -> get_var id
+    | UnaryExpr { op = `BOOLTOBV1; arg = e } ->
+        let* e = e in
+        return
+        @@ list
+             [
+               atom "ite";
+               e;
+               of_op (`Bitvector (Bitvec.one ~size:1));
+               of_op (`Bitvector (Bitvec.zero ~size:1));
+             ]
+    | Lambda { op; bound_vars; in_body } ->
+        (* TODO: trigger *)
+        let names = List.map (Var.name %> atom) bound_vars in
+        let types = List.map (Var.typ %> of_typ %> fst) bound_vars in
+        let binds =
+          List.combine names types |> List.map (fun (a, b) -> list [ a; b ])
+        in
+        let* in_body = in_body in
+        let o =
+          match op with
+          | `Forall -> "forall"
+          | `Exists -> "exists"
+          | `Lambda -> "lambda"
+        in
+        return @@ list [ atom o; list binds; in_body ]
+    | Let { bound_vars; in_body } ->
+        (* TODO: trigger *)
+        let* in_body = in_body in
+        let* binds =
+          sequence
+          @@ List.map
+               (fun (v, b) ->
+                 let* b = b in
+                 return @@ list [ atom @@ Var.name v; b ])
+               bound_vars
+        in
+        return @@ list [ atom "let"; list binds; in_body ]
+    | UnaryExpr { op = o; arg = e } ->
         let* e = e in
         return @@ list [ of_op o; e ]
-    | BinaryExpr (o, l, r) ->
+    | BinaryExpr { op = `NEQ; arg1 = l; arg2 = r } ->
+        let* l = l in
+        let* r = r in
+        return @@ list [ of_op `BoolNOT; list [ of_op `EQ; l; r ] ]
+    | BinaryExpr { op = o; arg1 = l; arg2 = r } ->
         let* l = l in
         let* r = r in
         return @@ list [ of_op o; l; r ]
-    (* TODO: bool2bv1 *)
-    | ApplyIntrin (o, args) ->
+    | ApplyIntrin { op = o; args } ->
         let* args = sequence args in
         return (list (of_op o :: args))
     (* TODO: fundecls*)
-    | ApplyFun (n, args) ->
+    | ApplyFun { func; args } ->
         let* args = sequence args in
-        return @@ list (atom n :: args)
-    (* TODO: bindings *)
-    | Binding (_, _) -> failwith "unsupp"
+        let* func = func in
+        return @@ list (func :: args)
 
-  let of_bexpr e = (BasilExpr.cata smt_alg e) init
+  let of_bexpr e = fst @@ (BasilExpr.cata smt_alg e) empty
+  let bind_of_bexpr e b = BasilExpr.cata smt_alg e b
+
+  let trans_decl (decl : Program.declaration) =
+    let* x = return () in
+    match decl with
+    | Type { binding; typ = Sort (name, [ { variant } ]) } ->
+        return (Bincaml_util.Smt.Expr.declare_sort variant 0)
+    | Type { binding; typ = Sort (name, []) } ->
+        return (Bincaml_util.Smt.Expr.declare_sort name 0)
+    | Type { binding; typ = Sort (name, vs) } ->
+        let fields =
+          List.map
+            Types.(
+              function
+              | { variant; fields } ->
+                  ( variant,
+                    List.map
+                      (fun { field; typ } -> (field, fst @@ of_typ typ))
+                      fields ))
+            vs
+        in
+        return (Bincaml_util.Smt.Expr.declare_datatype name [] fields)
+    | Type { binding; typ } ->
+        return (list [ atom "decl-sort"; fst @@ of_typ typ ])
+    | Function { binding; attrib; definition = Function body } ->
+        let* body = bind_of_bexpr body in
+        let args, r = Var.typ binding |> Types.uncurry in
+        let args = List.map (of_typ %> fst) args in
+        let r = fst (of_typ r) in
+        return
+        @@ list
+             [ atom "define-fun"; atom (Var.name binding); list args; r; body ]
+    | Function { binding; definition = Axiom body } ->
+        let* body = bind_of_bexpr body in
+        return @@ list [ atom "assert"; body ]
+    | Function { binding; attrib; definition = Uninterpreted } ->
+        let args, r = Var.typ binding |> Types.uncurry in
+        let args = List.map (of_typ %> fst) args in
+        let r = fst (of_typ r) in
+        return
+        @@ list [ atom "declare-fun"; atom (Var.name binding); list args; r ]
+    | Variable v -> failwith "mutable"
 
   let assert_bexpr e =
     let* s = BasilExpr.cata smt_alg e in
     add_assert s
+
+  let push = add_command (list [ atom "push" ])
+  let pop = add_command (list [ atom "pop" ])
+  let check_sat = add_command (list [ atom "check-sat" ])
 
   let check_sat_bexpr e =
     let x =
       let* _ = assert_bexpr e in
       add_command (list [ atom "check-sat" ])
     in
-    let ex = (extract x) init in
+    let ex = (extract x) empty in
     fst ex
 
-  let assert_bexpr e = fst @@ (assert_bexpr e |> extract) init
-
   let%expect_test _ =
+    let assert_bexpr e = fst @@ (assert_bexpr e |> extract) empty in
     let open BasilExpr in
     let e =
       binexp ~op:`EQ
@@ -214,3 +336,32 @@ module SMTLib2 = struct
       (set-logic QF_BV)
       (assert (= ((_ sign_extend 10) (_ bv7 3)) (_ bv100 13))) |}]
 end
+
+let%expect_test "datatypes" =
+  let x : Program.declaration =
+    Type { binding = "test"; typ = Types.mk_sort "Opaque" }
+  in
+  let y : Program.declaration =
+    Type
+      {
+        binding = "list";
+        typ =
+          Types.mk_adt "list"
+            [
+              ( "Cons",
+                [
+                  Types.mk_field "head" (Bitvector 63);
+                  Types.mk_field "tail" (Types.mk_sort "list");
+                ] );
+              ("Nil", []);
+            ];
+      }
+  in
+
+  fst @@ SMTLib2.trans_decl x SMTLib2.empty |> Sexp.to_string |> print_endline;
+  fst @@ SMTLib2.trans_decl y SMTLib2.empty |> Sexp.to_string |> print_endline;
+  [%expect
+    {|
+    (declare-sort Opaque 0)
+    (declare-datatype list ((Cons (head (_ BitVec 63)) (tail list)) (Nil)))
+    |}]

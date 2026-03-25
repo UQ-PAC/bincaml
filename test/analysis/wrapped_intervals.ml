@@ -37,8 +37,8 @@ let%test_unit "member" =
   assert (member (iv 6 2) 7)
 
 let%test_unit "partial_order" =
-  let ( <= ) a b = compare a b <= 0 in
-  let ( > ) a b = compare a b > 0 in
+  let ( <= ) a b = leq a b in
+  let ( > ) a b = not @@ leq a b in
   let iv a b = interval (Bitvec.of_int ~size:4 a) (Bitvec.of_int ~size:4 b) in
   assert (top <= top);
   assert (bottom <= top);
@@ -176,7 +176,7 @@ let%test "mul2" =
       t
   in
   let concrete = iv ~w:43 0x180fcfd9808 0x180fcfd9808 in
-  compare concrete abstract <= 0
+  leq concrete abstract
 
 let%test "udiv_top_top" =
   let ( = ) = equal in

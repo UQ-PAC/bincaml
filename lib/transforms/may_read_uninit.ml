@@ -25,10 +25,18 @@ module ReadUninit = struct
     | Bot, a -> a
     | Write, Write -> Write
 
+  let leq a b =
+    match (a, b) with
+    | a, b when equal a b -> true
+    | Bot, _ | _, ReadUninit -> true
+    | _, Bot | ReadUninit, _ -> false
+    | _ -> false
+
   let show v = match v with ReadUninit -> "RU" | Bot -> "bot" | Write -> "W"
   let pretty v = Containers_pp.text (show v)
   let widening = join
   let bottom = Bot
+  let top = ReadUninit
   let analyze (e : Lang.Procedure.G.edge) d = d
 end
 
@@ -87,9 +95,6 @@ end
 
 let check ?(include_locals = false) (p : Program.proc) =
   let result = A.analyse p in
-  CCIO.with_out
-    (ID.to_string (Procedure.id p) ^ "ru.dot")
-    (fun o -> A.print_dot (Format.of_chan o) p result);
   let it =
     Option.to_iter (Procedure.graph p)
     |> Iter.flat_map (fun gr ->
@@ -143,10 +148,10 @@ let%expect_test "fold_block" =
   in
   [%expect
     {|
-    $stack->RU, R0_in->RU, R31_in->RU
-    $stack->RU, R0_in->RU, R31_in->RU, load45_1->W
-    $stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W
-    $stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, $mem->RU
-    $stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W
-    $stack->RU, R0_in->RU, R31_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, R0_10->W
+    ($stack->RU, R31_in->RU, R0_in->RU, _->⊥)
+    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, _->⊥)
+    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, _->⊥)
+    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, _->⊥)
+    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, _->⊥)
+    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, R0_10->W, _->⊥)
     |}]

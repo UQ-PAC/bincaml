@@ -24,7 +24,7 @@ module WrappedIntervalsLattice = struct
   let name = "wrappedIntervals"
 
   type t = Top | Interval of { lower : Bitvec.t; upper : Bitvec.t } | Bot
-  [@@deriving eq]
+  [@@deriving ord, eq]
 
   let show l =
     match l with
@@ -78,22 +78,18 @@ module WrappedIntervalsLattice = struct
         size_is_equal upper e;
         ule (sub e lower) (sub upper lower)
 
-  let compare a b =
+  let leq a b =
     match (a, b) with
-    | a, b when equal a b -> 0
-    | Top, _ | _, Bot -> 1
-    | Bot, _ | _, Top -> -1
+    | a, b when equal a b -> true
+    | Bot, _ | _, Top -> true
+    | Top, _ | _, Bot -> false
     | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
       ->
-        if
-          member b al && member b au
-          && ((not (member a bl)) || not (member a bu))
-        then -1
-        else 1
+        member b al && member b au && ((not (member a bl)) || not (member a bu))
 
   let join a b =
-    if compare a b <= 0 then b
-    else if compare b a <= 0 then a
+    if leq a b then b
+    else if leq b a then a
     else
       match (a, b) with
       | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
@@ -146,7 +142,7 @@ module WrappedIntervalsLattice = struct
           match (s, t) with
           | Interval { lower = al; _ }, Interval { lower = bl; _ } ->
               Bitvec.compare al bl
-          | _, _ -> compare s t)
+          | _, _ -> if equal s t then 0 else if leq s t then -1 else 1)
         ints
     in
     let f1 =
@@ -166,15 +162,16 @@ module WrappedIntervalsLattice = struct
 
   let widening a b =
     match (a, b) with
-    | _, Bot | Top, _ -> a
-    | Bot, _ | _, Top -> b
+    | Bot, s | s, Bot -> s
+    | Top, _ | _, Top -> Top
     | Interval { lower = al; upper = au }, Interval { lower = bl; upper = bu }
       ->
         size_is_equal al bl;
         size_is_equal au bu;
         let width = size al in
         if compare b a <= 0 then a
-        else if Z.geq (cardinality ~width a) (Z.pow (Z.of_int 2) width) then top
+        else if Z.geq (cardinality ~width a) (Z.pow (Z.of_int 2) (width - 1))
+        then top
         else
           let joined = join a b in
           if equal joined (interval al bu) then
@@ -232,7 +229,7 @@ module WrappedIntervalsLattice = struct
     | Interval { lower; upper } ->
         let width = size lower in
         let np = np ~width in
-        if compare np t <= 0 then
+        if leq np t then
           [ interval lower (smax ~width); interval (smin ~width) upper ]
         else [ t ]
 
@@ -247,7 +244,7 @@ module WrappedIntervalsLattice = struct
     | Interval { lower; upper } ->
         let width = size lower in
         let sp = sp ~width in
-        if compare sp t <= 0 then
+        if leq sp t then
           [ interval lower (umax ~width); interval (umin ~width) upper ]
         else [ t ]
 
@@ -497,9 +494,9 @@ module WrappedIntervalsLatticeOps = struct
 
     let max_or (al, au) (bl, bu) =
       let rec max_or_aux m =
+        let open Bitvec in
         let one = of_int ~size:(size m) 1 in
         let recurse _ = max_or_aux (lshr m one) in
-        let open Bitvec in
         if is_zero m then bitor au bu
         else if is_nonzero (bitand au bu |> bitand m) then
           let tempau = bitor (sub au m) (sub m one) in
@@ -534,9 +531,9 @@ module WrappedIntervalsLatticeOps = struct
 
     let max_and (al, au) (bl, bu) =
       let rec max_and_aux m =
-        let one = of_int ~size:(size m) 1 in
         let recurse _ = max_and_aux (lshr m (of_int ~size:(size m) 1)) in
         let open Bitvec in
+        let one = of_int ~size:(size m) 1 in
         if is_zero m then bitand au bu
         else if is_nonzero (bitand au (bitnot bu) |> bitand m) then
           let temp = bitor (bitand au (bitnot m)) (sub m one) in
@@ -573,9 +570,9 @@ module WrappedIntervalsLatticeOps = struct
 
     let max_xor (al, au) (bl, bu) =
       let rec max_xor_aux m (al, au) (bl, bu) =
+        let open Bitvec in
         let one = of_int ~size:(size m) 1 in
         let recurse = max_xor_aux (lshr m one) in
-        let open Bitvec in
         if is_zero m then bitxor au bu
         else if is_nonzero (bitand au bu |> bitand m) then
           let tempau = bitor (sub au m) (sub m one) in
@@ -644,7 +641,7 @@ module WrappedIntervalsLatticeOps = struct
           interval (zero ~size:width)
             (concat (zero ~size:k) (ones ~size:(width - k)))
         in
-        if compare (sp ~width) t <= 0 then fallback
+        if leq (sp ~width) t then fallback
         else
           match t with
           | Interval { lower; upper } ->
@@ -661,7 +658,7 @@ module WrappedIntervalsLatticeOps = struct
             (concat (ones ~size:k) (zero ~size:(width - k)))
             (concat (zero ~size:k) (ones ~size:(width - k)))
         in
-        if compare (np ~width) t <= 0 then fallback
+        if leq (np ~width) t then fallback
         else
           match t with
           | Interval { lower; upper } ->
@@ -680,7 +677,7 @@ module WrappedIntervalsLatticeOps = struct
       truncate (lshr ~width t (interval k k)) (hi - lo)
 
   let concat (s, sw) (t, tw) =
-    let t = if compare (sp ~width:tw) t <= 0 then top else t in
+    let t = if leq (sp ~width:tw) t then top else t in
     match (s, t) with
     | Bot, _ | _, Bot -> bottom
     | Top, Top -> top
@@ -700,7 +697,10 @@ module WrappedIntervalsValueAbstraction = struct
     match op with
     | `Bool _ -> top
     | `Integer _ -> top
-    | `Bitvector bv -> if size bv = 0 then top else interval bv bv
+    | `Bitvector bv | `Pointer (bv, _) ->
+        if size bv = 0 then top else interval bv bv
+    (* NOTE: This kind of thing happens frequently, should I go through all of the fields and make a intervals out of those bvs?*)
+    | `Record fields -> top
 
   let eval_unop (op : Lang.Ops.AllOps.unary) (a, t) rt =
     match t with
@@ -718,7 +718,7 @@ module WrappedIntervalsValueAbstraction = struct
     match (ta, ta) with
     | Types.Bitvector width, Types.Bitvector w2 when width = w2 -> (
         match op with
-        | `BVADD -> add ~width a b
+        | `BVADD | `PTRADD -> add ~width a b
         | `BVSUB -> sub ~width a b
         | `BVMUL -> mul ~width a b
         | `BVUDIV -> udiv ~width a b
@@ -761,10 +761,7 @@ end
 module StateAbstraction =
   Intra_analysis.MapState (WrappedIntervalsValueAbstractionBasil)
 
-module Eval =
-  Intra_analysis.EvalStmt
-    (WrappedIntervalsValueAbstractionBasil)
-    (StateAbstraction)
+module Eval = Intra_analysis.EvalStmt (WrappedIntervalsValueAbstractionBasil)
 
 module Domain = struct
   include StateAbstraction
@@ -777,13 +774,186 @@ module Domain = struct
     |> Iter.map (fun v -> (v, top_val))
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
-  let transfer dom stmt =
-    let stmt = Eval.stmt_eval_fwd stmt dom in
-    let updates =
+  open struct
+    type bin_pred =
+      [ `EQ | `NEQ | `ULE | `ULT | `UGT | `UGE | `SLE | `SLT | `SGT | `SGE ]
+
+    let from_op op =
+      match op with
+      | `EQ -> Some `EQ
+      | `NEQ -> Some `NEQ
+      | `BVULE -> Some `ULE
+      | `BVULT -> Some `ULT
+      | `BVSLE -> Some `SLE
+      | `BVSLT -> Some `SLT
+      | _ -> None
+
+    let invert p =
+      match p with
+      | `EQ -> `NEQ
+      | `NEQ -> `EQ
+      | `ULE -> `UGT
+      | `ULT -> `UGE
+      | `UGT -> `ULE
+      | `UGE -> `ULT
+      | `SLE -> `SGT
+      | `SLT -> `SGE
+      | `SGT -> `SLE
+      | `SGE -> `SLT
+
+    let swap p =
+      match p with
+      | `EQ -> `EQ
+      | `NEQ -> `NEQ
+      | `ULE -> `UGE
+      | `ULT -> `UGT
+      | `UGT -> `ULT
+      | `UGE -> `ULE
+      | `SLE -> `SGE
+      | `SLT -> `SGT
+      | `SGT -> `SLT
+      | `SGE -> `SLE
+
+    let reduce_bin_left op s t =
+      let open WrappedIntervalsLattice in
+      let meet s t = lub @@ intersect s t in
+      let bind f =
+        match t with
+        | Bot -> Bot
+        | Top -> s
+        | Interval { lower; upper } -> f lower upper
+      in
+      let ineq min max op =
+        match op with
+        | `LE ->
+            bind (fun _ b ->
+                let width = size b in
+                if member t (max ~width) then s
+                else meet s @@ interval (min ~width) b)
+        | `LT ->
+            bind (fun _ b ->
+                let width = size b in
+                if member t (max ~width) then
+                  meet s
+                  @@ interval (min ~width)
+                       Bitvec.(sub (max ~width) @@ of_int ~size:width 1)
+                else if Bitvec.equal b (min ~width) then Bot
+                else
+                  meet s
+                  @@ interval (min ~width)
+                       Bitvec.(sub b @@ of_int ~size:width 1))
+        | `GE ->
+            bind (fun a _ ->
+                let width = size a in
+                if member t (min ~width) then s
+                else meet s @@ interval a (max ~width))
+        | `GT ->
+            bind (fun a _ ->
+                let width = size a in
+                if member t (min ~width) then
+                  meet s
+                  @@ interval
+                       Bitvec.(add (min ~width) (of_int ~size:width 1))
+                       (max ~width)
+                else if Bitvec.equal a (max ~width) then Bot
+                else meet s @@ interval a (max ~width))
+      in
+      let uineq = ineq umin umax in
+      let sineq = ineq smin smax in
+      match op with
+      | `EQ -> meet s t
+      | `NEQ -> meet s @@ complement t
+      | `ULE -> uineq `LE
+      | `ULT -> uineq `LT
+      | `UGE -> uineq `GE
+      | `UGT -> uineq `GT
+      | `SLE -> sineq `LE
+      | `SLT -> sineq `LT
+      | `SGE -> sineq `GE
+      | `SGT -> sineq `GT
+
+    let reduce_bin ~read op l r =
+      let abstract_eval expr =
+        Eval.EV.eval read (Lang.Expr.BasilExpr.fix expr)
+      in
+      let open WrappedIntervalsLattice in
+      let open Lang.Expr.AbstractExpr in
+      match (l, r) with
+      | RVar { id = lv }, RVar { id = rv } ->
+          let l = read lv in
+          let r = read rv in
+          Iter.of_list
+            [
+              (lv, reduce_bin_left op l r); (rv, reduce_bin_left (swap op) r l);
+            ]
+      | RVar { id }, re ->
+          let l = read id in
+          let r = abstract_eval re in
+          Iter.singleton (id, reduce_bin_left op l r)
+      | le, RVar { id } ->
+          let l = abstract_eval le in
+          let r = read id in
+          Iter.singleton (id, reduce_bin_left (swap op) r l)
+      | _ -> Iter.empty
+
+    let rec reduce_expr ~read expr =
+      let open Lang.Expr in
+      let open WrappedIntervalsLattice in
+      let into_varmap =
+        Iter.fold
+          (fun acc (v, e) ->
+            VarMap.update v
+              (function Some l -> Some (e :: l) | None -> Some [ e ])
+              acc)
+          VarMap.empty
+      in
+      let meet s t = lub @@ intersect s t in
+      let glb ints = List.map complement ints |> lub |> complement in
+      match AbstractExpr.map BasilExpr.unfix (BasilExpr.unfix expr) with
+      | BinaryExpr { op; arg1; arg2 } ->
+          from_op op
+          |> Option.map_or ~default:Iter.empty (fun op ->
+              reduce_bin ~read op arg1 arg2)
+      | UnaryExpr { op = `BoolNOT; arg = BinaryExpr { op; arg1 = l; arg2 = r } }
+        ->
+          from_op op
+          |> Option.map_or ~default:Iter.empty (fun op ->
+              reduce_bin ~read (invert op) (BasilExpr.unfix l)
+                (BasilExpr.unfix r))
+      | ApplyIntrin { op = `AND; args } ->
+          List.map BasilExpr.fix args
+          |> Iter.of_list
+          |> Iter.flat_map (reduce_expr ~read)
+          |> into_varmap |> VarMap.map glb |> VarMap.to_iter
+      | ApplyIntrin { op = `OR; args } ->
+          List.map BasilExpr.fix args
+          |> Iter.of_list
+          |> Iter.flat_map (reduce_expr ~read)
+          |> into_varmap
+          |> VarMap.mapi (fun v rs ->
+              let s = read v in
+              if List.length rs = List.length args then meet s (lub rs) else s)
+          |> VarMap.to_iter
+      | _ -> Iter.empty
+  end
+
+  let transfer_state read stmt =
+    let evald_stmt = Eval.stmt_eval_fwd read stmt in
+    let open Lang.Expr in
+    let pred_updates =
       match stmt with
+      | Lang.Stmt.Instr_Assert { body } | Lang.Stmt.Instr_Assume { body } ->
+          reduce_expr ~read body
+      | _ -> Iter.empty
+    in
+    let updates =
+      match evald_stmt with
       | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
-      | Lang.Stmt.Instr_Assert _ -> Iter.empty
-      | Lang.Stmt.Instr_Assume _ -> Iter.empty
+      | Lang.Stmt.Instr_Assert _ | Lang.Stmt.Instr_Assume _ -> Iter.empty
+      | Lang.Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
+          Iter.singleton (lhs, rhs)
+      | Lang.Stmt.Instr_Store { lhs; value; addr = Scalar } ->
+          Iter.singleton (lhs, value)
       | Lang.Stmt.Instr_Load { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_Store { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_IntrinCall { lhs } ->
@@ -792,11 +962,16 @@ module Domain = struct
           StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
       | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
     in
-    Iter.fold (fun a (k, v) -> update k v a) dom updates
+    Iter.append pred_updates updates
+
+  let transfer dom stmt =
+    Iter.fold (fun a (k, v) -> update k v a) dom
+    @@ transfer_state (flip read dom) stmt
 end
 
-module Analysis = Dataflow_graph.AnalysisFwd (Domain)
+module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
+module Analysis = Intra_analysis.Forwards (Domain)
 
 let analyse (p : Lang.Program.proc) =
-  let g = Dataflow_graph.create p in
-  Analysis.analyse ~widen_set:Graph.ChaoticIteration.FromWto ~delay_widen:50 g
+  Analysis.analyse ~widening_set:Graph.ChaoticIteration.FromWto
+    ~widening_delay:50 p

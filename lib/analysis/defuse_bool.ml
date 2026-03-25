@@ -9,6 +9,7 @@ module IsZeroLattice = struct
   type t = Top | Zero | NonZero | Bot
   [@@deriving ord, eq, show { with_path = false }]
 
+  let top = Top
   let bottom = Bot
   let pretty t = Containers_pp.text (show t)
 
@@ -22,6 +23,13 @@ module IsZeroLattice = struct
     | _ -> Top
 
   let widening a b = join a b
+
+  let leq a b =
+    match (a, b) with
+    | a, b when equal a b -> true
+    | Bot, _ | _, Top -> true
+    | _, Bot | Top, _ -> false
+    | _ -> false
 end
 
 module IsZeroValueAbstraction = struct
@@ -32,10 +40,17 @@ module IsZeroValueAbstraction = struct
     | `Bool true -> NonZero
     | `Bool false -> Zero
     | `Integer i -> if Z.equal Z.zero i then Zero else NonZero
-    | `Bitvector i ->
+    | `Bitvector i | `Pointer (i, _) ->
         if Bitvec.size i = 0 then Top
         else if Z.equal Z.zero (Bitvec.value i) then Zero
         else NonZero
+    | `Record (fields, _) ->
+        StringMap.fold
+          (fun _ ({ value = i; _ } : Lang.Ops.Record.field) acc ->
+            if Bitvec.size i = 0 then Top
+            else if Z.equal Z.zero (Bitvec.value i) then join acc Zero
+            else join acc NonZero)
+          fields Zero
 
   let eval_unop (op : Lang.Ops.AllOps.unary) a =
     match op with
@@ -48,15 +63,17 @@ module IsZeroValueAbstraction = struct
     | `BVNOT -> ( match a with Zero -> NonZero | _ -> Top)
     | `ZeroExtend size -> a
     | `Old -> Top
-    | `Exists -> Top
-    | `Forall -> Top
+    | `FACCESS offset -> ( match a with Zero -> Zero | _ -> Top)
+    | `Gamma | `Classification -> Top
 
   let eval_binop (op : Lang.Ops.AllOps.binary) a b =
     match (op, a, b) with
     | `BVSREM, _, _ -> Top
     | `BVSDIV, _, _ -> Top
     | `BVADD, Zero, Zero -> Zero
+    | `PTRADD, Zero, Zero -> Zero
     | `BVADD, _, _ -> Top
+    | `PTRADD, _, _ -> Top
     | `NEQ, Zero, Zero -> Zero
     | `NEQ, _, _ -> Top
     | `BVASHR, _, _ -> Top
@@ -93,6 +110,11 @@ module IsZeroValueAbstraction = struct
     | `INTSUB, _, _ -> Top
     | `BVSLT, Zero, Zero -> Zero
     | `BVSLT, _, _ -> Top
+    | `FSET _, Zero, Zero -> Zero
+    | `FSET _, _, NonZero -> NonZero
+    (* Larger refactor would be needed to reason about individual fields *)
+    | `FSET _, _, _ -> Top
+    | #Lang.Ops.Spec.binary, _, _ -> Top
 
   let eval_intrin (op : Lang.Ops.AllOps.intrin) (args : t list) =
     match op with
@@ -113,6 +135,12 @@ module IsZeroValueAbstraction = struct
         else if List.for_all (equal NonZero) args then NonZero
         else if List.for_all (equal Bot) args then Bot
         else Top
+    | #Lang.Ops.Spec.intrin -> Top
+    | `MapUpdate -> (
+        match args with
+        | [ Zero; _; Zero ] -> Zero
+        | [ Zero; _; NonZero ] -> NonZero
+        | _ -> Top)
 end
 
 module IsZeroValueAbstractionUntyped = struct

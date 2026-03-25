@@ -2,10 +2,10 @@
  (public_name bincaml.loader)
  (name loader)
  (flags -w -27)
- (modules loadir)
+ (modules loadir spec_modifies)
  (inline_tests)
  (preprocess
-  (pps ppx_expect_nobase))
+  (pps ppx_expect ppx_deriving.show ppx_deriving.eq ppx_deriving.ord))
  (libraries
   pp_loc
   BasilIR
@@ -15,6 +15,14 @@
   zarith
   iter
   trace.core))
+
+; (library
+;  (public_name bincaml.backends)
+;  (name backends)
+;  (flags -w -27)
+;  (modules boogie)
+;  (libraries containers containers-data containers.pp backends)
+;  (inline_tests))
 
 (library
  (public_name bincaml)
