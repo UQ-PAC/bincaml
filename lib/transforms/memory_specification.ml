@@ -33,7 +33,7 @@ let transform_malloc p =
         @ [
             (* Can allocate at new r0 with size old r0 *)
             Calls.can_alloc
-              [ BasilExpr.rvar Globals.mem_encoding; r 0; old @@ r 0 ];
+              [ old @@ BasilExpr.rvar Globals.mem_encoding; r 0; old @@ r 0 ];
             (* Offset of return address r0 is 0 *)
             BasilExpr.binexp ~op:`EQ
               (Calls.addr_offset [ BasilExpr.rvar Globals.mem_encoding; r 0 ])
@@ -50,7 +50,7 @@ let transform_malloc p =
             BasilExpr.binexp ~op:`EQ
               (BasilExpr.rvar Globals.mem_encoding)
               (Calls.allocate
-                 [ BasilExpr.rvar Globals.mem_encoding; r 0; old @@ r 0 ]);
+                 [ old @@ BasilExpr.rvar Globals.mem_encoding; r 0; old @@ r 0 ]);
           ];
       modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
     }

@@ -484,13 +484,13 @@ module SplitMemory : MemoryEncoding = struct
                 ])
              (BasilExpr.bvconst live);
            BasilExpr.binexp ~op:`BVULE
-             (BasilExpr.binexp ~op:`BVADD
-                (Calls.addr_alloc
-                   [
-                     BasilExpr.rvar Locals.mem_encoding;
-                     BasilExpr.rvar Locals.addr;
-                   ])
-                (BasilExpr.rvar Locals.size))
+             (Calls.addr_offset
+                [
+                  BasilExpr.rvar Locals.mem_encoding;
+                  BasilExpr.binexp ~op:`BVADD
+                    (BasilExpr.rvar Locals.addr)
+                    (BasilExpr.rvar Locals.size);
+                ])
              (Calls.alloc_size
                 [
                   BasilExpr.rvar Locals.mem_encoding;

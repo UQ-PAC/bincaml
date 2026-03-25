@@ -271,7 +271,7 @@ module Instructions = struct
     in
     let steps = val_size / 8 in
     let body =
-      (if be then List.range (steps - 1) 0 else List.range 0 (steps - 1))
+      (if be then List.range 0 (steps - 1) else List.range (steps - 1) 0)
       |> List.tl
       |> List.fold_left
            (fun acc i ->
@@ -291,7 +291,7 @@ module Instructions = struct
                  (Lang.Expr.BasilExpr.rvar index)
                  (Lang.Expr.BasilExpr.bvconst
                     (Bitvec.of_int ~size:addr_size
-                       (if be then steps - 1 else 0)))))
+                       (if be then 0 else steps - 1)))))
     in
     Lang.Expr.BasilExpr.binding ~op:`Lambda [ memory; index ] body
 
