@@ -22,12 +22,13 @@ type state_after_processing = {
   notify_back : Linol_lwt.Jsonrpc2.notify_back;
   contents : string Lwt_react.signal;
   set_contents : string -> unit;
+  tokens : Bincaml_lsp.Raw_tokens.token_with_pos list Lwt_react.signal;
   debug_highlight_signal : bool Lwt_react.signal;
   set_debug_highlight : bool -> unit;
   diagnostics : Lsp.Types.Diagnostic.t list Lwt_react.signal;
 }
 
-let iter_tokens (contents : string) : 'a list =
+let parse_tokens (contents : string) : 'a list =
   let lexbuf = Lexing.from_string ~with_positions:true contents in
   Bincaml_lsp.Raw_tokens.extract_all_tokens lexbuf |> Iter.to_list
 
@@ -41,7 +42,7 @@ let to_diagnostic (x : Bincaml_lsp.Raw_tokens.token_with_pos) :
   let end_ = pos x.endpos in
   let range = Lsp.Types.Range.create ~start ~end_ in
   let str = x.str in
-  Lsp.Types.Diagnostic.create ~message:(`String str) ~range ()
+  Lsp.Types.Diagnostic.create ~message:(`String str) ~range ~severity:Lsp.Types.DiagnosticSeverity.Information ()
 
 let new_state ~notify_back (contents : string) : state_after_processing =
   let contents, set_contents = Lwt_react.S.create contents in
@@ -53,22 +54,23 @@ let new_state ~notify_back (contents : string) : state_after_processing =
         x)
       debug_highlight_signal
   in
+  let tokens = Lwt_react.S.map parse_tokens contents in
   let diagnostics =
     Lwt_react.S.l2
-      (function
-        | false -> Fun.const []
-        | true -> Fun.compose (List.map to_diagnostic) iter_tokens)
-      debug_highlight_signal contents
+      (function false -> Fun.const [] | true -> List.map to_diagnostic)
+      debug_highlight_signal tokens
   in
   let diagnostics =
     Lwt_react.S.trace
-      (Fun.compose ignore notify_back#send_diagnostic)
+      (fun diags ->
+        Linol_lwt.spawn @@ fun () -> notify_back#send_diagnostic diags)
       diagnostics
   in
   {
     notify_back;
     contents;
     set_contents;
+    tokens;
     debug_highlight_signal;
     set_debug_highlight;
     diagnostics;
@@ -96,6 +98,7 @@ class lsp_server =
       Hashtbl.create 32
 
     method get uri = Hashtbl.find buffers uri
+
     method spawn_query_handler f = Linol_lwt.spawn f
 
     (* We define here a helper method that will:
@@ -157,7 +160,6 @@ class lsp_server =
       match (cmd, args) with
       | "toggle-highlight", Some [ uri ] ->
           let uri = Linol_lsp.Lsp.Types.DocumentUri.t_of_yojson uri in
-          notify_back#set_uri uri;
           let st = self#get uri in
           (* let _ = *)
           (*   st.diagnostics |> Lwt_react.S.changes |> Lwt_react.E.next *)
