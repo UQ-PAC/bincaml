@@ -497,10 +497,14 @@ module SplitMemory : MemoryEncoding = struct
              (Calls.alloc_live
                 [
                   BasilExpr.rvar Locals.mem_encoding;
-                  Calls.addr_alloc
+                  Calls.alloc_base
                     [
                       BasilExpr.rvar Locals.mem_encoding;
-                      BasilExpr.rvar Locals.addr;
+                      Calls.addr_alloc
+                        [
+                          BasilExpr.rvar Locals.mem_encoding;
+                          BasilExpr.rvar Locals.addr;
+                        ];
                     ];
                 ])
              (BasilExpr.bvconst live);
@@ -515,10 +519,14 @@ module SplitMemory : MemoryEncoding = struct
              (Calls.alloc_size
                 [
                   BasilExpr.rvar Locals.mem_encoding;
-                  Calls.addr_alloc
+                  Calls.alloc_base
                     [
                       BasilExpr.rvar Locals.mem_encoding;
-                      BasilExpr.rvar Locals.addr;
+                      Calls.addr_alloc
+                        [
+                          BasilExpr.rvar Locals.mem_encoding;
+                          BasilExpr.rvar Locals.addr;
+                        ];
                     ];
                 ]);
          ])
