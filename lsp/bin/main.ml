@@ -187,7 +187,6 @@ class lsp_server =
 let run () =
   Logs.set_level (Some Logs.Info);
   Logs.set_reporter (Bincaml_lsp.Lsp_logs.file_reporter ());
-  (* Logs.set_reporter (Bincaml_lsp.Logs.lwt_reporter ()); *)
   Logs.info (fun m -> m "bincaml_lsp starting");
   Logs.app (fun m -> m "asd2");
   Logs.app (fun m -> m "asd2");
