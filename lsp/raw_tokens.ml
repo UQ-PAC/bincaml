@@ -1,9 +1,11 @@
+(** from _build/default/lib/fe/ParBasilIR.ml *)
 type raw_token = BasilIR.ParBasilIR.token =
   | TOK_String of string
   | TOK_Str of string
   | TOK_ProcIdent of ((int * int) * string)
+  | TOK_POINTERTYPE of ((int * int) * string)
+  | TOK_OpenParen of ((int * int) * string)
   | TOK_LocalIdent of ((int * int) * string)
-  | TOK_LambdaSep of string
   | TOK_IntegerHex of ((int * int) * string)
   | TOK_IntegerDec of ((int * int) * string)
   | TOK_Integer of int
@@ -14,6 +16,7 @@ type raw_token = BasilIR.ParBasilIR.token =
   | TOK_EndList of ((int * int) * string)
   | TOK_EOF
   | TOK_Double of float
+  | TOK_CloseParen of ((int * int) * string)
   | TOK_Char of char
   | TOK_BlockIdent of ((int * int) * string)
   | TOK_BeginRec of ((int * int) * string)
@@ -32,8 +35,11 @@ type raw_token = BasilIR.ParBasilIR.token =
   | SYMB10
   | SYMB1
   | KW_zero_extend
+  | KW_with
   | KW_var
+  | KW_val
   | KW_unreachable
+  | KW_type
   | KW_true
   | KW_store
   | KW_sign_extend
@@ -42,14 +48,24 @@ type raw_token = BasilIR.ParBasilIR.token =
   | KW_requires
   | KW_require
   | KW_rely
+  | KW_relies
+  | KW_ptradd
+  | KW_ptr
   | KW_prog
   | KW_proc
   | KW_phi
   | KW_old
+  | KW_of
+  | KW_observable
   | KW_nop
   | KW_neq
+  | KW_modifies
   | KW_memory
+  | KW_match
+  | KW_load_le
+  | KW_load_be
   | KW_load
+  | KW_let
   | KW_le
   | KW_invariant
   | KW_intsub
@@ -63,17 +79,26 @@ type raw_token = BasilIR.ParBasilIR.token =
   | KW_intdiv
   | KW_intadd
   | KW_indirect
+  | KW_in
   | KW_guard
+  | KW_guarantees
   | KW_guarantee
   | KW_goto
+  | KW_gamma
+  | KW_fun
+  | KW_fset
   | KW_forall
   | KW_false
+  | KW_faccess
   | KW_extract
   | KW_exists
   | KW_eq
   | KW_entry
   | KW_ensures
   | KW_ensure
+  | KW_classification
+  | KW_cases
+  | KW_captures
   | KW_call
   | KW_bvxor
   | KW_bvxnor
@@ -114,6 +139,7 @@ type raw_token = BasilIR.ParBasilIR.token =
   | KW_axiom
   | KW_assume
   | KW_assert
+  | KW_and
 [@@deriving show { with_path = false }]
 
 open struct
