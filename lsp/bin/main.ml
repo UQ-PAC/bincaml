@@ -19,7 +19,7 @@ module Lsp = Linol.Lsp
 
 (* type state_after_processing = Bincaml_lsp.Raw_tokens.raw_token list *)
 type state_after_processing = {
-  notify_back : Linol_lwt.Jsonrpc2.notify_back option ref;
+  notify_back : Linol_lwt.Jsonrpc2.notify_back;
   contents : string Lwt_react.signal;
   set_contents : string -> unit;
   debug_highlight_signal : bool Lwt_react.signal;
@@ -43,7 +43,7 @@ let to_diagnostic (x : Bincaml_lsp.Raw_tokens.token_with_pos) :
   let str = x.str in
   Lsp.Types.Diagnostic.create ~message:(`String str) ~range ()
 
-let new_state (contents : string) : state_after_processing =
+let new_state ~notify_back (contents : string) : state_after_processing =
   let contents, set_contents = Lwt_react.S.create contents in
   let debug_highlight_signal, set_debug_highlight = Lwt_react.S.create false in
   let debug_highlight_signal =
@@ -60,14 +60,18 @@ let new_state (contents : string) : state_after_processing =
         | true -> Fun.compose (List.map to_diagnostic) iter_tokens)
       debug_highlight_signal contents
   in
+  let diagnostics =
+    Lwt_react.S.trace
+      (Fun.compose ignore notify_back#send_diagnostic)
+      diagnostics
+  in
   {
+    notify_back;
     contents;
     set_contents;
     debug_highlight_signal;
     set_debug_highlight;
     diagnostics;
-    (* diagnostics_notifier = Lwt_react.E.never; *)
-    notify_back = ref None;
   }
 
 (* Lsp server class
@@ -107,7 +111,7 @@ class lsp_server =
             Logs.app (fun m -> m "setting new contents");
             st.set_contents contents;
             st
-        | None -> new_state contents
+        | None -> new_state ~notify_back contents
       in
       Hashtbl.replace buffers uri st;
       Lwt.return ()
@@ -155,14 +159,13 @@ class lsp_server =
           let uri = Linol_lsp.Lsp.Types.DocumentUri.t_of_yojson uri in
           notify_back#set_uri uri;
           let st = self#get uri in
-          st.notify_back := Some notify_back;
-          let resp =
-            st.diagnostics |> Lwt_react.S.changes |> Lwt_react.E.next
-            >>= notify_back#send_diagnostic
-            >|= Fun.const Yojson.Safe.(`Null)
-          in
+          (* let _ = *)
+          (*   st.diagnostics |> Lwt_react.S.changes |> Lwt_react.E.next *)
+          (*   >>= notify_back#send_diagnostic *)
+          (*   >|= Fun.const Yojson.Safe.(`Null) *)
+          (* in *)
           st.set_debug_highlight (not (React.S.value st.debug_highlight_signal));
-          resp
+          Lwt.return @@ Yojson.Safe.(`Null)
       | _ ->
           super#on_req_execute_command ~notify_back ~id ~workDoneToken cmd args
 
