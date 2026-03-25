@@ -38,7 +38,7 @@ proc @main () -> ()
     store le $stack bvadd($R31:bv64, 0x18:bv64) $R0:bv64 64 { .label = "2292_0" };
     var Exp14__5_21: bv64 := load le $stack bvadd($R31:bv64, 0x18:bv64) 64 { .label = "2296_0$0" };
     $R0: bv64 := Exp14__5_21:bv64 { .label = "2296_1" };
-    $R0: bv64 := bvadd($R0:bv64, 0x0:bv64) { .label = "2300_0" };
+    $R0: bv64 := bvadd($R0:bv64, 0x7:bv64) { .label = "2300_0" };
     $R1: bv64 := 0x79:bv64 { .label = "2304_0" };
     store le $mem $R0:bv64 extract(8, 0, $R1:bv64) 8 { .label = "2308_0" };
     var Exp14__5_22: bv64 := load le $stack bvadd($R31:bv64, 0x18:bv64) 64 { .label = "2312_0$0" };
