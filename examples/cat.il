@@ -1,11 +1,12 @@
-memory shared $mem : (bv64 -> bv8);
-memory $stack : (bv64 -> bv8);
+memory $stack : (bv64 -> <<<<<<<<<<<<< bv8);
 var $BTypeNext: bv2;
 var $CF: bv1;
 var $NF: bv1;
 var $R0: bv64;
 var $R1: bv64;
-var $R10: bv64;
+var $R10: bv64; <<<<<<>>>>>> a -         b
+
+<<<<<<<
 var $R11: bv64;
 var $R12: bv64;
 var $R16: bv64;

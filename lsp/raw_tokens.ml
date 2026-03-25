@@ -167,7 +167,8 @@ let show_lexbuf (buf : Lexing.lexbuf) =
     (show_position buf.lex_curr_p)
     (show_position buf.lex_start_p)
 
-let error_token ~startpos ~endpos () : token_with_pos =
+let error_token ~startpos () : token_with_pos =
+  let endpos = startpos in
   { token = Error (); str = "<ERROR>"; startpos; endpos }
 
 let dummy_token (buf : Lexing.lexbuf) () : token_with_pos =
@@ -175,28 +176,36 @@ let dummy_token (buf : Lexing.lexbuf) () : token_with_pos =
   let endpos = buf.lex_curr_p in
   { token = Error (); str = "<dummy token>"; startpos; endpos }
 
-let rec next_token ?err_begin (buf : Lexing.lexbuf) () : token_with_pos list =
-  let token = try Some (BasilIR.LexBasilIR.token buf) with _ -> None in
-  match token with
-  | Some token ->
-      let err_token =
-        match err_begin with
-        | Some startpos -> [ error_token ~startpos ~endpos:buf.lex_curr_p () ]
-        | None -> []
-      in
-      let str = show_raw_token token in
-      let token = Ok token in
-      err_token @ [ { (dummy_token buf ()) with token; str } ]
-  | None -> begin
-      Logs.err (fun m -> m "moving past error");
-      (* print_endline ("AFTER ERROR:" ^ show_lexbuf buf); *)
-      buf.lex_curr_pos <- buf.lex_curr_pos + 1;
-      let err_begin = Option.value ~default:buf.lex_curr_p err_begin in
-      Unix.sleepf 0.1;
-    []
-      (* next_token ~err_begin buf () *)
-    end
+let rec next_token ?err_token (buf : Lexing.lexbuf) () : token_with_pos list =
+  match (err_token, buf.lex_curr_p) with
+  | Some err_token, p when err_token.startpos <> p ->
+      err_token :: next_token buf ()
+  | _ -> (
+      let token = try Some (BasilIR.LexBasilIR.token buf) with _ -> None in
+      match token with
+      | Some token ->
+          let str = show_raw_token token in
+          let token = Ok token in
+          CCOption.to_list err_token
+          @ [ { (dummy_token buf ()) with token; str } ]
+      | None -> begin
+          Logs.err (fun m -> m "moving past error");
+          (* print_endline ("AFTER ERROR:" ^ show_lexbuf buf); *)
+          buf.lex_curr_pos <- buf.lex_curr_pos + 1;
+          let err_token =
+            Option.value
+              ~default:(error_token ~startpos:buf.lex_curr_p ())
+              err_token
+          in
+          let endpos =
+            { err_token.endpos with pos_cnum = err_token.endpos.pos_cnum + 1 }
+          in
+          let err_token = { err_token with endpos } in
+          Unix.sleepf 0.01;
+          next_token ~err_token buf ()
+        end)
 
 let extract_all_tokens buf =
   Iter.flat_map_l (next_token buf) (Iter.repeat ())
+  |> Iter.take 100
   |> Iter.take_while (fun x -> x.token != Ok BasilIR.ParBasilIR.TOK_EOF)

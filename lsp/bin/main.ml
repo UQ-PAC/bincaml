@@ -42,7 +42,12 @@ let to_diagnostic (x : Bincaml_lsp.Raw_tokens.token_with_pos) :
   let end_ = pos x.endpos in
   let range = Lsp.Types.Range.create ~start ~end_ in
   let str = x.str in
-  Lsp.Types.Diagnostic.create ~message:(`String str) ~range ~severity:Lsp.Types.DiagnosticSeverity.Information ()
+  let severity =
+    match x.token with
+    | Ok _ -> Lsp.Types.DiagnosticSeverity.Information
+    | Error _ -> Lsp.Types.DiagnosticSeverity.Error
+  in
+  Lsp.Types.Diagnostic.create ~message:(`String str) ~range ~severity ()
 
 let new_state ~notify_back (contents : string) : state_after_processing =
   let contents, set_contents = Lwt_react.S.create contents in
@@ -98,7 +103,6 @@ class lsp_server =
       Hashtbl.create 32
 
     method get uri = Hashtbl.find buffers uri
-
     method spawn_query_handler f = Linol_lwt.spawn f
 
     (* We define here a helper method that will:
