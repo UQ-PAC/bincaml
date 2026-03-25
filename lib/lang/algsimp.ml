@@ -141,6 +141,15 @@ let simplify_concat
 let simp_concat_fix e =
   to_steady BasilExpr.equal (BasilExpr.rewrite_typed_two simplify_concat) e
 
+(** Replace associative operators with empty or singleton argument lists with
+    the identity element for the operation, or the single argument,
+    respectively.
+
+    Note we cannot infer the width of a bitvector operation with no arguments in
+    order to construct the identity, so such an expression should never be
+    constructed.
+
+    Used by SMT encoding, so can't be tested by SMT*)
 let drop_assoc
     (e :
       (BasilExpr.t BasilExpr.abstract_expr * Types.t) BasilExpr.abstract_expr) =
@@ -158,6 +167,8 @@ let drop_assoc
       replace [%here] (BasilExpr.boolconst true)
   | ApplyIntrin { op = `OR; args = [] } ->
       replace [%here] (BasilExpr.boolconst false)
+  | ApplyIntrin { op = `BVConcat; args = [] } ->
+      replace [%here] (BasilExpr.bvconst @@ Bitvec.zero ~size:0)
   | _ -> Keep
 
 let algebraic_simplifications
