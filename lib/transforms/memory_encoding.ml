@@ -262,6 +262,7 @@ end
 
 module SplitMemory : MemoryEncoding = struct
   open BasilExpr
+
   let offset_size = 32
   let addr_size = 32
 
@@ -291,57 +292,43 @@ module SplitMemory : MemoryEncoding = struct
 
     (* sketchy workaround for the current lack of sort field accesses *)
     let alloc_live_access =
-      unexp ~op:(`ReadField "alloc_live")
-        (rvar mem_encoding)
+      unexp ~op:(`ReadField "alloc_live") (rvar mem_encoding)
 
     let alloc_size_access =
-      unexp ~op:(`ReadField "alloc_size")
-        (rvar mem_encoding)
+      unexp ~op:(`ReadField "alloc_size") (rvar mem_encoding)
 
     let addr_is_heap_access =
-      unexp ~op:(`ReadField "addr_is_heap")
-        (rvar mem_encoding)
+      unexp ~op:(`ReadField "addr_is_heap") (rvar mem_encoding)
   end
 
   let can_allocate_body =
     applyintrin ~op:`AND
       [
         (* Addr must be on the heap: *)
-        Calls.addr_is_heap
-          [ rvar Locals.mem_encoding; rvar Locals.addr ];
+        Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar Locals.addr ];
         (* Address is a base address *)
         binexp ~op:`EQ
-          (Calls.alloc_base
-             [ rvar Locals.mem_encoding; rvar Locals.addr ])
+          (Calls.alloc_base [ rvar Locals.mem_encoding; rvar Locals.addr ])
           (rvar Locals.addr);
         (* Adddress is fresh *)
         binexp ~op:`EQ
           (Calls.alloc_live
              [
                rvar Locals.mem_encoding;
-               Calls.addr_alloc
-                 [
-                   rvar Locals.mem_encoding;
-                   rvar Locals.addr;
-                 ];
+               Calls.addr_alloc [ rvar Locals.mem_encoding; rvar Locals.addr ];
              ])
           (bvconst fresh);
         (* Size is within bounds *)
-        binexp ~op:`BVULE
-          (rvar Locals.size)
+        binexp ~op:`BVULE (rvar Locals.size)
           (bv_of_int ~size:64 (Int.pow 2 offset_size - 1));
-        binexp ~op:`BVULT
-          (bv_of_int ~size:64 0)
-          (rvar Locals.size);
+        binexp ~op:`BVULT (bv_of_int ~size:64 0) (rvar Locals.size);
       ]
 
   let alloc_size_body =
-    binexp ~op:`MapAccess Locals.alloc_size_access
-      (rvar Locals.alloc)
+    binexp ~op:`MapAccess Locals.alloc_size_access (rvar Locals.alloc)
 
   let alloc_base_body =
-    binexp ~op:`BVAND
-      (rvar Locals.alloc)
+    binexp ~op:`BVAND (rvar Locals.alloc)
       (binexp ~op:`BVSHL
          (bv_of_int ~size:64 0xfffffffff)
          (bv_of_int ~size:64 32))
@@ -349,42 +336,27 @@ module SplitMemory : MemoryEncoding = struct
   let addr_alloc_body = rvar Locals.addr
 
   let alloc_live_body =
-    binexp ~op:`MapAccess Locals.alloc_live_access
-      (rvar Locals.alloc)
+    binexp ~op:`MapAccess Locals.alloc_live_access (rvar Locals.alloc)
 
   let addr_offset_body =
-    binexp ~op:`BVAND
-      (rvar Locals.addr)
-      (bv_of_int ~size:64 0xfffffffff)
+    binexp ~op:`BVAND (rvar Locals.addr) (bv_of_int ~size:64 0xfffffffff)
 
   let addr_is_heap_body =
-    binexp ~op:`MapAccess Locals.addr_is_heap_access
-      (rvar Locals.addr)
+    binexp ~op:`MapAccess Locals.addr_is_heap_access (rvar Locals.addr)
 
   let alloc_size_update_body =
-    binexp ~op:(`WriteField "alloc_size")
-      (rvar Locals.mem_encoding)
+    binexp ~op:(`WriteField "alloc_size") (rvar Locals.mem_encoding)
       (applyintrin ~op:`MapUpdate
-         [
-           Locals.alloc_size_access;
-           rvar Locals.alloc;
-           rvar Locals.size;
-         ])
+         [ Locals.alloc_size_access; rvar Locals.alloc; rvar Locals.size ])
 
   let alloc_live_update_body =
-    binexp ~op:(`WriteField "alloc_live")
-      (rvar Locals.mem_encoding)
+    binexp ~op:(`WriteField "alloc_live") (rvar Locals.mem_encoding)
       (applyintrin ~op:`MapUpdate
-         [
-           Locals.alloc_live_access;
-           rvar Locals.alloc;
-           rvar Locals.live;
-         ])
+         [ Locals.alloc_live_access; rvar Locals.alloc; rvar Locals.live ])
 
   let allocate_body =
     let alloc =
-      Calls.addr_alloc
-        [ rvar Locals.mem_encoding; rvar Locals.addr ]
+      Calls.addr_alloc [ rvar Locals.mem_encoding; rvar Locals.addr ]
     in
 
     Calls.alloc_size_update
@@ -397,99 +369,47 @@ module SplitMemory : MemoryEncoding = struct
 
   let init_encoding_body =
     let i = Var.create "i" ~scope:Var.Local (Types.Bitvector 64) in
+    let trigger e =
+      `Assoc (StringMap.of_list [ (".triggers", `List [ `List [ `Expr e ] ]) ])
+    in
     applyintrin ~op:`AND
       [
         (* Ensure that all heap addresses are bigger than the largest global address *)
         forall
           ~attrib:
-            (`Assoc
-               (StringMap.of_list
-                  [
-                    ( ".triggers",
-                      `List
-                        [
-                          `List
-                            [
-                              `Expr
-                                (Calls.addr_is_heap
-                                   [
-                                     rvar Locals.mem_encoding;
-                                     rvar i;
-                                   ]);
-                            ];
-                        ] );
-                  ]))
+            (trigger (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ]))
           ~bound:[ i ]
           (binexp ~op:`EQ
              (binexp ~op:`BVULT
                 (* TODO compute this value somehow *)
                 (bv_of_int 100000000 ~size:64)
                 (rvar i))
-             (Calls.addr_is_heap
-                [ rvar Locals.mem_encoding; rvar i ]));
+             (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ]));
         (* Heap addresses are initially fresh *)
         forall
           ~attrib:
-            (`Assoc
-               (StringMap.of_list
-                  [
-                    ( ".triggers",
-                      `List
-                        [
-                          `List
-                            [
-                              `Expr
-                                (Calls.alloc_live
-                                   [
-                                     rvar Locals.mem_encoding;
-                                     rvar i;
-                                   ]);
-                            ];
-                        ] );
-                  ]))
+            (trigger (Calls.alloc_live [ rvar Locals.mem_encoding; rvar i ]))
           ~bound:[ i ]
           (binexp ~op:`IMPLIES
-             (Calls.addr_is_heap
-                [ rvar Locals.mem_encoding; rvar i ])
+             (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ])
              (binexp ~op:`EQ
-                (Calls.alloc_live
-                   [ rvar Locals.mem_encoding; rvar i ])
+                (Calls.alloc_live [ rvar Locals.mem_encoding; rvar i ])
                 (bvconst fresh)));
         (* Non heap addresses are dead *)
         forall
           ~attrib:
-            (`Assoc
-               (StringMap.of_list
-                  [
-                    ( ".triggers",
-                      `List
-                        [
-                          `List
-                            [
-                              `Expr
-                                (Calls.alloc_live
-                                   [
-                                     rvar Locals.mem_encoding;
-                                     rvar i;
-                                   ]);
-                            ];
-                        ] );
-                  ]))
+            (trigger (Calls.alloc_live [ rvar Locals.mem_encoding; rvar i ]))
           ~bound:[ i ]
           (binexp ~op:`IMPLIES
-             (boolnot
-                (Calls.addr_is_heap
-                   [ rvar Locals.mem_encoding; rvar i ]))
+             (boolnot (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ]))
              (binexp ~op:`EQ
-                (Calls.alloc_live
-                   [ rvar Locals.mem_encoding; rvar i ])
+                (Calls.alloc_live [ rvar Locals.mem_encoding; rvar i ])
                 (bvconst dead)));
       ]
 
   let valid_access_body =
     binexp ~op:`IMPLIES
-      (Calls.addr_is_heap
-         [ rvar Locals.mem_encoding; rvar Locals.addr ])
+      (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar Locals.addr ])
       (applyintrin ~op:`AND
          [
            binexp ~op:`EQ
@@ -500,10 +420,7 @@ module SplitMemory : MemoryEncoding = struct
                     [
                       rvar Locals.mem_encoding;
                       Calls.addr_alloc
-                        [
-                          rvar Locals.mem_encoding;
-                          rvar Locals.addr;
-                        ];
+                        [ rvar Locals.mem_encoding; rvar Locals.addr ];
                     ];
                 ])
              (bvconst live);
@@ -511,9 +428,7 @@ module SplitMemory : MemoryEncoding = struct
              (Calls.addr_offset
                 [
                   rvar Locals.mem_encoding;
-                  binexp ~op:`BVADD
-                    (rvar Locals.addr)
-                    (rvar Locals.size);
+                  binexp ~op:`BVADD (rvar Locals.addr) (rvar Locals.size);
                 ])
              (Calls.alloc_size
                 [
@@ -522,10 +437,7 @@ module SplitMemory : MemoryEncoding = struct
                     [
                       rvar Locals.mem_encoding;
                       Calls.addr_alloc
-                        [
-                          rvar Locals.mem_encoding;
-                          rvar Locals.addr;
-                        ];
+                        [ rvar Locals.mem_encoding; rvar Locals.addr ];
                     ];
                 ]);
          ])
