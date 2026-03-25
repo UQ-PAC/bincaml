@@ -9,22 +9,11 @@ let bv_unop = [ `BVNOT; `BVNEG ]
 let bv_ops_partial = [ `BVSREM; `BVSDIV; `BVUREM; `BVUDIV; `BVSMOD ]
 
 let bv_ops_total =
-  [
-    `BVADD;
-    `BVSUB;
-    `BVMUL;
-    `BVSHL;
-    `BVNAND;
-    `BVXOR;
-    `BVOR;
-    `BVLSHR;
-    `BVASHR;
-    `BVAND;
-  ]
+  [ `BVSUB; `BVSHL; `BVNAND; `BVXOR; `BVOR; `BVLSHR; `BVASHR; `BVAND ]
 
 let multi = [ `BVADD; `BVOR; `BVXOR; `BVAND ]
 let gen_width = int_range 1 62
-let arb_bv_op : Ops.BVOps.binary gen = oneof_list bv_ops_total
+let arb_bv_op = oneof_list bv_ops_total
 
 let random_binary_string st length =
   (* 0b011101... *)

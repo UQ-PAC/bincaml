@@ -143,14 +143,12 @@ module SMTLib2 = struct
       | "bvor" -> Some `BVOR
       | "bvand" -> Some `BVAND
       | "bvxor" -> Some `BVXOR
+      | "bvmul" -> Some `BVMUL
       | _ -> None
 
     let of_binop a : Ops.AllOps.binary option =
       match a with
       | "=" -> Some `EQ
-      | "bvadd" -> Some `BVADD
-      | "bvor" -> Some `BVOR
-      | "bvand" -> Some `BVAND
       | "bvsrem" -> Some `BVSREM
       | "bvsdiv" -> Some `BVSDIV
       | "bvashr" -> Some `BVASHR
@@ -158,11 +156,9 @@ module SMTLib2 = struct
       | "bvshl" -> Some `BVSHL
       | "bvnand" -> Some `BVNAND
       | "bvurem" -> Some `BVUREM
-      | "bvxor" -> Some `BVXOR
       | "bvsub" -> Some `BVSUB
       | "bvudiv" -> Some `BVUDIV
       | "bvlshr" -> Some `BVLSHR
-      | "bvmul" -> Some `BVMUL
       | _ -> None
 
     let of_unop a : Ops.AllOps.unary option =
@@ -347,8 +343,11 @@ module SMTLib2 = struct
         let* func = func in
         return @@ list (func :: args)
 
-  let of_bexpr e = fst @@ (BasilExpr.cata smt_alg e) empty
-  let bind_of_bexpr e b = BasilExpr.cata smt_alg e b
+  let bind_of_bexpr e b =
+    let e = (BasilExpr.rewrite_typed_two Algsimp.drop_assoc) e in
+    BasilExpr.cata smt_alg e b
+
+  let of_bexpr e = fst @@ (bind_of_bexpr e) empty
 
   let trans_decl (decl : Program.declaration) =
     let* x = return () in
@@ -392,7 +391,7 @@ module SMTLib2 = struct
     | Variable v -> failwith "mutable"
 
   let assert_bexpr e =
-    let* s = BasilExpr.cata smt_alg e in
+    let* s = bind_of_bexpr e in
     add_assert s
 
   let push = add_command (list [ atom "push" ])

@@ -103,9 +103,7 @@ let eval_expr e = BasilExpr.cata eval_expr_alg e
 
 let%expect_test _ =
   let open BasilExpr in
-  let e =
-    applyintrin ~op:`BVMUL (bv_of_int ~size:10 10) (bv_of_int ~size:10 10)
-  in
+  let e = binexp ~op:`BVMUL (bv_of_int ~size:10 10) (bv_of_int ~size:10 10) in
   print_endline (to_string e);
   let r =
     eval_expr e |> Option.map const |> Option.map to_string |> function

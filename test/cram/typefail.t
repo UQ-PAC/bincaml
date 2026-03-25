@@ -32,12 +32,12 @@
   int is not of bitvector type in bvult at statement 23 in %main_entry
   int is not of bitvector type in bvule at statement 24 in %main_entry
   Paramters for the function has a type mismatch: type of bvand(1, 0x1:bv32) != type of $NF:bool (int != bool) at statement 25 in %main_entry
-  int is not of bitvector type in bvand at statement 25 in %main_entry
-  bool is not of bitvector type in bvor at statement 26 in %main_entry
-  bool is not of bitvector type in bvadd at statement 27 in %main_entry
-  bv32 is not the correct type of bv64 for bvadd at statement 28 in %main_entry
-  bool is not of bitvector type in bvmul at statement 29 in %main_entry
-  bv32 is not the correct type of bv64 for bvmul at statement 30 in %main_entry
+  bv32 is not a bitvector type in bvand at statement 25 in %main_entry
+  bv32 is not a bitvector type in bvor at statement 26 in %main_entry
+  bv32 is not a bitvector type in bvadd at statement 27 in %main_entry
+  bv32 is not a bitvector type in bvadd at statement 28 in %main_entry
+  bv32 is not a bitvector type in bvmul at statement 29 in %main_entry
+  bv32 is not a bitvector type in bvmul at statement 30 in %main_entry
   bool is not of bitvector type in bvudiv at statement 31 in %main_entry
   bv32 is not the correct type of bv64 for bvudiv at statement 32 in %main_entry
   bool is not of bitvector type in bvurem at statement 33 in %main_entry
@@ -48,8 +48,8 @@
   bv32 is not the correct type of bv64 for bvlshr at statement 38 in %main_entry
   bool is not of bitvector type in bvnand at statement 39 in %main_entry
   bv32 is not the correct type of bv64 for bvnand at statement 40 in %main_entry
-  bool is not of bitvector type in bvxor at statement 41 in %main_entry
-  bv32 is not the correct type of bv64 for bvxor at statement 42 in %main_entry
+  bv32 is not a bitvector type in bvxor at statement 41 in %main_entry
+  bv32 is not a bitvector type in bvxor at statement 42 in %main_entry
   bool is not of bitvector type in bvsub at statement 43 in %main_entry
   bv32 is not the correct type of bv64 for bvsub at statement 44 in %main_entry
   bool is not of bitvector type in bvsdiv at statement 45 in %main_entry

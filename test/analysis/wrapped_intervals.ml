@@ -160,7 +160,7 @@ let%test "mul2" =
   in
   let t = Types.Bitvector 43 in
   let abstract =
-    eval_binop `BVMUL
+    eval_binary `BVMUL
       (iv ~w:43 0x48303bae5fb 0x48303bae5fb, t)
       ( eval_intrin `BVConcat
           [
