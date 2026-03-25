@@ -12,7 +12,7 @@ let lwt_reporter () =
   let report src level ~over k msgf =
     let k () =
       let write () = match level with
-      | Deps.Logs.App -> Lwt_io.write Lwt_io.stdout (app_flush ())
+      | Logs.App -> Lwt_io.write Lwt_io.stdout (app_flush ())
       | _ -> Lwt_io.write Lwt_io.stderr (dst_flush ())
       in
       let unblock () = over (); Lwt.return_unit in
@@ -26,5 +26,5 @@ let lwt_reporter () =
 let file_reporter () =
   let app = Format.formatter_of_out_channel (open_out "/home/rina/progs/obasil/lsp/bincaml_lsp.out") in
   let dst = Format.formatter_of_out_channel (open_out "/home/rina/progs/obasil/lsp/bincaml_lsp.err") in
-  Deps.Logs.format_reporter ~app ~dst ()
+  Logs.format_reporter ~app ~dst ()
 

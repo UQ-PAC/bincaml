@@ -82,7 +82,7 @@ proc @getpid () -> ()
 
 proc @exit () -> ()
   { .name = "exit" };
-
+<-
 
 proc @exitcode_4198816 () -> ()
   { .name = "exitcode"; .address = 0x4011a0; .returnBlock = "exitcode_basil_return_1" }
