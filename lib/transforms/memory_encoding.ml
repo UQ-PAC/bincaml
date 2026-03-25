@@ -13,91 +13,89 @@ module Globals = struct
 end
 
 module Calls = struct
+  open BasilExpr
+
   let addr_is_heap args =
-    BasilExpr.apply_fun
+    apply_fun
       ~func:
-        (BasilExpr.rvar
-           (Var.create "me_addr_is_heap" ~scope:Var.Global Types.Boolean))
+        (rvar (Var.create "me_addr_is_heap" ~scope:Var.Global Types.Boolean))
       args
 
   let alloc_base args =
-    BasilExpr.apply_fun
+    apply_fun
       ~func:
-        (BasilExpr.rvar
+        (rvar
            (Var.create "me_alloc_base" ~scope:Var.Global (Types.Bitvector 64)))
       args
 
   let alloc_live args =
-    BasilExpr.apply_fun
+    apply_fun
       ~func:
-        (BasilExpr.rvar
+        (rvar
            (Var.create "me_alloc_live" ~scope:Var.Global (Types.Bitvector 2)))
       args
 
   let alloc_size args =
-    BasilExpr.apply_fun
+    apply_fun
       ~func:
-        (BasilExpr.rvar
+        (rvar
            (Var.create "me_alloc_size" ~scope:Var.Global (Types.Bitvector 64)))
       args
 
   let addr_alloc args =
-    BasilExpr.apply_fun
+    apply_fun
       ~func:
-        (BasilExpr.rvar
+        (rvar
            (Var.create "me_addr_alloc" ~scope:Var.Global (Types.Bitvector 64)))
       args
 
   let addr_offset args =
-    BasilExpr.apply_fun
+    apply_fun
       ~func:
-        (BasilExpr.rvar
+        (rvar
            (Var.create "me_addr_offset" ~scope:Var.Global (Types.Bitvector 64)))
       args
 
   let alloc_size_update args =
-    BasilExpr.apply_fun
+    apply_fun
       ~func:
-        (BasilExpr.rvar
+        (rvar
            (Var.create "me_alloc_size_update" ~scope:Var.Global
               (Types.Variable "MemEncoding")))
       args
 
   let alloc_live_update args =
-    BasilExpr.apply_fun
+    apply_fun
       ~func:
-        (BasilExpr.rvar
+        (rvar
            (Var.create "me_alloc_live_update" ~scope:Var.Global
               (Types.Variable "MemEncoding")))
       args
 
   let allocate args =
-    BasilExpr.apply_fun
+    apply_fun
       ~func:
-        (BasilExpr.rvar
+        (rvar
            (Var.create "me_allocate" ~scope:Var.Global
               (Types.Variable "MemEncoding")))
       args
 
   let can_alloc args =
-    BasilExpr.apply_fun
+    apply_fun
       ~func:
-        (BasilExpr.rvar
-           (Var.create "me_can_allocate" ~scope:Var.Global Types.Boolean))
+        (rvar (Var.create "me_can_allocate" ~scope:Var.Global Types.Boolean))
       args
 
   let init_encoding args =
-    BasilExpr.apply_fun
+    apply_fun
       ~func:
-        (BasilExpr.rvar
-           (Var.create "me_init_encoding" ~scope:Var.Global Types.Boolean))
+        (rvar (Var.create "me_init_encoding" ~scope:Var.Global Types.Boolean))
       args
 
   let valid_access args =
-    BasilExpr.apply_fun
+    apply_fun
       ~func:
-        (BasilExpr.rvar
-           (Var.create "me_valid_access" ~scope:Var.Global Types.Boolean))
+        (rvar (Var.create "me_valid_access" ~scope:Var.Global Types.Boolean))
       args
 end
 
@@ -263,6 +261,7 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
 end
 
 module SplitMemory : MemoryEncoding = struct
+  open BasilExpr
   let offset_size = 32
   let addr_size = 32
 
@@ -292,116 +291,116 @@ module SplitMemory : MemoryEncoding = struct
 
     (* sketchy workaround for the current lack of sort field accesses *)
     let alloc_live_access =
-      BasilExpr.unexp ~op:(`ReadField "alloc_live")
-        (BasilExpr.rvar mem_encoding)
+      unexp ~op:(`ReadField "alloc_live")
+        (rvar mem_encoding)
 
     let alloc_size_access =
-      BasilExpr.unexp ~op:(`ReadField "alloc_size")
-        (BasilExpr.rvar mem_encoding)
+      unexp ~op:(`ReadField "alloc_size")
+        (rvar mem_encoding)
 
     let addr_is_heap_access =
-      BasilExpr.unexp ~op:(`ReadField "addr_is_heap")
-        (BasilExpr.rvar mem_encoding)
+      unexp ~op:(`ReadField "addr_is_heap")
+        (rvar mem_encoding)
   end
 
   let can_allocate_body =
-    BasilExpr.applyintrin ~op:`AND
+    applyintrin ~op:`AND
       [
         (* Addr must be on the heap: *)
         Calls.addr_is_heap
-          [ BasilExpr.rvar Locals.mem_encoding; BasilExpr.rvar Locals.addr ];
+          [ rvar Locals.mem_encoding; rvar Locals.addr ];
         (* Address is a base address *)
-        BasilExpr.binexp ~op:`EQ
+        binexp ~op:`EQ
           (Calls.alloc_base
-             [ BasilExpr.rvar Locals.mem_encoding; BasilExpr.rvar Locals.addr ])
-          (BasilExpr.rvar Locals.addr);
+             [ rvar Locals.mem_encoding; rvar Locals.addr ])
+          (rvar Locals.addr);
         (* Adddress is fresh *)
-        BasilExpr.binexp ~op:`EQ
+        binexp ~op:`EQ
           (Calls.alloc_live
              [
-               BasilExpr.rvar Locals.mem_encoding;
+               rvar Locals.mem_encoding;
                Calls.addr_alloc
                  [
-                   BasilExpr.rvar Locals.mem_encoding;
-                   BasilExpr.rvar Locals.addr;
+                   rvar Locals.mem_encoding;
+                   rvar Locals.addr;
                  ];
              ])
-          (BasilExpr.bvconst fresh);
+          (bvconst fresh);
         (* Size is within bounds *)
-        BasilExpr.binexp ~op:`BVULE
-          (BasilExpr.rvar Locals.size)
-          (BasilExpr.bv_of_int ~size:64 (Int.pow 2 offset_size - 1));
-        BasilExpr.binexp ~op:`BVULT
-          (BasilExpr.bv_of_int ~size:64 0)
-          (BasilExpr.rvar Locals.size);
+        binexp ~op:`BVULE
+          (rvar Locals.size)
+          (bv_of_int ~size:64 (Int.pow 2 offset_size - 1));
+        binexp ~op:`BVULT
+          (bv_of_int ~size:64 0)
+          (rvar Locals.size);
       ]
 
   let alloc_size_body =
-    BasilExpr.binexp ~op:`MapAccess Locals.alloc_size_access
-      (BasilExpr.rvar Locals.alloc)
+    binexp ~op:`MapAccess Locals.alloc_size_access
+      (rvar Locals.alloc)
 
   let alloc_base_body =
-    BasilExpr.binexp ~op:`BVAND
-      (BasilExpr.rvar Locals.alloc)
-      (BasilExpr.binexp ~op:`BVSHL
-         (BasilExpr.bv_of_int ~size:64 0xfffffffff)
-         (BasilExpr.bv_of_int ~size:64 32))
+    binexp ~op:`BVAND
+      (rvar Locals.alloc)
+      (binexp ~op:`BVSHL
+         (bv_of_int ~size:64 0xfffffffff)
+         (bv_of_int ~size:64 32))
 
-  let addr_alloc_body = BasilExpr.rvar Locals.addr
+  let addr_alloc_body = rvar Locals.addr
 
   let alloc_live_body =
-    BasilExpr.binexp ~op:`MapAccess Locals.alloc_live_access
-      (BasilExpr.rvar Locals.alloc)
+    binexp ~op:`MapAccess Locals.alloc_live_access
+      (rvar Locals.alloc)
 
   let addr_offset_body =
-    BasilExpr.binexp ~op:`BVAND
-      (BasilExpr.rvar Locals.addr)
-      (BasilExpr.bv_of_int ~size:64 0xfffffffff)
+    binexp ~op:`BVAND
+      (rvar Locals.addr)
+      (bv_of_int ~size:64 0xfffffffff)
 
   let addr_is_heap_body =
-    BasilExpr.binexp ~op:`MapAccess Locals.addr_is_heap_access
-      (BasilExpr.rvar Locals.addr)
+    binexp ~op:`MapAccess Locals.addr_is_heap_access
+      (rvar Locals.addr)
 
   let alloc_size_update_body =
-    BasilExpr.binexp ~op:(`WriteField "alloc_size")
-      (BasilExpr.rvar Locals.mem_encoding)
-      (BasilExpr.applyintrin ~op:`MapUpdate
+    binexp ~op:(`WriteField "alloc_size")
+      (rvar Locals.mem_encoding)
+      (applyintrin ~op:`MapUpdate
          [
            Locals.alloc_size_access;
-           BasilExpr.rvar Locals.alloc;
-           BasilExpr.rvar Locals.size;
+           rvar Locals.alloc;
+           rvar Locals.size;
          ])
 
   let alloc_live_update_body =
-    BasilExpr.binexp ~op:(`WriteField "alloc_live")
-      (BasilExpr.rvar Locals.mem_encoding)
-      (BasilExpr.applyintrin ~op:`MapUpdate
+    binexp ~op:(`WriteField "alloc_live")
+      (rvar Locals.mem_encoding)
+      (applyintrin ~op:`MapUpdate
          [
            Locals.alloc_live_access;
-           BasilExpr.rvar Locals.alloc;
-           BasilExpr.rvar Locals.live;
+           rvar Locals.alloc;
+           rvar Locals.live;
          ])
 
   let allocate_body =
     let alloc =
       Calls.addr_alloc
-        [ BasilExpr.rvar Locals.mem_encoding; BasilExpr.rvar Locals.addr ]
+        [ rvar Locals.mem_encoding; rvar Locals.addr ]
     in
 
     Calls.alloc_size_update
       [
         Calls.alloc_live_update
-          [ BasilExpr.rvar Locals.mem_encoding; alloc; BasilExpr.bvconst live ];
+          [ rvar Locals.mem_encoding; alloc; bvconst live ];
         alloc;
-        BasilExpr.rvar Locals.size;
+        rvar Locals.size;
       ]
 
   let init_encoding_body =
     let i = Var.create "i" ~scope:Var.Local (Types.Bitvector 64) in
-    BasilExpr.applyintrin ~op:`AND
+    applyintrin ~op:`AND
       [
         (* Ensure that all heap addresses are bigger than the largest global address *)
-        BasilExpr.forall
+        forall
           ~attrib:
             (`Assoc
                (StringMap.of_list
@@ -414,22 +413,22 @@ module SplitMemory : MemoryEncoding = struct
                               `Expr
                                 (Calls.addr_is_heap
                                    [
-                                     BasilExpr.rvar Locals.mem_encoding;
-                                     BasilExpr.rvar i;
+                                     rvar Locals.mem_encoding;
+                                     rvar i;
                                    ]);
                             ];
                         ] );
                   ]))
           ~bound:[ i ]
-          (BasilExpr.binexp ~op:`EQ
-             (BasilExpr.binexp ~op:`BVULT
+          (binexp ~op:`EQ
+             (binexp ~op:`BVULT
                 (* TODO compute this value somehow *)
-                (BasilExpr.bv_of_int 100000000 ~size:64)
-                (BasilExpr.rvar i))
+                (bv_of_int 100000000 ~size:64)
+                (rvar i))
              (Calls.addr_is_heap
-                [ BasilExpr.rvar Locals.mem_encoding; BasilExpr.rvar i ]));
+                [ rvar Locals.mem_encoding; rvar i ]));
         (* Heap addresses are initially fresh *)
-        BasilExpr.forall
+        forall
           ~attrib:
             (`Assoc
                (StringMap.of_list
@@ -442,22 +441,22 @@ module SplitMemory : MemoryEncoding = struct
                               `Expr
                                 (Calls.alloc_live
                                    [
-                                     BasilExpr.rvar Locals.mem_encoding;
-                                     BasilExpr.rvar i;
+                                     rvar Locals.mem_encoding;
+                                     rvar i;
                                    ]);
                             ];
                         ] );
                   ]))
           ~bound:[ i ]
-          (BasilExpr.binexp ~op:`IMPLIES
+          (binexp ~op:`IMPLIES
              (Calls.addr_is_heap
-                [ BasilExpr.rvar Locals.mem_encoding; BasilExpr.rvar i ])
-             (BasilExpr.binexp ~op:`EQ
+                [ rvar Locals.mem_encoding; rvar i ])
+             (binexp ~op:`EQ
                 (Calls.alloc_live
-                   [ BasilExpr.rvar Locals.mem_encoding; BasilExpr.rvar i ])
-                (BasilExpr.bvconst fresh)));
+                   [ rvar Locals.mem_encoding; rvar i ])
+                (bvconst fresh)));
         (* Non heap addresses are dead *)
-        BasilExpr.forall
+        forall
           ~attrib:
             (`Assoc
                (StringMap.of_list
@@ -470,62 +469,62 @@ module SplitMemory : MemoryEncoding = struct
                               `Expr
                                 (Calls.alloc_live
                                    [
-                                     BasilExpr.rvar Locals.mem_encoding;
-                                     BasilExpr.rvar i;
+                                     rvar Locals.mem_encoding;
+                                     rvar i;
                                    ]);
                             ];
                         ] );
                   ]))
           ~bound:[ i ]
-          (BasilExpr.binexp ~op:`IMPLIES
-             (BasilExpr.boolnot
+          (binexp ~op:`IMPLIES
+             (boolnot
                 (Calls.addr_is_heap
-                   [ BasilExpr.rvar Locals.mem_encoding; BasilExpr.rvar i ]))
-             (BasilExpr.binexp ~op:`EQ
+                   [ rvar Locals.mem_encoding; rvar i ]))
+             (binexp ~op:`EQ
                 (Calls.alloc_live
-                   [ BasilExpr.rvar Locals.mem_encoding; BasilExpr.rvar i ])
-                (BasilExpr.bvconst dead)));
+                   [ rvar Locals.mem_encoding; rvar i ])
+                (bvconst dead)));
       ]
 
   let valid_access_body =
-    BasilExpr.binexp ~op:`IMPLIES
+    binexp ~op:`IMPLIES
       (Calls.addr_is_heap
-         [ BasilExpr.rvar Locals.mem_encoding; BasilExpr.rvar Locals.addr ])
-      (BasilExpr.applyintrin ~op:`AND
+         [ rvar Locals.mem_encoding; rvar Locals.addr ])
+      (applyintrin ~op:`AND
          [
-           BasilExpr.binexp ~op:`EQ
+           binexp ~op:`EQ
              (Calls.alloc_live
                 [
-                  BasilExpr.rvar Locals.mem_encoding;
+                  rvar Locals.mem_encoding;
                   Calls.alloc_base
                     [
-                      BasilExpr.rvar Locals.mem_encoding;
+                      rvar Locals.mem_encoding;
                       Calls.addr_alloc
                         [
-                          BasilExpr.rvar Locals.mem_encoding;
-                          BasilExpr.rvar Locals.addr;
+                          rvar Locals.mem_encoding;
+                          rvar Locals.addr;
                         ];
                     ];
                 ])
-             (BasilExpr.bvconst live);
-           BasilExpr.binexp ~op:`BVULE
+             (bvconst live);
+           binexp ~op:`BVULE
              (Calls.addr_offset
                 [
-                  BasilExpr.rvar Locals.mem_encoding;
-                  BasilExpr.binexp ~op:`BVADD
-                    (BasilExpr.rvar Locals.addr)
-                    (BasilExpr.rvar Locals.size);
+                  rvar Locals.mem_encoding;
+                  binexp ~op:`BVADD
+                    (rvar Locals.addr)
+                    (rvar Locals.size);
                 ])
              (Calls.alloc_size
                 [
-                  BasilExpr.rvar Locals.mem_encoding;
+                  rvar Locals.mem_encoding;
                   Calls.alloc_base
                     [
-                      BasilExpr.rvar Locals.mem_encoding;
+                      rvar Locals.mem_encoding;
                       Calls.addr_alloc
                         [
-                          BasilExpr.rvar Locals.mem_encoding;
-                          BasilExpr.rvar Locals.addr;
+                          rvar Locals.mem_encoding;
+                          rvar Locals.addr;
                         ];
                     ];
                 ]);
