@@ -8,7 +8,7 @@
   defuse_bool
   lattice_types
   ide
-  irreducible_loop
+  irreducible_loops
   idessi
   ide_live
   lattice_collections

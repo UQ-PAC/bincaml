@@ -1,5 +1,5 @@
 open Bincaml_util.Common
-open Analysis.Irreducible_loop
+open Analysis.Irreducible_loops
 
 type test_comparison = {
   iloop_headers : string StringMap.t;
@@ -29,13 +29,12 @@ let check_test_comparison a b =
     "loop header->participant sets equal" a.headers b.headers
 
 let assert_loop_detector p iloop_headers headers =
-  let loops = TraverseLoops.analyse p in
+  let loops = solve_loop_heirachy p in
   let headers =
     List.map (Pair.map Fun.id StringSet.of_list) headers |> StringMap.of_list
   in
   let iloop_headers = StringMap.of_list iloop_headers in
   let expect = { iloop_headers; headers } in
-  let open IrreducibleLoops in
   let headers =
     List.filter_map
       (function
