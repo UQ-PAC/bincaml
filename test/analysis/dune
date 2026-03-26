@@ -9,11 +9,9 @@
   bincaml.util
   bincaml
   bincaml.analysis
-  qcheck-alcotest
-  )
+  qcheck-alcotest)
  (preprocess
   (pps ppx_expect)))
-
 
 (test
  (modules analysis_tests test_irreducible_loops lattice_collections)
@@ -27,6 +25,4 @@
   bincaml.analysis
   alcotest
   qcheck-alcotest
-  qcheck-core)
- )
-
+  qcheck-core))
