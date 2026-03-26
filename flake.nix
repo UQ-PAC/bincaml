@@ -1,14 +1,20 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+
+    pac-nix.url = "github:katrinafyi/pac-nix";
+    # WARNING: this follows won't work because it causes bnfc build failure
+    # pac-nix.inputs.nixpkgs.follows = "nixpkgs";
+
     infuse-src.url = "https://codeberg.org/awarina/infuse.nix/archive/trunk.tar.gz";
     infuse-src.flake = false;
   };
   outputs =
     {
       self,
-      nixpkgs,
       infuse-src,
+      nixpkgs,
+      pac-nix,
     }@args:
     let
       inherit (nixpkgs) lib;
@@ -52,8 +58,16 @@
         "x86_64-darwin"
       ];
       perSystem =
-        { self, nixpkgs, ... }:
+        {
+          self,
+          system,
+          nixpkgs,
+          pac-nix,
+          ...
+        }:
         let
+          inherit (pac-nix.legacyPackages) bnfc-treesitter;
+
           pkgs = nixpkgs.legacyPackages;
           selfOcamlPackages = pkgs.ocamlPackages.overrideScope self.overlays.addBincamlPackages;
           fpOcamlPackages = selfOcamlPackages.overrideScope self.overlays.enableOcamlFramePointer;
@@ -73,8 +87,8 @@
 
           devShells = {
             default = self.devShells.fp;
-            fp = fpOcamlPackages.callPackage ./nix/shell.nix { };
-            no-fp = selfOcamlPackages.callPackage ./nix/shell.nix { };
+            fp = fpOcamlPackages.callPackage ./nix/shell.nix { inherit bnfc-treesitter; };
+            no-fp = selfOcamlPackages.callPackage ./nix/shell.nix { inherit bnfc-treesitter; };
           };
         };
     };

@@ -7,9 +7,9 @@
   cf_tx
   livevars
   cleanup_cfg
-  ide
   may_read_uninit
   type_check
+  function_summaries
   boogie_prepass
   gamma_vars)
  (libraries
