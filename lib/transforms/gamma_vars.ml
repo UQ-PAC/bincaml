@@ -159,7 +159,6 @@ let transform_proc ?(check_names = false) (add : ID.t -> Var.t -> bool) prog
   (* Add gamma in/out vars *)
   let add_param s v m =
     if add (Procedure.id proc) v then (
-      (* TODO gamma vars are added to the start of the arg list, not end... *)
       if check_names then check_var v;
       let g = gamma_of v in
       StringMap.add (Var.name g) g m)
