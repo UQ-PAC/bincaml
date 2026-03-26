@@ -62,7 +62,15 @@ let new_state ~notify_back (contents : string) : state_after_processing =
   let tokens = Lwt_react.S.map parse_tokens contents in
   let diagnostics =
     Lwt_react.S.l2
-      (function false -> Fun.const [] | true -> List.map to_diagnostic)
+      (fun debug_highlight tokens ->
+        let tokens =
+          List.filter
+            (fun (tok : Bincaml_lsp.Raw_tokens.token_with_pos) ->
+              if (not debug_highlight) && Result.is_ok tok.token then false
+              else true)
+            tokens
+        in
+        List.map to_diagnostic tokens)
       debug_highlight_signal tokens
   in
   let diagnostics =

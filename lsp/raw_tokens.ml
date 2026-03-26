@@ -169,7 +169,7 @@ let show_lexbuf (buf : Lexing.lexbuf) =
 
 let error_token ~startpos () : token_with_pos =
   let endpos = startpos in
-  { token = Error (); str = "<ERROR>"; startpos; endpos }
+  { token = Error (); str = "Syntax error: unrecognised token"; startpos; endpos }
 
 let dummy_token (buf : Lexing.lexbuf) () : token_with_pos =
   let startpos = buf.lex_start_p in
