@@ -166,6 +166,11 @@ class lsp_server =
     method! config_list_commands = [ "toggle-highlight" ]
     method! config_code_action_provider = `Bool true
 
+    method! config_completion =
+      Some
+        (Linol_lwt.CompletionOptions.create
+           ~triggerCharacters:[ "."; "$"; "@"; "#" ] ())
+
     method! on_req_execute_command ~notify_back ~id ~workDoneToken cmd args =
       let open Lwt.Infix in
       Logs.app (fun m -> m "execute");
@@ -188,6 +193,56 @@ class lsp_server =
       let uri = params.textDocument.uri in
       Lwt.return
         (Some [ `CodeAction (self#toggle_highlight_code_action ~uri ()) ])
+
+    method! on_req_completion ~notify_back ~id ~uri ~pos ~ctx ~workDoneToken
+        ~partialResultToken doc_state =
+      Logs.app (fun m -> m "req completion");
+      let st = self#get uri in
+
+      (* TODO: how to handle reactive delay in propagating tokens?? *)
+      let tokens = Lwt_react.S.value st.tokens in
+
+      let to_token_strings ts =
+        List.filter_map
+          (fun (x : Bincaml_lsp.Raw_tokens.token_with_pos) ->
+            let open Bincaml_lsp.Raw_tokens in
+            match x.token with
+            | Ok (TOK_ProcIdent (_, id)) -> Some id
+            | _ -> None)
+          ts
+      in
+      let tokens_under_cursor =
+        tokens
+        |> List.filter (fun (x : Bincaml_lsp.Raw_tokens.token_with_pos) ->
+            let open Bincaml_lsp.Raw_tokens in
+            lsprange_contains (lsprange_of_token x) pos)
+        |> to_token_strings
+      in
+      List.iter
+        (fun x -> Logs.app (fun m -> m "under tok = %s" x))
+        tokens_under_cursor;
+      match tokens_under_cursor with
+      | [] -> Lwt.return None
+      | under_cursor :: _ ->
+          let matching_tokens =
+            tokens |> to_token_strings
+            |> List.filter (fun s -> String.starts_with ~prefix:under_cursor s)
+          in
+          List.iter
+            (fun x -> Logs.app (fun m -> m "matching = %s" x))
+            matching_tokens;
+          Lwt.return
+          @@ Some
+               (`List
+                  (List.map
+                     (fun x ->
+                       Linol.Lsp.Types.CompletionItem.create ~insertText:x
+                         ~kind:Linol.Lsp.Types.CompletionItemKind.Method
+                         ~labelDetails:
+                           (Linol.Lsp.Types.CompletionItemLabelDetails.create
+                              ~detail:"procedure" ())
+                         ~label:x ())
+                     matching_tokens))
 
     (* method! on_req_code_lens_resolve ~notify_back ~id code_lens = *)
     (*   Lwt.return code_lens *)

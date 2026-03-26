@@ -152,6 +152,15 @@ open struct
   [@@deriving show]
 end
 
+let lsppos_of_position (x : Lexing.position) =
+  let character = x.pos_cnum - x.pos_bol in
+  let line = x.pos_lnum - 1 in
+  Linol.Lsp.Types.Position.create ~character ~line
+
+let lsppos_compare =
+  CCOrd.map (fun (x : Linol.Lsp.Types.Position.t) -> (x.line, x.character))
+  @@ CCOrd.pair CCOrd.int CCOrd.int
+
 type token_with_pos = {
   token : (raw_token, unit) result;
   str : string;
@@ -159,6 +168,14 @@ type token_with_pos = {
   endpos : position;
 }
 [@@deriving show]
+
+let lsprange_of_token (x : token_with_pos) =
+  let start = lsppos_of_position x.startpos
+  and end_ = lsppos_of_position x.endpos in
+  Linol.Lsp.Types.Range.create ~start ~end_
+
+let lsprange_contains (x : Linol.Lsp.Types.Range.t) pos =
+  lsppos_compare x.start pos <= 0 && lsppos_compare pos x.end_ <= 0
 
 let show_lexbuf (buf : Lexing.lexbuf) =
   Printf.sprintf
@@ -169,7 +186,12 @@ let show_lexbuf (buf : Lexing.lexbuf) =
 
 let error_token ~startpos () : token_with_pos =
   let endpos = startpos in
-  { token = Error (); str = "Syntax error: unrecognised token"; startpos; endpos }
+  {
+    token = Error ();
+    str = "Syntax error: unrecognised token";
+    startpos;
+    endpos;
+  }
 
 let dummy_token (buf : Lexing.lexbuf) () : token_with_pos =
   let startpos = buf.lex_start_p in
