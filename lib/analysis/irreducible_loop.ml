@@ -41,7 +41,7 @@ open Common
 
 module IrreducibleLoops = struct
   type loop_edge = { from_block : ID.t; to_block : ID.t }
-  [@@deriving eq, ord, show]
+  [@@deriving eq, ord, show { with_path = false }]
 
   (*
   type block_loop_info = {
@@ -67,6 +67,8 @@ module IrreducibleLoops = struct
 
   type loop_info =
     | PrimaryHeader of {
+        primary_header : ID.t option;
+            (** next-outermost header to this loop, if we are inside a loop *)
         headers : ID.Set.t;
             (** the set of blocks which can be used to enter the loop. a header
                 is defined as dominating all non-header nodes of the loop. *)
@@ -141,7 +143,7 @@ module IrreducibleLoops = struct
             loop, this always contains `b` as the primary header. for
             irreducible loops, it also contains secondary headers. *)
   }
-  [@@deriving show]
+  [@@deriving show { with_path = false }]
 
   let is_irreducible { headers } = ID.Set.cardinal headers > 1
   let is_reducible { headers } = ID.Set.cardinal headers = 1
@@ -155,6 +157,7 @@ module IrreducibleLoops = struct
       if is_loop_header e then
         PrimaryHeader
           {
+            primary_header = e.iloop_header;
             headers = e.headers;
             nodes;
             entries = compute_entries p e.block e.headers nodes;
@@ -170,15 +173,15 @@ module IrreducibleLoops = struct
   let compute_block_loop_info p (block_states : block_loop_state ID.Map.t) :
       block_info list =
     let open Iter in
-    let blocks =
+    (*NOTE: loops are in *bottom-up topological order.*)
+    let all_blocks =
       ID.Map.values block_states
       |> sort ~cmp:(fun a b -> -Int.compare a.dfsp_pos_max b.dfsp_pos_max)
     in
     let header_blocks =
       filter
-        (function
-          | { headers } when ID.Set.is_empty headers -> false | _ -> true)
-        blocks
+        (function { headers } -> not @@ ID.Set.is_empty headers)
+        all_blocks
       |> Iter.persistent
     in
     let (forest : ID.Set.t ID.Map.t) =
@@ -186,44 +189,56 @@ module IrreducibleLoops = struct
       |> map (fun b -> (b.block, ID.Set.singleton b.block))
       |> ID.Map.of_iter
     in
+
+    (* NOTE: iterates the forest in *bottom-up* topological order. this
+       ensures that node-sets of sub-cycles are fully populated before
+       processing their parent cycle. this avoids us having to compute
+       closures of node-sets.*)
     let forest =
-      Iter.fold
-        (fun forest ->
-          (function
-          | { iloop_header = None } -> forest
-          | { iloop_header = Some h; block } ->
-              ID.Map.update h
-                (function
-                  | None -> Some (ID.Set.singleton block)
-                  | Some e -> Some (ID.Set.add block e))
-                forest))
-        forest header_blocks
+      all_blocks
+      |> fold
+           (fun forest ->
+             (function
+             | { iloop_header = None } -> forest
+             | { iloop_header = Some h; block } ->
+                 ID.Map.update h
+                   (function
+                     | None -> Some (ID.Set.singleton block)
+                     | Some e -> Some (ID.Set.add block e))
+                   forest))
+           forest
     in
     let forest =
-      Iter.fold
-        (fun forest -> function
-          | { iloop_header = None } -> forest
-          | { iloop_header = Some h; block } ->
-              let a = ID.Map.find block forest in
-              ID.Map.update h
-                (function None -> Some a | Some e -> Some (ID.Set.union a e))
-                forest)
-        forest header_blocks
+      header_blocks
+      |> fold
+           (fun forest -> function
+             | { iloop_header = None } -> forest
+             | { iloop_header = Some h; block } ->
+                 let a = ID.Map.find block forest in
+                 ID.Map.update h
+                   (function
+                     | None -> Some a | Some e -> Some (ID.Set.union a e))
+                   forest)
+           forest
     in
     header_blocks
-    |> Iter.iter (fun b ->
+    |> iter (fun b ->
         let nodes = ID.Map.find b.block forest in
         let bad_headers =
-          ID.Set.exists
+          ID.Set.filter
             (fun x ->
-              Procedure.blocks_pred p x
-              |> exists (fun (b, _) -> not @@ ID.Set.mem b nodes))
+              not
+                (Procedure.blocks_pred p x
+                |> exists (fun (b, _) -> not @@ ID.Set.mem b nodes)))
             b.headers
         in
-        if bad_headers then failwith "bad header");
+        if not @@ ID.Set.is_empty bad_headers then
+          failwith @@ "loop has invalid headers: " ^ ID.to_string b.block
+          ^ " bad headers: "
+          ^ ID.Set.to_string ID.to_string bad_headers);
 
     let new_loops =
-      blocks
+      all_blocks
       |> map (fun b ->
           let participants =
             ID.Map.find_opt b.block forest
@@ -276,24 +291,23 @@ module TraverseLoops = struct
 
   (** Sets `h` as the loop header for the block `b` and all containing loops. *)
   let tag_lhead s (b : block_loop_state) (h : block_loop_state option) =
-    let exception Ret in
-    try
-      match h with
-      | Some h when not @@ ID.equal b.block h.block -> begin
-          let rec loop (cur1 : block_loop_state) (cur2 : block_loop_state) =
-            match cur1.iloop_header with
-            | Some ih when ID.equal ih cur2.block -> ()
-            | Some ih ->
-                if (s.l ih).dfsp_pos < cur2.dfsp_pos then (
-                  cur1.iloop_header <- Some cur2.block;
-                  loop cur2 (s.l ih))
-                else loop (s.l ih) cur2
-            | None -> ()
-          in
-          loop b h
-        end
-      | _ -> ()
-    with Ret -> ()
+    print_endline "tag lhead";
+    match h with
+    | Some h when not @@ ID.equal b.block h.block -> begin
+        print_endline (show_block_loop_state h);
+        let rec loop ~(cur1 : block_loop_state) ~(cur2 : block_loop_state) =
+          match cur1.iloop_header with
+          | Some ih when ID.equal ih cur2.block -> ()
+          | Some ih ->
+              if (s.l ih).dfsp_pos < cur2.dfsp_pos then (
+                cur1.iloop_header <- Some cur2.block;
+                loop ~cur1:cur2 ~cur2:(s.l ih))
+              else loop ~cur1:(s.l ih) ~cur2
+          | None -> cur1.iloop_header <- Some cur2.block
+        in
+        loop ~cur1:b ~cur2:h
+      end
+    | _ -> ()
 
   (** {List.iteri} but for each element we pass the tail of the list. *)
   let rec iter_tails f l =
@@ -322,61 +336,70 @@ module TraverseLoops = struct
       `Right` argument. We use local exceptions to represent early termination 
       to the recursive call. *)
   let rec trav_loops st (input : call_action)
-      (continuations : continuation_stack) =
+      (input_continuations : continuation_stack) =
     let open Iter in
     let exception Ret of block_loop_state option in
     let exception Recurse of (call_action * continuation_stack) in
     let run () =
       let b0, dfsp_pos, it, continuations =
-        match (input, continuations) with
-        | Call { block; dfsp_pos }, _ -> begin
+        match (input, input_continuations) with
+        | Call { block; dfsp_pos }, conts -> begin
             (* Normal function entry. The code here is in the entry
                of the paper's algorithm, before the loop begins. *)
             block.dfsp_pos <- dfsp_pos;
             block.dfsp_pos_max <- dfsp_pos;
             block.is_traversed <- true;
-            let it =
-              st.succ block |> map (fun b -> ID.Map.find b st.loops) |> to_list
-            in
-            (block, dfsp_pos, it, continuations)
+            let it = st.succ block |> map st.l |> to_list in
+            (block, dfsp_pos, it, conts)
           end
-        | Return return, ({ block = b0; dfsp_pos }, it) :: rest -> begin
+        | Return nh, ({ block = b0; dfsp_pos }, it) :: rest -> begin
             (* Return from a recursive subcall with remaining call stack. This simply calls
                tag_lhead, which appears in the algorithm after the recursive
                subcall, then continues the iteration using the stored `it`. *)
-            tag_lhead st b0 return;
+            tag_lhead st b0 nh;
             (b0, dfsp_pos, it, rest)
           end
-        | Return return, [] ->
+        | Return nh, [] ->
             (* this is the outermost call : we are done*)
-            raise (Ret return)
+            raise (Ret nh)
       in
       (* iterate the remaining blocks *)
-      it
-      |> iter_tails (fun it block ->
-          match block with
-          | { is_traversed = true } ->
+      iter_tails
+        (fun it b ->
+          print_endline
+            (Printf.sprintf "%s %d"
+               (ID.to_string (b : block_loop_state).block)
+               (List.length it));
+          match b with
+          | { is_traversed = false } ->
               raise
                 (Recurse
-                   ( Call { block; dfsp_pos = dfsp_pos + 1 },
+                   ( Call { block = b; dfsp_pos = dfsp_pos + 1 },
                      ({ block = b0; dfsp_pos }, it) :: continuations ))
-          | { iloop_header = Some h; block } -> begin
-              if (st.l h).dfsp_pos > 0 then tag_lhead st b0 (Some (st.l h))
+          | { dfsp_pos } when dfsp_pos > 0 -> begin
+              b.headers <- ID.Set.add b.block b.headers;
+              tag_lhead st b0 (Some b)
+            end
+          | { iloop_header = None } -> ()
+          | { iloop_header = Some h } -> begin
+              let h = st.l h in
+              if h.dfsp_pos > 0 then tag_lhead st b0 (Some h)
               else begin
-                (st.l h).headers <- ID.Set.add block (st.l h).headers;
+                h.headers <- ID.Set.add b.block h.headers;
                 let rec loop h =
                   match h.iloop_header with
                   | None -> ()
                   | Some h when (st.l h).dfsp_pos > 0 ->
                       tag_lhead st b0 (Some (st.l h))
-                  | _ ->
-                      h.headers <- ID.Set.add block h.headers;
+                  | Some h ->
+                      let h = st.l h in
+                      h.headers <- ID.Set.add b.block h.headers;
                       loop h
                 in
-                loop (st.l h)
+                loop h
               end
-            end
-          | { iloop_header = None } -> ());
+            end)
+        it;
       b0.dfsp_pos <- 0;
       let result = Option.map st.l b0.iloop_header in
       raise (Recurse (Return result, continuations))
@@ -385,10 +408,18 @@ module TraverseLoops = struct
     | Ret r -> r
     | Recurse (c, continuations) -> trav_loops st c continuations
 
+  let dbg_show st =
+    print_endline
+    @@ (ID.Map.to_iter st.loops
+       |> Iter.to_string (fun (k, v) ->
+           Printf.sprintf "%s -> %s" (ID.to_string k) (show_block_loop_state v))
+       )
+
   let analyse p =
     let st = create p in
     Procedure.get_entry_block p
     |> Option.iter (fun entry ->
         ignore @@ trav_loops st (Call { block = st.l entry; dfsp_pos = 1 }) []);
+    dbg_show st;
     IrreducibleLoops.compute_block_loop_info p st.loops
 end
