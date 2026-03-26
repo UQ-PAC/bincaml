@@ -22,9 +22,9 @@ let check_var v =
   assert (not @@ String.starts_with ~prefix:"Gamma_" @@ Var.name v)
 
 let gamma_of v =
-  Var.create
-    ("Gamma_" ^ Var.name v)
-    ~pure:(Var.pure v) ~scope:(Var.scope v) Types.bool
+  let args, r = Types.uncurry (Var.typ v) in
+  let typ = Types.curry args Boolean in
+  Var.create ("Gamma_" ^ Var.name v) ~pure:(Var.pure v) ~scope:(Var.scope v) typ
 
 let add_globals ?(check_names = false) (add : Var.t -> bool) (p : Program.t) =
   StringMap.fold
@@ -39,16 +39,23 @@ let add_globals ?(check_names = false) (add : Var.t -> bool) (p : Program.t) =
 
 let gamma_expr ?(check_names = false) (add : Var.t -> bool)
     (e : Expr.BasilExpr.t) =
-  Expr.BasilExpr.applyintrin ~op:`OR
-    (Expr.BasilExpr.free_vars_iter e
+  (* TODO handle maps ? *)
+  let vars =
+    Expr.BasilExpr.free_vars_iter e
     |> Iter.map (fun v ->
         if check_names then check_var v;
         v)
     |> Iter.map gamma_of
     |> Iter.map Expr.BasilExpr.rvar
-    |> List.of_iter)
+    |> List.of_iter
+  in
+  match vars with
+  | [] -> Expr.BasilExpr.boolconst true
+  | [ v ] -> v
+  | l -> Expr.BasilExpr.applyintrin ~op:`OR l
 
 let update_expr ?(check_names = false) (add : Var.t -> bool) =
+  (* TODO handle maps ? *)
   let open Expr.AbstractExpr in
   let open Expr.BasilExpr in
   Expr.BasilExpr.rewrite ~rw_fun:(function
