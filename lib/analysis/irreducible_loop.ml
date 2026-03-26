@@ -276,7 +276,7 @@ module Implementation = struct
       end
     | _ -> ()
 
-  (** {List.iteri} but for each element we pass the tail of the list. *)
+  (** Like {! List.iteri} but for each element we pass the tail of the list. *)
   let rec iter_tails f l =
     match l with
     | h :: tl ->
@@ -298,12 +298,12 @@ module Implementation = struct
       The original algorithm has one recursive call, so its tail-recursive form
       has two "entry points" - one from the beginning of the function, and one
       when a recursive subcall has returned and wants to continue. This is
-      implemented by using the {call_action} parameter. The [Call] variant
+      implemented by using the {!call_action} parameter. The [Call] variant
       denotes a normal call to the function with arguments {call_arg}, and
       the [Return] variant denotes a return from a recursive subcall,
       with its argument being the return value of the recursive subcall.
 
-      This is combined with a stack of nested calls ({continuation_stack}). A
+      This is combined with a stack of nested calls ({!continuation_stack}). A
       recursive "call" happens by invoking the function with [Call] and pushing
       the current [call_args] onto the stack. In particular, storing the remainder of 
       the [it] list lets us resume the iteration at a later point. Upon completing
