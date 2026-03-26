@@ -66,7 +66,7 @@ module Domain (S : RequiresAnnotation) = struct
                     (ApplyIntrin
                        {
                          attrib;
-                         op = `OR;
+                         op = `AND;
                          args =
                            vars
                            |> List.map
