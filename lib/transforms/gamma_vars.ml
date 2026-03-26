@@ -26,6 +26,9 @@ let gamma_of v =
   let typ = Types.curry args Boolean in
   Var.create ("Gamma_" ^ Var.name v) ~pure:(Var.pure v) ~scope:(Var.scope v) typ
 
+let add_decl proc gv =
+    if Var.is_local gv then Hashtbl.replace (Procedure.local_decls proc) (Var.name gv) gv
+
 let add_globals ?(check_names = false) (add : Var.t -> bool) (p : Program.t) =
   StringMap.fold
     (fun s decl p ->
@@ -52,7 +55,7 @@ let gamma_expr ?(check_names = false) (add : Var.t -> bool)
   match vars with
   | [] -> Expr.BasilExpr.boolconst true
   | [ v ] -> v
-  | l -> Expr.BasilExpr.applyintrin ~op:`OR l
+  | l -> Expr.BasilExpr.applyintrin ~op:`AND l
 
 let update_expr ?(check_names = false) (add : Var.t -> bool) =
   (* TODO handle maps ? *)
@@ -63,12 +66,14 @@ let update_expr ?(check_names = false) (add : Var.t -> bool) =
         replace [%here] (gamma_expr ~check_names add arg)
     | _ -> Keep)
 
-let update_lhs ?(check_names = false) add_cur add_target m =
+let update_lhs ?(check_names = false) add_cur add_target proc m =
   StringMap.fold
     (fun s v m ->
       if add_cur v && add_target s then (
         if check_names then check_var v;
-        StringMap.add ("Gamma_" ^ s) (gamma_of v) m)
+        let gv = gamma_of v in
+        add_decl proc gv;
+        StringMap.add ("Gamma_" ^ s) gv m)
       else m)
     m m
 
@@ -85,6 +90,7 @@ let update_stmts ?(check_names = false) (add : ID.t -> Var.t -> bool) pid
     (prog : Program.t) (b : (Var.t, Expr.BasilExpr.t) Block.t) =
   let open Stmt in
   let update_expr = update_expr ~check_names (add pid) in
+  let proc = ID.Map.find pid prog.procs in
   Block.map
     ~phi:(fun a ->
       List.flat_map
@@ -109,6 +115,7 @@ let update_stmts ?(check_names = false) (add : ID.t -> Var.t -> bool) pid
                    if check_names then check_var l;
                    let gl = gamma_of l in
                    let ge = gamma_expr ~check_names (add pid) e in
+                   add_decl proc gl;
                    [ (gl, ge); (l, e) ])
                  else [ (l, e) ])
                a)
@@ -121,7 +128,7 @@ let update_stmts ?(check_names = false) (add : ID.t -> Var.t -> bool) pid
       | Instr_IntrinCall { lhs; name; args } ->
           Instr_IntrinCall
             {
-              lhs = update_lhs ~check_names (add pid) (fun _ -> true) lhs;
+              lhs = update_lhs ~check_names (add pid) (fun _ -> true) proc lhs;
               name;
               args = update_args ~check_names (add pid) (fun _ -> true) args;
             }
@@ -134,7 +141,7 @@ let update_stmts ?(check_names = false) (add : ID.t -> Var.t -> bool) pid
                   (fun s ->
                     add procid
                       (StringMap.find s (Procedure.formal_out_params callee)))
-                  lhs;
+                  proc lhs;
               procid;
               args =
                 update_args ~check_names (add pid)
@@ -152,6 +159,7 @@ let transform_proc ?(check_names = false) (add : ID.t -> Var.t -> bool) prog
   (* Add gamma in/out vars *)
   let add_param s v m =
     if add (Procedure.id proc) v then (
+      (* TODO gamma vars are added to the start of the arg list, not end... *)
       if check_names then check_var v;
       let g = gamma_of v in
       StringMap.add (Var.name g) g m)
