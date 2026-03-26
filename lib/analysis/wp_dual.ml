@@ -98,8 +98,7 @@ module Domain (S : RequiresAnnotation) = struct
     | Instr_Load l -> top
     | Instr_Assert { body } -> join p (BasilExpr.unexp ~op:`BoolNOT body)
     | Instr_Assume { body; branch } ->
-        (* NOTE: if security conditions are added into the ir with a transform
-           then this match case is incorrect and should be ignored *)
+        (* TODO: once verification conditions are added as a transform remove this branch *)
         let p =
           BasilExpr.applyintrin ~op:`AND
             [ p; BasilExpr.unexp ~op:`BoolNOT body ]

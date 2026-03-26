@@ -166,14 +166,25 @@ module PassManager = struct
     {
       name = "intra-function-summaries";
       apply = Proc Transforms.Function_summaries.intraproc_transform;
-      doc = "Generate function summaries for each procedure";
+      doc =
+        "Generate function summaries for each procedure independently. The \
+         generated summaries will be a refinement with respect to wp logic \
+         only, i.e. all \"correct\" inputs will remain allowed, and all \
+         described outputs will be \"correct\". There is no guarantee of \
+         completeness.";
     }
 
   let inter_function_summaries =
     {
       name = "inter-function-summaries";
       apply = Prog Transforms.Function_summaries.interproc_transform;
-      doc = "Generate function summaries for each procedure";
+      doc =
+        "Generate function summaries for each procedure intraprocedurally. \
+         Summaries generated for called procedures will be used in the \
+         generation of caller procedures. The generated summaries will be a \
+         refinement with respect to wp logic only, i.e. all \"correct\" inputs \
+         will remain allowed, and all described outputs will be \"correct\". \
+         There is no guarantee of completeness. Depends on Z3.";
     }
 
   let passes =
@@ -225,7 +236,8 @@ module PassManager = struct
       {
         name = "lambda-lifting";
         apply =
-          Prog (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
+          Prog
+            (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
       };
     ]
