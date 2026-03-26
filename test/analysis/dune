@@ -1,5 +1,6 @@
 (library
  (name bincaml_analysis_test)
+ (modules ide_live known_bits wrapped_intervals)
  (inline_tests)
  (libraries
   bincaml.loader
@@ -9,6 +10,23 @@
   bincaml
   bincaml.analysis
   qcheck-alcotest
-  qcheck-core)
+  )
  (preprocess
   (pps ppx_expect)))
+
+
+(test
+ (modules analysis_tests test_irreducible_loops lattice_collections)
+ (name analysis_tests)
+ (libraries
+  bincaml.loader
+  bincaml.ast
+  bincaml.transforms
+  bincaml.util
+  bincaml
+  bincaml.analysis
+  alcotest
+  qcheck-alcotest
+  qcheck-core)
+ )
+

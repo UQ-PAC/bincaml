@@ -51,7 +51,8 @@ module TestLattice = struct
     QCheck.Test.make ~name:"set_join_leq" (QCheck.pair arbitrary arbitrary)
       (fun (a, b) -> Bool.equal (leq a b) (equal (join a b) b))
 
-  let _ = QCheck_base_runner.run_tests [ idem; union_prop; join_leq ]
+  let tests =
+    List.map QCheck_alcotest.to_alcotest [ idem; union_prop; join_leq ]
 end
 
 module TestMap = struct
@@ -98,7 +99,9 @@ module TestMap = struct
     QCheck.Test.make ~name:"map_join_leq" (QCheck.pair arbitrary arbitrary)
       (fun (a, b) -> Bool.equal (leq a b) (equal (join a b) b))
 
-  let _ =
-    QCheck_base_runner.run_tests
-      [ idem; pointwise_join; pointwise_update; join_leq ]
+  let tests =
+    [ idem; pointwise_join; pointwise_update; join_leq ]
+    |> List.map QCheck_alcotest.to_alcotest
 end
+
+let tests = [ ("map lattice", TestMap.tests); ("lattice", TestLattice.tests) ]

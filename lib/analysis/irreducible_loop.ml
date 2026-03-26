@@ -136,8 +136,7 @@ module IrreducibleLoops = struct
         [@printer
           fun fmt m ->
             Format.pp_print_string fmt
-              (ID.Set.to_string ~sep:", " ~start:"{" ~stop:"}" ID.to_string
-                 m.headers)]
+              (ID.Set.to_string ~sep:", " ~start:"{" ~stop:"}" ID.to_string m)]
         (** headers of the loop headed by this block. if this block heads a
             loop, this always contains `b` as the primary header. for
             irreducible loops, it also contains secondary headers. *)
@@ -271,12 +270,11 @@ module TraverseLoops = struct
     in
     { procedure; loops; l; succ; pred }
 
-  type arg = { block : block_loop_state; dfsp_pos : int }
+  type call_arg = { block : block_loop_state; dfsp_pos : int }
+  type call_action = Call of call_arg | Return of block_loop_state option
+  type continuation_stack = (call_arg * block_loop_state list) list
 
-  type c =
-    | Call of arg  (** left *)
-    | Return of block_loop_state option  (** right *)
-
+  (** Sets `h` as the loop header for the block `b` and all containing loops. *)
   let tag_lhead s (b : block_loop_state) (h : block_loop_state option) =
     let exception Ret in
     try
@@ -297,25 +295,43 @@ module TraverseLoops = struct
       | _ -> ()
     with Ret -> ()
 
-  type continuation_stack = (arg * block_loop_state list) list
-
-  let rec iter_snocs l f =
+  (** {List.iteri} but for each element we pass the tail of the list. *)
+  let rec iter_tails f l =
     match l with
     | h :: tl ->
         f tl h;
-        iter_snocs tl f
+        iter_tails f tl
     | [] -> ()
 
-  let rec trav_loops st (input : c) (continuations : continuation_stack) =
+  (** Tail-recursive form of the DFS-based traversal described in the paper.
+
+      The original algorithm has one recursive call, so its tail-recursive form
+      has two "entry points" - one from the beginning of the function, and one
+      when a recursive subcall has returned and wants to continue. This is
+      implemented by using the {call_action} parameter. The [Call] variant
+      denotes a normal call to the function with arguments {call_arg}, and
+      the [Return] variant denotes a return from a recursive subcall,
+      with its argument being the return value of the recursive subcall.
+
+      This is combined with a stack of nested calls ({continuation_stack}). A
+      recursive "call" happens by invoking the function with [Call] and pushing
+      the current [call_args] onto the stack. In particular, storing the remainder of 
+      the [it] list lets us resume the iteration at a later point. Upon completing
+      execution of one call to the function, if the stack is non-empty, the
+      function will "return" to the parent call by invoking the function with a
+      `Right` argument. We use local exceptions to represent early termination 
+      to the recursive call. *)
+  let rec trav_loops st (input : call_action)
+      (continuations : continuation_stack) =
     let open Iter in
     let exception Ret of block_loop_state option in
-    let exception Recurse of (c * continuation_stack) in
+    let exception Recurse of (call_action * continuation_stack) in
     let run () =
       let b0, dfsp_pos, it, continuations =
         match (input, continuations) with
         | Call { block; dfsp_pos }, _ -> begin
             (* Normal function entry. The code here is in the entry
-        of the paper's algorithm, before the loop begins. *)
+               of the paper's algorithm, before the loop begins. *)
             block.dfsp_pos <- dfsp_pos;
             block.dfsp_pos_max <- dfsp_pos;
             block.is_traversed <- true;
@@ -325,14 +341,21 @@ module TraverseLoops = struct
             (block, dfsp_pos, it, continuations)
           end
         | Return return, ({ block = b0; dfsp_pos }, it) :: rest -> begin
+            (* Return from a recursive subcall with remaining call stack. This simply calls
+               tag_lhead, which appears in the algorithm after the recursive
+               subcall, then continues the iteration using the stored `it`. *)
             tag_lhead st b0 return;
             (b0, dfsp_pos, it, rest)
           end
-        | Return return, [] -> raise (Ret return)
+        | Return return, [] ->
+            (* this is the outermost call : we are done*)
+            raise (Ret return)
       in
-      iter_snocs it (fun it ->
-          (function
-          | { is_traversed = true } as block ->
+      (* iterate the remaining blocks *)
+      it
+      |> iter_tails (fun it block ->
+          match block with
+          | { is_traversed = true } ->
               raise
                 (Recurse
                    ( Call { block; dfsp_pos = dfsp_pos + 1 },
@@ -353,9 +376,9 @@ module TraverseLoops = struct
                 loop (st.l h)
               end
             end
-          | { iloop_header = None } -> ()));
+          | { iloop_header = None } -> ());
       b0.dfsp_pos <- 0;
-      let result = b0.iloop_header |> Option.map st.l in
+      let result = Option.map st.l b0.iloop_header in
       raise (Recurse (Return result, continuations))
     in
     try run () with
@@ -365,6 +388,7 @@ module TraverseLoops = struct
   let analyse p =
     let st = create p in
     Procedure.get_entry_block p
-    |> Option.map (fun entry ->
-        trav_loops st (Call { block = st.l entry; dfsp_pos = 1 }) [])
+    |> Option.iter (fun entry ->
+        ignore @@ trav_loops st (Call { block = st.l entry; dfsp_pos = 1 }) []);
+    IrreducibleLoops.compute_block_loop_info p st.loops
 end
