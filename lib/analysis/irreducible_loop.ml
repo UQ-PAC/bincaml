@@ -3,93 +3,63 @@
 open Lang
 open Common
 
-(**
- * Loop identification and irreducible loop transformation.
- *
- * The [[IrreducibleLoops.transform_all_and_update]] method is the main entry
- * point for doing the identification and transformation in one step. This also
- * handles updating the loop information stored within blocks.
- *
- * Alternatively, the [[IrreducibleLoops.identify_loops]] method performs loop
- * identification, and results of this can be passed to
- * [[IrreducibleLoops.transform_loop]] to transform an irreducible loop to a
- * reducible one.
- *
- * The loop analysis produces a loop-nesting *forest* where nested sub-loops are
- * children of containing loops. A *sub-loop* of a loop is defined as a
- * strongly-connected component in the graph `V - {h}` where `V` is the set of
- * vertices (blocks) and `h` is the header of the parent loop. Examples of this
- * can be found in [the paper].
- *
- * Note that the loop-nesting tree is based on an arbitrary depth-first
- * traversal order and a CFG may have multiple valid loop-nesting trees.
- * In particular, certain nodes are chosen to be primary headers based
- * on this order. An irreducible loop, by definition, will have multiple
- * potential headers. We call the chosen header the _primary_ header
- * and any possible irreducible headers are called _secondary_ headers.
- *
- * For an overview of loop concepts and terminology, see LLVM's [Loop][]
- * and [Cycle][] pages. Note that we do not closely follow the terminology
- * of LLVM. For instance, we call both irreducible and reducible loops as
- * "loops", whereas LLVM only uses loop for *reducible* loops and uses cycle
- * for reducible or irreducible.
- *
- * [the paper]: {:http://dx.doi.org/10.1007/978-3-540-74061-2_11}
- * [Loop]: {:https://llvm.org/docs/LoopTerminology.html}
- * [Cycle]: {:https://llvm.org/docs/CycleTerminology.html}
- *)
+type loop_edge = { from_block : ID.t; to_block : ID.t }
+[@@deriving eq, ord, show { with_path = false }]
+(** control flow edge *)
 
-module IrreducibleLoops = struct
-  type loop_edge = { from_block : ID.t; to_block : ID.t }
-  [@@deriving eq, ord, show { with_path = false }]
+(** Loop context information of a given block. *)
+type loop_info =
+  | PrimaryHeader of {
+      primary_header : ID.t option;
+          (** next-outermost header to this loop, if we are inside a loop *)
+      headers : ID.Set.t;
+          (** the set of blocks which can be used to enter the loop. a header is
+              defined as dominating all non-header nodes of the loop. *)
+      nodes : ID.Set.t;
+          (** the set of blocks which are internal to the loop. this set forms a
+              strongly-connected component. note that a block may be internal to
+              multiple loops *)
+      entries : loop_edge Iter.t Lazy.t;
+          (** persistent iterator over edges which enter any header in this loop
+          *)
+      backedges : loop_edge Iter.t Lazy.t;
+          (** persistent iterator of back-edges to any header of this loop *)
+    }
+  | LoopParticipant of {
+      primary_header : ID.t;
+          (** The block serving as the primary header for the loop we are a
+              participant in *)
+    }
+  | NonLoop
 
-  (*
-  type block_loop_info = {
-    block : ID.t;  (** the block which this loop information concerns. *)
-    iloop_header : ID.t option;
-        (** if [block] is within a loop, this records the primary header of the
-            innermost loop containing [block]. Is [None] if [block] is the
-            designated loop header, or [block] is not a loop participant. *)
-    dfsp_pos : int;
-        (** visit order index of `b` within the depth-first traversal. within
-            the loop-nesting tree, parents have a _lesser_ value of `dfsp_pos`
-            than all their children. *)
-    headers : ID.Set.t;
-        (** if [block] is a primary loop header, this stores the set of blocks
-            which can be used to enter the loop. a header is defined as
-            dominating all non-header nodes of the loop. *)
-    nodes : ID.Set.t;
-        (** if [block] is a primary loop header, this stores the set of blocks
-            which are internal to the loop. this set forms a strongly-connected
-            component. note that a block may be internal to multiple loops. *)
-  }
-  *)
+type block_info = { block : ID.t; dfs_pos : int; loop : loop_info }
 
-  type loop_info =
-    | PrimaryHeader of {
-        primary_header : ID.t option;
-            (** next-outermost header to this loop, if we are inside a loop *)
-        headers : ID.Set.t;
-            (** the set of blocks which can be used to enter the loop. a header
-                is defined as dominating all non-header nodes of the loop. *)
-        nodes : ID.Set.t;
-            (** the set of blocks which are internal to the loop. this set forms
-                a strongly-connected component. note that a block may be
-                internal to multiple loops *)
-        entries : loop_edge Iter.t Lazy.t;
-            (** persistent iterator over edges which enter any header in this
-                loop *)
-        backedges : loop_edge Iter.t Lazy.t;
-            (** persistent iterator of back-edges to any header of this loop *)
-      }
-    | LoopParticipant of {
-        primary_header : ID.t;
-            (** The block serving as the primary header for the loop we are a
-                participant in *)
-      }
-    | NonLoop
+module Implementation = struct
+  (** Internal implementation of irreducible loop forest algorithm.
 
-  type block_info = { block : ID.t; dfs_pos : int; loop : loop_info }
+      The loop analysis produces a loop-nesting {e forest} where nested
+      sub-loops are children of containing loops. A {e sub-loop} of a loop is
+      defined as a strongly-connected component in the graph [V - {h}] where [V]
+      is the set of vertices (blocks) and [h] is the header of the parent loop.
+      Examples of this can be found in
+      {{:http://dx.doi.org/10.1007/978-3-540-74061-2_11} the paper}.
+
+      Note that the loop-nesting tree is based on an arbitrary depth-first
+      traversal order and a CFG may have multiple valid loop-nesting trees. In
+      particular, certain nodes are chosen to be primary headers based on this
+      order. An irreducible loop, by definition, will have multiple potential
+      headers. We call the chosen header the _primary_ header and any possible
+      irreducible headers are called _secondary_ headers.
+
+      For an overview of loop concepts and terminology, see LLVM's [Loop] and
+      [Cycle] pages. Note that we do not closely follow the terminology of LLVM.
+      For instance, we call both irreducible and reducible loops as "loops",
+      whereas LLVM only uses loop for *reducible* loops and uses cycle for
+      reducible or irreducible.
+
+      - the paper: {:http://dx.doi.org/10.1007/978-3-540-74061-2_11}
+      - Loop: {:https://llvm.org/docs/LoopTerminology.html}
+      - Cycle: {:https://llvm.org/docs/CycleTerminology.html} *)
 
   open struct
     (** Accesses the Basil IR state to compute the set of entry edges
@@ -247,10 +217,6 @@ module IrreducibleLoops = struct
           to_loop_info p b participants)
     in
     to_list new_loops
-end
-
-module TraverseLoops = struct
-  open IrreducibleLoops
 
   type st = {
     procedure : Program.proc;
@@ -259,7 +225,12 @@ module TraverseLoops = struct
     succ : block_loop_state -> ID.t Iter.t;
     pred : block_loop_state -> ID.t Iter.t;
   }
+  (** Handle for accessing the analysis state.
 
+      Field [loops] stores the state for each block, which is mutated internally
+      without modifying the map itself. *)
+
+  (** Create the initial analysis state *)
   let create procedure =
     let loops =
       Procedure.iter_blocks_topo_fwd procedure
@@ -284,10 +255,6 @@ module TraverseLoops = struct
       Procedure.blocks_pred procedure b.block |> Iter.map fst
     in
     { procedure; loops; l; succ; pred }
-
-  type call_arg = { block : block_loop_state; dfsp_pos : int }
-  type call_action = Call of call_arg | Return of block_loop_state option
-  type continuation_stack = (call_arg * block_loop_state list) list
 
   (** Sets `h` as the loop header for the block `b` and all containing loops. *)
   let tag_lhead s (b : block_loop_state) (h : block_loop_state option) =
@@ -317,6 +284,15 @@ module TraverseLoops = struct
         iter_tails f tl
     | [] -> ()
 
+  type call_arg = { block : block_loop_state; dfsp_pos : int }
+  (** arguments to a recursive call of the algorithm *)
+
+  (** type of contiuation *)
+  type call_action = Call of call_arg | Return of block_loop_state option
+
+  type continuation_stack = (call_arg * block_loop_state list) list
+  (** stack of continuations *)
+
   (** Tail-recursive form of the DFS-based traversal described in the paper.
 
       The original algorithm has one recursive call, so its tail-recursive form
@@ -333,7 +309,7 @@ module TraverseLoops = struct
       the [it] list lets us resume the iteration at a later point. Upon completing
       execution of one call to the function, if the stack is non-empty, the
       function will "return" to the parent call by invoking the function with a
-      `Right` argument. We use local exceptions to represent early termination 
+      [Return] argument. We use local exceptions to represent early termination 
       to the recursive call. *)
   let rec trav_loops st (input : call_action)
       (input_continuations : continuation_stack) =
@@ -414,12 +390,15 @@ module TraverseLoops = struct
        |> Iter.to_string (fun (k, v) ->
            Printf.sprintf "%s -> %s" (ID.to_string k) (show_block_loop_state v))
        )
-
-  let analyse p =
-    let st = create p in
-    Procedure.get_entry_block p
-    |> Option.iter (fun entry ->
-        ignore @@ trav_loops st (Call { block = st.l entry; dfsp_pos = 1 }) []);
-    dbg_show st;
-    IrreducibleLoops.compute_block_loop_info p st.loops
 end
+
+(** Perform irreducible loop analysis and return a list containing the loop
+    information label for each block in the procedure . *)
+let solve_loop_heirachy p =
+  let open Implementation in
+  let st = create p in
+  Procedure.get_entry_block p
+  |> Option.iter (fun entry ->
+      ignore @@ trav_loops st (Call { block = st.l entry; dfsp_pos = 1 }) []);
+  dbg_show st;
+  compute_block_loop_info p st.loops

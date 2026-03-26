@@ -101,12 +101,10 @@ module BasilASTLoader = struct
   and transStr (x : str) : string =
     match x with Str string -> stripquote string
 
-  and trans_program ?(lst : load_st option) ?(name = "<module>") (x : moduleT)
-      : load_st =
+  and trans_program ?(lst : load_st option) ?(name = "<module>") (x : moduleT) :
+      load_st =
     let prog =
-      match lst with
-      | Some lst -> lst
-      | None -> load_st_empty ~name ()
+      match lst with Some lst -> lst | None -> load_st_empty ~name ()
     in
     let prog =
       match x with
@@ -1331,7 +1329,8 @@ let ast_of_concrete_ast ?(lst : load_st option) ~name m =
   Trace_core.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->
   BasilASTLoader.trans_program ?lst ~name m
 
-let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__ string =
+let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__
+    string =
   let name =
     let open Option.Infix in
     let* line = __LINE__ >|= Int.to_string in
@@ -1346,7 +1345,7 @@ let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__ stri
   with LoadError { token_char_offset_range; msg } ->
     raise (LoadError { input = Some input; token_char_offset_range; msg })
 
-let ast_of_channel ?(lst: load_st option) ?input fname c =
+let ast_of_channel ?(lst : load_st option) ?input fname c =
   let m =
     Trace_core.with_span ~__FILE__ ~__LINE__ "load-concrete-ast" @@ fun f ->
     let m = concrete_prog_ast_of_channel ?input ~filename:fname c in
