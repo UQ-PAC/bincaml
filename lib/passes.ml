@@ -226,11 +226,14 @@ module PassManager = struct
            read ";
       };
       {
-        name = "ide-live";
-        apply = Prog Transforms.Ide.transform;
+        name = "inter-dead-store-elim";
+        apply =
+          Prog
+            (Transforms.Livevars.InterprocDSE.transform
+               (not % Bincaml_util.Var.is_local));
         doc =
-          "Write the results of an ide based live variable analysis to .dot \
-           files";
+          "Remove store assignments to pure local variables which are never \
+           read using an interprocedural analysis";
       };
       remove_unused;
       {

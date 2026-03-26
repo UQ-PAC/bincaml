@@ -80,22 +80,32 @@ module IDESSI (D : IDESSIDomain) = struct
     let compare = Ord.triple DL.compare ID.compare DL.compare
   end)
 
-  let propagate worklist summaries get_summary update_summary updates =
-    Iter.filter_map
-      (fun (d1, pid, d2, e) ->
-        let e' = get_summary pid d1 d2 in
-        let j = D.join e e' in
-        (not (D.equal e' j)) |> flip Option.return_if (d1, pid, d2, j))
-      updates
-    |> Iter.filter (fun (d1, pid, d2, e) ->
-        let base = get_summary pid Lambda d2 in
-        match d1 with
-        (* If Lambda already propagates something >= this, remove this from the summary. *)
-        | Label v when D.equal base (D.join e base) -> false
-        | _ -> true)
-    |> Iter.iter (fun (d1, pid, d2, e) ->
-        W1.add worklist (d1, pid, d2);
-        update_summary pid d1 d2 e)
+  let propagate worklist summaries get_summary update_summary =
+    Iter.iter (fun (d1, pid, i) ->
+        let summary = Hashtbl.find summaries pid in
+        let entry = DlMap.get_or d1 summary ~default:DlMap.empty in
+        let lambda = DlMap.get_or Lambda summary ~default:DlMap.empty in
+        let entry =
+          Iter.fold
+            (fun entry (d2, e) ->
+              let e' = DlMap.get_or d2 entry ~default:D.bottom in
+              let j = D.join e e' in
+              if D.equal e' j then entry
+              else
+                let base = DlMap.get_or d2 lambda ~default:D.bottom in
+                if
+                  match d1 with
+                  (* If Lambda already propagates something >= this, remove this from the summary. *)
+                  | Label v when D.equal base (D.join e base) -> false
+                  | _ -> true
+                then (
+                  W1.add worklist (d1, pid, d2);
+                  DlMap.add d2 j entry)
+                else entry)
+            entry i
+        in
+        let summary = DlMap.add d1 entry summary in
+        Hashtbl.replace summaries pid summary)
 
   let is_output proc v =
     match D.direction with
@@ -105,54 +115,63 @@ module IDESSI (D : IDESSIDomain) = struct
         Procedure.formal_in_params proc |> StringMap.mem (Var.name v)
 
   let p1_transfer (prog : Program.t) summaries entry2call entry2exit pid
-      (v : Vertex.t) d1 d2 e1 =
+      (v : Vertex.t) d1 d2 e1 : (DL.t * ID.t * (DL.t * D.t) Iter.t) Iter.t =
     let proc = ID.Map.find pid prog.procs in
     let open Stmt in
     match v with
     | _, Vertex.Stmt (_, (Instr_Call c as s)) ->
         let caller = ID.Map.find c.procid prog.procs in
-        (match D.direction with
-          | `Forwards ->
-              D.transfer_call c.args (Procedure.formal_in_params proc) d2
-              |> Iter.map (fun (d, e2) -> (d, e2 @. e1))
-          | `Backwards -> (
-              match d2 with
-              | Lambda -> Iter.singleton (Lambda, D.identity)
-              | Label v ->
-                  StringMap.to_iter c.lhs
-                  |> Iter.filter (fun (s, v') -> Var.equal v v')
-                  |> Iter.map (fun (s, _) ->
-                      ( Label
-                          (Procedure.formal_out_params caller
-                          |> StringMap.find s),
-                        e1 ))))
-        |> Iter.flat_map (fun (d, e1) ->
-            (* update the entry2call cache *)
-            let k = (d, c.procid) in
-            Hashtbl.get_or entry2call k ~default:ID.Map.empty
-            |> ID.Map.update pid (function
-              | Some m -> Some (DlMap.add d1 (e1, s) m)
-              | None -> Some (DlMap.singleton d1 (e1, s)))
-            |> Hashtbl.replace entry2call k;
-            (* If a summary of the caller exists, propagate through it *)
-            Hashtbl.get_or entry2exit (c.procid, d) ~default:VarMap.empty
-            |> VarMap.to_iter
-            |> Iter.flat_map (fun (v3, e2) ->
-                (match D.direction with
-                  | `Forwards ->
-                      StringMap.get (Var.name v3) c.lhs
-                      |> Option.to_iter
-                      |> Iter.map (fun v4 -> (Label v4, D.identity))
-                  | `Backwards ->
-                      D.transfer_call c.args
-                        (Procedure.formal_in_params proc)
-                        (Label v3))
-                |> Iter.map (fun (d4, e3) -> (d1, pid, d4, e3 @. e2 @. e1))))
+        Iter.singleton
+          ( d1,
+            pid,
+            (match D.direction with
+              | `Forwards ->
+                  D.transfer_call c.args (Procedure.formal_in_params caller) d2
+                  |> Iter.map (fun (d, e2) -> (d, e2 @. e1))
+              | `Backwards -> (
+                  match d2 with
+                  | Lambda -> Iter.singleton (Lambda, D.identity)
+                  | Label v ->
+                      StringMap.to_iter c.lhs
+                      |> Iter.filter (fun (s, v') -> Var.equal v v')
+                      |> Iter.map (fun (s, _) ->
+                          ( Label
+                              (Procedure.formal_out_params caller
+                              |> StringMap.find s),
+                            e1 ))))
+            |> Iter.flat_map (fun (d, e1) ->
+                (* update the entry2call cache *)
+                let k = (d, c.procid) in
+                Hashtbl.get_or entry2call k ~default:ID.Map.empty
+                |> ID.Map.update pid (function
+                  | Some m -> Some (DlMap.add d1 (e1, s) m)
+                  | None -> Some (DlMap.singleton d1 (e1, s)))
+                |> Hashtbl.replace entry2call k;
+                (* If a summary of the caller exists, propagate through it *)
+                Hashtbl.get_or entry2exit (c.procid, d) ~default:VarMap.empty
+                |> VarMap.to_iter
+                |> Iter.flat_map (fun (v3, e2) ->
+                    (match D.direction with
+                      | `Forwards ->
+                          StringMap.get (Var.name v3) c.lhs
+                          |> Option.to_iter
+                          |> Iter.map (fun v4 -> (Label v4, D.identity))
+                      | `Backwards ->
+                          D.transfer_call c.args
+                            (Procedure.formal_in_params proc)
+                            (Label v3))
+                    |> Iter.map (fun (d4, e3) -> (d4, e3 @. e2 @. e1)))) )
     | _, Vertex.Stmt (_, s) ->
-        D.transfer s d2 |> Iter.map (fun (d3, e2) -> (d1, pid, d3, e2 @. e1))
+        Iter.singleton
+        @@ ( d1,
+             pid,
+             D.transfer s d2 |> Iter.map (fun (d3, e2) -> (d3, e2 @. e1)) )
     | _, Vertex.Phi p ->
-        D.transfer_phi p.lhs p.rhs d2
-        |> Iter.map (fun (d3, e2) -> (d1, pid, d3, e2 @. e1))
+        Iter.singleton
+        @@ ( d1,
+             pid,
+             D.transfer_phi p.lhs p.rhs d2
+             |> Iter.map (fun (d3, e2) -> (d3, e2 @. e1)) )
     | _, Vertex.Entry | _, Vertex.Return -> (
         match d2 with
         | Label v2 when is_output proc v2 ->
@@ -168,21 +187,22 @@ module IDESSI (D : IDESSIDomain) = struct
             |> ID.Map.to_iter
             |> Iter.flat_map (fun (callee_id, m) ->
                 DlMap.to_iter m
-                |> Iter.flat_map (fun (d0, (e0, s)) ->
-                    match s with
-                    | Instr_Call c ->
-                        (match D.direction with
-                          | `Forwards ->
-                              StringMap.get (Var.name v2) c.lhs
-                              |> Option.to_iter
-                              |> Iter.map (fun v3 -> (Label v3, D.identity))
-                          | `Backwards ->
-                              D.transfer_call c.args
-                                (Procedure.formal_in_params proc)
-                                (Label v2))
-                        |> Iter.map (fun (d3, e2) ->
-                            (d0, callee_id, d3, e2 @. e1 @. e0))
-                    | _ -> Iter.empty))
+                |> Iter.map (fun (d0, (e0, s)) ->
+                    ( d0,
+                      callee_id,
+                      match s with
+                      | Instr_Call c ->
+                          (match D.direction with
+                            | `Forwards ->
+                                StringMap.get (Var.name v2) c.lhs
+                                |> Option.to_iter
+                                |> Iter.map (fun v3 -> (Label v3, D.identity))
+                            | `Backwards ->
+                                D.transfer_call c.args
+                                  (Procedure.formal_in_params proc)
+                                  (Label v2))
+                          |> Iter.map (fun (d3, e2) -> (d3, e2 @. e1 @. e0))
+                      | _ -> Iter.empty )))
         | _ -> Iter.empty)
 
   let p1_solve_scc (prog : Program.t) (defuses : (ID.t, MDeps.t) Hashtbl.t)
@@ -215,14 +235,7 @@ module IDESSI (D : IDESSIDomain) = struct
           D.init_data proc |> Iter.map (fun v -> Label v) |> Iter.cons Lambda
         in
         init |> Iter.map (fun v -> (v, pid, v)) |> W1.add_iter worklist;
-        let summary = Hashtbl.get_or summaries pid ~default:DlMap.empty in
-        let summary =
-          Iter.fold
-            (fun summary v ->
-              DlMap.add v (DlMap.singleton v D.identity) summary)
-            summary init
-        in
-        Hashtbl.replace summaries pid summary)
+        init |> Iter.iter (fun v -> update_summary pid v v D.identity))
       scc;
     while W1.non_empty worklist do
       let d1, pid, d2 = W1.pop worklist in
@@ -273,7 +286,7 @@ module IDESSI (D : IDESSIDomain) = struct
       prog.procs;
     defuses
 
-  let gen_stub_summaries (prog : Program.t) summaries =
+  let gen_stub_summaries (prog : Program.t) summaries entry2exit =
     let update_summary pid d1 d2 e =
       let summary = Hashtbl.get_or summaries pid ~default:DlMap.empty in
       let m = DlMap.get_or d1 summary ~default:DlMap.empty in
@@ -292,9 +305,16 @@ module IDESSI (D : IDESSIDomain) = struct
               |> Iter.cons Lambda
             in
             Iter.for_each init (fun d ->
-                Procedure.formal_out_params proc
+                (match D.direction with
+                  | `Forwards -> Procedure.formal_out_params proc
+                  | `Backwards -> Procedure.formal_in_params proc)
                 |> StringMap.values
-                |> Iter.iter (fun out -> update_summary pid d (Label out) D.top)))
+                |> Iter.iter (fun out ->
+                    let k = (pid, d) in
+                    Hashtbl.get_or entry2exit k ~default:VarMap.empty
+                    |> VarMap.add out D.top
+                    |> Hashtbl.replace entry2exit k;
+                    update_summary pid d (Label out) D.top)))
       prog.procs
 
   (** Generates edge function summaries for every procedure in the given
@@ -314,7 +334,7 @@ module IDESSI (D : IDESSIDomain) = struct
     let entry_to_exit_cache = Hashtbl.create 20 in
     let summaries = Hashtbl.create 20 in
     (* Initialise stub summaries *)
-    gen_stub_summaries prog summaries;
+    gen_stub_summaries prog summaries entry_to_exit_cache;
     (* Solve p1 *)
     List.iter
       (fun scc -> p1_solve_scc prog defuses entry_to_exit_cache summaries scc)
