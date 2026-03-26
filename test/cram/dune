@@ -27,6 +27,8 @@
   typepass.sexp
   basicssa.sexp
   roundtrip.sexp
+  gammavars.sexp
+  ../../examples/gamma.il
   ll_simple.il
   ll_simple.sexp
   ll_real.sexp
