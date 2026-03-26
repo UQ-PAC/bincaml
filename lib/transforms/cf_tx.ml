@@ -76,8 +76,8 @@ let to_smt (r : Expr.BasilExpr.rwinfo) =
 let online_check visit (solver : Bincaml_util.Smt.Solver.t)
     (r : Expr.BasilExpr.rwinfo) =
   let open Bincaml_util.Smt in
-  let _ = Solver.push solver in
-  to_smt r |> Iter.iter (fun i -> ignore @@ Solver.add_command solver i);
+  Solver.push solver;
+  to_smt r |> Iter.iter (fun i -> Solver.add_command solver i);
   let res : Solver.result = Solver.check solver in
   (match res with
   | Sat ->
@@ -86,7 +86,7 @@ let online_check visit (solver : Bincaml_util.Smt.Solver.t)
       visit (Some (from, into)) r
   | Unsat -> ()
   | Unknown -> visit None r);
-  let _ = Solver.pop solver in
+  Solver.pop solver;
   ()
 
 let online_check_all ?(debug = false) visit rws =
