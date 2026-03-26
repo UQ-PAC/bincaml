@@ -22,7 +22,8 @@ module Domain (S : RequiresAnnotation) = struct
   let e_true = BasilExpr.boolconst true
   let e_false = BasilExpr.boolconst false
 
-  (** Custom simplifier for this domain *)
+  (** Custom simplifier for this domain used to keep predicates in a consistent
+      form while still reducing size. *)
   let simplify =
     let open AbstractExpr in
     let open BasilExpr in
@@ -114,10 +115,9 @@ module Domain (S : RequiresAnnotation) = struct
     | _ -> p
 
   (** Encode an abstract state as a predicate *)
-  let to_pred = Algsimp.normalise % Algsimp.normalise % BasilExpr.boolnot
-  (* We use the Algsimp simplifier as a big simplifier pass at the end to make
-     cleaner summaries. It may be worth using an external smt simplifier. The
-     double normalise was needed to get rid of double nots. *)
+  let to_pred =
+    Algsimp.to_steady Expr.BasilExpr.equal Algsimp.alg_simp_rewriter
+    % BasilExpr.boolnot
 end
 
 module IntraDomain = Domain (struct
