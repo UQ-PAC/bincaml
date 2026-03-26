@@ -41,6 +41,10 @@ let gamma_expr ?(check_names = false) (add : Var.t -> bool)
     (e : Expr.BasilExpr.t) =
   Expr.BasilExpr.applyintrin ~op:`OR
     (Expr.BasilExpr.free_vars_iter e
+    |> Iter.map (fun v ->
+        if check_names then check_var v;
+        v)
+    |> Iter.map gamma_of
     |> Iter.map Expr.BasilExpr.rvar
     |> List.of_iter)
 
@@ -55,8 +59,9 @@ let update_expr ?(check_names = false) (add : Var.t -> bool) =
 let update_lhs ?(check_names = false) add_cur add_target m =
   StringMap.fold
     (fun s v m ->
-      if add_cur v && add_target s then
-        StringMap.add ("Gamma_" ^ s) (gamma_of v) m
+      if add_cur v && add_target s then (
+        if check_names then check_var v;
+        StringMap.add ("Gamma_" ^ s) (gamma_of v) m)
       else m)
     m m
 
@@ -150,6 +155,21 @@ let transform_proc ?(check_names = false) (add : ID.t -> Var.t -> bool) prog
     |> Procedure.map_formal_in_params (fun s -> StringMap.fold add_param s s)
     |> Procedure.map_formal_out_params (fun s -> StringMap.fold add_param s s)
   in
+  (* Update specs *)
+  let update_expr = update_expr ~check_names (add (Procedure.id proc)) in
+  let and_gamma v = [ gamma_of v; v ] in
+  let spec = Procedure.specification proc in
+  let requires = List.map update_expr spec.requires in
+  let ensures = List.map update_expr spec.ensures in
+  let rely = List.map update_expr spec.rely in
+  let guarantee = List.map update_expr spec.guarantee in
+  let captures_globs = List.flat_map and_gamma spec.captures_globs in
+  let modifies_globs = List.flat_map and_gamma spec.modifies_globs in
+  let spec : (Var.t, Program.e) Procedure.proc_spec =
+    { requires; ensures; rely; guarantee; captures_globs; modifies_globs }
+  in
+  let proc = Procedure.set_specification proc spec in
+
   (* Update statements *)
   let blocks = Procedure.blocks_to_list proc in
   List.fold_left
