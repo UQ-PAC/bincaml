@@ -62,6 +62,8 @@ let redundant (solver : Bincaml_util.Smt.Solver.t) p ps =
     s |> Iter.iter (fun c -> Solver.add_command solver c);
     let res = Solver.check solver in
     Solver.pop solver;
+    (* TODO a more robust strategy should be put in place in case a redundancy
+       check can't be performed (e.g. just stop iterating the fixpoint now) *)
     match res with Unsat -> true | Sat -> false | Unknown -> assert false
 
 let wp_dual_requires (module S : FunctionSummaryAnnotation)
@@ -134,6 +136,20 @@ let intraproc_transform proc =
   in
   add_summary summary proc
 
+module Domain = struct
+  type property = summary
+
+  let bottom = { requires = []; ensures = [] }
+
+  let equal a b =
+    List.equal Expr.BasilExpr.equal a.requires b.requires
+    && List.equal Expr.BasilExpr.equal a.ensures b.ensures
+
+  let is_maximal _ = false
+end
+
+module FixSummaries = Fix.Fix.ForHashedType (ID) (Domain)
+
 let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
     res component =
   let procs = prog.procs in
@@ -143,18 +159,6 @@ let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
       component
     |> ID.Set.of_list
   in
-  let module Domain = struct
-    type property = summary
-
-    let bottom = { requires = []; ensures = [] }
-
-    let equal a b =
-      List.equal Expr.BasilExpr.equal a.requires b.requires
-      && List.equal Expr.BasilExpr.equal a.ensures b.ensures
-
-    let is_maximal _ = false
-  end in
-  let module FixSummaries = Fix.Fix.ForHashedType (ID) (Domain) in
   let eqs (pid : ID.t) (vals : FixSummaries.valuation) =
     if ID.Set.mem pid component then
       let annotations =
