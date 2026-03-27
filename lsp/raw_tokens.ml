@@ -189,7 +189,6 @@ let show_lexbuf (buf : Lexing.lexbuf) =
     (show_position buf.lex_start_p)
 
 let error_token ~startpos () : token_with_pos =
-  token_extend_one
     {
       token = Error ();
       str = "Syntax error: unrecognised token";
@@ -203,35 +202,33 @@ let dummy_token (buf : Lexing.lexbuf) () : token_with_pos =
   { token = Error (); str = "<dummy token>"; startpos; endpos }
 
 let rec next_token ?err_token (buf : Lexing.lexbuf) () : token_with_pos list =
-  match (err_token, buf.lex_curr_p) with
-  | Some err_token, p when err_token.startpos <> p ->
-      err_token :: next_token buf ()
-  | _ -> (
-      let token = try Ok (BasilIR.LexBasilIR.token buf) with e -> Error e in
-      match token with
-      | Ok token ->
-          let str = show_raw_token token in
-          let token = Ok token in
-          let err_token = Option.map token_extend_one err_token in
-          CCOption.to_list err_token
-          @ [ { (dummy_token buf ()) with token; str } ]
-      | Error _ -> begin
-          Logs.err (fun m -> m "moving past error");
-          (* print_endline ("AFTER ERROR:" ^ show_lexbuf buf); *)
-          buf.lex_curr_pos <- buf.lex_curr_pos + 1;
-          let err_token =
-            match err_token with
-            | Some err_token -> token_extend_one err_token
-            | None -> error_token ~startpos:buf.lex_curr_p ()
-          in
-          Unix.sleepf 0.01;
-          next_token ~err_token buf ()
-        end)
+  (* print_endline (show_lexbuf buf); *)
+  let token = try Ok (BasilIR.LexBasilIR.token buf) with e -> Error e in
+  match (token, err_token) with
+  | Ok token, err_token ->
+      let str = show_raw_token token in
+      let token = Ok token in
+      (* let err_token = Option.map token_extend_one err_token in *)
+      CCOption.to_list err_token @ [ { (dummy_token buf ()) with token; str } ]
+  | Error _, Some err_token when err_token.startpos <> buf.lex_curr_p ->
+      err_token
+      :: next_token ~err_token:(error_token ~startpos:buf.lex_curr_p ()) buf ()
+  | Error _, err_token -> begin
+      (* Logs.err (fun m -> m "moving past error"); *)
+      (* print_endline ("AFTER ERROR:" ^ show_lexbuf buf); *)
+      buf.lex_curr_pos <- buf.lex_curr_pos + 1;
+      let err_token =
+        match err_token with
+        | Some err_token -> token_extend_one err_token
+        | None -> token_extend_one (error_token ~startpos:buf.lex_curr_p ())
+      in
+      Unix.sleepf 0.01;
+      next_token ~err_token buf ()
+    end
 
 let extract_all_tokens buf =
   Iter.flat_map_l (next_token buf) (Iter.repeat ())
-  |> Iter.take_while (fun x -> x.token <> Ok TOK_EOF)
-  |> Iter.take 20
+  |> Iter.take_while (function { token = Ok TOK_EOF } -> false | _ -> true)
 
 let render_token_line_bufs tokens linebuf =
   List.iteri
@@ -267,8 +264,9 @@ let extract_and_render_tokens oc contents =
       output_bytes oc tokline;
       output_char oc '\n')
     lines linebufs;
-  List.iter
-    (fun tok ->
+  List.iteri
+    (fun i tok ->
+      Printf.fprintf oc "%c: " Char.(chr (code 'a' + i));
       output_string oc tok.str;
       output_char oc '\n')
     tokens

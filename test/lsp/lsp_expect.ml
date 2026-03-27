@@ -3,56 +3,49 @@ let () =
   Logs.set_level (Some Logs.Info);
   Logs.set_reporter (Logs.format_reporter ~app:Format.std_formatter ~dst:Format.std_formatter ())
 
-let%expect_test "errors on newline" =
-  let s = {|abc  <-   b
-  <- a|} in
+let%expect_test "error then error" =
   let open Bincaml_lsp.Raw_tokens in
+  let s = {|<-  <-
+
+    <-|} in
 
   extract_and_render_tokens stdout s;
   [%expect {|
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    abc  <-   b
-    aaa  bbb  c
-      <- a
-      ddde
-    (TOK_LocalIdent ((0, 3), "abc"))
-    Syntax error: unrecognised token
-    (TOK_LocalIdent ((10, 11), "b"))
-    Syntax error: unrecognised token
-    (TOK_LocalIdent ((17, 18), "a"))
+    <-  <-
+    aa  bb
+
+
+        <-
+        cc
+    a: Syntax error: unrecognised token
+    b: Syntax error: unrecognised token
+    c: Syntax error: unrecognised token
+    |}]
+
+let%expect_test "error then token" =
+  let open Bincaml_lsp.Raw_tokens in
+  let s = {|<- e|} in
+
+  extract_and_render_tokens stdout s;
+  [%expect {|
+    <- e
+    aa b
+    a: Syntax error: unrecognised token
+    b: (TOK_LocalIdent ((3, 4), "e"))
     |}]
 
 let%expect_test "errors on same line" =
-  let s = {| <- abc    <---   <-     <--- aa <--|} in
+  let s = {| <---   <--- aa <--  <--  <--|} in
   let open Bincaml_lsp.Raw_tokens in
 
   extract_and_render_tokens stdout s;
   [%expect {|
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-    inline-test-runner.exe: [ERROR] moving past error
-     <- abc    <---   <-     <--- aa <--
-     aaabbb    ccccc  dd     eeee ff gggg
-    Syntax error: unrecognised token
-    (TOK_LocalIdent ((4, 7), "abc"))
-    Syntax error: unrecognised token
-    Syntax error: unrecognised token
-    Syntax error: unrecognised token
-    (TOK_LocalIdent ((30, 32), "aa"))
-    Syntax error: unrecognised token
+     <---   <--- aa <--  <--  <--
+     aaaa   bbbb cc ddd  eee  fff
+    a: Syntax error: unrecognised token
+    b: Syntax error: unrecognised token
+    c: (TOK_LocalIdent ((13, 15), "aa"))
+    d: Syntax error: unrecognised token
+    e: Syntax error: unrecognised token
+    f: Syntax error: unrecognised token
     |}]
