@@ -2,6 +2,10 @@ include Lang.Common
 include Analysis.Lattice_collections
 
 open struct
+  (** Put all the implementation in a hidden struct so not exported and we get
+      unused function warnings if we define a test and dont add it to the suite
+  *)
+
   module TestKey = struct
     include Int
 
