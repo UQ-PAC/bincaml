@@ -163,7 +163,6 @@ let one_long_loop =
   let p =
     {|
 prog entry @main;
-
 proc @main () -> ()
 [
   block %S [ goto(%preloop); ]; 
@@ -184,9 +183,7 @@ let nested_loop =
   let p =
     {|
 prog entry @main;
-
 proc @main () -> ()
-  { .name = "main"; .returnBlock = "end" }
 [
  
   block %S [ goto(%loop); ]; 
@@ -209,9 +206,7 @@ let nested_self_loop =
   let p =
     {|
 prog entry @main;
-
 proc @main () -> ()
-  { .name = "main"; .returnBlock = "end" }
 [
  
   block %S [ goto(%loop); ]; 
