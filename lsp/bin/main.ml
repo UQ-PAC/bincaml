@@ -138,13 +138,16 @@ class lsp_server =
       with
       | None -> Lwt.return None
       | Some prefix ->
-          let matching_tokens = Lsp_state.completions_for_prefix st pos "" in
-          Lwt.return
-          @@ Some
-               (`List
-                  (matching_tokens
-                  |> List.filter_map Lsp_state.completion_item_of_token
-                  |> List.sort_uniq CCOrd.poly))
+          let completions =
+            st.completions ()
+            |> List.filter (fun (comp : Linol_lwt.CompletionItem.t)->
+                comp.data
+                |> Option.map (fun data ->
+                    let range = Linol.Lsp.Types.Range.t_of_yojson data in
+                    not (Bincaml_lsp.Raw_tokens.lsprange_contains range pos))
+                |> Option.value ~default:true)
+          in
+          Lwt.return (Some (`List completions))
 
     (* method! on_req_code_lens_resolve ~notify_back ~id code_lens = *)
     (*   Lwt.return code_lens *)

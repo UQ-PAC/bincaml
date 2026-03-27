@@ -39,7 +39,8 @@ proc @main_4196260 () -> ()
     var var1_4196272_bv64: bv64 := 0x0:bv64 { .comment = "op: 0xf1144421" };
     var var2_4196272_bv64: bv64 := 0x0:bv64 { .comment = "op: 0xf1144421" };
     var var2_4196272_bv64: bv64 := $R1:bv64 { .comment = "op: 0xf1144421" };
-    $VF: bv1 := bvnot(booltobv1(eq(sign_extend(64, bvadd(bvadd(var2_4196272_bv64:bv64, 0xfffffffffffffaee:bv64), 0x1:bv64)), bvadd(bvadd(sign_extend(64, var2_4196272_bv64:bv64), 0xfffffffffffffffffffffffffffffaee:bv128), 0x1:bv128)))) { .comment = "op: 0xf1144421" };
+
+    : bv1 := bvnot(booltobv1(eq(sign_extend(64, bvadd(bvadd(var2_4196272_bv64:bv64, 0xfffffffffffffaee:bv64), 0x1:bv64)), bvadd(bvadd(sign_extend(64, var2_4196272_bv64:bv64), 0xfffffffffffffffffffffffffffffaee:bv128), 0x1:bv128)))) { .comment = "op: 0xf1144421" };
     $CF: bv1 := bvnot(booltobv1(eq(zero_extend(64, bvadd(bvadd(var2_4196272_bv64:bv64, 0xfffffffffffffaee:bv64), 0x1:bv64)), bvadd(bvadd(zero_extend(64, var2_4196272_bv64:bv64), 0xfffffffffffffaee:bv128), 0x1:bv128)))) { .comment = "op: 0xf1144421" };
     $ZF: bv1 := booltobv1(eq(bvadd(bvadd(var2_4196272_bv64:bv64, 0xfffffffffffffaee:bv64), 0x1:bv64), 0x0:bv64)) { .comment = "op: 0xf1144421" };
     $NF: bv1 := extract(64, 63, bvadd(bvadd(var2_4196272_bv64:bv64, 0xfffffffffffffaee:bv64), 0x1:bv64)) { .comment = "op: 0xf1144421" };

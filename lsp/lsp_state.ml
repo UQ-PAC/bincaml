@@ -6,6 +6,7 @@ type t = {
   contents : string ref;
   tokens : unit -> TokenSet.t;
   diagnostics : unit -> Lsp.Types.Diagnostic.t list;
+  completions : unit -> Linol.Lsp.Types.CompletionItem.t list;
   debug_highlight : bool ref;
 }
 
@@ -29,6 +30,29 @@ let to_diagnostic (x : Raw_tokens.token_with_pos) : Lsp.Types.Diagnostic.t =
   in
   Lsp.Types.Diagnostic.create ~message:(`String str) ~range ~severity ()
 
+let completion_item_of_token (x : Raw_tokens.token_with_pos) =
+  let open Linol.Lsp.Types.CompletionItemKind in
+  let kind =
+    match x.token with
+    | Ok (TOK_ProcIdent (_, id)) -> Some (id, Class, "procedure")
+    | Ok (TOK_BIdent (_, id)) -> Some (id, Text, "attribute")
+    | Ok (TOK_BlockIdent (_, id)) -> Some (id, Method, "block")
+    | Ok (TOK_GlobalIdent (_, id)) -> Some (id, Variable, "global")
+    | Ok (TOK_LocalIdent (_, id)) -> Some (id, Field, "local")
+    | _ -> None
+  in
+  let data =
+    CCOption.return_if
+      (match x.token with Ok (TOK_BIdent _) -> false | _ -> true)
+      (Linol.Lsp.Types.Range.yojson_of_t (Raw_tokens.lsprange_of_token x))
+  in
+  match kind with
+  | None -> None
+  | Some (str, kind, detail) ->
+      Some
+        (Linol.Lsp.Types.CompletionItem.create ~kind ?data ~detail
+           ~label:str ())
+
 let one_value_function_cache f argfun =
   let cache = CCCache.lru ~eq:CCEqual.poly 1 in
   let cached = CCCache.with_cache cache f in
@@ -38,7 +62,14 @@ let new_state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
     (contents : string) : t =
   let contents = ref contents in
   let debug_highlight = ref false in
+
+  let lines =
+    one_value_function_cache (Fun.compose Array.of_list CCString.lines)
+      (fun () -> !contents)
+  in
+
   let tokens = one_value_function_cache parse_tokens (fun () -> !contents) in
+
   let diagnostics =
     one_value_function_cache
       (fun (debug_highlight, tokens) ->
@@ -54,7 +85,31 @@ let new_state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
         diags)
       (fun () -> (!debug_highlight, tokens ()))
   in
-  { notify_back; contents; tokens; debug_highlight; diagnostics }
+
+  let completions =
+    one_value_function_cache
+      (fun (tokens, lines) ->
+        tokens
+        |> Iter.of_set (module TokenSet)
+        |> Iter.filter_map completion_item_of_token
+        |> Iter.sort_uniq
+             ~cmp:
+               (CCOrd.map
+                  (fun (x : Linol_lwt.CompletionItem.t) -> x.label)
+                  CCOrd.string)
+        |> Iter.map (fun (comp : Linol_lwt.CompletionItem.t) ->
+            let documentation =
+              comp.data
+              |> Option.map (fun data ->
+                  let range = Linol.Lsp.Types.Range.t_of_yojson data in
+                  let line = range.start.line in
+                  `String lines.(line))
+            in
+            { comp with documentation })
+        |> Iter.to_list)
+      (fun () -> (tokens (), lines ()))
+  in
+  { notify_back; contents; tokens; debug_highlight; diagnostics; completions }
 
 let completions_for_prefix st lsppos prefix =
   let tokens = st.tokens () in
@@ -66,23 +121,3 @@ let completions_for_prefix st lsppos prefix =
         ~some:(String.starts_with ~prefix)
         (Raw_tokens.ident_of_token x))
   |> Iter.sort |> Iter.uniq |> Iter.to_list
-
-let completion_item_of_token (x : Raw_tokens.token_with_pos) =
-  let open Linol.Lsp.Types.CompletionItemKind in
-  let kind =
-    match x.token with
-    | Ok (TOK_ProcIdent (_, id)) -> Some (id, Class)
-    | Ok (TOK_BIdent (_, id)) -> Some (id, Variable)
-    | Ok (TOK_BlockIdent (_, id)) -> Some (id, Method)
-    | Ok (TOK_GlobalIdent (_, id)) -> Some (id, Constant)
-    | Ok (TOK_LocalIdent (_, id)) -> Some (id, Variable)
-    | _ -> None
-  in
-  match kind with
-  | None -> None
-  | Some (str, kind) ->
-      Some
-        (Linol.Lsp.Types.CompletionItem.create ~kind
-           ~labelDetails:(Linol.Lsp.Types.CompletionItemLabelDetails.create ())
-           ~label:str ())
-
