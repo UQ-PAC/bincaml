@@ -8,7 +8,7 @@ open Common
 open Idessi
 open Lattice_types
 
-module LinearDomain : IDESSIDomain = struct
+module LinearDomain = struct
   let direction = `Forwards
 
   module Value = FlatLattice (struct
@@ -164,8 +164,10 @@ module LinearDomain : IDESSIDomain = struct
   type state_update = (DL.t * t) Iter.t
 
   let init_data (proc : Program.proc) = Procedure.formal_in_params proc |> StringMap.values
+  (*
   let transfer_call = failwith "todo"
   let transfer = failwith "todo"
   let transfer_phi = failwith "todo"
   let init_p2 = failwith "todo"
+  *)
 end
