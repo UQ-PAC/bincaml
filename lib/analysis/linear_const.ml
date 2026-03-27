@@ -8,7 +8,7 @@ open Common
 open Idessi
 open Lattice_types
 
-module LinearDomain = struct
+module LinearDomain : IDESSIDomain = struct
   let direction = `Forwards
 
   module Value = FlatLattice (struct
@@ -154,6 +154,8 @@ module LinearDomain = struct
     | BotEdge, _ -> Value.Bot
     | IdEdge, x -> x
     | TopEdge, _ -> Top
+    | Linear (a, b), _ when Z.equal Z.zero (Bitvec.value a) -> V b
+    | Join (a, b, _), _ when Z.equal Z.zero (Bitvec.value a) -> V b
     | Linear (a, b), Value.V x -> V (Bitvec.add (Bitvec.mul a x) b)
     | Linear _, Bot -> Bot
     | Linear _, Top -> Top
@@ -242,5 +244,26 @@ module LinearDomain = struct
     | Label _ -> Iter.singleton (Label lhs, IdEdge)
 
   (* Nothing is initially const, and there's no point propagating top *)
-  let init_p2 (proc : Program.proc) = Iter.empty
+  let init_p2 (proc : Program.proc) =
+    Procedure.formal_in_params proc
+    |> StringMap.values
+    |> Iter.map (fun v -> (v, Value.Top))
 end
+
+module Analysis = IDESSI (LinearDomain)
+
+let tester_transform (p : Program.t) =
+  let s, r = Analysis.solve p in
+  Hashtbl.iter
+    (fun pid sum ->
+      print_endline @@ ID.show pid;
+      print_endline @@ Analysis.show_summary sum)
+    s;
+  ID.Map.iter
+    (fun pid r ->
+      VarMap.iter
+        (fun v c ->
+          print_endline @@ Var.name v ^ " " ^ LinearDomain.Value.show c)
+        r)
+    r;
+  p

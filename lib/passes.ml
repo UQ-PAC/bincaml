@@ -243,6 +243,11 @@ module PassManager = struct
             (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
       };
+      {
+        name = "linear-const";
+        apply = Prog Analysis.Linear_const.tester_transform;
+        doc = "";
+      };
     ]
 
   let print_passes =
