@@ -281,7 +281,7 @@ module Make (G : GSig) = struct
       let pred (b : block_loop_state) = G.pred procedure b.block in
       { procedure; loops; l; succ; pred }
 
-    (** Sets `h` as the loop header for the block `b` and all containing loops.
+    (** Sets [h] as the loop header for the block `b` and all containing loops.
     *)
     let tag_lhead s (b : block_loop_state) (h : block_loop_state option) =
       print_endline "tag lhead";
