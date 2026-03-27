@@ -69,7 +69,7 @@ module LinearDomain = struct
       Some (Value.V j)
     else None
 
-  (* Should make join edges with top become TopEdges *)
+  (* Should make join edges with top become TopEdges (this is probably a big deal) *)
   let join a b =
     match (a, b) with
     | BotEdge, b -> b
@@ -163,11 +163,84 @@ module LinearDomain = struct
 
   type state_update = (DL.t * t) Iter.t
 
-  let init_data (proc : Program.proc) = Procedure.formal_in_params proc |> StringMap.values
-  (*
-  let transfer_call = failwith "todo"
-  let transfer = failwith "todo"
-  let transfer_phi = failwith "todo"
-  let init_p2 = failwith "todo"
-  *)
+  let init_data (proc : Program.proc) =
+    Procedure.formal_in_params proc |> StringMap.values
+
+  open DL
+
+  let const_expr e =
+    let open Expr.AbstractExpr in
+    let open Expr.BasilExpr in
+    match e with E (Constant { const = `Bitvector x }) -> Some x | _ -> None
+
+  let extract_expr e =
+    let open Expr.AbstractExpr in
+    let open Expr.BasilExpr in
+    (* this is so dumb... *)
+    match e with
+    | E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector b }); arg2 = E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }); }) ->
+        Some (Linear (a, b))
+    | E (BinaryExpr { op = `BVADD; arg1 = E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }); arg2 = E (Constant { const = `Bitvector b }); }) ->
+        Some (Linear (a, b))
+    | E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector b }); arg2 = E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }); }) ->
+        Some (Linear (a, b))
+    | E (BinaryExpr { op = `BVADD; arg1 = E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }); arg2 = E (Constant { const = `Bitvector b }); }) ->
+        Some (Linear (a, b))
+    | E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector b }); E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); })] }) ->
+        Some (Linear (a, b))
+    | E (ApplyIntrin { op = `BVADD; args = [E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }); E (Constant { const = `Bitvector b })] }) ->
+        Some (Linear (a, b))
+    | E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector b }); E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); })] }) ->
+        Some (Linear (a, b))
+    | E (ApplyIntrin { op = `BVADD; args = [E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }); E (Constant { const = `Bitvector b })] }) ->
+        Some (Linear (a, b))
+    | _ -> None
+    [@@ocamlformat "disable"]
+
+  let transfer_call call param d =
+    match d with
+    | Lambda -> Iter.singleton (Lambda, IdEdge)
+    | Label v ->
+        StringMap.to_iter call
+        |> Iter.filter (fun (s, e) -> VarSet.mem v (Expr.BasilExpr.free_vars e))
+        |> Iter.map (fun (s, e) ->
+            let v' = StringMap.find s param in
+            match extract_expr e with
+            | Some ef -> (Label v', ef)
+            | None -> (Label v', TopEdge))
+
+  let transfer stmt d =
+    let open Stmt in
+    match d with
+    | Lambda -> (
+        match stmt with
+        | Instr_Assign a ->
+            Iter.of_list a
+            |> Iter.flat_map (fun (v, e) ->
+                match const_expr e with
+                | Some x ->
+                    Iter.singleton
+                      (Label v, Linear (Bitvec.zero ~size:(Bitvec.size x), x))
+                | None -> Iter.empty)
+        | _ -> Iter.empty)
+    | Label v -> (
+        match stmt with
+        | Instr_Assign a ->
+            Iter.of_list a
+            |> Iter.filter (fun (s, e) ->
+                VarSet.mem v (Expr.BasilExpr.free_vars e))
+            |> Iter.map (fun (v', e) ->
+                match extract_expr e with
+                | Some ef -> (Label v', ef)
+                | None -> (Label v', TopEdge))
+        | _ -> Iter.empty)
+
+  (* RHS will contain d because ssa *)
+  let transfer_phi lhs _ d =
+    match d with
+    | Lambda -> Iter.empty
+    | Label _ -> Iter.singleton (Label lhs, IdEdge)
+
+  (* Nothing is initially const, and there's no point propagating top *)
+  let init_p2 (proc : Program.proc) = Iter.empty
 end
