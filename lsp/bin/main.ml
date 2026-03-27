@@ -70,9 +70,14 @@ class lsp_server =
 
     (* Similarly, we also override the [on_notify_doc_did_change] method that will be called
        by the server each time a new document is opened. *)
-    method on_notif_doc_did_change ~notify_back d _c ~old_content:_old
+    method on_notif_doc_did_change ~notify_back d changes ~old_content:_old
         ~new_content =
       self#_on_doc ~notify_back d.uri new_content;
+      Logs.app (fun m ->
+          changes
+          |> List.map Linol_lwt.TextDocumentContentChangeEvent.yojson_of_t
+          |> List.iter (fun x -> x |> Yojson.Safe.to_string |> m "change: %s"));
+      (* TODO: store a "working line". completion requests made in the working line will not re-trigger lexing *)
       Lwt.return ()
 
     (* On document closes, we remove the state associated to the file from the global
@@ -80,6 +85,10 @@ class lsp_server =
     method on_notif_doc_did_close ~notify_back:_ d : unit Linol_lwt.t =
       Hashtbl.remove buffers d.uri;
       Linol_lwt.return ()
+
+    (* method! config_sync_opts = *)
+    (*   Linol_lsp.Lsp.Types.TextDocumentSyncOptions.create *)
+    (*     ~change:Linol_lsp.Types.TextDocumentSyncKind.Incremental () *)
 
     method! config_code_lens_options =
       Some (Linol_lsp.Lsp.Types.CodeLensOptions.create ())
@@ -140,7 +149,7 @@ class lsp_server =
       | Some prefix ->
           let completions =
             st.completions ()
-            |> List.filter (fun (comp : Linol_lwt.CompletionItem.t)->
+            |> List.filter (fun (comp : Linol_lwt.CompletionItem.t) ->
                 comp.data
                 |> Option.map (fun data ->
                     let range = Linol.Lsp.Types.Range.t_of_yojson data in
