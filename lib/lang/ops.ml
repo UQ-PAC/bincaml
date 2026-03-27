@@ -350,7 +350,6 @@ module AllOps = struct
     | `FACCESS offset ->
         let { typ; _ } = get_field offset a in
         return typ
-    | `Forall -> return Boolean
     | `BVNEG -> return a
     | `INTNEG -> return Integer
     | `Old -> return a
