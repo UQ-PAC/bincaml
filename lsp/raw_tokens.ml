@@ -222,7 +222,6 @@ let rec next_token ?err_token (buf : Lexing.lexbuf) () : token_with_pos list =
         | Some err_token -> token_extend_one err_token
         | None -> token_extend_one (error_token ~startpos:buf.lex_curr_p ())
       in
-      Unix.sleepf 0.01;
       next_token ~err_token buf ()
     end
 
