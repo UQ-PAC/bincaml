@@ -8,7 +8,9 @@ var $R30: bv64;
 var $VF: bv1;
 var $ZF: bv1;
 var $_PC: bv64;
-var $__BranchTaken: bv1;<<<<         <<<
+var $__BranchTaken: bv1;<<<<         <<<     aaaaaa
+
+<----->>>>>>>
 
 prog entry @main_4196260;
 

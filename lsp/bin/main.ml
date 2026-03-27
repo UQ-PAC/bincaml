@@ -20,12 +20,10 @@ module Lsp = Linol.Lsp
 (* type state_after_processing = Bincaml_lsp.Raw_tokens.raw_token list *)
 type state_after_processing = {
   notify_back : Linol_lwt.Jsonrpc2.notify_back;
-  contents : string Lwt_react.signal;
-  set_contents : string -> unit;
-  tokens : Bincaml_lsp.Raw_tokens.token_with_pos list Lwt_react.signal;
-  debug_highlight_signal : bool Lwt_react.signal;
-  set_debug_highlight : bool -> unit;
-  diagnostics : Lsp.Types.Diagnostic.t list Lwt_react.signal;
+  contents : string ref;
+  tokens : unit -> Bincaml_lsp.Raw_tokens.token_with_pos list;
+  diagnostics : unit -> Lsp.Types.Diagnostic.t list;
+  debug_highlight : bool ref;
 }
 
 let parse_tokens (contents : string) : 'a list =
@@ -49,20 +47,19 @@ let to_diagnostic (x : Bincaml_lsp.Raw_tokens.token_with_pos) :
   in
   Lsp.Types.Diagnostic.create ~message:(`String str) ~range ~severity ()
 
+let one_value_function_cache f argfun =
+  let cache = CCCache.lru ~eq:CCEqual.poly 1 in
+  let cached = CCCache.with_cache cache f in
+  fun () -> cached (argfun ())
+
 let new_state ~notify_back (contents : string) : state_after_processing =
-  let contents, set_contents = Lwt_react.S.create contents in
-  let debug_highlight_signal, set_debug_highlight = Lwt_react.S.create false in
-  let debug_highlight_signal =
-    Lwt_react.S.map
-      (fun x ->
-        Logs.app (fun m -> m "debug highlight set");
-        x)
-      debug_highlight_signal
-  in
-  let tokens = Lwt_react.S.map parse_tokens contents in
+  let contents = ref contents in
+  let debug_highlight = ref false in
+  let tokens = one_value_function_cache parse_tokens (fun () -> !contents) in
   let diagnostics =
-    Lwt_react.S.l2
-      (fun debug_highlight tokens ->
+    one_value_function_cache
+      (fun (debug_highlight, tokens) ->
+        Logs.app (fun m -> m "making diags");
         let tokens =
           List.filter
             (fun (tok : Bincaml_lsp.Raw_tokens.token_with_pos) ->
@@ -70,24 +67,12 @@ let new_state ~notify_back (contents : string) : state_after_processing =
               else true)
             tokens
         in
-        List.map to_diagnostic tokens)
-      debug_highlight_signal tokens
+        let diags = List.map to_diagnostic tokens in
+        Linol_lwt.spawn (fun () -> notify_back#send_diagnostic diags);
+        diags)
+      (fun () -> (!debug_highlight, tokens ()))
   in
-  let diagnostics =
-    Lwt_react.S.trace
-      (fun diags ->
-        Linol_lwt.spawn @@ fun () -> notify_back#send_diagnostic diags)
-      diagnostics
-  in
-  {
-    notify_back;
-    contents;
-    set_contents;
-    tokens;
-    debug_highlight_signal;
-    set_debug_highlight;
-    diagnostics;
-  }
+  { notify_back; contents; tokens; debug_highlight; diagnostics }
 
 (* Lsp server class
 
@@ -120,27 +105,30 @@ class lsp_server =
     *)
     method private _on_doc ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
         (uri : Lsp.Types.DocumentUri.t) (contents : string) =
+      notify_back#set_uri uri;
       let st =
         match Hashtbl.find_opt buffers uri with
         | Some st ->
             Logs.app (fun m -> m "setting new contents");
-            st.set_contents contents;
+            st.contents := contents;
             st
         | None -> new_state ~notify_back contents
       in
-      Hashtbl.replace buffers uri st;
-      Lwt.return ()
+      ignore @@ st.diagnostics ();
+      Hashtbl.replace buffers uri st
 
     (* We now override the [on_notify_doc_did_open] method that will be called
        by the server each time a new document is opened. *)
     method on_notif_doc_did_open ~notify_back d ~content : unit Linol_lwt.t =
-      self#_on_doc ~notify_back d.uri content
+      self#_on_doc ~notify_back d.uri content;
+      Lwt.return ()
 
     (* Similarly, we also override the [on_notify_doc_did_change] method that will be called
        by the server each time a new document is opened. *)
     method on_notif_doc_did_change ~notify_back d _c ~old_content:_old
         ~new_content =
-      self#_on_doc ~notify_back d.uri new_content
+      self#_on_doc ~notify_back d.uri new_content;
+      Lwt.return ()
 
     (* On document closes, we remove the state associated to the file from the global
        hashtable state, to avoid leaking memory. *)
@@ -177,13 +165,11 @@ class lsp_server =
       match (cmd, args) with
       | "toggle-highlight", Some [ uri ] ->
           let uri = Linol_lsp.Lsp.Types.DocumentUri.t_of_yojson uri in
+          notify_back#set_uri uri;
           let st = self#get uri in
-          (* let _ = *)
-          (*   st.diagnostics |> Lwt_react.S.changes |> Lwt_react.E.next *)
-          (*   >>= notify_back#send_diagnostic *)
-          (*   >|= Fun.const Yojson.Safe.(`Null) *)
-          (* in *)
-          st.set_debug_highlight (not (React.S.value st.debug_highlight_signal));
+
+          st.debug_highlight := not !(st.debug_highlight);
+          ignore @@ st.diagnostics ();
           Lwt.return @@ Yojson.Safe.(`Null)
       | _ ->
           super#on_req_execute_command ~notify_back ~id ~workDoneToken cmd args
@@ -199,8 +185,7 @@ class lsp_server =
       Logs.app (fun m -> m "req completion");
       let st = self#get uri in
 
-      (* TODO: how to handle reactive delay in propagating tokens?? *)
-      let tokens = Lwt_react.S.value st.tokens in
+      let tokens = st.tokens () in
 
       let to_token_strings ts =
         List.filter_map
