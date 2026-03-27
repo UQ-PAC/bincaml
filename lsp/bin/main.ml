@@ -16,63 +16,8 @@
 *)
 
 module Lsp = Linol.Lsp
-
-(* type state_after_processing = Bincaml_lsp.Raw_tokens.raw_token list *)
-type state_after_processing = {
-  notify_back : Linol_lwt.Jsonrpc2.notify_back;
-  contents : string ref;
-  tokens : unit -> Bincaml_lsp.Raw_tokens.token_with_pos list;
-  diagnostics : unit -> Lsp.Types.Diagnostic.t list;
-  debug_highlight : bool ref;
-}
-
-let parse_tokens (contents : string) : 'a list =
-  let lexbuf = Lexing.from_string ~with_positions:true contents in
-  Bincaml_lsp.Raw_tokens.extract_all_tokens lexbuf |> Iter.to_list
-
-let to_diagnostic (x : Bincaml_lsp.Raw_tokens.token_with_pos) :
-    Lsp.Types.Diagnostic.t =
-  let pos (p : Lexing.position) =
-    Lsp.Types.Position.create ~character:(p.pos_cnum - p.pos_bol)
-      ~line:(p.pos_lnum - 1)
-  in
-  let start = pos x.startpos in
-  let end_ = pos x.endpos in
-  let range = Lsp.Types.Range.create ~start ~end_ in
-  let str = x.str in
-  let severity =
-    match x.token with
-    | Ok _ -> Lsp.Types.DiagnosticSeverity.Information
-    | Error _ -> Lsp.Types.DiagnosticSeverity.Error
-  in
-  Lsp.Types.Diagnostic.create ~message:(`String str) ~range ~severity ()
-
-let one_value_function_cache f argfun =
-  let cache = CCCache.lru ~eq:CCEqual.poly 1 in
-  let cached = CCCache.with_cache cache f in
-  fun () -> cached (argfun ())
-
-let new_state ~notify_back (contents : string) : state_after_processing =
-  let contents = ref contents in
-  let debug_highlight = ref false in
-  let tokens = one_value_function_cache parse_tokens (fun () -> !contents) in
-  let diagnostics =
-    one_value_function_cache
-      (fun (debug_highlight, tokens) ->
-        Logs.app (fun m -> m "making diags");
-        let tokens =
-          List.filter
-            (fun (tok : Bincaml_lsp.Raw_tokens.token_with_pos) ->
-              if (not debug_highlight) && Result.is_ok tok.token then false
-              else true)
-            tokens
-        in
-        let diags = List.map to_diagnostic tokens in
-        Linol_lwt.spawn (fun () -> notify_back#send_diagnostic diags);
-        diags)
-      (fun () -> (!debug_highlight, tokens ()))
-  in
-  { notify_back; contents; tokens; debug_highlight; diagnostics }
+module Lsp_state = Bincaml_lsp.Lsp_state
+module TokenSet = Bincaml_lsp.Raw_tokens.TokenSet
 
 (* Lsp server class
 
@@ -92,7 +37,7 @@ class lsp_server =
     inherit Linol_lwt.Jsonrpc2.server as super
 
     (* one env per document *)
-    val buffers : (Lsp.Types.DocumentUri.t, state_after_processing) Hashtbl.t =
+    val buffers : (Lsp.Types.DocumentUri.t, Lsp_state.t) Hashtbl.t =
       Hashtbl.create 32
 
     method get uri = Hashtbl.find buffers uri
@@ -112,7 +57,7 @@ class lsp_server =
             Logs.app (fun m -> m "setting new contents");
             st.contents := contents;
             st
-        | None -> new_state ~notify_back contents
+        | None -> Lsp_state.new_state ~notify_back contents
       in
       ignore @@ st.diagnostics ();
       Hashtbl.replace buffers uri st
@@ -187,46 +132,26 @@ class lsp_server =
 
       let tokens = st.tokens () in
 
-      let to_token_strings ts =
-        List.filter_map
-          (fun (x : Bincaml_lsp.Raw_tokens.token_with_pos) ->
-            let open Bincaml_lsp.Raw_tokens in
-            match x.token with
-            | Ok (TOK_ProcIdent (_, id)) -> Some id
-            | _ -> None)
-          ts
-      in
-      let tokens_under_cursor =
-        tokens
-        |> List.filter (fun (x : Bincaml_lsp.Raw_tokens.token_with_pos) ->
-            let open Bincaml_lsp.Raw_tokens in
-            lsprange_contains (lsprange_of_token x) pos)
-        |> to_token_strings
-      in
-      List.iter
-        (fun x -> Logs.app (fun m -> m "under tok = %s" x))
-        tokens_under_cursor;
-      match tokens_under_cursor with
-      | [] -> Lwt.return None
-      | under_cursor :: _ ->
+      match
+        TokenSet.token_at_pos tokens pos
+        |> CCOption.flat_map Bincaml_lsp.Raw_tokens.ident_of_token
+      with
+      | None -> Lwt.return None
+      | Some prefix ->
           let matching_tokens =
-            tokens |> to_token_strings
-            |> List.filter (fun s -> String.starts_with ~prefix:under_cursor s)
+            Lsp_state.completions_for_prefix st pos prefix
           in
-          List.iter
-            (fun x -> Logs.app (fun m -> m "matching = %s" x))
-            matching_tokens;
           Lwt.return
           @@ Some
                (`List
                   (List.map
-                     (fun x ->
-                       Linol.Lsp.Types.CompletionItem.create ~insertText:x
+                     (fun (x : Bincaml_lsp.Raw_tokens.token_with_pos) ->
+                       Linol.Lsp.Types.CompletionItem.create ~insertText:x.str
                          ~kind:Linol.Lsp.Types.CompletionItemKind.Method
                          ~labelDetails:
                            (Linol.Lsp.Types.CompletionItemLabelDetails.create
                               ~detail:"procedure" ())
-                         ~label:x ())
+                         ~label:x.str ())
                      matching_tokens))
 
     (* method! on_req_code_lens_resolve ~notify_back ~id code_lens = *)

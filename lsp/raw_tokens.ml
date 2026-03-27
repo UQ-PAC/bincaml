@@ -140,7 +140,7 @@ type raw_token = BasilIR.ParBasilIR.token =
   | KW_assume
   | KW_assert
   | KW_and
-[@@deriving show { with_path = false }]
+[@@deriving show { with_path = false }, eq]
 
 open struct
   type position = Lexing.position = {
@@ -149,7 +149,7 @@ open struct
     pos_bol : int;
     pos_cnum : int;
   }
-  [@@deriving show]
+  [@@deriving show, eq, ord]
 end
 
 let lsppos_of_position (x : Lexing.position) =
@@ -167,7 +167,7 @@ type token_with_pos = {
   startpos : position;
   endpos : position;
 }
-[@@deriving show]
+[@@deriving show, eq]
 
 let token_extend_one (x : token_with_pos) =
   let endpos = { x.endpos with pos_cnum = x.endpos.pos_cnum + 1 } in
@@ -189,17 +189,53 @@ let show_lexbuf (buf : Lexing.lexbuf) =
     (show_position buf.lex_start_p)
 
 let error_token ~startpos () : token_with_pos =
-    {
-      token = Error ();
-      str = "Syntax error: unrecognised token";
-      startpos;
-      endpos = startpos;
-    }
+  {
+    token = Error ();
+    str = "Syntax error: unrecognised token";
+    startpos;
+    endpos = startpos;
+  }
 
 let dummy_token (buf : Lexing.lexbuf) () : token_with_pos =
   let startpos = buf.lex_start_p in
   let endpos = buf.lex_curr_p in
   { token = Error (); str = "<dummy token>"; startpos; endpos }
+
+module TokenSet = struct
+  let compare_elt =
+    CCOrd.map
+      (fun (x : token_with_pos) -> lsppos_of_position x.startpos)
+      lsppos_compare
+
+  include Set.Make (struct
+    type t = token_with_pos
+
+    let compare = compare_elt
+  end)
+
+  let token_at_pos (set : t) (lsppos : Linol.Lsp.Types.Position.t) =
+    let pos =
+      {
+        pos_fname = "";
+        pos_lnum = lsppos.line + 1;
+        pos_cnum = lsppos.character;
+        pos_bol = 0;
+      }
+    in
+    let dummy = error_token ~startpos:pos () in
+    find_last_opt (fun x -> compare_elt x dummy <= 0) set
+    |> CCOption.filter (fun tok ->
+        lsprange_contains (lsprange_of_token tok) lsppos)
+end
+
+let ident_of_token (x : token_with_pos) =
+  match x.token with
+  | Ok (TOK_ProcIdent (_, id)) -> Some id
+  | Ok (TOK_BIdent (_, id)) -> Some id
+  | Ok (TOK_BlockIdent (_, id)) -> Some id
+  | Ok (TOK_GlobalIdent (_, id)) -> Some id
+  | Ok (TOK_LocalIdent (_, id)) -> Some id
+  | _ -> None
 
 let rec next_token ?err_token (buf : Lexing.lexbuf) () : token_with_pos list =
   (* print_endline (show_lexbuf buf); *)

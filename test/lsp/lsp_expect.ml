@@ -5,16 +5,13 @@ let () =
 
 let%expect_test "error then error" =
   let open Bincaml_lsp.Raw_tokens in
-  let s = {|<-  <-
-
+  let s = {|<-  <--
     <-|} in
 
   extract_and_render_tokens stdout s;
   [%expect {|
-    <-  <-
-    aa  bb
-
-
+    <-  <--
+    aa  bbb
         <-
         cc
     a: Syntax error: unrecognised token
