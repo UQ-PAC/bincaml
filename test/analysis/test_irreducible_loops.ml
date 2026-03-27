@@ -12,6 +12,8 @@ open struct
   }
   [@@deriving eq, show]
 
+  let block_info = Alcotest.testable pp_block_info equal_block_info
+
   let id_map equal str =
     Alcotest.testable
       (fun f p ->
@@ -62,6 +64,16 @@ open struct
     in
     let checked = { iloop_headers = headers; headers = members } in
     check_test_comparison expect checked
+
+  let run_transform prog =
+    let p = (Loader.Loadir.ast_of_string prog).prog in
+    let p =
+      IDMap.find (Option.get_exn_or "no entry proc" p.entry_proc) p.procs
+    in
+    let before = solve_proc p in
+    let p' = Transforms.Irreducible_loop.transform p in
+    let after = solve_proc p' in
+    (before, after)
 
   let check_loop_result name prog ~header_ptrs ~all_loop_headers =
     let p = (Loader.Loadir.ast_of_string prog).prog in
@@ -186,7 +198,6 @@ proc @main () -> ()
 prog entry @main;
 proc @main () -> ()
 [
- 
   block %S [ goto(%loop); ]; 
   block %loop [ goto(%loop2); ]; 
   block %loop2 [ goto(%loop3); ]; 
@@ -211,7 +222,6 @@ proc @main () -> ()
 prog entry @main;
 proc @main () -> ()
 [
- 
   block %S [ goto(%loop); ]; 
   block %loop [ goto(%loop2); ]; 
   block %loop2 [ goto(%loop3, %loop2); ]; 
@@ -226,6 +236,47 @@ proc @main () -> ()
       [ ("%loop", [ "%loop" ]); ("%loop2", [ "%loop2" ]) ]
     in
     check_loop_result name p ~header_ptrs ~all_loop_headers
+
+  let loops_irreducible p =
+    List.filter
+      (fun b ->
+        match classify_block b with `IrreducibleHeader -> true | _ -> false)
+      p
+
+  let irrloops_fixed after =
+    Alcotest.(check (list block_info))
+      "all irreducible loops fixed" [] (loops_irreducible after)
+
+  let sub_cycles_transform =
+    let p =
+      {|
+prog entry @main;                           
+                                            
+proc @main () -> ()                         
+  { .name = "main"; .returnBlock = "exit" } 
+[                                           
+  block %S [                                
+    goto(%h1, %h2);                         
+  ];                                        
+  block %h1 [                               
+    goto(%h2);                              
+  ];                                        
+  block %h2 [                               
+    goto(%h1, %h3);                         
+  ];                                        
+  block %h3 [                               
+    goto(%h2, %exit);                       
+  ];                                        
+  block %exit [                             
+    return ();                              
+  ]                                         
+];                                          
+                                            
+    |}
+    in
+    let _, after = run_transform p in
+    Alcotest.test_case "sub cycles transform" `Quick (fun () ->
+        irrloops_fixed after)
 end
 
 let tests =
@@ -238,5 +289,6 @@ let tests =
         one_long_loop;
         nested_loop;
         nested_self_loop;
+        sub_cycles_transform;
       ] );
   ]

@@ -17,14 +17,18 @@ let transform_loop p l =
     | {
      block;
      loop = PrimaryHeader { primary_header; headers; nodes; entries; backedges };
-    } ->
+    }
+      when VSet.cardinal headers > 1 ->
         ( block,
           primary_header,
           headers,
           nodes,
           Lazy.force entries,
           Lazy.force backedges )
-    | _ -> raise (Invalid_argument "called on non-primary header")
+    | _ ->
+        raise
+          (Invalid_argument
+             "called on non-primary header / non-irreducible loop ")
   in
   let dest = BlockGraph.E.dst in
   let src = BlockGraph.E.src in
@@ -118,8 +122,7 @@ let transform (p : Program.proc) =
   (* NOTE: we get the result sorted in reverse-topological order *)
   let loops =
     solve_proc p
-    |> List.filter (function
-      | { loop = PrimaryHeader _; _ } -> true
-      | _ -> false)
+    |> List.filter (fun b ->
+        match classify_block b with `IrreducibleHeader -> true | _ -> false)
   in
   List.fold_left transform_loop p loops

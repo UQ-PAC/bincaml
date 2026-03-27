@@ -38,22 +38,26 @@ module Make (G : GSig) = struct
   module VSet = Set.Make (G.V)
   module VMap = Map.Make (G.V)
 
+  let vset_pp fmt m =
+    Format.pp_print_string fmt
+      (VSet.to_string ~sep:", " ~start:"{" ~stop:"}" G.V.show m)
+
   (** Loop context information of a given block. *)
   type loop_info =
     | PrimaryHeader of {
         primary_header : G.V.t option;
             (** next-outermost header to this loop, if we are inside a loop *)
-        headers : VSet.t;
+        headers : VSet.t; [@printer vset_pp]
             (** the set of blocks which can be used to enter the loop. a header
                 is defined as dominating all non-header nodes of the loop. *)
-        nodes : VSet.t;
+        nodes : VSet.t; [@printer vset_pp]
             (** the set of blocks which are internal to the loop. this set forms
                 a strongly-connected component. note that a block may be
                 internal to multiple loops *)
-        entries : G.E.t list Lazy.t;
+        entries : G.E.t list; [@equal fun a b -> Equal.poly a b]
             (** persistent iterator over edges which enter any header in this
                 loop *)
-        backedges : G.E.t list Lazy.t;
+        backedges : G.E.t list; [@equal fun a b -> Equal.poly a b]
             (** persistent iterator of back-edges to any header of this loop *)
       }  (** Designated primary header of a loop. *)
     | LoopParticipant of {
@@ -64,8 +68,18 @@ module Make (G : GSig) = struct
         (** Member of a loop that is not a primary header (may be a non-primary
             header) *)
     | NonLoop
+  [@@deriving show { with_path = false }, eq]
 
   type block_info = { block : G.V.t; dfs_pos : int; loop : loop_info }
+  [@@deriving eq, show { with_path = false }]
+
+  let classify_block b =
+    match b with
+    | { loop = NonLoop } -> `NonLoop
+    | { loop = LoopParticipant _ } -> `LoopNode
+    | { loop = PrimaryHeader { headers } } when VSet.cardinal headers = 1 ->
+        `ReducibleHeader
+    | { loop = PrimaryHeader { headers } } -> `IrreducibleHeader
 
   module Implementation = struct
     (** Internal implementation of irreducible loop forest algorithm.
@@ -99,25 +113,23 @@ module Make (G : GSig) = struct
           originating from outside the loop and going towards *any* header of
           the loop. *)
       let compute_entries p block headers nodes =
-        lazy
-          (Iter.(
-             VSet.to_iter headers
-             |> flat_map (fun h ->
-                 diff (G.pred p h |> List.to_iter) (VSet.to_iter nodes))
-             |> map (fun src -> G.find_edge p src block))
-          |> Iter.to_list)
+        Iter.(
+          VSet.to_iter headers
+          |> flat_map (fun h ->
+              diff (G.pred p h |> List.to_iter) (VSet.to_iter nodes))
+          |> map (fun src -> G.find_edge p src block))
+        |> Iter.to_list
 
       (** Accesses the Basil IR state to compute the set of back-edges. That is,
           the set of edges originating from _inside_ the loop and going towards
           *any* header of the loop. *)
       let compute_backedges p block headers nodes =
-        lazy
-          (Iter.(
-             VSet.to_iter headers
-             |> flat_map (fun h ->
-                 inter (G.pred p h |> List.to_iter) (VSet.to_iter nodes))
-             |> map (fun src -> G.find_edge p src block))
-          |> Iter.to_list)
+        Iter.(
+          VSet.to_iter headers
+          |> flat_map (fun h ->
+              inter (G.pred p h |> List.to_iter) (VSet.to_iter nodes))
+          |> map (fun src -> G.find_edge p src block))
+        |> Iter.to_list
     end
 
     type block_loop_state = {
@@ -133,11 +145,7 @@ module Make (G : GSig) = struct
               maintained even after visiting is finished. *)
       mutable is_traversed : bool;
           (** whether visiting this block has _started_. *)
-      mutable headers : VSet.t;
-          [@printer
-            fun fmt m ->
-              Format.pp_print_string fmt
-                (VSet.to_string ~sep:", " ~start:"{" ~stop:"}" G.V.show m)]
+      mutable headers : VSet.t; [@printer vset_pp]
           (** headers of the loop headed by this block. if this block heads a
               loop, this always contains `b` as the primary header. for
               irreducible loops, it also contains secondary headers. *)
@@ -284,10 +292,8 @@ module Make (G : GSig) = struct
     (** Sets [h] as the loop header for the block `b` and all containing loops.
     *)
     let tag_lhead s (b : block_loop_state) (h : block_loop_state option) =
-      print_endline "tag lhead";
       match h with
       | Some h when not @@ G.V.equal b.block h.block -> begin
-          print_endline (show_block_loop_state h);
           let rec loop ~(cur1 : block_loop_state) ~(cur2 : block_loop_state) =
             match cur1.iloop_header with
             | Some ih when G.V.equal ih cur2.block -> ()
@@ -368,10 +374,6 @@ module Make (G : GSig) = struct
         (* iterate the remaining blocks *)
         iter_tails
           (fun it b ->
-            (*print_endline
-            (Printf.sprintf "%s %d"
-               (ID.to_string (b : block_loop_state).block)
-               (List.length it));*)
             match b with
             | { is_traversed = false } ->
                 raise
