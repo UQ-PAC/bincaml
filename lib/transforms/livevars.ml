@@ -166,7 +166,7 @@ module InterprocDSE = struct
   let transform_proc prog keep live_param_strs results proc =
     (* Remove dead parameters *)
     let live_params =
-      ID.Map.get_or (Procedure.id proc) live_param_strs ~default:StringSet.empty
+      IDMap.get_or (Procedure.id proc) live_param_strs ~default:StringSet.empty
     in
     let proc =
       Procedure.map_formal_in_params
@@ -185,7 +185,7 @@ module InterprocDSE = struct
                   (function
                     | Stmt.Instr_Call f ->
                         let live_params =
-                          ID.Map.get_or f.procid live_param_strs
+                          IDMap.get_or f.procid live_param_strs
                             ~default:StringSet.empty
                         in
                         let args =
@@ -205,7 +205,7 @@ module InterprocDSE = struct
        here as all interprocedural results come from input parameters being
        dead, which we have removed. *)
     let live =
-      ID.Map.find (Procedure.id proc) results
+      IDMap.find (Procedure.id proc) results
       |> VarMap.to_iter
       |> Iter.filter_map (fun (v, t) -> Option.return_if t v)
       |> VarSet.of_iter
@@ -229,10 +229,10 @@ module InterprocDSE = struct
       IDELiveSSIAnalysis.solve p
     in
 
-    let live_param_strs : StringSet.t ID.Map.t =
-      ID.Map.mapi
+    let live_param_strs : StringSet.t IDMap.t =
+      IDMap.mapi
         (fun pid proc ->
-          let res = ID.Map.find pid results in
+          let res = IDMap.find pid results in
           Procedure.formal_in_params proc
           |> StringMap.filter (fun _ v -> VarMap.get_or v res ~default:false)
           |> StringMap.keys |> StringSet.of_iter)
@@ -240,7 +240,7 @@ module InterprocDSE = struct
     in
 
     let procs =
-      ID.Map.map
+      IDMap.map
         (fun proc -> transform_proc p keep live_param_strs results proc)
         p.procs
     in

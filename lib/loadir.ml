@@ -247,7 +247,7 @@ module BasilASTLoader = struct
         in
         let prog =
           map_prog
-            (fun pr -> { pr with procs = ID.Map.add proc_id p pr.procs })
+            (fun pr -> { pr with procs = IDMap.add proc_id p pr.procs })
             prog
         in
         prog
@@ -366,7 +366,7 @@ module BasilASTLoader = struct
           spec_list,
           proc_def ) ->
         let proc_id = prog.prog.proc_names.decl_or_get id in
-        let p = ID.Map.find proc_id prog.prog.procs in
+        let p = IDMap.find proc_id prog.prog.procs in
         let prog = { prog with curr_proc = Some p } in
         let prog, blocks =
           match proc_def with
@@ -444,7 +444,7 @@ module BasilASTLoader = struct
             p blocks
         in
         map_prog
-          (fun prog -> { prog with procs = ID.Map.add proc_id p prog.procs })
+          (fun prog -> { prog with procs = IDMap.add proc_id p prog.procs })
           prog
     | Decl_Mem _ | Decl_Var _ | Decl_RecType _ | Decl_Type _ ->
         (* declarations only: handled by first pass *)
@@ -1298,7 +1298,7 @@ let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
       proc
   in
   let prog =
-    { prog with procs = ID.Map.add (Procedure.id proc) proc prog.procs }
+    { prog with procs = IDMap.add (Procedure.id proc) proc prog.procs }
   in
   let bl = Procedure.get_block proc bid |> Option.get_exn_or "" in
   let globals =
@@ -1553,7 +1553,7 @@ proc @c() -> ()
 |}
   in
   let res = analyse prog.prog in
-  ID.Map.iter
+  IDMap.iter
     (fun pid proc ->
       print_endline (ID.to_string pid ^ ":\n" ^ (res pid |> RWSets.to_string)))
     prog.prog.procs;
