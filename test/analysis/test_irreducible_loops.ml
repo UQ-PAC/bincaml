@@ -1,5 +1,5 @@
 open Bincaml_util.Common
-open Analysis.Irreducible_loops
+open Analysis.Irreducible_loops.ProcIntra
 
 type test_comparison = {
   iloop_headers : string StringMap.t;
@@ -17,8 +17,8 @@ let id_map equal str =
 
 let id_set =
   Alcotest.testable
-    (fun f p -> Format.pp_print_string f (ID.Set.to_string ID.to_string p))
-    ID.Set.equal
+    (fun f p -> Format.pp_print_string f (IDSet.to_string ID.to_string p))
+    IDSet.equal
 
 let check_test_comparison a b =
   Alcotest.(check @@ id_map String.equal Fun.id)
@@ -56,7 +56,7 @@ let assert_loop_detector p iloop_headers headers =
       loops
     |> List.map (fun (k, v) ->
         ( ID.to_string k,
-          ID.Set.to_iter v |> Iter.map ID.to_string |> StringSet.of_iter ))
+          IDSet.to_iter v |> Iter.map ID.to_string |> StringSet.of_iter ))
     |> StringMap.of_list
   in
   let checked = { iloop_headers = headers; headers = members } in
