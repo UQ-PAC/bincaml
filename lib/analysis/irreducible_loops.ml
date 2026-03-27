@@ -50,10 +50,10 @@ module Make (G : GSig) = struct
             (** the set of blocks which are internal to the loop. this set forms
                 a strongly-connected component. note that a block may be
                 internal to multiple loops *)
-        entries : G.E.t Iter.t Lazy.t;
+        entries : G.E.t list Lazy.t;
             (** persistent iterator over edges which enter any header in this
                 loop *)
-        backedges : G.E.t Iter.t Lazy.t;
+        backedges : G.E.t list Lazy.t;
             (** persistent iterator of back-edges to any header of this loop *)
       }  (** Designated primary header of a loop. *)
     | LoopParticipant of {
@@ -105,7 +105,7 @@ module Make (G : GSig) = struct
              |> flat_map (fun h ->
                  diff (G.pred p h |> List.to_iter) (VSet.to_iter nodes))
              |> map (fun src -> G.find_edge p src block))
-          |> Iter.persistent)
+          |> Iter.to_list)
 
       (** Accesses the Basil IR state to compute the set of back-edges. That is,
           the set of edges originating from _inside_ the loop and going towards
@@ -117,7 +117,7 @@ module Make (G : GSig) = struct
              |> flat_map (fun h ->
                  inter (G.pred p h |> List.to_iter) (VSet.to_iter nodes))
              |> map (fun src -> G.find_edge p src block))
-          |> Iter.persistent)
+          |> Iter.to_list)
     end
 
     type block_loop_state = {
@@ -417,6 +417,8 @@ module Make (G : GSig) = struct
              Printf.sprintf "%s -> %s" (G.V.show k) (show_block_loop_state v)))
   end
 
+  (** Returns a list representing the loop forest sorted in reverse-topological
+      order. *)
   let solve g entry =
     let open Implementation in
     let st = create g in
@@ -467,7 +469,8 @@ module ProcIntra = struct
   include Make (BlockGraph)
 
   (** Perform irreducible loop analysis and return a list containing the loop
-      information label for each block in the procedure . *)
+      information label for each block in the procedure. Returns all loop tags
+      for blocks in reverse-topological order. *)
   let solve_proc p =
     Procedure.get_entry_block p
     |> Option.flat_map_l (fun entry -> solve p entry)

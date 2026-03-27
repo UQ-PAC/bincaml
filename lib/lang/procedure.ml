@@ -338,15 +338,21 @@ let get_entry_block p =
         Some (List.hd id))
   with Not_found -> None
 
+(** Get the block for an id
+
+    @raises {! Not_found} when the block does not exist.
+*)
+let find_block p id =
+  let open Edge in
+  let open G in
+  let g = graph p |> function Some e -> e | _ -> raise Not_found in
+  let _, e, _ = G.find_edge g (Begin id) (End id) in
+  match e with Block b -> b | Jump -> raise Not_found
+
 let get_block p id =
   let open Edge in
   let open G in
-  try
-    graph p
-    |> Option.flat_map (fun g ->
-        let _, e, _ = G.find_edge g (Begin id) (End id) in
-        match e with Block b -> Some b | Jump -> None)
-  with Not_found -> None
+  try Some (find_block p id) with Not_found -> None
 
 let decl_block_exn p name ?(phis = [])
     ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
@@ -364,6 +370,15 @@ let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
       let g = G.remove_edge g (Begin id) (End id) in
       let g = G.add_edge_e g (Begin id, Block block, End id) in
       g)
+
+let replace_block_succs p id succs =
+  let open Edge in
+  let open G in
+  p
+  |> map_graph (fun g ->
+      let g = G.succ_e g (End id) |> List.fold_left G.remove_edge_e g in
+      let succs = List.map (fun s -> Vert.(Begin id, Jump, End s)) succs in
+      List.fold_left G.add_edge_e g succs)
 
 let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
   update_block p id block
