@@ -49,12 +49,12 @@ module Implementation = struct
       particular, certain nodes are chosen to be primary headers based on this
       order. An irreducible loop, by definition, will have multiple potential
       headers. We call the chosen header the _primary_ header and any possible
-      irreducible headers are called _secondary_ headers.
+      irreducible headers are called {e secondary} headers.
 
       For an overview of loop concepts and terminology, see LLVM's [Loop] and
       [Cycle] pages. Note that we do not closely follow the terminology of LLVM.
       For instance, we call both irreducible and reducible loops as "loops",
-      whereas LLVM only uses loop for *reducible* loops and uses cycle for
+      whereas LLVM only uses loop for {e reducible} loops and uses cycle for
       reducible or irreducible.
 
       - the paper: {:http://dx.doi.org/10.1007/978-3-540-74061-2_11}
@@ -298,19 +298,19 @@ module Implementation = struct
       The original algorithm has one recursive call, so its tail-recursive form
       has two "entry points" - one from the beginning of the function, and one
       when a recursive subcall has returned and wants to continue. This is
-      implemented by using the {!call_action} parameter. The [Call] variant
-      denotes a normal call to the function with arguments {call_arg}, and
-      the [Return] variant denotes a return from a recursive subcall,
-      with its argument being the return value of the recursive subcall.
+      implemented by using the {!call_action} parameter. The {! Call} variant
+      denotes a normal call to the function with arguments {! call_arg}, and the
+      {! Return} variant denotes a return from a recursive subcall, with its
+      argument being the return value of the recursive subcall.
 
       This is combined with a stack of nested calls ({!continuation_stack}). A
-      recursive "call" happens by invoking the function with [Call] and pushing
-      the current [call_args] onto the stack. In particular, storing the remainder of 
-      the [it] list lets us resume the iteration at a later point. Upon completing
-      execution of one call to the function, if the stack is non-empty, the
-      function will "return" to the parent call by invoking the function with a
-      [Return] argument. We use local exceptions to represent early termination 
-      to the recursive call. *)
+      recursive "call" happens by invoking the function with {! Call} and
+      pushing the current {! call_args} onto the stack. In particular, storing
+      the remainder of the [it] list lets us resume the iteration at a later
+      point. Upon completing execution of one call to the function, if the stack
+      is non-empty, the function will "return" to the parent call by invoking
+      the function with a {! Return} argument. We use local exceptions to
+      represent early termination to the recursive call. *)
   let rec trav_loops st (input : call_action)
       (input_continuations : continuation_stack) =
     let open Iter in
