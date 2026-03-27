@@ -14,7 +14,11 @@
   (pps ppx_expect)))
 
 (test
- (modules analysis_tests test_wrapped_intervals test_irreducible_loops test_lattice_collections)
+ (modules
+  analysis_tests
+  test_wrapped_intervals
+  test_irreducible_loops
+  test_lattice_collections)
  (name analysis_tests)
  (libraries
   bincaml.loader
