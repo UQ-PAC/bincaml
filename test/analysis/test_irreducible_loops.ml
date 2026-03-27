@@ -29,7 +29,7 @@ let check_test_comparison a b =
     "loop header->participant sets equal" a.headers b.headers
 
 let assert_loop_detector p iloop_headers headers =
-  let loops = solve_loop_heirachy p in
+  let loops = solve_proc p in
   let headers =
     List.map (Pair.map Fun.id StringSet.of_list) headers |> StringMap.of_list
   in
@@ -78,39 +78,18 @@ prog entry @main;
 proc @main () -> ()
   { .name = "main"; .returnBlock = "E" }
 [
-  block %S [
-    goto(%a, %e);
-  ];
-  block %a [
-    goto(%b);
-  ];
-  block %b [
-    goto(%c);
-  ];
-  block %c [
-    goto(%d, %b);
-  ];
-  block %d [
-    goto(%E, %a);
-  ];
-  block %e [
-    goto(%f);
-  ];
-  block %f [
-    goto(%g);
-  ];
-  block %g [
-    goto(%f, %h);
-  ];
-  block %h [
-    goto(%i);
-  ];
-  block %i [
-    goto(%h, %e, %E);
-  ];
-  block %E [
-    return ();
-  ]
+ 
+  block %S [ goto(%a, %e); ]; 
+  block %a [ goto(%b); ]; 
+  block %b [ goto(%c); ]; 
+  block %c [ goto(%d, %b); ]; 
+  block %d [ goto(%E, %a); ]; 
+  block %e [ goto(%f); ]; 
+  block %f [ goto(%g); ]; 
+  block %g [ goto(%f, %h); ]; 
+  block %h [ goto(%i); ]; 
+  block %i [ goto(%h, %e, %E); ]; 
+  block %E [ return (); ]
 ];
 
 
@@ -142,28 +121,14 @@ let paper_fig3 =
   let p =
     {|
 prog entry @main;
-
 proc @main () -> ()
-  { .name = "main"; .returnBlock = "E" }
 [
-  block %S [
-    goto(%a, %d);
-  ];
-  block %a [
-    goto(%b);
-  ];
-  block %b [
-    goto(%a, %c, %E);
-  ];
-  block %c [
-    goto(%b, %d, %E);
-  ];
-  block %d [
-    goto(%c);
-  ];
-  block %E [
-    return ();
-  ]
+  block %S [ goto(%a, %d); ]; 
+  block %a [ goto(%b); ]; 
+  block %b [ goto(%a, %c, %E); ]; 
+  block %c [ goto(%b, %d, %E); ]; 
+  block %d [ goto(%c); ]; 
+  block %E [ return (); ]
 ];
 |}
   in
@@ -178,31 +143,15 @@ let multiple_entries =
   let p =
     {|
 prog entry @main;
-
 proc @main () -> ()
-  { .name = "main"; .returnBlock = "end" }
 [
-  block %S [
-    goto(%a, %loopexit);
-  ];
-  block %a [
-    goto(%loop);
-  ];
-  block %b [
-    goto(%loop);
-  ];
-  block %loop [
-    goto(%loopexit);
-  ];
-  block %loopexit [
-    goto(%loop, %end);
-  ];
-  block %end [
-    return ();
-  ]
+  block %S [ goto(%a, %loopexit); ]; 
+  block %a [ goto(%loop); ]; 
+  block %b [ goto(%loop); ]; 
+  block %loop [ goto(%loopexit); ]; 
+  block %loopexit [ goto(%loop, %end); ]; 
+  block %end [ return (); ]
 ];
-
-
 |}
   in
   let header_ptrs = [ ("%loopexit", "%loop") ] in
@@ -216,29 +165,14 @@ let one_long_loop =
 prog entry @main;
 
 proc @main () -> ()
-  { .name = "main"; .returnBlock = "end" }
 [
-  block %S [
-    goto(%preloop);
-  ];
-  block %preloop [
-    goto(%loop);
-  ];
-  block %loop [
-    goto(%loop2);
-  ];
-  block %loop2 [
-    goto(%loop3);
-  ];
-  block %loop3 [
-    goto(%loop, %end);
-  ];
-  block %end [
-    return ();
-  ]
+  block %S [ goto(%preloop); ]; 
+  block %preloop [ goto(%loop); ]; 
+  block %loop [ goto(%loop2); ]; 
+  block %loop2 [ goto(%loop3); ]; 
+  block %loop3 [ goto(%loop, %end); ]; 
+  block %end [ return (); ]
 ];
-
-
 |}
   in
   let name = "one long loop" in
@@ -254,27 +188,14 @@ prog entry @main;
 proc @main () -> ()
   { .name = "main"; .returnBlock = "end" }
 [
-  block %S [
-    goto(%loop);
-  ];
-  block %loop [
-    goto(%loop2);
-  ];
-  block %loop2 [
-    goto(%loop3);
-  ];
-  block %loop3 [
-    goto(%loop2, %loop4);
-  ];
-  block %loop4 [
-    goto(%loop, %end);
-  ];
-  block %end [
-    return ();
-  ]
+ 
+  block %S [ goto(%loop); ]; 
+  block %loop [ goto(%loop2); ]; 
+  block %loop2 [ goto(%loop3); ]; 
+  block %loop3 [ goto(%loop2, %loop4); ]; 
+  block %loop4 [ goto(%loop, %end); ]; 
+  block %end [ return (); ]
 ];
-
-
 |}
   in
   let name = "nested loop" in
@@ -292,24 +213,13 @@ prog entry @main;
 proc @main () -> ()
   { .name = "main"; .returnBlock = "end" }
 [
-  block %S [
-    goto(%loop);
-  ];
-  block %loop [
-    goto(%loop2);
-  ];
-  block %loop2 [
-    goto(%loop3, %loop2);
-  ];
-  block %loop3 [
-    goto(%loop, %end);
-  ];
-  block %end [
-    return ();
-  ]
+ 
+  block %S [ goto(%loop); ]; 
+  block %loop [ goto(%loop2); ]; 
+  block %loop2 [ goto(%loop3, %loop2); ]; 
+  block %loop3 [ goto(%loop, %end); ]; 
+  block %end [ return (); ]
 ];
-
-
 |}
   in
   let name = "nested self-loop" in

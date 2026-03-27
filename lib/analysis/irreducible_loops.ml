@@ -55,12 +55,14 @@ module Make (G : GSig) = struct
                 loop *)
         backedges : G.E.t Iter.t Lazy.t;
             (** persistent iterator of back-edges to any header of this loop *)
-      }
+      }  (** Designated primary header of a loop. *)
     | LoopParticipant of {
         primary_header : G.V.t;
             (** The block serving as the primary header for the loop we are a
                 participant in *)
       }
+        (** Member of a loop that is not a primary header (may be a non-primary
+            header) *)
     | NonLoop
 
   type block_info = { block : G.V.t; dfs_pos : int; loop : loop_info }
@@ -300,8 +302,7 @@ module Make (G : GSig) = struct
         end
       | _ -> ()
 
-    (** Like {! List.iteri} but for each element we pass the tail of the list.
-    *)
+    (** Variant of {! List.iter} which passes the tail for each element. *)
     let rec iter_tails f l =
       match l with
       | h :: tl ->
@@ -310,13 +311,13 @@ module Make (G : GSig) = struct
       | [] -> ()
 
     type call_arg = { block : block_loop_state; dfsp_pos : int }
-    (** arguments to a recursive call of the algorithm *)
+    (** Arguments to a recursive call of the algorithm *)
 
-    (** type of contiuation *)
+    (** Type of continuation *)
     type call_action = Call of call_arg | Return of block_loop_state option
 
     type continuation_stack = (call_arg * block_loop_state list) list
-    (** stack of continuations *)
+    (** Stack of continuations *)
 
     (** Tail-recursive form of the DFS-based traversal described in the paper.
 
@@ -340,7 +341,6 @@ module Make (G : GSig) = struct
     let rec trav_loops st (input : call_action)
         (input_continuations : continuation_stack) =
       let open Iter in
-      let exception Ret of block_loop_state option in
       let exception Recurse of (call_action * continuation_stack) in
       let run () =
         let b0, dfsp_pos, it, continuations =
@@ -363,7 +363,7 @@ module Make (G : GSig) = struct
             end
           | Return nh, [] ->
               (* this is the outermost call : we are done*)
-              raise (Ret nh)
+              raise (Recurse (Return nh, []))
         in
         (* iterate the remaining blocks *)
         iter_tails
@@ -407,7 +407,7 @@ module Make (G : GSig) = struct
         raise (Recurse (Return result, continuations))
       in
       try run () with
-      | Ret r -> r
+      | Recurse (Return c, []) -> c
       | Recurse (c, continuations) -> trav_loops st c continuations
 
     let dbg_show st =
@@ -468,7 +468,7 @@ module ProcIntra = struct
 
   (** Perform irreducible loop analysis and return a list containing the loop
       information label for each block in the procedure . *)
-  let solve_loop_heirachy p =
+  let solve_proc p =
     Procedure.get_entry_block p
     |> Option.flat_map_l (fun entry -> solve p entry)
 end
