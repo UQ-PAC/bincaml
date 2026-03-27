@@ -16,8 +16,8 @@
 ; only enable this test if cvc available
 
 (executable
- (name expr_eval_qcheck)
- (modules expr_eval_qcheck)
+ (name test_expr_eval_qcheck)
+ (modules test_expr_eval_qcheck)
  (flags -w -27)
  (libraries str expr_gen alcotest qcheck-alcotest qcheck-core))
 
@@ -25,7 +25,7 @@
  (alias runtest)
  (enabled_if %{bin-available:cvc5})
  (action
-  (run %{dep:expr_eval_qcheck.exe})))
+  (run %{dep:test_expr_eval_qcheck.exe})))
 
 (rule
  (alias runtest)
@@ -37,9 +37,8 @@
 ; inline-test libs
 
 (library
- (name expr_eval_expect)
- (modules expr_eval_expect stmt interp)
- (flags -w -27)
+ (name test_expr_eval_expect)
+ (modules test_expr_eval_expect test_stmt test_interp)
  (libraries expr_gen loader)
  (inline_tests)
  (preprocess
@@ -48,8 +47,8 @@
 ; pagetable spec library
 
 (library
- (name pagetable_spec)
- (modules pagetable_spec)
+ (name test_pagetable_spec)
+ (modules test_pagetable_spec)
  (libraries
   iter
   zarith
@@ -72,13 +71,11 @@
 ; actual tests
 
 (test
- (name pagetable_qcheck)
- (modules pagetable_qcheck)
- (flags -w -27)
- (libraries pagetable_spec qcheck-core.runner qcheck-stm.sequential))
+ (name test_pagetable_qcheck)
+ (modules test_pagetable_qcheck)
+ (libraries test_pagetable_spec qcheck-core.runner qcheck-stm.sequential))
 
 (test
- (name value_soundness)
- (modules value_soundness)
- (flags -w -27)
+ (name test_value_soundness)
+ (modules test_value_soundness)
  (libraries expr_gen alcotest qcheck-alcotest qcheck-core bincaml.analysis))

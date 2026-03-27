@@ -116,11 +116,11 @@ module IDESSI (D : IDESSIDomain) = struct
 
   let p1_transfer (prog : Program.t) summaries entry2call entry2exit pid
       (v : Vertex.t) d1 d2 e1 : (DL.t * ID.t * (DL.t * D.t) Iter.t) Iter.t =
-    let proc = ID.Map.find pid prog.procs in
+    let proc = IDMap.find pid prog.procs in
     let open Stmt in
     match v with
     | _, Vertex.Stmt (_, (Instr_Call c as s)) ->
-        let caller = ID.Map.find c.procid prog.procs in
+        let caller = IDMap.find c.procid prog.procs in
         Iter.singleton
           ( d1,
             pid,
@@ -142,8 +142,8 @@ module IDESSI (D : IDESSIDomain) = struct
             |> Iter.flat_map (fun (d, e1) ->
                 (* update the entry2call cache *)
                 let k = (d, c.procid) in
-                Hashtbl.get_or entry2call k ~default:ID.Map.empty
-                |> ID.Map.update pid (function
+                Hashtbl.get_or entry2call k ~default:IDMap.empty
+                |> IDMap.update pid (function
                   | Some m -> Some (DlMap.add d1 (e1, s) m)
                   | None -> Some (DlMap.singleton d1 (e1, s)))
                 |> Hashtbl.replace entry2call k;
@@ -183,8 +183,8 @@ module IDESSI (D : IDESSIDomain) = struct
             |> Hashtbl.replace entry2exit k;
             (* We now propagate to all callees of this procedure that are
              * stored in the cache *)
-            Hashtbl.get_or entry2call (d1, pid) ~default:ID.Map.empty
-            |> ID.Map.to_iter
+            Hashtbl.get_or entry2call (d1, pid) ~default:IDMap.empty
+            |> IDMap.to_iter
             |> Iter.flat_map (fun (callee_id, m) ->
                 DlMap.to_iter m
                 |> Iter.map (fun (d0, (e0, s)) ->
@@ -224,13 +224,13 @@ module IDESSI (D : IDESSIDomain) = struct
        procedure's entry along with the call it comes from, with a fixed dl
        value at the start of the second procedure *)
     let entry_to_call_entry_cache :
-        (DL.t * ID.t, (D.t * Program.stmt) DlMap.t ID.Map.t) Hashtbl.t =
+        (DL.t * ID.t, (D.t * Program.stmt) DlMap.t IDMap.t) Hashtbl.t =
       Hashtbl.create 20
     in
     let worklist = W1.create () in
     List.iter
       (fun pid ->
-        let proc = ID.Map.find pid prog.procs in
+        let proc = IDMap.find pid prog.procs in
         let init =
           D.init_data proc |> Iter.map (fun v -> Label v) |> Iter.cons Lambda
         in
@@ -243,8 +243,7 @@ module IDESSI (D : IDESSIDomain) = struct
       let def_use = Hashtbl.find defuses pid in
       (match d2 with
         | Lambda ->
-            ID.Map.find pid prog.procs
-            |> get_dfg_vertices ~direction:D.direction
+            IDMap.find pid prog.procs |> get_dfg_vertices ~direction:D.direction
         | Label v2 -> MDeps.find_iter def_use v2)
       |> Iter.iter (fun v ->
           p1_transfer prog summaries entry_to_call_entry_cache
@@ -277,7 +276,7 @@ module IDESSI (D : IDESSIDomain) = struct
       functions. *)
   let compute_defuses (prog : Program.t) : (ID.t, MDeps.t) Hashtbl.t =
     let defuses = Hashtbl.create 20 in
-    ID.Map.iter
+    IDMap.iter
       (fun pid proc ->
         Hashtbl.add defuses pid
           (match D.direction with
@@ -294,7 +293,7 @@ module IDESSI (D : IDESSIDomain) = struct
       let summary = DlMap.add d1 m summary in
       Hashtbl.replace summaries pid summary
     in
-    ID.Map.iter
+    IDMap.iter
       (fun pid proc ->
         match Procedure.graph proc with
         | Some _ -> ()
@@ -344,12 +343,12 @@ module IDESSI (D : IDESSIDomain) = struct
   (** Compute edge function summaries and analysis results for every procedure
       in the given program. *)
   let solve ?(defuses : (ID.t, MDeps.t) Hashtbl.t option) (prog : Program.t) :
-      (ID.t, summary) Hashtbl.t * D.Value.t VarMap.t ID.Map.t =
+      (ID.t, summary) Hashtbl.t * D.Value.t VarMap.t IDMap.t =
     (* Solve phase 1 *)
     let summaries = solve_summaries ?defuses prog in
     (* Solve phase 2 *)
     let p2_res =
-      ID.Map.mapi
+      IDMap.mapi
         (fun pid proc ->
           let summary = Hashtbl.get_or summaries pid ~default:DlMap.empty in
           p2_solve_proc summary proc)

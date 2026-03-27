@@ -1,4 +1,5 @@
 let () =
   let open Alcotest in
   run "Static Analysis"
-    (Lattice_collections.tests @ Test_irreducible_loops.tests)
+    (Test_lattice_collections.tests @ Test_irreducible_loops.tests
+   @ Test_wrapped_intervals.tests)

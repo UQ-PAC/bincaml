@@ -43,12 +43,13 @@ let%expect_test "fold_block" =
     |}
   in
   Block.fold_forwards
-    ~f:(fun a i -> print_endline (Stmt.show_stmt_basil i))
-    ~phi:(fun a i -> a)
+    ~f:(fun _ i -> print_endline (Stmt.show_stmt_basil i))
+    ~phi:(fun a _ -> a)
     () block;
   print_endline (Block.to_string block);
   ();
-  [%expect {|
+  [%expect
+    {|
     $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in:bv64,
      0xfffffffffffffffc:bv64) extract(32,0, R0_in:bv64) 32
     var load45_1:bv32 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64,

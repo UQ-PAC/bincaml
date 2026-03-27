@@ -38,7 +38,7 @@ let simplify_proc_spec_exprs ?visit rewriter p =
 
 let simplify_prog_spec_exprs rewriter ?visit (p : Program.t) =
   let procs =
-    ID.Map.map
+    IDMap.map
       (fun proc -> simplify_proc_spec_exprs rewriter ?visit proc)
       p.procs
   in
@@ -46,7 +46,7 @@ let simplify_prog_spec_exprs rewriter ?visit (p : Program.t) =
 
 let simplify_prog_exprs rewriter ?visit (p : Program.t) =
   let procs =
-    ID.Map.map (fun proc -> simplify_proc_exprs rewriter ?visit proc) p.procs
+    IDMap.map (fun proc -> simplify_proc_exprs rewriter ?visit proc) p.procs
   in
   let globals =
     p.globals

@@ -325,7 +325,7 @@ proc @fun2(f:bv64, global_in:bv64)  -> (out2:bv64) {  }
       print_endline
       @@ Iter.to_string (fun (v, r) -> Var.name v)
       @@ VarMap.to_iter
-      @@ ID.Map.get_or pid p2_results ~default:VarMap.empty)
+      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
     results;
   [%expect
     {|

@@ -1,6 +1,6 @@
 (library
  (name bincaml_analysis_test)
- (modules ide_live known_bits wrapped_intervals)
+ (modules test_ide_live test_ssadfg)
  (inline_tests)
  (libraries
   bincaml.loader
@@ -14,7 +14,7 @@
   (pps ppx_expect)))
 
 (test
- (modules analysis_tests test_irreducible_loops lattice_collections)
+ (modules analysis_tests test_wrapped_intervals test_irreducible_loops test_lattice_collections)
  (name analysis_tests)
  (libraries
   bincaml.loader

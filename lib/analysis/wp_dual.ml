@@ -154,9 +154,7 @@ proc @main () -> ()
       .prog
   in
   let proc =
-    ID.Map.find
-      (prog.entry_proc |> Option.get_exn_or "no entry proc")
-      prog.procs
+    IDMap.find (prog.entry_proc |> Option.get_exn_or "no entry proc") prog.procs
   in
   let res =
     IntraAnalysis.analyse

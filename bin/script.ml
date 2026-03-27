@@ -85,14 +85,14 @@ let of_cmd st (e : Containers.Sexp.t) =
                  { msg; __FILE__; __LINE__; __FUNCTION__; cmd = full_cmd }))
       | "list-procs" ->
           let open Program in
-          ID.Map.iter
+          IDMap.iter
             (fun i _ -> Printf.printf "%s\n" (ID.show i))
             (get_prog st).procs;
           st
       | "list-blocks-il" ->
           let proc = List.hd (assert_atoms 1 args) in
           let id = (get_prog st).proc_names.get_id proc in
-          let p = ID.Map.find id (get_prog st).procs in
+          let p = IDMap.find id (get_prog st).procs in
           print_blocks_topo_fwd stdout p;
           st
       | "write-proc-cfg" ->
@@ -107,7 +107,7 @@ let of_cmd st (e : Containers.Sexp.t) =
                 with Not_found ->
                   begin
                     let procs =
-                      ID.Map.keys (get_prog st).procs
+                      IDMap.keys (get_prog st).procs
                       |> Iter.to_string ~sep:"\n" (fun n ->
                           Printf.sprintf "  %s\n" (ID.show n))
                     in
@@ -125,14 +125,14 @@ let of_cmd st (e : Containers.Sexp.t) =
                          })
                   end
               in
-              let p = ID.Map.find id (get_prog st).procs in
+              let p = IDMap.find id (get_prog st).procs in
               Viscfg.Dot.output_graph c
                 (Procedure.graph p |> Option.get_exn_or "procedure has no graph"));
           st
       | "dump-proc-il" ->
           let proc = List.hd (assert_atoms 1 args) in
           let id = (get_prog st).proc_names.get_id proc in
-          let p = ID.Map.find id (get_prog st).procs in
+          let p = IDMap.find id (get_prog st).procs in
           print_proc stdout p;
           st
       | "write-proc-il" ->
@@ -143,7 +143,7 @@ let of_cmd st (e : Containers.Sexp.t) =
           in
           CCIO.with_out ofile (fun c ->
               let id = (get_prog st).proc_names.get_id proc in
-              let p = ID.Map.find id (get_prog st).procs in
+              let p = IDMap.find id (get_prog st).procs in
               print_proc c p);
           st
       | "dump-il" ->
@@ -159,7 +159,7 @@ let of_cmd st (e : Containers.Sexp.t) =
           let ofile = List.hd @@ assert_atoms 1 args in
           let prog = get_prog st in
           let main =
-            ID.Map.find (Option.get_exn_or "no" prog.entry_proc) prog.procs
+            IDMap.find (Option.get_exn_or "no" prog.entry_proc) prog.procs
           in
           let ist =
             match Lang.Interp.test_run_proc ~seed:123456 prog main with

@@ -83,13 +83,13 @@ type t = {
   modulename : string;
   globals : declaration StringMap.t;
   entry_proc : ID.t option;
-  procs : proc ID.Map.t;
+  procs : proc IDMap.t;
   proc_names : ID.generator;
   attrib : e Attrib.attrib_map;
   spec : prog_spec;
 }
 
-let proc g p = ID.Map.find p g.procs
+let proc g p = IDMap.find p g.procs
 
 let proc_pretty p =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
@@ -128,7 +128,7 @@ let prog_pretty (p : t) =
     globs @ n
     @ List.map
         (fun (_, p) -> proc_pretty p)
-        (ID.Map.to_list p.procs
+        (IDMap.to_list p.procs
         |> List.sort (fun (i, _) (j, _) -> ID.compare i j))
   in
 
@@ -157,7 +157,7 @@ let create_single_proc ?(name = "<module>") () =
       modulename = name;
       entry_proc = Some procname;
       globals = StringMap.empty;
-      procs = ID.Map.singleton procname proc;
+      procs = IDMap.singleton procname proc;
       proc_names;
       attrib = StringMap.empty;
       spec = { rely = []; guarantee = [] };
@@ -171,7 +171,7 @@ let empty ?name () =
     modulename;
     entry_proc = None;
     globals = StringMap.empty;
-    procs = ID.Map.empty;
+    procs = IDMap.empty;
     proc_names = ID.make_gen ();
     attrib = StringMap.empty;
     spec = { rely = []; guarantee = [] };
@@ -226,10 +226,10 @@ module CallGraph = struct
       |> Iter.filter_map (function
         | Stmt.Instr_Call { procid } -> Some procid
         | _ -> None)
-      |> ID.Set.of_iter
+      |> IDSet.of_iter
     in
     let calls =
-      ID.Map.to_iter t.procs
+      IDMap.to_iter t.procs
       |> Iter.map (function pid, proc -> (pid, called_by proc))
     in
     let graph = G.empty in
@@ -238,7 +238,7 @@ module CallGraph = struct
     let proc_edges =
       Iter.map
         (function id -> (ProcBegin id, Proc id, ProcReturn id))
-        (ID.Map.keys t.procs)
+        (IDMap.keys t.procs)
     in
     let graph = Iter.fold G.add_edge_e graph proc_edges in
     let graph =
@@ -263,7 +263,7 @@ module CallGraph = struct
                 (Iter.singleton (ProcBegin proc, Proc proc, ProcReturn proc))
                 (Iter.flat_map
                    (function c -> call_dep proc c)
-                   (ID.Set.to_iter called)))
+                   (IDSet.to_iter called)))
         calls
     in
     Iter.fold G.add_edge_e graph call_dep_edges
