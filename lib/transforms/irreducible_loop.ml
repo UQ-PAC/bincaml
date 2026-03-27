@@ -23,8 +23,8 @@ let transform_loop p l =
           primary_header,
           headers,
           nodes,
-          Lazy.force entries,
-          Lazy.force backedges )
+          entries,
+          backedges )
     | _ ->
         raise
           (Invalid_argument
