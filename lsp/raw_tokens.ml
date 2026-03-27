@@ -169,6 +169,10 @@ type token_with_pos = {
 }
 [@@deriving show]
 
+let token_extend_one (x : token_with_pos) =
+  let endpos = { x.endpos with pos_cnum = x.endpos.pos_cnum + 1 } in
+  { x with endpos }
+
 let lsprange_of_token (x : token_with_pos) =
   let start = lsppos_of_position x.startpos
   and end_ = lsppos_of_position x.endpos in
@@ -185,13 +189,13 @@ let show_lexbuf (buf : Lexing.lexbuf) =
     (show_position buf.lex_start_p)
 
 let error_token ~startpos () : token_with_pos =
-  let endpos = startpos in
-  {
-    token = Error ();
-    str = "Syntax error: unrecognised token";
-    startpos;
-    endpos;
-  }
+  token_extend_one
+    {
+      token = Error ();
+      str = "Syntax error: unrecognised token";
+      startpos;
+      endpos = startpos;
+    }
 
 let dummy_token (buf : Lexing.lexbuf) () : token_with_pos =
   let startpos = buf.lex_start_p in
@@ -203,31 +207,68 @@ let rec next_token ?err_token (buf : Lexing.lexbuf) () : token_with_pos list =
   | Some err_token, p when err_token.startpos <> p ->
       err_token :: next_token buf ()
   | _ -> (
-      let token = try Some (BasilIR.LexBasilIR.token buf) with _ -> None in
+      let token = try Ok (BasilIR.LexBasilIR.token buf) with e -> Error e in
       match token with
-      | Some token ->
+      | Ok token ->
           let str = show_raw_token token in
           let token = Ok token in
+          let err_token = Option.map token_extend_one err_token in
           CCOption.to_list err_token
           @ [ { (dummy_token buf ()) with token; str } ]
-      | None -> begin
+      | Error _ -> begin
           Logs.err (fun m -> m "moving past error");
           (* print_endline ("AFTER ERROR:" ^ show_lexbuf buf); *)
           buf.lex_curr_pos <- buf.lex_curr_pos + 1;
           let err_token =
-            Option.value
-              ~default:(error_token ~startpos:buf.lex_curr_p ())
-              err_token
+            match err_token with
+            | Some err_token -> token_extend_one err_token
+            | None -> error_token ~startpos:buf.lex_curr_p ()
           in
-          let endpos =
-            { err_token.endpos with pos_cnum = err_token.endpos.pos_cnum + 1 }
-          in
-          let err_token = { err_token with endpos } in
           Unix.sleepf 0.01;
           next_token ~err_token buf ()
         end)
 
 let extract_all_tokens buf =
   Iter.flat_map_l (next_token buf) (Iter.repeat ())
-  |> Iter.take 100
-  |> Iter.take_while (fun x -> x.token != Ok BasilIR.ParBasilIR.TOK_EOF)
+  |> Iter.take_while (fun x -> x.token <> Ok TOK_EOF)
+  |> Iter.take 20
+
+let render_token_line_bufs tokens linebuf =
+  List.iteri
+    (fun toki (tok : token_with_pos) ->
+      assert (tok.startpos.pos_lnum = tok.endpos.pos_lnum);
+      (* if tok.startpos.pos_cnum >= tok.endpos.pos_cnum then *)
+      (*   Logs.warn (fun m -> m "empty token: %s" (show_token_with_pos tok)); *)
+      for j = tok.startpos.pos_cnum to tok.endpos.pos_cnum - 1 do
+        let linenum = tok.startpos.pos_lnum - 1 in
+        let colnum = j - tok.startpos.pos_bol in
+        if
+          0 <= linenum
+          && linenum < Array.length linebuf
+          && 0 <= colnum
+          && colnum < Bytes.length linebuf.(linenum)
+        then Bytes.set linebuf.(linenum) colnum Char.(chr (code 'a' + toki))
+        else Logs.warn (fun m -> m "out of range: l=%d, c=%d" linenum colnum)
+      done)
+    tokens
+
+let extract_and_render_tokens oc contents =
+  let lexbuf = Lexing.from_string ~with_positions:true contents in
+  let tokens = extract_all_tokens lexbuf |> Iter.to_list in
+  let lines = CCString.lines contents |> Array.of_list in
+  let linebufs =
+    Array.map (fun x -> Bytes.make (String.length x + 10) ' ') lines
+  in
+  render_token_line_bufs tokens linebufs;
+  CCArray.iter2
+    (fun line tokline ->
+      output_string oc line;
+      output_char oc '\n';
+      output_bytes oc tokline;
+      output_char oc '\n')
+    lines linebufs;
+  List.iter
+    (fun tok ->
+      output_string oc tok.str;
+      output_char oc '\n')
+    tokens
