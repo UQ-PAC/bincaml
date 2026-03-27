@@ -138,21 +138,13 @@ class lsp_server =
       with
       | None -> Lwt.return None
       | Some prefix ->
-          let matching_tokens =
-            Lsp_state.completions_for_prefix st pos prefix
-          in
+          let matching_tokens = Lsp_state.completions_for_prefix st pos "" in
           Lwt.return
           @@ Some
                (`List
-                  (List.map
-                     (fun (x : Bincaml_lsp.Raw_tokens.token_with_pos) ->
-                       Linol.Lsp.Types.CompletionItem.create ~insertText:x.str
-                         ~kind:Linol.Lsp.Types.CompletionItemKind.Method
-                         ~labelDetails:
-                           (Linol.Lsp.Types.CompletionItemLabelDetails.create
-                              ~detail:"procedure" ())
-                         ~label:x.str ())
-                     matching_tokens))
+                  (matching_tokens
+                  |> List.filter_map Lsp_state.completion_item_of_token
+                  |> List.sort_uniq CCOrd.poly))
 
     (* method! on_req_code_lens_resolve ~notify_back ~id code_lens = *)
     (*   Lwt.return code_lens *)

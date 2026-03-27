@@ -66,3 +66,23 @@ let completions_for_prefix st lsppos prefix =
         ~some:(String.starts_with ~prefix)
         (Raw_tokens.ident_of_token x))
   |> Iter.sort |> Iter.uniq |> Iter.to_list
+
+let completion_item_of_token (x : Raw_tokens.token_with_pos) =
+  let open Linol.Lsp.Types.CompletionItemKind in
+  let kind =
+    match x.token with
+    | Ok (TOK_ProcIdent (_, id)) -> Some (id, Class)
+    | Ok (TOK_BIdent (_, id)) -> Some (id, Variable)
+    | Ok (TOK_BlockIdent (_, id)) -> Some (id, Method)
+    | Ok (TOK_GlobalIdent (_, id)) -> Some (id, Constant)
+    | Ok (TOK_LocalIdent (_, id)) -> Some (id, Variable)
+    | _ -> None
+  in
+  match kind with
+  | None -> None
+  | Some (str, kind) ->
+      Some
+        (Linol.Lsp.Types.CompletionItem.create ~kind
+           ~labelDetails:(Linol.Lsp.Types.CompletionItemLabelDetails.create ())
+           ~label:str ())
+
