@@ -140,7 +140,7 @@ let algebraic_simplifications
   let open AbstractExpr in
   let open BasilExpr in
   let open Bitvec in
-  (* trying to make views of abstract exprs simpler; but avoid disacarding the attribs.
+  (* trying to make views of abstract exprs simpler; but avoid discarding the attribs.
      There's probably too much to think about still with writing rewriters like this. 
 
      We can build this into fold_with_type/rewrite_typed I guess.

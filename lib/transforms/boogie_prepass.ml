@@ -140,7 +140,7 @@ module Builtins = struct
     Lang.Stmt.iter_rexpr s (function `Expr e -> iexpr f e | _ -> ())
 
   let iprog f (p : Lang.Program.t) =
-    ID.Map.values p.procs
+    IDMap.values p.procs
     |> Iter.flat_map Lang.Procedure.iter_stmt_topo_fwd
     |> Iter.iter (istmt f);
     StringMap.values p.globals
@@ -148,7 +148,7 @@ module Builtins = struct
       | Lang.Program.Function { definition = Axiom e } -> (iexpr f) e
       | Lang.Program.Function { definition = Function e } -> (iexpr f) e
       | _ -> ());
-    p.procs |> ID.Map.values
+    p.procs |> IDMap.values
     |> Iter.iter (fun v ->
         let spec = Lang.Procedure.specification v in
         List.iter (iexpr f) spec.requires;
@@ -205,7 +205,7 @@ end
 module Instructions = struct
   let unique_stores_loads (prog : Lang.Program.t) =
     let visit_procs proc = Lang.Procedure.iter_stmt_topo_fwd proc in
-    let procs = ID.Map.values prog.procs in
+    let procs = IDMap.values prog.procs in
     procs |> Iter.flat_map visit_procs
     |> Iter.filter (function
       | Lang.Stmt.Instr_Store { lhs; rhs; value; addr = Scalar } -> true
@@ -498,7 +498,7 @@ module Normalise = struct
   let replace_stmts (p : Program.t) =
     let procs =
       p.procs
-      |> ID.Map.map (fun p ->
+      |> IDMap.map (fun p ->
           Procedure.map_blocks_nondet
             (fun (id, b) -> Block.map ~phi:Fun.id replace_stmt b)
             p)

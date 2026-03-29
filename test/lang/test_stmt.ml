@@ -43,8 +43,8 @@ let%expect_test "fold_block" =
     |}
   in
   Block.fold_forwards
-    ~f:(fun a i -> print_endline (Stmt.show_stmt_basil i))
-    ~phi:(fun a i -> a)
+    ~f:(fun _ i -> print_endline (Stmt.show_stmt_basil i))
+    ~phi:(fun a _ -> a)
     () block;
   print_endline (Block.to_string block);
   ();

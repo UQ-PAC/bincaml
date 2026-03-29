@@ -36,4 +36,5 @@
   lang
   transforms
   bincaml.ast
+  bincaml.util
   trace.core))

@@ -133,5 +133,5 @@ let transform_proc (p : Program.proc) =
   | _ -> p
 
 let transform (p : Program.t) =
-  let procs = ID.Map.map transform_proc p.procs in
+  let procs = IDMap.map transform_proc p.procs in
   { p with procs }

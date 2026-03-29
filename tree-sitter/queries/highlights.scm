@@ -20,6 +20,7 @@
 "var" @keyword
 "memory" @keyword
 "shared" @keyword.modifier
+"type" @keyword
 [ "rely"
   "relies"
   "guarantee"
@@ -31,10 +32,11 @@
   "captures"
   "modifies"
   "classification"
+  "let"
+  "fun"
   "invariant" ] @keyword
 [ "forall"
   "exists"
-  "fun"
   "old" ] @keyword.operator
 
 [ "match"

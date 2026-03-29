@@ -1,5 +1,4 @@
 open Lang.Common
-open Containers
 
 let%expect_test "fold_block" =
   let block =
@@ -12,7 +11,7 @@ let%expect_test "fold_block" =
       ]
     |}
   in
-  let prog, proc, bl =
+  let prog, proc, _ =
     Loader.Loadir.parse_single_block_proc ~proc:"test" block
   in
   CCIO.with_out "b.dot" (fun c ->
@@ -21,7 +20,8 @@ let%expect_test "fold_block" =
   let st, _ = Lang.Interp.run_prog prog in
   print_endline (Lang.Interp.IState.show st);
   ();
-  [%expect {|
+  [%expect
+    {|
     PC= test::Return
     Stack
 
