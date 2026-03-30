@@ -165,8 +165,15 @@ module PassManager = struct
   let split_memory_encoding =
     {
       name = "split-memory-encoding";
-      apply = Prog Transforms.Memory_encoding.transform;
-      doc = "Generates memory encoding/model";
+      apply = Prog Transforms.Memory_encoding.split_transform;
+      doc = "Generates a split base/offset pair memory encoding/model";
+    }
+
+  let flat_memory_encoding =
+    {
+      name = "flat-memory-encoding";
+      apply = Prog Transforms.Memory_encoding.flat_transform;
+      doc = "Generates a flat (heavily quantified) memory encoding/model";
     }
 
   let memory_specification =

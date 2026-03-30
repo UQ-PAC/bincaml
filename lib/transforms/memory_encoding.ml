@@ -260,11 +260,41 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
   let transform (p : Lang.Program.t) = add_decls p
 end
 
+module FlatMemory : MemoryEncoding = struct
+  open BasilExpr
+
+  let mem_encoding_type : Types.t =
+    Types.Sort ("MemEncoding", [ Types.mk_variant "MemEncoding" [] ])
+
+  module Locals = struct
+    let mem_encoding : Var.t =
+      Var.create "mem_encoding" ~scope:Var.Local mem_encoding_type
+
+    let alloc = Var.create "alloc" ~scope:Var.Local (Types.Bitvector 64)
+    let addr = Var.create "addr" ~scope:Var.Local (Types.Bitvector 64)
+    let size = Var.create "size" ~scope:Var.Local (Types.Bitvector 64)
+    let live = Var.create "live" ~scope:Var.Local (Types.Bitvector 2)
+  end
+
+  let can_allocate_body : Lang.Program.e = boolconst false
+  let alloc_size_body : Lang.Program.e = boolconst false
+  let alloc_base_body : Lang.Program.e = boolconst false
+  let addr_alloc_body : Lang.Program.e = boolconst false
+  let alloc_live_body : Lang.Program.e = boolconst false
+  let addr_offset_body : Lang.Program.e = boolconst false
+  let addr_is_heap_body : Lang.Program.e = boolconst false
+  let alloc_size_update_body : Lang.Program.e = boolconst false
+  let alloc_live_update_body : Lang.Program.e = boolconst false
+  let allocate_body : Lang.Program.e = boolconst false
+  let init_encoding_body : Lang.Program.e = boolconst false
+  let valid_access_body : Lang.Program.e = boolconst false
+end
+
 module SplitMemory : MemoryEncoding = struct
   open BasilExpr
 
   let offset_size = 32
-  let addr_size = 32
+  let addr_size = 64 - offset_size
 
   let mem_encoding_type =
     Types.Sort
@@ -290,7 +320,6 @@ module SplitMemory : MemoryEncoding = struct
     let size = Var.create "size" ~scope:Var.Local (Types.Bitvector 64)
     let live = Var.create "live" ~scope:Var.Local (Types.Bitvector 2)
 
-    (* sketchy workaround for the current lack of sort field accesses *)
     let alloc_live_access =
       unexp ~op:(`ReadField "alloc_live") (rvar mem_encoding)
 
@@ -329,9 +358,7 @@ module SplitMemory : MemoryEncoding = struct
 
   let alloc_base_body =
     binexp ~op:`BVAND (rvar Locals.alloc)
-      (binexp ~op:`BVSHL
-         (bv_of_int ~size:64 0xfffffffff)
-         (bv_of_int ~size:64 32))
+      (bv_of_int ~size:64 (Int.lnot (Int.pow 2 addr_size - 1)))
 
   let addr_alloc_body = rvar Locals.addr
 
@@ -339,7 +366,8 @@ module SplitMemory : MemoryEncoding = struct
     binexp ~op:`MapAccess Locals.alloc_live_access (rvar Locals.alloc)
 
   let addr_offset_body =
-    binexp ~op:`BVAND (rvar Locals.addr) (bv_of_int ~size:64 0xfffffffff)
+    binexp ~op:`BVAND (rvar Locals.addr)
+      (bv_of_int ~size:64 (Int.pow 2 offset_size - 1))
 
   let addr_is_heap_body =
     binexp ~op:`MapAccess Locals.addr_is_heap_access (rvar Locals.addr)
@@ -443,6 +471,10 @@ module SplitMemory : MemoryEncoding = struct
          ])
 end
 
-let transform (p : Program.t) =
+let split_transform (p : Program.t) =
   let module E = MemoryEncoder (SplitMemory) in
+  E.transform p
+
+let flat_transform (p : Program.t) =
+  let module E = MemoryEncoder (FlatMemory) in
   E.transform p
