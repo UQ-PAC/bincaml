@@ -162,9 +162,9 @@ module PassManager = struct
       doc = "Fail if the IR program is not type correct";
     }
 
-  let memory_encoding =
+  let split_memory_encoding =
     {
-      name = "memory-encoding";
+      name = "split-memory-encoding";
       apply = Prog Transforms.Memory_encoding.transform;
       doc = "Generates memory encoding/model";
     }
@@ -216,7 +216,7 @@ module PassManager = struct
       sssa;
       full_ssa;
       type_check;
-      memory_encoding;
+      split_memory_encoding;
       memory_specification;
       intra_function_summaries;
       inter_function_summaries;
