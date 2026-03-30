@@ -54,11 +54,6 @@ module Make (G : GSig) = struct
             (** the set of blocks which are internal to the loop. this set forms
                 a strongly-connected component. note that a block may be
                 internal to multiple loops *)
-        entries : G.E.t list; [@equal fun a b -> Equal.poly a b]
-            (** persistent iterator over edges which enter any header in this
-                loop *)
-        backedges : G.E.t list; [@equal fun a b -> Equal.poly a b]
-            (** persistent iterator of back-edges to any header of this loop *)
       }  (** Designated primary header of a loop. *)
     | LoopParticipant of {
         primary_header : G.V.t;
@@ -80,6 +75,33 @@ module Make (G : GSig) = struct
     | { loop = PrimaryHeader { headers } } when VSet.cardinal headers = 1 ->
         `ReducibleHeader
     | { loop = PrimaryHeader { headers } } -> `IrreducibleHeader
+
+  (** Accesses the Basil IR state to compute the set of entry edges originating
+      from outside the loop and going towards *any* header of the loop. *)
+  let compute_entries p = function
+    | { block; loop = PrimaryHeader { headers; nodes } } ->
+        Iter.(
+          VSet.to_iter headers
+          |> flat_map (fun h ->
+              G.pred p h |> List.to_iter
+              |> filter (fun a -> not @@ VSet.mem a nodes)
+              |> map (fun a -> G.find_edge p a h))
+          |> to_list)
+    | _ -> []
+
+  (** Accesses the Basil IR state to compute the set of back-edges. That is, the
+      set of edges originating from _inside_ the loop and going towards *any*
+      header of the loop. *)
+  let compute_backedges p = function
+    | { block; loop = PrimaryHeader { headers; nodes } } ->
+        Iter.(
+          VSet.to_iter headers
+          |> flat_map (fun h ->
+              G.pred p h |> List.to_iter
+              |> filter (fun a -> VSet.mem a nodes)
+              |> map (fun a -> G.find_edge p a h))
+          |> to_list)
+    | _ -> []
 
   module Implementation = struct
     (** Internal implementation of irreducible loop forest algorithm.
@@ -107,34 +129,6 @@ module Make (G : GSig) = struct
         - the paper: {:http://dx.doi.org/10.1007/978-3-540-74061-2_11}
         - Loop: {:https://llvm.org/docs/LoopTerminology.html}
         - Cycle: {:https://llvm.org/docs/CycleTerminology.html} *)
-
-    open struct
-      (** Accesses the Basil IR state to compute the set of entry edges
-          originating from outside the loop and going towards *any* header of
-          the loop. *)
-      let compute_entries p block headers nodes =
-        Iter.(
-          VSet.to_iter headers
-          |> flat_map (fun h ->
-              G.pred p h |> List.to_iter
-              |> map (fun p -> (p, h))
-              |> filter (fun (s, _) -> not @@ VSet.mem s nodes))
-          |> map (fun (a, b) -> G.find_edge p a b)
-          |> to_list)
-
-      (** Accesses the Basil IR state to compute the set of back-edges. That is,
-          the set of edges originating from _inside_ the loop and going towards
-          *any* header of the loop. *)
-      let compute_backedges p block headers nodes =
-        Iter.(
-          VSet.to_iter headers
-          |> flat_map (fun h ->
-              G.pred p h |> List.to_iter
-              |> map (fun p -> (p, h))
-              |> filter (fun (s, _) -> VSet.mem s nodes))
-          |> map (fun (a, b) -> G.find_edge p a b)
-          |> to_list)
-    end
 
     type block_loop_state = {
       block : G.V.t;  (** the block which this loop information concerns. *)
@@ -167,13 +161,7 @@ module Make (G : GSig) = struct
       let loop =
         if is_loop_header e then
           PrimaryHeader
-            {
-              primary_header = e.iloop_header;
-              headers = e.headers;
-              nodes;
-              entries = compute_entries p e.block e.headers nodes;
-              backedges = compute_backedges p e.block e.headers nodes;
-            }
+            { primary_header = e.iloop_header; headers = e.headers; nodes }
         else if is_loop_participant e then
           LoopParticipant
             {
@@ -183,6 +171,7 @@ module Make (G : GSig) = struct
       in
       { block = e.block; dfs_pos = e.dfsp_pos_max; loop }
 
+    (** return loop forest in {b reverse} topological order.*)
     let compute_block_loop_info p (block_states : block_loop_state VMap.t) :
         block_info list =
       let open Iter in
@@ -197,12 +186,14 @@ module Make (G : GSig) = struct
           all_blocks
         |> Iter.persistent
       in
+      (* 1 *)
       let (forest : VSet.t VMap.t) =
         header_blocks
         |> map (fun b -> (b.block, VSet.singleton b.block))
         |> VMap.of_iter
       in
 
+      (* 2 *)
       (* NOTE: iterates the forest in *bottom-up* topological order. this
        ensures that node-sets of sub-cycles are fully populated before
        processing their parent cycle. this avoids us having to compute
@@ -221,6 +212,7 @@ module Make (G : GSig) = struct
                      forest))
              forest
       in
+      (* 3 *)
       let forest =
         header_blocks
         |> fold
@@ -234,6 +226,7 @@ module Make (G : GSig) = struct
                      forest)
              forest
       in
+      (* 4 *)
       header_blocks
       |> iter (fun b ->
           let nodes = VMap.find b.block forest in
@@ -249,6 +242,7 @@ module Make (G : GSig) = struct
             ^ " bad headers: "
             ^ VSet.to_string G.V.show bad_headers);
 
+      (* 5 *)
       let new_loops =
         all_blocks
         |> map (fun b ->
@@ -373,14 +367,14 @@ module Make (G : GSig) = struct
             end
           | Return nh, [] ->
               (* this is the outermost call : we are done*)
-              raise (Recurse (Return nh, []))
+              raise_notrace (Recurse (Return nh, []))
         in
         (* iterate the remaining blocks *)
         iter_tails
           (fun it b ->
             match b with
             | { is_traversed = false } ->
-                raise
+                raise_notrace
                   (Recurse
                      ( Call { block = b; dfsp_pos = dfsp_pos + 1 },
                        ({ block = b0; dfsp_pos }, it) :: continuations ))
@@ -410,7 +404,7 @@ module Make (G : GSig) = struct
           it;
         b0.dfsp_pos <- 0;
         let result = Option.map st.l b0.iloop_header in
-        raise (Recurse (Return result, continuations))
+        raise_notrace (Recurse (Return result, continuations))
       in
       try run () with
       | Recurse (Return c, []) -> c
@@ -420,16 +414,23 @@ module Make (G : GSig) = struct
       print_endline
       @@ (VMap.to_iter st.loops
          |> Iter.to_string (fun (k, v) ->
-             Printf.sprintf "%s -> %s" (G.V.show k) (show_block_loop_state v)))
+             Printf.sprintf "%s -> %s\n" (G.V.show k) (show_block_loop_state v))
+         )
+
+    let dbg_show_r r =
+      print_endline
+      @@ (List.to_iter r
+         |> Iter.to_string (fun v -> Printf.sprintf "%s\n" (show_block_info v))
+         )
   end
 
-  (** Returns a list representing the loop forest sorted in reverse-topological
-      order. *)
+  (** Returns a list representing the loop forest in topological order. *)
   let solve g entry =
     let open Implementation in
     let st = create g in
     ignore @@ trav_loops st (Call { block = st.l entry; dfsp_pos = 1 }) [];
-    compute_block_loop_info g st.loops
+    let r = List.rev @@ compute_block_loop_info g st.loops in
+    r
 end
 
 module ProcIntra = struct
@@ -465,7 +466,7 @@ module ProcIntra = struct
       let open Option in
       Procedure.blocks_succ p src |> Iter.find_pred (fst %> ID.equal dest)
       |> function
-      | Some (e, b) -> (e, dest)
+      | Some _ -> (src, dest)
       | _ -> raise Not_found
 
     let succ p v = Procedure.blocks_succ p v |> Iter.map fst |> Iter.to_list

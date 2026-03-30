@@ -371,14 +371,30 @@ let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
       let g = G.add_edge_e g (Begin id, Block block, End id) in
       g)
 
+let modify_succs p id ~remove ~add =
+  let open Edge in
+  let open G in
+  p
+  |> map_graph (fun g ->
+      let g =
+        G.succ_e g (End id)
+        |> List.filter
+             ( G.E.dst %> function
+               | Begin e -> List.exists (ID.equal e) remove
+               | _ -> false )
+        |> List.fold_left G.remove_edge_e g
+      in
+      let new_succs = List.map (fun s -> Vert.(End id, Jump, Begin s)) add in
+      List.fold_left G.add_edge_e g new_succs)
+
 let replace_block_succs p id succs =
   let open Edge in
   let open G in
   p
   |> map_graph (fun g ->
       let g = G.succ_e g (End id) |> List.fold_left G.remove_edge_e g in
-      let succs = List.map (fun s -> Vert.(Begin id, Jump, End s)) succs in
-      List.fold_left G.add_edge_e g succs)
+      let new_succs = List.map (fun s -> Vert.(End id, Jump, Begin s)) succs in
+      List.fold_left G.add_edge_e g new_succs)
 
 let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
   update_block p id block

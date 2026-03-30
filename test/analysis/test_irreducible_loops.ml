@@ -26,16 +26,7 @@ open struct
           |> Iter.to_string ~sep:", " (fun (k, v) -> k ^ "->" ^ str v)))
       (StringMap.equal equal)
 
-  let check_test_comparison a b =
-    Alcotest.(check @@ id_map String.equal Fun.id)
-      "loop participant->header ptrs equal" a.iloop_headers b.iloop_headers;
-    Alcotest.(
-      check
-        (id_map StringSet.equal
-           (StringSet.to_string ~stop:"}" ~start:"{" Fun.id)))
-      "loop header->participant sets equal" a.headers b.headers
-
-  let assert_loop_detector loops iloop_headers headers =
+  let assert_loop_detector here loops iloop_headers headers =
     let headers =
       List.map (Pair.map Fun.id StringSet.of_list) headers |> StringMap.of_list
     in
@@ -66,7 +57,15 @@ open struct
       |> StringMap.of_list
     in
     let checked = { iloop_headers = headers; headers = members } in
-    check_test_comparison expect checked
+    (let open Alcotest in
+     check ~here @@ id_map String.equal Fun.id)
+      "loop participant->header ptrs equal" expect.iloop_headers
+      checked.iloop_headers;
+    (let open Alcotest in
+     check ~here
+       (id_map StringSet.equal
+          (StringSet.to_string ~stop:"]" ~start:"[" ~sep:";" Fun.id)))
+      "loop header->participant sets equal" expect.headers checked.headers
 
   let run_transform prog =
     let p = (Loader.Loadir.ast_of_string prog).prog in
@@ -86,7 +85,7 @@ open struct
     let c =
      fun () ->
       let loops = solve_proc p in
-      assert_loop_detector loops header_ptrs all_loop_headers
+      assert_loop_detector [%here] loops header_ptrs all_loop_headers
     in
     Alcotest.test_case name `Quick c
 
@@ -250,7 +249,8 @@ proc @main () -> ()
         match classify_block b with
         | `IrreducibleHeader -> false
         | `ReducibleHeader -> true
-        | _ -> false)
+        | `LoopNode -> false
+        | `NonLoop -> false)
       p
 
   let loops_irreducible p =
@@ -259,7 +259,7 @@ proc @main () -> ()
         match classify_block b with `IrreducibleHeader -> true | _ -> false)
       p
 
-  let check_transform_fixed name ~num_irr_loops ~num_red_loops ?header_ptrs
+  let check_transform_fixed here name ~num_irr_loops ~num_red_loops ?header_ptrs
       ?all_headers p =
     let checks () =
       let before, after = run_transform p in
@@ -268,23 +268,35 @@ proc @main () -> ()
         let open Option in
         let* hdrs = header_ptrs in
         let* headers = all_headers in
-        Some (fun () -> assert_loop_detector before hdrs headers)
+        Some (fun () -> assert_loop_detector here before hdrs headers)
       in
-      Option.iter (fun x -> x ()) check_x;
-      Alcotest.(check int)
+      print_endline @@ "before transform: ";
+      Implementation.dbg_show_r before;
+      print_endline @@ "after transform: ";
+      Implementation.dbg_show_r after;
+      print_endline @@ "irreducible: "
+      ^ List.to_string show_block_info (loops_irreducible before);
+      print_endline @@ "reducible: "
+      ^ List.to_string show_block_info (loops_reducible before);
+      Alcotest.(check ~here int)
         "number of irreducible loops present" num_irr_loops
         (List.length @@ loops_irreducible before);
-      Alcotest.(check int)
+      Alcotest.(check ~here int)
         "number of reducible loops present" num_red_loops
         (List.length @@ loops_reducible before);
-      Alcotest.(check (list block_info))
-        "all irreducible loops fixed" [] (loops_irreducible after)
+      Option.iter (fun x -> x ()) check_x;
+      Alcotest.(check ~here (list block_info))
+        "all irreducible loops fixed" [] (loops_irreducible after);
+      Alcotest.(check ~here bool)
+        "have at least one loop left"
+        (num_irr_loops + num_red_loops > 0)
+        (List.length @@ loops_reducible after > 0)
     in
     Alcotest.test_case name `Quick checks
 
   let sub_cycles_transform =
-    check_transform_fixed "subcycles applying transform" ~num_irr_loops:1
-      ~num_red_loops:1
+    check_transform_fixed [%here] "subcycles applying transform"
+      ~num_irr_loops:1 ~num_red_loops:1
       {|
 prog entry @main;                           
                                             
@@ -310,7 +322,7 @@ proc @main () -> ()
     |}
 
   let crossover =
-    check_transform_fixed "crossover" ~num_irr_loops:2 ~num_red_loops:0
+    check_transform_fixed [%here] "crossover" ~num_irr_loops:2 ~num_red_loops:0
       {|
 prog entry @main;
 proc @main () -> ()
@@ -338,7 +350,8 @@ proc @main () -> ()
     |}
 
   let paper_fig4a =
-    check_transform_fixed "paper fig4a" ~num_irr_loops:0 ~num_red_loops:0
+    check_transform_fixed [%here] "paper fig4a" ~num_irr_loops:0
+      ~num_red_loops:0
       {|
 prog entry @main;
 
@@ -368,7 +381,8 @@ proc @main () -> ()
     |}
 
   let paper_fig4b =
-    check_transform_fixed "paper fig4b" ~num_irr_loops:0 ~num_red_loops:1
+    check_transform_fixed [%here] "paper fig4b" ~num_irr_loops:0
+      ~num_red_loops:1
       ~header_ptrs:[ ("%b0", "%b"); ("%x", "%b") ]
       ~all_headers:[ ("%b", [ "%b" ]) ]
       {|
@@ -399,8 +413,8 @@ proc @main () -> ()
     |}
 
   let paper_fig4c =
-    (* TODO: sus there are no loops before *)
-    check_transform_fixed "paper fig4c" ~num_irr_loops:0 ~num_red_loops:0
+    check_transform_fixed [%here] "paper fig4c" ~num_irr_loops:0
+      ~num_red_loops:0
       {|
 prog entry @main;
 
@@ -435,7 +449,8 @@ proc @main () -> ()
   |}
 
   let paper_fig4d =
-    check_transform_fixed "paper fig4d" ~num_irr_loops:0 ~num_red_loops:1
+    check_transform_fixed [%here] "paper fig4d" ~num_irr_loops:0
+      ~num_red_loops:1
       ~header_ptrs:
         [
           ("%b", "%h"); ("%b0", "%h"); ("%x", "%h"); ("%y", "%h"); ("%z", "%h");
@@ -479,9 +494,14 @@ proc @main () -> ()
     |}
 
   let paper_fig6a =
-    (* TODO: wrong; does scala impl identifies 2 irreducible loops *)
-    check_transform_fixed "paper fig6a" ~num_irr_loops:2 ~num_red_loops:1
-      ~header_ptrs:[] ~all_headers:[]
+    (* FIXME: scala impl identifies 2 irreducible loops 
+
+  + BlockLoopInfo(%h2,Some(%h3),4,Set(%h2, %b),HashSet(%b, %h1, %h2, %z, %a)) 
+  + BlockLoopInfo(%h1,Some(%h2),5,Set(%h1, %b),Set(%h1, %z, %b)) 
+
+       *)
+    check_transform_fixed [%here] "paper fig6a" ~num_irr_loops:2
+      ~num_red_loops:1
       {|
 prog entry @main;
 
@@ -529,8 +549,8 @@ proc @main () -> ()
     |}
 
   let paper_fig6b =
-    (* FIXME: shouldn't we identify 4 reducible loops? *)
-    check_transform_fixed "paper fig6b" ~num_irr_loops:0 ~num_red_loops:1
+    check_transform_fixed [%here] "paper fig6b" ~num_irr_loops:0
+      ~num_red_loops:4
       {|
 prog entry @main;
 
@@ -571,8 +591,18 @@ proc @main () -> ()
 |}
 
   let paper_fig4e =
-    check_transform_fixed "paper fig4e" ~num_irr_loops:1 ~num_red_loops:1
-      ~header_ptrs:[] ~all_headers:[]
+    check_transform_fixed [%here] "paper fig4e" ~num_irr_loops:1
+      ~num_red_loops:1
+      ~header_ptrs:
+        [
+          ("%a", "%h");
+          ("%b", "%h");
+          ("%b0", "%h1");
+          ("%h", "%h1");
+          ("%y", "%h1");
+          ("%z", "%h1");
+        ]
+      ~all_headers:[ ("%h", [ "%b"; "%h" ]); ("%h1", [ "%h1" ]) ]
       {|
 prog entry @main;
 
@@ -611,7 +641,7 @@ proc @main () -> ()
 end
 
 let triforce =
-  check_transform_fixed "triforce" ~num_irr_loops:2 ~num_red_loops:1
+  check_transform_fixed [%here] "triforce" ~num_irr_loops:2 ~num_red_loops:1
     {|
 prog entry @main;
 
@@ -654,8 +684,8 @@ let tests =
         paper_fig4b;
         paper_fig4c;
         paper_fig4d;
-        paper_fig6a;
         paper_fig6b;
+        paper_fig6a;
         paper_fig4e;
         triforce;
       ] );

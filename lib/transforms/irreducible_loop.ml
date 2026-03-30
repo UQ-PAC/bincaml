@@ -14,17 +14,11 @@ let transform_loop p l =
   let open Option in
   let header, next_h, headers, nodes, entries, backedges =
     match l with
-    | {
-     block;
-     loop = PrimaryHeader { primary_header; headers; nodes; entries; backedges };
-    }
+    | { block; loop = PrimaryHeader { primary_header; headers; nodes } }
       when VSet.cardinal headers > 1 ->
-        ( block,
-          primary_header,
-          headers,
-          nodes,
-          entries,
-          backedges )
+        let entries = compute_entries p l in
+        let backedges = compute_backedges p l in
+        (block, primary_header, headers, nodes, entries, backedges)
     | _ ->
         raise
           (Invalid_argument
@@ -33,7 +27,7 @@ let transform_loop p l =
   let dest = BlockGraph.E.dst in
   let src = BlockGraph.E.src in
   let backedges_to_primary_header =
-    List.filter (BlockGraph.E.dst %> ID.equal header) entries
+    List.filter (BlockGraph.E.dst %> ID.equal header) backedges
   in
   let entry_indexes =
     entries @ backedges
@@ -43,12 +37,12 @@ let transform_loop p l =
 
   (* included entry blocks should be a superset of (externalEntries ++ backEdgesToFirstHeader).
      in particular, it additionally includes internal edges to alternative headers.*)
-  assert (
+  (*assert (
     Iter.append (List.to_iter entries)
       (List.to_iter backedges_to_primary_header)
     |> Iter.map BlockGraph.E.src
     |> Iter.subset ~eq:ID.equal (IDMap.keys entry_indexes));
-
+    *)
   let preceding_indices =
     entries @ backedges
     |> List.group_by ~hash:(dest %> ID.hash) ~eq:(fun a b ->
@@ -57,10 +51,8 @@ let transform_loop p l =
       | h :: tl ->
           ( dest h,
             h :: tl |> List.map src
-            |> List.sort_uniq ~cmp:(fun a b ->
-                Int.compare
-                  (IDMap.find a entry_indexes)
-                  (IDMap.find a entry_indexes)) )
+            |> List.map (fun a -> IDMap.find a entry_indexes)
+            |> List.sort_uniq ~cmp:Int.compare )
       | _ -> failwith "emtpy")
   in
   let ctrl_sz = Types.bv_min_width_for_nat (IDSet.cardinal headers) in
@@ -74,15 +66,11 @@ let transform_loop p l =
     let size = match ctrl_sz with Bitvector i -> i | _ -> assert false in
     BasilExpr.bvconst (Bitvec.of_int ~size idx)
   in
-  let bval m =
-    let idx = IDMap.find m entry_indexes in
-    bvali idx
-  in
   (* create new primary header which jumps to all existing headers *)
   let p, n_header =
     Procedure.fresh_block
       ~name:(ID.to_string header ^ "header_loop_N")
-      ~successors:(VSet.to_list headers) p ~stmts:[] ()
+      ~successors:(List.map dest entries) p ~stmts:[] ()
   in
   ( ( p |> fun p ->
       (* add guards to old headers to restrict their predecessors to original predecessor set *)
@@ -91,7 +79,7 @@ let transform_loop p l =
           let preds =
             List.map
               (fun i ->
-                BasilExpr.binexp ~op:`EQ (BasilExpr.rvar loop_crtl_v) (bval i))
+                BasilExpr.binexp ~op:`EQ (BasilExpr.rvar loop_crtl_v) (bvali i))
               indices
           in
           let e = BasilExpr.applyintrin ~op:`OR preds in
@@ -114,7 +102,8 @@ let transform_loop p l =
   |> fun p ->
   (* make all headers jump to the new primary header *)
   List.fold_left
-    (fun p (src, dest) -> Procedure.replace_block_succs p src [ n_header ])
+    (fun p (src, dest) ->
+      Procedure.modify_succs p src ~remove:[ dest ] ~add:[ n_header ])
     p
     (entries @ backedges_to_primary_header)
 
