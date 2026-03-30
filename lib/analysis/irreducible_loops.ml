@@ -186,14 +186,12 @@ module Make (G : GSig) = struct
           all_blocks
         |> Iter.persistent
       in
-      (* 1 *)
       let (forest : VSet.t VMap.t) =
         header_blocks
         |> map (fun b -> (b.block, VSet.singleton b.block))
         |> VMap.of_iter
       in
 
-      (* 2 *)
       (* NOTE: iterates the forest in *bottom-up* topological order. this
        ensures that node-sets of sub-cycles are fully populated before
        processing their parent cycle. this avoids us having to compute
@@ -212,7 +210,6 @@ module Make (G : GSig) = struct
                      forest))
              forest
       in
-      (* 3 *)
       let forest =
         header_blocks
         |> fold
@@ -226,7 +223,6 @@ module Make (G : GSig) = struct
                      forest)
              forest
       in
-      (* 4 *)
       header_blocks
       |> iter (fun b ->
           let nodes = VMap.find b.block forest in
@@ -242,7 +238,6 @@ module Make (G : GSig) = struct
             ^ " bad headers: "
             ^ VSet.to_string G.V.show bad_headers);
 
-      (* 5 *)
       let new_loops =
         all_blocks
         |> map (fun b ->

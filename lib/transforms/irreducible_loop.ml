@@ -37,12 +37,13 @@ let transform_loop p l =
 
   (* included entry blocks should be a superset of (externalEntries ++ backEdgesToFirstHeader).
      in particular, it additionally includes internal edges to alternative headers.*)
-  (*assert (
-    Iter.append (List.to_iter entries)
-      (List.to_iter backedges_to_primary_header)
-    |> Iter.map BlockGraph.E.src
-    |> Iter.subset ~eq:ID.equal (IDMap.keys entry_indexes));
-    *)
+  assert (
+    let e =
+      Iter.append (List.to_iter entries)
+        (List.to_iter backedges_to_primary_header)
+      |> Iter.map BlockGraph.E.src
+    in
+    Iter.subset e (IDMap.keys entry_indexes));
   let preceding_indices =
     entries @ backedges
     |> List.group_by ~hash:(dest %> ID.hash) ~eq:(fun a b ->

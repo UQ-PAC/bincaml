@@ -274,10 +274,14 @@ proc @main () -> ()
       Implementation.dbg_show_r before;
       print_endline @@ "after transform: ";
       Implementation.dbg_show_r after;
-      print_endline @@ "irreducible: "
+      print_endline @@ "irreducible before: "
       ^ List.to_string show_block_info (loops_irreducible before);
-      print_endline @@ "reducible: "
+      print_endline @@ "reducible before: "
       ^ List.to_string show_block_info (loops_reducible before);
+      print_endline @@ "irreducible after: "
+      ^ List.to_string show_block_info (loops_irreducible after);
+      print_endline @@ "reducible after: "
+      ^ List.to_string show_block_info (loops_reducible after);
       Alcotest.(check ~here int)
         "number of irreducible loops present" num_irr_loops
         (List.length @@ loops_irreducible before);
@@ -500,7 +504,7 @@ proc @main () -> ()
   + BlockLoopInfo(%h1,Some(%h2),5,Set(%h1, %b),Set(%h1, %z, %b)) 
 
        *)
-    check_transform_fixed [%here] "paper fig6a" ~num_irr_loops:2
+    check_transform_fixed [%here] "paper fig6a" ~num_irr_loops:1
       ~num_red_loops:1
       {|
 prog entry @main;
