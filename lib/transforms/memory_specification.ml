@@ -119,7 +119,7 @@ let transform_stmt (s : Program.stmt) =
     | _ -> [ s ])
   |> List.to_iter
 
-let transform_proc (p : Program.proc) =
+let transform_proc (entry) (p : Program.proc) =
   let p =
     Procedure.map_blocks_nondet
       (fun (i, b) -> Block.flat_map ~phi:Fun.id transform_stmt b)
@@ -128,10 +128,12 @@ let transform_proc (p : Program.proc) =
   let name = ID.name (Procedure.id p) in
   match name with
   | "@main" -> transform_main p
+  | e when String.equal entry e -> transform_main p
   | "@malloc" -> transform_malloc p
   | "@free" -> transform_free p
   | _ -> p
 
 let transform (p : Program.t) =
-  let procs = IDMap.map transform_proc p.procs in
+  let entry = p.entry_proc |> Option.map ID.name |> Option.get_or ~default:"" in
+  let procs = IDMap.map (transform_proc entry) p.procs in
   { p with procs }
