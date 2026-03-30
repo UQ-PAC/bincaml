@@ -116,10 +116,10 @@ module Make (G : GSig) = struct
         Iter.(
           VSet.to_iter headers
           |> flat_map (fun h ->
-              G.pred p h |> List.to_iter 
+              G.pred p h |> List.to_iter
               |> map (fun p -> (p, h))
-              |> filter (fun (s,_) -> not @@ VSet.mem s nodes))
-          |> map (fun (a,b) -> G.find_edge p a b)
+              |> filter (fun (s, _) -> not @@ VSet.mem s nodes))
+          |> map (fun (a, b) -> G.find_edge p a b)
           |> to_list)
 
       (** Accesses the Basil IR state to compute the set of back-edges. That is,
@@ -129,11 +129,11 @@ module Make (G : GSig) = struct
         Iter.(
           VSet.to_iter headers
           |> flat_map (fun h ->
-              G.pred p h |> List.to_iter 
+              G.pred p h |> List.to_iter
               |> map (fun p -> (p, h))
-              |> filter (fun (s,_) -> VSet.mem s nodes))
-          |> map (fun (a,b) -> G.find_edge p a b)
-        |> to_list)
+              |> filter (fun (s, _) -> VSet.mem s nodes))
+          |> map (fun (a, b) -> G.find_edge p a b)
+          |> to_list)
     end
 
     type block_loop_state = {

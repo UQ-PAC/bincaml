@@ -1,8 +1,12 @@
 open Bincaml_util.Common
 open Analysis.Irreducible_loops.ProcIntra
 
+(** Tests for irreducible loop forest analysis and transform. Here "paper"
+    refers to T. Wei et al. {:http://dx.doi.org/10.1007/978-3-540-74061-2_11}.
+*)
+
 open struct
-  (** Put all the implementation in a hidden struct so not exported and we get
+  (* Put all the implementation in a hidden struct so not exported and we get
       unused function warnings if we define a test and dont add it to the suite
   *)
 
@@ -31,8 +35,7 @@ open struct
            (StringSet.to_string ~stop:"}" ~start:"{" Fun.id)))
       "loop header->participant sets equal" a.headers b.headers
 
-  let assert_loop_detector p iloop_headers headers =
-    let loops = solve_proc p in
+  let assert_loop_detector loops iloop_headers headers =
     let headers =
       List.map (Pair.map Fun.id StringSet.of_list) headers |> StringMap.of_list
     in
@@ -80,7 +83,11 @@ open struct
     let p =
       IDMap.find (Option.get_exn_or "no entry proc" p.entry_proc) p.procs
     in
-    let c = fun () -> assert_loop_detector p header_ptrs all_loop_headers in
+    let c =
+     fun () ->
+      let loops = solve_proc p in
+      assert_loop_detector loops header_ptrs all_loop_headers
+    in
     Alcotest.test_case name `Quick c
 
   let paper_fig2 =
@@ -237,18 +244,47 @@ proc @main () -> ()
     in
     check_loop_result name p ~header_ptrs ~all_loop_headers
 
+  let loops_reducible p =
+    List.filter
+      (fun b ->
+        match classify_block b with
+        | `IrreducibleHeader -> false
+        | `ReducibleHeader -> true
+        | _ -> false)
+      p
+
   let loops_irreducible p =
     List.filter
       (fun b ->
         match classify_block b with `IrreducibleHeader -> true | _ -> false)
       p
 
-  let irrloops_fixed after =
-    Alcotest.(check (list block_info))
-      "all irreducible loops fixed" [] (loops_irreducible after)
+  let check_transform_fixed name ~num_irr_loops ~num_red_loops ?header_ptrs
+      ?all_headers p =
+    let checks () =
+      let before, after = run_transform p in
+
+      let check_x =
+        let open Option in
+        let* hdrs = header_ptrs in
+        let* headers = all_headers in
+        Some (fun () -> assert_loop_detector before hdrs headers)
+      in
+      Option.iter (fun x -> x ()) check_x;
+      Alcotest.(check int)
+        "number of irreducible loops present" num_irr_loops
+        (List.length @@ loops_irreducible before);
+      Alcotest.(check int)
+        "number of reducible loops present" num_red_loops
+        (List.length @@ loops_reducible before);
+      Alcotest.(check (list block_info))
+        "all irreducible loops fixed" [] (loops_irreducible after)
+    in
+    Alcotest.test_case name `Quick checks
 
   let sub_cycles_transform =
-    let p =
+    check_transform_fixed "subcycles applying transform" ~num_irr_loops:1
+      ~num_red_loops:1
       {|
 prog entry @main;                           
                                             
@@ -271,13 +307,336 @@ proc @main () -> ()
     return ();                              
   ]                                         
 ];                                          
-                                            
     |}
-    in
-    let _, after = run_transform p in
-    Alcotest.test_case "sub cycles transform" `Quick (fun () ->
-        irrloops_fixed after)
+
+  let crossover =
+    check_transform_fixed "crossover" ~num_irr_loops:2 ~num_red_loops:0
+      {|
+prog entry @main;
+proc @main () -> ()
+  { .name = "main"; .returnBlock = "exit" }
+[
+  block %S [
+    goto(%h1, %h2);
+  ];
+  block %h1 [
+    goto(%x);
+  ];
+  block %x [
+    goto(%h2, %h1);
+  ];
+  block %h2 [
+    goto(%y);
+  ];
+  block %y [
+    goto(%x, %exit);
+  ];
+  block %exit [
+    return ();
+  ]
+];
+    |}
+
+  let paper_fig4a =
+    check_transform_fixed "paper fig4a" ~num_irr_loops:0 ~num_red_loops:0
+      {|
+prog entry @main;
+
+proc @main () -> ()
+  { .name = "main"; .returnBlock = "exit" }
+[
+  block %S [
+    goto(%1);
+  ];
+  block %1 [
+    goto(%2);
+  ];
+  block %2 [
+    goto(%b0);
+  ];
+  block %b0 [
+    goto(%b);
+  ];
+  block %b [
+    goto(%exit);
+  ];
+  block %exit [
+    return ();
+  ]
+];
+
+    |}
+
+  let paper_fig4b =
+    check_transform_fixed "paper fig4b" ~num_irr_loops:0 ~num_red_loops:1
+      ~header_ptrs:[ ("%b0", "%b"); ("%x", "%b") ]
+      ~all_headers:[ ("%b", [ "%b" ]) ]
+      {|
+prog entry @main;
+
+proc @main () -> ()
+  { .name = "main"; .returnBlock = "exit" }
+[
+  block %S [
+    goto(%1);
+  ];
+  block %1 [
+    goto(%b);
+  ];
+  block %b [
+    goto(%x);
+  ];
+  block %x [
+    goto(%b0);
+  ];
+  block %b0 [
+    goto(%exit, %b);
+  ];
+  block %exit [
+    return ();
+  ]
+];
+    |}
+
+  let paper_fig4c =
+    (* TODO: sus there are no loops before *)
+    check_transform_fixed "paper fig4c" ~num_irr_loops:0 ~num_red_loops:0
+      {|
+prog entry @main;
+
+proc @main () -> ()
+  { .name = "main"; .returnBlock = "exit" }
+[
+  block %S [
+    goto(%1);
+  ];
+  block %1 [
+    goto(%h);
+  ];
+  block %h [
+    goto(%x, %b0);
+  ];
+  block %x [
+    goto(%b);
+  ];
+  block %b0 [
+    goto(%b);
+  ];
+  block %b [
+    goto(%z);
+  ];
+  block %z [
+    goto(%exit);
+  ];
+  block %exit [
+    return ();
+  ]
+];
+  |}
+
+  let paper_fig4d =
+    check_transform_fixed "paper fig4d" ~num_irr_loops:0 ~num_red_loops:1
+      ~header_ptrs:
+        [
+          ("%b", "%h"); ("%b0", "%h"); ("%x", "%h"); ("%y", "%h"); ("%z", "%h");
+        ]
+      ~all_headers:[ ("%h", [ "%h" ]) ]
+      {|
+prog entry @main;
+
+proc @main () -> ()
+  { .name = "main"; .returnBlock = "exit" }
+[
+  block %S [
+    goto(%1);
+  ];
+  block %1 [
+    goto(%h);
+  ];
+  block %h [
+    goto(%x);
+  ];
+  block %x [
+    goto(%b0, %y);
+  ];
+  block %y [
+    goto(%b);
+  ];
+  block %b0 [
+    goto(%b);
+  ];
+  block %b [
+    goto(%z);
+  ];
+  block %z [
+    goto(%exit, %h);
+  ];
+  block %exit [
+    return ();
+  ]
+];
+
+    |}
+
+  let paper_fig6a =
+    (* TODO: wrong; does scala impl identifies 2 irreducible loops *)
+    check_transform_fixed "paper fig6a" ~num_irr_loops:2 ~num_red_loops:1
+      ~header_ptrs:[] ~all_headers:[]
+      {|
+prog entry @main;
+
+proc @main () -> ()
+  { .name = "main"; .returnBlock = "exit" }
+[
+  block %S [
+    goto(%h3);
+  ];
+  block %h3 [
+    goto(%x);
+  ];
+  block %x [
+    goto(%h2, %y);
+  ];
+  block %y [
+    goto(%b0);
+  ];
+  block %b0 [
+    goto(%b);
+  ];
+  block %h2 [
+    goto(%h1);
+  ];
+  block %h1 [
+    goto(%b);
+  ];
+  block %b [
+    goto(%z);
+  ];
+  block %z [
+    goto(%h1, %a);
+  ];
+  block %a [
+    goto(%h2, %back);
+  ];
+  block %back [
+    goto(%h3, %exit);
+  ];
+  block %exit [
+    return ();
+  ]
+];
+
+    |}
+
+  let paper_fig6b =
+    (* FIXME: shouldn't we identify 4 reducible loops? *)
+    check_transform_fixed "paper fig6b" ~num_irr_loops:0 ~num_red_loops:1
+      {|
+prog entry @main;
+
+proc @main () -> ()
+  { .name = "main"; .returnBlock = "exit" }
+[
+  block %S [
+    goto(%h4);
+  ];
+  block %h4 [
+    goto(%h3);
+  ];
+  block %h3 [
+    goto(%h2);
+  ];
+  block %h2 [
+    goto(%h1);
+  ];
+  block %h1 [
+    goto(%x);
+  ];
+  block %x [
+    goto(%y, %h4);
+  ];
+  block %y [
+    goto(%z, %h3);
+  ];
+  block %z [
+    goto(%back, %h2);
+  ];
+  block %back [
+    goto(%h1, %exit);
+  ];
+  block %exit [
+    return ();
+  ]
+];
+|}
+
+  let paper_fig4e =
+    check_transform_fixed "paper fig4e" ~num_irr_loops:1 ~num_red_loops:1
+      ~header_ptrs:[] ~all_headers:[]
+      {|
+prog entry @main;
+
+proc @main () -> ()
+  { .name = "main"; .returnBlock = "exit" }
+[
+  block %S [
+    goto(%h1);
+  ];
+  block %h1 [
+    goto(%y, %z);
+  ];
+  block %y [
+    goto(%h);
+  ];
+  block %h [
+    goto(%b);
+  ];
+  block %z [
+    goto(%b0);
+  ];
+  block %b0 [
+    goto(%b);
+  ];
+  block %b [
+    goto(%a);
+  ];
+  block %a [
+    goto(%h, %h1, %exit);
+  ];
+  block %exit [
+    return ();
+  ]
+];
+    |}
 end
+
+let triforce =
+  check_transform_fixed "triforce" ~num_irr_loops:2 ~num_red_loops:1
+    {|
+prog entry @main;
+
+proc @main () -> ()
+  { .name = "main"; .returnBlock = "exit" }
+[
+  block %S [
+    goto(%h1, %h2, %h3);
+  ];
+  block %h1 [
+    goto(%h1, %h2, %h3);
+  ];
+  block %h2 [
+    goto(%h1, %h2, %h3);
+  ];
+  block %h3 [
+    goto(%h1, %h2, %h3, %exit);
+  ];
+  block %exit [
+    return ();
+  ]
+];
+
+
+  |}
 
 let tests =
   [
@@ -290,5 +649,14 @@ let tests =
         nested_loop;
         nested_self_loop;
         sub_cycles_transform;
+        crossover;
+        paper_fig4a;
+        paper_fig4b;
+        paper_fig4c;
+        paper_fig4d;
+        paper_fig6a;
+        paper_fig6b;
+        paper_fig4e;
+        triforce;
       ] );
   ]
