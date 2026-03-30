@@ -16,6 +16,7 @@
   perf,
   bnfc-treesitter,
   boogie,
+  cvc5,
 }:
 
 mkShell {
@@ -28,6 +29,7 @@ mkShell {
     nodejs-slim
     bnfc-treesitter
     boogie
+    cvc5
     # sherlodoc - not in nixpkgs?
   ]
   ++ lib.optional stdenv.hostPlatform.isLinux perf;

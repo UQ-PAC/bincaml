@@ -8,7 +8,7 @@
   concat.il))
 
 (cram
- (applies_to * \ expr_smt)
+ (applies_to * \ expr_smt malloc_free)
  (deps
   loop_dfg.sexp
   ../../examples/loop.il
@@ -35,3 +35,13 @@
   ll_spec.il
   ll_spec.sexp
   ../../bin/main.exe))
+
+(cram
+ (applies_to malloc_free)
+ (enabled_if
+  (and %{bin-available:boogie} %{bin-available:cvc5}))
+ (deps
+  %{bin:bincaml}
+  ../../examples/memory/malloc_free.il
+  ../../examples/memory/malloc_free_oob.il
+  ./malloc_free.sexp))
