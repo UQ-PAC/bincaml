@@ -1,6 +1,7 @@
 module Lsp = Linol.Lsp
 module TokenSet = Raw_tokens.TokenSet
 
+
 type t = {
   contents : string ref;
   is_too_big : unit -> bool;
@@ -154,16 +155,7 @@ let new_state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
     completions;
   }
 
-let completions_for_prefix st lsppos prefix =
-  let tokens = st.tokens () in
-  Iter.of_set (module TokenSet) tokens
-  |> Iter.filter (fun tok ->
-      not Raw_tokens.(lsprange_contains (lsprange_of_token tok) lsppos))
-  |> Iter.filter (fun x ->
-      Option.fold ~none:false
-        ~some:(String.starts_with ~prefix)
-        (Raw_tokens.ident_of_token x))
-  |> Iter.sort |> Iter.uniq |> Iter.to_list
+
 
 let update_contents ?(force = false) (st : t) contents =
   if force || not (st.is_too_big ()) then st.contents := contents
