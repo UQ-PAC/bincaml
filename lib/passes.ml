@@ -245,7 +245,8 @@ module PassManager = struct
       };
       {
         name = "linear-const";
-        apply = Prog Analysis.Linear_const.tester_transform;
+        (*apply = Prog Analysis.Linear_const.tester_transform;*)
+        apply = Prog Transforms.Const_prop.transform;
         doc = "";
       };
     ]

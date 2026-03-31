@@ -8,7 +8,7 @@ open Common
 open Idessi
 open Lattice_types
 
-module LinearDomain : IDESSIDomain = struct
+module LinearDomain = struct
   let direction = `Forwards
 
   module Value = FlatLattice (struct
@@ -184,34 +184,23 @@ module LinearDomain : IDESSIDomain = struct
     | E (RVar v) ->
         Some (IdEdge)
     (* x + c *)
-    | E (BinaryExpr { op = `BVADD; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }) ->
-        Some (Linear (Bitvec.one ~size:(Bitvec.size a), a))
-    | E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }) ->
-        Some (Linear (Bitvec.one ~size:(Bitvec.size a), a))
-    | E (ApplyIntrin { op = `BVADD; args = [E (RVar v); E (Constant { const = `Bitvector a })] }) ->
-        Some (Linear (Bitvec.one ~size:(Bitvec.size a), a))
+    | E (BinaryExpr { op = `BVADD; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); })
+    | E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); })
+    | E (ApplyIntrin { op = `BVADD; args = [E (RVar v); E (Constant { const = `Bitvector a })] })
     | E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector a }); E (RVar v)] }) ->
         Some (Linear (Bitvec.one ~size:(Bitvec.size a), a))
     (* a * x *)
-    | E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }) ->
-        Some (Linear (a, Bitvec.zero ~size:(Bitvec.size a)))
+    | E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); })
     | E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }) ->
         Some (Linear (a, Bitvec.zero ~size:(Bitvec.size a)))
     (* a * x + c *)
-    | E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector b }); arg2 = E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }); }) ->
-        Some (Linear (a, b))
-    | E (BinaryExpr { op = `BVADD; arg1 = E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }); arg2 = E (Constant { const = `Bitvector b }); }) ->
-        Some (Linear (a, b))
-    | E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector b }); arg2 = E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }); }) ->
-        Some (Linear (a, b))
-    | E (BinaryExpr { op = `BVADD; arg1 = E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }); arg2 = E (Constant { const = `Bitvector b }); }) ->
-        Some (Linear (a, b))
-    | E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector b }); E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); })] }) ->
-        Some (Linear (a, b))
-    | E (ApplyIntrin { op = `BVADD; args = [E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }); E (Constant { const = `Bitvector b })] }) ->
-        Some (Linear (a, b))
-    | E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector b }); E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); })] }) ->
-        Some (Linear (a, b))
+    | E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector b }); arg2 = E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }); })
+    | E (BinaryExpr { op = `BVADD; arg1 = E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }); arg2 = E (Constant { const = `Bitvector b }); })
+    | E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector b }); arg2 = E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }); })
+    | E (BinaryExpr { op = `BVADD; arg1 = E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }); arg2 = E (Constant { const = `Bitvector b }); })
+    | E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector b }); E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); })] })
+    | E (ApplyIntrin { op = `BVADD; args = [E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }); E (Constant { const = `Bitvector b })] })
+    | E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector b }); E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); })] })
     | E (ApplyIntrin { op = `BVADD; args = [E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }); E (Constant { const = `Bitvector b })] }) ->
         Some (Linear (a, b))
 
@@ -269,10 +258,10 @@ module LinearDomain : IDESSIDomain = struct
     |> Iter.map (fun v -> (v, Value.Top))
 end
 
-module Analysis = IDESSI (LinearDomain)
+module LinearConstAnalysis = IDESSI (LinearDomain)
 
 let tester_transform (p : Program.t) =
-  let s, r = Analysis.solve p in
+  let s, r = LinearConstAnalysis.solve p in
   ID.Map.iter
     (fun pid m ->
       print_endline @@ ID.name pid;

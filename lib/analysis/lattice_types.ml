@@ -130,6 +130,8 @@ struct
     | _, Bot -> Bot
     | _ -> Top
 
+  let get_val a = match a with V x -> Some x | _ -> None
+
   let map f a = bind (fun x -> V (f x)) a
   let map2 f a b = bind2 (fun x y -> V (f x y)) a b
 
