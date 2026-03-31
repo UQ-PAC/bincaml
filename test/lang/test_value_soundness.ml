@@ -37,7 +37,7 @@ struct
   let eval_abs e =
     Eval.eval Ops.AllOps.show_const Ops.AllOps.show_unary Ops.AllOps.show_binary
       Ops.AllOps.show_intrin
-      (fun v -> failwith "no vars")
+      (fun _ -> failwith "no vars")
       e
 
   let join_symm (l, r) =

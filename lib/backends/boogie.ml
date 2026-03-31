@@ -438,7 +438,7 @@ let pretty_program (p : Lang.Program.t) =
   let glob_vars = join_lines_end glob_vars in
   let glob_funs = append_nl glob_funs in
   let procs =
-    p.procs |> ID.Map.to_list
+    p.procs |> IDMap.to_list
     |> List.map (fun (_, p) -> pretty_procedure p)
     |> append_l ~sep:(newline ^ newline)
   in

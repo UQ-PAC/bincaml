@@ -295,7 +295,7 @@ module PassManager = struct
     | Prog tf -> tf p
     | Batch tf -> List.fold_left run_transform p tf
     | DFGAnalysis (module D : Analysis.Dataflow_graph.AnalysisType) ->
-        ID.Map.to_iter p.procs
+        IDMap.to_iter p.procs
         |> Iter.filter (fun (_, p) -> Procedure.graph p |> Option.is_some)
         |> Iter.iter (fun (pn, p) ->
             (*let r =
@@ -316,7 +316,7 @@ module PassManager = struct
         p
     | ProcCheck app ->
         let _ =
-          ID.Map.mapi
+          IDMap.mapi
             (fun id proc ->
               Trace_core.with_span ~__FILE__ ~__LINE__
                 ("check-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
@@ -329,7 +329,7 @@ module PassManager = struct
         p
     | Proc app ->
         let procs =
-          ID.Map.mapi
+          IDMap.mapi
             (fun id proc ->
               Trace_core.with_span ~__FILE__ ~__LINE__
                 ("transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id)

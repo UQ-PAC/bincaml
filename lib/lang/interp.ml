@@ -489,7 +489,7 @@ module IState = struct
     let pc =
       {
         proc =
-          ID.Map.find
+          IDMap.find
             (prog.entry_proc |> Option.get_exn_or "executing prog with no entry")
             prog.procs;
         vert = Exit;
@@ -654,7 +654,7 @@ module IState = struct
         st
     | Stmt.Instr_IntrinCall _ -> failwith "unsupported"
     | Stmt.Instr_Call { lhs; procid; args } ->
-        let proc = ID.Map.find procid st.prog.procs in
+        let proc = IDMap.find procid st.prog.procs in
         let st, out = call_proc st proc args in
         let st =
           StringMap.fold
@@ -852,6 +852,6 @@ let run_proc prog ?(args = StringMap.empty) proc =
 let run_prog ?(args = StringMap.empty) prog =
   let st = IState.create prog in
   let proc =
-    ID.Map.find (Option.get_exn_or "no main proc" prog.entry_proc) prog.procs
+    IDMap.find (Option.get_exn_or "no main proc" prog.entry_proc) prog.procs
   in
   IState.call_proc st proc args

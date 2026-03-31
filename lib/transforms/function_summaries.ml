@@ -64,7 +64,10 @@ let redundant (solver : Bincaml_util.Smt.Solver.t) p ps =
     Solver.pop solver;
     (* TODO a more robust strategy should be put in place in case a redundancy
        check can't be performed (e.g. just stop iterating the fixpoint now) *)
-    match res with Unsat -> true | Sat -> false | Unknown -> assert false
+    match res with
+    | Unsat -> true
+    | Sat -> false
+    | Unknown -> assert false
 
 let wp_dual_requires (module S : FunctionSummaryAnnotation)
     (proc : Program.proc) =
@@ -157,27 +160,27 @@ let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
     List.filter_map
       (function Program.CallGraph.Vert.ProcBegin pid -> Some pid | _ -> None)
       component
-    |> ID.Set.of_list
+    |> IDSet.of_list
   in
   let eqs (pid : ID.t) (vals : FixSummaries.valuation) =
-    if ID.Set.mem pid component then
+    if IDSet.mem pid component then
       let annotations =
         (module struct
           let requires id =
-            List.append (ID.Map.find id res).requires (vals id).requires
+            List.append (IDMap.find id res).requires (vals id).requires
 
           let ensures id =
-            List.append (ID.Map.find id res).ensures (vals id).ensures
+            List.append (IDMap.find id res).ensures (vals id).ensures
         end : FunctionSummaryAnnotation)
       in
-      let extra = extra_summary solver annotations (ID.Map.find pid procs) in
+      let extra = extra_summary solver annotations (IDMap.find pid procs) in
       append_summary (vals pid) extra
-    else ID.Map.get_or pid res ~default:Domain.bottom
+    else IDMap.get_or pid res ~default:Domain.bottom
   in
   let sol = FixSummaries.lfp eqs in
-  ID.Set.fold
+  IDSet.fold
     (fun pid res ->
-      ID.Map.add pid (append_summary (ID.Map.find pid res) (sol pid)) res)
+      IDMap.add pid (append_summary (IDMap.find pid res) (sol pid)) res)
     component res
 
 let interproc_transform (prog : Program.t) =
@@ -192,17 +195,17 @@ let interproc_transform (prog : Program.t) =
   in
   let summaries =
     prog.procs
-    |> ID.Map.map (fun proc ->
+    |> IDMap.map (fun proc ->
         let spec = Procedure.specification proc in
         { requires = spec.requires; ensures = spec.ensures })
   in
   let summaries =
     List.fold_left (solve_component solver call_graph prog) summaries sccs
   in
-  ID.Map.fold
+  IDMap.fold
     (fun pid summary (prog : Program.t) ->
-      let proc = ID.Map.find pid prog.procs in
+      let proc = IDMap.find pid prog.procs in
       let proc' = set_summary summary proc in
-      let procs = ID.Map.add pid proc' prog.procs in
+      let procs = IDMap.add pid proc' prog.procs in
       { prog with procs })
     summaries prog

@@ -19,7 +19,7 @@ let list_procs fname =
   let p = Loader.Loadir.ast_of_fname fname in
   let procs prog =
     let open Program in
-    ID.Map.iter (fun i _ -> Printf.printf "%s\n" (ID.show i)) prog.procs
+    IDMap.iter (fun i _ -> Printf.printf "%s\n" (ID.show i)) prog.procs
   in
   procs p.prog;
   Ok ()
@@ -33,7 +33,7 @@ let dump_proc fname proc =
   try
     let p = Loader.Loadir.ast_of_fname fname in
     let id = p.prog.proc_names.get_id proc in
-    let p = ID.Map.find id p.prog.procs in
+    let p = IDMap.find id p.prog.procs in
     print_proc stdout p;
     Ok ()
   with
@@ -44,7 +44,7 @@ let dump_proc fname proc =
 let print_cfg fname proc =
   let prg = Loader.Loadir.ast_of_fname fname in
   let id = prg.prog.proc_names.get_id proc in
-  let _ = ID.Map.find id prg.prog.procs in
+  let _ = IDMap.find id prg.prog.procs in
   Ok ()
 (*Lang.Livevars.print_live_vars_dot Format.std_formatter p ; *)
 (*Lang.Livevars.print_dse_dot Format.std_formatter p; *)
