@@ -136,4 +136,5 @@ let transform_proc (entry) (p : Program.proc) =
 let transform (p : Program.t) =
   let entry = p.entry_proc |> Option.map ID.name |> Option.get_or ~default:"" in
   let procs = IDMap.map (transform_proc entry) p.procs in
-  { p with procs }
+  let p = { p with procs } in
+  (fun prog -> Loader.Spec_modifies.set_modsets ~add_only:true prog) p
