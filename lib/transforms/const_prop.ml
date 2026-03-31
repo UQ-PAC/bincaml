@@ -30,7 +30,7 @@ let transform_proc r keep =
       Block.map ~phi:id
         (Stmt.map ~f_lvar:id ~f_expr:(prop_expr prop) ~f_rvar:id))
 
-let transform (prog : Program.t) =
+let linear_transform (prog : Program.t) =
   let _, r = LinearConstAnalysis.solve prog in
 
   let procs =

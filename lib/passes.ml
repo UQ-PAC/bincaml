@@ -245,9 +245,10 @@ module PassManager = struct
       };
       {
         name = "linear-const";
-        (*apply = Prog Analysis.Linear_const.tester_transform;*)
-        apply = Prog Transforms.Const_prop.transform;
-        doc = "";
+        apply = Prog Transforms.Const_prop.linear_transform;
+        doc =
+          "Performs interprocedural constant propagation of linear expressions \
+           (expressions of the form a * x + b). Assumes SSA form.";
       };
     ]
 

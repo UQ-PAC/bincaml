@@ -259,15 +259,3 @@ module LinearDomain = struct
 end
 
 module LinearConstAnalysis = IDESSI (LinearDomain)
-
-let tester_transform (p : Program.t) =
-  let s, r = LinearConstAnalysis.solve p in
-  ID.Map.iter
-    (fun pid m ->
-      print_endline @@ ID.name pid;
-      VarMap.iter
-        (fun v x ->
-          print_endline @@ Var.name v ^ " " ^ LinearDomain.Value.show x)
-        m)
-    r;
-  p
