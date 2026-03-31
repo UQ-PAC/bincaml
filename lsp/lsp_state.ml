@@ -1,7 +1,6 @@
 module Lsp = Linol.Lsp
 module TokenSet = Raw_tokens.TokenSet
 
-
 type t = {
   contents : string ref;
   is_too_big : unit -> bool;
@@ -10,6 +9,7 @@ type t = {
   diagnostics : unit -> Lsp.Types.Diagnostic.t list;
   completions : unit -> Linol.Lsp.Types.CompletionItem.t list;
   debug_highlight : bool ref;
+  cst : unit -> BasilIR.AbsBasilIR.moduleT;
 }
 
 let parse_tokens (contents : string) =
@@ -145,6 +145,20 @@ let new_state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
         x)
       (fun () -> (tokens (), lines ()))
   in
+
+  let cst =
+    one_value_function_cache
+      (fun contents ->
+        let m = try
+          BasilIR.ParBasilIR.pModuleT BasilIR.LexBasilIR.token
+            (Lexing.from_string contents)
+        with e ->
+          Logs.err (fun m -> m "parse error: %s" (Printexc.get_backtrace ()));
+          BasilIR.AbsBasilIR.Module1 [] in
+          BasilIR.PrintBasilIR.(printTree prtModuleT) m)
+      )
+      (fun () -> !contents)
+  in
   {
     contents;
     is_too_big;
@@ -153,9 +167,9 @@ let new_state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
     debug_highlight;
     diagnostics;
     completions;
+    cst;
   }
 
-
-
 let update_contents ?(force = false) (st : t) contents =
+  ignore @@ st.cst ();
   if force || not (st.is_too_big ()) then st.contents := contents
