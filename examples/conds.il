@@ -10,7 +10,6 @@ var $ZF: bv1;
 var $_PC: bv64;
 var $__BranchTaken: bv1;<<<<         <<<     aaaaaa
 
-
 prog entry @main_4196260;
 
 proc @main_4196260 () -> ()
@@ -25,6 +24,8 @@ proc @main_4196260 () -> ()
     $_PC: bv64 := bvadd($_PC:bv64, 0x4:bv64) { .label = "pc-tracking" };
     $R0: bv64 := 0x420000:bv64 { .comment = "op: 0x90000100" };
     $_PC: bv64 := bvadd($_PC:bv64, 0x4:bv64) { .label = "pc-tracking" };
+
+    >>>>>>>
     var var1_4196264_bv64: bv64 := 0x0:bv64 { .comment = "op: 0xf9401800" };
     var var1_4196264_bv64: bv64 := $R0:bv64 { .comment = "op: 0xf9401800" };
     var var2_4196264_bv64: bv64 := 0x0:bv64 { .comment = "op: 0xf9401800" };

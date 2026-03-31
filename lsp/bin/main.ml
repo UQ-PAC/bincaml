@@ -49,13 +49,12 @@ class lsp_server =
        - return the diagnostics from the new state
     *)
     method private _on_doc ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
-        (uri : Lsp.Types.DocumentUri.t) (contents : string) =
+        ?(force = false) (uri : Lsp.Types.DocumentUri.t) (contents : string) =
       notify_back#set_uri uri;
       let st =
         match Hashtbl.find_opt buffers uri with
         | Some st ->
-            Logs.app (fun m -> m "setting new contents");
-            st.contents := contents;
+            Lsp_state.update_contents ~force st contents;
             st
         | None -> Lsp_state.new_state ~notify_back contents
       in
@@ -73,11 +72,14 @@ class lsp_server =
     method on_notif_doc_did_change ~notify_back d changes ~old_content:_old
         ~new_content =
       self#_on_doc ~notify_back d.uri new_content;
-      Logs.app (fun m ->
-          changes
-          |> List.map Linol_lwt.TextDocumentContentChangeEvent.yojson_of_t
-          |> List.iter (fun x -> x |> Yojson.Safe.to_string |> m "change: %s"));
-      (* TODO: store a "working line". completion requests made in the working line will not re-trigger lexing *)
+      Lwt.return ()
+
+    method! on_notif_doc_did_save ~notify_back saveparams =
+      let docst = Hashtbl.find docs saveparams.textDocument.uri in
+      Linol_lwt.spawn (fun () ->
+          self#_on_doc ~notify_back ~force:true saveparams.textDocument.uri
+            docst.content;
+          Lwt.return ());
       Lwt.return ()
 
     (* On document closes, we remove the state associated to the file from the global
@@ -85,10 +87,6 @@ class lsp_server =
     method on_notif_doc_did_close ~notify_back:_ d : unit Linol_lwt.t =
       Hashtbl.remove buffers d.uri;
       Linol_lwt.return ()
-
-    (* method! config_sync_opts = *)
-    (*   Linol_lsp.Lsp.Types.TextDocumentSyncOptions.create *)
-    (*     ~change:Linol_lsp.Types.TextDocumentSyncKind.Incremental () *)
 
     method! config_code_lens_options =
       Some (Linol_lsp.Lsp.Types.CodeLensOptions.create ())
@@ -147,14 +145,16 @@ class lsp_server =
       with
       | None -> Lwt.return None
       | Some prefix ->
+          let prefix = String.sub prefix 0 1 in
           let completions =
             st.completions ()
             |> List.filter (fun (comp : Linol_lwt.CompletionItem.t) ->
-                comp.data
-                |> Option.map (fun data ->
-                    let range = Linol.Lsp.Types.Range.t_of_yojson data in
-                    not (Bincaml_lsp.Raw_tokens.lsprange_contains range pos))
-                |> Option.value ~default:true)
+                String.starts_with ~prefix comp.label
+                && comp.data
+                   |> Option.map (fun data ->
+                       let range = Linol.Lsp.Types.Range.t_of_yojson data in
+                       not (Bincaml_lsp.Raw_tokens.lsprange_contains range pos))
+                   |> Option.value ~default:true)
           in
           Lwt.return (Some (`List completions))
 

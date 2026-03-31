@@ -25,7 +25,7 @@ var $R25: bv64;
 var $R26: bv64;
 var $R27: bv64;
 var $R28: bv64;
-var $R29: bv64;
+var $R29: bv64;<
 var $R3: bv64;
 var $R30: bv64;
 var $R31: bv64;
@@ -37,14 +37,13 @@ var $R8: bv64;
 var $R9: bv64;
 var $VF: bv1;
 var $Z25: bv128;
-var $Z26: bv128;
+var $Z26: bv128;<
 var $Z27: bv128;
 var $Z28: bv128;
-var $Z29: bv128;
+var $Z29: bv128;<
 var $Z30: bv128;
-var $Z31: bv128;
-var $ZF: bv1;
-var $__BranchTaken: bv1;
+var $Z31: bv128;<
+var $ZF: bv1;<
 
 prog entry @main_4204352;
 
