@@ -20,10 +20,11 @@ let prop_expr (prop : Var.t -> Bitvec.t option) =
         | _ -> Keep)
     | _ -> Keep)
 
-let transform_proc r =
+let transform_proc r keep =
   let open Stmt in
   let prop v =
-    VarMap.find_opt v r |> Option.flat_map LinearDomain.Value.get_val
+    if keep v then None
+    else VarMap.find_opt v r |> Option.flat_map LinearDomain.Value.get_val
   in
   Procedure.map_blocks_topo_fwd (fun _ ->
       Block.map ~phi:id
@@ -34,7 +35,7 @@ let transform (prog : Program.t) =
 
   let procs =
     ID.Map.mapi
-      (fun pid proc -> transform_proc (ID.Map.find pid r) proc)
+      (fun pid proc -> transform_proc (ID.Map.find pid r) (fun _ -> false) proc)
       prog.procs
   in
 
