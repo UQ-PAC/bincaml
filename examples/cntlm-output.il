@@ -49,9 +49,9 @@ var $__BranchTaken: bv1;
 prog entry @main_4204352;
 
 proc @main_4204352 () -> ()
-  { .name = "main"; .address = 0x402740; .returnBlock = "main_basil_return_1" }
+  { .name = "main"; .address = 0x402740; .returnBlock = "main_basil_return_1" }<
 [
-  block %main_entry {.address = 0x402740; .originalLabel = "PuweIlQsQpSAE5A95Qp8yg=="} [
+  block %main_entry {.address = 0x402740; .originalLabel = "PuweIlQsQpSAE5A95Qp8yg=="} [a<
     var var1_4204352_bv64: bv64 := 0x0:bv64 { .comment = "op: 0xd10b03ff" };
     var var1_4204352_bv64: bv64 := $R31:bv64 { .comment = "op: 0xd10b03ff" };
     $R31: bv64 := bvadd(bvadd(var1_4204352_bv64:bv64, 0xfffffffffffffd3f:bv64), 0x1:bv64) { .comment = "op: 0xd10b03ff" };

@@ -34,7 +34,7 @@ let completion_item_of_token (x : Raw_tokens.token_with_pos) =
   let open Linol.Lsp.Types.CompletionItemKind in
   let kind =
     match x.token with
-    | Ok (TOK_ProcIdent (_, id)) -> Some (id, Class, "procedure")
+    | Ok (TOK_ProcIdent (_, id)) -> Some (id, Method, "procedure")
     | Ok (TOK_BIdent (_, id)) -> Some (id, Text, "attribute")
     | Ok (TOK_BlockIdent (_, id)) -> Some (id, Method, "block")
     | Ok (TOK_GlobalIdent (_, id)) -> Some (id, Variable, "global")
@@ -51,7 +51,7 @@ let completion_item_of_token (x : Raw_tokens.token_with_pos) =
   | Some (str, kind, detail) ->
       Some
         (Linol.Lsp.Types.CompletionItem.create ~kind ?data ~detail
-           ~label:str ())
+           ~preselect:true ~label:str ())
 
 let one_value_function_cache f argfun =
   let cache = CCCache.lru ~eq:CCEqual.poly 1 in
@@ -68,22 +68,52 @@ let new_state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
       (fun () -> !contents)
   in
 
-  let tokens = one_value_function_cache parse_tokens (fun () -> !contents) in
+  let is_too_big =
+    one_value_function_cache
+      (fun contents -> String.length contents > 1_000_000)
+      (fun () -> !contents)
+  in
+
+  let tokens =
+    one_value_function_cache
+      (fun (is_too_big, contents) ->
+        if is_too_big then TokenSet.empty else parse_tokens contents)
+      (fun () -> (is_too_big (), !contents))
+  in
 
   let diagnostics =
     one_value_function_cache
-      (fun (debug_highlight, tokens) ->
-        Logs.app (fun m -> m "making diags");
-        let tokens =
-          Iter.of_set (module TokenSet) tokens
-          |> Iter.filter (fun (tok : Raw_tokens.token_with_pos) ->
-              if (not debug_highlight) && Result.is_ok tok.token then false
-              else true)
-        in
-        let diags = Iter.map to_diagnostic tokens |> Iter.to_list in
-        Linol_lwt.spawn (fun () -> notify_back#send_diagnostic diags);
-        diags)
-      (fun () -> (!debug_highlight, tokens ()))
+      (function
+        | true, _, _ ->
+            let start = Lsp.Types.Position.create ~line:0 ~character:0
+            and end_ = Lsp.Types.Position.create ~line:0  ~character:100 in
+            let range = Lsp.Types.Range.create ~start ~end_ in
+            let severity = Lsp.Types.DiagnosticSeverity.Warning in
+
+            let diags =
+              [
+                Lsp.Types.Diagnostic.create
+                  ~message:
+                    (`String
+                       "File too big! On-keypress Bincaml LSP features are \
+                        disabled. Save the file to manually refresh.")
+                  ~range ~severity ();
+              ]
+            in
+            Linol_lwt.spawn (fun () -> notify_back#send_diagnostic diags);
+            diags
+        | false, debug_highlight, tokens ->
+            Logs.app (fun m -> m "making diags");
+            let tokens =
+              Iter.of_set (module TokenSet) tokens
+              |> Iter.filter (fun (tok : Raw_tokens.token_with_pos) ->
+                  if (not debug_highlight) && Result.is_ok tok.token then false
+                  else true)
+            in
+            let diags = Iter.map to_diagnostic tokens |> Iter.to_list in
+            Linol_lwt.spawn (fun () -> notify_back#send_diagnostic diags);
+            diags)
+      (fun () -> (is_too_big (), !debug_highlight, tokens ()))
   in
 
   let completions =
