@@ -203,6 +203,16 @@ module LinearDomain = struct
     | E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector b }); E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); })] })
     | E (ApplyIntrin { op = `BVADD; args = [E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }); E (Constant { const = `Bitvector b })] }) ->
         Some (Linear (a, b))
+    (* a * (b + c) *)
+    | E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector b }); arg2 = E (RVar v); }); })
+    | E (BinaryExpr { op = `BVMUL; arg1 = E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector b }); arg2 = E (RVar v); }); arg2 = E (Constant { const = `Bitvector a }); })
+    | E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (BinaryExpr { op = `BVADD; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector b }); }); })
+    | E (BinaryExpr { op = `BVMUL; arg1 = E (BinaryExpr { op = `BVADD; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector b }); }); arg2 = E (Constant { const = `Bitvector a }); })
+    | E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector b }); E (RVar v)] }); })
+    | E (BinaryExpr { op = `BVMUL; arg1 = E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector b }); E (RVar v)] }); arg2 = E (Constant { const = `Bitvector a }); })
+    | E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (ApplyIntrin { op = `BVADD; args = [E (RVar v); E (Constant { const = `Bitvector b })] }); })
+    | E (BinaryExpr { op = `BVMUL; arg1 = E (ApplyIntrin { op = `BVADD; args = [E (RVar v); E (Constant { const = `Bitvector b })] }); arg2 = E (Constant { const = `Bitvector a }); }) ->
+        Some (Linear (a, Bitvec.mul a b))
 
     | _ -> None
     [@@ocamlformat "disable"]

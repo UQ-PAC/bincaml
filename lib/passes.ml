@@ -248,7 +248,9 @@ module PassManager = struct
         apply = Prog Transforms.Const_prop.linear_transform;
         doc =
           "Performs interprocedural constant propagation of linear expressions \
-           (expressions of the form a * x + b). Assumes SSA form.";
+           (expressions of the form a * x + b). Usage of constant variables \
+           are replaced with their constant value. Newly dead variables are \
+           not eliminated. Assumes SSA form.";
       };
     ]
 
