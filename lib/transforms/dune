@@ -10,7 +10,8 @@
   may_read_uninit
   type_check
   function_summaries
-  boogie_prepass)
+  boogie_prepass
+  gamma_vars)
  (libraries
   bincaml.analysis
   patricia-tree

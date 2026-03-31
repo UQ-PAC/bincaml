@@ -28,6 +28,8 @@
   typepass.sexp
   basicssa.sexp
   roundtrip.sexp
+  gammavars.sexp
+  ../../examples/gamma.il
   inter_dead.sexp
   ll_simple.il
   ll_simple.sexp
