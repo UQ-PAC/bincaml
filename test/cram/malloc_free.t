@@ -117,6 +117,11 @@
   
   procedure p$free();
     modifies $mem_encoding, $mem, $stack, $R0, $R1, $R16, $R17, $R29, $R30, $R31;
+    ensures ($mem_encoding == me_alloc_live_update(
+       old($mem_encoding),
+       me_addr_alloc(old($mem_encoding), $R0),
+       2bv2
+     ));
     requires me_addr_is_heap($mem_encoding, $R0);
     requires (0bv64 == me_addr_offset($mem_encoding, $R0));
     requires (me_alloc_live($mem_encoding, me_addr_alloc($mem_encoding, $R0)) == 1bv2);
@@ -325,6 +330,11 @@
   
   procedure p$free();
     modifies $mem_encoding, $mem, $stack, $R0, $R1, $R16, $R17, $R29, $R30, $R31;
+    ensures ($mem_encoding == me_alloc_live_update(
+       old($mem_encoding),
+       me_addr_alloc(old($mem_encoding), $R0),
+       2bv2
+     ));
     requires me_addr_is_heap($mem_encoding, $R0);
     requires (0bv64 == me_addr_offset($mem_encoding, $R0));
     requires (me_alloc_live($mem_encoding, me_addr_alloc($mem_encoding, $R0)) == 1bv2);
@@ -413,8 +423,8 @@
   }
 
   $ boogie ./bad.bpl
-  ./bad.bpl(171,5): Error: this assertion could not be proved
+  ./bad.bpl(176,5): Error: this assertion could not be proved
   Execution trace:
-      ./bad.bpl(141,3): b#main_entry
+      ./bad.bpl(146,3): b#main_entry
   
   Boogie program verifier finished with 0 verified, 1 error
