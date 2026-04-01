@@ -340,7 +340,7 @@ let get_entry_block p =
 
 (** Get the block for an id
 
-   @raises {! Not_found } when the block does not exist.
+   @raise {! Not_found } when the block does not exist.
 *)
 let find_block p id =
   let open Edge in
