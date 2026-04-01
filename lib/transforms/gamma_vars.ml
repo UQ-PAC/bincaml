@@ -90,7 +90,7 @@ let update_stmts ?(check_names = false) (add : ID.t -> Var.t -> bool) pid
     (prog : Program.t) (b : (Var.t, Expr.BasilExpr.t) Block.t) =
   let open Stmt in
   let update_expr = update_expr ~check_names (add pid) in
-  let proc = ID.Map.find pid prog.procs in
+  let proc = IDMap.find pid prog.procs in
   Block.map
     ~phi:(fun a ->
       List.flat_map
@@ -133,7 +133,7 @@ let update_stmts ?(check_names = false) (add : ID.t -> Var.t -> bool) pid
               args = update_args ~check_names (add pid) (fun _ -> true) args;
             }
       | Instr_Call { lhs; procid; args } ->
-          let callee = ID.Map.find procid prog.procs in
+          let callee = IDMap.find procid prog.procs in
           Instr_Call
             {
               lhs =
@@ -198,7 +198,7 @@ let transform_proc ?(check_names = false) (add : ID.t -> Var.t -> bool) prog
 let transform ?(check_names = false) (p : Program.t) =
   let p = add_globals ~check_names (fun v -> true) p in
   let procs =
-    ID.Map.map
+    IDMap.map
       (fun proc -> transform_proc ~check_names (fun pid v -> true) p proc)
       p.procs
   in
