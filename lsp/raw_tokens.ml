@@ -201,54 +201,46 @@ let dummy_token (buf : Lexing.lexbuf) () : token_with_pos =
   let endpos = buf.lex_curr_p in
   { token = Error (); str = "<dummy token>"; startpos; endpos }
 
-module TokenSet = struct
+let token_at_pos tokens (lsppos : Linol.Lsp.Types.Position.t) =
   let compare_elt =
     CCOrd.map
       (fun (x : token_with_pos) -> lsppos_of_position x.startpos)
       lsppos_compare
+  in
+  let pos =
+    {
+      pos_fname = "";
+      pos_lnum = lsppos.line + 1;
+      pos_cnum = lsppos.character;
+      pos_bol = 0;
+    }
+  in
+  let dummy = error_token ~startpos:pos () in
+  match CCArray.bsearch ~cmp:compare_elt dummy tokens with
+  | `Just_after ibefore -> Some tokens.(ibefore)
+  | _ -> None
 
-  include Set.Make (struct
-    type t = token_with_pos
-
-    let compare = compare_elt
-  end)
-
-  let token_at_pos (set : t) (lsppos : Linol.Lsp.Types.Position.t) =
-    let pos =
-      {
-        pos_fname = "";
-        pos_lnum = lsppos.line + 1;
-        pos_cnum = lsppos.character;
-        pos_bol = 0;
-      }
-    in
-    let dummy = error_token ~startpos:pos () in
-    find_last_opt (fun x -> compare_elt x dummy <= 0) set
-    |> CCOption.filter (fun tok ->
-        lsprange_contains (lsprange_of_token tok) lsppos)
-
-  let make_token_getter set =
-    let rest = ref (to_seq set) in
-    let prev =
-      ref
-        (error_token
-           ~startpos:{ pos_fname = ""; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 }
-           ())
-    in
-    let rec f =
-     fun arg ->
-      match !rest () with
-      | Nil -> failwith "no more tokens"
-      | Cons (x, newrest) -> (
-          rest := newrest;
-          match x.token with
-          | Error _ -> f arg
-          | Ok tok ->
-              prev := x;
-              tok)
-    in
-    (f, prev)
-end
+let make_token_getter set =
+  let rest = ref (Array.to_seq set) in
+  let prev =
+    ref
+      (error_token
+         ~startpos:{ pos_fname = ""; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 }
+         ())
+  in
+  let rec f =
+   fun arg ->
+    match !rest () with
+    | Nil -> failwith "no more tokens"
+    | Cons (x, newrest) -> (
+        rest := newrest;
+        match x.token with
+        | Error _ -> f arg
+        | Ok tok ->
+            prev := x;
+            tok)
+  in
+  (f, prev)
 
 let source_of_token contents (x : token_with_pos) =
   let inp = Pp_loc.Input.string contents in

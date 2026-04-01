@@ -140,7 +140,7 @@ class lsp_server =
       let tokens = st.tokens () in
 
       match
-        TokenSet.token_at_pos tokens pos
+        Bincaml_lsp.Raw_tokens.token_at_pos tokens pos
         |> CCOption.flat_map Bincaml_lsp.Raw_tokens.ident_of_token
       with
       | None -> Lwt.return None

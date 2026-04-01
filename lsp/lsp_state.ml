@@ -1,11 +1,10 @@
 module Lsp = Linol.Lsp
-module TokenSet = Raw_tokens.TokenSet
 
 type t = {
   contents : string ref;
   is_too_big : bool ref;
   notify_back : Linol_lwt.Jsonrpc2.notify_back;
-  tokens : unit -> TokenSet.t;
+  tokens : unit -> Raw_tokens.token_with_pos Array.t;
   diagnostics : unit -> Lsp.Types.Diagnostic.t list;
   completions : unit -> Linol.Lsp.Types.CompletionItem.t list;
   debug_highlight : bool ref;
@@ -16,10 +15,8 @@ type t = {
 
 let parse_tokens (contents : string) =
   let lexbuf = Lexing.from_string ~with_positions:true contents in
-  let tokens =
-    Raw_tokens.extract_all_tokens lexbuf |> Iter.to_set (module TokenSet)
-  in
-  Logs.app (fun m -> m "got %d tokens" (TokenSet.cardinal tokens));
+  let tokens = Raw_tokens.extract_all_tokens lexbuf |> Iter.to_array in
+  Logs.app (fun m -> m "got %d tokens" (Array.length tokens));
   tokens
 
 let to_diagnostic (x : Raw_tokens.token_with_pos) : Lsp.Types.Diagnostic.t =
@@ -82,8 +79,7 @@ let new_state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
   let completions =
     one_value_function_cache
       (fun (tokens, lines) ->
-        tokens
-        |> Iter.of_set (module TokenSet)
+        tokens |> Iter.of_array
         |> Iter.filter_map completion_item_of_token
         |> Iter.sort_uniq
              ~cmp:
@@ -109,7 +105,7 @@ let new_state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
   let parse_result =
     one_value_function_cache
       (fun (tokens, contents) ->
-        let get_token, prev_token = TokenSet.make_token_getter tokens in
+        let get_token, prev_token = Raw_tokens.make_token_getter tokens in
         try Ok (BasilIR.ParBasilIR.pModuleT get_token (Lexing.from_string ""))
         with e ->
           let s = Raw_tokens.lsppos_of_position !prev_token.startpos
@@ -166,7 +162,7 @@ let new_state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
 
         Logs.app (fun m -> m "making diags");
         let tokens =
-          Iter.of_set (module TokenSet) tokens
+          tokens |> Iter.of_array
           |> Iter.filter (fun (tok : Raw_tokens.token_with_pos) ->
               if (not debug_highlight) && Result.is_ok tok.token then false
               else true)
