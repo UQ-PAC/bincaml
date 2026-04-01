@@ -2,6 +2,7 @@ prog entry @main ;
 
 var $R0 : bv64;
 var $R1 : bv64;
+axiom $a true;
 
 
 proc @main () -> () [

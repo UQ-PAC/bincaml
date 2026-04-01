@@ -1,7 +1,7 @@
 (library
  (public_name bincaml_lsp)
  (name bincaml_lsp)
- (modules lsp_state raw_tokens lsp_logs token_parser)
+ (modules lsp_state raw_tokens lsp_logs)
  (root_module Deps)
  (libraries linol-lwt linol lsp bincaml bincaml.basilir bincaml.loader logs logs.fmt)
  (flags

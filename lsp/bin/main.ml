@@ -157,6 +157,13 @@ class lsp_server =
           in
           Lwt.return (Some (`List completions))
 
+    method! config_symbol = Some (`Bool true)
+
+    method! on_req_symbol ~notify_back ~id ~uri ~workDoneToken
+        ~partialResultToken () =
+      let st = self#get uri in
+      Lwt.return (Some (`DocumentSymbol (st#lspsymbols ())))
+
     (* method! on_req_code_lens_resolve ~notify_back ~id code_lens = *)
     (*   Lwt.return code_lens *)
   end

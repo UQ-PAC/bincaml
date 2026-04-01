@@ -50,6 +50,53 @@ let completion_item_of_token (x : Raw_tokens.token_with_pos) =
         (Linol.Lsp.Types.CompletionItem.create ~kind ?data ~detail
            ~preselect:true ~label:str ())
 
+let lsppos_of_pploc inp loc =
+  let lexpos = Pp_loc.Position.to_lexing inp loc in
+  Lsp.Types.Position.create
+    ~character:(lexpos.pos_cnum - lexpos.pos_bol)
+    ~line:(lexpos.pos_lnum - 1)
+
+let lspsymbol_of_decl contents (decl : BasilIR.AbsBasilIR.decl) =
+  let open Linol_lsp.Types.SymbolKind in
+  let open BasilIR.AbsBasilIR in
+  let inp = Pp_loc.Input.string contents in
+
+  let make_range (s, e) =
+    let s = Pp_loc.Position.of_offset s and e = Pp_loc.Position.of_offset e in
+    let start = lsppos_of_pploc inp s and end_ = lsppos_of_pploc inp e in
+    Lsp.Types.Range.create ~start ~end_
+  in
+
+  let of_gident (GlobalIdent ((s, e), ident)) = (make_range (s, e), ident) in
+  let of_lident (LocalIdent ((s, e), ident)) = (make_range (s, e), ident) in
+  let of_pident (ProcIdent ((s, e), ident)) = (make_range (s, e), ident) in
+
+  let result =
+    match decl with
+    | Decl_Axiom (glb, _, _) -> Some (of_gident glb, Constant, [])
+    | Decl_Mem (_, glb, _, _) -> Some (of_gident glb, Variable, [])
+    | Decl_Var (_, glb, _, _) -> Some (of_gident glb, Variable, [])
+    | Decl_UninterpFun (glb, _, _) -> Some (of_gident glb, Function, [])
+    | Decl_Fun (glb, _, _, _, _) -> Some (of_gident glb, Function, [])
+    | Decl_FunNoType (glb, _, _) -> Some (of_gident glb, Function, [])
+    | Decl_ProgEmpty (_, _) -> None
+    | Decl_ProgWithSpec (_, _, _) -> None
+    | Decl_Proc (proc, _, _, _, _, _, _, _, _, _) ->
+        Some (of_pident proc, Class, [])
+    | Decl_RecType (TypeAssign_Sum (loc, _) :: rest) ->
+        Some (of_lident loc, Struct, [])
+    | Decl_RecType _ -> None (* should be impossible *)
+    | Decl_Type loc -> Some (of_lident loc, Struct, [])
+  in
+
+  (* TODO: do range properly by using sliding window of 2 adjacent decls?? *)
+  match result with
+  | Some ((selectionRange, name), kind, children) ->
+      Some
+        (Linol_lsp.Types.DocumentSymbol.create ~children ~kind ~name
+           ~selectionRange ~range:selectionRange ())
+  | None -> None
+
 class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
   (initial_contents : string) =
   object (self)
@@ -161,6 +208,14 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
           diags)
         (fun () ->
           (is_too_big, debug_highlight, self#tokens (), self#parse_result ()))
+
+    method lspsymbols =
+      one_value_function_cache
+        (fun (BasilIR.AbsBasilIR.Module1 decls, contents) ->
+          List.filter_map (lspsymbol_of_decl contents) decls)
+        (fun () -> (self#cst (), contents))
+
+    (** {2 Update methods} *)
 
     method update_contents ?(force = false) new_contents =
       ignore @@ self#cst ();
