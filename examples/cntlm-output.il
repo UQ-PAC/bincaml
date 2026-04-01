@@ -25,7 +25,7 @@ var $R25: bv64;
 var $R26: bv64;
 var $R27: bv64;
 var $R28: bv64;
-var $R29: bv64;<
+var $R29: bv64;
 var $R3: bv64;
 var $R30: bv64;
 var $R31: bv64;
@@ -37,20 +37,21 @@ var $R8: bv64;
 var $R9: bv64;
 var $VF: bv1;
 var $Z25: bv128;
-var $Z26: bv128;<
+var $Z26: bv128;
 var $Z27: bv128;
 var $Z28: bv128;
-var $Z29: bv128;<
+var $Z29: bv128;
 var $Z30: bv128;
-var $Z31: bv128;<
-var $ZF: bv1;<
+var $Z31: bv128;
+var $ZF: bv1;
+var $__BranchTaken: bv1;
 
 prog entry @main_4204352;
 
 proc @main_4204352 () -> ()
-  { .name = "main"; .address = 0x402740; .returnBlock = "main_basil_return_1" }<
+  { .name = "main"; .address = 0x402740; .returnBlock = "main_basil_return_1" }
 [
-  block %main_entry {.address = 0x402740; .originalLabel = "PuweIlQsQpSAE5A95Qp8yg=="} [a<
+  block %main_entry {.address = 0x402740; .originalLabel = "PuweIlQsQpSAE5A95Qp8yg=="} [
     var var1_4204352_bv64: bv64 := 0x0:bv64 { .comment = "op: 0xd10b03ff" };
     var var1_4204352_bv64: bv64 := $R31:bv64 { .comment = "op: 0xd10b03ff" };
     $R31: bv64 := bvadd(bvadd(var1_4204352_bv64:bv64, 0xfffffffffffffd3f:bv64), 0x1:bv64) { .comment = "op: 0xd10b03ff" };

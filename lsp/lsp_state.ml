@@ -3,12 +3,14 @@ module TokenSet = Raw_tokens.TokenSet
 
 type t = {
   contents : string ref;
-  is_too_big : unit -> bool;
+  is_too_big : bool ref;
   notify_back : Linol_lwt.Jsonrpc2.notify_back;
   tokens : unit -> TokenSet.t;
   diagnostics : unit -> Lsp.Types.Diagnostic.t list;
   completions : unit -> Linol.Lsp.Types.CompletionItem.t list;
   debug_highlight : bool ref;
+  parse_result :
+    unit -> (BasilIR.AbsBasilIR.moduleT, Lsp.Types.Diagnostic.t) Result.t;
   cst : unit -> BasilIR.AbsBasilIR.moduleT;
 }
 
@@ -68,56 +70,14 @@ let new_state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
     (contents : string) : t =
   let contents = ref contents in
   let debug_highlight = ref false in
+  let is_too_big = ref false in
 
   let lines =
     one_value_function_cache (Fun.compose Array.of_list CCString.lines)
       (fun () -> !contents)
   in
 
-  let is_too_big =
-    one_value_function_cache
-      (fun contents -> String.length contents > 1_000_000)
-      (fun () -> !contents)
-  in
-
   let tokens = one_value_function_cache parse_tokens (fun () -> !contents) in
-
-  let diagnostics =
-    one_value_function_cache
-      (fun (is_too_big, debug_highlight, tokens) ->
-        let start = Lsp.Types.Position.create ~line:0 ~character:0
-        and end_ = Lsp.Types.Position.create ~line:0 ~character:100 in
-        let range = Lsp.Types.Range.create ~start ~end_ in
-        let severity = Lsp.Types.DiagnosticSeverity.Warning in
-
-        let too_big_diag =
-          if is_too_big then
-            [
-              Lsp.Types.Diagnostic.create
-                ~message:
-                  (`String
-                     "File too big! On-keypress Bincaml LSP features are \
-                      disabled. Save the file to manually refresh.")
-                ~range ~severity ();
-            ]
-          else []
-        in
-
-        Logs.app (fun m -> m "making diags");
-        let tokens =
-          Iter.of_set (module TokenSet) tokens
-          |> Iter.filter (fun (tok : Raw_tokens.token_with_pos) ->
-              if (not debug_highlight) && Result.is_ok tok.token then false
-              else true)
-        in
-        let diags =
-          Iter.map to_diagnostic tokens
-          |> Iter.to_list |> List.append too_big_diag
-        in
-        Linol_lwt.spawn (fun () -> notify_back#send_diagnostic diags);
-        diags)
-      (fun () -> (is_too_big (), !debug_highlight, tokens ()))
-  in
 
   let completions =
     one_value_function_cache
@@ -146,18 +106,78 @@ let new_state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
       (fun () -> (tokens (), lines ()))
   in
 
+  let parse_result =
+    one_value_function_cache
+      (fun (tokens, contents) ->
+        let get_token, prev_token = TokenSet.make_token_getter tokens in
+        try Ok (BasilIR.ParBasilIR.pModuleT get_token (Lexing.from_string ""))
+        with e ->
+          let s = Raw_tokens.lsppos_of_position !prev_token.startpos
+          and e = Raw_tokens.lsppos_of_position !prev_token.endpos in
+          let range = Lsp.Types.Range.create ~start:s ~end_:e in
+          let message =
+            Printf.sprintf "Parse error: unexpected token '%s'"
+              (Raw_tokens.source_of_token contents !prev_token)
+            (* (Raw_tokens.show_raw_token (Result.get_ok !prev_token.token)) *)
+          in
+          Error
+            (Lsp.Types.Diagnostic.create ~range ~message:(`String message) ()))
+      (fun () -> (tokens (), !contents))
+  in
   let cst =
     one_value_function_cache
-      (fun contents ->
-        let m = try
-          BasilIR.ParBasilIR.pModuleT BasilIR.LexBasilIR.token
-            (Lexing.from_string contents)
-        with e ->
-          Logs.err (fun m -> m "parse error: %s" (Printexc.get_backtrace ()));
-          BasilIR.AbsBasilIR.Module1 [] in
-          BasilIR.PrintBasilIR.(printTree prtModuleT) m)
-      )
-      (fun () -> !contents)
+      (fun parse_result ->
+        let prev = ref (BasilIR.AbsBasilIR.Module1 []) in
+        match parse_result with
+        | Ok (BasilIR.AbsBasilIR.Module1 decls as cst) ->
+            Logs.app (fun m -> m "new cst with %d decls" (List.length decls));
+            prev := cst;
+            cst
+        | Error _ ->
+            Logs.app (fun m -> m "had parse error, keeping old cst");
+            !prev)
+      (fun () -> parse_result ())
+  in
+
+  let diagnostics =
+    one_value_function_cache
+      (fun (is_too_big, debug_highlight, tokens, parse_result) ->
+        let start = Lsp.Types.Position.create ~line:0 ~character:0
+        and end_ = Lsp.Types.Position.create ~line:0 ~character:100 in
+        let range = Lsp.Types.Range.create ~start ~end_ in
+        let severity = Lsp.Types.DiagnosticSeverity.Warning in
+
+        let too_big_diag =
+          if is_too_big then
+            [
+              Lsp.Types.Diagnostic.create
+                ~message:
+                  (`String
+                     "File too big! On-keypress Bincaml LSP features are \
+                      disabled. Save the file to manually refresh.")
+                ~range ~severity ();
+            ]
+          else []
+        in
+
+        let parse_diag =
+          match parse_result with Error e -> [ e ] | Ok _ -> []
+        in
+
+        Logs.app (fun m -> m "making diags");
+        let tokens =
+          Iter.of_set (module TokenSet) tokens
+          |> Iter.filter (fun (tok : Raw_tokens.token_with_pos) ->
+              if (not debug_highlight) && Result.is_ok tok.token then false
+              else true)
+        in
+        let diags =
+          Iter.map to_diagnostic tokens
+          |> Iter.to_list |> List.append too_big_diag |> List.append parse_diag
+        in
+        Linol_lwt.spawn (fun () -> notify_back#send_diagnostic diags);
+        diags)
+      (fun () -> (!is_too_big, !debug_highlight, tokens (), parse_result ()))
   in
   {
     contents;
@@ -167,9 +187,11 @@ let new_state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
     debug_highlight;
     diagnostics;
     completions;
+    parse_result;
     cst;
   }
 
 let update_contents ?(force = false) (st : t) contents =
   ignore @@ st.cst ();
-  if force || not (st.is_too_big ()) then st.contents := contents
+  st.is_too_big := String.length contents > 1_000_000;
+  if force || not !(st.is_too_big) then st.contents := contents

@@ -1,12 +1,11 @@
-memory $stack : (bv64 -> <<<<<<<<<<<<< bv8);
+memory shared $mem : (bv64 -> bv8);
+memory $stack : (bv64 -> bv8);
 var $BTypeNext: bv2;
 var $CF: bv1;
 var $NF: bv1;
 var $R0: bv64;
 var $R1: bv64;
-var $R10: bv64; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< a -         b
-
-<<<<<<<
+var $R10: bv64;
 var $R11: bv64;
 var $R12: bv64;
 var $R16: bv64;
@@ -44,9 +43,11 @@ var $Z7: bv128;
 var $ZF: bv1;
 var $_PC: bv64;
 var $__BranchTaken: bv1;
+
 prog entry @main_4197696;
+
 proc @main_4197696 () -> ()
-  { .name = "main"; .address = 0x400d40; .returnBlock = "main_basil_return_1" }
+  { 2 }
   require eq($_PC:bv64, 0x400d40:bv64)
   ensures eq($_PC:bv64, old($R30:bv64))
 [
@@ -81,7 +82,7 @@ proc @getpid () -> ()
 
 proc @exit () -> ()
   { .name = "exit" };
-<-
+
 
 proc @exitcode_4198816 () -> ()
   { .name = "exitcode"; .address = 0x4011a0; .returnBlock = "exitcode_basil_return_1" }

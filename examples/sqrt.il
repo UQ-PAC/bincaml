@@ -3,7 +3,7 @@ prog entry @Sqrt_4196228;
 proc @Sqrt_4196228(R0_in:bv64, R31_in:bv64)  -> (R0_out:bv64, R1_out:bv64) { .address = 4196228;
     .name = "Sqrt"; .returnBlock = "Sqrt_return" }
   modifies $stack:(bv64->bv8)
-  captures $stack:(bv64->bv8)$stack
+  captures $stack:(bv64->bv8)
 
 [
    block %Sqrt_entry [

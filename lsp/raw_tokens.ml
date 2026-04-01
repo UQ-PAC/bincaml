@@ -226,7 +226,38 @@ module TokenSet = struct
     find_last_opt (fun x -> compare_elt x dummy <= 0) set
     |> CCOption.filter (fun tok ->
         lsprange_contains (lsprange_of_token tok) lsppos)
+
+  let make_token_getter set =
+    let rest = ref (to_seq set) in
+    let prev =
+      ref
+        (error_token
+           ~startpos:{ pos_fname = ""; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 }
+           ())
+    in
+    let rec f =
+     fun arg ->
+      match !rest () with
+      | Nil -> failwith "no more tokens"
+      | Cons (x, newrest) -> (
+          rest := newrest;
+          match x.token with
+          | Error _ -> f arg
+          | Ok tok ->
+              prev := x;
+              tok)
+    in
+    (f, prev)
 end
+
+let source_of_token contents (x : token_with_pos) =
+  let inp = Pp_loc.Input.string contents in
+  let s, e =
+    (Pp_loc.Position.of_lexing x.startpos, Pp_loc.Position.of_lexing x.endpos)
+  in
+  let offset = Pp_loc.Position.to_offset inp s in
+  let len = Pp_loc.Position.to_offset inp e - offset in
+  String.sub contents offset len
 
 let ident_of_token (x : token_with_pos) =
   match x.token with
@@ -263,7 +294,9 @@ let rec next_token ?err_token (buf : Lexing.lexbuf) () : token_with_pos list =
 
 let extract_all_tokens buf =
   Iter.flat_map_l (next_token buf) (Iter.repeat ())
-  |> Iter.take_while (function { token = Ok TOK_EOF } -> false | _ -> true)
+  |> Iter.map_while (function
+    | { token = Ok TOK_EOF } as tok -> `Return tok
+    | tok -> `Yield tok)
 
 let render_token_line_bufs tokens linebuf =
   List.iteri
