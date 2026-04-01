@@ -81,6 +81,18 @@ let transform_free p =
                  ])
               (bvconst live);
           ];
+      ensures =
+        spec.ensures
+        @ [
+            binexp ~op:`EQ
+              (rvar Globals.mem_encoding)
+              (Calls.alloc_live_update
+                 [
+                   old @@ rvar Globals.mem_encoding;
+                   Calls.addr_alloc [ old @@ rvar Globals.mem_encoding; r 0 ];
+                   BasilExpr.bvconst dead;
+                 ]);
+          ];
       modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
     }
 
@@ -92,12 +104,13 @@ let transform_stmt (s : Program.stmt) =
           Stmt.Instr_Assert
             {
               body =
-                BasilExpr.(Calls.valid_access
-                  [
-                    rvar Globals.mem_encoding;
-                    addr;
-                    bv_of_int ~size:64 (size / 8);
-                  ];)
+                BasilExpr.(
+                  Calls.valid_access
+                    [
+                      rvar Globals.mem_encoding;
+                      addr;
+                      bv_of_int ~size:64 (size / 8);
+                    ]);
             }
         in
         match Var.name rhs with "$mem" -> [ valid_assert; s ] | _ -> [ s ])
@@ -119,7 +132,7 @@ let transform_stmt (s : Program.stmt) =
     | _ -> [ s ])
   |> List.to_iter
 
-let transform_proc (entry) (p : Program.proc) =
+let transform_proc entry (p : Program.proc) =
   let p =
     Procedure.map_blocks_nondet
       (fun (i, b) -> Block.flat_map ~phi:Fun.id transform_stmt b)

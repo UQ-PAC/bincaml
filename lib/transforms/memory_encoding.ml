@@ -15,12 +15,16 @@ end
 module Calls = struct
   open BasilExpr
 
+  (** [addr_is_heap args] checks if an address belongs to the heap. args(0) is
+      the memory encoding object. args(1) is the address to check. *)
   let addr_is_heap args =
     apply_fun
       ~func:
         (rvar (Var.create "me_addr_is_heap" ~scope:Var.Global Types.Boolean))
       args
 
+  (** [alloc_base args] returns the base address of a supplied allocation id.
+      args(0) is the memory encoding object. args(1) is the allocation id. *)
   let alloc_base args =
     apply_fun
       ~func:
@@ -28,6 +32,9 @@ module Calls = struct
            (Var.create "me_alloc_base" ~scope:Var.Global (Types.Bitvector 64)))
       args
 
+  (** [alloc_live args] returns the liveness of an allocation. Returns value is
+      0 for fresh, 1 for live, and 2 for dead, as a bv3. args(0) is the memory
+      encoding object. args(1) is the allocation id. *)
   let alloc_live args =
     apply_fun
       ~func:
@@ -35,6 +42,8 @@ module Calls = struct
            (Var.create "me_alloc_live" ~scope:Var.Global (Types.Bitvector 2)))
       args
 
+  (** [alloc_size args] returns the size of an allocation. args(0) is the memory
+      encoding object. args(1) is the allocation id. *)
   let alloc_size args =
     apply_fun
       ~func:
@@ -42,6 +51,8 @@ module Calls = struct
            (Var.create "me_alloc_size" ~scope:Var.Global (Types.Bitvector 64)))
       args
 
+  (** [addr_alloc args] returns the allocation id of an address. args(0) is the
+      memory encoding object. args(1) is the address. *)
   let addr_alloc args =
     apply_fun
       ~func:
@@ -49,6 +60,8 @@ module Calls = struct
            (Var.create "me_addr_alloc" ~scope:Var.Global (Types.Bitvector 64)))
       args
 
+  (** [addr_offset args] returns the offset an address is into its allocation.
+      args(0) is the memory encoding object. args(1) is the address. *)
   let addr_offset args =
     apply_fun
       ~func:
@@ -56,6 +69,9 @@ module Calls = struct
            (Var.create "me_addr_offset" ~scope:Var.Global (Types.Bitvector 64)))
       args
 
+  (** [alloc_size_update args] returns a new memory encoding with the size of an
+      allocation updated. args(0) is the memory encoding object. args(1) is the
+      allocation id. args(2) is the new size. *)
   let alloc_size_update args =
     apply_fun
       ~func:
@@ -64,6 +80,9 @@ module Calls = struct
               (Types.Variable "MemEncoding")))
       args
 
+  (** [alloc_live_update args] returns a new memory encoding with the liveness
+      of an allocation updated. args(0) is the memory encoding object. args(1)
+      is the allocation id. args(2) is the new liveness value as a bv3. *)
   let alloc_live_update args =
     apply_fun
       ~func:
@@ -72,6 +91,9 @@ module Calls = struct
               (Types.Variable "MemEncoding")))
       args
 
+  (** [allocate args] allocates space at a size, returning the updated memory
+      encoding. args(0) is the memory encoding object. args(1) is the address
+      being allocated at. args(2) is the size of the allocation. *)
   let allocate args =
     apply_fun
       ~func:
@@ -80,18 +102,24 @@ module Calls = struct
               (Types.Variable "MemEncoding")))
       args
 
+  (** [can_alloc args] Returns whether an alloc, performed by [allocate], is
+      valid/allowed. args(0) is the memory encoding object. args(1) is the
+      target address. args(2) is the size of the allocation. *)
   let can_alloc args =
     apply_fun
       ~func:
         (rvar (Var.create "me_can_allocate" ~scope:Var.Global Types.Boolean))
       args
 
+  (** [init_encoding args] Returns if a memory encoding is initialized.
+      args(0) is the memory encoding. *)
   let init_encoding args =
     apply_fun
       ~func:
         (rvar (Var.create "me_init_encoding" ~scope:Var.Global Types.Boolean))
       args
 
+    (** [valid_access args] Checks if an access is valid. args(0) is the memory encoding object. args(1) is the address being accessed. args(2) is the size of the access in bytes. *)
   let valid_access args =
     apply_fun
       ~func:
