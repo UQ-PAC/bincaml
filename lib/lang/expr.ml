@@ -469,13 +469,13 @@ module BasilExpr = struct
             let _, rtype = Types.uncurry (Var.typ name) in
             text (Var.name name)
             ^+ binding ^+ text ":"
-            ^+ text (Types.to_string rtype)
+            ^+ text (Types.to_string_rexp rtype)
             ^+ text "=" ^+ bracket "(" in_body ")"
         | name, { this = Some e } ->
             let rtype = Var.typ name in
             text (Var.name name)
             ^+ attrib ^+ text ":"
-            ^+ text (Types.to_string rtype)
+            ^+ text (Types.to_string_rexp rtype)
             ^+ text "=" ^ bracket "(" e ")"
         | _ -> failwith "undefined ")
     in
@@ -510,7 +510,7 @@ module BasilExpr = struct
         return (text op ^ a ^ text " " ^ binding)
     | Lambda { bound_vars; in_body; attrib } -> pass ()
     | Let { bound_vars; in_body; attrib } -> pass ()
-    | RVar { id; attrib } -> return (text (Var.to_string id) ^ a)
+    | RVar { id; attrib } -> return (text (Var.name id) ^ a)
     | Constant { const } -> return (text (AllOps.to_string const) ^ a)
     | UnaryExpr { op = `ZeroExtend bits; arg = { this = Some arg } } ->
         return
@@ -526,24 +526,15 @@ module BasilExpr = struct
         return
           (fill nil
              [ text "extract" ^ a ^ textpf "(%d,%d, " hi lo ^ e ^ text ")" ])
-    | UnaryExpr { op = `FACCESS offset; arg = { this = Some arg } } ->
-        return
-          (fill
-             (text "," ^ newline)
-             [ text "faccess" ^ a ^ (textpf "(\"%s\"") offset; arg ^ text ")" ])
+    | UnaryExpr { op = `ReadField field; arg = { this = Some arg } } ->
+        return (arg ^ text "." ^ text field)
     | BinaryExpr
         {
-          op = `FSET offset;
-          arg1 = { this = Some arg1 };
-          arg2 = { this = Some arg2 };
+          op = `WriteField field;
+          arg1 = { this = Some r };
+          arg2 = { this = Some vl };
         } ->
-        return
-          (fill
-             (text "," ^ newline)
-             [
-               text "fset" ^ a ^ (textpf "(\"%s\"") offset;
-               arg1 ^ text ", " ^ arg2 ^ text ")";
-             ])
+        return @@ bracket "(" (r ^ text "." ^ text field ^+ text "<-" ^+ vl) ")"
     | UnaryExpr { op; arg = { this = Some e } } ->
         return (text (AllOps.to_string op) ^ a ^ bracket "(" e ")")
     | BinaryExpr
@@ -570,6 +561,25 @@ module BasilExpr = struct
                ^ a
                ^ bracket "(" (fill (text "," ^ newline) [ e; e2 ]) ")";
              ])
+    | ApplyIntrin
+        {
+          op = `Cases;
+          args =
+            [
+              {
+                inner =
+                  Some
+                    (BinaryExpr
+                       {
+                         op = `IfThen;
+                         arg1 = { this = Some cond };
+                         arg2 = { this = Some thn };
+                       });
+              };
+              { this = Some els };
+            ];
+        } ->
+        return (text "if" ^+ cond ^+ text "then" ^+ thn ^+ text "else" ^+ els)
     | ApplyIntrin { op; args = es } when List.for_all FoldN.is_def es ->
         return
           (fill nil
@@ -748,11 +758,11 @@ module BasilExpr = struct
   let zero_extend ?attrib ~n_prefix_bits (e : t) : t =
     unexp ?attrib ~op:(`ZeroExtend n_prefix_bits) e
 
-  let fset ?attrib ~(offset : string) (record : t) (e : t) : t =
-    binexp ?attrib ~op:(`FSET offset) record e
+  let field_store ?attrib ~(field : string) (record : t) (e : t) : t =
+    binexp ?attrib ~op:(`WriteField field) record e
 
-  let faccess ?attrib ~(offset : string) (record : t) : t =
-    unexp ?attrib ~op:(`FACCESS offset) record
+  let field_read ?attrib ~(field : string) (record : t) : t =
+    unexp ?attrib ~op:(`ReadField field) record
 
   let sign_extend ?attrib ~n_prefix_bits (e : t) : t =
     unexp ?attrib ~op:(`SignExtend n_prefix_bits) e
@@ -765,6 +775,9 @@ module BasilExpr = struct
 
   let concat ?attrib (e : t) (f : t) : t =
     applyintrin ?attrib ~op:`BVConcat [ e; f ]
+
+  let ifthenelse ?attrib cond t e =
+    applyintrin ~op:`Cases [ binexp ~op:`IfThen cond t; e ]
 
   let concatl ?attrib (e : t list) : t = applyintrin ?attrib ~op:`BVConcat e
   let forall ?attrib ~bound p = binding ?attrib ~op:`Forall bound p

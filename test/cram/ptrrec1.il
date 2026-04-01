@@ -1,4 +1,6 @@
-var $rec:{("0": (bv32, 0))};
+
+var $rec: struct { field0 : (0, bv32), field1: (32, bv64)} ;
+
 prog entry @main_4196164;
 proc @main_4196164(R0_in:bv64, R10_in:bv64, R11_in:bv64, R12_in:bv64, R13_in:bv64,
    R14_in:bv64, R15_in:bv64, R16_in:bv64, R17_in:bv64, R18_in:bv64, R1_in:bv64,
@@ -12,8 +14,8 @@ proc @main_4196164(R0_in:bv64, R10_in:bv64, R11_in:bv64, R12_in:bv64, R13_in:bv6
 [
    block %main_entry [
      var as:ptr(bv64, bv64) := ptradd(R31_in:bv64, R0_in:bv64);
-     var af:bv32 := faccess("0", $rec:{("0": (bv32, 0))});
-     $rec:{("0": (bv32, 0))} := fset("0", $rec:{("0": (bv32, 0))}, af:bv32);
+     var af:bv32 := bvadd(1:bv32, $rec.field0);
+     $rec:{("0": (bv32, 0))} := $rec.field0 <- af:bv32;
      goto (%main_return);
    ];
    block %main_return [

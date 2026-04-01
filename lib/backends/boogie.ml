@@ -38,6 +38,8 @@ let rec type_to_string (t : Types.t) =
   | Types.Bitvector i -> String.cat "bv" (Int.to_string i)
   | Types.Map (i, o) ->
       String.concat "" [ "["; type_to_string i; "]"; type_to_string o ]
+  | Types.Variable s -> s
+  | Types.Sort (s, vs) -> s
   | t ->
       raise
         (BoogieException (String.cat "Unsupported type" (Types.to_string t)))
@@ -66,6 +68,7 @@ let pretty_const (c : Lang.Ops.AllOps.const) =
   | `Record _ -> raise (BoogieException "records unsupported by boogie backend")
   | `Pointer _ ->
       raise (BoogieException "pointers unsupported by boogie backend")
+  | `Sort _ -> raise (BoogieException "const sorts unsupported by boogie backend")
 
 let pretty_call_args_no_brackets (args : Containers_pp.t list) =
   let open Containers_pp in
@@ -90,6 +93,8 @@ let pretty_binary_expr (op : Lang.Ops.AllOps.binary) (ty1, arg1) (ty2, arg2)
   let open Containers_pp in
   match op with
   | `MapAccess -> arg1 ^ bracket "[" arg2 "]"
+  | `WriteField s ->
+      arg1 ^ text "->" ^ bracket "(" (text s ^+ text ":=" ^+ arg2) ")"
   | _ -> (
       match Transforms.Boogie_prepass.Builtins.name op [ ty1; ty2; t ] with
       | Function name -> text name ^ pretty_call_args [ arg1; arg2 ]
@@ -165,7 +170,7 @@ and pretty_attribute_map (key : string)
         "}")
   |> append_sp
 
-and pretty_triggers attrib =
+and pretty_triggers (attrib : Lang.Program.e Lang.Attrib.t option) =
   let open Containers_pp in
   Lang.Attrib.find_opt ".triggers" attrib
   |> Option.map (fun attrib ->
@@ -173,6 +178,7 @@ and pretty_triggers attrib =
       @@ List.map (fun b -> bracket "{" b "}")
       @@ pretty_attribute attrib)
   |> Option.get_or ~default:(text "")
+  (* Option.map (Lang.Attrib.attrib_pretty Lang.Expr.BasilExpr.pretty) attrib |> Option.get_or ~default:(text "MAGIC") *)
 
 and pretty_binding_expr ?(attrib : Lang.Program.e Lang.Attrib.t option) bound
     in_body =
@@ -196,7 +202,7 @@ and pretty_expr_alg
         | `Exists -> "exists"
         | `Lambda -> "lambda"
       in
-      bracket "(" (op ^+ pretty_binding_expr bound_vars in_body) ")"
+      bracket "(" (op ^+ pretty_binding_expr ?attrib bound_vars in_body) ")"
   | UnaryExpr { op; arg } -> pretty_unary_expr op arg (type_of e)
   | BinaryExpr { op; arg1; arg2 } -> pretty_binary_expr op arg1 arg2 (type_of e)
   | ApplyIntrin { op; args } -> pretty_apply_intrinsic op args (type_of e)
@@ -225,6 +231,26 @@ let pretty_function_body funcname (e : Lang.Program.e) =
               (Var.to_string funcname)
               (Lang.Expr.BasilExpr.to_string e)))
 
+let pretty_variant_declaration (v : Types.variant) =
+  let open Containers_pp in
+  text v.variant
+  ^ bracket "("
+      (append_l
+         ~sep:(text "," ^ sp)
+         (List.map
+            (fun (f : Types.field) ->
+              text f.field ^ text ":" ^+ text (type_to_string f.typ))
+            v.fields))
+      ")"
+
+let pretty_type_declaration (binding : string) (typ : Types.t) =
+  let open Containers_pp in
+  match typ with
+  | Types.Sort (s, vs) ->
+      text "datatype" ^+ text binding
+      ^+ bracket "{" (append_sp (List.map pretty_variant_declaration vs)) "}"
+  | _ -> raise (BoogieException "Unsupported type declaration")
+
 let pretty_declaration (d : Lang.Program.declaration) =
   let open Containers_pp in
   let open Containers_pp.Infix in
@@ -233,6 +259,11 @@ let pretty_declaration (d : Lang.Program.declaration) =
       pretty_variable_declaration binding
   | Lang.Program.Function { binding; attrib; definition = Function t } ->
       let func_body, return_type = pretty_function_body binding t in
+
+      (* Ideally use above return type
+       * but unfortunately curry will uncurry returned maps... :( *) 
+      let return_type = Lang.Expr.BasilExpr.type_of t in
+      let return_type = text @@ type_to_string return_type in
 
       text "function"
       ^+ pretty_attribute_map ".boogie" attrib
@@ -258,9 +289,7 @@ let pretty_declaration (d : Lang.Program.declaration) =
           ")"
       ^ bracket " returns (" (text (type_to_string rt)) ")"
       ^ text ";"
-  | Lang.Program.Type _ ->
-      raise
-        (BoogieException "generation of boogie datatypes is unsupported for now")
+  | Lang.Program.Type { binding; typ } -> pretty_type_declaration binding typ
 
 let rec pretty_statement (s : Lang.Program.stmt) =
   let open Containers_pp in
@@ -395,15 +424,13 @@ let pretty_procedure_impl (p : Lang.Program.proc) =
   let in_params = Lang.Procedure.formal_in_params p in
   let out_params = Lang.Procedure.formal_out_params p in
   let local_decls =
-    if StringMap.cardinal in_params + StringMap.cardinal out_params > 0 then
-      Lang.Procedure.local_decls p
-      |> Hashtbl.to_list
-      |> List.filter (fun (k, v) ->
-          (Option.is_none @@ StringMap.get k in_params)
-          && (Option.is_none @@ StringMap.get k out_params))
-      |> List.map (fun (k, v) -> pretty_variable_declaration v)
-      |> join_lines_end
-    else text ""
+    Lang.Procedure.local_decls p
+    |> Hashtbl.to_list
+    |> List.filter (fun (k, v) ->
+        (Option.is_none @@ StringMap.get k in_params)
+        && (Option.is_none @@ StringMap.get k out_params))
+    |> List.map (fun (k, v) -> pretty_variable_declaration v)
+    |> join_lines_end
   in
   let blocks =
     Lang.Procedure.iter_blocks_topo_fwd p

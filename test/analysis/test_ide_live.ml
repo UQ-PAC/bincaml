@@ -93,9 +93,9 @@ proc @main (x_in:bv64) -> ()
   print_lives results main;
   [%expect {|
     @main
+    addr:bv64
     $mem:(bv64->bv8)
     x_in:bv64
-    addr:bv64
     |}]
 
 let%expect_test "simple_call" =
