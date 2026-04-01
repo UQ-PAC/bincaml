@@ -17,7 +17,6 @@
 
 module Lsp = Linol.Lsp
 module Lsp_state = Bincaml_lsp.Lsp_state
-module TokenSet = Bincaml_lsp.Raw_tokens.TokenSet
 
 (* Lsp server class
 
@@ -37,7 +36,7 @@ class lsp_server =
     inherit Linol_lwt.Jsonrpc2.server as super
 
     (* one env per document *)
-    val buffers : (Lsp.Types.DocumentUri.t, Lsp_state.t) Hashtbl.t =
+    val buffers : (Lsp.Types.DocumentUri.t, Lsp_state.state) Hashtbl.t =
       Hashtbl.create 32
 
     method get uri = Hashtbl.find buffers uri
@@ -54,11 +53,11 @@ class lsp_server =
       let st =
         match Hashtbl.find_opt buffers uri with
         | Some st ->
-            Lsp_state.update_contents ~force st contents;
+            st#update_contents ~force contents;
             st
-        | None -> Lsp_state.new_state ~notify_back contents
+        | None -> new Lsp_state.state ~notify_back ~uri contents
       in
-      ignore @@ st.diagnostics ();
+      ignore @@ st#diagnostics ();
       Hashtbl.replace buffers uri st
 
     (* We now override the [on_notify_doc_did_open] method that will be called
@@ -120,8 +119,8 @@ class lsp_server =
           notify_back#set_uri uri;
           let st = self#get uri in
 
-          st.debug_highlight := not !(st.debug_highlight);
-          ignore @@ st.diagnostics ();
+          st#toggle_debug_highlight;
+          ignore @@ st#diagnostics ();
           Lwt.return @@ Yojson.Safe.(`Null)
       | _ ->
           super#on_req_execute_command ~notify_back ~id ~workDoneToken cmd args
@@ -137,7 +136,7 @@ class lsp_server =
       Logs.app (fun m -> m "req completion");
       let st = self#get uri in
 
-      let tokens = st.tokens () in
+      let tokens = st#tokens () in
 
       match
         Bincaml_lsp.Raw_tokens.token_at_pos tokens pos
@@ -147,7 +146,7 @@ class lsp_server =
       | Some prefix ->
           let prefix = String.sub prefix 0 1 in
           let completions =
-            st.completions ()
+            st#completions ()
             |> List.filter (fun (comp : Linol_lwt.CompletionItem.t) ->
                 String.starts_with ~prefix comp.label
                 && comp.data
