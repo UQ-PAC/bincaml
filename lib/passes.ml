@@ -146,6 +146,13 @@ module PassManager = struct
       doc = "Remove blocks unreachable from entry";
     }
 
+  let irreducible_loop =
+    {
+      name = "irreducible-loops";
+      apply = Proc Transforms.Irreducible_loop.transform;
+      doc = "Remove blocks unreachable from entry";
+    }
+
   let full_ssa =
     {
       name = "ssa";
@@ -210,6 +217,7 @@ module PassManager = struct
 
   let passes =
     [
+      irreducible_loop;
       cleanup_cfg;
       dfg_bool;
       dfg_ival_wint_product;

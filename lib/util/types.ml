@@ -84,6 +84,8 @@ let mk_adt name (variants : (string * field list) list) =
   Sort
     (name, variants |> List.map (fun (variant, fields) -> { variant; fields }))
 
+let bv_min_width_for_nat n = Bitvector (Z.of_int n |> Z.numbits)
+
 let struct_field field_name record : record_field =
   match record with
   | Struct fields -> (

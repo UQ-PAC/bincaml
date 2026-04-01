@@ -3,6 +3,7 @@
  (name transforms)
  (flags -w -27)
  (modules
+  irreducible_loop
   ssa
   cf_tx
   livevars
