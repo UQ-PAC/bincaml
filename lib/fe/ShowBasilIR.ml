@@ -306,11 +306,13 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.Expr_SignExtend (openparen, intval, expr, closeparen) -> s2s "Expr_SignExtend" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Extract (openparen, intval0, intval, expr, closeparen) -> s2s "Expr_Extract" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval0  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Concat (openparen, exprs, closeparen) -> s2s "Expr_Concat" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showExpr exprs  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
-  |    AbsBasilIR.Expr_FSet (openparen, str, expr0, expr, closeparen) -> s2s "Expr_FSet" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showStr str  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
-  |    AbsBasilIR.Expr_FAccess (openparen, str, expr, closeparen) -> s2s "Expr_FAccess" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showStr str  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.Expr_Ite (expr0, expr1, expr) -> s2s "Expr_Ite" >> c2s ' ' >> c2s '(' >> showExpr expr0  >> s2s ", " >>  showExpr expr1  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_Match (expr, openparen, cases, closeparen) -> s2s "Expr_Match" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showCase cases  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Cases (openparen, cases, closeparen) -> s2s "Expr_Cases" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showCase cases  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> s2s "Expr_Paren" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.Expr_Field (expr, bident) -> s2s "Expr_Field" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showBIdent bident >> c2s ')'
+  |    AbsBasilIR.Expr_FieldSet (expr0, localident, expr) -> s2s "Expr_FieldSet" >> c2s ' ' >> c2s '(' >> showExpr expr0  >> s2s ", " >>  showLocalIdent localident  >> s2s ", " >>  showExpr expr >> c2s ')'
+  |    AbsBasilIR.SortValRec (localident, beginrec, fieldassigns, endrec) -> s2s "SortValRec" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showBeginRec beginrec  >> s2s ", " >>  showList showFieldAssign fieldassigns  >> s2s ", " >>  showEndRec endrec >> c2s ')'
 
 
 and showLambdaDef (e : AbsBasilIR.lambdaDef) : showable = match e with
@@ -338,6 +340,10 @@ and showUnOp (e : AbsBasilIR.unOp) : showable = match e with
 and showCase (e : AbsBasilIR.case) : showable = match e with
        AbsBasilIR.CaseCase (expr0, expr) -> s2s "CaseCase" >> c2s ' ' >> c2s '(' >> showExpr expr0  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.CaseDefault expr -> s2s "CaseDefault" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
+
+
+and showFieldAssign (e : AbsBasilIR.fieldAssign) : showable = match e with
+       AbsBasilIR.FieldAssign1 (localident, expr) -> s2s "FieldAssign1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showExpr expr >> c2s ')'
 
 
 and showEqOp (e : AbsBasilIR.eqOp) : showable = match e with

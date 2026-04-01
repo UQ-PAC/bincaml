@@ -9,6 +9,8 @@
   cleanup_cfg
   may_read_uninit
   type_check
+  memory_encoding
+  memory_specification
   function_summaries
   boogie_prepass
   gamma_vars)
