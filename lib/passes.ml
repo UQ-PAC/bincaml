@@ -243,6 +243,11 @@ module PassManager = struct
             (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
       };
+      {
+          name = "copy-prop";
+          apply = Prog (Analysis.Inter_copy.test_transform);
+          doc = "";
+      }
     ]
 
   let print_passes =

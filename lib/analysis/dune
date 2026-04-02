@@ -16,7 +16,8 @@
   known_bits
   tnum_wint_reduced_product
   known_bits
-  wp_dual)
+  wp_dual
+  inter_copy)
  (libraries
   intPQueue
   patricia-tree

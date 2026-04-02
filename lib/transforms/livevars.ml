@@ -159,6 +159,7 @@ module InterprocDSE = struct
           | _ -> (false, s)
         in
         if omit then acc else new_s :: acc)
+      (* TODO remove dead phis *)
       ~phi:(fun x a -> x)
       ~init:[] block
     |> Vector.of_list
