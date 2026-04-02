@@ -268,8 +268,8 @@ module LinearDomain = struct
     | Lambda -> Iter.empty
     | Label _ -> Iter.singleton (Label lhs, IdEdge)
 
-  (* Nothing is initially const, and there's no point propagating top *)
   let init_p2 (proc : Program.proc) =
+    (* TODO could enforce in vars to be const based on requires clause *)
     Procedure.formal_in_params proc
     |> StringMap.values
     |> Iter.map (fun v -> (v, Value.Top))
