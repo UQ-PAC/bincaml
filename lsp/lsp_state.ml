@@ -102,6 +102,23 @@ let children_lspsymbols_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
         ~range:selectionRange ~children:[] ())
   |> Iter.to_list
 
+let elided_of_decl (decl : BasilIR.AbsBasilIR.decl) =
+  let open BasilIR.AbsBasilIR in
+  let ellipsis = Expr_Local (LocalUntyped (LocalIdent ((0, 0), "..."))) in
+  match decl with
+  | Decl_Axiom (a, b, c) -> decl
+  | Decl_Mem (a, b, c, d) -> decl
+  | Decl_Var (a, b, c, d) -> decl
+  | Decl_UninterpFun (a, b, c) -> decl
+  | Decl_Fun (a, b, c, d, e) -> Decl_Fun (a, b, c, d, ellipsis)
+  | Decl_FunNoType (a, b, c) -> Decl_FunNoType (a, b, ellipsis)
+  | Decl_ProgEmpty (a, b) -> decl
+  | Decl_ProgWithSpec (a, b, c) -> decl
+  | Decl_Proc (a, b, c, d, e, f, g, h, i, j) ->
+      Decl_Proc (a, b, c, d, e, f, g, AttribSet_Empty, i, ProcDef_Empty)
+  | Decl_RecType _ -> decl
+  | Decl_Type _ -> decl
+
 let lspsymbol_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
   let open Linol_lsp.Types.SymbolKind in
   let open BasilIR.AbsBasilIR in
@@ -133,12 +150,30 @@ let lspsymbol_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
   |> function
   | Some ((selectionRange, name), kind) ->
       let children = children_lspsymbols_of_decl input decl in
+      let detail =
+        elided_of_decl decl |> BasilIR.PrintBasilIR.(printTree prtDecl)
+      in
       Some
-        (Linol_lsp.Types.DocumentSymbol.create ~children ~kind ~name
+        (Linol_lsp.Types.DocumentSymbol.create ~children ~kind ~name ~detail
            ~selectionRange ~range:selectionRange ())
   | None -> None
 
-let lspsymbols_of_decls input decls = 2
+let lspsymbols_of_decls ~len input decls =
+  let open Linol_lsp.Types.DocumentSymbol in
+  let end_ = Pp_loc.Position.of_offset len |> lsppos_of_pploc input in
+
+  decls
+  |> List.filter_map (lspsymbol_of_decl input)
+  |> CCListLabels.fold_right
+       ~f:(fun decl (end_, rest) ->
+         let range = { decl.range with end_ } in
+         (decl.range.start, { decl with range } :: rest))
+       ~init:(end_, [])
+  |> snd
+
+
+let lspsymbol_with_name lspsymbols ident =
+  List.fin
 
 class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
   (initial_contents : string) =
@@ -257,9 +292,9 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
 
     method lspsymbols =
       one_value_function_cache
-        (fun (BasilIR.AbsBasilIR.Module1 decls, contents) ->
-          List.filter_map (lspsymbol_of_decl contents) decls)
-        (fun () -> (self#cst (), self#input ()))
+        (fun (BasilIR.AbsBasilIR.Module1 decls, contents, input) ->
+          lspsymbols_of_decls ~len:(String.length contents) input decls)
+        (fun () -> (self#cst (), contents, self#input ()))
 
     (** {2 Update methods} *)
 
