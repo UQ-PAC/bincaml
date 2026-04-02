@@ -274,7 +274,7 @@ end
 
 include PG
 
-let add_goto p ~(from : ID.t) ~(targets : ID.t list) =
+let add_goto ~(from : ID.t) ~(targets : ID.t list) p =
   let open Vert in
   p
   |> map_graph (fun g ->
@@ -337,6 +337,17 @@ let get_entry_block p =
         assert (List.length id = 1);
         Some (List.hd id))
   with Not_found -> None
+
+let get_returning_blocks p =
+  let open Edge in
+  let open G in
+  graph p |> Option.to_list
+  |> List.flat_map (fun g ->
+      G.pred g Return
+      |> List.filter_map (function
+        | Vert.Begin id -> Some id
+        | End id -> Some id
+        | _ -> None))
 
 (** Get the block for an id
 
@@ -513,23 +524,19 @@ let blocks_succ p i =
   |> Iter.flat_map (fun graph ->
       Iter.from_iter (fun f -> G.iter_succ f graph (End i))
       |> Iter.flat_map (function
-        | Vert.Begin i ->
-            Iter.singleton
-              (i, get_block p i |> Option.get_exn_or "bad cfg sturcture")
+        | Vert.Begin i -> Iter.singleton i
         | Return -> Iter.empty
         | Exit -> Iter.empty
-        | v -> failwith @@ "bad graph structure " ^ Vert.show v))
+        | v -> Iter.empty))
 
 let blocks_pred p i =
   Option.to_iter (graph p)
   |> Iter.flat_map (fun graph ->
       Iter.from_iter (fun f -> G.iter_pred f graph (Begin i))
       |> Iter.flat_map (function
-        | Vert.End i ->
-            Iter.singleton
-              (i, get_block p i |> Option.get_exn_or "bad cfg sturcture")
+        | Vert.End i -> Iter.singleton i
         | Entry -> Iter.empty
-        | v -> failwith @@ "bad graph structure  " ^ Vert.show v))
+        | v -> Iter.empty))
 
 let iter_blocks_topo_fwd p =
   Iter.from_iter (fun f -> fold_blocks_topo_fwd (fun acc a b -> f (a, b)) () p)

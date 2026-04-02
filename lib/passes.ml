@@ -133,7 +133,7 @@ module PassManager = struct
   let sssa =
     {
       name = "simple-ssa";
-      apply = Proc Transforms.Ssa.ssa;
+      apply = Proc (Transforms.Ssa.ssa %> snd);
       doc =
         "Naive SSA transform assuming all variable uses are dominated by \
          definitions from parameters";
@@ -151,6 +151,13 @@ module PassManager = struct
       name = "irreducible-loops";
       apply = Proc Transforms.Irreducible_loop.transform;
       doc = "Remove blocks unreachable from entry";
+    }
+
+  let verify_smt =
+    {
+      name = "verify-procs-smt";
+      apply = Prog Transforms.Verif_smt.check;
+      doc = "Simple smt verification";
     }
 
   let full_ssa =
@@ -189,7 +196,7 @@ module PassManager = struct
       apply = Prog Transforms.Memory_specification.transform;
       doc = "Specifies programs for memory safety";
     }
-  
+
   let intra_function_summaries =
     {
       name = "intra-function-summaries";
@@ -230,6 +237,7 @@ module PassManager = struct
       read_uninit true;
       sssa;
       full_ssa;
+      verify_smt;
       type_check;
       split_memory_encoding;
       memory_specification;
@@ -275,9 +283,9 @@ module PassManager = struct
         doc = "Replaces captured global variables with explicit parameters";
       };
       {
-          name = "gamma-vars";
-          apply = Prog Transforms.Gamma_vars.transform;
-          doc = "Replace gamma expressions with gamma variables";
+        name = "gamma-vars";
+        apply = Prog Transforms.Gamma_vars.transform;
+        doc = "Replace gamma expressions with gamma variables";
       };
     ]
 

@@ -433,7 +433,11 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
   in
   { p with procs; globals }
 
-let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
+let ssa ?blocks ?(skip_observable = true) ?(skip_maps = true)
+    (in_proc : Program.proc) =
+  let blocks =
+    Option.get_or ~default:(Procedure.iter_blocks_topo_fwd in_proc)
+  in
   let in_proc = intro_ssi_assigns in_proc in
   let lives = Livevars.run in_proc in
   let rename r v : Var.t =
@@ -537,10 +541,10 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
       | [] ->
           Hashtbl.add phis block_id VarMap.empty;
           (VarMap.empty, [])
-      | [ (id, _) ] -> (Hashtbl.find st id, [])
+      | [ id ] -> (Hashtbl.find st id, [])
       | inc ->
           let joined_phis =
-            List.map (fun (id, _) -> (id, get_st_pred id)) inc
+            List.map (fun id -> (id, get_st_pred id)) inc
             |> List.fold_left
                  (fun phim (block, rn) ->
                    let rn =
@@ -578,7 +582,7 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
     let renames = Hashtbl.find st block_id in
     if IDSet.mem block_id !delayed_phis then
       Procedure.blocks_succ proc block_id
-      |> Iter.filter (fun (bid, _) ->
+      |> Iter.filter (fun bid ->
           let pred =
             Procedure.G.pred
               (Option.get_exn_or "unreachable" @@ Procedure.graph proc)
@@ -586,7 +590,7 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
           in
           List.length pred > 1)
       |> Iter.fold
-           (fun proc (succ_bid, _) ->
+           (fun proc succ_bid ->
              let eblock =
                Procedure.get_block proc succ_bid
                |> Option.get_exn_or "block not exist"
@@ -627,9 +631,7 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
   in
   let proc = IDSet.fold fixup_delayed !delayed_phis proc in
   let check_bl (block_id, (block : Program.bloc)) =
-    let pred =
-      Procedure.blocks_pred proc block_id |> Iter.map (fun (i, _) -> i)
-    in
+    let pred = Procedure.blocks_pred proc block_id |> Iter.map (fun i -> i) in
     let npred = Iter.length pred in
     block.phis
     |> List.map (fun (p : Var.t Block.phi) ->
@@ -643,7 +645,7 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
   in
   assert (Procedure.iter_blocks_topo_fwd proc |> Iter.for_all check_bl);
   check_ssa ~skip_observable ~skip_maps proc;
-  proc
+  (st, proc)
 
 let ssa_prog ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
-  { p with procs = IDMap.map (ssa ~skip_observable ~skip_maps) p.procs }
+  { p with procs = IDMap.map (ssa ~skip_observable ~skip_maps %> snd) p.procs }

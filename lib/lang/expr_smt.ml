@@ -88,6 +88,35 @@ module SMTLib2 = struct
 
   let run (e : 'e t) = e empty
 
+  let smt_norm_rewriter e =
+    let open AbstractExpr in
+    let open BasilExpr in
+    let open Bitvec in
+    let e = AbstractExpr.map fst e in
+    match e with
+    | ApplyIntrin { op = `AND; args = [] } ->
+        replace [%here] @@ BasilExpr.boolconst true
+    | ApplyIntrin { op = `OR; args = [] } ->
+        replace [%here] @@ BasilExpr.boolconst false
+    | ApplyIntrin { op = `Cases; args } -> (
+        match List.rev args with
+        | [ a ] -> replace [%here] (BasilExpr.fix a)
+        | h :: tl ->
+            replace [%here]
+              (List.fold_left
+                 (fun acc b ->
+                   match b with
+                   | BinaryExpr { op = `IfThen; arg1; arg2 } ->
+                       BasilExpr.ifthenelse arg1 arg2 acc
+                   | o ->
+                       (* all other functions are total*)
+                       fix o)
+                 (BasilExpr.fix h) tl)
+        | _ -> Keep)
+    | _ -> Keep
+
+  let norm_expr e = BasilExpr.rewrite_typed_two smt_norm_rewriter e
+
   let extract s =
     let* b = get s in
     return @@ to_sexp b
@@ -174,6 +203,7 @@ module SMTLib2 = struct
     | `BoolNOT -> atom "not"
     | `NEQ -> failwith "undef"
     | `AND -> atom "and"
+    | `IMPLIES -> atom "=>"
     | `OR -> atom "or"
     | #Ops.AllOps.unary as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.const as o -> atom @@ Ops.AllOps.to_string o
@@ -250,6 +280,16 @@ module SMTLib2 = struct
         let* l = l in
         let* r = r in
         return @@ list [ of_op o; l; r ]
+    | ApplyIntrin { op = `Cases; args } ->
+        let* args = sequence args in
+        let cond, thn, els =
+          match args with
+          | [ condition; `List [ `Atom "case"; arg ]; els ] ->
+              (condition, arg, els)
+          | _ -> failwith "unsupp cases"
+        in
+        return @@ Bincaml_util.Smt.Expr.ite cond thn els
+    (* TODO: bool2bv1 *)
     | ApplyIntrin { op = o; args } ->
         let* args = sequence args in
         return (list (of_op o :: args))
@@ -259,8 +299,13 @@ module SMTLib2 = struct
         let* func = func in
         return @@ list (func :: args)
 
-  let of_bexpr e = fst @@ (BasilExpr.cata smt_alg e) empty
-  let bind_of_bexpr e b = BasilExpr.cata smt_alg e b
+  let of_bexpr e =
+    let e = norm_expr e in
+    fst @@ (BasilExpr.cata smt_alg e) empty
+
+  let bind_of_bexpr e b =
+    let e = norm_expr e in
+    BasilExpr.cata smt_alg e b
 
   let trans_decl (decl : Program.declaration) =
     let* x = return () in
@@ -304,7 +349,7 @@ module SMTLib2 = struct
     | Variable v -> failwith "mutable"
 
   let assert_bexpr e =
-    let* s = BasilExpr.cata smt_alg e in
+    let* s = bind_of_bexpr e in
     add_assert s
 
   let push = add_command (list [ atom "push" ])

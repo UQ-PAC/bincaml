@@ -14,7 +14,8 @@
   memory_specification
   function_summaries
   boogie_prepass
-  gamma_vars)
+  gamma_vars
+  verif_smt)
  (libraries
   bincaml.analysis
   patricia-tree

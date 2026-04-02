@@ -459,13 +459,12 @@ module ProcIntra = struct
 
     let find_edge p src dest : edge =
       let open Option in
-      Procedure.blocks_succ p src |> Iter.find_pred (fst %> ID.equal dest)
-      |> function
+      Procedure.blocks_succ p src |> Iter.find_pred (ID.equal dest) |> function
       | Some _ -> (src, dest)
       | _ -> raise Not_found
 
-    let succ p v = Procedure.blocks_succ p v |> Iter.map fst |> Iter.to_list
-    let pred p v = Procedure.blocks_pred p v |> Iter.map fst |> Iter.to_list
+    let succ p v = Procedure.blocks_succ p v |> Iter.to_list
+    let pred p v = Procedure.blocks_pred p v |> Iter.to_list
   end
 
   include Make (BlockGraph)
