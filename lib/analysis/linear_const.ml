@@ -26,21 +26,28 @@ module LinearDomain = struct
   end
 
   type t =
+    (* \x . Bottom *)
     | BotEdge
+    (* \x . x *)
     | IdEdge
+    (* \x . Top *)
     | TopEdge
+    (* Linear (a, b) = \x. a * x + b *)
     | Linear of Bitvec.t * Bitvec.t
+    (* Join (a, b, c) = \x. (a * x + b) join c *)
     | Join of Bitvec.t * Bitvec.t * Value.t
   [@@deriving eq, ord]
 
-  let show = function
-    | BotEdge -> "Bot"
+  let show e =
+    let open Bincaml_util.Unicode in
+    match e with
+    | BotEdge -> bot_char
     | IdEdge -> "Id"
-    | TopEdge -> "Top"
+    | TopEdge -> top_char
     | Linear (a, b) -> "\\x . " ^ Bitvec.show a ^ " * x + " ^ Bitvec.show b
     | Join (a, b, c) ->
-        "\\x . (" ^ Bitvec.show a ^ " * x + " ^ Bitvec.show b ^ ") join "
-        ^ Value.show c
+        "\\x . (" ^ Bitvec.show a ^ " * x + " ^ Bitvec.show b ^ ") " ^ join_char
+        ^ " " ^ Value.show c
 
   let bottom = BotEdge
   let identity = IdEdge
