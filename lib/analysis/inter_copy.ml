@@ -149,6 +149,12 @@ module CopyGraph = struct
       G.empty nodes
 end
 
+type call_info = {
+  callee_id : ID.t;
+  lhs : Var.t StringMap.t;
+  args : Program.e StringMap.t;
+}
+
 module Solver = struct
   let add_phi node_of (phi : Var.t Block.phi) =
     let l = node_of phi.lhs in
@@ -160,7 +166,7 @@ module Solver = struct
     let open Expr.BasilExpr in
     match unfix e with RVar { id } -> Some id | _ -> None
 
-  let add_intra_stmt node_of stmt =
+  let add_intra_stmt callers node_of pid component stmt =
     let open Stmt in
     match stmt with
     | Instr_Assign a ->
@@ -173,9 +179,19 @@ module Solver = struct
                 CopyNode.join v' v
             | None -> ())
           a
+    | Instr_Call c ->
+        (* We at the same time create a list of all callers of each procedure in the scc. *)
+        if List.mem ~eq:ID.equal c.procid component then
+          Hashtbl.update callers
+            ~f:(fun pid l ->
+              let c = { callee_id = pid; lhs = c.lhs; args = c.args } in
+              match l with Some cs -> Some (c :: cs) | None -> Some [ c ])
+            ~k:c.procid
     | _ -> ()
 
-  let solve_component (prog : Program.t)
+  module Worklist = Worklist.Make (ID)
+
+  let solve_component (prog : Program.t) call_graph
       (graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t) component =
     let node_of pid v =
       let vm = Hashtbl.get_or_add graphs ~f:(const VarMap.empty) ~k:pid in
@@ -188,25 +204,67 @@ module Solver = struct
           n
     in
     (* Initialise the graph with all intraprocedural copies *)
+    let callers = Hashtbl.create 10 in
     List.iter
       (fun pid ->
         IDMap.find pid prog.procs |> Procedure.iter_blocks
         |> Iter.iter (fun (bid, b) ->
-            Block.stmts_iter b |> Iter.iter (add_intra_stmt (node_of pid));
+            Block.stmts_iter b
+            |> Iter.iter (add_intra_stmt callers (node_of pid) pid component);
             List.iter (add_phi (node_of pid)) b.phis))
       component;
-    (* I'll do the interproc stuff later *)
-    ()
+    (* The interproc part *)
+    let worklist = Worklist.create () in
+    Worklist.add_list worklist component;
+    while Worklist.non_empty worklist do
+      let pid = Worklist.pop worklist in
+      let proc = IDMap.find pid prog.procs in
+      Procedure.formal_out_params proc
+      |> StringMap.values
+      |> Iter.map (node_of pid)
+      |> Iter.filter_map (fun node ->
+          let leaves = CopyNode.leaves node in
+          (* TODO don't check input vars like this... *)
+          ((not (List.is_empty leaves))
+          && List.for_all
+               (fun (n : CopyNode.t) ->
+                 String.ends_with ~suffix:"_in" @@ Var.name !n.v)
+               leaves)
+          |> flip Option.return_if (node, leaves))
+      |> Iter.iter (fun ((node : CopyNode.t), leaves) ->
+          Hashtbl.get_or callers pid ~default:[]
+          |> List.iter (fun (call : call_info) ->
+              let open List.Traverse (Option) in
+              leaves
+              |> List.map (fun (n : CopyNode.t) ->
+                  StringMap.find (Var.name !n.v) call.args)
+              |> map_m copy_of
+              |> Option.iter (fun leaves ->
+                  match leaves with
+                  | v :: vs ->
+                      if List.for_all (Var.equal v) vs then (
+                        let assigned =
+                          StringMap.find (Var.name !node.v) call.lhs
+                        in
+                        CopyNode.join (node_of call.callee_id v)
+                          (node_of call.callee_id assigned);
+                        (* Update worklist (i'm lazy) *)
+                        Iter.of_list component
+                        |> Iter.filter (fun pid ->
+                            not @@ ID.equal call.callee_id pid)
+                        |> Worklist.add_iter worklist)
+                  | [] -> failwith "leaves should never be empty!")))
+    done
 
   let solve (prog : Program.t) =
     let graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t = Hashtbl.create 100 in
-    Program.CallGraph.make_call_graph prog
-    |> Program.CallGraph.Scc.scc_list
+    let call_graph = Program.CallGraph.make_call_graph prog in
+    Program.CallGraph.Scc.scc_list call_graph
     |> List.map
          (List.filter_map (function
            | Program.CallGraph.Vert.ProcBegin id -> Some id
            | _ -> None))
-    |> List.iter (solve_component prog graphs);
+    |> List.iter (solve_component prog call_graph graphs);
     graphs
 end
 
