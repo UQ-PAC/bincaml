@@ -20,6 +20,8 @@
   test_irreducible_loops
   test_lattice_collections)
  (name analysis_tests)
+ (preprocess
+  (pps ppx_here))
  (libraries
   bincaml.loader
   bincaml.ast
