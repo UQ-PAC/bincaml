@@ -164,4 +164,4 @@ proc @main () -> ()
   IntraAnalysis.A.M.find Procedure.Vert.Entry res
   |> IntraDomain.to_pred |> BasilExpr.to_string |> print_endline;
   [%expect
-    {| booland(eq(bvadd($x:bv64, a:bv64), 0), eq(bvadd(a:bv64, a:bv64), 0)) |}]
+    {| booland(eq(bvadd($x, a), 0), eq(bvadd(a, a), 0)) |}]

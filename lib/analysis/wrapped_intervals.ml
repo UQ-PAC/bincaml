@@ -701,6 +701,7 @@ module WrappedIntervalsValueAbstraction = struct
         if size bv = 0 then top else interval bv bv
     (* NOTE: This kind of thing happens frequently, should I go through all of the fields and make a intervals out of those bvs?*)
     | `Record fields -> top
+    | `Sort _ -> top
 
   let eval_unop (op : Lang.Ops.AllOps.unary) (a, t) rt =
     match t with

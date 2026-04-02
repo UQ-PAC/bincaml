@@ -62,9 +62,9 @@ module IsZeroValueAbstraction = struct
     | `SignExtend _ -> ( match a with Zero -> Zero | _ -> Top)
     | `BVNOT -> ( match a with Zero -> NonZero | _ -> Top)
     | `ZeroExtend size -> a
-    | `Old -> Top
-    | `FACCESS offset -> ( match a with Zero -> Zero | _ -> Top)
-    | `Gamma | `Classification -> Top
+    | `Old | `Gamma | `Classification -> Top
+    (* NOTE: More effort would be needed to be able to say is this one field zero or not *)
+    | `ReadField offset -> ( match a with Zero -> Zero | _ -> Top)
 
   let eval_binop (op : Lang.Ops.AllOps.binary) a b =
     match (op, a, b) with
@@ -110,10 +110,10 @@ module IsZeroValueAbstraction = struct
     | `INTSUB, _, _ -> Top
     | `BVSLT, Zero, Zero -> Zero
     | `BVSLT, _, _ -> Top
-    | `FSET _, Zero, Zero -> Zero
-    | `FSET _, _, NonZero -> NonZero
+    | `WriteField _, Zero, Zero -> Zero
+    | `WriteField _, _, NonZero -> NonZero
     (* Larger refactor would be needed to reason about individual fields *)
-    | `FSET _, _, _ -> Top
+    | `WriteField _, _, _ -> Top
     | #Lang.Ops.Spec.binary, _, _ -> Top
 
   let eval_intrin (op : Lang.Ops.AllOps.intrin) (args : t list) =
