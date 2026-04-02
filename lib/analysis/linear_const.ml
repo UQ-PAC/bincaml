@@ -182,47 +182,68 @@ module LinearDomain = struct
     let open Expr.BasilExpr in
     match e with E (Constant { const = `Bitvector x }) -> Some x | _ -> None
 
-  let extract_expr e =
-    let open Expr.AbstractExpr in
-    let open Expr.BasilExpr in
-    (* this is so dumb... *)
-    match e with
-    (* copy prop *)
-    | E (RVar v) ->
-        Some (IdEdge)
-    (* x + c *)
-    | E (BinaryExpr { op = `BVADD; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); })
-    | E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); })
-    | E (ApplyIntrin { op = `BVADD; args = [E (RVar v); E (Constant { const = `Bitvector a })] })
-    | E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector a }); E (RVar v)] }) ->
-        Some (Linear (Bitvec.one ~size:(Bitvec.size a), a))
-    (* a * x *)
-    | E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); })
-    | E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }) ->
-        Some (Linear (a, Bitvec.zero ~size:(Bitvec.size a)))
-    (* a * x + c *)
-    | E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector b }); arg2 = E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }); })
-    | E (BinaryExpr { op = `BVADD; arg1 = E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }); arg2 = E (Constant { const = `Bitvector b }); })
-    | E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector b }); arg2 = E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }); })
-    | E (BinaryExpr { op = `BVADD; arg1 = E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }); arg2 = E (Constant { const = `Bitvector b }); })
-    | E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector b }); E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); })] })
-    | E (ApplyIntrin { op = `BVADD; args = [E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (RVar v); }); E (Constant { const = `Bitvector b })] })
-    | E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector b }); E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); })] })
-    | E (ApplyIntrin { op = `BVADD; args = [E (BinaryExpr { op = `BVMUL; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector a }); }); E (Constant { const = `Bitvector b })] }) ->
-        Some (Linear (a, b))
-    (* a * (b + c) *)
-    | E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector b }); arg2 = E (RVar v); }); })
-    | E (BinaryExpr { op = `BVMUL; arg1 = E (BinaryExpr { op = `BVADD; arg1 = E (Constant { const = `Bitvector b }); arg2 = E (RVar v); }); arg2 = E (Constant { const = `Bitvector a }); })
-    | E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (BinaryExpr { op = `BVADD; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector b }); }); })
-    | E (BinaryExpr { op = `BVMUL; arg1 = E (BinaryExpr { op = `BVADD; arg1 = E (RVar v); arg2 = E (Constant { const = `Bitvector b }); }); arg2 = E (Constant { const = `Bitvector a }); })
-    | E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector b }); E (RVar v)] }); })
-    | E (BinaryExpr { op = `BVMUL; arg1 = E (ApplyIntrin { op = `BVADD; args = [E (Constant { const = `Bitvector b }); E (RVar v)] }); arg2 = E (Constant { const = `Bitvector a }); })
-    | E (BinaryExpr { op = `BVMUL; arg1 = E (Constant { const = `Bitvector a }); arg2 = E (ApplyIntrin { op = `BVADD; args = [E (RVar v); E (Constant { const = `Bitvector b })] }); })
-    | E (BinaryExpr { op = `BVMUL; arg1 = E (ApplyIntrin { op = `BVADD; args = [E (RVar v); E (Constant { const = `Bitvector b })] }); arg2 = E (Constant { const = `Bitvector a }); }) ->
-        Some (Linear (a, Bitvec.mul a b))
+  module Extract = struct
+    open Option
 
-    | _ -> None
-    [@@ocamlformat "disable"]
+    let liftA2 f a b =
+      let* a = a in
+      let* b = b in
+      pure @@ f a b
+
+    let liftJoin2 f a b =
+      let* a = a in
+      let* b = b in
+      f a b
+
+    module Lin = struct
+      type t = Bitvec.t option * Var.t option * Bitvec.t
+
+      let var v =
+        match Var.typ v with
+        | Bitvector size ->
+            Some (Some (Bitvec.one ~size), Some v, Bitvec.zero ~size)
+        | _ -> None
+
+      let const x = (None, None, x)
+
+      let add a b =
+        match (a, b) with
+        | (a, v, b), (None, None, c) | (None, None, b), (a, v, c) ->
+            Some (a, v, Bitvec.add b c)
+        | (Some a, Some v, b), (Some c, Some v', d) when Var.equal v v' ->
+            Some (Some (Bitvec.add a c), Some v, Bitvec.add b d)
+        | _ -> None
+
+      let mul a b =
+        match (a, b) with
+        | (None, None, b), (None, None, d) -> Some (None, None, Bitvec.mul b d)
+        | (Some a, Some v, b), (None, None, d)
+        | (None, None, d), (Some a, Some v, b) ->
+            Some (Some (Bitvec.mul a d), Some v, Bitvec.mul b d)
+        | _ -> None
+    end
+
+    let extract_alg e =
+      let open Expr.AbstractExpr in
+      match e with
+      | RVar { id } -> Lin.var id
+      | Constant { const = `Bitvector c } -> Some (Lin.const c)
+      | ApplyIntrin { op = `BVADD; args = a :: rest } ->
+          List.fold_left (liftJoin2 Lin.add) a rest
+      | BinaryExpr { op = `BVADD; arg1; arg2 } -> liftJoin2 Lin.add arg1 arg2
+      (* BVMUL isn't an intrin ... *)
+      | BinaryExpr { op = `BVMUL; arg1; arg2 } -> liftJoin2 Lin.mul arg1 arg2
+      | _ -> None
+
+    let extract_expr e =
+      match Expr.BasilExpr.cata extract_alg e with
+      | Some (Some a, Some _, b)
+        when Z.equal Z.one (Bitvec.value a) && Z.equal Z.zero (Bitvec.value b)
+        ->
+          IdEdge
+      | Some (Some a, Some _, b) -> Linear (a, b)
+      | _ -> TopEdge
+  end
 
   let transfer_call call param d =
     match d with
@@ -232,9 +253,7 @@ module LinearDomain = struct
         |> Iter.filter (fun (s, e) -> VarSet.mem v (Expr.BasilExpr.free_vars e))
         |> Iter.map (fun (s, e) ->
             let v' = StringMap.find s param in
-            match extract_expr e with
-            | Some ef -> (Label v', ef)
-            | None -> (Label v', TopEdge))
+            (Label v', Extract.extract_expr e))
 
   let transfer stmt d =
     let open Stmt in
@@ -256,10 +275,7 @@ module LinearDomain = struct
             Iter.of_list a
             |> Iter.filter (fun (s, e) ->
                 VarSet.mem v (Expr.BasilExpr.free_vars e))
-            |> Iter.map (fun (v', e) ->
-                match extract_expr e with
-                | Some ef -> (Label v', ef)
-                | None -> (Label v', TopEdge))
+            |> Iter.map (fun (v', e) -> (Label v', Extract.extract_expr e))
         | _ -> Iter.empty)
 
   (* RHS will contain d because ssa *)
