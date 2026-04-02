@@ -5,7 +5,7 @@ var $R1 : bv64;
 axiom $a true;
 
 
-proc @main () -> () [
+proc @main (a:bv2) -> () [
   block %entry  [
     $R0 := 0:bv64;
     $R1 := 0:bv64;

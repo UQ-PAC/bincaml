@@ -56,46 +56,89 @@ let lsppos_of_pploc inp loc =
     ~character:(lexpos.pos_cnum - lexpos.pos_bol)
     ~line:(lexpos.pos_lnum - 1)
 
-let lspsymbol_of_decl contents (decl : BasilIR.AbsBasilIR.decl) =
+let lsppos_of_prev_endline inp loc =
+  let lexpos = Pp_loc.Position.to_lexing inp loc in
+  let bol = { lexpos with pos_cnum = lexpos.pos_bol } in
+  bol |> Pp_loc.Position.of_lexing
+  |> Fun.flip Pp_loc.Position.shift (-1)
+  |> lsppos_of_pploc inp
+
+let lsprange_of_offsets input (s, e) =
+  let s = Pp_loc.Position.of_offset s and e = Pp_loc.Position.of_offset e in
+  let start = lsppos_of_pploc input s and end_ = lsppos_of_pploc input e in
+  Lsp.Types.Range.create ~start ~end_
+
+let children_lspsymbols_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
   let open Linol_lsp.Types.SymbolKind in
   let open BasilIR.AbsBasilIR in
-  let inp = Pp_loc.Input.string contents in
-
-  let make_range (s, e) =
-    let s = Pp_loc.Position.of_offset s and e = Pp_loc.Position.of_offset e in
-    let start = lsppos_of_pploc inp s and end_ = lsppos_of_pploc inp e in
-    Lsp.Types.Range.create ~start ~end_
+  let of_bident (BlockIdent ((s, e), ident)) =
+    (lsprange_of_offsets input (s, e), ident)
+  in
+  let of_lident (LocalIdent ((s, e), ident)) =
+    (lsprange_of_offsets input (s, e), ident)
   in
 
-  let of_gident (GlobalIdent ((s, e), ident)) = (make_range (s, e), ident) in
-  let of_lident (LocalIdent ((s, e), ident)) = (make_range (s, e), ident) in
-  let of_pident (ProcIdent ((s, e), ident)) = (make_range (s, e), ident) in
+  (match decl with
+    | Decl_Fun (_, params, _, _, _) ->
+        params |> Iter.of_list
+        |> Iter.map (function LocalVarParen1 (_, lid, _, _) ->
+            (of_lident lid, Field))
+    | Decl_Proc (proc, _, params, _, _, _, _, _, _, ProcDef_Some (_, blocks, _))
+      ->
+        let paramsyms =
+          params |> Iter.of_list
+          |> Iter.map (function Params1 (lid, _ty) -> (of_lident lid, Field))
+        and blocksyms =
+          blocks |> Iter.of_list
+          |> Iter.map (function
+              | Block_NoPhi (bid, _, _, _, _, _)
+              | Block_Phi (bid, _, _, _, _, _, _, _, _)
+              -> (of_bident bid, Property))
+        in
+        Iter.append paramsyms blocksyms
+    | _ -> Iter.empty)
+  |> Iter.map (function (selectionRange, name), kind ->
+      Linol_lsp.Types.DocumentSymbol.create ~kind ~name ~selectionRange
+        ~range:selectionRange ~children:[] ())
+  |> Iter.to_list
 
-  let result =
-    match decl with
-    | Decl_Axiom (glb, _, _) -> Some (of_gident glb, Constant, [])
-    | Decl_Mem (_, glb, _, _) -> Some (of_gident glb, Variable, [])
-    | Decl_Var (_, glb, _, _) -> Some (of_gident glb, Variable, [])
-    | Decl_UninterpFun (glb, _, _) -> Some (of_gident glb, Function, [])
-    | Decl_Fun (glb, _, _, _, _) -> Some (of_gident glb, Function, [])
-    | Decl_FunNoType (glb, _, _) -> Some (of_gident glb, Function, [])
+let lspsymbol_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
+  let open Linol_lsp.Types.SymbolKind in
+  let open BasilIR.AbsBasilIR in
+  let of_gident (GlobalIdent ((s, e), ident)) =
+    (lsprange_of_offsets input (s, e), ident)
+  in
+  let of_lident (LocalIdent ((s, e), ident)) =
+    (lsprange_of_offsets input (s, e), ident)
+  in
+  let of_pident (ProcIdent ((s, e), ident)) =
+    (lsprange_of_offsets input (s, e), ident)
+  in
+
+  (match decl with
+    | Decl_Axiom (glb, _, _) -> Some (of_gident glb, Constant)
+    | Decl_Mem (_, glb, _, _) -> Some (of_gident glb, Variable)
+    | Decl_Var (_, glb, _, _) -> Some (of_gident glb, Variable)
+    | Decl_UninterpFun (glb, _, _) -> Some (of_gident glb, Function)
+    | Decl_Fun (glb, _, _, _, _) -> Some (of_gident glb, Function)
+    | Decl_FunNoType (glb, _, _) -> Some (of_gident glb, Function)
     | Decl_ProgEmpty (_, _) -> None
     | Decl_ProgWithSpec (_, _, _) -> None
-    | Decl_Proc (proc, _, _, _, _, _, _, _, _, _) ->
-        Some (of_pident proc, Class, [])
+    | Decl_Proc (proc, _, _, _, _, _, _, _, _, _) -> Some (of_pident proc, Class)
     | Decl_RecType (TypeAssign_Sum (loc, _) :: rest) ->
-        Some (of_lident loc, Struct, [])
+        Some (of_lident loc, Struct)
     | Decl_RecType _ -> None (* should be impossible *)
-    | Decl_Type loc -> Some (of_lident loc, Struct, [])
-  in
-
+    | Decl_Type loc -> Some (of_lident loc, Struct))
   (* TODO: do range properly by using sliding window of 2 adjacent decls?? *)
-  match result with
-  | Some ((selectionRange, name), kind, children) ->
+  |> function
+  | Some ((selectionRange, name), kind) ->
+      let children = children_lspsymbols_of_decl input decl in
       Some
         (Linol_lsp.Types.DocumentSymbol.create ~children ~kind ~name
            ~selectionRange ~range:selectionRange ())
   | None -> None
+
+let lspsymbols_of_decls input decls = 2
 
 class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
   (initial_contents : string) =
@@ -107,6 +150,9 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
     method lines =
       one_value_function_cache (Fun.compose Array.of_list CCString.lines)
         (fun () -> contents)
+
+    method input =
+      one_value_function_cache Pp_loc.Input.string (fun () -> contents)
 
     method tokens = one_value_function_cache parse_tokens (fun () -> contents)
 
@@ -213,7 +259,7 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
       one_value_function_cache
         (fun (BasilIR.AbsBasilIR.Module1 decls, contents) ->
           List.filter_map (lspsymbol_of_decl contents) decls)
-        (fun () -> (self#cst (), contents))
+        (fun () -> (self#cst (), self#input ()))
 
     (** {2 Update methods} *)
 
