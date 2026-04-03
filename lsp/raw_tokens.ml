@@ -217,7 +217,7 @@ let token_at_pos tokens (lsppos : Linol.Lsp.Types.Position.t) =
   in
   let dummy = error_token ~startpos:pos () in
   match CCArray.bsearch ~cmp:compare_elt dummy tokens with
-  | `Just_after ibefore -> Some tokens.(ibefore)
+  | `Just_after i | `At i -> Some tokens.(i)
   | _ -> None
 
 let make_token_getter set =

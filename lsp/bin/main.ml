@@ -140,10 +140,10 @@ class lsp_server =
 
       match
         Bincaml_lsp.Raw_tokens.token_at_pos tokens pos
-        |> CCOption.flat_map Bincaml_lsp.Raw_tokens.ident_of_token
+        |> CCOption.flat_map Bincaml_lsp.Lsp_symbols.ident_of_token
       with
       | None -> Lwt.return None
-      | Some prefix ->
+      | Some { Bincaml_lsp.Lsp_symbols.text = prefix } ->
           let prefix = String.sub prefix 0 1 in
           let completions =
             st#completions ()
@@ -163,6 +163,67 @@ class lsp_server =
         ~partialResultToken () =
       let st = self#get uri in
       Lwt.return (Some (`DocumentSymbol (st#lspsymbols ())))
+
+    method! config_hover = Some (`Bool true)
+
+    method! on_req_hover ~notify_back ~id ~uri ~pos ~workDoneToken _doc =
+      Logs.app (fun m -> m "req hover");
+      let st = self#get uri in
+      let tokens = st#tokens () in
+      let ident =
+        Bincaml_lsp.Raw_tokens.token_at_pos tokens pos
+        |> CCOption.flat_map Bincaml_lsp.Lsp_symbols.ident_of_token
+      in
+      (let open CCOption.Infix in
+       let* ident = ident in
+       let lspsymbols = st#lspsymbols () in
+       let* sym =
+         Bincaml_lsp.Lsp_symbols.lspsymbol_of_ident ~lspsymbols ~lsppos:pos
+           ident
+         |> Iter.head
+       in
+       let detail =
+         Option.value
+           ~default:
+             (Printf.sprintf
+                "no information available for %s. please file a bug!" ident.text)
+           sym.detail
+       in
+       let contents =
+         `MarkupContent
+           {
+             Linol_lsp.Types.MarkupContent.value = detail;
+             kind = Linol_lsp.Types.MarkupKind.Markdown;
+           }
+       in
+       let hover = Linol_lsp.Types.Hover.create ~contents () in
+       Some hover)
+      |> function
+      | Some x -> Lwt.return (Some x)
+      | None -> Lwt.return None
+
+    method! config_definition = Some (`Bool true)
+
+    method! on_req_definition ~notify_back ~id ~uri ~pos ~workDoneToken
+        ~partialResultToken _doc =
+      Logs.app (fun m -> m "req definition");
+      let st = self#get uri in
+      let tokens = st#tokens () in
+      let ident =
+        Bincaml_lsp.Raw_tokens.token_at_pos tokens pos
+        |> CCOption.flat_map Bincaml_lsp.Lsp_symbols.ident_of_token
+      in
+      match ident with
+      | None -> Lwt.return None
+      | Some ident ->
+          let lspsymbols = st#lspsymbols () in
+          let locations =
+            Bincaml_lsp.Lsp_symbols.lspsymbol_of_ident ~lspsymbols ~lsppos:pos
+              ident
+            |> Iter.map (fun (sym : Bincaml_lsp.Lsp_symbols.symbol) ->
+                Linol_lsp.Types.Location.create ~range:sym.selectionRange ~uri)
+          in
+          Lwt.return (Some (`Location (Iter.to_list locations)))
 
     (* method! on_req_code_lens_resolve ~notify_back ~id code_lens = *)
     (*   Lwt.return code_lens *)
