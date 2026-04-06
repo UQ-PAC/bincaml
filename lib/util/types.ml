@@ -112,11 +112,7 @@ let rec compare_partial (a : t) (b : t) =
       compare_partial lower lower1 |> function
       | Some 0 -> compare_partial upper upper1
       | o -> o)
-<<<<<<< HEAD
   | Struct fields, Struct fields2 ->
-=======
-  | Record (_, fields), Record (_, fields2) ->
->>>>>>> 70095a6 (bmp)
       Some
         (StringMap.compare
            (fun ({ typ = a; _ } : record_field) { typ = b; _ } ->
@@ -148,21 +144,10 @@ let rec to_string = function
   | Top -> "⊤"
   | Nothing -> "⊥"
   | Variable name -> name
-<<<<<<< HEAD
-  | Pointer { lower; upper } ->
+  | Pointer { lower; upper; _ } ->
       Printf.sprintf "ptr(%s, %s)" (to_string lower) (to_string upper)
   | Struct record ->
-=======
-  | Pointer { lower; upper; name } ->
-      Printf.sprintf "ptr_%s(%s, %s)" name (to_string lower) (to_string upper)
-<<<<<<< HEAD
-  | Record (_, record) ->
->>>>>>> 70095a6 (bmp)
       "{"
-=======
-  | Record (name, record) ->
-      name ^ "{"
->>>>>>> 977c758 (bmp)
       ^ (StringMap.bindings record
         |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->
             Printf.sprintf "\"%s\": (%s, %s)" k (to_string v)
