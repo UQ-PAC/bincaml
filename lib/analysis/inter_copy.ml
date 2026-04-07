@@ -86,11 +86,13 @@ module CopyNode = struct
         (* We can clear the copied_from field whenever setting the parent for
            the garbage collector to gobble on (yum) *)
         v := { v = !v.v; copied_from = []; parent = Some p };
-        v
+        v'
     | None -> v
 
   (** `join v v'` sets the parent of `v'` to `v` (mod transitivity) *)
   let join v v' : unit = v' := { v = !v'.v; copied_from = []; parent = Some v }
+
+  let eq (n : t) (m : t) = Var.equal !n.v !m.v
 
   (** Set out edges of a given vertex (think `v := phi(a, b, c)` defining edges
       `v -> a, v -> b, v -> c`) *)
@@ -101,8 +103,16 @@ module CopyNode = struct
     v := { v = !v.v; copied_from; parent = None }
 
   (** Returns all reachable leaves from the given node *)
-  let rec leaves v : t list = List.flat_map (find %> leaves) !v.copied_from
-  (* TODO deduplicate *)
+  let rec leaves v : t list =
+    let visited = ref VarSet.empty in
+    let rec dfs v : t list =
+      let v = find v in
+      if VarSet.mem !v.v !visited then []
+      else (
+        visited := VarSet.add !v.v !visited;
+        match !v.copied_from with [] -> [ v ] | ls -> List.flat_map dfs ls)
+    in
+    dfs v
   (* TODO possible optimisation where we abort this search if a leaf node is
      not an input variable (want to benchmark) *)
 end
@@ -150,7 +160,7 @@ module CopyGraph = struct
 end
 
 type call_info = {
-  callee_id : ID.t;
+  caller_id : ID.t;
   lhs : Var.t StringMap.t;
   args : Program.e StringMap.t;
 }
@@ -183,8 +193,8 @@ module Solver = struct
         (* We at the same time create a list of all callers of each procedure in the scc. *)
         if List.mem ~eq:ID.equal c.procid component then
           Hashtbl.update callers
-            ~f:(fun pid l ->
-              let c = { callee_id = pid; lhs = c.lhs; args = c.args } in
+            ~f:(fun _ l ->
+              let c = { caller_id = pid; lhs = c.lhs; args = c.args } in
               match l with Some cs -> Some (c :: cs) | None -> Some [ c ])
             ~k:c.procid
     | _ -> ()
@@ -224,11 +234,10 @@ module Solver = struct
       |> Iter.map (node_of pid)
       |> Iter.filter_map (fun node ->
           let leaves = CopyNode.leaves node in
-          (* TODO don't check input vars like this... *)
           ((not (List.is_empty leaves))
           && List.for_all
                (fun (n : CopyNode.t) ->
-                 String.ends_with ~suffix:"_in" @@ Var.name !n.v)
+                 StringMap.mem (Var.name !n.v) (Procedure.formal_in_params proc))
                leaves)
           |> flip Option.return_if (node, leaves))
       |> Iter.iter (fun ((node : CopyNode.t), leaves) ->
@@ -241,18 +250,20 @@ module Solver = struct
               |> map_m copy_of
               |> Option.iter (fun leaves ->
                   match leaves with
-                  | v :: vs ->
-                      if List.for_all (Var.equal v) vs then (
+                  | v :: vs -> (
+                      if List.for_all (Var.equal v) vs then
                         let assigned =
-                          StringMap.find (Var.name !node.v) call.lhs
+                          node_of call.caller_id
+                          @@ StringMap.find (Var.name !node.v) call.lhs
                         in
-                        CopyNode.join (node_of call.callee_id v)
-                          (node_of call.callee_id assigned);
-                        (* Update worklist (i'm lazy) *)
-                        Iter.of_list component
-                        |> Iter.filter (fun pid ->
-                            not @@ ID.equal call.callee_id pid)
-                        |> Worklist.add_iter worklist)
+                        match !assigned.parent with
+                        | Some _ -> ()
+                        | None ->
+                            CopyNode.join (node_of call.caller_id v) assigned;
+                            (* Update worklist (i'm lazy) *)
+                            Iter.of_list component
+                            |> Iter.filter (not % ID.equal pid)
+                            |> Worklist.add_iter worklist)
                   | [] -> failwith "leaves should never be empty!")))
     done
 
