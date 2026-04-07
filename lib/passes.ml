@@ -282,7 +282,7 @@ module PassManager = struct
       {
           name = "copy-prop";
           apply = Prog (Transforms.Copyprop.transform);
-          doc = "";
+          doc = "Interprocedural variable copy propagation. Require SSA form.";
       };
     ]
 
