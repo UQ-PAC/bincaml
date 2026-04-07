@@ -115,6 +115,8 @@ module CopyNode = struct
     dfs
   (* TODO possible optimisation where we abort this search if a leaf node is
      not an input variable (want to benchmark) *)
+
+  let var (n : t) = !n.v
 end
 
 (** Ocamlgraph representation of the above for debug utilities *)

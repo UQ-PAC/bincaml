@@ -281,7 +281,7 @@ module PassManager = struct
       };
       {
           name = "copy-prop";
-          apply = Prog (Analysis.Inter_copy.test_transform);
+          apply = Prog (Transforms.Copyprop.transform);
           doc = "";
       };
     ]
