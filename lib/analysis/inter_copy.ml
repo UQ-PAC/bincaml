@@ -242,10 +242,9 @@ module Solver = struct
                         | Some _ -> ()
                         | None ->
                             CopyNode.join (node_of call.caller_id v) assigned;
-                            (* Update worklist (i'm lazy) *)
-                            Iter.of_list component
-                            |> Iter.filter (not % ID.equal pid)
-                            |> Worklist.add_iter worklist)
+                            (* We have updated the caller's graph so we should
+                               recompute it *)
+                            Worklist.add worklist call.caller_id)
                   | [] -> failwith "leaves should never be empty!")))
     done
 
