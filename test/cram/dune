@@ -8,7 +8,7 @@
   concat.il))
 
 (cram
- (applies_to * \ expr_smt)
+ (applies_to * \ expr_smt malloc_free)
  (deps
   loop_dfg.sexp
   ../../examples/loop.il
@@ -23,13 +23,29 @@
   ../../examples/cntlm-simp-output.il
   incorrect_types.il
   ../../examples/x-output.il
+  inter_dead.il
   typefail.sexp
   typepass.sexp
   basicssa.sexp
   roundtrip.sexp
+  gammavars.sexp
+  ../../examples/gamma.il
+  inter_dead.sexp
+  ../../examples/const.il
+  const.sexp
   ll_simple.il
   ll_simple.sexp
   ll_real.sexp
   ll_spec.il
   ll_spec.sexp
   ../../bin/main.exe))
+
+(cram
+ (applies_to malloc_free)
+ (enabled_if
+  (and %{bin-available:boogie} %{bin-available:cvc5}))
+ (deps
+  %{bin:bincaml}
+  ../../examples/memory/malloc_free.il
+  ../../examples/memory/malloc_free_oob.il
+  ./malloc_free.sexp))

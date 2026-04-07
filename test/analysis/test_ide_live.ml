@@ -42,7 +42,8 @@ proc @main () -> ()
   let _, results = IDELiveAnalysis.solve program in
   let main = program.entry_proc |> Option.get_exn_or "No entry proc" in
   print_lives results main;
-  [%expect {|
+  [%expect
+    {|
     @main
     $mem:(bv64->bv8)
     $x:bv64
@@ -92,9 +93,9 @@ proc @main (x_in:bv64) -> ()
   print_lives results main;
   [%expect {|
     @main
+    addr:bv64
     $mem:(bv64->bv8)
     x_in:bv64
-    addr:bv64
     |}]
 
 let%expect_test "simple_call" =
@@ -124,8 +125,9 @@ proc @fun (c:bv64, d:bv64) -> (out:bv64)
   in
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
-  ID.Map.iter (fun id _ -> print_lives results id) program.procs;
-  [%expect {|
+  IDMap.iter (fun id _ -> print_lives results id) program.procs;
+  [%expect
+    {|
     @main
     b:bv64
     y:bv64
@@ -172,8 +174,9 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   in
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
-  ID.Map.iter (fun id _ -> print_lives results id) program.procs;
-  [%expect {|
+  IDMap.iter (fun id _ -> print_lives results id) program.procs;
+  [%expect
+    {|
     @main
     b:bv64
     y:bv64
@@ -237,8 +240,9 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   in
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
-  ID.Map.iter (fun id _ -> print_lives results id) program.procs;
-  [%expect {|
+  IDMap.iter (fun id _ -> print_lives results id) program.procs;
+  [%expect
+    {|
     @main
     b:bv64
     y:bv64

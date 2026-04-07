@@ -8,13 +8,17 @@
   defuse_bool
   lattice_types
   ide
+  irreducible_loops
   idessi
   ide_live
   lattice_collections
   wrapped_intervals
   known_bits
+  gamma_domain
   tnum_wint_reduced_product
-  known_bits)
+  known_bits
+  wp_dual
+  linear_const)
  (libraries
   intPQueue
   patricia-tree
@@ -31,6 +35,7 @@
  (inline_tests)
  (preprocess
   (pps
+   ppx_here
    ppx_deriving.show
    ppx_deriving.eq
    ppx_deriving.ord
