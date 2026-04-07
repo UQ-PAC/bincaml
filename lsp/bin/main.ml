@@ -57,7 +57,7 @@ class lsp_server =
             st
         | None -> new Lsp_state.state ~notify_back ~uri contents
       in
-      ignore @@ st#diagnostics ();
+      ignore @@ st#diagnostics;
       Hashtbl.replace buffers uri st
 
     (* We now override the [on_notify_doc_did_open] method that will be called
@@ -120,7 +120,7 @@ class lsp_server =
           let st = self#get uri in
 
           st#toggle_debug_highlight;
-          ignore @@ st#diagnostics ();
+          ignore @@ st#diagnostics;
           Lwt.return @@ Yojson.Safe.(`Null)
       | _ ->
           super#on_req_execute_command ~notify_back ~id ~workDoneToken cmd args
@@ -136,7 +136,7 @@ class lsp_server =
       Logs.app (fun m -> m "req completion");
       let st = self#get uri in
 
-      let tokens = st#tokens () in
+      let tokens = st#tokens in
 
       match
         Bincaml_lsp.Raw_tokens.token_at_pos tokens pos
@@ -146,7 +146,7 @@ class lsp_server =
       | Some { Bincaml_lsp.Lsp_symbols.text = prefix } ->
           let prefix = String.sub prefix 0 1 in
           let completions =
-            st#completions ()
+            st#completions
             |> List.filter (fun (comp : Linol_lwt.CompletionItem.t) ->
                 String.starts_with ~prefix comp.label
                 && comp.data
@@ -162,21 +162,21 @@ class lsp_server =
     method! on_req_symbol ~notify_back ~id ~uri ~workDoneToken
         ~partialResultToken () =
       let st = self#get uri in
-      Lwt.return (Some (`DocumentSymbol (st#lspsymbols ())))
+      Lwt.return (Some (`DocumentSymbol st#lspsymbols))
 
     method! config_hover = Some (`Bool true)
 
     method! on_req_hover ~notify_back ~id ~uri ~pos ~workDoneToken _doc =
       Logs.app (fun m -> m "req hover");
       let st = self#get uri in
-      let tokens = st#tokens () in
+      let tokens = st#tokens in
       let ident =
         Bincaml_lsp.Raw_tokens.token_at_pos tokens pos
         |> CCOption.flat_map Bincaml_lsp.Lsp_symbols.ident_of_token
       in
       (let open CCOption.Infix in
        let* ident = ident in
-       let lspsymbols = st#lspsymbols () in
+       let lspsymbols = st#lspsymbols in
        let* sym =
          Bincaml_lsp.Lsp_symbols.lspsymbol_of_ident ~lspsymbols ~lsppos:pos
            ident
@@ -208,7 +208,7 @@ class lsp_server =
         ~partialResultToken _doc =
       Logs.app (fun m -> m "req definition");
       let st = self#get uri in
-      let tokens = st#tokens () in
+      let tokens = st#tokens in
       let ident =
         Bincaml_lsp.Raw_tokens.token_at_pos tokens pos
         |> CCOption.flat_map Bincaml_lsp.Lsp_symbols.ident_of_token
@@ -216,7 +216,7 @@ class lsp_server =
       match ident with
       | None -> Lwt.return None
       | Some ident ->
-          let lspsymbols = st#lspsymbols () in
+          let lspsymbols = st#lspsymbols in
           let locations =
             Bincaml_lsp.Lsp_symbols.lspsymbol_of_ident ~lspsymbols ~lsppos:pos
               ident
