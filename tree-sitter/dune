@@ -28,7 +28,15 @@
     LocalIdent
     basilir.cf
     --makefile)
-   (diff? grammar.js tree-sitter-basilir/grammar.js))))
+   (with-stdout-to grammar.js.new
+   (run
+     sed
+     "/name:/ {
+       a conflicts: $ => [[$.Expr1, $.Expr2]],
+     }"
+     tree-sitter-basilir/grammar.js
+     ))
+   (diff? grammar.js grammar.js.new))))
 
 (rule
  (alias runtest)

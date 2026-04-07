@@ -2,6 +2,7 @@
 
 module.exports = grammar({
   name: "basilir",
+conflicts: $ => [[$.Expr1, $.Expr2]],
   extras: $ =>[
     /\s/,
     $.token_CommentSingle,
