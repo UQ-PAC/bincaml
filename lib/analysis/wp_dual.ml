@@ -77,7 +77,11 @@ module Domain (S : RequiresAnnotation) = struct
     rw % rw
 
   let join a b = BasilExpr.applyintrin ~op:`OR [ a; b ] |> simplify
-  let widening a b = top
+
+  let widening a b =
+    print_endline "magic";
+    top
+
   let init proc = bottom
 
   let leq a b =
@@ -87,13 +91,20 @@ module Domain (S : RequiresAnnotation) = struct
 
   let low_expr = Expr.BasilExpr.unexp ~op:`Gamma
 
-  let transfer p stmt =
+  let transfer (p: t) (stmt: Program.stmt) =
     let open Stmt in
     match stmt with
     | Instr_Assign a ->
         BasilExpr.substitute
           (fun v ->
             List.find_map (fun (v', e) -> Option.return_if (Var.equal v v') e) a)
+          p
+        |> simplify
+    | Instr_Load
+        { lhs; rhs; addr = Addr { addr : 'e; size : int; endian : endian } } ->
+        let le = BasilExpr.load ~bits:size endian (BasilExpr.rvar rhs) addr in
+        BasilExpr.substitute
+          (fun v -> Option.return_if (Var.equal v lhs) le)
           p
         |> simplify
     | Instr_Load l -> top
@@ -110,7 +121,12 @@ module Domain (S : RequiresAnnotation) = struct
          else p)
         |> simplify
     | Instr_Call { procid } ->
-        BasilExpr.applyintrin ~op:`AND (p :: S.requires procid)
+        let out = BasilExpr.applyintrin ~op:`OR (p :: (List.map (Expr.BasilExpr.boolnot) @@ S.requires procid)) in
+        print_endline "-------";
+        print_endline (ID.name procid);
+        print_endline @@ List.to_string (fun exp -> BasilExpr.to_string exp) (S.requires procid);
+        print_endline @@ List.to_string (fun exp -> BasilExpr.to_string exp) [out];
+        out
     | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
     | _ -> p
 
@@ -163,5 +179,4 @@ proc @main () -> ()
   in
   IntraAnalysis.A.M.find Procedure.Vert.Entry res
   |> IntraDomain.to_pred |> BasilExpr.to_string |> print_endline;
-  [%expect
-    {| booland(eq(bvadd($x, a), 0), eq(bvadd(a, a), 0)) |}]
+  [%expect {| booland(eq(bvadd($x, a), 0), eq(bvadd(a, a), 0)) |}]

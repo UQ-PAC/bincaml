@@ -136,7 +136,7 @@ let pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
       ^ surround ~width:0 (text "[")
           (List.nth args 1 ^+ text ":=" ^+ List.nth args 2)
           (text "]")
-  | `AND -> bracket "(" (append_l ~sep:(text "&&") (List.map snd args)) ")"
+  | `AND -> bracket "(" (append_l ~sep:(newline_or_spaces 1 ^ text "&&" ^ newline_or_spaces 1) (List.map snd args)) ")"
   | `OR -> bracket "(" (append_l ~sep:(text "||") (List.map snd args)) ")"
   | e ->
       let x = Lang.Ops.AllOps.to_string e in

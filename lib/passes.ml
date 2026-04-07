@@ -186,7 +186,7 @@ module PassManager = struct
   let intra_function_summaries =
     {
       name = "intra-function-summaries";
-      apply = Proc Transforms.Function_summaries.intraproc_transform;
+      apply = Prog Transforms.Function_summaries.intraproc_transform;
       doc =
         "Generate function summaries for each procedure independently. The \
          generated summaries will be a refinement with respect to wp logic \

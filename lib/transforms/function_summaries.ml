@@ -91,7 +91,8 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
     wp_dual_requires (module S) proc
     |> List.fold_left
          (fun rs r ->
-           if redundant solver r (List.append rs cur_req) then rs else r :: rs)
+           (* if redundant solver r (List.append rs cur_req) then rs else r :: rs) *)
+           if false then rs else r :: rs)
          []
   in
   { requires; ensures = [] }
@@ -114,7 +115,7 @@ let add_summary summary (proc : Program.proc) =
   in
   Procedure.set_specification proc spec
 
-let intraproc_transform proc =
+let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
   let solver =
     Bincaml_util.Smt.Solver.create
       {
@@ -126,18 +127,35 @@ let intraproc_transform proc =
     extra_summary solver
       (module struct
         let requires id =
-          if ID.equal id (Procedure.id proc) then
-            (Procedure.specification proc).requires
-          else []
+          IDMap.get id prog.procs
+          |> Option.map_or
+               (fun p -> (Procedure.specification p).requires)
+               ~default:[]
 
         let ensures id =
-          if ID.equal id (Procedure.id proc) then
-            (Procedure.specification proc).ensures
-          else []
+          IDMap.get id prog.procs
+          |> Option.map_or
+               (fun p -> (Procedure.specification p).ensures)
+               ~default:[]
       end : FunctionSummaryAnnotation)
       proc
   in
   add_summary summary proc
+
+let intraproc_transform (prog : Program.t) =
+  let module Dfs = Graph.Traverse.Dfs (Program.CallGraph.G) in
+  let cg = Program.CallGraph.make_call_graph prog in
+  let procs =
+    Iter.from_iter (fun f -> Dfs.postfix f cg)
+    |> Iter.fold
+         (fun acc v ->
+           match v with
+           | Program.CallGraph.Vert.ProcBegin id ->
+               IDMap.update id (Option.map (intraproc_transform_proc prog)) acc
+           | _ -> acc)
+         prog.procs
+  in
+  { prog with procs }
 
 module Domain = struct
   type property = summary

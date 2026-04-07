@@ -191,7 +191,7 @@ let transform_proc entry (p : Program.proc) =
   | "@main" -> transform_main p
   | e when String.equal entry e -> transform_main p
   | "@malloc" -> transform_malloc p
-  | "@free" -> transform_free p
+  | "@free" | "@#free" -> transform_free p
   | _ -> p
 
 let transform (p : Program.t) =
