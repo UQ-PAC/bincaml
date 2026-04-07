@@ -143,19 +143,19 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
   add_summary summary proc
 
 let intraproc_transform (prog : Program.t) =
-  let module Dfs = Graph.Traverse.Dfs (Program.CallGraph.G) in
-  let cg = Program.CallGraph.make_call_graph prog in
-  let procs =
-    Iter.from_iter (fun f -> Dfs.postfix f cg)
-    |> Iter.fold
-         (fun acc v ->
-           match v with
-           | Program.CallGraph.Vert.ProcBegin id ->
-               IDMap.update id (Option.map (intraproc_transform_proc prog)) acc
-           | _ -> acc)
-         prog.procs
-  in
-  { prog with procs }
+  (* let module Dfs = Graph.Traverse.Dfs (Program.CallGraph.G) in *)
+  (* let cg = Program.CallGraph.make_call_graph prog in *)
+  (* let procs = *)
+    (* Iter.from_iter (fun f -> Dfs.postfix f cg) *)
+    (* |> Iter.fold *)
+         (* (fun acc v -> *)
+           (* match v with *)
+           (* | Program.CallGraph.Vert.ProcBegin id -> *)
+               (* IDMap.update id (Option.map (intraproc_transform_proc prog)) acc *)
+           (* | _ -> acc) *)
+         (* prog.procs *)
+  (* in *)
+  { prog with procs=IDMap.map (intraproc_transform_proc prog) prog.procs }
 
 module Domain = struct
   type property = summary

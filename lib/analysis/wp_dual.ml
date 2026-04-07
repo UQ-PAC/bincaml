@@ -113,11 +113,7 @@ module Domain (S : RequiresAnnotation) = struct
           BasilExpr.applyintrin ~op:`AND
             [ p; BasilExpr.unexp ~op:`BoolNOT body ]
         in
-        (if branch then
-           BasilExpr.applyintrin ~op:`OR
-             [ p; BasilExpr.boolnot @@ low_expr body ]
-         else p)
-        |> simplify
+        simplify p
     | Instr_Call { procid } ->
         BasilExpr.applyintrin ~op:`OR
           (p :: (List.map Expr.BasilExpr.boolnot @@ S.requires procid))
