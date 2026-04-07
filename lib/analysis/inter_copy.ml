@@ -249,25 +249,26 @@ module Solver = struct
     done
 
   (** Collapse copies through phis into copies *)
-  let collapse_composites =
+  let collapse_composites g =
+    let open CopyNode in
     let searched = ref VarSet.empty in
-    let rec search (node : CopyNode.t) =
+    let rec search (node : t) =
       if not @@ VarSet.mem !node.v !searched then (
         searched := VarSet.add !node.v !searched;
         let copied_from =
           List.filter
-            (fun (n : CopyNode.t) -> not @@ Var.equal !node.v !n.v)
+            (fun (n : t) -> not @@ Var.equal !node.v !n.v)
             !node.copied_from
         in
         match copied_from with
         | l :: ls ->
-            List.iter (search % CopyNode.find) (l :: ls);
-            let p = CopyNode.find l in
-            if List.for_all (fun p' -> Var.equal !p.v !(CopyNode.find p').v) ls
-            then CopyNode.join p node
+            List.iter (search % find) (l :: ls);
+            let p = find l in
+            if List.for_all (fun p' -> Var.equal !p.v (var @@ find p')) ls then
+              join p node
         | _ -> ())
     in
-    VarMap.iter (const (search % CopyNode.find))
+    VarMap.iter (const (search % CopyNode.find)) g
 
   let solve (prog : Program.t) =
     let graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t = Hashtbl.create 100 in

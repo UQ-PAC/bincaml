@@ -5,10 +5,10 @@ open Lang
 open Analysis.Inter_copy
 
 let transform_proc (p : Program.t) g (proc : Program.proc) =
-  let parent v =
+  let copied_by v =
     VarMap.get v g
-    |> Option.get_lazy (fun _ -> CopyNode.init v)
-    |> CopyNode.find |> CopyNode.var
+    |> Option.map (CopyNode.var % CopyNode.find)
+    |> Option.get_or ~default:v
   in
 
   Procedure.map_blocks_nondet
@@ -16,8 +16,14 @@ let transform_proc (p : Program.t) g (proc : Program.proc) =
       Block.map
         ~phi:
           (List.map (fun (p : Var.t Block.phi) ->
-               { p with rhs = List.map (fun (bid, v) -> (bid, parent v)) p.rhs }))
-        (Stmt.map ~f_lvar:id ~f_expr:id ~f_rvar:parent)
+               {
+                 p with
+                 rhs = List.map (fun (bid, v) -> (bid, copied_by v)) p.rhs;
+               }))
+        (Stmt.map ~f_lvar:id
+           ~f_expr:
+             Expr.BasilExpr.(substitute (fun v -> Some (rvar @@ copied_by v)))
+           ~f_rvar:copied_by)
         block)
     proc
 
