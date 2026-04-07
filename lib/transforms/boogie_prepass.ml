@@ -38,8 +38,7 @@ module Builtins = struct
     | `BVNOT
     | `BVNEG
     | `ZeroExtend of int
-    | `SignExtend of int
-    | `Load of Lang.Ops.Maps.endian * int ]
+    | `SignExtend of int ]
   (** Subset of binary/unary/intrinsic ops which have builtins. (":builtin X" in
       boogie) *)
 
@@ -69,15 +68,15 @@ module Builtins = struct
     | `BVNEG -> "bvneg"
     | `ZeroExtend sz -> Printf.sprintf "zero_extend %d" sz
     | `SignExtend sz -> Printf.sprintf "sign_extend %d" sz
-    | `Load (`Big, i) -> Printf.sprintf "load%d_be" i
-    | `Load (`Little, i) -> Printf.sprintf "load%d_le" i
 
   (** Returns the monomorphized builtin name *)
   let monomorphize_builtin (op : builtin) targs =
-    let args = String.concat "_" (List.map Types.to_string targs) in
-    Printf.sprintf "%s_%s"
-      (String.replace ~sub:" " ~by:"_" (builtin_name op))
-      args
+    match op with
+    | _ ->
+        let args = String.concat "_" (List.map Types.to_string targs) in
+        Printf.sprintf "%s_%s"
+          (String.replace ~sub:" " ~by:"_" (builtin_name op))
+          args
 
   let name
       (op :
@@ -307,7 +306,7 @@ module Instructions = struct
                  Var.create
                    (Printf.sprintf "store%d_%s" size
                       (Lang.Stmt.show_endian endian))
-                   (Lang.Expr.BasilExpr.type_of body);
+                   (Lang.Expr.BasilExpr.type_of value);
                definition = Lang.Program.Function body;
              }
             : Lang.Program.declaration)
@@ -315,6 +314,15 @@ module Instructions = struct
         let boogie_attribs = StringMap.of_list [ (".extern", `List []) ] in
         let attribs =
           StringMap.of_list [ (".boogie", `Assoc boogie_attribs) ]
+        in
+        let body =
+          load_body (Var.typ rhs)
+            (match Var.typ lhs with
+            | Types.Bitvector s -> s
+            | _ -> failwith "Expected bitvec type")
+            (match Lang.Expr.BasilExpr.type_of addr with
+            | Types.Bitvector s -> s
+            | _ -> failwith "Expected bitvec type")
         in
         Some
           (Function
@@ -325,15 +333,7 @@ module Instructions = struct
                    (Printf.sprintf "load%d_%s" size
                       (Lang.Stmt.show_endian endian))
                    (Var.typ lhs);
-               definition =
-                 Function
-                   (load_body (Var.typ rhs)
-                      (match Var.typ lhs with
-                      | Types.Bitvector s -> s
-                      | _ -> failwith "Expected bitvec type")
-                      (match Lang.Expr.BasilExpr.type_of addr with
-                      | Types.Bitvector s -> s
-                      | _ -> failwith "Expected bitvec type"));
+               definition = Function body;
              }
             : Lang.Program.declaration)
     | _ -> None

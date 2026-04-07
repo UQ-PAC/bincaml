@@ -77,11 +77,7 @@ module Domain (S : RequiresAnnotation) = struct
     rw % rw
 
   let join a b = BasilExpr.applyintrin ~op:`OR [ a; b ] |> simplify
-
-  let widening a b =
-    print_endline "magic";
-    top
-
+  let widening a b = top
   let init proc = bottom
 
   let leq a b =
