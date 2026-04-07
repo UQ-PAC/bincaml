@@ -17,7 +17,8 @@
   gamma_domain
   tnum_wint_reduced_product
   known_bits
-  wp_dual)
+  wp_dual
+  linear_const)
  (libraries
   intPQueue
   patricia-tree
