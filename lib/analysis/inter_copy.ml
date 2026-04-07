@@ -103,7 +103,7 @@ module CopyNode = struct
     v := { v = !v.v; copied_from; parent = None }
 
   (** Returns all reachable leaves from the given node *)
-  let rec leaves v : t list =
+  let rec leaves =
     let visited = ref VarSet.empty in
     let rec dfs v : t list =
       let v = find v in
@@ -112,7 +112,7 @@ module CopyNode = struct
         visited := VarSet.add !v.v !visited;
         match !v.copied_from with [] -> [ v ] | ls -> List.flat_map dfs ls)
     in
-    dfs v
+    dfs
   (* TODO possible optimisation where we abort this search if a leaf node is
      not an input variable (want to benchmark) *)
 end
@@ -267,6 +267,23 @@ module Solver = struct
                   | [] -> failwith "leaves should never be empty!")))
     done
 
+  let collapse_composites graph =
+    let searched = ref VarSet.empty in
+    let rec search (node : CopyNode.t) =
+      if not @@ VarSet.mem !node.v !searched then (
+        searched := VarSet.add !node.v !searched;
+        let copied_from = List.filter (fun (n : CopyNode.t) -> not @@ Var.equal !node.v !n.v) !node.copied_from in
+        match copied_from with
+        | l :: ls ->
+            List.iter (search % CopyNode.find) (l :: ls);
+            let p = CopyNode.find l in
+            if List.for_all (fun p' -> Var.equal !p.v !(CopyNode.find p').v) ls
+            then CopyNode.join p node
+        | _ -> ())
+    in
+    VarMap.iter (const (search % CopyNode.find)) graph;
+    VarMap.iter (const (ignore % CopyNode.find)) graph
+
   let solve (prog : Program.t) =
     let graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t = Hashtbl.create 100 in
     let call_graph = Program.CallGraph.make_call_graph prog in
@@ -276,6 +293,7 @@ module Solver = struct
            | Program.CallGraph.Vert.ProcBegin id -> Some id
            | _ -> None))
     |> List.iter (solve_component prog call_graph graphs);
+    Hashtbl.iter (const collapse_composites) graphs;
     graphs
 end
 
