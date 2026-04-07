@@ -121,6 +121,13 @@ module PassManager = struct
          control flow graph and prints results";
     }
 
+  let demo_dfg_gamma =
+    {
+      name = "demo-dfg-gamma-analysis";
+      apply = DFGAnalysis (module Analysis.Gamma_domain.DFGAnalysis);
+      doc = "Runs a gamma analysis on a data flow graph and prints results";
+    }
+
   let remove_unused =
     {
       name = "remove-unused-decls";
@@ -225,6 +232,7 @@ module PassManager = struct
       demo_ival_wint_dfg;
       cfg_wrapped_int;
       cfg_tnum_wint_reduced;
+      demo_dfg_gamma;
       sparams;
       read_uninit false;
       read_uninit true;
@@ -278,6 +286,15 @@ module PassManager = struct
           name = "gamma-vars";
           apply = Prog Transforms.Gamma_vars.transform;
           doc = "Replace gamma expressions with gamma variables";
+      };
+      {
+        name = "linear-const";
+        apply = Prog Transforms.Const_prop.linear_transform;
+        doc =
+          "Performs interprocedural constant propagation of linear expressions \
+           (expressions of the form a * x + b). Usage of constant variables \
+           are replaced with their constant value. Newly dead variables are \
+           not eliminated. Assumes SSA form.";
       };
       {
           name = "copy-prop";

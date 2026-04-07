@@ -33,6 +33,8 @@
   copyprop.sexp
   ../../examples/copyprop.il
   inter_dead.sexp
+  ../../examples/const.il
+  const.sexp
   ll_simple.il
   ll_simple.sexp
   ll_real.sexp

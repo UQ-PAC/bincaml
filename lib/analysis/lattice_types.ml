@@ -130,9 +130,19 @@ struct
     | _, Bot -> Bot
     | _ -> Top
 
+  let get_val a = match a with V x -> Some x | _ -> None
+
   let map f a = bind (fun x -> V (f x)) a
   let map2 f a b = bind2 (fun x y -> V (f x y)) a b
-  let join a b = match (a, b) with Top, _ -> Top | _, Top -> Top | _ -> Bot
+
+  let join a b =
+    match (a, b) with
+    | Top, _ -> Top
+    | _, Top -> Top
+    | Bot, a -> a
+    | a, Bot -> a
+    | V a, V b when L.equal a b -> V a
+    | _ -> Top
 
   let leq a b =
     match (a, b) with

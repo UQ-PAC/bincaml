@@ -42,7 +42,7 @@ module type IDESSIDomain = sig
   val compose : t -> t -> t
   (** the composite of edge functions *)
 
-  val eval : t -> Value.t -> Value.t
+  val eval : Value.t -> t -> Value.t
   (** evaluate an edge function *)
 
   type state_update = (DL.t * t) Iter.t
@@ -260,9 +260,9 @@ module IDESSI (D : IDESSIDomain) = struct
                | Label v ->
                    let x =
                      match d with
-                     | Lambda -> D.eval ef D.Value.bottom
+                     | Lambda -> D.eval D.Value.bottom ef
                      | Label v' ->
-                         D.eval ef (VarMap.get_or v' m ~default:D.Value.bottom)
+                         D.eval (VarMap.get_or v' m ~default:D.Value.bottom) ef
                    in
                    let j =
                      D.Value.join (VarMap.get_or v m ~default:D.Value.bottom) x
