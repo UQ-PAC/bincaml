@@ -279,6 +279,15 @@ module PassManager = struct
           apply = Prog Transforms.Gamma_vars.transform;
           doc = "Replace gamma expressions with gamma variables";
       };
+      {
+        name = "linear-const";
+        apply = Prog Transforms.Const_prop.linear_transform;
+        doc =
+          "Performs interprocedural constant propagation of linear expressions \
+           (expressions of the form a * x + b). Usage of constant variables \
+           are replaced with their constant value. Newly dead variables are \
+           not eliminated. Assumes SSA form.";
+      };
     ]
 
   let print_passes =
