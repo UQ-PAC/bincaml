@@ -47,7 +47,6 @@ var $__BranchTaken: bv1;
 prog entry @main_4197696;
 
 proc @main_4197696 () -> ()
-  { 2 }
   require eq($_PC:bv64, 0x400d40:bv64)
   ensures eq($_PC:bv64, old($R30:bv64))
 [

@@ -50,10 +50,10 @@ let elided_of_block (block : BasilIR.AbsBasilIR.block) =
   match block with
   | Block_NoPhi (a, b, c, stmts, d, e) ->
       let stmts = elided_stmts stmts in
-      Block_NoPhi (a, b, c, stmts, d, e)
+      Block_NoPhi (a, AttribSet_Empty, c, stmts, d, e)
   | Block_Phi (a, b, c, d, e, f, stmts, g, h) ->
       let stmts = elided_stmts stmts in
-      Block_Phi (a, b, c, d, e, f, stmts, g, h)
+      Block_Phi (a, AttribSet_Empty, c, d, e, f, stmts, g, h)
 
 let elided_of_decl (decl : BasilIR.AbsBasilIR.decl) =
   let open BasilIR.AbsBasilIR in
@@ -97,26 +97,33 @@ let children_lspsymbols_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
         |> Iter.flat_map (function NamedCallReturn1 (lvar, _) -> of_lvar lvar)
   in
 
-  let of_stmt = function
-    | Stmt_Load_Var (lvar, _, _, _, _) -> of_lvar lvar
-    | Stmt_ScalarLoad (lvar, _) -> of_lvar lvar
-    | Stmt_SingleAssign (Assignment1 (lvar, _)) -> of_lvar lvar
-    | Stmt_MultiAssign (_, assigns, _) ->
-        Iter.of_list assigns
-        |> Iter.flat_map (function Assignment1 (lvar, _) -> of_lvar lvar)
-    | Stmt_DirectCall (lvars, _, _, _, _) -> of_lvars lvars
-    | _ -> Iter.empty
+  let fence = Printf.sprintf "```basilir\n%s\n```" in
+
+  let of_stmt stmt =
+    (match stmt with
+      | Stmt_Load_Var (lvar, _, _, _, _) -> of_lvar lvar
+      | Stmt_ScalarLoad (lvar, _) -> of_lvar lvar
+      | Stmt_SingleAssign (Assignment1 (lvar, _)) -> of_lvar lvar
+      | Stmt_MultiAssign (_, assigns, _) ->
+          Iter.of_list assigns
+          |> Iter.flat_map (function Assignment1 (lvar, _) -> of_lvar lvar)
+      | Stmt_DirectCall (lvars, _, _, _, _) -> of_lvars lvars
+      | _ -> Iter.empty)
+    |> Iter.map (fun stmt_info ->
+        let context = BasilIR.PrintBasilIR.(printTree prtStmt) stmt in
+        (stmt_info, [ fence context ]))
+  in
+
+  let block_context block =
+    [
+      block |> elided_of_block
+      |> BasilIR.PrintBasilIR.(printTree prtBlock)
+      |> fence;
+    ]
   in
 
   let of_block block =
-    let context =
-      Printf.sprintf {|within block
-
-```basilir
-%s
-```|}
-        (block |> elided_of_block |> BasilIR.PrintBasilIR.(printTree prtBlock))
-    in
+    let bcontext = block_context block in
     (match block with
       | Block_NoPhi (bid, _, _, stmts, _, _) ->
           Iter.of_list stmts
@@ -124,7 +131,8 @@ let children_lspsymbols_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
       | Block_Phi (bid, _, _, phis, _, _, stmts, _, _) ->
           Iter.of_list stmts
           |> Iter.flat_map (function StmtWithAttrib1 (stmt, _) -> of_stmt stmt))
-    |> Iter.map (fun (range, name) -> ((range, name), Field, [ context ]))
+    |> Iter.map (fun ((range, name), context) ->
+        ((range, name), Field, context @ ("within block" :: bcontext)))
   in
 
   (match decl with
@@ -136,14 +144,16 @@ let children_lspsymbols_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
       ->
         let paramsyms =
           params |> Iter.of_list
-          |> Iter.map (function Params1 (lid, _ty) ->
-              (of_lident lid, Field, ["within parameters"]))
+          |> Iter.map (function Params1 (lid, _ty) as p ->
+              let context = BasilIR.PrintBasilIR.(printTree prtParams) p in
+              (of_lident lid, Field, [ fence context; "within parameters" ]))
         and blocksyms =
           blocks |> Iter.of_list
-          |> Iter.map (function
+          |> Iter.map (fun block ->
+              match block with
               | Block_NoPhi (bid, _, _, _, _, _)
-              | Block_Phi (bid, _, _, _, _, _, _, _, _)
-              -> (of_bident bid, Property, []))
+              | Block_Phi (bid, _, _, _, _, _, _, _, _) ->
+                  (of_bident bid, Property, block_context block))
         and localsyms = blocks |> Iter.of_list |> Iter.flat_map of_block in
         blocksyms |> Iter.append paramsyms |> Iter.append localsyms
     | _ -> Iter.empty)
@@ -151,22 +161,10 @@ let children_lspsymbols_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
       let procdetail =
         elided_of_decl decl |> BasilIR.PrintBasilIR.(printTree prtDecl)
       in
+      let context = match context with [] -> [ fence name ] | x -> x in
+      let context = context @ [ "within procedure"; fence procdetail ] in
       let detail =
-        Printf.sprintf
-          {|
-```basilir
-%s
-```
-
-%swithin procedure
-
-```basilir
-%s
-```|} name
-          (context
-          |> List.map (Fun.flip CCString.cat "\n\n")
-          |> CCString.concat "")
-          procdetail
+        context |> List.map (Fun.flip CCString.cat "\n\n") |> CCString.concat ""
       in
       Linol_lsp.Types.DocumentSymbol.create ~kind ~name ~selectionRange ~detail
         ~range:selectionRange ~children:[] ())
@@ -199,7 +197,6 @@ let lspsymbol_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
         Some (of_lident loc, Struct)
     | Decl_RecType _ -> None (* should be impossible *)
     | Decl_Type loc -> Some (of_lident loc, Struct))
-  (* TODO: do range properly by using sliding window of 2 adjacent decls?? *)
   |> function
   | Some ((selectionRange, name), kind) ->
       let children = children_lspsymbols_of_decl input decl in
