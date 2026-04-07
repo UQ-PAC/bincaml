@@ -248,7 +248,8 @@ module Solver = struct
                   | [] -> failwith "leaves should never be empty!")))
     done
 
-  let collapse_composites graph =
+  (** Collapse copies through phis into copies *)
+  let collapse_composites =
     let searched = ref VarSet.empty in
     let rec search (node : CopyNode.t) =
       if not @@ VarSet.mem !node.v !searched then (
@@ -266,8 +267,7 @@ module Solver = struct
             then CopyNode.join p node
         | _ -> ())
     in
-    VarMap.iter (const (search % CopyNode.find)) graph;
-    VarMap.iter (const (ignore % CopyNode.find)) graph
+    VarMap.iter (const (search % CopyNode.find))
 
   let solve (prog : Program.t) =
     let graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t = Hashtbl.create 100 in
