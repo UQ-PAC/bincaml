@@ -91,7 +91,7 @@ module Domain (S : RequiresAnnotation) = struct
 
   let low_expr = Expr.BasilExpr.unexp ~op:`Gamma
 
-  let transfer (p: t) (stmt: Program.stmt) =
+  let transfer (p : t) (stmt : Program.stmt) =
     let open Stmt in
     match stmt with
     | Instr_Assign a ->
@@ -103,9 +103,7 @@ module Domain (S : RequiresAnnotation) = struct
     | Instr_Load
         { lhs; rhs; addr = Addr { addr : 'e; size : int; endian : endian } } ->
         let le = BasilExpr.load ~bits:size endian (BasilExpr.rvar rhs) addr in
-        BasilExpr.substitute
-          (fun v -> Option.return_if (Var.equal v lhs) le)
-          p
+        BasilExpr.substitute (fun v -> Option.return_if (Var.equal v lhs) le) p
         |> simplify
     | Instr_Load l -> top
     | Instr_Assert { body } -> join p (BasilExpr.unexp ~op:`BoolNOT body)
@@ -121,12 +119,8 @@ module Domain (S : RequiresAnnotation) = struct
          else p)
         |> simplify
     | Instr_Call { procid } ->
-        let out = BasilExpr.applyintrin ~op:`OR (p :: (List.map (Expr.BasilExpr.boolnot) @@ S.requires procid)) in
-        print_endline "-------";
-        print_endline (ID.name procid);
-        print_endline @@ List.to_string (fun exp -> BasilExpr.to_string exp) (S.requires procid);
-        print_endline @@ List.to_string (fun exp -> BasilExpr.to_string exp) [out];
-        out
+        BasilExpr.applyintrin ~op:`OR
+          (p :: (List.map Expr.BasilExpr.boolnot @@ S.requires procid))
     | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
     | _ -> p
 
