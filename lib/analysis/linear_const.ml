@@ -156,7 +156,7 @@ module LinearDomain = struct
     | Join (a, b, c), Join (d, e, Bot) ->
         Join (Bitvec.mul a d, Bitvec.add (Bitvec.mul a e) b, c)
 
-  let eval f x =
+  let eval x f =
     match (f, x) with
     | BotEdge, _ -> Value.Bot
     | IdEdge, x -> x
