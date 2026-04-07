@@ -79,19 +79,22 @@ module CopyNode = struct
     assert (not @@ Int.equal (List.length copied_from) 1);
     v := { v = !v.v; copied_from; parent = None }
 
-  (** Returns all reachable leaves from the given node *)
-  let rec leaves =
+  (** Returns all reachable leaves from the given node, but aborts if the
+      predicate is violated *)
+  let rec leaves (keep : t -> bool) =
     let visited = ref VarSet.empty in
-    let rec dfs v : t list =
+    let rec dfs v : t list option =
       let v = find v in
-      if VarSet.mem !v.v !visited then []
+      if VarSet.mem !v.v !visited then Some []
       else (
         visited := VarSet.add !v.v !visited;
-        match !v.copied_from with [] -> [ v ] | ls -> List.flat_map dfs ls)
+        match !v.copied_from with
+        | [] -> if keep v then Some [ v ] else None
+        | ls ->
+            let open List.Traverse (Option) in
+            Option.map List.concat @@ map_m dfs ls)
     in
     dfs
-  (* TODO possible optimisation where we abort this search if a leaf node is
-     not an input variable (want to benchmark) *)
 
   let var (n : t) = !n.v
 end
@@ -212,13 +215,13 @@ module Solver = struct
       |> StringMap.values
       |> Iter.map (node_of pid)
       |> Iter.filter_map (fun node ->
-          let leaves = CopyNode.leaves node in
-          ((not (List.is_empty leaves))
-          && List.for_all
-               (fun (n : CopyNode.t) ->
-                 StringMap.mem (Var.name !n.v) (Procedure.formal_in_params proc))
-               leaves)
-          |> flip Option.return_if (node, leaves))
+          CopyNode.leaves
+            (fun (n : CopyNode.t) ->
+              StringMap.mem (Var.name !n.v) (Procedure.formal_in_params proc))
+            node
+          |> Option.flat_map (fun leaves ->
+              (not (List.is_empty leaves))
+              |> flip Option.return_if (node, leaves)))
       |> Iter.iter (fun ((node : CopyNode.t), leaves) ->
           Hashtbl.get_or callers pid ~default:[]
           |> List.iter (fun (call : call_info) ->
