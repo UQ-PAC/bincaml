@@ -1,60 +1,37 @@
-(** An idea for interprocedural copy propagation using ... symmetric
-    multicategories?! We form union find relations of copies of variables, but
-    for phis, we introduce multi-edges! These are edges with multiple sources.
-    We can view relations as arrows in a category that can compose, and these
-    multi-edges can also compose (as in a symmetric multicategory (with each
-    target vertex distinct)), allowing us to make concise summaries of
-    procedures, being the composite of relations going from input to output
-    variables! We can then substitute a summary into the union find graph of a
-    caller, replacing input variables with caller variables if they are copied
-    (and replacing them with top otherwise). If any multi-edge summary collapses
-    into a single edge (by having multiple of the same source), we get a copy
-    relation edge! This could have been seen as a multi-target union find data
-    structure kind of thing without the category nonsense either I suppose.
+(** Interprocedural copy propagation using a funky graph thing *)
 
-    Example:
+(* For each copy assign and phi node, we create edges from the lhs to all
+    copied-from variables. We then perform path compression on linear paths of
+    this graph to get a partial intraprocedural copy propagation analysis!
+    However with just this, we miss out on copy propagation through phi nodes,
+    where every variable in a phi is copied from the same source. To fix this,
+    we recursively check whether the copied-from (parent) variables for all
+    successor vertices are all equal, and if so we create a path from the parent
+    of these successors. (This is probably hard to follow with words, so here is
+    an example:
     ```
-    f(x) -> (o) {
-        if (_) {
-            a1 = x;
-        } else {
-            a2, _ = g(x);
-        }
-        a = phi(a1, a2);
-        return a;
-    }
-
-    g(x) -> (o, p) {
-        if (_) {
-            b1 = x;
-        } else {
-            b2 = f(x);
-        }
-        b = phi(b1, b2);
-        return (x, b);
-    }
+    if ( * ) { x1 = a } else { x2 = a } x3 = phi(x1, x2)
     ```
-    Here we build intraprocedural relations
-    `x -> a1, {x, a2} -> a, {x, a2} -> o` for `f` and
-    `x -> b1, {x, b2} -> b, x -> o, {x, b2} -> p` for `g`.
-    Notice that "multi edge" unification is performed (I do NOT want to figure
-    out the time complexity of such a data structure...). From here we can substitute all of `g`'s relations of input to output vars into `f`, and obtain
-    `x -> a1, {x, a2} -> a, {x, a2} -> o, x -> a2` ->
-    `x -> a1, {x, x} -> a, {x, x} -> o, x -> a2` ->
-    `x -> a1, x -> a, x -> o, x -> a2`
-    From this, we can propagate `x -> o` into `g` to obtain
-    `x -> b1, {x, b2} -> b, x -> o, {x, b2} -> p, x -> b2` ->
-    `x -> b1, x -> b, x -> o, x -> p, x -> b2`
-    and then we can propagate again into f to obtain
-    `x -> a1, {x, a2} -> a, {x, a2} -> o, x -> a2, {x, x} -> _` ->
-    `x -> a1, {x, a2} -> a, {x, a2} -> o, x -> a2, x -> _`
-    which is redundant.
+    in this hypothetical program, x3 points to x1 and x2, which both point to a,
+    so we can update x3 to point to a. ) This gives a copy propagation analysis
+    that works through phi nodes!
 
-    To efficiently update relations from calls, we can update pointers of all output variables.
-    Hopefully this is fast... but it's linear in the number of target edges so we shall see...
-    Maybe having a map to all outvars related to a variable could help somehow?
-
-    Now to implement this... *)
+    To make it interprocedural, we perform a some small iteration steps. For
+    each output variable of each procedure, we see whether it is copied from
+    only input variables by doing a dfs on the path compressed graph. If this is
+    the case, we go to every caller of this procedure, and see whether all input
+    variables that copy into the output variable are copy expressions that are
+    equal. (Example:
+    ```
+    proc f(x) = { return g(x, x) }
+    proc g(x, y) = { if ( * ) { z1 = x } else { z2 = y } return phi(z1, x2) }
+    ```
+    here the return value of g is copied from x or y, but f calls g with (copy
+    expressions that are with) the same variable! Hence f returns a proper copy
+    of its input. ) In this case, we can create an edge from the output variable
+    in the caller graph to the input variable that copies into it. If this ever
+    actually happens, we'll want to re-iterate on this procedure as we may have
+    new edges to propagate to other procedures. *)
 
 open Bincaml_util.Common
 open Lang
@@ -274,7 +251,11 @@ module Solver = struct
     let rec search (node : CopyNode.t) =
       if not @@ VarSet.mem !node.v !searched then (
         searched := VarSet.add !node.v !searched;
-        let copied_from = List.filter (fun (n : CopyNode.t) -> not @@ Var.equal !node.v !n.v) !node.copied_from in
+        let copied_from =
+          List.filter
+            (fun (n : CopyNode.t) -> not @@ Var.equal !node.v !n.v)
+            !node.copied_from
+        in
         match copied_from with
         | l :: ls ->
             List.iter (search % CopyNode.find) (l :: ls);
