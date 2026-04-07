@@ -20,7 +20,7 @@ module IDELiveCommon = struct
   end
 
   module Value = struct
-    type t = bool [@@deriving eq, ord, show]
+    type t = bool [@@deriving eq, ord, show { with_path = false }]
 
     let bottom = false
     let top = true
@@ -41,13 +41,16 @@ module IDELiveCommon = struct
 
   open Value
 
-  type t = IdEdge | ConstEdge of Value.t [@@deriving eq, ord]
+  type t = IdEdge | ConstEdge of Value.t
+  [@@deriving eq, ord, show { with_path = false }]
 
   let bottom = ConstEdge bottom
   let top = ConstEdge top
 
   let show v =
-    match v with IdEdge -> "IdEdge" | ConstEdge v -> "ConstEdge " ^ show v
+    match v with
+    | IdEdge -> "IdEdge"
+    | ConstEdge v -> "ConstEdge " ^ Value.show v
 
   let pp fmt v = Format.pp_print_string fmt (show v)
   let identity = IdEdge
@@ -176,12 +179,17 @@ module IDELive = struct
     match d with
     | Label v -> Iter.singleton (Label (VarMap.get_or v phi ~default:v), IdEdge)
     | _ -> Iter.singleton (d, IdEdge)
+
+  let init_p2 globals (proc : Program.proc) =
+    Procedure.formal_out_params proc
+    |> StringMap.values |> Iter.append globals
+    |> Iter.map (fun v -> (v, true))
 end
 
 module IDELiveAnalysis = IDE (IDELive)
 open Idessi
 
-module IDELiveSSI : IDESSIDomain = struct
+module IDELiveSSI = struct
   include IDELiveCommon
 
   let init_data (proc : Program.proc) =
@@ -317,7 +325,7 @@ proc @fun2(f:bv64, global_in:bv64)  -> (out2:bv64) {  }
       print_endline
       @@ Iter.to_string (fun (v, r) -> Var.name v)
       @@ VarMap.to_iter
-      @@ ID.Map.get_or pid p2_results ~default:VarMap.empty)
+      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
     results;
   [%expect
     {|

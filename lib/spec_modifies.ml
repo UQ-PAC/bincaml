@@ -29,7 +29,7 @@ module FixProp = Fix.Fix.ForOrderedType (ID) (RWSets)
 
 let solve (prog : Program.t) =
   let local_rw (p : ID.t) (valuations : FixProp.valuation) =
-    let p = ID.Map.find p prog.procs in
+    let p = IDMap.find p prog.procs in
     let read, written =
       match Procedure.graph p with
       | Some _ ->
@@ -62,7 +62,7 @@ let solve (prog : Program.t) =
 let set_modsets ?(add_only = false) prog =
   let rwset = solve prog in
   let procs =
-    ID.Map.mapi
+    IDMap.mapi
       (fun i p ->
         let read, written = rwset i in
         let spec = Procedure.specification p in

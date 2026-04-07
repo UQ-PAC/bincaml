@@ -101,6 +101,7 @@ module Builtins = struct
     | `INTNEG -> Prefix "-"
     | `BVConcat -> Infix "++"
     | `IMPLIES -> Infix "==>"
+    | `ReadField s -> Postfix (Printf.sprintf "->%s" s)
     | `Extract (hi, lo) -> Postfix (Printf.sprintf "[%d:%d]" hi lo)
     | `BOOLTOBV1 -> Function "bool_to_bv1"
     | #Lang.Ops.AllOps.binary | #Lang.Ops.AllOps.unary | #Lang.Ops.AllOps.intrin
@@ -139,7 +140,7 @@ module Builtins = struct
     Lang.Stmt.iter_rexpr s (function `Expr e -> iexpr f e | _ -> ())
 
   let iprog f (p : Lang.Program.t) =
-    ID.Map.values p.procs
+    IDMap.values p.procs
     |> Iter.flat_map Lang.Procedure.iter_stmt_topo_fwd
     |> Iter.iter (istmt f);
     StringMap.values p.globals
@@ -147,7 +148,7 @@ module Builtins = struct
       | Lang.Program.Function { definition = Axiom e } -> (iexpr f) e
       | Lang.Program.Function { definition = Function e } -> (iexpr f) e
       | _ -> ());
-    p.procs |> ID.Map.values
+    p.procs |> IDMap.values
     |> Iter.iter (fun v ->
         let spec = Lang.Procedure.specification v in
         List.iter (iexpr f) spec.requires;
@@ -204,7 +205,7 @@ end
 module Instructions = struct
   let unique_stores_loads (prog : Lang.Program.t) =
     let visit_procs proc = Lang.Procedure.iter_stmt_topo_fwd proc in
-    let procs = ID.Map.values prog.procs in
+    let procs = IDMap.values prog.procs in
     procs |> Iter.flat_map visit_procs
     |> Iter.filter (function
       | Lang.Stmt.Instr_Store { lhs; rhs; value; addr = Scalar } -> true
@@ -257,7 +258,7 @@ module Instructions = struct
     in
     let steps = val_size / 8 in
     let body =
-      (if be then List.range (steps - 1) 0 else List.range 0 (steps - 1))
+      (if be then List.range 0 (steps - 1) else List.range (steps - 1) 0)
       |> List.tl
       |> List.fold_left
            (fun acc i ->
@@ -277,7 +278,7 @@ module Instructions = struct
                  (Lang.Expr.BasilExpr.rvar index)
                  (Lang.Expr.BasilExpr.bvconst
                     (Bitvec.of_int ~size:addr_size
-                       (if be then steps - 1 else 0)))))
+                       (if be then 0 else steps - 1)))))
     in
     Lang.Expr.BasilExpr.binding ~op:`Lambda [ memory; index ] body
 
@@ -289,6 +290,15 @@ module Instructions = struct
           StringMap.of_list [ (".extern", `List []); (".define", `List []) ]
         in
         let attribs = StringMap.singleton ".boogie" (`Assoc boogie_attribs) in
+        let body =
+          store_body (Var.typ rhs)
+            (match Lang.Expr.BasilExpr.type_of value with
+            | Types.Bitvector s -> s
+            | _ -> failwith "Expected bitvec type")
+            (match Lang.Expr.BasilExpr.type_of addr with
+            | Types.Bitvector s -> s
+            | _ -> failwith "Expected bitvec type")
+        in
         Some
           (Function
              {
@@ -297,16 +307,8 @@ module Instructions = struct
                  Var.create
                    (Printf.sprintf "store%d_%s" size
                       (Lang.Stmt.show_endian endian))
-                   (Var.typ lhs);
-               definition =
-                 Function
-                   (store_body (Var.typ rhs)
-                      (match Lang.Expr.BasilExpr.type_of value with
-                      | Types.Bitvector s -> s
-                      | _ -> failwith "Expected bitvec type")
-                      (match Lang.Expr.BasilExpr.type_of addr with
-                      | Types.Bitvector s -> s
-                      | _ -> failwith "Expected bitvec type"));
+                   (Lang.Expr.BasilExpr.type_of body);
+               definition = Lang.Program.Function body;
              }
             : Lang.Program.declaration)
     | Lang.Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->
@@ -496,7 +498,7 @@ module Normalise = struct
   let replace_stmts (p : Program.t) =
     let procs =
       p.procs
-      |> ID.Map.map (fun p ->
+      |> IDMap.map (fun p ->
           Procedure.map_blocks_nondet
             (fun (id, b) -> Block.map ~phi:Fun.id replace_stmt b)
             p)

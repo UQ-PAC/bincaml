@@ -46,7 +46,7 @@ let drop_unused_var_declarations_proc p =
 
 let drop_unused_var_declarations_prog (p : Program.t) =
   let used =
-    ID.Map.fold
+    IDMap.fold
       (fun i p acc -> VarSet.union acc (drop_unused_var_declarations_proc p))
       p.procs VarSet.empty
   in
@@ -97,7 +97,7 @@ let param_name suffix g =
 let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
   (* Collect all globals being lifted, for removal from p.globals at the end *)
   let all_lifted =
-    ID.Map.fold
+    IDMap.fold
       (fun _ proc acc ->
         List.fold_left
           (fun s g ->
@@ -111,7 +111,7 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
   (* ------------------------------------------------------------------ *)
   let procs =
     p.procs
-    |> ID.Map.mapi (fun procid proc ->
+    |> IDMap.mapi (fun procid proc ->
         let spec = Procedure.specification proc in
         (* We cannot lift variables in rely/guarantee clauses. This check
         assumes that only observable variables appear in these clauses. *)
@@ -347,7 +347,7 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
               Block.map ~phi:Fun.id
                 (function
                   | Stmt.Instr_Call { procid; lhs; args } as stmt -> (
-                      match ID.Map.find_opt procid p.procs with
+                      match IDMap.find_opt procid p.procs with
                       | None -> stmt
                       | Some callee ->
                           let cspec = Procedure.specification callee in
@@ -402,7 +402,7 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
   (* Pass 2 – remove lifted globals from captures/modifies specs        *)
   (* ------------------------------------------------------------------ *)
   let procs =
-    ID.Map.map
+    IDMap.map
       (fun proc ->
         let spec = Procedure.specification proc in
         Procedure.set_specification proc
@@ -520,7 +520,7 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
           ( Procedure.fresh_var in_proc ~name:(Var.name v) (Var.typ v),
             [ (block, rn) ] )
   in
-  let delayed_phis = ref ID.Set.empty in
+  let delayed_phis = ref IDSet.empty in
 
   let tf_block proc block_id b =
     let pred = Procedure.blocks_pred proc block_id |> Iter.to_list in
@@ -529,7 +529,7 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
       | Some v -> v
       | None ->
           Hashtbl.add phis id VarMap.empty;
-          delayed_phis := ID.Set.add id !delayed_phis;
+          delayed_phis := IDSet.add id !delayed_phis;
           VarMap.empty
     in
     let renames, bl_phis =
@@ -576,7 +576,7 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
 
   let fixup_delayed block_id proc =
     let renames = Hashtbl.find st block_id in
-    if ID.Set.mem block_id !delayed_phis then
+    if IDSet.mem block_id !delayed_phis then
       Procedure.blocks_succ proc block_id
       |> Iter.filter (fun (bid, _) ->
           let pred =
@@ -625,7 +625,7 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
            proc
     else proc
   in
-  let proc = ID.Set.fold fixup_delayed !delayed_phis proc in
+  let proc = IDSet.fold fixup_delayed !delayed_phis proc in
   let check_bl (block_id, (block : Program.bloc)) =
     let pred =
       Procedure.blocks_pred proc block_id |> Iter.map (fun (i, _) -> i)
@@ -646,4 +646,4 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
   proc
 
 let ssa_prog ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
-  { p with procs = ID.Map.map (ssa ~skip_observable ~skip_maps) p.procs }
+  { p with procs = IDMap.map (ssa ~skip_observable ~skip_maps) p.procs }

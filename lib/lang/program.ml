@@ -28,6 +28,13 @@ let pp_stmt fmt s = Format.pp_print_string fmt (show_stmt s)
 type prog_spec = { rely : BasilExpr.t list; guarantee : BasilExpr.t list }
 type func_type = Axiom of e | Uninterpreted | Function of e
 
+type implicit_declaration =
+  | VariantCase of {
+      variant : string;
+      belongs_to : Types.t;
+      constructor : Var.t; (* function to construct a value of this case *)
+    }
+
 type declaration =
   | Type of { binding : string; typ : Types.t }
   | Function of {
@@ -82,14 +89,15 @@ let pretty_declaration d =
 type t = {
   modulename : string;
   globals : declaration StringMap.t;
+  implicit_decls : implicit_declaration StringMap.t;
   entry_proc : ID.t option;
-  procs : proc ID.Map.t;
+  procs : proc IDMap.t;
   proc_names : ID.generator;
   attrib : e Attrib.attrib_map;
   spec : prog_spec;
 }
 
-let proc g p = ID.Map.find p g.procs
+let proc g p = IDMap.find p g.procs
 
 let proc_pretty p =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
@@ -128,7 +136,7 @@ let prog_pretty (p : t) =
     globs @ n
     @ List.map
         (fun (_, p) -> proc_pretty p)
-        (ID.Map.to_list p.procs
+        (IDMap.to_list p.procs
         |> List.sort (fun (i, _) (j, _) -> ID.compare i j))
   in
 
@@ -145,6 +153,37 @@ let decl_global ?(attrib = StringMap.empty) p v =
   let decl = Variable { binding = v; attrib } in
   { p with globals = StringMap.add (Var.name v) decl p.globals }
 
+let decl_typ ?(attrib = StringMap.empty) p t =
+  match t with
+  | Sort (name, []) as s ->
+      {
+        p with
+        globals =
+          StringMap.add name (Type { binding = name; typ = s }) p.globals;
+        implicit_decls =
+          StringMap.add name
+            (let ty = Types.curry [] s in
+             let constructor = Var.create name ty ~scope:Global in
+             VariantCase { variant = name; belongs_to = s; constructor })
+            p.implicit_decls;
+      }
+  | Sort (name, variants) as s ->
+      {
+        p with
+        globals =
+          StringMap.add name (Type { binding = name; typ = s }) p.globals;
+        implicit_decls =
+          StringMap.add_list p.implicit_decls
+            (variants
+            |> List.map (function { variant; fields } ->
+                let args = List.map (function { field; typ } -> typ) fields in
+                let ty = Types.curry args s in
+                let constructor = Var.create variant ty ~scope:Global in
+                (variant, VariantCase { variant; belongs_to = s; constructor }))
+            );
+      }
+  | _ -> failwith "not declarable type"
+
 let add_decl ?(attrib = StringMap.empty) p v decl =
   { p with globals = StringMap.add v decl p.globals }
 
@@ -157,7 +196,8 @@ let create_single_proc ?(name = "<module>") () =
       modulename = name;
       entry_proc = Some procname;
       globals = StringMap.empty;
-      procs = ID.Map.singleton procname proc;
+      implicit_decls = StringMap.empty;
+      procs = IDMap.singleton procname proc;
       proc_names;
       attrib = StringMap.empty;
       spec = { rely = []; guarantee = [] };
@@ -171,7 +211,8 @@ let empty ?name () =
     modulename;
     entry_proc = None;
     globals = StringMap.empty;
-    procs = ID.Map.empty;
+    implicit_decls = StringMap.empty;
+    procs = IDMap.empty;
     proc_names = ID.make_gen ();
     attrib = StringMap.empty;
     spec = { rely = []; guarantee = [] };
@@ -226,10 +267,10 @@ module CallGraph = struct
       |> Iter.filter_map (function
         | Stmt.Instr_Call { procid } -> Some procid
         | _ -> None)
-      |> ID.Set.of_iter
+      |> IDSet.of_iter
     in
     let calls =
-      ID.Map.to_iter t.procs
+      IDMap.to_iter t.procs
       |> Iter.map (function pid, proc -> (pid, called_by proc))
     in
     let graph = G.empty in
@@ -238,7 +279,7 @@ module CallGraph = struct
     let proc_edges =
       Iter.map
         (function id -> (ProcBegin id, Proc id, ProcReturn id))
-        (ID.Map.keys t.procs)
+        (IDMap.keys t.procs)
     in
     let graph = Iter.fold G.add_edge_e graph proc_edges in
     let graph =
@@ -263,7 +304,7 @@ module CallGraph = struct
                 (Iter.singleton (ProcBegin proc, Proc proc, ProcReturn proc))
                 (Iter.flat_map
                    (function c -> call_dep proc c)
-                   (ID.Set.to_iter called)))
+                   (IDSet.to_iter called)))
         calls
     in
     Iter.fold G.add_edge_e graph call_dep_edges

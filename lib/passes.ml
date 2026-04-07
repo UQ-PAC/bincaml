@@ -153,6 +153,13 @@ module PassManager = struct
       doc = "Remove blocks unreachable from entry";
     }
 
+  let irreducible_loop =
+    {
+      name = "irreducible-loops";
+      apply = Proc Transforms.Irreducible_loop.transform;
+      doc = "Remove blocks unreachable from entry";
+    }
+
   let full_ssa =
     {
       name = "ssa";
@@ -169,8 +176,55 @@ module PassManager = struct
       doc = "Fail if the IR program is not type correct";
     }
 
+  let split_memory_encoding =
+    {
+      name = "split-memory-encoding";
+      apply = Prog Transforms.Memory_encoding.split_transform;
+      doc = "Generates a split base/offset pair memory encoding/model";
+    }
+
+  let flat_memory_encoding =
+    {
+      name = "flat-memory-encoding";
+      apply = Prog Transforms.Memory_encoding.flat_transform;
+      doc = "Generates a flat (heavily quantified) memory encoding/model";
+    }
+
+  let memory_specification =
+    {
+      name = "memory-specification";
+      apply = Prog Transforms.Memory_specification.transform;
+      doc = "Specifies programs for memory safety";
+    }
+  
+  let intra_function_summaries =
+    {
+      name = "intra-function-summaries";
+      apply = Proc Transforms.Function_summaries.intraproc_transform;
+      doc =
+        "Generate function summaries for each procedure independently. The \
+         generated summaries will be a refinement with respect to wp logic \
+         only, i.e. all \"correct\" inputs will remain allowed, and all \
+         described outputs will be \"correct\". There is no guarantee of \
+         completeness.";
+    }
+
+  let inter_function_summaries =
+    {
+      name = "inter-function-summaries";
+      apply = Prog Transforms.Function_summaries.interproc_transform;
+      doc =
+        "Generate function summaries for each procedure intraprocedurally. \
+         Summaries generated for called procedures will be used in the \
+         generation of caller procedures. The generated summaries will be a \
+         refinement with respect to wp logic only, i.e. all \"correct\" inputs \
+         will remain allowed, and all described outputs will be \"correct\". \
+         There is no guarantee of completeness. Depends on Z3.";
+    }
+
   let passes =
     [
+      irreducible_loop;
       cleanup_cfg;
       dfg_bool;
       dfg_ival_wint_product;
@@ -185,6 +239,10 @@ module PassManager = struct
       sssa;
       full_ssa;
       type_check;
+      split_memory_encoding;
+      memory_specification;
+      intra_function_summaries;
+      inter_function_summaries;
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;
@@ -207,11 +265,14 @@ module PassManager = struct
            read ";
       };
       {
-        name = "ide-live";
-        apply = Prog Transforms.Ide.transform;
+        name = "inter-dead-store-elim";
+        apply =
+          Prog
+            (Transforms.Livevars.InterprocDSE.transform
+               (not % Bincaml_util.Var.is_local));
         doc =
-          "Write the results of an ide based live variable analysis to .dot \
-           files";
+          "Remove store assignments to pure local variables which are never \
+           read using an interprocedural analysis";
       };
       remove_unused;
       {
@@ -220,6 +281,11 @@ module PassManager = struct
           Prog
             (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
+      };
+      {
+          name = "gamma-vars";
+          apply = Prog Transforms.Gamma_vars.transform;
+          doc = "Replace gamma expressions with gamma variables";
       };
     ]
 
@@ -264,7 +330,7 @@ module PassManager = struct
     | Prog tf -> tf p
     | Batch tf -> List.fold_left run_transform p tf
     | DFGAnalysis (module D : Analysis.Dataflow_graph.AnalysisType) ->
-        ID.Map.to_iter p.procs
+        IDMap.to_iter p.procs
         |> Iter.filter (fun (_, p) -> Procedure.graph p |> Option.is_some)
         |> Iter.iter (fun (pn, p) ->
             (*let r =
@@ -285,7 +351,7 @@ module PassManager = struct
         p
     | ProcCheck app ->
         let _ =
-          ID.Map.mapi
+          IDMap.mapi
             (fun id proc ->
               Trace_core.with_span ~__FILE__ ~__LINE__
                 ("check-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
@@ -298,7 +364,7 @@ module PassManager = struct
         p
     | Proc app ->
         let procs =
-          ID.Map.mapi
+          IDMap.mapi
             (fun id proc ->
               Trace_core.with_span ~__FILE__ ~__LINE__
                 ("transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
