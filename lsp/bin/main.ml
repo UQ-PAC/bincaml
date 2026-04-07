@@ -161,6 +161,7 @@ class lsp_server =
 
     method! on_req_symbol ~notify_back ~id ~uri ~workDoneToken
         ~partialResultToken () =
+      Printexc.record_backtrace true;
       let st = self#get uri in
       Lwt.return (Some (`DocumentSymbol st#lspsymbols))
 

@@ -1,9 +1,8 @@
 module Lsp = Linol.Lsp
 
-let one_value_function_cache ~eq f argfun =
+let one_value_function_cache ?(eq = CCEqual.poly) f argfun =
   let cache = CCCache.lru ~eq 1 in
-  let cached = CCCache.with_cache cache f in
-  fun x -> cached (argfun x)
+  fun x -> CCCache.with_cache cache f (argfun x)
 
 let parse_tokens (contents : string) =
   let lexbuf = Lexing.from_string ~with_positions:true contents in
@@ -54,15 +53,20 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
   (initial_contents : string) =
   let () = notify_back#set_uri uri in
   let make_lines =
-    one_value_function_cache ~eq:CCEqual.string (Fun.compose Array.of_list CCString.lines)
-      (fun st -> st#contents)
+    one_value_function_cache ~eq:CCEqual.string
+      (Fun.compose Array.of_list CCString.lines) (fun st -> st#contents)
   in
   let input =
-    one_value_function_cache ~eq:CCEqual.string Pp_loc.Input.string (fun st -> st#contents)
+    one_value_function_cache ~eq:CCEqual.string Pp_loc.Input.string (fun st ->
+        st#contents)
   in
-  let tokens = one_value_function_cache ~eq:CCEqual.string parse_tokens (fun st -> st#contents) in
+  let tokens =
+    one_value_function_cache ~eq:CCEqual.string parse_tokens (fun st ->
+        st#contents)
+  in
   let completions =
-    one_value_function_cache ~eq:CCEqual.(pair (array Raw_tokens.equal_token_with_pos) (array string))
+    one_value_function_cache
+      ~eq:CCEqual.(pair (array Raw_tokens.equal_token_with_pos) (array string))
       (fun (tokens, lines) ->
         tokens |> Iter.of_array
         |> Iter.filter_map completion_item_of_token
@@ -87,7 +91,8 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
       (fun st -> (st#tokens, st#lines))
   in
   let parse_result =
-    one_value_function_cache ~eq:CCEqual.(pair (array Raw_tokens.equal_token_with_pos) string)
+    one_value_function_cache
+      ~eq:CCEqual.(pair (array Raw_tokens.equal_token_with_pos) string)
       (fun (tokens, contents) ->
         let get_token, prev_token = Raw_tokens.make_token_getter tokens in
         try Ok (BasilIR.ParBasilIR.pModuleT get_token (Lexing.from_string ""))
@@ -105,7 +110,8 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
       (fun st -> (st#tokens, st#contents))
   in
   let cst =
-    one_value_function_cache ~eq:(CCResult.equal ~err:CCEqual.poly CCEqual.poly)
+    one_value_function_cache
+      ~eq:(CCResult.equal ~err:CCEqual.poly CCEqual.poly)
       (fun parse_result ->
         let prev = ref (BasilIR.AbsBasilIR.Module1 []) in
         match parse_result with
@@ -160,7 +166,8 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
         (st#is_too_big, st#debug_highlight, st#tokens, st#parse_result))
   in
   let lspsymbols =
-    one_value_function_cache ~eq:CCEqual.poly
+    one_value_function_cache
+      ~eq:CCEqual.(triple poly poly physical)
       (fun (BasilIR.AbsBasilIR.Module1 decls, contents, input) ->
         Lsp_symbols.lspsymbols_of_decls ~len:(String.length contents) input
           decls)

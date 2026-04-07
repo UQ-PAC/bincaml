@@ -15,7 +15,6 @@ proc @main (a:bv2) -> () [
     goto (%loop_true, %loop_false);
   ];
   block %loop_true
-
     guard (bvult($R0, 10:bv64));
     $R1 := bvadd($R1, $R0);
     $R0 := bvadd($R0, 1:bv64);
