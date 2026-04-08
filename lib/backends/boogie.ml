@@ -73,11 +73,14 @@ let pretty_const (c : Lang.Ops.AllOps.const) =
 
 let pretty_call_args_no_brackets (args : Containers_pp.t list) =
   let open Containers_pp in
-  newline_or_spaces 0 ^ List.hd args
-  ^ append_l
-      (List.map
-         (fun arg -> text "," ^ newline_or_spaces 1 ^ arg)
-         (List.tl args))
+  newline_or_spaces 0
+  ^
+  match args with
+  | [] -> text ""
+  | [ hd ] -> hd
+  | hd :: tl ->
+      hd
+      ^ append_l @@ List.map (fun arg -> text "," ^ newline_or_spaces 1 ^ arg) tl
 
 let pretty_call_args (args : Containers_pp.t list) =
   let open Containers_pp in
