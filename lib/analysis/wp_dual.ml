@@ -130,10 +130,15 @@ module Domain (S : FunctionSummaryAnnotation) = struct
             lhs ensures
         in
         let p =
-          if StringMap.cardinal lhs > 0 then
-          (BasilExpr.forall
-            ~bound:(StringMap.values lhs |> Iter.to_list)
-            (BasilExpr.binexp ~op:`IMPLIES ensures p))
+          (* Only if we had return values and a meaningful ensures
+          do we care to update p. *)
+          if
+            StringMap.cardinal lhs > 0
+            && (not @@ List.is_empty @@ S.requires procid)
+          then
+            BasilExpr.forall
+              ~bound:(StringMap.values lhs |> Iter.to_list)
+              (BasilExpr.binexp ~op:`IMPLIES ensures p)
           else p
         in
         simplify p
