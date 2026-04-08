@@ -222,9 +222,21 @@ class lsp_server =
             Bincaml_lsp.Lsp_symbols.lspsymbol_of_ident ~lspsymbols ~lsppos:pos
               ident
             |> Iter.map (fun (sym : Bincaml_lsp.Lsp_symbols.symbol) ->
+                Logs.app (fun m ->
+                    m "%s"
+                      (Linol_lsp.Types.DocumentSymbol.yojson_of_t sym
+                      |> Yojson.Safe.to_string));
                 Linol_lsp.Types.Location.create ~range:sym.selectionRange ~uri)
           in
-          Lwt.return (Some (`Location (Iter.to_list locations)))
+          let locations = Iter.to_list locations in
+          List.iter
+            (fun l ->
+              Logs.app (fun m ->
+                  m "%s"
+                    (Linol_lsp.Types.Location.yojson_of_t l
+                    |> Yojson.Safe.to_string)))
+            locations;
+          Lwt.return (Some (`Location locations))
 
     (* method! on_req_code_lens_resolve ~notify_back ~id code_lens = *)
     (*   Lwt.return code_lens *)

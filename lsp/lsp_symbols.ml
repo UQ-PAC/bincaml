@@ -135,7 +135,20 @@ let children_lspsymbols_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
         ((range, name), Field, context @ ("within block" :: bcontext)))
   in
 
+  let of_typeassign (TypeAssign_Sum (_, cases)) =
+    let context case =
+      [ case |> BasilIR.PrintBasilIR.(printTree prtSumCase) |> fence ]
+    in
+    Iter.of_list cases
+    |> Iter.map (fun case ->
+        match case with
+        | SortType name | VariantCase (name, _, _, _) ->
+            (of_lident name, Constructor, context case))
+  in
+
   (match decl with
+    | Decl_RecType typeassigns ->
+        Iter.of_list typeassigns |> Iter.flat_map of_typeassign
     | Decl_Fun (_, params, _, _, _) ->
         params |> Iter.of_list
         |> Iter.map (function LocalVarParen1 (_, lid, _, _) ->
@@ -194,9 +207,9 @@ let lspsymbol_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
     | Decl_ProgWithSpec (_, _, _) -> None
     | Decl_Proc (proc, _, _, _, _, _, _, _, _, _) -> Some (of_pident proc, Class)
     | Decl_RecType (TypeAssign_Sum (loc, _) :: rest) ->
-        Some (of_lident loc, Struct)
+        Some (of_lident loc, Enum)
     | Decl_RecType _ -> None (* should be impossible *)
-    | Decl_Type loc -> Some (of_lident loc, Struct))
+    | Decl_Type loc -> Some (of_lident loc, Interface))
   |> function
   | Some ((selectionRange, name), kind) ->
       let children = children_lspsymbols_of_decl input decl in
@@ -226,21 +239,35 @@ let lspsymbols_of_decls ~len input decls =
        ~init:(end_, [])
   |> snd
 
+(* HACK: we have different kinds of toplevel decls, but we have to fit them into
+   the lsp types. in future, maybe we make our own symbol type... *)
+
 let proc_lspsymbol_at_pos ~lspsymbols lsppos =
   lspsymbols
   |> List.find_opt (fun (sym : symbol) ->
-      Raw_tokens.lsprange_contains sym.range lsppos)
+      match sym.kind with
+      | Enum | Interface -> false
+      | _ -> Raw_tokens.lsprange_contains sym.range lsppos)
 
 let lspsymbols_with_kind ~lspsymbols ~lsppos (kind : ident_kind) : symbol Iter.t
     =
+  let symbol = lazy (proc_lspsymbol_at_pos ~lspsymbols lsppos) in
   let locals () =
-    Iter.of_opt (proc_lspsymbol_at_pos ~lspsymbols lsppos)
+    Iter.of_opt (Lazy.force symbol)
     |> Iter.flat_map_l (fun (x : symbol) -> Option.value ~default:[] x.children)
+  in
+  let constructors () =
+    Iter.of_list lspsymbols
+    |> Iter.flat_map_l (fun (sym : symbol) ->
+        match sym.kind with
+        | Enum | Interface -> sym :: Option.value ~default:[] sym.children
+        | _ -> [])
   in
   match kind with
   | `Attrib -> Iter.empty
   | `Proc | `Global -> Iter.of_list lspsymbols
-  | `Block | `Local -> locals ()
+  | `Block -> locals ()
+  | `Local -> Iter.append (locals ()) (constructors ())
 
 let lspsymbol_of_ident ~lspsymbols ~lsppos ident =
   lspsymbols_with_kind ~lspsymbols ~lsppos ident.kind
