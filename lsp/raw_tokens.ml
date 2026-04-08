@@ -41,6 +41,7 @@ type raw_token = BasilIR.ParBasilIR.token =
   | KW_unreachable
   | KW_type
   | KW_true
+  | KW_then
   | KW_store
   | KW_sign_extend
   | KW_shared
@@ -80,22 +81,22 @@ type raw_token = BasilIR.ParBasilIR.token =
   | KW_intadd
   | KW_indirect
   | KW_in
+  | KW_if
   | KW_guard
   | KW_guarantees
   | KW_guarantee
   | KW_goto
   | KW_gamma
   | KW_fun
-  | KW_fset
   | KW_forall
   | KW_false
-  | KW_faccess
   | KW_extract
   | KW_exists
   | KW_eq
   | KW_entry
   | KW_ensures
   | KW_ensure
+  | KW_else
   | KW_classification
   | KW_cases
   | KW_captures
