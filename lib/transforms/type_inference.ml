@@ -21,8 +21,9 @@ module Polarity = struct
       - Upper bounds
       - Union
   *)
-  type t = Pos | Neg [@@deriving ord, eq, show]
+  type t = Pos | Neg [@@deriving ord, eq]
 
+  let show = function Pos -> "+" | Neg -> "-"
   let not p = match p with Pos -> Neg | Neg -> Pos
   let positive = equal Pos
 end
@@ -50,7 +51,9 @@ end = struct
 
   let var_procid_to_uid (var : Var.t) (procId : ID.t) : t =
     if Var.is_global var then Var.name var
-    else ID.name procId ^ "_" ^ Var.name var
+    else
+      let s = ID.name procId in
+      String.sub s 1 (String.length s - 1) ^ "_" ^ Var.name var
 
   let var_proc_to_uid (var : Var.t) (proc : Program.proc option) : t =
     match proc with
@@ -93,7 +96,6 @@ module InferredType = struct
         string
         * t StringMap.t
         * t StringMap.t (* list of inputs and list of outputs *)
-    | Field of field
     | Record of field list (* A list of fields in the record *)
     | TypeVar of VarId.t
     | Recursive of VarId.t * t
@@ -115,9 +117,8 @@ module InferredType = struct
         Printf.sprintf "(%s) → (%s)"
           (Iter.to_string show (StringMap.values ins))
           (Iter.to_string show (StringMap.values outs))
-    | Field field -> show_field field
     | Record fields ->
-        Printf.sprintf "{ %s }" @@ List.to_string show_field fields
+        Printf.sprintf "{ %s }" @@ List.to_string ~sep:", " show_field fields
 
   and show_field { offset; size; ty } =
     Printf.sprintf "(%s, %d): %s" (Z.to_string offset) size (show ty)
@@ -135,52 +136,7 @@ module InferredType = struct
     | Function (_, ins, outs) ->
         StringMap.iter (fun _ v -> iter f v) ins;
         StringMap.iter (fun _ v -> iter f v) outs
-    | Field { ty } -> iter f ty
     | Record fields -> List.iter (fun { ty } -> iter f ty) fields
-
-  (* Top and type_var might be valid, and maybe even bottom and then those can just default to whatever type it had prior *)
-  let rec inferred_to_real recursives typ : (VarId.t * Types.t) list * Types.t =
-    match typ with
-    | Top -> (recursives, Types.Top)
-    | Bottom -> (recursives, Types.Nothing)
-    | TypeVar a -> (recursives, Types.Variable (VarId.show a))
-    | BinCamlType a -> (recursives, BinCamlType.bincaml_type_to_type a)
-    | Pointer (lower, upper) ->
-        let recursives, lower = inferred_to_real recursives lower in
-        let recursives, upper = inferred_to_real recursives upper in
-        let name = "pointer_" ^ Int.to_string @@ Hashtbl.hash typ in
-
-        (recursives, Types.Pointer { name; lower; upper })
-    | Record fields ->
-        let name = "record_" ^ Int.to_string @@ Hashtbl.hash typ in
-        let recursives, fields =
-          List.fold_left_map
-            (fun recursives ({ offset; ty } : field) ->
-              let recursives, typ = inferred_to_real recursives ty in
-              ( recursives,
-                (Z.to_string offset, ({ typ; offset } : Types.record_field)) ))
-            recursives fields
-        in
-        (recursives, Types.Record (name, StringMap.of_list fields))
-    | Field { ty } -> inferred_to_real recursives ty
-    | Recursive (varid, typ) ->
-        let recursives, typ = inferred_to_real recursives typ in
-        ((varid, typ) :: recursives, Types.Variable (VarId.show varid))
-    | Union (a, b) | Sect (a, b) -> inferred_to_real recursives a (* TODO *)
-    | Function _ -> (recursives, Top)
-
-  let rec type_to_inferred (typ : Types.t) : t =
-    match typ with
-    | Top -> Top
-    | Nothing -> Bottom
-    | Variable a -> TypeVar (VarId.make_id a)
-    | Pointer { lower; upper } ->
-        Pointer (type_to_inferred lower, type_to_inferred upper)
-    | Record (name, fields) -> failwith "TODO"
-    | Bitvector bv -> BinCamlType (BinCaml_BV bv)
-    | Boolean -> BinCamlType BinCaml_Bool
-    | Integer -> BinCamlType BinCaml_Int
-    | Unit | Map _ | Sort _ -> failwith "No inferred type mapping"
 
   let rec join (ty0 : t) (ty1 : t) : t =
     match (ty0, ty1) with
@@ -216,6 +172,7 @@ module InferredType = struct
     | (Record _ as a), _ | _, (Record _ as a) -> a
     | Pointer (a, b), Pointer (c, d) ->
         (* ptr((a u c) n (b n d), (b n d)) *)
+        (* WARN: IDK *)
         Pointer (join (Union (a, c)) (join b d), join b d)
     | (Pointer _ as a), _ | _, (Pointer _ as a) -> a
     (*
@@ -238,9 +195,58 @@ module InferredType = struct
           in
           Function (name0, ins, outs0)
     | (Function _ as a), _ | _, (Function _ as a) -> a
-    | Top, a | a, Top -> a
+    (* TypeVar at this stage is pretty much Top *)
+    (* | TypeVar _, TypeVar _ -> Top *)
+    | Top, a | a, Top | TypeVar _, a | a, TypeVar _ -> a
     | Bottom, a | a, Bottom -> Bottom
-    | a, b -> Sect (a, b)
+    | a, b when equal a b -> a
+    | a, b -> b
+
+  (* Top and type_var might be valid, and maybe even bottom and then those can just default to whatever type it had prior *)
+  let rec inferred_to_real recursives typ : (VarId.t * Types.t) list * Types.t =
+    match typ with
+    | Top -> (recursives, Types.Top)
+    | Bottom -> (recursives, Types.Nothing)
+    | TypeVar a -> (recursives, Types.Variable (VarId.show a))
+    | BinCamlType a -> (recursives, BinCamlType.bincaml_type_to_type a)
+    | Pointer (lower, upper) ->
+        let recursives, lower = inferred_to_real recursives lower in
+        let recursives, upper = inferred_to_real recursives upper in
+        let name = "pointer_" ^ Int.to_string @@ Hashtbl.hash typ in
+
+        (recursives, Types.Pointer { name; lower; upper })
+    | Record fields ->
+        let name = "record_" ^ Int.to_string @@ Hashtbl.hash typ in
+        let recursives, fields =
+          List.fold_left_map
+            (fun recursives ({ offset; ty } : field) ->
+              let recursives, typ = inferred_to_real recursives ty in
+              ( recursives,
+                (Z.to_string offset, ({ typ; offset } : Types.record_field)) ))
+            recursives fields
+        in
+        (recursives, Types.Struct (name, StringMap.of_list fields))
+    | Recursive (varid, typ) ->
+        let recursives, typ = inferred_to_real recursives typ in
+        ((varid, typ) :: recursives, Types.Variable (VarId.show varid))
+    (* NOTE: Will need to check to make sure the typevar isn't a recursive and if it is use that one instead *)
+    | Union (a, b) -> inferred_to_real recursives a
+    | Sect (a, b) ->
+        inferred_to_real recursives @@ join a b (* This is inf recursion *)
+    | Function _ -> (recursives, Top)
+
+  let rec type_to_inferred (typ : Types.t) : t =
+    match typ with
+    | Top -> Top
+    | Nothing -> Bottom
+    | Variable a -> TypeVar (VarId.make_id a)
+    | Pointer { lower; upper } ->
+        Pointer (type_to_inferred lower, type_to_inferred upper)
+    | Struct (name, fields) -> failwith "TODO"
+    | Bitvector bv -> BinCamlType (BinCaml_BV bv)
+    | Boolean -> BinCamlType BinCaml_Bool
+    | Integer -> BinCamlType BinCaml_Int
+    | Unit | Map _ | Sort _ -> failwith "No inferred type mapping"
 end
 
 module TySet = struct
@@ -299,7 +305,7 @@ module ConstraintState = struct
     | Some { lb; ub } ->
         if Polarity.positive bound then TySet.mem typ lb else TySet.mem typ ub
 
-  let export_graph_viz (t : t) : string =
+  let export_graphviz (t : t) : string =
     Printf.sprintf "\ndigraph G {\n%s\n%s\n}"
       (Iter.fold
          (fun a ty ->
@@ -411,6 +417,39 @@ module TypeAutomata = struct
               m.transitions StateSet.empty)
   end
 
+  let export_graphviz n =
+    Printf.sprintf
+      "\n\
+       digraph G {\n\
+       \tranksep=2\n\
+       \tnodesep=2\n\n\
+       \t\"%s\" [height=0, width=0, style=filled, fillcolor=\"#c4a7e7\" ]\n\
+       %s\n\n\
+       \t\"%s\" -> %s;\n\
+       \t%s\n\
+       }\n\n\n"
+      n.name
+      (Iter.fold
+         (fun a (polarity, typ) ->
+           let shape =
+             if Polarity.positive polarity then "c4a7e7" else "eb6f92"
+           in
+           Printf.sprintf
+             "%s\"%s\" [shape=oval style=filled, fillcolor=\"#%s\"];\n" a
+             (InferredType.show typ ^ Polarity.show polarity)
+             shape)
+         "" (get_states n))
+      n.name
+      (Printf.sprintf "\"%s\""
+      @@ (fun (p, n) -> InferredType.show n ^ Polarity.show p) n.start)
+      (List.fold_left
+         (fun acc ((polarity, s), a, (polarity2, t)) ->
+           Printf.sprintf "%s\"%s\" -> \"%s\" [label=\"%s\", ];\n" acc
+             (InferredType.show s ^ Polarity.show polarity)
+             (InferredType.show t ^ Polarity.show polarity2)
+           @@ Sigma.show a)
+         "" (get_transitions n))
+
   (*
     Meow meow meow
   *)
@@ -418,7 +457,14 @@ module TypeAutomata = struct
     let rec helper (trans : State.t list Edges.t StateEdges.t)
         (curr_state : State.t) =
       (* Get outgoing edges from curr_state *)
-      let edges = get_transitions_from m curr_state in
+      let children = get_next_states m curr_state in
+      let trans = List.fold_left helper trans children in
+      (* WARN, this wrongly assumes kids are the same *)
+      let edges =
+        match StateEdges.find_opt curr_state m.transitions with
+        | None -> Iter.empty
+        | Some a -> Edges.to_iter a
+      in
       let trans, edge_list =
         (* Map those edges so that there is one state per edge *)
         List.fold_filter_map
@@ -430,6 +476,11 @@ module TypeAutomata = struct
             | edge, [ a ] -> (trans, Some (edge, [ a ]))
             (* Join all states together *)
             | edge, (p, h) :: tl ->
+                let children =
+                  match StateEdges.find_opt (p, h) trans with
+                  | None -> Iter.empty
+                  | Some a -> Edges.to_iter a
+                in
                 let edges, state =
                   List.fold_left
                     (fun (edges, acc) ((_, typ) as state) ->
@@ -437,10 +488,14 @@ module TypeAutomata = struct
                         If the end state from the edge has edges,
                           they should be attached to the new state
                       *)
-                      let children = get_transitions_from m state in
+                      let children =
+                        match StateEdges.find_opt state trans with
+                        | None -> Iter.empty
+                        | Some a -> Edges.to_iter a
+                      in
+
                       (Iter.append children edges, InferredType.join acc typ))
-                    (get_transitions_from m (p, h), h)
-                    tl
+                    (children, h) tl
                 in
                 let trans =
                   StateEdges.add (p, state) (Edges.of_iter edges) trans
@@ -450,10 +505,9 @@ module TypeAutomata = struct
         @@ List.of_iter edges
       in
       let trans = StateEdges.add curr_state (Edges.of_list edge_list) trans in
-      let children = get_next_states m curr_state in
-      List.fold_left helper trans children
+      trans
     in
-    let transitions = helper m.transitions m.start in
+    let transitions = helper StateEdges.empty m.start in
     { m with transitions }
 
   let remove_unreachable (m : t) : t =
@@ -470,7 +524,7 @@ module TypeAutomata = struct
     let good = helper StateEdges.empty m.start in
     { m with transitions = good }
 
-  let simplify_automata (m : t) : t = merge_nodes m |> remove_unreachable
+  let simplify_automata (m : t) : t = m |> merge_nodes |> remove_unreachable
 
   (*
     Two mutually recursive functions that take a given InferredType.t
@@ -502,7 +556,7 @@ module TypeAutomata = struct
     let rec grab_edges (ty : InferredType.t) p :
         (Polarity.t * InferredType.t) list * (Sigma.t * State.t) list =
       match ty with
-      | Top | BinCamlType _ | TypeVar _ | Bottom | Field _ -> ([], [])
+      | Top | BinCamlType _ | TypeVar _ | Bottom -> ([], [])
       | Recursive (a, ty) ->
           (*
               WARN: IDK
@@ -540,8 +594,7 @@ module TypeAutomata = struct
     let rec type_to_state_list p (ty : InferredType.t) ((ls, tbl) as acc) =
       let open Sigma in
       match ty with
-      | Top | BinCamlType _ | TypeVar _ | Bottom | Field _ ->
-          ((p, ty) :: ls, tbl)
+      | Top | BinCamlType _ | TypeVar _ | Bottom -> ((p, ty) :: ls, tbl)
       | Recursive (id, typ) ->
           (*
             NOTE: I think it is easiest to deal with recursives with type decls
@@ -642,9 +695,9 @@ module TypeAutomata = struct
            types)
     in
     (* Assume the list is only of two things *)
-    let make_pointer types : InferredType.t =
-      match types with
-      | [ (Sigma.StoreLabel, lb); (LoadLabel, ub) ]
+    let make_pointer : (Sigma.t * InferredType.t) list -> InferredType.t =
+      function
+      | [ (StoreLabel, lb); (LoadLabel, ub) ]
       | [ (LoadLabel, ub); (StoreLabel, lb) ] ->
           Pointer (lb, ub)
       | _ -> failwith "Illegal types in pointer list"
@@ -722,7 +775,8 @@ module TypeAutomata = struct
               match state with
               | state :: [] -> state
               | [] -> failwith "Map wasn't removed when edges were removed"
-              | _ -> failwith "A list of states here means they weren't merged"
+              | states ->
+                  failwith "A list of states here means they weren't merged"
             in
             (edge, construct_type state))
           highest_edges
@@ -732,36 +786,9 @@ module TypeAutomata = struct
     construct_type n.start
 
   let create_simple_type (polarity : Polarity.t) ty init name : InferredType.t =
-    type_to_automata polarity ty init name
-    |> simplify_automata |> automata_to_type
-
-  let export_graphviz n =
-    Printf.sprintf
-      "\n\
-       digraph G {\n\
-      \ \"%s\" [height=0, width=0, style=filled, fillcolor=\"#c4a7e7\" ]\n\
-       %s\n\
-       \"%s\" -> %s;\n\
-       %s\n\
-       }"
-      n.name
-      (Iter.fold
-         (fun a (polarity, typ) ->
-           let shape =
-             if Polarity.positive polarity then "c4a7e7" else "eb6f92"
-           in
-           Printf.sprintf
-             "%s\"%s\" [shape=oval style=filled, fillcolor=\"#%s\"];\n" a
-             (InferredType.show @@ typ) shape)
-         "" (get_states n))
-      n.name
-      (Printf.sprintf "\"%s\"" @@ InferredType.show @@ snd n.start)
-      (List.fold_left
-         (fun acc ((_, s), a, (_, t)) ->
-           Printf.sprintf "%s\"%s\" -> \"%s\" [label=\"%s\", ];\n" acc
-             (InferredType.show s) (InferredType.show t)
-           @@ Sigma.show a)
-         "" (get_transitions n))
+    let m = type_to_automata polarity ty init name |> simplify_automata in
+    print_endline @@ export_graphviz m;
+    m |> automata_to_type
 end
 
 (* Needed for extraction calls etc. *)
@@ -807,9 +834,9 @@ let minimise_type p ty name =
   c: lower [bv32]
      upper []
 
-  Coalesce starting at 'a', with negative polarity (upper bounds) would be
-    b n c
   Coalesce starting at 'a', with positive polarity (upper bounds) would be
+    b n c
+  Coalesce starting at 'a', with negative polarity (lower bounds) would be
     bv32
 *)
 let rec coalesce_types (constraint_set : ConstraintState.t)
@@ -822,9 +849,16 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
       Record
         (List.map
            (fun { size; offset; ty } ->
-             { size; offset; ty = recursive_call polarity ty })
+             let ty = recursive_call polarity ty in
+             match ty with
+             (* First one should be the TypeVar that just goes to the name, is not useful WARN: probably should remove this and make it work without *)
+             | Union (_, b) | Sect (_, b) -> { size; offset; ty = b }
+             (*
+               Field had no constraints on it,
+                it could just be a bitvector of size size
+              *)
+             | a -> { size; offset; ty = BinCamlType (BinCaml_BV size) })
            fields)
-  | Field { ty } -> recursive_call polarity ty
   | Pointer (a, b) ->
       Pointer
         (recursive_call (Polarity.not polarity) a, recursive_call polarity b)
@@ -832,7 +866,7 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
       (* This might be useless, but just in case there are exprs in function calls *)
       Function
         ( name,
-          StringMap.map (recursive_call polarity) ins,
+          StringMap.map (recursive_call @@ Polarity.not polarity) ins,
           StringMap.map (recursive_call polarity) outs )
   | TypeVar a -> (
       match TySet.find_opt tau recursive_set with
@@ -897,17 +931,6 @@ let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
             TySet.to_iter lb
             |> Iter.fold (fun st bound -> constrain st bound type1) st
         | None -> st)
-  | Field { ty }, TypeVar b -> (
-      match ty with
-      | TypeVar a -> (
-          let st = ConstraintState.add_ub st a type1 in
-          let bounds = VarIdMap.get a st in
-          match bounds with
-          | Some { lb } ->
-              TySet.to_iter lb
-              |> Iter.fold (fun st bound -> constrain st bound type1) st
-          | None -> st)
-      | _ -> st)
   | _, TypeVar a -> (
       if ConstraintState.check_bounded st a type0 Polarity.Pos then st
       else
@@ -971,9 +994,9 @@ let rec constrain_expr proc (st : ConstraintState.t)
   | UnaryExpr { op; arg = a } -> (
       let st, _ = constrain_expr proc st (BasilExpr.unfix a) in
       match op with
-      | `FACCESS offset ->
+      | `ReadField offset ->
           let { typ; offset } : Types.record_field =
-            Types.get_field offset (BasilExpr.type_of a)
+            Types.struct_field offset (BasilExpr.type_of a)
           in
           (st, type_to_inferred typ)
       | `BoolNOT ->
@@ -1016,15 +1039,15 @@ let rec constrain_expr proc (st : ConstraintState.t)
           let st =
             ConstraintState.add_lb st name (BinCamlType (BinCaml_BV size))
           in
-          (constrain_arg proc st a @@ Record [ field ], Field field))
+          (constrain_arg proc st a @@ Record [ field ], ty))
   | BinaryExpr { op; arg1 = l; arg2 = r } -> (
       let st, _ = constrain_expr proc st (BasilExpr.unfix l) in
       let st, _ = constrain_expr proc st (BasilExpr.unfix r) in
       match op with
-      | `FSET offset ->
+      | `WriteField offset ->
           (* TODO: constrain the r to be the type of that field in the record l*)
           let { typ } : Types.record_field =
-            Types.get_field offset (BasilExpr.type_of r)
+            Types.struct_field offset (BasilExpr.type_of r)
           in
           let st =
             constrain_arg proc st r @@ InferredType.type_to_inferred typ
@@ -1110,7 +1133,7 @@ let rec constrain_expr proc (st : ConstraintState.t)
               @@ BasilExpr.type_of (BasilExpr.fix expr)) ))
   | ApplyFun _ -> (st, Top)
 
-let constraint_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt :
+let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt :
     ConstraintState.t =
   let open AbstractExpr in
   let open InferredType in
@@ -1171,10 +1194,12 @@ let constraint_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt :
 
           Simply just a ptr(a,b) where a <= b
         *)
-        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_load" in
-        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_load" in
+        let lb = VarId.make_id @@ Int.to_string stmt_number ^ "_lower_load" in
+        let ub = VarId.make_id @@ Int.to_string stmt_number ^ "_upper_load" in
         let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
         let st = constrain st (Pointer (TypeVar lb, TypeVar ub)) addr in
+        let bv_type = BinCamlType (BinCaml_BV size) in
+        let st = constrain st (Pointer (bv_type, bv_type)) addr in
         let st = constrain st (TypeVar lb) @@ TypeVar ub in
         constrain st (TypeVar ub) (TypeVar lhs)
       else
@@ -1195,13 +1220,18 @@ let constraint_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt :
           | _ -> failwith "impossible"
         in
         let ty =
-          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_load")
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_upper_load")
         in
         let ub = Record [ { size; offset; ty } ] in
         let lb =
-          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_load")
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_lower_load")
         in
         let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
+        let st = constrain st (Pointer (lb, ub)) addr in
+        let st = constrain st ub lb in
+        let ub =
+          Record [ { size; offset; ty = BinCamlType (BinCaml_BV size) } ]
+        in
         let st = constrain st (Pointer (lb, ub)) addr in
         let st = constrain st ub lb in
         constrain st ty (TypeVar lhs)
@@ -1219,12 +1249,14 @@ let constraint_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt :
           Simply just a ptr(a,b) where a <= b
         *)
         let lb =
-          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_store")
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_lower_store")
         in
         let ub =
-          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_store")
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_upper_store")
         in
         let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
+        let bv_type = BinCamlType (BinCaml_BV size) in
+        let st = constrain st (Pointer (bv_type, bv_type)) addr in
         let st = constrain st (Pointer (lb, ub)) addr in
         let st = constrain st lb ub in
         constrain st lhs lb
@@ -1246,15 +1278,20 @@ let constraint_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt :
           | _ -> failwith "impossible"
         in
         let ty =
-          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_store")
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_lower_store")
         in
         let lb = Record [ { size; offset; ty } ] in
         let ub =
-          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_store")
+          TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_upper_store")
         in
         let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
         let st = constrain st (Pointer (lb, ub)) addr in
         let st = constrain st lb ub in
+        let lb =
+          Record [ { size; offset; ty = BinCamlType (BinCaml_BV size) } ]
+        in
+        let st = constrain st lb ub in
+        let st = constrain st (Pointer (lb, ub)) addr in
         constrain st lhs ty
   | Stmt.Instr_Call { lhs; args; procid } ->
       let formal_in = Procedure.formal_in_params @@ Program.proc prog procid in
@@ -1315,7 +1352,7 @@ let constraint_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt :
 let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
   (* Generate constraint set *)
   let type_constraint_map =
-    ID.Map.values prog.procs
+    IDMap.values prog.procs
     |> Iter.fold
          (fun acc proc ->
            let sva = Analysis.Sva.DFGAnalysis.flow_insensitive proc in
@@ -1331,11 +1368,10 @@ let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
                             let rhs = VarId.var_proc_to_uid rhs (Some proc) in
                             constrain acc (TypeVar rhs) (TypeVar lhs))
                           acc rhs)
-                      acc
-                    @@ b.phis
+                      acc b.phis
                   in
                   Block.stmts_iter b
-                  |> Iter.foldi (constraint_stmt prog (Some proc) sva) acc)
+                  |> Iter.foldi (constrain_stmt prog (Some proc) sva) acc)
                 acc)
          VarIdMap.empty
   in
@@ -1376,17 +1412,13 @@ let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
         let recursives2, types2 =
           InferredType.inferred_to_real recursives
           @@ InferredType.join
-               (minimise_type Polarity.Pos lower_ty name)
-               (minimise_type Polarity.Neg upper_ty name)
+               (minimise_type Polarity.Neg lower_ty name)
+               (minimise_type Polarity.Pos upper_ty name)
         in
         (recursives, (name, types2) :: types))
       types ([], [])
   in
-  (* VarIdMap.iter *)
-  (* (fun id (lower, upper) -> *)
-  (* Printf.printf "\n%s: \n\t\t lower: %s\n\t\t upper: %s" (VarId.show id) *)
-  (* (InferredType.show lower) (InferredType.show upper)) *)
-  (* types; *)
+
   (VarIdMap.of_list types, recursives)
 
 (*
@@ -1398,12 +1430,11 @@ let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
 
 let get_type results proc var : Types.t =
   match VarIdMap.find_opt (VarId.var_proc_to_uid var proc) results with
+  | None | Some Types.Top ->
+      Var.typ var
+      (* NOTE: This should fail, but might as well keep old type for now, this only really happens when the variable isn't used ever, i.e. function parameters, this could be changed to do a constraint there though, just forgot *)
+      (* TODO: Make this a failwith and instead just get better code to always have constraints *)
   | Some a -> a
-  | None ->
-      failwith
-      @@ Printf.sprintf
-           "Global variable was not in the type constraint list: %s"
-           (Var.name var)
 
 let map_var results proc (var : Var.t) : Var.t =
   Var.create (Var.name var) ~pure:(Var.pure var) ~scope:(Var.scope var)
@@ -1417,19 +1448,17 @@ let map_expr results proc =
         BasilExpr.replace [%here]
           (BasilExpr.rvar ?attrib @@ map_var results proc id)
     | AbstractExpr.UnaryExpr { op = `Extract (_, offset1); arg; attrib } -> (
-        (* arg is a Record, I love records *)
+        (* arg is a Struct, I love structs *)
         match BasilExpr.type_of arg with
-        | Types.Record (_, fields) ->
+        | Types.Struct (name, fields) ->
             let field, _ =
               List.find (fun (_, ({ offset } : Types.record_field)) ->
                   Z.equal offset @@ Z.of_int offset1)
               @@ StringMap.bindings fields
             in
-            print_endline field;
-            print_endline @@ BasilExpr.to_string arg;
             BasilExpr.replace [%here]
-              (BasilExpr.unexp ?attrib ~op:(`FACCESS field) arg)
-        | _ -> BasilExpr.replace [%here] @@ BasilExpr.fix abstract_expr)
+              (BasilExpr.unexp ?attrib ~op:(`ReadField field) arg)
+        | _ -> BasilExpr.Keep)
     | AbstractExpr.BinaryExpr { op = `BVADD; arg1; arg2; attrib } -> (
         match (BasilExpr.type_of arg1, BasilExpr.type_of arg2) with
         | Types.Pointer _, Types.Pointer _ ->
@@ -1440,9 +1469,8 @@ let map_expr results proc =
         | _, Types.Pointer _ ->
             BasilExpr.replace [%here]
               (BasilExpr.binexp ?attrib ~op:`PTRADD arg2 arg1)
-        | _ -> BasilExpr.replace [%here] @@ BasilExpr.fix abstract_expr)
-    (* TODO: Is this the best way to do no changes *)
-    | _ -> BasilExpr.replace [%here] @@ BasilExpr.fix abstract_expr
+        | _ -> BasilExpr.Keep)
+    | _ -> BasilExpr.Keep
   in
   BasilExpr.rewrite ~rw_fun:(expr_rewriter results proc)
 
@@ -1527,7 +1555,7 @@ let map_decl results proc (decl : Program.declaration) : Program.declaration =
 
 let declare_typ (typ : Types.t) : (string * Types.t) option * Types.t =
   match typ with
-  | Record (name, _) | Pointer { name } -> (Some (name, typ), typ)
+  | Struct (name, _) | Pointer { name } -> (Some (name, typ), typ)
   | _ -> (None, typ)
 
 let declare_recursive_typs (recursives : (VarId.t * Types.t) list) :
@@ -1561,7 +1589,7 @@ let transform (prog : Program.t) (results : Types.t VarIdMap.t)
   {
     prog with
     procs =
-      ID.Map.map
+      IDMap.map
         (fun proc ->
           Procedure.map_formal_in_params
             (StringMap.map (map_var results (Some proc)))
@@ -1569,7 +1597,7 @@ let transform (prog : Program.t) (results : Types.t VarIdMap.t)
                (StringMap.map (map_var results (Some proc)))
           @@ Procedure.map_blocks_nondet
                (fun (id, block) ->
-                 Block.map (* TODO: Needs to change the vars in phi nods*)
+                 Block.map
                    ~phi:
                      (List.map (fun ({ lhs; rhs } : Var.t Block.phi) ->
                           ({

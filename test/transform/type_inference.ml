@@ -72,7 +72,7 @@ proc @main_4196260 () -> ()
   let prog = lst.prog in
 
   let st =
-    ID.Map.values prog.procs
+    IDMap.values prog.procs
     |> Iter.fold
          (fun acc proc ->
            let sva = Analysis.Sva.DFGAnalysis.flow_insensitive proc in
@@ -80,7 +80,7 @@ proc @main_4196260 () -> ()
            |> Iter.fold
                 (fun acc (_, b) ->
                   Lang.Block.stmts_iter b
-                  |> Iter.foldi (gen_constraint_set prog (Some proc) sva) acc)
+                  |> Iter.foldi (constrain_stmt prog (Some proc) sva) acc)
                 acc)
          VarIdMap.empty
   in
