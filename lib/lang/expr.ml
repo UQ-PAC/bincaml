@@ -534,7 +534,7 @@ module BasilExpr = struct
           arg1 = { this = Some r };
           arg2 = { this = Some vl };
         } ->
-        return @@ bracket "(" (r ^ text "." ^ text field ^+ text "<-" ^+ vl) ")"
+        return @@ r ^ text " with " ^ text field ^+ text "=" ^+ vl
     | UnaryExpr { op; arg = { this = Some e } } ->
         return (text (AllOps.to_string op) ^ a ^ bracket "(" e ")")
     | BinaryExpr
