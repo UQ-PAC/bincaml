@@ -1,10 +1,5 @@
 
   $ bincaml script roundtrip.sexp
-  bincaml: Error in (load-il beforemem.il): Parse error:  beforemem.il:3
-           3 | let $b : record = Record of {a: bv64; b: bv32; c: bv64} = (Record)(0x1:bv64,
-                                        ^^
-            at Dune__exe__Script.of_cmd.(fun) bin/script.ml:85
-  [123]
 
 The serialise -> parse serialise loop should be idempotent
 
