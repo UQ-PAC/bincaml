@@ -110,9 +110,22 @@ module Domain (S : RequiresAnnotation) = struct
             [ p; BasilExpr.unexp ~op:`BoolNOT body ]
         in
         simplify p
-    | Instr_Call { procid } ->
-        BasilExpr.applyintrin ~op:`OR
-          (p :: (List.map Expr.BasilExpr.boolnot @@ S.requires procid))
+    | Instr_Call { lhs; procid; args } ->
+        let p =
+          BasilExpr.applyintrin ~op:`OR
+            (p :: (List.map Expr.BasilExpr.boolnot @@ S.requires procid))
+        in
+        let p =
+          StringMap.fold
+            (fun k d acc ->
+              BasilExpr.substitute
+                (fun v ->
+                  Option.return_if (Var.equal v d) (StringMap.get k args)
+                  |> Option.flatten)
+                p)
+            lhs p
+        in
+        simplify p
     | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
     | _ -> p
 
