@@ -18,6 +18,21 @@
 module Lsp = Linol.Lsp
 module Lsp_state = Bincaml_lsp.Lsp_state
 
+let run_command ?(quiet = true) ~notify_back command =
+  let stdout, stderr, errcode = CCUnix.call ~stdin:(`Str "") "%s" command in
+
+  if (not quiet) || errcode <> 0 then (
+    let verb = if errcode <> 0 then "failed" else "succeeded" in
+    let type_ = Lsp.Types.MessageType.(if errcode <> 0 then Error else Info) in
+    let message =
+      Printf.sprintf "lsp subprocess %s: %s\n\nstderr:\n%s\n\nstdout:\n%s" verb
+        command stderr stdout
+    in
+    Logs.app (fun m -> m "%s" message);
+    let params = Lsp.Types.ShowMessageParams.create ~type_ ~message in
+    notify_back#send_notification (Lsp.Server_notification.ShowMessage params))
+  else Lwt.return ()
+
 (* Lsp server class
 
    This is the main point of interaction beetween the code checking documents
@@ -96,17 +111,23 @@ class lsp_server =
         ~arguments:[ Linol_lsp.Lsp.Types.DocumentUri.yojson_of_t uri ]
         ()
 
-    method show_log_command () =
+    method show_log_command ~uri () =
       Linol_lsp.Lsp.Types.Command.create ~command:"open-log-file"
+        ~arguments:[ Linol_lsp.Lsp.Types.DocumentUri.yojson_of_t uri ]
         ~title:"Open LSP log file" ()
 
-    method toggle_highlight_code_action ~uri () =
-      let open Linol_lsp.Lsp.Types.CodeActionKind in
-      Linol_lsp.Lsp.Types.CodeAction.create ~kind:Empty
-        ~command:(self#toggle_highlight_command ~uri ())
-        ~title:(self#toggle_highlight_command ~uri ()).title ()
+    method dump_graph_command ~uri ~range () =
+      Linol_lsp.Lsp.Types.Command.create ~command:"procedure-graph"
+        ~arguments:
+          [
+            Linol_lsp.Lsp.Types.DocumentUri.yojson_of_t uri;
+            Linol_lsp.Lsp.Types.Range.yojson_of_t range;
+          ]
+        ~title:"Generate graph for current procedure" ()
 
-    method! config_list_commands = [ "toggle-highlight"; "open-log-file" ]
+    method! config_list_commands =
+      [ "toggle-highlight"; "open-log-file"; "dump-graph" ]
+
     method! config_code_action_provider = `Bool true
 
     method! config_completion =
@@ -121,36 +142,35 @@ class lsp_server =
       | "toggle-highlight", Some [ uri ] ->
           let uri = Linol_lsp.Lsp.Types.DocumentUri.t_of_yojson uri in
           notify_back#set_uri uri;
-          let st = self#get uri in
 
+          let st = self#get uri in
           st#toggle_debug_highlight;
           ignore @@ st#diagnostics;
           Lwt.return @@ Yojson.Safe.(`Null)
-      | "open-log-file", _ -> (
+      | "open-log-file", Some [ uri ] ->
+          let uri = Linol_lsp.Lsp.Types.DocumentUri.t_of_yojson uri in
+          notify_back#set_uri uri;
+
           let log_file = Filename.quote Bincaml_lsp.Lsp_logs.temp_file in
-          match Sys.command ("xdg-open " ^ log_file) with
-          | 0 -> Lwt.return @@ Yojson.Safe.(`Null)
-          | _ ->
-              let message = "failed to open log file: " ^ log_file in
-              let params =
-                Lsp.Types.ShowMessageParams.create
-                  ~type_:Lsp.Types.MessageType.Error ~message
-              in
-              notify_back#send_notification
-                (Lsp.Server_notification.ShowMessage params)
-              |> Lwt.map (fun _ -> `Null))
+          run_command ~notify_back (String.concat " " [ "xdg-open"; log_file ])
+          |> Lwt.map (fun _ -> `Null)
       | _ ->
           super#on_req_execute_command ~notify_back ~id ~workDoneToken cmd args
 
     method! on_req_code_action ~notify_back ~id params =
       Logs.app (fun m -> m "reqcodeaction");
       let uri = params.textDocument.uri in
+      let range = params.range in
       let make_action (command : Linol_lsp.Lsp.Types.Command.t) =
         Linol_lsp.Lsp.Types.CodeAction.create ~kind:Empty ~command
           ~title:command.title ()
       in
 
-      [ self#toggle_highlight_command ~uri (); self#show_log_command () ]
+      [
+        self#toggle_highlight_command ~uri ();
+        self#show_log_command ~uri ();
+        self#dump_graph_command ~uri ~range ();
+      ]
       |> List.map (fun cmd -> `CodeAction (make_action cmd))
       |> Option.some |> Lwt.return
 

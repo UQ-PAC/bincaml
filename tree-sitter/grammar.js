@@ -816,15 +816,15 @@ module.exports = grammar({
     token_POINTERTYPE: $ =>
       /ptr/,
     token_BIdent: $ =>
-      /\.(_|[a-zA-Z])([#\$\._~]|(\d|[a-zA-Z]))*/,
+      /\.(_|[a-zA-Z])([#\$_~]|(\d|[a-zA-Z]))*/,
     token_LocalIdent: $ =>
-      /([#_]|[a-zA-Z])([#\$\._]|(\d|[a-zA-Z]))*/,
+      /([#_]|[a-zA-Z])([#\$_]|(\d|[a-zA-Z]))*/,
     token_GlobalIdent: $ =>
-      /\$([#\$\._]|(\d|[a-zA-Z]))+/,
+      /\$([#\$_]|(\d|[a-zA-Z]))+/,
     token_BlockIdent: $ =>
-      /%([#\$\._]|(\d|[a-zA-Z]))+/,
+      /%([#\$_]|(\d|[a-zA-Z]))+/,
     token_ProcIdent: $ =>
-      /@([#\$\._]|(\d|[a-zA-Z]))+/,
+      /@([#\$_]|(\d|[a-zA-Z]))+/,
     token_OpenParen: $ =>
       /\(/,
     token_CloseParen: $ =>

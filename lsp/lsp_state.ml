@@ -2,7 +2,13 @@ module Lsp = Linol.Lsp
 
 let one_value_function_cache ?(eq = CCEqual.poly) f argfun =
   let cache = CCCache.lru ~eq 1 in
-  fun x -> CCCache.with_cache cache f (argfun x)
+  fun x ->
+    try CCCache.with_cache cache f (argfun x)
+    with e ->
+      Logs.err (fun m ->
+          m "error during cached handler: %s\n%s" (Printexc.to_string e)
+            (Printexc.get_backtrace ()));
+      raise e
 
 let parse_tokens (contents : string) =
   let lexbuf = Lexing.from_string ~with_positions:true contents in
@@ -124,25 +130,58 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
             !prev)
       (fun st -> st#parse_result)
   in
+  let diagnostics_input_eq (a, b, c, d, e, f) (a2, b2, c2, d2, e2, f2) =
+    (a, b) = (a2, b2) && c == c2 && d == d2 && e == e2 && f == f2
+  in
   let diagnostics =
-    one_value_function_cache ~eq:CCEqual.poly
-      (fun (is_too_big, debug_highlight, tokens, parse_result) ->
+    one_value_function_cache ~eq:diagnostics_input_eq
+      (fun (is_too_big, debug_highlight, tokens, parse_result, ast, input) ->
         let start = Lsp.Types.Position.create ~line:0 ~character:0
         and end_ = Lsp.Types.Position.create ~line:0 ~character:100 in
-        let range = Lsp.Types.Range.create ~start ~end_ in
-        let severity = Lsp.Types.DiagnosticSeverity.Warning in
+        let default_range = Lsp.Types.Range.create ~start ~end_ in
 
         let too_big_diag =
           if is_too_big then
+            let severity = Lsp.Types.DiagnosticSeverity.Warning in
             [
               Lsp.Types.Diagnostic.create
                 ~message:
                   (`String
                      "File too big! On-keypress Bincaml LSP features are \
                       disabled. Save the file to manually refresh.")
-                ~range ~severity ();
+                ~range:default_range ~severity ();
             ]
           else []
+        in
+
+        let ast_error =
+          match ast with
+          | Ok _ -> []
+          | Error (e, bt) ->
+              let message, range =
+                match e with
+                | Loader.Loadir.LoadError { token_char_offset_range; msg } ->
+                    ( `String msg,
+                      token_char_offset_range
+                      |> Option.map (Lsp_symbols.lsprange_of_offsets input) )
+                | e ->
+                    let message =
+                      Printf.sprintf
+                        "Unhandled exception during resolution: `%s`\n\n\
+                         ```ocaml\n\
+                         %s\
+                         ```"
+                        (Printexc.to_string e) bt
+                    in
+                    ( `MarkupContent
+                        {
+                          Linol_lsp.Types.MarkupContent.kind = Markdown;
+                          value = message;
+                        },
+                      None )
+              in
+              let range = Option.value ~default:default_range range in
+              [ Lsp.Types.Diagnostic.create ~message ~range ~severity:Error () ]
         in
 
         let parse_diag =
@@ -156,14 +195,17 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
               if (not debug_highlight) && Result.is_ok tok.token then false
               else true)
         in
-        let diags =
-          Iter.map to_diagnostic tokens
-          |> Iter.to_list |> List.append too_big_diag |> List.append parse_diag
-        in
+        let token_diags = tokens |> Iter.map to_diagnostic |> Iter.to_list in
+        let diags = too_big_diag @ parse_diag @ ast_error @ token_diags in
         Linol_lwt.spawn (fun () -> notify_back#send_diagnostic diags);
         diags)
       (fun st ->
-        (st#is_too_big, st#debug_highlight, st#tokens, st#parse_result))
+        ( st#is_too_big,
+          st#debug_highlight,
+          st#tokens,
+          st#parse_result,
+          st#ast,
+          st#input ))
   in
   let lspsymbols =
     one_value_function_cache
@@ -172,6 +214,15 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
         Lsp_symbols.lspsymbols_of_decls ~len:(String.length contents) input
           decls)
       (fun st -> (st#cst, st#contents, st#input))
+  in
+  let ast =
+    one_value_function_cache ~eq:CCEqual.physical
+      (fun cst ->
+        Logs.app (fun m -> m "ast of cst");
+        let name = Linol_lsp.Types.DocumentUri.to_path uri in
+        try Ok (Loader.Loadir.ast_of_concrete_ast ~name cst).prog
+        with e -> Error (e, Printexc.get_backtrace ()))
+      (fun st -> st#cst)
   in
   object (self)
     val mutable contents = initial_contents
@@ -185,6 +236,7 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
     method lines = make_lines (self :> state)
     method tokens = tokens (self :> state)
     method cst = cst (self :> state)
+    method ast = ast (self :> state)
     method lspsymbols = lspsymbols (self :> state)
     method completions = completions (self :> state)
     method diagnostics = diagnostics (self :> state)
