@@ -68,7 +68,7 @@
 
 (token_BlockIdent) @function.call
 (Block (token_BlockIdent) @function)
-"block" @keyword.conditional
+"block" @keyword.function
 
 (token_ProcIdent) @function.call
 (Decl (token_ProcIdent) @function)
