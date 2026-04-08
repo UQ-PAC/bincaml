@@ -27,7 +27,8 @@ let gamma_of v =
   Var.create ("Gamma_" ^ Var.name v) ~pure:(Var.pure v) ~scope:(Var.scope v) typ
 
 let add_decl proc gv =
-    if Var.is_local gv then Hashtbl.replace (Procedure.local_decls proc) (Var.name gv) gv
+  if Var.is_local gv then
+    Hashtbl.replace (Procedure.local_decls proc) (Var.name gv) gv
 
 let add_globals ?(check_names = false) (add : Var.t -> bool) (p : Program.t) =
   StringMap.fold

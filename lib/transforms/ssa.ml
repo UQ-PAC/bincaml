@@ -262,20 +262,25 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
             StringMap.empty outparam
         in
         let skip_any = skip_observable || skip_maps in
-        (* Rewrite Old(g) → g_in in body statements.
-           Must run before body substitution so Old(g) is still recognisable. *)
+        (* replace all variables with their equivalent in the pre-state *)
         let rewrite_old_expr expr =
           let open Expr.AbstractExpr in
           let open Expr.BasilExpr in
           let alg node =
-            match map unfix node with
-            | UnaryExpr { op = `Old; arg = RVar { id } } -> (
+            match node with
+            | UnaryExpr { op = `Old; arg } -> replace [%here] arg
+            | RVar { id } -> (
                 match StringMap.find_opt (Var.name id) glob_to_inparam with
                 | Some v -> replace [%here] (rvar v)
+                | None
+                  when StringMap.exists
+                         (fun _ n -> Var.equal id n)
+                         (Procedure.formal_in_params proc) ->
+                    Keep
                 | None when skip_any ->
                     failwith
-                      "Variable in contract but is not captured or modified by \
-                       procedure"
+                      ("Variable in contract but is not a parameter, or global \
+                        captured or modified by procedure: " ^ Var.name id)
                 | None -> Keep)
             | _ -> Keep
           in
@@ -283,43 +288,37 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
         in
         (* Rewrite requires: replace all captured globals with in-params and
            strip any Old wrappers (all refs already denote the pre-state) *)
-        let rewrite_requires_expr expr =
-          let open Expr.AbstractExpr in
-          let open Expr.BasilExpr in
-          let alg node =
-            match map unfix node with
-            | RVar { id } -> (
-                match StringMap.find_opt (Var.name id) glob_to_inparam with
-                | Some v -> replace [%here] (rvar v)
-                | None when skip_any ->
-                    failwith
-                      "Variable in contract but is not captured or modified by \
-                       procedure"
-                | None -> Keep)
-            | UnaryExpr { op = `Old; arg } -> replace [%here] (fix arg)
-            | _ -> Keep
-          in
-          rewrite ~rw_fun:alg expr
-        in
-        (* Rewrite ensures: Old(g) → g_in (entry value); bare modified g →
-           g_out (exit value); bare captured-only g → g_in (unchanged).
-           Old(g) is handled first so the bare-g pass doesn't clobber it. *)
         let rewrite_ensures_expr expr =
           let open Expr.AbstractExpr in
           let open Expr.BasilExpr in
-          let expr = rewrite_old_expr expr in
+          (* Rewrite ensures: Old(g) → g_in (entry value); bare modified g →
+           g_out (exit value); bare captured-only g → g_in (unchanged).
+           Old(g) is handled first so the bare-g pass doesn't clobber it. *)
           let alg node =
-            match map unfix node with
+            match node with
+            | UnaryExpr { op = `Old; arg } ->
+                replace [%here] (rewrite_old_expr arg)
             | RVar { id } -> (
                 match StringMap.find_opt (Var.name id) glob_to_outparam with
                 | Some v -> replace [%here] (rvar v)
-                | None -> (
-                    match StringMap.find_opt (Var.name id) glob_to_inparam with
-                    | Some v -> replace [%here] (rvar v)
-                    | None -> Keep))
+                | None
+                  when StringMap.exists
+                         (fun _ n -> Var.equal id n)
+                         (Procedure.formal_in_params proc) ->
+                    Keep
+                | None when skip_any ->
+                    failwith
+                      ("Variable in contract but is not captured or modified \
+                        by procedure: " ^ Var.name id)
+                | None -> Keep)
             | _ -> Keep
           in
-          rewrite ~rw_fun:alg expr
+          rewrite_down ~rw_fun:alg expr
+        in
+        let rewrite_requires_expr expr =
+          let open Expr.AbstractExpr in
+          let open Expr.BasilExpr in
+          rewrite_old_expr expr
         in
         let proc =
           let spec = Procedure.specification proc in
@@ -330,6 +329,8 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
               ensures = List.map rewrite_ensures_expr spec.ensures;
             }
         in
+        (*
+        (* I have no clue what this was trying to achieve ? *)
         let proc =
           Procedure.map_blocks_topo_fwd
             (fun _bid b ->
@@ -338,6 +339,7 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
                 b)
             proc
         in
+            *)
         (* Rewrite call sites using the original p.procs specs, emitting
            g (the global) in args/lhs.  The body substitution below then
            turns those into g_local automatically. *)

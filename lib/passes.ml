@@ -196,7 +196,7 @@ module PassManager = struct
       apply = Prog Transforms.Memory_specification.transform;
       doc = "Specifies programs for memory safety";
     }
-  
+
   let intra_function_summaries =
     {
       name = "intra-function-summaries";
@@ -240,6 +240,7 @@ module PassManager = struct
       full_ssa;
       type_check;
       split_memory_encoding;
+      flat_memory_encoding;
       memory_specification;
       intra_function_summaries;
       inter_function_summaries;
@@ -283,9 +284,9 @@ module PassManager = struct
         doc = "Replaces captured global variables with explicit parameters";
       };
       {
-          name = "gamma-vars";
-          apply = Prog Transforms.Gamma_vars.transform;
-          doc = "Replace gamma expressions with gamma variables";
+        name = "gamma-vars";
+        apply = Prog Transforms.Gamma_vars.transform;
+        doc = "Replace gamma expressions with gamma variables";
       };
       {
         name = "linear-const";

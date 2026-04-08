@@ -85,6 +85,14 @@ module ReadUninitAnalysis = struct
     Stmt.iter_lvar stmt
     |> Iter.map (fun v -> (v, write_var v st))
     |> Iter.fold (fun acc (k, v) -> update k v acc) st
+
+  let transfer_phi m (p : Var.t Block.phi) =
+    match p with
+    | { lhs; rhs } ->
+        rhs
+        |> List.map (fun (_, k) -> read k m)
+        |> List.fold_left ReadUninit.join ReadUninit.bottom
+        |> fun v -> update lhs v m
 end
 
 module A = struct

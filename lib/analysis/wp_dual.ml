@@ -87,15 +87,17 @@ module Domain (S : RequiresAnnotation) = struct
 
   let low_expr = Expr.BasilExpr.unexp ~op:`Gamma
 
+  let tf_assigns p a =
+    BasilExpr.substitute
+      (fun v ->
+        List.find_map (fun (v', e) -> Option.return_if (Var.equal v v') e) a)
+      p
+    |> simplify
+
   let transfer p stmt =
     let open Stmt in
     match stmt with
-    | Instr_Assign a ->
-        BasilExpr.substitute
-          (fun v ->
-            List.find_map (fun (v', e) -> Option.return_if (Var.equal v v') e) a)
-          p
-        |> simplify
+    | Instr_Assign a -> tf_assigns p a
     | Instr_Load l -> top
     | Instr_Assert { body } -> join p (BasilExpr.unexp ~op:`BoolNOT body)
     | Instr_Assume { body; branch } ->
@@ -113,6 +115,12 @@ module Domain (S : RequiresAnnotation) = struct
         BasilExpr.applyintrin ~op:`AND (p :: S.requires procid)
     | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
     | _ -> p
+
+  let transfer_phi m (p : Var.t Lang.Block.phi) =
+    match p with
+    | { lhs; rhs } ->
+        let rhs = List.map (fun (_, v) -> (lhs, BasilExpr.rvar v)) rhs in
+        tf_assigns m rhs
 
   (** Encode an abstract state as a predicate *)
   let to_pred =
@@ -163,5 +171,4 @@ proc @main () -> ()
   in
   IntraAnalysis.A.M.find Procedure.Vert.Entry res
   |> IntraDomain.to_pred |> BasilExpr.to_string |> print_endline;
-  [%expect
-    {| booland(eq(bvadd($x, a), 0), eq(bvadd(a, a), 0)) |}]
+  [%expect {| booland(eq(bvadd($x, a), 0), eq(bvadd(a, a), 0)) |}]
