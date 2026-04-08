@@ -197,10 +197,10 @@ module InferredType = struct
     | (Function _ as a), _ | _, (Function _ as a) -> a
     (* TypeVar at this stage is pretty much Top *)
     (* | TypeVar _, TypeVar _ -> Top *)
-    | Top, a | a, Top | TypeVar _, a | a, TypeVar _ -> a
+    | Top, a | a, Top | TypeVar _, a | a, TypeVar _ -> Top
     | Bottom, a | a, Bottom -> Bottom
     | a, b when equal a b -> a
-    | a, b -> b
+    | a, b -> b (* TODO *)
 
   (* Top and type_var might be valid, and maybe even bottom and then those can just default to whatever type it had prior *)
   let rec inferred_to_real recursives typ : (VarId.t * Types.t) list * Types.t =
@@ -230,9 +230,15 @@ module InferredType = struct
         let recursives, typ = inferred_to_real recursives typ in
         ((varid, typ) :: recursives, Types.Variable (VarId.show varid))
     (* NOTE: Will need to check to make sure the typevar isn't a recursive and if it is use that one instead *)
-    | Union (a, b) -> inferred_to_real recursives a
+    | Union (a, b) -> inferred_to_real recursives @@ join a b
     | Sect (a, b) ->
-        inferred_to_real recursives @@ join a b (* This is inf recursion *)
+        inferred_to_real recursives
+          (match (a, b) with
+          (* This is inf recursion *)
+          | Top, a | a, Top | TypeVar _, a | a, TypeVar _ -> Top
+          | Bottom, a | a, Bottom -> Bottom
+          | a, b when equal a b -> a
+          | a, b -> b (* TODO *))
     | Function _ -> (recursives, Top)
 
   let rec type_to_inferred (typ : Types.t) : t =
