@@ -21,9 +21,10 @@ module Lsp_state = Bincaml_lsp.Lsp_state
 let run_command ?(quiet = true) ~notify_back command =
   let stdout, stderr, errcode = CCUnix.call ~stdin:(`Str "") "%s" command in
 
-  if (not quiet) || errcode <> 0 then (
-    let verb = if errcode <> 0 then "failed" else "succeeded" in
-    let type_ = Lsp.Types.MessageType.(if errcode <> 0 then Error else Info) in
+  let failed = errcode <> 0 in
+  if (not quiet) || failed then (
+    let verb = if failed then "failed" else "succeeded" in
+    let type_ = Lsp.Types.MessageType.(if failed then Error else Info) in
     let message =
       Printf.sprintf "lsp subprocess %s: %s\n\nstderr:\n%s\n\nstdout:\n%s" verb
         command stderr stdout
@@ -116,17 +117,17 @@ class lsp_server =
         ~arguments:[ Linol_lsp.Lsp.Types.DocumentUri.yojson_of_t uri ]
         ~title:"Open LSP log file" ()
 
-    method dump_graph_command ~uri ~range () =
-      Linol_lsp.Lsp.Types.Command.create ~command:"procedure-graph"
+    method dump_graph_command ~uri ~name () =
+      let title =
+        Printf.sprintf "Generate and open graph for procedure '%s'" name
+      in
+      Linol_lsp.Lsp.Types.Command.create ~command:"procedure-graph" ~title
         ~arguments:
-          [
-            Linol_lsp.Lsp.Types.DocumentUri.yojson_of_t uri;
-            Linol_lsp.Lsp.Types.Range.yojson_of_t range;
-          ]
-        ~title:"Generate graph for current procedure" ()
+          [ Linol_lsp.Lsp.Types.DocumentUri.yojson_of_t uri; `String name ]
+        ()
 
     method! config_list_commands =
-      [ "toggle-highlight"; "open-log-file"; "dump-graph" ]
+      [ "toggle-highlight"; "open-log-file"; "procedure-graph" ]
 
     method! config_code_action_provider = `Bool true
 
@@ -154,6 +155,46 @@ class lsp_server =
           let log_file = Filename.quote Bincaml_lsp.Lsp_logs.temp_file in
           run_command ~notify_back (String.concat " " [ "xdg-open"; log_file ])
           |> Lwt.map (fun _ -> `Null)
+      | "procedure-graph", Some [ uri; `String name ] -> begin
+          let uri = Linol_lsp.Lsp.Types.DocumentUri.t_of_yojson uri in
+          notify_back#set_uri uri;
+
+          let st = self#get uri in
+          let notify_error ~type_ message =
+            let params = Lsp.Types.ShowMessageParams.create ~type_ ~message in
+            notify_back#send_notification
+              (Lsp.Server_notification.ShowMessage params)
+            |> Lwt.map (fun _ -> `Null)
+          in
+          match st#ast with
+          | Error e ->
+              notify_error ~type_:Error
+                "Cannot generate procedure graph because file has parse errors."
+          | Ok ast -> (
+              let procid = ast.proc_names.get_id name in
+              let procedure = Lang.Program.proc ast procid in
+              match Lang.Procedure.graph procedure with
+              | None ->
+                  notify_error ~type_:Error
+                    (Printf.sprintf "Procedure '%s' has no definition." name)
+              | Some graph ->
+                  let file_name = Filename.temp_file "bincaml_graph." ".dot" in
+                  Out_channel.with_open_text file_name (fun oc ->
+                      let fmt = Format.formatter_of_out_channel oc in
+                      Lang.Viscfg.Dot.fprint_graph fmt graph;
+                      Format.pp_print_flush fmt ());
+                  let open Lwt.Syntax in
+                  let* () =
+                    run_command ~notify_back
+                      (Filename.quote_command "dot"
+                         [ "-O"; "-Tsvg"; file_name ])
+                  in
+                  let* () =
+                    run_command ~notify_back ~quiet:false
+                      (Filename.quote_command "xdg-open" [ file_name ^ ".svg" ])
+                  in
+                  Lwt.return `Null)
+        end
       | _ ->
           super#on_req_execute_command ~notify_back ~id ~workDoneToken cmd args
 
@@ -166,11 +207,20 @@ class lsp_server =
           ~title:command.title ()
       in
 
-      [
-        self#toggle_highlight_command ~uri ();
-        self#show_log_command ~uri ();
-        self#dump_graph_command ~uri ~range ();
-      ]
+      let st = self#get uri in
+      let lspsymbols = st#lspsymbols in
+      let proc =
+        Bincaml_lsp.Lsp_symbols.proc_lspsymbol_at_pos ~lspsymbols range.end_
+      in
+
+      List.flatten
+        [
+          (match proc with
+          | Some proc -> [ self#dump_graph_command ~uri ~name:proc.name () ]
+          | None -> []);
+          [ self#show_log_command ~uri () ];
+          [ self#toggle_highlight_command ~uri () ];
+        ]
       |> List.map (fun cmd -> `CodeAction (make_action cmd))
       |> Option.some |> Lwt.return
 
