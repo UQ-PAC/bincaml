@@ -130,9 +130,11 @@ module Domain (S : FunctionSummaryAnnotation) = struct
             lhs ensures
         in
         let p =
-          BasilExpr.forall
+          if StringMap.cardinal lhs > 0 then
+          (BasilExpr.forall
             ~bound:(StringMap.values lhs |> Iter.to_list)
-            (BasilExpr.binexp ~op:`IMPLIES ensures p)
+            (BasilExpr.binexp ~op:`IMPLIES ensures p))
+          else p
         in
         simplify p
     | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
