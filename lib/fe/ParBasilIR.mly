@@ -507,7 +507,7 @@ field_list : /* empty */ { []  }
   | field SYMB2 field_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-field : openParen str SYMB5 openParen typeT SYMB2 intVal closeParen closeParen { Field1 ($1, $2, $4, $5, $7, $8, $9) }
+field : str SYMB5 openParen typeT SYMB2 intVal closeParen { Field1 ($1, $3, $4, $6, $7) }
   ;
 
 intType : iNTTYPE { IntType1 $1 }
