@@ -96,13 +96,17 @@ class lsp_server =
         ~arguments:[ Linol_lsp.Lsp.Types.DocumentUri.yojson_of_t uri ]
         ()
 
+    method show_log_command () =
+      Linol_lsp.Lsp.Types.Command.create ~command:"open-log-file"
+        ~title:"Open LSP log file" ()
+
     method toggle_highlight_code_action ~uri () =
       let open Linol_lsp.Lsp.Types.CodeActionKind in
       Linol_lsp.Lsp.Types.CodeAction.create ~kind:Empty
         ~command:(self#toggle_highlight_command ~uri ())
         ~title:(self#toggle_highlight_command ~uri ()).title ()
 
-    method! config_list_commands = [ "toggle-highlight" ]
+    method! config_list_commands = [ "toggle-highlight"; "open-log-file" ]
     method! config_code_action_provider = `Bool true
 
     method! config_completion =
@@ -122,14 +126,33 @@ class lsp_server =
           st#toggle_debug_highlight;
           ignore @@ st#diagnostics;
           Lwt.return @@ Yojson.Safe.(`Null)
+      | "open-log-file", _ -> (
+          let log_file = Filename.quote Bincaml_lsp.Lsp_logs.temp_file in
+          match Sys.command ("xdg-open " ^ log_file) with
+          | 0 -> Lwt.return @@ Yojson.Safe.(`Null)
+          | _ ->
+              let message = "failed to open log file: " ^ log_file in
+              let params =
+                Lsp.Types.ShowMessageParams.create
+                  ~type_:Lsp.Types.MessageType.Error ~message
+              in
+              notify_back#send_notification
+                (Lsp.Server_notification.ShowMessage params)
+              |> Lwt.map (fun _ -> `Null))
       | _ ->
           super#on_req_execute_command ~notify_back ~id ~workDoneToken cmd args
 
     method! on_req_code_action ~notify_back ~id params =
       Logs.app (fun m -> m "reqcodeaction");
       let uri = params.textDocument.uri in
-      Lwt.return
-        (Some [ `CodeAction (self#toggle_highlight_code_action ~uri ()) ])
+      let make_action (command : Linol_lsp.Lsp.Types.Command.t) =
+        Linol_lsp.Lsp.Types.CodeAction.create ~kind:Empty ~command
+          ~title:command.title ()
+      in
+
+      [ self#toggle_highlight_command ~uri (); self#show_log_command () ]
+      |> List.map (fun cmd -> `CodeAction (make_action cmd))
+      |> Option.some |> Lwt.return
 
     method! on_req_completion ~notify_back ~id ~uri ~pos ~ctx ~workDoneToken
         ~partialResultToken doc_state =

@@ -1,8 +1,11 @@
 let lwt_reporter () =
   let buf_fmt ~like =
     let b = Buffer.create 512 in
-    Fmt.with_buffer ~like b,
-    fun () -> let m = Buffer.contents b in Buffer.reset b; m
+    ( Fmt.with_buffer ~like b,
+      fun () ->
+        let m = Buffer.contents b in
+        Buffer.reset b;
+        m )
   in
   let app_fmt = Format.formatter_of_out_channel (open_out "bincaml_lsp.out") in
   let dst_fmt = Format.formatter_of_out_channel (open_out "bincaml_lsp.err") in
@@ -11,20 +14,24 @@ let lwt_reporter () =
   let reporter = Logs_fmt.reporter ~app ~dst () in
   let report src level ~over k msgf =
     let k () =
-      let write () = match level with
-      | Logs.App -> Lwt_io.write Lwt_io.stdout (app_flush ())
-      | _ -> Lwt_io.write Lwt_io.stderr (dst_flush ())
+      let write () =
+        match level with
+        | Logs.App -> Lwt_io.write Lwt_io.stdout (app_flush ())
+        | _ -> Lwt_io.write Lwt_io.stderr (dst_flush ())
       in
-      let unblock () = over (); Lwt.return_unit in
+      let unblock () =
+        over ();
+        Lwt.return_unit
+      in
       Lwt.finalize write unblock |> Lwt.ignore_result;
       k ()
     in
     reporter.Deps.Logs.report src level ~over:(fun () -> ()) k msgf
   in
-  { Deps.Logs.report = report }
+  { Deps.Logs.report }
+
+let temp_file = Filename.temp_file "bincaml_lsp." ".log"
 
 let file_reporter () =
-  let app = Format.formatter_of_out_channel (open_out "/home/rina/progs/obasil/lsp/bincaml_lsp.out") in
-  let dst = Format.formatter_of_out_channel (open_out "/home/rina/progs/obasil/lsp/bincaml_lsp.err") in
-  Logs.format_reporter ~app ~dst ()
-
+  let app = Format.formatter_of_out_channel (open_out temp_file) in
+  Logs.format_reporter ~app ~dst:app ()
