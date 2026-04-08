@@ -34,7 +34,7 @@ type t =
   | Nothing  (** least type / empty set *)
   | Map of t * t  (** function type *)
   | Sort of string * variant list  (** An Algebraic datatype *)
-  | Struct of record_field StringMap.t
+  | Struct of string * record_field StringMap.t
       (** a struct is a product type of a known layout that is representible as
           a finite byte/bit sequence *)
   | Pointer of pointer  (** pointer type *)
@@ -88,7 +88,7 @@ let bv_min_width_for_nat n = Bitvector (Z.of_int n |> Z.numbits)
 
 let struct_field field_name record : record_field =
   match record with
-  | Struct fields -> (
+  | Struct (_, fields) -> (
       match StringMap.find_opt field_name fields with
       | None -> failwith @@ "No field at offset " ^ field_name
       | Some t -> t)
@@ -112,7 +112,7 @@ let rec compare_partial (a : t) (b : t) =
       compare_partial lower lower1 |> function
       | Some 0 -> compare_partial upper upper1
       | o -> o)
-  | Struct fields, Struct fields2 ->
+  | Struct (_, fields), Struct (_, fields2) ->
       Some
         (StringMap.compare
            (fun ({ typ = a; _ } : record_field) { typ = b; _ } ->
@@ -146,7 +146,7 @@ let rec to_string = function
   | Variable name -> name
   | Pointer { lower; upper; _ } ->
       Printf.sprintf "ptr(%s, %s)" (to_string lower) (to_string upper)
-  | Struct record ->
+  | Struct (_, record) ->
       "{"
       ^ (StringMap.bindings record
         |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->

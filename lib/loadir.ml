@@ -461,14 +461,15 @@ module BasilASTLoader = struct
     | RecordField1 (id, ty) ->
         Types.mk_field (unsafe_unsigil (`Type id)) (trans_type ty)
 
-  and transRECORDTYPE (fields : field list) =
+  and transSTRUCTTYPE name (fields : field list) =
     Types.Struct
-      (StringMap.of_list
-         ((List.map (function Field1 (field_name, _, t, offset, _) ->
-              ( transStr field_name,
-                ({ typ = trans_type t; offset = transIntVal offset }
-                  : Types.record_field) )))
-            fields))
+      ( name,
+        StringMap.of_list
+          ((List.map (function Field1 (_, field_name, _, t, offset, _, _) ->
+               ( transStr field_name,
+                 ({ typ = trans_type t; offset = transIntVal offset }
+                   : Types.record_field) )))
+             fields) )
 
   and transPOINTERTYPE name (l : typeT) (u : typeT) =
     Types.Pointer { name; lower = trans_type l; upper = trans_type u }
@@ -482,7 +483,7 @@ module BasilASTLoader = struct
     | TypeParen (_, typeT, _) -> trans_type typeT
     | TypeVarType name -> Types.Variable (unsafe_unsigil (`Local name))
     | TypeRecordType (RecordType1 (name, _, fields, _)) ->
-        transRECORDTYPE (unsafe_unsigil @@ `Local name) fields
+        transSTRUCTTYPE (unsafe_unsigil @@ `Local name) fields
     | TypePointerType (PointerType1 (name, _, l, u, _)) ->
         transPOINTERTYPE (unsafe_unsigil (`Local name)) l u
 

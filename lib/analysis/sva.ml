@@ -322,7 +322,7 @@ let sva (prog : Program.t) =
     | Some a -> a
   in
   let results =
-    ID.Map.fold
+    IDMap.fold
       (fun _ v acc -> DFGAnalysis.flow_insensitive v :: acc)
       prog.procs []
   in
