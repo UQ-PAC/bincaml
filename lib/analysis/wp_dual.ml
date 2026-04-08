@@ -4,11 +4,12 @@ open Lang
 open Common
 open Expr
 
-module type RequiresAnnotation = sig
-  val requires : ID.t -> BasilExpr.t list
+module type FunctionSummaryAnnotation = sig
+  val requires : ID.t -> Expr.BasilExpr.t list
+  val ensures : ID.t -> Expr.BasilExpr.t list
 end
 
-module Domain (S : RequiresAnnotation) = struct
+module Domain (S : FunctionSummaryAnnotation) = struct
   let name = "WP dual domain"
 
   type t = Program.e
@@ -115,15 +116,23 @@ module Domain (S : RequiresAnnotation) = struct
           BasilExpr.applyintrin ~op:`OR
             (p :: (List.map Expr.BasilExpr.boolnot @@ S.requires procid))
         in
-        let p =
+        let ensures = BasilExpr.applyintrin ~op:`AND @@ S.ensures procid in
+        (* Sub the call site assignee variables into the ensures of the procedure *)
+        let ensures =
           StringMap.fold
             (fun k d acc ->
               BasilExpr.substitute
                 (fun v ->
-                  Option.return_if (Var.equal v d) (StringMap.get k args)
-                  |> Option.flatten)
-                p)
-            lhs p
+                  Option.return_if
+                    (String.equal (Var.name v) k)
+                    (BasilExpr.rvar d))
+                acc)
+            lhs ensures
+        in
+        let p =
+          BasilExpr.forall
+            ~bound:(StringMap.values lhs |> Iter.to_list)
+            (BasilExpr.binexp ~op:`IMPLIES ensures p)
         in
         simplify p
     | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
@@ -137,6 +146,7 @@ end
 
 module IntraDomain = Domain (struct
   let requires = const []
+  let ensures = const []
 end)
 
 module IntraAnalysis = Intra_analysis.Backwards (IntraDomain)

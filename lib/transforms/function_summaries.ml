@@ -87,8 +87,9 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
   (* TODO implement a sample ensures clause generator and some sort of analysis
      pass runner *)
   let cur_req = S.requires (Procedure.id proc) in
+  let requires = wp_dual_requires (module S) proc in
   let requires =
-    wp_dual_requires (module S) proc
+    requires
     |> List.fold_left
          (fun rs r ->
            (* if redundant solver r (List.append rs cur_req) then rs else r :: rs) *)
@@ -143,19 +144,20 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
   add_summary summary proc
 
 let intraproc_transform (prog : Program.t) =
-  (* let module Dfs = Graph.Traverse.Dfs (Program.CallGraph.G) in *)
-  (* let cg = Program.CallGraph.make_call_graph prog in *)
-  (* let procs = *)
-    (* Iter.from_iter (fun f -> Dfs.postfix f cg) *)
-    (* |> Iter.fold *)
-         (* (fun acc v -> *)
-           (* match v with *)
-           (* | Program.CallGraph.Vert.ProcBegin id -> *)
-               (* IDMap.update id (Option.map (intraproc_transform_proc prog)) acc *)
-           (* | _ -> acc) *)
-         (* prog.procs *)
-  (* in *)
-  { prog with procs=IDMap.map (intraproc_transform_proc prog) prog.procs }
+  let module Dfs = Graph.Traverse.Dfs (Program.CallGraph.G) in
+  let cg = Program.CallGraph.make_call_graph prog in
+  let procs =
+    Iter.from_iter (fun f -> Dfs.postfix f cg)
+    |> Iter.fold
+         (fun acc v ->
+           match v with
+           | Program.CallGraph.Vert.ProcBegin id ->
+               IDMap.update id (Option.map (intraproc_transform_proc prog)) acc
+           | _ -> acc)
+         prog.procs
+  in
+  { prog with procs }
+(* { prog with procs = IDMap.map (intraproc_transform_proc prog) prog.procs } *)
 
 module Domain = struct
   type property = summary
@@ -207,7 +209,7 @@ let interproc_transform (prog : Program.t) =
   let solver =
     Bincaml_util.Smt.Solver.create
       {
-        Bincaml_util.Smt.Config.z3 with
+        Bincaml_util.Smt.Config.cvc5 with
         log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
