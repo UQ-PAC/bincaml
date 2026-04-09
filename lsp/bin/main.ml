@@ -190,7 +190,7 @@ class lsp_server =
                          [ "-O"; "-Tsvg"; file_name ])
                   in
                   let* () =
-                    run_command ~notify_back ~quiet:false
+                    run_command ~notify_back
                       (Filename.quote_command "xdg-open" [ file_name ^ ".svg" ])
                   in
                   Lwt.return `Null)

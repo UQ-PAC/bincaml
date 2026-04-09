@@ -1,15 +1,5 @@
 module Lsp = Linol.Lsp
 
-let one_value_function_cache ?(eq = CCEqual.poly) f argfun =
-  let cache = CCCache.lru ~eq 1 in
-  fun x ->
-    try CCCache.with_cache cache f (argfun x)
-    with e ->
-      Logs.err (fun m ->
-          m "error during cached handler: %s\n%s" (Printexc.to_string e)
-            (Printexc.get_backtrace ()));
-      raise e
-
 let parse_tokens (contents : string) =
   let lexbuf = Lexing.from_string ~with_positions:true contents in
   let tokens = Raw_tokens.extract_all_tokens lexbuf |> Iter.to_array in
@@ -59,20 +49,19 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
   (initial_contents : string) =
   let () = notify_back#set_uri uri in
   let make_lines =
-    one_value_function_cache ~eq:CCEqual.string
+    Lsp_cache.cached ~eq:CCEqual.physical
       (Fun.compose Array.of_list CCString.lines) (fun st -> st#contents)
   in
   let input =
-    one_value_function_cache ~eq:CCEqual.string Pp_loc.Input.string (fun st ->
+    Lsp_cache.cached ~eq:CCEqual.physical Pp_loc.Input.string (fun st ->
         st#contents)
   in
   let tokens =
-    one_value_function_cache ~eq:CCEqual.string parse_tokens (fun st ->
-        st#contents)
+    Lsp_cache.cached ~eq:CCEqual.physical parse_tokens (fun st -> st#contents)
   in
   let completions =
-    one_value_function_cache
-      ~eq:CCEqual.(pair (array Raw_tokens.equal_token_with_pos) (array string))
+    Lsp_cache.cached
+      ~eq:CCEqual.(pair physical physical)
       (fun (tokens, lines) ->
         tokens |> Iter.of_array
         |> Iter.filter_map completion_item_of_token
@@ -97,8 +86,8 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
       (fun st -> (st#tokens, st#lines))
   in
   let parse_result =
-    one_value_function_cache
-      ~eq:CCEqual.(pair (array Raw_tokens.equal_token_with_pos) string)
+    Lsp_cache.cached
+      ~eq:CCEqual.(pair physical physical)
       (fun (tokens, contents) ->
         let get_token, prev_token = Raw_tokens.make_token_getter tokens in
         try Ok (BasilIR.ParBasilIR.pModuleT get_token (Lexing.from_string ""))
@@ -116,8 +105,8 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
       (fun st -> (st#tokens, st#contents))
   in
   let cst =
-    one_value_function_cache
-      ~eq:(CCResult.equal ~err:CCEqual.poly CCEqual.poly)
+    Lsp_cache.cached
+      ~eq:CCResult.(equal ~err:CCEqual.physical CCEqual.physical)
       (fun parse_result ->
         let prev = ref (BasilIR.AbsBasilIR.Module1 []) in
         match parse_result with
@@ -130,11 +119,10 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
             !prev)
       (fun st -> st#parse_result)
   in
-  let diagnostics_input_eq (a, b, c, d, e, f) (a2, b2, c2, d2, e2, f2) =
-    (a, b) = (a2, b2) && c == c2 && d == d2 && e == e2 && f == f2
-  in
   let diagnostics =
-    one_value_function_cache ~eq:diagnostics_input_eq
+    Lsp_cache.cached
+      ~eq:
+        Lsp_cache.(equal6 physical physical physical physical physical physical)
       (fun (is_too_big, debug_highlight, tokens, parse_result, ast, input) ->
         let start = Lsp.Types.Position.create ~line:0 ~character:0
         and end_ = Lsp.Types.Position.create ~line:0 ~character:100 in
@@ -169,8 +157,7 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
                       Printf.sprintf
                         "Unhandled exception during resolution: `%s`\n\n\
                          ```ocaml\n\
-                         %s\
-                         ```"
+                         %s\n```"
                         (Printexc.to_string e) bt
                     in
                     ( `MarkupContent
@@ -208,15 +195,15 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
           st#input ))
   in
   let lspsymbols =
-    one_value_function_cache
-      ~eq:CCEqual.(triple poly poly physical)
+    Lsp_cache.cached
+      ~eq:CCEqual.(triple physical physical physical)
       (fun (BasilIR.AbsBasilIR.Module1 decls, contents, input) ->
         Lsp_symbols.lspsymbols_of_decls ~len:(String.length contents) input
           decls)
       (fun st -> (st#cst, st#contents, st#input))
   in
   let ast =
-    one_value_function_cache ~eq:CCEqual.physical
+    Lsp_cache.cached ~eq:CCEqual.physical
       (fun cst ->
         Logs.app (fun m -> m "ast of cst");
         let name = Linol_lsp.Types.DocumentUri.to_path uri in
