@@ -3,6 +3,10 @@
 
 This guide explains who to get started as a contributor.
 
+Contributions are subject to the
+{{:https://github.com/agle/bincaml/blob/main/AIAgreement.md} AI Agreement},
+where {e contributions} denotes any code, pull request, code review, issues,
+and other interation with Bincaml's github page.
 
 {1 Standard Library}
 
