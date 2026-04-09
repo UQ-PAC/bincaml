@@ -304,7 +304,7 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
                 | None
                   when StringMap.exists
                          (fun _ n -> Var.equal id n)
-                         (Procedure.formal_in_params proc) ->
+                         (Procedure.formal_out_params proc) ->
                     Keep
                 | None when skip_any ->
                     failwith
