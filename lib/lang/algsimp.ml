@@ -172,6 +172,14 @@ let algebraic_simplifications
     when equal i (ones ~size:(size i)) ->
       replace [%here] (bvconst @@ ones ~size:(size i))
   | Binary (`BVOR, a, (_, C (`Bitvector i), _)) when is_zero i -> keep [%here] a
+  (* Having to handle commutativity like this seems unideal... *)
+  | Binary (`BVOR, (_, C (`Bitvector i), _), a) when is_zero i -> keep [%here] a
+  | Binary (`BVSHL, a, (_, C (`Bitvector i), _)) when is_zero i ->
+      keep [%here] a
+  | Binary (`BVASHR, a, (_, C (`Bitvector i), _)) when is_zero i ->
+      keep [%here] a
+  | Binary (`BVLSHR, a, (_, C (`Bitvector i), _)) when is_zero i ->
+      keep [%here] a
   | Unary (`ZeroExtend 0, a) -> keep [%here] a
   | Unary (`SignExtend 0, a) -> keep [%here] a
   | Unary (`Extract (hi, 0), ((_, _, Bitvector sz) as a)) when hi = sz ->
