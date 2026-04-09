@@ -38,6 +38,7 @@ module IDMap = Map.Make (ID)
 module VarMap = Map.Make (Var)
 module IDSet = Set.Make (ID)
 module VarSet = Set.Make (Var)
+module ZMap = Map.Make (Z)
 
 (** Values *)
 

@@ -116,18 +116,20 @@ proc @main_4196260 () -> ()
 let%test_unit "Record joining" =
   let fields1 =
     [
-      { offset = Z.zero; size = 32; ty = TypeVar (VarId.make_id "a") };
-      { offset = Z.of_int 32; size = 32; ty = TypeVar (VarId.make_id "b") };
+      (Z.zero, { offset = Z.zero; size = 32; ty = TypeVar (VarId.make_id "a") });
+      ( Z.of_int 32,
+        { offset = Z.of_int 32; size = 32; ty = TypeVar (VarId.make_id "b") } );
     ]
   in
   let fields2 =
     [
-      { offset = Z.zero; size = 32; ty = TypeVar (VarId.make_id "c") };
-      { offset = Z.of_int 64; size = 32; ty = TypeVar (VarId.make_id "d") };
+      (Z.zero, { offset = Z.zero; size = 32; ty = TypeVar (VarId.make_id "c") });
+      ( Z.of_int 64,
+        { offset = Z.of_int 64; size = 32; ty = TypeVar (VarId.make_id "d") } );
     ]
   in
-  let record1 = Record fields1 in
-  let record2 = Record fields2 in
+  let record1 = Record (ZMap.of_list fields1) in
+  let record2 = Record (ZMap.of_list fields2) in
   let joined_record = Union (record1, record2) in
 
   let m =
@@ -136,23 +138,17 @@ let%test_unit "Record joining" =
       "meow"
     |> TypeAutomata.simplify_automata
   in
-  let res =
-    {|
-digraph G {
- "meow" [height=0, width=0, style=filled, fillcolor="#c4a7e7" ]
-"{ (0, 32): a, (32, 32): b } ⊔ { (0, 32): c, (64, 32): d }" [shape=oval style=filled, fillcolor="#c4a7e7"];
-"c ⊓ a" [shape=oval style=filled, fillcolor="#c4a7e7"];
-"b" [shape=oval style=filled, fillcolor="#c4a7e7"];
-"d" [shape=oval style=filled, fillcolor="#c4a7e7"];
-
-"meow" -> "{ (0, 32): a, (32, 32): b } ⊔ { (0, 32): c, (64, 32): d }";
-"{ (0, 32): a, (32, 32): b } ⊔ { (0, 32): c, (64, 32): d }" -> "d" [label="Record Label 64 32", ];
-"{ (0, 32): a, (32, 32): b } ⊔ { (0, 32): c, (64, 32): d }" -> "b" [label="Record Label 32 32", ];
-"{ (0, 32): a, (32, 32): b } ⊔ { (0, 32): c, (64, 32): d }" -> "c ⊓ a" [label="Record Label 0 32", ];
-
-}|}
+  let fields =
+    [
+      (Z.zero, { offset = Z.zero; size = 32; ty = Top });
+      ( Z.of_int 32,
+        { offset = Z.of_int 32; size = 32; ty = TypeVar (VarId.make_id "b") } );
+      ( Z.of_int 64,
+        { offset = Z.of_int 64; size = 32; ty = TypeVar (VarId.make_id "d") } );
+    ]
   in
-  assert (String.equal res @@ TypeAutomata.export_graphviz m)
+  let actual = InferredType.Record (ZMap.of_list fields) in
+  assert (InferredType.equal actual @@ TypeAutomata.automata_to_type m)
 
 let%test_unit "BinSub type ADT" =
   (*
@@ -171,17 +167,15 @@ let%test_unit "BinSub type ADT" =
   let int32 = BinCamlType (BinCaml_BV 32) in
 
   let fields1 =
-    [
-      { offset = Z.of_int 4; size = 4; ty = Sect (b, Sect (t1, TypeVar alpha)) };
-    ]
+    { offset = Z.of_int 4; size = 4; ty = Sect (b, Sect (t1, TypeVar alpha)) }
   in
   let fields2 =
-    [ { offset = Z.zero; size = 4; ty = Sect (d, Sect (t2, int32)) } ]
+    { offset = Z.zero; size = 4; ty = Sect (d, Sect (t2, int32)) }
   in
-  let fields3 = [ { offset = Z.zero; size = 4; ty = Union (e, int32) } ] in
-  let record1 = Record fields1 in
-  let record2 = Record fields2 in
-  let record3 = Record fields3 in
+  let fields3 = { offset = Z.zero; size = 4; ty = Union (e, int32) } in
+  let record1 = Record (ZMap.singleton (Z.of_int 4) fields1) in
+  let record2 = Record (ZMap.singleton Z.zero fields2) in
+  let record3 = Record (ZMap.singleton Z.zero fields3) in
 
   let pointer1 = Pointer (a, record1) in
   let pointer2 = Pointer (c, record2) in
@@ -199,23 +193,29 @@ let%test_unit "BinSub type ADT" =
     |> TypeAutomata.simplify_automata
   in
   let res =
-    {|
-digraph G {
- "stack_slot_1" [height=0, width=0, style=filled, fillcolor="#c4a7e7" ]
-"μalpha.stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)" [shape=oval style=filled, fillcolor="#eb6f92"];
-"e ⊔ bv32" [shape=oval style=filled, fillcolor="#c4a7e7"];
-"{ (0, 4): e ⊔ bv32 }" [shape=oval style=filled, fillcolor="#c4a7e7"];
-"b ⊓ t1 ⊓ alpha" [shape=oval style=filled, fillcolor="#eb6f92"];
-"d ⊓ t2 ⊓ bv32" [shape=oval style=filled, fillcolor="#eb6f92"];
-"{ (0, 4): d ⊓ t2 ⊓ bv32, (4, 4): b ⊓ t1 ⊓ alpha }" [shape=oval style=filled, fillcolor="#eb6f92"];
-
-"stack_slot_1" -> "μalpha.stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)";
-"μalpha.stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)" -> "{ (0, 4): d ⊓ t2 ⊓ bv32, (4, 4): b ⊓ t1 ⊓ alpha }" [label="Load Label", ];
-"μalpha.stack_slot_2 ⊔ ptr(a, { (4, 4): b ⊓ t1 ⊓ alpha }) ⊔ ptr(c, { (0, 4): d ⊓ t2 ⊓ bv32 }) ⊔ ptr({ (0, 4): e ⊔ bv32 }, f)" -> "{ (0, 4): e ⊔ bv32 }" [label="Store Label", ];
-"{ (0, 4): d ⊓ t2 ⊓ bv32, (4, 4): b ⊓ t1 ⊓ alpha }" -> "b ⊓ t1 ⊓ alpha" [label="Record Label 4 4", ];
-"{ (0, 4): d ⊓ t2 ⊓ bv32, (4, 4): b ⊓ t1 ⊓ alpha }" -> "d ⊓ t2 ⊓ bv32" [label="Record Label 0 4", ];
-"{ (0, 4): e ⊔ bv32 }" -> "e ⊔ bv32" [label="Record Label 0 4", ];
-
-}|}
+    Pointer
+      ( Record
+          (ZMap.singleton Z.zero
+             {
+               offset = Z.zero;
+               size = 4;
+               ty = Union (e, BinCamlType (BinCaml_BV 32));
+             }),
+        Record
+          (ZMap.of_list
+             [
+               ( Z.zero,
+                 {
+                   offset = Z.zero;
+                   size = 4;
+                   ty = Sect (d, Sect (t2, BinCamlType (BinCaml_BV 32)));
+                 } );
+               ( Z.of_int 4,
+                 {
+                   offset = Z.of_int 4;
+                   size = 4;
+                   ty = Sect (b, Sect (t1, TypeVar alpha));
+                 } );
+             ]) )
   in
-  assert (String.equal res @@ TypeAutomata.export_graphviz m)
+  assert (InferredType.equal res @@ TypeAutomata.automata_to_type m)

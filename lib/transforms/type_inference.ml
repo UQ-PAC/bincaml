@@ -96,13 +96,13 @@ module InferredType = struct
         string
         * t StringMap.t
         * t StringMap.t (* list of inputs and list of outputs *)
-    | Record of field list (* A list of fields in the record *)
+    | Record of field ZMap.t (* A list of fields in the record *)
     | TypeVar of VarId.t
     | Recursive of VarId.t * t
     | BinCamlType of BinCamlType.t
-  [@@deriving ord, eq]
+  [@@deriving eq, ord]
 
-  and field = { offset : Z.t; size : int; ty : t }
+  and field = { offset : Z.t; size : int; ty : t } [@@deriving eq, ord]
 
   let rec show = function
     | Top -> "⊤"
@@ -118,7 +118,10 @@ module InferredType = struct
           (Iter.to_string show (StringMap.values ins))
           (Iter.to_string show (StringMap.values outs))
     | Record fields ->
-        Printf.sprintf "{ %s }" @@ List.to_string ~sep:", " show_field fields
+        Printf.sprintf "{ %s }"
+        @@ String.concat_iter ~sep:", "
+        @@ Iter.map (fun (_, field) -> show_field field)
+        @@ ZMap.to_iter fields
 
   and show_field { offset; size; ty } =
     Printf.sprintf "(%s, %d): %s" (Z.to_string offset) size (show ty)
@@ -136,7 +139,7 @@ module InferredType = struct
     | Function (_, ins, outs) ->
         StringMap.iter (fun _ v -> iter f v) ins;
         StringMap.iter (fun _ v -> iter f v) outs
-    | Record fields -> List.iter (fun { ty } -> iter f ty) fields
+    | Record fields -> ZMap.iter (fun _ { ty } -> iter f ty) fields
 
   let rec join (ty0 : t) (ty1 : t) : t =
     match (ty0, ty1) with
@@ -147,16 +150,17 @@ module InferredType = struct
 
           let compare = Stdlib.compare
         end) in
-        let fieldmap_to_field_list (map : t FieldMap.t) =
+        let fieldmap_to_field_list (map : t FieldMap.t) : field ZMap.t =
           FieldMap.bindings map
           |> List.map (fun ((offset, size), ty) ->
-              ({ offset; size; ty } : field))
+              (offset, { offset; size; ty }))
+          |> ZMap.of_list
         in
-        let fieldmap_of_list (fields : field list) : t FieldMap.t =
-          List.fold_left
-            (fun acc ({ offset; size; ty } : field) ->
+        let fieldmap_of_list (fields : field ZMap.t) : t FieldMap.t =
+          ZMap.fold
+            (fun _ ({ offset; size; ty } : field) acc ->
               FieldMap.add (offset, size) ty acc)
-            FieldMap.empty fields
+            fields FieldMap.empty
         in
         let f0 = fieldmap_of_list fields0 in
         let f1 = fieldmap_of_list fields1 in
@@ -223,7 +227,8 @@ module InferredType = struct
               let recursives, typ = inferred_to_real recursives ty in
               ( recursives,
                 (Z.to_string offset, ({ typ; offset } : Types.record_field)) ))
-            recursives fields
+            recursives
+          @@ List.of_iter @@ ZMap.values fields
         in
         (recursives, Types.Struct (name, StringMap.of_list fields))
     | Recursive (varid, typ) ->
@@ -385,6 +390,7 @@ module TypeAutomata = struct
     start : State.t;
     name : string;
   }
+  [@@deriving eq, ord]
 
   open struct
     let get_transitions m : (State.t * Sigma.t * State.t) list =
@@ -595,7 +601,8 @@ module TypeAutomata = struct
           List.fold_left_map
             (fun acc ({ offset; size; ty } : InferredType.field) ->
               ((p, ty) :: acc, (Sigma.Reclabel (offset, size), (p, ty))))
-            [] fields
+            []
+          @@ List.of_iter @@ ZMap.values fields
     in
     let rec type_to_state_list p (ty : InferredType.t) ((ls, tbl) as acc) =
       let open Sigma in
@@ -669,16 +676,16 @@ module TypeAutomata = struct
           ((p, ty) :: ls, tbl)
       | Record fields ->
           let ls, tbl =
-            List.fold_left
-              (fun acc ({ ty } : InferredType.field) ->
+            ZMap.fold
+              (fun _ ({ ty } : InferredType.field) acc ->
                 type_to_state_list p ty acc)
-              acc fields
+              fields acc
           in
           let edges =
-            List.fold_left
-              (fun edges ({ offset; size; ty } : InferredType.field) ->
+            ZMap.fold
+              (fun _ ({ offset; size; ty } : InferredType.field) edges ->
                 Edges.add_to_list (Reclabel (offset, size)) (p, ty) edges)
-              Edges.empty fields
+              fields Edges.empty
           in
           let tbl = StateEdges.add (p, ty) edges tbl in
           ((p, ty) :: ls, tbl)
@@ -692,13 +699,14 @@ module TypeAutomata = struct
     (* Look at edges and make a list of them + the type field to make a field *)
     let make_record types : InferredType.t =
       InferredType.Record
-        (List.map
-           (fun (edge, ty) ->
-             match edge with
-             | Sigma.Reclabel (offset, size) ->
-                 ({ offset; size; ty } : InferredType.field)
-             | _ -> failwith "Illegal edge in record list")
-           types)
+        (ZMap.of_list
+        @@ List.map
+             (fun (edge, ty) ->
+               match edge with
+               | Sigma.Reclabel (offset, size) ->
+                   (offset, ({ offset; size; ty } : InferredType.field))
+               | _ -> failwith "Illegal edge in record list")
+             types)
     in
     (* Assume the list is only of two things *)
     let make_pointer : (Sigma.t * InferredType.t) list -> InferredType.t =
@@ -853,7 +861,7 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
   match tau with
   | Record fields ->
       Record
-        (List.map
+        (ZMap.map
            (fun { size; offset; ty } ->
              let ty = recursive_call polarity ty in
              match ty with
@@ -1045,7 +1053,9 @@ let rec constrain_expr proc (st : ConstraintState.t)
           let st =
             ConstraintState.add_lb st name (BinCamlType (BinCaml_BV size))
           in
-          (constrain_arg proc st a @@ Record [ field ], ty))
+          ( constrain_arg proc st a
+            @@ Record (ZMap.singleton (Z.of_int rt) field),
+            ty ))
   | BinaryExpr { op; arg1 = l; arg2 = r } -> (
       let st, _ = constrain_expr proc st (BasilExpr.unfix l) in
       let st, _ = constrain_expr proc st (BasilExpr.unfix r) in
@@ -1228,7 +1238,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt :
         let ty =
           TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_upper_load")
         in
-        let ub = Record [ { size; offset; ty } ] in
+        let ub = Record (ZMap.singleton offset { size; offset; ty }) in
         let lb =
           TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_lower_load")
         in
@@ -1236,7 +1246,9 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt :
         let st = constrain st (Pointer (lb, ub)) addr in
         let st = constrain st ub lb in
         let ub =
-          Record [ { size; offset; ty = BinCamlType (BinCaml_BV size) } ]
+          Record
+            (ZMap.singleton offset
+               { size; offset; ty = BinCamlType (BinCaml_BV size) })
         in
         let st = constrain st (Pointer (lb, ub)) addr in
         let st = constrain st ub lb in
@@ -1286,7 +1298,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt :
         let ty =
           TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_lower_store")
         in
-        let lb = Record [ { size; offset; ty } ] in
+        let lb = Record (ZMap.singleton offset { size; offset; ty }) in
         let ub =
           TypeVar (VarId.make_id @@ Int.to_string stmt_number ^ "_upper_store")
         in
@@ -1294,7 +1306,9 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt :
         let st = constrain st (Pointer (lb, ub)) addr in
         let st = constrain st lb ub in
         let lb =
-          Record [ { size; offset; ty = BinCamlType (BinCaml_BV size) } ]
+          Record
+            (ZMap.singleton offset
+               { size; offset; ty = BinCamlType (BinCaml_BV size) })
         in
         let st = constrain st lb ub in
         let st = constrain st (Pointer (lb, ub)) addr in
