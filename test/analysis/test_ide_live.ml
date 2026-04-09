@@ -45,6 +45,12 @@ proc @main () -> ()
   print_lives results main;
   [%expect
     {|
+    Warn: undeclared global referenced in expr, $x:bv64
+    Warn: global undeclared $x assuming mutable unshared
+    Warn: undeclared global referenced in expr, $x:bv64
+    Warn: global undeclared $y assuming mutable unshared
+    Warn: global undeclared $z assuming mutable unshared
+    Warn: undeclared global referenced in expr, $z:bv64
     @main
     $mem:(bv64->bv8)
     $x:bv64
