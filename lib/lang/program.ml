@@ -70,13 +70,13 @@ let pretty_declaration d =
       | Lambda _ -> Expr.BasilExpr.pretty_let_single binding body None
       | _ ->
           let args, body, rtype = (text "", body, Var.typ binding) in
-          text "type "
+          text "let "
           ^ text (Var.name binding)
           ^ args ^+ text ":"
           ^+ text (Types.to_string rtype)
           ^+ text "="
           ^+ nest 2 (Expr.BasilExpr.pretty body))
-  | Type { binding; typ } -> text "type " ^ text (Types.to_string typ)
+  | Type { binding; typ } -> text "type " ^ text (Types.to_string_decl typ)
 
 (*match definition with
       | Some d -> 

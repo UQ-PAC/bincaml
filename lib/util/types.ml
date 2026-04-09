@@ -160,6 +160,9 @@ let rec to_string = function
   | Map (a, (Map _ as b)) ->
       "(" ^ ("(" ^ to_string a ^ ")" ^ "->" ^ to_string b) ^ ")"
   | Map (a, b) -> "(" ^ (to_string a ^ "->" ^ to_string b) ^ ")"
+  | Sort (name, _) -> name
+
+let to_string_decl = function
   | Sort (name, []) -> name
   | Sort (name, variants) ->
       let pfields fields =
@@ -175,6 +178,7 @@ let rec to_string = function
       ^ List.to_string ~sep:" | " ~start:"" ~stop:""
           (function { variant; fields } -> fsort variant fields)
           variants
+  | a -> to_string a
 
 let to_string_rexp = function
   | ( Boolean | Integer | Bitvector _ | Unit | Top | Nothing | Variable _

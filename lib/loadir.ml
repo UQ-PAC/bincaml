@@ -897,15 +897,18 @@ module BasilASTLoader = struct
   and lookup_global_decl ident p_st =
     let vn = unsafe_unsigil (`Global ident) in
     let token_char_offset_range = Some (get_bident_loc (`Global ident)) in
-    match StringMap.find vn p_st.prog.globals with
-    | Variable { binding } -> binding
-    | Function { binding } -> binding
-    | Type _ ->
+    match StringMap.find_opt vn p_st.prog.globals with
+    | Some (Variable { binding }) -> binding
+    | Some (Function { binding }) -> binding
+    | Some (Type _) ->
         let msg = "found type declaration when looking for variable:" ^ vn in
         raise (LoadError { token_char_offset_range; msg; input = None })
-    | exception Not_found ->
-        let msg = "global variable used before declaration : " ^ vn in
-        raise (LoadError { token_char_offset_range; msg; input = None })
+    | None -> (
+        match StringMap.find_opt vn p_st.prog.implicit_decls with
+        | Some (VariantCase { constructor }) -> constructor
+        | None ->
+            let msg = "global variable used before declaration : " ^ vn in
+            raise (LoadError { token_char_offset_range; msg; input = None }))
 
   and trans_bv_val v : Bitvec.t =
     match v with
