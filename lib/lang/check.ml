@@ -48,8 +48,20 @@ let variables_wf p =
              ^ (Procedure.id p |> ID.to_string)))
     | _ -> ()
   in
+  let m = ref VarSet.empty in
+  let write v =
+    match Var.scope v with
+    | LocalConst ->
+        if VarSet.mem v !m then
+          raise
+            (IRWellformed
+               ("constant local written more than once: " ^ Var.to_string v))
+        else m := VarSet.add v !m
+    | _ -> ()
+  in
   let check_lvar v =
     sigil_ok v;
+    write v;
     if Var.is_local v then is_declared v
     else if not @@ List.exists (fun e -> Var.equal v e) spec.modifies_globs then (
       print_endline

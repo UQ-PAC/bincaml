@@ -160,7 +160,7 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
           List.map
             (fun g ->
               let name = param_name "" g in
-              (g, Procedure.fresh_var ~pure:true ~name proc (Var.typ g)))
+              (g, Procedure.fresh_var ~pure:false ~name proc (Var.typ g)))
             captures
         in
         let glob_to_local_map =
