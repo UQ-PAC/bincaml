@@ -793,7 +793,7 @@ module TypeAutomata = struct
 
   let create_simple_type (polarity : Polarity.t) ty init name : InferredType.t =
     let m = type_to_automata polarity ty init name |> simplify_automata in
-    print_endline @@ export_graphviz m;
+    (* print_endline @@ export_graphviz m; *)
     m |> automata_to_type
 end
 
@@ -962,7 +962,7 @@ let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
 let constrain_arg proc st l t =
   let l = BasilExpr.unfix l in
   match l with
-  | RVar { id } -> ConstraintState.add_lb st (VarId.var_proc_to_uid id proc) t
+  | RVar { id } -> constrain st t (TypeVar (VarId.var_proc_to_uid id proc))
   | _ -> st
 
 let constrain_args proc st l r t =
