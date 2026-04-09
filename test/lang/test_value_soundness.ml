@@ -108,6 +108,8 @@ module TestTnumWintReducedDom =
     (Analysis.Tnum_wint_reduced_product
      .TnumWintReducedProductValueAbstractionBasil)
 
+module TestSVADom = ValueAbstractionSoundness (Analysis.Sva.SVAAbstractionBasil)
+
 let _ =
   Alcotest.run "value domain abstract eval soundness"
     [

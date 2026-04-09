@@ -121,6 +121,18 @@ module PassManager = struct
          control flow graph and prints results";
     }
 
+  let sva =
+    {
+      name = "sva";
+      apply =
+        Prog
+          (fun p ->
+            let r = Analysis.Sva.sva p in
+            print_endline @@ Analysis.Sva.StateAbstraction.show r;
+            p);
+      doc = "Runs symbolic value analysis and prints stuff out after";
+    }
+
   let demo_dfg_gamma =
     {
       name = "demo-dfg-gamma-analysis";
@@ -237,6 +249,7 @@ module PassManager = struct
       read_uninit false;
       read_uninit true;
       sssa;
+      sva;
       full_ssa;
       type_check;
       split_memory_encoding;
