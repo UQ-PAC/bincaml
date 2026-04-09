@@ -175,7 +175,7 @@ let children_lspsymbols_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
         elided_of_decl decl |> BasilIR.PrintBasilIR.(printTree prtDecl)
       in
       let context = match context with [] -> [ fence name ] | x -> x in
-      let context = context @ [ "within procedure"; fence procdetail ] in
+      let context = context @ [ "within top-level"; fence procdetail ] in
       let detail =
         context |> List.map (Fun.flip CCString.cat "\n\n") |> CCString.concat ""
       in
@@ -218,7 +218,7 @@ let lspsymbol_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
 %s
 ```
 
-global declaration|}
+top-level declaration|}
           (elided_of_decl decl |> BasilIR.PrintBasilIR.(printTree prtDecl))
       in
       Some
