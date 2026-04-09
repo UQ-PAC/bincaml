@@ -185,14 +185,14 @@ let pretty show_lvar show_var show_expr s =
       append_l ~sep:nil
         [
           intrin_plist lhs;
-          newline ^ text "call ";
+          text ":= call ";
           Intrinsic.pretty name;
           intrin_plist args;
         ]
   | Instr_Call { lhs; procid; args } ->
       let n = ID.to_string procid in
       append_l ~sep:nil
-        [ l_param_list lhs; newline ^ text "call "; text n; r_param_list args ]
+        [ l_param_list lhs; text "call "; text n; r_param_list args ]
   | Instr_IndirectCall { target } -> text "indirect call " ^ target
 
 (** Pretty print to il format*)
