@@ -337,7 +337,14 @@ module PassManager = struct
     Trace_core.with_span ~__FILE__ ~__LINE__ ("transform-prog::" ^ tf.name)
     @@ fun _ ->
     match tf.apply with
-    | Prog tf -> tf p
+    | Prog fn ->
+        let p = fn p in
+        IDMap.values p.procs
+        |> Iter.iter (fun p ->
+            try Lang.Check.wf_checks p
+            with Lang.Check.IRWellformed e ->
+              raise @@ Lang.Check.IRWellformed (tf.name ^ ": " ^ e));
+        p
     | Batch tf -> List.fold_left run_transform p tf
     | DFGAnalysis (module D : Analysis.Dataflow_graph.AnalysisType) ->
         IDMap.to_iter p.procs
@@ -366,9 +373,10 @@ module PassManager = struct
               Trace_core.with_span ~__FILE__ ~__LINE__
                 ("check-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
               @@ fun _ ->
-              match app p proc with
+              (match app p proc with
               | false -> ()
-              | true -> failwith @@ "Check failed: " ^ ID.to_string id)
+              | true -> failwith @@ "Check failed: " ^ ID.to_string id);
+              Lang.Check.wf_checks proc)
             p.procs
         in
         p
@@ -378,7 +386,13 @@ module PassManager = struct
             (fun id proc ->
               Trace_core.with_span ~__FILE__ ~__LINE__
                 ("transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
-              @@ fun _ -> app proc)
+              @@ fun _ ->
+              let p = app proc in
+              try
+                Lang.Check.wf_checks p;
+                p
+              with Lang.Check.IRWellformed e ->
+                raise @@ Lang.Check.IRWellformed (tf.name ^ ": " ^ e))
             p.procs
         in
         { p with procs }

@@ -958,7 +958,7 @@ module Domain = struct
       | Lang.Stmt.Instr_Load { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_Store { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_IntrinCall { lhs } ->
-          StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
+          List.to_iter lhs |> Iter.map (fun v -> (v, top_val))
       | Lang.Stmt.Instr_Call { lhs } ->
           StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
       | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
@@ -974,7 +974,8 @@ module Domain = struct
     | { lhs; rhs } ->
         rhs
         |> List.map (fun (_, k) -> read k m)
-        |> List.fold_left WrappedIntervalsLattice.join WrappedIntervalsLattice.bottom
+        |> List.fold_left WrappedIntervalsLattice.join
+             WrappedIntervalsLattice.bottom
         |> fun v -> update lhs v m
 end
 

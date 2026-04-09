@@ -641,6 +641,7 @@ namedCallReturn_list : /* empty */ { []  }
 
 lVars : /* empty */ { LVars_Empty  }
   | KW_var openParen localVar_list closeParen SYMB8 { LVars_LocalList ($2, $3, $4) }
+  | KW_let openParen localVar_list closeParen SYMB8 { LVars_LocalConstList ($2, $3, $4) }
   | openParen lVar_list closeParen SYMB8 { LVars_List ($1, $2, $3) }
   | openParen namedCallReturn_list closeParen SYMB8 { NamedLVars_List ($1, $2, $3) }
   ;
@@ -663,6 +664,7 @@ jump : KW_goto openParen blockIdent_list closeParen { Jump_GoTo ($2, $3, $4) }
   ;
 
 lVar : KW_var localVar { LVar_Local $2 }
+  | KW_let localVar { LVar_LocalConst $2 }
   | globalVar { LVar_Global $1 }
   ;
 

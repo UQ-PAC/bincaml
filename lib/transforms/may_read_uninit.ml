@@ -116,7 +116,7 @@ let check ?(include_locals = false) (p : Program.proc) =
               let ru =
                 ReadUninitAnalysis.read_uninit_vars ms
                 |> Iter.filter (fun v -> include_locals || Var.is_local v)
-                |> Iter.filter Var.pure
+                |> Iter.filter @@ (not % Var.is_shared)
               in
               if Iter.is_empty ru then None else Some (v, ru)
           | None -> None)

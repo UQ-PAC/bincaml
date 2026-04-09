@@ -24,10 +24,7 @@ let normalise_gamma =
   let open Expr.AbstractExpr in
   let open Expr.BasilExpr in
   let make_gamma_var v =
-    rvar
-      (Var.create
-         ("Gamma_" ^ Var.name v)
-         ~pure:(Var.pure v) ~scope:(Var.scope v) Boolean)
+    rvar (Var.create ("Gamma_" ^ Var.name v) ~scope:(Var.scope v) Boolean)
   in
   Expr.BasilExpr.rewrite ~rw_fun:(function
     | UnaryExpr { op = `Gamma; arg } -> (

@@ -1,24 +1,18 @@
 open Containers
 open Mtypes
 
-type declaration_scope = Local | Global [@@deriving show, eq, ord]
+type scope = LocalConst | LocalVar | GlobalVar | GlobalConst | GlobalVarShared
+[@@deriving show, eq, ord]
 
 open struct
   module V = struct
-    type t = {
-      name : string;
-      typ : Types.t;
-      pure : bool;
-      scope : declaration_scope;
-    }
+    type t = { name : string; typ : Types.t; scope : scope }
     [@@deriving eq, ord]
 
     let show (v : t) : string = Printf.sprintf "%s:%s" v.name (Types.show v.typ)
 
     let hash v =
-      Hash.(
-        combine4 (Hash.string v.name) (Hash.poly v.typ) (Hash.bool v.pure)
-          (Hash.poly v.scope))
+      Hash.(combine3 (Hash.string v.name) (Hash.poly v.scope) (Hash.poly v.typ))
   end
 end
 
@@ -30,16 +24,14 @@ include (
   struct
     type t = V.t Fix.HashCons.cell
 
-    let create name ?(pure = true) ?(scope = Local) typ =
-      H.make { name; typ; pure; scope }
+    let create name ?(scope = LocalVar) typ = H.make { name; typ; scope }
 
-    let copy ?name ?pure ?scope ?typ (v : t) =
+    let copy ?name ?scope ?typ (v : t) =
       let v = Fix.HashCons.data v in
       H.make
         {
           name = Option.get_or ~default:v.name name;
           typ = Option.get_or ~default:v.typ typ;
-          pure = Option.get_or ~default:v.pure pure;
           scope = Option.get_or ~default:v.scope scope;
         }
 
@@ -57,7 +49,6 @@ include (
     let name (e : t) = (Fix.HashCons.data e).name
     let scope (e : t) = (Fix.HashCons.data e).scope
     let typ (e : t) = (Fix.HashCons.data e).typ
-    let pure (e : t) = (Fix.HashCons.data e).pure
     let hash (a : t) = Fix.HashCons.hash a
   end :
     sig
@@ -68,35 +59,49 @@ include (
       include HASH_TYPE with type t := t
       include PRETTY with type t := t
 
-      val create :
-        string -> ?pure:bool -> ?scope:declaration_scope -> Types.t -> t
-
+      val create : string -> ?scope:scope -> Types.t -> t
       val pp : Format.formatter -> t -> unit
       val to_string : t -> string
       val name : t -> string
-      val scope : t -> declaration_scope
+      val scope : t -> scope
       val typ : t -> Types.t
-      val pure : t -> bool
       val hash : t -> int
-
-      val copy :
-        ?name:string ->
-        ?pure:bool ->
-        ?scope:declaration_scope ->
-        ?typ:Types.t ->
-        t ->
-        t
+      val copy : ?name:string -> ?scope:scope -> ?typ:Types.t -> t -> t
     end)
 
-let is_local (v : t) = equal_declaration_scope (scope v) Local
-let is_global (v : t) = equal_declaration_scope (scope v) Global
+let is_local (v : t) =
+  match scope v with LocalVar -> true | LocalConst -> true | _ -> false
+
+let is_global (v : t) =
+  match scope v with
+  | GlobalVar -> true
+  | GlobalConst -> true
+  | GlobalVarShared -> true
+  | _ -> false
+
+let is_mutable (v : t) =
+  match scope v with GlobalVar -> true | LocalVar -> true | _ -> false
+
+let is_constant (v : t) =
+  match scope v with LocalConst -> true | GlobalConst -> true | _ -> false
+
+let is_pure (v : t) = is_constant v
+
+let is_shared (v : t) =
+  match scope v with GlobalVarShared -> true | _ -> false
+
 let to_string_il_rvar v = to_string v
 
 let to_string_il_lvar v =
-  match scope v with Local -> "var " ^ to_string v | Global -> to_string v
+  match scope v with
+  | LocalVar -> "var " ^ to_string v
+  | LocalConst -> "let " ^ to_string v
+  | GlobalVar -> to_string v
+  | GlobalVarShared -> to_string v
+  | GlobalConst -> "let " ^ to_string v
 
 let to_decl_string_il v =
-  let modifiers = if not (pure v) then "observable " else "" in
+  let modifiers = if is_shared v then "observable " else "" in
   "var " ^ modifiers ^ to_string v
 
 module Decls = struct

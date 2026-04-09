@@ -113,6 +113,7 @@ module Domain (S : RequiresAnnotation) = struct
         |> simplify
     | Instr_Call { procid } ->
         BasilExpr.applyintrin ~op:`AND (p :: S.requires procid)
+    | Instr_IntrinCall { lhs; name = Intrinsic.Havoc } -> top
     | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
     | _ -> p
 
@@ -142,6 +143,8 @@ prog entry @main;
 proc @main () -> ()
 [
     block %main_entry [
+        let (a:bv64, e:bv64) := call @_havoc();
+        ($x:bv64) := call @_havoc();
         goto(%main_1, %main_2);
     ];
     block %main_1 [

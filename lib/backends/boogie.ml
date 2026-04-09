@@ -3,13 +3,18 @@ open Bincaml_util.Common
 
 exception BoogieException of string
 
+let var_name name =
+  let name = Var.name name in
+  let name =
+    String.chop_prefix ~pre:"$" name
+    |> Option.map (fun s -> "v$" ^ s)
+    |> Option.get_or ~default:name
+  in
+  name
+
 let function_name name =
   let open Containers_pp in
-  let name =
-    if String.starts_with ~prefix:"$" name then String.concat "" [ "f"; name ]
-    else name
-  in
-  text name
+  text (var_name name)
 
 let proc_name name =
   let open Containers_pp in
@@ -47,17 +52,17 @@ let rec type_to_string (t : Types.t) =
 let pretty_variable_declaration ?(const = false) (v : Var.t) =
   let open Containers_pp in
   (if const then text "const " else text "var ")
-  ^ text (Var.name v)
+  ^ text (var_name v)
   ^ text ": "
   ^ text (type_to_string @@ Var.typ v)
 
 let pretty_variable (v : Var.t) =
   let open Containers_pp in
-  text (Var.name v)
+  text (var_name v)
 
 let pretty_variable_typed (v : Var.t) =
   let open Containers_pp in
-  text (Var.name v) ^ text ": " ^ text (type_to_string @@ Var.typ v)
+  text (var_name v) ^ text ": " ^ text (type_to_string @@ Var.typ v)
 
 let pretty_const (c : Lang.Ops.AllOps.const) =
   let open Containers_pp in
@@ -68,7 +73,8 @@ let pretty_const (c : Lang.Ops.AllOps.const) =
   | `Record _ -> raise (BoogieException "records unsupported by boogie backend")
   | `Pointer _ ->
       raise (BoogieException "pointers unsupported by boogie backend")
-  | `Sort _ -> raise (BoogieException "const sorts unsupported by boogie backend")
+  | `Sort _ ->
+      raise (BoogieException "const sorts unsupported by boogie backend")
 
 let pretty_call_args_no_brackets (args : Containers_pp.t list) =
   let open Containers_pp in
@@ -178,7 +184,7 @@ and pretty_triggers (attrib : Lang.Program.e Lang.Attrib.t option) =
       @@ List.map (fun b -> bracket "{" b "}")
       @@ pretty_attribute attrib)
   |> Option.get_or ~default:(text "")
-  (* Option.map (Lang.Attrib.attrib_pretty Lang.Expr.BasilExpr.pretty) attrib |> Option.get_or ~default:(text "MAGIC") *)
+(* Option.map (Lang.Attrib.attrib_pretty Lang.Expr.BasilExpr.pretty) attrib |> Option.get_or ~default:(text "MAGIC") *)
 
 and pretty_binding_expr ?(attrib : Lang.Program.e Lang.Attrib.t option) bound
     in_body =
@@ -261,13 +267,13 @@ let pretty_declaration (d : Lang.Program.declaration) =
       let func_body, return_type = pretty_function_body binding t in
 
       (* Ideally use above return type
-       * but unfortunately curry will uncurry returned maps... :( *) 
+       * but unfortunately curry will uncurry returned maps... :( *)
       let return_type = Lang.Expr.BasilExpr.type_of t in
       let return_type = text @@ type_to_string return_type in
 
       text "function"
       ^+ pretty_attribute_map ".boogie" attrib
-      ^+ (function_name @@ Var.name binding)
+      ^+ (function_name @@ binding)
       ^ bracket "(" (pretty_function_args t) ")"
       ^+ text "returns"
       ^+ bracket "(" return_type ")"
@@ -281,7 +287,7 @@ let pretty_declaration (d : Lang.Program.declaration) =
       let param, rt = Types.uncurry (Var.typ binding) in
       text "function"
       ^+ pretty_attribute_map ".boogie" attrib
-      ^+ (function_name @@ Var.name binding)
+      ^+ (function_name @@ binding)
       ^ bracket "("
           (fill
              (text "," ^ sp)
@@ -295,6 +301,19 @@ let rec pretty_statement (s : Lang.Program.stmt) =
   let open Containers_pp in
   let open List.Infix in
   match s with
+  | Instr_IntrinCall { lhs; name; args } ->
+      let lhs =
+        if List.length lhs > 0 then
+          (List.map pretty_variable lhs |> fill (text "," ^ newline_or_spaces 1))
+          ^+ text ":=" ^ sp
+        else text ""
+      in
+      let rhs =
+        List.map pretty_expr args |> fill (text "," ^ newline_or_spaces 1)
+      in
+      nest 2 @@ text "call" ^+ lhs
+      ^ Lang.Stmt.Intrinsic.pretty name
+      ^ bracket "(" rhs ")"
   | Instr_Assign [] -> text "assert true"
   | Instr_Assign ls ->
       let lhs =
@@ -308,7 +327,8 @@ let rec pretty_statement (s : Lang.Program.stmt) =
       nest 2 @@ lhs ^+ text ":=" ^+ rhs
   | Instr_Assert { body } -> text "assert" ^+ pretty_expr body
   | Instr_Assume { body; branch } -> text "assume" ^+ pretty_expr body
-  | Instr_IntrinCall { lhs; name; args } ->
+  | Instr_Call { lhs; procid; args } ->
+      let name = ID.name procid in
       let lhs =
         if StringMap.cardinal lhs > 0 then
           (StringMap.bindings lhs
@@ -323,9 +343,6 @@ let rec pretty_statement (s : Lang.Program.stmt) =
         |> fill (text "," ^ newline_or_spaces 1)
       in
       nest 2 @@ text "call" ^+ lhs ^ proc_name name ^ bracket "(" rhs ")"
-  | Instr_Call { lhs; procid; args } ->
-      pretty_statement
-      @@ Lang.Stmt.Instr_IntrinCall { lhs; name = ID.name procid; args }
   | stmt ->
       raise
         (BoogieException

@@ -63,7 +63,7 @@ let drop_unused_var_declarations_prog (p : Program.t) =
 
 let should_lift ~skip_observable ~skip_maps v =
   let skip =
-    (skip_observable && not (Var.pure v))
+    (skip_observable && Var.is_shared v)
     || (skip_maps && Var.typ v |> function Map _ -> true | _ -> false)
   in
   not skip
@@ -144,14 +144,14 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
           List.map
             (fun g ->
               let name = param_name "_in" g in
-              (name, g, Procedure.fresh_var ~name proc (Var.typ g)))
+              (name, g, Procedure.fresh_var ~pure:true ~name proc (Var.typ g)))
             captures
         in
         let outparam =
           List.map
             (fun g ->
               let name = param_name "_out" g in
-              (name, g, Procedure.fresh_var ~name proc (Var.typ g)))
+              (name, g, Procedure.fresh_var ~pure:true ~name proc (Var.typ g)))
             modifies
         in
         (* Fresh local variable for each captured global – replaces the global
@@ -160,7 +160,7 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
           List.map
             (fun g ->
               let name = param_name "" g in
-              (g, Procedure.fresh_var ~name proc (Var.typ g)))
+              (g, Procedure.fresh_var ~pure:true ~name proc (Var.typ g)))
             captures
         in
         let glob_to_local_map =
@@ -272,7 +272,7 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
             | RVar { id } -> (
                 match StringMap.find_opt (Var.name id) glob_to_inparam with
                 | Some v -> replace [%here] (rvar v)
-                | None
+                | None (* identity function *)
                   when StringMap.exists
                          (fun _ n -> Var.equal id n)
                          (Procedure.formal_in_params proc) ->
@@ -302,15 +302,32 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
                 match StringMap.find_opt (Var.name id) glob_to_outparam with
                 | Some v -> replace [%here] (rvar v)
                 | None
-                  when StringMap.exists
-                         (fun _ n -> Var.equal id n)
-                         (Procedure.formal_out_params proc) ->
+                  when Iter.exists
+                         (fun n -> Var.equal id n)
+                         (StringMap.values (Procedure.formal_out_params proc)
+                         |> Iter.append
+                              (Procedure.formal_in_params proc
+                              |> StringMap.values)) ->
                     Keep
-                | None when skip_any ->
-                    failwith
-                      ("Variable in contract but is not captured or modified \
-                        by procedure: " ^ Var.name id)
-                | None -> Keep)
+                | None -> (
+                    match StringMap.find_opt (Var.name id) glob_to_inparam with
+                    | Some v -> replace [%here] (rvar v)
+                    | None when skip_any ->
+                        failwith
+                          ("Variable in contract but is not captured or \
+                            modified by procedure: " ^ Var.name id)
+                    | None -> Keep))
+            | _ -> Keep
+          in
+          rewrite_down ~rw_fun:alg expr
+        in
+        let rewrite_internal_expr_old expr =
+          let open Expr.AbstractExpr in
+          let open Expr.BasilExpr in
+          let alg node =
+            match node with
+            | UnaryExpr { op = `Old; arg } ->
+                replace [%here] (rewrite_old_expr arg)
             | _ -> Keep
           in
           rewrite_down ~rw_fun:alg expr
@@ -329,17 +346,15 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
               ensures = List.map rewrite_ensures_expr spec.ensures;
             }
         in
-        (*
-        (* I have no clue what this was trying to achieve ? *)
         let proc =
           Procedure.map_blocks_topo_fwd
             (fun _bid b ->
               Block.map ~phi:Fun.id
-                (Stmt.map ~f_lvar:Fun.id ~f_expr:rewrite_old_expr ~f_rvar:Fun.id)
+                (Stmt.map ~f_lvar:Fun.id ~f_expr:rewrite_internal_expr_old
+                   ~f_rvar:Fun.id)
                 b)
             proc
         in
-            *)
         (* Rewrite call sites using the original p.procs specs, emitting
            g (the global) in args/lhs.  The body substitution below then
            turns those into g_local automatically. *)
@@ -446,7 +461,9 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
          |> StringMap.exists (fun _ i -> Var.equal i v)
     then v
     else
-      let nv = Procedure.fresh_var ~name:(Var.name v) in_proc (Var.typ v) in
+      let nv =
+        Procedure.fresh_var ~pure:true ~name:(Var.name v) in_proc (Var.typ v)
+      in
       r := (v, nv) :: !r;
       nv
   in
@@ -519,7 +536,7 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
     | `Left phi -> Some phi
     | `Right rn ->
         Some
-          ( Procedure.fresh_var in_proc ~name:(Var.name v) (Var.typ v),
+          ( Procedure.fresh_var ~pure:true in_proc ~name:(Var.name v) (Var.typ v),
             [ (block, rn) ] )
   in
   let delayed_phis = ref IDSet.empty in

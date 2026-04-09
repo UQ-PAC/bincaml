@@ -327,6 +327,8 @@ module.exports = grammar({
         choice(),
         // LVars_LocalList. LVars ::= "var" OpenParen [LocalVar] CloseParen ":=" ;
         seq("var", $.token_OpenParen, $.list_LocalVar, $.token_CloseParen, ":="),
+        // LVars_LocalConstList. LVars ::= "let" OpenParen [LocalVar] CloseParen ":=" ;
+        seq("let", $.token_OpenParen, $.list_LocalVar, $.token_CloseParen, ":="),
         // LVars_List. LVars ::= OpenParen [LVar] CloseParen ":=" ;
         seq($.token_OpenParen, $.list_LVar, $.token_CloseParen, ":="),
         // NamedLVars_List. LVars ::= OpenParen [NamedCallReturn] CloseParen ":=" ;
@@ -364,6 +366,8 @@ module.exports = grammar({
       choice(
         // LVar_Local. LVar ::= "var" LocalVar ;
         seq("var", $.LocalVar),
+        // LVar_LocalConst. LVar ::= "let" LocalVar ;
+        seq("let", $.LocalVar),
         // LVar_Global. LVar ::= GlobalVar ;
         $.GlobalVar
       ),

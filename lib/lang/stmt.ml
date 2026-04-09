@@ -6,6 +6,38 @@ open Expr
 type endian = [ `Big | `Little ] [@@deriving eq, ord]
 type ident = string
 
+module Intrinsic = struct
+  type t =
+    | Havoc
+    (* void -> any list , ad hoc polymorphic, random a rendom value *)
+    | Malloc (* size -> ptr, allocate nondet memoty *)
+    | Free (*ptr -> void , free memory *)
+    | Calloc (* size -> ptr allocate zeroed memory *)
+    | AllocStack (* size -> ptr allocate stack memory *)
+    | FreeStack (* ptr -> void free , stack memory *)
+  [@@deriving eq, ord, show]
+
+  let of_string e =
+    match e with
+    | "@_havoc" -> Some Havoc
+    | "@_malloc" -> Some Malloc
+    | "@_calloc" -> Some Calloc
+    | "@_free" -> Some Free
+    | "@_allcoa" -> Some AllocStack
+    | "@_free_alloca" -> Some FreeStack
+    | _ -> None
+
+  let pretty e =
+    (match e with
+      | Havoc -> "@_havoc"
+      | Malloc -> "@_malloc"
+      | Calloc -> "@_calloc"
+      | Free -> "@_free"
+      | AllocStack -> "@_allcoa"
+      | FreeStack -> "@_free_alloca")
+    |> Containers_pp.text
+end
+
 let show_endian = function `Big -> "be" | `Little -> "le"
 let pp_endian fmt e = Format.pp_print_string fmt (show_endian e)
 
@@ -32,9 +64,9 @@ type ('lvar, 'var, 'expr) t =
       (** a store into memory indexes [addr] up to of [addr] + [cells] (of
           [value] byte swapped depending on endiannesss*)
   | Instr_IntrinCall of {
-      lhs : 'lvar StringMap.t;
-      name : string;
-      args : 'expr StringMap.t;
+      lhs : 'lvar list;
+      name : Intrinsic.t;
+      args : 'expr list;
     }  (** effectful operation calling a named intrinsic*)
   | Instr_Call of {
       lhs : 'lvar StringMap.t;
@@ -81,7 +113,7 @@ let iter_rexpr stmt =
   | Instr_Store { lhs; rhs; addr = Scalar; value } ->
       Iter.of_list [ `Expr value; `Var rhs ]
   | Instr_IntrinCall { lhs; name; args } ->
-      StringMap.to_iter args >|= snd >|= fun e -> `Expr e
+      List.to_iter args >|= fun e -> `Expr e
   | Instr_IndirectCall { target } -> Iter.singleton (`Expr target)
   | Instr_Call { lhs; procid; args } ->
       StringMap.to_iter args >|= snd >|= fun e -> `Expr e
@@ -95,7 +127,7 @@ let iter_lvar stmt =
   | Instr_Assume { body } -> Iter.empty
   | Instr_Load { lhs; rhs; addr } -> Iter.singleton lhs
   | Instr_Store { lhs; rhs; addr; value } -> Iter.singleton lhs
-  | Instr_IntrinCall { lhs; name; args } -> StringMap.to_iter lhs >|= snd
+  | Instr_IntrinCall { lhs; name; args } -> List.to_iter lhs
   | Instr_IndirectCall { target } -> Iter.empty
   | Instr_Call { lhs; procid; args } -> StringMap.to_iter lhs >|= snd
 
@@ -111,6 +143,9 @@ let pretty show_lvar show_var show_expr s =
         StringMap.bindings l |> List.map (fun (i, t) -> text i ^ text "=" ^ t)
       in
       bracket "(" (nest 2 (fill (text "," ^ newline_or_spaces 1) l)) ")"
+  in
+  let intrin_plist l =
+    bracket "(" (nest 2 (fill (text "," ^ newline_or_spaces 1) l)) ")"
   in
   let l_param_list l =
     if StringMap.is_empty l then text ""
@@ -143,12 +178,16 @@ let pretty show_lvar show_var show_expr s =
       ^ text (show_endian endian)
       ^ text " " ^ rhs ^ text " " ^ addr ^ text " " ^ value ^ text " "
       ^ int size
-  | Instr_IntrinCall { lhs; name; args } when StringMap.cardinal lhs = 0 ->
-      append_l ~sep:nil [ text "call "; text name; r_param_list args ]
+  | Instr_IntrinCall { lhs; name; args } when List.length lhs = 0 ->
+      append_l ~sep:nil
+        [ text "call "; Intrinsic.pretty name; intrin_plist args ]
   | Instr_IntrinCall { lhs; name; args } ->
       append_l ~sep:nil
         [
-          l_param_list lhs; newline ^ text "call "; text name; r_param_list args;
+          intrin_plist lhs;
+          newline ^ text "call ";
+          Intrinsic.pretty name;
+          intrin_plist args;
         ]
   | Instr_Call { lhs; procid; args } ->
       let n = ID.to_string procid in

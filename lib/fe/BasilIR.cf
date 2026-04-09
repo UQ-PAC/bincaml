@@ -154,6 +154,7 @@ separator NamedCallReturn "," ;
 
 LVars_Empty . LVars ::= ;
 LVars_LocalList . LVars ::= "var" OpenParen [ LocalVar ] CloseParen ":=" ;
+LVars_LocalConstList . LVars ::= "let" OpenParen [ LocalVar ] CloseParen ":=" ;
 LVars_List . LVars ::= OpenParen [ LVar ]  CloseParen ":=";
 NamedLVars_List . LVars ::= OpenParen [NamedCallReturn]  CloseParen ":=";
 
@@ -176,6 +177,7 @@ Jump_Return . Jump ::= "return" OpenParen [Expr] CloseParen ;
 Jump_ProcReturn. Jump ::= "return"  ;
 
 LVar_Local . LVar ::= "var" LocalVar;
+LVar_LocalConst . LVar ::= "let" LocalVar;
 LVar_Global . LVar ::= GlobalVar;
 
 separator nonempty LVar "," ;

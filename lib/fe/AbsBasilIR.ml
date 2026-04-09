@@ -145,6 +145,7 @@ and namedCallReturn =
 and lVars =
    LVars_Empty
  | LVars_LocalList of openParen * localVar list * closeParen
+ | LVars_LocalConstList of openParen * localVar list * closeParen
  | LVars_List of openParen * lVar list * closeParen
  | NamedLVars_List of openParen * namedCallReturn list * closeParen
 
@@ -163,6 +164,7 @@ and jump =
 
 and lVar =
    LVar_Local of localVar
+ | LVar_LocalConst of localVar
  | LVar_Global of globalVar
 
 and stmtWithAttrib =

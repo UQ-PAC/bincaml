@@ -18,6 +18,7 @@ prog entry @main;
 proc @main () -> ()
 [
     block %main_entry [
+        let (a:bv64, b:bv64, c:bv64, d:bv64, e:bv64) := call @_havoc();
         goto(%main_1, %main_2);
     ];
     block %main_1 [
@@ -65,6 +66,7 @@ prog entry @main;
 proc @main (x_in:bv64) -> ()
 [
     block %main_entry [
+        let (x_2:bv64, x_3:bv64, addr:bv64) := call @_havoc();
         goto(%loop_head);
     ];
     block %loop_head (
@@ -107,6 +109,7 @@ prog entry @main;
 proc @main () -> ()
 [
     block %main_entry [
+        let (b:bv64, y:bv64) := call @_havoc();
         var (a:bv64) := call @fun(b:bv64, b: bv64);
         var (x:bv64) := call @fun(a:bv64, b: bv64);
         assert eq(x:bv64, bvadd(b:bv64, b:bv64));
@@ -147,6 +150,7 @@ var $global:bv64;
 proc @main () -> ()
 [
     block %main_entry [
+        let (b:bv64, y:bv64) := call @_havoc();
         var (a:bv64) := call @fun1(b:bv64, b: bv64);
         var (x:bv64) := call @fun1(a:bv64, b: bv64);
         assert eq(x:bv64, bvadd(b:bv64, b:bv64));
@@ -201,6 +205,7 @@ var $global:bv64;
 proc @main () -> ()
 [
     block %main_entry [
+        let (b:bv64, y:bv64) := call @_havoc();
         var (a:bv64) := call @fun2(b:bv64);
         var (x:bv64) := call @fun1(a:bv64, b: bv64);
         assert eq(x:bv64, bvadd(b:bv64, b:bv64));
