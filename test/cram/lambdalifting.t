@@ -5,6 +5,11 @@ $x is read+written by @callee and @caller; $y is read-only in @callee but
 written by @caller.  After the pass:
 
   $ ../../bin/main.exe script ll_simple.sexp
+  (load-il ll_simple.il)
+  (dump-il before_ll.il)
+  (run-transforms lambda-lifting)
+  (run-transforms type-check)
+  (dump-il after_ll.il)
 
   $ diff before_ll.il after_ll.il
   1,2d0
@@ -21,10 +26,10 @@ written by @caller.  After the pass:
   <    block %entry [ $x:bv32 := bvadd($x, $y); goto (%ret); ];
   <    block %ret [ nop; return; ]
   ---
-  >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
-  >    block %entry [ var x:bv32 := bvadd(x, y); goto (%ret); ];
+  >    block %inputs [ (let x:bv32 := x_in, let y:bv32 := y_in); goto (%entry); ];
+  >    block %entry [ let x:bv32 := bvadd(x, y); goto (%ret); ];
   >    block %ret [ nop; goto (%returns); ];
-  >    block %returns [ var x_out:bv32 := x; return; ]
+  >    block %returns [ let x_out:bv32 := x; return; ]
   12,14c11,12
   < proc @caller()  -> () {  }
   <   modifies $x:bv32, $y:bv32
@@ -33,22 +38,22 @@ written by @caller.  After the pass:
   > proc @caller(x_in:bv32, y_in:bv32)  -> (x_out:bv32, y_out:bv32) {  }
   >   
   16a15
-  >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
+  >    block %inputs [ (let x:bv32 := x_in, let y:bv32 := y_in); goto (%entry); ];
   18,21c17,20
   <      $y:bv32 := 0x0:bv32;
   <      $x:bv32 := 0x1:bv32;
   <      
   <      call @callee();
   ---
-  >      var y:bv32 := 0x0:bv32;
-  >      var x:bv32 := 0x1:bv32;
-  >      (var x:bv32=x_out) := 
+  >      let y:bv32 := 0x0:bv32;
+  >      let x:bv32 := 0x1:bv32;
+  >      (let x:bv32=x_out) := 
   >      call @callee(x_in=x, y_in=y);
   24c23,24
   <    block %ret [ nop; return; ]
   ---
   >    block %ret [ nop; goto (%returns); ];
-  >    block %returns [ (var x_out:bv32 := x, var y_out:bv32 := y); return; ]
+  >    block %returns [ (let x_out:bv32 := x, let y_out:bv32 := y); return; ]
   [1]
 
 
@@ -59,6 +64,11 @@ Checks that Old(e) in the body and ensures becomes e[g -> in_param(g)], and that
 all global refs in requires (not just those under Old) become in-params.
 
   $ ../../bin/main.exe script ll_spec.sexp
+  (load-il ll_spec.il)
+  (dump-il before_ll_spec.il)
+  (run-transforms lambda-lifting)
+  (run-transforms type-check)
+  (dump-il after_ll_spec.il)
 
   $ diff before_ll_spec.il after_ll_spec.il
   1,2d0
@@ -82,10 +92,10 @@ all global refs in requires (not just those under Old) become in-params.
   <    ];
   <    block %ret [ nop; return; ]
   ---
-  >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
-  >    block %entry [ assert eq(x, x_in); var x:bv32 := bvadd(x, y); goto (%ret); ];
+  >    block %inputs [ (let x:bv32 := x_in, let y:bv32 := y_in); goto (%entry); ];
+  >    block %entry [ assert eq(x, x_in); let x:bv32 := bvadd(x, y); goto (%ret); ];
   >    block %ret [ nop; goto (%returns); ];
-  >    block %returns [ var x_out:bv32 := x; return; ]
+  >    block %returns [ let x_out:bv32 := x; return; ]
   18,20c12,13
   < proc @caller()  -> () {  }
   <   modifies $x:bv32, $y:bv32
@@ -94,22 +104,22 @@ all global refs in requires (not just those under Old) become in-params.
   > proc @caller(x_in:bv32, y_in:bv32)  -> (x_out:bv32, y_out:bv32) {  }
   >   
   22a16
-  >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
+  >    block %inputs [ (let x:bv32 := x_in, let y:bv32 := y_in); goto (%entry); ];
   24,27c18,21
   <      $y:bv32 := 0x0:bv32;
   <      $x:bv32 := 0x1:bv32;
   <      
   <      call @callee();
   ---
-  >      var y:bv32 := 0x0:bv32;
-  >      var x:bv32 := 0x1:bv32;
-  >      (var x:bv32=x_out) := 
+  >      let y:bv32 := 0x0:bv32;
+  >      let x:bv32 := 0x1:bv32;
+  >      (let x:bv32=x_out) := 
   >      call @callee(x_in=x, y_in=y);
   30c24,25
   <    block %ret [ nop; return; ]
   ---
   >    block %ret [ nop; goto (%returns); ];
-  >    block %returns [ (var x_out:bv32 := x, var y_out:bv32 := y); return; ]
+  >    block %returns [ (let x_out:bv32 := x, let y_out:bv32 := y); return; ]
   [1]
 
 
@@ -120,6 +130,10 @@ Verifies the pass completes without error, all top-level globals are removed,
 and @main_1876 acquires the expected _in parameters.
 
   $ ../../bin/main.exe script ll_real.sexp
+  (load-il ../../examples/irreducible_loop_1.il)
+  (run-transforms lambda-lifting)
+  (run-transforms type-check)
+  (dump-il after_ll_real.il)
 
   $ grep "^var" after_ll_real.il || echo "no top-level globals"
   no top-level globals
