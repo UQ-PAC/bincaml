@@ -45,7 +45,7 @@ module SymBase = struct
     | Ret _ | Par _ | Loaded -> true
 
   let to_int = Hashtbl.hash
-  let pretty a = Containers_pp.int 1
+  let pretty a = Containers_pp.text @@ show a
   let is_stack = function Stack _ -> true | _ -> false
 end
 
@@ -130,14 +130,7 @@ module SVAAbstraction = struct
                     match (sb1, sb2) with
                     (* NOTE: OCaml compiler complains when these cases are merged *)
                     | (SymBase.GlobSym | Constant), sb
-                      when not @@ SymBase.is_place_holder sb ->
-                        SymAddrSetLattice.update sb
-                          (WrappedIntervalsValueAbstractionBasil.eval_intrin op
-                             [ (vs1, snd a); (vs2, snd b) ]
-                             return_size)
-                          map
-                    | sb, (SymBase.GlobSym | Constant)
-                      when not @@ SymBase.is_place_holder sb ->
+                    | sb, (SymBase.GlobSym | Constant) ->
                         SymAddrSetLattice.update sb
                           (WrappedIntervalsValueAbstractionBasil.eval_intrin op
                              [ (vs1, snd a); (vs2, snd b) ]
@@ -170,26 +163,21 @@ module Domain = struct
   let link_register = Var.create ~scope:Local "R30_in" @@ Bitvector 64
   let frame_pointer = Var.create ~scope:Local "R29_in" @@ Bitvector 64
 
+  (* These registers are preserved over calls and are not real params, so we can ignore later *)
   let call_preserve =
     List.init 11 (fun i -> 19 + i) |> fun lst ->
     31 :: lst |> List.map (fun i -> "R" ^ string_of_int i)
 
-  let implicit_form = [ stack_pointer; link_register; frame_pointer ]
-
   let init proc =
     let name = ID.name @@ Procedure.id proc in
     StringMap.filter (fun param _ ->
-        List.fold_left
-          (fun acc a ->
-            if String.starts_with param ~prefix:a then acc else false)
-          false call_preserve)
+        List.exists (fun a -> String.starts_with param ~prefix:a) call_preserve)
     @@ Procedure.formal_in_params proc
     |> StringMap.to_iter
     |> Iter.map (fun (_, param) ->
         let size =
           match Var.typ param with
           | Types.Boolean -> 1
-          | Types.Integer -> 32
           | Types.Bitvector size -> size
           | _ -> failwith "Illegal function parameter type"
         in
@@ -255,7 +243,6 @@ module Domain = struct
               let size =
                 match Var.typ param with
                 | Types.Boolean -> 1
-                | Types.Integer -> 32
                 | Types.Bitvector size -> size
                 | _ -> failwith "Illegal function parameter type"
               in
