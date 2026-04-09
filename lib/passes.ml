@@ -128,7 +128,7 @@ module PassManager = struct
         Prog
           (fun p ->
             let r = Analysis.Sva.sva p in
-            print_endline @@ Analysis.Sva.StateAbstraction.show r;
+            List.iter (print_endline % Analysis.Sva.StateAbstraction.show) r;
             p);
       doc = "Runs symbolic value analysis and prints stuff out after";
     }
@@ -208,7 +208,7 @@ module PassManager = struct
       apply = Prog Transforms.Memory_specification.transform;
       doc = "Specifies programs for memory safety";
     }
-  
+
   let intra_function_summaries =
     {
       name = "intra-function-summaries";
@@ -296,9 +296,9 @@ module PassManager = struct
         doc = "Replaces captured global variables with explicit parameters";
       };
       {
-          name = "gamma-vars";
-          apply = Prog Transforms.Gamma_vars.transform;
-          doc = "Replace gamma expressions with gamma variables";
+        name = "gamma-vars";
+        apply = Prog Transforms.Gamma_vars.transform;
+        doc = "Replace gamma expressions with gamma variables";
       };
       {
         name = "linear-const";

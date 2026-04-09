@@ -282,50 +282,44 @@ let sva (prog : Program.t) =
   let constant_within_global_address (interval : WrappedIntervalsLattice.t)
       (prog : Program.t) : bool =
     let open Option in
-    match
-      let* symbols =
-        match StringMap.find_opt ".symbols" prog.attrib with
-        | Some symbols -> Some symbols
-        | _ -> None
-      in
-      let* globs =
-        match Attrib.find_opt ".globals" (Some symbols) with
-        | Some Attrib.(`List globals) -> Some globals
-        | _ -> None
-      in
-      List.fold_left
-        (fun acc (global : Program.e Attrib.t) ->
-          (* I would like a better early continue then an if *)
-          if
-            Option.is_some acc
-            && Bool.equal (Option.value ~default:false acc) true
-          then Some true
-          else
-            let* address =
-              match Attrib.find_opt ".address" (Some global) with
-              | Some Attrib.(`Bitvector bv) -> Some bv
-              | _ -> None
-            in
-            let* size =
-              match Attrib.find_opt ".size" (Some global) with
-              | Some Attrib.(`Bitvector bv) -> Some bv
-              | _ -> None
-            in
-            let end_address = Bitvec.add address size in
-            let interval2 =
-              WrappedIntervalsLattice.interval address end_address
-            in
-            Some (WrappedIntervalsLattice.leq interval2 interval))
-        None globs
-    with
-    | None -> false
-    | Some a -> a
+    (let* symbols =
+       match StringMap.find_opt ".symbols" prog.attrib with
+       | Some symbols -> Some symbols
+       | _ -> None
+     in
+     let* globs =
+       match Attrib.find_opt ".globals" (Some symbols) with
+       | Some Attrib.(`List globals) -> Some globals
+       | _ -> None
+     in
+     Some
+       (List.exists
+          (fun (global : Program.e Attrib.t) ->
+            (let* address =
+               match Attrib.find_opt ".address" (Some global) with
+               | Some Attrib.(`Bitvector bv) -> Some bv
+               | _ -> None
+             in
+             let* size =
+               match Attrib.find_opt ".size" (Some global) with
+               | Some Attrib.(`Bitvector bv) -> Some bv
+               | _ -> None
+             in
+             let end_address = Bitvec.add address size in
+             let interval2 =
+               WrappedIntervalsLattice.interval address end_address
+             in
+             Some (WrappedIntervalsLattice.leq interval2 interval))
+            |> Option.get_or ~default:false)
+          globs))
+    |> Option.get_or ~default:false
   in
   let results =
     IDMap.fold
       (fun _ v acc -> DFGAnalysis.flow_insensitive v :: acc)
       prog.procs []
   in
+  results |> List.map @@
   StateAbstraction.mapi (fun _ domain ->
       SymAddrSetLattice.to_list domain
       |> snd
@@ -336,4 +330,3 @@ let sva (prog : Program.t) =
           then (SymBase.GlobSym, value)
           else (sym_base, value))
       |> SymAddrSetLattice.of_list_bot)
-  @@ List.hd results
