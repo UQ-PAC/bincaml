@@ -169,21 +169,23 @@ module Domain = struct
     31 :: lst |> List.map (fun i -> "R" ^ string_of_int i)
 
   let init proc =
+    let open Option in
     let name = ID.name @@ Procedure.id proc in
     StringMap.filter (fun param _ ->
         List.exists (fun a -> String.starts_with param ~prefix:a) call_preserve)
     @@ Procedure.formal_in_params proc
     |> StringMap.to_iter
-    |> Iter.map (fun (_, param) ->
-        let size =
+    |> Iter.filter_map (fun (_, param) ->
+        let* size =
           match Var.typ param with
-          | Types.Boolean -> 1
-          | Types.Bitvector size -> size
-          | _ -> failwith "Illegal function parameter type"
+          | Types.Boolean -> Some 1
+          | Types.Bitvector size -> Some size
+          | _ -> None
         in
-        ( param,
-          SymAddrSetLattice.singleton (Par { name; param })
-          @@ IntervalDomain.init @@ Bitvec.zero ~size ))
+        Some
+          ( param,
+            SymAddrSetLattice.singleton (Par { name; param })
+            @@ IntervalDomain.init @@ Bitvec.zero ~size ))
     |> Iter.cons
          ( stack_pointer,
            SymAddrSetLattice.singleton (SymBase.Stack name)
@@ -306,14 +308,15 @@ let sva (prog : Program.t) =
       (fun _ v acc -> DFGAnalysis.flow_insensitive v :: acc)
       prog.procs []
   in
-  results |> List.map @@
-  StateAbstraction.mapi (fun _ domain ->
-      SymAddrSetLattice.to_list domain
-      |> snd
-      |> List.map (fun (sym_base, value) ->
-          if
-            SymBase.equal Constant sym_base
-            && constant_within_global_address value prog
-          then (SymBase.GlobSym, value)
-          else (sym_base, value))
-      |> SymAddrSetLattice.of_list_bot)
+  results
+  |> List.map
+     @@ StateAbstraction.mapi (fun _ domain ->
+         SymAddrSetLattice.to_list domain
+         |> snd
+         |> List.map (fun (sym_base, value) ->
+             if
+               SymBase.equal Constant sym_base
+               && constant_within_global_address value prog
+             then (SymBase.GlobSym, value)
+             else (sym_base, value))
+         |> SymAddrSetLattice.of_list_bot)
