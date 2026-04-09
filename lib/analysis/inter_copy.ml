@@ -63,11 +63,11 @@ module CopyNode = struct
         (* We can clear the copied_from field whenever setting the parent for
            the garbage collector to gobble on (yum) *)
         v := { v = !v.v; copied_from = []; parent = Some p };
-        v'
+        p
     | None -> v
 
   (** `join v v'` sets the parent of `v'` to `v` (mod transitivity) *)
-  let join v v' : unit = v' := { v = !v'.v; copied_from = []; parent = Some v }
+  let join v v' : unit = v' := { !v' with copied_from = []; parent = Some v }
 
   let eq (n : t) (m : t) = Var.equal !n.v !m.v
 
@@ -268,7 +268,7 @@ module Solver = struct
               join p node
         | _ -> ())
     in
-    VarMap.iter (const (search % CopyNode.find)) g
+    VarMap.iter (const (search % find)) g
 
   let solve (prog : Program.t) =
     let graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t = Hashtbl.create 100 in

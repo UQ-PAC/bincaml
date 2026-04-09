@@ -7,14 +7,22 @@ proc @f(x:bv64) -> (o:bv64)
     ];
     block %f_a [
         var y:bv64 := x;
-        goto (%f_return);
+        goto (%f_c, %f_d);
     ];
     block %f_b [
         (var y:bv64, var z:bv64) := call @g(x);
+        goto (%f_c, %f_d);
+    ];
+    block %f_c [
+        var w:bv64 := y;
+        goto (%f_return);
+    ];
+    block %f_d [
+        (var w:bv64, var p:bv64) := call @g(y);
         goto (%f_return);
     ];
     block %f_return [
-        return (y:bv64);
+        return (w:bv64);
     ];
 ];
 
