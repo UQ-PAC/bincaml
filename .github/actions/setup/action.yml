@@ -1,0 +1,29 @@
+name: 'Set up Bincaml runner environment'
+inputs:
+  ocaml-compiler:
+    description: 'ocaml-compiler argument of setup-ocaml'
+    required: true
+    default: '5.4.0'
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v5
+
+    - uses: ocaml/setup-ocaml@v3
+      with:
+        ocaml-compiler: ${{ inputs.ocaml-compiler }}
+
+    - uses: actions/cache@v5
+      with:
+        key: opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}
+        restore-keys: opam-${{ runner.os }}-
+        # exclude opam compiler paths which are cached by setup-ocaml
+        path: |
+          _opam
+          !_opam/bin/ocaml*
+          !_opam/lib/ocaml
+
+    - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
+    - run: opam install . --deps-only --with-test --with-doc
+    - run: opam install ocamlformat odoc-driver
+
