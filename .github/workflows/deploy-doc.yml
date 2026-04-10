@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/bincaml-setup
 
       - name: Build documentation
         run: |

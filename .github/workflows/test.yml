@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/bincaml-setup
         with:
           ocaml-compiler: ${{ matrix.compiler_version }}
       - run: opam exec -- dune build --ignore-promoted-rules
@@ -45,7 +45,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/bincaml-setup
         with:
           ocaml-compiler: ${{ matrix.compiler_version }}
 
@@ -57,19 +57,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/bincaml-setup
       - uses: ocaml/setup-ocaml/lint-doc@v3
 
   lint-fmt:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/bincaml-setup
       - uses: ocaml/setup-ocaml/lint-fmt@v3
 
   lint-opam:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/bincaml-setup
       - uses: ocaml/setup-ocaml/lint-opam@v3

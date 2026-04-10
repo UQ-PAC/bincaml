@@ -11,10 +11,14 @@ runs:
       with:
         ocaml-compiler: ${{ inputs.ocaml-compiler }}
 
+    - id: month
+      run: python3 -c 'from datetime import *; print(datetime.now().strftime("month=%m"))' >> "$GITHUB_OUTPUT"
+      shell: bash
+
     - uses: actions/cache@v5
       with:
-        key: opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}
-        restore-keys: opam-${{ runner.os }}-
+        key: opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-${{ steps.month.outputs.month }}
+        restore-keys: opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-
         # exclude opam compiler paths which are cached by setup-ocaml
         path: |
           _opam
