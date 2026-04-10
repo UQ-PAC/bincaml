@@ -1,0 +1,5 @@
+(load-il "../../examples/copyprop.il")
+(run-transforms "ssa")
+(dump-il "before.il")
+(run-transforms "copy-prop")
+(dump-il "after.il")
