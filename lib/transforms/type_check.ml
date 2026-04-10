@@ -60,17 +60,17 @@ let type_check stmt_id block_id expr =
       type_error list =
     let binary_same_types (expected_type : Types.t) arg1 arg2 =
       match (arg1, arg2) with
-      | tl, tr when Types.equal tl expected_type && Types.equal tr expected_type
+      | tl, tr when Types.leq tl expected_type && Types.leq tr expected_type
         ->
           []
-      | _, tr when Types.equal tr expected_type ->
+      | _, tr when Types.leq tr expected_type ->
           [
             type_err "%s is not the correct type of %s for %s"
               (Types.to_string arg1)
               (Types.to_string expected_type)
               (Ops.AllOps.to_string op);
           ]
-      | tl, _ when Types.equal tl expected_type ->
+      | tl, _ when Types.leq tl expected_type ->
           [
             type_err "%s is not the correct type of %s for %s"
               (Types.to_string arg2)
@@ -108,7 +108,7 @@ let type_check stmt_id block_id expr =
           | _ -> [ type_err "%s is not of record type" @@ Types.to_string arg1 ]
         in
         let { typ } : Types.record_field = Types.struct_field offset arg1 in
-        if List.length err = 1 || Types.equal arg2 typ then err
+        if List.length err = 1 || Types.leq arg2 typ then err
         else
           [
             type_err "%s is not of %s type" (Types.to_string arg1)
@@ -117,7 +117,7 @@ let type_check stmt_id block_id expr =
     | `INTADD | `INTMUL | `INTSUB | `INTDIV | `INTMOD | `INTLT | `INTLE ->
         binary_int_types arg1 arg2
     | (`EQ | `NEQ) as op ->
-        if Types.equal arg1 arg2 then []
+        if Types.leq arg1 arg2 then []
         else
           [
             type_err "Arguments are not of the same type in %s"
@@ -127,7 +127,7 @@ let type_check stmt_id block_id expr =
     | `MapAccess -> (
         let a, r = Types.uncurry arg1 in
         match a with
-        | [ arg ] when not (Types.equal arg arg2) ->
+        | [ arg ] when not (Types.leq arg arg2) ->
             [
               type_err "Argument does not match map type %s"
               @@ AllOps.to_string op;
@@ -156,7 +156,7 @@ let type_check stmt_id block_id expr =
         let correct_type = List.hd args in
         List.fold_left
           (fun acc typ ->
-            if Types.equal correct_type typ then acc
+            if Types.leq correct_type typ then acc
             else
               type_err "%s is not a bitvector type in %s" (Types.to_string typ)
                 (Ops.AllOps.to_string op)
@@ -189,7 +189,7 @@ let type_check stmt_id block_id expr =
             fst
             @@ List.fold_left
                  (fun (errs, ty) b ->
-                   if Types.equal ty b then (errs, ty)
+                   if Types.leq ty b then (errs, ty)
                    else
                      ( type_err "non-equal branch : %s %s" (Types.to_string ty)
                          (Types.to_string b)
@@ -200,14 +200,14 @@ let type_check stmt_id block_id expr =
         match args with
         | [ Types.Map (k, v); arg1; arg2 ] ->
             let err =
-              if Types.equal k arg1 then []
+              if Types.leq k arg1 then []
               else
                 [
                   type_err "map update expected key type %s but got %s"
                     (Types.to_string k) (Types.to_string arg1);
                 ]
             in
-            if Types.equal v arg2 then err
+            if Types.leq v arg2 then err
             else
               type_err "map update expected value type %s but got %s"
                 (Types.to_string v) (Types.to_string arg2)
@@ -266,7 +266,7 @@ let type_check stmt_id block_id expr =
 let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
   let type_err fmt = type_err fmt stmt_id block_id in
   let expect_equal msg a b (s : type_error list) =
-    if Types.equal a b then s
+    if Types.leq a b then s
     else
       type_err "%s : (%s != %s)" msg (Types.to_string a) (Types.to_string b)
       :: s
@@ -279,14 +279,14 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
         (fun acc (lvar, e) ->
           let expr_errors, rtype = type_check e in
           let acc = List.append acc expr_errors in
-          if Types.equal rtype (Var.typ lvar) then acc
+          if Types.leq (Var.typ lvar) rtype then acc
           else
             type_err
-              "Paramters for the function has a type mismatch: type of %s != \
-               type of %s (%s != %s)"
+              "Parameters for the function has a type mismatch: type of %s != \
+               type of %s (%s </= %s)"
               (BasilExpr.to_string e) (Var.to_string lvar)
-              (Types.to_string rtype)
               (Types.to_string (Var.typ lvar))
+              (Types.to_string rtype)
             :: acc)
         [] ls
   | Stmt.Instr_Store { lhs; rhs; value; addr = Scalar } ->
@@ -315,7 +315,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
       in
       match Var.typ rhs with
       | Map (Bitvector addressSize, _)
-        when Types.equal (Types.bv addressSize) rtype ->
+        when Types.leq rtype (Types.bv addressSize) ->
           errors
       | Map (Bitvector addressSize, _) ->
           type_err "Address loading data (%s) does not match address size (%d)"
@@ -339,7 +339,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
       in
       match Var.typ rhs with
       | Map (Bitvector addressSize, _)
-        when Types.equal (Types.bv addressSize) addr_rtype ->
+        when Types.leq addr_rtype (Types.bv addressSize) ->
           errors
       | Map (Bitvector addressSize, _) ->
           type_err "Address loading data (%s) does not match address size (%d)"
@@ -351,7 +351,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
           :: errors)
   | Stmt.Instr_IndirectCall { target } ->
       let expr_errors, rtype = type_check target in
-      if Types.equal rtype (Types.bv 64) then expr_errors
+      if Types.leq rtype (Types.bv 64) then expr_errors
       else
         type_err
           "Indirect call target (%s) must be an address (i.e. Bitvector 64)"
@@ -364,7 +364,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
             match (arg, real) with
             | None, _ | _, None -> Some (type_err "missing: %s" k)
             | Some arg, Some real ->
-                if Types.equal (ty_a arg) (ty_b real) then None
+                if Types.leq (ty_a arg) (ty_b real) then None
                 else
                   Some
                     (type_err "Type mismatch in arguments %s and %s" (str_a arg)
@@ -381,8 +381,8 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
         List.append
           (compare_stringmaps id Types.to_string args Var.typ Var.to_string
              real_args)
-          (compare_stringmaps Var.typ Var.to_string lhs Var.typ Var.to_string
-             output)
+          (compare_stringmaps Var.typ Var.to_string output Var.typ Var.to_string
+             lhs)
       in
       params_check
 

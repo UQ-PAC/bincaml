@@ -516,7 +516,7 @@ intType : iNTTYPE { IntType1 $1 }
 boolType : bOOLTYPE { BoolType1 $1 }
   ;
 
-recordType : localIdent KW_of beginRec field_list endRec { RecordType1 ($1, $3, $4, $5) }
+recordType : localIdent KW_of beginRec field_list endRec intVal { RecordType1 ($1, $3, $4, $5, $6) }
   ;
 
 pointerType : KW_ptr localIdent KW_of openParen typeT SYMB2 typeT closeParen { PointerType1 ($2, $4, $5, $7, $8) }

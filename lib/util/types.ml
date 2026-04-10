@@ -34,7 +34,7 @@ type t =
   | Nothing  (** least type / empty set *)
   | Map of t * t  (** function type *)
   | Sort of string * variant list  (** An Algebraic datatype *)
-  | Struct of string * record_field StringMap.t
+  | Struct of { name : string; fields : record_field StringMap.t; size : int }
       (** a struct is a product type of a known layout that is representible as
           a finite byte/bit sequence *)
   | Pointer of pointer  (** pointer type *)
@@ -88,14 +88,14 @@ let bv_min_width_for_nat n = Bitvector (Z.of_int n |> Z.numbits)
 
 let struct_field field_name record : record_field =
   match record with
-  | Struct (_, fields) -> (
+  | Struct { fields; _ } -> (
       match StringMap.find_opt field_name fields with
       | None -> failwith @@ "No field at offset " ^ field_name
       | Some t -> t)
   | _ -> failwith "Not record type"
 
 (*
-  Nothing < Unit < {boolean, integer, bitvector, record, pointer} < Top
+  Nothing < Unit < {boolean, integer, (pointer < bv64), bitvector, record} < Top
   *)
 let rec compare_partial (a : t) (b : t) =
   match (a, b) with
@@ -107,12 +107,16 @@ let rec compare_partial (a : t) (b : t) =
   | _, Nothing -> Some 1
   | Unit, _ -> Some (-1)
   | _, Unit -> Some 1
+  | Struct { size; _ }, Bitvector sz when sz = size -> Some (-1)
+  | Bitvector sz, Struct { size; _ } when sz = size -> Some 1
+  | Pointer _, Bitvector 64 -> Some (-1)
+  | Bitvector 64, Pointer _ -> Some 1
   | Pointer { lower; upper; _ }, Pointer { lower = lower1; upper = upper1; _ }
     -> (
       compare_partial lower lower1 |> function
       | Some 0 -> compare_partial upper upper1
       | o -> o)
-  | Struct (_, fields), Struct (_, fields2) ->
+  | Struct { fields; _ }, Struct { fields = fields2; _ } ->
       Some
         (StringMap.compare
            (fun ({ typ = a; _ } : record_field) { typ = b; _ } ->
@@ -146,14 +150,14 @@ let rec to_string = function
   | Variable name -> name
   | Pointer { lower; upper; _ } ->
       Printf.sprintf "ptr(%s, %s)" (to_string lower) (to_string upper)
-  | Struct (_, record) ->
+  | Struct { fields; size; _ } ->
       "{"
-      ^ (StringMap.bindings record
+      ^ (StringMap.bindings fields
         |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->
             Printf.sprintf "\"%s\": (%s, %s)" k (to_string v)
               (Z.to_string offset))
         |> String.concat ", ")
-      ^ "}"
+      ^ "} " ^ Int.to_string size
   | Map ((Map _ as a), (Map _ as b)) ->
       "(" ^ "(" ^ to_string a ^ ")" ^ "->" ^ "(" ^ to_string b ^ ")" ^ ")"
   | Map ((Map _ as a), b) ->

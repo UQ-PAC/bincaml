@@ -77,7 +77,7 @@ Field1 . Field ::= Str ":" OpenParen Type "," IntVal CloseParen ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
-RecordType1 . RecordType ::= LocalIdent "of" BeginRec [Field] EndRec ;
+RecordType1 . RecordType ::= LocalIdent "of" BeginRec [Field] EndRec IntVal;
 PointerType1 . PointerType ::= "ptr" LocalIdent "of" OpenParen Type "," Type CloseParen ;
 BVType1 . BVType ::= BVTYPE ;
 -- map types are right associative. left of -> cannot be another MapType.
