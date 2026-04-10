@@ -2,9 +2,10 @@ open Lang
 open Common
 
 module Constraint = struct
-  type t =
-    | Mem of { addr : Program.e; value : Program.e }
-    | Call of { lhs : Var.t StringMap.t; args : Program.e StringMap.t }
+  type 'e t =
+    | Mem of { addr : 'e; value : 'e }
+    | Call of { lhs : 'e StringMap.t; args : 'e StringMap.t }
+  [@@deriving map]
 
   let gen_constraints (p : Program.proc) =
     let open Stmt in
@@ -17,7 +18,9 @@ module Constraint = struct
                 Mem { addr; value = Expr.BasilExpr.rvar lhs } :: acc
             | Instr_Store { value; addr = Addr { addr } } ->
                 Mem { addr; value } :: acc
-            | Instr_Call { lhs; args } -> Call { lhs; args } :: acc
+            | Instr_Call { lhs; args } ->
+                Call { lhs = StringMap.map Expr.BasilExpr.rvar lhs; args }
+                :: acc
             | _ -> acc)
           acc)
       [] p
