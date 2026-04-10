@@ -128,8 +128,8 @@ let%test_unit "Record joining" =
         { offset = Z.of_int 64; size = 32; ty = TypeVar (VarId.make_id "d") } );
     ]
   in
-  let record1 = Record (ZMap.of_list fields1) in
-  let record2 = Record (ZMap.of_list fields2) in
+  let record1 = Record (ZMap.of_list fields1, 96) in
+  let record2 = Record (ZMap.of_list fields2, 96) in
   let joined_record = Union (record1, record2) in
 
   let m =
@@ -147,7 +147,7 @@ let%test_unit "Record joining" =
         { offset = Z.of_int 64; size = 32; ty = TypeVar (VarId.make_id "d") } );
     ]
   in
-  let actual = InferredType.Record (ZMap.of_list fields) in
+  let actual = InferredType.Record (ZMap.of_list fields, 96) in
   assert (InferredType.equal actual @@ TypeAutomata.automata_to_type m)
 
 let%test_unit "BinSub type ADT" =
@@ -173,9 +173,9 @@ let%test_unit "BinSub type ADT" =
     { offset = Z.zero; size = 4; ty = Sect (d, Sect (t2, int32)) }
   in
   let fields3 = { offset = Z.zero; size = 4; ty = Union (e, int32) } in
-  let record1 = Record (ZMap.singleton (Z.of_int 4) fields1) in
-  let record2 = Record (ZMap.singleton Z.zero fields2) in
-  let record3 = Record (ZMap.singleton Z.zero fields3) in
+  let record1 = Record (ZMap.singleton (Z.of_int 4) fields1, 8) in
+  let record2 = Record (ZMap.singleton Z.zero fields2, 8) in
+  let record3 = Record (ZMap.singleton Z.zero fields3, 8) in
 
   let pointer1 = Pointer (a, record1) in
   let pointer2 = Pointer (c, record2) in
@@ -195,27 +195,29 @@ let%test_unit "BinSub type ADT" =
   let res =
     Pointer
       ( Record
-          (ZMap.singleton Z.zero
-             {
-               offset = Z.zero;
-               size = 4;
-               ty = Union (e, BinCamlType (BinCaml_BV 32));
-             }),
+          ( ZMap.singleton Z.zero
+              {
+                offset = Z.zero;
+                size = 4;
+                ty = Union (e, BinCamlType (BinCaml_BV 32));
+              },
+            8 ),
         Record
-          (ZMap.of_list
-             [
-               ( Z.zero,
-                 {
-                   offset = Z.zero;
-                   size = 4;
-                   ty = Sect (d, Sect (t2, BinCamlType (BinCaml_BV 32)));
-                 } );
-               ( Z.of_int 4,
-                 {
-                   offset = Z.of_int 4;
-                   size = 4;
-                   ty = Sect (b, Sect (t1, TypeVar alpha));
-                 } );
-             ]) )
+          ( ZMap.of_list
+              [
+                ( Z.zero,
+                  {
+                    offset = Z.zero;
+                    size = 4;
+                    ty = Sect (d, Sect (t2, BinCamlType (BinCaml_BV 32)));
+                  } );
+                ( Z.of_int 4,
+                  {
+                    offset = Z.of_int 4;
+                    size = 4;
+                    ty = Sect (b, Sect (t1, TypeVar alpha));
+                  } );
+              ],
+            8 ) )
   in
   assert (InferredType.equal res @@ TypeAutomata.automata_to_type m)
