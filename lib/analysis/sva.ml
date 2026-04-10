@@ -304,12 +304,10 @@ let sva (prog : Program.t) =
     |> Option.get_or ~default:false
   in
   let results =
-    IDMap.fold
-      (fun _ v acc -> DFGAnalysis.flow_insensitive v :: acc)
-      prog.procs []
+    IDMap.map (fun v -> DFGAnalysis.flow_insensitive v) prog.procs
   in
   results
-  |> List.map
+  |> IDMap.map
      @@ StateAbstraction.mapi (fun _ domain ->
          SymAddrSetLattice.to_list domain
          |> snd

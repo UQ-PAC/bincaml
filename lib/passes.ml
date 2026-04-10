@@ -128,7 +128,9 @@ module PassManager = struct
         Prog
           (fun p ->
             let r = Analysis.Sva.sva p in
-            List.iter (print_endline % Analysis.Sva.StateAbstraction.show) r;
+            IDMap.iter
+              (fun _ v -> print_endline @@ Analysis.Sva.StateAbstraction.show v)
+              r;
             p);
       doc = "Runs symbolic value analysis and prints stuff out after";
     }
