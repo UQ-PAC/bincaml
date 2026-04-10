@@ -857,11 +857,14 @@ module BasilASTLoader = struct
     try
       match StringMap.find_opt vn binds with
       | Some v -> v
-      | None ->
-          Procedure.lookup_local_decl
-            (Option.get_exn_or "variable not bound and not in proc scope"
-               p_st.curr_proc)
-            vn
+      | None -> (
+          match StringMap.find_opt vn p_st.prog.implicit_decls with
+          | Some (VariantCase { constructor }) -> constructor
+          | None ->
+              Procedure.lookup_local_decl
+                (Option.get_exn_or "variable not bound and not in proc scope"
+                   p_st.curr_proc)
+                vn)
     with
     | Not_found ->
         let msg = "local variable used before declaration : " ^ vn in
