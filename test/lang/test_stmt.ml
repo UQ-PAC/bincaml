@@ -48,7 +48,8 @@ let%expect_test "fold_block" =
     () block;
   print_endline (Block.to_string block);
   ();
-  [%expect {|
+  [%expect
+    {|
     $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in,
      0xfffffffffffffffc:bv64) extract(32,0, R0_in) 32
     var load45_1:bv32 := load le $stack:(bv64->bv8) bvadd(R31_in,
