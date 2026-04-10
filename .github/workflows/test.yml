@@ -58,6 +58,10 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.compiler_version }}
 
+      - uses: mxschmitt/action-tmate@v3
+        with:
+          timeout-minutes: 5
+
       - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
       - run: opam install . --deps-only --with-test
       - run: opam exec -- dune build --ignore-promoted-rules
