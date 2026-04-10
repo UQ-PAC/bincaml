@@ -209,8 +209,8 @@ let%expect_test "dtp" =
   print_endline @@ to_string rc;
   [%expect
     {|
-    list = cons of {head: E; tail: list} | nil
-    recs = Recordrecs of {a: bv12; b: bool}
+    list
+    recs
     |}]
 
 let show (b : t) = to_string b
