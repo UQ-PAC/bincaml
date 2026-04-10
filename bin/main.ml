@@ -33,7 +33,14 @@ let dump_proc fname proc =
   try
     let p = Loader.Loadir.ast_of_fname fname in
     let id = p.prog.proc_names.get_id proc in
-    let p = IDMap.find id p.prog.procs in
+    let p = IDMap.find id
+
+
+
+
+
+
+      p.prog.procs in
     print_proc stdout p;
     Ok ()
   with
