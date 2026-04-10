@@ -22,6 +22,9 @@ runs:
           !_opam/lib/ocaml
 
     - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
+      shell: bash
     - run: opam install . --deps-only --with-test --with-doc
+      shell: bash
     - run: opam install ocamlformat odoc-driver
+      shell: bash
 
