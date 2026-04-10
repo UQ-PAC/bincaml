@@ -6,6 +6,7 @@
   dataflow_graph
   intra_analysis
   defuse_bool
+  dsa
   lattice_types
   ide
   irreducible_loops
