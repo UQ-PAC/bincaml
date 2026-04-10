@@ -3,7 +3,7 @@
  (name bincaml_lsp)
  (modules lsp_state raw_tokens lsp_logs lsp_symbols lsp_cache)
  (root_module Deps)
- (libraries linol-lwt linol lsp bincaml bincaml.basilir bincaml.loader logs logs.fmt)
+ (libraries linol-lwt linol bincaml bincaml.basilir bincaml.loader logs logs.fmt)
  (flags
   (-w -27 -w -39 -w -33 -w -23))
  (preprocess
