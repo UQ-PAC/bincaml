@@ -9,17 +9,17 @@ position token INTTYPE {"int"} ;
 position token BOOLTYPE {"bool"} ;
 position token POINTERTYPE {"ptr"} ;
 
-{- position token UserIdent '`' ((upper | letter | '_' | '#')(upper | letter | digit | ["_$#"])*) '`'; -}
-position token BIdent '.'((upper | letter | '_')(upper | letter | digit | ["_$#~"])*) ;
+{- position token UserIdent '`' ((upper | letter | '_' | '#')(upper | letter | digit | ["_.$#"])*) '`'; -}
+position token BIdent '.'((upper | letter | '_')(upper | letter | digit | ["_.$#~"])*) ;
 
-position token LocalIdent ('#' | upper | letter | '_')((upper | letter | digit | ["_$#"])*);
-position token GlobalIdent '$' ((upper | letter | digit | ["_$#"])+);
+position token LocalIdent ('#' | upper | letter | '_')((upper | letter | digit | ["_.$#"])*);
+position token GlobalIdent '$' ((upper | letter | digit | ["_.$#"])+);
 
-position token BlockIdent '%' ((upper | letter | digit | ["_$#"])+);
+position token BlockIdent '%' ((upper | letter | digit | ["_.$#"])+);
 
 separator BlockIdent ",";
 
-position token ProcIdent '@' ((upper | letter | digit | ["_$#"])+);
+position token ProcIdent '@' ((upper | letter | digit | ["_.$#"])+);
 
 
 position token OpenParen '(' ;
