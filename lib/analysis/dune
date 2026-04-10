@@ -14,11 +14,12 @@
   ide_live
   lattice_collections
   wrapped_intervals
-  known_bits
   gamma_domain
+  linear_const
   tnum_wint_reduced_product
   known_bits
   wp_dual
+  sva
   linear_const
   inter_copy)
  (libraries
