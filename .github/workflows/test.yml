@@ -58,9 +58,6 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.compiler_version }}
 
-      - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
-      - run: opam install . --deps-only --with-test --with-doc
-
       - uses: actions/cache@v5
         with:
           key: opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}
@@ -70,6 +67,9 @@ jobs:
             _opam
             !_opam/bin/ocaml*
             !_opam/lib/ocaml
+
+      - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
+      - run: opam install . --deps-only --with-test --with-doc
 
       - run: opam exec -- dune build --ignore-promoted-rules
       - run: sudo apt-get install cvc5 -y
