@@ -13,10 +13,11 @@ let%expect_test "error then error" =
     <-  <--
     aa  bbb
         <-
-        cc
+        dd
     a: Syntax error: unrecognised token
     b: Syntax error: unrecognised token
     c: Syntax error: unrecognised token
+    d: TOK_EOF
     |}]
 
 let%expect_test "error then token" =
@@ -29,6 +30,7 @@ let%expect_test "error then token" =
     aa b
     a: Syntax error: unrecognised token
     b: (TOK_LocalIdent ((3, 4), "e"))
+    c: TOK_EOF
     |}]
 
 let%expect_test "errors on same line" =
@@ -38,11 +40,12 @@ let%expect_test "errors on same line" =
   extract_and_render_tokens stdout s;
   [%expect {|
      <---   <--- aa <--  <--  <--
-     aaaa   bbbb cc ddd  eee  fff
+     aaaa   bbbb cc ddd  eee  ggg
     a: Syntax error: unrecognised token
     b: Syntax error: unrecognised token
     c: (TOK_LocalIdent ((13, 15), "aa"))
     d: Syntax error: unrecognised token
     e: Syntax error: unrecognised token
     f: Syntax error: unrecognised token
+    g: TOK_EOF
     |}]

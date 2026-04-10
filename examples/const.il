@@ -12,7 +12,7 @@ proc @main() -> (out:bv64)
 proc @f(inp:bv64) -> (out:bv64)
 [
     block %body [
-        var a:bv64 := bvmul(2:bv64, bvadd(a:bv64, 1:bv64));
+        var a:bv64 := bvmul(2:bv64, bvadd(inp:bv64, 1:bv64));
         var b:bv64 := bvmul(bvadd(a:bv64, 1:bv64), 2:bv64);
         var c:bv64 := bvmul(2:bv64, bvadd(1:bv64, b:bv64));
         var d:bv64 := bvmul(bvadd(1:bv64, c:bv64), 2:bv64);

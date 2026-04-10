@@ -1,8 +1,8 @@
 
   $ bincaml script roundtrip.sexp
-  bincaml: Error in (load-il beforemem.il): Parse error:  beforemem.il:3
-           3 | let $b : record = Record of {a: bv64; b: bv32; c: bv64} = (Record)(0x1:bv64,
-                                        ^^
+  bincaml: Error in (load-il beforemem.il): Parse error:  beforemem.il:2
+           2 | let $a : ilist = Cons of {head: bv64; tail: ilist} | Nil = (Nil)();
+                                     ^^
             at Dune__exe__Script.of_cmd.(fun) bin/script.ml:85
   [123]
 

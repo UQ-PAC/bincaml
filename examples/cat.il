@@ -47,6 +47,7 @@ var $__BranchTaken: bv1;
 prog entry @main_4197696;
 
 proc @main_4197696 () -> ()
+  { .name = "main"; .address = 0x400d40; .returnBlock = "main_basil_return_1" }
   require eq($_PC:bv64, 0x400d40:bv64)
   ensures eq($_PC:bv64, old($R30:bv64))
 [
