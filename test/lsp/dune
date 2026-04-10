@@ -1,9 +1,9 @@
 (library
  (name lsp_expect)
+ (package bincaml_lsp)
  (modules lsp_expect)
  (flags -w -27)
  (libraries bincaml_lsp)
  (inline_tests)
  (preprocess
   (pps ppx_expect)))
-

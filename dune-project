@@ -48,7 +48,7 @@
   (odig :with-dev-setup)
   (sherlodoc :with-doc)
   (ppx_expect
-   (>= "0.17.2.2"))
+   (>= 0.17.2.2))
   (alcotest :with-test)
   (qcheck-core :with-test)
   (qcheck-alcotest :with-test)
@@ -59,18 +59,14 @@
  (name bincaml_lsp)
  (synopsis "Language server for Bincaml IL files")
  (depends
-   bincaml
-   logs
-   iter
-   linol
-   linol-lwt
-   containers
-   lwt_react
-   ppx_deriving
-   ; and probably a bunch of bincaml dependencies...
-  (ocamlformat :with-dev-setup)
-  (odig :with-dev-setup)
-  (sherlodoc :with-doc))
- (tags (lsp)))
 
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html
+  (ppx_expect
+   (and (>= 0.17.2.2) :with-test))
+  bincaml
+  logs
+  iter
+  linol
+  linol-lwt
+  containers
+  ppx_deriving)
+ (tags (lsp)))

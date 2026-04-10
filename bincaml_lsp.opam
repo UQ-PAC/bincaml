@@ -11,17 +11,14 @@ doc: "https://url/to/documentation"
 bug-reports: "https://github.com/username/reponame/issues"
 depends: [
   "dune" {>= "3.19"}
+  "ppx_expect" {>= "0.17.2.2" & with-test}
   "bincaml"
   "logs"
   "iter"
   "linol"
   "linol-lwt"
   "containers"
-  "lwt_react"
   "ppx_deriving"
-  "ocamlformat" {with-dev-setup}
-  "odig" {with-dev-setup}
-  "sherlodoc" {with-doc}
   "odoc" {with-doc}
 ]
 build: [
