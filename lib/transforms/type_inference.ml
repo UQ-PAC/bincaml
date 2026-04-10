@@ -213,20 +213,23 @@ module InferredType = struct
     | Bottom -> (recursives, Types.Nothing)
     | TypeVar a -> (recursives, Types.Variable (VarId.show a))
     | BinCamlType a -> (recursives, BinCamlType.bincaml_type_to_type a)
+    | Pointer (Top, Top) ->
+        (recursives, Types.Pointer { name = "void*"; lower = Top; upper = Top })
     | Pointer (lower, upper) ->
         let recursives, lower = inferred_to_real recursives lower in
         let recursives, upper = inferred_to_real recursives upper in
-        let name = "pointer_" ^ Int.to_string @@ Hashtbl.hash typ in
+        let name = "ptr" ^ Int.to_string @@ Hashtbl.hash typ in
 
         (recursives, Types.Pointer { name; lower; upper })
     | Record fields ->
-        let name = "record_" ^ Int.to_string @@ Hashtbl.hash typ in
+        let name = "rec" ^ Int.to_string @@ Hashtbl.hash typ in
         let recursives, fields =
           List.fold_left_map
             (fun recursives ({ offset; ty } : field) ->
               let recursives, typ = inferred_to_real recursives ty in
               ( recursives,
-                (Z.to_string offset, ({ typ; offset } : Types.record_field)) ))
+                ( "field" ^ Z.to_string offset,
+                  ({ typ; offset } : Types.record_field) ) ))
             recursives
           @@ List.of_iter @@ ZMap.values fields
         in
