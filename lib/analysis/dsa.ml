@@ -1,3 +1,28 @@
+open Lang
+open Common
+
+module Constraint = struct
+  type t =
+    | Mem of { addr : Program.e; value : Program.e }
+    | Call of { lhs : Var.t StringMap.t; args : Program.e StringMap.t }
+
+  let gen_constraints (p : Program.proc) =
+    let open Stmt in
+    Procedure.fold_blocks_topo_fwd
+      (fun acc bid ->
+        Block.fold_forwards ~phi:const
+          ~f:(fun acc stmt ->
+            match stmt with
+            | Instr_Load { lhs; addr = Addr { addr } } ->
+                Mem { addr; value = Expr.BasilExpr.rvar lhs } :: acc
+            | Instr_Store { value; addr = Addr { addr } } ->
+                Mem { addr; value } :: acc
+            | Instr_Call { lhs; args } -> Call { lhs; args } :: acc
+            | _ -> acc)
+          acc)
+      [] p
+end
+
 open Wrapped_intervals
 module Interval = WrappedIntervalsLattice
 
