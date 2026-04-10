@@ -58,12 +58,19 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.compiler_version }}
 
-      - uses: mxschmitt/action-tmate@v3
-        with:
-          timeout-minutes: 5
-
       - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
-      - run: opam install . --deps-only --with-test
+      - run: opam install . --deps-only --with-test --with-doc
+
+      - uses: actions/cache@v5
+        with:
+          key: opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}
+          restore-keys: opam-${{ runner.os }}-
+          # exclude opam compiler paths which are cached by setup-ocaml
+          path: |
+            _opam
+            !_opam/bin/ocaml*
+            !_opam/lib/ocaml
+
       - run: opam exec -- dune build --ignore-promoted-rules
       - run: sudo apt-get install cvc5 -y
       - run: opam exec -- dune runtest --ignore-promoted-rules
