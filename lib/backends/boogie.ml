@@ -68,7 +68,8 @@ let pretty_const (c : Lang.Ops.AllOps.const) =
   | `Record _ -> raise (BoogieException "records unsupported by boogie backend")
   | `Pointer _ ->
       raise (BoogieException "pointers unsupported by boogie backend")
-  | `Sort _ -> raise (BoogieException "const sorts unsupported by boogie backend")
+  | `Sort _ ->
+      raise (BoogieException "const sorts unsupported by boogie backend")
 
 let pretty_call_args_no_brackets (args : Containers_pp.t list) =
   let open Containers_pp in
@@ -178,7 +179,7 @@ and pretty_triggers (attrib : Lang.Program.e Lang.Attrib.t option) =
       @@ List.map (fun b -> bracket "{" b "}")
       @@ pretty_attribute attrib)
   |> Option.get_or ~default:(text "")
-  (* Option.map (Lang.Attrib.attrib_pretty Lang.Expr.BasilExpr.pretty) attrib |> Option.get_or ~default:(text "MAGIC") *)
+(* Option.map (Lang.Attrib.attrib_pretty Lang.Expr.BasilExpr.pretty) attrib |> Option.get_or ~default:(text "MAGIC") *)
 
 and pretty_binding_expr ?(attrib : Lang.Program.e Lang.Attrib.t option) bound
     in_body =
@@ -261,7 +262,7 @@ let pretty_declaration (d : Lang.Program.declaration) =
       let func_body, return_type = pretty_function_body binding t in
 
       (* Ideally use above return type
-       * but unfortunately curry will uncurry returned maps... :( *) 
+       * but unfortunately curry will uncurry returned maps... :( *)
       let return_type = Lang.Expr.BasilExpr.type_of t in
       let return_type = text @@ type_to_string return_type in
 

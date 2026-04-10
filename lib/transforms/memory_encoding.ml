@@ -111,15 +111,17 @@ module Calls = struct
         (rvar (Var.create "me_can_allocate" ~scope:Var.Global Types.Boolean))
       args
 
-  (** [init_encoding args] Returns if a memory encoding is initialized.
-      args(0) is the memory encoding. *)
+  (** [init_encoding args] Returns if a memory encoding is initialized. args(0)
+      is the memory encoding. *)
   let init_encoding args =
     apply_fun
       ~func:
         (rvar (Var.create "me_init_encoding" ~scope:Var.Global Types.Boolean))
       args
 
-    (** [valid_access args] Checks if an access is valid. args(0) is the memory encoding object. args(1) is the address being accessed. args(2) is the size of the access in bytes. *)
+  (** [valid_access args] Checks if an access is valid. args(0) is the memory
+      encoding object. args(1) is the address being accessed. args(2) is the
+      size of the access in bytes. *)
   let valid_access args =
     apply_fun
       ~func:
