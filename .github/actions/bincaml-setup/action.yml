@@ -27,12 +27,13 @@ runs:
           _opam
           !_opam/bin/ocaml*
           !_opam/lib/ocaml
+          _opam/lib/ocamlformat*
 
     - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
       shell: bash
-    - run: opam install . --deps-only --with-test --with-doc
+    - run: opam install ocamlformat odoc-driver opam-dune-lint
       shell: bash
-    - run: opam install ocamlformat odoc-driver
+    - run: opam install . --deps-only --with-test --with-doc
       shell: bash
 
     - if: always() && steps.cache.outputs.cache-hit != 'true'
@@ -43,4 +44,5 @@ runs:
           _opam
           !_opam/bin/ocaml*
           !_opam/lib/ocaml
+          _opam/lib/ocamlformat*
 
