@@ -70,7 +70,7 @@ module IDELiveCommon = struct
     | IdEdge, ConstEdge false -> IdEdge
     | IdEdge, IdEdge -> IdEdge
 
-  let eval f v = match f with IdEdge -> v | ConstEdge c -> c
+  let eval v f = match f with IdEdge -> v | ConstEdge v -> v
 end
 
 module IDELive = struct

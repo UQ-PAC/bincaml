@@ -28,7 +28,8 @@
     LocalIdent
     basilir.cf
     --makefile)
-   (diff? grammar.js tree-sitter-basilir/grammar.js))))
+   (run sed -i.bak "s/= grammar/= /" tree-sitter-basilir/grammar.js)
+   (diff? grammar.bnfc.js tree-sitter-basilir/grammar.js))))
 
 (rule
  (alias runtest)

@@ -14,9 +14,12 @@
   lattice_collections
   wrapped_intervals
   known_bits
+  gamma_domain
   tnum_wint_reduced_product
   known_bits
-  wp_dual)
+  wp_dual
+  linear_const
+  inter_copy)
  (libraries
   intPQueue
   patricia-tree
