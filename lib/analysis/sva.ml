@@ -294,7 +294,9 @@ let sva (prog : Program.t) =
                | Some Attrib.(`Bitvector bv) -> Some bv
                | _ -> None
              in
-             let end_address = Bitvec.add address size in
+             let end_address =
+               Bitvec.sub (Bitvec.one ~size:64) @@ Bitvec.add address size
+             in
              let interval2 =
                WrappedIntervalsLattice.interval address end_address
              in
