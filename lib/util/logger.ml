@@ -9,7 +9,7 @@ module Logger = struct
   let time_stamp () =
     Logs.Tag.(empty |> add time_stamp_tag (Mtime_clock.count c))
 
-  let reporter ppf ?(filter = Fun.const true) =
+  let reporter ppf =
     let report src level ~over k msgf =
       let _ = src in
       let k _ =
