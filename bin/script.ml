@@ -66,10 +66,27 @@ let of_cmd st (e : Containers.Sexp.t) =
   Trace_core.with_span ~__FILE__ ~__LINE__ ("runcmd::" ^ cmd) (fun _ ->
       match cmd with
       | "skip" -> st
-      | "debug-level" ->
+      | "log-level" ->
           let level = List.hd (assert_atoms 1 args) in
           let open Result in
-          Logs.set_level @@ Option.get_or ~default:None @@Result.to_opt @@ Logs.level_of_string level;
+          let a =
+            match Result.to_opt @@ Logs.level_of_string level with
+            | Some a -> a
+            | None ->
+                raise
+                  (Common.ReplError
+                     {
+                       msg =
+                         "Incorrect log level option given, correct options \
+                          are [\"info\", \"quiet\", \"app\", \"error\", \
+                          \"warning\", \"debug\"]";
+                       cmd = "log-level";
+                       __FILE__;
+                       __FUNCTION__;
+                       __LINE__;
+                     })
+          in
+          Logs.set_level a;
           st
       | "load-il" -> (
           try
