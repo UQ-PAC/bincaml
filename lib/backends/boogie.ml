@@ -101,11 +101,15 @@ let pretty_binary_expr (op : Lang.Ops.AllOps.binary) (ty1, arg1) (ty2, arg2)
   | `MapAccess -> arg1 ^ bracket "[" arg2 "]"
   | `WriteField s ->
       arg1 ^ text "->" ^ bracket "(" (text s ^+ text ":=" ^+ arg2) ")"
+  | `IfThen -> text "if" ^+ arg1 ^+ text "then" ^+ arg2
   | _ -> (
       match Transforms.Boogie_prepass.Builtins.name op [ ty1; ty2; t ] with
       | Function name -> text name ^ pretty_call_args [ arg1; arg2 ]
       | Infix name -> bracket "(" (arg1 ^+ text name ^+ arg2) ")"
-      | _ -> failwith "Unsupported binary expr")
+      | _ ->
+          failwith
+            (Printf.sprintf "Unsupported binary expr: %s"
+               (Lang.Ops.AllOps.to_string op)))
 
 let pretty_unary_expr (op : Lang.Ops.AllOps.unary) (ty, arg) (rt : Types.t) =
   let open Containers_pp in
@@ -144,6 +148,14 @@ let pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
           (text "]")
   | `AND -> bracket "(" (append_l ~sep:(text "&&") (List.map snd args)) ")"
   | `OR -> bracket "(" (append_l ~sep:(text "||") (List.map snd args)) ")"
+  | `Cases -> (
+      match args with
+      | [ a ] -> snd a
+      | [] -> failwith "empty cases"
+      | h :: tl ->
+          List.fold_left
+            (fun a b -> a ^+ text "else" ^+ b)
+            (snd h) (List.map snd tl))
   | e ->
       let x = Lang.Ops.AllOps.to_string e in
       raise

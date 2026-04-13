@@ -19,12 +19,12 @@ open Common
    uses. *)
 
 let check_var v =
-  assert (not @@ String.starts_with ~prefix:"$Gamma_" @@ Var.name v)
+  assert (not @@ String.starts_with ~prefix:"Gamma_" @@ Var.name v)
 
 let gamma_of v =
   let args, r = Types.uncurry (Var.typ v) in
   let typ = Types.curry args Boolean in
-  Var.copy ~name:("$Gamma_" ^ Var.name v) ~typ v
+  Var.copy ~name:("Gamma_" ^ Var.name v) ~typ v
 
 let add_decl proc gv =
   if Var.is_local gv then

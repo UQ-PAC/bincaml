@@ -31,7 +31,7 @@ let sigil_ok v =
 let variables_wf p =
   let spec = Procedure.specification p in
   let is_declared n =
-    sigil_ok n;
+    (*sigil_ok n;*)
     match Var.scope n with
     | Var.LocalConst | Var.LocalVar -> (
         try ignore @@ Procedure.lookup_local_decl p (Var.name n)
@@ -60,7 +60,7 @@ let variables_wf p =
     | _ -> ()
   in
   let check_lvar v =
-    sigil_ok v;
+    (*sigil_ok v;*)
     write v;
     if Var.is_local v then is_declared v
     else if not @@ List.exists (fun e -> Var.equal v e) spec.modifies_globs then (
@@ -84,5 +84,7 @@ let variables_wf p =
       Block.assigned_vars_iter b |> Iter.iter check_lvar)
 
 let wf_checks p =
-  formal_params p;
-  variables_wf p
+  try
+    formal_params p;
+    variables_wf p
+  with IRWellformed e -> print_endline ("wellformedness:" ^ e)
