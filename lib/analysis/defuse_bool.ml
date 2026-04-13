@@ -51,6 +51,7 @@ module IsZeroValueAbstraction = struct
             else if Z.equal Z.zero (Bitvec.value i) then join acc Zero
             else join acc NonZero)
           fields Zero
+    | `Sort _ -> failwith ""
 
   let eval_unop (op : Lang.Ops.AllOps.unary) a =
     match op with
@@ -123,7 +124,7 @@ module IsZeroValueAbstraction = struct
     | `BVADD -> List.fold_left (eval_binary `BVADD) Bot args
     | `BVOR -> List.fold_left (eval_binary `BVOR) Bot args
     | `BVXOR -> List.fold_left (eval_binary `BVXOR) Bot args
-    | `BVMUL -> List.fold_left (eval_binary `BVXOR) Bot args
+    | `BVMUL -> List.fold_left (eval_binary `BVMUL) Bot args
     | `BVAND -> List.fold_left (eval_binary `BVAND) Bot args
     | `BVConcat -> List.fold_left join Bot args
     | `OR ->

@@ -231,7 +231,7 @@ module LinearDomain = struct
       | ApplyIntrin { op = `BVADD; args = a :: rest } ->
           List.fold_left (liftJoin2 Lin.add) a rest
       | ApplyIntrin { op = `BVMUL; args = a :: rest } ->
-          List.fold_left (liftJoin2 Lin.add) a rest
+          List.fold_left (liftJoin2 Lin.mul) a rest
       | _ -> None
 
     let extract_expr e =

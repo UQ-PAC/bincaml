@@ -80,7 +80,3 @@ Check concat rewrites work
   ---
   >       bvand(bvand(var1_4206396_bv64, 0xffffffff:bv64), 0xffffffff:bv64));
   [1]
-<<<<<<< HEAD
-=======
->>>>>>> 4f7f87d3a6424d68d94c1a49a6dac3a4b5feedbc
-
