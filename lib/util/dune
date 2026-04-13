@@ -13,9 +13,13 @@
   zint
   smt
   reverse_graph
+  logger
   recursionscheme)
  (libraries
   intPQueue
+  logs
+  mtime
+  mtime.clock
   iter
   containers
   fix

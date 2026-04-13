@@ -19,6 +19,8 @@
 , pp_loc
 , fmt
 , patricia-tree
+, logs
+, mtime
 
 # test:
 , ppx_expect
@@ -50,7 +52,7 @@ buildDunePackage {
   nativeBuildInputs = [ menhir writableTmpDirAsHomeHook ];
   buildInputs =
     [ menhir fix trace trace-tef containers containers-data iter
-      ppx_deriving ocamlgraph intPQueue cmdliner pp_loc fmt patricia-tree ];
+      ppx_deriving ocamlgraph intPQueue cmdliner pp_loc fmt patricia-tree logs mtime];
   propagatedBuildInputs = [ zarith ];
 
   doCheck = true;

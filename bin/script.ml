@@ -66,6 +66,11 @@ let of_cmd st (e : Containers.Sexp.t) =
   Trace_core.with_span ~__FILE__ ~__LINE__ ("runcmd::" ^ cmd) (fun _ ->
       match cmd with
       | "skip" -> st
+      | "debug-level" ->
+          let level = List.hd (assert_atoms 1 args) in
+          let open Result in
+          Logs.set_level @@ Option.get_or ~default:None @@Result.to_opt @@ Logs.level_of_string level;
+          st
       | "load-il" -> (
           try
             let args = assert_atoms (List.length args) args in

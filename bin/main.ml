@@ -1,4 +1,5 @@
 open Bincaml_util.Common
+open Bincaml_util.Logger
 open Lang
 open Cmdliner
 open Cmdliner.Term.Syntax
@@ -99,6 +100,8 @@ let cmd =
 let main () =
   Trace_core.set_process_name "main";
   Trace_core.set_thread_name "t1";
+  Logs.set_level (Some Logs.Error);
+  Logs.set_reporter (Logger.reporter Format.std_formatter);
   exit (Cmd.eval_result cmd)
 
 let () = Trace_tef.with_setup ~out:(`File "trace.json") () @@ fun () -> main ()
