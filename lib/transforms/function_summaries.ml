@@ -157,7 +157,6 @@ let intraproc_transform (prog : Program.t) =
          prog.procs
   in
   { prog with procs }
-(* { prog with procs = IDMap.map (intraproc_transform_proc prog) prog.procs } *)
 
 module Domain = struct
   type property = summary

@@ -112,34 +112,30 @@ module Domain (S : FunctionSummaryAnnotation) = struct
         in
         simplify p
     | Instr_Call { lhs; procid; args } ->
-        let p =
-          BasilExpr.applyintrin ~op:`OR
-            (p :: (List.map Expr.BasilExpr.boolnot @@ S.requires procid))
-        in
-        let ensures = BasilExpr.applyintrin ~op:`AND @@ S.ensures procid in
-        (* Sub the call site assignee variables into the ensures of the procedure *)
         let ensures =
-          StringMap.fold
-            (fun k d acc ->
-              BasilExpr.substitute
-                (fun v ->
-                  Option.return_if
-                    (String.equal (Var.name v) k)
-                    (BasilExpr.rvar d))
-                acc)
-            lhs ensures
+          BasilExpr.boolconst true :: S.ensures procid
+          |> BasilExpr.applyintrin ~op:`AND
+          |> simplify
+          |> StringMap.fold
+               (fun k d acc ->
+                 BasilExpr.substitute
+                   (fun v ->
+                     Option.return_if
+                       (String.equal (Var.name v) k)
+                       (BasilExpr.rvar d))
+                   acc)
+               lhs
+          |> simplify
         in
+        let requires =
+          BasilExpr.applyintrin ~op:`AND
+          @@ (BasilExpr.boolconst true :: S.requires procid)
+        in
+        let p = join p (Expr.BasilExpr.boolnot requires) in
         let p =
-          (* Only if we had return values and a meaningful ensures
-          do we care to update p. *)
-          if
-            StringMap.cardinal lhs > 0
-            && (not @@ List.is_empty @@ S.requires procid)
-          then
-            BasilExpr.forall
-              ~bound:(StringMap.values lhs |> Iter.to_list)
-              (BasilExpr.binexp ~op:`IMPLIES ensures p)
-          else p
+          BasilExpr.forall
+            ~bound:(StringMap.values lhs |> Iter.to_list)
+            (BasilExpr.binexp ~op:`IMPLIES ensures p)
         in
         simplify p
     | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
