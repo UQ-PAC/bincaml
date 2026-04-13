@@ -459,7 +459,7 @@ module BasilASTLoader = struct
   and transRECORDTYPE (fields : field list) =
     Types.Struct
       (StringMap.of_list
-         ((List.map (function Field1 (_, field_name, _, t, offset, _, _) ->
+         ((List.map (function Field1 (field_name, _, t, offset, _) ->
               ( transStr field_name,
                 ({ typ = trans_type t; offset = transIntVal offset }
                   : Types.record_field) )))
@@ -857,11 +857,14 @@ module BasilASTLoader = struct
     try
       match StringMap.find_opt vn binds with
       | Some v -> v
-      | None ->
-          Procedure.lookup_local_decl
-            (Option.get_exn_or "variable not bound and not in proc scope"
-               p_st.curr_proc)
-            vn
+      | None -> (
+          match StringMap.find_opt vn p_st.prog.implicit_decls with
+          | Some (VariantCase { constructor }) -> constructor
+          | None ->
+              Procedure.lookup_local_decl
+                (Option.get_exn_or "variable not bound and not in proc scope"
+                   p_st.curr_proc)
+                vn)
     with
     | Not_found ->
         let msg = "local variable used before declaration : " ^ vn in
@@ -897,15 +900,18 @@ module BasilASTLoader = struct
   and lookup_global_decl ident p_st =
     let vn = unsafe_unsigil (`Global ident) in
     let token_char_offset_range = Some (get_bident_loc (`Global ident)) in
-    match StringMap.find vn p_st.prog.globals with
-    | Variable { binding } -> binding
-    | Function { binding } -> binding
-    | Type _ ->
+    match StringMap.find_opt vn p_st.prog.globals with
+    | Some (Variable { binding }) -> binding
+    | Some (Function { binding }) -> binding
+    | Some (Type _) ->
         let msg = "found type declaration when looking for variable:" ^ vn in
         raise (LoadError { token_char_offset_range; msg; input = None })
-    | exception Not_found ->
-        let msg = "global variable used before declaration : " ^ vn in
-        raise (LoadError { token_char_offset_range; msg; input = None })
+    | None -> (
+        match StringMap.find_opt vn p_st.prog.implicit_decls with
+        | Some (VariantCase { constructor }) -> constructor
+        | None ->
+            let msg = "global variable used before declaration : " ^ vn in
+            raise (LoadError { token_char_offset_range; msg; input = None }))
 
   and trans_bv_val v : Bitvec.t =
     match v with
@@ -1046,10 +1052,7 @@ module BasilASTLoader = struct
           ~lo_incl:(transIntVal intval |> Z.to_int)
           (trans_expr expr)
     | Expr_FieldSet (record, fname, value) ->
-        let fname =
-          String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Local fname)
-          |> Option.get_exn_or "safe by parser"
-        in
+        let fname = unsafe_unsigil (`Local fname) in
         BasilExpr.field_store ~field:fname (trans_expr record)
           (trans_expr value)
     | Expr_Field (record, fname) ->
