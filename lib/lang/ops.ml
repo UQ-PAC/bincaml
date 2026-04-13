@@ -212,24 +212,60 @@ module IntOps = struct
     | #binary as b -> show_binary b
 end
 
+module ADTOps = struct
+  (* open recursive variant value *)
+  type 'a t = { name : string; fields : (string * 'a) list; ptype : Types.t }
+  [@@deriving eq, ord, show]
+
+  let get_typ { ptype } = ptype
+
+  let to_string f { name; fields } =
+    name ^ " {"
+    ^ (fields |> List.map (fun (k, v) -> k ^ "=" ^ f v) |> String.concat "; ")
+    ^ "}"
+
+  let get_field { fields } n = List.find (fst %> String.equal n) fields
+
+  let set_field n r nv =
+    {
+      r with
+      fields =
+        List.map
+          (fun (k, v) -> if String.equal n k then (k, v) else (k, nv))
+          r.fields;
+    }
+
+  type unary = [ `ReadField of string ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type binary = [ `WriteField of string ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  let eval_unary (u : unary) record =
+    match u with `ReadField field -> get_field record field
+
+  let eval_binary (u : binary) =
+    match u with `WriteField field -> set_field field
+end
+
 module RecordOps = struct
   type const = [ `Record of Record.t ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type unary = [ `FACCESS of string ]
+  type unary = [ `ReadField of string ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type binary = [ `FSET of string ]
+  type binary = [ `WriteField of string ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let eval_unary (u : unary) record =
     match u with
-    | `FACCESS offset ->
+    | `ReadField offset ->
         let { value; _ } : Record.field = Record.get_field offset record in
         value
 
   let eval_binary (u : binary) =
-    match u with `FSET offset -> Record.set_field offset
+    match u with `WriteField offset -> Record.set_field offset
 
   let show = function
     | #unary as u -> show_unary u
@@ -272,13 +308,16 @@ module Spec = struct
 end
 
 module AllOps = struct
-  type const =
-    [ IntOps.const
-    | BVOps.const
-    | LogicalOps.const
-    | RecordOps.const
-    | PointerOps.const ]
+  type prim_const =
+    [ IntOps.const | BVOps.const | LogicalOps.const | PointerOps.const ]
   [@@deriving show { with_path = false }, eq, ord]
+
+  type const = [ prim_const | RecordOps.const | `Sort of const ADTOps.t ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  module ADT = struct
+    type 'a t = { name : string; fields : string * 'a }
+  end
 
   type unary =
     [ IntOps.unary
@@ -317,6 +356,7 @@ module AllOps = struct
     | `Bitvector v -> return (Bitvector (Bitvec.size v))
     | `Pointer (v, ty) -> return (Pointer ty)
     | `Record ((fields, typ) : Record.t) -> return typ
+    | `Sort s -> return (ADTOps.get_typ s)
 
   let ret_type_lambda (o : [< lambda ]) args a =
     let open Types in
@@ -338,10 +378,16 @@ module AllOps = struct
         match a with
         | Bitvector s -> return @@ Bitvector (sz + s)
         | o -> Conflict [ (o, "<bitvector") ])
-    | `FACCESS offset ->
-        let { typ; _ } = get_field offset a in
-        return typ
-    | `Forall -> return Boolean
+    | `ReadField field -> (
+        match a with
+        | Sort _ ->
+            return
+            @@ Option.get_exn_or "no such field"
+            @@ adt_record_field field a
+        | Struct _ ->
+            let { typ } = struct_field field a in
+            return typ
+        | _ -> failwith "not a struct")
     | `BVNEG -> return a
     | `INTNEG -> return Integer
     | `Old -> return a
@@ -369,7 +415,7 @@ module AllOps = struct
     | `BVUDIV | `BVUREM | `BVSHL | `BVLSHR | `BVNAND | `BVSUB | `BVSDIV
     | `BVSREM | `BVSMOD | `BVASHR ->
         return l
-    | `FSET _ -> return r
+    | `WriteField _ -> return l
     | `PTRADD -> return l
     | `MapAccess ->
         let m, r = Types.uncurry l in
@@ -410,8 +456,9 @@ module AllOps = struct
 
   (** ops returning booleans *)
 
-  let to_string (op : [< const | unary | binary | intrin | lambda ]) =
+  let rec to_string (op : [< const | unary | binary | intrin | lambda ]) =
     match op with
+    | `Sort v -> ADTOps.to_string to_string v
     | `BVADD -> "bvadd"
     | `BVSREM -> "bvsrem"
     | `BVSDIV -> "bvsdiv"
@@ -431,8 +478,8 @@ module AllOps = struct
     | `Exists -> "exists"
     | `SignExtend n -> Printf.sprintf "sign_extend_%d" n
     | `ZeroExtend n -> Printf.sprintf "zero_extend_%d" n
-    | `FSET offset -> Printf.sprintf "fset_%s" offset
-    | `FACCESS offset -> Printf.sprintf "asdfaccess_%s" offset
+    | `WriteField offset -> "write_field_" ^ offset
+    | `ReadField offset -> "read_field_" ^ offset
     | `PTRADD -> "ptradd"
     | `EQ -> "eq"
     | `INTADD -> "intadd"

@@ -118,7 +118,7 @@ and transProcDef (x : procDef) : result = match x with
 
 
 and transField (x : field) : result = match x with
-    Field1 (openparen0, str, openparen, type', intval, closeparen1, closeparen) -> failure x
+    Field1 (str, openparen, type', intval, closeparen) -> failure x
 
 
 and transIntType (x : intType) : result = match x with
@@ -329,11 +329,13 @@ and transExpr (x : expr) : result = match x with
   | Expr_SignExtend (openparen, intval, expr, closeparen) -> failure x
   | Expr_Extract (openparen, intval0, intval, expr, closeparen) -> failure x
   | Expr_Concat (openparen, exprs, closeparen) -> failure x
-  | Expr_FSet (openparen, str, expr0, expr, closeparen) -> failure x
-  | Expr_FAccess (openparen, str, expr, closeparen) -> failure x
+  | Expr_Ite (expr0, expr1, expr) -> failure x
   | Expr_Match (expr, openparen, cases, closeparen) -> failure x
   | Expr_Cases (openparen, cases, closeparen) -> failure x
   | Expr_Paren (openparen, expr, closeparen) -> failure x
+  | Expr_Field (expr, bident) -> failure x
+  | Expr_FieldSet (expr0, localident, expr) -> failure x
+  | SortValRec (localident, beginrec, fieldassigns, endrec) -> failure x
 
 
 and transLambdaDef (x : lambdaDef) : result = match x with
@@ -361,6 +363,10 @@ and transUnOp (x : unOp) : result = match x with
 and transCase (x : case) : result = match x with
     CaseCase (expr0, expr) -> failure x
   | CaseDefault expr -> failure x
+
+
+and transFieldAssign (x : fieldAssign) : result = match x with
+    FieldAssign1 (localident, expr) -> failure x
 
 
 and transEqOp (x : eqOp) : result = match x with

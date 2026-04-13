@@ -38,11 +38,13 @@ The serialise -> parse serialise loop should be idempotent
 Memassign repr
 
   $ diff beforemem.il aftermem.il
-
   $ cat aftermem.il
   var observable $Global_4325420_4325424:bv32 classification true;
-  let $mul_2 (a:bv64), (b:bv64) : bv64 = (bvadd(b:bv64, bvmul(a:bv64, 0x2:bv64)));
-  let $three : bv64 = let func (a:bv64) : bv64 = (bvadd(a:bv64, 0x1:bv64)) in ((func:(bv64->bv64))(($mul_2:((bv64)->(bv64->bv64)))(0x2:bv64,
+  let $a : UninterpSort = (UninterpSort)();
+  let $b : record = (Record)(0x1:bv64, 0x2:bv64, 0x3:bv64);
+  let $mul_2 (a:bv64), (b:bv64) : bv64 = (bvadd(b, bvmul(a, 0x2:bv64)));
+  let $test (a:bv64) : bv64 = (if eq(a, 0x1:bv64) then 0xa:bv64 else 0xb:bv64);
+  let $three : bv64 = let func (a:bv64) : bv64 = (bvadd(a, 0x1:bv64)) in ((func)(($mul_2)(0x2:bv64,
            0x1:bv64)));
   type UninterpSort;
   type ilist = Cons of {head: bv64; tail: ilist} | Nil;
@@ -74,6 +76,4 @@ Memassign repr
 Record and Pointer
 
   $ diff ptrrec1.il ptrrec2.il
-
-
   $ diff ptrrec2.il ptrrec3.il

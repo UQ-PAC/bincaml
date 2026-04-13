@@ -1,0 +1,5 @@
+(load-il "../../examples/const.il")
+(run-transforms "cf-expressions" "ssa")
+(dump-il "before.il")
+(run-transforms "linear-const")
+(dump-il "after.il")

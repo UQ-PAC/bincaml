@@ -9,11 +9,11 @@ position token INTTYPE {"int"} ;
 position token BOOLTYPE {"bool"} ;
 position token POINTERTYPE {"ptr"} ;
 
-{- position token UserIdent '`' ((upper | letter | '_' | '#')(upper | letter | digit | ["_.$#"])*) '`'; -}
-position token BIdent '.'((upper | letter | '_')(upper | letter | digit | ["_.$#~"])*) ;
+{- position token UserIdent '`' ((upper | letter | '_' | '#')(upper | letter | digit | ["_$#"])*) '`'; -}
+position token BIdent '.'((upper | letter | '_')(upper | letter | digit | ["_$#~"])*) ;
 
-position token LocalIdent ('#' | upper | letter | '_')((upper | letter | digit | ["_.$#"])*);
-position token GlobalIdent '$' ((upper | letter | digit | ["_.$#"])+);
+position token LocalIdent ('#' | upper | letter | '_')((upper | letter | digit | ["_$#"])*);
+position token GlobalIdent '$' ((upper | letter | digit | ["_$#"])+);
 
 position token BlockIdent '%' ((upper | letter | digit | ["_.$#"])+);
 
@@ -73,7 +73,7 @@ ProcDef_Empty . ProcDef ::= ;
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
 separator Field "," ;
-Field1 . Field ::= OpenParen Str ":" OpenParen Type "," IntVal CloseParen CloseParen ;
+Field1 . Field ::= Str ":" OpenParen Type "," IntVal CloseParen ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
@@ -273,16 +273,26 @@ Expr_ZeroExtend . Expr2 ::= "zero_extend" OpenParen IntVal "," Expr CloseParen ;
 Expr_SignExtend . Expr2 ::= "sign_extend" OpenParen IntVal "," Expr CloseParen ;
 Expr_Extract    . Expr2 ::= "extract" OpenParen IntVal "," IntVal "," Expr CloseParen ;
 Expr_Concat     . Expr2 ::= "bvconcat"  OpenParen [Expr]  CloseParen ;
-Expr_FSet       . Expr2 ::= "fset" OpenParen Str "," Expr "," Expr CloseParen ;
-Expr_FAccess    . Expr2 ::= "faccess" OpenParen Str "," Expr CloseParen ;
+
 
 CaseCase . Case ::= Expr "->" Expr  ;
 CaseDefault . Case ::=  "_" "->" Expr ;
 separator Case "|" ;
 
+Expr_Ite . Expr2 ::= "if" Expr "then" Expr "else" Expr ;
 Expr_Match . Expr2 ::= "match" Expr "with" OpenParen [Case] CloseParen ;
 Expr_Cases . Expr2 ::= "cases" OpenParen [Case] CloseParen ;
 Expr_Paren . Expr2 ::= OpenParen Expr CloseParen ;
+
+
+Expr_Field      . Expr ::= Expr2 BIdent;
+Expr_FieldSet   . Expr2 ::= Expr2 "with" LocalIdent "=" Expr ;
+
+rules FieldAssign ::= LocalIdent "=" Expr ;
+separator FieldAssign ";";
+
+SortValRec . Expr ::= LocalIdent BeginRec [FieldAssign] EndRec;
+
 
 -- operators
 

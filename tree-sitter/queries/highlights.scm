@@ -20,6 +20,7 @@
 "var" @keyword
 "memory" @keyword
 "shared" @keyword.modifier
+"type" @keyword
 [ "rely"
   "relies"
   "guarantee"
@@ -31,15 +32,22 @@
   "captures"
   "modifies"
   "classification"
-  "invariant" ] @keyword
+  "let"
+  "in"
+  "fun"
+  "invariant"
+  "of"
+  "ptr" ] @keyword
 [ "forall"
   "exists"
-  "fun"
   "old" ] @keyword.operator
 
 [ "match"
   "with"
-  "cases" ] @keyword.conditional
+  "cases"
+  "if"
+  "then"
+  "else"] @keyword.conditional
 
 (IntVal) @number
 (token_IntegerHex) @number
@@ -52,10 +60,15 @@
 (token_INTTYPE) @type.builtin
 (token_BOOLTYPE) @type.builtin
 (token_BIdent) @variable.member
+(SumCase (token_LocalIdent) @constructor)
+(RecordField (token_LocalIdent) @variable.member)
+(FieldVal (token_Str) @variable.member)
+(Decl . "type" . (token_LocalIdent) @type.definition)
+(TypeAssign (token_LocalIdent) @type.definition)
 
 (token_BlockIdent) @function.call
 (Block (token_BlockIdent) @function)
-"block" @keyword.conditional
+"block" @keyword.function
 
 (token_ProcIdent) @function.call
 (Decl (token_ProcIdent) @function)
@@ -132,8 +145,8 @@
   (token_CloseParen)
 ] @punctuation.bracket
 
-[ ";" "," ] @punctuation.delimiter
-[ ":" "=" ":=" "::" ] @punctuation
+[ ";" "," "=" ] @punctuation.delimiter
+[ ":" ":=" "::" "mem:=" ] @punctuation
 [ (token_BeginRec)
   (token_EndRec)
   (token_BeginList)
@@ -142,3 +155,16 @@
 (token_Str) @string
 (token_CommentMulti) @comment
 (token_CommentSingle) @comment
+
+(Expr1
+  (Expr1
+    (Expr2 [(Value) (LocalVar) (GlobalVar)] @function.call)
+  )
+  .
+  (token_OpenParen))
+
+(Expr (token_LocalIdent) @constructor . (token_BeginRec))
+(FieldAssign (token_LocalIdent) @variable.member . "=")
+
+(Decl "let" . (token_GlobalIdent) @function . (list_LocalVarParen))
+(Expr "let" . (token_LocalIdent) @function . (list_LocalVarParen))

@@ -121,6 +121,13 @@ module PassManager = struct
          control flow graph and prints results";
     }
 
+  let demo_dfg_gamma =
+    {
+      name = "demo-dfg-gamma-analysis";
+      apply = DFGAnalysis (module Analysis.Gamma_domain.DFGAnalysis);
+      doc = "Runs a gamma analysis on a data flow graph and prints results";
+    }
+
   let remove_unused =
     {
       name = "remove-unused-decls";
@@ -146,6 +153,13 @@ module PassManager = struct
       doc = "Remove blocks unreachable from entry";
     }
 
+  let irreducible_loop =
+    {
+      name = "irreducible-loops";
+      apply = Proc Transforms.Irreducible_loop.transform;
+      doc = "Remove blocks unreachable from entry";
+    }
+
   let full_ssa =
     {
       name = "ssa";
@@ -162,8 +176,104 @@ module PassManager = struct
       doc = "Fail if the IR program is not type correct";
     }
 
+  let split_memory_encoding =
+    {
+      name = "split-memory-encoding";
+      apply = Prog Transforms.Memory_encoding.split_transform;
+      doc = "Generates a split base/offset pair memory encoding/model";
+    }
+
+  let flat_memory_encoding =
+    {
+      name = "flat-memory-encoding";
+      apply = Prog Transforms.Memory_encoding.flat_transform;
+      doc = "Generates a flat (heavily quantified) memory encoding/model";
+    }
+
+  let memory_specification =
+    {
+      name = "memory-specification";
+      apply = Prog Transforms.Memory_specification.transform;
+      doc = "Specifies programs for memory safety";
+    }
+
+  let intra_function_summaries =
+    {
+      name = "intra-function-summaries";
+      apply = Proc Transforms.Function_summaries.intraproc_transform;
+      doc =
+        "Generate function summaries for each procedure independently. The \
+         generated summaries will be a refinement with respect to wp logic \
+         only, i.e. all \"correct\" inputs will remain allowed, and all \
+         described outputs will be \"correct\". There is no guarantee of \
+         completeness.";
+    }
+
+  let inter_function_summaries =
+    {
+      name = "inter-function-summaries";
+      apply = Prog Transforms.Function_summaries.interproc_transform;
+      doc =
+        "Generate function summaries for each procedure intraprocedurally. \
+         Summaries generated for called procedures will be used in the \
+         generation of caller procedures. The generated summaries will be a \
+         refinement with respect to wp logic only, i.e. all \"correct\" inputs \
+         will remain allowed, and all described outputs will be \"correct\". \
+         There is no guarantee of completeness. Depends on Z3.";
+    }
+
+  let cf_exprs =
+    {
+      name = "cf-expressions";
+      apply = Proc Transforms.Cf_tx.simplify_proc_exprs_default;
+      doc =
+        "Perform intra-expression simplifications and constant folding for \
+         whole program";
+    }
+
+  let inter_dead =
+    {
+      name = "inter-dead-store-elim";
+      apply =
+        Prog
+          (Transforms.Livevars.InterprocDSE.transform
+             (not % Bincaml_util.Var.is_local));
+      doc =
+        "Remove store assignments to pure local variables which are never read \
+         using an interprocedural analysis";
+    }
+
+  let linear_const =
+    {
+      name = "linear-const";
+      apply = Prog Transforms.Const_prop.linear_transform;
+      doc =
+        "Performs interprocedural constant propagation of linear expressions \
+         (expressions of the form a * x + b). Usage of constant variables are \
+         replaced with their constant value. Newly dead variables are not \
+         eliminated. Assumes SSA form.";
+    }
+
+  let copy_prop =
+    {
+      name = "copy-prop";
+      apply = Prog Transforms.Copyprop.transform;
+      doc = "Interprocedural variable copy propagation. Require SSA form.";
+    }
+
+  let simp =
+    {
+      name = "simplify";
+      apply = Batch [ linear_const; copy_prop; cf_exprs; inter_dead ];
+      doc =
+        "Performs some simplifications (linear constant propagation, copy \
+         propagation, constant folding, dead store elimination). Requires SSA \
+         form.";
+    }
+
   let passes =
     [
+      irreducible_loop;
       cleanup_cfg;
       dfg_bool;
       dfg_ival_wint_product;
@@ -171,12 +281,22 @@ module PassManager = struct
       demo_ival_wint_dfg;
       cfg_wrapped_int;
       cfg_tnum_wint_reduced;
+      demo_dfg_gamma;
       sparams;
       read_uninit false;
       read_uninit true;
       sssa;
       full_ssa;
       type_check;
+      split_memory_encoding;
+      memory_specification;
+      intra_function_summaries;
+      inter_function_summaries;
+      cf_exprs;
+      inter_dead;
+      linear_const;
+      copy_prop;
+      simp;
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;
@@ -185,32 +305,24 @@ module PassManager = struct
            whole program and write smt log of rewrites to a file.";
       };
       {
-        name = "cf-expressions";
-        apply = Proc Transforms.Cf_tx.simplify_proc_exprs_default;
-        doc =
-          "Perform intra-expression simplifications and constant folding for \
-           whole program";
-      };
-      {
         name = "intra-dead-store-elim";
         apply = Proc Transforms.Livevars.DSE.sane_transform;
         doc =
           "Remove store assignments to pure local variables which are never \
            read ";
       };
-      {
-        name = "ide-live";
-        apply = Prog Transforms.Ide.transform;
-        doc =
-          "Write the results of an ide based live variable analysis to .dot \
-           files";
-      };
       remove_unused;
       {
         name = "lambda-lifting";
         apply =
-          Prog (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
+          Prog
+            (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
+      };
+      {
+        name = "gamma-vars";
+        apply = Prog Transforms.Gamma_vars.transform;
+        doc = "Replace gamma expressions with gamma variables";
       };
     ]
 
@@ -255,7 +367,7 @@ module PassManager = struct
     | Prog tf -> tf p
     | Batch tf -> List.fold_left run_transform p tf
     | DFGAnalysis (module D : Analysis.Dataflow_graph.AnalysisType) ->
-        ID.Map.to_iter p.procs
+        IDMap.to_iter p.procs
         |> Iter.filter (fun (_, p) -> Procedure.graph p |> Option.is_some)
         |> Iter.iter (fun (pn, p) ->
             (*let r =
@@ -276,7 +388,7 @@ module PassManager = struct
         p
     | ProcCheck app ->
         let _ =
-          ID.Map.mapi
+          IDMap.mapi
             (fun id proc ->
               Trace_core.with_span ~__FILE__ ~__LINE__
                 ("check-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
@@ -289,7 +401,7 @@ module PassManager = struct
         p
     | Proc app ->
         let procs =
-          ID.Map.mapi
+          IDMap.mapi
             (fun id proc ->
               Trace_core.with_span ~__FILE__ ~__LINE__
                 ("transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id)

@@ -103,6 +103,26 @@ let map_fold_forwards ~(phi : 'acc -> 'v phi list -> 'acc * 'v phi list)
 let map ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
   { stmts = Vector.map f b.stmts; phis = phi b.phis }
 
+(** Modify stmt list by creating a mutable copy of the underlying vector *)
+let fmap_stmts_copy (f : (('a, 'a, 'b) Stmt.t, 'c) Vector.t -> unit) b =
+  let v = Vector.copy b.stmts in
+  f v;
+  { b with stmts = Vector.freeze v }
+
+(** prepend statements to block statement list (copies underlying vector) *)
+let prepend_stmts (b : ('v, 'e) t) (nstmts : ('v, 'v, 'e) Stmt.t list) :
+    ('v, 'e) t =
+  let stmts = Vector.create () in
+  Vector.append_list stmts nstmts;
+  Vector.append stmts b.stmts;
+  let stmts = Vector.freeze stmts in
+  { b with stmts }
+
+(** append statements to block statement list (copies underlying vector) *)
+let append_stmts (b : ('v, 'e) t) (stmt : ('v, 'v, 'e) Stmt.t list) :
+    ('vv, 'ee) t =
+  fmap_stmts_copy (fun v -> Vector.append_list v stmt) b
+
 let flat_map ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
   {
     stmts =
