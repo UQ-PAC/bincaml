@@ -11,6 +11,7 @@ Run on basic irreducible loop example
   (run-transforms simple-ssa)
   (dump-il after.il)
   (load-il after.il)
+  wellformedness:non-equal variables with same name: { Var.V.name = "R1_1"; typ = bv64; scope = Var.LocalVar } { Var.V.name = "R1_1"; typ = bv64; scope = Var.LocalConst }
   (dump-il after_reparsed.il)
   ()
   ()
@@ -100,7 +101,6 @@ Run on basic irreducible loop example
        $R0:bv64 := 0x0:bv64;
        $R0:bv64 := bvadd($R0, 0x820:bv64);
        $R30:bv64 := 0x7a0:bv64;
-       
        call @puts_1584();
        goto (%main_3);
      ];
@@ -119,7 +119,6 @@ Run on basic irreducible loop example
        $R0:bv64 := 0x0:bv64;
        $R0:bv64 := bvadd($R0, 0x820:bv64);
        $R30:bv64 := 0x7d0:bv64;
-       
        call @puts_1584();
        goto (%main_17);
      ];
@@ -147,7 +146,6 @@ Run on basic irreducible loop example
        $R0:bv64 := 0x0:bv64;
        $R0:bv64 := bvadd($R0, 0x828:bv64);
        $R30:bv64 := 0x7f4:bv64;
-       
        call @puts_1584();
        goto (%main_13);
      ];
@@ -240,9 +238,9 @@ Run on basic irreducible loop example
        let R30_4:bv64 := 0x7a0:bv64;
        (let CF_7:bv1=CF_out, let NF_7:bv1=NF_out, let R0_16:bv64=R0_out,
           let R1_5:bv64=R1_out, let R29_6:bv64=R29_out, let R30_5:bv64=R30_out,
-          let R31_6:bv64=R31_out, let VF_7:bv1=VF_out, let ZF_10:bv1=ZF_out) := 
-       call @puts_1584(CF_in=CF_6, NF_in=NF_6, R0_in=R0_15, R1_in=R1_4, R29_in=R29_5,
-          R30_in=R30_4, R31_in=R31_5, VF_in=VF_6, ZF_in=ZF_9);
+          let R31_6:bv64=R31_out, let VF_7:bv1=VF_out, let ZF_10:bv1=ZF_out) := call @puts_1584(CF_in=CF_6,
+          NF_in=NF_6, R0_in=R0_15, R1_in=R1_4, R29_in=R29_5, R30_in=R30_4,
+          R31_in=R31_5, VF_in=VF_6, ZF_in=ZF_9);
        goto (%main_3);
      ];
      block %main_3 [
@@ -270,9 +268,9 @@ Run on basic irreducible loop example
        let R30_2:bv64 := 0x7d0:bv64;
        (let CF_4:bv1=CF_out, let NF_4:bv1=NF_out, let R0_10:bv64=R0_out,
           let R1_3:bv64=R1_out, let R29_4:bv64=R29_out, let R30_3:bv64=R30_out,
-          let R31_4:bv64=R31_out, let VF_4:bv1=VF_out, let ZF_6:bv1=ZF_out) := 
-       call @puts_1584(CF_in=CF_3, NF_in=NF_3, R0_in=R0_9, R1_in=R1_2, R29_in=R29_3,
-          R30_in=R30_2, R31_in=R31_3, VF_in=VF_3, ZF_in=ZF_5);
+          let R31_4:bv64=R31_out, let VF_4:bv1=VF_out, let ZF_6:bv1=ZF_out) := call @puts_1584(CF_in=CF_3,
+          NF_in=NF_3, R0_in=R0_9, R1_in=R1_2, R29_in=R29_3, R30_in=R30_2,
+          R31_in=R31_3, VF_in=VF_3, ZF_in=ZF_5);
        goto (%main_17);
      ];
      block %main_17 [
@@ -303,9 +301,9 @@ Run on basic irreducible loop example
        let R30_6:bv64 := 0x7f4:bv64;
        (let CF_8:bv1=CF_out, let NF_8:bv1=NF_out, let R0_24:bv64=R0_out,
           let R1_7:bv64=R1_out, let R29_7:bv64=R29_out, let R30_7:bv64=R30_out,
-          let R31_7:bv64=R31_out, let VF_8:bv1=VF_out, let ZF_12:bv1=ZF_out) := 
-       call @puts_1584(CF_in=CF_5, NF_in=NF_5, R0_in=R0_23, R1_in=R1_3, R29_in=R29_4,
-          R30_in=R30_6, R31_in=R31_4, VF_in=VF_5, ZF_in=ZF_11);
+          let R31_7:bv64=R31_out, let VF_8:bv1=VF_out, let ZF_12:bv1=ZF_out) := call @puts_1584(CF_in=CF_5,
+          NF_in=NF_5, R0_in=R0_23, R1_in=R1_3, R29_in=R29_4, R30_in=R30_6,
+          R31_in=R31_4, VF_in=VF_5, ZF_in=ZF_11);
        goto (%main_13);
      ];
      block %main_13 [ goto (%main_11); ];

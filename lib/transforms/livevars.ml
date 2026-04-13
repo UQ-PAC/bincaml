@@ -6,15 +6,6 @@ open Lang
 open Expr
 open Types
 
-(** live vars transfer function for a statement *)
-let tf_stmt_live init s =
-  let assigns = VarSet.diff init (Stmt.assigned VarSet.empty s) in
-  Stmt.free_vars assigns s
-
-(** live vars transfer function for a block *)
-let tf_block (init : VarSet.t) (b : (Var.t, BasilExpr.t) Block.t) =
-  Block.fold_backwards ~f:tf_stmt_live ~phi:(fun f _ -> f) ~init b
-
 (** Bourdoncle live-variable analysis using ocamlgraph's chaotic iteration *)
 module LV =
   Graph.ChaoticIteration.Make
@@ -32,7 +23,7 @@ module LV =
       let widening a b = VarSet.union a b
 
       let analyze (e : edge) d =
-        match G.E.label e with Block b -> tf_block d b | _ -> d
+        match G.E.label e with Block b -> Block.free_vars ~init:d b | _ -> d
     end)
 
 let run (p : Program.proc) =
@@ -116,7 +107,9 @@ module DSE = struct
                |> Iter.for_all (fun v ->
                    Var.is_local v && (not @@ VarSet.mem v live))
           in
-          let live = VarSet.filter Var.is_local @@ tf_stmt_live live s in
+          let live =
+            VarSet.filter Var.is_local @@ Stmt.free_vars ~init:live s
+          in
           let s = if dead_store then acc else s :: acc in
           (live, s))
         b

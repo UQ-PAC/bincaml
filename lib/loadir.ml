@@ -1060,11 +1060,16 @@ module BasilASTLoader = struct
         BasilExpr.rvar v
     | Expr_Local (LocalUntyped g) ->
         BasilExpr.rvar @@ lookup_local_decl ~binds g p_st
-    | Expr_Local (LocalTyped (g, type')) ->
-        BasilExpr.rvar
-        @@ Var.create ~scope:LocalVar
-             (unsafe_unsigil (`Local g))
-             (trans_type type')
+    | Expr_Local (LocalTyped (g, type')) -> (
+        try BasilExpr.rvar @@ lookup_local_decl ~binds g p_st
+        with Not_found | LoadError _ ->
+          let v =
+            Var.create ~scope:LocalVar
+              (unsafe_unsigil (`Local g))
+              (trans_type type')
+          in
+          print_endline @@ "warn: local use before def: " ^ Var.to_string v;
+          BasilExpr.rvar v)
     | Expr_Assoc (binop, _, rs, _) -> (
         match transBoolBinOp binop with
         | #AllOps.intrin as op ->
@@ -1394,10 +1399,16 @@ let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
         Procedure.G.add_edge g (End bid) Return)
       proc
   in
+  let bl = Procedure.get_block proc bid |> Option.get_exn_or "" in
+  let inparam =
+    Block.free_vars bl |> VarSet.filter Var.is_local |> VarSet.to_list
+    |> List.map (fun x -> (Var.name x, x))
+    |> StringMap.of_list
+  in
+  let proc = Procedure.map_formal_in_params (fun _ -> inparam) proc in
   let prog =
     { prog with procs = IDMap.add (Procedure.id proc) proc prog.procs }
   in
-  let bl = Procedure.get_block proc bid |> Option.get_exn_or "" in
   let globals =
     Iter.append (Block.read_vars_iter bl) (Block.assigned_vars_iter bl)
     |> Iter.filter Var.is_global

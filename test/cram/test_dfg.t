@@ -1,6 +1,9 @@
 Check output of DFG analysis with basic loop program
 
   $ bincaml script loop_dfg.sexp
+  (load-il ../../examples/loop.il)
+  (run-transforms ssa)
+  (run-transforms demoprint-dfg-ivalbits-product)
   tnumWintReduceProductMapLattice :: @main
   (_->⊥, R0_in:bv64->(⊤, ⊤), R1_in:bv64->(⊤, ⊤),
        R0_out:bv64->(0000000000000000000000000000000000000000000000000000000000001010, ⟦0xa:bv64, 0xa:bv64⟧),

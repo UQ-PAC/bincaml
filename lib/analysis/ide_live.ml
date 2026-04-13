@@ -158,7 +158,7 @@ module IDELive = struct
               (Iter.singleton (d, IdEdge))
               assigns
         (* If a variable is marked live then don't transfer relations too *)
-        | _ when VarSet.mem v @@ Stmt.free_vars VarSet.empty stmt -> Iter.empty
+        | _ when VarSet.mem v @@ Stmt.free_vars stmt -> Iter.empty
         (* The index variables of a memory read are always live regardless of if
            the lhs was dead, since there are still side effects of reading
            memory ? *)
@@ -226,7 +226,7 @@ module IDELiveSSI = struct
                   |> Iter.map (fun v' -> (Label v', IdEdge))
                 else Iter.empty)
         (* If a variable is marked live then don't transfer relations too *)
-        | _ when VarSet.mem v @@ Stmt.free_vars VarSet.empty s -> Iter.empty
+        | _ when VarSet.mem v @@ Stmt.free_vars s -> Iter.empty
         (* The index variables of a memory read are always live regardless of if
            the lhs was dead, since there are still side effects of reading
            memory ? *)

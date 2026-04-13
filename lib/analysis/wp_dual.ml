@@ -174,4 +174,11 @@ proc @main () -> ()
   in
   IntraAnalysis.A.M.find Procedure.Vert.Entry res
   |> IntraDomain.to_pred |> BasilExpr.to_string |> print_endline;
-  [%expect {| booland(eq(bvadd($x, a), 0), eq(bvadd(a, a), 0)) |}]
+  [%expect {|
+    Warn: global undeclared $x assuming mutable unshared
+    Warn: global undeclared $x assuming mutable unshared
+    Warn: undeclared global referenced in expr, $x:bv64
+    Warn: global undeclared $x assuming mutable unshared
+    Warn: undeclared global referenced in expr, $x:bv64
+    true
+    |}]

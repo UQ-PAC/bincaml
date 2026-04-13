@@ -1,9 +1,21 @@
 
   $ bincaml script roundtrip.sexp
-  bincaml: Error in (load-il beforemem.il): Parse error:  beforemem.il:3
-           3 | let $b : record = Record of {a: bv64; b: bv32; c: bv64} = (Record)(0x1:bv64,
-                                        ^^
-            at Dune__exe__Script.of_cmd.(fun) bin/script.ml:85
+  (load-il ../../examples/irreducible_loop_1.il)
+  (dump-il before.il)
+  (load-il before.il)
+  (dump-il after.il)
+  (load-il ../../examples/x-output.il)
+  (dump-il before2.il)
+  (load-il before2.il)
+  (dump-il after2.il)
+  ()
+  (load-il memassign.il)
+  (dump-il beforemem.il)
+  (load-il beforemem.il)
+  bincaml: Error in (load-il beforemem.il): Parse error:  beforemem.il:7
+           7 | type $a : UninterpSort = (UninterpSort)();
+                    ^^
+            at Dune__exe__Script.of_cmd.(fun) bin/script.ml:87
   [123]
 
 The serialise -> parse serialise loop should be idempotent
@@ -17,15 +29,15 @@ The serialise -> parse serialise loop should be idempotent
   <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
   ---
   >     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
-  121c121
+  118c118
   <    block %main_basil_return_1 [ nop; return; ]
   ---
   >    block %main_basil_return_1 [ return; ]
-  125c125
+  122c122
   <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
   ---
   >     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
-  127c127
+  124c124
   <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
   ---
   >     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
@@ -36,8 +48,8 @@ The serialise -> parse serialise loop should be idempotent
   <   modifies $mem:(bv64->bv8), $stack:(bv64->bv8)
   <   captures $mem:(bv64->bv8), $stack:(bv64->bv8)
   ---
-  >   modifies $stack:(bv64->bv8), $mem:(bv64->bv8)
-  >   captures $stack:(bv64->bv8), $mem:(bv64->bv8)
+  >   modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $mem:(bv64->bv8)
+  >   captures $mem:(bv64->bv8), $stack:(bv64->bv8), $mem:(bv64->bv8)
   [1]
 
 Memassign repr

@@ -7,9 +7,7 @@ type scope = LocalConst | LocalVar | GlobalVar | GlobalConst | GlobalVarShared
 open struct
   module V = struct
     type t = { name : string; typ : Types.t; scope : scope }
-    [@@deriving eq, ord]
-
-    let show (v : t) : string = Printf.sprintf "%s:%s" v.name (Types.show v.typ)
+    [@@deriving eq, ord, show]
 
     let hash v =
       Hash.(combine3 (Hash.string v.name) (Hash.poly v.scope) (Hash.poly v.typ))
@@ -36,20 +34,16 @@ include (
         }
 
     let to_int (v : V.t Fix.HashCons.cell) = v.id
-
-    let show v =
-      Printf.sprintf "{id=%d ; data=%s}" (Fix.HashCons.id v)
-        (V.show (Fix.HashCons.data v))
-
+    let show v = V.show (Fix.HashCons.data v)
     let equal (a : t) (b : t) : bool = Fix.HashCons.equal a b
     let compare (a : t) (b : t) : int = Fix.HashCons.compare a b
-    let pp fmt v = Format.pp_print_string fmt (show v)
-    let to_string v = V.show (Fix.HashCons.data v)
-    let pretty v = Containers_pp.text (to_string v)
     let name (e : t) = (Fix.HashCons.data e).name
     let scope (e : t) = (Fix.HashCons.data e).scope
     let typ (e : t) = (Fix.HashCons.data e).typ
     let hash (a : t) = Fix.HashCons.hash a
+    let to_string v = name v ^ ":" ^ Types.to_string @@ typ v
+    let pp fmt v = Format.pp_print_string fmt (to_string v)
+    let pretty v = Containers_pp.text (to_string v)
   end :
     sig
       type t

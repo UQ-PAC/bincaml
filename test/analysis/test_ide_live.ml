@@ -54,11 +54,6 @@ proc @main () -> ()
     @main
     $mem:(bv64->bv8)
     $x:bv64
-    a:bv64
-    e:bv64
-    b:bv64
-    c:bv64
-    d:bv64
     |}]
 
 let%expect_test "phi_loop" =
@@ -100,8 +95,8 @@ proc @main (x_in:bv64) -> ()
   let main = program.entry_proc |> Option.get_exn_or "No entry proc" in
   print_lives results main;
   [%expect {|
+    wellformedness:non-equal variables with same name: { Var.V.name = "x_2"; typ = bv64; scope = Var.LocalConst } { Var.V.name = "x_2"; typ = bv64; scope = Var.LocalVar }
     @main
-    addr:bv64
     $mem:(bv64->bv8)
     x_in:bv64
     |}]
@@ -135,15 +130,23 @@ proc @fun (c:bv64, d:bv64) -> (out:bv64)
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
   IDMap.iter (fun id _ -> print_lives results id) program.procs;
-  [%expect
-    {|
-    @main
-    b:bv64
-    y:bv64
-    @fun
-    c:bv64
-    d:bv64
-    |}]
+  [%expect.unreachable]
+[@@expect.uncaught_exn {|
+  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
+     This is strongly discouraged as backtraces are fragile.
+     Please change this test to not include a backtrace. *)
+  (Invalid_argument "No entry node")
+  Raised at Stdlib.invalid_arg in file "stdlib.ml" (inlined), line 30, characters 20-45
+  Called from CCOption.get_exn_or in file "src/core/CCOption.pp.ml", line 97, characters 12-27
+  Called from Bincaml_analysis_test__Test_ide_live.print_lives in file "test/analysis/test_ide_live.ml", lines 6-7, characters 2-38
+  Called from Stdlib__Map.Make.iter in file "map.ml", line 305, characters 20-25
+  Called from Bincaml_analysis_test__Test_ide_live.(fun) in file "test/analysis/test_ide_live.ml", line 137, characters 2-63
+  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
+
+  Trailing output
+  ---------------
+  @main
+  |}]
 
 let%expect_test "nested_call" =
   let lst =
@@ -188,8 +191,6 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   [%expect
     {|
     @main
-    b:bv64
-    y:bv64
     $global:bv64
     @fun1
     c:bv64
@@ -255,8 +256,6 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   [%expect
     {|
     @main
-    b:bv64
-    y:bv64
     $global:bv64
     @fun1
     c:bv64

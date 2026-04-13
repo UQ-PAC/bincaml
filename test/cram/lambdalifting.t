@@ -39,17 +39,15 @@ written by @caller.  After the pass:
   >   
   16a15
   >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
-  18,21c17,20
+  18,20c17,19
   <      $y:bv32 := 0x0:bv32;
   <      $x:bv32 := 0x1:bv32;
-  <      
   <      call @callee();
   ---
   >      var y:bv32 := 0x0:bv32;
   >      var x:bv32 := 0x1:bv32;
-  >      (var x:bv32=x_out) := 
-  >      call @callee(x_in=x, y_in=y);
-  24c23,24
+  >      (var x:bv32=x_out) := call @callee(x_in=x, y_in=y);
+  23c22,23
   <    block %ret [ nop; return; ]
   ---
   >    block %ret [ nop; goto (%returns); ];
@@ -105,17 +103,15 @@ all global refs in requires (not just those under Old) become in-params.
   >   
   22a16
   >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
-  24,27c18,21
+  24,26c18,20
   <      $y:bv32 := 0x0:bv32;
   <      $x:bv32 := 0x1:bv32;
-  <      
   <      call @callee();
   ---
   >      var y:bv32 := 0x0:bv32;
   >      var x:bv32 := 0x1:bv32;
-  >      (var x:bv32=x_out) := 
-  >      call @callee(x_in=x, y_in=y);
-  30c24,25
+  >      (var x:bv32=x_out) := call @callee(x_in=x, y_in=y);
+  29c23,24
   <    block %ret [ nop; return; ]
   ---
   >    block %ret [ nop; goto (%returns); ];

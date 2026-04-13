@@ -50,6 +50,9 @@ let%expect_test "fold_block" =
   ();
   [%expect {|
     Warn: global undeclared $stack assuming mutable unshared
+    warn: local use before def: R31_in:bv64
+    warn: local use before def: R0_in:bv64
+    warn: local use before def: R31_in:bv64
     Warn: global undeclared $mem assuming mutable unshared
     $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in,
      0xfffffffffffffffc:bv64) extract(32,0, R0_in) 32

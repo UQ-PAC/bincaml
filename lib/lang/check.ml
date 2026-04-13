@@ -29,9 +29,21 @@ let sigil_ok v =
   | _ -> ()
 
 let variables_wf p =
+  let ref_vars = ref StringMap.empty in
+  let ref_var v =
+    match StringMap.find_opt (Var.name v) !ref_vars with
+    | Some v' ->
+        if not (Var.equal v' v) then
+          raise
+            (IRWellformed
+               ("non-equal variables with same name: " ^ Var.show v ^ " "
+              ^ Var.show v'))
+    | _ -> ref_vars := StringMap.add (Var.name v) v !ref_vars
+  in
   let spec = Procedure.specification p in
-  let is_declared n =
-    (*sigil_ok n;*)
+  let var_is_ok n =
+    sigil_ok n;
+    ref_var n;
     match Var.scope n with
     | Var.LocalConst | Var.LocalVar -> (
         try ignore @@ Procedure.lookup_local_decl p (Var.name n)
@@ -48,6 +60,7 @@ let variables_wf p =
              ^ (Procedure.id p |> ID.to_string)))
     | _ -> ()
   in
+
   let m = ref VarSet.empty in
   let write v =
     match Var.scope v with
@@ -62,7 +75,7 @@ let variables_wf p =
   let check_lvar v =
     (*sigil_ok v;*)
     write v;
-    if Var.is_local v then is_declared v
+    if Var.is_local v then var_is_ok v
     else if not @@ List.exists (fun e -> Var.equal v e) spec.modifies_globs then (
       print_endline
         (Procedure.pretty Var.pretty Var.pretty Expr.BasilExpr.pretty p
@@ -73,13 +86,13 @@ let variables_wf p =
            ^ (Procedure.id p |> ID.to_string))))
     else ()
   in
-  let check e = Expr.BasilExpr.free_vars_iter e |> Iter.iter is_declared in
+  let check e = Expr.BasilExpr.free_vars_iter e |> Iter.iter var_is_ok in
   List.iter check spec.requires;
   List.iter check spec.ensures;
   List.iter check spec.rely;
   List.iter check spec.guarantee;
   Procedure.iter_blocks p (fun (_, b) ->
-      Block.read_vars_iter b |> Iter.iter is_declared);
+      Block.read_vars_iter b |> Iter.iter var_is_ok);
   Procedure.iter_blocks p (fun (_, b) ->
       Block.assigned_vars_iter b |> Iter.iter check_lvar)
 

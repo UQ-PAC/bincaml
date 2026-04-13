@@ -157,6 +157,9 @@ let%expect_test "fold_block" =
   [%expect
     {|
     Warn: global undeclared $stack assuming mutable unshared
+    warn: local use before def: R31_in:bv64
+    warn: local use before def: R0_in:bv64
+    warn: local use before def: R31_in:bv64
     Warn: global undeclared $mem assuming mutable unshared
     ($stack->RU, R31_in->RU, R0_in->RU, _->⊥)
     ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, _->⊥)

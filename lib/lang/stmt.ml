@@ -224,10 +224,15 @@ let free_vars_iter (s : (Var.t, Var.t, BasilExpr.t) t) : Var.t Iter.t =
   in
   iter_rexpr s |> Iter.flat_map f_expr
 
-let free_vars (init : VarSet.t) (s : (Var.t, Var.t, BasilExpr.t) t) : VarSet.t =
-  let f_expr a v =
-    match v with
-    | `Expr v -> VarSet.union (BasilExpr.free_vars v) a
-    | `Var v -> VarSet.add v a
-  in
-  iter_rexpr s |> Iter.fold f_expr init
+(** free variables, also known as live variables. Given the initial free
+    variables init following this statement*)
+let free_vars ?(init = VarSet.empty) s =
+  let assigns = VarSet.diff init (assigned VarSet.empty s) in
+  (fun (init : VarSet.t) (s : (Var.t, Var.t, BasilExpr.t) t) : VarSet.t ->
+    let f_expr a v =
+      match v with
+      | `Expr v -> VarSet.union (BasilExpr.free_vars v) a
+      | `Var v -> VarSet.add v a
+    in
+    iter_rexpr s |> Iter.fold f_expr init)
+    assigns s
