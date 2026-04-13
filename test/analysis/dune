@@ -1,5 +1,6 @@
 (library
  (name bincaml_analysis_test)
+ (package bincaml)
  (modules test_ide_live test_ssadfg)
  (inline_tests)
  (libraries
@@ -14,12 +15,13 @@
   (pps ppx_expect)))
 
 (test
+ (name analysis_tests)
+ (package bincaml)
  (modules
   analysis_tests
   test_wrapped_intervals
   test_irreducible_loops
   test_lattice_collections)
- (name analysis_tests)
  (preprocess
   (pps ppx_here))
  (libraries
