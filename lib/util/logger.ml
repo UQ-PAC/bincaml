@@ -1,12 +1,15 @@
+open Common
+
 module Logger = struct
   let c = Mtime_clock.counter ()
 
   let time_stamp_tag : Mtime.span Logs.Tag.def =
     Logs.Tag.def "stamp" ~doc:"Relative monotonic time stamp" Mtime.Span.pp
 
-  let time_stamp = Logs.Tag.(empty |> add time_stamp_tag (Mtime_clock.count c))
+  let time_stamp () =
+    Logs.Tag.(empty |> add time_stamp_tag (Mtime_clock.count c))
 
-  let reporter ppf =
+  let reporter ppf ?(filter = Fun.const true) =
     let report src level ~over k msgf =
       let _ = src in
       let k _ =
@@ -22,10 +25,10 @@ module Logger = struct
         let dt =
           match stamp with
           | None -> 0.
-          | Some s -> Mtime.Span.to_float_ns s /. 1000.0
+          | Some s -> Mtime.Span.to_float_ns s /. 1000000.0
         in
         Format.kfprintf k ppf
-          ("%a[%+04.0f us] @[" ^^ fmt ^^ "@]@.")
+          ("%a[%+05.0f ms] @[" ^^ fmt ^^ "@]@.")
           Logs.pp_header (level, h) dt
       in
       msgf @@ fun ?header ?tags fmt -> with_stamp header tags k ppf fmt
