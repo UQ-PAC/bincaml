@@ -14,6 +14,8 @@
   bincaml.util
   zarith
   iter
+  logs
+  mtime
   trace.core))
 
 ; (library
@@ -37,4 +39,6 @@
   transforms
   bincaml.ast
   bincaml.util
+  logs
+  mtime
   trace.core))

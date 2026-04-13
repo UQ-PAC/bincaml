@@ -3,6 +3,7 @@
 open Bincaml_util.Common
 open Lang
 open Expr
+open Logs
 
 type load_st = {
   prog : Program.t;
