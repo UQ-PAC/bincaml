@@ -467,7 +467,7 @@ module BasilASTLoader = struct
         name;
         fields =
           StringMap.of_list
-            ((List.map (function Field1 (_, field_name, _, t, offset, _, _) ->
+            ((List.map (function Field1 (field_name, _, t, offset, _) ->
                  ( transStr field_name,
                    ({ typ = trans_type t; offset = transIntVal offset }
                      : Types.record_field) )))

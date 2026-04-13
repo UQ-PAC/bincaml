@@ -3,6 +3,7 @@ open Transforms.Type_inference
 open ConstraintState
 open ConstraintState.TypeConstraint
 open InferredType
+open Lang
 
 let gen = ID.make_gen ()
 
@@ -76,11 +77,27 @@ proc @main_4196260 () -> ()
     |> Iter.fold
          (fun acc proc ->
            let sva = Analysis.Sva.DFGAnalysis.flow_insensitive proc in
-           Lang.Procedure.iter_blocks_topo_fwd proc
+           Procedure.iter_blocks_topo_fwd proc
            |> Iter.fold
-                (fun acc (_, b) ->
-                  Lang.Block.stmts_iter b
-                  |> Iter.foldi (constrain_stmt prog (Some proc) sva) acc)
+                (fun acc (bid, (b : Program.bloc)) ->
+                  let acc =
+                    List.fold_left
+                      (fun acc ({ lhs; rhs } : Var.t Block.phi) ->
+                        let lhs = VarId.var_proc_to_uid lhs (Some proc) in
+                        List.fold_left
+                          (fun acc (_, rhs) ->
+                            let rhs = VarId.var_proc_to_uid rhs (Some proc) in
+                            constrain acc (TypeVar rhs) (TypeVar lhs))
+                          acc rhs)
+                      acc b.phis
+                  in
+                  Block.stmts_iter b
+                  |> Iter.foldi
+                       (fun acc stmt_number stmt ->
+                         constrain_stmt prog (Some proc) sva acc stmt_number
+                           stmt
+                         @@ ID.hash bid)
+                       acc)
                 acc)
          VarIdMap.empty
   in

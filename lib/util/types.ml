@@ -125,6 +125,7 @@ let rec compare_partial (a : t) (b : t) =
   | Bitvector a, Bitvector b -> Some (Int.compare a b)
   | Sort (n1, _), Sort (n2, _) -> if String.equal n1 n2 then Some 0 else None
   | Integer, Integer -> Some 0
+  | Boolean, Boolean -> Some 0
   | Map (k, v), Map (k2, v2) -> (
       compare_partial k k2 |> function Some 0 -> compare_partial v v2 | o -> o)
   | _, _ -> None
