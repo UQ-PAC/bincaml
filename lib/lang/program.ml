@@ -125,13 +125,6 @@ let prog_pretty (p : t) =
   let open Containers_pp.Infix in
   let globs =
     StringMap.bindings p.globals
-    |> List.sort (fun (_, decl) (_, decl2) ->
-        (* NOTE: Recursive types might require more logic here *)
-        match (decl, decl2) with
-        | Type _, Type _ | Variable _, Variable _ | Function _, Function _ -> 0
-        | Type _, _ -> -1
-        | _, Type _ -> 1
-        | _ -> 0)
     |> List.map (fun (n, v) -> pretty_declaration v)
   in
   let n =
@@ -141,10 +134,10 @@ let prog_pretty (p : t) =
   in
   let decls =
     globs @ n
-    @ (List.map
+    @ List.map
         (fun (_, p) -> proc_pretty p)
         (IDMap.to_list p.procs
-        |> List.sort (fun (i, _) (j, _) -> ID.compare i j)))
+        |> List.sort (fun (i, _) (j, _) -> ID.compare i j))
   in
 
   append_l ~sep:(text ";\n") decls ^ text ";\n"
