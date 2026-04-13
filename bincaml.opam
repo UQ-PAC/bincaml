@@ -34,9 +34,9 @@ depends: [
   "sherlodoc" {with-doc}
   "ppx_expect" {>= "0.17.2.2"}
   "alcotest" {with-test}
-  "qcheck-core" {with-test}
-  "qcheck-alcotest" {with-test}
-  "qcheck-stm" {with-test}
+  "qcheck-core"
+  "qcheck-alcotest"
+  "qcheck-stm"
   "odoc" {with-doc}
 ]
 build: [

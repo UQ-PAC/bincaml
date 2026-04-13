@@ -11,7 +11,7 @@ doc: "https://url/to/documentation"
 bug-reports: "https://github.com/username/reponame/issues"
 depends: [
   "dune" {>= "3.19"}
-  "ppx_expect" {>= "0.17.2.2" & with-test}
+  "ppx_expect" {>= "0.17.2.2"}
   "bincaml"
   "logs"
   "iter"

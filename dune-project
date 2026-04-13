@@ -50,18 +50,17 @@
   (ppx_expect
    (>= 0.17.2.2))
   (alcotest :with-test)
-  (qcheck-core :with-test)
-  (qcheck-alcotest :with-test)
-  (qcheck-stm :with-test))
+  qcheck-core
+  qcheck-alcotest
+  qcheck-stm)
  (tags (program-analysis)))
 
 (package
  (name bincaml_lsp)
  (synopsis "Language server for Bincaml IL files")
  (depends
-
   (ppx_expect
-   (and (>= 0.17.2.2) :with-test))
+   (>= 0.17.2.2))
   bincaml
   logs
   iter

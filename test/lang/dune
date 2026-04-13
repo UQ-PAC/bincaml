@@ -2,6 +2,7 @@
 
 (library
  (name expr_gen)
+ (package bincaml)
  (modules expr_gen)
  (flags -w -27)
  (libraries
@@ -38,6 +39,7 @@
 
 (library
  (name test_expr_eval_expect)
+ (package bincaml)
  (modules test_expr_eval_expect test_stmt test_interp)
  (libraries expr_gen loader)
  (inline_tests)
@@ -48,6 +50,7 @@
 
 (library
  (name test_pagetable_spec)
+ (package bincaml)
  (modules test_pagetable_spec)
  (libraries
   iter
@@ -72,10 +75,12 @@
 
 (test
  (name test_pagetable_qcheck)
+ (package bincaml)
  (modules test_pagetable_qcheck)
  (libraries test_pagetable_spec qcheck-core.runner qcheck-stm.sequential))
 
 (test
  (name test_value_soundness)
+ (package bincaml)
  (modules test_value_soundness)
  (libraries expr_gen alcotest qcheck-alcotest qcheck-core bincaml.analysis))
