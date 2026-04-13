@@ -394,25 +394,15 @@ module Normalise = struct
     | ApplyIntrin { op = `OR; args } ->
         replace [%here]
           ((normalise_intrinsic `OR (BasilExpr.boolconst false)) args)
-    | ApplyIntrin { op = `BVConcat; args } ->
+    | ApplyIntrin { op = (`BVOR | `BVADD | `BVConcat | `BVXOR) as op; args } ->
         replace [%here]
-          (normalise_intrinsic `BVConcat
+          (normalise_intrinsic op
              (BasilExpr.bvconst (Bitvec.zero ~size:0))
              args)
-    | ApplyIntrin { op = `BVOR; args } ->
+    | ApplyIntrin { op = (`BVAND | `BVMUL) as op; args } ->
         replace [%here]
-          (normalise_intrinsic `BVOR
-             (BasilExpr.bvconst (Bitvec.zero ~size:0))
-             args)
-    | ApplyIntrin { op = `BVAND; args } ->
-        replace [%here]
-          (normalise_intrinsic `BVAND
-             (BasilExpr.bvconst (Bitvec.zero ~size:0))
-             args)
-    | ApplyIntrin { op = `BVXOR; args } ->
-        replace [%here]
-          (normalise_intrinsic `BVXOR
-             (BasilExpr.bvconst (Bitvec.zero ~size:0))
+          (normalise_intrinsic op
+             (BasilExpr.bvconst (Bitvec.ones ~size:0))
              args)
     | _ -> Keep
 

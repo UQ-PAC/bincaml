@@ -755,6 +755,11 @@ module BasilExpr = struct
 
   include R.Constructors
 
+  let binexp ?attrib ~op arg1 arg2 =
+    match op with
+    | #Ops.AllOps.intrin as op -> applyintrin ?attrib ~op [ arg1; arg2 ]
+    | #Ops.AllOps.binary as op -> binexp ?attrib ~op arg1 arg2
+
   let zero_extend ?attrib ~n_prefix_bits (e : t) : t =
     unexp ?attrib ~op:(`ZeroExtend n_prefix_bits) e
 
@@ -790,6 +795,12 @@ module BasilExpr = struct
 
   let bv_of_int ~(size : int) (v : int) : t =
     const (`Bitvector (Bitvec.of_int ~size v))
+
+  let drop_attrib a =
+    let a =
+      rewrite ~rw_fun:(AbstractExpr.drop_attrib %> fix %> replace [%here]) a
+    in
+    a
 
   (*
   module Memoiser = Fix.Memoize.ForHashedType (struct
