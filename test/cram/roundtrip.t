@@ -15,7 +15,7 @@
   bincaml: Error in (load-il beforemem.il): Parse error:  beforemem.il:7
            7 | type $a : UninterpSort = (UninterpSort)();
                     ^^
-            at Dune__exe__Script.of_cmd.(fun) bin/script.ml:87
+            at Dune__exe__Script.of_cmd.(fun) bin/script.ml:109
   [123]
 
 The serialise -> parse serialise loop should be idempotent
@@ -57,7 +57,6 @@ Memassign repr
   $ diff beforemem.il aftermem.il
   diff: aftermem.il: No such file or directory
   [2]
-
   $ cat aftermem.il
   cat: aftermem.il: No such file or directory
   [1]
@@ -68,7 +67,7 @@ Record and Pointer
   $ diff ptrrec1.il ptrrec2.il
   diff: ptrrec2.il: No such file or directory
   [2]
-
-
-  $ diff ptrrec2.il ptrrec3.il 2>/dev/null
+  $ diff ptrrec2.il ptrrec3.il
+  diff: ptrrec2.il: No such file or directory
+  diff: ptrrec3.il: No such file or directory
   [2]

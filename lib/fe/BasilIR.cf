@@ -9,11 +9,11 @@ position token INTTYPE {"int"} ;
 position token BOOLTYPE {"bool"} ;
 position token POINTERTYPE {"ptr"} ;
 
-{- position token UserIdent '`' ((upper | letter | '_' | '#')(upper | letter | digit | ["_.$#"])*) '`'; -}
-position token BIdent '.'((upper | letter | '_')(upper | letter | digit | ["_.$#~"])*) ;
+{- position token UserIdent '`' ((upper | letter | '_' | '#')(upper | letter | digit | ["_$#"])*) '`'; -}
+position token BIdent '.'((upper | letter | '_')(upper | letter | digit | ["_$#~"])*) ;
 
-position token LocalIdent ('#' | upper | letter | '_')((upper | letter | digit | ["_.$#"])*);
-position token GlobalIdent '$' ((upper | letter | digit | ["_.$#"])+);
+position token LocalIdent ('#' | upper | letter | '_')((upper | letter | digit | ["_$#"])*);
+position token GlobalIdent '$' ((upper | letter | digit | ["_$#"])+);
 
 position token BlockIdent '%' ((upper | letter | digit | ["_.$#"])+);
 
@@ -73,7 +73,7 @@ ProcDef_Empty . ProcDef ::= ;
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
 separator Field "," ;
-Field1 . Field ::= OpenParen Str ":" OpenParen Type "," IntVal CloseParen CloseParen ;
+Field1 . Field ::= Str ":" OpenParen Type "," IntVal CloseParen ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;

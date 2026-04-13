@@ -40,31 +40,29 @@ let normalise_gamma =
 (** `redundant p ps` returns true if the conjunction of `p :: ps` is equivalent
     to that of `ps`. *)
 let redundant (solver : Bincaml_util.Smt.Solver.t) p ps =
-  if Expr.BasilExpr.equal p (Expr.BasilExpr.boolconst true) then true
-  else if List.is_empty ps then false
+  if Expr.BasilExpr.equal p (Expr.BasilExpr.boolconst true) then
+    Bincaml_util.Smt.Solver.Unsat
+  else if List.is_empty ps then Bincaml_util.Smt.Solver.Sat
   else
-    let conj = Expr.BasilExpr.applyintrin ~op:`AND ps in
-    let q =
-      normalise_gamma @@ Expr.BasilExpr.boolnot
-      @@ Expr.BasilExpr.binexp ~op:`IMPLIES conj p
-    in
-    let open Expr_smt in
-    let s =
-      SMTLib2.assert_bexpr q SMTLib2.empty
-      |> snd
-      |> SMTLib2.to_sexp ~set_logic:false
-    in
-    let open Bincaml_util.Smt in
-    Solver.push solver;
-    s |> Iter.iter (fun c -> Solver.add_command solver c);
-    let res = Solver.check solver in
-    Solver.pop solver;
-    (* TODO a more robust strategy should be put in place in case a redundancy
-       check can't be performed (e.g. just stop iterating the fixpoint now) *)
-    match res with
-    | Unsat -> true
-    | Sat -> false
-    | Unknown -> assert false
+    try
+      let conj = Expr.BasilExpr.applyintrin ~op:`AND ps in
+      let q =
+        normalise_gamma @@ Expr.BasilExpr.boolnot
+        @@ Expr.BasilExpr.binexp ~op:`IMPLIES conj p
+      in
+      let open Expr_smt in
+      let s =
+        SMTLib2.assert_bexpr q SMTLib2.empty
+        |> snd
+        |> SMTLib2.to_sexp ~set_logic:false
+      in
+      let open Bincaml_util.Smt in
+      Solver.push solver;
+      s |> Iter.iter (fun c -> Solver.add_command solver c);
+      let res = Solver.check solver in
+      Solver.pop solver;
+      res
+    with _ -> Bincaml_util.Smt.Solver.Unknown
 
 let wp_dual_requires (module S : FunctionSummaryAnnotation)
     (proc : Program.proc) =
@@ -80,18 +78,27 @@ let wp_dual_requires (module S : FunctionSummaryAnnotation)
 
 (** Compute an extension of the given procedure's summary *)
 let extra_summary (solver : Bincaml_util.Smt.Solver.t)
-    (module S : FunctionSummaryAnnotation) (proc : Program.proc) =
+    (module S : FunctionSummaryAnnotation) reiter (proc : Program.proc) =
   (* TODO implement a sample ensures clause generator and some sort of analysis
      pass runner *)
   let cur_req = S.requires (Procedure.id proc) in
-  let requires =
-    wp_dual_requires (module S) proc
-    |> List.fold_left
-         (fun rs r ->
-           if redundant solver r (List.append rs cur_req) then rs else r :: rs)
-         []
-  in
-  { requires; ensures = [] }
+  if IDSet.mem (Procedure.id proc) !reiter then
+    { requires = cur_req; ensures = [] }
+  else
+    let requires =
+      wp_dual_requires (module S) proc
+      |> List.fold_left
+           (fun rs r ->
+             let open Bincaml_util.Smt in
+             match redundant solver r (List.append rs cur_req) with
+             | Unsat -> rs
+             | Sat -> r :: rs
+             | Unknown ->
+                 reiter := IDSet.add (Procedure.id proc) !reiter;
+                 r :: rs)
+           []
+    in
+    { requires; ensures = [] }
 
 let set_summary summary (proc : Program.proc) =
   let spec = Procedure.specification proc in
@@ -132,7 +139,7 @@ let intraproc_transform proc =
             (Procedure.specification proc).ensures
           else []
       end : FunctionSummaryAnnotation)
-      proc
+      (ref IDSet.empty) proc
   in
   add_summary summary proc
 
@@ -159,6 +166,7 @@ let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
       component
     |> IDSet.of_list
   in
+  let reiters = ref IDSet.empty in
   let eqs (pid : ID.t) (vals : FixSummaries.valuation) =
     if IDSet.mem pid component then
       let annotations =
@@ -170,7 +178,9 @@ let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
             List.append (IDMap.find id res).ensures (vals id).ensures
         end : FunctionSummaryAnnotation)
       in
-      let extra = extra_summary solver annotations (IDMap.find pid procs) in
+      let extra =
+        extra_summary solver annotations reiters (IDMap.find pid procs)
+      in
       append_summary (vals pid) extra
     else IDMap.get_or pid res ~default:Domain.bottom
   in

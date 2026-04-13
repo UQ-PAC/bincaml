@@ -137,22 +137,30 @@ module InterprocDSE = struct
 
   open Analysis.Ide_live
 
-  let filter_dead prog keep live (block : Program.bloc) =
-    Block.fold_backwards
-      ~f:(fun acc s ->
-        let omit, new_s =
-          match s with
-          | Stmt.Instr_Assign a ->
-              let a =
-                List.filter (fun (v, e) -> keep v || VarSet.mem v live) a
-              in
-              (List.is_empty a, Stmt.Instr_Assign a)
-          | _ -> (false, s)
-        in
-        if omit then acc else new_s :: acc)
-      ~phi:(fun x a -> x)
-      ~init:[] block
-    |> Vector.of_list
+  let filter_dead prog keep live (block : Program.bloc) : Program.bloc =
+    let phis, s =
+      Block.fold_backwards
+        ~f:(fun (p, acc) s ->
+          let omit, new_s =
+            match s with
+            | Stmt.Instr_Assign a ->
+                let a =
+                  List.filter (fun (v, e) -> keep v || VarSet.mem v live) a
+                in
+                (List.is_empty a, Stmt.Instr_Assign a)
+            | _ -> (false, s)
+          in
+          (p, if omit then acc else new_s :: acc)) (* TODO remove dead phis *)
+        ~phi:(fun (acc, s) a ->
+          ( List.filter_map
+              (fun (p : Var.t Block.phi) ->
+                Option.return_if (keep p.lhs || VarSet.mem p.lhs live) p)
+              a
+            @ acc,
+            s ))
+        ~init:([], []) block
+    in
+    { phis; stmts = Vector.of_list s }
 
   let transform_proc prog keep live_param_strs results proc =
     (* Remove dead parameters *)
@@ -207,8 +215,8 @@ module InterprocDSE = struct
         (fun p b ->
           match b with
           | Procedure.Vert.Begin id, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
-              let stmts = filter_dead prog keep live b in
-              Procedure.update_block p id { b with stmts }
+              let block = filter_dead prog keep live b in
+              Procedure.update_block p id block
           | _ -> p)
         proc blocks
     in

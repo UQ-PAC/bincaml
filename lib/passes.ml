@@ -1,5 +1,6 @@
 open Lang
 open Lang.Common
+open Bincaml_util.Logger
 
 (** TODO: pass program to procedure-local passes
 
@@ -222,6 +223,55 @@ module PassManager = struct
          There is no guarantee of completeness. Depends on Z3.";
     }
 
+  let cf_exprs =
+    {
+      name = "cf-expressions";
+      apply = Proc Transforms.Cf_tx.simplify_proc_exprs_default;
+      doc =
+        "Perform intra-expression simplifications and constant folding for \
+         whole program";
+    }
+
+  let inter_dead =
+    {
+      name = "inter-dead-store-elim";
+      apply =
+        Prog
+          (Transforms.Livevars.InterprocDSE.transform
+             (not % Bincaml_util.Var.is_local));
+      doc =
+        "Remove store assignments to pure local variables which are never read \
+         using an interprocedural analysis";
+    }
+
+  let linear_const =
+    {
+      name = "linear-const";
+      apply = Prog Transforms.Const_prop.linear_transform;
+      doc =
+        "Performs interprocedural constant propagation of linear expressions \
+         (expressions of the form a * x + b). Usage of constant variables are \
+         replaced with their constant value. Newly dead variables are not \
+         eliminated. Assumes SSA form.";
+    }
+
+  let copy_prop =
+    {
+      name = "copy-prop";
+      apply = Prog Transforms.Copyprop.transform;
+      doc = "Interprocedural variable copy propagation. Require SSA form.";
+    }
+
+  let simp =
+    {
+      name = "simplify";
+      apply = Batch [ linear_const; copy_prop; cf_exprs; inter_dead ];
+      doc =
+        "Performs some simplifications (linear constant propagation, copy \
+         propagation, constant folding, dead store elimination). Requires SSA \
+         form.";
+    }
+
   let passes =
     [
       irreducible_loop;
@@ -244,6 +294,11 @@ module PassManager = struct
       memory_specification;
       intra_function_summaries;
       inter_function_summaries;
+      cf_exprs;
+      inter_dead;
+      linear_const;
+      copy_prop;
+      simp;
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;
@@ -252,28 +307,11 @@ module PassManager = struct
            whole program and write smt log of rewrites to a file.";
       };
       {
-        name = "cf-expressions";
-        apply = Proc Transforms.Cf_tx.simplify_proc_exprs_default;
-        doc =
-          "Perform intra-expression simplifications and constant folding for \
-           whole program";
-      };
-      {
         name = "intra-dead-store-elim";
         apply = Proc Transforms.Livevars.DSE.sane_transform;
         doc =
           "Remove store assignments to pure local variables which are never \
            read ";
-      };
-      {
-        name = "inter-dead-store-elim";
-        apply =
-          Prog
-            (Transforms.Livevars.InterprocDSE.transform
-               (not % Bincaml_util.Var.is_local));
-        doc =
-          "Remove store assignments to pure local variables which are never \
-           read using an interprocedural analysis";
       };
       remove_unused;
       {
@@ -401,5 +439,10 @@ module PassManager = struct
     List.map (fun p -> StringMap.find p s.avail) passes
 
   let run_batch (batch : pass list) prog =
-    List.fold_left run_transform prog batch
+    List.fold_left
+      (fun prog pass ->
+        Logs.info (fun m ->
+            m "Starting %s" pass.name ?header:None ~tags:(Logger.time_stamp ()));
+        run_transform prog pass)
+      prog batch
 end

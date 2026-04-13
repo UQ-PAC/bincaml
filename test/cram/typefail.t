@@ -53,15 +53,15 @@
   Paramters for the function has a type mismatch: type of bvule(1, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 24 in %main_entry
   int is not of bitvector type in bvule at statement 24 in %main_entry
   Paramters for the function has a type mismatch: type of bvand(1, 0x1:bv32) != type of $NF:bv1 (int != bv1) at statement 25 in %main_entry
-  int is not of bitvector type in bvand at statement 25 in %main_entry
+  bv32 is not a bitvector type in bvand at statement 25 in %main_entry
   Paramters for the function has a type mismatch: type of bvor(true, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 26 in %main_entry
-  bool is not of bitvector type in bvor at statement 26 in %main_entry
+  bv32 is not a bitvector type in bvor at statement 26 in %main_entry
   Paramters for the function has a type mismatch: type of bvadd(true, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 27 in %main_entry
-  bool is not of bitvector type in bvadd at statement 27 in %main_entry
-  bv32 is not the correct type of bv64 for bvadd at statement 28 in %main_entry
+  bv32 is not a bitvector type in bvadd at statement 27 in %main_entry
+  bv32 is not a bitvector type in bvadd at statement 28 in %main_entry
   Paramters for the function has a type mismatch: type of bvmul(true, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 29 in %main_entry
-  bool is not of bitvector type in bvmul at statement 29 in %main_entry
-  bv32 is not the correct type of bv64 for bvmul at statement 30 in %main_entry
+  bv32 is not a bitvector type in bvmul at statement 29 in %main_entry
+  bv32 is not a bitvector type in bvmul at statement 30 in %main_entry
   Paramters for the function has a type mismatch: type of bvudiv(true, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 31 in %main_entry
   bool is not of bitvector type in bvudiv at statement 31 in %main_entry
   bv32 is not the correct type of bv64 for bvudiv at statement 32 in %main_entry
@@ -78,8 +78,8 @@
   bool is not of bitvector type in bvnand at statement 39 in %main_entry
   bv32 is not the correct type of bv64 for bvnand at statement 40 in %main_entry
   Paramters for the function has a type mismatch: type of bvxor(true, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 41 in %main_entry
-  bool is not of bitvector type in bvxor at statement 41 in %main_entry
-  bv32 is not the correct type of bv64 for bvxor at statement 42 in %main_entry
+  bv32 is not a bitvector type in bvxor at statement 41 in %main_entry
+  bv32 is not a bitvector type in bvxor at statement 42 in %main_entry
   Paramters for the function has a type mismatch: type of bvsub(true, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 43 in %main_entry
   bool is not of bitvector type in bvsub at statement 43 in %main_entry
   bv32 is not the correct type of bv64 for bvsub at statement 44 in %main_entry
@@ -98,4 +98,3 @@
   Body of booltobv1(0x7a0:bv64) is not a Boolean at statement 0 in %main_9
   booltobv1 body is not a boolean at statement 0 in %main_9
   [125]
-

@@ -125,16 +125,11 @@ module BVOps = struct
     | `BVSLT -> Bitvec.slt
 
   type binary_unif =
-    [ `BVAND
-    | `BVOR
-    | `BVADD
-    | `BVMUL
-    | `BVUDIV
+    [ `BVUDIV
     | `BVUREM
     | `BVSHL
     | `BVLSHR
     | `BVNAND
-    | `BVXOR
     | `BVSUB
     | `BVSDIV
     | `BVSREM
@@ -148,24 +143,19 @@ module BVOps = struct
     match op with
     | `BVSREM -> srem
     | `BVSDIV -> sdiv
-    | `BVADD -> add
     | `BVASHR -> ashr
     | `BVSMOD -> smod
     | `BVSHL -> shl
     | `BVNAND -> fun a b -> bitnot (bitand a b)
     | `BVUREM -> urem
-    | `BVXOR -> bitxor
-    | `BVOR -> bitor
     | `BVSUB -> sub
     | `BVUDIV -> udiv
     | `BVLSHR -> lshr
-    | `BVAND -> bitand
-    | `BVMUL -> mul
 
   type binary = [ binary_pred | binary_unif ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type intrin = [ `BVAND | `BVOR | `BVADD | `BVXOR | `BVConcat ]
+  type intrin = [ `BVAND | `BVOR | `BVADD | `BVXOR | `BVConcat | `BVMUL ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let eval_intrin (op : intrin) args =
@@ -180,6 +170,7 @@ module BVOps = struct
     | `BVOR -> ev Bitvec.bitor
     | `BVAND -> ev Bitvec.bitand
     | `BVConcat -> ev Bitvec.concat
+    | `BVMUL -> ev Bitvec.mul
 
   let show = function
     | #const as c -> show_const c
@@ -421,8 +412,8 @@ module AllOps = struct
     | `INTLE ->
         return Boolean
     | `INTDIV | `INTADD | `INTMUL | `INTSUB | `INTMOD -> return Integer
-    | `BVAND | `BVOR | `BVADD | `BVMUL | `BVUDIV | `BVUREM | `BVSHL | `BVLSHR
-    | `BVNAND | `BVXOR | `BVSUB | `BVSDIV | `BVSREM | `BVSMOD | `BVASHR ->
+    | `BVUDIV | `BVUREM | `BVSHL | `BVLSHR | `BVNAND | `BVSUB | `BVSDIV
+    | `BVSREM | `BVSMOD | `BVASHR ->
         return l
     | `WriteField _ -> return l
     | `PTRADD -> return l
@@ -438,6 +429,7 @@ module AllOps = struct
     match o with
     | `Cases -> return @@ List.hd @@ List.tl args
     | `BVADD -> return @@ List.hd args
+    | `BVMUL -> return @@ List.hd args
     | `BVOR -> return @@ List.hd args
     | `BVXOR -> return @@ List.hd args
     | `BVAND -> return @@ List.hd args
