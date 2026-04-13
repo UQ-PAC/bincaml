@@ -7,80 +7,6 @@ Should output no errors
 Check concat rewrites work
 
   $ diff before.il after.il
-<<<<<<< HEAD
-  17,83c17,19
-  <      $R28:bv64 := bvor(bvand(bvconcat(extract(1,0, bvlshr(var1_4206396_bv64:bv64,
-  <          0x1f:bv64)), extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
-  <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64))),
-  <        0xffffffff00000000:bv64),
-  <       bvand(bvor(0x0:bv64, bvand(var1_4206396_bv64:bv64, 0xffffffff:bv64)),
-  <        0xffffffff:bv64));
-  ---
-  >      $R28:bv64 := bvor(bvand(sign_extend(63,
-  >        extract(32,31, var1_4206396_bv64:bv64)), 0xffffffff00000000:bv64),
-  >       bvand(bvand(var1_4206396_bv64:bv64, 0xffffffff:bv64), 0xffffffff:bv64));
-=======
   17,80c17
   <      $R28:bv64 := bvor(bvand(bvconcat(extract(1,0, bvlshr(var1_4206396_bv64,
   <          0x1f:bv64)), extract(1,0, bvlshr(var1_4206396_bv64, 0x1f:bv64)),
@@ -148,6 +74,13 @@ Check concat rewrites work
   <         extract(1,0, bvlshr(var1_4206396_bv64, 0x1f:bv64))),
   ---
   >      $R28:bv64 := bvor(bvand(sign_extend(63, extract(32,31, var1_4206396_bv64)),
->>>>>>> 4f7f87d3a6424d68d94c1a49a6dac3a4b5feedbc
+  82,83c19
+  <       bvand(bvor(0x0:bv64, bvand(var1_4206396_bv64, 0xffffffff:bv64)),
+  <        0xffffffff:bv64));
+  ---
+  >       bvand(bvand(var1_4206396_bv64, 0xffffffff:bv64), 0xffffffff:bv64));
   [1]
+<<<<<<< HEAD
+=======
+>>>>>>> 4f7f87d3a6424d68d94c1a49a6dac3a4b5feedbc
 
