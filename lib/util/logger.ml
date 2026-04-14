@@ -35,3 +35,18 @@ module Logger = struct
     in
     { Logs.report }
 end
+
+let reporter ppf =
+  let report src level ~over k msgf =
+    let k _ =
+      over ();
+      k ()
+    in
+    let with_stamp h _tags k ppf fmt =
+      Format.kfprintf k ppf
+        ("%a (%s) @[" ^^ fmt ^^ "@]@.")
+        Logs.pp_header (level, h) (Logs.Src.name src)
+    in
+    msgf @@ fun ?header ?tags fmt -> with_stamp header tags k ppf fmt
+  in
+  { Logs.report }
