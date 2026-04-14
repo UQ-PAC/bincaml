@@ -2,7 +2,7 @@ open Bincaml_util.Common
 
 let function_name name =
   let name =
-    if String.starts_with ~prefix:"$" name then String.concat "" [ "f"; name ]
+    if String.starts_with ~prefix:"$" name then String.concat "" [ ""; name ]
     else name
   in
   name

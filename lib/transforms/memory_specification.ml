@@ -149,23 +149,9 @@ let transform_free p =
 
 let transform_stmt (s : Program.stmt) =
   (match s with
-    | Stmt.Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } }
+    | Stmt.Instr_Store { lhs; rhs; addr = Addr { addr; size; endian } }
+    | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } }
       -> (
-        let valid_assert =
-          Stmt.Instr_Assert
-            {
-              body =
-                BasilExpr.(
-                  Calls.valid_access
-                    [
-                      rvar Globals.mem_encoding;
-                      addr;
-                      bv_of_int ~size:64 (size / 8);
-                    ]);
-            }
-        in
-        match Var.name rhs with "$mem" -> [ valid_assert; s ] | _ -> [ s ])
-    | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } -> (
         let valid_assert =
           Stmt.Instr_Assert
             {

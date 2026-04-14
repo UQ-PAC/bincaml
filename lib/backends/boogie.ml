@@ -4,11 +4,11 @@ open Bincaml_util.Common
 exception BoogieException of string
 
 let function_name name =
-  let open Containers_pp in
   let name =
-    if String.starts_with ~prefix:"$" name then String.concat "" [ "f"; name ]
+    if String.starts_with ~prefix:"$" name then String.concat "" [ ""; name ]
     else name
   in
+  let open Containers_pp in
   text name
 
 let proc_name name =

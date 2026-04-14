@@ -125,7 +125,10 @@ module Calls = struct
   let valid_access args =
     apply_fun
       ~func:
-        (rvar (Var.create "me_valid_access" ~scope:Var.Global Types.Boolean))
+        (rvar
+           (Var.create "me_valid_access" ~scope:Var.Global
+              (Types.curry [Types.Bitvector 64; Types.Bitvector 64; Types.Variable "MemEncoding";] Types.Boolean)))
+              (* (Types.Map (Types.Variable "MemEncoding", Types.Map(Types.Bitvector 64, Types.Map(Types.Bitvector 64, Types.Boolean)))))) *)
       args
 end
 
