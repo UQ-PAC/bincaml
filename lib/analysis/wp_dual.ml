@@ -134,11 +134,10 @@ module Domain (S : FunctionSummaryAnnotation) = struct
         let p = join p (Expr.BasilExpr.boolnot requires) in
         let p =
           if StringMap.cardinal lhs > 0 then
-          BasilExpr.exists
-            ~bound:(StringMap.values lhs |> Iter.to_list)
-            (BasilExpr.binexp ~op:`IMPLIES ensures p)
-          else
-            (BasilExpr.binexp ~op:`IMPLIES ensures p)
+            BasilExpr.exists ?attrib:None
+              ~bound:(StringMap.values lhs |> Iter.to_list)
+              (BasilExpr.binexp ~op:`IMPLIES ensures p)
+          else BasilExpr.binexp ~op:`IMPLIES ensures p
         in
         simplify p
     | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
