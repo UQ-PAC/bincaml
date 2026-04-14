@@ -4,7 +4,7 @@
 
 (executable
  (name main)
- (public_name bincaml_lsp.lsp)
+ (public_name bincaml_lsp)
  (package bincaml_lsp)
  (flags
   (-w -27))
