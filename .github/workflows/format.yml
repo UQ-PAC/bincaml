@@ -1,0 +1,16 @@
+name: format
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  format:
+    name: format
+    runs-on: ubuntu-latest
+    container: ghcr.io/agle/bincaml-ci-containers/ci-doc-5.3:latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: opam exec -- dune build @fmt --display=quiet
