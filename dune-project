@@ -62,6 +62,7 @@
   (ppx_expect
    (>= 0.17.2.2))
   bincaml
+  fmt
   logs
   iter
   linol
