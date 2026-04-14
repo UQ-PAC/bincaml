@@ -1075,7 +1075,7 @@ module BasilASTLoader = struct
               (unsafe_unsigil (`Local g))
               (trans_type type')
           in
-          print_endline @@ "warn: local use before def: " ^ Var.to_string v;
+          (*print_endline @@ "warn: local use before def: " ^ Var.to_string v;*)
           BasilExpr.rvar v)
     | Expr_Assoc (binop, _, rs, _) -> (
         match transBoolBinOp binop with

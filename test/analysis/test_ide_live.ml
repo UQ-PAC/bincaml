@@ -132,8 +132,7 @@ proc @fun (c:bv64, d:bv64) -> (out:bv64)
   let _, results = IDELiveAnalysis.solve program in
   IDMap.iter (fun id _ -> print_lives results id) program.procs;
   [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
+[@@expect.uncaught_exn {|
   (* CR expect_test_collector: This test expectation appears to contain a backtrace.
      This is strongly discouraged as backtraces are fragile.
      Please change this test to not include a backtrace. *)
@@ -142,7 +141,7 @@ proc @fun (c:bv64, d:bv64) -> (out:bv64)
   Called from CCOption.get_exn_or in file "src/core/CCOption.pp.ml", line 97, characters 12-27
   Called from Bincaml_analysis_test__Test_ide_live.print_lives in file "test/analysis/test_ide_live.ml", lines 6-7, characters 2-38
   Called from Stdlib__Map.Make.iter in file "map.ml", line 305, characters 20-25
-  Called from Bincaml_analysis_test__Test_ide_live.(fun) in file "test/analysis/test_ide_live.ml", line 132, characters 2-63
+  Called from Bincaml_analysis_test__Test_ide_live.(fun) in file "test/analysis/test_ide_live.ml", line 133, characters 2-63
   Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
 
   Trailing output
