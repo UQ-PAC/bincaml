@@ -1,5 +1,6 @@
 open Lang
 open Lang.Common
+open Bincaml_util.Logger
 
 (** TODO: pass program to procedure-local passes
 
@@ -427,5 +428,10 @@ module PassManager = struct
     List.map (fun p -> StringMap.find p s.avail) passes
 
   let run_batch (batch : pass list) prog =
-    List.fold_left run_transform prog batch
+    List.fold_left
+      (fun prog pass ->
+        Logs.info (fun m ->
+            m "Starting %s" pass.name ?header:None ~tags:(Logger.time_stamp ()));
+        run_transform prog pass)
+      prog batch
 end

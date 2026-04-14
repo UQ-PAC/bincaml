@@ -68,7 +68,8 @@ let pretty_const (c : Lang.Ops.AllOps.const) =
   | `Record _ -> raise (BoogieException "records unsupported by boogie backend")
   | `Pointer _ ->
       raise (BoogieException "pointers unsupported by boogie backend")
-  | `Sort _ -> raise (BoogieException "const sorts unsupported by boogie backend")
+  | `Sort _ ->
+      raise (BoogieException "const sorts unsupported by boogie backend")
 
 let pretty_call_args_no_brackets (args : Containers_pp.t list) =
   let open Containers_pp in
@@ -138,11 +139,19 @@ let pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
           (text "]")
   | `AND -> bracket "(" (append_l ~sep:(text "&&") (List.map snd args)) ")"
   | `OR -> bracket "(" (append_l ~sep:(text "||") (List.map snd args)) ")"
-  | e ->
-      let x = Lang.Ops.AllOps.to_string e in
-      raise
-        String.(
-          BoogieException (String.cat "Unsupported intrinsic application " x))
+  | e -> (
+      match args with
+      | [ (ty1, arg1); (ty2, arg2) ] -> (
+          match Transforms.Boogie_prepass.Builtins.name op [ ty1; ty2; t ] with
+          | Function name -> text name ^ pretty_call_args [ arg1; arg2 ]
+          | Infix name -> bracket "(" (arg1 ^+ text name ^+ arg2) ")"
+          | _ -> failwith "Unsupported binary-reduced intrinsic expr ")
+      | _ ->
+          let x = Lang.Ops.AllOps.to_string e in
+          raise
+            String.(
+              BoogieException
+                (String.cat "Unsupported intrinsic application: " x)))
 
 let pretty_apply_function (func : Containers_pp.t)
     (args : (Types.t * Containers_pp.t) list) =
@@ -178,7 +187,7 @@ and pretty_triggers (attrib : Lang.Program.e Lang.Attrib.t option) =
       @@ List.map (fun b -> bracket "{" b "}")
       @@ pretty_attribute attrib)
   |> Option.get_or ~default:(text "")
-  (* Option.map (Lang.Attrib.attrib_pretty Lang.Expr.BasilExpr.pretty) attrib |> Option.get_or ~default:(text "MAGIC") *)
+(* Option.map (Lang.Attrib.attrib_pretty Lang.Expr.BasilExpr.pretty) attrib |> Option.get_or ~default:(text "MAGIC") *)
 
 and pretty_binding_expr ?(attrib : Lang.Program.e Lang.Attrib.t option) bound
     in_body =
@@ -261,7 +270,7 @@ let pretty_declaration (d : Lang.Program.declaration) =
       let func_body, return_type = pretty_function_body binding t in
 
       (* Ideally use above return type
-       * but unfortunately curry will uncurry returned maps... :( *) 
+       * but unfortunately curry will uncurry returned maps... :( *)
       let return_type = Lang.Expr.BasilExpr.type_of t in
       let return_type = text @@ type_to_string return_type in
 

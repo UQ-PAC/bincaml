@@ -116,7 +116,7 @@ module Domain (S : RequiresAnnotation) = struct
 
   (** Encode an abstract state as a predicate *)
   let to_pred =
-    Algsimp.to_steady Expr.BasilExpr.equal Algsimp.alg_simp_rewriter
+    Algsimp.Comb.to_steady Expr.BasilExpr.equal Algsimp.alg_simp_rewriter
     % BasilExpr.boolnot
 end
 
@@ -163,5 +163,4 @@ proc @main () -> ()
   in
   IntraAnalysis.A.M.find Procedure.Vert.Entry res
   |> IntraDomain.to_pred |> BasilExpr.to_string |> print_endline;
-  [%expect
-    {| booland(eq(bvadd($x, a), 0), eq(bvadd(a, a), 0)) |}]
+  [%expect {| booland(eq(bvadd($x, a), 0), eq(bvadd(a, a), 0)) |}]
