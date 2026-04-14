@@ -46,7 +46,7 @@ module Domain (S : FunctionSummaryAnnotation) = struct
               (match args with
               | [] -> e_true
               | [ l ] -> l
-              | args -> BasilExpr.fix (ApplyIntrin { attrib; op = `OR; args }))
+              | args -> BasilExpr.fix (ApplyIntrin { attrib; op = `AND; args }))
         | ApplyIntrin { op = `OR; args }
           when List.mem ~eq:BasilExpr.equal e_true args ->
             replace [%here] e_true
@@ -133,8 +133,11 @@ module Domain (S : FunctionSummaryAnnotation) = struct
         in
         let p = join p (Expr.BasilExpr.boolnot requires) in
         let p =
-          BasilExpr.forall
+          if StringMap.cardinal lhs > 0 then
+          BasilExpr.exists
             ~bound:(StringMap.values lhs |> Iter.to_list)
+            (BasilExpr.binexp ~op:`IMPLIES ensures p)
+          else
             (BasilExpr.binexp ~op:`IMPLIES ensures p)
         in
         simplify p
