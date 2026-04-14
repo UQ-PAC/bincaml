@@ -298,7 +298,8 @@ end
 module LinearConstAnalysis = IDESSI (LinearDomain)
 
 (* This is just the copyprop copy pasted... hopefully we can just remove the
-   normal copyprop *)
+   normal copyprop eventually (currently this analysis is not a superset of
+   copy prop, probably due to some imprecision) *)
 
 module CopyNode = struct
   type content = {
