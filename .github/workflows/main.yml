@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-      - run: opam install -t bincaml --deps-only
+      - run: opam install -t . --deps-only
       - run: opam exec -- dune build '@install'
       - run: opam exec -- dune runtest --force --profile=release
 
@@ -43,5 +43,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: |
+          opam install -t . --deps-only
           opam install opam-dune-lint
           opam exec -- opam-dune-lint
