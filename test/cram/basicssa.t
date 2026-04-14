@@ -2,8 +2,6 @@
 Run on basic irreducible loop example
 
   $ bincaml script basicssa.sexp
-  ()
-  ()
   (load-il ../../examples/irreducible_loop_1.il)
   (dump-il before.il)
   (run-transforms remove-unreachable-block cf-expressions intra-dead-store-elim)
@@ -11,35 +9,24 @@ Run on basic irreducible loop example
   (run-transforms simple-ssa)
   (dump-il after.il)
   (load-il after.il)
-  wellformedness:non-equal variables with same name: { Var.V.name = "R1_1"; typ = bv64; scope = Var.LocalVar } { Var.V.name = "R1_1"; typ = bv64; scope = Var.LocalConst }
+  bincaml: [ERROR] non-equal variables with same name: { Var.V.name = "R1_1"; typ = bv64; scope = Var.LocalVar } { Var.V.name = "R1_1"; typ = bv64; scope = Var.LocalConst }
   (dump-il after_reparsed.il)
-  ()
-  ()
-  ()
-  ()
   (load-il ../../examples/sqrt.il)
   (run-transforms remove-unreachable-block cf-expressions intra-dead-store-elim)
   (run-transforms simple-params)
   (interp-out before_loop.txt)
   (run-transforms simple-ssa)
   (interp-out after_loop.txt)
-  ()
-  ()
   (load-il ../../examples/x-output.il)
   (run-transforms remove-unreachable-block cf-expressions intra-dead-store-elim)
   (interp-out before_conds.txt)
   (run-transforms simple-ssa)
   (interp-out after_conds.txt)
-  ()
-  ()
-  ()
-  ()
   (load-il ssa-multi-deps.il)
   (run-transforms remove-unreachable-block cf-expressions intra-dead-store-elim)
   (dump-il ssa-multi-before.il)
   (run-transforms ssa)
   (dump-il ssa-multi-after.il)
-  ()
 
   $ cat before.il
   var $CF:bv1;

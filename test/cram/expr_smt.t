@@ -3,11 +3,8 @@
 Should output no errors
 
   $  bincaml script expr_smt_check.sexp 
-  ()
   (load-il ../../examples/cntlm-output.il)
   (run-transforms cf-expressions-smtcheck)
-  ()
-  ()
   (load-il concat.il)
   Warn: global undeclared $__BranchTaken assuming mutable unshared
   (dump-il before.il)

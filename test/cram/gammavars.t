@@ -3,10 +3,10 @@
   (load-il ../../examples/gamma.il)
   (dump-il before.il)
   (run-transforms gamma-vars)
-  wellformedness:global Gamma_$x:bool should have global sigil $
-  wellformedness:local Gamma_z:bool is not declared in @f
-  wellformedness:local Gamma_a:bool is not declared in @g
-  wellformedness:local Gamma_a:bool is not declared in @h
+  bincaml: [ERROR] global Gamma_$x:bool should have global sigil $
+  bincaml: [ERROR] local Gamma_z:bool is not declared in @f
+  bincaml: [ERROR] local Gamma_a:bool is not declared in @g
+  bincaml: [ERROR] local Gamma_a:bool is not declared in @h
   (dump-il after.il)
 
   $ diff before.il after.il

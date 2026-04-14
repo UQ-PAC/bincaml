@@ -100,7 +100,6 @@ proc @main (x_in:bv64) -> ()
   print_lives results main;
   [%expect
     {|
-    wellformedness:non-equal variables with same name: { Var.V.name = "x_2"; typ = bv64; scope = Var.LocalConst } { Var.V.name = "x_2"; typ = bv64; scope = Var.LocalVar }
     @main
     $mem:(bv64->bv8)
     x_in:bv64
