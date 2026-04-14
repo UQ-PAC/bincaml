@@ -27,6 +27,7 @@
   iter
   containers.pp
   fmt
+  unionFind
   trace.core
   bincaml.util)
  (inline_tests)
