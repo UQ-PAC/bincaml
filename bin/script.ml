@@ -57,7 +57,7 @@ let set_prog s prog =
 
 let of_cmd st (e : Containers.Sexp.t) =
   let full_cmd = Sexp.to_string e in
-  print_endline full_cmd;
+  (match e with `List [] -> () | _ -> Logs.debug (fun m -> m "%s" full_cmd));
 
   let cmd, args =
     match e with

@@ -3,6 +3,11 @@ open Procedure
 
 exception IRWellformed of string
 
+let src =
+  Logs.Src.create ~doc:("IR invariant checks: " ^ __FILE__) "wellformedness"
+
+module Logs = (val Logs.src_log src : Logs.LOG)
+
 let formal_params p =
   let c =
     Procedure.formal_in_params p
@@ -77,9 +82,10 @@ let variables_wf p =
     write v;
     if Var.is_local v then var_is_ok v
     else if not @@ List.exists (fun e -> Var.equal v e) spec.modifies_globs then (
-      print_endline
-        (Procedure.pretty Var.pretty Var.pretty Expr.BasilExpr.pretty p
-        |> Containers_pp.Pretty.to_string ~width:80);
+      Logs.debug (fun m ->
+          m "%s"
+            (Procedure.pretty Var.pretty Var.pretty Expr.BasilExpr.pretty p
+            |> Containers_pp.Pretty.to_string ~width:80));
       raise
         (IRWellformed
            ("written global " ^ Var.to_string v ^ " is not in modifies list of "
@@ -100,4 +106,4 @@ let wf_checks p =
   try
     formal_params p;
     variables_wf p
-  with IRWellformed e -> print_endline ("wellformedness:" ^ e)
+  with IRWellformed e -> Logs.err (fun m -> m "%s" e)

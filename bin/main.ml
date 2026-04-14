@@ -60,7 +60,11 @@ let dump_proc_cmd =
   let info = Cmd.info "dump-il" ~version:"alpha" ~doc in
   Cmd.v info Term.(const dump_proc $ fname $ proc)
 
-let run_script fname =
+let verb =
+  let doc = "set log level to debug" and docv = "VERBOSE" in
+  Arg.(value & flag & info [ "v"; "verbose" ] ~doc ~docv)
+
+let run_script ~verb fname =
   let st = Script.init_st in
   let r =
     CCIO.with_in fname (fun c ->
@@ -90,7 +94,9 @@ let callgraph_cmd =
 let script_cmd =
   let doc = "run script" in
   let info = Cmd.info "script" ~version:"alpha" ~doc in
-  Cmd.v info Term.(const run_script $ fname)
+  Cmd.make info
+  @@ let+ verb and+ fname in
+     run_script ~verb fname
 
 let cmd =
   let doc = "bincaml" in
@@ -101,7 +107,7 @@ let main () =
   Trace_core.set_process_name "main";
   Trace_core.set_thread_name "t1";
   Logs.set_level (Some Logs.Error);
-  Logs.set_reporter (Logger.reporter Format.err_formatter);
+  Logs.set_reporter (Logs.format_reporter ());
   exit (Cmd.eval_result cmd)
 
 let () = Trace_tef.with_setup ~out:(`File "trace.json") () @@ fun () -> main ()
