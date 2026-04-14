@@ -7,7 +7,7 @@ open Cmdliner.Term.Syntax
 let () = Printexc.record_backtrace true
 
 let fname =
-  let doc = "Input file name (filename.il)" in
+  let doc = "Input file name (e.g., filename.il or - for stdin)" in
   Arg.(required & pos 0 (some string) None & info [] ~docv:"FNAME" ~doc)
 
 let proc =
@@ -60,25 +60,26 @@ let dump_proc_cmd =
   let info = Cmd.info "dump-il" ~version:"alpha" ~doc in
   Cmd.v info Term.(const dump_proc $ fname $ proc)
 
+(** Runs the [inner] function with an input channel. The input channel is from
+    opening the given [fname], or stdin if [fname] is [-]. *)
+let with_in_or_stdin fname inner =
+  match fname with "-" -> inner stdin | fname -> CCIO.with_in fname inner
+
 let run_script fname =
   let st = Script.init_st in
-  let r =
-    CCIO.with_in fname (fun c ->
-        let iter = CCIO.read_lines_iter c in
-        try
-          let _ = Iter.fold (fun acc l -> Script.of_str acc l) st iter in
-          Ok ()
-        with
-        | Common.ReplError { __LINE__; __FILE__; __FUNCTION__; msg; cmd } ->
-          let n =
-            Printf.sprintf "Error in %s: %s at %s %s:%d" cmd
-              (Containers_pp.Term_color.color `Red (Containers_pp.text msg)
-              |> Containers_pp.Pretty.to_string ~width:80)
-              __FUNCTION__ __FILE__ __LINE__
-          in
-          Error n)
-  in
-  r
+  with_in_or_stdin fname @@ fun chan ->
+  let iter = CCIO.read_lines_iter chan in
+  try
+    let _ = Iter.fold (fun acc l -> Script.of_str acc l) st iter in
+    Ok ()
+  with Common.ReplError { __LINE__; __FILE__; __FUNCTION__; msg; cmd } ->
+    let n =
+      Printf.sprintf "Error in %s: %s at %s %s:%d" cmd
+        (Containers_pp.Term_color.color `Red (Containers_pp.text msg)
+        |> Containers_pp.Pretty.to_string ~width:80)
+        __FUNCTION__ __FILE__ __LINE__
+    in
+    Error n
 
 (*
 let callgraph_cmd =
@@ -101,7 +102,7 @@ let main () =
   Trace_core.set_process_name "main";
   Trace_core.set_thread_name "t1";
   Logs.set_level (Some Logs.Error);
-  Logs.set_reporter (Logger.reporter Format.err_formatter);
+  Logs.set_reporter (reporter Format.err_formatter);
   exit (Cmd.eval_result cmd)
 
 let () = Trace_tef.with_setup ~out:(`File "trace.json") () @@ fun () -> main ()
