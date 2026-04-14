@@ -40,17 +40,17 @@ Memassign repr
   $ diff beforemem.il aftermem.il
   $ cat aftermem.il
   var observable $Global_4325420_4325424:bv32 classification true;
-  let $a : ilist = (Nil)();
+  let $a : UninterpSort = (UninterpSort)();
   let $b : record = (Record)(0x1:bv64, 0x2:bv64, 0x3:bv64);
   let $mul_2 (a:bv64), (b:bv64) : bv64 = (bvadd(b, bvmul(a, 0x2:bv64)));
   let $test (a:bv64) : bv64 = (if eq(a, 0x1:bv64) then 0xa:bv64 else 0xb:bv64);
-  let $three : bv64 = let func (a:opaque) : bv64 = (bvadd(a, 0x1:bv64)) in ((func)(($mul_2)(0x2:bv64,
+  let $three : bv64 = let func (a:bv64) : bv64 = (bvadd(a, 0x1:bv64)) in ((func)(($mul_2)(0x2:bv64,
            0x1:bv64)));
   type UninterpSort;
   type ilist = Cons of {head: bv64; tail: ilist} | Nil;
   type opaque = A | B | C;
   type record = Record of {a: bv64; b: bv32; c: bv64};
-  type variants = A1 of {a: bv64} | B of {b: bv32} | C of {c: bv8};
+  type variants = A of {a: bv64} | B of {b: bv32} | C of {c: bv8};
   prog entry @main_4196164;
   proc @main_4196164(R0_in:bv64, R10_in:bv64, R11_in:bv64, R12_in:bv64, R13_in:bv64,
      R14_in:bv64, R15_in:bv64, R16_in:bv64, R17_in:bv64, R18_in:bv64, R1_in:bv64,

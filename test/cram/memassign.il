@@ -5,20 +5,19 @@ type UninterpSort;
 
 type opaque = A | B | C;
 
-type variants = A1 of {a: bv64}
-| B of {b:bv32} | C of {c: bv8};
+type variants = A of {a: bv64} | B of {b:bv32} | C of {c: bv8};
 
 type record = Record of {a : bv64; b: bv32; c:bv64};
 
 type ilist = Cons of {head:bv64; tail:ilist} | Nil ;
 
-let $a = Nil { };
+let $a = UninterpSort { };
 
 
 let $b = Record {a=1:bv64; b=2:bv64; c=3:bv64};
 
 let $mul_2 (a:bv64), (b:bv64) : bv64 = bvadd(b, bvmul(a, 2:bv64));
-let $three = let func (a:opaque) : bv64 = bvadd(a, 1:bv64) in func($mul_2(2:bv64, 1:bv64));
+let $three = let func (a:bv64) : bv64 = bvadd(a, 1:bv64) in func($mul_2(2:bv64, 1:bv64));
 
 let $test (a:bv64) : bv64 = if (eq(a, 1:bv64)) then (10:bv64) else (11:bv64) ;
 
