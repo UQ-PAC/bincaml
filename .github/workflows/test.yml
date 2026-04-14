@@ -90,14 +90,14 @@ jobs:
 #      - run: opam install ocamlformat
 #      - uses: ocaml/setup-ocaml/lint-fmt@v3
 
-  lint-opam:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout tree
-        uses: actions/checkout@v5
-      - name: Set-up OCaml
-        uses: ocaml/setup-ocaml@v3
-        with:
-          ocaml-compiler: 5.4.0
-      - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
-      - uses: ocaml/setup-ocaml/lint-opam@v3
+#  lint-opam:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout tree
+#        uses: actions/checkout@v5
+#      - name: Set-up OCaml
+#        uses: ocaml/setup-ocaml@v3
+#        with:
+#          ocaml-compiler: 5.4.0
+#      - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
+#      - uses: ocaml/setup-ocaml/lint-opam@v3

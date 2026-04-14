@@ -36,6 +36,14 @@ jobs:
       - uses: actions/checkout@v6
       - run: opam exec -- dune build @fmt --display=quiet
 
+  lint-opam:
+    name: lint-opam 
+    runs-on: ubuntu-latest
+    container: ghcr.io/agle/bincaml-ci-containers/ci-doc-5.3:latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: opam lint
+
 #  lint-opam:
 #    name: lint-opam
 #    runs-on: ubuntu-latest
