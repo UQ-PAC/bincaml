@@ -13,10 +13,10 @@
   var $mem_encoding: MemEncoding;
   
   function  f$magic(a: [bv64]bv8, b: [bv64]bv8) returns ([bv64]bv8) { a }
-  function {:extern } {:bvbuiltin "bvadd"} bvadd_bv64(bv64, bv64) returns (bv64);
-  function {:extern } {:bvbuiltin "bvand"} bvand_bv64(bv64, bv64) returns (bv64);
-  function {:extern } {:bvbuiltin "bvule"} bvule_bv64_bv64_bool(bv64, bv64) returns (bool);
-  function {:extern } {:bvbuiltin "bvult"} bvult_bv64_bv64_bool(bv64, bv64) returns (bool);
+  function {:bvbuiltin "bvadd"} {:extern } bvadd_bv64(bv64, bv64) returns (bv64);
+  function {:bvbuiltin "bvand"} {:extern } bvand_bv64(bv64, bv64) returns (bv64);
+  function {:bvbuiltin "bvule"} {:extern } bvule_bv64_bv64_bool(bv64, bv64) returns (bool);
+  function {:bvbuiltin "bvult"} {:extern } bvult_bv64_bv64_bool(bv64, bv64) returns (bool);
   function {:extern } load64_le(#memory: [bv64]bv8, #index: bv64) returns (bv64) {
     (((((((#memory[bvadd_bv64(#index, 7bv64)]
            ++
@@ -34,38 +34,38 @@
      ++
      #memory[bvadd_bv64(#index, 0bv64)]): bv64
   }
-  function {:inline } {:extern } me_addr_alloc(mem_encoding: MemEncoding, addr: bv64) returns (bv64) {
+  function {:extern } {:inline } me_addr_alloc(mem_encoding: MemEncoding, addr: bv64) returns (bv64) {
     addr
   }
-  function {:inline } {:extern } me_addr_is_heap(mem_encoding: MemEncoding, addr: bv64) returns (bool) {
+  function {:extern } {:inline } me_addr_is_heap(mem_encoding: MemEncoding, addr: bv64) returns (bool) {
     mem_encoding->addr_is_heap[addr]
   }
-  function {:inline } {:extern } me_addr_offset(mem_encoding: MemEncoding, addr: bv64) returns (bv64) {
+  function {:extern } {:inline } me_addr_offset(mem_encoding: MemEncoding, addr: bv64) returns (bv64) {
     bvand_bv64(addr, 4294967295bv64)
   }
-  function {:inline } {:extern } me_alloc_base(mem_encoding: MemEncoding, alloc: bv64) returns (bv64) {
+  function {:extern } {:inline } me_alloc_base(mem_encoding: MemEncoding, alloc: bv64) returns (bv64) {
     bvand_bv64(alloc, 18446744069414584320bv64)
   }
-  function {:inline } {:extern } me_alloc_live(mem_encoding: MemEncoding, alloc: bv64) returns (bv2) {
+  function {:extern } {:inline } me_alloc_live(mem_encoding: MemEncoding, alloc: bv64) returns (bv2) {
     mem_encoding->alloc_live[alloc]
   }
-  function {:inline } {:extern } me_alloc_live_update(mem_encoding: MemEncoding, alloc: bv64, live: bv2) returns (MemEncoding) {
+  function {:extern } {:inline } me_alloc_live_update(mem_encoding: MemEncoding, alloc: bv64, live: bv2) returns (MemEncoding) {
     mem_encoding->(alloc_live := mem_encoding->alloc_live[alloc := live])
   }
-  function {:inline } {:extern } me_alloc_size(mem_encoding: MemEncoding, alloc: bv64) returns (bv64) {
+  function {:extern } {:inline } me_alloc_size(mem_encoding: MemEncoding, alloc: bv64) returns (bv64) {
     mem_encoding->alloc_size[alloc]
   }
-  function {:inline } {:extern } me_alloc_size_update(mem_encoding: MemEncoding, alloc: bv64, size: bv64) returns (MemEncoding) {
+  function {:extern } {:inline } me_alloc_size_update(mem_encoding: MemEncoding, alloc: bv64, size: bv64) returns (MemEncoding) {
     mem_encoding->(alloc_size := mem_encoding->alloc_size[alloc := size])
   }
-  function {:inline } {:extern } me_allocate(mem_encoding: MemEncoding, addr: bv64, size: bv64) returns (MemEncoding) {
+  function {:extern } {:inline } me_allocate(mem_encoding: MemEncoding, addr: bv64, size: bv64) returns (MemEncoding) {
     me_alloc_size_update(
       me_alloc_live_update(mem_encoding, me_addr_alloc(mem_encoding, addr), 1bv2),
       me_addr_alloc(mem_encoding, addr),
       size
     )
   }
-  function {:inline } {:extern } me_can_allocate(mem_encoding: MemEncoding, addr: bv64, size: bv64) returns (bool) {
+  function {:extern } {:inline } me_can_allocate(mem_encoding: MemEncoding, addr: bv64, size: bv64) returns (bool) {
     ((((me_addr_is_heap(mem_encoding, addr)&&(me_alloc_base(mem_encoding, addr) == addr))&&(me_alloc_live(
           mem_encoding,
           me_addr_alloc(mem_encoding, addr)
@@ -74,7 +74,7 @@
        size
      ))
   }
-  function {:inline } {:extern } me_init_encoding(mem_encoding: MemEncoding) returns (bool) {
+  function {:extern } {:inline } me_init_encoding(mem_encoding: MemEncoding) returns (bool) {
     (((forall 
        i: bv64 :: 
        {me_addr_is_heap(mem_encoding, i)} 
@@ -86,7 +86,7 @@
       {me_alloc_live(mem_encoding, i)} 
       ((!(me_addr_is_heap(mem_encoding, i))) ==> (me_alloc_live(mem_encoding, i) == 2bv2))))
   }
-  function {:inline } {:extern } me_valid_access(mem_encoding: MemEncoding, addr: bv64, size: bv64) returns (bool) {
+  function {:extern } {:inline } me_valid_access(mem_encoding: MemEncoding, addr: bv64, size: bv64) returns (bool) {
     (me_addr_is_heap(mem_encoding, addr) ==> ((me_alloc_live(
          mem_encoding,
          me_alloc_base(mem_encoding, me_addr_alloc(mem_encoding, addr))
@@ -99,7 +99,7 @@
       )))
   }
   datatype MemEncoding {MemEncoding(alloc_live: [bv64]bv2, alloc_size: [bv64]bv64, addr_is_heap: [bv64]bool)}
-  function {:extern } {:define } store64_le(#memory: [bv64]bv8, #index: bv64, #value: bv64) returns ([bv64]bv8) {
+  function {:define } {:extern } store64_le(#memory: [bv64]bv8, #index: bv64, #value: bv64) returns ([bv64]bv8) {
     #memory[#index := #value[8:0]][bvadd_bv64(#index, 1bv64) := #value[16:8]][bvadd_bv64(
       #index,
       2bv64
@@ -111,27 +111,9 @@
       6bv64
     ) := #value[56:48]][bvadd_bv64(#index, 7bv64) := #value[64:56]]
   }
-  function {:extern } {:define } store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
+  function {:define } {:extern } store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
     #memory[#index := #value[8:0]]
   }
-  
-  procedure p$free();
-    modifies $mem_encoding, $mem, $stack, $R0, $R1, $R16, $R17, $R29, $R30, $R31;
-    ensures ($mem_encoding == me_alloc_live_update(
-       old($mem_encoding),
-       me_addr_alloc(old($mem_encoding), $R0),
-       2bv2
-     ));
-    requires me_addr_is_heap($mem_encoding, $R0);
-    requires (0bv64 == me_addr_offset($mem_encoding, $R0));
-    requires (me_alloc_live($mem_encoding, me_addr_alloc($mem_encoding, $R0)) == 1bv2);
-  
-  procedure p$malloc();
-    modifies $mem_encoding, $mem, $stack, $R0, $R1, $R16, $R17, $R29, $R30, $R31;
-    ensures me_can_allocate(old($mem_encoding), $R0, old($R0));
-    ensures (me_addr_offset($mem_encoding, $R0) == 0bv64);
-    ensures (me_alloc_base($mem_encoding, me_addr_alloc($mem_encoding, $R0)) == $R0);
-    ensures ($mem_encoding == me_allocate(old($mem_encoding), $R0, old($R0)));
   
   procedure p$main();
     modifies $mem_encoding, $mem, $stack, $R0, $R1, $R16, $R17, $R29, $R30, $R31;
@@ -208,6 +190,24 @@
       assert true;
       return;
   }
+  
+  procedure p$malloc();
+    modifies $mem_encoding, $mem, $stack, $R0, $R1, $R16, $R17, $R29, $R30, $R31;
+    ensures me_can_allocate(old($mem_encoding), $R0, old($R0));
+    ensures (me_addr_offset($mem_encoding, $R0) == 0bv64);
+    ensures (me_alloc_base($mem_encoding, me_addr_alloc($mem_encoding, $R0)) == $R0);
+    ensures ($mem_encoding == me_allocate(old($mem_encoding), $R0, old($R0)));
+  
+  procedure p$free();
+    modifies $mem_encoding, $mem, $stack, $R0, $R1, $R16, $R17, $R29, $R30, $R31;
+    ensures ($mem_encoding == me_alloc_live_update(
+       old($mem_encoding),
+       me_addr_alloc(old($mem_encoding), $R0),
+       2bv2
+     ));
+    requires me_addr_is_heap($mem_encoding, $R0);
+    requires (0bv64 == me_addr_offset($mem_encoding, $R0));
+    requires (me_alloc_live($mem_encoding, me_addr_alloc($mem_encoding, $R0)) == 1bv2);
 
   $ boogie ./good.bpl
   
@@ -226,10 +226,10 @@
   var $mem_encoding: MemEncoding;
   
   function  f$magic(a: [bv64]bv8, b: [bv64]bv8) returns ([bv64]bv8) { a }
-  function {:extern } {:bvbuiltin "bvadd"} bvadd_bv64(bv64, bv64) returns (bv64);
-  function {:extern } {:bvbuiltin "bvand"} bvand_bv64(bv64, bv64) returns (bv64);
-  function {:extern } {:bvbuiltin "bvule"} bvule_bv64_bv64_bool(bv64, bv64) returns (bool);
-  function {:extern } {:bvbuiltin "bvult"} bvult_bv64_bv64_bool(bv64, bv64) returns (bool);
+  function {:bvbuiltin "bvadd"} {:extern } bvadd_bv64(bv64, bv64) returns (bv64);
+  function {:bvbuiltin "bvand"} {:extern } bvand_bv64(bv64, bv64) returns (bv64);
+  function {:bvbuiltin "bvule"} {:extern } bvule_bv64_bv64_bool(bv64, bv64) returns (bool);
+  function {:bvbuiltin "bvult"} {:extern } bvult_bv64_bv64_bool(bv64, bv64) returns (bool);
   function {:extern } load64_le(#memory: [bv64]bv8, #index: bv64) returns (bv64) {
     (((((((#memory[bvadd_bv64(#index, 7bv64)]
            ++
@@ -247,38 +247,38 @@
      ++
      #memory[bvadd_bv64(#index, 0bv64)]): bv64
   }
-  function {:inline } {:extern } me_addr_alloc(mem_encoding: MemEncoding, addr: bv64) returns (bv64) {
+  function {:extern } {:inline } me_addr_alloc(mem_encoding: MemEncoding, addr: bv64) returns (bv64) {
     addr
   }
-  function {:inline } {:extern } me_addr_is_heap(mem_encoding: MemEncoding, addr: bv64) returns (bool) {
+  function {:extern } {:inline } me_addr_is_heap(mem_encoding: MemEncoding, addr: bv64) returns (bool) {
     mem_encoding->addr_is_heap[addr]
   }
-  function {:inline } {:extern } me_addr_offset(mem_encoding: MemEncoding, addr: bv64) returns (bv64) {
+  function {:extern } {:inline } me_addr_offset(mem_encoding: MemEncoding, addr: bv64) returns (bv64) {
     bvand_bv64(addr, 4294967295bv64)
   }
-  function {:inline } {:extern } me_alloc_base(mem_encoding: MemEncoding, alloc: bv64) returns (bv64) {
+  function {:extern } {:inline } me_alloc_base(mem_encoding: MemEncoding, alloc: bv64) returns (bv64) {
     bvand_bv64(alloc, 18446744069414584320bv64)
   }
-  function {:inline } {:extern } me_alloc_live(mem_encoding: MemEncoding, alloc: bv64) returns (bv2) {
+  function {:extern } {:inline } me_alloc_live(mem_encoding: MemEncoding, alloc: bv64) returns (bv2) {
     mem_encoding->alloc_live[alloc]
   }
-  function {:inline } {:extern } me_alloc_live_update(mem_encoding: MemEncoding, alloc: bv64, live: bv2) returns (MemEncoding) {
+  function {:extern } {:inline } me_alloc_live_update(mem_encoding: MemEncoding, alloc: bv64, live: bv2) returns (MemEncoding) {
     mem_encoding->(alloc_live := mem_encoding->alloc_live[alloc := live])
   }
-  function {:inline } {:extern } me_alloc_size(mem_encoding: MemEncoding, alloc: bv64) returns (bv64) {
+  function {:extern } {:inline } me_alloc_size(mem_encoding: MemEncoding, alloc: bv64) returns (bv64) {
     mem_encoding->alloc_size[alloc]
   }
-  function {:inline } {:extern } me_alloc_size_update(mem_encoding: MemEncoding, alloc: bv64, size: bv64) returns (MemEncoding) {
+  function {:extern } {:inline } me_alloc_size_update(mem_encoding: MemEncoding, alloc: bv64, size: bv64) returns (MemEncoding) {
     mem_encoding->(alloc_size := mem_encoding->alloc_size[alloc := size])
   }
-  function {:inline } {:extern } me_allocate(mem_encoding: MemEncoding, addr: bv64, size: bv64) returns (MemEncoding) {
+  function {:extern } {:inline } me_allocate(mem_encoding: MemEncoding, addr: bv64, size: bv64) returns (MemEncoding) {
     me_alloc_size_update(
       me_alloc_live_update(mem_encoding, me_addr_alloc(mem_encoding, addr), 1bv2),
       me_addr_alloc(mem_encoding, addr),
       size
     )
   }
-  function {:inline } {:extern } me_can_allocate(mem_encoding: MemEncoding, addr: bv64, size: bv64) returns (bool) {
+  function {:extern } {:inline } me_can_allocate(mem_encoding: MemEncoding, addr: bv64, size: bv64) returns (bool) {
     ((((me_addr_is_heap(mem_encoding, addr)&&(me_alloc_base(mem_encoding, addr) == addr))&&(me_alloc_live(
           mem_encoding,
           me_addr_alloc(mem_encoding, addr)
@@ -287,7 +287,7 @@
        size
      ))
   }
-  function {:inline } {:extern } me_init_encoding(mem_encoding: MemEncoding) returns (bool) {
+  function {:extern } {:inline } me_init_encoding(mem_encoding: MemEncoding) returns (bool) {
     (((forall 
        i: bv64 :: 
        {me_addr_is_heap(mem_encoding, i)} 
@@ -299,7 +299,7 @@
       {me_alloc_live(mem_encoding, i)} 
       ((!(me_addr_is_heap(mem_encoding, i))) ==> (me_alloc_live(mem_encoding, i) == 2bv2))))
   }
-  function {:inline } {:extern } me_valid_access(mem_encoding: MemEncoding, addr: bv64, size: bv64) returns (bool) {
+  function {:extern } {:inline } me_valid_access(mem_encoding: MemEncoding, addr: bv64, size: bv64) returns (bool) {
     (me_addr_is_heap(mem_encoding, addr) ==> ((me_alloc_live(
          mem_encoding,
          me_alloc_base(mem_encoding, me_addr_alloc(mem_encoding, addr))
@@ -312,7 +312,7 @@
       )))
   }
   datatype MemEncoding {MemEncoding(alloc_live: [bv64]bv2, alloc_size: [bv64]bv64, addr_is_heap: [bv64]bool)}
-  function {:extern } {:define } store64_le(#memory: [bv64]bv8, #index: bv64, #value: bv64) returns ([bv64]bv8) {
+  function {:define } {:extern } store64_le(#memory: [bv64]bv8, #index: bv64, #value: bv64) returns ([bv64]bv8) {
     #memory[#index := #value[8:0]][bvadd_bv64(#index, 1bv64) := #value[16:8]][bvadd_bv64(
       #index,
       2bv64
@@ -324,27 +324,9 @@
       6bv64
     ) := #value[56:48]][bvadd_bv64(#index, 7bv64) := #value[64:56]]
   }
-  function {:extern } {:define } store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
+  function {:define } {:extern } store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
     #memory[#index := #value[8:0]]
   }
-  
-  procedure p$free();
-    modifies $mem_encoding, $mem, $stack, $R0, $R1, $R16, $R17, $R29, $R30, $R31;
-    ensures ($mem_encoding == me_alloc_live_update(
-       old($mem_encoding),
-       me_addr_alloc(old($mem_encoding), $R0),
-       2bv2
-     ));
-    requires me_addr_is_heap($mem_encoding, $R0);
-    requires (0bv64 == me_addr_offset($mem_encoding, $R0));
-    requires (me_alloc_live($mem_encoding, me_addr_alloc($mem_encoding, $R0)) == 1bv2);
-  
-  procedure p$malloc();
-    modifies $mem_encoding, $mem, $stack, $R0, $R1, $R16, $R17, $R29, $R30, $R31;
-    ensures me_can_allocate(old($mem_encoding), $R0, old($R0));
-    ensures (me_addr_offset($mem_encoding, $R0) == 0bv64);
-    ensures (me_alloc_base($mem_encoding, me_addr_alloc($mem_encoding, $R0)) == $R0);
-    ensures ($mem_encoding == me_allocate(old($mem_encoding), $R0, old($R0)));
   
   procedure p$main();
     modifies $mem_encoding, $mem, $stack, $R0, $R1, $R16, $R17, $R29, $R30, $R31;
@@ -421,10 +403,28 @@
       assert true;
       return;
   }
+  
+  procedure p$malloc();
+    modifies $mem_encoding, $mem, $stack, $R0, $R1, $R16, $R17, $R29, $R30, $R31;
+    ensures me_can_allocate(old($mem_encoding), $R0, old($R0));
+    ensures (me_addr_offset($mem_encoding, $R0) == 0bv64);
+    ensures (me_alloc_base($mem_encoding, me_addr_alloc($mem_encoding, $R0)) == $R0);
+    ensures ($mem_encoding == me_allocate(old($mem_encoding), $R0, old($R0)));
+  
+  procedure p$free();
+    modifies $mem_encoding, $mem, $stack, $R0, $R1, $R16, $R17, $R29, $R30, $R31;
+    ensures ($mem_encoding == me_alloc_live_update(
+       old($mem_encoding),
+       me_addr_alloc(old($mem_encoding), $R0),
+       2bv2
+     ));
+    requires me_addr_is_heap($mem_encoding, $R0);
+    requires (0bv64 == me_addr_offset($mem_encoding, $R0));
+    requires (me_alloc_live($mem_encoding, me_addr_alloc($mem_encoding, $R0)) == 1bv2);
 
   $ boogie ./bad.bpl
-  ./bad.bpl(176,5): Error: this assertion could not be proved
+  ./bad.bpl(158,5): Error: this assertion could not be proved
   Execution trace:
-      ./bad.bpl(146,3): b#main_entry
+      ./bad.bpl(128,3): b#main_entry
   
   Boogie program verifier finished with 0 verified, 1 error

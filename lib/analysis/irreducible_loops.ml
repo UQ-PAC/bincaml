@@ -3,6 +3,10 @@
 open Lang
 open Common
 
+let logs_src = Logs.Src.create "analysis.irreducible_loops"
+
+module Logs = (val Logs.src_log logs_src : Logs.LOG)
+
 module type GSig = sig
   (** Minimal graph structure for computing forest *)
 
@@ -474,6 +478,15 @@ module ProcIntra = struct
       information label for each block in the procedure. Returns all loop tags
       for blocks in reverse-topological order. *)
   let solve_proc p =
-    Procedure.get_entry_block p
-    |> Option.flat_map_l (fun entry -> solve p entry)
+    let block_infos =
+      Procedure.get_entry_block p
+      |> Option.flat_map_l (fun entry -> solve p entry)
+    in
+    Logs.info (fun m ->
+        m "found %d loops, %d irreducible" (List.length block_infos)
+          (List.count
+             (( function `IrreducibleHeader -> true | _ -> false )
+             % classify_block)
+             block_infos));
+    block_infos
 end
