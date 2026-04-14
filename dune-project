@@ -44,6 +44,8 @@
   patricia-tree
   ppx_here
   intPQueue
+  logs
+  mtime
   (ocamlformat :with-dev-setup)
   (odig :with-dev-setup)
   (sherlodoc :with-doc)
@@ -54,6 +56,5 @@
   (qcheck-alcotest :with-test)
   (qcheck-stm :with-test))
  (tags (program-analysis)))
-
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

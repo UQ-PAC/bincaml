@@ -17,6 +17,8 @@
   bnfc-treesitter,
   boogie,
   cvc5,
+  logs,
+  mtime,
 }:
 
 mkShell {
@@ -30,6 +32,8 @@ mkShell {
     bnfc-treesitter
     boogie
     cvc5
+    logs
+    mtime
     # sherlodoc - not in nixpkgs?
   ]
   ++ lib.optional stdenv.hostPlatform.isLinux perf;

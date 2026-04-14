@@ -76,7 +76,7 @@ let pretty_declaration d =
           ^+ text (Types.to_string rtype)
           ^+ text "="
           ^+ nest 2 (Expr.BasilExpr.pretty body))
-  | Type { binding; typ } -> text "type " ^ text (Types.to_string typ)
+  | Type { binding; typ } -> text "type " ^ text (Types.to_string_decl typ)
 
 (*match definition with
       | Some d -> 
@@ -134,10 +134,10 @@ let prog_pretty (p : t) =
   in
   let decls =
     globs @ n
-    @ List.map
+    @ (List.map
         (fun (_, p) -> proc_pretty p)
         (IDMap.to_list p.procs
-        |> List.sort (fun (i, _) (j, _) -> ID.compare i j))
+        |> List.sort (fun (i, _) (j, _) -> ID.compare i j)))
   in
 
   append_l ~sep:(text ";\n") decls ^ text ";\n"

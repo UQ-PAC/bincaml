@@ -69,6 +69,7 @@ let transform_main p =
         spec.requires
         @ [ Calls.init_encoding [ BasilExpr.rvar Globals.mem_encoding ] ];
       modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
+      captures_globs = spec.captures_globs @ [ Globals.mem_encoding ];
     }
 
 let transform_malloc p =
@@ -103,6 +104,7 @@ let transform_malloc p =
                  [ old @@ rvar Globals.mem_encoding; r_out 0; r_in 0 ]);
           ];
       modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
+      captures_globs = spec.captures_globs @ [ Globals.mem_encoding ];
     }
 
 let transform_free p =
@@ -142,6 +144,7 @@ let transform_free p =
                  ]);
           ];
       modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
+      captures_globs = spec.captures_globs @ [ Globals.mem_encoding ];
     }
 
 let transform_stmt (s : Program.stmt) =

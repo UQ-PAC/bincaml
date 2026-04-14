@@ -145,7 +145,7 @@ module Domain (S : FunctionSummaryAnnotation) = struct
 
   (** Encode an abstract state as a predicate *)
   let to_pred =
-    Algsimp.to_steady Expr.BasilExpr.equal Algsimp.alg_simp_rewriter
+    Algsimp.Comb.to_steady Expr.BasilExpr.equal Algsimp.alg_simp_rewriter
     % BasilExpr.boolnot
 end
 

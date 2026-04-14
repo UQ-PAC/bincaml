@@ -115,8 +115,8 @@ module.exports = ({
         seq($.Field, ",", optional($.list_Field))
       ),
     Field: $ =>
-      // Field1. Field ::= OpenParen Str ":" OpenParen Type "," IntVal CloseParen CloseParen ;
-      seq($.token_OpenParen, $.token_Str, ":", $.token_OpenParen, $.Type, ",", $.IntVal, $.token_CloseParen, $.token_CloseParen),
+      // Field1. Field ::= Str ":" OpenParen Type "," IntVal CloseParen ;
+      seq($.token_Str, ":", $.token_OpenParen, $.Type, ",", $.IntVal, $.token_CloseParen),
     IntType: $ =>
       // IntType1. IntType ::= INTTYPE ;
       $.token_INTTYPE,
@@ -816,11 +816,11 @@ module.exports = ({
     token_POINTERTYPE: $ =>
       /ptr/,
     token_BIdent: $ =>
-      /\.(_|[a-zA-Z])([#\$\._~]|(\d|[a-zA-Z]))*/,
+      /\.(_|[a-zA-Z])([#\$_~]|(\d|[a-zA-Z]))*/,
     token_LocalIdent: $ =>
-      /([#_]|[a-zA-Z])([#\$\._]|(\d|[a-zA-Z]))*/,
+      /([#_]|[a-zA-Z])([#\$_]|(\d|[a-zA-Z]))*/,
     token_GlobalIdent: $ =>
-      /\$([#\$\._]|(\d|[a-zA-Z]))+/,
+      /\$([#\$_]|(\d|[a-zA-Z]))+/,
     token_BlockIdent: $ =>
       /%([#\$\._]|(\d|[a-zA-Z]))+/,
     token_ProcIdent: $ =>

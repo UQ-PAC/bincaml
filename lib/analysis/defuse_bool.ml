@@ -51,6 +51,7 @@ module IsZeroValueAbstraction = struct
             else if Z.equal Z.zero (Bitvec.value i) then join acc Zero
             else join acc NonZero)
           fields Zero
+    | `Sort _ -> failwith ""
 
   let eval_unop (op : Lang.Ops.AllOps.unary) a =
     match op with
@@ -66,7 +67,7 @@ module IsZeroValueAbstraction = struct
     (* NOTE: More effort would be needed to be able to say is this one field zero or not *)
     | `ReadField offset -> ( match a with Zero -> Zero | _ -> Top)
 
-  let eval_binop (op : Lang.Ops.AllOps.binary) a b =
+  let eval_binary op a b =
     match (op, a, b) with
     | `BVSREM, _, _ -> Top
     | `BVSDIV, _, _ -> Top
@@ -116,12 +117,15 @@ module IsZeroValueAbstraction = struct
     | `WriteField _, _, _ -> Top
     | #Lang.Ops.Spec.binary, _, _ -> Top
 
+  let eval_binop op a b = eval_binary op a b
+
   let eval_intrin (op : Lang.Ops.AllOps.intrin) (args : t list) =
     match op with
-    | `BVADD -> List.fold_left (eval_binop `BVADD) Bot args
-    | `BVOR -> List.fold_left (eval_binop `BVOR) Bot args
-    | `BVXOR -> List.fold_left (eval_binop `BVXOR) Bot args
-    | `BVAND -> List.fold_left (eval_binop `BVAND) Bot args
+    | `BVADD -> List.fold_left (eval_binary `BVADD) Bot args
+    | `BVOR -> List.fold_left (eval_binary `BVOR) Bot args
+    | `BVXOR -> List.fold_left (eval_binary `BVXOR) Bot args
+    | `BVMUL -> List.fold_left (eval_binary `BVMUL) Bot args
+    | `BVAND -> List.fold_left (eval_binary `BVAND) Bot args
     | `BVConcat -> List.fold_left join Bot args
     | `OR ->
         (* boolean or *)

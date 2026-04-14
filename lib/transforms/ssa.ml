@@ -291,10 +291,10 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
             | RVar { id } -> (
                 match StringMap.find_opt (Var.name id) glob_to_inparam with
                 | Some v -> replace [%here] (rvar v)
-                | None when skip_any ->
-                    failwith
-                      "Variable in contract but is not captured or modified by \
-                       procedure"
+                (* | None when skip_any -> *)
+                    (* failwith *)
+                      (* "Variable in contract but is not captured or modified by \ *)
+                       (* procedure" *)
                 | None -> Keep)
             | UnaryExpr { op = `Old; arg } -> replace [%here] (fix arg)
             | _ -> Keep
