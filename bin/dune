@@ -6,6 +6,7 @@
  (libraries
   bincaml.ast
   bincaml.util
+  bincaml.analysis
   bincaml.loader
   bincaml.transforms
   bincaml.backends

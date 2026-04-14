@@ -5,6 +5,7 @@ open Cmdliner
 open Cmdliner.Term.Syntax
 
 let () = Printexc.record_backtrace true
+let () = Analysis.Hm.testa ()
 
 let fname =
   let doc = "Input file name (e.g., filename.il or - for stdin)" in
