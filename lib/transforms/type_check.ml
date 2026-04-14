@@ -60,7 +60,7 @@ let type_check stmt_id block_id expr =
       type_error list =
     let binary_same_types (expected_type : Types.t) arg1 arg2 =
       match (arg1, arg2) with
-      | tl, tr when Types.equal tl expected_type && Types.equal tr expected_type
+      | tl, tr when Types.compatible_types tl expected_type && Types.equal tr expected_type
         ->
           []
       | _, tr when Types.equal tr expected_type ->
@@ -279,7 +279,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
         (fun acc (lvar, e) ->
           let expr_errors, rtype = type_check e in
           let acc = List.append acc expr_errors in
-          if Types.leq (Var.typ lvar) rtype then acc
+          if Types.compatible_types (Var.typ lvar) rtype then acc
           else
             type_err
               "Parameters for the function has a type mismatch: type of %s != \
@@ -315,7 +315,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
       in
       match Var.typ rhs with
       | Map (Bitvector addressSize, _)
-        when Types.equal rtype (Types.bv addressSize) ->
+        when Types.compatible_types rtype (Types.bv addressSize) ->
           errors
       | Map (Bitvector addressSize, _) ->
           type_err "Address loading data (%s : %s) does not match address size (%d)"
@@ -339,7 +339,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
       in
       match Var.typ rhs with
       | Map (Bitvector addressSize, _)
-        when Types.equal addr_rtype (Types.bv addressSize) ->
+        when Types.compatible_types addr_rtype (Types.bv addressSize) ->
           errors
       | Map (Bitvector addressSize, _) ->
           type_err "Address storing data (%s) does not match address size (%d)"
@@ -364,7 +364,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
             match (arg, real) with
             | None, _ | _, None -> Some (type_err "missing: %s" k)
             | Some arg, Some real ->
-                if Types.leq (ty_a arg) (ty_b real) then None
+                if Types.compatible_types (ty_b real) (ty_a arg) then None
                 else
                   Some
                     (type_err "Type mismatch in arguments %s and %s" (str_a arg)

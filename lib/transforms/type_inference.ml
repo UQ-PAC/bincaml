@@ -6,6 +6,7 @@
 *)
 
 open Bincaml_util.Common
+open Bincaml_util.Logger
 open Lang
 open Expr
 
@@ -203,32 +204,19 @@ module InferredType = struct
     | Bottom, a | a, Bottom -> Bottom
     | a, b when equal a b -> a
     (* | c, Union (a, b) | Union (a, b), c -> Sect (c, Union (a,)) *)
-    | c, Sect (a, b) | Sect (a, b), c -> intersect c @@ intersect a b
-    | a, b -> order a b
-
-  and union a b = a
-
-  and order a b =
-    match (a, b) with
-    | (Top | TypeVar _), a | a, (Top | TypeVar _) -> Top
-    | Bottom, a | a, Bottom -> Bottom
-    | Record (a, b), _ | _, Record (a, b) -> Record (a, b)
-    | Pointer (lower, upper), _ | _, Pointer (lower, upper) ->
-        Pointer (lower, upper)
-    | Function (a, b, c), _ | _, Function (a, b, c) -> Function (a, b, c)
-    | a, Union (c, d) | Union (c, d), a -> order a @@ union c d
-    | Sect (c, d), a | a, Sect (c, d) -> order a @@ intersect c d
-    | a, b ->
-        failwith
-        @@ Printf.sprintf "There is no order of these types %s %s" (show a)
-             (show b)
+    (* | c, Sect (a, b) | Sect (a, b), c -> intersect c @@ intersect a b *)
+    | a, b -> a
 
   (* Top and type_var might be valid, and maybe even bottom and then those can just default to whatever type it had prior *)
   let rec inferred_to_real recursives typ : (VarId.t * Types.t) list * Types.t =
     match typ with
     | Top -> (recursives, Types.Top)
     | Bottom -> (recursives, Types.Nothing)
-    | TypeVar a -> (recursives, Types.Variable (VarId.show a))
+    | TypeVar a ->
+        ( recursives,
+          if List.exists (fun (var, _) -> VarId.equal var a) recursives then
+            Types.Variable (VarId.show a)
+          else Top )
     | BinCamlType a -> (recursives, BinCamlType.bincaml_type_to_type a)
     | Pointer (Top, Top) ->
         (recursives, Types.Pointer { name = "void*"; lower = Top; upper = Top })
@@ -256,9 +244,7 @@ module InferredType = struct
         let recursives, typ = inferred_to_real recursives typ in
         ((varid, typ) :: recursives, Types.Variable (VarId.show varid))
     (* NOTE: Will need to check to make sure the typevar isn't a recursive and if it is use that one instead *)
-    | Union (a, b) ->
-        print_endline "fake join";
-        inferred_to_real recursives @@ intersect a b
+    | Union (a, b) -> inferred_to_real recursives @@ intersect a b
     | Sect (a, b) -> inferred_to_real recursives @@ intersect a b
     | Function _ -> (recursives, Top)
 
@@ -1421,7 +1407,9 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
 (* Passes through a given program and returns a given constraint set *)
 let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
   (* Generate constraint set *)
-  print_endline "Generate constraint set";
+  Logs.info (fun m ->
+      m "Generating the constraint set" ?header:None
+        ~tags:(Logger.time_stamp ()));
   let type_constraint_map =
     IDMap.values prog.procs
     |> Iter.fold
@@ -1451,7 +1439,8 @@ let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
                 acc)
          VarIdMap.empty
   in
-  print_endline "Coalesce types";
+  Logs.info (fun m ->
+      m "Coalescing types" ?header:None ~tags:(Logger.time_stamp ()));
   (* Create polar unconstrained types for each variable / function etc. *)
   let types =
     VarIdMap.mapi
@@ -1482,7 +1471,9 @@ let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
     What would happen if we made one huge automata and tried to solve it like that?
   *)
   (* Make the types simpler *)
-  print_endline "TypeAutomata simplify";
+  Logs.info (fun m ->
+      m "Type automata based simplification" ?header:None
+        ~tags:(Logger.time_stamp ()));
   let ( (recursives : (VarId.t * Types.t) list),
         (types : (VarId.t * Types.t) list) ) =
     VarIdMap.fold
@@ -1497,7 +1488,8 @@ let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
       types ([], [])
   in
 
-  print_endline "Done Analysis";
+  Logs.info (fun m ->
+      m "Done analysis" ?header:None ~tags:(Logger.time_stamp ()));
   (VarIdMap.of_list types, recursives)
 
 (*
@@ -1652,7 +1644,9 @@ let declare_recursive_typs (recursives : (VarId.t * Types.t) list) :
 
 let transform (prog : Program.t) (results : Types.t VarIdMap.t)
     (recursives : (VarId.t * Types.t) list) : Program.t =
-  print_endline "start transforming";
+  Logs.info (fun m ->
+      m "Starting type inference transform" ?header:None
+        ~tags:(Logger.time_stamp ()));
   let decls, results =
     List.fold_left_map
       (fun acc (id, typ) ->

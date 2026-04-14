@@ -1,20 +1,11 @@
 (load-il "examples/cntlm-output.il")
-<<<<<<< Updated upstream
+; (load-il "examples/irreducible_loop_1.il")
 (run-transforms "cf-expressions")
 (run-transforms "ssa")
 (run-transforms "cf-expressions")
 (run-transforms "simplify")
 (dump-il "before.il")
-(run-transforms "type-inference")
-; (dump-il "after.il")
-=======
-; (load-il "examples/irreducible_loop_1.il")
-(run-transforms "cf-expressions")
-(run-transforms "ssa")
-(run-transforms "cf-expressions")
-(run-transforms "inter-dead-store-elim")
 (run-transforms "type-check")
 (log-level "info")
 (run-transforms "type-inference")
 (dump-il "after.il")
->>>>>>> Stashed changes

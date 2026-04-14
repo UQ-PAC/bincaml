@@ -133,6 +133,12 @@ let rec compare_partial (a : t) (b : t) =
 let leq a b =
   compare_partial a b |> function Some a when a <= 0 -> true | _ -> false
 
+let compatible_types (a : t) (b : t) =
+  match (a, b) with
+  | Pointer _, _ | _, Pointer _ -> leq a b
+  | Struct _, _ | _, Struct _ -> leq a b
+  | _ -> equal a b
+
 let rec uncurry ?(acc = []) (l : t) : t list * t =
   match l with
   | Map (l, ts) -> uncurry ~acc:(l :: acc) ts
