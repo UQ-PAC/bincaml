@@ -7,6 +7,7 @@
   intra_analysis
   defuse_bool
   lattice_types
+  hm
   ide
   irreducible_loops
   idessi
@@ -25,6 +26,7 @@
   intPQueue
   patricia-tree
   loader
+  unionFind
   lang
   zarith
   fix
