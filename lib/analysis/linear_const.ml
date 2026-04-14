@@ -350,19 +350,31 @@ module CopyNode = struct
 
   (** Returns all reachable leaves from the given node, but aborts if the
       predicate is violated *)
-  let rec leaves (keep : t -> bool) v : edge list option =
-    let f, v = find v in
-    match !v.copied_from with
-    | [] -> if keep v then Some [ (f, v) ] else None
-    | ls ->
-        let open List.Traverse (Option) in
-        Option.map List.concat
-        @@ map_m
-             (fun (f', v') ->
-               leaves keep v'
-               |> Option.map
-                    (List.map (fun (f'', v'') -> (f @. f' @. f'', v''))))
-             ls
+  let leaves (keep : t -> bool) v : edge list option =
+    let memo = ref VarMap.empty in
+    let rec dfs v =
+      let f, v = find v in
+      match VarMap.get (var v) !memo with
+      | Some l -> Some l
+      | None -> (
+          memo := VarMap.add (var v) [] !memo;
+          match !v.copied_from with
+          | [] -> if keep v then Some [ (f, v) ] else None
+          | ls ->
+              let open List.Traverse (Option) in
+              let ans =
+                Option.map List.concat
+                @@ map_m
+                     (fun (f', v') ->
+                       dfs v'
+                       |> Option.map
+                            (List.map (fun (f'', v'') -> (f @. f' @. f'', v''))))
+                     ls
+              in
+              Option.iter (fun a -> memo := VarMap.add (var v) a !memo) ans;
+              ans)
+    in
+    dfs v
 end
 
 (** Ocamlgraph representation of the above for debug utilities *)
@@ -388,8 +400,11 @@ module CopyGraph = struct
     let get_subgraph _ = None
 
     let edge_attributes (_, f, _) =
-      let n = LF.show f in
-      [ `Label n ]
+      match f with
+      | IdEdge -> []
+      | f ->
+          let n = LF.show f in
+          [ `Label n ]
 
     let vertex_attributes v =
       let n = Var.name v in
