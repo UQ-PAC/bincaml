@@ -45,7 +45,7 @@ module SymBase = struct
     | Ret _ | Par _ | Loaded -> true
 
   let to_int = Hashtbl.hash
-  let pretty a = Containers_pp.int 1
+  let pretty a = Containers_pp.text @@ show a
   let is_stack = function Stack _ -> true | _ -> false
 end
 
@@ -74,10 +74,10 @@ module SVAAbstraction = struct
   include SymAddrSetLattice
   open WrappedIntervalsValueAbstractionBasil
 
-  let eval_const op rt =
+  let eval_const (op : Lang.Ops.AllOps.const) rt =
     SymAddrSetLattice.singleton SymBase.Constant @@ eval_const op rt
 
-  let eval_unop op (a, t) rt =
+  let eval_unop (op : Lang.Ops.AllOps.unary) (a, t) rt =
     SymAddrSetLattice.mapi
       (fun sb1 vs1 ->
         match sb1 with
@@ -114,7 +114,7 @@ module SVAAbstraction = struct
   let eval_binop op a b rt =
     match op with #Lang.Ops.AllOps.binary as op -> eval_binary op a b rt
 
-  let eval_intrin op args rt =
+  let eval_intrin (op : E.intrin) args rt =
     let op a b =
       match op with
       | (`BVADD | `BVOR | `BVXOR | `BVAND | `BVMUL) as op ->
@@ -134,14 +134,7 @@ module SVAAbstraction = struct
                     match (sb1, sb2) with
                     (* NOTE: OCaml compiler complains when these cases are merged *)
                     | (SymBase.GlobSym | Constant), sb
-                      when not @@ SymBase.is_place_holder sb ->
-                        SymAddrSetLattice.update sb
-                          (WrappedIntervalsValueAbstractionBasil.eval_intrin op
-                             [ (vs1, snd a); (vs2, snd b) ]
-                             return_size)
-                          map
-                    | sb, (SymBase.GlobSym | Constant)
-                      when not @@ SymBase.is_place_holder sb ->
+                    | sb, (SymBase.GlobSym | Constant) ->
                         SymAddrSetLattice.update sb
                           (WrappedIntervalsValueAbstractionBasil.eval_intrin op
                              [ (vs1, snd a); (vs2, snd b) ]
@@ -174,32 +167,29 @@ module Domain = struct
   let link_register = Var.create ~scope:Local "R30_in" @@ Bitvector 64
   let frame_pointer = Var.create ~scope:Local "R29_in" @@ Bitvector 64
 
+  (* These registers are preserved over calls and are not real params, so we can ignore later *)
   let call_preserve =
     List.init 11 (fun i -> 19 + i) |> fun lst ->
     31 :: lst |> List.map (fun i -> "R" ^ string_of_int i)
 
-  let implicit_form = [ stack_pointer; link_register; frame_pointer ]
-
   let init proc =
+    let open Option in
     let name = ID.name @@ Procedure.id proc in
     StringMap.filter (fun param _ ->
-        List.fold_left
-          (fun acc a ->
-            if String.starts_with param ~prefix:a then acc else false)
-          false call_preserve)
+        List.exists (fun a -> String.starts_with param ~prefix:a) call_preserve)
     @@ Procedure.formal_in_params proc
     |> StringMap.to_iter
-    |> Iter.map (fun (_, param) ->
-        let size =
+    |> Iter.filter_map (fun (_, param) ->
+        let* size =
           match Var.typ param with
-          | Types.Boolean -> 1
-          | Types.Integer -> 32
-          | Types.Bitvector size -> size
-          | _ -> failwith "Illegal function parameter type"
+          | Types.Boolean -> Some 1
+          | Types.Bitvector size -> Some size
+          | _ -> None
         in
-        ( param,
-          SymAddrSetLattice.singleton (Par { name; param })
-          @@ IntervalDomain.init @@ Bitvec.zero ~size ))
+        Some
+          ( param,
+            SymAddrSetLattice.singleton (Par { name; param })
+            @@ IntervalDomain.init @@ Bitvec.zero ~size ))
     |> Iter.cons
          ( stack_pointer,
            SymAddrSetLattice.singleton (SymBase.Stack name)
@@ -259,7 +249,6 @@ module Domain = struct
               let size =
                 match Var.typ param with
                 | Types.Boolean -> 1
-                | Types.Integer -> 32
                 | Types.Bitvector size -> size
                 | _ -> failwith "Illegal function parameter type"
               in
@@ -286,44 +275,39 @@ let sva (prog : Program.t) =
   let constant_within_global_address (interval : WrappedIntervalsLattice.t)
       (prog : Program.t) : bool =
     let open Option in
-    match
-      let* symbols =
-        match StringMap.find_opt ".symbols" prog.attrib with
-        | Some symbols -> Some symbols
-        | _ -> None
-      in
-      let* globs =
-        match Attrib.find_opt ".globals" (Some symbols) with
-        | Some Attrib.(`List globals) -> Some globals
-        | _ -> None
-      in
-      List.fold_left
-        (fun acc (global : Program.e Attrib.t) ->
-          (* I would like a better early continue then an if *)
-          if
-            Option.is_some acc
-            && Bool.equal (Option.value ~default:false acc) true
-          then Some true
-          else
-            let* address =
-              match Attrib.find_opt ".address" (Some global) with
-              | Some Attrib.(`Bitvector bv) -> Some bv
-              | _ -> None
-            in
-            let* size =
-              match Attrib.find_opt ".size" (Some global) with
-              | Some Attrib.(`Bitvector bv) -> Some bv
-              | _ -> None
-            in
-            let end_address = Bitvec.add address size in
-            let interval2 =
-              WrappedIntervalsLattice.interval address end_address
-            in
-            Some (WrappedIntervalsLattice.leq interval2 interval))
-        None globs
-    with
-    | None -> false
-    | Some a -> a
+    (let* symbols =
+       match StringMap.find_opt ".symbols" prog.attrib with
+       | Some symbols -> Some symbols
+       | _ -> None
+     in
+     let* globs =
+       match Attrib.find_opt ".globals" (Some symbols) with
+       | Some Attrib.(`List globals) -> Some globals
+       | _ -> None
+     in
+     Some
+       (List.exists
+          (fun (global : Program.e Attrib.t) ->
+            (let* address =
+               match Attrib.find_opt ".address" (Some global) with
+               | Some Attrib.(`Bitvector bv) -> Some bv
+               | _ -> None
+             in
+             let* size =
+               match Attrib.find_opt ".size" (Some global) with
+               | Some Attrib.(`Bitvector bv) -> Some bv
+               | _ -> None
+             in
+             let end_address =
+               Bitvec.sub (Bitvec.one ~size:64) @@ Bitvec.add address size
+             in
+             let interval2 =
+               WrappedIntervalsLattice.interval address end_address
+             in
+             Some (WrappedIntervalsLattice.leq interval2 interval))
+            |> Option.get_or ~default:false)
+          globs))
+    |> Option.get_or ~default:false
   in
   let results =
     IDMap.fold
