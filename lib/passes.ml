@@ -258,8 +258,8 @@ module PassManager = struct
   let linear_copy =
     {
       name = "linear-copy";
-      apply = Prog Analysis.Linear_const.test_transform;
-      doc = "";
+      apply = Prog Transforms.Linear_copy.transform;
+      doc = "blah";
     }
 
   let copy_prop =
@@ -272,7 +272,7 @@ module PassManager = struct
   let simp =
     {
       name = "simplify";
-      apply = Batch [ linear_const; copy_prop; cf_exprs; inter_dead ];
+      apply = Batch [ linear_const; copy_prop; cf_exprs; linear_copy; cf_exprs; inter_dead ];
       doc =
         "Performs some simplifications (linear constant propagation, copy \
          propagation, constant folding, dead store elimination). Requires SSA \

@@ -297,6 +297,9 @@ end
 
 module LinearConstAnalysis = IDESSI (LinearDomain)
 
+(* This is just the copyprop copy pasted... hopefully we can just remove the
+   normal copyprop *)
+
 module CopyNode = struct
   type content = {
     (* The variable this node represents *)

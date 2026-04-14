@@ -16,6 +16,7 @@
   boogie_prepass
   gamma_vars
   const_prop
+  linear_copy
   copyprop)
  (libraries
   bincaml.analysis

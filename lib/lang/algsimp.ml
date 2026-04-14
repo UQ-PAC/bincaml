@@ -169,6 +169,23 @@ let drop_assoc
       replace [%here] (BasilExpr.boolconst false)
   | ApplyIntrin { op = `BVConcat; args = [] } ->
       replace [%here] (BasilExpr.bvconst @@ Bitvec.zero ~size:0)
+  | ApplyIntrin { op; args }
+    when List.exists
+           (function
+             | ApplyIntrin { op = op' }, _ when Ops.AllOps.equal_intrin op op'
+               ->
+                 true
+             | _ -> false)
+           args ->
+      replace [%here]
+        (BasilExpr.applyintrin ~op
+           (List.flat_map
+              (function
+                | ApplyIntrin { op = op'; args }, _
+                  when Ops.AllOps.equal_intrin op op' ->
+                    args
+                | e, _ -> [ fix e ])
+              args))
   | _ -> Keep
 
 let algebraic_simplifications
@@ -180,6 +197,12 @@ let algebraic_simplifications
   let keep a = fix (fst a) in
   let is_bvzero = function
     | Constant { const = `Bitvector i } when is_zero i -> true
+    | _ -> false
+  in
+  let is_bvone = function
+    | Constant { const = `Bitvector i }
+      when Bitvec.equal i (Bitvec.one ~size:(Bitvec.size i)) ->
+        true
     | _ -> false
   in
   let is_ones = function
@@ -202,6 +225,24 @@ let algebraic_simplifications
       } ->
       replace [%here]
         (BasilExpr.concatl ?attrib @@ al @ List.map (fun i -> fix (fst i)) tl)
+  | ApplyIntrin
+      {
+        op = `BVADD;
+        attrib;
+        args = ((RVar { id; attrib = attrib2 } as v), _) :: tl;
+      }
+    when List.for_all (function Constant _, _ -> true | _ -> false) tl ->
+      let size = width_args tl in
+      let sum =
+        List.fold_left
+          (fun n e ->
+            match e with
+            | Constant { const = `Bitvector m }, _ -> Bitvec.add n m
+            | _ -> failwith "unreachable")
+          (Bitvec.zero ~size) tl
+      in
+      replace [%here]
+        (BasilExpr.applyintrin ~op:`BVADD [ fix v; BasilExpr.bvconst sum ])
   | ApplyIntrin { attrib; op = (`BVADD | `BVOR) as op; args }
     when List.exists (fst %> is_bvzero) args ->
       let size = width_args args in
@@ -215,8 +256,21 @@ let algebraic_simplifications
     when List.exists (fst %> is_bvzero) args ->
       let size = width_args args in
       replace [%here] (BasilExpr.bvconst ?attrib (Bitvec.zero ~size))
+  | ApplyIntrin { attrib; op = `BVMUL as op; args }
+    when List.exists (fst %> is_bvone) args ->
+      let size = width_args args in
+      let args =
+        args |> List.map fst |> List.filter (is_bvone %> not) |> List.map fix
+      in
+      if List.is_empty args then
+        replace [%here] (BasilExpr.bvconst ?attrib (Bitvec.one ~size))
+      else replace [%here] (BasilExpr.applyintrin ?attrib ~op args)
   | BinaryExpr
-      { op = `BVSUB; arg1; arg2 = Constant { const = `Bitvector i }, _ }
+      {
+        op = `BVSUB | `BVASHR | `BVLSHR | `BVSHL;
+        arg1;
+        arg2 = Constant { const = `Bitvector i }, _;
+      }
     when is_zero i ->
       replace [%here] @@ keep arg1
   | ApplyIntrin { attrib; op = `BVAND; args }
