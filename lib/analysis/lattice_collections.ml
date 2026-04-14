@@ -78,6 +78,7 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
       let name = V.name ^ "MapLattice"
       let bottom = BotMap KM.empty
       let top = TopMap KM.empty
+      let singleton k v = BotMap (KM.singleton k v)
 
       let top_vjoin _ x y =
         let j = V.join x y in
@@ -195,6 +196,13 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
       let to_list = function
         | BotMap m -> (`Bottom, KM.to_list m)
         | TopMap m -> (`Top, KM.to_list m)
+
+      let mapi f = function
+        | BotMap m -> BotMap (KM.mapi f m)
+        | TopMap m -> TopMap (KM.mapi f m)
+
+      let fold f m acc =
+        match m with BotMap m -> KM.fold f m acc | TopMap m -> KM.fold f m acc
     end :
       sig
         include StateAbstraction with type val_t = V.t and type key_t = K.t
@@ -204,6 +212,9 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
         val of_list_bot : (K.t * V.t) list -> t
         val cardinal : t -> int
         val to_list : t -> [ `Bottom | `Top ] * (K.t * V.t) list
+        val singleton : K.t -> V.t -> t
+        val mapi : (K.t -> V.t -> V.t) -> t -> t
+        val fold : (K.t -> V.t -> 'a -> 'a) -> t -> 'a -> 'a
       end)
 
   module V = V

@@ -26,6 +26,7 @@
   inter_dead.il
   typefail.sexp
   typepass.sexp
+  sva.sexp
   basicssa.sexp
   roundtrip.sexp
   gammavars.sexp
