@@ -330,14 +330,15 @@ let sva (prog : Program.t) =
       (fun _ v acc -> DFGAnalysis.flow_insensitive v :: acc)
       prog.procs []
   in
-  StateAbstraction.mapi (fun _ domain ->
-      SymAddrSetLattice.to_list domain
-      |> snd
-      |> List.map (fun (sym_base, value) ->
-          if
-            SymBase.equal Constant sym_base
-            && constant_within_global_address value prog
-          then (SymBase.GlobSym, value)
-          else (sym_base, value))
-      |> SymAddrSetLattice.of_list_bot)
-  @@ List.hd results
+  results
+  |> List.map
+     @@ StateAbstraction.mapi (fun _ domain ->
+         SymAddrSetLattice.to_list domain
+         |> snd
+         |> List.map (fun (sym_base, value) ->
+             if
+               SymBase.equal Constant sym_base
+               && constant_within_global_address value prog
+             then (SymBase.GlobSym, value)
+             else (sym_base, value))
+         |> SymAddrSetLattice.of_list_bot)
