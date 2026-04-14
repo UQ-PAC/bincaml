@@ -8,7 +8,7 @@ open Common
 open Idessi
 open Lattice_types
 
-module LinearDomain = struct
+module LinearFunction = struct
   let direction = `Forwards
 
   module Value = FlatLattice (struct
@@ -170,13 +170,6 @@ module LinearDomain = struct
     | Join _, Bot -> Bot
     | Join _, Top -> Top
 
-  type state_update = (DL.t * t) Iter.t
-
-  let init_data (proc : Program.proc) =
-    Procedure.formal_in_params proc |> StringMap.values
-
-  open DL
-
   let const_expr e =
     let open Expr.AbstractExpr in
     let open Expr.BasilExpr in
@@ -243,6 +236,17 @@ module LinearDomain = struct
       | Some (Some a, Some _, b) -> Linear (a, b)
       | _ -> TopEdge
   end
+end
+
+module LinearDomain = struct
+  include LinearFunction
+
+  type state_update = (DL.t * t) Iter.t
+
+  let init_data (proc : Program.proc) =
+    Procedure.formal_in_params proc |> StringMap.values
+
+  open DL
 
   let transfer_call call param d =
     match d with
