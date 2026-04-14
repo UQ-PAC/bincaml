@@ -23,7 +23,7 @@
 
 (rule
  (alias runtest)
- (enabled_if %{bin-available:cvc5})
+ (enabled_if %{bin-available:cvc8})
  (action
   (run %{dep:test_expr_eval_qcheck.exe})))
 

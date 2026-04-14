@@ -77,6 +77,14 @@ end
 module Rec = Bincaml_util.Recursionscheme.Recursion (Typ)
 open Typ
 
+let printer_alg = function
+  | Var e -> ID.to_string e
+  | TypeConstr ([ l ], e) -> " " ^ e
+  | TypeConstr (ls, e) ->
+      List.to_string ~start:"(" ~stop:")" ~sep:", " Fun.id ls ^ " " ^ e
+
+let type_to_string t = Rec.cata printer_alg t
+
 let occurs_in a b =
   let check = function
     | Var t -> equal_tvar t a
@@ -116,13 +124,24 @@ let rec to_basil (t : t) : Types.t =
 
 type scheme = Forall of tvar list * t
 
+let scheme_to_string = function
+  | Forall (tl, t) -> List.to_string ID.to_string tl ^ " . " ^ type_to_string t
+
 module U = UnionFind
 
-let rec unify t t' =
+let plpos (l : Lexing.position) = Printf.sprintf "%s:%d" l.pos_fname l.pos_lnum
+
+let rec unify ?(pos = Lexing.dummy_pos) t t' =
+  print_endline
+    ("unify: " ^ plpos pos ^ " "
+    ^ type_to_string (find t)
+    ^ " with "
+    ^ type_to_string (find t'));
   match (map_expr unfix @@ Typ.unfix t, map_expr unfix @@ Typ.unfix t') with
   | Var x, _ when occurs_in x t' -> failwith "recursive type"
-  | Var _, TypeConstr _ -> union t t'
-  | _, Var x -> unify t' t
+  | Var _, TypeConstr _ -> merge (fun a b -> b) t t'
+  | Var x, Var y -> union t t'
+  | _, Var x -> unify ~pos:[%here] t' t
   | TypeConstr (ars, n), TypeConstr (ars', n') when not (String.equal n n') ->
       failwith "false"
   | TypeConstr (ars, n), TypeConstr (ars', n')
@@ -137,7 +156,8 @@ let rec unify t t' =
       fix @@ TypeConstr ([ v ], "bv")
   | TypeConstr (ars, n), TypeConstr (ars', n') ->
       let args =
-        List.combine ars ars' |> List.map (fun (a, b) -> unify (fix a) (fix b))
+        List.combine ars ars'
+        |> List.map (fun (a, b) -> unify ~pos:[%here] (fix a) (fix b))
       in
       merge (fun a b -> TypeConstr (args, n)) t t'
 
@@ -210,7 +230,8 @@ let scheme_of_intrin (gen : ID.generator) (o : Ops.AllOps.(intrin)) args =
       curry_f [ m; fix @@ Var a; fix @@ Var b ] m
   | `Cases -> fix @@ Var (fv ())
 
-let rec infer e (c : scheme TCtx.t) =
+let rec infer (hr : Lexing.position) e (c : scheme TCtx.t) =
+  print_endline ("infer " ^ plpos hr ^ " " ^ Expr.BasilExpr.to_string e);
   let mkv v = V.locally v in
   let inst_annot_v v =
     match Var.typ v with
@@ -230,7 +251,7 @@ let rec infer e (c : scheme TCtx.t) =
         List.map (fun (v, t) -> (mkv v, Forall ([], t))) tvars
         |> TCtx.add_list c
       in
-      let bdty = infer in_body ictx in
+      let bdty = infer [%here] in_body ictx in
       let r =
         match op with
         | `Lambda -> bdty
@@ -245,39 +266,45 @@ let rec infer e (c : scheme TCtx.t) =
     end
   | UnaryExpr { op = #Ops.AllOps.unary as op; arg } -> begin
       let f = scheme_of_op gen op in
-      let arg = infer arg c in
+      let arg = infer [%here] arg c in
       ignore @@ unify f (curry_f [ arg ] r);
       r
     end
   | BinaryExpr { op = #Ops.AllOps.binary as op; arg1; arg2 } -> begin
       let f = scheme_of_op gen op in
-      let arg1 = infer arg1 c in
-      let arg2 = infer arg2 c in
+      let arg1 = infer [%here] arg1 c in
+      let arg2 = infer [%here] arg2 c in
       ignore @@ unify f (curry_f [ arg1; arg2 ] r);
       r
     end
   | ApplyIntrin { op = #Ops.AllOps.intrin as op; args } -> begin
       let f = scheme_of_intrin gen op (List.length args) in
-      let args = List.map (fun a -> infer a c) args in
+      let args = List.map (fun a -> infer [%here] a c) args in
       ignore @@ unify f (curry_f args r);
       r
     end
   | ApplyFun { func; args } ->
-      let f = infer func c in
-      let args = List.map (fun a -> infer a c) args in
+      let f = infer [%here] func c in
+      let args = List.map (fun a -> infer [%here] a c) args in
       ignore @@ unify f (curry_f args r);
       r
   | Let _ -> failwith ""
 
-let decl_var_typ c v =
+let decl_var_typ ?(no_constraint = false) c v =
   let vvar = V.locally v in
   let inst_annot_v v =
     match Var.typ v with
+    | _ when no_constraint -> fix @@ Var (gen.fresh ~name:(Var.name v) ())
     | Top -> fix @@ Var (gen.fresh ~name:(Var.name v) ())
     | o -> ty_of_basil o
   in
   let vt = inst_annot_v v in
-  TCtx.update vvar (function Some t -> Some (unify vt t) | None -> Some vt) c
+  TCtx.update vvar
+    (function
+      | Some (Forall ([], t)) -> Some (Forall ([], unify vt t))
+      | None -> Some (Forall ([], vt))
+      | _ -> failwith "unk")
+    c
 
 let%expect_test "test 2" =
   let a = U.make "a" in
@@ -289,7 +316,9 @@ let%expect_test "test 2" =
   print_endline (U.get f);
   ()
 
-let%expect_test "test 1" =
+let testa () =
+  print_endline "alsdkldjalk jdalkj";
+  Logs.err (fun m -> m "run test ");
   let open Expr in
   let e =
     BasilExpr.boolnot @@ BasilExpr.boolnot @@ BasilExpr.boolnot
@@ -300,11 +329,16 @@ let%expect_test "test 1" =
            BasilExpr.rvar (Var.create "a" Boolean);
          ]
   in
-  print_endline (BasilExpr.to_string e);
-  let e = infer e TCtx.empty in
-  print_endline (Types.to_string @@ to_basil e);
-  [%expect
-    {|
-    boolnot(boolnot(boolnot(booland(boolnot(boolnot(b)), a))))
-    boolor(boolnot(b), boolnot(a))
-    |}]
+  let ctx =
+    BasilExpr.free_vars_iter e
+    |> Iter.fold (decl_var_typ ~no_constraint:true) TCtx.empty
+  in
+  let e = infer [%here] e ctx in
+  let _ =
+    TCtx.to_iter ctx
+    |> Iter.to_string (fun (a, b) ->
+        Printf.sprintf "%s %s" (V.show a) (scheme_to_string b))
+    |> print_endline
+  in
+  (*print_endline (Types.to_string @@ to_basil e);*)
+  ()
