@@ -85,7 +85,7 @@ module SVAAbstraction = struct
         | _ -> Top)
       a
 
-  let eval_binop (op : E.binary) (a, ta) (b, tb) rt =
+  let eval_binary op (a, ta) (b, tb) rt =
     SymAddrSetLattice.fold
       (fun sb1 vs1 map ->
         SymAddrSetLattice.fold
@@ -99,11 +99,11 @@ module SVAAbstraction = struct
                   else Constant
                 in
                 SymAddrSetLattice.singleton sb
-                  (eval_binop op (vs1, ta) (vs2, tb) rt)
+                  (eval_binary op (vs1, ta) (vs2, tb) rt)
             | (SymBase.GlobSym | Constant), sb | sb, (SymBase.GlobSym | Constant)
               ->
                 SymAddrSetLattice.update sb
-                  (eval_binop op (vs1, ta) (vs2, tb) rt)
+                  (eval_binary op (vs1, ta) (vs2, tb) rt)
                   map
             | _, _ ->
                 SymAddrSetLattice.update sb1 Top
@@ -111,10 +111,14 @@ module SVAAbstraction = struct
           b map)
       a SymAddrSetLattice.bottom
 
+  let eval_binop op a b rt =
+    match op with #Lang.Ops.AllOps.binary as op -> eval_binary op a b rt
+
   let eval_intrin (op : E.intrin) args rt =
     let op a b =
       match op with
-      | (`BVADD | `BVOR | `BVXOR | `BVAND) as op -> (eval_binop op a b rt, rt)
+      | (`BVADD | `BVOR | `BVXOR | `BVAND | `BVMUL) as op ->
+          (eval_binary op a b rt, rt)
       | `OR | `AND | `Cases | `MapUpdate -> (SymAddrSetLattice.top, rt)
       | `BVConcat ->
           ( SymAddrSetLattice.fold
