@@ -18,6 +18,8 @@
 
 (license Apache-2.0)
 
+(formatting (enabled_for ocaml dune))
+
 (documentation https://url/to/documentation)
 
 (package
