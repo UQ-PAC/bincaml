@@ -94,7 +94,8 @@ proc @main (x_in:bv64) -> ()
   let _, results = IDELiveAnalysis.solve program in
   let main = program.entry_proc |> Option.get_exn_or "No entry proc" in
   print_lives results main;
-  [%expect {|
+  [%expect
+    {|
     wellformedness:non-equal variables with same name: { Var.V.name = "x_2"; typ = bv64; scope = Var.LocalConst } { Var.V.name = "x_2"; typ = bv64; scope = Var.LocalVar }
     @main
     $mem:(bv64->bv8)
@@ -131,7 +132,8 @@ proc @fun (c:bv64, d:bv64) -> (out:bv64)
   let _, results = IDELiveAnalysis.solve program in
   IDMap.iter (fun id _ -> print_lives results id) program.procs;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   (* CR expect_test_collector: This test expectation appears to contain a backtrace.
      This is strongly discouraged as backtraces are fragile.
      Please change this test to not include a backtrace. *)

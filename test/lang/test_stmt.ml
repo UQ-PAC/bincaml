@@ -48,7 +48,8 @@ let%expect_test "fold_block" =
     () block;
   print_endline (Block.to_string block);
   ();
-  [%expect {|
+  [%expect
+    {|
     Warn: global undeclared $stack assuming mutable unshared
     warn: local use before def: R31_in:bv64
     warn: local use before def: R0_in:bv64
