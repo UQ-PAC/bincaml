@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-      - run: opam install -t . --deps-only
+      - run: opam install -t bincaml --deps-only
       - run: opam exec -- dune build '@install'
       - run: opam exec -- dune runtest --force --profile=release
 
@@ -34,9 +34,7 @@ jobs:
     container: ghcr.io/agle/bincaml-ci-containers/ci-doc-5.3:latest
     steps:
       - uses: actions/checkout@v6
-      - run: |
-          opam install opam-dune-lint
-          opam exec -- opam-dune-lint
+      - run: opam exec -- dune build @fmt --display=quiet
 
   lint-opam:
     name: lint-opam
