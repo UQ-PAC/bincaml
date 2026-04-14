@@ -17,15 +17,11 @@ jobs:
   build-odoc:
     name: Build odoc
     runs-on: ubuntu-latest
+    container: ghcr.io/c-cube/c-cube-commmon/ci-doc-5.3:latest
 
     steps:
       - name: Checkout tree
         uses: actions/checkout@v4
-
-      - name: Set-up OCaml
-        uses: ocaml/setup-ocaml@v3
-        with:
-          ocaml-compiler: 5.3.0
 
       - name: Install dependencies
         run: |
