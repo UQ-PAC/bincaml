@@ -142,7 +142,7 @@ module InferredType = struct
     | Record (fields, _) -> ZMap.iter (fun _ { ty } -> iter f ty) fields
 
   let rec intersect (ty0 : t) (ty1 : t) : t =
-    print_endline @@ Printf.sprintf "joining types %s %s" (show ty0) @@ show ty1;
+    (* print_endline @@ Printf.sprintf "joining types %s %s" (show ty0) @@ show ty1; *)
     match (ty0, ty1) with
     | Record (fields0, size), Record (fields1, _) ->
         (* WARN: I think this could be improved, cause this is gross *)

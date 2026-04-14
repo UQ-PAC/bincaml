@@ -111,7 +111,7 @@ and showRecordType (e : AbsBasilIR.recordType) : showable = match e with
 
 
 and showPointerType (e : AbsBasilIR.pointerType) : showable = match e with
-       AbsBasilIR.PointerType1 (localident, openparen, type'0, type', closeparen) -> s2s "PointerType1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showTypeT type'0  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+       AbsBasilIR.PointerType1 (openparen, type'0, type', closeparen) -> s2s "PointerType1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showTypeT type'0  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
 and showBVType (e : AbsBasilIR.bVType) : showable = match e with

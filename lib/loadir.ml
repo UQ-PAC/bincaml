@@ -475,8 +475,8 @@ module BasilASTLoader = struct
         size;
       }
 
-  and transPOINTERTYPE name (l : typeT) (u : typeT) =
-    Types.Pointer { name; lower = trans_type l; upper = trans_type u }
+  and transPOINTERTYPE (l : typeT) (u : typeT) =
+    Types.Pointer { name = ""; lower = trans_type l; upper = trans_type u }
 
   and trans_type (x : typeT) : Types.t =
     match x with
@@ -489,8 +489,8 @@ module BasilASTLoader = struct
     | TypeRecordType (RecordType1 (name, _, fields, _, size)) ->
         transSTRUCTTYPE (unsafe_unsigil @@ `Local name) fields
         @@ Z.to_int @@ transIntVal size
-    | TypePointerType (PointerType1 (name, _, l, u, _)) ->
-        transPOINTERTYPE (unsafe_unsigil (`Local name)) l u
+    | TypePointerType (PointerType1 (_, l, u, _)) ->
+        transPOINTERTYPE l u
 
   and transIntVal (x : intVal) : PrimInt.t =
     match x with
@@ -1011,11 +1011,11 @@ module BasilASTLoader = struct
     | Value_Int intval -> `Integer (transIntVal intval)
     | Value_True -> `Bool true
     | Value_False -> `Bool false
-    | Value_Pointer (_, v, PointerType1 (name, _, l, u, _), _) ->
+    | Value_Pointer (_, v, PointerType1 ( _, l, u, _), _) ->
         `Pointer
           ( trans_bv_val v,
             {
-              name = unsafe_unsigil (`Local name);
+              name = "";
               lower = trans_type l;
               upper = trans_type u;
             } )

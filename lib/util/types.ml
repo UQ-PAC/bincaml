@@ -151,8 +151,8 @@ let rec to_string = function
   | Variable name -> name
   | Pointer { lower; upper; _ } ->
       Printf.sprintf "ptr(%s, %s)" (to_string lower) (to_string upper)
-  | Struct { fields; size; _ } ->
-      "{"
+  | Struct { fields; size; name } ->
+      name ^ " of {"
       ^ (StringMap.bindings fields
         |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->
             Printf.sprintf "\"%s\": (%s, %s)" k (to_string v)

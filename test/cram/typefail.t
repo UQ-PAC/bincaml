@@ -13,7 +13,7 @@
   Arguments are not of the same type in eq at statement 4 in %main_entry
   Paramters for the function has a type mismatch: type of neq(1, true) != type of $NF:bv1 (bool != bv1) at statement 5 in %main_entry
   Arguments are not of the same type in neq at statement 5 in %main_entry
-  Paramters for the function has a type mismatch: type of intneg(0x1:bv32) != type of $NF:bv1 (int != bv1) at statement 6 in %main_entry
+  Parameters for the function has a type mismatch: type of intneg(0x1:bv32) != type of $NF:bv1 (bv1 </= int) at statement 6 in %main_entry
   intneg body is not a integer at statement 6 in %main_entry
   Paramters for the function has a type mismatch: type of intadd(1, 0x1:bv32) != type of $NF:bv1 (int != bv1) at statement 7 in %main_entry
   bv32 is not the correct type of int for intadd at statement 7 in %main_entry
@@ -29,9 +29,9 @@
   bv32 is not the correct type of int for intlt at statement 12 in %main_entry
   Paramters for the function has a type mismatch: type of intle(1, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 13 in %main_entry
   bv32 is not the correct type of int for intle at statement 13 in %main_entry
-  Paramters for the function has a type mismatch: type of bvnot(1) != type of $NF:bv1 (int != bv1) at statement 14 in %main_entry
+  Parameters for the function has a type mismatch: type of bvnot(1) != type of $NF:bv1 (bv1 </= int) at statement 14 in %main_entry
   bvnot body is not a bitvector at statement 14 in %main_entry
-  Paramters for the function has a type mismatch: type of bvneg(1) != type of $NF:bv1 (int != bv1) at statement 15 in %main_entry
+  Parameters for the function has a type mismatch: type of bvneg(1) != type of $NF:bv1 (bv1 </= int) at statement 15 in %main_entry
   bvneg body is not a bitvector at statement 15 in %main_entry
   Paramters for the function has a type mismatch: type of zero_extend(32, 2) != type of $NF:bv1 (⊥ != bv1) at statement 16 in %main_entry
   Nothing type encountered in operator at statement 16 in %main_entry
@@ -95,6 +95,7 @@
   Paramters for the function has a type mismatch: type of bvashr(true, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 51 in %main_entry
   bool is not of bitvector type in bvashr at statement 51 in %main_entry
   bv32 is not the correct type of bv64 for bvashr at statement 52 in %main_entry
+  Address storing data (#4) does not match address size (64) at statement 54 in %main_entry
   Body of booltobv1(0x7a0:bv64) is not a Boolean at statement 0 in %main_9
   booltobv1 body is not a boolean at statement 0 in %main_9
   [125]

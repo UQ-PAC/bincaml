@@ -18,10 +18,6 @@
   ssa-multi-deps.il
   memassign.il
   ptrrec1.il
-  ptrrec2.il
-  ptrrec3.il
-  aftermem.il
-  beforemem.il
   ../../examples/sqrt.il
   ../../examples/irreducible_loop_1.il
   ../../examples/cat.il

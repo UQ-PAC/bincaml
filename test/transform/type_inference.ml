@@ -157,7 +157,7 @@ let%test_unit "Record joining" =
   in
   let fields =
     [
-      (Z.zero, { offset = Z.zero; size = 32; ty = Top });
+      (Z.zero, { offset = Z.zero; size = 32; ty = TypeVar (VarId.make_id "a") });
       ( Z.of_int 32,
         { offset = Z.of_int 32; size = 32; ty = TypeVar (VarId.make_id "b") } );
       ( Z.of_int 64,

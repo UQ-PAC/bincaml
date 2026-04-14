@@ -134,7 +134,7 @@ and transRecordType (x : recordType) : result = match x with
 
 
 and transPointerType (x : pointerType) : result = match x with
-    PointerType1 (localident, openparen, type'0, type', closeparen) -> failure x
+    PointerType1 (openparen, type'0, type', closeparen) -> failure x
 
 
 and transBVType (x : bVType) : result = match x with

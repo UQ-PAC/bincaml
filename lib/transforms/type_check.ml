@@ -60,17 +60,17 @@ let type_check stmt_id block_id expr =
       type_error list =
     let binary_same_types (expected_type : Types.t) arg1 arg2 =
       match (arg1, arg2) with
-      | tl, tr when Types.leq tl expected_type && Types.leq tr expected_type
+      | tl, tr when Types.equal tl expected_type && Types.equal tr expected_type
         ->
           []
-      | _, tr when Types.leq tr expected_type ->
+      | _, tr when Types.equal tr expected_type ->
           [
             type_err "%s is not the correct type of %s for %s"
               (Types.to_string arg1)
               (Types.to_string expected_type)
               (Ops.AllOps.to_string op);
           ]
-      | tl, _ when Types.leq tl expected_type ->
+      | tl, _ when Types.equal tl expected_type ->
           [
             type_err "%s is not the correct type of %s for %s"
               (Types.to_string arg2)
@@ -315,11 +315,11 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
       in
       match Var.typ rhs with
       | Map (Bitvector addressSize, _)
-        when Types.leq rtype (Types.bv addressSize) ->
+        when Types.equal rtype (Types.bv addressSize) ->
           errors
       | Map (Bitvector addressSize, _) ->
-          type_err "Address loading data (%s) does not match address size (%d)"
-            (BasilExpr.to_string addr) addressSize
+          type_err "Address loading data (%s : %s) does not match address size (%d)"
+            (BasilExpr.to_string addr) (Types.to_string @@ BasilExpr.type_of addr) addressSize
           :: errors
       | _ ->
           (type_err "Invalid field for addressSize in mem %s"
@@ -339,10 +339,10 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
       in
       match Var.typ rhs with
       | Map (Bitvector addressSize, _)
-        when Types.leq addr_rtype (Types.bv addressSize) ->
+        when Types.equal addr_rtype (Types.bv addressSize) ->
           errors
       | Map (Bitvector addressSize, _) ->
-          type_err "Address loading data (%s) does not match address size (%d)"
+          type_err "Address storing data (%s) does not match address size (%d)"
             (BasilExpr.to_string addr) addressSize
           :: errors
       | _ ->
