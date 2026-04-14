@@ -255,6 +255,13 @@ module PassManager = struct
          eliminated. Assumes SSA form.";
     }
 
+  let linear_copy =
+    {
+      name = "linear-copy";
+      apply = Prog Analysis.Linear_const.test_transform;
+      doc = "";
+    }
+
   let copy_prop =
     {
       name = "copy-prop";
@@ -296,6 +303,7 @@ module PassManager = struct
       cf_exprs;
       inter_dead;
       linear_const;
+      linear_copy;
       copy_prop;
       simp;
       {
