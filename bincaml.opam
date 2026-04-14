@@ -29,6 +29,8 @@ depends: [
   "patricia-tree"
   "ppx_here"
   "intPQueue"
+  "logs"
+  "mtime"
   "ocamlformat" {with-dev-setup}
   "odig" {with-dev-setup}
   "sherlodoc" {with-doc}

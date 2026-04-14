@@ -219,27 +219,37 @@ module KnownBitsValueAbstraction = struct
     | `BVNEG -> tnum_neg a
     | _ -> ( match rt with Types.Bitvector width -> unknown ~width | _ -> Top)
 
-  let eval_binop (op : Lang.Ops.AllOps.binary) (a, _) (b, _) rt =
+  let eval_binary op (a, _) (b, _) rt =
     match op with
-    | `BVADD -> tnum_add a b
+    | #Lang.Ops.Spec.binary -> Top
+    | #Lang.Ops.PointerOps.binary -> Top
+    | #Lang.Ops.RecordOps.binary -> Top
+    | #Lang.Ops.IntOps.binary -> Top
+    | #Lang.Ops.LogicalOps.binary -> Top
     | `BVSUB -> tnum_sub a b
-    | `BVAND -> tnum_bitand a b
     | `BVNAND -> tnum_bitnot (tnum_bitand a b)
-    | `BVOR -> tnum_bitor a b
-    | `BVXOR -> tnum_bitxor a b
     | `BVSHL -> tnum_shl a b
     | `BVLSHR -> tnum_lshr a b
     | `BVASHR -> tnum_ashr a b
+    | `BVOR -> tnum_bitor a b
+    | `BVAND -> tnum_bitand a b
+    | `BVADD -> tnum_add a b
+    | `BVXOR -> tnum_bitxor a b
     | `BVMUL -> tnum_mul a b
-    | _ -> ( match rt with Types.Bitvector width -> unknown ~width | _ -> Top)
+    | `BVSDIV | `BVSLE | `BVSLT | `BVSMOD | `BVSREM | `BVUDIV | `BVULE | `BVULT
+    | `BVUREM ->
+        Top
+
+  let eval_binop (op : Lang.Ops.AllOps.binary) a b rt =
+    match op with #Lang.Ops.AllOps.binary as op -> eval_binary op a b rt
 
   let eval_intrin (op : Lang.Ops.AllOps.intrin) (args : (t * Types.t) list) rt =
     let op a b =
       match op with
-      | `BVADD -> (eval_binop `BVADD a b rt, rt)
-      | `BVOR -> (eval_binop `BVOR a b rt, rt)
-      | `BVXOR -> (eval_binop `BVXOR a b rt, rt)
-      | `BVAND -> (eval_binop `BVAND a b rt, rt)
+      | `BVADD -> (eval_binary `BVADD a b rt, rt)
+      | `BVOR -> (eval_binary `BVOR a b rt, rt)
+      | `BVXOR -> (eval_binary `BVXOR a b rt, rt)
+      | `BVAND -> (eval_binary `BVAND a b rt, rt)
       | `BVConcat -> (tnum_concat (fst a) (fst b), rt)
       | _ -> (
           match rt with

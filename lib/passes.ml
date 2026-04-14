@@ -1,5 +1,6 @@
 open Lang
 open Lang.Common
+open Bincaml_util.Logger
 
 (** TODO: pass program to procedure-local passes
 
@@ -119,6 +120,18 @@ module PassManager = struct
       doc =
         "Runs known bits and wrapped interval reduced product analysis on \
          control flow graph and prints results";
+    }
+
+  let sva =
+    {
+      name = "sva";
+      apply =
+        Prog
+          (fun p ->
+            let r = Analysis.Sva.sva p in
+            List.iter (print_endline % Analysis.Sva.StateAbstraction.show) r;
+            p);
+      doc = "Runs symbolic value analysis and prints stuff out after";
     }
 
   let demo_dfg_gamma =
@@ -286,6 +299,7 @@ module PassManager = struct
       read_uninit false;
       read_uninit true;
       sssa;
+      sva;
       full_ssa;
       type_check;
       split_memory_encoding;
@@ -414,5 +428,10 @@ module PassManager = struct
     List.map (fun p -> StringMap.find p s.avail) passes
 
   let run_batch (batch : pass list) prog =
-    List.fold_left run_transform prog batch
+    List.fold_left
+      (fun prog pass ->
+        Logs.info (fun m ->
+            m "Starting %s" pass.name ?header:None ~tags:(Logger.time_stamp ()));
+        run_transform prog pass)
+      prog batch
 end

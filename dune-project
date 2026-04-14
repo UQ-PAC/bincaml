@@ -44,6 +44,8 @@
   patricia-tree
   ppx_here
   intPQueue
+  logs
+  mtime
   (ocamlformat :with-dev-setup)
   (odig :with-dev-setup)
   (sherlodoc :with-doc)
@@ -70,3 +72,4 @@
   containers
   ppx_deriving)
  (tags (lsp)))
+; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

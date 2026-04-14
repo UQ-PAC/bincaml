@@ -230,9 +230,8 @@ module LinearDomain = struct
       | Constant { const = `Bitvector c } -> Some (Lin.const c)
       | ApplyIntrin { op = `BVADD; args = a :: rest } ->
           List.fold_left (liftJoin2 Lin.add) a rest
-      | BinaryExpr { op = `BVADD; arg1; arg2 } -> liftJoin2 Lin.add arg1 arg2
-      (* BVMUL isn't an intrin ... *)
-      | BinaryExpr { op = `BVMUL; arg1; arg2 } -> liftJoin2 Lin.mul arg1 arg2
+      | ApplyIntrin { op = `BVMUL; args = a :: rest } ->
+          List.fold_left (liftJoin2 Lin.mul) a rest
       | _ -> None
 
     let extract_expr e =
