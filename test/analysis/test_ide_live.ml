@@ -15,10 +15,9 @@ memory shared $mem : (bv64 -> bv8);
 
 prog entry @main;
 
-proc @main () -> ()
+proc @main (a:bv64, b:bv64, c:bv64, d:bv64, e:bv64) -> ()
 [
     block %main_entry [
-        let (a:bv64, b:bv64, c:bv64, d:bv64, e:bv64) := call @_havoc();
         goto(%main_1, %main_2);
     ];
     block %main_1 [
@@ -53,6 +52,11 @@ proc @main () -> ()
     Warn: undeclared global referenced in expr, $z:bv64
     @main
     $mem:(bv64->bv8)
+    a:bv64
+    b:bv64
+    c:bv64
+    d:bv64
+    e:bv64
     $x:bv64
     |}]
 
@@ -108,14 +112,16 @@ let%expect_test "simple_call" =
       {|
 prog entry @main;
 
-proc @main () -> ()
+proc @main (b:bv64, y:bv64) -> ()
 [
     block %main_entry [
-        let (b:bv64, y:bv64) := call @_havoc();
         var (a:bv64) := call @fun(b:bv64, b: bv64);
         var (x:bv64) := call @fun(a:bv64, b: bv64);
         assert eq(x:bv64, bvadd(b:bv64, b:bv64));
         assert eq(y:bv64, 0);
+        goto (%main_ret);
+    ];
+    block %main_ret [
         return ();
     ];
 ];
@@ -123,6 +129,9 @@ proc @main () -> ()
 proc @fun (c:bv64, d:bv64) -> (out:bv64)
 [
     block %fun_entry [
+            goto(%fun_ret);
+    ];
+    block %fun_ret [
         return (bvadd(c:bv64, d:bv64));
     ];
 ];
@@ -131,24 +140,15 @@ proc @fun (c:bv64, d:bv64) -> (out:bv64)
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
   IDMap.iter (fun id _ -> print_lives results id) program.procs;
-  [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
-  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-     This is strongly discouraged as backtraces are fragile.
-     Please change this test to not include a backtrace. *)
-  (Invalid_argument "No entry node")
-  Raised at Stdlib.invalid_arg in file "stdlib.ml" (inlined), line 30, characters 20-45
-  Called from CCOption.get_exn_or in file "src/core/CCOption.pp.ml", line 97, characters 12-27
-  Called from Bincaml_analysis_test__Test_ide_live.print_lives in file "test/analysis/test_ide_live.ml", lines 6-7, characters 2-38
-  Called from Stdlib__Map.Make.iter in file "map.ml", line 305, characters 20-25
-  Called from Bincaml_analysis_test__Test_ide_live.(fun) in file "test/analysis/test_ide_live.ml", line 133, characters 2-63
-  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
-
-  Trailing output
-  ---------------
-  @main
-  |}]
+  [%expect
+    {|
+    @main
+    b:bv64
+    y:bv64
+    @fun
+    c:bv64
+    d:bv64
+    |}]
 
 let%expect_test "nested_call" =
   let lst =
@@ -158,10 +158,9 @@ prog entry @main;
 
 var $global:bv64;
 
-proc @main () -> ()
+proc @main (b:bv64, y:bv64) -> ()
 [
     block %main_entry [
-        let (b:bv64, y:bv64) := call @_havoc();
         var (a:bv64) := call @fun1(b:bv64, b: bv64);
         var (x:bv64) := call @fun1(a:bv64, b: bv64);
         assert eq(x:bv64, bvadd(b:bv64, b:bv64));
@@ -193,6 +192,8 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   [%expect
     {|
     @main
+    b:bv64
+    y:bv64
     $global:bv64
     @fun1
     c:bv64
@@ -211,10 +212,9 @@ prog entry @main;
 
 var $global:bv64;
 
-proc @main () -> ()
+proc @main (b:bv64, y:bv64) -> ()
 [
     block %main_entry [
-        let (b:bv64, y:bv64) := call @_havoc();
         var (a:bv64) := call @fun2(b:bv64);
         var (x:bv64) := call @fun1(a:bv64, b: bv64);
         assert eq(x:bv64, bvadd(b:bv64, b:bv64));
@@ -258,6 +258,8 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   [%expect
     {|
     @main
+    b:bv64
+    y:bv64
     $global:bv64
     @fun1
     c:bv64
