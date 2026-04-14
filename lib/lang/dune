@@ -3,7 +3,7 @@
  (name lang)
  (modules
   attrib
-spec_modifies
+  spec_modifies
   check
   expr
   algsimp

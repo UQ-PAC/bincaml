@@ -146,10 +146,10 @@ let prog_pretty (p : t) =
   in
   let decls =
     globs @ n
-    @ (List.map
+    @ List.map
         (fun (_, p) -> proc_pretty p)
         (IDMap.to_list p.procs
-        |> List.sort (fun (i, _) (j, _) -> ID.compare i j)))
+        |> List.sort (fun (i, _) (j, _) -> ID.compare i j))
   in
 
   append_l ~sep:(text ";\n") decls ^ text ";\n"
