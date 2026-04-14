@@ -112,24 +112,26 @@ module Domain (S : FunctionSummaryAnnotation) = struct
         in
         simplify p
     | Instr_Call { lhs; procid; args } ->
+        let substitute f sm e =
+          StringMap.fold
+            (fun k d acc ->
+              BasilExpr.substitute
+                (fun v -> Option.return_if (String.equal (Var.name v) k) (f d))
+                acc)
+            sm e
+        in
         let ensures =
           BasilExpr.boolconst true :: S.ensures procid
           |> BasilExpr.applyintrin ~op:`AND
           |> simplify
-          |> StringMap.fold
-               (fun k d acc ->
-                 BasilExpr.substitute
-                   (fun v ->
-                     Option.return_if
-                       (String.equal (Var.name v) k)
-                       (BasilExpr.rvar d))
-                   acc)
-               lhs
+          |> substitute Fun.id args |> simplify
+          |> substitute BasilExpr.rvar lhs
           |> simplify
         in
         let requires =
-          BasilExpr.applyintrin ~op:`AND
-          @@ (BasilExpr.boolconst true :: S.requires procid)
+          BasilExpr.boolconst true :: S.requires procid
+          |> BasilExpr.applyintrin ~op:`AND
+          |> substitute Fun.id args |> simplify
         in
         let p = join p (Expr.BasilExpr.boolnot requires) in
         let p =
