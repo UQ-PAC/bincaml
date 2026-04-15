@@ -42,7 +42,8 @@ module Calls = struct
     apply_fun
       ~func:
         (rvar
-           (Var.create "$me_alloc_live" ~scope:Var.GlobalConst (Types.Bitvector 2)))
+           (Var.create "$me_alloc_live" ~scope:Var.GlobalConst
+              (Types.Bitvector 2)))
       args
 
   (** [alloc_size args] returns the size of an allocation. args(0) is the memory
@@ -65,7 +66,8 @@ module Calls = struct
               (Types.Bitvector 64)))
       args
 
-              (* (Types.curry [Types.Bitvector 64; Types.Bitvector 64; Types.Variable "MemEncoding";] Types.Boolean))) *)
+  (* (Types.curry [Types.Bitvector 64; Types.Bitvector 64; Types.Variable "MemEncoding";] Types.Boolean))) *)
+
   (** [addr_offset args] returns the offset an address is into its allocation.
       args(0) is the memory encoding object. args(1) is the address. *)
   let addr_offset args =

@@ -12,7 +12,7 @@ let dbg f = if !debug then f () else ()
     variable, so that ssa has branch condition flow-sensitivity.
 
     https://dspace.mit.edu/bitstream/handle/1721.1/86578/48072795-MIT.pdf *)
-let intro_ssi_assigns proc (should_lift : Var.t -> bool)=
+let intro_ssi_assigns proc (should_lift : Var.t -> bool) =
   let fix_block (_, b) =
     b
     |> Block.flat_map ~phi:id

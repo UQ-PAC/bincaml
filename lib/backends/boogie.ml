@@ -84,8 +84,8 @@ let pretty_call_args_no_brackets (args : Containers_pp.t list) =
   | [] -> text ""
   | [ hd ] -> hd
   | hd :: tl ->
-      hd
-      ^ append_l @@ List.map (fun arg -> text "," ^ newline_or_spaces 1 ^ arg) tl
+      hd ^ append_l
+      @@ List.map (fun arg -> text "," ^ newline_or_spaces 1 ^ arg) tl
 
 let pretty_call_args (args : Containers_pp.t list) =
   let open Containers_pp in

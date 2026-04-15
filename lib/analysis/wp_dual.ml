@@ -129,8 +129,7 @@ module Domain (S : FunctionSummaryAnnotation) = struct
         let ensures =
           BasilExpr.boolconst true :: S.ensures procid
           |> BasilExpr.applyintrin ~op:`AND
-          |> simplify
-          |> substitute Fun.id args |> simplify
+          |> simplify |> substitute Fun.id args |> simplify
           |> substitute BasilExpr.rvar lhs
           |> simplify
         in

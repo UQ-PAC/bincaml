@@ -151,8 +151,7 @@ let transform_free p =
 let transform_stmt (s : Program.stmt) =
   (match s with
     | Stmt.Instr_Store { lhs; rhs; addr = Addr { addr; size; endian } }
-    | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } }
-      -> (
+    | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } -> (
         let valid_assert =
           Stmt.Instr_Assert
             {
