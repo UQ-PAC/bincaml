@@ -124,8 +124,8 @@ module.exports = ({
       // BoolType1. BoolType ::= BOOLTYPE ;
       $.token_BOOLTYPE,
     RecordType: $ =>
-      // RecordType1. RecordType ::= BeginRec [Field] EndRec ;
-      seq($.token_BeginRec, optional($.list_Field), $.token_EndRec),
+      // RecordType1. RecordType ::= LocalIdent "of" BeginRec [Field] EndRec IntVal ;
+      seq($.token_LocalIdent, "of", $.token_BeginRec, optional($.list_Field), $.token_EndRec, $.IntVal),
     PointerType: $ =>
       // PointerType1. PointerType ::= "ptr" OpenParen Type "," Type CloseParen ;
       seq("ptr", $.token_OpenParen, $.Type, ",", $.Type, $.token_CloseParen),

@@ -489,8 +489,7 @@ module BasilASTLoader = struct
     | TypeRecordType (RecordType1 (name, _, fields, _, size)) ->
         transSTRUCTTYPE (unsafe_unsigil @@ `Local name) fields
         @@ Z.to_int @@ transIntVal size
-    | TypePointerType (PointerType1 (_, l, u, _)) ->
-        transPOINTERTYPE l u
+    | TypePointerType (PointerType1 (_, l, u, _)) -> transPOINTERTYPE l u
 
   and transIntVal (x : intVal) : PrimInt.t =
     match x with
@@ -1011,14 +1010,10 @@ module BasilASTLoader = struct
     | Value_Int intval -> `Integer (transIntVal intval)
     | Value_True -> `Bool true
     | Value_False -> `Bool false
-    | Value_Pointer (_, v, PointerType1 ( _, l, u, _), _) ->
+    | Value_Pointer (_, v, PointerType1 (_, l, u, _), _) ->
         `Pointer
           ( trans_bv_val v,
-            {
-              name = "";
-              lower = trans_type l;
-              upper = trans_type u;
-            } )
+            { name = ""; lower = trans_type l; upper = trans_type u } )
     | Value_Record (_, _, fields, _, typ, _) ->
         `Record
           ( StringMap.of_list

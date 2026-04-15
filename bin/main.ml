@@ -53,7 +53,7 @@ let script_cmd =
   let doc = "run script" in
   let info = Cmd.info "script" ~version:"alpha" ~doc in
   Cmd.make info
-  @@ let+ verb and+ fname in
+  @@ let+ verb = verb and+ fname = fname in
      run_script ~verb fname
 
 let cmd =

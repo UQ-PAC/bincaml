@@ -294,7 +294,6 @@ module TySet = struct
 
   include S
 
-  (* TODO *)
   let show ts = to_list ts |> List.map InferredType.show |> String.concat ", "
 end
 
@@ -1092,7 +1091,7 @@ let rec constrain_expr proc (st : ConstraintState.t)
           let size =
             match BasilExpr.type_of a with
             | Bitvector sz -> sz
-            | _ -> failwith "Can you extract from non-bv"
+            | _ -> failwith "Can you do this? Probs not"
           in
           ( constrain_arg proc st a
             @@ Record (ZMap.singleton (Z.of_int rt) field, size),
@@ -1102,7 +1101,6 @@ let rec constrain_expr proc (st : ConstraintState.t)
       let st, _ = constrain_expr proc st (BasilExpr.unfix r) in
       match op with
       | `WriteField offset ->
-          (* TODO: constrain the r to be the type of that field in the record l*)
           let { typ } : Types.record_field =
             Types.struct_field offset (BasilExpr.type_of r)
           in
@@ -1111,7 +1109,7 @@ let rec constrain_expr proc (st : ConstraintState.t)
           in
           (st, type_to_inferred @@ BasilExpr.type_of l)
       | `PTRADD ->
-          (* The pointer is the the left pointer but with the offsets translated by the right value, use SVA to see if we know the right ptr? *)
+          (* TODO: The pointer is the the left pointer but with the offsets translated by the right value, use SVA to see if we know the right ptr? *)
           (st, Pointer (Top, Top))
       | `INTMOD | `INTSUB | `INTDIV | `INTADD | `INTMUL ->
           let st = constrain_args proc st l r @@ BinCamlType BinCaml_Int in
@@ -1242,7 +1240,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
         let lhs = VarId.var_proc_to_uid lhs proc in
         let rhs = VarId.var_proc_to_uid rhs proc in
         constrain st (TypeVar rhs) (TypeVar lhs)
-  (* TODO: These should probably be constrain calls and joined somehow *)
+  (* TODO: These should probably be joined somehow *)
   | Stmt.Instr_Load { lhs; addr = Addr { addr; size } } ->
       let sva_res =
         Analysis.Sva.Eval.EV.eval
