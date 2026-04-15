@@ -13,13 +13,13 @@ module V = struct
 
   let hash { univ; v } = Hash.pair Hash.string Hash.string (univ, v)
   let to_string { univ; v } = univ ^ "::" ^ v
-
-  let of_var univ v =
-    if Var.is_global v then { univ = "<global>"; v = Var.name v }
-    else { univ; v = Var.name v }
-
   let local_univ = "<local>"
   let global_univ = "<global>"
+  let proc_univ p = ID.to_string p
+
+  let of_var univ v =
+    if Var.is_global v then { univ = global_univ; v = Var.name v }
+    else { univ; v = Var.name v }
 end
 
 module TCtx = Map.Make (V)
@@ -79,9 +79,10 @@ open Typ
 let printer_alg = function
   | Var e -> ID.to_string e
   | TypeConstr ([ l ], e) -> l ^ " " ^ e
+  | TypeConstr ([ a; b ], "->") -> a ^ " -> " ^ b
   | TypeConstr ([], e) -> e
   | TypeConstr (ls, e) ->
-      List.to_string ~start:"(" ~stop:")" ~sep:" " Fun.id ls ^ " " ^ e
+      List.to_string ~start:"(" ~stop:")" ~sep:"," Fun.id ls ^ " " ^ e
 
 let type_to_string t = Rec.cata printer_alg t
 
@@ -97,13 +98,14 @@ let tmod_shared a = TypeConstr ([ a ], "shared")
 let fun_type a b = TypeConstr ([ a; b ], "->")
 let int_type = TypeConstr ([], "int")
 let nat_val_type i = TypeConstr ([], Int.to_string i)
-let bv_type i = TypeConstr ([ nat_val_type i ], "bv")
+let bv_type i = map_expr fix @@ TypeConstr ([ nat_val_type i ], "bv")
 let bvunk i = TypeConstr ([ Var i ], "bv")
 let bool_type = TypeConstr ([], "bool")
-let ptr_typ a b = TypeConstr ([ a; b ], "ptr")
 let unit_t = TypeConstr ([], "unit")
 let top_t = TypeConstr ([], "top")
 let nothing_t = TypeConstr ([], "nothing")
+let ptr_typ_sub a b = TypeConstr ([ a; b ], "ptr")
+let ptr_typ = bv_type 64
 
 let rec to_basil (t : t) : Types.t =
   let open Types in
@@ -189,7 +191,7 @@ let rec unify ?(pos = Lexing.dummy_pos) t t' =
       merge (fun a b -> TypeConstr (args, n)) t t'
 
 let gen = ID.make_gen ()
-let bv_type i = map_expr fix @@ bv_type i
+let bv_type i = bv_type i
 let bvunk i = map_expr fix @@ TypeConstr ([ Var i ], "bv")
 
 let rec ty_of_basil (t : Types.t) : t =
@@ -205,7 +207,7 @@ let rec ty_of_basil (t : Types.t) : t =
     | Types.Sort (n, _) -> TypeConstr ([], n)
     | Types.Struct _ -> failwith "unsupp"
     | Types.Pointer { lower; upper } ->
-        ptr_typ (ty_of_basil lower) (ty_of_basil upper)
+        ptr_typ_sub (ty_of_basil lower) (ty_of_basil upper)
     | Types.Variable n -> Var (gen.fresh ~name:n ())
   in
   fix e
@@ -221,6 +223,9 @@ let scheme_of_op (gen : ID.generator)
     (o : Ops.AllOps.([ const | unary | binary ])) =
   let fv () = gen.fresh ~name:"ɑ" () in
   match o with
+  | `Extract (hi, lo) -> curry [ bvunk (fv ()) ] (bv_type (hi - lo))
+  | `SignExtend bits -> curry [ bvunk (fv ()) ] (bvunk (fv ()))
+  | `ZeroExtend bits -> curry [ bvunk (fv ()) ] (bvunk (fv ()))
   | `BOOLTOBV1 -> curry [ bool_type ] (bv_type 1)
   | `Bitvector b -> fix @@ bv_type (Bitvec.size b)
   | #Ops.BVOps.binary_unif ->
@@ -240,7 +245,12 @@ let scheme_of_op (gen : ID.generator)
   | #Ops.LogicalOps.unary -> curry [ bool_type ] bool_type
   | #Ops.LogicalOps.const -> fix @@ bool_type
   | `Old -> fix @@ Var (fv ())
-  | o -> failwith @@ "unsupported op"
+  | #Ops.AllOps.binary as o ->
+      failwith @@ "unsupported op" ^ Ops.AllOps.to_string o
+  | #Ops.AllOps.unary as o ->
+      failwith @@ "unsupported op" ^ Ops.AllOps.to_string o
+  | #Ops.AllOps.const as o ->
+      failwith @@ "unsupported op" ^ Ops.AllOps.to_string o
 
 let scheme_of_intrin (gen : ID.generator) (o : Ops.AllOps.(intrin)) args =
   let fv () = gen.fresh ~name:"ɑ" () in
@@ -267,27 +277,29 @@ let inst_annot_v ?(no_constraint = false) v =
   in
   ty
 
+(* lookup var and add unify with its type annotation *)
+let lookup_var_typ univ ?(no_constraint = false) c v =
+  let vt = inst_annot_v v in
+  let a =
+    let v = V.of_var univ v in
+    TCtx.find_opt v c |> function
+    | Some v -> v
+    | None -> failwith ("var not found: " ^ V.to_string v)
+  in
+  let tt = match a with Forall (_, ty) -> union ty vt in
+  tt
+
 let rec infer ~univ (hr : Lexing.position) e (c : scheme TCtx.t) =
   print_endline ("infer " ^ plpos hr ^ " " ^ Expr.BasilExpr.to_string e);
   try do_infer univ hr e c
-  with TypeErr m ->
-    print_endline m;
-    ty_of_basil Nothing
+  with TypeErr m -> raise (TypeErr (m ^ " : " ^ Expr.BasilExpr.to_string e))
 
 and do_infer univ hr e c =
   let mkv v = V.of_var univ v in
   let r = fix @@ Var (gen.fresh ()) in
   let open Expr.AbstractExpr in
   match Expr.BasilExpr.unfix e with
-  | RVar { id } -> begin
-      let v = mkv id in
-      let a =
-        TCtx.find_opt v c |> function
-        | Some v -> v
-        | None -> failwith ("var not found: " ^ V.to_string v)
-      in
-      match a with Forall (_, ty) -> union ty r
-    end
+  | RVar { id } -> lookup_var_typ univ c id
   | Lambda { op; bound_vars; in_body } -> begin
       let tvars = List.map (fun v -> (v, inst_annot_v v)) bound_vars in
       let ictx =
@@ -364,10 +376,13 @@ let ctx_to_string ctx =
   |> Iter.to_string (fun (a, b) ->
       Printf.sprintf "%s %s" (V.to_string a) (scheme_to_string b))
 
-let infer_stmt univ ctx stmt =
+let fresh_tvar ?(n = "a") () = fix @@ Var (gen.fresh ~name:n ())
+
+let do_infer_stmt p univ ctx stmt =
   let open Stmt in
   (*let r = fix @@ Var (gen.fresh ()) in*)
   match stmt with
+  | Instr_IntrinCall _ -> failwith "intrin unsupported"
   | Instr_Assume { body } | Instr_Assert { body } ->
       let b = infer ~univ [%here] body ctx in
       ignore @@ unify (fix bool_type) b;
@@ -382,17 +397,72 @@ let infer_stmt univ ctx stmt =
       in
       let _ = List.iter (fun (l, r) -> ignore @@ unify l r) ls in
       ()
-  | Instr_Call _ -> ()
-  | Instr_IndirectCall _ -> ()
-  | Instr_IntrinCall _ -> ()
-  | Instr_Load _ -> ()
-  | Instr_Store _ -> ()
+  | Instr_Call { lhs; procid; args } ->
+      let p = Program.proc p procid in
+      let infer_param p =
+        infer ~univ:(V.proc_univ procid) [%here] (Expr.BasilExpr.rvar p) ctx
+      in
+      StringMap.to_iter args
+      |> Iter.map (fun (param, a) ->
+          ( infer_param (StringMap.find param (Procedure.formal_in_params p)),
+            infer ~univ [%here] a ctx ))
+      |> Iter.iter (fun (form, act) -> ignore @@ unify form act);
+      StringMap.to_iter lhs
+      |> Iter.map (fun (param, a) ->
+          ( infer_param (StringMap.find param @@ Procedure.formal_out_params p),
+            infer ~univ [%here] (Expr.BasilExpr.rvar a) ctx ))
+      |> Iter.iter (fun (form, act) -> ignore @@ unify form act);
+      ()
+  | Instr_IndirectCall { target } ->
+      let _ = unify (fix @@ ptr_typ) (infer ~univ [%here] target ctx) in
+      ()
+  | Instr_Load { lhs; rhs; addr = Scalar } ->
+      let _ =
+        unify
+          (infer ~univ [%here] (Expr.BasilExpr.rvar lhs) ctx)
+          (infer ~univ [%here] (Expr.BasilExpr.rvar rhs) ctx)
+      in
+      ()
+  | Instr_Load { lhs; rhs; addr = Addr { addr; size } } ->
+      let addr = infer ~univ [%here] addr ctx in
+      let _ = unify (fix @@ ptr_typ) addr in
+      let mapt = fix @@ fun_type addr (fresh_tvar ()) in
+      let _ = unify (lookup_var_typ univ ctx rhs) mapt in
+      let _ =
+        unify
+          (infer ~univ [%here] (Expr.BasilExpr.rvar lhs) ctx)
+          (fix @@ bv_type size)
+      in
+      ()
+  | Instr_Store { lhs; rhs; value; addr = Scalar } ->
+      let _ =
+        unify (infer ~univ [%here] value ctx)
+        @@ unify
+             (infer ~univ [%here] (Expr.BasilExpr.rvar lhs) ctx)
+             (infer ~univ [%here] (Expr.BasilExpr.rvar rhs) ctx)
+      in
+      ()
+  | Instr_Store { lhs; rhs; value; addr = Addr { addr; size } } ->
+      let addr = infer ~univ [%here] addr ctx in
+      let _ = unify (fix @@ ptr_typ) addr in
+      let mapt = fix @@ fun_type addr (fresh_tvar ()) in
+      let _ = unify mapt (infer ~univ [%here] (Expr.BasilExpr.rvar lhs) ctx) in
+      let _ = unify (lookup_var_typ univ ctx rhs) mapt in
+      let _ = unify (infer ~univ [%here] value ctx) (fix @@ bv_type size) in
+      ()
 
-let infer_block univ ctx (b : Program.bloc) =
+let infer_stmt p univ ctx s =
+  try do_infer_stmt p univ ctx s
+  with TypeErr m ->
+    raise
+      (TypeErr
+         (m ^ " " ^ Stmt.to_string Var.pretty Var.pretty Expr.BasilExpr.pretty s))
+
+let infer_block p univ ctx (b : Program.bloc) =
   let _ = infer_phi univ ctx b.phis in
   Block.stmts_iter b
   |> Iter.iter (fun s ->
-      let _ = infer_stmt univ ctx s in
+      let _ = infer_stmt p univ ctx s in
       ())
 
 let lproc =
@@ -458,7 +528,7 @@ let assume_proc_decl ctx ?(no_constraint = false) (p : Program.proc) =
   let globs = Var.Decls.values (Procedure.local_decls p) in
   let formals_in = Procedure.formal_in_params p |> StringMap.values in
   let formals_out = Procedure.formal_out_params p |> StringMap.values in
-  let univ = ID.to_string @@ Procedure.id p in
+  let univ = V.proc_univ @@ Procedure.id p in
   let ctx =
     Iter.fold
       (decl_var_typ ~no_constraint univ)
@@ -467,10 +537,10 @@ let assume_proc_decl ctx ?(no_constraint = false) (p : Program.proc) =
   in
   ctx
 
-let infer_proc ctx ?(no_constraint = false) (p : Program.proc) =
-  let univ = ID.to_string @@ Procedure.id p in
+let infer_proc prog ctx ?(no_constraint = false) (p : Program.proc) =
+  let univ = V.proc_univ @@ Procedure.id p in
   Procedure.iter_blocks_topo_fwd p
-  |> Iter.iter (fun (_, b) -> infer_block univ ctx b);
+  |> Iter.iter (fun (_, b) -> infer_block prog univ ctx b);
   print_endline univ;
   print_endline @@ ctx_to_string ctx;
   ctx
@@ -485,7 +555,12 @@ let infer_prog ~no_constraint p =
     IDMap.values p.procs |> Iter.fold (assume_proc_decl ~no_constraint) ctx
   in
   (* solve types *)
-  IDMap.values p.procs |> Iter.fold (infer_proc ~no_constraint) ctx
+  IDMap.values p.procs |> Iter.fold (infer_proc p ~no_constraint) ctx
+
+let infer_prog_test p =
+  let ctx = infer_prog p ~no_constraint:false in
+  print_endline (ctx_to_string ctx);
+  p
 
 let%expect_test "test 2" =
   let a = U.make "a" in
@@ -495,32 +570,4 @@ let%expect_test "test 2" =
   let d = U.make "a" in
   let f = U.find d in
   print_endline (U.get f);
-  ()
-
-let testa () =
-  print_endline "alsdkldjalk jdalkj";
-  Logs.err (fun m -> m "run test ");
-  let open Expr in
-  let e =
-    BasilExpr.boolnot @@ BasilExpr.boolnot @@ BasilExpr.boolnot
-    @@ BasilExpr.applyintrin ~op:`AND
-         [
-           BasilExpr.boolnot
-             (BasilExpr.boolnot (BasilExpr.rvar (Var.create "b" Boolean)));
-           BasilExpr.rvar (Var.create "a" Boolean);
-         ]
-  in
-  let ctx_b =
-    BasilExpr.free_vars_iter e
-    |> Iter.fold (decl_var_typ V.local_univ ~no_constraint:true) TCtx.empty
-  in
-  let ctx = infer_prog ~no_constraint:false lproc.prog in
-  let e = infer [%here] e ctx in
-  let _ =
-    TCtx.to_iter ctx
-    |> Iter.to_string (fun (a, b) ->
-        Printf.sprintf "%s %s" (V.to_string a) (scheme_to_string b))
-    |> print_endline
-  in
-  (*print_endline (Types.to_string @@ to_basil e);*)
   ()
