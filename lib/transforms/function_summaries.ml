@@ -146,6 +146,7 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
       end : FunctionSummaryAnnotation)
       (ref IDSet.empty) proc
   in
+  Bincaml_util.Smt.Solver.stop solver;
   add_summary summary proc
 
 let intraproc_transform (prog : Program.t) =
