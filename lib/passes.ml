@@ -141,6 +141,13 @@ module PassManager = struct
       doc = "Runs a gamma analysis on a data flow graph and prints results";
     }
 
+  let test_type_inf =
+    {
+      name = "hm-inf-test";
+      apply = Prog Analysis.Hm.infer_prog_test;
+      doc = "Run HM inference and dump context";
+    }
+
   let remove_unused =
     {
       name = "remove-unused-decls";
@@ -312,6 +319,7 @@ module PassManager = struct
       linear_const;
       copy_prop;
       simp;
+      test_type_inf;
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;
