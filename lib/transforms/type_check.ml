@@ -117,7 +117,7 @@ let type_check stmt_id block_id expr =
     | `INTADD | `INTMUL | `INTSUB | `INTDIV | `INTMOD | `INTLT | `INTLE ->
         binary_int_types arg1 arg2
     | (`EQ | `NEQ) as op ->
-        if Types.leq arg1 arg2 then []
+        if Types.equal arg1 arg2 then []
         else
           [
             type_err "Arguments are not of the same type in %s"

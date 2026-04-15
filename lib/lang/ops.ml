@@ -377,9 +377,8 @@ module AllOps = struct
     | `ZeroExtend sz -> (
         match a with
         | Bitvector s ->
-            return
-            (* @@ Bitvector (sz + s) *)
-            @@ Struct { name = ""; size = sz + s; fields = StringMap.empty }
+            return @@ Bitvector (sz + s)
+            (* @@ Struct { name = ""; size = sz + s; fields = StringMap.empty } *)
         | o -> Conflict [ (o, "<bitvector") ])
     | `ReadField field -> (
         match a with
@@ -435,8 +434,8 @@ module AllOps = struct
         return
         @@
         match List.hd args with
-        | Bitvector 64 ->
-            Pointer { name = ""; lower = Nothing; upper = Nothing }
+        (* | Bitvector 64 -> *)
+        (* Pointer { name = ""; lower = Nothing; upper = Nothing } *)
         | a -> a)
     | `BVMUL -> return @@ List.hd args
     | `BVOR -> return @@ List.hd args

@@ -1545,8 +1545,7 @@ let get_type results proc var : Types.t =
   | Some a -> a
 
 let map_var results proc (var : Var.t) : Var.t =
-  Var.create (Var.name var) ~pure:(Var.pure var) ~scope:(Var.scope var)
-  @@ get_type results proc var
+  Var.create (Var.name var) ~scope:(Var.scope var) @@ get_type results proc var
 
 let map_expr results proc =
   let expr_rewriter results proc (abstract_expr : 'e BasilExpr.abstract_expr) :
@@ -1635,8 +1634,8 @@ let map_stmt results proc (stmt : Program.stmt) : Program.stmt =
   | Stmt.Instr_IntrinCall { lhs; args; name } ->
       Stmt.Instr_IntrinCall
         {
-          lhs = StringMap.map (map_var results proc) lhs;
-          args = StringMap.map (map_expr results proc) args;
+          lhs = List.map (map_var results proc) lhs;
+          args = List.map (map_expr results proc) args;
           name;
         }
   | Stmt.Instr_Call { lhs; procid; args } ->
