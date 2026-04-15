@@ -158,16 +158,16 @@ module IDELive = struct
               (Iter.singleton (d, IdEdge))
               assigns
         (* If a variable is marked live then don't transfer relations too *)
-        | _ when VarSet.mem v @@ Stmt.free_vars VarSet.empty stmt -> Iter.empty
+        | _ when VarSet.mem v @@ Stmt.free_vars stmt -> Iter.empty
         (* The index variables of a memory read are always live regardless of if
            the lhs was dead, since there are still side effects of reading
            memory ? *)
         | Instr_Load l when Var.equal l.lhs v -> Iter.empty
-        | Instr_IntrinCall c
-          when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs ->
+        | Instr_IntrinCall { lhs }
+          when List.exists (fun v' -> Var.equal v v') lhs ->
             Iter.empty
-        | Instr_Call c when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs
-          ->
+        | Instr_Call { lhs }
+          when StringMap.exists (fun _ v' -> Var.equal v v') lhs ->
             Iter.empty
         (*| Instr_IndirectCall c -> top *)
         | Instr_IndirectCall c -> Iter.singleton (Label v, IdEdge) (* Unsound *)
@@ -226,13 +226,12 @@ module IDELiveSSI = struct
                   |> Iter.map (fun v' -> (Label v', IdEdge))
                 else Iter.empty)
         (* If a variable is marked live then don't transfer relations too *)
-        | _ when VarSet.mem v @@ Stmt.free_vars VarSet.empty s -> Iter.empty
+        | _ when VarSet.mem v @@ Stmt.free_vars s -> Iter.empty
         (* The index variables of a memory read are always live regardless of if
            the lhs was dead, since there are still side effects of reading
            memory ? *)
         | Instr_Load l when Var.equal l.lhs v -> Iter.empty
-        | Instr_IntrinCall c
-          when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs ->
+        | Instr_IntrinCall { lhs } when List.exists (Var.equal v) lhs ->
             Iter.empty
         | Instr_Call c when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs
           ->

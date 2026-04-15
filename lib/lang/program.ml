@@ -45,6 +45,11 @@ type declaration =
   | Variable of { binding : Var.t; attrib : Expr.BasilExpr.t Attrib.attrib_map }
       (** mutable state *)
 
+let decl_binding = function
+  | Type { binding } -> binding
+  | Variable { binding } -> Var.name binding
+  | Function { binding } -> Var.name binding
+
 let pretty_declaration d =
   let open Containers_pp in
   match d with
@@ -125,6 +130,13 @@ let prog_pretty (p : t) =
   let open Containers_pp.Infix in
   let globs =
     StringMap.bindings p.globals
+    |> List.sort (fun (_, decl) (_, decl2) ->
+        (* NOTE: Recursive types might require more logic here *)
+        match (decl, decl2) with
+        | Type _, Type _ | Variable _, Variable _ | Function _, Function _ -> 0
+        | Type _, _ -> -1
+        | _, Type _ -> 1
+        | _ -> 0)
     |> List.map (fun (n, v) -> pretty_declaration v)
   in
   let n =
@@ -134,10 +146,10 @@ let prog_pretty (p : t) =
   in
   let decls =
     globs @ n
-    @ (List.map
+    @ List.map
         (fun (_, p) -> proc_pretty p)
         (IDMap.to_list p.procs
-        |> List.sort (fun (i, _) (j, _) -> ID.compare i j)))
+        |> List.sort (fun (i, _) (j, _) -> ID.compare i j))
   in
 
   append_l ~sep:(text ";\n") decls ^ text ";\n"
@@ -163,7 +175,7 @@ let decl_typ ?(attrib = StringMap.empty) p t =
         implicit_decls =
           StringMap.add name
             (let ty = Types.curry [] s in
-             let constructor = Var.create name ty ~scope:Global in
+             let constructor = Var.create name ty ~scope:GlobalConst in
              VariantCase { variant = name; belongs_to = s; constructor })
             p.implicit_decls;
       }
@@ -178,14 +190,14 @@ let decl_typ ?(attrib = StringMap.empty) p t =
             |> List.map (function { variant; fields } ->
                 let args = List.map (function { field; typ } -> typ) fields in
                 let ty = Types.curry args s in
-                let constructor = Var.create variant ty ~scope:Global in
+                let constructor = Var.create variant ty ~scope:GlobalConst in
                 (variant, VariantCase { variant; belongs_to = s; constructor }))
             );
       }
   | _ -> failwith "not declarable type"
 
-let add_decl ?(attrib = StringMap.empty) p v decl =
-  { p with globals = StringMap.add v decl p.globals }
+let add_decl ?(attrib = StringMap.empty) p decl =
+  { p with globals = StringMap.add (decl_binding decl) decl p.globals }
 
 let create_single_proc ?(name = "<module>") () =
   let proc_names = ID.make_gen () in

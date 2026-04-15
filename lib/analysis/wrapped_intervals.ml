@@ -966,7 +966,7 @@ module Domain = struct
       | Lang.Stmt.Instr_Load { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_Store { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_IntrinCall { lhs } ->
-          StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
+          List.to_iter lhs |> Iter.map (fun v -> (v, top_val))
       | Lang.Stmt.Instr_Call { lhs } ->
           StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
       | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
@@ -976,6 +976,15 @@ module Domain = struct
   let transfer dom stmt =
     Iter.fold (fun a (k, v) -> update k v a) dom
     @@ transfer_state (flip read dom) stmt
+
+  let transfer_phi m (p : Var.t Lang.Block.phi) =
+    match p with
+    | { lhs; rhs } ->
+        rhs
+        |> List.map (fun (_, k) -> read k m)
+        |> List.fold_left WrappedIntervalsLattice.join
+             WrappedIntervalsLattice.bottom
+        |> fun v -> update lhs v m
 end
 
 module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)

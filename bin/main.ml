@@ -60,12 +60,17 @@ let dump_proc_cmd =
   let info = Cmd.info "dump-il" ~version:"alpha" ~doc in
   Cmd.v info Term.(const dump_proc $ fname $ proc)
 
+let verb =
+  let doc = "set log level to debug" and docv = "VERBOSE" in
+  Arg.(value & flag & info [ "v"; "verbose" ] ~doc ~docv)
+
 (** Runs the [inner] function with an input channel. The input channel is from
     opening the given [fname], or stdin if [fname] is [-]. *)
 let with_in_or_stdin fname inner =
   match fname with "-" -> inner stdin | fname -> CCIO.with_in fname inner
 
-let run_script fname =
+let run_script ~verb fname =
+  if verb then Logs.set_level (Some Logs.Debug);
   let st = Script.init_st in
   with_in_or_stdin fname @@ fun chan ->
   let iter = CCIO.read_lines_iter chan in
@@ -91,7 +96,9 @@ let callgraph_cmd =
 let script_cmd =
   let doc = "run script" in
   let info = Cmd.info "script" ~version:"alpha" ~doc in
-  Cmd.v info Term.(const run_script $ fname)
+  Cmd.make info
+  @@ let+ verb and+ fname in
+     run_script ~verb fname
 
 let cmd =
   let doc = "bincaml" in
@@ -101,8 +108,8 @@ let cmd =
 let main () =
   Trace_core.set_process_name "main";
   Trace_core.set_thread_name "t1";
-  Logs.set_level (Some Logs.Error);
-  Logs.set_reporter (reporter Format.err_formatter);
+  Logs.set_level (Some Logs.Info);
+  Logs.set_reporter (Logs.format_reporter ());
   exit (Cmd.eval_result cmd)
 
 let () = Trace_tef.with_setup ~out:(`File "trace.json") () @@ fun () -> main ()

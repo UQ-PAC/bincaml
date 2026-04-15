@@ -163,9 +163,9 @@ module Eval = Intra_analysis.EvalStmt (SVAAbstractionBasil)
 module Domain = struct
   include StateAbstraction
 
-  let stack_pointer = Var.create ~scope:Local "R31_in" @@ Bitvector 64
-  let link_register = Var.create ~scope:Local "R30_in" @@ Bitvector 64
-  let frame_pointer = Var.create ~scope:Local "R29_in" @@ Bitvector 64
+  let stack_pointer = Var.create ~scope:LocalConst "R31_in" @@ Bitvector 64
+  let link_register = Var.create ~scope:LocalConst "R30_in" @@ Bitvector 64
+  let frame_pointer = Var.create ~scope:LocalConst "R29_in" @@ Bitvector 64
 
   (* These registers are preserved over calls and are not real params, so we can ignore later *)
   let call_preserve =

@@ -235,6 +235,7 @@ and transNamedCallReturn (x : namedCallReturn) : result = match x with
 and transLVars (x : lVars) : result = match x with
     LVars_Empty  -> failure x
   | LVars_LocalList (openparen, localvars, closeparen) -> failure x
+  | LVars_LocalConstList (openparen, localvars, closeparen) -> failure x
   | LVars_List (openparen, lvars, closeparen) -> failure x
   | NamedLVars_List (openparen, namedcallreturns, closeparen) -> failure x
 
@@ -257,6 +258,7 @@ and transJump (x : jump) : result = match x with
 
 and transLVar (x : lVar) : result = match x with
     LVar_Local localvar -> failure x
+  | LVar_LocalConst localvar -> failure x
   | LVar_Global globalvar -> failure x
 
 

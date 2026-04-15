@@ -207,8 +207,7 @@ let%expect_test "dtp" =
   in
   print_endline @@ to_string lst;
   print_endline @@ to_string rc;
-  [%expect
-    {|
+  [%expect {|
     list
     recs
     |}]

@@ -6,9 +6,12 @@ Logs should print conditionally on whether their source has the right level.
   > (log-level "info" "analysis.irreducible_loops")
   > (run-transforms "irreducible-loops")
   > EOF
-  [INFO] (application) Starting irreducible-loops
-  [INFO] (analysis.irreducible_loops) found 15 loops, 1 irreducible
-  [INFO] (analysis.irreducible_loops) found 0 loops, 0 irreducible
+  (load-il ../../examples/irreducible_loop_1.il)
+  (log-level info)
+  (log-level info analysis.irreducible_loops)
+  (run-transforms irreducible-loops)
+  bincaml: [INFO] found 15 loops, 1 irreducible
+  bincaml: [INFO] found 0 loops, 0 irreducible
 
 
   $ cat << EOF | bincaml script -
@@ -17,7 +20,10 @@ Logs should print conditionally on whether their source has the right level.
   > (log-level "error" "analysis.irreducible_loops")
   > (run-transforms "irreducible-loops")
   > EOF
-  [INFO] (application) Starting irreducible-loops
+  (load-il ../../examples/irreducible_loop_1.il)
+  (log-level info)
+  (log-level error analysis.irreducible_loops)
+  (run-transforms irreducible-loops)
 
 Some error messages for log configuration.
 
@@ -26,7 +32,9 @@ Some error messages for log configuration.
   > (log-level)
   > (run-transforms "irreducible-loops")
   > EOF
-  bincaml: Error in log-level: Expected at least one argument at Dune__exe__Script.of_cmd.(fun).make_error bin/script.ml:88
+  (load-il ../../examples/irreducible_loop_1.il)
+  (log-level)
+  bincaml: Error in log-level: Expected at least one argument at Dune__exe__Script.of_cmd.(fun).make_error bin/script.ml:90
   [123]
 
   $ cat << EOF | bincaml script -
@@ -34,7 +42,9 @@ Some error messages for log configuration.
   > (log-level "blah")
   > (run-transforms "irreducible-loops")
   > EOF
-  bincaml: Error in log-level: Incorrect log level option given, correct options are ["info", "quiet", "app", "error", "warning", "debug"] at Dune__exe__Script.of_cmd.(fun).make_error bin/script.ml:88
+  (load-il ../../examples/irreducible_loop_1.il)
+  (log-level blah)
+  bincaml: Error in log-level: Incorrect log level option given, correct options are ["info", "quiet", "app", "error", "warning", "debug"] at Dune__exe__Script.of_cmd.(fun).make_error bin/script.ml:90
   [123]
 
 
@@ -43,5 +53,7 @@ Some error messages for log configuration.
   > (log-level "info" "nowheoijifsda")
   > (run-transforms "irreducible-loops")
   > EOF
-  bincaml: Error in log-level: source nowheoijifsda not found at Dune__exe__Script.of_cmd.(fun).make_error bin/script.ml:88
+  (load-il ../../examples/irreducible_loop_1.il)
+  (log-level info nowheoijifsda)
+  bincaml: Error in log-level: source nowheoijifsda not found at Dune__exe__Script.of_cmd.(fun).make_error bin/script.ml:90
   [123]

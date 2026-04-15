@@ -542,8 +542,9 @@ module IState = struct
 
   let lookup_var v st =
     (match Var.scope v with
-      | Local -> VarMap.find_opt v (stack_top st).locals
-      | Global -> VarMap.find_opt v st.globals)
+      | LocalVar | LocalConst -> VarMap.find_opt v (stack_top st).locals
+      | GlobalVar | GlobalVarShared | GlobalConst ->
+          VarMap.find_opt v st.globals)
     |> function
     | Some v -> v
     | None -> raise (ReadUninit v)
@@ -557,20 +558,21 @@ module IState = struct
 
   let lookup_memory v st =
     match Var.scope v with
-    | Global -> VarMap.find v st.memories
+    | GlobalVar | GlobalConst | GlobalVarShared -> VarMap.find v st.memories
     | _ -> failwith "unsupported"
 
   let write_var var value st =
     let value = IValue.of_constant value in
     match Var.scope var with
-    | Local ->
+    | LocalVar | LocalConst ->
         let stack =
           match st.stack with
           | h :: tl -> { h with locals = VarMap.add var value h.locals } :: tl
           | _ -> failwith "no stack"
         in
         { st with stack }
-    | Global -> { st with globals = VarMap.add var value st.globals }
+    | GlobalVar | GlobalVarShared | GlobalConst ->
+        { st with globals = VarMap.add var value st.globals }
 
   let map f v = (fst v, f (snd v))
 

@@ -2,6 +2,37 @@
 Run on basic irreducible loop example
 
   $ bincaml script basicssa.sexp
+  (load-il ../../examples/irreducible_loop_1.il)
+  (dump-il before.il)
+  (run-transforms remove-unreachable-block cf-expressions intra-dead-store-elim)
+  (run-transforms simple-params)
+  (run-transforms simple-ssa)
+  (dump-il after.il)
+  (load-il after.il)
+  bincaml: [WARNING] global undeclared CF_5. assuming mutable unshared
+  bincaml: [WARNING] global undeclared NF_5. assuming mutable unshared
+  bincaml: [WARNING] global undeclared R1_3. assuming mutable unshared
+  bincaml: [WARNING] global undeclared R29_4. assuming mutable unshared
+  bincaml: [WARNING] global undeclared R31_4. assuming mutable unshared
+  bincaml: [WARNING] global undeclared VF_5. assuming mutable unshared
+  bincaml: [WARNING] global undeclared ZF_8. assuming mutable unshared
+  (dump-il after_reparsed.il)
+  (load-il ../../examples/sqrt.il)
+  (run-transforms remove-unreachable-block cf-expressions intra-dead-store-elim)
+  (run-transforms simple-params)
+  (interp-out before_loop.txt)
+  (run-transforms simple-ssa)
+  (interp-out after_loop.txt)
+  (load-il ../../examples/x-output.il)
+  (run-transforms remove-unreachable-block cf-expressions intra-dead-store-elim)
+  (interp-out before_conds.txt)
+  (run-transforms simple-ssa)
+  (interp-out after_conds.txt)
+  (load-il ssa-multi-deps.il)
+  (run-transforms remove-unreachable-block cf-expressions intra-dead-store-elim)
+  (dump-il ssa-multi-before.il)
+  (run-transforms ssa)
+  (dump-il ssa-multi-after.il)
 
   $ cat before.il
   var $CF:bv1;
@@ -63,7 +94,6 @@ Run on basic irreducible loop example
        $R0:bv64 := 0x0:bv64;
        $R0:bv64 := bvadd($R0, 0x820:bv64);
        $R30:bv64 := 0x7a0:bv64;
-       
        call @puts_1584();
        goto (%main_3);
      ];
@@ -82,7 +112,6 @@ Run on basic irreducible loop example
        $R0:bv64 := 0x0:bv64;
        $R0:bv64 := bvadd($R0, 0x820:bv64);
        $R30:bv64 := 0x7d0:bv64;
-       
        call @puts_1584();
        goto (%main_17);
      ];
@@ -110,7 +139,6 @@ Run on basic irreducible loop example
        $R0:bv64 := 0x0:bv64;
        $R0:bv64 := bvadd($R0, 0x828:bv64);
        $R30:bv64 := 0x7f4:bv64;
-       
        call @puts_1584();
        goto (%main_13);
      ];
@@ -203,9 +231,9 @@ Run on basic irreducible loop example
        var R30_4:bv64 := 0x7a0:bv64;
        (var CF_7:bv1=CF_out, var NF_7:bv1=NF_out, var R0_16:bv64=R0_out,
           var R1_5:bv64=R1_out, var R29_6:bv64=R29_out, var R30_5:bv64=R30_out,
-          var R31_6:bv64=R31_out, var VF_7:bv1=VF_out, var ZF_10:bv1=ZF_out) := 
-       call @puts_1584(CF_in=CF_6, NF_in=NF_6, R0_in=R0_15, R1_in=R1_4, R29_in=R29_5,
-          R30_in=R30_4, R31_in=R31_5, VF_in=VF_6, ZF_in=ZF_9);
+          var R31_6:bv64=R31_out, var VF_7:bv1=VF_out, var ZF_10:bv1=ZF_out) := call @puts_1584(CF_in=CF_6,
+          NF_in=NF_6, R0_in=R0_15, R1_in=R1_4, R29_in=R29_5, R30_in=R30_4,
+          R31_in=R31_5, VF_in=VF_6, ZF_in=ZF_9);
        goto (%main_3);
      ];
      block %main_3 [
@@ -233,9 +261,9 @@ Run on basic irreducible loop example
        var R30_2:bv64 := 0x7d0:bv64;
        (var CF_4:bv1=CF_out, var NF_4:bv1=NF_out, var R0_10:bv64=R0_out,
           var R1_3:bv64=R1_out, var R29_4:bv64=R29_out, var R30_3:bv64=R30_out,
-          var R31_4:bv64=R31_out, var VF_4:bv1=VF_out, var ZF_6:bv1=ZF_out) := 
-       call @puts_1584(CF_in=CF_3, NF_in=NF_3, R0_in=R0_9, R1_in=R1_2, R29_in=R29_3,
-          R30_in=R30_2, R31_in=R31_3, VF_in=VF_3, ZF_in=ZF_5);
+          var R31_4:bv64=R31_out, var VF_4:bv1=VF_out, var ZF_6:bv1=ZF_out) := call @puts_1584(CF_in=CF_3,
+          NF_in=NF_3, R0_in=R0_9, R1_in=R1_2, R29_in=R29_3, R30_in=R30_2,
+          R31_in=R31_3, VF_in=VF_3, ZF_in=ZF_5);
        goto (%main_17);
      ];
      block %main_17 [
@@ -266,9 +294,9 @@ Run on basic irreducible loop example
        var R30_6:bv64 := 0x7f4:bv64;
        (var CF_8:bv1=CF_out, var NF_8:bv1=NF_out, var R0_24:bv64=R0_out,
           var R1_7:bv64=R1_out, var R29_7:bv64=R29_out, var R30_7:bv64=R30_out,
-          var R31_7:bv64=R31_out, var VF_8:bv1=VF_out, var ZF_12:bv1=ZF_out) := 
-       call @puts_1584(CF_in=CF_5, NF_in=NF_5, R0_in=R0_23, R1_in=R1_3, R29_in=R29_4,
-          R30_in=R30_6, R31_in=R31_4, VF_in=VF_5, ZF_in=ZF_11);
+          var R31_7:bv64=R31_out, var VF_8:bv1=VF_out, var ZF_12:bv1=ZF_out) := call @puts_1584(CF_in=CF_5,
+          NF_in=NF_5, R0_in=R0_23, R1_in=R1_3, R29_in=R29_4, R30_in=R30_6,
+          R31_in=R31_4, VF_in=VF_5, ZF_in=ZF_11);
        goto (%main_13);
      ];
      block %main_13 [ goto (%main_11); ];
@@ -300,19 +328,6 @@ Run on basic irreducible loop example
   ;
 
   $ diff after.il after_reparsed.il
-  9,10c9,10
-  <   modifies $mem:(bv64->bv8), $stack:(bv64->bv8)
-  <   captures $mem:(bv64->bv8), $stack:(bv64->bv8)
-  ---
-  >   modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $mem:(bv64->bv8)
-  >   captures $mem:(bv64->bv8), $stack:(bv64->bv8), $mem:(bv64->bv8)
-  162,163c162,163
-  <   modifies $mem:(bv64->bv8), $stack:(bv64->bv8)
-  <   captures $mem:(bv64->bv8), $stack:(bv64->bv8)
-  ---
-  >   modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $mem:(bv64->bv8)
-  >   captures $mem:(bv64->bv8), $stack:(bv64->bv8), $mem:(bv64->bv8)
-  [1]
 
 The interpreter should give the same output for both
 

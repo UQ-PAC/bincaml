@@ -1,12 +1,5 @@
 open Bincaml_util.Common
 
-let function_name name =
-  let name =
-    if String.starts_with ~prefix:"$" name then String.concat "" [ "f"; name ]
-    else name
-  in
-  name
-
 module Builtins = struct
   type t =
     | Function of string
@@ -158,6 +151,13 @@ module Builtins = struct
     p.spec.rely |> List.iter (iexpr f);
     p.spec.guarantee |> List.iter (iexpr f)
 
+  let function_for_op op args ret =
+    Var.create ~scope:Var.GlobalConst
+      (match name op (args @ [ ret ]) with
+      | Function s -> s
+      | _ -> failwith "unexpected")
+      (Types.curry args ret)
+
   let transform_op_to_decl op args ret =
     let boogie_attribs =
       StringMap.of_list
@@ -172,10 +172,7 @@ module Builtins = struct
       (Function
          {
            attrib = attribs;
-           binding =
-             Var.create
-               (match name op (args @ [ ret ]) with Function s -> s | _ -> "")
-               (Types.curry args ret);
+           binding = function_for_op op args ret;
            definition = Uninterpreted;
          }
         : Lang.Program.declaration)
@@ -190,16 +187,7 @@ module Builtins = struct
     |> Iter.to_list
 
   let transform_add_builtin_decls (p : Lang.Program.t) : Lang.Program.t =
-    used_ops p
-    |> List.fold_left
-         (fun acc d ->
-           Lang.Program.add_decl acc
-             (match d with
-             | Lang.Program.Function { binding } -> Var.name binding
-             | Lang.Program.Variable { binding } -> Var.name binding
-             | Lang.Program.Type { binding } -> binding)
-             d)
-         p
+    used_ops p |> List.fold_left Lang.Program.add_decl p
 end
 
 module Instructions = struct
@@ -219,12 +207,12 @@ module Instructions = struct
     |> Iter.sort_uniq
 
   let store_body ?(be = false) mem_typ val_size addr_size =
-    let memory = Var.create ~scope:Var.Local "#memory" mem_typ in
+    let memory = Var.create ~scope:Var.LocalVar "#memory" mem_typ in
     let value =
-      Var.create ~scope:Var.Local "#value" (Types.Bitvector val_size)
+      Var.create ~scope:Var.LocalVar "#value" (Types.Bitvector val_size)
     in
     let index =
-      Var.create ~scope:Var.Local "#index" (Types.Bitvector addr_size)
+      Var.create ~scope:Var.LocalVar "#index" (Types.Bitvector addr_size)
     in
     (* TODO: maybe generalize to non 8 bit stores, based on mem typ value? *)
     let steps = val_size / 8 in
@@ -252,9 +240,9 @@ module Instructions = struct
     Lang.Expr.BasilExpr.binding ~op:`Lambda [ memory; index; value ] body
 
   let load_body ?(be = false) mem_typ val_size addr_size =
-    let memory = Var.create ~scope:Var.Local "#memory" mem_typ in
+    let memory = Var.create ~scope:Var.LocalVar "#memory" mem_typ in
     let index =
-      Var.create ~scope:Var.Local "#index" (Types.Bitvector addr_size)
+      Var.create ~scope:Var.LocalVar "#index" (Types.Bitvector addr_size)
     in
     let steps = val_size / 8 in
     let body =
@@ -341,16 +329,7 @@ module Instructions = struct
   let transform_add_store_load_decls (prog : Lang.Program.t) =
     unique_stores_loads prog
     |> Iter.filter_map store_load_decl
-    |> Iter.to_list
-    |> List.fold_left
-         (fun acc d ->
-           Lang.Program.add_decl acc
-             (match d with
-             | Lang.Program.Function { binding } -> Var.name binding
-             | Lang.Program.Variable { binding } -> Var.name binding
-             | Lang.Program.Type { binding } -> binding)
-             d)
-         prog
+    |> Iter.fold Lang.Program.add_decl prog
 end
 
 module Normalise = struct
@@ -378,14 +357,11 @@ module Normalise = struct
     (* function application in boogie becomes a map access when on lambdas (identified by local vars) *)
     | ApplyFun { func; args } -> (
         match unfix func with
-        | RVar { attrib; id } when Stdlib.( == ) (Var.scope id) Var.Global ->
+        | RVar { attrib; id } when Var.is_global id ->
             replace [%here]
               (BasilExpr.apply_fun ?attrib
                  ~func:
-                   (BasilExpr.rvar ?attrib
-                      (Var.create
-                         (function_name @@ Var.name id)
-                         ~pure:(Var.pure id) ~scope:(Var.scope id) (Var.typ id)))
+                   (BasilExpr.rvar ?attrib (Var.copy ~name:(Var.name id) id))
                  args)
         | _ -> replace [%here] (apply_fun_to_map func args))
     | ApplyIntrin { op = `AND; args } ->

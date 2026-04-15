@@ -9,7 +9,8 @@ let old e = BasilExpr.unexp ~op:`Old e
 
 let r n =
   BasilExpr.rvar
-    (Var.create ~scope:Var.Global (Printf.sprintf "$R%d" n) (Types.Bitvector 64))
+    (Var.create ~scope:Var.GlobalVar (Printf.sprintf "$R%d" n)
+       (Types.Bitvector 64))
 
 let transform_main p =
   (* TODO: Specify Gammas Oneday *)
@@ -144,10 +145,13 @@ let transform_proc entry (p : Program.proc) =
   | e when String.equal entry e -> transform_main p
   | "@malloc" -> transform_malloc p
   | "@free" -> transform_free p
+  | "@#malloc" -> transform_malloc p
+  | "@zmalloc" -> transform_malloc p
+  | "@#free" -> transform_free p
   | _ -> p
 
 let transform (p : Program.t) =
   let entry = p.entry_proc |> Option.map ID.name |> Option.get_or ~default:"" in
   let procs = IDMap.map (transform_proc entry) p.procs in
   let p = { p with procs } in
-  (fun prog -> Loader.Spec_modifies.set_modsets ~add_only:true prog) p
+  (fun prog -> Spec_modifies.set_modsets ~add_only:false prog) p

@@ -5,6 +5,11 @@ $x is read+written by @callee and @caller; $y is read-only in @callee but
 written by @caller.  After the pass:
 
   $ ../../bin/main.exe script ll_simple.sexp
+  (load-il ll_simple.il)
+  (dump-il before_ll.il)
+  (run-transforms lambda-lifting)
+  (run-transforms type-check)
+  (dump-il after_ll.il)
 
   $ diff before_ll.il after_ll.il
   1,2d0
@@ -34,17 +39,15 @@ written by @caller.  After the pass:
   >   
   16a15
   >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
-  18,21c17,20
+  18,20c17,19
   <      $y:bv32 := 0x0:bv32;
   <      $x:bv32 := 0x1:bv32;
-  <      
   <      call @callee();
   ---
   >      var y:bv32 := 0x0:bv32;
   >      var x:bv32 := 0x1:bv32;
-  >      (var x:bv32=x_out) := 
-  >      call @callee(x_in=x, y_in=y);
-  24c23,24
+  >      (var x:bv32=x_out) := call @callee(x_in=x, y_in=y);
+  23c22,23
   <    block %ret [ nop; return; ]
   ---
   >    block %ret [ nop; goto (%returns); ];
@@ -59,6 +62,11 @@ Checks that Old(e) in the body and ensures becomes e[g -> in_param(g)], and that
 all global refs in requires (not just those under Old) become in-params.
 
   $ ../../bin/main.exe script ll_spec.sexp
+  (load-il ll_spec.il)
+  (dump-il before_ll_spec.il)
+  (run-transforms lambda-lifting)
+  (run-transforms type-check)
+  (dump-il after_ll_spec.il)
 
   $ diff before_ll_spec.il after_ll_spec.il
   1,2d0
@@ -95,17 +103,15 @@ all global refs in requires (not just those under Old) become in-params.
   >   
   22a16
   >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
-  24,27c18,21
+  24,26c18,20
   <      $y:bv32 := 0x0:bv32;
   <      $x:bv32 := 0x1:bv32;
-  <      
   <      call @callee();
   ---
   >      var y:bv32 := 0x0:bv32;
   >      var x:bv32 := 0x1:bv32;
-  >      (var x:bv32=x_out) := 
-  >      call @callee(x_in=x, y_in=y);
-  30c24,25
+  >      (var x:bv32=x_out) := call @callee(x_in=x, y_in=y);
+  29c23,24
   <    block %ret [ nop; return; ]
   ---
   >    block %ret [ nop; goto (%returns); ];
@@ -120,6 +126,10 @@ Verifies the pass completes without error, all top-level globals are removed,
 and @main_1876 acquires the expected _in parameters.
 
   $ ../../bin/main.exe script ll_real.sexp
+  (load-il ../../examples/irreducible_loop_1.il)
+  (run-transforms lambda-lifting)
+  (run-transforms type-check)
+  (dump-il after_ll_real.il)
 
   $ grep "^var" after_ll_real.il || echo "no top-level globals"
   no top-level globals
