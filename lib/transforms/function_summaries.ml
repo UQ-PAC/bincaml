@@ -161,6 +161,10 @@ let intraproc_transform (prog : Program.t) =
            | _ -> acc)
          prog.procs
   in
+  (* print_endline (Containers_pp.Pretty.to_string ~width:80 (Program.prog_pretty {prog with procs })); *)
+  (* print_endline @@ Containers_pp.Pretty.to_string ~width:80 @@ Program.prog_pretty {prog with procs}; *)
+
+  (* let to_string s c Containers_pp.Pretty.to_string ~width:80 (Procedure.pretty s) *)
   { prog with procs }
 
 module Domain = struct

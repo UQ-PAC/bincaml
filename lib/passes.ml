@@ -365,7 +365,14 @@ module PassManager = struct
     Trace_core.with_span ~__FILE__ ~__LINE__ ("transform-prog::" ^ tf.name)
     @@ fun _ ->
     match tf.apply with
-    | Prog tf -> tf p
+    | Prog tf ->
+  (* print_endline (Containers_pp.Pretty.to_string ~width:80 (Program.prog_pretty @@ tf p)); *)
+      Program.prog_pretty (p);
+  let o = tf p in
+  (* (Containers_pp.Pretty.to_string ~width:80 (Program.prog_pretty @@ o)); *)
+      (* Program.prog_pretty (Program.empty ()); *)
+      (* tf p; *) 
+      o
     | Batch tf -> List.fold_left run_transform p tf
     | DFGAnalysis (module D : Analysis.Dataflow_graph.AnalysisType) ->
         IDMap.to_iter p.procs

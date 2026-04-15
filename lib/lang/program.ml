@@ -77,6 +77,7 @@ let pretty_declaration d =
           ^+ text "="
           ^+ nest 2 (Expr.BasilExpr.pretty body))
   | Type { binding; typ } -> text "type " ^ text (Types.to_string_decl typ)
+  | _ -> text ""
 
 (*match definition with
       | Some d -> 
@@ -124,23 +125,29 @@ let prog_pretty (p : t) =
   let open Containers_pp in
   let open Containers_pp.Infix in
   let globs =
+    print_endline @@ Int.to_string @@ List.length (StringMap.bindings p.globals);
     StringMap.bindings p.globals
-    |> List.map (fun (n, v) -> pretty_declaration v)
+    |> List.filteri (fun i d -> 0 <= i)
+    (* |> fun l -> List.nth_opt l 13 *)
+    (* |> Option.map (fun (n, v) -> pretty_declaration v) *)
+    |> List.mapi (fun i (n, v) -> textf "\n\n%d:\n" i ^ pretty_declaration v)
+    |> List.for_all (fun t -> print_endline (Pretty.to_string ~width:80 t); true)
   in
-  let n =
-    p.entry_proc
-    |> Option.map (fun i -> text "prog entry " ^ text @@ ID.to_string i)
-    |> Option.to_list
-  in
-  let decls =
-    globs @ n
-    @ (List.map
-        (fun (_, p) -> proc_pretty p)
-        (IDMap.to_list p.procs
-        |> List.sort (fun (i, _) (j, _) -> ID.compare i j)))
-  in
+  (* let n = *)
+    (* p.entry_proc *)
+    (* |> Option.map (fun i -> text "prog entry " ^ text @@ ID.to_string i) *)
+    (* |> Option.to_list *)
+  (* in *)
+  (* let decls = *)
+    (* globs @ n *)
+    (* @ (List.map *)
+        (* (fun (_, p) -> proc_pretty p) *)
+        (* (IDMap.to_list p.procs *)
+        (* |> List.sort (fun (i, _) (j, _) -> ID.compare i j))) *)
+  (* in *)
 
-  append_l ~sep:(text ";\n") decls ^ text ";\n"
+  text ""
+  (* append_l ~sep:(text ";\n") decls ^ text ";\n" *)
 
 let pretty_to_chan chan (p : t) =
   let p = prog_pretty p in
