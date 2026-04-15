@@ -1,5 +1,4 @@
   $ bincaml script ./typeinference.sexp 2> /dev/null
-  Parameters for the function has a type mismatch: type of ptradd(R31_7, bvadd(0x20:bv64)) != type of R31_8:bv64 (bv64 </= ptr(rec1017972628 of {"field0": (bv64, 0)} 64, rec1017972628 of {"field0": (bv64, 0)} 64)) at statement 2 in %main_11
   $ cat after-type-inference-loops.il
   var observable $mem:(bv64->bv8);
   var $stack:(bv64->bv8);

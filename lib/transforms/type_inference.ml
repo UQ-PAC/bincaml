@@ -43,6 +43,7 @@ module VarId : sig
   val var_proc_to_uid : Var.t -> Program.proc option -> t
   val var_procid_to_uid : Var.t -> ID.t -> t
   val make_id : string -> t
+  val fresh : unit -> t
 end = struct
   type t = string
 
@@ -62,6 +63,13 @@ end = struct
     | Some proc -> var_procid_to_uid var (Procedure.id proc)
 
   let make_id hint = hint
+  let rand_chr () = Char.chr (97 + CCRandom.full_int 26)
+
+  let fresh () =
+    List.fold_left
+      (fun string char -> String.cat string @@ Char.to_string char)
+      ""
+    @@ List.init 10 (fun _ -> rand_chr ())
 end
 
 module VarIdMap = Map.Make (VarId)
@@ -142,9 +150,9 @@ module InferredType = struct
         StringMap.iter (fun _ v -> iter f v) outs
     | Record (fields, _) -> ZMap.iter (fun _ { ty } -> iter f ty) fields
 
-  let rec intersect (ty0 : t) (ty1 : t) : t =
+  let rec intersect (a : t) (b : t) : t =
     (* print_endline @@ Printf.sprintf "joining types %s %s" (show ty0) @@ show ty1; *)
-    match (ty0, ty1) with
+    match (a, b) with
     | Record (fields0, size), Record (fields1, _) ->
         (* WARN: I think this could be improved, cause this is gross *)
         let module FieldMap = Map.Make (struct
@@ -203,9 +211,25 @@ module InferredType = struct
     | Top, a | a, Top | TypeVar _, a | a, TypeVar _ -> a
     | Bottom, a | a, Bottom -> Bottom
     | a, b when equal a b -> a
-    (* | c, Union (a, b) | Union (a, b), c -> Sect (c, Union (a,)) *)
-    (* | c, Sect (a, b) | Sect (a, b), c -> intersect c @@ intersect a b *)
-    | a, b -> a
+    | c, Union (a, b) | Union (a, b), c -> Sect (c, Union (a, b))
+    | c, Sect (a, b) | Sect (a, b), c -> intersect c @@ intersect a b
+    | _ ->
+        print_endline @@ Printf.sprintf "TODO %s %s" (show a) (show b);
+        failwith "boom"
+
+  let rec union a b =
+    match (a, b) with
+    | _, _ when equal a b -> a
+    | Top, _ | _, Top -> Top
+    | Union (a, b), c | c, Union (a, b) -> union c @@ union a b
+    | Record (name, f1), Record (_, f2) -> a (* TODO *)
+    | Record (name, f), _ | _, Record (name, f) -> Record (name, f)
+    | Pointer (l1, u1), Pointer (l2, u2) -> a (* TODO *)
+    | Pointer (l, u), _ | _, Pointer (l, u) -> Pointer (l, u)
+    | TypeVar a, _ | _, TypeVar a -> TypeVar a
+    | _ ->
+        print_endline @@ Printf.sprintf "TODO %s %s" (show a) (show b);
+        failwith "boom"
 
   (* Top and type_var might be valid, and maybe even bottom and then those can just default to whatever type it had prior *)
   let rec inferred_to_real recursives typ : (VarId.t * Types.t) list * Types.t =
@@ -224,7 +248,6 @@ module InferredType = struct
         let recursives, lower = inferred_to_real recursives lower in
         let recursives, upper = inferred_to_real recursives upper in
         let name = "ptr" ^ Int.to_string @@ Hashtbl.hash typ in
-
         (recursives, Types.Pointer { name; lower; upper })
     | Record (fields, size) ->
         let name = "rec" ^ Int.to_string @@ Hashtbl.hash typ in
@@ -244,7 +267,7 @@ module InferredType = struct
         let recursives, typ = inferred_to_real recursives typ in
         ((varid, typ) :: recursives, Types.Variable (VarId.show varid))
     (* NOTE: Will need to check to make sure the typevar isn't a recursive and if it is use that one instead *)
-    | Union (a, b) -> inferred_to_real recursives @@ intersect a b
+    | Union (a, b) -> inferred_to_real recursives @@ union a b
     | Sect (a, b) -> inferred_to_real recursives @@ intersect a b
     | Function _ -> (recursives, Top)
 
@@ -1053,6 +1076,9 @@ let rec constrain_expr proc (st : ConstraintState.t)
       | `Extract (finish, rt) ->
           (* NOTE: This seems hard to determine what type is within a record *)
           let size = finish - rt in
+          Logs.debug (fun m ->
+              m "size %d" size ?header:None ~tags:(Logger.time_stamp ()));
+
           let name =
             VarId.make_id
             @@ Printf.sprintf "Extraction_%s"
@@ -1131,8 +1157,14 @@ let rec constrain_expr proc (st : ConstraintState.t)
       | `Load _ | `IfThen | `MapAccess -> (st, Top))
   | ApplyIntrin { op; args } -> (
       match op with
+      | `BVADD ->
+          let typ = TypeVar (VarId.fresh ()) in
+          let st =
+            List.fold_left (fun acc a -> constrain_arg proc st a typ) st args
+          in
+          (st, typ)
       (* output is constrain by every input *)
-      | `BVOR | `BVXOR | `BVAND | `BVADD | `BVMUL -> (
+      | `BVOR | `BVXOR | `BVAND | `BVMUL -> (
           match BasilExpr.type_of (List.hd args) with
           | Bitvector size ->
               let typ = BinCamlType (BinCaml_BV size) in
@@ -1357,12 +1389,11 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
           (fun k v acc ->
             match constrain_expr proc acc @@ BasilExpr.unfix v with
             | acc, TypeVar a ->
-                constrain acc
+                constrain acc (TypeVar a)
                   (TypeVar
                      (VarId.var_procid_to_uid
                         (StringMap.find k formal_in)
                         procid))
-                  (TypeVar a)
             | acc, a ->
                 ConstraintState.add_ub acc
                   (VarId.var_procid_to_uid (StringMap.find k formal_in) procid)
@@ -1466,7 +1497,13 @@ let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
         (lower, upper))
       type_constraint_map
   in
-
+  VarIdMap.iter
+    (fun k (lower, upper) ->
+      Logs.debug (fun m ->
+          m "VarID: %s\n\t\tLower: %s\n\t\tUpper: %s" (VarId.show k)
+            (InferredType.show lower) (InferredType.show upper) ?header:None
+            ~tags:(Logger.time_stamp ())))
+    types;
   (*
     What would happen if we made one huge automata and tried to solve it like that?
   *)
@@ -1480,9 +1517,9 @@ let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
       (fun name (lower_ty, upper_ty) (recursives, types) ->
         let recursives2, types2 =
           InferredType.inferred_to_real recursives
-          @@ InferredType.intersect
-               (minimise_type Polarity.Neg lower_ty name)
-               (minimise_type Polarity.Pos upper_ty name)
+            (* @@ Union *)
+            (minimise_type Polarity.Neg lower_ty name)
+          (* minimise_type Polarity.Pos upper_ty name ) *)
         in
         (recursives, (name, types2) :: types))
       types ([], [])
@@ -1539,9 +1576,12 @@ let map_expr results proc =
               | _ -> (acc, Some arg))
             [] args
         in
-        match pointer with
-        | [] -> BasilExpr.Keep
-        | [ pointer ] ->
+        match (pointer, args) with
+        | [], _ -> BasilExpr.Keep
+        | [ pointer ], [ x ] ->
+            BasilExpr.replace [%here]
+              (BasilExpr.binexp ?attrib ~op:`PTRADD pointer x)
+        | [ pointer ], x :: tl ->
             BasilExpr.replace [%here]
               (BasilExpr.binexp ?attrib ~op:`PTRADD pointer
                  (BasilExpr.applyintrin ?attrib ~op:`BVADD args))
@@ -1700,6 +1740,4 @@ let transform (prog : Program.t) (results : Types.t VarIdMap.t)
     globals = StringMap.add_list mapped_globals decls;
   }
 
-let infer_types (prog : Program.t) =
-  let results, recursives = analyse prog in
-  transform prog results recursives
+let infer_types (prog : Program.t) = uncurry (transform prog) @@ analyse prog

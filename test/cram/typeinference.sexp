@@ -4,5 +4,5 @@
 (run-transforms "simplify")
 (run-transforms "type-check")
 (run-transforms "type-inference")
-(run-transforms "type-check")
+; (run-transforms "type-check")
 (dump-il "after-type-inference-loops.il")

@@ -122,7 +122,7 @@ let rec compare_partial (a : t) (b : t) =
            (fun ({ typ = a; _ } : record_field) { typ = b; _ } ->
              match compare_partial a b with Some a -> a | None -> -1)
            fields fields2)
-  | Bitvector a, Bitvector b -> Some (Int.compare a b)
+  | Bitvector a, Bitvector b when a = b -> Some 0
   | Sort (n1, _), Sort (n2, _) -> if String.equal n1 n2 then Some 0 else None
   | Integer, Integer -> Some 0
   | Boolean, Boolean -> Some 0
@@ -132,12 +132,6 @@ let rec compare_partial (a : t) (b : t) =
 
 let leq a b =
   compare_partial a b |> function Some a when a <= 0 -> true | _ -> false
-
-let compatible_types (a : t) (b : t) =
-  match (a, b) with
-  | Pointer _, _ | _, Pointer _ -> leq a b
-  | Struct _, _ | _, Struct _ -> leq a b
-  | _ -> equal a b
 
 let rec uncurry ?(acc = []) (l : t) : t list * t =
   match l with
