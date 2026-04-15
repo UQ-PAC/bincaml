@@ -29,7 +29,7 @@ written by @caller.  After the pass:
   >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
   >    block %entry [ var x:bv32 := bvadd(x, y); goto (%ret); ];
   >    block %ret [ nop; goto (%returns); ];
-  >    block %returns [ let x_out:bv32 := x; return; ]
+  >    block %returns [ var x_out:bv32 := x; return; ]
   12,14c11,12
   < proc @caller()  -> () {  }
   <   modifies $x:bv32, $y:bv32
@@ -51,7 +51,7 @@ written by @caller.  After the pass:
   <    block %ret [ nop; return; ]
   ---
   >    block %ret [ nop; goto (%returns); ];
-  >    block %returns [ (let x_out:bv32 := x, let y_out:bv32 := y); return; ]
+  >    block %returns [ (var x_out:bv32 := x, var y_out:bv32 := y); return; ]
   [1]
 
 
@@ -93,7 +93,7 @@ all global refs in requires (not just those under Old) become in-params.
   >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
   >    block %entry [ assert eq(x, x_in); var x:bv32 := bvadd(x, y); goto (%ret); ];
   >    block %ret [ nop; goto (%returns); ];
-  >    block %returns [ let x_out:bv32 := x; return; ]
+  >    block %returns [ var x_out:bv32 := x; return; ]
   18,20c12,13
   < proc @caller()  -> () {  }
   <   modifies $x:bv32, $y:bv32
@@ -115,7 +115,7 @@ all global refs in requires (not just those under Old) become in-params.
   <    block %ret [ nop; return; ]
   ---
   >    block %ret [ nop; goto (%returns); ];
-  >    block %returns [ (let x_out:bv32 := x, let y_out:bv32 := y); return; ]
+  >    block %returns [ (var x_out:bv32 := x, var y_out:bv32 := y); return; ]
   [1]
 
 

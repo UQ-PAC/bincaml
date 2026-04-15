@@ -484,10 +484,17 @@ module BasilASTLoader = struct
 
   and trans_var ?(binds = StringMap.empty) p_st (v : var) =
     match v with
-    | VarLocalVar (LocalTyped (localVar, ty)) ->
-        Var.create ~scope:LocalVar
-          (unsafe_unsigil (`Local localVar))
-          (trans_type ty)
+    | VarLocalVar (LocalTyped (localVar, ty)) -> (
+        try lookup_local_decl ~binds localVar p_st
+        with e ->
+          let v =
+            Var.create ~scope:LocalVar
+              (unsafe_unsigil (`Local localVar))
+              (trans_type ty)
+          in
+          Logs.warn (fun m ->
+              m "global undeclared %s. assuming mutable unshared" @@ Var.name v);
+          v)
     | VarLocalVar (LocalUntyped localVar) ->
         lookup_local_decl ~binds localVar p_st
     | VarGlobalVar (GlobalTyped (globalVar, ty)) -> (
@@ -498,8 +505,9 @@ module BasilASTLoader = struct
               (unsafe_unsigil (`Global globalVar))
               (trans_type ty)
           in
-          print_endline @@ "Warn: global undeclared " ^ Var.name v
-          ^ " assuming mutable unshared";
+          Logs.warn (fun m ->
+              m "Warn: global undeclared %s. assuming mutable unshared"
+                (Var.name v));
           v)
     | VarGlobalVar (GlobalUntyped globalVar) ->
         lookup_global_decl globalVar p_st
@@ -1067,8 +1075,9 @@ module BasilASTLoader = struct
                 (unsafe_unsigil (`Global g))
                 (trans_type type')
             in
-            print_endline @@ "Warn: undeclared global referenced in expr, "
-            ^ Var.to_string v;
+            Logs.warn (fun m ->
+                m "Warn: undeclared global referenced in expr, %s"
+                  (Var.to_string v));
             v
         in
         BasilExpr.rvar v

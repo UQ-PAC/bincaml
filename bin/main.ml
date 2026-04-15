@@ -108,7 +108,7 @@ let cmd =
 let main () =
   Trace_core.set_process_name "main";
   Trace_core.set_thread_name "t1";
-  Logs.set_level (Some Logs.Error);
+  Logs.set_level (Some Logs.Info);
   Logs.set_reporter (Logs.format_reporter ());
   exit (Cmd.eval_result cmd)
 

@@ -22,7 +22,11 @@ include (
   struct
     type t = V.t Fix.HashCons.cell
 
-    let create name ?(scope = LocalVar) typ = H.make { name; typ; scope }
+    let create name ?(scope = LocalVar) typ =
+      (* disallow creating local const as its too hard to have declaration order *)
+      match scope with
+      | LocalConst -> H.make { name; typ; scope = LocalVar }
+      | _ -> H.make { name; typ; scope }
 
     let copy ?name ?scope ?typ (v : t) =
       let v = Fix.HashCons.data v in

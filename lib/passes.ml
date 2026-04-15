@@ -454,7 +454,7 @@ module PassManager = struct
   let run_batch (batch : pass list) prog =
     List.fold_left
       (fun prog pass ->
-        Logs.info (fun m ->
+        Logs.debug (fun m ->
             m "Starting %s" pass.name ?header:None ~tags:(Logger.time_stamp ()));
         run_transform prog pass)
       prog batch

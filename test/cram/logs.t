@@ -10,9 +10,7 @@ Logs should print conditionally on whether their source has the right level.
   (log-level info)
   (log-level info analysis.irreducible_loops)
   (run-transforms irreducible-loops)
-  bincaml: [INFO] Starting irreducible-loops
   bincaml: [INFO] found 15 loops, 1 irreducible
-  bincaml: [ERROR] constant local written more than once: %main_19loop_from:bv2
   bincaml: [INFO] found 0 loops, 0 irreducible
 
 
@@ -26,8 +24,6 @@ Logs should print conditionally on whether their source has the right level.
   (log-level info)
   (log-level error analysis.irreducible_loops)
   (run-transforms irreducible-loops)
-  bincaml: [INFO] Starting irreducible-loops
-  bincaml: [ERROR] constant local written more than once: %main_19loop_from:bv2
 
 Some error messages for log configuration.
 

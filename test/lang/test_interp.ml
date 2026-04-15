@@ -23,7 +23,6 @@ let%expect_test "fold_block" =
   [%expect
     {|
     Warn: global undeclared $mem assuming mutable unshared
-    Warn: global undeclared $mem assuming mutable unshared
     PC= test::Return
     Stack
 

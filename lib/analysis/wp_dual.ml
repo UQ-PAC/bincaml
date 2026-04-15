@@ -178,8 +178,6 @@ proc @main () -> ()
     {|
     Warn: global undeclared $x assuming mutable unshared
     Warn: global undeclared $x assuming mutable unshared
-    Warn: undeclared global referenced in expr, $x:bv64
     Warn: global undeclared $x assuming mutable unshared
-    Warn: undeclared global referenced in expr, $x:bv64
     true
     |}]
