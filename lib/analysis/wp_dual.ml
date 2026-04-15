@@ -88,21 +88,22 @@ module Domain (S : FunctionSummaryAnnotation) = struct
 
   let low_expr = Expr.BasilExpr.unexp ~op:`Gamma
 
-  let transfer (p : t) (stmt : Program.stmt) =
+  let tf_assigns p a =
+    BasilExpr.substitute
+      (fun v ->
+        List.find_map (fun (v', e) -> Option.return_if (Var.equal v v') e) a)
+      p
+    |> simplify
+
+  let transfer p stmt =
     let open Stmt in
     match stmt with
-    | Instr_Assign a ->
-        BasilExpr.substitute
-          (fun v ->
-            List.find_map (fun (v', e) -> Option.return_if (Var.equal v v') e) a)
-          p
-        |> simplify
+    | Instr_Assign a -> tf_assigns p a
     | Instr_Load
         { lhs; rhs; addr = Addr { addr : 'e; size : int; endian : endian } } ->
         let le = BasilExpr.load ~bits:size endian (BasilExpr.rvar rhs) addr in
         BasilExpr.substitute (fun v -> Option.return_if (Var.equal v lhs) le) p
         |> simplify
-    | Instr_Load l -> top
     | Instr_Assert { body } -> join p (BasilExpr.unexp ~op:`BoolNOT body)
     | Instr_Assume { body; branch } ->
         (* TODO: once verification conditions are added as a transform remove this branch *)
@@ -110,7 +111,12 @@ module Domain (S : FunctionSummaryAnnotation) = struct
           BasilExpr.applyintrin ~op:`AND
             [ p; BasilExpr.unexp ~op:`BoolNOT body ]
         in
-        simplify p
+        (if branch then
+           BasilExpr.applyintrin ~op:`OR
+             [ p; BasilExpr.boolnot @@ low_expr body ]
+         else p)
+        |> simplify
+    | Instr_IntrinCall { lhs; name = Intrinsic.Havoc } -> top
     | Instr_Call { lhs; procid; args } ->
         let substitute f sm e =
           StringMap.fold
@@ -145,6 +151,12 @@ module Domain (S : FunctionSummaryAnnotation) = struct
     | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
     | _ -> p
 
+  let transfer_phi m (p : Var.t Lang.Block.phi) =
+    match p with
+    | { lhs; rhs } ->
+        let rhs = List.map (fun (_, v) -> (lhs, BasilExpr.rvar v)) rhs in
+        tf_assigns m rhs
+
   (** Encode an abstract state as a predicate *)
   let to_pred =
     Algsimp.Comb.to_steady Expr.BasilExpr.equal Algsimp.alg_simp_rewriter
@@ -166,6 +178,8 @@ prog entry @main;
 proc @main () -> ()
 [
     block %main_entry [
+        let (a:bv64, e:bv64) := call @_havoc();
+        ($x:bv64) := call @_havoc();
         goto(%main_1, %main_2);
     ];
     block %main_1 [
@@ -195,4 +209,10 @@ proc @main () -> ()
   in
   IntraAnalysis.A.M.find Procedure.Vert.Entry res
   |> IntraDomain.to_pred |> BasilExpr.to_string |> print_endline;
-  [%expect {| booland(eq(bvadd($x, a), 0), eq(bvadd(a, a), 0)) |}]
+  [%expect
+    {|
+    Warn: global undeclared $x assuming mutable unshared
+    Warn: global undeclared $x assuming mutable unshared
+    Warn: global undeclared $x assuming mutable unshared
+    true
+    |}]

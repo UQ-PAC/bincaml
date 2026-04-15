@@ -1,1 +1,2 @@
-lib/fe/**
+lib/fe/*.ml
+_build/default/result/**

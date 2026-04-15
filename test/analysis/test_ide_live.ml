@@ -15,7 +15,7 @@ memory shared $mem : (bv64 -> bv8);
 
 prog entry @main;
 
-proc @main () -> ()
+proc @main (a:bv64, b:bv64, c:bv64, d:bv64, e:bv64) -> ()
 [
     block %main_entry [
         goto(%main_1, %main_2);
@@ -44,14 +44,17 @@ proc @main () -> ()
   print_lives results main;
   [%expect
     {|
+    Warn: global undeclared $x assuming mutable unshared
+    Warn: global undeclared $y assuming mutable unshared
+    Warn: global undeclared $z assuming mutable unshared
     @main
     $mem:(bv64->bv8)
-    $x:bv64
     a:bv64
-    e:bv64
     b:bv64
     c:bv64
     d:bv64
+    e:bv64
+    $x:bv64
     |}]
 
 let%expect_test "phi_loop" =
@@ -65,6 +68,7 @@ prog entry @main;
 proc @main (x_in:bv64) -> ()
 [
     block %main_entry [
+        let (x_2:bv64, x_3:bv64, addr:bv64) := call @_havoc();
         goto(%loop_head);
     ];
     block %loop_head (
@@ -93,7 +97,6 @@ proc @main (x_in:bv64) -> ()
   print_lives results main;
   [%expect {|
     @main
-    addr:bv64
     $mem:(bv64->bv8)
     x_in:bv64
     |}]
@@ -104,13 +107,16 @@ let%expect_test "simple_call" =
       {|
 prog entry @main;
 
-proc @main () -> ()
+proc @main (b:bv64, y:bv64) -> ()
 [
     block %main_entry [
         var (a:bv64) := call @fun(b:bv64, b: bv64);
         var (x:bv64) := call @fun(a:bv64, b: bv64);
         assert eq(x:bv64, bvadd(b:bv64, b:bv64));
         assert eq(y:bv64, 0);
+        goto (%main_ret);
+    ];
+    block %main_ret [
         return ();
     ];
 ];
@@ -118,6 +124,9 @@ proc @main () -> ()
 proc @fun (c:bv64, d:bv64) -> (out:bv64)
 [
     block %fun_entry [
+            goto(%fun_ret);
+    ];
+    block %fun_ret [
         return (bvadd(c:bv64, d:bv64));
     ];
 ];
@@ -144,7 +153,7 @@ prog entry @main;
 
 var $global:bv64;
 
-proc @main () -> ()
+proc @main (b:bv64, y:bv64) -> ()
 [
     block %main_entry [
         var (a:bv64) := call @fun1(b:bv64, b: bv64);
@@ -198,7 +207,7 @@ prog entry @main;
 
 var $global:bv64;
 
-proc @main () -> ()
+proc @main (b:bv64, y:bv64) -> ()
 [
     block %main_entry [
         var (a:bv64) := call @fun2(b:bv64);

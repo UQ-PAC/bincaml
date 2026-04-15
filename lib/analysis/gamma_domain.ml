@@ -30,6 +30,14 @@ module Domain = struct
     |> Iter.map (fun v -> (v, GammaSet.singleton v))
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
+  let transfer_phi m (p : Var.t Block.phi) =
+    match p with
+    | { lhs; rhs } ->
+        rhs
+        |> List.map (fun (_, k) -> read k m)
+        |> List.fold_left GammaSet.join GammaSet.bottom
+        |> fun v -> update lhs v m
+
   let transfer_state m stmt =
     let open Stmt in
     let eval_expr e =
@@ -48,8 +56,11 @@ module Domain = struct
     | Instr_Store { lhs; value } ->
         Iter.singleton (lhs, V.join (m lhs) (eval_expr value))
     (* could use IDE summaries, but that requires access to formal in params of caller *)
-    | Instr_Call { lhs } | Instr_IntrinCall { lhs } ->
+    | Instr_Call { lhs } ->
         StringMap.values lhs |> Iter.map (fun v -> (v, GammaSet.top))
+    (* need to globally go to top which the transfer_state api doesn't support *)
+    | Instr_IntrinCall { lhs } ->
+        List.to_iter lhs |> Iter.map (fun v -> (v, GammaSet.top))
     (* need to globally go to top which the transfer_state api doesn't support *)
     (*| Instr_IndirectCall c -> raise (Failure "unsupported")*)
     | Instr_IndirectCall _ -> Iter.empty

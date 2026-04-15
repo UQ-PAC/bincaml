@@ -21,8 +21,24 @@ let print_blocks_topo_fwd chan p =
       output_string chan "\n")
     ids_rev
 
-let assert_atoms n args =
-  if List.length args < n then
+let assert_atoms =
+  let error arg =
+    Common.ReplError
+      {
+        msg =
+          Printf.sprintf "expected an atom but got a list: %s"
+            (Sexp.to_string arg);
+        cmd = "unk";
+        __FILE__;
+        __FUNCTION__;
+        __LINE__;
+      }
+  in
+  List.map (function `Atom n -> n | non_atom -> raise (error non_atom))
+
+let assert_n_atoms n args =
+  let atoms = assert_atoms args in
+  if List.length atoms < n then
     raise
       (Common.ReplError
          {
@@ -33,7 +49,7 @@ let assert_atoms n args =
            __FUNCTION__;
            __LINE__;
          });
-  List.map (function `Atom n -> n | _ -> failwith "expected atom") args
+  atoms
 
 type dsl_st = { load_st : Loader.Loadir.load_st option; line : int }
 
@@ -57,6 +73,8 @@ let set_prog s prog =
 
 let of_cmd st (e : Containers.Sexp.t) =
   let full_cmd = Sexp.to_string e in
+  (match e with `List [] -> () | _ -> Logs.app (fun m -> m "%s" full_cmd));
+
   let cmd, args =
     match e with
     | `List [] -> ("skip", [])
@@ -67,30 +85,45 @@ let of_cmd st (e : Containers.Sexp.t) =
       match cmd with
       | "skip" -> st
       | "log-level" ->
-          let level = List.hd (assert_atoms 1 args) in
-          let open Result in
-          let a =
-            match Result.to_opt @@ Logs.level_of_string level with
-            | Some a -> a
-            | None ->
-                raise
-                  (Common.ReplError
-                     {
-                       msg =
+          let make_error msg =
+            Common.ReplError
+              { msg; cmd = "log-level"; __FILE__; __FUNCTION__; __LINE__ }
+          in
+
+          let level, src_names =
+            match assert_atoms args with
+            | [] -> raise (make_error "Expected at least one argument")
+            | level :: rest -> (
+                match Result.to_opt @@ Logs.level_of_string level with
+                | Some a -> (a, rest)
+                | None ->
+                    raise
+                      (make_error
                          "Incorrect log level option given, correct options \
                           are [\"info\", \"quiet\", \"app\", \"error\", \
-                          \"warning\", \"debug\"]";
-                       cmd = "log-level";
-                       __FILE__;
-                       __FUNCTION__;
-                       __LINE__;
-                     })
+                          \"warning\", \"debug\"]"))
           in
-          Logs.set_level a;
+          (match src_names with
+          | [] -> Logs.set_level level
+          | src_names ->
+              let srcs =
+                Iter.of_list (Logs.Src.list ())
+                |> Iter.map (fun src -> (Logs.Src.name src, src))
+                |> Iter.to_hashtbl
+              in
+              let find name =
+                Hashtbl.find_opt srcs name
+                |> CCOption.get_lazy (fun () ->
+                    raise
+                      (make_error @@ Printf.sprintf "source %s not found" name))
+              in
+              List.iter
+                (fun name -> Logs.Src.set_level (find name) level)
+                src_names);
           st
       | "load-il" -> (
           try
-            let args = assert_atoms (List.length args) args in
+            let args = assert_n_atoms (List.length args) args in
             let st =
               List.fold_left
                 (fun acc fname ->
@@ -112,14 +145,14 @@ let of_cmd st (e : Containers.Sexp.t) =
             (get_prog st).procs;
           st
       | "list-blocks-il" ->
-          let proc = List.hd (assert_atoms 1 args) in
+          let proc = List.hd (assert_n_atoms 1 args) in
           let id = (get_prog st).proc_names.get_id proc in
           let p = IDMap.find id (get_prog st).procs in
           print_blocks_topo_fwd stdout p;
           st
       | "write-proc-cfg" ->
           let proc, ofile =
-            assert_atoms 2 args |> function
+            assert_n_atoms 2 args |> function
             | [ proc; ofile ] -> (proc, ofile)
             | _ -> failwith "unreachable"
           in
@@ -152,14 +185,14 @@ let of_cmd st (e : Containers.Sexp.t) =
                 (Procedure.graph p |> Option.get_exn_or "procedure has no graph"));
           st
       | "dump-proc-il" ->
-          let proc = List.hd (assert_atoms 1 args) in
+          let proc = List.hd (assert_n_atoms 1 args) in
           let id = (get_prog st).proc_names.get_id proc in
           let p = IDMap.find id (get_prog st).procs in
           print_proc stdout p;
           st
       | "write-proc-il" ->
           let proc, ofile =
-            assert_atoms 2 args |> function
+            assert_n_atoms 2 args |> function
             | [ proc; ofile ] -> (proc, ofile)
             | _ -> failwith "unreachable"
           in
@@ -169,16 +202,16 @@ let of_cmd st (e : Containers.Sexp.t) =
               print_proc c p);
           st
       | "dump-il" ->
-          let ofile = List.hd @@ assert_atoms 1 args in
+          let ofile = List.hd @@ assert_n_atoms 1 args in
           CCIO.with_out ofile (fun c -> Program.pretty_to_chan c (get_prog st));
           st
       | "dump-boogie" ->
-          let ofile = List.hd @@ assert_atoms 1 args in
+          let ofile = List.hd @@ assert_n_atoms 1 args in
           CCIO.with_out ofile (fun c ->
               Backends.Boogie.pretty_to_chan c (get_prog st));
           st
       | "interp-out" ->
-          let ofile = List.hd @@ assert_atoms 1 args in
+          let ofile = List.hd @@ assert_n_atoms 1 args in
           let prog = get_prog st in
           let main =
             IDMap.find (Option.get_exn_or "no" prog.entry_proc) prog.procs
@@ -201,14 +234,14 @@ let of_cmd st (e : Containers.Sexp.t) =
           CCIO.with_out ofile (fun c -> output_string c ist);
           st
       | "run-transforms" ->
-          let args = assert_atoms (List.length args) args in
+          let args = assert_n_atoms (List.length args) args in
           let ba = Bincaml.Passes.PassManager.batch_of_list args in
           let prog =
             Some (Bincaml.Passes.PassManager.run_batch ba (get_prog st))
           in
           set_prog st prog
       | "run-transform" ->
-          let args = assert_atoms 1 args in
+          let args = assert_n_atoms 1 args in
           let ba = Bincaml.Passes.PassManager.batch_of_list args in
           let prog =
             Some (Bincaml.Passes.PassManager.run_batch ba (get_prog st))

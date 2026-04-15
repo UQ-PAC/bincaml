@@ -1,1 +1,9 @@
   $ bincaml script ./typepass.sexp
+  (load-il ../../examples/cat.il)
+  (run-transforms type-check)
+  (load-il ../../examples/cntlm-output.il)
+  (run-transforms type-check)
+  (load-il ../../examples/irreducible_loop_1.il)
+  (run-transforms type-check)
+  (load-il ../../examples/cntlm-simp-output.il)
+  (run-transforms type-check)

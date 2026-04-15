@@ -709,6 +709,24 @@ module BasilExpr = struct
     in
     cata rw_alg expr
 
+  (** substitute subexpression sbased on parameter *)
+  let rewrite_down ?visit ~(rw_fun : t abstract_expr -> rewrite) (expr : t) =
+    let rw_alg e =
+      let orig s = fix s in
+      match rw_fun e with
+      | SomeInfo { v; __LINE__; __FILE__ }
+        when Types.equal (type_of v) (type_of (orig e)) ->
+          log_rw visit ~__LINE__ ~__FILE__ (fix e) v
+      | SomeInfo { v; __LINE__; __FILE__ } ->
+          failwith
+          @@ Printf.sprintf
+               "improper rewrite type: attempt to rewrite %s into %s"
+               (to_string (orig e))
+               (to_string v)
+      | Keep -> orig e
+    in
+    rw_recurse_down ~f:rw_alg expr
+
   let rewrite_typed (f : (t * Types.t) abstract_expr -> t option) (expr : t) =
     let rw_alg e =
       let orig s = fix @@ AbstractExpr.map fst s in

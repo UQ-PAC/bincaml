@@ -24,10 +24,11 @@ let check_var v =
 let gamma_of v =
   let args, r = Types.uncurry (Var.typ v) in
   let typ = Types.curry args Boolean in
-  Var.create ("Gamma_" ^ Var.name v) ~pure:(Var.pure v) ~scope:(Var.scope v) typ
+  Var.copy ~name:("Gamma_" ^ Var.name v) ~typ v
 
 let add_decl proc gv =
-    if Var.is_local gv then Hashtbl.replace (Procedure.local_decls proc) (Var.name gv) gv
+  if Var.is_local gv then
+    Hashtbl.replace (Procedure.local_decls proc) (Var.name gv) gv
 
 let add_globals ?(check_names = false) (add : Var.t -> bool) (p : Program.t) =
   StringMap.fold
@@ -126,11 +127,24 @@ let update_stmts ?(check_names = false) (add : ID.t -> Var.t -> bool) pid
       | Instr_Load _ as s -> s
       | Instr_Store _ as s -> s
       | Instr_IntrinCall { lhs; name; args } ->
+          (* cursed *)
+          let to_sm lhs =
+            List.mapi (fun i v -> (Int.to_string i, v)) lhs |> StringMap.of_list
+          in
+          let of_sm lhs k =
+            List.mapi (fun i _ -> StringMap.find (Int.to_string i) k) lhs
+          in
           Instr_IntrinCall
             {
-              lhs = update_lhs ~check_names (add pid) (fun _ -> true) proc lhs;
+              lhs =
+                update_lhs ~check_names (add pid)
+                  (fun _ -> true)
+                  proc (to_sm lhs)
+                |> of_sm lhs;
               name;
-              args = update_args ~check_names (add pid) (fun _ -> true) args;
+              args =
+                update_args ~check_names (add pid) (fun _ -> true) (to_sm args)
+                |> of_sm args;
             }
       | Instr_Call { lhs; procid; args } ->
           let callee = IDMap.find procid prog.procs in

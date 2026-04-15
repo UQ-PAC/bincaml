@@ -3,13 +3,18 @@ open Bincaml_util.Common
 
 exception BoogieException of string
 
-let function_name name =
+let var_name name =
+  let name = Var.name name in
   let name =
-    if String.starts_with ~prefix:"$" name then String.concat "" [ ""; name ]
-    else name
+    String.chop_prefix ~pre:"$" name
+    |> Option.map (fun s -> "$" ^ s)
+    |> Option.get_or ~default:name
   in
+  name
+
+let function_name name =
   let open Containers_pp in
-  text name
+  text (var_name name)
 
 let proc_name name =
   let open Containers_pp in
@@ -47,17 +52,17 @@ let rec type_to_string (t : Types.t) =
 let pretty_variable_declaration ?(const = false) (v : Var.t) =
   let open Containers_pp in
   (if const then text "const " else text "var ")
-  ^ text (Var.name v)
+  ^ text (var_name v)
   ^ text ": "
   ^ text (type_to_string @@ Var.typ v)
 
 let pretty_variable (v : Var.t) =
   let open Containers_pp in
-  text (Var.name v)
+  text (var_name v)
 
 let pretty_variable_typed (v : Var.t) =
   let open Containers_pp in
-  text (Var.name v) ^ text ": " ^ text (type_to_string @@ Var.typ v)
+  text (var_name v) ^ text ": " ^ text (type_to_string @@ Var.typ v)
 
 let pretty_const (c : Lang.Ops.AllOps.const) =
   let open Containers_pp in
@@ -106,11 +111,15 @@ let pretty_binary_expr (op : Lang.Ops.AllOps.binary) (ty1, arg1) (ty2, arg2)
         | `Little, i -> Printf.sprintf "load%d_le" i
       in
       (text @@ name) ^ bracket "(" (arg1 ^ text "," ^+ arg2) ")"
+  | `IfThen -> text "if" ^+ arg1 ^+ text "then" ^+ arg2
   | _ -> (
       match Transforms.Boogie_prepass.Builtins.name op [ ty1; ty2; t ] with
       | Function name -> text name ^ pretty_call_args [ arg1; arg2 ]
       | Infix name -> bracket "(" (arg1 ^+ text name ^+ arg2) ")"
-      | _ -> failwith "Unsupported binary expr")
+      | _ ->
+          failwith
+            (Printf.sprintf "Unsupported binary expr: %s"
+               (Lang.Ops.AllOps.to_string op)))
 
 let pretty_unary_expr (op : Lang.Ops.AllOps.unary) (ty, arg) (rt : Types.t) =
   let open Containers_pp in
@@ -154,6 +163,14 @@ let pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
            (List.map snd args))
         ")"
   | `OR -> bracket "(" (append_l ~sep:(text "||") (List.map snd args)) ")"
+  | `Cases -> (
+      match args with
+      | [ a ] -> snd a
+      | [] -> failwith "empty cases"
+      | h :: tl ->
+          List.fold_left
+            (fun a b -> a ^+ text "else" ^+ b)
+            (snd h) (List.map snd tl))
   | e -> (
       match args with
       | [ (ty1, arg1); (ty2, arg2) ] -> (
@@ -291,7 +308,7 @@ let pretty_declaration (d : Lang.Program.declaration) =
 
       text "function"
       ^+ pretty_attribute_map ".boogie" attrib
-      ^+ (function_name @@ Var.name binding)
+      ^+ (function_name @@ binding)
       ^ bracket "(" (pretty_function_args t) ")"
       ^+ text "returns"
       ^+ bracket "(" return_type ")"
@@ -305,7 +322,7 @@ let pretty_declaration (d : Lang.Program.declaration) =
       let param, rt = Types.uncurry (Var.typ binding) in
       text "function"
       ^+ pretty_attribute_map ".boogie" attrib
-      ^+ (function_name @@ Var.name binding)
+      ^+ (function_name @@ binding)
       ^ bracket "("
           (fill
              (text "," ^ sp)
@@ -319,6 +336,19 @@ let rec pretty_statement (s : Lang.Program.stmt) =
   let open Containers_pp in
   let open List.Infix in
   match s with
+  | Instr_IntrinCall { lhs; name; args } ->
+      let lhs =
+        if List.length lhs > 0 then
+          (List.map pretty_variable lhs |> fill (text "," ^ newline_or_spaces 1))
+          ^+ text ":=" ^ sp
+        else text ""
+      in
+      let rhs =
+        List.map pretty_expr args |> fill (text "," ^ newline_or_spaces 1)
+      in
+      nest 2 @@ text "call" ^+ lhs
+      ^ Lang.Stmt.Intrinsic.pretty name
+      ^ bracket "(" rhs ")"
   | Instr_Assign [] -> text "assert true"
   | Instr_Assign ls ->
       let lhs =
@@ -332,7 +362,8 @@ let rec pretty_statement (s : Lang.Program.stmt) =
       nest 2 @@ lhs ^+ text ":=" ^+ rhs
   | Instr_Assert { body } -> text "assert" ^+ pretty_expr body
   | Instr_Assume { body; branch } -> text "assume" ^+ pretty_expr body
-  | Instr_IntrinCall { lhs; name; args } ->
+  | Instr_Call { lhs; procid; args } ->
+      let name = ID.name procid in
       let lhs =
         if StringMap.cardinal lhs > 0 then
           (StringMap.bindings lhs
@@ -347,9 +378,6 @@ let rec pretty_statement (s : Lang.Program.stmt) =
         |> fill (text "," ^ newline_or_spaces 1)
       in
       nest 2 @@ text "call" ^+ lhs ^ proc_name name ^ bracket "(" rhs ")"
-  | Instr_Call { lhs; procid; args } ->
-      pretty_statement
-      @@ Lang.Stmt.Instr_IntrinCall { lhs; name = ID.name procid; args }
   | stmt ->
       raise
         (BoogieException

@@ -19,7 +19,9 @@ let intro_ssi_assigns proc (should_lift : Var.t -> bool)=
          Stmt.(
            function
            | (Instr_Assert { body } | Instr_Assume { body }) as a ->
-               let fv = Expr.BasilExpr.free_vars body |> VarSet.filter should_lift in
+               let fv =
+                 Expr.BasilExpr.free_vars body |> VarSet.filter should_lift
+               in
                if VarSet.cardinal fv > 0 then
                  Iter.doubleton
                    (Instr_Assign
@@ -63,8 +65,9 @@ let drop_unused_var_declarations_prog (p : Program.t) =
 
 let should_lift ~skip_observable ~skip_maps v =
   let skip =
-    (skip_observable && not (Var.pure v))
+    (skip_observable && Var.is_shared v)
     || (skip_maps && Var.typ v |> function Map _ -> true | _ -> false)
+    || (Var.is_global v && Var.is_constant v)
   in
   not skip
 
@@ -144,14 +147,14 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
           List.map
             (fun g ->
               let name = param_name "_in" g in
-              (name, g, Procedure.fresh_var ~name proc (Var.typ g)))
+              (name, g, Procedure.fresh_var ~pure:true ~name proc (Var.typ g)))
             captures
         in
         let outparam =
           List.map
             (fun g ->
               let name = param_name "_out" g in
-              (name, g, Procedure.fresh_var ~name proc (Var.typ g)))
+              (name, g, Procedure.fresh_var ~pure:true ~name proc (Var.typ g)))
             modifies
         in
         (* Fresh local variable for each captured global – replaces the global
@@ -160,7 +163,7 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
           List.map
             (fun g ->
               let name = param_name "" g in
-              (g, Procedure.fresh_var ~name proc (Var.typ g)))
+              (g, Procedure.fresh_var ~pure:false ~name proc (Var.typ g)))
             captures
         in
         let glob_to_local_map =
@@ -262,20 +265,26 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
             StringMap.empty outparam
         in
         let skip_any = skip_observable || skip_maps in
-        (* Rewrite Old(g) → g_in in body statements.
-           Must run before body substitution so Old(g) is still recognisable. *)
+        (* replace all variables with their equivalent in the pre-state *)
         let rewrite_old_expr expr =
           let open Expr.AbstractExpr in
           let open Expr.BasilExpr in
           let alg node =
-            match map unfix node with
-            | UnaryExpr { op = `Old; arg = RVar { id } } -> (
+            match node with
+            | UnaryExpr { op = `Old; arg } -> replace [%here] arg
+            | RVar { id } when Var.is_constant id -> Keep
+            | RVar { id } -> (
                 match StringMap.find_opt (Var.name id) glob_to_inparam with
                 | Some v -> replace [%here] (rvar v)
+                | None (* identity function *)
+                  when StringMap.exists
+                         (fun _ n -> Var.equal id n)
+                         (Procedure.formal_in_params proc) ->
+                    Keep
                 | None when skip_any ->
                     failwith
-                      "Variable in contract but is not captured or modified by \
-                       procedure"
+                      ("Variable in contract but is not a parameter, or global \
+                        captured or modified by procedure: " ^ Var.name id)
                 | None -> Keep)
             | _ -> Keep
           in
@@ -283,43 +292,55 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
         in
         (* Rewrite requires: replace all captured globals with in-params and
            strip any Old wrappers (all refs already denote the pre-state) *)
-        let rewrite_requires_expr expr =
-          let open Expr.AbstractExpr in
-          let open Expr.BasilExpr in
-          let alg node =
-            match map unfix node with
-            | RVar { id } -> (
-                match StringMap.find_opt (Var.name id) glob_to_inparam with
-                | Some v -> replace [%here] (rvar v)
-                (* | None when skip_any -> *)
-                    (* failwith *)
-                      (* "Variable in contract but is not captured or modified by \ *)
-                       (* procedure" *)
-                | None -> Keep)
-            | UnaryExpr { op = `Old; arg } -> replace [%here] (fix arg)
-            | _ -> Keep
-          in
-          rewrite ~rw_fun:alg expr
-        in
-        (* Rewrite ensures: Old(g) → g_in (entry value); bare modified g →
-           g_out (exit value); bare captured-only g → g_in (unchanged).
-           Old(g) is handled first so the bare-g pass doesn't clobber it. *)
         let rewrite_ensures_expr expr =
           let open Expr.AbstractExpr in
           let open Expr.BasilExpr in
-          let expr = rewrite_old_expr expr in
+          (* Rewrite ensures: Old(g) → g_in (entry value); bare modified g →
+           g_out (exit value); bare captured-only g → g_in (unchanged).
+           Old(g) is handled first so the bare-g pass doesn't clobber it. *)
           let alg node =
-            match map unfix node with
+            match node with
+            | UnaryExpr { op = `Old; arg } ->
+                replace [%here] (rewrite_old_expr arg)
+            | RVar { id } when Var.is_constant id -> Keep
             | RVar { id } -> (
                 match StringMap.find_opt (Var.name id) glob_to_outparam with
                 | Some v -> replace [%here] (rvar v)
+                | None
+                  when Iter.exists
+                         (fun n -> Var.equal id n)
+                         (StringMap.values (Procedure.formal_out_params proc)
+                         |> Iter.append
+                              (Procedure.formal_in_params proc
+                              |> StringMap.values)) ->
+                    Keep
                 | None -> (
                     match StringMap.find_opt (Var.name id) glob_to_inparam with
                     | Some v -> replace [%here] (rvar v)
+                    | None when skip_any ->
+                        failwith
+                          ("Variable in contract but is not captured or \
+                            modified by procedure: " ^ Var.name id)
                     | None -> Keep))
             | _ -> Keep
           in
-          rewrite ~rw_fun:alg expr
+          rewrite_down ~rw_fun:alg expr
+        in
+        let rewrite_internal_expr_old expr =
+          let open Expr.AbstractExpr in
+          let open Expr.BasilExpr in
+          let alg node =
+            match node with
+            | UnaryExpr { op = `Old; arg } ->
+                replace [%here] (rewrite_old_expr arg)
+            | _ -> Keep
+          in
+          rewrite_down ~rw_fun:alg expr
+        in
+        let rewrite_requires_expr expr =
+          let open Expr.AbstractExpr in
+          let open Expr.BasilExpr in
+          rewrite_old_expr expr
         in
         let proc =
           let spec = Procedure.specification proc in
@@ -334,7 +355,8 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
           Procedure.map_blocks_topo_fwd
             (fun _bid b ->
               Block.map ~phi:Fun.id
-                (Stmt.map ~f_lvar:Fun.id ~f_expr:rewrite_old_expr ~f_rvar:Fun.id)
+                (Stmt.map ~f_lvar:Fun.id ~f_expr:rewrite_internal_expr_old
+                   ~f_rvar:Fun.id)
                 b)
             proc
         in
@@ -446,7 +468,9 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
          |> StringMap.exists (fun _ i -> Var.equal i v)
     then v
     else
-      let nv = Procedure.fresh_var ~name:(Var.name v) in_proc (Var.typ v) in
+      let nv =
+        Procedure.fresh_var ~pure:true ~name:(Var.name v) in_proc (Var.typ v)
+      in
       r := (v, nv) :: !r;
       nv
   in
@@ -519,7 +543,7 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
     | `Left phi -> Some phi
     | `Right rn ->
         Some
-          ( Procedure.fresh_var in_proc ~name:(Var.name v) (Var.typ v),
+          ( Procedure.fresh_var ~pure:true in_proc ~name:(Var.name v) (Var.typ v),
             [ (block, rn) ] )
   in
   let delayed_phis = ref IDSet.empty in

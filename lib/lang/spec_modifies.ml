@@ -1,7 +1,6 @@
 (** Interprocedurally infer read/write sets of procedures, ignoring the
     specified captures/modifies sets *)
 
-open Lang
 open Common
 
 module RWSets = struct
@@ -72,8 +71,16 @@ let set_modsets ?(add_only = false) prog =
         let exist_captures =
           if add_only then VarSet.of_list spec.captures_globs else VarSet.empty
         in
+        let vs =
+          List.to_iter
+            [ spec.requires; spec.ensures; spec.rely; spec.guarantee ]
+          |> Iter.flat_map List.to_iter
+          |> Iter.flat_map Expr.BasilExpr.free_vars_iter
+          |> Iter.filter Var.is_global |> VarSet.of_iter
+        in
         let captures_globs =
-          VarSet.elements
+          List.filter (not % Var.is_constant)
+          @@ VarSet.elements @@ VarSet.union vs
           @@ VarSet.union exist_captures
           @@ VarSet.union read written
         in

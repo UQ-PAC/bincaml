@@ -161,6 +161,10 @@ module Recursion (O : Fix) = struct
     let r = f r (unfix e) in
     (unfix %> (map_expr (map_fold ~f ~alg r) %> alg r)) e
 
+  let rec rw_recurse_down ~(f : t expr -> t) (e : t) : t =
+    let r = unfix @@ f (unfix e) in
+    map_expr (rw_recurse_down ~f) r |> fix
+
   (* hylo
   let rec hylo ~consume_alg ~produce_coalg e =
     consume_alg
