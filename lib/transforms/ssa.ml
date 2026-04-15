@@ -19,7 +19,9 @@ let intro_ssi_assigns proc (should_lift : Var.t -> bool) =
          Stmt.(
            function
            | (Instr_Assert { body } | Instr_Assume { body }) as a ->
-               let fv = Expr.BasilExpr.free_vars body |> VarSet.filter should_lift in
+               let fv =
+                 Expr.BasilExpr.free_vars body |> VarSet.filter should_lift
+               in
                if VarSet.cardinal fv > 0 then
                  Iter.doubleton
                    (Instr_Assign
@@ -451,7 +453,9 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
   { p with procs; globals }
 
 let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
-  let in_proc = intro_ssi_assigns in_proc (should_lift ~skip_observable ~skip_maps) in
+  let in_proc =
+    intro_ssi_assigns in_proc (should_lift ~skip_observable ~skip_maps)
+  in
   let lives = Livevars.run in_proc in
   let rename r v : Var.t =
     if
