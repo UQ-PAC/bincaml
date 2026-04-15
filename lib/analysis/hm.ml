@@ -465,65 +465,6 @@ let infer_block p univ ctx (b : Program.bloc) =
       let _ = infer_stmt p univ ctx s in
       ())
 
-let lproc =
-  Loader.Loadir.ast_of_string
-    {|
-prog entry @main;
-proc @main(b:bv64, global_in:bv64, y:bv64)  -> () {  }
-  
-
-[
-   block %inputs [ var global_1:bv64 := global_in:bv64; goto (%main_entry); ];
-   block %main_entry [
-     (var a:bv64=out2) := 
-     call @fun2(f=b:bv64, global_in=global_1:bv64);
-     (var x:bv64=out) :=  call @fun1(c=a:bv64, d=b:bv64, global_in=global_1:bv64);
-     (var b_1:bv64 := b:bv64, var x_1:bv64 := x:bv64);
-     assert eq(x_1:bv64, bvadd(b_1:bv64, b_1:bv64));
-     var y_1 := y;
-     assert eq(y_1:bv64, 0);
-     nop;
-     return;
-   ]
-];
-proc @fun1(c:bv64, d:bv64, global_in:bv64)  -> (out:bv64) {  }
-  
-
-[
-   block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun1_entry); ];
-   block %fun1_entry [
-     (var e:bv64=out2) := 
-     call @fun2(f=d:bv64, global_in=global_1:bv64);
-     let out:bv64 := bvsub(c:bv64, e:bv64);
-     return;
-   ]
-];
-proc @fun2(f:bv64, global_in:bv64)  -> (out2:bv64) {  }
-  
-
-[
-   block %inputs [ var global_1:= global_in; goto (%fun2_entry); ];
-   block %fun2_entry [ goto (%fun2_b,%fun2_a); ];
-   block %fun2_a [
-     var f_2 := f;
-     guard bvsle(f_2, 0:bv64);
-     (var g_2 =out) := 
-     call @fun1(c=f_2, d=1:bv64, global_in=global_1);
-     goto (%fun2_return);
-   ];
-   block %fun2_b [
-     var f_1 := f:bv64;
-     guard boolnot(bvsle(f_1:bv64, 0:bv64));
-     var g_1 := global_1;
-     goto (%fun2_return);
-   ];
-   block %fun2_return (
-     var f_3 := phi(%fun2_b -> f_1, %fun2_a -> f_2),
-     var g_3 := phi(%fun2_b -> g_1, %fun2_a -> g_2)
-   ) [ var out2:bv64 := bvadd(f_3, g_3); return; ]
-];
-    |}
-
 let assume_proc_decl ctx ?(no_constraint = false) (p : Program.proc) =
   let globs = Var.Decls.values (Procedure.local_decls p) in
   let formals_in = Procedure.formal_in_params p |> StringMap.values in
