@@ -490,10 +490,17 @@ module BasilASTLoader = struct
           (trans_type ty)
     | VarLocalVar (LocalUntyped localVar) ->
         lookup_local_decl ~binds localVar p_st
-    | VarGlobalVar (GlobalTyped (globalVar, ty)) ->
-        Var.create ~scope:GlobalVar
-          (unsafe_unsigil (`Global globalVar))
-          (trans_type ty)
+    | VarGlobalVar (GlobalTyped (globalVar, ty)) -> (
+        try lookup_global_decl globalVar p_st
+        with e ->
+          let v =
+            Var.create ~scope:GlobalVar
+              (unsafe_unsigil (`Global globalVar))
+              (trans_type ty)
+          in
+          print_endline @@ "Warn: global undeclared " ^ Var.name v
+          ^ " assuming mutable unshared";
+          v)
     | VarGlobalVar (GlobalUntyped globalVar) ->
         lookup_global_decl globalVar p_st
 

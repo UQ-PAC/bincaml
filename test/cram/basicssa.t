@@ -322,19 +322,6 @@ Run on basic irreducible loop example
   ;
 
   $ diff after.il after_reparsed.il
-  9,10c9,10
-  <   modifies $mem:(bv64->bv8), $stack:(bv64->bv8)
-  <   captures $mem:(bv64->bv8), $stack:(bv64->bv8)
-  ---
-  >   modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $mem:(bv64->bv8)
-  >   captures $mem:(bv64->bv8), $stack:(bv64->bv8), $mem:(bv64->bv8)
-  162,163c162,163
-  <   modifies $mem:(bv64->bv8), $stack:(bv64->bv8)
-  <   captures $mem:(bv64->bv8), $stack:(bv64->bv8)
-  ---
-  >   modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $mem:(bv64->bv8)
-  >   captures $mem:(bv64->bv8), $stack:(bv64->bv8), $mem:(bv64->bv8)
-  [1]
 
 The interpreter should give the same output for both
 

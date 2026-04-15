@@ -20,47 +20,17 @@
 The serialise -> parse serialise loop should be idempotent
 
   $ diff before.il after.il
-  16c16
-  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
-  ---
-  >     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
-  18c18
-  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
-  ---
-  >     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
   118c118
   <    block %main_basil_return_1 [ nop; return; ]
   ---
   >    block %main_basil_return_1 [ return; ]
-  122c122
-  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
-  ---
-  >     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
-  124c124
-  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
-  ---
-  >     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
   [1]
 
   $ diff before2.il after2.il
-  7,8c7,8
-  <   modifies $mem:(bv64->bv8), $stack:(bv64->bv8)
-  <   captures $mem:(bv64->bv8), $stack:(bv64->bv8)
-  ---
-  >   modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $mem:(bv64->bv8)
-  >   captures $mem:(bv64->bv8), $stack:(bv64->bv8), $mem:(bv64->bv8)
-  [1]
 
 Memassign repr
 
   $ diff beforemem.il aftermem.il
-  20,21c20,21
-  <   modifies $Global_4325420_4325424:bv32
-  <   captures $Global_4325420_4325424:bv32
-  ---
-  >   modifies $Global_4325420_4325424:bv32, $Global_4325420_4325424:bv32
-  >   captures $Global_4325420_4325424:bv32, $Global_4325420_4325424:bv32
-  [1]
   $ cat aftermem.il
   type UninterpSort;
   type ilist = Cons of {head: bv64; tail: ilist} | Nil;
@@ -81,8 +51,8 @@ Memassign repr
      R5_in:bv64, R6_in:bv64, R7_in:bv64, R8_in:bv64, R9_in:bv64, _PC_in:bv64)
      -> (R0_out:bv64, R1_out:bv64) { .address = 4196164; .name = "main";
       .returnBlock = "main_return" }
-    modifies $Global_4325420_4325424:bv32, $Global_4325420_4325424:bv32
-    captures $Global_4325420_4325424:bv32, $Global_4325420_4325424:bv32
+    modifies $Global_4325420_4325424:bv32
+    captures $Global_4325420_4325424:bv32
   
   [
      block %main_entry [
