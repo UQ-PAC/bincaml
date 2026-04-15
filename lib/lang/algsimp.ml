@@ -219,12 +219,12 @@ let algebraic_simplifications
       { op = `BVSUB; arg1; arg2 = Constant { const = `Bitvector i }, _ }
     when is_zero i ->
       replace [%here] @@ keep arg1
-  | ApplyIntrin { attrib; op = `BVAND; args }
+  | ApplyIntrin { attrib; op = `BVAND; args; typ }
     when List.exists (fst %> is_ones) args ->
       let args =
         args |> List.map fst |> List.filter (is_ones %> not) |> List.map fix
       in
-      replace [%here] (fix @@ ApplyIntrin { attrib; op = `BVAND; args })
+      replace [%here] (fix @@ ApplyIntrin { attrib; op = `BVAND; args; typ })
   | ApplyIntrin { attrib; op = `BVOR; args }
     when List.exists (fst %> is_ones) args ->
       let size = width_args args in

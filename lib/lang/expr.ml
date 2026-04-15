@@ -3,71 +3,50 @@ open Containers
 open Ops
 
 module AbstractExpr = struct
-  type ('const, 'var, 'unary, 'binary, 'intrin, 'e) simple =
-    | V of 'var  (** variables *)
-    | C of 'const
-        (** constants; a pure intrinsic function with zero arguments *)
-    | Unary of 'unary * 'e
-        (** application of a pure intrinsic function with one arguments *)
-    | Binary of 'binary * 'e * 'e
-    | Intrin of 'intrin * 'e list
-    | FApply of 'e * 'e list
-    | Lambda of Ops.AllOps.lambda * 'var list * 'e
-    | Let of ('var * 'e) list * 'e
-
   type ('const, 'var, 'unary, 'binary, 'intrin, 'attrib, 'e) t =
-    | RVar of { attrib : 'attrib option; id : 'var }  (** variables *)
-    | Constant of { attrib : 'attrib option; const : 'const }
+    | RVar of { attrib : 'attrib option; id : 'var; typ : Types.t }
+        (** variables *)
+    | Constant of { attrib : 'attrib option; const : 'const; typ : Types.t }
         (** constants; a pure intrinsic function with zero arguments *)
-    | UnaryExpr of { attrib : 'attrib option; op : 'unary; arg : 'e }
-        (** application of a pure intrinsic function with one arguments *)
+    | UnaryExpr of {
+        attrib : 'attrib option;
+        op : 'unary;
+        arg : 'e;
+        typ : Types.t;
+      }  (** application of a pure intrinsic function with one arguments *)
     | BinaryExpr of {
+        typ : Types.t;
         attrib : 'attrib option;
         op : 'binary;
         arg1 : 'e;
         arg2 : 'e;
       }  (** application of a pure intrinsic function with two arguments *)
-    | ApplyIntrin of { attrib : 'attrib option; op : 'intrin; args : 'e list }
-        (** application of a pure intrinsic function with n arguments *)
-    | ApplyFun of { attrib : 'attrib option; func : 'e; args : 'e list }
-        (** application of a pure runtime-defined function with n arguments *)
+    | ApplyIntrin of {
+        attrib : 'attrib option;
+        op : 'intrin;
+        args : 'e list;
+        typ : Types.t;
+      }  (** application of a pure intrinsic function with n arguments *)
+    | ApplyFun of {
+        attrib : 'attrib option;
+        func : 'e;
+        args : 'e list;
+        typ : Types.t;
+      }  (** application of a pure runtime-defined function with n arguments *)
     | Lambda of {
+        typ : Types.t;
         op : Ops.AllOps.lambda;
         attrib : 'attrib option;
         bound_vars : 'var list;
         in_body : 'e;
       }  (** syntactic binding in a nested scope *)
     | Let of {
+        typ : Types.t;
         attrib : 'attrib option;
         bound_vars : ('var * 'e) list;
         in_body : 'e;
       }  (** syntactic binding in a nested scope *)
   [@@deriving eq, ord, fold, map, iter]
-
-  let simple_view x : ('const, 'var, 'unary, 'binary, 'intrin, 'e) simple =
-    match x with
-    | RVar { id } -> V id
-    | Constant { const } -> C const
-    | UnaryExpr { op; arg } -> Unary (op, arg)
-    | BinaryExpr { op; arg1; arg2 } -> Binary (op, arg1, arg2)
-    | ApplyIntrin { op; args } -> Intrin (op, args)
-    | ApplyFun { func; args } -> FApply (func, args)
-    | Lambda { op; bound_vars; in_body } -> Lambda (op, bound_vars, in_body)
-    | Let { bound_vars; in_body } -> Let (bound_vars, in_body)
-
-  let of_simple_view (x : ('const, 'var, 'unary, 'binary, 'intrin, 'e) simple) :
-      ('const, 'var, 'unary, 'binary, 'intrin, 'attrib, 'e) t =
-    let attrib = None in
-    match x with
-    | V id -> RVar { id; attrib }
-    | C const -> Constant { const; attrib }
-    | Unary (op, arg) -> UnaryExpr { attrib; op; arg }
-    | Binary (op, arg1, arg2) -> BinaryExpr { attrib; op; arg1; arg2 }
-    | Intrin (op, args) -> ApplyIntrin { attrib; op; args }
-    | FApply (func, args) -> ApplyFun { attrib; func; args }
-    | Lambda (op, bound_vars, in_body) ->
-        Lambda { op; attrib; bound_vars; in_body }
-    | Let (bound_vars, in_body) -> Let { attrib; bound_vars; in_body }
 
   let map_attrib f x =
     match x with
@@ -175,23 +154,30 @@ module Make (O : Fix) = struct
   end)
 
   module Constructors = struct
-    let rvar ?attrib id = fix (RVar { attrib; id })
-    let const ?attrib const = fix (Constant { attrib; const })
+    let rvar ?attrib id = fix (RVar { attrib; id; typ = Nothing })
+    let const ?attrib const = fix (Constant { attrib; const; typ = Nothing })
 
     let binexp ?attrib ~op arg1 arg2 =
-      fix (BinaryExpr { attrib; op; arg1; arg2 })
+      fix (BinaryExpr { attrib; op; arg1; arg2; typ = Nothing })
 
-    let unexp ?attrib ~op arg = fix (UnaryExpr { attrib; op; arg })
-    let fapply ?attrib func args = fix (ApplyFun { attrib; func; args })
+    let unexp ?attrib ~op arg =
+      fix (UnaryExpr { attrib; op; arg; typ = Nothing })
+
+    let fapply ?attrib func args =
+      fix (ApplyFun { attrib; func; args; typ = Nothing })
 
     let binding ?attrib ~op bound_vars in_body =
-      fix (Lambda { attrib; op; bound_vars; in_body })
+      fix (Lambda { attrib; op; bound_vars; in_body; typ = Nothing })
 
     let letexp ?attrib bound_vars in_body =
-      fix (Let { attrib; bound_vars; in_body })
+      fix (Let { attrib; bound_vars; in_body; typ = Nothing })
 
-    let applyintrin ?attrib ~op args = fix (ApplyIntrin { attrib; op; args })
-    let apply_fun ?attrib ~func args = fix (ApplyFun { attrib; func; args })
+    let applyintrin ?attrib ~op args =
+      fix (ApplyIntrin { attrib; op; args; typ = Nothing })
+
+    let apply_fun ?attrib ~func args =
+      fix (ApplyFun { attrib; func; args; typ = Nothing })
+
     let attrib e = unfix e |> AbstractExpr.get_attrib
   end
 
@@ -248,12 +234,12 @@ module Make (O : Fix) = struct
           (* exprs to bind are evaluated outside the bound *)
           let bound = VarSet.add_list bound bound_vars in
           let in_body = subst bound in_body in
-          fix (Lambda { op; bound_vars; in_body; attrib })
+          fix (Lambda { op; bound_vars; in_body; attrib; typ = Nothing })
       | Let { bound_vars; in_body; attrib } ->
           (* exprs to bind are evaluated outside the bound *)
           let bound = VarSet.add_list bound (List.map fst bound_vars) in
           let in_body = subst bound in_body in
-          fix (Let { bound_vars; in_body; attrib })
+          fix (Let { bound_vars; in_body; attrib; typ = Nothing })
       | o -> fix @@ AbstractExpr.map (subst bound) o
     in
     subst VarSet.empty e
