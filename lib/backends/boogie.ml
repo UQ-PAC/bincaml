@@ -7,7 +7,7 @@ let var_name name =
   let name = Var.name name in
   let name =
     String.chop_prefix ~pre:"$" name
-    |> Option.map (fun s -> "v$" ^ s)
+    |> Option.map (fun s -> "$" ^ s)
     |> Option.get_or ~default:name
   in
   name
