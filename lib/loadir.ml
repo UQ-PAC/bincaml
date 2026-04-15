@@ -484,17 +484,10 @@ module BasilASTLoader = struct
 
   and trans_rvar ?(binds = StringMap.empty) p_st (v : var) =
     match v with
-    | VarLocalVar (LocalTyped (localVar, ty)) -> (
-        try lookup_local_decl ~binds localVar p_st
-        with e ->
-          let v =
-            Var.create ~scope:LocalVar
-              (unsafe_unsigil (`Local localVar))
-              (trans_type ty)
-          in
-          Logs.warn (fun m ->
-              m "global undeclared %s. assuming mutable unshared" @@ Var.name v);
-          v)
+    | VarLocalVar (LocalTyped (localVar, ty)) ->
+        Var.create ~scope:LocalVar
+          (unsafe_unsigil (`Local localVar))
+          (trans_type ty)
     | VarLocalVar (LocalUntyped localVar) ->
         Var.create ~scope:LocalVar
           (unsafe_unsigil (`Local localVar))
