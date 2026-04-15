@@ -398,7 +398,7 @@ let replace_block_succs p id succs =
 let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
   update_block p id block
 
-let lookup_local_decl p v = Var.Decls.find (local_decls p) v
+let lookup_local_decl p v = Var.Decls.find_opt (local_decls p) v
 
 let decl_local p v =
   let _ = (local_ids p).decl_or_get (Var.name v) in

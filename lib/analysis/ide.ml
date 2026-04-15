@@ -353,7 +353,7 @@ module IDEGraph = struct
             IntraVertex { proc_id; v = Return } ))
 
   let create (prog : Program.t) dir =
-    IDMap.to_iter prog.procs |> Iter.map snd
+    Program.procs prog |> Iter.map snd
     |> Iter.fold (fun g p -> proc_graph prog g p dir) (GB.empty ())
 
   (** a table giving, to each procedure, all of its call sites to other
@@ -703,8 +703,8 @@ module IDE (D : IDEDomain) = struct
           match D.direction with `Forwards -> Entry | `Backwards -> Exit)
     in
     (* Init the states with the analysis given values at each procedure *)
-    prog.procs
-    |> IDMap.iter (fun proc_id proc ->
+    Program.procs prog
+    |> Iter.iter (fun (proc_id, proc) ->
         let l = IDEGraph.Vert.IntraVertex { proc_id; v = proc_entry } in
         let state = Hashtbl.get_or states l ~default:DataMap.empty in
         let state =
@@ -783,8 +783,8 @@ module IDE (D : IDEDomain) = struct
     |> LM.of_iter
 
   let p1_start_vals (prog : Program.t) globals =
-    IDMap.values prog.procs
-    |> Iter.flat_map (fun proc ->
+    Program.procs prog
+    |> Iter.flat_map (fun (_, proc) ->
         let vert =
           Loc.IntraVertex
             {

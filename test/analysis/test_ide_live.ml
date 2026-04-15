@@ -134,7 +134,8 @@ proc @fun (c:bv64, d:bv64) -> (out:bv64)
   in
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
-  IDMap.iter (fun id _ -> print_lives results id) program.procs;
+  Lang.Program.procs program
+  |> Iter.iter (fun (id, _) -> print_lives results id);
   [%expect
     {|
     @main
@@ -183,7 +184,8 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   in
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
-  IDMap.iter (fun id _ -> print_lives results id) program.procs;
+  Lang.Program.procs program
+  |> Iter.iter (fun (id, _) -> print_lives results id);
   [%expect
     {|
     @main
@@ -249,7 +251,8 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   in
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
-  IDMap.iter (fun id _ -> print_lives results id) program.procs;
+  Lang.Program.procs program
+  |> Iter.iter (fun (id, _) -> print_lives results id);
   [%expect
     {|
     @main

@@ -229,7 +229,7 @@ module BasilASTLoader = struct
           attrib,
           spec,
           definition ) ->
-        let proc_id = prog.prog.proc_names.decl_or_get id in
+        let proc_id = prog.prog.global_names.decl_or_get id in
         let formal_in_params_order = List.map param_to_formal in_params in
         let formal_in_params = formal_in_params_order |> StringMap.of_list in
         let formal_out_params_order = List.map param_to_formal out_params in
@@ -244,7 +244,14 @@ module BasilASTLoader = struct
         in
         let prog =
           map_prog
-            (fun pr -> { pr with procs = IDMap.add proc_id p pr.procs })
+            (fun pr ->
+              {
+                pr with
+                declarations =
+                  IDMap.add proc_id
+                    (Program.Procedure { definition = p })
+                    pr.declarations;
+              })
             prog
         in
         prog
@@ -338,7 +345,7 @@ module BasilASTLoader = struct
         |> map_prog (fun p ->
             { p with attrib = Attrib.merge_map_shadow p.attrib nattrib })
         |> map_prog (fun p ->
-            { p with entry_proc = Some (p.proc_names.get_id id) })
+            { p with entry_proc = Some (p.global_names.get_id id) })
     | Decl_ProgWithSpec (ProcIdent (_, id), attr, spec) ->
         let nattrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         let prog = List.fold_left trans_progspec prog spec in
@@ -346,7 +353,7 @@ module BasilASTLoader = struct
         |> map_prog (fun p ->
             { p with attrib = Attrib.merge_map_shadow p.attrib nattrib })
         |> map_prog (fun p ->
-            { p with entry_proc = Some (p.proc_names.get_id id) })
+            { p with entry_proc = Some (p.global_names.get_id id) })
     | Decl_Proc
         ( ProcIdent (id_pos, id),
           _,
@@ -358,8 +365,8 @@ module BasilASTLoader = struct
           attrs,
           spec_list,
           proc_def ) ->
-        let proc_id = prog.prog.proc_names.decl_or_get id in
-        let p = IDMap.find proc_id prog.prog.procs in
+        let proc_id = prog.prog.global_names.decl_or_get id in
+        let p = Program.proc prog.prog proc_id in
         let prog = { prog with curr_proc = Some p } in
         let prog, blocks =
           match proc_def with
@@ -436,9 +443,7 @@ module BasilASTLoader = struct
                       Procedure.add_goto p ~from:f ~targets:succ))
             p blocks
         in
-        map_prog
-          (fun prog -> { prog with procs = IDMap.add proc_id p prog.procs })
-          prog
+        map_prog (fun prog -> Program.update_proc proc_id p prog) prog
     | Decl_Mem _ | Decl_Var _ | Decl_RecType _ | Decl_Type _ ->
         (* declarations only: handled by first pass *)
         prog
@@ -632,7 +637,7 @@ module BasilASTLoader = struct
     | Stmt_DirectCall (calllvars, bident, o, exprs, c) ->
         let n = unsafe_unsigil (`Proc bident) in
         let procid =
-          try p_st.prog.proc_names.get_id n
+          try p_st.prog.global_names.get_id n
           with Not_found ->
             raise
               (LoadError
@@ -923,13 +928,14 @@ module BasilASTLoader = struct
       match StringMap.find_opt vn binds with
       | Some v -> v
       | None -> (
-          match StringMap.find_opt vn p_st.prog.implicit_decls with
+          match Program.get_implicit_decl_by_name vn p_st.prog with
           | Some (VariantCase { constructor }) -> constructor
           | None ->
               Procedure.lookup_local_decl
                 (Option.get_exn_or "variable not bound and not in proc scope"
                    p_st.curr_proc)
-                vn)
+                vn
+              |> Option.get_exn_or "no declaration")
     with
     | Not_found ->
         let msg = "local variable used before declaration : " ^ vn in
@@ -940,7 +946,7 @@ module BasilASTLoader = struct
 
   and lookup_constructor p_st ident =
     let vn = unsafe_unsigil (`Local ident) in
-    match StringMap.find_opt vn p_st.prog.implicit_decls with
+    match Program.get_implicit_decl_by_name vn p_st.prog with
     | Program.(Some (VariantCase { constructor })) -> constructor
     | _ ->
         let token_char_offset_range = Some (get_bident_loc (`Local ident)) in
@@ -954,10 +960,10 @@ module BasilASTLoader = struct
       let msg = "Unable to find type declaration for:" ^ vn in
       raise (LoadError { token_char_offset_range; msg; input = None })
     in
-    match StringMap.find_opt vn p_st.prog.globals with
+    match Program.get_decl_by_name vn p_st.prog with
     | Some (Type { typ }) -> typ
     | None -> (
-        match StringMap.find_opt vn p_st.prog.implicit_decls with
+        match Program.get_implicit_decl_by_name vn p_st.prog with
         | Program.(Some (VariantCase { belongs_to })) -> belongs_to
         | _ -> fail ())
     | _ -> fail ()
@@ -965,18 +971,19 @@ module BasilASTLoader = struct
   and lookup_global_decl ident p_st =
     let vn = unsafe_unsigil (`Global ident) in
     let token_char_offset_range = Some (get_bident_loc (`Global ident)) in
-    match StringMap.find_opt vn p_st.prog.globals with
+    match Program.get_decl_by_name vn p_st.prog with
     | Some (Variable { binding }) -> binding
     | Some (Function { binding }) -> binding
     | Some (Type _) ->
         let msg = "found type declaration when looking for variable:" ^ vn in
         raise (LoadError { token_char_offset_range; msg; input = None })
     | None -> (
-        match StringMap.find_opt vn p_st.prog.implicit_decls with
+        match Program.get_implicit_decl_by_name vn p_st.prog with
         | Some (VariantCase { constructor }) -> constructor
         | None ->
             let msg = "global variable used before declaration : " ^ vn in
             raise (LoadError { token_char_offset_range; msg; input = None }))
+    | Some (Procedure _) -> failwith ""
 
   and trans_bv_val v : Bitvec.t =
     match v with
@@ -1426,18 +1433,16 @@ let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
     |> StringMap.of_list
   in
   let proc = Procedure.map_formal_in_params (fun _ -> inparam) proc in
-  let prog =
-    { prog with procs = IDMap.add (Procedure.id proc) proc prog.procs }
-  in
-  let globals =
+  let prog = Program.update_proc (Procedure.id proc) proc prog in
+  let declarations =
     Iter.append (Block.read_vars_iter bl) (Block.assigned_vars_iter bl)
     |> Iter.filter Var.is_global
     |> Iter.map (fun v ->
-        ( Var.name v,
+        ( prog.global_names.decl_or_get (Var.name v),
           Program.(Variable { binding = v; attrib = StringMap.empty }) ))
-    |> StringMap.of_iter
+    |> IDMap.of_iter
   in
-  ({ prog with globals }, proc, bl)
+  ({ prog with declarations }, proc, bl)
 
 let load_single_block ?proc ~input lexbuf =
   let _, _, block = load_single_block_proc ?proc ~input lexbuf in
@@ -1456,7 +1461,7 @@ let parse_single_block s : Program.bloc =
 let ast_of_concrete_ast ?(lst : load_st option) ~name m =
   Trace_core.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->
   let e = BasilASTLoader.trans_program ?lst ~name m in
-  e.prog.procs |> IDMap.values |> Iter.iter Lang.Check.wf_checks;
+  Program.procs e.prog |> Iter.map snd |> Iter.iter Lang.Check.wf_checks;
   e
 
 let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__
@@ -1683,10 +1688,10 @@ proc @c() -> ()
 |}
   in
   let res = analyse prog.prog in
-  IDMap.iter
-    (fun pid proc ->
+  Iter.iter
+    (fun (pid, proc) ->
       print_endline (ID.to_string pid ^ ":\n" ^ (res pid |> RWSets.to_string)))
-    prog.prog.procs;
+    (Program.procs prog.prog);
   [%expect
     {|
     @entry:

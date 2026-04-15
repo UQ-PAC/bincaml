@@ -31,7 +31,7 @@ let add_decl proc gv =
     Hashtbl.replace (Procedure.local_decls proc) (Var.name gv) gv
 
 let add_globals ?(check_names = false) (add : Var.t -> bool) (p : Program.t) =
-  StringMap.fold
+  IDMap.fold
     (fun s decl p ->
       match decl with
       | Program.Variable { binding; attrib } when add binding ->
@@ -39,7 +39,7 @@ let add_globals ?(check_names = false) (add : Var.t -> bool) (p : Program.t) =
           let g = gamma_of binding in
           Program.decl_global ~attrib p g
       | _ -> p)
-    p.globals p
+    p.declarations p
 
 let gamma_expr ?(check_names = false) (add : Var.t -> bool)
     (e : Expr.BasilExpr.t) =
@@ -91,7 +91,7 @@ let update_stmts ?(check_names = false) (add : ID.t -> Var.t -> bool) pid
     (prog : Program.t) (b : (Var.t, Expr.BasilExpr.t) Block.t) =
   let open Stmt in
   let update_expr = update_expr ~check_names (add pid) in
-  let proc = IDMap.find pid prog.procs in
+  let proc = Program.proc prog pid in
   Block.map
     ~phi:(fun a ->
       List.flat_map
@@ -147,7 +147,7 @@ let update_stmts ?(check_names = false) (add : ID.t -> Var.t -> bool) pid
                 |> of_sm args;
             }
       | Instr_Call { lhs; procid; args } ->
-          let callee = IDMap.find procid prog.procs in
+          let callee = Program.proc prog procid in
           Instr_Call
             {
               lhs =
@@ -211,9 +211,6 @@ let transform_proc ?(check_names = false) (add : ID.t -> Var.t -> bool) prog
 
 let transform ?(check_names = false) (p : Program.t) =
   let p = add_globals ~check_names (fun v -> true) p in
-  let procs =
-    IDMap.map
-      (fun proc -> transform_proc ~check_names (fun pid v -> true) p proc)
-      p.procs
-  in
-  { p with procs }
+  Program.map_procedures
+    (fun i proc -> transform_proc ~check_names (fun pid v -> true) p proc)
+    p

@@ -199,7 +199,7 @@ module Solver = struct
     let callers = Hashtbl.create 10 in
     List.iter
       (fun pid ->
-        IDMap.find pid prog.procs |> Procedure.iter_blocks
+        Program.proc prog pid |> Procedure.iter_blocks
         |> Iter.iter (fun (bid, b) ->
             Block.stmts_iter b
             |> Iter.iter (add_intra_stmt callers (node_of pid) pid component);
@@ -210,7 +210,7 @@ module Solver = struct
     Worklist.add_list worklist component;
     while Worklist.non_empty worklist do
       let pid = Worklist.pop worklist in
-      let proc = IDMap.find pid prog.procs in
+      let proc = Program.proc prog pid in
       Procedure.formal_out_params proc
       |> StringMap.values
       |> Iter.map (node_of pid)

@@ -133,7 +133,7 @@ let transform_stmt (s : Program.stmt) =
     | _ -> [ s ])
   |> List.to_iter
 
-let transform_proc entry (p : Program.proc) =
+let transform_proc entry _ (p : Program.proc) =
   let p =
     Procedure.map_blocks_nondet
       (fun (i, b) -> Block.flat_map ~phi:Fun.id transform_stmt b)
@@ -152,6 +152,5 @@ let transform_proc entry (p : Program.proc) =
 
 let transform (p : Program.t) =
   let entry = p.entry_proc |> Option.map ID.name |> Option.get_or ~default:"" in
-  let procs = IDMap.map (transform_proc entry) p.procs in
-  let p = { p with procs } in
+  let p = Program.map_procedures (transform_proc entry) p in
   (fun prog -> Spec_modifies.set_modsets ~add_only:false prog) p
