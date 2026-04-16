@@ -276,45 +276,6 @@ let pretty_type_declaration (binding : string) (typ : Types.t) =
       ^+ bracket "{" (append_sp (List.map pretty_variant_declaration vs)) "}"
   | _ -> raise (BoogieException "Unsupported type declaration")
 
-let pretty_declaration (d : Program.declaration) =
-  let open Containers_pp in
-  let open Containers_pp.Infix in
-  match d with
-  | Program.Variable { binding; attrib } -> pretty_variable_declaration binding
-  | Program.Function { binding; attrib; definition = Function t } ->
-      let func_body, return_type = pretty_function_body binding t in
-
-      (* Ideally use above return type
-       * but unfortunately curry will uncurry returned maps... :( *)
-      let return_type = Expr.BasilExpr.type_of t in
-      let return_type = text @@ type_to_string return_type in
-
-      text "function"
-      ^+ pretty_attribute_map ".boogie" attrib
-      ^+ (function_name @@ binding)
-      ^ bracket "(" (pretty_function_args t) ")"
-      ^+ text "returns"
-      ^+ bracket "(" return_type ")"
-      ^+ surround ~width:2 (text "{") (newline ^ func_body) (newline ^ text "}")
-  | Program.Function { binding; attrib; definition = Axiom t } ->
-      fill sp [ text "axiom"; bracket "(" (pretty_expr t) ")" ]
-  | Program.Function { binding; attrib; definition = Uninterpreted }
-    when List.is_empty (fst @@ Types.uncurry (Var.typ binding)) ->
-      pretty_variable_declaration ~const:true binding ^ text ";"
-  | Program.Function { binding; attrib; definition = Uninterpreted } ->
-      let param, rt = Types.uncurry (Var.typ binding) in
-      text "function"
-      ^+ pretty_attribute_map ".boogie" attrib
-      ^+ (function_name @@ binding)
-      ^ bracket "("
-          (fill
-             (text "," ^ sp)
-             (List.map (fun t -> text @@ type_to_string t) param))
-          ")"
-      ^ bracket " returns (" (text (type_to_string rt)) ")"
-      ^ text ";"
-  | Program.Type { binding; typ } -> pretty_type_declaration binding typ
-
 let rec pretty_statement (s : Program.stmt) =
   let open Containers_pp in
   let open List.Infix in
@@ -479,25 +440,60 @@ let pretty_procedure (p : Program.proc) =
     [ pretty_procedure_impl p ]
   else []
 
+let pretty_declaration (d : Program.declaration) =
+  let open Containers_pp in
+  let open Containers_pp.Infix in
+  match d with
+  | Program.Variable { binding; attrib } ->
+      pretty_variable_declaration binding ^ text ";"
+  | Program.Function { binding; attrib; definition = Function t } ->
+      let func_body, return_type = pretty_function_body binding t in
+
+      (* Ideally use above return type
+       * but unfortunately curry will uncurry returned maps... :( *)
+      let return_type = Expr.BasilExpr.type_of t in
+      let return_type = text @@ type_to_string return_type in
+
+      text "function"
+      ^+ pretty_attribute_map ".boogie" attrib
+      ^+ (function_name @@ binding)
+      ^ bracket "(" (pretty_function_args t) ")"
+      ^+ text "returns"
+      ^+ bracket "(" return_type ")"
+      ^+ surround ~width:2 (text "{") (newline ^ func_body) (newline ^ text "}")
+  | Program.Function { binding; attrib; definition = Axiom t } ->
+      fill sp [ text "axiom"; bracket "(" (pretty_expr t) ")" ] ^ text ";"
+  | Program.Function { binding; attrib; definition = Uninterpreted }
+    when List.is_empty (fst @@ Types.uncurry (Var.typ binding)) ->
+      pretty_variable_declaration ~const:true binding ^ text ";"
+  | Program.Function { binding; attrib; definition = Uninterpreted } ->
+      let param, rt = Types.uncurry (Var.typ binding) in
+      text "function"
+      ^+ pretty_attribute_map ".boogie" attrib
+      ^+ (function_name @@ binding)
+      ^ bracket "("
+          (fill
+             (text "," ^ sp)
+             (List.map (fun t -> text @@ type_to_string t) param))
+          ")"
+      ^ bracket " returns (" (text (type_to_string rt)) ")"
+      ^ text ";"
+  | Program.Type { binding; typ } -> pretty_type_declaration binding typ
+  | Procedure { definition } -> pretty_procedure definition
+
 let pretty_program (p : Program.t) =
   let open Containers_pp in
-  let glob_vars, glob_funs =
+  let glob_vars_funs, rest =
     Program.declarations p |> Iter.map snd |> Iter.to_list
     |> List.partition_filter_map (fun d ->
         let p = pretty_declaration d in
         match d with
-        | Program.Variable _ | Program.Function { definition = Axiom _ } ->
-            `Left p
+        | Program.Variable _ | Program.Function _ | Program.Type _ -> `Left p
         | _ -> `Right p)
   in
-  let glob_vars = join_lines_end glob_vars in
-  let glob_funs = append_nl glob_funs in
-  let procs =
-    Program.procs p |> Iter.to_list
-    |> List.map (fun (_, p) -> pretty_procedure p)
-    |> append_l ~sep:(newline ^ newline)
-  in
-  append_l ~sep:(newline ^ newline) [ glob_vars; glob_funs; procs ]
+  let glob_vars = append_nl glob_vars_funs in
+  let rest = append_nl rest in
+  append_l ~sep:(newline ^ newline) [ glob_vars; rest ]
 
 let pretty_to_chan chan (p : Program.t) =
   let p = Transforms.Boogie_prepass.transform p in
