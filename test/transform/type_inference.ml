@@ -30,17 +30,17 @@ let%test_unit "Add bounds" =
 
 let%test_unit "Basic consistent constraint set" =
   (*
+    ```
     var a = b;
     var b = c;
     var c = true;
-
+    ```
+    
     b <= a
-    c <= b
+    c <= b, therefore c <= a
 
-    c <= a
-
-    a: lower = [bool], upper = []
-    b: lower = [bool],     upper = [a]
+    a: lower = [bool],    upper = []
+    b: lower = [bool],    upper = [a]
     c: lower = [bool],    upper = [b]
   *)
   let block =
@@ -57,7 +57,7 @@ proc @main_4196260 () -> ()
   block %main_entry [
     $XF:bv1 := $YF:bv1;
     $YF:bv1 := $ZF:bv1;
-    $ZF:bv1 := eq(true, true);
+    $ZF:bv1 := true;
     goto(%main_basil_return_1);
   ];
   block %main_basil_return_1 [
@@ -72,35 +72,7 @@ proc @main_4196260 () -> ()
   in
   let prog = lst.prog in
 
-  let st =
-    IDMap.values prog.procs
-    |> Iter.fold
-         (fun acc proc ->
-           let sva = Analysis.Sva.DFGAnalysis.flow_insensitive proc in
-           Procedure.iter_blocks_topo_fwd proc
-           |> Iter.fold
-                (fun acc (bid, (b : Program.bloc)) ->
-                  let acc =
-                    List.fold_left
-                      (fun acc ({ lhs; rhs } : Var.t Block.phi) ->
-                        let lhs = VarId.var_proc_to_uid lhs (Some proc) in
-                        List.fold_left
-                          (fun acc (_, rhs) ->
-                            let rhs = VarId.var_proc_to_uid rhs (Some proc) in
-                            constrain acc (TypeVar rhs) (TypeVar lhs))
-                          acc rhs)
-                      acc b.phis
-                  in
-                  Block.stmts_iter b
-                  |> Iter.foldi
-                       (fun acc stmt_number stmt ->
-                         constrain_stmt prog (Some proc) sva acc stmt_number
-                           stmt
-                         @@ ID.hash bid)
-                       acc)
-                acc)
-         VarIdMap.empty
-  in
+  let st = generate_constraints prog in
 
   let ls =
     [

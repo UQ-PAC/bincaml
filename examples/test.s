@@ -1,4 +1,14 @@
-(load-il "examples/cntlm-simp-output.il")
-(dump-il "before.il")
-(run-transforms "cf-expressions" "intra-dead-store-elim")
+; (load-il "examples/cntlm-output.il")
+(load-il "examples/irreducible_loop_1.il")
+(run-transforms "cf-expressions")
+(run-transforms "ssa")
+(run-transforms "cf-expressions")
+(run-transforms "simplify")
+
+
+; (dump-il "before.il")
+(run-transforms "type-check")
+(log-level "debug")
+(run-transforms "type-inference")
 (dump-il "after.il")
+(run-transforms "type-check")

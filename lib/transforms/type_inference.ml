@@ -1398,44 +1398,38 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
   *)
   | Stmt.Instr_IndirectCall _ -> st
 
-(* Passes through a given program and returns a given constraint set *)
-let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
-  (* Generate constraint set *)
+let generate_constraints prog =
   Logs.info (fun m ->
-      m "Generating the constraint set" ?header:None
-        ~tags:(Logger.time_stamp ()));
-  let type_constraint_map =
-    IDMap.values prog.procs
-    |> Iter.fold
-         (fun acc proc ->
-           let sva = Analysis.Sva.DFGAnalysis.flow_insensitive proc in
-           Procedure.iter_blocks_topo_fwd proc
-           |> Iter.fold
-                (fun acc (bid, (b : Program.bloc)) ->
-                  let acc =
-                    List.fold_left
-                      (fun acc ({ lhs; rhs } : Var.t Block.phi) ->
-                        let lhs = VarId.var_proc_to_uid lhs (Some proc) in
-                        List.fold_left
-                          (fun acc (_, rhs) ->
-                            let rhs = VarId.var_proc_to_uid rhs (Some proc) in
-                            constrain acc (TypeVar rhs) (TypeVar lhs))
-                          acc rhs)
-                      acc b.phis
-                  in
-                  Block.stmts_iter b
-                  |> Iter.foldi
-                       (fun acc stmt_number stmt ->
-                         constrain_stmt prog (Some proc) sva acc stmt_number
-                           stmt
-                         @@ ID.hash bid)
-                       acc)
-                acc)
-         VarIdMap.empty
-  in
-  Logs.info (fun m ->
-      m "Coalescing types" ?header:None ~tags:(Logger.time_stamp ()));
-  (* Create polar unconstrained types for each variable / function etc. *)
+      m "Generating the constraint set" ~tags:(Logger.time_stamp ()));
+  IDMap.values prog.procs
+  |> Iter.fold
+       (fun acc proc ->
+         let sva = Analysis.Sva.DFGAnalysis.flow_insensitive proc in
+         Procedure.iter_blocks_topo_fwd proc
+         |> Iter.fold
+              (fun acc (bid, (b : Program.bloc)) ->
+                let acc =
+                  List.fold_left
+                    (fun acc ({ lhs; rhs } : Var.t Block.phi) ->
+                      let lhs = VarId.var_proc_to_uid lhs (Some proc) in
+                      List.fold_left
+                        (fun acc (_, rhs) ->
+                          let rhs = VarId.var_proc_to_uid rhs (Some proc) in
+                          constrain acc (TypeVar rhs) (TypeVar lhs))
+                        acc rhs)
+                    acc b.phis
+                in
+                Block.stmts_iter b
+                |> Iter.foldi
+                     (fun acc stmt_number stmt ->
+                       constrain_stmt prog (Some proc) sva acc stmt_number stmt
+                       @@ ID.hash bid)
+                     acc)
+              acc)
+       VarIdMap.empty
+
+let unconstrain_types type_constraint_map =
+  Logs.info (fun m -> m "Coalescing types" ~tags:(Logger.time_stamp ()));
   let types =
     VarIdMap.mapi
       (fun name ({ lb; ub } : ConstraintState.TypeConstraint.t) ->
@@ -1464,32 +1458,34 @@ let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
     (fun k (lower, upper) ->
       Logs.debug (fun m ->
           m "VarID: %s\n\t\tLower: %s\n\t\tUpper: %s" (VarId.show k)
-            (InferredType.show lower) (InferredType.show upper) ?header:None
+            (InferredType.show lower) (InferredType.show upper)
             ~tags:(Logger.time_stamp ())))
     types;
-  (*
-    What would happen if we made one huge automata and tried to solve it like that?
-  *)
-  (* Make the types simpler *)
+  types
+
+let simplify_types types =
   Logs.info (fun m ->
       m "Type automata based simplification" ?header:None
         ~tags:(Logger.time_stamp ()));
-  let ( (recursives : (VarId.t * Types.t) list),
-        (types : (VarId.t * Types.t) list) ) =
-    VarIdMap.fold
-      (fun name (lower_ty, upper_ty) (recursives, types) ->
-        let recursives2, types2 =
-          InferredType.inferred_to_real recursives
-            (* @@ Union *)
-            (minimise_type Polarity.Neg lower_ty name)
-          (* minimise_type Polarity.Pos upper_ty name ) *)
-        in
-        (recursives, (name, types2) :: types))
-      types ([], [])
-  in
 
+  VarIdMap.fold
+    (fun name (lower_ty, upper_ty) (recursives, types) ->
+      let recursives2, types2 =
+        InferredType.inferred_to_real recursives
+          (* @@ Union *)
+          (minimise_type Polarity.Neg lower_ty name)
+        (* minimise_type Polarity.Pos upper_ty name ) *)
+      in
+      (recursives, (name, types2) :: types))
+    types ([], [])
+
+(* Passes through a given program and returns a given constraint set *)
+let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
+  let recursives, types =
+    simplify_types @@ unconstrain_types @@ generate_constraints prog
+  in
   Logs.info (fun m ->
-      m "Done analysis" ?header:None ~tags:(Logger.time_stamp ()));
+      m "Done type inference analysis" ~tags:(Logger.time_stamp ()));
   (VarIdMap.of_list types, recursives)
 
 (*
@@ -1647,8 +1643,7 @@ let declare_recursive_typs (recursives : (VarId.t * Types.t) list) :
 let transform (prog : Program.t) (results : Types.t VarIdMap.t)
     (recursives : (VarId.t * Types.t) list) : Program.t =
   Logs.info (fun m ->
-      m "Starting type inference transform" ?header:None
-        ~tags:(Logger.time_stamp ()));
+      m "Starting type inference transform" ~tags:(Logger.time_stamp ()));
   let decls, results =
     List.fold_left_map
       (fun acc (id, typ) ->
