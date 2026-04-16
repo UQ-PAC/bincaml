@@ -7,8 +7,8 @@
 
   $ diff before.il after.il
   7,8c7,8
-  <      (var y_1:bv64=out) := call @f(inp=x_1);
-  <      var out:bv64 := bvadd(x_1, y_1);
+  <      (var y_1:bv64=out) := call @f(inp=x_1:bv64);
+  <      var out:bv64 := bvadd(x_1:bv64, y_1:bv64);
   ---
   >      (var y_1:bv64=out) := call @f(inp=0x5:bv64);
   >      var out:bv64 := bvadd(0x5:bv64, 0x2a5:bv64);
