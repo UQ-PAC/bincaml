@@ -31,15 +31,15 @@ let add_decl proc gv =
     Hashtbl.replace (Procedure.local_decls proc) (Var.name gv) gv
 
 let add_globals ?(check_names = false) (add : Var.t -> bool) (p : Program.t) =
-  IDMap.fold
-    (fun s decl p ->
-      match decl with
-      | Program.Variable { binding; attrib } when add binding ->
-          if check_names then check_var binding;
-          let g = gamma_of binding in
-          Program.decl_global ~attrib p g
-      | _ -> p)
-    p.declarations p
+  Program.declarations p
+  |> Iter.fold
+       (fun p (s, decl) ->
+         match decl with
+         | Program.Variable { binding; attrib } when add binding ->
+             if check_names then check_var binding;
+             Program.decl_global ~attrib p (gamma_of binding)
+         | _ -> p)
+       p
 
 let gamma_expr ?(check_names = false) (add : Var.t -> bool)
     (e : Expr.BasilExpr.t) =

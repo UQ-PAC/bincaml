@@ -54,16 +54,13 @@ let drop_unused_var_declarations_prog (p : Program.t) =
            VarSet.union acc (drop_unused_var_declarations_proc p))
          VarSet.empty
   in
-  let globals =
-    IDMap.filter_map
-      (fun _ v ->
-        match v with
-        | Program.(Variable { binding } as b) ->
-            if VarSet.mem binding used then Some b else None
-        | o -> Some o)
-      p.declarations
-  in
-  { p with declarations = globals }
+  Program.filter_map_decls
+    (fun _ v ->
+      match v with
+      | Program.(Variable { binding } as b) ->
+          if VarSet.mem binding used then Some b else None
+      | o -> Some o)
+    p
 
 let should_lift ~skip_observable ~skip_maps v =
   let skip =

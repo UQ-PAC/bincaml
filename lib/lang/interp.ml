@@ -486,10 +486,7 @@ module IState = struct
       initialised based on whether the random geenrator is passed *)
   let create ?(fuel = 10000) ?random (prog : Program.t) =
     let stack = [] in
-    let proc =
-      Program.proc prog
-        (prog.entry_proc |> Option.get_exn_or "executing prog with no entry")
-    in
+    let proc = Program.entry_proc_exn prog in
     let pc = { proc; vert = Exit } in
     let memories =
       Program.global_vars prog
@@ -843,7 +840,5 @@ let run_proc prog ?(args = StringMap.empty) proc =
 
 let run_prog ?(args = StringMap.empty) prog =
   let st = IState.create prog in
-  let proc =
-    Program.proc prog (Option.get_exn_or "no main proc" prog.entry_proc)
-  in
+  let proc = Program.entry_proc_exn prog in
   IState.call_proc st proc args

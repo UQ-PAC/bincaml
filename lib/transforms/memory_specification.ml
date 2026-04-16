@@ -150,6 +150,6 @@ let transform_proc entry _ (p : Program.proc) =
   | _ -> p
 
 let transform (p : Program.t) =
-  let entry = p.entry_proc |> Option.map ID.name |> Option.get_or ~default:"" in
+  let entry = Program.entry_proc_exn p |> Procedure.id %> ID.name in
   let p = Program.map_procedures (transform_proc entry) p in
   (fun prog -> Spec_modifies.set_modsets ~add_only:false prog) p

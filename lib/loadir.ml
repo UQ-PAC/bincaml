@@ -229,7 +229,7 @@ module BasilASTLoader = struct
           attrib,
           spec,
           definition ) ->
-        let proc_id = prog.prog.global_names.decl_or_get id in
+        let proc_id = Program.declare_name id prog.prog in
         let formal_in_params_order = List.map param_to_formal in_params in
         let formal_in_params = formal_in_params_order |> StringMap.of_list in
         let formal_out_params_order = List.map param_to_formal out_params in
@@ -242,36 +242,22 @@ module BasilASTLoader = struct
           Procedure.create proc_id ~attrib ~is_stub ~formal_in_params
             ~formal_out_params ()
         in
-        let prog =
-          map_prog
-            (fun pr ->
-              {
-                pr with
-                declarations =
-                  IDMap.add proc_id
-                    (Program.Procedure { definition = p })
-                    pr.declarations;
-              })
-            prog
-        in
+        let prog = map_prog (Program.add_proc p) prog in
         prog
 
   and trans_progspec p_st (p : progSpec) =
     p_st
     |> map_prog (fun prog ->
-        let spec = prog.spec in
+        let spec = Program.spec prog in
         match p with
         | ProgSpec_Rely (_, b) ->
-            {
-              prog with
-              spec = { spec with rely = trans_expr p_st b :: spec.rely };
-            }
+            Program.set_spec
+              { spec with rely = trans_expr p_st b :: spec.rely }
+              prog
         | ProgSpec_Guarantee (_, b) ->
-            {
-              prog with
-              spec =
-                { spec with guarantee = trans_expr p_st b :: spec.guarantee };
-            })
+            Program.set_spec
+              { spec with guarantee = trans_expr p_st b :: spec.guarantee }
+              prog)
 
   (** desugar let definition function *)
   and create_fun prog glident args attrList typ body =
@@ -343,17 +329,21 @@ module BasilASTLoader = struct
         let nattrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         prog
         |> map_prog (fun p ->
-            { p with attrib = Attrib.merge_map_shadow p.attrib nattrib })
+            Program.set_attrib
+              (Attrib.merge_map_shadow (Program.attrib p) nattrib)
+              p)
         |> map_prog (fun p ->
-            { p with entry_proc = Some (p.global_names.get_id id) })
+            Program.set_entry_proc (Program.get_id_by_name id p) p)
     | Decl_ProgWithSpec (ProcIdent (_, id), attr, spec) ->
         let nattrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         let prog = List.fold_left trans_progspec prog spec in
         prog
         |> map_prog (fun p ->
-            { p with attrib = Attrib.merge_map_shadow p.attrib nattrib })
+            Program.set_attrib
+              (Attrib.merge_map_shadow (Program.attrib p) nattrib)
+              p)
         |> map_prog (fun p ->
-            { p with entry_proc = Some (p.global_names.get_id id) })
+            Program.set_entry_proc (Program.get_id_by_name id p) p)
     | Decl_Proc
         ( ProcIdent (id_pos, id),
           _,
@@ -365,8 +355,7 @@ module BasilASTLoader = struct
           attrs,
           spec_list,
           proc_def ) ->
-        let proc_id = prog.prog.global_names.decl_or_get id in
-        let p = Program.proc prog.prog proc_id in
+        let p = Program.get_proc_by_name id prog.prog in
         let prog = { prog with curr_proc = Some p } in
         let prog, blocks =
           match proc_def with
@@ -637,7 +626,7 @@ module BasilASTLoader = struct
     | Stmt_DirectCall (calllvars, bident, o, exprs, c) ->
         let n = unsafe_unsigil (`Proc bident) in
         let procid =
-          try p_st.prog.global_names.get_id n
+          try Procedure.id @@ Program.get_proc_by_name n p_st.prog
           with Not_found ->
             raise
               (LoadError
@@ -1434,15 +1423,16 @@ let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
   in
   let proc = Procedure.map_formal_in_params (fun _ -> inparam) proc in
   let prog = Program.add_proc proc prog in
-  let declarations =
+  let prog =
     Iter.append (Block.read_vars_iter bl) (Block.assigned_vars_iter bl)
     |> Iter.filter Var.is_global
-    |> Iter.map (fun v ->
-        ( prog.global_names.decl_or_get (Var.name v),
-          Program.(Variable { binding = v; attrib = StringMap.empty }) ))
-    |> IDMap.of_iter
+    |> Iter.fold
+         (fun prog v ->
+           Program.add_decl prog
+             (Program.Variable { binding = v; attrib = StringMap.empty }))
+         prog
   in
-  ({ prog with declarations }, proc, bl)
+  (prog, proc, bl)
 
 let load_single_block ?proc ~input lexbuf =
   let _, _, block = load_single_block_proc ?proc ~input lexbuf in

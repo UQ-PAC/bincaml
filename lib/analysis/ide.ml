@@ -334,7 +334,12 @@ module IDEGraph = struct
     in
     let g = Iter.fold GB.add_vertex g intra_verts in
     let g =
-      if Option.equal ID.equal prog.entry_proc (Some proc_id) then
+      if
+        Option.(
+          equal ID.equal
+            (Program.entry_proc_opt prog |> map Procedure.id)
+            (Some proc_id))
+      then
         add_edge_e_dir dir g (Entry, Nop, IntraVertex { proc_id; v = Entry })
         |> fun g ->
         add_edge_e_dir dir g (IntraVertex { proc_id; v = Return }, Nop, Exit)
@@ -821,9 +826,7 @@ module IDE (D : IDEDomain) = struct
     let graph = IDEGraph.create prog dir in
     let start = p1_start_vals prog globals in
     let order = scc_order prog graph in
-    let start_proc =
-      prog.entry_proc |> Option.get_exn_or "Missing entry procedure"
-    in
+    let start_proc = Procedure.id @@ Program.entry_proc_exn prog in
     let summary = phase1_solve start graph globals order DlMap.empty in
     ( query_summary @@ summary,
       query @@ phase2_solve prog start_proc graph globals summary )

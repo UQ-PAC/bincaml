@@ -276,7 +276,7 @@ let sva (prog : Program.t) =
       (prog : Program.t) : bool =
     let open Option in
     (let* symbols =
-       match StringMap.find_opt ".symbols" prog.attrib with
+       match StringMap.find_opt ".symbols" (Program.attrib prog) with
        | Some symbols -> Some symbols
        | _ -> None
      in

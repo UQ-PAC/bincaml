@@ -109,6 +109,13 @@ type t = {
   spec : prog_spec;
 }
 
+let spec (p : t) = p.spec
+let set_spec spec (p : t) = { p with spec }
+let set_entry_proc e (p : t) = { p with entry_proc = Some e }
+let attrib (p : t) = p.attrib
+let set_attrib attrib (p : t) = { p with attrib }
+let modulename (p : t) = p.modulename
+
 let entry_proc_exn p =
   p.entry_proc |> function
   | None -> raise Not_found
@@ -116,6 +123,8 @@ let entry_proc_exn p =
       IDMap.get i p.declarations |> function
       | Some (Procedure { definition }) -> definition
       | _ -> raise Not_found)
+
+let entry_proc_opt p = try Some (entry_proc_exn p) with Not_found -> None
 
 let map_procedures f p =
   {
@@ -171,7 +180,9 @@ let get_implicit_decl_by_name name prog =
     IDMap.find_opt id prog.implicit_decls
   with Not_found -> None
 
+let declare_name_exn name prog = prog.global_names.decl_exn name
 let declare_name name prog = prog.global_names.decl_or_get name
+let get_id_by_name name prog = prog.global_names.get_id name
 
 let add_decl ?(attrib = StringMap.empty) p decl =
   let d = p.global_names.decl_or_get (decl_binding decl) in
@@ -247,6 +258,8 @@ let filter_map_decls f p =
          | Some d -> update_decl prog d
          | None -> { prog with declarations = IDMap.remove i prog.declarations })
        p
+
+let map_decls f p = filter_map_decls (fun id p -> Some (f id p)) p
 
 let flat_map_decls f p =
   declarations p

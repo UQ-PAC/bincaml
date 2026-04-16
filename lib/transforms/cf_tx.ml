@@ -47,24 +47,22 @@ let simplify_prog_exprs rewriter ?visit (p : Program.t) =
       (fun _ proc -> simplify_proc_exprs rewriter ?visit proc)
       p
   in
-  let declarations =
-    p.declarations
-    |> IDMap.map
-         Program.(
-           function
-           | Function { binding; attrib; definition } ->
-               let definition =
-                 match definition with
-                 | Axiom b ->
-                     let rw = rewriter ?visit b in
-                     Axiom rw
-                 | Function b -> Function (rewriter ?visit b)
-                 | Uninterpreted -> Uninterpreted
-               in
-               Function { binding; attrib; definition }
-           | o -> o)
-  in
-  { p with declarations }
+  Program.map_decls
+    Program.(
+      fun id ->
+        (function
+        | Function { binding; attrib; definition } ->
+            let definition =
+              match definition with
+              | Axiom b ->
+                  let rw = rewriter ?visit b in
+                  Axiom rw
+              | Function b -> Function (rewriter ?visit b)
+              | Uninterpreted -> Uninterpreted
+            in
+            Function { binding; attrib; definition }
+        | o -> o))
+    p
 
 let to_smt (r : Expr.BasilExpr.rwinfo) =
   let open Lang.Expr_smt in

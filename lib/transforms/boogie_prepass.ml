@@ -147,8 +147,9 @@ module Builtins = struct
         List.iter (iexpr f) spec.ensures;
         List.iter (iexpr f) spec.rely;
         List.iter (iexpr f) spec.guarantee);
-    p.spec.rely |> List.iter (iexpr f);
-    p.spec.guarantee |> List.iter (iexpr f)
+    let s = Program.spec p in
+    s.rely |> List.iter (iexpr f);
+    s.guarantee |> List.iter (iexpr f)
 
   let function_for_op op args ret =
     Var.create ~scope:Var.GlobalConst
@@ -434,7 +435,7 @@ module Normalise = struct
                   | Lambda { bound_vars; in_body } -> keep
                   | body ->
                       let axiom_name =
-                        p.global_names.decl_exn (ID.name k ^ "_funvalue")
+                        Program.declare_name_exn (ID.name k ^ "_funvalue") p
                       in
                       Iter.doubleton
                         (Function
