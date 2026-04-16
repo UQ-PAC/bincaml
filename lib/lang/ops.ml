@@ -376,9 +376,7 @@ module AllOps = struct
         | o -> Conflict [ (o, "<bitvector") ])
     | `ZeroExtend sz -> (
         match a with
-        | Bitvector s ->
-            return @@ Bitvector (sz + s)
-            (* @@ Struct { name = ""; size = sz + s; fields = StringMap.empty } *)
+        | Bitvector s -> return @@ Bitvector (sz + s)
         | o -> Conflict [ (o, "<bitvector") ])
     | `ReadField field -> (
         match a with
@@ -430,13 +428,7 @@ module AllOps = struct
     let return ret = Fun { args; ret } in
     match o with
     | `Cases -> return @@ List.hd @@ List.tl args
-    | `BVADD -> (
-        return
-        @@
-        match List.hd args with
-        (* | Bitvector 64 -> *)
-        (* Pointer { name = ""; lower = Nothing; upper = Nothing } *)
-        | a -> a)
+    | `BVADD -> return @@ List.hd args
     | `BVMUL -> return @@ List.hd args
     | `BVOR -> return @@ List.hd args
     | `BVXOR -> return @@ List.hd args

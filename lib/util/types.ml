@@ -48,7 +48,7 @@ and record_field = { offset : Z.t; typ : t } [@@deriving eq, ord]
   Lower type represents types the pointer could load
   Upper type represents types the pointer could store
 *)
-and pointer = { name : string; lower : t; upper : t } [@@deriving eq, ord]
+and pointer = { lower : t; upper : t } [@@deriving eq, ord]
 
 let bv i = Bitvector i
 let int = Integer
@@ -220,12 +220,10 @@ let%expect_test "dtp" =
 
 let show (b : t) = to_string b
 
-let show_pointer { lower; upper; name } =
-  Printf.sprintf "%s : { lower = %s; upper = %s }" name (show lower)
-    (show upper)
+let show_pointer { lower; upper } =
+  Printf.sprintf "{ lower = %s; upper = %s }" (show lower) (show upper)
 
 let pp fmt b = Format.pp_print_string fmt (show b)
 
-let pp_pointer fmt { lower; upper; name } =
-  Format.fprintf fmt "%s : { lower = %s; upper = %s }" name (show lower)
-    (show upper)
+let pp_pointer fmt { lower; upper } =
+  Format.fprintf fmt "{ lower = %s; upper = %s }" (show lower) (show upper)

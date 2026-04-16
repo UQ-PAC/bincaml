@@ -476,7 +476,7 @@ module BasilASTLoader = struct
       }
 
   and transPOINTERTYPE (l : typeT) (u : typeT) =
-    Types.Pointer { name = ""; lower = trans_type l; upper = trans_type u }
+    Types.Pointer { lower = trans_type l; upper = trans_type u }
 
   and trans_type (x : typeT) : Types.t =
     match x with
@@ -1011,9 +1011,7 @@ module BasilASTLoader = struct
     | Value_True -> `Bool true
     | Value_False -> `Bool false
     | Value_Pointer (_, v, PointerType1 (_, l, u, _), _) ->
-        `Pointer
-          ( trans_bv_val v,
-            { name = ""; lower = trans_type l; upper = trans_type u } )
+        `Pointer (trans_bv_val v, { lower = trans_type l; upper = trans_type u })
     | Value_Record (_, _, fields, _, typ, _) ->
         `Record
           ( StringMap.of_list

@@ -243,12 +243,11 @@ module InferredType = struct
           else Top )
     | BinCamlType a -> (recursives, BinCamlType.bincaml_type_to_type a)
     | Pointer (Top, Top) ->
-        (recursives, Types.Pointer { name = "void*"; lower = Top; upper = Top })
+        (recursives, Types.Pointer { lower = Top; upper = Top })
     | Pointer (lower, upper) ->
         let recursives, lower = inferred_to_real recursives lower in
         let recursives, upper = inferred_to_real recursives upper in
-        let name = "ptr" ^ Int.to_string @@ Hashtbl.hash typ in
-        (recursives, Types.Pointer { name; lower; upper })
+        (recursives, Types.Pointer { lower; upper })
     | Record (fields, size) ->
         let name = "rec" ^ Int.to_string @@ Hashtbl.hash typ in
         let recursives, fields =
@@ -1668,7 +1667,7 @@ let map_decl results proc (decl : Program.declaration) : Program.declaration =
 
 let declare_typ (typ : Types.t) : (string * Types.t) option * Types.t =
   match typ with
-  | Struct { name; _ } | Pointer { name } -> (Some (name, typ), typ)
+  | Struct { name; _ } -> (Some (name, typ), typ)
   | _ -> (None, typ)
 
 let declare_recursive_typs (recursives : (VarId.t * Types.t) list) :

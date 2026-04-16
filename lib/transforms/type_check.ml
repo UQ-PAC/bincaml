@@ -60,17 +60,16 @@ let type_check stmt_id block_id expr =
       type_error list =
     let binary_same_types (expected_type : Types.t) arg1 arg2 =
       match (arg1, arg2) with
-      | tl, tr when Types.leq tl expected_type && Types.equal tr expected_type
-        ->
+      | tl, tr when Types.leq tl expected_type && Types.leq tr expected_type ->
           []
-      | _, tr when Types.equal tr expected_type ->
+      | _, tr when Types.leq tr expected_type ->
           [
             type_err "%s is not the correct type of %s for %s"
               (Types.to_string arg1)
               (Types.to_string expected_type)
               (Ops.AllOps.to_string op);
           ]
-      | tl, _ when Types.equal tl expected_type ->
+      | tl, _ when Types.leq tl expected_type ->
           [
             type_err "%s is not the correct type of %s for %s"
               (Types.to_string arg2)
@@ -318,7 +317,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
   | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size } } -> (
       let errors, rtype = type_check addr in
       let errors =
-        if Types.equal (Var.typ lhs) (Types.bv size) then errors
+        if Types.leq (Var.typ lhs) (Types.bv size) then errors
         else
           type_err "Load size (%d) doesn't match lhs (%s) type" size
             (Var.to_string lhs)
@@ -344,7 +343,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
       let addr_errors, addr_rtype = type_check addr in
       let errors = List.append addr_errors val_errors in
       let errors =
-        if Types.equal val_rtype (Types.bv size) then errors
+        if Types.leq val_rtype (Types.bv size) then errors
         else
           type_err "Store size (%s) doesn't match lhs (%s) type"
             (Types.to_string (Types.bv size))

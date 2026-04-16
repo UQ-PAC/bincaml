@@ -7,12 +7,6 @@
   (run-transforms type-inference)
   (dump-il after-type-inference-loops.il)
   $ cat after-type-inference-loops.il
-  type ptr(rec442847055 of {"field-24": (bv64, -24)} 64, ⊤);
-  type ptr(rec124838810 of {"field-32": (bv64, -32)} 64, ⊤);
-  type ptr(rec317173895 of {"field8": (bv64, 8)} 64, rec317173895 of {"field8": (bv64, 8)} 64);
-  type ptr(rec108259554 of {"field-16": (bv64, -16)} 64, ⊤);
-  type ptr(rec918136015 of {"field-4": (bv32, -4)} 32, ⊤);
-  type ptr(rec1017972628 of {"field0": (bv64, 0)} 64, rec1017972628 of {"field0": (bv64, 0)} 64);
   type rec1017972628 of {"field0": (bv64, 0)} 64;
   type rec108259554 of {"field-16": (bv64, -16)} 64;
   type rec124838810 of {"field-32": (bv64, -32)} 64;
