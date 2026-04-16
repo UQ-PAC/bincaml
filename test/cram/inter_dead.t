@@ -10,7 +10,6 @@
 
   $ cat before.il
   var $global:bv64;
-  prog entry @main;
   proc @main(inp:bv64)  -> () {  }
     captures $global:bv64
   
@@ -44,10 +43,10 @@
        return;
      ]
   ];
+  prog entry @main;
 
   $ cat intra.il
   var $global:bv64;
-  prog entry @main;
   proc @main(inp:bv64)  -> () {  }
     captures $global:bv64
   
@@ -80,10 +79,10 @@
        return;
      ]
   ];
+  prog entry @main;
 
   $ cat inter.il
   var $global:bv64;
-  prog entry @main;
   proc @main(inp:bv64)  -> () {  }
     captures $global:bv64
   
@@ -116,9 +115,10 @@
        return;
      ]
   ];
+  prog entry @main;
 
   $ diff inter.il intra.il
-  8,10c8,10
+  7,9c7,9
   <      var a:bv64 := inp;
   <      (var a:bv64=out) := call @fun1(c=a);
   <      (var x:bv64=out) := call @fun1(c=a);
@@ -126,15 +126,15 @@
   >      (var a:bv64 := inp, var b:bv64 := inp);
   >      (var a:bv64=out) := call @fun1(c=a, d=b);
   >      (var x:bv64=out) := call @fun1(c=a, d=b);
-  15c15
+  14c14
   < proc @fun1(c:bv64)  -> (out:bv64) {  }
   ---
   > proc @fun1(c:bv64, d:bv64)  -> (out:bv64) {  }
-  20c20
+  19c19
   <      (var e:bv64=out2) := call @fun2();
   ---
   >      (var e:bv64=out2) := call @fun2(f=d);
-  25c25
+  24c24
   < proc @fun2()  -> (out2:bv64) {  }
   ---
   > proc @fun2(f:bv64)  -> (out2:bv64) {  }

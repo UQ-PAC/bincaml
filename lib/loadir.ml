@@ -1592,10 +1592,10 @@ proc @f (ZF_in:bv1, VF_in:bv1) -> ();
   @@ Containers_pp.Pretty.to_string ~width:80 (Program.prog_pretty ast.prog);
   [%expect
     {|
-    prog entry @f;
     proc @f(VF_in:bv1, ZF_in:bv1)  -> () {  }
 
     ;
+    prog entry @f;
     |}]
 
 let%expect_test "prop type from decl" =
@@ -1624,7 +1624,6 @@ proc @main_4196260 () -> ()
     {|
     var $NF:bv1;
     var $ZF:bv1;
-    prog entry @main_4196260;
     proc @main_4196260()  -> () {  }
       modifies $NF:bv1, $ZF:bv1
       captures $NF:bv1, $ZF:bv1
@@ -1637,6 +1636,7 @@ proc @main_4196260 () -> ()
        ];
        block %main_basil_return_1 [ nop; return; ]
     ];
+    prog entry @main_4196260;
     |}]
 
 let%expect_test "callstuff" =

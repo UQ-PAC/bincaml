@@ -14,7 +14,7 @@ Should output no errors
 Check concat rewrites work
 
   $ diff before.il after.il
-  17,80c17
+  16,79c16
   <      $R28:bv64 := bvor(bvand(bvconcat(extract(1,0, bvlshr(var1_4206396_bv64,
   <          0x1f:bv64)), extract(1,0, bvlshr(var1_4206396_bv64, 0x1f:bv64)),
   <         extract(1,0, bvlshr(var1_4206396_bv64, 0x1f:bv64)),
@@ -81,7 +81,7 @@ Check concat rewrites work
   <         extract(1,0, bvlshr(var1_4206396_bv64, 0x1f:bv64))),
   ---
   >      $R28:bv64 := bvor(bvand(sign_extend(63, extract(32,31, var1_4206396_bv64)),
-  82,83c19
+  81,82c18
   <       bvand(bvor(0x0:bv64, bvand(var1_4206396_bv64, 0xffffffff:bv64)),
   <        0xffffffff:bv64));
   ---

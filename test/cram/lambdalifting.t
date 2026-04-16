@@ -12,17 +12,16 @@ written by @caller.  After the pass:
   (dump-il after_ll.il)
 
   $ diff before_ll.il after_ll.il
-  1,2d0
+  1,5c1,2
   < var $x:bv32;
   < var $y:bv32;
-  4,6c2,3
   < proc @callee()  -> () {  }
   <   modifies $x:bv32
   <   captures $x:bv32, $y:bv32
   ---
   > proc @callee(x_in:bv32, y_in:bv32)  -> (x_out:bv32) {  }
   >   
-  9,10c6,9
+  8,9c5,8
   <    block %entry [ $x:bv32 := bvadd($x, $y); goto (%ret); ];
   <    block %ret [ nop; return; ]
   ---
@@ -30,16 +29,16 @@ written by @caller.  After the pass:
   >    block %entry [ var x:bv32 := bvadd(x, y); goto (%ret); ];
   >    block %ret [ nop; goto (%returns); ];
   >    block %returns [ var x_out:bv32 := x; return; ]
-  12,14c11,12
+  11,13c10,11
   < proc @caller()  -> () {  }
   <   modifies $x:bv32, $y:bv32
   <   captures $x:bv32, $y:bv32
   ---
   > proc @caller(x_in:bv32, y_in:bv32)  -> (x_out:bv32, y_out:bv32) {  }
   >   
-  16a15
+  15a14
   >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
-  18,20c17,19
+  17,19c16,18
   <      $y:bv32 := 0x0:bv32;
   <      $x:bv32 := 0x1:bv32;
   <      call @callee();
@@ -47,7 +46,7 @@ written by @caller.  After the pass:
   >      var y:bv32 := 0x0:bv32;
   >      var x:bv32 := 0x1:bv32;
   >      (var x:bv32=x_out) := call @callee(x_in=x, y_in=y);
-  23c22,23
+  22c21,22
   <    block %ret [ nop; return; ]
   ---
   >    block %ret [ nop; goto (%returns); ];
@@ -69,10 +68,9 @@ all global refs in requires (not just those under Old) become in-params.
   (dump-il after_ll_spec.il)
 
   $ diff before_ll_spec.il after_ll_spec.il
-  1,2d0
+  1,7c1,3
   < var $x:bv32;
   < var $y:bv32;
-  4,8c2,4
   < proc @callee()  -> () {  }
   <   modifies $x:bv32
   <   captures $x:bv32, $y:bv32
@@ -82,7 +80,7 @@ all global refs in requires (not just those under Old) become in-params.
   > proc @callee(x_in:bv32, y_in:bv32)  -> (x_out:bv32) {  }
   >   requires eq(x_in, 0x1:bv32)
   >   ensures eq(x_out, bvadd(x_in, y_in))
-  11,16c7,10
+  10,15c6,9
   <    block %entry [
   <      assert eq($x, old($x));
   <      $x:bv32 := bvadd($x, $y);
@@ -94,16 +92,16 @@ all global refs in requires (not just those under Old) become in-params.
   >    block %entry [ assert eq(x, x_in); var x:bv32 := bvadd(x, y); goto (%ret); ];
   >    block %ret [ nop; goto (%returns); ];
   >    block %returns [ var x_out:bv32 := x; return; ]
-  18,20c12,13
+  17,19c11,12
   < proc @caller()  -> () {  }
   <   modifies $x:bv32, $y:bv32
   <   captures $x:bv32, $y:bv32
   ---
   > proc @caller(x_in:bv32, y_in:bv32)  -> (x_out:bv32, y_out:bv32) {  }
   >   
-  22a16
+  21a15
   >    block %inputs [ (var x:bv32 := x_in, var y:bv32 := y_in); goto (%entry); ];
-  24,26c18,20
+  23,25c17,19
   <      $y:bv32 := 0x0:bv32;
   <      $x:bv32 := 0x1:bv32;
   <      call @callee();
@@ -111,7 +109,7 @@ all global refs in requires (not just those under Old) become in-params.
   >      var y:bv32 := 0x0:bv32;
   >      var x:bv32 := 0x1:bv32;
   >      (var x:bv32=x_out) := call @callee(x_in=x, y_in=y);
-  29c23,24
+  28c22,23
   <    block %ret [ nop; return; ]
   ---
   >    block %ret [ nop; goto (%returns); ];
@@ -135,7 +133,7 @@ and @main_1876 acquires the expected _in parameters.
   no top-level globals
 
   $ head -4 after_ll_real.il
-  prog entry @main_1876;
   proc @main_1876(CF_in:bv1, NF_in:bv1, R0_in:bv64, R1_in:bv64, R29_in:bv64,
      R30_in:bv64, R31_in:bv64, VF_in:bv1, ZF_in:bv1, mem_in:(bv64->bv8),
      stack_in:(bv64->bv8))
+     -> (CF_out:bv1, NF_out:bv1, R0_out:bv64, R1_out:bv64, R29_out:bv64,

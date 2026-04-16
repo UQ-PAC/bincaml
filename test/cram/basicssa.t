@@ -35,6 +35,8 @@ Run on basic irreducible loop example
   (dump-il ssa-multi-after.il)
 
   $ cat before.il
+  var observable $mem:(bv64->bv8);
+  var $stack:(bv64->bv8);
   var $CF:bv1;
   var $NF:bv1;
   var $R0:bv64;
@@ -44,9 +46,6 @@ Run on basic irreducible loop example
   var $R31:bv64;
   var $VF:bv1;
   var $ZF:bv1;
-  var observable $mem:(bv64->bv8);
-  var $stack:(bv64->bv8);
-  prog entry @main_1876;
   proc @main_1876()  -> () { .address = 1876; .name = "main";
       .returnBlock = "main_basil_return_1" }
     modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
@@ -160,11 +159,11 @@ Run on basic irreducible loop example
     captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
       $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
   ;
+  prog entry @main_1876;
 
   $ cat after.il
   var observable $mem:(bv64->bv8);
   var $stack:(bv64->bv8);
-  prog entry @main_1876;
   proc @main_1876(CF_in:bv1, NF_in:bv1, R0_in:bv64, R1_in:bv64, R29_in:bv64,
      R30_in:bv64, R31_in:bv64, VF_in:bv1, ZF_in:bv1)
      -> (CF_out:bv1, NF_out:bv1, R0_out:bv64, R1_out:bv64, R29_out:bv64,
@@ -326,6 +325,7 @@ Run on basic irreducible loop example
     modifies $mem:(bv64->bv8), $stack:(bv64->bv8)
     captures $mem:(bv64->bv8), $stack:(bv64->bv8)
   ;
+  prog entry @main_1876;
 
   $ diff after.il after_reparsed.il
 
@@ -342,18 +342,17 @@ Similar example fixing up  a file already in DSA form
 Multiple loops dependencies of loops etc are handled correctly
 
   $ diff ssa-multi-before.il ssa-multi-after.il
-  1d0
+  1,4c1,2
   < var $R0:bv64;
-  3,5c2,3
   < proc @main()  -> () {  }
   <   modifies $R0:bv64
   <   captures $R0:bv64
   ---
   > proc @main(R0_in:bv64)  -> (R0_out:bv64) {  }
   >   
-  7a6
+  6a5
   >    block %inputs [ var R0_1:bv64 := R0_in; goto (%e); ];
-  9,12c8,16
+  8,11c7,15
   <    block %e1 [ $R0:bv64 := 0x1:bv64; goto (%e2); ];
   <    block %e2 [ goto (%e4,%e1); ];
   <    block %e3 [ $R0:bv64 := 0x3:bv64; goto (%e4,%e1); ];

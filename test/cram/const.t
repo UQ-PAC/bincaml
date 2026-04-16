@@ -6,7 +6,7 @@
   (dump-il after.il)
 
   $ diff before.il after.il
-  8,9c8,9
+  7,8c7,8
   <      (var y_1:bv64=out) := call @f(inp=x_1);
   <      var out:bv64 := bvadd(x_1, y_1);
   ---
