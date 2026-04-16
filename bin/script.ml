@@ -155,7 +155,7 @@ let of_cmd st (e : Containers.Sexp.t) =
             | _ -> failwith "unreachable"
           in
           CCIO.with_out ofile (fun c ->
-              let id =
+              let p =
                 try Program.get_proc_by_name proc (get_prog st)
                 with Not_found ->
                   begin
@@ -173,8 +173,7 @@ let of_cmd st (e : Containers.Sexp.t) =
                   end
               in
               Viscfg.Dot.output_graph c
-                (Procedure.graph id
-                |> Option.get_exn_or "procedure has no graph"));
+                (Procedure.graph p |> Option.get_exn_or "procedure has no graph"));
           st
       | "dump-proc-il" ->
           let proc = List.hd (assert_n_atoms 1 args) in

@@ -1212,6 +1212,7 @@ module BasilASTLoader = struct
     | BinOpIntBinOp intbinop -> transIntBinOp intbinop
     | BinOpEqOp equop -> transEqOp equop
     | BinOpPointerBinOp pointerBinOp -> transPointerBinOp pointerBinOp
+    | BinOp_implies -> `IMPLIES
 
   and transUnOp (x : BasilIR.AbsBasilIR.unOp) =
     match x with

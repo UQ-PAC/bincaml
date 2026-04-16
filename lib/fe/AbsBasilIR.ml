@@ -237,7 +237,8 @@ and lambdaDef =
    LambdaDef1 of localVarParen list * lambdaSep * expr
 
 and binOp =
-   BinOpBVBinOp of bVBinOp
+   BinOp_implies
+ | BinOpBVBinOp of bVBinOp
  | BinOpBVLogicalBinOp of bVLogicalBinOp
  | BinOpIntLogicalBinOp of intLogicalBinOp
  | BinOpIntBinOp of intBinOp

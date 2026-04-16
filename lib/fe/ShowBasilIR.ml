@@ -321,7 +321,8 @@ and showLambdaDef (e : AbsBasilIR.lambdaDef) : showable = match e with
 
 
 and showBinOp (e : AbsBasilIR.binOp) : showable = match e with
-       AbsBasilIR.BinOpBVBinOp bvbinop -> s2s "BinOpBVBinOp" >> c2s ' ' >> c2s '(' >> showBVBinOp bvbinop >> c2s ')'
+       AbsBasilIR.BinOp_implies  -> s2s "BinOp_implies"
+  |    AbsBasilIR.BinOpBVBinOp bvbinop -> s2s "BinOpBVBinOp" >> c2s ' ' >> c2s '(' >> showBVBinOp bvbinop >> c2s ')'
   |    AbsBasilIR.BinOpBVLogicalBinOp bvlogicalbinop -> s2s "BinOpBVLogicalBinOp" >> c2s ' ' >> c2s '(' >> showBVLogicalBinOp bvlogicalbinop >> c2s ')'
   |    AbsBasilIR.BinOpIntLogicalBinOp intlogicalbinop -> s2s "BinOpIntLogicalBinOp" >> c2s ' ' >> c2s '(' >> showIntLogicalBinOp intlogicalbinop >> c2s ')'
   |    AbsBasilIR.BinOpIntBinOp intbinop -> s2s "BinOpIntBinOp" >> c2s ' ' >> c2s '(' >> showIntBinOp intbinop >> c2s ')'

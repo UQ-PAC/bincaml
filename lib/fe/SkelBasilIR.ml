@@ -344,7 +344,8 @@ and transLambdaDef (x : lambdaDef) : result = match x with
 
 
 and transBinOp (x : binOp) : result = match x with
-    BinOpBVBinOp bvbinop -> failure x
+    BinOp_implies  -> failure x
+  | BinOpBVBinOp bvbinop -> failure x
   | BinOpBVLogicalBinOp bvlogicalbinop -> failure x
   | BinOpIntLogicalBinOp intlogicalbinop -> failure x
   | BinOpIntBinOp intbinop -> failure x

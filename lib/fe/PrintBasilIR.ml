@@ -469,7 +469,8 @@ and prtLambdaDef (i:int) (e : AbsBasilIR.lambdaDef) : doc = match e with
 
 
 and prtBinOp (i:int) (e : AbsBasilIR.binOp) : doc = match e with
-       AbsBasilIR.BinOpBVBinOp bvbinop -> prPrec i 0 (concatD [prtBVBinOp 0 bvbinop])
+       AbsBasilIR.BinOp_implies  -> prPrec i 0 (concatD [render "implies"])
+  |    AbsBasilIR.BinOpBVBinOp bvbinop -> prPrec i 0 (concatD [prtBVBinOp 0 bvbinop])
   |    AbsBasilIR.BinOpBVLogicalBinOp bvlogicalbinop -> prPrec i 0 (concatD [prtBVLogicalBinOp 0 bvlogicalbinop])
   |    AbsBasilIR.BinOpIntLogicalBinOp intlogicalbinop -> prPrec i 0 (concatD [prtIntLogicalBinOp 0 intlogicalbinop])
   |    AbsBasilIR.BinOpIntBinOp intbinop -> prPrec i 0 (concatD [prtIntBinOp 0 intbinop])

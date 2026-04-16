@@ -572,6 +572,8 @@ module.exports = ({
       seq(optional($.list_LocalVarParen), $.LambdaSep, $.Expr),
     BinOp: $ =>
       choice(
+        // BinOp_implies. BinOp ::= "implies" ;
+        "implies",
         // BinOpBVBinOp. BinOp ::= BVBinOp ;
         $.BVBinOp,
         // BinOpBVLogicalBinOp. BinOp ::= BVLogicalBinOp ;
