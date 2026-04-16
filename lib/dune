@@ -16,7 +16,8 @@
   iter
   logs
   mtime
-  trace.core))
+  trace.core
+  str))
 
 ; (library
 ;  (public_name bincaml.backends)

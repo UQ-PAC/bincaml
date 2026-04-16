@@ -74,14 +74,14 @@ let set_modsets ?(add_only = false) prog =
         List.to_iter [ spec.requires; spec.ensures; spec.rely; spec.guarantee ]
         |> Iter.flat_map List.to_iter
         |> Iter.flat_map Expr.BasilExpr.free_vars_iter
-        |> VarSet.of_iter
+        |> Iter.filter Var.is_global |> VarSet.of_iter
       in
       let captures_globs =
-        VarSet.union vs
+        List.filter (not % Var.is_constant)
+        @@ VarSet.elements @@ VarSet.union vs
         @@ VarSet.union exist_captures
         @@ VarSet.union read written
       in
-      let captures_globs = captures_globs |> VarSet.elements in
       let modifies_globs =
         VarSet.elements @@ VarSet.union exist_modifies written
       in

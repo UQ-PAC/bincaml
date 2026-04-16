@@ -4,12 +4,23 @@ open Lang.Expr
 open Ops
 open Memory_encoding
 
-(* TODO: Support simplify, have this produce _out vars appropriately? *)
 let old e = BasilExpr.unexp ~op:`Old e
 
 let r n =
   BasilExpr.rvar
     (Var.create ~scope:Var.GlobalVar (Printf.sprintf "$R%d" n)
+       (Types.Bitvector 64))
+
+let r_in n =
+  BasilExpr.rvar
+    (Var.create ~scope:Var.LocalVar
+       (Printf.sprintf "R%d_in" n)
+       (Types.Bitvector 64))
+
+let r_out n =
+  BasilExpr.rvar
+    (Var.create ~scope:Var.LocalVar
+       (Printf.sprintf "R%d_out" n)
        (Types.Bitvector 64))
 
 let transform_main p =
@@ -22,6 +33,7 @@ let transform_main p =
         spec.requires
         @ [ Calls.init_encoding [ BasilExpr.rvar Globals.mem_encoding ] ];
       modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
+      captures_globs = spec.captures_globs @ [ Globals.mem_encoding ];
     }
 
 let transform_malloc p =
@@ -36,26 +48,27 @@ let transform_malloc p =
         @ [
             (* Can allocate at new r0 with size old r0 *)
             Calls.can_alloc
-              [ old @@ rvar Globals.mem_encoding; r 0; old @@ r 0 ];
+              [ old @@ rvar Globals.mem_encoding; r_out 0; r_in 0 ];
             (* Offset of return address r0 is 0 *)
             binexp ~op:`EQ
-              (Calls.addr_offset [ rvar Globals.mem_encoding; r 0 ])
+              (Calls.addr_offset [ rvar Globals.mem_encoding; r_out 0 ])
               (bv_of_int ~size:64 0);
             (* Base of associated allocation is r(0) *)
             binexp ~op:`EQ
               (Calls.alloc_base
                  [
                    rvar Globals.mem_encoding;
-                   Calls.addr_alloc [ rvar Globals.mem_encoding; r 0 ];
+                   Calls.addr_alloc [ rvar Globals.mem_encoding; r_out 0 ];
                  ])
-              (r 0);
+              (r_out 0);
             (* Update the memory encoding: *)
             binexp ~op:`EQ
               (rvar Globals.mem_encoding)
               (Calls.allocate
-                 [ old @@ rvar Globals.mem_encoding; r 0; old @@ r 0 ]);
+                 [ old @@ rvar Globals.mem_encoding; r_out 0; r_in 0 ]);
           ];
       modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
+      captures_globs = spec.captures_globs @ [ Globals.mem_encoding ];
     }
 
 let transform_free p =
@@ -69,16 +82,16 @@ let transform_free p =
         spec.requires
         @ [
             (* Only free heap values *)
-            Calls.addr_is_heap [ rvar Globals.mem_encoding; r 0 ];
+            Calls.addr_is_heap [ rvar Globals.mem_encoding; r_in 0 ];
             (* Only free if offset is 0 *)
             binexp ~op:`EQ (bv_of_int ~size:64 0)
-              (Calls.addr_offset [ rvar Globals.mem_encoding; r 0 ]);
+              (Calls.addr_offset [ rvar Globals.mem_encoding; r_in 0 ]);
             (* The object must be live to free *)
             binexp ~op:`EQ
               (Calls.alloc_live
                  [
                    rvar Globals.mem_encoding;
-                   Calls.addr_alloc [ rvar Globals.mem_encoding; r 0 ];
+                   Calls.addr_alloc [ rvar Globals.mem_encoding; r_in 0 ];
                  ])
               (bvconst live);
           ];
@@ -90,31 +103,17 @@ let transform_free p =
               (Calls.alloc_live_update
                  [
                    old @@ rvar Globals.mem_encoding;
-                   Calls.addr_alloc [ old @@ rvar Globals.mem_encoding; r 0 ];
+                   Calls.addr_alloc [ old @@ rvar Globals.mem_encoding; r_in 0 ];
                    BasilExpr.bvconst dead;
                  ]);
           ];
       modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
+      captures_globs = spec.captures_globs @ [ Globals.mem_encoding ];
     }
 
 let transform_stmt (s : Program.stmt) =
   (match s with
-    | Stmt.Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } }
-      -> (
-        let valid_assert =
-          Stmt.Instr_Assert
-            {
-              body =
-                BasilExpr.(
-                  Calls.valid_access
-                    [
-                      rvar Globals.mem_encoding;
-                      addr;
-                      bv_of_int ~size:64 (size / 8);
-                    ]);
-            }
-        in
-        match Var.name rhs with "$mem" -> [ valid_assert; s ] | _ -> [ s ])
+    | Stmt.Instr_Store { lhs; rhs; addr = Addr { addr; size; endian } }
     | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } -> (
         let valid_assert =
           Stmt.Instr_Assert

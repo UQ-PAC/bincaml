@@ -22,7 +22,7 @@ module Calls = struct
     apply_fun
       ~func:
         (rvar
-           (Var.create "$me_addr_is_heap" ~scope:Var.GlobalVar Types.Boolean))
+           (Var.create "$me_addr_is_heap" ~scope:Var.GlobalConst Types.Boolean))
       args
 
   (** [alloc_base args] returns the base address of a supplied allocation id.
@@ -31,7 +31,7 @@ module Calls = struct
     apply_fun
       ~func:
         (rvar
-           (Var.create "$me_alloc_base" ~scope:Var.GlobalVar
+           (Var.create "$me_alloc_base" ~scope:Var.GlobalConst
               (Types.Bitvector 64)))
       args
 
@@ -42,7 +42,8 @@ module Calls = struct
     apply_fun
       ~func:
         (rvar
-           (Var.create "$me_alloc_live" ~scope:Var.GlobalVar (Types.Bitvector 2)))
+           (Var.create "$me_alloc_live" ~scope:Var.GlobalConst
+              (Types.Bitvector 2)))
       args
 
   (** [alloc_size args] returns the size of an allocation. args(0) is the memory
@@ -51,7 +52,7 @@ module Calls = struct
     apply_fun
       ~func:
         (rvar
-           (Var.create "$me_alloc_size" ~scope:Var.GlobalVar
+           (Var.create "$me_alloc_size" ~scope:Var.GlobalConst
               (Types.Bitvector 64)))
       args
 
@@ -61,9 +62,11 @@ module Calls = struct
     apply_fun
       ~func:
         (rvar
-           (Var.create "$me_addr_alloc" ~scope:Var.GlobalVar
+           (Var.create "$me_addr_alloc" ~scope:Var.GlobalConst
               (Types.Bitvector 64)))
       args
+
+  (* (Types.curry [Types.Bitvector 64; Types.Bitvector 64; Types.Variable "MemEncoding";] Types.Boolean))) *)
 
   (** [addr_offset args] returns the offset an address is into its allocation.
       args(0) is the memory encoding object. args(1) is the address. *)
@@ -71,7 +74,7 @@ module Calls = struct
     apply_fun
       ~func:
         (rvar
-           (Var.create "$me_addr_offset" ~scope:Var.GlobalVar
+           (Var.create "$me_addr_offset" ~scope:Var.GlobalConst
               (Types.Bitvector 64)))
       args
 
@@ -82,7 +85,7 @@ module Calls = struct
     apply_fun
       ~func:
         (rvar
-           (Var.create "$me_alloc_size_update" ~scope:Var.GlobalVar
+           (Var.create "$me_alloc_size_update" ~scope:Var.GlobalConst
               (Types.Variable "MemEncoding")))
       args
 
@@ -93,7 +96,7 @@ module Calls = struct
     apply_fun
       ~func:
         (rvar
-           (Var.create "$me_alloc_live_update" ~scope:Var.GlobalVar
+           (Var.create "$me_alloc_live_update" ~scope:Var.GlobalConst
               (Types.Variable "MemEncoding")))
       args
 
@@ -104,7 +107,7 @@ module Calls = struct
     apply_fun
       ~func:
         (rvar
-           (Var.create "$me_allocate" ~scope:Var.GlobalVar
+           (Var.create "$me_allocate" ~scope:Var.GlobalConst
               (Types.Variable "MemEncoding")))
       args
 
@@ -115,7 +118,7 @@ module Calls = struct
     apply_fun
       ~func:
         (rvar
-           (Var.create "$me_can_allocate" ~scope:Var.GlobalVar Types.Boolean))
+           (Var.create "$me_can_allocate" ~scope:Var.GlobalConst Types.Boolean))
       args
 
   (** [init_encoding args] Returns if a memory encoding is initialized. args(0)
@@ -124,7 +127,7 @@ module Calls = struct
     apply_fun
       ~func:
         (rvar
-           (Var.create "$me_init_encoding" ~scope:Var.GlobalVar Types.Boolean))
+           (Var.create "$me_init_encoding" ~scope:Var.GlobalConst Types.Boolean))
       args
 
   (** [valid_access args] Checks if an access is valid. args(0) is the memory
@@ -134,7 +137,7 @@ module Calls = struct
     apply_fun
       ~func:
         (rvar
-           (Var.create "$me_valid_access" ~scope:Var.GlobalVar Types.Boolean))
+           (Var.create "$me_valid_access" ~scope:Var.GlobalConst Types.Boolean))
       args
 end
 
