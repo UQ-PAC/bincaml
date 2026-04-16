@@ -7,15 +7,15 @@
   (run-transforms type-inference)
   (dump-il after-type-inference-loops.il)
   $ cat after-type-inference-loops.il
-  type rec1017972628 of {"field0": (bv64, 0)} 64;
-  type rec108259554 of {"field-16": (bv64, -16)} 64;
-  type rec124838810 of {"field-32": (bv64, -32)} 64;
-  type rec210884686 of {"field131132": (bv32, 131132)} 32;
-  type rec317173895 of {"field8": (bv64, 8)} 64;
-  type rec442847055 of {"field-24": (bv64, -24)} 64;
-  type rec475212457 of {"field0": (bv32, 0)} 64;
-  type rec627472003 of {"field131136": (bv32, 131136)} 32;
-  type rec918136015 of {"field-4": (bv32, -4)} 32;
+  type rec1033252285 of {"field-24": (bv64, -24)} 64;
+  type rec151711918 of {"field-32": (bv64, -32)} 64;
+  type rec199532115 of {"field-16": (bv64, -16)} 64;
+  type rec405619338 of {"field131136": (bv32, 131136)} 32;
+  type rec429227263 of {"field0": (bv32, 0)} 64;
+  type rec592675771 of {"field8": (bv64, 8)} 64;
+  type rec830635702 of {"field-4": (bv32, -4)} 32;
+  type rec847980916 of {"field131132": (bv32, 131132)} 32;
+  type rec944453953 of {"field0": (bv64, 0)} 64;
   var observable $mem:(bv64->bv8);
   var $stack:(bv64->bv8);
   prog entry @main_1876;
@@ -29,7 +29,7 @@
   [
      block %inputs [ goto (%main_entry); ];
      block %main_entry [
-       var #4_1:ptr(rec124838810 of {"field-32": (bv64, -32)} 64, ⊤) := bvadd(R31_in,
+       var #4_1:ptr(rec151711918 of {"field-32": (bv64, -32)} 64, ⊤) := bvadd(R31_in,
         0xffffffffffffffe0:bv64);
        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) #4_1 R29_in 64;
        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) ptradd(#4_1, 0x8:bv64) R30_in 64;
@@ -38,7 +38,7 @@
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x2003c:bv64 0x0:bv32 32;
        var load18_1:bv32 := load le $mem:(bv64->bv8) 0x20040:bv64 32;
        var R0_6:bv64 := zero_extend(32, load18_1);
-       var R0_7:rec475212457 of {"field0": (bv32, 0)} 64 := zero_extend(32,
+       var R0_7:rec429227263 of {"field0": (bv32, 0)} 64 := zero_extend(32,
        bvconcat(0x0:bv31, extract(1,0, R0_6)));
        var #5_1:bv32 := bvadd(R0_7.field0, 0xffffffff:bv32);
        var VF_2:bv1 := bvnot(booltobv1(eq(sign_extend(1, bvadd(#5_1, 0x1:bv32)),
@@ -63,9 +63,9 @@
        var CF_6:bv1 := phi(%main_25 -> CF_2:bv1, %main_7 -> CF_5:bv1),
        var NF_6:bv1 := phi(%main_25 -> NF_2:bv1, %main_7 -> NF_5:bv1),
        var R1_4:bv64 := phi(%main_25 -> R1_in:bv64, %main_7 -> R1_3:bv64),
-       var R29_5:ptr(rec124838810 of {"field-32": (bv64, -32)} 64, ⊤) := phi(%main_25 -> #4_1:ptr(rec124838810 of {"field-32": (bv64, -32)} 64, ⊤),
+       var R29_5:ptr(rec151711918 of {"field-32": (bv64, -32)} 64, ⊤) := phi(%main_25 -> #4_1:ptr(rec151711918 of {"field-32": (bv64, -32)} 64, ⊤),
           %main_7 -> R29_4:bv64),
-       var R31_5:ptr(rec124838810 of {"field-32": (bv64, -32)} 64, ⊤) := phi(%main_25 -> #4_1:ptr(rec124838810 of {"field-32": (bv64, -32)} 64, ⊤),
+       var R31_5:ptr(rec151711918 of {"field-32": (bv64, -32)} 64, ⊤) := phi(%main_25 -> #4_1:ptr(rec151711918 of {"field-32": (bv64, -32)} 64, ⊤),
           %main_7 -> R31_4:bv64),
        var VF_6:bv1 := phi(%main_25 -> VF_2:bv1, %main_7 -> VF_5:bv1),
        var ZF_9:bv1 := phi(%main_25 -> ZF_2:bv1, %main_7 -> ZF_7:bv1)
@@ -88,10 +88,10 @@
        var CF_3:bv1 := phi(%main_3 -> CF_7:bv1, %main_21 -> CF_2:bv1),
        var NF_3:bv1 := phi(%main_3 -> NF_7:bv1, %main_21 -> NF_2:bv1),
        var R1_2:bv64 := phi(%main_3 -> R1_6:bv64, %main_21 -> R1_in:bv64),
-       var R29_3:ptr(rec124838810 of {"field-32": (bv64, -32)} 64, ⊤) := phi(%main_3 -> R29_6:bv64,
-          %main_21 -> #4_1:ptr(rec124838810 of {"field-32": (bv64, -32)} 64, ⊤)),
-       var R31_3:ptr(rec124838810 of {"field-32": (bv64, -32)} 64, ⊤) := phi(%main_3 -> R31_6:bv64,
-          %main_21 -> #4_1:ptr(rec124838810 of {"field-32": (bv64, -32)} 64, ⊤)),
+       var R29_3:ptr(rec151711918 of {"field-32": (bv64, -32)} 64, ⊤) := phi(%main_3 -> R29_6:bv64,
+          %main_21 -> #4_1:ptr(rec151711918 of {"field-32": (bv64, -32)} 64, ⊤)),
+       var R31_3:ptr(rec151711918 of {"field-32": (bv64, -32)} 64, ⊤) := phi(%main_3 -> R31_6:bv64,
+          %main_21 -> #4_1:ptr(rec151711918 of {"field-32": (bv64, -32)} 64, ⊤)),
        var VF_3:bv1 := phi(%main_3 -> VF_7:bv1, %main_21 -> VF_2:bv1),
        var ZF_5:bv1 := phi(%main_3 -> ZF_10:bv1, %main_21 -> ZF_2:bv1)
      ) [
@@ -123,7 +123,7 @@
        guard eq(bvnot(booltobv1(eq(ZF_7, 0x1:bv1))), 0x0:bv1);
        (var CF_8:bv1=CF_out, var NF_8:bv1=NF_out, var R0_24:bv64=R0_out,
           var R1_7:bv64=R1_out, var R29_7:bv64=R29_out, var R30_7:bv64=R30_out,
-          var R31_7:ptr(rec1017972628 of {"field0": (bv64, 0)} 64, rec1017972628 of {"field0": (bv64, 0)} 64)=R31_out,
+          var R31_7:ptr(rec944453953 of {"field0": (bv64, 0)} 64, rec944453953 of {"field0": (bv64, 0)} 64)=R31_out,
           var VF_8:bv1=VF_out, var ZF_12:bv1=ZF_out) := call @puts_1584(CF_in=CF_5,
           NF_in=NF_5, R0_in=0x828:bv64, R1_in=R1_3, R29_in=R29_4, R30_in=0x7f4:bv64,
           R31_in=R31_4, VF_in=VF_5, ZF_in=ZF_7);
@@ -146,8 +146,8 @@
      ]
   ];
   proc @puts_1584(CF_in:bv1, NF_in:bv1, R0_in:bv64, R1_in:bv64,
-     R29_in:ptr(rec124838810 of {"field-32": (bv64, -32)} 64, ⊤), R30_in:bv64,
-     R31_in:ptr(rec124838810 of {"field-32": (bv64, -32)} 64, ⊤), VF_in:bv1,
+     R29_in:ptr(rec151711918 of {"field-32": (bv64, -32)} 64, ⊤), R30_in:bv64,
+     R31_in:ptr(rec151711918 of {"field-32": (bv64, -32)} 64, ⊤), VF_in:bv1,
      ZF_in:bv1)
      -> (CF_out:bv1, NF_out:bv1, R0_out:bv64, R1_out:bv64, R29_out:bv64,
      R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1) { .address = 1584;

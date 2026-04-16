@@ -12,7 +12,7 @@ let%test_unit "Add bounds" =
   let st = add_ub st (VarId.make_id "c") Top in
   let st = add_lb st (VarId.make_id "c") Bottom in
   let st = add_lb st (VarId.make_id "d") @@ TypeVar (VarId.make_id "e") in
-  let st = add_ub st (VarId.make_id "d") @@ BinCamlType BinCaml_Bool in
+  let st = add_ub st (VarId.make_id "d") @@ Bool in
 
   let ls =
     [
@@ -21,7 +21,7 @@ let%test_unit "Add bounds" =
       ( VarId.make_id "d",
         {
           lb = TySet.singleton @@ TypeVar (VarId.make_id "e");
-          ub = TySet.singleton @@ BinCamlType BinCaml_Bool;
+          ub = TySet.singleton @@ Bool;
         } );
     ]
   in
@@ -105,24 +105,15 @@ proc @main_4196260 () -> ()
   let ls =
     [
       ( VarId.make_id "$XF",
-        {
-          lb =
-            TySet.of_list
-              [ BinCamlType BinCaml_Bool; BinCamlType (BinCaml_BV 1) ];
-          ub = TySet.empty;
-        } );
+        { lb = TySet.of_list [ Bool; BV 1 ]; ub = TySet.empty } );
       ( VarId.make_id "$YF",
         {
-          lb =
-            TySet.of_list
-              [ BinCamlType BinCaml_Bool; BinCamlType (BinCaml_BV 1) ];
+          lb = TySet.of_list [ Bool; BV 1 ];
           ub = TySet.singleton @@ TypeVar (VarId.make_id "$XF");
         } );
       ( VarId.make_id "$ZF",
         {
-          lb =
-            TySet.of_list
-              [ BinCamlType BinCaml_Bool; BinCamlType (BinCaml_BV 1) ];
+          lb = TySet.of_list [ Bool; BV 1 ];
           ub = TySet.singleton @@ TypeVar (VarId.make_id "$YF");
         } );
     ]
@@ -181,7 +172,7 @@ let%test_unit "BinSub type ADT" =
   let f = TypeVar (VarId.make_id "f") in
   let t1 = TypeVar (VarId.make_id "t1") in
   let t2 = TypeVar (VarId.make_id "t2") in
-  let int32 = BinCamlType (BinCaml_BV 32) in
+  let int32 = BV 32 in
 
   let fields1 =
     { offset = Z.of_int 4; size = 4; ty = Sect (b, Sect (t1, TypeVar alpha)) }
@@ -213,21 +204,14 @@ let%test_unit "BinSub type ADT" =
     Pointer
       ( Record
           ( ZMap.singleton Z.zero
-              {
-                offset = Z.zero;
-                size = 4;
-                ty = Union (e, BinCamlType (BinCaml_BV 32));
-              },
+              { offset = Z.zero; size = 4; ty = Union (e, BV 32) },
             8 ),
         Record
           ( ZMap.of_list
               [
                 ( Z.zero,
-                  {
-                    offset = Z.zero;
-                    size = 4;
-                    ty = Sect (d, Sect (t2, BinCamlType (BinCaml_BV 32)));
-                  } );
+                  { offset = Z.zero; size = 4; ty = Sect (d, Sect (t2, BV 32)) }
+                );
                 ( Z.of_int 4,
                   {
                     offset = Z.of_int 4;

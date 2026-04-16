@@ -74,26 +74,6 @@ end
 
 module VarIdMap = Map.Make (VarId)
 
-module BinCamlType = struct
-  type t = BinCaml_Int | BinCaml_BV of int | BinCaml_Bool [@@deriving ord, eq]
-
-  let show = function
-    | BinCaml_Int -> "int"
-    | BinCaml_BV size -> "bv" ^ string_of_int size
-    | BinCaml_Bool -> "bool"
-
-  let bincaml_type_to_type : t -> Types.t = function
-    | BinCaml_Int -> Types.Integer
-    | BinCaml_BV sz -> Types.Bitvector sz
-    | BinCaml_Bool -> Types.Boolean
-
-  let type_to_bincaml_type : Types.t -> t = function
-    | Types.Integer -> BinCaml_Int
-    | Types.Bitvector s -> BinCaml_BV s
-    | Types.Boolean -> BinCaml_Bool
-    | _ -> failwith "no BinCamlType"
-end
-
 module InferredType = struct
   type t =
     | Top
@@ -108,7 +88,9 @@ module InferredType = struct
     | Record of field ZMap.t * int (* A list of fields in the record *)
     | TypeVar of VarId.t
     | Recursive of VarId.t * t
-    | BinCamlType of BinCamlType.t
+    | BV of int
+    | Int
+    | Bool
   [@@deriving eq, ord]
 
   and field = { offset : Z.t; size : int; ty : t } [@@deriving eq, ord]
@@ -116,7 +98,9 @@ module InferredType = struct
   let rec show = function
     | Top -> "⊤"
     | Bottom -> "⊥"
-    | BinCamlType c -> BinCamlType.show c
+    | Int -> "int"
+    | BV size -> "bv" ^ string_of_int size
+    | Bool -> "bool"
     | TypeVar id -> Printf.sprintf "%s" @@ VarId.show id
     | Recursive (t1, t2) -> Printf.sprintf "μ%s.%s" (VarId.show t1) (show t2)
     | Union (t1, t2) -> Printf.sprintf "%s ⊔ %s" (show t1) (show t2)
@@ -138,7 +122,7 @@ module InferredType = struct
   let rec iter f (ty : t) =
     f ty;
     match ty with
-    | Top | Bottom | BinCamlType _ | TypeVar _ | Recursive _ -> ()
+    | Top | Bottom | BV _ | Int | Bool | TypeVar _ | Recursive _ -> ()
     | Union (a, b) | Sect (a, b) ->
         iter f b;
         iter f a
@@ -241,7 +225,9 @@ module InferredType = struct
           if List.exists (fun (var, _) -> VarId.equal var a) recursives then
             Types.Variable (VarId.show a)
           else Top )
-    | BinCamlType a -> (recursives, BinCamlType.bincaml_type_to_type a)
+    | Int -> (recursives, Types.Integer)
+    | BV sz -> (recursives, Types.Bitvector sz)
+    | Bool -> (recursives, Types.Boolean)
     | Pointer (Top, Top) ->
         (recursives, Types.Pointer { lower = Top; upper = Top })
     | Pointer (lower, upper) ->
@@ -278,9 +264,9 @@ module InferredType = struct
     | Pointer { lower; upper } ->
         Pointer (type_to_inferred lower, type_to_inferred upper)
     | Struct { name; fields; size } -> failwith "TODO"
-    | Bitvector bv -> BinCamlType (BinCaml_BV bv)
-    | Boolean -> BinCamlType BinCaml_Bool
-    | Integer -> BinCamlType BinCaml_Int
+    | Bitvector bv -> BV bv
+    | Boolean -> Bool
+    | Integer -> Int
     | Unit | Map _ | Sort _ -> failwith "No inferred type mapping"
 end
 
@@ -593,7 +579,7 @@ module TypeAutomata = struct
     let rec grab_edges (ty : InferredType.t) p :
         (Polarity.t * InferredType.t) list * (Sigma.t * State.t) list =
       match ty with
-      | Top | BinCamlType _ | TypeVar _ | Bottom -> ([], [])
+      | Top | BV _ | Bool | Int | TypeVar _ | Bottom -> ([], [])
       | Recursive (a, ty) ->
           (*
               WARN: IDK
@@ -632,7 +618,7 @@ module TypeAutomata = struct
     let rec type_to_state_list p (ty : InferredType.t) ((ls, tbl) as acc) =
       let open Sigma in
       match ty with
-      | Top | BinCamlType _ | TypeVar _ | Bottom -> ((p, ty) :: ls, tbl)
+      | Top | BV _ | Bool | Int | TypeVar _ | Bottom -> ((p, ty) :: ls, tbl)
       | Recursive (id, typ) ->
           (*
             NOTE: I think it is easiest to deal with recursives with type decls
@@ -901,7 +887,7 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
                Field had no constraints on it,
                 it could just be a bitvector of size size
               *)
-              | a -> { size; offset; ty = BinCamlType (BinCaml_BV size) })
+              | a -> { size; offset; ty = BV size })
             fields,
           size )
   | Pointer (a, b) ->
@@ -939,7 +925,7 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
               bounds tau
           in
           if rec_check then Recursive (a, s) else s)
-  | BinCamlType _ -> tau
+  | BV _ | Bool | Int -> tau
   | _ -> Top
 
 (*
@@ -962,6 +948,7 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
 let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
     (type1 : InferredType.t) : ConstraintState.t =
   match (type0, type1) with
+  | _, _ when InferredType.equal type0 type1 -> st
   | Pointer (type0_a, type0_b), Pointer (type1_a, type1_b) ->
       constrain (constrain st type1_a type0_a) type0_b type1_b
   | TypeVar a, TypeVar b -> (
@@ -987,12 +974,11 @@ let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
             TySet.to_iter ub
             |> Iter.fold (fun st bound -> constrain st type0 bound) st
         | None -> st)
-  | BinCamlType a, BinCamlType b when BinCamlType.equal a b -> st
-  | BinCamlType a, BinCamlType b ->
+  | (BV _ | Int | Bool), (BV _ | Int | Bool) ->
       failwith
-        (Printf.sprintf "Attempted to constrain to disjoint bincamltypes: %s %s"
-           (BinCamlType.show a) (BinCamlType.show b))
-  | _, BinCamlType b -> st
+        (Printf.sprintf "Attempted to constrain to disjoint atom types: %s %s"
+           (InferredType.show type0) (InferredType.show type1))
+  | _, (BV _ | Int | Bool) -> st
   | _ ->
       failwith
       @@ Printf.sprintf "Illegal types at this stage: %s %s"
@@ -1018,9 +1004,9 @@ let rec constrain_expr proc (st : ConstraintState.t)
   | RVar { id } ->
       let typ =
         match Var.typ id with
-        | Integer -> BinCamlType BinCaml_Int
-        | Boolean -> BinCamlType BinCaml_Bool
-        | Bitvector sz -> BinCamlType (BinCaml_BV sz)
+        | Integer -> Int
+        | Boolean -> Bool
+        | Bitvector sz -> BV sz
         | _ -> failwith "Illegal variable type"
       in
       ( constrain_arg proc st (BasilExpr.fix expr) typ,
@@ -1028,9 +1014,9 @@ let rec constrain_expr proc (st : ConstraintState.t)
   | Constant { const } ->
       ( st,
         match const with
-        | `Bool _ -> BinCamlType BinCaml_Bool
-        | `Bitvector bv -> BinCamlType (BinCaml_BV (Bitvec.size bv))
-        | `Integer _ -> BinCamlType BinCaml_Int
+        | `Bool _ -> Bool
+        | `Bitvector bv -> BV (Bitvec.size bv)
+        | `Integer _ -> Int
         | `Record (_, typ) -> InferredType.type_to_inferred typ
         | `Pointer (bv, { lower; upper }) ->
             InferredType.Pointer
@@ -1044,19 +1030,13 @@ let rec constrain_expr proc (st : ConstraintState.t)
             Types.struct_field offset (BasilExpr.type_of a)
           in
           (st, type_to_inferred typ)
-      | `BoolNOT ->
-          ( constrain_arg proc st a @@ BinCamlType BinCaml_Bool,
-            BinCamlType BinCaml_Bool )
-      | `BOOLTOBV1 ->
-          ( constrain_arg proc st a @@ BinCamlType BinCaml_Bool,
-            BinCamlType (BinCaml_BV 1) )
-      | `INTNEG ->
-          ( constrain_arg proc st a @@ BinCamlType BinCaml_Int,
-            BinCamlType BinCaml_Int )
+      | `BoolNOT -> (constrain_arg proc st a @@ Bool, Bool)
+      | `BOOLTOBV1 -> (constrain_arg proc st a @@ Bool, BV 1)
+      | `INTNEG -> (constrain_arg proc st a @@ Int, Int)
       | `BVNEG | `BVNOT ->
           let typ =
             match BasilExpr.type_of a with
-            | Bitvector size -> BinCamlType (BinCaml_BV size)
+            | Bitvector size -> BV size
             | _ -> failwith "Bitvector operation without bitvector arguments"
           in
           (constrain_arg proc st a @@ typ, typ)
@@ -1066,8 +1046,7 @@ let rec constrain_expr proc (st : ConstraintState.t)
             | Bitvector size -> size
             | _ -> failwith "Bitvector operation without bitvector arguments"
           in
-          ( constrain_arg proc st a @@ BinCamlType (BinCaml_BV size),
-            BinCamlType (BinCaml_BV (size + b)) )
+          (constrain_arg proc st a @@ BV size, BV (size + b))
       | `Old -> (st, Top)
       | `Gamma -> (st, Top)
       | `Classification -> (st, Top)
@@ -1084,9 +1063,7 @@ let rec constrain_expr proc (st : ConstraintState.t)
           in
           let ty = TypeVar name in
           let field = { offset = Z.of_int rt; size; ty } in
-          let st =
-            ConstraintState.add_lb st name (BinCamlType (BinCaml_BV size))
-          in
+          let st = ConstraintState.add_lb st name (BV size) in
           let size =
             match BasilExpr.type_of a with
             | Bitvector sz -> sz
@@ -1111,8 +1088,8 @@ let rec constrain_expr proc (st : ConstraintState.t)
           (* TODO: The pointer is the the left pointer but with the offsets translated by the right value, use SVA to see if we know the right ptr? *)
           (st, Pointer (Top, Top))
       | `INTMOD | `INTSUB | `INTDIV | `INTADD | `INTMUL ->
-          let st = constrain_args proc st l r @@ BinCamlType BinCaml_Int in
-          (st, BinCamlType BinCaml_Int)
+          let st = constrain_args proc st l r Int in
+          (st, Int)
       | `NEQ | `EQ -> (
           match (BasilExpr.unfix l, BasilExpr.unfix r) with
           | RVar { id = a }, RVar { id = b } ->
@@ -1122,30 +1099,28 @@ let rec constrain_expr proc (st : ConstraintState.t)
               let st = ConstraintState.add_ub st a_id (TypeVar b_id) in
               let st = ConstraintState.add_lb st b_id (TypeVar a_id) in
               let st = ConstraintState.add_ub st b_id (TypeVar a_id) in
-              (st, BinCamlType BinCaml_Bool)
+              (st, Bool)
           | RVar { id }, a | a, RVar { id } ->
               let id = VarId.var_proc_to_uid id proc in
               let st, expr = constrain_expr proc st a in
               let st = ConstraintState.add_lb st id expr in
               let st = ConstraintState.add_ub st id expr in
-              (st, BinCamlType BinCaml_Bool)
-          | _, _ -> (st, BinCamlType BinCaml_Bool))
+              (st, Bool)
+          | _, _ -> (st, Bool))
       | `INTLT | `INTLE ->
-          let st = constrain_args proc st l r @@ BinCamlType BinCaml_Int in
-          (st, BinCamlType BinCaml_Bool)
+          let st = constrain_args proc st l r @@ Int in
+          (st, Bool)
       | `BVULE | `BVULT | `BVSLE | `BVSLT -> (
           match BasilExpr.type_of l with
           | Bitvector size ->
-              let st =
-                constrain_args proc st l r @@ BinCamlType (BinCaml_BV size)
-              in
-              (st, BinCamlType BinCaml_Bool)
+              let st = constrain_args proc st l r @@ BV size in
+              (st, Bool)
           | _ -> failwith "BV operation without BV arguments")
       | `BVSREM | `BVSDIV | `BVUREM | `BVSUB | `BVUDIV | `BVSMOD | `BVSHL
       | `BVLSHR | `BVASHR | `BVNAND -> (
           match BasilExpr.type_of l with
           | Bitvector size ->
-              let typ = BinCamlType (BinCaml_BV size) in
+              let typ = BV size in
               let st = constrain_args proc st l r typ in
               (st, typ)
           | _ -> failwith "BV operation without BV arguments")
@@ -1164,7 +1139,7 @@ let rec constrain_expr proc (st : ConstraintState.t)
       | `BVOR | `BVXOR | `BVAND | `BVMUL -> (
           match BasilExpr.type_of (List.hd args) with
           | Bitvector size ->
-              let typ = BinCamlType (BinCaml_BV size) in
+              let typ = BV size in
               let st =
                 List.fold_left
                   (fun acc a -> constrain_arg proc st a typ)
@@ -1175,9 +1150,7 @@ let rec constrain_expr proc (st : ConstraintState.t)
       | `OR | `AND ->
           (* All types need to be the same *)
           let typ =
-            BinCamlType
-              (BinCamlType.type_to_bincaml_type
-                 (BasilExpr.type_of (List.hd args)))
+            InferredType.type_to_inferred (BasilExpr.type_of (List.hd args))
           in
           let st =
             List.fold_left (fun acc a -> constrain_arg proc st a typ) st args
@@ -1187,9 +1160,8 @@ let rec constrain_expr proc (st : ConstraintState.t)
       | `MapUpdate -> (st, Top)
       | `BVConcat ->
           ( st,
-            BinCamlType
-              (BinCamlType.type_to_bincaml_type
-              @@ BasilExpr.type_of (BasilExpr.fix expr)) ))
+            InferredType.type_to_inferred
+            @@ BasilExpr.type_of (BasilExpr.fix expr) ))
   | ApplyFun _ -> (st, Top)
 
 let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
@@ -1220,7 +1192,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
   match stmt with
   | Stmt.Instr_Assert { body } | Stmt.Instr_Assume { body } ->
       let st, constrain_expr = constrain_expr proc st (BasilExpr.unfix body) in
-      constrain st constrain_expr (BinCamlType BinCaml_Bool)
+      constrain st constrain_expr Bool
   | Stmt.Instr_Assign ls ->
       List.fold_left
         (fun st (lhs, expr) ->
@@ -1263,7 +1235,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
         in
         let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
         let st = constrain st (Pointer (TypeVar lb, TypeVar ub)) addr in
-        let bv_type = BinCamlType (BinCaml_BV size) in
+        let bv_type = BV size in
         let st = constrain st (Pointer (bv_type, bv_type)) addr in
         let st = constrain st (TypeVar lb) @@ TypeVar ub in
         constrain st (TypeVar ub) (TypeVar lhs)
@@ -1299,10 +1271,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
         let st = constrain st (Pointer (lb, ub)) addr in
         let st = constrain st ub lb in
         let ub =
-          Record
-            ( ZMap.singleton offset
-                { size; offset; ty = BinCamlType (BinCaml_BV size) },
-              size )
+          Record (ZMap.singleton offset { size; offset; ty = BV size }, size)
         in
         let st = constrain st (Pointer (lb, ub)) addr in
         let st = constrain st ub lb in
@@ -1331,7 +1300,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
            ^ "_upper_store")
         in
         let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
-        let bv_type = BinCamlType (BinCaml_BV size) in
+        let bv_type = BV size in
         let st = constrain st (Pointer (bv_type, bv_type)) addr in
         let st = constrain st (Pointer (lb, ub)) addr in
         let st = constrain st lb ub in
@@ -1368,10 +1337,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
         let st = constrain st (Pointer (lb, ub)) addr in
         let st = constrain st lb ub in
         let lb =
-          Record
-            ( ZMap.singleton offset
-                { size; offset; ty = BinCamlType (BinCaml_BV size) },
-              size )
+          Record (ZMap.singleton offset { size; offset; ty = BV size }, size)
         in
         let st = constrain st lb ub in
         let st = constrain st (Pointer (lb, ub)) addr in
