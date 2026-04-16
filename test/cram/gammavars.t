@@ -4,9 +4,6 @@
   (dump-il before.il)
   (run-transforms gamma-vars)
   bincaml: [ERROR] global Gamma_$x:bool should have global sigil $
-  bincaml: [ERROR] local Gamma_z:bool is not declared in @f
-  bincaml: [ERROR] local Gamma_a:bool is not declared in @g
-  bincaml: [ERROR] local Gamma_a:bool is not declared in @h
   (dump-il after.il)
 
   $ diff before.il after.il

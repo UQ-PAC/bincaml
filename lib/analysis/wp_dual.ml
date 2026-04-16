@@ -4,11 +4,12 @@ open Lang
 open Common
 open Expr
 
-module type RequiresAnnotation = sig
-  val requires : ID.t -> BasilExpr.t list
+module type FunctionSummaryAnnotation = sig
+  val requires : ID.t -> Expr.BasilExpr.t list
+  val ensures : ID.t -> Expr.BasilExpr.t list
 end
 
-module Domain (S : RequiresAnnotation) = struct
+module Domain (S : FunctionSummaryAnnotation) = struct
   let name = "WP dual domain"
 
   type t = Program.e
@@ -45,7 +46,7 @@ module Domain (S : RequiresAnnotation) = struct
               (match args with
               | [] -> e_true
               | [ l ] -> l
-              | args -> BasilExpr.fix (ApplyIntrin { attrib; op = `OR; args }))
+              | args -> BasilExpr.fix (ApplyIntrin { attrib; op = `AND; args }))
         | ApplyIntrin { op = `OR; args }
           when List.mem ~eq:BasilExpr.equal e_true args ->
             replace [%here] e_true
@@ -98,7 +99,11 @@ module Domain (S : RequiresAnnotation) = struct
     let open Stmt in
     match stmt with
     | Instr_Assign a -> tf_assigns p a
-    | Instr_Load l -> top
+    | Instr_Load
+        { lhs; rhs; addr = Addr { addr : 'e; size : int; endian : endian } } ->
+        let le = BasilExpr.load ~bits:size endian (BasilExpr.rvar rhs) addr in
+        BasilExpr.substitute (fun v -> Option.return_if (Var.equal v lhs) le) p
+        |> simplify
     | Instr_Assert { body } -> join p (BasilExpr.unexp ~op:`BoolNOT body)
     | Instr_Assume { body; branch } ->
         (* TODO: once verification conditions are added as a transform remove this branch *)
@@ -111,9 +116,37 @@ module Domain (S : RequiresAnnotation) = struct
              [ p; BasilExpr.boolnot @@ low_expr body ]
          else p)
         |> simplify
-    | Instr_Call { procid } ->
-        BasilExpr.applyintrin ~op:`AND (p :: S.requires procid)
     | Instr_IntrinCall { lhs; name = Intrinsic.Havoc } -> top
+    | Instr_Call { lhs; procid; args } ->
+        let substitute f sm e =
+          StringMap.fold
+            (fun k d acc ->
+              BasilExpr.substitute
+                (fun v -> Option.return_if (String.equal (Var.name v) k) (f d))
+                acc)
+            sm e
+        in
+        let ensures =
+          BasilExpr.boolconst true :: S.ensures procid
+          |> BasilExpr.applyintrin ~op:`AND
+          |> simplify |> substitute Fun.id args |> simplify
+          |> substitute BasilExpr.rvar lhs
+          |> simplify
+        in
+        let requires =
+          BasilExpr.boolconst true :: S.requires procid
+          |> BasilExpr.applyintrin ~op:`AND
+          |> substitute Fun.id args |> simplify
+        in
+        let p = join p (Expr.BasilExpr.boolnot requires) in
+        let p =
+          if StringMap.cardinal lhs > 0 then
+            BasilExpr.exists ?attrib:None
+              ~bound:(StringMap.values lhs |> Iter.to_list)
+              (BasilExpr.binexp ~op:`IMPLIES ensures p)
+          else BasilExpr.binexp ~op:`IMPLIES ensures p
+        in
+        simplify p
     | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
     | _ -> p
 
@@ -131,6 +164,7 @@ end
 
 module IntraDomain = Domain (struct
   let requires = const []
+  let ensures = const []
 end)
 
 module IntraAnalysis = Intra_analysis.Backwards (IntraDomain)

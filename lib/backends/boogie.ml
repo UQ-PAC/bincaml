@@ -78,11 +78,14 @@ let pretty_const (c : Lang.Ops.AllOps.const) =
 
 let pretty_call_args_no_brackets (args : Containers_pp.t list) =
   let open Containers_pp in
-  newline_or_spaces 0 ^ List.hd args
-  ^ append_l
-      (List.map
-         (fun arg -> text "," ^ newline_or_spaces 1 ^ arg)
-         (List.tl args))
+  newline_or_spaces 0
+  ^
+  match args with
+  | [] -> text ""
+  | [ hd ] -> hd
+  | hd :: tl ->
+      hd ^ append_l
+      @@ List.map (fun arg -> text "," ^ newline_or_spaces 1 ^ arg) tl
 
 let pretty_call_args (args : Containers_pp.t list) =
   let open Containers_pp in
@@ -101,6 +104,13 @@ let pretty_binary_expr (op : Lang.Ops.AllOps.binary) (ty1, arg1) (ty2, arg2)
   | `MapAccess -> arg1 ^ bracket "[" arg2 "]"
   | `WriteField s ->
       arg1 ^ text "->" ^ bracket "(" (text s ^+ text ":=" ^+ arg2) ")"
+  | `Load e ->
+      let name =
+        match e with
+        | `Big, i -> Printf.sprintf "load%d_be" i
+        | `Little, i -> Printf.sprintf "load%d_le" i
+      in
+      (text @@ name) ^ bracket "(" (arg1 ^ text "," ^+ arg2) ")"
   | `IfThen -> text "if" ^+ arg1 ^+ text "then" ^+ arg2
   | _ -> (
       match Transforms.Boogie_prepass.Builtins.name op [ ty1; ty2; t ] with
@@ -146,7 +156,12 @@ let pretty_apply_intrinsic (op : Lang.Ops.AllOps.intrin)
       ^ surround ~width:0 (text "[")
           (List.nth args 1 ^+ text ":=" ^+ List.nth args 2)
           (text "]")
-  | `AND -> bracket "(" (append_l ~sep:(text "&&") (List.map snd args)) ")"
+  | `AND ->
+      bracket "("
+        (append_l
+           ~sep:(newline_or_spaces 1 ^ text "&&" ^ newline_or_spaces 1)
+           (List.map snd args))
+        ")"
   | `OR -> bracket "(" (append_l ~sep:(text "||") (List.map snd args)) ")"
   | `Cases -> (
       match args with
