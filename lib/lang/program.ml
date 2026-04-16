@@ -134,12 +134,6 @@ let proc prog p =
 
 let proc_opt prog p = try Some (proc prog p) with Not_found -> None
 
-let update_proc id p prog =
-  {
-    prog with
-    declarations = IDMap.add id (Procedure { definition = p }) prog.declarations;
-  }
-
 let procs p =
   IDMap.to_iter p.declarations
   |> Iter.filter_map (function
@@ -177,12 +171,34 @@ let get_implicit_decl_by_name name prog =
     IDMap.find_opt id prog.implicit_decls
   with Not_found -> None
 
+let declare_name name prog = prog.global_names.decl_or_get name
+
 let add_decl ?(attrib = StringMap.empty) p decl =
   let d = p.global_names.decl_or_get (decl_binding decl) in
   { p with declarations = IDMap.add d decl p.declarations }
 
+let remove_decl p decl =
+  let d = p.global_names.decl_or_get (decl_binding decl) in
+  { p with declarations = IDMap.remove d p.declarations }
+
 let update_decl ?(attrib = StringMap.empty) prog decl =
   add_decl ~attrib prog decl
+
+let add_proc p prog =
+  let id = Procedure.id p in
+  {
+    prog with
+    declarations = IDMap.add id (Procedure { definition = p }) prog.declarations;
+  }
+
+let update_proc id f (prog : t) =
+  proc_opt prog id |> f |> function
+  | Some proc ->
+      (if not @@ ID.equal (Procedure.id proc) id then
+         { prog with declarations = IDMap.remove id prog.declarations }
+       else prog)
+      |> add_proc proc
+  | None -> { prog with declarations = IDMap.remove id prog.declarations }
 
 let output_proc_pretty chan p =
   output_string chan @@ Containers_pp.Pretty.to_string ~width:80 (pretty_proc p)

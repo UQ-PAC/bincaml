@@ -443,7 +443,7 @@ module BasilASTLoader = struct
                       Procedure.add_goto p ~from:f ~targets:succ))
             p blocks
         in
-        map_prog (fun prog -> Program.update_proc proc_id p prog) prog
+        map_prog (fun prog -> Program.add_proc p prog) prog
     | Decl_Mem _ | Decl_Var _ | Decl_RecType _ | Decl_Type _ ->
         (* declarations only: handled by first pass *)
         prog
@@ -1433,7 +1433,7 @@ let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
     |> StringMap.of_list
   in
   let proc = Procedure.map_formal_in_params (fun _ -> inparam) proc in
-  let prog = Program.update_proc (Procedure.id proc) proc prog in
+  let prog = Program.add_proc proc prog in
   let declarations =
     Iter.append (Block.read_vars_iter bl) (Block.assigned_vars_iter bl)
     |> Iter.filter Var.is_global

@@ -130,13 +130,13 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
     extra_summary solver
       (module struct
         let requires id =
-          IDMap.get id prog.procs
+          Program.proc_opt prog id
           |> Option.map_or
                (fun p -> (Procedure.specification p).requires)
                ~default:[]
 
         let ensures id =
-          IDMap.get id prog.procs
+          Program.proc_opt prog id
           |> Option.map_or
                (fun p -> (Procedure.specification p).ensures)
                ~default:[]
@@ -149,17 +149,18 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
 let intraproc_transform (prog : Program.t) =
   let module Dfs = Graph.Traverse.Dfs (Program.CallGraph.G) in
   let cg = Program.CallGraph.make_call_graph prog in
-  let procs =
-    Iter.from_iter (fun f -> Dfs.postfix f cg)
-    |> Iter.fold
-         (fun acc v ->
-           match v with
-           | Program.CallGraph.Vert.ProcBegin id ->
-               IDMap.update id (Option.map (intraproc_transform_proc prog)) acc
-           | _ -> acc)
-         prog.procs
-  in
-  { prog with procs }
+  Iter.from_iter (fun f -> Dfs.postfix f cg)
+  |> Iter.fold
+       (fun prog v ->
+         match v with
+         | Program.CallGraph.Vert.ProcBegin id ->
+             Program.update_proc id
+               (function
+                 | Some proc -> Some (intraproc_transform_proc prog proc)
+                 | None -> None)
+               prog
+         | _ -> prog)
+       prog
 
 module Domain = struct
   type property = summary
@@ -229,8 +230,6 @@ let interproc_transform (prog : Program.t) =
     List.fold_left (solve_component solver call_graph prog) summaries sccs
   in
   IDMap.fold
-    (fun pid summary (prog : Program.t) ->
-      let proc = Program.proc prog pid in
-      let proc' = set_summary summary proc in
-      Program.update_proc pid proc' prog)
+    (fun procid summary (prog : Program.t) ->
+      Program.update_proc procid (Option.map (set_summary summary)) prog)
     summaries prog
