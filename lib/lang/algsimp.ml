@@ -81,7 +81,7 @@ let desugar_let ?visit =
 let inline_let ?visit =
   to_steady BasilExpr.equal (BasilExpr.rewrite ?visit ~rw_fun:inline_let_alg)
 
-let normalise_bool e =
+let normalise e =
   let open AbstractExpr in
   let open BasilExpr in
   let open Bitvec in
@@ -99,6 +99,17 @@ let normalise_bool e =
   | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `OR; args } } ->
       replace [%here]
         (BasilExpr.applyintrin ~op:`AND (List.map BasilExpr.boolnot args))
+  | ApplyIntrin
+      {
+        attrib;
+        op = `BVADD;
+        args =
+          [ (RVar _ as v); Constant { attrib = cattrib; const = `Bitvector i } ];
+      }
+    when Bitvec.is_negative i ->
+      replace [%here]
+        (BasilExpr.binexp ?attrib ~op:`BVSUB (fix v)
+           (BasilExpr.bvconst ?attrib:cattrib (Bitvec.neg i)))
   | _ -> Keep
 
 let simplify_concat
@@ -169,7 +180,7 @@ let drop_assoc
       replace [%here] (BasilExpr.boolconst false)
   | ApplyIntrin { op = `BVConcat; args = [] } ->
       replace [%here] (BasilExpr.bvconst @@ Bitvec.zero ~size:0)
-  | ApplyIntrin { op; args }
+  | ApplyIntrin { attrib; op; args }
     when List.exists
            (function
              | ApplyIntrin { op = op' }, _ when Ops.AllOps.equal_intrin op op'
@@ -178,7 +189,7 @@ let drop_assoc
              | _ -> false)
            args ->
       replace [%here]
-        (BasilExpr.applyintrin ~op
+        (BasilExpr.applyintrin ?attrib ~op
            (List.flat_map
               (function
                 | ApplyIntrin { op = op'; args }, _
@@ -231,7 +242,8 @@ let algebraic_simplifications
         attrib;
         args = ((RVar { id; attrib = attrib2 } as v), _) :: tl;
       }
-    when List.for_all (function Constant _, _ -> true | _ -> false) tl ->
+    when List.length tl > 1
+         && List.for_all (function Constant _, _ -> true | _ -> false) tl ->
       let size = width_args tl in
       let sum =
         List.fold_left
@@ -306,11 +318,11 @@ let alg_simp_rewriter ?visit e =
   |> to_steady BasilExpr.equal
        (BasilExpr.rewrite_typed_two ?visit algebraic_simplifications)
   |> to_steady BasilExpr.equal
-       (BasilExpr.rewrite_typed_two ?visit normalise_bool)
+       (BasilExpr.rewrite_typed_two ?visit normalise)
 
 let normalise e =
   let e = alg_simp_rewriter e in
-  BasilExpr.rewrite_typed_two normalise_bool e
+  BasilExpr.rewrite_typed_two normalise e
 
 let%expect_test "normalise" =
   let e =

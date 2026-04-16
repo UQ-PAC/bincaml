@@ -198,6 +198,7 @@ module LF = struct
         | _ -> None
 
       let const x = (None, None, x)
+      let neg (a, v, c) = (Option.map Bitvec.neg a, v, Bitvec.neg c)
 
       let add a b =
         match (a, b) with
@@ -207,12 +208,26 @@ module LF = struct
             Some (Some (Bitvec.add a c), Some v, Bitvec.add b d)
         | _ -> None
 
+      let sub a (b, v, c) = add a (Option.map Bitvec.neg b, v, Bitvec.neg c)
+
+      (* ~a = -a - 1 *)
+      let not (a, v, c) =
+        ( Option.map Bitvec.neg a,
+          v,
+          Bitvec.sub (Bitvec.neg c) (Bitvec.one ~size:(Bitvec.size c)) )
+
       let mul a b =
         match (a, b) with
         | (None, None, b), (None, None, d) -> Some (None, None, Bitvec.mul b d)
         | (Some a, Some v, b), (None, None, d)
         | (None, None, d), (Some a, Some v, b) ->
             Some (Some (Bitvec.mul a d), Some v, Bitvec.mul b d)
+        | _ -> None
+
+      let shl a b =
+        match b with
+        | None, None, b ->
+            mul a (None, None, Bitvec.shl (Bitvec.one ~size:(Bitvec.size b)) b)
         | _ -> None
     end
 
@@ -225,6 +240,10 @@ module LF = struct
           List.fold_left (liftJoin2 Lin.add) a rest
       | ApplyIntrin { op = `BVMUL; args = a :: rest } ->
           List.fold_left (liftJoin2 Lin.mul) a rest
+      | BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b } -> liftJoin2 Lin.sub a b
+      | BinaryExpr { op = `BVSHL; arg1 = a; arg2 = b } -> liftJoin2 Lin.shl a b
+      | UnaryExpr { op = `BVNEG; arg } -> Option.map Lin.neg arg
+      | UnaryExpr { op = `BVNOT; arg } -> Option.map Lin.not arg
       | _ -> None
 
     let extract_expr e =
