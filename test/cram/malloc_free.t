@@ -215,15 +215,6 @@
         Exp16__5_24_1, Exp18__5_25_1;
       return;
   }
-<<<<<<< HEAD
-=======
->>>>>>> 0e8945b (flip the order)
-<<<<<<< HEAD
-=======
->>>>>>> 0e8945b (flip the order)
-<<<<<<< HEAD
-=======
->>>>>>> 0e8945b (flip the order)
 
   $ boogie ./good.bpl
   
@@ -440,24 +431,9 @@
         Exp16__5_24_1, Exp18__5_25_1;
       return;
   }
-<<<<<<< HEAD
-=======
->>>>>>> 0e8945b (flip the order)
-<<<<<<< HEAD
-=======
->>>>>>> 0e8945b (flip the order)
-<<<<<<< HEAD
   $ boogie ./bad.bpl
   ./bad.bpl(181,5): Error: this assertion could not be proved
   Execution trace:
       ./bad.bpl(155,3): b#main_entry
   
   Boogie program verifier finished with 0 verified, 1 error
-=======
-  $ boogie ./bad.bpl
-  ./bad.bpl(181,5): Error: this assertion could not be proved
-  Execution trace:
-      ./bad.bpl(155,3): b#main_entry
-  
-  Boogie program verifier finished with 0 verified, 1 error
->>>>>>> 0e8945b (flip the order)
