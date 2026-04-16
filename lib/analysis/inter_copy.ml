@@ -248,25 +248,61 @@ module Solver = struct
                   | [] -> failwith "leaves should never be empty!")))
     done
 
+  type 'a skip_option = Some of 'a | Skip | None
+
   (** Collapse copies through phis into copies *)
   let collapse_composites g =
     let open CopyNode in
+    (* Invariant: var node in !searched =>
+        (find node) is not copied from any other variable and
+        all (map find copied_from) are in !searched *)
     let searched = ref VarSet.empty in
+    (* For ensuring each node is only searched once *)
+    let searching = ref VarSet.empty in
+    (* Ensures: var node in !searched *)
+    (* Ensures: !searching == old(!searching) *)
     let rec search (node : t) =
+      assert (not @@ VarSet.mem !node.v !searching);
       if not @@ VarSet.mem !node.v !searched then (
-        searched := VarSet.add !node.v !searched;
-        let copied_from =
-          List.filter
-            (fun (n : t) -> not @@ Var.equal !node.v !n.v)
-            !node.copied_from
-        in
-        match copied_from with
-        | l :: ls ->
-            List.iter (search % find) (l :: ls);
-            let p = find l in
-            if List.for_all (fun p' -> Var.equal !p.v (var @@ find p')) ls then
-              join p node
-        | _ -> ())
+        searching := VarSet.add !node.v !searching;
+        (* Search targets and see if a common single parent exists *)
+        (match effective_parent !node.copied_from (ref VarSet.empty) with
+        | Some l -> join l node
+        | Skip -> failwith "the effective parent shouldn't ever be skip!"
+        | _ -> ());
+        searching := VarSet.remove !node.v !searching;
+        searched := VarSet.add !node.v !searched)
+    (* Perform a dfs on the subgraph of nodes that are currently being
+       searched, searching any new not-in-progress nodes, and try collect a
+       common parent while doing so. Effectively, we find all leaves of this
+       graph, where a leaf is a node that has been searched or is properly a
+       leaf, and "join" them together (but we join during the search). *)
+    and effective_parent (nodes : t list) (visited : VarSet.t ref) =
+      let f (n : t) =
+        assert (Option.is_none !n.parent);
+        if VarSet.mem !n.v !visited then Skip
+        else (
+          visited := VarSet.add !n.v !visited;
+          if VarSet.mem !n.v !searching then
+            match !n.copied_from with
+            | [] -> Some n
+            | l -> effective_parent l visited
+          else (
+            search n;
+            Some (find n)))
+      in
+      match nodes with
+      | n :: ns ->
+          List.fold_left
+            (fun acc n ->
+              let b = f @@ find n in
+              match (acc, b) with
+              | a, Skip | Skip, a -> a
+              | Some n1, Some n2 when CopyNode.eq n1 n2 -> Some n1
+              | _ -> None)
+            (f @@ find n)
+            ns
+      | [] -> None
     in
     VarMap.iter (const (search % find)) g
 

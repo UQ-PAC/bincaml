@@ -153,7 +153,7 @@ Run on basic irreducible loop example
        goto (%main_entry);
      ];
      block %main_entry [
-       var #4_1:bv64 := bvadd(R31_1, 0xffffffffffffffe0:bv64);
+       var #4_1:bv64 := bvsub(R31_1, 0x20:bv64);
        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) #4_1 R29_1 64;
        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(#4_1, 0x8:bv64) R30_1 64;
        var R31_2:bv64 := #4_1;
