@@ -132,14 +132,15 @@ module BasilASTLoader = struct
   and trans_typedecl t =
     match t with
     | TypeAssign_Sum (localIdent, typeT) ->
-        let n = unsafe_unsigil (`Local localIdent) in
+        let n = unsafe_unsigil (`Type localIdent) in
         ( n,
           Types.mk_adt n
             (typeT
             |> List.map (function
-              | SortType variant -> (unsafe_unsigil (`Local variant), [])
+              | SortType variant ->
+                  (unsafe_unsigil (`TypeConstructor variant), [])
               | VariantCase (variant, _, fields, _) ->
-                  ( unsafe_unsigil (`Local variant),
+                  ( unsafe_unsigil (`TypeConstructor variant),
                     List.map trans_recordfield fields ))) )
 
   (** First pass; process like forward declaration: only add the information
@@ -147,7 +148,7 @@ module BasilASTLoader = struct
   and trans_declaration prog (x : decl) : load_st =
     match x with
     | Decl_Type sort ->
-        let name = unsafe_unsigil (`Local sort) in
+        let name = unsafe_unsigil (`Type sort) in
         let typ = Types.mk_sort name in
         map_prog (fun prog -> Program.decl_typ prog typ) prog
     | Decl_RecType types ->
@@ -443,7 +444,7 @@ module BasilASTLoader = struct
   and trans_recordfield field =
     match field with
     | RecordField1 (id, ty) ->
-        Types.mk_field (unsafe_unsigil (`Local id)) (trans_type ty)
+        Types.mk_field (unsafe_unsigil (`Type id)) (trans_type ty)
 
   and transRECORDTYPE (fields : field list) =
     Types.Struct
@@ -464,7 +465,7 @@ module BasilASTLoader = struct
     | TypeMapType maptype -> transMapType maptype
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
     | TypeParen (_, typeT, _) -> trans_type typeT
-    | TypeVarType name -> Types.Variable (unsafe_unsigil (`Local name))
+    | TypeVarType name -> Types.Variable (unsafe_unsigil (`Type name))
     | TypeRecordType (RecordType1 (_, fields, _)) -> transRECORDTYPE fields
     | TypePointerType (PointerType1 (_, l, u, _)) -> transPOINTERTYPE l u
 
@@ -1003,6 +1004,15 @@ module BasilASTLoader = struct
 
   and unsafe_unsigil g : string =
     match g with
+    | `Type (LocalIdent (pos, g)) ->
+        if String.take 1 g |> String.for_all Char.is_lowercase_ascii then g
+        else failwith ("Invalid type name: " ^ g ^ " must start with lowercase.")
+    | `TypeConstructor (LocalIdent (pos, g)) ->
+        if String.take 1 g |> String.for_all Char.is_uppercase_ascii then g
+        else
+          failwith
+            ("Invalid type constuctor name: " ^ g
+           ^ " must start with lowercase.")
     | `Global (GlobalIdent (pos, g)) -> g
     | `Local (LocalIdent (pos, g)) -> g
     | `Proc (ProcIdent (pos, g)) -> g
@@ -1090,7 +1100,7 @@ module BasilASTLoader = struct
           (*print_endline @@ "warn: local use before def: " ^ Var.to_string v;*)
           BasilExpr.rvar v)
     | Expr_Assoc (binop, _, rs, _) -> (
-        match transBoolBinOp binop with
+        match trans_intrinop binop with
         | #AllOps.intrin as op ->
             BasilExpr.applyintrin ~op (List.map trans_expr rs)
         | _ -> failwith "non-associative operator")
@@ -1151,9 +1161,6 @@ module BasilASTLoader = struct
         BasilExpr.load ~attrib:(expr_range_attr o c)
           ~bits:(Z.to_int @@ transIntVal intval)
           `Big (trans_expr a1) (trans_expr a2)
-    | Expr_Concat (o, exprs, c) ->
-        BasilExpr.applyintrin ~attrib:(expr_range_attr o c) ~op:`BVConcat
-          (List.map trans_expr exprs)
     | Expr_Literal v -> (
         match trans_value v with #BasilExpr.const as v -> BasilExpr.const v)
     | Expr_Old (o, e, c) ->
@@ -1220,16 +1227,11 @@ module BasilASTLoader = struct
 
   and transBVBinOp (x : BasilIR.AbsBasilIR.bVBinOp) =
     match x with
-    | BVBinOp_bvand -> `BVAND
-    | BVBinOp_bvor -> `BVOR
-    | BVBinOp_bvadd -> `BVADD
-    | BVBinOp_bvmul -> `BVMUL
     | BVBinOp_bvudiv -> `BVUDIV
     | BVBinOp_bvurem -> `BVUREM
     | BVBinOp_bvshl -> `BVSHL
     | BVBinOp_bvlshr -> `BVLSHR
     | BVBinOp_bvnand -> `BVNAND
-    | BVBinOp_bvxor -> `BVXOR
     | BVBinOp_bvcomp -> `BVCOMP
     | BVBinOp_bvsub -> `BVSUB
     | BVBinOp_bvsdiv -> `BVSDIV
@@ -1270,11 +1272,16 @@ module BasilASTLoader = struct
     | IntLogicalBinOp_intgt -> `INTGT
     | IntLogicalBinOp_intge -> `INTGE
 
-  and transBoolBinOp (x : boolBinOp) =
+  and trans_intrinop (x : intrinOp) =
     match x with
-    | BoolBinOp_booland -> `AND
-    | BoolBinOp_boolor -> `OR
-    | BoolBinOp_boolimplies -> `IMPLIES
+    | IntrinOp_booland -> `AND
+    | IntrinOp_boolor -> `OR
+    | IntrinOp_bvand -> `BVAND
+    | IntrinOp_bvor -> `BVOR
+    | IntrinOp_bvadd -> `BVADD
+    | IntrinOp_bvxor -> `BVXOR
+    | IntrinOp_bvconcat -> `BVConcat
+    | IntrinOp_bvmul -> `BVMUL
 end
 
 exception ILBParseError of { input : Pp_loc.Input.t; lexbuf : Lexing.lexbuf }

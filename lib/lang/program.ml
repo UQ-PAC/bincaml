@@ -291,19 +291,12 @@ let decl_global ?(attrib = StringMap.empty) p v =
 
 let decl_typ ?(attrib = StringMap.empty) p t =
   match t with
-  | Sort (name, []) as s ->
-      let id : ID.t = p.global_names.decl_exn name in
-      let constr_id : ID.t = p.global_names.decl_exn ("mk_" ^ name) in
+  | Sort (type_name, []) as s ->
+      let id : ID.t = p.global_names.decl_exn type_name in
       {
         p with
         declarations =
-          IDMap.add id (Type { binding = name; typ = s }) p.declarations;
-        implicit_decls =
-          IDMap.add constr_id
-            (let ty = Types.curry [] s in
-             let constructor = Var.create name ty ~scope:GlobalConst in
-             VariantCase { variant = name; belongs_to = s; constructor })
-            p.implicit_decls;
+          IDMap.add id (Type { binding = type_name; typ = s }) p.declarations;
       }
   | Sort (name, variants) as s ->
       let id : ID.t = p.global_names.decl_exn name in
