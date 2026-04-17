@@ -154,3 +154,19 @@ let read_vars_iter b =
   in
   let bls = stmts_iter b |> Iter.flat_map Stmt.free_vars_iter in
   Iter.append phi bls
+
+(** free variables, also known as live variables. Given the initial free
+    variables init following this block*)
+let free_vars ?(init = VarSet.empty) (b : (Var.t, BasilExpr.t) t) =
+  (* live vars transfer function for a statement *)
+  fold_backwards
+    ~f:Stmt.(fun init -> free_vars ~init)
+    ~phi:(fun a phis ->
+      List.fold_left
+        (fun acc ->
+          (function
+          | { lhs; rhs } ->
+              VarSet.remove lhs acc |> fun l ->
+              VarSet.add_list l (List.map snd rhs)))
+        a phis)
+    ~init b

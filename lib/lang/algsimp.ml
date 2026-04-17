@@ -90,7 +90,7 @@ let normalise e =
   | BinaryExpr { op = `IMPLIES; arg1; arg2 } ->
       replace [%here]
         (BasilExpr.applyintrin ~op:`OR
-           [ fix arg1; BasilExpr.boolnot (fix arg2) ])
+           [ fix arg2; BasilExpr.boolnot (fix arg1) ])
   | UnaryExpr { op = `BoolNOT; arg = UnaryExpr { op = `BoolNOT; arg } } ->
       replace [%here] arg
   | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `AND; args } } ->
@@ -317,8 +317,7 @@ let alg_simp_rewriter ?visit e =
        e |> partial_eval_expr |> simp_concat_fix )
   |> to_steady BasilExpr.equal
        (BasilExpr.rewrite_typed_two ?visit algebraic_simplifications)
-  |> to_steady BasilExpr.equal
-       (BasilExpr.rewrite_typed_two ?visit normalise)
+  |> to_steady BasilExpr.equal (BasilExpr.rewrite_typed_two ?visit normalise)
 
 let normalise e =
   let e = alg_simp_rewriter e in
@@ -339,6 +338,6 @@ let%expect_test "normalise" =
   print_endline (BasilExpr.to_string e);
   [%expect
     {|
-    boolnot(boolnot(boolnot(booland(boolnot(boolnot(b)), a))))
-    boolor(boolnot(b), boolnot(a))
+    boolnot(boolnot(boolnot(booland(boolnot(boolnot(b:bool)), a:bool))))
+    boolor(boolnot(b:bool), boolnot(a:bool))
     |}]

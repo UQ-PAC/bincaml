@@ -137,7 +137,13 @@ module MapState (V : Lattice_collections.TopLattice) = struct
       (V)
 end
 
-module Forwards (D : Domain) = struct
+module type IntraDomain = sig
+  include Domain
+
+  val transfer_phi : t -> Var.t Block.phi -> t
+end
+
+module Forwards (D : IntraDomain) = struct
   module AnalyseBlock = struct
     include D
 
@@ -147,7 +153,7 @@ module Forwards (D : Domain) = struct
       match Procedure.G.E.label e with
       | Jump -> s
       | Block b -> begin
-          assert (List.is_empty b.phis);
+          let s = List.fold_left transfer_phi s b.phis in
           Block.fold_forwards ~phi:(fun a _ -> a) ~f:D.transfer s b
         end
   end
@@ -181,7 +187,7 @@ module Forwards (D : Domain) = struct
     Option.iter to_dot (Procedure.graph p)
 end
 
-module Backwards (D : Domain) = struct
+module Backwards (D : IntraDomain) = struct
   module AnalyseBlock = struct
     include D
 
@@ -191,8 +197,11 @@ module Backwards (D : Domain) = struct
       match Procedure.G.E.label e with
       | Jump -> s
       | Block b -> begin
-          assert (List.is_empty b.phis);
-          Block.fold_backwards ~phi:(fun a _ -> a) ~f:D.transfer ~init:s b
+          let s =
+            Block.fold_backwards ~phi:(fun a _ -> a) ~f:D.transfer ~init:s b
+          in
+          let s = List.fold_left transfer_phi s b.phis in
+          s
         end
   end
 

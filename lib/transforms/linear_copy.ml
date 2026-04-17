@@ -49,10 +49,6 @@ let transform_proc (p : Program.t) g (proc : Program.proc) =
 let transform (p : Program.t) =
   let gs = Solver.solve p in
 
-  let procs =
-    IDMap.mapi
-      (fun pid proc -> transform_proc p (Hashtbl.find gs pid) proc)
-      p.procs
-  in
-
-  { p with procs }
+  Program.map_procedures
+    (fun pid proc -> transform_proc p (Hashtbl.find gs pid) proc)
+    p

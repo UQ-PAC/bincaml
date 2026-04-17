@@ -33,10 +33,6 @@ let transform_proc r keep =
 let linear_transform (prog : Program.t) =
   let _, r = LinearConstAnalysis.solve prog in
 
-  let procs =
-    IDMap.mapi
-      (fun pid proc -> transform_proc (IDMap.find pid r) (fun _ -> false) proc)
-      prog.procs
-  in
-
-  { prog with procs }
+  Program.map_procedures
+    (fun pid proc -> transform_proc (IDMap.find pid r) (fun _ -> false) proc)
+    prog

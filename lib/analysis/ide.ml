@@ -334,7 +334,12 @@ module IDEGraph = struct
     in
     let g = Iter.fold GB.add_vertex g intra_verts in
     let g =
-      if Option.equal ID.equal prog.entry_proc (Some proc_id) then
+      if
+        Option.(
+          equal ID.equal
+            (Program.entry_proc_opt prog |> map Procedure.id)
+            (Some proc_id))
+      then
         add_edge_e_dir dir g (Entry, Nop, IntraVertex { proc_id; v = Entry })
         |> fun g ->
         add_edge_e_dir dir g (IntraVertex { proc_id; v = Return }, Nop, Exit)
@@ -353,7 +358,7 @@ module IDEGraph = struct
             IntraVertex { proc_id; v = Return } ))
 
   let create (prog : Program.t) dir =
-    IDMap.to_iter prog.procs |> Iter.map snd
+    Program.procs prog |> Iter.map snd
     |> Iter.fold (fun g p -> proc_graph prog g p dir) (GB.empty ())
 
   (** a table giving, to each procedure, all of its call sites to other
@@ -703,8 +708,8 @@ module IDE (D : IDEDomain) = struct
           match D.direction with `Forwards -> Entry | `Backwards -> Exit)
     in
     (* Init the states with the analysis given values at each procedure *)
-    prog.procs
-    |> IDMap.iter (fun proc_id proc ->
+    Program.procs prog
+    |> Iter.iter (fun (proc_id, proc) ->
         let l = IDEGraph.Vert.IntraVertex { proc_id; v = proc_entry } in
         let state = Hashtbl.get_or states l ~default:DataMap.empty in
         let state =
@@ -783,8 +788,8 @@ module IDE (D : IDEDomain) = struct
     |> LM.of_iter
 
   let p1_start_vals (prog : Program.t) globals =
-    IDMap.values prog.procs
-    |> Iter.flat_map (fun proc ->
+    Program.procs prog
+    |> Iter.flat_map (fun (_, proc) ->
         let vert =
           Loc.IntraVertex
             {
@@ -821,9 +826,7 @@ module IDE (D : IDEDomain) = struct
     let graph = IDEGraph.create prog dir in
     let start = p1_start_vals prog globals in
     let order = scc_order prog graph in
-    let start_proc =
-      prog.entry_proc |> Option.get_exn_or "Missing entry procedure"
-    in
+    let start_proc = Procedure.id @@ Program.entry_proc_exn prog in
     let summary = phase1_solve start graph globals order DlMap.empty in
     ( query_summary @@ summary,
       query @@ phase2_solve prog start_proc graph globals summary )

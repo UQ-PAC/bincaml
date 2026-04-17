@@ -8,8 +8,6 @@
 
 (generate_opam_files true)
 
-(formatting
- (enabled_for dune))
 
 (source
  (github username/reponame))
@@ -19,6 +17,8 @@
 (maintainers "Maintainer Name <maintainer@example.com>")
 
 (license Apache-2.0)
+
+(formatting (enabled_for ocaml dune))
 
 (documentation https://url/to/documentation)
 

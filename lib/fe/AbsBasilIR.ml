@@ -145,6 +145,7 @@ and namedCallReturn =
 and lVars =
    LVars_Empty
  | LVars_LocalList of openParen * localVar list * closeParen
+ | LVars_LocalConstList of openParen * localVar list * closeParen
  | LVars_List of openParen * lVar list * closeParen
  | NamedLVars_List of openParen * namedCallReturn list * closeParen
 
@@ -163,6 +164,7 @@ and jump =
 
 and lVar =
    LVar_Local of localVar
+ | LVar_LocalConst of localVar
  | LVar_Global of globalVar
 
 and stmtWithAttrib =
@@ -216,14 +218,13 @@ and expr =
  | Expr_Old of openParen * expr * closeParen
  | Expr_FunctionOp of expr * openParen * expr list * closeParen
  | Expr_Binary of binOp * openParen * expr * expr * closeParen
- | Expr_Assoc of boolBinOp * openParen * expr list * closeParen
+ | Expr_Assoc of intrinOp * openParen * expr list * closeParen
  | Expr_Unary of unOp * openParen * expr * closeParen
  | Expr_LoadBe of openParen * intVal * expr * expr * closeParen
  | Expr_LoadLe of openParen * intVal * expr * expr * closeParen
  | Expr_ZeroExtend of openParen * intVal * expr * closeParen
  | Expr_SignExtend of openParen * intVal * expr * closeParen
  | Expr_Extract of openParen * intVal * intVal * expr * closeParen
- | Expr_Concat of openParen * expr list * closeParen
  | Expr_Ite of expr * expr * expr
  | Expr_Match of expr * openParen * case list * closeParen
  | Expr_Cases of openParen * case list * closeParen
@@ -236,7 +237,8 @@ and lambdaDef =
    LambdaDef1 of localVarParen list * lambdaSep * expr
 
 and binOp =
-   BinOpBVBinOp of bVBinOp
+   BinOp_implies
+ | BinOpBVBinOp of bVBinOp
  | BinOpBVLogicalBinOp of bVLogicalBinOp
  | BinOpIntLogicalBinOp of intLogicalBinOp
  | BinOpIntBinOp of intBinOp
@@ -267,17 +269,12 @@ and bVUnOp =
  | BVUnOp_bvneg
 
 and bVBinOp =
-   BVBinOp_bvand
- | BVBinOp_bvor
- | BVBinOp_bvadd
- | BVBinOp_bvmul
- | BVBinOp_bvudiv
+   BVBinOp_bvudiv
  | BVBinOp_bvurem
  | BVBinOp_bvshl
  | BVBinOp_bvlshr
  | BVBinOp_bvnand
  | BVBinOp_bvnor
- | BVBinOp_bvxor
  | BVBinOp_bvxnor
  | BVBinOp_bvcomp
  | BVBinOp_bvsub
@@ -309,10 +306,15 @@ and intLogicalBinOp =
  | IntLogicalBinOp_intgt
  | IntLogicalBinOp_intge
 
-and boolBinOp =
-   BoolBinOp_booland
- | BoolBinOp_boolor
- | BoolBinOp_boolimplies
+and intrinOp =
+   IntrinOp_booland
+ | IntrinOp_boolor
+ | IntrinOp_bvand
+ | IntrinOp_bvor
+ | IntrinOp_bvadd
+ | IntrinOp_bvxor
+ | IntrinOp_bvconcat
+ | IntrinOp_bvmul
 
 and pointerBinOp =
    PointerBinOp_ptradd

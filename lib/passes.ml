@@ -122,6 +122,18 @@ module PassManager = struct
          control flow graph and prints results";
     }
 
+  let sva =
+    {
+      name = "sva";
+      apply =
+        Prog
+          (fun p ->
+            let r = Analysis.Sva.sva p in
+            List.iter (print_endline % Analysis.Sva.StateAbstraction.show) r;
+            p);
+      doc = "Runs symbolic value analysis and prints stuff out after";
+    }
+
   let demo_dfg_gamma =
     {
       name = "demo-dfg-gamma-analysis";
@@ -201,7 +213,7 @@ module PassManager = struct
   let intra_function_summaries =
     {
       name = "intra-function-summaries";
-      apply = Proc Transforms.Function_summaries.intraproc_transform;
+      apply = Prog Transforms.Function_summaries.intraproc_transform;
       doc =
         "Generate function summaries for each procedure independently. The \
          generated summaries will be a refinement with respect to wp logic \
@@ -265,7 +277,11 @@ module PassManager = struct
   let simp =
     {
       name = "simplify";
-      apply = Batch [ cf_exprs; linear_const; cf_exprs; linear_copy; cf_exprs; inter_dead ];
+      apply =
+        Batch
+          [
+            cf_exprs; linear_const; cf_exprs; linear_copy; cf_exprs; inter_dead;
+          ];
       doc =
         "Performs some simplifications (linear constant propagation, copy \
          propagation, constant folding, dead store elimination). Requires SSA \
@@ -287,9 +303,11 @@ module PassManager = struct
       read_uninit false;
       read_uninit true;
       sssa;
+      sva;
       full_ssa;
       type_check;
       split_memory_encoding;
+      flat_memory_encoding;
       memory_specification;
       intra_function_summaries;
       inter_function_summaries;
@@ -324,6 +342,15 @@ module PassManager = struct
         name = "gamma-vars";
         apply = Prog Transforms.Gamma_vars.transform;
         doc = "Replace gamma expressions with gamma variables";
+      };
+      {
+        name = "linear-const";
+        apply = Prog Transforms.Const_prop.linear_transform;
+        doc =
+          "Performs interprocedural constant propagation of linear expressions \
+           (expressions of the form a * x + b). Usage of constant variables \
+           are replaced with their constant value. Newly dead variables are \
+           not eliminated. Assumes SSA form.";
       };
     ]
 
@@ -365,10 +392,17 @@ module PassManager = struct
     Trace_core.with_span ~__FILE__ ~__LINE__ ("transform-prog::" ^ tf.name)
     @@ fun _ ->
     match tf.apply with
-    | Prog tf -> tf p
+    | Prog fn ->
+        let p = fn p in
+        Program.procs p
+        |> Iter.iter (fun (_, p) ->
+            try Lang.Check.wf_checks p
+            with Lang.Check.IRWellformed e ->
+              raise @@ Lang.Check.IRWellformed (tf.name ^ ": " ^ e));
+        p
     | Batch tf -> List.fold_left run_transform p tf
     | DFGAnalysis (module D : Analysis.Dataflow_graph.AnalysisType) ->
-        IDMap.to_iter p.procs
+        Program.procs p
         |> Iter.filter (fun (_, p) -> Procedure.graph p |> Option.is_some)
         |> Iter.iter (fun (pn, p) ->
             (*let r =
@@ -388,28 +422,29 @@ module PassManager = struct
             ());
         p
     | ProcCheck app ->
-        let _ =
-          IDMap.mapi
-            (fun id proc ->
-              Trace_core.with_span ~__FILE__ ~__LINE__
-                ("check-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
-              @@ fun _ ->
-              match app p proc with
-              | false -> ()
-              | true -> failwith @@ "Check failed: " ^ ID.to_string id)
-            p.procs
-        in
+        Program.procs p
+        |> Iter.iter (fun (id, proc) ->
+            Trace_core.with_span ~__FILE__ ~__LINE__
+              ("check-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
+            @@ fun _ ->
+            (match app p proc with
+            | false -> ()
+            | true -> failwith @@ "Check failed: " ^ ID.to_string id);
+            Lang.Check.wf_checks proc);
         p
     | Proc app ->
-        let procs =
-          IDMap.mapi
-            (fun id proc ->
-              Trace_core.with_span ~__FILE__ ~__LINE__
-                ("transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
-              @@ fun _ -> app proc)
-            p.procs
-        in
-        { p with procs }
+        Program.map_procedures
+          (fun id proc ->
+            Trace_core.with_span ~__FILE__ ~__LINE__
+              ("transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
+            @@ fun _ ->
+            let p = app proc in
+            try
+              Lang.Check.wf_checks p;
+              p
+            with Lang.Check.IRWellformed e ->
+              raise @@ Lang.Check.IRWellformed (tf.name ^ ": " ^ e))
+          p
 
   let construct_batch (s : t) (passes : string list) =
     List.map (fun p -> StringMap.find p s.avail) passes
@@ -417,7 +452,7 @@ module PassManager = struct
   let run_batch (batch : pass list) prog =
     List.fold_left
       (fun prog pass ->
-        Logs.info (fun m ->
+        Logs.debug (fun m ->
             m "Starting %s" pass.name ?header:None ~tags:(Logger.time_stamp ()));
         run_transform prog pass)
       prog batch

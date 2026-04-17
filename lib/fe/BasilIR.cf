@@ -67,7 +67,7 @@ TypeAssign_Sum. TypeAssign ::= LocalIdent "=" [SumCase] ;
 
 separator nonempty TypeAssign "and";
 Decl_RecType . Decl ::= "type" [TypeAssign] ;
-Decl_Type . Decl ::= "type" LocalIdent ;
+Decl_Type . Decl ::= "type" LocalIdent;
 
 ProcDef_Empty . ProcDef ::= ;
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
@@ -154,6 +154,7 @@ separator NamedCallReturn "," ;
 
 LVars_Empty . LVars ::= ;
 LVars_LocalList . LVars ::= "var" OpenParen [ LocalVar ] CloseParen ":=" ;
+LVars_LocalConstList . LVars ::= "let" OpenParen [ LocalVar ] CloseParen ":=" ;
 LVars_List . LVars ::= OpenParen [ LVar ]  CloseParen ":=";
 NamedLVars_List . LVars ::= OpenParen [NamedCallReturn]  CloseParen ":=";
 
@@ -176,6 +177,7 @@ Jump_Return . Jump ::= "return" OpenParen [Expr] CloseParen ;
 Jump_ProcReturn. Jump ::= "return"  ;
 
 LVar_Local . LVar ::= "var" LocalVar;
+LVar_LocalConst . LVar ::= "let" LocalVar;
 LVar_Global . LVar ::= GlobalVar;
 
 separator nonempty LVar "," ;
@@ -259,9 +261,9 @@ Expr_FunctionOp . Expr1       ::= Expr1 OpenParen [Expr] CloseParen;
 
 -- binary expr
 
-rules BinOp ::= BVBinOp | BVLogicalBinOp | IntLogicalBinOp | IntBinOp | EqOp | PointerBinOp ;
+rules BinOp ::= "implies" | BVBinOp | BVLogicalBinOp | IntLogicalBinOp | IntBinOp | EqOp | PointerBinOp ;
 Expr_Binary . Expr2      ::= BinOp OpenParen Expr "," Expr CloseParen ;
-Expr_Assoc  . Expr2      ::= BoolBinOp OpenParen [Expr] CloseParen ;
+Expr_Assoc  . Expr2      ::= IntrinOp OpenParen [Expr] CloseParen ;
 
 rules UnOp ::= BVUnOp | "boolnot" | "intneg" | "booltobv1" | "gamma" | "classification";
 Expr_Unary  . Expr2      ::= UnOp OpenParen Expr CloseParen ;
@@ -272,7 +274,6 @@ Expr_LoadLe . Expr2 ::= "load_le" OpenParen IntVal "," Expr "," Expr CloseParen 
 Expr_ZeroExtend . Expr2 ::= "zero_extend" OpenParen IntVal "," Expr CloseParen ;
 Expr_SignExtend . Expr2 ::= "sign_extend" OpenParen IntVal "," Expr CloseParen ;
 Expr_Extract    . Expr2 ::= "extract" OpenParen IntVal "," IntVal "," Expr CloseParen ;
-Expr_Concat     . Expr2 ::= "bvconcat"  OpenParen [Expr]  CloseParen ;
 
 
 CaseCase . Case ::= Expr "->" Expr  ;
@@ -298,13 +299,13 @@ SortValRec . Expr ::= LocalIdent BeginRec [FieldAssign] EndRec;
 
 rules EqOp ::= "eq" | "neq" ;
 rules BVUnOp ::= "bvnot" | "bvneg" ;
-rules BVBinOp ::= "bvand"|"bvor"|"bvadd"|"bvmul"|"bvudiv"|"bvurem"|"bvshl"|"bvlshr"|"bvnand"|"bvnor"
-  |"bvxor"|"bvxnor"|"bvcomp"|"bvsub"|"bvsdiv"|"bvsrem"|"bvsmod"|"bvashr" ;
+rules BVBinOp ::= "bvudiv"|"bvurem"|"bvshl"|"bvlshr"|"bvnand"|"bvnor"
+  |"bvxnor"|"bvcomp"|"bvsub"|"bvsdiv"|"bvsrem"|"bvsmod"|"bvashr" ;
 rules BVLogicalBinOp ::= "bvule" |  "bvugt" |  "bvuge" | "bvult" | "bvslt" |  "bvsle" |  "bvsgt" |  "bvsge" ;
 
 rules IntBinOp ::= "intadd" | "intmul" | "intsub" | "intdiv" | "intmod"  ;
 rules IntLogicalBinOp ::=  "intlt" | "intle" | "intgt" | "intge" ;
-rules BoolBinOp ::=  "booland" | "boolor" | "boolimplies" ;
+rules IntrinOp ::=  "booland" | "boolor" | "bvand" | "bvor" | "bvadd" | "bvxor" | "bvconcat" | "bvmul" ;
 rules PointerBinOp ::= "ptradd" ;
 
 {- SPECIFICATION -}

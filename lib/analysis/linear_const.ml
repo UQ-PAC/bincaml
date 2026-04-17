@@ -537,8 +537,8 @@ module Solver = struct
         Option.map (fun v -> (f @. f', v)) v)
     |> Option.iter (fun leaves ->
         match leaves with
-        | (f, v) :: vs ->
-            if List.for_all (Var.equal v % snd) vs then (
+        | (f, v) :: vs -> (
+            if List.for_all (Var.equal v % snd) vs then
               let assigned = node_of c.caller_id @@ StringMap.find s c.lhs in
               match !assigned.parent with
               | Some _ -> ()
@@ -613,7 +613,7 @@ module Solver = struct
     let callers = Hashtbl.create 10 in
     List.iter
       (fun pid ->
-        IDMap.find pid prog.procs |> Procedure.iter_blocks
+        Program.proc prog pid |> Procedure.iter_blocks
         |> Iter.iter (fun (bid, b) ->
             Block.stmts_iter b
             |> Iter.iter
@@ -625,7 +625,7 @@ module Solver = struct
     Worklist.add_list worklist component;
     while Worklist.non_empty worklist do
       let pid = Worklist.pop worklist in
-      let proc = IDMap.find pid prog.procs in
+      let proc = Program.proc prog pid in
       Procedure.formal_out_params proc
       |> StringMap.values
       |> Iter.map (node_of pid)

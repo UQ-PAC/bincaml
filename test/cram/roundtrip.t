@@ -1,57 +1,45 @@
 
   $ bincaml script roundtrip.sexp
+  (load-il ../../examples/irreducible_loop_1.il)
+  (dump-il before.il)
+  (load-il before.il)
+  (dump-il after.il)
+  (load-il ../../examples/x-output.il)
+  (dump-il before2.il)
+  (load-il before2.il)
+  (dump-il after2.il)
+  (load-il memassign.il)
+  (dump-il beforemem.il)
+  (load-il beforemem.il)
+  (dump-il aftermem.il)
+  (load-il ptrrec1.il)
+  (dump-il ptrrec2.il)
+  (load-il ptrrec2.il)
+  (dump-il ptrrec3.il)
 
 The serialise -> parse serialise loop should be idempotent
 
   $ diff before.il after.il
-  16c16
-  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
-  ---
-  >     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
-  18c18
-  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
-  ---
-  >     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
-  121c121
+  117c117
   <    block %main_basil_return_1 [ nop; return; ]
   ---
   >    block %main_basil_return_1 [ return; ]
-  125c125
-  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
-  ---
-  >     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
-  127c127
-  <     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
-  ---
-  >     $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1, $mem:(bv64->bv8)
   [1]
 
   $ diff before2.il after2.il
-  7,8c7,8
-  <   modifies $mem:(bv64->bv8), $stack:(bv64->bv8)
-  <   captures $mem:(bv64->bv8), $stack:(bv64->bv8)
-  ---
-  >   modifies $stack:(bv64->bv8), $mem:(bv64->bv8)
-  >   captures $stack:(bv64->bv8), $mem:(bv64->bv8)
-  [1]
 
 Memassign repr
 
   $ diff beforemem.il aftermem.il
   $ cat aftermem.il
-  var observable $Global_4325420_4325424:bv32 classification true;
-  let $a : UninterpSort = (UninterpSort)();
-  let $b : record = (Record)(0x1:bv64, 0x2:bv64, 0x3:bv64);
-  let $mul_2 (a:bv64), (b:bv64) : bv64 = (bvadd(b, bvmul(a, 0x2:bv64)));
-  let $test (a:bv64) : bv64 = (if eq(a, 0x1:bv64) then 0xa:bv64 else 0xb:bv64);
-  let $three : bv64 = let func (a:bv64) : bv64 = (bvadd(a, 0x1:bv64)) in ((func)(($mul_2)(0x2:bv64,
-           0x1:bv64)));
-  type UninterpSort;
-  type ilist = Cons of {head: bv64; tail: ilist} | Nil;
+  type uninterpSort = UninterpSort;
   type opaque = A | B | C;
+  type variants = AA of {a: bv64} | BB of {b: bv32} | CC of {c: bv8};
   type record = Record of {a: bv64; b: bv32; c: bv64};
-  type variants = A of {a: bv64} | B of {b: bv32} | C of {c: bv8};
-  prog entry @main_4196164;
+  type ilist = Cons of {head: bv64; tail: ilist} | Nil;
+  var observable $Global_4325420_4325424:bv32 classification true;
+  let $mul_2 (a:bv64), (b:bv64) : bv64 = (bvadd(b:bv64, bvmul(a:bv64, 0x2:bv64)));
+  let $test (a:bv64) : bv64 = (if eq(a:bv64, 0x1:bv64) then 0xa:bv64 else 0xb:bv64);
   proc @main_4196164(R0_in:bv64, R10_in:bv64, R11_in:bv64, R12_in:bv64, R13_in:bv64,
      R14_in:bv64, R15_in:bv64, R16_in:bv64, R17_in:bv64, R18_in:bv64, R1_in:bv64,
      R29_in:bv64, R2_in:bv64, R30_in:bv64, R31_in:bv64, R3_in:bv64, R4_in:bv64,
@@ -71,9 +59,145 @@ Memassign repr
        return;
      ]
   ];
+  let $a : uninterpSort = UninterpSort;
+  let $b : record = (Record)(0x1:bv64, 0x2:bv64, 0x3:bv64);
+  let $three : bv64 = let func (a:bv64) : bv64 = (bvadd(a:bv64, 0x1:bv64)) in ((func:(bv64->bv64))(($mul_2)(0x2:bv64,
+           0x1:bv64)));
+  prog entry @main_4196164;
 
 
 Record and Pointer
 
   $ diff ptrrec1.il ptrrec2.il
+  2d1
+  < prog entry @main_4196164;
+  14c13
+  <      var as:ptr(bv64, bv64) := ptradd(R31_in, R0_in);
+  ---
+  >      var as:ptr(bv64, bv64) := ptradd(R31_in:bv64, R0_in:bv64);
+  16c15
+  <      $rec:{"field0": (bv32, 0), "field1": (bv64, 32)} := $rec with field0 = af;
+  ---
+  >      $rec:{"field0": (bv32, 0), "field1": (bv64, 32)} := $rec with field0 = af:bv32;
+  23c22,23
+  < ];
+  \ No newline at end of file
+  ---
+  > ];
+  > prog entry @main_4196164;
+  \ No newline at end of file
+  [1]
   $ diff ptrrec2.il ptrrec3.il
+
+
+Examples Directory
+
+  $ cat << EOF | bincaml script -
+  > (load-il "../../examples/cntlm-simp-output.il")
+  > (dump-il "before.il")
+  > (load-il "before.il")
+  > (dump-il "after.il")
+  > EOF
+  (load-il ../../examples/cntlm-simp-output.il)
+  (dump-il before.il)
+  (load-il before.il)
+  (dump-il after.il)
+
+  $ diff before.il after.il | head
+
+
+  $ cat << EOF | bincaml script -
+  > (load-il "../../examples/cntlm-output.il")
+  > (dump-il "before.il")
+  > (load-il "before.il")
+  > (dump-il "after.il")
+  > EOF
+  (load-il ../../examples/cntlm-output.il)
+  (dump-il before.il)
+  (load-il before.il)
+  (dump-il after.il)
+
+  $ diff before.il after.il | head -n 50
+  493c493
+  <      goto (%main_2185,%main_2181,%main_2177,%main_2169,%main_2151,%main_2149,%main_2123,%main_2119,%main_2117,%main_2115,%main_2111,%main_2109,%main_2095,%main_2093,%main_2091,%main_2077,%main_2069,%main_2065,%main_2061,%main_2059,%main_2035,%main_2031,%main_2029,%main_2025,%main_1999,%main_1989,%main_1985,%main_1977,%main_1973,%main_1971,%main_1955);
+  ---
+  >      goto (%main_2177,%main_2185,%main_2181,%main_2169,%main_2151,%main_2149,%main_2123,%main_2119,%main_2117,%main_2115,%main_2111,%main_2109,%main_2095,%main_2093,%main_2091,%main_2077,%main_2069,%main_2065,%main_2061,%main_2059,%main_2035,%main_2031,%main_2029,%main_2025,%main_1999,%main_1989,%main_1985,%main_1977,%main_1973,%main_1971,%main_1955);
+  17779c17779
+  <    block %main_basil_return_1 [ nop; return; ]
+  ---
+  >    block %main_basil_return_1 [ return; ]
+  17833c17833
+  <    block %parent_available_basil_return_1 [ nop; return; ]
+  ---
+  >    block %parent_available_basil_return_1 [ return; ]
+  18046c18046
+  <    block %hlist_get_basil_return_1 [ nop; return; ]
+  ---
+  >    block %hlist_get_basil_return_1 [ return; ]
+  18221c18221
+  <    block %new_auth_basil_return_1 [ nop; return; ]
+  ---
+  >    block %new_auth_basil_return_1 [ return; ]
+  18314c18314
+  <    block %zmalloc_basil_return_1 [ nop; return; ]
+  ---
+  >    block %zmalloc_basil_return_1 [ return; ]
+  18978c18978
+  <    block %write_wrapper_basil_return_1 [ nop; return; ]
+  ---
+  >    block %write_wrapper_basil_return_1 [ return; ]
+  19243c19243
+  <    block %so_closed_basil_return_1 [ nop; return; ]
+  ---
+  >    block %so_closed_basil_return_1 [ return; ]
+  20727c20727
+  <    block %headers_send_basil_return_1 [ nop; return; ]
+  ---
+  >    block %headers_send_basil_return_1 [ return; ]
+  21322c21322
+  <    block %trimr_basil_return_1 [ nop; return; ]
+  ---
+  >    block %trimr_basil_return_1 [ return; ]
+  21995c21995
+  <    block %substr_basil_return_1 [ nop; return; ]
+  ---
+  >    block %substr_basil_return_1 [ return; ]
+  22411c22411
+  <    block %hlist_add_basil_return_1 [ nop; return; ];
+  ---
+  >    block %hlist_add_basil_return_1 [ return; ];
+  23342c23342
+  <    block %so_recvln_basil_return_1 [ nop; return; ];
+
+
+  $ cat << EOF | bincaml script -
+  > (load-il "../../examples/irreducible_loop_1.il")
+  > (dump-il "before.il")
+  > (load-il "before.il")
+  > (dump-il "after.il")
+  > EOF
+  (load-il ../../examples/irreducible_loop_1.il)
+  (dump-il before.il)
+  (load-il before.il)
+  (dump-il after.il)
+
+  $ diff before.il after.il
+  117c117
+  <    block %main_basil_return_1 [ nop; return; ]
+  ---
+  >    block %main_basil_return_1 [ return; ]
+  [1]
+
+  $ cat << EOF | bincaml script -
+  > (load-il "../../examples/sqrt.il")
+  > (dump-il "before.il")
+  > (load-il "before.il")
+  > (dump-il "after.il")
+  > EOF
+  (load-il ../../examples/sqrt.il)
+  (dump-il before.il)
+  (load-il before.il)
+  (dump-il after.il)
+
+  $ diff before.il after.il
+

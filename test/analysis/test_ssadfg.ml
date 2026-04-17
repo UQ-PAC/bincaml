@@ -60,7 +60,7 @@ proc @main_4196260 () -> ()
   let prog = lst.prog in
   let ba = Bincaml.Passes.PassManager.batch_of_list [ "ssa" ] in
   let prog = Bincaml.Passes.PassManager.run_batch ba prog in
-  let proc = Program.proc prog (prog.entry_proc |> Option.get_exn_or "fail") in
+  let proc = Program.entry_proc_exn prog in
   let ar = Analysis.Defuse_bool.analyse proc in
 
   let f =

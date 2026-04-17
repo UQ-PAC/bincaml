@@ -496,12 +496,12 @@ module Expr = struct
     | `Atom x -> (x, [])
     | `List xs -> (
         match xs with
-        | y :: ys -> begin
-            match y with
+        | y :: ys ->
+            begin match y with
             | `Atom x -> (x, ys)
             | `List [ _; `Atom x; _ ] -> (x, ys) (*cvc5: (as con ty)*)
             | _ -> bad ()
-          end
+            end
         | _ -> bad ())
 
   (** {1 Commands}
@@ -743,11 +743,11 @@ end = struct
               match todo with
               | x :: xs ->
                   if StringSet.mem x !processed then arrange xs
-                  else begin
-                    if StringSet.mem x !processing then
+                  else
+                    begin if StringSet.mem x !processing then
                       raise (UnexpectedSolverResponse ans) (* recursive *)
-                    else begin
-                      match StringMap.find_opt x deps with
+                    else
+                      begin match StringMap.find_opt x deps with
                       | None -> arrange xs
                       | Some (ds, e) ->
                           processing := StringSet.add x !processing;
@@ -756,8 +756,8 @@ end = struct
                           processed := StringSet.add x !processed;
                           decls := drop_as_array e :: !decls;
                           arrange xs
+                      end
                     end
-                  end
               | [] -> ()
             in
             arrange (List.map (fun (x, _, _) -> x) defs);

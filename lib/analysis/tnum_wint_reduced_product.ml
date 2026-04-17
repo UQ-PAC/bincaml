@@ -193,6 +193,15 @@ module Domain = struct
   let transfer dom stmt =
     transfer_state (fun v -> read v dom) stmt
     |> Iter.fold (fun dom (k, v) -> update k v dom) dom
+
+  let transfer_phi m (p : Var.t Lang.Block.phi) =
+    match p with
+    | { lhs; rhs } ->
+        rhs
+        |> List.map (fun (_, k) -> read k m)
+        |> List.fold_left TnumWintReducedProductLattice.join
+             TnumWintReducedProductLattice.bottom
+        |> fun v -> update lhs v m
 end
 
 module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
