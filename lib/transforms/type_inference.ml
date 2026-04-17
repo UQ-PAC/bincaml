@@ -1394,9 +1394,9 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
 let generate_constraints prog =
   Logs.info (fun m ->
       m "Generating the constraint set" ~tags:(Logger.time_stamp ()));
-  IDMap.values prog.procs
+  Program.procs prog
   |> Iter.fold
-       (fun acc proc ->
+       (fun acc (_, proc) ->
          let sva = Analysis.Sva.DFGAnalysis.flow_insensitive proc in
          Procedure.iter_blocks_topo_fwd proc
          |> Iter.fold
@@ -1619,6 +1619,31 @@ let map_decl results proc (decl : Program.declaration) : Program.declaration =
         }
   | Program.Variable { binding; attrib } ->
       Variable { binding = map_var results proc binding; attrib }
+  | Program.Procedure { definition = proc } ->
+      let definition =
+        Procedure.map_formal_in_params
+          (StringMap.map (map_var results (Some proc)))
+        @@ Procedure.map_formal_out_params
+             (StringMap.map (map_var results (Some proc)))
+        @@ Procedure.map_blocks_nondet
+             (fun (id, block) ->
+               Block.map
+                 ~phi:
+                   (List.map (fun ({ lhs; rhs } : Var.t Block.phi) ->
+                        ({
+                           lhs = map_var results (Some proc) lhs;
+                           rhs =
+                             List.map
+                               (fun (id, var) ->
+                                 (id, map_var results (Some proc) var))
+                               rhs;
+                         }
+                          : Var.t Block.phi)))
+                 (fun stmt -> map_stmt results (Some proc) stmt)
+                 block)
+             proc
+      in
+      Procedure { definition }
 
 let declare_typ (typ : Types.t) : (string * Types.t) option * Types.t =
   match typ with
@@ -1650,44 +1675,11 @@ let transform (prog : Program.t) (results : Types.t VarIdMap.t)
       (fun a ->
         match a with
         | Some (binding, typ) ->
-            Some (binding, (Type { typ; binding } : Program.declaration))
+            Some (Type { typ; binding } : Program.declaration)
         | None -> None)
       decls
   in
-  let mapped_globals = StringMap.map (map_decl results None) prog.globals in
-  {
-    prog with
-    procs =
-      IDMap.map
-        (fun proc ->
-          Procedure.map_formal_in_params
-            (StringMap.map (map_var results (Some proc)))
-          @@ Procedure.map_formal_out_params
-               (StringMap.map (map_var results (Some proc)))
-          @@ Procedure.map_blocks_nondet
-               (fun (id, block) ->
-                 Block.map
-                   ~phi:
-                     (List.map (fun ({ lhs; rhs } : Var.t Block.phi) ->
-                          ({
-                             lhs = map_var results (Some proc) lhs;
-                             rhs =
-                               List.map
-                                 (fun (id, var) ->
-                                   (id, map_var results (Some proc) var))
-                                 rhs;
-                           }
-                            : Var.t Block.phi)))
-                   (fun stmt -> map_stmt results (Some proc) stmt)
-                   block)
-               proc)
-        prog.procs;
-    (*
-      Change global variable types
-      Change function formal ins/outs
-      Add type decls
-    *)
-    globals = StringMap.add_list mapped_globals decls;
-  }
+  Program.map_decls (fun _ s -> map_decl results None s) prog |> fun prog ->
+  List.fold_left (fun prog decl -> Program.add_decl prog decl) prog decls
 
 let infer_types (prog : Program.t) = uncurry (transform prog) @@ analyse prog
