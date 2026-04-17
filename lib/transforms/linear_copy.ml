@@ -49,6 +49,7 @@ let transform_proc (p : Program.t) g (proc : Program.proc) =
 let transform (p : Program.t) =
   let gs = Solver.solve p in
 
+  Trace_core.with_span ~__FILE__ ~__LINE__ "transform" @@ fun _ ->
   Program.map_procedures
     (fun pid proc -> transform_proc p (Hashtbl.find gs pid) proc)
     p

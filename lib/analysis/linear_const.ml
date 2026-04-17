@@ -783,13 +783,15 @@ module Solver = struct
     let graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t = Hashtbl.create 100 in
     let call_graph = Program.CallGraph.make_call_graph prog in
     let summaries = Hashtbl.create 100 in
-    Program.CallGraph.Scc.scc_list call_graph
-    |> List.map
-         (List.filter_map (function
-           | Program.CallGraph.Vert.ProcBegin id -> Some id
-           | _ -> None))
-    |> List.iter (solve_component prog call_graph summaries graphs);
-    Hashtbl.iter (const collapse_composites) graphs;
+    ( Trace_core.with_span ~__FILE__ ~__LINE__ "graph-creation" @@ fun _ ->
+      Program.CallGraph.Scc.scc_list call_graph
+      |> List.map
+           (List.filter_map (function
+             | Program.CallGraph.Vert.ProcBegin id -> Some id
+             | _ -> None))
+      |> List.iter (solve_component prog call_graph summaries graphs) );
+    ( Trace_core.with_span ~__FILE__ ~__LINE__ "phi-propagation" @@ fun _ ->
+      Hashtbl.iter (const collapse_composites) graphs );
     graphs
 end
 
