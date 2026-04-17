@@ -1,7 +1,7 @@
-
 let () =
   Logs.set_level (Some Logs.Info);
-  Logs.set_reporter (Logs.format_reporter ~app:Format.std_formatter ~dst:Format.std_formatter ())
+  Logs.set_reporter
+    (Logs.format_reporter ~app:Format.std_formatter ~dst:Format.std_formatter ())
 
 let%expect_test "error then error" =
   let open Bincaml_lsp.Raw_tokens in
@@ -9,7 +9,8 @@ let%expect_test "error then error" =
     <-|} in
 
   extract_and_render_tokens stdout s;
-  [%expect {|
+  [%expect
+    {|
     <-  <--
     aa  bbb
         <-
@@ -25,7 +26,8 @@ let%expect_test "error then token" =
   let s = {|<- e|} in
 
   extract_and_render_tokens stdout s;
-  [%expect {|
+  [%expect
+    {|
     <- e
     aa b
     a: Syntax error: unrecognised token
@@ -36,9 +38,9 @@ let%expect_test "error then token" =
 let%expect_test "errors on same line" =
   let s = {| <---   <--- aa <--  <--  <--|} in
   let open Bincaml_lsp.Raw_tokens in
-
   extract_and_render_tokens stdout s;
-  [%expect {|
+  [%expect
+    {|
      <---   <--- aa <--  <--  <--
      aaaa   bbbb cc ddd  eee  ggg
     a: Syntax error: unrecognised token

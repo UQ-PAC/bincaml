@@ -157,7 +157,8 @@ class state ~(notify_back : Linol_lwt.Jsonrpc2.notify_back) ~uri
                       Printf.sprintf
                         "Unhandled exception during resolution: `%s`\n\n\
                          ```ocaml\n\
-                         %s\n```"
+                         %s\n\
+                         ```"
                         (Printexc.to_string e) bt
                     in
                     ( `MarkupContent

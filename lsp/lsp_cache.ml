@@ -18,7 +18,6 @@ let cached ~eq f argfun =
       raise e
 
 let physical = CCEqual.physical
-
 let equal2 eq1 eq2 (x1, x2) (y1, y2) = eq1 x1 y1 && eq2 x2 y2
 
 let equal3 eq1 eq2 eq3 (x1, x2, x3) (y1, y2, y3) =
@@ -43,4 +42,3 @@ let equal8 eq1 eq2 eq3 eq4 eq5 eq6 eq7 eq8 (x1, x2, x3, x4, x5, x6, x7, x8)
     (y1, y2, y3, y4, y5, y6, y7, y8) =
   eq1 x1 y1 && eq2 x2 y2 && eq3 x3 y3 && eq4 x4 y4 && eq5 x5 y5 && eq6 x6 y6
   && eq7 x7 y7 && eq8 x8 y8
-
