@@ -331,8 +331,9 @@ module CopyNode = struct
     v : Var.t;
     (* The variables this variable is copied from, through a phi. This field
        should only be read on parent nodes, in which case the list has either
-       no elements or >=2 elements.*)
-    copied_from : edge list;
+       no elements or >=2 elements. Note that phis are always copies, so we
+       don't need to store a function per edge *)
+    copied_from : t list;
     (* The union find parent node. Parent nodes have this set to None (avoid
        cycles). *)
     parent : edge option;
@@ -397,7 +398,7 @@ module CopyNode = struct
   let set_copied v copied_from =
     assert (Option.is_none !v.parent);
     assert (Option.is_none !v.copy_parent);
-    let copied_from = List.filter (not % eq v % target) copied_from in
+    let copied_from = List.filter (not % eq v) copied_from in
     v := { !v with copied_from; parent = None; copy_parent = None }
 
   (** Returns all reachable leaves from the given node, but aborts if the
@@ -419,8 +420,7 @@ module CopyNode = struct
               memo := VarMap.add (var v) None !memo;
               let open List.Traverse (Option) in
               let ans =
-                Option.map List.concat
-                @@ map_m (fun (f', v') -> dfs v' (f @. f')) ls
+                Option.map List.concat @@ map_m (fun v' -> dfs v' f) ls
               in
               Option.iter
                 (fun a -> memo := VarMap.add (var v) (Some a) !memo)
@@ -473,7 +473,8 @@ module CopyGraph = struct
         | Some (f, n') -> G.add_edge_e g (!n.v, f, !n'.v)
         | None ->
             List.fold_left
-              (fun g (f, (n' : CopyNode.t)) -> G.add_edge_e g (!n.v, f, !n'.v))
+              (fun g (n' : CopyNode.t) ->
+                G.add_edge_e g (!n.v, LF.identity, !n'.v))
               g !n.copied_from)
       G.empty nodes
 end
@@ -487,7 +488,7 @@ type call_info = {
 module Solver = struct
   let add_phi node_of (phi : Var.t Block.phi) =
     let l = node_of phi.lhs in
-    let copied = List.map (fun (_, v) -> (LF.identity, node_of v)) phi.rhs in
+    let copied = List.map (fun (_, v) -> node_of v) phi.rhs in
     CopyNode.set_copied l copied
 
   let copy_of e =
@@ -629,9 +630,7 @@ module Solver = struct
             if not @@ LF.is_id f then
               (* We can propagate copies further possibly *)
               match
-                effective_copy_parent
-                  (List.map snd !node.copied_from)
-                  (ref VarSet.empty)
+                effective_copy_parent !node.copied_from (ref VarSet.empty)
               with
               | SSome n -> join_copy n node
               | Skip -> failwith "the effective parent shouldn't ever be skip!"
@@ -649,7 +648,7 @@ module Solver = struct
     (* memo stores computed parent edges per node, from said node. if we are
        mid computation of that node, we store SNone. if another searcher
        queries memo and finds Some SNone, then there is a cycle. *)
-    and effective_parent f (edges : edge list) memo =
+    and effective_parent f (nodes : t list) memo =
       let step ((f', n) : edge) =
         assert (Option.is_none !n.parent);
         let f = f @. f' in
@@ -658,8 +657,13 @@ module Solver = struct
         | Some Skip -> Skip
         | Some SNone when LF.is_id f -> Skip
         (* I came up with a funky argument for why any non-identity cycle
-           should return None i promise (return None as in return this node as
-           the parent) *)
+           should return None (return None as in return this node as
+           the parent)
+           It was something like: if we have a non identity function from the
+           root that loops back on a currently searched node, that node will
+           have a path to the root of this search, giving us a non identity
+           loop through the root! In this case the node before the loop should
+           be returned as the parent. *)
         | Some SNone -> SSome (f', n)
         | None -> (
             memo := VarMap.add !n.v SNone !memo;
@@ -678,19 +682,21 @@ module Solver = struct
             memo := VarMap.add !n.v ans !memo;
             match ans with SSome (f'', n') -> SSome (f' @. f'', n') | a -> a)
       in
-      match edges with
-      | e :: es ->
+      match nodes with
+      | n :: ns ->
           List.fold_left
-            (fun acc e ->
-              let b = step @@ finde e in
+            (fun acc n ->
+              let b = step @@ find n in
               match (acc, b) with
               | a, Skip | Skip, a -> a
               | SSome (f1, n1), SSome (f2, n2) when CopyNode.eq n1 n2 ->
                   SSome (LF.join f1 f2, n1)
               | _ -> SNone)
-            (step @@ finde e)
-            es
+            (step @@ find n)
+            ns
       | [] -> SNone
+    (* The same thing as above but only copy propagation only (so much
+       duplication...) *)
     and effective_copy_parent (nodes : t list) visited =
       let step n =
         assert (Option.is_none !n.copy_parent);
@@ -698,7 +704,7 @@ module Solver = struct
         else (
           visited := VarSet.add !n.v !visited;
           if VarSet.mem !n.v !searching then
-            match List.map snd !n.copied_from with
+            match !n.copied_from with
             | [] -> SSome n
             | ns -> effective_copy_parent ns visited
           else (
