@@ -1,23 +1,8 @@
-(* This file is free software, part of linol. See file "LICENSE" for more information *)
-
-(* Some user code
-
-   The code here is just a placeholder to make this file compile, it is expected
-   that users have an implementation of a processing function for input contents.
-
-   Here we expect a few things:
-   - a type to represent a state/environment that results from processing an
-     input file
-   - a function processing an input file (given the file contents as a string),
-     which return a state/environment
-   - a function to extract a list of diagnostics from a state/environment.
-     Diagnostics includes all the warnings, errors and messages that the processing
-     of a document are expected to be able to return.
-*)
-
 module Lsp = Linol.Lsp
 module Lsp_state = Bincaml_lsp.Lsp_state
 
+(** Executes the given subproess command, reporting failures to the given
+    [notify_back]. Successes will be reported as well if [quiet] is false. *)
 let run_command ?(quiet = true) ~notify_back command =
   let stdout, stderr, errcode = CCUnix.call ~stdin:(`Str "") "%s" command in
 
@@ -36,15 +21,6 @@ let run_command ?(quiet = true) ~notify_back command =
 
 (* Lsp server class
 
-   This is the main point of interaction beetween the code checking documents
-   (parsing, typing, etc...), and the code of linol.
-
-   The [Linol_lwt.Jsonrpc2.server] class defines a method for each of the action
-   that the lsp server receives, such as opening of a document, when a document
-   changes, etc.. By default, the method predefined does nothing (or errors out ?),
-   so that users only need to override methods that they want the server to
-   actually meaningfully interpret and respond to.
-
     https://c-cube.github.io/linol/linol/Linol/Jsonrpc2/module-type-S/class-server/index.html
 *)
 class lsp_server =
@@ -61,11 +37,6 @@ class lsp_server =
     method get uri = Hashtbl.find buffers uri
     method spawn_query_handler f = Linol_lwt.spawn f
 
-    (* We define here a helper method that will:
-       - process a document
-       - store the state resulting from the processing
-       - return the diagnostics from the new state
-    *)
     method private _on_doc ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
         ?(force = false) (uri : Lsp.Types.DocumentUri.t) (contents : string) =
       latest_uri <- uri;
@@ -80,14 +51,10 @@ class lsp_server =
       ignore @@ st#diagnostics;
       Hashtbl.replace buffers uri st
 
-    (* We now override the [on_notify_doc_did_open] method that will be called
-       by the server each time a new document is opened. *)
     method on_notif_doc_did_open ~notify_back d ~content : unit Linol_lwt.t =
       self#_on_doc ~notify_back d.uri content;
       Lwt.return ()
 
-    (* Similarly, we also override the [on_notify_doc_did_change] method that will be called
-       by the server each time a new document is opened. *)
     method on_notif_doc_did_change ~notify_back d changes ~old_content:_old
         ~new_content =
       self#_on_doc ~notify_back d.uri new_content;

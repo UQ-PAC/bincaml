@@ -12,6 +12,7 @@
 , linol-lwt
 , containers
 , ppx_deriving
+, ppx_import
 
 # test:
 
@@ -29,7 +30,7 @@ buildDunePackage {
   checkInputs = [];
   nativeBuildInputs = [ writableTmpDirAsHomeHook ];
   buildInputs =
-    [ bincaml logs fmt iter linol linol-lwt containers ppx_deriving ];
+    [ bincaml logs fmt iter linol linol-lwt containers ppx_deriving ppx_import ];
   propagatedBuildInputs = [ ];
 
   doCheck = true;
