@@ -21,11 +21,20 @@ type phi_edge = {
   tgt : ID.t;  (** ID of the target block for this phi edge. *)
   phi_assignments : (Var.t * Var.t) list;
       (** Assignments to be made within this phi edge. *)
+  assumes : (Var.t, Var.t, Program.e) Stmt.t list;
+      (** {!Stmt.Instr_Assume} branch guard statements occuring at the beginning
+          of the target block. *)
 }
 (** An intermediate value for the information needed to create a "phi edge"
     between two blocks. A phi edge is made up of two jumps with a new block of
     assignments in the middle:
     {v src -> phi_assignments -> tgt v} *)
+
+(** Returns whether the given statement is an {!Stmt.Instr_Assume} with [branch]
+    set to true, i.e., whether it is a branch guard. *)
+let is_assume = function
+  | Stmt.Instr_Assume { branch = true } -> true
+  | _ -> false
 
 let identify_needed_phi_edges (graph : G.t) : phi_edge Iter.t =
   let block_of_id : ID.t -> (Var.t, Expr.BasilExpr.t) Block.t =
@@ -41,28 +50,31 @@ let identify_needed_phi_edges (graph : G.t) : phi_edge Iter.t =
         match block_of_id tgt with
         | { phis = []; stmts } -> None
         | { phis; stmts } ->
-            Some { src; tgt; phi_assignments = phis_from_src src phis })
+            let assumes, rest =
+              CCList.take_drop_while is_assume (CCVector.to_list stmts)
+            in
+            if List.exists is_assume rest then
+              failwith "block has non-contiguous assumes";
+            Some { src; tgt; phi_assignments = phis_from_src src phis; assumes }
+        )
     | _ -> None)
 
 let add_phi_edges procedure (phis : phi_edge Iter.t) =
-  phis
-  |> Iter.fold
-       (fun graph { src; tgt; phi_assignments } ->
-         let stmt =
-           Stmt.Instr_Assign
-             (phi_assignments
-             |> List.map (fun (lhs, rhs) ->
-                 (lhs, Expr.BasilExpr.E (RVar { attrib = None; id = rhs }))))
-         in
-         (* TODO: propagate assumes? *)
-         (* TODO: alternatively, do we just use some kind of conditional inside the target block?????? *)
-         let procedure, intermediate_block =
-           Procedure.fresh_block procedure
-             ~name:(ID.name tgt ^ "phis")
-             ~stmts:[ stmt ] ~successors:[ tgt ] ()
-         in
-         Procedure.add_goto ~from:src ~targets:[ tgt ] procedure)
-       procedure
+  Iter.fold
+    (fun graph { src; tgt; phi_assignments; assumes } ->
+      let phi_assign =
+        Stmt.Instr_Assign
+          (phi_assignments
+          |> List.map (fun (lhs, rhs) ->
+              (lhs, Expr.BasilExpr.E (RVar { attrib = None; id = rhs }))))
+      in
+      let procedure, intermediate_block =
+        Procedure.fresh_block procedure
+          ~name:(ID.name tgt ^ "phis")
+          ~stmts:(phi_assign :: assumes) ~successors:[ tgt ] ()
+      in
+      Procedure.add_goto ~from:src ~targets:[ intermediate_block ] procedure)
+    procedure phis
 
 let remove_phis_from_blocks =
   Procedure.map_graph (fun g ->
@@ -80,6 +92,6 @@ let remove_phis_from_blocks =
 let dsa (proc : Program.proc) =
   match Procedure.graph proc with
   | Some g ->
-      identify_needed_phi_edges g
-      |> add_phi_edges proc |> remove_phis_from_blocks
+      g |> identify_needed_phi_edges |> add_phi_edges proc
+      |> remove_phis_from_blocks
   | None -> proc
