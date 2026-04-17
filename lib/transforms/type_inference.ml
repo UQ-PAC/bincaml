@@ -45,11 +45,7 @@ module VarId : sig
   val make_id : string -> t
   val fresh : unit -> t
 end = struct
-  type t = string
-
-  let compare = String.compare
-  let equal = String.equal
-  let show = id
+  type t = string [@@deriving eq, ord, show]
 
   let var_procid_to_uid (var : Var.t) (procId : ID.t) : t =
     if Var.is_global var then Var.name var
@@ -110,11 +106,12 @@ module InferredType = struct
         Printf.sprintf "(%s) → (%s)"
           (Iter.to_string show (StringMap.values ins))
           (Iter.to_string show (StringMap.values outs))
-    | Record (fields, _) ->
-        Printf.sprintf "{ %s }"
-        @@ String.concat_iter ~sep:", "
-        @@ Iter.map (fun (_, field) -> show_field field)
-        @@ ZMap.to_iter fields
+    | Record (fields, size) ->
+        Printf.sprintf "{ %s } : %d"
+          (String.concat_iter ~sep:", "
+          @@ Iter.map (fun (_, field) -> show_field field)
+          @@ ZMap.to_iter fields)
+          size
 
   and show_field { offset; size; ty } =
     Printf.sprintf "(%s, %d): %s" (Z.to_string offset) size (show ty)
@@ -271,12 +268,7 @@ module InferredType = struct
 end
 
 module TySet = struct
-  module S = Set.Make (struct
-    type t = InferredType.t
-
-    let compare = InferredType.compare
-  end)
-
+  module S = Set.Make (InferredType)
   include S
 
   let show ts = to_list ts |> List.map InferredType.show |> String.concat ", "
@@ -284,15 +276,13 @@ end
 
 module ConstraintState = struct
   module TypeConstraint = struct
-    type t = { lb : TySet.t; ub : TySet.t }
+    type t = { lb : TySet.t; ub : TySet.t } [@@deriving eq, ord]
 
-    let equal { lb; ub } { lb = lb2; ub = ub2 } =
-      TySet.equal lb lb2 && TySet.equal ub ub2
+    let show { lb; ub } =
+      "lower: " ^ TySet.show lb ^ "\nupper: " ^ TySet.show ub
   end
 
-  type t = TypeConstraint.t VarIdMap.t
-
-  let equal (a : t) (b : t) = VarIdMap.equal TypeConstraint.equal a b
+  type t = TypeConstraint.t VarIdMap.t [@@deriving eq, ord]
 
   let show (m : t) =
     VarIdMap.bindings m
@@ -324,6 +314,9 @@ module ConstraintState = struct
     | None -> false
     | Some { lb; ub } ->
         if Polarity.positive bound then TySet.mem typ lb else TySet.mem typ ub
+
+  let iter = VarIdMap.iter
+  let bindings = VarIdMap.bindings
 
   let export_graphviz (t : t) : string =
     Printf.sprintf "\ndigraph G {\n%s\n%s\n}"

@@ -3,7 +3,6 @@ open Transforms.Type_inference
 open ConstraintState
 open ConstraintState.TypeConstraint
 open InferredType
-open Lang
 
 let gen = ID.make_gen ()
 
@@ -28,20 +27,20 @@ let%test_unit "Add bounds" =
   let st2 = VarIdMap.of_list ls in
   assert (ConstraintState.equal st st2)
 
-let%test_unit "Basic consistent constraint set" =
+let%test_unit "Constraint generation - Simple Cascading" =
   (*
     ```
-    var a = b;
-    var b = c;
-    var c = true;
+    var a : bv1 := b : bv1;
+    var b : bv1 := c : bv1;
+    var c : bv1 := true;
     ```
     
     b <= a
     c <= b, therefore c <= a
 
-    a: lower = [bool],    upper = []
-    b: lower = [bool],    upper = [a]
-    c: lower = [bool],    upper = [b]
+    a: lower = [bool, bv1],    upper = []
+    b: lower = [bool, bv1],    upper = [a]
+    c: lower = [bool, bv1],    upper = [b]
   *)
   let block =
     {|
@@ -92,6 +91,100 @@ proc @main_4196260 () -> ()
   in
   let st2 = VarIdMap.of_list ls in
   assert (ConstraintState.equal st st2)
+
+let%test_unit "Constraint generation - Simple Record" =
+  (*
+    ```
+    var record : bv64 := 0x2 : bv64;
+    var field1 : bv32 := extract(32, 0 , record : bv64);
+    var field2 : bv32 := extract(64, 32, record : bv64);
+    ```
+
+    field1 <= alpha
+    record <= {(0, 32) : alpha}
+    field1 <= beta
+    record <= {(32, 32) : beta}
+
+    field1: lower = [bv32, alpha],    upper = []
+    field2: lower = [bv32, beta ],    upper = []
+    record: lower = [bv64, {(0,32): alpha, (32,32): beta} ],    upper = []
+    
+    
+  *)
+  let block =
+    {|
+memory shared $mem : (bv64 -> bv8);
+var $record : bv64;
+var $field1 : bv32;
+
+var $record : bv64;
+var $field2 : bv32;
+
+prog entry @main_4196260;
+
+proc @main_4196260 () -> ()
+[
+  block %main_entry [
+    $record : bv64 := 0x2 : bv64;
+    $field1 : bv32 := extract(32, 0, $record : bv64);
+    $field2 : bv32 := extract(64, 32, $record : bv64);
+    goto(%main_basil_return_1);
+  ];
+  block %main_basil_return_1 [
+    return ();
+  ]
+];
+
+    |}
+  in
+  let lst =
+    Loader.Loadir.ast_of_string ~__LINE__ ~__FILE__ ~__FUNCTION__ block
+  in
+  let prog = lst.prog in
+
+  let st = generate_constraints prog in
+
+  let field1 = TypeVar (VarId.make_id "Extraction_v") in
+  let field2 = TypeVar (VarId.make_id "Extraction_v_1") in
+
+  let record1 =
+    Record
+      (ZMap.singleton Z.zero { offset = Z.zero; size = 32; ty = field1 }, 64)
+  in
+  let record2 =
+    Record
+      ( ZMap.singleton (Z.of_int 32)
+          { offset = Z.of_int 32; size = 32; ty = field2 },
+        64 )
+  in
+
+  let ls =
+    [
+      ( VarId.make_id "$record",
+        { lb = TySet.of_list [ BV 64; record1; record2 ]; ub = TySet.empty } );
+      ( VarId.make_id "$field1",
+        { lb = TySet.of_list [ BV 32 ]; ub = TySet.empty } );
+      ( VarId.make_id "$field2",
+        { lb = TySet.of_list [ BV 32 ]; ub = TySet.empty } );
+      ( VarId.make_id "Extraction_v",
+        {
+          lb = TySet.of_list [ BV 32 ];
+          ub = TySet.singleton (TypeVar (VarId.make_id "$field1"));
+        } );
+      ( VarId.make_id "Extraction_v_1",
+        {
+          lb = TySet.of_list [ BV 32 ];
+          ub = TySet.singleton (TypeVar (VarId.make_id "$field2"));
+        } );
+    ]
+  in
+  let st2 = VarIdMap.of_list ls in
+  assert (ConstraintState.equal st st2);
+  assert (
+    List.equal
+      (fun (_, ty) (_, ty2) -> Types.equal ty ty2)
+      (snd @@ simplify_types @@ unconstrain_types st)
+      (snd @@ simplify_types @@ unconstrain_types st2))
 
 let%test_unit "Record joining" =
   let fields1 =
