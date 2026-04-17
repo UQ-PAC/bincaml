@@ -7,7 +7,7 @@ proc @main(a:bv64, x:bool) -> ()
         (var c:bv64, var d:bv64) := call @loop(b:bv64, b:bv64);
         (var e:bv64) := call @cross(d:bv64, bvadd(d:bv64, 1:bv64));
         (var f:bv64 := bvadd(1:bv64, c:bv64), var g:bv64 := bvadd(1:bv64, e:bv64));
-        var y:bool := x:bool;
+        (var y:bool) := call @bool_id(x:bool);
         var z:bool := y:bool;
         return;
     ];
@@ -106,5 +106,12 @@ proc @cross(a:bv64, b:bv64) -> (o:bv64)
         var o_3:bv64 := phi(%a -> o_1:bv64, %b -> o_2:bv64)
     ) [
         return (o_3:bv64);
+    ];
+];
+
+proc @bool_id(a:bool) -> (o:bool)
+[
+    block %entry [
+        return (a:bool);
     ];
 ];
