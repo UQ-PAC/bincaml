@@ -272,7 +272,7 @@ module PassManager = struct
   let simp =
     {
       name = "simplify";
-      apply = Batch [ cf_exprs; linear_const; cf_exprs];
+      apply = Batch [ cf_exprs; linear_const; cf_exprs; linear_copy; cf_exprs; inter_dead ];
       doc =
         "Performs some simplifications (linear constant propagation, copy \
          propagation, constant folding, dead store elimination). Requires SSA \

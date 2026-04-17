@@ -336,6 +336,7 @@ module CopyNode = struct
     (* The union find parent node. Parent nodes have this set to None (avoid
        cycles). *)
     parent : edge option;
+    copy_parent : t option;
   }
 
   and edge = LF.t * t
@@ -347,7 +348,9 @@ module CopyNode = struct
   let target : edge -> t = snd
 
   let ( @. ) = LF.compose
-  let init v : t = ref { v; copied_from = []; parent = None }
+
+  let init v : t =
+    ref { v; copied_from = []; parent = None; copy_parent = None }
 
   (** Get the parent of this node (basically constant time because of path
       compression) *)
@@ -355,12 +358,20 @@ module CopyNode = struct
     match !v.parent with
     | Some (f1, v') ->
         let f2, v'' = find v' in
-        let p = (f1 @. f2, v'') in
-        (* We can clear the copied_from field whenever setting the parent for
-           the garbage collector to gobble on (yum) *)
-        v := { v = !v.v; copied_from = []; parent = Some p };
+        let f = f1 @. f2 in
+        let p = (f, v'') in
+        v := { !v with parent = Some p };
         p
     | None -> (LF.identity, v)
+
+  (** Get the copy parent of a node with path compression *)
+  let rec find_copy v : t =
+    match !v.copy_parent with
+    | Some v' ->
+        let p = find_copy v' in
+        v := { !v with copy_parent = Some p };
+        p
+    | None -> v
 
   (** Get the parent of this edge, with functions composed *)
   let finde ((f1, n) : edge) : edge =
@@ -369,7 +380,14 @@ module CopyNode = struct
 
   (** `join v f v'` points `v'` to `v` through f *)
   let join v f v' : unit =
-    v' := { !v' with copied_from = []; parent = Some (f, v) }
+    assert (Option.is_none !v'.parent);
+    let copy_parent = if LF.is_id f then Some v else None in
+    v' := { !v' with parent = Some (f, v); copy_parent }
+
+  (** `join_copy v v'` points `v'` to `v` in the copy graph *)
+  let join_copy v v' : unit =
+    assert (Option.is_none !v'.copy_parent);
+    v' := { !v' with copy_parent = Some v }
 
   let eq (n : t) (m : t) = Var.equal !n.v !m.v
 
@@ -378,8 +396,9 @@ module CopyNode = struct
       v2)) *)
   let set_copied v copied_from =
     assert (Option.is_none !v.parent);
+    assert (Option.is_none !v.copy_parent);
     let copied_from = List.filter (not % eq v % target) copied_from in
-    v := { v = !v.v; copied_from; parent = None }
+    v := { !v with copied_from; parent = None; copy_parent = None }
 
   (** Returns all reachable leaves from the given node, but aborts if the
       predicate is violated or if a top edge cycle is found *)
@@ -482,12 +501,18 @@ module Solver = struct
     | Instr_Assign a ->
         List.iter
           (fun (v, e) ->
-            match LF.Extract.extract_expr e with
-            | f, Some v' ->
+            (* handle non bitvector copies first *)
+            match copy_of e with
+            | Some v' ->
                 let v, v' = (node_of v, node_of v') in
-                (* v := f(v'), draw edge from v to v' with f *)
-                CopyNode.join v' f v
-            | _, None -> ())
+                CopyNode.join v' LF.identity v
+            | None -> (
+                match LF.Extract.extract_expr e with
+                | f, Some v' ->
+                    let v, v' = (node_of v, node_of v') in
+                    (* v := f(v'), draw edge from v to v' with f *)
+                    CopyNode.join v' f v
+                | _, None -> ()))
           a
     | Instr_Call c ->
         (* We at the same time create a list of all callers of each procedure in the scc. *)
@@ -599,7 +624,18 @@ module Solver = struct
              (ref (VarMap.singleton !node.v SNone))
          with
         | SSome ((LF.TopEdge | LF.BotEdge | LF.Join _), l) -> ()
-        | SSome (f, l) -> join l f node
+        | SSome (f, l) -> (
+            join l f node;
+            if not @@ LF.is_id f then
+              (* We can propagate copies further possibly *)
+              match
+                effective_copy_parent
+                  (List.map snd !node.copied_from)
+                  (ref VarSet.empty)
+              with
+              | SSome n -> join_copy n node
+              | Skip -> failwith "the effective parent shouldn't ever be skip!"
+              | _ -> ())
         | Skip -> failwith "the effective parent shouldn't ever be skip!"
         | SNone -> ());
         searching := VarSet.remove !node.v !searching;
@@ -621,7 +657,9 @@ module Solver = struct
         | Some (SSome (f'', n')) -> SSome (f' @. f'', n')
         | Some Skip -> Skip
         | Some SNone when LF.is_id f -> Skip
-        (* I came up with a funky argument for why any non-identity cycle should return None i promise *)
+        (* I came up with a funky argument for why any non-identity cycle
+           should return None i promise (return None as in return this node as
+           the parent) *)
         | Some SNone -> SSome (f', n)
         | None -> (
             memo := VarMap.add !n.v SNone !memo;
@@ -634,7 +672,9 @@ module Solver = struct
                 search n;
                 SSome (find n))
             in
-            let ans = match ans with SNone -> SSome (LF.identity, n) | e -> e in
+            let ans =
+              match ans with SNone -> SSome (LF.identity, n) | e -> e
+            in
             memo := VarMap.add !n.v ans !memo;
             match ans with SSome (f'', n') -> SSome (f' @. f'', n') | a -> a)
       in
@@ -650,6 +690,32 @@ module Solver = struct
               | _ -> SNone)
             (step @@ finde e)
             es
+      | [] -> SNone
+    and effective_copy_parent (nodes : t list) visited =
+      let step n =
+        assert (Option.is_none !n.copy_parent);
+        if VarSet.mem !n.v !visited then Skip
+        else (
+          visited := VarSet.add !n.v !visited;
+          if VarSet.mem !n.v !searching then
+            match List.map snd !n.copied_from with
+            | [] -> SSome n
+            | ns -> effective_copy_parent ns visited
+          else (
+            search n;
+            SSome (find_copy n)))
+      in
+      match nodes with
+      | n :: ns ->
+          List.fold_left
+            (fun acc n ->
+              let b = step @@ find_copy n in
+              match (acc, b) with
+              | a, Skip | Skip, a -> a
+              | SSome n1, SSome n2 when CopyNode.eq n1 n2 -> SSome n1
+              | _ -> SNone)
+            (step @@ find_copy n)
+            ns
       | [] -> SNone
     in
     VarMap.iter (const (search % snd % find)) g

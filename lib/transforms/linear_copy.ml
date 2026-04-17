@@ -18,10 +18,7 @@ let expr_of f v =
 let transform_proc (p : Program.t) g (proc : Program.proc) =
   let copied_by v =
     VarMap.get v g
-    |> Option.flat_map (fun n ->
-        match CopyNode.find n with
-        | f, n when LF.is_id f -> Some (CopyNode.var n)
-        | _ -> None)
+    |> Option.map CopyNode.(var % find_copy)
     |> Option.get_or ~default:v
   in
   let trans v =
