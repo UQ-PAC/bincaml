@@ -1680,6 +1680,13 @@ let transform (prog : Program.t) (results : Types.t VarIdMap.t)
       decls
   in
   Program.map_decls (fun _ s -> map_decl results None s) prog |> fun prog ->
-  List.fold_left (fun prog decl -> Program.add_decl prog decl) prog decls
+  List.fold_left (fun prog decl -> Program.add_decl prog decl) prog
+  @@ List.sort
+       (fun a b ->
+         match (a, b) with
+         | Program.Type { binding; _ }, Type { binding = binding2; _ } ->
+             String.compare binding binding2
+         | _ -> failwith "?")
+       decls
 
 let infer_types (prog : Program.t) = uncurry (transform prog) @@ analyse prog
