@@ -271,7 +271,9 @@ module PassManager = struct
     {
       name = "linear-copy";
       apply = Prog Transforms.Linear_copy.transform;
-      doc = "blah";
+      doc =
+        "Inteprocedural linear expression propagation. This is helpful in \
+         cleaning stack address uses. Assumes SSA.";
     }
 
   let simp =
@@ -283,9 +285,9 @@ module PassManager = struct
             cf_exprs; linear_const; cf_exprs; linear_copy; cf_exprs; inter_dead;
           ];
       doc =
-        "Performs some simplifications (linear constant propagation, copy \
-         propagation, constant folding, dead store elimination). Requires SSA \
-         form.";
+        "Performs some simplifications (linear constant propagation, linear \
+         copy propagation, constant folding, dead store elimination). Requires \
+         SSA form.";
     }
 
   let passes =

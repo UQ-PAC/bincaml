@@ -544,8 +544,7 @@ module Solver = struct
               | Some _ -> ()
               | None -> (
                   (* i had so much fun writing this...
-                            match List.fold_left (( %> ) fst % LF.join) f vs with
-                            but alas it was 81 characters *)
+                  match List.fold_left (( %> ) fst % LF.join) f vs with *)
                   match List.fold_left (fun f (g, _) -> LF.join f g) f vs with
                   | TopEdge | BotEdge | LF.Join _ -> ()
                   | f ->
