@@ -1,4 +1,13 @@
-prog entry @f;
+prog entry @main;
+
+proc @main(x:bv64) -> ()
+[
+    block %main [
+        (var y:bv64) := call @f(x:bv64);
+        var z:bv64 := bvadd(1:bv64, y:bv64);
+        return;
+    ];
+];
 
 proc @f(x:bv64) -> (o:bv64)
 [

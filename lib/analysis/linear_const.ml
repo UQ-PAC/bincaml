@@ -526,7 +526,36 @@ module Solver = struct
     let open Expr.BasilExpr in
     match unfix e with RVar { id } -> Some id | _ -> None
 
-  let add_intra_stmt callers node_of pid component stmt =
+  let propagate_call node_of update_worklist s c ls =
+    let open CopyNode in
+    let open List.Traverse (Option) in
+    ls
+    |> List.map (fun (f, (n : CopyNode.t)) ->
+        (f, StringMap.find (Var.name !n.v) c.args))
+    |> map_m (fun (f, e) ->
+        let f', v = LF.Extract.extract_expr e in
+        Option.map (fun v -> (f @. f', v)) v)
+    |> Option.iter (fun leaves ->
+        match leaves with
+        | (f, v) :: vs ->
+            if List.for_all (Var.equal v % snd) vs then (
+              let assigned = node_of c.caller_id @@ StringMap.find s c.lhs in
+              match !assigned.parent with
+              | Some _ -> ()
+              | None -> (
+                  (* i had so much fun writing this...
+                            match List.fold_left (( %> ) fst % LF.join) f vs with
+                            but alas it was 81 characters *)
+                  match List.fold_left (fun f (g, _) -> LF.join f g) f vs with
+                  | TopEdge | BotEdge | LF.Join _ -> ()
+                  | f ->
+                      join (node_of c.caller_id v) f assigned;
+                      (* We have updated the caller's graph so we
+                                   should recompute it *)
+                      update_worklist c.caller_id))
+        | [] -> failwith "leaves should never be empty!")
+
+  let add_intra_stmt summaries callers node_of pid component stmt =
     let open Stmt in
     match stmt with
     | Instr_Assign a ->
@@ -535,12 +564,12 @@ module Solver = struct
             (* handle non bitvector copies first *)
             match copy_of e with
             | Some v' ->
-                let v, v' = (node_of v, node_of v') in
+                let v, v' = (node_of pid v, node_of pid v') in
                 CopyNode.join v' LF.identity v
             | None -> (
                 match LF.Extract.extract_expr e with
                 | f, Some v' ->
-                    let v, v' = (node_of v, node_of v') in
+                    let v, v' = (node_of pid v, node_of pid v') in
                     (* v := f(v'), draw edge from v to v' with f *)
                     CopyNode.join v' f v
                 | _, None -> ()))
@@ -553,11 +582,21 @@ module Solver = struct
               let c = { caller_id = pid; lhs = c.lhs; args = c.args } in
               match l with Some cs -> Some (c :: cs) | None -> Some [ c ])
             ~k:c.procid
+        else
+          Hashtbl.get summaries c.procid
+          |> Option.iter (fun m ->
+              let c = { caller_id = pid; lhs = c.lhs; args = c.args } in
+              StringMap.iter
+                (fun s v ->
+                  StringMap.get s m
+                  |> Option.iter (fun leaves ->
+                      propagate_call node_of ignore s c leaves))
+                c.lhs)
     | _ -> ()
 
   module Worklist = Worklist.Make (ID)
 
-  let solve_component (prog : Program.t) call_graph
+  let solve_component (prog : Program.t) call_graph summaries
       (graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t) component =
     let open CopyNode in
     let node_of pid v =
@@ -577,7 +616,8 @@ module Solver = struct
         IDMap.find pid prog.procs |> Procedure.iter_blocks
         |> Iter.iter (fun (bid, b) ->
             Block.stmts_iter b
-            |> Iter.iter (add_intra_stmt callers (node_of pid) pid component);
+            |> Iter.iter
+                 (add_intra_stmt summaries callers node_of pid component);
             List.iter (add_phi (node_of pid)) b.phis))
       component;
     (* The interproc part *)
@@ -598,39 +638,16 @@ module Solver = struct
               (not (List.is_empty leaves))
               |> flip Option.return_if (node, leaves)))
       |> Iter.iter (fun ((node : CopyNode.t), leaves) ->
+          (* Store a summary of this outvar *)
+          let m = Hashtbl.get_or summaries pid ~default:StringMap.empty in
+          let m = StringMap.add (Var.name !node.v) leaves m in
+          Hashtbl.replace summaries pid m;
           Hashtbl.get_or callers pid ~default:[]
           |> List.iter (fun (call : call_info) ->
-              let open List.Traverse (Option) in
-              leaves
-              |> List.map (fun (f, (n : CopyNode.t)) ->
-                  (f, StringMap.find (Var.name !n.v) call.args))
-              |> map_m (fun (f, e) ->
-                  let f', v = LF.Extract.extract_expr e in
-                  Option.map (fun v -> (f @. f', v)) v)
-              |> Option.iter (fun leaves ->
-                  match leaves with
-                  | (f, v) :: vs -> (
-                      if List.for_all (Var.equal v % snd) vs then
-                        let assigned =
-                          node_of call.caller_id
-                          @@ StringMap.find (Var.name !node.v) call.lhs
-                        in
-                        match !assigned.parent with
-                        | Some _ -> ()
-                        | None -> (
-                            (* i had so much fun writing this...
-                            match List.fold_left (( %> ) fst % LF.join) f vs with
-                            but alas it was 81 characters *)
-                            match
-                              List.fold_left (fun f (g, _) -> LF.join f g) f vs
-                            with
-                            | TopEdge | BotEdge | LF.Join _ -> ()
-                            | f ->
-                                join (node_of call.caller_id v) f assigned;
-                                (* We have updated the caller's graph so we
-                                   should recompute it *)
-                                Worklist.add worklist call.caller_id))
-                  | [] -> failwith "leaves should never be empty!")))
+              propagate_call node_of
+                (fun pid -> Worklist.add worklist pid)
+                (Var.name @@ var node)
+                call leaves))
     done
 
   type 'a skip_option = SSome of 'a | Skip | SNone
@@ -745,12 +762,13 @@ module Solver = struct
   let solve (prog : Program.t) =
     let graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t = Hashtbl.create 100 in
     let call_graph = Program.CallGraph.make_call_graph prog in
+    let summaries = Hashtbl.create 100 in
     Program.CallGraph.Scc.scc_list call_graph
     |> List.map
          (List.filter_map (function
            | Program.CallGraph.Vert.ProcBegin id -> Some id
            | _ -> None))
-    |> List.iter (solve_component prog call_graph graphs);
+    |> List.iter (solve_component prog call_graph summaries graphs);
     Hashtbl.iter (const collapse_composites) graphs;
     graphs
 end
