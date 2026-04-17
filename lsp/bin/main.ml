@@ -55,6 +55,9 @@ class lsp_server =
     val buffers : (Lsp.Types.DocumentUri.t, Lsp_state.state) Hashtbl.t =
       Hashtbl.create 32
 
+    val mutable latest_uri : Lsp.Types.DocumentUri.t =
+      Lsp.Types.DocumentUri.of_path "/"
+
     method get uri = Hashtbl.find buffers uri
     method spawn_query_handler f = Linol_lwt.spawn f
 
@@ -65,6 +68,7 @@ class lsp_server =
     *)
     method private _on_doc ~(notify_back : Linol_lwt.Jsonrpc2.notify_back)
         ?(force = false) (uri : Lsp.Types.DocumentUri.t) (contents : string) =
+      latest_uri <- uri;
       notify_back#set_uri uri;
       let st =
         match Hashtbl.find_opt buffers uri with
@@ -195,6 +199,18 @@ class lsp_server =
                   in
                   Lwt.return `Null)
         end
+      | cmd, _ when List.mem cmd self#config_list_commands ->
+          let message =
+            "Code action command missing file context. Please invoke the \
+             command from the contextual code actions."
+          in
+          let params =
+            Lsp.Types.ShowMessageParams.create ~type_:Error ~message
+          in
+          notify_back#set_uri latest_uri;
+          notify_back#send_notification
+            (Lsp.Server_notification.ShowMessage params)
+          |> Lwt.map (fun _ -> `Null)
       | _ ->
           super#on_req_execute_command ~notify_back ~id ~workDoneToken cmd args
 
