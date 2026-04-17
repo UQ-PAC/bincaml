@@ -340,7 +340,7 @@ let get_entry_block p =
 
 (** Get the block for an id
 
-    @raise Not_found when the block does not exist. *)
+    raise Not_found when the block does not exist. *)
 let find_block p id =
   let open Edge in
   let open G in
@@ -398,18 +398,23 @@ let replace_block_succs p id succs =
 let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
   update_block p id block
 
-let lookup_local_decl p v = Var.Decls.find (local_decls p) v
+let lookup_local_decl p v =
+  Var.Decls.find_opt (local_decls p) v
+  |> Option.or_lazy ~else_:(fun () ->
+      StringMap.find_opt v (formal_out_params p))
+  |> Option.or_lazy ~else_:(fun () -> StringMap.find_opt v (formal_in_params p))
 
 let decl_local p v =
   let _ = (local_ids p).decl_or_get (Var.name v) in
   Var.Decls.replace (local_decls p) (Var.name v) v;
   v
 
-let fresh_var p ?(pure = true) ?name typ : Var.t =
+let fresh_var p ?(pure = false) ?name typ : Var.t =
   let name = Option.map (String.drop_while (Char.equal '$')) name in
   let name = Option.get_or ~default:"v" name in
   let n = ID.name @@ (local_ids p).fresh ~name () in
-  let v = Var.create n typ ~pure in
+  let scope = if pure then Var.LocalConst else LocalVar in
+  let v = Var.create n typ ~scope in
   Var.Decls.replace (local_decls p) (Var.name v) v;
   v
 

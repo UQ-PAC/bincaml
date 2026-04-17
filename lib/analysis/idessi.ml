@@ -116,11 +116,11 @@ module IDESSI (D : IDESSIDomain) = struct
 
   let p1_transfer (prog : Program.t) summaries entry2call entry2exit pid
       (v : Vertex.t) d1 d2 e1 : (DL.t * ID.t * (DL.t * D.t) Iter.t) Iter.t =
-    let proc = IDMap.find pid prog.procs in
+    let proc = Program.proc prog pid in
     let open Stmt in
     match v with
     | _, Vertex.Stmt (_, (Instr_Call c as s)) ->
-        let caller = IDMap.find c.procid prog.procs in
+        let caller = Program.proc prog c.procid in
         Iter.singleton
           ( d1,
             pid,
@@ -230,7 +230,7 @@ module IDESSI (D : IDESSIDomain) = struct
     let worklist = W1.create () in
     List.iter
       (fun pid ->
-        let proc = IDMap.find pid prog.procs in
+        let proc = Program.proc prog pid in
         let init =
           D.init_data proc |> Iter.map (fun v -> Label v) |> Iter.cons Lambda
         in
@@ -243,7 +243,7 @@ module IDESSI (D : IDESSIDomain) = struct
       let def_use = Hashtbl.find defuses pid in
       (match d2 with
         | Lambda ->
-            IDMap.find pid prog.procs |> get_dfg_vertices ~direction:D.direction
+            Program.proc prog pid |> get_dfg_vertices ~direction:D.direction
         | Label v2 -> MDeps.find_iter def_use v2)
       |> Iter.iter (fun v ->
           p1_transfer prog summaries entry_to_call_entry_cache
@@ -276,13 +276,12 @@ module IDESSI (D : IDESSIDomain) = struct
       functions. *)
   let compute_defuses (prog : Program.t) : (ID.t, MDeps.t) Hashtbl.t =
     let defuses = Hashtbl.create 20 in
-    IDMap.iter
-      (fun pid proc ->
+    Program.procs prog
+    |> Iter.iter (fun (pid, proc) ->
         Hashtbl.add defuses pid
           (match D.direction with
           | `Forwards -> def_to_use_map proc
-          | `Backwards -> use_to_def_map proc))
-      prog.procs;
+          | `Backwards -> use_to_def_map proc));
     defuses
 
   let gen_stub_summaries (prog : Program.t) summaries entry2exit =
@@ -293,8 +292,8 @@ module IDESSI (D : IDESSIDomain) = struct
       let summary = DlMap.add d1 m summary in
       Hashtbl.replace summaries pid summary
     in
-    IDMap.iter
-      (fun pid proc ->
+    Program.procs prog
+    |> Iter.iter (fun (pid, proc) ->
         match Procedure.graph proc with
         | Some _ -> ()
         | None ->
@@ -314,7 +313,6 @@ module IDESSI (D : IDESSIDomain) = struct
                     |> VarMap.add out D.top
                     |> Hashtbl.replace entry2exit k;
                     update_summary pid d (Label out) D.top)))
-      prog.procs
 
   (** Generates edge function summaries for every procedure in the given
       program. *)
@@ -348,11 +346,11 @@ module IDESSI (D : IDESSIDomain) = struct
     let summaries = solve_summaries ?defuses prog in
     (* Solve phase 2 *)
     let p2_res =
-      IDMap.mapi
-        (fun pid proc ->
+      Program.procs prog
+      |> Iter.map (fun (pid, proc) ->
           let summary = Hashtbl.get_or summaries pid ~default:DlMap.empty in
-          p2_solve_proc summary proc)
-        prog.procs
+          (pid, p2_solve_proc summary proc))
+      |> IDMap.of_iter
     in
     (summaries, p2_res)
 end

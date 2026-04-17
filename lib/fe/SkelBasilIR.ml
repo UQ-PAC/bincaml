@@ -235,6 +235,7 @@ and transNamedCallReturn (x : namedCallReturn) : result = match x with
 and transLVars (x : lVars) : result = match x with
     LVars_Empty  -> failure x
   | LVars_LocalList (openparen, localvars, closeparen) -> failure x
+  | LVars_LocalConstList (openparen, localvars, closeparen) -> failure x
   | LVars_List (openparen, lvars, closeparen) -> failure x
   | NamedLVars_List (openparen, namedcallreturns, closeparen) -> failure x
 
@@ -257,6 +258,7 @@ and transJump (x : jump) : result = match x with
 
 and transLVar (x : lVar) : result = match x with
     LVar_Local localvar -> failure x
+  | LVar_LocalConst localvar -> failure x
   | LVar_Global globalvar -> failure x
 
 
@@ -321,14 +323,13 @@ and transExpr (x : expr) : result = match x with
   | Expr_Old (openparen, expr, closeparen) -> failure x
   | Expr_FunctionOp (expr, openparen, exprs, closeparen) -> failure x
   | Expr_Binary (binop, openparen, expr0, expr, closeparen) -> failure x
-  | Expr_Assoc (boolbinop, openparen, exprs, closeparen) -> failure x
+  | Expr_Assoc (intrinop, openparen, exprs, closeparen) -> failure x
   | Expr_Unary (unop, openparen, expr, closeparen) -> failure x
   | Expr_LoadBe (openparen, intval, expr0, expr, closeparen) -> failure x
   | Expr_LoadLe (openparen, intval, expr0, expr, closeparen) -> failure x
   | Expr_ZeroExtend (openparen, intval, expr, closeparen) -> failure x
   | Expr_SignExtend (openparen, intval, expr, closeparen) -> failure x
   | Expr_Extract (openparen, intval0, intval, expr, closeparen) -> failure x
-  | Expr_Concat (openparen, exprs, closeparen) -> failure x
   | Expr_Ite (expr0, expr1, expr) -> failure x
   | Expr_Match (expr, openparen, cases, closeparen) -> failure x
   | Expr_Cases (openparen, cases, closeparen) -> failure x
@@ -343,7 +344,8 @@ and transLambdaDef (x : lambdaDef) : result = match x with
 
 
 and transBinOp (x : binOp) : result = match x with
-    BinOpBVBinOp bvbinop -> failure x
+    BinOp_implies  -> failure x
+  | BinOpBVBinOp bvbinop -> failure x
   | BinOpBVLogicalBinOp bvlogicalbinop -> failure x
   | BinOpIntLogicalBinOp intlogicalbinop -> failure x
   | BinOpIntBinOp intbinop -> failure x
@@ -380,17 +382,12 @@ and transBVUnOp (x : bVUnOp) : result = match x with
 
 
 and transBVBinOp (x : bVBinOp) : result = match x with
-    BVBinOp_bvand  -> failure x
-  | BVBinOp_bvor  -> failure x
-  | BVBinOp_bvadd  -> failure x
-  | BVBinOp_bvmul  -> failure x
-  | BVBinOp_bvudiv  -> failure x
+    BVBinOp_bvudiv  -> failure x
   | BVBinOp_bvurem  -> failure x
   | BVBinOp_bvshl  -> failure x
   | BVBinOp_bvlshr  -> failure x
   | BVBinOp_bvnand  -> failure x
   | BVBinOp_bvnor  -> failure x
-  | BVBinOp_bvxor  -> failure x
   | BVBinOp_bvxnor  -> failure x
   | BVBinOp_bvcomp  -> failure x
   | BVBinOp_bvsub  -> failure x
@@ -426,10 +423,15 @@ and transIntLogicalBinOp (x : intLogicalBinOp) : result = match x with
   | IntLogicalBinOp_intge  -> failure x
 
 
-and transBoolBinOp (x : boolBinOp) : result = match x with
-    BoolBinOp_booland  -> failure x
-  | BoolBinOp_boolor  -> failure x
-  | BoolBinOp_boolimplies  -> failure x
+and transIntrinOp (x : intrinOp) : result = match x with
+    IntrinOp_booland  -> failure x
+  | IntrinOp_boolor  -> failure x
+  | IntrinOp_bvand  -> failure x
+  | IntrinOp_bvor  -> failure x
+  | IntrinOp_bvadd  -> failure x
+  | IntrinOp_bvxor  -> failure x
+  | IntrinOp_bvconcat  -> failure x
+  | IntrinOp_bvmul  -> failure x
 
 
 and transPointerBinOp (x : pointerBinOp) : result = match x with

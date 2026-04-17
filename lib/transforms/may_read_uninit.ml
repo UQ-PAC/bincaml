@@ -85,6 +85,14 @@ module ReadUninitAnalysis = struct
     Stmt.iter_lvar stmt
     |> Iter.map (fun v -> (v, write_var v st))
     |> Iter.fold (fun acc (k, v) -> update k v acc) st
+
+  let transfer_phi m (p : Var.t Block.phi) =
+    match p with
+    | { lhs; rhs } ->
+        rhs
+        |> List.map (fun (_, k) -> read k m)
+        |> List.fold_left ReadUninit.join ReadUninit.bottom
+        |> fun v -> update lhs v m
 end
 
 module A = struct
@@ -108,7 +116,7 @@ let check ?(include_locals = false) (p : Program.proc) =
               let ru =
                 ReadUninitAnalysis.read_uninit_vars ms
                 |> Iter.filter (fun v -> include_locals || Var.is_local v)
-                |> Iter.filter Var.pure
+                |> Iter.filter @@ (not % Var.is_shared)
               in
               if Iter.is_empty ru then None else Some (v, ru)
           | None -> None)
@@ -148,6 +156,8 @@ let%expect_test "fold_block" =
   in
   [%expect
     {|
+    Warn: global undeclared $stack assuming mutable unshared
+    Warn: global undeclared $mem assuming mutable unshared
     (R31_in->RU, $stack->RU, R0_in->RU, _->⊥)
     (R31_in->RU, $stack->RU, R0_in->RU, load45_1->W, _->⊥)
     (R31_in->RU, $stack->RU, R0_in->RU, load45_1->W, R1_4->W, _->⊥)
