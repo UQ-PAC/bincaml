@@ -269,7 +269,7 @@ module Solver = struct
         (match effective_parent !node.copied_from (ref VarSet.empty) with
         | Some l -> join l node
         | Skip -> failwith "the effective parent shouldn't ever be skip!"
-        | _ -> ());
+        | None -> ());
         searching := VarSet.remove !node.v !searching;
         searched := VarSet.add !node.v !searched)
     (* Perform a dfs on the subgraph of nodes that are currently being
@@ -278,7 +278,7 @@ module Solver = struct
        graph, where a leaf is a node that has been searched or is properly a
        leaf, and "join" them together (but we join during the search). *)
     and effective_parent (nodes : t list) (visited : VarSet.t ref) =
-      let f (n : t) =
+      let step (n : t) =
         assert (Option.is_none !n.parent);
         if VarSet.mem !n.v !visited then Skip
         else (
@@ -286,7 +286,7 @@ module Solver = struct
           if VarSet.mem !n.v !searching then
             match !n.copied_from with
             | [] -> Some n
-            | l -> effective_parent l visited
+            | ns -> effective_parent ns visited
           else (
             search n;
             Some (find n)))
@@ -295,12 +295,12 @@ module Solver = struct
       | n :: ns ->
           List.fold_left
             (fun acc n ->
-              let b = f @@ find n in
+              let b = step @@ find n in
               match (acc, b) with
               | a, Skip | Skip, a -> a
               | Some n1, Some n2 when CopyNode.eq n1 n2 -> Some n1
               | _ -> None)
-            (f @@ find n)
+            (step @@ find n)
             ns
       | [] -> None
     in

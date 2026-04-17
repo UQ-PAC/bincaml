@@ -20,7 +20,7 @@ let transform_proc (p : Program.t) g (proc : Program.proc) =
     VarMap.get v g
     |> Option.flat_map (fun n ->
         match CopyNode.find n with
-        | LF.IdEdge, n -> Some (CopyNode.var n)
+        | f, n when LF.is_id f -> Some (CopyNode.var n)
         | _ -> None)
     |> Option.get_or ~default:v
   in

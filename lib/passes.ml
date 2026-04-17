@@ -255,13 +255,6 @@ module PassManager = struct
          eliminated. Assumes SSA form.";
     }
 
-  let linear_copy =
-    {
-      name = "linear-copy";
-      apply = Prog Transforms.Linear_copy.transform;
-      doc = "blah";
-    }
-
   let copy_prop =
     {
       name = "copy-prop";
@@ -269,10 +262,17 @@ module PassManager = struct
       doc = "Interprocedural variable copy propagation. Require SSA form.";
     }
 
+  let linear_copy =
+    {
+      name = "linear-copy";
+      apply = Prog Transforms.Linear_copy.transform;
+      doc = "blah";
+    }
+
   let simp =
     {
       name = "simplify";
-      apply = Batch [ linear_const; copy_prop; cf_exprs; linear_copy; cf_exprs; inter_dead ];
+      apply = Batch [ cf_exprs; linear_const; cf_exprs];
       doc =
         "Performs some simplifications (linear constant propagation, copy \
          propagation, constant folding, dead store elimination). Requires SSA \
