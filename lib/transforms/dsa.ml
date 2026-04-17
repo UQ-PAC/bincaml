@@ -1,5 +1,5 @@
-(** Destructs SSA phi nodes into assignments, placed into newly-created blocks
-    preceding the phi node's location. *)
+(** Destructs SSA phi nodes into dynamic single assignment statements, placed
+    into newly-created blocks preceding the phi node's location. *)
 
 open Lang.Common
 open Lang
@@ -16,19 +16,20 @@ let phis_from_src src =
       | Some rhs -> Some (phi.lhs, rhs)
       | None -> None)
 
-type phi_edge = {
+type dsa_block = {
   src : ID.t;  (** ID of the source block for this phi edge. *)
   tgt : ID.t;  (** ID of the target block for this phi edge. *)
   phi_assignments : (Var.t * Var.t) list;
       (** Assignments to be made within this phi edge. *)
   assumes : (Var.t, Var.t, Program.e) Stmt.t list;
+      [@printer List.pp Stmt.pp_stmt_basil]
       (** {!Stmt.Instr_Assume} branch guard statements occuring at the beginning
           of the target block. *)
 }
-(** An intermediate value for the information needed to create a "phi edge"
-    between two blocks. A phi edge is made up of two jumps with a new block of
-    assignments in the middle:
-    {v src -> phi_assignments -> tgt v} *)
+[@@deriving show]
+(** An intermediate value for the information needed to create a DSA block, to
+    be placed between two existing block. Within the DSA block, we perform
+    assignments which emulate the old phi variables in the [tgt] block. *)
 
 (** Returns whether the given statement is an {!Stmt.Instr_Assume} with [branch]
     set to true, i.e., whether it is a branch guard. *)
@@ -36,7 +37,7 @@ let is_assume = function
   | Stmt.Instr_Assume { branch = true } -> true
   | _ -> false
 
-let identify_needed_phi_edges (graph : G.t) : phi_edge Iter.t =
+let identify_needed_dsa_blocks (graph : G.t) : dsa_block Iter.t =
   let block_of_id : ID.t -> (Var.t, Expr.BasilExpr.t) Block.t =
     let cache = CCCache.lru ~eq:ID.equal ~hash:ID.hash 128 in
     CCCache.with_cache cache @@ fun id ->
@@ -59,9 +60,12 @@ let identify_needed_phi_edges (graph : G.t) : phi_edge Iter.t =
         )
     | _ -> None)
 
-let add_phi_edges procedure (phis : phi_edge Iter.t) =
+(** Adds new blocks and edges according to the given {!phi_edge} list, with
+    DSA-style assignments performed in the new intermediate block. At the same
+    time, removes old direct edges from [src] to [tgt]. *)
+let replace_phis_with_dsa_blocks procedure (phis : dsa_block Iter.t) =
   Iter.fold
-    (fun graph { src; tgt; phi_assignments; assumes } ->
+    (fun procedure { src; tgt; phi_assignments; assumes } ->
       let phi_assign =
         Stmt.Instr_Assign
           (phi_assignments
@@ -70,28 +74,36 @@ let add_phi_edges procedure (phis : phi_edge Iter.t) =
       in
       let procedure, intermediate_block =
         Procedure.fresh_block procedure
-          ~name:(ID.name tgt ^ "phis")
+          ~name:(ID.name tgt ^ "__phi")
           ~stmts:(phi_assign :: assumes) ~successors:[ tgt ] ()
       in
-      Procedure.add_goto ~from:src ~targets:[ intermediate_block ] procedure)
+      let procedure =
+        Procedure.add_goto ~from:src ~targets:[ intermediate_block ] procedure
+      in
+      Procedure.modify_succs procedure src ~remove:[ tgt ] ~add:[])
     procedure phis
 
+(** Removes phi nodes from blocks. These are no longer needed after DSA
+    blocks are inserted. *)
 let remove_phis_from_blocks =
   Procedure.map_graph (fun g ->
       Iter.from_iter (Fun.flip G.iter_edges_e g)
       |> Iter.fold
            (fun g edge ->
              match edge with
-             | src, Procedure.Edge.Block { phis = _ :: _; stmts }, tgt ->
+             | beg, Procedure.Edge.Block { phis = _ :: _; stmts }, nd ->
                  let g = G.remove_edge_e g edge in
                  G.add_edge_e g
-                   (src, Procedure.Edge.Block { phis = []; stmts }, tgt)
+                   (beg, Procedure.Edge.Block { phis = []; stmts }, nd)
              | _ -> g)
            g)
 
+(** Lowers the phi nodes of procedure into {i dynamic single assignment} form.
+*)
 let dsa (proc : Program.proc) =
   match Procedure.graph proc with
   | Some g ->
-      g |> identify_needed_phi_edges |> add_phi_edges proc
+      g |> identify_needed_dsa_blocks
+      |> replace_phis_with_dsa_blocks proc
       |> remove_phis_from_blocks
   | None -> proc

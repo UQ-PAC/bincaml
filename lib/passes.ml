@@ -271,6 +271,15 @@ module PassManager = struct
          form.";
     }
 
+  let dynamic_single_assignment =
+    {
+      name = "dynamic-single-assignment";
+      apply = Proc Transforms.Dsa.dsa;
+      doc =
+        "Transforms phi nodes in the program into dynamic single assignment \
+         statements.";
+    }
+
   let passes =
     [
       irreducible_loop;
