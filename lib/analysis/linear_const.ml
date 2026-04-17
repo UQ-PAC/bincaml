@@ -329,7 +329,6 @@ end
 
 module LinearConstAnalysis = IDESSI (LinearIDE)
 
-(* TODO rewrite comment to apply to edge function version *)
 (* For each linear assign and phi node, we create edges from the lhs to all
    copied-from variables. For assignments we associate a function encoding the
    linear expression. The function should be thought of pointing opposite to
