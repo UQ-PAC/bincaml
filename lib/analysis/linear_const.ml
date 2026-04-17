@@ -619,26 +619,27 @@ module Solver = struct
     let rec search (node : t) =
       if not @@ VarSet.mem !node.v !searched then (
         searching := VarSet.add !node.v !searching;
-        (* Search targets and see if a common single parent + function *)
-        (match
-           effective_parent LF.identity !node.copied_from
-             (ref (VarMap.singleton !node.v SNone))
-         with
-        | SSome ((LF.TopEdge | LF.BotEdge | LF.Join _), l) -> ()
-        | SSome (f, l) -> (
-            join l f node;
-            if not @@ LF.is_id f then
-              (* We can propagate copies further possibly *)
-              match
-                effective_copy_parent !node.copied_from (ref VarSet.empty)
-              with
-              | SSome n -> join_copy n node
-              | Skip -> failwith "the effective parent shouldn't ever be skip!"
-              | _ -> ())
-        | Skip -> failwith "the effective parent shouldn't ever be skip!"
-        | SNone -> ());
+        propagate node;
         searching := VarSet.remove !node.v !searching;
         searched := VarSet.add !node.v !searched)
+    (* Search targets and see if a common single parent + function exists *)
+    and propagate node =
+      match
+        effective_parent LF.identity !node.copied_from
+          (ref (VarMap.singleton !node.v SNone))
+      with
+      | SSome ((LF.TopEdge | LF.BotEdge | LF.Join _), l) -> propagate_copy node
+      | SSome (f, l) ->
+          join l f node;
+          if not @@ LF.is_id f then propagate_copy node
+      | Skip -> failwith "the effective parent shouldn't ever be skip!"
+      | SNone -> ()
+    (* Further propagate only copy edges *)
+    and propagate_copy node =
+      match effective_copy_parent !node.copied_from (ref VarSet.empty) with
+      | SSome n -> join_copy n node
+      | Skip -> failwith "the effective parent shouldn't ever be skip!"
+      | _ -> ()
     (* Perform a dfs on the subgraph of nodes that are currently being
        searched, searching any new not-in-progress nodes, and try collect a
        common parent edge while doing so. Effectively, we find all leaf edges
@@ -667,34 +668,26 @@ module Solver = struct
         | Some SNone -> SSome (f', n)
         | None -> (
             memo := VarMap.add !n.v SNone !memo;
-            let ans =
+            let r =
               if VarSet.mem !n.v !searching then
-                match !n.copied_from with
-                | [] -> SSome (LF.identity, n)
-                | es -> effective_parent (f @. f') es memo
+                effective_parent f !n.copied_from memo
               else (
                 search n;
                 SSome (find n))
             in
-            let ans =
-              match ans with SNone -> SSome (LF.identity, n) | e -> e
-            in
-            memo := VarMap.add !n.v ans !memo;
-            match ans with SSome (f'', n') -> SSome (f' @. f'', n') | a -> a)
+            (* If there was no parent then this node is now the parent *)
+            let r = match r with SNone -> SSome (LF.identity, n) | e -> e in
+            memo := VarMap.add !n.v r !memo;
+            match r with SSome (f'', n') -> SSome (f' @. f'', n') | a -> a)
       in
-      match nodes with
-      | n :: ns ->
-          List.fold_left
-            (fun acc n ->
-              let b = step @@ find n in
-              match (acc, b) with
-              | a, Skip | Skip, a -> a
-              | SSome (f1, n1), SSome (f2, n2) when CopyNode.eq n1 n2 ->
-                  SSome (LF.join f1 f2, n1)
-              | _ -> SNone)
-            (step @@ find n)
-            ns
-      | [] -> SNone
+      List.map (step % find) nodes
+      |> List.reduce (fun a b ->
+          match (a, b) with
+          | a, Skip | Skip, a -> a
+          | SSome (f1, n1), SSome (f2, n2) when CopyNode.eq n1 n2 ->
+              SSome (LF.join f1 f2, n1)
+          | _ -> SNone)
+      |> Option.get_or ~default:SNone
     (* The same thing as above but only copy propagation only (so much
        duplication...) *)
     and effective_copy_parent (nodes : t list) visited =
@@ -704,25 +697,18 @@ module Solver = struct
         else (
           visited := VarSet.add !n.v !visited;
           if VarSet.mem !n.v !searching then
-            match !n.copied_from with
-            | [] -> SSome n
-            | ns -> effective_copy_parent ns visited
+            effective_copy_parent !n.copied_from visited
           else (
             search n;
             SSome (find_copy n)))
       in
-      match nodes with
-      | n :: ns ->
-          List.fold_left
-            (fun acc n ->
-              let b = step @@ find_copy n in
-              match (acc, b) with
-              | a, Skip | Skip, a -> a
-              | SSome n1, SSome n2 when CopyNode.eq n1 n2 -> SSome n1
-              | _ -> SNone)
-            (step @@ find_copy n)
-            ns
-      | [] -> SNone
+      List.map (step % find_copy) nodes
+      |> List.reduce (fun a b ->
+          match (a, b) with
+          | a, Skip | Skip, a -> a
+          | SSome n1, SSome n2 when CopyNode.eq n1 n2 -> SSome n1
+          | _ -> SNone)
+      |> Option.get_or ~default:SNone
     in
     VarMap.iter (const (search % snd % find)) g
 
