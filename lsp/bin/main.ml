@@ -270,7 +270,6 @@ class lsp_server =
 
     method! on_req_symbol ~notify_back ~id ~uri ~workDoneToken
         ~partialResultToken () =
-      Printexc.record_backtrace true;
       let st = self#get uri in
       Lwt.return (Some (`DocumentSymbol st#lspsymbols))
 
@@ -355,6 +354,7 @@ class lsp_server =
    This is the code that creates an instance of the lsp server class
    and runs it as a task. *)
 let run () =
+  Printexc.record_backtrace true;
   Logs.set_level (Some Logs.Info);
   Logs.set_reporter (Bincaml_lsp.Lsp_logs.file_reporter ());
   Logs.info (fun m -> m "bincaml_lsp starting");
