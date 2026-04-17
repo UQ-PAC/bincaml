@@ -16,8 +16,7 @@
   boogie_prepass
   gamma_vars
   const_prop
-  linear_copy
-  copyprop)
+  linear_copy)
  (libraries
   bincaml.analysis
   patricia-tree

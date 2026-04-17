@@ -321,9 +321,39 @@ end
 
 module LinearConstAnalysis = IDESSI (LinearIDE)
 
-(* This is just the copyprop copy pasted... hopefully we can just remove the
-   normal copyprop eventually (currently this analysis is not a superset of
-   copy prop, probably due to some imprecision) *)
+(* TODO rewrite comment to apply to edge function version *)
+(* For each copy assign and phi node, we create edges from the lhs to all
+   copied-from variables. We then perform path compression on linear paths of
+   this graph to get a partial intraprocedural copy propagation analysis!
+   However with just this, we miss out on copy propagation through phi nodes,
+   where every variable in a phi is copied from the same source. To fix this,
+   we recursively check whether the copied-from (parent) variables for all
+   successor vertices are all equal, and if so we create a path from the parent
+   of these successors. (This is probably hard to follow with words, so here is
+   an example:
+   ```
+   if ( * ) { x1 = a } else { x2 = a } x3 = phi(x1, x2)
+   ```
+   in this hypothetical program, x3 points to x1 and x2, which both point to a,
+   so we can update x3 to point to a. ) This gives a copy propagation analysis
+   that works through phi nodes!
+
+   To make it interprocedural, we perform a some small iteration steps. For
+   each output variable of each procedure, we see whether it is copied from
+   only input variables by doing a dfs on the path compressed graph. If this is
+   the case, we go to every caller of this procedure, and see whether all input
+   variables that copy into the output variable are copy expressions that are
+   equal. (Example:
+   ```
+   proc f(x) = { return g(x, x) }
+   proc g(x, y) = { if ( * ) { z1 = x } else { z2 = y } return phi(z1, x2) }
+   ```
+   here the return value of g is copied from x or y, but f calls g with (copy
+   expressions that are with) the same variable! Hence f returns a proper copy
+   of its input. ) In this case, we can create an edge from the output variable
+   in the caller graph to the input variable that copies into it. If this ever
+   actually happens, we'll want to re-iterate on this procedure as we may have
+   new edges to propagate to other procedures. *)
 
 module CopyNode = struct
   type content = {
