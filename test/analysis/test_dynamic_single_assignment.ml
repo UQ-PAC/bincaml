@@ -44,11 +44,9 @@ proc @main (x: bv64) -> (out: bv64)
   [%expect
     {|
     { Dsa.src = ("%main_1", 0); tgt = ("%main_return", 3);
-      phi_assignments = [({id=20 ; data=y:bv64}, {id=18 ; data=x1:bv64})];
-      assumes =  }
+      phi_assignments = [(y:bv64, x1:bv64)]; assumes =  }
     { Dsa.src = ("%main_2", 1); tgt = ("%main_return", 3);
-      phi_assignments = [({id=20 ; data=y:bv64}, {id=19 ; data=x2:bv64})];
-      assumes =  }
+      phi_assignments = [(y:bv64, x2:bv64)]; assumes =  }
     |}];
 
   (* let proc_with_intermediates = Dsa.identify_needed_phi_edges graph |> Dsa.add_phi_edges proc in *)
@@ -63,18 +61,18 @@ proc @main (x: bv64) -> (out: bv64)
     [
        block %main_entry [ goto (%main_2,%main_1); ];
        block %main_1 [
-         guard boolnot(eq(x, 0x0:bv64));
+         guard boolnot(eq(x:bv64, 0x0:bv64));
          var x1:bv64 := 0x0:bv64;
          goto (%main_return__phi);
        ];
-       block %main_return__phi [ var y:bv64 := x1; goto (%main_return); ];
+       block %main_return__phi [ var y:bv64 := x1:bv64; goto (%main_return); ];
        block %main_2 [
-         guard eq(x, 0x0:bv64);
+         guard eq(x:bv64, 0x0:bv64);
          var x2:bv64 := 0x1:bv64;
          goto (%main_return__phi_1);
        ];
-       block %main_return__phi_1 [ var y:bv64 := x2; goto (%main_return); ];
-       block %main_return [ var out:bv64 := y; return; ]
+       block %main_return__phi_1 [ var y:bv64 := x2:bv64; goto (%main_return); ];
+       block %main_return [ var out:bv64 := y:bv64; return; ]
     ]
     |}]
 
@@ -125,29 +123,30 @@ proc @main(a_in:bv64, b_in:bv64, x_in:bv64)  -> (x_out:bv64) {  }
 
     [
        block %inputs [
-         (var x_1:bv64 := x_in, var a_1:bv64 := a_in, var b_1:bv64 := b_in);
+         (var x_1:bv64 := x_in:bv64, var a_1:bv64 := a_in:bv64,
+          var b_1:bv64 := b_in:bv64);
          goto (%main_entry__phi_1);
        ];
        block %main_entry__phi_1 [
-         (var x_2:bv64 := x_1, var a_2:bv64 := a_1, var b_2:bv64 := b_1);
+         (var x_2:bv64 := x_1:bv64, var a_2:bv64 := a_1:bv64, var b_2:bv64 := b_1:bv64);
          goto (%main_entry);
        ];
        block %main_entry [ goto (%main_1,%main_2); ];
        block %main_2 [
-         var x_3:bv64 := bvadd(x_2, b_2);
+         var x_3:bv64 := bvadd(x_2:bv64, b_2:bv64);
          goto (%main_return__phi,%main_entry__phi);
        ];
        block %main_entry__phi [
-         (var x_2:bv64 := x_3, var a_2:bv64 := a_2, var b_2:bv64 := b_2);
+         (var x_2:bv64 := x_3:bv64, var a_2:bv64 := a_2:bv64, var b_2:bv64 := b_2:bv64);
          goto (%main_entry);
        ];
-       block %main_return__phi [ var x_5:bv64 := x_3; goto (%main_return); ];
+       block %main_return__phi [ var x_5:bv64 := x_3:bv64; goto (%main_return); ];
        block %main_1 [
-         var x_4:bv64 := bvadd(x_2, a_2);
+         var x_4:bv64 := bvadd(x_2:bv64, a_2:bv64);
          goto (%main_return__phi_1);
        ];
-       block %main_return__phi_1 [ var x_5:bv64 := x_4; goto (%main_return); ];
+       block %main_return__phi_1 [ var x_5:bv64 := x_4:bv64; goto (%main_return); ];
        block %main_return [ goto (%returns); ];
-       block %returns [ var x_out:bv64 := x_5; return; ]
+       block %returns [ var x_out:bv64 := x_5:bv64; return; ]
     ]
     |}]
