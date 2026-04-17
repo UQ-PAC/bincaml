@@ -7,15 +7,15 @@
   (run-transforms type-inference)
   (dump-il after-type-inference-loops.il)
   $ cat after-type-inference-loops.il
-  type rec944453953 of {"field0": (bv64, 0)} 64;
-  type rec592675771 of {"field8": (bv64, 8)} 64;
-  type rec847980916 of {"field131132": (bv32, 131132)} 32;
-  type rec151711918 of {"field-32": (bv64, -32)} 64;
-  type rec1033252285 of {"field-24": (bv64, -24)} 64;
-  type rec830635702 of {"field-4": (bv32, -4)} 32;
-  type rec199532115 of {"field-16": (bv64, -16)} 64;
-  type rec405619338 of {"field131136": (bv32, 131136)} 32;
   type rec429227263 of {"field0": (bv32, 0)} 64;
+  type rec847980916 of {"field131132": (bv32, 131132)} 32;
+  type rec405619338 of {"field131136": (bv32, 131136)} 32;
+  type rec199532115 of {"field-16": (bv64, -16)} 64;
+  type rec830635702 of {"field-4": (bv32, -4)} 32;
+  type rec1033252285 of {"field-24": (bv64, -24)} 64;
+  type rec151711918 of {"field-32": (bv64, -32)} 64;
+  type rec592675771 of {"field8": (bv64, 8)} 64;
+  type rec944453953 of {"field0": (bv64, 0)} 64;
   var observable $mem:(bv64->bv8);
   var $stack:(bv64->bv8);
   proc @main_1876(R0_in:bv64, R1_in:bv64, R29_in:bv64, R30_in:bv64, R31_in:bv64)
