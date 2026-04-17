@@ -251,9 +251,8 @@ let proc_lspsymbol_at_pos ~lspsymbols lsppos =
 
 let lspsymbols_with_kind ~lspsymbols ~lsppos (kind : ident_kind) : symbol Iter.t
     =
-  let symbol = lazy (proc_lspsymbol_at_pos ~lspsymbols lsppos) in
   let locals () =
-    Iter.of_opt (Lazy.force symbol)
+    Iter.of_opt (proc_lspsymbol_at_pos ~lspsymbols lsppos)
     |> Iter.flat_map_l (fun (x : symbol) -> Option.value ~default:[] x.children)
   in
   let constructors () =
