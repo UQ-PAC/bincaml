@@ -92,7 +92,7 @@ proc @main_4196260 () -> ()
   let st2 = VarIdMap.of_list ls in
   assert (ConstraintState.equal st st2)
 
-let%test_unit "Constraint generation - Simple Record" =
+let%test_unit "Simple Record" =
   (*
     ```
     var record : bv64 := 0x2 : bv64;
@@ -178,11 +178,33 @@ proc @main_4196260 () -> ()
   in
   let st2 = VarIdMap.of_list ls in
   assert (ConstraintState.equal st st2);
+
+  let fields : Types.record_field StringMap.t =
+    StringMap.of_list
+      [
+        ( "field0",
+          ({ offset = Z.zero; typ = Types.Bitvector 32 } : Types.record_field)
+        );
+        ("field32", { offset = Z.of_int 32; typ = Types.Bitvector 32 });
+      ]
+  in
+
+  let types =
+    [
+      (VarId.make_id "$field1", Types.Bitvector 32);
+      (VarId.make_id "$field2", Types.Bitvector 32);
+      ( VarId.make_id "$record",
+        Types.Struct { name = "rec915960920"; fields; size = 64 } );
+      (VarId.make_id "Extraction_v", Types.Bitvector 32);
+      (VarId.make_id "Extraction_v_1", Types.Bitvector 32);
+    ]
+  in
+
   assert (
     List.equal
       (fun (_, ty) (_, ty2) -> Types.equal ty ty2)
       (snd @@ simplify_types @@ unconstrain_types st)
-      (snd @@ simplify_types @@ unconstrain_types st2))
+      types)
 
 let%test_unit "Record joining" =
   let fields1 =

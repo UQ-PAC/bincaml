@@ -99,8 +99,8 @@ module InferredType = struct
     | Bool -> "bool"
     | TypeVar id -> Printf.sprintf "%s" @@ VarId.show id
     | Recursive (t1, t2) -> Printf.sprintf "μ%s.%s" (VarId.show t1) (show t2)
-    | Union (t1, t2) -> Printf.sprintf "%s ⊔ %s" (show t1) (show t2)
-    | Sect (t1, t2) -> Printf.sprintf "%s ⊓ %s" (show t1) (show t2)
+    | Union (t1, t2) -> Printf.sprintf "(%s ⊔ %s)" (show t1) (show t2)
+    | Sect (t1, t2) -> Printf.sprintf "(%s ⊓ %s)" (show t1) (show t2)
     | Pointer (lb, ub) -> Printf.sprintf "ptr(%s, %s)" (show lb) (show ub)
     | Function (name, ins, outs) ->
         Printf.sprintf "(%s) → (%s)"
@@ -192,17 +192,18 @@ module InferredType = struct
     | Top, a | a, Top | TypeVar _, a | a, TypeVar _ -> a
     | Bottom, a | a, Bottom -> Bottom
     | a, b when equal a b -> a
-    | c, Union (a, b) | Union (a, b), c -> Sect (c, Union (a, b))
+    | c, Union (a, b) | Union (a, b), c -> Sect (c, union a b)
     | c, Sect (a, b) | Sect (a, b), c -> intersect c @@ intersect a b
     | _ ->
         print_endline @@ Printf.sprintf "TODO %s %s" (show a) (show b);
         failwith "boom"
 
-  let rec union a b =
+  and union a b =
     match (a, b) with
     | _, _ when equal a b -> a
     | Top, _ | _, Top -> Top
     | Union (a, b), c | c, Union (a, b) -> union c @@ union a b
+    | Sect (a, b), c | c, Sect (a, b) -> union c @@ intersect a b
     | Record (name, f1), Record (_, f2) -> a (* TODO *)
     | Record (name, f), _ | _, Record (name, f) -> Record (name, f)
     | Pointer (l1, u1), Pointer (l2, u2) -> a (* TODO *)
@@ -873,14 +874,12 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
         ( ZMap.map
             (fun { size; offset; ty } ->
               let ty = recursive_call polarity ty in
-              match ty with
-              (* First one should be the TypeVar that just goes to the name, is not useful WARN: probably should remove this and make it work without *)
-              | Union (_, b) | Sect (_, b) -> { size; offset; ty = b }
-              (*
-               Field had no constraints on it,
-                it could just be a bitvector of size size
-              *)
-              | a -> { size; offset; ty = BV size })
+              let ty =
+                if Polarity.positive polarity then
+                  InferredType.Union (ty, BV size)
+                else Sect (ty, BV size)
+              in
+              { size; offset; ty })
             fields,
           size )
   | Pointer (a, b) ->
@@ -1315,6 +1314,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
           | Interval { lower } -> Bitvec.to_signed_bigint lower
           | _ -> failwith "impossible"
         in
+        print_endline @@ Z.to_string offset;
         let ty =
           TypeVar
             (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
@@ -1467,7 +1467,7 @@ let simplify_types types =
         InferredType.inferred_to_real recursives
           (* @@ Union *)
           (minimise_type Polarity.Neg lower_ty name)
-        (* minimise_type Polarity.Pos upper_ty name ) *)
+        (* @@ minimise_type Polarity.Pos upper_ty name *)
       in
       (recursives, (name, types2) :: types))
     types ([], [])
