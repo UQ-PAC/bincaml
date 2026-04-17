@@ -1,5 +1,5 @@
-  $ bincaml script copyprop.sexp
-  (load-il ../../examples/copyprop.il)
+  $ bincaml script linear_copy.sexp
+  (load-il ../../examples/linear_copy.il)
   bincaml: [WARNING] global undeclared x_3. assuming mutable unshared
   bincaml: [WARNING] global undeclared y_3. assuming mutable unshared
   (dump-il before.il)
