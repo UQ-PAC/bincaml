@@ -45,7 +45,9 @@ module VarId : sig
   val make_id : string -> t
   val fresh : unit -> t
 end = struct
-  type t = string [@@deriving eq, ord, show]
+  type t = string [@@deriving eq, ord]
+
+  let show a = a
 
   let var_procid_to_uid (var : Var.t) (procId : ID.t) : t =
     if Var.is_global var then Var.name var
@@ -1314,7 +1316,6 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
           | Interval { lower } -> Bitvec.to_signed_bigint lower
           | _ -> failwith "impossible"
         in
-        print_endline @@ Z.to_string offset;
         let ty =
           TypeVar
             (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
