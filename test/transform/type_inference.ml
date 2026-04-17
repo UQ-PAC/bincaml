@@ -116,8 +116,6 @@ let%test_unit "Constraint generation - Simple Record" =
 memory shared $mem : (bv64 -> bv8);
 var $record : bv64;
 var $field1 : bv32;
-
-var $record : bv64;
 var $field2 : bv32;
 
 prog entry @main_4196260;
