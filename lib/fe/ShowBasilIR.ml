@@ -212,6 +212,7 @@ and showNamedCallReturn (e : AbsBasilIR.namedCallReturn) : showable = match e wi
 and showLVars (e : AbsBasilIR.lVars) : showable = match e with
        AbsBasilIR.LVars_Empty  -> s2s "LVars_Empty"
   |    AbsBasilIR.LVars_LocalList (openparen, localvars, closeparen) -> s2s "LVars_LocalList" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showLocalVar localvars  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.LVars_LocalConstList (openparen, localvars, closeparen) -> s2s "LVars_LocalConstList" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showLocalVar localvars  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.LVars_List (openparen, lvars, closeparen) -> s2s "LVars_List" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showLVar lvars  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.NamedLVars_List (openparen, namedcallreturns, closeparen) -> s2s "NamedLVars_List" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showNamedCallReturn namedcallreturns  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
@@ -234,6 +235,7 @@ and showJump (e : AbsBasilIR.jump) : showable = match e with
 
 and showLVar (e : AbsBasilIR.lVar) : showable = match e with
        AbsBasilIR.LVar_Local localvar -> s2s "LVar_Local" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
+  |    AbsBasilIR.LVar_LocalConst localvar -> s2s "LVar_LocalConst" >> c2s ' ' >> c2s '(' >> showLocalVar localvar >> c2s ')'
   |    AbsBasilIR.LVar_Global globalvar -> s2s "LVar_Global" >> c2s ' ' >> c2s '(' >> showGlobalVar globalvar >> c2s ')'
 
 
@@ -298,14 +300,13 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.Expr_Old (openparen, expr, closeparen) -> s2s "Expr_Old" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_FunctionOp (expr, openparen, exprs, closeparen) -> s2s "Expr_FunctionOp" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showExpr exprs  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Binary (binop, openparen, expr0, expr, closeparen) -> s2s "Expr_Binary" >> c2s ' ' >> c2s '(' >> showBinOp binop  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
-  |    AbsBasilIR.Expr_Assoc (boolbinop, openparen, exprs, closeparen) -> s2s "Expr_Assoc" >> c2s ' ' >> c2s '(' >> showBoolBinOp boolbinop  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showExpr exprs  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.Expr_Assoc (intrinop, openparen, exprs, closeparen) -> s2s "Expr_Assoc" >> c2s ' ' >> c2s '(' >> showIntrinOp intrinop  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showExpr exprs  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Unary (unop, openparen, expr, closeparen) -> s2s "Expr_Unary" >> c2s ' ' >> c2s '(' >> showUnOp unop  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_LoadBe (openparen, intval, expr0, expr, closeparen) -> s2s "Expr_LoadBe" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_LoadLe (openparen, intval, expr0, expr, closeparen) -> s2s "Expr_LoadLe" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_ZeroExtend (openparen, intval, expr, closeparen) -> s2s "Expr_ZeroExtend" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_SignExtend (openparen, intval, expr, closeparen) -> s2s "Expr_SignExtend" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Extract (openparen, intval0, intval, expr, closeparen) -> s2s "Expr_Extract" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval0  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
-  |    AbsBasilIR.Expr_Concat (openparen, exprs, closeparen) -> s2s "Expr_Concat" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showExpr exprs  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Ite (expr0, expr1, expr) -> s2s "Expr_Ite" >> c2s ' ' >> c2s '(' >> showExpr expr0  >> s2s ", " >>  showExpr expr1  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_Match (expr, openparen, cases, closeparen) -> s2s "Expr_Match" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showCase cases  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Cases (openparen, cases, closeparen) -> s2s "Expr_Cases" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showCase cases  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
@@ -320,7 +321,8 @@ and showLambdaDef (e : AbsBasilIR.lambdaDef) : showable = match e with
 
 
 and showBinOp (e : AbsBasilIR.binOp) : showable = match e with
-       AbsBasilIR.BinOpBVBinOp bvbinop -> s2s "BinOpBVBinOp" >> c2s ' ' >> c2s '(' >> showBVBinOp bvbinop >> c2s ')'
+       AbsBasilIR.BinOp_implies  -> s2s "BinOp_implies"
+  |    AbsBasilIR.BinOpBVBinOp bvbinop -> s2s "BinOpBVBinOp" >> c2s ' ' >> c2s '(' >> showBVBinOp bvbinop >> c2s ')'
   |    AbsBasilIR.BinOpBVLogicalBinOp bvlogicalbinop -> s2s "BinOpBVLogicalBinOp" >> c2s ' ' >> c2s '(' >> showBVLogicalBinOp bvlogicalbinop >> c2s ')'
   |    AbsBasilIR.BinOpIntLogicalBinOp intlogicalbinop -> s2s "BinOpIntLogicalBinOp" >> c2s ' ' >> c2s '(' >> showIntLogicalBinOp intlogicalbinop >> c2s ')'
   |    AbsBasilIR.BinOpIntBinOp intbinop -> s2s "BinOpIntBinOp" >> c2s ' ' >> c2s '(' >> showIntBinOp intbinop >> c2s ')'
@@ -357,17 +359,12 @@ and showBVUnOp (e : AbsBasilIR.bVUnOp) : showable = match e with
 
 
 and showBVBinOp (e : AbsBasilIR.bVBinOp) : showable = match e with
-       AbsBasilIR.BVBinOp_bvand  -> s2s "BVBinOp_bvand"
-  |    AbsBasilIR.BVBinOp_bvor  -> s2s "BVBinOp_bvor"
-  |    AbsBasilIR.BVBinOp_bvadd  -> s2s "BVBinOp_bvadd"
-  |    AbsBasilIR.BVBinOp_bvmul  -> s2s "BVBinOp_bvmul"
-  |    AbsBasilIR.BVBinOp_bvudiv  -> s2s "BVBinOp_bvudiv"
+       AbsBasilIR.BVBinOp_bvudiv  -> s2s "BVBinOp_bvudiv"
   |    AbsBasilIR.BVBinOp_bvurem  -> s2s "BVBinOp_bvurem"
   |    AbsBasilIR.BVBinOp_bvshl  -> s2s "BVBinOp_bvshl"
   |    AbsBasilIR.BVBinOp_bvlshr  -> s2s "BVBinOp_bvlshr"
   |    AbsBasilIR.BVBinOp_bvnand  -> s2s "BVBinOp_bvnand"
   |    AbsBasilIR.BVBinOp_bvnor  -> s2s "BVBinOp_bvnor"
-  |    AbsBasilIR.BVBinOp_bvxor  -> s2s "BVBinOp_bvxor"
   |    AbsBasilIR.BVBinOp_bvxnor  -> s2s "BVBinOp_bvxnor"
   |    AbsBasilIR.BVBinOp_bvcomp  -> s2s "BVBinOp_bvcomp"
   |    AbsBasilIR.BVBinOp_bvsub  -> s2s "BVBinOp_bvsub"
@@ -403,10 +400,15 @@ and showIntLogicalBinOp (e : AbsBasilIR.intLogicalBinOp) : showable = match e wi
   |    AbsBasilIR.IntLogicalBinOp_intge  -> s2s "IntLogicalBinOp_intge"
 
 
-and showBoolBinOp (e : AbsBasilIR.boolBinOp) : showable = match e with
-       AbsBasilIR.BoolBinOp_booland  -> s2s "BoolBinOp_booland"
-  |    AbsBasilIR.BoolBinOp_boolor  -> s2s "BoolBinOp_boolor"
-  |    AbsBasilIR.BoolBinOp_boolimplies  -> s2s "BoolBinOp_boolimplies"
+and showIntrinOp (e : AbsBasilIR.intrinOp) : showable = match e with
+       AbsBasilIR.IntrinOp_booland  -> s2s "IntrinOp_booland"
+  |    AbsBasilIR.IntrinOp_boolor  -> s2s "IntrinOp_boolor"
+  |    AbsBasilIR.IntrinOp_bvand  -> s2s "IntrinOp_bvand"
+  |    AbsBasilIR.IntrinOp_bvor  -> s2s "IntrinOp_bvor"
+  |    AbsBasilIR.IntrinOp_bvadd  -> s2s "IntrinOp_bvadd"
+  |    AbsBasilIR.IntrinOp_bvxor  -> s2s "IntrinOp_bvxor"
+  |    AbsBasilIR.IntrinOp_bvconcat  -> s2s "IntrinOp_bvconcat"
+  |    AbsBasilIR.IntrinOp_bvmul  -> s2s "IntrinOp_bvmul"
 
 
 and showPointerBinOp (e : AbsBasilIR.pointerBinOp) : showable = match e with

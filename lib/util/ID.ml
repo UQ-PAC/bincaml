@@ -32,7 +32,7 @@ open struct
           (** generate a fresh unique name optional string prefix hint *)
       decl_or_get : string -> t;
           (** generate and return unique integer identifier for a name *)
-      decl_exn : string -> string * int;
+      decl_exn : string -> t;
           (** generate and return unique integer identifier throwing if it
               already exists*)
       get_declared : unit -> M.t;
@@ -149,7 +149,7 @@ module ID : ID_Pub = struct
         (** generate a fresh unique name optional string prefix hint *)
     decl_or_get : string -> t;
         (** generate and return unique integer identifier for a name *)
-    decl_exn : string -> string * int;
+    decl_exn : string -> t;
         (** generate and return unique integer identifier throwing if it already
             exists*)
     get_declared : unit -> M.t;
@@ -176,6 +176,8 @@ module ID : ID_Pub = struct
 end
 
 include ID
+module Map = Map.Make (ID)
+module Set = Set.Make (ID)
 
 (** return a previously declared unique integer identifier for a name *)
 let get_id (g : generator) = g.get_id

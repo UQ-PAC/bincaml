@@ -372,7 +372,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
           a b
         |> StringMap.values |> Iter.to_list
       in
-      let target_proc = IDMap.find procid pt.procs in
+      let target_proc = Program.proc pt procid in
       let real_args = Procedure.formal_in_params target_proc in
       let output = Procedure.formal_out_params target_proc in
 

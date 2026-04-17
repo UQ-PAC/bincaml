@@ -8,8 +8,6 @@
 
 (generate_opam_files true)
 
-(formatting
- (enabled_for dune))
 
 (source
  (github username/reponame))
@@ -19,6 +17,8 @@
 (maintainers "Maintainer Name <maintainer@example.com>")
 
 (license Apache-2.0)
+
+(formatting (enabled_for ocaml dune))
 
 (documentation https://url/to/documentation)
 
@@ -44,6 +44,8 @@
   patricia-tree
   ppx_here
   intPQueue
+  logs
+  mtime
   (ocamlformat :with-dev-setup)
   (odig :with-dev-setup)
   (sherlodoc :with-doc)
@@ -54,6 +56,5 @@
   (qcheck-alcotest :with-test)
   (qcheck-stm :with-test))
  (tags (program-analysis)))
-
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

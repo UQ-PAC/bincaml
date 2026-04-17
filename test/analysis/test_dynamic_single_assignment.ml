@@ -33,10 +33,7 @@ proc @main (x: bv64) -> (out: bv64)
     |}
   in
   let program = lst.prog in
-  let main_proc_id =
-    Option.get_exn_or "expected entry proc" program.entry_proc
-  in
-  let proc = Lang.Program.proc program main_proc_id in
+  let proc = Lang.Program.entry_proc_exn program in
   let graph =
     Option.get_exn_or "expected proc graph" @@ Lang.Procedure.graph proc
   in
@@ -118,13 +115,11 @@ proc @main(a_in:bv64, b_in:bv64, x_in:bv64)  -> (x_out:bv64) {  }
   in
 
   let program = lst.prog in
-  let main_proc_id =
-    Option.get_exn_or "expected entry proc" program.entry_proc
-  in
-  let proc = Lang.Program.proc program main_proc_id in
+  let proc = Lang.Program.entry_proc_exn program in
   let transformed = Dsa.dsa proc in
   Lang.Program.output_proc_pretty stdout transformed;
-  [%expect {|
+  [%expect
+    {|
     proc @main(a_in:bv64, b_in:bv64, x_in:bv64)  -> (x_out:bv64) {  }
 
 

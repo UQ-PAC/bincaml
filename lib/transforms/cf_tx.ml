@@ -37,35 +37,32 @@ let simplify_proc_spec_exprs ?visit rewriter p =
   Procedure.set_specification p s
 
 let simplify_prog_spec_exprs rewriter ?visit (p : Program.t) =
-  let procs =
-    IDMap.map
-      (fun proc -> simplify_proc_spec_exprs rewriter ?visit proc)
-      p.procs
-  in
-  { p with procs }
+  Program.map_procedures
+    (fun _ proc -> simplify_proc_spec_exprs rewriter ?visit proc)
+    p
 
 let simplify_prog_exprs rewriter ?visit (p : Program.t) =
-  let procs =
-    IDMap.map (fun proc -> simplify_proc_exprs rewriter ?visit proc) p.procs
+  let p =
+    Program.map_procedures
+      (fun _ proc -> simplify_proc_exprs rewriter ?visit proc)
+      p
   in
-  let globals =
-    p.globals
-    |> StringMap.map
-         Program.(
-           function
-           | Function { binding; attrib; definition } ->
-               let definition =
-                 match definition with
-                 | Axiom b ->
-                     let rw = rewriter ?visit b in
-                     Axiom rw
-                 | Function b -> Function (rewriter ?visit b)
-                 | Uninterpreted -> Uninterpreted
-               in
-               Function { binding; attrib; definition }
-           | o -> o)
-  in
-  { p with procs; globals }
+  Program.map_decls
+    Program.(
+      fun id ->
+        (function
+        | Function { binding; attrib; definition } ->
+            let definition =
+              match definition with
+              | Axiom b ->
+                  let rw = rewriter ?visit b in
+                  Axiom rw
+              | Function b -> Function (rewriter ?visit b)
+              | Uninterpreted -> Uninterpreted
+            in
+            Function { binding; attrib; definition }
+        | o -> o))
+    p
 
 let to_smt (r : Expr.BasilExpr.rwinfo) =
   let open Lang.Expr_smt in

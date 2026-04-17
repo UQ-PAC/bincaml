@@ -83,8 +83,8 @@ let replace_phis_with_dsa_blocks procedure (phis : dsa_block Iter.t) =
       Procedure.modify_succs procedure src ~remove:[ tgt ] ~add:[])
     procedure phis
 
-(** Removes phi nodes from blocks. These are no longer needed after DSA
-    blocks are inserted. *)
+(** Removes phi nodes from blocks. These are no longer needed after DSA blocks
+    are inserted. *)
 let remove_phis_from_blocks =
   Procedure.map_graph (fun g ->
       Iter.from_iter (Fun.flip G.iter_edges_e g)
