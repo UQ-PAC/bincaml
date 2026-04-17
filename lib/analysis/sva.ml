@@ -276,7 +276,7 @@ let sva (prog : Program.t) =
       (prog : Program.t) : bool =
     let open Option in
     (let* symbols =
-       match StringMap.find_opt ".symbols" prog.attrib with
+       match StringMap.find_opt ".symbols" (Program.attrib prog) with
        | Some symbols -> Some symbols
        | _ -> None
      in
@@ -310,9 +310,8 @@ let sva (prog : Program.t) =
     |> Option.get_or ~default:false
   in
   let results =
-    IDMap.fold
-      (fun _ v acc -> DFGAnalysis.flow_insensitive v :: acc)
-      prog.procs []
+    Program.procs prog
+    |> Iter.fold (fun acc (_, v) -> DFGAnalysis.flow_insensitive v :: acc) []
   in
   results
   |> List.map

@@ -86,8 +86,10 @@ let%expect_test _ =
   print_endline (to_string e2);
   [%expect
     {|
-    forall (v1:bv1) :: (eq(v2, forall (v2:bv1) :: (booland(v1, v2, v3))))
-    forall (v1:bv1) :: (eq(0x16:bv5, forall (v2:bv1) :: (booland(v1, v2, 0x16:bv5))))
+    forall (v1:bv1) :: (eq(v2:bv1,
+      forall (v2:bv1) :: (booland(v1:bv1, v2:bv1, v3:bv1))))
+    forall (v1:bv1) :: (eq(0x16:bv5,
+      forall (v2:bv1) :: (booland(v1:bv1, v2:bv1, 0x16:bv5))))
     |}]
 
 module DSE = struct
@@ -229,20 +231,15 @@ module InterprocDSE = struct
     in
 
     let live_param_strs : StringSet.t IDMap.t =
-      IDMap.mapi
-        (fun pid proc ->
+      Program.procs p |> IDMap.of_iter
+      |> IDMap.mapi (fun pid proc ->
           let res = IDMap.find pid results in
           Procedure.formal_in_params proc
           |> StringMap.filter (fun _ v -> VarMap.get_or v res ~default:false)
           |> StringMap.keys |> StringSet.of_iter)
-        p.procs
     in
 
-    let procs =
-      IDMap.map
-        (fun proc -> transform_proc p keep live_param_strs results proc)
-        p.procs
-    in
-
-    { p with procs }
+    Program.map_procedures
+      (fun _ proc -> transform_proc p keep live_param_strs results proc)
+      p
 end

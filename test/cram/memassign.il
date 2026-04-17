@@ -1,17 +1,17 @@
 var shared $Global_4325420_4325424: bv32
   classification true;
 
-type UninterpSort;
+type uninterpSort = UninterpSort; 
 
 type opaque = A | B | C;
 
-type variants = A of {a: bv64} | B of {b:bv32} | C of {c: bv8};
+type variants = AA of {a: bv64} | BB of {b:bv32} | CC of {c: bv8};
 
 type record = Record of {a : bv64; b: bv32; c:bv64};
 
 type ilist = Cons of {head:bv64; tail:ilist} | Nil ;
 
-let $a = UninterpSort { };
+let $a = UninterpSort;
 
 
 let $b = Record {a=1:bv64; b=2:bv64; c=3:bv64};

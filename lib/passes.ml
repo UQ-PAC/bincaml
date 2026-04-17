@@ -390,15 +390,15 @@ module PassManager = struct
     match tf.apply with
     | Prog fn ->
         let p = fn p in
-        IDMap.values p.procs
-        |> Iter.iter (fun p ->
+        Program.procs p
+        |> Iter.iter (fun (_, p) ->
             try Lang.Check.wf_checks p
             with Lang.Check.IRWellformed e ->
               raise @@ Lang.Check.IRWellformed (tf.name ^ ": " ^ e));
         p
     | Batch tf -> List.fold_left run_transform p tf
     | DFGAnalysis (module D : Analysis.Dataflow_graph.AnalysisType) ->
-        IDMap.to_iter p.procs
+        Program.procs p
         |> Iter.filter (fun (_, p) -> Procedure.graph p |> Option.is_some)
         |> Iter.iter (fun (pn, p) ->
             (*let r =
@@ -418,35 +418,29 @@ module PassManager = struct
             ());
         p
     | ProcCheck app ->
-        let _ =
-          IDMap.mapi
-            (fun id proc ->
-              Trace_core.with_span ~__FILE__ ~__LINE__
-                ("check-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
-              @@ fun _ ->
-              (match app p proc with
-              | false -> ()
-              | true -> failwith @@ "Check failed: " ^ ID.to_string id);
-              Lang.Check.wf_checks proc)
-            p.procs
-        in
+        Program.procs p
+        |> Iter.iter (fun (id, proc) ->
+            Trace_core.with_span ~__FILE__ ~__LINE__
+              ("check-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
+            @@ fun _ ->
+            (match app p proc with
+            | false -> ()
+            | true -> failwith @@ "Check failed: " ^ ID.to_string id);
+            Lang.Check.wf_checks proc);
         p
     | Proc app ->
-        let procs =
-          IDMap.mapi
-            (fun id proc ->
-              Trace_core.with_span ~__FILE__ ~__LINE__
-                ("transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
-              @@ fun _ ->
-              let p = app proc in
-              try
-                Lang.Check.wf_checks p;
-                p
-              with Lang.Check.IRWellformed e ->
-                raise @@ Lang.Check.IRWellformed (tf.name ^ ": " ^ e))
-            p.procs
-        in
-        { p with procs }
+        Program.map_procedures
+          (fun id proc ->
+            Trace_core.with_span ~__FILE__ ~__LINE__
+              ("transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
+            @@ fun _ ->
+            let p = app proc in
+            try
+              Lang.Check.wf_checks p;
+              p
+            with Lang.Check.IRWellformed e ->
+              raise @@ Lang.Check.IRWellformed (tf.name ^ ": " ^ e))
+          p
 
   let construct_batch (s : t) (passes : string list) =
     List.map (fun p -> StringMap.find p s.avail) passes

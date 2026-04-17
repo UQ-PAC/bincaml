@@ -130,13 +130,13 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
     extra_summary solver
       (module struct
         let requires id =
-          IDMap.get id prog.procs
+          Program.proc_opt prog id
           |> Option.map_or
                (fun p -> (Procedure.specification p).requires)
                ~default:[]
 
         let ensures id =
-          IDMap.get id prog.procs
+          Program.proc_opt prog id
           |> Option.map_or
                (fun p -> (Procedure.specification p).ensures)
                ~default:[]
@@ -149,17 +149,18 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
 let intraproc_transform (prog : Program.t) =
   let module Dfs = Graph.Traverse.Dfs (Program.CallGraph.G) in
   let cg = Program.CallGraph.make_call_graph prog in
-  let procs =
-    Iter.from_iter (fun f -> Dfs.postfix f cg)
-    |> Iter.fold
-         (fun acc v ->
-           match v with
-           | Program.CallGraph.Vert.ProcBegin id ->
-               IDMap.update id (Option.map (intraproc_transform_proc prog)) acc
-           | _ -> acc)
-         prog.procs
-  in
-  { prog with procs }
+  Iter.from_iter (fun f -> Dfs.postfix f cg)
+  |> Iter.fold
+       (fun prog v ->
+         match v with
+         | Program.CallGraph.Vert.ProcBegin id ->
+             Program.update_proc id
+               (function
+                 | Some proc -> Some (intraproc_transform_proc prog proc)
+                 | None -> None)
+               prog
+         | _ -> prog)
+       prog
 
 module Domain = struct
   type property = summary
@@ -177,7 +178,7 @@ module FixSummaries = Fix.Fix.ForHashedType (ID) (Domain)
 
 let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
     res component =
-  let procs = prog.procs in
+  let procs = Program.procs prog |> IDMap.of_iter in
   let component =
     List.filter_map
       (function Program.CallGraph.Vert.ProcBegin pid -> Some pid | _ -> None)
@@ -219,18 +220,16 @@ let interproc_transform (prog : Program.t) =
       }
   in
   let summaries =
-    prog.procs
-    |> IDMap.map (fun proc ->
+    Program.procs prog
+    |> Iter.map (fun (i, proc) ->
         let spec = Procedure.specification proc in
-        { requires = spec.requires; ensures = spec.ensures })
+        (i, { requires = spec.requires; ensures = spec.ensures }))
+    |> IDMap.of_iter
   in
   let summaries =
     List.fold_left (solve_component solver call_graph prog) summaries sccs
   in
   IDMap.fold
-    (fun pid summary (prog : Program.t) ->
-      let proc = IDMap.find pid prog.procs in
-      let proc' = set_summary summary proc in
-      let procs = IDMap.add pid proc' prog.procs in
-      { prog with procs })
+    (fun procid summary (prog : Program.t) ->
+      Program.update_proc procid (Option.map (set_summary summary)) prog)
     summaries prog

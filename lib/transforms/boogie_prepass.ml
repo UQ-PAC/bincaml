@@ -1,4 +1,5 @@
 open Bincaml_util.Common
+open Lang
 
 module Builtins = struct
   type t =
@@ -31,6 +32,7 @@ module Builtins = struct
     | `BVNOT
     | `BVNEG
     | `ZeroExtend of int
+    | `Load of Ops.Maps.endian * int
     | `SignExtend of int ]
   (** Subset of binary/unary/intrinsic ops which have builtins. (":builtin X" in
       boogie) *)
@@ -61,6 +63,8 @@ module Builtins = struct
     | `BVNEG -> "bvneg"
     | `ZeroExtend sz -> Printf.sprintf "zero_extend %d" sz
     | `SignExtend sz -> Printf.sprintf "sign_extend %d" sz
+    | `Load (`Big, i) -> Printf.sprintf "load%d_be" i
+    | `Load (`Little, i) -> Printf.sprintf "load%d_le" i
 
   (** Returns the monomorphized builtin name *)
   let monomorphize_builtin (op : builtin) targs =
@@ -73,10 +77,8 @@ module Builtins = struct
 
   let name
       (op :
-        [< Lang.Ops.AllOps.binary
-        | Lang.Ops.AllOps.unary
-        | Lang.Ops.AllOps.intrin
-        | builtin ]) args =
+        [< Ops.AllOps.binary | Ops.AllOps.unary | Ops.AllOps.intrin | builtin ])
+      args =
     match op with
     | (`BVADD | `BVAND | `BVNOT | `BVNEG | `BVMUL | `BVOR) as op ->
         Function (monomorphize_builtin op (List.take 1 args))
@@ -96,13 +98,11 @@ module Builtins = struct
     | `ReadField s -> Postfix (Printf.sprintf "->%s" s)
     | `Extract (hi, lo) -> Postfix (Printf.sprintf "[%d:%d]" hi lo)
     | `BOOLTOBV1 -> Function "bool_to_bv1"
-    | #Lang.Ops.AllOps.binary | #Lang.Ops.AllOps.unary | #Lang.Ops.AllOps.intrin
-      ->
-        Unsup
+    | #Ops.AllOps.binary | #Ops.AllOps.unary | #Ops.AllOps.intrin -> Unsup
 
-  let visit_expr_ops f (e : Types.t Lang.Expr.BasilExpr.abstract_expr) =
-    let open Lang.Expr.AbstractExpr in
-    let open Lang.Ops.AllOps in
+  let visit_expr_ops f (e : Types.t Expr.BasilExpr.abstract_expr) =
+    let open Expr.AbstractExpr in
+    let open Ops.AllOps in
     let get_ty (op : [ const | unary | binary | intrin | lambda ]) o =
       match o with
       | Fun { ret; args } ->
@@ -126,29 +126,30 @@ module Builtins = struct
         ret_type_lambda op (List.map Var.typ bound_vars) in_body |> get_ty op
     | Let _ -> failwith "unsupported: prepass remove"
 
-  let iexpr f e = Lang.Expr.BasilExpr.cata (visit_expr_ops f) e |> ignore
+  let iexpr f e = Expr.BasilExpr.cata (visit_expr_ops f) e |> ignore
 
-  let istmt f (s : Lang.Program.stmt) =
-    Lang.Stmt.iter_rexpr s (function `Expr e -> iexpr f e | _ -> ())
+  let istmt f (s : Program.stmt) =
+    Stmt.iter_rexpr s (function `Expr e -> iexpr f e | _ -> ())
 
-  let iprog f (p : Lang.Program.t) =
-    IDMap.values p.procs
-    |> Iter.flat_map Lang.Procedure.iter_stmt_topo_fwd
+  let iprog f (p : Program.t) =
+    Program.procs p |> Iter.map snd
+    |> Iter.flat_map Procedure.iter_stmt_topo_fwd
     |> Iter.iter (istmt f);
-    StringMap.values p.globals
+    Program.declarations p |> Iter.map snd
     |> Iter.iter (function
-      | Lang.Program.Function { definition = Axiom e } -> (iexpr f) e
-      | Lang.Program.Function { definition = Function e } -> (iexpr f) e
+      | Program.Function { definition = Axiom e } -> (iexpr f) e
+      | Program.Function { definition = Function e } -> (iexpr f) e
       | _ -> ());
-    p.procs |> IDMap.values
+    Program.procs p |> Iter.map snd
     |> Iter.iter (fun v ->
-        let spec = Lang.Procedure.specification v in
+        let spec = Procedure.specification v in
         List.iter (iexpr f) spec.requires;
         List.iter (iexpr f) spec.ensures;
         List.iter (iexpr f) spec.rely;
         List.iter (iexpr f) spec.guarantee);
-    p.spec.rely |> List.iter (iexpr f);
-    p.spec.guarantee |> List.iter (iexpr f)
+    let s = Program.spec p in
+    s.rely |> List.iter (iexpr f);
+    s.guarantee |> List.iter (iexpr f)
 
   let function_for_op op args ret =
     Var.create ~scope:Var.GlobalConst
@@ -174,9 +175,9 @@ module Builtins = struct
            binding = function_for_op op args ret;
            definition = Uninterpreted;
          }
-        : Lang.Program.declaration)
+        : Program.declaration)
 
-  let used_ops (p : Lang.Program.t) =
+  let used_ops (p : Program.t) =
     Iter.from_iter (fun f -> iprog f p)
     |> Iter.sort_uniq
     |> Iter.filter_map (function op, args, ret ->
@@ -185,23 +186,22 @@ module Builtins = struct
         | _ -> None))
     |> Iter.to_list
 
-  let transform_add_builtin_decls (p : Lang.Program.t) : Lang.Program.t =
-    used_ops p |> List.fold_left Lang.Program.add_decl p
+  let transform_add_builtin_decls (p : Program.t) : Program.t =
+    used_ops p |> List.fold_left Program.add_decl p
 end
 
 module Instructions = struct
-  let unique_stores_loads (prog : Lang.Program.t) =
-    let visit_procs proc = Lang.Procedure.iter_stmt_topo_fwd proc in
-    let procs = IDMap.values prog.procs in
+  let unique_stores_loads (prog : Program.t) =
+    let visit_procs proc = Procedure.iter_stmt_topo_fwd proc in
+    let procs = Program.procs prog |> Iter.map snd in
     procs |> Iter.flat_map visit_procs
     |> Iter.filter (function
-      | Lang.Stmt.Instr_Store { lhs; rhs; value; addr = Scalar } -> true
-      | Lang.Stmt.Instr_Store
-          { lhs; rhs; value; addr = Addr { addr; size; endian } } ->
+      | Stmt.Instr_Store { lhs; rhs; value; addr = Scalar } -> true
+      | Stmt.Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } }
+        ->
           true
-      | Lang.Stmt.Instr_Load { lhs; rhs; addr = Scalar } -> true
-      | Lang.Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->
-          true
+      | Stmt.Instr_Load { lhs; rhs; addr = Scalar } -> true
+      | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } -> true
       | _ -> false)
     |> Iter.sort_uniq
 
@@ -219,24 +219,23 @@ module Instructions = struct
       List.range 0 (steps - 1)
       |> List.fold_left
            (fun acc i ->
-             Lang.Expr.BasilExpr.applyintrin ~op:`MapUpdate
+             Expr.BasilExpr.applyintrin ~op:`MapUpdate
                [
                  acc;
-                 (if Stdlib.( == ) i 0 then Lang.Expr.BasilExpr.rvar index
+                 (if Stdlib.( == ) i 0 then Expr.BasilExpr.rvar index
                   else
-                    Lang.Expr.BasilExpr.binexp ~op:`BVADD
-                      (Lang.Expr.BasilExpr.rvar index)
-                      (Lang.Expr.BasilExpr.bvconst
-                         (Bitvec.of_int ~size:addr_size i)));
-                 Lang.Expr.BasilExpr.extract
+                    Expr.BasilExpr.binexp ~op:`BVADD
+                      (Expr.BasilExpr.rvar index)
+                      (Expr.BasilExpr.bvconst (Bitvec.of_int ~size:addr_size i)));
+                 Expr.BasilExpr.extract
                    ~hi_excl:
                      (if be then ((val_size / 8) - i) * 8 else (i + 1) * 8)
                    ~lo_incl:(if be then ((val_size / 8) - i - 1) * 8 else i * 8)
-                   (Lang.Expr.BasilExpr.rvar value);
+                   (Expr.BasilExpr.rvar value);
                ])
-           (Lang.Expr.BasilExpr.rvar memory)
+           (Expr.BasilExpr.rvar memory)
     in
-    Lang.Expr.BasilExpr.binding ~op:`Lambda [ memory; index; value ] body
+    Expr.BasilExpr.binding ~op:`Lambda [ memory; index; value ] body
 
   let load_body ?(be = false) mem_typ val_size addr_size =
     let memory = Var.create ~scope:Var.LocalVar "#memory" mem_typ in
@@ -249,40 +248,39 @@ module Instructions = struct
       |> List.tl
       |> List.fold_left
            (fun acc i ->
-             Lang.Expr.BasilExpr.applyintrin ~op:`BVConcat
+             Expr.BasilExpr.applyintrin ~op:`BVConcat
                [
                  acc;
-                 Lang.Expr.BasilExpr.binexp ~op:`MapAccess
-                   (Lang.Expr.BasilExpr.rvar memory)
-                   (Lang.Expr.BasilExpr.binexp ~op:`BVADD
-                      (Lang.Expr.BasilExpr.rvar index)
-                      (Lang.Expr.BasilExpr.bvconst
-                         (Bitvec.of_int ~size:addr_size i)));
+                 Expr.BasilExpr.binexp ~op:`MapAccess
+                   (Expr.BasilExpr.rvar memory)
+                   (Expr.BasilExpr.binexp ~op:`BVADD
+                      (Expr.BasilExpr.rvar index)
+                      (Expr.BasilExpr.bvconst (Bitvec.of_int ~size:addr_size i)));
                ])
-           (Lang.Expr.BasilExpr.binexp ~op:`MapAccess
-              (Lang.Expr.BasilExpr.rvar memory)
-              (Lang.Expr.BasilExpr.binexp ~op:`BVADD
-                 (Lang.Expr.BasilExpr.rvar index)
-                 (Lang.Expr.BasilExpr.bvconst
+           (Expr.BasilExpr.binexp ~op:`MapAccess
+              (Expr.BasilExpr.rvar memory)
+              (Expr.BasilExpr.binexp ~op:`BVADD
+                 (Expr.BasilExpr.rvar index)
+                 (Expr.BasilExpr.bvconst
                     (Bitvec.of_int ~size:addr_size
                        (if be then 0 else steps - 1)))))
     in
-    Lang.Expr.BasilExpr.binding ~op:`Lambda [ memory; index ] body
+    Expr.BasilExpr.binding ~op:`Lambda [ memory; index ] body
 
-  let store_load_decl (s : Lang.Program.stmt) =
+  let store_load_decl (s : Program.stmt) =
     match s with
-    | Lang.Stmt.Instr_Store
-        { lhs; rhs; value; addr = Addr { addr; size; endian } } ->
+    | Stmt.Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } }
+      ->
         let boogie_attribs =
           StringMap.of_list [ (".extern", `List []); (".define", `List []) ]
         in
         let attribs = StringMap.singleton ".boogie" (`Assoc boogie_attribs) in
         let body =
           store_body (Var.typ rhs)
-            (match Lang.Expr.BasilExpr.type_of value with
+            (match Expr.BasilExpr.type_of value with
             | Types.Bitvector s -> s
             | _ -> failwith "Expected bitvec type")
-            (match Lang.Expr.BasilExpr.type_of addr with
+            (match Expr.BasilExpr.type_of addr with
             | Types.Bitvector s -> s
             | _ -> failwith "Expected bitvec type")
         in
@@ -297,8 +295,8 @@ module Instructions = struct
                    (Lang.Expr.BasilExpr.type_of value);
                definition = Lang.Program.Function body;
              }
-            : Lang.Program.declaration)
-    | Lang.Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->
+            : Program.declaration)
+    | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->
         let boogie_attribs = StringMap.of_list [ (".extern", `List []) ] in
         let attribs =
           StringMap.of_list [ (".boogie", `Assoc boogie_attribs) ]
@@ -318,18 +316,17 @@ module Instructions = struct
                attrib = attribs;
                binding =
                  Var.create
-                   (Printf.sprintf "load%d_%s" size
-                      (Lang.Stmt.show_endian endian))
+                   (Printf.sprintf "load%d_%s" size (Stmt.show_endian endian))
                    (Var.typ lhs);
                definition = Function body;
              }
-            : Lang.Program.declaration)
+            : Program.declaration)
     | _ -> None
 
-  let transform_add_store_load_decls (prog : Lang.Program.t) =
+  let transform_add_store_load_decls (prog : Program.t) =
     unique_stores_loads prog
     |> Iter.filter_map store_load_decl
-    |> Iter.fold Lang.Program.add_decl prog
+    |> Iter.fold Program.add_decl prog
 end
 
 module Normalise = struct
@@ -392,25 +389,25 @@ module Normalise = struct
     | Instr_Store { lhs; value; addr = Scalar } -> Instr_Assign [ (lhs, value) ]
     | Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->
         let fn_name =
-          Printf.sprintf "load%d_%s" size (Lang.Stmt.show_endian endian)
+          Printf.sprintf "load%d_%s" size (Stmt.show_endian endian)
         in
         Instr_Assign
           [
             ( lhs,
-              Lang.Expr.BasilExpr.fapply
-                (Lang.Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
-                [ Lang.Expr.BasilExpr.rvar rhs; addr ] );
+              Expr.BasilExpr.fapply
+                (Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
+                [ Expr.BasilExpr.rvar rhs; addr ] );
           ]
     | Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } } ->
         let fn_name =
-          Printf.sprintf "store%d_%s" size (Lang.Stmt.show_endian endian)
+          Printf.sprintf "store%d_%s" size (Stmt.show_endian endian)
         in
-        Lang.Stmt.Instr_Assign
+        Stmt.Instr_Assign
           [
             ( lhs,
-              Lang.Expr.BasilExpr.fapply
-                (Lang.Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
-                [ Lang.Expr.BasilExpr.rvar rhs; addr; value ] );
+              Expr.BasilExpr.fapply
+                (Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
+                [ Expr.BasilExpr.rvar rhs; addr; value ] );
           ]
     | o -> o
 
@@ -424,55 +421,52 @@ module Normalise = struct
     %> Cf_tx.simplify_prog_exprs rewriter
 
   let replace_functions (p : Program.t) =
-    let globals =
-      p.globals |> StringMap.to_iter
-      |> Iter.flat_map
-           Program.(
-             function
-             | k, Function { binding; attrib; definition } -> (
-                 let keep =
-                   Iter.singleton (k, Function { binding; attrib; definition })
-                 in
-                 match definition with
-                 | Function b -> (
-                     match BasilExpr.unfix b with
-                     | Lambda { bound_vars; in_body } -> keep
-                     | body ->
-                         let axiom_name = k ^ "_funvalue" in
-                         Iter.doubleton
-                           ( k,
-                             Function
-                               { binding; definition = Uninterpreted; attrib }
-                           )
-                           ( axiom_name,
-                             Function
-                               {
-                                 binding = Var.copy ~name:axiom_name binding;
-                                 definition =
-                                   Axiom
-                                     (BasilExpr.binexp ~op:`EQ
-                                        (BasilExpr.rvar binding)
-                                        (BasilExpr.fix body));
-                                 attrib;
-                               } ))
-                 | o -> keep)
-             | e -> Iter.singleton e)
-      |> StringMap.of_iter
+    let open Program in
+    let prog =
+      Program.flat_map_decls
+        (fun k -> function
+          | Function { binding; attrib; definition } -> (
+              let keep =
+                Iter.singleton (Function { binding; attrib; definition })
+              in
+              match definition with
+              | Function b -> (
+                  match BasilExpr.unfix b with
+                  | Lambda { bound_vars; in_body } -> keep
+                  | body ->
+                      let axiom_name =
+                        Program.declare_name_exn (ID.name k ^ "_funvalue") p
+                      in
+                      Iter.doubleton
+                        (Function
+                           { binding; definition = Uninterpreted; attrib })
+                        (Function
+                           {
+                             binding =
+                               Var.copy ~name:(ID.name axiom_name) binding;
+                             definition =
+                               Axiom
+                                 (BasilExpr.binexp ~op:`EQ
+                                    (BasilExpr.rvar binding)
+                                    (BasilExpr.fix body));
+                             attrib;
+                           }))
+              | o -> keep)
+          | e -> Iter.singleton e)
+        p
     in
-    { p with globals }
+    prog
 
   let replace_stmts (p : Program.t) =
-    let procs =
-      p.procs
-      |> IDMap.map (fun p ->
-          Procedure.map_blocks_nondet
-            (fun (id, b) -> Block.map ~phi:Fun.id replace_stmt b)
-            p)
-    in
-    { p with procs }
+    Program.map_procedures
+      (fun _ p ->
+        Procedure.map_blocks_nondet
+          (fun (id, b) -> Block.map ~phi:Fun.id replace_stmt b)
+          p)
+      p
 end
 
-let transform (p : Lang.Program.t) =
+let transform (p : Program.t) =
   p |> Normalise.replace_functions |> Normalise.replace_exprs
   |> Instructions.transform_add_store_load_decls |> Normalise.replace_stmts
   |> Builtins.transform_add_builtin_decls

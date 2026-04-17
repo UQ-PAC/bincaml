@@ -69,9 +69,7 @@ open struct
 
   let run_transform prog =
     let p = (Loader.Loadir.ast_of_string prog).prog in
-    let p =
-      IDMap.find (Option.get_exn_or "no entry proc" p.entry_proc) p.procs
-    in
+    let p = Lang.Program.entry_proc_exn p in
     let before = solve_proc p in
     let p' = Transforms.Irreducible_loop.transform p in
     let after = solve_proc p' in
@@ -79,9 +77,7 @@ open struct
 
   let check_loop_result name prog ~header_ptrs ~all_loop_headers =
     let p = (Loader.Loadir.ast_of_string prog).prog in
-    let p =
-      IDMap.find (Option.get_exn_or "no entry proc" p.entry_proc) p.procs
-    in
+    let p = Lang.Program.entry_proc_exn p in
     let c =
      fun () ->
       let loops = solve_proc p in

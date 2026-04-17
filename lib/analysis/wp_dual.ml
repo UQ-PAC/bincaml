@@ -198,9 +198,7 @@ proc @main () -> ()
     |})
       .prog
   in
-  let proc =
-    IDMap.find (prog.entry_proc |> Option.get_exn_or "no entry proc") prog.procs
-  in
+  let proc = Program.entry_proc_exn prog in
   let res =
     IntraAnalysis.analyse
       ~init:(fun _ -> Expr.BasilExpr.boolconst false)

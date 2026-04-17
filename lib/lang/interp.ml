@@ -486,20 +486,10 @@ module IState = struct
       initialised based on whether the random geenrator is passed *)
   let create ?(fuel = 10000) ?random (prog : Program.t) =
     let stack = [] in
-    let pc =
-      {
-        proc =
-          IDMap.find
-            (prog.entry_proc |> Option.get_exn_or "executing prog with no entry")
-            prog.procs;
-        vert = Exit;
-      }
-    in
+    let proc = Program.entry_proc_exn prog in
+    let pc = { proc; vert = Exit } in
     let memories =
-      prog.globals |> StringMap.values
-      |> Iter.filter_map (function
-        | Program.(Variable { binding }) -> Some binding
-        | _ -> None)
+      Program.global_vars prog
       |> Iter.filter (fun v ->
           match Var.typ v with Map _ -> true | _ -> false)
       |> Iter.map (fun v -> (v, PageTable.create ?use_random_init:random ()))
@@ -511,10 +501,7 @@ module IState = struct
       | None -> Z.zero
     in
     let globals =
-      prog.globals |> StringMap.values
-      |> Iter.filter_map (function
-        | Program.(Variable { binding }) -> Some binding
-        | _ -> None)
+      Program.global_vars prog
       |> Iter.filter (fun v ->
           match Var.typ v with Map _ -> false | _ -> true)
       |> Iter.map (fun v -> (v, init_glob v))
@@ -656,7 +643,7 @@ module IState = struct
         st
     | Stmt.Instr_IntrinCall _ -> failwith "unsupported"
     | Stmt.Instr_Call { lhs; procid; args } ->
-        let proc = IDMap.find procid st.prog.procs in
+        let proc = Program.proc st.prog procid in
         let st, out = call_proc st proc args in
         let st =
           StringMap.fold
@@ -853,7 +840,5 @@ let run_proc prog ?(args = StringMap.empty) proc =
 
 let run_prog ?(args = StringMap.empty) prog =
   let st = IState.create prog in
-  let proc =
-    IDMap.find (Option.get_exn_or "no main proc" prog.entry_proc) prog.procs
-  in
+  let proc = Program.entry_proc_exn prog in
   IState.call_proc st proc args

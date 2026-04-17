@@ -16,50 +16,6 @@ let proc =
 
 let print_proc chan p = Program.output_proc_pretty chan p
 
-let list_procs fname =
-  let p = Loader.Loadir.ast_of_fname fname in
-  let procs prog =
-    let open Program in
-    IDMap.iter (fun i _ -> Printf.printf "%s\n" (ID.show i)) prog.procs
-  in
-  procs p.prog;
-  Ok ()
-
-let procs_cmd =
-  let doc = "list program print procedures " in
-  let info = Cmd.info "procs" ~version:"alpha" ~doc in
-  Cmd.v info Term.(const list_procs $ fname)
-
-let dump_proc fname proc =
-  try
-    let p = Loader.Loadir.ast_of_fname fname in
-    let id = p.prog.proc_names.get_id proc in
-    let p = IDMap.find id p.prog.procs in
-    print_proc stdout p;
-    Ok ()
-  with
-  | (Loader.Loadir.ILBParseError _ | Loader.Loadir.LoadError _) as e ->
-      Error (Loader.Loadir.show_ilbparseerror e)
-  | Not_found -> Error ("no procedure \"" ^ proc ^ "\" in " ^ fname)
-
-let print_cfg fname proc =
-  let prg = Loader.Loadir.ast_of_fname fname in
-  let id = prg.prog.proc_names.get_id proc in
-  let _ = IDMap.find id prg.prog.procs in
-  Ok ()
-(*Lang.Livevars.print_live_vars_dot Format.std_formatter p ; *)
-(*Lang.Livevars.print_dse_dot Format.std_formatter p; *)
-
-let print_cfg_cmd =
-  let doc = "print dot CFG for graph" in
-  let info = Cmd.info "dump-cfg" ~version:"alpha" ~doc in
-  Cmd.v info Term.(const print_cfg $ fname $ proc)
-
-let dump_proc_cmd =
-  let doc = "print il for procedure" in
-  let info = Cmd.info "dump-il" ~version:"alpha" ~doc in
-  Cmd.v info Term.(const dump_proc $ fname $ proc)
-
 let verb =
   let doc = "set log level to debug" and docv = "VERBOSE" in
   Arg.(value & flag & info [ "v"; "verbose" ] ~doc ~docv)
@@ -102,8 +58,7 @@ let script_cmd =
 
 let cmd =
   let doc = "bincaml" in
-  Cmd.group (Cmd.info "bincaml" ~version:"%%VERSION%%" ~doc)
-  @@ [ procs_cmd; dump_proc_cmd; print_cfg_cmd; script_cmd ]
+  Cmd.group (Cmd.info "bincaml" ~version:"%%VERSION%%" ~doc) @@ [ script_cmd ]
 
 let main () =
   Trace_core.set_process_name "main";

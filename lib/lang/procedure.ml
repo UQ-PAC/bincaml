@@ -402,7 +402,7 @@ let lookup_local_decl p v =
   Var.Decls.find_opt (local_decls p) v
   |> Option.or_lazy ~else_:(fun () ->
       StringMap.find_opt v (formal_out_params p))
-  |> Option.get_lazy (fun () -> StringMap.find v (formal_in_params p))
+  |> Option.or_lazy ~else_:(fun () -> StringMap.find_opt v (formal_in_params p))
 
 let decl_local p v =
   let _ = (local_ids p).decl_or_get (Var.name v) in

@@ -40,7 +40,7 @@ proc @main (a:bv64, b:bv64, c:bv64, d:bv64, e:bv64) -> ()
   in
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
-  let main = program.entry_proc |> Option.get_exn_or "No entry proc" in
+  let main = Lang.(Procedure.id @@ Program.entry_proc_exn program) in
   print_lives results main;
   [%expect
     {|
@@ -93,7 +93,7 @@ proc @main (x_in:bv64) -> ()
   in
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
-  let main = program.entry_proc |> Option.get_exn_or "No entry proc" in
+  let main = Lang.(Program.entry_proc_exn program |> Procedure.id) in
   print_lives results main;
   [%expect {|
     @main
@@ -134,7 +134,8 @@ proc @fun (c:bv64, d:bv64) -> (out:bv64)
   in
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
-  IDMap.iter (fun id _ -> print_lives results id) program.procs;
+  Lang.Program.procs program
+  |> Iter.iter (fun (id, _) -> print_lives results id);
   [%expect
     {|
     @main
@@ -183,7 +184,8 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   in
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
-  IDMap.iter (fun id _ -> print_lives results id) program.procs;
+  Lang.Program.procs program
+  |> Iter.iter (fun (id, _) -> print_lives results id);
   [%expect
     {|
     @main
@@ -249,7 +251,8 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   in
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
-  IDMap.iter (fun id _ -> print_lives results id) program.procs;
+  Lang.Program.procs program
+  |> Iter.iter (fun (id, _) -> print_lives results id);
   [%expect
     {|
     @main
@@ -288,7 +291,7 @@ proc @stub() -> ();
   in
   let program = lst.prog in
   let _, results = IDELiveAnalysis.solve program in
-  let main = program.entry_proc |> Option.get_exn_or "No entry proc" in
+  let main = Lang.(Program.entry_proc_exn program |> Procedure.id) in
   print_lives results main;
   [%expect {|
     @main
