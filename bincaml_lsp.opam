@@ -19,6 +19,7 @@ depends: [
   "linol"
   "linol-lwt"
   "containers"
+  "ppx_import"
   "ppx_deriving"
   "odoc" {with-doc}
 ]

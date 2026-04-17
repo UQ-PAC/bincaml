@@ -70,6 +70,7 @@
   linol
   linol-lwt
   containers
+  ppx_import
   ppx_deriving)
  (tags (lsp)))
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

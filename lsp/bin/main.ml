@@ -171,7 +171,7 @@ class lsp_server =
               notify_error ~type_:Error
                 "Cannot generate procedure graph because file has parse errors."
           | Ok ast -> (
-              let procid = ast.proc_names.get_id name in
+              let procid = Lang.Program.get_id_by_name name ast in
               let procedure = Lang.Program.proc ast procid in
               match Lang.Procedure.graph procedure with
               | None ->
