@@ -594,6 +594,23 @@ module Solver = struct
                 c.lhs)
     | _ -> ()
 
+  let add_stub node_of proc =
+    (* ARM abi tell us that R19..R29 and R31 are preserved through calls https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#611general-purpose-registers *)
+    let regs =
+      List.range 19 29 @ [ 31 ] |> List.map (fun n -> "R" ^ Int.to_string n)
+    in
+    let fin, fout =
+      (Procedure.formal_in_params proc, Procedure.formal_out_params proc)
+    in
+    List.iter
+      (fun r ->
+        let open Option.Infix in
+        ignore
+          (let* inp = StringMap.get (r ^ "_in") fin in
+           let* out = StringMap.get (r ^ "_out") fout in
+           Some (CopyNode.join (node_of inp) LF.identity (node_of out))))
+      regs
+
   module Worklist = Worklist.Make (ID)
 
   let solve_component (prog : Program.t) call_graph summaries
@@ -613,12 +630,16 @@ module Solver = struct
     let callers = Hashtbl.create 10 in
     List.iter
       (fun pid ->
-        Program.proc prog pid |> Procedure.iter_blocks
-        |> Iter.iter (fun (bid, b) ->
-            Block.stmts_iter b
-            |> Iter.iter
-                 (add_intra_stmt summaries callers node_of pid component);
-            List.iter (add_phi (node_of pid)) b.phis))
+        let proc = Program.proc prog pid in
+        match Procedure.graph proc with
+        | None -> add_stub (node_of pid) proc
+        | Some _ ->
+            Procedure.iter_blocks proc
+            |> Iter.iter (fun (bid, b) ->
+                Block.stmts_iter b
+                |> Iter.iter
+                     (add_intra_stmt summaries callers node_of pid component);
+                List.iter (add_phi (node_of pid)) b.phis))
       component;
     (* The interproc part *)
     let worklist = Worklist.create () in
