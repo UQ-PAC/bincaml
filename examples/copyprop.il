@@ -1,11 +1,14 @@
 prog entry @main;
 
-proc @main(a:bv64) -> ()
+proc @main(a:bv64, x:bool) -> ()
 [
     block %main [
         (var b:bv64) := call @f(a:bv64);
         (var c:bv64, var d:bv64) := call @loop(b:bv64, b:bv64);
-        (var e:bv64 := bvadd(1:bv64, c:bv64), var f:bv64 := bvadd(1:bv64, d:bv64));
+        (var e:bv64) := call @cross(d:bv64, bvadd(d:bv64, 1:bv64));
+        (var f:bv64 := bvadd(1:bv64, c:bv64), var g:bv64 := bvadd(1:bv64, e:bv64));
+        var y:bool := x:bool;
+        var z:bool := y:bool;
         return;
     ];
 ];
@@ -83,5 +86,25 @@ proc @loop(x:bv64, y:bv64) -> (o:bv64, p:bv64)
     ) [
         (var o:bv64 := x_4:bv64, var p:bv64 := y_4:bv64);
         return;
+    ];
+];
+
+proc @cross(a:bv64, b:bv64) -> (o:bv64)
+[
+    block %entry [
+        goto(%a, %b);
+    ];
+    block %a [
+        var o_1:bv64 := a:bv64;
+        goto(%ret);
+    ];
+    block %b [
+        var o_2:bv64 := bvsub(b:bv64, 1:bv64);
+        goto(%ret);
+    ];
+    block %ret (
+        var o_3:bv64 := phi(%a -> o_1:bv64, %b -> o_2:bv64)
+    ) [
+        return (o_3:bv64);
     ];
 ];

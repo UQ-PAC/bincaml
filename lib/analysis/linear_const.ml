@@ -213,7 +213,7 @@ module LF = struct
             Some (Some (Bitvec.add a c), Some v, Bitvec.add b d)
         | _ -> None
 
-      let sub a (b, v, c) = add a (Option.map Bitvec.neg b, v, Bitvec.neg c)
+      let sub a b = add a (neg b)
 
       (* ~a = -a - 1 *)
       let not (a, v, c) =
@@ -251,14 +251,22 @@ module LF = struct
       | UnaryExpr { op = `BVNOT; arg } -> Option.map Lin.not arg
       | _ -> None
 
+    let copy_of e =
+      let open Expr.AbstractExpr in
+      let open Expr.BasilExpr in
+      match unfix e with RVar { id } -> Some id | _ -> None
+
     let extract_expr e =
-      match Expr.BasilExpr.cata extract_alg e with
-      | Some (Some a, Some v, b)
-        when Z.equal Z.one (Bitvec.value a) && Z.equal Z.zero (Bitvec.value b)
-        ->
-          (IdEdge, Some v)
-      | Some (Some a, Some v, b) -> (Linear (a, b), Some v)
-      | _ -> (TopEdge, None)
+      match copy_of e with
+      | Some v -> (IdEdge, Some v)
+      | _ -> (
+          match Expr.BasilExpr.cata extract_alg e with
+          | Some (Some a, Some v, b)
+            when Z.equal Z.one (Bitvec.value a)
+                 && Z.equal Z.zero (Bitvec.value b) ->
+              (IdEdge, Some v)
+          | Some (Some a, Some v, b) -> (Linear (a, b), Some v)
+          | _ -> (TopEdge, None))
   end
 end
 
@@ -524,11 +532,6 @@ module Solver = struct
     let copied = List.map (fun (_, v) -> node_of v) phi.rhs in
     CopyNode.set_copied l copied
 
-  let copy_of e =
-    let open Expr.AbstractExpr in
-    let open Expr.BasilExpr in
-    match unfix e with RVar { id } -> Some id | _ -> None
-
   let propagate_call node_of update_worklist s c ls =
     let open CopyNode in
     let open List.Traverse (Option) in
@@ -563,18 +566,12 @@ module Solver = struct
     | Instr_Assign a ->
         List.iter
           (fun (v, e) ->
-            (* handle non bitvector copies first *)
-            match copy_of e with
-            | Some v' ->
+            match LF.Extract.extract_expr e with
+            | f, Some v' ->
                 let v, v' = (node_of pid v, node_of pid v') in
-                CopyNode.join v' LF.identity v
-            | None -> (
-                match LF.Extract.extract_expr e with
-                | f, Some v' ->
-                    let v, v' = (node_of pid v, node_of pid v') in
-                    (* v := f(v'), draw edge from v to v' with f *)
-                    CopyNode.join v' f v
-                | _, None -> ()))
+                (* v := f(v'), draw edge from v to v' with f *)
+                CopyNode.join v' f v
+            | _, None -> ())
           a
     | Instr_Call c ->
         (* We at the same time create a list of all callers of each procedure in the scc. *)
