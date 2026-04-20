@@ -472,6 +472,6 @@ let%expect_test "datatypes" =
   fst @@ SMTLib2.trans_decl y SMTLib2.empty |> Sexp.to_string |> print_endline;
   [%expect
     {|
-    (declare-sort Opaque 0)
+    (declare-datatype Opaque ())
     (declare-datatype list ((Cons (head (_ BitVec 63)) (tail list)) (Nil)))
     |}]
