@@ -1,5 +1,5 @@
 let () =
-  let cntlm = Loader.Loadir.ast_of_fname "../../examples/cntlm-output.il" in
+  let cntlm = Loader.Loadir.ast_of_fname "../../examples/irreducible_loop_1.il" in
   let cntlm_dsa =
     Bincaml.Passes.PassManager.(run_transform cntlm.prog irreducible_loop)
   in

@@ -41,37 +41,62 @@ let gen_differential_test_results (prog1, proc1) (prog2, proc2) =
 
   let open Gen in
   let random = Random.State.make [| 2 |] in
-  let+ params = gen_proc_params formals1 in
+  let+ args = gen_proc_params formals1 in
 
   let run_guarded ~random prog proc =
-    try Ok (Lang.Interp.run_proc ~random prog proc)
-    with Lang.Interp.IState.InterpreterError (st, msg) -> Error (st, msg)
+    let st = Lang.Interp.IState.create ~random ~fuel:100000 prog in
+    try Ok (Lang.Interp.IState.exec_proc st proc args)
+    with Lang.Interp.IState.InterpreterError (_, msg) -> Error msg
   in
 
   let result1 = run_guarded ~random prog1 proc1 in
   let result2 = run_guarded ~random prog2 proc2 in
-  (params, result1, result2)
+  (args, result1, result2)
+
+let pp_params =
+  StringMap.pp
+    ~pp_sep:(fun fmt () -> CCFormat.string fmt ",\n")
+    CCFormat.string Lang.Ops.AllOps.pp_const
 
 let make_differential_test_case (prog1, proc1) (prog2, proc2) =
   QCheck2.Test.make
     (gen_differential_test_results (prog1, proc1) (prog2, proc2))
-    ~count:10
+    ~count:100
     ~name:(ID.name (Lang.Procedure.id proc1))
     ~print:(fun (params, _, _) ->
-      let params =
-        CCFormat.to_string
-          (StringMap.pp
-             ~pp_sep:(fun fmt () -> CCFormat.string fmt ",\n")
-             CCFormat.string Lang.Ops.AllOps.pp_const)
-          params
-      in
+      let params = CCFormat.to_string pp_params params in
       params)
-    (fun (_params, result1, result2) ->
+    (fun (params, result1, result2) ->
+      pp_params Format.stdout params;
+      print_endline
+      @@ CCFormat.to_string
+           (CCResult.pp (fun fmt _ -> CCFormat.text fmt "..."))
+           result1;
+      print_endline
+      @@ CCFormat.to_string
+           (CCResult.pp (fun fmt _ -> CCFormat.text fmt "..."))
+           result2;
+      print_newline ();
+
       match (result1, result2) with
-      | Ok (_, out1), Ok (_, out2) ->
+      | Error "Fuel exhausted", _ ->
+          print_endline "before fuel exhausted";
+          true
+      | _, Error "Fuel exhausted" ->
+          print_endline "after fuel exhausted";
+          true
+      | Ok (st1, out1), Ok (st2, out2) ->
           StringMap.equal Lang.Ops.AllOps.equal_const out1 out2
+          && String.equal
+               (Lang.Interp.IState.show st1)
+               (Lang.Interp.IState.show st2)
       | Error _, Error _ -> true
-      | _ -> false)
+      | Ok _, Error s ->
+          Printf.printf "before passed, after fails %s" s;
+          false
+      | Error s, Ok _ ->
+          Printf.printf "before fails %s, after passes" s;
+          false)
 
 let make_differential_test_cases_for_prog prog1 prog2 =
   Lang.Program.procs prog1
