@@ -4,23 +4,30 @@ let () =
       {|
 prog entry @main;
 
-proc @main () -> ()
+proc @main (max: bv64) -> (evens: bv64, odds: bv64, i: bv64)
   { .name = "main"; .returnBlock = "exit" }
 [
   block %S [
-    goto(%h1, %h2);
+    var i: bv64 := 0x0:bv64;
+    var even: bv64 := 0x0:bv64;
+    var odd: bv64 := 0x0:bv64;
+    goto(%odd, %even, %exit);
   ];
-  block %h1 [
-    goto(%h2);
+  block %even [
+    guard (booland(eq(bvand(0x1:bv64, i:bv64), 0x0:bv64), boolnot(eq(i:bv64, max:bv64))));
+    var even: bv64 := bvadd(even:bv64, 0x1:bv64);
+    var i: bv64 := bvadd(i:bv64, 0x1:bv64);
+    goto(%odd, %even, %exit);
   ];
-  block %h2 [
-    goto(%h1, %h3);
-  ];
-  block %h3 [
-    goto(%h2, %exit);
+  block %odd [
+    guard (booland(boolnot(eq(bvand(0x1:bv64, i:bv64), 0x0:bv64)), boolnot(eq(i:bv64, max:bv64))));
+    var odd: bv64 := bvadd(odd:bv64, 0x1:bv64);
+    var i: bv64 := bvadd(i:bv64, 0x1:bv64);
+    goto(%even, %even, %exit);
   ];
   block %exit [
-    return ();
+    guard (eq(i:bv64, max:bv64));
+    return (even, odd, i);
   ]
 ];
     |}
