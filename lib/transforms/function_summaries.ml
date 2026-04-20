@@ -126,6 +126,15 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
         log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
+  let builder = Expr_smt.SMTLib2.empty in
+  let x: Expr_smt.SMTLib2.builder =
+    Program.declarations prog |> Iter.from_iter
+    |> Iter.map (function i, d -> Expr_smt.SMTLib2.trans_decl d)
+    |> Iter.fold (fun acc t -> snd @@ t acc) builder
+  in
+  (* |> Iter.to_string ~sep:"," (fun d -> ""); *)
+  (* let builder = Expr_smt.SMTLib2.add_ in *)
+  (* Bincaml_util.Smt.Solver.add_command *)
   let summary =
     extra_summary solver
       (module struct
