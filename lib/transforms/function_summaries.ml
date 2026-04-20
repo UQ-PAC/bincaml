@@ -126,20 +126,18 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
         log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
-  let sexps =
-    Program.declarations prog |> Iter.from_iter |> Iter.map snd
-    |> Iter.filter
-         Program.(
-           function
-           | Type { binding } -> true
-           | Variable { binding } -> Var.is_constant binding
-           | Function { binding } -> Var.is_constant binding
-           | Procedure { definition } -> false)
-    |> Iter.map (fun d -> Expr_smt.SMTLib2.trans_decl d Expr_smt.SMTLib2.empty)
-    |> Iter.map fst
-    |> fun i ->
-    Iter.for_each i (fun s -> Bincaml_util.Smt.Solver.add_command solver s)
-  in
+  Program.declarations prog |> Iter.from_iter |> Iter.map snd
+  |> Iter.filter
+       Program.(
+         function
+         | Type { binding } -> true
+         | Variable { binding } -> Var.is_constant binding
+         | Function { binding } -> Var.is_constant binding
+         | Procedure { definition } -> false)
+  |> Iter.map (fun d -> Expr_smt.SMTLib2.trans_decl d Expr_smt.SMTLib2.empty)
+  |> Iter.map fst
+  |> fun i ->
+  Iter.for_each i (fun s -> Bincaml_util.Smt.Solver.add_command solver s);
   let summary =
     extra_summary solver
       (module struct
