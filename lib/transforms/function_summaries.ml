@@ -126,6 +126,7 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
         log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
+  (* a change so github doesnt complain *)
   let summary =
     extra_summary solver
       (module struct
