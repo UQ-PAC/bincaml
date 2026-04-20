@@ -263,6 +263,11 @@ module SMTLib2 = struct
     | `NEQ -> failwith "undef"
     | `AND -> atom "and"
     | `OR -> atom "or"
+    | `ReadField s -> atom s
+    | `WriteField s -> atom s
+    | `MapAccess -> atom "select"
+    | `MapUpdate -> atom "store"
+    | `IMPLIES -> atom "=>"
     | #Ops.AllOps.unary as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.const as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.binary as o -> atom @@ Ops.AllOps.to_string o
@@ -334,6 +339,11 @@ module SMTLib2 = struct
         let* l = l in
         let* r = r in
         return @@ list [ of_op `BoolNOT; list [ of_op `EQ; l; r ] ]
+    | BinaryExpr { op = `WriteField f; arg1 = l; arg2 = r; } ->
+        let* l = l in
+        let* r = r in
+        (* z3 expects "update-field"... this is problematic *)
+        return @@ list [ list [ atom "_"; atom "update"; atom f ]; l; r]
     | BinaryExpr { op = o; arg1 = l; arg2 = r } ->
         let* l = l in
         let* r = r in
@@ -356,10 +366,8 @@ module SMTLib2 = struct
   let trans_decl (decl : Program.declaration) =
     let* x = return () in
     match decl with
-    | Type { binding; typ = Sort (name, [ { variant } ]) } ->
+    | Type { binding; typ = Sort (name, [ { variant; fields=[] } ]) } ->
         return (Bincaml_util.Smt.Expr.declare_sort variant 0)
-    | Type { binding; typ = Sort (name, []) } ->
-        return (Bincaml_util.Smt.Expr.declare_sort name 0)
     | Type { binding; typ = Sort (name, vs) } ->
         let fields =
           List.map
@@ -376,9 +384,19 @@ module SMTLib2 = struct
     | Type { binding; typ } ->
         return (list [ atom "decl-sort"; fst @@ of_typ typ ])
     | Function { binding; attrib; definition = Function body } ->
-        let* body = bind_of_bexpr body in
-        let args, r = Var.typ binding |> Types.uncurry in
-        let args = List.map (of_typ %> fst) args in
+        let op, bound_vars, in_body =
+          match BasilExpr.unfix body with
+          | Lambda { op; bound_vars; in_body } -> (op, bound_vars, in_body)
+          | _ -> failwith "expected lambda"
+        in
+        let names = List.map (Var.name %> atom) bound_vars in
+        let types = List.map (Var.typ %> of_typ %> fst) bound_vars in
+        let binds =
+          List.combine names types |> List.map (fun (a, b) -> list [ a; b ])
+        in
+        let args = binds in
+        let r = Expr.BasilExpr.type_of in_body in
+        let* body = bind_of_bexpr in_body in
         let r = fst (of_typ r) in
         return
         @@ list
@@ -393,6 +411,7 @@ module SMTLib2 = struct
         return
         @@ list [ atom "declare-fun"; atom (Var.name binding); list args; r ]
     | Variable v -> failwith "mutable"
+    | Procedure p -> failwith "procedure"
 
   let assert_bexpr e =
     let* s = bind_of_bexpr e in

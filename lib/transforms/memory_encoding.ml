@@ -172,9 +172,10 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
     Lang.Program.add_decl ~attrib p
       (Lang.Program.Function
          {
-           binding =
+           binding = (print_endline (List.to_string (Types.to_string % Var.typ) bindings);
              Bincaml_util.Common.Var.create name ~scope:GlobalConst
-               (Lang.Expr.BasilExpr.type_of body);
+               (Types.curry (List.map Var.typ bindings) @@ Lang.Expr.BasilExpr.type_of body));
+               (* (Lang.Expr.BasilExpr.type_of body)); *)
            attrib;
            definition : Lang.Program.func_type =
              Function (Lang.Expr.BasilExpr.binding ~op:`Lambda bindings body);
@@ -288,11 +289,11 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
         add_mem_encoding;
         add_addr_offset;
         add_alloc_base;
-        add_can_allocate;
         add_alloc_live;
         add_alloc_size;
         add_addr_alloc;
         add_addr_is_heap;
+        add_can_allocate;
         add_alloc_size_update;
         add_alloc_live_update;
         add_allocate;
