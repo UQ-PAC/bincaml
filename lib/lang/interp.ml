@@ -665,7 +665,9 @@ module IState = struct
     let eval_block st block =
       let st =
         match b with
-        | Procedure.Vert.Begin blockid -> add_event st (Block { blockid })
+        | Procedure.Vert.Begin blockid ->
+            print_endline (ID.show blockid);
+            add_event st (Block { blockid })
         | _ -> st
       in
       Block.fold_forwards
@@ -733,11 +735,20 @@ module IState = struct
             let xs =
               List.to_iter xs
               |> Iter.filter_map (fun e ->
-                  try Some (exec_edge (clone st) e) with AssumeFail _ -> None)
+                  try
+                    Some
+                      (let st = exec_edge (clone st) e in
+                       let _, e, d = e in
+                       Printf.printf "%s %s" (Procedure.Edge.show e)
+                         (Procedure.Vert.show d);
+                       st)
+                  with AssumeFail _ -> None)
               |> Iter.to_list
               |> function
               | [ l ] -> Continue l
-              | h :: tl -> Choose (clone h, List.map clone tl)
+              | h :: tl ->
+                  print_endline "fallback";
+                  Choose (clone h, List.map clone tl)
               | [] -> failwith "stop"
             in
             xs

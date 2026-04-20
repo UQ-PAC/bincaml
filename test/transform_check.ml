@@ -33,6 +33,11 @@ let gen_proc_params (formals : Var.t StringMap.t) :
   Gen.flatten_list gens
   |> Gen.map (fun values -> List.combine names values |> StringMap.of_list)
 
+let pp_params =
+  StringMap.pp
+    ~pp_sep:(fun fmt () -> CCFormat.string fmt ",\n")
+    CCFormat.string Lang.Ops.AllOps.pp_const
+
 let gen_differential_test_results (prog1, proc1) (prog2, proc2) =
   let formals1 = Lang.Procedure.formal_in_params proc1
   and formals2 = Lang.Procedure.formal_in_params proc2 in
@@ -49,14 +54,11 @@ let gen_differential_test_results (prog1, proc1) (prog2, proc2) =
     with Lang.Interp.IState.InterpreterError (_, msg) -> Error msg
   in
 
+  pp_params Format.stdout args;
+  Format.pp_print_flush Format.stdout ();
   let result1 = run_guarded ~random prog1 proc1 in
   let result2 = run_guarded ~random prog2 proc2 in
   (args, result1, result2)
-
-let pp_params =
-  StringMap.pp
-    ~pp_sep:(fun fmt () -> CCFormat.string fmt ",\n")
-    CCFormat.string Lang.Ops.AllOps.pp_const
 
 let block_trace (st : Lang.Interp.IState.t) =
   st.events
