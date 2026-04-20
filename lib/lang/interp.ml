@@ -402,6 +402,7 @@ module IState = struct
         value : Ops.AllOps.const;
       }
     | Load of { mem : string; addr : Ops.AllOps.const }
+    | Block of { blockid : ID.t }
   [@@deriving show { with_path = false }]
 
   type t = {
@@ -662,6 +663,11 @@ module IState = struct
     let b, l, e = e in
     let pred = st.last_block in
     let eval_block st block =
+      let st =
+        match b with
+        | Procedure.Vert.Begin blockid -> add_event st (Block { blockid })
+        | _ -> st
+      in
       Block.fold_forwards
         ~phi:(fun st phis ->
           let assigns =

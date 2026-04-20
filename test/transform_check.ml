@@ -58,6 +58,12 @@ let pp_params =
     ~pp_sep:(fun fmt () -> CCFormat.string fmt ",\n")
     CCFormat.string Lang.Ops.AllOps.pp_const
 
+let block_trace (st : Lang.Interp.IState.t) =
+  st.events
+  |> List.filter_map (function
+    | Lang.Interp.IState.Block { blockid } -> Some blockid
+    | _ -> None)
+
 let make_differential_test_case (prog1, proc1) (prog2, proc2) =
   QCheck2.Test.make
     (gen_differential_test_results (prog1, proc1) (prog2, proc2))
@@ -86,6 +92,8 @@ let make_differential_test_case (prog1, proc1) (prog2, proc2) =
           print_endline "after fuel exhausted";
           true
       | Ok (st1, out1), Ok (st2, out2) ->
+          print_endline (Lang.Interp.IState.show st1);
+          print_endline (Lang.Interp.IState.show st2);
           StringMap.equal Lang.Ops.AllOps.equal_const out1 out2
           && String.equal
                (Lang.Interp.IState.show st1)
