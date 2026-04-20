@@ -10,3 +10,9 @@
  (libraries)
  (preprocess
   (pps ppx_expect)))
+
+(library
+ (public_name bincaml.transform_check)
+ (name bincaml_transform_check)
+ (modules transform_check)
+ (libraries bincaml bincaml.ast qcheck-core))

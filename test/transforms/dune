@@ -1,0 +1,5 @@
+(test
+ (name transform_tests)
+ (deps ../../examples/cntlm-output.il)
+ (libraries bincaml.transform_check bincaml bincaml.transforms
+            qcheck-alcotest))

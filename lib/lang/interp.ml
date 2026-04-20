@@ -710,12 +710,14 @@ module IState = struct
     | Exit -> failwith "exit"
     | o -> (
         let succ =
-          Procedure.G.succ_e
-            (Option.get_exn_or
-               ("executing proc without implementation: " ^ ID.to_string
-              @@ Procedure.id st.pc.proc)
-            @@ Procedure.graph st.pc.proc)
-            st.pc.vert
+          try
+            Procedure.G.succ_e
+              (Option.get_exn_or
+                 ("executing proc without implementation: " ^ ID.to_string
+                @@ Procedure.id st.pc.proc)
+              @@ Procedure.graph st.pc.proc)
+              st.pc.vert
+          with e -> failwith (Procedure.Vert.show st.pc.vert)
         in
         match succ with
         | [] -> failwith "stop"
@@ -834,8 +836,8 @@ let test_run_proc ~(seed : int) prog proc =
   try Ok (IState.exec_proc st proc args)
   with IState.InterpreterError (st, msg) -> Error (st, msg)
 
-let run_proc prog ?(args = StringMap.empty) proc =
-  let st = IState.create prog in
+let run_proc prog ?random ?(args = StringMap.empty) proc =
+  let st = IState.create ?random prog in
   IState.call_proc st proc args
 
 let run_prog ?(args = StringMap.empty) prog =
