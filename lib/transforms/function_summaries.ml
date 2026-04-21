@@ -76,14 +76,25 @@ let wp_dual_requires (module S : FunctionSummaryAnnotation)
   Analysis.A.M.find_opt Procedure.Vert.Entry result
   |> Option.map Domain.to_pred |> Option.to_list
 
+let sp_ensures (module S : FunctionSummaryAnnotation) (proc : Program.proc) =
+  let module Domain = Sp.Domain (S) in
+  let module Analysis = Intra_analysis.Forwards (Domain) in
+  let result = Analysis.analyse
+    (* ~init:(fun _ -> Expr.BasilExpr.boolconst true) *)
+    ~widening_set:Graph.ChaoticIteration.FromWto ~widening_delay:5 proc
+  in
+  Analysis.A.M.find_opt Procedure.Vert.Entry result
+  |> Option.map Domain.to_pred |> Option.to_list
+
 (** Compute an extension of the given procedure's summary *)
 let extra_summary (solver : Bincaml_util.Smt.Solver.t)
     (module S : FunctionSummaryAnnotation) reiter (proc : Program.proc) =
   (* TODO implement a sample ensures clause generator and some sort of analysis
      pass runner *)
   let cur_req = S.requires (Procedure.id proc) in
+  let cur_ens = S.ensures (Procedure.id proc) in
   if IDSet.mem (Procedure.id proc) !reiter then
-    { requires = cur_req; ensures = [] }
+    { requires = cur_req; ensures = cur_ens }
   else
     let requires =
       wp_dual_requires (module S) proc
@@ -98,7 +109,21 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
                  r :: rs)
            []
     in
-    { requires; ensures = [] }
+    let ensures =
+    print_endline (Procedure.id proc |> ID.name);
+      sp_ensures (module S) proc
+      |> List.fold_left
+           (fun rs r ->
+             let open Bincaml_util.Smt in
+             match redundant solver r (List.append rs cur_req) with
+             | Unsat -> rs
+             | Sat -> r :: rs
+             | Unknown ->
+                 reiter := IDSet.add (Procedure.id proc) !reiter;
+                 r :: rs)
+           []
+    in
+    { requires; ensures }
 
 let set_summary summary (proc : Program.proc) =
   let spec = Procedure.specification proc in
