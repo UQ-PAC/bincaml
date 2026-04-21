@@ -179,6 +179,51 @@ proc @main_4196260 () -> ()
   let st2 = VarIdMap.of_list ls in
   assert (ConstraintState.equal st st2);
 
+  let st = unconstrain_types st in
+  let fields1 : InferredType.field ZMap.t =
+    ZMap.of_list
+      [
+        ( Z.zero,
+          ({
+             offset = Z.zero;
+             ty = Sect (Sect (field1, BV 32), BV 32);
+             size = 32;
+           }
+            : InferredType.field) );
+      ]
+  in
+  let fields2 : InferredType.field ZMap.t =
+    ZMap.of_list
+      [
+        ( Z.of_int 32,
+          {
+            offset = Z.of_int 32;
+            ty = Sect (Sect (field2, BV 32), BV 32);
+            size = 32;
+          } );
+      ]
+  in
+  let record =
+    Sect (Sect (InferredType.Record (fields1, 64), Record (fields2, 64)), BV 64)
+  in
+  let ls =
+    [
+      (VarId.make_id "$record", (record, Top));
+      (VarId.make_id "$field1", (BV 32, Top));
+      (VarId.make_id "$field2", (BV 32, Top));
+      (VarId.make_id "Extraction_v", (BV 32, TypeVar (VarId.make_id "$field1")));
+      ( VarId.make_id "Extraction_v_1",
+        (BV 32, TypeVar (VarId.make_id "$field2")) );
+    ]
+  in
+  let st2 = VarIdMap.of_list ls in
+
+  assert (
+    VarIdMap.equal
+      (fun (a1, b1) (a2, b2) ->
+        InferredType.equal a1 a2 && InferredType.equal b1 b2)
+      st st2);
+
   let fields : Types.record_field StringMap.t =
     StringMap.of_list
       [
@@ -203,7 +248,7 @@ proc @main_4196260 () -> ()
   assert (
     List.equal
       (fun (_, ty) (_, ty2) -> Types.equal ty ty2)
-      (snd @@ simplify_types @@ unconstrain_types st)
+      (snd @@ simplify_types st)
       types)
 
 let%test_unit "Record joining" =

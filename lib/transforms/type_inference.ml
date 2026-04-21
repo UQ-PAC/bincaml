@@ -323,13 +323,7 @@ module ConstraintState = struct
 
   let export_graphviz (t : t) : string =
     Printf.sprintf "\ndigraph G {\n%s\n%s\n}"
-      (Iter.fold
-         (fun a ty ->
-           Printf.sprintf
-             "%s\"%s\" [shape=circle style=filled, fillcolor=\"#c4a7e7\"];\n" a
-             (VarId.show ty))
-         ""
-      @@ VarIdMap.keys t)
+      "node [shape=circle style=filled, fillcolor=\"#c4a7e7\"];\n"
       (VarIdMap.fold
          (fun k ({ lb; ub } : TypeConstraint.t) acc ->
            let acc =
@@ -441,21 +435,17 @@ module TypeAutomata = struct
        digraph G {\n\
        \tranksep=2\n\
        \tnodesep=2\n\n\
-       \t\"%s\" [height=0, width=0, style=filled, fillcolor=\"#c4a7e7\" ]\n\
+       \tnode [height=0, width=0, style=filled, fillcolor=\"#c4a7e7\" ]\n\
        %s\n\n\
        \t\"%s\" -> %s;\n\
        \t%s\n\
        }\n\n\n"
-      n.name
       (Iter.fold
          (fun a (polarity, typ) ->
-           let shape =
-             if Polarity.positive polarity then "c4a7e7" else "eb6f92"
-           in
-           Printf.sprintf
-             "%s\"%s\" [shape=oval style=filled, fillcolor=\"#%s\"];\n" a
-             (InferredType.show typ ^ Polarity.show polarity)
-             shape)
+           if Polarity.positive polarity then a
+           else
+             Printf.sprintf "%s\"%s\" [fillcolor=\"#eb6f92\"];\n" a
+               (InferredType.show typ ^ Polarity.show polarity))
          "" (get_states n))
       n.name
       (Printf.sprintf "\"%s\""
@@ -901,7 +891,7 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
           let bounds =
             (* Get the bounds for the variable depending on the polarity *)
             match VarIdMap.find_opt a constraint_set with
-            | Some { lb; ub } -> if Polarity.positive polarity then lb else ub
+            | Some { lb; ub } -> if Polarity.positive polarity then ub else lb
             | None -> TySet.empty
           in
           (* If tau is in bounds then we have a recursive type *)
