@@ -339,11 +339,11 @@ module SMTLib2 = struct
         let* l = l in
         let* r = r in
         return @@ list [ of_op `BoolNOT; list [ of_op `EQ; l; r ] ]
-    | BinaryExpr { op = `WriteField f; arg1 = l; arg2 = r; } ->
+    | BinaryExpr { op = `WriteField f; arg1 = l; arg2 = r } ->
         let* l = l in
         let* r = r in
         (* z3 expects "update-field"... this is problematic *)
-        return @@ list [ list [ atom "_"; atom "update"; atom f ]; l; r]
+        return @@ list [ list [ atom "_"; atom "update"; atom f ]; l; r ]
     | BinaryExpr { op = o; arg1 = l; arg2 = r } ->
         let* l = l in
         let* r = r in
@@ -366,7 +366,7 @@ module SMTLib2 = struct
   let trans_decl (decl : Program.declaration) =
     let* x = return () in
     match decl with
-    | Type { binding; typ = Sort (name, [ { variant; fields=[] } ]) } ->
+    | Type { binding; typ = Sort (name, [ { variant; fields = [] } ]) } ->
         return (Bincaml_util.Smt.Expr.declare_sort variant 0)
     | Type { binding; typ = Sort (name, vs) } ->
         let fields =
