@@ -1,4 +1,5 @@
 (* The wp dual domain for precondition inference *)
+(* Assumes SSA form *)
 
 open Lang
 open Common

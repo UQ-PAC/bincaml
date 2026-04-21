@@ -1,3 +1,6 @@
+(* The sp domain for postcondition inference *)
+(* Assumes SSA form *)
+
 open Lang
 open Common
 open Expr
