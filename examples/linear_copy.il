@@ -68,8 +68,8 @@ proc @g(x:bv64) -> (o:bv64, p:bv64)
 proc @loop(x:bv64, y:bv64) -> (o:bv64, p:bv64)
 [
     block %entry [
-        var x_1:bv64 := x:bv64;
-        var y_1:bv64 := y:bv64;
+        var x_1:bv64 := bvadd(x:bv64, 1:bv64);
+        var y_1:bv64 := bvadd(y:bv64, 1:bv64);
         goto(%a, %ret);
     ];
     block %a (

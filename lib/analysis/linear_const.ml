@@ -445,29 +445,68 @@ module CopyNode = struct
       predicate is violated or if a top edge cycle is found *)
   let leaves (keep : t -> bool) v : edge list option =
     let memo = ref VarMap.empty in
+    (* Determines whether all cycles through the node `root` are copy cycles *)
+    let is_id_cycle root =
+      let searching = ref VarSet.empty in
+      let searched = ref VarSet.empty in
+      let rec dfs f n =
+        if VarSet.mem (var n) !searched then true
+        else if VarSet.mem (var n) !searching then LF.is_id f
+        else
+          match !n.copied_from with
+          | [] -> true
+          | ls ->
+              searching := VarSet.add (var n) !searching;
+              let ans =
+                List.for_all
+                  (fun n' ->
+                    let f', n' = finde (f, n) in
+                    match VarMap.get (var n') !memo with
+                    | Some None -> if eq root n' then LF.is_id f' else dfs f' n'
+                    | _ -> true)
+                  ls
+              in
+              searched := VarSet.add (var n) !searched;
+              ans
+      in
+      dfs LF.identity root
+    in
     let rec dfs v f =
       let f, v = finde (f, v) in
       match VarMap.get (var v) !memo with
       | Some (Some l) -> Some l
       (* If there's a cycle, ignore it if the composite of the cycle is id and
          abort otherwise *)
-      | Some None when LF.is_id f -> Some []
-      | Some None -> None
+      | Some None when is_id_cycle v -> Some VarMap.empty
+      | Some None ->
+          print_endline @@ Var.name !v.v;
+          None
       | None -> (
           match !v.copied_from with
-          | [] -> if keep v then Some [ (f, v) ] else None
-          | ls ->
+          | [] -> if keep v then Some (VarMap.singleton !v.v (f, v)) else None
+          | l :: ls ->
               memo := VarMap.add (var v) None !memo;
-              let open List.Traverse (Option) in
-              let ans =
-                Option.map List.concat @@ map_m (fun v' -> dfs v' f) ls
+              let open Option.Infix in
+              let ans : _ option =
+                List.fold_left
+                  (fun acc l ->
+                    let* acc = acc in
+                    let* b = dfs l f in
+                    Some
+                      (VarMap.fold
+                         (fun v (f, n) acc ->
+                           match VarMap.get v acc with
+                           | Some (f', n') -> VarMap.add v (LF.join f f', n) acc
+                           | None -> VarMap.add v (f, n) acc)
+                         b acc))
+                  (dfs l f) ls
               in
               Option.iter
                 (fun a -> memo := VarMap.add (var v) (Some a) !memo)
                 ans;
               ans)
     in
-    dfs v LF.identity
+    dfs v LF.identity |> Option.map (VarMap.values %> Iter.to_list)
 end
 
 (** Ocamlgraph representation of the above for debug utilities *)
@@ -551,7 +590,7 @@ module Solver = struct
                   (* i had so much fun writing this...
                   match List.fold_left (( %> ) fst % LF.join) f vs with *)
                   match List.fold_left (fun f (g, _) -> LF.join f g) f vs with
-                  | TopEdge | BotEdge | LF.Join _ -> ()
+                  | TopEdge | LF.Join _ -> ()
                   | f ->
                       join (node_of c.caller_id v) f assigned;
                       (* We have updated the caller's graph so we
@@ -592,22 +631,42 @@ module Solver = struct
                 c.lhs)
     | _ -> ()
 
+  let exits = [ "@__assert_fail"; "@exit" ]
+
   let add_stub node_of proc =
-    (* ARM abi tell us that R19..R29 and R31 are preserved through calls https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#611general-purpose-registers *)
-    let regs =
-      List.range 19 29 @ [ 31 ] |> List.map (fun n -> "R" ^ Int.to_string n)
-    in
+    let open Option.Infix in
     let fin, fout =
       (Procedure.formal_in_params proc, Procedure.formal_out_params proc)
     in
-    List.iter
-      (fun r ->
-        let open Option.Infix in
-        ignore
-          (let* inp = StringMap.get (r ^ "_in") fin in
-           let* out = StringMap.get (r ^ "_out") fout in
-           Some (CopyNode.join (node_of inp) LF.identity (node_of out))))
-      regs
+    if
+      List.exists
+        (fun s -> Procedure.id proc |> ID.name |> String.starts_with ~prefix:s)
+        exits
+    then
+      (* Put everything to bottom *)
+      StringMap.iter
+        (fun sin vin ->
+          ignore
+            (let* var = String.chop_suffix ~suf:"in" sin in
+             let sout = var ^ "out" in
+             let* vout = StringMap.get sout fout in
+             Some (CopyNode.join (node_of vin) LF.bottom (node_of vout))))
+        fin
+    else
+      (* ARM abi tell us that R19..R29 and R31 are preserved through calls https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#611general-purpose-registers *)
+      let regs =
+        List.range 19 29 @ [ 31 ] |> List.map (fun n -> "R" ^ Int.to_string n)
+      in
+      let fin, fout =
+        (Procedure.formal_in_params proc, Procedure.formal_out_params proc)
+      in
+      List.iter
+        (fun r ->
+          ignore
+            (let* inp = StringMap.get (r ^ "_in") fin in
+             let* out = StringMap.get (r ^ "_out") fout in
+             Some (CopyNode.join (node_of inp) LF.identity (node_of out))))
+        regs
 
   module Worklist = Worklist.Make (ID)
 
@@ -661,10 +720,11 @@ module Solver = struct
           let m = Hashtbl.get_or summaries pid ~default:StringMap.empty in
           let m = StringMap.add (Var.name !node.v) leaves m in
           Hashtbl.replace summaries pid m;
+          (* Propagate calls within this scc *)
           Hashtbl.get_or callers pid ~default:[]
           |> List.iter (fun (call : call_info) ->
               propagate_call node_of
-                (fun pid -> Worklist.add worklist pid)
+                (fun pid -> Worklist.add worklist call.caller_id)
                 (Var.name @@ var node)
                 call leaves))
     done
@@ -694,7 +754,7 @@ module Solver = struct
         effective_parent LF.identity !node.copied_from
           (ref (VarMap.singleton !node.v SNone))
       with
-      | SSome ((LF.TopEdge | LF.BotEdge | LF.Join _), l) -> propagate_copy node
+      | SSome ((LF.TopEdge | LF.Join _), l) -> propagate_copy node
       | SSome (f, l) ->
           join l f node;
           if not @@ LF.is_id f then propagate_copy node
