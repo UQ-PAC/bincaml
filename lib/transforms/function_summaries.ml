@@ -19,6 +19,12 @@ module type FunctionSummaryAnnotation = sig
   val ensures : ID.t -> Expr.BasilExpr.t list
 end
 
+module type FunctionAnnotation = sig
+  include FunctionSummaryAnnotation
+
+  val inout : VarSet.t
+end
+
 (** Replace gamma expressions with gamma variables for an smt query *)
 let normalise_gamma =
   let open Expr.AbstractExpr in
@@ -76,19 +82,19 @@ let wp_dual_requires (module S : FunctionSummaryAnnotation)
   Analysis.A.M.find_opt Procedure.Vert.Entry result
   |> Option.map Domain.to_pred |> Option.to_list
 
-let sp_ensures (module S : FunctionSummaryAnnotation) (proc : Program.proc) =
+let sp_ensures (module S : FunctionAnnotation) (proc : Program.proc) =
   let module Domain = Sp.Domain (S) in
   let module Analysis = Intra_analysis.Forwards (Domain) in
-  let result = Analysis.analyse
-    (* ~init:(fun _ -> Expr.BasilExpr.boolconst true) *)
-    ~widening_set:Graph.ChaoticIteration.FromWto ~widening_delay:5 proc
+  let result =
+    Analysis.analyse (* ~init:(fun _ -> Expr.BasilExpr.boolconst true) *)
+      ~widening_set:Graph.ChaoticIteration.FromWto ~widening_delay:5 proc
   in
-  Analysis.A.M.find_opt Procedure.Vert.Entry result
+  Analysis.A.M.find_opt Procedure.Vert.Return result
   |> Option.map Domain.to_pred |> Option.to_list
 
 (** Compute an extension of the given procedure's summary *)
 let extra_summary (solver : Bincaml_util.Smt.Solver.t)
-    (module S : FunctionSummaryAnnotation) reiter (proc : Program.proc) =
+    (module S : FunctionAnnotation) reiter (proc : Program.proc) =
   (* TODO implement a sample ensures clause generator and some sort of analysis
      pass runner *)
   let cur_req = S.requires (Procedure.id proc) in
@@ -110,7 +116,6 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
            []
     in
     let ensures =
-    print_endline (Procedure.id proc |> ID.name);
       sp_ensures (module S) proc
       |> List.fold_left
            (fun rs r ->
@@ -177,7 +182,14 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
           |> Option.map_or
                (fun p -> (Procedure.specification p).ensures)
                ~default:[]
-      end : FunctionSummaryAnnotation)
+
+        let inout =
+          VarSet.union
+            (VarSet.of_iter @@ StringMap.values
+            @@ Procedure.formal_in_params proc)
+            (VarSet.of_iter @@ StringMap.values
+            @@ Procedure.formal_out_params proc)
+      end : FunctionAnnotation)
       (ref IDSet.empty) proc
   in
   Bincaml_util.Smt.Solver.stop solver;
@@ -186,7 +198,7 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
 let intraproc_transform (prog : Program.t) =
   let module Dfs = Graph.Traverse.Dfs (Program.CallGraph.G) in
   let cg = Program.CallGraph.make_call_graph prog in
-  Iter.from_iter (fun f -> Dfs.postfix f cg)
+  Iter.from_iter (fun f -> Dfs.prefix f cg)
   |> Iter.fold
        (fun prog v ->
          match v with
@@ -232,7 +244,18 @@ let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
 
           let ensures id =
             List.append (IDMap.find id res).ensures (vals id).ensures
-        end : FunctionSummaryAnnotation)
+
+          let inout =
+            Program.proc_opt prog pid
+            |> Option.map_or
+                 (fun p ->
+                   VarSet.union
+                     (VarSet.of_iter @@ StringMap.values
+                     @@ Procedure.formal_in_params p)
+                     (VarSet.of_iter @@ StringMap.values
+                     @@ Procedure.formal_out_params p))
+                 ~default:VarSet.empty
+        end : FunctionAnnotation)
       in
       let extra =
         extra_summary solver annotations reiters (IDMap.find pid procs)

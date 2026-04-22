@@ -5,12 +5,12 @@ open Lang
 open Common
 open Expr
 
-module type FunctionSummaryAnnotation = sig
+module type Functionnnotation = sig
   val requires : ID.t -> Expr.BasilExpr.t list
   val ensures : ID.t -> Expr.BasilExpr.t list
 end
 
-module Domain (S : FunctionSummaryAnnotation) = struct
+module Domain (S : Functionnnotation) = struct
   let name = "WP dual domain"
 
   type t = Program.e
