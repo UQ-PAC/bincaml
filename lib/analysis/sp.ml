@@ -107,4 +107,3 @@ end)
 
 module IntraAnalysis = Intra_analysis.Forwards (IntraDomain)
 
-let%test "magic" = false
