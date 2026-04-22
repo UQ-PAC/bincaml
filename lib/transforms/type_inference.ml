@@ -1124,16 +1124,8 @@ let rec constrain_expr proc (st : ConstraintState.t)
               let st = constrain_args proc st l r @@ BV size in
               (st, Bool)
           | _ -> failwith "BV operation without BV arguments")
-      | `BVSUB ->
-          let typ = TypeVar (VarId.fresh ()) in
-          let st =
-            List.fold_left
-              (fun acc a -> constrain_arg proc st a typ)
-              st [ l; r ]
-          in
-          (st, typ)
-      | `BVSREM | `BVSDIV | `BVUREM | `BVUDIV | `BVSMOD | `BVSHL | `BVLSHR
-      | `BVASHR | `BVNAND -> (
+      | `BVSREM | `BVSDIV | `BVUREM | `BVUDIV | `BVSMOD | `BVSUB | `BVSHL
+      | `BVLSHR | `BVASHR | `BVNAND -> (
           match BasilExpr.type_of l with
           | Bitvector size ->
               let typ = BV size in
@@ -1150,14 +1142,8 @@ let rec constrain_expr proc (st : ConstraintState.t)
           st args
       in
       match op with
-      | `BVADD ->
-          let typ = TypeVar (VarId.fresh ()) in
-          let st =
-            List.fold_left (fun acc a -> constrain_arg proc st a typ) st args
-          in
-          (st, typ)
       (* output is constrain by every input *)
-      | `BVOR | `BVXOR | `BVAND | `BVMUL -> (
+      | `BVOR | `BVXOR | `BVAND | `BVMUL | `BVADD -> (
           match BasilExpr.type_of (List.hd args) with
           | Bitvector size ->
               let typ = BV size in
@@ -1199,15 +1185,16 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
     *)
     let open Analysis.Sva in
     let open Analysis.Wrapped_intervals in
-    SymAddrSetLattice.cardinal sva_res <> 1
-    || WrappedIntervalsLattice.equal
-         (snd @@ List.hd @@ snd @@ SymAddrSetLattice.to_list sva_res)
-         WrappedIntervalsLattice.Top
-    || SymBase.is_stack
-         (fst @@ List.hd @@ snd @@ SymAddrSetLattice.to_list sva_res)
-    || WrappedIntervalsLattice.equal
-         (snd @@ List.hd @@ snd @@ SymAddrSetLattice.to_list sva_res)
-         WrappedIntervalsLattice.Bot
+    not
+      (SymAddrSetLattice.cardinal sva_res <> 1
+      || WrappedIntervalsLattice.equal
+           (snd @@ List.hd @@ snd @@ SymAddrSetLattice.to_list sva_res)
+           WrappedIntervalsLattice.Top
+      || SymBase.is_stack
+           (fst @@ List.hd @@ snd @@ SymAddrSetLattice.to_list sva_res)
+      || WrappedIntervalsLattice.equal
+           (snd @@ List.hd @@ snd @@ SymAddrSetLattice.to_list sva_res)
+           WrappedIntervalsLattice.Bot)
   in
   (* Given a expression constrain the variables involed *)
   match stmt with
@@ -1233,139 +1220,118 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
         let rhs = VarId.var_proc_to_uid rhs proc in
         constrain st (TypeVar rhs) (TypeVar lhs)
   (* TODO: These should probably be joined somehow *)
-  | Stmt.Instr_Load { lhs; addr = Addr { addr; size } }
-  | Stmt.Instr_Store { lhs; addr = Addr { addr; size } } ->
-      st
-      (* | Stmt.Instr_Load { lhs; addr = Addr { addr; size } } -> *)
-      (* let sva_res = *)
-      (* Analysis.Sva.Eval.EV.eval *)
-      (* ((flip Analysis.Sva.StateAbstraction.read) sva) *)
-      (* addr *)
-      (* in *)
-      (* let lhs = VarId.var_proc_to_uid lhs proc in *)
-      (* if sva_res_check sva_res addr then *)
-      (* (* *)
-          (* No information case *)
+  | Stmt.Instr_Store { lhs; addr = Addr { addr; size } } as stmt
+    when sva_res_check
+           (Analysis.Sva.Eval.EV.eval
+              ((flip Analysis.Sva.StateAbstraction.read) sva)
+              addr)
+           addr ->
+      let lhs = TypeVar (VarId.var_proc_to_uid lhs proc) in
+      let sva_res =
+        Analysis.Sva.Eval.EV.eval
+          ((flip Analysis.Sva.StateAbstraction.read) sva)
+          addr
+      in
+      let res =
+        snd @@ List.hd @@ snd @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res
+      in
+      let offset =
+        match res with
+        | Interval { lower } -> Bitvec.to_signed_bigint lower
+        | _ -> failwith "impossible"
+      in
+      let ty =
+        TypeVar
+          (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
+         ^ "_lower_" ^ Program.show_stmt stmt)
+      in
+      let lb = Record (ZMap.singleton offset { size; offset; ty }, size) in
+      let ub =
+        TypeVar
+          (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
+         ^ "_upper_" ^ Program.show_stmt stmt)
+      in
+      let st, _ = constrain_expr proc st (BasilExpr.unfix addr) in
+      let st =
+        match BasilExpr.unfix addr with
+        | RVar { id } ->
+            let addr = TypeVar (VarId.var_proc_to_uid id proc) in
+            let st = constrain st (Pointer (lb, ub)) addr in
+            st
+        | _ -> st
+      in
+      let st = constrain st lb ub in
+      let lb =
+        Record (ZMap.singleton offset { size; offset; ty = BV size }, size)
+      in
+      let st = constrain st lb ub in
+      constrain st lhs ty
+  | Stmt.Instr_Load { lhs; addr = Addr { addr; size } } as stmt
+    when sva_res_check
+           (Analysis.Sva.Eval.EV.eval
+              ((flip Analysis.Sva.StateAbstraction.read) sva)
+              addr)
+           addr ->
+      let lhs = TypeVar (VarId.var_proc_to_uid lhs proc) in
+      let sva_res =
+        Analysis.Sva.Eval.EV.eval
+          ((flip Analysis.Sva.StateAbstraction.read) sva)
+          addr
+      in
+      (* TODO: Should I check to see if it is a malloc? i.e. Heap *)
+      let res =
+        snd @@ List.hd @@ snd @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res
+      in
+      let offset =
+        match res with
+        | Interval { lower } -> Bitvec.to_signed_bigint lower
+        | _ -> failwith "impossible"
+      in
+      let ty =
+        TypeVar
+          (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
+         ^ "_upper_" ^ Program.show_stmt stmt)
+      in
+      let ub = Record (ZMap.singleton offset { size; offset; ty }, size) in
+      let lb =
+        TypeVar
+          (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
+         ^ "_lower_" ^ Program.show_stmt stmt)
+      in
 
-          (* Simply just a ptr(a,b) where a <= b *)
-        (* *) *)
-      (* let lb = *)
-      (* VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number *)
-      (* ^ "_lower_load" *)
-      (* in *)
-      (* let ub = *)
-      (* VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number *)
-      (* ^ "_upper_load" *)
-      (* in *)
-      (* let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in *)
-      (* let st = constrain st (Pointer (TypeVar lb, TypeVar ub)) addr in *)
-      (* let bv_type = BV size in *)
-      (* let st = constrain st (Pointer (bv_type, bv_type)) addr in *)
-      (* let st = constrain st (TypeVar lb) @@ TypeVar ub in *)
-      (* constrain st (TypeVar ub) (TypeVar lhs) *)
-      (* else *)
-      (* (* *)
-          (* Some information case *)
-
-          (* ptr with the upper bound as a record with the offset as the offset, *)
-            (* and size of load as the size, type is var atm and gets constrained *)
-            (* to lhs *)
-        (* *) *)
-      (* let res = *)
-      (* snd @@ List.hd @@ snd *)
-      (* @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res *)
-      (* in *)
-      (* let offset = *)
-      (* match res with *)
-      (* | Interval { lower } -> Bitvec.to_signed_bigint lower *)
-      (* | _ -> failwith "impossible" *)
-      (* in *)
-      (* let ty = *)
-      (* TypeVar *)
-      (* (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number *)
-      (* ^ "_upper_load") *)
-      (* in *)
-      (* let ub = Record (ZMap.singleton offset { size; offset; ty }, size) in *)
-      (* let lb = *)
-      (* TypeVar *)
-      (* (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number *)
-      (* ^ "_lower_load") *)
-      (* in *)
-      (* let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in *)
-      (* let st = constrain st (Pointer (lb, ub)) addr in *)
-      (* let st = constrain st ub lb in *)
-      (* let ub = *)
-      (* Record (ZMap.singleton offset { size; offset; ty = BV size }, size) *)
-      (* in *)
-      (* let st = constrain st (Pointer (lb, ub)) addr in *)
-      (* let st = constrain st ub lb in *)
-      (* constrain st ty (TypeVar lhs) *)
-      (* | Stmt.Instr_Store { lhs; addr = Addr { addr; size } } -> *)
-      (* let sva_res = *)
-      (* Analysis.Sva.Eval.EV.eval *)
-      (* ((flip Analysis.Sva.StateAbstraction.read) sva) *)
-      (* addr *)
-      (* in *)
-      (* let lhs = TypeVar (VarId.var_proc_to_uid lhs proc) in *)
-      (* if sva_res_check sva_res addr then *)
-      (* (* *)
-          (* No information case *)
-
-          (* Simply just a ptr(a,b) where a <= b *)
-        (* *) *)
-      (* let lb = *)
-      (* TypeVar *)
-      (* (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number *)
-      (* ^ "_lower_store") *)
-      (* in *)
-      (* let ub = *)
-      (* TypeVar *)
-      (* (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number *)
-      (* ^ "_upper_store") *)
-      (* in *)
-      (* let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in *)
-      (* let bv_type = BV size in *)
-      (* let st = constrain st (Pointer (bv_type, bv_type)) addr in *)
-      (* let st = constrain st (Pointer (lb, ub)) addr in *)
-      (* let st = constrain st lb ub in *)
-      (* constrain st lhs lb *)
-      (* else *)
-      (* (* *)
-          (* Some information case *)
-
-          (* ptr with the upper bound as a record with the offset as the offset, *)
-            (* and size of load as the size, type is var atm and gets constrained *)
-            (* to lhs *)
-        (* *) *)
-      (* let res = *)
-      (* snd @@ List.hd @@ snd *)
-      (* @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res *)
-      (* in *)
-      (* let offset = *)
-      (* match res with *)
-      (* | Interval { lower } -> Bitvec.to_signed_bigint lower *)
-      (* | _ -> failwith "impossible" *)
-      (* in *)
-      (* let ty = *)
-      (* TypeVar *)
-      (* (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number *)
-      (* ^ "_lower_store") *)
-      (* in *)
-      (* let lb = Record (ZMap.singleton offset { size; offset; ty }, size) in *)
-      (* let ub = *)
-      (* TypeVar *)
-      (* (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number *)
-      (* ^ "_upper_store") *)
-      (* in *)
-      (* let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in *)
-      (* let st = constrain st (Pointer (lb, ub)) addr in *)
-      (* let st = constrain st lb ub in *)
-      (* let lb = *)
-      (* Record (ZMap.singleton offset { size; offset; ty = BV size }, size) *)
-      (* in *)
-      (* let st = constrain st lb ub in *)
-      (* let st = constrain st (Pointer (lb, ub)) addr in *)
-      (* constrain st lhs ty *)
+      let st, _ = constrain_expr proc st (BasilExpr.unfix addr) in
+      let st =
+        match BasilExpr.unfix addr with
+        | RVar { id } ->
+            let addr = TypeVar (VarId.var_proc_to_uid id proc) in
+            let st = constrain st (Pointer (lb, ub)) addr in
+            st
+        | _ -> st
+      in
+      let st = constrain st ub lb in
+      let ub =
+        Record (ZMap.singleton offset { size; offset; ty = BV size }, size)
+      in
+      let st = constrain st ub lb in
+      constrain st lhs ty
+  | ( Stmt.Instr_Load { lhs; addr = Addr { addr; size } }
+    | Stmt.Instr_Store { lhs; addr = Addr { addr; size } } ) as stmt ->
+      let lhs = TypeVar (VarId.var_proc_to_uid lhs proc) in
+      let lb =
+        TypeVar
+          (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
+         ^ "_lower_" ^ Program.show_stmt stmt)
+      in
+      let ub =
+        TypeVar
+          (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
+         ^ "_upper_" ^ Program.show_stmt stmt)
+      in
+      let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
+      let st = constrain st (Pointer (lb, ub)) addr in
+      let st = constrain st ub lb in
+      constrain st ub lhs
+      (* *)
   | Stmt.Instr_Call { lhs; args; procid } ->
       (*
         WARN: I don't remember my mindset when I wrote the below code
@@ -1595,7 +1561,12 @@ let map_expr results proc =
             BasilExpr.replace [%here]
               (BasilExpr.binexp ?attrib ~op:`PTRADD pointer
                  (BasilExpr.applyintrin ?attrib ~op:`BVADD args))
-        | _ -> failwith "Two or more pointer types adding")
+        | x, _ ->
+            failwith
+            @@ Printf.sprintf "Two or more pointer types adding, ptrs: %s"
+            @@ List.fold_left
+                 (fun acc a -> acc ^ " " ^ BasilExpr.to_string a)
+                 "" x)
     | AbstractExpr.BinaryExpr { op = `BVSUB; arg1; arg2; attrib } -> (
         match (BasilExpr.type_of arg1, BasilExpr.type_of arg2) with
         | Types.Pointer _, Types.Pointer _ ->
