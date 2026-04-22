@@ -17,8 +17,7 @@ module Domain (S : FunctionAnnotation) = struct
   type t = Program.e
 
   let non_local (p : t) =
-    BasilExpr.free_vars p |> flip VarSet.subset S.inout;
-    true
+    BasilExpr.free_vars p |> flip VarSet.subset S.inout
 
   let show = BasilExpr.to_string
   let equal = BasilExpr.equal
