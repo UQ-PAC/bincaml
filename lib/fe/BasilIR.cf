@@ -265,7 +265,7 @@ rules BinOp ::= "implies" | BVBinOp | BVLogicalBinOp | IntLogicalBinOp | IntBinO
 Expr_Binary . Expr2      ::= BinOp OpenParen Expr "," Expr CloseParen ;
 Expr_Assoc  . Expr2      ::= IntrinOp OpenParen [Expr] CloseParen ;
 
-rules UnOp ::= BVUnOp | "boolnot" | "intneg" | "booltobv1" | "gamma" | "classification";
+rules UnOp ::= BVUnOp | "boolnot" | "intneg" | "booltobv1" | "ptrtobv64" | "rectobv" | "gamma" | "classification";
 Expr_Unary  . Expr2      ::= UnOp OpenParen Expr CloseParen ;
 
 Expr_LoadBe . Expr2 ::= "load_be" OpenParen IntVal "," Expr "," Expr CloseParen ;

@@ -597,6 +597,10 @@ module.exports = ({
         "intneg",
         // UnOp_booltobv1. UnOp ::= "booltobv1" ;
         "booltobv1",
+        // UnOp_ptrtobv64. UnOp ::= "ptrtobv64" ;
+        "ptrtobv64",
+        // UnOp_rectobv. UnOp ::= "rectobv" ;
+        "rectobv",
         // UnOp_gamma. UnOp ::= "gamma" ;
         "gamma",
         // UnOp_classification. UnOp ::= "classification" ;

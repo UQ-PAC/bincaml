@@ -483,6 +483,8 @@ and prtUnOp (i:int) (e : AbsBasilIR.unOp) : doc = match e with
   |    AbsBasilIR.UnOp_boolnot  -> prPrec i 0 (concatD [render "boolnot"])
   |    AbsBasilIR.UnOp_intneg  -> prPrec i 0 (concatD [render "intneg"])
   |    AbsBasilIR.UnOp_booltobv1  -> prPrec i 0 (concatD [render "booltobv1"])
+  |    AbsBasilIR.UnOp_ptrtobv64  -> prPrec i 0 (concatD [render "ptrtobv64"])
+  |    AbsBasilIR.UnOp_rectobv  -> prPrec i 0 (concatD [render "rectobv"])
   |    AbsBasilIR.UnOp_gamma  -> prPrec i 0 (concatD [render "gamma"])
   |    AbsBasilIR.UnOp_classification  -> prPrec i 0 (concatD [render "classification"])
 

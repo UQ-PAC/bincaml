@@ -640,7 +640,12 @@ module BasilExpr = struct
     let open AbstractExpr in
     let open Ops.AllOps in
     let get_ty o =
-      match o with Fun { ret } -> ret | _ -> failwith "type error"
+      match o with
+      | Fun { ret } -> ret
+      | Conflict errs ->
+          failwith
+          @@ Printf.sprintf "type error: %s"
+          @@ List.fold_left (fun a (_, s) -> a ^ s) "" errs
     in
     match e with
     | RVar { id } -> Var.typ id

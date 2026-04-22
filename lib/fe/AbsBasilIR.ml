@@ -250,6 +250,8 @@ and unOp =
  | UnOp_boolnot
  | UnOp_intneg
  | UnOp_booltobv1
+ | UnOp_ptrtobv64
+ | UnOp_rectobv
  | UnOp_gamma
  | UnOp_classification
 

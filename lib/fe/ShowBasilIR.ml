@@ -335,6 +335,8 @@ and showUnOp (e : AbsBasilIR.unOp) : showable = match e with
   |    AbsBasilIR.UnOp_boolnot  -> s2s "UnOp_boolnot"
   |    AbsBasilIR.UnOp_intneg  -> s2s "UnOp_intneg"
   |    AbsBasilIR.UnOp_booltobv1  -> s2s "UnOp_booltobv1"
+  |    AbsBasilIR.UnOp_ptrtobv64  -> s2s "UnOp_ptrtobv64"
+  |    AbsBasilIR.UnOp_rectobv  -> s2s "UnOp_rectobv"
   |    AbsBasilIR.UnOp_gamma  -> s2s "UnOp_gamma"
   |    AbsBasilIR.UnOp_classification  -> s2s "UnOp_classification"
 

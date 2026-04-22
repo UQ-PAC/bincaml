@@ -358,6 +358,8 @@ and transUnOp (x : unOp) : result = match x with
   | UnOp_boolnot  -> failure x
   | UnOp_intneg  -> failure x
   | UnOp_booltobv1  -> failure x
+  | UnOp_ptrtobv64  -> failure x
+  | UnOp_rectobv  -> failure x
   | UnOp_gamma  -> failure x
   | UnOp_classification  -> failure x
 

@@ -1244,6 +1244,8 @@ module BasilASTLoader = struct
     | UnOp_booltobv1 -> `BOOLTOBV1
     | UnOp_gamma -> `Gamma
     | UnOp_classification -> `Classification
+    | UnOp_ptrtobv64 -> `PTRTOBV64
+    | UnOp_rectobv -> `RECTOBV
 
   and transBVUnOp (x : bVUnOp) =
     match x with BVUnOp_bvnot -> `BVNOT | BVUnOp_bvneg -> `BVNEG
