@@ -1116,8 +1116,16 @@ let rec constrain_expr proc (st : ConstraintState.t)
               let st = constrain_args proc st l r @@ BV size in
               (st, Bool)
           | _ -> failwith "BV operation without BV arguments")
-      | `BVSREM | `BVSDIV | `BVUREM | `BVSUB | `BVUDIV | `BVSMOD | `BVSHL
-      | `BVLSHR | `BVASHR | `BVNAND -> (
+      | `BVSUB ->
+          let typ = TypeVar (VarId.fresh ()) in
+          let st =
+            List.fold_left
+              (fun acc a -> constrain_arg proc st a typ)
+              st [ l; r ]
+          in
+          (st, typ)
+      | `BVSREM | `BVSDIV | `BVUREM | `BVUDIV | `BVSMOD | `BVSHL | `BVLSHR
+      | `BVASHR | `BVNAND -> (
           match BasilExpr.type_of l with
           | Bitvector size ->
               let typ = BV size in
@@ -1580,6 +1588,19 @@ let map_expr results proc =
               (BasilExpr.binexp ?attrib ~op:`PTRADD pointer
                  (BasilExpr.applyintrin ?attrib ~op:`BVADD args))
         | _ -> failwith "Two or more pointer types adding")
+    | AbstractExpr.BinaryExpr { op = `BVSUB; arg1; arg2; attrib } -> (
+        match (BasilExpr.type_of arg1, BasilExpr.type_of arg2) with
+        | Types.Pointer _, Types.Pointer _ ->
+            failwith "Two or more pointer types adding"
+        | Types.Pointer _, _ ->
+            BasilExpr.replace [%here]
+              (BasilExpr.binexp ?attrib ~op:`PTRADD arg1
+                 (BasilExpr.unexp ?attrib ~op:`BVNEG arg2))
+        | _, Types.Pointer _ ->
+            BasilExpr.replace [%here]
+              (BasilExpr.binexp ?attrib ~op:`PTRADD arg2
+                 (BasilExpr.unexp ?attrib ~op:`BVNEG arg1))
+        | _ -> BasilExpr.Keep)
     (*
       THESE OPERATIONS ARE NOT DEFINED OVER POINTERS OR RECORDS
 
