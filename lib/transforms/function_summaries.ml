@@ -137,9 +137,6 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
            | Procedure { definition } -> false)
     |> Iter.map (fun d -> Expr_smt.SMTLib2.trans_decl d Expr_smt.SMTLib2.empty)
     |> Iter.map fst
-    (* |> Iter.map (fun s -> *)
-    (* print_endline @@ CCSexp.to_string s; *)
-    (* s) *)
     |> fun i ->
     Iter.for_each i (fun s -> Bincaml_util.Smt.Solver.add_command solver s)
   in

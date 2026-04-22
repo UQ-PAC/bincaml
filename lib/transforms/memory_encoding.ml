@@ -176,7 +176,6 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
              Bincaml_util.Common.Var.create name ~scope:GlobalConst
                (Types.curry (List.map Var.typ bindings)
                @@ Lang.Expr.BasilExpr.type_of body);
-           (* (Lang.Expr.BasilExpr.type_of body)); *)
            attrib;
            definition : Lang.Program.func_type =
              Function (Lang.Expr.BasilExpr.binding ~op:`Lambda bindings body);
