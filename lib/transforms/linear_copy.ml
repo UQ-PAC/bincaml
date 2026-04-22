@@ -51,5 +51,7 @@ let transform (p : Program.t) =
 
   Trace_core.with_span ~__FILE__ ~__LINE__ "transform" @@ fun _ ->
   Program.map_procedures
-    (fun pid proc -> transform_proc p (Hashtbl.find gs pid) proc)
+    (fun pid proc ->
+      Hashtbl.find_opt gs pid
+      |> Option.map_or ~default:proc (flip (transform_proc p) proc))
     p
