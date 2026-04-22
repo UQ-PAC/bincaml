@@ -425,6 +425,7 @@
     requires $me_addr_is_heap($mem_encoding, R0_in);
     requires (0bv64 == $me_addr_offset($mem_encoding, R0_in));
     requires ($me_alloc_live($mem_encoding, $me_addr_alloc($mem_encoding, R0_in)) == 1bv2);
+
   $ boogie ./bad.bpl
   ./bad.bpl(162,5): Error: this assertion could not be proved
   Execution trace:
