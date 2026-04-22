@@ -238,7 +238,7 @@ let prog_pretty (p : t) =
 
   append_l ~sep:(text ";\n") decls ^ text ";\n"
 
-let declarations p = p.declarations |> IDMap.to_iter
+let declarations p = IDMap.bindings p.declarations |> List.to_iter
 
 let filter_decls f p =
   declarations p

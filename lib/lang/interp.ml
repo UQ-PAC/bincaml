@@ -2,13 +2,14 @@ open Common
 
 exception ConversionError of string
 exception AssertFailure of Program.stmt
-exception AssumeFail of Program.stmt
 exception ReadUninit of Var.t
 exception Timeout
 
+let debug = false
+let dbg_print s = if debug then print_endline s
+
 let () =
   Printexc.register_printer (function
-    | AssumeFail stmt -> Some ("Assumption failed: " ^ Program.show_stmt stmt)
     | AssertFailure e -> Some ("AssertFailure : " ^ Program.show_stmt e)
     | ReadUninit e -> Some ("ReadUninitialised : " ^ Var.to_string e)
     | Timeout -> Some "Fuel exhausted"
@@ -416,7 +417,10 @@ module IState = struct
     fuel : int option;
   }
 
+  let show_state_pc st = show_loc st.pc
+
   exception InterpreterError of (t * string)
+  exception AssumeFail of (t * Program.stmt)
 
   let tick st =
     match st.fuel with
@@ -481,6 +485,16 @@ module IState = struct
             ^ newline
             ^ text (PageTable.show m)))
     |> Pretty.to_string ~width:200
+
+  let () =
+    Printexc.register_printer (function
+      | AssumeFail (st, stmt) ->
+          Some
+            ("Assumption failed: " ^ Program.show_stmt stmt ^ "\n\n"
+           ^ show ~show_stack:true st)
+      | InterpreterError (st, msg) ->
+          Some ("Interpreter error: " ^ msg ^ "\n\n" ^ show ~show_stack:true st)
+      | _ -> None)
 
   (** create a new state for prog that is either zero-intiialised or randomly
       initialised based on whether the random geenrator is passed *)
@@ -604,6 +618,13 @@ module IState = struct
     | Choose of t * t list
   [@@derving eq]
 
+  let show_action = function
+    | Continue s -> "continue : " ^ show_state_pc s
+    | Exit -> "exit"
+    | Return _ -> "return"
+    | Choose (h, tl) ->
+        "choose(" ^ List.to_string show_state_pc ~sep:", " (h :: tl) ^ ")"
+
   let rec eval_stmt_unsafe (stmt : Program.stmt) (st : t) =
     let stmt' =
       Stmt.map ~f_lvar:id ~f_rvar:id ~f_expr:(fun e -> eval_expr e st) stmt
@@ -623,7 +644,7 @@ module IState = struct
     | Stmt.Instr_Assume { body } -> (
         IValue.of_constant body |> IValue.as_bool |> function
         | true -> st
-        | false -> raise_notrace (AssumeFail stmt))
+        | false -> raise_notrace (AssumeFail (st, stmt)))
     | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } -> begin
         let m = lookup_memory rhs st in
         let nbits = size in
@@ -782,18 +803,26 @@ module IState = struct
         ^ ID.to_string @@ Procedure.id p
 
   and exec_proc st p (args : Ops.AllOps.const StringMap.t) =
-    let rec run st =
-      match step st with
-      | Return r -> (st, r)
-      | Exit -> failwith "exit"
-      | Continue st -> run st
-      | Choose (h, tl) -> (
-          try run h
-          with AssumeFail _ -> (
-            match tl with h :: tl -> run h | [] -> failwith "died"))
+    let rec run choices st =
+      dbg_print "";
+      dbg_print ("choice: " ^ show_state_pc st);
+      dbg_print ("choices: " ^ List.to_string show_state_pc choices);
+      try
+        let s = step st in
+        dbg_print (show_action s);
+        match s with
+        | Return r -> (st, r)
+        | Exit -> failwith "exit"
+        | Continue st -> run choices st
+        | Choose (h, tl) -> run (tl @ choices) h
+      with AssumeFail (st, p) -> (
+        dbg_print ("assume failed: " ^ Program.show_stmt p);
+        match choices with
+        | h :: tl -> run tl h
+        | [] -> failwith "cannot progress")
     in
     let st = activate_proc p st args in
-    let st, r = run st in
+    let st, r = run [] st in
     (st, r)
 
   let initialise_spec st (sp : (Var.t, Program.e) Procedure.proc_spec) =
@@ -831,8 +860,10 @@ let test_run_proc ~(seed : int) prog proc =
     |> StringMap.map (fun arg -> IValue.random rs (Var.typ arg))
   in
   let st = IState.create ~random:rs prog in
-  try Ok (IState.exec_proc st proc args)
-  with IState.InterpreterError (st, msg) -> Error (st, msg)
+  try Ok (IState.exec_proc st proc args) with
+  | IState.InterpreterError (st, msg) -> Error (st, msg)
+  | IState.AssumeFail (st, msg) ->
+      Error (st, "Assumption failed: " ^ Program.show_stmt msg)
 
 let run_proc prog ?(args = StringMap.empty) proc =
   let st = IState.create prog in
