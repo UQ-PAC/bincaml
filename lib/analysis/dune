@@ -18,9 +18,7 @@
   tnum_wint_reduced_product
   known_bits
   wp_dual
-  sva
-  linear_const
-  inter_copy)
+  sva)
  (libraries
   intPQueue
   patricia-tree

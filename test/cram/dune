@@ -31,8 +31,8 @@
   roundtrip.sexp
   gammavars.sexp
   ../../examples/gamma.il
-  copyprop.sexp
-  ../../examples/copyprop.il
+  linear_copy.sexp
+  ../../examples/linear_copy.il
   inter_dead.sexp
   ../../examples/const.il
   const.sexp
