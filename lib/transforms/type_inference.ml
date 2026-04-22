@@ -121,7 +121,8 @@ module InferredType = struct
   let rec iter f (ty : t) =
     f ty;
     match ty with
-    | Top | Bottom | BV _ | Int | Bool | TypeVar _ | Recursive _ -> ()
+    | Top | Bottom | BV _ | Int | Bool | TypeVar _ -> ()
+    | Recursive (_, t) -> iter f t
     | Union (a, b) | Sect (a, b) ->
         iter f b;
         iter f a
@@ -136,6 +137,7 @@ module InferredType = struct
   let rec intersect (a : t) (b : t) : t =
     (* print_endline @@ Printf.sprintf "joining types %s %s" (show ty0) @@ show ty1; *)
     match (a, b) with
+    | a, b when equal a b -> a
     | Record (fields0, size), Record (fields1, _) ->
         (* WARN: I think this could be improved, cause this is gross *)
         let module FieldMap = Map.Make (struct
@@ -193,10 +195,11 @@ module InferredType = struct
     | (Function _ as a), _ | _, (Function _ as a) -> a
     | Top, a | a, Top | TypeVar _, a | a, TypeVar _ -> a
     | Bottom, a | a, Bottom -> Bottom
-    | a, b when equal a b -> a
     | c, Union (a, b) | Union (a, b), c -> Sect (c, union a b)
     | c, Sect (a, b) | Sect (a, b), c -> intersect c @@ intersect a b
-    | Recursive (a, b), _ | _, Recursive (a, b) -> Recursive (a, b) (*TODO*)
+    | Recursive (a, b), _ | _, Recursive (a, b) ->
+        print_endline "Intersection Recursive";
+        Recursive (a, b) (*TODO*)
     | a, b -> order a b
 
   and union a b =
@@ -209,7 +212,9 @@ module InferredType = struct
     | Record (name, f), _ | _, Record (name, f) -> Record (name, f)
     | Pointer (l1, u1), Pointer (l2, u2) -> a (* TODO *)
     | Pointer (l, u), _ | _, Pointer (l, u) -> Pointer (l, u)
-    | Recursive (a, b), _ | _, Recursive (a, b) -> Recursive (a, b) (*TODO*)
+    | Recursive (a, b), _ | _, Recursive (a, b) ->
+        print_endline "Union Recursive";
+        Recursive (a, b) (*TODO*)
     | TypeVar a, _ | _, TypeVar a -> TypeVar a
     | _ ->
         print_endline @@ Printf.sprintf "TODO %s %s" (show a) (show b);
@@ -920,7 +925,12 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
                 else Sect (type_cons, y))
               bounds tau
           in
-          if rec_check then Recursive (a, s) else s)
+          if rec_check then (
+            print_endline @@ VarId.show a;
+            print_endline @@ TySet.show bounds;
+            print_endline "BOOM";
+            Recursive (a, s))
+          else s)
   | BV _ | Bool | Int -> tau
   | _ -> Top
 
@@ -1093,12 +1103,10 @@ let rec constrain_expr proc (st : ConstraintState.t)
       | `NEQ | `EQ -> (
           match (BasilExpr.unfix l, BasilExpr.unfix r) with
           | RVar { id = a }, RVar { id = b } ->
-              let a_id = VarId.var_proc_to_uid a proc in
-              let b_id = VarId.var_proc_to_uid b proc in
-              let st = ConstraintState.add_lb st a_id (TypeVar b_id) in
-              let st = ConstraintState.add_ub st a_id (TypeVar b_id) in
-              let st = ConstraintState.add_lb st b_id (TypeVar a_id) in
-              let st = ConstraintState.add_ub st b_id (TypeVar a_id) in
+              let a_id = TypeVar (VarId.var_proc_to_uid a proc) in
+              let b_id = TypeVar (VarId.var_proc_to_uid b proc) in
+              let st = constrain st a_id b_id in
+              let st = constrain st b_id a_id in
               (st, Bool)
           | RVar { id }, a | a, RVar { id } ->
               let id = VarId.var_proc_to_uid id proc in
@@ -1369,35 +1377,33 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
           Regards,
             JTrenerry
       *)
-      (* let formal_in = Procedure.formal_in_params @@ Program.proc prog procid in *)
-      (* let formal_out = *)
-      (* Procedure.formal_out_params @@ Program.proc prog procid *)
-      (* in *)
-      (* let st = *)
-      (* StringMap.fold *)
-      (* (fun k v acc -> *)
-      (* match constrain_expr proc acc @@ BasilExpr.unfix v with *)
-      (* | acc, TypeVar a -> *)
-      (* constrain acc (TypeVar a) *)
-      (* (TypeVar *)
-      (* (VarId.var_procid_to_uid *)
-      (* (StringMap.find k formal_in) *)
-      (* procid)) *)
-      (* | acc, a -> *)
-      (* ConstraintState.add_ub acc *)
-      (* (VarId.var_procid_to_uid (StringMap.find k formal_in) procid) *)
-      (* a) *)
-      (* args *)
-      (* @@ StringMap.fold *)
-      (* (fun k v acc -> *)
-      (* constrain acc *)
-      (* (TypeVar *)
-      (* (VarId.var_procid_to_uid *)
-      (* (StringMap.find k formal_out) *)
-      (* procid)) *)
-      (* (TypeVar (VarId.var_proc_to_uid v proc))) *)
-      (* lhs st *)
-      (* in *)
+      let formal_in = Procedure.formal_in_params @@ Program.proc prog procid in
+      let formal_out =
+        Procedure.formal_out_params @@ Program.proc prog procid
+      in
+      let st =
+        StringMap.fold
+          (fun k v acc ->
+            let acc, input =
+              match BasilExpr.unfix v with
+              | RVar { id } -> (st, TypeVar (VarId.var_procid_to_uid id procid))
+              | o -> constrain_expr proc acc o
+            in
+            constrain acc
+              (TypeVar
+                 (VarId.var_procid_to_uid (StringMap.find k formal_in) procid))
+              input)
+          args
+        @@ StringMap.fold
+             (fun k v acc ->
+               constrain acc
+                 (TypeVar
+                    (VarId.var_procid_to_uid
+                       (StringMap.find k formal_out)
+                       procid))
+                 (TypeVar (VarId.var_proc_to_uid v proc)))
+             lhs st
+      in
       let args =
         StringMap.map
           (fun v -> snd @@ constrain_expr proc st @@ BasilExpr.unfix v)
@@ -1579,7 +1585,9 @@ let map_expr results proc =
             [] args
         in
         match (pointer, args) with
-        | [], _ -> BasilExpr.Keep
+        | [], _ ->
+            BasilExpr.replace [%here]
+              (BasilExpr.applyintrin ?attrib ~op:`BVADD (List.map cast args))
         | [ pointer ], [ x ] ->
             BasilExpr.replace [%here]
               (BasilExpr.binexp ?attrib ~op:`PTRADD pointer x)
@@ -1600,7 +1608,9 @@ let map_expr results proc =
             BasilExpr.replace [%here]
               (BasilExpr.binexp ?attrib ~op:`PTRADD arg2
                  (BasilExpr.unexp ?attrib ~op:`BVNEG arg1))
-        | _ -> BasilExpr.Keep)
+        | _ ->
+            BasilExpr.replace [%here]
+              (BasilExpr.binexp ?attrib ~op:`BVSUB (cast arg1) (cast arg2)))
     (*
       THESE OPERATIONS ARE NOT DEFINED OVER POINTERS OR RECORDS
 
