@@ -531,7 +531,7 @@ module IState = struct
       events = [];
       last_block = None;
       random_gen = random;
-      fuel = Some fuel;
+      fuel = None;
     }
 
   type decisions = { choices_remaining : decisions list; choice : t }
@@ -676,7 +676,7 @@ module IState = struct
 
   and eval_stmt (stmt : Program.stmt) (st : t) =
     try eval_stmt_unsafe stmt st with
-    | AssumeFail _ as e -> raise e
+    | AssumeFail _ as e -> raise_notrace e
     | e -> raise (InterpreterError (st, Printexc.to_string e))
 
   and exec_edge st e =
@@ -750,7 +750,7 @@ module IState = struct
               |> Iter.to_list
               |> function
               | [ l ] -> Continue l
-              | h :: tl -> Choose (clone h, List.map clone tl)
+              | h :: tl -> Choose (h, tl)
               | [] -> failwith "stop"
             in
             xs
@@ -803,27 +803,30 @@ module IState = struct
         ^ ID.to_string @@ Procedure.id p
 
   and exec_proc st p (args : Ops.AllOps.const StringMap.t) =
-    let rec run choices st =
-      dbg_print "";
-      dbg_print ("choice: " ^ show_state_pc st);
-      dbg_print ("choices: " ^ List.to_string show_state_pc choices);
+    let choices = ref [] in
+    let st = ref st in
+    st := activate_proc p !st args;
+    let return = ref None in
+    while Option.is_none !return do
       try
-        let s = step st in
-        dbg_print (show_action s);
+        let s = step !st in
         match s with
-        | Return r -> (st, r)
+        | Return r ->
+            return := Some r;
+            st := !st
         | Exit -> failwith "exit"
-        | Continue st -> run choices st
-        | Choose (h, tl) -> run (tl @ choices) h
-      with AssumeFail (st, p) -> (
-        dbg_print ("assume failed: " ^ Program.show_stmt p);
-        match choices with
-        | h :: tl -> run tl h
+        | Continue s -> st := s
+        | Choose (h, tl) ->
+            choices := tl @ !choices;
+            st := h
+      with AssumeFail (_, p) -> (
+        match !choices with
+        | h :: tl ->
+            choices := tl;
+            st := h
         | [] -> failwith "cannot progress")
-    in
-    let st = activate_proc p st args in
-    let st, r = run [] st in
-    (st, r)
+    done;
+    (!st, Option.get_exn_or "unreach" !return)
 
   let initialise_spec st (sp : (Var.t, Program.e) Procedure.proc_spec) =
     let open Expr.AbstractExpr in
