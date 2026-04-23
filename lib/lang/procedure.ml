@@ -338,6 +338,20 @@ let get_entry_block p =
         Some (List.hd id))
   with Not_found -> None
 
+let is_entry_block p id =
+  graph p
+  |> Option.map (fun g ->
+      G.pred g (Vert.Begin id) |> List.mem ~eq:Vert.equal Vert.Entry)
+  |> Option.get_or ~default:false
+
+let set_entry_block p id =
+  let open Edge in
+  let open G in
+  p
+  |> map_graph (fun g ->
+      let g = fold_succ (fun v g -> remove_edge g Entry v) g Entry g in
+      add_edge g Entry (Begin id))
+
 (** Get the block for an id
 
     raise Not_found when the block does not exist. *)
