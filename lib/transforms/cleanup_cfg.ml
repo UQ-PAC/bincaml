@@ -25,32 +25,79 @@ let collapse_empty_blocks proc =
   let is_empty (block : Program.bloc) =
     Vector.is_empty block.stmts && List.is_empty block.phis
   in
-  Procedure.fold_blocks_topo_fwd
-    (fun proc bid block ->
-      if is_empty block then
-        let succ =
-          Procedure.blocks_succ proc bid |> Iter.map fst |> List.of_iter
-        in
-        if Procedure.is_entry_block proc bid then
-          (* If this is an entry then set the successor to entry if it's unique *)
-          if List.length succ = 1 then
-            Procedure.set_entry_block proc (List.hd succ)
-          else proc
-        else if List.is_empty succ then
-          (* Don't collapse terminal edges for now *)
-          proc
-        else
-          let proc =
-            Procedure.blocks_pred proc bid
-            |> Iter.fold
-                 (fun proc (pbid, pblock) ->
-                   Procedure.add_goto proc ~from:pbid ~targets:succ)
-                 proc
+  let proc =
+    Procedure.fold_blocks_topo_fwd
+      (fun proc bid block ->
+        if is_empty block then
+          let succ =
+            Procedure.blocks_succ proc bid |> Iter.map fst |> List.of_iter
           in
-          let proc = Procedure.remove_block proc bid in
-          proc
-      else proc)
-    proc proc
+          if Procedure.is_entry_block proc bid then
+            (* We do empty blocks after collapsing intermediate edges *)
+            proc
+          else if List.is_empty succ then
+            (* Don't collapse terminal edges for now *)
+            proc
+          else
+            let proc =
+              Procedure.blocks_pred proc bid
+              |> Iter.fold
+                   (fun proc (pbid, pblock) ->
+                     Procedure.add_goto proc ~from:pbid ~targets:succ)
+                   proc
+            in
+            (* Update phis *)
+            let pred =
+              Procedure.blocks_pred proc bid |> Iter.map fst |> List.of_iter
+            in
+            let proc =
+              Procedure.map_blocks_nondet
+                (fun (sbid, sblock) ->
+                  if List.mem sbid succ then
+                    Block.map
+                      ~phi:
+                        (List.map (fun (phi : Var.t Block.phi) ->
+                             let _, r =
+                               List.find (fst %> ID.equal bid) phi.rhs
+                             in
+                             {
+                               phi with
+                               rhs =
+                                 List.map (fun id -> (id, r)) pred
+                                 @ List.filter
+                                     (fst %> ID.equal bid %> not)
+                                     phi.rhs;
+                             }))
+                      id sblock
+                  else sblock)
+                proc
+            in
+            let proc = Procedure.remove_block proc bid in
+            proc
+        else proc)
+      proc proc
+  in
+  (* We then push the entry block forward to the first non-empty block (this is
+     a second pass to avoid iteration order issues) *)
+  let proc =
+    Procedure.fold_blocks_topo_fwd
+      (fun proc bid block ->
+        if is_empty block && Procedure.is_entry_block proc bid then
+          match
+            Procedure.blocks_succ proc bid |> Iter.map fst |> List.of_iter
+          with
+          | [ hd ] ->
+              Procedure.get_block proc hd
+              |> Option.map (fun (hb : Program.bloc) ->
+                  if List.is_empty hb.phis then
+                    Procedure.set_entry_block proc hd
+                  else proc)
+              |> Option.get_or ~default:proc
+          | _ -> proc
+        else proc)
+      proc proc
+  in
+  proc
 
 let cleanup_cfg proc =
   collapse_empty_blocks proc |> remove_blocks_unreachable_from_entry

@@ -314,6 +314,8 @@ module PassManager = struct
     [
       irreducible_loop;
       remove_unreachable_blocks;
+      collapse_empty_blocks;
+      cleanup_cfg;
       dfg_bool;
       dfg_ival_wint_product;
       demo_ival_wint_cfg;
