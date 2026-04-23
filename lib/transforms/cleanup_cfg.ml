@@ -77,25 +77,26 @@ let collapse_empty_blocks proc =
         else proc)
       proc proc
   in
-  (* We then push the entry block forward to the first non-empty block (this is
-     a second pass to avoid iteration order issues) *)
+  (* We then push the entry block forward to its successor if the entry is empty *)
   let proc =
-    Procedure.fold_blocks_topo_fwd
-      (fun proc bid block ->
-        if is_empty block && Procedure.is_entry_block proc bid then
-          match
-            Procedure.blocks_succ proc bid |> Iter.map fst |> List.of_iter
-          with
-          | [ hd ] ->
-              Procedure.get_block proc hd
-              |> Option.map (fun (hb : Program.bloc) ->
-                  if List.is_empty hb.phis then
-                    Procedure.set_entry_block proc hd
-                  else proc)
-              |> Option.get_or ~default:proc
-          | _ -> proc
-        else proc)
-      proc proc
+    Procedure.get_entry_block proc
+    |> Option.fold
+         (fun proc bid ->
+           let entry = Procedure.find_block proc bid in
+           if is_empty entry then
+             match
+               Procedure.blocks_succ proc bid |> Iter.map fst |> List.of_iter
+             with
+             | [ hd ] ->
+                 Procedure.get_block proc hd
+                 |> Option.map (fun (hb : Program.bloc) ->
+                     if List.is_empty hb.phis then
+                       Procedure.set_entry_block proc hd
+                     else proc)
+                 |> Option.get_or ~default:proc
+             | _ -> proc
+           else proc)
+         proc
   in
   proc
 
