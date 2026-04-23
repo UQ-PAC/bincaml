@@ -1444,16 +1444,22 @@ let simplify_types types =
   VarIdMap.fold
     (fun name (lower_ty, upper_ty) (recursives, types) ->
       let recursives2, types2 =
-        InferredType.inferred_to_real recursives
-          (* @@ Union *)
-          (minimise_type Polarity.Neg lower_ty name)
-        (* @@ minimise_type Polarity.Pos upper_ty name *)
+        let r1, t1 =
+          InferredType.inferred_to_real recursives
+          @@ minimise_type Polarity.Neg lower_ty name
+        in
+        let r2, t2 =
+          InferredType.inferred_to_real recursives
+          @@ minimise_type Polarity.Pos upper_ty name
+        in
+        (r1 @ r2, (t1, t2))
       in
       (recursives, (name, types2) :: types))
     types ([], [])
 
 (* Passes through a given program and returns a given constraint set *)
-let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
+let analyse (prog : Program.t) :
+    (Types.t * Types.t) VarIdMap.t * (VarId.t * Types.t) list =
   let recursives, types =
     simplify_types @@ unconstrain_types @@ generate_constraints prog
   in
@@ -1468,13 +1474,21 @@ let analyse (prog : Program.t) : Types.t VarIdMap.t * (VarId.t * Types.t) list =
   Actual transform to replace the types in stmt / exprs etc. with inferred types  
 *)
 
-let get_type results proc var : Types.t =
+let get_lower_type results proc var : Types.t =
   match VarIdMap.find_opt (VarId.var_proc_to_uid var proc) results with
-  | None | Some Types.Top ->
+  | None | Some (Types.Top, _) ->
       Var.typ var
       (* NOTE: This should fail, but might as well keep old type for now, this only really happens when the variable isn't used ever, i.e. function parameters, this could be changed to do a constraint there though, just forgot *)
       (* TODO: Make this a failwith and instead just get better code to always have constraints *)
-  | Some a -> a
+  | Some (a, _) -> a
+
+let get_upper_type results proc var : Types.t =
+  match VarIdMap.find_opt (VarId.var_proc_to_uid var proc) results with
+  | None | Some (_, Types.Top) ->
+      Var.typ var
+      (* NOTE: This should fail, but might as well keep old type for now, this only really happens when the variable isn't used ever, i.e. function parameters, this could be changed to do a constraint there though, just forgot *)
+      (* TODO: Make this a failwith and instead just get better code to always have constraints *)
+  | Some (_, a) -> a
 
 let cast arg : BasilExpr.t =
   match BasilExpr.type_of arg with
@@ -1482,8 +1496,13 @@ let cast arg : BasilExpr.t =
   | Struct _ -> BasilExpr.unexp ~op:`RECTOBV arg
   | _ -> arg
 
+let map_lvar results proc (var : Var.t) : Var.t =
+  Var.create (Var.name var) ~scope:(Var.scope var)
+  @@ get_upper_type results proc var
+
 let map_var results proc (var : Var.t) : Var.t =
-  Var.create (Var.name var) ~scope:(Var.scope var) @@ get_type results proc var
+  Var.create (Var.name var) ~scope:(Var.scope var)
+  @@ get_lower_type results proc var
 
 let map_expr results proc =
   let expr_rewriter results proc (abstract_expr : 'e BasilExpr.abstract_expr) :
@@ -1578,7 +1597,7 @@ let map_stmt results proc (stmt : Program.stmt) : Program.stmt =
       Stmt.Instr_Assign
         (List.map
            (fun (lvar, expr) ->
-             (map_var results proc lvar, map_expr results proc expr))
+             (map_lvar results proc lvar, map_expr results proc expr))
            assignments)
   | Stmt.Instr_Assume { body; branch } ->
       Stmt.Instr_Assume { branch; body = map_expr results proc body }
@@ -1587,21 +1606,21 @@ let map_stmt results proc (stmt : Program.stmt) : Program.stmt =
   | Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
       Stmt.Instr_Load
         {
-          lhs = map_var results proc lhs;
+          lhs = map_lvar results proc lhs;
           rhs = map_var results proc rhs;
           addr = Scalar;
         }
   | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->
       Stmt.Instr_Load
         {
-          lhs = map_var results proc lhs;
+          lhs = map_lvar results proc lhs;
           rhs = map_var results proc rhs;
           addr = Addr { size; endian; addr = map_expr results proc addr };
         }
   | Stmt.Instr_Store { lhs; rhs; value; addr = Scalar } ->
       Stmt.Instr_Store
         {
-          lhs = map_var results proc lhs;
+          lhs = map_lvar results proc lhs;
           rhs = map_var results proc rhs;
           value = map_expr results proc value;
           addr = Scalar;
@@ -1609,7 +1628,7 @@ let map_stmt results proc (stmt : Program.stmt) : Program.stmt =
   | Stmt.Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } } ->
       Stmt.Instr_Store
         {
-          lhs = map_var results proc lhs;
+          lhs = map_lvar results proc lhs;
           rhs = map_var results proc rhs;
           addr = Addr { size; endian; addr = map_expr results proc addr };
           value = map_expr results proc value;
@@ -1617,14 +1636,14 @@ let map_stmt results proc (stmt : Program.stmt) : Program.stmt =
   | Stmt.Instr_IntrinCall { lhs; args; name } ->
       Stmt.Instr_IntrinCall
         {
-          lhs = List.map (map_var results proc) lhs;
+          lhs = List.map (map_lvar results proc) lhs;
           args = List.map (map_expr results proc) args;
           name;
         }
   | Stmt.Instr_Call { lhs; procid; args } ->
       Stmt.Instr_Call
         {
-          lhs = StringMap.map (map_var results proc) lhs;
+          lhs = StringMap.map (map_lvar results proc) lhs;
           args = StringMap.map (map_expr results proc) args;
           procid;
         }
@@ -1662,7 +1681,7 @@ let map_decl results proc (decl : Program.declaration) : Program.declaration =
                  ~phi:
                    (List.map (fun ({ lhs; rhs } : Var.t Block.phi) ->
                         ({
-                           lhs = map_var results (Some proc) lhs;
+                           lhs = map_lvar results (Some proc) lhs;
                            rhs =
                              List.map
                                (fun (id, var) ->
@@ -1689,15 +1708,16 @@ let declare_recursive_typs (recursives : (VarId.t * Types.t) list) :
       (binding, (Type { typ; binding } : Program.declaration)))
     recursives
 
-let transform (prog : Program.t) (results : Types.t VarIdMap.t)
+let transform (prog : Program.t) (results : (Types.t * Types.t) VarIdMap.t)
     (recursives : (VarId.t * Types.t) list) : Program.t =
   Logs.info (fun m ->
       m "Starting type inference transform" ~tags:(Logger.time_stamp ()));
   let decls, results =
     List.fold_left_map
-      (fun acc (id, typ) ->
-        let name, typ = declare_typ typ in
-        (name :: acc, (id, typ)))
+      (fun acc (id, (l, u)) ->
+        let name1, l = declare_typ l in
+        let name2, u = declare_typ u in
+        (name1 :: name2 :: acc, (id, (l, u))))
       [] (VarIdMap.to_list results)
   in
   let results = VarIdMap.of_list results in

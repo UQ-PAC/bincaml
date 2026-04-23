@@ -236,18 +236,19 @@ proc @main_4196260 () -> ()
 
   let types =
     [
-      (VarId.make_id "$field1", Types.Bitvector 32);
-      (VarId.make_id "$field2", Types.Bitvector 32);
+      (VarId.make_id "$field1", (Types.Top, Types.Bitvector 32));
+      (VarId.make_id "$field2", (Types.Top, Types.Bitvector 32));
       ( VarId.make_id "$record",
-        Types.Struct { name = "rec915960920"; fields; size = 64 } );
-      (VarId.make_id "Extraction_v", Types.Bitvector 32);
-      (VarId.make_id "Extraction_v_1", Types.Bitvector 32);
+        (Top, Types.Struct { name = "rec915960920"; fields; size = 64 }) );
+      (VarId.make_id "Extraction_v", (Top, Types.Bitvector 32));
+      (VarId.make_id "Extraction_v_1", (Top, Types.Bitvector 32));
     ]
   in
 
   assert (
     List.equal
-      (fun (_, ty) (_, ty2) -> Types.equal ty ty2)
+      (* Accidently wrote the test the wrong way *)
+      (fun (_, (ty, _)) (_, (_, ty2)) -> Types.equal ty ty2)
       (snd @@ simplify_types st)
       types)
 
