@@ -1219,60 +1219,17 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
         let lhs = VarId.var_proc_to_uid lhs proc in
         let rhs = VarId.var_proc_to_uid rhs proc in
         constrain st (TypeVar rhs) (TypeVar lhs)
-  (* TODO: These should probably be joined somehow *)
-  | Stmt.Instr_Store { lhs; addr = Addr { addr; size } } as stmt
+  | ( Stmt.Instr_Store { lhs; addr = Addr { addr; size } }
+    | Stmt.Instr_Load { lhs; addr = Addr { addr; size } } ) as stmt
     when sva_res_check
            (Analysis.Sva.Eval.EV.eval
               ((flip Analysis.Sva.StateAbstraction.read) sva)
               addr)
-           addr ->
-      let lhs = TypeVar (VarId.var_proc_to_uid lhs proc) in
-      let sva_res =
-        Analysis.Sva.Eval.EV.eval
-          ((flip Analysis.Sva.StateAbstraction.read) sva)
-          addr
-      in
-      let res =
-        snd @@ List.hd @@ snd @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res
-      in
-      let offset =
-        match res with
-        | Interval { lower } -> Bitvec.to_signed_bigint lower
-        | _ -> failwith "impossible"
-      in
-      let ty =
-        TypeVar
-          (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
-         ^ "_lower_" ^ Program.show_stmt stmt)
-      in
-      let lb = Record (ZMap.singleton offset { size; offset; ty }, size) in
-      let ub =
-        TypeVar
-          (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
-         ^ "_upper_" ^ Program.show_stmt stmt)
-      in
+           addr -> (
+      (* Generate constraints from the addr argument *)
       let st, _ = constrain_expr proc st (BasilExpr.unfix addr) in
-      let st =
-        match BasilExpr.unfix addr with
-        | RVar { id } ->
-            let addr = TypeVar (VarId.var_proc_to_uid id proc) in
-            let st = constrain st (Pointer (lb, ub)) addr in
-            st
-        | _ -> st
-      in
-      let st = constrain st lb ub in
-      let lb =
-        Record (ZMap.singleton offset { size; offset; ty = BV size }, size)
-      in
-      let st = constrain st lb ub in
-      constrain st lhs ty
-  | Stmt.Instr_Load { lhs; addr = Addr { addr; size } } as stmt
-    when sva_res_check
-           (Analysis.Sva.Eval.EV.eval
-              ((flip Analysis.Sva.StateAbstraction.read) sva)
-              addr)
-           addr ->
-      let lhs = TypeVar (VarId.var_proc_to_uid lhs proc) in
+
+      let lhs = VarId.var_proc_to_uid lhs proc in
       let sva_res =
         Analysis.Sva.Eval.EV.eval
           ((flip Analysis.Sva.StateAbstraction.read) sva)
@@ -1290,30 +1247,57 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
       let ty =
         TypeVar
           (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
-         ^ "_upper_" ^ Program.show_stmt stmt)
-      in
-      let ub = Record (ZMap.singleton offset { size; offset; ty }, size) in
-      let lb =
-        TypeVar
-          (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
-         ^ "_lower_" ^ Program.show_stmt stmt)
+         ^ "_b_" ^ Program.show_stmt stmt)
       in
 
-      let st, _ = constrain_expr proc st (BasilExpr.unfix addr) in
-      let st =
-        match BasilExpr.unfix addr with
-        | RVar { id } ->
-            let addr = TypeVar (VarId.var_proc_to_uid id proc) in
-            let st = constrain st (Pointer (lb, ub)) addr in
-            st
-        | _ -> st
-      in
-      let st = constrain st ub lb in
-      let ub =
-        Record (ZMap.singleton offset { size; offset; ty = BV size }, size)
-      in
-      let st = constrain st ub lb in
-      constrain st lhs ty
+      match stmt with
+      | Stmt.Instr_Load _ ->
+          let st = ConstraintState.add_lb st lhs ty in
+          let lb, ub =
+            ( VarId.make_id @@ Int.to_string block_id
+              ^ Int.to_string stmt_number ^ "_a_" ^ Program.show_stmt stmt,
+              Record (ZMap.singleton offset { size; offset; ty }, size) )
+          in
+          let st =
+            match BasilExpr.unfix addr with
+            | RVar { id } ->
+                let addr = TypeVar (VarId.var_proc_to_uid id proc) in
+                constrain st (Pointer (TypeVar lb, ub)) addr
+            | _ -> st
+          in
+          let st = ConstraintState.add_ub st lb ub in
+          let ub =
+            Record (ZMap.singleton offset { size; offset; ty = BV size }, size)
+          in
+          ConstraintState.add_ub st lb ub
+      | Stmt.Instr_Store { value } ->
+          let st, _ = constrain_expr proc st (BasilExpr.unfix value) in
+          let st =
+            match BasilExpr.unfix value with
+            | RVar { id } ->
+                let value = VarId.var_proc_to_uid id proc in
+                let st = ConstraintState.add_ub st value ty in
+                st
+            | _ -> st
+          in
+          let lb, ub =
+            ( Record (ZMap.singleton offset { size; offset; ty }, size),
+              VarId.make_id @@ Int.to_string block_id
+              ^ Int.to_string stmt_number ^ "_b_" ^ Program.show_stmt stmt )
+          in
+          let st =
+            match BasilExpr.unfix addr with
+            | RVar { id } ->
+                let addr = TypeVar (VarId.var_proc_to_uid id proc) in
+                constrain st (Pointer (lb, TypeVar ub)) addr
+            | _ -> st
+          in
+          (* let st = ConstraintState.add_lb st ub lb in *)
+          let lb =
+            Record (ZMap.singleton offset { size; offset; ty = BV size }, size)
+          in
+          ConstraintState.add_lb st ub lb
+      | _ -> failwith "Impossible")
   | ( Stmt.Instr_Load { lhs; addr = Addr { addr; size } }
     | Stmt.Instr_Store { lhs; addr = Addr { addr; size } } ) as stmt ->
       let lhs = TypeVar (VarId.var_proc_to_uid lhs proc) in
@@ -1331,18 +1315,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
       let st = constrain st (Pointer (lb, ub)) addr in
       let st = constrain st ub lb in
       constrain st ub lhs
-      (* *)
   | Stmt.Instr_Call { lhs; args; procid } ->
-      (*
-        WARN: I don't remember my mindset when I wrote the below code
-
-          It takes 1 and a bit minutes with this code in vs 2 seconds with it out
-
-          I believe this may do nothing and I just dreamt this worked
-
-          Regards,
-            JTrenerry
-      *)
       let formal_in = Procedure.formal_in_params @@ Program.proc prog procid in
       let formal_out =
         Procedure.formal_out_params @@ Program.proc prog procid
