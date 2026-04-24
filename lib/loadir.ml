@@ -76,6 +76,21 @@ module BasilASTLoader = struct
           |> List.map (function
             | `Stmt s -> s
             | `Return exprs ->
+                let formals_len = List.length formal_out_params_order
+                and exprs_len = List.length exprs in
+                if formals_len <> exprs_len then
+                  raise
+                    (LoadError
+                       {
+                         input = None;
+                         token_char_offset_range = None;
+                         msg =
+                           Printf.sprintf
+                             "return statement in %s has incorrect number of \
+                              values (expected %d, got %d)"
+                             name formals_len exprs_len;
+                       });
+
                 let args =
                   List.combine formal_out_params_order exprs
                   |> List.map (function (name, var), expr -> (var, expr))
