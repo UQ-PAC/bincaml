@@ -3,7 +3,16 @@ open Containers
 open Expr
 
 module Vert = struct
-  type t = Begin of ID.t | End of ID.t | Entry | Return | Exit
+  type t =
+    | Begin of ID.t
+        (** Beginning of a block within the procedure. This is the target of
+            jumps. *)
+    | End of ID.t
+        (** Immediately after a block within the procedure. This is the source
+            of jumps. *)
+    | Entry  (** Entry of the procedure when it is called. *)
+    | Return  (** Normal return from the procedure, returning to the caller. *)
+    | Exit  (** Exiting the program, not returning to the caller. *)
   [@@deriving show { with_path = false }, eq, ord]
 
   let hash (v : t) =
@@ -36,6 +45,8 @@ end
 
 module Loc = Int
 
+(** A procedure's graph is made up of "positions" as nodes ({!Vert.t}) and edges
+    between positions are basic blocks or jumps ({!Edge.t}). *)
 module G = struct
   include Graph.Persistent.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
 end

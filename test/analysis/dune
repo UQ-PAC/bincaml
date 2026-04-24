@@ -1,7 +1,7 @@
 (library
  (name bincaml_analysis_test)
  (package bincaml)
- (modules test_ide_live test_ssadfg)
+ (modules test_ide_live test_ssadfg test_dynamic_single_assignment)
  (inline_tests)
  (libraries
   bincaml.loader

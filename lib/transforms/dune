@@ -5,6 +5,7 @@
  (modules
   irreducible_loop
   ssa
+  dsa
   cf_tx
   livevars
   cleanup_cfg
