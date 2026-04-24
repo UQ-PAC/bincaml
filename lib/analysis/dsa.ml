@@ -13,21 +13,17 @@ module Constraint = struct
 
   let gen_constraints (p : Program.proc) =
     let open Stmt in
-    Procedure.fold_blocks_topo_fwd
-      (fun acc bid ->
-        Block.fold_forwards ~phi:const
-          ~f:(fun acc stmt ->
-            match stmt with
-            | Instr_Load { lhs; addr = Addr { addr } } ->
-                Mem { addr; value = Expr.BasilExpr.rvar lhs } :: acc
-            | Instr_Store { value; addr = Addr { addr } } ->
-                Mem { addr; value } :: acc
-            | Instr_Call { lhs; args } ->
-                Call { lhs = StringMap.map Expr.BasilExpr.rvar lhs; args }
-                :: acc
-            | _ -> acc)
-          acc)
-      [] p
+    Procedure.iter_blocks_topo_fwd p
+    |> Iter.flat_map (fun (bid, block) -> Block.stmts_iter block)
+    |> Iter.filter_map (fun stmt ->
+        match stmt with
+        | Instr_Load { lhs; addr = Addr { addr } } ->
+            Some (Mem { addr; value = Expr.BasilExpr.rvar lhs })
+        | Instr_Store { value; addr = Addr { addr } } ->
+            Some (Mem { addr; value })
+        | Instr_Call { lhs; args } ->
+            Some (Call { lhs = StringMap.map Expr.BasilExpr.rvar lhs; args })
+        | _ -> None)
 end
 
 open Wrapped_intervals
@@ -76,12 +72,13 @@ end
 
 module SBMap = Map.Make (Sva.SymBase)
 
-let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t list) =
+let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
+    =
   (* Create just the cells *)
   let add_cells sv m = failwith "todo" in
 
   let g =
-    List.fold_left
+    Iter.fold
       (fun acc constr ->
         match constr with
         | Constraint.Mem { addr; value } ->
@@ -94,6 +91,37 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t list) =
     |> SBMap.values |> Iter.to_list
   in
 
+  (* make joining nodes unify with union find
+
+     solve:
+     join overlapping cells in nodes
+     init workist to sets of codomains of cells greater than 1 in size
+     // maybe worklist isn't needed and we can just iterate over all cells
+     // wrapped intervals i think might make the join order not invariant
+     for each:
+         unify set
+         grow worklist
+
+     unify set S:
+     compute offsets per node
+     // what if we used a funky data structure that encoded a union of intervals, instead of imprecisely joining them and deleting their holes?!
+     make all nodes of cells to be unified point to a single node (offsets adjusted)
+     fix overlapping intervals
+
+     the union of intervals data structure (might not work) alternatively this is a data structure to represent nodes:
+     leaves: intervals that are all disjoint
+     binary branches:
+         leaves are all disjoint intervals with ordering invariant
+         approximates a whole interval (join of all leaves)
+         the left branch has its own interval range
+         the right too
+         store on the branch the interval between the left branch's right point and right branches left point
+     element of queries are log n
+     does there exist an efficient algorithm to join two trees?! what about n trees? what if we want to add offsets to trees we are joining?
+     looks like yes, since such algorithms exist for various balanced bsts
+     offsets can probably be handled too as edges in the tree
+     *)
+
   g
 
 let dsa (p : Program.t) =
@@ -104,7 +132,7 @@ let dsa (p : Program.t) =
         let proc = IDMap.find pid p.procs in
         let constraints =
           Constraint.gen_constraints proc
-          |> List.map
+          |> Iter.map
                (Constraint.map
                   (Sva.Eval.EV.eval (flip Sva.StateAbstraction.read r)))
         in
