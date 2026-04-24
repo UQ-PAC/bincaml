@@ -44,9 +44,9 @@ proc @main (x: bv64) -> (out: bv64)
   [%expect
     {|
     { Dsa.src = ("%main_1", 0); tgt = ("%main_return", 3);
-      phi_assignments = [(y:bv64, x1:bv64)]; assumes =  }
+      phi_assignments = [(y:bv64, x1:bv64)] }
     { Dsa.src = ("%main_2", 1); tgt = ("%main_return", 3);
-      phi_assignments = [(y:bv64, x2:bv64)]; assumes =  }
+      phi_assignments = [(y:bv64, x2:bv64)] }
     |}];
 
   (* let proc_with_intermediates = Dsa.identify_needed_phi_edges graph |> Dsa.add_phi_edges proc in *)

@@ -21,21 +21,11 @@ type dsa_block = {
   tgt : ID.t;  (** ID of the target block for this phi edge. *)
   phi_assignments : (Var.t * Var.t) list;
       (** Assignments to be made within this phi edge. *)
-  assumes : (Var.t, Var.t, Program.e) Stmt.t list;
-      [@printer List.pp Stmt.pp_stmt_basil]
-      (** {!Stmt.Instr_Assume} branch guard statements occuring at the beginning
-          of the target block. *)
 }
 [@@deriving show]
 (** An intermediate value for the information needed to create a DSA block, to
     be placed between two existing block. Within the DSA block, we perform
     assignments which emulate the old phi variables in the [tgt] block. *)
-
-(** Returns whether the given statement is an {!Stmt.Instr_Assume} with [branch]
-    set to true, i.e., whether it is a branch guard. *)
-let is_assume = function
-  | Stmt.Instr_Assume { branch = true } -> true
-  | _ -> false
 
 let identify_needed_dsa_blocks (graph : G.t) : dsa_block Iter.t =
   let block_of_id : ID.t -> (Var.t, Expr.BasilExpr.t) Block.t =
@@ -51,13 +41,7 @@ let identify_needed_dsa_blocks (graph : G.t) : dsa_block Iter.t =
         match block_of_id tgt with
         | { phis = []; stmts } -> None
         | { phis; stmts } ->
-            let assumes, rest =
-              CCList.take_drop_while is_assume (CCVector.to_list stmts)
-            in
-            if List.exists is_assume rest then
-              failwith "block has non-contiguous assumes";
-            Some { src; tgt; phi_assignments = phis_from_src src phis; assumes }
-        )
+            Some { src; tgt; phi_assignments = phis_from_src src phis })
     | _ -> None)
 
 (** Adds new blocks and edges according to the given {!phi_edge} list, with
@@ -65,7 +49,7 @@ let identify_needed_dsa_blocks (graph : G.t) : dsa_block Iter.t =
     time, removes old direct edges from [src] to [tgt]. *)
 let replace_phis_with_dsa_blocks procedure (phis : dsa_block Iter.t) =
   Iter.fold
-    (fun procedure { src; tgt; phi_assignments; assumes } ->
+    (fun procedure { src; tgt; phi_assignments } ->
       let phi_assign =
         Stmt.Instr_Assign
           (phi_assignments
@@ -75,7 +59,7 @@ let replace_phis_with_dsa_blocks procedure (phis : dsa_block Iter.t) =
       let procedure, intermediate_block =
         Procedure.fresh_block procedure
           ~name:(ID.name tgt ^ "__phi")
-          ~stmts:(phi_assign :: assumes) ~successors:[ tgt ] ()
+          ~stmts:[ phi_assign ] ~successors:[ tgt ] ()
       in
       let procedure =
         Procedure.add_goto ~from:src ~targets:[ intermediate_block ] procedure
