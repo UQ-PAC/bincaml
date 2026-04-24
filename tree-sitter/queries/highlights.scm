@@ -79,6 +79,7 @@
 "entry" @keyword.directive
 
 (BinOp) @function.builtin
+(IntrinOp) @function.builtin
 (UnOp) @function.builtin
 (EqOp) @function.builtin
 
@@ -129,6 +130,7 @@
 "intge" @function.builtin
 "booland" @function.builtin
 "boolor" @function.builtin
+"implies" @function.builtin
 "zero_extend" @function.builtin
 "sign_extend" @function.builtin
 "extract" @function.builtin

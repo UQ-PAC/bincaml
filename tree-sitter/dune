@@ -1,7 +1,7 @@
 ; checks tree-sitter is valid and unambiguous
 
 (rule
- (deps grammar.js)
+ (deps grammar.js grammar.bnfc.js)
  (alias runtest)
  (enabled_if %{bin-available:tree-sitter})
  (action

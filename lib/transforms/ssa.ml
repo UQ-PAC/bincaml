@@ -258,6 +258,7 @@ let lift_procedure_params prog ~skip_observable ~skip_maps all_lifted procid
     let alg node =
       match node with
       | UnaryExpr { op = `Old; arg } -> replace [%here] (rewrite_old_expr arg)
+      | RVar { id } when Var.is_constant id -> Keep
       | RVar { id } -> (
           match StringMap.find_opt (Var.name id) glob_to_outparam with
           | Some v -> replace [%here] (rvar v)

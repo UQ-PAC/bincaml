@@ -267,21 +267,27 @@ module PassManager = struct
          eliminated. Assumes SSA form.";
     }
 
-  let copy_prop =
+  let linear_copy =
     {
-      name = "copy-prop";
-      apply = Prog Transforms.Copyprop.transform;
-      doc = "Interprocedural variable copy propagation. Require SSA form.";
+      name = "linear-copy";
+      apply = Prog Transforms.Linear_copy.transform;
+      doc =
+        "Inteprocedural linear expression propagation. This is helpful in \
+         cleaning stack address uses. Assumes SSA.";
     }
 
   let simp =
     {
       name = "simplify";
-      apply = Batch [ linear_const; copy_prop; cf_exprs; inter_dead ];
+      apply =
+        Batch
+          [
+            cf_exprs; linear_const; cf_exprs; linear_copy; cf_exprs; inter_dead;
+          ];
       doc =
-        "Performs some simplifications (linear constant propagation, copy \
-         propagation, constant folding, dead store elimination). Requires SSA \
-         form.";
+        "Performs some simplifications (linear constant propagation, linear \
+         copy propagation, constant folding, dead store elimination). Requires \
+         SSA form.";
     }
 
   let passes =
@@ -310,7 +316,7 @@ module PassManager = struct
       cf_exprs;
       inter_dead;
       linear_const;
-      copy_prop;
+      linear_copy;
       simp;
       {
         name = "cf-expressions-smtcheck";
@@ -338,15 +344,6 @@ module PassManager = struct
         name = "gamma-vars";
         apply = Prog Transforms.Gamma_vars.transform;
         doc = "Replace gamma expressions with gamma variables";
-      };
-      {
-        name = "linear-const";
-        apply = Prog Transforms.Const_prop.linear_transform;
-        doc =
-          "Performs interprocedural constant propagation of linear expressions \
-           (expressions of the form a * x + b). Usage of constant variables \
-           are replaced with their constant value. Newly dead variables are \
-           not eliminated. Assumes SSA form.";
       };
     ]
 

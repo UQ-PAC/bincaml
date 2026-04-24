@@ -38,7 +38,7 @@
   containers-data
   ppx_deriving
   ocamlgraph
-  cmdliner
+  (cmdliner (>= "2.0.0"))
   pp_loc
   fmt
   patricia-tree
