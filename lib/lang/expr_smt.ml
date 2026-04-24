@@ -136,6 +136,94 @@ module SMTLib2 = struct
     in
     return v
 
+  open struct
+    let of_assoc a : Ops.AllOps.intrin option =
+      match a with
+      | "bvadd" -> Some `BVADD
+      | "bvor" -> Some `BVOR
+      | "bvand" -> Some `BVAND
+      | "bvxor" -> Some `BVXOR
+      | "bvmul" -> Some `BVMUL
+      | _ -> None
+
+    let of_binop a : Ops.AllOps.binary option =
+      match a with
+      | "=" -> Some `EQ
+      | "bvsrem" -> Some `BVSREM
+      | "bvsdiv" -> Some `BVSDIV
+      | "bvashr" -> Some `BVASHR
+      | "bvsmod" -> Some `BVSMOD
+      | "bvshl" -> Some `BVSHL
+      | "bvnand" -> Some `BVNAND
+      | "bvurem" -> Some `BVUREM
+      | "bvsub" -> Some `BVSUB
+      | "bvudiv" -> Some `BVUDIV
+      | "bvlshr" -> Some `BVLSHR
+      | "bvsle" -> Some `BVSLE
+      | "bvule" -> Some `BVULE
+      | "bvult" -> Some `BVULT
+      | "bvslt" -> Some `BVSLT
+      | _ -> None
+
+    let of_unop a : Ops.AllOps.unary option =
+      match a with
+      | "bvnot" -> Some `BVNOT
+      | "bvneg" -> Some `BVNEG
+      | "not" -> Some `BoolNOT
+      | _ -> None
+  end
+
+  let rec expr_of_smt vardefs (e : Sexp.t) =
+    let open Option.Infix in
+    let module T = List.Traverse (Option) in
+    match e with
+    | `Atom "true" -> Some (BasilExpr.boolconst true)
+    | `Atom "false" -> Some (BasilExpr.boolconst false)
+    | `Atom e when Int.of_string e |> Option.is_some ->
+        Some (BasilExpr.intconst (Z.of_string e))
+    | `Atom e -> StringMap.find_opt e vardefs
+    | `List [ `Atom "_"; `Atom bvalue; `Atom bsize ] ->
+        let* size = Int.of_string bsize in
+        let* b = String.chop_prefix ~pre:"bv" bvalue in
+        let v = Z.of_string b in
+        Some (BasilExpr.bvconst (Bitvec.create ~size v))
+    (*| `List [ `Atom "ite"; c; t; e ] ->
+        let* c = expr_of_smt vardefs c in
+        let* t = expr_of_smt vardefs t in
+        let* e = expr_of_smt vardefs e in
+        Some (BasilExpr.ifthenelse c t e)*)
+    | `List (op :: args) -> (
+        let* args = T.map_m (expr_of_smt vardefs) args in
+        match (op, args) with
+        | `Atom "and", _ -> Some (BasilExpr.applyintrin ~op:`AND args)
+        | `Atom "or", _ -> Some (BasilExpr.applyintrin ~op:`OR args)
+        | `Atom "concat", _ -> Some (BasilExpr.applyintrin ~op:`BVConcat args)
+        | `List [ `Atom "_"; `Atom "extract"; `Atom hi; `Atom lo ], [ a ] ->
+            let* hi = Int.of_string hi in
+            let* lo = Int.of_string lo in
+            Some (BasilExpr.extract ~hi_excl:(hi + 1) ~lo_incl:lo a)
+        | `List [ `Atom "_"; `Atom "sign_extend"; `Atom bits ], [ a ] ->
+            let* bits = Int.of_string bits in
+            Some (BasilExpr.sign_extend ~n_prefix_bits:bits a)
+        | `List [ `Atom "_"; `Atom "zero_extend"; `Atom bits ], [ a ] ->
+            let* bits = Int.of_string bits in
+            Some (BasilExpr.zero_extend ~n_prefix_bits:bits a)
+        | `Atom u, [ a ] when of_unop u |> Option.is_some ->
+            let* op = of_unop u in
+            Some (BasilExpr.unexp ~op a)
+        | `Atom u, [ a; b ] when of_binop u |> Option.is_some ->
+            let* op = of_binop u in
+            Some (BasilExpr.binexp ~op a b)
+        | `Atom op, args when Option.is_some (of_assoc op) ->
+            let* op = of_assoc op in
+            Some (BasilExpr.applyintrin ~op args)
+        | e, _ ->
+            print_endline ("unk op: " ^ Sexp.to_string e);
+            None)
+    | e ->
+        print_endline ("unk: " ^ Sexp.to_string e);
+        None
+
   let decl_var (v : Var.t) s =
     VarMap.find_opt v s.var_decls |> function
     | Some { decl_cmd; var } -> (var, s)
@@ -175,6 +263,11 @@ module SMTLib2 = struct
     | `NEQ -> failwith "undef"
     | `AND -> atom "and"
     | `OR -> atom "or"
+    | `ReadField s -> atom s
+    | `WriteField s -> atom s
+    | `MapAccess -> atom "select"
+    | `MapUpdate -> atom "store"
+    | `IMPLIES -> atom "=>"
     | #Ops.AllOps.unary as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.const as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.binary as o -> atom @@ Ops.AllOps.to_string o
@@ -246,6 +339,11 @@ module SMTLib2 = struct
         let* l = l in
         let* r = r in
         return @@ list [ of_op `BoolNOT; list [ of_op `EQ; l; r ] ]
+    | BinaryExpr { op = `WriteField f; arg1 = l; arg2 = r } ->
+        let* l = l in
+        let* r = r in
+        (* z3 expects "update-field"... this is problematic *)
+        return @@ list [ list [ atom "_"; atom "update"; atom f ]; l; r ]
     | BinaryExpr { op = o; arg1 = l; arg2 = r } ->
         let* l = l in
         let* r = r in
@@ -259,16 +357,17 @@ module SMTLib2 = struct
         let* func = func in
         return @@ list (func :: args)
 
-  let of_bexpr e = fst @@ (BasilExpr.cata smt_alg e) empty
-  let bind_of_bexpr e b = BasilExpr.cata smt_alg e b
+  let bind_of_bexpr e b =
+    let e = (BasilExpr.rewrite_typed_two Algsimp.drop_assoc) e in
+    BasilExpr.cata smt_alg e b
+
+  let of_bexpr e = fst @@ (bind_of_bexpr e) empty
 
   let trans_decl (decl : Program.declaration) =
     let* x = return () in
     match decl with
-    | Type { binding; typ = Sort (name, [ { variant } ]) } ->
+    | Type { binding; typ = Sort (name, [ { variant; fields = [] } ]) } ->
         return (Bincaml_util.Smt.Expr.declare_sort variant 0)
-    | Type { binding; typ = Sort (name, []) } ->
-        return (Bincaml_util.Smt.Expr.declare_sort name 0)
     | Type { binding; typ = Sort (name, vs) } ->
         let fields =
           List.map
@@ -285,9 +384,19 @@ module SMTLib2 = struct
     | Type { binding; typ } ->
         return (list [ atom "decl-sort"; fst @@ of_typ typ ])
     | Function { binding; attrib; definition = Function body } ->
-        let* body = bind_of_bexpr body in
-        let args, r = Var.typ binding |> Types.uncurry in
-        let args = List.map (of_typ %> fst) args in
+        let op, bound_vars, in_body =
+          match BasilExpr.unfix body with
+          | Lambda { op; bound_vars; in_body } -> (op, bound_vars, in_body)
+          | _ -> failwith "expected lambda"
+        in
+        let names = List.map (Var.name %> atom) bound_vars in
+        let types = List.map (Var.typ %> of_typ %> fst) bound_vars in
+        let binds =
+          List.combine names types |> List.map (fun (a, b) -> list [ a; b ])
+        in
+        let args = binds in
+        let r = Expr.BasilExpr.type_of in_body in
+        let* body = bind_of_bexpr in_body in
         let r = fst (of_typ r) in
         return
         @@ list
@@ -302,9 +411,10 @@ module SMTLib2 = struct
         return
         @@ list [ atom "declare-fun"; atom (Var.name binding); list args; r ]
     | Variable v -> failwith "mutable"
+    | Procedure p -> failwith "procedure"
 
   let assert_bexpr e =
-    let* s = BasilExpr.cata smt_alg e in
+    let* s = bind_of_bexpr e in
     add_assert s
 
   let push = add_command (list [ atom "push" ])
@@ -362,6 +472,6 @@ let%expect_test "datatypes" =
   fst @@ SMTLib2.trans_decl y SMTLib2.empty |> Sexp.to_string |> print_endline;
   [%expect
     {|
-    (declare-sort Opaque 0)
+    (declare-datatype Opaque ())
     (declare-datatype list ((Cons (head (_ BitVec 63)) (tail list)) (Nil)))
     |}]

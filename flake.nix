@@ -37,6 +37,7 @@
       overlays = {
         addBincamlPackages = ofinal: _: {
           bincaml = ofinal.callPackage ./nix/bincaml.nix { };
+          bincaml_lsp = ofinal.callPackage ./nix/bincaml-lsp.nix { };
           hector = ofinal.callPackage ./nix/hector.nix { };
           intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
         };
@@ -77,10 +78,12 @@
 
           legacyPackages = {
             bincaml = selfOcamlPackages.bincaml;
+            bincaml_lsp = selfOcamlPackages.bincaml_lsp;
             intPQueue = selfOcamlPackages.intPQueue;
             hector = selfOcamlPackages.hector;
 
             fp.bincaml = fpOcamlPackages.bincaml;
+            fp.bincaml_lsp = fpOcamlPackages.bincaml_lsp;
             fp.intPQueue = fpOcamlPackages.intPQueue;
             fp.hector = fpOcamlPackages.hector;
           };

@@ -24,7 +24,7 @@ let transform_proc r keep =
   let open Stmt in
   let prop v =
     if keep v then None
-    else VarMap.find_opt v r |> Option.flat_map LinearDomain.Value.get_val
+    else VarMap.find_opt v r |> Option.flat_map LinearIDE.Value.get_val
   in
   Procedure.map_blocks_topo_fwd (fun _ ->
       Block.map ~phi:id
@@ -33,10 +33,6 @@ let transform_proc r keep =
 let linear_transform (prog : Program.t) =
   let _, r = LinearConstAnalysis.solve prog in
 
-  let procs =
-    IDMap.mapi
-      (fun pid proc -> transform_proc (IDMap.find pid r) (fun _ -> false) proc)
-      prog.procs
-  in
-
-  { prog with procs }
+  Program.map_procedures
+    (fun pid proc -> transform_proc (IDMap.find pid r) (fun _ -> false) proc)
+    prog

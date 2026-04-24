@@ -9,7 +9,6 @@ proc @main (inp:bv64) -> ()
         var (a:bv64) := call @fun1(a:bv64, b: bv64);
         var (x:bv64) := call @fun1(a:bv64, b: bv64);
         assert eq(x:bv64, bvadd(a:bv64, a:bv64));
-        assert eq(y:bv64, 0);
         return ();
     ];
 ];

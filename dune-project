@@ -8,9 +8,6 @@
 
 (generate_opam_files true)
 
-(formatting
- (enabled_for dune))
-
 (source
  (github username/reponame))
 
@@ -20,6 +17,9 @@
 
 (license Apache-2.0)
 
+(formatting
+ (enabled_for ocaml dune))
+
 (documentation https://url/to/documentation)
 
 (package
@@ -27,6 +27,9 @@
  (synopsis "Program analysis tool.")
  (description "A longer description")
  (depends
+  (qcheck-stm :with-test)
+  (qcheck-core :with-test)
+  (qcheck-alcotest :with-test)
   menhir
   ocaml
   zarith
@@ -38,22 +41,33 @@
   containers-data
   ppx_deriving
   ocamlgraph
-  cmdliner
+  (cmdliner (>= 2.0.0))
   pp_loc
   fmt
   patricia-tree
   ppx_here
   intPQueue
+  logs
+  mtime
   (ocamlformat :with-dev-setup)
   (odig :with-dev-setup)
   (sherlodoc :with-doc)
-  (ppx_expect
-   (>= "0.17.2.2"))
-  (alcotest :with-test)
-  (qcheck-core :with-test)
-  (qcheck-alcotest :with-test)
-  (qcheck-stm :with-test))
+  ppx_expect
+  (alcotest :with-test))
  (tags (program-analysis)))
 
-
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html
+(package
+ (name bincaml_lsp)
+ (synopsis "Language server for Bincaml IL files")
+ (depends
+  ppx_expect
+  bincaml
+  fmt
+  logs
+  iter
+  linol
+  linol-lwt
+  containers
+  ppx_import
+  ppx_deriving)
+ (tags (lsp)))

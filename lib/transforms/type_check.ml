@@ -134,9 +134,8 @@ let type_check stmt_id block_id expr =
             ]
         | _ -> [])
     | `IMPLIES -> binary_bool_types arg1 arg2
-    | `BVSREM | `BVSDIV | `BVADD | `BVASHR | `BVMUL | `BVSHL | `BVNAND | `BVSLE
-    | `BVUREM | `BVXOR | `BVOR | `BVSUB | `BVUDIV | `BVLSHR | `BVAND | `BVSMOD
-    | `BVULT | `BVULE | `BVSLT -> (
+    | `BVSREM | `BVSDIV | `BVASHR | `BVSHL | `BVNAND | `BVSLE | `BVUREM | `BVSUB
+    | `BVUDIV | `BVLSHR | `BVSMOD | `BVULT | `BVULE | `BVSLT -> (
         match arg1 with
         | Bitvector sz as typ -> binary_same_types arg1 arg2 typ
         | _ ->
@@ -153,7 +152,7 @@ let type_check stmt_id block_id expr =
   let check_intrin (op : Ops.AllOps.intrin) (args : Types.t list) :
       type_error list =
     match op with
-    | `BVADD | `BVXOR | `BVOR | `BVAND ->
+    | `BVADD | `BVXOR | `BVOR | `BVAND | `BVMUL ->
         let correct_type = List.hd args in
         List.fold_left
           (fun acc typ ->
@@ -373,7 +372,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
           a b
         |> StringMap.values |> Iter.to_list
       in
-      let target_proc = IDMap.find procid pt.procs in
+      let target_proc = Program.proc pt procid in
       let real_args = Procedure.formal_in_params target_proc in
       let output = Procedure.formal_out_params target_proc in
 

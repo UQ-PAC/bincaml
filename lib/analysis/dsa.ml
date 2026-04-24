@@ -121,15 +121,15 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
      looks like yes, since such algorithms exist for various balanced bsts
      offsets can probably be handled too as edges in the tree
      *)
-
   g
 
 let dsa (p : Program.t) =
   let sva_r = Sva.sva p in
+  (*
   let _local_graphs =
     IDMap.mapi
       (fun pid r ->
-        let proc = IDMap.find pid p.procs in
+        let proc = Program.proc p pid in
         let constraints =
           Constraint.gen_constraints proc
           |> Iter.map
@@ -139,4 +139,5 @@ let dsa (p : Program.t) =
         make_local_graph constraints)
       sva_r
   in
+  *)
   p

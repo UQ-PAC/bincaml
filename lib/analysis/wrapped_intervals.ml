@@ -715,10 +715,14 @@ module WrappedIntervalsValueAbstraction = struct
         | _ -> top)
     | _ -> top
 
-  let eval_binop (op : Lang.Ops.AllOps.binary) (a, ta) (b, tb) rt =
+  let eval_binary op (a, ta) (b, tb) rt =
     match (ta, ta) with
     | Types.Bitvector width, Types.Bitvector w2 when width = w2 -> (
         match op with
+        | #Lang.Ops.Spec.binary -> Top
+        | #Lang.Ops.RecordOps.binary -> Top
+        | #Lang.Ops.IntOps.binary -> Top
+        | #Lang.Ops.LogicalOps.binary -> Top
         | `BVADD | `PTRADD -> add ~width a b
         | `BVSUB -> sub ~width a b
         | `BVMUL -> mul ~width a b
@@ -731,16 +735,20 @@ module WrappedIntervalsValueAbstraction = struct
         | `BVASHR -> ashr ~width a b
         | `BVLSHR -> lshr ~width a b
         | `BVSHL -> shl ~width a b
-        | _ -> top)
+        | `BVSLE | `BVSLT | `BVSMOD | `BVSREM | `BVULE | `BVULT | `BVUREM -> top
+        )
     | _ -> top
+
+  let eval_binop (op : Lang.Ops.AllOps.binary) a b rt =
+    match op with #Lang.Ops.AllOps.binary as op -> eval_binary op a b rt
 
   let eval_intrin (op : Lang.Ops.AllOps.intrin) (args : (t * Types.t) list) rt =
     let op a b =
       match op with
-      | `BVADD -> (eval_binop `BVADD a b rt, rt)
-      | `BVOR -> (eval_binop `BVOR a b rt, rt)
-      | `BVXOR -> (eval_binop `BVXOR a b rt, rt)
-      | `BVAND -> (eval_binop `BVAND a b rt, rt)
+      | `BVADD -> (eval_binary `BVADD a b rt, rt)
+      | `BVOR -> (eval_binary `BVOR a b rt, rt)
+      | `BVXOR -> (eval_binary `BVXOR a b rt, rt)
+      | `BVAND -> (eval_binary `BVAND a b rt, rt)
       | `BVConcat ->
           ( (match (snd a, snd b) with
             | Types.Bitvector wa, Types.Bitvector wb ->
@@ -958,7 +966,7 @@ module Domain = struct
       | Lang.Stmt.Instr_Load { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_Store { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_IntrinCall { lhs } ->
-          StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
+          List.to_iter lhs |> Iter.map (fun v -> (v, top_val))
       | Lang.Stmt.Instr_Call { lhs } ->
           StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
       | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
@@ -968,6 +976,15 @@ module Domain = struct
   let transfer dom stmt =
     Iter.fold (fun a (k, v) -> update k v a) dom
     @@ transfer_state (flip read dom) stmt
+
+  let transfer_phi m (p : Var.t Lang.Block.phi) =
+    match p with
+    | { lhs; rhs } ->
+        rhs
+        |> List.map (fun (_, k) -> read k m)
+        |> List.fold_left WrappedIntervalsLattice.join
+             WrappedIntervalsLattice.bottom
+        |> fun v -> update lhs v m
 end
 
 module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)

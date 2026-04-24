@@ -4,16 +4,23 @@ open Bincaml_util.Common
 open Expr
 open Ops
 
-let to_steady equal f x =
-  let rec loop x =
-    let n = f x in
-    if equal n x then n else loop n
-  in
-  loop x
+module Comb = struct
+  let to_steady equal f x =
+    let rec loop x =
+      let n = f x in
+      if equal n x then n else loop n
+    in
+    loop x
 
-let apply_fun in_body args =
-  let args = args |> VarMap.of_list |> fun m v -> VarMap.find_opt v m in
-  BasilExpr.substitute args in_body
+  let sequence (a : 'a -> BasilExpr.rewrite) (b : 'a -> BasilExpr.rewrite) e =
+    match a e with Keep -> b e | e -> e
+
+  let apply_fun in_body args =
+    let args = args |> VarMap.of_list |> fun m v -> VarMap.find_opt v m in
+    BasilExpr.substitute args in_body
+end
+
+open Comb
 
 let rec inline_let_rec e =
   let open AbstractExpr in
@@ -74,7 +81,7 @@ let desugar_let ?visit =
 let inline_let ?visit =
   to_steady BasilExpr.equal (BasilExpr.rewrite ?visit ~rw_fun:inline_let_alg)
 
-let normalise_bool e =
+let normalise e =
   let open AbstractExpr in
   let open BasilExpr in
   let open Bitvec in
@@ -83,7 +90,7 @@ let normalise_bool e =
   | BinaryExpr { op = `IMPLIES; arg1; arg2 } ->
       replace [%here]
         (BasilExpr.applyintrin ~op:`OR
-           [ fix arg1; BasilExpr.boolnot (fix arg2) ])
+           [ fix arg2; BasilExpr.boolnot (fix arg1) ])
   | UnaryExpr { op = `BoolNOT; arg = UnaryExpr { op = `BoolNOT; arg } } ->
       replace [%here] arg
   | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `AND; args } } ->
@@ -92,6 +99,17 @@ let normalise_bool e =
   | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `OR; args } } ->
       replace [%here]
         (BasilExpr.applyintrin ~op:`AND (List.map BasilExpr.boolnot args))
+  | ApplyIntrin
+      {
+        attrib;
+        op = `BVADD;
+        args =
+          [ (RVar _ as v); Constant { attrib = cattrib; const = `Bitvector i } ];
+      }
+    when Bitvec.is_negative i ->
+      replace [%here]
+        (BasilExpr.binexp ?attrib ~op:`BVSUB (fix v)
+           (BasilExpr.bvconst ?attrib:cattrib (Bitvec.neg i)))
   | _ -> Keep
 
 let simplify_concat
@@ -134,131 +152,160 @@ let simplify_concat
 let simp_concat_fix e =
   to_steady BasilExpr.equal (BasilExpr.rewrite_typed_two simplify_concat) e
 
-let algebraic_simplifications
+(** Replace associative operators with empty or singleton argument lists with
+    the identity element for the operation, or the single argument,
+    respectively.
+
+    Note we cannot infer the width of a bitvector operation with no arguments in
+    order to construct the identity, so such an expression should never be
+    constructed.
+
+    Used by SMT encoding, so can't be tested by SMT*)
+let drop_assoc
     (e :
       (BasilExpr.t BasilExpr.abstract_expr * Types.t) BasilExpr.abstract_expr) =
   let open AbstractExpr in
   let open BasilExpr in
   let open Bitvec in
-  (* trying to make views of abstract exprs simpler; but avoid discarding the attribs.
-     There's probably too much to think about still with writing rewriters like this. 
-
-     We can build this into fold_with_type/rewrite_typed I guess.
-   *)
-  let orig_e (a, b, c) = a in
-
-  (* orig expr, simplified view, expr type *)
-  let fix_s e = fix (AbstractExpr.of_simple_view e) in
-  let keep here a = replace here (fix (orig_e a)) in
-  let to_s (v, t) = (v, AbstractExpr.simple_view v, t) in
-  let s = AbstractExpr.simple_view (AbstractExpr.map to_s e) in
-  match s with
-  | Intrin (`BVConcat, (_, Intrin (`BVConcat, al), _) :: tl) ->
+  match e with
+  | ApplyIntrin
+      {
+        op = `BVADD | `BVMUL | `BVOR | `BVXOR | `BVAND | `AND | `OR | `BVConcat;
+        args = [ a ];
+      } ->
+      replace [%here] (fix (fst a))
+  | ApplyIntrin { op = `AND; args = [] } ->
+      replace [%here] (BasilExpr.boolconst true)
+  | ApplyIntrin { op = `OR; args = [] } ->
+      replace [%here] (BasilExpr.boolconst false)
+  | ApplyIntrin { op = `BVConcat; args = [] } ->
+      replace [%here] (BasilExpr.bvconst @@ Bitvec.zero ~size:0)
+  | ApplyIntrin { attrib; op; args }
+    when List.exists
+           (function
+             | ApplyIntrin { op = op' }, _ when Ops.AllOps.equal_intrin op op'
+               ->
+                 true
+             | _ -> false)
+           args ->
       replace [%here]
-        (fix_s (Intrin (`BVConcat, al @ List.map (orig_e %> fix) tl)))
-  | Binary (`BVADD, a, (_, C (`Bitvector i), _)) when is_zero i ->
-      keep [%here] a
-  | Binary (`BVSUB, a, (_, C (`Bitvector i), _)) when is_zero i ->
-      keep [%here] a
-  | Binary (`BVMUL, a, (_, C (`Bitvector i), _))
-    when equal i @@ of_int ~size:(size i) 1 ->
-      keep [%here] a
-  | Binary (`BVAND, a, (_, C (`Bitvector i), _)) when is_zero i ->
-      replace [%here] (bvconst (zero ~size:(size i)))
-  | Binary (`BVAND, a, (_, C (`Bitvector i), _))
-    when equal i (ones ~size:(size i)) ->
-      keep [%here] a
-  | Binary (`BVOR, a, (_, C (`Bitvector i), _))
-    when equal i (ones ~size:(size i)) ->
-      replace [%here] (bvconst @@ ones ~size:(size i))
-  | Binary (`BVOR, a, (_, C (`Bitvector i), _)) when is_zero i -> keep [%here] a
-  | Unary (`ZeroExtend 0, a) -> keep [%here] a
-  | Unary (`SignExtend 0, a) -> keep [%here] a
-  | Unary (`Extract (hi, 0), ((_, _, Bitvector sz) as a)) when hi = sz ->
-      keep [%here] a
-  | Unary (`BVNOT, (_, Unary (`BVNOT, a), _)) -> replace [%here] a
-  | Unary (`BoolNOT, (_, Unary (`BoolNOT, a), _)) -> replace [%here] a
+        (BasilExpr.applyintrin ?attrib ~op
+           (List.flat_map
+              (function
+                | ApplyIntrin { op = op'; args }, _
+                  when Ops.AllOps.equal_intrin op op' ->
+                    args
+                | e, _ -> [ fix e ])
+              args))
   | _ -> Keep
 
-(*
 let algebraic_simplifications
     (e :
       (BasilExpr.t BasilExpr.abstract_expr * Types.t) BasilExpr.abstract_expr) =
   let open AbstractExpr in
   let open BasilExpr in
   let open Bitvec in
-  let keep a = Some (fix (fst a)) in
+  let keep a = fix (fst a) in
+  let is_bvzero = function
+    | Constant { const = `Bitvector i } when is_zero i -> true
+    | _ -> false
+  in
+  let is_bvone = function
+    | Constant { const = `Bitvector i }
+      when Bitvec.equal i (Bitvec.one ~size:(Bitvec.size i)) ->
+        true
+    | _ -> false
+  in
+  let is_ones = function
+    | Constant { const = `Bitvector i } when equal i (ones ~size:(size i)) ->
+        true
+    | _ -> false
+  in
+  let width_args args =
+    let size =
+      List.hd args |> snd |> Types.bit_width |> Option.get_exn_or "not a bv?"
+    in
+    size
+  in
   match e with
   | ApplyIntrin
       {
         op = `BVConcat;
+        attrib;
         args = (ApplyIntrin { op = `BVConcat; args = al }, _) :: tl;
       } ->
-      Some (BasilExpr.concatl @@ al @ List.map (fun i -> fix (fst i)) tl)
+      replace [%here]
+        (BasilExpr.concatl ?attrib @@ al @ List.map (fun i -> fix (fst i)) tl)
+  | ApplyIntrin
+      {
+        op = `BVADD;
+        attrib;
+        args = ((RVar { id; attrib = attrib2 } as v), _) :: tl;
+      }
+    when List.length tl > 1
+         && List.for_all (function Constant _, _ -> true | _ -> false) tl ->
+      let size = width_args tl in
+      let sum =
+        List.fold_left
+          (fun n e ->
+            match e with
+            | Constant { const = `Bitvector m }, _ -> Bitvec.add n m
+            | _ -> failwith "unreachable")
+          (Bitvec.zero ~size) tl
+      in
+      replace [%here]
+        (BasilExpr.applyintrin ~op:`BVADD [ fix v; BasilExpr.bvconst sum ])
+  | ApplyIntrin { attrib; op = (`BVADD | `BVOR) as op; args }
+    when List.exists (fst %> is_bvzero) args ->
+      let size = width_args args in
+      let args =
+        args |> List.map fst |> List.filter (is_bvzero %> not) |> List.map fix
+      in
+      if List.is_empty args then
+        replace [%here] (BasilExpr.bvconst ?attrib (Bitvec.zero ~size))
+      else replace [%here] (BasilExpr.applyintrin ?attrib ~op args)
+  | ApplyIntrin { attrib; op = `BVAND | `BVMUL; args }
+    when List.exists (fst %> is_bvzero) args ->
+      let size = width_args args in
+      replace [%here] (BasilExpr.bvconst ?attrib (Bitvec.zero ~size))
+  | ApplyIntrin { attrib; op = `BVMUL as op; args }
+    when List.exists (fst %> is_bvone) args ->
+      let size = width_args args in
+      let args =
+        args |> List.map fst |> List.filter (is_bvone %> not) |> List.map fix
+      in
+      if List.is_empty args then
+        replace [%here] (BasilExpr.bvconst ?attrib (Bitvec.one ~size))
+      else replace [%here] (BasilExpr.applyintrin ?attrib ~op args)
   | BinaryExpr
-      { op = `BVADD; arg1; arg2 = Constant { const = `Bitvector i }, _ }
+      {
+        op = `BVSUB | `BVASHR | `BVLSHR | `BVSHL;
+        arg1;
+        arg2 = Constant { const = `Bitvector i }, _;
+      }
     when is_zero i ->
-      keep arg1
-  | BinaryExpr
-      { op = `BVSUB; arg1; arg2 = Constant { const = `Bitvector i }, _ }
-    when is_zero i ->
-      keep arg1
-  | BinaryExpr
-      { op = `BVMUL; arg1; arg2 = Constant { const = `Bitvector i }, _ }
-    when equal i @@ of_int ~size:(size i) 1 ->
-      keep arg1
-  | BinaryExpr { op = `BVAND; arg2 = Constant { const = `Bitvector i }, _ }
-    when is_zero i ->
-      Some (bvconst (zero ~size:(size i)))
-  | BinaryExpr { op = `BVAND; arg1 = Constant { const = `Bitvector i }, _ }
-    when is_zero i ->
-      Some (bvconst (zero ~size:(size i)))
-  | BinaryExpr
-      { op = `BVAND; arg1; arg2 = Constant { const = `Bitvector i }, _ }
-    when equal i (ones ~size:(size i)) ->
-      keep arg1
-  | BinaryExpr
-      { op = `BVAND; arg2; arg1 = Constant { const = `Bitvector i }, _ }
-    when equal i (ones ~size:(size i)) ->
-      keep arg2
-  | BinaryExpr { op = `BVOR; arg1; arg2 = Constant { const = `Bitvector i }, _ }
-    when equal i (ones ~size:(size i)) ->
-      Some (bvconst @@ ones ~size:(size i))
-  | BinaryExpr { op = `BVOR; arg1; arg2 = Constant { const = `Bitvector i }, _ }
-    when is_zero i ->
-      keep arg1
-  | UnaryExpr { op = `ZeroExtend 0; arg } -> keep arg
-  | UnaryExpr { op = `SignExtend 0; arg } -> keep arg
+      replace [%here] @@ keep arg1
+  | ApplyIntrin { attrib; op = `BVAND; args }
+    when List.exists (fst %> is_ones) args ->
+      let args =
+        args |> List.map fst |> List.filter (is_ones %> not) |> List.map fix
+      in
+      replace [%here] (fix @@ ApplyIntrin { attrib; op = `BVAND; args })
+  | ApplyIntrin { attrib; op = `BVOR; args }
+    when List.exists (fst %> is_ones) args ->
+      let size = width_args args in
+      replace [%here] (BasilExpr.bvconst ?attrib @@ Bitvec.ones ~size)
+  | UnaryExpr { op = `ZeroExtend 0; arg } -> replace [%here] @@ keep arg
+  | UnaryExpr { op = `SignExtend 0; arg } -> replace [%here] @@ keep arg
   | UnaryExpr { op = `Extract (hi, 0); arg = a, Bitvector sz } when hi = sz ->
-      Some (fix a)
+      replace [%here] (fix a)
   | UnaryExpr { op = `BVNOT; arg = UnaryExpr { op = `BVNOT; arg }, _ } ->
-      Some arg
+      replace [%here] arg
   | UnaryExpr { op = `BoolNOT; arg = UnaryExpr { op = `BoolNOT; arg }, _ } ->
-      Some arg
-  | _ -> None
+      replace [%here] arg
+  | _ -> Keep
 
-type 'e rewriter_expr = {
-  orig : 'e BasilExpr.abstract_expr BasilExpr.abstract_expr;
-  typ : Types.t;
-  e :
-    ( BasilExpr.const,
-      BasilExpr.var,
-      BasilExpr.unary,
-      BasilExpr.binary,
-      BasilExpr.intrin,
-      ( BasilExpr.const,
-        BasilExpr.var,
-        BasilExpr.unary,
-        BasilExpr.binary,
-        BasilExpr.intrin,
-        'e )
-      AbstractExpr.simple )
-    AbstractExpr.simple;
-}
-*)
-
-let sequence (a : 'a -> BasilExpr.rewrite) (b : 'a -> BasilExpr.rewrite) e =
-  match a e with Keep -> b e | e -> e
+let algebraic_simplifications = sequence drop_assoc algebraic_simplifications
 
 let alg_simp_rewriter ?visit e =
   let partial_eval_expr e =
@@ -268,14 +315,13 @@ let alg_simp_rewriter ?visit e =
   e
   |> ( to_steady BasilExpr.equal @@ fun e ->
        e |> partial_eval_expr |> simp_concat_fix )
-  |> BasilExpr.rewrite_typed_two ?visit
-       (sequence simplify_concat algebraic_simplifications)
   |> to_steady BasilExpr.equal
-       (BasilExpr.rewrite_typed_two ?visit normalise_bool)
+       (BasilExpr.rewrite_typed_two ?visit algebraic_simplifications)
+  |> to_steady BasilExpr.equal (BasilExpr.rewrite_typed_two ?visit normalise)
 
 let normalise e =
   let e = alg_simp_rewriter e in
-  BasilExpr.rewrite_typed_two normalise_bool e
+  BasilExpr.rewrite_typed_two normalise e
 
 let%expect_test "normalise" =
   let e =
@@ -292,6 +338,6 @@ let%expect_test "normalise" =
   print_endline (BasilExpr.to_string e);
   [%expect
     {|
-    boolnot(boolnot(boolnot(booland(boolnot(boolnot(b)), a))))
-    boolor(boolnot(b), boolnot(a))
+    boolnot(boolnot(boolnot(booland(boolnot(boolnot(b:bool)), a:bool))))
+    boolor(boolnot(b:bool), boolnot(a:bool))
     |}]

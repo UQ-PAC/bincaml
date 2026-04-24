@@ -19,6 +19,8 @@
 , pp_loc
 , fmt
 , patricia-tree
+, logs
+, mtime
 
 # test:
 , ppx_expect
@@ -46,12 +48,11 @@ buildDunePackage {
 
   src = nix-gitignore.gitignoreSource [ "nix" "flake.nix" "flake.lock" ] ./..;
 
-  checkInputs = [ ppx_expect alcotest qcheck-core qcheck-alcotest qcheck-stm ];
+  checkInputs = [ alcotest qcheck-core qcheck-alcotest qcheck-stm ];
   nativeBuildInputs = [ menhir writableTmpDirAsHomeHook ];
-  buildInputs =
-    [ menhir fix trace trace-tef containers containers-data iter
-      ppx_deriving ocamlgraph intPQueue cmdliner pp_loc fmt patricia-tree ];
-  propagatedBuildInputs = [ zarith ];
+  propagatedBuildInputs =
+    [ zarith ppx_expect pp_loc ppx_deriving containers containers-data ocamlgraph
+      menhir fix trace trace-tef iter intPQueue cmdliner fmt patricia-tree logs mtime ];
 
   doCheck = true;
   outputs = [ "out" "dev" ];

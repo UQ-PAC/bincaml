@@ -1,5 +1,6 @@
 (cram
  (applies_to expr_smt)
+ (package bincaml)
  (enabled_if %{bin-available:cvc5})
  (deps
   %{bin:bincaml}
@@ -9,6 +10,7 @@
 
 (cram
  (applies_to * \ expr_smt malloc_free)
+ (package bincaml)
  (deps
   loop_dfg.sexp
   ../../examples/loop.il
@@ -26,12 +28,13 @@
   inter_dead.il
   typefail.sexp
   typepass.sexp
+  sva.sexp
   basicssa.sexp
   roundtrip.sexp
   gammavars.sexp
   ../../examples/gamma.il
-  copyprop.sexp
-  ../../examples/copyprop.il
+  linear_copy.sexp
+  ../../examples/linear_copy.il
   inter_dead.sexp
   ../../examples/const.il
   const.sexp
@@ -44,6 +47,7 @@
 
 (cram
  (applies_to malloc_free)
+ (package bincaml)
  (enabled_if
   (and %{bin-available:boogie} %{bin-available:cvc5}))
  (deps

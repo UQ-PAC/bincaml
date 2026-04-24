@@ -6,15 +6,6 @@ open Lang
 open Expr
 open Types
 
-(** live vars transfer function for a statement *)
-let tf_stmt_live init s =
-  let assigns = VarSet.diff init (Stmt.assigned VarSet.empty s) in
-  Stmt.free_vars assigns s
-
-(** live vars transfer function for a block *)
-let tf_block (init : VarSet.t) (b : (Var.t, BasilExpr.t) Block.t) =
-  Block.fold_backwards ~f:tf_stmt_live ~phi:(fun f _ -> f) ~init b
-
 (** Bourdoncle live-variable analysis using ocamlgraph's chaotic iteration *)
 module LV =
   Graph.ChaoticIteration.Make
@@ -32,7 +23,7 @@ module LV =
       let widening a b = VarSet.union a b
 
       let analyze (e : edge) d =
-        match G.E.label e with Block b -> tf_block d b | _ -> d
+        match G.E.label e with Block b -> Block.free_vars ~init:d b | _ -> d
     end)
 
 let run (p : Program.proc) =
@@ -95,8 +86,10 @@ let%expect_test _ =
   print_endline (to_string e2);
   [%expect
     {|
-    forall (v1:bv1) :: (eq(v2, forall (v2:bv1) :: (booland(v1, v2, v3))))
-    forall (v1:bv1) :: (eq(0x16:bv5, forall (v2:bv1) :: (booland(v1, v2, 0x16:bv5))))
+    forall (v1:bv1) :: (eq(v2:bv1,
+      forall (v2:bv1) :: (booland(v1:bv1, v2:bv1, v3:bv1))))
+    forall (v1:bv1) :: (eq(0x16:bv5,
+      forall (v2:bv1) :: (booland(v1:bv1, v2:bv1, 0x16:bv5))))
     |}]
 
 module DSE = struct
@@ -116,7 +109,9 @@ module DSE = struct
                |> Iter.for_all (fun v ->
                    Var.is_local v && (not @@ VarSet.mem v live))
           in
-          let live = VarSet.filter Var.is_local @@ tf_stmt_live live s in
+          let live =
+            VarSet.filter Var.is_local @@ Stmt.free_vars ~init:live s
+          in
           let s = if dead_store then acc else s :: acc in
           (live, s))
         b
@@ -236,20 +231,15 @@ module InterprocDSE = struct
     in
 
     let live_param_strs : StringSet.t IDMap.t =
-      IDMap.mapi
-        (fun pid proc ->
+      Program.procs p |> IDMap.of_iter
+      |> IDMap.mapi (fun pid proc ->
           let res = IDMap.find pid results in
           Procedure.formal_in_params proc
           |> StringMap.filter (fun _ v -> VarMap.get_or v res ~default:false)
           |> StringMap.keys |> StringSet.of_iter)
-        p.procs
     in
 
-    let procs =
-      IDMap.map
-        (fun proc -> transform_proc p keep live_param_strs results proc)
-        p.procs
-    in
-
-    { p with procs }
+    Program.map_procedures
+      (fun _ proc -> transform_proc p keep live_param_strs results proc)
+      p
 end

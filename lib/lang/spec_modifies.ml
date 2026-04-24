@@ -1,7 +1,6 @@
 (** Interprocedurally infer read/write sets of procedures, ignoring the
     specified captures/modifies sets *)
 
-open Lang
 open Common
 
 module RWSets = struct
@@ -29,7 +28,7 @@ module FixProp = Fix.Fix.ForOrderedType (ID) (RWSets)
 
 let solve (prog : Program.t) =
   let local_rw (p : ID.t) (valuations : FixProp.valuation) =
-    let p = IDMap.find p prog.procs in
+    let p = Program.proc prog p in
     let read, written =
       match Procedure.graph p with
       | Some _ ->
@@ -61,32 +60,35 @@ let solve (prog : Program.t) =
 
 let set_modsets ?(add_only = false) prog =
   let rwset = solve prog in
-  let procs =
-    IDMap.mapi
-      (fun i p ->
-        let read, written = rwset i in
-        let spec = Procedure.specification p in
-        let exist_modifies =
-          if add_only then VarSet.of_list spec.modifies_globs else VarSet.empty
-        in
-        let exist_captures =
-          if add_only then VarSet.of_list spec.captures_globs else VarSet.empty
-        in
-        let captures_globs =
-          VarSet.elements
-          @@ VarSet.union exist_captures
-          @@ VarSet.union read written
-        in
-        let modifies_globs =
-          VarSet.elements @@ VarSet.union exist_modifies written
-        in
-        let spec : (Var.t, Program.e) Procedure.proc_spec =
-          Procedure.specification p
-        in
-        let spec = { spec with captures_globs; modifies_globs } in
-        Procedure.set_specification p spec)
-      prog.procs
-  in
-  { prog with procs }
+  prog
+  |> Program.map_procedures (fun i p ->
+      let read, written = rwset i in
+      let spec = Procedure.specification p in
+      let exist_modifies =
+        if add_only then VarSet.of_list spec.modifies_globs else VarSet.empty
+      in
+      let exist_captures =
+        if add_only then VarSet.of_list spec.captures_globs else VarSet.empty
+      in
+      let vs =
+        List.to_iter [ spec.requires; spec.ensures; spec.rely; spec.guarantee ]
+        |> Iter.flat_map List.to_iter
+        |> Iter.flat_map Expr.BasilExpr.free_vars_iter
+        |> Iter.filter Var.is_global |> VarSet.of_iter
+      in
+      let captures_globs =
+        List.filter (not % Var.is_constant)
+        @@ VarSet.elements @@ VarSet.union vs
+        @@ VarSet.union exist_captures
+        @@ VarSet.union read written
+      in
+      let modifies_globs =
+        VarSet.elements @@ VarSet.union exist_modifies written
+      in
+      let spec : (Var.t, Program.e) Procedure.proc_spec =
+        Procedure.specification p
+      in
+      let spec = { spec with captures_globs; modifies_globs } in
+      Procedure.set_specification p spec)
 
 let analyse prog = solve prog

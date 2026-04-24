@@ -115,8 +115,8 @@ module.exports = ({
         seq($.Field, ",", optional($.list_Field))
       ),
     Field: $ =>
-      // Field1. Field ::= OpenParen Str ":" OpenParen Type "," IntVal CloseParen CloseParen ;
-      seq($.token_OpenParen, $.token_Str, ":", $.token_OpenParen, $.Type, ",", $.IntVal, $.token_CloseParen, $.token_CloseParen),
+      // Field1. Field ::= Str ":" OpenParen Type "," IntVal CloseParen ;
+      seq($.token_Str, ":", $.token_OpenParen, $.Type, ",", $.IntVal, $.token_CloseParen),
     IntType: $ =>
       // IntType1. IntType ::= INTTYPE ;
       $.token_INTTYPE,
@@ -327,6 +327,8 @@ module.exports = ({
         choice(),
         // LVars_LocalList. LVars ::= "var" OpenParen [LocalVar] CloseParen ":=" ;
         seq("var", $.token_OpenParen, $.list_LocalVar, $.token_CloseParen, ":="),
+        // LVars_LocalConstList. LVars ::= "let" OpenParen [LocalVar] CloseParen ":=" ;
+        seq("let", $.token_OpenParen, $.list_LocalVar, $.token_CloseParen, ":="),
         // LVars_List. LVars ::= OpenParen [LVar] CloseParen ":=" ;
         seq($.token_OpenParen, $.list_LVar, $.token_CloseParen, ":="),
         // NamedLVars_List. LVars ::= OpenParen [NamedCallReturn] CloseParen ":=" ;
@@ -364,6 +366,8 @@ module.exports = ({
       choice(
         // LVar_Local. LVar ::= "var" LocalVar ;
         seq("var", $.LocalVar),
+        // LVar_LocalConst. LVar ::= "let" LocalVar ;
+        seq("let", $.LocalVar),
         // LVar_Global. LVar ::= GlobalVar ;
         $.GlobalVar
       ),
@@ -538,8 +542,8 @@ module.exports = ({
         seq("old", $.token_OpenParen, $.Expr, $.token_CloseParen),
         // Expr_Binary. Expr2 ::= BinOp OpenParen Expr "," Expr CloseParen ;
         seq($.BinOp, $.token_OpenParen, $.Expr, ",", $.Expr, $.token_CloseParen),
-        // Expr_Assoc. Expr2 ::= BoolBinOp OpenParen [Expr] CloseParen ;
-        seq($.BoolBinOp, $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
+        // Expr_Assoc. Expr2 ::= IntrinOp OpenParen [Expr] CloseParen ;
+        seq($.IntrinOp, $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
         // Expr_Unary. Expr2 ::= UnOp OpenParen Expr CloseParen ;
         seq($.UnOp, $.token_OpenParen, $.Expr, $.token_CloseParen),
         // Expr_LoadBe. Expr2 ::= "load_be" OpenParen IntVal "," Expr "," Expr CloseParen ;
@@ -552,8 +556,6 @@ module.exports = ({
         seq("sign_extend", $.token_OpenParen, $.IntVal, ",", $.Expr, $.token_CloseParen),
         // Expr_Extract. Expr2 ::= "extract" OpenParen IntVal "," IntVal "," Expr CloseParen ;
         seq("extract", $.token_OpenParen, $.IntVal, ",", $.IntVal, ",", $.Expr, $.token_CloseParen),
-        // Expr_Concat. Expr2 ::= "bvconcat" OpenParen [Expr] CloseParen ;
-        seq("bvconcat", $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
         // Expr_Ite. Expr2 ::= "if" Expr "then" Expr "else" Expr ;
         seq("if", $.Expr, "then", $.Expr, "else", $.Expr),
         // Expr_Match. Expr2 ::= "match" Expr "with" OpenParen [Case] CloseParen ;
@@ -570,6 +572,8 @@ module.exports = ({
       seq(optional($.list_LocalVarParen), $.LambdaSep, $.Expr),
     BinOp: $ =>
       choice(
+        // BinOp_implies. BinOp ::= "implies" ;
+        "implies",
         // BinOpBVBinOp. BinOp ::= BVBinOp ;
         $.BVBinOp,
         // BinOpBVLogicalBinOp. BinOp ::= BVLogicalBinOp ;
@@ -642,14 +646,6 @@ module.exports = ({
       ),
     BVBinOp: $ =>
       choice(
-        // BVBinOp_bvand. BVBinOp ::= "bvand" ;
-        "bvand",
-        // BVBinOp_bvor. BVBinOp ::= "bvor" ;
-        "bvor",
-        // BVBinOp_bvadd. BVBinOp ::= "bvadd" ;
-        "bvadd",
-        // BVBinOp_bvmul. BVBinOp ::= "bvmul" ;
-        "bvmul",
         // BVBinOp_bvudiv. BVBinOp ::= "bvudiv" ;
         "bvudiv",
         // BVBinOp_bvurem. BVBinOp ::= "bvurem" ;
@@ -662,8 +658,6 @@ module.exports = ({
         "bvnand",
         // BVBinOp_bvnor. BVBinOp ::= "bvnor" ;
         "bvnor",
-        // BVBinOp_bvxor. BVBinOp ::= "bvxor" ;
-        "bvxor",
         // BVBinOp_bvxnor. BVBinOp ::= "bvxnor" ;
         "bvxnor",
         // BVBinOp_bvcomp. BVBinOp ::= "bvcomp" ;
@@ -722,14 +716,24 @@ module.exports = ({
         // IntLogicalBinOp_intge. IntLogicalBinOp ::= "intge" ;
         "intge"
       ),
-    BoolBinOp: $ =>
+    IntrinOp: $ =>
       choice(
-        // BoolBinOp_booland. BoolBinOp ::= "booland" ;
+        // IntrinOp_booland. IntrinOp ::= "booland" ;
         "booland",
-        // BoolBinOp_boolor. BoolBinOp ::= "boolor" ;
+        // IntrinOp_boolor. IntrinOp ::= "boolor" ;
         "boolor",
-        // BoolBinOp_boolimplies. BoolBinOp ::= "boolimplies" ;
-        "boolimplies"
+        // IntrinOp_bvand. IntrinOp ::= "bvand" ;
+        "bvand",
+        // IntrinOp_bvor. IntrinOp ::= "bvor" ;
+        "bvor",
+        // IntrinOp_bvadd. IntrinOp ::= "bvadd" ;
+        "bvadd",
+        // IntrinOp_bvxor. IntrinOp ::= "bvxor" ;
+        "bvxor",
+        // IntrinOp_bvconcat. IntrinOp ::= "bvconcat" ;
+        "bvconcat",
+        // IntrinOp_bvmul. IntrinOp ::= "bvmul" ;
+        "bvmul"
       ),
     PointerBinOp: $ =>
       // PointerBinOp_ptradd. PointerBinOp ::= "ptradd" ;
@@ -816,11 +820,11 @@ module.exports = ({
     token_POINTERTYPE: $ =>
       /ptr/,
     token_BIdent: $ =>
-      /\.(_|[a-zA-Z])([#\$\._~]|(\d|[a-zA-Z]))*/,
+      /\.(_|[a-zA-Z])([#\$_~]|(\d|[a-zA-Z]))*/,
     token_LocalIdent: $ =>
-      /([#_]|[a-zA-Z])([#\$\._]|(\d|[a-zA-Z]))*/,
+      /([#_]|[a-zA-Z])([#\$_]|(\d|[a-zA-Z]))*/,
     token_GlobalIdent: $ =>
-      /\$([#\$\._]|(\d|[a-zA-Z]))+/,
+      /\$([#\$_]|(\d|[a-zA-Z]))+/,
     token_BlockIdent: $ =>
       /%([#\$\._]|(\d|[a-zA-Z]))+/,
     token_ProcIdent: $ =>

@@ -85,7 +85,7 @@ module SVAAbstraction = struct
         | _ -> Top)
       a
 
-  let eval_binop (op : E.binary) (a, ta) (b, tb) rt =
+  let eval_binary op (a, ta) (b, tb) rt =
     SymAddrSetLattice.fold
       (fun sb1 vs1 map ->
         SymAddrSetLattice.fold
@@ -99,11 +99,11 @@ module SVAAbstraction = struct
                   else Constant
                 in
                 SymAddrSetLattice.singleton sb
-                  (eval_binop op (vs1, ta) (vs2, tb) rt)
+                  (eval_binary op (vs1, ta) (vs2, tb) rt)
             | (SymBase.GlobSym | Constant), sb | sb, (SymBase.GlobSym | Constant)
               ->
                 SymAddrSetLattice.update sb
-                  (eval_binop op (vs1, ta) (vs2, tb) rt)
+                  (eval_binary op (vs1, ta) (vs2, tb) rt)
                   map
             | _, _ ->
                 SymAddrSetLattice.update sb1 Top
@@ -111,10 +111,14 @@ module SVAAbstraction = struct
           b map)
       a SymAddrSetLattice.bottom
 
+  let eval_binop op a b rt =
+    match op with #Lang.Ops.AllOps.binary as op -> eval_binary op a b rt
+
   let eval_intrin (op : E.intrin) args rt =
     let op a b =
       match op with
-      | (`BVADD | `BVOR | `BVXOR | `BVAND) as op -> (eval_binop op a b rt, rt)
+      | (`BVADD | `BVOR | `BVXOR | `BVAND | `BVMUL) as op ->
+          (eval_binary op a b rt, rt)
       | `OR | `AND | `Cases | `MapUpdate -> (SymAddrSetLattice.top, rt)
       | `BVConcat ->
           ( SymAddrSetLattice.fold
@@ -159,9 +163,9 @@ module Eval = Intra_analysis.EvalStmt (SVAAbstractionBasil)
 module Domain = struct
   include StateAbstraction
 
-  let stack_pointer = Var.create ~scope:Local "R31_in" @@ Bitvector 64
-  let link_register = Var.create ~scope:Local "R30_in" @@ Bitvector 64
-  let frame_pointer = Var.create ~scope:Local "R29_in" @@ Bitvector 64
+  let stack_pointer = Var.create ~scope:LocalConst "R31_in" @@ Bitvector 64
+  let link_register = Var.create ~scope:LocalConst "R30_in" @@ Bitvector 64
+  let frame_pointer = Var.create ~scope:LocalConst "R29_in" @@ Bitvector 64
 
   (* These registers are preserved over calls and are not real params, so we can ignore later *)
   let call_preserve =
@@ -272,7 +276,7 @@ let sva (prog : Program.t) =
       (prog : Program.t) : bool =
     let open Option in
     (let* symbols =
-       match StringMap.find_opt ".symbols" prog.attrib with
+       match StringMap.find_opt ".symbols" (Program.attrib prog) with
        | Some symbols -> Some symbols
        | _ -> None
      in
@@ -294,7 +298,9 @@ let sva (prog : Program.t) =
                | Some Attrib.(`Bitvector bv) -> Some bv
                | _ -> None
              in
-             let end_address = Bitvec.add address size in
+             let end_address =
+               Bitvec.sub (Bitvec.one ~size:64) @@ Bitvec.add address size
+             in
              let interval2 =
                WrappedIntervalsLattice.interval address end_address
              in
@@ -304,10 +310,11 @@ let sva (prog : Program.t) =
     |> Option.get_or ~default:false
   in
   let results =
-    IDMap.map (fun v -> DFGAnalysis.flow_insensitive v) prog.procs
+    Program.procs prog
+    |> Iter.fold (fun acc (_, v) -> DFGAnalysis.flow_insensitive v :: acc) []
   in
   results
-  |> IDMap.map
+  |> List.map
      @@ StateAbstraction.mapi (fun _ domain ->
          SymAddrSetLattice.to_list domain
          |> snd
