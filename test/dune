@@ -1,5 +1,6 @@
 (test
  (name test_bincaml)
+ (package bincaml)
  (modules test_bincaml)
  (libraries bincaml_inline_tests))
 

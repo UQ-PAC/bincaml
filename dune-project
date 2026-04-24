@@ -27,6 +27,18 @@
  (synopsis "Program analysis tool.")
  (description "A longer description")
  (depends
+  (qcheck-stm
+   (and
+    (>= 0.10)
+    :with-test))
+  (qcheck-core
+   (and
+    (>= 0.91)
+    :with-test))
+  (qcheck-alcotest
+   (and
+    (>= 0.91)
+    :with-test))
   menhir
   ocaml
   zarith
@@ -38,7 +50,8 @@
   containers-data
   ppx_deriving
   ocamlgraph
-  (cmdliner (>= "2.0.0"))
+  (cmdliner
+   (>= 2.0.0))
   pp_loc
   fmt
   patricia-tree
@@ -51,10 +64,7 @@
   (sherlodoc :with-doc)
   (ppx_expect
    (>= 0.17.2.2))
-  (alcotest :with-test)
-  qcheck-core
-  qcheck-alcotest
-  qcheck-stm)
+  (alcotest :with-test))
  (tags (program-analysis)))
 
 (package
@@ -68,6 +78,10 @@
   (qcheck-alcotest
    (and
     (>= 0.91)
+    :with-test))
+  (ppx_here
+   (and
+    (>= v0.17.0)
     :with-test))
   (alcotest
    (and

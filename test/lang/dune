@@ -2,7 +2,6 @@
 
 (library
  (name expr_gen)
- (package bincaml)
  (modules expr_gen)
  (flags -w -27)
  (libraries
@@ -18,6 +17,7 @@
 
 (test
  (name test_expr_eval_qcheck)
+ (package bincaml)
  (enabled_if %{bin-available:cvc5})
  (modules test_expr_eval_qcheck)
  (flags -w -27)
@@ -35,9 +35,8 @@
 
 (library
  (name test_expr_eval_expect)
- (package bincaml)
  (modules test_expr_eval_expect test_stmt test_interp)
- (libraries expr_gen loader)
+ (libraries loader)
  (inline_tests)
  (preprocess
   (pps ppx_expect)))
@@ -46,16 +45,8 @@
 
 (library
  (name test_pagetable_spec)
- (package bincaml)
  (modules test_pagetable_spec)
- (libraries
-  iter
-  zarith
-  bincaml.ast
-  bincaml.util
-  qcheck-stm.stm
-  qcheck-core
-  qcheck-stm.sequential)
+ (libraries iter zarith bincaml.ast bincaml.util qcheck-stm.stm)
  (flags -w +27)
  (preprocess
   (pps

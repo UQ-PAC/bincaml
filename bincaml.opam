@@ -12,6 +12,9 @@ doc: "https://url/to/documentation"
 bug-reports: "https://github.com/username/reponame/issues"
 depends: [
   "dune" {>= "3.19"}
+  "qcheck-stm" {>= "0.10" & with-test}
+  "qcheck-core" {>= "0.91" & with-test}
+  "qcheck-alcotest" {>= "0.91" & with-test}
   "menhir"
   "ocaml"
   "zarith"
@@ -36,9 +39,6 @@ depends: [
   "sherlodoc" {with-doc}
   "ppx_expect" {>= "0.17.2.2"}
   "alcotest" {with-test}
-  "qcheck-core"
-  "qcheck-alcotest"
-  "qcheck-stm"
   "odoc" {with-doc}
 ]
 build: [
