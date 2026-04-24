@@ -1,0 +1,50 @@
+{0 Bincaml IR Language server }
+
+This is a language server for the {{: https://github.com/agle/bincaml } Bincaml}
+intermediate language. These files usually have the [.il] file extension.
+
+It provides the following basic functionality:
+
+- go to definition of block/global/parameter variables, blocks, procedures, ADT cases, and declared type names.
+- hover information of the above terms,
+- autocompletion of the above terms,
+- symbol tree view,
+- procedure DOT graph generation,
+- syntax error highlighting from lexer / parser,
+- loading error highlighting (e.g., due to undefined variable errors),
+- debug highlight mode where every token is highlighted.
+
+To use it, you should build or obtain the LSP executable, then set the path to
+the binary as the LSP for the language associated with [.il] files.
+
+{1 Installation}
+
+To obtain the LSP executable, you can check out and build it (if doing this, it is
+convenient to use a different folder to your usual copy).
+
+It is also available
+through the Nix flake, with [nix build .#bincaml_lsp -o bincaml-lsp], or within the Nix
+dev shell, as [bincaml_lsp] inside [nix develop].
+
+{1 Setup}
+
+Finally, it can be configured in Astronvim with this inside your [astrolsp.lua]:
+
+{[
+    servers = {
+       "basillsp"
+    },
+    config = {
+      basillsp = {
+        cmd={".../_build/default/lsp/bin/main.exe"}, filetypes={"basilir"}, root_dir = require("lspconfig.util").root_pattern("."),
+      },
+    },
+]}
+
+For Helix, see {{: https://docs.helix-editor.com/languages.html#language-server-configuration} Language Server configuration}.
+
+
+{1 Modules}
+
+- {!module:Bincaml_lsp}
+

@@ -5,6 +5,7 @@
 
   # ocaml packages
   bincaml,
+  bincaml_lsp,
   odoc,
   odig,
   ocaml-lsp,
@@ -17,8 +18,6 @@
   bnfc-treesitter,
   boogie,
   cvc5,
-  logs,
-  mtime,
 }:
 
 mkShell {
@@ -32,8 +31,7 @@ mkShell {
     bnfc-treesitter
     boogie
     cvc5
-    logs
-    mtime
+    bincaml_lsp
     # sherlodoc - not in nixpkgs?
   ]
   ++ lib.optional stdenv.hostPlatform.isLinux perf;

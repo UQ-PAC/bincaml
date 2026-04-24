@@ -1,2 +1,3 @@
 lib/fe/*.ml
 _build/default/result/**
+_build/default/bincaml-lsp/**

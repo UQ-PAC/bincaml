@@ -1,5 +1,11 @@
 {0 Bincaml-related tooling}
 
+{1 Language server}
+
+There is a language server implementation for the IL language. This provides
+go to definition, autocomplete, error highlighting, and other useful features.
+See {{: ../bincaml_lsp/} [bincaml_lsp]} for details.
+
 {1 Tree-sitter grammar}
 
 There is a Tree-sitter grammar stored in this repository in the
