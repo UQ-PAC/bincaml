@@ -11,6 +11,9 @@ doc: "https://url/to/documentation"
 bug-reports: "https://github.com/username/reponame/issues"
 depends: [
   "dune" {>= "3.19"}
+  "qcheck-core" {>= "0.91" & with-test}
+  "qcheck-alcotest" {>= "0.91" & with-test}
+  "alcotest" {>= "1.9.1" & with-test}
   "ppx_expect" {>= "0.17.2.2"}
   "bincaml"
   "fmt"

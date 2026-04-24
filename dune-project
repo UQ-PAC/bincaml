@@ -8,7 +8,6 @@
 
 (generate_opam_files true)
 
-
 (source
  (github username/reponame))
 
@@ -18,7 +17,8 @@
 
 (license Apache-2.0)
 
-(formatting (enabled_for ocaml dune))
+(formatting
+ (enabled_for ocaml dune))
 
 (documentation https://url/to/documentation)
 
@@ -61,6 +61,18 @@
  (name bincaml_lsp)
  (synopsis "Language server for Bincaml IL files")
  (depends
+  (qcheck-core
+   (and
+    (>= 0.91)
+    :with-test))
+  (qcheck-alcotest
+   (and
+    (>= 0.91)
+    :with-test))
+  (alcotest
+   (and
+    (>= 1.9.1)
+    :with-test))
   (ppx_expect
    (>= 0.17.2.2))
   bincaml
@@ -73,4 +85,3 @@
   ppx_import
   ppx_deriving)
  (tags (lsp)))
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html
