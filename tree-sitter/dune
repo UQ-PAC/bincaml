@@ -1,11 +1,21 @@
 ; checks tree-sitter is valid and unambiguous
 
 (rule
- (deps grammar.js grammar.bnfc.js)
+ (deps grammar.js grammar.bnfc.js tree-sitter.json)
  (alias runtest)
  (enabled_if %{bin-available:tree-sitter})
  (action
   (run tree-sitter generate grammar.js)))
+
+(rule
+ (deps grammar.js grammar.bnfc.js tree-sitter.json queries/highlights.scm)
+ (alias runtest)
+ (enabled_if %{bin-available:tree-sitter})
+ (action
+  (with-stdin-from
+   %{project_root}/examples/cat.il
+   (ignore-stdout
+    (run tree-sitter highlight)))))
 
 ; check that grammar.js is up to date.
 ; requires `bnfc-treesitter` from pac-nix.
