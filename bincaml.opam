@@ -29,6 +29,8 @@ depends: [
   "cmdliner" {>= "2.0.0"}
   "pp_loc"
   "fmt"
+  "kittyimg"
+  "nanosvg"
   "patricia-tree"
   "ppx_here"
   "intPQueue"

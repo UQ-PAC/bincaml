@@ -4,12 +4,18 @@
  (flags -w -32)
  (name main)
  (modules main script)
+ (preprocess (pps ppx_blob))
+ (preprocessor_deps DroidSansMono.ttf)
  (libraries
   linenoise
   bincaml.ast
   bincaml.util
   bincaml.loader
   bincaml.transforms
+  kittyimg
+  nanosvg
+  nanosvg_text
+  stb_truetype
   bincaml.backends
   pp_loc
   bincaml

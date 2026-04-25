@@ -223,7 +223,7 @@ let log_level st args =
 let list_procs st a =
   let open Program in
   Program.procs (get_prog st)
-  |> Iter.iter (fun (i, _) -> Printf.printf "%s\n" (ID.show i));
+  |> Iter.iter (fun (i, _) -> print_endline (ID.show i));
   st
 
 let list_blocks_il st args =
@@ -240,26 +240,73 @@ let run_bash_command st args =
   flush_all ();
   st
 
+let get_proc st proc =
+  let proc =
+    match Procedure.graph @@ Program.get_proc_by_name proc (get_prog st) with
+    | Some e -> e
+    | None | (exception Not_found) -> begin
+        raise
+          (ReplError
+             {
+               loc = None;
+               cmd = "";
+               msg = Printf.sprintf "No procedure in program with name %s" proc;
+             })
+      end
+  in
+  proc
+
 let write_proc_cfg st args =
-  let proc, ofile = P.(pair string string args) in
-  CCIO.with_out ofile (fun c ->
-      let p =
-        try Program.get_proc_by_name proc (get_prog st)
-        with Not_found ->
-          begin
-            raise
-              (ReplError
-                 {
-                   loc = None;
-                   cmd = "write-proc-cfg";
-                   msg =
-                     Printf.sprintf "No procedure in program with name %s" proc;
-                 })
-          end
-      in
-      Viscfg.Dot.output_graph c
-        (Procedure.graph p |> Option.get_exn_or "procedure has no graph"));
+  let proc, ofile = P.(pair_opt string string args) in
+  let proc = get_proc st proc in
+  file_opt ofile (fun c -> Viscfg.Dot.output_graph c proc);
   st
+
+let font_blob = [%blob "DroidSansMono.ttf"]
+
+let font =
+  let font_buf =
+    Bigarray.Array1.create Bigarray.int8_unsigned Bigarray.c_layout
+      (String.length font_blob)
+  in
+  String.iteri (fun i c -> font_buf.{i} <- Char.code c) font_blob;
+  let offsets = Stb_truetype.enum font_buf in
+  Stb_truetype.init font_buf (List.hd offsets) |> Option.get
+
+let kittyimg ?(scale = 1.0) dotfile =
+  let open Nanosvg in
+  let svgfile = Filename.temp_file "memgraph_kitty" ".svg" in
+  let _ = Sys.command (Printf.sprintf "dot -Tsvg -o%s %s" svgfile dotfile) in
+  begin match Nanosvg.parse_from_file ~units:Px svgfile with
+  | Some svg ->
+      let w = int_of_float (Nanosvg.Image_data.width svg *. scale) in
+      let h = int_of_float (Nanosvg.Image_data.height svg *. scale) in
+      let buf =
+        Bigarray.Array1.create Bigarray.Int8_unsigned Bigarray.C_layout
+          (w * h * 4)
+      in
+      Bigarray.Array1.fill buf 0;
+      let rast = Nanosvg.Rasterizer.create () in
+      Nanosvg.rasterize rast svg ~tx:0. ~ty:0. ~scale ~dst:buf ~w ~h ();
+      let svg_data = Nanosvg.lift svg in
+      Nanosvg_text.rasterize_text svg_data
+        ~get_font:(fun ~family:_ -> font)
+        ~dst:buf ~scale ~tx:0. ~ty:0. ~w ~h ();
+      Kittyimg.send_image ~w ~h ~format:`RGBA (Kittyimg.string_of_bytes_ba buf)
+  | None -> failwith "svg failure"
+  end;
+  Sys.remove dotfile;
+  Sys.remove svgfile
+
+let display_proc_cfg st proc =
+  let proc = P.(singleton string proc) in
+  let proc = get_proc st proc in
+  CCIO.File.with_temp ~prefix:"graph" ~suffix:".dot" (fun dot ->
+      CCIO.with_out dot (fun dot ->
+          Viscfg.Dot.output_graph dot proc;
+          flush dot);
+      kittyimg dot;
+      st)
 
 let dump_proc_il st args =
   let proc, ofile = P.(pair_opt string string args) in
@@ -311,8 +358,12 @@ let cmds_list =
       list_blocks_il,
       "<procedure>",
       "list blocks in a procedure" );
-    ( "write-proc-cfg",
+    ( "dump-proc-cfg",
       write_proc_cfg,
+      "<proc> ?file",
+      "Write dot cfg of <proc> to file or stdout" );
+    ( "display-proc-cfg",
+      display_proc_cfg,
       "<proc> ?file",
       "Write dot cfg of <proc> to file or stdout" );
     ("dump-history", save_history, "file.sexp", "Print the IL of a proc");

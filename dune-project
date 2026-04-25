@@ -44,6 +44,10 @@
   (cmdliner (>= 2.0.0))
   pp_loc
   fmt
+  kittyimg
+  nanosvg
+  nanosvg-text
+  ppx_blob
   patricia-tree
   ppx_here
   intPQueue
