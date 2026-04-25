@@ -74,9 +74,11 @@ type dsl_st = {
   history : Sexp.t list;
   load_st : Loader.Loadir.load_st option;
   line : int;
+  user_cmds : (string * Sexp.t) StringMap.t;
 }
 
-let init_st = { history = []; load_st = None; line = 0 }
+let init_st =
+  { history = []; load_st = None; line = 0; user_cmds = StringMap.empty }
 
 let get_prog s =
   s.load_st
@@ -304,6 +306,15 @@ let list_passes st args =
   |> print_endline;
   st
 
+let def_cmd st d =
+  let name, doc, defn =
+    match d with
+    | `List [ `Atom n; `Atom doc; defn ] -> (n, doc, defn)
+    | _ -> failwith "Illeal structure"
+  in
+  let defn : Sexp.t = defn in
+  { st with user_cmds = StringMap.add name (doc, defn) st.user_cmds }
+
 let save_history st fname =
   file_opt
     P.(opt string fname)
@@ -320,6 +331,7 @@ let cmds_list =
   [
     ("skip", (fun a b -> a), "", "Do nothing");
     ("load-il", load_il, "<filename1> <filename2> ...", "load il files");
+    ("defcmd", def_cmd, "<name> <definition>", "define a command alias");
     ("list-procs", list_procs, "", "List procedures in program");
     ("dump-il", dump_il, "?file", "Write IL to file or stdout");
     ("dump-boogie", dump_boogie, "?file", "Write Boogie to file or stdout");
@@ -358,11 +370,18 @@ let cmds_list =
 let add_help_cmd cmds =
   let open Containers_pp in
   let help st arg =
+    let cmds =
+      List.map (fun (name, _, args, help) -> (name, args, help)) cmds
+    in
+    let user_cmds =
+      StringMap.to_list st.user_cmds
+      |> List.map (function name, (doc, _) -> (name, "", doc))
+    in
     let text =
       List.map
-        (fun (name, _, args, help) ->
+        (fun (name, args, help) ->
           text name ^+ text args ^+ text " : " ^+ nest 4 (text help))
-        cmds
+        (cmds @ user_cmds)
       |> append_nl
       |> Containers_pp.Pretty.to_string ~width:80
     in
@@ -375,7 +394,14 @@ let add_help_cmd cmds =
 
 let default_cmds = add_help_cmd cmds_list
 
-let of_cmd ?(cmds = default_cmds) ?(echo_cmd = true) st
+let rec of_cmd ?(cmds = default_cmds) ?(echo_cmd = true) st
+    (i_command : Containers.Sexp.t) =
+  match i_command with
+  | `List (`Atom "progn" :: rest) ->
+      List.fold_left (of_cmd ~cmds ~echo_cmd) st rest
+  | o -> atom_cmd ~cmds ~echo_cmd st o
+
+and atom_cmd ?(cmds = default_cmds) ?(echo_cmd = true) st
     (i_command : Containers.Sexp.t) =
   let full_cmd = Sexp.to_string i_command in
   (match i_command with
@@ -392,11 +418,16 @@ let of_cmd ?(cmds = default_cmds) ?(echo_cmd = true) st
         raise (ReplError { msg = "bad command."; loc = None; cmd = full_cmd })
   in
   Trace_core.with_span ~__FILE__ ~__LINE__ ("runcmd::" ^ cmd) (fun _ ->
-      match StringMap.find_opt cmd cmds with
-      | Some f ->
-          let st = { st with history = i_command :: st.history } in
-          f st args
-      | None -> raise (ReplError { msg = "not a command."; loc = None; cmd }))
+      match StringMap.find_opt cmd st.user_cmds with
+      | Some e -> of_cmd ~cmds ~echo_cmd st (snd e)
+      | None -> (
+          match StringMap.find_opt cmd cmds with
+          | Some f ->
+              let st = f st args in
+              let st = { st with history = i_command :: st.history } in
+              st
+          | None ->
+              raise (ReplError { msg = "not a command."; loc = None; cmd })))
 
 let of_channel ?st c =
   let st = Option.get_or ~default:init_st st in
