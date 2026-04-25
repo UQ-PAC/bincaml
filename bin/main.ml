@@ -25,13 +25,184 @@ let verb =
 let with_in_or_stdin fname inner =
   match fname with "-" -> inner stdin | fname -> CCIO.with_in fname inner
 
+exception Exit
+
+let repl ~verb =
+  let cmds =
+    Script.cmds_list
+    @ [
+        ( "clear",
+          (fun st c ->
+            LNoise.clear_screen ();
+            st),
+          "",
+          "clear screen" );
+        ("exit", (fun st c -> raise_notrace Exit), "", "exit");
+        ( "run-script",
+          (fun st c ->
+            let fname = Script.P.(singleton string c) in
+            CCIO.with_in fname (fun c -> Script.of_channel ~st c)),
+          "fname.sexp",
+          "Interpret a script" );
+      ]
+  in
+
+  let cmds_m = cmds |> Script.add_help_cmd in
+
+  let completions_from_list ls prefix =
+    List.to_iter ls |> Iter.filter (fun i -> String.starts_with ~prefix i)
+  in
+
+  let iter_of_gen g =
+    let rec iter_gen f g =
+      match g () with
+      | Some n ->
+          f n;
+          iter_gen f g
+      | None -> ()
+    in
+    Iter.from_iter (fun f -> iter_gen f g)
+  in
+
+  let complete_filename prefix =
+    let path, fname =
+      match CCIO.File.is_directory prefix with
+      | true -> (prefix, "")
+      | (exception Sys_error _) | false ->
+          (Filename.dirname prefix, Filename.basename prefix)
+    in
+    let files = iter_of_gen (CCIO.File.read_dir path) in
+    files
+    |> Iter.flat_map (function
+      | n when String.starts_with ~prefix:fname n ->
+          Iter.singleton @@ Filename.concat path n
+      | n when String.starts_with ~prefix:fname n ->
+          Iter.singleton @@ Filename.concat path n
+      | _ -> Iter.empty)
+  in
+
+  let cmds_completion =
+    cmds
+    |> List.map (function (a, _, _, _) as cmd -> (a, cmd))
+    |> StringMap.of_list
+  in
+
+  let hints_callback cmd =
+    let cmd = String.trim cmd in
+    StringMap.find_opt cmd cmds_completion
+    |> Option.map (function _, _, c, _ -> (c, LNoise.Blue, true))
+  in
+  LNoise.set_hints_callback hints_callback;
+
+  let _ = LNoise.history_load ~filename:".bincaml_repl_history" in
+
+  let opt_len = function Some _ -> 1 | _ -> 0 in
+
+  let completions_callback str completions =
+    let last ns =
+      List.rev ns |> List.head_opt |> function
+      | Some (`Atom n) -> Some n
+      | _ -> None
+    in
+    let str = Sexp.parse_string_list str in
+    match str with
+    | Error _ -> ()
+    | Ok [ `Atom "log-level"; `Atom level ] ->
+        completions_from_list
+          [ "quiet"; "info"; "app"; "error"; "warning"; "debug" ]
+          level
+        |> Iter.iter (fun c ->
+            LNoise.add_completion completions @@ "log-level " ^ c)
+    | Ok (`Atom "load-il" :: fnames as l)
+    | Ok (`Atom "run-script" :: fnames as l)
+    | Ok (`Atom "dump-il" :: fnames as l)
+    | Ok (`Atom "interp-out" :: fnames as l)
+    | Ok (`Atom "write-proc-cfg" :: fnames as l)
+    | Ok (`Atom "dump-proc-il" :: fnames as l)
+    | Ok (`Atom "dump-boogie" :: fnames as l) ->
+        let c = last fnames in
+        let l =
+          List.take (List.length l - opt_len c) l
+          |> List.to_string ~sep:" " CCSexp.to_string
+        in
+        (match c with Some n -> Iter.singleton n | None -> Iter.empty)
+        |> Iter.flat_map complete_filename
+        |> Iter.map (fun s -> l ^ " " ^ s)
+        |> Iter.iter (LNoise.add_completion completions)
+    | Ok (`Atom "run-transforms" :: transforms as l)
+    | Ok (`Atom "run-transform" :: transforms as l) ->
+        let c = last transforms in
+        let l =
+          List.take (List.length l - opt_len c) l
+          |> List.to_string ~sep:" " CCSexp.to_string
+        in
+        let tx_list =
+          Bincaml.Passes.PassManager.(passes |> List.map (fun x -> x.name))
+        in
+        (match c with Some n -> Iter.singleton n | None -> Iter.singleton "")
+        |> Iter.flat_map (completions_from_list tx_list)
+        |> Iter.map (fun s -> l ^ " " ^ s)
+        |> Iter.iter (LNoise.add_completion completions)
+    | Ok [ `Atom cmd ] ->
+        Iter.filter (String.starts_with ~prefix:cmd) (StringMap.keys cmds_m)
+        |> Iter.iter (fun s -> LNoise.add_completion completions (s ^ " "))
+    | _ -> ()
+  in
+  LNoise.set_completion_callback completions_callback;
+
+  LNoise.catch_break true;
+  if verb then Logs.set_level (Some Logs.Debug);
+  try
+    LNoise.set_multiline true;
+    let st = ref Script.init_st in
+    while
+      try
+        begin
+          let line = LNoise.linenoise "bincaml ~ " in
+          let sexp =
+            line |> Option.map (fun line -> Sexp.parse_string_list line)
+          in
+          match sexp with
+          | Some (Ok sexp) -> (
+              let _ = LNoise.history_add (Option.get_exn_or "" line) in
+              try
+                st :=
+                  Script.of_cmd ~cmds:cmds_m ~echo_cmd:false !st (`List sexp);
+                true
+              with
+              | Exit -> false
+              | err ->
+                  Logs.app (fun m -> m "%s" (Printexc.to_string err));
+                  Logs.debug (fun m -> m "%s" (Printexc.get_backtrace ()));
+                  true)
+          | Some (Error msg) ->
+              Logs.app (fun m -> m "Syntax error: %s" msg);
+              true
+          | None -> false
+        end
+      with
+      | Sys.Break -> true
+      | Exit -> false
+    do
+      ()
+    done;
+    let _ = LNoise.history_save ~filename:".bincaml_repl_history" in
+
+    Ok ()
+  with Common.ReplError { __LINE__; __FILE__; __FUNCTION__; msg; cmd } ->
+    let n =
+      Printf.sprintf "Error in %s: %s at %s %s:%d" cmd
+        (Containers_pp.Term_color.color `Red (Containers_pp.text msg)
+        |> Containers_pp.Pretty.to_string ~width:80)
+        __FUNCTION__ __FILE__ __LINE__
+    in
+    Error n
+
 let run_script ~verb fname =
   if verb then Logs.set_level (Some Logs.Debug);
-  let st = Script.init_st in
   with_in_or_stdin fname @@ fun chan ->
-  let iter = CCIO.read_lines_iter chan in
   try
-    let _ = Iter.fold (fun acc l -> Script.of_str acc l) st iter in
+    let _ = Script.of_channel chan in
     Ok ()
   with Common.ReplError { __LINE__; __FILE__; __FUNCTION__; msg; cmd } ->
     let n =
@@ -49,6 +220,13 @@ let callgraph_cmd =
   Cmd.v info Term.(const print_callgraph $ fname)
   *)
 
+let repl_cmd =
+  let doc = "run repl" in
+  let info = Cmd.info "repl" ~version:"alpha" ~doc in
+  Cmd.make info
+  @@ let+ verb in
+     repl ~verb
+
 let script_cmd =
   let doc = "run script" in
   let info = Cmd.info "script" ~version:"alpha" ~doc in
@@ -58,7 +236,8 @@ let script_cmd =
 
 let cmd =
   let doc = "bincaml" in
-  Cmd.group (Cmd.info "bincaml" ~version:"%%VERSION%%" ~doc) @@ [ script_cmd ]
+  Cmd.group (Cmd.info "bincaml" ~version:"%%VERSION%%" ~doc)
+  @@ [ script_cmd; repl_cmd ]
 
 let main () =
   Trace_core.set_process_name "main";

@@ -5,6 +5,7 @@
  (name main)
  (modules main script)
  (libraries
+  linenoise
   bincaml.ast
   bincaml.util
   bincaml.loader

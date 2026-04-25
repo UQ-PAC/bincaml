@@ -69,5 +69,6 @@
   linol-lwt
   containers
   ppx_import
+  linenoise
   ppx_deriving)
  (tags (lsp)))
