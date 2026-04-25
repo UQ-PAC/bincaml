@@ -45,9 +45,7 @@
   pp_loc
   fmt
   kittyimg
-  nanosvg
-  nanosvg-text
-  ppx_blob
+  terminal_size
   patricia-tree
   ppx_here
   intPQueue

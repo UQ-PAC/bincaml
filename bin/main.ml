@@ -22,6 +22,10 @@ let verb =
   let doc = "set log level to debug" and docv = "VERBOSE" in
   Arg.(value & flag & info [ "v"; "verbose" ] ~doc ~docv)
 
+let echo_cmd =
+  let doc = "Have repl echo each command back" and docv = "ECHO_CMD" in
+  Arg.(value & flag & info [ "e"; "echo" ] ~doc ~docv)
+
 (** Runs the [inner] function with an input channel. The input channel is from
     opening the given [fname], or stdin if [fname] is [-]. *)
 let with_in_or_stdin fname inner =
@@ -29,7 +33,7 @@ let with_in_or_stdin fname inner =
 
 exception Exit
 
-let repl ~verb =
+let repl ~verb ~echo_cmd =
   let cmds =
     Script.cmds_list
     @ [
@@ -172,8 +176,7 @@ let repl ~verb =
           | Some (Ok sexp) -> (
               let _ = LNoise.history_add (Option.get_exn_or "" line) in
               try
-                st :=
-                  Script.of_cmd ~cmds:cmds_m ~echo_cmd:false !st (`List sexp);
+                st := Script.of_cmd ~cmds:cmds_m ~echo_cmd !st (`List sexp);
                 true
               with
               | Exit -> false
@@ -214,8 +217,8 @@ let repl_cmd =
   let doc = "run repl" in
   let info = Cmd.info "repl" ~version:"alpha" ~doc in
   Cmd.make info
-  @@ let+ verb in
-     repl ~verb
+  @@ let+ verb and+ echo_cmd in
+     repl ~verb ~echo_cmd
 
 let script_cmd =
   let doc = "run script" in

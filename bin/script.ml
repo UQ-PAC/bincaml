@@ -262,41 +262,24 @@ let write_proc_cfg st args =
   file_opt ofile (fun c -> Viscfg.Dot.output_graph c proc);
   st
 
-let font_blob = [%blob "DroidSansMono.ttf"]
-
-let font =
-  let font_buf =
-    Bigarray.Array1.create Bigarray.int8_unsigned Bigarray.c_layout
-      (String.length font_blob)
-  in
-  String.iteri (fun i c -> font_buf.{i} <- Char.code c) font_blob;
-  let offsets = Stb_truetype.enum font_buf in
-  Stb_truetype.init font_buf (List.hd offsets) |> Option.get
-
-let kittyimg ?(scale = 1.0) dotfile =
-  let open Nanosvg in
-  let svgfile = Filename.temp_file "memgraph_kitty" ".svg" in
-  let _ = Sys.command (Printf.sprintf "dot -Tsvg -o%s %s" svgfile dotfile) in
-  begin match Nanosvg.parse_from_file ~units:Px svgfile with
-  | Some svg ->
-      let w = int_of_float (Nanosvg.Image_data.width svg *. scale) in
-      let h = int_of_float (Nanosvg.Image_data.height svg *. scale) in
-      let buf =
-        Bigarray.Array1.create Bigarray.Int8_unsigned Bigarray.C_layout
-          (w * h * 4)
+let kittyimg dotfile =
+  CCIO.File.with_temp ~prefix:"bincaml_repl_cfg" ~suffix:".png" (fun pngfile ->
+      let pngfile = ".png" in
+      let cols = Option.get_or ~default:10 @@ Terminal_size.get_columns () in
+      let _ =
+        Sys.command (Printf.sprintf "dot %s  -Tpng -o %s" dotfile pngfile)
       in
-      Bigarray.Array1.fill buf 0;
-      let rast = Nanosvg.Rasterizer.create () in
-      Nanosvg.rasterize rast svg ~tx:0. ~ty:0. ~scale ~dst:buf ~w ~h ();
-      let svg_data = Nanosvg.lift svg in
-      Nanosvg_text.rasterize_text svg_data
-        ~get_font:(fun ~family:_ -> font)
-        ~dst:buf ~scale ~tx:0. ~ty:0. ~w ~h ();
-      Kittyimg.send_image ~w ~h ~format:`RGBA (Kittyimg.string_of_bytes_ba buf)
-  | None -> failwith "svg failure"
-  end;
-  Sys.remove dotfile;
-  Sys.remove svgfile
+      let img = Stb_image.load ~channels:4 pngfile in
+      match img with
+      | Ok img ->
+          let b = Kittyimg.string_of_bytes_ba img.Stb_image.data in
+          print_newline ();
+          Kittyimg.send_image ~w:img.Stb_image.width ~h:img.Stb_image.height
+            ~format:`RGBA
+            ~mode:(`Display (Kittyimg.display_opts ~cstretch:cols ()))
+            b;
+          print_newline ()
+      | Error (`Msg e) -> failwith ("svg failure" ^ e))
 
 let display_proc_cfg st proc =
   let proc = P.(singleton string proc) in
