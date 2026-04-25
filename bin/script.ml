@@ -3,6 +3,55 @@ open Lang
 
 exception Parse
 
+module SexpLoc = struct
+  type t = Sexp.t
+  type loc = Pp_loc.Position.t * Pp_loc.Position.t
+
+  let make_loc =
+    Some
+      (fun a b s ->
+        ( Pp_loc.Position.of_line_col (fst a) (snd a),
+          Pp_loc.Position.of_line_col (fst b) (snd b) ))
+
+  let atom x = `Atom x
+  let list x = `List x
+  let atom_with_loc ~loc:_ s = `Atom s
+  let list_with_loc ~loc:_ l = `List l
+
+  let match_ x ~atom ~list =
+    match x with `Atom x -> atom x | `List l -> list l
+end
+
+module Sexp = Sexp.Make (SexpLoc)
+
+type errpos = { pos : SexpLoc.loc list; inp : Pp_loc.Input.t }
+
+exception ReplError of { msg : string; cmd : string; loc : errpos option }
+
+let print_repl_error = function
+  | ReplError { msg; cmd; loc = None } ->
+      Printf.sprintf "%s: %s" cmd
+        (Containers_pp.Term_color.color `Red (Containers_pp.text msg)
+        |> Containers_pp.Pretty.to_string ~width:80)
+  | ReplError { msg; cmd; loc = Some loc } ->
+      let exab fmt loc = Pp_loc.pp ~input:loc.inp fmt loc.pos in
+      let msg =
+        Printf.sprintf "%s: %s" cmd
+          (Containers_pp.Term_color.color `Red (Containers_pp.text msg)
+          |> Containers_pp.Pretty.to_string ~width:80)
+      in
+      let s =
+        Format.asprintf "%s%a%a" msg Format.pp_force_newline () exab loc
+      in
+      s
+  | _ -> failwith ""
+
+let printer () =
+  Printexc.register_printer (function
+    | ReplError _ as e -> Some (print_repl_error e)
+    | _ -> None)
+
+let () = printer ()
 let print_proc chan p = Program.output_proc_pretty chan p
 
 let print_blocks_topo_fwd chan p =
@@ -20,36 +69,6 @@ let print_blocks_topo_fwd chan p =
       output_string chan (ID.to_string i);
       output_string chan "\n")
     ids_rev
-
-let assert_atoms =
-  let error arg =
-    Common.ReplError
-      {
-        msg =
-          Printf.sprintf "expected an atom but got a list: %s"
-            (Sexp.to_string arg);
-        cmd = "unk";
-        __FILE__;
-        __FUNCTION__;
-        __LINE__;
-      }
-  in
-  List.map (function `Atom n -> n | non_atom -> raise (error non_atom))
-
-let assert_n_atoms n args =
-  let atoms = assert_atoms args in
-  if List.length atoms < n then
-    raise
-      (Common.ReplError
-         {
-           msg =
-             Printf.sprintf "expected %d args but got %d" n (List.length args);
-           cmd = "unk";
-           __FILE__;
-           __FUNCTION__;
-           __LINE__;
-         });
-  atoms
 
 type dsl_st = {
   history : Sexp.t list;
@@ -137,7 +156,7 @@ let interp_out st ofile =
         let state = Lang.Interp.IState.show ~show_stack:false st in
         let params =
           "returned: "
-          ^ (Common.StringMap.to_iter rvals
+          ^ (StringMap.to_iter rvals
             |> Iter.to_string ~sep:", " (fun (k, v) ->
                 k ^ "=" ^ Lang.Ops.AllOps.to_string v))
         in
@@ -160,14 +179,7 @@ let load_il st args =
   with (Loader.Loadir.ILBParseError _ | Loader.Loadir.LoadError _) as e ->
     let msg = Loader.Loadir.show_ilbparseerror e in
     raise
-      (Common.ReplError
-         {
-           msg;
-           __FILE__;
-           __LINE__;
-           __FUNCTION__;
-           cmd = "load-il " ^ Sexp.to_string args;
-         })
+      (ReplError { msg; cmd = "load-il " ^ Sexp.to_string args; loc = None })
 
 let run_transform st args =
   let args = P.(list string args) in
@@ -176,10 +188,7 @@ let run_transform st args =
   set_prog st prog
 
 let log_level st args =
-  let make_error msg =
-    Common.ReplError
-      { msg; cmd = "log-level"; __FILE__; __FUNCTION__; __LINE__ }
-  in
+  let make_error msg = ReplError { msg; cmd = "log-level"; loc = None } in
 
   let args = P.(list string args) in
   let level, src_names =
@@ -239,11 +248,9 @@ let write_proc_cfg st args =
         with Not_found ->
           begin
             raise
-              (Common.ReplError
+              (ReplError
                  {
-                   __LINE__;
-                   __FILE__;
-                   __FUNCTION__;
+                   loc = None;
                    cmd = "write-proc-cfg";
                    msg =
                      Printf.sprintf "No procedure in program with name %s" proc;
@@ -346,14 +353,15 @@ let of_cmd ?(cmds = default_cmds) ?(echo_cmd = true) st
     match i_command with
     | `List [] -> ("skip", `List [])
     | `List (`Atom cmd :: n) -> (cmd, `List n)
-    | _ -> failwith @@ "bad cmd structure " ^ full_cmd
+    | _ ->
+        raise (ReplError { msg = "bad command."; loc = None; cmd = full_cmd })
   in
   Trace_core.with_span ~__FILE__ ~__LINE__ ("runcmd::" ^ cmd) (fun _ ->
       match StringMap.find_opt cmd cmds with
       | Some f ->
           let st = f st args in
           { st with history = i_command :: st.history }
-      | None -> failwith @@ "not a command : " ^ cmd)
+      | None -> raise (ReplError { msg = "not a command."; loc = None; cmd }))
 
 let of_channel ?st c =
   let st = Option.get_or ~default:init_st st in
@@ -362,36 +370,49 @@ let of_channel ?st c =
   in
   List.fold_left of_cmd st i
 
-let of_chan_2 channel =
-  try
-    let lbuf = Lexing.from_channel channel in
-    let s = Sexp.Decoder.of_lexbuf lbuf in
-    let st = ref init_st in
-    while
-      let sexp = Sexp.Decoder.next s in
-      match sexp with
-      | Yield sexp -> (
-          try
-            st := of_cmd !st sexp;
-            true
-          with err ->
-            Logs.debug (fun m -> m "%s" (Printexc.get_backtrace ()));
-            failwith (Printexc.to_string err))
-      | Fail msg -> failwith ("Syntax error: " ^ msg)
-      | End -> false
-    do
-      ()
-    done;
-
-    Ok ()
-  with Common.ReplError { __LINE__; __FILE__; __FUNCTION__; msg; cmd } ->
-    let n =
-      Printf.sprintf "Error in %s: %s at %s %s:%d" cmd
-        (Containers_pp.Term_color.color `Red (Containers_pp.text msg)
-        |> Containers_pp.Pretty.to_string ~width:80)
-        __FUNCTION__ __FILE__ __LINE__
+let of_chan_2 ?fname ?st channel =
+  let lbuf = Lexing.from_channel ~with_positions:true channel in
+  let s = Sexp.Decoder.of_lexbuf lbuf in
+  let st = ref (Option.get_or ~default:init_st st) in
+  let inp =
+    Option.map Pp_loc.Input.file fname
+    |> Option.get_or ~default:(Pp_loc.Input.in_channel channel)
+  in
+  while
+    let b : Sexp.loc option = Sexp.Decoder.last_loc s in
+    let sexp = Sexp.Decoder.next s in
+    let e : Sexp.loc option = Sexp.Decoder.last_loc s in
+    let loc =
+      match (b, e) with
+      | Some b, Some e ->
+          Some { pos = [ e ]; inp = Pp_loc.Input.in_channel channel }
+      | _, Some e -> Some { pos = [ e ]; inp }
+      | Some e, _ -> Some { pos = [ e ]; inp }
+      | None, None -> None
     in
-    Error n
+    match sexp with
+    | Yield sexp -> (
+        try
+          st := of_cmd !st sexp;
+          true
+        with
+        | ReplError { msg; cmd; loc = None } ->
+            raise (ReplError { msg; cmd; loc })
+        | err ->
+            Logs.debug (fun m -> m "%s" (Printexc.get_backtrace ()));
+            raise
+              (ReplError
+                 {
+                   msg = Printexc.to_string err;
+                   loc;
+                   cmd = Sexp.to_string sexp;
+                 }))
+    | Fail msg -> raise (ReplError { msg; loc; cmd = "" })
+    | End -> false
+  do
+    ()
+  done;
+  !st
 
 let of_str st (e : string) =
   let str_comment =
@@ -405,8 +426,6 @@ let of_str st (e : string) =
     | Ok e -> e
     | Error err ->
         let msg = "failed to parse " ^ e ^ ": " ^ err in
-        raise
-          (Common.ReplError
-             { msg; __FILE__; __LINE__; __FUNCTION__; cmd = "parse" })
+        raise (ReplError { msg; loc = None; cmd = "parse" })
   in
   of_cmd st s

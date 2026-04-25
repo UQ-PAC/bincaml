@@ -34,7 +34,8 @@ Some error messages for log configuration.
   > EOF
   (load-il ../../examples/irreducible_loop_1.il)
   (log-level)
-  bincaml: Error in log-level: Expected at least one argument at Dune__exe__Script.of_cmd.(fun).make_error bin/script.ml:90
+  bincaml: log-level: Expected at least one argument
+           
   [123]
 
   $ cat << EOF | bincaml script -
@@ -44,7 +45,8 @@ Some error messages for log configuration.
   > EOF
   (load-il ../../examples/irreducible_loop_1.il)
   (log-level blah)
-  bincaml: Error in log-level: Incorrect log level option given, correct options are ["info", "quiet", "app", "error", "warning", "debug"] at Dune__exe__Script.of_cmd.(fun).make_error bin/script.ml:90
+  bincaml: log-level: Incorrect log level option given, correct options are ["info", "quiet", "app", "error", "warning", "debug"]
+           
   [123]
 
 
@@ -55,5 +57,6 @@ Some error messages for log configuration.
   > EOF
   (load-il ../../examples/irreducible_loop_1.il)
   (log-level info nowheoijifsda)
-  bincaml: Error in log-level: source nowheoijifsda not found at Dune__exe__Script.of_cmd.(fun).make_error bin/script.ml:90
+  bincaml: log-level: source nowheoijifsda not found
+           
   [123]

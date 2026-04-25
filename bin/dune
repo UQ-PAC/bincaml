@@ -11,6 +11,7 @@
   bincaml.loader
   bincaml.transforms
   bincaml.backends
+  pp_loc
   bincaml
   cmdliner
   iter

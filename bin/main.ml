@@ -3,8 +3,10 @@ open Bincaml_util.Logger
 open Lang
 open Cmdliner
 open Cmdliner.Term.Syntax
+open Script
 
 let () = Printexc.record_backtrace true
+let () = Script.printer ()
 
 let fname =
   let doc = "Input file name (e.g., filename.il or - for stdin)" in
@@ -41,7 +43,11 @@ let repl ~verb =
         ( "run-script",
           (fun st c ->
             let fname = Script.P.(singleton string c) in
-            CCIO.with_in fname (fun c -> Script.of_channel ~st c)),
+            CCIO.with_in fname (fun c ->
+                try Script.of_chan_2 ~fname ~st c
+                with ReplError _ as exn ->
+                  print_endline @@ Script.print_repl_error exn;
+                  st)),
           "fname.sexp",
           "Interpret a script" );
       ]
@@ -106,7 +112,7 @@ let repl ~verb =
     in
     let str = Sexp.parse_string_list str in
     match str with
-    | Error _ -> ()
+    | Error e -> ()
     | Ok [ `Atom "log-level"; `Atom level ] ->
         completions_from_list
           [ "quiet"; "info"; "app"; "error"; "warning"; "debug" ]
@@ -180,38 +186,22 @@ let repl ~verb =
               true
           | None -> false
         end
-      with
-      | Sys.Break -> true
-      | Exit -> false
+      with Sys.Break -> true
     do
       ()
     done;
     let _ = LNoise.history_save ~filename:".bincaml_repl_history" in
 
     Ok ()
-  with Common.ReplError { __LINE__; __FILE__; __FUNCTION__; msg; cmd } ->
-    let n =
-      Printf.sprintf "Error in %s: %s at %s %s:%d" cmd
-        (Containers_pp.Term_color.color `Red (Containers_pp.text msg)
-        |> Containers_pp.Pretty.to_string ~width:80)
-        __FUNCTION__ __FILE__ __LINE__
-    in
-    Error n
+  with e -> Error (Printexc.to_string e)
 
 let run_script ~verb fname =
   if verb then Logs.set_level (Some Logs.Debug);
   with_in_or_stdin fname @@ fun chan ->
   try
-    let _ = Script.of_channel chan in
+    let _ = Script.of_chan_2 chan in
     Ok ()
-  with Common.ReplError { __LINE__; __FILE__; __FUNCTION__; msg; cmd } ->
-    let n =
-      Printf.sprintf "Error in %s: %s at %s %s:%d" cmd
-        (Containers_pp.Term_color.color `Red (Containers_pp.text msg)
-        |> Containers_pp.Pretty.to_string ~width:80)
-        __FUNCTION__ __FILE__ __LINE__
-    in
-    Error n
+  with e -> Error (Printexc.to_string e)
 
 (*
 let callgraph_cmd =

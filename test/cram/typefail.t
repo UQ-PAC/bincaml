@@ -97,4 +97,4 @@
   bv32 is not the correct type of bv64 for bvashr at statement 52 in %main_entry
   Body of booltobv1(0x7a0:bv64) is not a Boolean at statement 0 in %main_9
   booltobv1 body is not a boolean at statement 0 in %main_9
-  [125]
+  [123]
