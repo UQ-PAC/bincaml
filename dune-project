@@ -44,13 +44,14 @@
   (cmdliner (>= 2.0.0))
   pp_loc
   fmt
-  kittyimg
-  terminal_size
   patricia-tree
   ppx_here
   intPQueue
   logs
   mtime
+  linenoise
+  kittyimg
+  terminal_size
   (ocamlformat :with-dev-setup)
   (odig :with-dev-setup)
   (sherlodoc :with-doc)
@@ -71,6 +72,5 @@
   linol-lwt
   containers
   ppx_import
-  linenoise
   ppx_deriving)
  (tags (lsp)))
