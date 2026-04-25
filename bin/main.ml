@@ -108,11 +108,21 @@ let repl ~verb ~echo_cmd =
 
   let opt_len = function Some _ -> 1 | _ -> 0 in
 
+  let completions_state = ref None in
   let completions_callback str completions =
     let last ns =
       List.rev ns |> List.head_opt |> function
       | Some (`Atom n) -> Some n
       | _ -> None
+    in
+    let proc_list =
+      lazy
+        (Option.bind !completions_state (fun s -> s.load_st)
+        |> Option.to_iter
+        |> Iter.flat_map (fun p ->
+            Program.procs Loader.Loadir.(p.prog)
+            |> Iter.map (fst %> ID.to_string))
+        |> Iter.to_list)
     in
     let str = Sexp.parse_string_list str in
     match str with
@@ -123,6 +133,13 @@ let repl ~verb ~echo_cmd =
           level
         |> Iter.iter (fun c ->
             LNoise.add_completion completions @@ "log-level " ^ c)
+    | Ok [ (`Atom "dump-proc-il" as c); `Atom proc ]
+    | Ok [ (`Atom "list-blocks-il" as c); `Atom proc ]
+    | Ok [ (`Atom "display-proc-cfg" as c); `Atom proc ]
+    | Ok [ (`Atom "dump-proc-cfg" as c); `Atom proc ] ->
+        completions_from_list (Lazy.force proc_list) proc
+        |> Iter.map (fun s -> Sexp.to_string c ^ " " ^ s)
+        |> Iter.iter (LNoise.add_completion completions)
     | Ok (`Atom "load-il" :: fnames as l)
     | Ok (`Atom "run-script" :: fnames as l)
     | Ok (`Atom "dump-il" :: fnames as l)
@@ -166,6 +183,7 @@ let repl ~verb ~echo_cmd =
     LNoise.set_multiline true;
     let st = ref Script.init_st in
     while
+      completions_state := Some !st;
       try
         begin
           let line = LNoise.linenoise "bincaml ~ " in
