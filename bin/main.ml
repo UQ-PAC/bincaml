@@ -186,7 +186,7 @@ let repl ~verb ~echo_cmd =
       completions_state := Some !st;
       try
         begin
-          let line = LNoise.linenoise "bincaml ~ " in
+          let line = LNoise.linenoise "bcml ~> " in
           let sexp =
             line |> Option.map (fun line -> Sexp.parse_string_list line)
           in

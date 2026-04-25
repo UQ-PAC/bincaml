@@ -387,14 +387,15 @@ let of_cmd ?(cmds = default_cmds) ?(echo_cmd = true) st
     match i_command with
     | `List [] -> ("skip", `List [])
     | `List (`Atom cmd :: n) -> (cmd, `List n)
+    | `List [ `List (`Atom cmd :: n) ] -> (cmd, `List n)
     | _ ->
         raise (ReplError { msg = "bad command."; loc = None; cmd = full_cmd })
   in
   Trace_core.with_span ~__FILE__ ~__LINE__ ("runcmd::" ^ cmd) (fun _ ->
       match StringMap.find_opt cmd cmds with
       | Some f ->
-          let st = f st args in
-          { st with history = i_command :: st.history }
+          let st = { st with history = i_command :: st.history } in
+          f st args
       | None -> raise (ReplError { msg = "not a command."; loc = None; cmd }))
 
 let of_channel ?st c =
