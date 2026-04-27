@@ -525,7 +525,7 @@ module BasilExpr = struct
         let binding =
           fill (text " ")
             (List.map (fun v -> bracket "(" (Var.pretty v) ")") bound_vars)
-          ^+ sep ^+ a ^ bracket "(" b ")"
+          ^+ sep ^ bracket "(" b ")"
         in
         return (text op ^ a ^ text " " ^ binding)
     | Lambda { bound_vars; in_body; attrib } -> pass ()
