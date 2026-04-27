@@ -236,18 +236,38 @@ module Make (O : Fix) = struct
 
   let free_vars_iter (e : t) = free_vars e |> VarSet.to_iter
 
+  (** get free and bound vars of exprs *)
+  let vars (e : t) =
+    let open AbstractExpr in
+    let alg e =
+      match e with
+      | RVar { id } -> VarSet.singleton id
+      | Let { bound_vars; in_body } ->
+          let bindees =
+            List.fold_left VarSet.union VarSet.empty (List.map snd bound_vars)
+          in
+          let bound_vars = List.map fst bound_vars in
+          VarSet.union bindees
+            (VarSet.union in_body (VarSet.add_list VarSet.empty bound_vars))
+      | Lambda { bound_vars; in_body } ->
+          VarSet.union in_body (VarSet.add_list VarSet.empty bound_vars)
+      | o -> fold (fun acc a -> VarSet.union a acc) VarSet.empty o
+    in
+    cata alg e
+
   (* substite variables for expressions *)
-  let substitute (sub : var -> t option) (e : t) =
+  let substitute ?(sub_binds=false) (sub : var -> t option) (e : t) =
     let open AbstractExpr in
     let rec subst bound orig =
       let exp = unfix orig in
       match exp with
-      | RVar { id } when VarSet.find_opt id bound |> Option.is_none -> (
+      | RVar { id } when sub_binds || VarSet.find_opt id bound |> Option.is_none -> (
           match sub id with Some r -> r | None -> orig)
       | Lambda { op; bound_vars; in_body; attrib } ->
           (* exprs to bind are evaluated outside the bound *)
           let bound = VarSet.add_list bound bound_vars in
           let in_body = subst bound in_body in
+          let bound_vars = bound_vars in
           fix (Lambda { op; bound_vars; in_body; attrib })
       | Let { bound_vars; in_body; attrib } ->
           (* exprs to bind are evaluated outside the bound *)
