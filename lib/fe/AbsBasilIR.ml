@@ -40,6 +40,7 @@ and decl =
  | Decl_ProgWithSpec of procIdent * attribSet * progSpec list
  | Decl_Proc of procIdent * openParen * params list * closeParen * openParen * params list * closeParen * attribSet * funSpec list * procDef
  | Decl_RecType of typeAssign list
+ | Decl_StructType of structType
  | Decl_Type of localIdent
 
 and typeAssign =
@@ -58,8 +59,8 @@ and intType =
 and boolType =
    BoolType1 of bOOLTYPE
 
-and recordType =
-   RecordType1 of localIdent * beginRec * field list * endRec * intVal
+and structType =
+   StructType1 of localIdent * beginRec * field list * endRec * intVal
 
 and pointerType =
    PointerType1 of openParen * typeT * typeT * closeParen
@@ -82,7 +83,7 @@ and typeT =
  | TypeBoolType of boolType
  | TypeBVType of bVType
  | TypePointerType of pointerType
- | TypeRecordType of recordType
+ | TypeStructType of structType
  | TypeVarType of localIdent
  | TypeParen of openParen * typeT * closeParen
  | TypeMapType of mapType

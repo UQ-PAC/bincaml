@@ -166,6 +166,7 @@ and prtDecl (i:int) (e : AbsBasilIR.decl) : doc = match e with
   |    AbsBasilIR.Decl_ProgWithSpec (procident, attribset, progspecs) -> prPrec i 0 (concatD [render "prog" ; render "entry" ; prtProcIdent 0 procident ; prtAttribSet 0 attribset ; prtProgSpecListBNFC 0 progspecs])
   |    AbsBasilIR.Decl_Proc (procident, openparen1, paramss1, closeparen1, openparen2, paramss2, closeparen2, attribset, funspecs, procdef) -> prPrec i 0 (concatD [render "proc" ; prtProcIdent 0 procident ; prtOpenParen 0 openparen1 ; prtParamsListBNFC 0 paramss1 ; prtCloseParen 0 closeparen1 ; render "->" ; prtOpenParen 0 openparen2 ; prtParamsListBNFC 0 paramss2 ; prtCloseParen 0 closeparen2 ; prtAttribSet 0 attribset ; prtFunSpecListBNFC 0 funspecs ; prtProcDef 0 procdef])
   |    AbsBasilIR.Decl_RecType typeassigns -> prPrec i 0 (concatD [render "type" ; prtTypeAssignListBNFC 0 typeassigns])
+  |    AbsBasilIR.Decl_StructType structtype -> prPrec i 0 (concatD [render "type" ; prtStructType 0 structtype])
   |    AbsBasilIR.Decl_Type localident -> prPrec i 0 (concatD [render "type" ; prtLocalIdent 0 localident])
 
 and prtDeclListBNFC i es : doc = match (i, es) with
@@ -198,8 +199,8 @@ and prtBoolType (i:int) (e : AbsBasilIR.boolType) : doc = match e with
        AbsBasilIR.BoolType1 booltype -> prPrec i 0 (concatD [prtBOOLTYPE 0 booltype])
 
 
-and prtRecordType (i:int) (e : AbsBasilIR.recordType) : doc = match e with
-       AbsBasilIR.RecordType1 (localident, beginrec, fields, endrec, intval) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "of" ; prtBeginRec 0 beginrec ; prtFieldListBNFC 0 fields ; prtEndRec 0 endrec ; prtIntVal 0 intval])
+and prtStructType (i:int) (e : AbsBasilIR.structType) : doc = match e with
+       AbsBasilIR.StructType1 (localident, beginrec, fields, endrec, intval) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "of" ; prtBeginRec 0 beginrec ; prtFieldListBNFC 0 fields ; prtEndRec 0 endrec ; prtIntVal 0 intval])
 
 
 and prtPointerType (i:int) (e : AbsBasilIR.pointerType) : doc = match e with
@@ -234,7 +235,7 @@ and prtTypeT (i:int) (e : AbsBasilIR.typeT) : doc = match e with
   |    AbsBasilIR.TypeBoolType booltype -> prPrec i 1 (concatD [prtBoolType 0 booltype])
   |    AbsBasilIR.TypeBVType bvtype -> prPrec i 1 (concatD [prtBVType 0 bvtype])
   |    AbsBasilIR.TypePointerType pointertype -> prPrec i 1 (concatD [prtPointerType 0 pointertype])
-  |    AbsBasilIR.TypeRecordType recordtype -> prPrec i 1 (concatD [prtRecordType 0 recordtype])
+  |    AbsBasilIR.TypeStructType structtype -> prPrec i 1 (concatD [prtStructType 0 structtype])
   |    AbsBasilIR.TypeVarType localident -> prPrec i 1 (concatD [prtLocalIdent 0 localident])
   |    AbsBasilIR.TypeParen (openparen, type_, closeparen) -> prPrec i 1 (concatD [prtOpenParen 0 openparen ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.TypeMapType maptype -> prPrec i 0 (concatD [prtMapType 0 maptype])

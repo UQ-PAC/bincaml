@@ -70,6 +70,7 @@ let elided_of_decl (decl : BasilIR.AbsBasilIR.decl) =
       Decl_Proc (a, b, c, d, e, f, g, h, i, ProcDef_Empty)
   | Decl_RecType _ -> decl
   | Decl_Type _ -> decl
+  | Decl_StructType _ -> decl
 
 let children_lspsymbols_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
   let open Linol_lsp.Types.SymbolKind in
@@ -209,7 +210,9 @@ let lspsymbol_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
     | Decl_RecType (TypeAssign_Sum (loc, _) :: rest) ->
         Some (of_lident loc, Enum)
     | Decl_RecType _ -> None (* should be impossible *)
-    | Decl_Type loc -> Some (of_lident loc, Interface))
+    | Decl_Type loc -> Some (of_lident loc, Interface)
+    | Decl_StructType (StructType1 (loc, _, _, _, _)) ->
+        Some (of_lident loc, Interface))
   |> function
   | Some ((selectionRange, name), kind) ->
       let children = children_lspsymbols_of_decl input decl in

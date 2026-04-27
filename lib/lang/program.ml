@@ -293,6 +293,13 @@ let decl_global ?(attrib = StringMap.empty) p v =
 
 let decl_typ ?(attrib = StringMap.empty) p t =
   match t with
+  | Struct { name; fields; size } as s ->
+      let id : ID.t = p.global_names.decl_exn name in
+      {
+        p with
+        declarations =
+          IDMap.add id (Type { binding = name; typ = s }) p.declarations;
+      }
   | Sort (type_name, []) as s ->
       let id : ID.t = p.global_names.decl_exn type_name in
       {

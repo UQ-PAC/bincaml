@@ -45,7 +45,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pPointerType pBVType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pFieldVal_list pFieldVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pStructType pPointerType pBVType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pFieldVal_list pFieldVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -61,7 +61,7 @@ open Lexing
 %type <AbsBasilIR.field> pField
 %type <AbsBasilIR.intType> pIntType
 %type <AbsBasilIR.boolType> pBoolType
-%type <AbsBasilIR.recordType> pRecordType
+%type <AbsBasilIR.structType> pStructType
 %type <AbsBasilIR.pointerType> pPointerType
 %type <AbsBasilIR.bVType> pBVType
 %type <AbsBasilIR.mapType> pMapType
@@ -157,7 +157,7 @@ open Lexing
 %type <AbsBasilIR.field> field
 %type <AbsBasilIR.intType> intType
 %type <AbsBasilIR.boolType> boolType
-%type <AbsBasilIR.recordType> recordType
+%type <AbsBasilIR.structType> structType
 %type <AbsBasilIR.pointerType> pointerType
 %type <AbsBasilIR.bVType> bVType
 %type <AbsBasilIR.mapType> mapType
@@ -289,7 +289,7 @@ pIntType : intType TOK_EOF { $1 };
 
 pBoolType : boolType TOK_EOF { $1 };
 
-pRecordType : recordType TOK_EOF { $1 };
+pStructType : structType TOK_EOF { $1 };
 
 pPointerType : pointerType TOK_EOF { $1 };
 
@@ -483,6 +483,7 @@ decl : KW_axiom globalIdent attribSet expr { Decl_Axiom ($2, $3, $4) }
   | KW_prog KW_entry procIdent attribSet progSpec_list { Decl_ProgWithSpec ($3, $4, $5) }
   | KW_proc procIdent openParen params_list closeParen SYMB3 openParen params_list closeParen attribSet funSpec_list procDef { Decl_Proc ($2, $3, $4, $5, $7, $8, $9, $10, $11, $12) }
   | KW_type typeAssign_list { Decl_RecType $2 }
+  | KW_type structType { Decl_StructType $2 }
   | KW_type localIdent { Decl_Type $2 }
   ;
 
@@ -516,7 +517,7 @@ intType : iNTTYPE { IntType1 $1 }
 boolType : bOOLTYPE { BoolType1 $1 }
   ;
 
-recordType : localIdent KW_of beginRec field_list endRec intVal { RecordType1 ($1, $3, $4, $5, $6) }
+structType : localIdent KW_of beginRec field_list endRec intVal { StructType1 ($1, $3, $4, $5, $6) }
   ;
 
 pointerType : KW_ptr openParen typeT SYMB2 typeT closeParen { PointerType1 ($2, $3, $5, $6) }
@@ -547,7 +548,7 @@ type1 : intType { TypeIntType $1 }
   | boolType { TypeBoolType $1 }
   | bVType { TypeBVType $1 }
   | pointerType { TypePointerType $1 }
-  | recordType { TypeRecordType $1 }
+  | structType { TypeStructType $1 }
   | localIdent { TypeVarType $1 }
   | openParen typeT closeParen { TypeParen ($1, $2, $3) }
   ;

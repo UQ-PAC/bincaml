@@ -4,5 +4,6 @@
 (run-transforms "simplify")
 (run-transforms "type-check")
 (run-transforms "type-inference")
-; (run-transforms "type-check") ; It does not type check currently, better idea around polar types within type system
+(run-transforms "type-check")
 (dump-il "after-type-inference-loops.il")
+(load-il "after-type-inference-loops.il") ; It does not currently parse as types have two different types, this will be fixed with ADT type stuff

@@ -76,6 +76,8 @@ module.exports = ({
         seq("proc", $.token_ProcIdent, $.token_OpenParen, optional($.list_Params), $.token_CloseParen, "->", $.token_OpenParen, optional($.list_Params), $.token_CloseParen, optional($.AttribSet), optional($.list_FunSpec), optional($.ProcDef)),
         // Decl_RecType. Decl ::= "type" [TypeAssign] ;
         seq("type", $.list_TypeAssign),
+        // Decl_StructType. Decl ::= "type" StructType ;
+        seq("type", $.StructType),
         // Decl_Type. Decl ::= "type" LocalIdent ;
         seq("type", $.token_LocalIdent)
       ),
@@ -123,8 +125,8 @@ module.exports = ({
     BoolType: $ =>
       // BoolType1. BoolType ::= BOOLTYPE ;
       $.token_BOOLTYPE,
-    RecordType: $ =>
-      // RecordType1. RecordType ::= LocalIdent "of" BeginRec [Field] EndRec IntVal ;
+    StructType: $ =>
+      // StructType1. StructType ::= LocalIdent "of" BeginRec [Field] EndRec IntVal ;
       seq($.token_LocalIdent, "of", $.token_BeginRec, optional($.list_Field), $.token_EndRec, $.IntVal),
     PointerType: $ =>
       // PointerType1. PointerType ::= "ptr" OpenParen Type "," Type CloseParen ;
@@ -169,8 +171,8 @@ module.exports = ({
         $.BVType,
         // TypePointerType. Type1 ::= PointerType ;
         $.PointerType,
-        // TypeRecordType. Type1 ::= RecordType ;
-        $.RecordType,
+        // TypeStructType. Type1 ::= StructType ;
+        $.StructType,
         // TypeVarType. Type1 ::= LocalIdent ;
         $.token_LocalIdent,
         // TypeParen. Type1 ::= OpenParen Type CloseParen ;
@@ -850,7 +852,7 @@ module.exports = ({
     token_IntegerHex: $ =>
       /0x([abcdef]|\d)+/,
     token_IntegerDec: $ =>
-      /\d+/,
+      /-?\d+/,
     token_CommentSingle: $ =>
       /\/\/.*\n/,
     token_CommentMulti: $ =>

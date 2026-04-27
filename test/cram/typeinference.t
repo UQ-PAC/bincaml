@@ -1,11 +1,22 @@
-  $ bincaml script ./typeinference.sexp 2> /dev/null
+  $ bincaml script ./typeinference.sexp
   (load-il ../../examples/irreducible_loop_1.il)
   (run-transforms ssa)
   (run-transforms cf-expressions)
   (run-transforms simplify)
   (run-transforms type-check)
   (run-transforms type-inference)
+  bincaml: [ERROR] non-equal variables with same name: { Var.V.name = "R0_6"; typ = bv64; scope = Var.LocalVar } { Var.V.name = "R0_6"; typ = rec241617322 of {"field0": (bv1, 0)} 64;
+    scope = Var.LocalVar }
+  (run-transforms type-check)
+  bincaml: [ERROR] non-equal variables with same name: { Var.V.name = "R0_6"; typ = bv64; scope = Var.LocalVar } { Var.V.name = "R0_6"; typ = rec241617322 of {"field0": (bv1, 0)} 64;
+    scope = Var.LocalVar }
   (dump-il after-type-inference-loops.il)
+  (load-il after-type-inference-loops.il)
+  bincaml: [WARNING] global undeclared CF_5. assuming mutable unshared
+  bincaml: [WARNING] global undeclared NF_5. assuming mutable unshared
+  bincaml: [WARNING] global undeclared R1_3. assuming mutable unshared
+  bincaml: [WARNING] global undeclared VF_5. assuming mutable unshared
+  bincaml: [WARNING] global undeclared ZF_7. assuming mutable unshared
   $ cat after-type-inference-loops.il
   type rec1020629241 of {"field0": (bv32, 0)} 64;
   type rec1070941161 of {"field-16": (bv64, -16)} 64;

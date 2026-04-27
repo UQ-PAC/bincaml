@@ -105,6 +105,7 @@ and transDecl (x : decl) : result = match x with
   | Decl_ProgWithSpec (procident, attribset, progspecs) -> failure x
   | Decl_Proc (procident, openparen0, paramss1, closeparen2, openparen, paramss, closeparen, attribset, funspecs, procdef) -> failure x
   | Decl_RecType typeassigns -> failure x
+  | Decl_StructType structtype -> failure x
   | Decl_Type localident -> failure x
 
 
@@ -129,8 +130,8 @@ and transBoolType (x : boolType) : result = match x with
     BoolType1 booltype -> failure x
 
 
-and transRecordType (x : recordType) : result = match x with
-    RecordType1 (localident, beginrec, fields, endrec, intval) -> failure x
+and transStructType (x : structType) : result = match x with
+    StructType1 (localident, beginrec, fields, endrec, intval) -> failure x
 
 
 and transPointerType (x : pointerType) : result = match x with
@@ -159,7 +160,7 @@ and transType (x : typeT) : result = match x with
   | TypeBoolType booltype -> failure x
   | TypeBVType bvtype -> failure x
   | TypePointerType pointertype -> failure x
-  | TypeRecordType recordtype -> failure x
+  | TypeStructType structtype -> failure x
   | TypeVarType localident -> failure x
   | TypeParen (openparen, type', closeparen) -> failure x
   | TypeMapType maptype -> failure x

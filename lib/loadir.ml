@@ -162,6 +162,11 @@ module BasilASTLoader = struct
       needed to do non-local reslolution of names such as for procedure calls *)
   and trans_declaration prog (x : decl) : load_st =
     match x with
+    | Decl_StructType (StructType1 (localIdent, _, fields, _, size)) ->
+        let name = unsafe_unsigil (`Type localIdent) in
+        let size = Z.to_int @@ transIntVal size in
+        let typ = transSTRUCTTYPE name fields size in
+        map_prog (fun prog -> Program.decl_typ prog typ) prog
     | Decl_Type sort ->
         let name = unsafe_unsigil (`Type sort) in
         let typ = Types.mk_sort name in
@@ -449,7 +454,7 @@ module BasilASTLoader = struct
             p blocks
         in
         map_prog (fun prog -> Program.add_proc p prog) prog
-    | Decl_Mem _ | Decl_Var _ | Decl_RecType _ | Decl_Type _ ->
+    | Decl_Mem _ | Decl_Var _ | Decl_RecType _ | Decl_StructType _ | Decl_Type _ ->
         (* declarations only: handled by first pass *)
         prog
 
@@ -486,7 +491,7 @@ module BasilASTLoader = struct
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
     | TypeParen (_, typeT, _) -> trans_type typeT
     | TypeVarType name -> Types.Variable (unsafe_unsigil (`Local name))
-    | TypeRecordType (RecordType1 (name, _, fields, _, size)) ->
+    | TypeStructType (StructType1 (name, _, fields, _, size)) ->
         transSTRUCTTYPE (unsafe_unsigil @@ `Local name) fields
         @@ Z.to_int @@ transIntVal size
     | TypePointerType (PointerType1 (_, l, u, _)) -> transPOINTERTYPE l u

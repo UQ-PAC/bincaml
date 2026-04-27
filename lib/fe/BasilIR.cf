@@ -35,7 +35,7 @@ rules LambdaSep ::= "->" | "::" ;
 
 token Str '"' ((char - ["\"\\"]) | ('\\' ["\"\\tnrf"]))* '"' ;
 position token IntegerHex ('0' 'x' (digit | ["abcdef"])+);
-position token IntegerDec (digit+);
+position token IntegerDec ('-'? digit+);
 
 comment "//" ;
 comment "/*" "*/" ;
@@ -66,8 +66,10 @@ Decl_Proc . Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenPar
 TypeAssign_Sum. TypeAssign ::= LocalIdent "=" [SumCase] ;
 
 separator nonempty TypeAssign "and";
-Decl_RecType . Decl ::= "type" [TypeAssign] ;
-Decl_Type . Decl ::= "type" LocalIdent;
+
+Decl_RecType    . Decl ::= "type" [TypeAssign] ;
+Decl_StructType . Decl ::= "type" StructType ;
+Decl_Type       . Decl ::= "type" LocalIdent;
 
 ProcDef_Empty . ProcDef ::= ;
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
@@ -77,7 +79,7 @@ Field1 . Field ::= Str ":" OpenParen Type "," IntVal CloseParen ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
-RecordType1 . RecordType ::= LocalIdent "of" BeginRec [Field] EndRec IntVal;
+StructType1 . StructType ::= LocalIdent "of" BeginRec [Field] EndRec IntVal;
 PointerType1 . PointerType ::= "ptr" OpenParen Type "," Type CloseParen ;
 BVType1 . BVType ::= BVTYPE ;
 -- map types are right associative. left of -> cannot be another MapType.
@@ -96,7 +98,7 @@ TypeIntType     . Type1 ::= IntType ;
 TypeBoolType    . Type1 ::= BoolType ;
 TypeBVType      . Type1 ::= BVType ;
 TypePointerType . Type1 ::= PointerType ;
-TypeRecordType  . Type1 ::= RecordType ;
+TypeStructType  . Type1 ::= StructType ;
 TypeVarType     . Type1 ::= LocalIdent ;
 TypeParen       . Type1 ::= OpenParen Type CloseParen; 
 TypeMapType     . Type ::= MapType;
