@@ -454,7 +454,8 @@ module BasilASTLoader = struct
             p blocks
         in
         map_prog (fun prog -> Program.add_proc p prog) prog
-    | Decl_Mem _ | Decl_Var _ | Decl_RecType _ | Decl_StructType _ | Decl_Type _ ->
+    | Decl_Mem _ | Decl_Var _ | Decl_RecType _ | Decl_StructType _ | Decl_Type _
+      ->
         (* declarations only: handled by first pass *)
         prog
 
