@@ -50,6 +50,7 @@
   logs
   mtime
   linenoise
+  stb_image
   kittyimg
   terminal_size
   (ocamlformat :with-dev-setup)
