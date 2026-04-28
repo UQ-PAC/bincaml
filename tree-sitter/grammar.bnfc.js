@@ -525,8 +525,8 @@ module.exports = ({
         seq("fun", optional($.AttribSet), $.LambdaDef),
         // Expr_Let. Expr ::= "let" LocalIdent [LocalVarParen] ":" Type "=" Expr "in" Expr ;
         seq("let", $.token_LocalIdent, optional($.list_LocalVarParen), ":", $.Type, "=", $.Expr, "in", $.Expr),
-        // Expr_Field. Expr ::= Expr2 BIdent ;
-        seq($.Expr2, $.token_BIdent),
+        // Expr_Field. Expr ::= OpenParen Expr BIdent CloseParen ;
+        seq($.token_OpenParen, $.Expr, $.token_BIdent, $.token_CloseParen),
         // SortValRec. Expr ::= LocalIdent BeginRec [FieldAssign] EndRec ;
         seq($.token_LocalIdent, $.token_BeginRec, optional($.list_FieldAssign), $.token_EndRec)
       ),

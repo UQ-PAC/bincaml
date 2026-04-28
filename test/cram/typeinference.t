@@ -19,24 +19,23 @@
   bincaml: [WARNING] global undeclared ZF_7. assuming mutable unshared
   $ cat after-type-inference-loops.il
   type rec1020629241 of {"field0": (bv32, 0)} 64;
-  type rec1070941161 of {"field-16": (bv64, -16)} 64;
+  type rec123481209 of {"field131132": (rec847980916 of {"field131132": (bv32, 131132)} 32, 131132)} 32;
+  type rec208599999 of {"field-32": (rec151711918 of {"field-32": (bv64, -32)} 64, -32)} 64;
   type rec241617322 of {"field0": (bv1, 0)} 64;
-  type rec256104172 of {"field-24": (bv64, -24)} 64;
   type rec26062834 of {"field131132": (bv32, 131132)} 32;
-  type rec40893805 of {"field-32": (bv64, -32)} 64;
+  type rec274553038 of {"field-4": (rec830635702 of {"field-4": (bv32, -4)} 32, -4)} 32;
   type rec429227263 of {"field0": (bv32, 0)} 64;
   type rec52470766 of {"field-24": (bv64, -24)} 64;
+  type rec550039421 of {"field-16": (rec199532115 of {"field-16": (bv64, -16)} 64, -16)} 64;
   type rec559529883 of {"field131136": (bv32, 131136)} 32;
   type rec715801573 of {"field0": (bv32, 0)} 64;
   type rec750247379 of {"field0": (bv32, 0)} 64;
-  type rec761858290 of {"field131132": (bv32, 131132)} 32;
-  type rec786542237 of {"field-4": (bv32, -4)} 32;
   type rec809214491 of {"field-32": (bv64, -32)} 64;
   type rec884577748 of {"field131132": (bv32, 131132)} 32;
+  type rec944130662 of {"field-24": (rec1033252285 of {"field-24": (bv64, -24)} 64, -24)} 64;
   var observable $mem:(bv64->bv8);
   var $stack:(bv64->bv8);
-  proc @main_1876(R0_in:rec750247379 of {"field0": (bv32, 0)} 64, R1_in:bv64,
-     R29_in:bv64, R30_in:bv64, R31_in:bv64)
+  proc @main_1876(R0_in:bv64, R1_in:bv64, R29_in:bv64, R30_in:bv64, R31_in:bv64)
      -> (CF_out:bv1, NF_out:bv1, R0_out:bv64, R1_out:bv64, R29_out:bv64,
      R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1) { .address = 1876;
       .name = "main"; .returnBlock = "main_basil_return_1" }
@@ -50,21 +49,21 @@
         0x20:bv64) R29_in:bv64 64;
        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64,
         0x18:bv64) R30_in:bv64 64;
-       $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x4:bv64) R0_in:rec750247379 of {"field0": (bv32, 0)} 64.field0 32;
+       $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x4:bv64) (R0_in:rec750247379 of {"field0": (bv32, 0)} 64.field0) 32;
        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64,
         0x10:bv64) R1_in:bv64 64;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x2003c:bv64 0x0:bv32 32;
        var load18_1:bv32 := load le $mem:(bv64->bv8) 0x20040:bv64 32;
        var R0_6:bv64 := zero_extend(32, load18_1:bv32);
        var R0_7:bv64 := zero_extend(32,
-       bvconcat(0x0:bv31, R0_6:rec241617322 of {"field0": (bv1, 0)} 64.field0));
-       var #5_1:bv32 := bvadd(R0_7:rec429227263 of {"field0": (bv32, 0)} 64.field0,
+       bvconcat(0x0:bv31, (R0_6:rec241617322 of {"field0": (bv1, 0)} 64.field0)));
+       var #5_1:bv32 := bvadd((R0_7:rec429227263 of {"field0": (bv32, 0)} 64.field0),
         0xffffffff:bv32);
        var VF_2:bv1 := bvnot(booltobv1(eq(sign_extend(1, bvadd(#5_1:bv32, 0x1:bv32)),
-          sign_extend(1, R0_7:rec429227263 of {"field0": (bv32, 0)} 64.field0))));
+          sign_extend(1, (R0_7:rec429227263 of {"field0": (bv32, 0)} 64.field0)))));
        var CF_2:bv1 := bvnot(booltobv1(eq(zero_extend(1, bvadd(#5_1:bv32, 0x1:bv32)),
-          bvadd(zero_extend(1, R0_7:rec429227263 of {"field0": (bv32, 0)} 64.field0),
-           0x100000000:bv33))));
+          bvadd(zero_extend(1,
+           (R0_7:rec429227263 of {"field0": (bv32, 0)} 64.field0)), 0x100000000:bv33))));
        var ZF_2:bv1 := booltobv1(eq(bvadd(#5_1:bv32, 0x1:bv32), 0x0:bv32));
        var NF_2:bv1 := extract(32,31, bvadd(#5_1:bv32, 0x1:bv32));
        goto (%main_27,%main_23);
@@ -98,8 +97,8 @@
        var load19_1:bv32 := load le $mem:(bv64->bv8) 0x2003c:bv64 32;
        var R0_19:bv64 := zero_extend(32, load19_1:bv32);
        var R1_6:bv64 := zero_extend(32,
-       bvadd(R0_19:rec1020629241 of {"field0": (bv32, 0)} 64.field0, 0x1:bv32));
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x2003c:bv64 R1_6:rec715801573 of {"field0": (bv32, 0)} 64.field0 32;
+       bvadd((R0_19:rec1020629241 of {"field0": (bv32, 0)} 64.field0), 0x1:bv32));
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x2003c:bv64 (R1_6:rec715801573 of {"field0": (bv32, 0)} 64.field0) 32;
        goto (%main_19);
      ];
      block %main_19 (
@@ -122,14 +121,15 @@
      block %main_17 [
        var load20_1:bv32 := load le $mem:(bv64->bv8) 0x2003c:bv64 32;
        var R0_13:bv64 := zero_extend(32, load20_1:bv32);
-       var #6_1:bv32 := bvadd(R0_13:rec429227263 of {"field0": (bv32, 0)} 64.field0,
+       var #6_1:bv32 := bvadd((R0_13:rec429227263 of {"field0": (bv32, 0)} 64.field0),
         0xfffffffa:bv32);
        var VF_5:bv1 := bvnot(booltobv1(eq(sign_extend(1, bvadd(#6_1:bv32, 0x1:bv32)),
           bvadd(sign_extend(1,
-           R0_13:rec429227263 of {"field0": (bv32, 0)} 64.field0), 0x1fffffffb:bv33))));
+           (R0_13:rec429227263 of {"field0": (bv32, 0)} 64.field0)),
+           0x1fffffffb:bv33))));
        var CF_5:bv1 := bvnot(booltobv1(eq(zero_extend(1, bvadd(#6_1:bv32, 0x1:bv32)),
           bvadd(zero_extend(1,
-           R0_13:rec429227263 of {"field0": (bv32, 0)} 64.field0), 0xfffffffb:bv33))));
+           (R0_13:rec429227263 of {"field0": (bv32, 0)} 64.field0)), 0xfffffffb:bv33))));
        var ZF_7:bv1 := booltobv1(eq(bvadd(#6_1:bv32, 0x1:bv32), 0x0:bv32));
        var NF_5:bv1 := extract(32,31, bvadd(#6_1:bv32, 0x1:bv32));
        goto (%main_15,%main_9);

@@ -12,7 +12,7 @@ proc @main_4196164(R0_in:bv64, R10_in:bv64, R11_in:bv64, R12_in:bv64, R13_in:bv6
 [
    block %main_entry [
      var as:ptr(bv64, bv64) := ptradd(R31_in, R0_in);
-     var af:bv32 := bvadd(0x1:bv32, $rec.field0);
+     var af:bv32 := bvadd(0x1:bv32, ($rec.field0));
      $rec:meow of {"field0": (bv32, 0), "field1": (bv64, 32)} 64 := $rec with field0 = af;
      goto (%main_return);
    ];

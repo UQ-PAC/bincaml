@@ -262,12 +262,12 @@ module InferredType = struct
             recursives
           @@ List.of_iter @@ ZMap.values fields
         in
-        print_endline
-          (name
-          ^ List.fold_left
-              (fun acc (_, ({ offset; typ } : Types.record_field)) ->
-                acc ^ " " ^ Types.show typ ^ " " ^ Z.to_string offset)
-              "" fields);
+        (* print_endline *)
+        (* (name *)
+        (* ^ List.fold_left *)
+        (* (fun acc (_, ({ offset; typ } : Types.record_field)) -> *)
+        (* acc ^ " " ^ Types.show typ ^ " " ^ Z.to_string offset) *)
+        (* "" fields); *)
         ( recursives,
           Types.Struct { name; fields = StringMap.of_list fields; size } )
     | Recursive (varid, typ) ->
@@ -727,11 +727,11 @@ module TypeAutomata = struct
             | _ -> failwith "Illegal edge in record list")
           types
       in
-      print_endline
-      @@ List.fold_left
-           (fun acc (_, ({ offset; size } : InferredType.field)) ->
-             acc ^ " " ^ Z.to_string offset ^ " " ^ Int.to_string size)
-           "" fields;
+      (* print_endline *)
+      (* @@ List.fold_left *)
+      (* (fun acc (_, ({ offset; size } : InferredType.field)) -> *)
+      (* acc ^ " " ^ Z.to_string offset ^ " " ^ Int.to_string size) *)
+      (* "" fields; *)
       let fields =
         fields
         |> List.sort
@@ -759,7 +759,10 @@ module TypeAutomata = struct
                  ( _,
                    ({ offset = offset1; size = size1; ty = ty1 } as field1 :
                      InferredType.field) ) ->
-              match (Z.leq offset offset1, size1 <= size) with
+              match
+                ( Z.leq offset offset1,
+                  Z.to_int offset1 + size1 <= Z.to_int offset + size )
+              with
               | true, true ->
                   let field1 = nest_record field field1 in
                   (true, (offset, field1))
@@ -768,17 +771,17 @@ module TypeAutomata = struct
         in
         if set then fields else (offset, field) :: fields
       in
-      print_endline
-      @@ List.fold_left
-           (fun acc (_, ({ offset; size } : InferredType.field)) ->
-             acc ^ " " ^ Z.to_string offset ^ " " ^ Int.to_string size)
-           "" fields;
+      (* print_endline *)
+      (* @@ List.fold_left *)
+      (* (fun acc (_, ({ offset; size } : InferredType.field)) -> *)
+      (* acc ^ " " ^ Z.to_string offset ^ " " ^ Int.to_string size) *)
+      (* "" fields; *)
       let fields = List.fold_left (fun acc (_, a) -> helper acc a) [] fields in
-      print_endline
-      @@ List.fold_left
-           (fun acc (_, ({ offset; size } : InferredType.field)) ->
-             acc ^ " " ^ Z.to_string offset ^ " " ^ Int.to_string size)
-           "" fields;
+      (* print_endline *)
+      (* @@ List.fold_left *)
+      (* (fun acc (_, ({ offset; size } : InferredType.field)) -> *)
+      (* acc ^ " " ^ Z.to_string offset ^ " " ^ Int.to_string size) *)
+      (* "" fields; *)
       InferredType.Record (ZMap.of_list fields, size)
     in
     (* Assume the list is only of two things *)
@@ -1589,8 +1592,9 @@ let map_expr results proc =
         | Types.Struct { name; fields; size } as typ ->
             let rec find_field offset1 size1 fields exp =
               match
-                List.find_opt (fun (_, ({ offset } : Types.record_field)) ->
-                    (Z.leq offset @@ Z.of_int offset1) && size1 <= size)
+                List.last_opt
+                @@ List.find_all (fun (_, ({ offset } : Types.record_field)) ->
+                    Z.leq offset @@ Z.of_int offset1)
                 @@ StringMap.bindings fields
               with
               | Some (str, { typ = Types.Struct { fields; size } })
