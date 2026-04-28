@@ -17,17 +17,12 @@
   bincaml: [WARNING] global undeclared ZF_7. assuming mutable unshared
   $ cat after-type-inference-loops.il
   type rec1033140799 of {"field131132": (bv32, 131132)} 32;
-  type rec129270769 of {"field-24": (rec655598698, -24)} 64;
   type rec219118263 of {"field0": (bv32, 0)} 64;
-  type rec25896807 of {"field131132": (rec1033140799, 131132)} 32;
   type rec340476297 of {"field-16": (bv64, -16)} 64;
   type rec395040688 of {"field-4": (bv32, -4)} 32;
-  type rec415299809 of {"field-4": (rec395040688, -4)} 32;
   type rec609987531 of {"field-32": (bv64, -32)} 64;
   type rec653825801 of {"field0": (bv1, 0)} 64;
   type rec655598698 of {"field-24": (bv64, -24)} 64;
-  type rec788165488 of {"field-16": (rec340476297, -16)} 64;
-  type rec913263426 of {"field-32": (rec609987531, -32)} 64;
   type rec995080098 of {"field131136": (bv32, 131136)} 32;
   var observable $mem:(bv64->bv8);
   var $stack:(bv64->bv8);

@@ -1295,13 +1295,13 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
         | Interval { lower } -> Bitvec.to_signed_bigint lower
         | _ -> failwith "impossible"
       in
-      let ty = TypeVar (VarId.make_id @@ "_b_" ^ ID.name @@ gen.fresh ()) in
+      let ty = TypeVar (VarId.make_id @@ ID.name @@ gen.fresh ()) in
 
       match stmt with
       | Stmt.Instr_Load _ ->
           let st = ConstraintState.add_lb st lhs ty in
           let lb, ub =
-            ( VarId.make_id @@ "_a_" ^ ID.name @@ gen.fresh (),
+            ( VarId.make_id @@ ID.name @@ gen.fresh (),
               Record (ZMap.singleton offset { size; offset; ty }, size) )
           in
           let st =
@@ -1330,7 +1330,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
           in
           let lb, ub =
             ( Record (ZMap.singleton offset { size; offset; ty }, size),
-              VarId.make_id @@ "_b_" ^ ID.name @@ gen.fresh () )
+              VarId.make_id @@ ID.name @@ gen.fresh () )
           in
           let st, _ = constrain_expr proc st (BasilExpr.unfix value) in
           let st, addr1 = constrain_expr proc st (BasilExpr.unfix addr) in
@@ -1352,8 +1352,8 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
   | ( Stmt.Instr_Load { lhs; addr = Addr { addr; size } }
     | Stmt.Instr_Store { lhs; addr = Addr { addr; size } } ) as stmt ->
       let lhs = TypeVar (VarId.var_proc_to_uid lhs proc) in
-      let lb = TypeVar (VarId.make_id @@ "_b_" ^ ID.name @@ gen.fresh ()) in
-      let ub = TypeVar (VarId.make_id @@ "_b_" ^ ID.name @@ gen.fresh ()) in
+      let lb = TypeVar (VarId.make_id @@ ID.name @@ gen.fresh ()) in
+      let ub = TypeVar (VarId.make_id @@ ID.name @@ gen.fresh ()) in
       let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
       let st = constrain st (Pointer (lb, ub)) addr in
       let st = constrain st ub lb in
@@ -1723,7 +1723,6 @@ let map_decl results proc (decl : Program.declaration) : Program.declaration =
       Function
         {
           attrib;
-          (* TODO: Ask Ali if this should be mapped *)
           binding = map_var results proc binding;
           definition =
             (match definition with
