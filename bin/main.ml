@@ -3,10 +3,39 @@ open Bincaml_util.Logger
 open Lang
 open Cmdliner
 open Cmdliner.Term.Syntax
-open Script
+open Bincaml
 
 let () = Printexc.record_backtrace true
 let () = Script.printer ()
+
+let kittyimg dotfile =
+  CCIO.File.with_temp ~prefix:"bincaml_repl_cfg" ~suffix:".png" (fun pngfile ->
+      let pngfile = ".png" in
+      let cols = Option.get_or ~default:10 @@ Terminal_size.get_columns () in
+      let _ =
+        Sys.command (Printf.sprintf "dot %s  -Tpng -o %s" dotfile pngfile)
+      in
+      let img = Stb_image.load ~channels:4 pngfile in
+      match img with
+      | Ok img ->
+          let b = Kittyimg.string_of_bytes_ba img.Stb_image.data in
+          print_newline ();
+          Kittyimg.send_image ~w:img.Stb_image.width ~h:img.Stb_image.height
+            ~format:`RGBA
+            ~mode:(`Display (Kittyimg.display_opts ~cstretch:cols ()))
+            b;
+          print_newline ()
+      | Error (`Msg e) -> failwith ("svg failure" ^ e))
+
+let display_proc_cfg st proc =
+  let proc = Script.P.(singleton string proc) in
+  let proc = Script.get_proc st proc in
+  CCIO.File.with_temp ~prefix:"graph" ~suffix:".dot" (fun dot ->
+      CCIO.with_out dot (fun dot ->
+          Viscfg.Dot.output_graph dot proc;
+          flush dot);
+      kittyimg dot;
+      st)
 
 let fname =
   let doc = "Input file name (e.g., filename.il or - for stdin)" in
@@ -49,11 +78,15 @@ let repl ~verb ~echo_cmd =
             let fname = Script.P.(singleton string c) in
             CCIO.with_in fname (fun c ->
                 try Script.of_chan_2 ~fname ~st c
-                with ReplError _ as exn ->
+                with Script.ReplError _ as exn ->
                   print_endline @@ Script.print_repl_error exn;
                   st)),
           "fname.sexp",
           "Interpret a script" );
+        ( "display-proc-cfg",
+          display_proc_cfg,
+          "<proc> ?file",
+          "Write dot cfg of <proc> to file or stdout" );
       ]
   in
 
@@ -117,7 +150,7 @@ let repl ~verb ~echo_cmd =
     in
     let proc_list =
       lazy
-        (Option.bind !completions_state (fun s -> s.load_st)
+        (Option.bind !completions_state Script.(fun s -> s.load_st)
         |> Option.to_iter
         |> Iter.flat_map (fun p ->
             Program.procs Loader.Loadir.(p.prog)

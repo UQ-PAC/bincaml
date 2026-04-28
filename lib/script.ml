@@ -185,8 +185,8 @@ let load_il st args =
 
 let run_transform st args =
   let args = P.(list string args) in
-  let ba = Bincaml.Passes.PassManager.batch_of_list args in
-  let prog = Some (Bincaml.Passes.PassManager.run_batch ba (get_prog st)) in
+  let ba = Passes.PassManager.batch_of_list args in
+  let prog = Some (Passes.PassManager.run_batch ba (get_prog st)) in
   set_prog st prog
 
 let log_level st args =
@@ -258,41 +258,6 @@ let get_proc st proc =
   in
   proc
 
-let write_proc_cfg st args =
-  let proc, ofile = P.(pair_opt string string args) in
-  let proc = get_proc st proc in
-  file_opt ofile (fun c -> Viscfg.Dot.output_graph c proc);
-  st
-
-let kittyimg dotfile =
-  CCIO.File.with_temp ~prefix:"bincaml_repl_cfg" ~suffix:".png" (fun pngfile ->
-      let pngfile = ".png" in
-      let cols = Option.get_or ~default:10 @@ Terminal_size.get_columns () in
-      let _ =
-        Sys.command (Printf.sprintf "dot %s  -Tpng -o %s" dotfile pngfile)
-      in
-      let img = Stb_image.load ~channels:4 pngfile in
-      match img with
-      | Ok img ->
-          let b = Kittyimg.string_of_bytes_ba img.Stb_image.data in
-          print_newline ();
-          Kittyimg.send_image ~w:img.Stb_image.width ~h:img.Stb_image.height
-            ~format:`RGBA
-            ~mode:(`Display (Kittyimg.display_opts ~cstretch:cols ()))
-            b;
-          print_newline ()
-      | Error (`Msg e) -> failwith ("svg failure" ^ e))
-
-let display_proc_cfg st proc =
-  let proc = P.(singleton string proc) in
-  let proc = get_proc st proc in
-  CCIO.File.with_temp ~prefix:"graph" ~suffix:".dot" (fun dot ->
-      CCIO.with_out dot (fun dot ->
-          Viscfg.Dot.output_graph dot proc;
-          flush dot);
-      kittyimg dot;
-      st)
-
 let dump_proc_il st args =
   let proc, ofile = P.(pair_opt string string args) in
   file_opt ofile (fun c ->
@@ -301,7 +266,7 @@ let dump_proc_il st args =
   st
 
 let list_passes st args =
-  Bincaml.Passes.PassManager.print_passes
+  Passes.PassManager.print_passes
   |> Containers_pp.Pretty.to_string ~width:80
   |> print_endline;
   st
@@ -314,6 +279,12 @@ let def_cmd st d =
   in
   let defn : Sexp.t = defn in
   { st with user_cmds = StringMap.add name (doc, defn) st.user_cmds }
+
+let write_proc_cfg st args =
+  let proc, ofile = P.(pair_opt string string args) in
+  let proc = get_proc st proc in
+  file_opt ofile (fun c -> Viscfg.Dot.output_graph c proc);
+  st
 
 let save_history st fname =
   file_opt
@@ -355,10 +326,6 @@ let cmds_list =
       "list blocks in a procedure" );
     ( "dump-proc-cfg",
       write_proc_cfg,
-      "<proc> ?file",
-      "Write dot cfg of <proc> to file or stdout" );
-    ( "display-proc-cfg",
-      display_proc_cfg,
       "<proc> ?file",
       "Write dot cfg of <proc> to file or stdout" );
     ("dump-history", save_history, "file.sexp", "Print the IL of a proc");

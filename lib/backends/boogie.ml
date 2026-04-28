@@ -204,7 +204,7 @@ let rec pretty_attribute (attr : Program.e Attrib.t) =
 and pretty_attribute_map (key : string) (a : Program.e Attrib.attrib_map) =
   let open Containers_pp in
   StringMap.find_opt key a |> Option.to_list
-  |> List.flat_map (function `Assoc m -> StringMap.to_list m | _ -> [])
+  |> List.flat_map (function `Assoc m -> StringMap.bindings m | _ -> [])
   |> List.map (function k, f ->
       bracket "{"
         (text ":" ^ text (String.drop 1 k) ^+ append_sp @@ pretty_attribute f)
