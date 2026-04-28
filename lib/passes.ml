@@ -332,7 +332,6 @@ module PassManager = struct
       cfg_wrapped_int;
       cfg_tnum_wint_reduced;
       demo_dfg_gamma;
-      sva;
       sparams;
       read_uninit false;
       read_uninit true;

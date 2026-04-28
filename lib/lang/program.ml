@@ -149,8 +149,6 @@ let procs p =
     | k, Procedure { definition } -> Some (k, definition)
     | _ -> None)
 
-let globals prog = IDMap.values prog.declarations
-
 let global_vars prog =
   IDMap.values prog.declarations
   |> Iter.filter_map (function
