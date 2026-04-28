@@ -256,18 +256,17 @@ module Make (O : Fix) = struct
     cata alg e
 
   (* substite variables for expressions *)
-  let substitute ?(sub_binds=false) (sub : var -> t option) (e : t) =
+  let substitute (sub : var -> t option) (e : t) =
     let open AbstractExpr in
     let rec subst bound orig =
       let exp = unfix orig in
       match exp with
-      | RVar { id } when sub_binds || VarSet.find_opt id bound |> Option.is_none -> (
+      | RVar { id } when VarSet.find_opt id bound |> Option.is_none -> (
           match sub id with Some r -> r | None -> orig)
       | Lambda { op; bound_vars; in_body; attrib } ->
           (* exprs to bind are evaluated outside the bound *)
           let bound = VarSet.add_list bound bound_vars in
           let in_body = subst bound in_body in
-          let bound_vars = bound_vars in
           fix (Lambda { op; bound_vars; in_body; attrib })
       | Let { bound_vars; in_body; attrib } ->
           (* exprs to bind are evaluated outside the bound *)
@@ -277,6 +276,27 @@ module Make (O : Fix) = struct
       | o -> fix @@ AbstractExpr.map (subst bound) o
     in
     subst VarSet.empty e
+
+  let substitute_bound (sub : var -> var option) (e : t) =
+    let open AbstractExpr in
+    let sub v = match sub v with Some r -> r | None -> v in
+    let rec subst orig =
+      let exp = unfix orig in
+      match exp with
+      | RVar { id; attrib } -> fix (RVar { attrib; id = sub id })
+      | Lambda { op; bound_vars; in_body; attrib } ->
+          (* exprs to bind are evaluated outside the bound *)
+          let in_body = subst in_body in
+          let bound_vars = bound_vars |> List.map sub in
+          fix (Lambda { op; bound_vars; in_body; attrib })
+      | Let { bound_vars; in_body; attrib } ->
+          (* exprs to bind are evaluated outside the bound *)
+          let in_body = subst in_body in
+          let bound_vars = bound_vars |> List.map (fun (a, b) -> (sub a, b)) in
+          fix (Let { bound_vars; in_body; attrib })
+      | o -> fix @@ AbstractExpr.map subst o
+    in
+    subst e
 
   (** get list of child expressions *)
   let children e = cata Alges.children_alg e

@@ -204,7 +204,7 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
                  (Procedure.fresh_var
                     (Procedure.create (ID.decl_exn (ID.make_gen ()) "") ()))
 
-        let id = Procedure.id proc;
+        let id = Procedure.id proc
       end : FunctionAnnotation)
       (ref IDSet.empty) proc
   in
@@ -261,38 +261,26 @@ let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
           let ensures id =
             List.append (IDMap.find id res).ensures (vals id).ensures
 
-        let inout id =
-          Program.proc_opt prog id
-          |> Option.map_or
-               (fun p ->
-                 VarSet.union
-                   (VarSet.of_iter @@ StringMap.values
-                   @@ Procedure.formal_in_params p)
-                   (VarSet.of_iter @@ StringMap.values
-                   @@ Procedure.formal_out_params p))
-               ~default:VarSet.empty
+          let inout id =
+            Program.proc_opt prog id
+            |> Option.map_or
+                 (fun p ->
+                   VarSet.union
+                     (VarSet.of_iter @@ StringMap.values
+                     @@ Procedure.formal_in_params p)
+                     (VarSet.of_iter @@ StringMap.values
+                     @@ Procedure.formal_out_params p))
+                 ~default:VarSet.empty
 
-        let fresh_var id =
-          Program.proc_opt prog id
-          |> Option.map_or
-               (fun p -> Procedure.fresh_var p)
-               ~default:
-                 (Procedure.fresh_var
-                    (Procedure.create (ID.decl_exn (ID.make_gen ()) "") ()))
+          let fresh_var id =
+            Program.proc_opt prog id
+            |> Option.map_or
+                 (fun p -> Procedure.fresh_var p)
+                 ~default:
+                   (Procedure.fresh_var
+                      (Procedure.create (ID.decl_exn (ID.make_gen ()) "") ()))
 
-        let id = pid;
-          (* let inout = *)
-            (* Program.proc_opt prog pid *)
-            (* |> Option.map_or *)
-                 (* (fun p -> *)
-                   (* VarSet.union *)
-                     (* (VarSet.of_iter @@ StringMap.values *)
-                     (* @@ Procedure.formal_in_params p) *)
-                     (* (VarSet.of_iter @@ StringMap.values *)
-                     (* @@ Procedure.formal_out_params p)) *)
-                 (* ~default:VarSet.empty *)
-
-          (* let fresh_var = Program.proc prog pid |> Procedure.fresh_var *)
+          let id = pid
         end : FunctionAnnotation)
       in
       let extra =
