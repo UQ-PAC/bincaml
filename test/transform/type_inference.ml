@@ -239,7 +239,7 @@ proc @main_4196260 () -> ()
       (VarId.make_id "$field1", (Types.Top, Types.Bitvector 32));
       (VarId.make_id "$field2", (Types.Top, Types.Bitvector 32));
       ( VarId.make_id "$record",
-        (Top, Types.Struct { name = "rec507745169"; fields; size = 64 }) );
+        (Top, Types.Struct { name = "rec293033211"; fields; size = 64 }) );
       (VarId.make_id "Extraction_v", (Top, Types.Bitvector 32));
       (VarId.make_id "Extraction_v_1", (Top, Types.Bitvector 32));
     ]

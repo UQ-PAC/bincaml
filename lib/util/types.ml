@@ -151,14 +151,7 @@ let rec to_string = function
   | Variable name -> name
   | Pointer { lower; upper; _ } ->
       Printf.sprintf "ptr(%s, %s)" (to_string lower) (to_string upper)
-  | Struct { fields; size; name } ->
-      name ^ " of {"
-      ^ (StringMap.bindings fields
-        |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->
-            Printf.sprintf "\"%s\": (%s, %s)" k (to_string v)
-              (Z.to_string offset))
-        |> String.concat ", ")
-      ^ "} " ^ Int.to_string size
+  | Struct { name; _ } -> name
   | Map ((Map _ as a), (Map _ as b)) ->
       "(" ^ "(" ^ to_string a ^ ")" ^ "->" ^ "(" ^ to_string b ^ ")" ^ ")"
   | Map ((Map _ as a), b) ->
@@ -184,6 +177,14 @@ let to_string_decl = function
       ^ List.to_string ~sep:" | " ~start:"" ~stop:""
           (function { variant; fields } -> fsort variant fields)
           variants
+  | Struct { fields; size; name } ->
+      name ^ " of {"
+      ^ (StringMap.bindings fields
+        |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->
+            Printf.sprintf "\"%s\": (%s, %s)" k (to_string v)
+              (Z.to_string offset))
+        |> String.concat ", ")
+      ^ "} " ^ Int.to_string size
   | a -> to_string a
 
 let to_string_rexp = function

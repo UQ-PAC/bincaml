@@ -251,7 +251,6 @@ module InferredType = struct
         let recursives, upper = inferred_to_real recursives upper in
         (recursives, Types.Pointer { lower; upper })
     | Record (fields, size) ->
-        let name = "rec" ^ Int.to_string @@ Hashtbl.hash typ in
         let recursives, fields =
           List.fold_left_map
             (fun recursives ({ offset; ty } : field) ->
@@ -262,6 +261,7 @@ module InferredType = struct
             recursives
           @@ List.of_iter @@ ZMap.values fields
         in
+        let name = "rec" ^ Int.to_string @@ Hashtbl.hash fields in
         (* print_endline *)
         (* (name *)
         (* ^ List.fold_left *)
@@ -1782,10 +1782,15 @@ let map_decl results proc (decl : Program.declaration) : Program.declaration =
       in
       Procedure { definition }
 
-let declare_typ (typ : Types.t) : (string * Types.t) option * Types.t =
+let rec declare_typ (typ : Types.t) acc : (string * Types.t) option list =
   match typ with
-  | Struct { name; _ } -> (Some (name, typ), typ)
-  | _ -> (None, typ)
+  | Struct { name; fields } ->
+      Some (name, typ)
+      :: StringMap.fold
+           (fun _ ({ typ } : Types.record_field) acc -> declare_typ typ acc)
+           fields acc
+  | Pointer { lower; upper } -> declare_typ lower (declare_typ upper acc)
+  | _ -> None :: acc
 
 let declare_recursive_typs (recursives : (VarId.t * Types.t) list) :
     (string * Program.declaration) list =
@@ -1799,23 +1804,18 @@ let transform (prog : Program.t) (results : (Types.t * Types.t) VarIdMap.t)
     (recursives : (VarId.t * Types.t) list) : Program.t =
   Logs.info (fun m ->
       m "Starting type inference transform" ~tags:(Logger.time_stamp ()));
-  let decls, results =
-    List.fold_left_map
-      (fun acc (id, (l, u)) ->
-        let name1, l = declare_typ l in
-        let name2, u = declare_typ u in
-        (name1 :: name2 :: acc, (id, (l, u))))
-      [] (VarIdMap.to_list results)
-  in
-  let results = VarIdMap.of_list results in
   let decls =
-    List.filter_map
-      (fun a ->
+    List.fold_left
+      (fun acc (id, (l, u)) ->
+        let name1 = declare_typ l [] in
+        let name2 = declare_typ u [] in
+        name1 @ name2 @ acc)
+      [] (VarIdMap.to_list results)
+    |> List.filter_map (fun a ->
         match a with
         | Some (binding, typ) ->
             Some (Type { typ; binding } : Program.declaration)
         | None -> None)
-      decls
   in
   Program.map_decls (fun _ s -> map_decl results None s) prog |> fun prog ->
   List.fold_left (fun prog decl -> Program.add_decl prog decl) prog
