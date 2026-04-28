@@ -1,8 +1,5 @@
 (*
   Paper this work is based on: https://arxiv.org/abs/2409.01841
-
-  TODO:
-    Don't rely on full type information
 *)
 
 open Bincaml_util.Common
@@ -138,6 +135,14 @@ module InferredType = struct
     (* print_endline @@ Printf.sprintf "joining types %s %s" (show ty0) @@ show ty1; *)
     match (a, b) with
     | a, b when equal a b -> a
+    | Recursive (a, b), _ | _, Recursive (a, b) ->
+        (*
+          TODO:
+            Deal with recursives, I doubt they are real though
+            they are probs more important than anything else?
+        *)
+        print_endline "Intersection Recursive";
+        Recursive (a, b)
     | Record (fields0, size), Record (fields1, _) ->
         (* WARN: I think this could be improved, cause this is gross *)
         let module FieldMap = Map.Make (struct
@@ -193,18 +198,24 @@ module InferredType = struct
           in
           Function (name0, ins, outs0)
     | (Function _ as a), _ | _, (Function _ as a) -> a
+    (* TODO: Will need to check to make sure the typevar isn't a recursive and if it is use that one instead *)
     | Top, a | a, Top | TypeVar _, a | a, TypeVar _ -> a
     | Bottom, a | a, Bottom -> Bottom
     | c, Union (a, b) | Union (a, b), c -> Sect (c, union a b)
     | c, Sect (a, b) | Sect (a, b), c -> intersect c @@ intersect a b
-    | Recursive (a, b), _ | _, Recursive (a, b) ->
-        print_endline "Intersection Recursive";
-        Recursive (a, b) (*TODO*)
     | a, b -> order a b
 
   and union a b =
     match (a, b) with
     | _, _ when equal a b -> a
+    | Recursive (a, b), _ | _, Recursive (a, b) ->
+        (*
+          TODO:
+            Deal with recursives, I doubt they are real though
+            they are probs more important than anything else?
+        *)
+        print_endline "Union Recursive";
+        Recursive (a, b) (*TODO*)
     | Top, _ | _, Top -> Top
     | Union (a, b), c | c, Union (a, b) -> union c @@ union a b
     | Sect (a, b), c | c, Sect (a, b) -> union c @@ intersect a b
@@ -212,9 +223,7 @@ module InferredType = struct
     | Record (name, f), _ | _, Record (name, f) -> Record (name, f)
     | Pointer (l1, u1), Pointer (l2, u2) -> a (* TODO *)
     | Pointer (l, u), _ | _, Pointer (l, u) -> Pointer (l, u)
-    | Recursive (a, b), _ | _, Recursive (a, b) ->
-        print_endline "Union Recursive";
-        Recursive (a, b) (*TODO*)
+    (* TODO: Will need to check to make sure the typevar isn't a recursive and if it is use that one instead *)
     | TypeVar a, _ | _, TypeVar a -> TypeVar a
     | _ ->
         print_endline @@ Printf.sprintf "TODO %s %s" (show a) (show b);
@@ -222,14 +231,17 @@ module InferredType = struct
 
   and order a b =
     match (a, b) with
-    | Record (a, b), _ | _, Record (a, b) -> Record (a, b)
-    | BV a, BV b when a = b -> BV a
+    | a, b when equal a b -> a
     | BV _, BV _ ->
-        print_endline @@ Printf.sprintf "DISJOINT %s %s" (show a) (show b);
+        print_endline @@ Printf.sprintf "DISJOINT BV %s %s" (show a) (show b);
         Top
+    | (Record _ as a), _ | _, (Record _ as a) -> a
+    | (Pointer _ as a), _ | _, (Pointer _ as a) -> a
+    | (Function _ as a), _ | _, (Function _ as a) -> a
     | _ ->
-        print_endline @@ Printf.sprintf "TODO %s %s" (show a) (show b);
-        failwith "boom3"
+        print_endline
+        @@ Printf.sprintf "No order over these types %s %s" (show a) (show b);
+        failwith "No order over these types"
 
   (* Top and type_var might be valid, and maybe even bottom and then those can just default to whatever type it had prior *)
   let rec inferred_to_real recursives typ : (VarId.t * Types.t) list * Types.t =
@@ -262,18 +274,12 @@ module InferredType = struct
           @@ List.of_iter @@ ZMap.values fields
         in
         let name = "rec" ^ Int.to_string @@ Hashtbl.hash fields in
-        (* print_endline *)
-        (* (name *)
-        (* ^ List.fold_left *)
-        (* (fun acc (_, ({ offset; typ } : Types.record_field)) -> *)
-        (* acc ^ " " ^ Types.show typ ^ " " ^ Z.to_string offset) *)
-        (* "" fields); *)
         ( recursives,
           Types.Struct { name; fields = StringMap.of_list fields; size } )
     | Recursive (varid, typ) ->
         let recursives, typ = inferred_to_real recursives typ in
         ((varid, typ) :: recursives, Types.Variable (VarId.show varid))
-    (* NOTE: Will need to check to make sure the typevar isn't a recursive and if it is use that one instead *)
+    (* TODO: Will need to check to make sure the typevar isn't a recursive and if it is use that one instead *)
     | Union (a, b) -> inferred_to_real recursives @@ union a b
     | Sect (a, b) -> inferred_to_real recursives @@ intersect a b
     | Function _ -> (recursives, Top)
@@ -625,7 +631,8 @@ module TypeAutomata = struct
     let rec type_to_state_list p (ty : InferredType.t) ((ls, tbl) as acc) =
       let open Sigma in
       match ty with
-      | Top | BV _ | Bool | Int | TypeVar _ | Bottom -> ((p, ty) :: ls, tbl)
+      | Top | BV _ | Bool | Int | TypeVar _ | Bottom ->
+          (Iter.cons (p, ty) ls, tbl)
       | Recursive (id, typ) ->
           (*
             NOTE: I think it is easiest to deal with recursives with type decls
@@ -642,7 +649,7 @@ module TypeAutomata = struct
               Edges.empty edges
           in
           let tbl = StateEdges.add (p, ty) edges tbl in
-          ((p, ty) :: ls, tbl)
+          (Iter.cons (p, ty) ls, tbl)
       | Union (a, b) | Sect (a, b) ->
           let next1, edges1 = grab_edges a p in
           let next2, edges2 = grab_edges b p in
@@ -658,7 +665,7 @@ module TypeAutomata = struct
               Edges.empty edges
           in
           let tbl = StateEdges.add (p, ty) edges tbl in
-          ((p, ty) :: ls, tbl)
+          (Iter.cons (p, ty) ls, tbl)
       | Function (_, ins, outs) ->
           let acc =
             StringMap.fold
@@ -682,7 +689,7 @@ module TypeAutomata = struct
             @@ StringMap.to_list outs
           in
           let tbl = StateEdges.add (p, ty) edges tbl in
-          ((p, ty) :: ls, tbl)
+          (Iter.cons (p, ty) ls, tbl)
       | Pointer (a, b) ->
           let ((ls, tbl) as acc) = type_to_state_list p b acc in
           let ls, tbl = type_to_state_list (Polarity.not p) a acc in
@@ -691,7 +698,7 @@ module TypeAutomata = struct
             @@ Edges.add_to_list StoreLabel (Polarity.not p, a) Edges.empty
           in
           let tbl = StateEdges.add (p, ty) edges tbl in
-          ((p, ty) :: ls, tbl)
+          (Iter.cons (p, ty) ls, tbl)
       | Record (fields, r_size) ->
           let ls, tbl =
             ZMap.fold
@@ -708,10 +715,10 @@ module TypeAutomata = struct
               fields Edges.empty
           in
           let tbl = StateEdges.add (p, ty) edges tbl in
-          ((p, ty) :: ls, tbl)
+          (Iter.cons (p, ty) ls, tbl)
     in
     let states, transitions =
-      type_to_state_list polarity ty ([], StateEdges.empty)
+      type_to_state_list polarity ty (Iter.empty, StateEdges.empty)
     in
     { transitions; start = init; name }
 
@@ -727,11 +734,6 @@ module TypeAutomata = struct
             | _ -> failwith "Illegal edge in record list")
           types
       in
-      (* print_endline *)
-      (* @@ List.fold_left *)
-      (* (fun acc (_, ({ offset; size } : InferredType.field)) -> *)
-      (* acc ^ " " ^ Z.to_string offset ^ " " ^ Int.to_string size) *)
-      (* "" fields; *)
       let fields =
         fields
         |> List.sort
@@ -771,17 +773,7 @@ module TypeAutomata = struct
         in
         if set then fields else (offset, field) :: fields
       in
-      (* print_endline *)
-      (* @@ List.fold_left *)
-      (* (fun acc (_, ({ offset; size } : InferredType.field)) -> *)
-      (* acc ^ " " ^ Z.to_string offset ^ " " ^ Int.to_string size) *)
-      (* "" fields; *)
       let fields = List.fold_left (fun acc (_, a) -> helper acc a) [] fields in
-      (* print_endline *)
-      (* @@ List.fold_left *)
-      (* (fun acc (_, ({ offset; size } : InferredType.field)) -> *)
-      (* acc ^ " " ^ Z.to_string offset ^ " " ^ Int.to_string size) *)
-      (* "" fields; *)
       InferredType.Record (ZMap.of_list fields, size)
     in
     (* Assume the list is only of two things *)
@@ -876,9 +868,8 @@ module TypeAutomata = struct
     construct_type n.start
 
   let create_simple_type (polarity : Polarity.t) ty init name : InferredType.t =
-    let m = type_to_automata polarity ty init name |> simplify_automata in
-    (* print_endline @@ export_graphviz m; *)
-    m |> automata_to_type
+    type_to_automata polarity ty init name
+    |> simplify_automata |> automata_to_type
 end
 
 (* Needed for extraction calls etc. *)
@@ -1159,9 +1150,7 @@ let rec constrain_expr proc (st : ConstraintState.t)
             constrain_arg proc st r @@ InferredType.type_to_inferred typ
           in
           (st, type_to_inferred @@ BasilExpr.type_of l)
-      | `PTRADD ->
-          (* TODO: The pointer is the the left pointer but with the offsets translated by the right value, use SVA to see if we know the right ptr? *)
-          (st, Pointer (Top, Top))
+      | `PTRADD -> (st, Pointer (Top, Top))
       | `INTMOD | `INTSUB | `INTDIV | `INTADD | `INTMUL ->
           let st = constrain_args proc st l r Int in
           (st, Int)
@@ -1298,7 +1287,6 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
           ((flip Analysis.Sva.StateAbstraction.read) sva)
           addr
       in
-      (* TODO: Should I check to see if it is a malloc? i.e. Heap *)
       let res =
         snd @@ List.hd @@ snd @@ Analysis.Sva.SymAddrSetLattice.to_list sva_res
       in
@@ -1307,18 +1295,13 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
         | Interval { lower } -> Bitvec.to_signed_bigint lower
         | _ -> failwith "impossible"
       in
-      let ty =
-        TypeVar
-          (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
-         ^ "_b_" ^ Program.show_stmt stmt)
-      in
+      let ty = TypeVar (VarId.make_id @@ "_b_" ^ ID.name @@ gen.fresh ()) in
 
       match stmt with
       | Stmt.Instr_Load _ ->
           let st = ConstraintState.add_lb st lhs ty in
           let lb, ub =
-            ( VarId.make_id @@ Int.to_string block_id
-              ^ Int.to_string stmt_number ^ "_a_" ^ Program.show_stmt stmt,
+            ( VarId.make_id @@ "_a_" ^ ID.name @@ gen.fresh (),
               Record (ZMap.singleton offset { size; offset; ty }, size) )
           in
           let st =
@@ -1347,8 +1330,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
           in
           let lb, ub =
             ( Record (ZMap.singleton offset { size; offset; ty }, size),
-              VarId.make_id @@ Int.to_string block_id
-              ^ Int.to_string stmt_number ^ "_b_" ^ Program.show_stmt stmt )
+              VarId.make_id @@ "_b_" ^ ID.name @@ gen.fresh () )
           in
           let st, _ = constrain_expr proc st (BasilExpr.unfix value) in
           let st, addr1 = constrain_expr proc st (BasilExpr.unfix addr) in
@@ -1370,16 +1352,8 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
   | ( Stmt.Instr_Load { lhs; addr = Addr { addr; size } }
     | Stmt.Instr_Store { lhs; addr = Addr { addr; size } } ) as stmt ->
       let lhs = TypeVar (VarId.var_proc_to_uid lhs proc) in
-      let lb =
-        TypeVar
-          (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
-         ^ "_lower_" ^ Program.show_stmt stmt)
-      in
-      let ub =
-        TypeVar
-          (VarId.make_id @@ Int.to_string block_id ^ Int.to_string stmt_number
-         ^ "_upper_" ^ Program.show_stmt stmt)
-      in
+      let lb = TypeVar (VarId.make_id @@ "_b_" ^ ID.name @@ gen.fresh ()) in
+      let ub = TypeVar (VarId.make_id @@ "_b_" ^ ID.name @@ gen.fresh ()) in
       let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
       let st = constrain st (Pointer (lb, ub)) addr in
       let st = constrain st ub lb in
@@ -1535,8 +1509,18 @@ let simplify_types types =
 (* Passes through a given program and returns a given constraint set *)
 let analyse (prog : Program.t) :
     (Types.t * Types.t) VarIdMap.t * (VarId.t * Types.t) list =
+  let cons =
+    Trace_core.with_span ~__FILE__ ~__LINE__
+      "transform-proc::generate_constraints" (fun _ ->
+        generate_constraints prog)
+  in
+  let types =
+    Trace_core.with_span ~__FILE__ ~__LINE__ "type-inference::coalesce_types"
+      (fun _ -> unconstrain_types cons)
+  in
   let recursives, types =
-    simplify_types @@ unconstrain_types @@ generate_constraints prog
+    Trace_core.with_span ~__FILE__ ~__LINE__ "type-inference::simplification"
+      (fun _ -> simplify_types types)
   in
   Logs.info (fun m ->
       m "Done type inference analysis" ~tags:(Logger.time_stamp ()));
@@ -1551,18 +1535,12 @@ let analyse (prog : Program.t) :
 
 let get_lower_type results proc var : Types.t =
   match VarIdMap.find_opt (VarId.var_proc_to_uid var proc) results with
-  | None | Some (Types.Top, _) ->
-      Var.typ var
-      (* NOTE: This should fail, but might as well keep old type for now, this only really happens when the variable isn't used ever, i.e. function parameters, this could be changed to do a constraint there though, just forgot *)
-      (* TODO: Make this a failwith and instead just get better code to always have constraints *)
+  | None | Some (Types.Top, _) -> Var.typ var
   | Some (a, _) -> a
 
 let get_upper_type results proc var : Types.t =
   match VarIdMap.find_opt (VarId.var_proc_to_uid var proc) results with
-  | None | Some (_, Types.Top) ->
-      Var.typ var
-      (* NOTE: This should fail, but might as well keep old type for now, this only really happens when the variable isn't used ever, i.e. function parameters, this could be changed to do a constraint there though, just forgot *)
-      (* TODO: Make this a failwith and instead just get better code to always have constraints *)
+  | None | Some (_, Types.Top) -> Var.typ var
   | Some (_, a) -> a
 
 let cast arg : BasilExpr.t =
@@ -1741,13 +1719,12 @@ let map_decl results proc (decl : Program.declaration) : Program.declaration =
   match decl with
   (* Leave type decls alone, could have a pass that removes dead ones *)
   | Program.Type _ -> decl
-  (* TODO: confused *)
   | Program.Function { definition; attrib; binding } ->
       Function
         {
           attrib;
           (* TODO: Ask Ali if this should be mapped *)
-          binding;
+          binding = map_var results proc binding;
           definition =
             (match definition with
             | Axiom e -> Axiom (map_expr results proc e)
@@ -1827,4 +1804,13 @@ let transform (prog : Program.t) (results : (Types.t * Types.t) VarIdMap.t)
          | _ -> failwith "?")
        decls
 
-let infer_types (prog : Program.t) = uncurry (transform prog) @@ analyse prog
+let infer_types (prog : Program.t) =
+  let a, b =
+    Trace_core.with_span ~__FILE__ ~__LINE__ "type-inference::analyse"
+    @@ fun _ -> analyse prog
+  in
+  let prog =
+    Trace_core.with_span ~__FILE__ ~__LINE__ "type-inference::transform"
+      (fun _ -> transform prog a b)
+  in
+  prog
