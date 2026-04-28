@@ -59,6 +59,9 @@ and intType =
 and boolType =
    BoolType1 of bOOLTYPE
 
+and topType =
+   TopType1
+
 and structType =
    StructType1 of localIdent * beginRec * field list * endRec * intVal
 
@@ -82,6 +85,7 @@ and typeT =
    TypeIntType of intType
  | TypeBoolType of boolType
  | TypeBVType of bVType
+ | TypeTop of topType
  | TypePointerType of pointerType
  | TypeStructType of structType
  | TypeVarType of localIdent
@@ -230,7 +234,7 @@ and expr =
  | Expr_Match of expr * openParen * case list * closeParen
  | Expr_Cases of openParen * case list * closeParen
  | Expr_Paren of openParen * expr * closeParen
- | Expr_Field of expr * bIdent
+ | Expr_Field of openParen * expr * bIdent * closeParen
  | Expr_FieldSet of expr * localIdent * expr
  | SortValRec of localIdent * beginRec * fieldAssign list * endRec
 

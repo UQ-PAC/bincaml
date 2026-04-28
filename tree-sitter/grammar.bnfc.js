@@ -125,6 +125,9 @@ module.exports = ({
     BoolType: $ =>
       // BoolType1. BoolType ::= BOOLTYPE ;
       $.token_BOOLTYPE,
+    TopType: $ =>
+      // TopType1. TopType ::= "\8868" ;
+      "\8868",
     StructType: $ =>
       // StructType1. StructType ::= LocalIdent "of" BeginRec [Field] EndRec IntVal ;
       seq($.token_LocalIdent, "of", $.token_BeginRec, optional($.list_Field), $.token_EndRec, $.IntVal),
@@ -169,6 +172,8 @@ module.exports = ({
         $.BoolType,
         // TypeBVType. Type1 ::= BVType ;
         $.BVType,
+        // TypeTop. Type1 ::= TopType ;
+        $.TopType,
         // TypePointerType. Type1 ::= PointerType ;
         $.PointerType,
         // TypeStructType. Type1 ::= StructType ;

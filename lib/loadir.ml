@@ -486,6 +486,7 @@ module BasilASTLoader = struct
 
   and trans_type (x : typeT) : Types.t =
     match x with
+    | TypeTop toptype -> Top
     | TypeIntType inttype -> Integer
     | TypeBoolType booltype -> Boolean
     | TypeMapType maptype -> transMapType maptype
@@ -1169,7 +1170,7 @@ module BasilASTLoader = struct
         let fname = unsafe_unsigil (`Local fname) in
         BasilExpr.field_store ~field:fname (trans_expr record)
           (trans_expr value)
-    | Expr_Field (record, fname) ->
+    | Expr_Field (_, record, fname, _) ->
         let fname =
           String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Attr fname)
           |> Option.get_exn_or "safe by parser"

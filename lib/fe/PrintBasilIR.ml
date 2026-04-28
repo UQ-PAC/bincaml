@@ -199,6 +199,10 @@ and prtBoolType (i:int) (e : AbsBasilIR.boolType) : doc = match e with
        AbsBasilIR.BoolType1 booltype -> prPrec i 0 (concatD [prtBOOLTYPE 0 booltype])
 
 
+and prtTopType (i:int) (e : AbsBasilIR.topType) : doc = match e with
+       AbsBasilIR.TopType1  -> prPrec i 0 (concatD [render "⊤"])
+
+
 and prtStructType (i:int) (e : AbsBasilIR.structType) : doc = match e with
        AbsBasilIR.StructType1 (localident, beginrec, fields, endrec, intval) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "of" ; prtBeginRec 0 beginrec ; prtFieldListBNFC 0 fields ; prtEndRec 0 endrec ; prtIntVal 0 intval])
 
@@ -234,6 +238,7 @@ and prtTypeT (i:int) (e : AbsBasilIR.typeT) : doc = match e with
        AbsBasilIR.TypeIntType inttype -> prPrec i 1 (concatD [prtIntType 0 inttype])
   |    AbsBasilIR.TypeBoolType booltype -> prPrec i 1 (concatD [prtBoolType 0 booltype])
   |    AbsBasilIR.TypeBVType bvtype -> prPrec i 1 (concatD [prtBVType 0 bvtype])
+  |    AbsBasilIR.TypeTop toptype -> prPrec i 1 (concatD [prtTopType 0 toptype])
   |    AbsBasilIR.TypePointerType pointertype -> prPrec i 1 (concatD [prtPointerType 0 pointertype])
   |    AbsBasilIR.TypeStructType structtype -> prPrec i 1 (concatD [prtStructType 0 structtype])
   |    AbsBasilIR.TypeVarType localident -> prPrec i 1 (concatD [prtLocalIdent 0 localident])
@@ -457,7 +462,7 @@ and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
   |    AbsBasilIR.Expr_Match (expr, openparen, cases, closeparen) -> prPrec i 2 (concatD [render "match" ; prtExpr 0 expr ; render "with" ; prtOpenParen 0 openparen ; prtCaseListBNFC 0 cases ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Cases (openparen, cases, closeparen) -> prPrec i 2 (concatD [render "cases" ; prtOpenParen 0 openparen ; prtCaseListBNFC 0 cases ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> prPrec i 2 (concatD [prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
-  |    AbsBasilIR.Expr_Field (expr, bident) -> prPrec i 0 (concatD [prtExpr 2 expr ; prtBIdent 0 bident])
+  |    AbsBasilIR.Expr_Field (openparen, expr, bident, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtExpr 0 expr ; prtBIdent 0 bident ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_FieldSet (expr1, localident, expr2) -> prPrec i 2 (concatD [prtExpr 2 expr1 ; render "with" ; prtLocalIdent 0 localident ; render "=" ; prtExpr 0 expr2])
   |    AbsBasilIR.SortValRec (localident, beginrec, fieldassigns, endrec) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; prtBeginRec 0 beginrec ; prtFieldAssignListBNFC 0 fieldassigns ; prtEndRec 0 endrec])
 

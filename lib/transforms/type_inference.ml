@@ -262,6 +262,12 @@ module InferredType = struct
             recursives
           @@ List.of_iter @@ ZMap.values fields
         in
+        print_endline
+          (name
+          ^ List.fold_left
+              (fun acc (_, ({ offset; typ } : Types.record_field)) ->
+                acc ^ " " ^ Types.show typ ^ " " ^ Z.to_string offset)
+              "" fields);
         ( recursives,
           Types.Struct { name; fields = StringMap.of_list fields; size } )
     | Recursive (varid, typ) ->
@@ -483,7 +489,6 @@ module TypeAutomata = struct
       (* Get outgoing edges from curr_state *)
       let children = get_next_states m curr_state in
       let trans = List.fold_left helper trans children in
-      (* WARN, this wrongly assumes kids are the same *)
       let edges =
         match StateEdges.find_opt curr_state m.transitions with
         | None -> Iter.empty
@@ -712,16 +717,68 @@ module TypeAutomata = struct
 
   let automata_to_type n =
     (* Look at edges and make a list of them + the type field to make a field *)
-    let make_record types : InferredType.t =
-      let size, fields =
-        List.fold_map
-          (fun acc (edge, ty) ->
+    let make_record types size : InferredType.t =
+      let fields =
+        List.map
+          (fun (edge, ty) ->
             match edge with
-            | Sigma.Reclabel (offset, size, r_size) ->
-                (r_size, (offset, ({ offset; size; ty } : InferredType.field)))
+            | Sigma.Reclabel (offset, size, _) ->
+                (offset, ({ offset; size; ty } : InferredType.field))
             | _ -> failwith "Illegal edge in record list")
-          0 types
+          types
       in
+      print_endline
+      @@ List.fold_left
+           (fun acc (_, ({ offset; size } : InferredType.field)) ->
+             acc ^ " " ^ Z.to_string offset ^ " " ^ Int.to_string size)
+           "" fields;
+      let fields =
+        fields
+        |> List.sort
+             (fun
+               (_, ({ size; _ } : InferredType.field))
+               (_, { size = size2; _ })
+             -> Int.compare size size2)
+      in
+      let rec helper fields ({ offset; size; ty } as field : InferredType.field)
+          =
+        let nest_record ({ ty = ty1; size; offset } : InferredType.field)
+            (field : InferredType.field) : InferredType.field =
+          let ty =
+            match ty1 with
+            | InferredType.Record (fields, size) ->
+                InferredType.Record
+                  (ZMap.of_list @@ helper (ZMap.to_list fields) field, size)
+            | _ -> InferredType.Record (ZMap.singleton offset field, size)
+          in
+          { offset; size; ty }
+        in
+        let set, fields =
+          List.fold_map
+            (fun set
+                 ( _,
+                   ({ offset = offset1; size = size1; ty = ty1 } as field1 :
+                     InferredType.field) ) ->
+              match (Z.leq offset offset1, size1 <= size) with
+              | true, true ->
+                  let field1 = nest_record field field1 in
+                  (true, (offset, field1))
+              | _ -> (false, (offset1, field1)))
+            false fields
+        in
+        if set then fields else (offset, field) :: fields
+      in
+      print_endline
+      @@ List.fold_left
+           (fun acc (_, ({ offset; size } : InferredType.field)) ->
+             acc ^ " " ^ Z.to_string offset ^ " " ^ Int.to_string size)
+           "" fields;
+      let fields = List.fold_left (fun acc (_, a) -> helper acc a) [] fields in
+      print_endline
+      @@ List.fold_left
+           (fun acc (_, ({ offset; size } : InferredType.field)) ->
+             acc ^ " " ^ Z.to_string offset ^ " " ^ Int.to_string size)
+           "" fields;
       InferredType.Record (ZMap.of_list fields, size)
     in
     (* Assume the list is only of two things *)
@@ -755,7 +812,7 @@ module TypeAutomata = struct
       (* Figure out what constructor to use *)
       match types with
       | [] -> ty
-      | (Reclabel _, _) :: _ -> make_record types
+      | (Reclabel (_, _, rsize), _) :: _ -> make_record types rsize
       | ((StoreLabel | LoadLabel), _) :: _ -> make_pointer types
       | ((FnIn _ | FnOut _), _) :: _ -> make_function types
       | (Ep, _) :: _ -> failwith "Should have been removed"
@@ -1029,7 +1086,7 @@ let rec constrain_expr proc (st : ConstraintState.t)
               ( InferredType.type_to_inferred lower,
                 InferredType.type_to_inferred upper ) )
   | UnaryExpr { op; arg = a } -> (
-      let st, _ = constrain_expr proc st (BasilExpr.unfix a) in
+      let st, inner = constrain_expr proc st (BasilExpr.unfix a) in
       match op with
       | `ReadField offset ->
           let { typ; offset } : Types.record_field =
@@ -1080,6 +1137,11 @@ let rec constrain_expr proc (st : ConstraintState.t)
           let st =
             constrain_arg proc st a
             @@ Record (ZMap.singleton (Z.of_int offset) field, record_size)
+          in
+          let st =
+            constrain st
+              (Record (ZMap.singleton (Z.of_int offset) field, record_size))
+              inner
           in
           (st, ty))
   | BinaryExpr { op; arg1 = l; arg2 = r } -> (
@@ -1227,8 +1289,6 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
               addr)
            addr -> (
       (* Generate constraints from the addr argument *)
-      let st, _ = constrain_expr proc st (BasilExpr.unfix addr) in
-
       let lhs = VarId.var_proc_to_uid lhs proc in
       let sva_res =
         Analysis.Sva.Eval.EV.eval
@@ -1265,13 +1325,15 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
                 constrain st (Pointer (TypeVar lb, ub)) addr
             | _ -> st
           in
+          let st, addr1 = constrain_expr proc st (BasilExpr.unfix addr) in
+          let st = constrain st (Pointer (TypeVar lb, ub)) addr1 in
           let st = ConstraintState.add_ub st lb ub in
           let ub =
             Record (ZMap.singleton offset { size; offset; ty = BV size }, size)
           in
+          let st = constrain st (Pointer (TypeVar lb, ub)) addr1 in
           ConstraintState.add_ub st lb ub
       | Stmt.Instr_Store { value } ->
-          let st, _ = constrain_expr proc st (BasilExpr.unfix value) in
           let st =
             match BasilExpr.unfix value with
             | RVar { id } ->
@@ -1285,6 +1347,9 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
               VarId.make_id @@ Int.to_string block_id
               ^ Int.to_string stmt_number ^ "_b_" ^ Program.show_stmt stmt )
           in
+          let st, _ = constrain_expr proc st (BasilExpr.unfix value) in
+          let st, addr1 = constrain_expr proc st (BasilExpr.unfix addr) in
+          let st = constrain st (Pointer (lb, TypeVar ub)) addr1 in
           let st =
             match BasilExpr.unfix addr with
             | RVar { id } ->
@@ -1292,10 +1357,11 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
                 constrain st (Pointer (lb, TypeVar ub)) addr
             | _ -> st
           in
-          (* let st = ConstraintState.add_lb st ub lb in *)
+          let st = ConstraintState.add_lb st ub lb in
           let lb =
             Record (ZMap.singleton offset { size; offset; ty = BV size }, size)
           in
+          let st = constrain st (Pointer (lb, TypeVar ub)) addr1 in
           ConstraintState.add_lb st ub lb
       | _ -> failwith "Impossible")
   | ( Stmt.Instr_Load { lhs; addr = Addr { addr; size } }
@@ -1314,6 +1380,12 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
       let st, addr = constrain_expr proc st (BasilExpr.unfix addr) in
       let st = constrain st (Pointer (lb, ub)) addr in
       let st = constrain st ub lb in
+      let st =
+        match stmt with
+        | Instr_Store { value } ->
+            fst @@ constrain_expr proc st (BasilExpr.unfix value)
+        | _ -> st
+      in
       constrain st ub lhs
   | Stmt.Instr_Call { lhs; args; procid } ->
       let formal_in = Procedure.formal_in_params @@ Program.proc prog procid in
@@ -1511,28 +1583,39 @@ let map_expr results proc =
     | AbstractExpr.RVar { id; attrib } ->
         BasilExpr.replace [%here]
           (BasilExpr.rvar ?attrib @@ map_var results proc id)
-    | AbstractExpr.UnaryExpr { op = `Extract (_, offset1); arg; attrib } -> (
+    | AbstractExpr.UnaryExpr { op = `Extract (endv, offset1); arg; attrib } -> (
         (* arg is a Struct, I love structs *)
         match BasilExpr.type_of arg with
-        | Types.Struct { name; fields; size } as typ -> (
-            let field =
-              List.find_opt (fun (_, ({ offset } : Types.record_field)) ->
-                  Z.equal offset @@ Z.of_int offset1)
-              @@ StringMap.bindings fields
+        | Types.Struct { name; fields; size } as typ ->
+            let rec find_field offset1 size1 fields exp =
+              match
+                List.find_opt (fun (_, ({ offset } : Types.record_field)) ->
+                    (Z.leq offset @@ Z.of_int offset1) && size1 <= size)
+                @@ StringMap.bindings fields
+              with
+              | Some (str, { typ = Types.Struct { fields; size } })
+                when size <> size1 ->
+                  let exp = BasilExpr.unexp ?attrib ~op:(`ReadField str) exp in
+                  find_field offset1 size1 fields exp
+              | Some (str, field) ->
+                  let exp = BasilExpr.unexp ?attrib ~op:(`ReadField str) exp in
+                  exp
+              | None ->
+                  failwith
+                  @@ Printf.sprintf
+                       "No such field field%d in %s for the expression %s in \
+                        proc %s"
+                       offset1 (Types.to_string typ)
+                       (BasilExpr.to_string @@ BasilExpr.fix abstract_expr)
+                       (ID.name @@ Procedure.id @@ Option.get_exn_or "" proc)
             in
-            match field with
-            | None ->
-                failwith
-                @@ Printf.sprintf
-                     "No such field field%d in %s for the expression %s in \
-                      proc %s"
-                     offset1 (Types.to_string typ)
-                     (BasilExpr.to_string @@ BasilExpr.fix abstract_expr)
-                     (ID.name @@ Procedure.id @@ Option.get_exn_or "" proc)
-            | Some (field, _) ->
-                BasilExpr.replace [%here]
-                  (BasilExpr.unexp ?attrib ~op:(`ReadField field) arg))
-        | _ -> BasilExpr.Keep)
+            let field = find_field offset1 (endv - offset1) fields arg in
+            BasilExpr.replace [%here] field
+        | _ ->
+            BasilExpr.replace [%here]
+              (BasilExpr.unexp ?attrib
+                 ~op:(`Extract (endv, offset1))
+                 (cast arg)))
     | AbstractExpr.ApplyIntrin { op = `BVADD; args; attrib } -> (
         let pointer, args =
           List.fold_filter_map
@@ -1672,7 +1755,7 @@ let map_decl results proc (decl : Program.declaration) : Program.declaration =
   | Program.Procedure { definition = proc } ->
       let definition =
         Procedure.map_formal_in_params
-          (StringMap.map (map_var results (Some proc)))
+          (StringMap.map (map_lvar results (Some proc)))
         @@ Procedure.map_formal_out_params
              (StringMap.map (map_var results (Some proc)))
         @@ Procedure.map_blocks_nondet

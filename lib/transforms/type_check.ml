@@ -25,6 +25,14 @@ let type_check stmt_id block_id expr =
   let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
     let open Ops in
     match op with
+    | `PTRTOBV64 -> (
+        match arg with
+        | Pointer _ -> []
+        | _ -> [ type_err "PTRTOBV64 body is not a pointer type" ])
+    | `RECTOBV -> (
+        match arg with
+        | Struct _ -> []
+        | _ -> [ type_err "RECTOBV body is not a struct type" ])
     | `Classification -> []
     | `Gamma -> []
     | `Old -> []
@@ -394,8 +402,8 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
         List.append
           (compare_stringmaps "args" id Types.to_string args Var.typ
              Var.to_string real_args)
-          (compare_stringmaps "rets" Var.typ Var.to_string lhs Var.typ
-             Var.to_string output)
+          (compare_stringmaps "rets" Var.typ Var.to_string output Var.typ
+             Var.to_string lhs)
       in
       params_check
 

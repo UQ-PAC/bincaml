@@ -130,6 +130,10 @@ and transBoolType (x : boolType) : result = match x with
     BoolType1 booltype -> failure x
 
 
+and transTopType (x : topType) : result = match x with
+    TopType1  -> failure x
+
+
 and transStructType (x : structType) : result = match x with
     StructType1 (localident, beginrec, fields, endrec, intval) -> failure x
 
@@ -159,6 +163,7 @@ and transType (x : typeT) : result = match x with
     TypeIntType inttype -> failure x
   | TypeBoolType booltype -> failure x
   | TypeBVType bvtype -> failure x
+  | TypeTop toptype -> failure x
   | TypePointerType pointertype -> failure x
   | TypeStructType structtype -> failure x
   | TypeVarType localident -> failure x
@@ -335,7 +340,7 @@ and transExpr (x : expr) : result = match x with
   | Expr_Match (expr, openparen, cases, closeparen) -> failure x
   | Expr_Cases (openparen, cases, closeparen) -> failure x
   | Expr_Paren (openparen, expr, closeparen) -> failure x
-  | Expr_Field (expr, bident) -> failure x
+  | Expr_Field (openparen, expr, bident, closeparen) -> failure x
   | Expr_FieldSet (expr0, localident, expr) -> failure x
   | SortValRec (localident, beginrec, fieldassigns, endrec) -> failure x
 

@@ -15,10 +15,11 @@ open Lexing
 %token SYMB4 /* :: */
 %token SYMB5 /* : */
 %token SYMB6 /* = */
-%token SYMB7 /* | */
-%token SYMB8 /* := */
-%token SYMB9 /* mem:= */
-%token SYMB10 /* _ */
+%token SYMB7 /* ⊤ */
+%token SYMB8 /* | */
+%token SYMB9 /* := */
+%token SYMB10 /* mem:= */
+%token SYMB11 /* _ */
 
 %token TOK_EOF
 %token <string> TOK_Ident
@@ -45,7 +46,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pStructType pPointerType pBVType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pFieldVal_list pFieldVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pTopType pStructType pPointerType pBVType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pFieldVal_list pFieldVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -61,6 +62,7 @@ open Lexing
 %type <AbsBasilIR.field> pField
 %type <AbsBasilIR.intType> pIntType
 %type <AbsBasilIR.boolType> pBoolType
+%type <AbsBasilIR.topType> pTopType
 %type <AbsBasilIR.structType> pStructType
 %type <AbsBasilIR.pointerType> pPointerType
 %type <AbsBasilIR.bVType> pBVType
@@ -157,6 +159,7 @@ open Lexing
 %type <AbsBasilIR.field> field
 %type <AbsBasilIR.intType> intType
 %type <AbsBasilIR.boolType> boolType
+%type <AbsBasilIR.topType> topType
 %type <AbsBasilIR.structType> structType
 %type <AbsBasilIR.pointerType> pointerType
 %type <AbsBasilIR.bVType> bVType
@@ -288,6 +291,8 @@ pField : field TOK_EOF { $1 };
 pIntType : intType TOK_EOF { $1 };
 
 pBoolType : boolType TOK_EOF { $1 };
+
+pTopType : topType TOK_EOF { $1 };
 
 pStructType : structType TOK_EOF { $1 };
 
@@ -517,6 +522,9 @@ intType : iNTTYPE { IntType1 $1 }
 boolType : bOOLTYPE { BoolType1 $1 }
   ;
 
+topType : SYMB7 { TopType1  }
+  ;
+
 structType : localIdent KW_of beginRec field_list endRec intVal { StructType1 ($1, $3, $4, $5, $6) }
   ;
 
@@ -541,12 +549,13 @@ sumCase : localIdent { SortType $1 }
   ;
 
 sumCase_list : sumCase { (fun x -> [x]) $1 }
-  | sumCase SYMB7 sumCase_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | sumCase SYMB8 sumCase_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 type1 : intType { TypeIntType $1 }
   | boolType { TypeBoolType $1 }
   | bVType { TypeBVType $1 }
+  | topType { TypeTop $1 }
   | pointerType { TypePointerType $1 }
   | structType { TypeStructType $1 }
   | localIdent { TypeVarType $1 }
@@ -576,17 +585,17 @@ endian : KW_le { Endian_Little  }
   | KW_be { Endian_Big  }
   ;
 
-assignment : lVar SYMB8 expr { Assignment1 ($1, $3) }
+assignment : lVar SYMB9 expr { Assignment1 ($1, $3) }
   ;
 
 stmt : KW_nop { Stmt_Nop  }
   | assignment { Stmt_SingleAssign $1 }
-  | lVar SYMB9 expr { Stmt_MemAssign ($1, $3) }
-  | lVar SYMB8 KW_store expr { Stmt_ScalarStore ($1, $4) }
-  | lVar SYMB8 KW_load var { Stmt_ScalarLoad ($1, $4) }
+  | lVar SYMB10 expr { Stmt_MemAssign ($1, $3) }
+  | lVar SYMB9 KW_store expr { Stmt_ScalarStore ($1, $4) }
+  | lVar SYMB9 KW_load var { Stmt_ScalarLoad ($1, $4) }
   | openParen assignment_list closeParen { Stmt_MultiAssign ($1, $2, $3) }
-  | lVar SYMB8 KW_load endian var expr intVal { Stmt_Load_Var ($1, $4, $5, $6, $7) }
-  | lVar SYMB8 KW_store endian var expr2 expr intVal { Stmt_Store_Var ($1, $4, $5, $6, $7, $8) }
+  | lVar SYMB9 KW_load endian var expr intVal { Stmt_Load_Var ($1, $4, $5, $6, $7) }
+  | lVar SYMB9 KW_store endian var expr2 expr intVal { Stmt_Store_Var ($1, $4, $5, $6, $7, $8) }
   | KW_store endian globalIdent expr2 expr intVal { Stmt_Store ($2, $3, $4, $5, $6) }
   | lVars KW_call procIdent openParen callParams closeParen { Stmt_DirectCall ($1, $3, $4, $5, $6) }
   | KW_indirect KW_call expr { Stmt_IndirectCall $3 }
@@ -641,10 +650,10 @@ namedCallReturn_list : /* empty */ { []  }
   ;
 
 lVars : /* empty */ { LVars_Empty  }
-  | KW_var openParen localVar_list closeParen SYMB8 { LVars_LocalList ($2, $3, $4) }
-  | KW_let openParen localVar_list closeParen SYMB8 { LVars_LocalConstList ($2, $3, $4) }
-  | openParen lVar_list closeParen SYMB8 { LVars_List ($1, $2, $3) }
-  | openParen namedCallReturn_list closeParen SYMB8 { NamedLVars_List ($1, $2, $3) }
+  | KW_var openParen localVar_list closeParen SYMB9 { LVars_LocalList ($2, $3, $4) }
+  | KW_let openParen localVar_list closeParen SYMB9 { LVars_LocalConstList ($2, $3, $4) }
+  | openParen lVar_list closeParen SYMB9 { LVars_List ($1, $2, $3) }
+  | openParen namedCallReturn_list closeParen SYMB9 { NamedLVars_List ($1, $2, $3) }
   ;
 
 namedCallArg : localIdent SYMB6 expr { NamedCallArg1 ($1, $3) }
@@ -696,7 +705,7 @@ phiExpr_list : /* empty */ { []  }
   | phiExpr SYMB2 phiExpr_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-phiAssign : lVar SYMB8 KW_phi openParen phiExpr_list closeParen { PhiAssign1 ($1, $4, $5, $6) }
+phiAssign : lVar SYMB9 KW_phi openParen phiExpr_list closeParen { PhiAssign1 ($1, $4, $5, $6) }
   ;
 
 phiAssign_list : /* empty */ { []  }
@@ -757,7 +766,7 @@ expr : expr1 {  $1 }
   | KW_exists attribSet lambdaDef { Expr_Exists ($2, $3) }
   | KW_fun attribSet lambdaDef { Expr_Lambda ($2, $3) }
   | KW_let localIdent localVarParen_list SYMB5 typeT SYMB6 expr KW_in expr { Expr_Let ($2, $3, $5, $7, $9) }
-  | expr2 bIdent { Expr_Field ($1, $2) }
+  | openParen expr bIdent closeParen { Expr_Field ($1, $2, $3, $4) }
   | localIdent beginRec fieldAssign_list endRec { SortValRec ($1, $2, $3, $4) }
   ;
 
@@ -807,12 +816,12 @@ unOp : bVUnOp { UnOpBVUnOp $1 }
   ;
 
 case : expr SYMB3 expr { CaseCase ($1, $3) }
-  | SYMB10 SYMB3 expr { CaseDefault $3 }
+  | SYMB11 SYMB3 expr { CaseDefault $3 }
   ;
 
 case_list : /* empty */ { []  }
   | case { (fun x -> [x]) $1 }
-  | case SYMB7 case_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | case SYMB8 case_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
 fieldAssign : localIdent SYMB6 expr { FieldAssign1 ($1, $3) }

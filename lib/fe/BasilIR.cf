@@ -79,6 +79,7 @@ Field1 . Field ::= Str ":" OpenParen Type "," IntVal CloseParen ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
+TopType1 . TopType ::= "⊤";
 StructType1 . StructType ::= LocalIdent "of" BeginRec [Field] EndRec IntVal;
 PointerType1 . PointerType ::= "ptr" OpenParen Type "," Type CloseParen ;
 BVType1 . BVType ::= BVTYPE ;
@@ -97,6 +98,7 @@ separator nonempty SumCase "|";
 TypeIntType     . Type1 ::= IntType ;
 TypeBoolType    . Type1 ::= BoolType ;
 TypeBVType      . Type1 ::= BVType ;
+TypeTop         . Type1 ::= TopType ;
 TypePointerType . Type1 ::= PointerType ;
 TypeStructType  . Type1 ::= StructType ;
 TypeVarType     . Type1 ::= LocalIdent ;
@@ -288,7 +290,7 @@ Expr_Cases . Expr2 ::= "cases" OpenParen [Case] CloseParen ;
 Expr_Paren . Expr2 ::= OpenParen Expr CloseParen ;
 
 
-Expr_Field      . Expr ::= Expr2 BIdent;
+Expr_Field      . Expr ::= OpenParen Expr BIdent CloseParen;
 Expr_FieldSet   . Expr2 ::= Expr2 "with" LocalIdent "=" Expr ;
 
 rules FieldAssign ::= LocalIdent "=" Expr ;
