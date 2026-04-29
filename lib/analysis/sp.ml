@@ -136,7 +136,7 @@ module Domain (S : FunctionAnnotation) = struct
           let r =
             List.fold_left
               (fun a b -> conjunction [ a; sub b ])
-              e_false (S.ensures procid)
+              e_true (S.ensures procid)
           in
           conjunction [ p; simplify r ]
       | Instr_Store

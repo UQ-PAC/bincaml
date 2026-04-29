@@ -149,14 +149,7 @@ let add_summary summary (proc : Program.proc) =
   in
   Procedure.set_specification proc spec
 
-let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
-  let solver =
-    Bincaml_util.Smt.Solver.create
-      {
-        Bincaml_util.Smt.Config.cvc5 with
-        log = Bincaml_util.Smt.Config.quiet_log;
-      }
-  in
+let add_decls solver prog =
   Program.declarations prog |> Iter.from_iter |> Iter.map snd
   |> Iter.filter
        Program.(
@@ -168,7 +161,17 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
   |> Iter.map (fun d -> Expr_smt.SMTLib2.trans_decl d Expr_smt.SMTLib2.empty)
   |> Iter.map fst
   |> fun i ->
-  Iter.for_each i (fun s -> Bincaml_util.Smt.Solver.add_command solver s);
+  Iter.for_each i (fun s -> Bincaml_util.Smt.Solver.add_command solver s)
+
+let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
+  let solver =
+    Bincaml_util.Smt.Solver.create
+      {
+        Bincaml_util.Smt.Config.cvc5 with
+        log = Bincaml_util.Smt.Config.quiet_log;
+      }
+  in
+  add_decls solver prog;
   let summary =
     extra_summary solver
       (module struct
@@ -269,7 +272,13 @@ let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
       let extra =
         extra_summary solver annotations reiters (IDMap.find pid procs)
       in
-      append_summary (vals pid) extra
+      if
+        Option.get_or ~default:false
+        @@ Option.map
+             (fun proc -> ID.equal pid (Procedure.id proc))
+             (Program.entry_proc_opt prog)
+      then vals pid (* Makes no sense to generate summary for entrypoint. *)
+      else append_summary (vals pid) extra
     else IDMap.get_or pid res ~default:Domain.bottom
   in
   let sol = FixSummaries.lfp eqs in
@@ -285,10 +294,10 @@ let interproc_transform (prog : Program.t) =
     Bincaml_util.Smt.Solver.create
       {
         Bincaml_util.Smt.Config.cvc5 with
-        (* log = Bincaml_util.Smt.Config.quiet_log; *)
-        log = Bincaml_util.Smt.Config.printf_log;
+        log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
+  add_decls solver prog;
   let summaries =
     Program.procs prog
     |> Iter.map (fun (i, proc) ->
