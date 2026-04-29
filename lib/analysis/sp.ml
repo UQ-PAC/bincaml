@@ -160,8 +160,8 @@ module Domain (S : FunctionAnnotation) = struct
             rhs;
             addr = Addr { addr : 'e; size : int; endian : Stmt.endian };
           } ->
-            (* Without a load expression it is unclear what to constrain here. *)
-            (* Could be a map access in future. *)
+          (* Without a load expression it is unclear what to constrain here. *)
+          (* Could be a map access in future. *)
           e_true
       | Instr_IndirectCall _ | Instr_IntrinCall _ -> e_true
       | _ -> e_true

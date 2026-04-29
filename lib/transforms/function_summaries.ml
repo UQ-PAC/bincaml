@@ -121,7 +121,7 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
       |> List.fold_left
            (fun rs r ->
              let open Bincaml_util.Smt in
-             match redundant solver r (List.append rs cur_req) with
+             match redundant solver r (List.append rs cur_ens) with
              | Unsat -> rs
              | Sat -> r :: rs
              | Unknown ->
@@ -285,7 +285,8 @@ let interproc_transform (prog : Program.t) =
     Bincaml_util.Smt.Solver.create
       {
         Bincaml_util.Smt.Config.cvc5 with
-        log = Bincaml_util.Smt.Config.quiet_log;
+        (* log = Bincaml_util.Smt.Config.quiet_log; *)
+        log = Bincaml_util.Smt.Config.printf_log;
       }
   in
   let summaries =
