@@ -236,25 +236,6 @@ module Make (O : Fix) = struct
 
   let free_vars_iter (e : t) = free_vars e |> VarSet.to_iter
 
-  (** get free and bound vars of exprs *)
-  let vars (e : t) =
-    let open AbstractExpr in
-    let alg e =
-      match e with
-      | RVar { id } -> VarSet.singleton id
-      | Let { bound_vars; in_body } ->
-          let bindees =
-            List.fold_left VarSet.union VarSet.empty (List.map snd bound_vars)
-          in
-          let bound_vars = List.map fst bound_vars in
-          VarSet.union bindees
-            (VarSet.union in_body (VarSet.add_list VarSet.empty bound_vars))
-      | Lambda { bound_vars; in_body } ->
-          VarSet.union in_body (VarSet.add_list VarSet.empty bound_vars)
-      | o -> fold (fun acc a -> VarSet.union a acc) VarSet.empty o
-    in
-    cata alg e
-
   (* substite variables for expressions *)
   let substitute (sub : var -> t option) (e : t) =
     let open AbstractExpr in
@@ -276,27 +257,6 @@ module Make (O : Fix) = struct
       | o -> fix @@ AbstractExpr.map (subst bound) o
     in
     subst VarSet.empty e
-
-  let substitute_bound (sub : var -> var option) (e : t) =
-    let open AbstractExpr in
-    let sub v = match sub v with Some r -> r | None -> v in
-    let rec subst orig =
-      let exp = unfix orig in
-      match exp with
-      | RVar { id; attrib } -> fix (RVar { attrib; id = sub id })
-      | Lambda { op; bound_vars; in_body; attrib } ->
-          (* exprs to bind are evaluated outside the bound *)
-          let in_body = subst in_body in
-          let bound_vars = bound_vars |> List.map sub in
-          fix (Lambda { op; bound_vars; in_body; attrib })
-      | Let { bound_vars; in_body; attrib } ->
-          (* exprs to bind are evaluated outside the bound *)
-          let in_body = subst in_body in
-          let bound_vars = bound_vars |> List.map (fun (a, b) -> (sub a, b)) in
-          fix (Let { bound_vars; in_body; attrib })
-      | o -> fix @@ AbstractExpr.map subst o
-    in
-    subst e
 
   (** get list of child expressions *)
   let children e = cata Alges.children_alg e
