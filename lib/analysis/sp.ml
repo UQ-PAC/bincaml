@@ -9,14 +9,13 @@ module type FunctionAnnotation = sig
   val requires : ID.t -> Expr.BasilExpr.t list
   val ensures : ID.t -> Expr.BasilExpr.t list
   val inout : ID.t -> VarSet.t
-  val fresh_var : ID.t -> ?pure:bool -> ?name:string -> Types.t -> Var.t
   val id : ID.t
 end
 
 module Domain (S : FunctionAnnotation) = struct
   let name = "SP domain"
 
-  type t = Program.e
+  type t = Program.e option
 
   let e_true = BasilExpr.boolconst true
   let e_false = BasilExpr.boolconst false
@@ -73,29 +72,33 @@ module Domain (S : FunctionAnnotation) = struct
     in
     rw % rw
 
-  let show = BasilExpr.to_string
-  let equal = BasilExpr.equal
-  let compare = BasilExpr.compare
-  let pretty = BasilExpr.pretty
-  let top = e_true
-  let bottom = e_false
-  let join a b = print_endline (BasilExpr.to_string a); print_endline (BasilExpr.to_string b); print_endline("----");BasilExpr.applyintrin ~op:`OR [ a; b ]
+  let unwrap p = Option.get_or ~default:e_true p
+  let show = Option.map_or ~default:"" BasilExpr.to_string
+  let equal = Option.equal BasilExpr.equal
+  let compare = Option.compare BasilExpr.compare
+  let pretty = BasilExpr.pretty % unwrap
+  let top = None
+  let bottom = Some e_false
+
+  let join (a : t) (b : t) : t =
+    let o =
+      match (a, b) with
+      | None, None -> Some e_true
+      | None, x | x, None -> x
+      | Some a, Some b -> Some (BasilExpr.applyintrin ~op:`OR [ a; b ])
+    in
+    o
+
   let leq a b = failwith "leq not implemented"
   let widening a b = bottom
 
-  let locals (p : t) =
+  let locals (p : BasilExpr.t) =
     BasilExpr.free_vars p
     |> flip VarSet.diff (S.inout S.id)
     |> VarSet.filter (fun v -> not @@ Var.is_global v)
 
-  let substitute_vars (a : (Var.t * t) list) (p : t) : t =
-    BasilExpr.substitute
-      (fun v ->
-        List.find_map (fun (v', e) -> Option.return_if (Var.equal v v') e) a)
-      p
-    |> simplify
-
-  let substitute_var_names (a : (string * t) list) (p : t) : t =
+  let substitute_var_names (a : (string * BasilExpr.t) list) (p : BasilExpr.t) :
+      BasilExpr.t =
     BasilExpr.substitute
       (fun v ->
         List.find_map
@@ -113,15 +116,17 @@ module Domain (S : FunctionAnnotation) = struct
     |> simplify
 
   let transfer (p : t) (stmt : Program.stmt) : t =
+    let p = unwrap p in
     let o =
       match stmt with
+      | Instr_Assign [] -> p
       | Instr_Assign (a : (Var.t * BasilExpr.t) list) ->
-          e_false (* tf_assigns p a |> simplify *)
+          tf_assigns p a |> simplify
       | Instr_Assume { body; branch = false } ->
-          e_false (* conjunction [ p; simplify body ] *)
-      | Instr_Assert { body } -> e_false (* conjunction [ p; simplify body ] *)
+          conjunction [ p; simplify body ]
+      | Instr_Assert { body } -> conjunction [ p; simplify body ]
       | Instr_Call { lhs; procid; args } ->
-          let sub (s : t) : t =
+          let sub (s : BasilExpr.t) : BasilExpr.t =
             s
             |> substitute_var_names (StringMap.to_list args)
             |> substitute_var_names
@@ -131,7 +136,7 @@ module Domain (S : FunctionAnnotation) = struct
           let r =
             List.fold_left
               (fun a b -> conjunction [ a; sub b ])
-              bottom (S.ensures procid)
+              e_false (S.ensures procid)
           in
           conjunction [ p; simplify r ]
       | Instr_Store
@@ -150,96 +155,101 @@ module Domain (S : FunctionAnnotation) = struct
                    (BasilExpr.rvar lhs) addr);
             ]
       | Instr_Load _ -> p
-      | Instr_IndirectCall _ | Instr_IntrinCall _ -> bottom
+      | Instr_IndirectCall _ | Instr_IntrinCall _ -> e_false
       | _ -> p
     in
-    o;
-    e_false
+    Some o
 
-  let init (proc : Program.proc) : t = print_endline "init";List.fold_left (BasilExpr.binexp ~op:`AND) e_true (S.requires (Procedure.id proc)); e_false
+  let init (proc : Program.proc) : t = top
 
   let transfer_phi (m : t) (p : Var.t Block.phi) : t =
+    let m = unwrap m in
     match p with
     | { lhs; rhs } ->
         let rhs =
-          List.map (fun (_, v) -> tf_assigns m [ (lhs, BasilExpr.rvar v) ]) rhs
+          List.map
+            (fun (_, v) -> Some (tf_assigns m [ (lhs, BasilExpr.rvar v) ]))
+            rhs
         in
-        List.fold_left join e_true rhs;
-        e_false
+        List.fold_left join top rhs
 
-  let to_pred (p : t) : t =
-    BasilExpr.exists ~bound:(VarSet.to_list @@ locals p) p
-    |> Algsimp.Comb.to_steady Expr.BasilExpr.equal Algsimp.alg_simp_rewriter
+  let to_pred (p : t) : BasilExpr.t =
+    let p = unwrap p in
+    let l = locals p in
+    match VarSet.cardinal l with
+    | 0 -> p
+    | _ ->
+        BasilExpr.exists ~bound:(VarSet.to_list @@ l) p
+        |> Algsimp.Comb.to_steady Expr.BasilExpr.equal Algsimp.alg_simp_rewriter
 end
-
-module IntraDomain = Domain (struct
-  let requires = const []
-  let ensures = const []
-  let inout = const VarSet.empty
-
-  let fresh_var =
-    const
-    @@ Procedure.fresh_var
-         (Procedure.create (ID.decl_exn (ID.make_gen ()) "") ())
-
-  let id = ID.decl_exn (ID.make_gen ()) ""
-end)
-
-module IntraAnalysis = Intra_analysis.Forwards (IntraDomain)
 
 let%expect_test "sp" =
   let prog =
     (Loader.Loadir.ast_of_string
-       (* [ *)
-       (* block %main_entry [ *)
-       (* let (a:bv64, e:bv64) := call @_havoc(); *)
-       (* ($x:bv64) := call @_havoc(); *)
-       (* goto(%main_1, %main_2); *)
-       (* ]; *)
-       (* block %main_1 [ *)
-       (* $x:bv64 := a:bv64; *)
-       (* goto(%main_2); *)
-       (* ]; *)
-       (* block %main_2 [ *)
-       (* $x:bv64 := bvadd($x:bv64, a:bv64); *)
-       (* assert eq($x:bv64,0); *)
-       (* assume neq(e:bv64,0); *)
-       (* goto(%main_return); *)
-       (* ]; *)
-       (* block %main_return [ *)
-       (* return(); *)
-       (* ]; *)
-       (* ]; *)
        {|
-prog entry @main;
-proc @main (a:bv64) -> ()
-  [
-    block %main_entry [
-      goto(%main_return);
-    ];
-    block %main_return [
-      assert bvult(a,100:bv64);
-      assume bvult(a,100:bv64);
-      return();
-    ];
-  ];
+proc @branching(a:bv64) -> (b:bv64) [
+   block %1 [ goto (%2); ];
+   block %2 [
+     var a_1:bv64 := a:bv64;
+     assume bvult(a_1:bv64, 0x64:bv64);
+     goto (%3_2,%3_1);
+   ];
+   block %3_1 [
+     var a_3:bv64 := a_1:bv64;
+     assume bvult(a_3:bv64, 0x32:bv64);
+     var x_2:bv64 := a_3:bv64;
+     goto (%4);
+   ];
+   block %3_2 [
+     var a_2:bv64 := a_1:bv64;
+     assume boolnot(bvult(a_2:bv64, 0x32:bv64));
+     var x_1:bv64 := 0x0:bv64;
+     goto (%4);
+   ];
+   block %4 ( var x_3:bv64 := phi(%3_2 -> x_1:bv64, %3_1 -> x_2:bv64) ) [
+     var b:bv64 := x_3:bv64;
+     return;
+   ]
+];
     |})
       .prog
   in
-  let proc = Program.entry_proc_exn prog in
+  let module IntraDomain = Domain (struct
+    let requires = const []
+    let ensures = const []
+
+    let inout id =
+      Program.proc_opt prog id
+      |> Option.map_or
+           (fun p ->
+             VarSet.union
+               (VarSet.of_iter @@ StringMap.values
+               @@ Procedure.formal_in_params p)
+               (VarSet.of_iter @@ StringMap.values
+               @@ Procedure.formal_out_params p))
+           ~default:VarSet.empty
+
+    let id = Procedure.id @@ Program.get_proc_by_name "@branching" prog
+  end) in
+  let module IntraAnalysis = Intra_analysis.Forwards (IntraDomain) in
+  let proc = Program.get_proc_by_name "@branching" prog in
   let res =
     IntraAnalysis.analyse ~widening_set:Graph.ChaoticIteration.FromWto
       ~widening_delay:5 proc
   in
-  IntraAnalysis.print_dot (Format.of_chan stdout) proc res;
-  IntraAnalysis.A.M.find (Procedure.Vert.End (Procedure.id proc)) res
-  (* |> IntraDomain.to_pred *)
-  |> BasilExpr.to_string
-  |> print_endline;
+  IntraAnalysis.A.M.find Procedure.Vert.Return res
+  |> IntraDomain.to_pred |> BasilExpr.to_string |> print_endline;
   [%expect
     {|
-    Warn: global undeclared $x assuming mutable unshared
-    Warn: global undeclared $x assuming mutable unshared
-    Warn: global undeclared $x assuming mutable unshared
-    true
+    exists (a_1:bv64) (a_3:bv64) (x_2:bv64) (a_2:bv64) (x_1:bv64) (x_3:bv64) ::(booland(boolor(booland(boolor(booland(eq(a_1:bv64,
+           a:bv64), bvult(a_1:bv64, 0x64:bv64), eq(a_3:bv64, a_1:bv64),
+          bvult(a_3:bv64, 0x32:bv64), eq(x_2:bv64, a_3:bv64)),
+         booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64),
+          eq(a_2:bv64, a_1:bv64), boolnot(bvult(a_2:bv64, 0x32:bv64)),
+          eq(x_1:bv64, 0x0:bv64))), eq(x_3:bv64, x_1:bv64)),
+       booland(boolor(booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64),
+          eq(a_3:bv64, a_1:bv64), bvult(a_3:bv64, 0x32:bv64), eq(x_2:bv64, a_3:bv64)),
+         booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64),
+          eq(a_2:bv64, a_1:bv64), boolnot(bvult(a_2:bv64, 0x32:bv64)),
+          eq(x_1:bv64, 0x0:bv64))), eq(x_3:bv64, x_2:bv64))), eq(b:bv64, x_3:bv64)))
     |}]

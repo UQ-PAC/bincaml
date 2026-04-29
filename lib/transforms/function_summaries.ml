@@ -23,7 +23,6 @@ module type FunctionAnnotation = sig
   include FunctionSummaryAnnotation
 
   val inout : ID.t -> VarSet.t
-  val fresh_var : ID.t -> ?pure:bool -> ?name:string -> Types.t -> Var.t
   val id : ID.t
 end
 
@@ -88,8 +87,8 @@ let sp_ensures (module S : FunctionAnnotation) (proc : Program.proc) =
   let module Domain = Sp.Domain (S) in
   let module Analysis = Intra_analysis.Forwards (Domain) in
   let result =
-    Analysis.analyse (* ~init:(fun _ -> Expr.BasilExpr.boolconst true) *)
-      ~widening_set:Graph.ChaoticIteration.FromWto ~widening_delay:5 proc
+    Analysis.analyse ~widening_set:Graph.ChaoticIteration.FromWto
+      ~widening_delay:5 proc
   in
   Analysis.A.M.find_opt Procedure.Vert.Return result
   |> Option.map Domain.to_pred |> Option.to_list
@@ -196,14 +195,6 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
                    @@ Procedure.formal_out_params p))
                ~default:VarSet.empty
 
-        let fresh_var id =
-          Program.proc_opt prog id
-          |> Option.map_or
-               (fun p -> Procedure.fresh_var p)
-               ~default:
-                 (Procedure.fresh_var
-                    (Procedure.create (ID.decl_exn (ID.make_gen ()) "") ()))
-
         let id = Procedure.id proc
       end : FunctionAnnotation)
       (ref IDSet.empty) proc
@@ -271,14 +262,6 @@ let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
                      (VarSet.of_iter @@ StringMap.values
                      @@ Procedure.formal_out_params p))
                  ~default:VarSet.empty
-
-          let fresh_var id =
-            Program.proc_opt prog id
-            |> Option.map_or
-                 (fun p -> Procedure.fresh_var p)
-                 ~default:
-                   (Procedure.fresh_var
-                      (Procedure.create (ID.decl_exn (ID.make_gen ()) "") ()))
 
           let id = pid
         end : FunctionAnnotation)
