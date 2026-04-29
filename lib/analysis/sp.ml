@@ -154,9 +154,17 @@ module Domain (S : FunctionAnnotation) = struct
                    ~op:(`Load (endian, size))
                    (BasilExpr.rvar lhs) addr);
             ]
-      | Instr_Load _ -> p
-      | Instr_IndirectCall _ | Instr_IntrinCall _ -> e_false
-      | _ -> p
+      | Instr_Load
+          {
+            lhs;
+            rhs;
+            addr = Addr { addr : 'e; size : int; endian : Stmt.endian };
+          } ->
+            (* Without a load expression it is unclear what to constrain here. *)
+            (* Could be a map access in future. *)
+          e_true
+      | Instr_IndirectCall _ | Instr_IntrinCall _ -> e_true
+      | _ -> e_true
     in
     Some o
 
