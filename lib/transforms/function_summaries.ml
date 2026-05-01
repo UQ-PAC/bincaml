@@ -126,7 +126,7 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
         log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
-  let sexps =
+  let _ =
     Program.declarations prog |> Iter.from_iter |> Iter.map snd
     |> Iter.filter
          Program.(
