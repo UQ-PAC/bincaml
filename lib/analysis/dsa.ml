@@ -260,7 +260,7 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
   g
 
 let dsa (p : Program.t) =
-  let sva_r = Sva.sva p in
+  let _sva_r = Sva.sva p in
   (*
   let _local_graphs =
     IDMap.mapi
