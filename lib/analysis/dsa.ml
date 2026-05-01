@@ -37,10 +37,10 @@ module Interval = struct
 
   let of_wint (i : WrappedIntervalsLattice.t) =
     match i with
-    | Top -> Top
-    | Interval { lower; upper } ->
-        Interval (Bitvec.value lower, Bitvec.value upper)
     | Bot -> Bot
+    | Interval { lower; upper } when Bitvec.slt lower upper ->
+        Interval (Bitvec.value lower, Bitvec.value upper)
+    | _ -> Top
 
   let left_of i j =
     match (i, j) with
