@@ -35,6 +35,8 @@ module Interval = struct
 
   open Z
 
+  let start = function Top | Bot -> None | Interval (a, _) -> Some a
+
   let of_wint (i : WrappedIntervalsLattice.t) =
     match i with
     | Bot -> Bot
@@ -79,6 +81,7 @@ module DSGraph = struct
   (* Nodes are represented as sorted lists of cells, ordered by the low end of the intervals of each cell *)
   and node = cell list ref
 
+  (** Get the union find parent of this cell *)
   let rec find (c : cell) =
     match !c with
     | Path c' ->
@@ -87,44 +90,79 @@ module DSGraph = struct
         p
     | Cell _ -> c
 
+  (** Get the offsets interval of this cell's parent *)
   let offsets (c : cell) =
     match !(find c) with
     | Cell { offsets } -> offsets
     | _ -> failwith "Union find returned non terminal cell"
 
+  (** Get the node of this cell's parent *)
   let node_of (c : cell) =
     match !(find c) with
     | Cell { node } -> node
     | _ -> failwith "Union find returned non terminal cell"
 
+  (** Get the pointees of this cell's parent *)
   let pointees (c : cell) =
     match !(find c) with
     | Cell { pointees } -> pointees
     | _ -> failwith "Union find returned non terminal cell"
 
-  (* note: sets c2's node to c1's node *)
+  (** Shift the interval of the cell's parent by the given offset *)
+  let shift off (c : cell) =
+    let f = find c in
+    match !f with
+    | Cell r -> f := Cell { r with offsets = Interval.shift off r.offsets }
+    | _ -> failwith "Union find returned non terminal cell"
+
+  (** Set the node of this cell's parent *)
+  let set_node node (c : cell) =
+    let f = find c in
+    match !f with
+    | Cell r -> f := Cell { r with node }
+    | _ -> failwith "Union find returned non terminal cell"
+
+  (** Set the pointees of this cell's parent *)
+  let set_pointees pointees (c : cell) =
+    let f = find c in
+    match !f with
+    | Cell r -> f := Cell { r with pointees }
+    | _ -> failwith "Union find returned non terminal cell"
+
+  (** Merge the two given cells together. If they belong to different nodes then
+      the nodes are merged so that the cell offsets line up. *)
   let rec join (c1 : cell) (c2 : cell) =
     match !c2 with
     | Path _ -> failwith "Attempted to join old cell"
-    | Cell { offsets = i; pointees = p } -> (
+    | Cell { offsets = i; pointees = p; node = n2 } -> (
         match !c1 with
         | Path _ -> join (find c1) c2
-        | Cell { offsets = i'; node; pointees = p' } -> (
-            c2 := Path c1;
-            (* TODO make O(1) *)
-            let pointees = p @ p' in
-            let offsets = Interval.join i i' in
-            c1 := Cell { node; pointees; offsets };
-            match offsets with Top -> collapse node | _ -> ()))
+        | Cell { offsets = i'; node; pointees = p' } ->
+            if not @@ CCEqual.physical node n2 then
+              match Interval.(start i', start i) with
+              | Some a, Some b when Z.lt a b ->
+                  join_nodes_at (Z.sub b a) node n2
+              | Some a, Some b -> join_nodes_at (Z.sub a b) n2 node
+              | _ -> failwith "TODO"
+            else (
+              c2 := Path c1;
+              (* TODO make O(1) also collapse pointees maybe?! something needs to be worked out for that *)
+              let pointees = p @ p' in
+              let offsets = Interval.join i i' in
+              c1 := Cell { node; pointees; offsets };
+              match offsets with Top -> collapse node | _ -> ()))
 
+  (** Collapse all cells in the node into a single cell (its interval being Top)
+  *)
   and collapse node =
     let pointees = List.fold_left (fun acc c -> acc @ pointees c) [] !node in
     let c = ref (Cell { offsets = Top; node; pointees }) in
     List.iter (fun c' -> join c c') !node;
     node := [ c ]
 
-  (* assumes that cell has its node already set to node *)
-  let rec insert node cell =
+  (** Inserts the cell into the node. It is assumed that the cell has set (or
+      will set) its node pointer outside of this call *)
+  and insert node cell =
     match !cell with
     | Path _ -> insert node (find cell)
     | Cell { offsets = Interval.Bot } -> ()
@@ -152,23 +190,18 @@ module DSGraph = struct
         in
         match insert' !node with Some n -> node := n | None -> ())
 
-  (* join n2 into n1 with n2 at offset off *)
-  let join_nodes n1 n2 off =
-    n2 :=
-      List.map
-        (fun c ->
-          let f = find c in
-          match !f with
-          | Cell r ->
-              f := Cell { r with offsets = Interval.shift off r.offsets };
-              f
-          | _ -> failwith "Union find returned non terminal cell")
-        !n2;
+  (** Join the two nodes, with the second shifted by the given offset *)
+  and join_nodes_at off n1 n2 =
+    assert (not @@ CCEqual.physical n1 n2);
+    List.iter (shift off) !n2;
+    (* Update n2 cell nodes so we never have the slow path of join *)
+    List.iter (set_node n1) !n2;
     let rec join_nodes' n1' n2' =
       match (n1', n2') with
       | [], cs | cs, [] -> Some cs
       | c :: cs, c' :: cs' -> (
           match (offsets c, offsets c') with
+          (* TODO Bot cases shouldn't happen i think?! please confirm this, future worker *)
           | Bot, Bot -> join_nodes' cs cs'
           | Bot, _ -> join_nodes' cs n2'
           | _, Bot -> join_nodes' n1' cs'
@@ -191,7 +224,7 @@ module DSGraph = struct
     in
     match join_nodes' !n1 !n2 with Some n -> n1 := n | _ -> ()
 
-  (* Check that the node has its cell intervals sorted (and disjoint) *)
+  (** Check that the node has its cell intervals sorted and disjoint *)
   let check_sorted node =
     let is = List.map offsets !node in
     let rec aux = function
@@ -200,7 +233,9 @@ module DSGraph = struct
     in
     assert (aux is)
 
-  let init offsets node : cell =
+  (** Create a single cell belonging to its own node *)
+  let init offsets : cell =
+    let node = ref [] in
     let c = ref (Cell { offsets; node; pointees = [] }) in
     insert node c;
     c
@@ -233,7 +268,9 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
      join overlapping cells in nodes
      init workist to sets of codomains of cells greater than 1 in size
      // maybe worklist isn't needed and we can just iterate over all cells
-     // wrapped intervals i think might make the join order not invariant
+     // no but maybe if you recursively unify joined codomain cells it works (tail recurse?!)
+     // if we do this then no operations *create* new cells with multiple out edges
+     // should be good but also does iteration order matter?!
      for each:
          unify set
          grow worklist
