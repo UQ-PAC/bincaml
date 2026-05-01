@@ -87,7 +87,7 @@ module DSGraph = struct
         p
     | Cell _ -> c
 
-  (* assumes both cells in same node *)
+  (* note: sets c2's node to c1's node *)
   let rec join (c1 : cell) (c2 : cell) =
     match !c2 with
     | Path _ -> failwith "Attempted to join old cell"
@@ -98,6 +98,7 @@ module DSGraph = struct
             c2 := Path c1;
             (* TODO make O(1) *)
             let pointees = p @ p' in
+            (* TODO collapse on top *)
             c1 := Cell { node; pointees; offsets = Interval.join i i' })
 
   (* assumes that cell has its node already set to node *)
@@ -143,7 +144,16 @@ module DSGraph = struct
 
   (* join n2 into n1 with n2 at offset off *)
   let join_nodes n1 n2 off =
-    (* TODO shift n2 by off *)
+    n2 :=
+      List.map
+        (fun c ->
+          let f = find c in
+          match !f with
+          | Cell r ->
+              f := Cell { r with offsets = Interval.shift off r.offsets };
+              f
+          | _ -> failwith "Union find returned non terminal cell")
+        !n2;
     let rec join_nodes' n1' n2' =
       match (n1', n2') with
       | [], cs | cs, [] -> cs
@@ -167,6 +177,15 @@ module DSGraph = struct
               join_nodes' cs n2')
     in
     n1 := join_nodes' !n1 !n2
+
+  (* Check that the node has its cell intervals sorted (and disjoint) *)
+  let check_sorted node =
+    let is = List.map offsets !node in
+    let rec aux = function
+      | [] | [ _ ] -> true
+      | i :: (j :: _ as tail) -> Interval.left_of i j && aux tail
+    in
+    assert (aux is)
 
   let init offsets node : cell =
     let c = ref (Cell { offsets; node; pointees = [] }) in
