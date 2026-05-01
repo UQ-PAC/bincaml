@@ -132,25 +132,27 @@ module DSGraph = struct
   (** Merge the two given cells together. If they belong to different nodes then
       the nodes are merged so that the cell offsets line up. *)
   let rec join (c1 : cell) (c2 : cell) =
-    match !c2 with
-    | Path _ -> failwith "Attempted to join old cell"
-    | Cell { offsets = i; pointees = p; node = n2 } -> (
-        match !c1 with
-        | Path _ -> join (find c1) c2
-        | Cell { offsets = i'; node; pointees = p' } ->
-            if not @@ CCEqual.physical node n2 then
-              match Interval.(start i', start i) with
-              | Some a, Some b when Z.lt a b ->
-                  join_nodes_at (Z.sub b a) node n2
-              | Some a, Some b -> join_nodes_at (Z.sub a b) n2 node
-              | _ -> failwith "TODO"
-            else (
-              c2 := Path c1;
-              (* TODO make O(1) also collapse pointees maybe?! something needs to be worked out for that *)
-              let pointees = p @ p' in
-              let offsets = Interval.join i i' in
-              c1 := Cell { node; pointees; offsets };
-              match offsets with Top -> collapse node | _ -> ()))
+    if CCEqual.physical c1 c2 then ()
+    else
+      match !c2 with
+      | Path _ -> failwith "Attempted to join old cell"
+      | Cell { offsets = i; pointees = p; node = n2 } -> (
+          match !c1 with
+          | Path _ -> join (find c1) c2
+          | Cell { offsets = i'; node; pointees = p' } ->
+              if not @@ CCEqual.physical node n2 then
+                match Interval.(start i', start i) with
+                | Some a, Some b when Z.lt a b ->
+                    join_nodes_at (Z.sub b a) node n2
+                | Some a, Some b -> join_nodes_at (Z.sub a b) n2 node
+                | _ -> failwith "TODO"
+              else (
+                c2 := Path c1;
+                (* TODO make O(1) also collapse pointees maybe?! something needs to be worked out for that *)
+                let pointees = p @ p' in
+                let offsets = Interval.join i i' in
+                c1 := Cell { node; pointees; offsets };
+                match offsets with Top -> collapse node | _ -> ()))
 
   (** Collapse all cells in the node into a single cell (its interval being Top)
   *)
@@ -239,6 +241,18 @@ module DSGraph = struct
     let c = ref (Cell { offsets; node; pointees = [] }) in
     insert node c;
     c
+
+  (** Unify all pointees of this cell so that it points to only one cell *)
+  let unify_pointees cell =
+    let rec aux = function
+      | [] | [ _ ] -> ()
+      | a :: (b :: cs as tail) ->
+          join a b;
+          aux tail
+    in
+    let p = pointees cell in
+    aux p;
+    match p with [] -> () | c :: _ -> set_pointees [ find c ] cell
 end
 
 module SBMap = Map.Make (Sva.SymBase)
