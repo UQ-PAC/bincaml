@@ -355,6 +355,66 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
      *)
   ()
 
+(** Manual dot string construction because I couldn't see a way to do record
+    nodes in ocamlgraph *)
+let dot_string nodes =
+  let cur_id = ref 0 in
+  let take_id () =
+    let id = !cur_id in
+    cur_id := succ !cur_id;
+    id
+  in
+
+  let nid_map = Hashtbl.create 100 in
+
+  let nids =
+    List.map
+      (fun node ->
+        let nid = take_id () in
+        ( nid,
+          List.map
+            (fun cell ->
+              let id = take_id () in
+              Hashtbl.add nid_map id nid;
+              (id, cell))
+            !node ))
+      nodes
+  in
+  let cells = List.flat_map snd nids in
+  let pointees = Hashtbl.create 100 in
+  List.iter
+    (fun (cid, cell) ->
+      let ps =
+        List.map
+          (fun c' ->
+            List.find_map
+              (fun (id, c'') -> Option.return_if (CCEqual.physical c' c'') id)
+              cells
+            |> Option.get_exn_or "pointing to cell that doesn't exist")
+          (DSGraph.pointees cell)
+      in
+      Hashtbl.add pointees cid ps)
+    cells;
+
+  "digraph G {\nrankdir=\"LR\"\n"
+  ^ List.to_string ~sep:"\n"
+      (fun (nid, cids) ->
+        Printf.sprintf
+          "\"node%d\"=[\nlabel=\"node%d|{%s}\"\nshape=\"record\"\n]" nid nid
+          (List.to_string ~sep:"|"
+             (fun (id, cell) ->
+               Printf.sprintf "<%d>%s" id (Interval.show @@ DSGraph.offsets cell))
+             cids))
+      nids
+  ^ (Hashtbl.to_iter pointees
+    |> Iter.flat_map (fun (cid, ps) ->
+        let nid = Hashtbl.find nid_map cid in
+        List.to_iter ps |> Iter.map (fun id -> (nid, cid, id)))
+    |> Iter.to_string ~sep:"\n" (fun (nid, cid, id) ->
+        let nid2 = Hashtbl.find nid_map id in
+        Printf.sprintf "\"node%d\":%d -> \"node%d\":%d" nid cid nid2 id))
+  ^ "}"
+
 let dsa (p : Program.t) =
   let _sva_r = Sva.sva p in
   (*
