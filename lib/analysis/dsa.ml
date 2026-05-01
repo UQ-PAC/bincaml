@@ -87,46 +87,6 @@ module DSGraph = struct
         p
     | Cell _ -> c
 
-  (* note: sets c2's node to c1's node *)
-  let rec join (c1 : cell) (c2 : cell) =
-    match !c2 with
-    | Path _ -> failwith "Attempted to join old cell"
-    | Cell { offsets = i; pointees = p } -> (
-        match !c1 with
-        | Path _ -> join (find c1) c2
-        | Cell { offsets = i'; node; pointees = p' } ->
-            c2 := Path c1;
-            (* TODO make O(1) *)
-            let pointees = p @ p' in
-            (* TODO collapse on top *)
-            c1 := Cell { node; pointees; offsets = Interval.join i i' })
-
-  (* assumes that cell has its node already set to node *)
-  let rec insert node cell =
-    match !cell with
-    | Path _ -> insert node (find cell)
-    | Cell { offsets = Interval.Bot } -> ()
-    | Cell { offsets = Top } -> failwith "TODO collapse node"
-    | Cell { offsets = Interval _ as i } ->
-        let rec insert' = function
-          | [] -> [ cell ]
-          | c :: cs -> (
-              match !c with
-              | Path _ -> insert' (find c :: cs)
-              | Cell { offsets = Top } ->
-                  [ c ]
-                  (* collapsed case ? or should that be represented differently *)
-              | Cell { offsets = Bot } -> insert' cs
-              | Cell { offsets = Interval _ as j } when Interval.left_of i j ->
-                  cell :: c :: cs
-              | Cell { offsets = Interval _ as j } when Interval.right_of i j ->
-                  c :: insert' cs
-              | Cell { offsets = Interval _ } ->
-                  join c cell;
-                  c :: cs)
-        in
-        node := insert' !node
-
   let offsets (c : cell) =
     match !(find c) with
     | Cell { offsets } -> offsets
@@ -142,6 +102,56 @@ module DSGraph = struct
     | Cell { pointees } -> pointees
     | _ -> failwith "Union find returned non terminal cell"
 
+  (* note: sets c2's node to c1's node *)
+  let rec join (c1 : cell) (c2 : cell) =
+    match !c2 with
+    | Path _ -> failwith "Attempted to join old cell"
+    | Cell { offsets = i; pointees = p } -> (
+        match !c1 with
+        | Path _ -> join (find c1) c2
+        | Cell { offsets = i'; node; pointees = p' } -> (
+            c2 := Path c1;
+            (* TODO make O(1) *)
+            let pointees = p @ p' in
+            let offsets = Interval.join i i' in
+            c1 := Cell { node; pointees; offsets };
+            match offsets with Top -> collapse node | _ -> ()))
+
+  and collapse node =
+    let pointees = List.fold_left (fun acc c -> acc @ pointees c) [] !node in
+    let c = ref (Cell { offsets = Top; node; pointees }) in
+    List.iter (fun c' -> join c c') !node;
+    node := [ c ]
+
+  (* assumes that cell has its node already set to node *)
+  let rec insert node cell =
+    match !cell with
+    | Path _ -> insert node (find cell)
+    | Cell { offsets = Interval.Bot } -> ()
+    | Cell { offsets = Top } ->
+        node := cell :: !node;
+        collapse node
+    | Cell { offsets = Interval _ as i } -> (
+        let rec insert' = function
+          | [] -> Some [ cell ]
+          | c :: cs -> (
+              match !c with
+              | Path _ -> insert' (find c :: cs)
+              | Cell { offsets = Top } ->
+                  node := cell :: !node;
+                  collapse node;
+                  None
+              | Cell { offsets = Bot } -> insert' cs
+              | Cell { offsets = Interval _ as j } when Interval.left_of i j ->
+                  Some (cell :: c :: cs)
+              | Cell { offsets = Interval _ as j } when Interval.right_of i j ->
+                  Option.map (List.cons c) @@ insert' cs
+              | Cell { offsets = Interval _ } ->
+                  join c cell;
+                  Some (c :: cs))
+        in
+        match insert' !node with Some n -> node := n | None -> ())
+
   (* join n2 into n1 with n2 at offset off *)
   let join_nodes n1 n2 off =
     n2 :=
@@ -156,17 +166,20 @@ module DSGraph = struct
         !n2;
     let rec join_nodes' n1' n2' =
       match (n1', n2') with
-      | [], cs | cs, [] -> cs
+      | [], cs | cs, [] -> Some cs
       | c :: cs, c' :: cs' -> (
           match (offsets c, offsets c') with
           | Bot, Bot -> join_nodes' cs cs'
           | Bot, _ -> join_nodes' cs n2'
           | _, Bot -> join_nodes' n1' cs'
-          | Top, _ | _, Top -> failwith "TODO collapse"
+          | Top, _ | _, Top ->
+              n1 := !n1 @ !n2;
+              collapse n1;
+              None
           | (Interval _ as i), (Interval _ as j) when Interval.left_of i j ->
-              c :: join_nodes' cs n2'
+              Option.map (List.cons c) @@ join_nodes' cs n2'
           | (Interval _ as i), (Interval _ as j) when Interval.right_of i j ->
-              c :: join_nodes' n1' cs'
+              Option.map (List.cons c) @@ join_nodes' n1' cs'
           | Interval (a, b), Interval (x, y) when Z.leq b y ->
               (* first cell is left of second cell, so join first cell into second to preserve order *)
               join c' c;
@@ -176,7 +189,7 @@ module DSGraph = struct
               join c c';
               join_nodes' cs n2')
     in
-    n1 := join_nodes' !n1 !n2
+    match join_nodes' !n1 !n2 with Some n -> n1 := n | _ -> ()
 
   (* Check that the node has its cell intervals sorted (and disjoint) *)
   let check_sorted node =
