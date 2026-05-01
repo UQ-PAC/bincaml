@@ -132,7 +132,6 @@ module SVAAbstraction = struct
                       | _ -> failwith "boom"
                     in
                     match (sb1, sb2) with
-                    (* NOTE: OCaml compiler complains when these cases are merged *)
                     | (SymBase.GlobSym | Constant), sb
                     | sb, (SymBase.GlobSym | Constant) ->
                         SymAddrSetLattice.update sb

@@ -135,7 +135,7 @@ module DSGraph = struct
     if CCEqual.physical c1 c2 then ()
     else
       match !c2 with
-      | Path _ -> failwith "Attempted to join old cell"
+      | Path _ -> join c1 (find c2)
       | Cell { offsets = i; pointees = p; node = n2 } -> (
           match !c1 with
           | Path _ -> join (find c1) c2
@@ -192,11 +192,13 @@ module DSGraph = struct
         in
         match insert' !node with Some n -> node := n | None -> ())
 
-  (** Join the two nodes, with the second shifted by the given offset *)
+  (** Join the two nodes, with the second shifted by the given offset. The
+      second node is deleted and the first is kept *)
   and join_nodes_at off n1 n2 =
     assert (not @@ CCEqual.physical n1 n2);
     List.iter (shift off) !n2;
     (* Update n2 cell nodes so we never have the slow path of join *)
+    (* This could technically be redundant though hmmmm *)
     List.iter (set_node n1) !n2;
     let rec join_nodes' n1' n2' =
       match (n1', n2') with
@@ -242,8 +244,9 @@ module DSGraph = struct
     insert node c;
     c
 
-  (** Unify all pointees of this cell so that it points to only one cell *)
-  let unify_pointees cell =
+  (** Unify all pointees of this cell so that it points to only one cell, then
+      recurse on that cell *)
+  let rec unify_pointees cell =
     let rec aux = function
       | [] | [ _ ] -> ()
       | a :: (b :: cs as tail) ->
@@ -252,29 +255,71 @@ module DSGraph = struct
     in
     let p = pointees cell in
     aux p;
-    match p with [] -> () | c :: _ -> set_pointees [ find c ] cell
+    match p with
+    | [] -> ()
+    | c :: cs ->
+        set_pointees [ find c ] cell;
+        if not @@ List.is_empty cs then unify_pointees c
+
+  (** Create a node from a list of singleton cells by effectively performing
+      merge sort *)
+  let merge_init cells : node =
+    let rec sort n cs =
+      match (n, cs) with
+      | 0, cs -> (ref [], cs)
+      | 1, c :: cs -> (node_of c, cs)
+      | n, cs ->
+          let a = n / 2 in
+          let l, rem = sort a cs in
+          let r, cs = sort (n - a) rem in
+          join_nodes_at Z.zero l r;
+          (l, cs)
+    in
+    let l = List.length cells in
+    fst @@ sort l cells
 end
 
 module SBMap = Map.Make (Sva.SymBase)
 
 let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
     =
-  (* Create just the cells *)
-  let add_cells sv m = failwith "todo" in
-
-  let g =
+  let cells = Vector.create () in
+  let add_cells sv m =
+    let cells =
+      Sva.SymAddrSetLattice.to_iter sv
+      |> Iter.map (fun (b, i) ->
+          let c = DSGraph.init (Interval.of_wint i) in
+          Vector.push cells c;
+          (b, c))
+    in
+    Iter.fold
+      (fun (cs, m) (b, c) ->
+        let l = c :: cs in
+        (l, SBMap.add b l m))
+      ([], m) cells
+  in
+  (* Construct base graph *)
+  (* For each base make a list of cells, then do a merge sort-esque construction of a single node for that base yay nlogn *)
+  let m =
     Iter.fold
       (fun acc constr ->
         match constr with
         | Constraint.Mem { addr; value } ->
-            let acc, ptrs = add_cells addr acc in
-            let acc, vals = add_cells value acc in
-            (* TODO Add edges between (unify later) *)
+            let ptrs, acc = add_cells addr acc in
+            let vals, acc = add_cells value acc in
+            List.iter (DSGraph.set_pointees vals) ptrs;
             acc
-        | Constraint.Call { lhs; args } -> failwith "todo")
+        | Constraint.Call { lhs; args } -> (* TODO add call cells *) acc)
       SBMap.empty constraints
-    |> SBMap.values |> Iter.to_list
   in
+  let _nodes =
+    SBMap.fold (fun _b cs nodes -> DSGraph.merge_init cs :: nodes) m []
+  in
+
+  (* Unify all pointees (i hope a worklist can be avoided) *)
+  Vector.iter DSGraph.unify_pointees cells;
+
+  (* Local phase should be done ?! *)
 
   (* make joining nodes unify with union find
 
@@ -308,7 +353,7 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
      looks like yes, since such algorithms exist for various balanced bsts
      offsets can probably be handled too as edges in the tree
      *)
-  g
+  ()
 
 let dsa (p : Program.t) =
   let _sva_r = Sva.sva p in
