@@ -27,24 +27,57 @@ module Constraint = struct
 end
 
 open Wrapped_intervals
-module Interval = WrappedIntervalsLattice
+
+(* Offset interval should never overflow in userspace code, so it is fine not to use wrapped intervals (can use signed intervals that go to top on overflow instead) *)
+module Interval = struct
+  type t = Top | Interval of Z.t * Z.t | Bot
+  [@@deriving eq, ord, show { with_path = false }]
+
+  open Z
+
+  let of_wint (i : WrappedIntervalsLattice.t) =
+    match i with
+    | Top -> Top
+    | Interval { lower; upper } ->
+        Interval (Bitvec.value lower, Bitvec.value upper)
+    | Bot -> Bot
+
+  let left_of i j =
+    match (i, j) with
+    | Bot, _ | Top, _ | _, Bot | _, Top -> false
+    | Interval (_, b), Interval (c, _) -> lt b c
+
+  let right_of i j =
+    match (i, j) with
+    | Bot, _ | Top, _ | _, Bot | _, Top -> false
+    | Interval (a, _), Interval (_, d) -> lt d a
+
+  let disjoint i j = left_of i j || right_of i j
+  let overlap i j = not @@ disjoint i j
+
+  let join i j =
+    match (i, j) with
+    | Bot, i | i, Bot -> i
+    | Top, _ | _, Top -> Top
+    | Interval (a, b), Interval (c, d) -> Interval (min a c, max b d)
+
+  let shift off = function
+    | Bot -> Bot
+    | Top -> Top
+    | Interval (a, b) -> Interval (a + off, b + off)
+end
 
 module DSGraph = struct
   (* A path compressed cell. Cells store a set of offsets from an abstract base
      address, and the node that it belongs to. *)
   type content =
-    | Cell of { offsets : Interval.t; node : node ref; pointees : cell list }
+    | Cell of { offsets : Interval.t; node : node; pointees : cell list }
     | Path of cell
 
   and cell = content ref
-  and node = unit
 
-  let init offsets node : cell = ref (Cell { offsets; node; pointees = [] })
-
-  let join (c1 : cell) (c2 : cell) =
-    match !c2 with
-    | Path _ -> failwith "Attempted to join old cell"
-    | _ -> c2 := Path c1
+  (* Nodes are represented as sorted lists of cells, ordered by the low end of the intervals of each cell *)
+  and node = cell list ref
 
   let rec find (c : cell) =
     match !c with
@@ -54,12 +87,51 @@ module DSGraph = struct
         p
     | Cell _ -> c
 
+  (* assumes both cells in same node *)
+  let rec join (c1 : cell) (c2 : cell) =
+    match !c2 with
+    | Path _ -> failwith "Attempted to join old cell"
+    | Cell { offsets = i; pointees = p } -> (
+        match !c1 with
+        | Path _ -> join (find c1) c2
+        | Cell { offsets = i'; node; pointees = p' } ->
+            c2 := Path c1;
+            (* TODO make O(1) *)
+            let pointees = p @ p' in
+            c1 := Cell { node; pointees; offsets = Interval.join i i' })
+
+  (* assumes that cell has its node already set to node *)
+  let rec insert node cell =
+    match !cell with
+    | Path _ -> insert node (find cell)
+    | Cell { offsets = Interval.Bot } -> ()
+    | Cell { offsets = Top } -> failwith "TODO collapse node"
+    | Cell { offsets = Interval _ as i } ->
+        let rec insert' = function
+          | [] -> [ cell ]
+          | c :: cs -> (
+              match !c with
+              | Path _ -> insert' (find c :: cs)
+              | Cell { offsets = Top } ->
+                  [ c ]
+                  (* collapsed case ? or should that be represented differently *)
+              | Cell { offsets = Bot } -> insert' cs
+              | Cell { offsets = Interval _ as j } when Interval.left_of i j ->
+                  cell :: c :: cs
+              | Cell { offsets = Interval _ as j } when Interval.right_of i j ->
+                  c :: insert' cs
+              | Cell { offsets = Interval _ } ->
+                  join c cell;
+                  c :: cs)
+        in
+        node := insert' !node
+
   let offsets (c : cell) =
     match !(find c) with
     | Cell { offsets } -> offsets
     | _ -> failwith "Union find returned non terminal cell"
 
-  let node (c : cell) =
+  let node_of (c : cell) =
     match !(find c) with
     | Cell { node } -> node
     | _ -> failwith "Union find returned non terminal cell"
@@ -68,6 +140,38 @@ module DSGraph = struct
     match !(find c) with
     | Cell { pointees } -> pointees
     | _ -> failwith "Union find returned non terminal cell"
+
+  (* join n2 into n1 with n2 at offset off *)
+  let join_nodes n1 n2 off =
+    (* TODO shift n2 by off *)
+    let rec join_nodes' n1' n2' =
+      match (n1', n2') with
+      | [], cs | cs, [] -> cs
+      | c :: cs, c' :: cs' -> (
+          match (offsets c, offsets c') with
+          | Bot, Bot -> join_nodes' cs cs'
+          | Bot, _ -> join_nodes' cs n2'
+          | _, Bot -> join_nodes' n1' cs'
+          | Top, _ | _, Top -> failwith "TODO collapse"
+          | (Interval _ as i), (Interval _ as j) when Interval.left_of i j ->
+              c :: join_nodes' cs n2'
+          | (Interval _ as i), (Interval _ as j) when Interval.right_of i j ->
+              c :: join_nodes' n1' cs'
+          | Interval (a, b), Interval (x, y) when Z.leq b y ->
+              (* first cell is left of second cell, so join first cell into second to preserve order *)
+              join c' c;
+              join_nodes' n1' cs'
+          | Interval (a, b), Interval (x, y) ->
+              (* second cell is left of first cell, so join second cell into first to preserve order *)
+              join c c';
+              join_nodes' cs n2')
+    in
+    n1 := join_nodes' !n1 !n2
+
+  let init offsets node : cell =
+    let c = ref (Cell { offsets; node; pointees = [] }) in
+    insert node c;
+    c
 end
 
 module SBMap = Map.Make (Sva.SymBase)
