@@ -145,7 +145,8 @@ module DSGraph = struct
     | Path _, Path _ -> join_paths (find c1) (find c2)
     | Path _, _ -> join_paths (find c1) c2
     | _, Path _ -> join_paths c1 (find c2)
-    | Cell r, Cell { pointees = p } -> c2 := Path c1
+    | Cell r, Cell { pointees = p } ->
+        if not @@ CCEqual.physical c1 c2 then c2 := Path c1
 
   (** Collapse all cells in the node into a single cell (its interval being Top)
   *)
@@ -153,7 +154,9 @@ module DSGraph = struct
     let pointees =
       List.fold_left
         (fun acc c ->
-          List.fold_right (List.add_nodup ~eq:CCEqual.physical) (pointees c) acc)
+          List.fold_left
+            (flip (List.add_nodup ~eq:CCEqual.physical))
+            acc (pointees c))
         [] !node
     in
     let c = ref (Cell { offsets = Top; node; pointees }) in
@@ -181,7 +184,9 @@ module DSGraph = struct
                 c2 := Path c1;
                 (* TODO make O(1) also dedup pointees maybe?! something needs to be worked out for that *)
                 let pointees =
-                  List.fold_right (List.add_nodup ~eq:CCEqual.physical) p' p
+                  List.fold_left
+                    (flip (List.add_nodup ~eq:CCEqual.physical))
+                    p p'
                 in
                 let offsets = Interval.join i i' in
                 c1 := Cell { node; pointees; offsets };
