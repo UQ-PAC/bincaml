@@ -35,14 +35,24 @@ module Interval = struct
 
   open Z
 
+  let show = function
+    | Top -> "Top"
+    | Bot -> "Bot"
+    | Interval (a, b) ->
+        Printf.sprintf "[%s, %s]" (Z.to_string a) (Z.to_string b)
+
   let start = function Top | Bot -> None | Interval (a, _) -> Some a
 
   let of_wint (i : WrappedIntervalsLattice.t) =
     match i with
     | Bot -> Bot
-    | Interval { lower; upper } when Bitvec.slt lower upper ->
+    | Interval { lower; upper } when Bitvec.sle lower upper ->
         Interval (Bitvec.to_signed_bigint lower, Bitvec.to_signed_bigint upper)
     | _ -> Top
+
+  let pad_with_size size = function
+    | Interval (a, b) -> Interval (a, b + Z.of_int (Int.( / ) size 8) - Z.one)
+    | otherwise -> otherwise
 
   let left_of i j =
     match (i, j) with
@@ -190,28 +200,33 @@ module DSGraph = struct
       | [], cs | cs, [] -> Some cs
       | c :: cs, c' :: cs' -> (
           match (offsets c, offsets c') with
-          (* TODO Bot cases shouldn't happen i think?! please confirm this, future worker *)
+          (* TODO Bot cases shouldn't happen i think?! please confirm this *)
           | Bot, Bot -> join_nodes' cs cs'
           | Bot, _ -> join_nodes' cs n2'
           | _, Bot -> join_nodes' n1' cs'
           | Top, _ | _, Top ->
               n1 := !n1 @ !n2;
+              n2 := [];
               collapse n1;
               None
           | (Interval _ as i), (Interval _ as j) when Interval.left_of i j ->
               Option.map (List.cons c) @@ join_nodes' cs n2'
           | (Interval _ as i), (Interval _ as j) when Interval.right_of i j ->
-              Option.map (List.cons c) @@ join_nodes' n1' cs'
+              Option.map (List.cons c') @@ join_nodes' n1' cs'
           | Interval (a, b), Interval (x, y) when Z.leq b y ->
               (* first cell is left of second cell, so join first cell into second to preserve order *)
               join c' c;
-              join_nodes' n1' cs'
+              join_nodes' cs n2'
           | Interval (a, b), Interval (x, y) ->
               (* second cell is left of first cell, so join second cell into first to preserve order *)
               join c c';
-              join_nodes' cs n2')
+              join_nodes' n1' cs')
     in
-    match join_nodes' !n1 !n2 with Some n -> n1 := n | _ -> ()
+    match join_nodes' !n1 !n2 with
+    | Some n ->
+        n1 := n;
+        n2 := []
+    | _ -> ()
 
   (** Inserts the cell into the node. It is assumed that the cell has set (or
       will set) its node pointer outside of this call *)
@@ -303,7 +318,14 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
     let cells =
       Sva.SymAddrSetLattice.to_iter sv
       |> Iter.map (fun (b, i) ->
-          let c = DSGraph.init (Interval.of_wint i) in
+          let size =
+            match i with
+            | WrappedIntervalsLattice.Interval { upper } -> Bitvec.size upper
+            | _ -> 0
+          in
+          let c =
+            DSGraph.init (Interval.of_wint i |> Interval.pad_with_size size)
+          in
           Vector.push cells c;
           (b, c))
     in
@@ -344,7 +366,8 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
 
   (* Unify all pointees (i hope a worklist can be avoided) *)
   Vector.iter DSGraph.unify_pointees cells;
-  nodes
+
+  List.filter (fun node -> not @@ List.is_empty !node) nodes
 
 (** Manual dot string construction because I couldn't see a way to do record
     nodes in ocamlgraph *)
@@ -422,6 +445,10 @@ let dsa (p : Program.t) =
                (Constraint.map
                   (Sva.Eval.EV.eval (flip Sva.StateAbstraction.read r)))
         in
+        print_endline
+        @@ Iter.to_string
+             (Constraint.show Sva.SymAddrSetLattice.show)
+             constraints;
         (pid, make_local_graph constraints))
       sva_r
   in
