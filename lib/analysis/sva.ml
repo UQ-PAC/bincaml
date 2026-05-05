@@ -310,17 +310,22 @@ let sva (prog : Program.t) =
   in
   let results =
     Program.procs prog
-    |> Iter.fold (fun acc (_, v) -> DFGAnalysis.flow_insensitive v :: acc) []
+    |> Iter.fold
+         (fun acc (id, v) -> (id, DFGAnalysis.flow_insensitive v) :: acc)
+         []
   in
   results
-  |> List.map
-     @@ StateAbstraction.mapi (fun _ domain ->
-         SymAddrSetLattice.to_list domain
-         |> snd
-         |> List.map (fun (sym_base, value) ->
-             if
-               SymBase.equal Constant sym_base
-               && constant_within_global_address value prog
-             then (SymBase.GlobSym, value)
-             else (sym_base, value))
-         |> SymAddrSetLattice.of_list_bot)
+  |> List.map (fun (id, b) ->
+      ( id,
+        StateAbstraction.mapi
+          (fun _ domain ->
+            SymAddrSetLattice.to_list domain
+            |> snd
+            |> List.map (fun (sym_base, value) ->
+                if
+                  SymBase.equal Constant sym_base
+                  && constant_within_global_address value prog
+                then (SymBase.GlobSym, value)
+                else (sym_base, value))
+            |> SymAddrSetLattice.of_list_bot)
+          b ))

@@ -41,7 +41,7 @@ module Interval = struct
     match i with
     | Bot -> Bot
     | Interval { lower; upper } when Bitvec.slt lower upper ->
-        Interval (Bitvec.value lower, Bitvec.value upper)
+        Interval (Bitvec.to_signed_bigint lower, Bitvec.to_signed_bigint upper)
     | _ -> Top
 
   let left_of i j =
@@ -129,6 +129,25 @@ module DSGraph = struct
     | Cell r -> f := Cell { r with pointees }
     | _ -> failwith "Union find returned non terminal cell"
 
+  (** Join the pointees of the second cell into the pointees of the first cell,
+      and make the second cell point to the first *)
+  let rec join_pointees (c1 : cell) (c2 : cell) =
+    match (!c1, !c2) with
+    | Path _, Path _ -> join_pointees (find c1) (find c2)
+    | Path _, _ -> join_pointees (find c1) c2
+    | _, Path _ -> join_pointees c1 (find c2)
+    | Cell r, Cell { pointees = p } ->
+        c1 := Cell { r with pointees = r.pointees @ p };
+        c2 := Path c1
+
+  (** Collapse all cells in the node into a single cell (its interval being Top)
+  *)
+  let collapse node =
+    let pointees = List.fold_left (fun acc c -> acc @ pointees c) [] !node in
+    let c = ref (Cell { offsets = Top; node; pointees }) in
+    List.iter (fun c' -> join_pointees c c') !node;
+    node := [ c ]
+
   (** Merge the two given cells together. If they belong to different nodes then
       the nodes are merged so that the cell offsets line up. *)
   let rec join (c1 : cell) (c2 : cell) =
@@ -145,52 +164,14 @@ module DSGraph = struct
                 | Some a, Some b when Z.lt a b ->
                     join_nodes_at (Z.sub b a) node n2
                 | Some a, Some b -> join_nodes_at (Z.sub a b) n2 node
-                | _ -> failwith "TODO"
+                | _ -> join_nodes_at Z.zero node n2
               else (
                 c2 := Path c1;
-                (* TODO make O(1) also collapse pointees maybe?! something needs to be worked out for that *)
+                (* TODO make O(1) also dedup pointees maybe?! something needs to be worked out for that *)
                 let pointees = p @ p' in
                 let offsets = Interval.join i i' in
                 c1 := Cell { node; pointees; offsets };
                 match offsets with Top -> collapse node | _ -> ()))
-
-  (** Collapse all cells in the node into a single cell (its interval being Top)
-  *)
-  and collapse node =
-    let pointees = List.fold_left (fun acc c -> acc @ pointees c) [] !node in
-    let c = ref (Cell { offsets = Top; node; pointees }) in
-    List.iter (fun c' -> join c c') !node;
-    node := [ c ]
-
-  (** Inserts the cell into the node. It is assumed that the cell has set (or
-      will set) its node pointer outside of this call *)
-  and insert node cell =
-    match !cell with
-    | Path _ -> insert node (find cell)
-    | Cell { offsets = Interval.Bot } -> ()
-    | Cell { offsets = Top } ->
-        node := cell :: !node;
-        collapse node
-    | Cell { offsets = Interval _ as i } -> (
-        let rec insert' = function
-          | [] -> Some [ cell ]
-          | c :: cs -> (
-              match !c with
-              | Path _ -> insert' (find c :: cs)
-              | Cell { offsets = Top } ->
-                  node := cell :: !node;
-                  collapse node;
-                  None
-              | Cell { offsets = Bot } -> insert' cs
-              | Cell { offsets = Interval _ as j } when Interval.left_of i j ->
-                  Some (cell :: c :: cs)
-              | Cell { offsets = Interval _ as j } when Interval.right_of i j ->
-                  Option.map (List.cons c) @@ insert' cs
-              | Cell { offsets = Interval _ } ->
-                  join c cell;
-                  Some (c :: cs))
-        in
-        match insert' !node with Some n -> node := n | None -> ())
 
   (** Join the two nodes, with the second shifted by the given offset. The
       second node is deleted and the first is kept *)
@@ -227,6 +208,36 @@ module DSGraph = struct
               join_nodes' cs n2')
     in
     match join_nodes' !n1 !n2 with Some n -> n1 := n | _ -> ()
+
+  (** Inserts the cell into the node. It is assumed that the cell has set (or
+      will set) its node pointer outside of this call *)
+  let rec insert node cell =
+    match !cell with
+    | Path _ -> insert node (find cell)
+    | Cell { offsets = Interval.Bot } -> ()
+    | Cell { offsets = Top } ->
+        node := cell :: !node;
+        collapse node
+    | Cell { offsets = Interval _ as i } -> (
+        let rec insert' = function
+          | [] -> Some [ cell ]
+          | c :: cs -> (
+              match !c with
+              | Path _ -> insert' (find c :: cs)
+              | Cell { offsets = Top } ->
+                  node := cell :: !node;
+                  collapse node;
+                  None
+              | Cell { offsets = Bot } -> insert' cs
+              | Cell { offsets = Interval _ as j } when Interval.left_of i j ->
+                  Some (cell :: c :: cs)
+              | Cell { offsets = Interval _ as j } when Interval.right_of i j ->
+                  Option.map (List.cons c) @@ insert' cs
+              | Cell { offsets = Interval _ } ->
+                  join c cell;
+                  Some (c :: cs))
+        in
+        match insert' !node with Some n -> node := n | None -> ())
 
   (** Check that the node has its cell intervals sorted and disjoint *)
   let check_sorted node =
@@ -294,8 +305,9 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
     in
     Iter.fold
       (fun (cs, m) (b, c) ->
-        let l = c :: cs in
-        (l, SBMap.add b l m))
+        let l = SBMap.get_or b m ~default:[] in
+        let m = SBMap.add b (c :: l) m in
+        (c :: cs, m))
       ([], m) cells
   in
   (* Construct base graph *)
@@ -312,7 +324,7 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
         | Constraint.Call { lhs; args } -> (* TODO add call cells *) acc)
       SBMap.empty constraints
   in
-  let _nodes =
+  let nodes =
     SBMap.fold (fun _b cs nodes -> DSGraph.merge_init cs :: nodes) m []
   in
 
@@ -353,15 +365,16 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
      looks like yes, since such algorithms exist for various balanced bsts
      offsets can probably be handled too as edges in the tree
      *)
-  ()
+  nodes
 
 (** Manual dot string construction because I couldn't see a way to do record
     nodes in ocamlgraph *)
 let dot_string nodes =
-  let cur_id = ref 0 in
-  let take_id () =
-    let id = !cur_id in
-    cur_id := succ !cur_id;
+  let cur_nid = ref 0 in
+  let cur_cid = ref 0 in
+  let take_id ids () =
+    let id = !ids in
+    ids := succ !ids;
     id
   in
 
@@ -370,13 +383,13 @@ let dot_string nodes =
   let nids =
     List.map
       (fun node ->
-        let nid = take_id () in
+        let nid = take_id cur_nid () in
         ( nid,
           List.map
             (fun cell ->
-              let id = take_id () in
-              Hashtbl.add nid_map id nid;
-              (id, cell))
+              let cid = take_id cur_cid () in
+              Hashtbl.add nid_map cid nid;
+              (cid, DSGraph.find cell))
             !node ))
       nodes
   in
@@ -388,7 +401,8 @@ let dot_string nodes =
         List.map
           (fun c' ->
             List.find_map
-              (fun (id, c'') -> Option.return_if (CCEqual.physical c' c'') id)
+              (fun (id, c'') ->
+                Option.return_if (CCEqual.physical (DSGraph.find c') c'') id)
               cells
             |> Option.get_exn_or "pointing to cell that doesn't exist")
           (DSGraph.pointees cell)
@@ -396,31 +410,31 @@ let dot_string nodes =
       Hashtbl.add pointees cid ps)
     cells;
 
-  "digraph G {\nrankdir=\"LR\"\n"
+  "digraph G {\n  rankdir=\"LR\"\n  node[shape=record]\n"
   ^ List.to_string ~sep:"\n"
       (fun (nid, cids) ->
-        Printf.sprintf
-          "\"node%d\"=[\nlabel=\"node%d|{%s}\"\nshape=\"record\"\n]" nid nid
+        Printf.sprintf "  \"node%d\"[label=\"node%d|{%s}\"];" nid nid
           (List.to_string ~sep:"|"
              (fun (id, cell) ->
                Printf.sprintf "<%d>%s" id (Interval.show @@ DSGraph.offsets cell))
              cids))
       nids
+  ^ "\n"
   ^ (Hashtbl.to_iter pointees
     |> Iter.flat_map (fun (cid, ps) ->
         let nid = Hashtbl.find nid_map cid in
         List.to_iter ps |> Iter.map (fun id -> (nid, cid, id)))
     |> Iter.to_string ~sep:"\n" (fun (nid, cid, id) ->
         let nid2 = Hashtbl.find nid_map id in
-        Printf.sprintf "\"node%d\":%d -> \"node%d\":%d" nid cid nid2 id))
-  ^ "}"
+        Printf.sprintf "  \"node%d\":%d -> \"node%d\":%d" nid cid nid2 id))
+  ^ "\n}"
 
 let dsa (p : Program.t) =
-  let _sva_r = Sva.sva p in
-  (*
-  let _local_graphs =
-    IDMap.mapi
-      (fun pid r ->
+  (* I don't have the procedure ids ... *)
+  let sva_r = Sva.sva p in
+  let nodess =
+    List.map
+      (fun (pid, r) ->
         let proc = Program.proc p pid in
         let constraints =
           Constraint.gen_constraints proc
@@ -431,5 +445,5 @@ let dsa (p : Program.t) =
         make_local_graph constraints)
       sva_r
   in
-  *)
+  List.iter (print_endline % dot_string) nodess;
   p

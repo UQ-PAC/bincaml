@@ -129,7 +129,9 @@ module PassManager = struct
         Prog
           (fun p ->
             let r = Analysis.Sva.sva p in
-            List.iter (print_endline % Analysis.Sva.StateAbstraction.show) r;
+            List.iter
+              (print_endline % Analysis.Sva.StateAbstraction.show % snd)
+              r;
             p);
       doc = "Runs symbolic value analysis and prints stuff out after";
     }
@@ -353,6 +355,11 @@ module PassManager = struct
         name = "gamma-vars";
         apply = Prog Transforms.Gamma_vars.transform;
         doc = "Replace gamma expressions with gamma variables";
+      };
+      {
+        name = "data-structure-analysis";
+        apply = Prog Analysis.Dsa.dsa;
+        doc = "";
       };
     ]
 
