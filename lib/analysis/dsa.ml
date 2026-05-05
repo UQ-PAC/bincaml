@@ -129,23 +129,25 @@ module DSGraph = struct
     | Cell r -> f := Cell { r with pointees }
     | _ -> failwith "Union find returned non terminal cell"
 
-  (** Join the pointees of the second cell into the pointees of the first cell,
-      and make the second cell point to the first *)
-  let rec join_pointees (c1 : cell) (c2 : cell) =
+  (** Make the second cell point to the first *)
+  let rec join_paths (c1 : cell) (c2 : cell) =
     match (!c1, !c2) with
-    | Path _, Path _ -> join_pointees (find c1) (find c2)
-    | Path _, _ -> join_pointees (find c1) c2
-    | _, Path _ -> join_pointees c1 (find c2)
-    | Cell r, Cell { pointees = p } ->
-        c1 := Cell { r with pointees = r.pointees @ p };
-        c2 := Path c1
+    | Path _, Path _ -> join_paths (find c1) (find c2)
+    | Path _, _ -> join_paths (find c1) c2
+    | _, Path _ -> join_paths c1 (find c2)
+    | Cell r, Cell { pointees = p } -> c2 := Path c1
 
   (** Collapse all cells in the node into a single cell (its interval being Top)
   *)
   let collapse node =
-    let pointees = List.fold_left (fun acc c -> acc @ pointees c) [] !node in
+    let pointees =
+      List.fold_left
+        (fun acc c ->
+          List.fold_right (List.add_nodup ~eq:CCEqual.physical) (pointees c) acc)
+        [] !node
+    in
     let c = ref (Cell { offsets = Top; node; pointees }) in
-    List.iter (fun c' -> join_pointees c c') !node;
+    List.iter (fun c' -> join_paths c c') !node;
     node := [ c ]
 
   (** Merge the two given cells together. If they belong to different nodes then
@@ -168,7 +170,9 @@ module DSGraph = struct
               else (
                 c2 := Path c1;
                 (* TODO make O(1) also dedup pointees maybe?! something needs to be worked out for that *)
-                let pointees = p @ p' in
+                let pointees =
+                  List.fold_right (List.add_nodup ~eq:CCEqual.physical) p' p
+                in
                 let offsets = Interval.join i i' in
                 c1 := Cell { node; pointees; offsets };
                 match offsets with Top -> collapse node | _ -> ()))
@@ -270,7 +274,7 @@ module DSGraph = struct
     | [] -> ()
     | c :: cs ->
         set_pointees [ find c ] cell;
-        if not @@ List.is_empty cs then unify_pointees c
+        if not @@ List.is_empty cs then unify_pointees (find c)
 
   (** Create a node from a list of singleton cells by effectively performing
       merge sort *)
@@ -324,47 +328,22 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
         | Constraint.Call { lhs; args } -> (* TODO add call cells *) acc)
       SBMap.empty constraints
   in
+  print_endline "Built constraints";
   let nodes =
     SBMap.fold (fun _b cs nodes -> DSGraph.merge_init cs :: nodes) m []
+    (*SBMap.fold (fun _b cs nodes -> List.map DSGraph.node_of cs @ nodes) m []*)
   in
+  print_endline @@ "Constructed nodes: " ^ Int.to_string @@ List.length nodes;
+  print_endline @@ "Pointee counts: " ^ Int.to_string
+  @@ List.fold_left
+       (fun acc node ->
+         List.fold_left
+           (fun acc cells -> acc + (List.length @@ DSGraph.pointees cells))
+           acc !node)
+       0 nodes;
 
   (* Unify all pointees (i hope a worklist can be avoided) *)
   Vector.iter DSGraph.unify_pointees cells;
-
-  (* Local phase should be done ?! *)
-
-  (* make joining nodes unify with union find
-
-     solve:
-     join overlapping cells in nodes
-     init workist to sets of codomains of cells greater than 1 in size
-     // maybe worklist isn't needed and we can just iterate over all cells
-     // no but maybe if you recursively unify joined codomain cells it works (tail recurse?!)
-     // if we do this then no operations *create* new cells with multiple out edges
-     // should be good but also does iteration order matter?!
-     for each:
-         unify set
-         grow worklist
-
-     unify set S:
-     compute offsets per node
-     // what if we used a funky data structure that encoded a union of intervals, instead of imprecisely joining them and deleting their holes?!
-     make all nodes of cells to be unified point to a single node (offsets adjusted)
-     fix overlapping intervals
-
-     the union of intervals data structure (might not work) alternatively this is a data structure to represent nodes:
-     leaves: intervals that are all disjoint
-     binary branches:
-         leaves are all disjoint intervals with ordering invariant
-         approximates a whole interval (join of all leaves)
-         the left branch has its own interval range
-         the right too
-         store on the branch the interval between the left branch's right point and right branches left point
-     element of queries are log n
-     does there exist an efficient algorithm to join two trees?! what about n trees? what if we want to add offsets to trees we are joining?
-     looks like yes, since such algorithms exist for various balanced bsts
-     offsets can probably be handled too as edges in the tree
-     *)
   nodes
 
 (** Manual dot string construction because I couldn't see a way to do record
@@ -435,6 +414,7 @@ let dsa (p : Program.t) =
   let nodess =
     List.map
       (fun (pid, r) ->
+        print_endline @@ ID.show pid;
         let proc = Program.proc p pid in
         let constraints =
           Constraint.gen_constraints proc
@@ -442,8 +422,13 @@ let dsa (p : Program.t) =
                (Constraint.map
                   (Sva.Eval.EV.eval (flip Sva.StateAbstraction.read r)))
         in
-        make_local_graph constraints)
+        (pid, make_local_graph constraints))
       sva_r
   in
-  List.iter (print_endline % dot_string) nodess;
+  print_endline "graphs made";
+  List.iter
+    (fun (id, nodes) ->
+      print_endline @@ ID.show id;
+      print_endline @@ dot_string nodes)
+    nodess;
   p
