@@ -80,7 +80,7 @@ module Domain (S : FunctionAnnotation) = struct
 
   let join a b = BasilExpr.applyintrin ~op:`OR [ a; b ] |> simplify
   let widening a b = top
-  let init proc = bottom
+  let init ?(vertex=None) proc = bottom
 
   let leq a b =
     raise

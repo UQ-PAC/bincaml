@@ -167,7 +167,7 @@ module Domain = struct
 
   let top_val = TnumWintReducedProductLattice.top
 
-  let init p =
+  let init ?(vertex=None) p =
     let vs = Lang.Procedure.formal_in_params p |> StringMap.values in
     vs
     |> Iter.map (fun v -> (v, top_val))

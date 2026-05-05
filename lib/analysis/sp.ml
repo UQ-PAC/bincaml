@@ -166,7 +166,7 @@ module Domain (S : FunctionAnnotation) = struct
     in
     Some o
 
-  let init (proc : Program.proc) : t = top
+  let init ?(vertex=None) (proc : Program.proc) : t = top
 
   let transfer_phi (m : t) (p : Var.t Block.phi) : t =
     let m = unwrap m in
