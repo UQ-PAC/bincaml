@@ -317,6 +317,8 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
   let add_cells sv m =
     let cells =
       Sva.SymAddrSetLattice.to_iter sv
+      (* Shouldn't be kept when we have distinct global values (which are not currently present and hence stored as globals) *)
+      (*|> Iter.filter (not % Sva.SymBase.equal Sva.SymBase.Constant % fst)*)
       |> Iter.map (fun (b, i) ->
           let size =
             match i with

@@ -28,7 +28,8 @@ module SymBase = struct
     (* Unknown *)
     | Par of { name : string; param : Var.t }
     | Ret of { name : string; param : Var.t }
-    | Loaded
+    (* Variables are identifiers of load instructions because of ssa form *)
+    | Loaded of { var : Var.t }
   [@@deriving ord, eq]
 
   let show = function
@@ -38,11 +39,11 @@ module SymBase = struct
     | Constant -> "Constant"
     | Par { name; param } -> Printf.sprintf "Par(%s_%s)" name (Var.show param)
     | Ret { name; param } -> Printf.sprintf "Ret(%s_%s)" name (Var.show param)
-    | Loaded -> Printf.sprintf "Loaded"
+    | Loaded { var } -> Printf.sprintf "Loaded(%s)" (Var.name var)
 
   let is_place_holder = function
     | Stack _ | Heap _ | GlobSym | Constant -> false
-    | Ret _ | Par _ | Loaded -> true
+    | Ret _ | Par _ | Loaded _ -> true
 
   let to_int = Hashtbl.hash
   let pretty a = Containers_pp.text @@ show a
@@ -217,7 +218,7 @@ module Domain = struct
           | Scalar -> (lhs, rhs)
           | Addr { size } ->
               ( lhs,
-                SymAddrSetLattice.singleton Loaded
+                SymAddrSetLattice.singleton (Loaded { var = lhs })
                 @@ IntervalDomain.init @@ Bitvec.zero ~size ))
       | Stmt.Instr_Store { lhs; addr; rhs } -> (
           match addr with
