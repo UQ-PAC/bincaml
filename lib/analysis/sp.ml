@@ -12,6 +12,22 @@ module type FunctionAnnotation = sig
   val id : ID.t
 end
 
+let expr_size e =
+  let open AbstractExpr in
+  let alg (e : int BasilExpr.abstract_expr) =
+    (match e with
+      | RVar { attrib; id } -> 0
+      | Constant { attrib; const } -> 0
+      | UnaryExpr { attrib; op; arg } -> arg
+      | BinaryExpr { attrib; op; arg1; arg2 } -> arg1 + arg2
+      | ApplyIntrin { attrib; op; args } -> List.fold_left ( + ) 0 args
+      | ApplyFun { attrib; func; args } -> func + List.fold_left ( + ) 0 args
+      | Lambda { op; attrib; bound_vars; in_body } -> in_body
+      | Let { attrib; bound_vars; in_body } -> in_body)
+    + 1
+  in
+  BasilExpr.cata alg e
+
 module Domain (S : FunctionAnnotation) = struct
   let name = "SP domain"
 
@@ -165,8 +181,11 @@ module Domain (S : FunctionAnnotation) = struct
     match VarSet.cardinal l with
     | 0 -> p
     | _ ->
-        BasilExpr.exists ~bound:(VarSet.to_list @@ l) p
-        |> Algsimp.Comb.to_steady Expr.BasilExpr.equal Algsimp.alg_simp_rewriter
+        if expr_size p > 10000 then BasilExpr.boolconst true
+        else
+          BasilExpr.exists ~bound:(VarSet.to_list @@ l) p
+          |> Algsimp.Comb.to_steady Expr.BasilExpr.equal
+               Algsimp.alg_simp_rewriter
 end
 
 let%expect_test "sp" =
