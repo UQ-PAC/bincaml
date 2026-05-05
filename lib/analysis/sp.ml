@@ -90,7 +90,7 @@ module Domain (S : FunctionAnnotation) = struct
     o
 
   let leq a b = failwith "leq not implemented"
-  let widening a b = bottom
+  let widening a b = top
 
   let locals (p : BasilExpr.t) =
     BasilExpr.free_vars p
@@ -134,9 +134,7 @@ module Domain (S : FunctionAnnotation) = struct
                  |> List.map (fun (i, v) -> (i, BasilExpr.rvar v)))
           in
           let r =
-            List.fold_left
-              (fun a b -> conjunction [ a; sub b ])
-              e_true (S.ensures procid)
+            conjunction @@ (e_true :: (S.ensures procid |> List.map sub))
           in
           conjunction [ p; simplify r ]
       | Instr_Store
@@ -249,7 +247,7 @@ proc @branching(a:bv64) -> (b:bv64) [
   |> IntraDomain.to_pred |> BasilExpr.to_string |> print_endline;
   [%expect
     {|
-    exists (a_1:bv64) (a_3:bv64) (x_2:bv64) (a_2:bv64) (x_1:bv64) (x_3:bv64) ::(booland(boolor(booland(boolor(booland(eq(a_1:bv64,
+    exists (a_1:bv64) (a_3:bv64) (x_2:bv64) (a_2:bv64) (x_1:bv64) (x_3:bv64) :: (booland(boolor(booland(boolor(booland(eq(a_1:bv64,
            a:bv64), bvult(a_1:bv64, 0x64:bv64), eq(a_3:bv64, a_1:bv64),
           bvult(a_3:bv64, 0x32:bv64), eq(x_2:bv64, a_3:bv64)),
          booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64),

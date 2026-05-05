@@ -5,6 +5,7 @@ open Ops
 open Memory_encoding
 
 let old e = BasilExpr.unexp ~op:`Old e
+let i = Var.create ~scope:Var.LocalConst "i" (Types.Bitvector 64)
 
 let r n =
   BasilExpr.rvar
@@ -31,7 +32,28 @@ let transform_main p =
       spec with
       requires =
         spec.requires
+        (* Require memory is initialized. *)
         @ [ Calls.init_encoding [ BasilExpr.rvar Globals.mem_encoding ] ];
+      (* Ensure there are no memory leaks. *)
+      ensures =
+        spec.ensures
+        @ [
+            BasilExpr.forall ~bound:[ i ]
+            @@ BasilExpr.binexp ~op:`IMPLIES
+                 (Calls.addr_is_heap
+                    [ BasilExpr.rvar Globals.mem_encoding; BasilExpr.rvar i ])
+                 (BasilExpr.binexp ~op:`NEQ
+                    (Calls.alloc_live
+                       [
+                         BasilExpr.rvar Globals.mem_encoding;
+                         Calls.addr_alloc
+                           [
+                             BasilExpr.rvar Globals.mem_encoding;
+                             BasilExpr.rvar i;
+                           ];
+                       ])
+                    (BasilExpr.bvconst live));
+          ];
       modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
       captures_globs = spec.captures_globs @ [ Globals.mem_encoding ];
     }

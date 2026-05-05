@@ -255,10 +255,11 @@ let lift_procedure_params prog ~skip_observable ~skip_maps all_lifted procid
     (* Rewrite ensures: Old(g) → g_in (entry value); bare modified g →
            g_out (exit value); bare captured-only g → g_in (unchanged).
            Old(g) is handled first so the bare-g pass doesn't clobber it. *)
+    let fvs = Expr.BasilExpr.free_vars expr in
     let alg node =
       match node with
       | UnaryExpr { op = `Old; arg } -> replace [%here] (rewrite_old_expr arg)
-      | RVar { id } when Var.is_constant id -> Keep
+      | RVar { id } when Var.is_constant id || (not @@ VarSet.mem id fvs) -> Keep
       | RVar { id } -> (
           match StringMap.find_opt (Var.name id) glob_to_outparam with
           | Some v -> replace [%here] (rvar v)

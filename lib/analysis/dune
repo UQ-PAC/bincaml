@@ -19,8 +19,7 @@
   known_bits
   wp_dual
   sp
-  sva
-  linear_const)
+  sva)
  (libraries
   intPQueue
   patricia-tree

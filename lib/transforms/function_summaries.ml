@@ -17,11 +17,6 @@ let append_summary s1 s2 =
 module type FunctionSummaryAnnotation = sig
   val requires : ID.t -> Expr.BasilExpr.t list
   val ensures : ID.t -> Expr.BasilExpr.t list
-end
-
-module type FunctionAnnotation = sig
-  include FunctionSummaryAnnotation
-
   val inout : ID.t -> VarSet.t
   val id : ID.t
 end
@@ -83,7 +78,7 @@ let wp_dual_requires (module S : FunctionSummaryAnnotation)
   Analysis.A.M.find_opt Procedure.Vert.Entry result
   |> Option.map Domain.to_pred |> Option.to_list
 
-let sp_ensures (module S : FunctionAnnotation) (proc : Program.proc) =
+let sp_ensures (module S : FunctionSummaryAnnotation) (proc : Program.proc) =
   let module Domain = Sp.Domain (S) in
   let module Analysis = Intra_analysis.Forwards (Domain) in
   let result =
@@ -95,7 +90,7 @@ let sp_ensures (module S : FunctionAnnotation) (proc : Program.proc) =
 
 (** Compute an extension of the given procedure's summary *)
 let extra_summary (solver : Bincaml_util.Smt.Solver.t)
-    (module S : FunctionAnnotation) reiter (proc : Program.proc) =
+    (module S : FunctionSummaryAnnotation) reiter (proc : Program.proc) =
   (* TODO implement a sample ensures clause generator and some sort of analysis
      pass runner *)
   let cur_req = S.requires (Procedure.id proc) in
@@ -199,7 +194,7 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
                ~default:VarSet.empty
 
         let id = Procedure.id proc
-      end : FunctionAnnotation)
+      end : FunctionSummaryAnnotation)
       (ref IDSet.empty) proc
   in
   Bincaml_util.Smt.Solver.stop solver;
@@ -267,7 +262,7 @@ let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
                  ~default:VarSet.empty
 
           let id = pid
-        end : FunctionAnnotation)
+        end : FunctionSummaryAnnotation)
       in
       let extra =
         extra_summary solver annotations reiters (IDMap.find pid procs)

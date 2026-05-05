@@ -166,7 +166,6 @@ module Forwards (D : IntraDomain) = struct
       ?(widening_set = Graph.ChaoticIteration.Predicate (fun _ -> false))
       ?(widening_delay = 0) p =
     Trace_core.with_span ~__FILE__ ~__LINE__ D.name (fun _ ->
-        let g = Procedure.graph p in
         Procedure.graph p
         |> Option.map (fun g ->
             A.recurse g (Procedure.topo_fwd p)
