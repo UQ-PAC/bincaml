@@ -161,9 +161,9 @@ module Domain (S : FunctionAnnotation) = struct
         } ->
         (* Without a load expression it is unclear what to constrain here. *)
         (* Could be a map access in future. *)
-        e_true
-    | Instr_IndirectCall _ | Instr_IntrinCall _ -> e_true
-    | _ -> e_true
+        top
+    | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
+    | _ -> top
 
   let init ?(vertex = None) (proc : Program.proc) : t =
     match vertex with Some Procedure.Vert.Entry -> top | _ -> bottom
@@ -174,7 +174,7 @@ module Domain (S : FunctionAnnotation) = struct
         let rhs =
           List.map (fun (_, v) -> tf_assigns m [ (lhs, BasilExpr.rvar v) ]) rhs
         in
-        List.fold_left join top rhs
+        List.fold_left join bottom rhs
 
   let to_pred (p : t) : BasilExpr.t =
     let l = locals p in
@@ -246,15 +246,16 @@ proc @branching(a:bv64) -> (b:bv64) [
   |> IntraDomain.to_pred |> BasilExpr.to_string |> print_endline;
   [%expect
     {|
-    exists (a_1:bv64) (a_3:bv64) (x_2:bv64) (a_2:bv64) (x_1:bv64) (x_3:bv64) :: (booland(boolor(booland(boolor(booland(eq(a_1:bv64,
-           a:bv64), bvult(a_1:bv64, 0x64:bv64), eq(a_3:bv64, a_1:bv64),
-          bvult(a_3:bv64, 0x32:bv64), eq(x_2:bv64, a_3:bv64)),
-         booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64),
-          eq(a_2:bv64, a_1:bv64), boolnot(bvult(a_2:bv64, 0x32:bv64)),
-          eq(x_1:bv64, 0x0:bv64))), eq(x_3:bv64, x_1:bv64)),
-       booland(boolor(booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64),
-          eq(a_3:bv64, a_1:bv64), bvult(a_3:bv64, 0x32:bv64), eq(x_2:bv64, a_3:bv64)),
-         booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64),
-          eq(a_2:bv64, a_1:bv64), boolnot(bvult(a_2:bv64, 0x32:bv64)),
-          eq(x_1:bv64, 0x0:bv64))), eq(x_3:bv64, x_2:bv64))), eq(b:bv64, x_3:bv64)))
+    exists (a_1:bv64) (a_3:bv64) (x_2:bv64) (a_2:bv64) (x_1:bv64) (x_3:bv64) :: (boolor(booland(boolor(booland(boolor(booland(eq(a_1:bv64,
+            a:bv64), bvult(a_1:bv64, 0x64:bv64), eq(a_3:bv64, a_1:bv64),
+           bvult(a_3:bv64, 0x32:bv64), eq(x_2:bv64, a_3:bv64)),
+          booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64),
+           eq(a_2:bv64, a_1:bv64), boolnot(bvult(a_2:bv64, 0x32:bv64)),
+           eq(x_1:bv64, 0x0:bv64))), eq(x_3:bv64, x_1:bv64)),
+        booland(boolor(booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64),
+           eq(a_3:bv64, a_1:bv64), bvult(a_3:bv64, 0x32:bv64), eq(x_2:bv64, a_3:bv64)),
+          booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64),
+           eq(a_2:bv64, a_1:bv64), boolnot(bvult(a_2:bv64, 0x32:bv64)),
+           eq(x_1:bv64, 0x0:bv64))), eq(x_3:bv64, x_2:bv64))), eq(b:bv64, x_3:bv64)),
+      false, false))
     |}]
