@@ -22,7 +22,7 @@ module Domain = struct
 
   let name = "Gamma domain"
 
-  let init ?(vertex=None) proc =
+  let init ?(vertex = None) proc =
     Procedure.formal_in_params proc
     |> StringMap.values
     |> Iter.append

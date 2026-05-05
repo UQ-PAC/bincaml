@@ -71,7 +71,7 @@ module ReadUninitAnalysis = struct
   let show_short st =
     read_uninit_vars st |> Iter.to_string ~sep:", " Var.to_string
 
-  let init ?(vertex) p =
+  let init ?vertex p =
     Procedure.formal_in_params p
     |> Common.StringMap.values
     |> Iter.fold (fun acc v -> update v ReadUninit.Write acc) bottom
