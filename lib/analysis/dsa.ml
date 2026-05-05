@@ -89,7 +89,8 @@ module DSGraph = struct
   and cell = content ref
 
   (* Nodes are represented as sorted lists of cells, ordered by the low end of the intervals of each cell *)
-  and node = cell list ref
+  and node_content = { cells : cell list }
+  and node = node_content ref
 
   (** Get the union find parent of this cell *)
   let rec find (c : cell) =
@@ -157,11 +158,11 @@ module DSGraph = struct
           List.fold_left
             (flip (List.add_nodup ~eq:CCEqual.physical))
             acc (pointees c))
-        [] !node
+        [] !node.cells
     in
     let c = ref (Cell { offsets = Top; node; pointees }) in
-    List.iter (fun c' -> join_paths c c') !node;
-    node := [ c ]
+    List.iter (fun c' -> join_paths c c') !node.cells;
+    node := { cells = [ c ] }
 
   (** Merge the two given cells together. If they belong to different nodes then
       the nodes are merged so that the cell offsets line up. *)
@@ -196,10 +197,10 @@ module DSGraph = struct
       second node is deleted and the first is kept *)
   and join_nodes_at off n1 n2 =
     assert (not @@ CCEqual.physical n1 n2);
-    List.iter (shift off) !n2;
+    List.iter (shift off) !n2.cells;
     (* Update n2 cell nodes so we never have the slow path of join *)
     (* This could technically be redundant though hmmmm *)
-    List.iter (set_node n1) !n2;
+    List.iter (set_node n1) !n2.cells;
     let rec join_nodes' n1' n2' =
       match (n1', n2') with
       | [], cs | cs, [] -> Some cs
@@ -210,8 +211,8 @@ module DSGraph = struct
           | Bot, _ -> join_nodes' cs n2'
           | _, Bot -> join_nodes' n1' cs'
           | Top, _ | _, Top ->
-              n1 := !n1 @ !n2;
-              n2 := [];
+              n1 := { cells = !n1.cells @ !n2.cells };
+              n2 := { cells = [] };
               collapse n1;
               None
           | (Interval _ as i), (Interval _ as j) when Interval.left_of i j ->
@@ -227,10 +228,10 @@ module DSGraph = struct
               join c c';
               join_nodes' n1' cs')
     in
-    match join_nodes' !n1 !n2 with
+    match join_nodes' !n1.cells !n2.cells with
     | Some n ->
-        n1 := n;
-        n2 := []
+        n1 := { cells = n };
+        n2 := { cells = [] }
     | _ -> ()
 
   (** Inserts the cell into the node. It is assumed that the cell has set (or
@@ -240,7 +241,7 @@ module DSGraph = struct
     | Path _ -> insert node (find cell)
     | Cell { offsets = Interval.Bot } -> ()
     | Cell { offsets = Top } ->
-        node := cell :: !node;
+        node := { cells = cell :: !node.cells };
         collapse node
     | Cell { offsets = Interval _ as i } -> (
         let rec insert' = function
@@ -249,7 +250,7 @@ module DSGraph = struct
               match !c with
               | Path _ -> insert' (find c :: cs)
               | Cell { offsets = Top } ->
-                  node := cell :: !node;
+                  node := { cells = cell :: !node.cells };
                   collapse node;
                   None
               | Cell { offsets = Bot } -> insert' cs
@@ -261,7 +262,9 @@ module DSGraph = struct
                   join c cell;
                   Some (c :: cs))
         in
-        match insert' !node with Some n -> node := n | None -> ())
+        match insert' !node.cells with
+        | Some n -> node := { cells = n }
+        | None -> ())
 
   (** Check that the node has its cell intervals sorted and disjoint *)
   let check_sorted node =
@@ -274,7 +277,7 @@ module DSGraph = struct
 
   (** Create a single cell belonging to its own node *)
   let init offsets : cell =
-    let node = ref [] in
+    let node = ref { cells = [] } in
     let c = ref (Cell { offsets; node; pointees = [] }) in
     insert node c;
     c
@@ -301,7 +304,7 @@ module DSGraph = struct
   let merge_init cells : node =
     let rec sort n cs =
       match (n, cs) with
-      | 0, cs -> (ref [], cs)
+      | 0, cs -> (ref { cells = [] }, cs)
       | 1, c :: cs -> (node_of c, cs)
       | n, cs ->
           let a = n / 2 in
@@ -365,16 +368,18 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
   print_endline @@ "Constructed nodes: " ^ Int.to_string @@ List.length nodes;
   print_endline @@ "Pointee counts: " ^ Int.to_string
   @@ List.fold_left
-       (fun acc node ->
+       (fun acc (node : DSGraph.node) ->
          List.fold_left
            (fun acc cells -> acc + (List.length @@ DSGraph.pointees cells))
-           acc !node)
+           acc !node.cells)
        0 nodes;
 
   (* Unify all pointees (i hope a worklist can be avoided) *)
   Vector.iter DSGraph.unify_pointees cells;
 
-  List.filter (fun node -> not @@ List.is_empty !node) nodes
+  List.filter
+    (fun (node : DSGraph.node) -> not @@ List.is_empty !node.cells)
+    nodes
 
 (** Manual dot string construction because I couldn't see a way to do record
     nodes in ocamlgraph *)
@@ -391,7 +396,7 @@ let dot_string nodes =
 
   let nids =
     List.map
-      (fun node ->
+      (fun (node : DSGraph.node) ->
         let nid = take_id cur_nid () in
         ( nid,
           List.map
@@ -399,7 +404,7 @@ let dot_string nodes =
               let cid = take_id cur_cid () in
               Hashtbl.add nid_map cid nid;
               (cid, DSGraph.find cell))
-            !node ))
+            !node.cells ))
       nodes
   in
   let cells = List.flat_map snd nids in

@@ -29,6 +29,7 @@ module SymBase = struct
     | Par of { name : string; param : Var.t }
     | Ret of { name : string; param : Var.t }
     (* Variables are identifiers of load instructions because of ssa form *)
+    (* TODO need procedure identifier to make this unique regardless of the procedure *)
     | Loaded of { var : Var.t }
   [@@deriving ord, eq]
 
