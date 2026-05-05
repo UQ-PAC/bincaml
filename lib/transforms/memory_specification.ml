@@ -161,15 +161,17 @@ let transform_proc entry _ (p : Program.proc) =
       p
   in
   let name = ID.name (Procedure.id p) in
-  match name with
-  | "@main" -> transform_main p
-  | e when String.equal entry e -> transform_main p
-  | "@malloc" -> transform_malloc p
-  | "@free" -> transform_free p
-  | "@#malloc" -> transform_malloc p
-  | "@zmalloc" -> transform_malloc p
-  | "@#free" -> transform_free p
-  | _ -> p
+  if Procedure.attrib p |> StringMap.mem ".entrypoint" then transform_main p
+  else
+    match name with
+    | "@main" -> transform_main p
+    | e when String.equal entry e -> transform_main p
+    | "@malloc" -> transform_malloc p
+    | "@free" -> transform_free p
+    | "@#malloc" -> transform_malloc p
+    | "@zmalloc" -> transform_malloc p
+    | "@#free" -> transform_free p
+    | _ -> p
 
 let transform (p : Program.t) =
   let entry = Program.entry_proc_exn p |> Procedure.id %> ID.name in
