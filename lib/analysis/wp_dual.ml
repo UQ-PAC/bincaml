@@ -1,15 +1,16 @@
 (* The wp dual domain for precondition inference *)
+(* Assumes SSA form *)
 
 open Lang
 open Common
 open Expr
 
-module type FunctionSummaryAnnotation = sig
+module type FunctionAnnotation = sig
   val requires : ID.t -> Expr.BasilExpr.t list
   val ensures : ID.t -> Expr.BasilExpr.t list
 end
 
-module Domain (S : FunctionSummaryAnnotation) = struct
+module Domain (S : FunctionAnnotation) = struct
   let name = "WP dual domain"
 
   type t = Program.e
@@ -79,7 +80,7 @@ module Domain (S : FunctionSummaryAnnotation) = struct
 
   let join a b = BasilExpr.applyintrin ~op:`OR [ a; b ] |> simplify
   let widening a b = top
-  let init proc = bottom
+  let init ?(vertex = None) proc = bottom
 
   let leq a b =
     raise

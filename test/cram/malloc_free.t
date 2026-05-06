@@ -133,6 +133,13 @@
      R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
      R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64);
     modifies $mem_encoding, $mem, $stack;
+    ensures (forall 
+     i: bv64 :: 
+      
+     ($me_addr_is_heap($mem_encoding, i) ==> ($me_alloc_live(
+         $mem_encoding,
+         $me_addr_alloc($mem_encoding, i)
+       ) != 1bv2)));
     requires $me_init_encoding($mem_encoding);
   implementation p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
    R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
@@ -342,6 +349,13 @@
      R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
      R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64);
     modifies $mem_encoding, $mem, $stack;
+    ensures (forall 
+     i: bv64 :: 
+      
+     ($me_addr_is_heap($mem_encoding, i) ==> ($me_alloc_live(
+         $mem_encoding,
+         $me_addr_alloc($mem_encoding, i)
+       ) != 1bv2)));
     requires $me_init_encoding($mem_encoding);
   implementation p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
    R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
@@ -427,8 +441,8 @@
     requires ($me_alloc_live($mem_encoding, $me_addr_alloc($mem_encoding, R0_in)) == 1bv2);
 
   $ boogie ./bad.bpl
-  ./bad.bpl(162,5): Error: this assertion could not be proved
+  ./bad.bpl(169,5): Error: this assertion could not be proved
   Execution trace:
-      ./bad.bpl(136,3): b#main_entry
+      ./bad.bpl(143,3): b#main_entry
   
   Boogie program verifier finished with 0 verified, 1 error

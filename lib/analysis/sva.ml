@@ -63,7 +63,7 @@ module IntervalDomain = struct
   let join = WrappedIntervalsLattice.join
   let top = WrappedIntervalsLattice.Top
   let neg = WrappedIntervalsLatticeOps.neg
-  let init a = interval a a
+  let init ?(vertex = None) a = interval a a
 end
 
 module SymAddrSetLattice = struct
@@ -172,7 +172,7 @@ module Domain = struct
     List.init 11 (fun i -> 19 + i) |> fun lst ->
     31 :: lst |> List.map (fun i -> "R" ^ string_of_int i)
 
-  let init proc =
+  let init ?(vertex = None) proc =
     let open Option in
     let name = ID.name @@ Procedure.id proc in
     StringMap.filter (fun param _ ->

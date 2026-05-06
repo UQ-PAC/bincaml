@@ -9,7 +9,7 @@
   concat.il))
 
 (cram
- (applies_to * \ expr_smt malloc_free)
+ (applies_to * \ expr_smt malloc_free memory_safety memory_interproc)
  (package bincaml)
  (deps
   loop_dfg.sexp
@@ -46,7 +46,7 @@
   ../../bin/main.exe))
 
 (cram
- (applies_to malloc_free)
+ (applies_to malloc_free memory_safety memory_interproc)
  (package bincaml)
  (enabled_if
   (and %{bin-available:boogie} %{bin-available:cvc5}))
@@ -54,4 +54,8 @@
   %{bin:bincaml}
   ../../examples/memory/malloc_free.il
   ../../examples/memory/malloc_free_oob.il
-  ./malloc_free.sexp))
+  ./malloc_free.sexp
+  ../../examples/memory/memory_interproc.il
+  ./memory_interproc.sexp
+  ../../examples/memory/memory_safety.il
+  ./memory_safety.sexp))

@@ -5,6 +5,7 @@ open Ops
 open Memory_encoding
 
 let old e = BasilExpr.unexp ~op:`Old e
+let i = Var.create ~scope:Var.LocalConst "i" (Types.Bitvector 64)
 
 let r n =
   BasilExpr.rvar
@@ -31,7 +32,28 @@ let transform_main p =
       spec with
       requires =
         spec.requires
+        (* Require memory is initialized. *)
         @ [ Calls.init_encoding [ BasilExpr.rvar Globals.mem_encoding ] ];
+      (* Ensure there are no memory leaks. *)
+      ensures =
+        spec.ensures
+        @ [
+            BasilExpr.forall ~bound:[ i ]
+            @@ BasilExpr.binexp ~op:`IMPLIES
+                 (Calls.addr_is_heap
+                    [ BasilExpr.rvar Globals.mem_encoding; BasilExpr.rvar i ])
+                 (BasilExpr.binexp ~op:`NEQ
+                    (Calls.alloc_live
+                       [
+                         BasilExpr.rvar Globals.mem_encoding;
+                         Calls.addr_alloc
+                           [
+                             BasilExpr.rvar Globals.mem_encoding;
+                             BasilExpr.rvar i;
+                           ];
+                       ])
+                    (BasilExpr.bvconst live));
+          ];
       modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
       captures_globs = spec.captures_globs @ [ Globals.mem_encoding ];
     }
@@ -139,15 +161,17 @@ let transform_proc entry _ (p : Program.proc) =
       p
   in
   let name = ID.name (Procedure.id p) in
-  match name with
-  | "@main" -> transform_main p
-  | e when String.equal entry e -> transform_main p
-  | "@malloc" -> transform_malloc p
-  | "@free" -> transform_free p
-  | "@#malloc" -> transform_malloc p
-  | "@zmalloc" -> transform_malloc p
-  | "@#free" -> transform_free p
-  | _ -> p
+  if Procedure.attrib p |> StringMap.mem ".entrypoint" then transform_main p
+  else
+    match name with
+    | "@main" -> transform_main p
+    | e when String.equal entry e -> transform_main p
+    | "@malloc" -> transform_malloc p
+    | "@free" -> transform_free p
+    | "@#malloc" -> transform_malloc p
+    | "@zmalloc" -> transform_malloc p
+    | "@#free" -> transform_free p
+    | _ -> p
 
 let transform (p : Program.t) =
   let entry = Program.entry_proc_exn p |> Procedure.id %> ID.name in

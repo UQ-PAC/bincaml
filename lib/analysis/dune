@@ -18,6 +18,7 @@
   tnum_wint_reduced_product
   known_bits
   wp_dual
+  sp
   sva)
  (libraries
   intPQueue
