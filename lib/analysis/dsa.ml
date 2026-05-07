@@ -1,31 +1,5 @@
 open Lang
 open Common
-
-module Constraint = struct
-  type 'e t =
-    | Mem of { addr : 'e; value : 'e }
-    | Call of { lhs : 'e StringMap.t; args : 'e StringMap.t }
-  [@@deriving eq, map]
-
-  let show s = function
-    | Mem { addr; value } -> Printf.sprintf "[|%s|] -> %s" (s addr) (s value)
-    | Call _ -> "todo"
-
-  let gen_constraints (p : Program.proc) =
-    let open Stmt in
-    Procedure.iter_blocks_topo_fwd p
-    |> Iter.flat_map (fun (bid, block) -> Block.stmts_iter block)
-    |> Iter.filter_map (fun stmt ->
-        match stmt with
-        | Instr_Load { lhs; addr = Addr { addr } } ->
-            Some (Mem { addr; value = Expr.BasilExpr.rvar lhs })
-        | Instr_Store { value; addr = Addr { addr } } ->
-            Some (Mem { addr; value })
-        | Instr_Call { lhs; args } ->
-            Some (Call { lhs = StringMap.map Expr.BasilExpr.rvar lhs; args })
-        | _ -> None)
-end
-
 open Wrapped_intervals
 
 (* Offset interval should never overflow in userspace code, so it is fine not to use wrapped intervals (can use signed intervals that go to top on overflow instead) *)
@@ -79,6 +53,67 @@ module Interval = struct
     | Interval (a, b) -> Interval (a + off, b + off)
 end
 
+module NodeFlags = struct
+  (* A bool uses 64 bits of memory and we're storing flags per node so it's probably worth using bitflags *)
+  type t = int
+
+  let empty = 0
+  let ( >> ) = Int.shift_right_logical
+  let ( << ) = Int.shift_left
+  let ( || ) = Int.logor
+  let ( & ) = Int.logand
+  let ( != ) a b = not @@ (a = b)
+  let get_flag idx f = (f >> idx & 1) != 0
+  let set_flag idx f = f || 1 << idx
+  let clear_flag idx f = f & Int.lognot (1 << idx)
+  let join f f' = f || f'
+
+  (* Should be used like `get_flag heap f` or `clear_flag unknown f` *)
+  let heap = 0
+  let stack = 1
+  let global = 2
+  let unknown = 3
+  let modified = 4
+  let read = 5
+  let complete = 6
+  let collapsed = 7
+
+  let show f =
+    (if get_flag heap f then "H" else "")
+    ^ (if get_flag stack f then "S" else "")
+    ^ (if get_flag global f then "G" else "")
+    ^ (if get_flag unknown f then "U" else "")
+    ^ (if get_flag modified f then "M" else "")
+    ^ (if get_flag read f then "R" else "")
+    ^ (if get_flag complete f then "C" else "")
+    ^ if get_flag collapsed f then "O" else ""
+end
+
+module Constraint = struct
+  type 'e t =
+    | Mem of { addr : 'e; value : 'e; size : int }
+    | Call of { lhs : 'e StringMap.t; args : 'e StringMap.t }
+  [@@deriving eq, map]
+
+  let show s = function
+    | Mem { addr; value } -> Printf.sprintf "[|%s|] -> %s" (s addr) (s value)
+    | Call _ -> "todo"
+
+  let gen_constraints (p : Program.proc) =
+    let open Stmt in
+    Procedure.iter_blocks_topo_fwd p
+    |> Iter.flat_map (fun (bid, block) -> Block.stmts_iter block)
+    |> Iter.filter_map (fun stmt ->
+        match stmt with
+        | Instr_Load { lhs; addr = Addr { addr; size } } ->
+            Some (Mem { addr; value = Expr.BasilExpr.rvar lhs; size })
+        | Instr_Store { value; addr = Addr { addr; size } } ->
+            Some (Mem { addr; value; size })
+        | Instr_Call { lhs; args } ->
+            Some (Call { lhs = StringMap.map Expr.BasilExpr.rvar lhs; args })
+        | _ -> None)
+end
+
 module DSGraph = struct
   (* A path compressed cell. Cells store a set of offsets from an abstract base
      address, and the node that it belongs to. *)
@@ -89,7 +124,7 @@ module DSGraph = struct
   and cell = content ref
 
   (* Nodes are represented as sorted lists of cells, ordered by the low end of the intervals of each cell *)
-  and node_content = { cells : cell list }
+  and node_content = { cells : cell list; flags : NodeFlags.t }
   and node = node_content ref
 
   (** Get the union find parent of this cell *)
@@ -140,6 +175,13 @@ module DSGraph = struct
     | Cell r -> f := Cell { r with pointees }
     | _ -> failwith "Union find returned non terminal cell"
 
+  (** Set the flags of this node *)
+  let set_flags f (n : node) = n := { !n with flags = f }
+
+  (** Set the flags of the first node to the join of the two node's flags *)
+  let join_flags n n' =
+    n := { !n with flags = NodeFlags.join !n.flags !n'.flags }
+
   (** Make the second cell point to the first *)
   let rec join_paths (c1 : cell) (c2 : cell) =
     match (!c1, !c2) with
@@ -162,7 +204,8 @@ module DSGraph = struct
     in
     let c = ref (Cell { offsets = Top; node; pointees }) in
     List.iter (fun c' -> join_paths c c') !node.cells;
-    node := { cells = [ c ] }
+    let flags = NodeFlags.(set_flag collapsed !node.flags) in
+    node := { cells = [ c ]; flags }
 
   (** Merge the two given cells together. If they belong to different nodes then
       the nodes are merged so that the cell offsets line up. *)
@@ -183,7 +226,7 @@ module DSGraph = struct
                 | _ -> join_nodes_at Z.zero node n2
               else (
                 c2 := Path c1;
-                (* TODO make O(1) also dedup pointees maybe?! something needs to be worked out for that *)
+                (* TODO make better algorithm for this *)
                 let pointees =
                   List.fold_left
                     (flip (List.add_nodup ~eq:CCEqual.physical))
@@ -201,6 +244,7 @@ module DSGraph = struct
     (* Update n2 cell nodes so we never have the slow path of join *)
     (* This could technically be redundant though hmmmm *)
     List.iter (set_node n1) !n2.cells;
+    join_flags n1 n2;
     let rec join_nodes' n1' n2' =
       match (n1', n2') with
       | [], cs | cs, [] -> Some cs
@@ -211,8 +255,8 @@ module DSGraph = struct
           | Bot, _ -> join_nodes' cs n2'
           | _, Bot -> join_nodes' n1' cs'
           | Top, _ | _, Top ->
-              n1 := { cells = !n1.cells @ !n2.cells };
-              n2 := { cells = [] };
+              n1 := { !n1 with cells = !n1.cells @ !n2.cells };
+              n2 := { cells = []; flags = NodeFlags.empty };
               collapse n1;
               None
           | (Interval _ as i), (Interval _ as j) when Interval.left_of i j ->
@@ -230,8 +274,8 @@ module DSGraph = struct
     in
     match join_nodes' !n1.cells !n2.cells with
     | Some n ->
-        n1 := { cells = n };
-        n2 := { cells = [] }
+        n1 := { !n1 with cells = n };
+        n2 := { cells = []; flags = NodeFlags.empty }
     | _ -> ()
 
   (** Inserts the cell into the node. It is assumed that the cell has set (or
@@ -241,7 +285,7 @@ module DSGraph = struct
     | Path _ -> insert node (find cell)
     | Cell { offsets = Interval.Bot } -> ()
     | Cell { offsets = Top } ->
-        node := { cells = cell :: !node.cells };
+        node := { !node with cells = cell :: !node.cells };
         collapse node
     | Cell { offsets = Interval _ as i } -> (
         let rec insert' = function
@@ -250,7 +294,7 @@ module DSGraph = struct
               match !c with
               | Path _ -> insert' (find c :: cs)
               | Cell { offsets = Top } ->
-                  node := { cells = cell :: !node.cells };
+                  node := { !node with cells = cell :: !node.cells };
                   collapse node;
                   None
               | Cell { offsets = Bot } -> insert' cs
@@ -263,7 +307,7 @@ module DSGraph = struct
                   Some (c :: cs))
         in
         match insert' !node.cells with
-        | Some n -> node := { cells = n }
+        | Some n -> node := { !node with cells = n }
         | None -> ())
 
   (** Check that the node has its cell intervals sorted and disjoint *)
@@ -276,8 +320,9 @@ module DSGraph = struct
     assert (aux is)
 
   (** Create a single cell belonging to its own node *)
-  let init offsets : cell =
-    let node = ref { cells = [] } in
+  let init offsets flags : cell =
+    (* TODO set initial flags *)
+    let node = ref { cells = []; flags } in
     let c = ref (Cell { offsets; node; pointees = [] }) in
     insert node c;
     c
@@ -304,7 +349,7 @@ module DSGraph = struct
   let merge_init cells : node =
     let rec sort n cs =
       match (n, cs) with
-      | 0, cs -> (ref { cells = [] }, cs)
+      | 0, cs -> (ref { cells = []; flags = NodeFlags.empty }, cs)
       | 1, c :: cs -> (node_of c, cs)
       | n, cs ->
           let a = n / 2 in
@@ -322,19 +367,28 @@ module SBMap = Map.Make (Sva.SymBase)
 let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
     =
   let cells = Vector.create () in
-  let add_cells sv m =
+  let add_cells size sv m =
     let cells =
       Sva.SymAddrSetLattice.to_iter sv
-      (* Shouldn't be kept when we have distinct global values (which are not currently present and hence stored as globals) *)
-      (*|> Iter.filter (not % Sva.SymBase.equal Sva.SymBase.Constant % fst)*)
+      |> Iter.filter (not % Sva.SymBase.equal Sva.SymBase.Constant % fst)
       |> Iter.map (fun (b, i) ->
+          (*
           let size =
             match i with
             | WrappedIntervalsLattice.Interval { upper } -> Bitvec.size upper
             | _ -> 0
+          in *)
+          let f =
+            match b with
+            | Sva.SymBase.Stack _ -> NodeFlags.(set_flag stack empty)
+            | Sva.SymBase.Heap _ -> NodeFlags.(set_flag heap empty)
+            | GlobSym -> NodeFlags.(set_flag global empty)
+            | Constant | Par _ | Ret _ | Loaded _ ->
+                NodeFlags.(set_flag unknown empty)
           in
+          (* TODO this is the wrong size to pad by *)
           let c =
-            DSGraph.init (Interval.of_wint i |> Interval.pad_with_size size)
+            DSGraph.init (Interval.of_wint i |> Interval.pad_with_size size) f
           in
           Vector.push cells c;
           (b, c))
@@ -352,9 +406,9 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
     Iter.fold
       (fun acc constr ->
         match constr with
-        | Constraint.Mem { addr; value } ->
-            let ptrs, acc = add_cells addr acc in
-            let vals, acc = add_cells value acc in
+        | Constraint.Mem { addr; value; size } ->
+            let ptrs, acc = add_cells size addr acc in
+            let vals, acc = add_cells size value acc in
             List.iter (DSGraph.set_pointees vals) ptrs;
             acc
         | Constraint.Call { lhs; args } -> (* TODO add call cells *) acc)
@@ -399,6 +453,7 @@ let dot_string nodes =
       (fun (node : DSGraph.node) ->
         let nid = take_id cur_nid () in
         ( nid,
+          !node.flags,
           List.map
             (fun cell ->
               let cid = take_id cur_cid () in
@@ -407,7 +462,7 @@ let dot_string nodes =
             !node.cells ))
       nodes
   in
-  let cells = List.flat_map snd nids in
+  let cells = List.flat_map (fun (_, _, cells) -> cells) nids in
   let pointees = Hashtbl.create 100 in
   List.iter
     (fun (cid, cell) ->
@@ -426,8 +481,9 @@ let dot_string nodes =
 
   "digraph G {\n  rankdir=\"LR\"\n  node[shape=record]\n"
   ^ List.to_string ~sep:"\n"
-      (fun (nid, cids) ->
-        Printf.sprintf "  \"node%d\"[label=\"node%d|{%s}\"];" nid nid
+      (fun (nid, flags, cids) ->
+        Printf.sprintf "  \"node%d\"[label=\"node%d %s |{%s}\"];" nid nid
+          (NodeFlags.show flags)
           (List.to_string ~sep:"|"
              (fun (id, cell) ->
                Printf.sprintf "<%d>%s" id (Interval.show @@ DSGraph.offsets cell))
@@ -454,8 +510,12 @@ let dsa (p : Program.t) =
         let constraints =
           Constraint.gen_constraints proc
           |> Iter.map
-               (Constraint.map
-                  (Sva.Eval.EV.eval (flip Sva.StateAbstraction.read r)))
+               (Constraint.map (fun e ->
+                    Sva.(
+                      Eval.EV.eval (flip StateAbstraction.read r) e
+                      |> SymAddrSetLattice.to_list |> snd
+                      |> List.map (try_make_global p)
+                      |> SymAddrSetLattice.of_list_bot)))
         in
         print_endline
         @@ Iter.to_string

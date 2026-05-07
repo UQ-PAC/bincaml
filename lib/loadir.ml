@@ -536,7 +536,13 @@ module BasilASTLoader = struct
     match attr with
     | Attr_Map (_, keyvals, _) -> `Assoc (trans_attr_kv ~binds p_st keyvals)
     | Attr_List (_, ls, _) -> `List (List.map (trans_attr ~binds p_st) ls)
-    | Attr_Expr expr -> `Expr (trans_expr ~binds p_st expr)
+    | Attr_Expr expr -> (
+        match expr with
+        | Expr_Literal v -> (
+            match trans_value v with
+            | (`Bitvector _ | `Integer _ | `Bool _) as v -> v
+            | _ -> `Expr (trans_expr ~binds p_st expr))
+        | _ -> `Expr (trans_expr ~binds p_st expr))
     | Attr_Str s -> `String (trans_str s)
 
   and trans_attrib_set ~binds p_st (atrs : attribSet) :
