@@ -22,5 +22,4 @@
   containers.unix
   trace.core
   trace-tef
-  terminal_size
-  ))
+  terminal_size))

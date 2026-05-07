@@ -40,6 +40,8 @@
           bincaml_lsp = ofinal.callPackage ./nix/bincaml-lsp.nix { };
           hector = ofinal.callPackage ./nix/hector.nix { };
           intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
+          kittyimg = ofinal.callPackage ./nix/kittyimg.nix { };
+          stb_image = ofinal.callPackage ./nix/stb_image.nix { };
         };
 
         enableOcamlFramePointer =
@@ -81,11 +83,15 @@
             bincaml_lsp = selfOcamlPackages.bincaml_lsp;
             intPQueue = selfOcamlPackages.intPQueue;
             hector = selfOcamlPackages.hector;
+            kittyimg = selfOcamlPackages.kittyimg;
+            stb_image = selfOcamlPackages.stb_image;
 
             fp.bincaml = fpOcamlPackages.bincaml;
             fp.bincaml_lsp = fpOcamlPackages.bincaml_lsp;
             fp.intPQueue = fpOcamlPackages.intPQueue;
             fp.hector = fpOcamlPackages.hector;
+            fp.kittyimg = fpOcamlPackages.kittyimg;
+            fp.stb_image = fpOcamlPackages.stb_image;
           };
 
           devShells = {
