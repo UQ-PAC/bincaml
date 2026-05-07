@@ -26,11 +26,10 @@ module SymBase = struct
     | GlobSym
     | Constant
     (* Unknown *)
-    | Par of { name : string; param : Var.t }
-    | Ret of { name : string; param : Var.t }
-    (* Variables are identifiers of load instructions because of ssa form *)
-    (* TODO need procedure identifier to make this unique regardless of the procedure *)
-    | Loaded of { var : Var.t }
+    | Par of { name : string; param : Var.t; proc_id : ID.t option }
+    | Ret of { name : string; param : Var.t; proc_id : ID.t option }
+    (* Variables are identifiers of load instructions per proc because of ssa form *)
+    | Loaded of { var : Var.t; proc_id : ID.t option }
   [@@deriving ord, eq]
 
   let show = function
@@ -175,7 +174,8 @@ module Domain = struct
 
   let init proc =
     let open Option in
-    let name = ID.name @@ Procedure.id proc in
+    let proc_id = Procedure.id proc in
+    let name = ID.name @@ proc_id in
     StringMap.filter (fun param _ ->
         List.exists (fun a -> String.starts_with param ~prefix:a) call_preserve)
     @@ Procedure.formal_in_params proc
@@ -189,7 +189,8 @@ module Domain = struct
         in
         Some
           ( param,
-            SymAddrSetLattice.singleton (Par { name; param })
+            SymAddrSetLattice.singleton
+              (Par { name; param; proc_id = Some proc_id })
             @@ IntervalDomain.init @@ Bitvec.zero ~size ))
     |> Iter.cons
          ( stack_pointer,
@@ -198,12 +199,14 @@ module Domain = struct
     |> Iter.cons
          ( link_register,
            SymAddrSetLattice.singleton
-             (SymBase.Par { name; param = link_register })
+             (SymBase.Par
+                { name; param = link_register; proc_id = Some proc_id })
            @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
     |> Iter.cons
          ( frame_pointer,
            SymAddrSetLattice.singleton
-             (SymBase.Par { name; param = frame_pointer })
+             (SymBase.Par
+                { name; param = frame_pointer; proc_id = Some proc_id })
            @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
@@ -219,7 +222,8 @@ module Domain = struct
           | Scalar -> (lhs, rhs)
           | Addr { size } ->
               ( lhs,
-                SymAddrSetLattice.singleton (Loaded { var = lhs })
+                SymAddrSetLattice.singleton
+                  (Loaded { var = lhs; proc_id = None })
                 @@ IntervalDomain.init @@ Bitvec.zero ~size ))
       | Stmt.Instr_Store { lhs; addr; rhs } -> (
           match addr with
@@ -255,7 +259,7 @@ module Domain = struct
               in
               ( param,
                 SymAddrSetLattice.singleton
-                  (Ret { name = ID.name procid; param })
+                  (Ret { name = ID.name procid; param; proc_id = None })
                 @@ IntervalDomain.init @@ Bitvec.zero ~size ))
           @@ StringMap.values lhs
       | Stmt.Instr_Assert _ | Stmt.Instr_Assume _ -> Iter.empty
@@ -357,6 +361,15 @@ let sva (prog : Program.t) =
           (fun _ domain ->
             SymAddrSetLattice.to_list domain
             |> snd
+            |> List.map (fun (base, i) ->
+                match base with
+                | SymBase.Loaded r when Option.is_none r.proc_id ->
+                    (SymBase.Loaded { r with proc_id = Some id }, i)
+                | SymBase.Par r when Option.is_none r.proc_id ->
+                    (SymBase.Par { r with proc_id = Some id }, i)
+                | SymBase.Ret r when Option.is_none r.proc_id ->
+                    (SymBase.Ret { r with proc_id = Some id }, i)
+                | _ -> (base, i))
             |> List.map (try_make_global prog)
             |> SymAddrSetLattice.of_list_bot)
           b ))
