@@ -284,6 +284,9 @@ module IDESSI (D : IDESSIDomain) = struct
           | `Backwards -> use_to_def_map proc));
     defuses
 
+  let abi_regs =
+    List.range 19 29 @ [ 31 ] |> List.map (fun n -> "R" ^ Int.to_string n)
+
   let gen_stub_summaries (prog : Program.t) summaries entry2exit =
     let update_summary pid d1 d2 e =
       let summary = Hashtbl.get_or summaries pid ~default:DlMap.empty in
@@ -308,11 +311,30 @@ module IDESSI (D : IDESSIDomain) = struct
                   | `Backwards -> Procedure.formal_in_params proc)
                 |> StringMap.values
                 |> Iter.iter (fun out ->
-                    let k = (pid, d) in
-                    Hashtbl.get_or entry2exit k ~default:VarMap.empty
-                    |> VarMap.add out D.top
-                    |> Hashtbl.replace entry2exit k;
-                    update_summary pid d (Label out) D.top)))
+                    (* ARM abi tell us that R19..R29 and R31 are preserved through calls, which we assume for externals https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#611general-purpose-registers *)
+                    let prefix =
+                      List.find_opt
+                        (fun prefix ->
+                          String.starts_with ~prefix @@ Var.name out)
+                        abi_regs
+                    in
+                    match prefix with
+                    | Some prefix -> (
+                        match d with
+                        | Label v when String.starts_with ~prefix @@ Var.name v
+                          ->
+                            let k = (pid, d) in
+                            Hashtbl.get_or entry2exit k ~default:VarMap.empty
+                            |> VarMap.add out D.identity
+                            |> Hashtbl.replace entry2exit k;
+                            update_summary pid d (Label out) D.identity
+                        | _ -> ())
+                    | _ ->
+                        let k = (pid, d) in
+                        Hashtbl.get_or entry2exit k ~default:VarMap.empty
+                        |> VarMap.add out D.top
+                        |> Hashtbl.replace entry2exit k;
+                        update_summary pid d (Label out) D.top)))
 
   (** Generates edge function summaries for every procedure in the given
       program. *)
