@@ -357,6 +357,11 @@ module PassManager = struct
         doc = "Replace gamma expressions with gamma variables";
       };
       {
+        name = "linear-copy-dots";
+        apply = Prog Analysis.Linear_const.test_transform;
+        doc = "";
+      };
+      {
         name = "data-structure-analysis";
         apply = Prog Analysis.Dsa.dsa;
         doc = "";

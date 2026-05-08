@@ -124,7 +124,10 @@ module DSGraph = struct
   and cell = content ref
 
   (* Nodes are represented as sorted lists of cells, ordered by the low end of the intervals of each cell *)
-  and node_content = { cells : cell list; flags : NodeFlags.t }
+  and node_content =
+    | Node of { cells : cell list; flags : NodeFlags.t }
+    | NodePath of node
+
   and node = node_content ref
 
   (** Get the union find parent of this cell *)
@@ -135,6 +138,17 @@ module DSGraph = struct
         c := Path p;
         p
     | Cell _ -> c
+
+  (** Get the union find parent of this cell *)
+  let rec find_node (n : node) =
+    match !n with
+    | NodePath n' ->
+        assert (not @@ CCEqual.physical n n');
+        let p = find_node n' in
+        assert (not @@ CCEqual.physical n p);
+        n := NodePath p;
+        p
+    | Node _ -> n
 
   (** Get the offsets interval of this cell's parent *)
   let offsets (c : cell) =
@@ -175,12 +189,19 @@ module DSGraph = struct
     | Cell r -> f := Cell { r with pointees }
     | _ -> failwith "Union find returned non terminal cell"
 
-  (** Set the flags of this node *)
-  let set_flags f (n : node) = n := { !n with flags = f }
+  (** Get the cells of this node's parent *)
+  let rec cells (n : node) =
+    match !n with NodePath _ -> cells (find_node n) | Node r -> r.cells
 
-  (** Set the flags of the first node to the join of the two node's flags *)
-  let join_flags n n' =
-    n := { !n with flags = NodeFlags.join !n.flags !n'.flags }
+  (** Get the flags of this node's parent *)
+  let rec flags (n : node) =
+    match !n with NodePath _ -> flags (find_node n) | Node r -> r.flags
+
+  (** Set the flags of this node *)
+  let rec set_flags f (n : node) =
+    match !n with
+    | NodePath _ -> set_flags f (find_node n)
+    | Node r -> n := Node { r with flags = f }
 
   (** Make the second cell point to the first *)
   let rec join_paths (c1 : cell) (c2 : cell) =
@@ -193,19 +214,22 @@ module DSGraph = struct
 
   (** Collapse all cells in the node into a single cell (its interval being Top)
   *)
-  let collapse node =
-    let pointees =
-      List.fold_left
-        (fun acc c ->
+  let rec collapse node =
+    match !node with
+    | NodePath _ -> collapse (find_node node)
+    | Node r ->
+        let pointees =
           List.fold_left
-            (flip (List.add_nodup ~eq:CCEqual.physical))
-            acc (pointees c))
-        [] !node.cells
-    in
-    let c = ref (Cell { offsets = Top; node; pointees }) in
-    List.iter (fun c' -> join_paths c c') !node.cells;
-    let flags = NodeFlags.(set_flag collapsed !node.flags) in
-    node := { cells = [ c ]; flags }
+            (fun acc c ->
+              List.fold_left
+                (flip (List.add_nodup ~eq:CCEqual.physical))
+                acc (pointees c))
+            [] (cells node)
+        in
+        let c = ref (Cell { offsets = Top; node; pointees }) in
+        List.iter (fun c' -> join_paths c c') r.cells;
+        let flags = NodeFlags.(set_flag collapsed r.flags) in
+        node := Node { cells = [ c ]; flags }
 
   (** Merge the two given cells together. If they belong to different nodes then
       the nodes are merged so that the cell offsets line up. *)
@@ -239,76 +263,88 @@ module DSGraph = struct
   (** Join the two nodes, with the second shifted by the given offset. The
       second node is deleted and the first is kept *)
   and join_nodes_at off n1 n2 =
-    assert (not @@ CCEqual.physical n1 n2);
-    List.iter (shift off) !n2.cells;
-    (* Update n2 cell nodes so we never have the slow path of join *)
-    (* This could technically be redundant though hmmmm *)
-    List.iter (set_node n1) !n2.cells;
-    join_flags n1 n2;
-    let rec join_nodes' n1' n2' =
-      match (n1', n2') with
-      | [], cs | cs, [] -> Some cs
-      | c :: cs, c' :: cs' -> (
-          match (offsets c, offsets c') with
-          (* TODO Bot cases shouldn't happen i think?! please confirm this *)
-          | Bot, Bot -> join_nodes' cs cs'
-          | Bot, _ -> join_nodes' cs n2'
-          | _, Bot -> join_nodes' n1' cs'
-          | Top, _ | _, Top ->
-              n1 := { !n1 with cells = !n1.cells @ !n2.cells };
-              n2 := { cells = []; flags = NodeFlags.empty };
-              collapse n1;
-              None
-          | (Interval _ as i), (Interval _ as j) when Interval.left_of i j ->
-              Option.map (List.cons c) @@ join_nodes' cs n2'
-          | (Interval _ as i), (Interval _ as j) when Interval.right_of i j ->
-              Option.map (List.cons c') @@ join_nodes' n1' cs'
-          | Interval (a, b), Interval (x, y) when Z.leq b y ->
-              (* first cell is left of second cell, so join first cell into second to preserve order *)
-              join c' c;
-              join_nodes' cs n2'
-          | Interval (a, b), Interval (x, y) ->
-              (* second cell is left of first cell, so join second cell into first to preserve order *)
-              join c c';
-              join_nodes' n1' cs')
-    in
-    match join_nodes' !n1.cells !n2.cells with
-    | Some n ->
-        n1 := { !n1 with cells = n };
-        n2 := { cells = []; flags = NodeFlags.empty }
-    | _ -> ()
+    match (!n1, !n2) with
+    | NodePath _, NodePath _ -> join_nodes_at off (find_node n1) (find_node n2)
+    | _, NodePath _ -> join_nodes_at off n1 (find_node n2)
+    | NodePath _, _ -> join_nodes_at off (find_node n1) n2
+    | Node r1, Node r2 -> (
+        assert (not @@ CCEqual.physical n1 n2);
+        List.iter (shift off) r2.cells;
+        (* Update n2 cell nodes so we never have the slow path of join *)
+        (* This could technically be redundant though hmmmm *)
+        List.iter (set_node n1) r2.cells;
+        let flags = NodeFlags.join r1.flags r2.flags in
+        let rec join_nodes' n1' n2' =
+          match (n1', n2') with
+          | [], cs | cs, [] -> Some cs
+          | c :: cs, c' :: cs' -> (
+              match (offsets c, offsets c') with
+              (* TODO Bot cases shouldn't happen i think?! please confirm this *)
+              | Bot, Bot -> join_nodes' cs cs'
+              | Bot, _ -> join_nodes' cs n2'
+              | _, Bot -> join_nodes' n1' cs'
+              | Top, _ | _, Top ->
+                  n1 := Node { cells = r1.cells @ r2.cells; flags };
+                  n2 := NodePath n1;
+                  collapse n1;
+                  None
+              | (Interval _ as i), (Interval _ as j) when Interval.left_of i j
+                ->
+                  Option.map (List.cons c) @@ join_nodes' cs n2'
+              | (Interval _ as i), (Interval _ as j) when Interval.right_of i j
+                ->
+                  Option.map (List.cons c') @@ join_nodes' n1' cs'
+              | Interval (a, b), Interval (x, y) when Z.leq b y ->
+                  (* first cell is left of second cell, so join first cell into second to preserve order *)
+                  join c' c;
+                  join_nodes' cs n2'
+              | Interval (a, b), Interval (x, y) ->
+                  (* second cell is left of first cell, so join second cell into first to preserve order *)
+                  join c c';
+                  join_nodes' n1' cs')
+        in
+        match join_nodes' r1.cells r2.cells with
+        | Some n ->
+            n1 := Node { cells = n; flags };
+            n2 := NodePath n1
+        | _ -> ())
 
   (** Inserts the cell into the node. It is assumed that the cell has set (or
       will set) its node pointer outside of this call *)
   let rec insert node cell =
-    match !cell with
-    | Path _ -> insert node (find cell)
-    | Cell { offsets = Interval.Bot } -> ()
-    | Cell { offsets = Top } ->
-        node := { !node with cells = cell :: !node.cells };
-        collapse node
-    | Cell { offsets = Interval _ as i } -> (
-        let rec insert' = function
-          | [] -> Some [ cell ]
-          | c :: cs -> (
-              match !c with
-              | Path _ -> insert' (find c :: cs)
-              | Cell { offsets = Top } ->
-                  node := { !node with cells = cell :: !node.cells };
-                  collapse node;
-                  None
-              | Cell { offsets = Bot } -> insert' cs
-              | Cell { offsets = Interval _ as j } when Interval.left_of i j ->
-                  Some (cell :: c :: cs)
-              | Cell { offsets = Interval _ as j } when Interval.right_of i j ->
-                  Option.map (List.cons c) @@ insert' cs
-              | Cell { offsets = Interval _ } ->
-                  join c cell;
-                  Some (c :: cs))
-        in
-        match insert' !node.cells with
-        | Some n -> node := { !node with cells = n }
-        | None -> ())
+    match !node with
+    | NodePath _ -> insert (find_node node) cell
+    | Node r -> (
+        match !cell with
+        | Path _ -> insert node (find cell)
+        | Cell { offsets = Interval.Bot } -> ()
+        | Cell { offsets = Top } ->
+            node := Node { r with cells = cell :: r.cells };
+            collapse node
+        | Cell { offsets = Interval _ as i } -> (
+            let rec insert' = function
+              | [] -> Some [ cell ]
+              | c :: cs -> (
+                  match !c with
+                  | Path _ -> insert' (find c :: cs)
+                  | Cell { offsets = Top } ->
+                      node := Node { r with cells = cell :: r.cells };
+                      collapse node;
+                      None
+                  | Cell { offsets = Bot } -> insert' cs
+                  | Cell { offsets = Interval _ as j } when Interval.left_of i j
+                    ->
+                      Some (cell :: c :: cs)
+                  | Cell { offsets = Interval _ as j }
+                    when Interval.right_of i j ->
+                      Option.map (List.cons c) @@ insert' cs
+                  | Cell { offsets = Interval _ } ->
+                      join c cell;
+                      Some (c :: cs))
+            in
+            match insert' r.cells with
+            | Some n -> node := Node { r with cells = n }
+            | None -> ()))
 
   (** Check that the node has its cell intervals sorted and disjoint *)
   let check_sorted node =
@@ -322,7 +358,7 @@ module DSGraph = struct
   (** Create a single cell belonging to its own node *)
   let init offsets flags : cell =
     (* TODO set initial flags *)
-    let node = ref { cells = []; flags } in
+    let node = ref (Node { cells = []; flags }) in
     let c = ref (Cell { offsets; node; pointees = [] }) in
     insert node c;
     c
@@ -349,7 +385,7 @@ module DSGraph = struct
   let merge_init cells : node =
     let rec sort n cs =
       match (n, cs) with
-      | 0, cs -> (ref { cells = []; flags = NodeFlags.empty }, cs)
+      | 0, cs -> (ref (Node { cells = []; flags = NodeFlags.empty }), cs)
       | 1, c :: cs -> (node_of c, cs)
       | n, cs ->
           let a = n / 2 in
@@ -414,26 +450,21 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
         | Constraint.Call { lhs; args } -> (* TODO add call cells *) acc)
       SBMap.empty constraints
   in
-  print_endline "Built constraints";
   let nodes =
-    SBMap.fold (fun _b cs nodes -> DSGraph.merge_init cs :: nodes) m []
+    SBMap.fold
+      (fun b cs m -> SBMap.add b (DSGraph.merge_init cs) m)
+      m SBMap.empty
     (*SBMap.fold (fun _b cs nodes -> List.map DSGraph.node_of cs @ nodes) m []*)
   in
-  print_endline @@ "Constructed nodes: " ^ Int.to_string @@ List.length nodes;
-  print_endline @@ "Pointee counts: " ^ Int.to_string
-  @@ List.fold_left
-       (fun acc (node : DSGraph.node) ->
-         List.fold_left
-           (fun acc cells -> acc + (List.length @@ DSGraph.pointees cells))
-           acc !node.cells)
-       0 nodes;
 
   (* Unify all pointees (i hope a worklist can be avoided) *)
   Vector.iter DSGraph.unify_pointees cells;
 
-  List.filter
-    (fun (node : DSGraph.node) -> not @@ List.is_empty !node.cells)
-    nodes
+  SBMap.to_list nodes |> List.map snd
+  |> List.filter (fun (node : DSGraph.node) ->
+      match !node with
+      | NodePath _ -> false
+      | Node r -> not @@ List.is_empty r.cells)
 
 (** Manual dot string construction because I couldn't see a way to do record
     nodes in ocamlgraph *)
@@ -450,16 +481,16 @@ let dot_string nodes =
 
   let nids =
     List.map
-      (fun (node : DSGraph.node) ->
+      (fun node ->
         let nid = take_id cur_nid () in
         ( nid,
-          !node.flags,
+          DSGraph.flags node,
           List.map
             (fun cell ->
               let cid = take_id cur_cid () in
               Hashtbl.add nid_map cid nid;
               (cid, DSGraph.find cell))
-            !node.cells ))
+            (DSGraph.cells node) ))
       nodes
   in
   let cells = List.flat_map (fun (_, _, cells) -> cells) nids in
