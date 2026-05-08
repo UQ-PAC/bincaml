@@ -34,7 +34,6 @@
     captures $mem:(bv64->bv8), $stack:(bv64->bv8)
   
   [
-     block %inputs [ goto (%main_entry); ];
      block %main_entry [
        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64,
         0x20:bv64) R29_in:bv64 64;
@@ -59,20 +58,18 @@
      ];
      block %main_23 [
        guard neq(booltobv1(eq(ZF_2:bv1, 0x1:bv1)), 0x0:bv1);
-       goto (%main_21);
+       goto (%main_19);
      ];
-     block %main_21 [ goto (%main_19); ];
      block %main_27 [
        guard eq(booltobv1(eq(ZF_2:bv1, 0x1:bv1)), 0x0:bv1);
-       goto (%main_25);
+       goto (%main_5);
      ];
-     block %main_25 [ goto (%main_5); ];
      block %main_5 (
-       var CF_6:bv1 := phi(%main_25 -> CF_2:bv1, %main_7 -> CF_5:bv1),
-       var NF_6:bv1 := phi(%main_25 -> NF_2:bv1, %main_7 -> NF_5:bv1),
-       var R1_4:bv64 := phi(%main_25 -> R1_in:bv64, %main_7 -> R1_3:bv64),
-       var VF_6:bv1 := phi(%main_25 -> VF_2:bv1, %main_7 -> VF_5:bv1),
-       var ZF_9:bv1 := phi(%main_25 -> ZF_2:bv1, %main_7 -> ZF_7:bv1)
+       var CF_6:bv1 := phi(%main_9 -> CF_5:bv1, %main_27 -> CF_2:bv1),
+       var NF_6:bv1 := phi(%main_9 -> NF_5:bv1, %main_27 -> NF_2:bv1),
+       var R1_4:bv64 := phi(%main_9 -> R1_3:bv64, %main_27 -> R1_in:bv64),
+       var VF_6:bv1 := phi(%main_9 -> VF_5:bv1, %main_27 -> VF_2:bv1),
+       var ZF_9:bv1 := phi(%main_9 -> ZF_7:bv1, %main_27 -> ZF_2:bv1)
      ) [
        (var CF_7:bv1=CF_out, var NF_7:bv1=NF_out, var R0_16:bv64=R0_out,
           var R1_5:bv64=R1_out, var R29_6:bv64=R29_out, var R30_5:bv64=R30_out,
@@ -91,11 +88,11 @@
        goto (%main_19);
      ];
      block %main_19 (
-       var CF_3:bv1 := phi(%main_3 -> CF_7:bv1, %main_21 -> CF_2:bv1),
-       var NF_3:bv1 := phi(%main_3 -> NF_7:bv1, %main_21 -> NF_2:bv1),
-       var R1_2:bv64 := phi(%main_3 -> R1_6:rec219118263, %main_21 -> R1_in:bv64),
-       var VF_3:bv1 := phi(%main_3 -> VF_7:bv1, %main_21 -> VF_2:bv1),
-       var ZF_5:bv1 := phi(%main_3 -> ZF_10:bv1, %main_21 -> ZF_2:bv1)
+       var CF_3:bv1 := phi(%main_23 -> CF_2:bv1, %main_3 -> CF_7:bv1),
+       var NF_3:bv1 := phi(%main_23 -> NF_2:bv1, %main_3 -> NF_7:bv1),
+       var R1_2:bv64 := phi(%main_23 -> R1_in:bv64, %main_3 -> R1_6:rec219118263),
+       var VF_3:bv1 := phi(%main_23 -> VF_2:bv1, %main_3 -> VF_7:bv1),
+       var ZF_5:bv1 := phi(%main_23 -> ZF_2:bv1, %main_3 -> ZF_10:bv1)
      ) [
        (var CF_4:bv1=CF_out, var NF_4:bv1=NF_out, var R0_10:bv64=R0_out,
           var R1_3:bv64=R1_out, var R29_4:bv64=R29_out, var R30_3:bv64=R30_out,
@@ -119,9 +116,8 @@
      ];
      block %main_9 [
        guard neq(bvnot(booltobv1(eq(ZF_7:bv1, 0x1:bv1))), 0x0:bv1);
-       goto (%main_7);
+       goto (%main_5);
      ];
-     block %main_7 [ goto (%main_5); ];
      block %main_15 [
        guard eq(bvnot(booltobv1(eq(ZF_7:bv1, 0x1:bv1))), 0x0:bv1);
        (var CF_8:bv1=CF_out, var NF_8:bv1=NF_out, var R0_24:bv64=R0_out,
@@ -130,15 +126,13 @@
           NF_in=NF_5:bv1, R0_in=0x828:bv64, R1_in=R1_3:bv64,
           R29_in=bvsub(R31_in:bv64, 0x20:bv64), R30_in=0x7f4:bv64,
           R31_in=bvsub(R31_in:bv64, 0x20:bv64), VF_in=VF_5:bv1, ZF_in=ZF_7:bv1);
-       goto (%main_13);
+       goto (%main_11);
      ];
-     block %main_13 [ goto (%main_11); ];
      block %main_11 [
        var load21_1:bv64 := load le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x20:bv64) 64;
        var load22_1:bv64 := load le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x18:bv64) 64;
-       goto (%main_basil_return_1);
+       goto (%returns);
      ];
-     block %main_basil_return_1 [ goto (%returns); ];
      block %returns [
        (var CF_out:bv1 := CF_8:bv1, var NF_out:bv1 := NF_8:bv1,
         var R0_out:bv64 := 0x0:bv64, var R1_out:bv64 := R1_7:bv64,
