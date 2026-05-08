@@ -159,11 +159,25 @@ module PassManager = struct
          definitions from parameters";
     }
 
-  let cleanup_cfg =
+  let remove_unreachable_blocks =
     {
       name = "remove-unreachable-block";
       apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
       doc = "Remove blocks unreachable from entry";
+    }
+
+  let collapse_empty_blocks =
+    {
+      name = "collapse-empty-blocks";
+      apply = Proc Transforms.Cleanup_cfg.collapse_empty_blocks;
+      doc = "Collapses empty intermediate blocks";
+    }
+
+  let cleanup_cfg =
+    {
+      name = "cleanup-cfg";
+      apply = Proc Transforms.Cleanup_cfg.cleanup_cfg;
+      doc = "Collapses empty intermediate blocks";
     }
 
   let irreducible_loop =
@@ -176,7 +190,7 @@ module PassManager = struct
   let full_ssa =
     {
       name = "ssa";
-      apply = Batch [ cleanup_cfg; sparams; sssa; remove_unused ];
+      apply = Batch [ remove_unreachable_blocks; sparams; sssa; remove_unused ];
       doc =
         "Complete SSA pipeline for early IR (global register parameterless \
          form)";
@@ -282,7 +296,13 @@ module PassManager = struct
       apply =
         Batch
           [
-            cf_exprs; linear_const; cf_exprs; linear_copy; cf_exprs; inter_dead;
+            cf_exprs;
+            linear_const;
+            cf_exprs;
+            linear_copy;
+            cf_exprs;
+            inter_dead;
+            cleanup_cfg;
           ];
       doc =
         "Performs some simplifications (linear constant propagation, linear \
@@ -302,6 +322,8 @@ module PassManager = struct
   let passes =
     [
       irreducible_loop;
+      remove_unreachable_blocks;
+      collapse_empty_blocks;
       cleanup_cfg;
       dfg_bool;
       dfg_ival_wint_product;

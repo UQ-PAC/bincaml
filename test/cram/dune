@@ -38,6 +38,8 @@
   inter_dead.sexp
   ../../examples/const.il
   const.sexp
+  ../../examples/collapse_edge.il
+  collapse_edge.sexp
   ll_simple.il
   ll_simple.sexp
   ll_real.sexp
