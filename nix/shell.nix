@@ -18,6 +18,14 @@
   bnfc-treesitter,
   boogie,
   cvc5,
+  linol-lwt,
+  linol,
+
+  # lsp
+  ppx_import,
+  logs,
+  mtime,
+  z3,
 }:
 
 mkShell {
@@ -32,6 +40,12 @@ mkShell {
     boogie
     cvc5
     bincaml_lsp
+    linol
+    linol-lwt
+    ppx_import
+    logs
+    mtime
+    z3.out
     # sherlodoc - not in nixpkgs?
   ]
   ++ lib.optional stdenv.hostPlatform.isLinux perf;

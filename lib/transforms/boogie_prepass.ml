@@ -178,23 +178,39 @@ module Builtins = struct
         : Program.declaration)
 
   let used_ops (p : Program.t) =
-    Iter.from_iter (fun f -> iprog f p)
-    |> Iter.sort_uniq
+    Iter.from_iter (fun f -> iprog f p) |> Iter.sort_uniq
+
+  let transform_add_builtin_decls (p : Program.t) : Program.t =
+    used_ops p
     |> Iter.filter_map (function op, args, ret ->
         (match op with
+        | `Load _ -> None
         | #builtin as op -> transform_op_to_decl op args ret
         | _ -> None))
     |> Iter.to_list
-
-  let transform_add_builtin_decls (p : Program.t) : Program.t =
-    used_ops p |> List.fold_left Program.add_decl p
+    |> List.fold_left Program.add_decl p
 end
 
 module Instructions = struct
   let unique_stores_loads (prog : Program.t) =
     let visit_procs proc = Procedure.iter_stmt_topo_fwd proc in
+    let load_exprs : (Var.t, Var.t, Program.e) Stmt.t Iter.t =
+      Builtins.used_ops prog
+      |> Iter.filter_map (function op, args, ret ->
+          (match op with
+          | `Load (endian, size) ->
+              let lhs = Var.create "" ret in
+              let rhs = Var.create "" (List.hd args) in
+              let addr =
+                Expr.BasilExpr.rvar @@ Var.create "" (List.hd @@ List.tl args)
+              in
+              Some
+                (Stmt.Instr_Load
+                   { lhs; rhs; addr = Addr { addr; size; endian } })
+          | _ -> None))
+    in
     let procs = Program.procs prog |> Iter.map snd in
-    procs |> Iter.flat_map visit_procs
+    procs |> Iter.flat_map visit_procs |> Iter.append load_exprs
     |> Iter.filter (function
       | Stmt.Instr_Store { lhs; rhs; value; addr = Scalar } -> true
       | Stmt.Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } }

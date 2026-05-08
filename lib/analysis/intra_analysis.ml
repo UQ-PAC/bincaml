@@ -169,7 +169,7 @@ module Forwards (D : IntraDomain) = struct
         Procedure.graph p
         |> Option.map (fun g ->
             A.recurse g (Procedure.topo_fwd p)
-              (fun v -> D.init p)
+              (fun v -> D.init ~vertex:(Some v) p)
               widening_set widening_delay))
     |> Option.get_or ~default:A.M.empty
 

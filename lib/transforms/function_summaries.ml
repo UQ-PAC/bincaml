@@ -17,6 +17,8 @@ let append_summary s1 s2 =
 module type FunctionSummaryAnnotation = sig
   val requires : ID.t -> Expr.BasilExpr.t list
   val ensures : ID.t -> Expr.BasilExpr.t list
+  val inout : ID.t -> VarSet.t
+  val id : ID.t
 end
 
 (** Replace gamma expressions with gamma variables for an smt query *)
@@ -76,14 +78,25 @@ let wp_dual_requires (module S : FunctionSummaryAnnotation)
   Analysis.A.M.find_opt Procedure.Vert.Entry result
   |> Option.map Domain.to_pred |> Option.to_list
 
+let sp_ensures (module S : FunctionSummaryAnnotation) (proc : Program.proc) =
+  let module Domain = Sp.Domain (S) in
+  let module Analysis = Intra_analysis.Forwards (Domain) in
+  let result =
+    Analysis.analyse ~widening_set:Graph.ChaoticIteration.FromWto
+      ~widening_delay:5 proc
+  in
+  Analysis.A.M.find_opt Procedure.Vert.Return result
+  |> Option.map Domain.to_pred |> Option.to_list
+
 (** Compute an extension of the given procedure's summary *)
 let extra_summary (solver : Bincaml_util.Smt.Solver.t)
     (module S : FunctionSummaryAnnotation) reiter (proc : Program.proc) =
   (* TODO implement a sample ensures clause generator and some sort of analysis
      pass runner *)
   let cur_req = S.requires (Procedure.id proc) in
+  let cur_ens = S.ensures (Procedure.id proc) in
   if IDSet.mem (Procedure.id proc) !reiter then
-    { requires = cur_req; ensures = [] }
+    { requires = cur_req; ensures = cur_ens }
   else
     let requires =
       wp_dual_requires (module S) proc
@@ -98,7 +111,20 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
                  r :: rs)
            []
     in
-    { requires; ensures = [] }
+    let ensures =
+      sp_ensures (module S) proc
+      |> List.fold_left
+           (fun rs r ->
+             let open Bincaml_util.Smt in
+             match redundant solver r (List.append rs cur_ens) with
+             | Unsat -> rs
+             | Sat -> r :: rs
+             | Unknown ->
+                 reiter := IDSet.add (Procedure.id proc) !reiter;
+                 r :: rs)
+           []
+    in
+    { requires; ensures }
 
 let set_summary summary (proc : Program.proc) =
   let spec = Procedure.specification proc in
@@ -118,6 +144,20 @@ let add_summary summary (proc : Program.proc) =
   in
   Procedure.set_specification proc spec
 
+let add_decls solver prog =
+  Program.declarations prog |> Iter.from_iter |> Iter.map snd
+  |> Iter.filter
+       Program.(
+         function
+         | Type { binding } -> true
+         | Variable { binding } -> Var.is_constant binding
+         | Function { binding } -> Var.is_constant binding
+         | Procedure { definition } -> false)
+  |> Iter.map (fun d -> Expr_smt.SMTLib2.trans_decl d Expr_smt.SMTLib2.empty)
+  |> Iter.map fst
+  |> fun i ->
+  Iter.for_each i (fun s -> Bincaml_util.Smt.Solver.add_command solver s)
+
 let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
   let solver =
     Bincaml_util.Smt.Solver.create
@@ -126,20 +166,7 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
         log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
-  let _ =
-    Program.declarations prog |> Iter.from_iter |> Iter.map snd
-    |> Iter.filter
-         Program.(
-           function
-           | Type { binding } -> true
-           | Variable { binding } -> Var.is_constant binding
-           | Function { binding } -> Var.is_constant binding
-           | Procedure { definition } -> false)
-    |> Iter.map (fun d -> Expr_smt.SMTLib2.trans_decl d Expr_smt.SMTLib2.empty)
-    |> Iter.map fst
-    |> fun i ->
-    Iter.for_each i (fun s -> Bincaml_util.Smt.Solver.add_command solver s)
-  in
+  add_decls solver prog;
   let summary =
     extra_summary solver
       (module struct
@@ -154,6 +181,19 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
           |> Option.map_or
                (fun p -> (Procedure.specification p).ensures)
                ~default:[]
+
+        let inout id =
+          Program.proc_opt prog id
+          |> Option.map_or
+               (fun p ->
+                 VarSet.union
+                   (VarSet.of_iter @@ StringMap.values
+                   @@ Procedure.formal_in_params p)
+                   (VarSet.of_iter @@ StringMap.values
+                   @@ Procedure.formal_out_params p))
+               ~default:VarSet.empty
+
+        let id = Procedure.id proc
       end : FunctionSummaryAnnotation)
       (ref IDSet.empty) proc
   in
@@ -163,7 +203,7 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
 let intraproc_transform (prog : Program.t) =
   let module Dfs = Graph.Traverse.Dfs (Program.CallGraph.G) in
   let cg = Program.CallGraph.make_call_graph prog in
-  Iter.from_iter (fun f -> Dfs.postfix f cg)
+  Iter.from_iter (fun f -> Dfs.prefix f cg)
   |> Iter.fold
        (fun prog v ->
          match v with
@@ -209,12 +249,31 @@ let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
 
           let ensures id =
             List.append (IDMap.find id res).ensures (vals id).ensures
+
+          let inout id =
+            Program.proc_opt prog id
+            |> Option.map_or
+                 (fun p ->
+                   VarSet.union
+                     (VarSet.of_iter @@ StringMap.values
+                     @@ Procedure.formal_in_params p)
+                     (VarSet.of_iter @@ StringMap.values
+                     @@ Procedure.formal_out_params p))
+                 ~default:VarSet.empty
+
+          let id = pid
         end : FunctionSummaryAnnotation)
       in
       let extra =
         extra_summary solver annotations reiters (IDMap.find pid procs)
       in
-      append_summary (vals pid) extra
+      if
+        Option.get_or ~default:false
+        @@ Option.map
+             (fun proc -> ID.equal pid (Procedure.id proc))
+             (Program.entry_proc_opt prog)
+      then vals pid (* Makes no sense to generate summary for entrypoint. *)
+      else append_summary (vals pid) extra
     else IDMap.get_or pid res ~default:Domain.bottom
   in
   let sol = FixSummaries.lfp eqs in
@@ -233,6 +292,7 @@ let interproc_transform (prog : Program.t) =
         log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
+  add_decls solver prog;
   let summaries =
     Program.procs prog
     |> Iter.map (fun (i, proc) ->
