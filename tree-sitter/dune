@@ -1,14 +1,6 @@
-; checks tree-sitter is valid and unambiguous
-
+; checks tree-sitter highlights are valid
 (rule
- (deps grammar.js grammar.bnfc.js tree-sitter.json)
- (alias runtest)
- (enabled_if %{bin-available:tree-sitter})
- (action
-  (run tree-sitter generate grammar.js)))
-
-(rule
- (deps grammar.js grammar.bnfc.js tree-sitter.json queries/highlights.scm)
+ (deps src/parser.c queries/highlights.scm)
  (alias runtest)
  (enabled_if %{bin-available:tree-sitter})
  (action
