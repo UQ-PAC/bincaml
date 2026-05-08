@@ -41,6 +41,19 @@ module Interval = struct
   let disjoint i j = left_of i j || right_of i j
   let overlap i j = not @@ disjoint i j
 
+  let elem x i =
+    match i with
+    | Bot -> false
+    | Top -> true
+    | Interval (a, b) -> Z.leq a x && Z.leq x b
+
+  let subset i j =
+    match (i, j) with
+    | Bot, Bot | Top, Top | Bot, _ | _, Top -> true
+    | _, Bot | Top, _ -> false
+    | Interval (a, b), Interval (c, d) ->
+        Z.leq c a && Z.leq a d && Z.leq c b && Z.leq b d
+
   let join i j =
     match (i, j) with
     | Bot, i | i, Bot -> i
@@ -126,7 +139,8 @@ module DSGraph = struct
   (* Nodes are represented as sorted lists of cells, ordered by the low end of the intervals of each cell *)
   and node_content =
     | Node of { cells : cell list; flags : NodeFlags.t }
-    | NodePath of node
+    (* Node was joined into parent at the given offset *)
+    | NodePath of node * Z.t
 
   and node = node_content ref
 
@@ -142,13 +156,11 @@ module DSGraph = struct
   (** Get the union find parent of this cell *)
   let rec find_node (n : node) =
     match !n with
-    | NodePath n' ->
-        assert (not @@ CCEqual.physical n n');
-        let p = find_node n' in
-        assert (not @@ CCEqual.physical n p);
-        n := NodePath p;
-        p
-    | Node _ -> n
+    | NodePath (n', off) ->
+        let p, off' = find_node n' in
+        n := NodePath (p, off');
+        (p, off')
+    | Node _ -> (n, Z.zero)
 
   (** Get the offsets interval of this cell's parent *)
   let offsets (c : cell) =
@@ -191,16 +203,16 @@ module DSGraph = struct
 
   (** Get the cells of this node's parent *)
   let rec cells (n : node) =
-    match !n with NodePath _ -> cells (find_node n) | Node r -> r.cells
+    match !n with NodePath _ -> cells (fst @@ find_node n) | Node r -> r.cells
 
   (** Get the flags of this node's parent *)
   let rec flags (n : node) =
-    match !n with NodePath _ -> flags (find_node n) | Node r -> r.flags
+    match !n with NodePath _ -> flags (fst @@ find_node n) | Node r -> r.flags
 
   (** Set the flags of this node *)
   let rec set_flags f (n : node) =
     match !n with
-    | NodePath _ -> set_flags f (find_node n)
+    | NodePath _ -> set_flags f (fst @@ find_node n)
     | Node r -> n := Node { r with flags = f }
 
   (** Make the second cell point to the first *)
@@ -216,7 +228,7 @@ module DSGraph = struct
   *)
   let rec collapse node =
     match !node with
-    | NodePath _ -> collapse (find_node node)
+    | NodePath _ -> collapse (fst @@ find_node node)
     | Node r ->
         let pointees =
           List.fold_left
@@ -264,9 +276,12 @@ module DSGraph = struct
       second node is deleted and the first is kept *)
   and join_nodes_at off n1 n2 =
     match (!n1, !n2) with
-    | NodePath _, NodePath _ -> join_nodes_at off (find_node n1) (find_node n2)
-    | _, NodePath _ -> join_nodes_at off n1 (find_node n2)
-    | NodePath _, _ -> join_nodes_at off (find_node n1) n2
+    | NodePath _, _ ->
+        let p, off' = find_node n1 in
+        join_nodes_at (Z.( - ) off off') p n2
+    | _, NodePath _ ->
+        let p, off' = find_node n2 in
+        join_nodes_at (Z.( + ) off off') n1 p
     | Node r1, Node r2 -> (
         assert (not @@ CCEqual.physical n1 n2);
         List.iter (shift off) r2.cells;
@@ -285,7 +300,7 @@ module DSGraph = struct
               | _, Bot -> join_nodes' n1' cs'
               | Top, _ | _, Top ->
                   n1 := Node { cells = r1.cells @ r2.cells; flags };
-                  n2 := NodePath n1;
+                  n2 := NodePath (n1, off);
                   collapse n1;
                   None
               | (Interval _ as i), (Interval _ as j) when Interval.left_of i j
@@ -306,14 +321,17 @@ module DSGraph = struct
         match join_nodes' r1.cells r2.cells with
         | Some n ->
             n1 := Node { cells = n; flags };
-            n2 := NodePath n1
+            n2 := NodePath (n1, off)
         | _ -> ())
 
   (** Inserts the cell into the node. It is assumed that the cell has set (or
       will set) its node pointer outside of this call *)
   let rec insert node cell =
     match !node with
-    | NodePath _ -> insert (find_node node) cell
+    | NodePath _ ->
+        let p, off = find_node node in
+        shift off cell;
+        insert p cell
     | Node r -> (
         match !cell with
         | Path _ -> insert node (find cell)
@@ -357,7 +375,6 @@ module DSGraph = struct
 
   (** Create a single cell belonging to its own node *)
   let init offsets flags : cell =
-    (* TODO set initial flags *)
     let node = ref (Node { cells = []; flags }) in
     let c = ref (Cell { offsets; node; pointees = [] }) in
     insert node c;
@@ -396,6 +413,38 @@ module DSGraph = struct
     in
     let l = List.length cells in
     fst @@ sort l cells
+
+  (** Find a cell corresponding to an interval in a node. If the interval
+      overlaps with multiple cells, they are merged, and if it overlaps with no
+      cells a new cell is created. *)
+  let rec get_cell i (n : node) =
+    match !n with
+    | NodePath _ ->
+        let p, off = find_node n in
+        get_cell (Interval.shift off i) p
+    | Node r -> (
+        (* TODO switch to another data structure to log(n)-ify this *)
+        let rec aux = function
+          | [] -> []
+          | x :: xs when Interval.subset i (offsets x) -> x :: aux xs
+          | x :: xs -> aux xs
+        in
+        let cells = aux r.cells in
+        match cells with
+        | [] ->
+            (* TODO this is suboptimal and traverses the node list twice *)
+            let cell = ref (Cell { offsets = i; node = n; pointees = [] }) in
+            insert n cell;
+            cell
+        | [ c ] -> c
+        | c :: cs ->
+            ignore
+            @@ List.fold_left
+                 (fun c c' ->
+                   join c c';
+                   c)
+                 c cs;
+            c)
 end
 
 module SBMap = Map.Make (Sva.SymBase)
@@ -408,12 +457,6 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
       Sva.SymAddrSetLattice.to_iter sv
       |> Iter.filter (not % Sva.SymBase.equal Sva.SymBase.Constant % fst)
       |> Iter.map (fun (b, i) ->
-          (*
-          let size =
-            match i with
-            | WrappedIntervalsLattice.Interval { upper } -> Bitvec.size upper
-            | _ -> 0
-          in *)
           let f =
             match b with
             | Sva.SymBase.Stack _ -> NodeFlags.(set_flag stack empty)
@@ -422,7 +465,6 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
             | Constant | Par _ | Ret _ | Loaded _ ->
                 NodeFlags.(set_flag unknown empty)
           in
-          (* TODO this is the wrong size to pad by *)
           let c =
             DSGraph.init (Interval.of_wint i |> Interval.pad_with_size size) f
           in
@@ -454,7 +496,6 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
     SBMap.fold
       (fun b cs m -> SBMap.add b (DSGraph.merge_init cs) m)
       m SBMap.empty
-    (*SBMap.fold (fun _b cs nodes -> List.map DSGraph.node_of cs @ nodes) m []*)
   in
 
   (* Unify all pointees (i hope a worklist can be avoided) *)
