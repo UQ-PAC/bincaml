@@ -1,44 +1,45 @@
-(**
-  Type Inference using Algebaric Subtyping
-  {1 Overview and related reading }
+(** Type Inference using Algebaric Subtyping
+    {1 Overview and related reading}
 
-  If you wanna learn how algebaric subtyping works the best bet is one of
-    the papers this is based off of:
+    If you wanna learn how algebaric subtyping works the best bet is one of the
+    papers this is based off of:
     - {{:https://arxiv.org/abs/2409.01841}BinSub}
     - {{:https://dl.acm.org/doi/pdf/10.1145/3409006}SimpleSub}
     - {{:https://dl.acm.org/doi/pdf/10.1145/3009837.3009882}MlSub}
-    - {{:https://www.cs.tufts.edu/~nr/cs257/archive/stephen-dolan/thesis.pdf}Algebraic Subtyping Thesis}
+    - {{:https://www.cs.tufts.edu/~nr/cs257/archive/stephen-dolan/thesis.pdf}Algebraic
+       Subtyping Thesis}
 
-  If you wanna learn how it works within BinCaml you can probably just look at
+    If you wanna learn how it works within BinCaml you can probably just look at
     my stuff, the slides are pretty barebones though.
-    - {{:https://typst.app/project/rIVqCuLCBKG7ZQIBQyeaKL}Interim Presentation Slides}
-    - {{:https://typst.app/project/rIVqCuLCBKG7ZQIBQyeaKL}Final Presentation Slides}
+    - {{:https://typst.app/project/rIVqCuLCBKG7ZQIBQyeaKL}Interim Presentation
+       Slides}
+    - {{:https://typst.app/project/rIVqCuLCBKG7ZQIBQyeaKL}Final Presentation
+       Slides}
     - {{:https://typst.app/project/rIVqCuLCBKG7ZQIBQyeaKL}Final Report}
 
-  In short, this transform adds Record and Pointer types to the IR using
-    type inference, naturally from these changes, additional operations are added to
+    In short, this transform adds Record and Pointer types to the IR using type
+    inference, naturally from these changes, additional operations are added to
     suit these new types, i.e. rectobv, ptradd, field access etc.
 
-  Extra considerations are then needed to have these new types, as each type now has
-    a lower and upper type (side effect of algebaric subtyping). Since type inference
-    requires SSA form, this can largely be ignored.
+    Extra considerations are then needed to have these new types, as each type
+    now has a lower and upper type (side effect of algebaric subtyping). Since
+    type inference requires SSA form, this can largely be ignored.
 
-    - The upper type just represents any type that value can take in, and is often
-      only constrained by size.
-    - The lower type just represents the type when used on the right hand side (or
-      similar situtations)
+    - The upper type just represents any type that value can take in, and is
+      often only constrained by size.
+    - The lower type just represents the type when used on the right hand side
+      (or similar situtations)
 
     Example:
-      {[
-        type rec1 = { field0 : (bv32, 0)} 64;
-        var a: bv64 := 0x1c:bv64
-        var b: bv32 := (a:rec1.field0)
-      ]}
+    {[
+      type rec1 = { field0 : (bv32, 0)} 64;
+      var a: bv64 := 0x1c:bv64
+      var b: bv32 := (a:rec1.field0)
+    ]}
 
-      The variable [a] has the lower type of [rec1] and the upper type of [bv64],
-        this is able to type check because a record with size [s] is a subtype of a
-        bv with size [s]
-*)
+    The variable [a] has the lower type of [rec1] and the upper type of [bv64],
+    this is able to type check because a record with size [s] is a subtype of a
+    bv with size [s] *)
 
 open Bincaml_util.Common
 open Bincaml_util.Logger
@@ -1110,6 +1111,9 @@ let rec constrain_expr proc (st : ConstraintState.t)
   | Constant { const } ->
       ( st,
         match const with
+        | `Sort _ ->
+            Top
+            (* TODO: Not sure what to do with sort, top will just make it its original type *)
         | `Bool _ -> Bool
         | `Bitvector bv -> BV (Bitvec.size bv)
         | `Integer _ -> Int

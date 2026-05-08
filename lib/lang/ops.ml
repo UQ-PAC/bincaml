@@ -113,20 +113,22 @@ module BVOps = struct
 
   let rec eval_unary_rec (o : unary_rec) =
     match o with
-    | `RECTOBV ->
-        fun (values, Types.Struct { size; fields; _ }) ->
-          List.fold_left
-            (fun bv (name, ({ offset; _ } : Types.record_field)) ->
-              let { value; _ } : Record.field = StringMap.find name values in
-              let bv =
-                Bitvec.bitor bv
-                @@ Bitvec.zero_extend
-                     ~extension:(size - Bitvec.size value)
-                     value
-              in
-              bv)
-            (Bitvec.zero ~size)
-          @@ StringMap.bindings fields
+    | `RECTOBV -> (
+        function
+        | values, Types.Struct { size; fields; _ } ->
+            List.fold_left
+              (fun bv (name, ({ offset; _ } : Types.record_field)) ->
+                let { value; _ } : Record.field = StringMap.find name values in
+                let bv =
+                  Bitvec.bitor bv
+                  @@ Bitvec.zero_extend
+                       ~extension:(size - Bitvec.size value)
+                       value
+                in
+                bv)
+              (Bitvec.zero ~size)
+            @@ StringMap.bindings fields
+        | _ -> failwith "unsupported type")
 
   let eval_unary_unif (o : unary_unif) =
     match o with
