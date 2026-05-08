@@ -63,7 +63,7 @@ module IntervalDomain = struct
   let join = WrappedIntervalsLattice.join
   let top = WrappedIntervalsLattice.Top
   let neg = WrappedIntervalsLatticeOps.neg
-  let init ?(vertex = None)  a = interval a a
+  let init ?(vertex = None) a = interval a a
 end
 
 module SymAddrSetLattice = struct
