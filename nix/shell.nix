@@ -52,6 +52,7 @@ mkShell {
 
   inputsFrom = [
     bincaml
+    bincaml_lsp
   ];
 
   shellHook = ''

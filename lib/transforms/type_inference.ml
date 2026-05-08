@@ -1,5 +1,43 @@
-(*
-  Paper this work is based on: https://arxiv.org/abs/2409.01841
+(**
+  Type Inference using Algebaric Subtyping
+  {1 Overview and related reading }
+
+  If you wanna learn how algebaric subtyping works the best bet is one of
+    the papers this is based off of:
+    - {{:https://arxiv.org/abs/2409.01841}BinSub}
+    - {{:https://dl.acm.org/doi/pdf/10.1145/3409006}SimpleSub}
+    - {{:https://dl.acm.org/doi/pdf/10.1145/3009837.3009882}MlSub}
+    - {{:https://www.cs.tufts.edu/~nr/cs257/archive/stephen-dolan/thesis.pdf}Algebraic Subtyping Thesis}
+
+  If you wanna learn how it works within BinCaml you can probably just look at
+    my stuff, the slides are pretty barebones though.
+    - {{:https://typst.app/project/rIVqCuLCBKG7ZQIBQyeaKL}Interim Presentation Slides}
+    - {{:}Final Presentation Slides}
+    - {{:}Final Report}
+
+  In short, this transform adds Record and Pointer types to the IR using
+    type inference, naturally from these changes, additional operations are added to
+    suit these new types, i.e. rectobv, ptradd, field access etc.
+
+  Extra considerations are then needed to have these new types, as each type now has
+    a lower and upper type (side effect of algebaric subtyping). Since type inference
+    requires SSA form, this can largely be ignored.
+
+    - The upper type just represents any type that value can take in, and is often
+      only constrained by size.
+    - The lower type just represents the type when used on the right hand side (or
+      similar situtations)
+
+    Example:
+      {[
+        type rec1 = { field0 : (bv32, 0)} 64;
+        var a: bv64 := 0x1c:bv64
+        var b: bv32 := (a:rec1.field0)
+      ]}
+
+      The variable [a] has the lower type of [rec1] and the upper type of [bv64],
+        this is able to type check because a record with size [s] is a subtype of a
+        bv with size [s]
 *)
 
 open Bincaml_util.Common
@@ -7,18 +45,18 @@ open Bincaml_util.Logger
 open Lang
 open Expr
 
-module Polarity = struct
-  (*
-    Negative polarity
-      - Stores
-      - Lower bounds
-      - Intersection
+(** Polar Types - lhs type is positive, rhs type is negative
+    {1 Polar Types}
+    {2 Negative polarity}
+    - Stores
+    - Lower bounds
+    - Intersection
 
-    Positive polarity
-      - Loads
-      - Upper bounds
-      - Union
-  *)
+    {2 Positive polarity}
+    - Loads
+    - Upper bounds
+    - Union *)
+module Polarity = struct
   type t = Pos | Neg [@@deriving ord, eq]
 
   let show = function Pos -> "+" | Neg -> "-"
@@ -26,12 +64,9 @@ module Polarity = struct
   let positive = equal Pos
 end
 
+(** Creates a unique way to look at variables by combining procedure and
+    variable name NOTE: Sig is needed to string and t can't be the same type *)
 module VarId : sig
-  (*
-    Creates a unique way to look at variables by combining procedure and variable name
-  
-    NOTE: Sig is needed to string and t can't be the same type
-  *)
   type t
 
   val compare : t -> t -> int
@@ -69,18 +104,28 @@ end
 
 module VarIdMap = Map.Make (VarId)
 
+(** The type system for the type inference algorithm
+    {1 Inferred Types}
+    {2 Types}
+    - It is almost a superset of Types.t (Missing Map / ADT) adding Union and
+      intersection types
+
+    {2 Why not use Types.t?}
+    - Probably could?
+    - But, it is easier this way to be honest, I would have to add in Union /
+      Sect types into it as well, and this keeps them more seperate as type
+      inference wants more information about things like records than the rest
+      of the IR wants. *)
 module InferredType = struct
   type t =
     | Top
     | Bottom
-    | Union of t * t (* type ∪ type *)
-    | Sect of t * t (* type ∩ type *)
-    | Pointer of t * t (* ptr(lb, ub) *)
-    | Function of
-        string
-        * t StringMap.t
-        * t StringMap.t (* list of inputs and list of outputs *)
-    | Record of field ZMap.t * int (* A list of fields in the record *)
+    | Union of t * t  (** type ∪ type *)
+    | Sect of t * t  (** type ∩ type *)
+    | Pointer of t * t  (** ptr(lb, ub) *)
+    | Function of string * t StringMap.t * t StringMap.t
+        (** list of inputs and list of outputs *)
+    | Record of field ZMap.t * int  (** A list of fields in the record *)
     | TypeVar of VarId.t
     | Recursive of VarId.t * t
     | BV of int
@@ -229,6 +274,9 @@ module InferredType = struct
         print_endline @@ Printf.sprintf "TODO %s %s" (show a) (show b);
         failwith "boom2"
 
+  (** As well as having intersection and union defined, types have an inherent
+      heuristic based ordering on them from BinSub, records -> functions ->
+      Pointers -> the rest *)
   and order a b =
     match (a, b) with
     | a, b when equal a b -> a
@@ -305,7 +353,10 @@ module TySet = struct
   let show ts = to_list ts |> List.map InferredType.show |> String.concat ", "
 end
 
+(** Map of VarId -> TypeConstraint *)
 module ConstraintState = struct
+  (** Two TySet.t representing the lower and upper constraints on a variable's
+      type *)
   module TypeConstraint = struct
     type t = { lb : TySet.t; ub : TySet.t } [@@deriving eq, ord]
 
@@ -369,13 +420,10 @@ module ConstraintState = struct
          t "")
 end
 
+(** Edges for type automata
+    - RecLabel is offset, field_size, record_size
+    - FnIn / FnOut is name of the parameter *)
 module Sigma = struct
-  (*
-    Edges for type automata
-
-    RecLabel is offset, field_size, record_size
-    FnIn / FnOut is name of the parameter
-  *)
   type t =
     | Ep
     | StoreLabel
@@ -397,18 +445,22 @@ module Sigma = struct
   let is_epislon = equal Ep
 end
 
-module State = struct
-  (*
-    States for type automata
+(** States for type automata
 
-    Made up of a polarity and a type
-  *)
+    Made up of a polarity and a type *)
+module State = struct
   type t = Polarity.t * InferredType.t [@@deriving eq, ord]
 
   let show (p, ty) =
     Printf.sprintf "(%s, %s)" (Polarity.show p) (InferredType.show ty)
 end
 
+(** Automata representation of a Inferred Type
+
+    States represent some data that is a Inferred Types
+
+    Edges represent the structure between two states, i.e. record edges from
+    [a -> b] say that [a] is a record and [b] is it's field *)
 module TypeAutomata = struct
   module StateEdges = Map.Make (State)
   module Edges = Map.Make (Sigma)
@@ -486,9 +538,6 @@ module TypeAutomata = struct
            @@ Sigma.show a)
          "" (get_transitions n))
 
-  (*
-    Meow meow meow
-  *)
   let merge_nodes (m : t) : t =
     let rec helper (trans : State.t list Edges.t StateEdges.t)
         (curr_state : State.t) =
@@ -562,32 +611,29 @@ module TypeAutomata = struct
 
   let simplify_automata (m : t) : t = m |> merge_nodes |> remove_unreachable
 
-  (*
-    Two mutually recursive functions that take a given InferredType.t
-      and make it into an automata.
+  (** Two mutually recursive functions that take a given InferredType.t and make
+      it into an automata.
 
-    grab_edges is like a worker of type_to_automata, with the sole job of
+      grab_edges is like a worker of type_to_automata, with the sole job of
       recursing down paths that would lead to epsilon edges and returning the
       states that won't and any edges that need to be added.
 
-      This has the benefit of never needing to remove epsilon edges, as
-        none are ever made, saving an entire pass of the types.
+      This has the benefit of never needing to remove epsilon edges, as none are
+      ever made, saving an entire pass of the types.
 
-    type_to_automata takes a given type structure and decomposes it into
+      type_to_automata takes a given type structure and decomposes it into
       states and edges, when union / intersection are encounted, grab_edges
       steps in to deal with epsilon edges and then provides a list of types that
       act as the next types to deconstruct since grab_edges skips some types.
 
-    It would be nice to have the merge_nodes in the same step as this, however,
-      it isn't that nice to have it here.
+      It would be nice to have the merge_nodes in the same step as this,
+      however, it isn't that nice to have it here. grab_edges is the only way we
+      can get similar edges, but it is from both the new types to convert next
+      and the edges we just got.
 
-      grab_edges is the only way we can get similar edges, but it is from both the
-        new types to convert next and the edges we just got.
+      Edges are easy to do, but the next types makes another recursive function.
 
-        Edges are easy to do, but the next types makes another recursive function.
-
-        so messy
-  *)
+      so messy *)
   let type_to_automata (polarity : Polarity.t) ty init name =
     let rec grab_edges (ty : InferredType.t) p :
         (Polarity.t * InferredType.t) list * (Sigma.t * State.t) list =
@@ -875,53 +921,52 @@ end
 (* Needed for extraction calls etc. *)
 let gen = ID.make_gen ()
 
-(*
+(** {1 Type Inferencing Algorithm}
 
-  Start of actual type inferencing algorithm
-  ==========================================
+    Three main functions:
+    + generate_constraints Runs over each statement in the program and generates
+      the initial constraints
+    + coalesce_types Takes constraints over variables and changes it to be one
+      combined type that is not constrained
+    + minimise type Takes a (coalesced) type and returns an automata that
+      represents that type has side effects (removing epsilon edges and that
+      have the same incoming edges where possible) *)
 
-  Three main functions
+(** {2 Minimise type}*)
 
-  1) gen_constraint_set
-    Runs over each statement in the program and generates the initial constraints
-
-  2) coalesce_types
-    Takes constraints over variables and changes it to be one combined type that is not constrained
-
-  3) minimise type
-    Takes a (coalesced) type and returns an automata that represents that type
-    Has side effects (removing epsilon edges and that have the same incoming edges where possible)
-    
-
+(**
+  Uses TypeAutomata simplification methods to create simple types
 *)
-
 let minimise_type p (ty : InferredType.t) name =
   match ty with
   | Function _ -> ty
   | _ -> TypeAutomata.create_simple_type p ty (p, ty) (VarId.show name)
 
-(*
-  Given a type tau get all bounds (depending on polarity) and make a combined
+(**
+    {2 Coalesce types}
+*)
+
+(**
+    Given a type tau get all bounds (depending on polarity) and make a combined
     type out of them using u or n (depending on polarity).
 
     This recurses into the bounds of their bounds, etc. so that the type
-      constraints are represented in the single type now instead of two lists
-      of types (lower and upper bounds)
+    constraints are represented in the single type now instead of two lists of
+    types (lower and upper bounds)
 
-  For example:
+    For example:
+    {[
+      a: lower [bv32]
+         upper [b]
+      b: lower [bv32]
+         upper [c]
+      c: lower [bv32]
+         upper []
+    ]}
 
-  a: lower [bv32]
-     upper [b]
-  b: lower [bv32]
-     upper [c]
-  c: lower [bv32]
-     upper []
-
-  Coalesce starting at 'a', with positive polarity (upper bounds) would be
-    b n c
-  Coalesce starting at 'a', with negative polarity (lower bounds) would be
-    bv32
-*)
+    Coalesce starting at 'a', with positive polarity (upper bounds) would be b n
+    c Coalesce starting at 'a', with negative polarity (lower bounds) would be
+    bv32 *)
 let rec coalesce_types (constraint_set : ConstraintState.t)
     (recursive_set : TySet.t) (polarity : Polarity.t) (tau : InferredType.t) :
     InferredType.t =
@@ -985,23 +1030,21 @@ let rec coalesce_types (constraint_set : ConstraintState.t)
   | BV _ | Bool | Int -> tau
   | _ -> Top
 
-(*
-  Given a statement constrain the variables involed (based on the expression)
+(** Given a statement constrain the variables involed (based on the expression)
 
-  Prefer giving upper bounds when possible
+    Prefer giving upper bounds when possible
 
-  NOTE: This could possibly be used else where some what easily
+    NOTE: This could possibly be used else where some what easily
 
-        By providing an empty constraint state and a statement you can generate
-          all typing constraints a particular statement can generate
+    By providing an empty constraint state and a statement you can generate all
+    typing constraints a particular statement can generate
 
-        Might need to make SVA an option type to better support this, however
-          no-sva leads to bad types when sva is needed.
+    Might need to make SVA an option type to better support this, however no-sva
+    leads to bad types when sva is needed.
 
-        Program is needed for formal params
+    Program is needed for formal params
 
-        Procedure is needed for unique IDs for local variables
-*)
+    Procedure is needed for unique IDs for local variables *)
 let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
     (type1 : InferredType.t) : ConstraintState.t =
   match (type0, type1) with
@@ -1051,6 +1094,7 @@ let constrain_args proc st l r t =
   let st = constrain_arg proc st l t in
   constrain_arg proc st r t
 
+(** Given a expr update a ConstraintState.t with new constraints*)
 let rec constrain_expr proc (st : ConstraintState.t)
     (expr : 'e BasilExpr.abstract_expr) =
   let open InferredType in
@@ -1225,6 +1269,7 @@ let rec constrain_expr proc (st : ConstraintState.t)
             @@ BasilExpr.type_of (BasilExpr.fix expr) ))
   | ApplyFun _ -> (st, Top)
 
+(** Given a stmt update a ConstraintState.t with new constraints*)
 let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
     block_id : ConstraintState.t =
   let open AbstractExpr in
@@ -1418,6 +1463,9 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
   *)
   | Stmt.Instr_IndirectCall _ -> st
 
+(**{2 Generate Constraints}*)
+
+(** Given a program, generate all constraints*)
 let generate_constraints prog =
   Logs.info (fun m ->
       m "Generating the constraint set" ~tags:(Logger.time_stamp ()));
@@ -1448,6 +1496,7 @@ let generate_constraints prog =
               acc)
        VarIdMap.empty
 
+(** Given a constraint state generate two polar unconstrained types *)
 let unconstrain_types type_constraint_map =
   Logs.info (fun m -> m "Coalescing types" ~tags:(Logger.time_stamp ()));
   let types =
@@ -1485,6 +1534,7 @@ let unconstrain_types type_constraint_map =
     types;
   types
 
+(** Given unconstrained types, simplify the types using type automatas *)
 let simplify_types types =
   Logs.info (fun m ->
       m "Type automata based simplification" ?header:None
@@ -1506,7 +1556,7 @@ let simplify_types types =
       (recursives, (name, types2) :: types))
     types ([], [])
 
-(* Passes through a given program and returns a given constraint set *)
+(** Passes through a given program and returns a given constraint set *)
 let analyse (prog : Program.t) :
     (Types.t * Types.t) VarIdMap.t * (VarId.t * Types.t) list =
   let cons =
@@ -1526,11 +1576,15 @@ let analyse (prog : Program.t) :
       m "Done type inference analysis" ~tags:(Logger.time_stamp ()));
   (VarIdMap.of_list types, recursives)
 
-(*
-  Transform Section
-  =================
+(**
+  {1 IR Transformation}
 
-  Actual transform to replace the types in stmt / exprs etc. with inferred types  
+    Actual transform to replace the types in stmt / exprs etc. with inferred
+    types
+
+    Just a series of mapping function that rewrite the IR based on the type of a
+      variable on in what context it is used in
+
 *)
 
 let get_lower_type results proc var : Types.t =
