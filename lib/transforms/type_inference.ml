@@ -934,20 +934,15 @@ let gen = ID.make_gen ()
 
 (** {2 Minimise type}*)
 
-(**
-  Uses TypeAutomata simplification methods to create simple types
-*)
+(** Uses TypeAutomata simplification methods to create simple types *)
 let minimise_type p (ty : InferredType.t) name =
   match ty with
   | Function _ -> ty
   | _ -> TypeAutomata.create_simple_type p ty (p, ty) (VarId.show name)
 
-(**
-    {2 Coalesce types}
-*)
+(** {2 Coalesce types} *)
 
-(**
-    Given a type tau get all bounds (depending on polarity) and make a combined
+(** Given a type tau get all bounds (depending on polarity) and make a combined
     type out of them using u or n (depending on polarity).
 
     This recurses into the bounds of their bounds, etc. so that the type
@@ -1576,16 +1571,13 @@ let analyse (prog : Program.t) :
       m "Done type inference analysis" ~tags:(Logger.time_stamp ()));
   (VarIdMap.of_list types, recursives)
 
-(**
-  {1 IR Transformation}
+(** {1 IR Transformation}
 
     Actual transform to replace the types in stmt / exprs etc. with inferred
     types
 
     Just a series of mapping function that rewrite the IR based on the type of a
-      variable on in what context it is used in
-
-*)
+    variable on in what context it is used in *)
 
 let get_lower_type results proc var : Types.t =
   match VarIdMap.find_opt (VarId.var_proc_to_uid var proc) results with
