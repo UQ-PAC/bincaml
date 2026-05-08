@@ -12,8 +12,8 @@
   If you wanna learn how it works within BinCaml you can probably just look at
     my stuff, the slides are pretty barebones though.
     - {{:https://typst.app/project/rIVqCuLCBKG7ZQIBQyeaKL}Interim Presentation Slides}
-    - {{:}Final Presentation Slides}
-    - {{:}Final Report}
+    - {{:https://typst.app/project/rIVqCuLCBKG7ZQIBQyeaKL}Final Presentation Slides}
+    - {{:https://typst.app/project/rIVqCuLCBKG7ZQIBQyeaKL}Final Report}
 
   In short, this transform adds Record and Pointer types to the IR using
     type inference, naturally from these changes, additional operations are added to
