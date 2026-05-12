@@ -45,6 +45,8 @@
   ll_real.sexp
   ll_spec.il
   ll_spec.sexp
+  repeated_ssa.il
+  repeated_ssa.sexp
   ../../bin/main.exe))
 
 (cram
