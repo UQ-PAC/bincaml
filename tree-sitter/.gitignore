@@ -48,6 +48,7 @@ zig-out/
 *.tgz
 *.zip
 
-src
+src/*
+!src/dune
 bindings
 tree-sitter-basil-ir
