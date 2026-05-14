@@ -40,10 +40,14 @@ type declaration =
   | Type of { binding : string; typ : Types.t }
   | Function of {
       binding : Var.t;
-      attrib : e Attrib.attrib_map;
+      attrib : Attrib.attrib_map;
       definition : func_type;
     }
-  | Variable of { binding : Var.t; attrib : e Attrib.attrib_map }
+  | Variable of {
+      binding : Var.t;
+      attrib : Attrib.attrib_map;
+      classification : e option;
+    }
   | Procedure of { definition : proc }
 
 val decl_binding : declaration -> string
@@ -55,10 +59,10 @@ type t
 val get_id_by_name : string -> t -> ID.t
 val set_entry_proc : ID.t -> t -> t
 val set_spec : prog_spec -> t -> t
-val set_attrib : e Attrib.attrib_map -> t -> t
+val set_attrib : Attrib.attrib_map -> t -> t
 val spec : t -> prog_spec
 val modulename : t -> string
-val attrib : t -> e Attrib.attrib_map
+val attrib : t -> Attrib.attrib_map
 val entry_proc_exn : t -> proc
 val entry_proc_opt : t -> proc option
 val map_procedures : (ID.t -> proc -> proc) -> t -> t
@@ -94,7 +98,11 @@ val flat_map_decls : (ID.t -> declaration -> declaration Iter.t) -> t -> t
 val pretty_to_chan : out_channel -> t -> unit
 
 val decl_global :
-  ?attrib:Expr.BasilExpr.t Attrib.t Types.StringMap.t -> t -> Var.t -> t
+  ?attrib:Attrib.t Types.StringMap.t ->
+  ?classification:e option ->
+  t ->
+  Var.t ->
+  t
 
 val decl_typ : ?attrib:'a Types.StringMap.t -> t -> Types.t -> t
 

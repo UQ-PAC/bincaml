@@ -138,9 +138,8 @@ module BasilASTLoader = struct
   and trans_varspec prog (v : varSpec) =
     let trans_one v =
       match v with
-      | VarSpec_Classification v ->
-          [ ("classification", `Expr (trans_expr prog v)) ]
-      | VarSpec_Empty -> []
+      | VarSpec_Classification v -> Some (trans_expr prog v)
+      | VarSpec_Empty -> None
     in
     trans_one v
 
@@ -173,21 +172,21 @@ module BasilASTLoader = struct
             map_prog (fun prog -> Program.decl_typ prog typ) prog)
           prog types
     | Decl_Mem (modifiers, bident, type', spec) ->
-        let attrib = StringMap.of_list (trans_varspec prog spec) in
+        let classification = trans_varspec prog spec in
         let scope = var_modifiers_shared modifiers in
         map_prog
           (fun p ->
-            Program.decl_global p ~attrib
+            Program.decl_global p ~classification
               (Var.create
                  (unsafe_unsigil (`Global bident))
                  ~scope (trans_type type')))
           prog
     | Decl_Var (modifiers, bident, type', spec) ->
-        let attrib = StringMap.of_list (trans_varspec prog spec) in
+        let classification = trans_varspec prog spec in
         let scope = var_modifiers_shared modifiers in
         map_prog
           (fun p ->
-            Program.decl_global p ~attrib
+            Program.decl_global p ~classification
               (Var.create
                  (unsafe_unsigil (`Global bident))
                  ~scope (trans_type type')))
@@ -522,7 +521,7 @@ module BasilASTLoader = struct
     | VarGlobalVar (GlobalUntyped globalVar) ->
         lookup_global_decl globalVar p_st
 
-  and trans_attr_kv ~binds p_st kv : Expr.BasilExpr.t Attrib.attrib_map =
+  and trans_attr_kv ~binds p_st kv : Attrib.attrib_map =
     List.map
       (function
         | AttrKeyValue1 (bident, attr) ->
@@ -532,15 +531,19 @@ module BasilASTLoader = struct
 
   and trans_str (s : str) = match s with Str s -> stripquote s
 
-  and trans_attr p_st ~binds (attr : attr) : [> Expr.BasilExpr.t Attrib.t ] =
+  and trans_attr p_st ~binds (attr : attr) : [> Attrib.t ] =
     match attr with
     | Attr_Map (_, keyvals, _) -> `Assoc (trans_attr_kv ~binds p_st keyvals)
     | Attr_List (_, ls, _) -> `List (List.map (trans_attr ~binds p_st) ls)
-    | Attr_Expr expr -> `Expr (trans_expr ~binds p_st expr)
+    | Attr_Expr expr -> (
+        match trans_expr ~binds p_st expr |> BasilExpr.unfix with
+        | Constant { const = `Bitvector i } -> `Bitvector i
+        | Constant { const = `Integer i } -> `Integer i
+        | Constant { const = `Bool i } -> `Bool i
+        | _ -> failwith "unsupp")
     | Attr_Str s -> `String (trans_str s)
 
-  and trans_attrib_set ~binds p_st (atrs : attribSet) :
-      Expr.BasilExpr.t Attrib.attrib_map =
+  and trans_attrib_set ~binds p_st (atrs : attribSet) : Attrib.attrib_map =
     match atrs with
     | AttribSet_Empty -> StringMap.empty
     | AttribSet_Some (_, attrKeyValue, _) ->
@@ -810,14 +813,14 @@ module BasilASTLoader = struct
     let ed = match endlist with EndRec ((i, j), l) -> j in
     Some (beg, ed)
 
-  and expr_range_attr bl el : Expr.BasilExpr.t Lang.Attrib.t =
+  and expr_range_attr bl el =
     match (bl, el) with
     | OpenParen ((a, _), _), CloseParen ((_, b), _) -> Attrib.attr_of_loc (a, b)
 
-  and join_ranges bl el : Expr.BasilExpr.t Lang.Attrib.t =
+  and join_ranges bl el =
     match (Attrib.find_loc_opt bl, Attrib.find_loc_opt el) with
     | Some (b, _), Some (_, e) -> Attrib.attr_of_loc (b, e)
-    | _ -> `Assoc StringMap.empty
+    | _ -> StringMap.empty
 
   and trans_block (prog : load_st) (x : BasilIR.AbsBasilIR.block) =
     let tx name (phis : phiAssign list) statements jump =
@@ -1081,9 +1084,8 @@ module BasilASTLoader = struct
     | Expr_Cases (o, cases, c) -> trans_cases p_st cases
     | Expr_Paren (o, e, c) ->
         trans_expr e |> BasilExpr.unfix
-        |> AbstractExpr.map_attrib (function
-          | None -> Some (expr_range_attr o c)
-          | Some e -> Some (Attrib.merge_assoc_shadow e (expr_range_attr o c)))
+        |> AbstractExpr.map_attrib (fun e ->
+            Attrib.merge_map_shadow e (expr_range_attr o c))
         |> BasilExpr.fix
     | Expr_Global (GlobalUntyped g) ->
         BasilExpr.rvar @@ lookup_global_decl g p_st
@@ -1185,14 +1187,14 @@ module BasilASTLoader = struct
         let binds =
           StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
         in
-        let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
+        let attrib = trans_attrib_set ~binds p_st attrs in
         BasilExpr.forall ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_Lambda (attrs, LambdaDef1 (lv, _, e)) ->
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
         let binds =
           StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
         in
-        let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
+        let attrib = trans_attrib_set ~binds p_st attrs in
         BasilExpr.lambda ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_Let (id, param, rt, body, in_expr) ->
         let id = unsafe_unsigil (`Local id) in
@@ -1211,7 +1213,7 @@ module BasilASTLoader = struct
         let binds =
           StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
         in
-        let attrib = `Assoc (trans_attrib_set ~binds p_st attrs) in
+        let attrib = trans_attrib_set ~binds p_st attrs in
         BasilExpr.exists ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_FunctionOp (func, o, args, c) ->
         let func = trans_expr func in
@@ -1452,7 +1454,8 @@ let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
     |> Iter.fold
          (fun prog v ->
            Program.add_decl prog
-             (Program.Variable { binding = v; attrib = StringMap.empty }))
+             (Program.Variable
+                { binding = v; attrib = StringMap.empty; classification = None }))
          prog
   in
   (prog, proc, bl)
