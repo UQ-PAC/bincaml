@@ -46,12 +46,6 @@ var $__BranchTaken: bv1;
 
 prog entry @main_4197696;
 
-let $string_length_is (addr:bv64), (length:bv64), (mem:bv64->bv8) : bool = 
-  booland(eq(mem(length), 0:bv8),
-    forall (i:bv64) :: (if (booland(bvuge(i, 0:bv64), bvult(i, length))) then boolnot(eq(mem(i), 0:bv8)) else true))
-;
-
-
 proc @main_4197696 () -> ()
   { .name = "main"; .address = 0x400d40; .returnBlock = "main_basil_return_1" }
   require eq($_PC:bv64, 0x400d40:bv64)
@@ -93,7 +87,6 @@ proc @exit () -> ()
 proc @exitcode_4198816 () -> ()
   { .name = "exitcode"; .address = 0x4011a0; .returnBlock = "exitcode_basil_return_1" }
   require eq($_PC:bv64, 0x4011a0:bv64)
-  require $string_length_is($R0, 10:bv64, $mem)
   ensures eq($_PC:bv64, old($R30:bv64))
 [
   block %exitcode_entry {.address = 0x4011a0; .originalLabel = "Hr3XvFHLQ62ROxw2L+L+kg=="} [
