@@ -110,7 +110,14 @@ module Constraint = struct
 
   let show s = function
     | Mem { addr; value } -> Printf.sprintf "[|%s|] -> %s" (s addr) (s value)
-    | Call _ -> "todo"
+    | Call { lhs; args } ->
+        (*
+        Printf.sprintf "in: %s, out: %s"
+          (StringMap.to_iter args
+          |> Iter.to_string ~sep:", " (fun (str, e) -> str ^ " -> " ^ s e))
+          (StringMap.to_iter lhs
+          |> Iter.to_string ~sep:", " (fun (str, e) -> str ^ " -> " ^ s e))*)
+        "noisy"
 
   let gen_constraints (p : Program.proc) =
     let open Stmt in
@@ -445,6 +452,18 @@ module DSGraph = struct
                    c)
                  c cs;
             c)
+
+  (** Create a copy of the given node with all reachable nodes and cells from
+      pointees copied. The previous (given) list of nodes will then be updated
+      with all new nodes after the copy and returned. *)
+  let copy_node nodes (n : node) =
+    (* TODO:
+       1. Create a mapping of old nodes to new nodes
+       2. do an algorithm:
+            pop old/new node pair from stack/queue (initialised with n)
+            being in this queue means the new node needs to have its contents copied from old nodes
+            we copy each cell from the old node, and for any pointees that the cells have that haven't yet been copied, we create a new node and add it with its old version to the queue. *)
+    failwith "todo"
 end
 
 module SBMap = Map.Make (Sva.SymBase)
@@ -501,11 +520,76 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
   (* Unify all pointees (i hope a worklist can be avoided) *)
   Vector.iter DSGraph.unify_pointees cells;
 
-  SBMap.to_list nodes |> List.map snd
-  |> List.filter (fun (node : DSGraph.node) ->
+  SBMap.filter
+    (fun b node ->
       match !node with
-      | NodePath _ -> false
-      | Node r -> not @@ List.is_empty r.cells)
+      | DSGraph.NodePath _ -> false
+      | _ -> not @@ List.is_empty @@ DSGraph.cells node)
+    nodes
+
+let callees p =
+  Procedure.blocks_to_list p |> List.to_iter |> Iter.map snd
+  |> Iter.flat_map Block.stmts_iter
+  |> Iter.filter_map (function
+    | Stmt.Instr_Call { procid } -> Some procid
+    | _ -> None)
+  |> IDSet.of_iter |> IDSet.to_iter
+
+let call_sites p =
+  Procedure.blocks_to_list p |> List.to_iter |> Iter.map snd
+  |> Iter.flat_map Block.stmts_iter
+  |> Iter.filter_map (function
+    | Stmt.Instr_Call { lhs; args; procid } -> Some (lhs, args, procid)
+    | _ -> None)
+
+let bottom_up prog nodess =
+  (* Perform an inlined tarjan's algorithm that dynamically grows the call graph when resolving indirect calls (later) *)
+  let stack = Stack.create () in
+  let entry = Program.entry_proc_exn prog in
+  let cur_id = ref 0 in
+  let get_id () =
+    let id = !cur_id in
+    cur_id := succ !cur_id;
+    id
+  in
+  let ids = Hashtbl.create 100 in
+
+  let rec visit proc =
+    let id = get_id () in
+    let min_id = ref id in
+    let proc_id = Procedure.id proc in
+    Hashtbl.add ids proc_id !min_id;
+    Stack.push proc_id stack;
+
+    (* etc *)
+    callees proc
+    |> Iter.iter (fun callee_pid ->
+        (match Hashtbl.get ids callee_pid with
+        | None ->
+            let callee = Program.proc prog callee_pid in
+            visit callee
+        | Some id -> min_id := min !min_id id);
+        if !min_id = id then (
+          let scc = ref IDSet.empty in
+          while Option.equal ID.equal (Some proc_id) (Stack.top_opt stack) do
+            scc := IDSet.add (Stack.pop stack) !scc
+          done;
+          process_scc !scc))
+  and process_scc scc =
+    IDSet.iter
+      (fun pid ->
+        let proc = Program.proc prog pid in
+        call_sites proc
+        |> Iter.iter (fun cs ->
+            (* TODO if callee not in scc resolve callee *)
+            ()))
+      scc;
+    ()
+  in
+
+  visit entry;
+
+  ()
 
 (** Manual dot string construction because I couldn't see a way to do record
     nodes in ocamlgraph *)
@@ -572,9 +656,9 @@ let dot_string nodes =
   ^ "\n}"
 
 let dsa (p : Program.t) =
-  (* I don't have the procedure ids ... *)
   let sva_r = Sva.sva p in
   let nodess =
+    Trace_core.with_span ~__FILE__ ~__LINE__ "local phase" @@ fun _ ->
     List.map
       (fun (pid, r) ->
         print_endline @@ ID.show pid;
@@ -596,10 +680,14 @@ let dsa (p : Program.t) =
         (pid, make_local_graph constraints))
       sva_r
   in
-  print_endline "graphs made";
+  print_endline "local phase done";
+  ( Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
+    bottom_up p nodess );
   List.iter
     (fun (id, nodes) ->
       print_endline @@ ID.show id;
       print_endline @@ dot_string nodes)
-    nodess;
+    (List.map
+       (fun (pid, nodes) -> (pid, SBMap.values nodes |> Iter.to_list))
+       nodess);
   p

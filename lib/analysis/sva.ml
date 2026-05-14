@@ -187,15 +187,19 @@ module Domain = struct
           | Types.Bitvector size -> Some size
           | _ -> None
         in
-        Some
-          ( param,
-            SymAddrSetLattice.singleton
-              (Par { name; param; proc_id = Some proc_id })
-            @@ IntervalDomain.init @@ Bitvec.zero ~size ))
-    |> Iter.cons
-         ( stack_pointer,
-           SymAddrSetLattice.singleton (SymBase.Stack name)
-           @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
+        match Var.name param with
+        | "R31_in" ->
+            Some
+              ( param,
+                SymAddrSetLattice.singleton (SymBase.Stack name)
+                @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
+        | _ ->
+            Some
+              ( param,
+                SymAddrSetLattice.singleton
+                  (Par { name; param; proc_id = Some proc_id })
+                @@ IntervalDomain.init @@ Bitvec.zero ~size ))
+    (*
     |> Iter.cons
          ( link_register,
            SymAddrSetLattice.singleton
@@ -207,7 +211,7 @@ module Domain = struct
            SymAddrSetLattice.singleton
              (SymBase.Par
                 { name; param = frame_pointer; proc_id = Some proc_id })
-           @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
+           @@ IntervalDomain.init @@ Bitvec.zero ~size:64 ) *)
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
   let transfer_state read stmt =
