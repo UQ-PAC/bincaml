@@ -493,15 +493,29 @@ module BasilExpr = struct
     | Let { attrib; in_body = { this = Some inner_exp }; bound_vars } ->
         return
         @@ pretty_let bound_vars ~attrib:(pattrib attrib) (Some inner_exp)
-    | Lambda { attrib; op; in_body = { this = Some b }; bound_vars } ->
+    | Lambda { attrib; op; in_body = { this = Some b }; bound_vars; triggers }
+      ->
         let op = Ops.AllOps.to_string op in
         let sep = text "::" in
+        let triggers =
+          if List.is_empty triggers then text ""
+          else
+            bracket " { .triggers = ["
+              (append_sp
+              @@ List.map
+                   (fun t ->
+                     bracket "["
+                       (append_l ~sep:(text ", ") (List.map FoldN.get t))
+                       "]")
+                   triggers)
+              "]}"
+        in
         let binding =
           fill (text " ")
             (List.map (fun v -> bracket "(" (Var.pretty v) ")") bound_vars)
           ^+ sep ^+ bracket "(" b ")"
         in
-        return (text op ^ a ^ text " " ^ binding)
+        return (text op ^ triggers ^+ a ^ text " " ^ binding)
     | Lambda { bound_vars; in_body; attrib } -> pass ()
     | Let { bound_vars; in_body; attrib } -> pass ()
     | RVar { id; attrib } when Var.is_local id ->

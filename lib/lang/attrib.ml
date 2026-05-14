@@ -9,13 +9,12 @@ type t =
   | `Integer of Z.t
   | `CamlInt of int
   | `Bitvector of Bitvec.t
-  | `Record of Ops.Record.t
-  | `Pointer of Bitvec.t * Types.pointer
   | `List of t list ]
 [@@deriving eq, ord]
 
 let is_internal_key = String.starts_with ~prefix:"__"
 let location_key = "__text_range"
+let triggers_key = ".triggers"
 
 let rec attrib_pretty pretty_expr (e : t) : Containers_pp.t =
   let open Containers_pp in
@@ -25,9 +24,6 @@ let rec attrib_pretty pretty_expr (e : t) : Containers_pp.t =
   | `CamlInt s -> int s
   | `Bool b -> bool b
   | `Bitvector bv -> text @@ Bitvec.to_string bv
-  | `Pointer (bv, typ) ->
-      text (String.cat (Bitvec.to_string bv) @@ Types.show_pointer typ)
-  | `Record record -> text @@ Ops.Record.to_string record
   | `Integer bv -> text @@ Z.to_string bv
   | `List s ->
       nest 2

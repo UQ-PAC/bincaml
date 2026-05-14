@@ -5,6 +5,34 @@ open Lang
 open Expr
 open Logs
 
+let get_trigger l =
+  StringMap.get_or ~default:(`List []) Attrib.triggers_key l |> function
+  | `List ls ->
+      List.map
+        (function
+          | `List ls ->
+              List.map
+                (function
+                  | `Expr e -> e | _ -> failwith "trigger should be expr")
+                ls
+          | _ -> failwith "bad trigger ")
+        ls
+  | _ -> failwith "bad structure"
+
+let rec to_attrib k l : Attrib.t option =
+  if String.equal k Attrib.triggers_key then None
+  else
+    match l with
+    | `CamlInt i -> Some (`CamlInt i)
+    | `Bool i -> Some (`Bool i)
+    | `Integer i -> Some (`Integer i)
+    | `String i -> Some (`String i)
+    | `Bitvector i -> Some (`Bitvector i)
+    | `List l -> Some (`List (List.filter_map (fun e -> to_attrib k e) l))
+    | `Assoc a ->
+        Some (`Assoc (StringMap.filter_map (fun k v -> to_attrib k v) a))
+    | _ -> None
+
 type load_st = {
   prog : Program.t;
   curr_proc : Program.proc option;
@@ -521,7 +549,7 @@ module BasilASTLoader = struct
     | VarGlobalVar (GlobalUntyped globalVar) ->
         lookup_global_decl globalVar p_st
 
-  and trans_attr_kv ~binds p_st kv : Attrib.attrib_map =
+  and trans_attr_kv ~binds p_st kv =
     List.map
       (function
         | AttrKeyValue1 (bident, attr) ->
@@ -531,7 +559,7 @@ module BasilASTLoader = struct
 
   and trans_str (s : str) = match s with Str s -> stripquote s
 
-  and trans_attr p_st ~binds (attr : attr) : [> Attrib.t ] =
+  and trans_attr p_st ~binds (attr : attr) =
     match attr with
     | Attr_Map (_, keyvals, _) -> `Assoc (trans_attr_kv ~binds p_st keyvals)
     | Attr_List (_, ls, _) -> `List (List.map (trans_attr ~binds p_st) ls)
@@ -540,14 +568,22 @@ module BasilASTLoader = struct
         | Constant { const = `Bitvector i } -> `Bitvector i
         | Constant { const = `Integer i } -> `Integer i
         | Constant { const = `Bool i } -> `Bool i
-        | _ -> failwith "unsupp")
+        | _ -> `Expr expr)
     | Attr_Str s -> `String (trans_str s)
 
   and trans_attrib_set ~binds p_st (atrs : attribSet) : Attrib.attrib_map =
     match atrs with
     | AttribSet_Empty -> StringMap.empty
     | AttribSet_Some (_, attrKeyValue, _) ->
-        trans_attr_kv ~binds p_st attrKeyValue
+        let e = trans_attr_kv ~binds p_st attrKeyValue in
+        StringMap.filter_map (fun k v -> to_attrib k v) e
+
+  and get_trigger_attrib ~binds p_st (atrs : attribSet) =
+    match atrs with
+    | AttribSet_Empty -> []
+    | AttribSet_Some (_, attrKeyValue, _) ->
+        let e = trans_attr_kv ~binds p_st attrKeyValue in
+        get_trigger e
 
   and trans_stmt (p_st : load_st) (x : BasilIR.AbsBasilIR.stmtWithAttrib) :
       load_st
@@ -1184,11 +1220,14 @@ module BasilASTLoader = struct
         BasilExpr.unexp ~attrib:(expr_range_attr o c) ~op:`Old (trans_expr e)
     | Expr_Forall (attrs, LambdaDef1 (lv, _, e)) ->
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
+        let triggers =
+          List.map (List.map trans_expr) (get_trigger_attrib ~binds p_st attrs)
+        in
         let binds =
           StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
         in
         let attrib = trans_attrib_set ~binds p_st attrs in
-        BasilExpr.forall ~attrib ~bound (trans_expr ~nbinds:bound e)
+        BasilExpr.forall ~attrib ~triggers ~bound (trans_expr ~nbinds:bound e)
     | Expr_Lambda (attrs, LambdaDef1 (lv, _, e)) ->
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
         let binds =
@@ -1210,11 +1249,14 @@ module BasilASTLoader = struct
         BasilExpr.letexp [ (funvar, func) ] in_expr
     | Expr_Exists (attrs, LambdaDef1 (lv, _, e)) ->
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
+        let triggers =
+          List.map (List.map trans_expr) (get_trigger_attrib ~binds p_st attrs)
+        in
         let binds =
           StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
         in
         let attrib = trans_attrib_set ~binds p_st attrs in
-        BasilExpr.exists ~attrib ~bound (trans_expr ~nbinds:bound e)
+        BasilExpr.exists ~triggers ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_FunctionOp (func, o, args, c) ->
         let func = trans_expr func in
         BasilExpr.apply_fun ~func ~attrib:(expr_range_attr o c)
@@ -1662,7 +1704,7 @@ proc @main_4196260 () -> ()
          $ZF:bv1 := $NF;
          goto (%main_basil_return_1);
        ];
-       block %main_basil_return_1 [ nop; return; ]
+       block %main_basil_return_1 [ return; ]
     ];
     prog entry @main_4196260;
     |}]
