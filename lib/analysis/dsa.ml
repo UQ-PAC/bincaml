@@ -135,6 +135,7 @@ module Constraint = struct
 end
 
 module DSGraph = struct
+  (* TODO mutable keyword *)
   (* A path compressed cell. Cells store a set of offsets from an abstract base
      address, and the node that it belongs to. *)
   type content =
@@ -145,11 +146,14 @@ module DSGraph = struct
 
   (* Nodes are represented as sorted lists of cells, ordered by the low end of the intervals of each cell *)
   and node_content =
-    | Node of { cells : cell list; flags : NodeFlags.t }
+    (* ID's CAN change when nodes are mutated!! Make sure that if ids are ever used, the nodes whos ids are being used won't change!!!! *)
+    | Node of { cells : cell list; flags : NodeFlags.t; id : ID.t }
     (* Node was joined into parent at the given offset *)
     | NodePath of node * Z.t
 
   and node = node_content ref
+
+  let id_gen = ID.make_gen ()
 
   (** Get the union find parent of this cell *)
   let rec find (c : cell) =
@@ -216,11 +220,21 @@ module DSGraph = struct
   let rec flags (n : node) =
     match !n with NodePath _ -> flags (fst @@ find_node n) | Node r -> r.flags
 
-  (** Set the flags of this node *)
-  let rec set_flags f (n : node) =
+  (** Get the id of this node's parent *)
+  let rec id (n : node) =
+    match !n with NodePath _ -> id (fst @@ find_node n) | Node r -> r.id
+
+  (** Set the cells of this node *)
+  let rec set_cells cells (n : node) =
     match !n with
-    | NodePath _ -> set_flags f (fst @@ find_node n)
-    | Node r -> n := Node { r with flags = f }
+    | NodePath _ -> set_cells cells (fst @@ find_node n)
+    | Node r -> n := Node { r with cells }
+
+  (** Set the flags of this node *)
+  let rec set_flags flags (n : node) =
+    match !n with
+    | NodePath _ -> set_flags flags (fst @@ find_node n)
+    | Node r -> n := Node { r with flags }
 
   (** Make the second cell point to the first *)
   let rec join_paths (c1 : cell) (c2 : cell) =
@@ -248,7 +262,7 @@ module DSGraph = struct
         let c = ref (Cell { offsets = Top; node; pointees }) in
         List.iter (fun c' -> join_paths c c') r.cells;
         let flags = NodeFlags.(set_flag collapsed r.flags) in
-        node := Node { cells = [ c ]; flags }
+        node := Node { r with cells = [ c ]; flags }
 
   (** Merge the two given cells together. If they belong to different nodes then
       the nodes are merged so that the cell offsets line up. *)
@@ -306,7 +320,7 @@ module DSGraph = struct
               | Bot, _ -> join_nodes' cs n2'
               | _, Bot -> join_nodes' n1' cs'
               | Top, _ | _, Top ->
-                  n1 := Node { cells = r1.cells @ r2.cells; flags };
+                  n1 := Node { r1 with cells = r1.cells @ r2.cells; flags };
                   n2 := NodePath (n1, off);
                   collapse n1;
                   None
@@ -327,7 +341,7 @@ module DSGraph = struct
         in
         match join_nodes' r1.cells r2.cells with
         | Some n ->
-            n1 := Node { cells = n; flags };
+            n1 := Node { r1 with cells = n; flags };
             n2 := NodePath (n1, off)
         | _ -> ())
 
@@ -380,9 +394,13 @@ module DSGraph = struct
     in
     assert (aux is)
 
+  (** Creates an empty node *)
+  let empty_node () =
+    ref (Node { cells = []; flags = NodeFlags.empty; id = ID.fresh id_gen () })
+
   (** Create a single cell belonging to its own node *)
   let init offsets flags : cell =
-    let node = ref (Node { cells = []; flags }) in
+    let node = ref (Node { cells = []; flags; id = ID.fresh id_gen () }) in
     let c = ref (Cell { offsets; node; pointees = [] }) in
     insert node c;
     c
@@ -409,7 +427,7 @@ module DSGraph = struct
   let merge_init cells : node =
     let rec sort n cs =
       match (n, cs) with
-      | 0, cs -> (ref (Node { cells = []; flags = NodeFlags.empty }), cs)
+      | 0, cs -> (empty_node (), cs)
       | 1, c :: cs -> (node_of c, cs)
       | n, cs ->
           let a = n / 2 in
@@ -457,13 +475,47 @@ module DSGraph = struct
       pointees copied. The previous (given) list of nodes will then be updated
       with all new nodes after the copy and returned. *)
   let copy_node nodes (n : node) =
-    (* TODO:
-       1. Create a mapping of old nodes to new nodes
-       2. do an algorithm:
-            pop old/new node pair from stack/queue (initialised with n)
-            being in this queue means the new node needs to have its contents copied from old nodes
-            we copy each cell from the old node, and for any pointees that the cells have that haven't yet been copied, we create a new node and add it with its old version to the queue. *)
-    failwith "todo"
+    (* Mappings of old nodes (in the copied-from graph) to new nodes. Since the
+       old nodes won't be modified, this is safe. *)
+    let old_to_new = Hashtbl.create 100 in
+    let nodes = ref nodes in
+    let stack = Stack.create () in
+    (* Create a copy of the given node, with cells initialised except for their pointees *)
+    let create_new_node n =
+      assert (not @@ Hashtbl.mem old_to_new @@ id n);
+      let new_n =
+        ref (Node { cells = []; flags = flags n; id = ID.fresh id_gen () })
+      in
+      let new_cells =
+        cells n
+        |> List.map (fun c ->
+            ref (Cell { offsets = offsets c; node = new_n; pointees = [] }))
+      in
+      set_cells new_cells new_n;
+      Hashtbl.add old_to_new (id n) new_n;
+      nodes := new_n :: !nodes;
+      Stack.push (n, new_n) stack;
+      new_n
+    in
+    let new_n = create_new_node n in
+    (* Recursively update the pointees of cells and create copies for what they point to *)
+    while not @@ Stack.is_empty stack do
+      let old_n, new_n = Stack.pop stack in
+      List.combine (cells old_n) (cells new_n)
+      |> List.iter (fun (old_c, new_c) ->
+          let pointees =
+            pointees old_c
+            |> List.map (fun old_c' ->
+                let new_pointee_node =
+                  Hashtbl.get old_to_new (id @@ node_of old_c')
+                  |> Option.get_lazy (fun _ ->
+                      create_new_node @@ node_of old_c')
+                in
+                get_cell (offsets old_c') new_pointee_node)
+          in
+          set_pointees pointees new_c)
+    done;
+    (!nodes, new_n)
 end
 
 module SBMap = Map.Make (Sva.SymBase)
