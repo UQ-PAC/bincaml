@@ -61,5 +61,4 @@
   ./malloc_free.sexp
   ../../examples/memory/memory_interproc.il
   ./memory_interproc.sexp
-  ../../examples/memory/memory_safety.il
-))
+  ../../examples/memory/memory_safety.il))
