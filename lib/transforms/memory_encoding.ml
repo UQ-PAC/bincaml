@@ -8,9 +8,11 @@ let live = Bitvec.of_int 1 ~size:2
 let dead = Bitvec.of_int 2 ~size:2
 
 module Globals = struct
+  let mem_encoding_typ_name = "memory_encoding"
+  let mem_encoding_typ = Types.Variable mem_encoding_typ_name
+
   let mem_encoding =
-    Var.create "$mem_encoding" ~scope:Var.GlobalVar
-      (Types.Variable "MemEncoding")
+    Var.create "$mem_encoding" ~scope:Var.GlobalVar mem_encoding_typ
 end
 
 module Calls = struct
@@ -86,7 +88,7 @@ module Calls = struct
       ~func:
         (rvar
            (Var.create "$me_alloc_size_update" ~scope:Var.GlobalConst
-              (Types.Variable "MemEncoding")))
+              Globals.mem_encoding_typ))
       args
 
   (** [alloc_live_update args] returns a new memory encoding with the liveness
@@ -97,7 +99,7 @@ module Calls = struct
       ~func:
         (rvar
            (Var.create "$me_alloc_live_update" ~scope:Var.GlobalConst
-              (Types.Variable "MemEncoding")))
+              Globals.mem_encoding_typ))
       args
 
   (** [allocate args] allocates space at a size, returning the updated memory
@@ -108,7 +110,7 @@ module Calls = struct
       ~func:
         (rvar
            (Var.create "$me_allocate" ~scope:Var.GlobalConst
-              (Types.Variable "MemEncoding")))
+              Globals.mem_encoding_typ))
       args
 
   (** [can_alloc args] Returns whether an alloc, performed by [allocate], is
@@ -185,7 +187,10 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
     let p =
       Lang.Program.add_decl p
         (Lang.Program.Type
-           { binding = "MemEncoding"; typ = Encoding.mem_encoding_type })
+           {
+             binding = Globals.mem_encoding_typ_name;
+             typ = Encoding.mem_encoding_type;
+           })
     in
     let p =
       Lang.Program.add_decl p
@@ -346,7 +351,7 @@ module SplitMemory : MemoryEncoding = struct
 
   let mem_encoding_type =
     Types.Sort
-      ( "MemEncoding",
+      ( Globals.mem_encoding_typ_name,
         [
           Types.mk_variant "MemEncoding"
             [

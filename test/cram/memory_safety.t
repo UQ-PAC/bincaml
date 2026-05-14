@@ -1,13 +1,16 @@
-  $ bincaml script memory_safety.sexp
-  (load-il ../../examples/memory/memory_safety.il)
-  (run-transforms ssa)
-  (run-transforms split-memory-encoding)
-  (run-transforms memory-specification)
-  (run-transforms ssa)
-  (run-transforms linear-const)
-  (run-transforms linear-copy)
-  (dump-il after.il)
-  (dump-boogie out.bpl)
+  $ cat << EOF | bincaml script -
+  >  (load-il ../../examples/memory/memory_safety.il)
+  >  (run-transforms ssa)
+  >  (run-transforms split-memory-encoding)
+  >  (run-transforms memory-specification)
+  >  (run-transforms ssa)
+  >  (run-transforms linear-const)
+  >  (run-transforms linear-copy)
+  >  (dump-il after.il)
+  >  (dump-boogie out.bpl)
+  >  (load-il after.il)
+  >  (dump-il after2.il)
+  > EOF
   $ boogie out.bpl
   out.bpl(193,5): Error: a precondition for this call could not be proved
   out.bpl(112,3): Related location: this is the precondition that could not be proved
@@ -29,3 +32,6 @@
       out.bpl(337,3): b#inputs
   
   Boogie program verifier finished with 1 verified, 5 errors
+
+
+  $ diff after.il after2.il

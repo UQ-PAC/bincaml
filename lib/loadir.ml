@@ -73,8 +73,8 @@ module BasilASTLoader = struct
         let stmts = stmts in
         let stmts =
           stmts
-          |> List.map (function
-            | `Stmt s -> s
+          |> List.flat_map (function
+            | `Stmt s -> [ s ]
             | `Return exprs ->
                 let formals_len = List.length formal_out_params_order
                 and exprs_len = List.length exprs in
@@ -95,7 +95,7 @@ module BasilASTLoader = struct
                   List.combine formal_out_params_order exprs
                   |> List.map (function (name, var), expr -> (var, expr))
                 in
-                Stmt.(Instr_Assign args))
+                if List.is_empty args then [] else [ Stmt.(Instr_Assign args) ])
         in
         stmts
 
@@ -898,11 +898,11 @@ module BasilASTLoader = struct
       (Var.t, BasilExpr.t) Procedure.proc_spec =
     match s with
     | FunSpec_Require (_, e) ->
-        { spec with requires = trans_expr prog e :: spec.requires }
+        { spec with requires = spec.requires @ [ trans_expr prog e ] }
     | FunSpec_Ensure (_, e) ->
         {
           spec with
-          ensures = trans_expr ~binds:bound_post prog e :: spec.ensures;
+          ensures = spec.ensures @ [ trans_expr ~binds:bound_post prog e ];
         }
     | FunSpec_Rely (_, e) -> { spec with rely = trans_expr prog e :: spec.rely }
     | FunSpec_Guar (_, e) -> { spec with rely = trans_expr prog e :: spec.rely }
@@ -1230,6 +1230,7 @@ module BasilASTLoader = struct
     | BinOpEqOp equop -> transEqOp equop
     | BinOpPointerBinOp pointerBinOp -> transPointerBinOp pointerBinOp
     | BinOp_implies -> `IMPLIES
+    | BinOp_get -> `MapAccess
 
   and transUnOp (x : BasilIR.AbsBasilIR.unOp) =
     match x with
@@ -1292,6 +1293,7 @@ module BasilASTLoader = struct
 
   and trans_intrinop (x : intrinOp) =
     match x with
+    | IntrinOp_update -> `MapUpdate
     | IntrinOp_booland -> `AND
     | IntrinOp_boolor -> `OR
     | IntrinOp_bvand -> `BVAND
