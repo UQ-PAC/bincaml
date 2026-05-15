@@ -105,8 +105,25 @@ end
 module Constraint = struct
   type 'e t =
     | Mem of { addr : 'e; value : 'e; size : int }
-    | Call of { lhs : 'e StringMap.t; args : 'e StringMap.t }
-  [@@deriving eq, map]
+    (* Actual * Formal pairs *)
+    | Call of { lhs : ('e * 'e) list; args : ('e * 'e) list; callee_id : ID.t }
+    | Join of 'e
+  [@@deriving eq]
+
+  (** Special funky map where the second function evaluates within a procedure
+      id *)
+  let map f g c =
+    match c with
+    | Mem { addr; value; size } -> Mem { addr = f addr; value = f value; size }
+    | Call { lhs; args; callee_id } ->
+        let lhs =
+          List.map (fun (actual, formal) -> (f actual, g callee_id formal)) lhs
+        in
+        let args =
+          List.map (fun (actual, formal) -> (f actual, g callee_id formal)) args
+        in
+        Call { lhs; args; callee_id }
+    | Join e -> Join (f e)
 
   let show s = function
     | Mem { addr; value } -> Printf.sprintf "[|%s|] -> %s" (s addr) (s value)
@@ -118,8 +135,9 @@ module Constraint = struct
           (StringMap.to_iter lhs
           |> Iter.to_string ~sep:", " (fun (str, e) -> str ^ " -> " ^ s e))*)
         "noisy"
+    | Join e -> Printf.sprintf "Join %s" (s e)
 
-  let gen_constraints (p : Program.proc) =
+  let gen_constraints (prog : Program.t) (p : Program.proc) =
     let open Stmt in
     Procedure.iter_blocks_topo_fwd p
     |> Iter.flat_map (fun (bid, block) -> Block.stmts_iter block)
@@ -129,10 +147,26 @@ module Constraint = struct
             Some (Mem { addr; value = Expr.BasilExpr.rvar lhs; size })
         | Instr_Store { value; addr = Addr { addr; size } } ->
             Some (Mem { addr; value; size })
-        | Instr_Call { lhs; args } ->
-            Some (Call { lhs = StringMap.map Expr.BasilExpr.rvar lhs; args })
+        | Instr_Call { lhs; args; procid } ->
+            let callee = Program.proc prog procid in
+            let fin = Procedure.formal_in_params callee in
+            let fout = Procedure.formal_out_params callee in
+            let lhs =
+              StringMap.to_list lhs
+              |> List.map (fun (s, actual) ->
+                  ( Expr.BasilExpr.rvar actual,
+                    Expr.BasilExpr.rvar @@ StringMap.find s fout ))
+            in
+            let args =
+              StringMap.to_list args
+              |> List.map (fun (s, actual) ->
+                  (actual, Expr.BasilExpr.rvar @@ StringMap.find s fin))
+            in
+            Some (Call { lhs; args; callee_id = procid })
         | _ -> None)
 end
+
+module SBMap = Map.Make (Sva.SymBase)
 
 module DSGraph = struct
   (* TODO mutable keyword *)
@@ -152,6 +186,12 @@ module DSGraph = struct
     | NodePath of node * Z.t
 
   and node = node_content ref
+
+  type t = {
+    mutable nodes : node list;
+    mutable node_map : node SBMap.t;
+    sva : Sva.StateAbstraction.t;
+  }
 
   let id_gen = ID.make_gen ()
 
@@ -442,7 +482,7 @@ module DSGraph = struct
   (** Find a cell corresponding to an interval in a node. If the interval
       overlaps with multiple cells, they are merged, and if it overlaps with no
       cells a new cell is created. *)
-  let rec get_cell i (n : node) =
+  let rec get_cell ?(uniq = false) i (n : node) =
     match !n with
     | NodePath _ ->
         let p, off = find_node n in
@@ -462,6 +502,7 @@ module DSGraph = struct
             insert n cell;
             cell
         | [ c ] -> c
+        | c :: cs when uniq -> failwith "TODO"
         | c :: cs ->
             ignore
             @@ List.fold_left
@@ -471,14 +512,38 @@ module DSGraph = struct
                  c cs;
             c)
 
+  (** Get the/a cell corresponding to the given expression, following the logic
+      of `get_cell` applied to the results of the SVA analysis. If uniq, then it
+      is expected that a unique symbolic base corresponds to the expr, and no
+      cells will be merged. TODO rewrite this because it can return none too *)
+  let cell_of ?(uniq = false) (v : Sva.SymAddrSetLattice.t) (g : t) :
+      cell option =
+    let v = snd @@ Sva.SymAddrSetLattice.to_list v in
+    (*if uniq then assert (List.length v <= 1);*)
+    let open Option.Infix in
+    let cells =
+      List.filter_map
+        (fun (sb, i) ->
+          let i = Interval.of_wint i in
+          let* n = SBMap.get sb g.node_map in
+          Some (get_cell ~uniq i n))
+        v
+    in
+    match cells with
+    | [ x ] -> Some x
+    | x :: xs when not uniq ->
+        List.iter (join x) xs;
+        Some x
+    | [] -> None
+    | _ -> failwith "Expr without a unique cell was given"
+
   (** Create a copy of the given node with all reachable nodes and cells from
       pointees copied. The previous (given) list of nodes will then be updated
       with all new nodes after the copy and returned. *)
-  let copy_node nodes (n : node) =
+  let copy_node (graph : t) ?(sb = None) (n : node) =
     (* Mappings of old nodes (in the copied-from graph) to new nodes. Since the
        old nodes won't be modified, this is safe. *)
     let old_to_new = Hashtbl.create 100 in
-    let nodes = ref nodes in
     let stack = Stack.create () in
     (* Create a copy of the given node, with cells initialised except for their pointees *)
     let create_new_node n =
@@ -493,7 +558,7 @@ module DSGraph = struct
       in
       set_cells new_cells new_n;
       Hashtbl.add old_to_new (id n) new_n;
-      nodes := new_n :: !nodes;
+      graph.nodes <- new_n :: graph.nodes;
       Stack.push (n, new_n) stack;
       new_n
     in
@@ -515,13 +580,21 @@ module DSGraph = struct
           in
           set_pointees pointees new_c)
     done;
-    (!nodes, new_n)
+    match sb with
+    | Some sb -> (
+        (* TODO maybe this isn't needed (should be thoroughly docuemnted why! scala DSA doesn't do this) *)
+        match SBMap.get sb graph.node_map with
+        | Some n' ->
+            join_nodes_at Z.zero n' new_n;
+            n'
+        | None ->
+            graph.node_map <- SBMap.add sb new_n graph.node_map;
+            new_n)
+    | _ -> new_n
 end
 
-module SBMap = Map.Make (Sva.SymBase)
-
-let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
-    =
+let make_local_graph sva
+    (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t) : DSGraph.t =
   let cells = Vector.create () in
   let add_cells size sv m =
     let cells =
@@ -560,7 +633,7 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
             let vals, acc = add_cells size value acc in
             List.iter (DSGraph.set_pointees vals) ptrs;
             acc
-        | Constraint.Call { lhs; args } -> (* TODO add call cells *) acc)
+        | _ -> acc)
       SBMap.empty constraints
   in
   let nodes =
@@ -572,12 +645,29 @@ let make_local_graph (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t)
   (* Unify all pointees (i hope a worklist can be avoided) *)
   Vector.iter DSGraph.unify_pointees cells;
 
-  SBMap.filter
-    (fun b node ->
-      match !node with
-      | DSGraph.NodePath _ -> false
-      | _ -> not @@ List.is_empty @@ DSGraph.cells node)
-    nodes
+  let node_map =
+    SBMap.filter
+      (fun b node ->
+        match !node with
+        | DSGraph.NodePath _ -> false
+        | _ -> not @@ List.is_empty @@ DSGraph.cells node)
+      nodes
+  in
+
+  let (g : DSGraph.t) =
+    { nodes = SBMap.values node_map |> Iter.to_list; node_map; sva }
+  in
+
+  (* Merge return values and paramater values *)
+  Iter.iter
+    (function
+      | Constraint.Join sbs ->
+          let _ = DSGraph.cell_of sbs g in
+          ()
+      | _ -> ())
+    constraints;
+
+  g
 
 let callees p =
   Procedure.blocks_to_list p |> List.to_iter |> Iter.map snd
@@ -593,6 +683,31 @@ let call_sites p =
   |> Iter.filter_map (function
     | Stmt.Instr_Call { lhs; args; procid } -> Some (lhs, args, procid)
     | _ -> None)
+
+let resolve_callee caller_sva caller_graph callee_sva callee_graph actual formal
+    =
+  ignore
+    (let open Option.Infix in
+     let open DSGraph in
+     let* caller_cell = cell_of actual caller_graph in
+     print_endline @@ "Thingy: " ^ Sva.SymAddrSetLattice.show formal;
+     let* callee_cell = cell_of ~uniq:true formal callee_graph in
+     let callee_node = node_of callee_cell in
+     let callee_node_copy = copy_node caller_graph callee_node in
+     let flags = flags callee_node_copy in
+     let flags = NodeFlags.(clear_flag stack flags) in
+     set_flags flags callee_node_copy;
+     let callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
+     print_endline "Joining";
+     print_endline @@ "Caller node size: " ^ Int.to_string @@ List.length
+     @@ DSGraph.cells
+     @@ DSGraph.node_of caller_cell;
+     print_endline @@ "Callee node size: " ^ Int.to_string @@ List.length
+     @@ DSGraph.cells @@ callee_node;
+     join caller_cell callee_cell_copy;
+     print_endline "Joined";
+     unify_pointees caller_cell;
+     None)
 
 let bottom_up prog nodess =
   (* Perform an inlined tarjan's algorithm that dynamically grows the call graph when resolving indirect calls (later) *)
@@ -610,31 +725,55 @@ let bottom_up prog nodess =
     let id = get_id () in
     let min_id = ref id in
     let proc_id = Procedure.id proc in
-    Hashtbl.add ids proc_id !min_id;
+    Hashtbl.add ids proc_id id;
     Stack.push proc_id stack;
 
-    (* etc *)
     callees proc
     |> Iter.iter (fun callee_pid ->
-        (match Hashtbl.get ids callee_pid with
+        match Hashtbl.get ids callee_pid with
         | None ->
             let callee = Program.proc prog callee_pid in
             visit callee
         | Some id -> min_id := min !min_id id);
-        if !min_id = id then (
-          let scc = ref IDSet.empty in
-          while Option.equal ID.equal (Some proc_id) (Stack.top_opt stack) do
-            scc := IDSet.add (Stack.pop stack) !scc
-          done;
-          process_scc !scc))
+    if !min_id = id then (
+      let scc = ref @@ IDSet.singleton proc_id in
+      while not @@ Option.equal ID.equal (Some proc_id) (Stack.top_opt stack) do
+        scc := IDSet.add (Stack.pop stack) !scc
+      done;
+      let top = Stack.pop stack in
+      assert (ID.equal proc_id top);
+      (* Hopefully there aren't more than Int.max_int procedures in the call graph! *)
+      IDSet.iter (fun id -> Hashtbl.add ids id Int.max_int) !scc;
+      process_scc !scc)
   and process_scc scc =
+    (* TODO:
+       1. Merge callees for each out-of-scc call
+       2. Merge all graphs in the scc into one
+       3. Merge callees within the scc
+
+       1:
+          a) get sva results for both procedures
+          b) for each formal in/out, copy its callee node, then merge it with the actual in/out *)
+    print_endline @@ "scc: " ^ IDSet.to_string ID.show scc;
     IDSet.iter
       (fun pid ->
-        let proc = Program.proc prog pid in
-        call_sites proc
-        |> Iter.iter (fun cs ->
-            (* TODO if callee not in scc resolve callee *)
-            ()))
+        let constraints, sva, nodes = IDMap.find pid nodess in
+        Iter.iter
+          Constraint.(
+            function
+            | Call { lhs; args; callee_id } ->
+                print_endline @@ "Calling: " ^ ID.show callee_id;
+                let _, callee_sva, callee_nodes = IDMap.find callee_id nodess in
+                List.iter
+                  (fun (a, f) ->
+                    resolve_callee sva nodes callee_sva callee_nodes a f)
+                  args;
+                List.iter
+                  (fun (a, f) ->
+                    resolve_callee sva nodes callee_sva callee_nodes a f)
+                  lhs
+            | _ -> ())
+          constraints)
       scc;
     ()
   in
@@ -645,7 +784,7 @@ let bottom_up prog nodess =
 
 (** Manual dot string construction because I couldn't see a way to do record
     nodes in ocamlgraph *)
-let dot_string nodes =
+let dot_string (graph : DSGraph.t) =
   let cur_nid = ref 0 in
   let cur_cid = ref 0 in
   let take_id ids () =
@@ -654,11 +793,18 @@ let dot_string nodes =
     id
   in
 
+  (* TODO nodes have an ID.t field now so those should be used instead *)
   let nid_map = Hashtbl.create 100 in
 
+  let nodes =
+    graph.nodes
+    |> List.map DSGraph.(fun n -> (id n, fst @@ find_node n))
+    |> IDMap.of_list |> IDMap.to_list |> List.map snd
+  in
+
   let nids =
-    List.map
-      (fun node ->
+    nodes
+    |> List.map (fun node ->
         let nid = take_id cur_nid () in
         ( nid,
           DSGraph.flags node,
@@ -668,7 +814,6 @@ let dot_string nodes =
               Hashtbl.add nid_map cid nid;
               (cid, DSGraph.find cell))
             (DSGraph.cells node) ))
-      nodes
   in
   let cells = List.flat_map (fun (_, _, cells) -> cells) nids in
   let pointees = Hashtbl.create 100 in
@@ -708,38 +853,40 @@ let dot_string nodes =
   ^ "\n}"
 
 let dsa (p : Program.t) =
-  let sva_r = Sva.sva p in
-  let nodess =
+  let sva_r = Sva.sva p |> IDMap.of_list in
+  let translate pid e =
+    Sva.(
+      Eval.EV.eval (flip StateAbstraction.read (IDMap.find pid sva_r)) e
+      |> SymAddrSetLattice.to_list |> snd
+      |> List.map (try_make_global p)
+      |> SymAddrSetLattice.of_list_bot)
+  in
+  let local_graphs =
     Trace_core.with_span ~__FILE__ ~__LINE__ "local phase" @@ fun _ ->
-    List.map
-      (fun (pid, r) ->
+    IDMap.to_list sva_r
+    |> List.map (fun (pid, r) ->
         print_endline @@ ID.show pid;
         let proc = Program.proc p pid in
         let constraints =
-          Constraint.gen_constraints proc
-          |> Iter.map
-               (Constraint.map (fun e ->
-                    Sva.(
-                      Eval.EV.eval (flip StateAbstraction.read r) e
-                      |> SymAddrSetLattice.to_list |> snd
-                      |> List.map (try_make_global p)
-                      |> SymAddrSetLattice.of_list_bot)))
+          Constraint.gen_constraints p proc
+          |> Iter.map (Constraint.map (translate pid) translate)
+          |> Iter.persistent
         in
         print_endline
         @@ Iter.to_string
              (Constraint.show Sva.SymAddrSetLattice.show)
              constraints;
-        (pid, make_local_graph constraints))
-      sva_r
+        (pid, (constraints, r, make_local_graph r constraints)))
+    |> IDMap.of_list
   in
   print_endline "local phase done";
   ( Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
-    bottom_up p nodess );
+    bottom_up p local_graphs );
   List.iter
-    (fun (id, nodes) ->
+    (fun (id, graph) ->
       print_endline @@ ID.show id;
-      print_endline @@ dot_string nodes)
+      print_endline @@ dot_string graph)
     (List.map
-       (fun (pid, nodes) -> (pid, SBMap.values nodes |> Iter.to_list))
-       nodess);
+       (fun (pid, (_, _, (graph : DSGraph.t))) -> (pid, graph))
+       (IDMap.to_list local_graphs));
   p

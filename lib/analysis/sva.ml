@@ -282,7 +282,7 @@ module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
 
 let try_make_global (prog : Program.t) (sym_base, value) =
   (* NOTE this is slow ... it's a significant part of the runtime of the DSA local phase
-     can be made O(log n) with an interval tree *)
+     (~80%), and can be made O(log n) with an interval tree *)
   let constant_within_global_address (interval : WrappedIntervalsLattice.t)
       (prog : Program.t) : bool =
     match interval with
