@@ -59,6 +59,13 @@ module PassManager = struct
       doc = "runs interavl analysis on dataflow graph and prints results";
     }
 
+  let cse_elim =
+    {
+      name = "cse-elim";
+      apply = Proc Transforms.Cse_elim.transform;
+      doc = "common-subexpression elimination transform";
+    }
+
   let demo_ival_wint_cfg =
     {
       name = "demo-ivalwint-product-cfg";
@@ -321,6 +328,7 @@ module PassManager = struct
 
   let passes =
     [
+      cse_elim;
       irreducible_loop;
       remove_unreachable_blocks;
       collapse_empty_blocks;

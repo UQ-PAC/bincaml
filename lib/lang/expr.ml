@@ -5,6 +5,10 @@ open Ops
 module AbstractExpr = struct
   open Attrib
 
+  let pp_attrib_map fm m =
+    let m = Attrib.to_string ~show_internal:true (`Assoc m) in
+    Format.pp_print_string fm m
+
   type ('const, 'var, 'unary, 'binary, 'intrin, 'typ, 'e) t =
     | RVar of { attrib : attrib_map; id : 'var; typ : 'typ }  (** variables *)
     | Constant of { attrib : attrib_map; const : 'const; typ : 'typ }
@@ -40,7 +44,12 @@ module AbstractExpr = struct
         in_body : 'e;
         typ : 'typ;
       }  (** syntactic binding in a nested scope *)
-  [@@deriving eq, ord, fold, map, iter]
+  [@@deriving eq, ord, fold, map, iter, show]
+
+  let to_iter e =
+    let ignore e = () in
+    let i e = fun f -> iter ignore ignore ignore ignore ignore ignore f e in
+    Iter.from_iter (fun f -> i e f)
 
   let get_typ x =
     match x with
@@ -97,6 +106,30 @@ module AbstractExpr = struct
     | Lambda v -> Lambda { v with attrib = Attrib.empty }
     | Let v -> Let { v with attrib = Attrib.empty }
 
+  (*let equal eq_const eq_id eq_unary eq_binary eq_intrin eq_typ eq_expr
+      (a : ('const, 'var, 'unary, 'binary, 'intrin, 'typ, 'e) t)
+      (b : ('const, 'var, 'unary, 'binary, 'intrin, 'typ, 'e) t) =
+    let e = (a, b) in
+    let attrib = StringMap.equal Attrib.equal (get_attrib a) (get_attrib b) in
+    let ty = eq_typ (get_typ a) (get_typ b) in
+    attrib && ty
+    &&
+    match e with
+    | RVar { id }, RVar { id = id2 } -> eq_id id id2
+    | Constant { const }, Constant { const = const2 } -> eq_const const const2
+    | UnaryExpr { op; arg }, UnaryExpr { op = op2; arg = arg2 } ->
+        Equal.pair eq_unary eq_expr (op, arg) (op2, arg2)
+    | ( BinaryExpr { op; arg1; arg2 },
+        BinaryExpr { op = op2; arg1 = arg11; arg2 = arg12 } ) ->
+        Equal.triple eq_binary eq_expr eq_expr (op, arg1, arg2)
+          (op2, arg11, arg12)
+    | ApplyIntrin _, ApplyIntrin _ -> true
+    | ApplyFun _, ApplyFun _ -> true
+    | Lambda _, Lambda _ -> true
+    | Let _, Let _ -> true
+    | _ -> false
+    *)
+
   let id a b = a
   let fold f b o = fold id id id id id id f b o
 
@@ -104,24 +137,27 @@ module AbstractExpr = struct
     let id a = a in
     map id id id id id id f e
 
-  let hash hash hash_typ e1 : int =
+  let hash hash_const hash_v hash_unary hash_bin hash_intrin hash_typ hash e1 :
+      int =
     match e1 with
-    | RVar { id; typ } -> Hash.(combine3 2 (poly id) (hash_typ typ))
+    | Constant { const = c; typ } ->
+        Hash.(combine3 7 (hash_const c) (hash_typ typ))
+    | RVar { id; typ } -> Hash.(combine3 2 (hash_v id) (hash_typ typ))
     | UnaryExpr { op; arg; typ } ->
-        Hash.(combine4 3 (poly op) (hash arg) (hash_typ typ))
+        Hash.(combine4 3 (hash_unary op) (hash arg) (hash_typ typ))
     | BinaryExpr { op; arg1; arg2; typ } ->
-        Hash.(combine4 5 (poly op) (hash arg1) (hash arg2))
-    | Constant { const; typ } -> Hash.(combine3 7 (poly const) (hash_typ typ))
+        Hash.(combine5 5 (hash_bin op) (hash arg1) (hash arg2) (hash_typ typ))
     | ApplyIntrin { op; args; typ } ->
-        Hash.(combine4 11 (poly op) (list hash args) (hash_typ typ))
+        Hash.(combine4 11 (hash_intrin op) (list hash args) (hash_typ typ))
     | ApplyFun { func; args; typ } ->
         Hash.(combine4 13 (hash func) (list hash args) (hash_typ typ))
     | Lambda { bound_vars; in_body; typ } ->
-        Hash.(combine4 17 (list poly bound_vars) (hash in_body) (hash_typ typ))
+        Hash.(
+          combine4 17 (list hash_v bound_vars) (hash in_body) (hash_typ typ))
     | Let { bound_vars; in_body; typ } ->
         Hash.(
           combine4 23
-            ((list (pair poly hash)) bound_vars)
+            ((list (pair hash_v hash)) bound_vars)
             (hash in_body) (hash_typ typ))
 end
 
@@ -167,15 +203,17 @@ module Make (O : Fix) = struct
   open O
 
   type 'e abstract_expr =
-    (const, Var.t, unary, binary, intrin, typ, 'e) AbstractExpr.t
+    (const, Var.t, unary, binary, intrin, Types.t, 'e) AbstractExpr.t
 
   include Bincaml_util.Recursionscheme.Recursion (struct
     include O
 
-    type 'e expr = 'e abstract_expr
+    type 'e expr = (const, Var.t, unary, binary, intrin, typ, 'e) AbstractExpr.t
 
     let map_expr = AbstractExpr.map
   end)
+
+  let get_typ e = unfix e |> AbstractExpr.get_typ
 
   module Constructors = struct
     let rvar ?(attrib = Attrib.empty) ?(typ = top_typ) id =
@@ -284,6 +322,10 @@ module BasilExpr = struct
   type intrin = Ops.AllOps.intrin
   type var = Var.t
 
+  let hash_const = function
+    | `Bitvector b -> Hash.combine2 2 (Bitvec.hash b)
+    | `Boolean b -> Hash.combine2 3 (if b then 11 else 13)
+
   let top_typ = Types.Nothing
 
   module Var = Var
@@ -296,45 +338,6 @@ module BasilExpr = struct
   [@@unboxed] [@@deriving eq, ord]
 
   type typ = Types.t
-
-  open struct
-    (** leftover ; we could hash-cons the expression if we want *)
-    module EHashed = struct
-      include AllOps
-
-      type var = Var.t
-      type 'a cell = 'a Fix.HashCons.cell
-
-      let equal_cell _ a b = Fix.HashCons.equal a b
-      let compare_cell _ a b = Fix.HashCons.compare a b
-
-      type t = expr_node_v cell
-
-      and expr_node_v =
-        | E of (const, Var.t, unary, binary, intrin, Types.t, t) AbstractExpr.t
-      [@@deriving eq, ord]
-
-      module HashExpr = struct
-        type t = expr_node_v
-
-        let hash e : int =
-          e |> function
-          | E e -> AbstractExpr.hash Fix.HashCons.hash Hashtbl.hash e
-
-        let equal (i : t) (j : t) : bool =
-          match (i, j) with
-          | E i, E j ->
-              AbstractExpr.equal AllOps.equal_const Var.equal AllOps.equal_unary
-                AllOps.equal_binary AllOps.equal_intrin Types.equal
-                Fix.HashCons.equal i j
-      end
-
-      module H = Fix.HashCons.ForHashedTypeWeak (HashExpr)
-
-      let fix i = H.make (E i)
-      let unfix i = match Fix.HashCons.data i with E i -> i
-    end
-  end
 
   (** {1 Expression recursions}
 
@@ -664,7 +667,7 @@ module BasilExpr = struct
           StringMap.filter (fun k v -> not @@ Attrib.is_internal_key k) e
         in
         if StringMap.is_empty attrib then text ""
-        else text " " ^ Attrib.attrib_pretty pretty_drop_attrib (`Assoc attrib)
+        else text " " ^ Attrib.attrib_pretty (`Assoc attrib)
 
   let pretty s = cata (pretty_alg ~type_annot:false pretty_attr) s |> FoldN.get
 
@@ -854,6 +857,21 @@ module BasilExpr = struct
     in
     fold_with_type rw_alg expr
 
+  let rec hash e : int =
+    match e with
+    | E e ->
+        AbstractExpr.hash Ops.AllOps.hash Var.hash Ops.AllOps.hash
+          Ops.AllOps.hash Ops.AllOps.hash Hashtbl.hash hash e
+
+  let rec equal (i : t) (j : t) : bool =
+    match (i, j) with
+    | E i', E j' ->
+        let e =
+          AbstractExpr.equal equal_const Var.equal equal_unary equal_binary
+            equal_intrin Types.equal equal i' j'
+        in
+        e
+
   (** {1 Smart Constructors} *)
 
   open R.Constructors
@@ -936,14 +954,11 @@ module BasilExpr = struct
     in
     a
 
-  (*
-  module Memoiser = Fix.Memoize.ForHashedType (struct
-    type expr = t
-    type t = expr
+  let show_abstract pp_e e =
+    AbstractExpr.show Ops.AllOps.pp_const Var.pp Ops.AllOps.pp_unary
+      Ops.AllOps.pp_binary Ops.AllOps.pp_intrin Types.pp pp_e e
 
-    let equal = Fix.HashCons.equal
-    let hash = Fix.HashCons.hash
-  end)
+  (*
 
   let cata_memo (alg : 'a abstract_expr -> 'a) =
     let g r t = AbstractExpr.map r (unfix t) |> alg in
@@ -962,6 +977,72 @@ module BasilExpr = struct
       sharing*)
   let rewrite_typed_two_memo = rewrite_typed_two ~cata:cata_memo
   *)
+
+  open struct
+    let basil_cata = cata
+  end
+
+  module HashExprFix = struct
+    include AllOps
+    module Var = Var
+
+    type nonrec 'e abstract_expr = 'e abstract_expr
+    type var = Var.t
+    type 'a cell = 'a Fix.HashCons.cell
+
+    let equal_cell _ a b = Fix.HashCons.equal a b
+    let compare_cell _ a b = Fix.HashCons.compare a b
+
+    type t = expr_node_v cell
+
+    and expr_node_v =
+      | E of (const, Var.t, unary, binary, intrin, Types.t, t) AbstractExpr.t
+    [@@deriving eq, ord]
+
+    module HashExpr = struct
+      type t = expr_node_v
+
+      let hash e : int =
+        match e with
+        | E e ->
+            let e = AbstractExpr.drop_attrib e in
+            AbstractExpr.hash Ops.AllOps.hash Var.hash Ops.AllOps.hash
+              Ops.AllOps.hash Ops.AllOps.hash Hashtbl.hash Fix.HashCons.hash e
+
+      exception EQErr of (t * t)
+
+      let equal (i : t) (j : t) : bool =
+        let he = hash i = hash j in
+        match (i, j) with
+        | E i', E j' ->
+            let e =
+              AbstractExpr.equal equal_const Var.equal equal_unary equal_binary
+                equal_intrin Types.equal Fix.HashCons.equal
+                (AbstractExpr.drop_attrib i')
+                (AbstractExpr.drop_attrib j')
+            in
+            if e then if not he then raise (EQErr (i, j));
+            e
+    end
+
+    type typ = Types.t
+
+    let top_typ = Types.Top
+
+    module H = Fix.HashCons.ForHashedType (HashExpr)
+
+    let fix i = H.make (E i)
+    let unfix i = match Fix.HashCons.data i with E i -> i
+  end
+
+  module ExprHashCons = struct
+    include HashExprFix
+    include Make (HashExprFix)
+
+    let of_expr e =
+      let alg e = fix (AbstractExpr.drop_attrib e) in
+      basil_cata alg e
+  end
 end
 
 module type ExprType = sig

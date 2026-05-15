@@ -3,6 +3,7 @@
  (name transforms)
  (flags -w -27)
  (modules
+  cse_elim
   irreducible_loop
   ssa
   dsa

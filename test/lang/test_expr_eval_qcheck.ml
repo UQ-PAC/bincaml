@@ -114,6 +114,43 @@ let check_smt =
       gen
   in
 
+  let arb_eq =
+    let gen =
+      let open QCheck.Gen in
+      let* e = Expr_gen.gen_expr in
+      let* f = Expr_gen.gen_expr in
+      let* b = bool in
+      if b then return (e, Expr.BasilExpr.cata Expr.BasilExpr.fix e)
+      else return (e, f)
+    in
+    QCheck.make
+      ~print:(fun (a, e) ->
+        Expr.BasilExpr.to_string_annot a
+        ^ " = "
+        ^ Expr.BasilExpr.to_string_annot e)
+      gen
+  in
+
+  let equality_compare (a, b) =
+    Bool.equal (Expr.BasilExpr.equal a b) (Expr.BasilExpr.compare a b = 0)
+  in
+
+  let equality_compare_hashcons (a, b) =
+    let a = Expr.BasilExpr.ExprHashCons.of_expr a in
+    let b = Expr.BasilExpr.ExprHashCons.of_expr b in
+    let ecomp =
+      Bool.equal
+        (Expr.BasilExpr.ExprHashCons.equal a b)
+        (Expr.BasilExpr.ExprHashCons.compare a b = 0)
+    in
+    ecomp
+    &&
+    if not (Expr.BasilExpr.ExprHashCons.equal a b) then true
+    else
+      Int.equal (Fix.HashCons.id a) (Fix.HashCons.id b)
+      && Int.equal (Fix.HashCons.hash a) (Fix.HashCons.hash b)
+  in
+
   let valid_predicate (e, smt, p) =
     let check_p =
       Expr_smt.SMTLib2.of_bexpr
@@ -140,6 +177,10 @@ let check_smt =
       roundtrip_predicate;
     QCheck.Test.make ~name:"expr valid smt" ~count:30 ~max_fail:1 arb
       valid_predicate;
+    QCheck.Test.make ~name:"expr comp eq " ~count:1000 ~max_fail:1 arb_eq
+      equality_compare;
+    QCheck.Test.make ~name:"expr hashcons comp eq " ~count:1000 ~max_fail:1
+      arb_eq equality_compare_hashcons;
   ]
 
 let _ =
