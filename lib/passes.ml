@@ -239,6 +239,18 @@ module PassManager = struct
       invariants = Invariants.from_list (fun x -> x.invariants) batch;
     }
 
+  let chc_infer_invariants =
+    {
+      name = "chc-infer-invariants";
+      apply = Prog Transforms.Chc_infer.infer_invariants;
+      doc =
+        "Encode the program as a system of constrained Horn clauses, invoke \
+         Z3/Spacer, and annotate procedures with the inferred requires/ensures \
+         clauses when the solver returns sat. Expects the pipeline \
+         full-ssa → load-store-reduction → lambda-lifting beforehand. Depends \
+         on Z3.";
+    }
+
   let load_store_reduction =
     {
       name = "load-store-reduction";
@@ -434,6 +446,7 @@ module PassManager = struct
       sva;
       full_ssa;
       load_store_reduction;
+      chc_infer_invariants;
       type_check;
       split_memory_encoding;
       flat_memory_encoding;

@@ -357,3 +357,142 @@ let run_solver (prog : Program.t) : solve_result =
   | Unsat -> Logs.warn (fun m -> m "Solver returned unsat — assertions not provable")
   | Unknown -> Logs.warn (fun m -> m "Solver returned unknown"));
   result
+
+(** Parse a model returned by Z3 [get-model] into a list of
+    [(predicate_name, params, body)] triples. The model's parameter names
+    typically don't match our input names — Z3 emits fresh [x!0], [x!1]
+    placeholders — so the caller must map them back by position. *)
+let parse_model (model : Sexp.t) : (string * (string * Sexp.t) list * Sexp.t) list =
+  match model with
+  | `List defs ->
+      List.filter_map
+        (fun def ->
+          match def with
+          | `List
+              [
+                `Atom "define-fun";
+                `Atom name;
+                `List params;
+                _ret;
+                body;
+              ] ->
+              let params =
+                List.filter_map
+                  (fun p ->
+                    match p with
+                    | `List [ `Atom v; sort ] -> Some (v, sort)
+                    | _ -> None)
+                  params
+              in
+              Some (name, params, body)
+          | _ -> None)
+        defs
+  | _ -> []
+
+(** Decode a predicate body returned by the solver into a [BasilExpr.t],
+    binding the model's positional parameters to the predicate's actual
+    variables. Returns [None] if the body contains constructs
+    {!Lang.Expr_smt.SMTLib2.expr_of_smt} can't decode (e.g. [ite] — see TODO
+    in [expr_smt.ml]). *)
+let extract_invariant (pred : predicate)
+    (model_params : (string * Sexp.t) list) (body : Sexp.t) : BasilExpr.t option
+    =
+  if List.length model_params <> List.length pred.params then None
+  else
+    let vardefs =
+      List.combine model_params pred.params
+      |> List.fold_left
+           (fun acc ((name, _sort), v) ->
+             StringMap.add name (BasilExpr.rvar v) acc)
+           StringMap.empty
+    in
+    Expr_smt.SMTLib2.expr_of_smt vardefs body
+
+(** [true] when an expression is the boolean literal [true] — i.e. the
+    solver gave us no useful information. We don't emit these as
+    [requires]/[ensures]. *)
+let is_trivially_true (e : BasilExpr.t) : bool =
+  match BasilExpr.unfix e with
+  | Constant { const = `Bool true; _ } -> true
+  | _ -> false
+
+(** Add [requires]/[ensures] to [proc] based on the solver's interpretations
+    of its [enter]/[exit] predicates. [find_def] looks up a predicate by name
+    in the parsed model. *)
+let annotate_proc
+    ~(find_def : string -> ((string * Sexp.t) list * Sexp.t) option)
+    (proc : Program.proc) : Program.proc =
+  let pname = ID.to_string (Procedure.id proc) in
+  let in_params =
+    Procedure.formal_in_params proc |> StringMap.values |> Iter.to_list
+  in
+  let out_params =
+    Procedure.formal_out_params proc |> StringMap.values |> Iter.to_list
+  in
+  let enter_pred =
+    { name = predicate_name ~proc:pname ~suffix:"enter"; params = in_params }
+  in
+  let exit_pred =
+    {
+      name = predicate_name ~proc:pname ~suffix:"exit";
+      params = in_params @ out_params;
+    }
+  in
+  let invariant_of (pred : predicate) : BasilExpr.t option =
+    let open Option.Infix in
+    let* params, body = find_def pred.name in
+    let* inv = extract_invariant pred params body in
+    if is_trivially_true inv then None else Some inv
+  in
+  let spec = Procedure.specification proc in
+  let spec =
+    match invariant_of enter_pred with
+    | Some inv -> { spec with requires = spec.requires @ [ inv ] }
+    | None -> spec
+  in
+  let spec =
+    match invariant_of exit_pred with
+    | Some inv -> { spec with ensures = spec.ensures @ [ inv ] }
+    | None -> spec
+  in
+  Procedure.set_specification proc spec
+
+(** Full pass: encode the program as CHCs, solve, and annotate each procedure
+    with inferred [requires]/[ensures] when the solver returns sat. On unsat
+    or unknown the program is returned unchanged. *)
+let infer_invariants (prog : Program.t) : Program.t =
+  let preds, clauses = encode_program prog in
+  Logs.info (fun m ->
+      m "Submitting %d predicates and %d clauses to solver"
+        (List.length preds) (List.length clauses));
+  let module Solver = Bincaml_util.Smt.Solver in
+  let s = Solver.create Bincaml_util.Smt.Config.z3 in
+  Solver.set_logic s "HORN";
+  List.iter (fun pr -> Solver.add_command s (declare_predicate pr)) preds;
+  List.iter (fun c -> Solver.add_command s (clause_to_sexp c)) clauses;
+  let prog' =
+    match Solver.check s with
+    | Sat ->
+        let model = Solver.get_model s in
+        let defs = parse_model model in
+        let find_def name =
+          List.find_map
+            (fun (n, params, body) ->
+              if String.equal n name then Some (params, body) else None)
+            defs
+        in
+        Logs.info (fun m ->
+            m "Solver returned sat; extracted %d definitions"
+              (List.length defs));
+        Program.map_procedures (fun _ p -> annotate_proc ~find_def p) prog
+    | Unsat ->
+        Logs.warn (fun m ->
+            m "Solver returned unsat — no invariants extracted");
+        prog
+    | Unknown ->
+        Logs.warn (fun m ->
+            m "Solver returned unknown — no invariants extracted");
+        prog
+  in
+  Solver.stop s;
+  prog'

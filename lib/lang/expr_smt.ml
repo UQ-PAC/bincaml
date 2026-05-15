@@ -181,6 +181,16 @@ module SMTLib2 = struct
     | `Atom "false" -> Some (BasilExpr.boolconst false)
     | `Atom e when Int.of_string e |> Option.is_some ->
         Some (BasilExpr.intconst (Z.of_string e))
+    | `Atom s when String.length s > 2 && Char.equal s.[0] '#' && Char.equal s.[1] 'b' ->
+        let digs = String.sub s 2 (String.length s - 2) in
+        let size = String.length digs in
+        let v = Z.of_string ("0b" ^ digs) in
+        Some (BasilExpr.bvconst (Bitvec.create ~size v))
+    | `Atom s when String.length s > 2 && Char.equal s.[0] '#' && Char.equal s.[1] 'x' ->
+        let digs = String.sub s 2 (String.length s - 2) in
+        let size = 4 * String.length digs in
+        let v = Z.of_string ("0x" ^ digs) in
+        Some (BasilExpr.bvconst (Bitvec.create ~size v))
     | `Atom e -> StringMap.find_opt e vardefs
     | `List [ `Atom "_"; `Atom bvalue; `Atom bsize ] ->
         let* size = Int.of_string bsize in
