@@ -1,0 +1,5 @@
+(load-il "chc_dump_basic.il")
+(run-transforms "ssa")
+(run-transforms "load-store-reduction")
+(run-transforms "lambda-lifting")
+(chc-dump-clauses "chc_dump_basic_out.smt2")

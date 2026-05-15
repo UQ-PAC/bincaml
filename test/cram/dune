@@ -49,6 +49,8 @@
   repeated_ssa.sexp
   load_store_reduction.il
   load_store_reduction.sexp
+  chc_dump_basic.il
+  chc_dump_basic.sexp
   ../../bin/main.exe))
 
 (cram
