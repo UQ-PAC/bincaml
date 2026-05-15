@@ -107,7 +107,6 @@ module Constraint = struct
     | Mem of { addr : 'e; value : 'e; size : int }
     (* Actual * Formal pairs *)
     | Call of { lhs : ('e * 'e) list; args : ('e * 'e) list; callee_id : ID.t }
-    | Join of 'e
   [@@deriving eq]
 
   (** Special funky map where the second function evaluates within a procedure
@@ -123,7 +122,6 @@ module Constraint = struct
           List.map (fun (actual, formal) -> (f actual, g callee_id formal)) args
         in
         Call { lhs; args; callee_id }
-    | Join e -> Join (f e)
 
   let show s = function
     | Mem { addr; value } -> Printf.sprintf "[|%s|] -> %s" (s addr) (s value)
@@ -135,7 +133,6 @@ module Constraint = struct
           (StringMap.to_iter lhs
           |> Iter.to_string ~sep:", " (fun (str, e) -> str ^ " -> " ^ s e))*)
         "noisy"
-    | Join e -> Printf.sprintf "Join %s" (s e)
 
   let gen_constraints (prog : Program.t) (p : Program.proc) =
     let open Stmt in
@@ -534,8 +531,8 @@ module DSGraph = struct
     | x :: xs when not uniq ->
         List.iter (join x) xs;
         Some x
+    | x :: xs -> failwith "Non unique cell given"
     | [] -> None
-    | _ -> failwith "Expr without a unique cell was given"
 
   (** Create a copy of the given node with all reachable nodes and cells from
       pointees copied. The previous (given) list of nodes will then be updated
@@ -633,7 +630,7 @@ let make_local_graph sva
             let vals, acc = add_cells size value acc in
             List.iter (DSGraph.set_pointees vals) ptrs;
             acc
-        | _ -> acc)
+        | Constraint.Call { lhs; args } -> acc)
       SBMap.empty constraints
   in
   let nodes =
@@ -657,15 +654,6 @@ let make_local_graph sva
   let (g : DSGraph.t) =
     { nodes = SBMap.values node_map |> Iter.to_list; node_map; sva }
   in
-
-  (* Merge return values and paramater values *)
-  Iter.iter
-    (function
-      | Constraint.Join sbs ->
-          let _ = DSGraph.cell_of sbs g in
-          ()
-      | _ -> ())
-    constraints;
 
   g
 
@@ -785,7 +773,6 @@ let bottom_up prog nodess =
 (** Manual dot string construction because I couldn't see a way to do record
     nodes in ocamlgraph *)
 let dot_string (graph : DSGraph.t) =
-  let cur_nid = ref 0 in
   let cur_cid = ref 0 in
   let take_id ids () =
     let id = !ids in
@@ -795,6 +782,19 @@ let dot_string (graph : DSGraph.t) =
 
   (* TODO nodes have an ID.t field now so those should be used instead *)
   let nid_map = Hashtbl.create 100 in
+  let node_sbs = Hashtbl.create 100 in
+
+  SBMap.iter
+    (fun sb n ->
+      let s = Hashtbl.get_or node_sbs (ID.index @@ DSGraph.id n) ~default:"" in
+      Hashtbl.add node_sbs
+        (ID.index @@ DSGraph.id n)
+        (s ^ " "
+        ^ (Sva.SymBase.show sb
+          |> String.replace ~sub:"\"" ~by:"\\\""
+          |> String.replace ~sub:"{" ~by:"\\{"
+          |> String.replace ~sub:"}" ~by:"\\}")))
+    graph.node_map;
 
   let nodes =
     graph.nodes
@@ -805,7 +805,7 @@ let dot_string (graph : DSGraph.t) =
   let nids =
     nodes
     |> List.map (fun node ->
-        let nid = take_id cur_nid () in
+        let nid = ID.index @@ DSGraph.id node in
         ( nid,
           DSGraph.flags node,
           List.map
@@ -835,8 +835,9 @@ let dot_string (graph : DSGraph.t) =
   "digraph G {\n  rankdir=\"LR\"\n  node[shape=record]\n"
   ^ List.to_string ~sep:"\n"
       (fun (nid, flags, cids) ->
-        Printf.sprintf "  \"node%d\"[label=\"node%d %s |{%s}\"];" nid nid
+        Printf.sprintf "  \"node%d\"[label=\"node%d %s %s |{%s}\"];" nid nid
           (NodeFlags.show flags)
+          (Hashtbl.get_or node_sbs nid ~default:"")
           (List.to_string ~sep:"|"
              (fun (id, cell) ->
                Printf.sprintf "<%d>%s" id (Interval.show @@ DSGraph.offsets cell))
