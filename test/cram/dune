@@ -47,6 +47,8 @@
   ll_spec.sexp
   repeated_ssa.il
   repeated_ssa.sexp
+  load_store_reduction.il
+  load_store_reduction.sexp
   ../../bin/main.exe))
 
 (cram

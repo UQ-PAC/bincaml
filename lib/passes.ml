@@ -239,6 +239,25 @@ module PassManager = struct
       invariants = Invariants.from_list (fun x -> x.invariants) batch;
     }
 
+  let load_store_reduction =
+    {
+      name = "load-store-reduction";
+      apply =
+        Prog
+          (fun p ->
+            p
+            |> Transforms.Boogie_prepass.Instructions
+               .transform_add_store_load_decls
+            |> Transforms.Boogie_prepass.Normalise.replace_stmts
+            |> Transforms.Boogie_prepass.Normalise.replace_exprs);
+      doc =
+        "Eliminate Instr_Load/Instr_Store by introducing uninterpreted \
+         load/store functions and rewriting addressed memory accesses as \
+         assignments to function applications. Also inlines lets and \
+         normalises n-ary intrinsics so the resulting IR matches the reduced \
+         form expected by the CHC pass.";
+    }
+
   let type_check =
     {
       name = "type-check";
@@ -414,6 +433,7 @@ module PassManager = struct
       sssa;
       sva;
       full_ssa;
+      load_store_reduction;
       type_check;
       split_memory_encoding;
       flat_memory_encoding;
