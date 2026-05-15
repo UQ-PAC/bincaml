@@ -317,3 +317,43 @@ let dump_to_file (prog : Program.t) (path : string) : unit =
   Logs.info (fun m -> m "Dumping CHC clauses to %s" path);
   let preds, clauses = encode_program prog in
   CCIO.with_out path (fun oc -> emit_chc_problem oc preds clauses)
+
+type solve_result = Sat | Unsat | Unknown
+
+let show_solve_result = function
+  | Sat -> "sat"
+  | Unsat -> "unsat"
+  | Unknown -> "unknown"
+
+(** Send the encoded CHC system to Z3/Spacer. Reuses {!Bincaml_util.Smt.Solver}
+    directly; the only HORN-specific bit is the [(set-logic HORN)] preamble. *)
+let solve (preds : predicate list) (clauses : clause list) : solve_result =
+  let module Solver = Bincaml_util.Smt.Solver in
+  let s = Solver.create Bincaml_util.Smt.Config.z3 in
+  Solver.set_logic s "HORN";
+  List.iter
+    (fun pr -> Solver.add_command s (declare_predicate pr))
+    preds;
+  List.iter
+    (fun c -> Solver.add_command s (clause_to_sexp c))
+    clauses;
+  let result =
+    match Solver.check s with
+    | Sat -> Sat
+    | Unsat -> Unsat
+    | Unknown -> Unknown
+  in
+  Solver.stop s;
+  result
+
+let run_solver (prog : Program.t) : solve_result =
+  let preds, clauses = encode_program prog in
+  Logs.info (fun m ->
+      m "Submitting %d predicates and %d clauses to solver"
+        (List.length preds) (List.length clauses));
+  let result = solve preds clauses in
+  (match result with
+  | Sat -> Logs.info (fun m -> m "Solver returned sat")
+  | Unsat -> Logs.warn (fun m -> m "Solver returned unsat — assertions not provable")
+  | Unknown -> Logs.warn (fun m -> m "Solver returned unknown"));
+  result

@@ -1,0 +1,5 @@
+(load-il "chc_solve_sat.il")
+(run-transforms "ssa")
+(run-transforms "load-store-reduction")
+(run-transforms "lambda-lifting")
+(chc-solve)

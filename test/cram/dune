@@ -9,7 +9,7 @@
   concat.il))
 
 (cram
- (applies_to * \ expr_smt malloc_free memory_safety memory_interproc)
+ (applies_to * \ expr_smt malloc_free memory_safety memory_interproc chc_solve_sat)
  (package bincaml)
  (deps
   loop_dfg.sexp
@@ -68,3 +68,13 @@
   ../../examples/memory/memory_interproc.il
   ./memory_interproc.sexp
   ../../examples/memory/memory_safety.il))
+
+(cram
+ (applies_to chc_solve_sat)
+ (package bincaml)
+ (enabled_if %{bin-available:z3})
+ (deps
+  %{bin:bincaml}
+  chc_solve_sat.il
+  chc_solve_sat.sexp
+  ../../bin/main.exe))
