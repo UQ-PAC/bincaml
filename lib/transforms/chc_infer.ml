@@ -175,6 +175,16 @@ let encode_block (preds : proc_predicates) (proc : Program.proc)
   Encoder.add_premise enc (apply_predicate block_pred entry_args);
   if not (List.is_empty block.phis) then
     failwith "chc_infer: phi nodes not supported yet (run dynamic-single-assignment first)";
+  let queries = ref [] in
+  let snapshot_query ~extra_premises =
+    queries :=
+      {
+        vars = Encoder.vars enc;
+        premises = Encoder.premises enc @ extra_premises;
+        head = None;
+      }
+      :: !queries
+  in
   Vector.to_iter block.stmts
   |> Iter.iter (fun stmt ->
       match stmt with
@@ -188,10 +198,19 @@ let encode_block (preds : proc_predicates) (proc : Program.proc)
               Encoder.add_premise enc
                 (SmtExpr.eq (atom (Var.name fresh)) rhs_sexp))
             rhss
+      | Stmt.Instr_Assert { body } ->
+          let body_sexp = encode_expr enc body in
+          snapshot_query ~extra_premises:[ SmtExpr.bool_not body_sexp ];
+          Encoder.add_premise enc body_sexp
+      | Stmt.Instr_Assume { body } ->
+          Encoder.add_premise enc (encode_expr enc body)
+      | Stmt.Instr_IntrinCall _ ->
+          (* Treated as [assert false]: the current premise set must already
+             be unsatisfiable for the intrinsic call to be unreachable. *)
+          snapshot_query ~extra_premises:[]
       | s ->
           failwith
-            ("chc_infer: unsupported statement at Step 1: "
-            ^ Stmt.show_stmt_basil s));
+            ("chc_infer: unsupported statement: " ^ Stmt.show_stmt_basil s));
   let succs = block_successors proc block_id in
   let mk_head_args (pred : predicate) =
     List.map (fun v -> atom (Var.name (Encoder.lookup enc v))) pred.params
@@ -210,7 +229,7 @@ let encode_block (preds : proc_predicates) (proc : Program.proc)
       [ { vars = Encoder.vars enc; premises = Encoder.premises enc; head = Some head } ]
     else []
   in
-  block_clauses @ return_clauses
+  List.rev !queries @ block_clauses @ return_clauses
 
 let entry_block_of (proc : Program.proc) : ID.t option =
   Procedure.get_entry_block proc
