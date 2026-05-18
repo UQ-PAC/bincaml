@@ -9,7 +9,14 @@
   concat.il))
 
 (cram
- (applies_to * \ expr_smt malloc_free memory_safety memory_interproc)
+ (applies_to
+  *
+  \
+  expr_smt
+  malloc_free
+  memory_safety
+  memory_interproc
+  memory_phis)
  (package bincaml)
  (deps
   loop_dfg.sexp
@@ -47,10 +54,12 @@
   ll_spec.sexp
   repeated_ssa.il
   repeated_ssa.sexp
+  boogie_phis.il
+  boogie_phis.sexp
   ../../bin/main.exe))
 
 (cram
- (applies_to malloc_free memory_safety memory_interproc)
+ (applies_to malloc_free memory_safety memory_interproc memory_phis)
  (package bincaml)
  (enabled_if
   (and %{bin-available:boogie} %{bin-available:cvc5}))
@@ -62,4 +71,6 @@
   ../../examples/memory/memory_interproc.il
   ./memory_interproc.sexp
   ../../examples/memory/memory_safety.il
-  ./memory_safety.sexp))
+  ./memory_safety.sexp
+  ./memory_phis.il
+  ./memory_phis.sexp))

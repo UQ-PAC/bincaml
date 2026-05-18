@@ -473,6 +473,39 @@ module Normalise = struct
     in
     prog
 
+  let insert_phi_assigns (prog : Program.t) =
+    (* Boogie doesn't have explicit phi nodes. *)
+    (* We turn each IR phi node into an assign at the end of each source block. *)
+
+    (* Build a map of source block id -> phi node *)
+    Program.map_procedures
+      (fun _ proc ->
+        (* Maps block ids to outgoing assigns *)
+        let assigns : Program.stmt list IDMap.t =
+          Procedure.fold_blocks_topo_fwd
+            (fun acc id block ->
+              (* Fold over the phis... *)
+              block.phis
+              |> List.fold_left
+                   (fun acc (phi : Var.t Block.phi) ->
+                     (* Fold over all source blocks... *)
+                     List.fold_left
+                       (fun acc (id, rhs) ->
+                         (* Add an assign stmt to the source block from rhs to lhs *)
+                         IDMap.add_to_list id
+                           (Stmt.Instr_Assign [ (phi.lhs, BasilExpr.rvar rhs) ])
+                           acc)
+                       acc phi.rhs)
+                   acc)
+            IDMap.empty proc
+        in
+        (* Append the outgoing assigns to each block *)
+        Procedure.map_blocks_nondet
+          (fun (id, b) ->
+            Block.append_stmts b (IDMap.get_or ~default:[] id assigns))
+          proc)
+      prog
+
   let replace_stmts (p : Program.t) =
     Program.map_procedures
       (fun _ p ->
@@ -484,5 +517,5 @@ end
 
 let transform (p : Program.t) =
   p |> Normalise.replace_functions |> Normalise.replace_exprs
-  |> Instructions.transform_add_store_load_decls |> Normalise.replace_stmts
-  |> Builtins.transform_add_builtin_decls
+  |> Instructions.transform_add_store_load_decls |> Normalise.insert_phi_assigns
+  |> Normalise.replace_stmts |> Builtins.transform_add_builtin_decls
