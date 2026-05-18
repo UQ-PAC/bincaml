@@ -60,6 +60,7 @@
  (name bincaml_lsp)
  (synopsis "Language server for Bincaml IL files")
  (depends
+  (menhir (>= 20180523))
   ppx_expect
   bincaml
   fmt
