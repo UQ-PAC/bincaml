@@ -10,6 +10,8 @@
   odig,
   ocaml-lsp,
   ocamlformat,
+  opam-switch,
+  opam,
 
   # dev packages
   tree-sitter,
@@ -46,6 +48,8 @@ mkShell {
     logs
     mtime
     z3.out
+    opam
+    opam-switch
     # sherlodoc - not in nixpkgs?
   ]
   ++ lib.optional stdenv.hostPlatform.isLinux perf;
@@ -55,6 +59,7 @@ mkShell {
   ];
 
   shellHook = ''
+    export OPAMROOT=${opam-switch}
     export ODIG_CACHE_DIR=~/.cache/odig
 
     ocaml_hash="$(echo "$OCAMLPATH" | sha1sum | cut -d' ' -f1)"

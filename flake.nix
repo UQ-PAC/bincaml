@@ -40,6 +40,7 @@
           bincaml_lsp = ofinal.callPackage ./nix/bincaml-lsp.nix { };
           hector = ofinal.callPackage ./nix/hector.nix { };
           intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
+          opam-switch = ofinal.callPackage ./nix/opam-switch.nix { };
         };
 
         enableOcamlFramePointer =
@@ -86,6 +87,7 @@
             fp.bincaml_lsp = fpOcamlPackages.bincaml_lsp;
             fp.intPQueue = fpOcamlPackages.intPQueue;
             fp.hector = fpOcamlPackages.hector;
+            x =selfOcamlPackages.opam-switch;
           };
 
           devShells = {
