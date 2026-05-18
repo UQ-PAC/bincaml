@@ -1,7 +1,7 @@
 (rule
  (deps ../grammar.js ../grammar.bnfc.js ../tree-sitter.json)
  (targets grammar.json parser.c node-types.json)
- (alias runtest)
+ (alias treesit)
  (mode promote)
  (enabled_if %{bin-available:tree-sitter})
  (action

@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    name: build_tesG
+    name: build_test
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -30,10 +30,29 @@ jobs:
       - run: opam exec -- dune build '@install'
       - run: opam exec -- dune runtest --force --profile=release
 
+
+  treesit:
+    name: treesitter
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ocaml-version: "5.4"
+            container: ghcr.io/agle/bincaml-ci-containers/ci-5.4:latest
+
+    runs-on: ubuntu-latest
+    container: ${{ matrix.container }}
+
+    steps:
+      - uses: actions/checkout@v6
+      - run: opam install -t . --deps-only
+      - run: opam exec -- dune build '@treesit'
+
   lint-fmt:
     name: format 
     runs-on: ubuntu-latest
-    container: ghcr.io/agle/bincaml-ci-containers/ci-5.4:latest
+    container: ghcr.io/agle/bincaml-ci-containers/ci-doc-5.3:latest
     steps:
       - uses: actions/checkout@v6
       - run: opam exec -- dune build @fmt --display=quiet
