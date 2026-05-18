@@ -540,7 +540,7 @@ module BasilExpr = struct
               (List.map (fun v -> bracket "(" (Var.pretty v) ")") bound_vars)
             ^+ sep ^+ bracket "(" b ")"
           in
-          return (text op ^ triggers ^+ a ^ text " " ^ binding)
+          return (text op ^ triggers ^ a ^ text " " ^ binding)
       | Lambda { bound_vars; in_body; attrib } -> pass ()
       | Let { bound_vars; in_body; attrib } -> pass ()
       | RVar { id; attrib } when Var.is_local id ->

@@ -86,10 +86,10 @@ let%expect_test _ =
   print_endline (to_string e2);
   [%expect
     {|
-    forall  (v1:bv1) :: (eq(v2:bv1,
-      forall  (v2:bv1) :: (booland(v1:bv1, v2:bv1, v3:bv1))))
-    forall  (v1:bv1) :: (eq(0x16:bv5,
-      forall  (v2:bv1) :: (booland(v1:bv1, v2:bv1, 0x16:bv5))))
+    forall (v1:bv1) :: (eq(v2:bv1,
+      forall (v2:bv1) :: (booland(v1:bv1, v2:bv1, v3:bv1))))
+    forall (v1:bv1) :: (eq(0x16:bv5,
+      forall (v2:bv1) :: (booland(v1:bv1, v2:bv1, 0x16:bv5))))
     |}]
 
 module DSE = struct
