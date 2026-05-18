@@ -1,1 +1,0 @@
-/home/alicia/.config/nvim/queries/basilir/highlights.scm
