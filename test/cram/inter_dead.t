@@ -19,7 +19,6 @@
        (var a:bv64=out) := call @fun1(c=a:bv64, d=b:bv64);
        (var x:bv64=out) := call @fun1(c=a:bv64, d=b:bv64);
        assert eq(x:bv64, bvadd(a:bv64, a:bv64));
-       nop;
        return;
      ]
   ];

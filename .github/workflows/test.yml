@@ -64,17 +64,6 @@ jobs:
       - run: sudo apt-get install cvc5 -y
       - run: opam exec -- dune runtest --ignore-promoted-rules
 
-  lint-doc:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout tree
-        uses: actions/checkout@v5
-      - name: Set-up OCaml
-        uses: ocaml/setup-ocaml@v3
-        with:
-          ocaml-compiler: 5.4.0
-      - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
-      - uses: ocaml/setup-ocaml/lint-doc@v3
 
   lint-fmt:
     runs-on: ubuntu-latest

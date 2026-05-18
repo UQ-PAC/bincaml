@@ -345,6 +345,7 @@ and transLambdaDef (x : lambdaDef) : result = match x with
 
 and transBinOp (x : binOp) : result = match x with
     BinOp_implies  -> failure x
+  | BinOp_get  -> failure x
   | BinOpBVBinOp bvbinop -> failure x
   | BinOpBVLogicalBinOp bvlogicalbinop -> failure x
   | BinOpIntLogicalBinOp intlogicalbinop -> failure x
@@ -432,6 +433,7 @@ and transIntrinOp (x : intrinOp) : result = match x with
   | IntrinOp_bvxor  -> failure x
   | IntrinOp_bvconcat  -> failure x
   | IntrinOp_bvmul  -> failure x
+  | IntrinOp_update  -> failure x
 
 
 and transPointerBinOp (x : pointerBinOp) : result = match x with

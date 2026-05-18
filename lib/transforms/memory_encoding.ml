@@ -8,9 +8,11 @@ let live = Bitvec.of_int 1 ~size:2
 let dead = Bitvec.of_int 2 ~size:2
 
 module Globals = struct
+  let mem_encoding_typ_name = "memory_encoding"
+  let mem_encoding_typ = Types.Variable mem_encoding_typ_name
+
   let mem_encoding =
-    Var.create "$mem_encoding" ~scope:Var.GlobalVar
-      (Types.Variable "MemEncoding")
+    Var.create "$mem_encoding" ~scope:Var.GlobalVar mem_encoding_typ
 end
 
 module Calls = struct
@@ -86,7 +88,7 @@ module Calls = struct
       ~func:
         (rvar
            (Var.create "$me_alloc_size_update" ~scope:Var.GlobalConst
-              (Types.Variable "MemEncoding")))
+              Globals.mem_encoding_typ))
       args
 
   (** [alloc_live_update args] returns a new memory encoding with the liveness
@@ -97,7 +99,7 @@ module Calls = struct
       ~func:
         (rvar
            (Var.create "$me_alloc_live_update" ~scope:Var.GlobalConst
-              (Types.Variable "MemEncoding")))
+              Globals.mem_encoding_typ))
       args
 
   (** [allocate args] allocates space at a size, returning the updated memory
@@ -108,7 +110,7 @@ module Calls = struct
       ~func:
         (rvar
            (Var.create "$me_allocate" ~scope:Var.GlobalConst
-              (Types.Variable "MemEncoding")))
+              Globals.mem_encoding_typ))
       args
 
   (** [can_alloc args] Returns whether an alloc, performed by [allocate], is
@@ -178,19 +180,26 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
                @@ Lang.Expr.BasilExpr.type_of body);
            attrib;
            definition : Lang.Program.func_type =
-             Function (Lang.Expr.BasilExpr.binding ~op:`Lambda bindings body);
+             Function (Lang.Expr.BasilExpr.lambda ~bound:bindings body);
          })
 
   let add_mem_encoding p =
     let p =
       Lang.Program.add_decl p
         (Lang.Program.Type
-           { binding = "MemEncoding"; typ = Encoding.mem_encoding_type })
+           {
+             binding = Globals.mem_encoding_typ_name;
+             typ = Encoding.mem_encoding_type;
+           })
     in
     let p =
       Lang.Program.add_decl p
         (Lang.Program.Variable
-           { binding = Globals.mem_encoding; attrib = Attrib.empty })
+           {
+             binding = Globals.mem_encoding;
+             attrib = Attrib.empty;
+             classification = None;
+           })
     in
     p
 
@@ -342,7 +351,7 @@ module SplitMemory : MemoryEncoding = struct
 
   let mem_encoding_type =
     Types.Sort
-      ( "MemEncoding",
+      ( Globals.mem_encoding_typ_name,
         [
           Types.mk_variant "MemEncoding"
             [
@@ -441,14 +450,12 @@ module SplitMemory : MemoryEncoding = struct
 
   let init_encoding_body =
     let i = Var.create "i" ~scope:Var.LocalVar (Types.Bitvector 64) in
-    let trigger e =
-      `Assoc (StringMap.of_list [ (".triggers", `List [ `List [ `Expr e ] ]) ])
-    in
+    let trigger e = [ [ e ] ] in
     applyintrin ~op:`AND
       [
         (* Ensure that all heap addresses are bigger than the largest global address *)
         forall
-          ~attrib:
+          ~triggers:
             (trigger (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ]))
           ~bound:[ i ]
           (binexp ~op:`EQ
@@ -459,7 +466,7 @@ module SplitMemory : MemoryEncoding = struct
              (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ]));
         (* Heap addresses are initially fresh *)
         forall
-          ~attrib:
+          ~triggers:
             (trigger (Calls.alloc_live [ rvar Locals.mem_encoding; rvar i ]))
           ~bound:[ i ]
           (binexp ~op:`IMPLIES
@@ -469,7 +476,7 @@ module SplitMemory : MemoryEncoding = struct
                 (bvconst fresh)));
         (* Non heap addresses are dead *)
         forall
-          ~attrib:
+          ~triggers:
             (trigger (Calls.alloc_live [ rvar Locals.mem_encoding; rvar i ]))
           ~bound:[ i ]
           (binexp ~op:`IMPLIES

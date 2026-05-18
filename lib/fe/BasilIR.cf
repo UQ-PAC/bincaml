@@ -261,7 +261,7 @@ Expr_FunctionOp . Expr1       ::= Expr1 OpenParen [Expr] CloseParen;
 
 -- binary expr
 
-rules BinOp ::= "implies" | BVBinOp | BVLogicalBinOp | IntLogicalBinOp | IntBinOp | EqOp | PointerBinOp ;
+rules BinOp ::= "implies" | "get" | BVBinOp | BVLogicalBinOp | IntLogicalBinOp | IntBinOp | EqOp | PointerBinOp ;
 Expr_Binary . Expr2      ::= BinOp OpenParen Expr "," Expr CloseParen ;
 Expr_Assoc  . Expr2      ::= IntrinOp OpenParen [Expr] CloseParen ;
 
@@ -305,7 +305,7 @@ rules BVLogicalBinOp ::= "bvule" |  "bvugt" |  "bvuge" | "bvult" | "bvslt" |  "b
 
 rules IntBinOp ::= "intadd" | "intmul" | "intsub" | "intdiv" | "intmod"  ;
 rules IntLogicalBinOp ::=  "intlt" | "intle" | "intgt" | "intge" ;
-rules IntrinOp ::=  "booland" | "boolor" | "bvand" | "bvor" | "bvadd" | "bvxor" | "bvconcat" | "bvmul" ;
+rules IntrinOp ::=  "booland" | "boolor" | "bvand" | "bvor" | "bvadd" | "bvxor" | "bvconcat" | "bvmul" | "update";
 rules PointerBinOp ::= "ptradd" ;
 
 {- SPECIFICATION -}

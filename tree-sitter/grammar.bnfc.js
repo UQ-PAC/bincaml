@@ -574,6 +574,8 @@ module.exports = ({
       choice(
         // BinOp_implies. BinOp ::= "implies" ;
         "implies",
+        // BinOp_get. BinOp ::= "get" ;
+        "get",
         // BinOpBVBinOp. BinOp ::= BVBinOp ;
         $.BVBinOp,
         // BinOpBVLogicalBinOp. BinOp ::= BVLogicalBinOp ;
@@ -733,7 +735,9 @@ module.exports = ({
         // IntrinOp_bvconcat. IntrinOp ::= "bvconcat" ;
         "bvconcat",
         // IntrinOp_bvmul. IntrinOp ::= "bvmul" ;
-        "bvmul"
+        "bvmul",
+        // IntrinOp_update. IntrinOp ::= "update" ;
+        "update"
       ),
     PointerBinOp: $ =>
       // PointerBinOp_ptradd. PointerBinOp ::= "ptradd" ;
