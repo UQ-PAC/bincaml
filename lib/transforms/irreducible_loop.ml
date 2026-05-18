@@ -11,7 +11,6 @@ type state = {
 open Analysis.Irreducible_loops.ProcIntra
 
 let transform_loop p l =
-  let open Option in
   let header, next_h, headers, nodes, entries, backedges =
     match l with
     | { block; loop = PrimaryHeader { primary_header; headers; nodes } }

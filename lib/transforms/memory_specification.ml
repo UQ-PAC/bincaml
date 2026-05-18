@@ -1,7 +1,6 @@
 open Lang
 open Lang.Common
 open Lang.Expr
-open Ops
 open Memory_encoding
 
 let old e = BasilExpr.unexp ~op:`Old e

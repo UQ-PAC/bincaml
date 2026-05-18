@@ -63,7 +63,7 @@ let loc_of_attr l =
 
 let merge_map_shadow (a : attrib_map) (b : attrib_map) =
   StringMap.merge
-    (fun k l r ->
+    (fun _ l r ->
       match (l, r) with
       | _, Some a -> Some a
       | Some a, None -> Some a

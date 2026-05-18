@@ -136,16 +136,16 @@ let check_smt =
   in
 
   let equality_compare_hashcons (a, b) =
-    let a = Expr.BasilExpr.ExprHashCons.of_expr a in
-    let b = Expr.BasilExpr.ExprHashCons.of_expr b in
+    let a = Expr.ExprHashCons.of_expr a in
+    let b = Expr.ExprHashCons.of_expr b in
     let ecomp =
       Bool.equal
-        (Expr.BasilExpr.ExprHashCons.equal a b)
-        (Expr.BasilExpr.ExprHashCons.compare a b = 0)
+        (Expr.ExprHashCons.equal a b)
+        (Expr.ExprHashCons.compare a b = 0)
     in
     ecomp
     &&
-    if not (Expr.BasilExpr.ExprHashCons.equal a b) then true
+    if not (Expr.ExprHashCons.equal a b) then true
     else
       Int.equal (Fix.HashCons.id a) (Fix.HashCons.id b)
       && Int.equal (Fix.HashCons.hash a) (Fix.HashCons.hash b)

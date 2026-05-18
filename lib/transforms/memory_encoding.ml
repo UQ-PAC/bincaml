@@ -1,7 +1,6 @@
 open Lang
 open Lang.Common
 open Lang.Expr
-open Ops
 
 let fresh = Bitvec.of_int 0 ~size:2
 let live = Bitvec.of_int 1 ~size:2

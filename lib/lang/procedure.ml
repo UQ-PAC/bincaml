@@ -701,9 +701,8 @@ let pretty show_lvar show_var show_expr p =
   in
   header ^ spec ^ newline ^ blocks
 
+(** A simplified graph of block level control flow *)
 module BlockGraph = struct
-  (* simpler graph of block dependency *)
-
   module Vert = struct
     type t = Block of ID.t | Entry | Return | Exit
     [@@deriving show { with_path = false }, eq, ord]

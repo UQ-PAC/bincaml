@@ -294,11 +294,7 @@ let lift_procedure_params prog ~skip_observable ~skip_maps all_lifted procid
     in
     rewrite_down ~rw_fun:alg expr
   in
-  let rewrite_requires_expr expr =
-    let open Expr.AbstractExpr in
-    let open Expr.BasilExpr in
-    rewrite_old_expr expr
-  in
+  let rewrite_requires_expr expr = rewrite_old_expr expr in
   let proc =
     let spec = Procedure.specification proc in
     Procedure.set_specification proc

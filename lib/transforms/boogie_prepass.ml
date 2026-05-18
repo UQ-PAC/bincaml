@@ -350,7 +350,6 @@ module Normalise = struct
   open Expr
   open AbstractExpr
   open BasilExpr
-  open Bitvec
 
   let replace_expr (e : BasilExpr.t BasilExpr.abstract_expr) =
     let normalise_intrinsic op base args =

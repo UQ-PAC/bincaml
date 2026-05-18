@@ -523,8 +523,6 @@ module AllOps = struct
     | `IfThen -> "case"
     | `Cases -> "match"
 
-  let hash a = to_string a |> String.hash
-
   let eval_equal (a : const) (b : const) =
     match (a, b) with
     | `Bitvector a, `Bitvector b -> Bitvec.equal a b
