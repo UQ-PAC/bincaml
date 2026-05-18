@@ -102,6 +102,30 @@ let check_smt =
     return (e, smt, parsed)
   in
 
+  let stack_machine_pred (_, a, _, b) = Expr.BasilExpr.equal a b in
+
+  let stack_machine_test =
+    let gen_tsi =
+      let open QCheck.Gen in
+      let* e = Expr_gen.gen_expr in
+      let e = Expr.BasilExpr.fixup_typ e in
+      let ec = Lang.Tsi.compile_expr e in
+      let stackv =
+        Expr.BasilExpr.const @@ Tsi.eval_expr (fun v -> failwith "") ec
+      in
+      let comparv =
+        Expr.BasilExpr.const @@ Tsi.fallback_eval (fun v -> failwith "") e
+      in
+      return (e, comparv, ec, stackv)
+    in
+    QCheck.make
+      ~print:(fun (a, compmarv, s, stackv) ->
+        Expr.BasilExpr.to_string compmarv
+        ^ "=" ^ Expr.BasilExpr.to_string a ^ " ~> " ^ Tsi.show_compiled s ^ "="
+        ^ Expr.BasilExpr.to_string stackv)
+      gen_tsi
+  in
+
   let arb =
     QCheck.make
       ~print:(fun (a, s, e) ->
@@ -140,6 +164,8 @@ let check_smt =
       roundtrip_predicate;
     QCheck.Test.make ~name:"expr valid smt" ~count:30 ~max_fail:1 arb
       valid_predicate;
+    QCheck.Test.make ~name:"expr stack machine eval" ~count:1000 ~max_fail:1
+      stack_machine_test stack_machine_pred;
   ]
 
 let _ =

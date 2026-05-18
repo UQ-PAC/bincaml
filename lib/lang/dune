@@ -16,6 +16,7 @@
   block
   procedure
   interp
+  tsi
   program)
  (flags -w -27) ; unused var
  (libraries

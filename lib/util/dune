@@ -2,6 +2,7 @@
  (public_name bincaml.util)
  (name bincaml_util)
  (modules
+   fixed_width_arith
   worklist
   mtypes
   common
