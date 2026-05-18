@@ -349,6 +349,7 @@ module PassManager = struct
       linear_const;
       linear_copy;
       simp;
+      dynamic_single_assignment;
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;
