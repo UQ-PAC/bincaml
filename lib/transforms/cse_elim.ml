@@ -206,6 +206,7 @@ let%expect_test "cse1" =
   in
   let prog, proc, b = Loader.Loadir.parse_single_block_proc bl in
   Program.output_proc_pretty stdout proc;
+  print_endline "";
   let p2 = cse_tf_proc ~min_subexprs:2 proc in
   Program.output_proc_pretty stdout p2;
   [%expect
@@ -221,7 +222,8 @@ let%expect_test "cse1" =
          var D:bv64 := bvnot(0x1:bv64);
          return;
        ]
-    ]proc <proc>()  -> () {  }
+    ]
+    proc <proc>()  -> () {  }
 
 
     [
@@ -235,12 +237,6 @@ let%expect_test "cse1" =
        ]
     ]
     |}]
-
-let%expect_test "z hash" =
-  let a = Z.of_string "1" in
-  let b = Z.of_string "0x1" in
-  assert (String.equal (Z.to_string a) (Z.to_string b));
-  ()
 
 let%expect_test "cse mid" =
   let bl =
@@ -259,6 +255,7 @@ let%expect_test "cse mid" =
   in
   let prog, proc, b = Loader.Loadir.parse_single_block_proc bl in
   Program.output_proc_pretty stdout proc;
+  print_endline "";
   let p2 = cse_tf_proc ~min_subexprs:2 ~min_occurances:2 proc in
   Program.output_proc_pretty stdout p2;
   [%expect
@@ -274,7 +271,8 @@ let%expect_test "cse mid" =
              sign_extend(64, bvnot(bvashr(R0_179:bv64, 0xa:bv64))), 0x1:bv128))));
          return;
        ]
-    ]proc <proc>(R0_179:bv64, R22_85:bv64)  -> () {  }
+    ]
+    proc <proc>(R0_179:bv64, R22_85:bv64)  -> () {  }
 
 
     [
