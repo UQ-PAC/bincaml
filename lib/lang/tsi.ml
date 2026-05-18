@@ -110,7 +110,7 @@ let eval read (st : st) stmt =
   | COPY i -> Vector.push st (Vector.get st i)
   | PUSHV (v, i) ->
       Vector.append_iter st
-        (Iter.int_range ~start:0 ~stop:i |> Iter.map (fun _ -> v))
+        (Iter.int_range ~start:0 ~stop:(i - 1) |> Iter.map (fun _ -> v))
   | BVADD size -> bvbinop st size A.add
   | BVSUB size -> bvbinop st size A.sub
   | BVNOT size -> bvunop st size A.bitnot
@@ -157,6 +157,8 @@ module ListTrOpt = List.Traverse (Option)
 let compile (e : 'e Expr.BasilExpr.abstract_expr) =
   let open Expr.AbstractExpr in
   let open Option in
+  let typs = Expr.AbstractExpr.map snd e in
+  let e = Expr.AbstractExpr.map fst e in
   match e with
   | Constant { const } ->
       let* v = of_const const in
@@ -165,7 +167,9 @@ let compile (e : 'e Expr.BasilExpr.abstract_expr) =
   | UnaryExpr { op; arg; typ } ->
       let* arg = arg in
       let width () =
-        match typ with Types.Bitvector v -> v | _ -> failwith "not bv"
+        match typs with
+        | UnaryExpr { arg = Types.Bitvector v } -> v
+        | _ -> failwith ("not bv : " ^ Types.to_string typ)
       in
       let* op =
         match op with
@@ -173,23 +177,23 @@ let compile (e : 'e Expr.BasilExpr.abstract_expr) =
         | `BoolNOT -> Some [ BoolNOT ]
         | `BOOLTOBV1 -> Some []
         | `INTNEG -> Some [ INTNEG ]
-        | `Old -> None
         | `Extract (hi, lo) -> Some [ Extract { hi; lo } ]
         | `SignExtend amount ->
             Some [ SignExtend { ext = amount; size = width () } ]
-        | `Gamma -> None
-        | `Classification -> None
         | `BVNOT -> Some [ BVNOT (width ()) ]
         | `ZeroExtend ext -> Some []
         | `ReadField _ -> None
+        | `Old -> None
+        | `Gamma -> None
+        | `Classification -> None
       in
-      Some (op @ arg)
+      Some (arg @ op)
   | BinaryExpr { op; arg1; arg2; typ } ->
       let* arg1 = arg1 in
       let* arg2 = arg2 in
       let size () =
-        match typ with
-        | Types.Bitvector v -> v
+        match typs with
+        | BinaryExpr { arg1 = Types.Bitvector v } -> v
         | _ -> failwith ("not bv : " ^ Types.to_string typ)
       in
       let* op =
@@ -224,35 +228,42 @@ let compile (e : 'e Expr.BasilExpr.abstract_expr) =
         | `Load _ -> None
         | `BVSLT -> Some [ BVSLT (size ()) ]
       in
-      Some (op @ arg1 @ arg2)
+      Some (arg2 @ arg1 @ op)
+  | ApplyIntrin { op; args = []; typ } -> None
+  | ApplyIntrin { op; args = [ _ ]; typ } -> None
+  | ApplyIntrin { op = `OR; args = []; typ } -> Some [ PUSHV (Z.one, 1) ]
+  | ApplyIntrin { op = `AND; args = []; typ } -> Some [ PUSHV (Z.zero, 1) ]
+  | ApplyIntrin { op = `OR | `AND; args = [ a ]; typ } -> a
   | ApplyIntrin { op = (`OR | `AND) as op; args; typ } ->
       let op = match op with `OR -> BoolOR | `AND -> BoolAND in
       let* args = ListTrOpt.sequence_m args in
-      Some (List.fold_left (fun acc a -> (op :: a) @ acc) [] args)
+      let args' = List.concat args in
+      let ops = List.init (List.length args - 1) (fun _ -> op) in
+      Some (args' @ ops)
   | ApplyIntrin { op; args; typ } ->
       let* size = match typ with Types.Bitvector v -> Some v | _ -> None in
-      let fop acc a =
-        let* a = a in
+      let* op =
         match op with
-        | `BVADD -> Some ((BVADD size :: a) @ acc)
-        | `BVMUL -> Some ((BVMUL size :: a) @ acc)
-        | `BVOR -> Some ((BVOR size :: a) @ acc)
-        | `BVXOR -> Some ((BVOR size :: a) @ acc)
-        | `BVAND -> Some ((BVAND size :: a) @ acc)
+        | `BVADD -> Some (BVADD size)
+        | `BVMUL -> Some (BVMUL size)
+        | `BVOR -> Some (BVOR size)
+        | `BVXOR -> Some (BVXOR size)
+        | `BVAND -> Some (BVAND size)
         | `BVConcat -> None
         | `MapUpdate -> None
         | `Cases -> None
         | `OR | `AND -> None
       in
-      let* r = ListTrOpt.fold_m fop [] args in
-      Some r
+      let* args = ListTrOpt.sequence_m args >|= List.rev in
+      let ops = List.init (List.length args - 1) (fun _ -> op) in
+      Some (List.concat args @ ops)
   | Lambda _ | Let _ | ApplyFun _ -> None
 
 let compile_expr e =
   let typ = Expr.BasilExpr.type_of e in
 
-  match Expr.BasilExpr.cata compile e with
-  | Some c -> Ok (List.rev c, typ)
+  match Expr.BasilExpr.fold_with_type compile e with
+  | Some c -> Ok (c, typ)
   | None -> Error e
 
 let fallback_eval read e =

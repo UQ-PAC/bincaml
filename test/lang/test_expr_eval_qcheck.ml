@@ -111,7 +111,10 @@ let check_smt =
       let e = Expr.BasilExpr.fixup_typ e in
       let ec = Lang.Tsi.compile_expr e in
       let stackv =
-        Expr.BasilExpr.const @@ Tsi.eval_expr (fun v -> failwith "") ec
+        try Expr.BasilExpr.const @@ Tsi.eval_expr (fun v -> failwith "") ec
+        with e ->
+          print_endline @@ Printexc.to_string e;
+          Expr.BasilExpr.bvconst @@ Bincaml_util.Bitvec.of_int ~size:0 0
       in
       let comparv =
         Expr.BasilExpr.const @@ Tsi.fallback_eval (fun v -> failwith "") e
@@ -122,7 +125,8 @@ let check_smt =
       ~print:(fun (a, compmarv, s, stackv) ->
         Expr.BasilExpr.to_string compmarv
         ^ "=" ^ Expr.BasilExpr.to_string a ^ " ~> " ^ Tsi.show_compiled s ^ "="
-        ^ Expr.BasilExpr.to_string stackv)
+        ^ Expr.BasilExpr.to_string stackv
+        ^ "\n")
       gen_tsi
   in
 
@@ -160,11 +164,11 @@ let check_smt =
   in
 
   [
-    QCheck.Test.make ~name:"expr smt roundtrip" ~count:1000 ~max_fail:1 arb
+    QCheck.Test.make ~name:"expr smt roundtrip" ~count:1000 ~max_fail:5 arb
       roundtrip_predicate;
-    QCheck.Test.make ~name:"expr valid smt" ~count:30 ~max_fail:1 arb
+    QCheck.Test.make ~name:"expr valid smt" ~count:30 ~max_fail:5 arb
       valid_predicate;
-    QCheck.Test.make ~name:"expr stack machine eval" ~count:1000 ~max_fail:1
+    QCheck.Test.make ~name:"expr stack machine eval" ~count:1000 ~max_fail:5
       stack_machine_test stack_machine_pred;
   ]
 
