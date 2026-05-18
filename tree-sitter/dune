@@ -48,6 +48,7 @@
 
 ; run treesit test as part of runtest if possible, unless CI=true which
 ; is set by actions runners
+
 (alias
  (name runtest)
  (deps
