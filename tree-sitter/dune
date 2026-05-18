@@ -45,10 +45,3 @@
   (echo
    "tree-sitter/dune: bnfc tree-sitter generation skipped,"
    "because the installed bnfc doesn't support it.\n")))
-
-(alias
- (name runtest)
- (deps
-  (alias treesit))
- (enabled_if
-  (and %{read:../lib/fe/has-bnfc-tree-sitter} %{bin-available:tree-sitter})))
