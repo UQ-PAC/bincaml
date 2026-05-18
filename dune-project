@@ -30,7 +30,7 @@
   (qcheck-stm :with-test)
   (qcheck-core :with-test)
   (qcheck-alcotest :with-test)
-  menhir
+  (menhir (>= 20180523))
   ocaml
   zarith
   fix
