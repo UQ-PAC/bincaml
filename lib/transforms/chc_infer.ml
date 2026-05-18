@@ -195,12 +195,36 @@ let phi_subst_for_edge ~(from_id : ID.t) (succ_block : Program.bloc) :
     VarMap.empty
     succ_block.phis
 
+(** Predicate signatures for a callee, derived from its [formal_in_params] and
+    [formal_out_params]. Same naming/ordering convention as
+    {!proc_predicates}, so the call-site clauses line up with the callee's
+    own block-level clauses. *)
+let callee_predicates (callee : Program.proc) : predicate * predicate =
+  let id = ID.to_string (Procedure.id callee) in
+  let in_params =
+    Procedure.formal_in_params callee |> StringMap.values |> Iter.to_list
+  in
+  let out_params =
+    Procedure.formal_out_params callee |> StringMap.values |> Iter.to_list
+  in
+  let enter =
+    { name = predicate_name ~proc:id ~suffix:"enter"; params = in_params }
+  in
+  let exit =
+    {
+      name = predicate_name ~proc:id ~suffix:"exit";
+      params = in_params @ out_params;
+    }
+  in
+  (enter, exit)
+
 (** Encode a single block. Returns one rule clause per outgoing edge (block
     successor or procedure return). Phi nodes in the successor are resolved
     by substituting each phi target with the appropriate rhs variable for
     this edge before doing the Δ lookup. *)
-let encode_block (preds : proc_predicates) (proc : Program.proc)
-    (block_id : ID.t) (block : Program.bloc) : clause list =
+let encode_block (prog : Program.t) (preds : proc_predicates)
+    (proc : Program.proc) (block_id : ID.t) (block : Program.bloc) :
+    clause list =
   let block_pred = IDMap.find block_id preds.block_preds in
   let enc = Encoder.create ~initial_vars:block_pred.params in
   let entry_args = List.map (fun v -> atom (Var.name v)) block_pred.params in
@@ -214,6 +238,16 @@ let encode_block (preds : proc_predicates) (proc : Program.proc)
         head = None;
       }
       :: !queries
+  in
+  let call_clauses = ref [] in
+  let snapshot_call ~head =
+    call_clauses :=
+      {
+        vars = Encoder.vars enc;
+        premises = Encoder.premises enc;
+        head = Some head;
+      }
+      :: !call_clauses
   in
   Vector.to_iter block.stmts
   |> Iter.iter (fun stmt ->
@@ -238,6 +272,42 @@ let encode_block (preds : proc_predicates) (proc : Program.proc)
           (* Treated as [assert false]: the current premise set must already
              be unsatisfiable for the intrinsic call to be unreachable. *)
           snapshot_query ~extra_premises:[]
+      | Stmt.Instr_Call { lhs; procid; args } ->
+          let callee =
+            Program.proc_opt prog procid
+            |> Option.get_exn_or
+                 ("chc_infer: callee not found: " ^ ID.to_string procid)
+          in
+          let enter_pred, exit_pred = callee_predicates callee in
+          (* Build arg sexps in the callee's formal-in-params order
+             (alphabetical by name, matching [StringMap.values]). *)
+          let arg_sexps =
+            StringMap.bindings (Procedure.formal_in_params callee)
+            |> List.map (fun (name, _) ->
+                match StringMap.find_opt name args with
+                | Some e -> encode_expr enc e
+                | None ->
+                    failwith
+                      ("chc_infer: missing arg " ^ name ^ " at call to "
+                      ^ ID.to_string procid))
+          in
+          (* Emit C ⟹ enter⟨f⟩(args). Captures Encoder state before
+             fresh-naming the returns. *)
+          snapshot_call ~head:(apply_predicate enter_pred arg_sexps);
+          (* Fresh-name each return, in the callee's formal-out-params order. *)
+          let return_args =
+            StringMap.bindings (Procedure.formal_out_params callee)
+            |> List.map (fun (name, _) ->
+                match StringMap.find_opt name lhs with
+                | Some v -> atom (Var.name (Encoder.fresh enc v))
+                | None ->
+                    failwith
+                      ("chc_infer: missing return binding " ^ name
+                      ^ " at call to " ^ ID.to_string procid))
+          in
+          (* Conjoin exit⟨f⟩(args, returns) to premises. *)
+          Encoder.add_premise enc
+            (apply_predicate exit_pred (arg_sexps @ return_args))
       | s ->
           failwith
             ("chc_infer: unsupported statement: " ^ Stmt.show_stmt_basil s));
@@ -273,7 +343,7 @@ let encode_block (preds : proc_predicates) (proc : Program.proc)
       [ { vars = Encoder.vars enc; premises = Encoder.premises enc; head = Some head } ]
     else []
   in
-  List.rev !queries @ block_clauses @ return_clauses
+  List.rev !call_clauses @ List.rev !queries @ block_clauses @ return_clauses
 
 let entry_block_of (proc : Program.proc) : ID.t option =
   Procedure.get_entry_block proc
@@ -299,13 +369,15 @@ let enter_to_entry_block (preds : proc_predicates) (proc : Program.proc) :
         };
       ]
 
-let encode_proc (proc : Program.proc) : proc_predicates * clause list =
+let encode_proc (prog : Program.t) (proc : Program.proc) :
+    proc_predicates * clause list =
   let live = Livevars.run proc in
   let preds = proc_predicates ~live proc in
   let connect = enter_to_entry_block preds proc in
   let block_clauses =
     Procedure.iter_blocks proc
-    |> Iter.flat_map_l (fun (id, block) -> encode_block preds proc id block)
+    |> Iter.flat_map_l (fun (id, block) ->
+        encode_block prog preds proc id block)
     |> Iter.to_list
   in
   (preds, connect @ block_clauses)
@@ -319,7 +391,7 @@ let all_predicates (preds : proc_predicates) : predicate list =
 let encode_program (prog : Program.t) : predicate list * clause list =
   let per_proc =
     Program.procs prog
-    |> Iter.map (fun (_, proc) -> (proc, encode_proc proc))
+    |> Iter.map (fun (_, proc) -> (proc, encode_proc prog proc))
     |> Iter.to_list
   in
   let preds =
