@@ -1196,7 +1196,7 @@ module BasilASTLoader = struct
           (trans_expr value)
     | Expr_Field (record, fname) ->
         let fname =
-          String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Attr fname)
+          String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Local fname)
           |> Option.get_exn_or "safe by parser"
         in
         BasilExpr.field_read ~field:fname (trans_expr record)

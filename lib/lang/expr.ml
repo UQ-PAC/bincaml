@@ -562,7 +562,7 @@ module BasilExpr = struct
             (fill nil
                [ text "extract" ^ a ^ textpf "(%d,%d, " hi lo ^ e ^ text ")" ])
       | UnaryExpr { op = `ReadField field; arg = { this = Some arg } } ->
-          return (arg ^ text "." ^ text field)
+          return (arg ^ text "&" ^ text field)
       | BinaryExpr
           {
             op = `WriteField field;

@@ -334,7 +334,7 @@ and transExpr (x : expr) : result = match x with
   | Expr_Match (expr, openparen, cases, closeparen) -> failure x
   | Expr_Cases (openparen, cases, closeparen) -> failure x
   | Expr_Paren (openparen, expr, closeparen) -> failure x
-  | Expr_Field (expr, bident) -> failure x
+  | Expr_Field (expr, localident) -> failure x
   | Expr_FieldSet (expr0, localident, expr) -> failure x
   | SortValRec (localident, beginrec, fieldassigns, endrec) -> failure x
 

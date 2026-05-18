@@ -19,6 +19,7 @@ open Lexing
 %token SYMB8 /* := */
 %token SYMB9 /* mem:= */
 %token SYMB10 /* _ */
+%token SYMB11 /* & */
 
 %token TOK_EOF
 %token <string> TOK_Ident
@@ -756,7 +757,7 @@ expr : expr1 {  $1 }
   | KW_exists attribSet lambdaDef { Expr_Exists ($2, $3) }
   | KW_fun attribSet lambdaDef { Expr_Lambda ($2, $3) }
   | KW_let localIdent localVarParen_list SYMB5 typeT SYMB6 expr KW_in expr { Expr_Let ($2, $3, $5, $7, $9) }
-  | expr2 bIdent { Expr_Field ($1, $2) }
+  | expr2 SYMB11 localIdent { Expr_Field ($1, $3) }
   | localIdent beginRec fieldAssign_list endRec { SortValRec ($1, $2, $3, $4) }
   ;
 
