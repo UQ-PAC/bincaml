@@ -70,6 +70,16 @@ let predicate_name ~proc ~suffix = "p_" ^ proc ^ "_" ^ suffix
 let block_predicate_name proc_id block_id =
   predicate_name ~proc:(ID.to_string proc_id) ~suffix:(ID.to_string block_id)
 
+(** A procedure has a spec if it declares any [requires] or [ensures] clauses. *)
+let has_spec (spec : (Var.t, BasilExpr.t) Procedure.proc_spec) : bool =
+  not (List.is_empty spec.requires) || not (List.is_empty spec.ensures)
+
+(** Default predicate for [should_inline]: any procedure with a non-trivial
+    spec is treated modularly. Callers see only the spec; the body is
+    verified standalone against it. *)
+let default_should_inline (p : Program.proc) : bool =
+  has_spec (Procedure.specification p)
+
 (** Variables live just after the block's phi nodes, i.e. at the start of
     its regular statements. {!Livevars.run} gives us live-before-phis at
     [Begin id]; this walks the block's stmts backward starting from
@@ -221,10 +231,15 @@ let callee_predicates (callee : Program.proc) : predicate * predicate =
 (** Encode a single block. Returns one rule clause per outgoing edge (block
     successor or procedure return). Phi nodes in the successor are resolved
     by substituting each phi target with the appropriate rhs variable for
-    this edge before doing the Δ lookup. *)
-let encode_block (prog : Program.t) (preds : proc_predicates)
-    (proc : Program.proc) (block_id : ID.t) (block : Program.bloc) :
-    clause list =
+    this edge before doing the Δ lookup.
+
+    [should_inline] decides per-callee whether to use the spec-inlining path
+    (verify the callee body separately against its spec; at the call site,
+    check the precondition and assume the postcondition) or the full encoding
+    (connect to the callee's [enter]/[exit] predicates). *)
+let encode_block ~(should_inline : Program.proc -> bool) (prog : Program.t)
+    (preds : proc_predicates) (proc : Program.proc) (block_id : ID.t)
+    (block : Program.bloc) : clause list =
   let block_pred = IDMap.find block_id preds.block_preds in
   let enc = Encoder.create ~initial_vars:block_pred.params in
   let entry_args = List.map (fun v -> atom (Var.name v)) block_pred.params in
@@ -278,36 +293,95 @@ let encode_block (prog : Program.t) (preds : proc_predicates)
             |> Option.get_exn_or
                  ("chc_infer: callee not found: " ^ ID.to_string procid)
           in
-          let enter_pred, exit_pred = callee_predicates callee in
-          (* Build arg sexps in the callee's formal-in-params order
-             (alphabetical by name, matching [StringMap.values]). *)
-          let arg_sexps =
-            StringMap.bindings (Procedure.formal_in_params callee)
-            |> List.map (fun (name, _) ->
-                match StringMap.find_opt name args with
-                | Some e -> encode_expr enc e
-                | None ->
-                    failwith
-                      ("chc_infer: missing arg " ^ name ^ " at call to "
-                      ^ ID.to_string procid))
-          in
-          (* Emit C ⟹ enter⟨f⟩(args). Captures Encoder state before
-             fresh-naming the returns. *)
-          snapshot_call ~head:(apply_predicate enter_pred arg_sexps);
-          (* Fresh-name each return, in the callee's formal-out-params order. *)
-          let return_args =
-            StringMap.bindings (Procedure.formal_out_params callee)
-            |> List.map (fun (name, _) ->
-                match StringMap.find_opt name lhs with
-                | Some v -> atom (Var.name (Encoder.fresh enc v))
-                | None ->
-                    failwith
-                      ("chc_infer: missing return binding " ^ name
-                      ^ " at call to " ^ ID.to_string procid))
-          in
-          (* Conjoin exit⟨f⟩(args, returns) to premises. *)
-          Encoder.add_premise enc
-            (apply_predicate exit_pred (arg_sexps @ return_args))
+          if should_inline callee then
+            (* Spec-inlining path. Verify the precondition at the call site,
+               assume the postcondition afterwards; the body is verified
+               independently via [entry_fact_for] + [postcondition_queries]. *)
+            let spec = Procedure.specification callee in
+            (* Substitution from the callee's formal in-params to the
+               caller's arg expressions. *)
+            let in_subst =
+              StringMap.fold
+                (fun name v acc ->
+                  match StringMap.find_opt name args with
+                  | Some arg_e -> VarMap.add v arg_e acc
+                  | None -> acc)
+                (Procedure.formal_in_params callee)
+                VarMap.empty
+            in
+            let apply_in_subst e =
+              BasilExpr.substitute (fun v -> VarMap.find_opt v in_subst) e
+            in
+            (* Precondition queries: one per requires clause. *)
+            List.iter
+              (fun req ->
+                let req_sexp = encode_expr enc (apply_in_subst req) in
+                snapshot_query ~extra_premises:[ SmtExpr.bool_not req_sexp ])
+              spec.requires;
+            (* Fresh-name returns, building the [callee out-param → caller fresh var]
+               half of the postcondition substitution. *)
+            let out_subst =
+              StringMap.fold
+                (fun name callee_out_v acc ->
+                  match StringMap.find_opt name lhs with
+                  | Some lhs_v ->
+                      let fresh = Encoder.fresh enc lhs_v in
+                      VarMap.add callee_out_v (BasilExpr.rvar fresh) acc
+                  | None ->
+                      failwith
+                        ("chc_infer: missing return binding " ^ name
+                        ^ " at call to " ^ ID.to_string procid))
+                (Procedure.formal_out_params callee)
+                VarMap.empty
+            in
+            let apply_full_subst e =
+              BasilExpr.substitute
+                (fun v ->
+                  match VarMap.find_opt v in_subst with
+                  | Some e -> Some e
+                  | None ->
+                      VarMap.find_opt v out_subst)
+                e
+            in
+            (* Assume each ensures clause (substituted) post-call. *)
+            List.iter
+              (fun ens ->
+                Encoder.add_premise enc
+                  (encode_expr enc (apply_full_subst ens)))
+              spec.ensures
+          else begin
+            (* Full encoding: connect to the callee's enter/exit predicates. *)
+            let enter_pred, exit_pred = callee_predicates callee in
+            (* Build arg sexps in the callee's formal-in-params order
+               (alphabetical by name, matching [StringMap.values]). *)
+            let arg_sexps =
+              StringMap.bindings (Procedure.formal_in_params callee)
+              |> List.map (fun (name, _) ->
+                  match StringMap.find_opt name args with
+                  | Some e -> encode_expr enc e
+                  | None ->
+                      failwith
+                        ("chc_infer: missing arg " ^ name ^ " at call to "
+                        ^ ID.to_string procid))
+            in
+            (* Emit C ⟹ enter⟨f⟩(args). Captures Encoder state before
+               fresh-naming the returns. *)
+            snapshot_call ~head:(apply_predicate enter_pred arg_sexps);
+            (* Fresh-name each return, in the callee's formal-out-params order. *)
+            let return_args =
+              StringMap.bindings (Procedure.formal_out_params callee)
+              |> List.map (fun (name, _) ->
+                  match StringMap.find_opt name lhs with
+                  | Some v -> atom (Var.name (Encoder.fresh enc v))
+                  | None ->
+                      failwith
+                        ("chc_infer: missing return binding " ^ name
+                        ^ " at call to " ^ ID.to_string procid))
+            in
+            (* Conjoin exit⟨f⟩(args, returns) to premises. *)
+            Encoder.add_premise enc
+              (apply_predicate exit_pred (arg_sexps @ return_args))
+          end
       | s ->
           failwith
             ("chc_infer: unsupported statement: " ^ Stmt.show_stmt_basil s));
@@ -369,15 +443,15 @@ let enter_to_entry_block (preds : proc_predicates) (proc : Program.proc) :
         };
       ]
 
-let encode_proc (prog : Program.t) (proc : Program.proc) :
-    proc_predicates * clause list =
+let encode_proc ~(should_inline : Program.proc -> bool) (prog : Program.t)
+    (proc : Program.proc) : proc_predicates * clause list =
   let live = Livevars.run proc in
   let preds = proc_predicates ~live proc in
   let connect = enter_to_entry_block preds proc in
   let block_clauses =
     Procedure.iter_blocks proc
     |> Iter.flat_map_l (fun (id, block) ->
-        encode_block prog preds proc id block)
+        encode_block ~should_inline prog preds proc id block)
     |> Iter.to_list
   in
   (preds, connect @ block_clauses)
@@ -386,37 +460,72 @@ let all_predicates (preds : proc_predicates) : predicate list =
   preds.enter :: preds.exit
   :: (IDMap.values preds.block_preds |> Iter.to_list)
 
-(** Encode the whole program: gather all predicates and clauses, then add an
-    entry fact for [enter⟨main⟩] with unconstrained inputs. *)
-let encode_program (prog : Program.t) : predicate list * clause list =
+(** Entry fact for a procedure whose body is verified standalone (main, or
+    any inlined procedure): [⟦requires⟧ ⟹ enter⟨f⟩(in_params)]. The
+    precondition defaults to [true] when [requires] is empty, recovering the
+    unconditional entry fact we used in earlier steps. *)
+let entry_fact_for (proc : Program.proc) (enter : predicate) : clause =
+  let requires = (Procedure.specification proc).requires in
+  let premises = List.map Expr_smt.SMTLib2.of_bexpr requires in
+  let args = List.map (fun v -> atom (Var.name v)) enter.params in
+  {
+    vars = enter.params;
+    premises;
+    head = Some (apply_predicate enter args);
+  }
+
+(** One postcondition query per [ensures] clause:
+    [exit⟨f⟩(in_params, out_params) ∧ ¬ensures ⟹ ⊥]. Asserts the body
+    actually satisfies each user-declared postcondition. *)
+let postcondition_queries (proc : Program.proc) (exit : predicate) :
+    clause list =
+  let ensures = (Procedure.specification proc).ensures in
+  let args = List.map (fun v -> atom (Var.name v)) exit.params in
+  let exit_app = apply_predicate exit args in
+  List.map
+    (fun e ->
+      let body = Expr_smt.SMTLib2.of_bexpr e in
+      {
+        vars = exit.params;
+        premises = [ exit_app; SmtExpr.bool_not body ];
+        head = None;
+      })
+    ensures
+
+(** Encode the whole program: gather all predicates and clauses, add entry
+    facts for procedures whose body is verified standalone (main and every
+    inlined procedure), and emit postcondition queries for each [ensures]
+    clause on those procedures. *)
+let encode_program ?(should_inline = default_should_inline) (prog : Program.t)
+    : predicate list * clause list =
+  let main_id =
+    Program.entry_proc_opt prog |> Option.map Procedure.id
+  in
+  let is_main p =
+    match main_id with
+    | Some id -> ID.equal (Procedure.id p) id
+    | None -> false
+  in
+  let verify_standalone p = is_main p || should_inline p in
   let per_proc =
     Program.procs prog
-    |> Iter.map (fun (_, proc) -> (proc, encode_proc prog proc))
+    |> Iter.map (fun (_, proc) -> (proc, encode_proc ~should_inline prog proc))
     |> Iter.to_list
   in
   let preds =
     List.concat_map (fun (_, (p, _)) -> all_predicates p) per_proc
   in
-  let clauses = List.concat_map (fun (_, (_, cs)) -> cs) per_proc in
-  let entry_fact =
-    match Program.entry_proc_opt prog with
-    | None -> []
-    | Some main_proc ->
-        let _, (preds, _) =
-          List.find
-            (fun (p, _) -> ID.equal (Procedure.id p) (Procedure.id main_proc))
-            per_proc
-        in
-        let args = List.map (fun v -> atom (Var.name v)) preds.enter.params in
-        [
-          {
-            vars = preds.enter.params;
-            premises = [];
-            head = Some (apply_predicate preds.enter args);
-          };
-        ]
+  let body_clauses = List.concat_map (fun (_, (_, cs)) -> cs) per_proc in
+  let spec_clauses =
+    List.concat_map
+      (fun (proc, (proc_preds, _)) ->
+        if verify_standalone proc then
+          entry_fact_for proc proc_preds.enter
+          :: postcondition_queries proc proc_preds.exit
+        else [])
+      per_proc
   in
-  (preds, entry_fact @ clauses)
+  (preds, spec_clauses @ body_clauses)
 
 let emit_chc_problem (oc : out_channel) (preds : predicate list)
     (clauses : clause list) : unit =
@@ -571,8 +680,17 @@ let loop_heads (proc : Program.proc) : ID.t list =
 (** Add [requires]/[ensures] to [proc] based on the solver's interpretations
     of its [enter]/[exit] predicates, and prepend [Instr_Assert] at each loop
     head with that block predicate's inferred invariant. [find_def] looks up
-    a predicate by name in the parsed model. *)
-let annotate_proc
+    a predicate by name in the parsed model.
+
+    When [should_inline proc] is true, the user already provided a spec which
+    drove the encoding (precondition-gated entry fact, postcondition
+    queries). Spacer's interpretations of [enter⟨f⟩]/[exit⟨f⟩] are then just
+    restatements of the user's [requires]/[ensures] in whatever shape the
+    solver prefers — appending them would duplicate the spec in a
+    less-readable form. So we skip the procedure-level annotation in that
+    case, but still attach inferred loop-head invariants (those aren't
+    typically user-provided). *)
+let annotate_proc ~(should_inline : Program.proc -> bool)
     ~(find_def : string -> ((string * Sexp.t) list * Sexp.t) option)
     (proc : Program.proc) : Program.proc =
   let live = Livevars.run proc in
@@ -583,19 +701,25 @@ let annotate_proc
     let* inv = extract_invariant pred params body in
     if is_trivially_true inv then None else Some inv
   in
-  (* Procedure-level annotations: requires from enter⟨f⟩, ensures from exit⟨f⟩. *)
-  let spec = Procedure.specification proc in
-  let spec =
-    match invariant_of preds.enter with
-    | Some inv -> { spec with requires = spec.requires @ [ inv ] }
-    | None -> spec
+  let proc =
+    if should_inline proc then proc
+    else
+      (* Procedure-level annotations: requires from enter⟨f⟩, ensures from
+         exit⟨f⟩. Only emitted when the user has no spec for this procedure
+         (otherwise [should_inline] is true and we skip this branch). *)
+      let spec = Procedure.specification proc in
+      let spec =
+        match invariant_of preds.enter with
+        | Some inv -> { spec with requires = spec.requires @ [ inv ] }
+        | None -> spec
+      in
+      let spec =
+        match invariant_of preds.exit with
+        | Some inv -> { spec with ensures = spec.ensures @ [ inv ] }
+        | None -> spec
+      in
+      Procedure.set_specification proc spec
   in
-  let spec =
-    match invariant_of preds.exit with
-    | Some inv -> { spec with ensures = spec.ensures @ [ inv ] }
-    | None -> spec
-  in
-  let proc = Procedure.set_specification proc spec in
   (* Loop invariants: prepend assert at each loop head. [Block.prepend_stmts]
      puts the new stmt at the start of [stmts], i.e. after any phi nodes —
      which is where the phi target is in scope. *)
@@ -620,7 +744,8 @@ let annotate_proc
     with inferred [requires]/[ensures] when the solver returns sat. On unsat
     or unknown the program is returned unchanged. *)
 let infer_invariants (prog : Program.t) : Program.t =
-  let preds, clauses = encode_program prog in
+  let should_inline = default_should_inline in
+  let preds, clauses = encode_program ~should_inline prog in
   Logs.info (fun m ->
       m "Submitting %d predicates and %d clauses to solver"
         (List.length preds) (List.length clauses));
@@ -642,7 +767,9 @@ let infer_invariants (prog : Program.t) : Program.t =
         Logs.info (fun m ->
             m "Solver returned sat; extracted %d definitions"
               (List.length defs));
-        Program.map_procedures (fun _ p -> annotate_proc ~find_def p) prog
+        Program.map_procedures
+          (fun _ p -> annotate_proc ~should_inline ~find_def p)
+          prog
     | Unsat ->
         Logs.warn (fun m ->
             m "Solver returned unsat — no invariants extracted");
