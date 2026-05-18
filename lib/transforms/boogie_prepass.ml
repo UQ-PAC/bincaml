@@ -251,7 +251,7 @@ module Instructions = struct
                ])
            (Expr.BasilExpr.rvar memory)
     in
-    Expr.BasilExpr.binding ~op:`Lambda [ memory; index; value ] body
+    Expr.BasilExpr.lambda ~bound:[ memory; index; value ] body
 
   let load_body ?(be = false) mem_typ val_size addr_size =
     let memory = Var.create ~scope:Var.LocalVar "#memory" mem_typ in
@@ -281,7 +281,7 @@ module Instructions = struct
                     (Bitvec.of_int ~size:addr_size
                        (if be then 0 else steps - 1)))))
     in
-    Expr.BasilExpr.binding ~op:`Lambda [ memory; index ] body
+    Expr.BasilExpr.lambda ~bound:[ memory; index ] body
 
   let store_load_decl (s : Program.stmt) =
     match s with
@@ -372,9 +372,9 @@ module Normalise = struct
         match unfix func with
         | RVar { attrib; id } when Var.is_global id ->
             replace [%here]
-              (BasilExpr.apply_fun ?attrib
+              (BasilExpr.apply_fun ~attrib
                  ~func:
-                   (BasilExpr.rvar ?attrib (Var.copy ~name:(Var.name id) id))
+                   (BasilExpr.rvar ~attrib (Var.copy ~name:(Var.name id) id))
                  args)
         | _ -> replace [%here] (apply_fun_to_map func args))
     | ApplyIntrin { op = `AND; args } ->

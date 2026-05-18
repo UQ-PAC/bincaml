@@ -18,7 +18,6 @@
      ];
      block %exit ( var j_3:bv64 := phi(%a -> yi_9:bv64, %b -> yi_8:bv64) ) [
        var x_3:bv64 := j_3:bv64;
-       nop;
        return;
      ]
   ];
@@ -31,7 +30,6 @@
      block %b [ var bi_3:bv64 := 0x2:bv64; goto (%exit); ];
      block %exit ( var j_3:bv64 := phi(%a -> ai_3:bv64, %b -> bi_3:bv64) ) [
        var x_3:bv64 := j_3:bv64;
-       nop;
        return;
      ]
   ];

@@ -39,10 +39,14 @@ type declaration =
   | Type of { binding : string; typ : Types.t }
   | Function of {
       binding : Var.t;
-      attrib : Expr.BasilExpr.t Attrib.attrib_map;
+      attrib : Attrib.attrib_map;
       definition : func_type;
     }  (** pure functions *)
-  | Variable of { binding : Var.t; attrib : Expr.BasilExpr.t Attrib.attrib_map }
+  | Variable of {
+      binding : Var.t;
+      attrib : Attrib.attrib_map;
+      classification : e option;
+    }
   | Procedure of { definition : proc }
 
 let decl_binding = function
@@ -60,13 +64,10 @@ let pretty_proc p =
 let pretty_declaration d =
   let open Containers_pp in
   match d with
-  | Variable { binding; attrib } ->
+  | Variable { binding; attrib; classification } ->
       let classification =
-        StringMap.find_opt "classification" attrib
-        |> Option.to_list
-        |> List.flat_map (function
-          | `Expr e -> [ text " classification " ^ Expr.BasilExpr.pretty e ]
-          | _ -> [])
+        classification |> Option.to_list
+        |> List.map (fun e -> text " classification " ^ Expr.BasilExpr.pretty e)
         |> append_l
       in
       text (Var.to_decl_string_il binding) ^ classification
@@ -105,7 +106,7 @@ type t = {
   implicit_decls : implicit_declaration IDMap.t;
   entry_proc : ID.t option;
   global_names : ID.generator;
-  attrib : e Attrib.attrib_map;
+  attrib : Attrib.attrib_map;
   spec : prog_spec;
 }
 
@@ -284,9 +285,9 @@ let pretty_to_chan chan (p : t) =
   Containers_pp.Pretty.to_format ~width:80 fmt p;
   Format.flush fmt ()
 
-let decl_global ?(attrib = StringMap.empty) p v =
+let decl_global ?(attrib = StringMap.empty) ?(classification = None) p v =
   let id : ID.t = p.global_names.decl_exn (Var.name v) in
-  let decl = Variable { binding = v; attrib } in
+  let decl = Variable { binding = v; attrib; classification } in
   { p with declarations = IDMap.add id decl p.declarations }
 
 let decl_typ ?(attrib = StringMap.empty) p t =
