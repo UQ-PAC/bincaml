@@ -2,8 +2,7 @@
 
 (rule
  (deps src/parser.c queries/highlights.scm)
- (alias runtest)
- (enabled_if %{bin-available:tree-sitter})
+ (alias treesit)
  (action
   (with-stdin-from
    %{project_root}/examples/cat.il
@@ -18,9 +17,8 @@
 ; bnfc for the main ocaml parser.
 
 (rule
- (alias runtest)
+ (alias treesit)
  (deps %{project_root}/lib/fe/BasilIR.cf)
- (enabled_if %{read:../lib/fe/has-bnfc-tree-sitter})
  (action
   (progn
    (copy %{deps} basilir.cf)
@@ -30,12 +28,16 @@
     --tree-sitter-word
     LocalIdent
     basilir.cf
-    --makefile)
-   (run sed -i.bak "s/= grammar/= /" tree-sitter-basilir/grammar.js)
-   (diff? grammar.bnfc.js tree-sitter-basilir/grammar.js))))
+    --makefile
+    --outputdir=out/tree-sitter-basilir)
+   ; compensate for older bnfc emitting into a subfolder of outputdir
+   (with-stdout-to
+    grammar.bnfc.js.new
+    (bash "shopt -s globstar ; sed 's/= grammar/= /' out/**/grammar.js"))
+   (diff? grammar.bnfc.js grammar.bnfc.js.new))))
 
 (rule
- (alias runtest)
+ (alias treesit)
  (deps (universe))
  (enabled_if
   (not %{read:../lib/fe/has-bnfc-tree-sitter}))
@@ -43,3 +45,17 @@
   (echo
    "tree-sitter/dune: bnfc tree-sitter generation skipped,"
    "because the installed bnfc doesn't support it.\n")))
+
+; run treesit test as part of runtest if possible, unless CI=true which
+; is set by actions runners
+
+(alias
+ (name runtest)
+ (deps
+  (alias treesit))
+ (enabled_if
+  (and
+   %{read:../lib/fe/has-bnfc-tree-sitter}
+   %{bin-available:tree-sitter}
+   (not
+    (= %{env:CI=} "true")))))
