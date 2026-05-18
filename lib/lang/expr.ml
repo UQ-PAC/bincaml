@@ -675,20 +675,13 @@ module HashExprFix = struct
           let h = Hash.poly in
           AbstractExpr.hash h Var.hash h h h Hashtbl.hash Fix.HashCons.hash e
 
-    exception EQErr of (t * t)
-
     let equal (i : t) (j : t) : bool =
-      let he = hash i = hash j in
       match (i, j) with
       | E i', E j' ->
-          let e =
-            AbstractExpr.equal equal_const Var.equal equal_unary equal_binary
-              equal_intrin Types.equal Fix.HashCons.equal
-              (AbstractExpr.drop_attrib i')
-              (AbstractExpr.drop_attrib j')
-          in
-          if e then if not he then raise (EQErr (i, j));
-          e
+          AbstractExpr.equal equal_const Var.equal equal_unary equal_binary
+            equal_intrin Types.equal Fix.HashCons.equal
+            (AbstractExpr.drop_attrib i')
+            (AbstractExpr.drop_attrib j')
   end
 
   type typ = Types.t
