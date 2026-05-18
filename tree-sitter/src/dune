@@ -3,7 +3,6 @@
  (targets grammar.json parser.c node-types.json)
  (alias treesit)
  (mode promote)
- (enabled_if %{bin-available:tree-sitter})
  (action
   (chdir
    ..
