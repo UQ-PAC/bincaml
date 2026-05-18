@@ -43,14 +43,3 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: opam lint
-
-#  lint-opam:
-#    name: lint-opam
-#    runs-on: ubuntu-latest
-#    container: ghcr.io/agle/bincaml-ci-containers/ci-5.4:latest
-#    steps:
-#      - uses: actions/checkout@v6
-#      - run: |
-#          opam install -t . --deps-only
-#          opam install opam-dune-lint
-#          opam exec -- opam-dune-lint
