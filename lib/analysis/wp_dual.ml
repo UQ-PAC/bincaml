@@ -1,15 +1,16 @@
 (* The wp dual domain for precondition inference *)
+(* Assumes SSA form *)
 
 open Lang
 open Common
 open Expr
 
-module type FunctionSummaryAnnotation = sig
+module type FunctionAnnotation = sig
   val requires : ID.t -> Expr.BasilExpr.t list
   val ensures : ID.t -> Expr.BasilExpr.t list
 end
 
-module Domain (S : FunctionSummaryAnnotation) = struct
+module Domain (S : FunctionAnnotation) = struct
   let name = "WP dual domain"
 
   type t = Program.e
@@ -31,22 +32,24 @@ module Domain (S : FunctionSummaryAnnotation) = struct
     let rw =
       BasilExpr.rewrite ~rw_fun:(function
         | ApplyIntrin { op; args = [ l ] } -> replace [%here] l
-        | ApplyIntrin { attrib; op = `OR; args }
+        | ApplyIntrin { attrib; op = `OR; args; typ }
           when List.mem ~eq:BasilExpr.equal e_false args ->
             let args = List.remove ~eq:BasilExpr.equal ~key:e_false args in
             replace [%here]
               (match args with
               | [] -> e_false
               | [ l ] -> l
-              | args -> BasilExpr.fix (ApplyIntrin { attrib; op = `OR; args }))
-        | ApplyIntrin { attrib; op = `AND; args }
+              | args ->
+                  BasilExpr.fix (ApplyIntrin { attrib; op = `OR; args; typ }))
+        | ApplyIntrin { attrib; op = `AND; args; typ }
           when List.mem ~eq:BasilExpr.equal e_true args ->
             let args = List.remove ~eq:BasilExpr.equal ~key:e_true args in
             replace [%here]
               (match args with
               | [] -> e_true
               | [ l ] -> l
-              | args -> BasilExpr.fix (ApplyIntrin { attrib; op = `AND; args }))
+              | args ->
+                  BasilExpr.fix (ApplyIntrin { attrib; op = `AND; args; typ }))
         | ApplyIntrin { op = `OR; args }
           when List.mem ~eq:BasilExpr.equal e_true args ->
             replace [%here] e_true
@@ -57,7 +60,7 @@ module Domain (S : FunctionSummaryAnnotation) = struct
             replace [%here] e_true
         | UnaryExpr { op = `BoolNOT; arg } when BasilExpr.equal arg e_true ->
             replace [%here] e_false
-        | UnaryExpr { attrib; op = `Gamma; arg } ->
+        | UnaryExpr { attrib; op = `Gamma; arg; typ } ->
             replace [%here]
               (match free_vars arg |> VarSet.to_list with
               | [] -> e_true
@@ -68,6 +71,7 @@ module Domain (S : FunctionSummaryAnnotation) = struct
                        {
                          attrib;
                          op = `AND;
+                         typ;
                          args =
                            vars
                            |> List.map
@@ -79,7 +83,7 @@ module Domain (S : FunctionSummaryAnnotation) = struct
 
   let join a b = BasilExpr.applyintrin ~op:`OR [ a; b ] |> simplify
   let widening a b = top
-  let init proc = bottom
+  let init ?(vertex = None) proc = bottom
 
   let leq a b =
     raise

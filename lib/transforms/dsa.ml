@@ -54,7 +54,10 @@ let replace_phis_with_dsa_blocks procedure (phis : dsa_block Iter.t) =
         Stmt.Instr_Assign
           (phi_assignments
           |> List.map (fun (lhs, rhs) ->
-              (lhs, Expr.BasilExpr.fix (RVar { attrib = None; id = rhs }))))
+              ( lhs,
+                Expr.BasilExpr.fix
+                  (RVar { attrib = Attrib.empty; id = rhs; typ = Var.typ rhs })
+              )))
       in
       let procedure, intermediate_block =
         Procedure.fresh_block procedure

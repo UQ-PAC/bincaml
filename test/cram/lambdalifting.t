@@ -23,14 +23,14 @@ written by @caller.  After the pass:
   >   
   8,9c5,11
   <    block %entry [ $x:bv32 := bvadd($x, $y); goto (%ret); ];
-  <    block %ret [ nop; return; ]
+  <    block %ret [ return; ]
   ---
   >    block %inputs [
   >      (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32);
   >      goto (%entry);
   >    ];
   >    block %entry [ var x:bv32 := bvadd(x:bv32, y:bv32); goto (%ret); ];
-  >    block %ret [ nop; goto (%returns); ];
+  >    block %ret [ goto (%returns); ];
   >    block %returns [ var x_out:bv32 := x:bv32; return; ]
   11,13c13,14
   < proc @caller()  -> () {  }
@@ -53,9 +53,9 @@ written by @caller.  After the pass:
   >      var x:bv32 := 0x1:bv32;
   >      (var x:bv32=x_out) := call @callee(x_in=x:bv32, y_in=y:bv32);
   22c27,31
-  <    block %ret [ nop; return; ]
+  <    block %ret [ return; ]
   ---
-  >    block %ret [ nop; goto (%returns); ];
+  >    block %ret [ goto (%returns); ];
   >    block %returns [
   >      (var x_out:bv32 := x:bv32, var y_out:bv32 := y:bv32);
   >      return;
@@ -101,9 +101,9 @@ all global refs in requires (not just those under Old) become in-params.
   >      assert eq(x:bv32, x_in:bv32);
   >      var x:bv32 := bvadd(x:bv32, y:bv32);
   15c15,16
-  <    block %ret [ nop; return; ]
+  <    block %ret [ return; ]
   ---
-  >    block %ret [ nop; goto (%returns); ];
+  >    block %ret [ goto (%returns); ];
   >    block %returns [ var x_out:bv32 := x:bv32; return; ]
   17,19c18,19
   < proc @caller()  -> () {  }
@@ -126,9 +126,9 @@ all global refs in requires (not just those under Old) become in-params.
   >      var x:bv32 := 0x1:bv32;
   >      (var x:bv32=x_out) := call @callee(x_in=x:bv32, y_in=y:bv32);
   28c32,36
-  <    block %ret [ nop; return; ]
+  <    block %ret [ return; ]
   ---
-  >    block %ret [ nop; goto (%returns); ];
+  >    block %ret [ goto (%returns); ];
   >    block %returns [
   >      (var x_out:bv32 := x:bv32, var y_out:bv32 := y:bv32);
   >      return;

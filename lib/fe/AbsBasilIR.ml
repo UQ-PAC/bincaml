@@ -238,6 +238,7 @@ and lambdaDef =
 
 and binOp =
    BinOp_implies
+ | BinOp_get
  | BinOpBVBinOp of bVBinOp
  | BinOpBVLogicalBinOp of bVLogicalBinOp
  | BinOpIntLogicalBinOp of intLogicalBinOp
@@ -315,6 +316,7 @@ and intrinOp =
  | IntrinOp_bvxor
  | IntrinOp_bvconcat
  | IntrinOp_bvmul
+ | IntrinOp_update
 
 and pointerBinOp =
    PointerBinOp_ptradd

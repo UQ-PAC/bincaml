@@ -96,8 +96,14 @@
 
           devShells = {
             default = self.devShells.fp;
-            fp = fpOcamlPackages.callPackage ./nix/shell.nix { inherit bnfc-treesitter; };
-            no-fp = selfOcamlPackages.callPackage ./nix/shell.nix { inherit bnfc-treesitter; };
+            fp = fpOcamlPackages.callPackage ./nix/shell.nix {
+              inherit bnfc-treesitter;
+              z3 = pkgs.z3.out;
+            };
+            no-fp = selfOcamlPackages.callPackage ./nix/shell.nix {
+              inherit bnfc-treesitter;
+              z3 = pkgs.z3.out;
+            };
           };
         };
     };

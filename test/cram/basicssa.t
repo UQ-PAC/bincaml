@@ -151,7 +151,7 @@ Run on basic irreducible loop example
        $R31:bv64 := bvadd($R31, 0x20:bv64);
        goto (%main_basil_return_1);
      ];
-     block %main_basil_return_1 [ nop; return; ]
+     block %main_basil_return_1 [ return; ]
   ];
   proc @puts_1584()  -> () { .address = 1584; .name = "puts" }
     modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,

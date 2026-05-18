@@ -19,13 +19,13 @@ module EvalExprGen = struct
     let* wd = Expr_gen.gen_width in
     Expr_gen.gen_bvexpr (1, wd)
 
-  let arb_bvexpr = QCheck.make ~print:Expr.BasilExpr.to_string eval_expr
+  let arb_bvexpr = QCheck.make ~print:Expr.BasilExpr.to_string_annot eval_expr
 
   let arb_partial_eval_bvexpr =
     QCheck.make ~print:(fun (e, p) ->
         Printf.sprintf "%s ~> %s"
-          (Expr.BasilExpr.to_string e)
-          (Expr.BasilExpr.to_string (Lazy.force p)))
+          (Expr.BasilExpr.to_string_annot e)
+          (Expr.BasilExpr.to_string_annot (Lazy.force p)))
     @@
     let open QCheck.Gen in
     let* exp = eval_expr in
@@ -73,7 +73,7 @@ let partial_eval_test =
     try Lazy.force evaled
     with exc ->
       Printf.printf "exc: %s\n%s\n" (Printexc.to_string exc)
-        (Expr.BasilExpr.to_string exp);
+        (Expr.BasilExpr.to_string_annot exp);
       raise exc
   in
 
@@ -105,8 +105,12 @@ let check_smt =
   let arb =
     QCheck.make
       ~print:(fun (a, s, e) ->
-        Expr.BasilExpr.to_string a ^ " -> " ^ Sexp.to_string s ^ " -> "
-        ^ match e with None -> "none" | Some e -> Expr.BasilExpr.to_string e)
+        Expr.BasilExpr.to_string_annot a
+        ^ " -> " ^ Sexp.to_string s ^ " -> "
+        ^
+        match e with
+        | None -> "none"
+        | Some e -> Expr.BasilExpr.to_string_annot e)
       gen
   in
 

@@ -193,15 +193,14 @@ let pretty_apply_function (func : Containers_pp.t)
 
 let type_of e = Expr.BasilExpr.type_alg (Expr.AbstractExpr.map fst e)
 
-let rec pretty_attribute (attr : Program.e Attrib.t) =
+let rec pretty_attribute (attr : Attrib.t) =
   let open Containers_pp in
   match attr with
   | `List l -> List.flat_map pretty_attribute l
   | `String s -> [ text s ]
-  | `Expr e -> [ pretty_expr e ]
   | _ -> []
 
-and pretty_attribute_map (key : string) (a : Program.e Attrib.attrib_map) =
+and pretty_attribute_map (key : string) (a : Attrib.attrib_map) =
   let open Containers_pp in
   StringMap.find_opt key a |> Option.to_list
   |> List.flat_map (function `Assoc m -> StringMap.bindings m | _ -> [])
@@ -211,20 +210,17 @@ and pretty_attribute_map (key : string) (a : Program.e Attrib.attrib_map) =
         "}")
   |> append_sp
 
-and pretty_triggers (attrib : Program.e Attrib.t option) =
+and pretty_triggers (triggers : Containers_pp.t list list) =
   let open Containers_pp in
-  Attrib.find_opt ".triggers" attrib
-  |> Option.map (fun attrib ->
-      append_sp
-      @@ List.map (fun b -> bracket "{" b "}")
-      @@ pretty_attribute attrib)
-  |> Option.get_or ~default:(text "")
+  triggers
+  |> List.map (fun attrib -> bracket "{" (append_l ~sep:(text ", ") attrib) "}")
+  |> append_sp
 (* Option.map (Attrib.attrib_pretty Expr.BasilExpr.pretty) attrib |> Option.get_or ~default:(text "MAGIC") *)
 
-and pretty_binding_expr ?(attrib : Program.e Attrib.t option) bound in_body =
+and pretty_binding_expr triggers bound in_body =
   let open Containers_pp in
   pretty_call_args_no_brackets (List.map pretty_variable_typed bound)
-  ^+ text "::" ^+ newline_or_spaces 0 ^ pretty_triggers attrib
+  ^+ text "::" ^+ newline_or_spaces 0 ^ pretty_triggers triggers
   ^+ newline_or_spaces 0 ^ snd in_body
 
 and pretty_expr_alg
@@ -233,7 +229,7 @@ and pretty_expr_alg
   match e with
   | RVar { attrib; id } -> pretty_variable id
   | Constant { attrib; const } -> pretty_const const
-  | Lambda { attrib; op; bound_vars; in_body } ->
+  | Lambda { attrib; op; bound_vars; in_body; triggers } ->
       let op =
         text
         @@
@@ -242,7 +238,12 @@ and pretty_expr_alg
         | `Exists -> "exists"
         | `Lambda -> "lambda"
       in
-      bracket "(" (op ^+ pretty_binding_expr ?attrib bound_vars in_body) ")"
+      bracket "("
+        (op
+        ^+ pretty_binding_expr
+             (List.map (List.map snd) triggers)
+             bound_vars in_body)
+        ")"
   | UnaryExpr { op; arg } -> pretty_unary_expr op arg (type_of e)
   | BinaryExpr { op; arg1; arg2 } -> pretty_binary_expr op arg1 arg2 (type_of e)
   | ApplyIntrin { op; args } -> pretty_apply_intrinsic op args (type_of e)

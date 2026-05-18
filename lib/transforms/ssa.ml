@@ -255,10 +255,12 @@ let lift_procedure_params prog ~skip_observable ~skip_maps all_lifted procid
     (* Rewrite ensures: Old(g) → g_in (entry value); bare modified g →
            g_out (exit value); bare captured-only g → g_in (unchanged).
            Old(g) is handled first so the bare-g pass doesn't clobber it. *)
+    let fvs = Expr.BasilExpr.free_vars expr in
     let alg node =
       match node with
       | UnaryExpr { op = `Old; arg } -> replace [%here] (rewrite_old_expr arg)
-      | RVar { id } when Var.is_constant id -> Keep
+      | RVar { id } when Var.is_constant id || (not @@ VarSet.mem id fvs) ->
+          Keep
       | RVar { id } -> (
           match StringMap.find_opt (Var.name id) glob_to_outparam with
           | Some v -> replace [%here] (rvar v)
@@ -505,7 +507,7 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
   in
   let delayed_phis = ref IDSet.empty in
 
-  let tf_block proc block_id b =
+  let tf_block proc block_id (b : Program.bloc) =
     let pred = Procedure.blocks_pred proc block_id |> Iter.to_list in
     let get_st_pred id =
       Hashtbl.get st id |> function
@@ -515,6 +517,28 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
           delayed_phis := IDSet.add id !delayed_phis;
           VarMap.empty
     in
+
+    let lives2 = lives (End block_id) in
+    let lives2 =
+      Block.fold_backwards ~init:lives2 ~phi:const
+        ~f:Stmt.(fun init -> free_vars ~init)
+        b
+    in
+
+    let new_renames = ref [] in
+    let cur_phis = b.phis in
+    let cur_phis =
+      List.fold_left
+        (fun acc ({ lhs; rhs } : Var.t Block.phi) ->
+          VarMap.add lhs
+            ( rename new_renames lhs,
+              rhs
+              |> List.map (fun (a, b) ->
+                  (a, VarMap.get_or ~default:b b (get_st_pred a))) )
+            acc)
+        VarMap.empty cur_phis
+    in
+
     let renames, bl_phis =
       match pred with
       | [] ->
@@ -526,13 +550,9 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
             List.map (fun (id, _) -> (id, get_st_pred id)) inc
             |> List.fold_left
                  (fun phim (block, rn) ->
-                   let rn =
-                     VarMap.filter
-                       (fun v _ -> VarSet.mem v (lives (Begin block_id)))
-                       rn
-                   in
+                   let rn = VarMap.filter (fun v _ -> VarSet.mem v lives2) rn in
                    VarMap.merge_safe ~f:(merge_phi block) phim rn)
-                 VarMap.empty
+                 cur_phis
           in
           (* TODO: this will join everything, we should only join things with diff definitions *)
           Hashtbl.add phis block_id joined_phis;
