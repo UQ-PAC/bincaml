@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    name: build
+    name: build_test
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -18,6 +18,8 @@ jobs:
         include:
           - ocaml-version: "5.4"
             container: ghcr.io/agle/bincaml-ci-containers/ci-5.4:latest
+          - ocaml-version: "5.3"
+            container: ghcr.io/agle/bincaml-ci-containers/ci-5.3-doc:latest
 
     runs-on: ubuntu-latest
     container: ${{ matrix.container }}
@@ -28,10 +30,10 @@ jobs:
       - run: opam exec -- dune build '@install'
       - run: opam exec -- dune runtest --force --profile=release
 
-  format:
+  lint-fmt:
     name: format 
     runs-on: ubuntu-latest
-    container: ghcr.io/agle/bincaml-ci-containers/ci-doc-5.3:latest
+    container: ghcr.io/agle/bincaml-ci-containers/ci-5.4:latest
     steps:
       - uses: actions/checkout@v6
       - run: opam exec -- dune build @fmt --display=quiet
@@ -39,7 +41,7 @@ jobs:
   lint-opam:
     name: lint-opam 
     runs-on: ubuntu-latest
-    container: ghcr.io/agle/bincaml-ci-containers/ci-doc-5.3:latest
+    container: ghcr.io/agle/bincaml-ci-containers/ci-5.4:latest
     steps:
       - uses: actions/checkout@v6
       - run: opam lint
