@@ -70,13 +70,27 @@ let predicate_name ~proc ~suffix = "p_" ^ proc ^ "_" ^ suffix
 let block_predicate_name proc_id block_id =
   predicate_name ~proc:(ID.to_string proc_id) ~suffix:(ID.to_string block_id)
 
+(** Variables live just after the block's phi nodes, i.e. at the start of
+    its regular statements. {!Livevars.run} gives us live-before-phis at
+    [Begin id]; this walks the block's stmts backward starting from
+    live-at-exit ([live (End id)]) and skips the phi step, yielding
+    live-after-phis. This is the set we actually want for a block's CHC
+    predicate parameters: it includes phi targets that are still used, and
+    excludes phi sources that are only consumed by the phi. *)
+let live_after_phis_of (block : Program.bloc) ~(live_at_exit : VarSet.t) :
+    VarSet.t =
+  Block.fold_backwards
+    ~f:(fun init s -> Stmt.free_vars ~init s)
+    ~phi:(fun acc _phis -> acc)
+    ~init:live_at_exit
+    block
+
 (** Compute predicate parameters for a block: the procedure's in-parameters
-    followed by the live variables at block entry that aren't already
-    in-parameters (preserving deterministic order). *)
-let block_params ~in_params ~live_at =
+    followed by [live-after-phis] (minus duplicates). *)
+let block_params ~in_params ~live_after_phis =
   let in_set = VarSet.of_list in_params in
-  let extra = VarSet.diff live_at in_set |> VarSet.to_list in
-  in_params @ extra
+  let extras = VarSet.diff live_after_phis in_set |> VarSet.to_list in
+  in_params @ extras
 
 let proc_predicates ~live (proc : Program.proc) : proc_predicates =
   let proc_id = Procedure.id proc in
@@ -90,9 +104,10 @@ let proc_predicates ~live (proc : Program.proc) : proc_predicates =
   let block_preds =
     Procedure.iter_blocks proc
     |> Iter.fold
-         (fun acc (id, _) ->
-           let live_at = live (Procedure.Vert.Begin id) in
-           let params = block_params ~in_params ~live_at in
+         (fun acc (id, block) ->
+           let live_at_exit = live (Procedure.Vert.End id) in
+           let live_after_phis = live_after_phis_of block ~live_at_exit in
+           let params = block_params ~in_params ~live_after_phis in
            IDMap.add id { name = block_predicate_name proc_id id; params } acc)
          IDMap.empty
   in
@@ -165,16 +180,31 @@ let block_successors (proc : Program.proc) (block_id : ID.t) : block_succs =
         (Procedure.Vert.End block_id)
         { blocks = []; returns = false }
 
+(** Build a phi-substitution map for the edge from [from_id] into a block:
+    each phi target maps to whichever rhs variable the source block
+    contributes for this edge. Used when computing the head args of a
+    transition clause — the successor's predicate has the phi target as a
+    parameter, and we bind it to the source's value. *)
+let phi_subst_for_edge ~(from_id : ID.t) (succ_block : Program.bloc) :
+    Var.t VarMap.t =
+  List.fold_left
+    (fun acc (phi : Var.t Block.phi) ->
+      match List.assoc_opt ~eq:ID.equal from_id phi.rhs with
+      | Some src -> VarMap.add phi.lhs src acc
+      | None -> acc)
+    VarMap.empty
+    succ_block.phis
+
 (** Encode a single block. Returns one rule clause per outgoing edge (block
-    successor or procedure return). *)
+    successor or procedure return). Phi nodes in the successor are resolved
+    by substituting each phi target with the appropriate rhs variable for
+    this edge before doing the Δ lookup. *)
 let encode_block (preds : proc_predicates) (proc : Program.proc)
     (block_id : ID.t) (block : Program.bloc) : clause list =
   let block_pred = IDMap.find block_id preds.block_preds in
   let enc = Encoder.create ~initial_vars:block_pred.params in
   let entry_args = List.map (fun v -> atom (Var.name v)) block_pred.params in
   Encoder.add_premise enc (apply_predicate block_pred entry_args);
-  if not (List.is_empty block.phis) then
-    failwith "chc_infer: phi nodes not supported yet (run dynamic-single-assignment first)";
   let queries = ref [] in
   let snapshot_query ~extra_premises =
     queries :=
@@ -212,20 +242,34 @@ let encode_block (preds : proc_predicates) (proc : Program.proc)
           failwith
             ("chc_infer: unsupported statement: " ^ Stmt.show_stmt_basil s));
   let succs = block_successors proc block_id in
-  let mk_head_args (pred : predicate) =
-    List.map (fun v -> atom (Var.name (Encoder.lookup enc v))) pred.params
+  let mk_head_args ~phi_subst (pred : predicate) =
+    List.map
+      (fun v ->
+        let v' =
+          match VarMap.find_opt v phi_subst with Some src -> src | None -> v
+        in
+        atom (Var.name (Encoder.lookup enc v')))
+      pred.params
   in
   let block_clauses =
     List.map
       (fun succ_id ->
         let succ_pred = IDMap.find succ_id preds.block_preds in
-        let head = apply_predicate succ_pred (mk_head_args succ_pred) in
+        let succ_block =
+          Procedure.get_block proc succ_id
+          |> Option.get_exn_or "chc_infer: missing successor block"
+        in
+        let phi_subst = phi_subst_for_edge ~from_id:block_id succ_block in
+        let head = apply_predicate succ_pred (mk_head_args ~phi_subst succ_pred) in
         { vars = Encoder.vars enc; premises = Encoder.premises enc; head = Some head })
       succs.blocks
   in
   let return_clauses =
     if succs.returns then
-      let head = apply_predicate preds.exit (mk_head_args preds.exit) in
+      let head =
+        apply_predicate preds.exit
+          (mk_head_args ~phi_subst:VarMap.empty preds.exit)
+      in
       [ { vars = Encoder.vars enc; premises = Encoder.premises enc; head = Some head } ]
     else []
   in
@@ -389,6 +433,20 @@ let parse_model (model : Sexp.t) : (string * (string * Sexp.t) list * Sexp.t) li
         defs
   | _ -> []
 
+(** Preprocess a model body before decoding: expand [let] bindings and strip
+    [(! ... :attrs ...)] annotation forms. Spacer's models wrap subterms in
+    these and {!Lang.Expr_smt.SMTLib2.expr_of_smt} doesn't recognise them
+    natively. *)
+let preprocess_model_body (s : Sexp.t) : Sexp.t =
+  let expanded = Bincaml_util.Smt.Expr.no_let s in
+  let rec strip s =
+    match s with
+    | `List (`Atom "!" :: body :: _attrs) -> strip body
+    | `List xs -> `List (List.map strip xs)
+    | _ -> s
+  in
+  strip expanded
+
 (** Decode a predicate body returned by the solver into a [BasilExpr.t],
     binding the model's positional parameters to the predicate's actual
     variables. Returns [None] if the body contains constructs
@@ -406,7 +464,7 @@ let extract_invariant (pred : predicate)
              StringMap.add name (BasilExpr.rvar v) acc)
            StringMap.empty
     in
-    Expr_smt.SMTLib2.expr_of_smt vardefs body
+    Expr_smt.SMTLib2.expr_of_smt vardefs (preprocess_model_body body)
 
 (** [true] when an expression is the boolean literal [true] — i.e. the
     solver gave us no useful information. We don't emit these as
@@ -416,46 +474,62 @@ let is_trivially_true (e : BasilExpr.t) : bool =
   | Constant { const = `Bool true; _ } -> true
   | _ -> false
 
+(** Loop heads of a procedure — SCC component heads in the forward weak
+    topological ordering. Every cycle in the CFG has exactly one of these as
+    its entry point. *)
+let loop_heads (proc : Program.proc) : ID.t list =
+  Procedure.iter_blocks_topo_fwd_headers proc
+  |> Iter.filter_map (fun (id, h, _b) ->
+      match h with `Header -> Some id | `Vert -> None)
+  |> Iter.to_list
+
 (** Add [requires]/[ensures] to [proc] based on the solver's interpretations
-    of its [enter]/[exit] predicates. [find_def] looks up a predicate by name
-    in the parsed model. *)
+    of its [enter]/[exit] predicates, and prepend [Instr_Assert] at each loop
+    head with that block predicate's inferred invariant. [find_def] looks up
+    a predicate by name in the parsed model. *)
 let annotate_proc
     ~(find_def : string -> ((string * Sexp.t) list * Sexp.t) option)
     (proc : Program.proc) : Program.proc =
-  let pname = ID.to_string (Procedure.id proc) in
-  let in_params =
-    Procedure.formal_in_params proc |> StringMap.values |> Iter.to_list
-  in
-  let out_params =
-    Procedure.formal_out_params proc |> StringMap.values |> Iter.to_list
-  in
-  let enter_pred =
-    { name = predicate_name ~proc:pname ~suffix:"enter"; params = in_params }
-  in
-  let exit_pred =
-    {
-      name = predicate_name ~proc:pname ~suffix:"exit";
-      params = in_params @ out_params;
-    }
-  in
+  let live = Livevars.run proc in
+  let preds = proc_predicates ~live proc in
   let invariant_of (pred : predicate) : BasilExpr.t option =
     let open Option.Infix in
     let* params, body = find_def pred.name in
     let* inv = extract_invariant pred params body in
     if is_trivially_true inv then None else Some inv
   in
+  (* Procedure-level annotations: requires from enter⟨f⟩, ensures from exit⟨f⟩. *)
   let spec = Procedure.specification proc in
   let spec =
-    match invariant_of enter_pred with
+    match invariant_of preds.enter with
     | Some inv -> { spec with requires = spec.requires @ [ inv ] }
     | None -> spec
   in
   let spec =
-    match invariant_of exit_pred with
+    match invariant_of preds.exit with
     | Some inv -> { spec with ensures = spec.ensures @ [ inv ] }
     | None -> spec
   in
-  Procedure.set_specification proc spec
+  let proc = Procedure.set_specification proc spec in
+  (* Loop invariants: prepend assert at each loop head. [Block.prepend_stmts]
+     puts the new stmt at the start of [stmts], i.e. after any phi nodes —
+     which is where the phi target is in scope. *)
+  loop_heads proc
+  |> List.fold_left
+       (fun proc head_id ->
+         let head_pred = IDMap.find head_id preds.block_preds in
+         match invariant_of head_pred with
+         | Some inv ->
+             let block =
+               Procedure.get_block proc head_id
+               |> Option.get_exn_or "chc_infer: missing loop head block"
+             in
+             let block' =
+               Block.prepend_stmts block [ Stmt.Instr_Assert { body = inv } ]
+             in
+             Procedure.update_block proc head_id block'
+         | None -> proc)
+       proc
 
 (** Full pass: encode the program as CHCs, solve, and annotate each procedure
     with inferred [requires]/[ensures] when the solver returns sat. On unsat

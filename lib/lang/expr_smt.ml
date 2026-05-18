@@ -173,6 +173,20 @@ module SMTLib2 = struct
       | _ -> None
   end
 
+  let rec typ_of_smt (s : Sexp.t) : Types.t option =
+    let open Option.Infix in
+    match s with
+    | `Atom "Bool" -> Some Types.Boolean
+    | `Atom "Int" -> Some Types.Integer
+    | `List [ `Atom "_"; `Atom "BitVec"; `Atom n ] ->
+        let* n = Int.of_string n in
+        Some (Types.Bitvector n)
+    | `List [ `Atom "Array"; k; v ] ->
+        let* k = typ_of_smt k in
+        let* v = typ_of_smt v in
+        Some (Types.Map (k, v))
+    | _ -> None
+
   let rec expr_of_smt vardefs (e : Sexp.t) =
     let open Option.Infix in
     let module T = List.Traverse (Option) in
@@ -202,6 +216,22 @@ module SMTLib2 = struct
         let* t = expr_of_smt vardefs t in
         let* e = expr_of_smt vardefs e in
         Some (BasilExpr.ifthenelse c t e)*)
+    | `List [ `Atom ("forall" | "exists" as q); `List binders; body ] ->
+        let decode_bind = function
+          | `List [ `Atom name; sort_sexp ] ->
+              let* typ = typ_of_smt sort_sexp in
+              Some (Var.create name typ, name)
+          | _ -> None
+        in
+        let* bound_pairs = T.map_m decode_bind binders in
+        let vardefs' =
+          List.fold_left
+            (fun acc (v, name) -> StringMap.add name (BasilExpr.rvar v) acc)
+            vardefs bound_pairs
+        in
+        let* body' = expr_of_smt vardefs' body in
+        let op = if String.equal q "forall" then `Forall else `Exists in
+        Some (BasilExpr.binding ~op (List.map fst bound_pairs) body')
     | `List (op :: args) -> (
         let* args = T.map_m (expr_of_smt vardefs) args in
         match (op, args) with
