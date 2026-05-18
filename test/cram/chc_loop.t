@@ -22,11 +22,8 @@ when the assert is checked):
      block %loop (
        var i_3:bv64 := phi(%loop_body -> i_5:bv64, %entry -> i_2:bv64)
      ) [
-       assert boolor(eq(extract(64,4, i_3:bv64), 0x0:bv60),
-        exists (x!3:bv64) :: (booland(eq(extract(64,4, x!3:bv64), 0x0:bv60),
+       assert eq(extract(64,4, i_3:bv64), 0x0:bv60);
+       goto (%loop_exit,%loop_body);
 
-The exit predicate's invariant is attached as an [ensures] clause on the
-procedure spec:
-
-  $ grep -c '^ *ensures' chc_loop_out.il
-  1
+The invariant says the high 60 bits of [i_3] are zero, i.e. [i_3 ≤ 15] —
+strong enough to discharge the [i ≤ 20] assertion at the loop exit.

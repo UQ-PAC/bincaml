@@ -369,12 +369,25 @@ let show_solve_result = function
   | Unsat -> "unsat"
   | Unknown -> "unknown"
 
+(** Open a Z3 process configured for Spacer with model-preserving options.
+    Spacer's slicing and eager-inlining transformations rewrite the input in
+    ways that drop predicate parameters or fuse predicates together, which
+    breaks our positional-parameter mapping when decoding the model. Turn
+    both off so [(get-model)] returns predicates that line up with what we
+    sent. *)
+let open_spacer () =
+  let module Solver = Bincaml_util.Smt.Solver in
+  let s = Solver.create Bincaml_util.Smt.Config.z3 in
+  Solver.set_option s ":fp.xform.slice" "false";
+  Solver.set_option s ":fp.xform.inline_eager" "false";
+  Solver.set_logic s "HORN";
+  s
+
 (** Send the encoded CHC system to Z3/Spacer. Reuses {!Bincaml_util.Smt.Solver}
     directly; the only HORN-specific bit is the [(set-logic HORN)] preamble. *)
 let solve (preds : predicate list) (clauses : clause list) : solve_result =
   let module Solver = Bincaml_util.Smt.Solver in
-  let s = Solver.create Bincaml_util.Smt.Config.z3 in
-  Solver.set_logic s "HORN";
+  let s = open_spacer () in
   List.iter
     (fun pr -> Solver.add_command s (declare_predicate pr))
     preds;
@@ -540,8 +553,7 @@ let infer_invariants (prog : Program.t) : Program.t =
       m "Submitting %d predicates and %d clauses to solver"
         (List.length preds) (List.length clauses));
   let module Solver = Bincaml_util.Smt.Solver in
-  let s = Solver.create Bincaml_util.Smt.Config.z3 in
-  Solver.set_logic s "HORN";
+  let s = open_spacer () in
   List.iter (fun pr -> Solver.add_command s (declare_predicate pr)) preds;
   List.iter (fun c -> Solver.add_command s (clause_to_sexp c)) clauses;
   let prog' =
