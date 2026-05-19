@@ -53,15 +53,22 @@ module LF = struct
   let identity = IdEdge
   let top = TopEdge
 
-  (* This is the worst thing ever *)
+  let is_id_coeff a b =
+    Z.equal Z.one (Bitvec.value a) && Z.equal Z.zero (Bitvec.value b)
 
-  let is_id = function
-    | IdEdge -> true
-    | Linear (a, b) ->
-        Z.equal (Bitvec.value a) Z.one && Z.equal (Bitvec.value b) Z.zero
-    | Join (a, b, Value.Bot) ->
-        Z.equal (Bitvec.value a) Z.one && Z.equal (Bitvec.value b) Z.zero
-    | _ -> false
+  let canonical = function
+    | Linear (a, b) when is_id_coeff a b -> false
+    (* In theory we could not have Join represent Bot or Top values but that means we can't call join *)
+    | Join (_, _, Value.(Bot | Top)) -> false
+    (* Join of two constants shouldn't be represented, as it would either be Top or just a linear function *)
+    | Join (a, _, _) when Z.equal Z.zero (Bitvec.value a) -> false
+    | _ -> true
+
+  let is_id f =
+    assert (canonical f);
+    match f with IdEdge -> true | _ -> false
+
+  (* Definitions from https://doi.org/10.1016/0304-3975(96)00072-2 with gcdext modifications coming from computing inverses mod 2^n *)
 
   let compute_join a b c d =
     let bd = Bitvec.value (Bitvec.sub b d) in
@@ -81,12 +88,7 @@ module LF = struct
       Some (Value.V j)
     else None
 
-  let make_linear a b =
-    match () with
-    | _ when Z.equal Z.one (Bitvec.value a) && Z.equal Z.zero (Bitvec.value b)
-      ->
-        IdEdge
-    | _ -> Linear (a, b)
+  let make_linear a b = if is_id_coeff a b then IdEdge else Linear (a, b)
 
   let make_join a b c =
     match c with
@@ -96,6 +98,7 @@ module LF = struct
 
   (* Should make join edges with top become TopEdges (and probably similar for effectively id Linear and Join edges...) *)
   let join a b =
+    assert (canonical a && canonical b);
     match (a, b) with
     | BotEdge, b -> b
     | a, BotEdge -> a
@@ -107,10 +110,8 @@ module LF = struct
     | Linear (a, b), Linear (c, d) when Bitvec.equal a c && Bitvec.equal b d ->
         make_linear a b
     | IdEdge, IdEdge -> IdEdge
-    | IdEdge, f when is_id f -> IdEdge
-    | f, IdEdge when is_id f -> IdEdge
-    | IdEdge, Join (a, b, c) when is_id (Linear (a, b)) -> make_join a b c
-    | Join (a, b, c), IdEdge when is_id (Linear (a, b)) -> make_join a b c
+    | IdEdge, Join (a, b, c) when is_id_coeff a b -> make_join a b c
+    | Join (a, b, c), IdEdge when is_id_coeff a b -> make_join a b c
     | Linear (a, b), Linear (c, d) -> (
         match compute_join a b c d with
         | Some j -> make_join a b j
@@ -145,6 +146,7 @@ module LF = struct
         | None -> TopEdge)
 
   let compose a b =
+    assert (canonical a && canonical b);
     match (a, b) with
     | IdEdge, b -> b
     | a, IdEdge -> a
@@ -173,12 +175,12 @@ module LF = struct
         make_join (Bitvec.mul a d) (Bitvec.add (Bitvec.mul a e) b) c
 
   let eval x f =
+    assert (canonical f);
     match (f, x) with
     | BotEdge, _ -> Value.Bot
     | IdEdge, x -> x
     | TopEdge, _ -> Top
     | Linear (a, b), _ when Z.equal Z.zero (Bitvec.value a) -> V b
-    | Join (a, b, _), _ when Z.equal Z.zero (Bitvec.value a) -> V b
     | Linear (a, b), Value.V x -> V (Bitvec.add (Bitvec.mul a x) b)
     | Linear _, Bot -> Bot
     | Linear _, Top -> Top
