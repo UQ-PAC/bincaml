@@ -307,7 +307,7 @@ let try_make_global (prog : Program.t) (sym_base, value) =
          in
          Some
            (List.exists
-              (fun (global : Program.e Attrib.t) ->
+              (fun (global : Attrib.t) ->
                 (let* address =
                    match Attrib.find_opt ".address" (Some global) with
                    | Some Attrib.(`Bitvector bv) -> Some bv

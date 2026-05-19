@@ -45,6 +45,8 @@
   ll_real.sexp
   ll_spec.il
   ll_spec.sexp
+  repeated_ssa.il
+  repeated_ssa.sexp
   ../../bin/main.exe))
 
 (cram
@@ -59,5 +61,4 @@
   ./malloc_free.sexp
   ../../examples/memory/memory_interproc.il
   ./memory_interproc.sexp
-  ../../examples/memory/memory_safety.il
-  ./memory_safety.sexp))
+  ../../examples/memory/memory_safety.il))

@@ -30,7 +30,7 @@
 (library
  (public_name bincaml)
  (flags -w -27)
- (modules passes)
+ (modules passes script)
  (libraries
   loader
   containers.pp
@@ -38,6 +38,7 @@
   BasilIR
   lang
   transforms
+  bincaml.backends
   bincaml.ast
   bincaml.util
   logs

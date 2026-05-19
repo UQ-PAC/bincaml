@@ -30,7 +30,7 @@
   (qcheck-stm :with-test)
   (qcheck-core :with-test)
   (qcheck-alcotest :with-test)
-  menhir
+  (menhir (>= 20180523))
   ocaml
   zarith
   fix
@@ -49,6 +49,10 @@
   intPQueue
   logs
   mtime
+  linenoise
+  stb_image
+  kittyimg
+  terminal_size
   (ocamlformat :with-dev-setup)
   (odig :with-dev-setup)
   (sherlodoc :with-doc)
@@ -60,6 +64,7 @@
  (name bincaml_lsp)
  (synopsis "Language server for Bincaml IL files")
  (depends
+  (menhir (>= 20180523))
   ppx_expect
   bincaml
   fmt

@@ -119,13 +119,13 @@ module PG : sig
     ?ensures:BasilExpr.t list ->
     ?rely:BasilExpr.t list ->
     ?guarantee:BasilExpr.t list ->
-    ?attrib:BasilExpr.t Attrib.attrib_map ->
+    ?attrib:Attrib.attrib_map ->
     unit ->
     ('a, 'b) t
 
-  val attrib : ('a, 'b) t -> BasilExpr.t Attrib.attrib_map
-  val set_attrib : ('a, 'b) t -> BasilExpr.t Attrib.t -> string -> ('a, 'b) t
-  val set_attribs : ('a, 'b) t -> BasilExpr.t Attrib.attrib_map -> ('a, 'b) t
+  val attrib : ('a, 'b) t -> Attrib.attrib_map
+  val set_attrib : ('a, 'b) t -> Attrib.t -> string -> ('a, 'b) t
+  val set_attribs : ('a, 'b) t -> Attrib.attrib_map -> ('a, 'b) t
 
   val set_specification : ('a, 'b) t -> ('a, 'c) proc_spec -> ('a, 'c) t
   (** set the procedure's specification/contract *)
@@ -173,7 +173,7 @@ end = struct
     local_ids : ID.generator;
     block_ids : ID.generator;
     specification : ('v, 'e) proc_spec;
-    attrib : BasilExpr.t Attrib.attrib_map;
+    attrib : Attrib.attrib_map;
   }
 
   let attrib p = p.attrib
