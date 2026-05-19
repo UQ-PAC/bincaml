@@ -41,12 +41,6 @@ let fname =
   let doc = "Input file name (e.g., filename.il or - for stdin)" in
   Arg.(required & pos 0 (some string) None & info [] ~docv:"FNAME" ~doc)
 
-let proc =
-  let doc = "proc to output" and docv = "PROC" in
-  Arg.(value & opt string "" & info [ "p"; "proc" ] ~doc ~docv)
-
-let print_proc chan p = Program.output_proc_pretty chan p
-
 let verb =
   let doc = "set log level to debug" and docv = "VERBOSE" in
   Arg.(value & flag & info [ "v"; "verbose" ] ~doc ~docv)

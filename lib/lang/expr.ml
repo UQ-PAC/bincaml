@@ -812,7 +812,8 @@ module BasilExpr = struct
     in
     rw_recurse_down ~f:rw_alg expr
 
-  let rewrite_typed (f : (t * Types.t) abstract_expr -> t option) (expr : t) =
+  let[@warning "-32"] rewrite_typed
+      (f : (t * Types.t) abstract_expr -> t option) (expr : t) =
     let rw_alg e =
       let orig s = fix @@ AbstractExpr.map fst s in
       match f e with Some e -> e | None -> orig e

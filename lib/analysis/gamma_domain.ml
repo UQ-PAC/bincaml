@@ -1,4 +1,5 @@
-(* The forwards overappraximating gamma domain. It is assumed that the program is in ssa form. *)
+(** The forwards overapproximating gamma domain. It is assumed that the program
+    is in ssa form. *)
 
 include Lang
 include Common
@@ -14,7 +15,7 @@ module GammaSet = struct
   end)
 
   let name = "Gamma set"
-  let pp fmt v = Format.pp_print_string fmt (show v)
+  let[@warning "-32"] pp fmt v = Format.pp_print_string fmt (show v)
 end
 
 module Domain = struct
@@ -92,7 +93,7 @@ module IDEDomain : IDESSIDomain = struct
 
   module Value = GammaSet
 
-  let show_state s =
+  let[@warning "-32"] show_state s =
     s
     |> Iter.to_string ~sep:", " (fun (v, s) ->
         Var.to_string v ^ "->" ^ GammaSet.show s)
@@ -100,7 +101,7 @@ module IDEDomain : IDESSIDomain = struct
   type t = BottomEdge | IdEdge | TopEdge
   [@@deriving eq, ord, show { with_path = false }]
 
-  let pp fmt v = Format.pp_print_string fmt (show v)
+  let[@warning "-32"] pp fmt v = Format.pp_print_string fmt (show v)
   let identity = IdEdge
   let bottom = BottomEdge
   let top = TopEdge

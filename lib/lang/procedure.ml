@@ -215,8 +215,11 @@ end = struct
   let map_formal_out_params f p =
     { p with formal_out_params = f p.formal_out_params }
 
-  let set_formal_in_params f p = map_formal_in_params (fun _ -> f) p
-  let set_formal_out_params f p = map_formal_in_params (fun _ -> f) p
+  let[@warning "-32"] set_formal_in_params f p =
+    map_formal_in_params (fun _ -> f) p
+
+  let[@warning "-32"] set_formal_out_params f p =
+    map_formal_in_params (fun _ -> f) p
 
   let empty_graph =
     let graph = G.empty in
