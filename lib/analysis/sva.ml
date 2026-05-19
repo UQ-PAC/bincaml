@@ -163,22 +163,11 @@ module Eval = Intra_analysis.EvalStmt (SVAAbstractionBasil)
 module Domain = struct
   include StateAbstraction
 
-  let stack_pointer = Var.create ~scope:LocalConst "R31_in" @@ Bitvector 64
-  let link_register = Var.create ~scope:LocalConst "R30_in" @@ Bitvector 64
-  let frame_pointer = Var.create ~scope:LocalConst "R29_in" @@ Bitvector 64
-
-  (* These registers are preserved over calls and are not real params, so we can ignore later *)
-  let call_preserve =
-    List.init 11 (fun i -> 19 + i) |> fun lst ->
-    31 :: lst |> List.map (fun i -> "R" ^ string_of_int i)
-
   let init ?(vertex = None) proc =
     let open Option in
     let proc_id = Procedure.id proc in
     let name = ID.name @@ proc_id in
-    StringMap.filter (fun param _ ->
-        List.exists (fun a -> String.starts_with param ~prefix:a) call_preserve)
-    @@ Procedure.formal_in_params proc
+    Procedure.formal_in_params proc
     |> StringMap.to_iter
     |> Iter.filter_map (fun (_, param) ->
         let* size =
@@ -188,7 +177,7 @@ module Domain = struct
           | _ -> None
         in
         match Var.name param with
-        | "R31_in" ->
+        | s when String.starts_with ~prefix:"R31" s ->
             Some
               ( param,
                 SymAddrSetLattice.singleton (SymBase.Stack name)
@@ -199,19 +188,6 @@ module Domain = struct
                 SymAddrSetLattice.singleton
                   (Par { name; param; proc_id = Some proc_id })
                 @@ IntervalDomain.init @@ Bitvec.zero ~size ))
-    (*
-    |> Iter.cons
-         ( link_register,
-           SymAddrSetLattice.singleton
-             (SymBase.Par
-                { name; param = link_register; proc_id = Some proc_id })
-           @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
-    |> Iter.cons
-         ( frame_pointer,
-           SymAddrSetLattice.singleton
-             (SymBase.Par
-                { name; param = frame_pointer; proc_id = Some proc_id })
-           @@ IntervalDomain.init @@ Bitvec.zero ~size:64 ) *)
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
   let transfer_state read stmt =
