@@ -14,3 +14,17 @@
   (package bincaml_lsp)
   bincaml_lsp.install)
  (package bincaml_lsp))
+
+(env
+ ; in dev, all warnings are non-fatal.
+ (dev
+  (flags
+   (:standard -warn-error -A -w -27-9-33)))
+ ; in release, all (enabled) warnings are fatal.
+ (release
+  (flags
+   (:standard -warn-error A))))
+
+;  9 partial record pattern
+; 27 unused variable strict
+; 33 unused open
