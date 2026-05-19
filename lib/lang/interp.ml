@@ -574,6 +574,7 @@ module IState = struct
   let eval_expr (e : Program.e) st =
     let open Expr.AbstractExpr in
     let open Expr in
+    let read = fun id -> read_var id st in
     let alg e =
       match e with
       | RVar { id } ->
@@ -658,39 +659,38 @@ module IState = struct
     | AssumeFail _ as e -> raise e
     | e -> raise (InterpreterError (st, Printexc.to_string e))
 
+  and exec_phi bvert st phis =
+    let pred = st.last_block in
+    let assigns =
+      List.map
+        (fun (i : Var.t Block.phi) ->
+          match i with
+          | { lhs; rhs } ->
+              let _, rhs =
+                let pred =
+                  Option.get_exn_or
+                    (Printf.sprintf "no predecessor blokc for %s"
+                       (Procedure.Vert.show bvert))
+                    pred
+                in
+                List.find_opt (fun (id, v) -> ID.equal id pred) rhs |> function
+                | Some i -> i
+                | None ->
+                    failwith
+                    @@ Printf.sprintf "Phi assignment not found for %s %s %s"
+                         (Var.to_string lhs) (ID.to_string pred)
+                         (Procedure.Vert.show bvert)
+              in
+              let rhs = read_var rhs st in
+              (lhs, rhs))
+        phis
+    in
+    List.fold_left (fun st (l, r) -> write_var l r st) st assigns
+
   and exec_edge st e =
     let b, l, e = e in
-    let pred = st.last_block in
     let eval_block st block =
-      Block.fold_forwards
-        ~phi:(fun st phis ->
-          let assigns =
-            List.map
-              (fun (i : Var.t Block.phi) ->
-                match i with
-                | { lhs; rhs } ->
-                    let _, rhs =
-                      let pred =
-                        Option.get_exn_or
-                          (Printf.sprintf "no predecessor blokc for %s"
-                             (Procedure.Vert.show b))
-                          pred
-                      in
-                      List.find_opt (fun (id, v) -> ID.equal id pred) rhs
-                      |> function
-                      | Some i -> i
-                      | None ->
-                          failwith
-                          @@ Printf.sprintf
-                               "Phi assignment not found for %s %s %s"
-                               (Var.to_string lhs) (ID.to_string pred)
-                               (Procedure.Vert.show b)
-                    in
-                    let rhs = read_var rhs st in
-                    (lhs, rhs))
-              phis
-          in
-          List.fold_left (fun st (l, r) -> write_var l r st) st assigns)
+      Block.fold_forwards ~phi:(exec_phi b)
         ~f:(fun st stmt -> eval_stmt stmt st)
         st block
     in

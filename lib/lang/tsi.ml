@@ -154,7 +154,7 @@ let eval read (st : st) stmt =
 
 module ListTrOpt = List.Traverse (Option)
 
-let compile (e : 'e Expr.BasilExpr.abstract_expr) =
+let compile_expr (e : 'e Expr.BasilExpr.abstract_expr) =
   let open Expr.AbstractExpr in
   let open Option in
   let typs = Expr.AbstractExpr.map snd e in
@@ -229,12 +229,12 @@ let compile (e : 'e Expr.BasilExpr.abstract_expr) =
         | `BVSLT -> Some [ BVSLT (size ()) ]
       in
       Some (arg2 @ arg1 @ op)
-  | ApplyIntrin { op; args = []; typ } -> None
-  | ApplyIntrin { op; args = [ _ ]; typ } -> None
   | ApplyIntrin { op = `OR; args = []; typ } -> Some [ PUSHV (Z.one, 1) ]
   | ApplyIntrin { op = `AND; args = []; typ } -> Some [ PUSHV (Z.zero, 1) ]
   | ApplyIntrin { op = `OR | `AND; args = [ a ]; typ } -> a
-  | ApplyIntrin { op = (`OR | `AND) as op; args; typ } ->
+  | ApplyIntrin { op; args = []; typ } -> None
+  | ApplyIntrin { op; args = [ _ ]; typ } -> None
+  | ApplyIntrin { op = (`OR | `AND) as op; args = _ :: _ :: _ as args; typ } ->
       let op = match op with `OR -> BoolOR | `AND -> BoolAND in
       let* args = ListTrOpt.sequence_m args in
       let args' = List.concat args in
@@ -259,10 +259,12 @@ let compile (e : 'e Expr.BasilExpr.abstract_expr) =
       Some (List.concat args @ ops)
   | Lambda _ | Let _ | ApplyFun _ -> None
 
+type c = (tsi_op list * Types.t, Program.e) result
+
 let compile_expr e =
   let typ = Expr.BasilExpr.type_of e in
 
-  match Expr.BasilExpr.fold_with_type compile e with
+  match Expr.BasilExpr.fold_with_type compile_expr e with
   | Some c -> Ok (c, typ)
   | None -> Error e
 
@@ -289,6 +291,38 @@ let eval_expr read e =
       | Types.Integer -> `Integer v
       | _ -> failwith "unlikely")
   | Error e -> fallback_eval read e
+
+type block = (Var.t, (tsi_op list * Types.t, Program.e) result) Block.t
+
+let compile_block =
+  Block.map ~phi:Fun.id
+    (Stmt.map ~f_lvar:Fun.id ~f_rvar:Fun.id ~f_expr:compile_expr)
+
+type bl = { stmt : block; mutable succ : bl ref list }
+
+let compile_proc p =
+  (* efficient linked graph representation *)
+  let mem = ref @@ IDMap.empty in
+  let get_bl id =
+    IDMap.get id !mem |> function
+    | Some i -> i
+    | None ->
+        let b =
+          compile_block (Procedure.get_block p id |> Option.get_exn_or "")
+        in
+        let b = ref { stmt = b; succ = [] } in
+        mem := IDMap.add id b !mem;
+        b
+  in
+  let a =
+    Procedure.iter_blocks_topo_fwd p
+    |> Iter.map (fun (b, bl) ->
+        (get_bl b, Procedure.blocks_succ p b |> Iter.map fst |> Iter.to_list))
+    |> Iter.persistent
+    (* force iter to compile blocks first to avoid a cycle *)
+  in
+  a |> Iter.iter (fun (b, bs) -> !b.succ <- List.map get_bl bs);
+  !mem
 
 let show_compiled = function
   | Error e -> "unsupp"
