@@ -66,19 +66,7 @@ Record and Pointer
   $ diff ptrrec1.il ptrrec2.il
   2d1
   < prog entry @main_4196164;
-  14c13
-  <      var as:ptr(bv64, bv64) := ptradd(R31_in, R0_in);
-  ---
-  >      var as:ptr(bv64, bv64) := ptradd(R31_in:bv64, R0_in:bv64);
-  16c15
-  <      $rec:{"field0": (bv32, 0), "field1": (bv64, 32)} := $rec with field0 = af;
-  ---
-  >      $rec:{"field0": (bv32, 0), "field1": (bv64, 32)} := $rec with field0 = af:bv32;
-  23c22,23
-  < ];
-  \ No newline at end of file
-  ---
-  > ];
+  23a23
   > prog entry @main_4196164;
   \ No newline at end of file
   [1]
