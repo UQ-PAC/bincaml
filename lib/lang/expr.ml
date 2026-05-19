@@ -297,7 +297,7 @@ module BasilExpr = struct
 
   type typ = Types.t
 
-  open struct
+  open [@warning "-32-34"] struct
     (** leftover ; we could hash-cons the expression if we want *)
     module EHashed = struct
       include AllOps
