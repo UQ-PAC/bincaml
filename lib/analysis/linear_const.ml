@@ -81,6 +81,19 @@ module LF = struct
       Some (Value.V j)
     else None
 
+  let make_linear a b =
+    match () with
+    | _ when Z.equal Z.one (Bitvec.value a) && Z.equal Z.zero (Bitvec.value b)
+      ->
+        IdEdge
+    | _ -> Linear (a, b)
+
+  let make_join a b c =
+    match c with
+    | Value.Top -> TopEdge
+    | Bot -> make_linear a b
+    | _ -> Join (a, b, c)
+
   (* Should make join edges with top become TopEdges (and probably similar for effectively id Linear and Join edges...) *)
   let join a b =
     match (a, b) with
@@ -90,45 +103,45 @@ module LF = struct
     | _, TopEdge -> TopEdge
     | Join (a, b, c), Join (d, e, f) when Bitvec.equal a d && Bitvec.equal b e
       ->
-        Join (a, b, Value.join c f)
+        make_join a b (Value.join c f)
     | Linear (a, b), Linear (c, d) when Bitvec.equal a c && Bitvec.equal b d ->
-        Linear (a, b)
+        make_linear a b
     | IdEdge, IdEdge -> IdEdge
     | IdEdge, f when is_id f -> IdEdge
     | f, IdEdge when is_id f -> IdEdge
-    | IdEdge, Join (a, b, c) when is_id (Linear (a, b)) -> Join (a, b, c)
-    | Join (a, b, c), IdEdge when is_id (Linear (a, b)) -> Join (a, b, c)
+    | IdEdge, Join (a, b, c) when is_id (Linear (a, b)) -> make_join a b c
+    | Join (a, b, c), IdEdge when is_id (Linear (a, b)) -> make_join a b c
     | Linear (a, b), Linear (c, d) -> (
         match compute_join a b c d with
-        | Some j -> Join (a, b, j)
+        | Some j -> make_join a b j
         | None -> TopEdge)
     | Linear (a, b), Join (c, d, e) -> (
         match compute_join a b c d with
-        | Some j -> Join (a, b, Value.join j e)
+        | Some j -> make_join a b (Value.join j e)
         | None -> TopEdge)
     | Join (a, b, c), Linear (d, e) -> (
         match compute_join a b d e with
-        | Some j -> Join (a, b, Value.join j c)
+        | Some j -> make_join a b (Value.join j c)
         | None -> TopEdge)
     | Join (a, b, c), Join (d, e, f) -> (
         match compute_join a b d e with
-        | Some j -> Join (a, b, Value.join j (Value.join c f))
+        | Some j -> make_join a b (Value.join j (Value.join c f))
         | None -> TopEdge)
     | IdEdge, Linear (a, b) -> (
         match compute_join_id a b with
-        | Some j -> Join (a, b, j)
+        | Some j -> make_join a b j
         | None -> TopEdge)
     | Linear (a, b), IdEdge -> (
         match compute_join_id a b with
-        | Some j -> Join (a, b, j)
+        | Some j -> make_join a b j
         | None -> TopEdge)
     | IdEdge, Join (a, b, c) -> (
         match compute_join_id a b with
-        | Some j -> Join (a, b, Value.join j c)
+        | Some j -> make_join a b (Value.join j c)
         | None -> TopEdge)
     | Join (a, b, c), IdEdge -> (
         match compute_join_id a b with
-        | Some j -> Join (a, b, Value.join j c)
+        | Some j -> make_join a b (Value.join j c)
         | None -> TopEdge)
 
   let compose a b =
@@ -140,26 +153,24 @@ module LF = struct
     | _, BotEdge -> BotEdge
     | _, TopEdge -> TopEdge
     | Linear (a, b), Linear (c, d) ->
-        Linear (Bitvec.mul a c, Bitvec.add (Bitvec.mul a d) b)
+        make_linear (Bitvec.mul a c) (Bitvec.add (Bitvec.mul a d) b)
     | Join (a, b, c), Linear (d, e) ->
-        Join (Bitvec.mul a d, Bitvec.add (Bitvec.mul a e) b, c)
+        make_join (Bitvec.mul a d) (Bitvec.add (Bitvec.mul a e) b) c
     | Linear (a, b), Join (c, d, V e) ->
-        Join
-          ( Bitvec.mul a c,
-            Bitvec.add (Bitvec.mul a d) b,
-            V (Bitvec.add (Bitvec.mul a e) b) )
+        make_join (Bitvec.mul a c)
+          (Bitvec.add (Bitvec.mul a d) b)
+          (V (Bitvec.add (Bitvec.mul a e) b))
     | Linear (a, b), Join (c, d, Top) -> TopEdge
     | Linear (a, b), Join (c, d, Bot) ->
-        Linear (Bitvec.mul a c, Bitvec.add (Bitvec.mul a d) b)
+        make_linear (Bitvec.mul a c) (Bitvec.add (Bitvec.mul a d) b)
     | Join (a, b, c), Join (d, e, V f) ->
-        Join
-          ( Bitvec.mul a d,
-            Bitvec.add (Bitvec.mul a e) b,
-            Value.join (V (Bitvec.add (Bitvec.mul a f) b)) c )
+        make_join (Bitvec.mul a d)
+          (Bitvec.add (Bitvec.mul a e) b)
+          (Value.join (V (Bitvec.add (Bitvec.mul a f) b)) c)
     | Join (a, b, c), Join (d, e, Top) ->
-        Join (Bitvec.mul a d, Bitvec.add (Bitvec.mul a e) b, Top)
+        make_join (Bitvec.mul a d) (Bitvec.add (Bitvec.mul a e) b) Top
     | Join (a, b, c), Join (d, e, Bot) ->
-        Join (Bitvec.mul a d, Bitvec.add (Bitvec.mul a e) b, c)
+        make_join (Bitvec.mul a d) (Bitvec.add (Bitvec.mul a e) b) c
 
   let eval x f =
     match (f, x) with
@@ -261,11 +272,7 @@ module LF = struct
       | Some v -> (IdEdge, Some v)
       | _ -> (
           match Expr.BasilExpr.cata extract_alg e with
-          | Some (Some a, Some v, b)
-            when Z.equal Z.one (Bitvec.value a)
-                 && Z.equal Z.zero (Bitvec.value b) ->
-              (IdEdge, Some v)
-          | Some (Some a, Some v, b) -> (Linear (a, b), Some v)
+          | Some (Some a, Some v, b) -> (make_linear a b, Some v)
           | _ -> (TopEdge, None))
   end
 end
@@ -301,7 +308,8 @@ module LinearIDE = struct
                 match const_expr e with
                 | Some x ->
                     Iter.singleton
-                      (Label v, Linear (Bitvec.zero ~size:(Bitvec.size x), x))
+                      ( Label v,
+                        make_linear (Bitvec.zero ~size:(Bitvec.size x)) x )
                 | None -> Iter.empty)
         | _ -> Iter.empty)
     | Label v -> (
