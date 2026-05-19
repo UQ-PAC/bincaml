@@ -873,3 +873,45 @@ let test_transform (p : Program.t) =
       CopyGraph.Dot.output_graph stdout g)
     gs;
   p
+
+let%expect_test "canonicalises" =
+  (* This program used to get stuck in an infinite loop before canonicalisation
+     as Top was represented by Join(a, b, Top) for a constantly changing b *)
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+prog entry @f;
+
+proc @f (x_in: bv64) -> (x_3:bv64)
+[
+  block %entry [
+    var x_1: bv64 := bvadd(x_in:bv64, 0xffffffffffffffc0:bv64);
+    goto(%a);
+  ];
+  block %a (var x_2:bv64 := phi(%entry -> x_1:bv64, %a -> x_3:bv64)) [
+    (var x_3:bv64) := call @g(x_2);
+    goto(%a, %ret);
+  ];
+  block %ret [
+    return;
+  ]
+];
+
+proc @g (x_in: bv64) -> (x_3:bv64)
+[
+  block %entry [
+    var x_1: bv64 := bvadd(x_in:bv64, 0xffffffffffffffd0:bv64);
+    goto(%a, %ret);
+  ];
+  block %a [
+    var x_2: bv64 := bvadd(x_1:bv64, 0x30:bv64);
+    goto(%ret);
+  ];
+  block %ret (var x_3:bv64 := phi ( %entry -> x_1:bv64, %a -> x_2:bv64) ) [
+    return;
+  ]
+];
+    |}
+  in
+  let prog = lst.prog in
+  ignore @@ LinearConstAnalysis.solve prog
