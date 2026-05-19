@@ -27,6 +27,7 @@
  (synopsis "Program analysis tool.")
  (description "A longer description")
  (depends
+  (ocaml-protoc-plugin (>= 6.1.0))
   (qcheck-stm :with-test)
   (qcheck-core :with-test)
   (qcheck-alcotest :with-test)

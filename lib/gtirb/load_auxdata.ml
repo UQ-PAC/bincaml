@@ -71,12 +71,10 @@ open AuxDataTypes
 
 type 'a aux_section = { name : string; decoder : 'a t }
 
-let load a (m : Gtirb_proto.Module.Gtirb.Proto.Module.t) =
+let load a (ad : Gtirb_proto.AuxData.Gtirb.Proto.AuxData.t StringMap.t) =
   let open Result in
-  let ad = m.aux_data |> StringMap.of_list in
   let* d =
     StringMap.find_opt a.name ad
-    |> Option.flatten
     |> Option.to_result ("could not find aux section: " ^ a.name)
   in
   let b = d.data |> Bytes.to_string in
