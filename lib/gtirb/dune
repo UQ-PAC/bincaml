@@ -6,6 +6,7 @@
    gtirb
   )
  (libraries
+   angstrom
   bincaml.gtirb_proto
   zarith
   fix
