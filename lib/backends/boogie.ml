@@ -319,7 +319,17 @@ let pretty_statement (s : Program.stmt) =
         ls >|= compose snd pretty_expr |> fill (text "," ^ newline_or_spaces 1)
       in
       nest 2 @@ lhs ^+ text ":=" ^+ rhs
-  | Instr_Assert { body } -> text "assert" ^+ pretty_expr body
+  | Instr_Assert { body } -> (
+      match Expr.BasilExpr.unfix body with
+      | RVar { attrib }
+      | Constant { attrib }
+      | UnaryExpr { attrib }
+      | BinaryExpr { attrib }
+      | ApplyIntrin { attrib }
+      | ApplyFun { attrib }
+      | Lambda { attrib }
+      | Let { attrib } ->
+          text "assert" ^ pretty_attribute_map ".boogie" attrib ^+ pretty_expr body)
   | Instr_Assume { body; branch } -> text "assume" ^+ pretty_expr body
   | Instr_Call { lhs; procid; args } ->
       let name = ID.name procid in

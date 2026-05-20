@@ -137,6 +137,17 @@ module Calls = struct
       size of the access in bytes. *)
   let valid_access args =
     apply_fun
+      ?attrib:
+        (Some
+           (StringMap.of_list
+              [
+                ( ".boogie",
+                  `Assoc
+                    (StringMap.of_list
+                       [
+                         (".msg", `String "message here");
+                       ]) );
+              ]))
       ~func:
         (rvar
            (Var.create "$me_valid_access" ~scope:Var.GlobalConst Types.Boolean))
