@@ -125,7 +125,7 @@ module Domain (S : FunctionAnnotation) = struct
     |> simplify
 
   let transfer (p : t) (stmt : Program.stmt) : t =
-    match stmt with
+    let out = match stmt with
     | Instr_Assign [] -> p
     | Instr_Assign (a : (Var.t * BasilExpr.t) list) ->
         tf_assigns p a |> simplify
@@ -166,18 +166,20 @@ module Domain (S : FunctionAnnotation) = struct
         (* Could be a map access in future. *)
         top
     | Instr_IndirectCall _ | Instr_IntrinCall _ -> top
-    | _ -> top
+    | _ -> top in
+  if (expr_size out > 10000) then top else out
 
   let init ?(vertex = None) (proc : Program.proc) : t =
     match vertex with Some Procedure.Vert.Entry -> top | _ -> bottom
 
   let transfer_phi (m : t) (p : Var.t Block.phi) : t =
-    match p with
+    let out = match p with
     | { lhs; rhs } ->
         let rhs =
           List.map (fun (_, v) -> tf_assigns m [ (lhs, BasilExpr.rvar v) ]) rhs
         in
-        List.fold_left join bottom rhs
+        List.fold_left join bottom rhs in
+    if (expr_size out > 10000) then top else out
 
   let to_pred (p : t) : BasilExpr.t =
     let l = locals p in

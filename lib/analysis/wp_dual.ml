@@ -117,7 +117,8 @@ module Domain (S : FunctionAnnotation) = struct
         in
         (if branch then
            BasilExpr.applyintrin ~op:`OR
-             [ p; BasilExpr.boolnot @@ low_expr body ]
+             [ p ]
+             (* [ p; BasilExpr.boolnot @@ low_expr body ] *)
          else p)
         |> simplify
     | Instr_IntrinCall { lhs; name = Intrinsic.Havoc } -> top

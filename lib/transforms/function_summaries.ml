@@ -21,6 +21,46 @@ module type FunctionSummaryAnnotation = sig
   val id : ID.t
 end
 
+let add_expr_decls solver e =
+  let seen = ref (Hashtbl.create 10) in
+  let alg (e : Program.e Expr.BasilExpr.abstract_expr) =
+    (match e with
+    | BinaryExpr
+        {
+          attrib : 'attrib option;
+          op : 'binary = `Load (ed, sz);
+          arg1 : 'e;
+          arg2 : 'e;
+        } ->
+        let s =
+          fst
+          @@ Expr_smt.SMTLib2.trans_decl
+               (Program.Function
+                  {
+                    binding =
+                      Var.create
+                        (Ops.AllOps.to_string (`Load (ed, sz)))
+                        (Types.curry
+                           [
+                             Expr.BasilExpr.type_of arg2;
+                             Expr.BasilExpr.type_of arg1;
+                           ]
+                           (Expr.BasilExpr.type_of (Expr.BasilExpr.fix e)));
+                    attrib = StringMap.empty;
+                    definition = Uninterpreted;
+                  })
+               Expr_smt.SMTLib2.empty
+        in
+        if Hashtbl.mem !seen s then ()
+        else (
+          Hashtbl.add !seen s s;
+          Bincaml_util.Smt.Solver.add_command solver s)
+    | _ -> ());
+    Expr.BasilExpr.fix e
+  in
+  Expr.BasilExpr.cata alg e;
+  ()
+
 (** Replace gamma expressions with gamma variables for an smt query *)
 let normalise_gamma =
   let open Expr.AbstractExpr in
@@ -60,6 +100,7 @@ let redundant (solver : Bincaml_util.Smt.Solver.t) p ps =
       in
       let open Bincaml_util.Smt in
       Solver.push solver;
+      add_expr_decls solver p;
       s |> Iter.iter (fun c -> Solver.add_command solver c);
       let res = Solver.check solver in
       Solver.pop solver;
@@ -95,8 +136,7 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
      pass runner *)
   let cur_req = S.requires (Procedure.id proc) in
   let cur_ens = S.ensures (Procedure.id proc) in
-  if IDSet.mem (Procedure.id proc) !reiter then
-    { requires = cur_req; ensures = cur_ens }
+  if IDSet.mem (Procedure.id proc) !reiter then { requires = []; ensures = [] }
   else
     let requires =
       wp_dual_requires (module S) proc
@@ -114,14 +154,14 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
     let ensures =
       sp_ensures (module S) proc
       |> List.fold_left
-           (fun rs r ->
+           (fun es e ->
              let open Bincaml_util.Smt in
-             match redundant solver r (List.append rs cur_ens) with
-             | Unsat -> rs
-             | Sat -> r :: rs
+             match redundant solver e (List.append es cur_ens) with
+             | Unsat -> es
+             | Sat -> e :: es
              | Unknown ->
                  reiter := IDSet.add (Procedure.id proc) !reiter;
-                 r :: rs)
+                 e :: es)
            []
     in
     { requires; ensures }
@@ -290,6 +330,7 @@ let interproc_transform (prog : Program.t) =
       {
         Bincaml_util.Smt.Config.cvc5 with
         log = Bincaml_util.Smt.Config.quiet_log;
+        opts = Bincaml_util.Smt.Config.cvc5.opts;
       }
   in
   add_decls solver prog;
