@@ -27,7 +27,7 @@ let add_expr_decls solver e =
     (match e with
     | BinaryExpr
         {
-          attrib : 'attrib option;
+          attrib;
           op : 'binary = `Load (ed, sz);
           arg1 : 'e;
           arg2 : 'e;

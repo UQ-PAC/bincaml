@@ -69,6 +69,5 @@
   ../../examples/memory/memory_interproc.il
   ./memory_interproc.sexp
   ../../examples/memory/memory_safety.il
-  ./memory_safety.sexp
   memory_phis.il
   memory_phis.sexp))
