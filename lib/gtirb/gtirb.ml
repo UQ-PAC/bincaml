@@ -7,7 +7,6 @@ open ByteInterval.Gtirb.Proto
 open Module.Gtirb.Proto
 open Section.Gtirb.Proto
 open CFG.Gtirb.Proto
-open CodeBlock.Gtirb.Proto
 module Result = OcamlResult
 open Load_auxdata
 module UUIDMap = UUIDMap
@@ -18,9 +17,9 @@ module UUIDSet = UUIDSet
 type block = {
   uuid : UUID.t;
   contents : string;
-  opcodes : string list;
   address : int;
   size : int;
+  opcodes : string list option;
 }
 [@@deriving eq, ord, show { with_path = false }]
 
@@ -28,8 +27,12 @@ type block = {
 type content_block = { block : Block.t; raw : bytes; address : int }
 
 (* CONSTANTS  *)
-let opcode_length = 4
-let count_pos_args = ref 0
+
+type config = { opcode_length : int; pc_var : Var.t }
+
+let conf =
+  let pc_var = Var.create "PC" ~scope:Var.GlobalVar (Bitvector 64) in
+  { opcode_length = 4; pc_var }
 
 open struct
   (* ASL specifications are from the bundled ARM semantics in libASL. *)
@@ -42,26 +45,50 @@ open struct
     let getrev i = String.get opcode (len - 1 - i) in
     String.init len getrev
 
-  let do_block ~(need_flip : bool) ((b, c) : content_block * CodeBlock.t) :
-      block =
-    let cut_op contents i =
-      let bytes = String.sub contents (i * opcode_length) opcode_length in
-      if need_flip then endian_reverse bytes else bytes
+  let make_block ~(need_flip : bool) (block : content_block) : block option =
+    let open Option in
+    let contents size () =
+      if Bytes.length block.raw = 0 then String.empty
+      else (
+        Logs.debug (fun m -> m "%d : %d" (Bytes.length block.raw) size);
+        String.of_bytes @@ Bytes.sub block.raw block.block.offset size)
+    in
+    let* uuid, size, opcodes, contents =
+      match block.block.value with
+      | `Code b -> (
+          match b.decode_mode with
+          | ARM_Thumb ->
+              Logs.warn (fun m -> m "ARM thumb not supported");
+              Some (UUID.of_bytes b.uuid, b.size, None, contents b.size ())
+          | All_Default ->
+              Some
+                ( UUID.of_bytes b.uuid,
+                  b.size,
+                  Some conf.opcode_length,
+                  contents b.size () ))
+      | `Data b -> Some (UUID.of_bytes b.uuid, b.size, None, contents b.size ())
+      | `not_set -> None
     in
 
-    let size = c.size in
-    let uuid = UUID.of_bytes c.uuid in
-    let address = b.address in
-    let num_opcodes = c.size / opcode_length in
-    if size <> num_opcodes * opcode_length then
-      Printf.eprintf
-        "block size is not a multiple of opcode size (size %d): %s\n" size
-        (UUID.show uuid);
+    let address = block.address in
+    let opcodes =
+      let* opcode_length = opcodes in
 
-    let contents = String.of_bytes @@ Bytes.sub b.raw b.block.offset size in
-    let opcodes = List.init num_opcodes (cut_op contents) in
+      let cut_op contents i =
+        let bytes = String.sub contents (i * opcode_length) opcode_length in
+        if need_flip then endian_reverse bytes else bytes
+      in
+      let num_opcodes = size / opcode_length in
+      if size <> num_opcodes * opcode_length then
+        Logs.err (fun m ->
+            m "block size is not a multiple of opcode size (size %d): %s\n" size
+              (UUID.show uuid));
 
-    { size; uuid; contents; opcodes; address }
+      let opcodes = List.init num_opcodes (cut_op contents) in
+      Some opcodes
+    in
+
+    Some { size; uuid; contents; opcodes; address }
 end
 
 module AD = Load_auxdata.Loaders
@@ -157,6 +184,131 @@ type temp_proc = {
   cfg : OCFG.G.t;
 }
 
+open struct
+  let addr_equal_expr addr =
+    Lang.Expr.BasilExpr.(
+      binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 addr)) (rvar conf.pc_var))
+end
+
+let create_block succ_addr (proc, blockmap) (b : block) =
+  let open Lang in
+  let open Option in
+  let bl =
+    let* opcodes = b.opcodes in
+    let guard = addr_equal_expr b.address in
+    let guard = Stmt.Instr_Assume { body = guard; branch = false } in
+    let ensure =
+      succ_addr b.uuid
+      |> Iter.map (fun addr -> addr_equal_expr addr)
+      |> Iter.to_list
+      |> Expr.BasilExpr.applyintrin ~op:`OR
+    in
+    let ensure = Stmt.Instr_Assert { body = ensure } in
+    let instrs =
+      opcodes
+      |> List.map (fun _ ->
+          Stmt.Instr_Assert { body = Lang.Expr.BasilExpr.boolconst false })
+    in
+    let stmts = guard :: (instrs @ [ ensure ]) in
+    let proc, nb = Procedure.fresh_block proc ~name:"gtirb" ~stmts () in
+    let blockmap = UUIDMap.add b.uuid nb blockmap in
+    Some (proc, blockmap)
+  in
+  Option.get_or ~default:(proc, blockmap) bl
+
+let add_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
+  let open Option in
+  let open Lang in
+  let module G = Procedure.G in
+  let get_vert_block src =
+    match src with
+    | OCFG.Vert.Internal uuid -> UUIDMap.get uuid blocks
+    | External _ -> None
+  in
+  let src = get_vert_block src in
+  let tgt = get_vert_block tgt in
+  let open OCFG.Edge in
+  let proc =
+    proc
+    |> Procedure.map_graph (fun g ->
+        match l with
+        | OCFG.Edge.Nop ->
+            let e =
+              let* src = src in
+              let* tgt = tgt in
+              Some Procedure.Vert.(End src, Begin tgt)
+            in
+            Option.fold (fun g (s, t) -> G.add_edge g s t) g e
+        | OCFG.Edge.Labeled { typ; _ } -> (
+            match typ with
+            | Type_Branch | Type_Fallthrough | Type_Syscall | Type_Sysret
+            | Type_Call ->
+                (* syscall, sysret and call  are unlikely to be internal to this procedure, 
+                  but we include them in case they are. We most likely handle this with instruction-local control flow.
+
+                  We likely eventually want to add stub code blocks containing the call instructions
+                  which we jump to in place of the external blocks.
+                   *)
+                let e =
+                  let* src = src in
+                  let* tgt = tgt in
+                  Some Procedure.Vert.(End src, Begin tgt)
+                in
+                Option.fold (fun g (s, t) -> G.add_edge g s t) g e
+            | Type_Return ->
+                let e =
+                  let* src = src in
+                  Some Procedure.Vert.(End src, Return)
+                in
+                Option.fold (fun g (s, t) -> G.add_edge g s t) g e))
+  in
+  proc
+
+let to_ir_proc m (p : temp_proc) =
+  let entry_addrs =
+    UUIDSet.to_iter p.entries
+    |> Iter.map (fun x -> UUIDMap.find x p.code_blocks |> fun x -> x.address)
+  in
+  let requires =
+    entry_addrs
+    |> Iter.map (fun i ->
+        Lang.Expr.BasilExpr.(
+          binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 i)) (rvar conf.pc_var)))
+    |> Iter.to_list
+    |> fun conj ->
+    Lang.Expr.BasilExpr.applyintrin ~op:`OR conj |> fun pc_init -> [ pc_init ]
+  in
+  let succ_addr uuid =
+    try
+      OCFG.(
+        G.succ p.cfg (Vert.Internal uuid)
+        |> List.to_iter
+        |> Iter.filter_map (function
+          | Vert.Internal uuid -> UUIDMap.find_opt uuid p.code_blocks
+          | _ -> None)
+        |> Iter.map (fun (b : block) -> b.address))
+    with Invalid_argument _ -> Iter.empty
+  in
+  let name = Lang.Program.declare_name p.name m in
+  let proc = Lang.Procedure.create ~requires name () in
+  let proc, blocks =
+    p.code_blocks |> UUIDMap.to_iter |> Iter.map snd
+    |> Iter.fold (create_block succ_addr) (proc, UUIDMap.empty)
+  in
+
+  let proc =
+    UUIDSet.fold
+      (fun uuid acc ->
+        let b = UUIDMap.find uuid blocks in
+        Lang.Procedure.(
+          map_graph
+            (fun g -> G.add_edge g Lang.Procedure.Vert.Entry (Begin b))
+            acc))
+      p.entries proc
+  in
+  let proc = OCFG.G.fold_edges_e (add_edge blocks) p.cfg proc in
+  Lang.Program.add_proc proc m
+
 let get_code_block_opcodes (m : Module.t) =
   let all_sects = m.sections in
   let intervals =
@@ -174,17 +326,10 @@ let get_code_block_opcodes (m : Module.t) =
          intervals
   in
 
-  let extract_code (b : content_block) =
-    match b.block.value with
-    | `Code (c : CodeBlock.t) -> Some (b, c)
-    | _ -> None
-  in
-  let code_blocks = List.filter_map extract_code ival_blks in
-
   let need_flip =
     m.byte_order |> function ByteOrder.LittleEndian -> true | _ -> false
   in
-  let rblocks = List.map (do_block ~need_flip) code_blocks in
+  let rblocks = List.filter_map (make_block ~need_flip) ival_blks in
   rblocks
 
 let load_gtirb infile =
@@ -228,6 +373,7 @@ let load_gtirb infile =
 
 let cfg (c : CFG.t) (m : Module.t) =
   let blocks = get_code_block_opcodes m in
+
   let sym =
     m.symbols
     |> List.map (fun (s : Symbol.Gtirb.Proto.Symbol.t) ->
@@ -316,7 +462,22 @@ let cfg (c : CFG.t) (m : Module.t) =
   let procs = UUIDMap.map make_cfg procs in
   procs
 
-let load_gtirb filename =
+let to_ir_prog ir_cfg (m : Module.t) =
+  let prog = Lang.Program.empty ~name:m.name () in
+  let c = cfg ir_cfg m in
+  UUIDMap.fold (fun _ proc prog -> to_ir_proc prog proc) c prog
+
+let load_gtirb_prog filename =
+  let open Result in
+  let g = load_gtirb filename in
+  let* c = g.cfg |> Option.to_result "No CFG" in
+  let p = List.map (to_ir_prog c) g.modules in
+  match p with
+  | h :: [] -> Ok h
+  | _ :: _ -> Error "got more than one module"
+  | [] -> Error "got zero modules"
+
+let load_gtirb_cfg filename =
   let open Option in
   let g = load_gtirb filename in
   let* c = g.cfg in
