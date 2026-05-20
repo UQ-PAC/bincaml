@@ -32,6 +32,7 @@
  (flags -w -27)
  (modules passes script)
  (libraries
+   bincaml.gtirb
   loader
   containers.pp
   pp_loc

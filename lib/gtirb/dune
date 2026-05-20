@@ -4,8 +4,11 @@
  (modules
    load_auxdata
    gtirb
+  UUID 
   )
+ (flags :standard -w -69)
  (libraries
+   base64
    angstrom
   bincaml.gtirb_proto
   zarith

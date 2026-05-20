@@ -10,6 +10,9 @@ open Angstrom
     {{:https://github.com/UQ-PAC/BASIL/blob/tv-rewrites/src/main/scala/gtirb/AuxDecoder.scala#L28-L28}
      BASIL implementation}. *)
 
+module UUIDMap = Map.Make (UUID)
+module UUIDSet = Set.Make (UUID)
+
 module AuxDataTypes = struct
   let str =
     LE.any_int64 >>= fun len ->
@@ -26,7 +29,8 @@ module AuxDataTypes = struct
     let* len = LE.any_int64 >>= Int64.to_int %> return in
     count len value
 
-  let uuid = count 16 any_char >>= fun s -> return (String.of_list s)
+  let uuid =
+    count 16 any_char >>= fun s -> return (String.of_list s |> UUID.of_string)
 
   let pair a b =
     let* a = a in
@@ -63,8 +67,8 @@ module AuxDataTypes = struct
     let* len = LE.any_int64 in
     return (uuid, len)
 
-  let uuid_set = sequence uuid >>= StringSet.of_list %> return
-  let uuid_map v = map uuid v >>= StringMap.of_list %> return
+  let uuid_set = sequence uuid >>= UUIDSet.of_list %> return
+  let uuid_map v = map uuid v >>= UUIDMap.of_list %> return
 end
 
 open AuxDataTypes
