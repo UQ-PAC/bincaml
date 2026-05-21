@@ -13,9 +13,7 @@ module LV =
     (struct
       open Procedure
 
-      type vertex = RevG.E.vertex
       type edge = RevG.E.t
-      type g = RevG.t
       type t = VarSet.t
 
       let equal = VarSet.equal
