@@ -22,7 +22,7 @@ let dis_op op =
   let o, _, _ =
     CCUnix.call
       ~stdin:(`Str (print_op op))
-      "%s --disassemble --arch aarch64" bin
+      "%s --disassemble --arch aarch64 -mattr=v9.5a" bin
   in
   let o =
     String.split_on_char '\n' o
