@@ -582,43 +582,14 @@ let open_spacer () =
   Solver.set_logic s "HORN";
   s
 
-(** Send the encoded CHC system to Z3/Spacer. Reuses {!Bincaml_util.Smt.Solver}
-    directly; the only HORN-specific bit is the [(set-logic HORN)] preamble. *)
-let solve (preds : predicate list) (clauses : clause list) : solve_result =
-  let module Solver = Bincaml_util.Smt.Solver in
-  let s = open_spacer () in
-  List.iter
-    (fun pr -> Solver.add_command s (declare_predicate pr))
-    preds;
-  List.iter
-    (fun c -> Solver.add_command s (clause_to_sexp c))
-    clauses;
-  let result =
-    match Solver.check s with
-    | Sat -> Sat
-    | Unsat -> Unsat
-    | Unknown -> Unknown
-  in
-  Solver.stop s;
-  result
+(** One [define-fun] entry from a parsed [get-model]: the predicate name, its
+    positional parameters with sorts (Spacer typically emits fresh names like
+    [x!0], [x!1]), and the body. Callers map params back to our actual
+    variables by position. *)
+type model_def = string * (string * Sexp.t) list * Sexp.t
 
-let run_solver (prog : Program.t) : solve_result =
-  let preds, clauses = encode_program prog in
-  Logs.info (fun m ->
-      m "Submitting %d predicates and %d clauses to solver"
-        (List.length preds) (List.length clauses));
-  let result = solve preds clauses in
-  (match result with
-  | Sat -> Logs.info (fun m -> m "Solver returned sat")
-  | Unsat -> Logs.warn (fun m -> m "Solver returned unsat — assertions not provable")
-  | Unknown -> Logs.warn (fun m -> m "Solver returned unknown"));
-  result
-
-(** Parse a model returned by Z3 [get-model] into a list of
-    [(predicate_name, params, body)] triples. The model's parameter names
-    typically don't match our input names — Z3 emits fresh [x!0], [x!1]
-    placeholders — so the caller must map them back by position. *)
-let parse_model (model : Sexp.t) : (string * (string * Sexp.t) list * Sexp.t) list =
+(** Parse a model returned by Z3 [get-model] into a list of [model_def]s. *)
+let parse_model (model : Sexp.t) : model_def list =
   match model with
   | `List defs ->
       List.filter_map
@@ -644,6 +615,43 @@ let parse_model (model : Sexp.t) : (string * (string * Sexp.t) list * Sexp.t) li
           | _ -> None)
         defs
   | _ -> []
+
+(** One Spacer invocation against the encoded CHC system. Reuses
+    {!Bincaml_util.Smt.Solver} directly; the only HORN-specific bit is the
+    [(set-logic HORN)] preamble. Returns the [solve_result] together with the
+    parsed model on Sat. *)
+let solve_and_get_model (preds : predicate list) (clauses : clause list)
+    : solve_result * model_def list option =
+  let module Solver = Bincaml_util.Smt.Solver in
+  let s = open_spacer () in
+  List.iter
+    (fun pr -> Solver.add_command s (declare_predicate pr))
+    preds;
+  List.iter
+    (fun c -> Solver.add_command s (clause_to_sexp c))
+    clauses;
+  let result =
+    match Solver.check s with
+    | Sat ->
+        let model = parse_model (Solver.get_model s) in
+        (Sat, Some model)
+    | Unsat -> (Unsat, None)
+    | Unknown -> (Unknown, None)
+  in
+  Solver.stop s;
+  result
+
+let run_solver (prog : Program.t) : solve_result =
+  let preds, clauses = encode_program prog in
+  Logs.info (fun m ->
+      m "Submitting %d predicates and %d clauses to solver"
+        (List.length preds) (List.length clauses));
+  let result, _ = solve_and_get_model preds clauses in
+  (match result with
+  | Sat -> Logs.info (fun m -> m "Solver returned sat")
+  | Unsat -> Logs.warn (fun m -> m "Solver returned unsat — assertions not provable")
+  | Unknown -> Logs.warn (fun m -> m "Solver returned unknown"));
+  result
 
 (** Preprocess a model body before decoding: expand [let] bindings and strip
     [(! ... :attrs ...)] annotation forms. Spacer's models wrap subterms in
@@ -686,6 +694,28 @@ let is_trivially_true (e : BasilExpr.t) : bool =
   | Constant { const = `Bool true; _ } -> true
   | _ -> false
 
+(** Decode every model definition that names a known predicate into a
+    [BasilExpr.t], keyed by predicate name. Skips definitions whose name we
+    don't recognise (Spacer occasionally emits auxiliary functions), whose
+    body can't be decoded by {!Expr_smt.SMTLib2.expr_of_smt}, or which
+    decode to a trivially-true expression (uninformative). *)
+let decode_model (preds : predicate list) (defs : model_def list)
+    : BasilExpr.t StringMap.t =
+  let pred_by_name =
+    List.fold_left
+      (fun acc (p : predicate) -> StringMap.add p.name p acc)
+      StringMap.empty preds
+  in
+  List.fold_left
+    (fun acc (name, params, body) ->
+      match StringMap.find_opt name pred_by_name with
+      | None -> acc
+      | Some pred -> (
+          match extract_invariant pred params body with
+          | Some e when not (is_trivially_true e) -> StringMap.add name e acc
+          | _ -> acc))
+    StringMap.empty defs
+
 (** Loop heads of a procedure — SCC component heads in the forward weak
     topological ordering. Every cycle in the CFG has exactly one of these as
     its entry point. *)
@@ -697,8 +727,10 @@ let loop_heads (proc : Program.proc) : ID.t list =
 
 (** Add [requires]/[ensures] to [proc] based on the solver's interpretations
     of its [enter]/[exit] predicates, and prepend [Instr_Assert] at each loop
-    head with that block predicate's inferred invariant. [find_def] looks up
-    a predicate by name in the parsed model.
+    head with that block predicate's inferred invariant. [invs] maps each
+    predicate name to its (already-decoded) inferred body — typically the
+    output of {!decode_model}, or a per-predicate conjunction across multiple
+    solver calls in per-query mode.
 
     Procedure-level annotation is skipped when [use_spec proc] is true: in
     that case the encoding has already constrained [enter⟨f⟩]/[exit⟨f⟩] to
@@ -708,15 +740,11 @@ let loop_heads (proc : Program.proc) : ID.t list =
     whatever shape it prefers. Attaching them would duplicate the spec.
     Loop-head invariants are still attached either way. *)
 let annotate_proc ~(use_spec : Program.proc -> bool)
-    ~(find_def : string -> ((string * Sexp.t) list * Sexp.t) option)
-    (proc : Program.proc) : Program.proc =
+    ~(invs : BasilExpr.t StringMap.t) (proc : Program.proc) : Program.proc =
   let live = Livevars.run proc in
   let preds = proc_predicates ~live proc in
   let invariant_of (pred : predicate) : BasilExpr.t option =
-    let open Option.Infix in
-    let* params, body = find_def pred.name in
-    let* inv = extract_invariant pred params body in
-    if is_trivially_true inv then None else Some inv
+    StringMap.find_opt pred.name invs
   in
   let proc =
     if use_spec proc then proc
@@ -765,35 +793,75 @@ let infer_invariants (prog : Program.t) : Program.t =
   Logs.info (fun m ->
       m "Submitting %d predicates and %d clauses to solver"
         (List.length preds) (List.length clauses));
-  let module Solver = Bincaml_util.Smt.Solver in
-  let s = open_spacer () in
-  List.iter (fun pr -> Solver.add_command s (declare_predicate pr)) preds;
-  List.iter (fun c -> Solver.add_command s (clause_to_sexp c)) clauses;
-  let prog' =
-    match Solver.check s with
-    | Sat ->
-        let model = Solver.get_model s in
-        let defs = parse_model model in
-        let find_def name =
-          List.find_map
-            (fun (n, params, body) ->
-              if String.equal n name then Some (params, body) else None)
-            defs
-        in
-        Logs.info (fun m ->
-            m "Solver returned sat; extracted %d definitions"
-              (List.length defs));
-        Program.map_procedures
-          (fun _ p -> annotate_proc ~use_spec ~find_def p)
-          prog
-    | Unsat ->
-        Logs.warn (fun m ->
-            m "Solver returned unsat — no invariants extracted");
+  match solve_and_get_model preds clauses with
+  | Sat, Some defs ->
+      Logs.info (fun m ->
+          m "Solver returned sat; extracted %d definitions"
+            (List.length defs));
+      let invs = decode_model preds defs in
+      Program.map_procedures
+        (fun _ p -> annotate_proc ~use_spec ~invs p)
         prog
-    | Unknown ->
-        Logs.warn (fun m ->
-            m "Solver returned unknown — no invariants extracted");
-        prog
+  | Unsat, _ ->
+      Logs.warn (fun m ->
+          m "Solver returned unsat — no invariants extracted");
+      prog
+  | Unknown, _ | Sat, None ->
+      Logs.warn (fun m ->
+          m "Solver returned unknown — no invariants extracted");
+      prog
+
+(** Per-query variant: one solver call per query clause, conjoining the
+    inferred invariants across successful calls. See {!infer_invariants} for
+    the single-call version. *)
+let infer_invariants_per_query (prog : Program.t) : Program.t =
+  let use_spec = default_use_spec in
+  let preds, clauses = encode_program ~use_spec prog in
+  let normal, queries =
+    List.partition (fun c -> Option.is_some c.head) clauses
   in
-  Solver.stop s;
-  prog'
+  let n_queries = List.length queries in
+  Logs.info (fun m ->
+      m "Per-query mode: %d predicates, %d normal clauses, %d queries"
+        (List.length preds) (List.length normal) n_queries);
+  let accum = ref StringMap.empty in
+  let successes = ref 0 in
+  List.iteri
+    (fun i q ->
+      let idx = i + 1 in
+      match solve_and_get_model preds (normal @ [ q ]) with
+      | Sat, Some defs ->
+          incr successes;
+          let invs = decode_model preds defs in
+          Logs.info (fun m ->
+              m "Query %d/%d: sat (%d definitions, %d non-trivial)" idx
+                n_queries (List.length defs) (StringMap.cardinal invs));
+          StringMap.iter
+            (fun name e ->
+              let existing =
+                StringMap.find_opt name !accum |> Option.value ~default:[]
+              in
+              accum := StringMap.add name (e :: existing) !accum)
+            invs
+      | Unsat, _ ->
+          Logs.warn (fun m ->
+              m "Query %d/%d: unsat — assertion not provable" idx n_queries)
+      | Unknown, _ | Sat, None ->
+          Logs.warn (fun m -> m "Query %d/%d: unknown" idx n_queries))
+    queries;
+  let conjoined =
+    StringMap.map
+      (fun es ->
+        match es with
+        | [] -> BasilExpr.boolconst true
+        | [ e ] -> e
+        | _ -> BasilExpr.applyintrin ~op:`AND es)
+      !accum
+  in
+  Logs.info (fun m ->
+      m "Per-query mode: %d/%d queries succeeded; extracted invariants for \
+         %d predicates"
+        !successes n_queries (StringMap.cardinal conjoined));
+  Program.map_procedures
+    (fun _ p -> annotate_proc ~use_spec ~invs:conjoined p)
+    prog
