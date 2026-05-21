@@ -536,7 +536,6 @@ module DSGraph = struct
         let rec aux = function
           | [] -> []
           | x :: xs when Interval.subset i (offsets x) ->
-              print_endline @@ Interval.show i ^ Interval.show (offsets x);
               x :: aux xs
           | x :: xs -> aux xs
         in
@@ -748,40 +747,21 @@ let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
   ignore
     (let open Option.Infix in
      let open DSGraph in
-     print_endline @@ "Thingy: " ^ Sva.SymAddrSetLattice.show formal;
-     SBMap.iter (fun s n -> check_sorted n) callee_graph.node_map;
-     SBMap.iter (fun s n -> DSGraph.check_sorted n) caller_graph.node_map;
      let* callee_cell = cell_of ~uniq:true formal callee_graph in
      let callee_node = node_of callee_cell in
-     SBMap.iter (fun s n -> check_sorted n) callee_graph.node_map;
-     SBMap.iter (fun s n -> check_sorted n) caller_graph.node_map;
      let callee_node_copy =
        copy_node
          ~sbs:(Sva.SymAddrSetLattice.to_list actual |> snd |> List.map fst)
          ~old_to_new:(Some old_to_new) caller_graph callee_node
      in
-     SBMap.iter (fun s n -> check_sorted n) caller_graph.node_map;
-     check_sorted callee_node_copy;
      let flags = flags callee_node_copy in
      let flags = NodeFlags.(clear_flag stack flags) in
      set_flags flags callee_node_copy;
      let callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
      (* Only do the joining if a caller cell actually exists *)
-     SBMap.iter (fun s n -> DSGraph.check_sorted n) caller_graph.node_map;
      let* caller_cell = cell_of actual caller_graph in
-     SBMap.iter (fun s n -> check_sorted n) caller_graph.node_map;
-     print_endline "Joining";
-     print_endline @@ "Caller node size: " ^ Int.to_string @@ List.length
-     @@ DSGraph.cells
-     @@ DSGraph.node_of caller_cell;
-     print_endline @@ "Callee node size: " ^ Int.to_string @@ List.length
-     @@ DSGraph.cells @@ callee_node;
-     SBMap.iter (fun s n -> DSGraph.check_sorted n) caller_graph.node_map;
      join caller_cell callee_cell_copy;
-     print_endline "Joined";
-     SBMap.iter (fun s n -> DSGraph.check_sorted n) caller_graph.node_map;
      unify_pointees caller_cell;
-     SBMap.iter (fun s n -> DSGraph.check_sorted n) caller_graph.node_map;
      None)
 
 let bottom_up prog nodess =
@@ -829,7 +809,6 @@ let bottom_up prog nodess =
        1:
           a) get sva results for both procedures
           b) for each formal in/out, copy its callee node, then merge it with the actual in/out *)
-    print_endline @@ "scc: " ^ IDSet.to_string ID.show scc;
     IDSet.iter
       (fun pid ->
         let constraints, sva, (nodes : DSGraph.t) = IDMap.find pid nodess in
@@ -839,7 +818,6 @@ let bottom_up prog nodess =
             function
             | Call { lhs; args; callee_id } ->
                 let old_to_new = Hashtbl.create 100 in
-                print_endline @@ "Calling: " ^ ID.show callee_id;
                 let _, callee_sva, callee_nodes = IDMap.find callee_id nodess in
                 List.iter
                   (fun (a, f) ->
@@ -880,7 +858,7 @@ let dot_string (graph : DSGraph.t) =
       let s = Hashtbl.get_or node_sbs (ID.index @@ DSGraph.id n) ~default:"" in
       Hashtbl.add node_sbs
         (ID.index @@ DSGraph.id n)
-        (s ^ " "
+        (s ^ "\\n"
         ^ (Sva.SymBase.show sb
           |> String.replace ~sub:"\"" ~by:"\\\""
           |> String.replace ~sub:"{" ~by:"\\{"
