@@ -148,6 +148,12 @@ module PG : sig
   val formal_out_params : ('a, 'b) t -> 'a StringMap.t
   (** return formal out parameters *)
 
+  val set_formal_in_params : 'a StringMap.t -> ('a, 'b) t -> ('a, 'b) t
+  (** set the formal in parameters *)
+
+  val set_formal_out_params : 'a StringMap.t -> ('a, 'b) t -> ('a, 'b) t
+  (** set the formal out parameters *)
+
   val map_formal_in_params :
     ('a StringMap.t -> 'a StringMap.t) -> ('a, 'b) t -> ('a, 'b) t
   (** modify formal in parameters *)
@@ -215,11 +221,8 @@ end = struct
   let map_formal_out_params f p =
     { p with formal_out_params = f p.formal_out_params }
 
-  let[@warning "-32"] set_formal_in_params f p =
-    map_formal_in_params (fun _ -> f) p
-
-  let[@warning "-32"] set_formal_out_params f p =
-    map_formal_in_params (fun _ -> f) p
+  let set_formal_in_params f p = map_formal_in_params (fun _ -> f) p
+  let set_formal_out_params f p = map_formal_in_params (fun _ -> f) p
 
   let empty_graph =
     let graph = G.empty in
