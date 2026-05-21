@@ -1,11 +1,11 @@
 ; checks tree-sitter highlights are valid
 
 (rule
- (deps src/parser.c queries/highlights.scm test/concat.il)
+ (deps src/parser.c queries/highlights.scm test/cram/concat.il)
  (alias treesit)
  (action
   (with-stdin-from
-   %{project_root}/test/concat.il
+   %{project_root}/test/cram/concat.il
    (ignore-stdout
     (run tree-sitter highlight)))))
 
