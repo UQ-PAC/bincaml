@@ -47,6 +47,7 @@ module IValue = struct
           (fun _ ({ value; _ } : Ops.Record.field) acc ->
             Bitvec.concat acc value)
           fields Bitvec.empty
+    | `Sort _ -> failwith "struct sort unsupported"
 
   let of_constant (v : Ops.AllOps.const) =
     let open Expr.BasilExpr in
@@ -57,6 +58,7 @@ module IValue = struct
     | `Bool b -> if b then true_value else false_value
     | `Pointer (bv, _) -> bv_value bv
     | `Record fields -> bv_value @@ bv_of_constant v
+    | `Sort _ -> failwith "struct sort unsupported"
 
   (** conversion to basil values *)
 

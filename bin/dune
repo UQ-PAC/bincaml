@@ -1,7 +1,6 @@
 (executable
  (public_name bincaml)
  (package bincaml)
- (flags -w -32)
  (name main)
  (modules main)
  (libraries
