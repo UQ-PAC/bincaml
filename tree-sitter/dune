@@ -5,7 +5,7 @@
  (alias treesit)
  (action
   (with-stdin-from
-   %{project_root}/examples/cat.il
+   %{project_root}/test/concat.il
    (ignore-stdout
     (run tree-sitter highlight)))))
 

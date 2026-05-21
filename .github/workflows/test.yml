@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Checkout tree
         uses: actions/checkout@v5
+        with:
+          submodules: true
 
       - name: Set-up OCaml
         uses: ocaml/setup-ocaml@v3
@@ -54,6 +56,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: true
       - run: opam install -t . --deps-only
       - run: opam exec -- dune build '@install'
       - run: opam exec -- dune runtest --force --profile=release
