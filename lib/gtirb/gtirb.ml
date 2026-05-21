@@ -31,7 +31,7 @@ type content_block = { block : Block.t; raw : bytes; address : int }
 type config = { opcode_length : int; pc_var : Var.t }
 
 let conf =
-  let pc_var = Var.create "PC" ~scope:Var.GlobalVar (Bitvector 64) in
+  let pc_var = Var.create "$PC" ~scope:Var.GlobalVar (Bitvector 64) in
   { opcode_length = 4; pc_var }
 
 open struct
@@ -208,15 +208,17 @@ let create_block succ_addr (proc, blockmap) (b : block) =
     let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
     let instrs =
       opcodes
-      |> List.map (fun _ ->
+      |> List.map (fun op ->
           Stmt.Instr_Assert
             {
               body = Lang.Expr.BasilExpr.boolconst false;
-              attrib = Attrib.empty;
+              attrib =
+                StringMap.singleton ".opcode"
+                  (`String (Opcode.to_hex_string @@ Opcode.of_be_bytes op));
             })
     in
     let stmts = guard :: (instrs @ [ ensure ]) in
-    let proc, nb = Procedure.fresh_block proc ~name:"gtirb" ~stmts () in
+    let proc, nb = Procedure.fresh_block proc ~name:"%gtirb" ~stmts () in
     let blockmap = UUIDMap.add b.uuid nb blockmap in
     Some (proc, blockmap)
   in
@@ -295,7 +297,7 @@ let to_ir_proc all_blocks m (p : temp_proc) =
         |> Iter.map (fun (b : block) -> b.address))
     with Invalid_argument _ -> Iter.empty
   in
-  let name = Lang.Program.declare_name p.name m in
+  let name = Lang.Program.declare_name ("@" ^ p.name) m in
   let proc = Lang.Procedure.create ~requires name () in
   let proc, blocks =
     p.code_blocks |> UUIDMap.to_iter |> Iter.map snd
@@ -470,6 +472,7 @@ let cfg (c : CFG.t) (m : Module.t) =
 
 let to_ir_prog ir_cfg (m : Module.t) =
   let prog = Lang.Program.empty ~name:m.name () in
+  let prog = Lang.Program.decl_global prog conf.pc_var in
   let c = cfg ir_cfg m in
   let all_blocks =
     UUIDMap.values c

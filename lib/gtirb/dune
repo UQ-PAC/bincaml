@@ -4,7 +4,8 @@
  (modules
    load_auxdata
    gtirb
-  UUID 
+   UUID 
+   opcode
   )
  (flags :standard -w -69)
  (libraries
