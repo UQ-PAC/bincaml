@@ -45,8 +45,8 @@ module Domain = struct
       |> Iter.fold (fun s v' -> V.join (m v') s) V.bottom
     in
     match stmt with
-    | Instr_Assign a ->
-        Iter.of_list a |> Iter.map (fun (v, e) -> (v, eval_expr e))
+    | Instr_Assign { al } ->
+        Iter.of_list al |> Iter.map (fun (v, e) -> (v, eval_expr e))
     | Instr_Assert _ -> Iter.empty
     | Instr_Assume _ -> Iter.empty
     | Instr_Load { lhs; rhs; addr = Scalar } -> Iter.singleton (lhs, m rhs)
@@ -144,8 +144,8 @@ module IDEDomain : IDESSIDomain = struct
         | _ -> Iter.empty)
     | Label v -> (
         match stmt with
-        | Instr_Assign a ->
-            Iter.of_list a
+        | Instr_Assign { al } ->
+            Iter.of_list al
             |> Iter.flat_map (fun (v', e) ->
                 if VarSet.mem v (Expr.BasilExpr.free_vars e) then
                   Iter.singleton (Label v', IdEdge)

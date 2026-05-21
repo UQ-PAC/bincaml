@@ -308,8 +308,8 @@ let rec pretty_statement (s : Program.stmt) =
       in
       nest 2 @@ text "call" ^+ lhs ^ Stmt.Intrinsic.pretty name
       ^ bracket "(" rhs ")"
-  | Instr_Assign [] -> text "assert true"
-  | Instr_Assign ls ->
+  | Instr_Assign { al = [] } -> text "assert true"
+  | Instr_Assign { al = ls } ->
       let lhs =
         ls
         >|= compose fst pretty_variable

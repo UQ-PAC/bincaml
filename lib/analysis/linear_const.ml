@@ -53,15 +53,22 @@ module LF = struct
   let identity = IdEdge
   let top = TopEdge
 
-  (* This is the worst thing ever *)
+  let is_id_coeff a b =
+    Z.equal Z.one (Bitvec.value a) && Z.equal Z.zero (Bitvec.value b)
 
-  let is_id = function
-    | IdEdge -> true
-    | Linear (a, b) ->
-        Z.equal (Bitvec.value a) Z.one && Z.equal (Bitvec.value b) Z.zero
-    | Join (a, b, Value.Bot) ->
-        Z.equal (Bitvec.value a) Z.one && Z.equal (Bitvec.value b) Z.zero
-    | _ -> false
+  let canonical = function
+    | Linear (a, b) when is_id_coeff a b -> false
+    (* In theory we could not have Join represent Bot or Top values but that means we can't call join *)
+    | Join (_, _, Value.(Bot | Top)) -> false
+    (* Join of two constants shouldn't be represented, as it would either be Top or just a linear function *)
+    | Join (a, _, _) when Z.equal Z.zero (Bitvec.value a) -> false
+    | _ -> true
+
+  let is_id f =
+    assert (canonical f);
+    match f with IdEdge -> true | _ -> false
+
+  (* Definitions from https://doi.org/10.1016/0304-3975(96)00072-2 with gcdext modifications coming from computing inverses mod 2^n *)
 
   let compute_join a b c d =
     let bd = Bitvec.value (Bitvec.sub b d) in
@@ -81,8 +88,17 @@ module LF = struct
       Some (Value.V j)
     else None
 
+  let make_linear a b = if is_id_coeff a b then IdEdge else Linear (a, b)
+
+  let make_join a b c =
+    match c with
+    | Value.Top -> TopEdge
+    | Bot -> make_linear a b
+    | _ -> Join (a, b, c)
+
   (* Should make join edges with top become TopEdges (and probably similar for effectively id Linear and Join edges...) *)
   let join a b =
+    assert (canonical a && canonical b);
     match (a, b) with
     | BotEdge, b -> b
     | a, BotEdge -> a
@@ -90,48 +106,47 @@ module LF = struct
     | _, TopEdge -> TopEdge
     | Join (a, b, c), Join (d, e, f) when Bitvec.equal a d && Bitvec.equal b e
       ->
-        Join (a, b, Value.join c f)
+        make_join a b (Value.join c f)
     | Linear (a, b), Linear (c, d) when Bitvec.equal a c && Bitvec.equal b d ->
-        Linear (a, b)
+        make_linear a b
     | IdEdge, IdEdge -> IdEdge
-    | IdEdge, f when is_id f -> IdEdge
-    | f, IdEdge when is_id f -> IdEdge
-    | IdEdge, Join (a, b, c) when is_id (Linear (a, b)) -> Join (a, b, c)
-    | Join (a, b, c), IdEdge when is_id (Linear (a, b)) -> Join (a, b, c)
+    | IdEdge, Join (a, b, c) when is_id_coeff a b -> make_join a b c
+    | Join (a, b, c), IdEdge when is_id_coeff a b -> make_join a b c
     | Linear (a, b), Linear (c, d) -> (
         match compute_join a b c d with
-        | Some j -> Join (a, b, j)
+        | Some j -> make_join a b j
         | None -> TopEdge)
     | Linear (a, b), Join (c, d, e) -> (
         match compute_join a b c d with
-        | Some j -> Join (a, b, Value.join j e)
+        | Some j -> make_join a b (Value.join j e)
         | None -> TopEdge)
     | Join (a, b, c), Linear (d, e) -> (
         match compute_join a b d e with
-        | Some j -> Join (a, b, Value.join j c)
+        | Some j -> make_join a b (Value.join j c)
         | None -> TopEdge)
     | Join (a, b, c), Join (d, e, f) -> (
         match compute_join a b d e with
-        | Some j -> Join (a, b, Value.join j (Value.join c f))
+        | Some j -> make_join a b (Value.join j (Value.join c f))
         | None -> TopEdge)
     | IdEdge, Linear (a, b) -> (
         match compute_join_id a b with
-        | Some j -> Join (a, b, j)
+        | Some j -> make_join a b j
         | None -> TopEdge)
     | Linear (a, b), IdEdge -> (
         match compute_join_id a b with
-        | Some j -> Join (a, b, j)
+        | Some j -> make_join a b j
         | None -> TopEdge)
     | IdEdge, Join (a, b, c) -> (
         match compute_join_id a b with
-        | Some j -> Join (a, b, Value.join j c)
+        | Some j -> make_join a b (Value.join j c)
         | None -> TopEdge)
     | Join (a, b, c), IdEdge -> (
         match compute_join_id a b with
-        | Some j -> Join (a, b, Value.join j c)
+        | Some j -> make_join a b (Value.join j c)
         | None -> TopEdge)
 
   let compose a b =
+    assert (canonical a && canonical b);
     match (a, b) with
     | IdEdge, b -> b
     | a, IdEdge -> a
@@ -140,34 +155,32 @@ module LF = struct
     | _, BotEdge -> BotEdge
     | _, TopEdge -> TopEdge
     | Linear (a, b), Linear (c, d) ->
-        Linear (Bitvec.mul a c, Bitvec.add (Bitvec.mul a d) b)
+        make_linear (Bitvec.mul a c) (Bitvec.add (Bitvec.mul a d) b)
     | Join (a, b, c), Linear (d, e) ->
-        Join (Bitvec.mul a d, Bitvec.add (Bitvec.mul a e) b, c)
+        make_join (Bitvec.mul a d) (Bitvec.add (Bitvec.mul a e) b) c
     | Linear (a, b), Join (c, d, V e) ->
-        Join
-          ( Bitvec.mul a c,
-            Bitvec.add (Bitvec.mul a d) b,
-            V (Bitvec.add (Bitvec.mul a e) b) )
+        make_join (Bitvec.mul a c)
+          (Bitvec.add (Bitvec.mul a d) b)
+          (V (Bitvec.add (Bitvec.mul a e) b))
     | Linear (a, b), Join (c, d, Top) -> TopEdge
     | Linear (a, b), Join (c, d, Bot) ->
-        Linear (Bitvec.mul a c, Bitvec.add (Bitvec.mul a d) b)
+        make_linear (Bitvec.mul a c) (Bitvec.add (Bitvec.mul a d) b)
     | Join (a, b, c), Join (d, e, V f) ->
-        Join
-          ( Bitvec.mul a d,
-            Bitvec.add (Bitvec.mul a e) b,
-            Value.join (V (Bitvec.add (Bitvec.mul a f) b)) c )
+        make_join (Bitvec.mul a d)
+          (Bitvec.add (Bitvec.mul a e) b)
+          (Value.join (V (Bitvec.add (Bitvec.mul a f) b)) c)
     | Join (a, b, c), Join (d, e, Top) ->
-        Join (Bitvec.mul a d, Bitvec.add (Bitvec.mul a e) b, Top)
+        make_join (Bitvec.mul a d) (Bitvec.add (Bitvec.mul a e) b) Top
     | Join (a, b, c), Join (d, e, Bot) ->
-        Join (Bitvec.mul a d, Bitvec.add (Bitvec.mul a e) b, c)
+        make_join (Bitvec.mul a d) (Bitvec.add (Bitvec.mul a e) b) c
 
   let eval x f =
+    assert (canonical f);
     match (f, x) with
     | BotEdge, _ -> Value.Bot
     | IdEdge, x -> x
     | TopEdge, _ -> Top
     | Linear (a, b), _ when Z.equal Z.zero (Bitvec.value a) -> V b
-    | Join (a, b, _), _ when Z.equal Z.zero (Bitvec.value a) -> V b
     | Linear (a, b), Value.V x -> V (Bitvec.add (Bitvec.mul a x) b)
     | Linear _, Bot -> Bot
     | Linear _, Top -> Top
@@ -261,11 +274,7 @@ module LF = struct
       | Some v -> (IdEdge, Some v)
       | _ -> (
           match Expr.BasilExpr.cata extract_alg e with
-          | Some (Some a, Some v, b)
-            when Z.equal Z.one (Bitvec.value a)
-                 && Z.equal Z.zero (Bitvec.value b) ->
-              (IdEdge, Some v)
-          | Some (Some a, Some v, b) -> (Linear (a, b), Some v)
+          | Some (Some a, Some v, b) -> (make_linear a b, Some v)
           | _ -> (TopEdge, None))
   end
 end
@@ -295,19 +304,20 @@ module LinearIDE = struct
     match d with
     | Lambda -> (
         match stmt with
-        | Instr_Assign a ->
-            Iter.of_list a
+        | Instr_Assign { al } ->
+            Iter.of_list al
             |> Iter.flat_map (fun (v, e) ->
                 match const_expr e with
                 | Some x ->
                     Iter.singleton
-                      (Label v, Linear (Bitvec.zero ~size:(Bitvec.size x), x))
+                      ( Label v,
+                        make_linear (Bitvec.zero ~size:(Bitvec.size x)) x )
                 | None -> Iter.empty)
         | _ -> Iter.empty)
     | Label v -> (
         match stmt with
-        | Instr_Assign a ->
-            Iter.of_list a
+        | Instr_Assign { al } ->
+            Iter.of_list al
             |> Iter.filter (fun (s, e) ->
                 VarSet.mem v (Expr.BasilExpr.free_vars e))
             |> Iter.map (fun (v', e) ->
@@ -601,16 +611,15 @@ module Solver = struct
   let add_intra_stmt summaries callers node_of pid component stmt =
     let open Stmt in
     match stmt with
-    | Instr_Assign a ->
-        List.iter
-          (fun (v, e) ->
+    | Instr_Assign { al } ->
+        al
+        |> List.iter (fun (v, e) ->
             match LF.Extract.extract_expr e with
             | f, Some v' ->
                 let v, v' = (node_of pid v, node_of pid v') in
                 (* v := f(v'), draw edge from v to v' with f *)
                 CopyNode.join v' f v
             | _, None -> ())
-          a
     | Instr_Call c ->
         (* We at the same time create a list of all callers of each procedure in the scc. *)
         if List.mem ~eq:ID.equal c.procid component then
@@ -863,3 +872,45 @@ let test_transform (p : Program.t) =
       CopyGraph.Dot.output_graph stdout g)
     gs;
   p
+
+let%expect_test "canonicalises" =
+  (* This program used to get stuck in an infinite loop before canonicalisation
+     as Top was represented by Join(a, b, Top) for a constantly changing b *)
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+prog entry @f;
+
+proc @f (x_in: bv64) -> (x_3:bv64)
+[
+  block %entry [
+    var x_1: bv64 := bvadd(x_in:bv64, 0xffffffffffffffc0:bv64);
+    goto(%a);
+  ];
+  block %a (var x_2:bv64 := phi(%entry -> x_1:bv64, %a -> x_3:bv64)) [
+    (var x_3:bv64) := call @g(x_2);
+    goto(%a, %ret);
+  ];
+  block %ret [
+    return;
+  ]
+];
+
+proc @g (x_in: bv64) -> (x_3:bv64)
+[
+  block %entry [
+    var x_1: bv64 := bvadd(x_in:bv64, 0xffffffffffffffd0:bv64);
+    goto(%a, %ret);
+  ];
+  block %a [
+    var x_2: bv64 := bvadd(x_1:bv64, 0x30:bv64);
+    goto(%ret);
+  ];
+  block %ret (var x_3:bv64 := phi ( %entry -> x_1:bv64, %a -> x_2:bv64) ) [
+    return;
+  ]
+];
+    |}
+  in
+  let prog = lst.prog in
+  ignore @@ LinearConstAnalysis.solve prog

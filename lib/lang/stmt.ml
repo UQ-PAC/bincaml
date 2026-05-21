@@ -45,17 +45,20 @@ type 'e access = Scalar | Addr of { addr : 'e; size : int; endian : endian }
 [@@deriving eq, ord, show, map]
 
 type ('lvar, 'var, 'expr) t =
-  | Instr_Assign of ('lvar * 'expr) list
+  | Instr_Assign of { attrib : Attrib.attrib_map; al : ('lvar * 'expr) list }
       (** simultaneous assignment of expr snd to lvar fst*)
-  | Instr_Assert of { body : 'expr }  (** assertions *)
-  | Instr_Assume of { body : 'expr; branch : bool }
+  | Instr_Assert of { attrib : Attrib.attrib_map; body : 'expr }
+      (** assertions *)
+  | Instr_Assume of { attrib : Attrib.attrib_map; body : 'expr; branch : bool }
       (** assumption; or branch guard *)
   | Instr_Load of {
+      attrib : Attrib.attrib_map;
       lhs : 'lvar;  (** load destination variable *)
       rhs : 'var;  (** variable loading from *)
       addr : 'expr access;  (** load index *)
     }  (** a load from memory [rhs] at index [addr] *)
   | Instr_Store of {
+      attrib : Attrib.attrib_map;
       lhs : 'lvar;  (** store destination variable *)
       rhs : 'var;  (** store source variable *)
       value : 'expr;  (** value to store value (may be combined with [rhs]) *)
@@ -64,18 +67,20 @@ type ('lvar, 'var, 'expr) t =
       (** a store into memory indexes [addr] up to of [addr] + [cells] (of
           [value] byte swapped depending on endiannesss*)
   | Instr_IntrinCall of {
+      attrib : Attrib.attrib_map;
       lhs : 'lvar list;
       name : Intrinsic.t;
       args : 'expr list;
     }  (** effectful operation calling a named intrinsic*)
   | Instr_Call of {
+      attrib : Attrib.attrib_map;
       lhs : 'lvar StringMap.t;
       procid : ID.t;
       args : 'expr StringMap.t;
     }
       (** call a procedure with the args, assigning its return parameters to lhs
       *)
-  | Instr_IndirectCall of { target : 'expr }
+  | Instr_IndirectCall of { attrib : Attrib.attrib_map; target : 'expr }
       (** call to the address of a procedure or block stored in [target], due to
           its nature local behaviour is not captured and hence will have
           incorrect semantics unless all behaviour in the IR is encoded as
@@ -102,7 +107,7 @@ let iter_mem_store stmt =
 let iter_rexpr stmt =
   let open Iter.Infix in
   match stmt with
-  | Instr_Assign ls -> List.to_iter ls >|= snd >|= fun v -> `Expr v
+  | Instr_Assign { al } -> List.to_iter al >|= snd >|= fun v -> `Expr v
   | Instr_Assert { body } -> Iter.singleton (`Expr body)
   | Instr_Assume { body } -> Iter.singleton (`Expr body)
   | Instr_Load { lhs; rhs; addr = Addr { addr } } ->
@@ -122,7 +127,7 @@ let iter_rexpr stmt =
 let iter_lvar stmt =
   let open Iter.Infix in
   match stmt with
-  | Instr_Assign ls -> List.to_iter ls >|= fst
+  | Instr_Assign { al } -> List.to_iter al >|= fst
   | Instr_Assert { body } -> Iter.empty
   | Instr_Assume { body } -> Iter.empty
   | Instr_Load { lhs; rhs; addr } -> Iter.singleton lhs
@@ -130,6 +135,32 @@ let iter_lvar stmt =
   | Instr_IntrinCall { lhs; name; args } -> List.to_iter lhs
   | Instr_IndirectCall { target } -> Iter.empty
   | Instr_Call { lhs; procid; args } -> StringMap.to_iter lhs >|= snd
+
+let attrib stmt =
+  let open Iter.Infix in
+  match stmt with
+  | Instr_Assign { attrib } -> attrib
+  | Instr_Assert { attrib } -> attrib
+  | Instr_Assume { attrib } -> attrib
+  | Instr_Load { attrib } -> attrib
+  | Instr_Store { attrib } -> attrib
+  | Instr_IntrinCall { attrib } -> attrib
+  | Instr_IndirectCall { attrib } -> attrib
+  | Instr_Call { attrib } -> attrib
+
+let set_attrib stmt attrib =
+  let open Iter.Infix in
+  match stmt with
+  | Instr_Assign a -> Instr_Assign { a with attrib }
+  | Instr_Assert a -> Instr_Assert { a with attrib }
+  | Instr_Assume a -> Instr_Assume { a with attrib }
+  | Instr_Load a -> Instr_Load { a with attrib }
+  | Instr_Store a -> Instr_Store { a with attrib }
+  | Instr_IntrinCall a -> Instr_IntrinCall { a with attrib }
+  | Instr_IndirectCall a -> Instr_IndirectCall { a with attrib }
+  | Instr_Call a -> Instr_Call { a with attrib }
+
+let drop_attrib stmt = set_attrib stmt Attrib.empty
 
 (** Get pretty-printer for il format*)
 let pretty show_lvar show_var show_expr s =
@@ -157,8 +188,8 @@ let pretty show_lvar show_var show_expr s =
   in
   let e = map ~f_lvar:show_lvar ~f_expr:show_expr ~f_rvar:show_var s in
   match e with
-  | Instr_Assign [] -> text "nop"
-  | Instr_Assign ls ->
+  | Instr_Assign { al = [] } -> text "nop"
+  | Instr_Assign { al = ls } ->
       let ls = List.map (function lhs, rhs -> lhs ^ text " := " ^ rhs) ls in
       let b = fill (text "," ^ newline) ls in
       if List.length ls > 1 then bracket "(" b ")" else b

@@ -123,7 +123,9 @@ module BasilASTLoader = struct
                   List.combine formal_out_params_order exprs
                   |> List.map (function (name, var), expr -> (var, expr))
                 in
-                if List.is_empty args then [] else [ Stmt.(Instr_Assign args) ])
+                if List.is_empty args then []
+                else
+                  [ Stmt.(Instr_Assign { al = args; attrib = Attrib.empty }) ])
         in
         stmts
 
@@ -603,6 +605,7 @@ module BasilASTLoader = struct
           `Stmt
             (Instr_Load
                {
+                 attrib = Attrib.empty;
                  lhs;
                  rhs;
                  addr = Addr { addr = trans_expr p_st expr; endian; size };
@@ -616,6 +619,7 @@ module BasilASTLoader = struct
           `Stmt
             (Instr_Store
                {
+                 attrib = Attrib.empty;
                  lhs;
                  rhs;
                  value = trans_expr p_st value;
@@ -629,6 +633,7 @@ module BasilASTLoader = struct
           `Stmt
             (Instr_Store
                {
+                 attrib = Attrib.empty;
                  lhs = mem;
                  rhs = mem;
                  value = trans_expr p_st value;
@@ -637,23 +642,42 @@ module BasilASTLoader = struct
     | Stmt_SingleAssign (Assignment1 (lvar, expr)) ->
         let expr = trans_expr p_st expr in
         let p_st, lv = trans_lvar p_st lvar in
-        (p_st, `Stmt (Instr_Assign [ (lv, expr) ]))
+        let al = [ (lv, expr) ] in
+        let attrib = Attrib.empty in
+        (p_st, `Stmt (Instr_Assign { al; attrib }))
     | Stmt_MemAssign (lvar, expr) ->
         let expr = trans_expr p_st expr in
         let p_st, lv = trans_lvar p_st lvar in
         ( p_st,
           `Stmt
-            (Instr_Store { lhs = lv; rhs = lv; value = expr; addr = Scalar }) )
+            (Instr_Store
+               {
+                 lhs = lv;
+                 rhs = lv;
+                 value = expr;
+                 addr = Scalar;
+                 attrib = Attrib.empty;
+               }) )
     | Stmt_ScalarStore (lvar, expr) ->
         let expr = trans_expr p_st expr in
         let p_st, lv = trans_lvar p_st lvar in
         ( p_st,
           `Stmt
-            (Instr_Store { lhs = lv; rhs = lv; value = expr; addr = Scalar }) )
+            (Instr_Store
+               {
+                 lhs = lv;
+                 rhs = lv;
+                 value = expr;
+                 addr = Scalar;
+                 attrib = Attrib.empty;
+               }) )
     | Stmt_ScalarLoad (lvar, rvar) ->
         let rhs = trans_var p_st rvar in
         let p_st, lv = trans_lvar p_st lvar in
-        (p_st, `Stmt (Instr_Load { lhs = lv; rhs; addr = Scalar }))
+        ( p_st,
+          `Stmt
+            (Instr_Load { lhs = lv; rhs; addr = Scalar; attrib = Attrib.empty })
+        )
     | Stmt_MultiAssign (o, assigns, c) ->
         let f (p_st, assigns) v =
           match v with
@@ -663,7 +687,9 @@ module BasilASTLoader = struct
               (p_st, (d, e) :: assigns)
         in
         let p_st, assigns = List.fold_left f (p_st, []) assigns in
-        (p_st, `Stmt (Instr_Assign (List.rev assigns)))
+        ( p_st,
+          `Stmt (Instr_Assign { al = List.rev assigns; attrib = Attrib.empty })
+        )
     | Stmt_DirectCall (calllvars, bident, o, exprs, c)
       when Option.is_some @@ Intrinsic.of_string (unsafe_unsigil (`Proc bident))
       ->
@@ -677,7 +703,8 @@ module BasilASTLoader = struct
           | CallParams_Exprs e -> List.map (trans_expr p_st) e
           | CallParams_Named _ -> failwith "intrin args are ordered not named"
         in
-        (p_st, `Call (Instr_IntrinCall { lhs; name; args }))
+        ( p_st,
+          `Call (Instr_IntrinCall { lhs; name; args; attrib = Attrib.empty }) )
     | Stmt_DirectCall (calllvars, bident, o, exprs, c) ->
         let n = unsafe_unsigil (`Proc bident) in
         let procid =
@@ -697,18 +724,35 @@ module BasilASTLoader = struct
           trans_call_lhs p_st (List.map fst out_param) calllvars
         in
         let args = trans_call_rhs p_st in_param exprs in
-        (p_st, `Call (Instr_Call { lhs; procid; args }))
+        (p_st, `Call (Instr_Call { lhs; procid; args; attrib = Attrib.empty }))
     | Stmt_IndirectCall expr ->
-        (p_st, `Call (Instr_IndirectCall { target = trans_expr p_st expr }))
+        ( p_st,
+          `Call
+            (Instr_IndirectCall
+               { target = trans_expr p_st expr; attrib = Attrib.empty }) )
     | Stmt_Assume expr ->
         ( p_st,
-          `Stmt (Instr_Assume { body = trans_expr p_st expr; branch = false })
-        )
+          `Stmt
+            (Instr_Assume
+               {
+                 body = trans_expr p_st expr;
+                 branch = false;
+                 attrib = Attrib.empty;
+               }) )
     | Stmt_Guard expr ->
         ( p_st,
-          `Stmt (Instr_Assume { body = trans_expr p_st expr; branch = true }) )
+          `Stmt
+            (Instr_Assume
+               {
+                 body = trans_expr p_st expr;
+                 branch = true;
+                 attrib = Attrib.empty;
+               }) )
     | Stmt_Assert expr ->
-        (p_st, `Stmt (Instr_Assert { body = trans_expr p_st expr }))
+        ( p_st,
+          `Stmt
+            (Instr_Assert { body = trans_expr p_st expr; attrib = Attrib.empty })
+        )
 
   and trans_call_rhs p_st in_param (x : callParams) =
     let trans_expr = trans_expr p_st in

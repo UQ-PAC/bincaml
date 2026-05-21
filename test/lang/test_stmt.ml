@@ -6,12 +6,16 @@ open Expr
 let%expect_test "frees" =
   let s =
     Instr_Assign
-      [
-        ( Var.create "v1" Types.Boolean,
-          BasilExpr.rvar @@ Var.create "v2" Types.Boolean );
-        ( Var.create "v3" Types.Boolean,
-          BasilExpr.rvar @@ Var.create "v4" Types.Boolean );
-      ]
+      {
+        al =
+          [
+            ( Var.create "v1" Types.Boolean,
+              BasilExpr.rvar @@ Var.create "v2" Types.Boolean );
+            ( Var.create "v3" Types.Boolean,
+              BasilExpr.rvar @@ Var.create "v4" Types.Boolean );
+          ];
+        attrib = Attrib.empty;
+      }
   in
   print_endline (to_string ~width:80 Var.pretty Var.pretty BasilExpr.pretty s);
   print_string "Rvars: ";
