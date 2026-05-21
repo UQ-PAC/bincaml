@@ -126,13 +126,9 @@ module Constraint = struct
   let show s = function
     | Mem { addr; value } -> Printf.sprintf "[|%s|] -> %s" (s addr) (s value)
     | Call { lhs; args } ->
-        (*
         Printf.sprintf "in: %s, out: %s"
-          (StringMap.to_iter args
-          |> Iter.to_string ~sep:", " (fun (str, e) -> str ^ " -> " ^ s e))
-          (StringMap.to_iter lhs
-          |> Iter.to_string ~sep:", " (fun (str, e) -> str ^ " -> " ^ s e))*)
-        "noisy"
+          (List.to_string ~sep:", " (fun (a, f) -> s a ^ " <-> " ^ s f) args)
+          (List.to_string ~sep:", " (fun (a, f) -> s a ^ " <-> " ^ s f) lhs)
 
   let gen_constraints (prog : Program.t) (p : Program.proc) =
     let open Stmt in
@@ -331,7 +327,7 @@ module DSGraph = struct
                 match offsets with Top -> collapse node | _ -> ()))
 
   (** Join the two nodes, with the second shifted by the given offset. The
-      second node is deleted and the first is kept *)
+      second node becomes a NodePath and the first is kept *)
   and join_nodes_at off n1 n2 =
     match (!n1, !n2) with
     | NodePath _, _ ->
@@ -537,7 +533,7 @@ module DSGraph = struct
   (** Create a copy of the given node with all reachable nodes and cells from
       pointees copied. The previous (given) list of nodes will then be updated
       with all new nodes after the copy and returned. *)
-  let copy_node (graph : t) ?(old_to_new = None) ?(sb = None) (n : node) =
+  let copy_node (graph : t) ?(old_to_new = None) ?(sbs = []) (n : node) =
     (* Mappings of old nodes (in the copied-from graph) to new nodes. Since the
        old nodes won't be modified, this is safe. *)
     let old_to_new = Option.get_lazy (fun _ -> Hashtbl.create 100) old_to_new in
@@ -575,6 +571,15 @@ module DSGraph = struct
           in
           set_pointees pointees new_c)
     done;
+    List.iter
+      (fun sb ->
+        (* TODO maybe this isn't needed (should be thoroughly docuemnted why! scala DSA doesn't do this) *)
+        match SBMap.get sb graph.node_map with
+        | Some n' -> join_nodes_at Z.zero n' new_n
+        | None -> graph.node_map <- SBMap.add sb new_n graph.node_map)
+      sbs;
+    new_n
+  (*
     match sb with
     | Some sb -> (
         (* TODO maybe this isn't needed (should be thoroughly docuemnted why! scala DSA doesn't do this) *)
@@ -586,6 +591,7 @@ module DSGraph = struct
             graph.node_map <- SBMap.add sb new_n graph.node_map;
             new_n)
     | _ -> new_n
+    *)
 end
 
 let make_local_graph sva
@@ -675,17 +681,20 @@ let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
   ignore
     (let open Option.Infix in
      let open DSGraph in
-     let* caller_cell = cell_of actual caller_graph in
      print_endline @@ "Thingy: " ^ Sva.SymAddrSetLattice.show formal;
      let* callee_cell = cell_of ~uniq:true formal callee_graph in
      let callee_node = node_of callee_cell in
      let callee_node_copy =
-       copy_node ~old_to_new:(Some old_to_new) caller_graph callee_node
+       copy_node
+         ~sbs:(Sva.SymAddrSetLattice.to_list actual |> snd |> List.map fst)
+         ~old_to_new:(Some old_to_new) caller_graph callee_node
      in
      let flags = flags callee_node_copy in
      let flags = NodeFlags.(clear_flag stack flags) in
      set_flags flags callee_node_copy;
      let callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
+     (* Only do the joining if a caller cell actually exists *)
+     let* caller_cell = cell_of actual caller_graph in
      print_endline "Joining";
      print_endline @@ "Caller node size: " ^ Int.to_string @@ List.length
      @@ DSGraph.cells
