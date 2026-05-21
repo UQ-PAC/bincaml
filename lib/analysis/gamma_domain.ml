@@ -15,7 +15,7 @@ module GammaSet = struct
   end)
 
   let name = "Gamma set"
-  let[@warning "-32"] pp fmt v = Format.pp_print_string fmt (show v)
+  let pp fmt v = Format.pp_print_string fmt (show v)
 end
 
 module Domain = struct
@@ -101,7 +101,7 @@ module IDEDomain : IDESSIDomain = struct
   type t = BottomEdge | IdEdge | TopEdge
   [@@deriving eq, ord, show { with_path = false }]
 
-  let[@warning "-32"] pp fmt v = Format.pp_print_string fmt (show v)
+  let pp fmt v = Format.pp_print_string fmt (show v)
   let identity = IdEdge
   let bottom = BottomEdge
   let top = TopEdge
