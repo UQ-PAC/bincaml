@@ -264,7 +264,7 @@ let add_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
   in
   proc
 
-let to_ir_proc m (p : temp_proc) =
+let to_ir_proc all_blocks m (p : temp_proc) =
   let entry_addrs =
     UUIDSet.to_iter p.entries
     |> Iter.map (fun x -> UUIDMap.find x p.code_blocks |> fun x -> x.address)
@@ -285,7 +285,7 @@ let to_ir_proc m (p : temp_proc) =
         |> List.to_iter
         |> Iter.filter_map (function
           | Vert.Internal uuid -> UUIDMap.find_opt uuid p.code_blocks
-          | _ -> None)
+          | Vert.External uuid -> UUIDMap.find_opt uuid all_blocks)
         |> Iter.map (fun (b : block) -> b.address))
     with Invalid_argument _ -> Iter.empty
   in
@@ -465,7 +465,12 @@ let cfg (c : CFG.t) (m : Module.t) =
 let to_ir_prog ir_cfg (m : Module.t) =
   let prog = Lang.Program.empty ~name:m.name () in
   let c = cfg ir_cfg m in
-  UUIDMap.fold (fun _ proc prog -> to_ir_proc prog proc) c prog
+  let all_blocks =
+    UUIDMap.values c
+    |> Iter.map (fun c -> c.code_blocks)
+    |> Iter.fold (UUIDMap.union (fun _ _ c -> Some c)) UUIDMap.empty
+  in
+  UUIDMap.fold (fun _ proc prog -> to_ir_proc all_blocks prog proc) c prog
 
 let load_gtirb_prog filename =
   let open Result in
