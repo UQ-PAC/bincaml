@@ -9,7 +9,7 @@ status: very early stages work-in progress.
 The examples exist in a submodule, to clone these:
 
 ```
-git clone --recurse-submodules https://github.com/agle/bincaml.git
+git clone --recurse-submodules https://github.com/agle/bincaml.git --shallow-submodules
 ```
 
 If you have already cloned you can fetch the submodule with:
