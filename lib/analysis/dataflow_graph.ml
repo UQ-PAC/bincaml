@@ -143,13 +143,14 @@ let get_dfg_vertices ~(direction : [ `Forwards | `Backwards ]) p :
         let block_def_use =
           Block.stmts_iter b
           |> Iter.flat_map (function
-            | Stmt.Instr_Assign assigns ->
+            | Stmt.Instr_Assign { al = assigns; attrib } ->
                 List.to_iter assigns
                 |> Iter.map (fun (lhs, rhs) ->
                     block_index := !block_index + 1;
                     ( !block_index,
                       Vertex.Stmt
-                        (is_header header, Stmt.Instr_Assign [ (lhs, rhs) ]) ))
+                        ( is_header header,
+                          Stmt.Instr_Assign { al = [ (lhs, rhs) ]; attrib } ) ))
             | stmt ->
                 block_index := !block_index + 1;
                 Iter.singleton
@@ -549,7 +550,7 @@ struct
     let transfer_state read stmt =
       let stmt = Eval.stmt_eval_fwd read stmt in
       match stmt with
-      | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
+      | Lang.Stmt.Instr_Assign { al } -> List.to_iter al
       | Lang.Stmt.Instr_Assert _ -> Iter.empty
       | Lang.Stmt.Instr_Assume _ -> Iter.empty
       | Lang.Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->

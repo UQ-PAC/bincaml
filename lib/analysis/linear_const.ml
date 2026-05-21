@@ -304,8 +304,8 @@ module LinearIDE = struct
     match d with
     | Lambda -> (
         match stmt with
-        | Instr_Assign a ->
-            Iter.of_list a
+        | Instr_Assign { al } ->
+            Iter.of_list al
             |> Iter.flat_map (fun (v, e) ->
                 match const_expr e with
                 | Some x ->
@@ -316,8 +316,8 @@ module LinearIDE = struct
         | _ -> Iter.empty)
     | Label v -> (
         match stmt with
-        | Instr_Assign a ->
-            Iter.of_list a
+        | Instr_Assign { al } ->
+            Iter.of_list al
             |> Iter.filter (fun (s, e) ->
                 VarSet.mem v (Expr.BasilExpr.free_vars e))
             |> Iter.map (fun (v', e) ->
@@ -611,16 +611,15 @@ module Solver = struct
   let add_intra_stmt summaries callers node_of pid component stmt =
     let open Stmt in
     match stmt with
-    | Instr_Assign a ->
-        List.iter
-          (fun (v, e) ->
+    | Instr_Assign { al } ->
+        al
+        |> List.iter (fun (v, e) ->
             match LF.Extract.extract_expr e with
             | f, Some v' ->
                 let v, v' = (node_of pid v, node_of pid v') in
                 (* v := f(v'), draw edge from v to v' with f *)
                 CopyNode.join v' f v
             | _, None -> ())
-          a
     | Instr_Call c ->
         (* We at the same time create a list of all callers of each procedure in the scc. *)
         if List.mem ~eq:ID.equal c.procid component then
