@@ -164,6 +164,7 @@ let drop_attrib stmt = set_attrib stmt Attrib.empty
 
 (** Get pretty-printer for il format*)
 let pretty show_lvar show_var show_expr s =
+  let attrib = Expr.BasilExpr.pretty_attr (attrib s) in
   Trace_core.with_span ~__FILE__ ~__LINE__ "pretty-stmt" @@ fun _ ->
   let open Containers_pp in
   let open Containers_pp.Infix in
@@ -188,30 +189,31 @@ let pretty show_lvar show_var show_expr s =
   in
   let e = map ~f_lvar:show_lvar ~f_expr:show_expr ~f_rvar:show_var s in
   match e with
-  | Instr_Assign { al = [] } -> text "nop"
+  | Instr_Assign { al = [] } -> text "nop" ^ attrib
   | Instr_Assign { al = ls } ->
       let ls = List.map (function lhs, rhs -> lhs ^ text " := " ^ rhs) ls in
       let b = fill (text "," ^ newline) ls in
-      if List.length ls > 1 then bracket "(" b ")" else b
-  | Instr_Assert { body } -> text "assert " ^ body
-  | Instr_Assume { body; branch = false } -> text "assume " ^ body
-  | Instr_Assume { body; branch = true } -> text "guard " ^ body
+      (if List.length ls > 1 then bracket "(" b ")" else b) ^ attrib
+  | Instr_Assert { body } -> text "assert " ^ body ^ attrib
+  | Instr_Assume { body; branch = false } -> text "assume " ^ body ^ attrib
+  | Instr_Assume { body; branch = true } -> text "guard " ^ body ^ attrib
   | Instr_Load { lhs; rhs; addr = Scalar } ->
       lhs ^ text " := " ^ text "load " ^ text " " ^ rhs
   | Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->
       lhs ^ text " := " ^ text "load "
       ^ text (show_endian endian)
-      ^ text " " ^ rhs ^ text " " ^ addr ^ text " " ^ int size
+      ^ text " " ^ rhs ^ text " " ^ addr ^ text " " ^ int size ^ attrib
   | Instr_Store { lhs; rhs; value; addr = Scalar } ->
-      lhs ^ text " := " ^ text "store " ^ text " " ^ value
+      lhs ^ text " := " ^ text "store " ^ text " " ^ value ^ attrib
   | Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } } ->
       lhs ^ text " := " ^ text "store "
       ^ text (show_endian endian)
       ^ text " " ^ rhs ^ text " " ^ addr ^ text " " ^ value ^ text " "
-      ^ int size
+      ^ int size ^ attrib
   | Instr_IntrinCall { lhs; name; args } when List.length lhs = 0 ->
       append_l ~sep:nil
         [ text "call "; Intrinsic.pretty name; intrin_plist args ]
+      ^ attrib
   | Instr_IntrinCall { lhs; name; args } ->
       append_l ~sep:nil
         [
@@ -220,11 +222,13 @@ let pretty show_lvar show_var show_expr s =
           Intrinsic.pretty name;
           intrin_plist args;
         ]
+      ^ attrib
   | Instr_Call { lhs; procid; args } ->
       let n = ID.to_string procid in
       append_l ~sep:nil
         [ l_param_list lhs; text "call "; text n; r_param_list args ]
-  | Instr_IndirectCall { target } -> text "indirect call " ^ target
+      ^ attrib
+  | Instr_IndirectCall { target } -> text "indirect call " ^ target ^ attrib
 
 (** Pretty print to il format*)
 let to_string ?width show_lvar show_var show_expr
