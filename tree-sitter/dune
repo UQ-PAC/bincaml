@@ -1,7 +1,7 @@
 ; checks tree-sitter highlights are valid
 
 (rule
- (deps src/parser.c queries/highlights.scm)
+ (deps src/parser.c queries/highlights.scm test/concat.il)
  (alias treesit)
  (action
   (with-stdin-from
