@@ -230,8 +230,10 @@ module SMTLib2 = struct
             vardefs bound_pairs
         in
         let* body' = expr_of_smt vardefs' body in
-        let op = if String.equal q "forall" then `Forall else `Exists in
-        Some (BasilExpr.binding ~op (List.map fst bound_pairs) body')
+        let bound = List.map fst bound_pairs in
+        Some
+          (if String.equal q "forall" then BasilExpr.forall ~bound body'
+           else BasilExpr.exists ~bound body')
     | `List (op :: args) -> (
         let* args = T.map_m (expr_of_smt vardefs) args in
         match (op, args) with
