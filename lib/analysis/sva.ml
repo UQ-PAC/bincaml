@@ -239,7 +239,7 @@ module Domain = struct
               in
               ( param,
                 SymAddrSetLattice.singleton
-                  (Ret { name = ID.name procid; param; proc_id = None })
+                  (Ret { name = ID.name procid; param; proc_id = Some procid })
                 @@ IntervalDomain.init @@ Bitvec.zero ~size ))
           @@ StringMap.values lhs
       | Stmt.Instr_Assert _ | Stmt.Instr_Assume _ -> Iter.empty
@@ -346,10 +346,6 @@ let sva (prog : Program.t) =
                 match base with
                 | SymBase.Loaded r when Option.is_none r.proc_id ->
                     (SymBase.Loaded { r with proc_id = Some id }, i)
-                | SymBase.Par r when Option.is_none r.proc_id ->
-                    (SymBase.Par { r with proc_id = Some id }, i)
-                | SymBase.Ret r when Option.is_none r.proc_id ->
-                    (SymBase.Ret { r with proc_id = Some id }, i)
                 | _ -> (base, i))
             |> List.map (try_make_global prog)
             |> SymAddrSetLattice.of_list_bot)

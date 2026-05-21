@@ -33,11 +33,7 @@ module Interval = struct
     | Bot, _ | Top, _ | _, Bot | _, Top -> false
     | Interval (_, b), Interval (c, _) -> lt b c
 
-  let right_of i j =
-    match (i, j) with
-    | Bot, _ | Top, _ | _, Bot | _, Top -> false
-    | Interval (a, _), Interval (_, d) -> lt d a
-
+  let right_of i j = left_of j i
   let disjoint i j = left_of i j || right_of i j
   let overlap i j = not @@ disjoint i j
 
@@ -110,7 +106,7 @@ module Constraint = struct
   [@@deriving eq]
 
   (** Special funky map where the second function evaluates within a procedure
-      id *)
+      id for call constraint callee formal arguments *)
   let map f g c =
     match c with
     | Mem { addr; value; size } -> Mem { addr = f addr; value = f value; size }
@@ -126,9 +122,10 @@ module Constraint = struct
   let show s = function
     | Mem { addr; value } -> Printf.sprintf "[|%s|] -> %s" (s addr) (s value)
     | Call { lhs; args } ->
-        Printf.sprintf "in: %s, out: %s"
+        (*Printf.sprintf "in: %s, out: %s"
           (List.to_string ~sep:", " (fun (a, f) -> s a ^ " <-> " ^ s f) args)
-          (List.to_string ~sep:", " (fun (a, f) -> s a ^ " <-> " ^ s f) lhs)
+          (List.to_string ~sep:", " (fun (a, f) -> s a ^ " <-> " ^ s f) lhs)*)
+        "noisy"
 
   let gen_constraints (prog : Program.t) (p : Program.proc) =
     let open Stmt in
@@ -174,7 +171,7 @@ module DSGraph = struct
   (* Nodes are represented as sorted lists of cells, ordered by the low end of the intervals of each cell *)
   and node_content =
     (* ID's CAN change when nodes are mutated!! Make sure that if ids are ever used, the nodes whos ids are being used won't change!!!! *)
-    | Node of { cells : cell list; flags : NodeFlags.t; id : ID.t }
+    | Node of { mutable cells : cell list; flags : NodeFlags.t; id : ID.t }
     (* Node was joined into parent at the given offset *)
     | NodePath of node * Z.t
 
@@ -278,6 +275,15 @@ module DSGraph = struct
     | Cell r, Cell { pointees = p } ->
         if not @@ CCEqual.physical c1 c2 then c2 := Path c1
 
+  (** Check that the node has its cell intervals sorted and disjoint *)
+  let check_sorted node =
+    let is = List.map offsets (cells node) in
+    let rec aux = function
+      | [] | [ _ ] -> true
+      | i :: (j :: _ as tail) -> Interval.left_of i j && aux tail
+    in
+    assert (aux is)
+
   (** Collapse all cells in the node into a single cell (its interval being Top)
   *)
   let rec collapse node =
@@ -297,38 +303,29 @@ module DSGraph = struct
         let flags = NodeFlags.(set_flag collapsed r.flags) in
         node := Node { r with cells = [ c ]; flags }
 
-  (** Merge the two given cells together. If they belong to different nodes then
-      the nodes are merged so that the cell offsets line up. *)
-  let rec join (c1 : cell) (c2 : cell) =
-    if CCEqual.physical c1 c2 then ()
-    else
-      match !c2 with
-      | Path _ -> join c1 (find c2)
-      | Cell { offsets = i; pointees = p; node = n2 } -> (
-          match !c1 with
-          | Path _ -> join (find c1) c2
-          | Cell { offsets = i'; node; pointees = p' } ->
-              if not @@ CCEqual.physical node n2 then
-                match Interval.(start i', start i) with
-                | Some a, Some b when Z.lt a b ->
-                    join_nodes_at (Z.sub b a) node n2
-                | Some a, Some b -> join_nodes_at (Z.sub a b) n2 node
-                | _ -> join_nodes_at Z.zero node n2
-              else (
-                c2 := Path c1;
-                (* TODO make better algorithm for this *)
-                let pointees =
-                  List.fold_left
-                    (flip (List.add_nodup ~eq:CCEqual.physical))
-                    p p'
-                in
-                let offsets = Interval.join i i' in
-                c1 := Cell { node; pointees; offsets };
-                match offsets with Top -> collapse node | _ -> ()))
+  (** Join c2 into c1, but without updating their nodes *)
+  let rec join_cells_only c1 c2 =
+    match (!c1, !c2) with
+    | Path _, Path _ -> join_cells_only (find c1) (find c2)
+    | Path _, _ -> join_cells_only (find c1) c2
+    | _, Path _ -> join_cells_only c1 (find c2)
+    | Cell a, Cell b -> (
+        assert (CCEqual.physical a.node b.node);
+        join_paths c1 c2;
+        let pointees =
+          List.fold_left
+            (flip (List.add_nodup ~eq:CCEqual.physical))
+            a.pointees b.pointees
+        in
+        let offsets = Interval.join a.offsets b.offsets in
+        c1 := Cell { node = a.node; pointees; offsets };
+        match offsets with Top -> collapse a.node | _ -> ())
 
   (** Join the two nodes, with the second shifted by the given offset. The
       second node becomes a NodePath and the first is kept *)
   and join_nodes_at off n1 n2 =
+    check_sorted n1;
+    check_sorted n2;
     match (!n1, !n2) with
     | NodePath _, _ ->
         let p, off' = find_node n1 in
@@ -336,47 +333,50 @@ module DSGraph = struct
     | _, NodePath _ ->
         let p, off' = find_node n2 in
         join_nodes_at (Z.( + ) off off') n1 p
-    | Node r1, Node r2 -> (
-        assert (not @@ CCEqual.physical n1 n2);
-        List.iter (shift off) r2.cells;
-        (* Update n2 cell nodes so we never have the slow path of join *)
-        (* This could technically be redundant though hmmmm *)
-        List.iter (set_node n1) r2.cells;
-        let flags = NodeFlags.join r1.flags r2.flags in
-        let rec join_nodes' n1' n2' =
-          match (n1', n2') with
-          | [], cs | cs, [] -> Some cs
-          | c :: cs, c' :: cs' -> (
-              match (offsets c, offsets c') with
-              (* TODO Bot cases shouldn't happen i think?! please confirm this *)
-              | Bot, Bot -> join_nodes' cs cs'
-              | Bot, _ -> join_nodes' cs n2'
-              | _, Bot -> join_nodes' n1' cs'
-              | Top, _ | _, Top ->
-                  n1 := Node { r1 with cells = r1.cells @ r2.cells; flags };
-                  n2 := NodePath (n1, off);
-                  collapse n1;
-                  None
-              | (Interval _ as i), (Interval _ as j) when Interval.left_of i j
-                ->
-                  Option.map (List.cons c) @@ join_nodes' cs n2'
-              | (Interval _ as i), (Interval _ as j) when Interval.right_of i j
-                ->
-                  Option.map (List.cons c') @@ join_nodes' n1' cs'
-              | Interval (a, b), Interval (x, y) when Z.leq b y ->
-                  (* first cell is left of second cell, so join first cell into second to preserve order *)
-                  join c' c;
-                  join_nodes' cs n2'
-              | Interval (a, b), Interval (x, y) ->
-                  (* second cell is left of first cell, so join second cell into first to preserve order *)
-                  join c c';
-                  join_nodes' n1' cs')
-        in
-        match join_nodes' r1.cells r2.cells with
-        | Some n ->
-            n1 := Node { r1 with cells = n; flags };
-            n2 := NodePath (n1, off)
-        | _ -> ())
+    | Node r1, Node r2 ->
+        if CCEqual.physical n1 n2 then assert (Z.equal Z.zero off)
+        else (
+          assert (not @@ CCEqual.physical n1 n2);
+          List.iter (shift off) r2.cells;
+          (* Update n2 cell nodes so we never have the slow path of join *)
+          (* This could technically be redundant though hmmmm *)
+          List.iter (set_node n1) r2.cells;
+          let flags = NodeFlags.join r1.flags r2.flags in
+          let rec join_nodes' n1' n2' =
+            match (n1', n2') with
+            | [], cs | cs, [] -> Some cs
+            | c :: cs, c' :: cs' -> (
+                match (offsets c, offsets c') with
+                | Bot, _ | _, Bot -> failwith "Bottom cells should not exist."
+                | Top, _ | _, Top ->
+                    n1 := Node { r1 with cells = r1.cells @ r2.cells; flags };
+                    n2 := NodePath (n1, off);
+                    collapse n1;
+                    check_sorted n1;
+                    check_sorted n2;
+                    None
+                | (Interval _ as i), (Interval _ as j) when Interval.left_of i j
+                  ->
+                    Option.map (List.cons c) @@ join_nodes' cs n2'
+                | (Interval _ as i), (Interval _ as j) when Interval.left_of i j
+                  ->
+                    Option.map (List.cons c') @@ join_nodes' n1' cs'
+                | Interval (a, b), Interval (x, y) when Z.leq b y ->
+                    (* first cell is left of second cell, so join first cell into second to preserve order *)
+                    join_cells_only c' c;
+                    join_nodes' cs n2'
+                | Interval (a, b), Interval (x, y) ->
+                    (* second cell is left of first cell, so join second cell into first to preserve order *)
+                    join_cells_only c c';
+                    join_nodes' n1' cs')
+          in
+          match join_nodes' r1.cells r2.cells with
+          | Some n ->
+              n1 := Node { r1 with cells = n; flags };
+              n2 := NodePath (n1, off);
+              check_sorted n1;
+              check_sorted n2
+          | _ -> ())
 
   (** Inserts the cell into the node. It is assumed that the cell has set (or
       will set) its node pointer outside of this call *)
@@ -411,21 +411,72 @@ module DSGraph = struct
                     when Interval.right_of i j ->
                       Option.map (List.cons c) @@ insert' cs
                   | Cell { offsets = Interval _ } ->
-                      join c cell;
+                      join_cells_only c cell;
                       Some (c :: cs))
             in
             match insert' r.cells with
             | Some n -> node := Node { r with cells = n }
             | None -> ()))
 
-  (** Check that the node has its cell intervals sorted and disjoint *)
-  let check_sorted node =
-    let is = List.map offsets !node in
-    let rec aux = function
-      | [] | [ _ ] -> true
-      | i :: (j :: _ as tail) -> Interval.left_of i j && aux tail
-    in
-    assert (aux is)
+  (** Join all cells in the given interval range of a node into a single cell
+      with that interval as its offsets. The interval range is assumed up to
+      date relative to the latest node and is not shifted. *)
+  let rec join_range (n : node) i =
+    match !n with
+    | NodePath _ ->
+        let n, _ = find_node n in
+        join_range n i
+    | Node r ->
+        check_sorted n;
+        let c = ref (Cell { offsets = i; node = n; pointees = [] }) in
+        let pointees, i =
+          List.fold_left
+            (fun (acc, i) c' ->
+              let i' = offsets c' in
+              if Interval.overlap i' i then
+                ( List.fold_left
+                    (flip (List.add_nodup ~eq:CCEqual.physical))
+                    acc (pointees c'),
+                  Interval.join i i' )
+              else (acc, i))
+            ([], i) r.cells
+        in
+        c := Cell { offsets = i; node = n; pointees };
+        let rec aux = function
+          | c' :: cs when Interval.left_of (offsets c') i -> c' :: aux cs
+          | c' :: cs when Interval.overlap (offsets c) i ->
+              join_paths c c';
+              aux cs
+          | xs -> c :: xs
+        in
+        r.cells <- aux r.cells;
+        check_sorted n
+
+  (** Merge the two given cells together. If they belong to different nodes then
+      the nodes are merged so that the cell offsets line up. *)
+  let rec join (c1 : cell) (c2 : cell) =
+    if CCEqual.physical c1 c2 then ()
+    else
+      match !c2 with
+      | Path _ -> join c1 (find c2)
+      | Cell { offsets = i'; pointees = p; node = n2 } -> (
+          match !c1 with
+          | Path _ -> join (find c1) c2
+          | Cell { offsets = i; node = n1; pointees = p' } ->
+              (* Note that cells know their up to date interval relative to the
+                 unification offset, so the intervals should not be updated. *)
+              let n1, _ = find_node n1 in
+              let n2, _ = find_node n2 in
+              if not @@ CCEqual.physical n1 n2 then
+                match Interval.(start i, start i') with
+                | Some a, Some b when Z.lt a b ->
+                    join_nodes_at (Z.sub b a) n1 n2
+                | Some a, Some b -> join_nodes_at (Z.sub a b) n2 n1
+                | _ -> join_nodes_at Z.zero n1 n2
+              else
+                (* TODO Calling this every time might be redundant if the joined
+                   interval isn't bigger? *)
+                join_range n1 (Interval.join i i'))
 
   (** Creates an empty node *)
   let empty_node () =
@@ -484,7 +535,9 @@ module DSGraph = struct
         (* TODO switch to another data structure to log(n)-ify this *)
         let rec aux = function
           | [] -> []
-          | x :: xs when Interval.subset i (offsets x) -> x :: aux xs
+          | x :: xs when Interval.subset i (offsets x) ->
+              print_endline @@ Interval.show i ^ Interval.show (offsets x);
+              x :: aux xs
           | x :: xs -> aux xs
         in
         let cells = aux r.cells in
@@ -527,6 +580,7 @@ module DSGraph = struct
     | x :: xs when not uniq ->
         List.iter (join x) xs;
         Some x
+    | x :: xs when List.for_all (CCEqual.physical (find x) % find) xs -> Some x
     | x :: xs -> failwith "Non unique cell given"
     | [] -> None
 
@@ -538,6 +592,7 @@ module DSGraph = struct
        old nodes won't be modified, this is safe. *)
     let old_to_new = Option.get_lazy (fun _ -> Hashtbl.create 100) old_to_new in
     let stack = Stack.create () in
+    SBMap.iter (fun s n -> check_sorted n) graph.node_map;
     (* Create a copy of the given node, with cells initialised except for their pointees *)
     let create_new_node n =
       Hashtbl.get old_to_new (id @@ n)
@@ -571,30 +626,23 @@ module DSGraph = struct
           in
           set_pointees pointees new_c)
     done;
+    SBMap.iter (fun s n -> check_sorted n) graph.node_map;
     List.iter
       (fun sb ->
         (* TODO maybe this isn't needed (should be thoroughly docuemnted why! scala DSA doesn't do this) *)
         match SBMap.get sb graph.node_map with
-        | Some n' -> join_nodes_at Z.zero n' new_n
-        | None -> graph.node_map <- SBMap.add sb new_n graph.node_map)
+        | Some n' ->
+            check_sorted n';
+            check_sorted new_n;
+            join_nodes_at Z.zero n' new_n
+        | None ->
+            check_sorted new_n;
+            graph.node_map <- SBMap.add sb new_n graph.node_map)
       sbs;
     new_n
-  (*
-    match sb with
-    | Some sb -> (
-        (* TODO maybe this isn't needed (should be thoroughly docuemnted why! scala DSA doesn't do this) *)
-        match SBMap.get sb graph.node_map with
-        | Some n' ->
-            join_nodes_at Z.zero n' new_n;
-            n'
-        | None ->
-            graph.node_map <- SBMap.add sb new_n graph.node_map;
-            new_n)
-    | _ -> new_n
-    *)
 end
 
-let make_local_graph sva
+let make_local_graph proc sva
     (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t) : DSGraph.t =
   let cells = Vector.create () in
   let add_cells size sv m =
@@ -643,17 +691,36 @@ let make_local_graph sva
       m SBMap.empty
   in
 
+  (* Join return values *)
+  Procedure.formal_out_params proc
+  |> StringMap.iter (fun _ v ->
+      let sv =
+        Sva.StateAbstraction.read v sva |> Sva.SymAddrSetLattice.to_list |> snd
+      in
+      match sv with
+      | [] | [ _ ] -> ()
+      | (b, i) :: xs ->
+          let n1 = SBMap.get_or b nodes ~default:(DSGraph.empty_node ()) in
+          List.iter
+            (fun (b', i') ->
+              match SBMap.get b' nodes with
+              | Some n2 ->
+                  let c1 = DSGraph.get_cell (Interval.of_wint i) n1 in
+                  let c2 = DSGraph.get_cell (Interval.of_wint i') n2 in
+                  DSGraph.join c1 c2
+              | None -> ())
+            xs);
+
   (* Unify all pointees (i hope a worklist can be avoided) *)
   Vector.iter DSGraph.unify_pointees cells;
 
   let node_map =
     SBMap.filter
-      (fun b node ->
-        match !node with
-        | DSGraph.NodePath _ -> false
-        | _ -> not @@ List.is_empty @@ DSGraph.cells node)
+      (fun b node -> not @@ List.is_empty @@ DSGraph.cells node)
       nodes
   in
+
+  SBMap.iter (fun s n -> DSGraph.check_sorted n) node_map;
 
   let (g : DSGraph.t) =
     { nodes = SBMap.values node_map |> Iter.to_list; node_map; sva }
@@ -682,28 +749,39 @@ let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
     (let open Option.Infix in
      let open DSGraph in
      print_endline @@ "Thingy: " ^ Sva.SymAddrSetLattice.show formal;
+     SBMap.iter (fun s n -> check_sorted n) callee_graph.node_map;
+     SBMap.iter (fun s n -> DSGraph.check_sorted n) caller_graph.node_map;
      let* callee_cell = cell_of ~uniq:true formal callee_graph in
      let callee_node = node_of callee_cell in
+     SBMap.iter (fun s n -> check_sorted n) callee_graph.node_map;
+     SBMap.iter (fun s n -> check_sorted n) caller_graph.node_map;
      let callee_node_copy =
        copy_node
          ~sbs:(Sva.SymAddrSetLattice.to_list actual |> snd |> List.map fst)
          ~old_to_new:(Some old_to_new) caller_graph callee_node
      in
+     SBMap.iter (fun s n -> check_sorted n) caller_graph.node_map;
+     check_sorted callee_node_copy;
      let flags = flags callee_node_copy in
      let flags = NodeFlags.(clear_flag stack flags) in
      set_flags flags callee_node_copy;
      let callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
      (* Only do the joining if a caller cell actually exists *)
+     SBMap.iter (fun s n -> DSGraph.check_sorted n) caller_graph.node_map;
      let* caller_cell = cell_of actual caller_graph in
+     SBMap.iter (fun s n -> check_sorted n) caller_graph.node_map;
      print_endline "Joining";
      print_endline @@ "Caller node size: " ^ Int.to_string @@ List.length
      @@ DSGraph.cells
      @@ DSGraph.node_of caller_cell;
      print_endline @@ "Callee node size: " ^ Int.to_string @@ List.length
      @@ DSGraph.cells @@ callee_node;
+     SBMap.iter (fun s n -> DSGraph.check_sorted n) caller_graph.node_map;
      join caller_cell callee_cell_copy;
      print_endline "Joined";
+     SBMap.iter (fun s n -> DSGraph.check_sorted n) caller_graph.node_map;
      unify_pointees caller_cell;
+     SBMap.iter (fun s n -> DSGraph.check_sorted n) caller_graph.node_map;
      None)
 
 let bottom_up prog nodess =
@@ -754,7 +832,8 @@ let bottom_up prog nodess =
     print_endline @@ "scc: " ^ IDSet.to_string ID.show scc;
     IDSet.iter
       (fun pid ->
-        let constraints, sva, nodes = IDMap.find pid nodess in
+        let constraints, sva, (nodes : DSGraph.t) = IDMap.find pid nodess in
+        SBMap.iter (fun s n -> DSGraph.check_sorted n) nodes.node_map;
         Iter.iter
           Constraint.(
             function
@@ -834,9 +913,9 @@ let dot_string (graph : DSGraph.t) =
       let ps =
         List.map
           (fun c' ->
+            let c' = DSGraph.find c' in
             List.find_map
-              (fun (id, c'') ->
-                Option.return_if (CCEqual.physical (DSGraph.find c') c'') id)
+              (fun (id, c'') -> Option.return_if (CCEqual.physical c' c'') id)
               cells
             |> Option.get_exn_or "pointing to cell that doesn't exist")
           (DSGraph.pointees cell)
@@ -885,11 +964,11 @@ let dsa (p : Program.t) =
           |> Iter.map (Constraint.map (translate pid) translate)
           |> Iter.persistent
         in
-        print_endline
-        @@ Iter.to_string
-             (Constraint.show Sva.SymAddrSetLattice.show)
-             constraints;
-        (pid, (constraints, r, make_local_graph r constraints)))
+        print_endline @@ "Constraints: "
+        ^ Iter.to_string
+            (Constraint.show Sva.SymAddrSetLattice.show)
+            constraints;
+        (pid, (constraints, r, make_local_graph proc r constraints)))
     |> IDMap.of_list
   in
   print_endline "local phase done";
