@@ -4,6 +4,21 @@ lightweight binary exploration verification project implemented in ocaml.
 
 status: very early stages work-in progress.
 
+### Cloning
+
+The examples exist in a submodule, to clone these:
+
+```
+git clone --recurse-submodules https://github.com/agle/bincaml.git
+```
+
+If you have already cloned you can fetch the submodule with:
+
+```
+git submodule init
+git submodule update
+```
+
 ### Setup
 
 Supports Linux (at least amd64) and MacOS (arm64) with OCaml 5.4.1.
