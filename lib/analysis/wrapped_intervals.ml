@@ -957,7 +957,7 @@ module Domain = struct
     in
     let updates =
       match evald_stmt with
-      | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
+      | Lang.Stmt.Instr_Assign { al } -> List.to_iter al
       | Lang.Stmt.Instr_Assert _ | Lang.Stmt.Instr_Assume _ -> Iter.empty
       | Lang.Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
           Iter.singleton (lhs, rhs)

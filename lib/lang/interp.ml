@@ -613,8 +613,8 @@ module IState = struct
     let st = add_event_stmt st stmt' in
     let st = tick st in
     match stmt' with
-    | Stmt.Instr_Assign assigns ->
-        List.to_iter assigns |> Iter.fold (fun st (l, r) -> write_var l r st) st
+    | Stmt.Instr_Assign { al } ->
+        List.to_iter al |> Iter.fold (fun st (l, r) -> write_var l r st) st
     | Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
         write_var lhs (read_var rhs st) st
     | Stmt.Instr_Store { lhs; value; addr = Scalar } -> write_var lhs value st

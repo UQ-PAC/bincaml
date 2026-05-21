@@ -18,15 +18,20 @@ let intro_ssi_assigns proc (should_lift : Var.t -> bool) =
     |> Block.flat_map ~phi:id
          Stmt.(
            function
-           | (Instr_Assert { body } | Instr_Assume { body }) as a ->
+           | (Instr_Assert { body; attrib } | Instr_Assume { body; attrib }) as
+             a ->
                let fv =
                  Expr.BasilExpr.free_vars body |> VarSet.filter should_lift
                in
                if VarSet.cardinal fv > 0 then
                  Iter.doubleton
                    (Instr_Assign
-                      (VarSet.to_list fv
-                      |> List.map (fun v -> (v, Expr.BasilExpr.rvar v))))
+                      {
+                        al =
+                          VarSet.to_list fv
+                          |> List.map (fun v -> (v, Expr.BasilExpr.rvar v));
+                        attrib;
+                      })
                    a
                else Iter.singleton a
            | b -> Iter.singleton b)
@@ -170,7 +175,8 @@ let lift_procedure_params prog ~skip_observable ~skip_maps all_lifted procid
       else
         let graph, inbl =
           Procedure.fresh_block_graph proc graph ~name:"%inputs"
-            ~stmts:[ Stmt.Instr_Assign assigns_in ]
+            ~stmts:
+              [ Stmt.Instr_Assign { al = assigns_in; attrib = Attrib.empty } ]
             ()
         in
         let open Procedure.Vert in
@@ -185,7 +191,8 @@ let lift_procedure_params prog ~skip_observable ~skip_maps all_lifted procid
       else
         let graph, outbl =
           Procedure.fresh_block_graph proc graph ~name:"%returns"
-            ~stmts:[ Stmt.Instr_Assign assigns_out ]
+            ~stmts:
+              [ Stmt.Instr_Assign { al = assigns_out; attrib = Attrib.empty } ]
             ()
         in
         let open Procedure.Vert in
@@ -325,7 +332,7 @@ let lift_procedure_params prog ~skip_observable ~skip_maps all_lifted procid
       (fun _bid b ->
         Block.map ~phi:Fun.id
           (function
-            | Stmt.Instr_Call { procid; lhs; args } as stmt -> (
+            | Stmt.Instr_Call { procid; lhs; args; attrib } as stmt -> (
                 match Program.proc_opt prog procid with
                 | None -> stmt
                 | Some callee ->
@@ -347,7 +354,8 @@ let lift_procedure_params prog ~skip_observable ~skip_maps all_lifted procid
                           else m)
                         lhs cspec.modifies_globs
                     in
-                    Stmt.Instr_Call { procid; lhs = new_lhs; args = new_args })
+                    Stmt.Instr_Call
+                      { procid; lhs = new_lhs; args = new_args; attrib })
             | s -> s)
           b)
       proc

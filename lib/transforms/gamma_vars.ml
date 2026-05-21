@@ -108,25 +108,27 @@ let update_stmts ?(check_names = false) (add : ID.t -> Var.t -> bool) pid
           else [ p ])
         a)
     (function
-      | Instr_Assign a ->
-          Instr_Assign
-            (List.flat_map
-               (fun (l, e) ->
-                 if add pid l then (
-                   if check_names then check_var l;
-                   let gl = gamma_of l in
-                   let ge = gamma_expr ~check_names (add pid) e in
-                   add_decl proc gl;
-                   [ (gl, ge); (l, e) ])
-                 else [ (l, e) ])
-               a)
-      | Instr_Assert { body } -> Instr_Assert { body = update_expr body }
-      | Instr_Assume { body; branch } ->
-          Instr_Assume { body = update_expr body; branch }
+      | Instr_Assign { al; attrib } ->
+          let al =
+            al
+            |> List.flat_map (fun (l, e) ->
+                if add pid l then (
+                  if check_names then check_var l;
+                  let gl = gamma_of l in
+                  let ge = gamma_expr ~check_names (add pid) e in
+                  add_decl proc gl;
+                  [ (gl, ge); (l, e) ])
+                else [ (l, e) ])
+          in
+          Instr_Assign { attrib; al }
+      | Instr_Assert { body; attrib } ->
+          Instr_Assert { body = update_expr body; attrib }
+      | Instr_Assume { body; branch; attrib } ->
+          Instr_Assume { body = update_expr body; branch; attrib }
       (* TODO Need atomic statement blocks to capture a "simultaneous op" from normal and gamma mem *)
       | Instr_Load _ as s -> s
       | Instr_Store _ as s -> s
-      | Instr_IntrinCall { lhs; name; args } ->
+      | Instr_IntrinCall { lhs; name; args; attrib } ->
           (* cursed *)
           let to_sm lhs =
             List.mapi (fun i v -> (Int.to_string i, v)) lhs |> StringMap.of_list
@@ -142,11 +144,12 @@ let update_stmts ?(check_names = false) (add : ID.t -> Var.t -> bool) pid
                   proc (to_sm lhs)
                 |> of_sm lhs;
               name;
+              attrib;
               args =
                 update_args ~check_names (add pid) (fun _ -> true) (to_sm args)
                 |> of_sm args;
             }
-      | Instr_Call { lhs; procid; args } ->
+      | Instr_Call { lhs; procid; args; attrib } ->
           let callee = Program.proc prog procid in
           Instr_Call
             {
@@ -157,6 +160,7 @@ let update_stmts ?(check_names = false) (add : ID.t -> Var.t -> bool) pid
                       (StringMap.find s (Procedure.formal_out_params callee)))
                   proc lhs;
               procid;
+              attrib;
               args =
                 update_args ~check_names (add pid)
                   (fun s ->
@@ -164,8 +168,8 @@ let update_stmts ?(check_names = false) (add : ID.t -> Var.t -> bool) pid
                       (StringMap.find s (Procedure.formal_in_params callee)))
                   args;
             }
-      | Instr_IndirectCall { target } ->
-          Instr_IndirectCall { target = update_expr target })
+      | Instr_IndirectCall { target; attrib } ->
+          Instr_IndirectCall { target = update_expr target; attrib })
     b
 
 let transform_proc ?(check_names = false) (add : ID.t -> Var.t -> bool) prog
