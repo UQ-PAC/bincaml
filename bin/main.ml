@@ -41,12 +41,6 @@ let fname =
   let doc = "Input file name (e.g., filename.il or - for stdin)" in
   Arg.(required & pos 0 (some string) None & info [] ~docv:"FNAME" ~doc)
 
-let proc =
-  let doc = "proc to output" and docv = "PROC" in
-  Arg.(value & opt string "" & info [ "p"; "proc" ] ~doc ~docv)
-
-let print_proc chan p = Program.output_proc_pretty chan p
-
 let verb =
   let doc = "set log level to debug" and docv = "VERBOSE" in
   Arg.(value & flag & info [ "v"; "verbose" ] ~doc ~docv)
@@ -93,18 +87,7 @@ let repl ~verb ~echo_cmd =
   let cmds_m = cmds |> Script.add_help_cmd in
 
   let completions_from_list ls prefix =
-    List.to_iter ls |> Iter.filter (fun i -> String.starts_with ~prefix i)
-  in
-
-  let iter_of_gen g =
-    let rec iter_gen f g =
-      match g () with
-      | Some n ->
-          f n;
-          iter_gen f g
-      | None -> ()
-    in
-    Iter.from_iter (fun f -> iter_gen f g)
+    List.to_iter ls |> Iter.filter (String.starts_with ~prefix)
   in
 
   let complete_filename prefix =
@@ -114,14 +97,9 @@ let repl ~verb ~echo_cmd =
       | (exception Sys_error _) | false ->
           (Filename.dirname prefix, Filename.basename prefix)
     in
-    let files = iter_of_gen (CCIO.File.read_dir path) in
-    files
-    |> Iter.flat_map (function
-      | n when String.starts_with ~prefix:fname n ->
-          Iter.singleton @@ Filename.concat path n
-      | n when String.starts_with ~prefix:fname n ->
-          Iter.singleton @@ Filename.concat path n
-      | _ -> Iter.empty)
+    Iter.from_fun (CCIO.File.read_dir path)
+    |> Iter.filter (String.starts_with ~prefix:fname)
+    |> Iter.map (Filename.concat path)
   in
 
   let cmds_completion =
