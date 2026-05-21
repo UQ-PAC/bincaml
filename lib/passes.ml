@@ -321,6 +321,7 @@ module PassManager = struct
 
   let passes =
     [
+      dynamic_single_assignment;
       irreducible_loop;
       remove_unreachable_blocks;
       collapse_empty_blocks;
