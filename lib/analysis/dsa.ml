@@ -537,27 +537,29 @@ module DSGraph = struct
   (** Create a copy of the given node with all reachable nodes and cells from
       pointees copied. The previous (given) list of nodes will then be updated
       with all new nodes after the copy and returned. *)
-  let copy_node (graph : t) ?(sb = None) (n : node) =
+  let copy_node (graph : t) ?(old_to_new = None) ?(sb = None) (n : node) =
     (* Mappings of old nodes (in the copied-from graph) to new nodes. Since the
        old nodes won't be modified, this is safe. *)
-    let old_to_new = Hashtbl.create 100 in
+    let old_to_new = Option.get_lazy (fun _ -> Hashtbl.create 100) old_to_new in
     let stack = Stack.create () in
     (* Create a copy of the given node, with cells initialised except for their pointees *)
     let create_new_node n =
-      assert (not @@ Hashtbl.mem old_to_new @@ id n);
-      let new_n =
-        ref (Node { cells = []; flags = flags n; id = ID.fresh id_gen () })
-      in
-      let new_cells =
-        cells n
-        |> List.map (fun c ->
-            ref (Cell { offsets = offsets c; node = new_n; pointees = [] }))
-      in
-      set_cells new_cells new_n;
-      Hashtbl.add old_to_new (id n) new_n;
-      graph.nodes <- new_n :: graph.nodes;
-      Stack.push (n, new_n) stack;
-      new_n
+      Hashtbl.get old_to_new (id @@ n)
+      |> Option.get_lazy (fun _ ->
+          assert (not @@ Hashtbl.mem old_to_new @@ id n);
+          let new_n =
+            ref (Node { cells = []; flags = flags n; id = ID.fresh id_gen () })
+          in
+          let new_cells =
+            cells n
+            |> List.map (fun c ->
+                ref (Cell { offsets = offsets c; node = new_n; pointees = [] }))
+          in
+          set_cells new_cells new_n;
+          Hashtbl.add old_to_new (id n) new_n;
+          graph.nodes <- new_n :: graph.nodes;
+          Stack.push (n, new_n) stack;
+          new_n)
     in
     let new_n = create_new_node n in
     (* Recursively update the pointees of cells and create copies for what they point to *)
@@ -568,11 +570,7 @@ module DSGraph = struct
           let pointees =
             pointees old_c
             |> List.map (fun old_c' ->
-                let new_pointee_node =
-                  Hashtbl.get old_to_new (id @@ node_of old_c')
-                  |> Option.get_lazy (fun _ ->
-                      create_new_node @@ node_of old_c')
-                in
+                let new_pointee_node = create_new_node @@ node_of old_c' in
                 get_cell (offsets old_c') new_pointee_node)
           in
           set_pointees pointees new_c)
@@ -672,8 +670,8 @@ let call_sites p =
     | Stmt.Instr_Call { lhs; args; procid } -> Some (lhs, args, procid)
     | _ -> None)
 
-let resolve_callee caller_sva caller_graph callee_sva callee_graph actual formal
-    =
+let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
+    actual formal =
   ignore
     (let open Option.Infix in
      let open DSGraph in
@@ -681,7 +679,9 @@ let resolve_callee caller_sva caller_graph callee_sva callee_graph actual formal
      print_endline @@ "Thingy: " ^ Sva.SymAddrSetLattice.show formal;
      let* callee_cell = cell_of ~uniq:true formal callee_graph in
      let callee_node = node_of callee_cell in
-     let callee_node_copy = copy_node caller_graph callee_node in
+     let callee_node_copy =
+       copy_node ~old_to_new:(Some old_to_new) caller_graph callee_node
+     in
      let flags = flags callee_node_copy in
      let flags = NodeFlags.(clear_flag stack flags) in
      set_flags flags callee_node_copy;
@@ -750,15 +750,18 @@ let bottom_up prog nodess =
           Constraint.(
             function
             | Call { lhs; args; callee_id } ->
+                let old_to_new = Hashtbl.create 100 in
                 print_endline @@ "Calling: " ^ ID.show callee_id;
                 let _, callee_sva, callee_nodes = IDMap.find callee_id nodess in
                 List.iter
                   (fun (a, f) ->
-                    resolve_callee sva nodes callee_sva callee_nodes a f)
+                    resolve_callee old_to_new sva nodes callee_sva callee_nodes
+                      a f)
                   args;
                 List.iter
                   (fun (a, f) ->
-                    resolve_callee sva nodes callee_sva callee_nodes a f)
+                    resolve_callee old_to_new sva nodes callee_sva callee_nodes
+                      a f)
                   lhs
             | _ -> ())
           constraints)
