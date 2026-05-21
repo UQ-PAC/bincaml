@@ -196,18 +196,24 @@ let create_block succ_addr (proc, blockmap) (b : block) =
   let bl =
     let* opcodes = b.opcodes in
     let guard = addr_equal_expr b.address in
-    let guard = Stmt.Instr_Assume { body = guard; branch = false } in
+    let guard =
+      Stmt.Instr_Assume { body = guard; branch = false; attrib = Attrib.empty }
+    in
     let ensure =
       succ_addr b.uuid
       |> Iter.map (fun addr -> addr_equal_expr addr)
       |> Iter.to_list
       |> Expr.BasilExpr.applyintrin ~op:`OR
     in
-    let ensure = Stmt.Instr_Assert { body = ensure } in
+    let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
     let instrs =
       opcodes
       |> List.map (fun _ ->
-          Stmt.Instr_Assert { body = Lang.Expr.BasilExpr.boolconst false })
+          Stmt.Instr_Assert
+            {
+              body = Lang.Expr.BasilExpr.boolconst false;
+              attrib = Attrib.empty;
+            })
     in
     let stmts = guard :: (instrs @ [ ensure ]) in
     let proc, nb = Procedure.fresh_block proc ~name:"gtirb" ~stmts () in
