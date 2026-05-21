@@ -28,11 +28,11 @@ type content_block = { block : Block.t; raw : bytes; address : int }
 
 (* CONSTANTS  *)
 
-type config = { opcode_length : int; pc_var : Var.t }
+type config = { opcode_length : int; pc_var : Var.t; disas : bool }
 
 let conf =
   let pc_var = Var.create "$PC" ~scope:Var.GlobalVar (Bitvector 64) in
-  { opcode_length = 4; pc_var }
+  { opcode_length = 4; pc_var; disas = true }
 
 open struct
   (* ASL specifications are from the bundled ARM semantics in libASL. *)
@@ -213,8 +213,13 @@ let create_block succ_addr (proc, blockmap) (b : block) =
             {
               body = Lang.Expr.BasilExpr.boolconst false;
               attrib =
-                StringMap.singleton ".opcode"
-                  (`String (Opcode.to_hex_string @@ Opcode.of_be_bytes op));
+                (let op = Opcode.of_be_bytes op in
+                 let asm = if conf.disas then Disas.dis_op op else None in
+                 Option.fold
+                   (fun m a -> StringMap.add ".asm" (`String a) m)
+                   (StringMap.singleton ".opcode"
+                      (`String (Opcode.to_hex_string op)))
+                   asm);
             })
     in
     let stmts = guard :: (instrs @ [ ensure ]) in

@@ -6,6 +6,7 @@
    gtirb
    UUID 
    opcode
+   disas
   )
  (flags :standard -w -69)
  (libraries

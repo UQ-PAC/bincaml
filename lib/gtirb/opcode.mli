@@ -8,6 +8,9 @@ val to_hex_string : t -> string
 val to_le_bytes : t -> string
 (** Convert to little-endian bytes string *)
 
+val to_be_bytes : t -> string
+(** Convert to little-endian bytes string *)
+
 val pp : Format.formatter -> t -> unit
 (** The same as {! to_hex_string } *)
 
