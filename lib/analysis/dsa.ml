@@ -163,7 +163,11 @@ module DSGraph = struct
   (* A path compressed cell. Cells store a set of offsets from an abstract base
      address, and the node that it belongs to. *)
   type content =
-    | Cell of { offsets : Interval.t; node : node; pointees : cell list }
+    | Cell of {
+        mutable offsets : Interval.t;
+        mutable node : node;
+        mutable pointees : cell list;
+      }
     | Path of cell
 
   and cell = content ref
@@ -171,7 +175,11 @@ module DSGraph = struct
   (* Nodes are represented as sorted lists of cells, ordered by the low end of the intervals of each cell *)
   and node_content =
     (* ID's CAN change when nodes are mutated!! Make sure that if ids are ever used, the nodes whos ids are being used won't change!!!! *)
-    | Node of { mutable cells : cell list; flags : NodeFlags.t; id : ID.t }
+    | Node of {
+        mutable cells : cell list;
+        mutable flags : NodeFlags.t;
+        id : ID.t;
+      }
     (* Node was joined into parent at the given offset *)
     | NodePath of node * Z.t
 
@@ -232,14 +240,14 @@ module DSGraph = struct
   let set_node node (c : cell) =
     let f = find c in
     match !f with
-    | Cell r -> f := Cell { r with node }
+    | Cell r -> r.node <- node
     | _ -> failwith "Union find returned non terminal cell"
 
   (** Set the pointees of this cell's parent *)
   let set_pointees pointees (c : cell) =
     let f = find c in
     match !f with
-    | Cell r -> f := Cell { r with pointees }
+    | Cell r -> r.pointees <- pointees
     | _ -> failwith "Union find returned non terminal cell"
 
   (** Get the cells of this node's parent *)
@@ -258,13 +266,13 @@ module DSGraph = struct
   let rec set_cells cells (n : node) =
     match !n with
     | NodePath _ -> set_cells cells (fst @@ find_node n)
-    | Node r -> n := Node { r with cells }
+    | Node r -> r.cells <- cells
 
   (** Set the flags of this node *)
   let rec set_flags flags (n : node) =
     match !n with
     | NodePath _ -> set_flags flags (fst @@ find_node n)
-    | Node r -> n := Node { r with flags }
+    | Node r -> r.flags <- flags
 
   (** Make the second cell point to the first *)
   let rec join_paths (c1 : cell) (c2 : cell) =
@@ -275,14 +283,24 @@ module DSGraph = struct
     | Cell r, Cell { pointees = p } ->
         if not @@ CCEqual.physical c1 c2 then c2 := Path c1
 
-  (** Check that the node has its cell intervals sorted and disjoint *)
-  let check_sorted node =
+  (** Returns whether the node has its cell intervals sorted and disjoint *)
+  let is_sorted node =
     let is = List.map offsets (cells node) in
     let rec aux = function
       | [] | [ _ ] -> true
-      | i :: (j :: _ as tail) -> Interval.left_of i j && aux tail
+      | i :: j :: xs -> Interval.left_of i j && aux (j :: xs)
     in
-    assert (aux is)
+    aux is
+
+  (** Returns whether every cell has its node set to this one. *)
+  let valid_cell_nodes node =
+    let f, _ = find_node node in
+    List.for_all (CCEqual.physical f % node_of) (cells f)
+
+  (** Check that the node satisfies its invariants *)
+  let check_valid_node node =
+    assert (is_sorted node);
+    assert (valid_cell_nodes node)
 
   (** Collapse all cells in the node into a single cell (its interval being Top)
   *)
@@ -301,7 +319,8 @@ module DSGraph = struct
         let c = ref (Cell { offsets = Top; node; pointees }) in
         List.iter (fun c' -> join_paths c c') r.cells;
         let flags = NodeFlags.(set_flag collapsed r.flags) in
-        node := Node { r with cells = [ c ]; flags }
+        r.cells <- [ c ];
+        r.flags <- flags
 
   (** Join c2 into c1, but without updating their nodes *)
   let rec join_cells_only c1 c2 =
@@ -311,21 +330,22 @@ module DSGraph = struct
     | _, Path _ -> join_cells_only c1 (find c2)
     | Cell a, Cell b -> (
         assert (CCEqual.physical a.node b.node);
-        join_paths c1 c2;
         let pointees =
           List.fold_left
             (flip (List.add_nodup ~eq:CCEqual.physical))
             a.pointees b.pointees
         in
         let offsets = Interval.join a.offsets b.offsets in
-        c1 := Cell { node = a.node; pointees; offsets };
+        a.pointees <- pointees;
+        a.offsets <- offsets;
+        join_paths c1 c2;
         match offsets with Top -> collapse a.node | _ -> ())
 
   (** Join the two nodes, with the second shifted by the given offset. The
       second node becomes a NodePath and the first is kept *)
   and join_nodes_at off n1 n2 =
-    check_sorted n1;
-    check_sorted n2;
+    check_valid_node n1;
+    check_valid_node n2;
     match (!n1, !n2) with
     | NodePath _, _ ->
         let p, off' = find_node n1 in
@@ -352,8 +372,8 @@ module DSGraph = struct
                     n1 := Node { r1 with cells = r1.cells @ r2.cells; flags };
                     n2 := NodePath (n1, off);
                     collapse n1;
-                    check_sorted n1;
-                    check_sorted n2;
+                    check_valid_node n1;
+                    check_valid_node n2;
                     None
                 | (Interval _ as i), (Interval _ as j) when Interval.left_of i j
                   ->
@@ -374,8 +394,8 @@ module DSGraph = struct
           | Some n ->
               n1 := Node { r1 with cells = n; flags };
               n2 := NodePath (n1, off);
-              check_sorted n1;
-              check_sorted n2
+              check_valid_node n1;
+              check_valid_node n2
           | _ -> ())
 
   (** Inserts the cell into the node. It is assumed that the cell has set (or
@@ -389,11 +409,14 @@ module DSGraph = struct
     | Node r -> (
         match !cell with
         | Path _ -> insert node (find cell)
-        | Cell { offsets = Interval.Bot } -> ()
+        | Cell { offsets = Interval.Bot } ->
+            failwith "Bot cells should not exist"
         | Cell { offsets = Top } ->
             node := Node { r with cells = cell :: r.cells };
             collapse node
         | Cell { offsets = Interval _ as i } -> (
+            check_valid_node node;
+            set_node node cell;
             let rec insert' = function
               | [] -> Some [ cell ]
               | c :: cs -> (
@@ -403,7 +426,8 @@ module DSGraph = struct
                       node := Node { r with cells = cell :: r.cells };
                       collapse node;
                       None
-                  | Cell { offsets = Bot } -> insert' cs
+                  | Cell { offsets = Bot } ->
+                      failwith "Bot cells should not exist"
                   | Cell { offsets = Interval _ as j } when Interval.left_of i j
                     ->
                       Some (cell :: c :: cs)
@@ -411,46 +435,23 @@ module DSGraph = struct
                     when Interval.right_of i j ->
                       Option.map (List.cons c) @@ insert' cs
                   | Cell { offsets = Interval _ } ->
-                      join_cells_only c cell;
-                      Some (c :: cs))
+                      join_cells_only cell c;
+                      insert' cs)
             in
             match insert' r.cells with
             | Some n -> node := Node { r with cells = n }
             | None -> ()))
 
-  (** Join all cells in the given interval range of a node into a single cell
-      with that interval as its offsets. The interval range is assumed up to
-      date relative to the latest node and is not shifted. *)
-  let rec join_range (n : node) i =
-    match !n with
-    | NodePath _ ->
-        let n, _ = find_node n in
-        join_range n i
-    | Node r ->
-        check_sorted n;
-        let c = ref (Cell { offsets = i; node = n; pointees = [] }) in
-        let pointees, i =
-          List.fold_left
-            (fun (acc, i) c' ->
-              let i' = offsets c' in
-              if Interval.overlap i' i then
-                ( List.fold_left
-                    (flip (List.add_nodup ~eq:CCEqual.physical))
-                    acc (pointees c'),
-                  Interval.join i i' )
-              else (acc, i))
-            ([], i) r.cells
-        in
-        c := Cell { offsets = i; node = n; pointees };
-        let rec aux = function
-          | c' :: cs when Interval.left_of (offsets c') i -> c' :: aux cs
-          | c' :: cs when Interval.overlap (offsets c) i ->
-              join_paths c c';
-              aux cs
-          | xs -> c :: xs
-        in
-        r.cells <- aux r.cells;
-        check_sorted n
+  (** Creates an empty node *)
+  let empty_node () =
+    ref (Node { cells = []; flags = NodeFlags.empty; id = ID.fresh id_gen () })
+
+  (** Create a single cell belonging to its own node *)
+  let init offsets flags : cell =
+    let node = ref (Node { cells = []; flags; id = ID.fresh id_gen () }) in
+    let c = ref (Cell { offsets; node; pointees = [] }) in
+    insert node c;
+    c
 
   (** Merge the two given cells together. If they belong to different nodes then
       the nodes are merged so that the cell offsets line up. *)
@@ -476,18 +477,7 @@ module DSGraph = struct
               else
                 (* TODO Calling this every time might be redundant if the joined
                    interval isn't bigger? *)
-                join_range n1 (Interval.join i i'))
-
-  (** Creates an empty node *)
-  let empty_node () =
-    ref (Node { cells = []; flags = NodeFlags.empty; id = ID.fresh id_gen () })
-
-  (** Create a single cell belonging to its own node *)
-  let init offsets flags : cell =
-    let node = ref (Node { cells = []; flags; id = ID.fresh id_gen () }) in
-    let c = ref (Cell { offsets; node; pointees = [] }) in
-    insert node c;
-    c
+                insert n1 (init (Interval.join i i') 0))
 
   (** Unify all pointees of this cell so that it points to only one cell, then
       recurse on that cell *)
@@ -535,8 +525,7 @@ module DSGraph = struct
         (* TODO switch to another data structure to log(n)-ify this *)
         let rec aux = function
           | [] -> []
-          | x :: xs when Interval.subset i (offsets x) ->
-              x :: aux xs
+          | x :: xs when Interval.subset i (offsets x) -> x :: aux xs
           | x :: xs -> aux xs
         in
         let cells = aux r.cells in
@@ -591,7 +580,7 @@ module DSGraph = struct
        old nodes won't be modified, this is safe. *)
     let old_to_new = Option.get_lazy (fun _ -> Hashtbl.create 100) old_to_new in
     let stack = Stack.create () in
-    SBMap.iter (fun s n -> check_sorted n) graph.node_map;
+    SBMap.iter (fun s n -> check_valid_node n) graph.node_map;
     (* Create a copy of the given node, with cells initialised except for their pointees *)
     let create_new_node n =
       Hashtbl.get old_to_new (id @@ n)
@@ -625,17 +614,17 @@ module DSGraph = struct
           in
           set_pointees pointees new_c)
     done;
-    SBMap.iter (fun s n -> check_sorted n) graph.node_map;
+    SBMap.iter (fun s n -> check_valid_node n) graph.node_map;
     List.iter
       (fun sb ->
         (* TODO maybe this isn't needed (should be thoroughly docuemnted why! scala DSA doesn't do this) *)
         match SBMap.get sb graph.node_map with
         | Some n' ->
-            check_sorted n';
-            check_sorted new_n;
+            check_valid_node n';
+            check_valid_node new_n;
             join_nodes_at Z.zero n' new_n
         | None ->
-            check_sorted new_n;
+            check_valid_node new_n;
             graph.node_map <- SBMap.add sb new_n graph.node_map)
       sbs;
     new_n
@@ -719,7 +708,7 @@ let make_local_graph proc sva
       nodes
   in
 
-  SBMap.iter (fun s n -> DSGraph.check_sorted n) node_map;
+  SBMap.iter (fun s n -> DSGraph.check_valid_node n) node_map;
 
   let (g : DSGraph.t) =
     { nodes = SBMap.values node_map |> Iter.to_list; node_map; sva }
@@ -812,7 +801,7 @@ let bottom_up prog nodess =
     IDSet.iter
       (fun pid ->
         let constraints, sva, (nodes : DSGraph.t) = IDMap.find pid nodess in
-        SBMap.iter (fun s n -> DSGraph.check_sorted n) nodes.node_map;
+        SBMap.iter (fun s n -> DSGraph.check_valid_node n) nodes.node_map;
         Iter.iter
           Constraint.(
             function
@@ -950,8 +939,8 @@ let dsa (p : Program.t) =
     |> IDMap.of_list
   in
   print_endline "local phase done";
-  ( Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
-    bottom_up p local_graphs );
+  (*( Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
+    bottom_up p local_graphs );*)
   List.iter
     (fun (id, graph) ->
       print_endline @@ ID.show id;
