@@ -939,8 +939,8 @@ let dsa (p : Program.t) =
     |> IDMap.of_list
   in
   print_endline "local phase done";
-  (*( Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
-    bottom_up p local_graphs );*)
+  ( Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
+    bottom_up p local_graphs );
   List.iter
     (fun (id, graph) ->
       print_endline @@ ID.show id;
