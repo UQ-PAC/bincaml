@@ -1,7 +1,6 @@
 (library
  (public_name bincaml.loader)
  (name loader)
- (flags -w -27)
  (modules loadir)
  (inline_tests)
  (preprocess
@@ -22,14 +21,12 @@
 ; (library
 ;  (public_name bincaml.backends)
 ;  (name backends)
-;  (flags -w -27)
 ;  (modules boogie)
 ;  (libraries containers containers-data containers.pp backends)
 ;  (inline_tests))
 
 (library
  (public_name bincaml)
- (flags -w -27)
  (modules passes script)
  (libraries
    bincaml.gtirb

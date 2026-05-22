@@ -85,11 +85,12 @@ let children_lspsymbols_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
   in
   let of_lvar = function
     | LVar_Global _ -> Iter.empty
-    | LVar_Local localvar -> of_localvar localvar
+    | LVar_Local localvar | LVar_LocalConst localvar -> of_localvar localvar
   in
   let of_lvars = function
     | LVars_Empty -> Iter.empty
-    | LVars_LocalList (_, localvars, _) ->
+    | LVars_LocalList (_, localvars, _) | LVars_LocalConstList (_, localvars, _)
+      ->
         Iter.of_list localvars |> Iter.flat_map of_localvar
     | LVars_List (_, lvars, _) -> Iter.of_list lvars |> Iter.flat_map of_lvar
     | NamedLVars_List (_, named, _) ->

@@ -9,8 +9,9 @@
   SkelBasilIR
   LexBasilIR
   ParBasilIR)
+ ; ignore all warnings in this generated code.
  (flags
-  (-w -27 -w -39 -w -33)))
+  (:standard -w -A)))
 
 (ocamllex LexBasilIR)
 

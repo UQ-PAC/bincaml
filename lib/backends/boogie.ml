@@ -292,7 +292,7 @@ let pretty_type_declaration (binding : string) (typ : Types.t) =
       ^+ bracket "{" (append_sp (List.map pretty_variant_declaration vs)) "}"
   | _ -> raise (BoogieException "Unsupported type declaration")
 
-let rec pretty_statement (s : Program.stmt) =
+let pretty_statement (s : Program.stmt) =
   let open Containers_pp in
   let open List.Infix in
   match s with

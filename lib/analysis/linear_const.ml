@@ -49,6 +49,7 @@ module LF = struct
         "\\x . (" ^ Bitvec.show a ^ " * x + " ^ Bitvec.show b ^ ") " ^ join_char
         ^ " " ^ Value.show c
 
+  let pp fmt x = Format.pp_print_string fmt (show x)
   let bottom = BotEdge
   let identity = IdEdge
   let top = TopEdge

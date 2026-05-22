@@ -1,4 +1,5 @@
-(* The forwards overappraximating gamma domain. It is assumed that the program is in ssa form. *)
+(** The forwards overapproximating gamma domain. It is assumed that the program
+    is in ssa form. *)
 
 include Lang
 include Common
@@ -92,7 +93,7 @@ module IDEDomain : IDESSIDomain = struct
 
   module Value = GammaSet
 
-  let show_state s =
+  let[@warning "-32"] show_state s =
     s
     |> Iter.to_string ~sep:", " (fun (v, s) ->
         Var.to_string v ^ "->" ^ GammaSet.show s)

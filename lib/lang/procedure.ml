@@ -148,6 +148,12 @@ module PG : sig
   val formal_out_params : ('a, 'b) t -> 'a StringMap.t
   (** return formal out parameters *)
 
+  val set_formal_in_params : 'a StringMap.t -> ('a, 'b) t -> ('a, 'b) t
+  (** set the formal in parameters *)
+
+  val set_formal_out_params : 'a StringMap.t -> ('a, 'b) t -> ('a, 'b) t
+  (** set the formal out parameters *)
+
   val map_formal_in_params :
     ('a StringMap.t -> 'a StringMap.t) -> ('a, 'b) t -> ('a, 'b) t
   (** modify formal in parameters *)
