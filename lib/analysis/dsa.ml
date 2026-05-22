@@ -378,8 +378,8 @@ module DSGraph = struct
                 | (Interval _ as i), (Interval _ as j) when Interval.left_of i j
                   ->
                     Option.map (List.cons c) @@ join_nodes' cs n2'
-                | (Interval _ as i), (Interval _ as j) when Interval.left_of i j
-                  ->
+                | (Interval _ as i), (Interval _ as j)
+                  when Interval.right_of i j ->
                     Option.map (List.cons c') @@ join_nodes' n1' cs'
                 | Interval (a, b), Interval (x, y) when Z.leq b y ->
                     (* first cell is left of second cell, so join first cell into second to preserve order *)
