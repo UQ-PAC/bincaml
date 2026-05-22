@@ -575,7 +575,8 @@ module DSGraph = struct
   (** Create a copy of the given node with all reachable nodes and cells from
       pointees copied. The previous (given) list of nodes will then be updated
       with all new nodes after the copy and returned. *)
-  let copy_node (graph : t) ?(old_to_new = None) ?(sbs = []) (n : node) =
+  let copy_node (graph : t) ?(clear_stack = false) ?(old_to_new = None)
+      ?(sbs = []) (n : node) =
     (* Mappings of old nodes (in the copied-from graph) to new nodes. Since the
        old nodes won't be modified, this is safe. *)
     let old_to_new = Option.get_lazy (fun _ -> Hashtbl.create 100) old_to_new in
@@ -586,8 +587,12 @@ module DSGraph = struct
       Hashtbl.get old_to_new (id @@ n)
       |> Option.get_lazy (fun _ ->
           assert (not @@ Hashtbl.mem old_to_new @@ id n);
+          let flags =
+            if clear_stack then NodeFlags.(clear_flag stack) (flags n)
+            else flags n
+          in
           let new_n =
-            ref (Node { cells = []; flags = flags n; id = ID.fresh id_gen () })
+            ref (Node { cells = []; flags; id = ID.fresh id_gen () })
           in
           let new_cells =
             cells n
@@ -739,13 +744,10 @@ let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
      let* callee_cell = cell_of ~uniq:true formal callee_graph in
      let callee_node = node_of callee_cell in
      let callee_node_copy =
-       copy_node
+       copy_node ~clear_stack:true
          ~sbs:(Sva.SymAddrSetLattice.to_list actual |> snd |> List.map fst)
          ~old_to_new:(Some old_to_new) caller_graph callee_node
      in
-     let flags = flags callee_node_copy in
-     let flags = NodeFlags.(clear_flag stack flags) in
-     set_flags flags callee_node_copy;
      let callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
      (* Only do the joining if a caller cell actually exists *)
      let* caller_cell = cell_of actual caller_graph in
