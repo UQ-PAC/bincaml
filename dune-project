@@ -32,6 +32,7 @@
   (qcheck-core :with-test)
   (qcheck-alcotest :with-test)
   (menhir (>= 20180523))
+  angstrom
   ocaml
   zarith
   fix
