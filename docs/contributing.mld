@@ -270,7 +270,7 @@ cd examples && git add . && git commit -m 'add example' && git push
 cd .. && git add examples && git commit -m 'update examples' && git push
 v}
 
-Allt the bincaml repository sees is a commit sha in the remote repository, so
+All the bincaml repository sees is a commit sha in the remote repository, so
 to fix any merge conflicts on the examples folder simply update the reference to
 the current main commit:
 
