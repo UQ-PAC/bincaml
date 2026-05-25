@@ -1,17 +1,12 @@
 (library
  (public_name bincaml.gtirb)
  (name gtirb)
- (modules
-   load_auxdata
-   gtirb
-   UUID 
-   opcode
-   disas
-  )
+ (modules load_auxdata gtirb UUID opcode disas)
  (flags :standard -w -69)
  (libraries
-   base64
-   angstrom
+  bincaml.gtirb.capstone
+  base64
+  angstrom
   bincaml.gtirb_proto
   zarith
   fix
@@ -23,8 +18,7 @@
   fmt
   trace.core
   bincaml.util
-  bincaml.ast
-  )
+  bincaml.ast)
  (inline_tests)
  (preprocess
   (pps
