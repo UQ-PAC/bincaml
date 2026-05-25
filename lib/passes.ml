@@ -2,20 +2,94 @@ open Lang
 open Lang.Common
 open Bincaml_util.Logger
 
+(** Invariants (properties) which describe certain well-known states of the IR.
+    Transforms can {i presuppose}, {i establish}, or {i invalidate} invariants.
+    Generally, invariants are just a guide to the user and an invariant
+    violation will be reported as a warning rather than an error. Additionally,
+    bincaml will assume that the invariant configs specified on each pass are
+    correct and complete. *)
+module Invariants = struct
+  (** Invariants (properties) which describe certain well-known states of the
+      IR. *)
+  type t =
+    | SSA
+    | DSA
+    | Params
+        (** TODO: there is a "simple" parameter form then there is a reduced
+            param form presuming ABI. *)
+    | ReducibleLoops
+        (** All loops are reducible. That is, there are no {i irreducible}
+            loops. *)
+  [@@deriving show, eq, ord]
+
+  open struct
+    (** Unions the two invariant lists. *)
+    let ( +++ ) a b : t list =
+      let a = List.sort compare a and b = List.sort compare b in
+      List.sorted_merge ~cmp:compare a b
+
+    (** Subtracts the second invariant list from the first. *)
+    let ( --- ) a b : t list =
+      let a = List.sort compare a and b = List.sort compare b in
+      List.sorted_diff_uniq ~cmp:compare a b
+  end
+
+  type config = {
+    presupposes : t list;
+        (** Invariants which are required to hold {i before} this transform can
+            be applied. *)
+    establishes : t list;
+        (** Invariants which are known to hold this transform. [establishes] and
+            [invalidates] must be disjoint. Invariants which are not present in
+            [establishes] or [invalidates] are assumed to be unchanged. *)
+    invalidates : t list;
+        (** Invariants which are known to {i not} hold after this transform.
+            [establishes] and [invalidates] must be disjoint. *)
+  }
+  [@@deriving show]
+  (** Invariant specification for a particular transform pass.
+
+      TODO: require the absence of some invariants (e.g., !SSA)?? or is this
+      adequately expressed just the {!DSA} state and an [invalidates:[SSA]]
+      config? *)
+
+  let make ?(presupposes = []) ?(establishes = []) ?(invalidates = []) () =
+    let overlap = List.inter ~eq:equal establishes invalidates in
+    if not (List.is_empty overlap) then
+      invalid_arg
+      @@ Printf.sprintf
+           "invariant config has overlapping 'invalidates' and 'establishes': \
+            %s"
+           (CCString.concat "," (List.map show overlap));
+    { presupposes; establishes; invalidates }
+
+  let empty = make ()
+
+  let needs ?(establishes = []) ?(invalidates = []) presupposes =
+    make ~presupposes ~establishes ~invalidates ()
+
+  let establishes ?(needs = []) ?(invalidates = []) establishes =
+    let presupposes = needs in
+    make ~presupposes ~establishes ~invalidates ()
+
+  (** Computes the invariant config from applying [x1] then [x2]. *)
+  let sequence x1 x2 =
+    let presupposes = x1.presupposes +++ (x2.presupposes --- x1.establishes) in
+    let establishes = x2.establishes +++ (x1.establishes --- x2.invalidates) in
+    let invalidates = x2.invalidates +++ (x1.invalidates --- x2.establishes) in
+    make ~presupposes ~establishes ~invalidates ()
+
+  (** Computes the invariant config from a list of values, extracting the config
+      from each list using the given function. The extracted invariant configs
+      are composed in {!sequence}. *)
+  let from_list f xs = List.fold_left sequence empty (List.map f xs)
+end
+
 (** TODO: pass program to procedure-local passes
 
     TODO: structured errors for checks *)
 
 module PassManager = struct
-  type invariant = SSA | DSA | Params [@@deriving show]
-
-  type invariants = {
-    presupposes : invariant list;
-    establishes : invariant list;
-    invalidates : invariant list;
-  }
-  [@@deriving show]
-
   type transform =
     | Prog of (Program.t -> Program.t)
         (** A transform over the whole program *)
@@ -32,7 +106,7 @@ module PassManager = struct
     name : string;
     apply : transform;
     doc : string;
-    invariants : invariants;
+    invariants : Invariants.config;
   }
 
   type t = { avail : pass StringMap.t }
@@ -44,6 +118,7 @@ module PassManager = struct
       doc =
         "Pull all global variables into the parameter list, discarding initial \
          parameter list (i.e. assuming its empty)";
+      invariants = Invariants.establishes [ Params ];
     }
 
   let read_uninit locals =
@@ -56,6 +131,7 @@ module PassManager = struct
           (fun _ proc ->
             Transforms.May_read_uninit.check ~include_locals:locals proc);
       doc = "Fail if the program contains read-uninitialised variables";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let dfg_bool =
@@ -63,6 +139,7 @@ module PassManager = struct
       name = "demo-dfg-bool-analysis";
       apply = DFGAnalysis (module Analysis.Defuse_bool.Analysis);
       doc = "runs truthiness analysis on dataflow graph and prints results";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let dfg_ival_wint_product =
@@ -71,6 +148,7 @@ module PassManager = struct
       apply =
         DFGAnalysis (module Analysis.Tnum_wint_reduced_product.DFGAnalysis);
       doc = "runs interavl analysis on dataflow graph and prints results";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let demo_ival_wint_cfg =
@@ -86,6 +164,7 @@ module PassManager = struct
       doc =
         "Runs wrapped interval analysis on control flow graph and prints \
          results";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let demo_ival_wint_dfg =
@@ -100,7 +179,9 @@ module PassManager = struct
             p);
       doc =
         "Runs wrapped interval analysis on control flow graph and prints \
-         results";
+         invariants = Invariants.needs [SSA];\n\
+        \         results";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let cfg_wrapped_int =
@@ -116,6 +197,7 @@ module PassManager = struct
             (*Analysis.Wrapped_intervals.Analysis.print_dot
               (Format.of_chan stdout) p r;*)
             p);
+      invariants = Invariants.needs [ SSA ];
       doc =
         "Runs wrapped interval analysis on control flow graph and prints \
          results";
@@ -134,6 +216,7 @@ module PassManager = struct
       doc =
         "Runs known bits and wrapped interval reduced product analysis on \
          control flow graph and prints results";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let sva =
@@ -146,6 +229,7 @@ module PassManager = struct
             List.iter (print_endline % Analysis.Sva.StateAbstraction.show) r;
             p);
       doc = "Runs symbolic value analysis and prints stuff out after";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let demo_dfg_gamma =
@@ -153,6 +237,7 @@ module PassManager = struct
       name = "demo-dfg-gamma-analysis";
       apply = DFGAnalysis (module Analysis.Gamma_domain.DFGAnalysis);
       doc = "Runs a gamma analysis on a data flow graph and prints results";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let remove_unused =
@@ -162,6 +247,7 @@ module PassManager = struct
       doc =
         "Removes all unused variable declarations (globals and locals on each \
          procedure) from the IR program";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let sssa =
@@ -171,6 +257,7 @@ module PassManager = struct
       doc =
         "Naive SSA transform assuming all variable uses are dominated by \
          definitions from parameters";
+      invariants = Invariants.needs [ Params ] ~establishes:[ SSA ];
     }
 
   let remove_unreachable_blocks =
@@ -178,6 +265,7 @@ module PassManager = struct
       name = "remove-unreachable-block";
       apply = Proc Transforms.Cleanup_cfg.remove_blocks_unreachable_from_entry;
       doc = "Remove blocks unreachable from entry";
+      invariants = Invariants.needs [];
     }
 
   let collapse_empty_blocks =
@@ -185,6 +273,7 @@ module PassManager = struct
       name = "collapse-empty-blocks";
       apply = Proc Transforms.Cleanup_cfg.collapse_empty_blocks;
       doc = "Collapses empty intermediate blocks";
+      invariants = Invariants.needs [];
     }
 
   let cleanup_cfg =
@@ -192,6 +281,7 @@ module PassManager = struct
       name = "cleanup-cfg";
       apply = Proc Transforms.Cleanup_cfg.cleanup_cfg;
       doc = "Collapses empty intermediate blocks";
+      invariants = Invariants.needs [];
     }
 
   let irreducible_loop =
@@ -199,15 +289,18 @@ module PassManager = struct
       name = "irreducible-loops";
       apply = Proc Transforms.Irreducible_loop.transform;
       doc = "Remove blocks unreachable from entry";
+      invariants = Invariants.needs [];
     }
 
   let full_ssa =
+    let batch = [ remove_unreachable_blocks; sparams; sssa; remove_unused ] in
     {
       name = "ssa";
-      apply = Batch [ remove_unreachable_blocks; sparams; sssa; remove_unused ];
+      apply = Batch batch;
       doc =
         "Complete SSA pipeline for early IR (global register parameterless \
          form)";
+      invariants = Invariants.from_list (fun x -> x.invariants) batch;
     }
 
   let type_check =
@@ -215,6 +308,7 @@ module PassManager = struct
       name = "type-check";
       apply = ProcCheck Transforms.Type_check.check;
       doc = "Fail if the IR program is not type correct";
+      invariants = Invariants.needs [];
     }
 
   let split_memory_encoding =
@@ -222,6 +316,7 @@ module PassManager = struct
       name = "split-memory-encoding";
       apply = Prog Transforms.Memory_encoding.split_transform;
       doc = "Generates a split base/offset pair memory encoding/model";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let flat_memory_encoding =
@@ -229,6 +324,7 @@ module PassManager = struct
       name = "flat-memory-encoding";
       apply = Prog Transforms.Memory_encoding.flat_transform;
       doc = "Generates a flat (heavily quantified) memory encoding/model";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let memory_specification =
@@ -236,6 +332,7 @@ module PassManager = struct
       name = "memory-specification";
       apply = Prog Transforms.Memory_specification.transform;
       doc = "Specifies programs for memory safety";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let intra_function_summaries =
@@ -248,6 +345,7 @@ module PassManager = struct
          only, i.e. all \"correct\" inputs will remain allowed, and all \
          described outputs will be \"correct\". There is no guarantee of \
          completeness.";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let inter_function_summaries =
@@ -261,6 +359,7 @@ module PassManager = struct
          refinement with respect to wp logic only, i.e. all \"correct\" inputs \
          will remain allowed, and all described outputs will be \"correct\". \
          There is no guarantee of completeness. Depends on Z3.";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let cf_exprs =
@@ -270,6 +369,7 @@ module PassManager = struct
       doc =
         "Perform intra-expression simplifications and constant folding for \
          whole program";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let inter_dead =
@@ -282,6 +382,7 @@ module PassManager = struct
       doc =
         "Remove store assignments to pure local variables which are never read \
          using an interprocedural analysis";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let linear_const =
@@ -293,6 +394,7 @@ module PassManager = struct
          (expressions of the form a * x + b). Usage of constant variables are \
          replaced with their constant value. Newly dead variables are not \
          eliminated. Assumes SSA form.";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let linear_copy =
@@ -302,26 +404,29 @@ module PassManager = struct
       doc =
         "Inteprocedural linear expression propagation. This is helpful in \
          cleaning stack address uses. Assumes SSA.";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let simp =
+    let batch =
+      [
+        cf_exprs;
+        linear_const;
+        cf_exprs;
+        linear_copy;
+        cf_exprs;
+        inter_dead;
+        cleanup_cfg;
+      ]
+    in
     {
       name = "simplify";
-      apply =
-        Batch
-          [
-            cf_exprs;
-            linear_const;
-            cf_exprs;
-            linear_copy;
-            cf_exprs;
-            inter_dead;
-            cleanup_cfg;
-          ];
+      apply = Batch batch;
       doc =
         "Performs some simplifications (linear constant propagation, linear \
          copy propagation, constant folding, dead store elimination). Requires \
          SSA form.";
+      invariants = Invariants.from_list (fun x -> x.invariants) batch;
     }
 
   let dynamic_single_assignment =
@@ -331,6 +436,8 @@ module PassManager = struct
       doc =
         "Transforms phi nodes in the program into dynamic single assignment \
          statements.";
+      invariants =
+        Invariants.needs [ SSA ] ~establishes:[ DSA ] ~invalidates:[ SSA ];
     }
 
   let passes =
@@ -370,6 +477,7 @@ module PassManager = struct
         doc =
           "Perform intra-expression simplifications and constant folding for \
            whole program and write smt log of rewrites to a file.";
+        invariants = Invariants.needs [ SSA ];
       };
       {
         name = "intra-dead-store-elim";
@@ -377,6 +485,7 @@ module PassManager = struct
         doc =
           "Remove store assignments to pure local variables which are never \
            read ";
+        invariants = Invariants.needs [ SSA ];
       };
       remove_unused;
       {
@@ -385,11 +494,13 @@ module PassManager = struct
           Prog
             (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
+        invariants = Invariants.needs [ SSA ] ~establishes:[ Params ];
       };
       {
         name = "gamma-vars";
         apply = Prog Transforms.Gamma_vars.transform;
         doc = "Replace gamma expressions with gamma variables";
+        invariants = Invariants.needs [ SSA ];
       };
     ]
 
