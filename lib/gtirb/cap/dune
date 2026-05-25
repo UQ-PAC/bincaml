@@ -6,5 +6,3 @@
   (include_dirs include)
   (names capst))
  (c_library_flags -lcapstone))
-
-
