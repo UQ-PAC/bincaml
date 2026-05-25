@@ -3,6 +3,7 @@ open Bincaml_util.Common
 type t = Int32.t
 
 let to_hex_string (opcode : t) : string = Printf.sprintf "0x%08lx" opcode
+let to_int o = o
 
 let to_le_bytes (opcode : t) : string =
   let bytes = Bytes.create 4 in
