@@ -18,6 +18,13 @@ If you have already cloned you can fetch the submodule with:
 git submodule update --init --depth 1
 ```
 
+If you are developing with SSH git access, update the examples remote to make
+uplaoding examples easier
+
+```
+cd examples && git remote set-url origin git@github.com:UQ-PAC/bincaml-test.git
+```
+
 ### Setup
 
 Supports Linux (at least amd64) and MacOS (arm64) with OCaml 5.4.1.
