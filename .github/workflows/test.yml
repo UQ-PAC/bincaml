@@ -34,8 +34,8 @@ jobs:
 
       - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
       - run: opam install . --deps-only --with-test
-      - run: opam exec -- dune build --ignore-promoted-rules
-      - run: opam exec -- dune runtest --ignore-promoted-rules
+      - run: LDFLAGS="-L/opt/homebrew/lib" CPPFLAGS="-I/opt/homebrew/include"  opam exec -- dune build --ignore-promoted-rules
+      - run: LDFLAGS="-L/opt/homebrew/lib" CPPFLAGS="-I/opt/homebrew/include"  opam exec -- dune runtest --ignore-promoted-rules
 
   build:
     name: build_test
