@@ -48,6 +48,8 @@
   ll_spec.sexp
   repeated_ssa.il
   repeated_ssa.sexp
+  intrin_call.sexp
+  ../../examples/memory/malloc_free.il
   ../../bin/main.exe))
 
 (cram

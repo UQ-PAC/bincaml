@@ -2,6 +2,15 @@ open Bincaml_util.Common
 open Lang
 open Expr
 
+let string_to_intrin =
+  Stmt.Intrinsic.(
+    function
+    | "@malloc" | "@#malloc" | "@_malloc" -> Malloc
+    | "@calloc" | "@_calloc" | "@zmalloc" -> Calloc
+    | "@alloca" | "@_alloca" -> AllocStack
+    | "@free" | "@#free" | "@_free" -> Free
+    | _ -> failwith "Unreachable")
+
 let transform_proc proc prog =
   let replace_call (stmt : Program.stmt) : Program.stmt Iter.t =
     match stmt with
@@ -11,28 +20,22 @@ let transform_proc proc prog =
           | "@_calloc" | "@_alloca" ) as name ->
             let modifies =
               List.filter
-                (fun var -> not @@ String.equal (Var.name var) "R0")
+                (fun var ->
+                  not @@ String.starts_with (Var.name var) ~prefix:"R0")
                 (Procedure.specification (Program.proc prog procid))
                   .modifies_globs
             in
             let lhs =
-              StringMap.filter (fun name _ -> String.equal name "R0") lhs
+              StringMap.filter (fun name _ -> String.starts_with name ~prefix:"R0") lhs
               |> StringMap.values |> List.of_iter
             in
             let args =
-              StringMap.filter (fun name _ -> String.equal name "R0") args
+              StringMap.filter (fun name _ -> String.starts_with name ~prefix:"R0") args
               |> StringMap.values |> List.of_iter
             in
             Iter.doubleton
               (Stmt.Instr_IntrinCall
-                 {
-                   name =
-                     Option.get_exn_or "Unreachable"
-                     @@ Stmt.Intrinsic.of_string name;
-                   lhs;
-                   args;
-                   attrib;
-                 })
+                 { name = string_to_intrin name; lhs; args; attrib })
               (Stmt.Instr_IntrinCall
                  {
                    name = Stmt.Intrinsic.Havoc;
@@ -47,19 +50,14 @@ let transform_proc proc prog =
             in
             let lhs = StringMap.values lhs |> List.of_iter in
             let args =
-              StringMap.filter (fun name _ -> String.equal name "R0") args
+              StringMap.filter
+                (fun name _ -> String.starts_with name ~prefix:"R0")
+                args
               |> StringMap.values |> List.of_iter
             in
             Iter.doubleton
               (Stmt.Instr_IntrinCall
-                 {
-                   name =
-                     Option.get_exn_or "Unreachable"
-                     @@ Stmt.Intrinsic.of_string name;
-                   lhs;
-                   args;
-                   attrib;
-                 })
+                 { name = string_to_intrin name; lhs; args; attrib })
               (Stmt.Instr_IntrinCall
                  {
                    name = Stmt.Intrinsic.Havoc;
@@ -75,14 +73,7 @@ let transform_proc proc prog =
             let lhs = StringMap.values lhs |> List.of_iter in
             Iter.doubleton
               (Stmt.Instr_IntrinCall
-                 {
-                   name =
-                     Option.get_exn_or "Unreachable"
-                     @@ Stmt.Intrinsic.of_string name;
-                   lhs;
-                   args = [];
-                   attrib;
-                 })
+                 { name = string_to_intrin name; lhs; args = []; attrib })
               (Stmt.Instr_IntrinCall
                  {
                    name = Stmt.Intrinsic.Havoc;

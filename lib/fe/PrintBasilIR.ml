@@ -283,7 +283,6 @@ and prtStmt (i:int) (e : AbsBasilIR.stmt) : doc = match e with
   |    AbsBasilIR.Stmt_Store (endian, globalident, expr1, expr2, intval) -> prPrec i 0 (concatD [render "store" ; prtEndian 0 endian ; prtGlobalIdent 0 globalident ; prtExpr 2 expr1 ; prtExpr 0 expr2 ; prtIntVal 0 intval])
   |    AbsBasilIR.Stmt_DirectCall (lvars, procident, openparen, callparams, closeparen) -> prPrec i 0 (concatD [prtLVars 0 lvars ; render "call" ; prtProcIdent 0 procident ; prtOpenParen 0 openparen ; prtCallParams 0 callparams ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Stmt_IndirectCall expr -> prPrec i 0 (concatD [render "indirect" ; render "call" ; prtExpr 0 expr])
-  |    AbsBasilIR.Stmt_IntrinCall (lvars, intrincall, openparen, callparams, closeparen) -> prPrec i 0 (concatD [prtLVars 0 lvars ; render "call" ; prtIntrinCall 0 intrincall ; prtOpenParen 0 openparen ; prtCallParams 0 callparams ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Stmt_Assume expr -> prPrec i 0 (concatD [render "assume" ; prtExpr 0 expr])
   |    AbsBasilIR.Stmt_Guard expr -> prPrec i 0 (concatD [render "guard" ; prtExpr 0 expr])
   |    AbsBasilIR.Stmt_Assert expr -> prPrec i 0 (concatD [render "assert" ; prtExpr 0 expr])
@@ -347,15 +346,6 @@ and prtNamedCallArgListBNFC i es : doc = match (i, es) with
 and prtCallParams (i:int) (e : AbsBasilIR.callParams) : doc = match e with
        AbsBasilIR.CallParams_Exprs exprs -> prPrec i 0 (concatD [prtExprListBNFC 0 exprs])
   |    AbsBasilIR.CallParams_Named namedcallargs -> prPrec i 0 (concatD [prtNamedCallArgListBNFC 0 namedcallargs])
-
-
-and prtIntrinCall (i:int) (e : AbsBasilIR.intrinCall) : doc = match e with
-       AbsBasilIR.MallocCall  -> prPrec i 0 (concatD [render "@_malloc"])
-  |    AbsBasilIR.FreeCall  -> prPrec i 0 (concatD [render "@_free"])
-  |    AbsBasilIR.CallocCall  -> prPrec i 0 (concatD [render "@_calloc"])
-  |    AbsBasilIR.HavocCall  -> prPrec i 0 (concatD [render "@_havoc"])
-  |    AbsBasilIR.AllocaCall  -> prPrec i 0 (concatD [render "@_alloca"])
-  |    AbsBasilIR.FreeAllocaCall  -> prPrec i 0 (concatD [render "@_free_alloca"])
 
 
 and prtJump (i:int) (e : AbsBasilIR.jump) : doc = match e with

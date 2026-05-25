@@ -345,6 +345,7 @@ module PassManager = struct
       read_uninit false;
       read_uninit true;
       sssa;
+      intrin_call;
       sva;
       full_ssa;
       type_check;

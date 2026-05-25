@@ -116,7 +116,6 @@ and stmt =
  | Stmt_Store of endian * globalIdent * expr * expr * intVal
  | Stmt_DirectCall of lVars * procIdent * openParen * callParams * closeParen
  | Stmt_IndirectCall of expr
- | Stmt_IntrinCall of lVars * intrinCall * openParen * callParams * closeParen
  | Stmt_Assume of expr
  | Stmt_Guard of expr
  | Stmt_Assert of expr
@@ -156,14 +155,6 @@ and namedCallArg =
 and callParams =
    CallParams_Exprs of expr list
  | CallParams_Named of namedCallArg list
-
-and intrinCall =
-   MallocCall
- | FreeCall
- | CallocCall
- | HavocCall
- | AllocaCall
- | FreeAllocaCall
 
 and jump =
    Jump_GoTo of openParen * blockIdent list * closeParen

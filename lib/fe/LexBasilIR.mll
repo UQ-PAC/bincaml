@@ -7,9 +7,9 @@
 open ParBasilIR
 open Lexing
 
-let symbol_table = Hashtbl.create 16
+let symbol_table = Hashtbl.create 10
 let _ = List.iter (fun (kwd, tok) -> Hashtbl.add symbol_table kwd tok)
-                  [(";", SYMB1);(",", SYMB2);("->", SYMB3);("::", SYMB4);(":", SYMB5);("=", SYMB6);("|", SYMB7);(":=", SYMB8);("mem:=", SYMB9);("@_malloc", SYMB10);("@_free", SYMB11);("@_calloc", SYMB12);("@_havoc", SYMB13);("@_alloca", SYMB14);("@_free_alloca", SYMB15);("_", SYMB16)]
+                  [(";", SYMB1);(",", SYMB2);("->", SYMB3);("::", SYMB4);(":", SYMB5);("=", SYMB6);("|", SYMB7);(":=", SYMB8);("mem:=", SYMB9);("_", SYMB10)]
 
 let resword_table = Hashtbl.create 109
 let _ = List.iter (fun (kwd, tok) -> Hashtbl.add resword_table kwd tok)
@@ -53,7 +53,7 @@ let _idchar = _letter | _digit | ['_' '\'']         (*  identifier character *)
 let _universal = _                                  (* universal: any character *)
 
 (* reserved words consisting of special symbols *)
-let rsyms = ";" | "," | "->" | "::" | ":" | "=" | "|" | ":=" | "mem:=" | "@_malloc" | "@_free" | "@_calloc" | "@_havoc" | "@_alloca" | "@_free_alloca" | "_"
+let rsyms = ";" | "," | "->" | "::" | ":" | "=" | "|" | ":=" | "mem:=" | "_"
 
 (* user-defined token types *)
 let bVTYPE = "bv" _digit +

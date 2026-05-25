@@ -239,8 +239,6 @@ module.exports = ({
         seq(optional($.LVars), "call", $.token_ProcIdent, $.token_OpenParen, optional($.CallParams), $.token_CloseParen),
         // Stmt_IndirectCall. Stmt ::= "indirect" "call" Expr ;
         seq("indirect", "call", $.Expr),
-        // Stmt_IntrinCall. Stmt ::= LVars "call" IntrinCall OpenParen CallParams CloseParen ;
-        seq(optional($.LVars), "call", $.IntrinCall, $.token_OpenParen, optional($.CallParams), $.token_CloseParen),
         // Stmt_Assume. Stmt ::= "assume" Expr ;
         seq("assume", $.Expr),
         // Stmt_Guard. Stmt ::= "guard" Expr ;
@@ -352,21 +350,6 @@ module.exports = ({
         $.list_Expr,
         // CallParams_Named. CallParams ::= [NamedCallArg] ;
         $.list_NamedCallArg
-      ),
-    IntrinCall: $ =>
-      choice(
-        // MallocCall. IntrinCall ::= "@_malloc" ;
-        "@_malloc",
-        // FreeCall. IntrinCall ::= "@_free" ;
-        "@_free",
-        // CallocCall. IntrinCall ::= "@_calloc" ;
-        "@_calloc",
-        // HavocCall. IntrinCall ::= "@_havoc" ;
-        "@_havoc",
-        // AllocaCall. IntrinCall ::= "@_alloca" ;
-        "@_alloca",
-        // FreeAllocaCall. IntrinCall ::= "@_free_alloca" ;
-        "@_free_alloca"
       ),
     Jump: $ =>
       choice(

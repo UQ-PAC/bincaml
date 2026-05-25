@@ -166,14 +166,6 @@ CallParams_Named . CallParams ::= [NamedCallArg];
 
 Stmt_DirectCall   . Stmt ::= LVars "call" ProcIdent OpenParen CallParams CloseParen ;
 Stmt_IndirectCall . Stmt ::= "indirect" "call" Expr ;
-Stmt_IntrinCall   . Stmt ::= LVars "call" IntrinCall OpenParen CallParams CloseParen ;
-
-MallocCall     . IntrinCall ::= "@_malloc";
-FreeCall       . IntrinCall ::= "@_free";
-CallocCall     . IntrinCall ::= "@_calloc";
-HavocCall      . IntrinCall ::= "@_havoc";
-AllocaCall     . IntrinCall ::= "@_alloca";
-FreeAllocaCall . IntrinCall ::= "@_free_alloca";
 
 Stmt_Assume . Stmt ::= "assume" Expr ;
 Stmt_Guard . Stmt ::= "guard" Expr ;

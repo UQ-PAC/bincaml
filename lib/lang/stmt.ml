@@ -19,11 +19,11 @@ module Intrinsic = struct
 
   let of_string e =
     match e with
-    | "@_havoc" | "@havoc" | "@#havoc" -> Some Havoc
-    | "@_malloc" | "@malloc" | "@#malloc" -> Some Malloc
-    | "@_calloc" | "@calloc" | "@zmalloc" -> Some Calloc
-    | "@_free" | "@free" | "@#free" -> Some Free
-    | "@_alloca" | "@alloca" -> Some AllocStack
+    | "@_havoc" -> Some Havoc
+    | "@_malloc" -> Some Malloc
+    | "@_calloc" -> Some Calloc
+    | "@_free" -> Some Free
+    | "@_alloca" -> Some AllocStack
     | "@_free_alloca" -> Some FreeStack
     | _ -> None
 
