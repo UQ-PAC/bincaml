@@ -15,8 +15,7 @@ git clone --recurse-submodules https://github.com/agle/bincaml.git --shallow-sub
 If you have already cloned you can fetch the submodule with:
 
 ```
-git submodule init
-git submodule update
+git submodule update --init --depth 1
 ```
 
 ### Setup
