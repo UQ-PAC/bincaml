@@ -406,16 +406,8 @@ let pretty_modifies (p : Program.proc) =
     ]
 
 let pretty_expr_attribs e =
-  match Expr.BasilExpr.unfix e with
-  | RVar { attrib }
-  | Constant { attrib }
-  | UnaryExpr { attrib }
-  | BinaryExpr { attrib }
-  | ApplyIntrin { attrib }
-  | ApplyFun { attrib }
-  | Lambda { attrib }
-  | Let { attrib } ->
-      pretty_attribute_map ".boogie" attrib
+  let attrib = Expr.AbstractExpr.get_attrib @@ Expr.BasilExpr.unfix e in
+  pretty_attribute_map ".boogie" attrib
 
 let pretty_ensures (p : Program.proc) =
   let open Containers_pp in
