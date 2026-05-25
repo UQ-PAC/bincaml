@@ -18,7 +18,13 @@ open Lexing
 %token SYMB7 /* | */
 %token SYMB8 /* := */
 %token SYMB9 /* mem:= */
-%token SYMB10 /* _ */
+%token SYMB10 /* @_malloc */
+%token SYMB11 /* @_free */
+%token SYMB12 /* @_calloc */
+%token SYMB13 /* @_havoc */
+%token SYMB14 /* @_alloca */
+%token SYMB15 /* @_free_alloca */
+%token SYMB16 /* _ */
 
 %token TOK_EOF
 %token <string> TOK_Ident
@@ -45,7 +51,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pPointerType pBVType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pFieldVal_list pFieldVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pPointerType pBVType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pFieldVal_list pFieldVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pIntrinCall pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -93,6 +99,7 @@ open Lexing
 %type <AbsBasilIR.namedCallArg> pNamedCallArg
 %type <AbsBasilIR.namedCallArg list> pNamedCallArg_list
 %type <AbsBasilIR.callParams> pCallParams
+%type <AbsBasilIR.intrinCall> pIntrinCall
 %type <AbsBasilIR.jump> pJump
 %type <AbsBasilIR.lVar> pLVar
 %type <AbsBasilIR.lVar list> pLVar_list
@@ -189,6 +196,7 @@ open Lexing
 %type <AbsBasilIR.namedCallArg> namedCallArg
 %type <AbsBasilIR.namedCallArg list> namedCallArg_list
 %type <AbsBasilIR.callParams> callParams
+%type <AbsBasilIR.intrinCall> intrinCall
 %type <AbsBasilIR.jump> jump
 %type <AbsBasilIR.lVar> lVar
 %type <AbsBasilIR.lVar list> lVar_list
@@ -352,6 +360,8 @@ pNamedCallArg : namedCallArg TOK_EOF { $1 };
 pNamedCallArg_list : namedCallArg_list TOK_EOF { $1 };
 
 pCallParams : callParams TOK_EOF { $1 };
+
+pIntrinCall : intrinCall TOK_EOF { $1 };
 
 pJump : jump TOK_EOF { $1 };
 
@@ -589,6 +599,7 @@ stmt : KW_nop { Stmt_Nop  }
   | KW_store endian globalIdent expr2 expr intVal { Stmt_Store ($2, $3, $4, $5, $6) }
   | lVars KW_call procIdent openParen callParams closeParen { Stmt_DirectCall ($1, $3, $4, $5, $6) }
   | KW_indirect KW_call expr { Stmt_IndirectCall $3 }
+  | lVars intrinCall openParen callParams closeParen { Stmt_IntrinCall ($1, $2, $3, $4, $5) }
   | KW_assume expr { Stmt_Assume $2 }
   | KW_guard expr { Stmt_Guard $2 }
   | KW_assert expr { Stmt_Assert $2 }
@@ -655,6 +666,14 @@ namedCallArg_list : namedCallArg { (fun x -> [x]) $1 }
 
 callParams : expr_list { CallParams_Exprs $1 }
   | namedCallArg_list { CallParams_Named $1 }
+  ;
+
+intrinCall : SYMB10 { MallocCall  }
+  | SYMB11 { FreeCall  }
+  | SYMB12 { CallocCall  }
+  | SYMB13 { HavocCall  }
+  | SYMB14 { AllocaCall  }
+  | SYMB15 { FreeAllocaCall  }
   ;
 
 jump : KW_goto openParen blockIdent_list closeParen { Jump_GoTo ($2, $3, $4) }
@@ -805,7 +824,7 @@ unOp : bVUnOp { UnOpBVUnOp $1 }
   ;
 
 case : expr SYMB3 expr { CaseCase ($1, $3) }
-  | SYMB10 SYMB3 expr { CaseDefault $3 }
+  | SYMB16 SYMB3 expr { CaseDefault $3 }
   ;
 
 case_list : /* empty */ { []  }

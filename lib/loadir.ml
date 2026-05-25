@@ -730,6 +730,15 @@ module BasilASTLoader = struct
           `Call
             (Instr_IndirectCall
                { target = trans_expr p_st expr; attrib = Attrib.empty }) )
+    | Stmt_IntrinCall (lvars, intrin_call, _, params, _) ->
+        let args = trans_intrin_call_rhs p_st params in
+        let p_st, lhs = trans_intrin_lhs p_st lvars in
+        let name = trans_intrin_call_name intrin_call in
+        (p_st,
+          `Call
+            (Instr_IntrinCall { attrib = Attrib.empty; lhs; name; args}
+            )
+        )
     | Stmt_Assume expr ->
         ( p_st,
           `Stmt
@@ -765,6 +774,22 @@ module BasilASTLoader = struct
         |> List.map (function NamedCallArg1 (li, e) ->
             (unsafe_unsigil (`Local li), trans_expr e))
         |> StringMap.of_list
+    
+  and trans_intrin_call_rhs p_st (x : callParams) =
+    let trans_expr = trans_expr p_st in
+    match x with
+    | CallParams_Exprs exprs ->
+        List.map trans_expr exprs
+    | CallParams_Named nl ->
+      failwith "Named args in Intrin call"
+
+  and trans_intrin_call_name = Stmt.Intrinsic.(function
+    | MallocCall -> Malloc
+    | FreeCall -> Free
+    | CallocCall -> Calloc
+    | HavocCall -> Havoc
+    | AllocaCall -> AllocStack
+    | FreeAllocaCall -> FreeStack)
 
   and trans_intrin_lhs prog (x : lVars) : load_st * Var.t list =
     let vars : Var.t list =

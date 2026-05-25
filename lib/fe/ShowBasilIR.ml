@@ -176,6 +176,7 @@ and showStmt (e : AbsBasilIR.stmt) : showable = match e with
   |    AbsBasilIR.Stmt_Store (endian, globalident, expr0, expr, intval) -> s2s "Stmt_Store" >> c2s ' ' >> c2s '(' >> showEndian endian  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showIntVal intval >> c2s ')'
   |    AbsBasilIR.Stmt_DirectCall (lvars, procident, openparen, callparams, closeparen) -> s2s "Stmt_DirectCall" >> c2s ' ' >> c2s '(' >> showLVars lvars  >> s2s ", " >>  showProcIdent procident  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showCallParams callparams  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Stmt_IndirectCall expr -> s2s "Stmt_IndirectCall" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
+  |    AbsBasilIR.Stmt_IntrinCall (lvars, intrincall, openparen, callparams, closeparen) -> s2s "Stmt_IntrinCall" >> c2s ' ' >> c2s '(' >> showLVars lvars  >> s2s ", " >>  showIntrinCall intrincall  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showCallParams callparams  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Stmt_Assume expr -> s2s "Stmt_Assume" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Stmt_Guard expr -> s2s "Stmt_Guard" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
   |    AbsBasilIR.Stmt_Assert expr -> s2s "Stmt_Assert" >> c2s ' ' >> c2s '(' >> showExpr expr >> c2s ')'
@@ -224,6 +225,15 @@ and showNamedCallArg (e : AbsBasilIR.namedCallArg) : showable = match e with
 and showCallParams (e : AbsBasilIR.callParams) : showable = match e with
        AbsBasilIR.CallParams_Exprs exprs -> s2s "CallParams_Exprs" >> c2s ' ' >> c2s '(' >> showList showExpr exprs >> c2s ')'
   |    AbsBasilIR.CallParams_Named namedcallargs -> s2s "CallParams_Named" >> c2s ' ' >> c2s '(' >> showList showNamedCallArg namedcallargs >> c2s ')'
+
+
+and showIntrinCall (e : AbsBasilIR.intrinCall) : showable = match e with
+       AbsBasilIR.MallocCall  -> s2s "MallocCall"
+  |    AbsBasilIR.FreeCall  -> s2s "FreeCall"
+  |    AbsBasilIR.CallocCall  -> s2s "CallocCall"
+  |    AbsBasilIR.HavocCall  -> s2s "HavocCall"
+  |    AbsBasilIR.AllocaCall  -> s2s "AllocaCall"
+  |    AbsBasilIR.FreeAllocaCall  -> s2s "FreeAllocaCall"
 
 
 and showJump (e : AbsBasilIR.jump) : showable = match e with

@@ -199,6 +199,7 @@ and transStmt (x : stmt) : result = match x with
   | Stmt_Store (endian, globalident, expr0, expr, intval) -> failure x
   | Stmt_DirectCall (lvars, procident, openparen, callparams, closeparen) -> failure x
   | Stmt_IndirectCall expr -> failure x
+  | Stmt_IntrinCall (lvars, intrincall, openparen, callparams, closeparen) -> failure x
   | Stmt_Assume expr -> failure x
   | Stmt_Guard expr -> failure x
   | Stmt_Assert expr -> failure x
@@ -247,6 +248,15 @@ and transNamedCallArg (x : namedCallArg) : result = match x with
 and transCallParams (x : callParams) : result = match x with
     CallParams_Exprs exprs -> failure x
   | CallParams_Named namedcallargs -> failure x
+
+
+and transIntrinCall (x : intrinCall) : result = match x with
+    MallocCall  -> failure x
+  | FreeCall  -> failure x
+  | CallocCall  -> failure x
+  | HavocCall  -> failure x
+  | AllocaCall  -> failure x
+  | FreeAllocaCall  -> failure x
 
 
 and transJump (x : jump) : result = match x with
