@@ -766,14 +766,6 @@ module BasilASTLoader = struct
             (unsafe_unsigil (`Local li), trans_expr e))
         |> StringMap.of_list
     
-  and trans_intrin_call_rhs p_st (x : callParams) =
-    let trans_expr = trans_expr p_st in
-    match x with
-    | CallParams_Exprs exprs ->
-        List.map trans_expr exprs
-    | CallParams_Named nl ->
-      failwith "Named args in Intrin call"
-
   and trans_intrin_lhs prog (x : lVars) : load_st * Var.t list =
     let vars : Var.t list =
       match x with
