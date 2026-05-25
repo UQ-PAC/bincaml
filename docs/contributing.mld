@@ -256,7 +256,7 @@ git submodule update --init --depth 1
 v}
 
 If you are developing with SSH git access, update the examples remote to make
-uplaoding examples easier
+uploading examples easier
 
 {v
 cd examples && git remote set-url origin git@github.com:UQ-PAC/bincaml-test.git
