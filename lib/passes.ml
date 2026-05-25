@@ -16,11 +16,22 @@ module Invariants = struct
     | DSA
     | Params
         (** TODO: there is a "simple" parameter form then there is a reduced
-            param form presuming ABI. *)
+            param form presuming ABI. do we care? which to use? *)
     | ReducibleLoops
         (** All loops are reducible. That is, there are no {i irreducible}
             loops. *)
-  [@@deriving show, eq, ord]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  let read s =
+    match s with
+    | "SSA" -> SSA
+    | "DSA" -> DSA
+    | "Params" -> Params
+    | "ReducibleLoops" -> ReducibleLoops
+    | _ ->
+        failwith (Printf.sprintf "cannot parse string into Invariants.t: %s" s)
+
+  let show_list xs = "[" ^ CCString.concat ", " (List.map show xs) ^ "]"
 
   open struct
     (** Unions the two invariant lists. *)
@@ -60,7 +71,7 @@ module Invariants = struct
       @@ Printf.sprintf
            "invariant config has overlapping 'invalidates' and 'establishes': \
             %s"
-           (CCString.concat "," (List.map show overlap));
+           (show_list overlap);
     { presupposes; establishes; invalidates }
 
   let empty = make ()
@@ -83,6 +94,31 @@ module Invariants = struct
       from each list using the given function. The extracted invariant configs
       are composed in {!sequence}. *)
   let from_list f xs = List.fold_left sequence empty (List.map f xs)
+
+  (** Applies the given invariant config to the given current invariant state,
+      emitting a warning if the necessary invariants are not satisfied. *)
+  let apply ~msg ~config x =
+    let unsatisfied = config.presupposes --- x in
+    if not (List.is_empty unsatisfied) then
+      Logs.warn (fun m ->
+          m "Invariants not satisfied during '%s'. Needs %s but only have %s."
+            msg
+            (show_list config.presupposes)
+            (show_list x));
+    x +++ config.establishes --- config.invalidates
+
+  let of_attrib attrib_map =
+    let attrib = StringMap.find_opt "invariants" attrib_map in
+    match attrib with
+    | Some (`List xs) ->
+        xs
+        |> List.filter_map (function `String x -> Some x | _ -> None)
+        |> List.map read
+    | _ -> []
+
+  let to_attrib xs : Attrib.attrib_map =
+    let vals = List.map (fun x -> `String (show x)) xs in
+    StringMap.singleton "invariants" (`List vals)
 end
 
 (** TODO: pass program to procedure-local passes
@@ -541,7 +577,14 @@ module PassManager = struct
   let rec run_transform (p : Program.t) (tf : pass) =
     Trace_core.with_span ~__FILE__ ~__LINE__ ("transform-prog::" ^ tf.name)
     @@ fun _ ->
-    match tf.apply with
+    (* Running {!Invariants.apply} here will log the invariant violation
+       before the transform runs (and possibly errors) .*)
+    let pre_invs = Invariants.of_attrib (Program.attrib p) in
+    let post_invs =
+      Invariants.apply ~msg:tf.name ~config:tf.invariants pre_invs
+    in
+
+    begin match tf.apply with
     | Prog fn ->
         let p = fn p in
         Program.procs p
@@ -595,6 +638,12 @@ module PassManager = struct
             with Lang.Check.IRWellformed e ->
               raise @@ Lang.Check.IRWellformed (tf.name ^ ": " ^ e))
           p
+    end
+    |> fun (p : Program.t) ->
+    Program.set_attrib
+      (Attrib.merge_map_shadow (Program.attrib p)
+         (Invariants.to_attrib post_invs))
+      p
 
   let construct_batch (s : t) (passes : string list) =
     List.map (fun p -> StringMap.find p s.avail) passes
