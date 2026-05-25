@@ -133,14 +133,14 @@
      R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
      R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64);
     modifies $mem_encoding, $mem, $stack;
-    ensures (forall 
+    ensures {:msg "Memory Error: Memory Leak"} (forall 
      i: bv64 :: 
       
      ($me_addr_is_heap($mem_encoding, i) ==> ($me_alloc_live(
          $mem_encoding,
          $me_addr_alloc($mem_encoding, i)
        ) != 1bv2)));
-    requires $me_init_encoding($mem_encoding);
+    requires  $me_init_encoding($mem_encoding);
   implementation p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
    R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
    R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64) {
@@ -162,7 +162,11 @@
           bvadd_bv64(R31_in, 18446744073709551592bv64),
           R30_in
         );
-      assert $me_valid_access($mem_encoding, 131088bv64, 8bv64);
+      assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
+        $mem_encoding,
+        131088bv64,
+        8bv64
+      );
       Exp14__5_2_1 := load64_le($mem, 131088bv64);
       assert true;
       call R0_3 := p$malloc(1bv64);
@@ -177,13 +181,21 @@
           $stack,
           bvadd_bv64(R31_in, 18446744073709551608bv64)
         );
-      assert $me_valid_access($mem_encoding, Exp14__5_21_1, 1bv64);
+      assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
+        $mem_encoding,
+        Exp14__5_21_1,
+        1bv64
+      );
       $mem := store8_le($mem, Exp14__5_21_1, 121bv8);
       Exp14__5_22_1 := load64_le(
           $stack,
           bvadd_bv64(R31_in, 18446744073709551608bv64)
         );
-      assert $me_valid_access($mem_encoding, 131112bv64, 8bv64);
+      assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
+        $mem_encoding,
+        131112bv64,
+        8bv64
+      );
       Exp14__5_1_1 := load64_le($mem, 131112bv64);
       assert true;
       call p$#free(Exp14__5_22_1);
@@ -205,20 +217,26 @@
   }
   procedure p$malloc(R0_in: bv64) returns (R0_out: bv64);
     modifies $mem_encoding, $mem, $stack;
-    ensures $me_can_allocate(old($mem_encoding), R0_out, R0_in);
-    ensures ($me_addr_offset($mem_encoding, R0_out) == 0bv64);
-    ensures ($me_alloc_base($mem_encoding, $me_addr_alloc($mem_encoding, R0_out)) == R0_out);
-    ensures ($mem_encoding == $me_allocate(old($mem_encoding), R0_out, R0_in));
+    ensures  $me_can_allocate(old($mem_encoding), R0_out, R0_in);
+    ensures  ($me_addr_offset($mem_encoding, R0_out) == 0bv64);
+    ensures  ($me_alloc_base($mem_encoding, $me_addr_alloc($mem_encoding, R0_out)) == R0_out);
+    ensures  ($mem_encoding == $me_allocate(old($mem_encoding), R0_out, R0_in));
   procedure p$#free(R0_in: bv64);
     modifies $mem_encoding, $mem, $stack;
-    ensures ($mem_encoding == $me_alloc_live_update(
+    ensures {:msg "Memory Error: Invalid Free"} ($mem_encoding == $me_alloc_live_update(
        old($mem_encoding),
        $me_addr_alloc(old($mem_encoding), R0_in),
        2bv2
      ));
-    requires $me_addr_is_heap($mem_encoding, R0_in);
-    requires (0bv64 == $me_addr_offset($mem_encoding, R0_in));
-    requires ($me_alloc_live($mem_encoding, $me_addr_alloc($mem_encoding, R0_in)) == 1bv2);
+    requires  $me_addr_is_heap($mem_encoding, R0_in);
+    requires {:msg "Memory Error: Invalid Free (not base address)"} (0bv64 == $me_addr_offset(
+       $mem_encoding,
+       R0_in
+     ));
+    requires {:msg "Memory Error: Invalid Free (object not live)"} ($me_alloc_live(
+       $mem_encoding,
+       $me_addr_alloc($mem_encoding, R0_in)
+     ) == 1bv2);
 
   $ boogie ./good.bpl
   
@@ -349,14 +367,14 @@
      R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
      R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64);
     modifies $mem_encoding, $mem, $stack;
-    ensures (forall 
+    ensures {:msg "Memory Error: Memory Leak"} (forall 
      i: bv64 :: 
       
      ($me_addr_is_heap($mem_encoding, i) ==> ($me_alloc_live(
          $mem_encoding,
          $me_addr_alloc($mem_encoding, i)
        ) != 1bv2)));
-    requires $me_init_encoding($mem_encoding);
+    requires  $me_init_encoding($mem_encoding);
   implementation p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
    R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
    R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64) {
@@ -378,7 +396,11 @@
           bvadd_bv64(R31_in, 18446744073709551592bv64),
           R30_in
         );
-      assert $me_valid_access($mem_encoding, 131088bv64, 8bv64);
+      assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
+        $mem_encoding,
+        131088bv64,
+        8bv64
+      );
       Exp14__5_2_1 := load64_le($mem, 131088bv64);
       assert true;
       call R0_3 := p$malloc(1bv64);
@@ -393,7 +415,7 @@
           $stack,
           bvadd_bv64(R31_in, 18446744073709551608bv64)
         );
-      assert $me_valid_access(
+      assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
         $mem_encoding,
         bvadd_bv64(Exp14__5_21_1, 7bv64),
         1bv64
@@ -403,7 +425,11 @@
           $stack,
           bvadd_bv64(R31_in, 18446744073709551608bv64)
         );
-      assert $me_valid_access($mem_encoding, 131112bv64, 8bv64);
+      assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
+        $mem_encoding,
+        131112bv64,
+        8bv64
+      );
       Exp14__5_1_1 := load64_le($mem, 131112bv64);
       assert true;
       call p$#free(Exp14__5_22_1);
@@ -425,23 +451,29 @@
   }
   procedure p$malloc(R0_in: bv64) returns (R0_out: bv64);
     modifies $mem_encoding, $mem, $stack;
-    ensures $me_can_allocate(old($mem_encoding), R0_out, R0_in);
-    ensures ($me_addr_offset($mem_encoding, R0_out) == 0bv64);
-    ensures ($me_alloc_base($mem_encoding, $me_addr_alloc($mem_encoding, R0_out)) == R0_out);
-    ensures ($mem_encoding == $me_allocate(old($mem_encoding), R0_out, R0_in));
+    ensures  $me_can_allocate(old($mem_encoding), R0_out, R0_in);
+    ensures  ($me_addr_offset($mem_encoding, R0_out) == 0bv64);
+    ensures  ($me_alloc_base($mem_encoding, $me_addr_alloc($mem_encoding, R0_out)) == R0_out);
+    ensures  ($mem_encoding == $me_allocate(old($mem_encoding), R0_out, R0_in));
   procedure p$#free(R0_in: bv64);
     modifies $mem_encoding, $mem, $stack;
-    ensures ($mem_encoding == $me_alloc_live_update(
+    ensures {:msg "Memory Error: Invalid Free"} ($mem_encoding == $me_alloc_live_update(
        old($mem_encoding),
        $me_addr_alloc(old($mem_encoding), R0_in),
        2bv2
      ));
-    requires $me_addr_is_heap($mem_encoding, R0_in);
-    requires (0bv64 == $me_addr_offset($mem_encoding, R0_in));
-    requires ($me_alloc_live($mem_encoding, $me_addr_alloc($mem_encoding, R0_in)) == 1bv2);
+    requires  $me_addr_is_heap($mem_encoding, R0_in);
+    requires {:msg "Memory Error: Invalid Free (not base address)"} (0bv64 == $me_addr_offset(
+       $mem_encoding,
+       R0_in
+     ));
+    requires {:msg "Memory Error: Invalid Free (object not live)"} ($me_alloc_live(
+       $mem_encoding,
+       $me_addr_alloc($mem_encoding, R0_in)
+     ) == 1bv2);
 
   $ boogie ./bad.bpl
-  ./bad.bpl(169,5): Error: this assertion could not be proved
+  Memory Error: Invalid Access
   Execution trace:
       ./bad.bpl(143,3): b#main_entry
   
