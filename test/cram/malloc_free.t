@@ -109,9 +109,6 @@
      ++
      #memory[bvadd_bv64(#index, 0bv64)]): bv64
   }
-  function {:define } {:extern } store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
-    #memory[#index := #value[8:0]]
-  }
   function {:define } {:extern } store64_le(#memory: [bv64]bv8, #index: bv64, #value: bv64) returns ([bv64]bv8) {
     #memory[#index := #value[8:0]][bvadd_bv64(#index, 1bv64) := #value[16:8]][bvadd_bv64(
       #index,
@@ -123,6 +120,9 @@
       #index,
       6bv64
     ) := #value[56:48]][bvadd_bv64(#index, 7bv64) := #value[64:56]]
+  }
+  function {:define } {:extern } store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
+    #memory[#index := #value[8:0]]
   }
   function {:bvbuiltin "bvadd"} {:extern } bvadd_bv64(bv64, bv64) returns (bv64);
   function {:bvbuiltin "bvand"} {:extern } bvand_bv64(bv64, bv64) returns (bv64);
@@ -325,9 +325,6 @@
      ++
      #memory[bvadd_bv64(#index, 0bv64)]): bv64
   }
-  function {:define } {:extern } store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
-    #memory[#index := #value[8:0]]
-  }
   function {:define } {:extern } store64_le(#memory: [bv64]bv8, #index: bv64, #value: bv64) returns ([bv64]bv8) {
     #memory[#index := #value[8:0]][bvadd_bv64(#index, 1bv64) := #value[16:8]][bvadd_bv64(
       #index,
@@ -339,6 +336,9 @@
       #index,
       6bv64
     ) := #value[56:48]][bvadd_bv64(#index, 7bv64) := #value[64:56]]
+  }
+  function {:define } {:extern } store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
+    #memory[#index := #value[8:0]]
   }
   function {:bvbuiltin "bvadd"} {:extern } bvadd_bv64(bv64, bv64) returns (bv64);
   function {:bvbuiltin "bvand"} {:extern } bvand_bv64(bv64, bv64) returns (bv64);

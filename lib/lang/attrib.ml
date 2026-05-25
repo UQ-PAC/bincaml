@@ -45,15 +45,34 @@ type attrib_map = t StringMap.t [@@deriving eq, ord]
 let empty : attrib_map = StringMap.empty
 
 type loc = int * int
+(** a text token range; beginchar, endchar*)
 
 let attr_of_loc l =
   let s, e = l in
   StringMap.singleton location_key (`List [ `CamlInt s; `CamlInt e ])
 
+let join_range (a, b) (c, d) =
+  (List.fold_left min a [ b; c; d ], List.fold_left max a [ b; c; d ])
+
 let loc_of_attr l =
   match l with
   | `List [ `CamlInt s; `CamlInt e ] -> (s, e)
   | _ -> failwith "bad structure"
+
+let join_map_locs (a : attrib_map) (b : attrib_map) =
+  StringMap.merge
+    (fun k l r ->
+      match (l, r) with
+      | ( Some (`List [ `CamlInt a; `CamlInt b ]),
+          Some (`List [ `CamlInt c; `CamlInt d ]) )
+        when String.equal k location_key ->
+          Some
+            (let a, b = join_range (a, b) (c, d) in
+             `List [ `CamlInt a; `CamlInt b ])
+      | _, Some a -> Some a
+      | Some a, None -> Some a
+      | None, None -> None)
+    a b
 
 let merge_map_shadow (a : attrib_map) (b : attrib_map) =
   StringMap.merge
