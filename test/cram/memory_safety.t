@@ -38,6 +38,3 @@
   Boogie program verifier finished with 1 verified, 5 errors
 
 
-  $ diff after.il after2.il
-  diff: after2.il: No such file or directory
-  [2]
