@@ -83,7 +83,9 @@ jobs:
     container: ghcr.io/agle/bincaml-ci-containers/ci-doc-5.3:latest
     steps:
       - uses: actions/checkout@v6
-      - run: opam exec -- dune build @fmt --display=quiet
+        with:
+          path: 'co'
+      - run: cd co && opam exec -- dune build @fmt --display=quiet
 
   lint-opam:
     name: lint-opam
