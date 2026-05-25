@@ -1,9 +1,7 @@
-
 (library
- (public_name 
-  bincaml.gtirb.capstone
-  )
+ (public_name bincaml.gtirb.capstone)
  (name capstone)
- (foreign_stubs (language c) (names capst))
- (c_library_flags -lcapstone)
- )
+ (foreign_stubs
+  (language c)
+  (names capst))
+ (c_library_flags -lcapstone))
