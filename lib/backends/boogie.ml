@@ -406,22 +406,24 @@ let pretty_modifies (p : Program.proc) =
     ]
 
 let pretty_expr_attribs e =
+  let open Containers_pp in
   let attrib = Expr.AbstractExpr.get_attrib @@ Expr.BasilExpr.unfix e in
-  pretty_attribute_map ".boogie" attrib
+  if StringMap.mem ".boogie" attrib then
+  sp ^ pretty_attribute_map ".boogie" attrib else text ""
 
 let pretty_ensures (p : Program.proc) =
   let open Containers_pp in
   let spec = Procedure.specification p in
   spec.ensures
   |> List.map (fun s ->
-      text "ensures" ^+ pretty_expr_attribs s ^+ pretty_expr s)
+      text "ensures" ^ pretty_expr_attribs s ^+ pretty_expr s)
 
 let pretty_requires (p : Program.proc) =
   let open Containers_pp in
   let spec = Procedure.specification p in
   spec.requires
   |> List.map (fun s ->
-      text "requires" ^+ pretty_expr_attribs s ^+ pretty_expr s)
+      text "requires" ^ pretty_expr_attribs s ^+ pretty_expr s)
 
 let pretty_procedure_spec (p : Program.proc) =
   let open Containers_pp in
