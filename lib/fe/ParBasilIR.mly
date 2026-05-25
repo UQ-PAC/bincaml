@@ -599,7 +599,7 @@ stmt : KW_nop { Stmt_Nop  }
   | KW_store endian globalIdent expr2 expr intVal { Stmt_Store ($2, $3, $4, $5, $6) }
   | lVars KW_call procIdent openParen callParams closeParen { Stmt_DirectCall ($1, $3, $4, $5, $6) }
   | KW_indirect KW_call expr { Stmt_IndirectCall $3 }
-  | lVars intrinCall openParen callParams closeParen { Stmt_IntrinCall ($1, $2, $3, $4, $5) }
+  | lVars KW_call intrinCall openParen callParams closeParen { Stmt_IntrinCall ($1, $3, $4, $5, $6) }
   | KW_assume expr { Stmt_Assume $2 }
   | KW_guard expr { Stmt_Guard $2 }
   | KW_assert expr { Stmt_Assert $2 }

@@ -27,15 +27,16 @@ module Intrinsic = struct
     | "@_free_alloca" -> Some FreeStack
     | _ -> None
 
-  let pretty e =
-    (match e with
-      | Havoc -> "@_havoc"
-      | Malloc -> "@_malloc"
-      | Calloc -> "@_calloc"
-      | Free -> "@_free"
-      | AllocStack -> "@_allcoa"
-      | FreeStack -> "@_free_alloca")
-    |> Containers_pp.text
+  let to_string e =
+    match e with
+    | Havoc -> "@_havoc"
+    | Malloc -> "@_malloc"
+    | Calloc -> "@_calloc"
+    | Free -> "@_free"
+    | AllocStack -> "@_allcoa"
+    | FreeStack -> "@_free_alloca"
+
+  let pretty = Containers_pp.text % to_string
 end
 
 let show_endian = function `Big -> "be" | `Little -> "le"

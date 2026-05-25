@@ -283,7 +283,7 @@ and prtStmt (i:int) (e : AbsBasilIR.stmt) : doc = match e with
   |    AbsBasilIR.Stmt_Store (endian, globalident, expr1, expr2, intval) -> prPrec i 0 (concatD [render "store" ; prtEndian 0 endian ; prtGlobalIdent 0 globalident ; prtExpr 2 expr1 ; prtExpr 0 expr2 ; prtIntVal 0 intval])
   |    AbsBasilIR.Stmt_DirectCall (lvars, procident, openparen, callparams, closeparen) -> prPrec i 0 (concatD [prtLVars 0 lvars ; render "call" ; prtProcIdent 0 procident ; prtOpenParen 0 openparen ; prtCallParams 0 callparams ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Stmt_IndirectCall expr -> prPrec i 0 (concatD [render "indirect" ; render "call" ; prtExpr 0 expr])
-  |    AbsBasilIR.Stmt_IntrinCall (lvars, intrincall, openparen, callparams, closeparen) -> prPrec i 0 (concatD [prtLVars 0 lvars ; prtIntrinCall 0 intrincall ; prtOpenParen 0 openparen ; prtCallParams 0 callparams ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.Stmt_IntrinCall (lvars, intrincall, openparen, callparams, closeparen) -> prPrec i 0 (concatD [prtLVars 0 lvars ; render "call" ; prtIntrinCall 0 intrincall ; prtOpenParen 0 openparen ; prtCallParams 0 callparams ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Stmt_Assume expr -> prPrec i 0 (concatD [render "assume" ; prtExpr 0 expr])
   |    AbsBasilIR.Stmt_Guard expr -> prPrec i 0 (concatD [render "guard" ; prtExpr 0 expr])
   |    AbsBasilIR.Stmt_Assert expr -> prPrec i 0 (concatD [render "assert" ; prtExpr 0 expr])

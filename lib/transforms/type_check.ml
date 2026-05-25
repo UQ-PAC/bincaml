@@ -263,6 +263,51 @@ let type_check stmt_id block_id expr =
   in
   BasilExpr.cata type_error_alg expr
 
+let check_intrin_call (intrin_call : Stmt.Intrinsic.t) args params =
+  Stmt.Intrinsic.(
+    match intrin_call with
+    | Havoc ->
+        List.fold_left2
+          (fun err lhs rhs ->
+            if Types.equal (Var.typ lhs) (BasilExpr.type_of rhs) then err
+            else TypeError { text = "Type of lhs != rhs in Havoc call" } :: err)
+          [] args params
+    | Malloc | AllocStack | Calloc -> (
+        match (args, params) with
+        | [ size ], [ ptr ] ->
+            let err =
+              if Types.leq (Bitvector 64) (BasilExpr.type_of ptr) then []
+              else
+                [
+                  TypeError
+                    { text = "Wrong type of arg in " ^ to_string intrin_call };
+                ]
+            in
+            if Types.equal (Bitvector 64) (Var.typ size) then err
+            else
+              TypeError
+                { text = "Wrong type of arg in " ^ to_string intrin_call }
+              :: err
+        | _ ->
+            [
+              TypeError
+                { text = "Wrong amount of args in " ^ to_string intrin_call };
+            ])
+    | Free | FreeStack -> (
+        match (args, params) with
+        | [ ptr ], [] ->
+            if Types.leq (Bitvector 64) (Var.typ ptr) then []
+            else
+              [
+                TypeError
+                  { text = "Wrong type of arg in " ^ to_string intrin_call };
+              ]
+        | _ ->
+            [
+              TypeError
+                { text = "Wrong amount of args in " ^ to_string intrin_call };
+            ]))
+
 let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
   let type_err fmt = type_err fmt stmt_id block_id in
   let expect_equal msg a b (s : type_error list) =
@@ -273,7 +318,6 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
   in
   let type_check = type_check stmt_id block_id in
   match stmt with
-  | Stmt.Instr_IntrinCall _ -> []
   | Stmt.Instr_Assign { al } ->
       al
       |> List.fold_left
@@ -386,6 +430,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
              output)
       in
       params_check
+  | Stmt.Instr_IntrinCall { name; lhs; args } -> check_intrin_call name lhs args
 
 let check_block prog (id, b) =
   Block.stmts_iter b
