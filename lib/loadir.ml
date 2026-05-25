@@ -765,7 +765,7 @@ module BasilASTLoader = struct
         |> List.map (function NamedCallArg1 (li, e) ->
             (unsafe_unsigil (`Local li), trans_expr e))
         |> StringMap.of_list
-    
+
   and trans_intrin_lhs prog (x : lVars) : load_st * Var.t list =
     let vars : Var.t list =
       match x with

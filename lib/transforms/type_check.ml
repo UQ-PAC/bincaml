@@ -293,7 +293,7 @@ let check_intrin_call (intrin_call : Stmt.Intrinsic.t) args params =
             ])
     | Free | FreeStack -> (
         match (args, params) with
-        | [ ptr ], [ ] ->
+        | [ ptr ], [] ->
             if Types.leq (Bitvector 64) (Var.typ ptr) then []
             else
               [

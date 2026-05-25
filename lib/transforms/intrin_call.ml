@@ -26,11 +26,15 @@ let transform_proc proc prog =
                   .modifies_globs
             in
             let lhs =
-              StringMap.filter (fun name _ -> String.starts_with name ~prefix:"R0") lhs
+              StringMap.filter
+                (fun name _ -> String.starts_with name ~prefix:"R0")
+                lhs
               |> StringMap.values |> List.of_iter
             in
             let args =
-              StringMap.filter (fun name _ -> String.starts_with name ~prefix:"R0") args
+              StringMap.filter
+                (fun name _ -> String.starts_with name ~prefix:"R0")
+                args
               |> StringMap.values |> List.of_iter
             in
             Iter.doubleton
