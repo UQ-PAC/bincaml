@@ -206,7 +206,7 @@ module PassManager = struct
       name = "irreducible-loops";
       apply = Proc Transforms.Irreducible_loop.transform;
       doc = "Remove blocks unreachable from entry";
-      invariants = Invariants.needs [];
+      invariants = Invariants.needs [] ~establishes:[ ReducibleLoops ];
     }
 
   let full_ssa =
