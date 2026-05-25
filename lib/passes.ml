@@ -7,8 +7,14 @@ open Bincaml_util.Logger
     TODO: structured errors for checks *)
 
 module PassManager = struct
-
   type invariant = SSA | DSA | Params [@@deriving show]
+
+  type invariants = {
+    presupposes : invariant list;
+    establishes : invariant list;
+    invalidates : invariant list;
+  }
+  [@@deriving show]
 
   type transform =
     | Prog of (Program.t -> Program.t)
@@ -22,7 +28,12 @@ module PassManager = struct
     | DFGAnalysis of (module Analysis.Dataflow_graph.AnalysisType)
         (** Run an analysis over SSA-form DSG and print output *)
 
-  and pass = { name : string; apply : transform; doc : string; establishes : invariant list; invalidates: invariant list }
+  and pass = {
+    name : string;
+    apply : transform;
+    doc : string;
+    invariants : invariants;
+  }
 
   type t = { avail : pass StringMap.t }
 
