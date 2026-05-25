@@ -4,7 +4,7 @@
   > (dump-il gtirb-output.il)
   > (dump-il)
   > (load-il gtirb-output.il)
-  warning: here-document at line 1 delimited by end-of-file (wanted `EOF')
+  > EOF
   (load-gtirb ../../examples/binsearch_sqrt.gtirb)
   (dump-il gtirb-output.il)
   (dump-il)
