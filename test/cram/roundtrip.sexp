@@ -16,3 +16,6 @@
 (dump-il "ptrrec2.il")
 (load-il "ptrrec2.il")
 (dump-il "ptrrec3.il")
+
+(load-il "intrin_before.il")
+(dump-il "intrin_after.il")

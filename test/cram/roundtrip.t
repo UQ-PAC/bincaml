@@ -16,6 +16,8 @@
   (dump-il ptrrec2.il)
   (load-il ptrrec2.il)
   (dump-il ptrrec3.il)
+  (load-il intrin_before.il)
+  (dump-il intrin_after.il)
 
 The serialise -> parse serialise loop should be idempotent
 
@@ -84,6 +86,12 @@ Record and Pointer
   [1]
   $ diff ptrrec2.il ptrrec3.il
 
+Intrin Calls
+
+  $ diff intrin_before.il intrin_after.il
+  6a7
+  >   
+  [1]
 
 Examples Directory
 

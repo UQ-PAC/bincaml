@@ -23,7 +23,7 @@ module Intrinsic = struct
     | "@_malloc" -> Some Malloc
     | "@_calloc" -> Some Calloc
     | "@_free" -> Some Free
-    | "@_allcoa" -> Some AllocStack
+    | "@_alloca" -> Some AllocStack
     | "@_free_alloca" -> Some FreeStack
     | _ -> None
 
@@ -33,7 +33,7 @@ module Intrinsic = struct
     | Malloc -> "@_malloc"
     | Calloc -> "@_calloc"
     | Free -> "@_free"
-    | AllocStack -> "@_allcoa"
+    | AllocStack -> "@_alloca"
     | FreeStack -> "@_free_alloca"
 
   let pretty = Containers_pp.text % to_string
