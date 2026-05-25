@@ -319,7 +319,8 @@ let pretty_statement (s : Program.stmt) =
         ls >|= compose snd pretty_expr |> fill (text "," ^ newline_or_spaces 1)
       in
       nest 2 @@ lhs ^+ text ":=" ^+ rhs
-  | Instr_Assert { body } -> text "assert" ^+ pretty_expr body
+  | Instr_Assert { attrib; body } ->
+      text "assert" ^ pretty_attribute_map ".boogie" attrib ^+ pretty_expr body
   | Instr_Assume { body; branch } -> text "assume" ^+ pretty_expr body
   | Instr_Call { lhs; procid; args } ->
       let name = ID.name procid in
@@ -404,17 +405,25 @@ let pretty_modifies (p : Program.proc) =
          |> fill (text "," ^ sp));
     ]
 
+let pretty_expr_attribs e =
+  let open Containers_pp in
+  let attrib = Expr.AbstractExpr.get_attrib @@ Expr.BasilExpr.unfix e in
+  if StringMap.mem ".boogie" attrib then
+    sp ^ pretty_attribute_map ".boogie" attrib
+  else text ""
+
 let pretty_ensures (p : Program.proc) =
   let open Containers_pp in
   let spec = Procedure.specification p in
-  spec.ensures |> List.map pretty_expr
-  |> List.map (fun s -> text "ensures" ^+ s)
+  spec.ensures
+  |> List.map (fun s -> text "ensures" ^ pretty_expr_attribs s ^+ pretty_expr s)
 
 let pretty_requires (p : Program.proc) =
   let open Containers_pp in
   let spec = Procedure.specification p in
-  spec.requires |> List.map pretty_expr
-  |> List.map (fun s -> text "requires" ^+ s)
+  spec.requires
+  |> List.map (fun s ->
+      text "requires" ^ pretty_expr_attribs s ^+ pretty_expr s)
 
 let pretty_procedure_spec (p : Program.proc) =
   let open Containers_pp in
