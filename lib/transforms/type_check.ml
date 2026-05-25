@@ -266,12 +266,10 @@ let type_check stmt_id block_id expr =
 let check_intrin_call (intrin_call : Stmt.Intrinsic.t) args params =
   Stmt.Intrinsic.(
     match intrin_call with
-    | Havoc ->
-        List.fold_left2
-          (fun err lhs rhs ->
-            if Types.equal (Var.typ lhs) (BasilExpr.type_of rhs) then err
-            else TypeError { text = "Type of lhs != rhs in Havoc call" } :: err)
-          [] args params
+    | Havoc -> (
+        match params with
+        | [] -> []
+        | _ -> [ TypeError { text = "Havoc should not have args" } ])
     | Malloc | AllocStack | Calloc -> (
         match (args, params) with
         | [ size ], [ ptr ] ->

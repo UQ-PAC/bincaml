@@ -290,6 +290,14 @@ module PassManager = struct
          cleaning stack address uses. Assumes SSA.";
     }
 
+  let intrin_call =
+    {
+      name = "intrin-call";
+      apply = Prog Transforms.Intrin_call.transform;
+      doc =
+        "Replaces special calls like malloc and free with intrin calls instead";
+    }
+
   let simp =
     {
       name = "simplify";
