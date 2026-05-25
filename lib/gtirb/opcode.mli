@@ -2,6 +2,8 @@ open Bincaml_util.Common
 
 type t
 
+val to_int : t -> Int32.t
+
 val to_hex_string : t -> string
 (** Convert to hex string format [0xffffffff] *)
 
