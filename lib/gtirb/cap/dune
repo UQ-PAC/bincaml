@@ -1,8 +1,0 @@
-(library
- (public_name bincaml.gtirb.capstone)
- (name capstone)
- (foreign_stubs
-  (language c)
-  (include_dirs include)
-  (names capst))
- (c_library_flags -lcapstone))
