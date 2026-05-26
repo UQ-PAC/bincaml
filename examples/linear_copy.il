@@ -1,4 +1,4 @@
-prog entry @main;
+prog entry @main { .invariants = ["SSA"] } ;
 
 proc @main(a:bv64, x:bool) -> ()
 [

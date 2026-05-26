@@ -1,7 +1,7 @@
 memory shared $mem : (bv64 -> bv8);
 memory $stack : (bv64 -> bv8);
 
-prog entry @main_4196164;
+prog entry @main_4196164 { .invariants = ["NoPhis"; "Params"] };
 
 proc @main_4196164
   (R0_in:bv64, R1_in:bv64, R30_in:bv64, R31_in:bv64, _PC_in:bv64)

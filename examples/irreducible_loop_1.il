@@ -10,7 +10,7 @@ var $R31: bv64;
 var $VF: bv1;
 var $ZF: bv1;
 
-prog entry @main_1876;
+prog entry @main_1876 {.invariants = ["NoPhis"]};
 
 proc @main_1876 () -> ()
   { .name = "main"; .address = 0x754; .returnBlock = "main_basil_return_1" }

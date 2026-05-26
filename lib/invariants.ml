@@ -12,8 +12,10 @@ open Lang.Common
 type t =
   | SSA
   | DSA
+  | NoPhis
   | Params
   | LambdaLift
+  | MemoryEncoding
   | ReducibleLoops
       (** All loops are reducible. That is, there are no {i irreducible} loops.
       *)
@@ -24,9 +26,11 @@ let read s =
   match s with
   | "SSA" -> SSA
   | "DSA" -> DSA
+  | "NoPhis" -> NoPhis
   | "Params" -> Params
   | "LambdaLift" -> LambdaLift
   | "ReducibleLoops" -> ReducibleLoops
+  | "MemoryEncoding" -> MemoryEncoding
   | _ -> failwith (Printf.sprintf "cannot parse string into Invariants.t: %s" s)
 
 let show_list xs = "[" ^ CCString.concat ", " (List.map show xs) ^ "]"
@@ -104,7 +108,7 @@ let apply ~msg ~config x =
   x +++ config.establishes --- config.invalidates
 
 let of_attrib (attrib_map : Lang.Attrib.attrib_map) =
-  let attrib = StringMap.find_opt "invariants" attrib_map in
+  let attrib = StringMap.find_opt ".invariants" attrib_map in
   match attrib with
   | Some (`List xs) ->
       xs
@@ -114,4 +118,4 @@ let of_attrib (attrib_map : Lang.Attrib.attrib_map) =
 
 let to_attrib xs : Lang.Attrib.attrib_map =
   let vals = List.map (fun x -> `String (show x)) xs in
-  StringMap.singleton "invariants" (`List vals)
+  StringMap.singleton ".invariants" (`List vals)

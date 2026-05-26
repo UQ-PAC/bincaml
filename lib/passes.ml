@@ -28,6 +28,18 @@ module PassManager = struct
 
   type t = { avail : pass StringMap.t }
 
+  let dump_boogie out_channel =
+    {
+      name = "dump-boogie";
+      doc = "write boogie to channel";
+      invariants = Invariants.make ~presupposes:[ NoPhis ] ();
+      apply =
+        Prog
+          (fun prog ->
+            Backends.Boogie.pretty_to_chan out_channel prog;
+            prog);
+    }
+
   let sparams =
     {
       name = "simple-params";
@@ -232,7 +244,9 @@ module PassManager = struct
       name = "split-memory-encoding";
       apply = Prog Transforms.Memory_encoding.split_transform;
       doc = "Generates a split base/offset pair memory encoding/model";
-      invariants = Invariants.needs [ SSA ];
+      invariants =
+        Invariants.make ~presupposes:[ SSA ] ~invalidates:[ SSA ]
+          ~establishes:[ MemoryEncoding ] ();
     }
 
   let flat_memory_encoding =
@@ -240,7 +254,9 @@ module PassManager = struct
       name = "flat-memory-encoding";
       apply = Prog Transforms.Memory_encoding.flat_transform;
       doc = "Generates a flat (heavily quantified) memory encoding/model";
-      invariants = Invariants.needs [ SSA ];
+      invariants =
+        Invariants.make ~presupposes:[ SSA ] ~invalidates:[ SSA ]
+          ~establishes:[ MemoryEncoding ] ();
     }
 
   let memory_specification =
@@ -248,7 +264,7 @@ module PassManager = struct
       name = "memory-specification";
       apply = Prog Transforms.Memory_specification.transform;
       doc = "Specifies programs for memory safety";
-      invariants = Invariants.needs [ SSA ];
+      invariants = Invariants.needs [ MemoryEncoding ];
     }
 
   let intra_function_summaries =
@@ -285,7 +301,7 @@ module PassManager = struct
       doc =
         "Perform intra-expression simplifications and constant folding for \
          whole program";
-      invariants = Invariants.needs [ SSA ];
+      invariants = Invariants.needs [];
     }
 
   let inter_dead =
@@ -298,7 +314,7 @@ module PassManager = struct
       doc =
         "Remove store assignments to pure local variables which are never read \
          using an interprocedural analysis";
-      invariants = Invariants.needs [ SSA ];
+      invariants = Invariants.needs [ NoPhis ];
     }
 
   let linear_const =
@@ -345,6 +361,17 @@ module PassManager = struct
       invariants = Invariants.from_list (fun x -> x.invariants) batch;
     }
 
+  let flatten_phis =
+    {
+      name = "flatten-phis";
+      apply = Proc Transforms.Dsa.dsa;
+      doc =
+        "Transforms phi nodes in the program into dynamic single assignment \
+         statements.";
+      invariants =
+        Invariants.needs [] ~establishes:[ DSA; NoPhis ] ~invalidates:[ SSA ];
+    }
+
   let dynamic_single_assignment =
     {
       name = "dynamic-single-assignment";
@@ -353,11 +380,13 @@ module PassManager = struct
         "Transforms phi nodes in the program into dynamic single assignment \
          statements.";
       invariants =
-        Invariants.needs [ SSA ] ~establishes:[ DSA ] ~invalidates:[ SSA ];
+        Invariants.needs [ SSA ] ~establishes:[ DSA; NoPhis ]
+          ~invalidates:[ SSA ];
     }
 
   let passes =
     [
+      flatten_phis;
       dynamic_single_assignment;
       irreducible_loop;
       remove_unreachable_blocks;
@@ -393,7 +422,7 @@ module PassManager = struct
         doc =
           "Perform intra-expression simplifications and constant folding for \
            whole program and write smt log of rewrites to a file.";
-        invariants = Invariants.needs [ SSA ];
+        invariants = Invariants.needs [];
       };
       {
         name = "intra-dead-store-elim";
@@ -401,7 +430,7 @@ module PassManager = struct
         doc =
           "Remove store assignments to pure local variables which are never \
            read ";
-        invariants = Invariants.needs [ SSA ];
+        invariants = Invariants.needs [ NoPhis ];
       };
       remove_unused;
       {
@@ -410,7 +439,7 @@ module PassManager = struct
           Prog
             (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
-        invariants = Invariants.needs [ SSA ] ~establishes:[ LambdaLift ];
+        invariants = Invariants.establishes [ LambdaLift ];
       };
       {
         name = "gamma-vars";
