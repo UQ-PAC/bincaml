@@ -302,6 +302,9 @@ module DSGraph = struct
     assert (is_sorted node);
     assert (valid_cell_nodes node)
 
+  let unique_pointee cell =
+    match pointees cell with [] | [ _ ] -> true | _ -> false
+
   (** Collapse all cells in the node into a single cell (its interval being Top)
   *)
   let rec collapse node =
@@ -617,7 +620,8 @@ module DSGraph = struct
                 let new_pointee_node = create_new_node @@ node_of old_c' in
                 get_cell (offsets old_c') new_pointee_node)
           in
-          set_pointees pointees new_c)
+          set_pointees pointees new_c;
+          unify_pointees new_c)
     done;
     SBMap.iter (fun s n -> check_valid_node n) graph.node_map;
     List.iter
@@ -627,7 +631,8 @@ module DSGraph = struct
         | Some n' ->
             check_valid_node n';
             check_valid_node new_n;
-            join_nodes_at Z.zero n' new_n
+            join_nodes_at Z.zero n' new_n;
+            List.iter unify_pointees (cells n')
         | None ->
             check_valid_node new_n;
             graph.node_map <- SBMap.add sb new_n graph.node_map)
@@ -715,6 +720,11 @@ let make_local_graph proc sva
 
   SBMap.iter (fun s n -> DSGraph.check_valid_node n) node_map;
 
+  SBMap.iter
+    (fun s n ->
+      List.iter (fun c -> assert (DSGraph.unique_pointee c)) @@ DSGraph.cells n)
+    node_map;
+
   let (g : DSGraph.t) =
     { nodes = SBMap.values node_map |> Iter.to_list; node_map; sva }
   in
@@ -743,16 +753,31 @@ let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
      let open DSGraph in
      let* callee_cell = cell_of ~uniq:true formal callee_graph in
      let callee_node = node_of callee_cell in
+     List.iter
+       (fun n ->
+         List.iter (fun c -> assert (DSGraph.unique_pointee c))
+         @@ DSGraph.cells n)
+       caller_graph.nodes;
      let callee_node_copy =
        copy_node ~clear_stack:true
          ~sbs:(Sva.SymAddrSetLattice.to_list actual |> snd |> List.map fst)
          ~old_to_new:(Some old_to_new) caller_graph callee_node
      in
+     List.iter
+       (fun n ->
+         List.iter (fun c -> assert (DSGraph.unique_pointee c))
+         @@ DSGraph.cells n)
+       caller_graph.nodes;
      let callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
      (* Only do the joining if a caller cell actually exists *)
      let* caller_cell = cell_of actual caller_graph in
      join caller_cell callee_cell_copy;
      unify_pointees caller_cell;
+     List.iter
+       (fun n ->
+         List.iter (fun c -> assert (DSGraph.unique_pointee c))
+         @@ DSGraph.cells n)
+       caller_graph.nodes;
      None)
 
 let bottom_up prog nodess =
@@ -827,6 +852,15 @@ let bottom_up prog nodess =
   in
 
   visit entry;
+
+  IDMap.iter
+    (fun _ (_, _, (g : DSGraph.t)) ->
+      List.iter
+        (fun n ->
+          List.iter (fun c -> assert (DSGraph.unique_pointee c))
+          @@ DSGraph.cells n)
+        g.nodes)
+    nodess;
 
   ()
 
