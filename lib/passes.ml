@@ -35,7 +35,7 @@ module PassManager = struct
       doc =
         "Pull all global variables into the parameter list, discarding initial \
          parameter list (i.e. assuming its empty)";
-      invariants = Invariants.establishes [ Params ];
+      invariants = Invariants.establishes ~invalidates:[ SSA ] [ Params ];
     }
 
   let read_uninit locals =
@@ -48,7 +48,7 @@ module PassManager = struct
           (fun _ proc ->
             Transforms.May_read_uninit.check ~include_locals:locals proc);
       doc = "Fail if the program contains read-uninitialised variables";
-      invariants = Invariants.needs [ SSA ];
+      invariants = Invariants.make ();
     }
 
   let dfg_bool =
@@ -96,8 +96,7 @@ module PassManager = struct
             p);
       doc =
         "Runs wrapped interval analysis on control flow graph and prints \
-         invariants = Invariants.needs [SSA];\n\
-        \         results";
+         results";
       invariants = Invariants.needs [ SSA ];
     }
 
@@ -411,13 +410,13 @@ module PassManager = struct
           Prog
             (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
-        invariants = Invariants.needs [ SSA ] ~establishes:[ Params ];
+        invariants = Invariants.needs [ SSA ] ~establishes:[ LambdaLift ];
       };
       {
         name = "gamma-vars";
         apply = Prog Transforms.Gamma_vars.transform;
         doc = "Replace gamma expressions with gamma variables";
-        invariants = Invariants.needs [ SSA ];
+        invariants = Invariants.needs ~invalidates:[ SSA ] [];
       };
     ]
 

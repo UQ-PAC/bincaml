@@ -13,11 +13,11 @@ type t =
   | SSA
   | DSA
   | Params
-      (** TODO: there is a "simple" parameter form then there is a reduced param
-          form presuming ABI. do we care? which to use? *)
+  | LambdaLift
   | ReducibleLoops
       (** All loops are reducible. That is, there are no {i irreducible} loops.
       *)
+  | Imperative
 [@@deriving show { with_path = false }, eq, ord]
 
 let read s =
@@ -25,6 +25,7 @@ let read s =
   | "SSA" -> SSA
   | "DSA" -> DSA
   | "Params" -> Params
+  | "LambdaLift" -> LambdaLift
   | "ReducibleLoops" -> ReducibleLoops
   | _ -> failwith (Printf.sprintf "cannot parse string into Invariants.t: %s" s)
 
