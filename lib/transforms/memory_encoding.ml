@@ -68,8 +68,6 @@ module Calls = struct
               (Types.Bitvector 64)))
       args
 
-  (* (Types.curry [Types.Bitvector 64; Types.Bitvector 64; Types.Variable "MemEncoding";] Types.Boolean))) *)
-
   (** [addr_offset args] returns the offset an address is into its allocation.
       args(0) is the memory encoding object. args(1) is the address. *)
   let addr_offset ?attrib args =
@@ -102,15 +100,13 @@ module Calls = struct
               Globals.mem_encoding_typ))
       args
 
-  (** [allocate args] allocates space at a size, returning the updated memory
-      encoding. args(0) is the memory encoding object. args(1) is the address
-      being allocated at. args(2) is the size of the allocation. *)
+  (** [allocate args] allocates space at a size. args(0) is the memory encoding
+      object, args(1) is the updated encoding. args(2) is the address being
+      allocated at. args(3) is the size of the allocation. *)
   let allocate ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar
-           (Var.create "$me_allocate" ~scope:Var.GlobalConst
-              Globals.mem_encoding_typ))
+        (rvar (Var.create "$me_allocate" ~scope:Var.GlobalConst Types.Boolean))
       args
 
   (** [can_alloc args] Returns whether an alloc, performed by [allocate], is
@@ -146,6 +142,7 @@ end
 module type MemoryEncoding = sig
   module Locals : sig
     val mem_encoding : Var.t
+    val mem_encoding_out : Var.t
     val alloc : Var.t
     val addr : Var.t
     val size : Var.t
@@ -226,7 +223,10 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
   let add_allocate p =
     add_decl ~attrib p "me_allocate"
       [
-        Encoding.Locals.mem_encoding; Encoding.Locals.addr; Encoding.Locals.size;
+        Encoding.Locals.mem_encoding;
+        Encoding.Locals.mem_encoding_out;
+        Encoding.Locals.addr;
+        Encoding.Locals.size;
       ]
       Encoding.allocate_body
 
@@ -317,28 +317,95 @@ module FlatMemory : MemoryEncoding = struct
   open BasilExpr
 
   let mem_encoding_type : Types.t =
-    Types.Sort ("MemEncoding", [ Types.mk_variant "MemEncoding" [] ])
+    Types.Sort
+      ( "MemEncoding",
+        [
+          Types.mk_variant "MemEncoding"
+            [
+              (* liveness of an allocation *)
+              Types.mk_field "alloc_live"
+                (Types.Map (Types.Integer, Types.Bitvector 2));
+              (* size of an allocation *)
+              Types.mk_field "alloc_size"
+                (Types.Map (Types.Integer, Types.Bitvector 64));
+              (* allocation base address *)
+              Types.mk_field "alloc_base"
+                (Types.Map (Types.Integer, Types.Bitvector 64));
+              (* is an address on the heap *)
+              Types.mk_field "addr_is_heap"
+                (Types.Map (Types.Bitvector 64, Types.Bitvector 2));
+              (* allocation of an address *)
+              Types.mk_field "addr_alloc"
+                (Types.Map (Types.Bitvector 64, Types.Integer));
+              (* offset of an address into its allocation *)
+              Types.mk_field "addr_offset"
+                (Types.Map (Types.Bitvector 64, Types.Bitvector 64));
+              (* allocation counter *)
+              Types.mk_field "alloc_counter" Types.Integer;
+            ];
+        ] )
 
   module Locals = struct
     let mem_encoding : Var.t =
       Var.create "mem_encoding" ~scope:Var.LocalVar mem_encoding_type
 
-    let alloc = Var.create "alloc" ~scope:Var.LocalVar (Types.Bitvector 64)
+    let mem_encoding_out : Var.t =
+      Var.create "mem_encoding_out" ~scope:Var.LocalVar mem_encoding_type
+
+    let alloc = Var.create "alloc" ~scope:Var.LocalVar Types.Integer
     let addr = Var.create "addr" ~scope:Var.LocalVar (Types.Bitvector 64)
     let size = Var.create "size" ~scope:Var.LocalVar (Types.Bitvector 64)
     let live = Var.create "live" ~scope:Var.LocalVar (Types.Bitvector 2)
+
+    let alloc_live_access =
+      unexp ~op:(`ReadField "alloc_live") (rvar mem_encoding)
+
+    let alloc_size_access =
+      unexp ~op:(`ReadField "alloc_size") (rvar mem_encoding)
+
+    let alloc_base_access =
+      unexp ~op:(`ReadField "alloc_base") (rvar mem_encoding)
+
+    let addr_is_heap_access =
+      unexp ~op:(`ReadField "addr_is_heap") (rvar mem_encoding)
+
+    let addr_alloc_access =
+      unexp ~op:(`ReadField "addr_alloc") (rvar mem_encoding)
+
+    let addr_offset_access =
+      unexp ~op:(`ReadField "addr_offset") (rvar mem_encoding)
   end
 
   let can_allocate_body : Lang.Program.e = boolconst false
-  let alloc_size_body : Lang.Program.e = boolconst false
-  let alloc_base_body : Lang.Program.e = boolconst false
+
+  let alloc_size_body : Lang.Program.e =
+    binexp ~op:`MapAccess Locals.alloc_size_access (rvar Locals.addr)
+
+  let alloc_base_body : Lang.Program.e =
+    binexp ~op:`MapAccess Locals.alloc_base_access (rvar Locals.addr)
+
   let addr_alloc_body : Lang.Program.e = boolconst false
-  let alloc_live_body : Lang.Program.e = boolconst false
-  let addr_offset_body : Lang.Program.e = boolconst false
-  let addr_is_heap_body : Lang.Program.e = boolconst false
-  let alloc_size_update_body : Lang.Program.e = boolconst false
-  let alloc_live_update_body : Lang.Program.e = boolconst false
-  let allocate_body : Lang.Program.e = boolconst false
+
+  let alloc_live_body : Lang.Program.e =
+    binexp ~op:`MapAccess Locals.alloc_live_access (rvar Locals.addr)
+
+  let addr_offset_body : Lang.Program.e =
+    binexp ~op:`MapAccess Locals.addr_offset_access (rvar Locals.addr)
+
+  let addr_is_heap_body : Lang.Program.e =
+    binexp ~op:`MapAccess Locals.addr_is_heap_access (rvar Locals.addr)
+
+  let alloc_size_update_body : Lang.Program.e =
+    binexp ~op:(`WriteField "alloc_size") (rvar Locals.mem_encoding)
+      (applyintrin ~op:`MapUpdate
+         [ Locals.alloc_size_access; rvar Locals.alloc; rvar Locals.size ])
+
+  let alloc_live_update_body : Lang.Program.e =
+    binexp ~op:(`WriteField "alloc_live") (rvar Locals.mem_encoding)
+      (applyintrin ~op:`MapUpdate
+         [ Locals.alloc_live_access; rvar Locals.alloc; rvar Locals.live ])
+
+  let allocate_body : Lang.Program.e = applyintrin ~op:`AND []
   let init_encoding_body : Lang.Program.e = boolconst false
   let valid_access_body : Lang.Program.e = boolconst false
 end
@@ -367,6 +434,9 @@ module SplitMemory : MemoryEncoding = struct
   module Locals = struct
     let mem_encoding =
       Var.create "mem_encoding" ~scope:Var.LocalVar mem_encoding_type
+
+    let mem_encoding_out : Var.t =
+      Var.create "mem_encoding_out" ~scope:Var.LocalVar mem_encoding_type
 
     let alloc = Var.create "alloc" ~scope:Var.LocalVar (Types.Bitvector 64)
     let addr = Var.create "addr" ~scope:Var.LocalVar (Types.Bitvector 64)
@@ -440,13 +510,17 @@ module SplitMemory : MemoryEncoding = struct
       Calls.addr_alloc [ rvar Locals.mem_encoding; rvar Locals.addr ]
     in
 
-    Calls.alloc_size_update
-      [
-        Calls.alloc_live_update
-          [ rvar Locals.mem_encoding; alloc; bvconst live ];
-        alloc;
-        rvar Locals.size;
-      ]
+    let updated =
+      Calls.alloc_size_update
+        [
+          Calls.alloc_live_update
+            [ rvar Locals.mem_encoding; alloc; bvconst live ];
+          alloc;
+          rvar Locals.size;
+        ]
+    in
+
+    binexp ~op:`EQ updated (rvar Locals.mem_encoding_out)
 
   let init_encoding_body =
     let i = Var.create "i" ~scope:Var.LocalVar (Types.Bitvector 64) in
