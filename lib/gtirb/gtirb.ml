@@ -134,6 +134,7 @@ module OCFG = struct
     type t =
       | Internal of UUID.t  (** vertex in this procedure *)
       | External of UUID.t  (** vertex in another procedure *)
+      | Stmts of { uuid : UUID.t option; stmts : Lang.Program.stmt list }
     [@@deriving eq, ord, show { with_path = false }]
 
     let hash = Hash.poly
@@ -160,6 +161,8 @@ module OCFG = struct
       ("v"
       ^
       match v with
+      | Stmts { uuid = Some uuid } -> "stmts:" ^ UUID.show uuid
+      | Stmts { stmts } -> "stmts:" ^ Int.to_string @@ Hashtbl.hash stmts
       | Internal e -> UUID.show e
       | External e -> "External" ^ UUID.show e)
       |> String.replace ~sub:"/" ~by:"_"
@@ -170,6 +173,10 @@ module OCFG = struct
         match v with
         | Vert.Internal n -> UUID.show n
         | External e -> "External:" ^ UUID.show e
+        | Stmts { uuid; stmts } ->
+            (Option.to_iter uuid |> Iter.to_string UUID.show)
+            ^ "\\r"
+            ^ List.to_string ~sep:"\\r" Lang.Program.show_stmt stmts
       in
       [ `Fontname "Mono"; `Label n ]
   end)
@@ -177,6 +184,7 @@ end
 
 type temp_proc = {
   name : string;
+  id : ID.t;
   uuid : UUID.t; (* generic function UUID*)
   entries : UUIDSet.t; (* entry block uuids *)
   blocks : UUIDSet.t;
@@ -190,22 +198,30 @@ open struct
       binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 addr)) (rvar conf.pc_var))
 end
 
-let create_block succ_addr (proc, blockmap) (b : block) =
+let create_simple_block succ_addr (proc, blockmap) (uuid, addr, stmts) =
+  let open Lang in
+  let open Option in
+  let guard = addr_equal_expr addr in
+  let guard =
+    Stmt.Instr_Assume { body = guard; branch = false; attrib = Attrib.empty }
+  in
+  let ensure =
+    succ_addr uuid
+    |> Iter.map (fun addr -> addr_equal_expr addr)
+    |> Iter.to_list
+    |> Expr.BasilExpr.applyintrin ~op:`OR
+  in
+  let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
+  let stmts = guard :: (stmts @ [ ensure ]) in
+  let proc, nb = Procedure.fresh_block proc ~name:"%gtirb" ~stmts () in
+  let blockmap = UUIDMap.add uuid nb blockmap in
+  (proc, blockmap)
+
+let create_code_block succ_addr (proc, blockmap) (b : block) =
   let open Lang in
   let open Option in
   let bl =
     let* opcodes = b.opcodes in
-    let guard = addr_equal_expr b.address in
-    let guard =
-      Stmt.Instr_Assume { body = guard; branch = false; attrib = Attrib.empty }
-    in
-    let ensure =
-      succ_addr b.uuid
-      |> Iter.map (fun addr -> addr_equal_expr addr)
-      |> Iter.to_list
-      |> Expr.BasilExpr.applyintrin ~op:`OR
-    in
-    let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
     let instrs =
       opcodes
       |> List.map (fun op ->
@@ -222,12 +238,69 @@ let create_block succ_addr (proc, blockmap) (b : block) =
                    asm);
             })
     in
-    let stmts = guard :: (instrs @ [ ensure ]) in
-    let proc, nb = Procedure.fresh_block proc ~name:"%gtirb" ~stmts () in
-    let blockmap = UUIDMap.add b.uuid nb blockmap in
-    Some (proc, blockmap)
+    Some
+      (create_simple_block succ_addr (proc, blockmap)
+         (b.uuid, b.address, instrs))
   in
   Option.get_or ~default:(proc, blockmap) bl
+
+(** For each successor set containing a fallthrough edge, remove fallthrough
+    edge and add it as a successor of all other edges. *)
+let reorder_fallthrough (g : OCFG.G.t) =
+  let reorder_fallthrough_succs v g =
+    let ft, nft =
+      OCFG.G.succ_e g v
+      |> List.partition (function
+        | _, OCFG.Edge.Labeled { typ = OCFG.Edge.Type_Fallthrough }, v -> true
+        | _ -> false)
+    in
+    let is_call =
+      OCFG.G.succ_e g v
+      |> List.exists (function
+        | ( _,
+            OCFG.Edge.Labeled { typ = OCFG.Edge.Type_Call },
+            OCFG.Vert.External _ ) ->
+            true
+        | ( _,
+            OCFG.Edge.Labeled { typ = OCFG.Edge.Type_Syscall },
+            OCFG.Vert.External _ ) ->
+            true
+        | _ -> false)
+    in
+    match ft with
+    | [] -> g
+    | [ ((_, _, fallthru_tgt) as fe) ] ->
+        (*let g = OCFG.G.remove_edge_e g fe in*)
+        List.fold_left
+          (fun g (_, _, s) -> OCFG.G.add_edge g s fallthru_tgt)
+          g nft
+    | [ _ ] when not is_call -> g
+    | _ -> failwith "odd: multiple fallthru edges"
+  in
+  OCFG.G.fold_vertex reorder_fallthrough_succs g g
+
+(** Replace all external edges with a defined procedure with stmt edges
+    containing a call to that procedure. *)
+let replace_call_edges procids =
+  OCFG.G.map_vertex (function
+    | External uuid as default ->
+        let id = procids uuid in
+        let m =
+          id
+          |> Option.map (fun id ->
+              let stmt =
+                Lang.Stmt.Instr_Call
+                  {
+                    procid = id;
+                    args = StringMap.empty;
+                    lhs = StringMap.empty;
+                    attrib = StringMap.empty;
+                  }
+              in
+              OCFG.Vert.Stmts { uuid = Some uuid; stmts = [ stmt ] })
+        in
+        Option.get_or ~default m
+    | o -> o)
 
 let add_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
   let open Option in
@@ -235,8 +308,17 @@ let add_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
   let module G = Procedure.G in
   let get_vert_block src =
     match src with
-    | OCFG.Vert.Internal uuid -> UUIDMap.get uuid blocks
-    | External _ -> None
+    | OCFG.Vert.Internal uuid
+    | Stmts { uuid = Some uuid }
+    | OCFG.Vert.External uuid -> (
+        UUIDMap.get uuid blocks |> function Some e -> `Block e | _ -> `None)
+    | _ -> `None
+  in
+  let proc, retbl = Procedure.fresh_block ~name:"%ret" ~stmts:[] proc () in
+  let proc =
+    Procedure.map_graph
+      (fun g -> Procedure.G.add_edge g (Procedure.Vert.End retbl) Return)
+      proc
   in
   let src = get_vert_block src in
   let tgt = get_vert_block tgt in
@@ -244,36 +326,20 @@ let add_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
   let proc =
     proc
     |> Procedure.map_graph (fun g ->
-        match l with
-        | OCFG.Edge.Nop ->
-            let e =
-              let* src = src in
-              let* tgt = tgt in
-              Some Procedure.Vert.(End src, Begin tgt)
-            in
-            Option.fold (fun g (s, t) -> G.add_edge g s t) g e
-        | OCFG.Edge.Labeled { typ; _ } -> (
+        match (src, l, tgt) with
+        | `Block src, OCFG.Edge.Labeled { typ = Type_Return; _ }, _ ->
+            G.add_edge g Procedure.Vert.(End src) (Begin retbl)
+        | `Block src, OCFG.Edge.Nop, `Block tgt ->
+            G.add_edge g Procedure.Vert.(End src) (Begin tgt)
+        | `Block src, OCFG.Edge.Labeled { typ; _ }, `Block tgt -> (
             match typ with
             | Type_Branch | Type_Fallthrough | Type_Syscall | Type_Sysret
-            | Type_Call ->
+            | Type_Call | Type_Return ->
                 (* syscall, sysret and call  are unlikely to be internal to this procedure, 
                   but we include them in case they are. We most likely handle this with instruction-local control flow.
-
-                  We likely eventually want to add stub code blocks containing the call instructions
-                  which we jump to in place of the external blocks.
-                   *)
-                let e =
-                  let* src = src in
-                  let* tgt = tgt in
-                  Some Procedure.Vert.(End src, Begin tgt)
-                in
-                Option.fold (fun g (s, t) -> G.add_edge g s t) g e
-            | Type_Return ->
-                let e =
-                  let* src = src in
-                  Some Procedure.Vert.(End src, Return)
-                in
-                Option.fold (fun g (s, t) -> G.add_edge g s t) g e))
+                 *)
+                G.add_edge g Procedure.Vert.(End src) (Begin tgt))
+        | _ -> g)
   in
   proc
 
@@ -291,22 +357,47 @@ let to_ir_proc all_blocks m (p : temp_proc) =
     |> fun conj ->
     Lang.Expr.BasilExpr.applyintrin ~op:`OR conj |> fun pc_init -> [ pc_init ]
   in
+
   let succ_addr uuid =
+    let verts =
+      Iter.from_iter (fun f -> OCFG.G.iter_vertex f p.cfg)
+      |> Iter.filter (function
+        | OCFG.Vert.Internal uid | External uid | Stmts { uuid = Some uid } ->
+            UUID.equal uid uuid
+        | _ -> false)
+    in
     try
       OCFG.(
-        G.succ p.cfg (Vert.Internal uuid)
-        |> List.to_iter
+        verts
+        |> Iter.flat_map (fun v -> G.succ p.cfg v |> List.to_iter)
         |> Iter.filter_map (function
           | Vert.Internal uuid -> UUIDMap.find_opt uuid p.code_blocks
-          | Vert.External uuid -> UUIDMap.find_opt uuid all_blocks)
+          | Vert.External uuid -> UUIDMap.find_opt uuid all_blocks
+          | Vert.Stmts { uuid } ->
+              Option.bind uuid (fun uuid -> UUIDMap.find_opt uuid all_blocks))
         |> Iter.map (fun (b : block) -> b.address))
     with Invalid_argument _ -> Iter.empty
   in
   let name = Lang.Program.declare_name ("@" ^ p.name) m in
   let proc = Lang.Procedure.create ~requires name () in
+
   let proc, blocks =
     p.code_blocks |> UUIDMap.to_iter |> Iter.map snd
-    |> Iter.fold (create_block succ_addr) (proc, UUIDMap.empty)
+    |> Iter.fold (create_code_block succ_addr) (proc, UUIDMap.empty)
+  in
+  let proc, blocks =
+    Iter.from_iter (fun f -> OCFG.G.iter_vertex f p.cfg)
+    |> Iter.filter_map (function
+      | OCFG.Vert.External uuid ->
+          Option.map
+            (fun (b : block) -> (uuid, b.address, []))
+            (UUIDMap.find_opt uuid all_blocks)
+      | OCFG.Vert.Stmts { uuid = Some uuid; stmts } ->
+          Option.map
+            (fun (b : block) -> (uuid, b.address, stmts))
+            (UUIDMap.find_opt uuid all_blocks)
+      | _ -> None)
+    |> Iter.fold (create_simple_block succ_addr) (proc, blocks)
   in
 
   let proc =
@@ -384,7 +475,7 @@ let load_gtirb infile =
 
   *)
 
-let cfg (c : CFG.t) (m : Module.t) =
+let cfg prog (c : CFG.t) (m : Module.t) =
   let blocks = get_code_block_opcodes m in
 
   let sym =
@@ -448,7 +539,8 @@ let cfg (c : CFG.t) (m : Module.t) =
               m "No entry blocks for proc: %s %s" (UUID.show uuid) name);
           (UUIDSet.empty, UUIDMap.empty)
     in
-    { uuid; name; entries; blocks; code_blocks; cfg = OCFG.G.empty }
+    let id = Lang.Program.declare_name ("@" ^ name) prog in
+    { uuid; name; id; entries; blocks; code_blocks; cfg = OCFG.G.empty }
   in
   let procs = UUIDMap.mapi make_temp_proc func_names in
   let make_cfg (p : temp_proc) =
@@ -473,12 +565,31 @@ let cfg (c : CFG.t) (m : Module.t) =
     { p with cfg }
   in
   let procs = UUIDMap.map make_cfg procs in
+  let procs =
+    UUIDMap.map
+      (fun p ->
+        let cfg =
+          let calls =
+            UUIDMap.to_iter procs
+            |> Iter.flat_map (fun (uid, p) ->
+                p.entries |> UUIDSet.to_iter |> Iter.map (fun u -> (u, p.id)))
+            |> UUIDMap.of_iter
+            |> fun m uuid -> UUIDMap.get uuid m
+          in
+          let cfg = p.cfg in
+          let cfg = replace_call_edges calls cfg in
+          let cfg = reorder_fallthrough cfg in
+          cfg
+        in
+        { p with cfg })
+      procs
+  in
   procs
 
 let to_ir_prog ir_cfg (m : Module.t) =
   let prog = Lang.Program.empty ~name:m.name () in
   let prog = Lang.Program.decl_global prog conf.pc_var in
-  let c = cfg ir_cfg m in
+  let c = cfg prog ir_cfg m in
   let all_blocks =
     UUIDMap.values c
     |> Iter.map (fun c -> c.code_blocks)
@@ -499,13 +610,14 @@ let load_gtirb_prog filename =
 let load_gtirb_cfg filename =
   let open Option in
   let g = load_gtirb filename in
+  let p = Lang.Program.empty () in
   let* c = g.cfg in
   let cfg =
     List.fold_left
       (fun a m ->
         UUIDMap.union
           (fun _ _ _ -> failwith "procedure present in two modules")
-          a (cfg c m))
+          a (cfg p c m))
       UUIDMap.empty g.modules
   in
   Some cfg

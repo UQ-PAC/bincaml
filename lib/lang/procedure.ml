@@ -330,14 +330,14 @@ let add_block p id ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
 let fresh_block_graph p graph ?name ?(phis = [])
     ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   let open Block in
-  let name = Option.get_or ~default:"block" name in
+  let name = Option.get_or ~default:"%block" name in
   let id = (block_ids p).fresh ~name () in
   (add_block_graph graph id ~phis ~stmts ~successors (), id)
 
 let fresh_block p ?name ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
     ?(successors = []) () =
   let open Block in
-  let name = Option.get_or ~default:"block" name in
+  let name = Option.get_or ~default:"%block" name in
   let id = (block_ids p).fresh ~name () in
   (add_block p id ~phis ~stmts ~successors (), id)
 
@@ -664,7 +664,13 @@ let pretty show_lvar show_var show_expr p =
               (fun (b, label, e) ->
                 match G.V.label e with
                 | Begin i -> text @@ ID.to_string i
-                | _ -> failwith "bad graph structure: goto targets non-block")
+                | o ->
+                    failwith
+                      (String.concat " "
+                         [
+                           "bad graph structure: goto targets non-block ";
+                           Vert.show o;
+                         ]))
               succ
           in
           [ text "goto " ^ (fun s -> bracket "(" (fill (text ",") s) ")") succ ]

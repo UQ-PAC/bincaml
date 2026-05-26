@@ -26,8 +26,9 @@
        assert false { .asm = "ldp x29, x30, [sp], #16"; .opcode = "0xa8c17bfd" };
        assert false { .asm = "ret"; .opcode = "0xd65f03c0" };
        assert boolor();
-       return;
-     ]
+       goto (%ret_1);
+     ];
+     block %ret_1 [ return; ]
   ];
   proc @_init()  -> () {  }
     requires boolor(eq(0x400600:bv64, $PC))
@@ -40,14 +41,21 @@
        assert false { .asm = "mov x29, sp"; .opcode = "0x910003fd" };
        assert false { .asm = "bl #184"; .opcode = "0x9400002e" };
        assert boolor(eq(0x4006c4:bv64, $PC), eq(0x400610:bv64, $PC));
-       goto (%gtirb_1);
+       goto (%gtirb_2,%gtirb_1);
      ];
      block %gtirb_1 [
        assume eq(0x400610:bv64, $PC);
        assert false { .asm = "ldp x29, x30, [sp], #16"; .opcode = "0xa8c17bfd" };
        assert false { .asm = "ret"; .opcode = "0xd65f03c0" };
        assert boolor();
-       return;
+       goto (%ret_2);
+     ];
+     block %ret_2 [ return; ];
+     block %gtirb_2 [
+       assume eq(0x4006c4:bv64, $PC);
+       call @call_weak_fn();
+       assert boolor(eq(0x400610:bv64, $PC));
+       goto (%gtirb_1);
      ]
   ];
   proc @__do_global_dtors_aux()  -> () {  }
@@ -70,14 +78,15 @@
        assert false { .asm = "ldr x19, [sp, #16]"; .opcode = "0xf9400bf3" };
        assert false { .asm = "ldp x29, x30, [sp], #32"; .opcode = "0xa8c27bfd" };
        assert false { .asm = "ret"; .opcode = "0xd65f03c0" };
-       assert boolor();
-       return;
+       assert boolor(eq(0x400764:bv64, $PC));
+       goto (%ret_3,%gtirb_3);
      ];
+     block %ret_3 [ return; ];
      block %gtirb_3 [
        assume eq(0x400764:bv64, $PC);
        assert false { .asm = "bl #-132"; .opcode = "0x97ffffdf" };
        assert boolor(eq(0x4006e0:bv64, $PC), eq(0x400768:bv64, $PC));
-       goto (%gtirb_2);
+       goto (%gtirb_5,%gtirb_2);
      ];
      block %gtirb_2 [
        assume eq(0x400768:bv64, $PC);
@@ -86,6 +95,12 @@
        assert false { .asm = "strb w0, [x19, #40]"; .opcode = "0x3900a260" };
        assert boolor(eq(0x400770:bv64, $PC));
        goto (%gtirb_1);
+     ];
+     block %gtirb_5 [
+       assume eq(0x4006e0:bv64, $PC);
+       call @deregister_tm_clones();
+       assert boolor(eq(0x400768:bv64, $PC));
+       goto (%gtirb_2);
      ]
   ];
   proc @register_tm_clones()  -> () {  }
@@ -109,9 +124,10 @@
      block %gtirb [
        assume eq(0x400748:bv64, $PC);
        assert false { .asm = "ret"; .opcode = "0xd65f03c0" };
-       assert boolor();
-       return;
+       assert boolor(eq(0x400734:bv64, $PC), eq(0x400740:bv64, $PC));
+       goto (%ret_2,%gtirb_3,%gtirb_1);
      ];
+     block %ret_2 [ return; ];
      block %gtirb_3 [
        assume eq(0x400734:bv64, $PC);
        assert false { .asm = "adrp x2, #126976"; .opcode = "0xf00000e2" };
@@ -136,6 +152,12 @@
        assume eq(0x400780:bv64, $PC);
        assert false { .asm = "b #-112"; .opcode = "0x17ffffe4" };
        assert boolor(eq(0x400710:bv64, $PC));
+       goto (%gtirb_1);
+     ];
+     block %gtirb_1 [
+       assume eq(0x400710:bv64, $PC);
+       call @register_tm_clones();
+       assert boolor();
        unreachable;
      ]
   ];
@@ -185,8 +207,9 @@
        assert false { .asm = "add sp, sp, #48"; .opcode = "0x9100c3ff" };
        assert false { .asm = "ret"; .opcode = "0xd65f03c0" };
        assert boolor(eq(0x400820:bv64, $PC));
-       return;
+       goto (%ret_4);
      ];
+     block %ret_4 [ return; ];
      block %gtirb_4 [
        assume eq(0x4007a0:bv64, $PC);
        assert false { .asm = "ldr x1, [sp, #40]"; .opcode = "0xf94017e1" };
@@ -202,15 +225,16 @@
        assert false { .asm = "ldr x1, [sp, #8]"; .opcode = "0xf94007e1" };
        assert false { .asm = "cmp x1, x0"; .opcode = "0xeb00003f" };
        assert false { .asm = "b.lt #16"; .opcode = "0x5400008b" };
-       assert boolor(eq(0x4007d4:bv64, $PC), eq(0x4007e0:bv64, $PC));
-       goto (%gtirb_2,%gtirb);
+       assert boolor(eq(0x4007fc:bv64, $PC), eq(0x4007d4:bv64, $PC),
+        eq(0x4007e0:bv64, $PC));
+       goto (%gtirb_3,%gtirb_2,%gtirb);
      ];
      block %gtirb [
        assume eq(0x4007e0:bv64, $PC);
        assert false { .asm = "ldrsw x0, [sp, #28]"; .opcode = "0xb9801fe0" };
        assert false { .asm = "str x0, [sp, #32]"; .opcode = "0xf90013e0" };
-       assert boolor(eq(0x4007e8:bv64, $PC));
-       goto (%gtirb_5);
+       assert boolor(eq(0x4007e8:bv64, $PC), eq(0x4007d4:bv64, $PC));
+       goto (%gtirb_5,%gtirb_2);
      ];
      block %gtirb_2 [
        assume eq(0x4007d4:bv64, $PC);
@@ -244,13 +268,25 @@
            .opcode = "0xd2800004" };
        assert false { .asm = "bl #-108"; .opcode = "0x97ffffe5" };
        assert boolor(eq(0x400640:bv64, $PC), eq(0x4006b0:bv64, $PC));
-       goto (%gtirb_1);
+       goto (%gtirb_4,%gtirb_1);
      ];
      block %gtirb_1 [
        assume eq(0x4006b0:bv64, $PC);
        assert false { .asm = "bl #-80"; .opcode = "0x97ffffec" };
        assert boolor(eq(0x400660:bv64, $PC));
+       goto (%gtirb_6);
+     ];
+     block %gtirb_6 [
+       assume eq(0x400660:bv64, $PC);
+       call @FUN_400660();
+       assert boolor();
        unreachable;
+     ];
+     block %gtirb_4 [
+       assume eq(0x400640:bv64, $PC);
+       call @FUN_400640();
+       assert boolor(eq(0x4006b0:bv64, $PC));
+       goto (%gtirb_1);
      ]
   ];
   proc @_dl_relocate_static_pie()  -> () {  }
@@ -261,8 +297,9 @@
        assume eq(0x4006c0:bv64, $PC);
        assert false { .asm = "ret"; .opcode = "0xd65f03c0" };
        assert boolor();
-       return;
-     ]
+       goto (%ret);
+     ];
+     block %ret [ return; ]
   ];
   proc @call_weak_fn()  -> () {  }
     requires boolor(eq(0x4006c4:bv64, $PC))
@@ -280,14 +317,21 @@
        assume eq(0x4006d0:bv64, $PC);
        assert false { .asm = "b #-128"; .opcode = "0x17ffffe0" };
        assert boolor(eq(0x400650:bv64, $PC));
+       goto (%gtirb_4);
+     ];
+     block %gtirb_4 [
+       assume eq(0x400650:bv64, $PC);
+       call @.L_400650();
+       assert boolor();
        unreachable;
      ];
      block %gtirb_2 [
        assume eq(0x4006d4:bv64, $PC);
        assert false { .asm = "ret"; .opcode = "0xd65f03c0" };
-       assert boolor(eq(0x400610:bv64, $PC));
-       return;
-     ]
+       assert boolor(eq(0x400610:bv64, $PC), eq(0x4006d0:bv64, $PC));
+       goto (%ret_4,%gtirb_1);
+     ];
+     block %ret_4 [ return; ]
   ];
   proc @main()  -> () {  }
     requires boolor(eq(0x400808:bv64, $PC))
@@ -302,14 +346,21 @@
        assert false { .asm = "ldrsw x0, [sp, #28]"; .opcode = "0xb9801fe0" };
        assert false { .asm = "bl #-152"; .opcode = "0x97ffffda" };
        assert boolor(eq(0x400784:bv64, $PC), eq(0x400820:bv64, $PC));
-       goto (%gtirb_1);
+       goto (%gtirb_2,%gtirb_1);
      ];
      block %gtirb_1 [
        assume eq(0x400820:bv64, $PC);
        assert false { .asm = "ldp x29, x30, [sp], #32"; .opcode = "0xa8c27bfd" };
        assert false { .asm = "ret"; .opcode = "0xd65f03c0" };
        assert boolor();
-       return;
+       goto (%ret_2);
+     ];
+     block %ret_2 [ return; ];
+     block %gtirb_2 [
+       assume eq(0x400784:bv64, $PC);
+       call @Sqrt();
+       assert boolor(eq(0x400820:bv64, $PC));
+       goto (%gtirb_1);
      ]
   ];
   proc @.L_400650()  -> () {  }
@@ -363,18 +414,20 @@
        assert boolor(eq(0x40070c:bv64, $PC), eq(0x400704:bv64, $PC));
        goto (%gtirb_3,%gtirb_2);
      ];
+     block %gtirb_3 [
+       assume eq(0x40070c:bv64, $PC);
+       assert false { .asm = "ret"; .opcode = "0xd65f03c0" };
+       assert boolor(eq(0x400768:bv64, $PC), eq(0x400704:bv64, $PC),
+        eq(0x4006f8:bv64, $PC));
+       goto (%ret_7,%gtirb_2,%gtirb_1);
+     ];
+     block %ret_7 [ return; ];
      block %gtirb_2 [
        assume eq(0x400704:bv64, $PC);
        assert false { .asm = "mov x16, x1"; .opcode = "0xaa0103f0" };
        assert false { .asm = "br x16"; .opcode = "0xd61f0200" };
        assert boolor();
        unreachable;
-     ];
-     block %gtirb_3 [
-       assume eq(0x40070c:bv64, $PC);
-       assert false { .asm = "ret"; .opcode = "0xd65f03c0" };
-       assert boolor(eq(0x400768:bv64, $PC));
-       return;
      ]
   ];
   proc @FUN_400620()  -> () {  }
