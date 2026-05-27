@@ -375,7 +375,6 @@ module FlatMemory : MemoryEncoding = struct
   end
 
   let trigger e = [ [ e ] ]
-
   let can_allocate_body : Lang.Program.e = boolconst true
 
   let alloc_size_body : Lang.Program.e =
@@ -427,7 +426,9 @@ module FlatMemory : MemoryEncoding = struct
         (* update addr_alloc for all pointers in the range [addr, addr+size)
            to point to the old allocation counter. *)
         forall ~bound:[ i ]
-          ~triggers:(trigger (Calls.addr_alloc [ rvar Locals.mem_encoding_out; rvar i ]))
+          ~triggers:
+            (trigger
+               (Calls.addr_alloc [ rvar Locals.mem_encoding_out; rvar i ]))
           (binexp ~op:`IMPLIES in_bounds
              (binexp ~op:`EQ
                 (Calls.addr_alloc [ rvar Locals.mem_encoding_out; rvar i ])
@@ -435,7 +436,9 @@ module FlatMemory : MemoryEncoding = struct
                    (rvar Locals.mem_encoding))));
         (* Preserve all other addr_alloc entries. *)
         forall ~bound:[ i ]
-          ~triggers:(trigger (Calls.addr_alloc [ rvar Locals.mem_encoding_out; rvar i ]))
+          ~triggers:
+            (trigger
+               (Calls.addr_alloc [ rvar Locals.mem_encoding_out; rvar i ]))
           (binexp ~op:`IMPLIES
              (unexp ~op:`BoolNOT in_bounds)
              (binexp ~op:`EQ
@@ -443,14 +446,18 @@ module FlatMemory : MemoryEncoding = struct
                 (Calls.addr_alloc [ rvar Locals.mem_encoding; rvar i ])));
         (* Update offsets for all pointers in allocation. *)
         forall ~bound:[ i ]
-          ~triggers:(trigger (Calls.addr_offset [ rvar Locals.mem_encoding_out; rvar i ]))
+          ~triggers:
+            (trigger
+               (Calls.addr_offset [ rvar Locals.mem_encoding_out; rvar i ]))
           (binexp ~op:`IMPLIES same_alloc
              (binexp ~op:`EQ
                 (Calls.addr_offset [ rvar Locals.mem_encoding_out; rvar i ])
                 (binexp ~op:`BVSUB (rvar i) (rvar Locals.addr))));
         (* Preserve all other addr offsets. *)
         forall ~bound:[ i ]
-          ~triggers:(trigger (Calls.addr_offset [ rvar Locals.mem_encoding_out; rvar i ]))
+          ~triggers:
+            (trigger
+               (Calls.addr_offset [ rvar Locals.mem_encoding_out; rvar i ]))
           (binexp ~op:`IMPLIES
              (unexp ~op:`BoolNOT same_alloc)
              (binexp ~op:`EQ
@@ -488,7 +495,9 @@ module FlatMemory : MemoryEncoding = struct
         (* The allocation at addr was/is on the heap. *)
         Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar Locals.addr ];
         (* addr_is_heap is unchanged. *)
-        binexp ~op:`EQ (unexp ~op:(`ReadField "addr_is_heap") (rvar Locals.mem_encoding)) (unexp ~op:(`ReadField "addr_is_heap") (rvar Locals.mem_encoding_out))
+        binexp ~op:`EQ
+          (unexp ~op:(`ReadField "addr_is_heap") (rvar Locals.mem_encoding))
+          (unexp ~op:(`ReadField "addr_is_heap") (rvar Locals.mem_encoding_out));
       ]
 
   let init_encoding_body : Lang.Program.e =
@@ -502,16 +511,19 @@ module FlatMemory : MemoryEncoding = struct
           (intconst @@ Z.of_int 0);
         (* all objects are initially fresh *)
         forall ~bound:[ o ]
-          ~triggers:(trigger (Calls.alloc_live [ rvar Locals.mem_encoding; rvar o ]))
+          ~triggers:
+            (trigger (Calls.alloc_live [ rvar Locals.mem_encoding; rvar o ]))
           (binexp ~op:`EQ
              (Calls.alloc_live [ rvar Locals.mem_encoding; rvar o ])
              (bvconst fresh));
         (* stack/heap separation, TODO: compute this smartly *)
         forall ~bound:[ i ]
-          ~triggers:(trigger (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ]))
+          ~triggers:
+            (trigger (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ]))
           (binexp ~op:`EQ
              (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ])
-             (unexp ~op:`BoolNOT @@ binexp ~op:`BVULE (rvar i) (bv_of_int ~size:64 100000000)));
+             (unexp ~op:`BoolNOT
+             @@ binexp ~op:`BVULE (rvar i) (bv_of_int ~size:64 100000000)));
       ]
 
   let valid_access_body : Lang.Program.e =

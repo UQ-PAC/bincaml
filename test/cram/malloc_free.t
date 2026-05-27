@@ -48,16 +48,16 @@
   function {:extern } {:inline } $me_alloc_live_update(mem_encoding: memory_encoding, alloc: bv64, live: bv2) returns (memory_encoding) {
     mem_encoding->(alloc_live := mem_encoding->alloc_live[alloc := live])
   }
-  function {:extern } {:inline } $me_allocate(mem_encoding: memory_encoding, addr: bv64, size: bv64) returns (memory_encoding) {
-    $me_alloc_size_update(
-      $me_alloc_live_update(
-        mem_encoding,
-        $me_addr_alloc(mem_encoding, addr),
-        1bv2
-      ),
-      $me_addr_alloc(mem_encoding, addr),
-      size
-    )
+  function {:extern } {:inline } $me_allocate(mem_encoding: memory_encoding, mem_encoding_out: memory_encoding, addr: bv64, size: bv64) returns (bool) {
+    ($me_alloc_size_update(
+       $me_alloc_live_update(
+         mem_encoding,
+         $me_addr_alloc(mem_encoding, addr),
+         1bv2
+       ),
+       $me_addr_alloc(mem_encoding, addr),
+       size
+     ) == mem_encoding_out)
   }
   function {:extern } {:inline } $me_init_encoding(mem_encoding: memory_encoding) returns (bool) {
     (((forall 
@@ -220,7 +220,7 @@
     ensures $me_can_allocate(old($mem_encoding), R0_out, R0_in);
     ensures ($me_addr_offset($mem_encoding, R0_out) == 0bv64);
     ensures ($me_alloc_base($mem_encoding, $me_addr_alloc($mem_encoding, R0_out)) == R0_out);
-    ensures ($mem_encoding == $me_allocate(old($mem_encoding), R0_out, R0_in));
+    ensures $me_allocate(old($mem_encoding), $mem_encoding, R0_out, R0_in);
   procedure p$#free(R0_in: bv64);
     modifies $mem_encoding, $mem, $stack;
     ensures {:msg "Memory Error: Invalid Free"} ($mem_encoding == $me_alloc_live_update(
@@ -285,16 +285,16 @@
   function {:extern } {:inline } $me_alloc_live_update(mem_encoding: memory_encoding, alloc: bv64, live: bv2) returns (memory_encoding) {
     mem_encoding->(alloc_live := mem_encoding->alloc_live[alloc := live])
   }
-  function {:extern } {:inline } $me_allocate(mem_encoding: memory_encoding, addr: bv64, size: bv64) returns (memory_encoding) {
-    $me_alloc_size_update(
-      $me_alloc_live_update(
-        mem_encoding,
-        $me_addr_alloc(mem_encoding, addr),
-        1bv2
-      ),
-      $me_addr_alloc(mem_encoding, addr),
-      size
-    )
+  function {:extern } {:inline } $me_allocate(mem_encoding: memory_encoding, mem_encoding_out: memory_encoding, addr: bv64, size: bv64) returns (bool) {
+    ($me_alloc_size_update(
+       $me_alloc_live_update(
+         mem_encoding,
+         $me_addr_alloc(mem_encoding, addr),
+         1bv2
+       ),
+       $me_addr_alloc(mem_encoding, addr),
+       size
+     ) == mem_encoding_out)
   }
   function {:extern } {:inline } $me_init_encoding(mem_encoding: memory_encoding) returns (bool) {
     (((forall 
@@ -457,7 +457,7 @@
     ensures $me_can_allocate(old($mem_encoding), R0_out, R0_in);
     ensures ($me_addr_offset($mem_encoding, R0_out) == 0bv64);
     ensures ($me_alloc_base($mem_encoding, $me_addr_alloc($mem_encoding, R0_out)) == R0_out);
-    ensures ($mem_encoding == $me_allocate(old($mem_encoding), R0_out, R0_in));
+    ensures $me_allocate(old($mem_encoding), $mem_encoding, R0_out, R0_in);
   procedure p$#free(R0_in: bv64);
     modifies $mem_encoding, $mem, $stack;
     ensures {:msg "Memory Error: Invalid Free"} ($mem_encoding == $me_alloc_live_update(
