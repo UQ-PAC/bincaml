@@ -61,31 +61,27 @@
   (dump-boogie out.bpl)
 
   $ boogie out.bpl
-  out.bpl(228,5): Error: a precondition for this call could not be proved
-  out.bpl(148,3): Related location: this is the precondition that could not be proved
+  Memory Error: Invalid Free (object not live)
   Execution trace:
-      out.bpl(215,3): b#inputs
-  out.bpl(258,5): Error: a precondition for this call could not be proved
-  out.bpl(147,3): Related location: this is the precondition that could not be proved
+      out.bpl(226,3): b#inputs
+  Memory Error: Invalid Free (not base address)
   Execution trace:
-      out.bpl(252,3): b#inputs
-  out.bpl(258,5): Error: a precondition for this call could not be proved
-  out.bpl(148,3): Related location: this is the precondition that could not be proved
+      out.bpl(271,3): b#inputs
+  Memory Error: Invalid Free (object not live)
   Execution trace:
-      out.bpl(252,3): b#inputs
-  out.bpl(258,5): Error: a precondition for this call could not be proved
+      out.bpl(271,3): b#inputs
+  out.bpl(277,5): Error: a precondition for this call could not be proved
   out.bpl(146,3): Related location: this is the precondition that could not be proved
   Execution trace:
-      out.bpl(252,3): b#inputs
-  out.bpl(298,5): Error: this assertion could not be proved
+      out.bpl(271,3): b#inputs
+  Memory Error: Invalid Access
   Execution trace:
-      out.bpl(287,3): b#inputs
-  out.bpl(335,5): Error: this assertion could not be proved
+      out.bpl(306,3): b#inputs
+  Memory Error: Invalid Access
   Execution trace:
-      out.bpl(328,3): b#inputs
-  out.bpl(385,5): Error: a postcondition could not be proved on this return path
-  out.bpl(350,3): Related location: this is the postcondition that could not be proved
+      out.bpl(355,3): b#inputs
+  Memory Error: Memory Leak
   Execution trace:
-      out.bpl(368,3): b#inputs
+      out.bpl(403,3): b#inputs
   
   Boogie program verifier finished with 1 verified, 7 errors
