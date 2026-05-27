@@ -78,9 +78,11 @@ let reorder_fallthrough (g : Gfir.G.t) =
   let reorder_fallthrough_succs v g =
     let ft, nft =
       Gfir.G.succ_e g v
-      |> List.partition (function
-        | _, Gfir.Edge.Labeled { typ = Gfir.Edge.Type_Fallthrough }, v -> true
-        | _ -> false)
+      |> List.partition
+           Gfir.Edge.(
+             function
+             | _, Some { type' = Gfir.Edge.Type_Fallthrough }, v -> true
+             | _ -> false)
     in
     (* check if these successors have no successors, this transform is made
          safe by the assertions *)
@@ -150,7 +152,8 @@ let cfg_edge_to_ir_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
     proc
     |> Procedure.map_graph (fun g ->
         match (src, l, tgt) with
-        | `Block src, Gfir.Edge.Labeled { typ = Type_Return; _ }, _ ->
+        | `Block src, Some { type' = Type_Return; _ }, _ ->
+            (* jump to return *)
             G.add_edge g Procedure.Vert.(End src) (Begin retbl)
         | `Block src, _, `Block tgt ->
             (* We conservatively add all edges with blocks defined *)
@@ -264,7 +267,7 @@ let module_to_ir_prog ir_cfg (m : Module.t) =
   (* (2) convert jumps to procedure-external vertices to stub blocks with call
      statements, and reroute the fall through edges as a successor of this stub
      *)
-  let procs = transform_cfg_calls procs in
+  let procs = if conf.direct then procs else transform_cfg_calls procs in
   (*
     (3) convert [Gfir] to Bincaml IR program, with each block getting a assertions
         to verify our modified CFG is corect; each block is
