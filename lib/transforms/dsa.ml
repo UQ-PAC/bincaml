@@ -51,10 +51,14 @@ let replace_phis_with_dsa_blocks procedure (phis : dsa_block Iter.t) =
   Iter.fold
     (fun procedure { src; tgt; phi_assignments } ->
       let phi_assign =
-        Stmt.Instr_Assign
-          (phi_assignments
-          |> List.map (fun (lhs, rhs) ->
-              (lhs, Expr.BasilExpr.fix (RVar { attrib = None; id = rhs }))))
+        phi_assignments
+        |> List.map (fun (lhs, rhs) ->
+            ( lhs,
+              Expr.BasilExpr.fix
+                (RVar { attrib = Attrib.empty; id = rhs; typ = Var.typ rhs }) ))
+      in
+      let phi_assign =
+        Stmt.Instr_Assign { al = phi_assign; attrib = Attrib.empty }
       in
       let procedure, intermediate_block =
         Procedure.fresh_block procedure

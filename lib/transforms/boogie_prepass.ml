@@ -206,7 +206,12 @@ module Instructions = struct
               in
               Some
                 (Stmt.Instr_Load
-                   { lhs; rhs; addr = Addr { addr; size; endian } })
+                   {
+                     lhs;
+                     rhs;
+                     addr = Addr { addr; size; endian };
+                     attrib = Attrib.empty;
+                   })
           | _ -> None))
     in
     let procs = Program.procs prog |> Iter.map snd in
@@ -251,7 +256,7 @@ module Instructions = struct
                ])
            (Expr.BasilExpr.rvar memory)
     in
-    Expr.BasilExpr.binding ~op:`Lambda [ memory; index; value ] body
+    Expr.BasilExpr.lambda ~bound:[ memory; index; value ] body
 
   let load_body ?(be = false) mem_typ val_size addr_size =
     let memory = Var.create ~scope:Var.LocalVar "#memory" mem_typ in
@@ -281,7 +286,7 @@ module Instructions = struct
                     (Bitvec.of_int ~size:addr_size
                        (if be then 0 else steps - 1)))))
     in
-    Expr.BasilExpr.binding ~op:`Lambda [ memory; index ] body
+    Expr.BasilExpr.lambda ~bound:[ memory; index ] body
 
   let store_load_decl (s : Program.stmt) =
     match s with
@@ -372,9 +377,9 @@ module Normalise = struct
         match unfix func with
         | RVar { attrib; id } when Var.is_global id ->
             replace [%here]
-              (BasilExpr.apply_fun ?attrib
+              (BasilExpr.apply_fun ~attrib
                  ~func:
-                   (BasilExpr.rvar ?attrib (Var.copy ~name:(Var.name id) id))
+                   (BasilExpr.rvar ~attrib (Var.copy ~name:(Var.name id) id))
                  args)
         | _ -> replace [%here] (apply_fun_to_map func args))
     | ApplyIntrin { op = `AND; args } ->
@@ -399,32 +404,47 @@ module Normalise = struct
 
   let replace_stmt (s : Program.stmt) =
     match s with
-    | Instr_IndirectCall _ -> Instr_Assert { body = BasilExpr.boolconst false }
-    | Instr_Load { lhs; rhs; addr = Scalar } ->
-        Instr_Assign [ (lhs, BasilExpr.rvar rhs) ]
-    | Instr_Store { lhs; value; addr = Scalar } -> Instr_Assign [ (lhs, value) ]
-    | Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->
+    | Instr_IndirectCall { attrib } ->
+        Instr_Assert
+          {
+            body = BasilExpr.boolconst false;
+            attrib = StringMap.add "comment" (`String "indirect call") attrib;
+          }
+    | Instr_Load { lhs; rhs; addr = Scalar; attrib } ->
+        Instr_Assign { al = [ (lhs, BasilExpr.rvar rhs) ]; attrib }
+    | Instr_Store { lhs; value; addr = Scalar; attrib } ->
+        Instr_Assign { al = [ (lhs, value) ]; attrib }
+    | Instr_Load { lhs; rhs; addr = Addr { addr; size; endian }; attrib } ->
         let fn_name =
           Printf.sprintf "load%d_%s" size (Stmt.show_endian endian)
         in
         Instr_Assign
-          [
-            ( lhs,
-              Expr.BasilExpr.fapply
-                (Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
-                [ Expr.BasilExpr.rvar rhs; addr ] );
-          ]
-    | Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } } ->
+          {
+            al =
+              [
+                ( lhs,
+                  Expr.BasilExpr.fapply
+                    (Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
+                    [ Expr.BasilExpr.rvar rhs; addr ] );
+              ];
+            attrib;
+          }
+    | Instr_Store
+        { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib } ->
         let fn_name =
           Printf.sprintf "store%d_%s" size (Stmt.show_endian endian)
         in
         Stmt.Instr_Assign
-          [
-            ( lhs,
-              Expr.BasilExpr.fapply
-                (Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
-                [ Expr.BasilExpr.rvar rhs; addr; value ] );
-          ]
+          {
+            al =
+              [
+                ( lhs,
+                  Expr.BasilExpr.fapply
+                    (Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
+                    [ Expr.BasilExpr.rvar rhs; addr; value ] );
+              ];
+            attrib;
+          }
     | o -> o
 
   let rewriter = BasilExpr.rewrite ~rw_fun:replace_expr

@@ -20,11 +20,6 @@
 The serialise -> parse serialise loop should be idempotent
 
   $ diff before.il after.il
-  117c117
-  <    block %main_basil_return_1 [ nop; return; ]
-  ---
-  >    block %main_basil_return_1 [ return; ]
-  [1]
 
   $ diff before2.il after2.il
 
@@ -103,52 +98,6 @@ Examples Directory
   <      goto (%main_2185,%main_2181,%main_2177,%main_2169,%main_2151,%main_2149,%main_2123,%main_2119,%main_2117,%main_2115,%main_2111,%main_2109,%main_2095,%main_2093,%main_2091,%main_2077,%main_2069,%main_2065,%main_2061,%main_2059,%main_2035,%main_2031,%main_2029,%main_2025,%main_1999,%main_1989,%main_1985,%main_1977,%main_1973,%main_1971,%main_1955);
   ---
   >      goto (%main_2177,%main_2185,%main_2181,%main_2169,%main_2151,%main_2149,%main_2123,%main_2119,%main_2117,%main_2115,%main_2111,%main_2109,%main_2095,%main_2093,%main_2091,%main_2077,%main_2069,%main_2065,%main_2061,%main_2059,%main_2035,%main_2031,%main_2029,%main_2025,%main_1999,%main_1989,%main_1985,%main_1977,%main_1973,%main_1971,%main_1955);
-  17779c17779
-  <    block %main_basil_return_1 [ nop; return; ]
-  ---
-  >    block %main_basil_return_1 [ return; ]
-  17833c17833
-  <    block %parent_available_basil_return_1 [ nop; return; ]
-  ---
-  >    block %parent_available_basil_return_1 [ return; ]
-  18046c18046
-  <    block %hlist_get_basil_return_1 [ nop; return; ]
-  ---
-  >    block %hlist_get_basil_return_1 [ return; ]
-  18221c18221
-  <    block %new_auth_basil_return_1 [ nop; return; ]
-  ---
-  >    block %new_auth_basil_return_1 [ return; ]
-  18314c18314
-  <    block %zmalloc_basil_return_1 [ nop; return; ]
-  ---
-  >    block %zmalloc_basil_return_1 [ return; ]
-  18978c18978
-  <    block %write_wrapper_basil_return_1 [ nop; return; ]
-  ---
-  >    block %write_wrapper_basil_return_1 [ return; ]
-  19243c19243
-  <    block %so_closed_basil_return_1 [ nop; return; ]
-  ---
-  >    block %so_closed_basil_return_1 [ return; ]
-  20727c20727
-  <    block %headers_send_basil_return_1 [ nop; return; ]
-  ---
-  >    block %headers_send_basil_return_1 [ return; ]
-  21322c21322
-  <    block %trimr_basil_return_1 [ nop; return; ]
-  ---
-  >    block %trimr_basil_return_1 [ return; ]
-  21995c21995
-  <    block %substr_basil_return_1 [ nop; return; ]
-  ---
-  >    block %substr_basil_return_1 [ return; ]
-  22411c22411
-  <    block %hlist_add_basil_return_1 [ nop; return; ];
-  ---
-  >    block %hlist_add_basil_return_1 [ return; ];
-  23342c23342
-  <    block %so_recvln_basil_return_1 [ nop; return; ];
 
 
   $ cat << EOF | bincaml script -
@@ -163,11 +112,6 @@ Examples Directory
   (dump-il after.il)
 
   $ diff before.il after.il
-  117c117
-  <    block %main_basil_return_1 [ nop; return; ]
-  ---
-  >    block %main_basil_return_1 [ return; ]
-  [1]
 
   $ cat << EOF | bincaml script -
   > (load-il "../../examples/sqrt.il")

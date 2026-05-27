@@ -291,22 +291,22 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
   let type_check = type_check stmt_id block_id in
   match stmt with
   | Stmt.Instr_IntrinCall _ -> []
-  | Stmt.Instr_Assign ls ->
-      List.fold_left
-        (fun acc (lvar, e) ->
-          let expr_errors, rhs_type = type_check e in
-          let acc = List.append acc expr_errors in
-          if Types.leq rhs_type (Var.typ lvar) then acc
-          else
-            type_err
-              "Parameters for the function has a type mismatch: type of %s != \
-               type of %s\n\
-               \t(%s </= %s)"
-              (BasilExpr.to_string e) (Var.to_string lvar)
-              (Types.to_string rhs_type)
-              (Types.to_string (Var.typ lvar))
-            :: acc)
-        [] ls
+  | Stmt.Instr_Assign { al } ->
+      al
+      |> List.fold_left
+           (fun acc (lvar, e) ->
+             let expr_errors, rtype = type_check e in
+             let acc = List.append acc expr_errors in
+             if Types.equal rtype (Var.typ lvar) then acc
+             else
+               type_err
+                 "Paramters for the function has a type mismatch: type of %s \
+                  != type of %s (%s != %s)"
+                 (BasilExpr.to_string e) (Var.to_string lvar)
+                 (Types.to_string rtype)
+                 (Types.to_string (Var.typ lvar))
+               :: acc)
+           []
   | Stmt.Instr_Store { lhs; rhs; value; addr = Scalar } ->
       let terror, rtype = type_check value in
       terror

@@ -145,7 +145,7 @@ module IDELive = struct
             |> Iter.cons (d, IdEdge))
     | Label v -> (
         match stmt with
-        | Instr_Assign assigns ->
+        | Instr_Assign { al = assigns } ->
             List.fold_left
               (fun i (v', ex) ->
                 Iter.flat_map
@@ -218,8 +218,8 @@ module IDELiveSSI = struct
             |> Iter.map (fun v -> (Label v, ConstEdge Value.live)))
     | Label v -> (
         match s with
-        | Instr_Assign assigns ->
-            Iter.of_list assigns
+        | Instr_Assign { al } ->
+            Iter.of_list al
             |> Iter.flat_map (fun (v', ex) ->
                 if Var.equal v v' then
                   Expr.BasilExpr.free_vars_iter ex

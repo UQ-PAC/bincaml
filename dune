@@ -1,0 +1,36 @@
+; only build public package files with `dune build`.
+; this excludes, e.g., tree-sitter test files
+
+(alias
+ (name default)
+ (deps
+  (package bincaml)
+  bincaml.install)
+ (package bincaml))
+
+(alias
+ (name default)
+ (deps
+  (package bincaml_lsp)
+  bincaml_lsp.install)
+ (package bincaml_lsp))
+
+; list of warnings: https://ocaml.org/manual/5.1/toplevel.html#:~:text=The%20warnings%20are%20as%20follows
+
+(env
+ ; in dev, all warnings are non-fatal.
+ (dev
+  (flags
+   (:standard
+    -warn-error
+    -A
+    -w
+    -unused-var-strict
+    -w
+    -missing-record-field-pattern
+    -w
+    -unused-open)))
+ ; in release, all (enabled) warnings are fatal.
+ (release
+  (flags
+   (:standard -warn-error A))))

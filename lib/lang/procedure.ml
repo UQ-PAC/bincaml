@@ -119,13 +119,13 @@ module PG : sig
     ?ensures:BasilExpr.t list ->
     ?rely:BasilExpr.t list ->
     ?guarantee:BasilExpr.t list ->
-    ?attrib:BasilExpr.t Attrib.attrib_map ->
+    ?attrib:Attrib.attrib_map ->
     unit ->
     ('a, 'b) t
 
-  val attrib : ('a, 'b) t -> BasilExpr.t Attrib.attrib_map
-  val set_attrib : ('a, 'b) t -> BasilExpr.t Attrib.t -> string -> ('a, 'b) t
-  val set_attribs : ('a, 'b) t -> BasilExpr.t Attrib.attrib_map -> ('a, 'b) t
+  val attrib : ('a, 'b) t -> Attrib.attrib_map
+  val set_attrib : ('a, 'b) t -> Attrib.t -> string -> ('a, 'b) t
+  val set_attribs : ('a, 'b) t -> Attrib.attrib_map -> ('a, 'b) t
 
   val set_specification : ('a, 'b) t -> ('a, 'c) proc_spec -> ('a, 'c) t
   (** set the procedure's specification/contract *)
@@ -147,6 +147,12 @@ module PG : sig
 
   val formal_out_params : ('a, 'b) t -> 'a StringMap.t
   (** return formal out parameters *)
+
+  val set_formal_in_params : 'a StringMap.t -> ('a, 'b) t -> ('a, 'b) t
+  (** set the formal in parameters *)
+
+  val set_formal_out_params : 'a StringMap.t -> ('a, 'b) t -> ('a, 'b) t
+  (** set the formal out parameters *)
 
   val map_formal_in_params :
     ('a StringMap.t -> 'a StringMap.t) -> ('a, 'b) t -> ('a, 'b) t
@@ -173,7 +179,7 @@ end = struct
     local_ids : ID.generator;
     block_ids : ID.generator;
     specification : ('v, 'e) proc_spec;
-    attrib : BasilExpr.t Attrib.attrib_map;
+    attrib : Attrib.attrib_map;
   }
 
   let attrib p = p.attrib

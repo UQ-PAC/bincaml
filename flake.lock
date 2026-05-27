@@ -51,11 +51,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1774296009,
-        "narHash": "sha256-wx5wPU69XksQ7WuuIDaHoRySCbdJMJXe0oDgXZQN3dw=",
+        "lastModified": 1779086944,
+        "narHash": "sha256-d1nHc4R5JBzl2aUqhXHrOi9oLbDQkJyc1gTNx4DCU3A=",
         "owner": "katrinafyi",
         "repo": "pac-nix",
-        "rev": "d0fa9138b31afeedb14d2620655c6f0af550b07d",
+        "rev": "1d8f905f7fc26eb7078f6ed0393f2460115af258",
         "type": "github"
       },
       "original": {

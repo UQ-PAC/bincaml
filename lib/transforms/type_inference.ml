@@ -1299,7 +1299,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
   | Stmt.Instr_Assert { body } | Stmt.Instr_Assume { body } ->
       let st, constrain_expr = constrain_expr proc st (BasilExpr.unfix body) in
       constrain st constrain_expr Bool
-  | Stmt.Instr_Assign ls ->
+  | Stmt.Instr_Assign { al } ->
       List.fold_left
         (fun st (lhs, expr) ->
           if String.starts_with ~prefix:"_PC" @@ Var.name lhs then st
@@ -1309,7 +1309,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
               constrain_expr proc st @@ BasilExpr.unfix expr
             in
             constrain st constrain_expr (TypeVar lhs))
-        st ls
+        st al
   | Stmt.Instr_Store { lhs; rhs; addr = Scalar }
   | Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
       if String.starts_with ~prefix:"_PC" @@ Var.name lhs then st
@@ -1613,7 +1613,7 @@ let map_expr results proc =
     match abstract_expr with
     | AbstractExpr.RVar { id; attrib } ->
         BasilExpr.replace [%here]
-          (BasilExpr.rvar ?attrib @@ map_var results proc id)
+          (BasilExpr.rvar ?attrib:(Some attrib) @@ map_var results proc id)
     | AbstractExpr.UnaryExpr { op = `Extract (endv, offset1); arg; attrib } -> (
         (* arg is a Struct, I love structs *)
         match BasilExpr.type_of arg with
@@ -1627,10 +1627,16 @@ let map_expr results proc =
               with
               | Some (str, { typ = Types.Struct { fields; size } })
                 when size <> size1 ->
-                  let exp = BasilExpr.unexp ?attrib ~op:(`ReadField str) exp in
+                  let exp =
+                    BasilExpr.unexp ?attrib:(Some attrib) ~op:(`ReadField str)
+                      exp
+                  in
                   find_field offset1 size1 fields exp
               | Some (str, field) ->
-                  let exp = BasilExpr.unexp ?attrib ~op:(`ReadField str) exp in
+                  let exp =
+                    BasilExpr.unexp ?attrib:(Some attrib) ~op:(`ReadField str)
+                      exp
+                  in
                   exp
               | None ->
                   failwith
@@ -1645,7 +1651,7 @@ let map_expr results proc =
             BasilExpr.replace [%here] field
         | _ ->
             BasilExpr.replace [%here]
-              (BasilExpr.unexp ?attrib
+              (BasilExpr.unexp ?attrib:(Some attrib)
                  ~op:(`Extract (endv, offset1))
                  (cast arg)))
     | AbstractExpr.ApplyIntrin { op = `BVADD; args; attrib } -> (
@@ -1660,14 +1666,15 @@ let map_expr results proc =
         match (pointer, args) with
         | [], _ ->
             BasilExpr.replace [%here]
-              (BasilExpr.applyintrin ?attrib ~op:`BVADD (List.map cast args))
+              (BasilExpr.applyintrin ?attrib:(Some attrib) ~op:`BVADD
+                 (List.map cast args))
         | [ pointer ], [ x ] ->
             BasilExpr.replace [%here]
-              (BasilExpr.binexp ?attrib ~op:`PTRADD pointer x)
+              (BasilExpr.binexp ?attrib:(Some attrib) ~op:`PTRADD pointer x)
         | [ pointer ], x :: tl ->
             BasilExpr.replace [%here]
-              (BasilExpr.binexp ?attrib ~op:`PTRADD pointer
-                 (BasilExpr.applyintrin ?attrib ~op:`BVADD args))
+              (BasilExpr.binexp ?attrib:(Some attrib) ~op:`PTRADD pointer
+                 (BasilExpr.applyintrin ?attrib:(Some attrib) ~op:`BVADD args))
         | x, _ ->
             failwith
             @@ Printf.sprintf "Two or more pointer types adding, ptrs: %s"
@@ -1680,90 +1687,102 @@ let map_expr results proc =
             failwith "Two or more pointer types adding"
         | Types.Pointer _, _ ->
             BasilExpr.replace [%here]
-              (BasilExpr.binexp ?attrib ~op:`PTRADD arg1
-                 (BasilExpr.unexp ?attrib ~op:`BVNEG arg2))
+              (BasilExpr.binexp ?attrib:(Some attrib) ~op:`PTRADD arg1
+                 (BasilExpr.unexp ?attrib:(Some attrib) ~op:`BVNEG arg2))
         | _, Types.Pointer _ ->
             BasilExpr.replace [%here]
-              (BasilExpr.binexp ?attrib ~op:`PTRADD arg2
-                 (BasilExpr.unexp ?attrib ~op:`BVNEG arg1))
+              (BasilExpr.binexp ?attrib:(Some attrib) ~op:`PTRADD arg2
+                 (BasilExpr.unexp ?attrib:(Some attrib) ~op:`BVNEG arg1))
         | _ ->
             BasilExpr.replace [%here]
-              (BasilExpr.binexp ?attrib ~op:`BVSUB (cast arg1) (cast arg2)))
+              (BasilExpr.binexp ?attrib:(Some attrib) ~op:`BVSUB (cast arg1)
+                 (cast arg2)))
     (*
       THESE OPERATIONS ARE NOT DEFINED OVER POINTERS OR RECORDS
 
       THEY SHOULD BE CAST TO BV IF THEY APPEAR
     *)
     | AbstractExpr.UnaryExpr { op; arg; attrib } ->
-        BasilExpr.replace [%here] (BasilExpr.unexp ?attrib ~op (cast arg))
+        BasilExpr.replace [%here]
+          (BasilExpr.unexp ?attrib:(Some attrib) ~op (cast arg))
     | AbstractExpr.BinaryExpr { op; arg1; arg2; attrib } ->
         BasilExpr.replace [%here]
-          (BasilExpr.binexp ?attrib ~op (cast arg1) (cast arg2))
+          (BasilExpr.binexp ?attrib:(Some attrib) ~op (cast arg1) (cast arg2))
     | AbstractExpr.ApplyIntrin { op; args; attrib } ->
         BasilExpr.replace [%here]
-          (BasilExpr.applyintrin ?attrib ~op (List.map cast args))
+          (BasilExpr.applyintrin ?attrib:(Some attrib) ~op (List.map cast args))
     | _ -> BasilExpr.Keep
   in
   BasilExpr.rewrite ~rw_fun:(expr_rewriter results proc)
 
 let map_stmt results proc (stmt : Program.stmt) : Program.stmt =
   match stmt with
-  | Stmt.Instr_Assign assignments ->
+  | Stmt.Instr_Assign { al; attrib } ->
       Stmt.Instr_Assign
-        (List.map
-           (fun (lvar, expr) ->
-             (map_lvar results proc lvar, map_expr results proc expr))
-           assignments)
-  | Stmt.Instr_Assume { body; branch } ->
-      Stmt.Instr_Assume { branch; body = map_expr results proc body }
-  | Stmt.Instr_Assert { body } ->
-      Stmt.Instr_Assert { body = map_expr results proc body }
-  | Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
+        {
+          attrib;
+          al =
+            List.map
+              (fun (lvar, expr) ->
+                (map_lvar results proc lvar, map_expr results proc expr))
+              al;
+        }
+  | Stmt.Instr_Assume { body; branch; attrib } ->
+      Stmt.Instr_Assume { branch; body = map_expr results proc body; attrib }
+  | Stmt.Instr_Assert { body; attrib } ->
+      Stmt.Instr_Assert { attrib; body = map_expr results proc body }
+  | Stmt.Instr_Load { lhs; rhs; addr = Scalar; attrib } ->
       Stmt.Instr_Load
         {
           lhs = map_lvar results proc lhs;
           rhs = map_var results proc rhs;
           addr = Scalar;
+          attrib;
         }
-  | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } ->
+  | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian; }; attrib; } ->
       Stmt.Instr_Load
         {
           lhs = map_lvar results proc lhs;
           rhs = map_var results proc rhs;
           addr = Addr { size; endian; addr = map_expr results proc addr };
+          attrib;
         }
-  | Stmt.Instr_Store { lhs; rhs; value; addr = Scalar } ->
+  | Stmt.Instr_Store { lhs; rhs; value; addr = Scalar; attrib } ->
       Stmt.Instr_Store
         {
           lhs = map_lvar results proc lhs;
           rhs = map_var results proc rhs;
           value = map_expr results proc value;
           addr = Scalar;
+          attrib;
         }
-  | Stmt.Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } } ->
+  | Stmt.Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib } ->
       Stmt.Instr_Store
         {
           lhs = map_lvar results proc lhs;
           rhs = map_var results proc rhs;
           addr = Addr { size; endian; addr = map_expr results proc addr };
           value = map_expr results proc value;
+          attrib;
         }
-  | Stmt.Instr_IntrinCall { lhs; args; name } ->
+  | Stmt.Instr_IntrinCall { lhs; args; name; attrib } ->
       Stmt.Instr_IntrinCall
         {
           lhs = List.map (map_lvar results proc) lhs;
           args = List.map (map_expr results proc) args;
           name;
+          attrib;
         }
-  | Stmt.Instr_Call { lhs; procid; args } ->
+  | Stmt.Instr_Call { lhs; procid; args; attrib } ->
       Stmt.Instr_Call
         {
           lhs = StringMap.map (map_lvar results proc) lhs;
           args = StringMap.map (map_expr results proc) args;
           procid;
+          attrib;
         }
-  | Stmt.Instr_IndirectCall { target } ->
-      Stmt.Instr_IndirectCall { target = map_expr results proc target }
+  | Stmt.Instr_IndirectCall { target; attrib } ->
+      Stmt.Instr_IndirectCall { target = map_expr results proc target; attrib }
 
 let map_decl results proc (decl : Program.declaration) : Program.declaration =
   match decl with
@@ -1780,8 +1799,8 @@ let map_decl results proc (decl : Program.declaration) : Program.declaration =
             | Function e -> Function (map_expr results proc e)
             | Uninterpreted -> Uninterpreted);
         }
-  | Program.Variable { binding; attrib } ->
-      Variable { binding = map_var results proc binding; attrib }
+  | Program.Variable { binding; attrib; classification } ->
+      Variable { binding = map_var results proc binding; attrib; classification }
   | Program.Procedure { definition = proc } ->
       let definition =
         Procedure.map_formal_in_params

@@ -8,9 +8,11 @@ let live = Bitvec.of_int 1 ~size:2
 let dead = Bitvec.of_int 2 ~size:2
 
 module Globals = struct
+  let mem_encoding_typ_name = "memory_encoding"
+  let mem_encoding_typ = Types.Variable mem_encoding_typ_name
+
   let mem_encoding =
-    Var.create "$mem_encoding" ~scope:Var.GlobalVar
-      (Types.Variable "MemEncoding")
+    Var.create "$mem_encoding" ~scope:Var.GlobalVar mem_encoding_typ
 end
 
 module Calls = struct
@@ -18,8 +20,8 @@ module Calls = struct
 
   (** [addr_is_heap args] checks if an address belongs to the heap. args(0) is
       the memory encoding object. args(1) is the address to check. *)
-  let addr_is_heap args =
-    apply_fun
+  let addr_is_heap ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_addr_is_heap" ~scope:Var.GlobalConst Types.Boolean))
@@ -27,8 +29,8 @@ module Calls = struct
 
   (** [alloc_base args] returns the base address of a supplied allocation id.
       args(0) is the memory encoding object. args(1) is the allocation id. *)
-  let alloc_base args =
-    apply_fun
+  let alloc_base ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_alloc_base" ~scope:Var.GlobalConst
@@ -38,8 +40,8 @@ module Calls = struct
   (** [alloc_live args] returns the liveness of an allocation. Returns value is
       0 for fresh, 1 for live, and 2 for dead, as a bv3. args(0) is the memory
       encoding object. args(1) is the allocation id. *)
-  let alloc_live args =
-    apply_fun
+  let alloc_live ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_alloc_live" ~scope:Var.GlobalConst
@@ -48,8 +50,8 @@ module Calls = struct
 
   (** [alloc_size args] returns the size of an allocation. args(0) is the memory
       encoding object. args(1) is the allocation id. *)
-  let alloc_size args =
-    apply_fun
+  let alloc_size ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_alloc_size" ~scope:Var.GlobalConst
@@ -58,8 +60,8 @@ module Calls = struct
 
   (** [addr_alloc args] returns the allocation id of an address. args(0) is the
       memory encoding object. args(1) is the address. *)
-  let addr_alloc args =
-    apply_fun
+  let addr_alloc ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_addr_alloc" ~scope:Var.GlobalConst
@@ -70,8 +72,8 @@ module Calls = struct
 
   (** [addr_offset args] returns the offset an address is into its allocation.
       args(0) is the memory encoding object. args(1) is the address. *)
-  let addr_offset args =
-    apply_fun
+  let addr_offset ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_addr_offset" ~scope:Var.GlobalConst
@@ -81,41 +83,41 @@ module Calls = struct
   (** [alloc_size_update args] returns a new memory encoding with the size of an
       allocation updated. args(0) is the memory encoding object. args(1) is the
       allocation id. args(2) is the new size. *)
-  let alloc_size_update args =
-    apply_fun
+  let alloc_size_update ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_alloc_size_update" ~scope:Var.GlobalConst
-              (Types.Variable "MemEncoding")))
+              Globals.mem_encoding_typ))
       args
 
   (** [alloc_live_update args] returns a new memory encoding with the liveness
       of an allocation updated. args(0) is the memory encoding object. args(1)
       is the allocation id. args(2) is the new liveness value as a bv3. *)
-  let alloc_live_update args =
-    apply_fun
+  let alloc_live_update ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_alloc_live_update" ~scope:Var.GlobalConst
-              (Types.Variable "MemEncoding")))
+              Globals.mem_encoding_typ))
       args
 
   (** [allocate args] allocates space at a size, returning the updated memory
       encoding. args(0) is the memory encoding object. args(1) is the address
       being allocated at. args(2) is the size of the allocation. *)
-  let allocate args =
-    apply_fun
+  let allocate ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_allocate" ~scope:Var.GlobalConst
-              (Types.Variable "MemEncoding")))
+              Globals.mem_encoding_typ))
       args
 
   (** [can_alloc args] Returns whether an alloc, performed by [allocate], is
       valid/allowed. args(0) is the memory encoding object. args(1) is the
       target address. args(2) is the size of the allocation. *)
-  let can_alloc args =
-    apply_fun
+  let can_alloc ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_can_allocate" ~scope:Var.GlobalConst Types.Boolean))
@@ -123,8 +125,8 @@ module Calls = struct
 
   (** [init_encoding args] Returns if a memory encoding is initialized. args(0)
       is the memory encoding. *)
-  let init_encoding args =
-    apply_fun
+  let init_encoding ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_init_encoding" ~scope:Var.GlobalConst Types.Boolean))
@@ -133,8 +135,8 @@ module Calls = struct
   (** [valid_access args] Checks if an access is valid. args(0) is the memory
       encoding object. args(1) is the address being accessed. args(2) is the
       size of the access in bytes. *)
-  let valid_access args =
-    apply_fun
+  let valid_access ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_valid_access" ~scope:Var.GlobalConst Types.Boolean))
@@ -178,19 +180,26 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
                @@ Lang.Expr.BasilExpr.type_of body);
            attrib;
            definition : Lang.Program.func_type =
-             Function (Lang.Expr.BasilExpr.binding ~op:`Lambda bindings body);
+             Function (Lang.Expr.BasilExpr.lambda ~bound:bindings body);
          })
 
   let add_mem_encoding p =
     let p =
       Lang.Program.add_decl p
         (Lang.Program.Type
-           { binding = "MemEncoding"; typ = Encoding.mem_encoding_type })
+           {
+             binding = Globals.mem_encoding_typ_name;
+             typ = Encoding.mem_encoding_type;
+           })
     in
     let p =
       Lang.Program.add_decl p
         (Lang.Program.Variable
-           { binding = Globals.mem_encoding; attrib = Attrib.empty })
+           {
+             binding = Globals.mem_encoding;
+             attrib = Attrib.empty;
+             classification = None;
+           })
     in
     p
 
@@ -342,7 +351,7 @@ module SplitMemory : MemoryEncoding = struct
 
   let mem_encoding_type =
     Types.Sort
-      ( "MemEncoding",
+      ( Globals.mem_encoding_typ_name,
         [
           Types.mk_variant "MemEncoding"
             [
@@ -441,14 +450,12 @@ module SplitMemory : MemoryEncoding = struct
 
   let init_encoding_body =
     let i = Var.create "i" ~scope:Var.LocalVar (Types.Bitvector 64) in
-    let trigger e =
-      `Assoc (StringMap.of_list [ (".triggers", `List [ `List [ `Expr e ] ]) ])
-    in
+    let trigger e = [ [ e ] ] in
     applyintrin ~op:`AND
       [
         (* Ensure that all heap addresses are bigger than the largest global address *)
         forall
-          ~attrib:
+          ~triggers:
             (trigger (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ]))
           ~bound:[ i ]
           (binexp ~op:`EQ
@@ -459,7 +466,7 @@ module SplitMemory : MemoryEncoding = struct
              (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ]));
         (* Heap addresses are initially fresh *)
         forall
-          ~attrib:
+          ~triggers:
             (trigger (Calls.alloc_live [ rvar Locals.mem_encoding; rvar i ]))
           ~bound:[ i ]
           (binexp ~op:`IMPLIES
@@ -469,7 +476,7 @@ module SplitMemory : MemoryEncoding = struct
                 (bvconst fresh)));
         (* Non heap addresses are dead *)
         forall
-          ~attrib:
+          ~triggers:
             (trigger (Calls.alloc_live [ rvar Locals.mem_encoding; rvar i ]))
           ~bound:[ i ]
           (binexp ~op:`IMPLIES

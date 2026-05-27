@@ -4,6 +4,15 @@ open Lang.Expr
 open Ops
 open Memory_encoding
 
+let make_msg_attrib msg =
+  StringMap.of_list
+    [
+      ( ".boogie",
+        `Assoc
+          (StringMap.of_list
+             [ (".msg", `String (Printf.sprintf "\"%s\"" msg)) ]) );
+    ]
+
 let old e = BasilExpr.unexp ~op:`Old e
 let i = Var.create ~scope:Var.LocalConst "i" (Types.Bitvector 64)
 
@@ -38,7 +47,9 @@ let transform_main p =
       ensures =
         spec.ensures
         @ [
-            BasilExpr.forall ~bound:[ i ]
+            BasilExpr.forall
+              ~attrib:(make_msg_attrib "Memory Error: Memory Leak")
+              ~bound:[ i ]
             @@ BasilExpr.binexp ~op:`IMPLIES
                  (Calls.addr_is_heap
                     [ BasilExpr.rvar Globals.mem_encoding; BasilExpr.rvar i ])
@@ -104,12 +115,21 @@ let transform_free p =
         spec.requires
         @ [
             (* Only free heap values *)
-            Calls.addr_is_heap [ rvar Globals.mem_encoding; r_in 0 ];
+            Calls.addr_is_heap
+              ~attrib:
+                (make_msg_attrib "Memory Error: Invalid Free (non heap object)")
+              [ rvar Globals.mem_encoding; r_in 0 ];
             (* Only free if offset is 0 *)
-            binexp ~op:`EQ (bv_of_int ~size:64 0)
+            binexp
+              ~attrib:
+                (make_msg_attrib "Memory Error: Invalid Free (not base address)")
+              ~op:`EQ (bv_of_int ~size:64 0)
               (Calls.addr_offset [ rvar Globals.mem_encoding; r_in 0 ]);
             (* The object must be live to free *)
-            binexp ~op:`EQ
+            binexp
+              ~attrib:
+                (make_msg_attrib "Memory Error: Invalid Free (object not live)")
+              ~op:`EQ
               (Calls.alloc_live
                  [
                    rvar Globals.mem_encoding;
@@ -121,6 +141,7 @@ let transform_free p =
         spec.ensures
         @ [
             binexp ~op:`EQ
+              ~attrib:(make_msg_attrib "Memory Error: Invalid Free")
               (rvar Globals.mem_encoding)
               (Calls.alloc_live_update
                  [
@@ -135,11 +156,13 @@ let transform_free p =
 
 let transform_stmt (s : Program.stmt) =
   (match s with
-    | Stmt.Instr_Store { lhs; rhs; addr = Addr { addr; size; endian } }
-    | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian } } -> (
+    | Stmt.Instr_Store { lhs; rhs; addr = Addr { addr; size; endian }; attrib }
+    | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian }; attrib }
+      -> (
         let valid_assert =
           Stmt.Instr_Assert
             {
+              attrib = make_msg_attrib "Memory Error: Invalid Access";
               body =
                 BasilExpr.(
                   Calls.valid_access
