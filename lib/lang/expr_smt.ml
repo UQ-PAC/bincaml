@@ -195,12 +195,16 @@ module SMTLib2 = struct
     | `Atom "false" -> Some (BasilExpr.boolconst false)
     | `Atom e when Int.of_string e |> Option.is_some ->
         Some (BasilExpr.intconst (Z.of_string e))
-    | `Atom s when String.length s > 2 && Char.equal s.[0] '#' && Char.equal s.[1] 'b' ->
+    | `Atom s
+      when String.length s > 2 && Char.equal s.[0] '#' && Char.equal s.[1] 'b'
+      ->
         let digs = String.sub s 2 (String.length s - 2) in
         let size = String.length digs in
         let v = Z.of_string ("0b" ^ digs) in
         Some (BasilExpr.bvconst (Bitvec.create ~size v))
-    | `Atom s when String.length s > 2 && Char.equal s.[0] '#' && Char.equal s.[1] 'x' ->
+    | `Atom s
+      when String.length s > 2 && Char.equal s.[0] '#' && Char.equal s.[1] 'x'
+      ->
         let digs = String.sub s 2 (String.length s - 2) in
         let size = 4 * String.length digs in
         let v = Z.of_string ("0x" ^ digs) in
@@ -216,7 +220,7 @@ module SMTLib2 = struct
         let* t = expr_of_smt vardefs t in
         let* e = expr_of_smt vardefs e in
         Some (BasilExpr.ifthenelse c t e)*)
-    | `List [ `Atom ("forall" | "exists" as q); `List binders; body ] ->
+    | `List [ `Atom (("forall" | "exists") as q); `List binders; body ] ->
         let decode_bind = function
           | `List [ `Atom name; sort_sexp ] ->
               let* typ = typ_of_smt sort_sexp in

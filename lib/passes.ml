@@ -246,9 +246,8 @@ module PassManager = struct
       doc =
         "Encode the program as a system of constrained Horn clauses, invoke \
          Z3/Spacer, and annotate procedures with the inferred requires/ensures \
-         clauses when the solver returns sat. Expects the pipeline \
-         full-ssa → load-store-reduction → lambda-lifting beforehand. Depends \
-         on Z3.";
+         clauses when the solver returns sat. Expects the pipeline full-ssa → \
+         load-store-reduction → lambda-lifting beforehand. Depends on Z3.";
     }
 
   let chc_infer_invariants_per_query =
@@ -259,8 +258,8 @@ module PassManager = struct
         "Per-query variant of chc-infer-invariants: issues one Spacer call per \
          query clause, sharing the same normal clauses, and conjoins the \
          inferred invariants across successful calls. Useful when one or more \
-         obligations are unprovable but invariants for the rest of the \
-         program are still desired. Same prerequisites and dependencies as \
+         obligations are unprovable but invariants for the rest of the program \
+         are still desired. Same prerequisites and dependencies as \
          chc-infer-invariants.";
     }
 

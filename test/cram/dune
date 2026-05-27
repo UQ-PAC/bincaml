@@ -9,7 +9,17 @@
   concat.il))
 
 (cram
- (applies_to * \ expr_smt malloc_free memory_safety memory_interproc chc_loop chc_call chc_spec chc_per_query)
+ (applies_to
+  *
+  \
+  expr_smt
+  malloc_free
+  memory_safety
+  memory_interproc
+  chc_loop
+  chc_call
+  chc_spec
+  chc_per_query)
  (package bincaml)
  (deps
   loop_dfg.sexp

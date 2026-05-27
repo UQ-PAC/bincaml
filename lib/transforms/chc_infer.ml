@@ -1,7 +1,7 @@
 (** CHC encoding of the IR.
 
-    This module encodes a program as a system of constrained Horn clauses
-    (CHCs) over quantifier-free bit vectors. See {!Lang.Expr_smt.SMTLib2} for
+    This module encodes a program as a system of constrained Horn clauses (CHCs)
+    over quantifier-free bit vectors. See {!Lang.Expr_smt.SMTLib2} for
     expression-level encoding and {!Bincaml_util.Smt} for the SMT-LIB sexp
     helpers used below. *)
 
@@ -15,20 +15,20 @@ let src = Logs.Src.create "transforms.chc_infer"
 module Logs = (val Logs.src_log src : Logs.LOG)
 module SmtExpr = Bincaml_util.Smt.Expr
 
+type predicate = { name : string; params : Var.t list }
 (** A CHC predicate: an uninterpreted [Bool]-valued function over a fixed list
     of typed parameters. The same parameter list is used for both declaration
     and application — order matters. *)
-type predicate = { name : string; params : Var.t list }
 
-(** A constrained Horn clause.
-    - [vars] are the universally-quantified binders for the [forall];
-    - [premises] are the conjuncts of the antecedent;
-    - [head] is [Some sexp] for a rule and [None] for a query (head = false). *)
 type clause = {
   vars : Var.t list;
   premises : Sexp.t list;
   head : Sexp.t option;
 }
+(** A constrained Horn clause.
+    - [vars] are the universally-quantified binders for the [forall];
+    - [premises] are the conjuncts of the antecedent;
+    - [head] is [Some sexp] for a rule and [None] for a query (head = false). *)
 
 let var_sort v = fst (Expr_smt.SMTLib2.of_typ (Var.typ v))
 
@@ -54,43 +54,43 @@ let clause_to_sexp (c : clause) : Sexp.t =
   in
   list [ atom "assert"; forall_ binders body ]
 
-(** Predicates associated with a procedure. *)
 type proc_predicates = {
   block_preds : predicate IDMap.t;
   enter : predicate;
   exit : predicate;
 }
+(** Predicates associated with a procedure. *)
 
 let predicate_name ~proc ~suffix = "p_" ^ proc ^ "_" ^ suffix
 
 let block_predicate_name proc_id block_id =
   predicate_name ~proc:(ID.to_string proc_id) ~suffix:(ID.to_string block_id)
 
-(** A procedure has a spec if it declares any [requires] or [ensures] clauses. *)
+(** A procedure has a spec if it declares any [requires] or [ensures] clauses.
+*)
 let has_spec (spec : (Var.t, BasilExpr.t) Procedure.proc_spec) : bool =
-  not (List.is_empty spec.requires) || not (List.is_empty spec.ensures)
+  (not (List.is_empty spec.requires)) || not (List.is_empty spec.ensures)
 
 (** Default predicate for [use_spec]: any procedure with a non-trivial spec.
     When true at a call site, callers see only the callee's [requires] and
-    [ensures] (substituted for the call) rather than connecting via the
-    callee's [enter]/[exit] predicates. *)
+    [ensures] (substituted for the call) rather than connecting via the callee's
+    [enter]/[exit] predicates. *)
 let default_use_spec (p : Program.proc) : bool =
   has_spec (Procedure.specification p)
 
-(** Variables live just after the block's phi nodes, i.e. at the start of
-    its regular statements. {!Livevars.run} gives us live-before-phis at
-    [Begin id]; this walks the block's stmts backward starting from
-    live-at-exit ([live (End id)]) and skips the phi step, yielding
-    live-after-phis. This is the set we actually want for a block's CHC
-    predicate parameters: it includes phi targets that are still used, and
-    excludes phi sources that are only consumed by the phi. *)
+(** Variables live just after the block's phi nodes, i.e. at the start of its
+    regular statements. {!Livevars.run} gives us live-before-phis at [Begin id];
+    this walks the block's stmts backward starting from live-at-exit
+    ([live (End id)]) and skips the phi step, yielding live-after-phis. This is
+    the set we actually want for a block's CHC predicate parameters: it includes
+    phi targets that are still used, and excludes phi sources that are only
+    consumed by the phi. *)
 let live_after_phis_of (block : Program.bloc) ~(live_at_exit : VarSet.t) :
     VarSet.t =
   Block.fold_backwards
     ~f:(fun init s -> Stmt.free_vars ~init s)
     ~phi:(fun acc _phis -> acc)
-    ~init:live_at_exit
-    block
+    ~init:live_at_exit block
 
 (** Compute predicate parameters for a block: the procedure's in-parameters
     followed by [live-after-phis] (minus duplicates). *)
@@ -118,7 +118,9 @@ let proc_predicates ~live (proc : Program.proc) : proc_predicates =
            IDMap.add id { name = block_predicate_name proc_id id; params } acc)
          IDMap.empty
   in
-  let enter = { name = predicate_name ~proc:pname ~suffix:"enter"; params = in_params } in
+  let enter =
+    { name = predicate_name ~proc:pname ~suffix:"enter"; params = in_params }
+  in
   let exit =
     {
       name = predicate_name ~proc:pname ~suffix:"exit";
@@ -127,9 +129,9 @@ let proc_predicates ~live (proc : Program.proc) : proc_predicates =
   in
   { block_preds; enter; exit }
 
-(** Encoder state for a single block. Tracks the current variable renaming,
-    the accumulated premises, and the set of binders introduced (for the
-    eventual [forall]). *)
+(** Encoder state for a single block. Tracks the current variable renaming, the
+    accumulated premises, and the set of binders introduced (for the eventual
+    [forall]). *)
 module Encoder = struct
   type t = {
     mutable delta : Var.t VarMap.t;
@@ -151,9 +153,7 @@ module Encoder = struct
 
   let fresh t v =
     t.counter <- t.counter + 1;
-    let nv =
-      Var.copy ~name:(Var.name v ^ "!" ^ string_of_int t.counter) v
-    in
+    let nv = Var.copy ~name:(Var.name v ^ "!" ^ string_of_int t.counter) v in
     t.delta <- VarMap.add v nv t.delta;
     t.vars <- nv :: t.vars;
     nv
@@ -169,9 +169,9 @@ let encode_expr (enc : Encoder.t) (e : BasilExpr.t) : Sexp.t =
   let renamed = BasilExpr.substitute sub e in
   Expr_smt.SMTLib2.of_bexpr renamed
 
-(** Successors of a block, separated into block-local jumps and procedure
-    return edges. *)
 type block_succs = { blocks : ID.t list; returns : bool }
+(** Successors of a block, separated into block-local jumps and procedure return
+    edges. *)
 
 let block_successors (proc : Program.proc) (block_id : ID.t) : block_succs =
   match Procedure.graph proc with
@@ -183,15 +183,14 @@ let block_successors (proc : Program.proc) (block_id : ID.t) : block_succs =
           | Procedure.Vert.Begin id -> { acc with blocks = id :: acc.blocks }
           | Return | Exit -> { acc with returns = true }
           | _ -> failwith "chc_infer: bad CFG structure")
-        g
-        (Procedure.Vert.End block_id)
+        g (Procedure.Vert.End block_id)
         { blocks = []; returns = false }
 
-(** Build a phi-substitution map for the edge from [from_id] into a block:
-    each phi target maps to whichever rhs variable the source block
-    contributes for this edge. Used when computing the head args of a
-    transition clause — the successor's predicate has the phi target as a
-    parameter, and we bind it to the source's value. *)
+(** Build a phi-substitution map for the edge from [from_id] into a block: each
+    phi target maps to whichever rhs variable the source block contributes for
+    this edge. Used when computing the head args of a transition clause — the
+    successor's predicate has the phi target as a parameter, and we bind it to
+    the source's value. *)
 let phi_subst_for_edge ~(from_id : ID.t) (succ_block : Program.bloc) :
     Var.t VarMap.t =
   List.fold_left
@@ -199,13 +198,12 @@ let phi_subst_for_edge ~(from_id : ID.t) (succ_block : Program.bloc) :
       match List.assoc_opt ~eq:ID.equal from_id phi.rhs with
       | Some src -> VarMap.add phi.lhs src acc
       | None -> acc)
-    VarMap.empty
-    succ_block.phis
+    VarMap.empty succ_block.phis
 
 (** Predicate signatures for a callee, derived from its [formal_in_params] and
-    [formal_out_params]. Same naming/ordering convention as
-    {!proc_predicates}, so the call-site clauses line up with the callee's
-    own block-level clauses. *)
+    [formal_out_params]. Same naming/ordering convention as {!proc_predicates},
+    so the call-site clauses line up with the callee's own block-level clauses.
+*)
 let callee_predicates (callee : Program.proc) : predicate * predicate =
   let id = ID.to_string (Procedure.id callee) in
   let in_params =
@@ -226,17 +224,17 @@ let callee_predicates (callee : Program.proc) : predicate * predicate =
   (enter, exit)
 
 (** Encode a single block. Returns one rule clause per outgoing edge (block
-    successor or procedure return). Phi nodes in the successor are resolved
-    by substituting each phi target with the appropriate rhs variable for
-    this edge before doing the Δ lookup.
+    successor or procedure return). Phi nodes in the successor are resolved by
+    substituting each phi target with the appropriate rhs variable for this edge
+    before doing the Δ lookup.
 
-    [use_spec] decides per-callee how the call site connects to the callee:
-    when true, the caller assumes the callee's [ensures] post-call and does
-    not refer to the callee's [enter]/[exit] predicates; when false, the
-    caller emits a [C ⟹ enter⟨f⟩(args)] clause and uses [exit⟨f⟩] as a
-    premise. Spec checking (precondition queries at the call site,
-    postcondition queries on the body) is performed independently of
-    [use_spec] whenever the callee has a [requires] or [ensures]. *)
+    [use_spec] decides per-callee how the call site connects to the callee: when
+    true, the caller assumes the callee's [ensures] post-call and does not refer
+    to the callee's [enter]/[exit] predicates; when false, the caller emits a
+    [C ⟹ enter⟨f⟩(args)] clause and uses [exit⟨f⟩] as a premise. Spec checking
+    (precondition queries at the call site, postcondition queries on the body)
+    is performed independently of [use_spec] whenever the callee has a
+    [requires] or [ensures]. *)
 let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
     (preds : proc_predicates) (proc : Program.proc) (block_id : ID.t)
     (block : Program.bloc) : clause list =
@@ -270,7 +268,9 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
       | Stmt.Instr_Assign { al; _ } ->
           (* Evaluate RHSs in parallel before binding any new LHS — matches the
              simultaneous-assignment semantics of [Instr_Assign]. *)
-          let rhss = List.map (fun (lhs, rhs) -> (lhs, encode_expr enc rhs)) al in
+          let rhss =
+            List.map (fun (lhs, rhs) -> (lhs, encode_expr enc rhs)) al
+          in
           List.iter
             (fun (lhs, rhs_sexp) ->
               let fresh = Encoder.fresh enc lhs in
@@ -332,7 +332,7 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
                   | None ->
                       failwith
                         ("chc_infer: missing return binding " ^ name
-                        ^ " at call to " ^ ID.to_string procid))
+                       ^ " at call to " ^ ID.to_string procid))
                 (Procedure.formal_out_params callee)
                 VarMap.empty
             in
@@ -347,10 +347,10 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
             (* Assume each ensures clause (substituted) post-call. *)
             List.iter
               (fun ens ->
-                Encoder.add_premise enc
-                  (encode_expr enc (apply_full_subst ens)))
+                Encoder.add_premise enc (encode_expr enc (apply_full_subst ens)))
               spec.ensures
-          end else begin
+          end
+          else begin
             (* Full encoding: connect to the callee's enter/exit predicates. *)
             let enter_pred, exit_pred = callee_predicates callee in
             (* Build arg sexps in the callee's formal-in-params order
@@ -363,7 +363,7 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
                   | None ->
                       failwith
                         ("chc_infer: missing arg " ^ name ^ " at call to "
-                        ^ ID.to_string procid))
+                       ^ ID.to_string procid))
             in
             (* Emit C ⟹ enter⟨f⟩(args). Captures Encoder state before
                fresh-naming the returns. *)
@@ -377,7 +377,7 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
                   | None ->
                       failwith
                         ("chc_infer: missing return binding " ^ name
-                        ^ " at call to " ^ ID.to_string procid))
+                       ^ " at call to " ^ ID.to_string procid))
             in
             (* Conjoin exit⟨f⟩(args, returns) to premises. *)
             Encoder.add_premise enc
@@ -405,8 +405,14 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
           |> Option.get_exn_or "chc_infer: missing successor block"
         in
         let phi_subst = phi_subst_for_edge ~from_id:block_id succ_block in
-        let head = apply_predicate succ_pred (mk_head_args ~phi_subst succ_pred) in
-        { vars = Encoder.vars enc; premises = Encoder.premises enc; head = Some head })
+        let head =
+          apply_predicate succ_pred (mk_head_args ~phi_subst succ_pred)
+        in
+        {
+          vars = Encoder.vars enc;
+          premises = Encoder.premises enc;
+          head = Some head;
+        })
       succs.blocks
   in
   let return_clauses =
@@ -415,7 +421,13 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
         apply_predicate preds.exit
           (mk_head_args ~phi_subst:VarMap.empty preds.exit)
       in
-      [ { vars = Encoder.vars enc; premises = Encoder.premises enc; head = Some head } ]
+      [
+        {
+          vars = Encoder.vars enc;
+          premises = Encoder.premises enc;
+          head = Some head;
+        };
+      ]
     else []
   in
   List.rev !call_clauses @ List.rev !queries @ block_clauses @ return_clauses
@@ -458,28 +470,23 @@ let encode_proc ~(use_spec : Program.proc -> bool) (prog : Program.t)
   (preds, connect @ block_clauses)
 
 let all_predicates (preds : proc_predicates) : predicate list =
-  preds.enter :: preds.exit
-  :: (IDMap.values preds.block_preds |> Iter.to_list)
+  preds.enter :: preds.exit :: (IDMap.values preds.block_preds |> Iter.to_list)
 
-(** Entry fact for a procedure whose body needs to be reachable
-    independently of any caller (main, or any procedure with [use_spec] =
-    true): [⟦requires⟧ ⟹ enter⟨f⟩(in_params)]. The precondition defaults to
-    [true] when [requires] is empty, yielding an unconditional entry fact. *)
+(** Entry fact for a procedure whose body needs to be reachable independently of
+    any caller (main, or any procedure with [use_spec] = true):
+    [⟦requires⟧ ⟹ enter⟨f⟩(in_params)]. The precondition defaults to [true] when
+    [requires] is empty, yielding an unconditional entry fact. *)
 let entry_fact_for (proc : Program.proc) (enter : predicate) : clause =
   let requires = (Procedure.specification proc).requires in
   let premises = List.map Expr_smt.SMTLib2.of_bexpr requires in
   let args = List.map (fun v -> atom (Var.name v)) enter.params in
-  {
-    vars = enter.params;
-    premises;
-    head = Some (apply_predicate enter args);
-  }
+  { vars = enter.params; premises; head = Some (apply_predicate enter args) }
 
 (** One postcondition query per [ensures] clause:
-    [exit⟨f⟩(in_params, out_params) ∧ ¬ensures ⟹ ⊥]. Asserts the body
-    actually satisfies each user-declared postcondition. *)
-let postcondition_queries (proc : Program.proc) (exit : predicate) :
-    clause list =
+    [exit⟨f⟩(in_params, out_params) ∧ ¬ensures ⟹ ⊥]. Asserts the body actually
+    satisfies each user-declared postcondition. *)
+let postcondition_queries (proc : Program.proc) (exit : predicate) : clause list
+    =
   let ensures = (Procedure.specification proc).ensures in
   let args = List.map (fun v -> atom (Var.name v)) exit.params in
   let exit_app = apply_predicate exit args in
@@ -496,25 +503,21 @@ let postcondition_queries (proc : Program.proc) (exit : predicate) :
 (** Encode the whole program:
 
     - Body clauses for every procedure.
-    - Entry fact [⟦requires⟧ ⟹ enter⟨f⟩] for procedures whose body needs to
-      be reachable independently of any caller — main, and every procedure
-      for which [use_spec] is true (call sites of those don't connect to
+    - Entry fact [⟦requires⟧ ⟹ enter⟨f⟩] for procedures whose body needs to be
+      reachable independently of any caller — main, and every procedure for
+      which [use_spec] is true (call sites of those don't connect to
       [enter⟨f⟩]).
-    - Postcondition queries [exit⟨f⟩ ∧ ¬ensures ⟹ ⊥] for *every* procedure
-      with a non-empty [ensures], regardless of [use_spec]. Combined with
-      the precondition queries emitted at every call site (also regardless
-      of [use_spec]), this means spec checking is performed whenever a spec
-      is present; [use_spec] only governs whether callers see the body via
+    - Postcondition queries [exit⟨f⟩ ∧ ¬ensures ⟹ ⊥] for *every* procedure with
+      a non-empty [ensures], regardless of [use_spec]. Combined with the
+      precondition queries emitted at every call site (also regardless of
+      [use_spec]), this means spec checking is performed whenever a spec is
+      present; [use_spec] only governs whether callers see the body via
       [enter]/[exit] predicates or via the spec. *)
-let encode_program ?(use_spec = default_use_spec) (prog : Program.t)
-    : predicate list * clause list =
-  let main_id =
-    Program.entry_proc_opt prog |> Option.map Procedure.id
-  in
+let encode_program ?(use_spec = default_use_spec) (prog : Program.t) :
+    predicate list * clause list =
+  let main_id = Program.entry_proc_opt prog |> Option.map Procedure.id in
   let is_main p =
-    match main_id with
-    | Some id -> ID.equal (Procedure.id p) id
-    | None -> false
+    match main_id with Some id -> ID.equal (Procedure.id p) id | None -> false
   in
   let needs_entry_fact p = is_main p || use_spec p in
   let per_proc =
@@ -522,16 +525,13 @@ let encode_program ?(use_spec = default_use_spec) (prog : Program.t)
     |> Iter.map (fun (_, proc) -> (proc, encode_proc ~use_spec prog proc))
     |> Iter.to_list
   in
-  let preds =
-    List.concat_map (fun (_, (p, _)) -> all_predicates p) per_proc
-  in
+  let preds = List.concat_map (fun (_, (p, _)) -> all_predicates p) per_proc in
   let body_clauses = List.concat_map (fun (_, (_, cs)) -> cs) per_proc in
   let spec_clauses =
     List.concat_map
       (fun (proc, (proc_preds, _)) ->
         let entry =
-          if needs_entry_fact proc then
-            [ entry_fact_for proc proc_preds.enter ]
+          if needs_entry_fact proc then [ entry_fact_for proc proc_preds.enter ]
           else []
         in
         let post = postcondition_queries proc proc_preds.exit in
@@ -561,9 +561,8 @@ type solve_result = Sat | Unsat | Unknown
 (** Open a Z3 process configured for Spacer with model-preserving options.
     Spacer's slicing and eager-inlining transformations rewrite the input in
     ways that drop predicate parameters or fuse predicates together, which
-    breaks our positional-parameter mapping when decoding the model. Turn
-    both off so [(get-model)] returns predicates that line up with what we
-    sent. *)
+    breaks our positional-parameter mapping when decoding the model. Turn both
+    off so [(get-model)] returns predicates that line up with what we sent. *)
 let open_spacer () =
   let module Solver = Bincaml_util.Smt.Solver in
   let s = Solver.create Bincaml_util.Smt.Config.z3 in
@@ -572,11 +571,11 @@ let open_spacer () =
   Solver.set_logic s "HORN";
   s
 
+type model_def = string * (string * Sexp.t) list * Sexp.t
 (** One [define-fun] entry from a parsed [get-model]: the predicate name, its
     positional parameters with sorts (Spacer typically emits fresh names like
-    [x!0], [x!1]), and the body. Callers map params back to our actual
-    variables by position. *)
-type model_def = string * (string * Sexp.t) list * Sexp.t
+    [x!0], [x!1]), and the body. Callers map params back to our actual variables
+    by position. *)
 
 (** Parse a model returned by Z3 [get-model] into a list of [model_def]s. *)
 let parse_model (model : Sexp.t) : model_def list =
@@ -585,14 +584,8 @@ let parse_model (model : Sexp.t) : model_def list =
       List.filter_map
         (fun def ->
           match def with
-          | `List
-              [
-                `Atom "define-fun";
-                `Atom name;
-                `List params;
-                _ret;
-                body;
-              ] ->
+          | `List [ `Atom "define-fun"; `Atom name; `List params; _ret; body ]
+            ->
               let params =
                 List.filter_map
                   (fun p ->
@@ -610,16 +603,12 @@ let parse_model (model : Sexp.t) : model_def list =
     {!Bincaml_util.Smt.Solver} directly; the only HORN-specific bit is the
     [(set-logic HORN)] preamble. Returns the [solve_result] together with the
     parsed model on Sat. *)
-let solve_and_get_model (preds : predicate list) (clauses : clause list)
-    : solve_result * model_def list option =
+let solve_and_get_model (preds : predicate list) (clauses : clause list) :
+    solve_result * model_def list option =
   let module Solver = Bincaml_util.Smt.Solver in
   let s = open_spacer () in
-  List.iter
-    (fun pr -> Solver.add_command s (declare_predicate pr))
-    preds;
-  List.iter
-    (fun c -> Solver.add_command s (clause_to_sexp c))
-    clauses;
+  List.iter (fun pr -> Solver.add_command s (declare_predicate pr)) preds;
+  List.iter (fun c -> Solver.add_command s (clause_to_sexp c)) clauses;
   let result =
     match Solver.check s with
     | Sat ->
@@ -645,14 +634,13 @@ let preprocess_model_body (s : Sexp.t) : Sexp.t =
   in
   strip expanded
 
-(** Decode a predicate body returned by the solver into a [BasilExpr.t],
-    binding the model's positional parameters to the predicate's actual
-    variables. Returns [None] if the body contains constructs
-    {!Lang.Expr_smt.SMTLib2.expr_of_smt} can't decode (e.g. [ite] — see TODO
-    in [expr_smt.ml]). *)
-let extract_invariant (pred : predicate)
-    (model_params : (string * Sexp.t) list) (body : Sexp.t) : BasilExpr.t option
-    =
+(** Decode a predicate body returned by the solver into a [BasilExpr.t], binding
+    the model's positional parameters to the predicate's actual variables.
+    Returns [None] if the body contains constructs
+    {!Lang.Expr_smt.SMTLib2.expr_of_smt} can't decode (e.g. [ite] — see TODO in
+    [expr_smt.ml]). *)
+let extract_invariant (pred : predicate) (model_params : (string * Sexp.t) list)
+    (body : Sexp.t) : BasilExpr.t option =
   if List.length model_params <> List.length pred.params then None
   else
     let vardefs =
@@ -664,9 +652,9 @@ let extract_invariant (pred : predicate)
     in
     Expr_smt.SMTLib2.expr_of_smt vardefs (preprocess_model_body body)
 
-(** [true] when an expression is the boolean literal [true] — i.e. the
-    solver gave us no useful information. We don't emit these as
-    [requires]/[ensures]. *)
+(** [true] when an expression is the boolean literal [true] — i.e. the solver
+    gave us no useful information. We don't emit these as [requires]/[ensures].
+*)
 let is_trivially_true (e : BasilExpr.t) : bool =
   match BasilExpr.unfix e with
   | Constant { const = `Bool true; _ } -> true
@@ -674,11 +662,11 @@ let is_trivially_true (e : BasilExpr.t) : bool =
 
 (** Decode every model definition that names a known predicate into a
     [BasilExpr.t], keyed by predicate name. Skips definitions whose name we
-    don't recognise (Spacer occasionally emits auxiliary functions), whose
-    body can't be decoded by {!Expr_smt.SMTLib2.expr_of_smt}, or which
-    decode to a trivially-true expression (uninformative). *)
-let decode_model (preds : predicate list) (defs : model_def list)
-    : BasilExpr.t StringMap.t =
+    don't recognise (Spacer occasionally emits auxiliary functions), whose body
+    can't be decoded by {!Expr_smt.SMTLib2.expr_of_smt}, or which decode to a
+    trivially-true expression (uninformative). *)
+let decode_model (preds : predicate list) (defs : model_def list) :
+    BasilExpr.t StringMap.t =
   let pred_by_name =
     List.fold_left
       (fun acc (p : predicate) -> StringMap.add p.name p acc)
@@ -695,28 +683,28 @@ let decode_model (preds : predicate list) (defs : model_def list)
     StringMap.empty defs
 
 (** Loop heads of a procedure — SCC component heads in the forward weak
-    topological ordering. Every cycle in the CFG has exactly one of these as
-    its entry point. *)
+    topological ordering. Every cycle in the CFG has exactly one of these as its
+    entry point. *)
 let loop_heads (proc : Program.proc) : ID.t list =
   Procedure.iter_blocks_topo_fwd_headers proc
   |> Iter.filter_map (fun (id, h, _b) ->
       match h with `Header -> Some id | `Vert -> None)
   |> Iter.to_list
 
-(** Add [requires]/[ensures] to [proc] based on the solver's interpretations
-    of its [enter]/[exit] predicates, and prepend [Instr_Assert] at each loop
-    head with that block predicate's inferred invariant. [invs] maps each
-    predicate name to its (already-decoded) inferred body — typically the
-    output of {!decode_model}, or a per-predicate conjunction across multiple
-    solver calls in per-query mode.
+(** Add [requires]/[ensures] to [proc] based on the solver's interpretations of
+    its [enter]/[exit] predicates, and prepend [Instr_Assert] at each loop head
+    with that block predicate's inferred invariant. [invs] maps each predicate
+    name to its (already-decoded) inferred body — typically the output of
+    {!decode_model}, or a per-predicate conjunction across multiple solver calls
+    in per-query mode.
 
-    Procedure-level annotation is skipped when [use_spec proc] is true: in
-    that case the encoding has already constrained [enter⟨f⟩]/[exit⟨f⟩] to
-    be consistent with the procedure's [requires]/[ensures] (via the
-    precondition-gated entry fact and the postcondition queries), so
-    Spacer's interpretations are essentially restatements of the spec in
-    whatever shape it prefers. Attaching them would duplicate the spec.
-    Loop-head invariants are still attached either way. *)
+    Procedure-level annotation is skipped when [use_spec proc] is true: in that
+    case the encoding has already constrained [enter⟨f⟩]/[exit⟨f⟩] to be
+    consistent with the procedure's [requires]/[ensures] (via the
+    precondition-gated entry fact and the postcondition queries), so Spacer's
+    interpretations are essentially restatements of the spec in whatever shape
+    it prefers. Attaching them would duplicate the spec. Loop-head invariants
+    are still attached either way. *)
 let annotate_proc ~(use_spec : Program.proc -> bool)
     ~(invs : BasilExpr.t StringMap.t) (proc : Program.proc) : Program.proc =
   let live = Livevars.run proc in
@@ -764,35 +752,30 @@ let annotate_proc ~(use_spec : Program.proc -> bool)
        proc
 
 (** Full pass: encode the program as CHCs, solve, and annotate each procedure
-    with inferred [requires]/[ensures] when the solver returns sat. On unsat
-    or unknown the program is returned unchanged. *)
+    with inferred [requires]/[ensures] when the solver returns sat. On unsat or
+    unknown the program is returned unchanged. *)
 let infer_invariants (prog : Program.t) : Program.t =
   let use_spec = default_use_spec in
   let preds, clauses = encode_program ~use_spec prog in
   Logs.info (fun m ->
-      m "Submitting %d predicates and %d clauses to solver"
-        (List.length preds) (List.length clauses));
+      m "Submitting %d predicates and %d clauses to solver" (List.length preds)
+        (List.length clauses));
   match solve_and_get_model preds clauses with
   | Sat, Some defs ->
       Logs.info (fun m ->
-          m "Solver returned sat; extracted %d definitions"
-            (List.length defs));
+          m "Solver returned sat; extracted %d definitions" (List.length defs));
       let invs = decode_model preds defs in
-      Program.map_procedures
-        (fun _ p -> annotate_proc ~use_spec ~invs p)
-        prog
+      Program.map_procedures (fun _ p -> annotate_proc ~use_spec ~invs p) prog
   | Unsat, _ ->
-      Logs.warn (fun m ->
-          m "Solver returned unsat — no invariants extracted");
+      Logs.warn (fun m -> m "Solver returned unsat — no invariants extracted");
       prog
   | Unknown, _ | Sat, None ->
-      Logs.warn (fun m ->
-          m "Solver returned unknown — no invariants extracted");
+      Logs.warn (fun m -> m "Solver returned unknown — no invariants extracted");
       prog
 
-(** Per-query variant: one solver call per query clause, conjoining the
-    inferred invariants across successful calls. See {!infer_invariants} for
-    the single-call version. *)
+(** Per-query variant: one solver call per query clause, conjoining the inferred
+    invariants across successful calls. See {!infer_invariants} for the
+    single-call version. *)
 let infer_invariants_per_query (prog : Program.t) : Program.t =
   let use_spec = default_use_spec in
   let preds, clauses = encode_program ~use_spec prog in
@@ -838,9 +821,11 @@ let infer_invariants_per_query (prog : Program.t) : Program.t =
       !accum
   in
   Logs.info (fun m ->
-      m "Per-query mode: %d/%d queries succeeded; extracted invariants for \
-         %d predicates"
-        !successes n_queries (StringMap.cardinal conjoined));
+      m
+        "Per-query mode: %d/%d queries succeeded; extracted invariants for %d \
+         predicates"
+        !successes n_queries
+        (StringMap.cardinal conjoined));
   Program.map_procedures
     (fun _ p -> annotate_proc ~use_spec ~invs:conjoined p)
     prog
