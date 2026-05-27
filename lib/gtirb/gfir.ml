@@ -1,17 +1,18 @@
 open Bincaml_util.Common
 open Gtirb_proto
-module OcamlResult = Result
 open Ocaml_protoc_plugin
 open IR.Gtirb.Proto
 open ByteInterval.Gtirb.Proto
 open Module.Gtirb.Proto
 open Section.Gtirb.Proto
 open CFG.Gtirb.Proto
-module Result = OcamlResult
 open Load_auxdata
 module UUIDMap = UUIDMap
 module UUIDSet = UUIDSet
+
 module AD = Load_auxdata.Loaders
+(** Auxdata parsers *)
+
 open Conf
 
 (** {2 GTIRB Frontend Intermediate Representation} *)
@@ -114,23 +115,19 @@ type block = Gtirb.block [@@deriving eq, ord, show { with_path = false }]
 (** code/data block with absolute address *)
 
 type temp_proc = {
-  name : string;
-  id : ID.t;
-  uuid : UUID.t; (* generic function UUID*)
-  entries : UUIDSet.t; (* entry block uuids *)
-  blocks : UUIDSet.t; (* UUIDs of blocks internal to this procedure *)
+  name : string;  (** human-readable procedure name *)
+  id : ID.t;  (** procedure ID attached to a program (matches name) *)
+  uuid : UUID.t;  (** generic function UUID*)
+  entries : UUIDSet.t;  (** entry block uuids *)
+  blocks : UUIDSet.t;  (** UUIDs of blocks internal to this procedure *)
   code_blocks : Gtirb.block UUIDMap.t;  (** block definitions *)
-  cfg : G.t;
+  cfg : G.t;  (** intraprocedural control-flow graph *)
 }
 (** Gfir procedure; basic blocks containing sequences of opcodes or statemetns
 *)
 
-let endian_reverse (opcode : string) : string =
-  let len = String.length opcode in
-  let getrev i = String.get opcode (len - 1 - i) in
-  String.init len getrev
-
-(** Load a prodobuf gtirb module into a set of temp_procs *)
+(** Load a prodobuf gtirb module into a set of temp_procs, use [prog] to
+    generate procedure IDs.*)
 let gtirb_to_cfg prog (c : CFG.t) (m : Module.t) =
   let blocks = Gtirb.get_code_block_opcodes m in
 

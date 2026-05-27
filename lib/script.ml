@@ -315,7 +315,7 @@ let load_gtirb st fname =
 let dbg_gtirb st fname =
   let gtirb, a = P.pair_opt P.string P.string fname in
   file_opt a (fun chan ->
-      let p = Gtirb_frontend.load_gtirb_cfg gtirb in
+      let p = Gtirb_frontend.load_gtirb_gfir gtirb in
       p |> Option.to_iter
       |> Iter.flat_map Gtirb_frontend.UUIDMap.to_iter
       |> Iter.map snd

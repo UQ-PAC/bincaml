@@ -1,13 +1,11 @@
 open Bincaml_util.Common
 open Gtirb_proto
-module OcamlResult = Result
 open Ocaml_protoc_plugin
 open IR.Gtirb.Proto
 open ByteInterval.Gtirb.Proto
 open Module.Gtirb.Proto
 open Section.Gtirb.Proto
 open CFG.Gtirb.Proto
-module Result = OcamlResult
 open Load_auxdata
 module UUIDMap = UUIDMap
 module UUIDSet = UUIDSet

@@ -2,7 +2,12 @@ open Lang.Common
 open Option
 module UUIDMap = Load_auxdata.UUIDMap
 module UUIDSet = Load_auxdata.UUIDSet
+
 module Gfir = Gfir
+(** Intermediate representation used by the frontend *)
+
+module Gfir_to_bincaml = Gfir_to_bincaml
+(** Translation from frontend intermediate represntation to bincaml IR *)
 
 let load_gtirb_prog filename =
   let open Result in
@@ -16,7 +21,7 @@ let load_gtirb_prog filename =
   | _ :: _ -> Error "got more than one module"
   | [] -> Error "got zero modules"
 
-let load_gtirb_cfg filename =
+let load_gtirb_gfir filename =
   let open Option in
   (* protobuf IR *)
   let g = Gtirb.of_file filename in
