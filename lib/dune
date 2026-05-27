@@ -29,7 +29,7 @@
  (public_name bincaml)
  (modules passes script)
  (libraries
-   bincaml.gtirb
+  bincaml.gtirb
   loader
   containers.pp
   pp_loc
