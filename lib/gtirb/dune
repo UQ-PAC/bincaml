@@ -1,7 +1,16 @@
 (library
  (public_name bincaml.gtirb)
- (name gtirb)
- (modules load_auxdata gtirb UUID opcode disas)
+ (name gtirb_frontend)
+ (modules
+  load_auxdata
+  gtirb
+  UUID
+  opcode
+  disas
+  gfir
+  gfir_to_bincaml
+  conf
+  gtirb_frontend)
  (flags :standard -w -69)
  (libraries
   base64

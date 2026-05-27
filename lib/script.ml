@@ -301,7 +301,7 @@ let save_history st fname =
 let load_gtirb st fname =
   let gtirb, a = P.pair_opt P.string P.string fname in
   file_opt a (fun chan ->
-      let p = Gtirb.load_gtirb_prog gtirb in
+      let p = Gtirb_frontend.load_gtirb_prog gtirb in
       let p =
         match p with
         | Ok e ->
@@ -315,13 +315,13 @@ let load_gtirb st fname =
 let dbg_gtirb st fname =
   let gtirb, a = P.pair_opt P.string P.string fname in
   file_opt a (fun chan ->
-      let p = Gtirb.load_gtirb_cfg gtirb in
+      let p = Gtirb_frontend.load_gtirb_cfg gtirb in
       p |> Option.to_iter
-      |> Iter.flat_map Gtirb.UUIDMap.to_iter
+      |> Iter.flat_map Gtirb_frontend.UUIDMap.to_iter
       |> Iter.map snd
-      |> Iter.iter (fun (p : Gtirb.Gtirb_CFG.temp_proc) ->
+      |> Iter.iter (fun (p : Gtirb_frontend.Gfir.temp_proc) ->
           print_endline p.name;
-          Gtirb.(Gtirb_CFG.D.output_graph chan p.cfg)));
+          Gtirb_frontend.(Gfir.D.output_graph chan p.cfg)));
   st
 
 let cmds_list =
