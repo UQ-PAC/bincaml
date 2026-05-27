@@ -12,19 +12,6 @@ open Load_auxdata
 module UUIDMap = UUIDMap
 module UUIDSet = UUIDSet
 
-type block = {
-  uuid : UUID.t;
-  contents : string;
-  address : int;
-  size : int;
-  opcodes : string list option;
-}
-[@@deriving eq, ord, show { with_path = false }]
-(** code/data block with absolute address *)
-
-type content_block = { block : Block.t; raw : bytes; address : int }
-(** Code/data/empty block with address relative to code section *)
-
 type config = { opcode_length : int; pc_var : Var.t; disas : bool }
 
 let conf =
@@ -32,12 +19,25 @@ let conf =
   { opcode_length = 4; pc_var; disas = false }
 
 module Gtirb = struct
+  type block = {
+    uuid : UUID.t;
+    contents : string;
+    address : int;
+    size : int;
+    opcodes : string list option;
+  }
+  [@@deriving eq, ord, show { with_path = false }]
+  (** code/data block with absolute address *)
+
+  type content_block = { block : Block.t; raw : bytes; address : int }
+  (** Code/data/empty block of raw bytes, with absolute address *)
+
   let endian_reverse (opcode : string) : string =
     let len = String.length opcode in
     let getrev i = String.get opcode (len - 1 - i) in
     String.init len getrev
 
-  let make_block ~(need_flip : bool) block : block option =
+  let chop_block_opcodes ~(need_flip : bool) block : block option =
     let open Option in
     let contents size () =
       if Bytes.length block.raw = 0 then String.empty
@@ -104,7 +104,7 @@ module Gtirb = struct
     let need_flip =
       m.byte_order |> function ByteOrder.LittleEndian -> true | _ -> false
     in
-    let rblocks = List.filter_map (make_block ~need_flip) ival_blks in
+    let rblocks = List.filter_map (chop_block_opcodes ~need_flip) ival_blks in
     rblocks
 
   let of_file infile =
@@ -138,6 +138,7 @@ module Gtirb = struct
 end
 
 module AD = Load_auxdata.Loaders
+(** Auxdata loaders *)
 
 (** Initial Intermediate representation for ddisasm CFG *)
 module Gtirb_CFG = struct
@@ -229,111 +230,110 @@ module Gtirb_CFG = struct
       in
       [ `Fontname "Mono"; `Label n ]
   end)
+
+  type temp_proc = {
+    name : string;
+    id : ID.t;
+    uuid : UUID.t; (* generic function UUID*)
+    entries : UUIDSet.t; (* entry block uuids *)
+    blocks : UUIDSet.t;
+    code_blocks : Gtirb.block UUIDMap.t;
+    cfg : G.t;
+  }
+
+  let gtirb_to_cfg prog (c : CFG.t) (m : Module.t) =
+    let blocks = Gtirb.get_code_block_opcodes m in
+
+    let sym =
+      m.symbols
+      |> List.map (fun (s : Symbol.Gtirb.Proto.Symbol.t) ->
+          (UUID.of_bytes s.uuid, s.name))
+      |> UUIDMap.of_list
+    in
+    let all_blocks =
+      List.map (fun (b : Gtirb.block) -> (b.uuid, b)) blocks |> UUIDMap.of_list
+    in
+    let auxdata =
+      m.aux_data |> StringMap.of_list |> StringMap.filter_map (fun _ v -> v)
+    in
+    let or_error default = function
+      | Ok e -> e
+      | Error msg ->
+          Logs.warn (fun m -> m "load:gtirb %s" msg);
+          default
+    in
+    let func_names =
+      AD.function_names auxdata |> or_error UUIDMap.empty
+      |> UUIDMap.filter_map (fun _ u -> UUIDMap.find_opt u sym)
+    in
+    let func_blocks = AD.function_blocks auxdata |> or_error UUIDMap.empty in
+    let block_functions =
+      func_blocks |> UUIDMap.to_iter
+      |> Iter.flat_map (fun (func, blocks) ->
+          UUIDSet.to_iter blocks |> Iter.map (fun b -> (b, func)))
+      |> UUIDMap.of_iter
+    in
+    let block_member_of ~proc block =
+      Option.(
+        UUIDMap.get block block_functions
+        >|= (fun b -> UUID.equal b proc)
+        |> get_or ~default:false)
+    in
+    let func_entry_blocks =
+      AD.function_entries auxdata |> or_error UUIDMap.empty
+    in
+    let make_temp_proc uuid (name : string) =
+      let entries =
+        UUIDMap.get uuid func_entry_blocks |> function
+        | Some b -> b
+        | None ->
+            Logs.warn (fun m ->
+                m "No entry blocks for proc: %s %s" (UUID.show uuid) name);
+            UUIDSet.empty
+      in
+      let blocks, code_blocks =
+        UUIDMap.get uuid func_blocks |> function
+        | Some b ->
+            ( b,
+              UUIDSet.to_iter b
+              |> Iter.filter_map (fun id ->
+                  UUIDMap.get id all_blocks |> fun a ->
+                  Option.bind a (fun b -> Some (id, b)))
+              |> UUIDMap.of_iter )
+        | None ->
+            Logs.warn (fun m ->
+                m "No entry blocks for proc: %s %s" (UUID.show uuid) name);
+            (UUIDSet.empty, UUIDMap.empty)
+      in
+      let id = Lang.Program.declare_name ("@" ^ name) prog in
+      { uuid; name; id; entries; blocks; code_blocks; cfg = G.empty }
+    in
+    let procs = UUIDMap.mapi make_temp_proc func_names in
+    let make_cfg (p : temp_proc) =
+      let conv_vert e =
+        if block_member_of ~proc:p.uuid e then Vert.Internal e else External e
+      in
+      let module E = Edge in
+      let edges =
+        Gtirb_proto.CFG.Gtirb.Proto.Edge.(
+          c.edges
+          |> List.filter (fun { source_uuid; _ } ->
+              block_member_of ~proc:p.uuid (UUID.of_bytes source_uuid))
+          |> List.map (fun { source_uuid; label; target_uuid } ->
+              ( conv_vert @@ UUID.of_bytes source_uuid,
+                E.of_gtirb_label label,
+                conv_vert @@ UUID.of_bytes target_uuid )))
+      in
+      let cfg = List.fold_left (fun cfg e -> G.add_edge_e cfg e) p.cfg edges in
+      { p with cfg }
+    in
+    let procs = UUIDMap.map make_cfg procs in
+    procs
 end
 
-type temp_proc = {
-  name : string;
-  id : ID.t;
-  uuid : UUID.t; (* generic function UUID*)
-  entries : UUIDSet.t; (* entry block uuids *)
-  blocks : UUIDSet.t;
-  code_blocks : block UUIDMap.t;
-  cfg : Gtirb_CFG.G.t;
-}
-
-let gtirb_to_cfg prog (c : CFG.t) (m : Module.t) =
-  let blocks = Gtirb.get_code_block_opcodes m in
-
-  let sym =
-    m.symbols
-    |> List.map (fun (s : Symbol.Gtirb.Proto.Symbol.t) ->
-        (UUID.of_bytes s.uuid, s.name))
-    |> UUIDMap.of_list
-  in
-  let all_blocks =
-    List.map (fun (b : block) -> (b.uuid, b)) blocks |> UUIDMap.of_list
-  in
-  let auxdata =
-    m.aux_data |> StringMap.of_list |> StringMap.filter_map (fun _ v -> v)
-  in
-  let or_error default = function
-    | Ok e -> e
-    | Error msg ->
-        Logs.warn (fun m -> m "load:gtirb %s" msg);
-        default
-  in
-  let func_names =
-    AD.function_names auxdata |> or_error UUIDMap.empty
-    |> UUIDMap.filter_map (fun _ u -> UUIDMap.find_opt u sym)
-  in
-  let func_blocks = AD.function_blocks auxdata |> or_error UUIDMap.empty in
-  let block_functions =
-    func_blocks |> UUIDMap.to_iter
-    |> Iter.flat_map (fun (func, blocks) ->
-        UUIDSet.to_iter blocks |> Iter.map (fun b -> (b, func)))
-    |> UUIDMap.of_iter
-  in
-  let block_member_of ~proc block =
-    Option.(
-      UUIDMap.get block block_functions
-      >|= (fun b -> UUID.equal b proc)
-      |> get_or ~default:false)
-  in
-  let func_entry_blocks =
-    AD.function_entries auxdata |> or_error UUIDMap.empty
-  in
-  let make_temp_proc uuid (name : string) =
-    let entries =
-      UUIDMap.get uuid func_entry_blocks |> function
-      | Some b -> b
-      | None ->
-          Logs.warn (fun m ->
-              m "No entry blocks for proc: %s %s" (UUID.show uuid) name);
-          UUIDSet.empty
-    in
-    let blocks, code_blocks =
-      UUIDMap.get uuid func_blocks |> function
-      | Some b ->
-          ( b,
-            UUIDSet.to_iter b
-            |> Iter.filter_map (fun id ->
-                UUIDMap.get id all_blocks |> fun a ->
-                Option.bind a (fun b -> Some (id, b)))
-            |> UUIDMap.of_iter )
-      | None ->
-          Logs.warn (fun m ->
-              m "No entry blocks for proc: %s %s" (UUID.show uuid) name);
-          (UUIDSet.empty, UUIDMap.empty)
-    in
-    let id = Lang.Program.declare_name ("@" ^ name) prog in
-    { uuid; name; id; entries; blocks; code_blocks; cfg = Gtirb_CFG.G.empty }
-  in
-  let procs = UUIDMap.mapi make_temp_proc func_names in
-  let make_cfg (p : temp_proc) =
-    let open CFG in
-    let open Edge in
-    let conv_vert e =
-      if block_member_of ~proc:p.uuid e then Gtirb_CFG.Vert.Internal e
-      else External e
-    in
-    let edges =
-      c.edges
-      |> List.filter (fun { source_uuid; _ } ->
-          block_member_of ~proc:p.uuid (UUID.of_bytes source_uuid))
-      |> List.map (fun { source_uuid; label; target_uuid } ->
-          ( conv_vert @@ UUID.of_bytes source_uuid,
-            Gtirb_CFG.Edge.of_gtirb_label label,
-            conv_vert @@ UUID.of_bytes target_uuid ))
-    in
-    let cfg =
-      List.fold_left (fun cfg e -> Gtirb_CFG.G.add_edge_e cfg e) p.cfg edges
-    in
-    { p with cfg }
-  in
-  let procs = UUIDMap.map make_cfg procs in
-  procs
-
 module ToIR = struct
+  open Gtirb_CFG
+
   open struct
     let addr_equal_expr addr =
       Lang.Expr.BasilExpr.(
@@ -365,11 +365,11 @@ module ToIR = struct
 
   (* Update (procedure, uuidmap) with a newly created IR block with opcodes and
      PC address contract *)
-  let add_new_code_block succ_addr (proc, blockmap) (b : block) =
+  let add_new_code_block succ_addr (proc, blockmap) (b : Gtirb.block) =
     let open Lang in
     let open Option in
     let bl =
-      let* opcodes = b.opcodes in
+      let* opcodes = Gtirb.(b.opcodes) in
       let instrs =
         opcodes
         |> List.map (fun op ->
@@ -544,7 +544,7 @@ module ToIR = struct
             | Vert.External uuid -> UUIDMap.find_opt uuid all_blocks
             | Vert.Stmts { uuid } ->
                 Option.bind uuid (fun uuid -> UUIDMap.find_opt uuid all_blocks))
-          |> Iter.map (fun (b : block) -> b.address))
+          |> Iter.map (fun (b : Gtirb.block) -> b.address))
       with Invalid_argument _ -> Iter.empty
     in
     let name = Lang.Program.declare_name ("@" ^ p.name) m in
@@ -559,11 +559,11 @@ module ToIR = struct
       |> Iter.filter_map (function
         | Gtirb_CFG.Vert.External uuid ->
             Option.map
-              (fun (b : block) -> (uuid, b.address, []))
+              (fun (b : Gtirb.block) -> (uuid, b.address, []))
               (UUIDMap.find_opt uuid all_blocks)
         | Gtirb_CFG.Vert.Stmts { uuid = Some uuid; stmts } ->
             Option.map
-              (fun (b : block) -> (uuid, b.address, stmts))
+              (fun (b : Gtirb.block) -> (uuid, b.address, stmts))
               (UUIDMap.find_opt uuid all_blocks)
         | _ -> None)
       |> Iter.fold (add_new_simple_block succ_addr) (proc, blocks)
@@ -619,7 +619,8 @@ let load_gtirb_cfg filename =
       (fun a m ->
         UUIDMap.union
           (fun _ _ _ -> failwith "procedure present in two modules")
-          a (gtirb_to_cfg p c m))
+          a
+          (Gtirb_CFG.gtirb_to_cfg p c m))
       UUIDMap.empty g.modules
   in
   Some cfg

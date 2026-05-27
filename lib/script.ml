@@ -319,7 +319,7 @@ let dbg_gtirb st fname =
       p |> Option.to_iter
       |> Iter.flat_map Gtirb.UUIDMap.to_iter
       |> Iter.map snd
-      |> Iter.iter (fun (p : Gtirb.temp_proc) ->
+      |> Iter.iter (fun (p : Gtirb.Gtirb_CFG.temp_proc) ->
           print_endline p.name;
           Gtirb.(Gtirb_CFG.D.output_graph chan p.cfg)));
   st
