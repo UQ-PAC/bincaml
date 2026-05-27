@@ -1739,7 +1739,7 @@ let map_stmt results proc (stmt : Program.stmt) : Program.stmt =
           addr = Scalar;
           attrib;
         }
-  | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian; }; attrib; } ->
+  | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size; endian }; attrib } ->
       Stmt.Instr_Load
         {
           lhs = map_lvar results proc lhs;
@@ -1756,7 +1756,8 @@ let map_stmt results proc (stmt : Program.stmt) : Program.stmt =
           addr = Scalar;
           attrib;
         }
-  | Stmt.Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib } ->
+  | Stmt.Instr_Store
+      { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib } ->
       Stmt.Instr_Store
         {
           lhs = map_lvar results proc lhs;
@@ -1800,7 +1801,8 @@ let map_decl results proc (decl : Program.declaration) : Program.declaration =
             | Uninterpreted -> Uninterpreted);
         }
   | Program.Variable { binding; attrib; classification } ->
-      Variable { binding = map_var results proc binding; attrib; classification }
+      Variable
+        { binding = map_var results proc binding; attrib; classification }
   | Program.Procedure { definition = proc } ->
       let definition =
         Procedure.map_formal_in_params
