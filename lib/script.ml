@@ -321,7 +321,7 @@ let dbg_gtirb st fname =
       |> Iter.map snd
       |> Iter.iter (fun (p : Gtirb.temp_proc) ->
           print_endline p.name;
-          Gtirb.(OCFG.D.output_graph chan p.cfg)));
+          Gtirb.(Gtirb_CFG.D.output_graph chan p.cfg)));
   st
 
 let cmds_list =

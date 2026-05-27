@@ -12,8 +12,6 @@ open Load_auxdata
 module UUIDMap = UUIDMap
 module UUIDSet = UUIDSet
 
-(* These could probably be simplified *)
-(* OCaml representation of mid-evaluation code block  *)
 type block = {
   uuid : UUID.t;
   contents : string;
@@ -22,30 +20,24 @@ type block = {
   opcodes : string list option;
 }
 [@@deriving eq, ord, show { with_path = false }]
+(** code/data block with absolute address *)
 
-(* Wrapper for polymorphic code/data/not-set block pre-rectification  *)
 type content_block = { block : Block.t; raw : bytes; address : int }
-
-(* CONSTANTS  *)
+(** Code/data/empty block with address relative to code section *)
 
 type config = { opcode_length : int; pc_var : Var.t; disas : bool }
 
 let conf =
   let pc_var = Var.create "$PC" ~scope:Var.GlobalVar (Bitvector 64) in
-  { opcode_length = 4; pc_var; disas = true }
+  { opcode_length = 4; pc_var; disas = false }
 
-open struct
-  (* ASL specifications are from the bundled ARM semantics in libASL. *)
-
-  (* Protobuf spelunking  *)
-  (*let text          = ".text"*)
-
+module Gtirb = struct
   let endian_reverse (opcode : string) : string =
     let len = String.length opcode in
     let getrev i = String.get opcode (len - 1 - i) in
     String.init len getrev
 
-  let make_block ~(need_flip : bool) (block : content_block) : block option =
+  let make_block ~(need_flip : bool) block : block option =
     let open Option in
     let contents size () =
       if Bytes.length block.raw = 0 then String.empty
@@ -89,11 +81,67 @@ open struct
     in
 
     Some { size; uuid; contents; opcodes; address }
+
+  (* convert code blocks in module into blocks containing opcode sequences *)
+  let get_code_block_opcodes (m : Module.t) =
+    let all_sects = m.sections in
+    let intervals =
+      List.flatten
+      @@ List.map (fun (s : Section.t) -> s.byte_intervals) all_sects
+    in
+
+    let content_block (i : ByteInterval.t) (b : Block.t) : content_block =
+      { block = b; raw = i.contents; address = i.address + b.offset }
+    in
+
+    let ival_blks : content_block list =
+      List.flatten
+      @@ List.map
+           (fun i -> List.map (fun b -> content_block i b) i.blocks)
+           intervals
+    in
+
+    let need_flip =
+      m.byte_order |> function ByteOrder.LittleEndian -> true | _ -> false
+    in
+    let rblocks = List.filter_map (make_block ~need_flip) ival_blks in
+    rblocks
+
+  let of_file infile =
+    let bytes =
+      let ic = open_in_bin infile in
+      let len = in_channel_length ic in
+      let magic = really_input_string ic 8 in
+      let res = really_input_string ic (len - 8) in
+      (* check for gtirb magic otherwise assume is raw protobuf *)
+      let res =
+        if String.starts_with ~prefix:"GTIRB" magic then res else magic ^ res
+      in
+      close_in ic;
+      res
+    in
+
+    let gtirb =
+      let raw = Reader.create bytes in
+      IR.from_proto raw
+    in
+
+    let ir =
+      match gtirb with
+      | Ok a -> a
+      | Error e ->
+          failwith
+            (Printf.sprintf "%s%s" "Could not reply request: "
+               (Ocaml_protoc_plugin.Result.show_error e))
+    in
+    ir
 end
 
 module AD = Load_auxdata.Loaders
 
-module OCFG = struct
+(** Initial Intermediate representation for ddisasm CFG *)
+module Gtirb_CFG = struct
+  (* just copy directly from gtirb protobuf *)
   module Edge = struct
     type edge_type =
       | Type_Branch
@@ -130,6 +178,7 @@ module OCFG = struct
               Labeled { conditional; direct; typ = Type_Sysret })
   end
 
+  (* just copy directly from gtirb protobuf *)
   module Vert = struct
     type t =
       | Internal of UUID.t  (** vertex in this procedure *)
@@ -189,294 +238,11 @@ type temp_proc = {
   entries : UUIDSet.t; (* entry block uuids *)
   blocks : UUIDSet.t;
   code_blocks : block UUIDMap.t;
-  cfg : OCFG.G.t;
+  cfg : Gtirb_CFG.G.t;
 }
 
-open struct
-  let addr_equal_expr addr =
-    Lang.Expr.BasilExpr.(
-      binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 addr)) (rvar conf.pc_var))
-end
-
-let create_simple_block succ_addr (proc, blockmap) (uuid, addr, stmts) =
-  let open Lang in
-  let open Option in
-  let guard = addr_equal_expr addr in
-  let guard =
-    Stmt.Instr_Assume { body = guard; branch = false; attrib = Attrib.empty }
-  in
-  let ensure =
-    succ_addr uuid
-    |> Iter.map (fun addr -> addr_equal_expr addr)
-    |> Iter.to_list
-    |> Expr.BasilExpr.applyintrin ~op:`OR
-  in
-  let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
-  let stmts = guard :: (stmts @ [ ensure ]) in
-  let proc, nb = Procedure.fresh_block proc ~name:"%gtirb" ~stmts () in
-  let blockmap = UUIDMap.add uuid nb blockmap in
-  (proc, blockmap)
-
-let create_code_block succ_addr (proc, blockmap) (b : block) =
-  let open Lang in
-  let open Option in
-  let bl =
-    let* opcodes = b.opcodes in
-    let instrs =
-      opcodes
-      |> List.map (fun op ->
-          Stmt.Instr_Assert
-            {
-              body = Lang.Expr.BasilExpr.boolconst false;
-              attrib =
-                (let op = Opcode.of_be_bytes op in
-                 let asm = if conf.disas then Disas.dis_op op else None in
-                 Option.fold
-                   (fun m a -> StringMap.add ".asm" (`String a) m)
-                   (StringMap.singleton ".opcode"
-                      (`String (Opcode.to_hex_string op)))
-                   asm);
-            })
-    in
-    Some
-      (create_simple_block succ_addr (proc, blockmap)
-         (b.uuid, b.address, instrs))
-  in
-  Option.get_or ~default:(proc, blockmap) bl
-
-(** For each successor set containing a fallthrough edge, remove fallthrough
-    edge and add it as a successor of all other edges. *)
-let reorder_fallthrough (g : OCFG.G.t) =
-  let reorder_fallthrough_succs v g =
-    let ft, nft =
-      OCFG.G.succ_e g v
-      |> List.partition (function
-        | _, OCFG.Edge.Labeled { typ = OCFG.Edge.Type_Fallthrough }, v -> true
-        | _ -> false)
-    in
-    let is_call =
-      OCFG.G.succ_e g v
-      |> List.exists (function
-        | ( _,
-            OCFG.Edge.Labeled { typ = OCFG.Edge.Type_Call },
-            OCFG.Vert.External _ ) ->
-            true
-        | ( _,
-            OCFG.Edge.Labeled { typ = OCFG.Edge.Type_Syscall },
-            OCFG.Vert.External _ ) ->
-            true
-        | _ -> false)
-    in
-    match ft with
-    | [] -> g
-    | [ ((_, _, fallthru_tgt) as fe) ] ->
-        (*let g = OCFG.G.remove_edge_e g fe in*)
-        List.fold_left
-          (fun g (_, _, s) -> OCFG.G.add_edge g s fallthru_tgt)
-          g nft
-    | [ _ ] when not is_call -> g
-    | _ -> failwith "odd: multiple fallthru edges"
-  in
-  OCFG.G.fold_vertex reorder_fallthrough_succs g g
-
-(** Replace all external edges with a defined procedure with stmt edges
-    containing a call to that procedure. *)
-let replace_call_edges procids =
-  OCFG.G.map_vertex (function
-    | External uuid as default ->
-        let id = procids uuid in
-        let m =
-          id
-          |> Option.map (fun id ->
-              let stmt =
-                Lang.Stmt.Instr_Call
-                  {
-                    procid = id;
-                    args = StringMap.empty;
-                    lhs = StringMap.empty;
-                    attrib = StringMap.empty;
-                  }
-              in
-              OCFG.Vert.Stmts { uuid = Some uuid; stmts = [ stmt ] })
-        in
-        Option.get_or ~default m
-    | o -> o)
-
-let add_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
-  let open Option in
-  let open Lang in
-  let module G = Procedure.G in
-  let get_vert_block src =
-    match src with
-    | OCFG.Vert.Internal uuid
-    | Stmts { uuid = Some uuid }
-    | OCFG.Vert.External uuid -> (
-        UUIDMap.get uuid blocks |> function Some e -> `Block e | _ -> `None)
-    | _ -> `None
-  in
-  let proc, retbl = Procedure.fresh_block ~name:"%ret" ~stmts:[] proc () in
-  let proc =
-    Procedure.map_graph
-      (fun g -> Procedure.G.add_edge g (Procedure.Vert.End retbl) Return)
-      proc
-  in
-  let src = get_vert_block src in
-  let tgt = get_vert_block tgt in
-  let open OCFG.Edge in
-  let proc =
-    proc
-    |> Procedure.map_graph (fun g ->
-        match (src, l, tgt) with
-        | `Block src, OCFG.Edge.Labeled { typ = Type_Return; _ }, _ ->
-            G.add_edge g Procedure.Vert.(End src) (Begin retbl)
-        | `Block src, OCFG.Edge.Nop, `Block tgt ->
-            G.add_edge g Procedure.Vert.(End src) (Begin tgt)
-        | `Block src, OCFG.Edge.Labeled { typ; _ }, `Block tgt -> (
-            match typ with
-            | Type_Branch | Type_Fallthrough | Type_Syscall | Type_Sysret
-            | Type_Call | Type_Return ->
-                (* syscall, sysret and call  are unlikely to be internal to this procedure, 
-                  but we include them in case they are. We most likely handle this with instruction-local control flow.
-                 *)
-                G.add_edge g Procedure.Vert.(End src) (Begin tgt))
-        | _ -> g)
-  in
-  proc
-
-let to_ir_proc all_blocks m (p : temp_proc) =
-  let entry_addrs =
-    UUIDSet.to_iter p.entries
-    |> Iter.map (fun x -> UUIDMap.find x p.code_blocks |> fun x -> x.address)
-  in
-  let requires =
-    entry_addrs
-    |> Iter.map (fun i ->
-        Lang.Expr.BasilExpr.(
-          binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 i)) (rvar conf.pc_var)))
-    |> Iter.to_list
-    |> fun conj ->
-    Lang.Expr.BasilExpr.applyintrin ~op:`OR conj |> fun pc_init -> [ pc_init ]
-  in
-
-  let succ_addr uuid =
-    let verts =
-      Iter.from_iter (fun f -> OCFG.G.iter_vertex f p.cfg)
-      |> Iter.filter (function
-        | OCFG.Vert.Internal uid | External uid | Stmts { uuid = Some uid } ->
-            UUID.equal uid uuid
-        | _ -> false)
-    in
-    try
-      OCFG.(
-        verts
-        |> Iter.flat_map (fun v -> G.succ p.cfg v |> List.to_iter)
-        |> Iter.filter_map (function
-          | Vert.Internal uuid -> UUIDMap.find_opt uuid p.code_blocks
-          | Vert.External uuid -> UUIDMap.find_opt uuid all_blocks
-          | Vert.Stmts { uuid } ->
-              Option.bind uuid (fun uuid -> UUIDMap.find_opt uuid all_blocks))
-        |> Iter.map (fun (b : block) -> b.address))
-    with Invalid_argument _ -> Iter.empty
-  in
-  let name = Lang.Program.declare_name ("@" ^ p.name) m in
-  let proc = Lang.Procedure.create ~requires name () in
-
-  let proc, blocks =
-    p.code_blocks |> UUIDMap.to_iter |> Iter.map snd
-    |> Iter.fold (create_code_block succ_addr) (proc, UUIDMap.empty)
-  in
-  let proc, blocks =
-    Iter.from_iter (fun f -> OCFG.G.iter_vertex f p.cfg)
-    |> Iter.filter_map (function
-      | OCFG.Vert.External uuid ->
-          Option.map
-            (fun (b : block) -> (uuid, b.address, []))
-            (UUIDMap.find_opt uuid all_blocks)
-      | OCFG.Vert.Stmts { uuid = Some uuid; stmts } ->
-          Option.map
-            (fun (b : block) -> (uuid, b.address, stmts))
-            (UUIDMap.find_opt uuid all_blocks)
-      | _ -> None)
-    |> Iter.fold (create_simple_block succ_addr) (proc, blocks)
-  in
-
-  let proc =
-    UUIDSet.fold
-      (fun uuid acc ->
-        let b = UUIDMap.find uuid blocks in
-        Lang.Procedure.(
-          map_graph
-            (fun g -> G.add_edge g Lang.Procedure.Vert.Entry (Begin b))
-            acc))
-      p.entries proc
-  in
-  let proc = OCFG.G.fold_edges_e (add_edge blocks) p.cfg proc in
-  Lang.Program.add_proc proc m
-
-let get_code_block_opcodes (m : Module.t) =
-  let all_sects = m.sections in
-  let intervals =
-    List.flatten @@ List.map (fun (s : Section.t) -> s.byte_intervals) all_sects
-  in
-
-  let content_block (i : ByteInterval.t) (b : Block.t) : content_block =
-    { block = b; raw = i.contents; address = i.address + b.offset }
-  in
-
-  let ival_blks : content_block list =
-    List.flatten
-    @@ List.map
-         (fun i -> List.map (fun b -> content_block i b) i.blocks)
-         intervals
-  in
-
-  let need_flip =
-    m.byte_order |> function ByteOrder.LittleEndian -> true | _ -> false
-  in
-  let rblocks = List.filter_map (make_block ~need_flip) ival_blks in
-  rblocks
-
-let load_gtirb infile =
-  let bytes =
-    let ic = open_in_bin infile in
-    let len = in_channel_length ic in
-    let magic = really_input_string ic 8 in
-    let res = really_input_string ic (len - 8) in
-    (* check for gtirb magic otherwise assume is raw protobuf *)
-    let res =
-      if String.starts_with ~prefix:"GTIRB" magic then res else magic ^ res
-    in
-    close_in ic;
-    res
-  in
-
-  (* Pull out interesting code bits *)
-  let gtirb =
-    let raw = Reader.create bytes in
-    IR.from_proto raw
-  in
-
-  let ir =
-    match gtirb with
-    | Ok a -> a
-    | Error e ->
-        failwith
-          (Printf.sprintf "%s%s" "Could not reply request: "
-             (Ocaml_protoc_plugin.Result.show_error e))
-  in
-  ir
-(*
-      type t = {
-        uuid:bytes;
-        optional_payload:[ `not_set | `Value of int | `Referent_uuid of bytes ];
-        name:string;
-        at_end:bool;
-      }
-
-  *)
-
-let cfg prog (c : CFG.t) (m : Module.t) =
-  let blocks = get_code_block_opcodes m in
+let gtirb_to_cfg prog (c : CFG.t) (m : Module.t) =
+  let blocks = Gtirb.get_code_block_opcodes m in
 
   let sym =
     m.symbols
@@ -540,14 +306,14 @@ let cfg prog (c : CFG.t) (m : Module.t) =
           (UUIDSet.empty, UUIDMap.empty)
     in
     let id = Lang.Program.declare_name ("@" ^ name) prog in
-    { uuid; name; id; entries; blocks; code_blocks; cfg = OCFG.G.empty }
+    { uuid; name; id; entries; blocks; code_blocks; cfg = Gtirb_CFG.G.empty }
   in
   let procs = UUIDMap.mapi make_temp_proc func_names in
   let make_cfg (p : temp_proc) =
     let open CFG in
     let open Edge in
     let conv_vert e =
-      if block_member_of ~proc:p.uuid e then OCFG.Vert.Internal e
+      if block_member_of ~proc:p.uuid e then Gtirb_CFG.Vert.Internal e
       else External e
     in
     let edges =
@@ -556,52 +322,288 @@ let cfg prog (c : CFG.t) (m : Module.t) =
           block_member_of ~proc:p.uuid (UUID.of_bytes source_uuid))
       |> List.map (fun { source_uuid; label; target_uuid } ->
           ( conv_vert @@ UUID.of_bytes source_uuid,
-            OCFG.Edge.of_gtirb_label label,
+            Gtirb_CFG.Edge.of_gtirb_label label,
             conv_vert @@ UUID.of_bytes target_uuid ))
     in
     let cfg =
-      List.fold_left (fun cfg e -> OCFG.G.add_edge_e cfg e) p.cfg edges
+      List.fold_left (fun cfg e -> Gtirb_CFG.G.add_edge_e cfg e) p.cfg edges
     in
     { p with cfg }
   in
   let procs = UUIDMap.map make_cfg procs in
-  let procs =
-    UUIDMap.map
-      (fun p ->
-        let cfg =
-          let calls =
-            UUIDMap.to_iter procs
-            |> Iter.flat_map (fun (uid, p) ->
-                p.entries |> UUIDSet.to_iter |> Iter.map (fun u -> (u, p.id)))
-            |> UUIDMap.of_iter
-            |> fun m uuid -> UUIDMap.get uuid m
-          in
-          let cfg = p.cfg in
-          let cfg = replace_call_edges calls cfg in
-          let cfg = reorder_fallthrough cfg in
-          cfg
-        in
-        { p with cfg })
-      procs
-  in
   procs
 
-let to_ir_prog ir_cfg (m : Module.t) =
-  let prog = Lang.Program.empty ~name:m.name () in
-  let prog = Lang.Program.decl_global prog conf.pc_var in
-  let c = cfg prog ir_cfg m in
-  let all_blocks =
-    UUIDMap.values c
-    |> Iter.map (fun c -> c.code_blocks)
-    |> Iter.fold (UUIDMap.union (fun _ _ c -> Some c)) UUIDMap.empty
-  in
-  UUIDMap.fold (fun _ proc prog -> to_ir_proc all_blocks prog proc) c prog
+module ToIR = struct
+  open struct
+    let addr_equal_expr addr =
+      Lang.Expr.BasilExpr.(
+        binexp ~op:`EQ
+          (bvconst (Bitvec.of_int ~size:64 addr))
+          (rvar conf.pc_var))
+  end
+
+  (* Update (procedure, uuidmap) with a newly created IR block containing stmts
+     and PC address contract*)
+  let add_new_simple_block succ_addr (proc, blockmap) (uuid, addr, stmts) =
+    let open Lang in
+    let open Option in
+    let guard = addr_equal_expr addr in
+    let guard =
+      Stmt.Instr_Assume { body = guard; branch = false; attrib = Attrib.empty }
+    in
+    let ensure =
+      succ_addr uuid
+      |> Iter.map (fun addr -> addr_equal_expr addr)
+      |> Iter.to_list
+      |> Expr.BasilExpr.applyintrin ~op:`OR
+    in
+    let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
+    let stmts = guard :: (stmts @ [ ensure ]) in
+    let proc, nb = Procedure.fresh_block proc ~name:"%gtirb" ~stmts () in
+    let blockmap = UUIDMap.add uuid nb blockmap in
+    (proc, blockmap)
+
+  (* Update (procedure, uuidmap) with a newly created IR block with opcodes and
+     PC address contract *)
+  let add_new_code_block succ_addr (proc, blockmap) (b : block) =
+    let open Lang in
+    let open Option in
+    let bl =
+      let* opcodes = b.opcodes in
+      let instrs =
+        opcodes
+        |> List.map (fun op ->
+            Stmt.Instr_Assert
+              {
+                body = Lang.Expr.BasilExpr.boolconst false;
+                attrib =
+                  (let op = Opcode.of_be_bytes op in
+                   let asm = if conf.disas then Disas.dis_op op else None in
+                   Option.fold
+                     (fun m a -> StringMap.add ".asm" (`String a) m)
+                     (StringMap.singleton ".opcode"
+                        (`String (Opcode.to_hex_string op)))
+                     asm);
+              })
+      in
+      Some
+        (add_new_simple_block succ_addr (proc, blockmap)
+           (b.uuid, b.address, instrs))
+    in
+    Option.get_or ~default:(proc, blockmap) bl
+
+  (** For each successor set containing a fallthrough edge, remove fallthrough
+      edge and add it as a successor of all other edges. *)
+  let reorder_fallthrough (g : Gtirb_CFG.G.t) =
+    let reorder_fallthrough_succs v g =
+      let ft, nft =
+        Gtirb_CFG.G.succ_e g v
+        |> List.partition (function
+          | ( _,
+              Gtirb_CFG.Edge.Labeled { typ = Gtirb_CFG.Edge.Type_Fallthrough },
+              v ) ->
+              true
+          | _ -> false)
+      in
+      (* check if these successors have no successors, this transform is made
+         safe by the assertions *)
+      match ft with
+      | [] -> g
+      | [ ((_, _, fallthru_tgt) as fe) ] ->
+          let g = Gtirb_CFG.G.remove_edge_e g fe in
+          List.fold_left
+            (fun g (_, _, s) -> Gtirb_CFG.G.add_edge g s fallthru_tgt)
+            g nft
+      | _ -> failwith "odd: multiple fallthru edges"
+    in
+    Gtirb_CFG.G.fold_vertex reorder_fallthrough_succs g g
+
+  (** Replace all external edges with a defined procedure with stmt edges
+      containing a call to that procedure. *)
+  let replace_call_edges procids =
+    Gtirb_CFG.G.map_vertex (function
+      | External uuid as default ->
+          let id = procids uuid in
+          let m =
+            id
+            |> Option.map (fun id ->
+                let stmt =
+                  Lang.Stmt.Instr_Call
+                    {
+                      procid = id;
+                      args = StringMap.empty;
+                      lhs = StringMap.empty;
+                      attrib = StringMap.empty;
+                    }
+                in
+                Gtirb_CFG.Vert.Stmts { uuid = Some uuid; stmts = [ stmt ] })
+          in
+          Option.get_or ~default m
+      | o -> o)
+
+  (** Add the given CFG edge to the IR procedure. We naively translate all edges
+      as jumps, on the assumption that
+
+      (1) soundness is maintained by the PC address contracts
+
+      (2) the external vertices have been cleaned up and converted to the
+      appropriate code vertices. representing the effects *)
+  let cfg_edge_to_ir_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
+    let open Option in
+    let open Lang in
+    let module G = Procedure.G in
+    let get_vert_block src =
+      match src with
+      | Gtirb_CFG.Vert.Internal uuid
+      | Stmts { uuid = Some uuid }
+      | Gtirb_CFG.Vert.External uuid -> (
+          UUIDMap.get uuid blocks |> function Some e -> `Block e | _ -> `None)
+      | _ -> `None
+    in
+    let proc, retbl = Procedure.fresh_block ~name:"%ret" ~stmts:[] proc () in
+    let proc =
+      Procedure.map_graph
+        (fun g -> Procedure.G.add_edge g (Procedure.Vert.End retbl) Return)
+        proc
+    in
+    let src = get_vert_block src in
+    let tgt = get_vert_block tgt in
+    let open Gtirb_CFG.Edge in
+    let proc =
+      proc
+      |> Procedure.map_graph (fun g ->
+          match (src, l, tgt) with
+          | `Block src, Gtirb_CFG.Edge.Labeled { typ = Type_Return; _ }, _ ->
+              G.add_edge g Procedure.Vert.(End src) (Begin retbl)
+          | `Block src, Gtirb_CFG.Edge.Nop, `Block tgt ->
+              G.add_edge g Procedure.Vert.(End src) (Begin tgt)
+          | `Block src, Gtirb_CFG.Edge.Labeled { typ; _ }, `Block tgt -> (
+              match typ with
+              | Type_Branch | Type_Fallthrough | Type_Syscall | Type_Sysret
+              | Type_Call | Type_Return ->
+                  (* syscall, sysret and call  are unlikely to be internal to this procedure, 
+                  but we include them in case they are. We most likely handle this with instruction-local control flow.
+                 *)
+                  G.add_edge g Procedure.Vert.(End src) (Begin tgt))
+          | _ -> g)
+    in
+    proc
+
+  (** lift interprocedural control flow to call statement blocks in the CFG *)
+  let transform_cfg_calls procs =
+    UUIDMap.map
+      (fun p ->
+        let calls =
+          UUIDMap.to_iter procs
+          |> Iter.flat_map (fun (uid, p) ->
+              p.entries |> UUIDSet.to_iter |> Iter.map (fun u -> (u, p.id)))
+          |> UUIDMap.of_iter
+          |> fun m uuid -> UUIDMap.get uuid m
+        in
+        let cfg = p.cfg in
+        let cfg = replace_call_edges calls cfg in
+        let cfg = reorder_fallthrough cfg in
+        { p with cfg })
+      procs
+
+  let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
+    let entry_addrs =
+      UUIDSet.to_iter p.entries
+      |> Iter.map (fun x -> UUIDMap.find x p.code_blocks |> fun x -> x.address)
+    in
+    (* Possible entry addresses *)
+    let requires =
+      entry_addrs
+      |> Iter.map (fun i ->
+          Lang.Expr.BasilExpr.(
+            binexp ~op:`EQ
+              (bvconst (Bitvec.of_int ~size:64 i))
+              (rvar conf.pc_var)))
+      |> Iter.to_list
+      |> fun conj ->
+      Lang.Expr.BasilExpr.applyintrin ~op:`OR conj |> fun pc_init -> [ pc_init ]
+    in
+
+    (* Addresses of successor blocks to [uuid] *)
+    let succ_addr uuid =
+      let verts =
+        Iter.from_iter (fun f -> Gtirb_CFG.G.iter_vertex f p.cfg)
+        |> Iter.filter (function
+          | Gtirb_CFG.Vert.Internal uid
+          | External uid
+          | Stmts { uuid = Some uid } ->
+              UUID.equal uid uuid
+          | _ -> false)
+      in
+      try
+        Gtirb_CFG.(
+          verts
+          |> Iter.flat_map (fun v -> G.succ p.cfg v |> List.to_iter)
+          |> Iter.filter_map (function
+            | Vert.Internal uuid -> UUIDMap.find_opt uuid p.code_blocks
+            | Vert.External uuid -> UUIDMap.find_opt uuid all_blocks
+            | Vert.Stmts { uuid } ->
+                Option.bind uuid (fun uuid -> UUIDMap.find_opt uuid all_blocks))
+          |> Iter.map (fun (b : block) -> b.address))
+      with Invalid_argument _ -> Iter.empty
+    in
+    let name = Lang.Program.declare_name ("@" ^ p.name) m in
+    let proc = Lang.Procedure.create ~requires name () in
+
+    let proc, blocks =
+      p.code_blocks |> UUIDMap.to_iter |> Iter.map snd
+      |> Iter.fold (add_new_code_block succ_addr) (proc, UUIDMap.empty)
+    in
+    let proc, blocks =
+      Iter.from_iter (fun f -> Gtirb_CFG.G.iter_vertex f p.cfg)
+      |> Iter.filter_map (function
+        | Gtirb_CFG.Vert.External uuid ->
+            Option.map
+              (fun (b : block) -> (uuid, b.address, []))
+              (UUIDMap.find_opt uuid all_blocks)
+        | Gtirb_CFG.Vert.Stmts { uuid = Some uuid; stmts } ->
+            Option.map
+              (fun (b : block) -> (uuid, b.address, stmts))
+              (UUIDMap.find_opt uuid all_blocks)
+        | _ -> None)
+      |> Iter.fold (add_new_simple_block succ_addr) (proc, blocks)
+    in
+
+    let proc =
+      UUIDSet.fold
+        (fun uuid acc ->
+          let b = UUIDMap.find uuid blocks in
+          Lang.Procedure.(
+            map_graph
+              (fun g -> G.add_edge g Lang.Procedure.Vert.Entry (Begin b))
+              acc))
+        p.entries proc
+    in
+    let proc =
+      Gtirb_CFG.G.fold_edges_e (cfg_edge_to_ir_edge blocks) p.cfg proc
+    in
+    Lang.Program.add_proc proc m
+
+  let module_to_ir_prog ir_cfg (m : Module.t) =
+    let prog = Lang.Program.empty ~name:m.name () in
+    let prog = Lang.Program.decl_global prog conf.pc_var in
+    let procs = gtirb_to_cfg prog ir_cfg m in
+    let all_blocks =
+      UUIDMap.values procs
+      |> Iter.map (fun c -> c.code_blocks)
+      |> Iter.fold (UUIDMap.union (fun _ _ c -> Some c)) UUIDMap.empty
+    in
+    let procs = transform_cfg_calls procs in
+    UUIDMap.fold
+      (fun _ proc prog -> temp_proc_to_ir_proc all_blocks prog proc)
+      procs prog
+end
 
 let load_gtirb_prog filename =
   let open Result in
-  let g = load_gtirb filename in
+  let g = Gtirb.of_file filename in
   let* c = g.cfg |> Option.to_result "No CFG" in
-  let p = List.map (to_ir_prog c) g.modules in
+  let p = List.map (ToIR.module_to_ir_prog c) g.modules in
   match p with
   | h :: [] -> Ok h
   | _ :: _ -> Error "got more than one module"
@@ -609,7 +611,7 @@ let load_gtirb_prog filename =
 
 let load_gtirb_cfg filename =
   let open Option in
-  let g = load_gtirb filename in
+  let g = Gtirb.of_file filename in
   let p = Lang.Program.empty () in
   let* c = g.cfg in
   let cfg =
@@ -617,7 +619,7 @@ let load_gtirb_cfg filename =
       (fun a m ->
         UUIDMap.union
           (fun _ _ _ -> failwith "procedure present in two modules")
-          a (cfg p c m))
+          a (gtirb_to_cfg p c m))
       UUIDMap.empty g.modules
   in
   Some cfg
