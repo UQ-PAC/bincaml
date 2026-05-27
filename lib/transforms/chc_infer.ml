@@ -66,6 +66,27 @@ let predicate_name ~proc ~suffix = "p_" ^ proc ^ "_" ^ suffix
 let block_predicate_name proc_id block_id =
   predicate_name ~proc:(ID.to_string proc_id) ~suffix:(ID.to_string block_id)
 
+(** Build the procedure-level [enter] and [exit] predicates. [enter] takes the
+    formal in-params; [exit] takes in-params followed by out-params. *)
+let enter_exit_predicates (proc : Program.proc) : predicate * predicate =
+  let pname = ID.to_string (Procedure.id proc) in
+  let in_params =
+    Procedure.formal_in_params proc |> StringMap.values |> Iter.to_list
+  in
+  let out_params =
+    Procedure.formal_out_params proc |> StringMap.values |> Iter.to_list
+  in
+  let enter =
+    { name = predicate_name ~proc:pname ~suffix:"enter"; params = in_params }
+  in
+  let exit =
+    {
+      name = predicate_name ~proc:pname ~suffix:"exit";
+      params = in_params @ out_params;
+    }
+  in
+  (enter, exit)
+
 (** A procedure has a spec if it declares any [requires] or [ensures] clauses.
 *)
 let has_spec (spec : (Var.t, BasilExpr.t) Procedure.proc_spec) : bool =
@@ -101,12 +122,8 @@ let block_params ~in_params ~live_after_phis =
 
 let proc_predicates ~live (proc : Program.proc) : proc_predicates =
   let proc_id = Procedure.id proc in
-  let pname = ID.to_string proc_id in
   let in_params =
     Procedure.formal_in_params proc |> StringMap.values |> Iter.to_list
-  in
-  let out_params =
-    Procedure.formal_out_params proc |> StringMap.values |> Iter.to_list
   in
   let block_preds =
     Procedure.iter_blocks proc
@@ -118,15 +135,7 @@ let proc_predicates ~live (proc : Program.proc) : proc_predicates =
            IDMap.add id { name = block_predicate_name proc_id id; params } acc)
          IDMap.empty
   in
-  let enter =
-    { name = predicate_name ~proc:pname ~suffix:"enter"; params = in_params }
-  in
-  let exit =
-    {
-      name = predicate_name ~proc:pname ~suffix:"exit";
-      params = in_params @ out_params;
-    }
-  in
+  let enter, exit = enter_exit_predicates proc in
   { block_preds; enter; exit }
 
 (** Encoder state for a single block. Tracks the current variable renaming, the
@@ -199,29 +208,6 @@ let phi_subst_for_edge ~(from_id : ID.t) (succ_block : Program.bloc) :
       | Some src -> VarMap.add phi.lhs src acc
       | None -> acc)
     VarMap.empty succ_block.phis
-
-(** Predicate signatures for a callee, derived from its [formal_in_params] and
-    [formal_out_params]. Same naming/ordering convention as {!proc_predicates},
-    so the call-site clauses line up with the callee's own block-level clauses.
-*)
-let callee_predicates (callee : Program.proc) : predicate * predicate =
-  let id = ID.to_string (Procedure.id callee) in
-  let in_params =
-    Procedure.formal_in_params callee |> StringMap.values |> Iter.to_list
-  in
-  let out_params =
-    Procedure.formal_out_params callee |> StringMap.values |> Iter.to_list
-  in
-  let enter =
-    { name = predicate_name ~proc:id ~suffix:"enter"; params = in_params }
-  in
-  let exit =
-    {
-      name = predicate_name ~proc:id ~suffix:"exit";
-      params = in_params @ out_params;
-    }
-  in
-  (enter, exit)
 
 (** Encode a single block. Returns one rule clause per outgoing edge (block
     successor or procedure return). Phi nodes in the successor are resolved by
@@ -302,7 +288,10 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
               (fun name v acc ->
                 match StringMap.find_opt name args with
                 | Some arg_e -> VarMap.add v arg_e acc
-                | None -> acc)
+                | None ->
+                    failwith
+                      ("chc_infer: missing arg " ^ name ^ " at call to "
+                     ^ ID.to_string procid))
               (Procedure.formal_in_params callee)
               VarMap.empty
           in
@@ -340,7 +329,7 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
               BasilExpr.substitute
                 (fun v ->
                   match VarMap.find_opt v in_subst with
-                  | Some e -> Some e
+                  | Some arg_e -> Some arg_e
                   | None -> VarMap.find_opt v out_subst)
                 e
             in
@@ -352,7 +341,7 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
           end
           else begin
             (* Full encoding: connect to the callee's enter/exit predicates. *)
-            let enter_pred, exit_pred = callee_predicates callee in
+            let enter_pred, exit_pred = enter_exit_predicates callee in
             (* Build arg sexps in the callee's formal-in-params order
                (alphabetical by name, matching [StringMap.values]). *)
             let arg_sexps =
@@ -432,13 +421,10 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
   in
   List.rev !call_clauses @ List.rev !queries @ block_clauses @ return_clauses
 
-let entry_block_of (proc : Program.proc) : ID.t option =
-  Procedure.get_entry_block proc
-
 (** Connect [enter⟨f⟩] to the entry block predicate. *)
 let enter_to_entry_block (preds : proc_predicates) (proc : Program.proc) :
     clause list =
-  match entry_block_of proc with
+  match Procedure.get_entry_block proc with
   | None -> []
   | Some entry_id ->
       let entry_pred = IDMap.find entry_id preds.block_preds in
@@ -516,9 +502,7 @@ let postcondition_queries (proc : Program.proc) (exit : predicate) : clause list
 let encode_program ?(use_spec = default_use_spec) (prog : Program.t) :
     predicate list * clause list =
   let main_id = Program.entry_proc_opt prog |> Option.map Procedure.id in
-  let is_main p =
-    match main_id with Some id -> ID.equal (Procedure.id p) id | None -> false
-  in
+  let is_main p = Option.equal ID.equal main_id (Some (Procedure.id p)) in
   let needs_entry_fact p = is_main p || use_spec p in
   let per_proc =
     Program.procs prog
@@ -653,8 +637,7 @@ let extract_invariant (pred : predicate) (model_params : (string * Sexp.t) list)
     Expr_smt.SMTLib2.expr_of_smt vardefs (preprocess_model_body body)
 
 (** [true] when an expression is the boolean literal [true] — i.e. the solver
-    gave us no useful information. We don't emit these as [requires]/[ensures].
-*)
+    gave us no useful information. We don't emit these as annotations. *)
 let is_trivially_true (e : BasilExpr.t) : bool =
   match BasilExpr.unfix e with
   | Constant { const = `Bool true; _ } -> true
@@ -751,6 +734,11 @@ let annotate_proc ~(use_spec : Program.proc -> bool)
          | None -> proc)
        proc
 
+(** Apply per-predicate inferred invariants across every procedure in [prog]. *)
+let annotate_program ~(use_spec : Program.proc -> bool)
+    ~(invs : BasilExpr.t StringMap.t) (prog : Program.t) : Program.t =
+  Program.map_procedures (fun _ p -> annotate_proc ~use_spec ~invs p) prog
+
 (** Full pass: encode the program as CHCs, solve, and annotate each procedure
     with inferred [requires]/[ensures] when the solver returns sat. On unsat or
     unknown the program is returned unchanged. *)
@@ -765,7 +753,7 @@ let infer_invariants (prog : Program.t) : Program.t =
       Logs.info (fun m ->
           m "Solver returned sat; extracted %d definitions" (List.length defs));
       let invs = decode_model preds defs in
-      Program.map_procedures (fun _ p -> annotate_proc ~use_spec ~invs p) prog
+      annotate_program ~use_spec ~invs prog
   | Unsat, _ ->
       Logs.warn (fun m -> m "Solver returned unsat — no invariants extracted");
       prog
@@ -826,6 +814,4 @@ let infer_invariants_per_query (prog : Program.t) : Program.t =
          predicates"
         !successes n_queries
         (StringMap.cardinal conjoined));
-  Program.map_procedures
-    (fun _ p -> annotate_proc ~use_spec ~invs:conjoined p)
-    prog
+  annotate_program ~use_spec ~invs:conjoined prog
