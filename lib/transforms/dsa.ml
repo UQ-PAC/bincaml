@@ -79,10 +79,10 @@ let remove_phis_from_blocks =
       |> Iter.fold
            (fun g edge ->
              match edge with
-             | beg, Procedure.Edge.Block { phis = _ :: _; stmts }, nd ->
+             | beg, Procedure.Edge.Block { phis = _ :: _; stmts; attrib }, nd ->
                  let g = G.remove_edge_e g edge in
                  G.add_edge_e g
-                   (beg, Procedure.Edge.Block { phis = []; stmts }, nd)
+                   (beg, Procedure.Edge.Block { phis = []; stmts; attrib }, nd)
              | _ -> g)
            g)
 

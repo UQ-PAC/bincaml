@@ -305,10 +305,10 @@ let remove_block p id =
       G.remove_vertex g (Begin id))
     p
 
-let add_block_graph graph id ?(phis = [])
+let add_block_graph ?(attrib = Attrib.empty) graph id ?(phis = [])
     ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   let stmts = Vector.of_list stmts in
-  let b = Edge.(Block { phis; stmts }) in
+  let b = Edge.(Block { phis; stmts; attrib }) in
   let open Vert in
   let existing = G.find_all_edges graph (Begin id) (End id) in
   let graph = List.fold_left G.remove_edge_e graph existing in
@@ -320,11 +320,11 @@ let add_block_graph graph id ?(phis = [])
   in
   graph
 
-let add_block p id ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
-    ?(successors = []) () =
+let add_block p id ?(attrib = Attrib.empty) ?(phis = [])
+    ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   assert (Option.is_some (graph p));
   map_graph
-    (fun graph -> add_block_graph graph id ~phis ~stmts ~successors ())
+    (fun graph -> add_block_graph graph id ~attrib ~phis ~stmts ~successors ())
     p
 
 let fresh_block_graph p graph ?name ?(phis = [])
@@ -334,12 +334,12 @@ let fresh_block_graph p graph ?name ?(phis = [])
   let id = (block_ids p).fresh ~name () in
   (add_block_graph graph id ~phis ~stmts ~successors (), id)
 
-let fresh_block p ?name ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
-    ?(successors = []) () =
+let fresh_block p ?attrib ?name ?(phis = [])
+    ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   let open Block in
   let name = Option.get_or ~default:"%block" name in
   let id = (block_ids p).fresh ~name () in
-  (add_block p id ~phis ~stmts ~successors (), id)
+  (add_block ?attrib p id ~phis ~stmts ~successors (), id)
 
 let get_entry_block p =
   let open Edge in

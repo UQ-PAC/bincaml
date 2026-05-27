@@ -20,7 +20,8 @@ end
 
 (* Update (procedure, uuidmap) with a newly created IR block containing stmts
      and PC address contract*)
-let add_new_simple_block succ_addr (proc, blockmap) (uuid, addr, stmts) =
+let add_new_simple_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap)
+    (uuid, addr, stmts) =
   let open Lang in
   let open Option in
   let guard = addr_equal_expr addr in
@@ -35,7 +36,7 @@ let add_new_simple_block succ_addr (proc, blockmap) (uuid, addr, stmts) =
   in
   let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
   let stmts = guard :: (stmts @ [ ensure ]) in
-  let proc, nb = Procedure.fresh_block proc ~name:"%gtirb" ~stmts () in
+  let proc, nb = Procedure.fresh_block proc ~attrib ~name:"%gtirb" ~stmts () in
   let blockmap = UUIDMap.add uuid nb blockmap in
   (proc, blockmap)
 
@@ -44,6 +45,9 @@ let add_new_simple_block succ_addr (proc, blockmap) (uuid, addr, stmts) =
 let add_new_code_block succ_addr (proc, blockmap) (b : Gtirb.block) =
   let open Lang in
   let open Option in
+  let attrib =
+    StringMap.of_list [ (".gtirb_block", `String (UUID.show b.uuid)) ]
+  in
   let bl =
     let* opcodes = Gtirb.(b.opcodes) in
     let instrs =
@@ -63,7 +67,7 @@ let add_new_code_block succ_addr (proc, blockmap) (b : Gtirb.block) =
             })
     in
     Some
-      (add_new_simple_block succ_addr (proc, blockmap)
+      (add_new_simple_block ~attrib succ_addr (proc, blockmap)
          (b.uuid, b.address, instrs))
   in
   Option.get_or ~default:(proc, blockmap) bl
@@ -148,16 +152,9 @@ let cfg_edge_to_ir_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
         match (src, l, tgt) with
         | `Block src, Gfir.Edge.Labeled { typ = Type_Return; _ }, _ ->
             G.add_edge g Procedure.Vert.(End src) (Begin retbl)
-        | `Block src, Gfir.Edge.Nop, `Block tgt ->
+        | `Block src, _, `Block tgt ->
+            (* We conservatively add all edges with blocks defined *)
             G.add_edge g Procedure.Vert.(End src) (Begin tgt)
-        | `Block src, Gfir.Edge.Labeled { typ; _ }, `Block tgt -> (
-            match typ with
-            | Type_Branch | Type_Fallthrough | Type_Syscall | Type_Sysret
-            | Type_Call | Type_Return ->
-                (* syscall, sysret and call  are unlikely to be internal to this procedure, 
-                  but we include them in case they are. We most likely handle this with instruction-local control flow.
-                 *)
-                G.add_edge g Procedure.Vert.(End src) (Begin tgt))
         | _ -> g)
   in
   proc

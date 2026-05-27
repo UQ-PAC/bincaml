@@ -21,6 +21,7 @@ module V = struct
 end
 
 type ('v, 'e) t = {
+  attrib : Attrib.attrib_map;
   phis : 'v phi list;
       (** List of phi nodes simultaneously assigning each input variable *)
   stmts : ('v, 'v, 'e) Stmt.t V.t;  (** statement list *)
@@ -63,9 +64,10 @@ let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
   in
   let stmts = stmts @ terminator |> List.map (fun i -> i ^ text ";") in
   let stmts = phi ^ bracket' ~n:2 "[" (append_nl stmts) "]" in
+  let attrib = Expr.BasilExpr.pretty_attr b.attrib in
   let name =
     Option.map
-      (fun id -> text "block " ^ text (ID.to_string id) ^ text " ")
+      (fun id -> text "block " ^ text (ID.to_string id) ^ attrib ^ text " ")
       block_id
   in
   let name = Option.get_or ~default:nil name in
@@ -98,10 +100,10 @@ let map_fold_forwards ~(phi : 'acc -> 'v phi list -> 'acc * 'v phi list)
       (acc, Iter.empty) (Vector.to_iter b.stmts)
   in
   let stmts = Vector.of_iter stmts |> Vector.freeze in
-  (acc, { phis; stmts })
+  (acc, { phis; stmts; attrib = b.attrib })
 
 let map ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
-  { stmts = Vector.map f b.stmts; phis = phi b.phis }
+  { stmts = Vector.map f b.stmts; phis = phi b.phis; attrib = b.attrib }
 
 (** Modify stmt list by creating a mutable copy of the underlying vector *)
 let fmap_stmts_copy (f : (('a, 'a, 'b) Stmt.t, 'c) Vector.t -> unit) b =
@@ -129,6 +131,7 @@ let flat_map ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
       Vector.to_iter b.stmts |> Iter.flat_map f |> Vector.of_iter
       |> Vector.freeze;
     phis = phi b.phis;
+    attrib = b.attrib;
   }
 
 let foldi_backwards ~(f : 'acc -> int * ('v, 'v, 'e) Stmt.t -> 'acc)
