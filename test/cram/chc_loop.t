@@ -1,8 +1,7 @@
 
-CHC loop-head annotation (Step 5) — run the full pipeline on a simple
-counting loop ([i := 0; while i < 10: i := i + 1; assert i ≤ 20]) and
-check that the inferred loop invariant is attached as an [assert] at the
-loop head.
+CHC loop-head annotation — run the full pipeline on a simple counting loop
+([i := 0; while i < 10: i := i + 1; assert i ≤ 20]) and check that the
+inferred loop invariant is attached as an [assert] at the loop head.
 
   $ bincaml script chc_loop.sexp
   (load-il chc_loop.il)

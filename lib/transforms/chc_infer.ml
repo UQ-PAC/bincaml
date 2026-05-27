@@ -3,11 +3,7 @@
     This module encodes a program as a system of constrained Horn clauses
     (CHCs) over quantifier-free bit vectors. See {!Lang.Expr_smt.SMTLib2} for
     expression-level encoding and {!Bincaml_util.Smt} for the SMT-LIB sexp
-    helpers used below.
-
-    Step 1 only supports straight-line procedures with [Instr_Assign]
-    statements. Later steps add assertions, queries, loops, and procedure
-    calls. *)
+    helpers used below. *)
 
 open Bincaml_util.Common
 open Lang
@@ -468,8 +464,7 @@ let all_predicates (preds : proc_predicates) : predicate list =
 (** Entry fact for a procedure whose body needs to be reachable
     independently of any caller (main, or any procedure with [use_spec] =
     true): [⟦requires⟧ ⟹ enter⟨f⟩(in_params)]. The precondition defaults to
-    [true] when [requires] is empty, recovering the unconditional entry
-    fact we used in earlier steps. *)
+    [true] when [requires] is empty, yielding an unconditional entry fact. *)
 let entry_fact_for (proc : Program.proc) (enter : predicate) : clause =
   let requires = (Procedure.specification proc).requires in
   let premises = List.map Expr_smt.SMTLib2.of_bexpr requires in
