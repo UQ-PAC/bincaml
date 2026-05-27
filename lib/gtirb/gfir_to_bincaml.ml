@@ -42,7 +42,7 @@ let add_new_simple_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap)
 
 (* Update (procedure, uuidmap) with a newly created IR block with opcodes and
      PC address contract *)
-let add_new_code_block succ_addr (proc, blockmap) (b : Gtirb.block) =
+let add_new_code_block temp_proc succ_addr (proc, blockmap) (b : Gtirb.block) =
   let open Lang in
   let open Option in
   let attrib =
@@ -50,6 +50,21 @@ let add_new_code_block succ_addr (proc, blockmap) (b : Gtirb.block) =
   in
   let bl =
     let* opcodes = Gtirb.(b.opcodes) in
+    let attrib' =
+      let ge e = if G.mem_vertex temp_proc.cfg e then Some e else None in
+      let* e =
+        Option.or_ ~else_:(ge @@ External b.uuid) (ge @@ Internal b.uuid)
+      in
+      let es =
+        G.succ_e temp_proc.cfg e
+        |> List.map (fun (_, l, t) ->
+            (match l with Some l -> Edge.to_attrib l | None -> Attrib.empty)
+            |> StringMap.add ".target" (Vert.to_attrib t))
+        |> List.map (fun e -> `Assoc e)
+      in
+      Some (StringMap.singleton ".succ" (`List es))
+    in
+    let attrib = Option.fold Attrib.merge_map_shadow attrib attrib' in
     let instrs =
       opcodes
       |> List.map (fun op ->
@@ -115,7 +130,7 @@ let replace_call_edges procids =
                     attrib = StringMap.empty;
                   }
               in
-              Gfir.Vert.Stmts { uuid = Some uuid; stmts = [ stmt ] })
+              Gfir.Vert.Stmts { uuid; stmts = [ stmt ] })
         in
         Option.get_or ~default m
     | o -> o)
@@ -133,11 +148,8 @@ let cfg_edge_to_ir_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
   let module G = Procedure.G in
   let get_vert_block src =
     match src with
-    | Gfir.Vert.Internal uuid
-    | Stmts { uuid = Some uuid }
-    | Gfir.Vert.External uuid -> (
+    | Gfir.Vert.Internal uuid | Stmts { uuid } | Gfir.Vert.External uuid -> (
         UUIDMap.get uuid blocks |> function Some e -> `Block e | _ -> `None)
-    | _ -> `None
   in
   let proc, retbl = Procedure.fresh_block ~name:"%ret" ~stmts:[] proc () in
   let proc =
@@ -200,9 +212,8 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
     let verts =
       Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
       |> Iter.filter (function
-        | Gfir.Vert.Internal uid | External uid | Stmts { uuid = Some uid } ->
-            UUID.equal uid uuid
-        | _ -> false)
+          | Gfir.Vert.Internal uid | External uid | Stmts { uuid = uid } ->
+          UUID.equal uid uuid)
     in
     try
       Gfir.(
@@ -211,8 +222,7 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
         |> Iter.filter_map (function
           | Vert.Internal uuid -> UUIDMap.find_opt uuid p.code_blocks
           | Vert.External uuid -> UUIDMap.find_opt uuid all_blocks
-          | Vert.Stmts { uuid } ->
-              Option.bind uuid (fun uuid -> UUIDMap.find_opt uuid all_blocks))
+          | Vert.Stmts { uuid } -> UUIDMap.find_opt uuid all_blocks)
         |> Iter.map (fun (b : Gtirb.block) -> b.address))
     with Invalid_argument _ -> Iter.empty
   in
@@ -221,7 +231,7 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
 
   let proc, blocks =
     p.code_blocks |> UUIDMap.to_iter |> Iter.map snd
-    |> Iter.fold (add_new_code_block succ_addr) (proc, UUIDMap.empty)
+    |> Iter.fold (add_new_code_block p succ_addr) (proc, UUIDMap.empty)
   in
   let proc, blocks =
     Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
@@ -230,7 +240,7 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
           Option.map
             (fun (b : Gtirb.block) -> (uuid, b.address, []))
             (UUIDMap.find_opt uuid all_blocks)
-      | Gfir.Vert.Stmts { uuid = Some uuid; stmts } ->
+      | Gfir.Vert.Stmts { uuid; stmts } ->
           Option.map
             (fun (b : Gtirb.block) -> (uuid, b.address, stmts))
             (UUIDMap.find_opt uuid all_blocks)
@@ -256,7 +266,7 @@ let module_to_ir_prog ir_cfg (m : Module.t) =
   let prog = Lang.Program.empty ~name:m.name () in
   let prog = Lang.Program.decl_global prog conf.pc_var in
   (* (1) build Gfir CFG *)
-  let procs = gtirb_to_cfg prog ir_cfg m in
+  let procs = gtirb_to_gfir prog ir_cfg m in
   (* collect map of all blocks in order to fixup interprocedural control-flow
      *)
   let all_blocks =

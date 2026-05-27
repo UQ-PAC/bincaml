@@ -37,6 +37,14 @@ module Edge = struct
 
   type t = edge_label option [@@deriving eq, ord, show { with_path = false }]
 
+  let to_attrib { conditional; direct; type' } =
+    StringMap.of_list
+      [
+        (".conditional", `String (Bool.to_string conditional));
+        (".direct", `String (Bool.to_string direct));
+        (".type", `String (show_edge_type type'));
+      ]
+
   let default = None
 end
 
@@ -50,8 +58,13 @@ module Vert = struct
   type t =
     | Internal of UUID.t  (** vertex in this procedure *)
     | External of UUID.t  (** vertex in another procedure *)
-    | Stmts of { uuid : UUID.t option; stmts : Lang.Program.stmt list }
+    | Stmts of { uuid : UUID.t; stmts : Lang.Program.stmt list }
   [@@deriving eq, ord, show { with_path = false }]
+
+  let to_attrib = function
+    | Internal uuid -> `String ("internal:" ^ UUID.show uuid)
+    | External uuid -> `String ("internal:" ^ UUID.show uuid)
+    | Stmts { uuid } -> `String ("stmts:" ^ UUID.show uuid)
 
   let hash = Hash.poly
 end
@@ -78,8 +91,7 @@ module D = Graph.Graphviz.Dot (struct
     ("v"
     ^
     match v with
-    | Stmts { uuid = Some uuid } -> "stmts:" ^ UUID.show uuid
-    | Stmts { stmts } -> "stmts:" ^ Int.to_string @@ Hashtbl.hash stmts
+    | Stmts { uuid } -> "stmts:" ^ UUID.show uuid
     | Internal e -> UUID.show e
     | External e -> "External" ^ UUID.show e)
     |> String.replace ~sub:"/" ~by:"_"
@@ -91,8 +103,7 @@ module D = Graph.Graphviz.Dot (struct
       | Vert.Internal n -> UUID.show n
       | External e -> "External:" ^ UUID.show e
       | Stmts { uuid; stmts } ->
-          (Option.to_iter uuid |> Iter.to_string UUID.show)
-          ^ "\\r"
+          UUID.show uuid ^ "\\r"
           ^ List.to_string ~sep:"\\r" Lang.Program.show_stmt stmts
     in
     [ `Fontname "Mono"; `Label n ]
@@ -169,9 +180,9 @@ let make_temp_proc prog all_blocks func_blocks func_entry_blocks
   let proc = { uuid; name; id; entries; blocks; code_blocks; cfg = G.empty } in
   make_proc_cfg block_is_member_of gtirb_cfg proc
 
-(** Load a prodobuf gtirb module into a set of temp_procs, use [prog] to
+(** Load a protobuf gtirb module into a set of temp_procs, use [prog] to
     generate procedure IDs.*)
-let gtirb_to_cfg prog (gtirb_cfg : CFG.t) (m : Module.t) =
+let gtirb_to_gfir prog (gtirb_cfg : CFG.t) (m : Module.t) =
   let blocks = Gtirb.get_code_block_opcodes m in
 
   let sym =
