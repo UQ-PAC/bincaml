@@ -180,11 +180,6 @@ let chc_dump_clauses st args =
   Transforms.Chc_infer.dump_to_file (get_prog st) ofile;
   st
 
-let chc_solve st _args =
-  let result = Transforms.Chc_infer.run_solver (get_prog st) in
-  print_endline (Transforms.Chc_infer.show_solve_result result);
-  st
-
 let load_il st args =
   let largs = P.(list string args) in
   try
@@ -325,11 +320,6 @@ let cmds_list =
       chc_dump_clauses,
       "<file>",
       "Encode the program as CHCs and write the SMT-LIB clauses to a file" );
-    ( "chc-solve",
-      chc_solve,
-      "",
-      "Encode the program as CHCs, run Z3/Spacer, and print sat/unsat/unknown"
-    );
     ( "interp-out",
       interp_out,
       "?file",

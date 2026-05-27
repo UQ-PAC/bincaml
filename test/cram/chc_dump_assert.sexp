@@ -1,5 +1,0 @@
-(load-il "chc_dump_assert.il")
-(run-transforms "ssa")
-(run-transforms "load-store-reduction")
-(run-transforms "lambda-lifting")
-(chc-dump-clauses "chc_dump_assert_out.smt2")

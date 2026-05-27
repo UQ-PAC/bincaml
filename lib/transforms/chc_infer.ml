@@ -271,10 +271,10 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
   Vector.to_iter block.stmts
   |> Iter.iter (fun stmt ->
       match stmt with
-      | Stmt.Instr_Assign assigns ->
+      | Stmt.Instr_Assign { al; _ } ->
           (* Evaluate RHSs in parallel before binding any new LHS — matches the
              simultaneous-assignment semantics of [Instr_Assign]. *)
-          let rhss = List.map (fun (lhs, rhs) -> (lhs, encode_expr enc rhs)) assigns in
+          let rhss = List.map (fun (lhs, rhs) -> (lhs, encode_expr enc rhs)) al in
           List.iter
             (fun (lhs, rhs_sexp) ->
               let fresh = Encoder.fresh enc lhs in
@@ -563,11 +563,6 @@ let dump_to_file (prog : Program.t) (path : string) : unit =
 
 type solve_result = Sat | Unsat | Unknown
 
-let show_solve_result = function
-  | Sat -> "sat"
-  | Unsat -> "unsat"
-  | Unknown -> "unknown"
-
 (** Open a Z3 process configured for Spacer with model-preserving options.
     Spacer's slicing and eager-inlining transformations rewrite the input in
     ways that drop predicate parameters or fuse predicates together, which
@@ -639,18 +634,6 @@ let solve_and_get_model (preds : predicate list) (clauses : clause list)
     | Unknown -> (Unknown, None)
   in
   Solver.stop s;
-  result
-
-let run_solver (prog : Program.t) : solve_result =
-  let preds, clauses = encode_program prog in
-  Logs.info (fun m ->
-      m "Submitting %d predicates and %d clauses to solver"
-        (List.length preds) (List.length clauses));
-  let result, _ = solve_and_get_model preds clauses in
-  (match result with
-  | Sat -> Logs.info (fun m -> m "Solver returned sat")
-  | Unsat -> Logs.warn (fun m -> m "Solver returned unsat — assertions not provable")
-  | Unknown -> Logs.warn (fun m -> m "Solver returned unknown"));
   result
 
 (** Preprocess a model body before decoding: expand [let] bindings and strip
@@ -778,7 +761,8 @@ let annotate_proc ~(use_spec : Program.proc -> bool)
                |> Option.get_exn_or "chc_infer: missing loop head block"
              in
              let block' =
-               Block.prepend_stmts block [ Stmt.Instr_Assert { body = inv } ]
+               Block.prepend_stmts block
+                 [ Stmt.Instr_Assert { attrib = Attrib.empty; body = inv } ]
              in
              Procedure.update_block proc head_id block'
          | None -> proc)

@@ -9,7 +9,7 @@
   concat.il))
 
 (cram
- (applies_to * \ expr_smt malloc_free memory_safety memory_interproc chc_solve_sat chc_annotate chc_loop chc_call chc_spec chc_per_query)
+ (applies_to * \ expr_smt malloc_free memory_safety memory_interproc chc_loop chc_call chc_spec chc_per_query)
  (package bincaml)
  (deps
   loop_dfg.sexp
@@ -49,10 +49,6 @@
   repeated_ssa.sexp
   load_store_reduction.il
   load_store_reduction.sexp
-  chc_dump_basic.il
-  chc_dump_basic.sexp
-  chc_dump_assert.il
-  chc_dump_assert.sexp
   ../../bin/main.exe))
 
 (cram
@@ -70,15 +66,11 @@
   ../../examples/memory/memory_safety.il))
 
 (cram
- (applies_to chc_solve_sat chc_annotate chc_loop chc_call chc_spec chc_per_query)
+ (applies_to chc_loop chc_call chc_spec chc_per_query)
  (package bincaml)
  (enabled_if %{bin-available:z3})
  (deps
   %{bin:bincaml}
-  chc_solve_sat.il
-  chc_solve_sat.sexp
-  chc_annotate.il
-  chc_annotate.sexp
   chc_loop.il
   chc_loop.sexp
   chc_call.il
