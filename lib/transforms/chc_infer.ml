@@ -248,6 +248,107 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
       }
       :: !call_clauses
   in
+  (* Use the callee's spec at the call site: assume each (substituted) [ensures]
+     as a premise post-call, without referring to the callee's [enter]/[exit]
+     predicates. *)
+  let encode_call_with_spec ~callee
+      ~(spec : (Var.t, BasilExpr.t) Procedure.proc_spec) ~lhs ~procid ~in_subst
+      =
+    (* Fresh-name returns, building the [callee out-param → caller fresh var]
+       half of the postcondition substitution. *)
+    let out_subst =
+      StringMap.fold
+        (fun name callee_out_v acc ->
+          match StringMap.find_opt name lhs with
+          | Some lhs_v ->
+              let fresh = Encoder.fresh enc lhs_v in
+              VarMap.add callee_out_v (BasilExpr.rvar fresh) acc
+          | None ->
+              failwith
+                ("chc_infer: missing return binding " ^ name ^ " at call to "
+               ^ ID.to_string procid))
+        (Procedure.formal_out_params callee)
+        VarMap.empty
+    in
+    let apply_full_subst e =
+      BasilExpr.substitute
+        (fun v ->
+          match VarMap.find_opt v in_subst with
+          | Some arg_e -> Some arg_e
+          | None -> VarMap.find_opt v out_subst)
+        e
+    in
+    List.iter
+      (fun ens ->
+        Encoder.add_premise enc (encode_expr enc (apply_full_subst ens)))
+      spec.ensures
+  in
+  (* Connect the call site to the callee's [enter]/[exit] predicates: emit
+     [C ⟹ enter⟨f⟩(args)] and conjoin [exit⟨f⟩(args, returns)] to premises. *)
+  let encode_call_full ~callee ~args ~lhs ~procid =
+    let enter_pred, exit_pred = enter_exit_predicates callee in
+    (* Arg sexps in the callee's formal-in-params order (alphabetical by name,
+       matching [StringMap.values]). *)
+    let arg_sexps =
+      StringMap.bindings (Procedure.formal_in_params callee)
+      |> List.map (fun (name, _) ->
+          match StringMap.find_opt name args with
+          | Some e -> encode_expr enc e
+          | None ->
+              failwith
+                ("chc_infer: missing arg " ^ name ^ " at call to "
+               ^ ID.to_string procid))
+    in
+    (* Captures Encoder state before fresh-naming the returns. *)
+    snapshot_call ~head:(apply_predicate enter_pred arg_sexps);
+    let return_args =
+      StringMap.bindings (Procedure.formal_out_params callee)
+      |> List.map (fun (name, _) ->
+          match StringMap.find_opt name lhs with
+          | Some v -> atom (Var.name (Encoder.fresh enc v))
+          | None ->
+              failwith
+                ("chc_infer: missing return binding " ^ name ^ " at call to "
+               ^ ID.to_string procid))
+    in
+    Encoder.add_premise enc
+      (apply_predicate exit_pred (arg_sexps @ return_args))
+  in
+  let encode_call ~lhs ~procid ~args =
+    let callee =
+      Program.proc_opt prog procid
+      |> Option.get_exn_or
+           ("chc_infer: callee not found: " ^ ID.to_string procid)
+    in
+    let spec = Procedure.specification callee in
+    (* Substitution from the callee's formal in-params to the caller's arg
+       expressions. Used to instantiate the callee's spec at this call site. *)
+    let in_subst =
+      StringMap.fold
+        (fun name v acc ->
+          match StringMap.find_opt name args with
+          | Some arg_e -> VarMap.add v arg_e acc
+          | None ->
+              failwith
+                ("chc_infer: missing arg " ^ name ^ " at call to "
+               ^ ID.to_string procid))
+        (Procedure.formal_in_params callee)
+        VarMap.empty
+    in
+    let apply_in_subst e =
+      BasilExpr.substitute (fun v -> VarMap.find_opt v in_subst) e
+    in
+    (* Precondition queries are emitted regardless of [use_spec] — the caller
+       is obligated to satisfy the callee's precondition either way. *)
+    List.iter
+      (fun req ->
+        let req_sexp = encode_expr enc (apply_in_subst req) in
+        snapshot_query ~extra_premises:[ SmtExpr.bool_not req_sexp ])
+      spec.requires;
+    if use_spec callee then
+      encode_call_with_spec ~callee ~spec ~lhs ~procid ~in_subst
+    else encode_call_full ~callee ~args ~lhs ~procid
+  in
   Vector.to_iter block.stmts
   |> Iter.iter (fun stmt ->
       match stmt with
@@ -273,105 +374,7 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
           (* Treated as [assert false]: the current premise set must already
              be unsatisfiable for the intrinsic call to be unreachable. *)
           snapshot_query ~extra_premises:[]
-      | Stmt.Instr_Call { lhs; procid; args } ->
-          let callee =
-            Program.proc_opt prog procid
-            |> Option.get_exn_or
-                 ("chc_infer: callee not found: " ^ ID.to_string procid)
-          in
-          let spec = Procedure.specification callee in
-          (* Substitution from the callee's formal in-params to the
-             caller's arg expressions. Used to instantiate the callee's
-             spec at this specific call site. *)
-          let in_subst =
-            StringMap.fold
-              (fun name v acc ->
-                match StringMap.find_opt name args with
-                | Some arg_e -> VarMap.add v arg_e acc
-                | None ->
-                    failwith
-                      ("chc_infer: missing arg " ^ name ^ " at call to "
-                     ^ ID.to_string procid))
-              (Procedure.formal_in_params callee)
-              VarMap.empty
-          in
-          let apply_in_subst e =
-            BasilExpr.substitute (fun v -> VarMap.find_opt v in_subst) e
-          in
-          (* Always: emit precondition queries for the callee's [requires].
-             Independent of [use_spec] — the caller is obligated to satisfy
-             the callee's precondition either way. *)
-          List.iter
-            (fun req ->
-              let req_sexp = encode_expr enc (apply_in_subst req) in
-              snapshot_query ~extra_premises:[ SmtExpr.bool_not req_sexp ])
-            spec.requires;
-          if use_spec callee then begin
-            (* Callers see only the spec: assume the postcondition post-call,
-               don't refer to the callee's [enter]/[exit] predicates. *)
-            (* Fresh-name returns, building the [callee out-param → caller fresh var]
-               half of the postcondition substitution. *)
-            let out_subst =
-              StringMap.fold
-                (fun name callee_out_v acc ->
-                  match StringMap.find_opt name lhs with
-                  | Some lhs_v ->
-                      let fresh = Encoder.fresh enc lhs_v in
-                      VarMap.add callee_out_v (BasilExpr.rvar fresh) acc
-                  | None ->
-                      failwith
-                        ("chc_infer: missing return binding " ^ name
-                       ^ " at call to " ^ ID.to_string procid))
-                (Procedure.formal_out_params callee)
-                VarMap.empty
-            in
-            let apply_full_subst e =
-              BasilExpr.substitute
-                (fun v ->
-                  match VarMap.find_opt v in_subst with
-                  | Some arg_e -> Some arg_e
-                  | None -> VarMap.find_opt v out_subst)
-                e
-            in
-            (* Assume each ensures clause (substituted) post-call. *)
-            List.iter
-              (fun ens ->
-                Encoder.add_premise enc (encode_expr enc (apply_full_subst ens)))
-              spec.ensures
-          end
-          else begin
-            (* Full encoding: connect to the callee's enter/exit predicates. *)
-            let enter_pred, exit_pred = enter_exit_predicates callee in
-            (* Build arg sexps in the callee's formal-in-params order
-               (alphabetical by name, matching [StringMap.values]). *)
-            let arg_sexps =
-              StringMap.bindings (Procedure.formal_in_params callee)
-              |> List.map (fun (name, _) ->
-                  match StringMap.find_opt name args with
-                  | Some e -> encode_expr enc e
-                  | None ->
-                      failwith
-                        ("chc_infer: missing arg " ^ name ^ " at call to "
-                       ^ ID.to_string procid))
-            in
-            (* Emit C ⟹ enter⟨f⟩(args). Captures Encoder state before
-               fresh-naming the returns. *)
-            snapshot_call ~head:(apply_predicate enter_pred arg_sexps);
-            (* Fresh-name each return, in the callee's formal-out-params order. *)
-            let return_args =
-              StringMap.bindings (Procedure.formal_out_params callee)
-              |> List.map (fun (name, _) ->
-                  match StringMap.find_opt name lhs with
-                  | Some v -> atom (Var.name (Encoder.fresh enc v))
-                  | None ->
-                      failwith
-                        ("chc_infer: missing return binding " ^ name
-                       ^ " at call to " ^ ID.to_string procid))
-            in
-            (* Conjoin exit⟨f⟩(args, returns) to premises. *)
-            Encoder.add_premise enc
-              (apply_predicate exit_pred (arg_sexps @ return_args))
-          end
+      | Stmt.Instr_Call { lhs; procid; args } -> encode_call ~lhs ~procid ~args
       | s ->
           failwith
             ("chc_infer: unsupported statement: " ^ Stmt.show_stmt_basil s));
