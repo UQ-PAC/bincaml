@@ -4,6 +4,7 @@
   bincaml: [WARNING] global undeclared y_3. assuming mutable unshared
   (dump-il before.il)
   (run-transforms linear-copy cf-expressions)
+  bincaml: [WARNING] Invariants not satisfied during 'linear-copy'. Needs [SSA] but only have [].
   (dump-il after.il)
 
   $ diff before.il after.il
