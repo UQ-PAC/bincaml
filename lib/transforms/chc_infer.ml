@@ -87,10 +87,20 @@ let enter_exit_predicates (proc : Program.proc) : predicate * predicate =
   in
   (enter, exit)
 
-(** A procedure has a spec if it declares any [requires] or [ensures] clauses.
-*)
+(** [true] when an expression is the boolean literal [true] — i.e. the solver
+    gave us no useful information. We don't emit these as annotations. *)
+let is_trivially_true (e : BasilExpr.t) : bool =
+  match BasilExpr.unfix e with
+  | Constant { const = `Bool true; _ } -> true
+  | _ -> false
+
+(** A procedure has a spec if it declares any non-trivial [requires] or
+    [ensures] clause. Trivially-true clauses are ignored — they impose no
+    obligation on either side. *)
 let has_spec (spec : (Var.t, BasilExpr.t) Procedure.proc_spec) : bool =
-  (not (List.is_empty spec.requires)) || not (List.is_empty spec.ensures)
+  let is_nontrivial e = not (is_trivially_true e) in
+  List.exists is_nontrivial spec.requires
+  || List.exists is_nontrivial spec.ensures
 
 (** Default predicate for [use_spec]: any procedure with a non-trivial spec.
     When true at a call site, callers see only the callee's [requires] and
@@ -638,13 +648,6 @@ let extract_invariant (pred : predicate) (model_params : (string * Sexp.t) list)
            StringMap.empty
     in
     Expr_smt.SMTLib2.expr_of_smt vardefs (preprocess_model_body body)
-
-(** [true] when an expression is the boolean literal [true] — i.e. the solver
-    gave us no useful information. We don't emit these as annotations. *)
-let is_trivially_true (e : BasilExpr.t) : bool =
-  match BasilExpr.unfix e with
-  | Constant { const = `Bool true; _ } -> true
-  | _ -> false
 
 (** Decode every model definition that names a known predicate into a
     [BasilExpr.t], keyed by predicate name. Skips definitions whose name we
