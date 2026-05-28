@@ -9,8 +9,6 @@
   >  (run-transforms dynamic-single-assignment)
   >  (dump-il after.il)
   >  (dump-boogie out.bpl)
-  >  (load-il after.il)
-  >  (dump-il after2.il)
   > EOF
   (load-il ../../examples/memory/memory_safety.il)
   (run-transforms ssa)
@@ -22,29 +20,23 @@
   (run-transforms dynamic-single-assignment)
   (dump-il after.il)
   (dump-boogie out.bpl)
-  (load-il after.il)
-  (dump-il after2.il)
   $ boogie out.bpl
-  out.bpl(192,5): Error: a precondition for this call could not be proved
-  out.bpl(112,3): Related location: this is the precondition that could not be proved
+  Memory Error: Invalid Free (object not live)
   Execution trace:
-      out.bpl(179,3): b#inputs
-  out.bpl(222,5): Error: a precondition for this call could not be proved
-  out.bpl(111,3): Related location: this is the precondition that could not be proved
+      out.bpl(190,3): b#inputs
+  Memory Error: Invalid Free (not base address)
   Execution trace:
-      out.bpl(216,3): b#inputs
-  out.bpl(262,5): Error: this assertion could not be proved
+      out.bpl(235,3): b#inputs
+  Memory Error: Invalid Access
   Execution trace:
-      out.bpl(251,3): b#inputs
-  out.bpl(299,5): Error: this assertion could not be proved
+      out.bpl(270,3): b#inputs
+  Memory Error: Invalid Access
   Execution trace:
-      out.bpl(292,3): b#inputs
-  out.bpl(349,5): Error: a postcondition could not be proved on this return path
-  out.bpl(314,3): Related location: this is the postcondition that could not be proved
+      out.bpl(319,3): b#inputs
+  Memory Error: Memory Leak
   Execution trace:
-      out.bpl(332,3): b#inputs
+      out.bpl(367,3): b#inputs
   
   Boogie program verifier finished with 1 verified, 5 errors
 
 
-  $ diff after.il after2.il
