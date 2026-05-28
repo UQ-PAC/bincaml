@@ -6,7 +6,7 @@ open struct
 
   (** Generates cells, nodes, graphs and things *)
   module DSGraphGen = struct
-    (** Generates small zarith integer *)
+    (** Generates small zarith integers *)
     let small_z = QCheck2.Gen.(int_small |> map Z.of_int)
 
     (** Generates an arbitrary interval with the given zarith generator.

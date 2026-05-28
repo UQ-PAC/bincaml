@@ -158,7 +158,251 @@ end
 
 module SBMap = Map.Make (Sva.SymBase)
 
-module DSGraph = struct
+(* TODO decide on how flags should be tested (if at all) maybe only test in expect tests
+          and also symbolic bases probably*)
+(* TODO put this in a separate file somehow *)
+
+(** A purely functional (and less efficient) representation of DSGraphs to be
+    used as a model. This is based on the DSA paper !!!! yay!!! It's also very
+    ugly because it is based lots of giant set comprehensions in code but oh
+    well! *)
+module FormalDSGraph = struct
+  module Cell = struct
+    type t = { offsets : Interval.t; node : int }
+    [@@deriving eq, ord, show { with_path = false }]
+  end
+
+  module Edge = struct
+    type t = Cell.t * Cell.t [@@deriving eq, ord, show { with_path = false }]
+  end
+
+  module CellSet = CCSet.Make (Cell)
+  module EdgeSet = CCSet.Make (Edge)
+  module IntervalSet = CCSet.Make (Interval)
+
+  type t = { cells : CellSet.t; edges : EdgeSet.t; next_nid : int }
+
+  (** An empty graph *)
+  let empty : t = { cells = CellSet.empty; edges = EdgeSet.empty; next_nid = 0 }
+
+  let join_invervals s =
+    (* (mu S . {s1 join s2 | s1, s2 in S and overlap(s1, s2)}) union {s | s in S and forall s' in S, not overlap(s, s')} *)
+    (* S = {c.s | c in C && c.n = node} *)
+    let step s =
+      let sl = IntervalSet.to_list s in
+      List.product (fun a b -> (a, b)) sl sl
+      |> List.filter (fun (s1, s2) -> Interval.overlap s1 s2)
+      |> List.map (uncurry Interval.join)
+      |> IntervalSet.of_list
+    in
+    let rec fix s = if IntervalSet.equal s (step s) then s else fix (step s) in
+    let o =
+      IntervalSet.filter
+        (fun i ->
+          IntervalSet.for_all
+            (fun i' ->
+              (not @@ Interval.equal i i') && (not @@ Interval.overlap i i'))
+            s)
+        s
+    in
+    IntervalSet.union (fix s) o
+
+  let cleq (c : Cell.t) (c' : Cell.t) =
+    c.node = c'.node && Interval.subset c.offsets c'.offsets
+
+  let cells_flat_map f cs =
+    CellSet.fold (fun c acc -> CellSet.union acc (f c)) cs CellSet.empty
+
+  let edges_flat_map f es =
+    EdgeSet.fold (fun e acc -> EdgeSet.union acc (f e)) es EdgeSet.empty
+
+  (** Join cells in the same nodes that overlap *)
+  let join_overlapping_cells (g : t) =
+    (* C^join* = {(n, s) | s in join*{c.s | c.n = n && c in C} && n in N } *)
+    let cells =
+      cells_flat_map
+        (fun (c : Cell.t) ->
+          CellSet.to_list g.cells
+          |> List.filter_map (fun (c' : Cell.t) ->
+              Option.return_if (c'.node = c.node) c.offsets)
+          |> IntervalSet.of_list |> join_invervals |> IntervalSet.to_list
+          |> List.map (fun i -> ({ offsets = i; node = c.node } : Cell.t))
+          |> CellSet.of_list)
+        g.cells
+    in
+    (* E^join* = {(c1, c2) | (c3, c4) in E && c3 <= c1 && c4 <= c2 && c1 in C^join* && c2 in C^join*} *)
+    let edges =
+      edges_flat_map
+        (fun (c3, c4) ->
+          let cl = CellSet.to_list cells in
+          List.product (fun c1 c2 -> (c1, c2)) cl cl
+          |> List.filter (fun (c1, c2) -> cleq c3 c1 && cleq c4 c2)
+          |> EdgeSet.of_list)
+        g.edges
+    in
+    { g with cells; edges }
+
+  (** Get a new, unused node id (assuming all nodes in the graph came from
+      make_node prior) *)
+  let make_node (g : t) : t * int =
+    let nid = g.next_nid in
+    ({ g with next_nid = nid + 1 }, nid)
+
+  (** Insert a cell into the node of the graph with the provided offsets *)
+  let add_cell (g : t) (nid : int) offsets : t =
+    let cell : Cell.t = { offsets; node = nid } in
+    let cells = CellSet.add cell g.cells in
+    join_overlapping_cells { g with cells }
+
+  (** Add an edge between two given cells. *)
+  let add_edge (g : t) f t =
+    assert (CellSet.mem f g.cells);
+    assert (CellSet.mem t g.cells);
+    let edges = EdgeSet.add (f, t) g.edges in
+    { g with edges }
+
+  let unify_cells (g : t) (cs : CellSet.t) =
+    assert (not @@ CellSet.is_empty cs);
+    assert (CellSet.subset cs g.cells);
+    (* PAIN *)
+    let nodes =
+      CellSet.to_list cs
+      |> List.map (fun (c : Cell.t) -> c.node)
+      |> IntSet.of_list
+    in
+    let j =
+      IntSet.to_list nodes
+      |> List.map (fun n ->
+          let is =
+            CellSet.to_list g.cells
+            |> List.filter_map (fun (c : Cell.t) ->
+                Option.return_if (c.node = n) c.offsets)
+          in
+          let offsets =
+            match is with
+            | [] -> Interval.Bot
+            | i :: is -> List.fold_left Interval.join i is
+          in
+          ({ offsets; node = n } : Cell.t))
+      |> CellSet.of_list
+    in
+    let ufy_cells =
+      CellSet.filter
+        (fun (c : Cell.t) ->
+          IntSet.mem c.node nodes && (not @@ CellSet.mem c cs))
+        g.cells
+      |> CellSet.union j
+    in
+    let open List.Traverse (Option) in
+    let starts =
+      IntSet.to_list nodes
+      |> map_m (fun n ->
+          let starts =
+            CellSet.filter (fun (c : Cell.t) -> c.node = n) j
+            |> CellSet.to_list
+            |> List.filter_map (fun (c : Cell.t) -> Interval.start c.offsets)
+          in
+          match starts with
+          | [] -> None
+          | s :: ss -> Some (n, List.fold_left Z.min s ss))
+    in
+    match starts with
+    | Some starts ->
+        let start_max =
+          match starts with
+          | [] -> failwith "no cells despite assertion"
+          | (_, s) :: ss -> List.fold_left Z.max s (List.map snd ss)
+        in
+        let deltas =
+          List.map (fun (n, s) -> (n, Z.sub start_max s)) starts
+          |> IntMap.of_list
+        in
+        let adj_offs =
+          CellSet.to_list ufy_cells
+          |> List.map (fun (c : Cell.t) ->
+              Interval.shift
+                (IntMap.get_or c.node deltas ~default:Z.zero)
+                c.offsets)
+          |> IntervalSet.of_list
+        in
+        let g, nid = make_node g in
+        let n =
+          join_invervals adj_offs |> IntervalSet.to_list
+          |> List.map (fun offsets -> ({ offsets; node = nid } : Cell.t))
+          |> CellSet.of_list
+        in
+        let map (c : Cell.t) =
+          if IntSet.mem c.node nodes then
+            let d = IntMap.find c.node deltas in
+            let o = Interval.shift d c.offsets in
+            CellSet.find_first
+              (fun (c' : Cell.t) -> Interval.subset o c'.offsets)
+              n
+          else c
+        in
+        let cells = CellSet.map map g.cells in
+        let edges = EdgeSet.map (Pair.map map map) g.edges in
+        { g with cells; edges }
+    | None ->
+        (* Collapsed *)
+        let g, nid = make_node g in
+        let c : Cell.t = { node = nid; offsets = Interval.Top } in
+        let map (c' : Cell.t) = if IntSet.mem c'.node nodes then c else c' in
+        let cells = CellSet.map map g.cells in
+        let edges = EdgeSet.map (Pair.map map map) g.edges in
+        { g with cells; edges }
+
+  let join_cell_pair (g : t) (a : Cell.t) (b : Cell.t) =
+    unify_cells g @@ CellSet.of_list [ a; b ]
+end
+
+module DSGraph : sig
+  type cell
+  type node
+  type t
+
+  (* Probably shouldn't be public *)
+  val find : cell -> cell
+  val find_node : node -> node * Z.t
+  val offsets : cell -> Interval.t
+  val join_nodes_at : Z.t -> node -> node -> unit
+
+  (* Should be public *)
+  val make_graph : node list -> node SBMap.t -> Sva.StateAbstraction.t -> t
+  val nodes : t -> node list
+  val node_map : t -> node SBMap.t
+  val empty_node : unit -> node
+  val init : Interval.t -> NodeFlags.t -> cell
+  val join : cell -> cell -> unit
+  val check_valid_node : node -> unit
+
+  (* TODO this looks like it should work over a graph ... and probably have a better type signature (intervals + pointees maybe?) *)
+  val merge_init : cell list -> node
+
+  (* idk if should be public *)
+  val insert : node -> cell -> unit
+  val unique_pointee : cell -> bool
+  val unify_pointees : cell -> unit
+  val is_sorted : node -> bool
+  val valid_cell_nodes : node -> bool
+  val cells : node -> cell list
+  val node_of : cell -> node
+  val id : node -> ID.t
+  val flags : node -> NodeFlags.t
+  val pointees : cell -> cell list
+  val set_pointees : cell list -> cell -> unit
+  val get_cell : ?uniq:bool -> Interval.t -> node -> cell
+  val cell_of : ?uniq:bool -> Sva.SymAddrSetLattice.t -> t -> cell option
+
+  (* This type signature is so ugly... *)
+  val copy_node :
+    t ->
+    ?clear_stack:bool ->
+    ?old_to_new:(IDSet.elt, node) Hashtbl.t option ->
+    ?sbs:SBMap.key list ->
+    node ->
+    node
+end = struct
   (* TODO mutable keyword *)
   (* A path compressed cell. Cells store a set of offsets from an abstract base
      address, and the node that it belongs to. *)
@@ -191,6 +435,9 @@ module DSGraph = struct
     sva : Sva.StateAbstraction.t;
   }
 
+  let make_graph nodes node_map sva = { nodes; node_map; sva }
+  let nodes (g : t) = g.nodes
+  let node_map (g : t) = g.node_map
   let id_gen = ID.make_gen ()
 
   (** Get the union find parent of this cell *)
@@ -726,7 +973,7 @@ let make_local_graph proc sva
     node_map;
 
   let (g : DSGraph.t) =
-    { nodes = SBMap.values node_map |> Iter.to_list; node_map; sva }
+    DSGraph.make_graph (SBMap.values node_map |> Iter.to_list) node_map sva
   in
 
   g
@@ -757,7 +1004,7 @@ let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
        (fun n ->
          List.iter (fun c -> assert (DSGraph.unique_pointee c))
          @@ DSGraph.cells n)
-       caller_graph.nodes;
+       (DSGraph.nodes caller_graph);
      let callee_node_copy =
        copy_node ~clear_stack:true
          ~sbs:(Sva.SymAddrSetLattice.to_list actual |> snd |> List.map fst)
@@ -767,7 +1014,7 @@ let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
        (fun n ->
          List.iter (fun c -> assert (DSGraph.unique_pointee c))
          @@ DSGraph.cells n)
-       caller_graph.nodes;
+       (DSGraph.nodes caller_graph);
      let callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
      (* Only do the joining if a caller cell actually exists *)
      let* caller_cell = cell_of actual caller_graph in
@@ -777,7 +1024,7 @@ let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
        (fun n ->
          List.iter (fun c -> assert (DSGraph.unique_pointee c))
          @@ DSGraph.cells n)
-       caller_graph.nodes;
+       (DSGraph.nodes caller_graph);
      None)
 
 let bottom_up prog nodess =
@@ -828,7 +1075,9 @@ let bottom_up prog nodess =
     IDSet.iter
       (fun pid ->
         let constraints, sva, (nodes : DSGraph.t) = IDMap.find pid nodess in
-        SBMap.iter (fun s n -> DSGraph.check_valid_node n) nodes.node_map;
+        SBMap.iter
+          (fun s n -> DSGraph.check_valid_node n)
+          (DSGraph.node_map nodes);
         Iter.iter
           Constraint.(
             function
@@ -859,7 +1108,7 @@ let bottom_up prog nodess =
         (fun n ->
           List.iter (fun c -> assert (DSGraph.unique_pointee c))
           @@ DSGraph.cells n)
-        g.nodes)
+        (DSGraph.nodes g))
     nodess;
 
   ()
@@ -888,10 +1137,10 @@ let dot_string (graph : DSGraph.t) =
           |> String.replace ~sub:"\"" ~by:"\\\""
           |> String.replace ~sub:"{" ~by:"\\{"
           |> String.replace ~sub:"}" ~by:"\\}")))
-    graph.node_map;
+    (DSGraph.node_map graph);
 
   let nodes =
-    graph.nodes
+    DSGraph.nodes graph
     |> List.map DSGraph.(fun n -> (id n, fst @@ find_node n))
     |> IDMap.of_list |> IDMap.to_list |> List.map snd
   in
