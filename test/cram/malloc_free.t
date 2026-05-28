@@ -60,22 +60,22 @@
     )
   }
   function {:extern } {:inline } $me_init_encoding(mem_encoding: memory_encoding) returns (bool) {
-    (((forall
-       i: bv64 ::
-       {$me_addr_is_heap(mem_encoding, i)}
+    (((forall 
+       i: bv64 :: 
+       {$me_addr_is_heap(mem_encoding, i)} 
        (bvult_bv64_bv64_bool(100000000bv64, i) == $me_addr_is_heap(
           mem_encoding,
           i
         )))
       &&
-      (forall
-       i: bv64 ::
-       {$me_alloc_live(mem_encoding, i)}
+      (forall 
+       i: bv64 :: 
+       {$me_alloc_live(mem_encoding, i)} 
        ($me_addr_is_heap(mem_encoding, i) ==> ($me_alloc_live(mem_encoding, i) == 0bv2))))
      &&
-     (forall
-      i: bv64 ::
-      {$me_alloc_live(mem_encoding, i)}
+     (forall 
+      i: bv64 :: 
+      {$me_alloc_live(mem_encoding, i)} 
       ((!($me_addr_is_heap(mem_encoding, i))) ==> ($me_alloc_live(mem_encoding, i) == 2bv2))))
   }
   function {:extern } {:inline } $me_valid_access(mem_encoding: memory_encoding, addr: bv64, size: bv64) returns (bool) {
@@ -128,14 +128,14 @@
   function {:bvbuiltin "bvand"} {:extern } bvand_bv64(bv64, bv64) returns (bv64);
   function {:bvbuiltin "bvule"} {:extern } bvule_bv64_bv64_bool(bv64, bv64) returns (bool);
   function {:bvbuiltin "bvult"} {:extern } bvult_bv64_bv64_bool(bv64, bv64) returns (bool);
-
+  
   procedure p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
      R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
      R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64);
     modifies $mem_encoding, $mem, $stack;
-    ensures {:msg "Memory Error: Memory Leak"} (forall
-     i: bv64 ::
-
+    ensures {:msg "Memory Error: Memory Leak"} (forall 
+     i: bv64 :: 
+      
      ($me_addr_is_heap($mem_encoding, i) ==> ($me_alloc_live(
          $mem_encoding,
          $me_addr_alloc($mem_encoding, i)
@@ -167,7 +167,7 @@
         131088bv64,
         8bv64
       );
-      Exp14__5_2_1 := load64_le($mem, 131088bv64);
+      Exp14__5_2_2 := load64_le($mem, 131088bv64);
       assert true;
       call R0_4 := p$malloc(1bv64);
       goto b#phi_5;
@@ -181,21 +181,13 @@
           $stack,
           bvadd_bv64(R31_in, 18446744073709551608bv64)
         );
-      assert $me_valid_access($mem_encoding, Exp14__5_21_2, 1bv64);
-      $mem := store8_le($mem, Exp14__5_21_2, 121bv8);
-      Exp14__5_22_2 := load64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551608bv64)
-        );
-      assert $me_valid_access($mem_encoding, 131112bv64, 8bv64);
-      Exp14__5_1_2 := load64_le($mem, 131112bv64);
       assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
         $mem_encoding,
-        Exp14__5_21_1,
+        Exp14__5_21_2,
         1bv64
       );
-      $mem := store8_le($mem, Exp14__5_21_1, 121bv8);
-      Exp14__5_22_1 := load64_le(
+      $mem := store8_le($mem, Exp14__5_21_2, 121bv8);
+      Exp14__5_22_2 := load64_le(
           $stack,
           bvadd_bv64(R31_in, 18446744073709551608bv64)
         );
@@ -204,7 +196,7 @@
         131112bv64,
         8bv64
       );
-      Exp14__5_1_1 := load64_le($mem, 131112bv64);
+      Exp14__5_1_2 := load64_le($mem, 131112bv64);
       assert true;
       call p$#free(Exp14__5_22_2);
       goto b#phi_6;
@@ -246,9 +238,12 @@
        $me_addr_alloc($mem_encoding, R0_in)
      ) == 1bv2);
 
-  $ boogie ./good.bpl
 
+
+  $ boogie ./good.bpl
+  
   Boogie program verifier finished with 1 verified, 0 errors
+
 
   $ cat ./bad.bpl
   var $mem: [bv64]bv8;
@@ -302,22 +297,22 @@
     )
   }
   function {:extern } {:inline } $me_init_encoding(mem_encoding: memory_encoding) returns (bool) {
-    (((forall
-       i: bv64 ::
-       {$me_addr_is_heap(mem_encoding, i)}
+    (((forall 
+       i: bv64 :: 
+       {$me_addr_is_heap(mem_encoding, i)} 
        (bvult_bv64_bv64_bool(100000000bv64, i) == $me_addr_is_heap(
           mem_encoding,
           i
         )))
       &&
-      (forall
-       i: bv64 ::
-       {$me_alloc_live(mem_encoding, i)}
+      (forall 
+       i: bv64 :: 
+       {$me_alloc_live(mem_encoding, i)} 
        ($me_addr_is_heap(mem_encoding, i) ==> ($me_alloc_live(mem_encoding, i) == 0bv2))))
      &&
-     (forall
-      i: bv64 ::
-      {$me_alloc_live(mem_encoding, i)}
+     (forall 
+      i: bv64 :: 
+      {$me_alloc_live(mem_encoding, i)} 
       ((!($me_addr_is_heap(mem_encoding, i))) ==> ($me_alloc_live(mem_encoding, i) == 2bv2))))
   }
   function {:extern } {:inline } $me_valid_access(mem_encoding: memory_encoding, addr: bv64, size: bv64) returns (bool) {
@@ -370,14 +365,14 @@
   function {:bvbuiltin "bvand"} {:extern } bvand_bv64(bv64, bv64) returns (bv64);
   function {:bvbuiltin "bvule"} {:extern } bvule_bv64_bv64_bool(bv64, bv64) returns (bool);
   function {:bvbuiltin "bvult"} {:extern } bvult_bv64_bv64_bool(bv64, bv64) returns (bool);
-
+  
   procedure p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
      R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
      R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64);
     modifies $mem_encoding, $mem, $stack;
-    ensures {:msg "Memory Error: Memory Leak"} (forall
-     i: bv64 ::
-
+    ensures {:msg "Memory Error: Memory Leak"} (forall 
+     i: bv64 :: 
+      
      ($me_addr_is_heap($mem_encoding, i) ==> ($me_alloc_live(
          $mem_encoding,
          $me_addr_alloc($mem_encoding, i)
@@ -404,14 +399,12 @@
           bvadd_bv64(R31_in, 18446744073709551592bv64),
           R30_in
         );
-      assert $me_valid_access($mem_encoding, 131088bv64, 8bv64);
-      Exp14__5_2_2 := load64_le($mem, 131088bv64);
       assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
         $mem_encoding,
         131088bv64,
         8bv64
       );
-      Exp14__5_2_1 := load64_le($mem, 131088bv64);
+      Exp14__5_2_2 := load64_le($mem, 131088bv64);
       assert true;
       call R0_4 := p$malloc(1bv64);
       goto b#phi_5;
@@ -435,17 +428,12 @@
           $stack,
           bvadd_bv64(R31_in, 18446744073709551608bv64)
         );
-<<<<<<< HEAD
-      assert $me_valid_access($mem_encoding, 131112bv64, 8bv64);
-      Exp14__5_1_2 := load64_le($mem, 131112bv64);
-=======
       assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
         $mem_encoding,
         131112bv64,
         8bv64
       );
-      Exp14__5_1_1 := load64_le($mem, 131112bv64);
->>>>>>> origin/main
+      Exp14__5_1_2 := load64_le($mem, 131112bv64);
       assert true;
       call p$#free(Exp14__5_22_2);
       goto b#phi_6;
@@ -487,9 +475,15 @@
        $me_addr_alloc($mem_encoding, R0_in)
      ) == 1bv2);
 
+
+<<<<<<< HEAD
+=======
+>>>>>>> origin/main
+
   $ boogie ./bad.bpl
   Memory Error: Invalid Access
   Execution trace:
       ./bad.bpl(143,3): b#main_entry
-
+  
   Boogie program verifier finished with 0 verified, 1 error
+
