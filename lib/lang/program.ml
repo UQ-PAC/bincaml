@@ -93,9 +93,9 @@ let pretty_declaration d =
   | Procedure { definition } -> pretty_proc definition
 
 (*match definition with
-      | Some d -> 
+      | Some d ->
       let param, rt = Types.uncurry (Var.typ binding) in
-      let param = 
+      let param =
       text "let " ^ text (Var.name binding) ^ text (Var.to_decl_string_il binding)
       | None -> text @@ Var.to_decl_string_il binding)
       *)
@@ -229,13 +229,21 @@ let prog_pretty (p : t) =
         | _ -> 0)
     |> List.map (fun (n, v) -> pretty_declaration v)
   in
-  let n =
-    p.entry_proc
-    |> Option.map (fun i -> text "prog entry " ^ text @@ ID.to_string i)
+  let attrib_text =
+    if StringMap.is_empty (attrib p) then []
+    else [ Attrib.attrib_pretty BasilExpr.pretty (`Assoc (attrib p)) ]
+  in
+  let entry_text =
+    (match p.entry_proc with
+      | Some entry ->
+          Some
+            (append_sp
+               ([ text "prog entry"; text (ID.to_string entry) ] @ attrib_text))
+      | _ -> None)
     |> Option.to_list
   in
   (* hopefullly ID map is sorted by id generator *)
-  let decls = globs @ n in
+  let decls = globs @ entry_text in
 
   append_l ~sep:(text ";\n") decls ^ text ";\n"
 
