@@ -5,6 +5,7 @@ Run on basic irreducible loop example
   (load-il ../../examples/irreducible_loop_1.il)
   (dump-il before.il)
   (run-transforms remove-unreachable-block cf-expressions intra-dead-store-elim)
+  bincaml: [WARNING] Invariants not satisfied during 'intra-dead-store-elim'. Needs [NoPhis] but only have [].
   (run-transforms simple-params)
   (run-transforms simple-ssa)
   (dump-il after.il)
@@ -19,14 +20,17 @@ Run on basic irreducible loop example
   (dump-il after_reparsed.il)
   (load-il ../../examples/sqrt.il)
   (run-transforms remove-unreachable-block cf-expressions intra-dead-store-elim)
+  bincaml: [WARNING] Invariants not satisfied during 'intra-dead-store-elim'. Needs [NoPhis] but only have [].
   (run-transforms simple-params)
   (interp-out before_loop.txt)
   (run-transforms simple-ssa)
   (interp-out after_loop.txt)
   (load-il ../../examples/x-output.il)
   (run-transforms remove-unreachable-block cf-expressions intra-dead-store-elim)
+  bincaml: [WARNING] Invariants not satisfied during 'intra-dead-store-elim'. Needs [NoPhis] but only have [].
   (interp-out before_conds.txt)
   (run-transforms simple-ssa)
+  bincaml: [WARNING] Invariants not satisfied during 'simple-ssa'. Needs [Params] but only have [].
   (interp-out after_conds.txt)
   (load-il ssa-multi-deps.il)
   (run-transforms remove-unreachable-block cf-expressions intra-dead-store-elim)
