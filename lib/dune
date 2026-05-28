@@ -27,7 +27,7 @@
 
 (library
  (public_name bincaml)
- (modules passes script)
+ (modules passes script invariants)
  (libraries
   loader
   containers.pp
@@ -40,4 +40,6 @@
   bincaml.util
   logs
   mtime
-  trace.core))
+  trace.core)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord)))
