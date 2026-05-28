@@ -1,0 +1,11 @@
+(library
+ (name bincaml_transform_test)
+ (inline_tests)
+ (libraries
+  bincaml.loader
+  bincaml.ast
+  bincaml.transforms
+  bincaml.util
+  bincaml)
+ (preprocess
+  (pps ppx_expect)))

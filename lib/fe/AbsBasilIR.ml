@@ -40,6 +40,7 @@ and decl =
  | Decl_ProgWithSpec of procIdent * attribSet * progSpec list
  | Decl_Proc of procIdent * openParen * params list * closeParen * openParen * params list * closeParen * attribSet * funSpec list * procDef
  | Decl_RecType of typeAssign list
+ | Decl_StructType of structType
  | Decl_Type of localIdent
 
 and typeAssign =
@@ -58,8 +59,11 @@ and intType =
 and boolType =
    BoolType1 of bOOLTYPE
 
-and recordType =
-   RecordType1 of beginRec * field list * endRec
+and topType =
+   TopType1
+
+and structType =
+   StructType1 of localIdent * beginRec * field list * endRec * intVal
 
 and pointerType =
    PointerType1 of openParen * typeT * typeT * closeParen
@@ -81,8 +85,9 @@ and typeT =
    TypeIntType of intType
  | TypeBoolType of boolType
  | TypeBVType of bVType
+ | TypeTop of topType
  | TypePointerType of pointerType
- | TypeRecordType of recordType
+ | TypeStructType of structType
  | TypeVarType of localIdent
  | TypeParen of openParen * typeT * closeParen
  | TypeMapType of mapType
@@ -229,7 +234,7 @@ and expr =
  | Expr_Match of expr * openParen * case list * closeParen
  | Expr_Cases of openParen * case list * closeParen
  | Expr_Paren of openParen * expr * closeParen
- | Expr_Field of expr * bIdent
+ | Expr_Field of openParen * expr * bIdent * closeParen
  | Expr_FieldSet of expr * localIdent * expr
  | SortValRec of localIdent * beginRec * fieldAssign list * endRec
 
@@ -251,6 +256,8 @@ and unOp =
  | UnOp_boolnot
  | UnOp_intneg
  | UnOp_booltobv1
+ | UnOp_ptrtobv64
+ | UnOp_rectobv
  | UnOp_gamma
  | UnOp_classification
 

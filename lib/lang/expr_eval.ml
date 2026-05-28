@@ -62,6 +62,12 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
       Some (bv (BVOps.eval_intrin op args))
   | UnaryExpr { op = #LogicalOps.unary as op; arg = b } ->
       get_bool b >|= LogicalOps.eval_unary op >>= bool
+  | UnaryExpr { op = `RECTOBV as op; arg } ->
+      let* record = get_record arg in
+      Some (bv (BVOps.eval_unary_rec op record))
+  | UnaryExpr { op = `PTRTOBV64 as op; arg } ->
+      let* pointer = get_pointer arg in
+      Some (bv (BVOps.eval_unary_ptr op pointer))
   | UnaryExpr { op = `Old } -> None
   | UnaryExpr { op = #IntOps.unary as op; arg = b } ->
       get_int b >|= IntOps.eval_unary op >|= fun b -> `Integer b

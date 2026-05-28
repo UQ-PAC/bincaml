@@ -29,6 +29,7 @@
   typefail.sexp
   typepass.sexp
   sva.sexp
+  typeinference.sexp
   basicssa.sexp
   roundtrip.sexp
   gammavars.sexp

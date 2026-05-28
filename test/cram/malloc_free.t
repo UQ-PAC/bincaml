@@ -471,7 +471,10 @@
        $mem_encoding,
        $me_addr_alloc($mem_encoding, R0_in)
      ) == 1bv2);
+<<<<<<< HEAD
+=======
 
+>>>>>>> bdae646dcb7b03cd7c4cc5a00c654ed12886c41f
   $ boogie ./bad.bpl
   Memory Error: Invalid Access
   Execution trace:

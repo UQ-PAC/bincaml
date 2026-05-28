@@ -25,6 +25,14 @@ let type_check stmt_id block_id expr =
   let check_unary (op : Ops.AllOps.unary) (arg : Types.t) : type_error list =
     let open Ops in
     match op with
+    | `PTRTOBV64 -> (
+        match arg with
+        | Pointer _ -> []
+        | _ -> [ type_err "PTRTOBV64 body is not a pointer type" ])
+    | `RECTOBV -> (
+        match arg with
+        | Struct _ -> []
+        | _ -> [ type_err "RECTOBV body is not a struct type" ])
     | `Classification -> []
     | `Gamma -> []
     | `Old -> []
@@ -60,17 +68,16 @@ let type_check stmt_id block_id expr =
       type_error list =
     let binary_same_types (expected_type : Types.t) arg1 arg2 =
       match (arg1, arg2) with
-      | tl, tr when Types.equal tl expected_type && Types.equal tr expected_type
-        ->
+      | tl, tr when Types.leq tl expected_type && Types.leq tr expected_type ->
           []
-      | _, tr when Types.equal tr expected_type ->
+      | _, tr when Types.leq tr expected_type ->
           [
             type_err "%s is not the correct type of %s for %s"
               (Types.to_string arg1)
               (Types.to_string expected_type)
               (Ops.AllOps.to_string op);
           ]
-      | tl, _ when Types.equal tl expected_type ->
+      | tl, _ when Types.leq tl expected_type ->
           [
             type_err "%s is not the correct type of %s for %s"
               (Types.to_string arg2)
@@ -108,7 +115,7 @@ let type_check stmt_id block_id expr =
           | _ -> [ type_err "%s is not of record type" @@ Types.to_string arg1 ]
         in
         let { typ } : Types.record_field = Types.struct_field offset arg1 in
-        if List.length err = 1 || Types.equal arg2 typ then err
+        if List.length err = 1 || Types.leq arg2 typ then err
         else
           [
             type_err "%s is not of %s type" (Types.to_string arg1)
@@ -127,7 +134,7 @@ let type_check stmt_id block_id expr =
     | `MapAccess -> (
         let a, r = Types.uncurry arg1 in
         match a with
-        | [ arg ] when not (Types.equal arg arg2) ->
+        | [ arg ] when not (Types.leq arg arg2) ->
             [
               type_err "Argument does not match map type %s"
               @@ AllOps.to_string op;
@@ -152,11 +159,21 @@ let type_check stmt_id block_id expr =
   let check_intrin (op : Ops.AllOps.intrin) (args : Types.t list) :
       type_error list =
     match op with
-    | `BVADD | `BVXOR | `BVOR | `BVAND | `BVMUL ->
+    | `BVADD ->
         let correct_type = List.hd args in
         List.fold_left
           (fun acc typ ->
-            if Types.equal correct_type typ then acc
+            if Types.leq correct_type typ then acc
+            else
+              type_err "%s is not a bitvector / ptr type in %s"
+                (Types.to_string typ) (Ops.AllOps.to_string op)
+              :: acc)
+          [] args
+    | `BVXOR | `BVOR | `BVAND | `BVMUL ->
+        let correct_type = List.hd args in
+        List.fold_left
+          (fun acc typ ->
+            if Types.leq correct_type typ then acc
             else
               type_err "%s is not a bitvector type in %s" (Types.to_string typ)
                 (Ops.AllOps.to_string op)
@@ -189,7 +206,7 @@ let type_check stmt_id block_id expr =
             fst
             @@ List.fold_left
                  (fun (errs, ty) b ->
-                   if Types.equal ty b then (errs, ty)
+                   if Types.leq ty b then (errs, ty)
                    else
                      ( type_err "non-equal branch : %s %s" (Types.to_string ty)
                          (Types.to_string b)
@@ -200,14 +217,14 @@ let type_check stmt_id block_id expr =
         match args with
         | [ Types.Map (k, v); arg1; arg2 ] ->
             let err =
-              if Types.equal k arg1 then []
+              if Types.leq k arg1 then []
               else
                 [
                   type_err "map update expected key type %s but got %s"
                     (Types.to_string k) (Types.to_string arg1);
                 ]
             in
-            if Types.equal v arg2 then err
+            if Types.leq v arg2 then err
             else
               type_err "map update expected value type %s but got %s"
                 (Types.to_string v) (Types.to_string arg2)
@@ -266,7 +283,7 @@ let type_check stmt_id block_id expr =
 let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
   let type_err fmt = type_err fmt stmt_id block_id in
   let expect_equal msg a b (s : type_error list) =
-    if Types.equal a b then s
+    if Types.leq a b then s
     else
       type_err "%s : (%s != %s)" msg (Types.to_string a) (Types.to_string b)
       :: s
@@ -308,7 +325,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
   | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size } } -> (
       let errors, rtype = type_check addr in
       let errors =
-        if Types.equal (Var.typ lhs) (Types.bv size) then errors
+        if Types.leq (Var.typ lhs) (Types.bv size) then errors
         else
           type_err "Load size (%d) doesn't match lhs (%s) type" size
             (Var.to_string lhs)
@@ -316,11 +333,14 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
       in
       match Var.typ rhs with
       | Map (Bitvector addressSize, _)
-        when Types.equal (Types.bv addressSize) rtype ->
+        when Types.leq rtype (Types.bv addressSize) ->
           errors
       | Map (Bitvector addressSize, _) ->
-          type_err "Address loading data (%s) does not match address size (%d)"
-            (BasilExpr.to_string addr) addressSize
+          type_err
+            "Address loading data (%s : %s) does not match address size (%d)"
+            (BasilExpr.to_string addr)
+            (Types.to_string @@ BasilExpr.type_of addr)
+            addressSize
           :: errors
       | _ ->
           (type_err "Invalid field for addressSize in mem %s"
@@ -331,7 +351,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
       let addr_errors, addr_rtype = type_check addr in
       let errors = List.append addr_errors val_errors in
       let errors =
-        if Types.equal val_rtype (Types.bv size) then errors
+        if Types.leq val_rtype (Types.bv size) then errors
         else
           type_err "Store size (%s) doesn't match lhs (%s) type"
             (Types.to_string (Types.bv size))
@@ -340,10 +360,10 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
       in
       match Var.typ rhs with
       | Map (Bitvector addressSize, _)
-        when Types.equal (Types.bv addressSize) addr_rtype ->
+        when Types.leq addr_rtype (Types.bv addressSize) ->
           errors
       | Map (Bitvector addressSize, _) ->
-          type_err "Address loading data (%s) does not match address size (%d)"
+          type_err "Address storing data (%s) does not match address size (%d)"
             (BasilExpr.to_string addr) addressSize
           :: errors
       | _ ->
@@ -352,24 +372,24 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
           :: errors)
   | Stmt.Instr_IndirectCall { target } ->
       let expr_errors, rtype = type_check target in
-      if Types.equal rtype (Types.bv 64) then expr_errors
+      if Types.leq rtype (Types.bv 64) then expr_errors
       else
         type_err
           "Indirect call target (%s) must be an address (i.e. Bitvector 64)"
           (BasilExpr.to_string target)
         :: expr_errors
   | Stmt.Instr_Call { lhs; procid; args } ->
-      let compare_stringmaps ty_a str_a a ty_b str_b b =
+      let compare_stringmaps name ty_a str_a a ty_b str_b b =
         StringMap.merge
-          (fun k arg real ->
-            match (arg, real) with
+          (fun k arg_a arg_b ->
+            match (arg_a, arg_b) with
             | None, _ | _, None -> Some (type_err "missing: %s" k)
-            | Some arg, Some real ->
-                if Types.equal (ty_a arg) (ty_b real) then None
+            | Some arg_a, Some arg_b ->
+                if Types.leq (ty_a arg_a) (ty_b arg_b) then None
                 else
                   Some
-                    (type_err "Type mismatch in arguments %s and %s" (str_a arg)
-                       (str_b real)))
+                    (type_err "%s: Type mismatch in arguments %s and %s" name
+                       (str_a arg_a) (str_b arg_b)))
           a b
         |> StringMap.values |> Iter.to_list
       in
@@ -380,18 +400,40 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
       let args = StringMap.map (fun v -> snd (type_check v)) args in
       let params_check =
         List.append
-          (compare_stringmaps id Types.to_string args Var.typ Var.to_string
-             real_args)
-          (compare_stringmaps Var.typ Var.to_string lhs Var.typ Var.to_string
-             output)
+          (compare_stringmaps "args" id Types.to_string args Var.typ
+             Var.to_string real_args)
+          (compare_stringmaps "rets" Var.typ Var.to_string output Var.typ
+             Var.to_string lhs)
       in
       params_check
 
-let check_block prog (id, b) =
+let check_block prog (id, (b : Program.bloc)) =
+  let open Block in
+  let err =
+    List.fold_left
+      (fun err ({ lhs; rhs } : Var.t Block.phi) ->
+        List.fold_left
+          (fun err (_, var) ->
+            if Types.leq (Var.typ var) (Var.typ lhs) then err
+            else
+              Iter.append err @@ Iter.singleton
+              @@ TypeError
+                   {
+                     text =
+                       Printf.sprintf
+                         "Incorrect type in phi node %s is not compatible with \
+                          %s"
+                         (Types.to_string @@ Var.typ lhs)
+                         (Types.to_string @@ Var.typ var);
+                   })
+          err rhs)
+      Iter.empty b.phis
+  in
   Block.stmts_iter b
   |> Iter.mapi (fun i stmt -> (i, stmt))
   |> Iter.flat_map (fun (i, stmt) ->
       List.to_iter (check_stmt_types stmt prog i @@ ID.name id))
+  |> Iter.append err
 
 let check_proc prog p =
   Procedure.iter_blocks_topo_fwd p |> Iter.flat_map (check_block prog)

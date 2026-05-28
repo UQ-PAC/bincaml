@@ -35,7 +35,7 @@ rules LambdaSep ::= "->" | "::" ;
 
 token Str '"' ((char - ["\"\\"]) | ('\\' ["\"\\tnrf"]))* '"' ;
 position token IntegerHex ('0' 'x' (digit | ["abcdef"])+);
-position token IntegerDec (digit+);
+position token IntegerDec ('-'? digit+);
 
 comment "//" ;
 comment "/*" "*/" ;
@@ -66,8 +66,10 @@ Decl_Proc . Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenPar
 TypeAssign_Sum. TypeAssign ::= LocalIdent "=" [SumCase] ;
 
 separator nonempty TypeAssign "and";
-Decl_RecType . Decl ::= "type" [TypeAssign] ;
-Decl_Type . Decl ::= "type" LocalIdent;
+
+Decl_RecType    . Decl ::= "type" [TypeAssign] ;
+Decl_StructType . Decl ::= "type" StructType ;
+Decl_Type       . Decl ::= "type" LocalIdent;
 
 ProcDef_Empty . ProcDef ::= ;
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
@@ -77,7 +79,8 @@ Field1 . Field ::= Str ":" OpenParen Type "," IntVal CloseParen ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
-RecordType1 . RecordType ::= BeginRec [Field] EndRec ;
+TopType1 . TopType ::= "⊤";
+StructType1 . StructType ::= LocalIdent "of" BeginRec [Field] EndRec IntVal;
 PointerType1 . PointerType ::= "ptr" OpenParen Type "," Type CloseParen ;
 BVType1 . BVType ::= BVTYPE ;
 -- map types are right associative. left of -> cannot be another MapType.
@@ -95,8 +98,9 @@ separator nonempty SumCase "|";
 TypeIntType     . Type1 ::= IntType ;
 TypeBoolType    . Type1 ::= BoolType ;
 TypeBVType      . Type1 ::= BVType ;
+TypeTop         . Type1 ::= TopType ;
 TypePointerType . Type1 ::= PointerType ;
-TypeRecordType  . Type1 ::= RecordType ;
+TypeStructType  . Type1 ::= StructType ;
 TypeVarType     . Type1 ::= LocalIdent ;
 TypeParen       . Type1 ::= OpenParen Type CloseParen; 
 TypeMapType     . Type ::= MapType;
@@ -265,7 +269,7 @@ rules BinOp ::= "implies" | "get" | BVBinOp | BVLogicalBinOp | IntLogicalBinOp |
 Expr_Binary . Expr2      ::= BinOp OpenParen Expr "," Expr CloseParen ;
 Expr_Assoc  . Expr2      ::= IntrinOp OpenParen [Expr] CloseParen ;
 
-rules UnOp ::= BVUnOp | "boolnot" | "intneg" | "booltobv1" | "gamma" | "classification";
+rules UnOp ::= BVUnOp | "boolnot" | "intneg" | "booltobv1" | "ptrtobv64" | "rectobv" | "gamma" | "classification";
 Expr_Unary  . Expr2      ::= UnOp OpenParen Expr CloseParen ;
 
 Expr_LoadBe . Expr2 ::= "load_be" OpenParen IntVal "," Expr "," Expr CloseParen ;
@@ -286,7 +290,7 @@ Expr_Cases . Expr2 ::= "cases" OpenParen [Case] CloseParen ;
 Expr_Paren . Expr2 ::= OpenParen Expr CloseParen ;
 
 
-Expr_Field      . Expr ::= Expr2 BIdent;
+Expr_Field      . Expr ::= OpenParen Expr BIdent CloseParen;
 Expr_FieldSet   . Expr2 ::= Expr2 "with" LocalIdent "=" Expr ;
 
 rules FieldAssign ::= LocalIdent "=" Expr ;

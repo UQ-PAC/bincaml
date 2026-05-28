@@ -364,6 +364,11 @@ module PassManager = struct
           "Remove store assignments to pure local variables which are never \
            read ";
       };
+      {
+        name = "type-inference";
+        apply = Prog Transforms.Type_inference.infer_types;
+        doc = "Perform type inferencing on program.";
+      };
       remove_unused;
       {
         name = "lambda-lifting";

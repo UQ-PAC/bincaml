@@ -57,8 +57,8 @@
   Paramters for the function has a type mismatch: type of bvor(true, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 26 in %main_entry
   bv32 is not a bitvector type in bvor at statement 26 in %main_entry
   Paramters for the function has a type mismatch: type of bvadd(true, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 27 in %main_entry
-  bv32 is not a bitvector type in bvadd at statement 27 in %main_entry
-  bv32 is not a bitvector type in bvadd at statement 28 in %main_entry
+  bv32 is not a bitvector / ptr type in bvadd at statement 27 in %main_entry
+  bv32 is not a bitvector / ptr type in bvadd at statement 28 in %main_entry
   Paramters for the function has a type mismatch: type of bvmul(true, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 29 in %main_entry
   bv32 is not a bitvector type in bvmul at statement 29 in %main_entry
   bv32 is not a bitvector type in bvmul at statement 30 in %main_entry

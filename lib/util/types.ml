@@ -34,7 +34,7 @@ type t =
   | Nothing  (** least type / empty set *)
   | Map of t * t  (** function type *)
   | Sort of string * variant list  (** An Algebraic datatype *)
-  | Struct of record_field StringMap.t
+  | Struct of { name : string; fields : record_field StringMap.t; size : int }
       (** a struct is a product type of a known layout that is representible as
           a finite byte/bit sequence *)
   | Pointer of pointer  (** pointer type *)
@@ -88,14 +88,14 @@ let bv_min_width_for_nat n = Bitvector (Z.of_int n |> Z.numbits)
 
 let struct_field field_name record : record_field =
   match record with
-  | Struct fields -> (
+  | Struct { fields; _ } -> (
       match StringMap.find_opt field_name fields with
       | None -> failwith @@ "No field at offset " ^ field_name
       | Some t -> t)
   | _ -> failwith "Not record type"
 
 (*
-  Nothing < Unit < {boolean, integer, bitvector, record, pointer} < Top
+  Nothing < Unit < {boolean, integer, (pointer < bv64), bitvector, record} < Top
   *)
 let rec compare_partial (a : t) (b : t) =
   match (a, b) with
@@ -107,19 +107,25 @@ let rec compare_partial (a : t) (b : t) =
   | _, Nothing -> Some 1
   | Unit, _ -> Some (-1)
   | _, Unit -> Some 1
-  | Pointer { lower; upper }, Pointer { lower = lower1; upper = upper1 } -> (
+  | Struct { size; _ }, Bitvector sz when sz = size -> Some (-1)
+  | Bitvector sz, Struct { size; _ } when sz = size -> Some 1
+  | Pointer _, Bitvector 64 -> Some (-1)
+  | Bitvector 64, Pointer _ -> Some 1
+  | Pointer { lower; upper; _ }, Pointer { lower = lower1; upper = upper1; _ }
+    -> (
       compare_partial lower lower1 |> function
       | Some 0 -> compare_partial upper upper1
       | o -> o)
-  | Struct fields, Struct fields2 ->
+  | Struct { fields; _ }, Struct { fields = fields2; _ } ->
       Some
         (StringMap.compare
            (fun ({ typ = a; _ } : record_field) { typ = b; _ } ->
              match compare_partial a b with Some a -> a | None -> -1)
            fields fields2)
-  | Bitvector a, Bitvector b -> Some (Int.compare a b)
+  | Bitvector a, Bitvector b when a = b -> Some 0
   | Sort (n1, _), Sort (n2, _) -> if String.equal n1 n2 then Some 0 else None
   | Integer, Integer -> Some 0
+  | Boolean, Boolean -> Some 0
   | Map (k, v), Map (k2, v2) -> (
       compare_partial k k2 |> function Some 0 -> compare_partial v v2 | o -> o)
   | _, _ -> None
@@ -143,16 +149,9 @@ let rec to_string = function
   | Top -> "⊤"
   | Nothing -> "⊥"
   | Variable name -> name
-  | Pointer { lower; upper } ->
+  | Pointer { lower; upper; _ } ->
       Printf.sprintf "ptr(%s, %s)" (to_string lower) (to_string upper)
-  | Struct record ->
-      "{"
-      ^ (StringMap.bindings record
-        |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->
-            Printf.sprintf "\"%s\": (%s, %s)" k (to_string v)
-              (Z.to_string offset))
-        |> String.concat ", ")
-      ^ "}"
+  | Struct { name; _ } -> name
   | Map ((Map _ as a), (Map _ as b)) ->
       "(" ^ "(" ^ to_string a ^ ")" ^ "->" ^ "(" ^ to_string b ^ ")" ^ ")"
   | Map ((Map _ as a), b) ->
@@ -178,6 +177,14 @@ let to_string_decl = function
       ^ List.to_string ~sep:" | " ~start:"" ~stop:""
           (function { variant; fields } -> fsort variant fields)
           variants
+  | Struct { fields; size; name } ->
+      name ^ " of {"
+      ^ (StringMap.bindings fields
+        |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->
+            Printf.sprintf "\"%s\": (%s, %s)" k (to_string v)
+              (Z.to_string offset))
+        |> String.concat ", ")
+      ^ "} " ^ Int.to_string size
   | a -> to_string a
 
 let to_string_rexp = function

@@ -562,7 +562,7 @@ module BasilExpr = struct
             (fill nil
                [ text "extract" ^ a ^ textpf "(%d,%d, " hi lo ^ e ^ text ")" ])
       | UnaryExpr { op = `ReadField field; arg = { this = Some arg } } ->
-          return (arg ^ text "." ^ text field)
+          return (bracket "(" (arg ^ text "." ^ text field) ")")
       | BinaryExpr
           {
             op = `WriteField field;
@@ -693,7 +693,12 @@ module BasilExpr = struct
     let open AbstractExpr in
     let open Ops.AllOps in
     let get_ty o =
-      match o with Fun { ret } -> ret | _ -> failwith "type error"
+      match o with
+      | Fun { ret } -> ret
+      | Conflict errs ->
+          failwith
+          @@ Printf.sprintf "type error: %s"
+          @@ List.fold_left (fun a (_, s) -> a ^ s) "" errs
     in
     match e with
     | RVar { id } -> Var.typ id
@@ -781,15 +786,8 @@ module BasilExpr = struct
     let rw_alg e =
       let orig s = fix s in
       match rw_fun e with
-      | SomeInfo { v; __LINE__; __FILE__ }
-        when Types.equal (type_of v) (type_of (orig e)) ->
-          log_rw visit ~__LINE__ ~__FILE__ (fix e) v
       | SomeInfo { v; __LINE__; __FILE__ } ->
-          failwith
-          @@ Printf.sprintf
-               "improper rewrite type: attempt to rewrite %s into %s"
-               (to_string (orig e))
-               (to_string v)
+          log_rw visit ~__LINE__ ~__FILE__ (fix e) v
       | Keep -> orig e
     in
     cata rw_alg expr

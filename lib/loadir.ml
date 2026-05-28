@@ -191,6 +191,11 @@ module BasilASTLoader = struct
       needed to do non-local reslolution of names such as for procedure calls *)
   and trans_declaration prog (x : decl) : load_st =
     match x with
+    | Decl_StructType (StructType1 (localIdent, _, fields, _, size)) ->
+        let name = unsafe_unsigil (`Type localIdent) in
+        let size = Z.to_int @@ transIntVal size in
+        let typ = transSTRUCTTYPE name fields size in
+        map_prog (fun prog -> Program.decl_typ prog typ) prog
     | Decl_Type sort ->
         let name = unsafe_unsigil (`Type sort) in
         let typ = Types.mk_sort name in
@@ -478,7 +483,8 @@ module BasilASTLoader = struct
             p blocks
         in
         map_prog (fun prog -> Program.add_proc p prog) prog
-    | Decl_Mem _ | Decl_Var _ | Decl_RecType _ | Decl_Type _ ->
+    | Decl_Mem _ | Decl_Var _ | Decl_RecType _ | Decl_StructType _ | Decl_Type _
+      ->
         (* declarations only: handled by first pass *)
         prog
 
@@ -490,27 +496,35 @@ module BasilASTLoader = struct
     | RecordField1 (id, ty) ->
         Types.mk_field (unsafe_unsigil (`Type id)) (trans_type ty)
 
-  and transRECORDTYPE (fields : field list) =
+  and transSTRUCTTYPE name (fields : field list) size =
     Types.Struct
-      (StringMap.of_list
-         ((List.map (function Field1 (field_name, _, t, offset, _) ->
-              ( transStr field_name,
-                ({ typ = trans_type t; offset = transIntVal offset }
-                  : Types.record_field) )))
-            fields))
+      {
+        name;
+        fields =
+          StringMap.of_list
+            ((List.map (function Field1 (field_name, _, t, offset, _) ->
+                 ( transStr field_name,
+                   ({ typ = trans_type t; offset = transIntVal offset }
+                     : Types.record_field) )))
+               fields);
+        size;
+      }
 
   and transPOINTERTYPE (l : typeT) (u : typeT) =
     Types.Pointer { lower = trans_type l; upper = trans_type u }
 
   and trans_type (x : typeT) : Types.t =
     match x with
+    | TypeTop toptype -> Top
     | TypeIntType inttype -> Integer
     | TypeBoolType booltype -> Boolean
     | TypeMapType maptype -> transMapType maptype
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
     | TypeParen (_, typeT, _) -> trans_type typeT
-    | TypeVarType name -> Types.Variable (unsafe_unsigil (`Type name))
-    | TypeRecordType (RecordType1 (_, fields, _)) -> transRECORDTYPE fields
+    | TypeVarType name -> Types.Variable (unsafe_unsigil (`Local name))
+    | TypeStructType (StructType1 (name, _, fields, _, size)) ->
+        transSTRUCTTYPE (unsafe_unsigil @@ `Local name) fields
+        @@ Z.to_int @@ transIntVal size
     | TypePointerType (PointerType1 (_, l, u, _)) -> transPOINTERTYPE l u
 
   and transIntVal (x : intVal) : PrimInt.t =
@@ -1316,7 +1330,7 @@ module BasilASTLoader = struct
         let fname = unsafe_unsigil (`Local fname) in
         BasilExpr.field_store ~field:fname (trans_expr record)
           (trans_expr value)
-    | Expr_Field (record, fname) ->
+    | Expr_Field (_, record, fname, _) ->
         let fname =
           String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Attr fname)
           |> Option.get_exn_or "safe by parser"
@@ -1404,6 +1418,8 @@ module BasilASTLoader = struct
     | UnOp_booltobv1 -> `BOOLTOBV1
     | UnOp_gamma -> `Gamma
     | UnOp_classification -> `Classification
+    | UnOp_ptrtobv64 -> `PTRTOBV64
+    | UnOp_rectobv -> `RECTOBV
 
   and transBVUnOp (x : bVUnOp) =
     match x with BVUnOp_bvnot -> `BVNOT | BVUnOp_bvneg -> `BVNEG

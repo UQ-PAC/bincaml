@@ -76,6 +76,8 @@ module.exports = ({
         seq("proc", $.token_ProcIdent, $.token_OpenParen, optional($.list_Params), $.token_CloseParen, "->", $.token_OpenParen, optional($.list_Params), $.token_CloseParen, optional($.AttribSet), optional($.list_FunSpec), optional($.ProcDef)),
         // Decl_RecType. Decl ::= "type" [TypeAssign] ;
         seq("type", $.list_TypeAssign),
+        // Decl_StructType. Decl ::= "type" StructType ;
+        seq("type", $.StructType),
         // Decl_Type. Decl ::= "type" LocalIdent ;
         seq("type", $.token_LocalIdent)
       ),
@@ -123,9 +125,12 @@ module.exports = ({
     BoolType: $ =>
       // BoolType1. BoolType ::= BOOLTYPE ;
       $.token_BOOLTYPE,
-    RecordType: $ =>
-      // RecordType1. RecordType ::= BeginRec [Field] EndRec ;
-      seq($.token_BeginRec, optional($.list_Field), $.token_EndRec),
+    TopType: $ =>
+      // TopType1. TopType ::= "\8868" ;
+      "\u22a4",
+    StructType: $ =>
+      // StructType1. StructType ::= LocalIdent "of" BeginRec [Field] EndRec IntVal ;
+      seq($.token_LocalIdent, "of", $.token_BeginRec, optional($.list_Field), $.token_EndRec, $.IntVal),
     PointerType: $ =>
       // PointerType1. PointerType ::= "ptr" OpenParen Type "," Type CloseParen ;
       seq("ptr", $.token_OpenParen, $.Type, ",", $.Type, $.token_CloseParen),
@@ -167,10 +172,12 @@ module.exports = ({
         $.BoolType,
         // TypeBVType. Type1 ::= BVType ;
         $.BVType,
+        // TypeTop. Type1 ::= TopType ;
+        $.TopType,
         // TypePointerType. Type1 ::= PointerType ;
         $.PointerType,
-        // TypeRecordType. Type1 ::= RecordType ;
-        $.RecordType,
+        // TypeStructType. Type1 ::= StructType ;
+        $.StructType,
         // TypeVarType. Type1 ::= LocalIdent ;
         $.token_LocalIdent,
         // TypeParen. Type1 ::= OpenParen Type CloseParen ;
@@ -518,8 +525,8 @@ module.exports = ({
         seq("fun", optional($.AttribSet), $.LambdaDef),
         // Expr_Let. Expr ::= "let" LocalIdent [LocalVarParen] ":" Type "=" Expr "in" Expr ;
         seq("let", $.token_LocalIdent, optional($.list_LocalVarParen), ":", $.Type, "=", $.Expr, "in", $.Expr),
-        // Expr_Field. Expr ::= Expr2 BIdent ;
-        seq($.Expr2, $.token_BIdent),
+        // Expr_Field. Expr ::= OpenParen Expr BIdent CloseParen ;
+        seq($.token_OpenParen, $.Expr, $.token_BIdent, $.token_CloseParen),
         // SortValRec. Expr ::= LocalIdent BeginRec [FieldAssign] EndRec ;
         seq($.token_LocalIdent, $.token_BeginRec, optional($.list_FieldAssign), $.token_EndRec)
       ),
@@ -599,6 +606,10 @@ module.exports = ({
         "intneg",
         // UnOp_booltobv1. UnOp ::= "booltobv1" ;
         "booltobv1",
+        // UnOp_ptrtobv64. UnOp ::= "ptrtobv64" ;
+        "ptrtobv64",
+        // UnOp_rectobv. UnOp ::= "rectobv" ;
+        "rectobv",
         // UnOp_gamma. UnOp ::= "gamma" ;
         "gamma",
         // UnOp_classification. UnOp ::= "classification" ;
@@ -850,7 +861,7 @@ module.exports = ({
     token_IntegerHex: $ =>
       /0x([abcdef]|\d)+/,
     token_IntegerDec: $ =>
-      /\d+/,
+      /-?\d+/,
     token_CommentSingle: $ =>
       /\/\/[^\n\r]*/,
     token_CommentMulti: $ =>

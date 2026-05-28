@@ -1,4 +1,4 @@
-var $rec:{"field0": (bv32, 0), "field1": (bv64, 32)};
+var $rec:meow of {"field0": (bv32, 0), "field1": (bv64, 32)} 64;
 prog entry @main_4196164;
 proc @main_4196164(R0_in:bv64, R10_in:bv64, R11_in:bv64, R12_in:bv64, R13_in:bv64,
    R14_in:bv64, R15_in:bv64, R16_in:bv64, R17_in:bv64, R18_in:bv64, R1_in:bv64,
@@ -6,14 +6,14 @@ proc @main_4196164(R0_in:bv64, R10_in:bv64, R11_in:bv64, R12_in:bv64, R13_in:bv6
    R5_in:bv64, R6_in:bv64, R7_in:bv64, R8_in:bv64, R9_in:bv64, _PC_in:bv64)
    -> (R0_out:bv64, R1_out:bv64) { .address = 4196164; .name = "main";
     .returnBlock = "main_return" }
-  modifies $rec:{"field0": (bv32, 0), "field1": (bv64, 32)}
-  captures $rec:{"field0": (bv32, 0), "field1": (bv64, 32)}
+  modifies $rec:meow of {"field0": (bv32, 0), "field1": (bv64, 32)} 64
+  captures $rec:meow of {"field0": (bv32, 0), "field1": (bv64, 32)} 64
 
 [
    block %main_entry [
      var as:ptr(bv64, bv64) := ptradd(R31_in, R0_in);
-     var af:bv32 := bvadd(0x1:bv32, $rec.field0);
-     $rec:{"field0": (bv32, 0), "field1": (bv64, 32)} := $rec with field0 = af;
+     var af:bv32 := bvadd(0x1:bv32, ($rec.field0));
+     $rec:meow of {"field0": (bv32, 0), "field1": (bv64, 32)} 64 := $rec with field0 = af;
      goto (%main_return);
    ];
    block %main_return [

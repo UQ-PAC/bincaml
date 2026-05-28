@@ -57,7 +57,7 @@ module IsZeroValueAbstraction = struct
     match op with
     | `BVNEG -> Top
     | `BoolNOT -> ( match a with Zero -> NonZero | NonZero -> Zero | o -> o)
-    | `BOOLTOBV1 -> a
+    | `RECTOBV | `PTRTOBV64 | `BOOLTOBV1 -> a
     | `INTNEG -> Top
     | `Extract _ -> ( match a with Zero -> Zero | _ -> Top)
     | `SignExtend _ -> ( match a with Zero -> Zero | _ -> Top)

@@ -82,6 +82,7 @@ and showDecl (e : AbsBasilIR.decl) : showable = match e with
   |    AbsBasilIR.Decl_ProgWithSpec (procident, attribset, progspecs) -> s2s "Decl_ProgWithSpec" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showList showProgSpec progspecs >> c2s ')'
   |    AbsBasilIR.Decl_Proc (procident, openparen0, paramss1, closeparen2, openparen, paramss, closeparen, attribset, funspecs, procdef) -> s2s "Decl_Proc" >> c2s ' ' >> c2s '(' >> showProcIdent procident  >> s2s ", " >>  showOpenParen openparen0  >> s2s ", " >>  showList showParams paramss1  >> s2s ", " >>  showCloseParen closeparen2  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showParams paramss  >> s2s ", " >>  showCloseParen closeparen  >> s2s ", " >>  showAttribSet attribset  >> s2s ", " >>  showList showFunSpec funspecs  >> s2s ", " >>  showProcDef procdef >> c2s ')'
   |    AbsBasilIR.Decl_RecType typeassigns -> s2s "Decl_RecType" >> c2s ' ' >> c2s '(' >> showList showTypeAssign typeassigns >> c2s ')'
+  |    AbsBasilIR.Decl_StructType structtype -> s2s "Decl_StructType" >> c2s ' ' >> c2s '(' >> showStructType structtype >> c2s ')'
   |    AbsBasilIR.Decl_Type localident -> s2s "Decl_Type" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
 
 
@@ -106,8 +107,12 @@ and showBoolType (e : AbsBasilIR.boolType) : showable = match e with
        AbsBasilIR.BoolType1 booltype -> s2s "BoolType1" >> c2s ' ' >> c2s '(' >> showBOOLTYPE booltype >> c2s ')'
 
 
-and showRecordType (e : AbsBasilIR.recordType) : showable = match e with
-       AbsBasilIR.RecordType1 (beginrec, fields, endrec) -> s2s "RecordType1" >> c2s ' ' >> c2s '(' >> showBeginRec beginrec  >> s2s ", " >>  showList showField fields  >> s2s ", " >>  showEndRec endrec >> c2s ')'
+and showTopType (e : AbsBasilIR.topType) : showable = match e with
+       AbsBasilIR.TopType1  -> s2s "TopType1"
+
+
+and showStructType (e : AbsBasilIR.structType) : showable = match e with
+       AbsBasilIR.StructType1 (localident, beginrec, fields, endrec, intval) -> s2s "StructType1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showBeginRec beginrec  >> s2s ", " >>  showList showField fields  >> s2s ", " >>  showEndRec endrec  >> s2s ", " >>  showIntVal intval >> c2s ')'
 
 
 and showPointerType (e : AbsBasilIR.pointerType) : showable = match e with
@@ -135,8 +140,9 @@ and showTypeT (e : AbsBasilIR.typeT) : showable = match e with
        AbsBasilIR.TypeIntType inttype -> s2s "TypeIntType" >> c2s ' ' >> c2s '(' >> showIntType inttype >> c2s ')'
   |    AbsBasilIR.TypeBoolType booltype -> s2s "TypeBoolType" >> c2s ' ' >> c2s '(' >> showBoolType booltype >> c2s ')'
   |    AbsBasilIR.TypeBVType bvtype -> s2s "TypeBVType" >> c2s ' ' >> c2s '(' >> showBVType bvtype >> c2s ')'
+  |    AbsBasilIR.TypeTop toptype -> s2s "TypeTop" >> c2s ' ' >> c2s '(' >> showTopType toptype >> c2s ')'
   |    AbsBasilIR.TypePointerType pointertype -> s2s "TypePointerType" >> c2s ' ' >> c2s '(' >> showPointerType pointertype >> c2s ')'
-  |    AbsBasilIR.TypeRecordType recordtype -> s2s "TypeRecordType" >> c2s ' ' >> c2s '(' >> showRecordType recordtype >> c2s ')'
+  |    AbsBasilIR.TypeStructType structtype -> s2s "TypeStructType" >> c2s ' ' >> c2s '(' >> showStructType structtype >> c2s ')'
   |    AbsBasilIR.TypeVarType localident -> s2s "TypeVarType" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
   |    AbsBasilIR.TypeParen (openparen, type', closeparen) -> s2s "TypeParen" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.TypeMapType maptype -> s2s "TypeMapType" >> c2s ' ' >> c2s '(' >> showMapType maptype >> c2s ')'
@@ -311,7 +317,7 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.Expr_Match (expr, openparen, cases, closeparen) -> s2s "Expr_Match" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showCase cases  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Cases (openparen, cases, closeparen) -> s2s "Expr_Cases" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showList showCase cases  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> s2s "Expr_Paren" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
-  |    AbsBasilIR.Expr_Field (expr, bident) -> s2s "Expr_Field" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showBIdent bident >> c2s ')'
+  |    AbsBasilIR.Expr_Field (openparen, expr, bident, closeparen) -> s2s "Expr_Field" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showBIdent bident  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_FieldSet (expr0, localident, expr) -> s2s "Expr_FieldSet" >> c2s ' ' >> c2s '(' >> showExpr expr0  >> s2s ", " >>  showLocalIdent localident  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.SortValRec (localident, beginrec, fieldassigns, endrec) -> s2s "SortValRec" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showBeginRec beginrec  >> s2s ", " >>  showList showFieldAssign fieldassigns  >> s2s ", " >>  showEndRec endrec >> c2s ')'
 
@@ -336,6 +342,8 @@ and showUnOp (e : AbsBasilIR.unOp) : showable = match e with
   |    AbsBasilIR.UnOp_boolnot  -> s2s "UnOp_boolnot"
   |    AbsBasilIR.UnOp_intneg  -> s2s "UnOp_intneg"
   |    AbsBasilIR.UnOp_booltobv1  -> s2s "UnOp_booltobv1"
+  |    AbsBasilIR.UnOp_ptrtobv64  -> s2s "UnOp_ptrtobv64"
+  |    AbsBasilIR.UnOp_rectobv  -> s2s "UnOp_rectobv"
   |    AbsBasilIR.UnOp_gamma  -> s2s "UnOp_gamma"
   |    AbsBasilIR.UnOp_classification  -> s2s "UnOp_classification"
 

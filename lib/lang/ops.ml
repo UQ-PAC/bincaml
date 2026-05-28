@@ -88,6 +88,11 @@ module BVOps = struct
   type unary_bool = [ `BOOLTOBV1 ]
   [@@deriving show { with_path = false }, eq, ord]
 
+  type unary_ptr = [ `PTRTOBV64 ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type unary_rec = [ `RECTOBV ] [@@deriving show { with_path = false }, eq, ord]
+
   type unary_unif =
     [ `BVNOT
     | `BVNEG
@@ -96,13 +101,34 @@ module BVOps = struct
     | `Extract of int * int ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type unary = [ unary_bool | unary_unif ]
+  type unary = [ unary_bool | unary_ptr | unary_rec | unary_unif ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let eval_unary_bool (o : unary_bool) =
     match o with
     | `BOOLTOBV1 -> (
         function true -> Bitvec.true_bv | false -> Bitvec.false_bv)
+
+  let eval_unary_ptr (o : unary_ptr) = match o with `PTRTOBV64 -> fst
+
+  let rec eval_unary_rec (o : unary_rec) =
+    match o with
+    | `RECTOBV -> (
+        function
+        | values, Types.Struct { size; fields; _ } ->
+            List.fold_left
+              (fun bv (name, ({ offset; _ } : Types.record_field)) ->
+                let { value; _ } : Record.field = StringMap.find name values in
+                let bv =
+                  Bitvec.bitor bv
+                  @@ Bitvec.zero_extend
+                       ~extension:(size - Bitvec.size value)
+                       value
+                in
+                bv)
+              (Bitvec.zero ~size)
+            @@ StringMap.bindings fields
+        | _ -> failwith "unsupported type")
 
   let eval_unary_unif (o : unary_unif) =
     match o with
@@ -373,11 +399,13 @@ module AllOps = struct
     | `SignExtend sz -> (
         match a with
         | Bitvector s -> return @@ Bitvector (sz + s)
-        | o -> Conflict [ (o, "<bitvector") ])
+        | o ->
+            Conflict
+              [ (o, Printf.sprintf "<bitvector - sign %s" @@ Types.show a) ])
     | `ZeroExtend sz -> (
         match a with
         | Bitvector s -> return @@ Bitvector (sz + s)
-        | o -> Conflict [ (o, "<bitvector") ])
+        | o -> Conflict [ (o, "<bitvector - zero") ])
     | `ReadField field -> (
         match a with
         | Sort _ ->
@@ -394,6 +422,11 @@ module AllOps = struct
     | `BoolNOT -> return Boolean
     | `BVNOT -> return a
     | `BOOLTOBV1 -> return @@ Bitvector 1
+    | `PTRTOBV64 -> return @@ Bitvector 64
+    | `RECTOBV -> (
+        match a with
+        | Struct { size; _ } -> return @@ Bitvector size
+        | o -> Conflict [ (o, Printf.sprintf "<record %s" @@ Types.show a) ])
     | `Extract (hi, lo) -> return (Bitvector (hi - lo))
     | `Gamma ->
         let args, r = Types.uncurry a in
@@ -438,7 +471,8 @@ module AllOps = struct
     | `BVConcat ->
         let x =
           List.filter_map
-            (function Bitvector _ -> None | o -> Some (o, "<bitvector"))
+            (function
+              | Bitvector _ -> None | o -> Some (o, "<bitvector - concat"))
             args
         in
         if List.length x > 0 then Conflict x
@@ -512,6 +546,8 @@ module AllOps = struct
     | `INTSUB -> "intsub"
     | `BVULE -> "bvule"
     | `BOOLTOBV1 -> "booltobv1"
+    | `PTRTOBV64 -> "ptrtobv64"
+    | `RECTOBV -> "rectobv"
     | `BoolNOT -> "boolnot"
     | `BVSLT -> "bvslt"
     | `Classification -> "classification"

@@ -110,7 +110,7 @@ module SMTLib2 = struct
         let log = LSet.union (LSet.singleton Array) (LSet.union ll lr) in
         (list [ atom "Array"; tl; tr ], log)
     | Types.Variable v -> (atom v, LSet.empty)
-    | Types.Struct e ->
+    | Types.Struct _ ->
         failwith "unsupported: must be lowered to Sort/ADT/Datatype first"
     | Types.Pointer { upper; lower } ->
         ( list [ atom "Pointer "; fst (of_typ upper); fst (of_typ lower) ],
