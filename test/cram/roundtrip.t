@@ -46,7 +46,7 @@ Memassign repr
   
   [
      block %main_entry [
-       $Global_4325420_4325424:bv32 := store  0x2a:bv32;
+       $Global_4325420_4325424:bv32 := store  0x2a:bv32 { .label = "4196176_0" };
        goto (%main_return);
      ];
      block %main_return [
