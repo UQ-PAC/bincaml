@@ -29,14 +29,21 @@ open struct
   (* TODO
      - Method to refer to old cells in formal model ? So we can test performing operations on Path cells/nodes
      - Comparison data structure obtainable from either handle (intervals become relative / based at 0 maybe)
-     - Figure out a way to represent copies/multiple graphs *)
+     - Figure out a way to represent copies/multiple graphs
+     - Test symbase stuff *)
 
   (** Stores state for comparing with the formal model *)
   module DSGraphHandle = struct
-    type t = DSGraph.t list
+    type t = DSGraph.t list ref
 
-    let empty = []
-    (* TODO asdkfdlhgsf the DSGraph like never works over DSGraph.t-s so nothing works ahsdlkjhsdhfdsakjghdlgkjs *)
+    let empty () = ref []
+
+    let add_graph l =
+      l := DSGraph.empty_graph Analysis.Sva.StateAbstraction.bottom :: !l
+
+    let make_cell l n i =
+      let g = List.nth !l n in
+      ignore @@ DSGraph.new_add_cell g i 0
   end
 
   (** Stores state for comparing with the implementation *)
@@ -44,15 +51,22 @@ open struct
     type t = FormalDSGraph.t list
 
     let empty = []
-
-    (** Add a new graph *)
     let add_graph l = FormalDSGraph.empty :: l
+
+    let make_cell l n i =
+      List.mapi
+        (fun n' g ->
+          if n = n' then
+            let g, n = FormalDSGraph.make_node g in
+            FormalDSGraph.add_cell g n i
+          else g)
+        l
   end
 
   module DSGraphSpec : Spec = struct
     type sut = DSGraphHandle.t
 
-    let init_sut () = DSGraphHandle.empty
+    let init_sut = DSGraphHandle.empty
     let cleanup _ = ()
 
     type cmd = AddGraph | MakeCell of int * Interval.t
@@ -61,8 +75,15 @@ open struct
       | UnifyAll
       | Copy*)
 
-    let show_cmd = function AddGraph -> "AddGraph" | _ -> failwith "todo"
-    let run cmd _sut = match cmd with _ -> Res (unit, failwith "todo")
+    let show_cmd = function
+      | AddGraph -> "AddGraph"
+      | MakeCell (n, i) ->
+          Printf.sprintf "MakeCell (%d, %s)" n (Interval.show i)
+
+    let run cmd sut =
+      match cmd with
+      | AddGraph -> Res (unit, DSGraphHandle.add_graph sut)
+      | MakeCell (n, i) -> Res (unit, DSGraphHandle.make_cell sut n i)
 
     type state = FormalDSGraphHandle.t
 
@@ -71,7 +92,7 @@ open struct
     let next_state cmd state =
       match cmd with
       | AddGraph -> FormalDSGraphHandle.add_graph state
-      | _ -> failwith "todo"
+      | MakeCell (n, i) -> FormalDSGraphHandle.make_cell state n i
 
     let precond _cmd _state = true
     let postcond _cmd _state _res = true
