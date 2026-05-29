@@ -32,4 +32,5 @@
   bincaml.analysis
   alcotest
   qcheck-alcotest
-  qcheck-core))
+  qcheck-core
+  qcheck-stm.sequential))

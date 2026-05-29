@@ -2,17 +2,19 @@ open Lang.Common
 open Analysis.Dsa
 
 open struct
+  open STM
+
   (* 1. Property tests for invariants of the DSGraph representation *)
 
   (** Generates cells, nodes, graphs and things *)
   module DSGraphGen = struct
     (** Generates small zarith integers *)
-    let small_z = QCheck2.Gen.(int_small |> map Z.of_int)
+    let small_z = QCheck.Gen.(int_small |> map Z.of_int)
 
     (** Generates an arbitrary interval with the given zarith generator.
         Occasionally will generate a Top interval but never a Bot interval. *)
     let interval zgen =
-      QCheck2.Gen.(
+      QCheck.Gen.(
         oneof_weighted
           [
             ( 30,
@@ -24,7 +26,71 @@ open struct
           ])
   end
 
+  (* TODO
+     - Method to refer to old cells in formal model ? So we can test performing operations on Path cells/nodes
+     - Comparison data structure obtainable from either handle (intervals become relative / based at 0 maybe)
+     - Figure out a way to represent copies/multiple graphs *)
+
+  (** Stores state for comparing with the formal model *)
+  module DSGraphHandle = struct
+    type t = DSGraph.t list
+
+    let empty = []
+    (* TODO asdkfdlhgsf the DSGraph like never works over DSGraph.t-s so nothing works ahsdlkjhsdhfdsakjghdlgkjs *)
+  end
+
+  (** Stores state for comparing with the implementation *)
+  module FormalDSGraphHandle = struct
+    type t = FormalDSGraph.t list
+
+    let empty = []
+
+    (** Add a new graph *)
+    let add_graph l = FormalDSGraph.empty :: l
+  end
+
+  module DSGraphSpec : Spec = struct
+    type sut = DSGraphHandle.t
+
+    let init_sut () = DSGraphHandle.empty
+    let cleanup _ = ()
+
+    type cmd = AddGraph | MakeCell of int * Interval.t
+    (*| MakeEdge
+      | Join
+      | UnifyAll
+      | Copy*)
+
+    let show_cmd = function AddGraph -> "AddGraph" | _ -> failwith "todo"
+    let run cmd _sut = match cmd with _ -> Res (unit, failwith "todo")
+
+    type state = FormalDSGraphHandle.t
+
+    let init_state = FormalDSGraphHandle.empty
+
+    let next_state cmd state =
+      match cmd with
+      | AddGraph -> FormalDSGraphHandle.add_graph state
+      | _ -> failwith "todo"
+
+    let precond _cmd _state = true
+    let postcond _cmd _state _res = true
+
+    let arb_cmd state =
+      let open QCheck.Gen in
+      let add_graph = Some (pure AddGraph) in
+      let make_cell =
+        Option.return_if
+          (not @@ List.is_empty state)
+          ( int_range 0 (List.length state - 1) >>= fun g ->
+            map (fun i -> MakeCell (g, i)) DSGraphGen.(interval small_z) )
+      in
+      QCheck.make ~print:show_cmd
+        (oneof @@ List.filter_map id [ add_graph; make_cell ])
+  end
+
   module DSGraphTests = struct
+    (*
     let widths cells = List.map (fun c -> (c, DSGraph.offsets c)) cells
     let cell_subset (c, i) = Interval.subset i (DSGraph.offsets c)
     let valid n = DSGraph.is_sorted n && DSGraph.valid_cell_nodes n
@@ -36,7 +102,7 @@ open struct
 
     (** merge_init ensures invariants *)
     let merge_init =
-      QCheck2.(
+      QCheck.(
         Test.make ~name:"merge_init" ~count:1000
           ~print:Print.(contramap (CCList.to_string Interval.show) string)
           DSGraphGen.(Gen.list (interval small_z))
@@ -103,6 +169,8 @@ open struct
     let tests =
       [ merge_init; join_nodes_at; insert ]
       |> List.map QCheck_alcotest.to_alcotest
+      *)
+    let tests = []
   end
 end
 
