@@ -33,7 +33,8 @@ let load_gtirb_gfir filename =
       (fun a m ->
         UUIDMap.union
           (fun _ _ _ -> failwith "procedure present in two modules")
-          a (Gfir.gtirb_to_gfir p c m))
+          a
+          (snd @@ Gfir.gtirb_to_gfir p c m))
       UUIDMap.empty g.modules
   in
   Some cfg

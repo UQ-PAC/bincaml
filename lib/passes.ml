@@ -23,6 +23,13 @@ module PassManager = struct
 
   type t = { avail : pass StringMap.t }
 
+  let chop_unreachable =
+    {
+      name = "trim-unreachable-proc";
+      apply = Prog Transforms.Chop_reachable.transform;
+      doc = "Remove procedures unreachable from entry";
+    }
+
   let sparams =
     {
       name = "simple-params";
@@ -321,6 +328,7 @@ module PassManager = struct
 
   let passes =
     [
+      chop_unreachable;
       dynamic_single_assignment;
       irreducible_loop;
       remove_unreachable_blocks;

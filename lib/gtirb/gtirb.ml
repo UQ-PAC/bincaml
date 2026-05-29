@@ -13,15 +13,28 @@ module UUIDMap = UUIDMap
 module UUIDSet = UUIDSet
 open Conf
 
-type block = {
-  uuid : UUID.t;
-  contents : string;
-  address : int;
-  size : int;
-  opcodes : string list option;
-}
-[@@deriving eq, ord, show { with_path = false }]
 (** code/data block with absolute address *)
+type block =
+  | Proxy of UUID.t
+  | Data of { uuid : UUID.t; contents : string; address : int; size : int }
+  | Code of {
+      uuid : UUID.t;
+      contents : string;
+      address : int;
+      size : int;
+      opcodes : string list;
+    }
+[@@deriving eq, ord, show { with_path = false }]
+
+let address = function
+  | Proxy uuid -> None
+  | Data { address } -> Some address
+  | Code { address } -> Some address
+
+let uuid = function
+  | Proxy uuid -> uuid
+  | Data { uuid } -> uuid
+  | Code { uuid } -> uuid
 
 type content_block = { block : Block.t; raw : bytes; address : int }
 (** Code/data/empty block of raw bytes, with absolute address *)
@@ -75,7 +88,9 @@ let chop_block_opcodes ~(need_flip : bool) block : block option =
     Some opcodes
   in
 
-  Some { size; uuid; contents; opcodes; address }
+  match opcodes with
+  | Some opcodes -> Some (Code { size; uuid; contents; opcodes; address })
+  | None -> Some (Data { size; uuid; contents; address })
 
 (* convert code blocks in module into blocks containing opcode sequences *)
 let get_code_block_opcodes (m : Module.t) =

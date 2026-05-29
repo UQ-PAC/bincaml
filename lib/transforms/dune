@@ -3,6 +3,7 @@
  (name transforms)
  (modules
   irreducible_loop
+  chop_reachable
   ssa
   dsa
   cf_tx

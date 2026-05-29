@@ -18,15 +18,35 @@ open struct
       binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 addr)) (rvar conf.pc_var))
 end
 
+let add_proxy_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap) uuid
+    =
+  let open Lang in
+  let open Option in
+  let ensure =
+    succ_addr uuid
+    |> Iter.map (fun addr -> addr_equal_expr addr)
+    |> Iter.to_list
+    |> Expr.BasilExpr.applyintrin ~op:`OR
+  in
+  let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
+  let stmts = ensure :: [] in
+  let proc, nb = Procedure.fresh_block proc ~attrib ~name:"%gtirb" ~stmts () in
+  let blockmap = UUIDMap.add uuid nb blockmap in
+  (proc, blockmap)
+
 (* Update (procedure, uuidmap) with a newly created IR block containing stmts
      and PC address contract*)
 let add_new_simple_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap)
     (uuid, addr, stmts) =
   let open Lang in
   let open Option in
-  let guard = addr_equal_expr addr in
   let guard =
-    Stmt.Instr_Assume { body = guard; branch = false; attrib = Attrib.empty }
+    let* addr = addr in
+    let guard = addr_equal_expr addr in
+    let guard =
+      Stmt.Instr_Assume { body = guard; branch = false; attrib = Attrib.empty }
+    in
+    Some guard
   in
   let ensure =
     succ_addr uuid
@@ -35,7 +55,7 @@ let add_new_simple_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap)
     |> Expr.BasilExpr.applyintrin ~op:`OR
   in
   let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
-  let stmts = guard :: (stmts @ [ ensure ]) in
+  let stmts = Option.to_list guard @ stmts @ [ ensure ] in
   let proc, nb = Procedure.fresh_block proc ~attrib ~name:"%gtirb" ~stmts () in
   let blockmap = UUIDMap.add uuid nb blockmap in
   (proc, blockmap)
@@ -47,21 +67,28 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
   let open Lang in
   let open Option in
   let attrib =
-    StringMap.of_list [ (".gtirb_block", `String (UUID.show b.uuid)) ]
+    StringMap.of_list [ (".gtirb_block", `String (UUID.show @@ Gtirb.uuid b)) ]
   in
   let bl =
-    let* opcodes = Gtirb.(b.opcodes) in
+    let* opcodes =
+      match b with Gtirb.Code { opcodes } -> Some opcodes | _ -> None
+    in
     let attrib' =
       let ge e = if G.mem_vertex temp_proc.cfg e then Some e else None in
       let* e =
-        Option.or_ ~else_:(ge @@ External b.uuid) (ge @@ Internal b.uuid)
+        Option.or_
+          ~else_:(ge @@ External (Gtirb.uuid b))
+          (ge @@ Internal (Gtirb.uuid b))
       in
       let es =
         G.succ_e temp_proc.cfg e
         |> List.map (fun (_, l, t) ->
             let addr =
-              UUIDMap.find_opt (Vert.uuid t) all_blocks
-              |> Option.map (fun (x : block) -> x.address)
+              UUIDMap.find_opt (Vert.uuid t) all_blocks |> fun c ->
+              Option.bind c (function
+                | Code { address } -> Some address
+                | Data { address } -> Some address
+                | _ -> None)
               |> Option.map (fun x -> (".address", `CamlInt x))
               |> Option.to_list
             in
@@ -89,9 +116,13 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
                    asm);
             })
     in
-    Some
-      (add_new_simple_block ~attrib succ_addr (proc, blockmap)
-         (b.uuid, b.address, instrs))
+    match b with
+    | Code { address } | Data { address } ->
+        Some
+          (add_new_simple_block ~attrib succ_addr (proc, blockmap)
+             (Gtirb.uuid b, Some address, instrs))
+    | Proxy uuid ->
+        Some (add_proxy_block ~attrib succ_addr (proc, blockmap) uuid)
   in
   Option.get_or ~default:(proc, blockmap) bl
 
@@ -155,9 +186,9 @@ let cfg_edge_to_ir_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
   let open Lang in
   let module G = Procedure.G in
   let get_vert_block src =
-    match src with
-    | Gfir.Vert.Internal uuid | Stmts { uuid } | Gfir.Vert.External uuid -> (
-        UUIDMap.get uuid blocks |> function Some e -> `Block e | _ -> `None)
+    UUIDMap.get (Vert.uuid src) blocks |> function
+    | Some e -> `Block e
+    | _ -> `None
   in
   let proc, retbl = Procedure.fresh_block ~name:"%ret" ~stmts:[] proc () in
   let proc =
@@ -202,7 +233,7 @@ let transform_cfg_calls procs =
 let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let entry_addrs =
     UUIDSet.to_iter p.entries
-    |> Iter.map (fun x -> UUIDMap.find x p.code_blocks |> fun x -> x.address)
+    |> Iter.filter_map (fun x -> UUIDMap.find x p.code_blocks |> Gtirb.address)
   in
   (* Possible entry addresses *)
   let requires =
@@ -219,19 +250,14 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let succ_addr uuid =
     let verts =
       Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
-      |> Iter.filter (function
-          | Gfir.Vert.Internal uid | External uid | Stmts { uuid = uid } ->
-          UUID.equal uid uuid)
+      |> Iter.filter (fun x -> UUID.equal (Vert.uuid x) uuid)
     in
     try
       Gfir.(
         verts
         |> Iter.flat_map (fun v -> G.succ p.cfg v |> List.to_iter)
-        |> Iter.filter_map (function
-          | Vert.Internal uuid -> UUIDMap.find_opt uuid p.code_blocks
-          | Vert.External uuid -> UUIDMap.find_opt uuid all_blocks
-          | Vert.Stmts { uuid } -> UUIDMap.find_opt uuid all_blocks)
-        |> Iter.map (fun (b : Gtirb.block) -> b.address))
+        |> Iter.filter_map (fun v -> UUIDMap.find_opt (Vert.uuid v) all_blocks)
+        |> Iter.filter_map Gtirb.address)
     with Invalid_argument _ -> Iter.empty
   in
   let name = Lang.Program.declare_name ("@" ^ p.name) m in
@@ -246,13 +272,13 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let proc, blocks =
     Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
     |> Iter.filter_map (function
-      | Gfir.Vert.External uuid ->
+      | Gfir.Vert.External uuid | Gfir.Vert.Proxy uuid ->
           Option.map
-            (fun (b : Gtirb.block) -> (uuid, b.address, []))
+            (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, []))
             (UUIDMap.find_opt uuid all_blocks)
       | Gfir.Vert.Stmts { uuid; stmts } ->
           Option.map
-            (fun (b : Gtirb.block) -> (uuid, b.address, stmts))
+            (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, stmts))
             (UUIDMap.find_opt uuid all_blocks)
       | _ -> None)
     |> Iter.fold (add_new_simple_block succ_addr) (proc, blocks)
@@ -276,7 +302,7 @@ let module_to_ir_prog ir_cfg (m : Module.t) =
   let prog = Lang.Program.empty ~name:m.name () in
   let prog = Lang.Program.decl_global prog conf.pc_var in
   (* (1) build Gfir CFG *)
-  let procs = gtirb_to_gfir prog ir_cfg m in
+  let entry_proc, procs = gtirb_to_gfir prog ir_cfg m in
   (* collect map of all blocks in order to fixup interprocedural control-flow
      *)
   let all_blocks =
@@ -295,6 +321,10 @@ let module_to_ir_prog ir_cfg (m : Module.t) =
       - guarded by (PC = its address)
       - ensuring the pc at the end is the address of a successor
   *)
-  UUIDMap.fold
-    (fun _ proc prog -> temp_proc_to_ir_proc all_blocks prog proc)
-    procs prog
+  let prog =
+    UUIDMap.fold
+      (fun _ proc prog -> temp_proc_to_ir_proc all_blocks prog proc)
+      procs prog
+  in
+  let entry_proc = UUIDMap.find entry_proc procs in
+  Lang.Program.set_entry_proc entry_proc.id prog
