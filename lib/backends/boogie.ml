@@ -197,7 +197,7 @@ let rec pretty_attribute (attr : Attrib.t) =
   let open Containers_pp in
   match attr with
   | `List l -> List.flat_map pretty_attribute l
-  | `String s -> [ text s ]
+  | `String s -> [ text (Printf.sprintf "%S" s) ]
   | _ -> []
 
 and pretty_attribute_map (key : string) (a : Attrib.attrib_map) =

@@ -3,7 +3,7 @@
 
 var $R0: bv64;
 
-prog entry @main ;
+prog entry @main  { .invariants = ["NoPhis"] } ;
 
 proc @main () -> ()
 [

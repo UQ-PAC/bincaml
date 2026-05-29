@@ -1,11 +1,11 @@
   $ bincaml script malloc_free.sexp
   (load-il ../../examples/memory/malloc_free.il)
-  (run-transforms split-memory-encoding)
-  (run-transforms memory-specification)
+  (run-transforms ssa split-memory-encoding)
+  (run-transforms memory-specification flatten-phis)
   (dump-boogie good.bpl)
   (load-il ../../examples/memory/malloc_free_oob.il)
-  (run-transforms split-memory-encoding)
-  (run-transforms memory-specification)
+  (run-transforms ssa split-memory-encoding)
+  (run-transforms memory-specification flatten-phis)
   (dump-boogie bad.bpl)
 
   $ cat ./good.bpl
@@ -109,9 +109,6 @@
      ++
      #memory[bvadd_bv64(#index, 0bv64)]): bv64
   }
-  function {:define } {:extern } store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
-    #memory[#index := #value[8:0]]
-  }
   function {:define } {:extern } store64_le(#memory: [bv64]bv8, #index: bv64, #value: bv64) returns ([bv64]bv8) {
     #memory[#index := #value[8:0]][bvadd_bv64(#index, 1bv64) := #value[16:8]][bvadd_bv64(
       #index,
@@ -123,6 +120,9 @@
       #index,
       6bv64
     ) := #value[56:48]][bvadd_bv64(#index, 7bv64) := #value[64:56]]
+  }
+  function {:define } {:extern } store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
+    #memory[#index := #value[8:0]]
   }
   function {:bvbuiltin "bvadd"} {:extern } bvadd_bv64(bv64, bv64) returns (bv64);
   function {:bvbuiltin "bvand"} {:extern } bvand_bv64(bv64, bv64) returns (bv64);
@@ -144,13 +144,13 @@
   implementation p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
    R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
    R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64) {
-    var Exp18__5_25_1: bv64;
-    var Exp16__5_24_1: bv64;
-    var Exp14__5_21_1: bv64;
-    var R0_3: bv64;
-    var Exp14__5_22_1: bv64;
-    var Exp14__5_2_1: bv64;
-    var Exp14__5_1_1: bv64;
+    var Exp18__5_25_2: bv64;
+    var Exp14__5_21_2: bv64;
+    var Exp14__5_22_2: bv64;
+    var R0_4: bv64;
+    var Exp16__5_24_2: bv64;
+    var Exp14__5_2_2: bv64;
+    var Exp14__5_1_2: bv64;
     b#main_entry:
       $stack := store64_le(
           $stack,
@@ -167,27 +167,27 @@
         131088bv64,
         8bv64
       );
-      Exp14__5_2_1 := load64_le($mem, 131088bv64);
+      Exp14__5_2_2 := load64_le($mem, 131088bv64);
       assert true;
-      call R0_3 := p$malloc(1bv64);
+      call R0_4 := p$malloc(1bv64);
       goto b#phi_5;
     b#phi_5:
       $stack := store64_le(
           $stack,
           bvadd_bv64(R31_in, 18446744073709551608bv64),
-          R0_3
+          R0_4
         );
-      Exp14__5_21_1 := load64_le(
+      Exp14__5_21_2 := load64_le(
           $stack,
           bvadd_bv64(R31_in, 18446744073709551608bv64)
         );
       assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
         $mem_encoding,
-        Exp14__5_21_1,
+        Exp14__5_21_2,
         1bv64
       );
-      $mem := store8_le($mem, Exp14__5_21_1, 121bv8);
-      Exp14__5_22_1 := load64_le(
+      $mem := store8_le($mem, Exp14__5_21_2, 121bv8);
+      Exp14__5_22_2 := load64_le(
           $stack,
           bvadd_bv64(R31_in, 18446744073709551608bv64)
         );
@@ -196,23 +196,23 @@
         131112bv64,
         8bv64
       );
-      Exp14__5_1_1 := load64_le($mem, 131112bv64);
+      Exp14__5_1_2 := load64_le($mem, 131112bv64);
       assert true;
-      call p$#free(Exp14__5_22_1);
+      call p$#free(Exp14__5_22_2);
       goto b#phi_6;
     b#phi_6:
-      Exp16__5_24_1 := load64_le(
+      Exp16__5_24_2 := load64_le(
           $stack,
           bvadd_bv64(R31_in, 18446744073709551584bv64)
         );
-      Exp18__5_25_1 := load64_le(
+      Exp18__5_25_2 := load64_le(
           $stack,
           bvadd_bv64(R31_in, 18446744073709551592bv64)
         );
       goto b#main_return;
     b#main_return:
-      R0_out, R17_out, R1_out, R29_out, R30_out := 0bv64, Exp14__5_1_1, 121bv64,
-        Exp16__5_24_1, Exp18__5_25_1;
+      R0_out, R17_out, R1_out, R29_out, R30_out := 0bv64, Exp14__5_1_2, 121bv64,
+        Exp16__5_24_2, Exp18__5_25_2;
       return;
   }
   procedure p$malloc(R0_in: bv64) returns (R0_out: bv64);
@@ -238,9 +238,12 @@
        $me_addr_alloc($mem_encoding, R0_in)
      ) == 1bv2);
 
+
+
   $ boogie ./good.bpl
   
   Boogie program verifier finished with 1 verified, 0 errors
+
 
   $ cat ./bad.bpl
   var $mem: [bv64]bv8;
@@ -343,9 +346,6 @@
      ++
      #memory[bvadd_bv64(#index, 0bv64)]): bv64
   }
-  function {:define } {:extern } store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
-    #memory[#index := #value[8:0]]
-  }
   function {:define } {:extern } store64_le(#memory: [bv64]bv8, #index: bv64, #value: bv64) returns ([bv64]bv8) {
     #memory[#index := #value[8:0]][bvadd_bv64(#index, 1bv64) := #value[16:8]][bvadd_bv64(
       #index,
@@ -357,6 +357,9 @@
       #index,
       6bv64
     ) := #value[56:48]][bvadd_bv64(#index, 7bv64) := #value[64:56]]
+  }
+  function {:define } {:extern } store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
+    #memory[#index := #value[8:0]]
   }
   function {:bvbuiltin "bvadd"} {:extern } bvadd_bv64(bv64, bv64) returns (bv64);
   function {:bvbuiltin "bvand"} {:extern } bvand_bv64(bv64, bv64) returns (bv64);
@@ -378,13 +381,13 @@
   implementation p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
    R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
    R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64) {
-    var Exp18__5_25_1: bv64;
-    var Exp16__5_24_1: bv64;
-    var Exp14__5_21_1: bv64;
-    var R0_3: bv64;
-    var Exp14__5_22_1: bv64;
-    var Exp14__5_2_1: bv64;
-    var Exp14__5_1_1: bv64;
+    var Exp18__5_25_2: bv64;
+    var Exp14__5_21_2: bv64;
+    var Exp14__5_22_2: bv64;
+    var R0_4: bv64;
+    var Exp16__5_24_2: bv64;
+    var Exp14__5_2_2: bv64;
+    var Exp14__5_1_2: bv64;
     b#main_entry:
       $stack := store64_le(
           $stack,
@@ -401,27 +404,27 @@
         131088bv64,
         8bv64
       );
-      Exp14__5_2_1 := load64_le($mem, 131088bv64);
+      Exp14__5_2_2 := load64_le($mem, 131088bv64);
       assert true;
-      call R0_3 := p$malloc(1bv64);
+      call R0_4 := p$malloc(1bv64);
       goto b#phi_5;
     b#phi_5:
       $stack := store64_le(
           $stack,
           bvadd_bv64(R31_in, 18446744073709551608bv64),
-          R0_3
+          R0_4
         );
-      Exp14__5_21_1 := load64_le(
+      Exp14__5_21_2 := load64_le(
           $stack,
           bvadd_bv64(R31_in, 18446744073709551608bv64)
         );
       assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
         $mem_encoding,
-        bvadd_bv64(Exp14__5_21_1, 7bv64),
+        bvadd_bv64(Exp14__5_21_2, 7bv64),
         1bv64
       );
-      $mem := store8_le($mem, bvadd_bv64(Exp14__5_21_1, 7bv64), 121bv8);
-      Exp14__5_22_1 := load64_le(
+      $mem := store8_le($mem, bvadd_bv64(Exp14__5_21_2, 7bv64), 121bv8);
+      Exp14__5_22_2 := load64_le(
           $stack,
           bvadd_bv64(R31_in, 18446744073709551608bv64)
         );
@@ -430,23 +433,23 @@
         131112bv64,
         8bv64
       );
-      Exp14__5_1_1 := load64_le($mem, 131112bv64);
+      Exp14__5_1_2 := load64_le($mem, 131112bv64);
       assert true;
-      call p$#free(Exp14__5_22_1);
+      call p$#free(Exp14__5_22_2);
       goto b#phi_6;
     b#phi_6:
-      Exp16__5_24_1 := load64_le(
+      Exp16__5_24_2 := load64_le(
           $stack,
           bvadd_bv64(R31_in, 18446744073709551584bv64)
         );
-      Exp18__5_25_1 := load64_le(
+      Exp18__5_25_2 := load64_le(
           $stack,
           bvadd_bv64(R31_in, 18446744073709551592bv64)
         );
       goto b#main_return;
     b#main_return:
-      R0_out, R17_out, R1_out, R29_out, R30_out := 0bv64, Exp14__5_1_1, 121bv64,
-        Exp16__5_24_1, Exp18__5_25_1;
+      R0_out, R17_out, R1_out, R29_out, R30_out := 0bv64, Exp14__5_1_2, 121bv64,
+        Exp16__5_24_2, Exp18__5_25_2;
       return;
   }
   procedure p$malloc(R0_in: bv64) returns (R0_out: bv64);
@@ -472,9 +475,15 @@
        $me_addr_alloc($mem_encoding, R0_in)
      ) == 1bv2);
 
+
+<<<<<<< HEAD
+=======
+>>>>>>> origin/main
+
   $ boogie ./bad.bpl
   Memory Error: Invalid Access
   Execution trace:
       ./bad.bpl(143,3): b#main_entry
   
   Boogie program verifier finished with 0 verified, 1 error
+

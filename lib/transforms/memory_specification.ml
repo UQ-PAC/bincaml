@@ -6,12 +6,7 @@ open Memory_encoding
 
 let make_msg_attrib msg =
   StringMap.of_list
-    [
-      ( ".boogie",
-        `Assoc
-          (StringMap.of_list
-             [ (".msg", `String (Printf.sprintf "\"%s\"" msg)) ]) );
-    ]
+    [ (".boogie", `Assoc (StringMap.of_list [ (".msg", `String msg) ])) ]
 
 let old e = BasilExpr.unexp ~op:`Old e
 let i = Var.create ~scope:Var.LocalConst "i" (Types.Bitvector 64)

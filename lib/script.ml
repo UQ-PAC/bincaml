@@ -145,8 +145,13 @@ let dump_il st ofile =
 
 let dump_boogie st ofile =
   let ofile = P.(opt string ofile) in
-  file_opt ofile (fun c -> Backends.Boogie.pretty_to_chan c (get_prog st));
-  st
+  file_opt ofile (fun c ->
+      let prog =
+        Some
+          (Passes.PassManager.run_transform (get_prog st)
+             (Passes.PassManager.dump_boogie c))
+      in
+      set_prog st prog)
 
 let interp_out st ofile =
   let ofile = P.(opt string ofile) in
