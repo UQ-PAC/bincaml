@@ -176,9 +176,11 @@ module FormalDSGraph = struct
     type t = Cell.t * Cell.t [@@deriving eq, ord, show { with_path = false }]
   end
 
-  module CellSet = CCSet.Make (Cell)
-  module EdgeSet = CCSet.Make (Edge)
-  module IntervalSet = CCSet.Make (Interval)
+  module CellSet = Set.Make (Cell)
+  module CellSetSet = Set.Make (CellSet)
+  module CellMap = Map.Make (Cell)
+  module EdgeSet = Set.Make (Edge)
+  module IntervalSet = Set.Make (Interval)
 
   type t = { cells : CellSet.t; edges : EdgeSet.t; next_nid : int }
 
@@ -261,6 +263,10 @@ module FormalDSGraph = struct
     let edges = EdgeSet.add (f, t) g.edges in
     { g with edges }
 
+  (** Unify all cells in the given set. If cells are in different nodes, the
+      nodes are joined together into a single node with offsets corrected. This
+      node is returned with the new graph along with the map function from the
+      paper. *)
   let unify_cells (g : t) (cs : CellSet.t) =
     assert (not @@ CellSet.is_empty cs);
     assert (CellSet.subset cs g.cells);
@@ -342,7 +348,7 @@ module FormalDSGraph = struct
         in
         let cells = CellSet.map map g.cells in
         let edges = EdgeSet.map (Pair.map map map) g.edges in
-        { g with cells; edges }
+        ({ g with cells; edges }, (n, map))
     | None ->
         (* Collapsed *)
         let g, nid = make_node g in
@@ -350,10 +356,40 @@ module FormalDSGraph = struct
         let map (c' : Cell.t) = if IntSet.mem c'.node nodes then c else c' in
         let cells = CellSet.map map g.cells in
         let edges = EdgeSet.map (Pair.map map map) g.edges in
-        { g with cells; edges }
+        ({ g with cells; edges }, (CellSet.singleton c, map))
 
+  (** Join two cells together, if they are in different nodes the nodes will be
+      joined into one with offsets adjusted. *)
   let join_cell_pair (g : t) (a : Cell.t) (b : Cell.t) =
-    unify_cells g @@ CellSet.of_list [ a; b ]
+    fst @@ unify_cells g @@ CellSet.of_list [ a; b ]
+
+  (** Get sets of cells pointed to by the cells in the cell set *)
+  let pointees (cs : CellSet.t) (es : EdgeSet.t) =
+    EdgeSet.to_list es
+    |> List.fold_left
+         (fun acc (c, c') ->
+           if CellSet.mem c cs then
+             let cur = CellMap.get_or c acc ~default:CellSet.empty in
+             CellMap.add c (CellSet.add c' cur) acc
+           else acc)
+         CellMap.empty
+    |> CellMap.values |> CellSetSet.of_iter
+
+  (** Unify all pointees of cells so that each cell has a unique pointee. *)
+  let unify_all (g : t) =
+    let rec iter uc g =
+      if CellSetSet.is_empty uc then g
+      else
+        let s = CellSetSet.choose uc in
+        let g, (n, map) = unify_cells g s in
+        let uc =
+          CellSetSet.remove s uc
+          |> CellSetSet.map (CellSet.map map)
+          |> CellSetSet.union (pointees n g.edges)
+        in
+        iter uc g
+    in
+    iter (pointees g.cells g.edges) g
 end
 
 module DSGraph : sig
@@ -374,6 +410,7 @@ module DSGraph : sig
   val empty_node : unit -> node
   val init : Interval.t -> NodeFlags.t -> cell
   val join : cell -> cell -> unit
+  val unify_pointees : cell -> unit
   val check_valid_node : node -> unit
 
   (* TODO this looks like it should work over a graph ... and probably have a better type signature (intervals + pointees maybe?) *)
@@ -382,7 +419,6 @@ module DSGraph : sig
   (* idk if should be public *)
   val insert : node -> cell -> unit
   val unique_pointee : cell -> bool
-  val unify_pointees : cell -> unit
   val is_sorted : node -> bool
   val valid_cell_nodes : node -> bool
   val cells : node -> cell list
