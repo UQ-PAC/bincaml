@@ -1,0 +1,25 @@
+(library
+ (public_name bincaml.aslp)
+ (name bincaml_aslp)
+ (modules
+   ibi
+   lift)
+ (libraries
+   aslp_lifter_ocaml.aarch64
+  containers
+  containers-data
+  iter
+  containers.pp
+  bincaml.util
+  bincaml.ast)
+ (preprocess
+  (pps
+   ppx_here
+   ppx_deriving.show
+   ppx_deriving.eq
+   ppx_deriving.ord
+   ppx_deriving.map
+   ppx_deriving.iter
+   ppx_deriving.fold
+   ppx_deriving.enum
+   ppx_expect)))
