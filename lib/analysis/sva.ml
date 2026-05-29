@@ -13,15 +13,11 @@ open Containers
 open Common
 open Wrapped_intervals
 
-(*
-  TODO
-    Figure out what the SymBases should actually have in them, is it just for cute printing?
-*)
-
 module SymBase = struct
   type t =
     (* Known *)
     | Stack of string
+    (* TODO disambiguate distinct heap symbols from calling malloc multiple times *)
     | Heap of { name : string }
     | GlobSym
     | Constant
