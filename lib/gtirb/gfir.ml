@@ -61,9 +61,14 @@ module Vert = struct
     | Stmts of { uuid : UUID.t; stmts : Lang.Program.stmt list }
   [@@deriving eq, ord, show { with_path = false }]
 
+  let uuid = function
+    | Internal u -> u
+    | External u -> u
+    | Stmts { uuid } -> uuid
+
   let to_attrib = function
     | Internal uuid -> `String ("internal:" ^ UUID.show uuid)
-    | External uuid -> `String ("internal:" ^ UUID.show uuid)
+    | External uuid -> `String ("external:" ^ UUID.show uuid)
     | Stmts { uuid } -> `String ("stmts:" ^ UUID.show uuid)
 
   let hash = Hash.poly

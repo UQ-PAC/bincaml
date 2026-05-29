@@ -39,6 +39,7 @@ let chop_block_opcodes ~(need_flip : bool) block : block option =
       Logs.debug (fun m -> m "%d : %d" (Bytes.length block.raw) size);
       String.of_bytes @@ Bytes.sub block.raw block.block.offset size)
   in
+  (* all blocks that have uuid defined  *)
   let* uuid, size, opcodes, contents =
     match block.block.value with
     | `Code b -> (

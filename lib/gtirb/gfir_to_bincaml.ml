@@ -42,7 +42,8 @@ let add_new_simple_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap)
 
 (* Update (procedure, uuidmap) with a newly created IR block with opcodes and
      PC address contract *)
-let add_new_code_block temp_proc succ_addr (proc, blockmap) (b : Gtirb.block) =
+let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
+    (proc, blockmap) (b : Gtirb.block) =
   let open Lang in
   let open Option in
   let attrib =
@@ -58,8 +59,15 @@ let add_new_code_block temp_proc succ_addr (proc, blockmap) (b : Gtirb.block) =
       let es =
         G.succ_e temp_proc.cfg e
         |> List.map (fun (_, l, t) ->
+            let addr =
+              UUIDMap.find_opt (Vert.uuid t) all_blocks
+              |> Option.map (fun (x : block) -> x.address)
+              |> Option.map (fun x -> (".address", `CamlInt x))
+              |> Option.to_list
+            in
             (match l with Some l -> Edge.to_attrib l | None -> Attrib.empty)
-            |> StringMap.add ".target" (Vert.to_attrib t))
+            |> StringMap.add ".target" (Vert.to_attrib t)
+            |> fun m -> StringMap.add_list m addr)
         |> List.map (fun e -> `Assoc e)
       in
       Some (StringMap.singleton ".succ" (`List es))
@@ -231,7 +239,9 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
 
   let proc, blocks =
     p.code_blocks |> UUIDMap.to_iter |> Iter.map snd
-    |> Iter.fold (add_new_code_block p succ_addr) (proc, UUIDMap.empty)
+    |> Iter.fold
+         (add_new_code_block all_blocks p succ_addr)
+         (proc, UUIDMap.empty)
   in
   let proc, blocks =
     Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
