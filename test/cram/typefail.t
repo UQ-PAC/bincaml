@@ -33,10 +33,8 @@
   bvnot body is not a bitvector at statement 14 in %main_entry
   Paramters for the function has a type mismatch: type of bvneg(1) != type of $NF:bv1 (int != bv1) at statement 15 in %main_entry
   bvneg body is not a bitvector at statement 15 in %main_entry
-  Paramters for the function has a type mismatch: type of zero_extend(32, 2) != type of $NF:bv1 (⊥ != bv1) at statement 16 in %main_entry
   Nothing type encountered in operator at statement 16 in %main_entry
   zero_extend_32 body is not a bitvector at statement 16 in %main_entry
-  Paramters for the function has a type mismatch: type of sign_extend(32, 2) != type of $NF:bv1 (⊥ != bv1) at statement 17 in %main_entry
   Nothing type encountered in operator at statement 17 in %main_entry
   sign_extend_32 body is not a bitvector at statement 17 in %main_entry
   extract_32_31  body is not a bitvector at statement 18 in %main_entry

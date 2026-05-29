@@ -297,7 +297,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
            (fun acc (lvar, e) ->
              let expr_errors, rtype = type_check e in
              let acc = List.append acc expr_errors in
-             if Types.equal rtype (Var.typ lvar) then acc
+             if Types.leq rtype (Var.typ lvar) then acc
              else
                type_err
                  "Paramters for the function has a type mismatch: type of %s \

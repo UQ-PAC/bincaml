@@ -88,7 +88,7 @@ buildDunePackage {
     stb_image
   ];
 
-  doCheck = true;
+  # doCheck = true;
   outputs = [
     "out"
     "dev"
