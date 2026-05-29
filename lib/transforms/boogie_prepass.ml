@@ -163,8 +163,7 @@ module Builtins = struct
       StringMap.of_list
         [
           (".extern", `List []);
-          ( ".bvbuiltin",
-            `List [ `String (Printf.sprintf "\"%s\"" @@ builtin_name op) ] );
+          (".bvbuiltin", `List [ `String (builtin_name op) ]);
         ]
     in
     let attribs = StringMap.of_list [ (".boogie", `Assoc boogie_attribs) ] in
