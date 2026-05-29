@@ -347,7 +347,7 @@ module FormalDSGraph = struct
           else c
         in
         let cells = CellSet.map map g.cells in
-        let edges = EdgeSet.map (Pair.map map map) g.edges in
+        let edges = EdgeSet.map (Pair.map_same map) g.edges in
         ({ g with cells; edges }, (n, map))
     | None ->
         (* Collapsed *)
@@ -355,7 +355,7 @@ module FormalDSGraph = struct
         let c : Cell.t = { node = nid; offsets = Interval.Top } in
         let map (c' : Cell.t) = if IntSet.mem c'.node nodes then c else c' in
         let cells = CellSet.map map g.cells in
-        let edges = EdgeSet.map (Pair.map map map) g.edges in
+        let edges = EdgeSet.map (Pair.map_same map) g.edges in
         ({ g with cells; edges }, (CellSet.singleton c, map))
 
   (** Join two cells together, if they are in different nodes the nodes will be
@@ -378,18 +378,66 @@ module FormalDSGraph = struct
   (** Unify all pointees of cells so that each cell has a unique pointee. *)
   let unify_all (g : t) =
     let rec iter uc g =
-      if CellSetSet.is_empty uc then g
-      else
-        let s = CellSetSet.choose uc in
-        let g, (n, map) = unify_cells g s in
-        let uc =
-          CellSetSet.remove s uc
-          |> CellSetSet.map (CellSet.map map)
-          |> CellSetSet.union (pointees n g.edges)
-        in
-        iter uc g
+      match CellSetSet.choose_opt uc with
+      | None -> g
+      | Some s ->
+          let g, (n, map) = unify_cells g s in
+          let uc =
+            CellSetSet.remove s uc
+            |> CellSetSet.map (CellSet.map map)
+            |> CellSetSet.union (pointees n g.edges)
+          in
+          iter uc g
     in
     iter (pointees g.cells g.edges) g
+
+  (** Copy cells from the second graph into the first, with their corresponding
+      nodes copied along. The returned graph is the new first graph, and a
+      mapping of second-graph-cell to copied-cells is returned with it *)
+  let copy (g : t) (g' : t) (cs : CellSet.t) =
+    assert (CellSet.subset cs g'.cells);
+    let rec iter g ns done_ns =
+      match IntSet.choose_opt ns with
+      | None -> (g, IntMap.empty)
+      | Some n ->
+          assert (not @@ IntSet.mem n done_ns);
+          let g, n' = make_node g in
+          let cs =
+            g'.cells |> CellSet.filter (fun (c : Cell.t) -> c.node = n)
+          in
+          let cells =
+            CellSet.union
+              (cs |> CellSet.map (fun (c : Cell.t) -> { c with node = n' }))
+              g.cells
+          in
+          let g = { g with cells } in
+          let ptee_ns =
+            pointees cs g'.edges |> CellSetSet.to_iter
+            |> Iter.flat_map (fun cs ->
+                CellSet.to_iter cs |> Iter.map (fun (c : Cell.t) -> c.node))
+            |> IntSet.of_iter
+          in
+          let done_ns = IntSet.add n done_ns in
+          let ns = ns |> IntSet.union ptee_ns |> IntSet.diff done_ns in
+          (* The graph with all pointed-to cells copied, and the node mapping *)
+          let g, nm = iter g ns done_ns in
+          (* Add the edges *)
+          let edges =
+            g'.edges
+            |> EdgeSet.filter (fun ((c : Cell.t), _) -> c.node = n)
+            |> EdgeSet.map
+                 (Pair.map_same (fun (c : Cell.t) ->
+                      { c with node = IntMap.find c.node nm }))
+            |> EdgeSet.union g.edges
+          in
+          ({ g with edges }, nm)
+    in
+    let ns =
+      CellSet.to_list cs
+      |> List.map (fun (c : Cell.t) -> c.node)
+      |> IntSet.of_list
+    in
+    iter g ns IntSet.empty
 end
 
 module DSGraph : sig
@@ -923,6 +971,11 @@ end = struct
     new_n
 end
 
+(** Construct the local-phase graph of the given procedure. The local phase will
+    ensure that any expression that can be used as a pointer points to at most
+    one cell. Such expressions are precisely the expressions in memory indexing
+    operations in load/store statements, formal in and out parameters, argument
+    expressions of calls and registers returned by calls. *)
 let make_local_graph proc sva
     (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t) : DSGraph.t =
   let cells = Vector.create () in
