@@ -90,8 +90,13 @@ let transform_malloc p =
                  ])
               (r_out 0);
             (* Update the memory encoding: *)
-              (Calls.allocate
-                 [ old @@ rvar Globals.mem_encoding; rvar Globals.mem_encoding; r_out 0; r_in 0 ]);
+            Calls.allocate
+              [
+                old @@ rvar Globals.mem_encoding;
+                rvar Globals.mem_encoding;
+                r_out 0;
+                r_in 0;
+              ];
           ];
       modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
       captures_globs = spec.captures_globs @ [ Globals.mem_encoding ];
