@@ -19,8 +19,8 @@
   (run-transforms linear-const)
   (run-transforms linear-copy)
   (run-transforms inter-function-summaries)
+  (run-transforms dynamic-single-assignment)
   (dump-il after.il)
-  (run-transforms flatten-phis)
   (dump-boogie out.bpl)
   $ boogie out.bpl
   
@@ -47,6 +47,7 @@
   (run-transforms linear-const)
   (run-transforms linear-copy)
   (run-transforms inter-function-summaries)
+  (run-transforms dynamic-single-assignment)
   (dump-il after.il)
   (dump-boogie out.bpl)
 
