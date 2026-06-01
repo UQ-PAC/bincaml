@@ -1,4 +1,3 @@
 [submodule "examples"]
 	path = examples
 	url = https://github.com/UQ-PAC/bincaml-test.git
-	branch = main
