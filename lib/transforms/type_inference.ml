@@ -178,7 +178,6 @@ module InferredType = struct
     | Record (fields, _) -> ZMap.iter (fun _ { ty } -> iter f ty) fields
 
   let rec intersect (a : t) (b : t) : t =
-    (* print_endline @@ Printf.sprintf "joining types %s %s" (show ty0) @@ show ty1; *)
     match (a, b) with
     | a, b when equal a b -> a
     | Recursive (a, b), _ | _, Recursive (a, b) ->
@@ -787,19 +786,19 @@ module TypeAutomata = struct
              (fun
                (_, ({ size; _ } : InferredType.field))
                (_, { size = size2; _ })
-             -> Int.neg @@ Int.compare size size2)
+             -> Int.compare size2 size)
       in
       let rec helper (fields : (Z.t * InferredType.field) list) =
-        let nest_record ({ ty = ty1; size; offset } : InferredType.field)
+        let nest_record ({ ty = ty1; offset; size } : InferredType.field)
             ({ offset = offset2 } as field_to_nest : InferredType.field) :
             InferredType.field =
           let ty =
             match ty1 with
-            | InferredType.Record (fields, _) ->
-                InferredType.Record
-                  ( ZMap.of_list
-                    @@ helper ((offset2, field_to_nest) :: ZMap.to_list fields),
-                    size )
+            | InferredType.Record (fields, size) ->
+                let fields =
+                  helper (ZMap.to_list fields @ [ (offset2, field_to_nest) ])
+                in
+                InferredType.Record (ZMap.of_list fields, size)
             | _ ->
                 InferredType.Record (ZMap.singleton offset2 field_to_nest, size)
           in
@@ -814,12 +813,16 @@ module TypeAutomata = struct
                 @@ List.find_all
                      (fun ( _,
                             ({ offset = offset1; size = size1 } :
-                              InferredType.field) ) -> Z.leq offset1 offset)
+                              InferredType.field) ) ->
+                       Z.leq offset1 offset
+                       && Z.leq
+                            (Z.add offset @@ Z.of_int size)
+                            (Z.add offset1 @@ Z.of_int size1))
                      fields
               with
-              | Some (offset, field2) ->
-                  let fields = List.remove_assq offset fields in
-                  (offset, nest_record field2 field) :: fields
+              | Some (offset1, field1) ->
+                  let fields = List.remove_assq offset1 fields in
+                  (offset1, nest_record field1 field) :: fields
               | None -> (offset, field) :: fields)
             [] fields
         in
@@ -828,8 +831,23 @@ module TypeAutomata = struct
 
       let fields = helper fields in
 
-      let record = InferredType.Record (ZMap.of_list fields, size) in
-      record
+      (* You could def do this in one pass, BUT WHEN I TRIED I CRASHED OUT *)
+      let disjoint_fields fields =
+        List.fold_left
+          (fun disjoint (_, ({ offset; size } : InferredType.field)) ->
+            List.exists
+              (fun (_, ({ offset = offset1; size = size1 } : InferredType.field))
+                 ->
+                Z.leq offset1 offset
+                && Z.leq
+                     (Z.add offset @@ Z.of_int size)
+                     (Z.add offset1 @@ Z.of_int size1)
+                || disjoint)
+              fields)
+          false fields
+      in
+      if disjoint_fields fields then BV size
+      else InferredType.Record (ZMap.of_list fields, size)
     in
     (* Assume the list is only of two things *)
     let make_pointer : (Sigma.t * InferredType.t) list -> InferredType.t =

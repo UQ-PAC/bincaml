@@ -244,13 +244,13 @@ proc @main_4196260 () -> ()
       (VarId.make_id "Extraction_v_1", (Top, Types.Bitvector 32));
     ]
   in
-
+  
   assert (
     List.equal
       (* Accidently wrote the test the wrong way *)
       (fun (_, (ty, _)) (_, (_, ty2)) ->
-        (* print_endline @@ Types.show ty; *)
-        (* print_endline @@ Types.show ty2; *)
+        (* print_endline @@ Types.to_string_decl ty; *)
+        (* print_endline @@ Types.to_string_decl ty2; *)
         Types.equal ty ty2)
       (snd @@ simplify_types st)
       types)

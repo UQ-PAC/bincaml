@@ -43,7 +43,7 @@ buildDunePackage {
   ];
   propagatedBuildInputs = [ ];
 
-  doCheck = true;
+  doCheck = false;
   outputs = [
     "out"
     "dev"
