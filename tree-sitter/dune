@@ -1,7 +1,11 @@
 ; checks tree-sitter highlights are valid
 
 (rule
- (deps src/parser.c queries/highlights.scm ../test/cram/concat.il)
+ (deps
+  (source_tree src)
+  tree-sitter.json
+  queries/highlights.scm
+  ../test/cram/concat.il)
  (alias treesit)
  (action
   (with-stdin-from
