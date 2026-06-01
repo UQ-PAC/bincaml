@@ -11,7 +11,7 @@ homepage: "https://github.com/username/reponame"
 doc: "https://url/to/documentation"
 bug-reports: "https://github.com/username/reponame/issues"
 depends: [
-  "dune" {>= "3.23"}
+  "dune" {>= "3.19"}
   "ocaml-protoc-plugin" {>= "6.1.0"}
   "qcheck-stm" {with-test}
   "qcheck-core" {with-test}

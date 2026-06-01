@@ -32,7 +32,9 @@ module PassManager = struct
     {
       name = "trim-unreachable-proc";
       apply = Prog Transforms.Chop_reachable.transform;
+      invariants = Invariants.make ();
       doc = "Remove procedures unreachable from entry";
+    }
 
   let dump_boogie out_channel =
     {
