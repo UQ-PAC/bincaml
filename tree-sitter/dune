@@ -2,7 +2,8 @@
 
 (rule
  (deps
-  (source_tree src)
+  src/grammar.json
+  src/parser.c
   tree-sitter.json
   queries/highlights.scm
   ../test/cram/concat.il)
