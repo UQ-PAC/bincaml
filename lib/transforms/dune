@@ -2,6 +2,7 @@
  (public_name bincaml.transforms)
  (name transforms)
  (modules
+  cse_elim
   irreducible_loop
   chop_reachable
   ssa

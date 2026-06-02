@@ -88,6 +88,14 @@ module PassManager = struct
       invariants = Invariants.needs [ SSA ];
     }
 
+  let cse_elim =
+    {
+      name = "cse-elim";
+      apply = Proc Transforms.Cse_elim.transform;
+      doc = "common-subexpression elimination transform";
+      invariants = Invariants.needs [ SSA ];
+    }
+
   let demo_ival_wint_cfg =
     {
       name = "demo-ivalwint-product-cfg";
@@ -395,6 +403,7 @@ module PassManager = struct
   let passes =
     [
       chop_unreachable;
+      cse_elim;
       flatten_phis;
       dynamic_single_assignment;
       irreducible_loop;

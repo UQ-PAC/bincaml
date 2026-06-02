@@ -536,7 +536,10 @@ module AllOps = struct
     | (#unary as u), (#unary as u2) -> equal_unary u u2
     | (#binary as b), (#binary as b2) -> equal_binary b b2
     | (#intrin as b), (#intrin as b2) -> equal_intrin b b2
-    | _ -> false
+    | #const, _ -> false
+    | #unary, _ -> false
+    | #binary, _ -> false
+    | #intrin, _ -> false
 
   let hash_const = Hashtbl.hash
   let hash_unary = Hashtbl.hash
