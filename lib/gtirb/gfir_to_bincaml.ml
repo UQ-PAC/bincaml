@@ -16,6 +16,9 @@ open struct
   let addr_equal_expr addr =
     Lang.Expr.BasilExpr.(
       binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 addr)) (rvar conf.pc_var))
+
+  let sanitize_proc_name p =
+    List.fold_left (fun a sub -> String.replace ~sub ~by:"" a) p [ "@"; "." ]
 end
 
 let add_proxy_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap) uuid
@@ -28,16 +31,19 @@ let add_proxy_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap) uuid
     |> Iter.to_list
     |> Expr.BasilExpr.applyintrin ~op:`OR
   in
+  let name =
+    "%" ^ (Procedure.id proc |> ID.to_string |> sanitize_proc_name) ^ "_proxy"
+  in
   let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
   let stmts = ensure :: [] in
-  let proc, nb = Procedure.fresh_block proc ~attrib ~name:"%gtirb" ~stmts () in
+  let proc, nb = Procedure.fresh_block proc ~attrib ~name ~stmts () in
   let blockmap = UUIDMap.add uuid nb blockmap in
   (proc, blockmap)
 
 (* Update (procedure, uuidmap) with a newly created IR block containing stmts
      and PC address contract*)
-let add_new_simple_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap)
-    (uuid, addr, stmts) =
+let add_new_simple_block ?(name_suffix = "") ?(attrib = StringMap.empty)
+    succ_addr (proc, blockmap) (uuid, addr, stmts) =
   let open Lang in
   let open Option in
   let guard =
@@ -56,7 +62,12 @@ let add_new_simple_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap)
   in
   let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
   let stmts = Option.to_list guard @ stmts @ [ ensure ] in
-  let proc, nb = Procedure.fresh_block proc ~attrib ~name:"%gtirb" ~stmts () in
+  let name =
+    "%"
+    ^ (Procedure.id proc |> ID.to_string |> sanitize_proc_name)
+    ^ name_suffix
+  in
+  let proc, nb = Procedure.fresh_block proc ~attrib ~name ~stmts () in
   let blockmap = UUIDMap.add uuid nb blockmap in
   (proc, blockmap)
 
@@ -119,7 +130,8 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
     match b with
     | Code { address } | Data { address } ->
         Some
-          (add_new_simple_block ~attrib succ_addr (proc, blockmap)
+          (add_new_simple_block ~name_suffix:"_code" ~attrib succ_addr
+             (proc, blockmap)
              (Gtirb.uuid b, Some address, instrs))
     | Proxy uuid ->
         Some (add_proxy_block ~attrib succ_addr (proc, blockmap) uuid)
@@ -281,7 +293,9 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
             (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, stmts))
             (UUIDMap.find_opt uuid all_blocks)
       | _ -> None)
-    |> Iter.fold (add_new_simple_block succ_addr) (proc, blocks)
+    |> Iter.fold
+         (add_new_simple_block ~name_suffix:"_ext" succ_addr)
+         (proc, blocks)
   in
 
   let proc =
