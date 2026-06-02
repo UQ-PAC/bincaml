@@ -27,40 +27,110 @@ open struct
   end
 
   (* TODO
-     - Method to refer to old cells in formal model ? So we can test performing operations on Path cells/nodes
+     - DONE Method to refer to old cells in formal model ? So we can test performing operations on Path cells/nodes
      - Comparison data structure obtainable from either handle (intervals become relative / based at 0 maybe)
-     - Figure out a way to represent copies/multiple graphs
+     - DONEish? Figure out a way to represent copies/multiple graphs
      - Test symbase stuff *)
 
   (** Stores state for comparing with the formal model *)
   module DSGraphHandle = struct
-    type t = DSGraph.t list ref
+    type graph = { g : DSGraph.t; mutable cells : DSGraph.cell list }
+    type t = graph list ref
 
     let empty () = ref []
 
-    let add_graph l =
-      l := DSGraph.empty_graph Analysis.Sva.StateAbstraction.bottom :: !l
+    let add_graph (l : t) =
+      l :=
+        {
+          g = DSGraph.empty_graph Analysis.Sva.StateAbstraction.bottom;
+          cells = [];
+        }
+        :: !l
 
-    let make_cell l n i =
+    let make_cell (l : t) n i =
       let g = List.nth !l n in
-      ignore @@ DSGraph.new_add_cell g i 0
+      let c = DSGraph.new_add_cell g.g i 0 in
+      g.cells <- c :: g.cells
+
+    let count_cells (l : t) n =
+      let g = List.nth !l n in
+      List.length g.cells
+
+    let add_edge (l : t) n a b =
+      let g = List.nth !l n in
+      let a = List.nth g.cells a in
+      let b = List.nth g.cells b in
+      DSGraph.add_pointees [ b ] a
+
+    let extend_cells cur possible =
+      List.fold_left
+        (fun cur c -> List.add_nodup ~eq:CCEqual.physical (DSGraph.find c) cur)
+        cur possible
+
+    let join (l : t) n a b =
+      let g = List.nth !l n in
+      let a = List.nth g.cells a in
+      let b = List.nth g.cells b in
+      if CCEqual.physical (DSGraph.find a) (DSGraph.find b) then
+        DSGraph.join a b
+      else (
+        DSGraph.join a b;
+        let g = List.nth !l n in
+        g.cells <- extend_cells g.cells [ a; b ])
+
+    let unify_all (l : t) n =
+      let g = List.nth !l n in
+      List.iter DSGraph.unify_pointees g.cells;
+      g.cells <- extend_cells g.cells g.cells
   end
 
   (** Stores state for comparing with the implementation *)
   module FormalDSGraphHandle = struct
-    type t = FormalDSGraph.t list
+    type graph = { g : FormalDSGraph.t; cells : FormalDSGraph.Cell.t list }
+    type t = graph list
 
     let empty = []
-    let add_graph l = FormalDSGraph.empty :: l
+    let add_graph l : t = { g = FormalDSGraph.empty; cells = [] } :: l
+    let mapn l n f = List.mapi (fun n' gr -> if n = n' then f gr else gr) l
 
-    let make_cell l n i =
-      List.mapi
-        (fun n' g ->
-          if n = n' then
-            let g, n = FormalDSGraph.make_node g in
-            FormalDSGraph.add_cell g n i
-          else g)
-        l
+    let make_cell l n i : t =
+      mapn l n (fun gr ->
+          let g, n = FormalDSGraph.make_node gr.g in
+          let cells : FormalDSGraph.Cell.t list =
+            { offsets = i; node = n } :: gr.cells
+          in
+          { g = FormalDSGraph.add_cell g n i; cells })
+
+    let count_cells l n =
+      let g = List.nth l n in
+      List.length g.cells
+
+    let add_edge l n a b =
+      mapn l n (fun gr ->
+          let a = List.nth gr.cells a in
+          let b = List.nth gr.cells b in
+          { gr with g = FormalDSGraph.add_edge gr.g a b })
+
+    let join l n a b =
+      mapn l n (fun gr ->
+          let a = List.nth gr.cells a in
+          let b = List.nth gr.cells b in
+          let g = FormalDSGraph.join_cell_pair gr.g a b in
+          let c = FormalDSGraph.find g a in
+          let cells = List.add_nodup ~eq:FormalDSGraph.Cell.equal c gr.cells in
+          { g; cells })
+
+    let unify_all l n =
+      mapn l n (fun gr ->
+          let g = FormalDSGraph.unify_all gr.g in
+          let cells =
+            List.fold_left
+              (fun cur c ->
+                List.add_nodup ~eq:FormalDSGraph.Cell.equal
+                  (FormalDSGraph.find g c) cur)
+              gr.cells gr.cells
+          in
+          { g; cells })
   end
 
   module DSGraphSpec : Spec = struct
@@ -69,21 +139,32 @@ open struct
     let init_sut = DSGraphHandle.empty
     let cleanup _ = ()
 
-    type cmd = AddGraph | MakeCell of int * Interval.t
-    (*| MakeEdge
-      | Join
-      | UnifyAll
-      | Copy*)
+    type cmd =
+      | AddGraph
+      | MakeCell of int * Interval.t
+      | CountCells of int
+      | MakeEdge of int * int * int
+      | Join of int * int * int
+      | UnifyAll of int
+    (*| Copy*)
 
     let show_cmd = function
       | AddGraph -> "AddGraph"
       | MakeCell (n, i) ->
           Printf.sprintf "MakeCell (%d, %s)" n (Interval.show i)
+      | CountCells n -> Printf.sprintf "CountCells %d" n
+      | MakeEdge (n, a, b) -> Printf.sprintf "MakeEdge (%d, %d, %d)" n a b
+      | Join (n, a, b) -> Printf.sprintf "Join (%d, %d, %d)" n a b
+      | UnifyAll n -> Printf.sprintf "UnifyAll %d" n
 
     let run cmd sut =
       match cmd with
       | AddGraph -> Res (unit, DSGraphHandle.add_graph sut)
       | MakeCell (n, i) -> Res (unit, DSGraphHandle.make_cell sut n i)
+      | CountCells n -> Res (int, DSGraphHandle.count_cells sut n)
+      | MakeEdge (n, a, b) -> Res (unit, DSGraphHandle.add_edge sut n a b)
+      | Join (n, a, b) -> Res (unit, DSGraphHandle.join sut n a b)
+      | UnifyAll n -> Res (unit, DSGraphHandle.unify_all sut n)
 
     type state = FormalDSGraphHandle.t
 
@@ -93,22 +174,99 @@ open struct
       match cmd with
       | AddGraph -> FormalDSGraphHandle.add_graph state
       | MakeCell (n, i) -> FormalDSGraphHandle.make_cell state n i
+      | CountCells _ -> state
+      | MakeEdge (n, a, b) -> FormalDSGraphHandle.add_edge state n a b
+      | Join (n, a, b) -> FormalDSGraphHandle.join state n a b
+      | UnifyAll n -> FormalDSGraphHandle.unify_all state n
 
     let precond _cmd _state = true
-    let postcond _cmd _state _res = true
+
+    let postcond cmd state res =
+      match (cmd, res) with
+      | AddGraph, Res ((Unit, _), _) -> true
+      | MakeCell _, Res ((Unit, _), _) -> true
+      | CountCells i, Res ((Int, _), n) ->
+          FormalDSGraphHandle.count_cells state i = n
+      | MakeEdge _, Res ((Unit, _), _) -> true
+      | Join _, Res ((Unit, _), _) -> true
+      | UnifyAll _, Res ((Unit, _), _) -> true
+      | _ -> false
 
     let arb_cmd state =
       let open QCheck.Gen in
       let add_graph = Some (pure AddGraph) in
       let make_cell =
-        Option.return_if
-          (not @@ List.is_empty state)
-          ( int_range 0 (List.length state - 1) >>= fun g ->
-            map (fun i -> MakeCell (g, i)) DSGraphGen.(interval small_z) )
+        if not @@ List.is_empty state then
+          Some
+            ( int_range 0 (List.length state - 1) >>= fun g ->
+              map (fun i -> MakeCell (g, i)) DSGraphGen.(interval small_z) )
+        else None
+      in
+      let arb_cell_idx g =
+        if FormalDSGraphHandle.count_cells state g > 0 then
+          Some
+            ( int_range 0 (FormalDSGraphHandle.count_cells state g - 1)
+            >|= fun ci -> (g, ci) )
+        else None
+      in
+      let count_cells =
+        if not @@ List.is_empty state then
+          Some
+            (let* g = int_range 0 (List.length state - 1) in
+             pure (CountCells g))
+        else None
+      in
+      let make_edge =
+        (if not @@ List.is_empty state then
+           Some (List.init (List.length state) id)
+         else None)
+        |> Option.map (List.filter_map arb_cell_idx)
+        |> Option.filter (not % List.is_empty)
+        |> Option.map (fun is ->
+            is
+            |> List.map (fun gen ->
+                pair gen gen >|= fun ((g, c1), (_, c2)) -> MakeEdge (g, c1, c2))
+            |> oneof)
+      in
+      let make_join =
+        (if not @@ List.is_empty state then
+           Some (List.init (List.length state) id)
+         else None)
+        |> Option.map
+             (List.filter (fun g -> FormalDSGraphHandle.count_cells state g > 1))
+        |> Option.filter (not % List.is_empty)
+        |> Option.map (fun is ->
+            is
+            |> List.map (fun g ->
+                let n = FormalDSGraphHandle.count_cells state g in
+                let* c1 = 0 -- (n - 1) in
+                let* c2 =
+                  List.init n id |> List.filter (not % ( = ) c1) |> oneof_list
+                in
+                return (Join (g, c1, c2)))
+            |> oneof)
+      in
+      let unify_all =
+        if not @@ List.is_empty state then
+          Some
+            (let* g = int_range 0 (List.length state - 1) in
+             pure (UnifyAll g))
+        else None
       in
       QCheck.make ~print:show_cmd
-        (oneof @@ List.filter_map id [ add_graph; make_cell ])
+        (oneof
+        @@ List.filter_map id
+             [
+               add_graph;
+               make_cell;
+               count_cells;
+               make_edge;
+               make_join;
+               unify_all;
+             ])
   end
+
+  module DSGraphSequential = STM_sequential.Make (DSGraphSpec)
 
   module DSGraphTests = struct
     (*
@@ -191,7 +349,12 @@ open struct
       [ merge_init; join_nodes_at; insert ]
       |> List.map QCheck_alcotest.to_alcotest
       *)
-    let tests = []
+    let tests =
+      [
+        QCheck_alcotest.to_alcotest
+        @@ DSGraphSequential.agree_test ~count:100
+             ~name:"DSGraph STM Sequential tests";
+      ]
   end
 end
 

@@ -202,7 +202,7 @@ module FormalDSGraph = struct
     if CellSet.mem c g.cells then (
       assert (not @@ CellMap.mem c g.old_to_new);
       c)
-    else find (g : t) (CellMap.find c g.old_to_new)
+    else find g (CellMap.find c g.old_to_new)
 
   let join_invervals s =
     (* (mu S . {s1 join s2 | s1, s2 in S and overlap(s1, s2)}) union {s | s in S and forall s' in S, not overlap(s, s')} *)
@@ -528,7 +528,7 @@ module DSGraph : sig
   val id : node -> ID.t
   val flags : node -> NodeFlags.t
   val pointees : cell -> cell list
-  val set_pointees : cell list -> cell -> unit
+  val add_pointees : cell list -> cell -> unit
   val get_cell : ?uniq:bool -> Interval.t -> node -> cell
   val cell_of : ?uniq:bool -> Sva.SymAddrSetLattice.t -> t -> cell option
 
@@ -1083,7 +1083,7 @@ let make_local_graph proc sva
       | Constraint.Mem { addr; value; size } ->
           let ptrs = add_cells size addr in
           let vals = add_cells size value in
-          List.iter (DSGraph.set_pointees vals) ptrs
+          List.iter (DSGraph.add_pointees vals) ptrs
       | Constraint.Call { lhs; args } -> ())
     constraints;
 
