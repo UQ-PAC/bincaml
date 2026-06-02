@@ -205,37 +205,45 @@ module FormalDSGraph = struct
     else find g (CellMap.find c g.old_to_new)
 
   let join_invervals s =
-    (* (mu S . {s1 join s2 | s1, s2 in S and overlap(s1, s2)}) union {s | s in S and forall s' in S, not overlap(s, s')} *)
-    (* S = {c.s | c in C && c.n = node} *)
+    (* (mu S . {s1 join s2 | s1, s2 in S and overlap(s1, s2)} union {s | s in S and forall s' in S, not overlap(s, s')}) *)
     let step s =
+      let o =
+        IntervalSet.filter
+          (fun i ->
+            IntervalSet.for_all
+              (fun i' -> Interval.equal i i' || (not @@ Interval.overlap i i'))
+              s)
+          s
+      in
       let sl = IntervalSet.to_list s in
-      List.product (fun a b -> (a, b)) sl sl
-      |> List.filter (fun (s1, s2) -> Interval.overlap s1 s2)
+      List.product Pair.make sl sl
+      |> List.filter (fun (s1, s2) ->
+          Interval.((not @@ equal s1 s2) && overlap s1 s2))
       |> List.map (uncurry Interval.join)
-      |> IntervalSet.of_list
+      |> IntervalSet.of_list |> IntervalSet.union o
     in
     let rec fix s = if IntervalSet.equal s (step s) then s else fix (step s) in
-    let o =
-      IntervalSet.filter
-        (fun i ->
-          IntervalSet.for_all
-            (fun i' ->
-              (not @@ Interval.equal i i') && (not @@ Interval.overlap i i'))
-            s)
-        s
-    in
-    IntervalSet.union (fix s) o
+    fix s
 
-  let extend_old_to_new old_cells new_cells m =
+  let extend_old_to_new_join old_cells new_cells m =
     CellSet.to_list old_cells
     |> List.product Pair.make (CellSet.to_list new_cells)
-    |> List.filter (fun (c, c') ->
-        (not @@ Cell.equal c c') && Interval.subset c.offsets c'.offsets)
+    |> List.filter (fun ((c : Cell.t), (c' : Cell.t)) ->
+        (not @@ Interval.equal c.offsets c'.offsets)
+        && c.node = c'.node
+        && Interval.subset c.offsets c'.offsets)
     |> List.map
          (tap (fun (c, c') ->
               assert (not @@ CellMap.mem c m);
               assert (not @@ CellMap.mem c' m);
               assert (not @@ CellSet.mem c new_cells)))
+    |> CellMap.add_list m
+
+  let extend_old_to_new_map old_cells map m =
+    CellSet.to_list old_cells
+    |> List.filter_map (fun c ->
+        let c' = map c in
+        if Cell.equal c c' then None else Some (c, c'))
     |> CellMap.add_list m
 
   let cleq (c : Cell.t) (c' : Cell.t) =
@@ -250,18 +258,23 @@ module FormalDSGraph = struct
   (** Join cells in the same nodes that overlap *)
   let join_overlapping_cells (g : t) =
     (* C^join* = {(n, s) | s in join*{c.s | c.n = n && c in C} && n in N } *)
+    let nodes =
+      CellSet.to_list g.cells
+      |> List.map (fun (c : Cell.t) -> c.node)
+      |> IntSet.of_list
+    in
     let cells =
-      cells_flat_map
-        (fun (c : Cell.t) ->
+      IntSet.to_list nodes
+      |> List.map (fun n ->
           CellSet.to_list g.cells
           |> List.filter_map (fun (c' : Cell.t) ->
-              Option.return_if (c'.node = c.node) c.offsets)
+              Option.return_if (c'.node = n) c'.offsets)
           |> IntervalSet.of_list |> join_invervals |> IntervalSet.to_list
-          |> List.map (fun i -> ({ offsets = i; node = c.node } : Cell.t))
+          |> List.map (fun i -> ({ offsets = i; node = n } : Cell.t))
           |> CellSet.of_list)
-        g.cells
+      |> List.fold_left CellSet.union CellSet.empty
     in
-    let old_to_new = extend_old_to_new g.cells cells g.old_to_new in
+    let old_to_new = extend_old_to_new_join g.cells cells g.old_to_new in
     (* E^join* = {(c1, c2) | (c3, c4) in E && c3 <= c1 && c4 <= c2 && c1 in C^join* && c2 in C^join*} *)
     let edges =
       edges_flat_map
@@ -317,15 +330,11 @@ module FormalDSGraph = struct
       IntSet.to_list nodes
       |> List.map (fun n ->
           let is =
-            CellSet.to_list g.cells
+            CellSet.to_list cs
             |> List.filter_map (fun (c : Cell.t) ->
                 Option.return_if (c.node = n) c.offsets)
           in
-          let offsets =
-            match is with
-            | [] -> Interval.Bot
-            | i :: is -> List.fold_left Interval.join i is
-          in
+          let offsets = List.fold_left Interval.join Interval.Bot is in
           ({ offsets; node = n } : Cell.t))
       |> CellSet.of_list
     in
@@ -374,6 +383,13 @@ module FormalDSGraph = struct
           |> List.map (fun offsets -> ({ offsets; node = nid } : Cell.t))
           |> CellSet.of_list
         in
+        assert (
+          CellSet.for_all
+            (fun c ->
+              CellSet.for_all
+                (fun c' -> not @@ Interval.overlap c.offsets c'.offsets)
+                (CellSet.remove c n))
+            n);
         let map (c : Cell.t) =
           if IntSet.mem c.node nodes then
             let d = IntMap.find c.node deltas in
@@ -384,7 +400,7 @@ module FormalDSGraph = struct
           else c
         in
         let cells = CellSet.map map g.cells in
-        let old_to_new = extend_old_to_new g.cells cells g.old_to_new in
+        let old_to_new = extend_old_to_new_map g.cells map g.old_to_new in
         let edges = EdgeSet.map (Pair.map_same map) g.edges in
         ({ g with cells; edges; old_to_new }, (n, map))
     | None ->
@@ -393,7 +409,8 @@ module FormalDSGraph = struct
         let c : Cell.t = { node = nid; offsets = Interval.Top } in
         let map (c' : Cell.t) = if IntSet.mem c'.node nodes then c else c' in
         let cells = CellSet.map map g.cells in
-        let old_to_new = extend_old_to_new g.cells cells g.old_to_new in
+        (* wrong!! *)
+        let old_to_new = extend_old_to_new_map g.cells map g.old_to_new in
         let edges = EdgeSet.map (Pair.map_same map) g.edges in
         ({ g with cells; edges; old_to_new }, (CellSet.singleton c, map))
 
@@ -464,7 +481,10 @@ module FormalDSGraph = struct
                 (cs |> CellSet.map (fun (c : Cell.t) -> { c with node = n' }))
                 g.cells
             in
-            let old_to_new = extend_old_to_new g.cells cells g.old_to_new in
+            (* TODO probably wrong *)
+            let old_to_new =
+              extend_old_to_new_join g.cells cells g.old_to_new
+            in
             let g = { g with cells; old_to_new } in
             let ptee_ns =
               pointees cs g'.edges |> CellSetSet.to_iter

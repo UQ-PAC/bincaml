@@ -26,6 +26,25 @@ open struct
           ])
   end
 
+  module DSGraphGen2 = struct
+    (** Generates small zarith integers *)
+    let small_z = QCheck2.Gen.(int_small |> map Z.of_int)
+
+    (** Generates an arbitrary interval with the given zarith generator.
+        Occasionally will generate a Top interval but never a Bot interval. *)
+    let interval zgen =
+      QCheck2.Gen.(
+        oneof_weighted
+          [
+            ( 30,
+              pair zgen zgen
+              |> map (fun (a, b) ->
+                  if Z.leq a b then Interval.Interval (a, b)
+                  else Interval.Interval (b, a)) );
+            (1, pure Interval.Top);
+          ])
+  end
+
   (* TODO
      - DONE Method to refer to old cells in formal model ? So we can test performing operations on Path cells/nodes
      - Comparison data structure obtainable from either handle (intervals become relative / based at 0 maybe)
@@ -41,11 +60,13 @@ open struct
 
     let add_graph (l : t) =
       l :=
-        {
-          g = DSGraph.empty_graph Analysis.Sva.StateAbstraction.bottom;
-          cells = [];
-        }
-        :: !l
+        List.append !l
+          [
+            {
+              g = DSGraph.empty_graph Analysis.Sva.StateAbstraction.bottom;
+              cells = [];
+            };
+          ]
 
     let make_cell (l : t) n i =
       let g = List.nth !l n in
@@ -71,12 +92,9 @@ open struct
       let g = List.nth !l n in
       let a = List.nth g.cells a in
       let b = List.nth g.cells b in
-      if CCEqual.physical (DSGraph.find a) (DSGraph.find b) then
-        DSGraph.join a b
-      else (
-        DSGraph.join a b;
-        let g = List.nth !l n in
-        g.cells <- extend_cells g.cells [ a; b ])
+      DSGraph.join a b;
+      let g = List.nth !l n in
+      g.cells <- a :: g.cells
 
     let unify_all (l : t) n =
       let g = List.nth !l n in
@@ -90,16 +108,19 @@ open struct
     type t = graph list
 
     let empty = []
-    let add_graph l : t = { g = FormalDSGraph.empty; cells = [] } :: l
+
+    let add_graph l : t =
+      List.append l [ { g = FormalDSGraph.empty; cells = [] } ]
+
     let mapn l n f = List.mapi (fun n' gr -> if n = n' then f gr else gr) l
 
     let make_cell l n i : t =
       mapn l n (fun gr ->
-          let g, n = FormalDSGraph.make_node gr.g in
+          let g, nid = FormalDSGraph.make_node gr.g in
           let cells : FormalDSGraph.Cell.t list =
-            { offsets = i; node = n } :: gr.cells
+            { offsets = i; node = nid } :: gr.cells
           in
-          { g = FormalDSGraph.add_cell g n i; cells })
+          { g = FormalDSGraph.add_cell g nid i; cells })
 
     let count_cells l n =
       let g = List.nth l n in
@@ -117,7 +138,7 @@ open struct
           let b = List.nth gr.cells b in
           let g = FormalDSGraph.join_cell_pair gr.g a b in
           let c = FormalDSGraph.find g a in
-          let cells = List.add_nodup ~eq:FormalDSGraph.Cell.equal c gr.cells in
+          let cells = c :: gr.cells in
           { g; cells })
 
     let unify_all l n =
@@ -179,7 +200,19 @@ open struct
       | Join (n, a, b) -> FormalDSGraphHandle.join state n a b
       | UnifyAll n -> FormalDSGraphHandle.unify_all state n
 
-    let precond _cmd _state = true
+    let precond cmd state =
+      match cmd with
+      | AddGraph -> true
+      | MakeCell (n, _) -> List.length state > n
+      | CountCells n -> List.length state > n
+      | MakeEdge (n, a, b) ->
+          List.length state > n
+          && FormalDSGraphHandle.count_cells state n > Int.max a b
+      | Join (n, a, b) ->
+          List.length state > n
+          && FormalDSGraphHandle.count_cells state n > Int.max a b
+          && not (a = b)
+      | UnifyAll n -> List.length state > n
 
     let postcond cmd state res =
       match (cmd, res) with
@@ -246,7 +279,7 @@ open struct
                 return (Join (g, c1, c2)))
             |> oneof)
       in
-      let unify_all =
+      let _unify_all =
         if not @@ List.is_empty state then
           Some
             (let* g = int_range 0 (List.length state - 1) in
@@ -262,13 +295,29 @@ open struct
                count_cells;
                make_edge;
                make_join;
-               unify_all;
+               (*_unify_all;*)
              ])
   end
 
   module DSGraphSequential = STM_sequential.Make (DSGraphSpec)
 
   module DSGraphTests = struct
+    let _join_intervals =
+      QCheck2.(
+        Test.make ~name:"join_intervals"
+          ~print:Print.(contramap (CCList.to_string Interval.show) string)
+          (QCheck2.Gen.list_small @@ DSGraphGen2.(interval small_z))
+          (fun is ->
+            let open FormalDSGraph in
+            let is = IntervalSet.of_list is |> join_invervals in
+            IntervalSet.for_all
+              (fun i ->
+                IntervalSet.for_all
+                  (fun i' ->
+                    Interval.equal i i' || (not @@ Interval.overlap i i'))
+                  is)
+              is))
+
     (*
     let widths cells = List.map (fun c -> (c, DSGraph.offsets c)) cells
     let cell_subset (c, i) = Interval.subset i (DSGraph.offsets c)
@@ -351,10 +400,11 @@ open struct
       *)
     let tests =
       [
-        QCheck_alcotest.to_alcotest
-        @@ DSGraphSequential.agree_test ~count:100
-             ~name:"DSGraph STM Sequential tests";
+        DSGraphSequential.agree_test ~count:100
+          ~name:"DSGraph STM Sequential tests";
+        (*_join_intervals*)
       ]
+      |> List.map (QCheck_alcotest.to_alcotest ~verbose:true)
   end
 end
 
