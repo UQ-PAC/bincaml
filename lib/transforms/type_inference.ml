@@ -830,23 +830,38 @@ module TypeAutomata = struct
       in
 
       let fields = helper fields in
+      let overlapped_field fields =
+        let overlaps (o1, (f1 : InferredType.field))
+            (o2, (f2 : InferredType.field)) =
+          let open Z in
+          let end1 = add o1 (of_int f1.size) in
+          let end2 = add o2 (of_int f2.size) in
+          not (leq end1 o2 || leq end2 o1)
+        in
 
-      (* You could def do this in one pass, BUT WHEN I TRIED I CRASHED OUT *)
-      let disjoint_fields fields =
-        List.fold_left
-          (fun disjoint (_, ({ offset; size } : InferredType.field)) ->
+        let check_fields fields =
+          let rec aux = function
+            | [] -> false
+            | x :: xs ->
+                if List.exists (fun y -> overlaps x y) xs then true else aux xs
+          in
+          aux fields
+        in
+
+        let rec best_friend fields =
+          if check_fields fields then true
+          else
             List.exists
-              (fun (_, ({ offset = offset1; size = size1 } : InferredType.field))
-                 ->
-                Z.leq offset1 offset
-                && Z.leq
-                     (Z.add offset @@ Z.of_int size)
-                     (Z.add offset1 @@ Z.of_int size1)
-                || disjoint)
-              fields)
-          false fields
+              (fun (_, (f : InferredType.field)) ->
+                match f.ty with
+                | InferredType.Record (subfields, _) ->
+                    subfields |> ZMap.bindings |> best_friend
+                | _ -> false)
+              fields
+        in
+        best_friend fields
       in
-      if disjoint_fields fields then BV size
+      if overlapped_field fields then BV size
       else InferredType.Record (ZMap.of_list fields, size)
     in
     (* Assume the list is only of two things *)
