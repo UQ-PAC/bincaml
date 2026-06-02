@@ -2,11 +2,9 @@
 
 open Bincaml_util.Common
 open Lang
-open Expr_eval
 
 let simplify_proc_exprs ?visit rewriter p =
   let blocks = Procedure.blocks_to_list p in
-  let open Procedure.Edge in
   List.fold_left
     (fun p e ->
       match e with

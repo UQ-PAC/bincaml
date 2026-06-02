@@ -8,6 +8,30 @@ let e =
     "bvnand(bvnot(0x1c6a4ec2b:bv33), bvashr(bvudiv(0x1:bv33, \
      bvor(0x1633f1dbc:bv33, 0x1:bv33)), bvashr(0x3:bv33, 0x5222e27c:bv33)))"
 
+let%expect_test "iter" =
+  let i = Expr.BasilExpr.children_iter e in
+  Iter.iter
+    (fun i -> print_endline (Expr.BasilExpr.to_string (Expr.BasilExpr.fix i)))
+    i;
+  [%expect
+    {|
+    0x5222e27c:bv33
+    0x3:bv33
+    bvashr(0x3:bv33, 0x5222e27c:bv33)
+    0x1633f1dbc:bv33
+    0x1:bv33
+    bvor(0x1633f1dbc:bv33, 0x1:bv33)
+    0x1:bv33
+    bvudiv(0x1:bv33, bvor(0x1633f1dbc:bv33, 0x1:bv33))
+    bvashr(bvudiv(0x1:bv33, bvor(0x1633f1dbc:bv33, 0x1:bv33)),
+     bvashr(0x3:bv33, 0x5222e27c:bv33))
+    0x1c6a4ec2b:bv33
+    bvnot(0x1c6a4ec2b:bv33)
+    bvnand(bvnot(0x1c6a4ec2b:bv33),
+     bvashr(bvudiv(0x1:bv33, bvor(0x1633f1dbc:bv33, 0x1:bv33)),
+      bvashr(0x3:bv33, 0x5222e27c:bv33)))
+    |}]
+
 let partial_and_full_eval s =
   let e = Loader.Loadir.parse_expr_string s in
   print_endline "original: ";
