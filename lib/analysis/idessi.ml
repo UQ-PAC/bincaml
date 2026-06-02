@@ -54,6 +54,7 @@ module type IDESSIDomain = sig
   val transfer : Program.stmt -> DL.t -> state_update
   val transfer_phi : Var.t -> Var.t list -> DL.t -> state_update
   val init_p2 : Program.proc -> (Var.t * Value.t) Iter.t
+  val pp : Format.formatter -> t -> unit
 end
 
 module IDESSI (D : IDESSIDomain) = struct

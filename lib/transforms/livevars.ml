@@ -143,11 +143,11 @@ module InterprocDSE = struct
         ~f:(fun (p, acc) s ->
           let omit, new_s =
             match s with
-            | Stmt.Instr_Assign a ->
-                let a =
-                  List.filter (fun (v, e) -> keep v || VarSet.mem v live) a
+            | Stmt.Instr_Assign { al; attrib } ->
+                let al =
+                  List.filter (fun (v, e) -> keep v || VarSet.mem v live) al
                 in
-                (List.is_empty a, Stmt.Instr_Assign a)
+                (List.is_empty al, Stmt.Instr_Assign { al; attrib })
             | _ -> (false, s)
           in
           (p, if omit then acc else new_s :: acc)) (* TODO remove dead phis *)

@@ -1,7 +1,6 @@
 (library
  (public_name bincaml.transforms)
  (name transforms)
- (flags :standard -w -27-9)
  (modules
   cse_elim
   irreducible_loop

@@ -388,7 +388,7 @@ module WrappedIntervalsLatticeOps = struct
          (fun a -> List.concat_map (fun b -> rusmul a b) (cut ~width t))
          (cut ~width s)
 
-  (* 
+  (*
     Division implementation derived from Crab
     https://github.com/seahorn/crab/blob/418b63c66b91f04bf36ae59d5eecb936c48836ee/include/crab/domains/wrapped_interval_impl.hpp#L1034-L1091
     https://github.com/seahorn/crab/blob/418b63c66b91f04bf36ae59d5eecb936c48836ee/include/crab/domains/wrapped_interval_impl.hpp#L210-L297
@@ -787,7 +787,7 @@ module Domain = struct
     type bin_pred =
       [ `EQ | `NEQ | `ULE | `ULT | `UGT | `UGE | `SLE | `SLT | `SGT | `SGE ]
 
-    let from_op op =
+    let from_op (op : Lang.Expr.BasilExpr.binary) : bin_pred option =
       match op with
       | `EQ -> Some `EQ
       | `NEQ -> Some `NEQ
@@ -957,7 +957,7 @@ module Domain = struct
     in
     let updates =
       match evald_stmt with
-      | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
+      | Lang.Stmt.Instr_Assign { al } -> List.to_iter al
       | Lang.Stmt.Instr_Assert _ | Lang.Stmt.Instr_Assume _ -> Iter.empty
       | Lang.Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
           Iter.singleton (lhs, rhs)

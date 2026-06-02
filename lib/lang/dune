@@ -18,7 +18,6 @@
   procedure
   interp
   program)
- (flags -w -27) ; unused var
  (libraries
   zarith
   fix
