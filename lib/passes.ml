@@ -85,7 +85,7 @@ module PassManager = struct
       name = "cse-elim";
       apply = Proc Transforms.Cse_elim.transform;
       doc = "common-subexpression elimination transform";
-      invariants = Invariants.needs [SSA];
+      invariants = Invariants.needs [ SSA ];
     }
 
   let demo_ival_wint_cfg =

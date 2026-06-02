@@ -88,7 +88,9 @@ open struct
       in
       ( st,
         new_substs
-        |> Iter.map (fun (e, v) -> Stmt.Instr_Assign {al=[ (v, to_basil e)] ; attrib=Attrib.empty}) )
+        |> Iter.map (fun (e, v) ->
+            Stmt.Instr_Assign
+              { al = [ (v, to_basil e) ]; attrib = Attrib.empty }) )
 
   let cse_substitute_stmt st p s =
     let st, substs_bef = cse_make_avail st p in
