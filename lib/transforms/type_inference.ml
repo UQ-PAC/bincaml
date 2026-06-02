@@ -220,14 +220,8 @@ module InferredType = struct
         Record (fieldmap_to_field_list joined_map, size)
     | Pointer (a, b), Pointer (c, d) ->
         (* ptr((a u c) n (b n d), (b n d)) *)
-        (* WARN: IDK *)
-        Pointer (intersect (Union (a, c)) (intersect b d), intersect b d)
+        Pointer (intersect (union a c) (intersect b d), intersect b d)
     | (Pointer _ as a), _ | _, (Pointer _ as a) -> a
-    (*
-      WARN:
-        This is not how BinSub did it
-        I think I am just smarter and had better DS
-    *)
     | Function (name0, ins0, outs0), Function (name1, ins1, outs1) ->
         if not @@ String.equal name0 name1 then
           failwith "Function names do not match and a join between them occured"
@@ -238,7 +232,7 @@ module InferredType = struct
               ~f:(fun _ b ->
                 match b with
                 | `Both (l, r) -> Some (intersect l r)
-                | _ -> failwith "Function declartion differs to function usage")
+                | _ -> failwith "Function declaration differs to function usage")
               ins0 ins1
           in
           Function (name0, ins, outs0)
@@ -270,9 +264,9 @@ module InferredType = struct
     | Pointer (l, u), _ | _, Pointer (l, u) -> Pointer (l, u)
     (* TODO: Will need to check to make sure the typevar isn't a recursive and if it is use that one instead *)
     | TypeVar a, _ | _, TypeVar a -> TypeVar a
-    | _ ->
-        print_endline @@ Printf.sprintf "TODO %s %s" (show a) (show b);
-        failwith "boom2"
+    | BV _, _ | Bottom, _ | Int, _ | Function _, _ | Bool, _ ->
+        failwith
+          "Type inference union hit a weird case that should be unreachable"
 
   (** As well as having intersection and union defined, types have an inherent
       heuristic based ordering on them from BinSub, records -> functions ->
@@ -286,7 +280,15 @@ module InferredType = struct
     | (Record _ as a), _ | _, (Record _ as a) -> a
     | (Pointer _ as a), _ | _, (Pointer _ as a) -> a
     | (Function _ as a), _ | _, (Function _ as a) -> a
-    | _ ->
+    | BV _, _
+    | Top, _
+    | Bottom, _
+    | Int, _
+    | Bool, _
+    | Union _, _
+    | Sect _, _
+    | TypeVar _, _
+    | Recursive _, _ ->
         print_endline
         @@ Printf.sprintf "No order over these types %s %s" (show a) (show b);
         failwith "No order over these types"
@@ -339,7 +341,23 @@ module InferredType = struct
     | Variable a -> TypeVar (VarId.make_id a)
     | Pointer { lower; upper } ->
         Pointer (type_to_inferred lower, type_to_inferred upper)
-    | Struct { name; fields; size } -> failwith "TODO"
+    | Struct { name; fields; size } ->
+        let fields =
+          ZMap.of_iter
+          @@ Iter.map
+               (fun ({ offset; typ } : Types.record_field) ->
+                 let typ = type_to_inferred typ in
+                 let size =
+                   match typ with
+                   | BV sz -> sz
+                   | Pointer _ -> 64
+                   | Record (_, sz) -> sz
+                   | _ -> failwith "Undefined"
+                 in
+                 (offset, ({ offset; ty = typ; size } : field)))
+               (StringMap.values fields)
+        in
+        Record (fields, size)
     | Bitvector bv -> BV bv
     | Boolean -> Bool
     | Integer -> Int
@@ -898,7 +916,7 @@ module TypeAutomata = struct
       | (Reclabel (_, _, rsize), _) :: _ -> make_record types rsize
       | ((StoreLabel | LoadLabel), _) :: _ -> make_pointer types
       | ((FnIn _ | FnOut _), _) :: _ -> make_function types
-      | (Ep, _) :: _ -> failwith "Should have been removed"
+      | (Ep, _) :: _ -> failwith "Unreachable - Should have been removed"
     in
     let rec construct_type (state : State.t) : InferredType.t =
       let edges = get_transitions_from n state in
@@ -906,7 +924,7 @@ module TypeAutomata = struct
         Iter.fold
           (fun acc ((edge, state) as a) ->
             match (acc, edge) with
-            | _, Sigma.Ep -> failwith "Should have been removed"
+            | _, Sigma.Ep -> failwith "Unreachable - Should have been removed"
             (* Empty acc, add anything *)
             | [], _ -> [ (edge, state) ]
             (* Record label in acc and record label edge *)
@@ -944,9 +962,13 @@ module TypeAutomata = struct
             let state =
               match state with
               | state :: [] -> state
-              | [] -> failwith "Map wasn't removed when edges were removed"
+              | [] ->
+                  failwith
+                    "Unreachable - Map wasn't removed when edges were removed"
               | states ->
-                  failwith "A list of states here means they weren't merged"
+                  failwith
+                    "Unreachable - A list of states here means they weren't \
+                     merged"
             in
             (edge, construct_type state))
           highest_edges
@@ -1112,7 +1134,7 @@ let rec constrain (st : ConstraintState.t) (type0 : InferredType.t)
         | None -> st)
   | (BV _ | Int | Bool), (BV _ | Int | Bool) ->
       failwith
-        (Printf.sprintf "Attempted to constrain to disjoint atom types: %s %s"
+        (Printf.sprintf "Attempted to constrain to disjoint atomic types: %s %s"
            (InferredType.show type0) (InferredType.show type1))
   | _, (BV _ | Int | Bool) -> st
   | _ ->
@@ -1139,13 +1161,7 @@ let rec constrain_expr proc (st : ConstraintState.t)
   | Lambda _ -> (st, Top)
   | Let _ -> (st, Top)
   | RVar { id } ->
-      let typ =
-        match Var.typ id with
-        | Integer -> Int
-        | Boolean -> Bool
-        | Bitvector sz -> BV sz
-        | _ -> failwith "Illegal variable type"
-      in
+      let typ = InferredType.type_to_inferred (Var.typ id) in
       ( constrain_arg proc st (BasilExpr.fix expr) typ,
         TypeVar (VarId.var_proc_to_uid id proc) )
   | Constant { const } ->
@@ -1209,7 +1225,7 @@ let rec constrain_expr proc (st : ConstraintState.t)
           let record_size =
             match BasilExpr.type_of a with
             | Bitvector sz -> sz
-            | _ -> failwith "Can you do this? Probs not"
+            | _ -> failwith "Unreachable - Can you do this? Probs not"
           in
           let st =
             constrain_arg proc st a
@@ -1377,7 +1393,7 @@ let constrain_stmt prog proc sva (st : ConstraintState.t) stmt_number stmt
       let offset =
         match res with
         | Interval { lower } -> Bitvec.to_signed_bigint lower
-        | _ -> failwith "impossible"
+        | _ -> failwith "Impossible"
       in
       let ty = TypeVar (VarId.make_id @@ ID.name @@ gen.fresh ()) in
 
@@ -1911,7 +1927,7 @@ let transform (prog : Program.t) (results : (Types.t * Types.t) VarIdMap.t)
          match (a, b) with
          | Program.Type { binding; _ }, Type { binding = binding2; _ } ->
              String.compare binding binding2
-         | _ -> failwith "?")
+         | _ -> failwith "Unreachable")
        decls
 
 let infer_types (prog : Program.t) =
