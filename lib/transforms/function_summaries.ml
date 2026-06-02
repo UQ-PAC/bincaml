@@ -102,7 +102,6 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
       wp_dual_requires (module S) proc
       |> List.fold_left
            (fun rs r ->
-             let open Bincaml_util.Smt in
              match redundant solver r (List.append rs cur_req) with
              | Unsat -> rs
              | Sat -> r :: rs
@@ -115,7 +114,6 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
       sp_ensures (module S) proc
       |> List.fold_left
            (fun rs r ->
-             let open Bincaml_util.Smt in
              match redundant solver r (List.append rs cur_ens) with
              | Unsat -> rs
              | Sat -> r :: rs

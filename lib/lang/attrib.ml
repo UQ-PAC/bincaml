@@ -16,9 +16,8 @@ let is_internal_key = String.starts_with ~prefix:"__"
 let location_key = "__text_range"
 let triggers_key = ".triggers"
 
-let rec attrib_pretty pretty_expr (e : t) : Containers_pp.t =
+let rec attrib_pretty ?(show_internal = false) (e : t) : Containers_pp.t =
   let open Containers_pp in
-  let attrib_pretty = attrib_pretty pretty_expr in
   match e with
   | `String s -> text_quoted s
   | `CamlInt s -> int s
@@ -28,19 +27,26 @@ let rec attrib_pretty pretty_expr (e : t) : Containers_pp.t =
   | `List s ->
       nest 2
       @@ bracket "[ "
-           (fill (text ";" ^ newline) (List.map attrib_pretty s))
+           (fill
+              (text ";" ^ newline)
+              (List.map (attrib_pretty ~show_internal) s))
            " ]"
   | `Assoc sm ->
       let pairs =
         sm
-        |> StringMap.filter (fun i _ -> not @@ is_internal_key i)
+        |> StringMap.filter (fun i _ ->
+            show_internal || (not @@ is_internal_key i))
         |> StringMap.bindings
-        |> List.map (function k, v -> text k ^ text " = " ^ attrib_pretty v)
+        |> List.map (function k, v ->
+            text k ^ text " = " ^ (attrib_pretty ~show_internal) v)
       in
       let int = fill (text ";" ^ newline) pairs in
       nest 2 (bracket "{ " int " }")
 
 type attrib_map = t StringMap.t [@@deriving eq, ord]
+
+let to_string ?show_internal e =
+  attrib_pretty ?show_internal e |> Containers_pp.Pretty.to_string ~width:80
 
 let empty : attrib_map = StringMap.empty
 
@@ -76,7 +82,7 @@ let join_map_locs (a : attrib_map) (b : attrib_map) =
 
 let merge_map_shadow (a : attrib_map) (b : attrib_map) =
   StringMap.merge
-    (fun k l r ->
+    (fun _ l r ->
       match (l, r) with
       | _, Some a -> Some a
       | Some a, None -> Some a

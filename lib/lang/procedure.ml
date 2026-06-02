@@ -341,19 +341,25 @@ let fresh_block p ?name ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
   let id = (block_ids p).fresh ~name () in
   (add_block p id ~phis ~stmts ~successors (), id)
 
-let get_entry_block p =
-  let open Edge in
-  let open G in
+let get_blocks_pred p vert =
   try
-    graph p
-    |> Option.flat_map (fun g ->
-        let id =
-          G.succ g Entry
-          |> List.filter_map (function Vert.Begin id -> Some id | _ -> None)
-        in
-        assert (List.length id = 1);
-        Some (List.hd id))
-  with Not_found -> None
+    graph p |> Option.to_list
+    |> List.flat_map (fun g ->
+        G.pred g vert
+        |> List.filter_map (function Vert.End id -> Some id | _ -> None))
+  with Not_found -> []
+
+let get_blocks_succ p vert =
+  try
+    graph p |> Option.to_list
+    |> List.flat_map (fun g ->
+        G.succ g vert
+        |> List.filter_map (function Vert.Begin id -> Some id | _ -> None))
+  with Not_found -> []
+
+let get_entry_block p =
+  let id = get_blocks_succ p Entry in
+  List.head_opt id
 
 let is_entry_block p id =
   graph p
@@ -637,7 +643,7 @@ let pretty show_lvar show_var show_expr p =
            (newline ^ text " -> ")
            [ params (formal_in_params p); params (formal_out_params p) ])
     ^ text " "
-    ^ Attrib.attrib_pretty show_expr (`Assoc (attrib p))
+    ^ Attrib.attrib_pretty (`Assoc (attrib p))
   in
   let return_stmt = text "return" in
   let spec = pretty_spec show_var show_expr (specification p) in
@@ -700,3 +706,37 @@ let pretty show_lvar show_var show_expr p =
     | None -> nil
   in
   header ^ spec ^ newline ^ blocks
+
+(** A simplified graph of block level control flow *)
+module BlockGraph = struct
+  module Vert = struct
+    type t = Block of ID.t | Entry | Return | Exit
+    [@@deriving show { with_path = false }, eq, ord]
+
+    let hash = Hashtbl.hash
+  end
+
+  module G = Graph.Persistent.Digraph.ConcreteBidirectional (Vert)
+
+  let of_proc p =
+    graph p
+    |> Option.map (fun _ ->
+        let g = G.empty in
+        let g =
+          iter_blocks p
+          |> Iter.flat_map (fun (i, _) ->
+              blocks_succ p i |> Iter.map fst |> Iter.map (fun s -> (i, s)))
+          |> Iter.fold (fun g (p, s) -> G.add_edge g (Block p) (Block s)) g
+        in
+        let entr = get_blocks_succ p Entry in
+        let ex = get_blocks_pred p Exit in
+        let retb = get_blocks_pred p Return in
+        let g = List.fold_left (fun g p -> G.add_edge g (Block p) Exit) g ex in
+        let g =
+          List.fold_left (fun g p -> G.add_edge g (Block p) Return) g retb
+        in
+        let g =
+          List.fold_left (fun g p -> G.add_edge g Entry (Block p)) g entr
+        in
+        g)
+end
