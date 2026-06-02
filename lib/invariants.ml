@@ -19,7 +19,6 @@ type t =
   | ReducibleLoops
       (** All loops are reducible. That is, there are no {i irreducible} loops.
       *)
-  | Imperative
 [@@deriving show { with_path = false }, eq, ord]
 
 let read s =
