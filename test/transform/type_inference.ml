@@ -249,8 +249,8 @@ proc @main_4196260 () -> ()
     List.equal
       (* Accidently wrote the test the wrong way *)
       (fun (_, (ty, _)) (_, (_, ty2)) ->
-        print_endline @@ Types.to_string_decl ty;
-        print_endline @@ Types.to_string_decl ty2;
+        (* print_endline @@ Types.to_string_decl ty; *)
+        (* print_endline @@ Types.to_string_decl ty2; *)
         Types.equal ty ty2)
       (snd @@ simplify_types st)
       types)
