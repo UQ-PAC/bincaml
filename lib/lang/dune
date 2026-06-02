@@ -2,6 +2,8 @@
  (public_name bincaml.ast)
  (name lang)
  (modules
+  typeExpr
+  hm
   abstract_expr
   attrib
   spec_modifies
@@ -28,6 +30,7 @@
   containers.pp
   fmt
   trace.core
+  unionFind
   bincaml.util)
  (inline_tests)
  (preprocess
