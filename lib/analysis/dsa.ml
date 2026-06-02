@@ -182,10 +182,27 @@ module FormalDSGraph = struct
   module EdgeSet = Set.Make (Edge)
   module IntervalSet = Set.Make (Interval)
 
-  type t = { cells : CellSet.t; edges : EdgeSet.t; next_nid : int }
+  type t = {
+    cells : CellSet.t;
+    edges : EdgeSet.t;
+    next_nid : int;
+    old_to_new : Cell.t CellMap.t;
+  }
 
   (** An empty graph *)
-  let empty : t = { cells = CellSet.empty; edges = EdgeSet.empty; next_nid = 0 }
+  let empty : t =
+    {
+      cells = CellSet.empty;
+      edges = EdgeSet.empty;
+      next_nid = 0;
+      old_to_new = CellMap.empty;
+    }
+
+  let rec find (g : t) (c : Cell.t) =
+    if CellSet.mem c g.cells then (
+      assert (not @@ CellMap.mem c g.old_to_new);
+      c)
+    else find (g : t) (CellMap.find c g.old_to_new)
 
   let join_invervals s =
     (* (mu S . {s1 join s2 | s1, s2 in S and overlap(s1, s2)}) union {s | s in S and forall s' in S, not overlap(s, s')} *)
@@ -208,6 +225,18 @@ module FormalDSGraph = struct
         s
     in
     IntervalSet.union (fix s) o
+
+  let extend_old_to_new old_cells new_cells m =
+    CellSet.to_list old_cells
+    |> List.product Pair.make (CellSet.to_list new_cells)
+    |> List.filter (fun (c, c') ->
+        (not @@ Cell.equal c c') && Interval.subset c.offsets c'.offsets)
+    |> List.map
+         (tap (fun (c, c') ->
+              assert (not @@ CellMap.mem c m);
+              assert (not @@ CellMap.mem c' m);
+              assert (not @@ CellSet.mem c new_cells)))
+    |> CellMap.add_list m
 
   let cleq (c : Cell.t) (c' : Cell.t) =
     c.node = c'.node && Interval.subset c.offsets c'.offsets
@@ -232,6 +261,7 @@ module FormalDSGraph = struct
           |> CellSet.of_list)
         g.cells
     in
+    let old_to_new = extend_old_to_new g.cells cells g.old_to_new in
     (* E^join* = {(c1, c2) | (c3, c4) in E && c3 <= c1 && c4 <= c2 && c1 in C^join* && c2 in C^join*} *)
     let edges =
       edges_flat_map
@@ -242,7 +272,7 @@ module FormalDSGraph = struct
           |> EdgeSet.of_list)
         g.edges
     in
-    { g with cells; edges }
+    { g with cells; edges; old_to_new }
 
   (** Get a new, unused node id (assuming all nodes in the graph came from
       make_node prior) *)
@@ -253,15 +283,21 @@ module FormalDSGraph = struct
   (** Insert a cell into the node of the graph with the provided offsets *)
   let add_cell (g : t) (nid : int) offsets : t =
     let cell : Cell.t = { offsets; node = nid } in
+    assert (not @@ CellMap.mem cell g.old_to_new);
     let cells = CellSet.add cell g.cells in
     join_overlapping_cells { g with cells }
 
   (** Add an edge between two given cells. *)
-  let add_edge (g : t) f t =
-    assert (CellSet.mem f g.cells);
-    assert (CellSet.mem t g.cells);
-    let edges = EdgeSet.add (f, t) g.edges in
-    { g with edges }
+  let rec add_edge (g : t) f t =
+    if not @@ CellSet.mem f g.cells then
+      add_edge g (CellMap.find f g.old_to_new) t
+    else if not @@ CellSet.mem t g.cells then
+      add_edge g f (CellMap.find t g.old_to_new)
+    else (
+      assert (not @@ CellMap.mem f g.old_to_new);
+      assert (not @@ CellMap.mem t g.old_to_new);
+      let edges = EdgeSet.add (f, t) g.edges in
+      { g with edges })
 
   (** Unify all cells in the given set. If cells are in different nodes, the
       nodes are joined together into a single node with offsets corrected. This
@@ -269,6 +305,7 @@ module FormalDSGraph = struct
       paper. *)
   let unify_cells (g : t) (cs : CellSet.t) =
     assert (not @@ CellSet.is_empty cs);
+    (* this shouldn't be called publically (call unify_all) so this invariant can be enforced *)
     assert (CellSet.subset cs g.cells);
     (* PAIN *)
     let nodes =
@@ -347,21 +384,30 @@ module FormalDSGraph = struct
           else c
         in
         let cells = CellSet.map map g.cells in
+        let old_to_new = extend_old_to_new g.cells cells g.old_to_new in
         let edges = EdgeSet.map (Pair.map_same map) g.edges in
-        ({ g with cells; edges }, (n, map))
+        ({ g with cells; edges; old_to_new }, (n, map))
     | None ->
         (* Collapsed *)
         let g, nid = make_node g in
         let c : Cell.t = { node = nid; offsets = Interval.Top } in
         let map (c' : Cell.t) = if IntSet.mem c'.node nodes then c else c' in
         let cells = CellSet.map map g.cells in
+        let old_to_new = extend_old_to_new g.cells cells g.old_to_new in
         let edges = EdgeSet.map (Pair.map_same map) g.edges in
-        ({ g with cells; edges }, (CellSet.singleton c, map))
+        ({ g with cells; edges; old_to_new }, (CellSet.singleton c, map))
 
   (** Join two cells together, if they are in different nodes the nodes will be
       joined into one with offsets adjusted. *)
-  let join_cell_pair (g : t) (a : Cell.t) (b : Cell.t) =
-    fst @@ unify_cells g @@ CellSet.of_list [ a; b ]
+  let rec join_cell_pair (g : t) (a : Cell.t) (b : Cell.t) =
+    if not @@ CellSet.mem a g.cells then
+      join_cell_pair g (CellMap.find a g.old_to_new) b
+    else if not @@ CellSet.mem b g.cells then
+      join_cell_pair g a (CellMap.find b g.old_to_new)
+    else (
+      assert (not @@ CellMap.mem a g.old_to_new);
+      assert (not @@ CellMap.mem b g.old_to_new);
+      fst @@ unify_cells g @@ CellSet.of_list [ a; b ])
 
   (** Get sets of cells pointed to by the cells in the cell set *)
   let pointees (cs : CellSet.t) (es : EdgeSet.t) =
@@ -394,50 +440,59 @@ module FormalDSGraph = struct
   (** Copy cells from the second graph into the first, with their corresponding
       nodes copied along. The returned graph is the new first graph, and a
       mapping of second-graph-cell to copied-cells is returned with it *)
-  let copy (g : t) (g' : t) (cs : CellSet.t) =
-    assert (CellSet.subset cs g'.cells);
-    let rec iter g ns done_ns =
-      match IntSet.choose_opt ns with
-      | None -> (g, IntMap.empty)
-      | Some n ->
-          assert (not @@ IntSet.mem n done_ns);
-          let g, n' = make_node g in
-          let cs =
-            g'.cells |> CellSet.filter (fun (c : Cell.t) -> c.node = n)
-          in
-          let cells =
-            CellSet.union
-              (cs |> CellSet.map (fun (c : Cell.t) -> { c with node = n' }))
-              g.cells
-          in
-          let g = { g with cells } in
-          let ptee_ns =
-            pointees cs g'.edges |> CellSetSet.to_iter
-            |> Iter.flat_map (fun cs ->
-                CellSet.to_iter cs |> Iter.map (fun (c : Cell.t) -> c.node))
-            |> IntSet.of_iter
-          in
-          let done_ns = IntSet.add n done_ns in
-          let ns = ns |> IntSet.union ptee_ns |> IntSet.diff done_ns in
-          (* The graph with all pointed-to cells copied, and the node mapping *)
-          let g, nm = iter g ns done_ns in
-          (* Add the edges *)
-          let edges =
-            g'.edges
-            |> EdgeSet.filter (fun ((c : Cell.t), _) -> c.node = n)
-            |> EdgeSet.map
-                 (Pair.map_same (fun (c : Cell.t) ->
-                      { c with node = IntMap.find c.node nm }))
-            |> EdgeSet.union g.edges
-          in
-          ({ g with edges }, nm)
-    in
-    let ns =
-      CellSet.to_list cs
-      |> List.map (fun (c : Cell.t) -> c.node)
-      |> IntSet.of_list
-    in
-    iter g ns IntSet.empty
+  let rec copy (g : t) (g' : t) (cs : CellSet.t) =
+    if not @@ CellSet.subset cs g'.cells then
+      copy g g'
+        (CellSet.map
+           (fun c ->
+             (* Implicit assert that c is in old_to_new yay *)
+             if CellSet.mem c g'.cells then c else CellMap.find c g'.old_to_new)
+           cs)
+    else (
+      assert (CellSet.for_all (fun c -> not @@ CellMap.mem c g'.old_to_new) cs);
+      let rec iter g ns done_ns =
+        match IntSet.choose_opt ns with
+        | None -> (g, IntMap.empty)
+        | Some n ->
+            assert (not @@ IntSet.mem n done_ns);
+            let g, n' = make_node g in
+            let cs =
+              g'.cells |> CellSet.filter (fun (c : Cell.t) -> c.node = n)
+            in
+            let cells =
+              CellSet.union
+                (cs |> CellSet.map (fun (c : Cell.t) -> { c with node = n' }))
+                g.cells
+            in
+            let old_to_new = extend_old_to_new g.cells cells g.old_to_new in
+            let g = { g with cells; old_to_new } in
+            let ptee_ns =
+              pointees cs g'.edges |> CellSetSet.to_iter
+              |> Iter.flat_map (fun cs ->
+                  CellSet.to_iter cs |> Iter.map (fun (c : Cell.t) -> c.node))
+              |> IntSet.of_iter
+            in
+            let done_ns = IntSet.add n done_ns in
+            let ns = ns |> IntSet.union ptee_ns |> IntSet.diff done_ns in
+            (* The graph with all pointed-to cells copied, and the node mapping *)
+            let g, nm = iter g ns done_ns in
+            (* Add the edges *)
+            let edges =
+              g'.edges
+              |> EdgeSet.filter (fun ((c : Cell.t), _) -> c.node = n)
+              |> EdgeSet.map
+                   (Pair.map_same (fun (c : Cell.t) ->
+                        { c with node = IntMap.find c.node nm }))
+              |> EdgeSet.union g.edges
+            in
+            ({ g with edges }, nm)
+      in
+      let ns =
+        CellSet.to_list cs
+        |> List.map (fun (c : Cell.t) -> c.node)
+        |> IntSet.of_list
+      in
+      iter g ns IntSet.empty)
 end
 
 module DSGraph : sig
