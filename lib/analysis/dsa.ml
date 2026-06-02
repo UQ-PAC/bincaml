@@ -60,6 +60,11 @@ module Interval = struct
     | Bot -> Bot
     | Top -> Top
     | Interval (a, b) -> Interval (a + off, b + off)
+
+  let width = function
+    | Bot -> None
+    | Top -> None
+    | Interval (a, b) -> Some (Z.to_int (b - a))
 end
 
 module NodeFlags = struct

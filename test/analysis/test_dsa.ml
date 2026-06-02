@@ -77,6 +77,10 @@ open struct
       let g = List.nth !l n in
       List.length g.cells
 
+    let cell_widths (l : t) n =
+      let g = List.nth !l n in
+      List.map (Interval.width % DSGraph.offsets) g.cells
+
     let add_edge (l : t) n a b =
       let g = List.nth !l n in
       let a = List.nth g.cells a in
@@ -126,6 +130,12 @@ open struct
       let g = List.nth l n in
       List.length g.cells
 
+    let cell_widths l n =
+      let g = List.nth l n in
+      List.map
+        (fun (c : FormalDSGraph.Cell.t) -> Interval.width c.offsets)
+        g.cells
+
     let add_edge l n a b =
       mapn l n (fun gr ->
           let a = List.nth gr.cells a in
@@ -164,6 +174,7 @@ open struct
       | AddGraph
       | MakeCell of int * Interval.t
       | CountCells of int
+      | CellWidths of int
       | MakeEdge of int * int * int
       | Join of int * int * int
       | UnifyAll of int
@@ -174,6 +185,7 @@ open struct
       | MakeCell (n, i) ->
           Printf.sprintf "MakeCell (%d, %s)" n (Interval.show i)
       | CountCells n -> Printf.sprintf "CountCells %d" n
+      | CellWidths n -> Printf.sprintf "CellWidths %d" n
       | MakeEdge (n, a, b) -> Printf.sprintf "MakeEdge (%d, %d, %d)" n a b
       | Join (n, a, b) -> Printf.sprintf "Join (%d, %d, %d)" n a b
       | UnifyAll n -> Printf.sprintf "UnifyAll %d" n
@@ -183,6 +195,7 @@ open struct
       | AddGraph -> Res (unit, DSGraphHandle.add_graph sut)
       | MakeCell (n, i) -> Res (unit, DSGraphHandle.make_cell sut n i)
       | CountCells n -> Res (int, DSGraphHandle.count_cells sut n)
+      | CellWidths n -> Res (list (option int), DSGraphHandle.cell_widths sut n)
       | MakeEdge (n, a, b) -> Res (unit, DSGraphHandle.add_edge sut n a b)
       | Join (n, a, b) -> Res (unit, DSGraphHandle.join sut n a b)
       | UnifyAll n -> Res (unit, DSGraphHandle.unify_all sut n)
@@ -196,6 +209,7 @@ open struct
       | AddGraph -> FormalDSGraphHandle.add_graph state
       | MakeCell (n, i) -> FormalDSGraphHandle.make_cell state n i
       | CountCells _ -> state
+      | CellWidths _ -> state
       | MakeEdge (n, a, b) -> FormalDSGraphHandle.add_edge state n a b
       | Join (n, a, b) -> FormalDSGraphHandle.join state n a b
       | UnifyAll n -> FormalDSGraphHandle.unify_all state n
@@ -205,6 +219,7 @@ open struct
       | AddGraph -> true
       | MakeCell (n, _) -> List.length state > n
       | CountCells n -> List.length state > n
+      | CellWidths n -> List.length state > n
       | MakeEdge (n, a, b) ->
           List.length state > n
           && FormalDSGraphHandle.count_cells state n > Int.max a b
@@ -220,6 +235,9 @@ open struct
       | MakeCell _, Res ((Unit, _), _) -> true
       | CountCells i, Res ((Int, _), n) ->
           FormalDSGraphHandle.count_cells state i = n
+      | CellWidths i, Res ((List (Option Int), _), l) ->
+          List.equal (Option.equal Int.equal) l
+            (FormalDSGraphHandle.cell_widths state i)
       | MakeEdge _, Res ((Unit, _), _) -> true
       | Join _, Res ((Unit, _), _) -> true
       | UnifyAll _, Res ((Unit, _), _) -> true
@@ -247,6 +265,13 @@ open struct
           Some
             (let* g = int_range 0 (List.length state - 1) in
              pure (CountCells g))
+        else None
+      in
+      let cell_widths =
+        if not @@ List.is_empty state then
+          Some
+            (let* g = int_range 0 (List.length state - 1) in
+             pure (CellWidths g))
         else None
       in
       let make_edge =
@@ -293,6 +318,7 @@ open struct
                add_graph;
                make_cell;
                count_cells;
+               cell_widths;
                make_edge;
                make_join;
                (*_unify_all;*)
