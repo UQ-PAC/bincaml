@@ -35,6 +35,9 @@ end
 
 (** Type of mutable type context union find *)
 module type TypeContext = sig
+  val compare : 'a Fix.HashCons.cell -> 'a Fix.HashCons.cell -> int
+  val equal : 'a Fix.HashCons.cell -> 'a Fix.HashCons.cell -> bool
+
   module Typ : sig
     type 'a expr = 'a ATyp.expr = Var of tvar | TypeConstr of 'a list * string
 
@@ -136,7 +139,7 @@ module type TypeContext = sig
   end
 end
 
-module Make () : TypeContext = struct
+module Make () = struct
   module Typ = struct
     include ATyp
 
@@ -182,6 +185,9 @@ module Make () : TypeContext = struct
            (fun (T a) (T b) -> T (f a b))
            (Fix.HashCons.data a) (Fix.HashCons.data b)
   end
+
+  let compare a b = Fix.HashCons.compare a b
+  let equal a b = Fix.HashCons.equal a b
 
   module Rec = Bincaml_util.Recursionscheme.Recursion (Typ)
 end
