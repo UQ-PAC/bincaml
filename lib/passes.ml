@@ -248,6 +248,8 @@ module PassManager = struct
          Z3/Spacer, and annotate procedures with the inferred requires/ensures \
          clauses when the solver returns sat. Expects the pipeline full-ssa → \
          load-store-reduction → lambda-lifting beforehand. Depends on Z3.";
+      (* XXX placeholder *)
+      invariants = Invariants.needs [];
     }
 
   let chc_infer_invariants_per_query =
@@ -261,6 +263,8 @@ module PassManager = struct
          obligations are unprovable but invariants for the rest of the program \
          are still desired. Same prerequisites and dependencies as \
          chc-infer-invariants.";
+      (* XXX placeholder *)
+      invariants = Invariants.needs [];
     }
 
   let load_store_reduction =
@@ -280,6 +284,8 @@ module PassManager = struct
          assignments to function applications. Also inlines lets and \
          normalises n-ary intrinsics so the resulting IR matches the reduced \
          form expected by the CHC pass.";
+      (* XXX placeholder *)
+      invariants = Invariants.needs [];
     }
 
   let type_check =
