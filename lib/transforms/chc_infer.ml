@@ -193,17 +193,16 @@ type block_succs = { blocks : ID.t list; returns : bool }
     edges. *)
 
 let block_successors (proc : Program.proc) (block_id : ID.t) : block_succs =
-  match Procedure.graph proc with
-  | None -> { blocks = []; returns = false }
-  | Some g ->
-      Procedure.G.fold_succ
-        (fun v acc ->
-          match v with
-          | Procedure.Vert.Begin id -> { acc with blocks = id :: acc.blocks }
-          | Return | Exit -> { acc with returns = true }
-          | _ -> failwith "chc_infer: bad CFG structure")
-        g (Procedure.Vert.End block_id)
-        { blocks = []; returns = false }
+  let blocks =
+    Procedure.blocks_succ proc block_id |> Iter.map fst %> Iter.to_list
+  in
+  let returns =
+    Option.to_iter (Procedure.graph proc)
+    |> Iter.exists (fun graph ->
+        Iter.from_iter (fun f -> Procedure.G.iter_succ f graph (End block_id))
+        |> Iter.exists (function Procedure.Vert.Return -> true | _ -> false))
+  in
+  { blocks; returns }
 
 (** Build a phi-substitution map for the edge from [from_id] into a block: each
     phi target maps to whichever rhs variable the source block contributes for
