@@ -289,8 +289,7 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
         e
     in
     List.iter
-      (fun ens ->
-        Encoder.add_premise enc (encode_expr enc (apply_full_subst ens)))
+      (apply_full_subst %> encode_expr enc %> Encoder.add_premise enc)
       spec.ensures
   in
   (* Connect the call site to the callee's [enter]/[exit] predicates: emit
