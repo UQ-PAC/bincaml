@@ -1,11 +1,11 @@
 
   $ cat << EOF | bincaml script -
-  > (load-gtirb "../../examples/binsearch_sqrt.gtirb")
+  > (load-gtirb "../../examples/gtirb/binsearch_sqrt.gtirb")
   > (dump-il gtirb-output.il)
   > (dump-il)
   > (load-il gtirb-output.il)
   > EOF
-  (load-gtirb ../../examples/binsearch_sqrt.gtirb)
+  (load-gtirb ../../examples/gtirb/binsearch_sqrt.gtirb)
   (dump-il gtirb-output.il)
   (dump-il)
   var $PC:bv64;
