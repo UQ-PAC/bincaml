@@ -38,7 +38,7 @@ open struct
   (** Unions the two invariant lists. *)
   let ( +++ ) a b : t list =
     let a = List.sort compare a and b = List.sort compare b in
-    List.sorted_merge ~cmp:compare a b
+    List.sorted_merge_uniq ~cmp:compare a b
 
   (** Subtracts the second invariant list from the first. *)
   let ( --- ) a b : t list =
