@@ -69,13 +69,15 @@ module LF = struct
     assert (canonical f);
     match f with IdEdge -> true | _ -> false
 
-  (* Definitions from https://doi.org/10.1016/0304-3975(96)00072-2 with gcdext modifications coming from computing inverses mod 2^n *)
+  (* Definitions from https://doi.org/10.1016/0304-3975(96)00072-2 computing inverses mod 2^n *)
 
   let compute_join a b c d =
     let bd = Bitvec.value (Bitvec.sub b d) in
-    let g, s, t = Z.gcdext (Bitvec.value (Bitvec.sub c a)) bd in
-    if Z.divisible g bd then
-      let l0 = Bitvec.create ~size:(Bitvec.size a) (Z.mul s bd) in
+    let ca = Bitvec.value (Bitvec.sub c a) in
+    let pow = Z.pow (Z.of_int 2) (Bitvec.size a) in
+    if Z.congruent ca Z.one pow then
+      let cainv = Z.invert ca pow in
+      let l0 = Bitvec.create ~size:(Bitvec.size a) (Z.mul cainv bd) in
       let j = Bitvec.add (Bitvec.mul a l0) b in
       Some (Value.V j)
     else None
@@ -95,6 +97,8 @@ module LF = struct
     match c with
     | Value.Top -> TopEdge
     | Bot -> make_linear a b
+    | Value.V c when Z.equal Z.zero (Bitvec.value a) && Bitvec.equal b c ->
+        Linear (a, b)
     | _ -> Join (a, b, c)
 
   (* Should make join edges with top become TopEdges (and probably similar for effectively id Linear and Join edges...) *)
