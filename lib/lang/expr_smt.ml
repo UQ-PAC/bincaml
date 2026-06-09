@@ -244,8 +244,7 @@ module SMTLib2 = struct
         | `Atom "and", _ -> Some (BasilExpr.applyintrin ~op:`AND args)
         | `Atom "or", _ -> Some (BasilExpr.applyintrin ~op:`OR args)
         | `Atom "concat", _ -> Some (BasilExpr.applyintrin ~op:`BVConcat args)
-        | `Atom "select", [ a; i ] ->
-            Some (BasilExpr.binexp ~op:`MapAccess a i)
+        | `Atom "select", [ a; i ] -> Some (BasilExpr.binexp ~op:`MapAccess a i)
         | `Atom "store", [ a; i; v ] ->
             Some (BasilExpr.applyintrin ~op:`MapUpdate [ a; i; v ])
         | `List [ `Atom "_"; `Atom "extract"; `Atom hi; `Atom lo ], [ a ] ->
