@@ -246,10 +246,11 @@ module PassManager = struct
       doc =
         "Encode the program as a system of constrained Horn clauses, invoke \
          Z3/Spacer, and annotate procedures with the inferred requires/ensures \
-         clauses when the solver returns sat. Expects the pipeline full-ssa → \
-         load-store-reduction → lambda-lifting beforehand. Depends on Z3.";
-      (* XXX placeholder *)
-      invariants = Invariants.needs [];
+         clauses when the solver returns sat. Expects that \
+         load-store-reduction is run beforehand. This pass works if the \
+         program is in SSA form; however, the program should *NOT* be \
+         converted to SSA form after the pass. Depends on Z3.";
+      invariants = Invariants.needs [ LambdaLift ];
     }
 
   let chc_infer_invariants_per_query =
@@ -263,8 +264,7 @@ module PassManager = struct
          obligations are unprovable but invariants for the rest of the program \
          are still desired. Same prerequisites and dependencies as \
          chc-infer-invariants.";
-      (* XXX placeholder *)
-      invariants = Invariants.needs [];
+      invariants = Invariants.needs [ LambdaLift ];
     }
 
   let load_store_reduction =
@@ -279,12 +279,10 @@ module PassManager = struct
             |> Transforms.Boogie_prepass.Normalise.replace_stmts
             |> Transforms.Boogie_prepass.Normalise.replace_exprs);
       doc =
-        "Eliminate Instr_Load/Instr_Store by introducing uninterpreted \
-         load/store functions and rewriting addressed memory accesses as \
-         assignments to function applications. Also inlines lets and \
-         normalises n-ary intrinsics so the resulting IR matches the reduced \
-         form expected by the CHC pass.";
-      (* XXX placeholder *)
+        "Eliminate Instr_Load/Instr_Store by introducing load/store functions \
+         and rewriting addressed memory accesses as assignments to function \
+         applications. Also inlines lets and normalises n-ary intrinsics so \
+         the resulting IR matches the reduced form expected by the CHC pass.";
       invariants = Invariants.needs [];
     }
 
