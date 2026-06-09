@@ -3,7 +3,11 @@
     This module encodes a program as a system of constrained Horn clauses (CHCs)
     over quantifier-free bit vectors. See {!Lang.Expr_smt.SMTLib2} for
     expression-level encoding and {!Bincaml_util.Smt} for the SMT-LIB sexp
-    helpers used below. *)
+    helpers used below.
+
+    The encoding follows the algorithm presented in the paper
+    {{:https://arxiv.org/abs/2603.27107} Bit-Vector CHC Solving for Binary
+     Analysis and Binary Analysis for Bit-Vector CHC Solving}. *)
 
 open Bincaml_util.Common
 open Lang
