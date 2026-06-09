@@ -18,6 +18,7 @@
   gamma_vars
   const_prop
   linear_copy
+  chc_solve
   chc_infer)
  (libraries
   bincaml.analysis

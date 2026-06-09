@@ -13,48 +13,15 @@ open Bincaml_util.Common
 open Lang
 open Expr
 open CCSexp
+open Chc_solve
 
 let src = Logs.Src.create "transforms.chc_infer"
 
 module Logs = (val Logs.src_log src : Logs.LOG)
 module SmtExpr = Bincaml_util.Smt.Expr
 
-type predicate = { name : string; params : Var.t list }
-(** A CHC predicate: an uninterpreted [Bool]-valued function over a fixed list
-    of typed parameters. The same parameter list is used for both declaration
-    and application — order matters. *)
-
-type clause = {
-  vars : Var.t list;  (** universally-quantified binders for the [forall] *)
-  premises : Sexp.t list;  (** conjuncts of the antecedent *)
-  head : Sexp.t option;
-      (** [Some sexp] for a rule and [None] for a query (head = false) *)
-}
-(** A constrained Horn clause. **)
-
-let var_sort v = fst (Expr_smt.SMTLib2.of_typ (Var.typ v))
-
-let declare_predicate (p : predicate) : Sexp.t =
-  SmtExpr.declare_fun p.name (List.map var_sort p.params) SmtExpr.t_bool
-
 let apply_predicate (p : predicate) (args : Sexp.t list) : Sexp.t =
   SmtExpr.app_ p.name args
-
-let forall_ binders body =
-  if List.is_empty binders then body
-  else SmtExpr.app_ "forall" [ list binders; body ]
-
-let clause_to_sexp (c : clause) : Sexp.t =
-  let binders =
-    List.map (fun v -> list [ atom (Var.name v); var_sort v ]) c.vars
-  in
-  let premise = SmtExpr.bool_ands c.premises in
-  let body =
-    match c.head with
-    | Some h -> SmtExpr.bool_implies premise h
-    | None -> SmtExpr.bool_not premise
-  in
-  list [ atom "assert"; forall_ binders body ]
 
 type proc_predicates = {
   block_preds : predicate IDMap.t;
@@ -585,70 +552,6 @@ let dump_to_file (prog : Program.t) (path : string) : unit =
   Logs.info (fun m -> m "Dumping CHC clauses to %s" path);
   let preds, clauses = encode_program prog in
   CCIO.with_out path (fun oc -> emit_chc_problem oc preds clauses)
-
-type solve_result = Sat | Unsat | Unknown
-
-(** Open a Z3 process configured for Spacer with model-preserving options.
-    Spacer's slicing and eager-inlining transformations rewrite the input in
-    ways that drop predicate parameters or fuse predicates together, which
-    breaks our positional-parameter mapping when decoding the model. Turn both
-    off so [(get-model)] returns predicates that line up with what we sent. *)
-let open_spacer () =
-  let module Solver = Bincaml_util.Smt.Solver in
-  let s = Solver.create Bincaml_util.Smt.Config.z3 in
-  Solver.set_option s ":fp.xform.slice" "false";
-  Solver.set_option s ":fp.xform.inline_eager" "false";
-  Solver.set_logic s "HORN";
-  s
-
-type model_def = string * (string * Sexp.t) list * Sexp.t
-(** One [define-fun] entry from a parsed [get-model]: the predicate name, its
-    positional parameters with sorts (Spacer typically emits fresh names like
-    [x!0], [x!1]), and the body. Callers map params back to our actual variables
-    by position. *)
-
-(** Parse a model returned by Z3 [get-model] into a list of [model_def]s. *)
-let parse_model (model : Sexp.t) : model_def list =
-  match model with
-  | `List defs ->
-      List.filter_map
-        (fun def ->
-          match def with
-          | `List [ `Atom "define-fun"; `Atom name; `List params; _ret; body ]
-            ->
-              let params =
-                List.filter_map
-                  (fun p ->
-                    match p with
-                    | `List [ `Atom v; sort ] -> Some (v, sort)
-                    | _ -> None)
-                  params
-              in
-              Some (name, params, body)
-          | _ -> None)
-        defs
-  | _ -> []
-
-(** One Spacer invocation against the encoded CHC system. Reuses
-    {!Bincaml_util.Smt.Solver} directly; the only HORN-specific bit is the
-    [(set-logic HORN)] preamble. Returns the [solve_result] together with the
-    parsed model on Sat. *)
-let solve_and_get_model (preds : predicate list) (clauses : clause list) :
-    solve_result * model_def list option =
-  let module Solver = Bincaml_util.Smt.Solver in
-  let s = open_spacer () in
-  List.iter (fun pr -> Solver.add_command s (declare_predicate pr)) preds;
-  List.iter (fun c -> Solver.add_command s (clause_to_sexp c)) clauses;
-  let result =
-    match Solver.check s with
-    | Sat ->
-        let model = parse_model (Solver.get_model s) in
-        (Sat, Some model)
-    | Unsat -> (Unsat, None)
-    | Unknown -> (Unknown, None)
-  in
-  Solver.stop s;
-  result
 
 (** Preprocess a model body before decoding: expand [let] bindings and strip
     [(! ... :attrs ...)] annotation forms. Spacer's models wrap subterms in
