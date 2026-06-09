@@ -98,6 +98,21 @@ open struct
     let unify_all (l : t) n =
       let g = List.nth !l n in
       List.iter DSGraph.unify_pointees g.cells
+
+    let copy (l : t) f t cs =
+      let f = List.nth !l f in
+      let t = List.nth !l t in
+      let old_to_new = Hashtbl.create 100 in
+      let cs' =
+        cs
+        |> List.map (fun c ->
+            let c = List.nth f.cells c in
+            let n = DSGraph.node_of c in
+            let n' = DSGraph.copy_node ~old_to_new t.g n in
+            let ret = DSGraph.get_cell (DSGraph.offsets c) n' in
+            ret)
+      in
+      t.cells <- cs' @ t.cells
   end
 
   (** Stores state for comparing with the implementation *)
@@ -149,6 +164,22 @@ open struct
       mapn l n (fun gr ->
           let g = FormalDSGraph.unify_all gr.g in
           { gr with g })
+
+    let copy l f t cs =
+      mapn l t (fun tgr ->
+          let fgr = List.nth l f in
+          let cs = cs |> List.map (List.nth fgr.cells) in
+          let cs' = FormalDSGraph.CellSet.of_list cs in
+          let tgr', m = FormalDSGraph.copy tgr.g fgr.g cs' in
+          let cells' =
+            cs
+            |> List.map (fun c -> FormalDSGraph.find fgr.g c)
+            |> List.map (fun c ->
+                assert (FormalDSGraph.CellMap.mem c m);
+                FormalDSGraph.CellMap.find c m)
+          in
+          let cells = cells' @ tgr.cells in
+          { g = tgr'; cells })
   end
 
   module DSGraphSpec = struct
@@ -165,17 +196,19 @@ open struct
       | MakeEdge of int * int * int
       | Join of int * int * int
       | UnifyAll of int
-    (*| Copy*)
+      | Copy of int * int * int list
 
     let show_cmd = function
       | AddGraph -> "AddGraph"
-      | MakeCell (n, i) ->
-          Printf.sprintf "MakeCell (%d, %s)" n (Interval.show i)
+      | MakeCell (n, i) -> Printf.sprintf "MakeCell (%d, %s)" n (Interval.dbg i)
       | CountCells n -> Printf.sprintf "CountCells %d" n
       | CellWidths n -> Printf.sprintf "CellWidths %d" n
       | MakeEdge (n, a, b) -> Printf.sprintf "MakeEdge (%d, %d, %d)" n a b
       | Join (n, a, b) -> Printf.sprintf "Join (%d, %d, %d)" n a b
       | UnifyAll n -> Printf.sprintf "UnifyAll %d" n
+      | Copy (f, t, cs) ->
+          Printf.sprintf "Copy (%d, %d, [%s])" f t
+            (List.to_string ~sep:"; " Int.to_string cs)
 
     let run cmd sut =
       match cmd with
@@ -186,6 +219,7 @@ open struct
       | MakeEdge (n, a, b) -> Res (unit, DSGraphHandle.add_edge sut n a b)
       | Join (n, a, b) -> Res (unit, DSGraphHandle.join sut n a b)
       | UnifyAll n -> Res (unit, DSGraphHandle.unify_all sut n)
+      | Copy (f, t, cs) -> Res (unit, DSGraphHandle.copy sut f t cs)
 
     type state = FormalDSGraphHandle.t
 
@@ -200,6 +234,7 @@ open struct
       | MakeEdge (n, a, b) -> FormalDSGraphHandle.add_edge state n a b
       | Join (n, a, b) -> FormalDSGraphHandle.join state n a b
       | UnifyAll n -> FormalDSGraphHandle.unify_all state n
+      | Copy (f, t, cs) -> FormalDSGraphHandle.copy state f t cs
 
     let precond cmd state =
       match cmd with
@@ -215,6 +250,11 @@ open struct
           && FormalDSGraphHandle.count_cells state n > Int.max a b
           && not (a = b)
       | UnifyAll n -> List.length state > n
+      | Copy (f, t, cs) ->
+          List.length state > Int.max f t
+          && List.for_all
+               (fun i -> FormalDSGraphHandle.count_cells state f > i)
+               cs
 
     let postcond cmd state res =
       match (cmd, res) with
@@ -228,6 +268,7 @@ open struct
       | MakeEdge _, Res ((Unit, _), _) -> true
       | Join _, Res ((Unit, _), _) -> true
       | UnifyAll _, Res ((Unit, _), _) -> true
+      | Copy (_, _, _), Res ((Unit, _), _) -> true
       | _ -> false
 
     let arb_cmd state =
@@ -273,10 +314,10 @@ open struct
                 pair gen gen >|= fun ((g, c1), (_, c2)) -> MakeEdge (g, c1, c2))
             |> oneof)
       in
-      let make_join =
-        (if not @@ List.is_empty state then
-           Some (List.init (List.length state) id)
-         else None)
+      let join =
+        Option.return_if
+          (not @@ List.is_empty state)
+          (List.init (List.length state) id)
         |> Option.map
              (List.filter (fun g -> FormalDSGraphHandle.count_cells state g > 1))
         |> Option.filter (not % List.is_empty)
@@ -298,6 +339,20 @@ open struct
              pure (UnifyAll g))
         else None
       in
+      let copy =
+        Option.return_if
+          (not @@ List.is_empty state)
+          (List.init (List.length state) id)
+        |> Option.map
+             (List.filter (fun g -> FormalDSGraphHandle.count_cells state g > 0))
+        |> Option.filter (not % List.is_empty)
+        |> Option.map (fun fs ->
+            let* f = oneof_list fs in
+            let* t = 0 -- (List.length state - 1) in
+            let n = FormalDSGraphHandle.count_cells state f in
+            let* cs = list_small (0 -- (n - 1)) in
+            return (Copy (f, t, cs)))
+      in
       QCheck.make ~print:show_cmd
         (oneof
         @@ List.filter_map id
@@ -307,8 +362,9 @@ open struct
                count_cells;
                cell_widths;
                make_edge;
-               make_join;
+               join;
                unify_all;
+               copy;
              ])
 
     (* For recreating failing tests *)
@@ -316,11 +372,13 @@ open struct
       let steps =
         [
           AddGraph;
-          AddGraph;
-          MakeCell (1, Top);
-          UnifyAll 1;
-          MakeCell (1, Top);
-          CellWidths 1;
+          MakeCell (0, Interval.Interval (Z.of_int (-38), Z.of_int (-6)));
+          Copy (0, 0, [ 0 ]);
+          MakeEdge (0, 0, 1);
+          Copy (0, 0, [ 0 ]);
+          MakeEdge (0, 1, 1);
+          Copy (0, 0, [ 2; 1 ]);
+          CellWidths 0;
         ]
       in
       let s = init_sut () in
@@ -448,9 +506,9 @@ open struct
       [ merge_init; join_nodes_at; insert ]
       |> List.map QCheck_alcotest.to_alcotest
       *)
-    let tests =
+    let _tests =
       [
-        DSGraphSequential.agree_test ~count:100
+        DSGraphSequential.agree_test ~count:1000
           ~name:"DSGraph STM Sequential tests";
         (*_join_intervals*)
       ]
@@ -460,6 +518,6 @@ end
 
 let tests =
   [
-    ("dsa_invariants", DSGraphTests.tests);
     ("blah", [ Alcotest.test_case "blah" `Quick DSGraphSpec.dsa_specific_stm ]);
+    ("dsa_invariants", DSGraphTests._tests);
   ]

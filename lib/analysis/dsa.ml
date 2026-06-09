@@ -15,6 +15,13 @@ module Interval = struct
     | Interval (a, b) ->
         Printf.sprintf "[%s, %s]" (Z.to_string a) (Z.to_string b)
 
+  let dbg = function
+    | Top -> "Top"
+    | Bot -> "Bot"
+    | Interval (a, b) ->
+        Printf.sprintf "Interval.Interval (Z.of_int (%s), Z.of_int (%s))"
+          (Z.to_string a) (Z.to_string b)
+
   let start = function Top | Bot -> None | Interval (a, _) -> Some a
 
   let of_wint (i : WrappedIntervalsLattice.t) =
@@ -64,7 +71,7 @@ module Interval = struct
   let width = function
     | Bot -> None
     | Top -> None
-    | Interval (a, b) -> Some (Z.to_int (b - a))
+    | Interval (a, b) -> Some (Z.to_int (b - a + one))
 end
 
 module NodeFlags = struct
@@ -444,7 +451,6 @@ module FormalDSGraph = struct
            else acc)
          CellMap.empty
     |> CellMap.values |> CellSetSet.of_iter
-    |> CellSetSet.filter (fun s -> CellSet.cardinal s > 1)
 
   (** Unify all pointees of cells so that each cell has a unique pointee. *)
   let unify_all (g : t) =
@@ -453,14 +459,15 @@ module FormalDSGraph = struct
       | None -> g
       | Some s ->
           let g', (n, map) = unify_cells g s in
+          let p =
+            pointees n g'.edges
+            |> CellSetSet.filter (fun s -> CellSet.cardinal s > 1)
+          in
           let uc' =
             CellSetSet.remove s uc
             |> CellSetSet.map (CellSet.map map)
-            |> CellSetSet.union (pointees n g'.edges)
+            |> CellSetSet.union p
           in
-          assert (
-            (not @@ (CellSet.cardinal g'.cells = CellSet.cardinal g.cells))
-            || (CellSetSet.is_empty @@ pointees n g'.edges));
           iter uc' g'
     in
     iter (pointees g.cells g.edges) g
@@ -478,9 +485,9 @@ module FormalDSGraph = struct
            cs)
     else (
       assert (CellSet.for_all (fun c -> not @@ CellMap.mem c g'.old_to_new) cs);
-      let rec iter g ns done_ns =
+      let rec iter g ns done_ns nm =
         match IntSet.choose_opt ns with
-        | None -> (g, IntMap.empty)
+        | None -> (g, nm)
         | Some n ->
             assert (not @@ IntSet.mem n done_ns);
             let g, n' = make_node g in
@@ -492,11 +499,8 @@ module FormalDSGraph = struct
                 (cs |> CellSet.map (fun (c : Cell.t) -> { c with node = n' }))
                 g.cells
             in
-            (* TODO probably wrong *)
-            let old_to_new =
-              extend_old_to_new_join g.cells cells g.old_to_new
-            in
-            let g = { g with cells; old_to_new } in
+            (* old_to_new should not change *)
+            let g = { g with cells } in
             let ptee_ns =
               pointees cs g'.edges |> CellSetSet.to_iter
               |> Iter.flat_map (fun cs ->
@@ -504,15 +508,19 @@ module FormalDSGraph = struct
               |> IntSet.of_iter
             in
             let done_ns = IntSet.add n done_ns in
-            let ns = ns |> IntSet.union ptee_ns |> IntSet.diff done_ns in
+            let ns = ns |> IntSet.union ptee_ns |> flip IntSet.diff done_ns in
+            print_endline @@ Int.to_string n;
+            print_endline @@ Int.to_string @@ IntSet.cardinal ptee_ns;
             (* The graph with all pointed-to cells copied, and the node mapping *)
-            let g, nm = iter g ns done_ns in
+            let nm = IntMap.add n n' nm in
+            let g, nm = iter g ns done_ns nm in
             (* Add the edges *)
             let edges =
               g'.edges
               |> EdgeSet.filter (fun ((c : Cell.t), _) -> c.node = n)
               |> EdgeSet.map
                    (Pair.map_same (fun (c : Cell.t) ->
+                        print_endline @@ Int.to_string c.node;
                         { c with node = IntMap.find c.node nm }))
               |> EdgeSet.union g.edges
             in
@@ -523,7 +531,15 @@ module FormalDSGraph = struct
         |> List.map (fun (c : Cell.t) -> c.node)
         |> IntSet.of_list
       in
-      iter g ns IntSet.empty)
+      let g, nm = iter g ns IntSet.empty IntMap.empty in
+      let cm =
+        CellSet.to_list cs
+        |> List.map (fun (c : Cell.t) ->
+            assert (IntMap.mem c.node nm);
+            (c, { c with node = IntMap.find c.node nm }))
+        |> CellMap.of_list
+      in
+      (g, cm))
 end
 
 module DSGraph : sig
@@ -567,7 +583,7 @@ module DSGraph : sig
   val copy_node :
     t ->
     ?clear_stack:bool ->
-    ?old_to_new:(IDSet.elt, node) Hashtbl.t option ->
+    ?old_to_new:(IDSet.elt, node) Hashtbl.t ->
     ?sbs:SBMap.key list ->
     node ->
     node
@@ -935,9 +951,6 @@ end = struct
                 (* TODO Calling this every time might be redundant if the joined
                    interval isn't bigger? *)
                 (* TODO replace this i don't want `init` to exist *)
-                (* TODO This seems VERY wrong?!?! joining two cells in the same
-                   node should make the rest of the node join with itself
-                   too?!?! i.e. should go to collapse?! *)
                 insert n1 (init (Interval.join i i') 0))
 
   (** Unify all pointees of this cell so that it points to only one cell, then
@@ -1019,8 +1032,8 @@ end = struct
   (** Create a copy of the given node with all reachable nodes and cells from
       pointees copied. The previous (given) list of nodes will then be updated
       with all new nodes after the copy and returned. *)
-  let copy_node (graph : t) ?(clear_stack = false) ?(old_to_new = None)
-      ?(sbs = []) (n : node) =
+  let copy_node (graph : t) ?(clear_stack = false) ?old_to_new ?(sbs = [])
+      (n : node) =
     (* Mappings of old nodes (in the copied-from graph) to new nodes. Since the
        old nodes won't be modified, this is safe. *)
     let old_to_new = Option.get_lazy (fun _ -> Hashtbl.create 100) old_to_new in
@@ -1061,10 +1074,10 @@ end = struct
                 let new_pointee_node = create_new_node @@ node_of old_c' in
                 get_cell (offsets old_c') new_pointee_node)
           in
-          set_pointees pointees new_c;
-          unify_pointees new_c)
+          set_pointees pointees new_c
+          (*unify_pointees new_c*))
     done;
-    SBMap.iter (fun s n -> check_valid_node n) graph.node_map;
+    List.iter (fun n -> check_valid_node n) graph.nodes;
     List.iter
       (fun sb ->
         (* TODO maybe this isn't needed (should be thoroughly docuemnted why! scala DSA doesn't do this) *)
@@ -1169,7 +1182,7 @@ let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
      let callee_node_copy =
        copy_node ~clear_stack:true
          ~sbs:(Sva.SymAddrSetLattice.to_list actual |> snd |> List.map fst)
-         ~old_to_new:(Some old_to_new) caller_graph callee_node
+         ~old_to_new caller_graph callee_node
      in
      List.iter
        (fun n ->
