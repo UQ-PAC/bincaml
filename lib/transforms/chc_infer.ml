@@ -155,7 +155,8 @@ module Encoder = struct
   type t = {
     mutable delta : Var.t VarMap.t;
     mutable premises : Sexp.t list;
-    mutable vars : Var.t list;
+    mutable vars : VarSet.t;
+        (** the clause binders for the eventual [forall] *)
     mutable counter : int;
   }
 
@@ -163,23 +164,35 @@ module Encoder = struct
     {
       delta = VarMap.empty;
       premises = [];
-      vars = List.rev initial_vars;
+      vars = VarSet.of_list initial_vars;
       counter = 0;
     }
 
   let lookup t v =
-    match VarMap.find_opt v t.delta with Some v' -> v' | None -> v
+    match VarMap.find_opt v t.delta with
+    | Some v' -> v'
+    | None ->
+        (* No Δ entry: [v] is used as-is, so it must already be a binder —
+           either a block parameter (a live-in variable, possibly read
+           uninitialized) or an already-freshened variable substituted in by
+           spec inlining. Anything else is free in the clause and would silently
+           become an unquantified symbol in the SMT output. *)
+        if not (VarSet.mem v t.vars) then
+          failwith
+            ("chc_infer: free variable " ^ Var.name v
+           ^ " in clause (not a binder)");
+        v
 
   let fresh t v =
     t.counter <- t.counter + 1;
     let nv = Var.copy ~name:(Var.name v ^ "!" ^ string_of_int t.counter) v in
     t.delta <- VarMap.add v nv t.delta;
-    t.vars <- nv :: t.vars;
+    t.vars <- VarSet.add nv t.vars;
     nv
 
   let add_premise t p = t.premises <- p :: t.premises
   let premises t = List.rev t.premises
-  let vars t = List.rev t.vars
+  let vars t = VarSet.to_list t.vars
 end
 
 (** Convert a [BasilExpr] to a sexp under the current variable renaming. *)
@@ -218,12 +231,220 @@ let phi_subst_for_edge ~(from_id : ID.t) (succ_block : Program.bloc) :
       | None -> acc)
     VarMap.empty succ_block.phis
 
-(** Encode a single block. Returns one rule clause per outgoing edge (block
-    successor or procedure return). Phi nodes in the successor are resolved by
+(** Build a query clause (head = [false]) capturing the encoder's current state.
+    [extra_premises] are conjoined after the accumulated premises — typically
+    the negation of the condition being checked. *)
+let query_of_encoder (enc : Encoder.t) ~extra_premises : clause =
+  {
+    vars = Encoder.vars enc;
+    premises = Encoder.premises enc @ extra_premises;
+    head = None;
+  }
+
+(** Build a rule clause with the given [head], capturing the encoder's current
+    premises and binders. *)
+let rule_of_encoder (enc : Encoder.t) ~head : clause =
+  { vars = Encoder.vars enc; premises = Encoder.premises enc; head = Some head }
+
+(** Use the callee's spec at the call site: assume each (substituted) [ensures]
+    as a premise post-call, without referring to the callee's [enter]/[exit]
+    predicates. Mutates [enc]; produces no clauses. *)
+let encode_call_with_spec (enc : Encoder.t) ~callee
+    ~(spec : (Var.t, BasilExpr.t) Procedure.proc_spec) ~lhs ~procid ~in_subst :
+    unit =
+  (* Fresh-name returns, building the [callee out-param → caller fresh var]
+     half of the postcondition substitution. *)
+  let out_subst =
+    StringMap.fold
+      (fun name callee_out_v acc ->
+        match StringMap.find_opt name lhs with
+        | Some lhs_v ->
+            let fresh = Encoder.fresh enc lhs_v in
+            VarMap.add callee_out_v (BasilExpr.rvar fresh) acc
+        | None ->
+            failwith
+              ("chc_infer: missing return binding " ^ name ^ " at call to "
+             ^ ID.to_string procid))
+      (Procedure.formal_out_params callee)
+      VarMap.empty
+  in
+  let apply_full_subst e =
+    BasilExpr.substitute
+      (fun v ->
+        match VarMap.find_opt v in_subst with
+        | Some arg_e -> Some arg_e
+        | None -> VarMap.find_opt v out_subst)
+      e
+  in
+  List.iter
+    (apply_full_subst %> encode_expr enc %> Encoder.add_premise enc)
+    spec.ensures
+
+(** Connect the call site to the callee's [enter]/[exit] predicates: conjoin
+    [exit⟨f⟩(args, returns)] to [enc]'s premises and return the
+    [C ⟹ enter⟨f⟩(args)] clause. *)
+let encode_call_full (enc : Encoder.t) ~callee ~args ~lhs ~procid : clause list
+    =
+  let enter_pred, exit_pred = enter_exit_predicates callee in
+  (* Arg sexps in the callee's formal-in-params order (alphabetical by name,
+     matching [StringMap.values]). *)
+  let arg_sexps =
+    StringMap.bindings (Procedure.formal_in_params callee)
+    |> List.map (fun (name, _) ->
+        match StringMap.find_opt name args with
+        | Some e -> encode_expr enc e
+        | None ->
+            failwith
+              ("chc_infer: missing arg " ^ name ^ " at call to "
+             ^ ID.to_string procid))
+  in
+  (* Capture Encoder state for the [enter] clause before fresh-naming returns. *)
+  let enter_clause =
+    rule_of_encoder enc ~head:(apply_predicate enter_pred arg_sexps)
+  in
+  let return_args =
+    StringMap.bindings (Procedure.formal_out_params callee)
+    |> List.map (fun (name, _) ->
+        match StringMap.find_opt name lhs with
+        | Some v -> atom (Var.name (Encoder.fresh enc v))
+        | None ->
+            failwith
+              ("chc_infer: missing return binding " ^ name ^ " at call to "
+             ^ ID.to_string procid))
+  in
+  Encoder.add_premise enc (apply_predicate exit_pred (arg_sexps @ return_args));
+  [ enter_clause ]
+
+(** Encode a procedure call. Always emits a precondition query per [requires]
+    clause (the caller must satisfy them regardless of [use_spec]); then either
+    inlines the callee's spec ([use_spec]) or connects via its [enter]/[exit]
+    predicates. Mutates [enc] and returns the query/call clauses produced. *)
+let encode_call ~(use_spec : Program.proc -> bool) (enc : Encoder.t)
+    (prog : Program.t) ~lhs ~procid ~args : clause list =
+  let callee =
+    Program.proc_opt prog procid
+    |> Option.get_exn_or ("chc_infer: callee not found: " ^ ID.to_string procid)
+  in
+  let spec = Procedure.specification callee in
+  (* Substitution from the callee's formal in-params to the caller's arg
+     expressions. Used to instantiate the callee's spec at this call site. *)
+  let in_subst =
+    StringMap.fold
+      (fun name v acc ->
+        match StringMap.find_opt name args with
+        | Some arg_e -> VarMap.add v arg_e acc
+        | None ->
+            failwith
+              ("chc_infer: missing arg " ^ name ^ " at call to "
+             ^ ID.to_string procid))
+      (Procedure.formal_in_params callee)
+      VarMap.empty
+  in
+  let apply_in_subst e =
+    BasilExpr.substitute (fun v -> VarMap.find_opt v in_subst) e
+  in
+  (* Precondition queries are emitted regardless of [use_spec] — the caller is
+     obligated to satisfy the callee's precondition either way. Captured before
+     any call effect is added to [enc]. *)
+  let queries =
+    List.map
+      (fun req ->
+        let req_sexp = encode_expr enc (apply_in_subst req) in
+        query_of_encoder enc ~extra_premises:[ SmtExpr.bool_not req_sexp ])
+      spec.requires
+  in
+  let call_clauses =
+    if use_spec callee then (
+      encode_call_with_spec enc ~callee ~spec ~lhs ~procid ~in_subst;
+      [])
+    else encode_call_full enc ~callee ~args ~lhs ~procid
+  in
+  queries @ call_clauses
+
+(** Translate a single regular (non-phi) statement: mutate [enc] with the
+    statement's effect on the variable renaming and premises, and return any
+    query or call clauses it generates. *)
+let encode_stmt ~(use_spec : Program.proc -> bool) (enc : Encoder.t)
+    (prog : Program.t) stmt : clause list =
+  match stmt with
+  | Stmt.Instr_Assign { al; _ } ->
+      (* Evaluate RHSs in parallel before binding any new LHS — matches the
+         simultaneous-assignment semantics of [Instr_Assign]. *)
+      let rhss = List.map (fun (lhs, rhs) -> (lhs, encode_expr enc rhs)) al in
+      List.iter
+        (fun (lhs, rhs_sexp) ->
+          let fresh = Encoder.fresh enc lhs in
+          Encoder.add_premise enc (SmtExpr.eq (atom (Var.name fresh)) rhs_sexp))
+        rhss;
+      []
+  | Stmt.Instr_Assert { body } ->
+      let body_sexp = encode_expr enc body in
+      let query =
+        query_of_encoder enc ~extra_premises:[ SmtExpr.bool_not body_sexp ]
+      in
+      Encoder.add_premise enc body_sexp;
+      [ query ]
+  | Stmt.Instr_Assume { body } ->
+      Encoder.add_premise enc (encode_expr enc body);
+      []
+  | Stmt.Instr_IntrinCall _ ->
+      (* Treated as [assert false]: the current premise set must already be
+         unsatisfiable for the intrinsic call to be unreachable. *)
+      [ query_of_encoder enc ~extra_premises:[] ]
+  | Stmt.Instr_Call { lhs; procid; args } ->
+      encode_call ~use_spec enc prog ~lhs ~procid ~args
+  | s -> failwith ("chc_infer: unsupported statement: " ^ Stmt.show_stmt_basil s)
+
+(** Head arguments for a successor predicate: look up each parameter under the
+    current renaming, resolving phi targets through [phi_subst] first. *)
+let mk_head_args (enc : Encoder.t) ~phi_subst (pred : predicate) : Sexp.t list =
+  List.map
+    (fun v ->
+      let v' =
+        match VarMap.find_opt v phi_subst with Some src -> src | None -> v
+      in
+      atom (Var.name (Encoder.lookup enc v')))
+    pred.params
+
+(** Transition clauses leaving a block: one rule per block successor (with phi
+    nodes resolved on the edge) plus a return clause into [exit] when the block
+    can return. *)
+let block_head_clauses (enc : Encoder.t) (proc : Program.proc)
+    (preds : proc_predicates) (block_id : ID.t) : clause list =
+  let succs = block_successors proc block_id in
+  let block_clauses =
+    List.map
+      (fun succ_id ->
+        let succ_pred = IDMap.find succ_id preds.block_preds in
+        let succ_block =
+          Procedure.get_block proc succ_id
+          |> Option.get_exn_or "chc_infer: missing successor block"
+        in
+        let phi_subst = phi_subst_for_edge ~from_id:block_id succ_block in
+        let head =
+          apply_predicate succ_pred (mk_head_args enc ~phi_subst succ_pred)
+        in
+        rule_of_encoder enc ~head)
+      succs.blocks
+  in
+  let return_clauses =
+    if succs.returns then
+      let head =
+        apply_predicate preds.exit
+          (mk_head_args enc ~phi_subst:VarMap.empty preds.exit)
+      in
+      [ rule_of_encoder enc ~head ]
+    else []
+  in
+  block_clauses @ return_clauses
+
+(** Encode a single block. Walks the block's regular statements (threading the
+    encoder state), then appends one rule clause per outgoing edge (block
+    successor or procedure return). Phi nodes in a successor are resolved by
     substituting each phi target with the appropriate rhs variable for this edge
     before doing the Δ lookup.
 
-    [use_spec] decides per-callee how the call site connects to the callee: when
+    [use_spec] decides per-callee how a call site connects to the callee: when
     true, the caller assumes the callee's [ensures] post-call and does not refer
     to the callee's [enter]/[exit] predicates; when false, the caller emits a
     [C ⟹ enter⟨f⟩(args)] clause and uses [exit⟨f⟩] as a premise. Spec checking
@@ -237,200 +458,12 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
   let enc = Encoder.create ~initial_vars:block_pred.params in
   let entry_args = List.map (fun v -> atom (Var.name v)) block_pred.params in
   Encoder.add_premise enc (apply_predicate block_pred entry_args);
-  let queries = ref [] in
-  let snapshot_query ~extra_premises =
-    queries :=
-      {
-        vars = Encoder.vars enc;
-        premises = Encoder.premises enc @ extra_premises;
-        head = None;
-      }
-      :: !queries
+  let stmt_clauses =
+    Vector.to_iter block.stmts
+    |> Iter.flat_map_l (encode_stmt ~use_spec enc prog)
+    |> Iter.to_list
   in
-  let call_clauses = ref [] in
-  let snapshot_call ~head =
-    call_clauses :=
-      {
-        vars = Encoder.vars enc;
-        premises = Encoder.premises enc;
-        head = Some head;
-      }
-      :: !call_clauses
-  in
-  (* Use the callee's spec at the call site: assume each (substituted) [ensures]
-     as a premise post-call, without referring to the callee's [enter]/[exit]
-     predicates. *)
-  let encode_call_with_spec ~callee
-      ~(spec : (Var.t, BasilExpr.t) Procedure.proc_spec) ~lhs ~procid ~in_subst
-      =
-    (* Fresh-name returns, building the [callee out-param → caller fresh var]
-       half of the postcondition substitution. *)
-    let out_subst =
-      StringMap.fold
-        (fun name callee_out_v acc ->
-          match StringMap.find_opt name lhs with
-          | Some lhs_v ->
-              let fresh = Encoder.fresh enc lhs_v in
-              VarMap.add callee_out_v (BasilExpr.rvar fresh) acc
-          | None ->
-              failwith
-                ("chc_infer: missing return binding " ^ name ^ " at call to "
-               ^ ID.to_string procid))
-        (Procedure.formal_out_params callee)
-        VarMap.empty
-    in
-    let apply_full_subst e =
-      BasilExpr.substitute
-        (fun v ->
-          match VarMap.find_opt v in_subst with
-          | Some arg_e -> Some arg_e
-          | None -> VarMap.find_opt v out_subst)
-        e
-    in
-    List.iter
-      (apply_full_subst %> encode_expr enc %> Encoder.add_premise enc)
-      spec.ensures
-  in
-  (* Connect the call site to the callee's [enter]/[exit] predicates: emit
-     [C ⟹ enter⟨f⟩(args)] and conjoin [exit⟨f⟩(args, returns)] to premises. *)
-  let encode_call_full ~callee ~args ~lhs ~procid =
-    let enter_pred, exit_pred = enter_exit_predicates callee in
-    (* Arg sexps in the callee's formal-in-params order (alphabetical by name,
-       matching [StringMap.values]). *)
-    let arg_sexps =
-      StringMap.bindings (Procedure.formal_in_params callee)
-      |> List.map (fun (name, _) ->
-          match StringMap.find_opt name args with
-          | Some e -> encode_expr enc e
-          | None ->
-              failwith
-                ("chc_infer: missing arg " ^ name ^ " at call to "
-               ^ ID.to_string procid))
-    in
-    (* Captures Encoder state before fresh-naming the returns. *)
-    snapshot_call ~head:(apply_predicate enter_pred arg_sexps);
-    let return_args =
-      StringMap.bindings (Procedure.formal_out_params callee)
-      |> List.map (fun (name, _) ->
-          match StringMap.find_opt name lhs with
-          | Some v -> atom (Var.name (Encoder.fresh enc v))
-          | None ->
-              failwith
-                ("chc_infer: missing return binding " ^ name ^ " at call to "
-               ^ ID.to_string procid))
-    in
-    Encoder.add_premise enc
-      (apply_predicate exit_pred (arg_sexps @ return_args))
-  in
-  let encode_call ~lhs ~procid ~args =
-    let callee =
-      Program.proc_opt prog procid
-      |> Option.get_exn_or
-           ("chc_infer: callee not found: " ^ ID.to_string procid)
-    in
-    let spec = Procedure.specification callee in
-    (* Substitution from the callee's formal in-params to the caller's arg
-       expressions. Used to instantiate the callee's spec at this call site. *)
-    let in_subst =
-      StringMap.fold
-        (fun name v acc ->
-          match StringMap.find_opt name args with
-          | Some arg_e -> VarMap.add v arg_e acc
-          | None ->
-              failwith
-                ("chc_infer: missing arg " ^ name ^ " at call to "
-               ^ ID.to_string procid))
-        (Procedure.formal_in_params callee)
-        VarMap.empty
-    in
-    let apply_in_subst e =
-      BasilExpr.substitute (fun v -> VarMap.find_opt v in_subst) e
-    in
-    (* Precondition queries are emitted regardless of [use_spec] — the caller
-       is obligated to satisfy the callee's precondition either way. *)
-    List.iter
-      (fun req ->
-        let req_sexp = encode_expr enc (apply_in_subst req) in
-        snapshot_query ~extra_premises:[ SmtExpr.bool_not req_sexp ])
-      spec.requires;
-    if use_spec callee then
-      encode_call_with_spec ~callee ~spec ~lhs ~procid ~in_subst
-    else encode_call_full ~callee ~args ~lhs ~procid
-  in
-  Vector.to_iter block.stmts
-  |> Iter.iter (fun stmt ->
-      match stmt with
-      | Stmt.Instr_Assign { al; _ } ->
-          (* Evaluate RHSs in parallel before binding any new LHS — matches the
-             simultaneous-assignment semantics of [Instr_Assign]. *)
-          let rhss =
-            List.map (fun (lhs, rhs) -> (lhs, encode_expr enc rhs)) al
-          in
-          List.iter
-            (fun (lhs, rhs_sexp) ->
-              let fresh = Encoder.fresh enc lhs in
-              Encoder.add_premise enc
-                (SmtExpr.eq (atom (Var.name fresh)) rhs_sexp))
-            rhss
-      | Stmt.Instr_Assert { body } ->
-          let body_sexp = encode_expr enc body in
-          snapshot_query ~extra_premises:[ SmtExpr.bool_not body_sexp ];
-          Encoder.add_premise enc body_sexp
-      | Stmt.Instr_Assume { body } ->
-          Encoder.add_premise enc (encode_expr enc body)
-      | Stmt.Instr_IntrinCall _ ->
-          (* Treated as [assert false]: the current premise set must already
-             be unsatisfiable for the intrinsic call to be unreachable. *)
-          snapshot_query ~extra_premises:[]
-      | Stmt.Instr_Call { lhs; procid; args } -> encode_call ~lhs ~procid ~args
-      | s ->
-          failwith
-            ("chc_infer: unsupported statement: " ^ Stmt.show_stmt_basil s));
-  let succs = block_successors proc block_id in
-  let mk_head_args ~phi_subst (pred : predicate) =
-    List.map
-      (fun v ->
-        let v' =
-          match VarMap.find_opt v phi_subst with Some src -> src | None -> v
-        in
-        atom (Var.name (Encoder.lookup enc v')))
-      pred.params
-  in
-  let block_clauses =
-    List.map
-      (fun succ_id ->
-        let succ_pred = IDMap.find succ_id preds.block_preds in
-        let succ_block =
-          Procedure.get_block proc succ_id
-          |> Option.get_exn_or "chc_infer: missing successor block"
-        in
-        let phi_subst = phi_subst_for_edge ~from_id:block_id succ_block in
-        let head =
-          apply_predicate succ_pred (mk_head_args ~phi_subst succ_pred)
-        in
-        {
-          vars = Encoder.vars enc;
-          premises = Encoder.premises enc;
-          head = Some head;
-        })
-      succs.blocks
-  in
-  let return_clauses =
-    if succs.returns then
-      let head =
-        apply_predicate preds.exit
-          (mk_head_args ~phi_subst:VarMap.empty preds.exit)
-      in
-      [
-        {
-          vars = Encoder.vars enc;
-          premises = Encoder.premises enc;
-          head = Some head;
-        };
-      ]
-    else []
-  in
-  List.rev !call_clauses @ List.rev !queries @ block_clauses @ return_clauses
+  stmt_clauses @ block_head_clauses enc proc preds block_id
 
 (** Connect [enter⟨f⟩] to the entry block predicate. *)
 let enter_to_entry_block (preds : proc_predicates) (proc : Program.proc) :
