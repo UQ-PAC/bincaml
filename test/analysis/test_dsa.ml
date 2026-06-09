@@ -87,11 +87,6 @@ open struct
       let b = List.nth g.cells b in
       DSGraph.add_pointees [ b ] a
 
-    let extend_cells cur possible =
-      List.fold_left
-        (fun cur c -> List.add_nodup ~eq:CCEqual.physical (DSGraph.find c) cur)
-        cur possible
-
     let join (l : t) n a b =
       let g = List.nth !l n in
       let a = List.nth g.cells a in
@@ -102,8 +97,7 @@ open struct
 
     let unify_all (l : t) n =
       let g = List.nth !l n in
-      List.iter DSGraph.unify_pointees g.cells;
-      g.cells <- extend_cells g.cells g.cells
+      List.iter DSGraph.unify_pointees g.cells
   end
 
   (** Stores state for comparing with the implementation *)
@@ -154,14 +148,7 @@ open struct
     let unify_all l n =
       mapn l n (fun gr ->
           let g = FormalDSGraph.unify_all gr.g in
-          let cells =
-            List.fold_left
-              (fun cur c ->
-                List.add_nodup ~eq:FormalDSGraph.Cell.equal
-                  (FormalDSGraph.find g c) cur)
-              gr.cells gr.cells
-          in
-          { g; cells })
+          { gr with g })
   end
 
   module DSGraphSpec = struct
@@ -304,7 +291,7 @@ open struct
                 return (Join (g, c1, c2)))
             |> oneof)
       in
-      let _unify_all =
+      let unify_all =
         if not @@ List.is_empty state then
           Some
             (let* g = int_range 0 (List.length state - 1) in
@@ -321,7 +308,7 @@ open struct
                cell_widths;
                make_edge;
                make_join;
-               (*_unify_all;*)
+               unify_all;
              ])
 
     (* For recreating failing tests *)
@@ -329,13 +316,11 @@ open struct
       let steps =
         [
           AddGraph;
-          MakeCell (0, Interval.Interval (Z.of_int (-5), Z.of_int 5));
           AddGraph;
-          MakeCell (0, Interval.Interval (Z.of_int 0, Z.of_int 1));
-          AddGraph;
-          AddGraph;
-          Join (0, 0, 1);
-          CellWidths 0;
+          MakeCell (1, Top);
+          UnifyAll 1;
+          MakeCell (1, Top);
+          CellWidths 1;
         ]
       in
       let s = init_sut () in
@@ -343,6 +328,7 @@ open struct
       ignore
       @@ List.fold_left
            (fun state step ->
+             print_endline @@ show_cmd step;
              let res = run step s in
              (match (step, res) with
              | CountCells i, Res ((Int, _), n) ->

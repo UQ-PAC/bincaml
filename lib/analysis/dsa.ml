@@ -405,6 +405,7 @@ module FormalDSGraph = struct
           else c
         in
         let cells = CellSet.map map g.cells in
+        assert (CellSet.cardinal cells <= CellSet.cardinal g.cells);
         let old_to_new = extend_old_to_new_map g.cells map g.old_to_new in
         let edges = EdgeSet.map (Pair.map_same map) g.edges in
         ({ g with cells; edges; old_to_new }, (n, map))
@@ -414,6 +415,7 @@ module FormalDSGraph = struct
         let c : Cell.t = { node = nid; offsets = Interval.Top } in
         let map (c' : Cell.t) = if IntSet.mem c'.node nodes then c else c' in
         let cells = CellSet.map map g.cells in
+        assert (CellSet.cardinal cells <= CellSet.cardinal g.cells);
         (* wrong!! *)
         let old_to_new = extend_old_to_new_map g.cells map g.old_to_new in
         let edges = EdgeSet.map (Pair.map_same map) g.edges in
@@ -442,6 +444,7 @@ module FormalDSGraph = struct
            else acc)
          CellMap.empty
     |> CellMap.values |> CellSetSet.of_iter
+    |> CellSetSet.filter (fun s -> CellSet.cardinal s > 1)
 
   (** Unify all pointees of cells so that each cell has a unique pointee. *)
   let unify_all (g : t) =
@@ -449,13 +452,16 @@ module FormalDSGraph = struct
       match CellSetSet.choose_opt uc with
       | None -> g
       | Some s ->
-          let g, (n, map) = unify_cells g s in
-          let uc =
+          let g', (n, map) = unify_cells g s in
+          let uc' =
             CellSetSet.remove s uc
             |> CellSetSet.map (CellSet.map map)
-            |> CellSetSet.union (pointees n g.edges)
+            |> CellSetSet.union (pointees n g'.edges)
           in
-          iter uc g
+          assert (
+            (not @@ (CellSet.cardinal g'.cells = CellSet.cardinal g.cells))
+            || (CellSetSet.is_empty @@ pointees n g'.edges));
+          iter uc' g'
     in
     iter (pointees g.cells g.edges) g
 
