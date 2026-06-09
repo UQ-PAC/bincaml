@@ -922,13 +922,16 @@ end = struct
               if not @@ CCEqual.physical n1 n2 then
                 match Interval.(start i, start i') with
                 | Some a, Some b when Z.lt a b ->
-                    join_nodes_at (Z.sub b a) n1 n2
-                | Some a, Some b -> join_nodes_at (Z.sub a b) n2 n1
+                    join_nodes_at (Z.sub a b) n1 n2
+                | Some a, Some b -> join_nodes_at (Z.sub b a) n2 n1
                 | _ -> join_nodes_at Z.zero n1 n2
               else
                 (* TODO Calling this every time might be redundant if the joined
                    interval isn't bigger? *)
                 (* TODO replace this i don't want `init` to exist *)
+                (* TODO This seems VERY wrong?!?! joining two cells in the same
+                   node should make the rest of the node join with itself
+                   too?!?! i.e. should go to collapse?! *)
                 insert n1 (init (Interval.join i i') 0))
 
   (** Unify all pointees of this cell so that it points to only one cell, then

@@ -132,9 +132,9 @@ open struct
 
     let cell_widths l n =
       let g = List.nth l n in
-      List.map
-        (fun (c : FormalDSGraph.Cell.t) -> Interval.width c.offsets)
-        g.cells
+      g.cells
+      |> List.map (FormalDSGraph.find g.g)
+      |> List.map (fun (c : FormalDSGraph.Cell.t) -> Interval.width c.offsets)
 
     let add_edge l n a b =
       mapn l n (fun gr ->
@@ -164,7 +164,7 @@ open struct
           { g; cells })
   end
 
-  module DSGraphSpec : Spec = struct
+  module DSGraphSpec = struct
     type sut = DSGraphHandle.t
 
     let init_sut = DSGraphHandle.empty
@@ -323,6 +323,44 @@ open struct
                make_join;
                (*_unify_all;*)
              ])
+
+    (* For recreating failing tests *)
+    let dsa_specific_stm () =
+      let steps =
+        [
+          AddGraph;
+          MakeCell (0, Interval.Interval (Z.of_int (-5), Z.of_int 5));
+          AddGraph;
+          MakeCell (0, Interval.Interval (Z.of_int 0, Z.of_int 1));
+          AddGraph;
+          AddGraph;
+          Join (0, 0, 1);
+          CellWidths 0;
+        ]
+      in
+      let s = init_sut () in
+      let state = init_state in
+      ignore
+      @@ List.fold_left
+           (fun state step ->
+             let res = run step s in
+             (match (step, res) with
+             | CountCells i, Res ((Int, _), n) ->
+                 print_endline @@ Int.to_string n;
+                 print_endline @@ Int.to_string
+                 @@ FormalDSGraphHandle.count_cells state i
+             | CellWidths i, Res ((List (Option Int), _), l) ->
+                 print_endline
+                 @@ Format.to_string (List.pp (Option.pp Int.pp)) l;
+                 print_endline
+                 @@ Format.to_string
+                      (List.pp (Option.pp Int.pp))
+                      (FormalDSGraphHandle.cell_widths state i)
+             | _ -> ());
+             assert (postcond step state res);
+             next_state step state)
+           state steps;
+      ()
   end
 
   module DSGraphSequential = STM_sequential.Make (DSGraphSpec)
@@ -434,4 +472,8 @@ open struct
   end
 end
 
-let tests = [ ("dsa_invariants", DSGraphTests.tests) ]
+let tests =
+  [
+    ("dsa_invariants", DSGraphTests.tests);
+    ("blah", [ Alcotest.test_case "blah" `Quick DSGraphSpec.dsa_specific_stm ]);
+  ]
