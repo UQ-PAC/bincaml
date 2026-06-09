@@ -25,14 +25,12 @@ type predicate = { name : string; params : Var.t list }
     and application — order matters. *)
 
 type clause = {
-  vars : Var.t list;
-  premises : Sexp.t list;
+  vars : Var.t list;  (** universally-quantified binders for the [forall] *)
+  premises : Sexp.t list;  (** conjuncts of the antecedent *)
   head : Sexp.t option;
+      (** [Some sexp] for a rule and [None] for a query (head = false) *)
 }
-(** A constrained Horn clause.
-    - [vars] are the universally-quantified binders for the [forall];
-    - [premises] are the conjuncts of the antecedent;
-    - [head] is [Some sexp] for a rule and [None] for a query (head = false). *)
+(** A constrained Horn clause. **)
 
 let var_sort v = fst (Expr_smt.SMTLib2.of_typ (Var.typ v))
 
