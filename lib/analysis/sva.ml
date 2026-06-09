@@ -190,7 +190,7 @@ module Domain = struct
     let stmt = Eval.stmt_eval_fwd read stmt in
     let updates =
       match stmt with
-      | Stmt.Instr_Assign assignments -> List.to_iter assignments
+      | Stmt.Instr_Assign { al } -> List.to_iter al
       | Stmt.Instr_Load { lhs; addr; rhs } -> (
           Iter.singleton
           @@

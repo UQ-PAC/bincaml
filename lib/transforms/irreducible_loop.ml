@@ -11,7 +11,6 @@ type state = {
 open Analysis.Irreducible_loops.ProcIntra
 
 let transform_loop p l =
-  let open Option in
   let header, next_h, headers, nodes, entries, backedges =
     match l with
     | { block; loop = PrimaryHeader { primary_header; headers; nodes } }
@@ -86,7 +85,17 @@ let transform_loop p l =
           let e = BasilExpr.applyintrin ~op:`OR preds in
           let b = Procedure.find_block p h in
           let b =
-            Block.prepend_stmts b [ Instr_Assume { body = e; branch = false } ]
+            Block.prepend_stmts b
+              [
+                Instr_Assume
+                  {
+                    body = e;
+                    branch = false;
+                    attrib =
+                      StringMap.singleton "comment"
+                        (`String "irreducible loop gaurd");
+                  };
+              ]
           in
           Procedure.update_block p h b)
         p preceding_indices )
@@ -96,7 +105,16 @@ let transform_loop p l =
       (fun bid idx p ->
         let b = Procedure.find_block p bid in
         let b =
-          Block.append_stmts b [ Instr_Assign [ (loop_crtl_v, bvali idx) ] ]
+          Block.append_stmts b
+            [
+              Instr_Assign
+                {
+                  al = [ (loop_crtl_v, bvali idx) ];
+                  attrib =
+                    StringMap.singleton "comment"
+                      (`String "irreducible loop origin");
+                };
+            ]
         in
         Procedure.update_block p bid b)
       entry_indexes p )

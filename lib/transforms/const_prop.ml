@@ -21,7 +21,6 @@ let prop_expr (prop : Var.t -> Bitvec.t option) =
     | _ -> Keep)
 
 let transform_proc r keep =
-  let open Stmt in
   let prop v =
     if keep v then None
     else VarMap.find_opt v r |> Option.flat_map LinearIDE.Value.get_val

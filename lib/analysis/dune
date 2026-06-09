@@ -1,7 +1,6 @@
 (library
  (public_name bincaml.analysis)
  (name analysis)
- (flags -w -27)
  (modules
   dataflow_graph
   intra_analysis

@@ -13,4 +13,5 @@
 (run-transforms "inter-function-summaries")
 
 (dump-il "after.il")
+(run-transforms flatten-phis)
 (dump-boogie "out.bpl")

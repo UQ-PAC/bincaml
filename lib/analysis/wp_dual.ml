@@ -102,7 +102,7 @@ module Domain (S : FunctionAnnotation) = struct
   let transfer p stmt =
     let open Stmt in
     match stmt with
-    | Instr_Assign a -> tf_assigns p a
+    | Instr_Assign { al } -> tf_assigns p al
     | Instr_Load
         { lhs; rhs; addr = Addr { addr : 'e; size : int; endian : endian } } ->
         let le = BasilExpr.load ~bits:size endian (BasilExpr.rvar rhs) addr in

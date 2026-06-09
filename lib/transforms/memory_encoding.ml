@@ -1,7 +1,6 @@
 open Lang
 open Lang.Common
 open Lang.Expr
-open Ops
 
 let fresh = Bitvec.of_int 0 ~size:2
 let live = Bitvec.of_int 1 ~size:2
@@ -20,8 +19,8 @@ module Calls = struct
 
   (** [addr_is_heap args] checks if an address belongs to the heap. args(0) is
       the memory encoding object. args(1) is the address to check. *)
-  let addr_is_heap args =
-    apply_fun
+  let addr_is_heap ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_addr_is_heap" ~scope:Var.GlobalConst Types.Boolean))
@@ -29,8 +28,8 @@ module Calls = struct
 
   (** [alloc_base args] returns the base address of a supplied allocation id.
       args(0) is the memory encoding object. args(1) is the allocation id. *)
-  let alloc_base args =
-    apply_fun
+  let alloc_base ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_alloc_base" ~scope:Var.GlobalConst
@@ -40,8 +39,8 @@ module Calls = struct
   (** [alloc_live args] returns the liveness of an allocation. Returns value is
       0 for fresh, 1 for live, and 2 for dead, as a bv3. args(0) is the memory
       encoding object. args(1) is the allocation id. *)
-  let alloc_live args =
-    apply_fun
+  let alloc_live ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_alloc_live" ~scope:Var.GlobalConst
@@ -50,8 +49,8 @@ module Calls = struct
 
   (** [alloc_size args] returns the size of an allocation. args(0) is the memory
       encoding object. args(1) is the allocation id. *)
-  let alloc_size args =
-    apply_fun
+  let alloc_size ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_alloc_size" ~scope:Var.GlobalConst
@@ -60,8 +59,8 @@ module Calls = struct
 
   (** [addr_alloc args] returns the allocation id of an address. args(0) is the
       memory encoding object. args(1) is the address. *)
-  let addr_alloc args =
-    apply_fun
+  let addr_alloc ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_addr_alloc" ~scope:Var.GlobalConst
@@ -72,8 +71,8 @@ module Calls = struct
 
   (** [addr_offset args] returns the offset an address is into its allocation.
       args(0) is the memory encoding object. args(1) is the address. *)
-  let addr_offset args =
-    apply_fun
+  let addr_offset ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_addr_offset" ~scope:Var.GlobalConst
@@ -83,8 +82,8 @@ module Calls = struct
   (** [alloc_size_update args] returns a new memory encoding with the size of an
       allocation updated. args(0) is the memory encoding object. args(1) is the
       allocation id. args(2) is the new size. *)
-  let alloc_size_update args =
-    apply_fun
+  let alloc_size_update ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_alloc_size_update" ~scope:Var.GlobalConst
@@ -94,8 +93,8 @@ module Calls = struct
   (** [alloc_live_update args] returns a new memory encoding with the liveness
       of an allocation updated. args(0) is the memory encoding object. args(1)
       is the allocation id. args(2) is the new liveness value as a bv3. *)
-  let alloc_live_update args =
-    apply_fun
+  let alloc_live_update ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_alloc_live_update" ~scope:Var.GlobalConst
@@ -105,8 +104,8 @@ module Calls = struct
   (** [allocate args] allocates space at a size, returning the updated memory
       encoding. args(0) is the memory encoding object. args(1) is the address
       being allocated at. args(2) is the size of the allocation. *)
-  let allocate args =
-    apply_fun
+  let allocate ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_allocate" ~scope:Var.GlobalConst
@@ -116,8 +115,8 @@ module Calls = struct
   (** [can_alloc args] Returns whether an alloc, performed by [allocate], is
       valid/allowed. args(0) is the memory encoding object. args(1) is the
       target address. args(2) is the size of the allocation. *)
-  let can_alloc args =
-    apply_fun
+  let can_alloc ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_can_allocate" ~scope:Var.GlobalConst Types.Boolean))
@@ -125,8 +124,8 @@ module Calls = struct
 
   (** [init_encoding args] Returns if a memory encoding is initialized. args(0)
       is the memory encoding. *)
-  let init_encoding args =
-    apply_fun
+  let init_encoding ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_init_encoding" ~scope:Var.GlobalConst Types.Boolean))
@@ -135,8 +134,8 @@ module Calls = struct
   (** [valid_access args] Checks if an access is valid. args(0) is the memory
       encoding object. args(1) is the address being accessed. args(2) is the
       size of the access in bytes. *)
-  let valid_access args =
-    apply_fun
+  let valid_access ?attrib args =
+    apply_fun ?attrib
       ~func:
         (rvar
            (Var.create "$me_valid_access" ~scope:Var.GlobalConst Types.Boolean))

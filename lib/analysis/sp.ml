@@ -126,9 +126,9 @@ module Domain (S : FunctionAnnotation) = struct
 
   let transfer (p : t) (stmt : Program.stmt) : t =
     match stmt with
-    | Instr_Assign [] -> p
-    | Instr_Assign (a : (Var.t * BasilExpr.t) list) ->
-        tf_assigns p a |> simplify
+    | Instr_Assign { al = [] } -> p
+    | Instr_Assign { al : (Var.t * BasilExpr.t) list } ->
+        tf_assigns p al |> simplify
     | Instr_Assume { body; branch = false } -> conjunction [ p; simplify body ]
     | Instr_Assert { body } -> conjunction [ p; simplify body ]
     | Instr_Call { lhs; procid; args } ->

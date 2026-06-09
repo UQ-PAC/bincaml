@@ -246,6 +246,40 @@ output.
 
 More details are available in the {{:https://dune.readthedocs.io/en/stable/reference/cram.html}dune manual}.
 
+{3 Adding test case files }
+
+The example files live in a submodule under [examples/], this needs to be checked out
+with (if the repo was not cloned recursively).
+
+{v
+git submodule update --init --depth 1
+v}
+
+If you are developing with SSH git access, update the examples remote to make
+uploading examples easier
+
+{v
+cd examples && git remote set-url origin git@github.com:UQ-PAC/bincaml-test.git
+v}
+
+Once your examples are added they can be checked in and pushed to the submodule repository,
+and the reference in bincaml's repo updated to point to the new main.
+
+{v
+cd examples && git add . && git commit -m 'add example' && git push
+cd .. && git add examples && git commit -m 'update examples' && git push
+v}
+
+All the bincaml repository sees is a commit sha in the remote repository, so
+to fix any merge conflicts on the examples folder simply update the reference to
+the current main commit:
+
+{v
+cd examples && git pull && cd .. && git add examples && git commit -m 'update examples' && git push
+v}
+
+More information can be found at the {{:https://git-scm.com/book/en/v2/Git-Tools-Submodules} submodules documentation}.
+
 {1 Debugging}
 
 Ensure the opam switch is set up per the instructions in the readme: notably

@@ -2,6 +2,7 @@
  (public_name bincaml.ast)
  (name lang)
  (modules
+  abstract_expr
   attrib
   spec_modifies
   check
@@ -17,7 +18,6 @@
   procedure
   interp
   program)
- (flags -w -27) ; unused var
  (libraries
   zarith
   fix

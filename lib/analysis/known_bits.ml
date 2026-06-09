@@ -283,7 +283,7 @@ module Domain = struct
   let transfer_state read stmt =
     let stmt = Eval.stmt_eval_fwd read stmt in
     match stmt with
-    | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
+    | Lang.Stmt.Instr_Assign { al } -> List.to_iter al
     | Lang.Stmt.Instr_Assert _ -> Iter.empty
     | Lang.Stmt.Instr_Assume _ -> Iter.empty
     | Lang.Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
