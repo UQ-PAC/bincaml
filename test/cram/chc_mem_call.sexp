@@ -2,5 +2,3 @@
 (run-transforms "ssa")
 (run-transforms "chc-infer-invariants")
 (dump-il "chc_mem_call_out.il")
-(run-transforms "dynamic-single-assignment")
-(dump-boogie "chc_mem_call_out.bpl")
