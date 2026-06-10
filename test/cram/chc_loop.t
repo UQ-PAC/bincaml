@@ -6,8 +6,6 @@ inferred loop invariant is attached as an [assert] at the loop head.
   $ bincaml script chc_loop.sexp
   (load-il chc_loop.il)
   (run-transforms ssa)
-  (run-transforms load-store-reduction)
-  (run-transforms lambda-lifting)
   (run-transforms chc-infer-invariants)
   bincaml: [INFO] Submitting 8 predicates and 10 clauses to solver
   bincaml: [INFO] Solver returned sat; extracted 8 definitions

@@ -244,13 +244,11 @@ module PassManager = struct
       name = "chc-infer-invariants";
       apply = Prog Transforms.Chc_infer.infer_invariants;
       doc =
-        "Encode the program as a system of constrained Horn clauses, invoke \
-         Z3/Spacer, and annotate procedures with the inferred requires/ensures \
-         clauses when the solver returns sat. Expects that \
-         load-store-reduction is run beforehand. This pass works if the \
-         program is in SSA form; however, the program should *NOT* be \
-         converted to SSA form after the pass. Depends on Z3.";
-      invariants = Invariants.needs [ LambdaLift ];
+        "Encode the program as a system of constrained Horn clauses, invoke a \
+         CHC solver, and annotate procedures with the inferred invariants when \
+         the solver returns sat. Infers invariants for procedure pre- and \
+         post-conditions, and loops.";
+      invariants = Invariants.needs [ SSA ];
     }
 
   let chc_infer_invariants_per_query =
@@ -258,32 +256,13 @@ module PassManager = struct
       name = "chc-infer-invariants-per-query";
       apply = Prog Transforms.Chc_infer.infer_invariants_per_query;
       doc =
-        "Per-query variant of chc-infer-invariants: issues one Spacer call per \
-         query clause, sharing the same normal clauses, and conjoins the \
+        "Per-query variant of chc-infer-invariants: issues one CHC solver call \
+         per query clause, sharing the same normal clauses, and conjoins the \
          inferred invariants across successful calls. Useful when one or more \
          obligations are unprovable but invariants for the rest of the program \
          are still desired. Same prerequisites and dependencies as \
          chc-infer-invariants.";
-      invariants = Invariants.needs [ LambdaLift ];
-    }
-
-  let load_store_reduction =
-    {
-      name = "load-store-reduction";
-      apply =
-        Prog
-          (fun p ->
-            p
-            |> Transforms.Boogie_prepass.Instructions
-               .transform_add_store_load_decls
-            |> Transforms.Boogie_prepass.Normalise.replace_stmts
-            |> Transforms.Boogie_prepass.Normalise.replace_exprs);
-      doc =
-        "Eliminate Instr_Load/Instr_Store by introducing load/store functions \
-         and rewriting addressed memory accesses as assignments to function \
-         applications. Also inlines lets and normalises n-ary intrinsics so \
-         the resulting IR matches the reduced form expected by the CHC pass.";
-      invariants = Invariants.needs [];
+      invariants = Invariants.needs [ SSA ];
     }
 
   let type_check =
@@ -461,7 +440,6 @@ module PassManager = struct
       sssa;
       sva;
       full_ssa;
-      load_store_reduction;
       chc_infer_invariants;
       chc_infer_invariants_per_query;
       type_check;

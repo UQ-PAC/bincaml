@@ -548,9 +548,69 @@ let emit_chc_problem (oc : out_channel) (preds : predicate list)
   List.iter (fun c -> p (clause_to_sexp c)) clauses;
   p (list [ atom "check-sat" ])
 
+(** CHC problems admit no [define-fun]s; function bodies need to be inlined. *)
+let inline_function_defs (p : Program.t) : Program.t =
+  let open AbstractExpr in
+  let lambdas =
+    Program.declarations p
+    |> Iter.fold
+         (fun acc (_, decl) ->
+           match (decl : Program.declaration) with
+           | Program.Function { binding; definition = Function body; _ } -> (
+               match BasilExpr.unfix body with
+               | Lambda _ -> StringMap.add (Var.name binding) body acc
+               | _ -> acc)
+           | _ -> acc)
+         StringMap.empty
+  in
+  if StringMap.is_empty lambdas then p
+  else
+    let inline_expr e =
+      BasilExpr.cata
+        (fun node ->
+          match node with
+          | ApplyFun { func; args } -> (
+              match BasilExpr.unfix func with
+              | RVar { id; _ } -> (
+                  match StringMap.find_opt (Var.name id) lambdas with
+                  | Some lam -> (
+                      match BasilExpr.unfix lam with
+                      | Lambda { bound_vars; in_body; _ } ->
+                          let m =
+                            VarMap.of_list (List.combine bound_vars args)
+                          in
+                          BasilExpr.substitute
+                            (fun v -> VarMap.find_opt v m)
+                            in_body
+                      | _ -> BasilExpr.fix node)
+                  | None -> BasilExpr.fix node)
+              | _ -> BasilExpr.fix node)
+          | _ -> BasilExpr.fix node)
+        e
+    in
+    let rw ?visit:_ e = inline_expr e in
+    p
+    |> Cf_tx.simplify_prog_spec_exprs rw
+    |> Cf_tx.simplify_prog_exprs rw
+    |> Program.filter_decls (fun _ -> function
+      | Program.Function { binding; definition = Function _; _ } ->
+          not (StringMap.mem (Var.name binding) lambdas)
+      | _ -> true)
+
+(** Transform program to a simplified form that can be encoded directly as
+    constrained Horn clauses. *)
+let transform_internally (prog : Program.t) : Program.t * Ssa.program_lift_map =
+  let reduced =
+    prog |> Boogie_prepass.Instructions.transform_add_store_load_decls
+    |> Boogie_prepass.Normalise.replace_stmts |> inline_function_defs
+    |> Boogie_prepass.Normalise.replace_exprs
+  in
+  Ssa.set_params_with_map ~skip_observable:false ~skip_maps:false reduced
+
 let dump_to_file (prog : Program.t) (path : string) : unit =
   Logs.info (fun m -> m "Dumping CHC clauses to %s" path);
-  let preds, clauses = encode_program prog in
+  let prog_t, _lift = transform_internally prog in
+  let preds, clauses = encode_program prog_t in
   CCIO.with_out path (fun oc -> emit_chc_problem oc preds clauses)
 
 (** Preprocess a model body before decoding: expand [let] bindings and strip
@@ -616,6 +676,33 @@ let loop_heads (proc : Program.proc) : ID.t list =
       match h with `Header -> Some id | `Vert -> None)
   |> Iter.to_list
 
+(** Translate an invariant decoded over the lambda-lifted program back into the
+    original program's globals, using [lift].
+
+    A {!Ssa.Body_local} (the body-local that replaced a global) or
+    {!Ssa.Out_param} (a modified global's exit value) becomes the global's
+    current value [g]. An {!Ssa.In_param} carries the global's procedure-entry
+    value: in a [requires] (evaluated at entry) it is simply [g]; in an
+    [ensures] or a loop-head assertion it is [old(g)]. Variables absent from
+    [lift] — the procedure's real parameters and ordinary locals — are left
+    unchanged. When [lift] is empty (e.g. the program was already lifted before
+    the pass, or nothing was captured) this is the identity. *)
+let back_translate ~(mode : [ `Requires | `Ensures | `Loop ])
+    (lift : Ssa.proc_lift_map) (e : BasilExpr.t) : BasilExpr.t =
+  if VarMap.is_empty lift then e
+  else
+    BasilExpr.substitute
+      (fun v ->
+        match VarMap.find_opt v lift with
+        | Some ((Ssa.Body_local | Ssa.Out_param), g) -> Some (BasilExpr.rvar g)
+        | Some (Ssa.In_param, g) -> (
+            match mode with
+            | `Requires -> Some (BasilExpr.rvar g)
+            | `Ensures | `Loop ->
+                Some (BasilExpr.unexp ~op:`Old (BasilExpr.rvar g)))
+        | None -> None)
+      e
+
 (** Add [requires]/[ensures] to [proc] based on the solver's interpretations of
     its [enter]/[exit] predicates, and prepend [Instr_Assert] at each loop head
     with that block predicate's inferred invariant. [invs] maps each predicate
@@ -631,7 +718,8 @@ let loop_heads (proc : Program.proc) : ID.t list =
     it prefers. Attaching them would duplicate the spec. Loop-head invariants
     are still attached either way. *)
 let annotate_proc ~(use_spec : Program.proc -> bool)
-    ~(invs : BasilExpr.t StringMap.t) (proc : Program.proc) : Program.proc =
+    ~(invs : BasilExpr.t StringMap.t) ~(lift : Ssa.proc_lift_map)
+    (proc : Program.proc) : Program.proc =
   let live = Livevars.run proc in
   let preds = proc_predicates ~live proc in
   let invariant_of (pred : predicate) : BasilExpr.t option =
@@ -645,12 +733,22 @@ let annotate_proc ~(use_spec : Program.proc -> bool)
       let spec = Procedure.specification proc in
       let spec =
         match invariant_of preds.enter with
-        | Some inv -> { spec with requires = spec.requires @ [ inv ] }
+        | Some inv ->
+            {
+              spec with
+              requires =
+                spec.requires @ [ back_translate ~mode:`Requires lift inv ];
+            }
         | None -> spec
       in
       let spec =
         match invariant_of preds.exit with
-        | Some inv -> { spec with ensures = spec.ensures @ [ inv ] }
+        | Some inv ->
+            {
+              spec with
+              ensures =
+                spec.ensures @ [ back_translate ~mode:`Ensures lift inv ];
+            }
         | None -> spec
       in
       Procedure.set_specification proc spec
@@ -664,6 +762,7 @@ let annotate_proc ~(use_spec : Program.proc -> bool)
          let head_pred = IDMap.find head_id preds.block_preds in
          match invariant_of head_pred with
          | Some inv ->
+             let inv = back_translate ~mode:`Loop lift inv in
              let block =
                Procedure.get_block proc head_id
                |> Option.get_exn_or "chc_infer: missing loop head block"
@@ -676,17 +775,25 @@ let annotate_proc ~(use_spec : Program.proc -> bool)
          | None -> proc)
        proc
 
-(** Apply per-predicate inferred invariants across every procedure in [prog]. *)
+(** Apply per-predicate inferred invariants across every procedure in [prog],
+    back-translating each through the per-procedure lambda-lifting map in [lift]
+    (empty map ⇒ identity, for procedures that lifted nothing). *)
 let annotate_program ~(use_spec : Program.proc -> bool)
-    ~(invs : BasilExpr.t StringMap.t) (prog : Program.t) : Program.t =
-  Program.map_procedures (fun _ p -> annotate_proc ~use_spec ~invs p) prog
+    ~(invs : BasilExpr.t StringMap.t) ~(lift : Ssa.program_lift_map)
+    (prog : Program.t) : Program.t =
+  Program.map_procedures
+    (fun id p ->
+      let lift = IDMap.get_or ~default:VarMap.empty id lift in
+      annotate_proc ~use_spec ~invs ~lift p)
+    prog
 
 (** Full pass: encode the program as CHCs, solve, and annotate each procedure
     with inferred [requires]/[ensures] when the solver returns sat. On unsat or
     unknown the program is returned unchanged. *)
 let infer_invariants (prog : Program.t) : Program.t =
   let use_spec = default_use_spec in
-  let preds, clauses = encode_program ~use_spec prog in
+  let prog_t, lift = transform_internally prog in
+  let preds, clauses = encode_program ~use_spec prog_t in
   Logs.info (fun m ->
       m "Submitting %d predicates and %d clauses to solver" (List.length preds)
         (List.length clauses));
@@ -695,7 +802,7 @@ let infer_invariants (prog : Program.t) : Program.t =
       Logs.info (fun m ->
           m "Solver returned sat; extracted %d definitions" (List.length defs));
       let invs = decode_model preds defs in
-      annotate_program ~use_spec ~invs prog
+      annotate_program ~use_spec ~invs ~lift prog
   | Unsat, _ ->
       Logs.warn (fun m -> m "Solver returned unsat — no invariants extracted");
       prog
@@ -708,7 +815,8 @@ let infer_invariants (prog : Program.t) : Program.t =
     single-call version. *)
 let infer_invariants_per_query (prog : Program.t) : Program.t =
   let use_spec = default_use_spec in
-  let preds, clauses = encode_program ~use_spec prog in
+  let prog_t, lift = transform_internally prog in
+  let preds, clauses = encode_program ~use_spec prog_t in
   let normal, queries =
     List.partition (fun c -> Option.is_some c.head) clauses
   in
@@ -756,4 +864,4 @@ let infer_invariants_per_query (prog : Program.t) : Program.t =
          predicates"
         !successes n_queries
         (StringMap.cardinal conjoined));
-  annotate_program ~use_spec ~invs:conjoined prog
+  annotate_program ~use_spec ~invs:conjoined ~lift prog

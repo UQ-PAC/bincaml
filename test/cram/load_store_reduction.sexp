@@ -1,5 +1,0 @@
-(load-il "load_store_reduction.il")
-(run-transforms "ssa")
-(run-transforms "load-store-reduction")
-(run-transforms "lambda-lifting")
-(dump-il "load_store_reduction_out.il")

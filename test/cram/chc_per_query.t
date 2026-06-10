@@ -9,8 +9,6 @@ only produces a warning.
   $ bincaml script chc_per_query.sexp
   (load-il chc_per_query.il)
   (run-transforms ssa)
-  (run-transforms load-store-reduction)
-  (run-transforms lambda-lifting)
   (run-transforms chc-infer-invariants-per-query)
   bincaml: [INFO] Per-query mode: 8 predicates, 9 normal clauses, 2 queries
   bincaml: [INFO] Query 1/2: sat (8 definitions, 4 non-trivial)

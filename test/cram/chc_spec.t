@@ -6,8 +6,6 @@ helper's [enter]/[exit] predicates) at the call site in [main].
   $ bincaml script chc_spec.sexp
   (load-il chc_spec.il)
   (run-transforms ssa)
-  (run-transforms load-store-reduction)
-  (run-transforms lambda-lifting)
   (run-transforms chc-infer-invariants)
   bincaml: [INFO] Submitting 6 predicates and 9 clauses to solver
   bincaml: [INFO] Solver returned sat; extracted 6 definitions

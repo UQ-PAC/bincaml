@@ -8,8 +8,6 @@ call.
   $ bincaml script chc_call.sexp
   (load-il chc_call.il)
   (run-transforms ssa)
-  (run-transforms load-store-reduction)
-  (run-transforms lambda-lifting)
   (run-transforms chc-infer-invariants)
   bincaml: [INFO] Submitting 6 predicates and 7 clauses to solver
   bincaml: [INFO] Solver returned sat; extracted 6 definitions
