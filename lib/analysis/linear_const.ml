@@ -69,12 +69,14 @@ module LF = struct
     assert (canonical f);
     match f with IdEdge -> true | _ -> false
 
-  (* Definitions from https://doi.org/10.1016/0304-3975(96)00072-2 computing inverses mod 2^n *)
+  (** Definitions from {:https://doi.org/10.1016/0304-3975(96)00072-2} computing
+      inverses [mod 2^n].
 
+      This computes the join of [ax + b] and [cx + d]. According to the paper we
+      can compute this as [(ax + b) join (a * l + b)], where [l = (b-d)/(c-a)], and
+      we can compute this only when [c-a] has an inverse [mod 2^n], i.e. only
+      when [c-a] is odd (as hence it is coprime to 2^n). *)
   let compute_join a b c d =
-    (* This computes the join of ax + b and cx + d
-       According to the paper we can compute this as ax + b join a * l + b, where l = (b-d)/(c-a),
-       and we can compute this only when c-a has an inverse mod 2^n, i.e. only when c-a is odd (as hence it is coprime to 2^n) *)
     let bd = Bitvec.value (Bitvec.sub b d) in
     let ca = Bitvec.value (Bitvec.sub c a) in
     let pow = Z.pow (Z.of_int 2) (Bitvec.size a) in
