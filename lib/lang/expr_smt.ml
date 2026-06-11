@@ -221,10 +221,31 @@ module SMTLib2 = struct
         let* e = expr_of_smt vardefs e in
         Some (BasilExpr.ifthenelse c t e)*)
     | `List [ `Atom (("forall" | "exists") as q); `List binders; body ] ->
+        (* Give each binder a fresh variable rather than reusing the name the
+           solver chose. This accounts for names that are not valid identifiers
+           (e.g., include [!]) and names that clash with existing variables. *)
+        let used =
+          ref
+            (StringMap.fold
+               (fun _ e acc ->
+                 BasilExpr.free_vars_iter e
+                 |> Iter.fold (fun acc v -> StringSet.add (Var.name v) acc) acc)
+               vardefs StringSet.empty)
+        in
+        let fresh_var typ =
+          let rec go i =
+            let n = Printf.sprintf "x_%d" i in
+            if StringSet.mem n !used then go (i + 1)
+            else (
+              used := StringSet.add n !used;
+              Var.create n typ)
+          in
+          go 0
+        in
         let decode_bind = function
           | `List [ `Atom name; sort_sexp ] ->
               let* typ = typ_of_smt sort_sexp in
-              Some (Var.create name typ, name)
+              Some (fresh_var typ, name)
           | _ -> None
         in
         let* bound_pairs = T.map_m decode_bind binders in
