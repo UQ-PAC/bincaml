@@ -1007,7 +1007,6 @@ end = struct
       cells will be merged. *)
   let cell_of ?(uniq = false) (v : Sva.SymAddrSetLattice.t) (g : t) :
       cell option =
-    Printf.printf "%s\n%!" (Sva.SVAAbstractionBasil.show v);
     let v = snd @@ Sva.SymAddrSetLattice.to_list v in
     let open Option.Infix in
     let cells =
@@ -1022,6 +1021,7 @@ end = struct
     | [ x ] -> Some x
     | x :: xs when not uniq ->
         List.iter (join x) xs;
+        (* TODO should this unify_pointees? *)
         Some x
     | x :: xs when List.for_all (CCEqual.physical (find x) % find) xs -> Some x
     | x :: xs -> failwith "Non unique cell given"
@@ -1092,11 +1092,10 @@ end = struct
     new_n
 end
 
-(** Construct the local-phase graph of the given procedure. The local phase will
-    ensure that any expression that can be used as a pointer points to at most
-    one cell. Such expressions are precisely the expressions in memory indexing
-    operations in load/store statements, formal in and out parameters, argument
-    expressions of calls and registers returned by calls. *)
+(** Construct the local-phase graph of the given procedure. It will be ensured
+    that all loaded/stored addresses, and all formal in/out params are unified,
+    however actual params of calls will not be unified for precision and should
+    be unified at use in the BU/TD phases. *)
 let make_local_graph proc sva
     (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t) : DSGraph.t =
   let g = DSGraph.empty_graph () in
@@ -1140,23 +1139,11 @@ let make_local_graph proc sva
       let v = Sva.StateAbstraction.read v sva in
       DSGraph.merge_vs v g);
 
-  (* Join actual params of calls *)
-  Iter.iter
-    (fun constr ->
-      match constr with
-      | Constraint.Call { lhs; args } ->
-          lhs @ args |> List.iter (fun (a, _) -> DSGraph.merge_vs a g)
-      | _ -> ())
-    constraints;
-
   (* Unify all pointees (i hope a worklist can be avoided) *)
   Vector.iter DSGraph.unify_pointees cells;
 
-  (* Checks *)
   List.iter (fun n -> DSGraph.check_valid_node n) (DSGraph.nodes g);
-  List.iter
-    (List.iter (fun c -> assert (DSGraph.unique_pointee c)) % DSGraph.cells)
-    (DSGraph.nodes g);
+  DSGraph.check_unique_pointee g;
 
   g
 
@@ -1181,19 +1168,23 @@ let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
     (let open Option.Infix in
      let open DSGraph in
      let* callee_cell = cell_of ~uniq:true formal callee_graph in
-     let callee_node = node_of callee_cell in
-     check_unique_pointee caller_graph;
-     let callee_node_copy =
-       copy_node ~clear_stack:true
-         ~sbs:(Sva.SymAddrSetLattice.to_list actual |> snd |> List.map fst)
-         ~old_to_new caller_graph callee_node
-     in
-     check_unique_pointee caller_graph;
-     let* callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
      (* Only do the joining if a caller cell actually exists *)
      let* caller_cell = cell_of actual caller_graph in
+     unify_pointees caller_cell;
+     let callee_node = node_of callee_cell in
+     check_unique_pointee caller_graph;
+     (* The node gets copied even if the caller cell doesn't exist... *)
+     let callee_node_copy =
+       copy_node
+         ~clear_stack:true
+           (* This would merge stuff?!? hmmmmmmmmmmmmmm what to do... TODO *)
+           (*~sbs:(Sva.SymAddrSetLattice.to_list actual |> snd |> List.map fst)*)
+         ~old_to_new caller_graph callee_node
+     in
+     let* callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
+     unify_pointees callee_cell_copy;
+     check_unique_pointee caller_graph;
      join caller_cell callee_cell_copy;
-     merge_vs actual caller_graph;
      unify_pointees caller_cell;
      check_unique_pointee caller_graph;
      None)
@@ -1254,7 +1245,6 @@ let bottom_up prog nodess =
             function
             | Call { lhs; args; callee_id } ->
                 let old_to_new = Hashtbl.create 100 in
-                print_endline @@ ID.show pid;
                 let _, callee_sva, callee_nodes = IDMap.find callee_id nodess in
                 List.iter
                   (fun (a, f) ->
