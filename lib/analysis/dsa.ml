@@ -554,8 +554,7 @@ module DSGraph : sig
   val join_nodes_at : Z.t -> node -> node -> unit
 
   (* Should be public *)
-  val empty_graph : Sva.StateAbstraction.t -> t
-  val make_graph : node list -> node SBMap.t -> Sva.StateAbstraction.t -> t
+  val empty_graph : unit -> t
   val nodes : t -> node list
   val node_map : t -> node SBMap.t
   val empty_node : unit -> node
@@ -564,10 +563,12 @@ module DSGraph : sig
   val unify_pointees : cell -> unit
   val check_valid_node : node -> unit
   val new_add_cell : t -> ?sb:SBMap.key option -> Interval.t -> int -> cell
+  val merge_vs : Sva.SymAddrSetLattice.t -> t -> unit
 
   (* idk if should be public *)
   val insert : node -> cell -> unit
   val unique_pointee : cell -> bool
+  val check_unique_pointee : t -> unit
   val is_sorted : node -> bool
   val valid_cell_nodes : node -> bool
   val cells : node -> cell list
@@ -576,7 +577,7 @@ module DSGraph : sig
   val flags : node -> NodeFlags.t
   val pointees : cell -> cell list
   val add_pointees : cell list -> cell -> unit
-  val get_cell : ?uniq:bool -> Interval.t -> node -> cell
+  val get_cell : ?uniq:bool -> Interval.t -> node -> cell option
   val cell_of : ?uniq:bool -> Sva.SymAddrSetLattice.t -> t -> cell option
 
   (* This type signature is so ugly... *)
@@ -614,14 +615,9 @@ end = struct
 
   and node = node_content ref
 
-  type t = {
-    mutable nodes : node list;
-    mutable node_map : node SBMap.t;
-    sva : Sva.StateAbstraction.t;
-  }
+  type t = { mutable nodes : node list; mutable node_map : node SBMap.t }
 
-  let empty_graph sva = { nodes = []; node_map = SBMap.empty; sva }
-  let make_graph nodes node_map sva = { nodes; node_map; sva }
+  let empty_graph () = { nodes = []; node_map = SBMap.empty }
   let nodes (g : t) = g.nodes
   let node_map (g : t) = g.node_map
   let id_gen = ID.make_gen ()
@@ -711,12 +707,6 @@ end = struct
     | NodePath _ -> set_cells cells (fst @@ find_node n)
     | Node r -> r.cells <- cells
 
-  (** Set the flags of this node *)
-  let rec set_flags flags (n : node) =
-    match !n with
-    | NodePath _ -> set_flags flags (fst @@ find_node n)
-    | Node r -> r.flags <- flags
-
   (** Join the flags of this node with the new flags *)
   let rec join_flags flags (n : node) =
     match !n with
@@ -753,6 +743,11 @@ end = struct
 
   let unique_pointee cell =
     match pointees cell with [] | [ _ ] -> true | _ -> false
+
+  let check_unique_pointee g =
+    List.iter
+      (fun n -> List.iter (fun c -> assert (unique_pointee c)) @@ cells n)
+      (nodes g)
 
   (** Collapse all cells in the node into a single cell (its interval being Top)
   *)
@@ -972,8 +967,8 @@ end = struct
 
   (** Find a cell corresponding to an interval in a node. If the interval
       overlaps with multiple cells, they are merged, and if it overlaps with no
-      cells a new cell is created. *)
-  let rec get_cell ?(uniq = false) i (n : node) =
+      cells None is returned. *)
+  let rec get_cell ?(uniq = false) i (n : node) : cell option =
     match !n with
     | NodePath _ ->
         let p, off = find_node n in
@@ -987,21 +982,24 @@ end = struct
         in
         let cells = aux r.cells in
         match cells with
-        | [] ->
-            (* TODO this is suboptimal and traverses the node list twice *)
-            let cell = ref (Cell { offsets = i; node = n; pointees = [] }) in
-            insert n cell;
-            cell
-        | [ c ] -> c
+        | [] -> None
+        | [ c ] -> Some c
         | c :: cs when uniq -> failwith "TODO"
         | c :: cs ->
-            ignore
-            @@ List.fold_left
-                 (fun c c' ->
-                   join c c';
-                   c)
-                 c cs;
-            c)
+            List.iter (join c) cs;
+            Some c)
+
+  (** Merge all of the cells in a graph corresponding to an SVA term *)
+  let merge_vs (v : Sva.SymAddrSetLattice.t) (g : t) : unit =
+    let v = snd @@ Sva.SymAddrSetLattice.to_list v in
+    let cells =
+      List.filter_map
+        (fun (sb, i) ->
+          let i = Interval.of_wint i in
+          SBMap.get sb g.node_map |> Option.flat_map (fun n -> get_cell i n))
+        v
+    in
+    match cells with [] -> () | x :: xs -> List.iter (join x) xs
 
   (** Get the/a cell corresponding to the given expression, following the logic
       of `get_cell` applied to the results of the SVA analysis. If uniq, then it
@@ -1009,15 +1007,15 @@ end = struct
       cells will be merged. *)
   let cell_of ?(uniq = false) (v : Sva.SymAddrSetLattice.t) (g : t) :
       cell option =
+    Printf.printf "%s\n%!" (Sva.SVAAbstractionBasil.show v);
     let v = snd @@ Sva.SymAddrSetLattice.to_list v in
-    (*if uniq then assert (List.length v <= 1);*)
     let open Option.Infix in
     let cells =
       List.filter_map
         (fun (sb, i) ->
           let i = Interval.of_wint i in
           let* n = SBMap.get sb g.node_map in
-          Some (get_cell ~uniq i n))
+          get_cell ~uniq i n)
         v
     in
     match cells with
@@ -1070,7 +1068,7 @@ end = struct
       |> List.iter (fun (old_c, new_c) ->
           let pointees =
             pointees old_c
-            |> List.map (fun old_c' ->
+            |> List.filter_map (fun old_c' ->
                 let new_pointee_node = create_new_node @@ node_of old_c' in
                 get_cell (offsets old_c') new_pointee_node)
           in
@@ -1101,7 +1099,7 @@ end
     expressions of calls and registers returned by calls. *)
 let make_local_graph proc sva
     (constraints : Sva.SymAddrSetLattice.t Constraint.t Iter.t) : DSGraph.t =
-  let g = DSGraph.empty_graph sva in
+  let g = DSGraph.empty_graph () in
   let cells = Vector.create () in
   (* Add cells to the graph based on sva results *)
   let add_cells size sv =
@@ -1134,12 +1132,22 @@ let make_local_graph proc sva
       | Constraint.Call { lhs; args } -> ())
     constraints;
 
-  (* Join return values *)
-  Procedure.formal_out_params proc
-  |> StringMap.iter (fun _ v ->
+  (* Join formal in/out params *)
+  Procedure.formal_in_params proc
+  |> StringMap.values
+  |> Iter.append (Procedure.formal_out_params proc |> StringMap.values)
+  |> Iter.iter (fun v ->
       let v = Sva.StateAbstraction.read v sva in
-      (* TODO this works but feels illegal *)
-      ignore @@ DSGraph.cell_of v g);
+      DSGraph.merge_vs v g);
+
+  (* Join actual params of calls *)
+  Iter.iter
+    (fun constr ->
+      match constr with
+      | Constraint.Call { lhs; args } ->
+          lhs @ args |> List.iter (fun (a, _) -> DSGraph.merge_vs a g)
+      | _ -> ())
+    constraints;
 
   (* Unify all pointees (i hope a worklist can be avoided) *)
   Vector.iter DSGraph.unify_pointees cells;
@@ -1174,35 +1182,24 @@ let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
      let open DSGraph in
      let* callee_cell = cell_of ~uniq:true formal callee_graph in
      let callee_node = node_of callee_cell in
-     List.iter
-       (fun n ->
-         List.iter (fun c -> assert (DSGraph.unique_pointee c))
-         @@ DSGraph.cells n)
-       (DSGraph.nodes caller_graph);
+     check_unique_pointee caller_graph;
      let callee_node_copy =
        copy_node ~clear_stack:true
          ~sbs:(Sva.SymAddrSetLattice.to_list actual |> snd |> List.map fst)
          ~old_to_new caller_graph callee_node
      in
-     List.iter
-       (fun n ->
-         List.iter (fun c -> assert (DSGraph.unique_pointee c))
-         @@ DSGraph.cells n)
-       (DSGraph.nodes caller_graph);
-     let callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
+     check_unique_pointee caller_graph;
+     let* callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
      (* Only do the joining if a caller cell actually exists *)
      let* caller_cell = cell_of actual caller_graph in
      join caller_cell callee_cell_copy;
+     merge_vs actual caller_graph;
      unify_pointees caller_cell;
-     List.iter
-       (fun n ->
-         List.iter (fun c -> assert (DSGraph.unique_pointee c))
-         @@ DSGraph.cells n)
-       (DSGraph.nodes caller_graph);
+     check_unique_pointee caller_graph;
      None)
 
 let bottom_up prog nodess =
-  (* Perform an inlined tarjan's algorithm that dynamically grows the call graph when resolving indirect calls (later) *)
+  (* Perform an inlined tarjan's algorithm that dynamically grows the call graph when resolving indirect calls (TODO) *)
   let stack = Stack.create () in
   let entry = Program.entry_proc_exn prog in
   let cur_id = ref 0 in
@@ -1257,6 +1254,7 @@ let bottom_up prog nodess =
             function
             | Call { lhs; args; callee_id } ->
                 let old_to_new = Hashtbl.create 100 in
+                print_endline @@ ID.show pid;
                 let _, callee_sva, callee_nodes = IDMap.find callee_id nodess in
                 List.iter
                   (fun (a, f) ->
@@ -1398,9 +1396,8 @@ let dsa (p : Program.t) =
     |> IDMap.of_list
   in
   print_endline "local phase done";
-  (*
   ( Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
-    bottom_up p local_graphs );*)
+    bottom_up p local_graphs );
   List.iter
     (fun (id, graph) ->
       print_endline @@ ID.show id;

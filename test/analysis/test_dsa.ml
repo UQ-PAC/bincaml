@@ -46,10 +46,9 @@ open struct
   end
 
   (* TODO
-     - DONE Method to refer to old cells in formal model ? So we can test performing operations on Path cells/nodes
-     - Comparison data structure obtainable from either handle (intervals become relative / based at 0 maybe)
-     - DONEish? Figure out a way to represent copies/multiple graphs
-     - Test symbase stuff *)
+     - Test symbase stuff
+     - Test get_cell
+     - Test joining means get_cell returns a unique cell *)
 
   (** Stores state for comparing with the formal model *)
   module DSGraphHandle = struct
@@ -59,14 +58,7 @@ open struct
     let empty () = ref []
 
     let add_graph (l : t) =
-      l :=
-        List.append !l
-          [
-            {
-              g = DSGraph.empty_graph Analysis.Sva.StateAbstraction.bottom;
-              cells = [];
-            };
-          ]
+      l := List.append !l [ { g = DSGraph.empty_graph (); cells = [] } ]
 
     let make_cell (l : t) n i =
       let g = List.nth !l n in
@@ -105,12 +97,11 @@ open struct
       let old_to_new = Hashtbl.create 100 in
       let cs' =
         cs
-        |> List.map (fun c ->
+        |> List.filter_map (fun c ->
             let c = List.nth f.cells c in
             let n = DSGraph.node_of c in
             let n' = DSGraph.copy_node ~old_to_new t.g n in
-            let ret = DSGraph.get_cell (DSGraph.offsets c) n' in
-            ret)
+            DSGraph.get_cell (DSGraph.offsets c) n')
       in
       t.cells <- cs' @ t.cells
   end
@@ -518,6 +509,7 @@ end
 
 let tests =
   [
-    ("blah", [ Alcotest.test_case "blah" `Quick DSGraphSpec.dsa_specific_stm ]);
+    ( "specific",
+      [ Alcotest.test_case "specific" `Quick DSGraphSpec.dsa_specific_stm ] );
     ("dsa_invariants", DSGraphTests._tests);
   ]

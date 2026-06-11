@@ -459,12 +459,6 @@ module PassManager = struct
         invariants = Invariants.needs ~invalidates:[ SSA ] [];
       };
       {
-        name = "linear-copy-dots";
-        apply = Prog Analysis.Linear_const.test_transform;
-        doc = "";
-        invariants = Invariants.needs ~invalidates:[ SSA ] [];
-      };
-      {
         name = "data-structure-analysis";
         apply = Prog Analysis.Dsa.dsa;
         doc = "";
