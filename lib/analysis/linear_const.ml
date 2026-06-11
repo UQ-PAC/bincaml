@@ -73,9 +73,9 @@ module LF = struct
       inverses [mod 2^n].
 
       This computes the join of [ax + b] and [cx + d]. According to the paper we
-      can compute this as [(ax + b) join (a * l + b)], where [l = (b-d)/(c-a)], and
-      we can compute this only when [c-a] has an inverse [mod 2^n], i.e. only
-      when [c-a] is odd (as hence it is coprime to 2^n). *)
+      can compute this as [(ax + b) join (a * l + b)], where [l = (b-d)/(c-a)],
+      and we can compute this only when [c-a] has an inverse [mod 2^n], i.e.
+      only when [c-a] is odd (as hence it is coprime to 2^n). *)
   let compute_join a b c d =
     let bd = Bitvec.value (Bitvec.sub b d) in
     let ca = Bitvec.value (Bitvec.sub c a) in
