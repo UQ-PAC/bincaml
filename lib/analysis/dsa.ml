@@ -1072,8 +1072,7 @@ end = struct
                 let new_pointee_node = create_new_node @@ node_of old_c' in
                 get_cell (offsets old_c') new_pointee_node)
           in
-          set_pointees pointees new_c
-          (*unify_pointees new_c*))
+          set_pointees pointees new_c)
     done;
     List.iter (fun n -> check_valid_node n) graph.nodes;
     List.iter
@@ -1083,8 +1082,10 @@ end = struct
         | Some n' ->
             check_valid_node n';
             check_valid_node new_n;
+            (* This is probably really wrong............................ and probably should never be hit since we're copying nodes from other procedures, with different symbases ?! *)
             join_nodes_at Z.zero n' new_n;
-            List.iter unify_pointees (cells n')
+            List.iter unify_pointees (cells n');
+            failwith "asdgslkjghsglkhgdlkjshg"
         | None ->
             check_valid_node new_n;
             graph.node_map <- SBMap.add sb new_n graph.node_map)
@@ -1162,8 +1163,20 @@ let call_sites p =
     | Stmt.Instr_Call { lhs; args; procid } -> Some (lhs, args, procid)
     | _ -> None)
 
-let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
-    actual formal =
+let resolve_arguments graph actual formal =
+  ignore
+    (let open Option.Infix in
+     let open DSGraph in
+     let* formal_cell = cell_of ~uniq:true formal graph in
+     check_unique_pointee graph;
+     let* actual_cell = cell_of actual graph in
+     check_unique_pointee graph;
+     join actual_cell formal_cell;
+     unify_pointees actual_cell;
+     check_unique_pointee graph;
+     None)
+
+let resolve_callee old_to_new caller_graph callee_graph actual formal =
   ignore
     (let open Option.Infix in
      let open DSGraph in
@@ -1182,6 +1195,7 @@ let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
          ~old_to_new caller_graph callee_node
      in
      let* callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
+     (* TODO clean this up by calling resolve_arguments or something *)
      unify_pointees callee_cell_copy;
      check_unique_pointee caller_graph;
      join caller_cell callee_cell_copy;
@@ -1189,8 +1203,9 @@ let resolve_callee old_to_new caller_sva caller_graph callee_sva callee_graph
      check_unique_pointee caller_graph;
      None)
 
-let bottom_up prog nodess =
+let bottom_up prog graphs =
   (* Perform an inlined tarjan's algorithm that dynamically grows the call graph when resolving indirect calls (TODO) *)
+  let graphs = ref graphs in
   let stack = Stack.create () in
   let entry = Program.entry_proc_exn prog in
   let cur_id = ref 0 in
@@ -1226,54 +1241,87 @@ let bottom_up prog nodess =
       IDSet.iter (fun id -> Hashtbl.add ids id Int.max_int) !scc;
       process_scc !scc)
   and process_scc scc =
+    assert (not @@ IDSet.is_empty scc);
     (* TODO:
-       1. Merge callees for each out-of-scc call
+       1. DONE Merge callees for each out-of-scc call
        2. Merge all graphs in the scc into one
-       3. Merge callees within the scc
-
-       1:
-          a) get sva results for both procedures
-          b) for each formal in/out, copy its callee node, then merge it with the actual in/out *)
+       3. Merge callees within the scc *)
+    (* Resolve all out-of-scc calls *)
     IDSet.iter
       (fun pid ->
-        let constraints, sva, (nodes : DSGraph.t) = IDMap.find pid nodess in
+        let constraints, (graph : DSGraph.t) = IDMap.find pid !graphs in
         SBMap.iter
           (fun s n -> DSGraph.check_valid_node n)
-          (DSGraph.node_map nodes);
+          (DSGraph.node_map graph);
         Iter.iter
           Constraint.(
             function
-            | Call { lhs; args; callee_id } ->
+            | Call { lhs; args; callee_id } when not @@ IDSet.mem callee_id scc
+              ->
                 let old_to_new = Hashtbl.create 100 in
-                let _, callee_sva, callee_nodes = IDMap.find callee_id nodess in
-                List.iter
-                  (fun (a, f) ->
-                    resolve_callee old_to_new sva nodes callee_sva callee_nodes
-                      a f)
-                  args;
-                List.iter
-                  (fun (a, f) ->
-                    resolve_callee old_to_new sva nodes callee_sva callee_nodes
-                      a f)
-                  lhs
+                let _, callee_graph = IDMap.find callee_id !graphs in
+                args @ lhs
+                |> List.iter (fun (a, f) ->
+                    resolve_callee old_to_new graph callee_graph a f)
             | _ -> ())
           constraints)
       scc;
+    (* Combine all graphs in this scc into one *)
+    let scc_graph =
+      match IDSet.to_list scc with
+      | [] -> failwith "assert catches this"
+      | id :: idss ->
+          let _, g = IDMap.find id !graphs in
+          idss
+          |> List.iter (fun id' ->
+              let constrs, g' = IDMap.find id !graphs in
+              let old_to_new = Hashtbl.create 100 in
+              (* Copy g' into g *)
+              DSGraph.node_map g'
+              |> SBMap.iter (fun sb n ->
+                  ignore @@ DSGraph.copy_node g ~sbs:[ sb ] ~old_to_new n);
+              (* we need to copy nodes that are not assigned a symbolic base as
+                 well, ones that are already copied are skipped by the memo
+                 table. *)
+              DSGraph.nodes g'
+              |> List.iter (fun n ->
+                  ignore @@ DSGraph.copy_node g ~old_to_new n);
+              (* Finally replace this procedure's graph with the new one (yay for mutability) *)
+              graphs := IDMap.add id' (constrs, g) !graphs);
+          g
+    in
+    (* Resolve all in-scc calls *)
+    IDSet.iter
+      (fun pid ->
+        let constraints, (graph : DSGraph.t) = IDMap.find pid !graphs in
+        SBMap.iter
+          (fun s n -> DSGraph.check_valid_node n)
+          (DSGraph.node_map graph);
+        Iter.iter
+          Constraint.(
+            function
+            | Call { lhs; args; callee_id } when IDSet.mem callee_id scc ->
+                args @ lhs
+                |> List.iter (fun (a, f) -> resolve_arguments scc_graph a f)
+            | _ -> ())
+          constraints)
+      scc;
+    (* TODO Indirect call stuff *)
     ()
   in
 
   visit entry;
 
   IDMap.iter
-    (fun _ (_, _, (g : DSGraph.t)) ->
+    (fun _ (_, (g : DSGraph.t)) ->
       List.iter
         (fun n ->
           List.iter (fun c -> assert (DSGraph.unique_pointee c))
           @@ DSGraph.cells n)
         (DSGraph.nodes g))
-    nodess;
+    !graphs;
 
-  ()
+  !graphs
 
 (** Manual dot string construction because I couldn't see a way to do record
     nodes in ocamlgraph *)
@@ -1370,7 +1418,7 @@ let dsa (p : Program.t) =
   let local_graphs =
     Trace_core.with_span ~__FILE__ ~__LINE__ "local phase" @@ fun _ ->
     IDMap.to_list sva_r
-    |> List.map (fun (pid, r) ->
+    |> List.map (fun (pid, sva) ->
         print_endline @@ ID.show pid;
         let proc = Program.proc p pid in
         let constraints =
@@ -1382,17 +1430,19 @@ let dsa (p : Program.t) =
         ^ Iter.to_string
             (Constraint.show Sva.SymAddrSetLattice.show)
             constraints;
-        (pid, (constraints, r, make_local_graph proc r constraints)))
+        (pid, (constraints, make_local_graph proc sva constraints)))
     |> IDMap.of_list
   in
   print_endline "local phase done";
-  ( Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
-    bottom_up p local_graphs );
+  let bu_graphs =
+    Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
+    bottom_up p local_graphs
+  in
   List.iter
     (fun (id, graph) ->
       print_endline @@ ID.show id;
       print_endline @@ dot_string graph)
     (List.map
-       (fun (pid, (_, _, (graph : DSGraph.t))) -> (pid, graph))
-       (IDMap.to_list local_graphs));
+       (fun (pid, (_, (graph : DSGraph.t))) -> (pid, graph))
+       (IDMap.to_list bu_graphs));
   p
