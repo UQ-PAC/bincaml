@@ -787,6 +787,10 @@ let annotate_program ~(use_spec : Program.proc -> bool)
       annotate_proc ~use_spec ~invs ~lift p)
     prog
 
+(** Default solver timeout in milliseconds. This will be replaced by a
+    user-supplied argument in the future. *)
+let solver_timeout = 30_000
+
 (** Full pass: encode the program as CHCs, solve, and annotate each procedure
     with inferred [requires]/[ensures] when the solver returns sat. On unsat or
     unknown the program is returned unchanged. *)
@@ -797,7 +801,7 @@ let infer_invariants (prog : Program.t) : Program.t =
   Logs.info (fun m ->
       m "Submitting %d predicates and %d clauses to solver" (List.length preds)
         (List.length clauses));
-  match solve_and_get_model preds clauses with
+  match solve_and_get_model preds clauses ~timeout_ms:(Some solver_timeout) with
   | Sat, Some defs ->
       Logs.info (fun m ->
           m "Solver returned sat; extracted %d definitions" (List.length defs));
@@ -829,7 +833,10 @@ let infer_invariants_per_query (prog : Program.t) : Program.t =
   List.iteri
     (fun i q ->
       let idx = i + 1 in
-      match solve_and_get_model preds (normal @ [ q ]) with
+      match
+        solve_and_get_model preds (normal @ [ q ])
+          ~timeout_ms:(Some solver_timeout)
+      with
       | Sat, Some defs ->
           incr successes;
           let invs = decode_model preds defs in

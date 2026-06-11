@@ -48,11 +48,6 @@ let clause_to_sexp (c : clause) : Sexp.t =
 
 type solve_result = Sat | Unsat | Unknown
 
-(** Default wall-clock cap (milliseconds) applied to every Spacer solve. On
-    timeout Z3 returns [unknown], which {!Transforms.Chc_infer}'s pass entry
-    points already handle as "no invariant inferred". *)
-let default_timeout_ms = 30_000
-
 (** Open a Z3 process configured for Spacer with model-preserving options.
     Spacer's slicing and eager-inlining transformations rewrite the input in
     ways that drop predicate parameters or fuse predicates together, which
@@ -61,9 +56,8 @@ let default_timeout_ms = 30_000
 
     [timeout_ms] controls Z3's [:timeout] option (per [check-sat], in
     milliseconds): [Some t] caps the solve at [t] ms (on timeout [check-sat]
-    returns [unknown]), [None] leaves it unbounded. Defaults to
-    [Some default_timeout_ms]. *)
-let open_spacer ?(timeout_ms = Some default_timeout_ms) () =
+    returns [unknown]), [None] leaves it unbounded. Defaults to [None]. *)
+let open_spacer ?(timeout_ms = None) () =
   let module Solver = Bincaml_util.Smt.Solver in
   let s = Solver.create Bincaml_util.Smt.Config.z3 in
   Solver.set_option s ":fp.xform.slice" "false";
