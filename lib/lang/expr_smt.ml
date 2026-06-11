@@ -118,11 +118,26 @@ module SMTLib2 = struct
 
   let add_logic l s = ((), { s with logics = LSet.add l s.logics })
 
+  let is_simple_symbol_char c =
+    Char.is_letter_ascii c || Char.is_digit_ascii c
+    || String.contains "~!@$%^&*_-+=<>.?/" c
+
+  (* SMT-LIB allows two kinds of symbols: "simple" symbols (letters, digits and
+     a fixed set of punctuation, not starting with a digit) and "quoted" symbols
+     delimited by [|...|] which may contain any character except [|] and [\]. *)
+  let smt_symbol n =
+    if
+      String.length n > 0
+      && (not (Char.is_digit_ascii n.[0]))
+      && String.for_all is_simple_symbol_char n
+    then atom n
+    else atom ("|" ^ n ^ "|")
+
   let gen_decl v =
     let n = Var.name v in
     let ty = Var.typ v in
     let ty, logics = of_typ ty in
-    let v = atom n in
+    let v = smt_symbol n in
     ({ decl_cmd = list [ atom "declare-const"; v; ty ]; var = v }, logics)
 
   let add_logic_const (v : Ops.AllOps.const) =
@@ -351,7 +366,7 @@ module SMTLib2 = struct
     return @@ Bincaml_util.Smt.Expr.let_ binds body
 
   let quantifier quant bound_vars in_body =
-    let names = List.map (Var.name %> atom) bound_vars in
+    let names = List.map (Var.name %> smt_symbol) bound_vars in
     let types = List.map (Var.typ %> of_typ %> fst) bound_vars in
     let binds =
       List.combine names types |> List.map (fun (a, b) -> list [ a; b ])
@@ -377,7 +392,7 @@ module SMTLib2 = struct
              ]
     | Lambda { op; bound_vars; in_body } ->
         (* TODO: trigger *)
-        let names = List.map (Var.name %> atom) bound_vars in
+        let names = List.map (Var.name %> smt_symbol) bound_vars in
         let types = List.map (Var.typ %> of_typ %> fst) bound_vars in
         let binds =
           List.combine names types |> List.map (fun (a, b) -> list [ a; b ])
@@ -398,7 +413,7 @@ module SMTLib2 = struct
           @@ List.map
                (fun (v, b) ->
                  let* b = b in
-                 return @@ list [ atom @@ Var.name v; b ])
+                 return @@ list [ smt_symbol @@ Var.name v; b ])
                bound_vars
         in
         return @@ list [ atom "let"; list binds; in_body ]
@@ -459,7 +474,7 @@ module SMTLib2 = struct
           | Lambda { op; bound_vars; in_body } -> (op, bound_vars, in_body)
           | _ -> failwith "expected lambda"
         in
-        let names = List.map (Var.name %> atom) bound_vars in
+        let names = List.map (Var.name %> smt_symbol) bound_vars in
         let types = List.map (Var.typ %> of_typ %> fst) bound_vars in
         let binds =
           List.combine names types |> List.map (fun (a, b) -> list [ a; b ])
@@ -470,7 +485,13 @@ module SMTLib2 = struct
         let r = fst (of_typ r) in
         return
         @@ list
-             [ atom "define-fun"; atom (Var.name binding); list args; r; body ]
+             [
+               atom "define-fun";
+               smt_symbol (Var.name binding);
+               list args;
+               r;
+               body;
+             ]
     | Function { binding; definition = Axiom body } ->
         let* body = bind_of_bexpr body in
         return @@ list [ atom "assert"; body ]
@@ -479,7 +500,8 @@ module SMTLib2 = struct
         let args = List.map (of_typ %> fst) args in
         let r = fst (of_typ r) in
         return
-        @@ list [ atom "declare-fun"; atom (Var.name binding); list args; r ]
+        @@ list
+             [ atom "declare-fun"; smt_symbol (Var.name binding); list args; r ]
     | Variable v -> failwith "mutable"
     | Procedure p -> failwith "procedure"
 

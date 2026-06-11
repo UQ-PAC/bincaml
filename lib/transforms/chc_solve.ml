@@ -27,6 +27,11 @@ type clause = {
 
 let var_sort v = fst (Expr_smt.SMTLib2.of_typ (Var.typ v))
 
+(* A variable reference as an SMT atom. Routes through [smt_symbol] so names
+   that aren't valid SMT-LIB simple symbols (e.g. names containing [#]) are
+   emitted as quoted [|...|] symbols rather than mis-tokenised by the solver. *)
+let var_atom v = Expr_smt.SMTLib2.smt_symbol (Var.name v)
+
 let declare_predicate (p : predicate) : Sexp.t =
   SmtExpr.declare_fun p.name (List.map var_sort p.params) SmtExpr.t_bool
 
@@ -35,9 +40,7 @@ let forall_ binders body =
   else SmtExpr.app_ "forall" [ list binders; body ]
 
 let clause_to_sexp (c : clause) : Sexp.t =
-  let binders =
-    List.map (fun v -> list [ atom (Var.name v); var_sort v ]) c.vars
-  in
+  let binders = List.map (fun v -> list [ var_atom v; var_sort v ]) c.vars in
   let premise = SmtExpr.bool_ands c.premises in
   let body =
     match c.head with

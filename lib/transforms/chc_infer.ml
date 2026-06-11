@@ -275,7 +275,7 @@ let encode_call_full (enc : Encoder.t) ~callee ~args ~lhs ~procid : clause list
     StringMap.bindings (Procedure.formal_out_params callee)
     |> List.map (fun (name, _) ->
         match StringMap.find_opt name lhs with
-        | Some v -> atom (Var.name (Encoder.fresh enc v))
+        | Some v -> var_atom (Encoder.fresh enc v)
         | None ->
             failwith
               ("chc_infer: missing return binding " ^ name ^ " at call to "
@@ -343,7 +343,7 @@ let encode_stmt ~(use_spec : Program.proc -> bool) (enc : Encoder.t)
       List.iter
         (fun (lhs, rhs_sexp) ->
           let fresh = Encoder.fresh enc lhs in
-          Encoder.add_premise enc (SmtExpr.eq (atom (Var.name fresh)) rhs_sexp))
+          Encoder.add_premise enc (SmtExpr.eq (var_atom fresh) rhs_sexp))
         rhss;
       []
   | Stmt.Instr_Assert { body } ->
@@ -372,7 +372,7 @@ let mk_head_args (enc : Encoder.t) ~phi_subst (pred : predicate) : Sexp.t list =
       let v' =
         match VarMap.find_opt v phi_subst with Some src -> src | None -> v
       in
-      atom (Var.name (Encoder.lookup enc v')))
+      var_atom (Encoder.lookup enc v'))
     pred.params
 
 (** Transition clauses leaving a block: one rule per block successor (with phi
@@ -425,7 +425,7 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
     (block : Program.bloc) : clause list =
   let block_pred = IDMap.find block_id preds.block_preds in
   let enc = Encoder.create ~initial_vars:block_pred.params in
-  let entry_args = List.map (fun v -> atom (Var.name v)) block_pred.params in
+  let entry_args = List.map var_atom block_pred.params in
   Encoder.add_premise enc (apply_predicate block_pred entry_args);
   let stmt_clauses =
     Vector.to_iter block.stmts
@@ -441,12 +441,8 @@ let enter_to_entry_block (preds : proc_predicates) (proc : Program.proc) :
   | None -> []
   | Some entry_id ->
       let entry_pred = IDMap.find entry_id preds.block_preds in
-      let enter_args =
-        List.map (fun v -> atom (Var.name v)) preds.enter.params
-      in
-      let block_args =
-        List.map (fun v -> atom (Var.name v)) entry_pred.params
-      in
+      let enter_args = List.map var_atom preds.enter.params in
+      let block_args = List.map var_atom entry_pred.params in
       [
         {
           vars = entry_pred.params;
@@ -478,7 +474,7 @@ let all_predicates (preds : proc_predicates) : predicate list =
 let entry_fact_for (proc : Program.proc) (enter : predicate) : clause =
   let requires = (Procedure.specification proc).requires in
   let premises = List.map Expr_smt.SMTLib2.of_bexpr requires in
-  let args = List.map (fun v -> atom (Var.name v)) enter.params in
+  let args = List.map var_atom enter.params in
   { vars = enter.params; premises; head = Some (apply_predicate enter args) }
 
 (** One postcondition query per [ensures] clause:
@@ -487,7 +483,7 @@ let entry_fact_for (proc : Program.proc) (enter : predicate) : clause =
 let postcondition_queries (proc : Program.proc) (exit : predicate) : clause list
     =
   let ensures = (Procedure.specification proc).ensures in
-  let args = List.map (fun v -> atom (Var.name v)) exit.params in
+  let args = List.map var_atom exit.params in
   let exit_app = apply_predicate exit args in
   List.map
     (fun e ->
