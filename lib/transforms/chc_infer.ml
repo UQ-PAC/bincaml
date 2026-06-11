@@ -356,9 +356,18 @@ let encode_stmt ~(use_spec : Program.proc -> bool) (enc : Encoder.t)
   | Stmt.Instr_Assume { body } ->
       Encoder.add_premise enc (encode_expr enc body);
       []
-  | Stmt.Instr_IntrinCall _ ->
-      (* Treated as [assert false]: the current premise set must already be
+  | Stmt.Instr_IntrinCall { lhs; name = Havoc; _ } ->
+      (* Havoc assigns each lhs an arbitrary value. Fresh-name each lhs without
+         adding any premise, so it becomes an unconstrained clause binder. *)
+      List.iter (fun v -> ignore (Encoder.fresh enc v)) lhs;
+      []
+  | Stmt.Instr_IntrinCall { name; _ } ->
+      (* Other intrinsics (memory allocators, etc.) are not yet modelled.
+         Treated as [assert false]: the current premise set must already be
          unsatisfiable for the intrinsic call to be unreachable. *)
+      Logs.warn (fun m ->
+          m "chc_infer: treating intrinsic %s as `assert false` (unmodelled)"
+            (Stmt.Intrinsic.show name));
       [ query_of_encoder enc ~extra_premises:[] ]
   | Stmt.Instr_Call { lhs; procid; args } ->
       encode_call ~use_spec enc prog ~lhs ~procid ~args
