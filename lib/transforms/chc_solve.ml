@@ -48,16 +48,29 @@ let clause_to_sexp (c : clause) : Sexp.t =
 
 type solve_result = Sat | Unsat | Unknown
 
+(** Default wall-clock cap (milliseconds) applied to every Spacer solve. On
+    timeout Z3 returns [unknown], which {!Transforms.Chc_infer}'s pass entry
+    points already handle as "no invariant inferred". *)
+let default_timeout_ms = 30_000
+
 (** Open a Z3 process configured for Spacer with model-preserving options.
     Spacer's slicing and eager-inlining transformations rewrite the input in
     ways that drop predicate parameters or fuse predicates together, which
     breaks our positional-parameter mapping when decoding the model. Turn both
-    off so [(get-model)] returns predicates that line up with what we sent. *)
-let open_spacer () =
+    off so [(get-model)] returns predicates that line up with what we sent.
+
+    [timeout_ms] controls Z3's [:timeout] option (per [check-sat], in
+    milliseconds): [Some t] caps the solve at [t] ms (on timeout [check-sat]
+    returns [unknown]), [None] leaves it unbounded. Defaults to
+    [Some default_timeout_ms]. *)
+let open_spacer ?(timeout_ms = Some default_timeout_ms) () =
   let module Solver = Bincaml_util.Smt.Solver in
   let s = Solver.create Bincaml_util.Smt.Config.z3 in
   Solver.set_option s ":fp.xform.slice" "false";
   Solver.set_option s ":fp.xform.inline_eager" "false";
+  Option.iter
+    (fun t -> Solver.set_option s ":timeout" (string_of_int t))
+    timeout_ms;
   Solver.set_logic s "HORN";
   s
 
@@ -93,10 +106,10 @@ let parse_model (model : Sexp.t) : model_def list =
     {!Bincaml_util.Smt.Solver} directly; the only HORN-specific bit is the
     [(set-logic HORN)] preamble. Returns the [solve_result] together with the
     parsed model on Sat. *)
-let solve_and_get_model (preds : predicate list) (clauses : clause list) :
-    solve_result * model_def list option =
+let solve_and_get_model ?timeout_ms (preds : predicate list)
+    (clauses : clause list) : solve_result * model_def list option =
   let module Solver = Bincaml_util.Smt.Solver in
-  let s = open_spacer () in
+  let s = open_spacer ?timeout_ms () in
   List.iter (fun pr -> Solver.add_command s (declare_predicate pr)) preds;
   List.iter (fun c -> Solver.add_command s (clause_to_sexp c)) clauses;
   let result =
