@@ -116,17 +116,14 @@ let get_code_block_opcodes (m : Module.t) =
   let rblocks = List.filter_map (chop_block_opcodes ~need_flip) ival_blks in
   rblocks
 
-let of_file infile =
+let of_channel ic =
   let bytes =
-    let ic = open_in_bin infile in
-    let len = in_channel_length ic in
     let magic = really_input_string ic 8 in
-    let res = really_input_string ic (len - 8) in
+    let res = CCIO.read_all_bytes ic |> Bytes.unsafe_to_string in
     (* check for gtirb magic otherwise assume is raw protobuf *)
     let res =
       if String.starts_with ~prefix:"GTIRB" magic then res else magic ^ res
     in
-    close_in ic;
     res
   in
 
@@ -144,3 +141,10 @@ let of_file infile =
              (Ocaml_protoc_plugin.Result.show_error e))
   in
   ir
+
+
+let of_file fname =
+  let c = open_in_bin fname in
+  let r = of_channel c in
+  close_in c;
+  r
