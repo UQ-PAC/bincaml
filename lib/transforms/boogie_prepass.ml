@@ -309,7 +309,7 @@ module Instructions = struct
              {
                attrib = attribs;
                binding =
-                 Var.create
+                 Var.create ~scope:Var.GlobalConst
                    (Printf.sprintf "store%d_%s" size
                       (Lang.Stmt.show_endian endian))
                    (Lang.Expr.BasilExpr.type_of value);
@@ -335,7 +335,7 @@ module Instructions = struct
              {
                attrib = attribs;
                binding =
-                 Var.create
+                 Var.create ~scope:Var.GlobalConst
                    (Printf.sprintf "load%d_%s" size (Stmt.show_endian endian))
                    (Var.typ lhs);
                definition = Function body;
@@ -422,7 +422,8 @@ module Normalise = struct
               [
                 ( lhs,
                   Expr.BasilExpr.fapply
-                    (Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
+                    (Expr.BasilExpr.rvar
+                       (Var.create ~scope:Var.GlobalConst fn_name (Var.typ lhs)))
                     [ Expr.BasilExpr.rvar rhs; addr ] );
               ];
             attrib;
@@ -438,7 +439,8 @@ module Normalise = struct
               [
                 ( lhs,
                   Expr.BasilExpr.fapply
-                    (Expr.BasilExpr.rvar (Var.create fn_name (Var.typ lhs)))
+                    (Expr.BasilExpr.rvar
+                       (Var.create ~scope:Var.GlobalConst fn_name (Var.typ lhs)))
                     [ Expr.BasilExpr.rvar rhs; addr; value ] );
               ];
             attrib;

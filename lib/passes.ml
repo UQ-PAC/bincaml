@@ -330,7 +330,7 @@ module PassManager = struct
       doc =
         "Remove store assignments to pure local variables which are never read \
          using an interprocedural analysis";
-      invariants = Invariants.needs [ NoPhis ];
+      invariants = Invariants.needs [ SSA ];
     }
 
   let linear_const =
