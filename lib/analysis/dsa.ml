@@ -509,8 +509,6 @@ module FormalDSGraph = struct
             in
             let done_ns = IntSet.add n done_ns in
             let ns = ns |> IntSet.union ptee_ns |> flip IntSet.diff done_ns in
-            print_endline @@ Int.to_string n;
-            print_endline @@ Int.to_string @@ IntSet.cardinal ptee_ns;
             (* The graph with all pointed-to cells copied, and the node mapping *)
             let nm = IntMap.add n n' nm in
             let g, nm = iter g ns done_ns nm in
@@ -520,7 +518,6 @@ module FormalDSGraph = struct
               |> EdgeSet.filter (fun ((c : Cell.t), _) -> c.node = n)
               |> EdgeSet.map
                    (Pair.map_same (fun (c : Cell.t) ->
-                        print_endline @@ Int.to_string c.node;
                         { c with node = IntMap.find c.node nm }))
               |> EdgeSet.union g.edges
             in
@@ -951,19 +948,31 @@ end = struct
   (** Unify all pointees of this cell so that it points to only one cell, then
       recurse on that cell *)
   let rec unify_pointees cell =
-    let rec aux = function
-      | [] | [ _ ] -> ()
-      | a :: (b :: cs as tail) ->
+    let rec aux a = function
+      | [] -> ()
+      | b :: cs ->
           join a b;
-          aux tail
+          aux a cs
     in
     let p = pointees cell in
-    aux p;
     match p with
     | [] -> ()
+    | [ _ ] -> ()
     | c :: cs ->
-        set_pointees [ find c ] cell;
-        if not @@ List.is_empty cs then unify_pointees (find c)
+        aux c cs;
+        (* p' is nonempty only if `cell` pointed to itself, in which case it
+           would have been merged with its other pointees and recursed on *)
+        let p' =
+          pointees cell
+          |> List.filter (fun c' -> not @@ CCEqual.physical (find c') (find c))
+        in
+        if not @@ List.is_empty p' then
+          assert (CCEqual.physical (find cell) (find c));
+        assert (List.for_all (fun c' -> CCEqual.physical (find c') (find c)) cs);
+        set_pointees (find c :: p') cell;
+        (* Need to unify all of the cells in the newly created node, since
+           cells in other parts of the node may have been joined together *)
+        node_of c |> cells |> List.iter unify_pointees
 
   (** Find a cell corresponding to an interval in a node. If the interval
       overlaps with multiple cells, they are merged, and if it overlaps with no
@@ -1141,7 +1150,15 @@ let make_local_graph proc sva
       DSGraph.merge_vs v g);
 
   (* Unify all pointees (i hope a worklist can be avoided) *)
-  Vector.iter DSGraph.unify_pointees cells;
+  (*Vector.iter DSGraph.unify_pointees cells;*)
+  Vector.iteri
+    (fun i c ->
+      Vector.to_iter cells |> Iter.take i
+      |> Iter.iteri (fun j c -> assert (DSGraph.unique_pointee c));
+      DSGraph.unify_pointees c;
+      Vector.to_iter cells |> Iter.take i
+      |> Iter.iteri (fun j c -> assert (DSGraph.unique_pointee c)))
+    cells;
 
   List.iter (fun n -> DSGraph.check_valid_node n) (DSGraph.nodes g);
   DSGraph.check_unique_pointee g;
@@ -1426,10 +1443,6 @@ let dsa (p : Program.t) =
           |> Iter.map (Constraint.map (translate pid) translate)
           |> Iter.persistent
         in
-        print_endline @@ "Constraints: "
-        ^ Iter.to_string
-            (Constraint.show Sva.SymAddrSetLattice.show)
-            constraints;
         (pid, (constraints, make_local_graph proc sva constraints)))
     |> IDMap.of_list
   in
