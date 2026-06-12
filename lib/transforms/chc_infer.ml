@@ -794,7 +794,7 @@ let annotate_program ~(use_spec : Program.proc -> bool)
 
 (** Default solver timeout in milliseconds. This will be replaced by a
     user-supplied argument in the future. *)
-let solver_timeout = 30_000
+let solver_timeout = 10_000
 
 (** Full pass: encode the program as CHCs, solve, and annotate each procedure
     with inferred [requires]/[ensures] when the solver returns sat. On unsat or
