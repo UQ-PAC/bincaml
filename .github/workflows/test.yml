@@ -55,13 +55,7 @@ jobs:
     container: ${{ matrix.container }}
 
     steps:
-      - uses: actions/checkout@v6
-        with:
-          submodules: true
-      - run: opam install -t . --deps-only
-      - run: opam exec -- dune build '@install'
-      - run: opam exec -- dune runtest --force --profile=release
-
+      - run: bash tools/action.sh
 
   treesit:
     name: treesitter
