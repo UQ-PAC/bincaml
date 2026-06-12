@@ -39,6 +39,7 @@ let () =
   (CCIO.File.walk_l "../../../examples/gtirb/basil"
   |> List.filter_map (function `File, f -> Some f | _ -> None)
   |> List.filter_map (Filename.chop_suffix_opt ~suffix:".gts")
+  |> List.sort String.compare
   |> List.iter to_rule );
    print_endline "    )";
    print_endline  "))))"
