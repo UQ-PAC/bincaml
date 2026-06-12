@@ -1,4 +1,4 @@
-(lang dune 3.23)
+(lang dune 3.19)
 
 (using menhir 3.0)
 
@@ -27,13 +27,13 @@
  (synopsis "Program analysis tool.")
  (description "A longer description")
  (depends
+  ocaml
   (ocaml-protoc-plugin (>= 6.1.0))
   (qcheck-stm :with-test)
   (qcheck-core :with-test)
   (qcheck-alcotest :with-test)
   (menhir (>= 20180523))
   angstrom
-  ocaml
   zarith
   fix
   trace
