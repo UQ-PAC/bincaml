@@ -1,17 +1,13 @@
-
-
 (include dune_gtirb.inc)
 
 (executable
-  (name gen)
-  (libraries containers)
-)
+ (name gen)
+ (libraries containers))
 
 (rule
  (deps
   (source_tree ../../../examples/gtirb/)
-  gen.exe
-  )
+  gen.exe)
  (action
   (with-stdout-to
    dune_gtirb.inc.gen
