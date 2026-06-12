@@ -540,51 +540,7 @@ module FormalDSGraph = struct
       (g, cm))
 end
 
-module DSGraph : sig
-  type cell
-  type node
-  type t
-
-  (* Probably shouldn't be public *)
-  val find : cell -> cell
-  val find_node : node -> node * Z.t
-  val offsets : cell -> Interval.t
-  val join_nodes_at : Z.t -> node -> node -> unit
-
-  (* Should be public *)
-  val empty_graph : unit -> t
-  val nodes : t -> node list
-  val node_map : t -> node SBMap.t
-  val empty_node : ?flags:NodeFlags.t -> unit -> node
-  val join : cell -> cell -> unit
-  val unify_pointees : cell -> unit
-  val check_valid_node : node -> unit
-  val add_cell : t -> ?sb:SBMap.key option -> Interval.t -> int -> cell
-  val merge_vs : Sva.SymAddrSetLattice.t -> t -> unit
-
-  (* idk if should be public *)
-  val unique_pointee : cell -> bool
-  val check_unique_pointee : t -> unit
-  val is_sorted : node -> bool
-  val valid_cell_nodes : node -> bool
-  val cells : node -> cell list
-  val node_of : cell -> node
-  val id : node -> ID.t
-  val flags : node -> NodeFlags.t
-  val pointees : cell -> cell list
-  val add_pointees : cell list -> cell -> unit
-  val get_cell : ?uniq:bool -> Interval.t -> node -> cell option
-  val cell_of : ?uniq:bool -> Sva.SymAddrSetLattice.t -> t -> cell option
-
-  (* This type signature is so ugly... *)
-  val copy_node :
-    t ->
-    ?clear_stack:bool ->
-    ?old_to_new:(IDSet.elt, node) Hashtbl.t ->
-    ?sbs:SBMap.key list ->
-    node ->
-    node
-end = struct
+module DSGraph = struct
   (** A path compressed cell. Cells store a set of offsets from an abstract base
       address, the node that it belongs to, and a list of cells it points to
       (that will be a singleton or empty after unification). *)
