@@ -142,7 +142,6 @@ let of_channel ic =
   in
   ir
 
-
 let of_file fname =
   let c = open_in_bin fname in
   let r = of_channel c in
