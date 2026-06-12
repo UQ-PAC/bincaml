@@ -21,8 +21,7 @@ let preamble = {|
  (alias runtest)
  (deps
   %{bin:bincaml}
-  (source_tree basil)
-  (source_tree expect)
+  (source_tree  ../../../examples/gtirb)
   run.sh
   )
  (action
