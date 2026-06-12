@@ -983,7 +983,6 @@ end = struct
         let p, off = find_node n in
         get_cell (Interval.shift off i) p
     | Node r -> (
-        (* TODO switch to another data structure to log(n)-ify this *)
         let rec aux = function
           | [] -> []
           | x :: xs when Interval.subset i (offsets x) -> x :: aux xs
@@ -1141,14 +1140,6 @@ let make_local_graph proc sva
       | Constraint.Call { lhs; args } -> ())
     constraints;
 
-  (* Join formal in/out params *)
-  Procedure.formal_in_params proc
-  |> StringMap.values
-  |> Iter.append (Procedure.formal_out_params proc |> StringMap.values)
-  |> Iter.iter (fun v ->
-      let v = Sva.StateAbstraction.read v sva in
-      DSGraph.merge_vs v g);
-
   (* Unify all pointees (i hope a worklist can be avoided) *)
   (*Vector.iter DSGraph.unify_pointees cells;*)
   Vector.iteri
@@ -1159,6 +1150,24 @@ let make_local_graph proc sva
       Vector.to_iter cells |> Iter.take i
       |> Iter.iteri (fun j c -> assert (DSGraph.unique_pointee c)))
     cells;
+
+  (* Join formal in/out params while preserving unification *)
+  Procedure.formal_in_params proc
+  |> StringMap.values
+  |> Iter.append (Procedure.formal_out_params proc |> StringMap.values)
+  |> Iter.iter (fun v ->
+      let v = Sva.StateAbstraction.read v sva in
+      (* TODO I think this needs to be run in a fixed point loop :(( *)
+      DSGraph.merge_vs v g;
+      DSGraph.(Option.iter unify_pointees @@ cell_of ~uniq:true v g));
+
+  (* Check formal in/out params are unique (there is an assert in cell_of) *)
+  Procedure.formal_in_params proc
+  |> StringMap.values
+  |> Iter.append (Procedure.formal_out_params proc |> StringMap.values)
+  |> Iter.iter (fun v ->
+      let v = Sva.StateAbstraction.read v sva in
+      ignore @@ DSGraph.cell_of ~uniq:true v g);
 
   List.iter (fun n -> DSGraph.check_valid_node n) (DSGraph.nodes g);
   DSGraph.check_unique_pointee g;
@@ -1199,8 +1208,9 @@ let resolve_callee old_to_new caller_graph callee_graph actual formal =
      let open DSGraph in
      let* callee_cell = cell_of ~uniq:true formal callee_graph in
      (* Only do the joining if a caller cell actually exists *)
+     check_unique_pointee caller_graph;
      let* caller_cell = cell_of actual caller_graph in
-     unify_pointees caller_cell;
+     node_of caller_cell |> cells |> List.iter unify_pointees;
      let callee_node = node_of callee_cell in
      check_unique_pointee caller_graph;
      (* The node gets copied even if the caller cell doesn't exist... *)
@@ -1216,7 +1226,7 @@ let resolve_callee old_to_new caller_graph callee_graph actual formal =
      unify_pointees callee_cell_copy;
      check_unique_pointee caller_graph;
      join caller_cell callee_cell_copy;
-     unify_pointees caller_cell;
+     node_of caller_cell |> cells |> List.iter unify_pointees;
      check_unique_pointee caller_graph;
      None)
 
@@ -1259,10 +1269,7 @@ let bottom_up prog graphs =
       process_scc !scc)
   and process_scc scc =
     assert (not @@ IDSet.is_empty scc);
-    (* TODO:
-       1. DONE Merge callees for each out-of-scc call
-       2. Merge all graphs in the scc into one
-       3. Merge callees within the scc *)
+    print_endline @@ IDSet.to_string ID.show scc;
     (* Resolve all out-of-scc calls *)
     IDSet.iter
       (fun pid ->

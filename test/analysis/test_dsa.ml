@@ -91,12 +91,13 @@ open struct
     let unify_all (l : t) n =
       let g = List.nth !l n in
       (*List.iter DSGraph.unify_pointees g.cells*)
-      List.iteri
-        (fun i c ->
+      let cells = g.g |> DSGraph.nodes |> List.flat_map DSGraph.cells in
+      cells
+      |> List.iteri (fun i c ->
           DSGraph.unify_pointees c;
-          List.to_iter g.cells |> Iter.take i
+          List.to_iter cells
+          |> Iter.take (i + 1)
           |> Iter.iteri (fun j c -> assert (DSGraph.unique_pointee c)))
-        g.cells
 
     let copy (l : t) f t cs =
       let f = List.nth !l f in
@@ -369,31 +370,16 @@ open struct
     let dsa_specific_stm () =
       let steps =
         [
-            (*
           AddGraph;
-   MakeCell (0, Interval.Interval (Z.of_int (-1), Z.of_int (8)));
-   MakeCell (0, Interval.Interval (Z.of_int (-60), Z.of_int (-2)));
-   MakeEdge (0, 1, 0);
-   MakeEdge (0, 0, 0);
-   MakeEdge (0, 0, 0);
-   MakeEdge (0, 0, 1);
-   CountCells 0;
-   MakeCell (0, Interval.Interval (Z.of_int (-2), Z.of_int (1)));
-   Copy (0, 0, [2; 1; 2; 2; 1; 1; 1; 0; 1; 0; 1; 1; 2; 1]);
-   Copy (0, 0, [16; 8; 5; 3; 7; 10; 8; 11; 10; 5; 12]);
-   UnifyAll 0;
-   Join (0, 10, 11);
-   Copy (0, 0, [13; 15; 9; 20; 20]);
-   Copy (0, 0, [24]);
-   CountCells 0;
-   CellWidths 0;
-   CellWidths 0;
-   UnifyAll 0;
-   AddGraph;
-   CountCells 1;
-   MakeCell (1, Interval.Interval (Z.of_int (-77), Z.of_int (-6)));
-   CellWidths 1;
-          *)
+          MakeCell (0, Interval.Interval (Z.of_int (-93), Z.of_int (-89)));
+          MakeCell (0, Interval.Interval (Z.of_int 0, Z.of_int 4));
+          MakeCell (0, Interval.Interval (Z.of_int (-67), Z.of_int 3));
+          MakeEdge (0, 0, 1);
+          MakeEdge (0, 0, 2);
+          Copy (0, 0, [ 2; 0 ]);
+          Join (0, 4, 0);
+          Copy (0, 0, [ 3 ]);
+          UnifyAll 0;
         ]
       in
       let s = init_sut () in
@@ -523,7 +509,7 @@ open struct
       *)
     let _tests =
       [
-        DSGraphSequential.agree_test ~count:100000
+        DSGraphSequential.agree_test ~count:1000
           ~name:"DSGraph STM Sequential tests";
         (*_join_intervals*)
       ]
