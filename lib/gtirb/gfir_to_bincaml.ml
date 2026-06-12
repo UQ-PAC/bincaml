@@ -210,8 +210,8 @@ let cfg_edge_to_ir_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
   in
   let src = get_vert_block src in
   let tgt = get_vert_block tgt in
-  let open Gfir.Edge in
   let proc =
+    let open Gfir.Edge in
     proc
     |> Procedure.map_graph (fun g ->
         match (src, l, tgt) with

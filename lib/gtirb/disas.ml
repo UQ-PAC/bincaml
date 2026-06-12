@@ -17,14 +17,12 @@ let print_op (opcode : Opcode.t) : string =
   List.of_seq (String.to_seq opcode_le) |> List.map p_byte |> String.concat " "
 
 let dis_op op =
-  let open Option in
-  let* bin = Lazy.force llvm_mc_bin in
-  let o, _, _ =
-    CCUnix.call
-      ~stdin:(`Str (print_op op))
-      "%s --disassemble --arch aarch64 -mattr=v9.5a" bin
-  in
-  let o =
+  let disas_llvm bin =
+    let o, _, _ =
+      CCUnix.call
+        ~stdin:(`Str (print_op op))
+        "%s --disassemble --arch aarch64 -mattr=v9.5a" bin
+    in
     String.split_on_char '\n' o
     |> List.filter (fun c ->
         String.find ~start:0 ~sub:".text" c |> function
@@ -37,4 +35,4 @@ let dis_op op =
     |> Option.get_or ~default:s
     |> String.replace ~sub:"\t" ~by:" "
   in
-  Some o
+  Option.map disas_llvm (Lazy.force llvm_mc_bin)
