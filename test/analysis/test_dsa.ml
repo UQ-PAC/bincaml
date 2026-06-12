@@ -63,7 +63,7 @@ open struct
 
     let make_cell (l : t) n i =
       let g = List.nth !l n in
-      let c = DSGraph.new_add_cell g.g i 0 in
+      let c = DSGraph.add_cell g.g i 0 in
       g.cells <- c :: g.cells
 
     let count_cells (l : t) n =
