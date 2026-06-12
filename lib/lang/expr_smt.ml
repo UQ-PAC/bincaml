@@ -293,6 +293,14 @@ module SMTLib2 = struct
         | `List [ `Atom "_"; `Atom "zero_extend"; `Atom bits ], [ a ] ->
             let* bits = Int.of_string bits in
             Some (BasilExpr.zero_extend ~n_prefix_bits:bits a)
+        | `List [ `Atom "_"; `Atom "bit2bool"; `Atom i ], [ a ] ->
+            (* Z3 model operator: [((_ bit2bool i) x)] is true iff bit [i] of
+               [x] is set, i.e. [((_ extract i i) x) = #b1]. *)
+            let* i = Int.of_string i in
+            Some
+              (BasilExpr.binexp ~op:`EQ
+                 (BasilExpr.extract ~hi_excl:(i + 1) ~lo_incl:i a)
+                 (BasilExpr.bvconst (Bitvec.create ~size:1 Z.one)))
         | `Atom u, [ a ] when of_unop u |> Option.is_some ->
             let* op = of_unop u in
             Some (BasilExpr.unexp ~op a)
