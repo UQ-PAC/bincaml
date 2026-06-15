@@ -1,7 +1,7 @@
-  open Lang
-    open Common
+open Lang
+open Common
 
-module IBI : OfflineASL.Instruction_building_interface.IBI = struct
+module Bincaml_IBI = struct
   type bigint = int
   type bitvector = int
   type expr = int
@@ -23,10 +23,19 @@ module IBI : OfflineASL.Instruction_building_interface.IBI = struct
   let from_bitsLit : string -> bitvector = failwith ""
   let frem_int : bigint -> bigint -> bigint = failwith ""
   let extract_bits : bitvector -> bigint -> bigint -> bitvector = failwith ""
+
+  (** [f_Elem_set operand_width elem_width operand elem_index elem_width elem] =
+      failwith "" *)
   let f_Elem_set :
-    bigint -> bigint -> bitvector -> bigint -> bigint -> bitvector -> bitvector = failwith ""
-  (** [f_Elem_set operand_width elem_width operand elem_index elem_width elem] = failwith ""
-  *)
+      bigint ->
+      bigint ->
+      bitvector ->
+      bigint ->
+      bigint ->
+      bitvector ->
+      bitvector =
+    failwith ""
+
   let f_eq_bits : bigint -> bitvector -> bitvector -> bool = failwith ""
   let f_ne_bits : bigint -> bitvector -> bitvector -> bool = failwith ""
   let f_add_bits : bigint -> bitvector -> bitvector -> bitvector = failwith ""
@@ -40,23 +49,39 @@ module IBI : OfflineASL.Instruction_building_interface.IBI = struct
   let f_sle_bits : bigint -> bitvector -> bitvector -> bool = failwith ""
   let f_zeros_bits : bigint -> bitvector = failwith ""
   let f_ones_bits : bigint -> bitvector = failwith ""
-  let f_replicate_bits : bigint -> bigint -> bitvector -> bigint -> bitvector = failwith ""
-  (** [f_replicate_bits operand_width num_replications operand num_replications] = failwith ""
-  *)
-  let f_append_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector = failwith ""
+
+  (** [f_replicate_bits operand_width num_replications operand num_replications]
+      = failwith "" *)
+  let f_replicate_bits : bigint -> bigint -> bitvector -> bigint -> bitvector =
+    failwith ""
+
   (** [f_append_bits w1 w2 x1 x2] *)
-  let f_ZeroExtend : bigint -> bigint -> bitvector -> bigint -> bitvector = failwith ""
+  let f_append_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
+    failwith ""
+
   (** [f_ZeroExtend operand_width result_width operand result_width] *)
-  let f_SignExtend : bigint -> bigint -> bitvector -> bigint -> bitvector = failwith ""
+  let f_ZeroExtend : bigint -> bigint -> bitvector -> bigint -> bitvector =
+    failwith ""
+
   (** [f_SignExtend operand_width result_width operand result_width] *)
-  let f_lsl_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector = failwith ""
+  let f_SignExtend : bigint -> bigint -> bitvector -> bigint -> bitvector =
+    failwith ""
+
   (** [f_lsl_bits operand_width shift_width operand shift] *)
-  let f_lsr_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector = failwith ""
+  let f_lsl_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
+    failwith ""
+
   (** [f_lsr_bits operand_width shift_width operand shift] *)
-  let f_asr_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector = failwith ""
+  let f_lsr_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
+    failwith ""
+
   (** [f_asr_bits operand_width shift_width operand shift] *)
-  let f_cvt_bits_uint : bigint -> bitvector -> bigint = failwith ""
+  let f_asr_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
+    failwith ""
+
   (** [f_cvt_bits_uint operand_width operand] *)
+  let f_cvt_bits_uint : bigint -> bitvector -> bigint = failwith ""
+
   let f_sdiv_int : bigint -> bigint -> bigint = failwith ""
   let f_shl_int : bigint -> bigint -> bigint = failwith ""
   let v_PSTATE_C : expr = failwith ""
@@ -99,8 +124,14 @@ module IBI : OfflineASL.Instruction_building_interface.IBI = struct
   let f_gen_store : expr -> expr -> unit = failwith ""
   let f_gen_array_load : expr -> bigint -> expr = failwith ""
   let f_gen_array_store : expr -> bigint -> expr -> unit = failwith ""
-  let f_gen_Elem_read : bigint -> bigint -> expr -> expr -> expr -> expr = failwith ""
-  let f_gen_Elem_set : bigint -> bigint -> expr -> expr -> expr -> expr -> expr = failwith ""
+
+  let f_gen_Elem_read : bigint -> bigint -> expr -> expr -> expr -> expr =
+    failwith ""
+
+  let f_gen_Elem_set : bigint -> bigint -> expr -> expr -> expr -> expr -> expr
+      =
+    failwith ""
+
   let f_gen_Mem_set : bigint -> expr -> 'a -> expr -> expr -> unit = failwith ""
   let f_gen_Mem_read : bigint -> expr -> 'a -> expr -> expr = failwith ""
   let f_AtomicStart : unit -> unit = failwith ""
@@ -128,18 +159,29 @@ module IBI : OfflineASL.Instruction_building_interface.IBI = struct
   let f_gen_lsr_bits : bigint -> bigint -> expr -> expr -> expr = failwith ""
   let f_gen_lsl_bits : bigint -> bigint -> expr -> expr -> expr = failwith ""
   let f_gen_asr_bits : bigint -> bigint -> expr -> expr -> expr = failwith ""
-  let f_gen_replicate_bits : bigint -> bigint -> expr -> 'a -> expr = failwith ""
+
+  let f_gen_replicate_bits : bigint -> bigint -> expr -> 'a -> expr =
+    failwith ""
+
   let f_gen_ZeroExtend : bigint -> bigint -> expr -> 'a -> expr = failwith ""
   let f_gen_SignExtend : bigint -> bigint -> expr -> 'a -> expr = failwith ""
   let f_gen_slice : expr -> bigint -> bigint -> expr = failwith ""
-  let f_gen_FPCompare : bigint -> expr -> expr -> expr -> expr -> expr = failwith ""
+
+  let f_gen_FPCompare : bigint -> expr -> expr -> expr -> expr -> expr =
+    failwith ""
+
   let f_gen_FPCompareEQ : bigint -> expr -> expr -> expr -> expr = failwith ""
   let f_gen_FPCompareGE : bigint -> expr -> expr -> expr -> expr = failwith ""
   let f_gen_FPCompareGT : bigint -> expr -> expr -> expr -> expr = failwith ""
   let f_gen_FPAdd : bigint -> expr -> expr -> expr -> expr = failwith ""
   let f_gen_FPSub : bigint -> expr -> expr -> expr -> expr = failwith ""
-  let f_gen_FPMulAdd : bigint -> expr -> expr -> expr -> expr -> expr = failwith ""
-  let f_gen_FPMulAddH : bigint -> expr -> expr -> expr -> expr -> expr = failwith ""
+
+  let f_gen_FPMulAdd : bigint -> expr -> expr -> expr -> expr -> expr =
+    failwith ""
+
+  let f_gen_FPMulAddH : bigint -> expr -> expr -> expr -> expr -> expr =
+    failwith ""
+
   let f_gen_FPMulX : bigint -> expr -> expr -> expr -> expr = failwith ""
   let f_gen_FPMul : bigint -> expr -> expr -> expr -> expr = failwith ""
   let f_gen_FPDiv : bigint -> expr -> expr -> expr -> expr = failwith ""
@@ -157,13 +199,27 @@ module IBI : OfflineASL.Instruction_building_interface.IBI = struct
   let f_gen_FPConvertBF : expr -> expr -> expr -> expr = failwith ""
   let f_gen_FPRecipStepFused : bigint -> expr -> expr -> expr = failwith ""
   let f_gen_FPRSqrtStepFused : bigint -> expr -> expr -> expr = failwith ""
-  let f_gen_FPToFixed : bigint -> bigint -> expr -> expr -> expr -> expr -> expr -> expr = failwith ""
-  let f_gen_FixedToFP : bigint -> bigint -> expr -> expr -> expr -> expr -> expr -> expr = failwith ""
-  let f_gen_FPConvert : bigint -> bigint -> expr -> expr -> expr -> expr = failwith ""
-  let f_gen_FPRoundInt : bigint -> expr -> expr -> expr -> expr -> expr = failwith ""
-  let f_gen_FPRoundIntN : bigint -> expr -> expr -> expr -> expr -> expr = failwith ""
-  let f_gen_FPToFixedJS_impl : bigint -> bigint -> expr -> expr -> expr -> expr = failwith ""
 
+  let f_gen_FPToFixed :
+      bigint -> bigint -> expr -> expr -> expr -> expr -> expr -> expr =
+    failwith ""
+
+  let f_gen_FixedToFP :
+      bigint -> bigint -> expr -> expr -> expr -> expr -> expr -> expr =
+    failwith ""
+
+  let f_gen_FPConvert : bigint -> bigint -> expr -> expr -> expr -> expr =
+    failwith ""
+
+  let f_gen_FPRoundInt : bigint -> expr -> expr -> expr -> expr -> expr =
+    failwith ""
+
+  let f_gen_FPRoundIntN : bigint -> expr -> expr -> expr -> expr -> expr =
+    failwith ""
+
+  let f_gen_FPToFixedJS_impl : bigint -> bigint -> expr -> expr -> expr -> expr
+      =
+    failwith ""
 end
 
-let a = OfflineASL.Offline.f_A64_decoder (module IBI) 2
+let a = OfflineASL.Offline.f_A64_decoder (module Bincaml_IBI) 2
