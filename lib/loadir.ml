@@ -635,183 +635,178 @@ module BasilASTLoader = struct
           let l, attrib = trans_attrib_set ~binds:StringMap.empty p_st attrib in
           (l, attrib, stmt)
     in
-    match stmt with
-    | Stmt_Nop -> (p_st, `None)
-    | Stmt_Load_Var (lvar, endian, var, expr, intval) ->
-        let attrib =
-          Attrib.merge_map_shadow attrib
-          @@ Attrib.join_map_locs (loc_lvar lvar) (loc_intval intval)
-        in
-        let endian = trans_endian endian in
-        let rhs = trans_var p_st var in
-        let size = transIntVal intval |> Z.to_int in
-        let p_st, lhs = trans_lvar p_st lvar in
-        ( p_st,
-          `Stmt
-            (Instr_Load
-               {
-                 attrib;
-                 lhs;
-                 rhs;
-                 addr = Addr { addr = trans_expr p_st expr; endian; size };
-               }) )
-    | Stmt_Store_Var (lhs, endian, var, addr, value, intval) ->
-        let attrib =
-          Attrib.join_map_locs attrib
-          @@ Attrib.join_map_locs (loc_lvar lhs) (loc_intval intval)
-        in
-        let endian = trans_endian endian in
-        let size = transIntVal intval |> Z.to_int in
-        let rhs = trans_var p_st var in
-        let p_st, lhs = trans_lvar p_st lhs in
-        ( p_st,
-          `Stmt
-            (Instr_Store
-               {
-                 attrib;
-                 lhs;
-                 rhs;
-                 value = trans_expr p_st value;
-                 addr = Addr { addr = trans_expr p_st addr; size; endian };
-               }) )
-    | Stmt_Store (endian, bident, addr, value, intval) ->
-        let attrib =
-          Attrib.merge_map_shadow attrib
-          @@ Attrib.join_map_locs
-               (Attrib.attr_of_loc @@ loc_ident (`Global bident))
-               (loc_intval intval)
-        in
-        let endian = trans_endian endian in
-        let size = transIntVal intval |> Z.to_int in
-        let mem = lookup_global_decl bident p_st in
-        ( p_st,
-          `Stmt
-            (Instr_Store
-               {
-                 attrib;
-                 lhs = mem;
-                 rhs = mem;
-                 value = trans_expr p_st value;
-                 addr = Addr { addr = trans_expr p_st addr; size; endian };
-               }) )
-    | Stmt_SingleAssign (Assignment1 (lvar, expr)) ->
-        let expr = trans_expr p_st expr in
-        let attrib =
-          Attrib.merge_map_shadow attrib
-          @@ Attrib.join_map_locs (loc_lvar lvar) (loc_expr expr)
-        in
-        let p_st, lv = trans_lvar p_st lvar in
-        let al = [ (lv, expr) ] in
-        (p_st, `Stmt (Instr_Assign { al; attrib }))
-    | Stmt_MemAssign (lvar, expr) ->
-        let expr = trans_expr p_st expr in
-        let attrib =
-          Attrib.merge_map_shadow attrib
-          @@ Attrib.merge_map_shadow (loc_lvar lvar) (loc_expr expr)
-        in
-        let p_st, lv = trans_lvar p_st lvar in
-        ( p_st,
-          `Stmt
-            (Instr_Store
-               { lhs = lv; rhs = lv; value = expr; addr = Scalar; attrib }) )
-    | Stmt_ScalarStore (lvar, expr) ->
-        let expr = trans_expr p_st expr in
-        let attrib =
-          Attrib.join_map_locs attrib
-          @@ Attrib.join_map_locs (loc_lvar lvar) (loc_expr expr)
-        in
-        let p_st, lv = trans_lvar p_st lvar in
-        ( p_st,
-          `Stmt
-            (Instr_Store
-               { lhs = lv; rhs = lv; value = expr; addr = Scalar; attrib }) )
-    | Stmt_ScalarLoad (lvar, rvar) ->
-        let attrib =
-          Attrib.merge_map_shadow attrib
-          @@ Attrib.join_map_locs (loc_lvar lvar) (loc_var rvar)
-        in
-        let rhs = trans_var p_st rvar in
-        let p_st, lv = trans_lvar p_st lvar in
-        (p_st, `Stmt (Instr_Load { lhs = lv; rhs; addr = Scalar; attrib }))
-    | Stmt_MultiAssign (OpenParen (l, _), assigns, CloseParen (r, _)) ->
-        let f (p_st, assigns) v =
-          match v with
-          | Assignment1 (l, r) ->
-              let e = trans_expr p_st r in
-              let p_st, d = trans_lvar p_st l in
-              (p_st, (d, e) :: assigns)
-        in
-        let p_st, assigns = List.fold_left f (p_st, []) assigns in
-        ( p_st,
-          `Stmt
-            (Instr_Assign
-               {
-                 al = List.rev assigns;
-                 attrib = Attrib.attr_of_loc (Attrib.join_range l r);
-               }) )
-    | Stmt_DirectCall
-        (calllvars, bident, OpenParen (l, _), exprs, CloseParen (r, _))
-      when Option.is_some @@ Intrinsic.of_string (unsafe_unsigil (`Proc bident))
-      ->
-        let p_st, lhs = trans_intrin_lhs p_st calllvars in
-        let name =
-          Intrinsic.of_string (unsafe_unsigil (`Proc bident))
-          |> Option.get_exn_or "unreachable"
-        in
-        let args =
-          match exprs with
-          | CallParams_Exprs e -> List.map (trans_expr p_st) e
-          | CallParams_Named _ -> failwith "intrin args are ordered not named"
-        in
-        let attrib = Attrib.join_range l r |> Attrib.attr_of_loc in
-        (p_st, `Call (Instr_IntrinCall { lhs; name; args; attrib }))
-    | Stmt_DirectCall
-        (calllvars, bident, OpenParen (l, _), exprs, CloseParen (r, _)) ->
-        let n = unsafe_unsigil (`Proc bident) in
-        let bloc = loc_ident (`Proc bident) in
-        let procid =
-          try Procedure.id @@ Program.get_proc_by_name n p_st.prog
-          with Not_found ->
-            raise
-              (LoadError
+    let p_st, loc_attribs, stmt =
+      begin match stmt with
+      | Stmt_Nop -> (p_st, [], `None)
+      | Stmt_Load_Var (lvar, endian, var, expr, intval) ->
+          let locs = [ loc_lvar lvar; loc_intval intval ] in
+          let endian = trans_endian endian in
+          let rhs = trans_var p_st var in
+          let size = transIntVal intval |> Z.to_int in
+          let p_st, lhs = trans_lvar p_st lvar in
+          ( p_st,
+            locs,
+            `Stmt
+              (Instr_Load
                  {
-                   input = None;
-                   token_char_offset_range = Some (loc_ident (`Proc bident));
-                   msg = "no such procedure: " ^ n;
-                 })
-        in
-        let in_param, out_param = Hashtbl.find p_st.params_order n in
-        let p_st, lhs, loc =
-          trans_call_lhs p_st (List.map fst out_param) calllvars
-        in
-        let attrib =
-          join_ranges loc
-            (Attrib.attr_of_loc @@ Attrib.join_range bloc
-           @@ Attrib.join_range l r)
-        in
-        let args = trans_call_rhs p_st in_param exprs in
-        (p_st, `Call (Instr_Call { lhs; procid; args; attrib }))
-    | Stmt_IndirectCall expr ->
-        ( p_st,
-          `Call
-            (Instr_IndirectCall
-               { target = trans_expr p_st expr; attrib = Attrib.empty }) )
-    | Stmt_Assume expr ->
-        let expr = trans_expr p_st expr in
+                   attrib;
+                   lhs;
+                   rhs;
+                   addr = Addr { addr = trans_expr p_st expr; endian; size };
+                 }) )
+      | Stmt_Store_Var (lhs, endian, var, addr, value, intval) ->
+          let locs = [ loc_lvar lhs; loc_intval intval ] in
+          let endian = trans_endian endian in
+          let size = transIntVal intval |> Z.to_int in
+          let rhs = trans_var p_st var in
+          let p_st, lhs = trans_lvar p_st lhs in
+          ( p_st,
+            locs,
+            `Stmt
+              (Instr_Store
+                 {
+                   attrib;
+                   lhs;
+                   rhs;
+                   value = trans_expr p_st value;
+                   addr = Addr { addr = trans_expr p_st addr; size; endian };
+                 }) )
+      | Stmt_Store (endian, bident, addr, value, intval) ->
+          let locs =
+            [
+              Attrib.attr_of_loc (loc_ident (`Global bident)); loc_intval intval;
+            ]
+          in
+          let endian = trans_endian endian in
+          let size = transIntVal intval |> Z.to_int in
+          let mem = lookup_global_decl bident p_st in
+          ( p_st,
+            locs,
+            `Stmt
+              (Instr_Store
+                 {
+                   attrib;
+                   lhs = mem;
+                   rhs = mem;
+                   value = trans_expr p_st value;
+                   addr = Addr { addr = trans_expr p_st addr; size; endian };
+                 }) )
+      | Stmt_SingleAssign (Assignment1 (lvar, expr)) ->
+          let expr = trans_expr p_st expr in
+          let locs = [ loc_lvar lvar; loc_expr expr ] in
+          let p_st, lv = trans_lvar p_st lvar in
+          let al = [ (lv, expr) ] in
+          (p_st, locs, `Stmt (Instr_Assign { al; attrib }))
+      | Stmt_MemAssign (lvar, expr) ->
+          let expr = trans_expr p_st expr in
+          let locs = [ loc_lvar lvar; loc_expr expr ] in
+          let p_st, lv = trans_lvar p_st lvar in
+          ( p_st,
+            locs,
+            `Stmt
+              (Instr_Store
+                 { lhs = lv; rhs = lv; value = expr; addr = Scalar; attrib }) )
+      | Stmt_ScalarStore (lvar, expr) ->
+          let expr = trans_expr p_st expr in
+          let locs = [ loc_lvar lvar; loc_expr expr ] in
+          let p_st, lv = trans_lvar p_st lvar in
+          ( p_st,
+            locs,
+            `Stmt
+              (Instr_Store
+                 { lhs = lv; rhs = lv; value = expr; addr = Scalar; attrib }) )
+      | Stmt_ScalarLoad (lvar, rvar) ->
+          let rhs = trans_var p_st rvar in
+          let locs = [ loc_lvar lvar; loc_var rvar ] in
+          let p_st, lv = trans_lvar p_st lvar in
+          ( p_st,
+            locs,
+            `Stmt (Instr_Load { lhs = lv; rhs; addr = Scalar; attrib }) )
+      | Stmt_MultiAssign (OpenParen (l, _), assigns, CloseParen (r, _)) ->
+          let f (p_st, assigns) v =
+            match v with
+            | Assignment1 (l, r) ->
+                let e = trans_expr p_st r in
+                let p_st, d = trans_lvar p_st l in
+                (p_st, (d, e) :: assigns)
+          in
+          let locs = [ Attrib.attr_of_loc (Attrib.join_range l r) ] in
+          let p_st, assigns = List.fold_left f (p_st, []) assigns in
+          (p_st, locs, `Stmt (Instr_Assign { al = List.rev assigns; attrib }))
+      | Stmt_DirectCall
+          (calllvars, bident, OpenParen (l, _), exprs, CloseParen (r, _))
+        when Option.is_some
+             @@ Intrinsic.of_string (unsafe_unsigil (`Proc bident)) ->
+          let p_st, lhs = trans_intrin_lhs p_st calllvars in
+          let name =
+            Intrinsic.of_string (unsafe_unsigil (`Proc bident))
+            |> Option.get_exn_or "unreachable"
+          in
+          let args =
+            match exprs with
+            | CallParams_Exprs e -> List.map (trans_expr p_st) e
+            | CallParams_Named _ -> failwith "intrin args are ordered not named"
+          in
+          let locs = [ Attrib.join_range l r |> Attrib.attr_of_loc ] in
+          (p_st, locs, `Call (Instr_IntrinCall { lhs; name; args; attrib }))
+      | Stmt_DirectCall
+          (calllvars, bident, OpenParen (l, _), exprs, CloseParen (r, _)) ->
+          let n = unsafe_unsigil (`Proc bident) in
+          let bloc = loc_ident (`Proc bident) in
+          let procid =
+            try Procedure.id @@ Program.get_proc_by_name n p_st.prog
+            with Not_found ->
+              raise
+                (LoadError
+                   {
+                     input = None;
+                     token_char_offset_range = Some (loc_ident (`Proc bident));
+                     msg = "no such procedure: " ^ n;
+                   })
+          in
+          let in_param, out_param = Hashtbl.find p_st.params_order n in
+          let p_st, lhs, loc =
+            trans_call_lhs p_st (List.map fst out_param) calllvars
+          in
+          let locs = loc :: List.map Attrib.attr_of_loc [ bloc; l; r ] in
+          let args = trans_call_rhs p_st in_param exprs in
+          (p_st, locs, `Call (Instr_Call { lhs; procid; args; attrib }))
+      | Stmt_IndirectCall expr ->
+          let expr = trans_expr p_st expr in
+          let locs = [ loc_expr expr ] in
+          (p_st, locs, `Call (Instr_IndirectCall { target = expr; attrib }))
+      | Stmt_Assume expr ->
+          let expr = trans_expr p_st expr in
+          let locs = [ loc_expr expr ] in
 
-        ( p_st,
-          `Stmt
-            (Instr_Assume
-               { body = expr; branch = false; attrib = loc_expr expr }) )
-    | Stmt_Guard expr ->
-        let expr = trans_expr p_st expr in
-        ( p_st,
-          `Stmt
-            (Instr_Assume { body = expr; branch = true; attrib = loc_expr expr })
-        )
-    | Stmt_Assert expr ->
-        let expr = trans_expr p_st expr in
-        (p_st, `Stmt (Instr_Assert { body = expr; attrib = loc_expr expr }))
+          ( p_st,
+            locs,
+            `Stmt (Instr_Assume { body = expr; branch = false; attrib }) )
+      | Stmt_Guard expr ->
+          let expr = trans_expr p_st expr in
+          let locs = [ loc_expr expr ] in
+          ( p_st,
+            locs,
+            `Stmt (Instr_Assume { body = expr; branch = true; attrib }) )
+      | Stmt_Assert expr ->
+          let expr = trans_expr p_st expr in
+          let locs = [ loc_expr expr ] in
+          (p_st, locs, `Stmt (Instr_Assert { body = expr; attrib }))
+      end
+    in
+    let loaded_attrib =
+      match stmt with
+      | `Stmt stmt | `Call stmt -> Stmt.attrib stmt
+      | `None -> Attrib.empty
+    in
+    let attrib_with_locs =
+      List.fold_left Attrib.join_map_locs loaded_attrib loc_attribs
+    in
+    ( p_st,
+      match stmt with
+      | `Stmt stmt -> `Stmt (Stmt.set_attrib stmt attrib_with_locs)
+      | `Call stmt -> `Call (Stmt.set_attrib stmt attrib_with_locs)
+      | `None -> `None )
 
   and trans_call_rhs p_st in_param (x : callParams) =
     let trans_expr = trans_expr p_st in
@@ -1006,10 +1001,7 @@ module BasilASTLoader = struct
       let prog, stmts = sequence_st prog trans_stmt statements in
       let stmts =
         List.filter_map
-          (function
-            | `Call c -> Some (`Stmt c)
-            | `Stmt c -> Some (`Stmt c)
-            | `None -> None)
+          (function `Call c | `Stmt c -> Some (`Stmt c) | `None -> None)
           stmts
       in
       let succ = trans_jump prog jump in
