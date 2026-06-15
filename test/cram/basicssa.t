@@ -97,7 +97,7 @@ Run on basic irreducible loop example
        $R0:bv64 := 0x0:bv64 { .label = "%00000416" };
        $R0:bv64 := bvadd($R0, 0x820:bv64) { .label = "%0000041c" };
        $R30:bv64 := 0x7a0:bv64 { .label = "%00000421" };
-       call @puts_1584();
+       call @puts_1584() { .label = "%00000423" };
        goto (%main_3);
      ];
      block %main_3 [
@@ -115,7 +115,7 @@ Run on basic irreducible loop example
        $R0:bv64 := 0x0:bv64 { .label = "%000003d0" };
        $R0:bv64 := bvadd($R0, 0x820:bv64) { .label = "%000003d6" };
        $R30:bv64 := 0x7d0:bv64 { .label = "%000003db" };
-       call @puts_1584();
+       call @puts_1584() { .label = "%000003de" };
        goto (%main_17);
      ];
      block %main_17 [
@@ -142,7 +142,7 @@ Run on basic irreducible loop example
        $R0:bv64 := 0x0:bv64 { .label = "%00000459" };
        $R0:bv64 := bvadd($R0, 0x828:bv64) { .label = "%0000045f" };
        $R30:bv64 := 0x7f4:bv64 { .label = "%00000464" };
-       call @puts_1584();
+       call @puts_1584() { .label = "%00000466" };
        goto (%main_13);
      ];
      block %main_13 [ goto (%main_11); ];
@@ -238,7 +238,7 @@ Run on basic irreducible loop example
           var R1_5:bv64=R1_out, var R29_6:bv64=R29_out, var R30_5:bv64=R30_out,
           var R31_6:bv64=R31_out, var VF_7:bv1=VF_out, var ZF_10:bv1=ZF_out) := call @puts_1584(CF_in=CF_6:bv1,
           NF_in=NF_6:bv1, R0_in=R0_15:bv64, R1_in=R1_4:bv64, R29_in=R29_5:bv64,
-          R30_in=R30_4:bv64, R31_in=R31_5:bv64, VF_in=VF_6:bv1, ZF_in=ZF_9:bv1);
+          R30_in=R30_4:bv64, R31_in=R31_5:bv64, VF_in=VF_6:bv1, ZF_in=ZF_9:bv1) { .label = "%00000423" };
        goto (%main_3);
      ];
      block %main_3 [
@@ -268,7 +268,7 @@ Run on basic irreducible loop example
           var R1_3:bv64=R1_out, var R29_4:bv64=R29_out, var R30_3:bv64=R30_out,
           var R31_4:bv64=R31_out, var VF_4:bv1=VF_out, var ZF_6:bv1=ZF_out) := call @puts_1584(CF_in=CF_3:bv1,
           NF_in=NF_3:bv1, R0_in=R0_9:bv64, R1_in=R1_2:bv64, R29_in=R29_3:bv64,
-          R30_in=R30_2:bv64, R31_in=R31_3:bv64, VF_in=VF_3:bv1, ZF_in=ZF_5:bv1);
+          R30_in=R30_2:bv64, R31_in=R31_3:bv64, VF_in=VF_3:bv1, ZF_in=ZF_5:bv1) { .label = "%000003de" };
        goto (%main_17);
      ];
      block %main_17 [
@@ -301,7 +301,7 @@ Run on basic irreducible loop example
           var R1_7:bv64=R1_out, var R29_7:bv64=R29_out, var R30_7:bv64=R30_out,
           var R31_7:bv64=R31_out, var VF_8:bv1=VF_out, var ZF_12:bv1=ZF_out) := call @puts_1584(CF_in=CF_5:bv1,
           NF_in=NF_5:bv1, R0_in=R0_23:bv64, R1_in=R1_3:bv64, R29_in=R29_4:bv64,
-          R30_in=R30_6:bv64, R31_in=R31_4:bv64, VF_in=VF_5:bv1, ZF_in=ZF_11:bv1);
+          R30_in=R30_6:bv64, R31_in=R31_4:bv64, VF_in=VF_5:bv1, ZF_in=ZF_11:bv1) { .label = "%00000466" };
        goto (%main_13);
      ];
      block %main_13 [ goto (%main_11); ];

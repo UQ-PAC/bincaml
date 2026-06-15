@@ -110,11 +110,11 @@ proc @main()  -> () {  }
     [
        block %main_code [
          assume eq(0x400808:bv64, $PC);
-         assert false;
+         assert false { .opcode = "0xa9be7bfd" };
          assert boolor(eq(0x400784:bv64, $PC));
          goto (%ret_1);
        ];
        block %ret_1 [ return; ]
     ];
     prog entry @main;
-  |}]
+    |}]
