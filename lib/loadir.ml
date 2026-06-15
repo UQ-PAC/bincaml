@@ -779,7 +779,6 @@ module BasilASTLoader = struct
       | Stmt_Assume expr ->
           let expr = trans_expr p_st expr in
           let locs = [ loc_expr expr ] in
-
           ( p_st,
             locs,
             `Stmt (Instr_Assume { body = expr; branch = false; attrib }) )
