@@ -1,0 +1,9 @@
+(library
+ (name test_aslp)
+ (package bincaml)
+ (modules test_aslp)
+ (inline_tests)
+ (libraries bincaml.transforms)
+ (preprocess
+  (pps ppx_expect)))
+
