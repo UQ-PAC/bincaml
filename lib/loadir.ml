@@ -418,14 +418,10 @@ module BasilASTLoader = struct
           List.fold_left
             (fun (p, a) b ->
               match b with
-              | LBlock (name, attribs, phis, stmts, succ) ->
+              | LBlock (name, attrib, phis, stmts, succ) ->
                   let stmts = conv_lblock formal_out_params_order p b in
                   let p, bid =
-                    Procedure.decl_block_exn p name ~stmts ~phis ()
-                  in
-                  let p =
-                    Procedure.modify_block p bid (fun b ->
-                        { b with attrib = attribs })
+                    Procedure.decl_block_exn p name ~stmts ~phis ~attrib ()
                   in
                   (p, (name, bid) :: a))
             (p, []) blocks
