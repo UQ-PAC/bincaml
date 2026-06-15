@@ -1,0 +1,40 @@
+(library
+ (public_name bincaml.gtirb)
+ (name gtirb_frontend)
+ (modules
+  load_auxdata
+  gtirb
+  UUID
+  opcode
+  disas
+  gfir
+  gfir_to_bincaml
+  conf
+  gtirb_frontend)
+ (libraries
+  base64
+  angstrom
+  bincaml.gtirb_proto
+  zarith
+  fix
+  ocamlgraph
+  containers
+  containers-data
+  iter
+  containers.pp
+  fmt
+  trace.core
+  bincaml.util
+  bincaml.ast)
+ (inline_tests)
+ (preprocess
+  (pps
+   ppx_here
+   ppx_deriving.show
+   ppx_deriving.eq
+   ppx_deriving.ord
+   ppx_deriving.map
+   ppx_deriving.iter
+   ppx_deriving.fold
+   ppx_deriving.enum
+   ppx_expect)))

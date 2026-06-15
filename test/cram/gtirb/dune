@@ -1,0 +1,19 @@
+(include dune_gtirb.inc)
+
+(executable
+ (name gen)
+ (libraries containers))
+
+(rule
+ (deps
+  (source_tree ../../../examples/gtirb/)
+  gen.exe)
+ (action
+  (with-stdout-to
+   dune_gtirb.inc.gen
+   (run ./gen.exe))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff dune_gtirb.inc dune_gtirb.inc.gen)))

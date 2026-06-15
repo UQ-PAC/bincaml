@@ -11,6 +11,7 @@ package name—use this to add the library as a dependency.
 
 - {!Lang} ([bincaml.ast]) defines the IR itself
 - {!Loader.Loadir} ([bincaml.loader]) defines the parser for IR files.
+- {!Gtirb_frontend} ([bincaml.gtirb]) defines the frontend from gtirb protobuffers (WIP).
 
 {2 Basic utilities: [bincaml.util] }
 

@@ -160,7 +160,7 @@ module InterprocDSE = struct
             s ))
         ~init:([], []) block
     in
-    { phis; stmts = Vector.of_list s }
+    { block with phis; stmts = Vector.of_list s }
 
   let transform_proc prog keep live_param_strs results proc =
     (* Remove dead parameters *)

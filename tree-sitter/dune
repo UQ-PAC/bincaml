@@ -1,13 +1,28 @@
+(rule
+ (deps tree-sitter.json grammar.js grammar.bnfc.js)
+ (action
+  (with-stdout-to
+   src.tar
+   (progn
+    (run tree-sitter generate grammar.js)
+    (run tar -cf src.tar src)))))
+
 ; checks tree-sitter highlights are valid
 
 (rule
- (deps src/parser.c queries/highlights.scm ../test/cram/concat.il)
+ (deps
+  src.tar
+  tree-sitter.json
+  queries/highlights.scm
+  ../test/cram/concat.il)
  (alias treesit)
  (action
-  (with-stdin-from
-   %{project_root}/test/cram/concat.il
-   (ignore-stdout
-    (run tree-sitter highlight)))))
+  (progn
+   (run tar -xf src.tar)
+   (with-stdin-from
+    %{project_root}/test/cram/concat.il
+    (ignore-stdout
+     (run tree-sitter highlight))))))
 
 ; check that grammar.js is up to date.
 ; requires `bnfc-treesitter` from pac-nix.
