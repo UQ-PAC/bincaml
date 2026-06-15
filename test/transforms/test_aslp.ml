@@ -1,3 +1,6 @@
+open Lang
+open Common
+
 let%expect_test "aslp basic" =
   let lst =
     Loader.Loadir.ast_of_string
@@ -26,6 +29,7 @@ proc @main()  -> () {  }
     |}
   in
   let prog = lst.prog in
+  let proc = Lang.Program.entry_proc_exn prog in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
   [%expect
@@ -50,4 +54,17 @@ proc @main()  -> () {  }
        block %ret_1 [ return; ]
     ];
     prog entry @main;
+  |}];
+  Lang.Procedure.iter_stmt_topo_fwd proc
+  |> Iter.iter (fun stmt ->
+      Printf.printf "%b\n" (StringMap.is_empty (Lang.Stmt.attrib stmt)));
+  [%expect {|
+    true
+    true
+    true
+    true
+    true
+    true
+    true
+    true
     |}]
