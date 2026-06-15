@@ -58,7 +58,7 @@ Run on basic irreducible loop example
       $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
   
   [
-     block %main_entry [
+     block %main_entry { .address = 1876 } [
        var #4:bv64 := bvadd($R31, 0xffffffffffffffe0:bv64) { .label = "%0000035a" };
        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) #4:bv64 $R29 64 { .label = "%00000360" };
        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(#4:bv64, 0x8:bv64) $R30 64 { .label = "%00000366" };
@@ -87,20 +87,20 @@ Run on basic irreducible loop example
        guard neq(booltobv1(eq($ZF, 0x1:bv1)), 0x0:bv1);
        goto (%main_21);
      ];
-     block %main_21 [ goto (%main_19); ];
+     block %main_21 { .address = 1984 } [ goto (%main_19); ];
      block %main_27 [
        guard eq(booltobv1(eq($ZF, 0x1:bv1)), 0x0:bv1);
        goto (%main_25);
      ];
-     block %main_25 [ goto (%main_5); ];
-     block %main_5 [
+     block %main_25 { .address = 1928 } [ goto (%main_5); ];
+     block %main_5 { .address = 1940 } [
        $R0:bv64 := 0x0:bv64 { .label = "%00000416" };
        $R0:bv64 := bvadd($R0, 0x820:bv64) { .label = "%0000041c" };
        $R30:bv64 := 0x7a0:bv64 { .label = "%00000421" };
-       call @puts_1584();
+       call @puts_1584() { .label = "%00000423" };
        goto (%main_3);
      ];
-     block %main_3 [
+     block %main_3 { .address = 1952 } [
        $R0:bv64 := 0x20000:bv64 { .label = "%00000428" };
        $R0:bv64 := bvadd($R0, 0x3c:bv64) { .label = "%0000042e" };
        var load19:bv32 := load le $mem:(bv64->bv8) $R0 32 { .label = "%00000435$0" };
@@ -111,14 +111,14 @@ Run on basic irreducible loop example
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) $R0 extract(32,0, $R1) 32 { .label = "%0000044e" };
        goto (%main_19);
      ];
-     block %main_19 [
+     block %main_19 { .address = 1988 } [
        $R0:bv64 := 0x0:bv64 { .label = "%000003d0" };
        $R0:bv64 := bvadd($R0, 0x820:bv64) { .label = "%000003d6" };
        $R30:bv64 := 0x7d0:bv64 { .label = "%000003db" };
-       call @puts_1584();
+       call @puts_1584() { .label = "%000003de" };
        goto (%main_17);
      ];
-     block %main_17 [
+     block %main_17 { .address = 2000 } [
        $R0:bv64 := 0x20000:bv64 { .label = "%000003e3" };
        $R0:bv64 := bvadd($R0, 0x3c:bv64) { .label = "%000003e9" };
        var load20:bv32 := load le $mem:(bv64->bv8) $R0 32 { .label = "%000003f0$0" };
@@ -136,17 +136,17 @@ Run on basic irreducible loop example
        guard neq(bvnot(booltobv1(eq($ZF, 0x1:bv1))), 0x0:bv1);
        goto (%main_7);
      ];
-     block %main_7 [ goto (%main_5); ];
+     block %main_7 { .address = 1936 } [ goto (%main_5); ];
      block %main_15 [
        guard eq(bvnot(booltobv1(eq($ZF, 0x1:bv1))), 0x0:bv1);
        $R0:bv64 := 0x0:bv64 { .label = "%00000459" };
        $R0:bv64 := bvadd($R0, 0x828:bv64) { .label = "%0000045f" };
        $R30:bv64 := 0x7f4:bv64 { .label = "%00000464" };
-       call @puts_1584();
+       call @puts_1584() { .label = "%00000466" };
        goto (%main_13);
      ];
-     block %main_13 [ goto (%main_11); ];
-     block %main_11 [
+     block %main_13 { .address = 2020 } [ goto (%main_11); ];
+     block %main_11 { .address = 2036 } [
        $R0:bv64 := 0x0:bv64 { .label = "%0000046b" };
        var load21:bv64 := load le $stack:(bv64->bv8) $R31 64 { .label = "%00000472$0" };
        $R29:bv64 := load21:bv64 { .label = "%00000472$1" };
@@ -185,7 +185,7 @@ Run on basic irreducible loop example
         var ZF_1:bv1 := ZF_in:bv1);
        goto (%main_entry);
      ];
-     block %main_entry [
+     block %main_entry { .address = 1876 } [
        var #4_1:bv64 := bvsub(R31_1:bv64, 0x20:bv64) { .label = "%0000035a" };
        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) #4_1:bv64 R29_1:bv64 64 { .label = "%00000360" };
        $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(#4_1:bv64, 0x8:bv64) R30_1:bv64 64 { .label = "%00000366" };
@@ -215,14 +215,14 @@ Run on basic irreducible loop example
        guard neq(booltobv1(eq(ZF_4:bv1, 0x1:bv1)), 0x0:bv1);
        goto (%main_21);
      ];
-     block %main_21 [ goto (%main_19); ];
+     block %main_21 { .address = 1984 } [ goto (%main_19); ];
      block %main_27 [
        var ZF_3:bv1 := ZF_2:bv1;
        guard eq(booltobv1(eq(ZF_3:bv1, 0x1:bv1)), 0x0:bv1);
        goto (%main_25);
      ];
-     block %main_25 [ goto (%main_5); ];
-     block %main_5 (
+     block %main_25 { .address = 1928 } [ goto (%main_5); ];
+     block %main_5 { .address = 1940 } (
        var CF_6:bv1 := phi(%main_25 -> CF_2:bv1, %main_7 -> CF_5:bv1),
        var NF_6:bv1 := phi(%main_25 -> NF_2:bv1, %main_7 -> NF_5:bv1),
        var R1_4:bv64 := phi(%main_25 -> R1_1:bv64, %main_7 -> R1_3:bv64),
@@ -238,10 +238,10 @@ Run on basic irreducible loop example
           var R1_5:bv64=R1_out, var R29_6:bv64=R29_out, var R30_5:bv64=R30_out,
           var R31_6:bv64=R31_out, var VF_7:bv1=VF_out, var ZF_10:bv1=ZF_out) := call @puts_1584(CF_in=CF_6:bv1,
           NF_in=NF_6:bv1, R0_in=R0_15:bv64, R1_in=R1_4:bv64, R29_in=R29_5:bv64,
-          R30_in=R30_4:bv64, R31_in=R31_5:bv64, VF_in=VF_6:bv1, ZF_in=ZF_9:bv1);
+          R30_in=R30_4:bv64, R31_in=R31_5:bv64, VF_in=VF_6:bv1, ZF_in=ZF_9:bv1) { .label = "%00000423" };
        goto (%main_3);
      ];
-     block %main_3 [
+     block %main_3 { .address = 1952 } [
        var R0_17:bv64 := 0x20000:bv64 { .label = "%00000428" };
        var R0_18:bv64 := bvadd(R0_17:bv64, 0x3c:bv64) { .label = "%0000042e" };
        var load19_1:bv32 := load le $mem:(bv64->bv8) R0_18:bv64 32 { .label = "%00000435$0" };
@@ -252,7 +252,7 @@ Run on basic irreducible loop example
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) R0_21:bv64 extract(32,0, R1_6:bv64) 32 { .label = "%0000044e" };
        goto (%main_19);
      ];
-     block %main_19 (
+     block %main_19 { .address = 1988 } (
        var CF_3:bv1 := phi(%main_3 -> CF_7:bv1, %main_21 -> CF_2:bv1),
        var NF_3:bv1 := phi(%main_3 -> NF_7:bv1, %main_21 -> NF_2:bv1),
        var R1_2:bv64 := phi(%main_3 -> R1_6:bv64, %main_21 -> R1_1:bv64),
@@ -268,10 +268,10 @@ Run on basic irreducible loop example
           var R1_3:bv64=R1_out, var R29_4:bv64=R29_out, var R30_3:bv64=R30_out,
           var R31_4:bv64=R31_out, var VF_4:bv1=VF_out, var ZF_6:bv1=ZF_out) := call @puts_1584(CF_in=CF_3:bv1,
           NF_in=NF_3:bv1, R0_in=R0_9:bv64, R1_in=R1_2:bv64, R29_in=R29_3:bv64,
-          R30_in=R30_2:bv64, R31_in=R31_3:bv64, VF_in=VF_3:bv1, ZF_in=ZF_5:bv1);
+          R30_in=R30_2:bv64, R31_in=R31_3:bv64, VF_in=VF_3:bv1, ZF_in=ZF_5:bv1) { .label = "%000003de" };
        goto (%main_17);
      ];
-     block %main_17 [
+     block %main_17 { .address = 2000 } [
        var R0_11:bv64 := 0x20000:bv64 { .label = "%000003e3" };
        var R0_12:bv64 := bvadd(R0_11:bv64, 0x3c:bv64) { .label = "%000003e9" };
        var load20_1:bv32 := load le $mem:(bv64->bv8) R0_12:bv64 32 { .label = "%000003f0$0" };
@@ -290,7 +290,7 @@ Run on basic irreducible loop example
        guard neq(bvnot(booltobv1(eq(ZF_8:bv1, 0x1:bv1))), 0x0:bv1);
        goto (%main_7);
      ];
-     block %main_7 [ goto (%main_5); ];
+     block %main_7 { .address = 1936 } [ goto (%main_5); ];
      block %main_15 [
        var ZF_11:bv1 := ZF_7:bv1;
        guard eq(bvnot(booltobv1(eq(ZF_11:bv1, 0x1:bv1))), 0x0:bv1);
@@ -301,11 +301,11 @@ Run on basic irreducible loop example
           var R1_7:bv64=R1_out, var R29_7:bv64=R29_out, var R30_7:bv64=R30_out,
           var R31_7:bv64=R31_out, var VF_8:bv1=VF_out, var ZF_12:bv1=ZF_out) := call @puts_1584(CF_in=CF_5:bv1,
           NF_in=NF_5:bv1, R0_in=R0_23:bv64, R1_in=R1_3:bv64, R29_in=R29_4:bv64,
-          R30_in=R30_6:bv64, R31_in=R31_4:bv64, VF_in=VF_5:bv1, ZF_in=ZF_11:bv1);
+          R30_in=R30_6:bv64, R31_in=R31_4:bv64, VF_in=VF_5:bv1, ZF_in=ZF_11:bv1) { .label = "%00000466" };
        goto (%main_13);
      ];
-     block %main_13 [ goto (%main_11); ];
-     block %main_11 [
+     block %main_13 { .address = 2020 } [ goto (%main_11); ];
+     block %main_11 { .address = 2036 } [
        var R0_25:bv64 := 0x0:bv64 { .label = "%0000046b" };
        var load21_1:bv64 := load le $stack:(bv64->bv8) R31_7:bv64 64 { .label = "%00000472$0" };
        var R29_8:bv64 := load21_1:bv64 { .label = "%00000472$1" };
