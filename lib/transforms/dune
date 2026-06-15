@@ -2,6 +2,7 @@
  (public_name bincaml.transforms)
  (name transforms)
  (modules
+  aslp
   cse_elim
   irreducible_loop
   chop_reachable
@@ -20,6 +21,7 @@
   const_prop
   linear_copy)
  (libraries
+  aslp_lifter_ocaml.aarch64
   bincaml.analysis
   patricia-tree
   loader
