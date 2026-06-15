@@ -92,12 +92,13 @@ module BasilASTLoader = struct
   type loaded_block =
     | LBlock of
         (string
+        * Attrib.t StringMap.t
         * Var.t Block.phi list
         * [ `Stmt of Program.stmt | `Return of Program.e list ] list
         * [ `Goto of blockIdent list | `None | `Return ])
 
   let conv_lblock formal_out_params_order p = function
-    | LBlock (name, phis, stmts, succ) ->
+    | LBlock (name, _, phis, stmts, succ) ->
         let stmts = stmts in
         let stmts =
           stmts
@@ -417,10 +418,14 @@ module BasilASTLoader = struct
           List.fold_left
             (fun (p, a) b ->
               match b with
-              | LBlock (name, phis, stmts, succ) ->
+              | LBlock (name, attribs, phis, stmts, succ) ->
                   let stmts = conv_lblock formal_out_params_order p b in
                   let p, bid =
                     Procedure.decl_block_exn p name ~stmts ~phis ()
+                  in
+                  let p =
+                    Procedure.modify_block p bid (fun b ->
+                        { b with attrib = attribs })
                   in
                   (p, (name, bid) :: a))
             (p, []) blocks
@@ -449,7 +454,7 @@ module BasilASTLoader = struct
           List.fold_left
             (fun (p : Program.proc) b ->
               match b with
-              | LBlock (name, _, _, succ) -> (
+              | LBlock (name, _, _, _, succ) -> (
                   match succ with
                   | `None -> p
                   | `Return ->
@@ -976,7 +981,7 @@ module BasilASTLoader = struct
     Attrib.join_map_locs bl el
 
   and trans_block (prog : load_st) (x : BasilIR.AbsBasilIR.block) =
-    let tx name (phis : phiAssign list) statements jump =
+    let tx name attribs (phis : phiAssign list) statements jump =
       let find_block_ident name =
         (Procedure.block_ids
            (prog.curr_proc |> Option.get_exn_or "currproc not set"))
@@ -1012,20 +1017,23 @@ module BasilASTLoader = struct
         | `None, s -> (`None, s)
         | `Goto g, s -> (`Goto g, s)
       in
-      (p_st, LBlock (name, phis, stmts, succ))
+      let _attr_loc, attribs =
+        trans_attrib_set ~binds:StringMap.empty p_st attribs
+      in
+      (p_st, LBlock (name, attribs, phis, stmts, succ))
     in
     match x with
     | Block_NoPhi
         ( BlockIdent (text_range, name),
-          addrattr,
+          attribs,
           BeginList _,
           statements,
           jump,
           EndList _ ) ->
-        tx name [] statements jump
+        tx name attribs [] statements jump
     | Block_Phi
         ( BlockIdent (text_range, name),
-          addrattr,
+          attribs,
           OpenParen _,
           phi,
           CloseParen _,
@@ -1033,7 +1041,7 @@ module BasilASTLoader = struct
           statements,
           jump,
           EndList _ ) ->
-        tx name phi statements jump
+        tx name attribs phi statements jump
 
   and param_to_lvar (pp : params) : Var.t =
     match pp with

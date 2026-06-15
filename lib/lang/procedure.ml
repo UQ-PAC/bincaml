@@ -398,14 +398,19 @@ let decl_block_exn p name ?(phis = [])
   let p = add_block p id ~phis ~stmts ~successors () in
   (p, id)
 
-let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
+let modify_block p id
+    (f : (Var.t, BasilExpr.t) Block.t -> (Var.t, BasilExpr.t) Block.t) =
   let open Edge in
   let open G in
+  let block = f (find_block p id) in
   p
   |> map_graph (fun g ->
       let g = G.remove_edge g (Begin id) (End id) in
       let g = G.add_edge_e g (Begin id, Block block, End id) in
       g)
+
+let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
+  modify_block p id (fun _ -> block)
 
 let modify_succs p id ~remove ~add =
   let open Edge in

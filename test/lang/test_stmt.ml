@@ -108,7 +108,9 @@ proc @main()  -> () {  }
       requires boolor(eq(0x400808:bv64, $PC))
 
     [
-       block %main_code [
+       block %main_code { .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+           .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
+                   .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
          assume eq(0x400808:bv64, $PC);
          assert false { .opcode = "0xa9be7bfd" };
          assert boolor(eq(0x400784:bv64, $PC));
