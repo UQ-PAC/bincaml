@@ -1,36 +1,133 @@
 open Lang
 open Common
 
-module Aslp_state = struct
+module Aslp_state : sig
+  (** {1 Types} *)
+
   type aslp_block = {
+    assume : Expr.BasilExpr.t option;
     stmts : (Var.t, Var.t, Expr.BasilExpr.t) Stmt.t list;
     succs : string list;
   }
+  (** An ASLp lifter block is a list of statements followed by a
+      non-deterministic goto to a number of successors. Each block is optionally
+      guarded by an assume statement. *)
 
   type aslp_state = {
     blocks : aslp_block StringMap.t;
     entry : string;
+        (** Key of the entry block. The entry block is required to have no
+            {!assume} condition. *)
     exit : string;
+        (** Key of the exit block. The exit block is required to have no
+            {!succs}. *)
   }
   (** Offline lifter state representing a control flow diamond starting at
       [entry], then flowing through zero or more other blocks, then arriving at
-      [exit]. *)
+      [exit].
+
+      Alone, this is used to represent the lifter state {i between}
+      instructions. Or, it forms a part of {!lifter_state} for
+      {i within}-instruction state. *)
 
   type lifter_state = { active : string; state : aslp_state }
-  (** Intermediate offline lifter state for one instruction. This records the
-      [active] block to support ITE branching within an instruction. *)
+  (** Intermediate offline lifter state while {i within} one particular
+      instruction.
+
+      This records the {!active} block to support ITE branching within an
+      instruction. The offline IBI ({!Bincaml_IBI}) operates by mutating a
+      reference to this state. *)
+
+  (** {1 Base functions} *)
+
+  val empty_aslp_state : aslp_state
+  val empty_lifter_state : lifter_state
+  val map_aslp_block_names : (string -> string) -> aslp_block -> aslp_block
+  val map_aslp_state_names : (string -> string) -> aslp_state -> aslp_state
+
+  (** {1 Manipulation functions} *)
+
+  val add_goto : aslp_state -> source:string -> target:string -> aslp_state
+  val append_aslp_states : aslp_state -> aslp_state -> aslp_state
+
+  (** {1 Formatters} *)
+
+  val show_aslp_block : aslp_block -> string
+  val pp_aslp_block : Format.formatter -> aslp_block -> unit
+  val show_aslp_state : aslp_state -> string
+  val pp_aslp_state : Format.formatter -> aslp_state -> unit
+  val show_lifter_state : lifter_state -> string
+  val pp_lifter_state : Format.formatter -> lifter_state -> unit
+end = struct
+  type stmt =
+    ((Var.t, Var.t, Expr.BasilExpr.t) Stmt.t[@printer Stmt.pp_stmt_basil])
+  [@@deriving show]
+
+  type aslp_block = {
+    assume : Expr.BasilExpr.t option;
+    stmts : stmt list;
+    succs : string list;
+  }
+  [@@deriving show]
+
+  type aslp_state = {
+    blocks : aslp_block StringMap.t;
+        [@printer StringMap.pp CCString.pp pp_aslp_block]
+    entry : string;
+    exit : string;
+  }
+  [@@deriving show]
+
+  type lifter_state = { active : string; state : aslp_state } [@@deriving show]
 
   let empty_aslp_state =
-    {
-      blocks = StringMap.singleton "entry" { stmts = []; succs = [] };
-      entry = "entry";
-      exit = "exit";
-    }
+    let entry = "entry" and exit = "exit" in
+    let blocks =
+      StringMap.of_list
+        [
+          (entry, { assume = None; stmts = []; succs = [ exit ] });
+          (exit, { assume = None; stmts = []; succs = [] });
+        ]
+    in
+    { blocks; entry; exit }
 
   let empty_lifter_state = { active = "entry"; state = empty_aslp_state }
+
+  let map_aslp_block_names f { assume; stmts; succs } =
+    let succs = List.map f succs in
+    { assume; stmts; succs }
+
+  let map_aslp_state_names f { blocks; entry; exit } =
+    let blocks =
+      blocks |> StringMap.to_iter
+      |> Iter.map (fun (k, v) -> (f k, v))
+      |> StringMap.of_iter
+    and entry = f entry
+    and exit = f exit in
+    { blocks; entry; exit }
+
+  let add_goto aslp_state ~source ~target =
+    let blocks =
+      StringMap.update source
+        (function
+          | Some k -> Some { k with succs = target :: k.succs }
+          | _ -> failwith "add_goto: block not found")
+        aslp_state.blocks
+    in
+    { aslp_state with blocks }
+
+  let append_aslp_states first second =
+    let f key = function
+      | `Both _ -> failwith "overlapping aslp_state block names"
+      | `Left a | `Right a -> Some a
+    in
+    let blocks = StringMap.merge_safe ~f first.blocks second.blocks in
+    add_goto
+      { blocks; entry = first.entry; exit = second.exit }
+      ~source:first.exit ~target:second.entry
 end
 
-module Bincaml_ibi (S : sig
+module Bincaml_IBI (S : sig
   val bincaml_lifter_state : Aslp_state.lifter_state ref
 end) =
 struct
@@ -339,11 +436,11 @@ struct
    fun _ -> failwith ""
 end
 
-let ensure_asl_globals_exist prog = 9
+let ensure_aslp_globals_exist prog = 9
 
 let a () =
   let bincaml_aslp_state = ref Aslp_state.empty_lifter_state in
-  let module I = Bincaml_ibi (struct
+  let module I = Bincaml_IBI (struct
     let bincaml_lifter_state = bincaml_aslp_state
   end) in
-  OfflineASL.Offline.f_A64_decoder (module I) 2
+  OfflineASL_pc.Offline.f_A64_decoder (module I) 2

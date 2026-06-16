@@ -21,7 +21,7 @@
   const_prop
   linear_copy)
  (libraries
-  aslp_lifter_ocaml.aarch64
+  aslp_lifter_ocaml.pc_aarch64
   bincaml.analysis
   patricia-tree
   loader
