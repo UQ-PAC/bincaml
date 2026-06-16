@@ -379,6 +379,11 @@ open struct
                copy;
              ])
 
+    (* NOTE: the above counterexample shows that equality checking cell widths
+       is incorrect, as different correct implementations of unification can
+       produce different cell widths based on the order pointees are unified.
+       This kinda makes model comparisons useless, so the proptests will exist
+       to check assertions... *)
     let unification_edge_case () =
       let steps =
         [
@@ -415,7 +420,6 @@ open struct
       in
       let s = init_sut () in
       let state = init_state in
-      (*
       ignore
       @@ List.fold_left
            (fun state step ->
@@ -447,14 +451,7 @@ open struct
              print_endline @@ dot_string @@ (List.nth !s 0).g;
              next_state step state)
            state steps;
-           *)
 
-      (* NOTE: the above counterexample shows that equality checking cell
-         widths is incorrect, as different correct implementations of
-         unification can produce different cell widths based on the order
-         pointees are unified. This kinda makes model comparisons useless, so
-         the proptests will exist to check assertions... *)
-      ignore (steps, s, state);
       ()
   end
 
@@ -487,12 +484,4 @@ open struct
   end
 end
 
-let tests =
-  [
-    ( "speunification_edge_case",
-      [
-        Alcotest.test_case "unification_edge_case" `Quick
-          DSGraphSpec.unification_edge_case;
-      ] );
-    ("dsa_invariants", DSGraphTests.tests);
-  ]
+let tests = [ ("dsa_invariants", DSGraphTests.tests) ]
