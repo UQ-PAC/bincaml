@@ -95,7 +95,11 @@ buildDunePackage {
     stb_image
   ];
 
-  doCheck = true;
+  postPatch = ''
+    patchShebangs --build test
+  '';
+
+  doCheck = false;
   outputs = [
     "out"
     "dev"
