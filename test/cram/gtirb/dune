@@ -15,5 +15,6 @@
 
 (rule
  (alias runtest)
+ (package bincaml)
  (action
   (diff dune_gtirb.inc dune_gtirb.inc.gen)))

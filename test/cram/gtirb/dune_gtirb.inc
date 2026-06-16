@@ -1,6 +1,7 @@
 
 (rule
  (alias runtest)
+ (package bincaml)
  (deps
   %{bin:bincaml}
   (source_tree  ../../../examples/gtirb)
