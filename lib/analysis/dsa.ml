@@ -250,12 +250,13 @@ module FormalDSGraph = struct
   (** Update an old-to-new mapping after a join of overlapping cells is
       performed. *)
   let extend_old_to_new_join old_cells new_cells m =
-    CellSet.to_list old_cells
-    |> List.product Pair.make (CellSet.to_list new_cells)
+    List.product Pair.make
+      (CellSet.to_list old_cells)
+      (CellSet.to_list new_cells)
     |> List.filter (fun ((c : Cell.t), (c' : Cell.t)) ->
         (not @@ Interval.equal c.offsets c'.offsets)
         && c.node = c'.node
-        && Interval.subset c.offsets c'.offsets)
+        && Interval.overlap c.offsets c'.offsets)
     |> List.map
          (tap (fun (c, c') ->
               assert (not @@ CellMap.mem c m);
@@ -310,9 +311,10 @@ module FormalDSGraph = struct
   (** Insert a cell into the node of the graph with the provided offsets *)
   let add_cell (g : t) (nid : int) offsets : t =
     let cell : Cell.t = { offsets; node = nid } in
-    assert (not @@ CellMap.mem cell g.old_to_new);
-    let cells = CellSet.add cell g.cells in
-    join_overlapping_cells { g with cells }
+    if not @@ CellMap.mem cell g.old_to_new then
+      let cells = CellSet.add cell g.cells in
+      join_overlapping_cells { g with cells }
+    else g
 
   (** Add an edge between two given cells. *)
   let rec add_edge (g : t) f t =
@@ -408,9 +410,8 @@ module FormalDSGraph = struct
           if IntSet.mem c.node nodes then
             let d = IntMap.find c.node deltas in
             let o = Interval.shift d c.offsets in
-            CellSet.find_first
-              (fun (c' : Cell.t) -> Interval.subset o c'.offsets)
-              n
+            CellSet.filter (fun (c' : Cell.t) -> Interval.subset o c'.offsets) n
+            |> CellSet.choose
           else c
         in
         let cells = CellSet.map map g.cells in
@@ -471,7 +472,10 @@ module FormalDSGraph = struct
           in
           iter uc' g'
     in
-    iter (pointees g.cells g.edges) g
+    let g = iter (pointees g.cells g.edges) g in
+    pointees g.cells g.edges
+    |> CellSetSet.iter (fun cs -> assert (CellSet.cardinal cs = 1));
+    g
 
   (** Copy cells from the second graph into the first, with their corresponding
       nodes copied along. The returned graph is the new first graph, and a
@@ -890,30 +894,46 @@ module DSGraph = struct
 
   (** Unify the pointees of this cell and recurse *)
   let rec unify_pointees cell =
-    let rec aux a = function
+    let rec aux = function
       | [] -> ()
-      | b :: cs ->
+      | [ _ ] -> ()
+      | a :: (b :: cs as tail) ->
           join a b;
-          aux a cs
+          aux tail
+    in
+    (* Join the cells belonging to the same node, and then join each node
+       together. This avoids imprecision from joining cells from other nodes,
+        and residual cells around the rest of the node getting merged. *)
+    let join_pointees ps =
+      let node_cells =
+        List.fold_left
+          (fun acc c ->
+            let id = id (node_of c) in
+            let cur = IDMap.get_or id acc ~default:[] in
+            IDMap.add id (c :: cur) acc)
+          IDMap.empty ps
+      in
+      IDMap.iter (fun _ cs -> aux cs) node_cells;
+      IDMap.values node_cells
+      |> Iter.filter_map List.head_opt
+      |> Iter.to_list |> aux
     in
     let p = pointees cell in
     match p with
     | [] -> ()
     | [ _ ] -> ()
     | c :: cs ->
-        aux c cs;
-        (* p' is non-empty only if `cell` pointed to itself, in which case it
-           would have been merged with its other pointees and recursed on *)
+        join_pointees p;
+        (* p' can be non-empty still if cell ended up merged with something in
+           the process of unification. *)
         let p' =
           pointees cell
           |> List.filter (fun c' -> not @@ CCEqual.physical (find c') (find c))
         in
-        if not @@ List.is_empty p' then
-          assert (CCEqual.physical (find cell) (find c));
         assert (List.for_all (fun c' -> CCEqual.physical (find c') (find c)) cs);
         set_pointees (find c :: p') cell;
-        (* Need to unify all of the cells in their new node, since cells in
-           other parts of the node may have been joined together *)
+        (* Need to unify all of the cells in their new node, since the new cell
+           or cells in other parts of the node may have been joined together *)
         node_of c |> cells |> List.iter unify_pointees
 
   (** Find a cell corresponding to an interval in a node. If the interval
@@ -975,6 +995,7 @@ module DSGraph = struct
       in the graph prior. *)
   let copy_node (graph : t) ?(clear_stack = false) ?old_to_new ?(sbs = [])
       (n : node) =
+    List.iter (fun n -> check_valid_node n) graph.nodes;
     (* Mappings of old nodes (in the copied-from graph) to new nodes. Since the
        old nodes won't be modified, this is safe. *)
     let old_to_new = Option.get_lazy (fun _ -> Hashtbl.create 100) old_to_new in

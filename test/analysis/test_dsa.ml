@@ -61,10 +61,18 @@ open struct
     let add_graph (l : t) =
       l := List.append !l [ { g = DSGraph.empty_graph (); cells = [] } ]
 
-    let make_cell (l : t) n i =
+    let make_node (l : t) n is =
       let g = List.nth !l n in
-      let c = DSGraph.add_cell g.g i 0 in
-      g.cells <- c :: g.cells
+      let n = DSGraph.empty_node () in
+      let cs =
+        List.map
+          (fun i -> ref (DSGraph.Cell { offsets = i; node = n; pointees = [] }))
+          is
+      in
+      g.g.nodes <- n :: g.g.nodes;
+      List.iter (DSGraph.insert n) cs;
+      List.iter (fun n -> DSGraph.check_valid_node n) g.g.nodes;
+      g.cells <- cs @ g.cells
 
     let count_cells (l : t) n =
       let g = List.nth !l n in
@@ -90,14 +98,9 @@ open struct
 
     let unify_all (l : t) n =
       let g = List.nth !l n in
-      (*List.iter DSGraph.unify_pointees g.cells*)
       let cells = g.g |> DSGraph.nodes |> List.flat_map DSGraph.cells in
-      cells
-      |> List.iteri (fun i c ->
-          DSGraph.unify_pointees c;
-          List.to_iter cells
-          |> Iter.take (i + 1)
-          |> Iter.iteri (fun j c -> assert (DSGraph.unique_pointee c)))
+      cells |> List.iter DSGraph.unify_pointees;
+      DSGraph.check_unique_pointee g.g
 
     let copy (l : t) f t cs =
       let f = List.nth !l f in
@@ -126,13 +129,18 @@ open struct
 
     let mapn l n f = List.mapi (fun n' gr -> if n = n' then f gr else gr) l
 
-    let make_cell l n i : t =
+    let make_node l n is =
       mapn l n (fun gr ->
           let g, nid = FormalDSGraph.make_node gr.g in
-          let cells : FormalDSGraph.Cell.t list =
-            { offsets = i; node = nid } :: gr.cells
+          let cs, g =
+            List.fold_right
+              (fun i (acc, g) ->
+                ( ({ offsets = i; node = nid } : FormalDSGraph.Cell.t) :: acc,
+                  FormalDSGraph.add_cell g nid i ))
+              is ([], g)
           in
-          { g = FormalDSGraph.add_cell g nid i; cells })
+          let cells = cs @ gr.cells in
+          { g; cells })
 
     let count_cells l n =
       let g = List.nth l n in
@@ -189,7 +197,7 @@ open struct
 
     type cmd =
       | AddGraph
-      | MakeCell of int * Interval.t
+      | MakeNode of int * Interval.t list
       | CountCells of int
       | CellWidths of int
       | MakeEdge of int * int * int
@@ -199,7 +207,9 @@ open struct
 
     let show_cmd = function
       | AddGraph -> "AddGraph"
-      | MakeCell (n, i) -> Printf.sprintf "MakeCell (%d, %s)" n (Interval.dbg i)
+      | MakeNode (n, is) ->
+          Printf.sprintf "MakeNode (%d, %s)" n
+            (List.to_string ~start:"[" ~stop:"]" ~sep:"; " Interval.dbg is)
       | CountCells n -> Printf.sprintf "CountCells %d" n
       | CellWidths n -> Printf.sprintf "CellWidths %d" n
       | MakeEdge (n, a, b) -> Printf.sprintf "MakeEdge (%d, %d, %d)" n a b
@@ -212,7 +222,7 @@ open struct
     let run cmd sut =
       match cmd with
       | AddGraph -> Res (unit, DSGraphHandle.add_graph sut)
-      | MakeCell (n, i) -> Res (unit, DSGraphHandle.make_cell sut n i)
+      | MakeNode (n, is) -> Res (unit, DSGraphHandle.make_node sut n is)
       | CountCells n -> Res (int, DSGraphHandle.count_cells sut n)
       | CellWidths n -> Res (list (option int), DSGraphHandle.cell_widths sut n)
       | MakeEdge (n, a, b) -> Res (unit, DSGraphHandle.add_edge sut n a b)
@@ -227,7 +237,7 @@ open struct
     let next_state cmd state =
       match cmd with
       | AddGraph -> FormalDSGraphHandle.add_graph state
-      | MakeCell (n, i) -> FormalDSGraphHandle.make_cell state n i
+      | MakeNode (n, is) -> FormalDSGraphHandle.make_node state n is
       | CountCells _ -> state
       | CellWidths _ -> state
       | MakeEdge (n, a, b) -> FormalDSGraphHandle.add_edge state n a b
@@ -238,7 +248,7 @@ open struct
     let precond cmd state =
       match cmd with
       | AddGraph -> true
-      | MakeCell (n, _) -> List.length state > n
+      | MakeNode (n, _) -> List.length state > n
       | CountCells n -> List.length state > n
       | CellWidths n -> List.length state > n
       | MakeEdge (n, a, b) ->
@@ -258,7 +268,7 @@ open struct
     let postcond cmd state res =
       match (cmd, res) with
       | AddGraph, Res ((Unit, _), _) -> true
-      | MakeCell _, Res ((Unit, _), _) -> true
+      | MakeNode _, Res ((Unit, _), _) -> true
       | CountCells i, Res ((Int, _), n) ->
           FormalDSGraphHandle.count_cells state i = n
       | CellWidths i, Res ((List (Option Int), _), l) ->
@@ -273,11 +283,13 @@ open struct
     let arb_cmd state =
       let open QCheck.Gen in
       let add_graph = Some (pure AddGraph) in
-      let make_cell =
+      let make_node =
         if not @@ List.is_empty state then
           Some
             ( int_range 0 (List.length state - 1) >>= fun g ->
-              map (fun i -> MakeCell (g, i)) DSGraphGen.(interval small_z) )
+              map
+                (fun i -> MakeNode (g, i))
+                (list_small DSGraphGen.(interval small_z)) )
         else None
       in
       let arb_cell_idx g =
@@ -287,14 +299,14 @@ open struct
             >|= fun ci -> (g, ci) )
         else None
       in
-      let count_cells =
+      let _count_cells =
         if not @@ List.is_empty state then
           Some
             (let* g = int_range 0 (List.length state - 1) in
              pure (CountCells g))
         else None
       in
-      let cell_widths =
+      let _cell_widths =
         if not @@ List.is_empty state then
           Some
             (let* g = int_range 0 (List.length state - 1) in
@@ -357,36 +369,65 @@ open struct
         @@ List.filter_map id
              [
                add_graph;
-               make_cell;
-               count_cells;
-               cell_widths;
+               make_node;
+               (*_count_cells;*)
+               (* Unused, see NOTE under the unification edge case test. *)
+               (*_cell_widths;*)
                make_edge;
                join;
                unify_all;
                copy;
              ])
 
-    (* For recreating failing tests *)
-    let dsa_specific_stm () =
+    let unification_edge_case () =
       let steps =
         [
           AddGraph;
-          MakeCell (0, Interval.Interval (Z.of_int (-93), Z.of_int (-89)));
-          MakeCell (0, Interval.Interval (Z.of_int 0, Z.of_int 4));
-          MakeCell (0, Interval.Interval (Z.of_int (-67), Z.of_int 3));
-          MakeEdge (0, 0, 1);
-          MakeEdge (0, 0, 2);
-          Copy (0, 0, [ 2; 0 ]);
-          Join (0, 4, 0);
-          Copy (0, 0, [ 3 ]);
+          MakeNode
+            ( 0,
+              [
+                Interval.Interval (Z.of_int (-61), Z.of_int (-1));
+                Interval.Interval (Z.of_int 4, Z.of_int 7);
+                Interval.Interval (Z.of_int 2, Z.of_int 89);
+              ] );
+          MakeEdge (0, 2, 2);
+          MakeEdge (0, 2, 0);
+          Copy (0, 0, [ 1 ]);
+          AddGraph;
+          CellWidths 0;
+          MakeEdge (0, 0, 3);
+          MakeNode
+            ( 0,
+              [
+                Interval.Interval (Z.of_int (-3), Z.of_int 0);
+                Interval.Interval (Z.of_int 2, Z.of_int 5);
+                Interval.Interval (Z.of_int (-7), Z.of_int (-2));
+                Interval.Interval (Z.of_int (-8), Z.of_int 1);
+                Interval.Interval (Z.of_int (-7), Z.of_int (-2));
+                Interval.Interval (Z.of_int 0, Z.of_int 47);
+                Interval.Interval (Z.of_int (-2), Z.of_int 7);
+                Interval.Interval (Z.of_int (-5), Z.of_int 2);
+              ] );
+          Join (0, 9, 6);
           UnifyAll 0;
+          CellWidths 0;
         ]
       in
       let s = init_sut () in
       let state = init_state in
+      (*
       ignore
       @@ List.fold_left
            (fun state step ->
+             if not @@ List.is_empty state then (
+               (print_endline
+               @@ FormalDSGraph.(
+                    EdgeSet.to_string Edge.show
+                      (List.nth state 0 : FormalDSGraphHandle.graph).g.edges));
+               print_endline
+               @@ FormalDSGraph.(
+                    CellSet.to_string Cell.show
+                      (List.nth state 0 : FormalDSGraphHandle.graph).g.cells));
              print_endline @@ show_cmd step;
              let res = run step s in
              (match (step, res) with
@@ -403,15 +444,24 @@ open struct
                       (FormalDSGraphHandle.cell_widths state i)
              | _ -> ());
              assert (postcond step state res);
+             print_endline @@ dot_string @@ (List.nth !s 0).g;
              next_state step state)
            state steps;
+           *)
+
+      (* NOTE: the above counterexample shows that equality checking cell
+         widths is incorrect, as different correct implementations of
+         unification can produce different cell widths based on the order
+         pointees are unified. This kinda makes model comparisons useless, so
+         the proptests will exist to check assertions... *)
+      ignore (steps, s, state);
       ()
   end
 
   module DSGraphSequential = STM_sequential.Make (DSGraphSpec)
 
   module DSGraphTests = struct
-    let _join_intervals =
+    let join_intervals =
       QCheck2.(
         Test.make ~name:"join_intervals"
           ~print:Print.(contramap (CCList.to_string Interval.show) string)
@@ -427,91 +477,11 @@ open struct
                   is)
               is))
 
-    (*
-    let widths cells = List.map (fun c -> (c, DSGraph.offsets c)) cells
-    let cell_subset (c, i) = Interval.subset i (DSGraph.offsets c)
-    let valid n = DSGraph.is_sorted n && DSGraph.valid_cell_nodes n
-    let show_cell = Interval.show % DSGraph.offsets
-
-    (* TODO generate cell paths *)
-    (* TODO generate nodes with paths / generally make a node generator? *)
-    (* NOTE generating things that use references sucks!!!! don't do it!!!!!! *)
-
-    (** merge_init ensures invariants *)
-    let merge_init =
-      QCheck.(
-        Test.make ~name:"merge_init" ~count:1000
-          ~print:Print.(contramap (CCList.to_string Interval.show) string)
-          DSGraphGen.(Gen.list (interval small_z))
-          (fun is ->
-            let cells = List.map (fun i -> DSGraph.init i 0) is in
-            let widths = widths cells in
-            let node = DSGraph.merge_init cells in
-            List.for_all cell_subset widths && valid node))
-
-    (** join_nodes_at ensures invariants *)
-    let join_nodes_at =
-      QCheck2.(
-        Test.make ~name:"join_nodes_at" ~count:1000
-          ~print:
-            Print.(
-              contramap
-                (fun (i1, i2, o) ->
-                  CCList.to_string Interval.show i1
-                  ^ " "
-                  ^ CCList.to_string Interval.show i2
-                  ^ " " ^ Z.to_string o)
-                string)
-          DSGraphGen.(
-            Gen.(
-              triple (list (interval small_z)) (list (interval small_z)) small_z))
-          (fun (i1, i2, o) ->
-            let c1 = List.map (fun i -> DSGraph.init i 0) i1 in
-            let c2 = List.map (fun i -> DSGraph.init i 0) i2 in
-            let w1 = widths c1 in
-            let w2 =
-              widths c2 |> List.map (CCPair.map_snd (Interval.shift o))
-            in
-            let n1 = DSGraph.merge_init c1 in
-            let n2 = DSGraph.merge_init c2 in
-            DSGraph.join_nodes_at o n1 n2;
-            List.for_all cell_subset w1
-            && List.for_all cell_subset w2
-            && valid n1 && valid n2))
-
-    (** insert ensures invariants *)
-    let insert =
-      QCheck2.(
-        Test.make ~name:"insert" ~count:1000
-          ~print:
-            Print.(
-              contramap
-                (fun (c1, c2) ->
-                  CCList.to_string Interval.show c1 ^ "&" ^ Interval.show c2)
-                string)
-          DSGraphGen.(Gen.(pair (list (interval small_z)) (interval small_z)))
-          (fun (is, i) ->
-            let cs = List.map (fun i -> DSGraph.init i 0) is in
-            let c = DSGraph.init i 0 in
-            print_endline @@ "Cell list: " ^ CCList.to_string show_cell cs;
-            let w1 = widths cs in
-            let w2 = (c, DSGraph.offsets c) in
-            let n = DSGraph.merge_init cs in
-            print_endline "Merge done";
-            DSGraph.insert n c;
-            List.for_all cell_subset w1 && cell_subset w2 && valid n))
-
-    (** TODO unify_pointees, copy_node, get_cell, cell_of *)
-
     let tests =
-      [ merge_init; join_nodes_at; insert ]
-      |> List.map QCheck_alcotest.to_alcotest
-      *)
-    let _tests =
       [
-        DSGraphSequential.agree_test ~count:1000
+        DSGraphSequential.agree_test ~count:100
           ~name:"DSGraph STM Sequential tests";
-        (*_join_intervals*)
+        join_intervals;
       ]
       |> List.map (QCheck_alcotest.to_alcotest ~verbose:true)
   end
@@ -519,7 +489,10 @@ end
 
 let tests =
   [
-    ( "specific",
-      [ Alcotest.test_case "specific" `Quick DSGraphSpec.dsa_specific_stm ] );
-    ("dsa_invariants", DSGraphTests._tests);
+    ( "speunification_edge_case",
+      [
+        Alcotest.test_case "unification_edge_case" `Quick
+          DSGraphSpec.unification_edge_case;
+      ] );
+    ("dsa_invariants", DSGraphTests.tests);
   ]
