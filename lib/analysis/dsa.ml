@@ -2,7 +2,7 @@ open Lang
 open Common
 open Wrapped_intervals
 
-(* TODO flags so that the analysis results can actually be used *)
+(* TODO add flags for later analyses/transforms to use *)
 
 (* Offset interval should never overflow in userspace code, so it is fine to
    not use wrapped intervals within the DS graph itself. *)
@@ -934,7 +934,10 @@ module DSGraph = struct
         set_pointees (find c :: p') cell;
         (* Need to unify all of the cells in their new node, since the new cell
            or cells in other parts of the node may have been joined together *)
-        node_of c |> cells |> List.iter unify_pointees
+        unify_node_of c
+
+  (** Unify all cells of a node *)
+  and unify_node_of c = node_of c |> cells |> List.iter unify_pointees
 
   (** Find a cell corresponding to an interval in a node. If the interval
       overlaps with multiple cells, they are merged, and if it overlaps with no
@@ -974,14 +977,14 @@ module DSGraph = struct
   (** Get the/a cell corresponding to the given expression, following the logic
       of `get_cell` applied to the results of the SVA analysis. If uniq, then it
       is expected that a unique symbolic base corresponds to the expr, and no
-      cells will be merged. *)
+      cells will be merged. Note that since this method can merge cells,
+      unification may need to be re-performed. *)
   let cell_of ?(uniq = false) (v : Sva.SymAddrSetLattice.t) (g : t) :
       cell option =
     match cells_of ~uniq v g with
     | [ x ] -> Some x
     | x :: xs when not uniq ->
         List.iter (join x) xs;
-        (* TODO should this unify_pointees? *)
         Some x
     | x :: xs when List.for_all (CCEqual.physical (find x) % find) xs -> Some x
     | x :: xs -> failwith "Non unique cell given"
@@ -1131,7 +1134,7 @@ let resolve_arguments graph actual formal =
      let* formal_cell = cell_of ~uniq:true formal graph in
      let* actual_cell = cell_of actual graph in
      join actual_cell formal_cell;
-     node_of actual_cell |> cells |> List.iter unify_pointees;
+     unify_node_of actual_cell;
      check_unique_pointee graph;
      None)
 
@@ -1144,17 +1147,48 @@ let resolve_callee old_to_new caller_graph callee_graph actual formal =
      let* callee_cell = cell_of ~uniq:true formal callee_graph in
      (* Only do the joining if a caller cell actually exists *)
      let* caller_cell = cell_of actual caller_graph in
-     node_of caller_cell |> cells |> List.iter unify_pointees;
+     unify_node_of caller_cell;
      let callee_node = node_of callee_cell in
-     (* We copy with no symbases to avoid merging copied graphs from different calls to the same callee *)
      let callee_node_copy =
        copy_node ~clear_stack:true ~old_to_new caller_graph callee_node
      in
      let* callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
-     (* TODO clean this up by calling resolve_arguments or something *)
-     unify_pointees callee_cell_copy;
      join caller_cell callee_cell_copy;
-     node_of caller_cell |> cells |> List.iter unify_pointees;
+     unify_node_of caller_cell;
+     check_unique_pointee caller_graph;
+     None)
+
+(** Copy and merge the actual cells from the callee graph with the formal cell
+    of the caller graph. *)
+let resolve_caller old_to_new caller_graph callee_graph actual formal =
+  ignore
+    (let open Option.Infix in
+     let open DSGraph in
+     (* Copy all cells of the actual param over and join them *)
+     let caller_cells = cells_of actual caller_graph in
+     let caller_nodes = List.map node_of caller_cells in
+     let caller_nodes_copy =
+       List.map (copy_node ~old_to_new callee_graph) caller_nodes
+     in
+     let caller_cells_copy =
+       List.map2
+         (fun c n -> get_cell (offsets c) n)
+         caller_cells caller_nodes_copy
+       |> List.filter_map Fun.id
+     in
+     let* caller_cell_copy =
+       List.fold_left
+         (fun cur c ->
+           match cur with
+           | None -> Some c
+           | Some c' ->
+               join c c';
+               Some c')
+         None caller_cells_copy
+     in
+     let* callee_cell = cell_of ~uniq:true formal callee_graph in
+     join callee_cell caller_cell_copy;
+     unify_node_of callee_cell;
      check_unique_pointee caller_graph;
      None)
 
@@ -1173,7 +1207,23 @@ let bottom_up prog graphs =
   in
   let ids = Hashtbl.create 100 in
 
-  (* This is pretty much exactly taken from Latner's thesis, it computes sccs in the call graph and calls `process_scc` on them. *)
+  let iter_calls f scc =
+    IDSet.iter
+      (fun pid ->
+        let constraints, caller_graph = IDMap.find pid !graphs in
+        Iter.iter
+          Constraint.(
+            function
+            | Call { lhs; args; callee_id } -> f caller_graph lhs args callee_id
+            | _ -> ())
+          constraints)
+      scc
+  in
+
+  (* This is pretty much exactly taken from Latner's thesis, it computes sccs
+     in the call graph and calls `process_scc` on them. It needs to be mutually
+     recursive because the indirect call resolution code will call `visit` from
+     `process_scc` *)
   let rec visit proc =
     let id = get_id () in
     let min_id = ref id in
@@ -1201,26 +1251,15 @@ let bottom_up prog graphs =
   (* Propagate information across function calls both out and within the scc. *)
   and process_scc scc =
     assert (not @@ IDSet.is_empty scc);
-    (* TODO this feels like it should be simplified a lot... *)
     (* Resolve all out-of-scc calls *)
-    IDSet.iter
-      (fun pid ->
-        let constraints, caller_graph = IDMap.find pid !graphs in
-        SBMap.iter
-          (fun s n -> DSGraph.check_valid_node n)
-          (DSGraph.node_map caller_graph);
-        Iter.iter
-          Constraint.(
-            function
-            | Call { lhs; args; callee_id } when not @@ IDSet.mem callee_id scc
-              ->
-                let old_to_new = Hashtbl.create 100 in
-                let _, callee_graph = IDMap.find callee_id !graphs in
-                args @ lhs
-                |> List.iter (fun (a, f) ->
-                    resolve_callee old_to_new caller_graph callee_graph a f)
-            | _ -> ())
-          constraints)
+    iter_calls
+      (fun caller_graph lhs args callee_id ->
+        if not @@ IDSet.mem callee_id scc then
+          let old_to_new = Hashtbl.create 100 in
+          let _, callee_graph = IDMap.find callee_id !graphs in
+          args @ lhs
+          |> List.iter (fun (a, f) ->
+              resolve_callee old_to_new caller_graph callee_graph a f))
       scc;
     (* Combine all graphs in this scc into one *)
     let scc_graph =
@@ -1247,20 +1286,11 @@ let bottom_up prog graphs =
           g
     in
     (* Resolve all in-scc calls *)
-    IDSet.iter
-      (fun pid ->
-        let constraints, _ = IDMap.find pid !graphs in
-        SBMap.iter
-          (fun s n -> DSGraph.check_valid_node n)
-          (DSGraph.node_map scc_graph);
-        Iter.iter
-          Constraint.(
-            function
-            | Call { lhs; args; callee_id } when IDSet.mem callee_id scc ->
-                args @ lhs
-                |> List.iter (fun (a, f) -> resolve_arguments scc_graph a f)
-            | _ -> ())
-          constraints)
+    iter_calls
+      (fun _ lhs args callee_id ->
+        if IDSet.mem callee_id scc then
+          args @ lhs
+          |> List.iter (fun (a, f) -> resolve_arguments scc_graph a f))
       scc;
     (* TODO Indirect call stuff *)
     ()
@@ -1278,6 +1308,90 @@ let bottom_up prog graphs =
     !graphs;
 
   !graphs
+
+(** Perform the top down phase, which interprocedurally propagates information
+    downwards from callers to callees. It is assumed that the bottom up phase
+    has already been run (it doesn't make much sense to call this otherwise). *)
+let top_down prog graphs =
+  (* The indirect calls should be resolved by now, so we can do a simpler SCC iteration algorithm. *)
+  let iter_calls f scc =
+    IDSet.iter
+      (fun pid ->
+        let constraints, caller_graph = IDMap.find pid graphs in
+        Iter.iter
+          Constraint.(
+            function
+            | Call { lhs; args; callee_id } -> f caller_graph lhs args callee_id
+            | _ -> ())
+          constraints)
+      scc
+  in
+  let cg = Program.CallGraph.make_call_graph prog in
+  let sccs = Program.CallGraph.Scc.scc_list cg in
+  List.rev sccs
+  |> List.iter (fun scc ->
+      let scc =
+        List.filter_map
+          Program.CallGraph.Vert.(
+            function
+            | ProcBegin i | ProcReturn i | ProcExit i -> Some i
+            | _ -> None)
+          scc
+        |> IDSet.of_list
+      in
+      print_endline @@ IDSet.to_string ID.show scc;
+      (* Resolve calls *)
+      iter_calls
+        (fun caller_graph lhs args callee_id ->
+          if not @@ IDSet.mem callee_id scc then
+            let old_to_new = Hashtbl.create 100 in
+            let _, callee_graph = IDMap.find callee_id graphs in
+            args @ lhs
+            |> List.iter (fun (a, f) ->
+                resolve_caller old_to_new caller_graph callee_graph a f)
+          else
+            (* `caller_graph` will be the scc graph of this scc. *)
+            args @ lhs
+            |> List.iter (fun (a, f) -> resolve_arguments caller_graph a f))
+        scc;
+      ());
+  graphs
+
+(** Perform data structure analysis and return the graphs for each procedure. *)
+let dsa (p : Program.t) =
+  let sva_r =
+    Trace_core.with_span ~__FILE__ ~__LINE__ "sva" @@ fun _ ->
+    Sva.sva p |> IDMap.of_list
+  in
+  let translate pid e =
+    Sva.(
+      Eval.EV.eval (flip StateAbstraction.read (IDMap.find pid sva_r)) e
+      |> SymAddrSetLattice.to_list |> snd
+      |> List.map (try_make_global p)
+      |> SymAddrSetLattice.of_list_bot)
+  in
+  let local_graphs =
+    Trace_core.with_span ~__FILE__ ~__LINE__ "local phase" @@ fun _ ->
+    IDMap.to_list sva_r
+    |> List.map (fun (pid, sva) ->
+        let proc = Program.proc p pid in
+        let constraints =
+          Constraint.gen_constraints p proc
+          |> Iter.map (Constraint.map (translate pid) translate)
+          |> Iter.persistent
+        in
+        (pid, (constraints, make_local_graph proc sva constraints)))
+    |> IDMap.of_list
+  in
+  let bu_graphs =
+    Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
+    bottom_up p local_graphs
+  in
+  let td_graphs =
+    Trace_core.with_span ~__FILE__ ~__LINE__ "top down phase" @@ fun _ ->
+    top_down p bu_graphs
+  in
+  td_graphs
 
 (** Manual dot string construction because ocamlgraph doesn't seem to support
     record nodes. *)
@@ -1368,42 +1482,13 @@ let dot_string (graph : DSGraph.t) =
 
 (** Perform data structure analysis and print the dsgraphs as dot graphs to
     stdout. *)
-let dsa (p : Program.t) =
-  let sva_r =
-    Trace_core.with_span ~__FILE__ ~__LINE__ "sva" @@ fun _ ->
-    Sva.sva p |> IDMap.of_list
-  in
-  let translate pid e =
-    Sva.(
-      Eval.EV.eval (flip StateAbstraction.read (IDMap.find pid sva_r)) e
-      |> SymAddrSetLattice.to_list |> snd
-      |> List.map (try_make_global p)
-      |> SymAddrSetLattice.of_list_bot)
-  in
-  let local_graphs =
-    Trace_core.with_span ~__FILE__ ~__LINE__ "local phase" @@ fun _ ->
-    IDMap.to_list sva_r
-    |> List.map (fun (pid, sva) ->
-        print_endline @@ ID.show pid;
-        let proc = Program.proc p pid in
-        let constraints =
-          Constraint.gen_constraints p proc
-          |> Iter.map (Constraint.map (translate pid) translate)
-          |> Iter.persistent
-        in
-        (pid, (constraints, make_local_graph proc sva constraints)))
-    |> IDMap.of_list
-  in
-  print_endline "local phase done";
-  let bu_graphs =
-    Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
-    bottom_up p local_graphs
-  in
+let dsa_dots (p : Program.t) =
+  let gs = dsa p in
   List.iter
     (fun (id, graph) ->
       print_endline @@ ID.show id;
       print_endline @@ dot_string graph)
     (List.map
        (fun (pid, (_, (graph : DSGraph.t))) -> (pid, graph))
-       (IDMap.to_list bu_graphs));
+       (IDMap.to_list gs));
   p

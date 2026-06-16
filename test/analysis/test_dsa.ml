@@ -379,6 +379,7 @@ open struct
           MakeEdge (0, 1, 1);
           MakeEdge (0, 1, 0);
           Copy (0, 0, [ 1 ]);
+          (* The SUT says widths are 151 and state says 214, but if we reverse this edge they say what the other said *)
           MakeEdge (0, 0, 2);
           UnifyAll 0;
           CellWidths 0;
@@ -433,4 +434,8 @@ open struct
   end
 end
 
-let tests = [ ("dsa_invariants", DSGraphTests.tests) ]
+let tests =
+  [
+    (*( "unification_edge_case", [ Alcotest.test_case "unification_edge_case" `Quick DSGraphSpec.unification_edge_case; ] );*)
+    ("dsa_invariants", DSGraphTests.tests);
+  ]

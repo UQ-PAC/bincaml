@@ -460,7 +460,7 @@ module PassManager = struct
       };
       {
         name = "data-structure-analysis";
-        apply = Prog Analysis.Dsa.dsa;
+        apply = Prog Analysis.Dsa.dsa_dots;
         doc = "";
         invariants = Invariants.needs ~invalidates:[ SSA ] [];
       };
