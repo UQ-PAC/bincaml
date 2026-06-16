@@ -40,8 +40,8 @@ module Edge = struct
   let to_attrib { conditional; direct; type' } =
     StringMap.of_list
       [
-        (".conditional", `String (Bool.to_string conditional));
-        (".direct", `String (Bool.to_string direct));
+        (".conditional", `String (Stdlib.Bool.to_string conditional));
+        (".direct", `String (Stdlib.Bool.to_string direct));
         (".type", `String (show_edge_type type'));
       ]
 

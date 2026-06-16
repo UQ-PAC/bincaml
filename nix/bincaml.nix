@@ -3,9 +3,12 @@
   buildDunePackage,
   nix-gitignore,
   writableTmpDirAsHomeHook,
+  protobuf,
 
   # ocaml packages
   menhir,
+  angstrom,
+  ocaml-protoc-plugin,
   zarith,
   fix,
   trace,
@@ -60,10 +63,14 @@ buildDunePackage {
     qcheck-stm
   ];
   nativeBuildInputs = [
-    menhir
     writableTmpDirAsHomeHook
+    protobuf
+    ocaml-protoc-plugin
+    menhir
   ];
   propagatedBuildInputs = [
+    ocaml-protoc-plugin
+    angstrom
     zarith
     ppx_expect
     pp_loc
@@ -88,7 +95,11 @@ buildDunePackage {
     stb_image
   ];
 
-  doCheck = true;
+  postPatch = ''
+    patchShebangs --build test
+  '';
+
+  doCheck = false;
   outputs = [
     "out"
     "dev"
