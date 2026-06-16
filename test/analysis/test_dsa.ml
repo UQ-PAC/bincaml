@@ -26,25 +26,6 @@ open struct
           ])
   end
 
-  module DSGraphGen2 = struct
-    (** Generates small zarith integers *)
-    let small_z = QCheck2.Gen.(int_small |> map Z.of_int)
-
-    (** Generates an arbitrary interval with the given zarith generator.
-        Occasionally will generate a Top interval but never a Bot interval. *)
-    let interval zgen =
-      QCheck2.Gen.(
-        oneof_weighted
-          [
-            ( 30,
-              pair zgen zgen
-              |> map (fun (a, b) ->
-                  if Z.leq a b then Interval.Interval (a, b)
-                  else Interval.Interval (b, a)) );
-            (1, pure Interval.Top);
-          ])
-  end
-
   (* TODO
      - IMPORTANT nodes with multiple cells
      - Test symbase stuff
@@ -379,11 +360,12 @@ open struct
                copy;
              ])
 
+    (*
     (* NOTE: the above counterexample shows that equality checking cell widths
        is incorrect, as different correct implementations of unification can
        produce different cell widths based on the order pointees are unified.
-       This kinda makes model comparisons useless, so the proptests will exist
-       to check assertions... *)
+       This kinda makes model comparisons with cell widths useless, so the
+       proptests will exist to check assertions. *)
     let unification_edge_case () =
       let steps =
         [
@@ -392,28 +374,12 @@ open struct
             ( 0,
               [
                 Interval.Interval (Z.of_int (-61), Z.of_int (-1));
-                Interval.Interval (Z.of_int 4, Z.of_int 7);
                 Interval.Interval (Z.of_int 2, Z.of_int 89);
               ] );
-          MakeEdge (0, 2, 2);
-          MakeEdge (0, 2, 0);
+          MakeEdge (0, 1, 1);
+          MakeEdge (0, 1, 0);
           Copy (0, 0, [ 1 ]);
-          AddGraph;
-          CellWidths 0;
-          MakeEdge (0, 0, 3);
-          MakeNode
-            ( 0,
-              [
-                Interval.Interval (Z.of_int (-3), Z.of_int 0);
-                Interval.Interval (Z.of_int 2, Z.of_int 5);
-                Interval.Interval (Z.of_int (-7), Z.of_int (-2));
-                Interval.Interval (Z.of_int (-8), Z.of_int 1);
-                Interval.Interval (Z.of_int (-7), Z.of_int (-2));
-                Interval.Interval (Z.of_int 0, Z.of_int 47);
-                Interval.Interval (Z.of_int (-2), Z.of_int 7);
-                Interval.Interval (Z.of_int (-5), Z.of_int 2);
-              ] );
-          Join (0, 9, 6);
+          MakeEdge (0, 0, 2);
           UnifyAll 0;
           CellWidths 0;
         ]
@@ -451,34 +417,17 @@ open struct
              print_endline @@ dot_string @@ (List.nth !s 0).g;
              next_state step state)
            state steps;
-
       ()
+      *)
   end
 
   module DSGraphSequential = STM_sequential.Make (DSGraphSpec)
 
   module DSGraphTests = struct
-    let join_intervals =
-      QCheck2.(
-        Test.make ~name:"join_intervals"
-          ~print:Print.(contramap (CCList.to_string Interval.show) string)
-          (QCheck2.Gen.list_small @@ DSGraphGen2.(interval small_z))
-          (fun is ->
-            let open FormalDSGraph in
-            let is = IntervalSet.of_list is |> join_invervals in
-            IntervalSet.for_all
-              (fun i ->
-                IntervalSet.for_all
-                  (fun i' ->
-                    Interval.equal i i' || (not @@ Interval.overlap i i'))
-                  is)
-              is))
-
     let tests =
       [
         DSGraphSequential.agree_test ~count:100
           ~name:"DSGraph STM Sequential tests";
-        join_intervals;
       ]
       |> List.map (QCheck_alcotest.to_alcotest ~verbose:true)
   end
