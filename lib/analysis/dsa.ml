@@ -942,7 +942,7 @@ module DSGraph = struct
   (** Find a cell corresponding to an interval in a node. If the interval
       overlaps with multiple cells, they are merged, and if it overlaps with no
       cells None is returned. *)
-  let rec get_cell ?(uniq = false) i (n : node) : cell option =
+  let rec get_cell i (n : node) : cell option =
     match !n with
     | NodePath _ ->
         let p, off = find_node n in
@@ -957,18 +957,16 @@ module DSGraph = struct
         match cells with
         | [] -> None
         | [ c ] -> Some c
-        | c :: cs when uniq -> failwith "Non unique cell given"
         | c :: cs ->
             List.iter (join c) cs;
             Some c)
 
   (** Get all cells corresponding to a value set. *)
-  let cells_of ?(uniq = false) (v : Sva.SymAddrSetLattice.t) (g : t) : cell list
-      =
+  let cells_of (v : Sva.SymAddrSetLattice.t) (g : t) : cell list =
     snd @@ Sva.SymAddrSetLattice.to_list v
     |> List.filter_map (fun (sb, i) ->
         let i = Interval.of_wint i in
-        SBMap.get sb g.node_map |> Option.flat_map (fun n -> get_cell ~uniq i n))
+        SBMap.get sb g.node_map |> Option.flat_map (fun n -> get_cell i n))
 
   (** Merge all of the cells in a graph corresponding to an SVA term *)
   let merge_vs (v : Sva.SymAddrSetLattice.t) (g : t) : unit =
@@ -979,15 +977,12 @@ module DSGraph = struct
       is expected that a unique symbolic base corresponds to the expr, and no
       cells will be merged. Note that since this method can merge cells,
       unification may need to be re-performed. *)
-  let cell_of ?(uniq = false) (v : Sva.SymAddrSetLattice.t) (g : t) :
-      cell option =
-    match cells_of ~uniq v g with
+  let cell_of (v : Sva.SymAddrSetLattice.t) (g : t) : cell option =
+    match cells_of v g with
     | [ x ] -> Some x
-    | x :: xs when not uniq ->
+    | x :: xs ->
         List.iter (join x) xs;
         Some x
-    | x :: xs when List.for_all (CCEqual.physical (find x) % find) xs -> Some x
-    | x :: xs -> failwith "Non unique cell given"
     | [] -> None
 
   (** Create a copy of the given node with all reachable nodes and cells from
@@ -1048,6 +1043,29 @@ module DSGraph = struct
         graph.node_map <- SBMap.add sb new_n graph.node_map)
       sbs;
     new_n
+
+  (** Copy the cells corresponding to an sva value from one graph into another,
+      and merge the copied cells into a single cell. Note unification needs to
+      be performed afterwards. *)
+  let copy_cells_of ?old_to_new ?(clear_stack = false) sb from_graph to_graph =
+    let old_to_new = Option.get_lazy (fun _ -> Hashtbl.create 100) old_to_new in
+    let cells = cells_of sb from_graph in
+    let nodes = List.map node_of cells in
+    let nodes_copy =
+      List.map (copy_node ~clear_stack ~old_to_new to_graph) nodes
+    in
+    let cells_copy =
+      List.map2 (fun c n -> get_cell (offsets c) n) cells nodes_copy
+      |> List.filter_map Fun.id
+    in
+    List.fold_left
+      (fun cur c ->
+        match cur with
+        | None -> Some c
+        | Some c' ->
+            join c c';
+            Some c')
+      None cells_copy
 end
 
 (** Construct the local-phase graph of the given procedure. It will be ensured
@@ -1089,27 +1107,15 @@ let make_local_graph proc sva
       | Constraint.Call { lhs; args } -> ())
     constraints;
 
+  (* Join formal in params *)
+  Procedure.formal_in_params proc
+  |> StringMap.values
+  |> Iter.iter (fun v ->
+      let v = Sva.StateAbstraction.read v sva in
+      DSGraph.merge_vs v g);
+
   (* Unify all pointees *)
   Vector.iter DSGraph.unify_pointees cells;
-
-  (* Join formal in/out params while preserving unification *)
-  Procedure.formal_in_params proc
-  |> StringMap.values
-  |> Iter.append (Procedure.formal_out_params proc |> StringMap.values)
-  |> Iter.iter (fun v ->
-      let v = Sva.StateAbstraction.read v sva in
-      (* TODO I think this needs to be run in a fixed point loop since unifying
-              and merging can break each other :(( *)
-      DSGraph.merge_vs v g;
-      DSGraph.(Option.iter unify_pointees @@ cell_of ~uniq:true v g));
-
-  (* Check formal in/out params are unique (there is an assert in cell_of) *)
-  Procedure.formal_in_params proc
-  |> StringMap.values
-  |> Iter.append (Procedure.formal_out_params proc |> StringMap.values)
-  |> Iter.iter (fun v ->
-      let v = Sva.StateAbstraction.read v sva in
-      ignore @@ DSGraph.cell_of ~uniq:true v g);
 
   List.iter (fun n -> DSGraph.check_valid_node n) (DSGraph.nodes g);
   DSGraph.check_unique_pointee g;
@@ -1131,7 +1137,7 @@ let resolve_arguments graph actual formal =
   ignore
     (let open Option.Infix in
      let open DSGraph in
-     let* formal_cell = cell_of ~uniq:true formal graph in
+     let* formal_cell = cell_of formal graph in
      let* actual_cell = cell_of actual graph in
      join actual_cell formal_cell;
      unify_node_of actual_cell;
@@ -1144,15 +1150,15 @@ let resolve_callee old_to_new caller_graph callee_graph actual formal =
   ignore
     (let open Option.Infix in
      let open DSGraph in
-     let* callee_cell = cell_of ~uniq:true formal callee_graph in
      (* Only do the joining if a caller cell actually exists *)
      let* caller_cell = cell_of actual caller_graph in
      unify_node_of caller_cell;
-     let callee_node = node_of callee_cell in
-     let callee_node_copy =
-       copy_node ~clear_stack:true ~old_to_new caller_graph callee_node
+     let* callee_cell_copy =
+       copy_cells_of ~old_to_new ~clear_stack:true formal callee_graph
+         caller_graph
      in
-     let* callee_cell_copy = get_cell (offsets callee_cell) callee_node_copy in
+     unify_node_of callee_cell_copy;
+     check_unique_pointee caller_graph;
      join caller_cell callee_cell_copy;
      unify_node_of caller_cell;
      check_unique_pointee caller_graph;
@@ -1164,28 +1170,10 @@ let resolve_caller old_to_new caller_graph callee_graph actual formal =
   ignore
     (let open Option.Infix in
      let open DSGraph in
-     let* callee_cell = cell_of ~uniq:true formal callee_graph in
+     let* callee_cell = cell_of formal callee_graph in
      (* Copy all cells of the actual param over and join them (only if the callee cell exists of course) *)
-     let caller_cells = cells_of actual caller_graph in
-     let caller_nodes = List.map node_of caller_cells in
-     let caller_nodes_copy =
-       List.map (copy_node ~old_to_new callee_graph) caller_nodes
-     in
-     let caller_cells_copy =
-       List.map2
-         (fun c n -> get_cell (offsets c) n)
-         caller_cells caller_nodes_copy
-       |> List.filter_map Fun.id
-     in
      let* caller_cell_copy =
-       List.fold_left
-         (fun cur c ->
-           match cur with
-           | None -> Some c
-           | Some c' ->
-               join c c';
-               Some c')
-         None caller_cells_copy
+       copy_cells_of ~old_to_new actual caller_graph callee_graph
      in
      join callee_cell caller_cell_copy;
      unify_node_of callee_cell;
