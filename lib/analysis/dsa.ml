@@ -1164,7 +1164,8 @@ let resolve_caller old_to_new caller_graph callee_graph actual formal =
   ignore
     (let open Option.Infix in
      let open DSGraph in
-     (* Copy all cells of the actual param over and join them *)
+     let* callee_cell = cell_of ~uniq:true formal callee_graph in
+     (* Copy all cells of the actual param over and join them (only if the callee cell exists of course) *)
      let caller_cells = cells_of actual caller_graph in
      let caller_nodes = List.map node_of caller_cells in
      let caller_nodes_copy =
@@ -1186,7 +1187,6 @@ let resolve_caller old_to_new caller_graph callee_graph actual formal =
                Some c')
          None caller_cells_copy
      in
-     let* callee_cell = cell_of ~uniq:true formal callee_graph in
      join callee_cell caller_cell_copy;
      unify_node_of callee_cell;
      check_unique_pointee caller_graph;
