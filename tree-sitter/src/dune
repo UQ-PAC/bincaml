@@ -1,9 +1,0 @@
-(rule
- (deps ../grammar.js ../grammar.bnfc.js ../tree-sitter.json)
- (targets grammar.json parser.c node-types.json)
- (alias treesit)
- (mode promote)
- (action
-  (chdir
-   ..
-   (run tree-sitter generate grammar.js))))

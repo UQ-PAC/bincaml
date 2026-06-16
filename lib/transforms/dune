@@ -4,6 +4,7 @@
  (modules
   cse_elim
   irreducible_loop
+  chop_reachable
   ssa
   dsa
   cf_tx

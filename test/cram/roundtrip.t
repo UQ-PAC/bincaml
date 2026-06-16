@@ -45,7 +45,8 @@ Memassign repr
     captures $Global_4325420_4325424:bv32
   
   [
-     block %main_entry [
+     block %main_entry { .address = 4196164;
+         .originalLabel = "SFN4dpBgSO2bPUu0fyDluw==" } [
        $Global_4325420_4325424:bv32 := store  0x2a:bv32 { .label = "4196176_0" };
        goto (%main_return);
      ];
@@ -113,7 +114,7 @@ Examples Directory
   (dump-il after.il)
 
   $ diff before.il after.il | head -n 50
-  493c493
+  518c518
   <      goto (%main_2185,%main_2181,%main_2177,%main_2169,%main_2151,%main_2149,%main_2123,%main_2119,%main_2117,%main_2115,%main_2111,%main_2109,%main_2095,%main_2093,%main_2091,%main_2077,%main_2069,%main_2065,%main_2061,%main_2059,%main_2035,%main_2031,%main_2029,%main_2025,%main_1999,%main_1989,%main_1985,%main_1977,%main_1973,%main_1971,%main_1955);
   ---
   >      goto (%main_2177,%main_2185,%main_2181,%main_2169,%main_2151,%main_2149,%main_2123,%main_2119,%main_2117,%main_2115,%main_2111,%main_2109,%main_2095,%main_2093,%main_2091,%main_2077,%main_2069,%main_2065,%main_2061,%main_2059,%main_2035,%main_2031,%main_2029,%main_2025,%main_1999,%main_1989,%main_1985,%main_1977,%main_1973,%main_1971,%main_1955);

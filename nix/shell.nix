@@ -51,7 +51,7 @@ mkShell {
   ++ lib.optional stdenv.hostPlatform.isLinux perf;
 
   inputsFrom = [
-    bincaml
+    (bincaml.overrideAttrs { doCheck = true; })
   ];
 
   shellHook = ''

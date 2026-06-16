@@ -17,6 +17,6 @@
     captures $Global_4325420_4325424:bv32
   
   --
-     block %main_entry [
+         .originalLabel = "SFN4dpBgSO2bPUu0fyDluw==" } [
        $Global_4325420_4325424:bv32 := store  0x2a:bv32 { .label = "4196176_0" };
        goto (%main_return);

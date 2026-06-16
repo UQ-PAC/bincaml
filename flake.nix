@@ -36,7 +36,10 @@
     flake-for-all-systems args {
       overlays = {
         addBincamlPackages = ofinal: _: {
-          bincaml = ofinal.callPackage ./nix/bincaml.nix { };
+          bincaml = ofinal.callPackage ./nix/bincaml.nix {
+            ocaml-protoc-plugin = ofinal.ocaml-protoc-plugin-6-1-0;
+          };
+          ocaml-protoc-plugin-6-1-0 = ofinal.callPackage ./nix/ocaml-protoc-plugin.nix { };
           bincaml_lsp = ofinal.callPackage ./nix/bincaml-lsp.nix { };
           hector = ofinal.callPackage ./nix/hector.nix { };
           intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };

@@ -303,10 +303,38 @@ let save_history st fname =
       flush_all ();
       st)
 
+let load_gtirb st fname =
+  let gtirb, a = P.pair_opt P.string P.string fname in
+  file_opt a (fun chan ->
+      let p = Gtirb_frontend.load_gtirb_prog gtirb in
+      let p =
+        match p with
+        | Ok e ->
+            Loader.Loadir.(
+              Some
+                { prog = e; curr_proc = None; params_order = Hashtbl.create 0 })
+        | _ -> None
+      in
+      { st with load_st = p })
+
+let dbg_gtirb st fname =
+  let gtirb, a = P.pair_opt P.string P.string fname in
+  file_opt a (fun chan ->
+      let p = Gtirb_frontend.load_gtirb_gfir gtirb in
+      p |> Option.to_iter
+      |> Iter.flat_map Gtirb_frontend.UUIDMap.to_iter
+      |> Iter.map snd
+      |> Iter.iter (fun (p : Gtirb_frontend.Gfir.temp_proc) ->
+          print_endline p.name;
+          Gtirb_frontend.(Gfir.D.output_graph chan p.cfg)));
+  st
+
 let cmds_list =
   [
     ("skip", (fun a b -> a), "", "Do nothing");
     ("load-il", load_il, "<filename1> <filename2> ...", "load il files");
+    ("gtirb", dbg_gtirb, "in.gtirb output_file?", "Gtirb debug");
+    ("load-gtirb", load_gtirb, "in.gtirb output_file?", "Load gtirb file");
     ("defcmd", def_cmd, "<name> <definition>", "define a command alias");
     ("list-procs", list_procs, "", "List procedures in program");
     ("dump-il", dump_il, "?file", "Write IL to file or stdout");

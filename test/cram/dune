@@ -18,6 +18,7 @@
   ssa-multi-deps.il
   memassign.il
   ptrrec1.il
+  ../../examples/gtirb/binsearch_sqrt.gtirb
   ../../examples/sqrt.il
   ../../examples/irreducible_loop_1.il
   ../../examples/cat.il

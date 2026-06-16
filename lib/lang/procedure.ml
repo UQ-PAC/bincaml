@@ -305,10 +305,10 @@ let remove_block p id =
       G.remove_vertex g (Begin id))
     p
 
-let add_block_graph graph id ?(phis = [])
+let add_block_graph ?(attrib = Attrib.empty) graph id ?(phis = [])
     ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   let stmts = Vector.of_list stmts in
-  let b = Edge.(Block { phis; stmts }) in
+  let b = Edge.(Block { phis; stmts; attrib }) in
   let open Vert in
   let existing = G.find_all_edges graph (Begin id) (End id) in
   let graph = List.fold_left G.remove_edge_e graph existing in
@@ -320,26 +320,26 @@ let add_block_graph graph id ?(phis = [])
   in
   graph
 
-let add_block p id ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
-    ?(successors = []) () =
+let add_block p id ?(attrib = Attrib.empty) ?(phis = [])
+    ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   assert (Option.is_some (graph p));
   map_graph
-    (fun graph -> add_block_graph graph id ~phis ~stmts ~successors ())
+    (fun graph -> add_block_graph graph id ~attrib ~phis ~stmts ~successors ())
     p
 
 let fresh_block_graph p graph ?name ?(phis = [])
     ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   let open Block in
-  let name = Option.get_or ~default:"block" name in
+  let name = Option.get_or ~default:"%block" name in
   let id = (block_ids p).fresh ~name () in
   (add_block_graph graph id ~phis ~stmts ~successors (), id)
 
-let fresh_block p ?name ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
-    ?(successors = []) () =
+let fresh_block p ?attrib ?name ?(phis = [])
+    ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   let open Block in
-  let name = Option.get_or ~default:"block" name in
+  let name = Option.get_or ~default:"%block" name in
   let id = (block_ids p).fresh ~name () in
-  (add_block p id ~phis ~stmts ~successors (), id)
+  (add_block ?attrib p id ~phis ~stmts ~successors (), id)
 
 let get_blocks_pred p vert =
   try
@@ -391,21 +391,27 @@ let get_block p id =
   try Some (find_block p id) with Not_found -> None
 
 let decl_block_exn p name ?(phis = [])
-    ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
+    ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(attrib = Attrib.empty)
+    ?(successors = []) () =
   let open Block in
   let id = (block_ids p).decl_or_get name in
   assert (Option.is_none (get_block p id));
-  let p = add_block p id ~phis ~stmts ~successors () in
+  let p = add_block p id ~phis ~stmts ~successors ~attrib () in
   (p, id)
 
-let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
+let modify_block p id
+    (f : (Var.t, BasilExpr.t) Block.t -> (Var.t, BasilExpr.t) Block.t) =
   let open Edge in
   let open G in
+  let block = f (find_block p id) in
   p
   |> map_graph (fun g ->
       let g = G.remove_edge g (Begin id) (End id) in
       let g = G.add_edge_e g (Begin id, Block block, End id) in
       g)
+
+let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
+  modify_block p id (fun _ -> block)
 
 let modify_succs p id ~remove ~add =
   let open Edge in
@@ -670,7 +676,13 @@ let pretty show_lvar show_var show_expr p =
               (fun (b, label, e) ->
                 match G.V.label e with
                 | Begin i -> text @@ ID.to_string i
-                | _ -> failwith "bad graph structure: goto targets non-block")
+                | o ->
+                    failwith
+                      (String.concat " "
+                         [
+                           "bad graph structure: goto targets non-block ";
+                           Vert.show o;
+                         ]))
               succ
           in
           [ text "goto " ^ (fun s -> bracket "(" (fill (text ",") s) ")") succ ]
