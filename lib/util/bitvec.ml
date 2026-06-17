@@ -80,7 +80,8 @@ let of_string i =
 let size_is_equal a b = assert (size a = size b) [@@inline always]
 
 let size_if_equal a b =
-  if a.w = b.w then size a else failwith "bv binop widths differ"
+  if a.w = b.w then size a
+  else failwith (Printf.sprintf "bv binop widths differ. a:%d, b:%d" a.w b.w)
 [@@inline always]
 
 let bind1 f a = create ~size:a.w (f ~size:a.w a.v) [@@inline always]

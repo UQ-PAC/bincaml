@@ -51,6 +51,8 @@ module Aslp_state : sig
   (** {1 Manipulation functions} *)
 
   val add_goto : aslp_state -> source:string -> target:string -> aslp_state
+  val add_stmt_to_block : aslp_state -> string -> stmt -> aslp_state
+  val add_stmt_to_active : lifter_state -> stmt -> lifter_state
   val append_aslp_states : aslp_state -> aslp_state -> aslp_state
 
   (** {1 Formatters} *)
@@ -109,11 +111,25 @@ end = struct
     and exit = f exit in
     { blocks; entry; exit }
 
+  let add_stmt_to_block state key stmt =
+    let blocks =
+      StringMap.update key
+        (function
+          | Some blk -> Some { blk with stmts = blk.stmts @ [ stmt ] }
+          | None -> failwith "add_stmt: block not found")
+        state.blocks
+    in
+    { state with blocks }
+
+  let add_stmt_to_active { active; state } stmt =
+    let state = add_stmt_to_block state active stmt in
+    { active; state }
+
   let add_goto aslp_state ~source ~target =
     let blocks =
       StringMap.update source
         (function
-          | Some k -> Some { k with succs = target :: k.succs }
+          | Some blk -> Some { blk with succs = target :: blk.succs }
           | _ -> failwith "add_goto: block not found")
         aslp_state.blocks
     in
@@ -142,6 +158,10 @@ struct
   type branch = string
   type ast = Aslp_state.aslp_state
 
+  let bincaml_emit stmt =
+    S.bincaml_lifter_state :=
+      Aslp_state.add_stmt_to_active !S.bincaml_lifter_state stmt
+
   let reset_ir =
    fun () -> S.bincaml_lifter_state := Aslp_state.empty_lifter_state
 
@@ -152,12 +172,15 @@ struct
   let bigint_add : bigint -> bigint -> bigint = Z.add
   let bigint_sub : bigint -> bigint -> bigint = Z.sub
   let bigint_mul : bigint -> bigint -> bigint = Z.mul
-  let undefined : unit -> expr = fun _ -> failwith ""
+  let undefined : unit -> expr = fun _ -> Expr.BasilExpr.bv_of_int ~size:0 0
 
   let mkBits : bigint -> bigint -> bitvector =
    fun size x -> Bitvec.create ~size:(Z.to_int size) x
 
-  let from_bitsLit : string -> bitvector = Bitvec.of_string
+  let from_bitsLit : string -> bitvector =
+   fun bitstring ->
+    Bitvec.of_string
+      (Printf.sprintf "0b%s:bv%d" bitstring (String.length bitstring))
 
   let frem_int : bigint -> bigint -> bigint =
    fun x y -> Z.sub x (Z.mul y (Z.fdiv x y))
@@ -178,7 +201,7 @@ struct
       bigint ->
       bitvector ->
       bitvector =
-   fun _ -> failwith ""
+   fun _ -> failwith "elem_set"
 
   let f_eq_bits : bigint -> bitvector -> bitvector -> bool =
    fun _ -> Bitvec.equal
@@ -255,15 +278,15 @@ struct
   let f_cvt_bits_uint : bigint -> bitvector -> bigint =
    fun _ -> Bitvec.to_unsigned_bigint
 
-  let f_sdiv_int : bigint -> bigint -> bigint = fun _ -> failwith ""
-  let f_shl_int : bigint -> bigint -> bigint = fun _ -> failwith ""
+  let f_sdiv_int : bigint -> bigint -> bigint = fun _ -> failwith "sdiv int"
+  let f_shl_int : bigint -> bigint -> bigint = fun _ -> failwith "shl int"
   let v_PSTATE_C : lexpr = Var.create "v_PSTATE_C" (Types.Bitvector 1)
   let v_PSTATE_Z : lexpr = Var.create "v_PSTATE_Z" (Types.Bitvector 1)
   let v_PSTATE_V : lexpr = Var.create "v_PSTATE_V" (Types.Bitvector 1)
   let v_PSTATE_N : lexpr = Var.create "v_PSTATE_N" (Types.Bitvector 1)
   let v__PC : lexpr = Var.create "v__PC" (Types.Bitvector 1)
-  let v__R : lexpr = Var.create "v__R" (Types.Bitvector 1)
-  let v__Z : lexpr = Var.create "v__Z" (Types.Bitvector 1)
+  let v__R : lexpr = Var.create "v__R" (Types.Bitvector 0)
+  let v__Z : lexpr = Var.create "v__Z" (Types.Bitvector 0)
   let v_SP_EL0 : lexpr = Var.create "v_SP_EL0" (Types.Bitvector 1)
   let v_FPSR : lexpr = Var.create "v_FPSR" (Types.Bitvector 1)
   let v_FPCR : lexpr = Var.create "v_FPCR" (Types.Bitvector 1)
@@ -288,181 +311,248 @@ struct
   let v___ExclusiveLocal : lexpr =
     Var.create "v___ExclusiveLocal" (Types.Bitvector 1)
 
-  let f_switch_context : branch -> unit = fun _ -> failwith ""
-  let f_gen_branch : expr -> branch * branch * branch = fun _ -> failwith ""
-  let f_true_branch : branch * branch * branch -> branch = fun _ -> failwith ""
-  let f_false_branch : branch * branch * branch -> branch = fun _ -> failwith ""
-  let f_merge_branch : branch * branch * branch -> branch = fun _ -> failwith ""
-  let f_gen_assert : expr -> unit = fun _ -> failwith ""
-  let f_gen_bit_lit : bigint -> bitvector -> expr = fun _ -> failwith ""
-  let f_gen_bool_lit : bool -> expr = fun _ -> failwith ""
-  let f_gen_int_lit : bigint -> expr = fun _ -> failwith ""
-  let f_decl_bv : string -> bigint -> lexpr = fun _ -> failwith ""
-  let f_decl_bool : string -> lexpr = fun _ -> failwith ""
-  let f_gen_load : lexpr -> expr = fun _ -> failwith ""
-  let f_gen_store : lexpr -> expr -> unit = fun _ -> failwith ""
-  let f_gen_array_load : lexpr -> bigint -> expr = fun _ -> failwith ""
-  let f_gen_array_store : lexpr -> bigint -> expr -> unit = fun _ -> failwith ""
+  let f_switch_context : branch -> unit = fun _ -> failwith "f_switch_context"
+
+  let f_gen_branch : expr -> branch * branch * branch =
+   fun _ -> failwith "f_gen_branch"
+
+  let f_true_branch : branch * branch * branch -> branch =
+   fun _ -> failwith "f_true_branch"
+
+  let f_false_branch : branch * branch * branch -> branch =
+   fun _ -> failwith "f_false_branch"
+
+  let f_merge_branch : branch * branch * branch -> branch =
+   fun _ -> failwith "f_merge_branch"
+
+  let f_gen_assert : expr -> unit = fun _ -> failwith "f_gen_assert"
+
+  let f_gen_bit_lit : bigint -> bitvector -> expr =
+   fun _ bv -> Expr.BasilExpr.const (`Bitvector bv)
+
+  let f_gen_bool_lit : bool -> expr = fun _ -> failwith "f_gen_bool_lit"
+  let f_gen_int_lit : bigint -> expr = fun _ -> failwith "f_gen_int_lit"
+
+  let f_decl_bv : string -> bigint -> lexpr =
+   fun name size -> Var.create name (Types.Bitvector (Z.to_int size))
+
+  let f_decl_bool : string -> lexpr = fun _ -> failwith "f_decl_bool"
+  let f_gen_load : lexpr -> expr = fun lhs -> Expr.BasilExpr.rvar lhs
+
+  let f_gen_store : lexpr -> expr -> unit =
+   fun lhs rhs ->
+    bincaml_emit
+      (Stmt.Instr_Assign { attrib = Attrib.empty; al = [ (lhs, rhs) ] })
+
+  let f_gen_array_load : lexpr -> bigint -> expr =
+   fun array idx ->
+    match Var.name array with
+    | "v__R" ->
+        f_gen_load (Var.create ("v__R" ^ Z.to_string idx) (Types.Bitvector 64))
+    | x -> failwith x
+
+  let f_gen_array_store : lexpr -> bigint -> expr -> unit =
+   fun array idx rhs ->
+    match Var.name array with
+    | "v__R" ->
+        f_gen_store
+          (Var.create ("v__R" ^ Z.to_string idx) (Types.Bitvector 64))
+          rhs
+    | x -> failwith x
 
   let f_gen_Elem_read : bigint -> bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_Elem_read"
 
   let f_gen_Elem_set : bigint -> bigint -> expr -> expr -> expr -> expr -> expr
       =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_Elem_set"
 
   (** [f_gen_Mem_set size address size acctype value] *)
   let f_gen_Mem_set : bigint -> expr -> expr -> expr -> expr -> unit =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_Mem_set"
 
   (** [f_gen_Mem_read size address size acctype value] *)
   let f_gen_Mem_read : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_Mem_read"
 
-  let f_AtomicStart : unit -> unit = fun _ -> failwith ""
-  let f_AtomicEnd : unit -> unit = fun _ -> failwith ""
+  let f_AtomicStart : unit -> unit = fun _ -> failwith "f_AtomicStart"
+  let f_AtomicEnd : unit -> unit = fun _ -> failwith "f_AtomicEnd"
 
   (** [f_gen_AArch64_MemTag_set address acctype value] *)
   let f_gen_AArch64_MemTag_set : expr -> expr -> expr -> unit =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_AArch64_MemTag_set"
 
   (** [f_gen_AArch64_MemTag_read address acctype] *)
-  let f_gen_AArch64_MemTag_read : expr -> expr -> expr = fun _ -> failwith ""
+  let f_gen_AArch64_MemTag_read : expr -> expr -> expr =
+   fun _ -> failwith "f_gen_AArch64_MemTag_read"
 
-  let f_gen_and_bool : expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_or_bool : expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_not_bool : expr -> expr = fun _ -> failwith ""
-  let f_gen_cvt_bits_uint : bigint -> expr -> expr = fun _ -> failwith ""
-  let f_gen_eq_bits : bigint -> expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_ne_bits : bigint -> expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_not_bits : bigint -> expr -> expr = fun _ -> failwith ""
-  let f_gen_cvt_bool_bv : expr -> expr = fun _ -> failwith ""
-  let f_gen_or_bits : bigint -> expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_eor_bits : bigint -> expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_and_bits : bigint -> expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_add_bits : bigint -> expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_sub_bits : bigint -> expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_sdiv_bits : bigint -> expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_sle_bits : bigint -> expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_slt_bits : bigint -> expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_mul_bits : bigint -> expr -> expr -> expr = fun _ -> failwith ""
+  let f_gen_and_bool : expr -> expr -> expr = fun _ -> failwith "f_gen_and_bool"
+  let f_gen_or_bool : expr -> expr -> expr = fun _ -> failwith "f_gen_or_bool"
+  let f_gen_not_bool : expr -> expr = fun _ -> failwith "f_gen_not_bool"
+
+  let f_gen_cvt_bits_uint : bigint -> expr -> expr =
+   fun _ -> failwith "f_gen_cvt_bits_uint"
+
+  let f_gen_eq_bits : bigint -> expr -> expr -> expr =
+   fun _ -> failwith "f_gen_eq_bits"
+
+  let f_gen_ne_bits : bigint -> expr -> expr -> expr =
+   fun _ -> failwith "f_gen_ne_bits"
+
+  let f_gen_not_bits : bigint -> expr -> expr =
+   fun _ -> failwith "f_gen_not_bits"
+
+  let f_gen_cvt_bool_bv : expr -> expr = fun _ -> failwith "f_gen_cvt_bool_bv"
+
+  let f_gen_or_bits : bigint -> expr -> expr -> expr =
+   fun _ -> failwith "f_gen_or_bits"
+
+  let f_gen_eor_bits : bigint -> expr -> expr -> expr =
+   fun _ -> failwith "f_gen_eor_bits"
+
+  let f_gen_and_bits : bigint -> expr -> expr -> expr =
+   fun _ -> failwith "f_gen_and_bits"
+
+  let f_gen_add_bits : bigint -> expr -> expr -> expr =
+   fun _ -> Expr.BasilExpr.binexp ?attrib:None ~op:`BVADD
+
+  let f_gen_sub_bits : bigint -> expr -> expr -> expr =
+   fun _ -> failwith "f_gen_sub_bits"
+
+  let f_gen_sdiv_bits : bigint -> expr -> expr -> expr =
+   fun _ -> failwith "f_gen_sdiv_bits"
+
+  let f_gen_sle_bits : bigint -> expr -> expr -> expr =
+   fun _ -> failwith "f_gen_sle_bits"
+
+  let f_gen_slt_bits : bigint -> expr -> expr -> expr =
+   fun _ -> failwith "f_gen_slt_bits"
+
+  let f_gen_mul_bits : bigint -> expr -> expr -> expr =
+   fun _ -> failwith "f_gen_mul_bits"
 
   let f_gen_append_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_append_bits"
 
   let f_gen_lsr_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_lsr_bits"
 
   let f_gen_lsl_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ _ -> Expr.BasilExpr.binexp ?attrib:None ~op:`BVSHL
 
   let f_gen_asr_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_asr_bits"
 
   (** [f_gen_replicate_bits operand_width num_replications operand
        num_replications] *)
   let f_gen_replicate_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_replicate_bits"
 
   (** [f_gen_ZeroExtend operand_width result_width operand result_width] *)
   let f_gen_ZeroExtend : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_ZeroExtend"
 
   (** [f_gen_SignExtend operand_width result_width operand result_width] *)
   let f_gen_SignExtend : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_SignExtend"
 
-  let f_gen_slice : expr -> bigint -> bigint -> expr = fun _ -> failwith ""
+  let f_gen_slice : expr -> bigint -> bigint -> expr =
+   fun _ -> failwith "f_gen_slice"
 
   (* {1 Floating point intrinsics} *)
 
   let f_gen_FPCompare : bigint -> expr -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPCompare"
 
   let f_gen_FPCompareEQ : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPCompareEQ"
 
   let f_gen_FPCompareGE : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPCompareGE"
 
   let f_gen_FPCompareGT : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPCompareGT"
 
   let f_gen_FPAdd : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPAdd"
 
   let f_gen_FPSub : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPSub"
 
   let f_gen_FPMulAdd : bigint -> expr -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPMulAdd"
 
   let f_gen_FPMulAddH : bigint -> expr -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPMulAddH"
 
   let f_gen_FPMulX : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPMulX"
 
   let f_gen_FPMul : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPMul"
 
   let f_gen_FPDiv : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPDiv"
 
   let f_gen_FPMin : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPMin"
 
   let f_gen_FPMinNum : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPMinNum"
 
   let f_gen_FPMax : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPMax"
 
   let f_gen_FPMaxNum : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPMaxNum"
 
-  let f_gen_FPRecpX : bigint -> expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_FPSqrt : bigint -> expr -> expr -> expr = fun _ -> failwith ""
+  let f_gen_FPRecpX : bigint -> expr -> expr -> expr =
+   fun _ -> failwith "f_gen_FPRecpX"
+
+  let f_gen_FPSqrt : bigint -> expr -> expr -> expr =
+   fun _ -> failwith "f_gen_FPSqrt"
 
   let f_gen_FPRecipEstimate : bigint -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPRecipEstimate"
 
   let f_gen_UnsignedRSqrtEstimate : bigint -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_UnsignedRSqrtEstimate"
 
   let f_gen_FPRSqrtEstimate : bigint -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPRSqrtEstimate"
 
-  let f_gen_BFAdd : expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_BFMul : expr -> expr -> expr = fun _ -> failwith ""
-  let f_gen_FPConvertBF : expr -> expr -> expr -> expr = fun _ -> failwith ""
+  let f_gen_BFAdd : expr -> expr -> expr = fun _ -> failwith "f_gen_BFAdd"
+  let f_gen_BFMul : expr -> expr -> expr = fun _ -> failwith "f_gen_BFMul"
+
+  let f_gen_FPConvertBF : expr -> expr -> expr -> expr =
+   fun _ -> failwith "f_gen_FPConvertBF"
 
   let f_gen_FPRecipStepFused : bigint -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPRecipStepFused"
 
   let f_gen_FPRSqrtStepFused : bigint -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPRSqrtStepFused"
 
   let f_gen_FPToFixed :
       bigint -> bigint -> expr -> expr -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPToFixed"
 
   let f_gen_FixedToFP :
       bigint -> bigint -> expr -> expr -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FixedToFP"
 
   let f_gen_FPConvert : bigint -> bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPConvert"
 
   let f_gen_FPRoundInt : bigint -> expr -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPRoundInt"
 
   let f_gen_FPRoundIntN : bigint -> expr -> expr -> expr -> expr -> expr =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPRoundIntN"
 
   let f_gen_FPToFixedJS_impl : bigint -> bigint -> expr -> expr -> expr -> expr
       =
-   fun _ -> failwith ""
+   fun _ -> failwith "f_gen_FPToFixedJS_impl"
 end
 
 let ensure_aslp_globals_exist prog = 9
