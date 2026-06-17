@@ -81,7 +81,7 @@ let of_string i =
 let size_is_equal a b = assert (size a = size b) [@@inline always]
 
 let size_if_equal a b =
-  if size a = size b then size a else failwith "bv binop widths differ"
+  if size_is_equal a b then size a else failwith "bv binop widths differ"
 [@@inline always]
 
 let bind1 f a = create ~size:a.w (f ~size:a.w a.v) [@@inline always]
