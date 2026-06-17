@@ -504,97 +504,35 @@
   ];
   prog entry @_start;(load-il gtirb-output.il)
   (dump-il dumped.il)
-  $ diff -c1 gtirb-output.il dumped.il
-  *** gtirb-output.il	Wed Jun 17 15:19:23 2026
-  --- dumped.il	Wed Jun 17 15:19:23 2026
-  ***************
-  *** 2,3 ****
-  --- 2,4 ----
-    proc @_fini()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x400828:bv64, $PC))
-  ***************
-  *** 15,16 ****
-  --- 16,18 ----
-    proc @_init()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x400600:bv64, $PC))
-  ***************
-  *** 47,48 ****
-  --- 49,51 ----
-    proc @__do_global_dtors_aux()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x40074c:bv64, $PC))
-  ***************
-  *** 99,100 ****
-  --- 102,104 ----
-    proc @register_tm_clones()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x400710:bv64, $PC))
-  ***************
-  *** 150,151 ****
-  --- 154,156 ----
-    proc @frame_dummy()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x400780:bv64, $PC))
-  ***************
-  *** 169,170 ****
-  --- 174,176 ----
-    proc @FUN_400660()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x400660:bv64, $PC))
-  ***************
-  *** 185,186 ****
-  --- 191,193 ----
-    proc @Sqrt()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x400784:bv64, $PC))
-  ***************
-  *** 266,267 ****
-  --- 273,275 ----
-    proc @_start()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x400680:bv64, $PC))
-  ***************
-  *** 310,311 ****
-  --- 318,320 ----
-    proc @_dl_relocate_static_pie()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x4006c0:bv64, $PC))
-  ***************
-  *** 324,325 ****
-  --- 333,335 ----
-    proc @call_weak_fn()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x4006c4:bv64, $PC))
-  ***************
-  *** 363,364 ****
-  --- 373,375 ----
-    proc @main()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x400808:bv64, $PC))
-  ***************
-  *** 397,398 ****
-  --- 408,410 ----
-    proc @.L_400650()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x400650:bv64, $PC))
-  ***************
-  *** 413,414 ****
-  --- 425,427 ----
-    proc @FUN_400640()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x400640:bv64, $PC))
-  ***************
-  *** 429,430 ****
-  --- 442,444 ----
-    proc @deregister_tm_clones()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x4006e0:bv64, $PC))
-  ***************
-  *** 478,479 ****
-  --- 492,494 ----
-    proc @FUN_400620()  -> () {  }
-  +   captures $PC:bv64
-      requires boolor(eq(0x400620:bv64, $PC))
+  $ diff gtirb-output.il dumped.il
+  2a3
+  >   captures $PC:bv64
+  15a17
+  >   captures $PC:bv64
+  47a50
+  >   captures $PC:bv64
+  99a103
+  >   captures $PC:bv64
+  150a155
+  >   captures $PC:bv64
+  169a175
+  >   captures $PC:bv64
+  185a192
+  >   captures $PC:bv64
+  266a274
+  >   captures $PC:bv64
+  310a319
+  >   captures $PC:bv64
+  324a334
+  >   captures $PC:bv64
+  363a374
+  >   captures $PC:bv64
+  397a409
+  >   captures $PC:bv64
+  413a426
+  >   captures $PC:bv64
+  429a443
+  >   captures $PC:bv64
+  478a493
+  >   captures $PC:bv64
   [1]
