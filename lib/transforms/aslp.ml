@@ -4,6 +4,9 @@ open Common
 module Aslp_state : sig
   (** {1 Types} *)
 
+  type stmt = (Var.t, Var.t, Expr.BasilExpr.t) Stmt.t
+  (** A statement within the Bincaml AST. This is just a type alias. *)
+
   type aslp_block = {
     assume : Expr.BasilExpr.t option;
     stmts : (Var.t, Var.t, Expr.BasilExpr.t) Stmt.t list;
@@ -131,19 +134,19 @@ module Bincaml_IBI (S : sig
   val bincaml_lifter_state : Aslp_state.lifter_state ref
 end) =
 struct
-  type bigint = int
-  type bitvector = int
-  type expr = int
-  type lexpr = int
-  type stmt = int
-  type branch = int
-  type ast = int
+  type bigint = Z.t
+  type bitvector = Bitvec.t
+  type expr = Expr.BasilExpr.t
+  type lexpr = Var.t
+  type stmt = Aslp_state.stmt
+  type branch = string
+  type ast = Aslp_state.aslp_state
 
   let reset_ir : unit -> unit = fun _ -> failwith ""
   let get_ir : unit -> ast = fun _ -> failwith ""
   let bigint_of_string : string -> bigint = fun _ -> failwith ""
   let bigint_of_int : int -> bigint = fun _ -> failwith ""
-  let bigint_zero : bigint = 0
+  let bigint_zero : bigint = Z.zero
   let bigint_add : bigint -> bigint -> bigint = fun _ -> failwith ""
   let bigint_sub : bigint -> bigint -> bigint = fun _ -> failwith ""
   let bigint_mul : bigint -> bigint -> bigint = fun _ -> failwith ""
@@ -236,31 +239,37 @@ struct
 
   let f_sdiv_int : bigint -> bigint -> bigint = fun _ -> failwith ""
   let f_shl_int : bigint -> bigint -> bigint = fun _ -> failwith ""
-  let v_PSTATE_C : lexpr = 0
-  let v_PSTATE_Z : lexpr = 0
-  let v_PSTATE_V : lexpr = 0
-  let v_PSTATE_N : lexpr = 0
-  let v__PC : lexpr = 0
-  let v__R : lexpr = 0
-  let v__Z : lexpr = 0
-  let v_SP_EL0 : lexpr = 0
-  let v_FPSR : lexpr = 0
-  let v_FPCR : lexpr = 0
-  let v_PSTATE_A : lexpr = 0
-  let v_PSTATE_D : lexpr = 0
-  let v_PSTATE_DIT : lexpr = 0
-  let v_PSTATE_F : lexpr = 0
-  let v_PSTATE_I : lexpr = 0
-  let v_PSTATE_PAN : lexpr = 0
-  let v_PSTATE_SP : lexpr = 0
-  let v_PSTATE_SSBS : lexpr = 0
-  let v_PSTATE_TCO : lexpr = 0
-  let v_PSTATE_UAO : lexpr = 0
-  let v_PSTATE_BTYPE : lexpr = 0
-  let v_BTypeCompatible : lexpr = 0
-  let v___BranchTaken : lexpr = 0
-  let v_BTypeNext : lexpr = 0
-  let v___ExclusiveLocal : lexpr = 0
+  let v_PSTATE_C : lexpr = Var.create "v_PSTATE_C" (Types.Bitvector 1)
+  let v_PSTATE_Z : lexpr = Var.create "v_PSTATE_Z" (Types.Bitvector 1)
+  let v_PSTATE_V : lexpr = Var.create "v_PSTATE_V" (Types.Bitvector 1)
+  let v_PSTATE_N : lexpr = Var.create "v_PSTATE_N" (Types.Bitvector 1)
+  let v__PC : lexpr = Var.create "v__PC" (Types.Bitvector 1)
+  let v__R : lexpr = Var.create "v__R" (Types.Bitvector 1)
+  let v__Z : lexpr = Var.create "v__Z" (Types.Bitvector 1)
+  let v_SP_EL0 : lexpr = Var.create "v_SP_EL0" (Types.Bitvector 1)
+  let v_FPSR : lexpr = Var.create "v_FPSR" (Types.Bitvector 1)
+  let v_FPCR : lexpr = Var.create "v_FPCR" (Types.Bitvector 1)
+  let v_PSTATE_A : lexpr = Var.create "v_PSTATE_A" (Types.Bitvector 1)
+  let v_PSTATE_D : lexpr = Var.create "v_PSTATE_D" (Types.Bitvector 1)
+  let v_PSTATE_DIT : lexpr = Var.create "v_PSTATE_DIT" (Types.Bitvector 1)
+  let v_PSTATE_F : lexpr = Var.create "v_PSTATE_F" (Types.Bitvector 1)
+  let v_PSTATE_I : lexpr = Var.create "v_PSTATE_I" (Types.Bitvector 1)
+  let v_PSTATE_PAN : lexpr = Var.create "v_PSTATE_PAN" (Types.Bitvector 1)
+  let v_PSTATE_SP : lexpr = Var.create "v_PSTATE_SP" (Types.Bitvector 1)
+  let v_PSTATE_SSBS : lexpr = Var.create "v_PSTATE_SSBS" (Types.Bitvector 1)
+  let v_PSTATE_TCO : lexpr = Var.create "v_PSTATE_TCO" (Types.Bitvector 1)
+  let v_PSTATE_UAO : lexpr = Var.create "v_PSTATE_UAO" (Types.Bitvector 1)
+  let v_PSTATE_BTYPE : lexpr = Var.create "v_PSTATE_BTYPE" (Types.Bitvector 1)
+
+  let v_BTypeCompatible : lexpr =
+    Var.create "v_BTypeCompatible" (Types.Bitvector 1)
+
+  let v___BranchTaken : lexpr = Var.create "v___BranchTaken" (Types.Bitvector 1)
+  let v_BTypeNext : lexpr = Var.create "v_BTypeNext" (Types.Bitvector 1)
+
+  let v___ExclusiveLocal : lexpr =
+    Var.create "v___ExclusiveLocal" (Types.Bitvector 1)
+
   let f_switch_context : branch -> unit = fun _ -> failwith ""
   let f_gen_branch : expr -> branch * branch * branch = fun _ -> failwith ""
   let f_true_branch : branch * branch * branch -> branch = fun _ -> failwith ""
@@ -443,4 +452,4 @@ let a () =
   let module I = Bincaml_IBI (struct
     let bincaml_lifter_state = bincaml_aslp_state
   end) in
-  OfflineASL_pc.Offline.f_A64_decoder (module I) 2
+  OfflineASL_pc.Offline.f_A64_decoder (module I) (Bitvec.zero ~size:32)
