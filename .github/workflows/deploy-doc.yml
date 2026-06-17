@@ -26,6 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
+          opam repository --all add pac https://github.com/uq-pac/opam-repository.git
           opam install . --deps-only --with-doc
           opam install odoc-driver
 
