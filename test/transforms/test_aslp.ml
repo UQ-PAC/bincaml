@@ -2,7 +2,7 @@ open Lang
 open Common
 open Transforms.Aslp
 
-let%expect_test "lift one opcode" =
+let%expect_test "lift: add x1, x2, x3, lsl #4" =
   let bincaml_aslp_state = ref Aslp_state.empty_lifter_state in
   let module I = Bincaml_IBI (struct
     let bincaml_lifter_state = bincaml_aslp_state
@@ -14,7 +14,8 @@ let%expect_test "lift one opcode" =
       (Bitvec.of_string "0x8b031041:bv32")
   in
   print_endline @@ Aslp_state.show_aslp_state x;
-  [%expect {|
+  [%expect
+    {|
     { Aslp.Aslp_state.blocks = "entry"
       -> { Aslp.Aslp_state.assume = None;
            stmts =

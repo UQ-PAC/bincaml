@@ -9,7 +9,7 @@ module Aslp_state : sig
 
   type aslp_block = {
     assume : Expr.BasilExpr.t option;
-    stmts : (Var.t, Var.t, Expr.BasilExpr.t) Stmt.t list;
+    stmts : (Var.t, Var.t, Expr.BasilExpr.t) Stmt.t CCVector.vector;
     succs : string list;
   }
   (** An ASLp lifter block is a list of statements followed by a
@@ -68,9 +68,12 @@ end = struct
     ((Var.t, Var.t, Expr.BasilExpr.t) Stmt.t[@printer Stmt.pp_stmt_basil])
   [@@deriving show]
 
+  type _stmt_list = stmt list [@@deriving show]
+
   type aslp_block = {
     assume : Expr.BasilExpr.t option;
-    stmts : stmt list;
+    stmts : stmt CCVector.vector;
+        [@printer Format.map CCVector.to_list pp__stmt_list]
     succs : string list;
   }
   [@@deriving show]
@@ -90,8 +93,9 @@ end = struct
     let blocks =
       StringMap.of_list
         [
-          (entry, { assume = None; stmts = []; succs = [ exit ] });
-          (exit, { assume = None; stmts = []; succs = [] });
+          ( entry,
+            { assume = None; stmts = CCVector.create (); succs = [ exit ] } );
+          (exit, { assume = None; stmts = CCVector.create (); succs = [] });
         ]
     in
     { blocks; entry; exit }
@@ -115,7 +119,9 @@ end = struct
     let blocks =
       StringMap.update key
         (function
-          | Some blk -> Some { blk with stmts = blk.stmts @ [ stmt ] }
+          | Some blk ->
+              CCVector.push blk.stmts stmt;
+              Some blk
           | None -> failwith "add_stmt: block not found")
         state.blocks
     in
