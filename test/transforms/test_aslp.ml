@@ -3,7 +3,7 @@ open Common
 open Transforms.Aslp
 
 let%expect_test "lift: add x1, x2, x3, lsl #4" =
-  let bincaml_aslp_state = ref Aslp_state.empty_lifter_state in
+  let bincaml_aslp_state = ref (Aslp_state.empty_lifter_state ()) in
   let module I = Bincaml_IBI (struct
     let bincaml_lifter_state = bincaml_aslp_state
   end) in
@@ -28,7 +28,36 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
       entry = "entry"; exit = "exit" }
     |}]
 
-let%expect_test "aslp basic" =
+let%expect_test "lift 2x: mov x1, #0xabcd" =
+  let bincaml_aslp_state = ref (Aslp_state.empty_lifter_state ()) in
+  let module I = Bincaml_IBI (struct
+    let bincaml_lifter_state = bincaml_aslp_state
+  end) in
+  let x =
+    lift_code_block (module I) ~address:(Bitvec.zero ~size:64)
+    @@ Iter.doubleton
+         (Bitvec.of_string "0xd29579a1:bv32")
+         (Bitvec.of_string "0xd29579a1:bv32")
+  in
+  print_endline @@ Aslp_state.show_aslp_state x;
+  [%expect
+    {|
+    { Aslp.Aslp_state.blocks = "0_entry"
+      -> { Aslp.Aslp_state.assume = None;
+           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["0_exit"] },
+      "0_exit"
+      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["1_entry"] },
+      "1_entry"
+      -> { Aslp.Aslp_state.assume = None;
+           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["1_exit"] },
+      "1_exit" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] },
+      "entry" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["exit"] },
+      "exit"
+      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["0_entry"] };
+      entry = "entry"; exit = "1_exit" }
+    |}]
+
+let%expect_test "aslp integration basic" =
   let lst =
     Loader.Loadir.ast_of_string
       {|

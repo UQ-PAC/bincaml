@@ -43,9 +43,8 @@ module Aslp_state : sig
 
   (** {1 Base functions} *)
 
-  val empty_aslp_state : aslp_state
-  val empty_lifter_state : lifter_state
-  val map_aslp_block_names : (string -> string) -> aslp_block -> aslp_block
+  val empty_aslp_state : unit -> aslp_state
+  val empty_lifter_state : unit -> lifter_state
   val map_aslp_state_names : (string -> string) -> aslp_state -> aslp_state
 
   (** {1 Manipulation functions} *)
@@ -88,7 +87,7 @@ end = struct
 
   type lifter_state = { active : string; state : aslp_state } [@@deriving show]
 
-  let empty_aslp_state =
+  let empty_aslp_state () =
     let entry = "entry" and exit = "exit" in
     let blocks =
       StringMap.of_list
@@ -100,7 +99,7 @@ end = struct
     in
     { blocks; entry; exit }
 
-  let empty_lifter_state = { active = "entry"; state = empty_aslp_state }
+  let empty_lifter_state () = { active = "entry"; state = empty_aslp_state () }
 
   let map_aslp_block_names f { assume; stmts; succs } =
     let succs = List.map f succs in
@@ -109,7 +108,7 @@ end = struct
   let map_aslp_state_names f { blocks; entry; exit } =
     let blocks =
       blocks |> StringMap.to_iter
-      |> Iter.map (fun (k, v) -> (f k, v))
+      |> Iter.map (fun (k, v) -> (f k, map_aslp_block_names f v))
       |> StringMap.of_iter
     and entry = f entry
     and exit = f exit in
@@ -169,7 +168,7 @@ struct
       Aslp_state.add_stmt_to_active !S.bincaml_lifter_state stmt
 
   let reset_ir =
-   fun () -> S.bincaml_lifter_state := Aslp_state.empty_lifter_state
+   fun () -> S.bincaml_lifter_state := Aslp_state.empty_lifter_state ()
 
   let get_ir = fun () -> !S.bincaml_lifter_state.state
   let bigint_of_string : string -> bigint = Z.of_string_base 10
@@ -268,17 +267,22 @@ struct
     let extension = Z.(to_int (result_wd - wd)) in
     Bitvec.sign_extend ~extension x
 
+  let unify_shift_widths apply_shift operand shift =
+    let extension = Bitvec.(size operand - size shift) in
+    let shift = Bitvec.zero_extend ~extension shift in
+    apply_shift operand shift
+
   (** [f_lsl_bits operand_width shift_width operand shift] *)
   let f_lsl_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
-   fun _ _ -> Bitvec.shl
+   fun _ _ -> unify_shift_widths Bitvec.shl
 
   (** [f_lsr_bits operand_width shift_width operand shift] *)
   let f_lsr_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
-   fun _ _ -> Bitvec.lshr
+   fun _ _ -> unify_shift_widths Bitvec.lshr
 
   (** [f_asr_bits operand_width shift_width operand shift] *)
   let f_asr_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
-   fun _ _ -> Bitvec.ashr
+   fun _ _ -> unify_shift_widths Bitvec.ashr
 
   (** [f_cvt_bits_uint operand_width operand] *)
   let f_cvt_bits_uint : bigint -> bitvector -> bigint =
@@ -571,8 +575,18 @@ let lift_opcode
   OfflineASL_pc.Offline.f_A64_decoder (module I) opcode address;
   I.get_ir ()
 
-let lift_code_block ~address opcodes =
-  let opcodes_and_addresses =
-    opcodes |> List.mapi (fun i op -> (op, (i * 4) + address))
-  in
-  ()
+let lift_code_block
+    (module I : OfflineASL_pc.Instruction_building_interface.IBI
+      with type bitvector = Bitvec.t
+       and type ast = Aslp_state.aslp_state) ~address opcodes =
+  Iter.foldi
+    (fun state_acc i op ->
+      let address = Bitvec.add (Bitvec.create ~size:64 Z.(~$4 * ~$i)) address in
+      let prefix = Int.to_string i ^ "_" in
+      let lifted =
+        lift_opcode (module I) ~address op
+        |> Aslp_state.map_aslp_state_names (fun s -> prefix ^ s)
+      in
+      Aslp_state.append_aslp_states state_acc lifted)
+    (Aslp_state.empty_aslp_state ())
+    opcodes
