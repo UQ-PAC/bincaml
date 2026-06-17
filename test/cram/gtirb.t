@@ -1,4 +1,3 @@
-
   $ cat << EOF | bincaml script -
   > (load-gtirb "../../examples/gtirb/binsearch_sqrt.gtirb")
   > (dump-il gtirb-output.il)
@@ -505,157 +504,97 @@
   ];
   prog entry @_start;(load-il gtirb-output.il)
   (dump-il dumped.il)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  $ diff -u gtirb-output.il dumped.il
-  --- gtirb-output.il	2026-06-17 15:02:21.872603587 +1000
-  +++ dumped.il	2026-06-17 15:02:21.876603580 +1000
-  @@ -1,5 +1,6 @@
-   var $PC:bv64;
-   proc @_fini()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x400828:bv64, $PC))
-   
-   [
-  @@ -13,6 +14,7 @@
-      ]
-   ];
-   proc @_init()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x400600:bv64, $PC))
-   
-   [
-  @@ -45,6 +47,7 @@
-      block %ret_1 [ return; ]
-   ];
-   proc @__do_global_dtors_aux()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x40074c:bv64, $PC))
-   
-   [
-  @@ -97,6 +100,7 @@
-      block %ret_2 [ return; ]
-   ];
-   proc @register_tm_clones()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x400710:bv64, $PC))
-   
-   [
-  @@ -148,6 +152,7 @@
-      block %ret_2 [ return; ]
-   ];
-   proc @frame_dummy()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x400780:bv64, $PC))
-   
-   [
-  @@ -167,6 +172,7 @@
-      ]
-   ];
-   proc @FUN_400660()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x400660:bv64, $PC))
-   
-   [
-  @@ -183,6 +189,7 @@
-      ]
-   ];
-   proc @Sqrt()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x400784:bv64, $PC))
-   
-   [
-  @@ -264,6 +271,7 @@
-      block %ret_3 [ return; ]
-   ];
-   proc @_start()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x400680:bv64, $PC))
-   
-   [
-  @@ -308,6 +316,7 @@
-      ]
-   ];
-   proc @_dl_relocate_static_pie()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x4006c0:bv64, $PC))
-   
-   [
-  @@ -322,6 +331,7 @@
-      block %ret [ return; ]
-   ];
-   proc @call_weak_fn()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x4006c4:bv64, $PC))
-   
-   [
-  @@ -361,6 +371,7 @@
-      block %ret_3 [ return; ]
-   ];
-   proc @main()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x400808:bv64, $PC))
-   
-   [
-  @@ -395,6 +406,7 @@
-      block %ret_1 [ return; ]
-   ];
-   proc @.L_400650()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x400650:bv64, $PC))
-   
-   [
-  @@ -411,6 +423,7 @@
-      ]
-   ];
-   proc @FUN_400640()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x400640:bv64, $PC))
-   
-   [
-  @@ -427,6 +440,7 @@
-      ]
-   ];
-   proc @deregister_tm_clones()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x4006e0:bv64, $PC))
-   
-   [
-  @@ -476,6 +490,7 @@
-      block %ret_5 [ return; ]
-   ];
-   proc @FUN_400620()  -> () {  }
-  +  captures $PC:bv64
-     requires boolor(eq(0x400620:bv64, $PC))
-   
-   [
+  $ diff -c1 gtirb-output.il dumped.il
+  *** gtirb-output.il	Wed Jun 17 15:19:23 2026
+  --- dumped.il	Wed Jun 17 15:19:23 2026
+  ***************
+  *** 2,3 ****
+  --- 2,4 ----
+    proc @_fini()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x400828:bv64, $PC))
+  ***************
+  *** 15,16 ****
+  --- 16,18 ----
+    proc @_init()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x400600:bv64, $PC))
+  ***************
+  *** 47,48 ****
+  --- 49,51 ----
+    proc @__do_global_dtors_aux()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x40074c:bv64, $PC))
+  ***************
+  *** 99,100 ****
+  --- 102,104 ----
+    proc @register_tm_clones()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x400710:bv64, $PC))
+  ***************
+  *** 150,151 ****
+  --- 154,156 ----
+    proc @frame_dummy()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x400780:bv64, $PC))
+  ***************
+  *** 169,170 ****
+  --- 174,176 ----
+    proc @FUN_400660()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x400660:bv64, $PC))
+  ***************
+  *** 185,186 ****
+  --- 191,193 ----
+    proc @Sqrt()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x400784:bv64, $PC))
+  ***************
+  *** 266,267 ****
+  --- 273,275 ----
+    proc @_start()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x400680:bv64, $PC))
+  ***************
+  *** 310,311 ****
+  --- 318,320 ----
+    proc @_dl_relocate_static_pie()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x4006c0:bv64, $PC))
+  ***************
+  *** 324,325 ****
+  --- 333,335 ----
+    proc @call_weak_fn()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x4006c4:bv64, $PC))
+  ***************
+  *** 363,364 ****
+  --- 373,375 ----
+    proc @main()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x400808:bv64, $PC))
+  ***************
+  *** 397,398 ****
+  --- 408,410 ----
+    proc @.L_400650()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x400650:bv64, $PC))
+  ***************
+  *** 413,414 ****
+  --- 425,427 ----
+    proc @FUN_400640()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x400640:bv64, $PC))
+  ***************
+  *** 429,430 ****
+  --- 442,444 ----
+    proc @deregister_tm_clones()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x4006e0:bv64, $PC))
+  ***************
+  *** 478,479 ****
+  --- 492,494 ----
+    proc @FUN_400620()  -> () {  }
+  +   captures $PC:bv64
+      requires boolor(eq(0x400620:bv64, $PC))
   [1]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
