@@ -28,6 +28,7 @@
  (description "A longer description")
  (depends
   ocaml
+  (aslp_lifter_ocaml (>= 1.1))
   (ocaml-protoc-plugin (>= 6.1.0))
   (qcheck-stm :with-test)
   (qcheck-core :with-test)
