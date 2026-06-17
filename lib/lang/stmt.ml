@@ -15,6 +15,7 @@ module Intrinsic = struct
     | Calloc (* size -> ptr allocate zeroed memory *)
     | AllocStack (* size -> ptr allocate stack memory *)
     | FreeStack (* ptr -> void free , stack memory *)
+    | Aarch64Eval (* bv32 -> void. execute an AArch64 instruction *)
   [@@deriving eq, ord, show]
 
   let of_string e =
@@ -25,6 +26,7 @@ module Intrinsic = struct
     | "@_free" -> Some Free
     | "@_allcoa" -> Some AllocStack
     | "@_free_alloca" -> Some FreeStack
+    | "@_aarch64_eval" -> Some Aarch64Eval
     | _ -> None
 
   let pretty e =
@@ -34,7 +36,8 @@ module Intrinsic = struct
       | Calloc -> "@_calloc"
       | Free -> "@_free"
       | AllocStack -> "@_allcoa"
-      | FreeStack -> "@_free_alloca")
+      | FreeStack -> "@_free_alloca"
+      | Aarch64Eval -> "@_aarch64_eval")
     |> Containers_pp.text
 end
 
