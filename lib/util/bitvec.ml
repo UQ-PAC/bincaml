@@ -93,12 +93,6 @@ let bind2 f a b =
   create ~size:a.w (f ~size a.v b.v)
 [@@inline always]
 
-(* wrap signed bv operation *)
-(*let bind2_signed f a b =
-  let size = size_is_equal a b in
-  create ~size (f ~size (to_signed_bigint a) (to_signed_bigint b))
-[@@inline always]*)
-
 let map2 f a b =
   let size = size_if_equal a b in
   f ~size a.v b.v
@@ -143,19 +137,44 @@ let srem a b = bind2 I.srem a b
 (** Remainder with result sign following the divisor (b) sign. *)
 let smod a b = bind2 I.smod a b
 
+(** unsigned less-than*)
 let ult a b = map2 I.ult a b
+
+(** unsigned greater-than*)
 let ugt a b = map2 I.ugt a b
+
+(** unsigned less-than-equals*)
 let ule a b = map2 I.ule a b
+
+(** unsigned greater-than-equals*)
 let uge a b = map2 I.uge a b
+
+
+(** signed less-than *)
 let slt a b = map2 I.slt a b
+
+(** signed greater-than *)
 let sgt a b = map2 I.sgt a b
+
+(** signed less-than-equals *)
 let sle a b = map2 I.sle a b
+
+(** signed greater-than-equals *)
 let sge a b = map2 I.sge a b
+
+(** arithmetic shift right *)
 let ashr a b = bind2 I.ashr a b
+
+(** logical shift right *)
 let lshr a b = bind2 I.lshr a b
+
+(** shift left *)
 let shl a b = bind2 I.shl a b
+
+(** extend [extension] zeros in msb position *)
 let zero_extend ~(extension : int) b = create ~size:(b.w + extension) b.v
 
+(** bitconcat *)
 let concat a b =
   let wd = a.w + b.w in
   let a = zero_extend ~extension:(wd - a.w) a in
@@ -163,8 +182,10 @@ let concat a b =
   let b = zero_extend ~extension:(wd - b.w) b in
   bitor a b
 
+(* bitconcat a with itself n times *)
 let repeat_bits ~(copies : int) a =
   List.init copies (fun _ -> a) |> List.fold_left concat empty
 
+(* extend sign bit by [extension] bits *)
 let sign_extend ~(extension : int) b =
   create ~size:(b.w + extension) @@ to_signed_bigint b
