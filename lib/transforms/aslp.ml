@@ -142,21 +142,31 @@ struct
   type branch = string
   type ast = Aslp_state.aslp_state
 
-  let reset_ir : unit -> unit = fun _ -> failwith ""
-  let get_ir : unit -> ast = fun _ -> failwith ""
-  let bigint_of_string : string -> bigint = fun _ -> failwith ""
-  let bigint_of_int : int -> bigint = fun _ -> failwith ""
+  let reset_ir =
+   fun () -> S.bincaml_lifter_state := Aslp_state.empty_lifter_state
+
+  let get_ir = fun () -> !S.bincaml_lifter_state.state
+  let bigint_of_string : string -> bigint = Z.of_string_base 10
+  let bigint_of_int : int -> bigint = Z.of_int
   let bigint_zero : bigint = Z.zero
-  let bigint_add : bigint -> bigint -> bigint = fun _ -> failwith ""
-  let bigint_sub : bigint -> bigint -> bigint = fun _ -> failwith ""
-  let bigint_mul : bigint -> bigint -> bigint = fun _ -> failwith ""
+  let bigint_add : bigint -> bigint -> bigint = Z.add
+  let bigint_sub : bigint -> bigint -> bigint = Z.sub
+  let bigint_mul : bigint -> bigint -> bigint = Z.mul
   let undefined : unit -> expr = fun _ -> failwith ""
-  let mkBits : bigint -> bigint -> bitvector = fun _ -> failwith ""
-  let from_bitsLit : string -> bitvector = fun _ -> failwith ""
-  let frem_int : bigint -> bigint -> bigint = fun _ -> failwith ""
+
+  let mkBits : bigint -> bigint -> bitvector =
+   fun size x -> Bitvec.create ~size:(Z.to_int size) x
+
+  let from_bitsLit : string -> bitvector = Bitvec.of_string
+
+  let frem_int : bigint -> bigint -> bigint =
+   fun x y -> Z.sub x (Z.mul y (Z.fdiv x y))
 
   let extract_bits : bitvector -> bigint -> bigint -> bitvector =
-   fun _ -> failwith ""
+   fun x lo wd ->
+    let wd = Z.to_int wd and lo = Z.to_int lo in
+    let hi = lo + wd in
+    Bitvec.extract ~lo ~hi x (* [hi] is exclusive *)
 
   (** [f_Elem_set operand_width elem_width operand elem_index elem_width elem]
   *)
@@ -171,71 +181,79 @@ struct
    fun _ -> failwith ""
 
   let f_eq_bits : bigint -> bitvector -> bitvector -> bool =
-   fun _ -> failwith ""
+   fun _ -> Bitvec.equal
 
   let f_ne_bits : bigint -> bitvector -> bitvector -> bool =
-   fun _ -> failwith ""
+   fun _ a b -> not (Bitvec.equal a b)
 
   let f_add_bits : bigint -> bitvector -> bitvector -> bitvector =
-   fun _ -> failwith ""
+   fun _ -> Bitvec.add
 
   let f_sub_bits : bigint -> bitvector -> bitvector -> bitvector =
-   fun _ -> failwith ""
+   fun _ -> Bitvec.sub
 
   let f_mul_bits : bigint -> bitvector -> bitvector -> bitvector =
-   fun _ -> failwith ""
+   fun _ -> Bitvec.mul
 
   let f_and_bits : bigint -> bitvector -> bitvector -> bitvector =
-   fun _ -> failwith ""
+   fun _ -> Bitvec.bitand
 
   let f_or_bits : bigint -> bitvector -> bitvector -> bitvector =
-   fun _ -> failwith ""
+   fun _ -> Bitvec.bitor
 
   let f_eor_bits : bigint -> bitvector -> bitvector -> bitvector =
-   fun _ -> failwith ""
+   fun _ -> Bitvec.bitxor
 
-  let f_not_bits : bigint -> bitvector -> bitvector = fun _ -> failwith ""
+  let f_not_bits : bigint -> bitvector -> bitvector = fun _ -> Bitvec.bitnot
 
   let f_slt_bits : bigint -> bitvector -> bitvector -> bool =
-   fun _ -> failwith ""
+   fun _ -> Bitvec.slt
 
   let f_sle_bits : bigint -> bitvector -> bitvector -> bool =
-   fun _ -> failwith ""
+   fun _ -> Bitvec.sle
 
-  let f_zeros_bits : bigint -> bitvector = fun _ -> failwith ""
-  let f_ones_bits : bigint -> bitvector = fun _ -> failwith ""
+  let f_zeros_bits : bigint -> bitvector =
+   fun size -> Bitvec.zero ~size:(Z.to_int size)
+
+  let f_ones_bits : bigint -> bitvector =
+   fun size -> Bitvec.ones ~size:(Z.to_int size)
 
   (** [f_replicate_bits operand_width num_replications operand num_replications]
   *)
   let f_replicate_bits : bigint -> bigint -> bitvector -> bigint -> bitvector =
-   fun _ -> failwith ""
+   fun _ _ x copies -> Bitvec.repeat_bits ~copies:(Z.to_int copies) x
 
   (** [f_append_bits w1 w2 x1 x2] *)
   let f_append_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
-   fun _ -> failwith ""
+   fun _ _ -> Bitvec.concat
 
   (** [f_ZeroExtend operand_width result_width operand result_width] *)
   let f_ZeroExtend : bigint -> bigint -> bitvector -> bigint -> bitvector =
-   fun _ -> failwith ""
+   fun wd result_wd x _ ->
+    let extension = Z.(to_int (result_wd - wd)) in
+    Bitvec.zero_extend ~extension x
 
   (** [f_SignExtend operand_width result_width operand result_width] *)
   let f_SignExtend : bigint -> bigint -> bitvector -> bigint -> bitvector =
-   fun _ -> failwith ""
+   fun wd result_wd x _ ->
+    let extension = Z.(to_int (result_wd - wd)) in
+    Bitvec.sign_extend ~extension x
 
   (** [f_lsl_bits operand_width shift_width operand shift] *)
   let f_lsl_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
-   fun _ -> failwith ""
+   fun _ _ -> Bitvec.shl
 
   (** [f_lsr_bits operand_width shift_width operand shift] *)
   let f_lsr_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
-   fun _ -> failwith ""
+   fun _ _ -> Bitvec.lshr
 
   (** [f_asr_bits operand_width shift_width operand shift] *)
   let f_asr_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
-   fun _ -> failwith ""
+   fun _ _ -> Bitvec.ashr
 
   (** [f_cvt_bits_uint operand_width operand] *)
-  let f_cvt_bits_uint : bigint -> bitvector -> bigint = fun _ -> failwith ""
+  let f_cvt_bits_uint : bigint -> bitvector -> bigint =
+   fun _ -> Bitvec.to_unsigned_bigint
 
   let f_sdiv_int : bigint -> bigint -> bigint = fun _ -> failwith ""
   let f_shl_int : bigint -> bigint -> bigint = fun _ -> failwith ""
@@ -355,6 +373,8 @@ struct
    fun _ -> failwith ""
 
   let f_gen_slice : expr -> bigint -> bigint -> expr = fun _ -> failwith ""
+
+  (* {1 Floating point intrinsics} *)
 
   let f_gen_FPCompare : bigint -> expr -> expr -> expr -> expr -> expr =
    fun _ -> failwith ""
