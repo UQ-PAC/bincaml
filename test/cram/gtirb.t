@@ -4,6 +4,7 @@
   > (dump-il gtirb-output.il)
   > (dump-il)
   > (load-il gtirb-output.il)
+  > (dump-il "dumped.il")
   > EOF
   (load-gtirb ../../examples/gtirb/binsearch_sqrt.gtirb)
   (dump-il gtirb-output.il)
@@ -11,7 +12,7 @@
   var $PC:bv64;
   proc @_fini()  -> () {  }
     requires boolor(eq(0x400828:bv64, $PC))
-  
+
   [
      block %_fini_code { .gtirb_block = "gFBdrsFTRkSCdIsDFMk6qA"; .succ = [  ] } [
        assume eq(0x400828:bv64, $PC);
@@ -24,7 +25,7 @@
   ];
   proc @_init()  -> () {  }
     requires boolor(eq(0x400600:bv64, $PC))
-  
+
   [
      block %_init_code { .gtirb_block = "UfNyH7KvQiam2F847lIf0g";
          .succ = [ { .address = 4196036; .conditional = "false"; .direct = "true";
@@ -56,7 +57,7 @@
   ];
   proc @__do_global_dtors_aux()  -> () {  }
     requires boolor(eq(0x40074c:bv64, $PC))
-  
+
   [
      block %__do_global_dtors_aux_code { .gtirb_block = "D9t2gNJrSmyMH3GAVRe3IQ";
          .succ = [ { .address = 4196208; .conditional = "true"; .direct = "true";
@@ -108,7 +109,7 @@
   ];
   proc @register_tm_clones()  -> () {  }
     requires boolor(eq(0x400710:bv64, $PC))
-  
+
   [
      block %register_tm_clones_code_2 { .gtirb_block = "rIlbG4jGSTydaFqMhxCKWw";
          .succ = [ { .address = 4196168; .conditional = "true"; .direct = "true";
@@ -159,7 +160,7 @@
   ];
   proc @frame_dummy()  -> () {  }
     requires boolor(eq(0x400780:bv64, $PC))
-  
+
   [
      block %frame_dummy_code { .gtirb_block = "6JJvkaLhTaWXaEL0+yxKxg";
          .succ = [ { .address = 4196112; .conditional = "false"; .direct = "true";
@@ -178,7 +179,7 @@
   ];
   proc @FUN_400660()  -> () {  }
     requires boolor(eq(0x400660:bv64, $PC))
-  
+
   [
      block %FUN_400660_code { .gtirb_block = "iedVtPHmSjuLgqSxHgXOuw";
          .succ = [ { .conditional = "false"; .direct = "false";
@@ -194,7 +195,7 @@
   ];
   proc @Sqrt()  -> () {  }
     requires boolor(eq(0x400784:bv64, $PC))
-  
+
   [
      block %Sqrt_code_1 { .gtirb_block = "OuTzy8qRTci75taVjGinFQ";
          .succ = [ { .address = 4196328; .conditional = "false"; .direct = "true";
@@ -275,7 +276,7 @@
   ];
   proc @_start()  -> () {  }
     requires boolor(eq(0x400680:bv64, $PC))
-  
+
   [
      block %_start_code_2 { .gtirb_block = "xdHqi8HzTJ+zBYVemlzAtg";
          .succ = [ { .address = 4195904; .conditional = "false"; .direct = "true";
@@ -319,7 +320,7 @@
   ];
   proc @_dl_relocate_static_pie()  -> () {  }
     requires boolor(eq(0x4006c0:bv64, $PC))
-  
+
   [
      block %_dl_relocate_static_pie_code { .gtirb_block = "KTHyjTW0SWiGwqylcMDw6Q";
          .succ = [ { .conditional = "false"; .direct = "false";
@@ -333,7 +334,7 @@
   ];
   proc @call_weak_fn()  -> () {  }
     requires boolor(eq(0x4006c4:bv64, $PC))
-  
+
   [
      block %call_weak_fn_code { .gtirb_block = "Djx7L34DQzuSXaBFEj/bpQ";
          .succ = [ { .address = 4196052; .conditional = "true"; .direct = "true";
@@ -372,7 +373,7 @@
   ];
   proc @main()  -> () {  }
     requires boolor(eq(0x400808:bv64, $PC))
-  
+
   [
      block %main_code { .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
          .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
@@ -406,7 +407,7 @@
   ];
   proc @.L_400650()  -> () {  }
     requires boolor(eq(0x400650:bv64, $PC))
-  
+
   [
      block %L_400650_code { .gtirb_block = "i2bc6yURTw+Pq2nxe63pQA";
          .succ = [ { .conditional = "false"; .direct = "false";
@@ -422,7 +423,7 @@
   ];
   proc @FUN_400640()  -> () {  }
     requires boolor(eq(0x400640:bv64, $PC))
-  
+
   [
      block %FUN_400640_code { .gtirb_block = "YmNxI7RsS/6TZy3HTKzvWg";
          .succ = [ { .conditional = "false"; .direct = "false";
@@ -438,7 +439,7 @@
   ];
   proc @deregister_tm_clones()  -> () {  }
     requires boolor(eq(0x4006e0:bv64, $PC))
-  
+
   [
      block %deregister_tm_clones_code { .gtirb_block = "GW0MHC+ORUKlCdpgOcZ6zA";
          .succ = [ { .address = 4196108; .conditional = "true"; .direct = "true";
@@ -487,7 +488,7 @@
   ];
   proc @FUN_400620()  -> () {  }
     requires boolor(eq(0x400620:bv64, $PC))
-  
+
   [
      block %FUN_400620_code { .gtirb_block = "wtDzxxOjSJeWxzGBUpQYxA";
          .succ = [ { .conditional = "false"; .direct = "false";
@@ -503,3 +504,158 @@
      ]
   ];
   prog entry @_start;(load-il gtirb-output.il)
+  (dump-il dumped.il)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  $ diff -u gtirb-output.il dumped.il
+  --- gtirb-output.il	2026-06-17 15:02:21.872603587 +1000
+  +++ dumped.il	2026-06-17 15:02:21.876603580 +1000
+  @@ -1,5 +1,6 @@
+   var $PC:bv64;
+   proc @_fini()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x400828:bv64, $PC))
+
+   [
+  @@ -13,6 +14,7 @@
+      ]
+   ];
+   proc @_init()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x400600:bv64, $PC))
+
+   [
+  @@ -45,6 +47,7 @@
+      block %ret_1 [ return; ]
+   ];
+   proc @__do_global_dtors_aux()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x40074c:bv64, $PC))
+
+   [
+  @@ -97,6 +100,7 @@
+      block %ret_2 [ return; ]
+   ];
+   proc @register_tm_clones()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x400710:bv64, $PC))
+
+   [
+  @@ -148,6 +152,7 @@
+      block %ret_2 [ return; ]
+   ];
+   proc @frame_dummy()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x400780:bv64, $PC))
+
+   [
+  @@ -167,6 +172,7 @@
+      ]
+   ];
+   proc @FUN_400660()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x400660:bv64, $PC))
+
+   [
+  @@ -183,6 +189,7 @@
+      ]
+   ];
+   proc @Sqrt()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x400784:bv64, $PC))
+
+   [
+  @@ -264,6 +271,7 @@
+      block %ret_3 [ return; ]
+   ];
+   proc @_start()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x400680:bv64, $PC))
+
+   [
+  @@ -308,6 +316,7 @@
+      ]
+   ];
+   proc @_dl_relocate_static_pie()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x4006c0:bv64, $PC))
+
+   [
+  @@ -322,6 +331,7 @@
+      block %ret [ return; ]
+   ];
+   proc @call_weak_fn()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x4006c4:bv64, $PC))
+
+   [
+  @@ -361,6 +371,7 @@
+      block %ret_3 [ return; ]
+   ];
+   proc @main()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x400808:bv64, $PC))
+
+   [
+  @@ -395,6 +406,7 @@
+      block %ret_1 [ return; ]
+   ];
+   proc @.L_400650()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x400650:bv64, $PC))
+
+   [
+  @@ -411,6 +423,7 @@
+      ]
+   ];
+   proc @FUN_400640()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x400640:bv64, $PC))
+
+   [
+  @@ -427,6 +440,7 @@
+      ]
+   ];
+   proc @deregister_tm_clones()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x4006e0:bv64, $PC))
+
+   [
+  @@ -476,6 +490,7 @@
+      block %ret_5 [ return; ]
+   ];
+   proc @FUN_400620()  -> () {  }
+  +  captures $PC:bv64
+     requires boolor(eq(0x400620:bv64, $PC))
+
+   [
+  [1]
