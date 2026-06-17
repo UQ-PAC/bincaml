@@ -1,5 +1,4 @@
 open Containers
-module I = Fixed_width_arith
 
 (* workaround: ZArith library doesn't like zero-length extracts *)
 let checked_extract f v off len = if len > 0 then f v off len else Z.zero
@@ -81,7 +80,7 @@ let of_string i =
 let size_is_equal a b = assert (size a = size b) [@@inline always]
 
 let size_if_equal a b =
-  if size_is_equal a b then size a else failwith "bv binop widths differ"
+  if a.w = b.w then size a else failwith "bv binop widths differ"
 [@@inline always]
 
 let bind1 f a = create ~size:a.w (f ~size:a.w a.v) [@@inline always]
@@ -99,77 +98,76 @@ let map2 f a b =
 [@@inline always]
 
 (** sign negation *)
-let neg a = bind1 I.neg a
+let neg a = bind1 Fixed_width_arith.neg a
 
 (** addition *)
-let add a b = bind2 I.add a b
+let add a b = bind2 Fixed_width_arith.add a b
 
 (** multiplication *)
-let mul a b = bind2 I.mul a b
+let mul a b = bind2 Fixed_width_arith.mul a b
 
 (** subtraction *)
-let sub a b = bind2 I.sub a b
+let sub a b = bind2 Fixed_width_arith.sub a b
 
 (** bitwise not *)
-let bitnot a = bind1 I.bitnot a
+let bitnot a = bind1 Fixed_width_arith.bitnot a
 
 (** bitwise and *)
-let bitand a b = bind2 I.bitand a b
+let bitand a b = bind2 Fixed_width_arith.bitand a b
 
 (** bitwise or *)
-let bitor a b = bind2 I.bitor a b
+let bitor a b = bind2 Fixed_width_arith.bitor a b
 
 (** bitwise exclusive or *)
-let bitxor a b = bind2 I.bitxor a b
+let bitxor a b = bind2 Fixed_width_arith.bitxor a b
 
 (** unsigned division *)
-let udiv a b = bind2 I.udiv a b
+let udiv a b = bind2 Fixed_width_arith.udiv a b
 
 (** unsigned remainder *)
-let urem a b = bind2 I.urem a b
+let urem a b = bind2 Fixed_width_arith.urem a b
 
 (** signed division *)
-let sdiv a b = bind2 I.sdiv a b
+let sdiv a b = bind2 Fixed_width_arith.sdiv a b
 
 (** Remainder with result sign following the dividend (a) sign. *)
-let srem a b = bind2 I.srem a b
+let srem a b = bind2 Fixed_width_arith.srem a b
 
 (** Remainder with result sign following the divisor (b) sign. *)
-let smod a b = bind2 I.smod a b
+let smod a b = bind2 Fixed_width_arith.smod a b
 
 (** unsigned less-than*)
-let ult a b = map2 I.ult a b
+let ult a b = map2 Fixed_width_arith.ult a b
 
 (** unsigned greater-than*)
-let ugt a b = map2 I.ugt a b
+let ugt a b = map2 Fixed_width_arith.ugt a b
 
 (** unsigned less-than-equals*)
-let ule a b = map2 I.ule a b
+let ule a b = map2 Fixed_width_arith.ule a b
 
 (** unsigned greater-than-equals*)
-let uge a b = map2 I.uge a b
-
+let uge a b = map2 Fixed_width_arith.uge a b
 
 (** signed less-than *)
-let slt a b = map2 I.slt a b
+let slt a b = map2 Fixed_width_arith.slt a b
 
 (** signed greater-than *)
-let sgt a b = map2 I.sgt a b
+let sgt a b = map2 Fixed_width_arith.sgt a b
 
 (** signed less-than-equals *)
-let sle a b = map2 I.sle a b
+let sle a b = map2 Fixed_width_arith.sle a b
 
 (** signed greater-than-equals *)
-let sge a b = map2 I.sge a b
+let sge a b = map2 Fixed_width_arith.sge a b
 
 (** arithmetic shift right *)
-let ashr a b = bind2 I.ashr a b
+let ashr a b = bind2 Fixed_width_arith.ashr a b
 
 (** logical shift right *)
-let lshr a b = bind2 I.lshr a b
+let lshr a b = bind2 Fixed_width_arith.lshr a b
 
 (** shift left *)
-let shl a b = bind2 I.shl a b
+let shl a b = bind2 Fixed_width_arith.shl a b
 
 (** extend [extension] zeros in msb position *)
 let zero_extend ~(extension : int) b = create ~size:(b.w + extension) b.v
