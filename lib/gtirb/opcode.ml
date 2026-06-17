@@ -15,6 +15,9 @@ let to_be_bytes (opcode : t) : string =
   Bytes.set_int32_be bytes 0 opcode;
   String.of_bytes bytes
 
+let to_bitvec (opcode : t) : Bitvec.t =
+  Bitvec.create ~size:32 (Z.of_int32_unsigned opcode)
+
 let pp fmt f = Format.pp_print_string fmt (to_hex_string f)
 let of_be_bytes (bytes : string) : t = String.get_int32_be bytes 0
 
