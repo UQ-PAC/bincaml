@@ -467,9 +467,16 @@ end
 
 let ensure_aslp_globals_exist prog = 9
 
-let a () =
-  let bincaml_aslp_state = ref Aslp_state.empty_lifter_state in
-  let module I = Bincaml_IBI (struct
-    let bincaml_lifter_state = bincaml_aslp_state
-  end) in
-  OfflineASL_pc.Offline.f_A64_decoder (module I) (Bitvec.zero ~size:32)
+let lift_opcode
+    (module I : OfflineASL_pc.Instruction_building_interface.IBI
+      with type bitvector = Bitvec.t
+       and type ast = Aslp_state.aslp_state) ~address opcode =
+  I.reset_ir ();
+  OfflineASL_pc.Offline.f_A64_decoder (module I) opcode address;
+  I.get_ir ()
+
+let lift_code_block ~address opcodes =
+  let opcodes_and_addresses =
+    opcodes |> List.mapi (fun i op -> (op, (i * 4) + address))
+  in
+  ()
