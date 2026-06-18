@@ -563,35 +563,31 @@ let inline_function_defs (p : Program.t) : Program.t =
            match (decl : Program.declaration) with
            | Program.Function { binding; definition = Function body; _ } -> (
                match BasilExpr.unfix body with
-               | Lambda _ -> StringMap.add (Var.name binding) body acc
+               | Lambda { bound_vars; in_body; _ } ->
+                   StringMap.add (Var.name binding) (bound_vars, in_body) acc
                | _ -> acc)
            | _ -> acc)
          StringMap.empty
   in
   if StringMap.is_empty lambdas then p
   else
-    let inline_expr e =
-      BasilExpr.cata
-        (fun node ->
-          match node with
-          | ApplyFun { func; args } -> (
-              match BasilExpr.unfix func with
-              | RVar { id; _ } -> (
-                  match StringMap.find_opt (Var.name id) lambdas with
-                  | Some lam -> (
-                      match BasilExpr.unfix lam with
-                      | Lambda { bound_vars; in_body; _ } ->
-                          let m =
-                            VarMap.of_list (List.combine bound_vars args)
-                          in
-                          BasilExpr.substitute
-                            (fun v -> VarMap.find_opt v m)
-                            in_body
-                      | _ -> BasilExpr.fix node)
-                  | None -> BasilExpr.fix node)
-              | _ -> BasilExpr.fix node)
+    (* We use the raw [rw_recurse_down] rather than [rewrite_down] because the
+       latter asserts the rewrite is type-preserving, and [type_alg] seems to
+       mistype the application of a memory store/load (perhaps because function
+       and map types both share the [Map] constructor?). *)
+    let inline_expr =
+      BasilExpr.rw_recurse_down ~f:(fun node ->
+          match AbstractExpr.map BasilExpr.unfix node with
+          | ApplyFun { func = RVar { id; _ }; args } -> (
+              match StringMap.find_opt (Var.name id) lambdas with
+              | Some (bound_vars, in_body) ->
+                  let subst =
+                    VarMap.of_list
+                      (List.combine bound_vars (List.map BasilExpr.fix args))
+                  in
+                  BasilExpr.substitute (fun v -> VarMap.find_opt v subst) in_body
+              | None -> BasilExpr.fix node)
           | _ -> BasilExpr.fix node)
-        e
     in
     let rw ?visit:_ e = inline_expr e in
     p
