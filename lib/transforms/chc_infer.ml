@@ -805,15 +805,15 @@ let infer_invariants (prog : Program.t) : Program.t =
       m "Submitting %d predicates and %d clauses to solver" (List.length preds)
         (List.length clauses));
   match solve_and_get_model preds clauses ~timeout_ms:(Some solver_timeout) with
-  | Sat, Some defs ->
+  | Sat defs ->
       Logs.info (fun m ->
           m "Solver returned sat; extracted %d definitions" (List.length defs));
       let invs = decode_model preds defs in
       annotate_program ~use_spec ~invs ~lift prog
-  | Unsat, _ ->
+  | Unsat ->
       Logs.warn (fun m -> m "Solver returned unsat — no invariants extracted");
       prog
-  | Unknown, _ | Sat, None ->
+  | Unknown ->
       Logs.warn (fun m -> m "Solver returned unknown — no invariants extracted");
       prog
 
@@ -840,7 +840,7 @@ let infer_invariants_per_query (prog : Program.t) : Program.t =
         solve_and_get_model preds (normal @ [ q ])
           ~timeout_ms:(Some solver_timeout)
       with
-      | Sat, Some defs ->
+      | Sat defs ->
           incr successes;
           let invs = decode_model preds defs in
           Logs.info (fun m ->
@@ -853,11 +853,10 @@ let infer_invariants_per_query (prog : Program.t) : Program.t =
               in
               accum := StringMap.add name (e :: existing) !accum)
             invs
-      | Unsat, _ ->
+      | Unsat ->
           Logs.warn (fun m ->
               m "Query %d/%d: unsat — assertion not provable" idx n_queries)
-      | Unknown, _ | Sat, None ->
-          Logs.warn (fun m -> m "Query %d/%d: unknown" idx n_queries))
+      | Unknown -> Logs.warn (fun m -> m "Query %d/%d: unknown" idx n_queries))
     queries;
   let conjoined =
     StringMap.map

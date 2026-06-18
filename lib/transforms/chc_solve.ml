@@ -49,8 +49,6 @@ let clause_to_sexp (c : clause) : Sexp.t =
   in
   list [ atom "assert"; forall_ binders body ]
 
-type solve_result = Sat | Unsat | Unknown
-
 (** Open a Z3 process configured for Spacer with model-preserving options.
     Spacer's slicing and eager-inlining transformations rewrite the input in
     ways that drop predicate parameters or fuse predicates together, which
@@ -103,23 +101,27 @@ let parse_model (model : Sexp.t) : model_def list =
         defs
   | _ -> []
 
+type solve_result =
+  | Sat of model_def list
+      (** the solver's model, one [model_def] per predicate *)
+  | Unsat
+  | Unknown
+
 (** One Spacer invocation against the encoded CHC system. Reuses
     {!Bincaml_util.Smt.Solver} directly; the only HORN-specific bit is the
-    [(set-logic HORN)] preamble. Returns the [solve_result] together with the
-    parsed model on Sat. *)
+    [(set-logic HORN)] preamble. On [Sat] the parsed model is carried in the
+    result. *)
 let solve_and_get_model ?timeout_ms (preds : predicate list)
-    (clauses : clause list) : solve_result * model_def list option =
+    (clauses : clause list) : solve_result =
   let module Solver = Bincaml_util.Smt.Solver in
   let s = open_spacer ?timeout_ms () in
   List.iter (fun pr -> Solver.add_command s (declare_predicate pr)) preds;
   List.iter (fun c -> Solver.add_command s (clause_to_sexp c)) clauses;
   let result =
     match Solver.check s with
-    | Sat ->
-        let model = parse_model (Solver.get_model s) in
-        (Sat, Some model)
-    | Unsat -> (Unsat, None)
-    | Unknown -> (Unknown, None)
+    | Solver.Sat -> Sat (parse_model (Solver.get_model s))
+    | Solver.Unsat -> Unsat
+    | Solver.Unknown -> Unknown
   in
   Solver.stop s;
   result
