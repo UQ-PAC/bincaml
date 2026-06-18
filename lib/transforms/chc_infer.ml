@@ -56,7 +56,7 @@ let enter_exit_predicates (proc : Program.proc) : predicate * predicate =
   in
   (enter, exit)
 
-(** [true] when an expression is the boolean literal [true] — i.e. the solver
+(** [true] when an expression is the boolean literal [true] -- i.e. the solver
     gave us no useful information. We don't emit these as annotations. *)
 let is_trivially_true (e : BasilExpr.t) : bool =
   match BasilExpr.unfix e with
@@ -64,7 +64,7 @@ let is_trivially_true (e : BasilExpr.t) : bool =
   | _ -> false
 
 (** A procedure has a spec if it declares any non-trivial [requires] or
-    [ensures] clause. Trivially-true clauses are ignored — they impose no
+    [ensures] clause. Trivially-true clauses are ignored -- they impose no
     obligation on either side. *)
 let has_spec (spec : (Var.t, BasilExpr.t) Procedure.proc_spec) : bool =
   let is_nontrivial e = not (is_trivially_true e) in
@@ -141,7 +141,7 @@ module Encoder = struct
     match VarMap.find_opt v t.delta with
     | Some v' -> v'
     | None ->
-        (* No Δ entry: [v] is used as-is, so it must already be a binder —
+        (* No delta entry: [v] is used as-is, so it must already be a binder --
            either a block parameter (a live-in variable, possibly read
            uninitialized) or an already-freshened variable substituted in by
            spec inlining. Anything else is free in the clause and would silently
@@ -188,7 +188,7 @@ let block_successors (proc : Program.proc) (block_id : ID.t) : block_succs =
 
 (** Build a phi-substitution map for the edge from [from_id] into a block: each
     phi target maps to whichever rhs variable the source block contributes for
-    this edge. Used when computing the head args of a transition clause — the
+    this edge. Used when computing the head args of a transition clause -- the
     successor's predicate has the phi target as a parameter, and we bind it to
     the source's value. *)
 let phi_subst_for_edge ~(from_id : ID.t) (succ_block : Program.bloc) :
@@ -201,7 +201,7 @@ let phi_subst_for_edge ~(from_id : ID.t) (succ_block : Program.bloc) :
     VarMap.empty succ_block.phis
 
 (** Build a query clause (head = [false]) capturing the encoder's current state.
-    [extra_premises] are conjoined after the accumulated premises — typically
+    [extra_premises] are conjoined after the accumulated premises -- typically
     the negation of the condition being checked. *)
 let query_of_encoder (enc : Encoder.t) ~extra_premises : clause =
   {
@@ -221,7 +221,7 @@ let rule_of_encoder (enc : Encoder.t) ~head : clause =
 let encode_call_with_spec (enc : Encoder.t) ~callee
     ~(spec : (Var.t, BasilExpr.t) Procedure.proc_spec) ~lhs ~procid ~in_subst :
     unit =
-  (* Fresh-name returns, building the [callee out-param → caller fresh var]
+  (* Fresh-name returns, building the [callee out-param -> caller fresh var]
      half of the postcondition substitution. *)
   let out_subst =
     StringMap.fold
@@ -250,8 +250,8 @@ let encode_call_with_spec (enc : Encoder.t) ~callee
     spec.ensures
 
 (** Connect the call site to the callee's [enter]/[exit] predicates: conjoin
-    [exit⟨f⟩(args, returns)] to [enc]'s premises and return the
-    [C ⟹ enter⟨f⟩(args)] clause. *)
+    [exit<f>(args, returns)] to [enc]'s premises and return the
+    [C ==> enter<f>(args)] clause. *)
 let encode_call_full (enc : Encoder.t) ~callee ~args ~lhs ~procid : clause list
     =
   let enter_pred, exit_pred = enter_exit_predicates callee in
@@ -312,7 +312,7 @@ let encode_call ~(use_spec : Program.proc -> bool) (enc : Encoder.t)
   let apply_in_subst e =
     BasilExpr.substitute (fun v -> VarMap.find_opt v in_subst) e
   in
-  (* Precondition queries are emitted regardless of [use_spec] — the caller is
+  (* Precondition queries are emitted regardless of [use_spec] -- the caller is
      obligated to satisfy the callee's precondition either way. Captured before
      any call effect is added to [enc]. *)
   let queries =
@@ -337,7 +337,7 @@ let encode_stmt ~(use_spec : Program.proc -> bool) (enc : Encoder.t)
     (prog : Program.t) stmt : clause list =
   match stmt with
   | Stmt.Instr_Assign { al; _ } ->
-      (* Evaluate RHSs in parallel before binding any new LHS — matches the
+      (* Evaluate RHSs in parallel before binding any new LHS -- matches the
          simultaneous-assignment semantics of [Instr_Assign]. *)
       let rhss = List.map (fun (lhs, rhs) -> (lhs, encode_expr enc rhs)) al in
       List.iter
@@ -420,12 +420,12 @@ let block_head_clauses (enc : Encoder.t) (proc : Program.proc)
     encoder state), then appends one rule clause per outgoing edge (block
     successor or procedure return). Phi nodes in a successor are resolved by
     substituting each phi target with the appropriate rhs variable for this edge
-    before doing the Δ lookup.
+    before doing the delta lookup.
 
     [use_spec] decides per-callee how a call site connects to the callee: when
     true, the caller assumes the callee's [ensures] post-call and does not refer
     to the callee's [enter]/[exit] predicates; when false, the caller emits a
-    [C ⟹ enter⟨f⟩(args)] clause and uses [exit⟨f⟩] as a premise. Spec checking
+    [C ==> enter<f>(args)] clause and uses [exit<f>] as a premise. Spec checking
     (precondition queries at the call site, postcondition queries on the body)
     is performed independently of [use_spec] whenever the callee has a
     [requires] or [ensures]. *)
@@ -443,7 +443,7 @@ let encode_block ~(use_spec : Program.proc -> bool) (prog : Program.t)
   in
   stmt_clauses @ block_head_clauses enc proc preds block_id
 
-(** Connect [enter⟨f⟩] to the entry block predicate. *)
+(** Connect [enter<f>] to the entry block predicate. *)
 let enter_to_entry_block (preds : proc_predicates) (proc : Program.proc) :
     clause list =
   match Procedure.get_entry_block proc with
@@ -478,7 +478,7 @@ let all_predicates (preds : proc_predicates) : predicate list =
 
 (** Entry fact for a procedure whose body needs to be reachable independently of
     any caller (main, or any procedure with [use_spec] = true):
-    [⟦requires⟧ ⟹ enter⟨f⟩(in_params)]. The precondition defaults to [true] when
+    [requires ==> enter<f>(in_params)]. The precondition defaults to [true] when
     [requires] is empty, yielding an unconditional entry fact. *)
 let entry_fact_for (proc : Program.proc) (enter : predicate) : clause =
   let requires = (Procedure.specification proc).requires in
@@ -487,8 +487,8 @@ let entry_fact_for (proc : Program.proc) (enter : predicate) : clause =
   { vars = enter.params; premises; head = Some (apply_predicate enter args) }
 
 (** One postcondition query per [ensures] clause:
-    [exit⟨f⟩(in_params, out_params) ∧ ¬ensures ⟹ ⊥]. Asserts the body actually
-    satisfies each user-declared postcondition. *)
+    [exit<f>(in_params, out_params) /\ not ensures ==> false]. Asserts the body
+    actually satisfies each user-declared postcondition. *)
 let postcondition_queries (proc : Program.proc) (exit : predicate) : clause list
     =
   let ensures = (Procedure.specification proc).ensures in
@@ -507,14 +507,14 @@ let postcondition_queries (proc : Program.proc) (exit : predicate) : clause list
 (** Encode the whole program:
 
     - Body clauses for every procedure.
-    - Entry fact [⟦requires⟧ ⟹ enter⟨f⟩] for procedures whose body needs to be
-      reachable independently of any caller — main, and every procedure for
+    - Entry fact [requires ==> enter<f>] for procedures whose body needs to be
+      reachable independently of any caller -- main, and every procedure for
       which [use_spec] is true (call sites of those don't connect to
-      [enter⟨f⟩]).
-    - Postcondition queries [exit⟨f⟩ ∧ ¬ensures ⟹ ⊥] for *every* procedure with
-      a non-empty [ensures], regardless of [use_spec]. Combined with the
-      precondition queries emitted at every call site (also regardless of
-      [use_spec]), this means spec checking is performed whenever a spec is
+      [enter<f>]).
+    - Postcondition queries [exit<f> /\ not ensures ==> false] for *every*
+      procedure with a non-empty [ensures], regardless of [use_spec]. Combined
+      with the precondition queries emitted at every call site (also regardless
+      of [use_spec]), this means spec checking is performed whenever a spec is
       present; [use_spec] only governs whether callers see the body via
       [enter]/[exit] predicates or via the spec. *)
 let encode_program ?(use_spec = default_use_spec) (prog : Program.t) :
@@ -633,7 +633,7 @@ let preprocess_model_body (s : Sexp.t) : Sexp.t =
 (** Decode a predicate body returned by the solver into a [BasilExpr.t], binding
     the model's positional parameters to the predicate's actual variables.
     Returns [None] if the body contains constructs
-    {!Lang.Expr_smt.SMTLib2.expr_of_smt} can't decode (e.g. [ite] — see TODO in
+    {!Lang.Expr_smt.SMTLib2.expr_of_smt} can't decode (e.g. [ite] -- see TODO in
     [expr_smt.ml]). *)
 let extract_invariant (pred : predicate) (model_params : (string * Sexp.t) list)
     (body : Sexp.t) : BasilExpr.t option =
@@ -670,7 +670,7 @@ let decode_model (preds : predicate list) (defs : model_def list) :
           | _ -> acc))
     StringMap.empty defs
 
-(** Loop heads of a procedure — SCC component heads in the forward weak
+(** Loop heads of a procedure -- SCC component heads in the forward weak
     topological ordering. Every cycle in the CFG has exactly one of these as its
     entry point. *)
 let loop_heads (proc : Program.proc) : ID.t list =
@@ -687,7 +687,7 @@ let loop_heads (proc : Program.proc) : ID.t list =
     current value [g]. An {!Ssa.In_param} carries the global's procedure-entry
     value: in a [requires] (evaluated at entry) it is simply [g]; in an
     [ensures] or a loop-head assertion it is [old(g)]. Variables absent from
-    [lift] — the procedure's real parameters and ordinary locals — are left
+    [lift] -- the procedure's real parameters and ordinary locals -- are left
     unchanged. When [lift] is empty (e.g. the program was already lifted before
     the pass, or nothing was captured) this is the identity. *)
 let back_translate ~(mode : [ `Requires | `Ensures | `Loop ])
@@ -709,12 +709,12 @@ let back_translate ~(mode : [ `Requires | `Ensures | `Loop ])
 (** Add [requires]/[ensures] to [proc] based on the solver's interpretations of
     its [enter]/[exit] predicates, and prepend [Instr_Assert] at each loop head
     with that block predicate's inferred invariant. [invs] maps each predicate
-    name to its (already-decoded) inferred body — typically the output of
+    name to its (already-decoded) inferred body -- typically the output of
     {!decode_model}, or a per-predicate conjunction across multiple solver calls
     in per-query mode.
 
     Procedure-level annotation is skipped when [use_spec proc] is true: in that
-    case the encoding has already constrained [enter⟨f⟩]/[exit⟨f⟩] to be
+    case the encoding has already constrained [enter<f>]/[exit<f>] to be
     consistent with the procedure's [requires]/[ensures] (via the
     precondition-gated entry fact and the postcondition queries), so Spacer's
     interpretations are essentially restatements of the spec in whatever shape
@@ -731,8 +731,8 @@ let annotate_proc ~(use_spec : Program.proc -> bool)
   let proc =
     if use_spec proc then proc
     else
-      (* Procedure-level annotations: [requires] from [enter⟨f⟩], [ensures]
-         from [exit⟨f⟩]. Skipped above when [use_spec proc] is true. *)
+      (* Procedure-level annotations: [requires] from [enter<f>], [ensures]
+         from [exit<f>]. Skipped above when [use_spec proc] is true. *)
       let spec = Procedure.specification proc in
       let spec =
         match invariant_of preds.enter with
@@ -757,7 +757,7 @@ let annotate_proc ~(use_spec : Program.proc -> bool)
       Procedure.set_specification proc spec
   in
   (* Loop invariants: prepend assert at each loop head. [Block.prepend_stmts]
-     puts the new stmt at the start of [stmts], i.e. after any phi nodes —
+     puts the new stmt at the start of [stmts], i.e. after any phi nodes --
      which is where the phi target is in scope. *)
   loop_heads proc
   |> List.fold_left
@@ -780,7 +780,7 @@ let annotate_proc ~(use_spec : Program.proc -> bool)
 
 (** Apply per-predicate inferred invariants across every procedure in [prog],
     back-translating each through the per-procedure lambda-lifting map in [lift]
-    (empty map ⇒ identity, for procedures that lifted nothing). *)
+    (empty map => identity, for procedures that lifted nothing). *)
 let annotate_program ~(use_spec : Program.proc -> bool)
     ~(invs : BasilExpr.t StringMap.t) ~(lift : Ssa.program_lift_map)
     (prog : Program.t) : Program.t =
@@ -811,10 +811,11 @@ let infer_invariants (prog : Program.t) : Program.t =
       let invs = decode_model preds defs in
       annotate_program ~use_spec ~invs ~lift prog
   | Unsat ->
-      Logs.warn (fun m -> m "Solver returned unsat — no invariants extracted");
+      Logs.warn (fun m -> m "Solver returned unsat -- no invariants extracted");
       prog
   | Unknown ->
-      Logs.warn (fun m -> m "Solver returned unknown — no invariants extracted");
+      Logs.warn (fun m ->
+          m "Solver returned unknown -- no invariants extracted");
       prog
 
 (** Per-query variant: one solver call per query clause, conjoining the inferred
@@ -855,7 +856,7 @@ let infer_invariants_per_query (prog : Program.t) : Program.t =
             invs
       | Unsat ->
           Logs.warn (fun m ->
-              m "Query %d/%d: unsat — assertion not provable" idx n_queries)
+              m "Query %d/%d: unsat -- assertion not provable" idx n_queries)
       | Unknown -> Logs.warn (fun m -> m "Query %d/%d: unknown" idx n_queries))
     queries;
   let conjoined =

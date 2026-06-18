@@ -1,5 +1,5 @@
 
-CHC use-spec mode — [helper] declares [requires]/[ensures], so the pass
+CHC use-spec mode -- [helper] declares [requires]/[ensures], so the pass
 verifies its body against the spec independently and uses the spec (not the
 helper's [enter]/[exit] predicates) at the call site in [main].
 

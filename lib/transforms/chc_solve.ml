@@ -15,7 +15,7 @@ module SmtExpr = Bincaml_util.Smt.Expr
 type predicate = { name : string; params : Var.t list }
 (** A CHC predicate: an uninterpreted [Bool]-valued function over a fixed list
     of typed parameters. The same parameter list is used for both declaration
-    and application — order matters. *)
+    and application -- order matters. *)
 
 type clause = {
   vars : Var.t list;  (** universally-quantified binders for the [forall] *)

@@ -1,6 +1,6 @@
 
-Per-query mode — run the per-query variant on a loop with two post-loop
-assertions: one provable ([i ≤ 20]) and one not ([i ≤ 5]). The default mode
+Per-query mode -- run the per-query variant on a loop with two post-loop
+assertions: one provable ([i <= 20]) and one not ([i <= 5]). The default mode
 would fail on the unprovable assertion and abort without annotating
 anything; per-query mode issues one solver call per query, so the provable
 one still drives invariant inference for the loop while the unprovable one
@@ -12,7 +12,7 @@ only produces a warning.
   (run-transforms chc-infer-invariants-per-query)
   bincaml: [INFO] Per-query mode: 8 predicates, 9 normal clauses, 2 queries
   bincaml: [INFO] Query 1/2: sat (8 definitions, 4 non-trivial)
-  bincaml: [WARNING] Query 2/2: unsat — assertion not provable
+  bincaml: [WARNING] Query 2/2: unsat -- assertion not provable
   bincaml: [INFO] Per-query mode: 1/2 queries succeeded; extracted invariants for 4 predicates
   (dump-il chc_per_query_out.il)
 

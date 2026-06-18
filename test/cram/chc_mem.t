@@ -1,7 +1,7 @@
 
-CHC inference over memory — a loop that stores the counter into memory each
+CHC inference over memory -- a loop that stores the counter into memory each
 iteration ([while i < 10: mem[0x100] := i; i := i + 1]) then loads it back and
-asserts [i ≤ 20]. This test is just to make sure that loop invariant inference
+asserts [i <= 20]. This test is just to make sure that loop invariant inference
 works in the presence of memory, and that loads and stores are maintained in the
 annotated program. The invariants themselves do not involve memory.
 

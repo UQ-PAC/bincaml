@@ -1,8 +1,8 @@
 
-CHC memory invariants across a call — [main] writes a secret value to
+CHC memory invariants across a call -- [main] writes a secret value to
 mem[0x100], calls [foo] which loops five times incrementing mem[0x100] by one
 each iteration, then asserts mem[0x100] = secret + 5. [foo] has no user spec, so
-the pass infers its [requires]/[ensures] (full encoding) and a loop invariant —
+the pass infers its [requires]/[ensures] (full encoding) and a loop invariant --
 all expressed over the [$mem] global. Because the initial value is not a
 constant, the inferred invariants are relational and refer to the
 procedure-entry memory via [old($mem)].
@@ -15,7 +15,7 @@ procedure-entry memory via [old($mem)].
   bincaml: [INFO] Solver returned sat; extracted 17 definitions
   (dump-il chc_mem_call_out.il)
 
-[foo] gets a relational memory postcondition — after the call mem[0x100] holds
+[foo] gets a relational memory postcondition -- after the call mem[0x100] holds
 its entry value plus five, expressed via [get] (map access) over the original
 [$mem] and its entry version [old($mem)]:
 

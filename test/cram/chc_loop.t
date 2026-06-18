@@ -1,6 +1,6 @@
 
-CHC loop-head annotation — run the full pipeline on a simple counting loop
-([i := 0; while i < 10: i := i + 1; assert i ≤ 20]) and check that the
+CHC loop-head annotation -- run the full pipeline on a simple counting loop
+([i := 0; while i < 10: i := i + 1; assert i <= 20]) and check that the
 inferred loop invariant is attached as an [assert] at the loop head.
 
   $ bincaml script chc_loop.sexp
@@ -22,5 +22,5 @@ when the assert is checked):
        assert eq(extract(64,4, i_3:bv64), 0x0:bv60);
        goto (%loop_exit,%loop_body);
 
-The invariant says the high 60 bits of [i_3] are zero, i.e. [i_3 ≤ 15] —
-strong enough to discharge the [i ≤ 20] assertion at the loop exit.
+The invariant says the high 60 bits of [i_3] are zero, i.e. [i_3 <= 15] --
+strong enough to discharge the [i <= 20] assertion at the loop exit.
