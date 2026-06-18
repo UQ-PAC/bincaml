@@ -202,120 +202,116 @@ module SMTLib2 = struct
         Some (Types.Map (k, v))
     | _ -> None
 
-  let rec expr_of_smt vardefs (e : Sexp.t) =
+  let expr_of_smt vardefs (e : Sexp.t) =
     let open Option.Infix in
     let module T = List.Traverse (Option) in
-    match e with
-    | `Atom "true" -> Some (BasilExpr.boolconst true)
-    | `Atom "false" -> Some (BasilExpr.boolconst false)
-    | `Atom e when Int.of_string e |> Option.is_some ->
-        Some (BasilExpr.intconst (Z.of_string e))
-    | `Atom s
-      when String.length s > 2 && Char.equal s.[0] '#' && Char.equal s.[1] 'b'
-      ->
-        let digs = String.sub s 2 (String.length s - 2) in
-        let size = String.length digs in
-        let v = Z.of_string ("0b" ^ digs) in
-        Some (BasilExpr.bvconst (Bitvec.create ~size v))
-    | `Atom s
-      when String.length s > 2 && Char.equal s.[0] '#' && Char.equal s.[1] 'x'
-      ->
-        let digs = String.sub s 2 (String.length s - 2) in
-        let size = 4 * String.length digs in
-        let v = Z.of_string ("0x" ^ digs) in
-        Some (BasilExpr.bvconst (Bitvec.create ~size v))
-    | `Atom e -> StringMap.find_opt e vardefs
-    | `List [ `Atom "_"; `Atom bvalue; `Atom bsize ] ->
-        let* size = Int.of_string bsize in
-        let* b = String.chop_prefix ~pre:"bv" bvalue in
-        let v = Z.of_string b in
-        Some (BasilExpr.bvconst (Bitvec.create ~size v))
-    (*| `List [ `Atom "ite"; c; t; e ] ->
-        let* c = expr_of_smt vardefs c in
-        let* t = expr_of_smt vardefs t in
-        let* e = expr_of_smt vardefs e in
+    (* One generator for the whole decode. Reserve every Basil variable already
+       in scope -- the free vars of the values of [vardefs] -- so the quantifier
+       binders minted below stay disjoint from them. *)
+    let gen = ID.make_gen () in
+    StringMap.iter
+      (fun _ e ->
+        BasilExpr.free_vars_iter e
+        |> Iter.iter (fun v -> ignore (gen.decl_or_get (Var.name v))))
+      vardefs;
+    let fresh_var typ = Var.create (ID.name (gen.fresh ~name:"x" ())) typ in
+    (* Give each binder a fresh variable rather than reusing the name the solver
+        chose. This accounts for names that are not valid identifiers (e.g.,
+        include [!]) and names that clash with existing variables. *)
+    let decode_bind = function
+      | `List [ `Atom name; sort_sexp ] ->
+          let* typ = typ_of_smt sort_sexp in
+          Some (fresh_var typ, name)
+      | _ -> None
+    in
+    let rec go vardefs (e : Sexp.t) =
+      match e with
+      | `Atom "true" -> Some (BasilExpr.boolconst true)
+      | `Atom "false" -> Some (BasilExpr.boolconst false)
+      | `Atom e when Int.of_string e |> Option.is_some ->
+          Some (BasilExpr.intconst (Z.of_string e))
+      | `Atom s
+        when String.length s > 2 && Char.equal s.[0] '#' && Char.equal s.[1] 'b'
+        ->
+          let digs = String.sub s 2 (String.length s - 2) in
+          let size = String.length digs in
+          let v = Z.of_string ("0b" ^ digs) in
+          Some (BasilExpr.bvconst (Bitvec.create ~size v))
+      | `Atom s
+        when String.length s > 2 && Char.equal s.[0] '#' && Char.equal s.[1] 'x'
+        ->
+          let digs = String.sub s 2 (String.length s - 2) in
+          let size = 4 * String.length digs in
+          let v = Z.of_string ("0x" ^ digs) in
+          Some (BasilExpr.bvconst (Bitvec.create ~size v))
+      | `Atom e -> StringMap.find_opt e vardefs
+      | `List [ `Atom "_"; `Atom bvalue; `Atom bsize ] ->
+          let* size = Int.of_string bsize in
+          let* b = String.chop_prefix ~pre:"bv" bvalue in
+          let v = Z.of_string b in
+          Some (BasilExpr.bvconst (Bitvec.create ~size v))
+      (*| `List [ `Atom "ite"; c; t; e ] ->
+        let* c = go vardefs c in
+        let* t = go vardefs t in
+        let* e = go vardefs e in
         Some (BasilExpr.ifthenelse c t e)*)
-    | `List [ `Atom (("forall" | "exists") as q); `List binders; body ] ->
-        (* Give each binder a fresh variable rather than reusing the name the
-           solver chose. This accounts for names that are not valid identifiers
-           (e.g., include [!]) and names that clash with existing variables. *)
-        let used =
-          ref
-            (StringMap.fold
-               (fun _ e acc ->
-                 BasilExpr.free_vars_iter e
-                 |> Iter.fold (fun acc v -> StringSet.add (Var.name v) acc) acc)
-               vardefs StringSet.empty)
-        in
-        let fresh_var typ =
-          let rec go i =
-            let n = Printf.sprintf "x_%d" i in
-            if StringSet.mem n !used then go (i + 1)
-            else (
-              used := StringSet.add n !used;
-              Var.create n typ)
+      | `List [ `Atom (("forall" | "exists") as q); `List binders; body ] ->
+          let* bound_pairs = T.map_m decode_bind binders in
+          let vardefs' =
+            List.fold_left
+              (fun acc (v, name) -> StringMap.add name (BasilExpr.rvar v) acc)
+              vardefs bound_pairs
           in
-          go 0
-        in
-        let decode_bind = function
-          | `List [ `Atom name; sort_sexp ] ->
-              let* typ = typ_of_smt sort_sexp in
-              Some (fresh_var typ, name)
-          | _ -> None
-        in
-        let* bound_pairs = T.map_m decode_bind binders in
-        let vardefs' =
-          List.fold_left
-            (fun acc (v, name) -> StringMap.add name (BasilExpr.rvar v) acc)
-            vardefs bound_pairs
-        in
-        let* body' = expr_of_smt vardefs' body in
-        let bound = List.map fst bound_pairs in
-        Some
-          (if String.equal q "forall" then BasilExpr.forall ~bound body'
-           else BasilExpr.exists ~bound body')
-    | `List (op :: args) -> (
-        let* args = T.map_m (expr_of_smt vardefs) args in
-        match (op, args) with
-        | `Atom "and", _ -> Some (BasilExpr.applyintrin ~op:`AND args)
-        | `Atom "or", _ -> Some (BasilExpr.applyintrin ~op:`OR args)
-        | `Atom "concat", _ -> Some (BasilExpr.applyintrin ~op:`BVConcat args)
-        | `Atom "select", [ a; i ] -> Some (BasilExpr.binexp ~op:`MapAccess a i)
-        | `Atom "store", [ a; i; v ] ->
-            Some (BasilExpr.applyintrin ~op:`MapUpdate [ a; i; v ])
-        | `List [ `Atom "_"; `Atom "extract"; `Atom hi; `Atom lo ], [ a ] ->
-            let* hi = Int.of_string hi in
-            let* lo = Int.of_string lo in
-            Some (BasilExpr.extract ~hi_excl:(hi + 1) ~lo_incl:lo a)
-        | `List [ `Atom "_"; `Atom "sign_extend"; `Atom bits ], [ a ] ->
-            let* bits = Int.of_string bits in
-            Some (BasilExpr.sign_extend ~n_prefix_bits:bits a)
-        | `List [ `Atom "_"; `Atom "zero_extend"; `Atom bits ], [ a ] ->
-            let* bits = Int.of_string bits in
-            Some (BasilExpr.zero_extend ~n_prefix_bits:bits a)
-        | `List [ `Atom "_"; `Atom "bit2bool"; `Atom i ], [ a ] ->
-            (* Z3 model operator: [((_ bit2bool i) x)] is true iff bit [i] of
+          let* body' = go vardefs' body in
+          let bound = List.map fst bound_pairs in
+          Some
+            (if String.equal q "forall" then BasilExpr.forall ~bound body'
+             else BasilExpr.exists ~bound body')
+      | `List (op :: args) -> (
+          let* args = T.map_m (go vardefs) args in
+          match (op, args) with
+          | `Atom "and", _ -> Some (BasilExpr.applyintrin ~op:`AND args)
+          | `Atom "or", _ -> Some (BasilExpr.applyintrin ~op:`OR args)
+          | `Atom "concat", _ -> Some (BasilExpr.applyintrin ~op:`BVConcat args)
+          | `Atom "select", [ a; i ] ->
+              Some (BasilExpr.binexp ~op:`MapAccess a i)
+          | `Atom "store", [ a; i; v ] ->
+              Some (BasilExpr.applyintrin ~op:`MapUpdate [ a; i; v ])
+          | `List [ `Atom "_"; `Atom "extract"; `Atom hi; `Atom lo ], [ a ] ->
+              let* hi = Int.of_string hi in
+              let* lo = Int.of_string lo in
+              Some (BasilExpr.extract ~hi_excl:(hi + 1) ~lo_incl:lo a)
+          | `List [ `Atom "_"; `Atom "sign_extend"; `Atom bits ], [ a ] ->
+              let* bits = Int.of_string bits in
+              Some (BasilExpr.sign_extend ~n_prefix_bits:bits a)
+          | `List [ `Atom "_"; `Atom "zero_extend"; `Atom bits ], [ a ] ->
+              let* bits = Int.of_string bits in
+              Some (BasilExpr.zero_extend ~n_prefix_bits:bits a)
+          | `List [ `Atom "_"; `Atom "bit2bool"; `Atom i ], [ a ] ->
+              (* Z3 model operator: [((_ bit2bool i) x)] is true iff bit [i] of
                [x] is set, i.e. [((_ extract i i) x) = #b1]. *)
-            let* i = Int.of_string i in
-            Some
-              (BasilExpr.binexp ~op:`EQ
-                 (BasilExpr.extract ~hi_excl:(i + 1) ~lo_incl:i a)
-                 (BasilExpr.bvconst (Bitvec.create ~size:1 Z.one)))
-        | `Atom u, [ a ] when of_unop u |> Option.is_some ->
-            let* op = of_unop u in
-            Some (BasilExpr.unexp ~op a)
-        | `Atom u, [ a; b ] when of_binop u |> Option.is_some ->
-            let* op = of_binop u in
-            Some (BasilExpr.binexp ~op a b)
-        | `Atom op, args when Option.is_some (of_assoc op) ->
-            let* op = of_assoc op in
-            Some (BasilExpr.applyintrin ~op args)
-        | e, _ ->
-            print_endline ("unk op: " ^ Sexp.to_string e);
-            None)
-    | e ->
-        print_endline ("unk: " ^ Sexp.to_string e);
-        None
+              let* i = Int.of_string i in
+              Some
+                (BasilExpr.binexp ~op:`EQ
+                   (BasilExpr.extract ~hi_excl:(i + 1) ~lo_incl:i a)
+                   (BasilExpr.bvconst (Bitvec.create ~size:1 Z.one)))
+          | `Atom u, [ a ] when of_unop u |> Option.is_some ->
+              let* op = of_unop u in
+              Some (BasilExpr.unexp ~op a)
+          | `Atom u, [ a; b ] when of_binop u |> Option.is_some ->
+              let* op = of_binop u in
+              Some (BasilExpr.binexp ~op a b)
+          | `Atom op, args when Option.is_some (of_assoc op) ->
+              let* op = of_assoc op in
+              Some (BasilExpr.applyintrin ~op args)
+          | e, _ ->
+              print_endline ("unk op: " ^ Sexp.to_string e);
+              None)
+      | e ->
+          print_endline ("unk: " ^ Sexp.to_string e);
+          None
+    in
+    go vardefs e
 
   let decl_var (v : Var.t) s =
     VarMap.find_opt v s.var_decls |> function
