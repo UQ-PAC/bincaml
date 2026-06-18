@@ -1,6 +1,37 @@
 open Lang
 open Common
 
+module Aslp_IDs = struct
+  type t = {
+    names : (string, int) Hashtbl.t;
+        (** Names and their associated unique ID. *)
+    count : int ref;
+        (** Count of unique IDs {i ever} emitted by this generator. Importantly,
+            this counts names which have been forgotten. *)
+  }
+
+  let create () = { names = Hashtbl.create 16; count = ref 0 }
+
+  (** Returns a fresh ID. *)
+  let fresh { names; count } =
+    let prev = !count in
+    count := prev + 1;
+    prev
+
+  (** Returns the ID associated with the given name, or creates and stores a new
+      ID if the name is not yet known. *)
+  let find name st =
+    match Hashtbl.find_opt st.names name with
+    | None ->
+        let n = fresh st in
+        Hashtbl.replace st.names name n;
+        n
+    | Some n -> n
+
+  (** Returns a copy of the {!t} which forgets all known name associations. *)
+  let forget st = { names = Hashtbl.copy st.names; count = ref !(st.count) }
+end
+
 module Aslp_state : sig
   (** {1 Types} *)
 
@@ -33,16 +64,13 @@ module Aslp_state : sig
       instructions. Or, it forms a part of {!lifter_state} for
       {i within}-instruction state. *)
 
-  type lifter_generators = {
-    block_ids : ID.generator;
-    local_ids : ID.generator;
-    num_locals : int ref;
-  }
+  type aslp_ids = { block_ids : Aslp_IDs.t; local_ids : Aslp_IDs.t }
+  (** Generators for unique IDs used by the offline lifter. *)
 
   type lifter_state = {
     active : string;
     state : aslp_state;
-    generator : lifter_generators;
+    generator : aslp_ids;
   }
   (** Intermediate offline lifter state while {i within} one particular
       instruction.
@@ -51,11 +79,11 @@ module Aslp_state : sig
       instruction. The offline IBI ({!Bincaml_IBI}) operates by mutating a
       reference to this state. *)
 
-  (** {1 Base functions} *)
+  (** {1 Utility functions} *)
 
   val empty_aslp_state : entry:string -> exit:string -> unit -> aslp_state
 
-  val empty_lifter_state : ?generator:lifter_generators -> unit -> lifter_state
+  val empty_lifter_state : ?generator:aslp_ids -> unit -> lifter_state
   (** Constructs a new empty {!lifter_state}.
 
       Callers should consider whether they wish to re-use an existing
@@ -63,7 +91,18 @@ module Aslp_state : sig
 
   val map_aslp_state_names : (string -> string) -> aslp_state -> aslp_state
 
-  (** {1 Manipulation functions} *)
+  (** {2 ID generating functions} *)
+
+  val initial_aslp_ids : unit -> aslp_ids
+  val gen_block_id : aslp_ids -> string
+  val gen_local_id : aslp_ids -> string -> string
+
+  (** Returns a copy of the given lifter ID generator, but with the local
+      {i names} forgotten. This means that existing local names will become
+      inaccessible, though the {!num_locals} count will remain to ensure that
+      their numbers are not re-used. *)
+
+  (** {1 State manipulation functions} *)
 
   val add_goto : aslp_state -> source:string -> target:string -> aslp_state
   val add_stmt_to_block : aslp_state -> string -> stmt -> aslp_state
@@ -101,20 +140,21 @@ end = struct
   }
   [@@deriving show]
 
-  type lifter_generators = {
-    block_ids : ID.generator;
-    local_ids : ID.generator;
-    num_locals : int ref;
-  }
+  type aslp_ids = { block_ids : Aslp_IDs.t; local_ids : Aslp_IDs.t }
 
-  let initial_lifter_generators () =
-    let num_locals = ref 0 in
-    { block_ids = ID.make_gen (); local_ids = ID.make_gen (); num_locals }
+  let initial_aslp_ids () =
+    { block_ids = Aslp_IDs.create (); local_ids = Aslp_IDs.create () }
+
+  let gen_block_id gens =
+    Printf.sprintf "block_%d" @@ Aslp_IDs.fresh gens.block_ids
+
+  let gen_local_id gens name =
+    Printf.sprintf "var_%d" @@ Aslp_IDs.find name gens.local_ids
 
   type lifter_state = {
     active : string;
     state : aslp_state;
-    generator : lifter_generators; [@opaque]
+    generator : aslp_ids; [@opaque]
   }
   [@@deriving show]
 
@@ -130,9 +170,9 @@ end = struct
     { blocks; entry; exit }
 
   let empty_lifter_state ?generator () =
-    let generator = Option.get_lazy initial_lifter_generators generator in
-    let entry = generator.block_ids.fresh ~name:"entry" () |> ID.name in
-    let exit = generator.block_ids.fresh ~name:"exit" () |> ID.name in
+    let generator = Option.get_lazy initial_aslp_ids generator in
+    let entry = gen_block_id generator in
+    let exit = gen_block_id generator in
     { active = entry; state = empty_aslp_state ~entry ~exit (); generator }
 
   let map_aslp_block_names f { assume; stmts; succs } =
@@ -200,6 +240,10 @@ struct
   let bincaml_emit stmt =
     S.bincaml_lifter_state :=
       Aslp_state.add_stmt_to_active !S.bincaml_lifter_state stmt
+
+  let bincaml_local_var name ty =
+    let name = Aslp_state.gen_local_id !S.bincaml_lifter_state.generator name in
+    Var.create name ty
 
   let reset_ir () =
     let generator = !S.bincaml_lifter_state.generator in
@@ -348,13 +392,15 @@ struct
   let v_PSTATE_BTYPE : lexpr = Var.create "v_PSTATE_BTYPE" (Types.Bitvector 1)
 
   let v_BTypeCompatible : lexpr =
-    Var.create "v_BTypeCompatible" (Types.Bitvector 1)
+    bincaml_local_var "v_BTypeCompatible" (Types.Bitvector 1)
 
-  let v___BranchTaken : lexpr = Var.create "v___BranchTaken" (Types.Bitvector 1)
-  let v_BTypeNext : lexpr = Var.create "v_BTypeNext" (Types.Bitvector 1)
+  let v___BranchTaken : lexpr =
+    bincaml_local_var "v___BranchTaken" (Types.Bitvector 1)
+
+  let v_BTypeNext : lexpr = bincaml_local_var "v_BTypeNext" (Types.Bitvector 1)
 
   let v___ExclusiveLocal : lexpr =
-    Var.create "v___ExclusiveLocal" (Types.Bitvector 1)
+    bincaml_local_var "v___ExclusiveLocal" (Types.Bitvector 1)
 
   let f_switch_context : branch -> unit = fun _ -> failwith "f_switch_context"
 
@@ -379,7 +425,7 @@ struct
   let f_gen_int_lit : bigint -> expr = fun _ -> failwith "f_gen_int_lit"
 
   let f_decl_bv : string -> bigint -> lexpr =
-   fun name size -> Var.create name (Types.Bitvector (Z.to_int size))
+   fun name size -> bincaml_local_var name (Types.Bitvector (Z.to_int size))
 
   let f_decl_bool : string -> lexpr = fun _ -> failwith "f_decl_bool"
   let f_gen_load : lexpr -> expr = fun lhs -> Expr.BasilExpr.rvar lhs

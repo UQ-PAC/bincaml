@@ -15,16 +15,14 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
   in
   print_endline @@ Aslp_state.show_aslp_state x;
   [%expect {|
-    { Aslp.Aslp_state.blocks = "entry_1"
+    { Aslp.Aslp_state.blocks = "block_2"
       -> { Aslp.Aslp_state.assume = None;
            stmts =
-           [var X.read8__2:bv64 := v__R2:bv64;
-             var X.read14__3:bv64 := v__R3:bv64;
-             var v__R1:bv64 := bvadd(X.read8__2:bv64, bvshl(X.read14__3:bv64, 0x4:bv12))
-             ];
-           succs = ["exit_1"] },
-      "exit_1" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] };
-      entry = "entry_1"; exit = "exit_1" }
+           [var var_4:bv64 := v__R2:bv64; var var_5:bv64 := v__R3:bv64;
+             var v__R1:bv64 := bvadd(var_4:bv64, bvshl(var_5:bv64, 0x4:bv12))];
+           succs = ["block_3"] },
+      "block_3" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] };
+      entry = "block_2"; exit = "block_3" }
     |}]
 
 let%expect_test "lift 2x: mov x1, #0xabcd" =
@@ -40,20 +38,20 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
   in
   print_endline @@ Aslp_state.show_aslp_state x;
   [%expect {|
-    { Aslp.Aslp_state.blocks = "0_entry_1"
+    { Aslp.Aslp_state.blocks = "0_block_2"
       -> { Aslp.Aslp_state.assume = None;
-           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["0_exit_1"] },
-      "0_exit_1"
-      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["1_entry_2"] },
-      "1_entry_2"
+           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["0_block_3"] },
+      "0_block_3"
+      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["1_block_4"] },
+      "1_block_4"
       -> { Aslp.Aslp_state.assume = None;
-           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["1_exit_2"] },
-      "1_exit_2" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] },
+           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["1_block_5"] },
+      "1_block_5" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] },
       "entryyyy"
       -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["exittt"] },
       "exittt"
-      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["0_entry_1"] };
-      entry = "entryyyy"; exit = "1_exit_2" }
+      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["0_block_2"] };
+      entry = "entryyyy"; exit = "1_block_5" }
     |}]
 
 let%expect_test "aslp integration basic" =
