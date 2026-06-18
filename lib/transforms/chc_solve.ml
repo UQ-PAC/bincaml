@@ -79,27 +79,21 @@ type model_def = {
 (** One [define-fun] entry from a parsed [get-model]. Callers map [params] back
     to our actual variables by position. *)
 
-(** Parse a model returned by Z3 [get-model] into a list of [model_def]s. *)
+(** Parse a model returned by [get-model] into a list of [model_def]s. *)
 let parse_model (model : Sexp.t) : model_def list =
+  let unexpected s = raise (Bincaml_util.Smt.UnexpectedSolverResponse s) in
+  let parse_param p =
+    match p with `List [ `Atom v; sort ] -> (v, sort) | _ -> unexpected p
+  in
+  let parse_def def =
+    match def with
+    | `List [ `Atom "define-fun"; `Atom name; `List params; _ret; body ] ->
+        { name; params = List.map parse_param params; body }
+    | _ -> unexpected def
+  in
   match model with
-  | `List defs ->
-      List.filter_map
-        (fun def ->
-          match def with
-          | `List [ `Atom "define-fun"; `Atom name; `List params; _ret; body ]
-            ->
-              let params =
-                List.filter_map
-                  (fun p ->
-                    match p with
-                    | `List [ `Atom v; sort ] -> Some (v, sort)
-                    | _ -> None)
-                  params
-              in
-              Some { name; params; body }
-          | _ -> None)
-        defs
-  | _ -> []
+  | `List defs -> List.map parse_def defs
+  | `Atom _ -> unexpected model
 
 type solve_result =
   | Sat of model_def list
