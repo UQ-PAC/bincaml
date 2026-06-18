@@ -1327,7 +1327,6 @@ let top_down prog graphs =
           scc
         |> IDSet.of_list
       in
-      print_endline @@ IDSet.to_string ID.show scc;
       (* Resolve calls *)
       iter_calls
         (fun caller_graph lhs args callee_id ->

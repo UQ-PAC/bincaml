@@ -402,6 +402,16 @@ module PassManager = struct
           ~invalidates:[ SSA ];
     }
 
+  let data_structure_analysis =
+    {
+      name = "data-structure-analysis-dots";
+      apply = Prog Analysis.Dsa.dsa_dots;
+      doc =
+        "Perform data structure analysis to generate point-to graphs, and \
+         print the graphs as graphviz .dot files to stdout.";
+      invariants = Invariants.needs ~invalidates:[ SSA ] [];
+    }
+
   let passes =
     [
       chop_unreachable;
@@ -436,6 +446,7 @@ module PassManager = struct
       linear_const;
       linear_copy;
       simp;
+      data_structure_analysis;
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;
@@ -465,12 +476,6 @@ module PassManager = struct
         name = "gamma-vars";
         apply = Prog Transforms.Gamma_vars.transform;
         doc = "Replace gamma expressions with gamma variables";
-        invariants = Invariants.needs ~invalidates:[ SSA ] [];
-      };
-      {
-        name = "data-structure-analysis";
-        apply = Prog Analysis.Dsa.dsa_dots;
-        doc = "";
         invariants = Invariants.needs ~invalidates:[ SSA ] [];
       };
     ]
