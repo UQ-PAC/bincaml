@@ -392,15 +392,13 @@ struct
   let v_PSTATE_BTYPE : lexpr = Var.create "v_PSTATE_BTYPE" (Types.Bitvector 1)
 
   let v_BTypeCompatible : lexpr =
-    bincaml_local_var "v_BTypeCompatible" (Types.Bitvector 1)
+    Var.create "v_BTypeCompatible" (Types.Bitvector 1)
 
-  let v___BranchTaken : lexpr =
-    bincaml_local_var "v___BranchTaken" (Types.Bitvector 1)
-
-  let v_BTypeNext : lexpr = bincaml_local_var "v_BTypeNext" (Types.Bitvector 1)
+  let v___BranchTaken : lexpr = Var.create "v___BranchTaken" (Types.Bitvector 1)
+  let v_BTypeNext : lexpr = Var.create "v_BTypeNext" (Types.Bitvector 1)
 
   let v___ExclusiveLocal : lexpr =
-    bincaml_local_var "v___ExclusiveLocal" (Types.Bitvector 1)
+    Var.create "v___ExclusiveLocal" (Types.Bitvector 1)
 
   let f_switch_context : branch -> unit = fun _ -> failwith "f_switch_context"
 
