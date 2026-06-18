@@ -252,77 +252,43 @@ end
 
 module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
 
+(** Obtain an interval encoding the range of global addresses, loosely
+    determined by the symbol table attributes. *)
+let global_range (prog : Program.t) =
+  let open Option.Infix in
+  match StringMap.get ".initial_memory" (Program.attrib prog) with
+  | Some (`List attrs) ->
+      List.filter_map
+        (fun attr ->
+          match attr with
+          | `Assoc m ->
+              let* address =
+                match StringMap.get ".address" m with
+                | Some (`Bitvector bv) -> Some bv
+                | _ -> None
+              in
+              let* size =
+                match StringMap.get ".size" m with
+                | Some (`Bitvector bv) -> Some bv
+                | _ -> None
+              in
+              let end_address =
+                flip Bitvec.sub (Bitvec.one ~size:64) @@ Bitvec.add address size
+              in
+              Some (WrappedIntervalsLattice.interval address end_address)
+          | _ -> None)
+        attrs
+      |> List.fold_left WrappedIntervalsLattice.join WrappedIntervalsLattice.Bot
+  | _ -> WrappedIntervalsLattice.Bot
+
 let try_make_global (prog : Program.t) (sym_base, value) =
   (* NOTE this is slow ... it's a significant part of the runtime of the DSA local phase
      (~80%), and can be made O(log n) with an interval tree *)
-  let constant_within_global_address (interval : WrappedIntervalsLattice.t)
-      (prog : Program.t) : bool =
-    match interval with
-    | Interval { lower } when Bitvec.size lower = 64 ->
-        let open Option in
-        (let* symbols =
-           match StringMap.find_opt ".symbols" (Program.attrib prog) with
-           | Some symbols -> Some symbols
-           | _ -> None
-         in
-         let* globs =
-           match
-             List.flat_map
-               (fun s ->
-                 match Attrib.find_opt s (Some symbols) with
-                 | Some Attrib.(`List globals) -> globals
-                 | _ -> [])
-               [ ".externalFunctions"; ".globals"; ".funcEntries" ]
-           with
-           | [] -> None
-           | xs -> Some xs
-         in
-         Some
-           (List.exists
-              (fun (global : Attrib.t) ->
-                (let* address =
-                   match Attrib.find_opt ".address" (Some global) with
-                   | Some Attrib.(`Bitvector bv) -> Some bv
-                   | Some Attrib.(`Integer n) -> Some (Bitvec.create ~size:64 n)
-                   | _ -> None
-                 in
-                 let* size =
-                   match Attrib.find_opt ".size" (Some global) with
-                   | Some Attrib.(`Bitvector bv) -> Some bv
-                   | Some Attrib.(`Integer n) when not @@ Z.equal n Z.zero ->
-                       Some (Bitvec.create ~size:64 n)
-                   | _ -> None
-                 in
-                 let end_address =
-                   flip Bitvec.sub (Bitvec.one ~size:64)
-                   @@ Bitvec.add address size
-                 in
-                 let interval2 =
-                   WrappedIntervalsLattice.interval address end_address
-                 in
-                 Some (WrappedIntervalsLattice.leq interval interval2))
-                |> Option.or_lazy ~else_:(fun () ->
-                    let* offset =
-                      match Attrib.find_opt ".offset" (Some global) with
-                      | Some Attrib.(`Bitvector bv) -> Some bv
-                      | Some Attrib.(`Integer n) ->
-                          Some (Bitvec.create ~size:64 n)
-                      | _ -> None
-                    in
-                    let interval2 =
-                      WrappedIntervalsLattice.interval offset offset
-                    in
-                    (*print_endline @@ WrappedIntervalsLattice.show interval;*)
-                    Some (WrappedIntervalsLattice.leq interval interval2))
-                |> Option.get_or ~default:false)
-              globs))
-        |> Option.get_or ~default:false
-    | _ -> false
-  in
-  if
-    SymBase.equal Constant sym_base && constant_within_global_address value prog
-  then (SymBase.GlobSym, value)
-  else (sym_base, value)
+  let g = global_range prog in
+  match sym_base with
+  | SymBase.Constant when WrappedIntervalsLattice.leq value g ->
+      (SymBase.GlobSym, value)
+  | _ -> (sym_base, value)
 
 let sva (prog : Program.t) =
   let results =
