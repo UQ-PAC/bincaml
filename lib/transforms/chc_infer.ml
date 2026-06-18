@@ -585,7 +585,9 @@ let inline_function_defs (p : Program.t) : Program.t =
                     VarMap.of_list
                       (List.combine bound_vars (List.map BasilExpr.fix args))
                   in
-                  BasilExpr.substitute (fun v -> VarMap.find_opt v subst) in_body
+                  BasilExpr.substitute
+                    (fun v -> VarMap.find_opt v subst)
+                    in_body
               | None -> BasilExpr.fix node)
           | _ -> BasilExpr.fix node)
     in
@@ -659,7 +661,7 @@ let decode_model (preds : predicate list) (defs : model_def list) :
       StringMap.empty preds
   in
   List.fold_left
-    (fun acc (name, params, body) ->
+    (fun acc { name; params; body } ->
       match StringMap.find_opt name pred_by_name with
       | None -> acc
       | Some pred -> (

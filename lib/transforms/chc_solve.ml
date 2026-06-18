@@ -71,11 +71,15 @@ let open_spacer ?(timeout_ms = None) () =
   Solver.set_logic s "HORN";
   s
 
-type model_def = string * (string * Sexp.t) list * Sexp.t
-(** One [define-fun] entry from a parsed [get-model]: the predicate name, its
-    positional parameters with sorts (Spacer typically emits fresh names like
-    [x!0], [x!1]), and the body. Callers map params back to our actual variables
-    by position. *)
+type model_def = {
+  name : string;  (** the predicate name *)
+  params : (string * Sexp.t) list;
+      (** positional parameters with sorts (Spacer typically emits fresh names
+          like [x!0], [x!1]) *)
+  body : Sexp.t;  (** the predicate's inferred interpretation *)
+}
+(** One [define-fun] entry from a parsed [get-model]. Callers map [params] back
+    to our actual variables by position. *)
 
 (** Parse a model returned by Z3 [get-model] into a list of [model_def]s. *)
 let parse_model (model : Sexp.t) : model_def list =
@@ -94,7 +98,7 @@ let parse_model (model : Sexp.t) : model_def list =
                     | _ -> None)
                   params
               in
-              Some (name, params, body)
+              Some { name; params; body }
           | _ -> None)
         defs
   | _ -> []
