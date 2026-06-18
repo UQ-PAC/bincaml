@@ -33,7 +33,17 @@ module Aslp_state : sig
       instructions. Or, it forms a part of {!lifter_state} for
       {i within}-instruction state. *)
 
-  type lifter_state = { active : string; state : aslp_state }
+  type lifter_generators = {
+    block_ids : ID.generator;
+    local_ids : ID.generator;
+    num_locals : int ref;
+  }
+
+  type lifter_state = {
+    active : string;
+    state : aslp_state;
+    generator : lifter_generators;
+  }
   (** Intermediate offline lifter state while {i within} one particular
       instruction.
 
@@ -43,8 +53,14 @@ module Aslp_state : sig
 
   (** {1 Base functions} *)
 
-  val empty_aslp_state : unit -> aslp_state
-  val empty_lifter_state : unit -> lifter_state
+  val empty_aslp_state : entry:string -> exit:string -> unit -> aslp_state
+
+  val empty_lifter_state : ?generator:lifter_generators -> unit -> lifter_state
+  (** Constructs a new empty {!lifter_state}.
+
+      Callers should consider whether they wish to re-use an existing
+      [generator] value by passing it explicitly. *)
+
   val map_aslp_state_names : (string -> string) -> aslp_state -> aslp_state
 
   (** {1 Manipulation functions} *)
@@ -85,10 +101,24 @@ end = struct
   }
   [@@deriving show]
 
-  type lifter_state = { active : string; state : aslp_state } [@@deriving show]
+  type lifter_generators = {
+    block_ids : ID.generator;
+    local_ids : ID.generator;
+    num_locals : int ref;
+  }
 
-  let empty_aslp_state () =
-    let entry = "entry" and exit = "exit" in
+  let initial_lifter_generators () =
+    let num_locals = ref 0 in
+    { block_ids = ID.make_gen (); local_ids = ID.make_gen (); num_locals }
+
+  type lifter_state = {
+    active : string;
+    state : aslp_state;
+    generator : lifter_generators; [@opaque]
+  }
+  [@@deriving show]
+
+  let empty_aslp_state ~entry ~exit () =
     let blocks =
       StringMap.of_list
         [
@@ -99,7 +129,11 @@ end = struct
     in
     { blocks; entry; exit }
 
-  let empty_lifter_state () = { active = "entry"; state = empty_aslp_state () }
+  let empty_lifter_state ?generator () =
+    let generator = Option.get_lazy initial_lifter_generators generator in
+    let entry = generator.block_ids.fresh ~name:"entry" () |> ID.name in
+    let exit = generator.block_ids.fresh ~name:"exit" () |> ID.name in
+    { active = entry; state = empty_aslp_state ~entry ~exit (); generator }
 
   let map_aslp_block_names f { assume; stmts; succs } =
     let succs = List.map f succs in
@@ -126,9 +160,9 @@ end = struct
     in
     { state with blocks }
 
-  let add_stmt_to_active { active; state } stmt =
+  let add_stmt_to_active { active; state; generator } stmt =
     let state = add_stmt_to_block state active stmt in
-    { active; state }
+    { active; state; generator }
 
   let add_goto aslp_state ~source ~target =
     let blocks =
@@ -167,8 +201,9 @@ struct
     S.bincaml_lifter_state :=
       Aslp_state.add_stmt_to_active !S.bincaml_lifter_state stmt
 
-  let reset_ir =
-   fun () -> S.bincaml_lifter_state := Aslp_state.empty_lifter_state ()
+  let reset_ir () =
+    let generator = !S.bincaml_lifter_state.generator in
+    S.bincaml_lifter_state := Aslp_state.empty_lifter_state ~generator ()
 
   let get_ir = fun () -> !S.bincaml_lifter_state.state
   let bigint_of_string : string -> bigint = Z.of_string_base 10
@@ -579,6 +614,9 @@ let lift_code_block
     (module I : OfflineASL_pc.Instruction_building_interface.IBI
       with type bitvector = Bitvec.t
        and type ast = Aslp_state.aslp_state) ~address opcodes =
+  let initial =
+    Aslp_state.empty_aslp_state ~entry:"entryyyy" ~exit:"exittt" ()
+  in
   Iter.foldi
     (fun state_acc i op ->
       let address = Bitvec.add (Bitvec.create ~size:64 Z.(~$4 * ~$i)) address in
@@ -588,5 +626,4 @@ let lift_code_block
         |> Aslp_state.map_aslp_state_names (fun s -> prefix ^ s)
       in
       Aslp_state.append_aslp_states state_acc lifted)
-    (Aslp_state.empty_aslp_state ())
-    opcodes
+    initial opcodes
