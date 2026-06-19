@@ -247,6 +247,32 @@ module PassManager = struct
       invariants = Invariants.from_list (fun x -> x.invariants) batch;
     }
 
+  let chc_infer_invariants =
+    {
+      name = "chc-infer-invariants";
+      apply = Prog Transforms.Chc_infer.infer_invariants;
+      doc =
+        "Encode the program as a system of constrained Horn clauses, invoke a \
+         CHC solver, and annotate procedures with the inferred invariants when \
+         the solver returns sat. Infers invariants for procedure pre- and \
+         post-conditions, and loops.";
+      invariants = Invariants.needs [ SSA ];
+    }
+
+  let chc_infer_invariants_per_query =
+    {
+      name = "chc-infer-invariants-per-query";
+      apply = Prog Transforms.Chc_infer.infer_invariants_per_query;
+      doc =
+        "Per-query variant of chc-infer-invariants: issues one CHC solver call \
+         per query clause, sharing the same normal clauses, and conjoins the \
+         inferred invariants across successful calls. Useful when one or more \
+         obligations are unprovable but invariants for the rest of the program \
+         are still desired. Same prerequisites and dependencies as \
+         chc-infer-invariants.";
+      invariants = Invariants.needs [ SSA ];
+    }
+
   let type_check =
     {
       name = "type-check";
@@ -423,6 +449,8 @@ module PassManager = struct
       sssa;
       sva;
       full_ssa;
+      chc_infer_invariants;
+      chc_infer_invariants_per_query;
       type_check;
       split_memory_encoding;
       flat_memory_encoding;

@@ -19,7 +19,9 @@
   boogie_prepass
   gamma_vars
   const_prop
-  linear_copy)
+  linear_copy
+  chc_solve
+  chc_infer)
  (libraries
   aslp_lifter_ocaml.pc_aarch64
   bincaml.analysis
