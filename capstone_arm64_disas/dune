@@ -17,7 +17,7 @@
    (echo "()"))))
 
 (library
- (public_name bincaml.gtirb.capstone)
+ (public_name capstone_arm64_disas)
  (name capstone)
  (foreign_stubs
   (language c)

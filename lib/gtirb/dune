@@ -12,8 +12,8 @@
   conf
   gtirb_frontend)
  (libraries
-  bincaml.gtirb.capstone
   bincaml.gtirb_proto
+  capstone_arm64_disas
   base64
   angstrom
   zarith

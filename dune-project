@@ -23,6 +23,15 @@
 (documentation https://url/to/documentation)
 
 (package
+ (name capstone_arm64_disas)
+ (synopsis "Disas arm ops with capstone")
+ (depends
+   ocaml)
+ )
+ 
+
+
+(package
  (name bincaml)
  (synopsis "Program analysis tool.")
  (description "A longer description")
