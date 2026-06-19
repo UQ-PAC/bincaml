@@ -126,7 +126,7 @@ let tf_forwards st (read_st : 'a -> Var.t -> 'b) (s : Program.stmt)
        ~f_expr:(BasilExpr.fold_with_type alg)
        s
 
-module MapState (V : Lattice_collections.TopLattice) = struct
+module MapState (V : TopLattice) = struct
   include
     Lattice_collections.LatticeMap
       (struct
@@ -135,6 +135,13 @@ module MapState (V : Lattice_collections.TopLattice) = struct
         let show = name
       end)
       (V)
+end
+
+module NarrowingMapState (V1 : TopNarrowingLattice) = struct
+  include MapState (V1)
+  module V = V1
+
+  let narrowing = bot_binop V.narrowing
 end
 
 module type IntraDomain = sig
@@ -174,7 +181,7 @@ module Forwards (D : IntraDomain) = struct
     |> Option.get_or ~default:A.M.empty
 
   let print_dot fmt p analysis_result =
-    Trace_core.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
+    Trace_core.with_span ~__FILE__ ~__LINE__ "dot-printer" @@ fun _ ->
     let to_dot graph =
       let r =
        fun v -> Option.get_or ~default:D.bottom (A.M.find_opt v analysis_result)

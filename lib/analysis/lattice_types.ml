@@ -15,6 +15,34 @@ module type Lattice = sig
   val widening : t -> t -> t
 end
 
+module type NarrowingOperator = sig
+  type t
+
+  val narrowing : t -> t -> t
+end
+
+module type TopElement = sig
+  type t
+
+  val top : t
+end
+
+module type NarrowingLattice = sig
+  include Lattice
+  include NarrowingOperator with type t := t
+end
+
+module type TopLattice = sig
+  include Lattice
+  include TopElement with type t := t
+end
+
+module type TopNarrowingLattice = sig
+  include Lattice
+  include NarrowingOperator with type t := t
+  include TopElement with type t := t
+end
+
 (** an abstract value providing opertions of basil ir *)
 module type ValueAbstraction = sig
   include Lattice
@@ -87,6 +115,14 @@ module type StateDomain = sig
 
   val init : ?vertex:Procedure.Vert.t Option.t -> Program.proc -> t
   val transfer_state : (Var.t -> V.t) -> Program.stmt -> (Var.t * V.t) Iter.t
+end
+
+module type NarrowingStateDomain = sig
+  type val_t
+
+  module V : NarrowingLattice with type t = val_t
+  include StateDomain with type val_t := val_t with module V := V
+  include NarrowingOperator with type t := t
 end
 
 module type Domain = sig

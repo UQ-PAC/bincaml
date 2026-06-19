@@ -196,6 +196,9 @@ module WrappedIntervalsLattice = struct
                     (mul al (of_int ~size:width 2))))
           else top
 
+  (* possibly incorrect?! this isn't implemented in crab or described in the paper *)
+  let narrowing a b = match (a, b) with Top, i -> i | _ -> a
+
   let intersect a b =
     match (a, b) with
     | Bot, _ | _, Bot -> []
@@ -768,7 +771,7 @@ module WrappedIntervalsValueAbstractionBasil = struct
 end
 
 module StateAbstraction =
-  Intra_analysis.MapState (WrappedIntervalsValueAbstractionBasil)
+  Intra_analysis.NarrowingMapState (WrappedIntervalsValueAbstractionBasil)
 
 module Eval = Intra_analysis.EvalStmt (WrappedIntervalsValueAbstractionBasil)
 
@@ -865,7 +868,9 @@ module Domain = struct
                        Bitvec.(add (min ~width) (of_int ~size:width 1))
                        (max ~width)
                 else if Bitvec.equal a (max ~width) then Bot
-                else meet s @@ interval a (max ~width))
+                else
+                  meet s
+                  @@ interval (add a @@ of_int ~size:width 1) (max ~width))
       in
       let uineq = ineq umin umax in
       let sineq = ineq smin smax in
@@ -987,9 +992,42 @@ module Domain = struct
         |> fun v -> update lhs v m
 end
 
-module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
+module DFGAnalysis = Dataflow_graph.AnalysisFwdNarrowing (Domain)
 module Analysis = Intra_analysis.Forwards (Domain)
 
 let analyse (p : Lang.Program.proc) =
   Analysis.analyse ~widening_set:Graph.ChaoticIteration.FromWto
     ~widening_delay:50 p
+
+let%expect_test "narrow_loop" =
+  let prog =
+    (Loader.Loadir.ast_of_string
+       {|
+proc @main()  -> () {  }
+
+[
+   block %entry [ var l_1:bv64 := 0x0:bv64; goto (%ret,%loop); ];
+   block %loop ( var l_2:bv64 := phi(%loop -> l_4:bv64, %entry -> l_1:bv64) ) [
+     var l_3:bv64 := l_2:bv64;
+     assert bvsle(l_3:bv64, 0x100:bv64);
+     var l_4:bv64 := bvadd(l_3:bv64, 0x1:bv64);
+     goto (%ret,%loop);
+   ];
+   block %ret (
+     var l_5:bv64 := phi(%loop -> l_4:bv64, %loop -> l_4:bv64, %entry -> l_1:bv64)
+   ) [
+     var l_6:bv64 := l_5:bv64;
+     assert boolnot(bvsle(l_6:bv64, 0x100:bv64));
+     return;
+   ]
+];
+prog entry @main;
+    |})
+      .prog
+  in
+  let proc = Lang.Program.entry_proc_exn prog in
+  let r = DFGAnalysis.flow_insensitive proc in
+  print_endline @@ StateAbstraction.show r;
+  (* l_6->[0x101, 0x101] we infer an exact value! *)
+  [%expect
+    {| (l_1->⟦0x0:bv64, 0x0:bv64⟧, l_4->⟦0x8000000000000032:bv64, 0x101:bv64⟧, l_2->⟦0x8000000000000031:bv64, 0x101:bv64⟧, l_3->⟦0x8000000000000031:bv64, 0x100:bv64⟧, l_5->⟦0x8000000000000032:bv64, 0x101:bv64⟧, l_6->⟦0x101:bv64, 0x101:bv64⟧, _->⊥) |}]

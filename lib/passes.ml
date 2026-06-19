@@ -119,8 +119,7 @@ module PassManager = struct
         Proc
           (fun p ->
             let _ = Analysis.Wrapped_intervals.DFGAnalysis.flow_insensitive p in
-            (*Analysis.Wrapped_intervals.Analysis.print_dot
-              (Format.of_chan stdout) p r;*)
+            (*print_endline @@ Analysis.Wrapped_intervals.StateAbstraction.show r;*)
             p);
       doc =
         "Runs wrapped interval analysis on control flow graph and prints \
