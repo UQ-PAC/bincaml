@@ -134,7 +134,7 @@ end = struct
     Printf.sprintf "block_%d" @@ Fix.Gensym.fresh gens.block_ids
 
   let gen_local_id gens =
-    Printf.sprintf "var_%d" @@ Fix.Gensym.fresh gens.block_ids
+    Printf.sprintf "var_%d" @@ Fix.Gensym.fresh gens.local_ids
 
   type lifter_state = {
     active : string;
@@ -665,11 +665,7 @@ let lift_code_block
          let address =
            Bitvec.add (Bitvec.create ~size:64 Z.(~$4 * ~$i)) address
          in
-         let prefix = Int.to_string i ^ "_" in
-         let lifted =
-           lift_opcode (module I) ~address op
-           |> Aslp_state.map_aslp_state_names (fun s -> prefix ^ s)
-         in
+         let lifted = lift_opcode (module I) ~address op in
          match acc with
          | None -> Some lifted
          | Some acc -> Some (Aslp_state.append_aslp_states acc lifted))

@@ -19,8 +19,8 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
     { Aslp.Aslp_state.blocks = "block_0"
       -> { Aslp.Aslp_state.assume = None;
            stmts =
-           [var var_2:bv64 := v__R2:bv64; var var_3:bv64 := v__R3:bv64;
-             var v__R1:bv64 := bvadd(var_2:bv64, bvshl(var_3:bv64, 0x4:bv12))];
+           [var var_0:bv64 := v__R2:bv64; var var_1:bv64 := v__R3:bv64;
+             var v__R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12))];
            succs = ["block_1"] },
       "block_1" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] };
       entry = "block_0"; exit = "block_1" }
@@ -40,16 +40,16 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
   print_endline @@ Aslp_state.show_aslp_state x;
   [%expect
     {|
-    { Aslp.Aslp_state.blocks = "0_block_0"
+    { Aslp.Aslp_state.blocks = "block_0"
       -> { Aslp.Aslp_state.assume = None;
-           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["0_block_1"] },
-      "0_block_1"
-      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["1_block_2"] },
-      "1_block_2"
+           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["block_1"] },
+      "block_1"
+      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["block_2"] },
+      "block_2"
       -> { Aslp.Aslp_state.assume = None;
-           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["1_block_3"] },
-      "1_block_3" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] };
-      entry = "0_block_0"; exit = "1_block_3" }
+           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["block_3"] },
+      "block_3" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] };
+      entry = "block_0"; exit = "block_3" }
     |}]
 
 let%expect_test "aslp integration basic" =
