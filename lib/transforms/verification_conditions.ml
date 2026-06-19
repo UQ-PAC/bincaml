@@ -24,6 +24,21 @@ let wpif_conditions (proc : Program.proc) =
                   stmt;
                   Instr_Assert { attrib = Attrib.empty; body = po2 };
                 ]
+          | Instr_Store { lhs; value; addr = Addr { addr; size; endian } } ->
+              (* TODO L(x) => Gamma_e *)
+              let po1 = Expr.BasilExpr.boolconst true in
+              (* TODO forall y . x in vars(L(y)) => (L(y)[x \ e] => L(y) || Gamma_y) *)
+              let po2 = Expr.BasilExpr.boolconst true in
+              Iter.of_list
+                [
+                  Instr_Assert { attrib = Attrib.empty; body = po1 };
+                  stmt;
+                  Instr_Assert { attrib = Attrib.empty; body = po2 };
+                ]
+          | Instr_Assume { body; branch = true } ->
+              let po = Expr.BasilExpr.unexp ~op:`Gamma body in
+              Iter.of_list
+                [ Instr_Assert { attrib = Attrib.empty; body = po }; stmt ]
           | _ -> Iter.singleton stmt)
         b)
     proc
