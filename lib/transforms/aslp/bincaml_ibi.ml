@@ -1,7 +1,7 @@
 open Lang
 open Common
 
-include Ibi
+include Bincaml_ibi_make
 (** @inline *)
 
 (** Abstract Bincaml IBI signature. Defines the input type as
