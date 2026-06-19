@@ -3,10 +3,9 @@ open Common
 open Transforms.Aslp
 
 let%expect_test "lift empty" =
-  let bincaml_aslp_state = ref (Aslp_state.empty_lifter_state ()) in
-  let module I = Bincaml_IBI (struct
-    let bincaml_lifter_state = bincaml_aslp_state
-  end) in
+  let module I =
+    (val make_bincaml_ibi ~generator:(Aslp_state.empty_aslp_ids ()))
+  in
   let x =
     lift_code_block (module I) ~address:(Bitvec.zero ~size:64) @@ Iter.empty
   in
@@ -20,10 +19,9 @@ let%expect_test "lift empty" =
     |}]
 
 let%expect_test "lift: add x1, x2, x3, lsl #4" =
-  let bincaml_aslp_state = ref (Aslp_state.empty_lifter_state ()) in
-  let module I = Bincaml_IBI (struct
-    let bincaml_lifter_state = bincaml_aslp_state
-  end) in
+  let module I =
+    (val make_bincaml_ibi ~generator:(Aslp_state.empty_aslp_ids ()))
+  in
   let x =
     lift_opcode
       (module I)
@@ -44,10 +42,9 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
     |}]
 
 let%expect_test "lift 2x: mov x1, #0xabcd" =
-  let bincaml_aslp_state = ref (Aslp_state.empty_lifter_state ()) in
-  let module I = Bincaml_IBI (struct
-    let bincaml_lifter_state = bincaml_aslp_state
-  end) in
+  let module I =
+    (val make_bincaml_ibi ~generator:(Aslp_state.empty_aslp_ids ()))
+  in
   let x =
     lift_code_block (module I) ~address:(Bitvec.zero ~size:64)
     @@ Iter.doubleton
