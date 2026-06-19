@@ -226,7 +226,7 @@ module Backwards (D : IntraDomain) = struct
     |> Option.get_or ~default:A.M.empty
 
   let print_dot fmt p analysis_result =
-    Trace_core.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
+    Trace_core.with_span ~__FILE__ ~__LINE__ "dot-printer" @@ fun _ ->
     let to_dot graph =
       let r =
        fun v -> Option.get_or ~default:D.bottom (A.M.find_opt v analysis_result)
