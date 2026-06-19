@@ -205,6 +205,7 @@ end = struct
 end
 
 module Bincaml_IBI = struct
+  (** Makes a concrete module which implements {!Bincaml_IBI.IBI}. *)
   module Make (S : sig
     val bincaml_lifter_state : Aslp_state.lifter_state ref
   end) =
@@ -644,6 +645,9 @@ module Bincaml_IBI = struct
      fun _ -> failwith "f_gen_FPToFixedJS_impl"
   end
 
+  (** Abstract Bincaml IBI signature. Defines the input type as
+      {!Lang.Common.Bitvec.t} and the output type as {!Aslp_state.aslp_state}
+      but leaving other types opaque. *)
   module type IBI = sig
     include
       OfflineASL_pc.Instruction_building_interface.IBI
