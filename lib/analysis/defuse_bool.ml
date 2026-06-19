@@ -23,6 +23,7 @@ module IsZeroLattice = struct
     | _ -> Top
 
   let widening a b = join a b
+  let narrowing a b = a
 
   let leq a b =
     match (a, b) with

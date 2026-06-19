@@ -96,31 +96,14 @@ module PassManager = struct
       invariants = Invariants.needs [ SSA ];
     }
 
-  let demo_ival_wint_cfg =
-    {
-      name = "demo-ivalwint-product-cfg";
-      apply =
-        Proc
-          (fun p ->
-            ignore @@ Analysis.Wrapped_intervals.analyse p;
-            (*Analysis.Wrapped_intervals.Analysis.print_dot
-              (Format.of_chan stdout) p r;*)
-            p);
-      doc =
-        "Runs wrapped interval analysis on control flow graph and prints \
-         results";
-      invariants = Invariants.needs [ SSA ];
-    }
-
   let demo_ival_wint_dfg =
     {
       name = "demo-ivalwint-product-dfg";
       apply =
         Proc
           (fun p ->
-            let _ = Analysis.Wrapped_intervals.DFGAnalysis.flow_insensitive p in
-            (*Analysis.Wrapped_intervals.Analysis.print_dot
-              (Format.of_chan stdout) p r;*)
+            let r = Analysis.Wrapped_intervals.DFGAnalysis.flow_insensitive p in
+            print_endline @@ Analysis.Wrapped_intervals.StateAbstraction.show r;
             p);
       doc =
         "Runs wrapped interval analysis on control flow graph and prints \
@@ -134,12 +117,12 @@ module PassManager = struct
       apply =
         Proc
           (fun p ->
-            let _ =
+            let r =
               Trace_core.with_span ~__FILE__ ~__LINE__ "dfg_flow_sensitive"
               @@ fun _ -> Analysis.Wrapped_intervals.analyse p
             in
-            (*Analysis.Wrapped_intervals.Analysis.print_dot
-              (Format.of_chan stdout) p r;*)
+            Analysis.Wrapped_intervals.Analysis.print_dot
+              (Format.of_chan stdout) p r;
             p);
       invariants = Invariants.needs [ SSA ];
       doc =
@@ -438,7 +421,6 @@ module PassManager = struct
       cleanup_cfg;
       dfg_bool;
       dfg_ival_wint_product;
-      demo_ival_wint_cfg;
       demo_ival_wint_dfg;
       cfg_wrapped_int;
       cfg_tnum_wint_reduced;
