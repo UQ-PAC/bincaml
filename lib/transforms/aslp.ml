@@ -205,24 +205,11 @@ end = struct
 end
 
 module Bincaml_IBI = struct
-  module type S = sig
-    include
-      OfflineASL_pc.Instruction_building_interface.IBI
-        with type bitvector = Bitvec.t
-         and type ast = Aslp_state.aslp_state
-  end
-
   module Make (S : sig
     val bincaml_lifter_state : Aslp_state.lifter_state ref
   end) =
   struct
-    type bigint = Z.t
-    type bitvector = Bitvec.t
-    type expr = Expr.BasilExpr.t
-    type lexpr = Var.t
-    type stmt = Aslp_state.stmt
-    type branch = string
-    type ast = Aslp_state.aslp_state
+    (** {2 Bincaml-specific utility functions} *)
 
     let bincaml_emit stmt =
       S.bincaml_lifter_state :=
@@ -240,6 +227,16 @@ module Bincaml_IBI = struct
         | Some x -> x
       in
       Var.create id_name ty
+
+    (** {2 Instruction building interface implementation} *)
+
+    type bigint = Z.t
+    type bitvector = Bitvec.t
+    type expr = Expr.BasilExpr.t
+    type lexpr = Var.t
+    type stmt = Aslp_state.stmt
+    type branch = string
+    type ast = Aslp_state.aslp_state
 
     let reset_ir () =
       let generator = !S.bincaml_lifter_state.generator in
@@ -646,40 +643,45 @@ module Bincaml_IBI = struct
         bigint -> bigint -> expr -> expr -> expr -> expr =
      fun _ -> failwith "f_gen_FPToFixedJS_impl"
   end
+
+  module type IBI = sig
+    include
+      OfflineASL_pc.Instruction_building_interface.IBI
+        with type bitvector = Lang.Common.Bitvec.t
+         and type ast = Aslp_state.aslp_state
+  end
+
+  (** Builds a new {!IBI} with the given initial generator state. *)
+  let from_generator generator : (module IBI) =
+    let bincaml_lifter_state =
+      ref (Aslp_state.empty_lifter_state ~generator ())
+    in
+    (module Make (struct
+      let bincaml_lifter_state = bincaml_lifter_state
+    end))
+
+  (** Builds a new {!IBI} where the ID generators are derived from the given
+      procedure. *)
+  let from_bincaml_procedure proc : (module IBI) =
+    let block_ids = Procedure.block_ids proc
+    and local_ids = Procedure.local_ids proc in
+    from_generator (Aslp_state.aslp_ids_from_generators ~block_ids ~local_ids)
 end
-
-(** Builds a new {!module-type-Bincaml_IBI} with the given initial generator
-    state. *)
-let make_bincaml_ibi ~generator : (module Bincaml_IBI.S) =
-  let bincaml_lifter_state =
-    ref (Aslp_state.empty_lifter_state ~generator ())
-  in
-  (module Bincaml_IBI.Make(struct
-    let bincaml_lifter_state = bincaml_lifter_state
-  end))
-
-(** Builds a new {!module-type-Bincaml_IBI} where the ID generators are derived
-    from the given procedure. *)
-let make_bincaml_ibi_from_procedure proc : (module Bincaml_IBI.S) =
-  let block_ids = Procedure.block_ids proc
-  and local_ids = Procedure.local_ids proc in
-  make_bincaml_ibi
-    ~generator:(Aslp_state.aslp_ids_from_generators ~block_ids ~local_ids)
 
 let ensure_aslp_globals_exist prog = 9
 
 (** Requires and ensures that the IBI is in the "reset" state. *)
-let lift_opcode (module I : Bincaml_IBI.S) ~address opcode =
+let lift_opcode (module I : Bincaml_IBI.IBI) ~address opcode =
   Fun.protect ~finally:I.reset_ir (fun () ->
       OfflineASL_pc.Offline.f_A64_decoder (module I) opcode address;
       I.get_ir ())
 
 (** Requires and ensures that the IBI is in the "reset" state. *)
-let lift_empty (module I : Bincaml_IBI.S) () =
+let lift_empty (module I : Bincaml_IBI.IBI) () =
   Fun.protect ~finally:I.reset_ir (fun () -> I.get_ir ())
 
 (** Requires and ensures that the IBI is in the "reset" state. *)
-let lift_code_block (module I : Bincaml_IBI.S) ~address opcodes =
+let lift_code_block (module I : Bincaml_IBI.IBI) ~address opcodes =
   opcodes
   |> Iter.foldi
        (fun acc i op ->

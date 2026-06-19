@@ -3,8 +3,7 @@ open Common
 open Transforms.Aslp
 
 let%expect_test "lift empty" =
-  let module I =
-    (val make_bincaml_ibi ~generator:(Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_IBI.from_generator (Aslp_state.empty_aslp_ids ()))
   in
   let x =
     lift_code_block (module I) ~address:(Bitvec.zero ~size:64) @@ Iter.empty
@@ -19,8 +18,7 @@ let%expect_test "lift empty" =
     |}]
 
 let%expect_test "lift: add x1, x2, x3, lsl #4" =
-  let module I =
-    (val make_bincaml_ibi ~generator:(Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_IBI.from_generator (Aslp_state.empty_aslp_ids ()))
   in
   let x =
     lift_opcode
@@ -42,8 +40,7 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
     |}]
 
 let%expect_test "lift 2x: mov x1, #0xabcd" =
-  let module I =
-    (val make_bincaml_ibi ~generator:(Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_IBI.from_generator (Aslp_state.empty_aslp_ids ()))
   in
   let x =
     lift_code_block (module I) ~address:(Bitvec.zero ~size:64)
