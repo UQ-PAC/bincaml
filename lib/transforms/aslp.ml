@@ -1,37 +1,6 @@
 open Lang
 open Common
 
-module Aslp_IDs = struct
-  type t = {
-    names : (string, int) Hashtbl.t;
-        (** Names and their associated unique ID. *)
-    count : int ref;
-        (** Count of unique IDs {i ever} emitted by this generator. Importantly,
-            this counts names which have been forgotten. *)
-  }
-
-  let create () = { names = Hashtbl.create 16; count = ref 0 }
-
-  (** Returns a fresh ID. *)
-  let fresh { names; count } =
-    let prev = !count in
-    count := prev + 1;
-    prev
-
-  (** Returns the ID associated with the given name, or creates and stores a new
-      ID if the name is not yet known. *)
-  let find name st =
-    match Hashtbl.find_opt st.names name with
-    | None ->
-        let n = fresh st in
-        Hashtbl.replace st.names name n;
-        n
-    | Some n -> n
-
-  (** Returns a copy of the {!t} which forgets all known name associations. *)
-  let forget st = { names = Hashtbl.copy st.names; count = ref !(st.count) }
-end
-
 module Aslp_state : sig
   (** {1 Types} *)
 
@@ -64,13 +33,17 @@ module Aslp_state : sig
       instructions. Or, it forms a part of {!lifter_state} for
       {i within}-instruction state. *)
 
-  type aslp_ids = { block_ids : Aslp_IDs.t; local_ids : Aslp_IDs.t }
+  type aslp_ids = {
+    block_ids : Fix.Gensym.generator;
+    local_ids : Fix.Gensym.generator;
+  }
   (** Generators for unique IDs used by the offline lifter. *)
 
   type lifter_state = {
     active : string;
     state : aslp_state;
     generator : aslp_ids;
+    names : (string, string) Hashtbl.t;
   }
   (** Intermediate offline lifter state while {i within} one particular
       instruction.
@@ -95,7 +68,7 @@ module Aslp_state : sig
 
   val initial_aslp_ids : unit -> aslp_ids
   val gen_block_id : aslp_ids -> string
-  val gen_local_id : aslp_ids -> string -> string
+  val gen_local_id : aslp_ids -> string
 
   (** Returns a copy of the given lifter ID generator, but with the local
       {i names} forgotten. This means that existing local names will become
@@ -140,21 +113,25 @@ end = struct
   }
   [@@deriving show]
 
-  type aslp_ids = { block_ids : Aslp_IDs.t; local_ids : Aslp_IDs.t }
+  type aslp_ids = {
+    block_ids : Fix.Gensym.generator;
+    local_ids : Fix.Gensym.generator;
+  }
 
   let initial_aslp_ids () =
-    { block_ids = Aslp_IDs.create (); local_ids = Aslp_IDs.create () }
+    { block_ids = Fix.Gensym.generator (); local_ids = Fix.Gensym.generator () }
 
   let gen_block_id gens =
-    Printf.sprintf "block_%d" @@ Aslp_IDs.fresh gens.block_ids
+    Printf.sprintf "block_%d" @@ Fix.Gensym.fresh gens.block_ids
 
-  let gen_local_id gens name =
-    Printf.sprintf "var_%d" @@ Aslp_IDs.find name gens.local_ids
+  let gen_local_id gens =
+    Printf.sprintf "var_%d" @@ Fix.Gensym.fresh gens.block_ids
 
   type lifter_state = {
     active : string;
     state : aslp_state;
     generator : aslp_ids; [@opaque]
+    names : (string, string) Hashtbl.t;
   }
   [@@deriving show]
 
@@ -173,7 +150,12 @@ end = struct
     let generator = Option.get_lazy initial_aslp_ids generator in
     let entry = gen_block_id generator in
     let exit = gen_block_id generator in
-    { active = entry; state = empty_aslp_state ~entry ~exit (); generator }
+    {
+      active = entry;
+      state = empty_aslp_state ~entry ~exit ();
+      names = Hashtbl.create 16;
+      generator;
+    }
 
   let map_aslp_block_names f { assume; stmts; succs } =
     let succs = List.map f succs in
@@ -200,9 +182,9 @@ end = struct
     in
     { state with blocks }
 
-  let add_stmt_to_active { active; state; generator } stmt =
-    let state = add_stmt_to_block state active stmt in
-    { active; state; generator }
+  let add_stmt_to_active lifter_state stmt =
+    let state = add_stmt_to_block lifter_state.state lifter_state.active stmt in
+    { lifter_state with state }
 
   let add_goto aslp_state ~source ~target =
     let blocks =
@@ -242,8 +224,17 @@ struct
       Aslp_state.add_stmt_to_active !S.bincaml_lifter_state stmt
 
   let bincaml_local_var name ty =
-    let name = Aslp_state.gen_local_id !S.bincaml_lifter_state.generator name in
-    Var.create name ty
+    let id_name =
+      match Hashtbl.find_opt !S.bincaml_lifter_state.names name with
+      | None ->
+          let id_name =
+            Aslp_state.gen_local_id !S.bincaml_lifter_state.generator
+          in
+          Hashtbl.replace !S.bincaml_lifter_state.names name id_name;
+          id_name
+      | Some x -> x
+    in
+    Var.create id_name ty
 
   let reset_ir () =
     let generator = !S.bincaml_lifter_state.generator in
