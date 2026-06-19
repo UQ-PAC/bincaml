@@ -3,7 +3,7 @@ open Common
 open Transforms.Aslp
 
 let%expect_test "lift empty" =
-  let module I = (val Bincaml_IBI.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
   in
   let x =
     lift_code_block (module I) ~address:(Bitvec.zero ~size:64) @@ Iter.empty
@@ -11,14 +11,14 @@ let%expect_test "lift empty" =
   print_endline @@ Aslp_state.show_aslp_state x;
   [%expect
     {|
-    { Aslp.Aslp_state.blocks = "block_0"
-      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["block_1"] },
-      "block_1" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] };
-      entry = "block_0"; exit = "block_1" }
+    { Aslp_state.blocks = "block_0"
+      -> { Aslp_state.assume = None; stmts = []; succs = ["block_1"] }, "block_1"
+      -> { Aslp_state.assume = None; stmts = []; succs = [] }; entry = "block_0";
+      exit = "block_1" }
     |}]
 
 let%expect_test "lift: add x1, x2, x3, lsl #4" =
-  let module I = (val Bincaml_IBI.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
   in
   let x =
     lift_opcode
@@ -29,18 +29,18 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
   print_endline @@ Aslp_state.show_aslp_state x;
   [%expect
     {|
-    { Aslp.Aslp_state.blocks = "block_0"
-      -> { Aslp.Aslp_state.assume = None;
+    { Aslp_state.blocks = "block_0"
+      -> { Aslp_state.assume = None;
            stmts =
            [var var_0:bv64 := v__R2:bv64; var var_1:bv64 := v__R3:bv64;
              var v__R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12))];
            succs = ["block_1"] },
-      "block_1" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] };
+      "block_1" -> { Aslp_state.assume = None; stmts = []; succs = [] };
       entry = "block_0"; exit = "block_1" }
     |}]
 
 let%expect_test "lift 2x: mov x1, #0xabcd" =
-  let module I = (val Bincaml_IBI.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
   in
   let x =
     lift_code_block (module I) ~address:(Bitvec.zero ~size:64)
@@ -51,15 +51,14 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
   print_endline @@ Aslp_state.show_aslp_state x;
   [%expect
     {|
-    { Aslp.Aslp_state.blocks = "block_0"
-      -> { Aslp.Aslp_state.assume = None;
-           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["block_1"] },
-      "block_1"
-      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["block_2"] },
+    { Aslp_state.blocks = "block_0"
+      -> { Aslp_state.assume = None; stmts = [var v__R1:bv64 := 0xabcd:bv64];
+           succs = ["block_1"] },
+      "block_1" -> { Aslp_state.assume = None; stmts = []; succs = ["block_2"] },
       "block_2"
-      -> { Aslp.Aslp_state.assume = None;
-           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["block_3"] },
-      "block_3" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] };
+      -> { Aslp_state.assume = None; stmts = [var v__R1:bv64 := 0xabcd:bv64];
+           succs = ["block_3"] },
+      "block_3" -> { Aslp_state.assume = None; stmts = []; succs = [] };
       entry = "block_0"; exit = "block_3" }
     |}]
 
