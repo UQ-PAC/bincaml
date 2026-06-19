@@ -27,9 +27,7 @@
  (synopsis "Disas arm ops with capstone")
  (depends
    ocaml)
- )
- 
-
+)
 
 (package
  (name bincaml)
@@ -37,6 +35,7 @@
  (description "A longer description")
  (depends
   ocaml
+  capstone_arm64_disas
   (aslp_lifter_ocaml (>= 1.1))
   (ocaml-protoc-plugin (>= 6.1.0))
   (qcheck-stm :with-test)
