@@ -17,6 +17,7 @@
   memory_specification
   function_summaries
   boogie_prepass
+  verification_conditions
   gamma_vars
   const_prop
   linear_copy)
