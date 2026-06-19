@@ -1,0 +1,27 @@
+(rule
+ (target includes.gen)
+ (enabled_if
+  (= %{system} "macosx"))
+ (action
+  (with-stdout-to
+   includes.gen
+   (echo "/opt/homebrew/include"))))
+
+(rule
+ (target includes.gen)
+ (enabled_if
+  (<> %{system} "macosx"))
+ (action
+  (with-stdout-to
+   includes.gen
+   (echo "()"))))
+
+(library
+ (public_name bincaml.gtirb.capstone)
+ (name capstone)
+ (foreign_stubs
+  (language c)
+  (include_dirs
+   (include includes.gen))
+  (names capst))
+ (c_library_flags -lcapstone -I/opt/homebrew/include))
