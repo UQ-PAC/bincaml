@@ -3,9 +3,7 @@ open Common
 open Transforms.Aslp
 
 let%expect_test "lift: add x1, x2, x3, lsl #4" =
-  let bincaml_aslp_state =
-    ref (Aslp_state.empty_lifter_state ~entry:"entry" ~exit:"exit" ())
-  in
+  let bincaml_aslp_state = ref (Aslp_state.empty_lifter_state ()) in
   let module I = Bincaml_IBI (struct
     let bincaml_lifter_state = bincaml_aslp_state
   end) in
@@ -29,9 +27,7 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
     |}]
 
 let%expect_test "lift 2x: mov x1, #0xabcd" =
-  let bincaml_aslp_state =
-    ref (Aslp_state.empty_lifter_state ~entry:"entry" ~exit:"exit" ())
-  in
+  let bincaml_aslp_state = ref (Aslp_state.empty_lifter_state ()) in
   let module I = Bincaml_IBI (struct
     let bincaml_lifter_state = bincaml_aslp_state
   end) in
@@ -52,12 +48,8 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
       "1_block_2"
       -> { Aslp.Aslp_state.assume = None;
            stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["1_block_3"] },
-      "1_block_3" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] },
-      "entryyyy"
-      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["exittt"] },
-      "exittt"
-      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["0_block_0"] };
-      entry = "entryyyy"; exit = "1_block_3" }
+      "1_block_3" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] };
+      entry = "0_block_0"; exit = "1_block_3" }
     |}]
 
 let%expect_test "aslp integration basic" =

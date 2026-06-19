@@ -65,14 +65,11 @@ module Aslp_state : sig
 
   val empty_aslp_state : entry:string -> exit:string -> unit -> aslp_state
 
-  val empty_lifter_state :
-    ?entry:string -> ?exit:string -> ?generator:aslp_ids -> unit -> lifter_state
+  val empty_lifter_state : ?generator:aslp_ids -> unit -> lifter_state
   (** Constructs a new empty {!lifter_state}.
 
       Callers should consider whether they wish to re-use an existing
-      [generator] value by passing it explicitly. [entry] and [exit] can also be
-      provided explicitly. If not provided, these will be generated using the
-      generator. *)
+      [generator] value by passing it explicitly. *)
 
   val map_aslp_state_names : (string -> string) -> aslp_state -> aslp_state
 
@@ -158,10 +155,10 @@ end = struct
     in
     { blocks; entry; exit }
 
-  let empty_lifter_state ?entry ?exit ?generator () =
+  let empty_lifter_state ?generator () =
     let generator = Option.get_lazy initial_aslp_ids generator in
-    let entry = Option.get_lazy (fun () -> gen_block_id generator) entry in
-    let exit = Option.get_lazy (fun () -> gen_block_id generator) exit in
+    let entry = gen_block_id generator in
+    let exit = gen_block_id generator in
     {
       active = entry;
       state = empty_aslp_state ~entry ~exit ();
@@ -649,28 +646,33 @@ end
 
 let ensure_aslp_globals_exist prog = 9
 
+(** Requires and ensures that the IBI is in the "reset" state. *)
 let lift_opcode
     (module I : OfflineASL_pc.Instruction_building_interface.IBI
       with type bitvector = Bitvec.t
        and type ast = Aslp_state.aslp_state) ~address opcode =
-  I.reset_ir ();
-  OfflineASL_pc.Offline.f_A64_decoder (module I) opcode address;
-  I.get_ir ()
+  Fun.protect ~finally:I.reset_ir (fun () ->
+      OfflineASL_pc.Offline.f_A64_decoder (module I) opcode address;
+      I.get_ir ())
 
 let lift_code_block
     (module I : OfflineASL_pc.Instruction_building_interface.IBI
       with type bitvector = Bitvec.t
        and type ast = Aslp_state.aslp_state) ~address opcodes =
-  let initial =
-    Aslp_state.empty_aslp_state ~entry:"entryyyy" ~exit:"exittt" ()
-  in
-  Iter.foldi
-    (fun state_acc i op ->
-      let address = Bitvec.add (Bitvec.create ~size:64 Z.(~$4 * ~$i)) address in
-      let prefix = Int.to_string i ^ "_" in
-      let lifted =
-        lift_opcode (module I) ~address op
-        |> Aslp_state.map_aslp_state_names (fun s -> prefix ^ s)
-      in
-      Aslp_state.append_aslp_states state_acc lifted)
-    initial opcodes
+  opcodes
+  |> Iter.foldi
+       (fun acc i op ->
+         let address =
+           Bitvec.add (Bitvec.create ~size:64 Z.(~$4 * ~$i)) address
+         in
+         let prefix = Int.to_string i ^ "_" in
+         let lifted =
+           lift_opcode (module I) ~address op
+           |> Aslp_state.map_aslp_state_names (fun s -> prefix ^ s)
+         in
+         match acc with
+         | None -> Some lifted
+         | Some acc -> Some (Aslp_state.append_aslp_states acc lifted))
+       None
+  |> Option.get_lazy (fun () ->
+      Aslp_state.empty_aslp_state ~entry:"A" ~exit:"B" ())
