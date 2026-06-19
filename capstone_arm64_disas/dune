@@ -24,4 +24,4 @@
   (include_dirs
    (include includes.gen))
   (names capst))
- (c_library_flags -lcapstone -I/opt/homebrew/include))
+ (c_library_flags -lcapstone ))
