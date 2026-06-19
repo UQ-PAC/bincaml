@@ -13,11 +13,6 @@ module type Lattice = sig
   val equal : t -> t -> bool
   val leq : t -> t -> bool
   val widening : t -> t -> t
-end
-
-module type NarrowingOperator = sig
-  type t
-
   val narrowing : t -> t -> t
 end
 
@@ -27,19 +22,8 @@ module type TopElement = sig
   val top : t
 end
 
-module type NarrowingLattice = sig
-  include Lattice
-  include NarrowingOperator with type t := t
-end
-
 module type TopLattice = sig
   include Lattice
-  include TopElement with type t := t
-end
-
-module type TopNarrowingLattice = sig
-  include Lattice
-  include NarrowingOperator with type t := t
   include TopElement with type t := t
 end
 
@@ -117,14 +101,6 @@ module type StateDomain = sig
   val transfer_state : (Var.t -> V.t) -> Program.stmt -> (Var.t * V.t) Iter.t
 end
 
-module type NarrowingStateDomain = sig
-  type val_t
-
-  module V : NarrowingLattice with type t = val_t
-  include StateDomain with type val_t := val_t with module V := V
-  include NarrowingOperator with type t := t
-end
-
 module type Domain = sig
   include Lattice
 
@@ -187,6 +163,7 @@ struct
     | _ -> false
 
   let widening a b = join a b
+  let narrowing a b = a
 end
 
 module LiftLattice (L : Lattice) : Lattice = struct
@@ -194,6 +171,7 @@ module LiftLattice (L : Lattice) : Lattice = struct
 
   let name = L.name ^ ".lift_lattice"
   let widening a b = map2 L.widening a b
+  let narrowing a b = a
 
   let join a b =
     match (a, b) with

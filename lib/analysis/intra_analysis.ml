@@ -137,13 +137,6 @@ module MapState (V : TopLattice) = struct
       (V)
 end
 
-module NarrowingMapState (V1 : TopNarrowingLattice) = struct
-  include MapState (V1)
-  module V = V1
-
-  let narrowing = bot_binop V.narrowing
-end
-
 module type IntraDomain = sig
   include Domain
 

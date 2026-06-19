@@ -771,7 +771,7 @@ module WrappedIntervalsValueAbstractionBasil = struct
 end
 
 module StateAbstraction =
-  Intra_analysis.NarrowingMapState (WrappedIntervalsValueAbstractionBasil)
+  Intra_analysis.MapState (WrappedIntervalsValueAbstractionBasil)
 
 module Eval = Intra_analysis.EvalStmt (WrappedIntervalsValueAbstractionBasil)
 

@@ -395,13 +395,6 @@ module type DFAnalysis = sig
   include Lattice_types.StateDomain with type t := t with type key_t = Var.t
 end
 
-module type NarrowingDFAnalysis = sig
-  type t
-
-  include
-    Lattice_types.NarrowingStateDomain with type t := t with type key_t = Var.t
-end
-
 open struct
   module DFDomain
       (G :
@@ -499,7 +492,7 @@ open struct
         Bincaml_util.Reverse_graph.GraphSig
           with type V.t = Vertex.t
           with type t = DFGraph.t)
-      (D : NarrowingDFAnalysis) =
+      (D : DFAnalysis) =
   struct
     module Domain =
       DFDomain (G) (D)
@@ -575,7 +568,7 @@ end
 
 (** Backwards dataflow analysis over dfg that narrows after widening to a
     fixpoint *)
-module AnalysisRevNarrowing (AD : NarrowingDFAnalysis) = struct
+module AnalysisRevNarrowing (AD : DFAnalysis) = struct
   module A = DataflowAnalysis (Bincaml_util.Reverse_graph.RevG (DFGraph)) (AD)
   module N = DataflowNarrowing (Bincaml_util.Reverse_graph.RevG (DFGraph)) (AD)
   module D = AD
@@ -608,7 +601,7 @@ end
 
 (** Forwards dataflow analysis over dfg that narrows after widening to a
     fixpoint *)
-module AnalysisFwdNarrowing (AD : NarrowingDFAnalysis) = struct
+module AnalysisFwdNarrowing (AD : DFAnalysis) = struct
   module A = DataflowAnalysis (DFGraph) (AD)
   module N = DataflowNarrowing (DFGraph) (AD)
   module D = AD

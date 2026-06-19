@@ -49,6 +49,7 @@ module LatticeSet (T : SetElem) = struct
     | _, Top -> true
 
   let widening = join
+  let narrowing a b = a
 end
 
 module type MapKey = sig
@@ -164,6 +165,7 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
 
       let join = top_binop V.join
       let widening = top_binop V.widening
+      let narrowing = bot_binop V.narrowing
 
       let read k = function
         | BotMap m -> KM.find_opt k m |> Option.get_or ~default:V.bottom
@@ -203,7 +205,6 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
       sig
         include StateAbstraction with type val_t = V.t and type key_t = K.t
 
-        val bot_binop : (V.t -> V.t -> V.t) -> t -> t -> t
         val top : t
         val of_list_top : (K.t * V.t) list -> t
         val of_list_bot : (K.t * V.t) list -> t
