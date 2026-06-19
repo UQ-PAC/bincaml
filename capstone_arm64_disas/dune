@@ -5,7 +5,7 @@
  (action
   (with-stdout-to
    includes.gen
-   (echo "/opt/homebrew/include"))))
+   (system "sh -c \"printf \\\"%s/include\\\" $(brew --prefix)\""))))
 
 (rule
  (target includes.gen)
