@@ -2,6 +2,23 @@ open Lang
 open Common
 open Transforms.Aslp
 
+let%expect_test "lift empty" =
+  let bincaml_aslp_state = ref (Aslp_state.empty_lifter_state ()) in
+  let module I = Bincaml_IBI (struct
+    let bincaml_lifter_state = bincaml_aslp_state
+  end) in
+  let x =
+    lift_code_block (module I) ~address:(Bitvec.zero ~size:64) @@ Iter.empty
+  in
+  print_endline @@ Aslp_state.show_aslp_state x;
+  [%expect
+    {|
+    { Aslp.Aslp_state.blocks = "block_0"
+      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["block_1"] },
+      "block_1" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] };
+      entry = "block_0"; exit = "block_1" }
+    |}]
+
 let%expect_test "lift: add x1, x2, x3, lsl #4" =
   let bincaml_aslp_state = ref (Aslp_state.empty_lifter_state ()) in
   let module I = Bincaml_IBI (struct

@@ -33,10 +33,7 @@ module Aslp_state : sig
       instructions. Or, it forms a part of {!lifter_state} for
       {i within}-instruction state. *)
 
-  type aslp_ids = {
-    block_ids : Fix.Gensym.generator;
-    local_ids : Fix.Gensym.generator;
-  }
+  type aslp_ids = { block_ids : unit -> int; local_ids : unit -> int }
   (** Generators for unique IDs used by the offline lifter.
 
       The {!aslp_ids} is stateful and the same {!aslp_ids} should be used by all
@@ -71,18 +68,24 @@ module Aslp_state : sig
       Callers should consider whether they wish to re-use an existing
       [generator] value by passing it explicitly. *)
 
-  val map_aslp_state_names : (string -> string) -> aslp_state -> aslp_state
+  val empty_aslp_ids : unit -> aslp_ids
+  (** Construct a new {!aslp_ids} with no pre-existing IDs.
+
+      Be careful! You should use {!aslp_ids_from_generators} if you will use the
+      lifted statements within an existing Bincaml IR. *)
 
   (** {2 ID generating functions} *)
 
-  val initial_aslp_ids : unit -> aslp_ids
+  val aslp_ids_from_generators :
+    block_ids:ID.generator -> local_ids:ID.generator -> aslp_ids
+  (** Construct a {!aslp_ids} with the given {!Bincaml_util.ID.generator}s as
+      underlying generators.
+
+      This will ensure that ASLp's local variable and block names do not clash
+      with existing names. *)
+
   val gen_block_id : aslp_ids -> string
   val gen_local_id : aslp_ids -> string
-
-  (** Returns a copy of the given lifter ID generator, but with the local
-      {i names} forgotten. This means that existing local names will become
-      inaccessible, though the {!num_locals} count will remain to ensure that
-      their numbers are not re-used. *)
 
   (** {1 State manipulation functions} *)
 
@@ -122,19 +125,18 @@ end = struct
   }
   [@@deriving show]
 
-  type aslp_ids = {
-    block_ids : Fix.Gensym.generator;
-    local_ids : Fix.Gensym.generator;
-  }
+  type aslp_ids = { block_ids : unit -> int; local_ids : unit -> int }
 
-  let initial_aslp_ids () =
-    { block_ids = Fix.Gensym.generator (); local_ids = Fix.Gensym.generator () }
+  let empty_aslp_ids () =
+    { block_ids = Fix.Gensym.make (); local_ids = Fix.Gensym.make () }
 
-  let gen_block_id gens =
-    Printf.sprintf "block_%d" @@ Fix.Gensym.fresh gens.block_ids
+  let aslp_ids_from_generators ~block_ids ~local_ids =
+    let block_ids = ID.index % ID.fresh block_ids in
+    let local_ids = ID.index % ID.fresh local_ids in
+    { block_ids; local_ids }
 
-  let gen_local_id gens =
-    Printf.sprintf "var_%d" @@ Fix.Gensym.fresh gens.local_ids
+  let gen_block_id gens = Printf.sprintf "block_%d" @@ gens.block_ids ()
+  let gen_local_id gens = Printf.sprintf "var_%d" @@ gens.local_ids ()
 
   type lifter_state = {
     active : string;
@@ -156,7 +158,7 @@ end = struct
     { blocks; entry; exit }
 
   let empty_lifter_state ?generator () =
-    let generator = Option.get_lazy initial_aslp_ids generator in
+    let generator = Option.get_lazy empty_aslp_ids generator in
     let entry = gen_block_id generator in
     let exit = gen_block_id generator in
     {
@@ -165,19 +167,6 @@ end = struct
       names = Hashtbl.create 16;
       generator;
     }
-
-  let map_aslp_block_names f { assume; stmts; succs } =
-    let succs = List.map f succs in
-    { assume; stmts; succs }
-
-  let map_aslp_state_names f { blocks; entry; exit } =
-    let blocks =
-      blocks |> StringMap.to_iter
-      |> Iter.map (fun (k, v) -> (f k, map_aslp_block_names f v))
-      |> StringMap.of_iter
-    and entry = f entry
-    and exit = f exit in
-    { blocks; entry; exit }
 
   let add_stmt_to_block state key stmt =
     let blocks =
@@ -644,21 +633,27 @@ struct
    fun _ -> failwith "f_gen_FPToFixedJS_impl"
 end
 
+module type Bincaml_IBI = sig
+  include
+    OfflineASL_pc.Instruction_building_interface.IBI
+      with type bitvector = Bitvec.t
+       and type ast = Aslp_state.aslp_state
+end
+
 let ensure_aslp_globals_exist prog = 9
 
 (** Requires and ensures that the IBI is in the "reset" state. *)
-let lift_opcode
-    (module I : OfflineASL_pc.Instruction_building_interface.IBI
-      with type bitvector = Bitvec.t
-       and type ast = Aslp_state.aslp_state) ~address opcode =
+let lift_opcode (module I : Bincaml_IBI) ~address opcode =
   Fun.protect ~finally:I.reset_ir (fun () ->
       OfflineASL_pc.Offline.f_A64_decoder (module I) opcode address;
       I.get_ir ())
 
-let lift_code_block
-    (module I : OfflineASL_pc.Instruction_building_interface.IBI
-      with type bitvector = Bitvec.t
-       and type ast = Aslp_state.aslp_state) ~address opcodes =
+(** Requires and ensures that the IBI is in the "reset" state. *)
+let lift_empty (module I : Bincaml_IBI) () =
+  Fun.protect ~finally:I.reset_ir (fun () -> I.get_ir ())
+
+(** Requires and ensures that the IBI is in the "reset" state. *)
+let lift_code_block (module I : Bincaml_IBI) ~address opcodes =
   opcodes
   |> Iter.foldi
        (fun acc i op ->
@@ -670,5 +665,4 @@ let lift_code_block
          | None -> Some lifted
          | Some acc -> Some (Aslp_state.append_aslp_states acc lifted))
        None
-  |> Option.get_lazy (fun () ->
-      Aslp_state.empty_aslp_state ~entry:"A" ~exit:"B" ())
+  |> Option.get_lazy (lift_empty (module I))
