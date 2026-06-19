@@ -3,7 +3,9 @@ open Common
 open Transforms.Aslp
 
 let%expect_test "lift: add x1, x2, x3, lsl #4" =
-  let bincaml_aslp_state = ref (Aslp_state.empty_lifter_state ()) in
+  let bincaml_aslp_state =
+    ref (Aslp_state.empty_lifter_state ~entry:"entry" ~exit:"exit" ())
+  in
   let module I = Bincaml_IBI (struct
     let bincaml_lifter_state = bincaml_aslp_state
   end) in
@@ -14,19 +16,22 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
       (Bitvec.of_string "0x8b031041:bv32")
   in
   print_endline @@ Aslp_state.show_aslp_state x;
-  [%expect {|
-    { Aslp.Aslp_state.blocks = "block_2"
+  [%expect
+    {|
+    { Aslp.Aslp_state.blocks = "block_0"
       -> { Aslp.Aslp_state.assume = None;
            stmts =
-           [var var_4:bv64 := v__R2:bv64; var var_5:bv64 := v__R3:bv64;
-             var v__R1:bv64 := bvadd(var_4:bv64, bvshl(var_5:bv64, 0x4:bv12))];
-           succs = ["block_3"] },
-      "block_3" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] };
-      entry = "block_2"; exit = "block_3" }
+           [var var_2:bv64 := v__R2:bv64; var var_3:bv64 := v__R3:bv64;
+             var v__R1:bv64 := bvadd(var_2:bv64, bvshl(var_3:bv64, 0x4:bv12))];
+           succs = ["block_1"] },
+      "block_1" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] };
+      entry = "block_0"; exit = "block_1" }
     |}]
 
 let%expect_test "lift 2x: mov x1, #0xabcd" =
-  let bincaml_aslp_state = ref (Aslp_state.empty_lifter_state ()) in
+  let bincaml_aslp_state =
+    ref (Aslp_state.empty_lifter_state ~entry:"entry" ~exit:"exit" ())
+  in
   let module I = Bincaml_IBI (struct
     let bincaml_lifter_state = bincaml_aslp_state
   end) in
@@ -37,21 +42,22 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
          (Bitvec.of_string "0xd29579a1:bv32")
   in
   print_endline @@ Aslp_state.show_aslp_state x;
-  [%expect {|
-    { Aslp.Aslp_state.blocks = "0_block_2"
+  [%expect
+    {|
+    { Aslp.Aslp_state.blocks = "0_block_0"
       -> { Aslp.Aslp_state.assume = None;
-           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["0_block_3"] },
-      "0_block_3"
-      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["1_block_4"] },
-      "1_block_4"
+           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["0_block_1"] },
+      "0_block_1"
+      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["1_block_2"] },
+      "1_block_2"
       -> { Aslp.Aslp_state.assume = None;
-           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["1_block_5"] },
-      "1_block_5" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] },
+           stmts = [var v__R1:bv64 := 0xabcd:bv64]; succs = ["1_block_3"] },
+      "1_block_3" -> { Aslp.Aslp_state.assume = None; stmts = []; succs = [] },
       "entryyyy"
       -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["exittt"] },
       "exittt"
-      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["0_block_2"] };
-      entry = "entryyyy"; exit = "1_block_5" }
+      -> { Aslp.Aslp_state.assume = None; stmts = []; succs = ["0_block_0"] };
+      entry = "entryyyy"; exit = "1_block_3" }
     |}]
 
 let%expect_test "aslp integration basic" =

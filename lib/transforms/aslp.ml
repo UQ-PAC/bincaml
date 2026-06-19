@@ -37,13 +37,22 @@ module Aslp_state : sig
     block_ids : Fix.Gensym.generator;
     local_ids : Fix.Gensym.generator;
   }
-  (** Generators for unique IDs used by the offline lifter. *)
+  (** Generators for unique IDs used by the offline lifter.
+
+      The {!aslp_ids} is stateful and the same {!aslp_ids} should be used by all
+      opcodes within the same procedure, to ensure that IDs are unique.*)
 
   type lifter_state = {
     active : string;
+        (** Active block where new runtime statements will be appended. *)
     state : aslp_state;
-    generator : aslp_ids;
+        (** Lifter state representing a control flow diamond. *)
+    generator : aslp_ids;  (** Generators for ID numbers. *)
     names : (string, string) Hashtbl.t;
+        (** Map of ASLp local variable names to the "ID-ified" names produced
+            for Bincaml.
+
+            Local variables names are scoped to each {i instruction}. *)
   }
   (** Intermediate offline lifter state while {i within} one particular
       instruction.
@@ -56,11 +65,14 @@ module Aslp_state : sig
 
   val empty_aslp_state : entry:string -> exit:string -> unit -> aslp_state
 
-  val empty_lifter_state : ?generator:aslp_ids -> unit -> lifter_state
+  val empty_lifter_state :
+    ?entry:string -> ?exit:string -> ?generator:aslp_ids -> unit -> lifter_state
   (** Constructs a new empty {!lifter_state}.
 
       Callers should consider whether they wish to re-use an existing
-      [generator] value by passing it explicitly. *)
+      [generator] value by passing it explicitly. [entry] and [exit] can also be
+      provided explicitly. If not provided, these will be generated using the
+      generator. *)
 
   val map_aslp_state_names : (string -> string) -> aslp_state -> aslp_state
 
@@ -146,10 +158,10 @@ end = struct
     in
     { blocks; entry; exit }
 
-  let empty_lifter_state ?generator () =
+  let empty_lifter_state ?entry ?exit ?generator () =
     let generator = Option.get_lazy initial_aslp_ids generator in
-    let entry = gen_block_id generator in
-    let exit = gen_block_id generator in
+    let entry = Option.get_lazy (fun () -> gen_block_id generator) entry in
+    let exit = Option.get_lazy (fun () -> gen_block_id generator) exit in
     {
       active = entry;
       state = empty_aslp_state ~entry ~exit ();
@@ -182,7 +194,7 @@ end = struct
     in
     { state with blocks }
 
-  let add_stmt_to_active lifter_state stmt =
+  let add_stmt_to_active (lifter_state : lifter_state) stmt =
     let state = add_stmt_to_block lifter_state.state lifter_state.active stmt in
     { lifter_state with state }
 
@@ -240,7 +252,7 @@ struct
     let generator = !S.bincaml_lifter_state.generator in
     S.bincaml_lifter_state := Aslp_state.empty_lifter_state ~generator ()
 
-  let get_ir = fun () -> !S.bincaml_lifter_state.state
+  let get_ir () = !S.bincaml_lifter_state.state
   let bigint_of_string : string -> bigint = Z.of_string_base 10
   let bigint_of_int : int -> bigint = Z.of_int
   let bigint_zero : bigint = Z.zero
