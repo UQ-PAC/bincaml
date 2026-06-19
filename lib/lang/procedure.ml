@@ -110,6 +110,7 @@ module PG : sig
 
   val create :
     ID.t ->
+    ?local_id_gen:ID.generator ->
     ?is_stub:bool ->
     ?formal_in_params:'a StringMap.t ->
     ?formal_out_params:'a StringMap.t ->
@@ -139,7 +140,7 @@ module PG : sig
   val local_ids : ('a, 'b) t -> ID.generator
   (** return mutable generator for fresh local variable IDS *)
 
-  val local_decls : ('a, 'b) t -> 'a Var.Decls.t
+  val local_decls : ('a, 'b) t -> (string, 'a) Hashtbl.t
   (** return mutable declaration map for local var IDS *)
 
   val formal_in_params : ('a, 'b) t -> 'a StringMap.t
@@ -173,7 +174,7 @@ end = struct
     formal_in_params : 'v StringMap.t;
     formal_out_params : 'v StringMap.t;
     graph : G.t option;
-    locals : 'v Var.Decls.t;
+    locals : (string, 'v) Hashtbl.t;
     topo_fwd : Vert.t Graph.WeakTopological.t lazy_t;
     topo_rev : Vert.t Graph.WeakTopological.t lazy_t;
     local_ids : ID.generator;
@@ -231,19 +232,24 @@ end = struct
     let graph = G.add_vertex graph Return in
     graph
 
-  let create id ?(is_stub = false) ?(formal_in_params = StringMap.empty)
+  let create id ?local_id_gen ?(is_stub = false) ?(formal_in_params = StringMap.empty)
       ?(formal_out_params = StringMap.empty) ?(captures_globs = [])
       ?(modifies_globs = []) ?(requires = []) ?(ensures = []) ?(rely = [])
       ?(guarantee = []) ?(attrib = Attrib.empty) () =
     let specification =
       { captures_globs; modifies_globs; requires; ensures; rely; guarantee }
     in
-    let local_ids = ID.make_gen () in
+    let local_ids = match local_id_gen with
+      | Some g -> g 
+      | None -> let g = ID.make_gen ()  in
+          (* Oh no: we could have used a _different_ generator to build the in-params *)
+          StringMap.iter (fun k v -> ignore @@ g.decl_exn k) formal_in_params;
+          StringMap.iter (fun k v -> ignore @@ g.decl_exn k) formal_out_params;
+          g
+      in
     let block_ids = ID.make_gen () in
-    StringMap.iter (fun k v -> ignore @@ local_ids.decl_exn k) formal_in_params;
-    StringMap.iter (fun k v -> ignore @@ local_ids.decl_exn k) formal_out_params;
-    let locals = Var.Decls.empty () in
-    Var.Decls.add_iter locals
+    let locals = Hashtbl.create (StringMap.cardinal formal_in_params + StringMap.cardinal formal_out_params) in
+    Hashtbl.add_iter locals
       (Iter.append
          (StringMap.to_iter formal_in_params)
          (StringMap.to_iter formal_out_params));
@@ -442,23 +448,23 @@ let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
   update_block p id block
 
 let lookup_local_decl p v =
-  Var.Decls.find_opt (local_decls p) v
+  Hashtbl.find_opt (local_decls p) v
   |> Option.or_lazy ~else_:(fun () ->
       StringMap.find_opt v (formal_out_params p))
   |> Option.or_lazy ~else_:(fun () -> StringMap.find_opt v (formal_in_params p))
 
-let decl_local p v =
-  let _ = (local_ids p).decl_or_get (Var.name v) in
-  Var.Decls.replace (local_decls p) (Var.name v) v;
+let decl_local _var p ?(pure = false) name typ : Var.t =
+  let scope = if pure then Var.LocalConst else LocalVar in
+  let v = Var.create_exn (local_ids p) name ~scope typ in
+  Hashtbl.replace (local_decls p) (Var.name v) v;
   v
 
 let fresh_var p ?(pure = false) ?name typ : Var.t =
   let name = Option.map (String.drop_while (Char.equal '$')) name in
   let name = Option.get_or ~default:"v" name in
-  let n = ID.name @@ (local_ids p).fresh ~name () in
   let scope = if pure then Var.LocalConst else LocalVar in
-  let v = Var.create n typ ~scope in
-  Var.Decls.replace (local_decls p) (Var.name v) v;
+  let v = Var.fresh (local_ids p) name typ ~scope in
+  Hashtbl.replace (local_decls p) (Var.name v) v;
   v
 
 let blocks_to_list p =

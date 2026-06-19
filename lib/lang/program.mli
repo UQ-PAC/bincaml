@@ -77,7 +77,6 @@ val get_proc_by_name : string -> t -> proc
 val get_implicit_decl_by_name : string -> t -> implicit_declaration option
 val declare_name : string -> t -> ID.t
 val declare_name_exn : string -> t -> ID.t
-val add_decl : ?attrib:'a Types.StringMap.t -> t -> declaration -> t
 val remove_decl : t -> declaration -> t
 val update_decl : ?attrib:'a Types.StringMap.t -> t -> declaration -> t
 val add_proc : (Var.t, Expr.BasilExpr.t) Procedure.t -> t -> t
@@ -98,11 +97,23 @@ val flat_map_decls : (ID.t -> declaration -> declaration Iter.t) -> t -> t
 val pretty_to_chan : out_channel -> t -> unit
 
 val decl_global :
+  t ->
+  string ->
+  ID.t -> declaration ->
+  t
+
+val add_decl:
+  t ->
+  string ->
+  ID.t -> declaration ->
+  t
+
+val decl_global_var :
+  t ->
   ?attrib:Attrib.t Types.StringMap.t ->
   ?classification:e option ->
-  t ->
-  Var.t ->
-  t
+  string -> Var.scope -> Types.t -> t
+
 
 val decl_typ : ?attrib:'a Types.StringMap.t -> t -> Types.t -> t
 

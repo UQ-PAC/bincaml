@@ -53,7 +53,7 @@ let decl_binding = function
   | Type { binding } -> binding
   | Variable { binding } -> Var.name binding
   | Function { binding } -> Var.name binding
-  | Procedure { definition } -> ID.to_string (Procedure.id definition)
+  | Procedure { definition } -> ID.name (Procedure.id definition)
 
 let pretty_proc p =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
@@ -185,15 +185,14 @@ let declare_name_exn name prog = prog.global_names.decl_exn name
 let declare_name name prog = prog.global_names.decl_or_get name
 let get_id_by_name name prog = prog.global_names.get_id name
 
-let add_decl ?(attrib = StringMap.empty) p decl =
-  let d = p.global_names.decl_or_get (decl_binding decl) in
-  { p with declarations = IDMap.add d decl p.declarations }
-
 let remove_decl p decl =
   let d = p.global_names.decl_or_get (decl_binding decl) in
   { p with declarations = IDMap.remove d p.declarations }
 
 let update_decl ?(attrib = StringMap.empty) prog decl =
+  let d = p.global_names.decl_or_get (decl_binding decl) in
+  { p with declarations = IDMap.add id decl p.declarations }
+
   add_decl ~attrib prog decl
 
 let add_proc p prog =
@@ -285,10 +284,28 @@ let pretty_to_chan chan (p : t) =
   Containers_pp.Pretty.to_format ~width:80 fmt p;
   Format.flush fmt ()
 
-let decl_global ?(attrib = StringMap.empty) ?(classification = None) p v =
-  let id : ID.t = p.global_names.decl_exn (Var.name v) in
-  let decl = Variable { binding = v; attrib; classification } in
+  (*
+
+Variable { binding = v; attrib; classification }
+
+  *)
+
+let decl_global p name f =
+  let id : ID.t = p.global_names.decl_exn name in
+  let decl = f id in
   { p with declarations = IDMap.add id decl p.declarations }
+
+let add_decl  p name decl =
+  let id : ID.t = p.global_names.decl_exn name in
+  let decl = f id in
+  { p with declarations = IDMap.add id decl p.declarations }
+
+
+let decl_global_var p  ?(attrib = StringMap.empty) ?(classification = None) name scope typ  =
+  let f v = let r = ref None in match r with Some v -> v | None -> r := Some v ; v in
+  let p = decl_global p name (fun id -> Variable { binding = f (Var.create id ~scope typ) ; attrib; classification }) in
+  (p, f (failwith ""))
+
 
 let decl_typ ?(attrib = StringMap.empty) p t =
   match t with
@@ -313,7 +330,7 @@ let decl_typ ?(attrib = StringMap.empty) p t =
                 let args = List.map (function { field; typ } -> typ) fields in
                 let ty = Types.curry args s in
                 let constructor =
-                  Var.create (ID.name variant) ty ~scope:GlobalConst
+                  Var.create (variant) ty ~scope:GlobalConst
                 in
                 ( variant,
                   VariantCase

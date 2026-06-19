@@ -176,8 +176,6 @@ module ID : ID_Pub = struct
 end
 
 include ID
-module Map = Map.Make (ID)
-module Set = Set.Make (ID)
 
 (** return a previously declared unique integer identifier for a name *)
 let get_id (g : generator) = g.get_id

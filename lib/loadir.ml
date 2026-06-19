@@ -179,6 +179,7 @@ module BasilASTLoader = struct
     | TypeAssign_Sum (localIdent, typeT) ->
         let n = unsafe_unsigil (`Type localIdent) in
         ( n,
+        
           Types.mk_adt n
             (typeT
             |> List.map (function
@@ -207,20 +208,17 @@ module BasilASTLoader = struct
         let scope = var_modifiers_shared modifiers in
         map_prog
           (fun p ->
-            Program.decl_global p ~classification
-              (Var.create
+            Program.decl_global_var p ~classification
                  (unsafe_unsigil (`Global bident))
-                 ~scope (trans_type type')))
+                 scope (trans_type type'))
           prog
     | Decl_Var (modifiers, bident, type', spec) ->
         let classification = trans_varspec prog spec in
         let scope = var_modifiers_shared modifiers in
         map_prog
           (fun p ->
-            Program.decl_global p ~classification
-              (Var.create
-                 (unsafe_unsigil (`Global bident))
-                 ~scope (trans_type type')))
+            Program.decl_global_var p ~classification
+                 (unsafe_unsigil (`Global bident)) scope (trans_type type'))
           prog
     | Decl_ProgEmpty (ProcIdent (_, id), attr) -> prog
     | Decl_ProgWithSpec (ProcIdent (_, id), attr, spec) -> prog
@@ -228,28 +226,24 @@ module BasilASTLoader = struct
         let ftype = trans_type rettype in
         map_prog
           (fun p ->
-            Program.decl_global p
-              (Var.create
-                 (unsafe_unsigil (`Global glident))
-                 ~scope:GlobalConst ftype))
+            Program.decl_global_var p
+              (unsafe_unsigil (`Global glident)) GlobalConst ftype)
           prog
     | Decl_FunNoType (glident, _, _) -> prog
     | Decl_Fun (glident, params, _, typ, _) ->
         let bound = unpac_lambdaparen ~bound:StringMap.empty prog params in
         let arg_types = List.map Var.typ bound in
         let rtype = Types.curry arg_types (trans_type typ) in
-        let bvar =
-          Var.create (unsafe_unsigil (`Global glident)) ~scope:GlobalConst rtype
-        in
-        let fundef : Program.declaration =
+        let name = (unsafe_unsigil (`Global glident)) in
+        let fundef id : Program.declaration =
           Function
             {
               attrib = StringMap.empty;
-              binding = bvar;
+              binding =  Var.create id ~scope:GlobalConst rtype
               definition = Uninterpreted;
             }
         in
-        map_prog (fun prog -> Program.add_decl prog fundef) prog
+        map_prog (fun prog -> Program.add_decl prog name fundef) prog
     | Decl_Axiom (name, _, _) ->
         let bvar =
           Var.create (unsafe_unsigil (`Global name)) ~scope:GlobalConst Boolean
