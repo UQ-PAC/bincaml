@@ -14,7 +14,7 @@ struct
   type lexpr = Aslp_lexpr.t
   type stmt = Aslp_state.stmt
   type branch = { this : string; t : string; f : string; m : string }
-  type ast = Aslp_state.aslp_state
+  type ast = Aslp_state.aslp_diamond
 
   (** {2 Bincaml-specific utility functions} *)
 
@@ -35,9 +35,9 @@ struct
     in
     Aslp_lexpr.Local (id_name, ty)
 
-  (** Ensures that the two given {!aslp_block} keys agree on their
-      {!has_pc_assign} property, before moving to a control-flow join of the two
-      blocks.
+  (** Ensures that the two given block names agree on their {!has_pc_assign}
+      property. This function mutates the state, and this function should be
+      called before moving to a control-flow join of the two blocks
 
       This is used to maintain the invariant that at every control flow point,
       the [PC] variable is either assigned on all paths or assigned on no paths

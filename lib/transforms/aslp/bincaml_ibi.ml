@@ -11,7 +11,7 @@ module type IBI = sig
   include
     OfflineASL_pc.Instruction_building_interface.IBI
       with type bitvector = Lang.Common.Bitvec.t
-       and type ast = Aslp_state.aslp_state
+       and type ast = Aslp_state.aslp_diamond
 end
 
 (** Builds a new {!IBI} with the given initial generator state. *)

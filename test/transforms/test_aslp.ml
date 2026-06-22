@@ -8,7 +8,7 @@ let%expect_test "lift empty" =
   let x =
     lift_code_block (module I) ~address:(Bitvec.zero ~size:64) @@ Iter.empty
   in
-  print_endline @@ Aslp_state.show_aslp_state x;
+  print_endline @@ Aslp_state.show_aslp_diamond x;
   [%expect
     {|
     { Aslp_state.blocks = "block_0"
@@ -26,7 +26,7 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
       ~address:(Bitvec.zero ~size:64)
       (Bitvec.of_string "0x8b031041:bv32")
   in
-  print_endline @@ Aslp_state.show_aslp_state x;
+  print_endline @@ Aslp_state.show_aslp_diamond x;
   [%expect
     {|
     { Aslp_state.blocks = "block_0"
@@ -47,8 +47,9 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
          (Bitvec.of_string "0xd29579a1:bv32")
          (Bitvec.of_string "0xd29579a1:bv32")
   in
-  print_endline @@ Aslp_state.show_aslp_state x;
-  [%expect {|
+  print_endline @@ Aslp_state.show_aslp_diamond x;
+  [%expect
+    {|
     { Aslp_state.blocks = "block_0"
       -> { Aslp_state.assume = None; stmts = [$R1:bv64 := 0xabcd:bv64];
            succs = ["block_2"]; has_pc_assign = false },
@@ -67,8 +68,9 @@ let%expect_test "lift: b.eq #1024" =
       ~address:(Bitvec.zero ~size:64)
       (Bitvec.of_string "0x54002000:bv32")
   in
-  print_endline @@ Aslp_state.show_aslp_state x;
-  [%expect {|
+  print_endline @@ Aslp_state.show_aslp_diamond x;
+  [%expect
+    {|
     { Aslp_state.blocks = "block_0"
       -> { Aslp_state.assume = None; stmts = []; succs = ["block_3"; "block_2"];
            has_pc_assign = false },

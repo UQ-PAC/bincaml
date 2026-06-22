@@ -26,7 +26,7 @@ type aslp_block = {
     goto to a number of successors. Each block is optionally guarded by an
     assume statement. *)
 
-type aslp_state = {
+type aslp_diamond = {
   blocks : aslp_block StringMap.t;
       [@printer StringMap.pp CCString.pp pp_aslp_block]
   entry : string;
@@ -53,7 +53,8 @@ type aslp_ids = { block_id : unit -> string; local_id : unit -> string }
 type lifter_state = {
   active : string;
       (** Active block where new runtime statements will be appended. *)
-  state : aslp_state;  (** Lifter state representing a control flow diamond. *)
+  state : aslp_diamond;
+      (** Lifter state representing a control flow diamond. *)
   generator : aslp_ids; [@opaque]  (** Generators for ID names. *)
   names : (string, string) Hashtbl.t;
       (** Map of ASLp local variable names to the "ID-ified" names produced for
@@ -200,7 +201,7 @@ let append_aslp_states first second =
 
 let show_aslp_block = show_aslp_block
 let pp_aslp_block = pp_aslp_block
-let show_aslp_state = show_aslp_state
-let pp_aslp_state = pp_aslp_state
+let show_aslp_diamond = show_aslp_diamond
+let pp_aslp_diamond = pp_aslp_diamond
 let show_lifter_state = show_lifter_state
 let pp_lifter_state = pp_lifter_state
