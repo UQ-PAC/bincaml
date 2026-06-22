@@ -80,7 +80,13 @@ let empty_block () =
   }
 
 let empty_aslp_state ~entry ~exit () =
-  let blocks = StringMap.singleton entry (empty_block ()) in
+  let blocks =
+    StringMap.of_list
+      [
+        (entry, { (empty_block ()) with succs = [ exit ] });
+        (exit, empty_block ());
+      ]
+  in
   { blocks; entry; exit }
 
 (** Constructs a new empty {!lifter_state}.
@@ -155,24 +161,29 @@ let ensure_pc_assigned key state =
     { state with blocks })
   else state
 
+let modify_block aslp_state ~name ~f =
+  let blocks =
+    StringMap.update name
+      (function
+        | Some blk -> Some (f blk)
+        | _ -> failwith "modify_block: block not found")
+      aslp_state.blocks
+  in
+  { aslp_state with blocks }
+
 (** Adds a new goto edge from [source] to [target]. If [source] was the exit
     block, sets {!exit} to be [target]. *)
 let add_goto aslp_state ~source ~target =
-  let blocks =
-    StringMap.update source
-      (function
-        | Some blk -> Some { blk with succs = target :: blk.succs }
-        | _ -> failwith "add_goto: source block not found")
-      aslp_state.blocks
-  in
   let exit =
     if String.equal source aslp_state.exit then target else aslp_state.exit
   in
-  { aslp_state with blocks; exit }
+  modify_block aslp_state ~name:source ~f:(fun b ->
+      { b with succs = target :: b.succs })
+  |> fun s -> { s with exit }
 
 (** Creates a new block with the given name as a successor of the given [pred].
     If [pred] was the exit block, sets {!exit} to be the new block. *)
-let add_succ aslp_state ~pred ~name =
+let add_block aslp_state ~pred ~name =
   let blocks = aslp_state.blocks |> StringMap.add name (empty_block ()) in
   { aslp_state with blocks } |> add_goto ~source:pred ~target:name
 

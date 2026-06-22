@@ -212,15 +212,24 @@ struct
     let active = !S.bincaml_lifter_state.active in
     let state = !S.bincaml_lifter_state.state in
     let block_id = !S.bincaml_lifter_state.generator.block_id in
+
     let t = block_id () and f = block_id () and m = block_id () in
+
+    let old_succs = ref [] in
     let state =
       state
-      |> Aslp_state.add_succ ~pred:active ~name:t
-      |> Aslp_state.add_succ ~pred:active ~name:f
-      |> Aslp_state.add_succ ~pred:t ~name:m
+      |> Aslp_state.modify_block ~name:active ~f:(fun b ->
+          old_succs := b.succs;
+          { b with succs = [] })
+      |> Aslp_state.add_block ~pred:active ~name:t
+      |> Aslp_state.add_block ~pred:active ~name:f
+      |> Aslp_state.add_block ~pred:t ~name:m
       |> Aslp_state.add_goto ~source:f ~target:m
+      |> Aslp_state.modify_block ~name:m ~f:(fun b ->
+          { b with succs = !old_succs })
     in
     S.bincaml_lifter_state := { !S.bincaml_lifter_state with state };
+
     let tbranch = { this = t; t; f; m } in
     (tbranch, { tbranch with this = f }, { tbranch with this = m })
 
@@ -236,8 +245,8 @@ struct
   let f_gen_bit_lit : bigint -> bitvector -> expr =
    fun _ bv -> Expr.BasilExpr.const (`Bitvector bv)
 
-  let f_gen_bool_lit : bool -> expr = fun _ -> failwith "f_gen_bool_lit"
-  let f_gen_int_lit : bigint -> expr = fun _ -> failwith "f_gen_int_lit"
+  let f_gen_bool_lit : bool -> expr = Expr.BasilExpr.boolconst
+  let f_gen_int_lit : bigint -> expr = Expr.BasilExpr.intconst
 
   let f_decl_bv : string -> bigint -> lexpr =
    fun name size -> bincaml_local_var name (Types.Bitvector (Z.to_int size))

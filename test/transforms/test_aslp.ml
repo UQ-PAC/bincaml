@@ -12,9 +12,12 @@ let%expect_test "lift empty" =
   [%expect
     {|
     { Aslp_state.blocks = "block_0"
-      -> { Aslp_state.assume = None; stmts = []; succs = ["block_1"] }, "block_1"
-      -> { Aslp_state.assume = None; stmts = []; succs = [] }; entry = "block_0";
-      exit = "block_1" }
+      -> { Aslp_state.assume = None; stmts = []; succs = ["block_1"];
+           has_pc_assign = false },
+      "block_1"
+      -> { Aslp_state.assume = None; stmts = []; succs = [];
+           has_pc_assign = false };
+      entry = "block_0"; exit = "block_1" }
     |}]
 
 let%expect_test "lift: add x1, x2, x3, lsl #4" =
@@ -34,8 +37,10 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
            stmts =
            [var var_0:bv64 := R2:bv64; var var_1:bv64 := R3:bv64;
              var R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12))];
-           succs = ["block_1"] },
-      "block_1" -> { Aslp_state.assume = None; stmts = []; succs = [] };
+           succs = ["block_1"]; has_pc_assign = false },
+      "block_1"
+      -> { Aslp_state.assume = None; stmts = []; succs = [];
+           has_pc_assign = false };
       entry = "block_0"; exit = "block_1" }
     |}]
 
@@ -53,13 +58,17 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
     {|
     { Aslp_state.blocks = "block_0"
       -> { Aslp_state.assume = None; stmts = [var R1:bv64 := 0xabcd:bv64];
-           succs = ["block_1"] },
-      "block_1" -> { Aslp_state.assume = None; stmts = []; succs = ["block_2"] },
+           succs = ["block_1"]; has_pc_assign = false },
+      "block_1"
+      -> { Aslp_state.assume = None; stmts = []; succs = ["block_2"];
+           has_pc_assign = false },
       "block_2"
       -> { Aslp_state.assume = None; stmts = [var R1:bv64 := 0xabcd:bv64];
-           succs = ["block_3"] },
-      "block_3" -> { Aslp_state.assume = None; stmts = []; succs = [] };
-      entry = "block_0"; exit = "block_3" }
+           succs = ["block_3"]; has_pc_assign = false },
+      "block_3"
+      -> { Aslp_state.assume = None; stmts = []; succs = [];
+           has_pc_assign = false };
+      entry = "block_0"; exit = "block_2" }
     |}]
 
 let%expect_test "lift: b.eq #1024" =
@@ -72,21 +81,25 @@ let%expect_test "lift: b.eq #1024" =
       (Bitvec.of_string "0x54002000:bv32")
   in
   print_endline @@ Aslp_state.show_aslp_state x;
-  [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
-  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-     This is strongly discouraged as backtraces are fragile.
-     Please change this test to not include a backtrace. *)
-  (Failure f_gen_branch)
-  Raised at Stdlib.failwith in file "stdlib.ml", line 29, characters 17-33
-  Called from OfflineASL_pc__Aarch64_branch_conditional_cond.f_aarch64_branch_conditional_cond in file "lib/pc/aarch64_branch_conditional_cond.ml", line 42, characters 16-63
-  Called from Transforms__Aslp.lift_opcode.(fun) in file "lib/transforms/aslp/aslp.ml", line 18, characters 6-67
-  Called from Stdlib__Fun.protect in file "fun.ml", line 34, characters 8-15
-  Re-raised at Stdlib__Fun.protect in file "fun.ml", line 39, characters 6-52
-  Called from Test_aslp.(fun) in file "test/transforms/test_aslp.ml", lines 69-72, characters 4-42
-  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
-  |}]
+  [%expect {|
+    { Aslp_state.blocks = "block_0"
+      -> { Aslp_state.assume = None; stmts = []; succs = ["block_3"; "block_2"];
+           has_pc_assign = false },
+      "block_1"
+      -> { Aslp_state.assume = None; stmts = []; succs = [];
+           has_pc_assign = false },
+      "block_2"
+      -> { Aslp_state.assume = None;
+           stmts = [var BranchTaken:bool := true; var PC:bv64 := 0x400:bv64];
+           succs = ["block_4"]; has_pc_assign = false },
+      "block_3"
+      -> { Aslp_state.assume = None; stmts = []; succs = ["block_4"];
+           has_pc_assign = false },
+      "block_4"
+      -> { Aslp_state.assume = None; stmts = []; succs = ["block_1"];
+           has_pc_assign = false };
+      entry = "block_0"; exit = "block_1" }
+    |}]
 
 let%expect_test "aslp integration basic" =
   let lst =
