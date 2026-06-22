@@ -65,7 +65,10 @@ struct
     let generator = !S.bincaml_lifter_state.generator in
     S.bincaml_lifter_state := Aslp_state.empty_lifter_state ~generator ()
 
-  let get_ir () = !S.bincaml_lifter_state.diamond
+  let get_ir () =
+    let diamond = !S.bincaml_lifter_state.diamond in
+    Aslp_state.ensure_pc_assigned ~name:diamond.exit diamond
+
   let bigint_of_string : string -> bigint = Z.of_string_base 10
   let bigint_of_int : int -> bigint = Z.of_int
   let bigint_zero : bigint = Z.zero

@@ -12,8 +12,10 @@ let%expect_test "lift empty" =
   [%expect
     {|
     { Aslp_state.blocks = "block_0"
-      -> { Aslp_state.assume = None; stmts = []; succs = [];
-           has_pc_assign = false };
+      -> { Aslp_state.assume = None;
+           stmts =
+           [($PC:bv64 := bvadd($PC, 0x4:bv32), var BranchTaken:bool := false)];
+           succs = []; has_pc_assign = true };
       entry = "block_0"; exit = "block_0" }
     |}]
 
@@ -33,8 +35,9 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
       -> { Aslp_state.assume = None;
            stmts =
            [var var_0:bv64 := $R2; var var_1:bv64 := $R3;
-             $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12))];
-           succs = []; has_pc_assign = false };
+             $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
+             ($PC:bv64 := bvadd($PC, 0x4:bv32), var BranchTaken:bool := false)];
+           succs = []; has_pc_assign = true };
       entry = "block_0"; exit = "block_0" }
     |}]
 
@@ -51,12 +54,18 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
   [%expect
     {|
     { Aslp_state.blocks = "block_0"
-      -> { Aslp_state.assume = None; stmts = [$R1:bv64 := 0xabcd:bv64];
-           succs = ["block_2"]; has_pc_assign = false },
-      "block_2"
-      -> { Aslp_state.assume = None; stmts = [$R1:bv64 := 0xabcd:bv64];
-           succs = []; has_pc_assign = false };
-      entry = "block_0"; exit = "block_2" }
+      -> { Aslp_state.assume = None;
+           stmts =
+           [$R1:bv64 := 0xabcd:bv64;
+             ($PC:bv64 := bvadd($PC, 0x4:bv32), var BranchTaken:bool := false)];
+           succs = ["block_1"]; has_pc_assign = true },
+      "block_1"
+      -> { Aslp_state.assume = None;
+           stmts =
+           [$R1:bv64 := 0xabcd:bv64;
+             ($PC:bv64 := bvadd($PC, 0x4:bv32), var BranchTaken:bool := false)];
+           succs = []; has_pc_assign = true };
+      entry = "block_0"; exit = "block_1" }
     |}]
 
 let%expect_test "lift: b.eq #1024" =
@@ -72,21 +81,21 @@ let%expect_test "lift: b.eq #1024" =
   [%expect
     {|
     { Aslp_state.blocks = "block_0"
-      -> { Aslp_state.assume = None; stmts = []; succs = ["block_3"; "block_2"];
+      -> { Aslp_state.assume = None; stmts = []; succs = ["block_2"; "block_1"];
            has_pc_assign = false },
-      "block_2"
+      "block_1"
       -> { Aslp_state.assume = None;
            stmts = [var BranchTaken:bool := true; $PC:bv64 := 0x400:bv64];
-           succs = ["block_4"]; has_pc_assign = true },
-      "block_3"
+           succs = ["block_3"]; has_pc_assign = true },
+      "block_2"
       -> { Aslp_state.assume = None;
            stmts =
            [($PC:bv64 := bvadd($PC, 0x4:bv32), var BranchTaken:bool := false)];
-           succs = ["block_4"]; has_pc_assign = true },
-      "block_4"
+           succs = ["block_3"]; has_pc_assign = true },
+      "block_3"
       -> { Aslp_state.assume = None; stmts = []; succs = []; has_pc_assign = true
            };
-      entry = "block_0"; exit = "block_4" }
+      entry = "block_0"; exit = "block_3" }
     |}]
 
 let%expect_test "aslp integration basic" =

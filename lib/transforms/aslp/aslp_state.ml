@@ -80,7 +80,7 @@ let empty_block () =
     has_pc_assign = false;
   }
 
-let empty_aslp_state ~entry ~exit () =
+let empty_aslp_state ~entry () =
   let blocks =
     StringMap.of_list [ (entry, { (empty_block ()) with succs = [] }) ]
   in
@@ -92,10 +92,9 @@ let empty_aslp_state ~entry ~exit () =
     value by passing it explicitly. *)
 let empty_lifter_state ~generator () =
   let entry = generator.block_id () in
-  let exit = generator.block_id () in
   {
     active = entry;
-    diamond = empty_aslp_state ~entry ~exit ();
+    diamond = empty_aslp_state ~entry ();
     names = Hashtbl.create 16;
     generator;
   }
