@@ -260,62 +260,67 @@ struct
   let f_gen_AArch64_MemTag_read : expr -> expr -> expr =
    fun _ -> failwith "f_gen_AArch64_MemTag_read"
 
-  let f_gen_and_bool : expr -> expr -> expr = fun _ -> failwith "f_gen_and_bool"
-  let f_gen_or_bool : expr -> expr -> expr = fun _ -> failwith "f_gen_or_bool"
-  let f_gen_not_bool : expr -> expr = fun _ -> failwith "f_gen_not_bool"
+  let f_gen_and_bool : expr -> expr -> expr =
+   fun a b -> Expr.BasilExpr.applyintrin ~op:`AND [ a; b ]
+
+  let f_gen_or_bool : expr -> expr -> expr =
+   fun a b -> Expr.BasilExpr.applyintrin ~op:`OR [ a; b ]
+
+  let f_gen_not_bool : expr -> expr =
+   fun a -> Expr.BasilExpr.unexp ~op:`BoolNOT a
 
   let f_gen_cvt_bits_uint : bigint -> expr -> expr =
    fun _ -> failwith "f_gen_cvt_bits_uint"
 
   let f_gen_eq_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_eq_bits"
+   fun _ a b -> Expr.BasilExpr.binexp ~op:`EQ a b
 
   let f_gen_ne_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_ne_bits"
+   fun _ a b -> Expr.BasilExpr.binexp ~op:`EQ a b
 
   let f_gen_not_bits : bigint -> expr -> expr =
-   fun _ -> failwith "f_gen_not_bits"
+   fun _ a -> Expr.BasilExpr.unexp ~op:`BVNOT a
 
   let f_gen_cvt_bool_bv : expr -> expr = fun _ -> failwith "f_gen_cvt_bool_bv"
 
   let f_gen_or_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_or_bits"
+   fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVOR [ a; b ]
 
   let f_gen_eor_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_eor_bits"
+   fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVXOR [ a; b ]
 
   let f_gen_and_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_and_bits"
+   fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVAND [ a; b ]
 
   let f_gen_add_bits : bigint -> expr -> expr -> expr =
-   fun _ -> Expr.BasilExpr.binexp ?attrib:None ~op:`BVADD
+   fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVADD [ a; b ]
 
   let f_gen_sub_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_sub_bits"
+   fun _ a b -> Expr.BasilExpr.binexp ~op:`BVSUB a b
 
   let f_gen_sdiv_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_sdiv_bits"
+   fun _ a b -> Expr.BasilExpr.binexp ~op:`BVSDIV a b
 
   let f_gen_sle_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_sle_bits"
+   fun _ a b -> Expr.BasilExpr.binexp ~op:`BVSLE a b
 
   let f_gen_slt_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_slt_bits"
+   fun _ a b -> Expr.BasilExpr.binexp ~op:`BVSLT a b
 
   let f_gen_mul_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_mul_bits"
+   fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVMUL [ a; b ]
 
   let f_gen_append_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_append_bits"
+   fun _ _ a b -> Expr.BasilExpr.applyintrin ~op:`BVConcat [ a; b ]
 
   let f_gen_lsr_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_lsr_bits"
+   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVLSHR a b
 
   let f_gen_lsl_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ _ -> Expr.BasilExpr.binexp ?attrib:None ~op:`BVSHL
+   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVSHL a b
 
   let f_gen_asr_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_asr_bits"
+   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVASHR a b
 
   (** [f_gen_replicate_bits operand_width num_replications operand
        num_replications] *)
@@ -324,14 +329,19 @@ struct
 
   (** [f_gen_ZeroExtend operand_width result_width operand result_width] *)
   let f_gen_ZeroExtend : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_ZeroExtend"
+   fun op_wd final_wd x _ ->
+    Expr.BasilExpr.zero_extend ~n_prefix_bits:Z.(to_int (final_wd - op_wd)) x
 
   (** [f_gen_SignExtend operand_width result_width operand result_width] *)
   let f_gen_SignExtend : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_SignExtend"
+   fun op_wd final_wd x _ ->
+    Expr.BasilExpr.sign_extend ~n_prefix_bits:Z.(to_int (final_wd - op_wd)) x
 
+  (** [f_gen_slice x lo wd] *)
   let f_gen_slice : expr -> bigint -> bigint -> expr =
-   fun _ -> failwith "f_gen_slice"
+   fun x lo_incl wd ->
+    let hi_excl = Z.(to_int (lo_incl - wd)) and lo_incl = Z.to_int lo_incl in
+    Expr.BasilExpr.extract ~lo_incl ~hi_excl x
 
   (* {1 Floating point intrinsics} *)
 

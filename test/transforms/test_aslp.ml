@@ -78,9 +78,9 @@ let%expect_test "lift: b.eq #1024" =
   (* CR expect_test_collector: This test expectation appears to contain a backtrace.
      This is strongly discouraged as backtraces are fragile.
      Please change this test to not include a backtrace. *)
-  (Failure f_gen_eq_bits)
+  (Failure f_gen_branch)
   Raised at Stdlib.failwith in file "stdlib.ml", line 29, characters 17-33
-  Called from OfflineASL_pc__Aarch64_branch_conditional_cond.f_aarch64_branch_conditional_cond in file "lib/pc/aarch64_branch_conditional_cond.ml", line 9, characters 28-162
+  Called from OfflineASL_pc__Aarch64_branch_conditional_cond.f_aarch64_branch_conditional_cond in file "lib/pc/aarch64_branch_conditional_cond.ml", line 42, characters 16-63
   Called from Transforms__Aslp.lift_opcode.(fun) in file "lib/transforms/aslp/aslp.ml", line 18, characters 6-67
   Called from Stdlib__Fun.protect in file "fun.ml", line 34, characters 8-15
   Re-raised at Stdlib__Fun.protect in file "fun.ml", line 39, characters 6-52

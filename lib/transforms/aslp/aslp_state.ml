@@ -51,7 +51,7 @@ type lifter_state = {
   active : string;
       (** Active block where new runtime statements will be appended. *)
   state : aslp_state;  (** Lifter state representing a control flow diamond. *)
-  generator : aslp_ids; [@opaque]  (** Generators for ID numbers. *)
+  generator : aslp_ids; [@opaque]  (** Generators for ID names. *)
   names : (string, string) Hashtbl.t;
       (** Map of ASLp local variable names to the "ID-ified" names produced for
           Bincaml.
