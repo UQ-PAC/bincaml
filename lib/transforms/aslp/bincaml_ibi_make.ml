@@ -13,15 +13,7 @@ struct
   type expr = Expr.BasilExpr.t
   type lexpr = Aslp_lexpr.t
   type stmt = Aslp_state.stmt
-
-  type branch =
-    | Branch of {
-        this : [ `True | `False | `Merge ];
-        t : string;
-        f : string;
-        m : string;
-      }
-
+  type branch = { this : string; t : string; f : string; m : string }
   type ast = Aslp_state.aslp_state
 
   (** {2 Bincaml-specific utility functions} *)
@@ -214,21 +206,31 @@ struct
   let v___BranchTaken : lexpr = BranchTaken
   let v_BTypeNext : lexpr = BTypeNext
   let v___ExclusiveLocal : lexpr = ExclusiveLocal
-  let f_switch_context : branch -> unit = fun _ -> failwith "f_switch_context"
 
   let f_gen_branch : expr -> branch * branch * branch =
    fun cond ->
-    failwith "f_gen_branch"
+    let active = !S.bincaml_lifter_state.active in
+    let state = !S.bincaml_lifter_state.state in
+    let block_id = !S.bincaml_lifter_state.generator.block_id in
+    let t = block_id () and f = block_id () and m = block_id () in
+    let state =
+      state
+      |> Aslp_state.add_succ ~pred:active ~name:t
+      |> Aslp_state.add_succ ~pred:active ~name:f
+      |> Aslp_state.add_succ ~pred:t ~name:m
+      |> Aslp_state.add_goto ~source:f ~target:m
+    in
+    S.bincaml_lifter_state := { !S.bincaml_lifter_state with state };
+    let tbranch = { this = t; t; f; m } in
+    (tbranch, { tbranch with this = f }, { tbranch with this = m })
 
-  let f_true_branch : branch * branch * branch -> branch =
-   fun _ -> failwith "f_true_branch"
+  let f_switch_context : branch -> unit =
+   fun b ->
+    S.bincaml_lifter_state := { !S.bincaml_lifter_state with active = b.this }
 
-  let f_false_branch : branch * branch * branch -> branch =
-   fun _ -> failwith "f_false_branch"
-
-  let f_merge_branch : branch * branch * branch -> branch =
-   fun _ -> failwith "f_merge_branch"
-
+  let f_true_branch : branch * branch * branch -> branch = fun (t, f, m) -> t
+  let f_false_branch : branch * branch * branch -> branch = fun (t, f, m) -> f
+  let f_merge_branch : branch * branch * branch -> branch = fun (t, f, m) -> m
   let f_gen_assert : expr -> unit = fun _ -> failwith "f_gen_assert"
 
   let f_gen_bit_lit : bigint -> bitvector -> expr =
