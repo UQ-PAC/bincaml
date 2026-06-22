@@ -242,6 +242,7 @@ struct
       if String.equal b.this b.m then begin
         let has_pc_assign = bincaml_ensure_pc_consistency b.t b.f in
 
+        (* mindful that state access is after bincaml_ensure_pc_consistency *)
         !S.bincaml_lifter_state.state
         |> Aslp_state.modify_block ~name:b.this ~f:(fun merge ->
             { merge with has_pc_assign })

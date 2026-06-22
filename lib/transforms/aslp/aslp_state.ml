@@ -18,8 +18,8 @@ type aslp_block = {
       [@printer Format.map CCVector.to_list pp_stmt_list_for_printing]
   succs : string list;
   has_pc_assign : bool;
-      (** Whether this block (or any of its same-instruction predecessors) have
-          explicitly assigned to the [PC] variable. *)
+      (** Whether, upon reaching the end of this block, it is guaranteed that
+          [PC] will have been assigned to on all control-flow paths. *)
 }
 [@@deriving show]
 (** An ASLp lifter block is a list of statements followed by a non-deterministic
@@ -81,13 +81,9 @@ let empty_block () =
 
 let empty_aslp_state ~entry ~exit () =
   let blocks =
-    StringMap.of_list
-      [
-        (entry, { (empty_block ()) with succs = [ exit ] });
-        (exit, empty_block ());
-      ]
+    StringMap.of_list [ (entry, { (empty_block ()) with succs = [] }) ]
   in
-  { blocks; entry; exit }
+  { blocks; entry; exit = entry }
 
 (** Constructs a new empty {!lifter_state}.
 
@@ -169,16 +165,18 @@ let ensure_pc_assigned ~name state =
   state
   |> modify_block ~name ~f:(function
     | { has_pc_assign = false } ->
-        let pc = Aslp_lexpr.to_var PC in
+        let pc = Aslp_lexpr.to_var PC
+        and branchtaken = Aslp_lexpr.to_var BranchTaken in
         let incremented =
           Expr.BasilExpr.(
             applyintrin ~op:`BVADD [ rvar pc; bv_of_int ~size:32 4 ])
         in
-        let stmt =
-          Stmt.Instr_Assign
-            { attrib = Attrib.empty; al = [ (pc, incremented) ] }
+        let al =
+          [ (pc, incremented); (branchtaken, Expr.BasilExpr.boolconst false) ]
         in
-        block |> add_stmt_to_block ~stmt
+        block
+        |> add_stmt_to_block
+             ~stmt:(Stmt.Instr_Assign { attrib = Attrib.empty; al })
     | block -> block)
 
 (** Adds a new goto edge from [source] to [target]. If [source] was the exit
