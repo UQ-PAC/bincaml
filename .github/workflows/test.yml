@@ -37,8 +37,8 @@ jobs:
       - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
       - run: opam repository --all add pac https://github.com/uq-pac/opam-repository.git
       - run: opam install . --deps-only --with-test
-      - run: LIBRARY_PATH="$LIBRARY_PATH:/opt/homebrew/lib" opam exec -- dune build --ignore-promoted-rules
-      - run: LIBRARY_PATH="$LIBRARY_PATH:/opt/homebrew/lib" opam exec -- dune runtest --ignore-promoted-rules
+      - run: LIBRARY_PATH="$LIBRARY_PATH:/opt/homebrew/lib" opam exec -- dune build --ignore-promoted-rules --profile=release
+      - run: LIBRARY_PATH="$LIBRARY_PATH:/opt/homebrew/lib" opam exec -- dune runtest --ignore-promoted-rules --force
 
   build:
     name: build_test
@@ -61,8 +61,8 @@ jobs:
           submodules: true
       - run: opam repository --all add pac https://github.com/uq-pac/opam-repository.git
       - run: opam install -t . --deps-only
-      - run: opam exec -- dune build '@install'
-      - run: opam exec -- dune runtest --force --profile=release
+      - run: opam exec -- dune build '@install' --profile=release
+      - run: opam exec -- dune runtest --force
 
 
   treesit:
