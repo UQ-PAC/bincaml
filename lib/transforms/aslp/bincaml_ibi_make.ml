@@ -255,7 +255,9 @@ struct
   let f_true_branch : branch * branch * branch -> branch = fun (t, f, m) -> t
   let f_false_branch : branch * branch * branch -> branch = fun (t, f, m) -> f
   let f_merge_branch : branch * branch * branch -> branch = fun (t, f, m) -> m
-  let f_gen_assert : expr -> unit = fun _ -> failwith "f_gen_assert"
+
+  let f_gen_assert : expr -> unit =
+   fun e -> bincaml_emit (Stmt.Instr_Assert { attrib = Attrib.empty; body = e })
 
   let f_gen_bit_lit : bigint -> bitvector -> expr =
    fun _ bv -> Expr.BasilExpr.const (`Bitvector bv)

@@ -157,23 +157,16 @@ let add_stmt_to_active stmt (lifter_state : lifter_state) =
 (** Ensures that the given block ID has a PC assignment on all paths. If it
     already {!has_pc_assign}, no changes are made. *)
 let ensure_pc_assigned ~name state =
-  let blocks = state.blocks in
-  let block =
-    StringMap.find_opt name blocks
-    |> Option.get_exn_or "ensure_pc_assigned: block not found"
-  in
   state
   |> modify_block ~name ~f:(function
-    | { has_pc_assign = false } ->
+    | { has_pc_assign = false } as block ->
         let pc = Aslp_lexpr.to_var PC
         and branchtaken = Aslp_lexpr.to_var BranchTaken in
         let incremented =
           Expr.BasilExpr.(
             applyintrin ~op:`BVADD [ rvar pc; bv_of_int ~size:32 4 ])
-        in
-        let al =
-          [ (pc, incremented); (branchtaken, Expr.BasilExpr.boolconst false) ]
-        in
+        and boolfalse = Expr.BasilExpr.boolconst false in
+        let al = [ (pc, incremented); (branchtaken, boolfalse) ] in
         block
         |> add_stmt_to_block
              ~stmt:(Stmt.Instr_Assign { attrib = Attrib.empty; al })
