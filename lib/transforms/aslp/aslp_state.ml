@@ -3,9 +3,13 @@ open Common
 
 (** {1 Types} *)
 
-type stmt =
-  ((Var.t, Var.t, Expr.BasilExpr.t) Stmt.t[@printer Stmt.pp_stmt_basil])
-[@@deriving show]
+open struct
+  type stmt =
+    ((Var.t, Var.t, Expr.BasilExpr.t) Stmt.t[@printer Stmt.pp_stmt_basil])
+  [@@deriving show]
+end
+
+type nonrec stmt = stmt
 (** A statement within the Bincaml AST. This is just a type alias. *)
 
 open struct
@@ -172,8 +176,8 @@ let add_block ?assume aslp_state ~pred ~name =
   let blocks = aslp_state.blocks |> StringMap.add name new_block in
   { aslp_state with blocks } |> add_goto ~source:pred ~target:name
 
-(** {1 Advanced functions} *)
-
+(** Sequentially joins the given {!aslp_diamond}s such that [first] is succeeded
+    by [second]. *)
 let append_aslp_states first second =
   let f key = function
     | `Both _ -> failwith "overlapping aslp_state block names"
@@ -181,6 +185,8 @@ let append_aslp_states first second =
   in
   let blocks = StringMap.merge_safe ~f first.blocks second.blocks in
   { first with blocks } |> add_goto ~source:first.exit ~target:second.entry
+
+(** {1 Program counter functions} *)
 
 (** Ensures that the given block ID has a PC assignment on all paths. If it
     already {!has_pc_assign}, no changes are made. *)
