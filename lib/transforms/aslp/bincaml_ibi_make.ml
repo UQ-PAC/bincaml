@@ -6,6 +6,16 @@ module Make (S : sig
   val bincaml_lifter_state : Aslp_state.lifter_state ref
 end) =
 struct
+  (** {2 Type definitions} *)
+
+  type bigint = Z.t
+  type bitvector = Bitvec.t
+  type expr = Expr.BasilExpr.t
+  type lexpr = Aslp_lexpr.t
+  type stmt = Aslp_state.stmt
+  type branch = Branch of string
+  type ast = Aslp_state.aslp_state
+
   (** {2 Bincaml-specific utility functions} *)
 
   let bincaml_emit stmt =
@@ -23,17 +33,9 @@ struct
           id_name
       | Some x -> x
     in
-    Var.create id_name ty
+    Aslp_lexpr.Local (id_name, ty)
 
   (** {2 Instruction building interface implementation} *)
-
-  type bigint = Z.t
-  type bitvector = Bitvec.t
-  type expr = Expr.BasilExpr.t
-  type lexpr = Var.t
-  type stmt = Aslp_state.stmt
-  type branch = Branch of string
-  type ast = Aslp_state.aslp_state
 
   let reset_ir () =
     let generator = !S.bincaml_lifter_state.generator in
@@ -159,37 +161,31 @@ struct
 
   let f_sdiv_int : bigint -> bigint -> bigint = fun _ -> failwith "sdiv int"
   let f_shl_int : bigint -> bigint -> bigint = fun _ -> failwith "shl int"
-  let v_PSTATE_C : lexpr = Var.create "v_PSTATE_C" (Types.Bitvector 1)
-  let v_PSTATE_Z : lexpr = Var.create "v_PSTATE_Z" (Types.Bitvector 1)
-  let v_PSTATE_V : lexpr = Var.create "v_PSTATE_V" (Types.Bitvector 1)
-  let v_PSTATE_N : lexpr = Var.create "v_PSTATE_N" (Types.Bitvector 1)
-  let v__PC : lexpr = Var.create "v__PC" (Types.Bitvector 1)
-  let v__R : lexpr = Var.create "v__R" (Types.Bitvector 0)
-  let v__Z : lexpr = Var.create "v__Z" (Types.Bitvector 0)
-  let v_SP_EL0 : lexpr = Var.create "v_SP_EL0" (Types.Bitvector 1)
-  let v_FPSR : lexpr = Var.create "v_FPSR" (Types.Bitvector 1)
-  let v_FPCR : lexpr = Var.create "v_FPCR" (Types.Bitvector 1)
-  let v_PSTATE_A : lexpr = Var.create "v_PSTATE_A" (Types.Bitvector 1)
-  let v_PSTATE_D : lexpr = Var.create "v_PSTATE_D" (Types.Bitvector 1)
-  let v_PSTATE_DIT : lexpr = Var.create "v_PSTATE_DIT" (Types.Bitvector 1)
-  let v_PSTATE_F : lexpr = Var.create "v_PSTATE_F" (Types.Bitvector 1)
-  let v_PSTATE_I : lexpr = Var.create "v_PSTATE_I" (Types.Bitvector 1)
-  let v_PSTATE_PAN : lexpr = Var.create "v_PSTATE_PAN" (Types.Bitvector 1)
-  let v_PSTATE_SP : lexpr = Var.create "v_PSTATE_SP" (Types.Bitvector 1)
-  let v_PSTATE_SSBS : lexpr = Var.create "v_PSTATE_SSBS" (Types.Bitvector 1)
-  let v_PSTATE_TCO : lexpr = Var.create "v_PSTATE_TCO" (Types.Bitvector 1)
-  let v_PSTATE_UAO : lexpr = Var.create "v_PSTATE_UAO" (Types.Bitvector 1)
-  let v_PSTATE_BTYPE : lexpr = Var.create "v_PSTATE_BTYPE" (Types.Bitvector 1)
-
-  let v_BTypeCompatible : lexpr =
-    Var.create "v_BTypeCompatible" (Types.Bitvector 1)
-
-  let v___BranchTaken : lexpr = Var.create "v___BranchTaken" (Types.Bitvector 1)
-  let v_BTypeNext : lexpr = Var.create "v_BTypeNext" (Types.Bitvector 1)
-
-  let v___ExclusiveLocal : lexpr =
-    Var.create "v___ExclusiveLocal" (Types.Bitvector 1)
-
+  let v_PSTATE_C : lexpr = PSTATE_C
+  let v_PSTATE_Z : lexpr = PSTATE_Z
+  let v_PSTATE_V : lexpr = PSTATE_V
+  let v_PSTATE_N : lexpr = PSTATE_N
+  let v__PC : lexpr = PC
+  let v__R : lexpr = R None
+  let v__Z : lexpr = Z None
+  let v_SP_EL0 : lexpr = SP_EL0
+  let v_FPSR : lexpr = FPSR
+  let v_FPCR : lexpr = FPCR
+  let v_PSTATE_A : lexpr = PSTATE_A
+  let v_PSTATE_D : lexpr = PSTATE_D
+  let v_PSTATE_DIT : lexpr = PSTATE_DIT
+  let v_PSTATE_F : lexpr = PSTATE_F
+  let v_PSTATE_I : lexpr = PSTATE_I
+  let v_PSTATE_PAN : lexpr = PSTATE_PAN
+  let v_PSTATE_SP : lexpr = PSTATE_SP
+  let v_PSTATE_SSBS : lexpr = PSTATE_SSBS
+  let v_PSTATE_TCO : lexpr = PSTATE_TCO
+  let v_PSTATE_UAO : lexpr = PSTATE_UAO
+  let v_PSTATE_BTYPE : lexpr = PSTATE_BTYPE
+  let v_BTypeCompatible : lexpr = BTypeCompatible
+  let v___BranchTaken : lexpr = BranchTaken
+  let v_BTypeNext : lexpr = BTypeNext
+  let v___ExclusiveLocal : lexpr = ExclusiveLocal
   let f_switch_context : branch -> unit = fun _ -> failwith "f_switch_context"
 
   let f_gen_branch : expr -> branch * branch * branch =
@@ -216,28 +212,29 @@ struct
    fun name size -> bincaml_local_var name (Types.Bitvector (Z.to_int size))
 
   let f_decl_bool : string -> lexpr = fun _ -> failwith "f_decl_bool"
-  let f_gen_load : lexpr -> expr = fun lhs -> Expr.BasilExpr.rvar lhs
+
+  let f_gen_load : lexpr -> expr =
+   fun lhs -> Expr.BasilExpr.rvar (Aslp_lexpr.to_var lhs)
 
   let f_gen_store : lexpr -> expr -> unit =
    fun lhs rhs ->
     bincaml_emit
-      (Stmt.Instr_Assign { attrib = Attrib.empty; al = [ (lhs, rhs) ] })
+      (Stmt.Instr_Assign
+         { attrib = Attrib.empty; al = [ (Aslp_lexpr.to_var lhs, rhs) ] })
 
   let f_gen_array_load : lexpr -> bigint -> expr =
    fun array idx ->
-    match Var.name array with
-    | "v__R" ->
-        f_gen_load (Var.create ("v__R" ^ Z.to_string idx) (Types.Bitvector 64))
-    | x -> failwith x
+    match array with
+    | R None -> f_gen_load (R (Some (Z.to_int idx)))
+    | Z None -> f_gen_load (Z (Some (Z.to_int idx)))
+    | x -> failwith @@ "f_gen_array_load: " ^ Aslp_lexpr.show x
 
   let f_gen_array_store : lexpr -> bigint -> expr -> unit =
    fun array idx rhs ->
-    match Var.name array with
-    | "v__R" ->
-        f_gen_store
-          (Var.create ("v__R" ^ Z.to_string idx) (Types.Bitvector 64))
-          rhs
-    | x -> failwith x
+    match array with
+    | R None -> f_gen_store (R (Some (Z.to_int idx))) rhs
+    | Z None -> f_gen_store (Z (Some (Z.to_int idx))) rhs
+    | x -> failwith @@ "f_gen_array_store: " ^ Aslp_lexpr.show x
 
   let f_gen_Elem_read : bigint -> bigint -> expr -> expr -> expr -> expr =
    fun _ -> failwith "f_gen_Elem_read"
