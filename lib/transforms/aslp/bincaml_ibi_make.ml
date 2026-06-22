@@ -236,10 +236,11 @@ struct
             Aslp_state.ensure_pc_consistency ~left:b.t ~right:b.f )
     in
     let diamond =
-      !S.bincaml_lifter_state.diamond |> fixup_pc |> fun diamond ->
-      List.fold_left
-        (fun diamond source -> Aslp_state.add_goto ~source ~target:this diamond)
-        diamond preds
+      !S.bincaml_lifter_state.diamond |> fixup_pc
+      |> Fun.flip
+           (List.fold_left (fun diamond source ->
+                Aslp_state.add_goto ~source ~target:this diamond))
+           preds
     in
     S.bincaml_lifter_state :=
       { !S.bincaml_lifter_state with active = this; diamond }

@@ -1,7 +1,7 @@
 open Lang
 open Common
 
-(** A variable used by the ASLp lifter. Can be converted to a Bincaml {!Var.t}
+(** A variable used by the ASLp lifter. Can be converted to a Bincaml {!Var.t}.
 *)
 type t =
   | Local of string * Types.t
@@ -68,7 +68,6 @@ let scope = function
   | _ -> GlobalVar
 
 let to_var x =
-  let ty = typ x and name = name x in
-  let scope = scope x in
+  let ty = typ x and name = name x and scope = scope x in
   let name = match scope with GlobalVar -> "$" ^ name | _ -> name in
   Var.create ~scope name ty

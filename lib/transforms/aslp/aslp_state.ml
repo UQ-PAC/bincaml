@@ -74,12 +74,8 @@ type lifter_state = {
 (** {1 Utility functions} *)
 
 let empty_block () =
-  {
-    assume = None;
-    stmts = CCVector.create ();
-    succs = StringSet.empty;
-    has_pc_assign = false;
-  }
+  let stmts = CCVector.create () and succs = StringSet.empty in
+  { assume = None; stmts; succs; has_pc_assign = false }
 
 let empty_aslp_state ~entry () =
   let blocks = StringMap.singleton entry (empty_block ()) in
@@ -153,11 +149,43 @@ let add_stmt_to_active stmt (lifter_state : lifter_state) =
   in
   { lifter_state with diamond }
 
+(** Adds a new goto edge from [source] to [target]. If [source] was the exit
+    block, sets {!exit} to be [target]. If [source] {!has_pc_assign}, this is
+    propagated to [target]. *)
+let add_goto aslp_state ~source ~target =
+  let exit =
+    if String.equal source aslp_state.exit then target else aslp_state.exit
+  in
+  let has_pc_assign = ref false in
+  aslp_state
+  |> modify_block ~name:source ~f:(fun b ->
+      has_pc_assign := b.has_pc_assign;
+      { b with succs = StringSet.add target b.succs })
+  |> modify_block ~name:target ~f:(fun b ->
+      if !has_pc_assign then { b with has_pc_assign = !has_pc_assign } else b)
+  |> fun s -> { s with exit }
+
+(** Creates a new block with the given name as a successor of the given [pred].
+    If [pred] was the exit block, sets {!exit} to be the new block. *)
+let add_block ?assume aslp_state ~pred ~name =
+  let new_block = { (empty_block ()) with assume } in
+  let blocks = aslp_state.blocks |> StringMap.add name new_block in
+  { aslp_state with blocks } |> add_goto ~source:pred ~target:name
+
+(** {1 Advanced functions} *)
+
+let append_aslp_states first second =
+  let f key = function
+    | `Both _ -> failwith "overlapping aslp_state block names"
+    | `Left a | `Right a -> Some a
+  in
+  let blocks = StringMap.merge_safe ~f first.blocks second.blocks in
+  { first with blocks } |> add_goto ~source:first.exit ~target:second.entry
+
 (** Ensures that the given block ID has a PC assignment on all paths. If it
     already {!has_pc_assign}, no changes are made. *)
-let ensure_pc_assigned ~name state =
-  state
-  |> modify_block ~name ~f:(function
+let ensure_pc_assigned ~name =
+  modify_block ~name ~f:(function
     | { has_pc_assign = false } as block ->
         let pc = Aslp_lexpr.to_var PC
         and branchtaken = Aslp_lexpr.to_var BranchTaken in
@@ -182,44 +210,13 @@ let ensure_pc_assigned ~name state =
     [PC] variable is either assigned on all paths or assigned on no paths (from
     the beginning of the instruction). *)
 let ensure_pc_consistency state ~left ~right =
-  let has_any_pc_assign =
-    (get_block state ~name:left).has_pc_assign
-    || (get_block state ~name:right).has_pc_assign
-  in
-  if has_any_pc_assign then
-    state |> ensure_pc_assigned ~name:left |> ensure_pc_assigned ~name:right
-  else state
-
-(** Adds a new goto edge from [source] to [target]. If [source] was the exit
-    block, sets {!exit} to be [target]. If [source] {!has_pc_assign}, this is
-    propagated to [target]. *)
-let add_goto aslp_state ~source ~target =
-  let exit =
-    if String.equal source aslp_state.exit then target else aslp_state.exit
-  in
-  let has_pc_assign = ref false in
-  aslp_state
-  |> modify_block ~name:source ~f:(fun b ->
-      has_pc_assign := b.has_pc_assign;
-      { b with succs = StringSet.add target b.succs })
-  |> modify_block ~name:target ~f:(fun b ->
-      if !has_pc_assign then { b with has_pc_assign = !has_pc_assign } else b)
-  |> fun s -> { s with exit }
-
-(** Creates a new block with the given name as a successor of the given [pred].
-    If [pred] was the exit block, sets {!exit} to be the new block. *)
-let add_block ?assume aslp_state ~pred ~name =
-  let new_block = { (empty_block ()) with assume } in
-  let blocks = aslp_state.blocks |> StringMap.add name new_block in
-  { aslp_state with blocks } |> add_goto ~source:pred ~target:name
-
-let append_aslp_states first second =
-  let f key = function
-    | `Both _ -> failwith "overlapping aslp_state block names"
-    | `Left a | `Right a -> Some a
-  in
-  let blocks = StringMap.merge_safe ~f first.blocks second.blocks in
-  { first with blocks } |> add_goto ~source:first.exit ~target:second.entry
+  match
+    ( (get_block state ~name:left).has_pc_assign,
+      (get_block state ~name:right).has_pc_assign )
+  with
+  | true, false -> state |> ensure_pc_assigned ~name:right
+  | false, true -> state |> ensure_pc_assigned ~name:left
+  | _ -> state
 
 (** {1 Formatters} *)
 
