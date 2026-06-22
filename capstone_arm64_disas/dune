@@ -24,4 +24,7 @@
   (include_dirs
    (include includes.gen))
   (names capst))
- (c_library_flags -lcapstone))
+ (c_library_flags -lcapstone)
+ (inline_tests)
+ (preprocess
+  (pps ppx_expect)))

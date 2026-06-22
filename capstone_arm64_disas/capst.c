@@ -10,6 +10,13 @@
 
 #define BUFLEN 500
 
+/**
+ * Decode a single arm64 opcode passed by pointer to 32-bit buffer and write
+ * assembly to BUFLEN output buffer.
+ *
+ * https://www.capstone-engine.org/lang_c.html
+ *
+ */
 int decode_arm64(char *outbuf, const uint8_t *op) {
   csh handle;
 

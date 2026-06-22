@@ -26,7 +26,9 @@
  (name capstone_arm64_disas)
  (synopsis "Disas arm ops with capstone")
  (depends
-   ocaml)
+   ocaml
+   ppx_expect
+   )
 )
 
 (package
