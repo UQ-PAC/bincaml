@@ -126,40 +126,9 @@ let aslp_ids_from_generators ~block_ids ~local_ids =
 
 (** {1 State manipulation functions} *)
 
-let add_stmt_to_block state key stmt =
-  let blocks =
-    StringMap.update key
-      (function
-        | Some blk ->
-            CCVector.push blk.stmts stmt;
-            Some blk
-        | None -> failwith "add_stmt: block not found")
-      state.blocks
-  in
-  { state with blocks }
-
-let add_stmt_to_active stmt (lifter_state : lifter_state) =
-  let state = add_stmt_to_block lifter_state.state lifter_state.active stmt in
-  { lifter_state with state }
-
-(** Ensures that the given block ID has a PC assignment on all paths. If it
-    already {!has_pc_assign}, no changes are made. *)
-let ensure_pc_assigned key state =
-  let blocks = state.blocks in
-  let block =
-    StringMap.find_opt key blocks
-    |> Option.get_exn_or "ensure_pc_assigned: block not found"
-  in
-  if not block.has_pc_assign then (
-    let pc = Aslp_lexpr.to_var PC in
-    let incremented =
-      Expr.BasilExpr.(applyintrin ~op:`BVADD [ rvar pc; bv_of_int ~size:32 4 ])
-    in
-    CCVector.push block.stmts
-      (Stmt.Instr_Assign { attrib = Attrib.empty; al = [ (pc, incremented) ] });
-    let blocks = StringMap.add key { block with has_pc_assign = true } blocks in
-    { state with blocks })
-  else state
+let get_block aslp_state ~name =
+  StringMap.find_opt name aslp_state.blocks
+  |> Option.get_exn_or "get_block: block not found"
 
 let modify_block aslp_state ~name ~f =
   let blocks =
@@ -170,6 +139,47 @@ let modify_block aslp_state ~name ~f =
       aslp_state.blocks
   in
   { aslp_state with blocks }
+
+let add_stmt_to_block blk ~stmt =
+  let has_pc_assign =
+    match stmt with
+    | Stmt.Instr_Assign _ ->
+        Stmt.iter_assigned stmt |> Iter.mem ~eq:Var.equal Aslp_lexpr.(to_var PC)
+    | _ -> false
+  in
+
+  CCVector.push blk.stmts stmt;
+  if has_pc_assign then { blk with has_pc_assign } else blk
+
+let add_stmt_to_active stmt (lifter_state : lifter_state) =
+  let state =
+    lifter_state.state
+    |> modify_block ~name:lifter_state.active ~f:(add_stmt_to_block ~stmt)
+  in
+  { lifter_state with state }
+
+(** Ensures that the given block ID has a PC assignment on all paths. If it
+    already {!has_pc_assign}, no changes are made. *)
+let ensure_pc_assigned ~name state =
+  let blocks = state.blocks in
+  let block =
+    StringMap.find_opt name blocks
+    |> Option.get_exn_or "ensure_pc_assigned: block not found"
+  in
+  state
+  |> modify_block ~name ~f:(function
+    | { has_pc_assign = false } ->
+        let pc = Aslp_lexpr.to_var PC in
+        let incremented =
+          Expr.BasilExpr.(
+            applyintrin ~op:`BVADD [ rvar pc; bv_of_int ~size:32 4 ])
+        in
+        let stmt =
+          Stmt.Instr_Assign
+            { attrib = Attrib.empty; al = [ (pc, incremented) ] }
+        in
+        block |> add_stmt_to_block ~stmt
+    | block -> block)
 
 (** Adds a new goto edge from [source] to [target]. If [source] was the exit
     block, sets {!exit} to be [target]. *)

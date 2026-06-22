@@ -44,16 +44,19 @@ struct
       (from the beginning of the instruction). *)
   let bincaml_ensure_pc_consistency left right =
     let state = !S.bincaml_lifter_state.state in
-    if
-      (StringMap.find left state.blocks).has_pc_assign
-      || (StringMap.find right state.blocks).has_pc_assign
-    then
+    let has_any_pc_assign =
+      (Aslp_state.get_block state ~name:left).has_pc_assign
+      || (Aslp_state.get_block state ~name:right).has_pc_assign
+    in
+    if has_any_pc_assign then begin
       let state =
         state
-        |> Aslp_state.ensure_pc_assigned left
-        |> Aslp_state.ensure_pc_assigned right
+        |> Aslp_state.ensure_pc_assigned ~name:left
+        |> Aslp_state.ensure_pc_assigned ~name:right
       in
       S.bincaml_lifter_state := { !S.bincaml_lifter_state with state }
+    end;
+    has_any_pc_assign
 
   (** {2 Instruction building interface implementation} *)
 
@@ -235,7 +238,18 @@ struct
 
   let f_switch_context : branch -> unit =
    fun b ->
-    S.bincaml_lifter_state := { !S.bincaml_lifter_state with active = b.this }
+    let state =
+      if String.equal b.this b.m then begin
+        let has_pc_assign = bincaml_ensure_pc_consistency b.t b.f in
+
+        !S.bincaml_lifter_state.state
+        |> Aslp_state.modify_block ~name:b.this ~f:(fun merge ->
+            { merge with has_pc_assign })
+      end
+      else !S.bincaml_lifter_state.state
+    in
+    S.bincaml_lifter_state :=
+      { !S.bincaml_lifter_state with active = b.this; state }
 
   let f_true_branch : branch * branch * branch -> branch = fun (t, f, m) -> t
   let f_false_branch : branch * branch * branch -> branch = fun (t, f, m) -> f
