@@ -71,17 +71,16 @@ type lifter_state = {
 
 (** {1 Utility functions} *)
 
+let empty_block () =
+  {
+    assume = None;
+    stmts = CCVector.create ();
+    succs = [];
+    has_pc_assign = false;
+  }
+
 let empty_aslp_state ~entry ~exit () =
-  let assume = None
-  and has_pc_assign = false
-  and stmts () = CCVector.create () in
-  let blocks =
-    StringMap.of_list
-      [
-        (entry, { assume; stmts = stmts (); succs = [ exit ]; has_pc_assign });
-        (exit, { assume; stmts = stmts (); succs = []; has_pc_assign });
-      ]
-  in
+  let blocks = StringMap.singleton entry (empty_block ()) in
   { blocks; entry; exit }
 
 (** Constructs a new empty {!lifter_state}.
@@ -133,6 +132,10 @@ let add_stmt_to_block state key stmt =
   in
   { state with blocks }
 
+let add_stmt_to_active stmt (lifter_state : lifter_state) =
+  let state = add_stmt_to_block lifter_state.state lifter_state.active stmt in
+  { lifter_state with state }
+
 (** Ensures that the given block ID has a PC assignment on all paths. If it
     already {!has_pc_assign}, no changes are made. *)
 let ensure_pc_assigned key state =
@@ -152,19 +155,26 @@ let ensure_pc_assigned key state =
     { state with blocks })
   else state
 
-let add_stmt_to_active stmt (lifter_state : lifter_state) =
-  let state = add_stmt_to_block lifter_state.state lifter_state.active stmt in
-  { lifter_state with state }
-
+(** Adds a new goto edge from [source] to [target]. If [source] was the exit
+    block, sets {!exit} to be [target]. *)
 let add_goto aslp_state ~source ~target =
   let blocks =
     StringMap.update source
       (function
         | Some blk -> Some { blk with succs = target :: blk.succs }
-        | _ -> failwith "add_goto: block not found")
+        | _ -> failwith "add_goto: source block not found")
       aslp_state.blocks
   in
-  { aslp_state with blocks }
+  let exit =
+    if String.equal source aslp_state.exit then target else aslp_state.exit
+  in
+  { aslp_state with blocks; exit }
+
+(** Creates a new block with the given name as a successor of the given [pred].
+    If [pred] was the exit block, sets {!exit} to be the new block. *)
+let add_succ aslp_state ~pred ~name =
+  let blocks = aslp_state.blocks |> StringMap.add name (empty_block ()) in
+  { aslp_state with blocks } |> add_goto ~source:pred ~target:name
 
 let append_aslp_states first second =
   let f key = function
@@ -172,9 +182,7 @@ let append_aslp_states first second =
     | `Left a | `Right a -> Some a
   in
   let blocks = StringMap.merge_safe ~f first.blocks second.blocks in
-  add_goto
-    { blocks; entry = first.entry; exit = second.exit }
-    ~source:first.exit ~target:second.entry
+  { first with blocks } |> add_goto ~source:first.exit ~target:second.entry
 
 (** {1 Formatters} *)
 

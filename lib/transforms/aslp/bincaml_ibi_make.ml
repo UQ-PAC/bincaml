@@ -13,7 +13,15 @@ struct
   type expr = Expr.BasilExpr.t
   type lexpr = Aslp_lexpr.t
   type stmt = Aslp_state.stmt
-  type branch = Branch of string
+
+  type branch =
+    | Branch of {
+        this : [ `True | `False | `Merge ];
+        t : string;
+        f : string;
+        m : string;
+      }
+
   type ast = Aslp_state.aslp_state
 
   (** {2 Bincaml-specific utility functions} *)
@@ -209,7 +217,8 @@ struct
   let f_switch_context : branch -> unit = fun _ -> failwith "f_switch_context"
 
   let f_gen_branch : expr -> branch * branch * branch =
-   fun _ -> failwith "f_gen_branch"
+   fun cond ->
+    failwith "f_gen_branch"
 
   let f_true_branch : branch * branch * branch -> branch =
    fun _ -> failwith "f_true_branch"
