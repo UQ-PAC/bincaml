@@ -1,6 +1,6 @@
 (** Extract the definition from ParBasilIR.ml:
     {v
-      dune build lib/fe/ParBasilIR.ml && sed -n '/type token/,/^$/p' _build/default/lib/fe/ParBasilIR.mli
+      dune build lib/fe/ParBasilIR.mli && sed -n '/type token/,/^$/p' _build/default/lib/fe/ParBasilIR.mli
     v}
     [wl-copy] copies to the clipboard on Wayland. *)
 type raw_token = BasilIR.ParBasilIR.token =
