@@ -76,6 +76,5 @@
   linol
   linol-lwt
   containers
-  ppx_import
   ppx_deriving)
  (tags (lsp)))
