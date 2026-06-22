@@ -13,7 +13,15 @@ struct
   type expr = Expr.BasilExpr.t
   type lexpr = Aslp_lexpr.t
   type stmt = Aslp_state.stmt
-  type branch = { this : string; t : string; f : string; m : string }
+
+  type branch = {
+    this : [ `T | `F | `M ];
+    prev : string;
+    t : string;
+    f : string;
+    m : string;
+  }
+
   type ast = Aslp_state.aslp_diamond
 
   (** {2 Bincaml-specific utility functions} *)
@@ -34,30 +42,6 @@ struct
       | Some x -> x
     in
     Aslp_lexpr.Local (id_name, ty)
-
-  (** Ensures that the two given block names agree on their
-      {!Aslp_state.has_pc_assign} property. This function mutates the state, and
-      this function should be called before moving to a control-flow join of the
-      two blocks
-
-      This is used to maintain the invariant that at every control flow point,
-      the [PC] variable is either assigned on all paths or assigned on no paths
-      (from the beginning of the instruction). *)
-  let bincaml_ensure_pc_consistency left right =
-    let state = !S.bincaml_lifter_state.diamond in
-    let has_any_pc_assign =
-      (Aslp_state.get_block state ~name:left).has_pc_assign
-      || (Aslp_state.get_block state ~name:right).has_pc_assign
-    in
-    if has_any_pc_assign then begin
-      let diamond =
-        state
-        |> Aslp_state.ensure_pc_assigned ~name:left
-        |> Aslp_state.ensure_pc_assigned ~name:right
-      in
-      S.bincaml_lifter_state := { !S.bincaml_lifter_state with diamond }
-    end;
-    has_any_pc_assign
 
   (** {2 Instruction building interface implementation} *)
 
@@ -216,45 +200,49 @@ struct
 
   let f_gen_branch : expr -> branch * branch * branch =
    fun cond ->
-    let active = !S.bincaml_lifter_state.active in
-    let state = !S.bincaml_lifter_state.diamond in
-    let block_id = !S.bincaml_lifter_state.generator.block_id in
+    let st = !S.bincaml_lifter_state in
+    let block_id = st.generator.block_id
+    and ncond = Expr.BasilExpr.boolnot cond in
 
     let t = block_id () and f = block_id () and m = block_id () in
 
-    let old_succs = ref [] in
+    let original_succs = ref StringSet.empty in
     let diamond =
-      state
-      |> Aslp_state.modify_block ~name:active ~f:(fun b ->
-          old_succs := b.succs;
-          { b with succs = [] })
-      |> Aslp_state.add_block ~pred:active ~name:t
-      |> Aslp_state.add_block ~pred:active ~name:f
+      st.diamond
+      |> Aslp_state.modify_block ~name:st.active ~f:(fun b ->
+          original_succs := b.succs;
+          { b with succs = StringSet.empty })
+      |> Aslp_state.add_block ~pred:st.active ~name:t ~assume:cond
+      |> Aslp_state.add_block ~pred:st.active ~name:f ~assume:ncond
       |> Aslp_state.add_block ~pred:t ~name:m
       |> Aslp_state.add_goto ~source:f ~target:m
       |> Aslp_state.modify_block ~name:m ~f:(fun b ->
-          { b with succs = !old_succs })
+          { b with succs = !original_succs })
     in
-    S.bincaml_lifter_state := { !S.bincaml_lifter_state with diamond };
+    S.bincaml_lifter_state := { st with diamond };
 
-    let tbranch = { this = t; t; f; m } in
-    (tbranch, { tbranch with this = f }, { tbranch with this = m })
+    let tbranch = { this = `T; t; f; m; prev = st.active } in
+    (tbranch, { tbranch with this = `F }, { tbranch with this = `M })
 
   let f_switch_context : branch -> unit =
    fun b ->
+    let this, preds =
+      match b.this with
+      | `T -> (b.t, [ b.prev ])
+      | `F -> (b.f, [ b.prev ])
+      | `M -> (b.m, [ b.t; b.f ])
+    in
     let diamond =
-      if String.equal b.this b.m then begin
-        let has_pc_assign = bincaml_ensure_pc_consistency b.t b.f in
-
-        (* mindful that state access is after bincaml_ensure_pc_consistency *)
-        !S.bincaml_lifter_state.diamond
-        |> Aslp_state.modify_block ~name:b.this ~f:(fun merge ->
-            { merge with has_pc_assign })
-      end
-      else !S.bincaml_lifter_state.diamond
+      !S.bincaml_lifter_state.diamond
+      |> (match b.this with
+        | `M -> Aslp_state.ensure_pc_consistency ~left:b.t ~right:b.f
+        | _ -> Fun.id)
+      |> List.fold_right
+           (fun source -> Aslp_state.add_goto ~source ~target:this)
+           preds
     in
     S.bincaml_lifter_state :=
-      { !S.bincaml_lifter_state with active = b.this; diamond }
+      { !S.bincaml_lifter_state with active = this; diamond }
 
   let f_true_branch : branch * branch * branch -> branch = fun (t, f, m) -> t
   let f_false_branch : branch * branch * branch -> branch = fun (t, f, m) -> f

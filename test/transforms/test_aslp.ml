@@ -81,14 +81,14 @@ let%expect_test "lift: b.eq #1024" =
   [%expect
     {|
     { Aslp_state.blocks = "block_0"
-      -> { Aslp_state.assume = None; stmts = []; succs = ["block_2"; "block_1"];
+      -> { Aslp_state.assume = None; stmts = []; succs = ["block_1"; "block_2"];
            has_pc_assign = false },
       "block_1"
-      -> { Aslp_state.assume = None;
+      -> { Aslp_state.assume = (Some eq($PSTATE_Z, 0x1:bv1));
            stmts = [var BranchTaken:bool := true; $PC:bv64 := 0x400:bv64];
            succs = ["block_3"]; has_pc_assign = true },
       "block_2"
-      -> { Aslp_state.assume = None;
+      -> { Aslp_state.assume = (Some boolnot(eq($PSTATE_Z, 0x1:bv1)));
            stmts =
            [($PC:bv64 := bvadd($PC, 0x4:bv32), var BranchTaken:bool := false)];
            succs = ["block_3"]; has_pc_assign = true },

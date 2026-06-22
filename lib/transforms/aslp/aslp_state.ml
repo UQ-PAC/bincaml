@@ -9,14 +9,15 @@ type stmt =
 (** A statement within the Bincaml AST. This is just a type alias. *)
 
 open struct
-  type stmt_list_for_printing = stmt list [@@deriving show]
+  type 'a list_for_printing = 'a list [@@deriving show]
 end
 
 type aslp_block = {
   assume : Expr.BasilExpr.t option;
   stmts : stmt CCVector.vector;
-      [@printer Format.map CCVector.to_list pp_stmt_list_for_printing]
-  succs : string list;
+      [@printer Format.map CCVector.to_list (pp_list_for_printing pp_stmt)]
+  succs : StringSet.t;
+      [@printer Format.map StringSet.to_list (pp_list_for_printing String.pp)]
   has_pc_assign : bool;
       (** Whether, upon reaching the end of this block, it is guaranteed that
           [PC] will have been assigned to on all control-flow paths. *)
@@ -76,14 +77,12 @@ let empty_block () =
   {
     assume = None;
     stmts = CCVector.create ();
-    succs = [];
+    succs = StringSet.empty;
     has_pc_assign = false;
   }
 
 let empty_aslp_state ~entry () =
-  let blocks =
-    StringMap.of_list [ (entry, { (empty_block ()) with succs = [] }) ]
-  in
+  let blocks = StringMap.singleton entry (empty_block ()) in
   { blocks; entry; exit = entry }
 
 (** Constructs a new empty {!lifter_state}.
@@ -172,20 +171,46 @@ let ensure_pc_assigned ~name state =
              ~stmt:(Stmt.Instr_Assign { attrib = Attrib.empty; al })
     | block -> block)
 
+(** Ensures that the two given block names agree on their {!has_pc_assign}
+    property. If [PC] is assigned in only one of the blocks, a default increment
+    statement will be added to the other block. Otherwise, nothing changes.
+
+    This function should be called before moving to a control-flow join of the
+    two blocks.
+
+    This is used to maintain the invariant that at every control flow point, the
+    [PC] variable is either assigned on all paths or assigned on no paths (from
+    the beginning of the instruction). *)
+let ensure_pc_consistency state ~left ~right =
+  let has_any_pc_assign =
+    (get_block state ~name:left).has_pc_assign
+    || (get_block state ~name:right).has_pc_assign
+  in
+  if has_any_pc_assign then
+    state |> ensure_pc_assigned ~name:left |> ensure_pc_assigned ~name:right
+  else state
+
 (** Adds a new goto edge from [source] to [target]. If [source] was the exit
-    block, sets {!exit} to be [target]. *)
+    block, sets {!exit} to be [target]. If [source] {!has_pc_assign}, this is
+    propagated to [target]. *)
 let add_goto aslp_state ~source ~target =
   let exit =
     if String.equal source aslp_state.exit then target else aslp_state.exit
   in
-  modify_block aslp_state ~name:source ~f:(fun b ->
-      { b with succs = target :: b.succs })
+  let has_pc_assign = ref false in
+  aslp_state
+  |> modify_block ~name:source ~f:(fun b ->
+      has_pc_assign := b.has_pc_assign;
+      { b with succs = StringSet.add target b.succs })
+  |> modify_block ~name:target ~f:(fun b ->
+      if !has_pc_assign then { b with has_pc_assign = !has_pc_assign } else b)
   |> fun s -> { s with exit }
 
 (** Creates a new block with the given name as a successor of the given [pred].
     If [pred] was the exit block, sets {!exit} to be the new block. *)
-let add_block aslp_state ~pred ~name =
-  let blocks = aslp_state.blocks |> StringMap.add name (empty_block ()) in
+let add_block ?assume aslp_state ~pred ~name =
+  let new_block = { (empty_block ()) with assume } in
+  let blocks = aslp_state.blocks |> StringMap.add name new_block in
   { aslp_state with blocks } |> add_goto ~source:pred ~target:name
 
 let append_aslp_states first second =

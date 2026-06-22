@@ -5,8 +5,8 @@ include Bincaml_ibi_make
 (** @inline *)
 
 (** Abstract Bincaml IBI signature. Defines the input type as
-    {!Lang.Common.Bitvec.t} and the output type as {!Aslp_state.aslp_diamond} but
-    leaving other types opaque. *)
+    {!Lang.Common.Bitvec.t} and the output type as {!Aslp_state.aslp_diamond}
+    but leaving other types opaque. *)
 module type IBI = sig
   include
     OfflineASL_pc.Instruction_building_interface.IBI
