@@ -61,7 +61,7 @@ jobs:
           submodules: true
       - run: opam repository --all add pac https://github.com/uq-pac/opam-repository.git
       - run: opam install -t . --deps-only
-      - run: opam exec -- dune build '@install' --profile=release
+      - run: opam exec -- dune build --profile=release
       - run: opam exec -- dune runtest --force
 
 
