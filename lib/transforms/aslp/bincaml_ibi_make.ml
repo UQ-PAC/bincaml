@@ -221,25 +221,25 @@ struct
     in
     S.bincaml_lifter_state := { st with diamond };
 
-    let tbranch = { this = `T; t; f; m; prev = st.active } in
-    (tbranch, { tbranch with this = `F }, { tbranch with this = `M })
+    let branch mode = { this = mode; t; f; m; prev = st.active } in
+    (branch `T, branch `F, branch `M)
 
   let f_switch_context : branch -> unit =
    fun b ->
-    let this, preds =
+    let this, preds, fixup_pc =
       match b.this with
-      | `T -> (b.t, [ b.prev ])
-      | `F -> (b.f, [ b.prev ])
-      | `M -> (b.m, [ b.t; b.f ])
+      | `T -> (b.t, [ b.prev ], Fun.id)
+      | `F -> (b.f, [ b.prev ], Fun.id)
+      | `M ->
+          ( b.m,
+            [ b.t; b.f ],
+            Aslp_state.ensure_pc_consistency ~left:b.t ~right:b.f )
     in
     let diamond =
-      !S.bincaml_lifter_state.diamond
-      |> (match b.this with
-        | `M -> Aslp_state.ensure_pc_consistency ~left:b.t ~right:b.f
-        | _ -> Fun.id)
-      |> List.fold_right
-           (fun source -> Aslp_state.add_goto ~source ~target:this)
-           preds
+      !S.bincaml_lifter_state.diamond |> fixup_pc |> fun diamond ->
+      List.fold_left
+        (fun diamond source -> Aslp_state.add_goto ~source ~target:this diamond)
+        diamond preds
     in
     S.bincaml_lifter_state :=
       { !S.bincaml_lifter_state with active = this; diamond }
