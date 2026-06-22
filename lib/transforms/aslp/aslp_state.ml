@@ -17,11 +17,18 @@ type aslp_block = {
   stmts : stmt CCVector.vector;
       [@printer Format.map CCVector.to_list pp_stmt_list_for_printing]
   succs : string list;
+  has_pc_assign : bool;
+      (** Whether this block (or any of its same-instruction predecessors) have
+          explicitly assigned to the [PC] variable. *)
 }
 [@@deriving show]
 (** An ASLp lifter block is a list of statements followed by a non-deterministic
     goto to a number of successors. Each block is optionally guarded by an
-    assume statement. *)
+    assume statement.
+
+    We maintain the invariant that at the end of every {!aslp_block}, the [PC]
+    variable is either assigned on all paths or assigned on no paths (from the
+    beginning of the instruction). *)
 
 type aslp_state = {
   blocks : aslp_block StringMap.t;
@@ -69,11 +76,14 @@ type lifter_state = {
 (** {1 Utility functions} *)
 
 let empty_aslp_state ~entry ~exit () =
+  let assume = None
+  and has_pc_assign = false
+  and stmts () = CCVector.create () in
   let blocks =
     StringMap.of_list
       [
-        (entry, { assume = None; stmts = CCVector.create (); succs = [ exit ] });
-        (exit, { assume = None; stmts = CCVector.create (); succs = [] });
+        (entry, { assume; stmts = stmts (); succs = [ exit ]; has_pc_assign });
+        (exit, { assume; stmts = stmts (); succs = []; has_pc_assign });
       ]
   in
   { blocks; entry; exit }
