@@ -35,26 +35,27 @@ struct
     in
     Aslp_lexpr.Local (id_name, ty)
 
-  (** Ensures that the two given block names agree on their {!has_pc_assign}
-      property. This function mutates the state, and this function should be
-      called before moving to a control-flow join of the two blocks
+  (** Ensures that the two given block names agree on their
+      {!Aslp_state.has_pc_assign} property. This function mutates the state, and
+      this function should be called before moving to a control-flow join of the
+      two blocks
 
       This is used to maintain the invariant that at every control flow point,
       the [PC] variable is either assigned on all paths or assigned on no paths
       (from the beginning of the instruction). *)
   let bincaml_ensure_pc_consistency left right =
-    let state = !S.bincaml_lifter_state.state in
+    let state = !S.bincaml_lifter_state.diamond in
     let has_any_pc_assign =
       (Aslp_state.get_block state ~name:left).has_pc_assign
       || (Aslp_state.get_block state ~name:right).has_pc_assign
     in
     if has_any_pc_assign then begin
-      let state =
+      let diamond =
         state
         |> Aslp_state.ensure_pc_assigned ~name:left
         |> Aslp_state.ensure_pc_assigned ~name:right
       in
-      S.bincaml_lifter_state := { !S.bincaml_lifter_state with state }
+      S.bincaml_lifter_state := { !S.bincaml_lifter_state with diamond }
     end;
     has_any_pc_assign
 
@@ -64,7 +65,7 @@ struct
     let generator = !S.bincaml_lifter_state.generator in
     S.bincaml_lifter_state := Aslp_state.empty_lifter_state ~generator ()
 
-  let get_ir () = !S.bincaml_lifter_state.state
+  let get_ir () = !S.bincaml_lifter_state.diamond
   let bigint_of_string : string -> bigint = Z.of_string_base 10
   let bigint_of_int : int -> bigint = Z.of_int
   let bigint_zero : bigint = Z.zero
@@ -213,13 +214,13 @@ struct
   let f_gen_branch : expr -> branch * branch * branch =
    fun cond ->
     let active = !S.bincaml_lifter_state.active in
-    let state = !S.bincaml_lifter_state.state in
+    let state = !S.bincaml_lifter_state.diamond in
     let block_id = !S.bincaml_lifter_state.generator.block_id in
 
     let t = block_id () and f = block_id () and m = block_id () in
 
     let old_succs = ref [] in
-    let state =
+    let diamond =
       state
       |> Aslp_state.modify_block ~name:active ~f:(fun b ->
           old_succs := b.succs;
@@ -231,26 +232,26 @@ struct
       |> Aslp_state.modify_block ~name:m ~f:(fun b ->
           { b with succs = !old_succs })
     in
-    S.bincaml_lifter_state := { !S.bincaml_lifter_state with state };
+    S.bincaml_lifter_state := { !S.bincaml_lifter_state with diamond };
 
     let tbranch = { this = t; t; f; m } in
     (tbranch, { tbranch with this = f }, { tbranch with this = m })
 
   let f_switch_context : branch -> unit =
    fun b ->
-    let state =
+    let diamond =
       if String.equal b.this b.m then begin
         let has_pc_assign = bincaml_ensure_pc_consistency b.t b.f in
 
         (* mindful that state access is after bincaml_ensure_pc_consistency *)
-        !S.bincaml_lifter_state.state
+        !S.bincaml_lifter_state.diamond
         |> Aslp_state.modify_block ~name:b.this ~f:(fun merge ->
             { merge with has_pc_assign })
       end
-      else !S.bincaml_lifter_state.state
+      else !S.bincaml_lifter_state.diamond
     in
     S.bincaml_lifter_state :=
-      { !S.bincaml_lifter_state with active = b.this; state }
+      { !S.bincaml_lifter_state with active = b.this; diamond }
 
   let f_true_branch : branch * branch * branch -> branch = fun (t, f, m) -> t
   let f_false_branch : branch * branch * branch -> branch = fun (t, f, m) -> f

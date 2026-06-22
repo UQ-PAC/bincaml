@@ -53,7 +53,7 @@ type aslp_ids = { block_id : unit -> string; local_id : unit -> string }
 type lifter_state = {
   active : string;
       (** Active block where new runtime statements will be appended. *)
-  state : aslp_diamond;
+  diamond : aslp_diamond;
       (** Lifter state representing a control flow diamond. *)
   generator : aslp_ids; [@opaque]  (** Generators for ID names. *)
   names : (string, string) Hashtbl.t;
@@ -95,7 +95,7 @@ let empty_lifter_state ~generator () =
   let exit = generator.block_id () in
   {
     active = entry;
-    state = empty_aslp_state ~entry ~exit ();
+    diamond = empty_aslp_state ~entry ~exit ();
     names = Hashtbl.create 16;
     generator;
   }
@@ -149,11 +149,11 @@ let add_stmt_to_block blk ~stmt =
   if has_pc_assign then { blk with has_pc_assign } else blk
 
 let add_stmt_to_active stmt (lifter_state : lifter_state) =
-  let state =
-    lifter_state.state
+  let diamond =
+    lifter_state.diamond
     |> modify_block ~name:lifter_state.active ~f:(add_stmt_to_block ~stmt)
   in
-  { lifter_state with state }
+  { lifter_state with diamond }
 
 (** Ensures that the given block ID has a PC assignment on all paths. If it
     already {!has_pc_assign}, no changes are made. *)

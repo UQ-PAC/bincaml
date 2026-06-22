@@ -76,12 +76,12 @@ let%expect_test "lift: b.eq #1024" =
            has_pc_assign = false },
       "block_2"
       -> { Aslp_state.assume = None;
-           stmts = [$BranchTaken:bool := true; $PC:bv64 := 0x400:bv64];
+           stmts = [var BranchTaken:bool := true; $PC:bv64 := 0x400:bv64];
            succs = ["block_4"]; has_pc_assign = true },
       "block_3"
       -> { Aslp_state.assume = None;
            stmts =
-           [($PC:bv64 := bvadd($PC, 0x4:bv32), $BranchTaken:bool := false)];
+           [($PC:bv64 := bvadd($PC, 0x4:bv32), var BranchTaken:bool := false)];
            succs = ["block_4"]; has_pc_assign = true },
       "block_4"
       -> { Aslp_state.assume = None; stmts = []; succs = []; has_pc_assign = true
