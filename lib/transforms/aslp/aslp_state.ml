@@ -24,11 +24,7 @@ type aslp_block = {
 [@@deriving show]
 (** An ASLp lifter block is a list of statements followed by a non-deterministic
     goto to a number of successors. Each block is optionally guarded by an
-    assume statement.
-
-    We maintain the invariant that at the end of every {!aslp_block}, the [PC]
-    variable is either assigned on all paths or assigned on no paths (from the
-    beginning of the instruction). *)
+    assume statement. *)
 
 type aslp_state = {
   blocks : aslp_block StringMap.t;
@@ -137,7 +133,26 @@ let add_stmt_to_block state key stmt =
   in
   { state with blocks }
 
-let add_stmt_to_active (lifter_state : lifter_state) stmt =
+(** Ensures that the given block ID has a PC assignment on all paths. If it
+    already {!has_pc_assign}, no changes are made. *)
+let ensure_pc_assigned key state =
+  let blocks = state.blocks in
+  let block =
+    StringMap.find_opt key blocks
+    |> Option.get_exn_or "ensure_pc_assigned: block not found"
+  in
+  if not block.has_pc_assign then (
+    let pc = Aslp_lexpr.to_var PC in
+    let incremented =
+      Expr.BasilExpr.(applyintrin ~op:`BVADD [ rvar pc; bv_of_int ~size:32 4 ])
+    in
+    CCVector.push block.stmts
+      (Stmt.Instr_Assign { attrib = Attrib.empty; al = [ (pc, incremented) ] });
+    let blocks = StringMap.add key { block with has_pc_assign = true } blocks in
+    { state with blocks })
+  else state
+
+let add_stmt_to_active stmt (lifter_state : lifter_state) =
   let state = add_stmt_to_block lifter_state.state lifter_state.active stmt in
   { lifter_state with state }
 

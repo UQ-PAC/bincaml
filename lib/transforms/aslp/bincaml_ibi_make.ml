@@ -18,9 +18,11 @@ struct
 
   (** {2 Bincaml-specific utility functions} *)
 
+  (** Emits the given Bincaml statement. *)
+
   let bincaml_emit stmt =
     S.bincaml_lifter_state :=
-      Aslp_state.add_stmt_to_active !S.bincaml_lifter_state stmt
+      !S.bincaml_lifter_state |> Aslp_state.add_stmt_to_active stmt
 
   let bincaml_local_var name ty =
     let id_name =
@@ -32,6 +34,26 @@ struct
       | Some x -> x
     in
     Aslp_lexpr.Local (id_name, ty)
+
+  (** Ensures that the two given {!aslp_block} keys agree on their
+      {!has_pc_assign} property, before moving to a control-flow join of the two
+      blocks.
+
+      This is used to maintain the invariant that at every control flow point,
+      the [PC] variable is either assigned on all paths or assigned on no paths
+      (from the beginning of the instruction). *)
+  let bincaml_ensure_pc_consistency left right =
+    let state = !S.bincaml_lifter_state.state in
+    if
+      (StringMap.find left state.blocks).has_pc_assign
+      || (StringMap.find right state.blocks).has_pc_assign
+    then
+      let state =
+        state
+        |> Aslp_state.ensure_pc_assigned left
+        |> Aslp_state.ensure_pc_assigned right
+      in
+      S.bincaml_lifter_state := { !S.bincaml_lifter_state with state }
 
   (** {2 Instruction building interface implementation} *)
 
