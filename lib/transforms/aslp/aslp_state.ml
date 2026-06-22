@@ -41,7 +41,7 @@ type aslp_state = {
     Alone, this is used to represent the lifter state {i between} instructions.
     Or, it forms a part of {!lifter_state} for {i within}-instruction state. *)
 
-type aslp_ids = { block_ids : unit -> int; local_ids : unit -> int }
+type aslp_ids = { block_id : unit -> string; local_id : unit -> string }
 (** Generators for unique IDs used by the offline lifter.
 
     The {!aslp_ids} is stateful and the same {!aslp_ids} should be used by all
@@ -78,16 +78,13 @@ let empty_aslp_state ~entry ~exit () =
   in
   { blocks; entry; exit }
 
-let gen_block_id gens = Printf.sprintf "block_%d" @@ gens.block_ids ()
-let gen_local_id gens = Printf.sprintf "var_%d" @@ gens.local_ids ()
-
 (** Constructs a new empty {!lifter_state}.
 
     Callers should consider whether they wish to re-use an existing [generator]
     value by passing it explicitly. *)
 let empty_lifter_state ~generator () =
-  let entry = gen_block_id generator in
-  let exit = gen_block_id generator in
+  let entry = generator.block_id () in
+  let exit = generator.block_id () in
   {
     active = entry;
     state = empty_aslp_state ~entry ~exit ();
@@ -100,7 +97,9 @@ let empty_lifter_state ~generator () =
     Be careful! You should use {!aslp_ids_from_generators} if you will use the
     lifted statements within an existing Bincaml IR. *)
 let empty_aslp_ids () =
-  { block_ids = Fix.Gensym.make (); local_ids = Fix.Gensym.make () }
+  let block_id = Printf.sprintf "block_%d" % Fix.Gensym.make ()
+  and local_id = Printf.sprintf "var_%d" % Fix.Gensym.make () in
+  { block_id; local_id }
 
 (** {2 ID-generating functions} *)
 
@@ -110,12 +109,9 @@ let empty_aslp_ids () =
     This will ensure that ASLp's local variable and block names do not clash
     with existing names. *)
 let aslp_ids_from_generators ~block_ids ~local_ids =
-  let block_ids = ID.index % ID.fresh block_ids in
-  let local_ids = ID.index % ID.fresh local_ids in
-  { block_ids; local_ids }
-
-let gen_block_id = gen_block_id
-let gen_local_id = gen_local_id
+  let block_id = ID.name % ID.fresh ~name:"block" block_ids
+  and local_id = ID.name % ID.fresh ~name:"var" local_ids in
+  { block_id; local_id }
 
 (** {1 State manipulation functions} *)
 

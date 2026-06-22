@@ -27,15 +27,13 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
       (Bitvec.of_string "0x8b031041:bv32")
   in
   print_endline @@ Aslp_state.show_aslp_state x;
-  [%expect {|
+  [%expect
+    {|
     { Aslp_state.blocks = "block_0"
       -> { Aslp_state.assume = None;
            stmts =
-           [var (Aslp_types.Lexpr.Local ("var_0", bv64)):bv64 := R2:bv64;
-             var (Aslp_types.Lexpr.Local ("var_1", bv64)):bv64 := R3:bv64;
-             var R1:bv64 := bvadd((Aslp_types.Lexpr.Local ("var_0", bv64)):bv64,
-     bvshl((Aslp_types.Lexpr.Local ("var_1", bv64)):bv64, 0x4:bv12))
-             ];
+           [var var_0:bv64 := R2:bv64; var var_1:bv64 := R3:bv64;
+             var R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12))];
            succs = ["block_1"] },
       "block_1" -> { Aslp_state.assume = None; stmts = []; succs = [] };
       entry = "block_0"; exit = "block_1" }
@@ -51,7 +49,8 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
          (Bitvec.of_string "0xd29579a1:bv32")
   in
   print_endline @@ Aslp_state.show_aslp_state x;
-  [%expect {|
+  [%expect
+    {|
     { Aslp_state.blocks = "block_0"
       -> { Aslp_state.assume = None; stmts = [var R1:bv64 := 0xabcd:bv64];
            succs = ["block_1"] },
@@ -74,7 +73,8 @@ let%expect_test "lift: b.eq #1024" =
   in
   print_endline @@ Aslp_state.show_aslp_state x;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   (* CR expect_test_collector: This test expectation appears to contain a backtrace.
      This is strongly discouraged as backtraces are fragile.
      Please change this test to not include a backtrace. *)
@@ -84,7 +84,7 @@ let%expect_test "lift: b.eq #1024" =
   Called from Transforms__Aslp.lift_opcode.(fun) in file "lib/transforms/aslp/aslp.ml", line 18, characters 6-67
   Called from Stdlib__Fun.protect in file "fun.ml", line 34, characters 8-15
   Re-raised at Stdlib__Fun.protect in file "fun.ml", line 39, characters 6-52
-  Called from Test_aslp.(fun) in file "test/transforms/test_aslp.ml", lines 79-82, characters 4-42
+  Called from Test_aslp.(fun) in file "test/transforms/test_aslp.ml", lines 69-72, characters 4-42
   Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
   |}]
 

@@ -26,9 +26,7 @@ struct
     let id_name =
       match Hashtbl.find_opt !S.bincaml_lifter_state.names name with
       | None ->
-          let id_name =
-            Aslp_state.gen_local_id !S.bincaml_lifter_state.generator
-          in
+          let id_name = !S.bincaml_lifter_state.generator.local_id () in
           Hashtbl.replace !S.bincaml_lifter_state.names name id_name;
           id_name
       | Some x -> x
