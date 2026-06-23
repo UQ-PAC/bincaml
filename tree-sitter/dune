@@ -1,23 +1,22 @@
 (rule
  (deps tree-sitter.json grammar.js grammar.bnfc.js)
  (action
-  (with-stdout-to
-   src.tar
-   (progn
-    (run tree-sitter generate grammar.js)
-    (run tar -cf src.tar src)))))
+  (progn
+   (run rm -rf src)
+   (with-stdout-to
+    src.tar
+    (progn
+     (run tree-sitter generate grammar.js)
+     (run tar -cf src.tar src))))))
 
 ; checks tree-sitter highlights are valid
 
 (rule
- (deps
-  src.tar
-  tree-sitter.json
-  queries/highlights.scm
-  ../test/cram/concat.il)
+ (deps src.tar tree-sitter.json queries/highlights.scm)
  (alias treesit)
  (action
   (progn
+   (run rm -rf src)
    (run tar -xf src.tar)
    (with-stdin-from
     %{project_root}/test/cram/concat.il
