@@ -14,13 +14,12 @@ struct
   type lexpr = Aslp_lexpr.t
   type stmt = Aslp_state.stmt
 
-  type branch = {
-    this : [ `T | `F | `M ];
-    prev : string;
-    t : string;
-    f : string;
-    m : string;
-  }
+  type branch =
+    [ `T of string
+    | `F of string
+    | `M of string * (string * string)
+      (** A merge branch also records its true and false predecessors to
+          propagate PC information. *) ]
 
   type ast = Aslp_state.aslp_diamond
 
@@ -220,30 +219,20 @@ struct
           { b with succs = original_succs })
     in
     S.bincaml_lifter_state := { st with diamond };
-
-    let branch mode = { this = mode; t; f; m; prev = st.active } in
-    (branch `T, branch `F, branch `M)
+    (`T t, `F f, `M (m, (t, f)))
 
   let f_switch_context : branch -> unit =
    fun b ->
-    let this, preds, fixup_pc =
-      match b.this with
-      | `T -> (b.t, [ b.prev ], Fun.id)
-      | `F -> (b.f, [ b.prev ], Fun.id)
-      | `M ->
-          ( b.m,
-            [ b.t; b.f ],
-            Aslp_state.ensure_pc_consistency ~left:b.t ~right:b.f )
+    let diamond = !S.bincaml_lifter_state.diamond in
+    let active, diamond =
+      match b with
+      | `T x | `F x -> (x, diamond)
+      | `M (m, (t, f)) ->
+          ( m,
+            diamond |> Aslp_state.ensure_pc_consistency ~left:t ~right:f ~join:m
+          )
     in
-    let diamond =
-      !S.bincaml_lifter_state.diamond |> fixup_pc
-      |> Fun.flip
-           (List.fold_left (fun diamond source ->
-                Aslp_state.add_goto ~source ~target:this diamond))
-           preds
-    in
-    S.bincaml_lifter_state :=
-      { !S.bincaml_lifter_state with active = this; diamond }
+    S.bincaml_lifter_state := { !S.bincaml_lifter_state with active; diamond }
 
   let f_true_branch : branch * branch * branch -> branch = fun (t, f, m) -> t
   let f_false_branch : branch * branch * branch -> branch = fun (t, f, m) -> f

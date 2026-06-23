@@ -195,8 +195,8 @@ let append_aslp_states first second =
 
 (** {1 Program counter functions} *)
 
-(** Ensures that the given block ID has a PC assignment on all paths. If it
-    already {!has_pc_assign}, no changes are made. *)
+(** Ensures that the given block ID has a PC assignment. If it already
+    {!has_pc_assign}, no changes are made. *)
 let ensure_pc_assigned ~name =
   modify_block ~name ~f:(function
     | { has_pc_assign = false } as block ->
@@ -212,24 +212,36 @@ let ensure_pc_assigned ~name =
              ~stmt:(Stmt.Instr_Assign { attrib = Attrib.empty; al })
     | block -> block)
 
-(** Ensures that the two given block names agree on their {!has_pc_assign}
+(** Ensures that the left and right blocks agree on their {!has_pc_assign}
     property. If [PC] is assigned in only one of the blocks, a default increment
-    statement will be added to the other block. Otherwise, nothing changes.
+    statement will be added to the other block and {!has_pc_assign} will be
+    propagated to [join]. Otherwise, nothing changes.
 
-    This function should be called before moving to a control-flow join of the
-    two blocks.
+    This function should be called with blocks in this structure:
+    {v
+    left  right
+      \    /
+       join
+    v}
+    It should be called after [left] and [right] have been populated with
+    statements, before moving to [join].
 
     This is used to maintain the invariant that at every control flow point, the
     [PC] variable is either assigned on all paths or assigned on no paths (from
     the beginning of the instruction). *)
-let ensure_pc_consistency state ~left ~right =
-  match
-    ( (get_block state ~name:left).has_pc_assign,
-      (get_block state ~name:right).has_pc_assign )
-  with
-  | true, false -> state |> ensure_pc_assigned ~name:right
-  | false, true -> state |> ensure_pc_assigned ~name:left
-  | _ -> state
+let ensure_pc_consistency state ~left ~right ~join =
+  let has_pc_assign, state =
+    match
+      ( (get_block state ~name:left).has_pc_assign,
+        (get_block state ~name:right).has_pc_assign )
+    with
+    | true, false -> (true, state |> ensure_pc_assigned ~name:right)
+    | false, true -> (true, state |> ensure_pc_assigned ~name:left)
+    | _ -> (false, state)
+  in
+  if has_pc_assign then
+    state |> modify_block ~name:join ~f:(fun b -> { b with has_pc_assign })
+  else state
 
 (** {1 Formatters} *)
 
