@@ -103,8 +103,8 @@ let empty_lifter_state ~generator () =
     Be careful! You should use {!aslp_ids_from_generators} if you will use the
     lifted statements within an existing Bincaml IR. *)
 let empty_aslp_ids () =
-  let block_id = Printf.sprintf "block_%d" % Fix.Gensym.make ()
-  and local_id = Printf.sprintf "var_%d" % Fix.Gensym.make () in
+  let block_id = Fix.Gensym.make () %> Printf.sprintf "block_%d"
+  and local_id = Fix.Gensym.make () %> Printf.sprintf "var_%d" in
   { block_id; local_id }
 
 (** {2 ID-generating functions} *)
@@ -115,8 +115,8 @@ let empty_aslp_ids () =
     This will ensure that ASLp's local variable and block names do not clash
     with existing names. *)
 let aslp_ids_from_generators ~block_ids ~local_ids =
-  let block_id = ID.name % ID.fresh ~name:"block" block_ids
-  and local_id = ID.name % ID.fresh ~name:"var" local_ids in
+  let block_id = ID.fresh ~name:"block" block_ids %> ID.name
+  and local_id = ID.fresh ~name:"var" local_ids %> ID.name in
   { block_id; local_id }
 
 (** {1 State manipulation functions} *)
