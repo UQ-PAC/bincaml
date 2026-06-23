@@ -71,3 +71,6 @@ let to_var x =
   let ty = typ x and name = name x and scope = scope x in
   let name = match scope with GlobalVar -> "$" ^ name | _ -> name in
   Var.create ~scope name ty
+
+let pc_var = to_var PC
+let branchtaken_var = to_var BranchTaken

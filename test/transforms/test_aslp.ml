@@ -16,7 +16,7 @@ let%expect_test "lift empty" =
       blocks = "block_0"
       -> { Aslp_state.assume = None;
            stmts = [(var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
-           succs = []; has_pc_assign = true };
+           succs = []; pc_assign = (Some 0x2004:bv64) };
       entry = "block_0"; exit = "block_0" }
     |}]
 
@@ -39,7 +39,7 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
            [var var_0:bv64 := $R2; var var_1:bv64 := $R3;
              $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
              (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
-           succs = []; has_pc_assign = true };
+           succs = []; pc_assign = (Some 0x2004:bv64) };
       entry = "block_0"; exit = "block_0" }
     |}]
 
@@ -61,13 +61,13 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
            stmts =
            [$R1:bv64 := 0xabcd:bv64;
              (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
-           succs = ["block_1"]; has_pc_assign = true },
+           succs = ["block_1"]; pc_assign = (Some 0x2004:bv64) },
       "block_1"
       -> { Aslp_state.assume = None;
            stmts =
            [$R1:bv64 := 0xabcd:bv64;
              (var BranchTaken:bool := false, $PC:bv64 := 0x2008:bv64)];
-           succs = []; has_pc_assign = true };
+           succs = []; pc_assign = (Some 0x2004:bv64) };
       entry = "block_0"; exit = "block_1" }
     |}]
 
@@ -86,18 +86,19 @@ let%expect_test "lift: b.eq #1024" =
     { Aslp_state.address = 0x2000:bv64;
       blocks = "block_0"
       -> { Aslp_state.assume = None; stmts = []; succs = ["block_1"; "block_2"];
-           has_pc_assign = false },
+           pc_assign = None },
       "block_1"
       -> { Aslp_state.assume = (Some eq($PSTATE_Z, 0x1:bv1));
            stmts = [var BranchTaken:bool := true; $PC:bv64 := 0x2400:bv64];
-           succs = ["block_3"]; has_pc_assign = true },
+           succs = ["block_3"]; pc_assign = (Some 0x2400:bv64) },
       "block_2"
       -> { Aslp_state.assume = (Some boolnot(eq($PSTATE_Z, 0x1:bv1)));
            stmts = [(var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
-           succs = ["block_3"]; has_pc_assign = true },
+           succs = ["block_3"]; pc_assign = (Some 0x2004:bv64) },
       "block_3"
-      -> { Aslp_state.assume = None; stmts = []; succs = []; has_pc_assign = true
-           };
+      -> { Aslp_state.assume = None; stmts = []; succs = [];
+           pc_assign =
+           (Some if eq($PSTATE_Z, 0x1:bv1) then 0x2400:bv64 else 0x2004:bv64) };
       entry = "block_0"; exit = "block_3" }
     |}]
 

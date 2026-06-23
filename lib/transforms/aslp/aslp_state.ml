@@ -22,9 +22,9 @@ type aslp_block = {
       [@printer Format.map CCVector.to_list (pp_list_for_printing pp_stmt)]
   succs : StringSet.t;
       [@printer Format.map StringSet.to_list (pp_list_for_printing String.pp)]
-  has_pc_assign : bool;
-      (** Whether, upon reaching the end of this block, it is guaranteed that
-          [PC] will have been assigned to on all control-flow paths. *)
+  pc_assign : Expr.BasilExpr.t option;
+      (** The unique assignment to [PC] which is in effect at the end of this
+          block, if [PC] has been assigned. *)
 }
 [@@deriving show]
 (** An ASLp lifter block is a list of statements followed by a non-deterministic
@@ -81,7 +81,7 @@ type lifter_state = {
 
 let empty_block () =
   let stmts = CCVector.create () and succs = StringSet.empty in
-  { assume = None; stmts; succs; has_pc_assign = false }
+  { assume = None; stmts; succs; pc_assign = None }
 
 let empty_aslp_state ~entry () =
   let blocks = StringMap.singleton entry (empty_block ()) in
@@ -139,26 +139,26 @@ let modify_block aslp_state ~name ~f =
 
 (** Appends the given statement to the given block.
 
-    Sets {!has_pc_assign} if the statement is an assignment to {!Aslp_lexpr.PC}.
-    It is assumed that [PC] is assigned at most once on any straight-line path.
+    Sets {!pc_assign} if the statement is an assignment to {!Aslp_lexpr.PC}. It
+    is assumed that [PC] is assigned at most once on any straight-line path.
     Raises an exception if the statement is an assignment to [PC] and
-    {!has_pc_assign} is already set. *)
+    {!pc_assign} is already set. *)
 let add_stmt_to_block blk ~stmt =
-  let has_pc_assign =
+  let pc_assign =
     match stmt with
     | Stmt.Instr_Assign { al = assigns; _ } ->
-        assigns |> List.map fst |> List.mem ~eq:Var.equal Aslp_lexpr.(to_var PC)
-    | _ -> false
+        assigns |> List.Assoc.get ~eq:Var.equal Aslp_lexpr.(to_var PC)
+    | _ -> None
   in
-  match (has_pc_assign, blk.has_pc_assign) with
-  | true, true ->
+  match (pc_assign, blk.pc_assign) with
+  | Some _, Some _ ->
       failwith
-        "add_stmt_to_block: attempt to add PC assignment but has_pc_assign is \
+        "add_stmt_to_block: attempt to add PC assignment but pc_assign is \
          already set"
-  | true, false ->
+  | Some _, None ->
       CCVector.push blk.stmts stmt;
-      { blk with has_pc_assign }
-  | false, _ ->
+      { blk with pc_assign }
+  | None, _ ->
       CCVector.push blk.stmts stmt;
       blk
 
@@ -170,20 +170,20 @@ let add_stmt_to_active stmt (lifter_state : lifter_state) =
   { lifter_state with diamond }
 
 (** Adds a new goto edge from [source] to [target]. If [source] was the exit
-    block, sets {!exit} to be [target]. If [source] {!has_pc_assign}, this is
+    block, sets {!exit} to be [target]. If [source] {!pc_assign}, this is
     propagated to [target]. *)
 let add_goto aslp_state ~source ~target =
   let exit =
     if String.equal source aslp_state.exit then target else aslp_state.exit
   in
-  let src_has_pc_assign =
-    aslp_state |> get_block ~name:source |> fun x -> x.has_pc_assign
+  let src_pc_assign =
+    aslp_state |> get_block ~name:source |> fun x -> x.pc_assign
   in
   aslp_state
   |> modify_block ~name:source ~f:(fun b ->
       { b with succs = StringSet.add target b.succs })
   |> modify_block ~name:target ~f:(fun b ->
-      if src_has_pc_assign then { b with has_pc_assign = src_has_pc_assign }
+      if Option.is_some src_pc_assign then { b with pc_assign = src_pc_assign }
       else b)
   |> fun s -> { s with exit }
 
@@ -207,27 +207,28 @@ let append_aslp_states first second =
 (** {1 Program counter functions} *)
 
 (** Ensures that the given block ID has a PC assignment. If it already
-    {!has_pc_assign}, no changes are made. *)
+    {!pc_assign}, no changes are made. *)
 let ensure_pc_assigned ~name state =
   let address = state.address in
   state
   |> modify_block ~name ~f:(function
-    | { has_pc_assign = false } as block ->
-        let pc = Aslp_lexpr.to_var PC
-        and branchtaken = Aslp_lexpr.to_var BranchTaken in
+    | { pc_assign = None; _ } as block ->
         let incremented =
           Expr.BasilExpr.bvconst Bitvec.(add address (of_int ~size:64 4))
         and boolfalse = Expr.BasilExpr.boolconst false in
-        let al = [ (branchtaken, boolfalse); (pc, incremented) ] in
+
+        let al =
+          Aslp_lexpr.[ (branchtaken_var, boolfalse); (pc_var, incremented) ]
+        in
         block
         |> add_stmt_to_block
              ~stmt:(Stmt.Instr_Assign { attrib = Attrib.empty; al })
     | block -> block)
 
-(** Ensures that the left and right blocks agree on their {!has_pc_assign}
-    property. If [PC] is assigned in only one of the blocks, a default increment
-    statement will be added to the other block and {!has_pc_assign} will be
-    propagated to [join]. Otherwise, nothing changes.
+(** Ensures that the left and right blocks agree on their {!pc_assign} property.
+    If [PC] is assigned in only one of the blocks, a default increment statement
+    will be added to the other block and {!pc_assign} will be propagated to
+    [join]. Otherwise, nothing changes.
 
     This function should be called with blocks in this structure:
     {v
@@ -241,19 +242,30 @@ let ensure_pc_assigned ~name state =
     This is used to maintain the invariant that at every control flow point, the
     [PC] variable is either assigned on all paths or assigned on no paths (from
     the beginning of the instruction). *)
-let ensure_pc_consistency state ~left ~right ~join =
-  let has_pc_assign, state =
-    match
-      ( (get_block state ~name:left).has_pc_assign,
-        (get_block state ~name:right).has_pc_assign )
-    with
-    | true, false -> (true, state |> ensure_pc_assigned ~name:right)
-    | false, true -> (true, state |> ensure_pc_assigned ~name:left)
-    | _ -> (false, state)
+let ensure_pc_consistency state ~left:lname ~right:rname ~join =
+  let left = get_block state ~name:lname
+  and right = get_block state ~name:rname in
+  let left, right, state =
+    match (left.pc_assign, right.pc_assign) with
+    | Some _, None ->
+        let state = state |> ensure_pc_assigned ~name:rname in
+        (left, get_block state ~name:rname, state)
+    | None, Some _ ->
+        let state = state |> ensure_pc_assigned ~name:lname in
+        (get_block state ~name:lname, right, state)
+    | _ -> (left, right, state)
   in
-  if has_pc_assign then
-    state |> modify_block ~name:join ~f:(fun b -> { b with has_pc_assign })
-  else state
+  match (left, right) with
+  | { pc_assign = None }, { pc_assign = None } -> state
+  | { pc_assign = Some lpc; assume = lassume }, { pc_assign = Some rpc } ->
+      let lassume =
+        Option.get_exn_or
+          "invariant violation: branch expected to have assume set" lassume
+      in
+      let ite = Expr.BasilExpr.(ifthenelse lassume lpc rpc) in
+      state
+      |> modify_block ~name:join ~f:(fun b -> { b with pc_assign = Some ite })
+  | _ -> failwith "invariant violation: pcs should agree at this point"
 
 (** {1 Formatters} *)
 
