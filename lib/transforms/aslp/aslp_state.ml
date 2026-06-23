@@ -139,8 +139,7 @@ let add_stmt_to_block blk ~stmt =
   let has_pc_assign =
     match stmt with
     | Stmt.Instr_Assign { al = assigns; _ } ->
-        assigns |> List.map fst
-        |> List.mem ~eq:Var.equal Aslp_lexpr.(to_var BranchTaken)
+        assigns |> List.map fst |> List.mem ~eq:Var.equal Aslp_lexpr.(to_var PC)
     | _ -> false
   in
   CCVector.push blk.stmts stmt;
@@ -201,7 +200,7 @@ let ensure_pc_assigned ~name =
           Expr.BasilExpr.(
             applyintrin ~op:`BVADD [ rvar pc; bv_of_int ~size:32 4 ])
         and boolfalse = Expr.BasilExpr.boolconst false in
-        let al = [ (pc, incremented); (branchtaken, boolfalse) ] in
+        let al = [ (branchtaken, boolfalse); (pc, incremented) ] in
         block
         |> add_stmt_to_block
              ~stmt:(Stmt.Instr_Assign { attrib = Attrib.empty; al })

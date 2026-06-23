@@ -14,7 +14,7 @@ let%expect_test "lift empty" =
     { Aslp_state.blocks = "block_0"
       -> { Aslp_state.assume = None;
            stmts =
-           [($PC:bv64 := bvadd($PC, 0x4:bv32), var BranchTaken:bool := false)];
+           [(var BranchTaken:bool := false, $PC:bv64 := bvadd($PC, 0x4:bv32))];
            succs = []; has_pc_assign = true };
       entry = "block_0"; exit = "block_0" }
     |}]
@@ -36,7 +36,7 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
            stmts =
            [var var_0:bv64 := $R2; var var_1:bv64 := $R3;
              $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
-             ($PC:bv64 := bvadd($PC, 0x4:bv32), var BranchTaken:bool := false)];
+             (var BranchTaken:bool := false, $PC:bv64 := bvadd($PC, 0x4:bv32))];
            succs = []; has_pc_assign = true };
       entry = "block_0"; exit = "block_0" }
     |}]
@@ -57,13 +57,13 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
       -> { Aslp_state.assume = None;
            stmts =
            [$R1:bv64 := 0xabcd:bv64;
-             ($PC:bv64 := bvadd($PC, 0x4:bv32), var BranchTaken:bool := false)];
+             (var BranchTaken:bool := false, $PC:bv64 := bvadd($PC, 0x4:bv32))];
            succs = ["block_1"]; has_pc_assign = true },
       "block_1"
       -> { Aslp_state.assume = None;
            stmts =
            [$R1:bv64 := 0xabcd:bv64;
-             ($PC:bv64 := bvadd($PC, 0x4:bv32), var BranchTaken:bool := false)];
+             (var BranchTaken:bool := false, $PC:bv64 := bvadd($PC, 0x4:bv32))];
            succs = []; has_pc_assign = true };
       entry = "block_0"; exit = "block_1" }
     |}]
@@ -90,7 +90,7 @@ let%expect_test "lift: b.eq #1024" =
       "block_2"
       -> { Aslp_state.assume = (Some boolnot(eq($PSTATE_Z, 0x1:bv1)));
            stmts =
-           [($PC:bv64 := bvadd($PC, 0x4:bv32), var BranchTaken:bool := false)];
+           [(var BranchTaken:bool := false, $PC:bv64 := bvadd($PC, 0x4:bv32))];
            succs = ["block_3"]; has_pc_assign = true },
       "block_3"
       -> { Aslp_state.assume = None; stmts = []; succs = []; has_pc_assign = true
