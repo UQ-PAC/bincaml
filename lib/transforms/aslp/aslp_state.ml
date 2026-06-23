@@ -135,6 +135,12 @@ let modify_block aslp_state ~name ~f =
   in
   { aslp_state with blocks }
 
+(** Appends the given statement to the given block.
+
+    Sets {!has_pc_assign} if the statement is an assignment to {!Aslp_lexpr.PC}.
+    It is assumed that [PC] is assigned at most once on any straight-line path.
+    Raises an exception if the statement is an assignment to [PC] and
+    {!has_pc_assign} is already set. *)
 let add_stmt_to_block blk ~stmt =
   let has_pc_assign =
     match stmt with
@@ -150,7 +156,9 @@ let add_stmt_to_block blk ~stmt =
   | true, false ->
       CCVector.push blk.stmts stmt;
       { blk with has_pc_assign }
-  | false, _ -> blk
+  | false, _ ->
+      CCVector.push blk.stmts stmt;
+      blk
 
 let add_stmt_to_active stmt (lifter_state : lifter_state) =
   let diamond =
