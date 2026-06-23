@@ -165,13 +165,15 @@ let add_goto aslp_state ~source ~target =
   let exit =
     if String.equal source aslp_state.exit then target else aslp_state.exit
   in
-  let has_pc_assign = ref false in
+  let src_has_pc_assign =
+    aslp_state |> get_block ~name:source |> fun x -> x.has_pc_assign
+  in
   aslp_state
   |> modify_block ~name:source ~f:(fun b ->
-      has_pc_assign := b.has_pc_assign;
       { b with succs = StringSet.add target b.succs })
   |> modify_block ~name:target ~f:(fun b ->
-      if !has_pc_assign then { b with has_pc_assign = !has_pc_assign } else b)
+      if src_has_pc_assign then { b with has_pc_assign = src_has_pc_assign }
+      else b)
   |> fun s -> { s with exit }
 
 (** Creates a new block with the given name as a successor of the given [pred].

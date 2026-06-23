@@ -205,19 +205,19 @@ struct
     and ncond = Expr.BasilExpr.boolnot cond in
 
     let t = block_id () and f = block_id () and m = block_id () in
-
-    let original_succs = ref StringSet.empty in
+    let original_succs =
+      st.diamond |> Aslp_state.get_block ~name:st.active |> fun x -> x.succs
+    in
     let diamond =
       st.diamond
       |> Aslp_state.modify_block ~name:st.active ~f:(fun b ->
-          original_succs := b.succs;
           { b with succs = StringSet.empty })
       |> Aslp_state.add_block ~pred:st.active ~name:t ~assume:cond
       |> Aslp_state.add_block ~pred:st.active ~name:f ~assume:ncond
       |> Aslp_state.add_block ~pred:t ~name:m
       |> Aslp_state.add_goto ~source:f ~target:m
       |> Aslp_state.modify_block ~name:m ~f:(fun b ->
-          { b with succs = !original_succs })
+          { b with succs = original_succs })
     in
     S.bincaml_lifter_state := { st with diamond };
 
