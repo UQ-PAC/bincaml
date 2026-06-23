@@ -139,13 +139,8 @@ let add_stmt_to_block blk ~stmt =
   let has_pc_assign =
     match stmt with
     | Stmt.Instr_Assign { al = assigns; _ } ->
-        let branchtaken = Aslp_lexpr.(to_var BranchTaken) in
-        assigns
-        |> List.Assoc.map_values Expr.BasilExpr.unfix
-        |> List.exists (function
-          | l, Abstract_expr.AbstractExpr.Constant { const = `Bool true; _ } ->
-              Var.equal l branchtaken
-          | _ -> false)
+        assigns |> List.map fst
+        |> List.mem ~eq:Var.equal Aslp_lexpr.(to_var BranchTaken)
     | _ -> false
   in
   CCVector.push blk.stmts stmt;
