@@ -138,11 +138,16 @@ let modify_block aslp_state ~name ~f =
 let add_stmt_to_block blk ~stmt =
   let has_pc_assign =
     match stmt with
-    | Stmt.Instr_Assign _ ->
-        Stmt.iter_assigned stmt |> Iter.mem ~eq:Var.equal Aslp_lexpr.(to_var PC)
+    | Stmt.Instr_Assign { al = assigns; _ } ->
+        let branchtaken = Aslp_lexpr.(to_var BranchTaken) in
+        assigns
+        |> List.Assoc.map_values Expr.BasilExpr.unfix
+        |> List.exists (function
+          | l, Abstract_expr.AbstractExpr.Constant { const = `Bool true; _ } ->
+              Var.equal l branchtaken
+          | _ -> false)
     | _ -> false
   in
-
   CCVector.push blk.stmts stmt;
   if has_pc_assign then { blk with has_pc_assign } else blk
 
