@@ -3,27 +3,35 @@ open Common
 
 (** {1 Types} *)
 
-type stmt =
-  ((Var.t, Var.t, Expr.BasilExpr.t) Stmt.t[@printer Stmt.pp_stmt_basil])
-[@@deriving show]
+open struct
+  type stmt =
+    ((Var.t, Var.t, Expr.BasilExpr.t) Stmt.t[@printer Stmt.pp_stmt_basil])
+  [@@deriving show]
+end
+
+type nonrec stmt = stmt
 (** A statement within the Bincaml AST. This is just a type alias. *)
 
 open struct
-  type stmt_list_for_printing = stmt list [@@deriving show]
+  type 'a list_for_printing = 'a list [@@deriving show]
 end
 
 type aslp_block = {
   assume : Expr.BasilExpr.t option;
   stmts : stmt CCVector.vector;
-      [@printer Format.map CCVector.to_list pp_stmt_list_for_printing]
-  succs : string list;
+      [@printer Format.map CCVector.to_list (pp_list_for_printing pp_stmt)]
+  succs : StringSet.t;
+      [@printer Format.map StringSet.to_list (pp_list_for_printing String.pp)]
+  has_pc_assign : bool;
+      (** Whether, upon reaching the end of this block, it is guaranteed that
+          [PC] will have been assigned to on all control-flow paths. *)
 }
 [@@deriving show]
 (** An ASLp lifter block is a list of statements followed by a non-deterministic
     goto to a number of successors. Each block is optionally guarded by an
     assume statement. *)
 
-type aslp_state = {
+type aslp_diamond = {
   blocks : aslp_block StringMap.t;
       [@printer StringMap.pp CCString.pp pp_aslp_block]
   entry : string;
@@ -41,7 +49,7 @@ type aslp_state = {
     Alone, this is used to represent the lifter state {i between} instructions.
     Or, it forms a part of {!lifter_state} for {i within}-instruction state. *)
 
-type aslp_ids = { block_ids : unit -> int; local_ids : unit -> int }
+type aslp_ids = { block_id : unit -> string; local_id : unit -> string }
 (** Generators for unique IDs used by the offline lifter.
 
     The {!aslp_ids} is stateful and the same {!aslp_ids} should be used by all
@@ -50,8 +58,9 @@ type aslp_ids = { block_ids : unit -> int; local_ids : unit -> int }
 type lifter_state = {
   active : string;
       (** Active block where new runtime statements will be appended. *)
-  state : aslp_state;  (** Lifter state representing a control flow diamond. *)
-  generator : aslp_ids; [@opaque]  (** Generators for ID numbers. *)
+  diamond : aslp_diamond;
+      (** Lifter state representing a control flow diamond. *)
+  generator : aslp_ids; [@opaque]  (** Generators for ID names. *)
   names : (string, string) Hashtbl.t;
       (** Map of ASLp local variable names to the "ID-ified" names produced for
           Bincaml.
@@ -68,29 +77,23 @@ type lifter_state = {
 
 (** {1 Utility functions} *)
 
-let empty_aslp_state ~entry ~exit () =
-  let blocks =
-    StringMap.of_list
-      [
-        (entry, { assume = None; stmts = CCVector.create (); succs = [ exit ] });
-        (exit, { assume = None; stmts = CCVector.create (); succs = [] });
-      ]
-  in
-  { blocks; entry; exit }
+let empty_block () =
+  let stmts = CCVector.create () and succs = StringSet.empty in
+  { assume = None; stmts; succs; has_pc_assign = false }
 
-let gen_block_id gens = Printf.sprintf "block_%d" @@ gens.block_ids ()
-let gen_local_id gens = Printf.sprintf "var_%d" @@ gens.local_ids ()
+let empty_aslp_state ~entry () =
+  let blocks = StringMap.singleton entry (empty_block ()) in
+  { blocks; entry; exit = entry }
 
 (** Constructs a new empty {!lifter_state}.
 
     Callers should consider whether they wish to re-use an existing [generator]
     value by passing it explicitly. *)
 let empty_lifter_state ~generator () =
-  let entry = gen_block_id generator in
-  let exit = gen_block_id generator in
+  let entry = generator.block_id () in
   {
     active = entry;
-    state = empty_aslp_state ~entry ~exit ();
+    diamond = empty_aslp_state ~entry ();
     names = Hashtbl.create 16;
     generator;
   }
@@ -100,7 +103,9 @@ let empty_lifter_state ~generator () =
     Be careful! You should use {!aslp_ids_from_generators} if you will use the
     lifted statements within an existing Bincaml IR. *)
 let empty_aslp_ids () =
-  { block_ids = Fix.Gensym.make (); local_ids = Fix.Gensym.make () }
+  let block_id = Fix.Gensym.make () %> Printf.sprintf "block_%d"
+  and local_id = Fix.Gensym.make () %> Printf.sprintf "var_%d" in
+  { block_id; local_id }
 
 (** {2 ID-generating functions} *)
 
@@ -110,56 +115,148 @@ let empty_aslp_ids () =
     This will ensure that ASLp's local variable and block names do not clash
     with existing names. *)
 let aslp_ids_from_generators ~block_ids ~local_ids =
-  let block_ids = ID.index % ID.fresh block_ids in
-  let local_ids = ID.index % ID.fresh local_ids in
-  { block_ids; local_ids }
-
-let gen_block_id = gen_block_id
-let gen_local_id = gen_local_id
+  let block_id = ID.fresh ~name:"block" block_ids %> ID.name
+  and local_id = ID.fresh ~name:"var" local_ids %> ID.name in
+  { block_id; local_id }
 
 (** {1 State manipulation functions} *)
 
-let add_stmt_to_block state key stmt =
-  let blocks =
-    StringMap.update key
-      (function
-        | Some blk ->
-            CCVector.push blk.stmts stmt;
-            Some blk
-        | None -> failwith "add_stmt: block not found")
-      state.blocks
-  in
-  { state with blocks }
+let get_block aslp_state ~name =
+  StringMap.find_opt name aslp_state.blocks
+  |> Option.get_exn_or "get_block: block not found"
 
-let add_stmt_to_active (lifter_state : lifter_state) stmt =
-  let state = add_stmt_to_block lifter_state.state lifter_state.active stmt in
-  { lifter_state with state }
-
-let add_goto aslp_state ~source ~target =
+let modify_block aslp_state ~name ~f =
   let blocks =
-    StringMap.update source
+    StringMap.update name
       (function
-        | Some blk -> Some { blk with succs = target :: blk.succs }
-        | _ -> failwith "add_goto: block not found")
+        | Some blk -> Some (f blk)
+        | _ -> failwith "modify_block: block not found")
       aslp_state.blocks
   in
   { aslp_state with blocks }
 
+(** Appends the given statement to the given block.
+
+    Sets {!has_pc_assign} if the statement is an assignment to {!Aslp_lexpr.PC}.
+    It is assumed that [PC] is assigned at most once on any straight-line path.
+    Raises an exception if the statement is an assignment to [PC] and
+    {!has_pc_assign} is already set. *)
+let add_stmt_to_block blk ~stmt =
+  let has_pc_assign =
+    match stmt with
+    | Stmt.Instr_Assign { al = assigns; _ } ->
+        assigns |> List.map fst |> List.mem ~eq:Var.equal Aslp_lexpr.(to_var PC)
+    | _ -> false
+  in
+  match (has_pc_assign, blk.has_pc_assign) with
+  | true, true ->
+      failwith
+        "add_stmt_to_block: attempt to add PC assignment but has_pc_assign is \
+         already set"
+  | true, false ->
+      CCVector.push blk.stmts stmt;
+      { blk with has_pc_assign }
+  | false, _ ->
+      CCVector.push blk.stmts stmt;
+      blk
+
+let add_stmt_to_active stmt (lifter_state : lifter_state) =
+  let diamond =
+    lifter_state.diamond
+    |> modify_block ~name:lifter_state.active ~f:(add_stmt_to_block ~stmt)
+  in
+  { lifter_state with diamond }
+
+(** Adds a new goto edge from [source] to [target]. If [source] was the exit
+    block, sets {!exit} to be [target]. If [source] {!has_pc_assign}, this is
+    propagated to [target]. *)
+let add_goto aslp_state ~source ~target =
+  let exit =
+    if String.equal source aslp_state.exit then target else aslp_state.exit
+  in
+  let src_has_pc_assign =
+    aslp_state |> get_block ~name:source |> fun x -> x.has_pc_assign
+  in
+  aslp_state
+  |> modify_block ~name:source ~f:(fun b ->
+      { b with succs = StringSet.add target b.succs })
+  |> modify_block ~name:target ~f:(fun b ->
+      if src_has_pc_assign then { b with has_pc_assign = src_has_pc_assign }
+      else b)
+  |> fun s -> { s with exit }
+
+(** Creates a new block with the given name as a successor of the given [pred].
+    If [pred] was the exit block, sets {!exit} to be the new block. *)
+let add_block ?assume aslp_state ~pred ~name =
+  let new_block = { (empty_block ()) with assume } in
+  let blocks = aslp_state.blocks |> StringMap.add name new_block in
+  { aslp_state with blocks } |> add_goto ~source:pred ~target:name
+
+(** Sequentially joins the given {!aslp_diamond}s such that [first] is succeeded
+    by [second]. *)
 let append_aslp_states first second =
   let f key = function
     | `Both _ -> failwith "overlapping aslp_state block names"
     | `Left a | `Right a -> Some a
   in
   let blocks = StringMap.merge_safe ~f first.blocks second.blocks in
-  add_goto
-    { blocks; entry = first.entry; exit = second.exit }
-    ~source:first.exit ~target:second.entry
+  { first with blocks } |> add_goto ~source:first.exit ~target:second.entry
+
+(** {1 Program counter functions} *)
+
+(** Ensures that the given block ID has a PC assignment. If it already
+    {!has_pc_assign}, no changes are made. *)
+let ensure_pc_assigned ~name =
+  modify_block ~name ~f:(function
+    | { has_pc_assign = false } as block ->
+        let pc = Aslp_lexpr.to_var PC
+        and branchtaken = Aslp_lexpr.to_var BranchTaken in
+        let incremented =
+          Expr.BasilExpr.(
+            applyintrin ~op:`BVADD [ rvar pc; bv_of_int ~size:32 4 ])
+        and boolfalse = Expr.BasilExpr.boolconst false in
+        let al = [ (branchtaken, boolfalse); (pc, incremented) ] in
+        block
+        |> add_stmt_to_block
+             ~stmt:(Stmt.Instr_Assign { attrib = Attrib.empty; al })
+    | block -> block)
+
+(** Ensures that the left and right blocks agree on their {!has_pc_assign}
+    property. If [PC] is assigned in only one of the blocks, a default increment
+    statement will be added to the other block and {!has_pc_assign} will be
+    propagated to [join]. Otherwise, nothing changes.
+
+    This function should be called with blocks in this structure:
+    {v
+    left  right
+      \    /
+       join
+    v}
+    It should be called after [left] and [right] have been populated with
+    statements, before moving to [join].
+
+    This is used to maintain the invariant that at every control flow point, the
+    [PC] variable is either assigned on all paths or assigned on no paths (from
+    the beginning of the instruction). *)
+let ensure_pc_consistency state ~left ~right ~join =
+  let has_pc_assign, state =
+    match
+      ( (get_block state ~name:left).has_pc_assign,
+        (get_block state ~name:right).has_pc_assign )
+    with
+    | true, false -> (true, state |> ensure_pc_assigned ~name:right)
+    | false, true -> (true, state |> ensure_pc_assigned ~name:left)
+    | _ -> (false, state)
+  in
+  if has_pc_assign then
+    state |> modify_block ~name:join ~f:(fun b -> { b with has_pc_assign })
+  else state
 
 (** {1 Formatters} *)
 
 let show_aslp_block = show_aslp_block
 let pp_aslp_block = pp_aslp_block
-let show_aslp_state = show_aslp_state
-let pp_aslp_state = pp_aslp_state
+let show_aslp_diamond = show_aslp_diamond
+let pp_aslp_diamond = pp_aslp_diamond
 let show_lifter_state = show_lifter_state
 let pp_lifter_state = pp_lifter_state

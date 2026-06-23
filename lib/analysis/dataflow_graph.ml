@@ -216,7 +216,7 @@ module SimpleSolver = struct
   module WL = Worklist.Make (Vertex)
 
   let deps ~assume_ssi (dir : [ `Backwards | `Forwards ]) p lookup v =
-    (* this is hacky to support ssi without proper sigma nodes in the IR; we should add them to block 
+    (* this is hacky to support ssi without proper sigma nodes in the IR; we should add them to block
        type probably *)
     let all_deps =
       let defines (v : Vertex.t) =

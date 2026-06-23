@@ -8,13 +8,15 @@ let%expect_test "lift empty" =
   let x =
     lift_code_block (module I) ~address:(Bitvec.zero ~size:64) @@ Iter.empty
   in
-  print_endline @@ Aslp_state.show_aslp_state x;
+  print_endline @@ Aslp_state.show_aslp_diamond x;
   [%expect
     {|
     { Aslp_state.blocks = "block_0"
-      -> { Aslp_state.assume = None; stmts = []; succs = ["block_1"] }, "block_1"
-      -> { Aslp_state.assume = None; stmts = []; succs = [] }; entry = "block_0";
-      exit = "block_1" }
+      -> { Aslp_state.assume = None;
+           stmts =
+           [(var BranchTaken:bool := false, $PC:bv64 := bvadd($PC, 0x4:bv32))];
+           succs = []; has_pc_assign = true };
+      entry = "block_0"; exit = "block_0" }
     |}]
 
 let%expect_test "lift: add x1, x2, x3, lsl #4" =
@@ -26,17 +28,17 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
       ~address:(Bitvec.zero ~size:64)
       (Bitvec.of_string "0x8b031041:bv32")
   in
-  print_endline @@ Aslp_state.show_aslp_state x;
+  print_endline @@ Aslp_state.show_aslp_diamond x;
   [%expect
     {|
     { Aslp_state.blocks = "block_0"
       -> { Aslp_state.assume = None;
            stmts =
-           [var var_0:bv64 := v__R2:bv64; var var_1:bv64 := v__R3:bv64;
-             var v__R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12))];
-           succs = ["block_1"] },
-      "block_1" -> { Aslp_state.assume = None; stmts = []; succs = [] };
-      entry = "block_0"; exit = "block_1" }
+           [var var_0:bv64 := $R2; var var_1:bv64 := $R3;
+             $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
+             (var BranchTaken:bool := false, $PC:bv64 := bvadd($PC, 0x4:bv32))];
+           succs = []; has_pc_assign = true };
+      entry = "block_0"; exit = "block_0" }
     |}]
 
 let%expect_test "lift 2x: mov x1, #0xabcd" =
@@ -48,17 +50,51 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
          (Bitvec.of_string "0xd29579a1:bv32")
          (Bitvec.of_string "0xd29579a1:bv32")
   in
-  print_endline @@ Aslp_state.show_aslp_state x;
+  print_endline @@ Aslp_state.show_aslp_diamond x;
   [%expect
     {|
     { Aslp_state.blocks = "block_0"
-      -> { Aslp_state.assume = None; stmts = [var v__R1:bv64 := 0xabcd:bv64];
-           succs = ["block_1"] },
-      "block_1" -> { Aslp_state.assume = None; stmts = []; succs = ["block_2"] },
+      -> { Aslp_state.assume = None;
+           stmts =
+           [$R1:bv64 := 0xabcd:bv64;
+             (var BranchTaken:bool := false, $PC:bv64 := bvadd($PC, 0x4:bv32))];
+           succs = ["block_1"]; has_pc_assign = true },
+      "block_1"
+      -> { Aslp_state.assume = None;
+           stmts =
+           [$R1:bv64 := 0xabcd:bv64;
+             (var BranchTaken:bool := false, $PC:bv64 := bvadd($PC, 0x4:bv32))];
+           succs = []; has_pc_assign = true };
+      entry = "block_0"; exit = "block_1" }
+    |}]
+
+let%expect_test "lift: b.eq #1024" =
+  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  in
+  let x =
+    lift_opcode
+      (module I)
+      ~address:(Bitvec.zero ~size:64)
+      (Bitvec.of_string "0x54002000:bv32")
+  in
+  print_endline @@ Aslp_state.show_aslp_diamond x;
+  [%expect
+    {|
+    { Aslp_state.blocks = "block_0"
+      -> { Aslp_state.assume = None; stmts = []; succs = ["block_1"; "block_2"];
+           has_pc_assign = false },
+      "block_1"
+      -> { Aslp_state.assume = (Some eq($PSTATE_Z, 0x1:bv1));
+           stmts = [var BranchTaken:bool := true; $PC:bv64 := 0x400:bv64];
+           succs = ["block_3"]; has_pc_assign = true },
       "block_2"
-      -> { Aslp_state.assume = None; stmts = [var v__R1:bv64 := 0xabcd:bv64];
-           succs = ["block_3"] },
-      "block_3" -> { Aslp_state.assume = None; stmts = []; succs = [] };
+      -> { Aslp_state.assume = (Some boolnot(eq($PSTATE_Z, 0x1:bv1)));
+           stmts =
+           [(var BranchTaken:bool := false, $PC:bv64 := bvadd($PC, 0x4:bv32))];
+           succs = ["block_3"]; has_pc_assign = true },
+      "block_3"
+      -> { Aslp_state.assume = None; stmts = []; succs = []; has_pc_assign = true
+           };
       entry = "block_0"; exit = "block_3" }
     |}]
 

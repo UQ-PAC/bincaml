@@ -6,40 +6,52 @@ module Make (S : sig
   val bincaml_lifter_state : Aslp_state.lifter_state ref
 end) =
 struct
+  (** {2 Type definitions} *)
+
+  type bigint = Z.t
+  type bitvector = Bitvec.t
+  type expr = Expr.BasilExpr.t
+  type lexpr = Aslp_lexpr.t
+  type stmt = Aslp_state.stmt
+
+  type branch =
+    [ `T of string
+    | `F of string
+    | `M of string * (string * string)
+      (** A merge branch also records its true and false predecessors to
+          propagate PC information. *) ]
+
+  type ast = Aslp_state.aslp_diamond
+
   (** {2 Bincaml-specific utility functions} *)
+
+  (** Emits the given Bincaml statement. *)
 
   let bincaml_emit stmt =
     S.bincaml_lifter_state :=
-      Aslp_state.add_stmt_to_active !S.bincaml_lifter_state stmt
+      !S.bincaml_lifter_state |> Aslp_state.add_stmt_to_active stmt
 
   let bincaml_local_var name ty =
     let id_name =
       match Hashtbl.find_opt !S.bincaml_lifter_state.names name with
       | None ->
-          let id_name =
-            Aslp_state.gen_local_id !S.bincaml_lifter_state.generator
-          in
+          let id_name = !S.bincaml_lifter_state.generator.local_id () in
           Hashtbl.replace !S.bincaml_lifter_state.names name id_name;
           id_name
       | Some x -> x
     in
-    Var.create id_name ty
+    Aslp_lexpr.Local (id_name, ty)
 
   (** {2 Instruction building interface implementation} *)
-
-  type bigint = Z.t
-  type bitvector = Bitvec.t
-  type expr = Expr.BasilExpr.t
-  type lexpr = Var.t
-  type stmt = Aslp_state.stmt
-  type branch = Branch of string
-  type ast = Aslp_state.aslp_state
 
   let reset_ir () =
     let generator = !S.bincaml_lifter_state.generator in
     S.bincaml_lifter_state := Aslp_state.empty_lifter_state ~generator ()
 
-  let get_ir () = !S.bincaml_lifter_state.state
+  let get_ir () =
+    let diamond = !S.bincaml_lifter_state.diamond in
+    Aslp_state.ensure_pc_assigned ~name:diamond.exit diamond
+
   let bigint_of_string : string -> bigint = Z.of_string_base 10
   let bigint_of_int : int -> bigint = Z.of_int
   let bigint_zero : bigint = Z.zero
@@ -159,85 +171,109 @@ struct
 
   let f_sdiv_int : bigint -> bigint -> bigint = fun _ -> failwith "sdiv int"
   let f_shl_int : bigint -> bigint -> bigint = fun _ -> failwith "shl int"
-  let v_PSTATE_C : lexpr = Var.create "v_PSTATE_C" (Types.Bitvector 1)
-  let v_PSTATE_Z : lexpr = Var.create "v_PSTATE_Z" (Types.Bitvector 1)
-  let v_PSTATE_V : lexpr = Var.create "v_PSTATE_V" (Types.Bitvector 1)
-  let v_PSTATE_N : lexpr = Var.create "v_PSTATE_N" (Types.Bitvector 1)
-  let v__PC : lexpr = Var.create "v__PC" (Types.Bitvector 1)
-  let v__R : lexpr = Var.create "v__R" (Types.Bitvector 0)
-  let v__Z : lexpr = Var.create "v__Z" (Types.Bitvector 0)
-  let v_SP_EL0 : lexpr = Var.create "v_SP_EL0" (Types.Bitvector 1)
-  let v_FPSR : lexpr = Var.create "v_FPSR" (Types.Bitvector 1)
-  let v_FPCR : lexpr = Var.create "v_FPCR" (Types.Bitvector 1)
-  let v_PSTATE_A : lexpr = Var.create "v_PSTATE_A" (Types.Bitvector 1)
-  let v_PSTATE_D : lexpr = Var.create "v_PSTATE_D" (Types.Bitvector 1)
-  let v_PSTATE_DIT : lexpr = Var.create "v_PSTATE_DIT" (Types.Bitvector 1)
-  let v_PSTATE_F : lexpr = Var.create "v_PSTATE_F" (Types.Bitvector 1)
-  let v_PSTATE_I : lexpr = Var.create "v_PSTATE_I" (Types.Bitvector 1)
-  let v_PSTATE_PAN : lexpr = Var.create "v_PSTATE_PAN" (Types.Bitvector 1)
-  let v_PSTATE_SP : lexpr = Var.create "v_PSTATE_SP" (Types.Bitvector 1)
-  let v_PSTATE_SSBS : lexpr = Var.create "v_PSTATE_SSBS" (Types.Bitvector 1)
-  let v_PSTATE_TCO : lexpr = Var.create "v_PSTATE_TCO" (Types.Bitvector 1)
-  let v_PSTATE_UAO : lexpr = Var.create "v_PSTATE_UAO" (Types.Bitvector 1)
-  let v_PSTATE_BTYPE : lexpr = Var.create "v_PSTATE_BTYPE" (Types.Bitvector 1)
-
-  let v_BTypeCompatible : lexpr =
-    Var.create "v_BTypeCompatible" (Types.Bitvector 1)
-
-  let v___BranchTaken : lexpr = Var.create "v___BranchTaken" (Types.Bitvector 1)
-  let v_BTypeNext : lexpr = Var.create "v_BTypeNext" (Types.Bitvector 1)
-
-  let v___ExclusiveLocal : lexpr =
-    Var.create "v___ExclusiveLocal" (Types.Bitvector 1)
-
-  let f_switch_context : branch -> unit = fun _ -> failwith "f_switch_context"
+  let v_PSTATE_C : lexpr = PSTATE_C
+  let v_PSTATE_Z : lexpr = PSTATE_Z
+  let v_PSTATE_V : lexpr = PSTATE_V
+  let v_PSTATE_N : lexpr = PSTATE_N
+  let v__PC : lexpr = PC
+  let v__R : lexpr = R None
+  let v__Z : lexpr = Z None
+  let v_SP_EL0 : lexpr = SP_EL0
+  let v_FPSR : lexpr = FPSR
+  let v_FPCR : lexpr = FPCR
+  let v_PSTATE_A : lexpr = PSTATE_A
+  let v_PSTATE_D : lexpr = PSTATE_D
+  let v_PSTATE_DIT : lexpr = PSTATE_DIT
+  let v_PSTATE_F : lexpr = PSTATE_F
+  let v_PSTATE_I : lexpr = PSTATE_I
+  let v_PSTATE_PAN : lexpr = PSTATE_PAN
+  let v_PSTATE_SP : lexpr = PSTATE_SP
+  let v_PSTATE_SSBS : lexpr = PSTATE_SSBS
+  let v_PSTATE_TCO : lexpr = PSTATE_TCO
+  let v_PSTATE_UAO : lexpr = PSTATE_UAO
+  let v_PSTATE_BTYPE : lexpr = PSTATE_BTYPE
+  let v_BTypeCompatible : lexpr = BTypeCompatible
+  let v___BranchTaken : lexpr = BranchTaken
+  let v_BTypeNext : lexpr = BTypeNext
+  let v___ExclusiveLocal : lexpr = ExclusiveLocal
 
   let f_gen_branch : expr -> branch * branch * branch =
-   fun _ -> failwith "f_gen_branch"
+   fun cond ->
+    let st = !S.bincaml_lifter_state in
+    let block_id = st.generator.block_id
+    and ncond = Expr.BasilExpr.boolnot cond in
 
-  let f_true_branch : branch * branch * branch -> branch =
-   fun _ -> failwith "f_true_branch"
+    let t = block_id () and f = block_id () and m = block_id () in
+    let original_succs =
+      st.diamond |> Aslp_state.get_block ~name:st.active |> fun x -> x.succs
+    in
+    let diamond =
+      st.diamond
+      |> Aslp_state.modify_block ~name:st.active ~f:(fun b ->
+          { b with succs = StringSet.empty })
+      |> Aslp_state.add_block ~pred:st.active ~name:t ~assume:cond
+      |> Aslp_state.add_block ~pred:st.active ~name:f ~assume:ncond
+      |> Aslp_state.add_block ~pred:t ~name:m
+      |> Aslp_state.add_goto ~source:f ~target:m
+      |> Aslp_state.modify_block ~name:m ~f:(fun b ->
+          { b with succs = original_succs })
+    in
+    S.bincaml_lifter_state := { st with diamond };
+    (`T t, `F f, `M (m, (t, f)))
 
-  let f_false_branch : branch * branch * branch -> branch =
-   fun _ -> failwith "f_false_branch"
+  let f_switch_context : branch -> unit =
+   fun b ->
+    let diamond = !S.bincaml_lifter_state.diamond in
+    let active, diamond =
+      match b with
+      | `T x | `F x -> (x, diamond)
+      | `M (m, (t, f)) ->
+          ( m,
+            diamond |> Aslp_state.ensure_pc_consistency ~left:t ~right:f ~join:m
+          )
+    in
+    S.bincaml_lifter_state := { !S.bincaml_lifter_state with active; diamond }
 
-  let f_merge_branch : branch * branch * branch -> branch =
-   fun _ -> failwith "f_merge_branch"
+  let f_true_branch : branch * branch * branch -> branch = fun (t, f, m) -> t
+  let f_false_branch : branch * branch * branch -> branch = fun (t, f, m) -> f
+  let f_merge_branch : branch * branch * branch -> branch = fun (t, f, m) -> m
 
-  let f_gen_assert : expr -> unit = fun _ -> failwith "f_gen_assert"
+  let f_gen_assert : expr -> unit =
+   fun e -> bincaml_emit (Stmt.Instr_Assert { attrib = Attrib.empty; body = e })
 
   let f_gen_bit_lit : bigint -> bitvector -> expr =
    fun _ bv -> Expr.BasilExpr.const (`Bitvector bv)
 
-  let f_gen_bool_lit : bool -> expr = fun _ -> failwith "f_gen_bool_lit"
-  let f_gen_int_lit : bigint -> expr = fun _ -> failwith "f_gen_int_lit"
+  let f_gen_bool_lit : bool -> expr = Expr.BasilExpr.boolconst
+  let f_gen_int_lit : bigint -> expr = Expr.BasilExpr.intconst
 
   let f_decl_bv : string -> bigint -> lexpr =
    fun name size -> bincaml_local_var name (Types.Bitvector (Z.to_int size))
 
   let f_decl_bool : string -> lexpr = fun _ -> failwith "f_decl_bool"
-  let f_gen_load : lexpr -> expr = fun lhs -> Expr.BasilExpr.rvar lhs
+
+  let f_gen_load : lexpr -> expr =
+   fun lhs -> Expr.BasilExpr.rvar (Aslp_lexpr.to_var lhs)
 
   let f_gen_store : lexpr -> expr -> unit =
    fun lhs rhs ->
     bincaml_emit
-      (Stmt.Instr_Assign { attrib = Attrib.empty; al = [ (lhs, rhs) ] })
+      (Stmt.Instr_Assign
+         { attrib = Attrib.empty; al = [ (Aslp_lexpr.to_var lhs, rhs) ] })
 
   let f_gen_array_load : lexpr -> bigint -> expr =
    fun array idx ->
-    match Var.name array with
-    | "v__R" ->
-        f_gen_load (Var.create ("v__R" ^ Z.to_string idx) (Types.Bitvector 64))
-    | x -> failwith x
+    match array with
+    | R None -> f_gen_load (R (Some (Z.to_int idx)))
+    | Z None -> f_gen_load (Z (Some (Z.to_int idx)))
+    | x -> failwith @@ "f_gen_array_load: " ^ Aslp_lexpr.show x
 
   let f_gen_array_store : lexpr -> bigint -> expr -> unit =
    fun array idx rhs ->
-    match Var.name array with
-    | "v__R" ->
-        f_gen_store
-          (Var.create ("v__R" ^ Z.to_string idx) (Types.Bitvector 64))
-          rhs
-    | x -> failwith x
+    match array with
+    | R None -> f_gen_store (R (Some (Z.to_int idx))) rhs
+    | Z None -> f_gen_store (Z (Some (Z.to_int idx))) rhs
+    | x -> failwith @@ "f_gen_array_store: " ^ Aslp_lexpr.show x
 
   let f_gen_Elem_read : bigint -> bigint -> expr -> expr -> expr -> expr =
    fun _ -> failwith "f_gen_Elem_read"
@@ -265,62 +301,67 @@ struct
   let f_gen_AArch64_MemTag_read : expr -> expr -> expr =
    fun _ -> failwith "f_gen_AArch64_MemTag_read"
 
-  let f_gen_and_bool : expr -> expr -> expr = fun _ -> failwith "f_gen_and_bool"
-  let f_gen_or_bool : expr -> expr -> expr = fun _ -> failwith "f_gen_or_bool"
-  let f_gen_not_bool : expr -> expr = fun _ -> failwith "f_gen_not_bool"
+  let f_gen_and_bool : expr -> expr -> expr =
+   fun a b -> Expr.BasilExpr.applyintrin ~op:`AND [ a; b ]
+
+  let f_gen_or_bool : expr -> expr -> expr =
+   fun a b -> Expr.BasilExpr.applyintrin ~op:`OR [ a; b ]
+
+  let f_gen_not_bool : expr -> expr =
+   fun a -> Expr.BasilExpr.unexp ~op:`BoolNOT a
 
   let f_gen_cvt_bits_uint : bigint -> expr -> expr =
    fun _ -> failwith "f_gen_cvt_bits_uint"
 
   let f_gen_eq_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_eq_bits"
+   fun _ a b -> Expr.BasilExpr.binexp ~op:`EQ a b
 
   let f_gen_ne_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_ne_bits"
+   fun _ a b -> Expr.BasilExpr.binexp ~op:`EQ a b
 
   let f_gen_not_bits : bigint -> expr -> expr =
-   fun _ -> failwith "f_gen_not_bits"
+   fun _ a -> Expr.BasilExpr.unexp ~op:`BVNOT a
 
   let f_gen_cvt_bool_bv : expr -> expr = fun _ -> failwith "f_gen_cvt_bool_bv"
 
   let f_gen_or_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_or_bits"
+   fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVOR [ a; b ]
 
   let f_gen_eor_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_eor_bits"
+   fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVXOR [ a; b ]
 
   let f_gen_and_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_and_bits"
+   fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVAND [ a; b ]
 
   let f_gen_add_bits : bigint -> expr -> expr -> expr =
-   fun _ -> Expr.BasilExpr.binexp ?attrib:None ~op:`BVADD
+   fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVADD [ a; b ]
 
   let f_gen_sub_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_sub_bits"
+   fun _ a b -> Expr.BasilExpr.binexp ~op:`BVSUB a b
 
   let f_gen_sdiv_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_sdiv_bits"
+   fun _ a b -> Expr.BasilExpr.binexp ~op:`BVSDIV a b
 
   let f_gen_sle_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_sle_bits"
+   fun _ a b -> Expr.BasilExpr.binexp ~op:`BVSLE a b
 
   let f_gen_slt_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_slt_bits"
+   fun _ a b -> Expr.BasilExpr.binexp ~op:`BVSLT a b
 
   let f_gen_mul_bits : bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_mul_bits"
+   fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVMUL [ a; b ]
 
   let f_gen_append_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_append_bits"
+   fun _ _ a b -> Expr.BasilExpr.applyintrin ~op:`BVConcat [ a; b ]
 
   let f_gen_lsr_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_lsr_bits"
+   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVLSHR a b
 
   let f_gen_lsl_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ _ -> Expr.BasilExpr.binexp ?attrib:None ~op:`BVSHL
+   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVSHL a b
 
   let f_gen_asr_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_asr_bits"
+   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVASHR a b
 
   (** [f_gen_replicate_bits operand_width num_replications operand
        num_replications] *)
@@ -329,14 +370,19 @@ struct
 
   (** [f_gen_ZeroExtend operand_width result_width operand result_width] *)
   let f_gen_ZeroExtend : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_ZeroExtend"
+   fun op_wd final_wd x _ ->
+    Expr.BasilExpr.zero_extend ~n_prefix_bits:Z.(to_int (final_wd - op_wd)) x
 
   (** [f_gen_SignExtend operand_width result_width operand result_width] *)
   let f_gen_SignExtend : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_SignExtend"
+   fun op_wd final_wd x _ ->
+    Expr.BasilExpr.sign_extend ~n_prefix_bits:Z.(to_int (final_wd - op_wd)) x
 
+  (** [f_gen_slice x lo wd] *)
   let f_gen_slice : expr -> bigint -> bigint -> expr =
-   fun _ -> failwith "f_gen_slice"
+   fun x lo_incl wd ->
+    let hi_excl = Z.(to_int (lo_incl - wd)) and lo_incl = Z.to_int lo_incl in
+    Expr.BasilExpr.extract ~lo_incl ~hi_excl x
 
   (* {1 Floating point intrinsics} *)
 
