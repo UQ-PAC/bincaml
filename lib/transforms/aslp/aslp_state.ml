@@ -142,8 +142,15 @@ let add_stmt_to_block blk ~stmt =
         assigns |> List.map fst |> List.mem ~eq:Var.equal Aslp_lexpr.(to_var PC)
     | _ -> false
   in
-  CCVector.push blk.stmts stmt;
-  if has_pc_assign then { blk with has_pc_assign } else blk
+  match (has_pc_assign, blk.has_pc_assign) with
+  | true, true ->
+      failwith
+        "add_stmt_to_block: attempt to add PC assignment but has_pc_assign is \
+         already set"
+  | true, false ->
+      CCVector.push blk.stmts stmt;
+      { blk with has_pc_assign }
+  | false, _ -> blk
 
 let add_stmt_to_active stmt (lifter_state : lifter_state) =
   let diamond =
