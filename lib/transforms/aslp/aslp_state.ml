@@ -32,6 +32,8 @@ type aslp_block = {
     assume statement. *)
 
 type aslp_diamond = {
+  address : Bitvec.t;
+      (** Byte address of the instruction described by this diamond. *)
   blocks : aslp_block StringMap.t;
       [@printer StringMap.pp CCString.pp pp_aslp_block]
   entry : string;
@@ -83,7 +85,7 @@ let empty_block () =
 
 let empty_aslp_state ~entry () =
   let blocks = StringMap.singleton entry (empty_block ()) in
-  { blocks; entry; exit = entry }
+  { blocks; entry; exit = entry; address = Bitvec.zero ~size:64 }
 
 (** Constructs a new empty {!lifter_state}.
 
@@ -206,14 +208,15 @@ let append_aslp_states first second =
 
 (** Ensures that the given block ID has a PC assignment. If it already
     {!has_pc_assign}, no changes are made. *)
-let ensure_pc_assigned ~name =
-  modify_block ~name ~f:(function
+let ensure_pc_assigned ~name state =
+  let address = state.address in
+  state
+  |> modify_block ~name ~f:(function
     | { has_pc_assign = false } as block ->
         let pc = Aslp_lexpr.to_var PC
         and branchtaken = Aslp_lexpr.to_var BranchTaken in
         let incremented =
-          Expr.BasilExpr.(
-            applyintrin ~op:`BVADD [ rvar pc; bv_of_int ~size:32 4 ])
+          Expr.BasilExpr.bvconst Bitvec.(add address (of_int ~size:64 4))
         and boolfalse = Expr.BasilExpr.boolconst false in
         let al = [ (branchtaken, boolfalse); (pc, incremented) ] in
         block

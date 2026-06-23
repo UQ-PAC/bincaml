@@ -8,6 +8,8 @@ include Bincaml_ibi_make
     {!Lang.Common.Bitvec.t} and the output type as {!Aslp_state.aslp_diamond}
     but leaving other types opaque. *)
 module type IBI = sig
+  val bincaml_set_address : Lang.Common.Bitvec.t -> unit
+
   include
     OfflineASL_pc.Instruction_building_interface.IBI
       with type bitvector = Lang.Common.Bitvec.t

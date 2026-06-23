@@ -15,12 +15,15 @@ let ensure_aslp_globals_exist prog = 9
 (** Requires and ensures that the IBI is in the "reset" state. *)
 let lift_opcode (module I : Bincaml_ibi.IBI) ~address opcode =
   Fun.protect ~finally:I.reset_ir (fun () ->
+      I.bincaml_set_address address;
       OfflineASL_pc.Offline.f_A64_decoder (module I) opcode address;
       I.get_ir ())
 
 (** Requires and ensures that the IBI is in the "reset" state. *)
-let lift_empty (module I : Bincaml_ibi.IBI) () =
-  Fun.protect ~finally:I.reset_ir (fun () -> I.get_ir ())
+let lift_empty (module I : Bincaml_ibi.IBI) ~address () =
+  Fun.protect ~finally:I.reset_ir (fun () ->
+      I.bincaml_set_address address;
+      I.get_ir ())
 
 (** Requires and ensures that the IBI is in the "reset" state. *)
 let lift_code_block (module I : Bincaml_ibi.IBI) ~address opcodes =
@@ -35,4 +38,4 @@ let lift_code_block (module I : Bincaml_ibi.IBI) ~address opcodes =
          | None -> Some lifted
          | Some acc -> Some (Aslp_state.append_aslp_states acc lifted))
        None
-  |> Option.get_lazy (lift_empty (module I))
+  |> Option.get_lazy (lift_empty (module I) ~address)

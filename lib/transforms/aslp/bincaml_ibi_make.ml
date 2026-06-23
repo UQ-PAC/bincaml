@@ -25,8 +25,11 @@ struct
 
   (** {2 Bincaml-specific utility functions} *)
 
-  (** Emits the given Bincaml statement. *)
+  let bincaml_set_address address =
+    let diamond = { !S.bincaml_lifter_state.diamond with address } in
+    S.bincaml_lifter_state := { !S.bincaml_lifter_state with diamond }
 
+  (** Emits the given Bincaml statement. *)
   let bincaml_emit stmt =
     S.bincaml_lifter_state :=
       !S.bincaml_lifter_state |> Aslp_state.add_stmt_to_active stmt
@@ -50,7 +53,7 @@ struct
 
   let get_ir () =
     let diamond = !S.bincaml_lifter_state.diamond in
-    Aslp_state.ensure_pc_assigned ~name:diamond.exit diamond
+    diamond |> Aslp_state.ensure_pc_assigned ~name:diamond.exit
 
   let bigint_of_string : string -> bigint = Z.of_string_base 10
   let bigint_of_int : int -> bigint = Z.of_int
@@ -227,10 +230,8 @@ struct
     let active, diamond =
       match b with
       | `T x | `F x -> (x, diamond)
-      | `M (m, (t, f)) ->
-          ( m,
-            diamond |> Aslp_state.ensure_pc_consistency ~left:t ~right:f ~join:m
-          )
+      | `M (join, (left, right)) ->
+          (join, diamond |> Aslp_state.ensure_pc_consistency ~left ~right ~join)
     in
     S.bincaml_lifter_state := { !S.bincaml_lifter_state with active; diamond }
 
