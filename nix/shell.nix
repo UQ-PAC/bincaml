@@ -1,32 +1,55 @@
-{ lib
-, stdenv
-, mkShell
+{
+  lib,
+  stdenv,
+  mkShell,
 
-# ocaml packages
-, bincaml
-, odoc
-, odig
-, ocaml-lsp
-, ocamlformat
+  # ocaml packages
+  bincaml,
+  bincaml_lsp,
+  odoc,
+  odig,
+  ocaml-lsp,
+  ocamlformat,
 
-# dev packages
-, tree-sitter
-, nodejs-slim
-, perf
-, bnfc-treesitter
+  # dev packages
+  tree-sitter,
+  nodejs-slim,
+  perf,
+  bnfc-treesitter,
+  boogie,
+  cvc5,
+  linol-lwt,
+  linol,
 
+  # lsp
+  logs,
+  mtime,
+  z3,
 }:
 
 mkShell {
   packages = [
-    odoc odig ocaml-lsp ocamlformat
-    tree-sitter nodejs-slim
+    odoc
+    odig
+    ocaml-lsp
+    ocamlformat
+    tree-sitter
+    nodejs-slim
     bnfc-treesitter
+    boogie
+    cvc5
+    bincaml_lsp
+    linol
+    linol-lwt
+    logs
+    mtime
+    z3.out
     # sherlodoc - not in nixpkgs?
-  ] ++ lib.optional stdenv.hostPlatform.isLinux perf;
+  ]
+  ++ lib.optional stdenv.hostPlatform.isLinux perf;
 
   inputsFrom = [
-    bincaml
+    (bincaml.overrideAttrs { doCheck = true; })
   ];
 
   shellHook = ''

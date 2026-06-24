@@ -47,6 +47,7 @@ module IValue = struct
           (fun _ ({ value; _ } : Ops.Record.field) acc ->
             Bitvec.concat acc value)
           fields Bitvec.empty
+    | `Sort _ -> failwith "struct sort unsupported"
 
   let of_constant (v : Ops.AllOps.const) =
     let open Expr.BasilExpr in
@@ -57,6 +58,7 @@ module IValue = struct
     | `Bool b -> if b then true_value else false_value
     | `Pointer (bv, _) -> bv_value bv
     | `Record fields -> bv_value @@ bv_of_constant v
+    | `Sort _ -> failwith "struct sort unsupported"
 
   (** conversion to basil values *)
 
@@ -486,20 +488,10 @@ module IState = struct
       initialised based on whether the random geenrator is passed *)
   let create ?(fuel = 10000) ?random (prog : Program.t) =
     let stack = [] in
-    let pc =
-      {
-        proc =
-          ID.Map.find
-            (prog.entry_proc |> Option.get_exn_or "executing prog with no entry")
-            prog.procs;
-        vert = Exit;
-      }
-    in
+    let proc = Program.entry_proc_exn prog in
+    let pc = { proc; vert = Exit } in
     let memories =
-      prog.globals |> StringMap.values
-      |> Iter.filter_map (function
-        | Program.(Variable { binding }) -> Some binding
-        | _ -> None)
+      Program.global_vars prog
       |> Iter.filter (fun v ->
           match Var.typ v with Map _ -> true | _ -> false)
       |> Iter.map (fun v -> (v, PageTable.create ?use_random_init:random ()))
@@ -511,10 +503,7 @@ module IState = struct
       | None -> Z.zero
     in
     let globals =
-      prog.globals |> StringMap.values
-      |> Iter.filter_map (function
-        | Program.(Variable { binding }) -> Some binding
-        | _ -> None)
+      Program.global_vars prog
       |> Iter.filter (fun v ->
           match Var.typ v with Map _ -> false | _ -> true)
       |> Iter.map (fun v -> (v, init_glob v))
@@ -542,8 +531,9 @@ module IState = struct
 
   let lookup_var v st =
     (match Var.scope v with
-      | Local -> VarMap.find_opt v (stack_top st).locals
-      | Global -> VarMap.find_opt v st.globals)
+      | LocalVar | LocalConst -> VarMap.find_opt v (stack_top st).locals
+      | GlobalVar | GlobalVarShared | GlobalConst ->
+          VarMap.find_opt v st.globals)
     |> function
     | Some v -> v
     | None -> raise (ReadUninit v)
@@ -557,20 +547,21 @@ module IState = struct
 
   let lookup_memory v st =
     match Var.scope v with
-    | Global -> VarMap.find v st.memories
+    | GlobalVar | GlobalConst | GlobalVarShared -> VarMap.find v st.memories
     | _ -> failwith "unsupported"
 
   let write_var var value st =
     let value = IValue.of_constant value in
     match Var.scope var with
-    | Local ->
+    | LocalVar | LocalConst ->
         let stack =
           match st.stack with
           | h :: tl -> { h with locals = VarMap.add var value h.locals } :: tl
           | _ -> failwith "no stack"
         in
         { st with stack }
-    | Global -> { st with globals = VarMap.add var value st.globals }
+    | GlobalVar | GlobalVarShared | GlobalConst ->
+        { st with globals = VarMap.add var value st.globals }
 
   let map f v = (fst v, f (snd v))
 
@@ -622,8 +613,8 @@ module IState = struct
     let st = add_event_stmt st stmt' in
     let st = tick st in
     match stmt' with
-    | Stmt.Instr_Assign assigns ->
-        List.to_iter assigns |> Iter.fold (fun st (l, r) -> write_var l r st) st
+    | Stmt.Instr_Assign { al } ->
+        List.to_iter al |> Iter.fold (fun st (l, r) -> write_var l r st) st
     | Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
         write_var lhs (read_var rhs st) st
     | Stmt.Instr_Store { lhs; value; addr = Scalar } -> write_var lhs value st
@@ -654,7 +645,7 @@ module IState = struct
         st
     | Stmt.Instr_IntrinCall _ -> failwith "unsupported"
     | Stmt.Instr_Call { lhs; procid; args } ->
-        let proc = ID.Map.find procid st.prog.procs in
+        let proc = Program.proc st.prog procid in
         let st, out = call_proc st proc args in
         let st =
           StringMap.fold
@@ -851,7 +842,5 @@ let run_proc prog ?(args = StringMap.empty) proc =
 
 let run_prog ?(args = StringMap.empty) prog =
   let st = IState.create prog in
-  let proc =
-    ID.Map.find (Option.get_exn_or "no main proc" prog.entry_proc) prog.procs
-  in
+  let proc = Program.entry_proc_exn prog in
   IState.call_proc st proc args

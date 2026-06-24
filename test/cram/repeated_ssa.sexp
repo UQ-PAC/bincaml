@@ -1,0 +1,5 @@
+(load-il "repeated_ssa.il")
+(run-transforms "ssa")
+(run-transforms "ssa")
+(run-transforms "ssa")
+(dump-il "out.il")

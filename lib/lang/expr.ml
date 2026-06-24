@@ -1,266 +1,7 @@
 open Common
 open Containers
 open Ops
-
-module AbstractExpr = struct
-  type ('const, 'var, 'unary, 'binary, 'intrin, 'e) simple =
-    | V of 'var  (** variables *)
-    | C of 'const
-        (** constants; a pure intrinsic function with zero arguments *)
-    | Unary of 'unary * 'e
-        (** application of a pure intrinsic function with one arguments *)
-    | Binary of 'binary * 'e * 'e
-    | Intrin of 'intrin * 'e list
-    | FApply of 'e * 'e list
-    | Lambda of Ops.AllOps.lambda * 'var list * 'e
-    | Let of ('var * 'e) list * 'e
-
-  type ('const, 'var, 'unary, 'binary, 'intrin, 'attrib, 'e) t =
-    | RVar of { attrib : 'attrib option; id : 'var }  (** variables *)
-    | Constant of { attrib : 'attrib option; const : 'const }
-        (** constants; a pure intrinsic function with zero arguments *)
-    | UnaryExpr of { attrib : 'attrib option; op : 'unary; arg : 'e }
-        (** application of a pure intrinsic function with one arguments *)
-    | BinaryExpr of {
-        attrib : 'attrib option;
-        op : 'binary;
-        arg1 : 'e;
-        arg2 : 'e;
-      }  (** application of a pure intrinsic function with two arguments *)
-    | ApplyIntrin of { attrib : 'attrib option; op : 'intrin; args : 'e list }
-        (** application of a pure intrinsic function with n arguments *)
-    | ApplyFun of { attrib : 'attrib option; func : 'e; args : 'e list }
-        (** application of a pure runtime-defined function with n arguments *)
-    | Lambda of {
-        op : Ops.AllOps.lambda;
-        attrib : 'attrib option;
-        bound_vars : 'var list;
-        in_body : 'e;
-      }  (** syntactic binding in a nested scope *)
-    | Let of {
-        attrib : 'attrib option;
-        bound_vars : ('var * 'e) list;
-        in_body : 'e;
-      }  (** syntactic binding in a nested scope *)
-  [@@deriving eq, ord, fold, map, iter]
-
-  let simple_view x : ('const, 'var, 'unary, 'binary, 'intrin, 'e) simple =
-    match x with
-    | RVar { id } -> V id
-    | Constant { const } -> C const
-    | UnaryExpr { op; arg } -> Unary (op, arg)
-    | BinaryExpr { op; arg1; arg2 } -> Binary (op, arg1, arg2)
-    | ApplyIntrin { op; args } -> Intrin (op, args)
-    | ApplyFun { func; args } -> FApply (func, args)
-    | Lambda { op; bound_vars; in_body } -> Lambda (op, bound_vars, in_body)
-    | Let { bound_vars; in_body } -> Let (bound_vars, in_body)
-
-  let of_simple_view (x : ('const, 'var, 'unary, 'binary, 'intrin, 'e) simple) :
-      ('const, 'var, 'unary, 'binary, 'intrin, 'attrib, 'e) t =
-    let attrib = None in
-    match x with
-    | V id -> RVar { id; attrib }
-    | C const -> Constant { const; attrib }
-    | Unary (op, arg) -> UnaryExpr { attrib; op; arg }
-    | Binary (op, arg1, arg2) -> BinaryExpr { attrib; op; arg1; arg2 }
-    | Intrin (op, args) -> ApplyIntrin { attrib; op; args }
-    | FApply (func, args) -> ApplyFun { attrib; func; args }
-    | Lambda (op, bound_vars, in_body) ->
-        Lambda { op; attrib; bound_vars; in_body }
-    | Let (bound_vars, in_body) -> Let { attrib; bound_vars; in_body }
-
-  let map_attrib f x =
-    match x with
-    | RVar x -> RVar { x with attrib = f x.attrib }
-    | Constant x -> Constant { x with attrib = f x.attrib }
-    | UnaryExpr x -> UnaryExpr { x with attrib = f x.attrib }
-    | BinaryExpr x -> BinaryExpr { x with attrib = f x.attrib }
-    | ApplyIntrin x -> ApplyIntrin { x with attrib = f x.attrib }
-    | ApplyFun x -> ApplyFun { x with attrib = f x.attrib }
-    | Lambda x -> Lambda { x with attrib = f x.attrib }
-    | Let x -> Let { x with attrib = f x.attrib }
-
-  let get_attrib x =
-    match x with
-    | RVar { attrib } -> attrib
-    | Constant { attrib } -> attrib
-    | UnaryExpr { attrib } -> attrib
-    | BinaryExpr { attrib } -> attrib
-    | ApplyIntrin { attrib } -> attrib
-    | ApplyFun { attrib } -> attrib
-    | Let { attrib } -> attrib
-    | Lambda { attrib } -> attrib
-
-  let drop_attrib x =
-    match x with
-    | RVar v -> RVar { v with attrib = None }
-    | Constant v -> Constant { v with attrib = None }
-    | UnaryExpr v -> UnaryExpr { v with attrib = None }
-    | BinaryExpr v -> BinaryExpr { v with attrib = None }
-    | ApplyIntrin v -> ApplyIntrin { v with attrib = None }
-    | ApplyFun v -> ApplyFun { v with attrib = None }
-    | Lambda v -> Lambda { v with attrib = None }
-    | Let v -> Let { v with attrib = None }
-
-  let id a b = a
-  let fold f b o = fold id id id id id id f b o
-
-  let map f e =
-    let id a = a in
-    map id id id id id id f e
-
-  let hash hash e1 : int =
-    match e1 with
-    | RVar { id } -> Hash.(combine2 1 (poly id))
-    | UnaryExpr { op; arg } -> Hash.(combine3 3 (poly op) (hash arg))
-    | BinaryExpr { op; arg1; arg2 } ->
-        Hash.(combine4 5 (poly op) (hash arg1) (hash arg2))
-    | Constant { const } -> Hash.(combine2 7 (poly const))
-    | ApplyIntrin { op; args } -> Hash.(combine3 11 (poly op) (list hash args))
-    | ApplyFun { func; args } -> Hash.(combine3 13 (hash func) (list hash args))
-    | Lambda { bound_vars; in_body } ->
-        Hash.(combine3 17 (list poly bound_vars) (hash in_body))
-    | Let { bound_vars; in_body } ->
-        Hash.(combine3 23 ((list (pair poly hash)) bound_vars) (hash in_body))
-end
-
-module Alges = struct
-  open AbstractExpr
-
-  let children_alg a =
-    let alg a = fold (fun acc a -> a @ acc) [] a in
-    alg
-end
-
-module type Fix = sig
-  type const
-  (** Type of constants*)
-
-  type var
-  (** Type of variables *)
-
-  type unary
-  (** Unary operators *)
-
-  type binary
-  (** Binary operators *)
-
-  type intrin
-  (** Nary operators *)
-
-  type attrib
-
-  type t
-  (** Fixed type *)
-
-  module Var : HASH_TYPE with type t = var
-
-  val fix : (const, var, unary, binary, intrin, attrib, t) AbstractExpr.t -> t
-  val unfix : t -> (const, var, unary, binary, intrin, attrib, t) AbstractExpr.t
-end
-
-module Make (O : Fix) = struct
-  open Fun.Infix
-  open O
-
-  type 'e abstract_expr =
-    (const, Var.t, unary, binary, intrin, attrib, 'e) AbstractExpr.t
-
-  include Bincaml_util.Recursionscheme.Recursion (struct
-    include O
-
-    type 'e expr = 'e abstract_expr
-
-    let map_expr = AbstractExpr.map
-  end)
-
-  module Constructors = struct
-    let rvar ?attrib id = fix (RVar { attrib; id })
-    let const ?attrib const = fix (Constant { attrib; const })
-
-    let binexp ?attrib ~op arg1 arg2 =
-      fix (BinaryExpr { attrib; op; arg1; arg2 })
-
-    let unexp ?attrib ~op arg = fix (UnaryExpr { attrib; op; arg })
-    let fapply ?attrib func args = fix (ApplyFun { attrib; func; args })
-
-    let binding ?attrib ~op bound_vars in_body =
-      fix (Lambda { attrib; op; bound_vars; in_body })
-
-    let letexp ?attrib bound_vars in_body =
-      fix (Let { attrib; bound_vars; in_body })
-
-    let applyintrin ?attrib ~op args = fix (ApplyIntrin { attrib; op; args })
-    let apply_fun ?attrib ~func args = fix (ApplyFun { attrib; func; args })
-    let attrib e = unfix e |> AbstractExpr.get_attrib
-  end
-
-  (* dont know
-  let bind_match ~fconst ~frvar ~funi ~fbin ~fbind ~fintrin ~ffun
-      (e : 'e abstract_expr) : 'a =
-    let open AbstractExpr in
-    match e with
-    | RVar v -> frvar v
-    | Constant c -> fconst c
-    | UnaryExpr (op, e) -> funi op e
-    | BinaryExpr (op, a, b) -> fbin op a b
-    | Lambda (a, b) -> fbind a b
-    | ApplyIntrin (a, b) -> fintrin a b
-    | ApplyFun (a, b) -> ffun a b
-    *)
-
-  (**helpers*)
-
-  open struct
-    module VarSet = Set.Make (Var)
-  end
-
-  (** get free vars of exprs *)
-  let free_vars (e : t) =
-    let open AbstractExpr in
-    let alg e =
-      match e with
-      | RVar { id } -> VarSet.singleton id
-      | Let { bound_vars; in_body } ->
-          let bindees =
-            List.fold_left VarSet.union VarSet.empty (List.map snd bound_vars)
-          in
-          let bound_vars = List.map fst bound_vars in
-          VarSet.union bindees
-            (VarSet.diff in_body (VarSet.add_list VarSet.empty bound_vars))
-      | Lambda { bound_vars; in_body } ->
-          VarSet.diff in_body (VarSet.add_list VarSet.empty bound_vars)
-      | o -> fold (fun acc a -> VarSet.union a acc) VarSet.empty o
-    in
-    cata alg e
-
-  let free_vars_iter (e : t) = free_vars e |> VarSet.to_iter
-
-  (* substite variables for expressions *)
-  let substitute (sub : var -> t option) (e : t) =
-    let open AbstractExpr in
-    let rec subst bound orig =
-      let exp = unfix orig in
-      match exp with
-      | RVar { id } when VarSet.find_opt id bound |> Option.is_none -> (
-          match sub id with Some r -> r | None -> orig)
-      | Lambda { op; bound_vars; in_body; attrib } ->
-          (* exprs to bind are evaluated outside the bound *)
-          let bound = VarSet.add_list bound bound_vars in
-          let in_body = subst bound in_body in
-          fix (Lambda { op; bound_vars; in_body; attrib })
-      | Let { bound_vars; in_body; attrib } ->
-          (* exprs to bind are evaluated outside the bound *)
-          let bound = VarSet.add_list bound (List.map fst bound_vars) in
-          let in_body = subst bound in_body in
-          fix (Let { bound_vars; in_body; attrib })
-      | o -> fix @@ AbstractExpr.map (subst bound) o
-    in
-    subst VarSet.empty e
-
-  (** get list of child expressions *)
-  let children e = cata Alges.children_alg e
-end
+include Abstract_expr
 
 module BasilExpr = struct
   type const = Ops.AllOps.const
@@ -269,57 +10,22 @@ module BasilExpr = struct
   type intrin = Ops.AllOps.intrin
   type var = Var.t
 
+  let hash_const = function
+    | `Bitvector b -> Hash.combine2 2 (Bitvec.hash b)
+    | `Boolean b -> Hash.combine2 3 (if b then 11 else 13)
+
+  let top_typ = Types.Nothing
+
   module Var = Var
   open Ops.AllOps
 
   (** Fixed type of basil expressions: an expression of type {!t} whose
       subexpressions are also expressions of type {!t} *)
   type t =
-    | E of (const, Var.t, unary, binary, intrin, t Attrib.t, t) AbstractExpr.t
+    | E of (const, Var.t, unary, binary, intrin, Types.t, t) AbstractExpr.t
   [@@unboxed] [@@deriving eq, ord]
 
-  type ty = Types.t
-  type attrib = t Attrib.t
-
-  open struct
-    (** leftover ; we could hash-cons the expression if we want *)
-    module EHashed = struct
-      include AllOps
-
-      type var = Var.t
-      type 'a cell = 'a Fix.HashCons.cell
-
-      let equal_cell _ a b = Fix.HashCons.equal a b
-      let compare_cell _ a b = Fix.HashCons.compare a b
-
-      type t = expr_node_v cell
-
-      and expr_node_v =
-        | E of
-            (const, Var.t, unary, binary, intrin, t Attrib.t, t) AbstractExpr.t
-      [@@deriving eq, ord]
-
-      module HashExpr = struct
-        type t = expr_node_v
-
-        let hash e : int =
-          e |> function E e -> AbstractExpr.hash Fix.HashCons.hash e
-
-        let equal (i : t) (j : t) : bool =
-          match (i, j) with
-          | E i, E j ->
-              AbstractExpr.equal AllOps.equal_const Var.equal AllOps.equal_unary
-                AllOps.equal_binary AllOps.equal_intrin
-                (Attrib.equal Fix.HashCons.equal)
-                Fix.HashCons.equal i j
-      end
-
-      module H = Fix.HashCons.ForHashedTypeWeak (HashExpr)
-
-      let fix i = H.make (E i)
-      let unfix i = match Fix.HashCons.data i with E i -> i
-    end
-  end
+  type typ = Types.t
 
   (** {1 Expression recursions}
 
@@ -343,12 +49,13 @@ module BasilExpr = struct
       type outer = t
       type t = outer
       type var = Var.t
-      type attrib = t Attrib.t
+      type typ = Types.t
 
       module Var = Var
 
       let fix i = fix i
       let unfix i = unfix i
+      let top_typ = Types.Top
     end
 
     module R = Make (E)
@@ -392,6 +99,7 @@ module BasilExpr = struct
     let get e =
       e.this |> Option.get_exn_or "accumulator undefined at this level"
 
+    let map f e = { e with this = f e.this }
     let get_opt e = e.this
     let is_def e = Option.is_some e.this
     let mk_undef e = { this = None; inner = e }
@@ -469,13 +177,13 @@ module BasilExpr = struct
             let _, rtype = Types.uncurry (Var.typ name) in
             text (Var.name name)
             ^+ binding ^+ text ":"
-            ^+ text (Types.to_string rtype)
+            ^+ text (Types.to_string_rexp rtype)
             ^+ text "=" ^+ bracket "(" in_body ")"
         | name, { this = Some e } ->
             let rtype = Var.typ name in
             text (Var.name name)
             ^+ attrib ^+ text ":"
-            ^+ text (Types.to_string rtype)
+            ^+ text (Types.to_string_rexp rtype)
             ^+ text "=" ^ bracket "(" e ")"
         | _ -> failwith "undefined ")
     in
@@ -486,8 +194,9 @@ module BasilExpr = struct
     in
     text "let" ^+ append_l ~sep:(newline ^ text "and ") vs ^ in_expr
 
-  let pretty_alg pattrib (expr : Containers_pp.t FoldN.t4 abstract_expr) :
-      Containers_pp.t FoldN.t4 =
+  let pretty_alg ?(type_annot = false) pattrib
+      (expr : Containers_pp.t FoldN.t4 abstract_expr) : Containers_pp.t FoldN.t4
+      =
     let open AbstractExpr in
     let open Containers_pp in
     let open Containers_pp.Infix in
@@ -495,104 +204,144 @@ module BasilExpr = struct
     let return n = FoldN.lift_4 n expr in
 
     let a = AbstractExpr.get_attrib expr |> pattrib in
-    match expr with
-    | Let { attrib; in_body = { this = Some inner_exp }; bound_vars } ->
-        return
-        @@ pretty_let bound_vars ~attrib:(pattrib attrib) (Some inner_exp)
-    | Lambda { attrib; op; in_body = { this = Some b }; bound_vars } ->
-        let op = Ops.AllOps.to_string op in
-        let sep = text "::" in
-        let binding =
-          fill (text " ")
-            (List.map (fun v -> bracket "(" (Var.pretty v) ")") bound_vars)
-          ^+ sep ^+ a ^ bracket "(" b ")"
-        in
-        return (text op ^ a ^ text " " ^ binding)
-    | Lambda { bound_vars; in_body; attrib } -> pass ()
-    | Let { bound_vars; in_body; attrib } -> pass ()
-    | RVar { id; attrib } -> return (text (Var.to_string id) ^ a)
-    | Constant { const } -> return (text (AllOps.to_string const) ^ a)
-    | UnaryExpr { op = `ZeroExtend bits; arg = { this = Some arg } } ->
-        return
-          (fill
-             (text "," ^ newline)
-             [ text "zero_extend" ^ a ^ (textpf "(%d") bits; arg ^ text ")" ])
-    | UnaryExpr { op = `SignExtend bits; arg = { this = Some arg } } ->
-        return
-          (fill
-             (text "," ^ newline)
-             [ text "sign_extend" ^ a ^ (textpf "(%d") bits; arg ^ text ")" ])
-    | UnaryExpr { op = `Extract (hi, lo); arg = { this = Some e } } ->
-        return
-          (fill nil
-             [ text "extract" ^ a ^ textpf "(%d,%d, " hi lo ^ e ^ text ")" ])
-    | UnaryExpr { op = `FACCESS offset; arg = { this = Some arg } } ->
-        return
-          (fill
-             (text "," ^ newline)
-             [ text "faccess" ^ a ^ (textpf "(\"%s\"") offset; arg ^ text ")" ])
-    | BinaryExpr
-        {
-          op = `FSET offset;
-          arg1 = { this = Some arg1 };
-          arg2 = { this = Some arg2 };
-        } ->
-        return
-          (fill
-             (text "," ^ newline)
-             [
-               text "fset" ^ a ^ (textpf "(\"%s\"") offset;
-               arg1 ^ text ", " ^ arg2 ^ text ")";
-             ])
-    | UnaryExpr { op; arg = { this = Some e } } ->
-        return (text (AllOps.to_string op) ^ a ^ bracket "(" e ")")
-    | BinaryExpr
-        {
-          op = `Load (endian, bits);
-          arg1 = { this = Some arg1 };
-          arg2 = { this = Some arg2 };
-        } ->
-        return
-          (let endian =
-             text @@ match endian with `Big -> "be" | `Little -> "le"
-           in
-           fill
-             (text "," ^ newline)
-             [
-               text "load_" ^ endian ^ a ^ (textpf "(%d") bits;
-               arg1 ^ text ", " ^ arg2 ^ text ")";
-             ])
-    | BinaryExpr { op; arg1 = { this = Some e }; arg2 = { this = Some e2 } } ->
-        return
-          (fill nil
-             [
-               text (AllOps.to_string op)
-               ^ a
-               ^ bracket "(" (fill (text "," ^ newline) [ e; e2 ]) ")";
-             ])
-    | ApplyIntrin { op; args = es } when List.for_all FoldN.is_def es ->
-        return
-          (fill nil
-             [
-               text (AllOps.to_string op)
-               ^ a
-               ^ bracket "("
-                   (fill (text "," ^ newline) (List.map FoldN.get es))
-                   ")";
-             ])
-    | ApplyFun { func = { this = Some n }; args = es }
-      when List.for_all FoldN.is_def es ->
-        return
-          (fill nil
-             [
-               bracket "(" n ")" ^ a
-               ^ bracket "("
-                   (nest 2 (fill (text "," ^ newline) (List.map FoldN.get es)))
-                   ")";
-             ])
-    | _ ->
-        (* undefined child: maybe a case up the tree can do something with this *)
-        pass ()
+    let e =
+      match expr with
+      | Let { attrib; in_body = { this = Some inner_exp }; bound_vars } ->
+          return
+          @@ pretty_let bound_vars ~attrib:(pattrib attrib) (Some inner_exp)
+      | Lambda { attrib; op; in_body = { this = Some b }; bound_vars; triggers }
+        ->
+          let op = Ops.AllOps.to_string op in
+          let sep = text "::" in
+          let triggers =
+            if List.is_empty triggers then text ""
+            else
+              bracket " { .triggers = ["
+                (append_sp
+                @@ List.map
+                     (fun t ->
+                       bracket "["
+                         (append_l ~sep:(text ", ") (List.map FoldN.get t))
+                         "]")
+                     triggers)
+                "]}"
+          in
+          let binding =
+            fill (text " ")
+              (List.map (fun v -> bracket "(" (Var.pretty v) ")") bound_vars)
+            ^+ sep ^+ bracket "(" b ")"
+          in
+          return (text op ^ triggers ^ a ^ text " " ^ binding)
+      | Lambda { bound_vars; in_body; attrib } -> pass ()
+      | Let { bound_vars; in_body; attrib } -> pass ()
+      | RVar { id; attrib } when Var.is_local id ->
+          return (text (Var.to_string id) ^ a)
+      | RVar { id; attrib } -> return (text (Var.name id) ^ a)
+      | Constant { const } -> return (text (AllOps.to_string const) ^ a)
+      | UnaryExpr { op = `ZeroExtend bits; arg = { this = Some arg } } ->
+          return
+            (fill
+               (text "," ^ newline)
+               [ text "zero_extend" ^ a ^ (textpf "(%d") bits; arg ^ text ")" ])
+      | UnaryExpr { op = `SignExtend bits; arg = { this = Some arg } } ->
+          return
+            (fill
+               (text "," ^ newline)
+               [ text "sign_extend" ^ a ^ (textpf "(%d") bits; arg ^ text ")" ])
+      | UnaryExpr { op = `Extract (hi, lo); arg = { this = Some e } } ->
+          return
+            (fill nil
+               [ text "extract" ^ a ^ textpf "(%d,%d, " hi lo ^ e ^ text ")" ])
+      | UnaryExpr { op = `ReadField field; arg = { this = Some arg } } ->
+          return (arg ^ text "." ^ text field)
+      | BinaryExpr
+          {
+            op = `WriteField field;
+            arg1 = { this = Some r };
+            arg2 = { this = Some vl };
+          } ->
+          return @@ r ^ text " with " ^ text field ^+ text "=" ^+ vl
+      | UnaryExpr { op; arg = { this = Some e } } ->
+          return (text (AllOps.to_string op) ^ a ^ bracket "(" e ")")
+      | BinaryExpr
+          {
+            op = `Load (endian, bits);
+            arg1 = { this = Some arg1 };
+            arg2 = { this = Some arg2 };
+          } ->
+          return
+            (let endian =
+               text @@ match endian with `Big -> "be" | `Little -> "le"
+             in
+             fill
+               (text "," ^ newline)
+               [
+                 text "load_" ^ endian ^ a ^ (textpf "(%d") bits;
+                 arg1 ^ text ", " ^ arg2 ^ text ")";
+               ])
+      | BinaryExpr { op; arg1 = { this = Some e }; arg2 = { this = Some e2 } }
+        ->
+          return
+            (fill nil
+               [
+                 text (AllOps.to_string op)
+                 ^ a
+                 ^ bracket "(" (fill (text "," ^ newline) [ e; e2 ]) ")";
+               ])
+      | ApplyIntrin
+          {
+            op = `Cases;
+            args =
+              [
+                {
+                  inner =
+                    Some
+                      (BinaryExpr
+                         {
+                           op = `IfThen;
+                           arg1 = { this = Some cond };
+                           arg2 = { this = Some thn };
+                         });
+                };
+                { this = Some els };
+              ];
+          } ->
+          return (text "if" ^+ cond ^+ text "then" ^+ thn ^+ text "else" ^+ els)
+      | ApplyIntrin { op; args = es } when List.for_all FoldN.is_def es ->
+          return
+            (fill nil
+               [
+                 text (AllOps.to_string op)
+                 ^ a
+                 ^ bracket "("
+                     (fill (text "," ^ newline) (List.map FoldN.get es))
+                     ")";
+               ])
+      | ApplyFun { func = { this = Some n }; args = es }
+        when List.for_all FoldN.is_def es ->
+          return
+            (fill nil
+               [
+                 bracket "(" n ")" ^ a
+                 ^ bracket "("
+                     (nest 2
+                        (fill (text "," ^ newline) (List.map FoldN.get es)))
+                     ")";
+               ])
+      | _ ->
+          (* undefined child: maybe a case up the tree can do something with this *)
+          pass ()
+    in
+    if not type_annot then e
+    else
+      FoldN.map
+        (function
+          | Some e ->
+              Some
+                (e ^ text ":"
+                ^+ text (Types.to_string @@ AbstractExpr.get_typ expr))
+          | None -> None)
+        e
 
   let pretty_drop_attrib s =
     cata (pretty_alg (fun x -> Containers_pp.text "")) s |> FoldN.get
@@ -600,17 +349,24 @@ module BasilExpr = struct
   let pretty_attr =
     let open Containers_pp in
     function
-    | Some (`Assoc e) ->
+    | e when StringMap.is_empty e -> text ""
+    | e ->
         let attrib =
           StringMap.filter (fun k v -> not @@ Attrib.is_internal_key k) e
         in
         if StringMap.is_empty attrib then text ""
-        else text " " ^ Attrib.attrib_pretty pretty_drop_attrib (`Assoc attrib)
-    | Some e -> text " " ^ Attrib.attrib_pretty pretty_drop_attrib e
-    | None -> text ""
+        else text " " ^ Attrib.attrib_pretty (`Assoc attrib)
 
-  let pretty s = cata (pretty_alg pretty_attr) s |> FoldN.get
+  let pretty s = cata (pretty_alg ~type_annot:false pretty_attr) s |> FoldN.get
+
+  let pretty_a ?(type_annot = false) s =
+    cata (pretty_alg ~type_annot pretty_attr) s |> FoldN.get
+
   let to_string s = Containers_pp.Pretty.to_string ~width:80 (pretty s)
+
+  let to_string_annot s =
+    Containers_pp.Pretty.to_string ~width:80 (pretty_a ~type_annot:true s)
+
   let pp fmt s = Format.pp_print_string fmt @@ to_string s
 
   (** pretty print a single let definition *)
@@ -651,6 +407,36 @@ module BasilExpr = struct
   let idk alg = para alg
   let fold_with_type (alg : 'e abstract_expr -> 'a) = zygo_l ~cata type_alg alg
   let fold_with_type_r (alg : 'e abstract_expr -> 'a) = zygo ~cata type_alg alg
+
+  let elabourate_typ e =
+    fold_with_type
+      (fun t ->
+        let typ = type_alg (AbstractExpr.map snd t) in
+        fix (AbstractExpr.set_typ (AbstractExpr.map fst t) typ))
+      e
+
+  let rec fixup_typ (eo : t) : t =
+    let get_typ (e : t abstract_expr) =
+      AbstractExpr.(
+        match e with
+        | Constant { const = `Bitvector i } -> Types.Bitvector (Bitvec.size i)
+        | Constant { const = `Bool _ } -> Types.Boolean
+        | Constant { const = `Integer _ } -> Types.Integer
+        | RVar { id } -> Var.typ id
+        | e -> AbstractExpr.get_typ e)
+    in
+
+    let e = unfix eo in
+    let et : t abstract_expr =
+      match get_typ e with
+      | Types.Top ->
+          let ne = AbstractExpr.map fixup_typ e in
+          let t = AbstractExpr.map (unfix %> get_typ) ne in
+          let t = try type_alg t with _ -> Top in
+          AbstractExpr.set_typ ne t
+      | t -> AbstractExpr.set_typ e t
+    in
+    fix et
 
   type rwinfo = {
     from : t;
@@ -699,12 +485,23 @@ module BasilExpr = struct
     in
     cata rw_alg expr
 
-  let rewrite_typed (f : (t * Types.t) abstract_expr -> t option) (expr : t) =
+  (** substitute subexpression sbased on parameter *)
+  let rewrite_down ?visit ~(rw_fun : t abstract_expr -> rewrite) (expr : t) =
     let rw_alg e =
-      let orig s = fix @@ AbstractExpr.map fst s in
-      match f e with Some e -> e | None -> orig e
+      let orig s = fix s in
+      match rw_fun e with
+      | SomeInfo { v; __LINE__; __FILE__ }
+        when Types.equal (type_of v) (type_of (orig e)) ->
+          log_rw visit ~__LINE__ ~__FILE__ (fix e) v
+      | SomeInfo { v; __LINE__; __FILE__ } ->
+          failwith
+          @@ Printf.sprintf
+               "improper rewrite type: attempt to rewrite %s into %s"
+               (to_string (orig e))
+               (to_string v)
+      | Keep -> orig e
     in
-    fold_with_type rw_alg expr
+    rw_recurse_down ~f:rw_alg expr
 
   (** typed expression rewriter *)
   let rewrite_typed (f : (t * Types.t) abstract_expr -> t option) (expr : t) =
@@ -741,51 +538,176 @@ module BasilExpr = struct
     in
     fold_with_type rw_alg expr
 
+  let rec hash e : int =
+    match e with
+    | E e ->
+        let h = Hash.poly in
+        AbstractExpr.hash h Var.hash h h h Hashtbl.hash hash e
+
+  let rec equal (i : t) (j : t) : bool =
+    match (i, j) with
+    | E i', E j' ->
+        let e =
+          AbstractExpr.equal equal_const Var.equal equal_unary equal_binary
+            equal_intrin Types.equal equal i' j'
+        in
+        e
+
   (** {1 Smart Constructors} *)
 
-  include R.Constructors
+  open R.Constructors
+
+  let binexp ?attrib ~op arg1 arg2 =
+    (match op with
+      | #Ops.AllOps.intrin as op -> applyintrin ?attrib ~op [ arg1; arg2 ]
+      | #Ops.AllOps.binary as op -> binexp ?attrib ~op arg1 arg2)
+    |> fixup_typ
+
+  let unexp ?attrib ?typ ~op arg = unexp ?attrib ?typ ~op arg |> fixup_typ
+
+  let apply_fun ?attrib ?typ ~func args =
+    apply_fun ?attrib ?typ ~func args |> fixup_typ
+
+  let letexp ?attrib ?typ bound_vars in_body =
+    letexp ?attrib ?typ bound_vars in_body |> fixup_typ
 
   let zero_extend ?attrib ~n_prefix_bits (e : t) : t =
-    unexp ?attrib ~op:(`ZeroExtend n_prefix_bits) e
+    unexp ?attrib ~op:(`ZeroExtend n_prefix_bits) e |> fixup_typ
 
-  let fset ?attrib ~(offset : string) (record : t) (e : t) : t =
-    binexp ?attrib ~op:(`FSET offset) record e
+  let field_store ?attrib ~(field : string) (record : t) (e : t) : t =
+    binexp ?attrib ~op:(`WriteField field) record e |> fixup_typ
 
-  let faccess ?attrib ~(offset : string) (record : t) : t =
-    unexp ?attrib ~op:(`FACCESS offset) record
+  let field_read ?attrib ~(field : string) (record : t) : t =
+    unexp ?attrib ~op:(`ReadField field) record |> fixup_typ
 
   let sign_extend ?attrib ~n_prefix_bits (e : t) : t =
-    unexp ?attrib ~op:(`SignExtend n_prefix_bits) e
+    unexp ?attrib ~op:(`SignExtend n_prefix_bits) e |> fixup_typ
 
   let load ?attrib ~bits endian (m : t) (ind : t) : t =
-    binexp ?attrib ~op:(`Load (endian, bits)) m ind
+    binexp ?attrib ~op:(`Load (endian, bits)) m ind |> fixup_typ
 
   let extract ?attrib ~hi_excl ~lo_incl (e : t) : t =
-    unexp ?attrib ~op:(`Extract (hi_excl, lo_incl)) e
+    unexp ?attrib ~op:(`Extract (hi_excl, lo_incl)) e |> fixup_typ
 
   let concat ?attrib (e : t) (f : t) : t =
-    applyintrin ?attrib ~op:`BVConcat [ e; f ]
+    applyintrin ?attrib ~op:`BVConcat [ e; f ] |> fixup_typ
 
-  let concatl ?attrib (e : t list) : t = applyintrin ?attrib ~op:`BVConcat e
-  let forall ?attrib ~bound p = binding ?attrib ~op:`Forall bound p
-  let exists ?attrib ~bound p = binding ?attrib ~op:`Exists bound p
-  let lambda ?attrib ~bound p = binding ?attrib ~op:`Lambda bound p
-  let boolnot ?attrib e = unexp ?attrib ~op:`BoolNOT e
-  let intconst ?attrib (v : PrimInt.t) : t = const ?attrib (`Integer v)
-  let boolconst ?attrib (v : bool) : t = const ?attrib (`Bool v)
-  let bvconst ?attrib (v : Bitvec.t) : t = const ?attrib (`Bitvector v)
+  let ifthenelse ?attrib cond t e =
+    applyintrin ~op:`Cases [ binexp ~op:`IfThen cond t; e ] |> fixup_typ
+
+  let concatl ?attrib (e : t list) : t =
+    applyintrin ?attrib ~op:`BVConcat e |> fixup_typ
+
+  let forall ?attrib ?triggers ~bound p =
+    lambda ?triggers ?attrib ~op:`Forall bound p |> fixup_typ
+
+  let exists ?attrib ?triggers ~bound p =
+    lambda ?triggers ?attrib ~op:`Exists bound p |> fixup_typ
+
+  let lambda ?attrib ?triggers ~bound p =
+    lambda ?triggers ?attrib ~op:`Lambda bound p |> fixup_typ
+
+  let boolnot ?attrib e = unexp ?attrib ~op:`BoolNOT e |> fixup_typ
+
+  let intconst ?attrib (v : PrimInt.t) : t =
+    const ?attrib ~typ:Integer (`Integer v) |> fixup_typ
+
+  let boolconst ?attrib (v : bool) : t =
+    const ?attrib ~typ:Boolean (`Bool v) |> fixup_typ
+
+  let bvconst ?attrib (v : Bitvec.t) : t =
+    const ?attrib ~typ:(Bitvector (Bitvec.size v)) (`Bitvector v)
+
+  let rvar ?attrib v = rvar ?attrib ~typ:(Var.typ v) v
 
   let bv_of_int ~(size : int) (v : int) : t =
-    const (`Bitvector (Bitvec.of_int ~size v))
+    const (`Bitvector (Bitvec.of_int ~size v)) ~typ:(Bitvector size)
+
+  let const ?attrib ?typ v = const ?attrib ?typ v |> fixup_typ
+  let fapply ?attrib ?typ func args = fapply ?attrib ?typ func args |> fixup_typ
+
+  let applyintrin ?attrib ?typ ~op args =
+    applyintrin ?attrib ?typ ~op args |> fixup_typ
+
+  let drop_attrib a =
+    let a =
+      rewrite ~rw_fun:(AbstractExpr.drop_attrib %> fix %> replace [%here]) a
+    in
+    a
+
+  let show_abstract pp_e e =
+    AbstractExpr.show Ops.AllOps.pp_const Var.pp Ops.AllOps.pp_unary
+      Ops.AllOps.pp_binary Ops.AllOps.pp_intrin Types.pp pp_e e
+end
+
+module HashExprFix = struct
+  open BasilExpr
+  include AllOps
+  module Var = Var
+
+  type nonrec 'e abstract_expr = 'e abstract_expr
+  type var = Var.t
+  type 'a cell = 'a Fix.HashCons.cell
+
+  let equal_cell _ a b = Fix.HashCons.equal a b
+  let compare_cell _ a b = Fix.HashCons.compare a b
+
+  type t = expr_node_v cell
+
+  and expr_node_v =
+    | E of (const, Var.t, unary, binary, intrin, Types.t, t) AbstractExpr.t
+  [@@deriving eq, ord]
+
+  module HashExpr = struct
+    type t = expr_node_v
+
+    let hash e : int =
+      match e with
+      | E e ->
+          let e = AbstractExpr.drop_attrib e in
+          let h = Hash.poly in
+          AbstractExpr.hash h Var.hash h h h Hashtbl.hash Fix.HashCons.hash e
+
+    let equal (i : t) (j : t) : bool =
+      match (i, j) with
+      | E i', E j' ->
+          AbstractExpr.equal equal_const Var.equal equal_unary equal_binary
+            equal_intrin Types.equal Fix.HashCons.equal
+            (AbstractExpr.drop_attrib i')
+            (AbstractExpr.drop_attrib j')
+  end
+
+  type typ = Types.t
+
+  let top_typ = Types.Top
+
+  module H = Fix.HashCons.ForHashedType (HashExpr)
+
+  let fix i = H.make (E i)
+  let unfix i = match Fix.HashCons.data i with E i -> i
+end
+
+module ExprHashCons = struct
+  include HashExprFix
+  include Make (HashExprFix)
+
+  let of_expr e =
+    let alg e = fix (AbstractExpr.drop_attrib e) in
+    BasilExpr.cata alg e
+
+  let show_dbg (e : t) =
+    let i = Fix.HashCons.id e in
+    let h = Fix.HashCons.hash e in
+    let ihash = Hashtbl.hash e in
+    let full =
+      unfix e
+      |> BasilExpr.show_abstract (fun f e ->
+          Format.fprintf f "%d" @@ Fix.HashCons.id e)
+    in
+    let t = cata BasilExpr.fix e |> BasilExpr.to_string_annot in
+    Printf.sprintf "%d:%d:%d=%s==%s" i h ihash t full
 
   (*
-  module Memoiser = Fix.Memoize.ForHashedType (struct
-    type expr = t
-    type t = expr
-
-    let equal = Fix.HashCons.equal
-    let hash = Fix.HashCons.hash
-  end)
 
   let cata_memo (alg : 'a abstract_expr -> 'a) =
     let g r t = AbstractExpr.map r (unfix t) |> alg in
@@ -806,21 +728,6 @@ module BasilExpr = struct
   *)
 end
 
-module type ExprType = sig
-  include Fix
-
-  type 'e abstract_expr
-
-  include
-    Bincaml_util.Recursionscheme.Recurseable
-      with type 'a O.expr =
-        (const, var, unary, binary, intrin, attrib, 'a) AbstractExpr.t
-
-  type ty
-
-  val type_alg : ty O.expr -> ty
-end
-
 module IVarFix = struct
   include AllOps
 
@@ -835,11 +742,12 @@ module IVarFix = struct
   type t = expr_node_v
 
   and expr_node_v =
-    | E of (const, Int.t, unary, binary, intrin, t Attrib.t, t) AbstractExpr.t
+    | E of (const, Int.t, unary, binary, intrin, Types.t, t) AbstractExpr.t
   [@@unboxed] [@@deriving eq, ord]
 
-  type attrib = t Attrib.t
+  type typ = Types.t
 
+  let top_typ = Types.Top
   let fix i = E i
   let unfix i = match i with E i -> i
 end

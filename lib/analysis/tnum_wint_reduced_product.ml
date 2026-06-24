@@ -122,6 +122,9 @@ module TnumWintReducedProductLattice = struct
 
   let widening s t =
     { tnum = KBL.widening s.tnum t.tnum; wint = WIL.widening s.wint t.wint }
+
+  let narrowing s t =
+    { tnum = KBL.narrowing s.tnum t.tnum; wint = WIL.narrowing s.wint t.wint }
 end
 
 module TnumWintValueAbstraction = struct
@@ -167,7 +170,7 @@ module Domain = struct
 
   let top_val = TnumWintReducedProductLattice.top
 
-  let init p =
+  let init ?(vertex = None) p =
     let vs = Lang.Procedure.formal_in_params p |> StringMap.values in
     vs
     |> Iter.map (fun v -> (v, top_val))
@@ -193,6 +196,15 @@ module Domain = struct
   let transfer dom stmt =
     transfer_state (fun v -> read v dom) stmt
     |> Iter.fold (fun dom (k, v) -> update k v dom) dom
+
+  let transfer_phi m (p : Var.t Lang.Block.phi) =
+    match p with
+    | { lhs; rhs } ->
+        rhs
+        |> List.map (fun (_, k) -> read k m)
+        |> List.fold_left TnumWintReducedProductLattice.join
+             TnumWintReducedProductLattice.bottom
+        |> fun v -> update lhs v m
 end
 
 module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)

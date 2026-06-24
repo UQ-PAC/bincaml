@@ -143,13 +143,14 @@ let get_dfg_vertices ~(direction : [ `Forwards | `Backwards ]) p :
         let block_def_use =
           Block.stmts_iter b
           |> Iter.flat_map (function
-            | Stmt.Instr_Assign assigns ->
+            | Stmt.Instr_Assign { al = assigns; attrib } ->
                 List.to_iter assigns
                 |> Iter.map (fun (lhs, rhs) ->
                     block_index := !block_index + 1;
                     ( !block_index,
                       Vertex.Stmt
-                        (is_header header, Stmt.Instr_Assign [ (lhs, rhs) ]) ))
+                        ( is_header header,
+                          Stmt.Instr_Assign { al = [ (lhs, rhs) ]; attrib } ) ))
             | stmt ->
                 block_index := !block_index + 1;
                 Iter.singleton
@@ -215,7 +216,7 @@ module SimpleSolver = struct
   module WL = Worklist.Make (Vertex)
 
   let deps ~assume_ssi (dir : [ `Backwards | `Forwards ]) p lookup v =
-    (* this is hacky to support ssi without proper sigma nodes in the IR; we should add them to block 
+    (* this is hacky to support ssi without proper sigma nodes in the IR; we should add them to block
        type probably *)
     let all_deps =
       let defines (v : Vertex.t) =
@@ -389,11 +390,73 @@ end)
 (** Type of a dataflow analysis domain: this needs at minimum a view of variable
     state, lattice order, and transfer function *)
 module type DFAnalysis = sig
-  include Lattice_types.StateAbstraction with type key_t = Var.t
+  type t
+
   include Lattice_types.StateDomain with type t := t with type key_t = Var.t
 end
 
 open struct
+  module DFDomain
+      (G :
+        Bincaml_util.Reverse_graph.GraphSig
+          with type V.t = Vertex.t
+          with type t = DFGraph.t)
+      (D : DFAnalysis)
+      (W : sig
+        val widening : D.V.t -> D.V.t -> D.V.t
+      end) =
+  struct
+    include D
+
+    type edge = G.edge
+
+    (** Analysis function specificatlly for the flow insensitive fixed point,
+        hence incorporates joins etc. *)
+    let analyze_vert_intra ~widen data (v : Vertex.t) =
+      let r =
+        match snd v with
+        | Vertex.(Phi { lhs; rhs }) ->
+            (* On widening points widen with the old value, else replace the
+               old value entirely *)
+            let widen = if widen then W.widening else flip const in
+            let olhs = D.read lhs data in
+            let nlhs =
+              rhs
+              |> List.fold_left (fun a v -> V.join a (D.read v data)) D.V.bottom
+            in
+            let v = widen olhs nlhs in
+            if not (D.V.equal olhs v) then Some (update lhs v data) else None
+        | Vertex.(Stmt (_, stmt)) ->
+            let read v = D.read v data in
+            let s' =
+              D.transfer_state read stmt
+              |> Iter.filter_map (fun (v, s) ->
+                  let vv = read v in
+                  let s = if widen then W.widening vv s else s in
+                  if V.equal vv s then None else Some (v, s))
+            in
+            if Iter.is_empty s' then None
+            else (
+              log_debug (fun () ->
+                  Iter.to_string
+                    (function k, vvv -> Var.to_string k ^ "->" ^ V.show vvv)
+                    s');
+              Some (s' |> Iter.fold (fun acc (k, v) -> update k v acc) data))
+        | Entry -> None
+        | Return -> None
+      in
+      r
+
+    let analyze_vert (v : Vertex.t) data =
+      Option.get_or ~default:data (analyze_vert_intra ~widen:false data v)
+
+    let analyze (edge : G.edge) data =
+      (* this gets swapped based on graph direction so is always the logical
+         predecessor (dataflow dependency)
+      *)
+      analyze_vert (G.E.src edge) data
+  end
+
   (** Dataflow analysis that is parametric in analysis direction, via functor
       argument {! G} which may present either a forwards or backwards view of
       the graph. *)
@@ -404,57 +467,11 @@ open struct
           with type t = DFGraph.t)
       (D : DFAnalysis) =
   struct
-    module Domain = struct
-      include D
-
-      type edge = G.edge
-
-      (** Analysis function specificatlly for the flow insensitive fixed point,
-          hence incorporates joins etc. *)
-      let analyze_vert_intra ~widen data (v : Vertex.t) =
-        let r =
-          match snd v with
-          | Vertex.(Phi { lhs; rhs }) ->
-              let join = if widen then V.widening else V.join in
-              let olhs = D.read lhs data in
-              let nlhs =
-                rhs
-                |> List.fold_left
-                     (fun a v -> V.join a (D.read v data))
-                     D.V.bottom
-              in
-              let v = join olhs nlhs in
-              if not (D.V.equal olhs v) then Some (update lhs v data) else None
-          | Vertex.(Stmt (_, stmt)) ->
-              let read v = D.read v data in
-              let s' =
-                D.transfer_state read stmt
-                |> Iter.filter_map (fun (v, s) ->
-                    let vv = read v in
-                    let s = if widen then V.widening vv s else s in
-                    if V.equal vv s then None else Some (v, s))
-              in
-              if Iter.is_empty s' then None
-              else (
-                log_debug (fun () ->
-                    Iter.to_string
-                      (function k, vvv -> Var.to_string k ^ "->" ^ V.show vvv)
-                      s');
-                Some (s' |> Iter.fold (fun acc (k, v) -> update k v acc) data))
-          | Entry -> None
-          | Return -> None
-        in
-        r
-
-      let analyze_vert (v : Vertex.t) data =
-        Option.get_or ~default:data (analyze_vert_intra ~widen:false data v)
-
-      let analyze (edge : G.edge) data =
-        (* this gets swapped based on graph direction so is always the logical
-         predecessor (dataflow dependency)
-      *)
-        analyze_vert (G.E.src edge) data
-    end
+    module Domain =
+      DFDomain (G) (D)
+        (struct
+          let widening = D.V.widening
+        end)
 
     module Topo = Graph.WeakTopological.Make (G)
     module DFGChaoticIter = Graph.ChaoticIteration.Make (G) (Domain)
@@ -467,6 +484,30 @@ open struct
     let analyse root ~init ~widen_set ~delay_widen g =
       let scc = Topo.recursive_scc g root in
       let f_init v = init in
+      DFGChaoticIter.recurse g scc f_init widen_set delay_widen
+  end
+
+  module DataflowNarrowing
+      (G :
+        Bincaml_util.Reverse_graph.GraphSig
+          with type V.t = Vertex.t
+          with type t = DFGraph.t)
+      (D : DFAnalysis) =
+  struct
+    module Domain =
+      DFDomain (G) (D)
+        (struct
+          let widening = D.V.narrowing
+        end)
+
+    module Topo = Graph.WeakTopological.Make (G)
+    module DFGChaoticIter = Graph.ChaoticIteration.Make (G) (Domain)
+
+    let narrow root ~result ~widen_set ~delay_widen g =
+      let scc = Topo.recursive_scc g root in
+      let f_init v =
+        DFGChaoticIter.M.find_opt v result |> Option.get_or ~default:D.bottom
+      in
       DFGChaoticIter.recurse g scc f_init widen_set delay_widen
   end
 end
@@ -525,6 +566,72 @@ module AnalysisFwd (AD : DFAnalysis) = struct
       ~transfer:A.Domain.analyze_vert_intra p
 end
 
+(** Backwards dataflow analysis over dfg that narrows after widening to a
+    fixpoint *)
+module AnalysisRevNarrowing (AD : DFAnalysis) = struct
+  module A = DataflowAnalysis (Bincaml_util.Reverse_graph.RevG (DFGraph)) (AD)
+  module N = DataflowNarrowing (Bincaml_util.Reverse_graph.RevG (DFGraph)) (AD)
+  module D = AD
+
+  type t = D.t
+
+  let analyse ~widen_set ~delay_widen g : AD.t =
+    A.DFGChaoticIter.M.find_opt (0, Entry)
+      (let result =
+         A.analyse (0, Return)
+           ~init:(AD.init (fst g))
+           ~widen_set ~delay_widen
+           (Lazy.force (snd g))
+       in
+       let narrow =
+         N.narrow (0, Return) ~result ~widen_set ~delay_widen
+           (Lazy.force (snd g))
+       in
+       narrow)
+    |> Option.get_exn_or "error: return not reachable from entry"
+
+  let flow_insensitive p =
+    let widen =
+      SimpleSolver.fixpoint_fwd ~initial:(AD.init p)
+        ~transfer:A.Domain.analyze_vert_intra p
+    in
+    SimpleSolver.fixpoint_fwd ~initial:widen
+      ~transfer:N.Domain.analyze_vert_intra p
+end
+
+(** Forwards dataflow analysis over dfg that narrows after widening to a
+    fixpoint *)
+module AnalysisFwdNarrowing (AD : DFAnalysis) = struct
+  module A = DataflowAnalysis (DFGraph) (AD)
+  module N = DataflowNarrowing (DFGraph) (AD)
+  module D = AD
+
+  type t = D.t
+
+  let analyse ~widen_set ~delay_widen g : AD.t =
+    A.DFGChaoticIter.M.find_opt (Int.max_int, Return)
+      (let result =
+         A.analyse (0, Entry)
+           ~init:(AD.init (fst g))
+           ~widen_set ~delay_widen
+           (Lazy.force (snd g))
+       in
+       let narrow =
+         N.narrow (0, Entry) ~result ~widen_set ~delay_widen
+           (Lazy.force (snd g))
+       in
+       narrow)
+    |> Option.get_exn_or "error: return not reachable from entry"
+
+  let flow_insensitive p =
+    let widen =
+      SimpleSolver.fixpoint_fwd ~initial:(AD.init p)
+        ~transfer:A.Domain.analyze_vert_intra p
+    in
+    SimpleSolver.fixpoint_fwd ~initial:widen
+      ~transfer:N.Domain.analyze_vert_intra p
+end
+
 (** Simple way to get started with forwards analysis on def-use graph *)
 module EasyForwardAnalysisPack (V : sig
   include Lattice_types.TypedValueAbstraction with module E = Expr.BasilExpr
@@ -540,7 +647,7 @@ struct
 
     include SV
 
-    let init p =
+    let init ?(vertex = None) p =
       let vs = Lang.Procedure.formal_in_params p |> StringMap.values in
       vs
       |> Iter.map (fun v -> (v, top_val))
@@ -549,7 +656,7 @@ struct
     let transfer_state read stmt =
       let stmt = Eval.stmt_eval_fwd read stmt in
       match stmt with
-      | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
+      | Lang.Stmt.Instr_Assign { al } -> List.to_iter al
       | Lang.Stmt.Instr_Assert _ -> Iter.empty
       | Lang.Stmt.Instr_Assume _ -> Iter.empty
       | Lang.Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
@@ -559,7 +666,7 @@ struct
       | Lang.Stmt.Instr_Load { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_Store { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_IntrinCall { lhs } ->
-          StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
+          List.to_iter lhs |> Iter.map (fun v -> (v, top_val))
       | Lang.Stmt.Instr_Call { lhs } ->
           StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
       | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty

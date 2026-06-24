@@ -12,8 +12,15 @@ doc: "https://url/to/documentation"
 bug-reports: "https://github.com/username/reponame/issues"
 depends: [
   "dune" {>= "3.19"}
-  "menhir"
   "ocaml"
+  "capstone_arm64_disas"
+  "aslp_lifter_ocaml" {>= "1.1"}
+  "ocaml-protoc-plugin" {>= "6.1.0"}
+  "qcheck-stm" {with-test}
+  "qcheck-core" {with-test}
+  "qcheck-alcotest" {with-test}
+  "menhir" {>= "20180523"}
+  "angstrom"
   "zarith"
   "fix"
   "trace"
@@ -23,20 +30,23 @@ depends: [
   "containers-data"
   "ppx_deriving"
   "ocamlgraph"
-  "cmdliner"
+  "cmdliner" {>= "2.0.0"}
   "pp_loc"
   "fmt"
   "patricia-tree"
   "ppx_here"
   "intPQueue"
+  "logs"
+  "mtime"
+  "linenoise"
+  "stb_image"
+  "kittyimg"
+  "terminal_size"
   "ocamlformat" {with-dev-setup}
   "odig" {with-dev-setup}
   "sherlodoc" {with-doc}
-  "ppx_expect" {>= "0.17.2.2"}
+  "ppx_expect"
   "alcotest" {with-test}
-  "qcheck-core" {with-test}
-  "qcheck-alcotest" {with-test}
-  "qcheck-stm" {with-test}
   "odoc" {with-doc}
 ]
 build: [

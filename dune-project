@@ -8,9 +8,6 @@
 
 (generate_opam_files true)
 
-(formatting
- (enabled_for dune))
-
 (source
  (github username/reponame))
 
@@ -20,15 +17,34 @@
 
 (license Apache-2.0)
 
+(formatting
+ (enabled_for ocaml dune))
+
 (documentation https://url/to/documentation)
+
+(package
+ (name capstone_arm64_disas)
+ (synopsis "Disas arm ops with capstone")
+ (depends
+   ocaml
+   ppx_expect
+   )
+)
 
 (package
  (name bincaml)
  (synopsis "Program analysis tool.")
  (description "A longer description")
  (depends
-  menhir
   ocaml
+  capstone_arm64_disas
+  (aslp_lifter_ocaml (>= 1.1))
+  (ocaml-protoc-plugin (>= 6.1.0))
+  (qcheck-stm :with-test)
+  (qcheck-core :with-test)
+  (qcheck-alcotest :with-test)
+  (menhir (>= 20180523))
+  angstrom
   zarith
   fix
   trace
@@ -38,22 +54,37 @@
   containers-data
   ppx_deriving
   ocamlgraph
-  cmdliner
+  (cmdliner (>= 2.0.0))
   pp_loc
   fmt
   patricia-tree
   ppx_here
   intPQueue
+  logs
+  mtime
+  linenoise
+  stb_image
+  kittyimg
+  terminal_size
   (ocamlformat :with-dev-setup)
   (odig :with-dev-setup)
   (sherlodoc :with-doc)
-  (ppx_expect
-   (>= "0.17.2.2"))
-  (alcotest :with-test)
-  (qcheck-core :with-test)
-  (qcheck-alcotest :with-test)
-  (qcheck-stm :with-test))
+  ppx_expect
+  (alcotest :with-test))
  (tags (program-analysis)))
 
-
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html
+(package
+ (name bincaml_lsp)
+ (synopsis "Language server for Bincaml IL files")
+ (depends
+  (menhir (>= 20180523))
+  ppx_expect
+  bincaml
+  fmt
+  logs
+  iter
+  linol
+  linol-lwt
+  containers
+  ppx_deriving)
+ (tags (lsp)))

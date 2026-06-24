@@ -37,18 +37,18 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
       get_bv b >|= BVOps.eval_unary_unif op >|= bv
   | UnaryExpr { op = #BVOps.unary_bool as op; arg = b } ->
       get_bool b >|= BVOps.eval_unary_bool op >|= bv
-  | BinaryExpr { op = `FSET offset; arg1 = a; arg2 = b } ->
+  | BinaryExpr { op = `WriteField offset; arg1 = a; arg2 = b } ->
       let* a = get_record a in
       let* b = get_bv b in
       record (Record.set_field offset a b)
-  | UnaryExpr { op = `FACCESS offset; arg = a } ->
+  | UnaryExpr { op = `ReadField offset; arg = a } ->
       let* a = get_record a in
       let { value; _ } : Record.field = Record.get_field offset a in
       Some (bv value)
   | BinaryExpr { op = `PTRADD; arg1 = a; arg2 = b } ->
       let* a, typ = get_pointer a in
       let* b = get_bv b in
-      pointer (BVOps.eval_binary_unif `BVADD a b, typ)
+      pointer (BVOps.eval_intrin `BVADD [ a; b ], typ)
   | BinaryExpr { op = #BVOps.binary_unif as op; arg1 = a; arg2 = b } ->
       let* a = get_bv a in
       let* b = get_bv b in
@@ -120,7 +120,7 @@ let%expect_test _ =
   let ten = bv_of_int ~size:10 10 in
   let e =
     binexp ~op:`BVMUL
-      (binexp ~op:`BVADD ten ten)
+      (applyintrin ~op:`BVADD [ ten; ten ])
       (BasilExpr.rvar (Var.create "beans" Types.(Bitvector 10)))
   in
   print_endline (to_string e);

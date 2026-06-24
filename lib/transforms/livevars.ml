@@ -6,15 +6,6 @@ open Lang
 open Expr
 open Types
 
-(** live vars transfer function for a statement *)
-let tf_stmt_live init s =
-  let assigns = VarSet.diff init (Stmt.assigned VarSet.empty s) in
-  Stmt.free_vars assigns s
-
-(** live vars transfer function for a block *)
-let tf_block (init : VarSet.t) (b : (Var.t, BasilExpr.t) Block.t) =
-  Block.fold_backwards ~f:tf_stmt_live ~phi:(fun f _ -> f) ~init b
-
 (** Bourdoncle live-variable analysis using ocamlgraph's chaotic iteration *)
 module LV =
   Graph.ChaoticIteration.Make
@@ -22,9 +13,7 @@ module LV =
     (struct
       open Procedure
 
-      type vertex = RevG.E.vertex
       type edge = RevG.E.t
-      type g = RevG.t
       type t = VarSet.t
 
       let equal = VarSet.equal
@@ -32,7 +21,7 @@ module LV =
       let widening a b = VarSet.union a b
 
       let analyze (e : edge) d =
-        match G.E.label e with Block b -> tf_block d b | _ -> d
+        match G.E.label e with Block b -> Block.free_vars ~init:d b | _ -> d
     end)
 
 let run (p : Program.proc) =
@@ -72,7 +61,7 @@ let print_g res = Viscfg.dot_labels (fun v -> Some (label res v))
 
 let print_live_vars_dot fmt p =
   let r = run p in
-  Trace_core.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
+  Trace_core.with_span ~__FILE__ ~__LINE__ "dot-printer" @@ fun _ ->
   let (module M : Viscfg.ProcPrinter) =
     Viscfg.dot_labels (fun v -> Some (label r v))
   in
@@ -118,7 +107,9 @@ module DSE = struct
                |> Iter.for_all (fun v ->
                    Var.is_local v && (not @@ VarSet.mem v live))
           in
-          let live = VarSet.filter Var.is_local @@ tf_stmt_live live s in
+          let live =
+            VarSet.filter Var.is_local @@ Stmt.free_vars ~init:live s
+          in
           let s = if dead_store then acc else s :: acc in
           (live, s))
         b
@@ -138,4 +129,115 @@ module DSE = struct
             Procedure.update_block p id { b with stmts }
         | _ -> p)
       p blocks
+end
+
+module InterprocDSE = struct
+  (** Dead store elimination based on an interprocedural live var analysis using
+      the IDE solver *)
+
+  open Analysis.Ide_live
+
+  let filter_dead prog keep live (block : Program.bloc) : Program.bloc =
+    let phis, s =
+      Block.fold_backwards
+        ~f:(fun (p, acc) s ->
+          let omit, new_s =
+            match s with
+            | Stmt.Instr_Assign { al; attrib } ->
+                let al =
+                  List.filter (fun (v, e) -> keep v || VarSet.mem v live) al
+                in
+                (List.is_empty al, Stmt.Instr_Assign { al; attrib })
+            | _ -> (false, s)
+          in
+          (p, if omit then acc else new_s :: acc)) (* TODO remove dead phis *)
+        ~phi:(fun (acc, s) a ->
+          ( List.filter_map
+              (fun (p : Var.t Block.phi) ->
+                Option.return_if (keep p.lhs || VarSet.mem p.lhs live) p)
+              a
+            @ acc,
+            s ))
+        ~init:([], []) block
+    in
+    { block with phis; stmts = Vector.of_list s }
+
+  let transform_proc prog keep live_param_strs results proc =
+    (* Remove dead parameters *)
+    let live_params =
+      IDMap.get_or (Procedure.id proc) live_param_strs ~default:StringSet.empty
+    in
+    let proc =
+      Procedure.map_formal_in_params
+        (StringMap.filter (fun s _ -> StringSet.mem s live_params))
+        proc
+    in
+    (* Remove dead parameters from calls *)
+    let blocks = Procedure.blocks_to_list proc in
+    let proc =
+      List.fold_left
+        (fun p b ->
+          match b with
+          | Procedure.Vert.Begin bid, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
+              let b =
+                Block.map ~phi:id
+                  (function
+                    | Stmt.Instr_Call f ->
+                        let live_params =
+                          IDMap.get_or f.procid live_param_strs
+                            ~default:StringSet.empty
+                        in
+                        let args =
+                          StringMap.filter
+                            (fun s _ -> StringSet.mem s live_params)
+                            f.args
+                        in
+                        Stmt.Instr_Call { f with args }
+                    | s -> s)
+                  b
+              in
+              Procedure.update_block p bid b
+          | _ -> p)
+        proc blocks
+    in
+    (* Remove dead stores. We don't need to use any interprocedural results
+       here as all interprocedural results come from input parameters being
+       dead, which we have removed. *)
+    let live =
+      IDMap.find (Procedure.id proc) results
+      |> VarMap.to_iter
+      |> Iter.filter_map (fun (v, t) -> Option.return_if t v)
+      |> VarSet.of_iter
+    in
+    let blocks = Procedure.blocks_to_list proc in
+    let proc =
+      List.fold_left
+        (fun p b ->
+          match b with
+          | Procedure.Vert.Begin id, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
+              let block = filter_dead prog keep live b in
+              Procedure.update_block p id block
+          | _ -> p)
+        proc blocks
+    in
+    proc
+
+  let transform (keep : Var.t -> bool) (p : Program.t) =
+    let _, results =
+      Trace_core.with_span ~__FILE__ ~__LINE__ "ide live vars" @@ fun _ ->
+      IDELiveSSIAnalysis.solve p
+    in
+
+    let live_param_strs : StringSet.t IDMap.t =
+      Program.procs p |> IDMap.of_iter
+      |> IDMap.mapi (fun pid proc ->
+          let res = IDMap.find pid results in
+          Procedure.formal_in_params proc
+          |> StringMap.filter (fun _ v -> VarMap.get_or v res ~default:false)
+          |> StringMap.keys |> StringSet.of_iter)
+    in
+
+    Program.map_procedures
+      (fun _ proc -> transform_proc p keep live_param_strs results proc)
+      p
 end

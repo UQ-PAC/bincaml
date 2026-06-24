@@ -20,7 +20,7 @@ module IDELiveCommon = struct
   end
 
   module Value = struct
-    type t = bool [@@deriving eq, ord, show]
+    type t = bool [@@deriving eq, ord, show { with_path = false }]
 
     let bottom = false
     let top = true
@@ -41,13 +41,16 @@ module IDELiveCommon = struct
 
   open Value
 
-  type t = IdEdge | ConstEdge of Value.t [@@deriving eq, ord]
+  type t = IdEdge | ConstEdge of Value.t
+  [@@deriving eq, ord, show { with_path = false }]
 
   let bottom = ConstEdge bottom
   let top = ConstEdge top
 
   let show v =
-    match v with IdEdge -> "IdEdge" | ConstEdge v -> "ConstEdge " ^ show v
+    match v with
+    | IdEdge -> "IdEdge"
+    | ConstEdge v -> "ConstEdge " ^ Value.show v
 
   let pp fmt v = Format.pp_print_string fmt (show v)
   let identity = IdEdge
@@ -67,7 +70,7 @@ module IDELiveCommon = struct
     | IdEdge, ConstEdge false -> IdEdge
     | IdEdge, IdEdge -> IdEdge
 
-  let eval f v = match f with IdEdge -> v | ConstEdge v -> v
+  let eval v f = match f with IdEdge -> v | ConstEdge v -> v
 end
 
 module IDELive = struct
@@ -142,7 +145,7 @@ module IDELive = struct
             |> Iter.cons (d, IdEdge))
     | Label v -> (
         match stmt with
-        | Instr_Assign assigns ->
+        | Instr_Assign { al = assigns } ->
             List.fold_left
               (fun i (v', ex) ->
                 Iter.flat_map
@@ -155,16 +158,16 @@ module IDELive = struct
               (Iter.singleton (d, IdEdge))
               assigns
         (* If a variable is marked live then don't transfer relations too *)
-        | _ when VarSet.mem v @@ Stmt.free_vars VarSet.empty stmt -> Iter.empty
+        | _ when VarSet.mem v @@ Stmt.free_vars stmt -> Iter.empty
         (* The index variables of a memory read are always live regardless of if
            the lhs was dead, since there are still side effects of reading
            memory ? *)
         | Instr_Load l when Var.equal l.lhs v -> Iter.empty
-        | Instr_IntrinCall c
-          when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs ->
+        | Instr_IntrinCall { lhs }
+          when List.exists (fun v' -> Var.equal v v') lhs ->
             Iter.empty
-        | Instr_Call c when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs
-          ->
+        | Instr_Call { lhs }
+          when StringMap.exists (fun _ v' -> Var.equal v v') lhs ->
             Iter.empty
         (*| Instr_IndirectCall c -> top *)
         | Instr_IndirectCall c -> Iter.singleton (Label v, IdEdge) (* Unsound *)
@@ -176,12 +179,17 @@ module IDELive = struct
     match d with
     | Label v -> Iter.singleton (Label (VarMap.get_or v phi ~default:v), IdEdge)
     | _ -> Iter.singleton (d, IdEdge)
+
+  let init_p2 globals (proc : Program.proc) =
+    Procedure.formal_out_params proc
+    |> StringMap.values |> Iter.append globals
+    |> Iter.map (fun v -> (v, true))
 end
 
 module IDELiveAnalysis = IDE (IDELive)
 open Idessi
 
-module IDELiveSSI : IDESSIDomain = struct
+module IDELiveSSI = struct
   include IDELiveCommon
 
   let init_data (proc : Program.proc) =
@@ -210,21 +218,20 @@ module IDELiveSSI : IDESSIDomain = struct
             |> Iter.map (fun v -> (Label v, ConstEdge Value.live)))
     | Label v -> (
         match s with
-        | Instr_Assign assigns ->
-            Iter.of_list assigns
+        | Instr_Assign { al } ->
+            Iter.of_list al
             |> Iter.flat_map (fun (v', ex) ->
                 if Var.equal v v' then
                   Expr.BasilExpr.free_vars_iter ex
                   |> Iter.map (fun v' -> (Label v', IdEdge))
                 else Iter.empty)
         (* If a variable is marked live then don't transfer relations too *)
-        | _ when VarSet.mem v @@ Stmt.free_vars VarSet.empty s -> Iter.empty
+        | _ when VarSet.mem v @@ Stmt.free_vars s -> Iter.empty
         (* The index variables of a memory read are always live regardless of if
            the lhs was dead, since there are still side effects of reading
            memory ? *)
         | Instr_Load l when Var.equal l.lhs v -> Iter.empty
-        | Instr_IntrinCall c
-          when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs ->
+        | Instr_IntrinCall { lhs } when List.exists (Var.equal v) lhs ->
             Iter.empty
         | Instr_Call c when StringMap.exists (fun _ v' -> Var.equal v v') c.lhs
           ->
@@ -317,7 +324,7 @@ proc @fun2(f:bv64, global_in:bv64)  -> (out2:bv64) {  }
       print_endline
       @@ Iter.to_string (fun (v, r) -> Var.name v)
       @@ VarMap.to_iter
-      @@ ID.Map.get_or pid p2_results ~default:VarMap.empty)
+      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
     results;
   [%expect
     {|

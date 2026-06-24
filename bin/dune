@@ -1,14 +1,18 @@
 (executable
  (public_name bincaml)
- (flags -w -32)
+ (package bincaml)
  (name main)
- (modules main script)
+ (modules main)
  (libraries
+  stb_image
+  linenoise
   bincaml.ast
   bincaml.util
   bincaml.loader
   bincaml.transforms
+  kittyimg
   bincaml.backends
+  pp_loc
   bincaml
   cmdliner
   iter
@@ -16,4 +20,5 @@
   containers.pp
   containers.unix
   trace.core
-  trace-tef))
+  trace-tef
+  terminal_size))

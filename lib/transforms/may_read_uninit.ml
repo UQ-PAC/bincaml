@@ -35,6 +35,7 @@ module ReadUninit = struct
   let show v = match v with ReadUninit -> "RU" | Bot -> "bot" | Write -> "W"
   let pretty v = Containers_pp.text (show v)
   let widening = join
+  let narrowing a b = a
   let bottom = Bot
   let top = ReadUninit
   let analyze (e : Lang.Procedure.G.edge) d = d
@@ -71,7 +72,7 @@ module ReadUninitAnalysis = struct
   let show_short st =
     read_uninit_vars st |> Iter.to_string ~sep:", " Var.to_string
 
-  let init p =
+  let init ?vertex p =
     Procedure.formal_in_params p
     |> Common.StringMap.values
     |> Iter.fold (fun acc v -> update v ReadUninit.Write acc) bottom
@@ -85,6 +86,14 @@ module ReadUninitAnalysis = struct
     Stmt.iter_lvar stmt
     |> Iter.map (fun v -> (v, write_var v st))
     |> Iter.fold (fun acc (k, v) -> update k v acc) st
+
+  let transfer_phi m (p : Var.t Block.phi) =
+    match p with
+    | { lhs; rhs } ->
+        rhs
+        |> List.map (fun (_, k) -> read k m)
+        |> List.fold_left ReadUninit.join ReadUninit.bottom
+        |> fun v -> update lhs v m
 end
 
 module A = struct
@@ -108,7 +117,7 @@ let check ?(include_locals = false) (p : Program.proc) =
               let ru =
                 ReadUninitAnalysis.read_uninit_vars ms
                 |> Iter.filter (fun v -> include_locals || Var.is_local v)
-                |> Iter.filter Var.pure
+                |> Iter.filter @@ (not % Var.is_shared)
               in
               if Iter.is_empty ru then None else Some (v, ru)
           | None -> None)
@@ -148,10 +157,12 @@ let%expect_test "fold_block" =
   in
   [%expect
     {|
-    ($stack->RU, R31_in->RU, R0_in->RU, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, R0_10->W, _->⊥)
+    Warn: global undeclared $stack assuming mutable unshared
+    Warn: global undeclared $mem assuming mutable unshared
+    (R31_in->RU, $stack->RU, R0_in->RU, _->⊥)
+    (R31_in->RU, $stack->RU, R0_in->RU, load45_1->W, _->⊥)
+    (R31_in->RU, $stack->RU, R0_in->RU, load45_1->W, R1_4->W, _->⊥)
+    (R31_in->RU, $stack->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, _->⊥)
+    (R31_in->RU, $stack->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, _->⊥)
+    (R31_in->RU, $stack->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, R0_10->W, _->⊥)
     |}]

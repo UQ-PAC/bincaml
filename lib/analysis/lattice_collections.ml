@@ -2,12 +2,6 @@ open Lattice_types
 open Bincaml_util.Common
 open Bincaml_util.Unicode
 
-module type TopLattice = sig
-  include Lattice
-
-  val top : t
-end
-
 module type SetElem = sig
   include Set.OrderedType
 
@@ -55,6 +49,7 @@ module LatticeSet (T : SetElem) = struct
     | _, Top -> true
 
   let widening = join
+  let narrowing a b = a
 end
 
 module type MapKey = sig
@@ -78,14 +73,15 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
       let name = V.name ^ "MapLattice"
       let bottom = BotMap KM.empty
       let top = TopMap KM.empty
+      let singleton k v = BotMap (KM.singleton k v)
 
-      let top_vjoin _ x y =
-        let j = V.join x y in
-        if V.equal j V.top then None else Some j
+      let bot_v_op f _ x y =
+        let x = f x y in
+        if V.equal x V.bottom then None else Some x
 
-      let top_vwidening _ x y =
-        let j = V.widening x y in
-        if V.equal j V.top then None else Some j
+      let top_v_op f _ x y =
+        let x = f x y in
+        if V.equal x V.top then None else Some x
 
       let underlying = function TopMap m | BotMap m -> m
 
@@ -151,22 +147,25 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
         | TopMap a, TopMap b -> KM.reflexive_equal V.equal a b
         | _ -> false
 
-      let join a b =
+      let bot_binop f a b =
         match (a, b) with
-        | BotMap a, BotMap b -> BotMap (KM.idempotent_union (const V.join) a b)
+        | BotMap a, BotMap b -> BotMap (KM.idempotent_union (const f) a b)
         | BotMap a, TopMap b | TopMap b, BotMap a ->
-            TopMap (KM.difference top_vjoin b a)
+            BotMap (KM.difference (bot_v_op f) b a)
         | TopMap a, TopMap b ->
-            TopMap (KM.idempotent_inter_filter top_vjoin a b)
+            BotMap (KM.idempotent_inter_filter (bot_v_op f) a b)
 
-      let widening a b =
+      let top_binop f a b =
         match (a, b) with
-        | BotMap a, BotMap b ->
-            BotMap (KM.idempotent_union (const V.widening) a b)
+        | BotMap a, BotMap b -> BotMap (KM.idempotent_union (const f) a b)
         | BotMap a, TopMap b | TopMap b, BotMap a ->
-            TopMap (KM.difference top_vwidening b a)
+            TopMap (KM.difference (top_v_op f) b a)
         | TopMap a, TopMap b ->
-            TopMap (KM.idempotent_inter_filter top_vwidening a b)
+            TopMap (KM.idempotent_inter_filter (top_v_op f) a b)
+
+      let join = top_binop V.join
+      let widening = top_binop V.widening
+      let narrowing = bot_binop V.narrowing
 
       let read k = function
         | BotMap m -> KM.find_opt k m |> Option.get_or ~default:V.bottom
@@ -195,6 +194,13 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
       let to_list = function
         | BotMap m -> (`Bottom, KM.to_list m)
         | TopMap m -> (`Top, KM.to_list m)
+
+      let mapi f = function
+        | BotMap m -> BotMap (KM.mapi f m)
+        | TopMap m -> TopMap (KM.mapi f m)
+
+      let fold f m acc =
+        match m with BotMap m -> KM.fold f m acc | TopMap m -> KM.fold f m acc
     end :
       sig
         include StateAbstraction with type val_t = V.t and type key_t = K.t
@@ -204,6 +210,9 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
         val of_list_bot : (K.t * V.t) list -> t
         val cardinal : t -> int
         val to_list : t -> [ `Bottom | `Top ] * (K.t * V.t) list
+        val singleton : K.t -> V.t -> t
+        val mapi : (K.t -> V.t -> V.t) -> t -> t
+        val fold : (K.t -> V.t -> 'a -> 'a) -> t -> 'a -> 'a
       end)
 
   module V = V

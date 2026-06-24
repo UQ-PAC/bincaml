@@ -82,7 +82,7 @@ module ConditionalWritesDomain (D : InterferenceStateDomain) : InterferenceDomai
 
   type t = Top | Val of D.t VarSetMap.t
 
-  let name = "ConditionalWritesLattice"
+  let name = "ConditionalWritesDomain"
 
   let top = Top
   
@@ -103,6 +103,8 @@ module ConditionalWritesDomain (D : InterferenceStateDomain) : InterferenceDomai
   (** This could probably be optimised. *)
   
   let widening = join
+
+  let narrowing = failwith "Narrowing is not implemented for the ConditionalWritesDomain"
   
   let show i = match i with
     | Top -> Bincaml_util.Unicode.top_char
@@ -135,7 +137,7 @@ module ConditionalWritesDomain (D : InterferenceStateDomain) : InterferenceDomai
       all variables in var_set may update in one step. From the resulting intersection, havoc var_set to simulate an
       update. Do this for each entry, then join all the results together with d. *)
     
-  let rec transitions (lst: ConcInt.t list) = match lst with
+  let transitions (lst: ConcInt.t list) = match lst with
     | [] -> bottom
     | { pre; assignments } :: xs ->
       (* true iff v := e may modify v under pre *)
@@ -146,7 +148,7 @@ module ConditionalWritesDomain (D : InterferenceStateDomain) : InterferenceDomai
         let v_exp = BasilExpr.rvar v in
         let v'_exp = BasilExpr.rvar v' in
         (* apply v' := e to get the value of v after the assignment *)
-        let assign_v' = D.transfer pre (Stmt.Instr_Assign [(v', e)]) in
+        let assign_v' = D.transfer pre (Stmt.Instr_Assign { attrib = Attrib.empty; al = [(v', e)] }) in
         (* create the expression v' != v *)
         let v_not_eq_v' = BasilExpr.binexp ~op:`EQ v_exp v'_exp in
         (* apply filter v' != v to the state resulting from v' := e *)
@@ -171,7 +173,7 @@ module RelyGuaranteeGenerator (I : InterferenceDomain) = struct
   module ConcInt = I.ConcInt
 
   module type RGDomain = sig
-    include Lattice_types.Domain
+    include Intra_analysis.IntraDomain
     val interferences: t -> ConcInt.t list
   end
 
@@ -182,6 +184,9 @@ module RelyGuaranteeGenerator (I : InterferenceDomain) = struct
       state : D.t;
       interferences : ConcInt.t list;
     }
+
+    (* fixme *)
+    let transfer_phi t p = t
 
     let top = failwith "top is not defined for the RelyGuaranteeDomain"
     
@@ -196,14 +201,17 @@ module RelyGuaranteeGenerator (I : InterferenceDomain) = struct
     (* todo *)
     let widening = join
 
+    (* todo *)
+    let narrowing = failwith "Narrowing is not defined for the rely-guarantee domain."
+
     let transfer t stmt =
       (* stabilise t; note the stabilise function computes one environment step, so we need to do a fixpoint here *)
       let stable_pre = fixpoint D.equal (I.stabilise rely) t.state in
       (* capture transitions *)
       let interferences =
         match stmt with
-        | Stmt.Instr_Assign assigns ->
-          let global_assigns = List.filter (fun a -> fst a |> Var.is_global) assigns in
+        | Stmt.Instr_Assign { attrib; al } ->
+          let global_assigns = List.filter (fun a -> fst a |> Var.is_global) al in
           ConcInt.{ pre = stable_pre; assignments = global_assigns } :: t.interferences
         | _ -> t.interferences
       in
@@ -211,7 +219,7 @@ module RelyGuaranteeGenerator (I : InterferenceDomain) = struct
       let post = D.transfer stable_pre stmt in
       { state = post; interferences }
 
-    let init p = { state = D.init p; interferences = List.empty }
+    let init ?(vertex = None) p = { state = D.init p; interferences = List.empty }
 
     let compare t1 t2 =
       let compare_state = D.compare t1.state t2.state in

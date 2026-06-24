@@ -126,7 +126,7 @@ let tf_forwards st (read_st : 'a -> Var.t -> 'b) (s : Program.stmt)
        ~f_expr:(BasilExpr.fold_with_type alg)
        s
 
-module MapState (V : Lattice_collections.TopLattice) = struct
+module MapState (V : TopLattice) = struct
   include
     Lattice_collections.LatticeMap
       (struct
@@ -137,7 +137,13 @@ module MapState (V : Lattice_collections.TopLattice) = struct
       (V)
 end
 
-module Forwards (D : Domain) = struct
+module type IntraDomain = sig
+  include Domain
+
+  val transfer_phi : t -> Var.t Block.phi -> t
+end
+
+module Forwards (D : IntraDomain) = struct
   module AnalyseBlock = struct
     include D
 
@@ -147,7 +153,7 @@ module Forwards (D : Domain) = struct
       match Procedure.G.E.label e with
       | Jump -> s
       | Block b -> begin
-          assert (List.is_empty b.phis);
+          let s = List.fold_left transfer_phi s b.phis in
           Block.fold_forwards ~phi:(fun a _ -> a) ~f:D.transfer s b
         end
   end
@@ -163,12 +169,12 @@ module Forwards (D : Domain) = struct
         Procedure.graph p
         |> Option.map (fun g ->
             A.recurse g (Procedure.topo_fwd p)
-              (fun v -> D.init p)
+              (fun v -> D.init ~vertex:(Some v) p)
               widening_set widening_delay))
     |> Option.get_or ~default:A.M.empty
 
   let print_dot fmt p analysis_result =
-    Trace_core.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
+    Trace_core.with_span ~__FILE__ ~__LINE__ "dot-printer" @@ fun _ ->
     let to_dot graph =
       let r =
        fun v -> Option.get_or ~default:D.bottom (A.M.find_opt v analysis_result)
@@ -181,7 +187,7 @@ module Forwards (D : Domain) = struct
     Option.iter to_dot (Procedure.graph p)
 end
 
-module Backwards (D : Domain) = struct
+module Backwards (D : IntraDomain) = struct
   module AnalyseBlock = struct
     include D
 
@@ -191,8 +197,11 @@ module Backwards (D : Domain) = struct
       match Procedure.G.E.label e with
       | Jump -> s
       | Block b -> begin
-          assert (List.is_empty b.phis);
-          Block.fold_backwards ~phi:(fun a _ -> a) ~f:D.transfer ~init:s b
+          let s =
+            Block.fold_backwards ~phi:(fun a _ -> a) ~f:D.transfer ~init:s b
+          in
+          let s = List.fold_left transfer_phi s b.phis in
+          s
         end
   end
 
@@ -210,7 +219,7 @@ module Backwards (D : Domain) = struct
     |> Option.get_or ~default:A.M.empty
 
   let print_dot fmt p analysis_result =
-    Trace_core.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
+    Trace_core.with_span ~__FILE__ ~__LINE__ "dot-printer" @@ fun _ ->
     let to_dot graph =
       let r =
        fun v -> Option.get_or ~default:D.bottom (A.M.find_opt v analysis_result)

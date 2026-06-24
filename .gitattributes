@@ -1,4 +1,8 @@
 tools/vendor/**    linguist-vendored
+lib/gtirb/cap/include/capstone/** linguist-vendored
+lib/gtirb/proto/*.proto   linguist-vendored
 lib/fe/*.ml          linguist-generated
 lib/fe/*.mly          linguist-generated
 lib/fe/*.mll          linguist-generated
+tree-sitter/grammar.js      linguist-generated
+tree-sitter/grammar.bnfc.js linguist-generated

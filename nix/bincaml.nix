@@ -1,41 +1,51 @@
-{ lib
-, buildDunePackage
-, nix-gitignore
-, writableTmpDirAsHomeHook
+{
+  lib,
+  buildDunePackage,
+  nix-gitignore,
+  writableTmpDirAsHomeHook,
+  protobuf,
 
-# ocaml packages
-, menhir
-, zarith
-, fix
-, trace
-, trace-tef
-, containers
-, containers-data
-, iter
-, ppx_deriving
-, ocamlgraph
-, intPQueue
-, cmdliner
-, pp_loc
-, fmt
-, patricia-tree
+  # ocaml packages
+  menhir,
+  angstrom,
+  ocaml-protoc-plugin,
+  zarith,
+  fix,
+  trace,
+  trace-tef,
+  containers,
+  containers-data,
+  iter,
+  ppx_deriving,
+  ocamlgraph,
+  intPQueue,
+  cmdliner,
+  pp_loc,
+  fmt,
+  patricia-tree,
+  logs,
+  mtime,
+  terminal_size,
+  kittyimg,
+  stb_image,
+  linenoise,
 
-# test:
-, ppx_expect
-, alcotest
-, qcheck-core
-, qcheck-alcotest
-, qcheck-stm
+  # test:
+  ppx_expect,
+  alcotest,
+  qcheck-core,
+  qcheck-alcotest,
+  qcheck-stm,
 
-# dev:
-# , odig
-# , sherlodoc
-# , ocaml-lsp-server
-# , ocamlformat
-# , basil_lsp
-# , perf
-# , tree-sitter
-# , nodejs
+  # dev:
+  # , odig
+  # , sherlodoc
+  # , ocaml-lsp-server
+  # , ocamlformat
+  # , basil_lsp
+  # , perf
+  # , tree-sitter
+  # , nodejs
 }:
 
 buildDunePackage {
@@ -46,15 +56,54 @@ buildDunePackage {
 
   src = nix-gitignore.gitignoreSource [ "nix" "flake.nix" "flake.lock" ] ./..;
 
-  checkInputs = [ ppx_expect alcotest qcheck-core qcheck-alcotest qcheck-stm ];
-  nativeBuildInputs = [ menhir writableTmpDirAsHomeHook ];
-  buildInputs =
-    [ menhir fix trace trace-tef containers containers-data iter
-      ppx_deriving ocamlgraph intPQueue cmdliner pp_loc fmt patricia-tree ];
-  propagatedBuildInputs = [ zarith ];
+  checkInputs = [
+    alcotest
+    qcheck-core
+    qcheck-alcotest
+    qcheck-stm
+  ];
+  nativeBuildInputs = [
+    writableTmpDirAsHomeHook
+    protobuf
+    ocaml-protoc-plugin
+    menhir
+  ];
+  propagatedBuildInputs = [
+    ocaml-protoc-plugin
+    angstrom
+    zarith
+    ppx_expect
+    pp_loc
+    ppx_deriving
+    containers
+    containers-data
+    ocamlgraph
+    menhir
+    fix
+    trace
+    trace-tef
+    iter
+    intPQueue
+    cmdliner
+    fmt
+    patricia-tree
+    logs
+    mtime
+    terminal_size
+    kittyimg
+    linenoise
+    stb_image
+  ];
 
-  doCheck = true;
-  outputs = [ "out" "dev" ];
+  postPatch = ''
+    patchShebangs --build test
+  '';
+
+  doCheck = false;
+  outputs = [
+    "out"
+    "dev"
+  ];
 
   meta = {
     homepage = "https://github.com/agle/bincaml";

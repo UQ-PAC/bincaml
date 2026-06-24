@@ -196,6 +196,9 @@ module WrappedIntervalsLattice = struct
                     (mul al (of_int ~size:width 2))))
           else top
 
+  (* possibly incorrect?! this isn't implemented in crab or described in the paper *)
+  let narrowing a b = match (a, b) with Top, i -> i | _ -> a
+
   let intersect a b =
     match (a, b) with
     | Bot, _ | _, Bot -> []
@@ -388,7 +391,7 @@ module WrappedIntervalsLatticeOps = struct
          (fun a -> List.concat_map (fun b -> rusmul a b) (cut ~width t))
          (cut ~width s)
 
-  (* 
+  (*
     Division implementation derived from Crab
     https://github.com/seahorn/crab/blob/418b63c66b91f04bf36ae59d5eecb936c48836ee/include/crab/domains/wrapped_interval_impl.hpp#L1034-L1091
     https://github.com/seahorn/crab/blob/418b63c66b91f04bf36ae59d5eecb936c48836ee/include/crab/domains/wrapped_interval_impl.hpp#L210-L297
@@ -701,6 +704,7 @@ module WrappedIntervalsValueAbstraction = struct
         if size bv = 0 then top else interval bv bv
     (* NOTE: This kind of thing happens frequently, should I go through all of the fields and make a intervals out of those bvs?*)
     | `Record fields -> top
+    | `Sort _ -> top
 
   let eval_unop (op : Lang.Ops.AllOps.unary) (a, t) rt =
     match t with
@@ -714,10 +718,14 @@ module WrappedIntervalsValueAbstraction = struct
         | _ -> top)
     | _ -> top
 
-  let eval_binop (op : Lang.Ops.AllOps.binary) (a, ta) (b, tb) rt =
+  let eval_binary op (a, ta) (b, tb) rt =
     match (ta, ta) with
     | Types.Bitvector width, Types.Bitvector w2 when width = w2 -> (
         match op with
+        | #Lang.Ops.Spec.binary -> Top
+        | #Lang.Ops.RecordOps.binary -> Top
+        | #Lang.Ops.IntOps.binary -> Top
+        | #Lang.Ops.LogicalOps.binary -> Top
         | `BVADD | `PTRADD -> add ~width a b
         | `BVSUB -> sub ~width a b
         | `BVMUL -> mul ~width a b
@@ -730,16 +738,20 @@ module WrappedIntervalsValueAbstraction = struct
         | `BVASHR -> ashr ~width a b
         | `BVLSHR -> lshr ~width a b
         | `BVSHL -> shl ~width a b
-        | _ -> top)
+        | `BVSLE | `BVSLT | `BVSMOD | `BVSREM | `BVULE | `BVULT | `BVUREM -> top
+        )
     | _ -> top
+
+  let eval_binop (op : Lang.Ops.AllOps.binary) a b rt =
+    match op with #Lang.Ops.AllOps.binary as op -> eval_binary op a b rt
 
   let eval_intrin (op : Lang.Ops.AllOps.intrin) (args : (t * Types.t) list) rt =
     let op a b =
       match op with
-      | `BVADD -> (eval_binop `BVADD a b rt, rt)
-      | `BVOR -> (eval_binop `BVOR a b rt, rt)
-      | `BVXOR -> (eval_binop `BVXOR a b rt, rt)
-      | `BVAND -> (eval_binop `BVAND a b rt, rt)
+      | `BVADD -> (eval_binary `BVADD a b rt, rt)
+      | `BVOR -> (eval_binary `BVOR a b rt, rt)
+      | `BVXOR -> (eval_binary `BVXOR a b rt, rt)
+      | `BVAND -> (eval_binary `BVAND a b rt, rt)
       | `BVConcat ->
           ( (match (snd a, snd b) with
             | Types.Bitvector wa, Types.Bitvector wb ->
@@ -768,7 +780,7 @@ module Domain = struct
 
   let top_val = WrappedIntervalsLattice.top
 
-  let init p =
+  let init ?(vertex = None) p =
     let vs = Lang.Procedure.formal_in_params p |> StringMap.values in
     vs
     |> Iter.map (fun v -> (v, top_val))
@@ -778,7 +790,7 @@ module Domain = struct
     type bin_pred =
       [ `EQ | `NEQ | `ULE | `ULT | `UGT | `UGE | `SLE | `SLT | `SGT | `SGE ]
 
-    let from_op op =
+    let from_op (op : Lang.Expr.BasilExpr.binary) : bin_pred option =
       match op with
       | `EQ -> Some `EQ
       | `NEQ -> Some `NEQ
@@ -856,7 +868,9 @@ module Domain = struct
                        Bitvec.(add (min ~width) (of_int ~size:width 1))
                        (max ~width)
                 else if Bitvec.equal a (max ~width) then Bot
-                else meet s @@ interval a (max ~width))
+                else
+                  meet s
+                  @@ interval (add a @@ of_int ~size:width 1) (max ~width))
       in
       let uineq = ineq umin umax in
       let sineq = ineq smin smax in
@@ -948,7 +962,7 @@ module Domain = struct
     in
     let updates =
       match evald_stmt with
-      | Lang.Stmt.Instr_Assign ls -> List.to_iter ls
+      | Lang.Stmt.Instr_Assign { al } -> List.to_iter al
       | Lang.Stmt.Instr_Assert _ | Lang.Stmt.Instr_Assume _ -> Iter.empty
       | Lang.Stmt.Instr_Load { lhs; rhs; addr = Scalar } ->
           Iter.singleton (lhs, rhs)
@@ -957,7 +971,7 @@ module Domain = struct
       | Lang.Stmt.Instr_Load { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_Store { lhs } -> Iter.singleton (lhs, top_val)
       | Lang.Stmt.Instr_IntrinCall { lhs } ->
-          StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
+          List.to_iter lhs |> Iter.map (fun v -> (v, top_val))
       | Lang.Stmt.Instr_Call { lhs } ->
           StringMap.values lhs |> Iter.map (fun v -> (v, top_val))
       | Lang.Stmt.Instr_IndirectCall _ -> Iter.empty
@@ -967,11 +981,53 @@ module Domain = struct
   let transfer dom stmt =
     Iter.fold (fun a (k, v) -> update k v a) dom
     @@ transfer_state (flip read dom) stmt
+
+  let transfer_phi m (p : Var.t Lang.Block.phi) =
+    match p with
+    | { lhs; rhs } ->
+        rhs
+        |> List.map (fun (_, k) -> read k m)
+        |> List.fold_left WrappedIntervalsLattice.join
+             WrappedIntervalsLattice.bottom
+        |> fun v -> update lhs v m
 end
 
-module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
+module DFGAnalysis = Dataflow_graph.AnalysisFwdNarrowing (Domain)
 module Analysis = Intra_analysis.Forwards (Domain)
 
 let analyse (p : Lang.Program.proc) =
   Analysis.analyse ~widening_set:Graph.ChaoticIteration.FromWto
     ~widening_delay:50 p
+
+let%expect_test "narrow_loop" =
+  let prog =
+    (Loader.Loadir.ast_of_string
+       {|
+proc @main()  -> () {  }
+
+[
+   block %entry [ var l_1:bv64 := 0x0:bv64; goto (%ret,%loop); ];
+   block %loop ( var l_2:bv64 := phi(%loop -> l_4:bv64, %entry -> l_1:bv64) ) [
+     var l_3:bv64 := l_2:bv64;
+     assert bvsle(l_3:bv64, 0x100:bv64);
+     var l_4:bv64 := bvadd(l_3:bv64, 0x1:bv64);
+     goto (%ret,%loop);
+   ];
+   block %ret (
+     var l_5:bv64 := phi(%loop -> l_4:bv64, %loop -> l_4:bv64, %entry -> l_1:bv64)
+   ) [
+     var l_6:bv64 := l_5:bv64;
+     assert boolnot(bvsle(l_6:bv64, 0x100:bv64));
+     return;
+   ]
+];
+prog entry @main;
+    |})
+      .prog
+  in
+  let proc = Lang.Program.entry_proc_exn prog in
+  let r = DFGAnalysis.flow_insensitive proc in
+  print_endline @@ StateAbstraction.show r;
+  (* l_6->[0x101, 0x101] we infer an exact value! *)
+  [%expect
+    {| (l_1->⟦0x0:bv64, 0x0:bv64⟧, l_4->⟦0x8000000000000032:bv64, 0x101:bv64⟧, l_2->⟦0x8000000000000031:bv64, 0x101:bv64⟧, l_3->⟦0x8000000000000031:bv64, 0x100:bv64⟧, l_5->⟦0x8000000000000032:bv64, 0x101:bv64⟧, l_6->⟦0x101:bv64, 0x101:bv64⟧, _->⊥) |}]

@@ -1,0 +1,10 @@
+
+* @agle @katrinafyi
+
+/lib/*.ml @agle
+/lib/lang @agle
+
+/lsp @katrinafyi
+/tree-sitter @katrinafyi
+/nix @katrinafyi
+

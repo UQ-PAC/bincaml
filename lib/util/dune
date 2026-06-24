@@ -3,6 +3,7 @@
  (name bincaml_util)
  (modules
   worklist
+  fixed_width_arith
   mtypes
   common
   unicode
@@ -13,9 +14,13 @@
   zint
   smt
   reverse_graph
+  logger
   recursionscheme)
  (libraries
   intPQueue
+  logs
+  mtime
+  mtime.clock
   iter
   containers
   fix

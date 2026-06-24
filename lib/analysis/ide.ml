@@ -99,7 +99,7 @@ module type IDEDomain = sig
   val compose : t -> t -> t
   (** the composite of edge functions *)
 
-  val eval : t -> Value.t -> Value.t
+  val eval : Value.t -> t -> Value.t
   (** evaluate an edge function *)
 
   val init_data : Var.t Iter.t -> Program.proc -> Data.t Iter.t
@@ -127,6 +127,8 @@ module type IDEDomain = sig
 
   val transfer_phi : phi_info -> DL.t -> t state_update
   (** edge through phi information *)
+
+  val init_p2 : Var.t Iter.t -> Program.proc -> (Data.t * Value.t) Iter.t
 end
 
 module IDEGraph = struct
@@ -332,7 +334,12 @@ module IDEGraph = struct
     in
     let g = Iter.fold GB.add_vertex g intra_verts in
     let g =
-      if Option.equal ID.equal prog.entry_proc (Some proc_id) then
+      if
+        Option.(
+          equal ID.equal
+            (Program.entry_proc_opt prog |> map Procedure.id)
+            (Some proc_id))
+      then
         add_edge_e_dir dir g (Entry, Nop, IntraVertex { proc_id; v = Entry })
         |> fun g ->
         add_edge_e_dir dir g (IntraVertex { proc_id; v = Return }, Nop, Exit)
@@ -351,7 +358,7 @@ module IDEGraph = struct
             IntraVertex { proc_id; v = Return } ))
 
   let create (prog : Program.t) dir =
-    ID.Map.to_iter prog.procs |> Iter.map snd
+    Program.procs prog |> Iter.map snd
     |> Iter.fold (fun g p -> proc_graph prog g p dir) (GB.empty ())
 
   (** a table giving, to each procedure, all of its call sites to other
@@ -583,7 +590,7 @@ module IDE (D : IDEDomain) = struct
       updates
     |> Iter.fold
          (fun acc ((d1, d3), e) ->
-           let base = dldlget Lambda d3 summary in
+           let base = dldlget Lambda d3 acc in
            let m = DlMap.get_or d1 acc ~default:DlMap.empty in
            match d1 with
            | Label v when D.equal base (D.join e base) ->
@@ -652,7 +659,7 @@ module IDE (D : IDEDomain) = struct
             match d3 with
             | Label v ->
                 let st = Hashtbl.get_or states target ~default:DataMap.empty in
-                let fd = D.eval e21 md in
+                let fd = D.eval md e21 in
                 let y = DataMap.get_or v st ~default:D.Value.bottom in
                 let j = D.Value.join y fd in
                 if not (D.Value.equal j y) then (
@@ -672,7 +679,7 @@ module IDE (D : IDEDomain) = struct
   module W2 = Worklist.Make (P2K)
 
   (** Compute the analysis result using summaries from phase 1 *)
-  let phase2_solve prog start_proc graph globals
+  let phase2_solve (prog : Program.t) start_proc graph globals
       (summaries : (Loc.t, summary) Hashtbl.t) =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-phase2" @@ fun _ ->
     let states : (Loc.t, analysis_state) Hashtbl.t = Hashtbl.create 100 in
@@ -684,6 +691,32 @@ module IDE (D : IDEDomain) = struct
           (*print_endline @@ "summary undefined " ^ Loc.show loc;*)
           DlMap.empty
     in
+    let proc_entry =
+      match D.direction with
+      | `Forwards -> Procedure.Vert.Entry
+      | `Backwards -> Procedure.Vert.Return
+    in
+    let entry_of (l : Loc.t) =
+      match l with
+      | IntraVertex { proc_id; v } ->
+          Loc.IntraVertex { proc_id; v = proc_entry }
+      | CallSite stmt_id ->
+          IntraVertex { proc_id = stmt_id.proc_id; v = proc_entry }
+      | AfterCall stmt_id ->
+          IntraVertex { proc_id = stmt_id.proc_id; v = proc_entry }
+      | Entry | Exit -> (
+          match D.direction with `Forwards -> Entry | `Backwards -> Exit)
+    in
+    (* Init the states with the analysis given values at each procedure *)
+    Program.procs prog
+    |> Iter.iter (fun (proc_id, proc) ->
+        let l = IDEGraph.Vert.IntraVertex { proc_id; v = proc_entry } in
+        let state = Hashtbl.get_or states l ~default:DataMap.empty in
+        let state =
+          D.init_p2 (Program.global_vars prog) proc
+          |> Iter.fold (fun state (k, v) -> DataMap.add k v state) state
+        in
+        Hashtbl.replace states l state);
     (* The first step is to initialise the entry nodes of each procedure with
        their initial value based on the entry procedure being initialised to
        bottom, using the summary functions. This is done by looking at all call
@@ -695,7 +728,7 @@ module IDE (D : IDEDomain) = struct
     |> Iter.iter (fun l -> W2.add worklist (l, Lambda));
     while W2.non_empty worklist do
       let l, d = W2.pop worklist in
-      let ost = get_st l in
+      let ost = get_st (entry_of l) in
       let md =
         match d with
         | Label v -> DataMap.get_or v ost ~default:D.Value.bottom
@@ -709,15 +742,6 @@ module IDE (D : IDEDomain) = struct
     done;
     (* We then apply all summary functions to each location to the initial
        values of each procedure *)
-    let entry_of (l : Loc.t) =
-      match l with
-      | IntraVertex { proc_id; v } -> Loc.IntraVertex { proc_id; v = Entry }
-      | CallSite stmt_id -> IntraVertex { proc_id = stmt_id.proc_id; v = Entry }
-      | AfterCall stmt_id ->
-          IntraVertex { proc_id = stmt_id.proc_id; v = Entry }
-      | Entry -> Entry
-      | Exit -> Entry
-    in
     flip IDEGraph.G.iter_vertex graph (fun l ->
         let pst = get_st (entry_of l) in
         get_summary l
@@ -731,13 +755,21 @@ module IDE (D : IDEDomain) = struct
                 match d2 with
                 | Label v ->
                     let st = get_st l in
-                    let y = D.eval e x in
+                    let y = D.eval x e in
                     Hashtbl.replace states l (join_state_with st v y)
                 | _ -> ())));
     states
 
   let query r ~proc_id vert =
     Hashtbl.get r (Loc.IntraVertex { proc_id; v = vert })
+
+  let query_summary summaries proc_id =
+    let v =
+      match D.direction with
+      | `Backwards -> Loc.IntraVertex { proc_id; v = Procedure.Vert.Entry }
+      | `Forwards -> Loc.IntraVertex { proc_id; v = Procedure.Vert.Return }
+    in
+    Hashtbl.get summaries v
 
   let scc_order (prog : Program.t) graph =
     let components, call_graph_scc =
@@ -756,8 +788,8 @@ module IDE (D : IDEDomain) = struct
     |> LM.of_iter
 
   let p1_start_vals (prog : Program.t) globals =
-    ID.Map.values prog.procs
-    |> Iter.flat_map (fun proc ->
+    Program.procs prog
+    |> Iter.flat_map (fun (_, proc) ->
         let vert =
           Loc.IntraVertex
             {
@@ -777,26 +809,16 @@ module IDE (D : IDEDomain) = struct
          | `Forwards -> (Loc.Entry, Lambda, Lambda)
          | `Backwards -> (Loc.Exit, Lambda, Lambda))
 
-  (** Generate just the summaries (phase 1) of the IDE analysis performed on the
-      given program *)
-  let solve_summaries (prog : Program.t) : Program.proc -> summary option =
+  (** `solve_summaries prog` returns the summaries (phase 1) of the IDE analysis
+      performed on the given program *)
+  let solve_summaries (prog : Program.t) : ID.t -> summary option =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-solve_summaries" @@ fun _ ->
     let globals = Program.global_vars prog in
     let graph = IDEGraph.create prog dir in
     let start = p1_start_vals prog globals in
     let order = scc_order prog graph in
-    let summary = phase1_solve start graph globals order DlMap.empty in
-    fun proc ->
-      let v =
-        match D.direction with
-        | `Backwards ->
-            Loc.IntraVertex
-              { proc_id = Procedure.id proc; v = Procedure.Vert.Entry }
-        | `Forwards ->
-            Loc.IntraVertex
-              { proc_id = Procedure.id proc; v = Procedure.Vert.Return }
-      in
-      Hashtbl.get summary v
+    let summaries = phase1_solve start graph globals order DlMap.empty in
+    query_summary summaries
 
   let solve (prog : Program.t) =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide-solve" @@ fun _ ->
@@ -804,11 +826,9 @@ module IDE (D : IDEDomain) = struct
     let graph = IDEGraph.create prog dir in
     let start = p1_start_vals prog globals in
     let order = scc_order prog graph in
-    let start_proc =
-      prog.entry_proc |> Option.get_exn_or "Missing entry procedure"
-    in
+    let start_proc = Procedure.id @@ Program.entry_proc_exn prog in
     let summary = phase1_solve start graph globals order DlMap.empty in
-    ( query @@ summary,
+    ( query_summary @@ summary,
       query @@ phase2_solve prog start_proc graph globals summary )
 
   module G = Procedure.RevG

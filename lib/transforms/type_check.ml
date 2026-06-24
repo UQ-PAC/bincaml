@@ -27,10 +27,11 @@ let type_check stmt_id block_id expr =
     match op with
     | `Classification -> []
     | `Gamma -> []
-    | `FACCESS _ -> (
+    | `Old -> []
+    | `ReadField _ -> (
         match arg with
-        | Record _ -> []
-        | _ -> [ type_err "FACCESS body is not a record type" ])
+        | Struct _ -> []
+        | _ -> [ type_err "ReadField body is not a record type" ])
     | `BoolNOT | `BOOLTOBV1 ->
         if Types.equal arg Types.Boolean then []
         else [ type_err "%s body is not a boolean" @@ AllOps.to_string op ]
@@ -53,7 +54,6 @@ let type_check stmt_id block_id expr =
                   @@ AllOps.to_string op;
                 ])
         | _ -> [ type_err "%s body is not a bitvector" @@ AllOps.to_string op ])
-    | `Old -> []
   in
 
   let check_binary (op : Ops.AllOps.binary) (arg1 : Types.t) (arg2 : Types.t) :
@@ -101,13 +101,13 @@ let type_check stmt_id block_id expr =
         | _ ->
             err
             @ [ type_err "%s is not of pointer type" @@ Types.to_string arg2 ])
-    | `FSET offset ->
+    | `WriteField offset ->
         let err =
           match arg1 with
-          | Record _ -> []
+          | Struct _ -> []
           | _ -> [ type_err "%s is not of record type" @@ Types.to_string arg1 ]
         in
-        let { typ } : Types.record_field = Types.get_field offset arg1 in
+        let { typ } : Types.record_field = Types.struct_field offset arg1 in
         if List.length err = 1 || Types.equal arg2 typ then err
         else
           [
@@ -134,9 +134,8 @@ let type_check stmt_id block_id expr =
             ]
         | _ -> [])
     | `IMPLIES -> binary_bool_types arg1 arg2
-    | `BVSREM | `BVSDIV | `BVADD | `BVASHR | `BVMUL | `BVSHL | `BVNAND | `BVSLE
-    | `BVUREM | `BVXOR | `BVOR | `BVSUB | `BVUDIV | `BVLSHR | `BVAND | `BVSMOD
-    | `BVULT | `BVULE | `BVSLT -> (
+    | `BVSREM | `BVSDIV | `BVASHR | `BVSHL | `BVNAND | `BVSLE | `BVUREM | `BVSUB
+    | `BVUDIV | `BVLSHR | `BVSMOD | `BVULT | `BVULE | `BVSLT -> (
         match arg1 with
         | Bitvector sz as typ -> binary_same_types arg1 arg2 typ
         | _ ->
@@ -153,7 +152,7 @@ let type_check stmt_id block_id expr =
   let check_intrin (op : Ops.AllOps.intrin) (args : Types.t list) :
       type_error list =
     match op with
-    | `BVADD | `BVXOR | `BVOR | `BVAND ->
+    | `BVADD | `BVXOR | `BVOR | `BVAND | `BVMUL ->
         let correct_type = List.hd args in
         List.fold_left
           (fun acc typ ->
@@ -275,21 +274,22 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
   let type_check = type_check stmt_id block_id in
   match stmt with
   | Stmt.Instr_IntrinCall _ -> []
-  | Stmt.Instr_Assign ls ->
-      List.fold_left
-        (fun acc (lvar, e) ->
-          let expr_errors, rtype = type_check e in
-          let acc = List.append acc expr_errors in
-          if Types.equal rtype (Var.typ lvar) then acc
-          else
-            type_err
-              "Paramters for the function has a type mismatch: type of %s != \
-               type of %s (%s != %s)"
-              (BasilExpr.to_string e) (Var.to_string lvar)
-              (Types.to_string rtype)
-              (Types.to_string (Var.typ lvar))
-            :: acc)
-        [] ls
+  | Stmt.Instr_Assign { al } ->
+      al
+      |> List.fold_left
+           (fun acc (lvar, e) ->
+             let expr_errors, rtype = type_check e in
+             let acc = List.append acc expr_errors in
+             if Types.equal rtype (Var.typ lvar) then acc
+             else
+               type_err
+                 "Paramters for the function has a type mismatch: type of %s \
+                  != type of %s (%s != %s)"
+                 (BasilExpr.to_string e) (Var.to_string lvar)
+                 (Types.to_string rtype)
+                 (Types.to_string (Var.typ lvar))
+               :: acc)
+           []
   | Stmt.Instr_Store { lhs; rhs; value; addr = Scalar } ->
       let terror, rtype = type_check value in
       terror
@@ -373,7 +373,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
           a b
         |> StringMap.values |> Iter.to_list
       in
-      let target_proc = ID.Map.find procid pt.procs in
+      let target_proc = Program.proc pt procid in
       let real_args = Procedure.formal_in_params target_proc in
       let output = Procedure.formal_out_params target_proc in
 

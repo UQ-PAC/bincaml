@@ -1,8 +1,7 @@
 (library
  (public_name bincaml.loader)
  (name loader)
- (flags -w -27)
- (modules loadir spec_modifies)
+ (modules loadir)
  (inline_tests)
  (preprocess
   (pps ppx_expect ppx_deriving.show ppx_deriving.eq ppx_deriving.ord))
@@ -14,26 +13,34 @@
   bincaml.util
   zarith
   iter
-  trace.core))
+  logs
+  mtime
+  trace.core
+  str))
 
 ; (library
 ;  (public_name bincaml.backends)
 ;  (name backends)
-;  (flags -w -27)
 ;  (modules boogie)
 ;  (libraries containers containers-data containers.pp backends)
 ;  (inline_tests))
 
 (library
  (public_name bincaml)
- (flags -w -27)
- (modules passes)
+ (modules passes script invariants)
  (libraries
+  bincaml.gtirb
   loader
   containers.pp
   pp_loc
   BasilIR
   lang
   transforms
+  bincaml.backends
   bincaml.ast
-  trace.core))
+  bincaml.util
+  logs
+  mtime
+  trace.core)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq ppx_deriving.ord)))

@@ -1,11 +1,28 @@
-; checks tree-sitter is valid and unambiguous
+(rule
+ (deps tree-sitter.json grammar.js grammar.bnfc.js)
+ (action
+  (with-stdout-to
+   src.tar
+   (progn
+    (run tree-sitter generate grammar.js)
+    (run tar -cf src.tar src)))))
+
+; checks tree-sitter highlights are valid
 
 (rule
- (deps grammar.js)
- (alias runtest)
- (enabled_if %{bin-available:tree-sitter})
+ (deps
+  src.tar
+  tree-sitter.json
+  queries/highlights.scm
+  ../test/cram/concat.il)
+ (alias treesit)
  (action
-  (run tree-sitter generate grammar.js)))
+  (progn
+   (run tar -xf src.tar)
+   (with-stdin-from
+    %{project_root}/test/cram/concat.il
+    (ignore-stdout
+     (run tree-sitter highlight))))))
 
 ; check that grammar.js is up to date.
 ; requires `bnfc-treesitter` from pac-nix.
@@ -15,9 +32,8 @@
 ; bnfc for the main ocaml parser.
 
 (rule
- (alias runtest)
+ (alias treesit)
  (deps %{project_root}/lib/fe/BasilIR.cf)
- (enabled_if %{read:../lib/fe/has-bnfc-tree-sitter})
  (action
   (progn
    (copy %{deps} basilir.cf)
@@ -27,11 +43,16 @@
     --tree-sitter-word
     LocalIdent
     basilir.cf
-    --makefile)
-   (diff? grammar.js tree-sitter-basilir/grammar.js))))
+    --makefile
+    --outputdir=out/tree-sitter-basilir)
+   ; compensate for older bnfc emitting into a subfolder of outputdir
+   (with-stdout-to
+    grammar.bnfc.js.new
+    (bash "shopt -s globstar ; sed 's/= grammar/= /' out/**/grammar.js"))
+   (diff? grammar.bnfc.js grammar.bnfc.js.new))))
 
 (rule
- (alias runtest)
+ (alias treesit)
  (deps (universe))
  (enabled_if
   (not %{read:../lib/fe/has-bnfc-tree-sitter}))
@@ -39,3 +60,17 @@
   (echo
    "tree-sitter/dune: bnfc tree-sitter generation skipped,"
    "because the installed bnfc doesn't support it.\n")))
+
+; run treesit test as part of runtest if possible, unless CI=true which
+; is set by actions runners
+
+(alias
+ (name runtest)
+ (deps
+  (alias treesit))
+ (enabled_if
+  (and
+   %{read:../lib/fe/has-bnfc-tree-sitter}
+   %{bin-available:tree-sitter}
+   (not
+    (= %{env:CI=} "true")))))

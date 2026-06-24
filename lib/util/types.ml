@@ -27,15 +27,17 @@ module StringMap = Map.Make (String)
 
 type t =
   | Boolean
-  | Integer
-  | Bitvector of int
-  | Unit
-  | Top
-  | Nothing
-  | Map of t * t
-  | Sort of string * variant list
-  | Record of record_field StringMap.t
-  | Pointer of pointer
+  | Integer  (** mathematical integer type (Z)*)
+  | Bitvector of int  (** bitvector of a given width *)
+  | Unit  (** type inhabited by unit value *)
+  | Top  (** greatest type *)
+  | Nothing  (** least type / empty set *)
+  | Map of t * t  (** function type *)
+  | Sort of string * variant list  (** An Algebraic datatype *)
+  | Struct of record_field StringMap.t
+      (** a struct is a product type of a known layout that is representible as
+          a finite byte/bit sequence *)
+  | Pointer of pointer  (** pointer type *)
   | Variable of string (* Possibly a name of a type declartion *)
 
 and variant = { variant : string; fields : field list }
@@ -66,15 +68,12 @@ let mk_variant name fields = { variant = name; fields }
 let mk_enum name (cases : string list) =
   Sort (name, List.map (fun variant -> { variant; fields = [] }) cases)
 
-(* ADT not Record type *)
-let mk_record name (fields : field list) =
+let mk_adt_record name (fields : field list) =
   Sort (name, [ mk_variant ("Record" ^ name) fields ])
 
-(* ADT not Record type *)
-let record_field name t =
+let adt_record_field name t =
   match t with
-  | Sort (sort_name, [ { variant; fields } ])
-    when String.equal variant ("Record" ^ sort_name) ->
+  | Sort (_, [ { fields; _ } ]) ->
       fields
       |> List.find_map (function
         | { field; typ } when String.equal field name -> Some typ
@@ -85,9 +84,11 @@ let mk_adt name (variants : (string * field list) list) =
   Sort
     (name, variants |> List.map (fun (variant, fields) -> { variant; fields }))
 
-let get_field field_name record : record_field =
+let bv_min_width_for_nat n = Bitvector (Z.of_int n |> Z.numbits)
+
+let struct_field field_name record : record_field =
   match record with
-  | Record fields -> (
+  | Struct fields -> (
       match StringMap.find_opt field_name fields with
       | None -> failwith @@ "No field at offset " ^ field_name
       | Some t -> t)
@@ -110,7 +111,7 @@ let rec compare_partial (a : t) (b : t) =
       compare_partial lower lower1 |> function
       | Some 0 -> compare_partial upper upper1
       | o -> o)
-  | Record fields, Record fields2 ->
+  | Struct fields, Struct fields2 ->
       Some
         (StringMap.compare
            (fun ({ typ = a; _ } : record_field) { typ = b; _ } ->
@@ -144,11 +145,11 @@ let rec to_string = function
   | Variable name -> name
   | Pointer { lower; upper } ->
       Printf.sprintf "ptr(%s, %s)" (to_string lower) (to_string upper)
-  | Record record ->
+  | Struct record ->
       "{"
       ^ (StringMap.bindings record
         |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->
-            Printf.sprintf "(\"%s\": (%s, %s))" k (to_string v)
+            Printf.sprintf "\"%s\": (%s, %s)" k (to_string v)
               (Z.to_string offset))
         |> String.concat ", ")
       ^ "}"
@@ -159,6 +160,9 @@ let rec to_string = function
   | Map (a, (Map _ as b)) ->
       "(" ^ ("(" ^ to_string a ^ ")" ^ "->" ^ to_string b) ^ ")"
   | Map (a, b) -> "(" ^ (to_string a ^ "->" ^ to_string b) ^ ")"
+  | Sort (name, _) -> name
+
+let to_string_decl = function
   | Sort (name, []) -> name
   | Sort (name, variants) ->
       let pfields fields =
@@ -174,6 +178,13 @@ let rec to_string = function
       ^ List.to_string ~sep:" | " ~start:"" ~stop:""
           (function { variant; fields } -> fsort variant fields)
           variants
+  | a -> to_string a
+
+let to_string_rexp = function
+  | ( Boolean | Integer | Bitvector _ | Unit | Top | Nothing | Variable _
+    | Pointer _ | Struct _ | Map _ ) as e ->
+      to_string e
+  | Sort (name, _) -> name
 
 let%expect_test "dtp" =
   let lst =
@@ -192,14 +203,13 @@ let%expect_test "dtp" =
         ] )
   in
   let rc =
-    mk_record "recs" [ mk_field "a" (Bitvector 12); mk_field "b" Boolean ]
+    mk_adt_record "recs" [ mk_field "a" (Bitvector 12); mk_field "b" Boolean ]
   in
   print_endline @@ to_string lst;
   print_endline @@ to_string rc;
-  [%expect
-    {|
-    list = cons of {head: E; tail: list} | nil
-    recs = Recordrecs of {a: bv12; b: bool}
+  [%expect {|
+    list
+    recs
     |}]
 
 let show (b : t) = to_string b

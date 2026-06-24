@@ -1,0 +1,259 @@
+open Bincaml_util.Common
+open Gtirb_proto
+open Ocaml_protoc_plugin
+open IR.Gtirb.Proto
+open ByteInterval.Gtirb.Proto
+open Module.Gtirb.Proto
+open Section.Gtirb.Proto
+open CFG.Gtirb.Proto
+open Load_auxdata
+module UUIDMap = UUIDMap
+module UUIDSet = UUIDSet
+
+module AD = Load_auxdata.Loaders
+(** Auxdata parsers *)
+
+open Conf
+
+(** {2 GTIRB Frontend Intermediate Representation} *)
+
+(** edges just copied directly from gtirb protobuf CFG *)
+module Edge = struct
+  type edge_type = EdgeType.t =
+    | Type_Branch
+    | Type_Call
+    | Type_Fallthrough
+    | Type_Return
+    | Type_Syscall
+    | Type_Sysret
+  [@@deriving eq, ord, show { with_path = false }]
+
+  type edge_label = EdgeLabel.t = {
+    conditional : bool;
+    direct : bool;
+    type' : edge_type;
+  }
+  [@@deriving eq, ord, show { with_path = false }]
+
+  type t = edge_label option [@@deriving eq, ord, show { with_path = false }]
+
+  let to_attrib { conditional; direct; type' } =
+    StringMap.of_list
+      [
+        (".conditional", `String (Stdlib.Bool.to_string conditional));
+        (".direct", `String (Stdlib.Bool.to_string direct));
+        (".type", `String (show_edge_type type'));
+      ]
+
+  let default = None
+end
+
+(** Vertices are block uuids internal to a procedure, external to the procedure
+    (e.g. call and return targets), or stmt sequences with optional uuid (they
+    are used to replace an external vertices with code)
+
+    Note that here in contrast to bincaml vertices reprsent code and egdes
+    represent jumps. *)
+module Vert = struct
+  type t =
+    | Internal of UUID.t  (** vertex in this procedure *)
+    | External of UUID.t  (** vertex in another procedure *)
+    | Proxy of UUID.t  (** vertex in another procedure *)
+    | Stmts of { uuid : UUID.t; stmts : Lang.Program.stmt list }
+  [@@deriving eq, ord, show { with_path = false }]
+
+  let uuid = function
+    | Internal u -> u
+    | Proxy u -> u
+    | External u -> u
+    | Stmts { uuid } -> uuid
+
+  let to_attrib = function
+    | Internal uuid -> `String ("internal:" ^ UUID.show uuid)
+    | External uuid -> `String ("external:" ^ UUID.show uuid)
+    | Proxy uuid -> `String ("proxy:" ^ UUID.show uuid)
+    | Stmts { uuid } -> `String ("stmts:" ^ UUID.show uuid)
+
+  let hash = Hash.poly
+end
+
+module G = Graph.Persistent.Digraph.ConcreteLabeled (Vert) (Edge)
+(** OCamlgraph control-flow graph *)
+
+module D = Graph.Graphviz.Dot (struct
+  include G
+
+  let edge_attributes (_, e, _) =
+    let n =
+      Containers_pp.Pretty.to_string ~width:50
+        (Containers_pp.text @@ Edge.show e)
+    in
+    [ `Label n ]
+
+  let default_edge_attributes _ = []
+  let get_subgraph _ = None
+  let default_vertex_attributes _ = []
+  let graph_attributes _ = []
+
+  let vertex_name (v : Vert.t) =
+    ("v"
+    ^
+    match v with
+    | Stmts { uuid } -> "stmts:" ^ UUID.show uuid
+    | Internal e -> UUID.show e
+    | Proxy e -> "proxy:" ^ UUID.show e
+    | External e -> "External" ^ UUID.show e)
+    |> String.replace ~sub:"/" ~by:"_"
+    |> String.replace ~sub:"+" ~by:"__"
+
+  let vertex_attributes v =
+    let n =
+      match v with
+      | Vert.Internal n -> UUID.show n
+      | Vert.Proxy n -> "proxy:" ^ UUID.show n
+      | External e -> "External:" ^ UUID.show e
+      | Stmts { uuid; stmts } ->
+          UUID.show uuid ^ "\\r"
+          ^ List.to_string ~sep:"\\r" Lang.Program.show_stmt stmts
+    in
+    [ `Fontname "Mono"; `Label n ]
+end)
+
+type block = Gtirb.block [@@deriving eq, ord, show { with_path = false }]
+(** code/data block with absolute address *)
+
+type temp_proc = {
+  name : string;  (** human-readable procedure name *)
+  id : ID.t;  (** procedure ID attached to a program (matches name) *)
+  uuid : UUID.t;  (** generic function UUID*)
+  entries : UUIDSet.t;  (** entry block uuids *)
+  blocks : UUIDSet.t;  (** UUIDs of blocks internal to this procedure *)
+  code_blocks : Gtirb.block UUIDMap.t;  (** block definitions *)
+  cfg : G.t;  (** intraprocedural control-flow graph *)
+}
+(** Gfir procedure; basic blocks containing sequences of opcodes or statemetns
+*)
+
+open struct
+  let or_error default = function
+    | Ok e -> e
+    | Error msg ->
+        Logs.warn (fun m -> m "load:gtirb %s" msg);
+        default
+end
+
+(** Build ocamlgraph CFG for procedure from Gtirb CFG *)
+let make_proc_cfg block_member_of block_proxy (gtirb_cfg : CFG.t)
+    (p : temp_proc) =
+  let block_proxy i = UUIDMap.mem i block_proxy in
+  let conv_vert e =
+    if block_member_of ~proc:p.uuid e then Vert.Internal e
+    else if block_proxy e then Proxy e
+    else External e
+  in
+  let module E = Edge in
+  let edges =
+    Gtirb_proto.CFG.Gtirb.Proto.Edge.(
+      gtirb_cfg.edges
+      |> List.filter (fun { source_uuid; _ } ->
+          let uuid = UUID.of_bytes source_uuid in
+          block_proxy uuid || block_member_of ~proc:p.uuid uuid)
+      |> List.map (fun { source_uuid; label; target_uuid } ->
+          ( conv_vert @@ UUID.of_bytes source_uuid,
+            label,
+            conv_vert @@ UUID.of_bytes target_uuid )))
+  in
+  let cfg = List.fold_left (fun cfg e -> G.add_edge_e cfg e) p.cfg edges in
+  { p with cfg }
+
+(** build procedure *)
+let make_temp_proc prog all_blocks func_blocks func_entry_blocks proxy_blocks
+    block_is_member_of gtirb_cfg uuid (name : string) =
+  let entries =
+    UUIDMap.get uuid func_entry_blocks |> function
+    | Some b -> b
+    | None ->
+        Logs.warn (fun m ->
+            m "No entry blocks for proc: %s %s" (UUID.show uuid) name);
+        UUIDSet.empty
+  in
+  let blocks, code_blocks =
+    UUIDMap.get uuid func_blocks |> function
+    | Some b ->
+        ( b,
+          UUIDSet.to_iter b
+          |> Iter.filter_map (fun id ->
+              UUIDMap.get id all_blocks |> fun a ->
+              Option.bind a (fun b -> Some (id, b)))
+          |> UUIDMap.of_iter )
+    | None ->
+        Logs.warn (fun m ->
+            m "No entry blocks for proc: %s %s" (UUID.show uuid) name);
+        (UUIDSet.empty, UUIDMap.empty)
+  in
+  let id = Lang.Program.declare_name ("@" ^ name) prog in
+  let proc = { uuid; name; id; entries; blocks; code_blocks; cfg = G.empty } in
+  make_proc_cfg block_is_member_of proxy_blocks gtirb_cfg proc
+
+(** Load a protobuf gtirb module into a set of temp_procs, use [prog] to
+    generate procedure IDs.*)
+let gtirb_to_gfir prog (gtirb_cfg : CFG.t) (m : Module.t) =
+  let blocks = Gtirb.get_code_block_opcodes m in
+
+  let proxy_blocks =
+    m.proxies
+    |> List.map (fun (m : ProxyBlock.Gtirb.Proto.ProxyBlock.t) ->
+        let u = UUID.of_bytes m in
+        (u, Gtirb.Proxy u))
+    |> UUIDMap.of_list
+  in
+
+  let sym =
+    m.symbols
+    |> List.map (fun (s : Symbol.Gtirb.Proto.Symbol.t) ->
+        (UUID.of_bytes s.uuid, s.name))
+    |> UUIDMap.of_list
+  in
+  let all_blocks =
+    List.map (fun (b : Gtirb.block) -> (Gtirb.uuid b, b)) blocks
+    |> UUIDMap.of_list
+    |> UUIDMap.union
+         (fun _ _ c -> failwith "proxy should be disjoint")
+         proxy_blocks
+  in
+  let auxdata =
+    m.aux_data |> StringMap.of_list |> StringMap.filter_map (fun _ v -> v)
+  in
+  let func_names =
+    AD.function_names auxdata |> or_error UUIDMap.empty
+    |> UUIDMap.filter_map (fun _ u -> UUIDMap.find_opt u sym)
+  in
+  let func_blocks = AD.function_blocks auxdata |> or_error UUIDMap.empty in
+  (* construct map from block to function *)
+  let block_functions =
+    func_blocks |> UUIDMap.to_iter
+    |> Iter.flat_map (fun (func, blocks) ->
+        UUIDSet.to_iter blocks |> Iter.map (fun b -> (b, func)))
+    |> UUIDMap.of_iter
+  in
+  (* block function membership predicate *)
+  let block_is_member_of ~proc block =
+    Option.(
+      UUIDMap.get block block_functions
+      >|= (fun b -> UUID.equal b proc)
+      |> get_or ~default:false)
+  in
+  (* for each procedure collect its blocks marked as entry blocks*)
+  let func_entry_blocks =
+    AD.function_entries auxdata |> or_error UUIDMap.empty
+  in
+
+  let entry = UUIDMap.find (UUID.of_bytes m.entry_point) block_functions in
+  (* build initial procs *)
+  let procs =
+    UUIDMap.mapi
+      (make_temp_proc prog all_blocks func_blocks func_entry_blocks proxy_blocks
+         block_is_member_of gtirb_cfg)
+      func_names
+  in
+  (entry, procs)

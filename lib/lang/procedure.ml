@@ -3,7 +3,16 @@ open Containers
 open Expr
 
 module Vert = struct
-  type t = Begin of ID.t | End of ID.t | Entry | Return | Exit
+  type t =
+    | Begin of ID.t
+        (** Beginning of a block within the procedure. This is the target of
+            jumps. *)
+    | End of ID.t
+        (** Immediately after a block within the procedure. This is the source
+            of jumps. *)
+    | Entry  (** Entry of the procedure when it is called. *)
+    | Return  (** Normal return from the procedure, returning to the caller. *)
+    | Exit  (** Exiting the program, not returning to the caller. *)
   [@@deriving show { with_path = false }, eq, ord]
 
   let hash (v : t) =
@@ -36,6 +45,8 @@ end
 
 module Loc = Int
 
+(** A procedure's graph is made up of "positions" as nodes ({!Vert.t}) and edges
+    between positions are basic blocks or jumps ({!Edge.t}). *)
 module G = struct
   include Graph.Persistent.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
 end
@@ -108,13 +119,13 @@ module PG : sig
     ?ensures:BasilExpr.t list ->
     ?rely:BasilExpr.t list ->
     ?guarantee:BasilExpr.t list ->
-    ?attrib:BasilExpr.t Attrib.attrib_map ->
+    ?attrib:Attrib.attrib_map ->
     unit ->
     ('a, 'b) t
 
-  val attrib : ('a, 'b) t -> BasilExpr.t Attrib.attrib_map
-  val set_attrib : ('a, 'b) t -> BasilExpr.t Attrib.t -> string -> ('a, 'b) t
-  val set_attribs : ('a, 'b) t -> BasilExpr.t Attrib.attrib_map -> ('a, 'b) t
+  val attrib : ('a, 'b) t -> Attrib.attrib_map
+  val set_attrib : ('a, 'b) t -> Attrib.t -> string -> ('a, 'b) t
+  val set_attribs : ('a, 'b) t -> Attrib.attrib_map -> ('a, 'b) t
 
   val set_specification : ('a, 'b) t -> ('a, 'c) proc_spec -> ('a, 'c) t
   (** set the procedure's specification/contract *)
@@ -136,6 +147,12 @@ module PG : sig
 
   val formal_out_params : ('a, 'b) t -> 'a StringMap.t
   (** return formal out parameters *)
+
+  val set_formal_in_params : 'a StringMap.t -> ('a, 'b) t -> ('a, 'b) t
+  (** set the formal in parameters *)
+
+  val set_formal_out_params : 'a StringMap.t -> ('a, 'b) t -> ('a, 'b) t
+  (** set the formal out parameters *)
 
   val map_formal_in_params :
     ('a StringMap.t -> 'a StringMap.t) -> ('a, 'b) t -> ('a, 'b) t
@@ -162,7 +179,7 @@ end = struct
     local_ids : ID.generator;
     block_ids : ID.generator;
     specification : ('v, 'e) proc_spec;
-    attrib : BasilExpr.t Attrib.attrib_map;
+    attrib : Attrib.attrib_map;
   }
 
   let attrib p = p.attrib
@@ -288,10 +305,10 @@ let remove_block p id =
       G.remove_vertex g (Begin id))
     p
 
-let add_block_graph graph id ?(phis = [])
+let add_block_graph ?(attrib = Attrib.empty) graph id ?(phis = [])
     ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   let stmts = Vector.of_list stmts in
-  let b = Edge.(Block { phis; stmts }) in
+  let b = Edge.(Block { phis; stmts; attrib }) in
   let open Vert in
   let existing = G.find_all_edges graph (Begin id) (End id) in
   let graph = List.fold_left G.remove_edge_e graph existing in
@@ -303,79 +320,144 @@ let add_block_graph graph id ?(phis = [])
   in
   graph
 
-let add_block p id ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
-    ?(successors = []) () =
+let add_block p id ?(attrib = Attrib.empty) ?(phis = [])
+    ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   assert (Option.is_some (graph p));
   map_graph
-    (fun graph -> add_block_graph graph id ~phis ~stmts ~successors ())
+    (fun graph -> add_block_graph graph id ~attrib ~phis ~stmts ~successors ())
     p
 
 let fresh_block_graph p graph ?name ?(phis = [])
     ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   let open Block in
-  let name = Option.get_or ~default:"block" name in
+  let name = Option.get_or ~default:"%block" name in
   let id = (block_ids p).fresh ~name () in
   (add_block_graph graph id ~phis ~stmts ~successors (), id)
 
-let fresh_block p ?name ?(phis = []) ~(stmts : ('var, 'var, 'expr) Stmt.t list)
-    ?(successors = []) () =
+let fresh_block p ?attrib ?name ?(phis = [])
+    ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
   let open Block in
-  let name = Option.get_or ~default:"block" name in
+  let name = Option.get_or ~default:"%block" name in
   let id = (block_ids p).fresh ~name () in
-  (add_block p id ~phis ~stmts ~successors (), id)
+  (add_block ?attrib p id ~phis ~stmts ~successors (), id)
 
-let get_entry_block p id =
+let get_blocks_pred p vert =
+  try
+    graph p |> Option.to_list
+    |> List.flat_map (fun g ->
+        G.pred g vert
+        |> List.filter_map (function Vert.End id -> Some id | _ -> None))
+  with Not_found -> []
+
+let get_blocks_succ p vert =
+  try
+    graph p |> Option.to_list
+    |> List.flat_map (fun g ->
+        G.succ g vert
+        |> List.filter_map (function Vert.Begin id -> Some id | _ -> None))
+  with Not_found -> []
+
+let get_entry_block p =
+  let id = get_blocks_succ p Entry in
+  List.head_opt id
+
+let is_entry_block p id =
+  graph p
+  |> Option.map (fun g ->
+      G.pred g (Vert.Begin id) |> List.mem ~eq:Vert.equal Vert.Entry)
+  |> Option.get_or ~default:false
+
+let set_entry_block p id =
   let open Edge in
   let open G in
-  try
-    graph p
-    |> Option.flat_map (fun g ->
-        let id = G.find_edge g Entry (Begin id) in
-        Some id)
-  with Not_found -> None
+  p
+  |> map_graph (fun g ->
+      let g = fold_succ (fun v g -> remove_edge g Entry v) g Entry g in
+      add_edge g Entry (Begin id))
+
+(** Get the block for an id
+
+    raise Not_found when the block does not exist. *)
+let find_block p id =
+  let open Edge in
+  let open G in
+  let g = graph p |> function Some e -> e | _ -> raise Not_found in
+  let _, e, _ = G.find_edge g (Begin id) (End id) in
+  match e with Block b -> b | Jump -> raise Not_found
 
 let get_block p id =
   let open Edge in
   let open G in
-  try
-    graph p
-    |> Option.flat_map (fun g ->
-        let _, e, _ = G.find_edge g (Begin id) (End id) in
-        match e with Block b -> Some b | Jump -> None)
-  with Not_found -> None
+  try Some (find_block p id) with Not_found -> None
 
 let decl_block_exn p name ?(phis = [])
-    ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
+    ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(attrib = Attrib.empty)
+    ?(successors = []) () =
   let open Block in
   let id = (block_ids p).decl_or_get name in
   assert (Option.is_none (get_block p id));
-  let p = add_block p id ~phis ~stmts ~successors () in
+  let p = add_block p id ~phis ~stmts ~successors ~attrib () in
   (p, id)
 
-let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
+let modify_block p id
+    (f : (Var.t, BasilExpr.t) Block.t -> (Var.t, BasilExpr.t) Block.t) =
   let open Edge in
   let open G in
+  let block = f (find_block p id) in
   p
   |> map_graph (fun g ->
       let g = G.remove_edge g (Begin id) (End id) in
       let g = G.add_edge_e g (Begin id, Block block, End id) in
       g)
 
+let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
+  modify_block p id (fun _ -> block)
+
+let modify_succs p id ~remove ~add =
+  let open Edge in
+  let open G in
+  p
+  |> map_graph (fun g ->
+      let g =
+        G.succ_e g (End id)
+        |> List.filter
+             ( G.E.dst %> function
+               | Begin e -> List.exists (ID.equal e) remove
+               | _ -> false )
+        |> List.fold_left G.remove_edge_e g
+      in
+      let new_succs = List.map (fun s -> Vert.(End id, Jump, Begin s)) add in
+      List.fold_left G.add_edge_e g new_succs)
+
+let replace_block_succs p id succs =
+  let open Edge in
+  let open G in
+  p
+  |> map_graph (fun g ->
+      let g = G.succ_e g (End id) |> List.fold_left G.remove_edge_e g in
+      let new_succs = List.map (fun s -> Vert.(End id, Jump, Begin s)) succs in
+      List.fold_left G.add_edge_e g new_succs)
+
 let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
   update_block p id block
 
-let lookup_local_decl p v = Var.Decls.find (local_decls p) v
+let lookup_local_decl p v =
+  Var.Decls.find_opt (local_decls p) v
+  |> Option.or_lazy ~else_:(fun () ->
+      StringMap.find_opt v (formal_out_params p))
+  |> Option.or_lazy ~else_:(fun () -> StringMap.find_opt v (formal_in_params p))
 
 let decl_local p v =
   let _ = (local_ids p).decl_or_get (Var.name v) in
   Var.Decls.replace (local_decls p) (Var.name v) v;
   v
 
-let fresh_var p ?(pure = true) ?name typ : Var.t =
+let fresh_var p ?(pure = false) ?name typ : Var.t =
   let name = Option.map (String.drop_while (Char.equal '$')) name in
   let name = Option.get_or ~default:"v" name in
   let n = ID.name @@ (local_ids p).fresh ~name () in
-  let v = Var.create n typ ~pure in
+  let scope = if pure then Var.LocalConst else LocalVar in
+  let v = Var.create n typ ~scope in
   Var.Decls.replace (local_decls p) (Var.name v) v;
   v
 
@@ -532,26 +614,22 @@ let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
             p.captures_globs
         @ ml
             (fun x ->
-              append_l
-                ~sep:newline
+              append_l ~sep:newline
                 (List.map (fun v -> text "requires " ^ show_expr v) x))
             p.requires
         @ ml
             (fun x ->
-              append_l
-                ~sep:newline
+              append_l ~sep:newline
                 (List.map (fun v -> text "ensures " ^ show_expr v) x))
             p.ensures
         @ ml
             (fun x ->
-              append_l
-                ~sep:newline
+              append_l ~sep:newline
                 (List.map (fun v -> text "rely " ^ show_expr v) x))
             p.rely
         @ ml
             (fun x ->
-              append_l
-                ~sep:newline
+              append_l ~sep:newline
                 (List.map (fun v -> text "guarantee " ^ show_expr v) x))
             p.guarantee))
 
@@ -571,7 +649,7 @@ let pretty show_lvar show_var show_expr p =
            (newline ^ text " -> ")
            [ params (formal_in_params p); params (formal_out_params p) ])
     ^ text " "
-    ^ Attrib.attrib_pretty show_expr (`Assoc (attrib p))
+    ^ Attrib.attrib_pretty (`Assoc (attrib p))
   in
   let return_stmt = text "return" in
   let spec = pretty_spec show_var show_expr (specification p) in
@@ -598,7 +676,13 @@ let pretty show_lvar show_var show_expr p =
               (fun (b, label, e) ->
                 match G.V.label e with
                 | Begin i -> text @@ ID.to_string i
-                | _ -> failwith "bad graph structure: goto targets non-block")
+                | o ->
+                    failwith
+                      (String.concat " "
+                         [
+                           "bad graph structure: goto targets non-block ";
+                           Vert.show o;
+                         ]))
               succ
           in
           [ text "goto " ^ (fun s -> bracket "(" (fill (text ",") s) ")") succ ]
@@ -634,3 +718,37 @@ let pretty show_lvar show_var show_expr p =
     | None -> nil
   in
   header ^ spec ^ newline ^ blocks
+
+(** A simplified graph of block level control flow *)
+module BlockGraph = struct
+  module Vert = struct
+    type t = Block of ID.t | Entry | Return | Exit
+    [@@deriving show { with_path = false }, eq, ord]
+
+    let hash = Hashtbl.hash
+  end
+
+  module G = Graph.Persistent.Digraph.ConcreteBidirectional (Vert)
+
+  let of_proc p =
+    graph p
+    |> Option.map (fun _ ->
+        let g = G.empty in
+        let g =
+          iter_blocks p
+          |> Iter.flat_map (fun (i, _) ->
+              blocks_succ p i |> Iter.map fst |> Iter.map (fun s -> (i, s)))
+          |> Iter.fold (fun g (p, s) -> G.add_edge g (Block p) (Block s)) g
+        in
+        let entr = get_blocks_succ p Entry in
+        let ex = get_blocks_pred p Exit in
+        let retb = get_blocks_pred p Return in
+        let g = List.fold_left (fun g p -> G.add_edge g (Block p) Exit) g ex in
+        let g =
+          List.fold_left (fun g p -> G.add_edge g (Block p) Return) g retb
+        in
+        let g =
+          List.fold_left (fun g p -> G.add_edge g Entry (Block p)) g entr
+        in
+        g)
+end

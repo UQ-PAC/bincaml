@@ -36,9 +36,15 @@
     flake-for-all-systems args {
       overlays = {
         addBincamlPackages = ofinal: _: {
-          bincaml = ofinal.callPackage ./nix/bincaml.nix { };
+          bincaml = ofinal.callPackage ./nix/bincaml.nix {
+            ocaml-protoc-plugin = ofinal.ocaml-protoc-plugin-6-1-0;
+          };
+          ocaml-protoc-plugin-6-1-0 = ofinal.callPackage ./nix/ocaml-protoc-plugin.nix { };
+          bincaml_lsp = ofinal.callPackage ./nix/bincaml-lsp.nix { };
           hector = ofinal.callPackage ./nix/hector.nix { };
           intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
+          kittyimg = ofinal.callPackage ./nix/kittyimg.nix { };
+          stb_image = ofinal.callPackage ./nix/stb_image.nix { };
         };
 
         enableOcamlFramePointer =
@@ -77,18 +83,30 @@
 
           legacyPackages = {
             bincaml = selfOcamlPackages.bincaml;
+            bincaml_lsp = selfOcamlPackages.bincaml_lsp;
             intPQueue = selfOcamlPackages.intPQueue;
             hector = selfOcamlPackages.hector;
+            kittyimg = selfOcamlPackages.kittyimg;
+            stb_image = selfOcamlPackages.stb_image;
 
             fp.bincaml = fpOcamlPackages.bincaml;
+            fp.bincaml_lsp = fpOcamlPackages.bincaml_lsp;
             fp.intPQueue = fpOcamlPackages.intPQueue;
             fp.hector = fpOcamlPackages.hector;
+            fp.kittyimg = fpOcamlPackages.kittyimg;
+            fp.stb_image = fpOcamlPackages.stb_image;
           };
 
           devShells = {
             default = self.devShells.fp;
-            fp = fpOcamlPackages.callPackage ./nix/shell.nix { inherit bnfc-treesitter; };
-            no-fp = selfOcamlPackages.callPackage ./nix/shell.nix { inherit bnfc-treesitter; };
+            fp = fpOcamlPackages.callPackage ./nix/shell.nix {
+              inherit bnfc-treesitter;
+              z3 = pkgs.z3.out;
+            };
+            no-fp = selfOcamlPackages.callPackage ./nix/shell.nix {
+              inherit bnfc-treesitter;
+              z3 = pkgs.z3.out;
+            };
           };
         };
     };

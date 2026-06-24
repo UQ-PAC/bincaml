@@ -496,12 +496,12 @@ module Expr = struct
     | `Atom x -> (x, [])
     | `List xs -> (
         match xs with
-        | y :: ys -> begin
-            match y with
+        | y :: ys ->
+            begin match y with
             | `Atom x -> (x, ys)
             | `List [ _; `Atom x; _ ] -> (x, ys) (*cvc5: (as con ty)*)
             | _ -> bad ()
-          end
+            end
         | _ -> bad ())
 
   (** {1 Commands}
@@ -621,7 +621,7 @@ module Solver : sig
   val create : solver_config -> t
   (** Create a new solver with [config] *)
 
-  val add_command : t -> sexp -> sexp
+  val add_command : t -> sexp -> unit
   (** Send a command to the solver *)
 
   val add_assert : ?name:string -> t -> sexp -> sexp
@@ -636,16 +636,16 @@ module Solver : sig
   val check : t -> result
   (** send (check-sat); check consistency of current set of assumptions *)
 
-  val set_option : t -> string -> string -> sexp
+  val set_option : t -> string -> string -> unit
   (** [set_option opt val] sets option [opt] to value [val]. *)
 
-  val set_logic : t -> string -> sexp
+  val set_logic : t -> string -> unit
   (** Set the logic to use. *)
 
-  val push : ?n:int -> t -> sexp
+  val push : ?n:int -> t -> unit
   (** Push a new scope. *)
 
-  val pop : ?n:int -> t -> sexp
+  val pop : ?n:int -> t -> unit
   (** Pop a scope. *)
 
   val stop : t -> unit
@@ -743,11 +743,11 @@ end = struct
               match todo with
               | x :: xs ->
                   if StringSet.mem x !processed then arrange xs
-                  else begin
-                    if StringSet.mem x !processing then
+                  else
+                    begin if StringSet.mem x !processing then
                       raise (UnexpectedSolverResponse ans) (* recursive *)
-                    else begin
-                      match StringMap.find_opt x deps with
+                    else
+                      begin match StringMap.find_opt x deps with
                       | None -> arrange xs
                       | Some (ds, e) ->
                           processing := StringSet.add x !processing;
@@ -756,8 +756,8 @@ end = struct
                           processed := StringSet.add x !processed;
                           decls := drop_as_array e :: !decls;
                           arrange xs
+                      end
                     end
-                  end
               | [] -> ()
             in
             arrange (List.map (fun (x, _, _) -> x) defs);
@@ -916,7 +916,10 @@ the model does not contain those.  We need to explicitly add them.
   let create conf = new_solver conf
 
   (** add a command to solver *)
-  let add_command solver cmd = solver.command cmd
+  let add_command solver cmd =
+    match solver.command cmd with
+    | `Atom "success" -> ()
+    | ans -> raise (UnexpectedSolverResponse ans)
 
   (** add an assertion *)
   let add_assert ?name solver cmd =

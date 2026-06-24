@@ -4,22 +4,51 @@ lightweight binary exploration verification project implemented in ocaml.
 
 status: very early stages work-in progress.
 
+### Cloning
+
+The examples exist in a submodule, to clone these:
+
+```
+git clone --recurse-submodules https://github.com/agle/bincaml.git --shallow-submodules
+```
+
+If you have already cloned you can fetch the submodule with:
+
+```
+git submodule update --init --depth 1
+```
+
+If you are developing with SSH git access, update the examples remote to make
+uplaoding examples easier
+
+```
+cd examples && git remote set-url origin git@github.com:UQ-PAC/bincaml-test.git
+```
+
 ### Setup
 
-Supports Linux (at least amd64) and MacOS (arm64) with OCaml 5.3.0.
+Supports Linux (at least amd64) and MacOS (arm64) with OCaml 5.4.1.
 Windows is explicitly not supported outside of WSL.
 
 - enable frame pointers on opam switch for performance recording
 - enable flambda for compiler optimisation (for release build only)
+- ensure pac opam repository is installed
 
 - Tests requrie smt solver CVC5 installed.
 
 ```bash
-opam switch create bincaml ocaml-variants.5.3.0+options ocaml-option-flambda ocaml-option-fp
+opam switch create bincaml ocaml-variants.5.4.1+options ocaml-option-flambda ocaml-option-fp
 opam repository add pac https://github.com/uq-pac/opam-repository.git
 opam install --deps-only --with-doc --with-test .
 dune build
 ```
+
+On MacOS ensure your environment allows linking against homebrew, e.g. in `.bashrc`
+
+```
+export LIBRARY_PATH=$LIBRARY_PATH:/opt/homebrew/lib/
+```
+
 
 
 ### Example

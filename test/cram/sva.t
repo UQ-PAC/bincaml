@@ -1,0 +1,6 @@
+  $ bincaml script ./sva.sexp
+  (load-il ../../examples/irreducible_loop_1.il)
+  (run-transforms sva)
+  bincaml: [WARNING] Invariants not satisfied during 'sva'. Needs [SSA] but only have [].
+  (R31_in->(Stack(@puts_1584)->⟦0x0:bv64, 0x0:bv64⟧, _->⊥), R30_in->(Par(@puts_1584_{ Var.V.name = "R30_in"; typ = bv64; scope = Var.LocalVar })->⟦0x0:bv64, 0x0:bv64⟧, _->⊥), R29_in->(Par(@puts_1584_{ Var.V.name = "R29_in"; typ = bv64; scope = Var.LocalVar })->⟦0x0:bv64, 0x0:bv64⟧, _->⊥), _->⊥)
+  (R31_in->(Stack(@main_1876)->⟦0x0:bv64, 0x0:bv64⟧, _->⊥), R30_in->(Par(@main_1876_{ Var.V.name = "R30_in"; typ = bv64; scope = Var.LocalVar })->⟦0x0:bv64, 0x0:bv64⟧, _->⊥), R29_in->(Par(@main_1876_{ Var.V.name = "R29_in"; typ = bv64; scope = Var.LocalVar })->⟦0x0:bv64, 0x0:bv64⟧, _->⊥), $CF->(Loaded->⊤, _->⊥), $NF->(Loaded->⊤, _->⊥), $R0->(Constant->⟦0x0:bv64, 0x0:bv64⟧, _->⊥), $R1->(Loaded->⊤, _->⊥), $R29->(Loaded->⟦0x0:bv64, 0x0:bv64⟧, _->⊥), $R30->(Loaded->⟦0x0:bv64, 0x0:bv64⟧, _->⊥), $VF->(Loaded->⊤, _->⊥), $ZF->(Loaded->⊤, _->⊥), load18->(Loaded->⟦0x0:bv32, 0x0:bv32⟧, _->⊥), #5->(Loaded->⊤, _->⊥), load19->(Loaded->⟦0x0:bv32, 0x0:bv32⟧, _->⊥), load21->(Loaded->⟦0x0:bv64, 0x0:bv64⟧, _->⊥), load22->(Loaded->⟦0x0:bv64, 0x0:bv64⟧, _->⊥), load20->(Loaded->⟦0x0:bv32, 0x0:bv32⟧, _->⊥), #6->(Loaded->⊤, _->⊥), _->⊥)

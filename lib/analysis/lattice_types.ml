@@ -13,6 +13,18 @@ module type Lattice = sig
   val equal : t -> t -> bool
   val leq : t -> t -> bool
   val widening : t -> t -> t
+  val narrowing : t -> t -> t
+end
+
+module type TopElement = sig
+  type t
+
+  val top : t
+end
+
+module type TopLattice = sig
+  include Lattice
+  include TopElement with type t := t
 end
 
 (** an abstract value providing opertions of basil ir *)
@@ -36,14 +48,14 @@ module type TypedValueAbstraction = sig
 
   (** evaluate operators *)
 
-  val eval_const : E.const -> E.ty -> t
+  val eval_const : E.const -> E.typ -> t
   (** Return an abstract value for a constant: [eval_const op rt]
 
       @param op const op
       @param rt type of constant [const]
       @return abstract value for constant *)
 
-  val eval_unop : E.unary -> t * E.ty -> E.ty -> t
+  val eval_unop : E.unary -> t * E.typ -> E.typ -> t
   (** Abstract a unary op expression [eval_unop op arg rt]
 
       @param op unary operator
@@ -51,7 +63,7 @@ module type TypedValueAbstraction = sig
       @param rt operation return type
       @return abstract value operation result *)
 
-  val eval_binop : E.binary -> t * E.ty -> t * E.ty -> E.ty -> t
+  val eval_binop : E.binary -> t * E.typ -> t * E.typ -> E.typ -> t
   (** Abstract a binary expression [eval_binop op arg1 arg2 rt]
 
       @param op binary operator
@@ -60,7 +72,7 @@ module type TypedValueAbstraction = sig
       @param rt operation return type
       @return abstract value result of operation *)
 
-  val eval_intrin : E.intrin -> (t * E.ty) list -> E.ty -> t
+  val eval_intrin : E.intrin -> (t * E.typ) list -> E.typ -> t
   (** Abstract an n-ary intrinsic op [eval_intrin op args rt]
 
       @param op operator
@@ -85,7 +97,7 @@ end
 module type StateDomain = sig
   include StateAbstraction
 
-  val init : Program.proc -> t
+  val init : ?vertex:Procedure.Vert.t Option.t -> Program.proc -> t
   val transfer_state : (Var.t -> V.t) -> Program.stmt -> (Var.t * V.t) Iter.t
 end
 
@@ -93,7 +105,7 @@ module type Domain = sig
   include Lattice
 
   val transfer : t -> Program.stmt -> t
-  val init : Program.proc -> t
+  val init : ?vertex:Procedure.Vert.t Option.t -> Program.proc -> t
 end
 
 module FlatLattice (L : sig
@@ -130,9 +142,18 @@ struct
     | _, Bot -> Bot
     | _ -> Top
 
+  let get_val a = match a with V x -> Some x | _ -> None
   let map f a = bind (fun x -> V (f x)) a
   let map2 f a b = bind2 (fun x y -> V (f x y)) a b
-  let join a b = match (a, b) with Top, _ -> Top | _, Top -> Top | _ -> Bot
+
+  let join a b =
+    match (a, b) with
+    | Top, _ -> Top
+    | _, Top -> Top
+    | Bot, a -> a
+    | a, Bot -> a
+    | V a, V b when L.equal a b -> V a
+    | _ -> Top
 
   let leq a b =
     match (a, b) with
@@ -142,6 +163,7 @@ struct
     | _ -> false
 
   let widening a b = join a b
+  let narrowing a b = a
 end
 
 module LiftLattice (L : Lattice) : Lattice = struct
@@ -149,6 +171,7 @@ module LiftLattice (L : Lattice) : Lattice = struct
 
   let name = L.name ^ ".lift_lattice"
   let widening a b = map2 L.widening a b
+  let narrowing a b = a
 
   let join a b =
     match (a, b) with

@@ -1,5 +1,6 @@
 (library
  (name bincaml_analysis_test)
+ (modules test_ide_live test_ssadfg test_dynamic_single_assignment)
  (inline_tests)
  (libraries
   bincaml.loader
@@ -7,8 +8,27 @@
   bincaml.transforms
   bincaml.util
   bincaml
-  bincaml.analysis
-  qcheck-alcotest
-  qcheck-core)
+  bincaml.analysis)
  (preprocess
   (pps ppx_expect)))
+
+(test
+ (name analysis_tests)
+ (package bincaml)
+ (modules
+  analysis_tests
+  test_wrapped_intervals
+  test_irreducible_loops
+  test_lattice_collections)
+ (preprocess
+  (pps ppx_here))
+ (libraries
+  bincaml.loader
+  bincaml.ast
+  bincaml.transforms
+  bincaml.util
+  bincaml
+  bincaml.analysis
+  alcotest
+  qcheck-alcotest
+  qcheck-core))
