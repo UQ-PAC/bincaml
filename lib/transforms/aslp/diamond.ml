@@ -14,8 +14,8 @@
 
     { before = [3, 2, 1]; focus_and_after = [4, 5, 6] }
     v}
-    In trees, as in this module, this manifests as storing a bottom-up path to
-    the focus. This is {!diamond_path}.
+    In trees, this manifests as storing a bottom-up path to the focus. In this
+    module, this is {!diamond_path}.
 
     {1 Background}
 
@@ -212,7 +212,7 @@ let append_diamond ~left ~right ~value : 'a diamond_zipper -> 'a diamond_zipper
     = function
   | dia, path -> (dia, Pred { value; left; right } :: path)
 
-(** Modifies the focused value of the given {!diamond_zipper}. *)
+(** Modifies the {!focus} of the given {!diamond_zipper}. *)
 let modify (f : 'a -> 'a) : 'a diamond_zipper -> 'a diamond_zipper = function
   | Leaf x, path -> (Leaf (f x), path)
   | Diamond x, path -> (Diamond { x with value = f x.value }, path)
@@ -233,6 +233,17 @@ let skeleton : 'a diamond_zipper -> skeleton = function
   | this, path ->
       ( map (Fun.const ()) this,
         List.map (function Left _ -> `L | Right _ -> `R | Pred _ -> `P) path )
+
+let rec cata ~(leaf : 'a -> 'b)
+    ~(diamond : pred:'b -> left:'b -> right:'b -> value:'b -> 'b) dia : 'b =
+  match dia with
+  | Leaf x -> leaf x
+  | Diamond { value; left; right; pred } ->
+      let pred = cata ~leaf ~diamond pred
+      and left = cata ~leaf ~diamond left
+      and right = cata ~leaf ~diamond right
+      and value = leaf value in
+      diamond ~pred ~left ~right ~value
 
 (** {1 Derived functions} *)
 
