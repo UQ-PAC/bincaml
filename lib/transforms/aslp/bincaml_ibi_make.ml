@@ -13,14 +13,7 @@ struct
   type expr = Expr.BasilExpr.t
   type lexpr = Aslp_lexpr.t
   type stmt = Aslp_state.stmt
-
-  type branch =
-    [ `T of string
-    | `F of string
-    | `M of string * (string * string)
-      (** A merge branch also records its true and false predecessors to
-          propagate PC information. *) ]
-
+  type branch = [ `T | `F | `M ]
   type ast = Aslp_state.aslp_block Diamond.diamond
 
   (** {2 Bincaml-specific utility functions} *)
@@ -208,22 +201,36 @@ struct
     let block_id = st.generator.block_id
     and ncond = Expr.BasilExpr.boolnot cond in
 
-    let diamond = st.diamond in
-    let t = block_id () and f = block_id () and m = block_id () in
+    let make assume =
+      Diamond.empty { (Aslp_state.empty_block ()) with assume }
+    in
+    let left = make (Some cond)
+    and right = make (Some ncond)
+    and merge = make None in
+    let diamond =
+      st.diamond
+      |> Diamond.promote_to_diamond ~left ~right ~merge
+      |> Result.get_ok
+    in
     bincaml_lifter_state := { st with diamond };
-    (`T t, `F f, `M (m, (t, f)))
+    (`T, `F, `M)
 
   let f_switch_context : branch -> unit =
    fun b ->
     let diamond = !bincaml_lifter_state.diamond in
     let address = !bincaml_lifter_state.address in
-    let active, diamond =
+    let diamond =
       match b with
-      | `T x | `F x -> (x, diamond)
-      | `M (join, (left, right)) ->
-          (join, Aslp_state.ensure_pc_consistency ~address ~join:diamond)
+      | `T -> diamond |> Diamond.move_in_to `L |> Result.get_ok
+      | `F ->
+          diamond |> Diamond.move_out_of |> Result.get_ok
+          |> Diamond.move_in_to `R |> Result.get_ok
+      | `M ->
+          diamond |> Diamond.move_out_of |> Result.get_ok
+          |> Diamond.move_in_to `M |> Result.get_ok
+          |> Aslp_state.ensure_pc_consistency ~address
     in
-    bincaml_lifter_state := { !bincaml_lifter_state with active; diamond }
+    bincaml_lifter_state := { !bincaml_lifter_state with diamond }
 
   let f_true_branch : branch * branch * branch -> branch = fun (t, f, m) -> t
   let f_false_branch : branch * branch * branch -> branch = fun (t, f, m) -> f

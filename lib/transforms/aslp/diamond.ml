@@ -13,6 +13,8 @@ type 'a diamond =
     }
 [@@deriving show]
 
+let empty value : 'a diamond = Leaf value
+
 (** {1 Zippers} *)
 
 type 'a diamond_step =
@@ -103,12 +105,17 @@ let move_in_to direction :
       | `R -> Ok (right, Right { value; left; merge } :: rest)
       | `M -> Ok (merge, Merge { value; left; right } :: rest))
 
-let move_to_end : 'a diamond_zipper -> 'a diamond_zipper = function
+let move_in_to_end : 'a diamond_zipper -> 'a diamond_zipper = function
   | (Leaf _, _) as zip -> zip
   | zip -> (
       match move_in_to `M zip with
       | Ok x -> x
       | Error _ -> failwith "invariant violation :>")
+
+let move_out_until_not_merge : 'a diamond_zipper -> 'a diamond_zipper = function
+  | (merge, Merge { value; left; right } :: rest) as zip ->
+      move_out_of zip |> Result.get_ok
+  | zip -> zip
 
 let promote_to_diamond ~left ~right ~merge :
     'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =

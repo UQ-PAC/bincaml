@@ -233,25 +233,31 @@ let ensure_pc_assigned ~address =
     This is used to maintain the invariant that at every control flow point, the
     [PC] variable is either assigned on all paths or assigned on no paths (from
     the beginning of the instruction). *)
-let ensure_pc_consistency ~address ~join:state =
+let ensure_pc_consistency ~address state =
   let left =
-    state |> Diamond.move_adjacent `L |> Result.get_ok |> Diamond.move_to_end
+    state |> Diamond.move_adjacent `L |> Result.get_ok |> Diamond.move_in_to_end
   and right =
-    state |> Diamond.move_adjacent `R |> Result.get_ok |> Diamond.move_to_end
+    state |> Diamond.move_adjacent `R |> Result.get_ok |> Diamond.move_in_to_end
   in
 
   let state =
     match (Diamond.root left, Diamond.root right) with
     | { pc_assign = None }, { pc_assign = None } -> state
     | { pc_assign = Some pc_assign }, { pc_assign = None } ->
-        ensure_pc_assigned ~address right
+        ensure_pc_assigned ~address right |> Diamond.move_out_until_not_merge
     | { pc_assign = None }, { pc_assign = Some pc_assign } ->
-        ensure_pc_assigned ~address left
+        ensure_pc_assigned ~address left |> Diamond.move_out_until_not_merge
     | ( { pc_assign = Some lpc; assume = lassume },
         { pc_assign = Some rpc; assume = rassume } ) ->
         state
   in
 
+  let state = state |> Diamond.move_adjacent `M |> Result.get_ok in
+  let left =
+    state |> Diamond.move_adjacent `L |> Result.get_ok |> Diamond.move_in_to_end
+  and right =
+    state |> Diamond.move_adjacent `R |> Result.get_ok |> Diamond.move_in_to_end
+  in
   match (Diamond.root left, Diamond.root right) with
   | { pc_assign = None }, { pc_assign = None } -> state
   | { pc_assign = Some lpc; assume = lassume }, { pc_assign = Some rpc } ->
