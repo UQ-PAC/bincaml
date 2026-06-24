@@ -1,3 +1,6 @@
+(** Possibly-nested control flow diamonds.
+
+    This is isomorphic to an annotated ternary tree. *)
 type 'a diamond =
   | Leaf of 'a
   | Diamond of {
@@ -7,18 +10,39 @@ type 'a diamond =
       merge : 'a diamond;
     }
 
-type 'a diamond_level =
+type 'a diamond_step =
   | Left of { value : 'a; right : 'a diamond; merge : 'a diamond }
   | Right of { value : 'a; left : 'a diamond; merge : 'a diamond }
   | Merge of { value : 'a; left : 'a diamond; right : 'a diamond }
 
-type 'a diamond_hole = 'a diamond_level list
-(** A type describing the position of one unfilled ['a] cell within a
-    ['a ]{!diamond}. *)
+type 'a diamond_path = 'a diamond_step list
+(** A type describing a {!diamond} with one missing {!diamond} child, called the
+    "hole".
 
-type 'a diamond_zipper = 'a diamond * 'a diamond_hole
+    For example, this tree (where [@] is the missing child)
+    {v
+       v
+     / | \
+    @  r  m
+    v}
+    would be represented by
+    {v Left { value = v; right = r; merge = m } v}
+
+    It is a {i path} because if the hole occurs inside a nested {!diamond}, then
+    the path is a list of {!diamond_step} - starting from the hole and moving
+    upwards until you get to the root.
+
+    As a consequence of this, a {!diamond_path} of [[]] represents a {!diamond}
+    which is all hole:
+    {v @ v} *)
+
+type 'a diamond_zipper = 'a diamond * 'a diamond_path
 (** A {!diamond_zipper} is made up of a {!diamond_hole} combined with a
-    {!diamond} to "mount" at that hole. *)
+    {!diamond} to "mount" at that hole.
+
+    A {!diamond_zipper} represents the same information as {!diamond}, but its
+    structure allows to "move" the zipper around to focus on different points
+    within the nested diamonds. *)
 
 let rec of_zipper : 'a diamond_zipper -> 'a diamond = function
   | this, [] -> this
@@ -53,6 +77,9 @@ let move_to_merge :
       Ok (merge, Merge { value; left; right } :: rest)
   | zip -> Error zip
 
-let modify_head (f : 'a -> 'a) = function
+let modify_diamond (f : 'a -> 'a) = function
   | Leaf x -> Leaf (f x)
   | Diamond x -> Diamond { x with value = f x.value }
+
+let modify (f : 'a -> 'a) : 'a diamond_zipper -> 'a diamond_zipper = function
+  | dia, path -> (modify_diamond f dia, path)
