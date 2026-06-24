@@ -169,7 +169,7 @@ let ensure_pc_consistency ~address state =
   let left = go state `L and right = go state `R in
 
   let state =
-    match (Diamond.root left, Diamond.root right) with
+    match (Diamond.focus left, Diamond.focus right) with
     | { pc_assign = None }, { pc_assign = None } -> state
     | { pc_assign = Some pc_assign }, { pc_assign = None } ->
         ensure_pc_assigned ~address right
@@ -177,12 +177,12 @@ let ensure_pc_consistency ~address state =
         ensure_pc_assigned ~address left
     | ( { pc_assign = Some lpc; assume = lassume },
         { pc_assign = Some rpc; assume = rassume } ) ->
-        left
+        left (* arbitrary *)
   in
 
   let state = state |> Diamond.move_out_of |> Result.get_ok in
   let left = go state `L and right = go state `R in
-  match (Diamond.root left, Diamond.root right) with
+  match (Diamond.focus left, Diamond.focus right) with
   | { pc_assign = None }, { pc_assign = None } -> state
   | { pc_assign = Some lpc; assume = lassume }, { pc_assign = Some rpc } ->
       let lassume =

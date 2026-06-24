@@ -1,8 +1,58 @@
+(** A zipper is a concept in functional programming (especially, Haskell).
+    Functionally, a zipper for some data type ['a t] acts similarly to ['a t],
+    but augmented with the ability to point to one ['a] element, called the
+    focus.
+
+    A desirable property of zippers is that they should allow for efficient
+    (usually, [O(1)]) movement to adjacent positions within the data structure.
+    In practice, this leads to zippers storing an "inside-out" view of the data
+    structure. For example, a list zipper is made up of two lists, one of which
+    is reversed:
+    {v
+    [1; 2; 3; 4; 5; 6]
+              ^ pointer
+
+    { before = [3, 2, 1]; focus_and_after = [4, 5, 6] }
+    v}
+    In trees, as in this module, this manifests as storing a bottom-up path to
+    the focus. This is {!diamond_path}.
+
+    {1 Background}
+
+    The idea of a zipper was first described by
+    {{:https://gallium.inria.fr/~huet/PUBLIC/zip.pdf} Huet in 1993}. In this
+    module, we represent a zipper as a "one-hole context" combined with a
+    subtree. This is described by
+    {{:http://strictlypositive.org/diff.pdf} McBride}.
+
+    This module was mostly implemented by following the
+    {{:https://wiki.haskell.org/Zipper} Haskell wiki} (if reading this, be aware
+    that our inner nodes store values). If you enjoy Tony Morris's teaching
+    style, he has
+    {{:https://www.youtube.com/watch?v=HqHdgBXOOsE} a talk on YouTube} (the
+    first 10 minutes are most relevant). *)
+
+(** {1 Diamonds} *)
+
 (** Possibly-nested control flow diamonds.
 
-    The root, or top-level, value of a {!diamond} is the outermost ['a] value.
+    When thought of as a control-flow graph, the outermost [value] is the
+    {b last} one in program order. Following the [pred] links will take you
+    {b backwards} in program order until you reach the (unique) entry of the
+    CFG.
+    {v
+       ⋱   ⋰
+        pred
+       /    \
+    left   right
+       \    /
+        value
+    v}
 
-    This is isomorphic to an annotated ternary tree. *)
+    This is isomorphic to an annotated ternary tree. However, for the
+    control-flow interpretation, it is easier to think of it as {i nested}
+    control-flow diamonds. In the diagram above, [pred], [left], and [right]
+    could all be their own diamonds (but [value] is terminal). *)
 type 'a diamond =
   | Leaf of 'a
   | Diamond of {
@@ -15,8 +65,14 @@ type 'a diamond =
 
 let empty value : 'a diamond = Leaf value
 
-(** {1 Zippers} *)
+(** Returns the last value of the diamond in control-flow order. That is, the
+    outermost ['a] value. *)
+let last = function Leaf value | Diamond { value } -> value
 
+(** {1 Zipper for diamonds} *)
+
+(** Moving one step through the {!diamond}. Each variant records the direction
+    of the step, as well as the paths {i not} taken. *)
 type 'a diamond_step =
   | Left of { value : 'a; right : 'a diamond; pred : 'a diamond }
   | Right of { value : 'a; left : 'a diamond; pred : 'a diamond }
@@ -24,24 +80,26 @@ type 'a diamond_step =
 [@@deriving show { with_path = false }]
 
 type 'a diamond_path = 'a diamond_step list [@@deriving show]
-(** A type describing a {!diamond} with one missing {!diamond} child, called the
-    "hole".
+(** A type describing a path to a "hole" in a {!diamond}, with the ability to
+    reconstruct the full {!diamond} when the hole is filled.
 
-    For example, this tree (where [@] is the missing child)
+    For example, this diamond (where [@] is the missing child)
     {v
-       v
-     / | \
-    @  r  m
+      p
+     / \
+    @   r
+     \ /
+      v
     v}
     would be represented by
-    {v Left { value = v; right = r; pred = m } v}
+    {v Left { value = v; right = r; pred = p } v}
 
-    It is a {i path} because if the hole occurs inside a nested {!diamond}, then
-    the path is a list of {!diamond_step} - starting from the hole and moving
+    It is a list when the hole occurs inside a nested {!diamond}, the path is
+    made up of multiple {!diamond_step} - starting from the hole and moving
     upwards until you get to the root.
 
-    As a consequence of this, a {!diamond_path} of [[]] represents a {!diamond}
-    which is all hole:
+    As one consequence of this, a {!diamond_path} of [[]] represents a
+    {!diamond} which is all hole:
     {v @ v} *)
 
 type 'a diamond_zipper = 'a diamond * 'a diamond_path [@@deriving show]
@@ -55,11 +113,16 @@ type 'a diamond_zipper = 'a diamond * 'a diamond_path [@@deriving show]
     which represents the focus and nested diamonds {i below} the focus. The
     focus is the root of the stored {!diamond}. *)
 
+(** Builds an empty zipper with the given value. *)
 let empty_zipper value : 'a diamond_zipper = (Leaf value, [])
 
-let root : 'a diamond_zipper -> 'a = function
-  | Leaf value, _ | Diamond { value; _ }, _ -> value
+(** Returns the single focused value of the zipper. *)
+let focus : 'a diamond_zipper -> 'a = function this, _ -> last this
 
+(** Returns the subdiamond terminated by the currently focused position. *)
+let subdiamond : 'a diamond_zipper -> 'a diamond = function this, _ -> this
+
+(** Converts the given {!diamond_zipper} to a full {!diamond}. *)
 let rec of_zipper : 'a diamond_zipper -> 'a diamond = function
   | this, [] -> this
   | this, bot :: rest -> (
@@ -71,12 +134,38 @@ let rec of_zipper : 'a diamond_zipper -> 'a diamond = function
       | Pred { value; left; right } ->
           of_zipper (Diamond { value; left; right; pred = this }, rest))
 
-(** Converts the given {!diamond} to a zipper, positioned at the entry/root
-    value. *)
+(** Converts the given {!diamond} to a zipper, initially focused at {!last}. *)
 let to_zipper : 'a diamond -> 'a diamond_zipper = fun dmd -> (dmd, [])
 
-(** {1 Movement functions} *)
+(** {1 Movement functions}
 
+    When moving around the nested diamonds, there is a notion of "level" and
+    whether two positions are at the same nesting level. The rule is that two
+    values are at the same level if they have the same {!Diamond} as their
+    direct parent.
+
+    This can be subtle, especially with nesting. In the diagram below, we number
+    the depths of each value position. 0 is the outermost level ({!last}), and
+    increasing numbers are {i deeper} (but not necessarily earlier in program
+    order!).
+    {v
+         2
+        / \
+       2   2
+        \ /
+         1
+        / \
+       /   2
+      /   / \
+     1   2   2
+      \   \ /
+       \   1
+        \ /
+         0
+    v} *)
+
+(** Moves the zipper to a position in the same diamond level. That is, to a
+    sibling of the current position's containing {!diamond}. *)
 let move_adjacent direction :
     'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
   function
@@ -87,8 +176,11 @@ let move_adjacent direction :
       match direction with
       | `L -> Ok (left, Left { value; right; pred } :: rest)
       | `R -> Ok (right, Right { value; left; pred } :: rest)
-      | `M -> Ok (pred, Pred { value; left; right } :: rest))
+      | `P -> Ok (pred, Pred { value; left; right } :: rest))
 
+(** Moves the zipper to a position in the outer diamond level. That is, to the
+    {!value} of the containing {!diamond}. In control-flow terms, this is the
+    next control-flow join point. *)
 let move_out_of :
     'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
   function
@@ -98,6 +190,9 @@ let move_out_of :
   | pred, Pred { value; left; right } :: rest ->
       Ok (Diamond { value; left; right; pred }, rest)
 
+(** Moves the zipper to a position in the inner diamond level. In control-flow
+    terms, this is the left or right predecessor, or the predecessor of
+    left/right. *)
 let move_in_to direction :
     'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
   function
@@ -106,39 +201,29 @@ let move_in_to direction :
       match direction with
       | `L -> Ok (left, Left { value; right; pred } :: rest)
       | `R -> Ok (right, Right { value; left; pred } :: rest)
-      | `M -> Ok (pred, Pred { value; left; right } :: rest))
+      | `P -> Ok (pred, Pred { value; left; right } :: rest))
 
-let rec move_in_to_end : 'a diamond_zipper -> 'a diamond_zipper = function
-  | (Leaf _, _) as zip -> zip
-  | zip -> (
-      match move_in_to `M zip with
-      | Ok x -> move_in_to_end x
-      | Error _ -> failwith "invariant violation :>")
+(** {1 Modification functions} *)
 
-let rec move_out_until_not_pred : 'a diamond_zipper -> 'a diamond_zipper =
-  function
-  | (_, Pred { value; left; right } :: _) as zip ->
-      move_out_of zip |> Result.get_ok |> move_out_until_not_pred
-  | zip -> zip
-
-let promote_to_diamond ~left ~right ~pred :
-    'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
-  function
-  | Leaf value, path -> Ok (Diamond { value; left; right; pred }, path)
-  | zip -> Error zip
-
+(** Modifies the zipper by inserting a new diamond {i after} the current
+    position in program order, using the given parameters to build the new
+    {!Diamond}. *)
 let append_diamond ~left ~right ~value : 'a diamond_zipper -> 'a diamond_zipper
     = function
   | dia, path -> (dia, Pred { value; left; right } :: path)
 
-(** {1 Modification functions} *)
-
-(** Modifies the {i top-level} value of the given {!diamond} (doesn't modify any
-    child diamonds). *)
-let modify_diamond (f : 'a -> 'a) = function
-  | Leaf x -> Leaf (f x)
-  | Diamond x -> Diamond { x with value = f x.value }
-
-(** Modifies the currently-focused value of the given {!diamond_zipper}. *)
+(** Modifies the focused value of the given {!diamond_zipper}. *)
 let modify (f : 'a -> 'a) : 'a diamond_zipper -> 'a diamond_zipper = function
-  | dia, path -> (modify_diamond f dia, path)
+  | Leaf x, path -> (Leaf (f x), path)
+  | Diamond x, path -> (Diamond { x with value = f x.value }, path)
+
+(** {1 Formatters} *)
+
+let pp_diamond = pp_diamond
+let show_diamond = show_diamond
+let pp_diamond_step = pp_diamond_step
+let show_diamond_step = show_diamond_step
+let pp_diamond_path = pp_diamond_path
+let show_diamond_path = show_diamond_path
+let pp_diamond_zipper = pp_diamond_zipper
+let show_diamond_zipper = show_diamond_zipper
