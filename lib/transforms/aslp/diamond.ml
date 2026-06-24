@@ -108,16 +108,17 @@ let move_in_to direction :
       | `R -> Ok (right, Right { value; left; merge } :: rest)
       | `M -> Ok (merge, Merge { value; left; right } :: rest))
 
-let move_in_to_end : 'a diamond_zipper -> 'a diamond_zipper = function
+let rec move_in_to_end : 'a diamond_zipper -> 'a diamond_zipper = function
   | (Leaf _, _) as zip -> zip
   | zip -> (
       match move_in_to `M zip with
-      | Ok x -> x
+      | Ok x -> move_in_to_end x
       | Error _ -> failwith "invariant violation :>")
 
-let move_out_until_not_merge : 'a diamond_zipper -> 'a diamond_zipper = function
-  | (merge, Merge { value; left; right } :: rest) as zip ->
-      move_out_of zip |> Result.get_ok
+let rec move_out_until_not_merge : 'a diamond_zipper -> 'a diamond_zipper =
+  function
+  | (_, Merge { value; left; right } :: _) as zip ->
+      move_out_of zip |> Result.get_ok |> move_out_until_not_merge
   | zip -> zip
 
 let promote_to_diamond ~left ~right ~merge :

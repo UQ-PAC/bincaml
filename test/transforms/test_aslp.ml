@@ -71,6 +71,60 @@ let%expect_test "lift: b.eq #1024" =
   print_endline @@ Aslp_state.show_aslp_diamond x;
   [%expect
     {|
+    (Diamond {value = { Aslp_state.assume = None; stmts = []; pc_assign = None };
+       left =
+       (Leaf
+          { Aslp_state.assume = (Some eq($PSTATE_Z, 0x1:bv1)); stmts = [];
+            pc_assign = None });
+       right =
+       (Leaf
+          { Aslp_state.assume = (Some boolnot(eq($PSTATE_Z, 0x1:bv1)));
+            stmts = []; pc_assign = None });
+       merge = (Leaf { Aslp_state.assume = None; stmts = []; pc_assign = None })},
+     [])
+    t
+    ((Leaf
+        { Aslp_state.assume = (Some eq($PSTATE_Z, 0x1:bv1)); stmts = [];
+          pc_assign = None }),
+     [Left {value = { Aslp_state.assume = None; stmts = []; pc_assign = None };
+        right =
+        (Leaf
+           { Aslp_state.assume = (Some boolnot(eq($PSTATE_Z, 0x1:bv1)));
+             stmts = []; pc_assign = None });
+        merge = (Leaf { Aslp_state.assume = None; stmts = []; pc_assign = None })}
+       ])
+
+
+    ((Leaf
+        { Aslp_state.assume = (Some eq($PSTATE_Z, 0x1:bv1));
+          stmts = [var BranchTaken:bool := true; $PC:bv64 := 0x2400:bv64];
+          pc_assign = (Some 0x2400:bv64) }),
+     [Left {value = { Aslp_state.assume = None; stmts = []; pc_assign = None };
+        right =
+        (Leaf
+           { Aslp_state.assume = (Some boolnot(eq($PSTATE_Z, 0x1:bv1)));
+             stmts = []; pc_assign = None });
+        merge = (Leaf { Aslp_state.assume = None; stmts = []; pc_assign = None })}
+       ])
+    m
+    ((Leaf
+        { Aslp_state.assume = None; stmts = [];
+          pc_assign =
+          (Some if eq($PSTATE_Z, 0x1:bv1) then 0x2400:bv64 else 0x2004:bv64) }),
+     [Merge {value = { Aslp_state.assume = None; stmts = []; pc_assign = None };
+        left =
+        (Leaf
+           { Aslp_state.assume = (Some eq($PSTATE_Z, 0x1:bv1));
+             stmts = [var BranchTaken:bool := true; $PC:bv64 := 0x2400:bv64];
+             pc_assign = (Some 0x2400:bv64) });
+        right =
+        (Leaf
+           { Aslp_state.assume = (Some boolnot(eq($PSTATE_Z, 0x1:bv1)));
+             stmts = [(var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
+             pc_assign = (Some 0x2004:bv64) })}
+       ])
+
+
     Diamond {value = { Aslp_state.assume = None; stmts = []; pc_assign = None };
       left =
       (Leaf

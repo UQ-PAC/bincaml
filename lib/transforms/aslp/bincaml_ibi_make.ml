@@ -199,10 +199,8 @@ struct
    fun cond ->
     let st = !bincaml_lifter_state and ncond = Expr.BasilExpr.boolnot cond in
 
-    let make assume = Diamond.empty (Aslp_state.empty_block ?assume ()) in
-    let left = make (Some cond)
-    and right = make (Some ncond)
-    and merge = make None in
+    let mk assume = Diamond.empty (Aslp_state.empty_block ?assume ()) in
+    let left = mk (Some cond) and right = mk (Some ncond) and merge = mk None in
 
     let diamond =
       st.diamond
@@ -216,6 +214,9 @@ struct
    fun b ->
     let diamond = !bincaml_lifter_state.diamond
     and address = !bincaml_lifter_state.address in
+    print_endline
+    @@ Diamond.show_diamond_zipper Aslp_state.pp_aslp_block diamond;
+    (print_endline @@ match b with `T -> "t" | `F -> "f" | `M -> "m");
     let diamond =
       match b with
       | `T -> diamond |> Diamond.move_in_to `L |> Result.get_ok
@@ -227,6 +228,9 @@ struct
           |> Diamond.move_in_to `M |> Result.get_ok
           |> Aslp_state.ensure_pc_consistency ~address
     in
+    print_endline
+    @@ Diamond.show_diamond_zipper Aslp_state.pp_aslp_block diamond;
+    print_endline "\n";
     bincaml_lifter_state := { !bincaml_lifter_state with diamond }
 
   let f_true_branch : branch * branch * branch -> branch = fun (t, f, m) -> t

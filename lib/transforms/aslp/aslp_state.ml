@@ -165,11 +165,11 @@ let ensure_pc_assigned ~address =
     [PC] variable is either assigned on all paths or assigned on no paths (from
     the beginning of the instruction). *)
 let ensure_pc_consistency ~address state =
-  let left =
-    state |> Diamond.move_adjacent `L |> Result.get_ok |> Diamond.move_in_to_end
-  and right =
-    state |> Diamond.move_adjacent `R |> Result.get_ok |> Diamond.move_in_to_end
+  let go state d =
+    state |> Diamond.move_out_of |> Result.get_ok |> Diamond.move_in_to d
+    |> Result.get_ok |> Diamond.move_in_to_end
   in
+  let left = go state `L and right = go state `R in
 
   let state =
     match (Diamond.root left, Diamond.root right) with
@@ -183,12 +183,12 @@ let ensure_pc_consistency ~address state =
         state
   in
 
-  let state = state |> Diamond.move_adjacent `M |> Result.get_ok in
-  let left =
-    state |> Diamond.move_adjacent `L |> Result.get_ok |> Diamond.move_in_to_end
-  and right =
-    state |> Diamond.move_adjacent `R |> Result.get_ok |> Diamond.move_in_to_end
+  let state =
+    state |> Diamond.move_out_of |> Result.get_ok |> Diamond.move_in_to `M
+    |> Result.get_ok
   in
+  let left = go state `L and right = go state `R in
+  (* print_endline @@ Diamond.show_diamond_zipper pp_aslp_block state; *)
   match (Diamond.root left, Diamond.root right) with
   | { pc_assign = None }, { pc_assign = None } -> state
   | { pc_assign = Some lpc; assume = lassume }, { pc_assign = Some rpc } ->
@@ -197,7 +197,12 @@ let ensure_pc_consistency ~address state =
           "invariant violation: branch expected to have assume set" lassume
       in
       let ite = Expr.BasilExpr.(ifthenelse lassume lpc rpc) in
-      state |> Diamond.modify (fun b -> { b with pc_assign = Some ite })
+      let a =
+        state |> Diamond.modify (fun b -> { b with pc_assign = Some ite })
+      in
+
+      (* print_endline @@ Diamond.show_diamond_zipper pp_aslp_block a; *)
+      a
   | _ -> failwith "invariant violation: pcs should agree at this point"
 
 (** {1 Formatters} *)
