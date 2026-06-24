@@ -46,7 +46,7 @@ let drop_unused_var_declarations_proc p =
         |> Iter.fold (fun acc i -> VarSet.add i acc) acc)
       VarSet.empty p
   in
-  Var.Decls.filter_map_inplace
+  Hashtbl.filter_map_inplace
     (fun _ v -> if VarSet.mem v used then Some v else None)
     (Procedure.local_decls p);
   VarSet.filter Var.is_global used

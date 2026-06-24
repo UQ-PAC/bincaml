@@ -22,6 +22,9 @@ let copy ?name ?scope ?typ (v : t) =
 
 let to_int (v : t) = ID.index (v.name)
 let name (e : t) = ID.name @@ e.name
+
+let id v = v.name
+
 let scope (e : t) = e.scope
 let typ (e : t) = e.typ
 let to_string v = name v ^ ":" ^ Types.to_string @@ typ v

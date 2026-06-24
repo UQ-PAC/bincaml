@@ -22,11 +22,11 @@ module type FunctionSummaryAnnotation = sig
 end
 
 (** Replace gamma expressions with gamma variables for an smt query *)
-let normalise_gamma =
+let normalise_gamma p =
   let open Expr.AbstractExpr in
   let open Expr.BasilExpr in
   let make_gamma_var v =
-    rvar (Var.create ("Gamma_" ^ Var.name v) ~scope:(Var.scope v) Boolean)
+    rvar (Procedure.get_local p ("Gamma_" ^ Var.name v) Boolean)
   in
   Expr.BasilExpr.rewrite ~rw_fun:(function
     | UnaryExpr { op = `Gamma; arg } -> (
@@ -41,7 +41,7 @@ let normalise_gamma =
 
 (** `redundant p ps` returns true if the conjunction of `p :: ps` is equivalent
     to that of `ps`. *)
-let redundant (solver : Bincaml_util.Smt.Solver.t) p ps =
+let redundant proc (solver : Bincaml_util.Smt.Solver.t) p ps =
   if Expr.BasilExpr.equal p (Expr.BasilExpr.boolconst true) then
     Bincaml_util.Smt.Solver.Unsat
   else if List.is_empty ps then Bincaml_util.Smt.Solver.Sat
@@ -49,7 +49,7 @@ let redundant (solver : Bincaml_util.Smt.Solver.t) p ps =
     try
       let conj = Expr.BasilExpr.applyintrin ~op:`AND ps in
       let q =
-        normalise_gamma @@ Expr.BasilExpr.boolnot
+        normalise_gamma proc @@ Expr.BasilExpr.boolnot
         @@ Expr.BasilExpr.binexp ~op:`IMPLIES conj p
       in
       let open Expr_smt in
@@ -102,7 +102,7 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
       wp_dual_requires (module S) proc
       |> List.fold_left
            (fun rs r ->
-             match redundant solver r (List.append rs cur_req) with
+             match redundant proc solver r (List.append rs cur_req) with
              | Unsat -> rs
              | Sat -> r :: rs
              | Unknown ->
@@ -114,7 +114,7 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
       sp_ensures (module S) proc
       |> List.fold_left
            (fun rs r ->
-             match redundant solver r (List.append rs cur_ens) with
+             match redundant proc solver r (List.append rs cur_ens) with
              | Unsat -> rs
              | Sat -> r :: rs
              | Unknown ->

@@ -163,9 +163,9 @@ module Eval = Intra_analysis.EvalStmt (SVAAbstractionBasil)
 module Domain = struct
   include StateAbstraction
 
-  let stack_pointer = Var.create ~scope:LocalConst "R31_in" @@ Bitvector 64
-  let link_register = Var.create ~scope:LocalConst "R30_in" @@ Bitvector 64
-  let frame_pointer = Var.create ~scope:LocalConst "R29_in" @@ Bitvector 64
+  let stack_pointer p = Procedure.get_local p "R31_in" (Bitvector 64)
+  let link_register p = Procedure.get_local p "R30_in" (Bitvector 64)
+  let frame_pointer p = Procedure.get_local p "R29_in" (Bitvector 64)
 
   (* These registers are preserved over calls and are not real params, so we can ignore later *)
   let call_preserve =
@@ -191,18 +191,18 @@ module Domain = struct
             SymAddrSetLattice.singleton (Par { name; param })
             @@ IntervalDomain.init @@ Bitvec.zero ~size ))
     |> Iter.cons
-         ( stack_pointer,
+         ( stack_pointer proc,
            SymAddrSetLattice.singleton (SymBase.Stack name)
            @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
     |> Iter.cons
-         ( link_register,
+         ( link_register proc,
            SymAddrSetLattice.singleton
-             (SymBase.Par { name; param = link_register })
+             (SymBase.Par { name; param = link_register proc })
            @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
     |> Iter.cons
-         ( frame_pointer,
+         ( frame_pointer proc,
            SymAddrSetLattice.singleton
-             (SymBase.Par { name; param = frame_pointer })
+             (SymBase.Par { name; param = frame_pointer proc })
            @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 

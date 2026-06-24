@@ -15,14 +15,16 @@ open Conf
 open struct
   let addr_equal_expr pc_var addr =
     Lang.Expr.BasilExpr.(
-      binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 addr)) (pc_var))
+      binexp ~op:`EQ
+        (bvconst (Bitvec.of_int ~size:64 addr))
+        (Lang.Expr.BasilExpr.rvar pc_var))
 
   let sanitize_proc_name p =
     List.fold_left (fun a sub -> String.replace ~sub ~by:"" a) p [ "@"; "." ]
 end
 
-let add_proxy_block pc_var ?(attrib = StringMap.empty) succ_addr (proc, blockmap) uuid
-    =
+let add_proxy_block pc_var ?(attrib = StringMap.empty) succ_addr
+    (proc, blockmap) uuid =
   let open Lang in
   let open Option in
   let ensure =
@@ -73,8 +75,8 @@ let add_new_simple_block pc_var ?(name_suffix = "") ?(attrib = StringMap.empty)
 
 (* Update (procedure, uuidmap) with a newly created IR block with opcodes and
      PC address contract *)
-let add_new_code_block pc_var (all_blocks : block UUIDMap.t) temp_proc succ_addr
-    (proc, blockmap) (b : Gtirb.block) =
+let add_new_code_block (pc_var : Var.t) (all_blocks : block UUIDMap.t) temp_proc
+    succ_addr (proc, blockmap) (b : Gtirb.block) =
   let open Lang in
   let open Option in
   let attrib =
@@ -252,7 +254,9 @@ let temp_proc_to_ir_proc pc_var all_blocks m (p : temp_proc) =
     entry_addrs
     |> Iter.map (fun i ->
         Lang.Expr.BasilExpr.(
-          binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 i)) (pc_var)))
+          binexp ~op:`EQ
+            (bvconst (Bitvec.of_int ~size:64 i))
+            (Lang.Expr.BasilExpr.rvar pc_var)))
     |> Iter.to_list
     |> fun conj ->
     Lang.Expr.BasilExpr.applyintrin ~op:`OR conj |> fun pc_init -> [ pc_init ]

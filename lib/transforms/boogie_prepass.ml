@@ -151,14 +151,14 @@ module Builtins = struct
     s.rely |> List.iter (iexpr f);
     s.guarantee |> List.iter (iexpr f)
 
-  let function_for_op op args ret =
+  let function_for_op (pid : ID.generator) op args ret =
     Var.create ~scope:Var.GlobalConst
       (match name op (args @ [ ret ]) with
-      | Function s -> s
+      | Function s -> pid.decl_or_get s
       | _ -> failwith "unexpected")
       (Types.curry args ret)
 
-  let transform_op_to_decl op args ret =
+  let transform_op_to_decl pid op args ret =
     let boogie_attribs =
       StringMap.of_list
         [
@@ -171,7 +171,7 @@ module Builtins = struct
       (Function
          {
            attrib = attribs;
-           binding = function_for_op op args ret;
+           binding = function_for_op pid op args ret;
            definition = Uninterpreted;
          }
         : Program.declaration)
@@ -184,10 +184,12 @@ module Builtins = struct
     |> Iter.filter_map (function op, args, ret ->
         (match op with
         | `Load _ -> None
-        | #builtin as op -> transform_op_to_decl op args ret
+        | #builtin as op ->
+            transform_op_to_decl (Program.global_ids p) op args ret
         | _ -> None))
     |> Iter.to_list
-    |> List.fold_left Program.add_decl p
+    |> List.fold_left (fun p v ->
+        Program.add_decl p v) p
 end
 
 module Instructions = struct

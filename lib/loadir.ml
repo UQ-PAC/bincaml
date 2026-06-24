@@ -179,7 +179,6 @@ module BasilASTLoader = struct
     | TypeAssign_Sum (localIdent, typeT) ->
         let n = unsafe_unsigil (`Type localIdent) in
         ( n,
-        
           Types.mk_adt n
             (typeT
             |> List.map (function
@@ -208,7 +207,8 @@ module BasilASTLoader = struct
         let scope = var_modifiers_shared modifiers in
         map_prog
           (fun p ->
-            Program.decl_global_var p ~classification
+            fst
+            @@ Program.decl_global_var p ~classification
                  (unsafe_unsigil (`Global bident))
                  scope (trans_type type'))
           prog
@@ -217,8 +217,10 @@ module BasilASTLoader = struct
         let scope = var_modifiers_shared modifiers in
         map_prog
           (fun p ->
-            Program.decl_global_var p ~classification
-                 (unsafe_unsigil (`Global bident)) scope (trans_type type'))
+            fst
+            @@ Program.decl_global_var p ~classification
+                 (unsafe_unsigil (`Global bident))
+                 scope (trans_type type'))
           prog
     | Decl_ProgEmpty (ProcIdent (_, id), attr) -> prog
     | Decl_ProgWithSpec (ProcIdent (_, id), attr, spec) -> prog
@@ -226,30 +228,34 @@ module BasilASTLoader = struct
         let ftype = trans_type rettype in
         map_prog
           (fun p ->
-            Program.decl_global_var p
-              (unsafe_unsigil (`Global glident)) GlobalConst ftype)
+            fst
+            @@ Program.decl_global_var p
+                 (unsafe_unsigil (`Global glident))
+                 GlobalConst ftype)
           prog
     | Decl_FunNoType (glident, _, _) -> prog
     | Decl_Fun (glident, params, _, typ, _) ->
         let bound = unpac_lambdaparen ~bound:StringMap.empty prog params in
         let arg_types = List.map Var.typ bound in
         let rtype = Types.curry arg_types (trans_type typ) in
-        let name = (unsafe_unsigil (`Global glident)) in
+        let name = unsafe_unsigil (`Global glident) in
         let fundef id : Program.declaration =
           Function
             {
               attrib = StringMap.empty;
-              binding =  Var.create id ~scope:GlobalConst rtype
+              binding = Var.create id ~scope:GlobalConst rtype;
               definition = Uninterpreted;
             }
         in
-        map_prog (fun prog -> Program.add_decl prog name fundef) prog
+        map_prog
+          (fun prog ->
+            let p = Program.decl_global prog name fundef in
+            p)
+          prog
     | Decl_Axiom (name, _, _) ->
-        let bvar =
-          Var.create (unsafe_unsigil (`Global name)) ~scope:GlobalConst Boolean
-        in
-
-        let fundef : Program.declaration =
+        let name = unsafe_unsigil (`Global name) in
+        let fundef id : Program.declaration =
+          let bvar = Var.create id ~scope:GlobalConst Boolean in
           Function
             {
               attrib = StringMap.empty;
@@ -257,7 +263,7 @@ module BasilASTLoader = struct
               definition = Uninterpreted;
             }
         in
-        map_prog (fun prog -> Program.add_decl prog fundef) prog
+        map_prog (fun prog -> Program.decl_global prog name fundef) prog
     | Decl_Proc
         ( ProcIdent (id_pos, id),
           _,
@@ -269,18 +275,21 @@ module BasilASTLoader = struct
           attrib,
           spec,
           definition ) ->
+        let ids = ID.make_gen () in
         let proc_id = Program.declare_name id prog.prog in
-        let formal_in_params_order = List.map param_to_formal in_params in
+        let formal_in_params_order = List.map (param_to_formal ids) in_params in
         let formal_in_params = formal_in_params_order |> StringMap.of_list in
-        let formal_out_params_order = List.map param_to_formal out_params in
+        let formal_out_params_order =
+          List.map (param_to_formal ids) out_params
+        in
         let formal_out_params = StringMap.of_list formal_out_params_order in
         let _, attrib = trans_attrib_set prog ~binds:formal_in_params attrib in
         Hashtbl.add prog.params_order id
           (formal_in_params_order, formal_out_params_order);
         let is_stub = Stdlib.(definition = ProcDef_Empty) in
         let p =
-          Procedure.create proc_id ~attrib ~is_stub ~formal_in_params
-            ~formal_out_params ()
+          Procedure.create proc_id ~local_id_gen:ids ~attrib ~is_stub
+            ~formal_in_params ~formal_out_params ()
         in
         let prog = map_prog (Program.add_proc p) prog in
         prog
@@ -336,14 +345,12 @@ module BasilASTLoader = struct
                    }))
     in
     let _, attrib = trans_attrib_set ~binds:StringMap.empty prog attrList in
-    let binding =
-      Var.create (unsafe_unsigil (`Global glident)) ~scope:GlobalConst rtype
-    in
-
-    let fundef : Program.declaration =
+    let name = unsafe_unsigil (`Global glident) in
+    let fundef id : Program.declaration =
+      let binding = Var.create id ~scope:GlobalConst rtype in
       Function { attrib; binding; definition }
     in
-    map_prog (fun prog -> Program.add_decl prog fundef) prog
+    map_prog (fun prog -> Program.decl_global prog name fundef) prog
 
   (** Second pass: resolve the full definition of all declarations. *)
   and trans_definition prog (x : decl) : load_st =
@@ -357,14 +364,13 @@ module BasilASTLoader = struct
     | Decl_Axiom (name, attr, body) ->
         let _, attrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         let body = trans_expr prog body in
-        let bvar =
-          Var.create (unsafe_unsigil (`Global name)) ~scope:GlobalConst Boolean
-        in
+        let name = unsafe_unsigil (`Global name) in
 
-        let fundef : Program.declaration =
+        let fundef id : Program.declaration =
+          let bvar = Var.create id ~scope:GlobalConst Boolean in
           Function { attrib; binding = bvar; definition = Axiom body }
         in
-        map_prog (fun prog -> Program.add_decl prog fundef) prog
+        map_prog (fun prog -> Program.decl_global prog name fundef) prog
     | Decl_ProgEmpty (ProcIdent (_, id), attr) ->
         let _, nattrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         prog
@@ -396,6 +402,7 @@ module BasilASTLoader = struct
           spec_list,
           proc_def ) ->
         let p = Program.get_proc_by_name id prog.prog in
+        let id_gen = Procedure.local_ids p in
         let prog = { prog with curr_proc = Some p } in
         let prog, blocks =
           match proc_def with
@@ -406,7 +413,9 @@ module BasilASTLoader = struct
           if List.is_empty blocks then p else Procedure.add_empty_impl p
         in
         let open Procedure.Vert in
-        let formal_out_params_order = List.map param_to_formal out_params in
+        let formal_out_params_order =
+          List.map (param_to_formal id_gen) out_params
+        in
         (* add blocks *)
         let p, blocks_id =
           List.fold_left
@@ -536,10 +545,11 @@ module BasilASTLoader = struct
     | VarLocalVar (LocalTyped (localVar, ty)) -> (
         try lookup_local_decl ~binds localVar p_st
         with e ->
+          let name = unsafe_unsigil (`Local localVar) in
           let v =
-            Var.create ~scope:LocalVar
-              (unsafe_unsigil (`Local localVar))
-              (trans_type ty)
+            Procedure.get_local
+              (p_st.curr_proc |> Option.get_exn_or "")
+              name (trans_type ty)
           in
           Logs.warn (fun m ->
               m "global undeclared %s. assuming mutable unshared" @@ Var.name v);
@@ -547,12 +557,12 @@ module BasilASTLoader = struct
     | VarLocalVar (LocalUntyped localVar) ->
         lookup_local_decl ~binds localVar p_st
     | VarGlobalVar (GlobalTyped (globalVar, ty)) -> (
+        let name = unsafe_unsigil (`Global globalVar) in
+
         try lookup_global_decl globalVar p_st
         with e ->
-          let v =
-            Var.create ~scope:GlobalVar
-              (unsafe_unsigil (`Global globalVar))
-              (trans_type ty)
+          let p, v =
+            Program.decl_or_get_var p_st.prog name GlobalVar (trans_type ty)
           in
           Logs.warn (fun m ->
               m "Warn: global undeclared %s. assuming mutable unshared"
@@ -880,7 +890,10 @@ module BasilASTLoader = struct
     lvs
     |> List.map (function
       | LocalTyped (i, t) ->
-          Var.create ~scope (unsafe_unsigil (`Local i)) (trans_type t)
+          Procedure.get_local
+            (p_st.curr_proc |> Option.get_exn_or "")
+            (unsafe_unsigil (`Local i))
+            (trans_type t)
       | LocalUntyped i -> lookup_local_decl ~binds:bound i p_st)
 
   and unpac_lambdaparen ?(bound = StringMap.empty) p_st lvs : Var.t list =
@@ -900,8 +913,7 @@ module BasilASTLoader = struct
   and assign_var (prog : load_st) v =
     let p = Option.get_exn_or "no active proc" prog.curr_proc in
     match Var.scope v with
-    | Var.LocalVar | Var.LocalConst ->
-        (prog, Procedure.decl_local p v) (* decl is side-effecting *)
+    | Var.LocalVar | Var.LocalConst -> (prog, v)
     | Var.GlobalVar | Var.GlobalVarShared ->
         (map_curr_proc (fun p -> write_global p v) prog, v)
     | Var.GlobalConst -> failwith "assignment to global constant"
@@ -919,31 +931,21 @@ module BasilASTLoader = struct
     Attrib.attr_of_loc l
 
   and trans_lvar prog (x : BasilIR.AbsBasilIR.lVar) : load_st * Var.t =
+    let proc = prog.curr_proc |> Option.get_exn_or "" in
     match x with
     | LVar_Local (LocalTyped (bident, type')) ->
         assign_var prog
-          (Var.create ~scope:LocalVar
+        @@ Procedure.decl_local proc
              (unsafe_unsigil (`Local bident))
-             (trans_type type'))
+             ~pure:false (trans_type type')
     | LVar_LocalConst (LocalTyped (bident, type')) ->
         assign_var prog
-          (Var.create ~scope:LocalConst
+        @@ Procedure.decl_local proc
              (unsafe_unsigil (`Local bident))
-             (trans_type type'))
+             ~pure:true (trans_type type')
     | LVar_LocalConst (LocalUntyped _) -> failwith "type annotation needed"
     | LVar_Global (GlobalTyped (bident, type')) ->
-        let v =
-          try lookup_global_decl bident prog
-          with e ->
-            let v =
-              Var.create ~scope:GlobalVar
-                (unsafe_unsigil (`Global bident))
-                (trans_type type')
-            in
-            print_endline @@ "Warn: global undeclared " ^ Var.name v
-            ^ " assuming mutable unshared";
-            v
-        in
+        let v = lookup_global_decl bident prog in
         assign_var prog v
     | LVar_Local (LocalUntyped bident) ->
         let v = lookup_local_decl bident prog in
@@ -1032,13 +1034,10 @@ module BasilASTLoader = struct
           EndList _ ) ->
         tx name attribs phi statements jump
 
-  and param_to_lvar (pp : params) : Var.t =
+  and param_to_formal (p : ID.generator) (pp : params) : string * Var.t =
     match pp with
-    | Params1 (LocalIdent (pos, id), t) -> Var.create id (trans_type t)
-
-  and param_to_formal (pp : params) : string * Var.t =
-    match pp with
-    | Params1 (LocalIdent (pos, id), t) -> (id, Var.create id (trans_type t))
+    | Params1 (LocalIdent (pos, id), t) ->
+        (id, Var.create (p.decl_or_get id) (trans_type t))
 
   and trans_funspec prog bound_post
       (spec : (Var.t, BasilExpr.t) Procedure.proc_spec) (s : funSpec) :
@@ -1237,19 +1236,7 @@ module BasilASTLoader = struct
     | Expr_Global (GlobalUntyped g) ->
         BasilExpr.rvar @@ lookup_global_decl g p_st
     | Expr_Global (GlobalTyped (g, type')) ->
-        let v =
-          try lookup_global_decl g p_st
-          with e ->
-            let v =
-              Var.create ~scope:GlobalVar
-                (unsafe_unsigil (`Global g))
-                (trans_type type')
-            in
-            Logs.warn (fun m ->
-                m "Warn: undeclared global referenced in expr, %s"
-                  (Var.to_string v));
-            v
-        in
+        let v = lookup_global_decl g p_st in
         BasilExpr.rvar v
     | Expr_Local (LocalUntyped g) ->
         BasilExpr.rvar @@ lookup_local_decl ~binds g p_st
@@ -1257,7 +1244,8 @@ module BasilASTLoader = struct
         try BasilExpr.rvar @@ lookup_local_decl ~binds g p_st
         with Not_found | LoadError _ ->
           let v =
-            Var.create ~scope:LocalVar
+            Procedure.get_local
+              (p_st.curr_proc |> Option.get_exn_or "")
               (unsafe_unsigil (`Local g))
               (trans_type type')
           in
@@ -1347,10 +1335,20 @@ module BasilASTLoader = struct
         let _, attrib = trans_attrib_set ~binds p_st attrs in
         BasilExpr.lambda ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_Let (id, param, rt, body, in_expr) ->
-        let id = unsafe_unsigil (`Local id) in
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st param in
         let funct = Types.curry (List.map Var.typ bound) (trans_type rt) in
-        let funvar = Var.create id funct ~scope:LocalConst in
+        let id = unsafe_unsigil (`Local id) in
+        let idg =
+          p_st.curr_proc
+          |> Option.map Procedure.local_ids
+          |> Option.get_or ~default:(Program.global_ids p_st.prog)
+          (* FIXME: generally the semantics of nested definitions is bad; e.g.
+            local lookups are wrong and here its unclear what generator to use;
+            we should probably pass through which id generator is currently in
+               use *)
+        in
+        (* assume no shadowing *)
+        let funvar = Var.create (idg.decl_or_get id) funct ~scope:LocalConst in
         let func =
           match bound with
           | [] -> trans_expr ~nbinds:bound body
@@ -1603,16 +1601,6 @@ let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
   in
   let proc = Procedure.map_formal_in_params (fun _ -> inparam) proc in
   let prog = Program.add_proc proc prog in
-  let prog =
-    Iter.append (Block.read_vars_iter bl) (Block.assigned_vars_iter bl)
-    |> Iter.filter Var.is_global
-    |> Iter.fold
-         (fun prog v ->
-           Program.add_decl prog
-             (Program.Variable
-                { binding = v; attrib = StringMap.empty; classification = None }))
-         prog
-  in
   (prog, proc, bl)
 
 let load_single_block ?proc ~input lexbuf =

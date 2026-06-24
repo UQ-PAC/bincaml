@@ -232,23 +232,31 @@ end = struct
     let graph = G.add_vertex graph Return in
     graph
 
-  let create id ?local_id_gen ?(is_stub = false) ?(formal_in_params = StringMap.empty)
+
+  let create id ?local_id_gen ?(is_stub = false)
+      ?(formal_in_params = StringMap.empty)
       ?(formal_out_params = StringMap.empty) ?(captures_globs = [])
       ?(modifies_globs = []) ?(requires = []) ?(ensures = []) ?(rely = [])
       ?(guarantee = []) ?(attrib = Attrib.empty) () =
     let specification =
       { captures_globs; modifies_globs; requires; ensures; rely; guarantee }
     in
-    let local_ids = match local_id_gen with
-      | Some g -> g 
-      | None -> let g = ID.make_gen ()  in
+    let local_ids =
+      match local_id_gen with
+      | Some g -> g
+      | None ->
+          let g = ID.make_gen () in
           (* Oh no: we could have used a _different_ generator to build the in-params *)
           StringMap.iter (fun k v -> ignore @@ g.decl_exn k) formal_in_params;
           StringMap.iter (fun k v -> ignore @@ g.decl_exn k) formal_out_params;
           g
-      in
+    in
     let block_ids = ID.make_gen () in
-    let locals = Hashtbl.create (StringMap.cardinal formal_in_params + StringMap.cardinal formal_out_params) in
+    let locals =
+      Hashtbl.create
+        (StringMap.cardinal formal_in_params
+        + StringMap.cardinal formal_out_params)
+    in
     Hashtbl.add_iter locals
       (Iter.append
          (StringMap.to_iter formal_in_params)
@@ -453,7 +461,20 @@ let lookup_local_decl p v =
       StringMap.find_opt v (formal_out_params p))
   |> Option.or_lazy ~else_:(fun () -> StringMap.find_opt v (formal_in_params p))
 
-let decl_local _var p ?(pure = false) name typ : Var.t =
+let lookup_local_decl_exn p v =
+  Hashtbl.find_opt (local_decls p) v
+  |> Option.or_lazy ~else_:(fun () ->
+      StringMap.find_opt v (formal_out_params p))
+  |> Option.or_lazy ~else_:(fun () -> StringMap.find_opt v (formal_in_params p))
+  |> Option.get_exn_or ("no local decl : " ^ v)
+
+let get_local p ?(pure = false) name typ : Var.t =
+  let scope = if pure then Var.LocalConst else LocalVar in
+  let v = Var.with_name (local_ids p) name ~scope typ in
+  Hashtbl.replace (local_decls p) (Var.name v) v;
+  v
+
+let decl_local p ?(pure = false) name typ : Var.t =
   let scope = if pure then Var.LocalConst else LocalVar in
   let v = Var.create_exn (local_ids p) name ~scope typ in
   Hashtbl.replace (local_decls p) (Var.name v) v;

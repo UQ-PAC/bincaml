@@ -36,7 +36,7 @@ type implicit_declaration =
     }
 
 type declaration =
-  | Type of { binding : string; typ : Types.t }
+  | Type of { binding : ID.t; typ : Types.t }
   | Function of {
       binding : Var.t;
       attrib : Attrib.attrib_map;
@@ -54,6 +54,13 @@ let decl_binding = function
   | Variable { binding } -> Var.name binding
   | Function { binding } -> Var.name binding
   | Procedure { definition } -> ID.name (Procedure.id definition)
+
+let decl_id = function
+  | Type { binding } -> binding
+  | Variable { binding } -> (Var.id binding)
+  | Function { binding } -> (Var.id binding)
+  | Procedure { definition } -> (Procedure.id definition)
+
 
 let pretty_proc p =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
@@ -189,11 +196,9 @@ let remove_decl p decl =
   let d = p.global_names.decl_or_get (decl_binding decl) in
   { p with declarations = IDMap.remove d p.declarations }
 
-let update_decl ?(attrib = StringMap.empty) prog decl =
-  let d = p.global_names.decl_or_get (decl_binding decl) in
+let update_decl ?(attrib = StringMap.empty) p decl =
+  let id = p.global_names.decl_or_get (decl_binding decl) in
   { p with declarations = IDMap.add id decl p.declarations }
-
-  add_decl ~attrib prog decl
 
 let add_proc p prog =
   let id = Procedure.id p in
@@ -284,28 +289,57 @@ let pretty_to_chan chan (p : t) =
   Containers_pp.Pretty.to_format ~width:80 fmt p;
   Format.flush fmt ()
 
-  (*
+(*
 
 Variable { binding = v; attrib; classification }
 
   *)
 
+let add_decl p decl =
+  { p with declarations = IDMap.add (decl_id decl) decl p.declarations }
+
 let decl_global p name f =
   let id : ID.t = p.global_names.decl_exn name in
   let decl = f id in
-  { p with declarations = IDMap.add id decl p.declarations }
+  add_decl p id decl
 
-let add_decl  p name decl =
-  let id : ID.t = p.global_names.decl_exn name in
-  let decl = f id in
-  { p with declarations = IDMap.add id decl p.declarations }
-
-
-let decl_global_var p  ?(attrib = StringMap.empty) ?(classification = None) name scope typ  =
-  let f v = let r = ref None in match r with Some v -> v | None -> r := Some v ; v in
-  let p = decl_global p name (fun id -> Variable { binding = f (Var.create id ~scope typ) ; attrib; classification }) in
+let decl_global_var p ?(attrib = StringMap.empty) ?(classification = None) name
+    scope typ =
+  let f v =
+    let r = ref None in
+    match !r with
+    | Some v -> v
+    | None ->
+        r := Some v;
+        v
+  in
+  let p =
+    decl_global p name (fun id ->
+        Variable
+          { binding = f (Var.create id ~scope typ); attrib; classification })
+  in
   (p, f (failwith ""))
 
+(** add var decl for with id exising in generator *)
+let add_var_decl p ?(attrib = Attrib.empty) ?classification v =
+  let id = Var.id v in
+  (try p.global_names.get_name (ID.index id) |> ignore
+   with Not_found -> failwith "Id not created with programs' generator");
+  {
+    p with
+    declarations =
+      IDMap.add id
+        (Variable { attrib; classification; binding = v })
+        p.declarations;
+  }
+
+let global_ids p = p.global_names
+
+let decl_or_get_var p name scope typ =
+  let id : ID.t = p.global_names.decl_or_get name in
+  IDMap.find_opt id p.declarations |> function
+  | Some (Variable { binding }) -> (p, binding)
+  | _ -> decl_global_var p name scope typ
 
 let decl_typ ?(attrib = StringMap.empty) p t =
   match t with
@@ -329,9 +363,7 @@ let decl_typ ?(attrib = StringMap.empty) p t =
                 let variant = p.global_names.decl_exn variant in
                 let args = List.map (function { field; typ } -> typ) fields in
                 let ty = Types.curry args s in
-                let constructor =
-                  Var.create (variant) ty ~scope:GlobalConst
-                in
+                let constructor = Var.create variant ty ~scope:GlobalConst in
                 ( variant,
                   VariantCase
                     { variant = ID.name variant; belongs_to = s; constructor }
