@@ -1,5 +1,7 @@
 (** Possibly-nested control flow diamonds.
 
+    The root, or top-level, value of a {!diamond} is the outermost ['a] value.
+
     This is isomorphic to an annotated ternary tree. *)
 type 'a diamond =
   | Leaf of 'a
@@ -9,13 +11,15 @@ type 'a diamond =
       right : 'a diamond;
       merge : 'a diamond;
     }
+[@@deriving show]
 
 type 'a diamond_step =
   | Left of { value : 'a; right : 'a diamond; merge : 'a diamond }
   | Right of { value : 'a; left : 'a diamond; merge : 'a diamond }
   | Merge of { value : 'a; left : 'a diamond; right : 'a diamond }
+[@@deriving show]
 
-type 'a diamond_path = 'a diamond_step list
+type 'a diamond_path = 'a diamond_step list [@@deriving show]
 (** A type describing a {!diamond} with one missing {!diamond} child, called the
     "hole".
 
@@ -37,12 +41,15 @@ type 'a diamond_path = 'a diamond_step list
     {v @ v} *)
 
 type 'a diamond_zipper = 'a diamond * 'a diamond_path
-(** A {!diamond_zipper} is made up of a {!diamond_hole} combined with a
-    {!diamond} to "mount" at that hole.
+(** Conceptually, a {!diamond_zipper} is a ['a ]{!diamond} but with additional
+    information about a "position" which points to a particular ['a] value
+    within the diamond (called the focus). The focus can be moved around to
+    point to different positions within the nested diamonds.
 
-    A {!diamond_zipper} represents the same information as {!diamond}, but its
-    structure allows to "move" the zipper around to focus on different points
-    within the nested diamonds. *)
+    This is implemented by deconstructing a {!diamond} into a {!diamond_path}
+    which represents parts of the diamond {i above} the focus, and a {!diamond}
+    which represents the focus and nested diamonds {i below} the focus. The
+    focus is the root of the stored {!diamond}. *)
 
 let rec of_zipper : 'a diamond_zipper -> 'a diamond = function
   | this, [] -> this
@@ -59,27 +66,52 @@ let rec of_zipper : 'a diamond_zipper -> 'a diamond = function
     value. *)
 let to_zipper : 'a diamond -> 'a diamond_zipper = fun dmd -> (dmd, [])
 
-let move_to_adjacent :
+(** {1 Movement functions} *)
+
+let move_adjacent direction :
     'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
   function
-  | left, Left { value; right; merge } :: rest ->
-      Ok (right, Right { value; left; merge } :: rest)
-  | right, Right { value; left; merge } :: rest ->
-      Ok (left, Left { value; right; merge } :: rest)
-  | zip -> Error zip
+  | (_, []) as zip -> Error zip
+  | left, Left { value; right; merge } :: rest
+  | right, Right { value; left; merge } :: rest
+  | merge, Merge { value; left; right } :: rest -> (
+      match direction with
+      | `L -> Ok (left, Left { value; right; merge } :: rest)
+      | `R -> Ok (right, Right { value; left; merge } :: rest)
+      | `M -> Ok (merge, Merge { value; left; right } :: rest))
 
-let move_to_merge :
+let move_up : 'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result
+    = function
+  | (_, []) as zip -> Error zip
+  | left, Left { value; right; merge } :: rest
+  | right, Right { value; left; merge } :: rest
+  | merge, Merge { value; left; right } :: rest ->
+      Ok (Diamond { value; left; right; merge }, rest)
+
+let move_down direction :
     'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
   function
-  | left, Left { value; right; merge } :: rest ->
-      Ok (merge, Merge { value; left; right } :: rest)
-  | right, Right { value; left; merge } :: rest ->
-      Ok (merge, Merge { value; left; right } :: rest)
+  | (Leaf _, _) as zip -> Error zip
+  | Diamond { value; left; right; merge }, rest -> (
+      match direction with
+      | `L -> Ok (left, Left { value; right; merge } :: rest)
+      | `R -> Ok (right, Right { value; left; merge } :: rest)
+      | `M -> Ok (merge, Merge { value; left; right } :: rest))
+
+let promote_to_diamond ~left ~right ~merge :
+    'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
+  function
+  | Leaf value, path -> Ok (Diamond { value; left; right; merge }, path)
   | zip -> Error zip
 
+(** {1 Modification functions} *)
+
+(** Modifies the {i top-level} value of the given {!diamond} (doesn't modify any
+    child diamonds). *)
 let modify_diamond (f : 'a -> 'a) = function
   | Leaf x -> Leaf (f x)
   | Diamond x -> Diamond { x with value = f x.value }
 
+(** Modifies the currently-focused value of the given {!diamond_zipper}. *)
 let modify (f : 'a -> 'a) : 'a diamond_zipper -> 'a diamond_zipper = function
   | dia, path -> (modify_diamond f dia, path)
