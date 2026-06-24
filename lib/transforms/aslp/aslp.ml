@@ -9,6 +9,7 @@ open Lang
 open Common
 module Aslp_state = Aslp_state
 module Bincaml_ibi = Bincaml_ibi
+module Diamond = Diamond
 
 let ensure_aslp_globals_exist prog = 9
 
