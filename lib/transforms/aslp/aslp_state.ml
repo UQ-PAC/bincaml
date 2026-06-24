@@ -165,6 +165,7 @@ let ensure_pc_assigned ~address =
     [PC] variable is either assigned on all paths or assigned on no paths (from
     the beginning of the instruction). *)
 let ensure_pc_consistency ~address state =
+  let before_skel = Diamond.skeleton state in
   let go state d = state |> Diamond.move_in_to d |> Result.get_ok in
   let left = go state `L and right = go state `R in
 
@@ -181,6 +182,7 @@ let ensure_pc_consistency ~address state =
   in
 
   let state = state |> Diamond.move_out_of |> Result.get_ok in
+  assert (Diamond.(equal_skeleton before_skel (skeleton state)));
   let left = go state `L and right = go state `R in
   match (Diamond.focus left, Diamond.focus right) with
   | { pc_assign = None }, { pc_assign = None } -> state

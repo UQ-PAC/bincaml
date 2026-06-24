@@ -61,7 +61,7 @@ type 'a diamond =
       right : 'a diamond;
       value : 'a;
     }
-[@@deriving show { with_path = false }]
+[@@deriving show { with_path = false }, eq]
 
 let empty value : 'a diamond = Leaf value
 
@@ -217,8 +217,27 @@ let modify (f : 'a -> 'a) : 'a diamond_zipper -> 'a diamond_zipper = function
   | Leaf x, path -> (Leaf (f x), path)
   | Diamond x, path -> (Diamond { x with value = f x.value }, path)
 
-(** {1 Formatters} *)
+(** {1 Debugging} *)
 
+let rec map f = function
+  | Leaf x -> Leaf (f x)
+  | Diamond { value; left; right; pred } ->
+      let value = f value in
+      let left = map f left and right = map f right and pred = map f pred in
+      Diamond { value; left; right; pred }
+
+type skeleton = unit diamond * [ `L | `R | `P ] list
+[@@deriving show { with_path = false }, eq]
+
+let skeleton : 'a diamond_zipper -> skeleton = function
+  | this, path ->
+      ( map (Fun.const ()) this,
+        List.map (function Left _ -> `L | Right _ -> `R | Pred _ -> `P) path )
+
+(** {1 Derived functions} *)
+
+let equal_diamond = equal_diamond
+let equal_skeleton = equal_skeleton
 let pp_diamond = pp_diamond
 let show_diamond = show_diamond
 let pp_diamond_step = pp_diamond_step
@@ -227,3 +246,5 @@ let pp_diamond_path = pp_diamond_path
 let show_diamond_path = show_diamond_path
 let pp_diamond_zipper = pp_diamond_zipper
 let show_diamond_zipper = show_diamond_zipper
+let pp_skeleton = pp_skeleton
+let show_skeleton = show_skeleton
