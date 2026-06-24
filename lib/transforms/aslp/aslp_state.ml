@@ -20,16 +20,13 @@ type aslp_block = {
   assume : Expr.BasilExpr.t option;
   stmts : stmt CCVector.vector;
       [@printer Format.map CCVector.to_list (pp_list_for_printing pp_stmt)]
-  succs : StringSet.t;
-      [@printer Format.map StringSet.to_list (pp_list_for_printing String.pp)]
   pc_assign : Expr.BasilExpr.t option;
       (** The unique assignment to [PC] which is in effect at the end of this
           block, if [PC] has been assigned. *)
 }
 [@@deriving show]
-(** An ASLp lifter block is a list of statements followed by a non-deterministic
-    goto to a number of successors. Each block is optionally guarded by an
-    assume statement. *)
+(** An ASLp lifter block is a list of statements. Each block is optionally
+    guarded by an assume statement. *)
 
 type aslp_diamond = {
   address : Bitvec.t;
@@ -80,8 +77,8 @@ type lifter_state = {
 (** {1 Utility functions} *)
 
 let empty_block () =
-  let stmts = CCVector.create () and succs = StringSet.empty in
-  { assume = None; stmts; succs; pc_assign = None }
+  let stmts = CCVector.create () in
+  { assume = None; stmts; pc_assign = None }
 
 let empty_aslp_state ~entry () =
   let blocks = StringMap.singleton entry (empty_block ()) in
@@ -180,8 +177,7 @@ let add_goto aslp_state ~source ~target =
     aslp_state |> get_block ~name:source |> fun x -> x.pc_assign
   in
   aslp_state
-  |> modify_block ~name:source ~f:(fun b ->
-      { b with succs = StringSet.add target b.succs })
+  |> modify_block ~name:source ~f:(fun b -> b)
   |> modify_block ~name:target ~f:(fun b ->
       if Option.is_some src_pc_assign then { b with pc_assign = src_pc_assign }
       else b)
