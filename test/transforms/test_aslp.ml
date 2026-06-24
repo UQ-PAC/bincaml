@@ -9,7 +9,7 @@ let%expect_test "lift empty" =
     lift_code_block (module I) ~address:(Bitvec.of_int ~size:64 0x2000)
     @@ Iter.empty
   in
-  print_endline @@ Aslp_state.show_aslp_diamond x;
+  List.iter (print_endline % Diamond.show_diamond Aslp_state.pp_aslp_block) x;
   [%expect
     {|
     { Aslp_state.address = 0x2000:bv64;
@@ -29,7 +29,9 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
       ~address:(Bitvec.of_int ~size:64 0x2000)
       (Bitvec.of_string "0x8b031041:bv32")
   in
-  print_endline @@ Aslp_state.show_aslp_diamond x;
+  List.iter
+    (print_endline % Diamond.show_diamond Aslp_state.pp_aslp_block)
+    [ x ];
   [%expect
     {|
     { Aslp_state.address = 0x2000:bv64;
@@ -52,7 +54,7 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
          (Bitvec.of_string "0xd29579a1:bv32")
          (Bitvec.of_string "0xd29579a1:bv32")
   in
-  print_endline @@ Aslp_state.show_aslp_diamond x;
+  List.iter (print_endline % Diamond.show_diamond Aslp_state.pp_aslp_block) x;
   [%expect
     {|
     { Aslp_state.address = 0x2000:bv64;
@@ -80,7 +82,9 @@ let%expect_test "lift: b.eq #1024" =
       ~address:(Bitvec.of_int ~size:64 0x2000)
       (Bitvec.of_string "0x54002000:bv32")
   in
-  print_endline @@ Aslp_state.show_aslp_diamond x;
+  List.iter
+    (print_endline % Diamond.show_diamond Aslp_state.pp_aslp_block)
+    [ x ];
   [%expect
     {|
     { Aslp_state.address = 0x2000:bv64;

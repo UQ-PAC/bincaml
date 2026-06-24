@@ -29,14 +29,7 @@ let lift_empty (module I : Bincaml_ibi.IBI) ~address () =
 (** Requires and ensures that the IBI is in the "reset" state. *)
 let lift_code_block (module I : Bincaml_ibi.IBI) ~address opcodes =
   opcodes
-  |> Iter.foldi
-       (fun acc i op ->
-         let address =
-           Bitvec.add (Bitvec.create ~size:64 Z.(~$4 * ~$i)) address
-         in
-         let lifted = lift_opcode (module I) ~address op in
-         match acc with
-         | None -> Some lifted
-         | Some acc -> Some (Aslp_state.append_aslp_states acc lifted))
-       None
-  |> Option.get_lazy (lift_empty (module I) ~address)
+  |> Iter.mapi (fun i op ->
+      let address = Bitvec.add (Bitvec.create ~size:64 Z.(~$4 * ~$i)) address in
+      lift_opcode (module I) ~address op)
+  |> Iter.to_list

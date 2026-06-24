@@ -21,15 +21,14 @@ struct
       (** A merge branch also records its true and false predecessors to
           propagate PC information. *) ]
 
-  type ast = Aslp_state.aslp_diamond
+  type ast = Aslp_state.aslp_block Diamond.diamond
 
   (** {2 Bincaml-specific utility functions} *)
 
   let bincaml_lifter_state = ref S.initial_lifter_state
 
   let bincaml_set_address address =
-    let diamond = { !bincaml_lifter_state.diamond with address } in
-    bincaml_lifter_state := { !bincaml_lifter_state with diamond }
+    bincaml_lifter_state := { !bincaml_lifter_state with address }
 
   (** Emits the given Bincaml statement. *)
   let bincaml_emit stmt =
@@ -54,8 +53,9 @@ struct
     bincaml_lifter_state := Aslp_state.empty_lifter_state ~generator ()
 
   let get_ir () =
-    let diamond = !bincaml_lifter_state.diamond in
-    diamond |> Aslp_state.ensure_pc_assigned ~name:diamond.exit
+    let diamond = !bincaml_lifter_state.diamond
+    and address = !bincaml_lifter_state.address in
+    diamond |> Aslp_state.ensure_pc_assigned ~address |> Diamond.of_zipper
 
   let bigint_of_string : string -> bigint = Z.of_string_base 10
   let bigint_of_int : int -> bigint = Z.of_int
@@ -208,27 +208,20 @@ struct
     let block_id = st.generator.block_id
     and ncond = Expr.BasilExpr.boolnot cond in
 
+    let diamond = st.diamond in
     let t = block_id () and f = block_id () and m = block_id () in
-    let diamond =
-      st.diamond
-      |> Aslp_state.modify_block ~name:st.active ~f:(fun b -> b)
-      |> Aslp_state.add_block ~pred:st.active ~name:t ~assume:cond
-      |> Aslp_state.add_block ~pred:st.active ~name:f ~assume:ncond
-      |> Aslp_state.add_block ~pred:t ~name:m
-      |> Aslp_state.add_goto ~source:f ~target:m
-      |> Aslp_state.modify_block ~name:m ~f:(fun b -> b)
-    in
     bincaml_lifter_state := { st with diamond };
     (`T t, `F f, `M (m, (t, f)))
 
   let f_switch_context : branch -> unit =
    fun b ->
     let diamond = !bincaml_lifter_state.diamond in
+    let address = !bincaml_lifter_state.address in
     let active, diamond =
       match b with
       | `T x | `F x -> (x, diamond)
       | `M (join, (left, right)) ->
-          (join, diamond |> Aslp_state.ensure_pc_consistency ~left ~right ~join)
+          (join, Aslp_state.ensure_pc_consistency ~address ~join:diamond)
     in
     bincaml_lifter_state := { !bincaml_lifter_state with active; diamond }
 

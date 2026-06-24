@@ -57,7 +57,9 @@ type aslp_ids = { block_id : unit -> string; local_id : unit -> string }
 type lifter_state = {
   active : string;
       (** Active block where new runtime statements will be appended. *)
-  diamond : aslp_diamond;
+  address : Bitvec.t;
+      (** Byte address of the instruction currently being lifted. *)
+  diamond : aslp_block Diamond.diamond_zipper;
       (** Lifter state representing a control flow diamond. *)
   generator : aslp_ids; [@opaque]  (** Generators for ID names. *)
   names : (string, string) Hashtbl.t;
@@ -80,10 +82,6 @@ let empty_block () =
   let stmts = CCVector.create () in
   { assume = None; stmts; pc_assign = None }
 
-let empty_aslp_state ~entry () =
-  let blocks = StringMap.singleton entry (empty_block ()) in
-  { blocks; entry; exit = entry; address = Bitvec.zero ~size:64 }
-
 (** Constructs a new empty {!lifter_state}.
 
     Callers should consider whether they wish to re-use an existing [generator]
@@ -92,8 +90,9 @@ let empty_lifter_state ~generator () =
   let entry = generator.block_id () in
   {
     active = entry;
-    diamond = empty_aslp_state ~entry ();
+    diamond = Diamond.empty_zipper (empty_block ());
     names = Hashtbl.create 16;
+    address = Bitvec.of_int ~size:64 0xbadbadbad000;
     generator;
   }
 
@@ -160,10 +159,8 @@ let add_stmt_to_block blk ~stmt =
       blk
 
 let add_stmt_to_active stmt (lifter_state : lifter_state) =
-  let diamond =
-    lifter_state.diamond
-    |> modify_block ~name:lifter_state.active ~f:(add_stmt_to_block ~stmt)
-  in
+  let diamond = lifter_state.diamond in
+  let diamond = diamond |> Diamond.modify (add_stmt_to_block ~stmt) in
   { lifter_state with diamond }
 
 (** Adds a new goto edge from [source] to [target]. If [source] was the exit
@@ -204,11 +201,9 @@ let append_aslp_states first second =
 
 (** Ensures that the given block ID has a PC assignment. If it already
     {!pc_assign}, no changes are made. *)
-let ensure_pc_assigned ~name state =
-  let address = state.address in
-  state
-  |> modify_block ~name ~f:(function
-    | { pc_assign = None; _ } as block ->
+let ensure_pc_assigned ~address =
+  Diamond.modify (function
+    | { pc_assign = None } as block ->
         let incremented =
           Expr.BasilExpr.bvconst Bitvec.(add address (of_int ~size:64 4))
         and boolfalse = Expr.BasilExpr.boolconst false in
@@ -238,20 +233,26 @@ let ensure_pc_assigned ~name state =
     This is used to maintain the invariant that at every control flow point, the
     [PC] variable is either assigned on all paths or assigned on no paths (from
     the beginning of the instruction). *)
-let ensure_pc_consistency state ~left:lname ~right:rname ~join =
-  let left = get_block state ~name:lname
-  and right = get_block state ~name:rname in
-  let left, right, state =
-    match (left.pc_assign, right.pc_assign) with
-    | Some _, None ->
-        let state = state |> ensure_pc_assigned ~name:rname in
-        (left, get_block state ~name:rname, state)
-    | None, Some _ ->
-        let state = state |> ensure_pc_assigned ~name:lname in
-        (get_block state ~name:lname, right, state)
-    | _ -> (left, right, state)
+let ensure_pc_consistency ~address ~join:state =
+  let left =
+    state |> Diamond.move_adjacent `L |> Result.get_ok |> Diamond.move_to_end
+  and right =
+    state |> Diamond.move_adjacent `R |> Result.get_ok |> Diamond.move_to_end
   in
-  match (left, right) with
+
+  let state =
+    match (Diamond.root left, Diamond.root right) with
+    | { pc_assign = None }, { pc_assign = None } -> state
+    | { pc_assign = Some pc_assign }, { pc_assign = None } ->
+        ensure_pc_assigned ~address right
+    | { pc_assign = None }, { pc_assign = Some pc_assign } ->
+        ensure_pc_assigned ~address left
+    | ( { pc_assign = Some lpc; assume = lassume },
+        { pc_assign = Some rpc; assume = rassume } ) ->
+        state
+  in
+
+  match (Diamond.root left, Diamond.root right) with
   | { pc_assign = None }, { pc_assign = None } -> state
   | { pc_assign = Some lpc; assume = lassume }, { pc_assign = Some rpc } ->
       let lassume =
@@ -259,8 +260,7 @@ let ensure_pc_consistency state ~left:lname ~right:rname ~join =
           "invariant violation: branch expected to have assume set" lassume
       in
       let ite = Expr.BasilExpr.(ifthenelse lassume lpc rpc) in
-      state
-      |> modify_block ~name:join ~f:(fun b -> { b with pc_assign = Some ite })
+      state |> Diamond.modify (fun b -> { b with pc_assign = Some ite })
   | _ -> failwith "invariant violation: pcs should agree at this point"
 
 (** {1 Formatters} *)
