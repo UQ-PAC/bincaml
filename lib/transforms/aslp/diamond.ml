@@ -11,7 +11,7 @@ type 'a diamond =
       right : 'a diamond;
       merge : 'a diamond;
     }
-[@@deriving show]
+[@@deriving show { with_path = false }]
 
 let empty value : 'a diamond = Leaf value
 
@@ -21,7 +21,7 @@ type 'a diamond_step =
   | Left of { value : 'a; right : 'a diamond; merge : 'a diamond }
   | Right of { value : 'a; left : 'a diamond; merge : 'a diamond }
   | Merge of { value : 'a; left : 'a diamond; right : 'a diamond }
-[@@deriving show]
+[@@deriving show { with_path = false }]
 
 type 'a diamond_path = 'a diamond_step list [@@deriving show]
 (** A type describing a {!diamond} with one missing {!diamond} child, called the
@@ -56,6 +56,9 @@ type 'a diamond_zipper = 'a diamond * 'a diamond_path [@@deriving show]
     focus is the root of the stored {!diamond}. *)
 
 let empty_zipper value : 'a diamond_zipper = (Leaf value, [])
+
+let root : 'a diamond_zipper -> 'a = function
+  | Leaf value, _ | Diamond { value; _ }, _ -> value
 
 let rec of_zipper : 'a diamond_zipper -> 'a diamond = function
   | this, [] -> this
@@ -134,6 +137,3 @@ let modify_diamond (f : 'a -> 'a) = function
 (** Modifies the currently-focused value of the given {!diamond_zipper}. *)
 let modify (f : 'a -> 'a) : 'a diamond_zipper -> 'a diamond_zipper = function
   | dia, path -> (modify_diamond f dia, path)
-
-let root : 'a diamond_zipper -> 'a = function
-  | Leaf value, _ | Diamond { value; _ }, _ -> value

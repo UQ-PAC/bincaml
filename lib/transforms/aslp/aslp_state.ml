@@ -7,14 +7,12 @@ open struct
   type stmt =
     ((Var.t, Var.t, Expr.BasilExpr.t) Stmt.t[@printer Stmt.pp_stmt_basil])
   [@@deriving show]
+
+  type 'a list_for_printing = 'a list [@@deriving show]
 end
 
 type nonrec stmt = stmt
 (** A statement within the Bincaml AST. This is just a type alias. *)
-
-open struct
-  type 'a list_for_printing = 'a list [@@deriving show]
-end
 
 type aslp_block = {
   assume : Expr.BasilExpr.t option;
@@ -28,35 +26,20 @@ type aslp_block = {
 (** An ASLp lifter block is a list of statements. Each block is optionally
     guarded by an assume statement. *)
 
-type aslp_diamond = {
-  address : Bitvec.t;
-      (** Byte address of the instruction described by this diamond. *)
-  blocks : aslp_block StringMap.t;
-      [@printer StringMap.pp CCString.pp pp_aslp_block]
-  entry : string;
-      (** Key of the entry block. The entry block is required to have no
-          {!assume} condition. *)
-  exit : string;
-      (** Key of the exit block. The exit block is required to have no {!succs}.
-      *)
-}
-[@@deriving show]
-(** Offline lifter state representing a control flow diamond starting at
-    [entry], then flowing through zero or more other blocks, then arriving at
-    [exit].
+type aslp_diamond = aslp_block Diamond.diamond [@@deriving show]
+(** Offline lifter state representing a control flow diamond. See {!Diamond} for
+    more details of the structure.
 
     Alone, this is used to represent the lifter state {i between} instructions.
     Or, it forms a part of {!lifter_state} for {i within}-instruction state. *)
 
-type aslp_ids = { block_id : unit -> string; local_id : unit -> string }
+type aslp_ids = { local_id : unit -> string }
 (** Generators for unique IDs used by the offline lifter.
 
     The {!aslp_ids} is stateful and the same {!aslp_ids} should be used by all
     opcodes within the same procedure, to ensure that IDs are unique.*)
 
 type lifter_state = {
-  active : string;
-      (** Active block where new runtime statements will be appended. *)
   address : Bitvec.t;
       (** Byte address of the instruction currently being lifted. *)
   diamond : aslp_block Diamond.diamond_zipper;
@@ -78,18 +61,16 @@ type lifter_state = {
 
 (** {1 Utility functions} *)
 
-let empty_block () =
+let empty_block ?assume ?pc_assign () =
   let stmts = CCVector.create () in
-  { assume = None; stmts; pc_assign = None }
+  { assume; stmts; pc_assign }
 
 (** Constructs a new empty {!lifter_state}.
 
     Callers should consider whether they wish to re-use an existing [generator]
     value by passing it explicitly. *)
 let empty_lifter_state ~generator () =
-  let entry = generator.block_id () in
   {
-    active = entry;
     diamond = Diamond.empty_zipper (empty_block ());
     names = Hashtbl.create 16;
     address = Bitvec.of_int ~size:64 0xbadbadbad000;
@@ -101,9 +82,8 @@ let empty_lifter_state ~generator () =
     Be careful! You should use {!aslp_ids_from_generators} if you will use the
     lifted statements within an existing Bincaml IR. *)
 let empty_aslp_ids () =
-  let block_id = Fix.Gensym.make () %> Printf.sprintf "block_%d"
-  and local_id = Fix.Gensym.make () %> Printf.sprintf "var_%d" in
-  { block_id; local_id }
+  let local_id = Fix.Gensym.make () %> Printf.sprintf "var_%d" in
+  { local_id }
 
 (** {2 ID-generating functions} *)
 
@@ -113,25 +93,10 @@ let empty_aslp_ids () =
     This will ensure that ASLp's local variable and block names do not clash
     with existing names. *)
 let aslp_ids_from_generators ~block_ids ~local_ids =
-  let block_id = ID.fresh ~name:"block" block_ids %> ID.name
-  and local_id = ID.fresh ~name:"var" local_ids %> ID.name in
-  { block_id; local_id }
+  let local_id = ID.fresh ~name:"var" local_ids %> ID.name in
+  { local_id }
 
 (** {1 State manipulation functions} *)
-
-let get_block aslp_state ~name =
-  StringMap.find_opt name aslp_state.blocks
-  |> Option.get_exn_or "get_block: block not found"
-
-let modify_block aslp_state ~name ~f =
-  let blocks =
-    StringMap.update name
-      (function
-        | Some blk -> Some (f blk)
-        | _ -> failwith "modify_block: block not found")
-      aslp_state.blocks
-  in
-  { aslp_state with blocks }
 
 (** Appends the given statement to the given block.
 
@@ -162,40 +127,6 @@ let add_stmt_to_active stmt (lifter_state : lifter_state) =
   let diamond = lifter_state.diamond in
   let diamond = diamond |> Diamond.modify (add_stmt_to_block ~stmt) in
   { lifter_state with diamond }
-
-(** Adds a new goto edge from [source] to [target]. If [source] was the exit
-    block, sets {!exit} to be [target]. If [source] {!pc_assign}, this is
-    propagated to [target]. *)
-let add_goto aslp_state ~source ~target =
-  let exit =
-    if String.equal source aslp_state.exit then target else aslp_state.exit
-  in
-  let src_pc_assign =
-    aslp_state |> get_block ~name:source |> fun x -> x.pc_assign
-  in
-  aslp_state
-  |> modify_block ~name:source ~f:(fun b -> b)
-  |> modify_block ~name:target ~f:(fun b ->
-      if Option.is_some src_pc_assign then { b with pc_assign = src_pc_assign }
-      else b)
-  |> fun s -> { s with exit }
-
-(** Creates a new block with the given name as a successor of the given [pred].
-    If [pred] was the exit block, sets {!exit} to be the new block. *)
-let add_block ?assume aslp_state ~pred ~name =
-  let new_block = { (empty_block ()) with assume } in
-  let blocks = aslp_state.blocks |> StringMap.add name new_block in
-  { aslp_state with blocks } |> add_goto ~source:pred ~target:name
-
-(** Sequentially joins the given {!aslp_diamond}s such that [first] is succeeded
-    by [second]. *)
-let append_aslp_states first second =
-  let f key = function
-    | `Both _ -> failwith "overlapping aslp_state block names"
-    | `Left a | `Right a -> Some a
-  in
-  let blocks = StringMap.merge_safe ~f first.blocks second.blocks in
-  { first with blocks } |> add_goto ~source:first.exit ~target:second.entry
 
 (** {1 Program counter functions} *)
 

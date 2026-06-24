@@ -197,16 +197,13 @@ struct
 
   let f_gen_branch : expr -> branch * branch * branch =
    fun cond ->
-    let st = !bincaml_lifter_state in
-    let block_id = st.generator.block_id
-    and ncond = Expr.BasilExpr.boolnot cond in
+    let st = !bincaml_lifter_state and ncond = Expr.BasilExpr.boolnot cond in
 
-    let make assume =
-      Diamond.empty { (Aslp_state.empty_block ()) with assume }
-    in
+    let make assume = Diamond.empty (Aslp_state.empty_block ?assume ()) in
     let left = make (Some cond)
     and right = make (Some ncond)
     and merge = make None in
+
     let diamond =
       st.diamond
       |> Diamond.promote_to_diamond ~left ~right ~merge
@@ -217,8 +214,8 @@ struct
 
   let f_switch_context : branch -> unit =
    fun b ->
-    let diamond = !bincaml_lifter_state.diamond in
-    let address = !bincaml_lifter_state.address in
+    let diamond = !bincaml_lifter_state.diamond
+    and address = !bincaml_lifter_state.address in
     let diamond =
       match b with
       | `T -> diamond |> Diamond.move_in_to `L |> Result.get_ok
