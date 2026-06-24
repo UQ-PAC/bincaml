@@ -127,6 +127,10 @@ let promote_to_diamond ~left ~right ~merge :
   | Leaf value, path -> Ok (Diamond { value; left; right; merge }, path)
   | zip -> Error zip
 
+let append_diamond ~left ~right ~value : 'a diamond_zipper -> 'a diamond_zipper
+    = function
+  | dia, path -> (dia, Merge { value; left; right } :: path)
+
 (** {1 Modification functions} *)
 
 (** Modifies the {i top-level} value of the given {!diamond} (doesn't modify any

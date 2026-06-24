@@ -204,8 +204,7 @@ struct
 
     let diamond =
       st.diamond
-      |> Diamond.promote_to_diamond ~left ~right ~merge
-      |> Result.get_ok
+      |> Diamond.append_diamond ~left ~right ~value:(Aslp_state.empty_block ())
     in
     bincaml_lifter_state := { st with diamond };
     (`T, `F, `M)
@@ -214,23 +213,14 @@ struct
    fun b ->
     let diamond = !bincaml_lifter_state.diamond
     and address = !bincaml_lifter_state.address in
-    print_endline
-    @@ Diamond.show_diamond_zipper Aslp_state.pp_aslp_block diamond;
-    (print_endline @@ match b with `T -> "t" | `F -> "f" | `M -> "m");
     let diamond =
       match b with
-      | `T -> diamond |> Diamond.move_in_to `L |> Result.get_ok
-      | `F ->
-          diamond |> Diamond.move_out_of |> Result.get_ok
-          |> Diamond.move_in_to `R |> Result.get_ok
+      | `T -> diamond |> Diamond.move_adjacent `L |> Result.get_ok
+      | `F -> diamond |> Diamond.move_adjacent `R |> Result.get_ok
       | `M ->
           diamond |> Diamond.move_out_of |> Result.get_ok
-          |> Diamond.move_in_to `M |> Result.get_ok
           |> Aslp_state.ensure_pc_consistency ~address
     in
-    print_endline
-    @@ Diamond.show_diamond_zipper Aslp_state.pp_aslp_block diamond;
-    print_endline "\n";
     bincaml_lifter_state := { !bincaml_lifter_state with diamond }
 
   let f_true_branch : branch * branch * branch -> branch = fun (t, f, m) -> t
