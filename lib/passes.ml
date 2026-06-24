@@ -48,7 +48,7 @@ module PassManager = struct
             prog);
     }
 
-  let lift_intrinsics_aarhc64 =
+  let lift_intrinsics_aarch64 =
     {
       name = "lift-intrinsics-aarch64";
       apply = Prog Transforms.Aarch64_intrin.transform;
@@ -421,7 +421,7 @@ module PassManager = struct
 
   let passes =
     [
-      lift_intrinsics_aarhc64;
+      lift_intrinsics_aarch64;
       chop_unreachable;
       cse_elim;
       flatten_phis;
