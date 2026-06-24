@@ -72,10 +72,7 @@ let%expect_test "lift: b.eq #1024" =
   [%expect
     {|
     Diamond {
-      value =
-      { Aslp_state.assume = None; stmts = [];
-        pc_assign =
-        (Some if eq($PSTATE_Z, 0x1:bv1) then 0x2400:bv64 else 0x2004:bv64) };
+      pred = (Leaf { Aslp_state.assume = None; stmts = []; pc_assign = None });
       left =
       (Leaf
          { Aslp_state.assume = (Some eq($PSTATE_Z, 0x1:bv1));
@@ -86,7 +83,10 @@ let%expect_test "lift: b.eq #1024" =
          { Aslp_state.assume = (Some boolnot(eq($PSTATE_Z, 0x1:bv1)));
            stmts = [(var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
            pc_assign = (Some 0x2004:bv64) });
-      merge = (Leaf { Aslp_state.assume = None; stmts = []; pc_assign = None })}
+      value =
+      { Aslp_state.assume = None; stmts = [];
+        pc_assign =
+        (Some if eq($PSTATE_Z, 0x1:bv1) then 0x2400:bv64 else 0x2004:bv64) }}
     |}]
 
 let%expect_test "lift: b #16" =

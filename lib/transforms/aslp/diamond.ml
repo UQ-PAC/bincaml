@@ -6,10 +6,10 @@
 type 'a diamond =
   | Leaf of 'a
   | Diamond of {
-      value : 'a;
+      pred : 'a diamond;
       left : 'a diamond;
       right : 'a diamond;
-      merge : 'a diamond;
+      value : 'a;
     }
 [@@deriving show { with_path = false }]
 
@@ -18,9 +18,9 @@ let empty value : 'a diamond = Leaf value
 (** {1 Zippers} *)
 
 type 'a diamond_step =
-  | Left of { value : 'a; right : 'a diamond; merge : 'a diamond }
-  | Right of { value : 'a; left : 'a diamond; merge : 'a diamond }
-  | Merge of { value : 'a; left : 'a diamond; right : 'a diamond }
+  | Left of { value : 'a; right : 'a diamond; pred : 'a diamond }
+  | Right of { value : 'a; left : 'a diamond; pred : 'a diamond }
+  | Pred of { value : 'a; left : 'a diamond; right : 'a diamond }
 [@@deriving show { with_path = false }]
 
 type 'a diamond_path = 'a diamond_step list [@@deriving show]
@@ -34,7 +34,7 @@ type 'a diamond_path = 'a diamond_step list [@@deriving show]
     @  r  m
     v}
     would be represented by
-    {v Left { value = v; right = r; merge = m } v}
+    {v Left { value = v; right = r; pred = m } v}
 
     It is a {i path} because if the hole occurs inside a nested {!diamond}, then
     the path is a list of {!diamond_step} - starting from the hole and moving
@@ -64,12 +64,12 @@ let rec of_zipper : 'a diamond_zipper -> 'a diamond = function
   | this, [] -> this
   | this, bot :: rest -> (
       match bot with
-      | Left { value; right; merge } ->
-          of_zipper (Diamond { value; left = this; right; merge }, rest)
-      | Right { value; left; merge } ->
-          of_zipper (Diamond { value; left; right = this; merge }, rest)
-      | Merge { value; left; right } ->
-          of_zipper (Diamond { value; left; right; merge = this }, rest))
+      | Left { value; right; pred } ->
+          of_zipper (Diamond { value; left = this; right; pred }, rest)
+      | Right { value; left; pred } ->
+          of_zipper (Diamond { value; left; right = this; pred }, rest)
+      | Pred { value; left; right } ->
+          of_zipper (Diamond { value; left; right; pred = this }, rest))
 
 (** Converts the given {!diamond} to a zipper, positioned at the entry/root
     value. *)
@@ -81,32 +81,32 @@ let move_adjacent direction :
     'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
   function
   | (_, []) as zip -> Error zip
-  | left, Left { value; right; merge } :: rest
-  | right, Right { value; left; merge } :: rest
-  | merge, Merge { value; left; right } :: rest -> (
+  | left, Left { value; right; pred } :: rest
+  | right, Right { value; left; pred } :: rest
+  | pred, Pred { value; left; right } :: rest -> (
       match direction with
-      | `L -> Ok (left, Left { value; right; merge } :: rest)
-      | `R -> Ok (right, Right { value; left; merge } :: rest)
-      | `M -> Ok (merge, Merge { value; left; right } :: rest))
+      | `L -> Ok (left, Left { value; right; pred } :: rest)
+      | `R -> Ok (right, Right { value; left; pred } :: rest)
+      | `M -> Ok (pred, Pred { value; left; right } :: rest))
 
 let move_out_of :
     'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
   function
   | (_, []) as zip -> Error zip
-  | left, Left { value; right; merge } :: rest
-  | right, Right { value; left; merge } :: rest
-  | merge, Merge { value; left; right } :: rest ->
-      Ok (Diamond { value; left; right; merge }, rest)
+  | left, Left { value; right; pred } :: rest
+  | right, Right { value; left; pred } :: rest
+  | pred, Pred { value; left; right } :: rest ->
+      Ok (Diamond { value; left; right; pred }, rest)
 
 let move_in_to direction :
     'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
   function
   | (Leaf _, _) as zip -> Error zip
-  | Diamond { value; left; right; merge }, rest -> (
+  | Diamond { value; left; right; pred }, rest -> (
       match direction with
-      | `L -> Ok (left, Left { value; right; merge } :: rest)
-      | `R -> Ok (right, Right { value; left; merge } :: rest)
-      | `M -> Ok (merge, Merge { value; left; right } :: rest))
+      | `L -> Ok (left, Left { value; right; pred } :: rest)
+      | `R -> Ok (right, Right { value; left; pred } :: rest)
+      | `M -> Ok (pred, Pred { value; left; right } :: rest))
 
 let rec move_in_to_end : 'a diamond_zipper -> 'a diamond_zipper = function
   | (Leaf _, _) as zip -> zip
@@ -115,21 +115,21 @@ let rec move_in_to_end : 'a diamond_zipper -> 'a diamond_zipper = function
       | Ok x -> move_in_to_end x
       | Error _ -> failwith "invariant violation :>")
 
-let rec move_out_until_not_merge : 'a diamond_zipper -> 'a diamond_zipper =
+let rec move_out_until_not_pred : 'a diamond_zipper -> 'a diamond_zipper =
   function
-  | (_, Merge { value; left; right } :: _) as zip ->
-      move_out_of zip |> Result.get_ok |> move_out_until_not_merge
+  | (_, Pred { value; left; right } :: _) as zip ->
+      move_out_of zip |> Result.get_ok |> move_out_until_not_pred
   | zip -> zip
 
-let promote_to_diamond ~left ~right ~merge :
+let promote_to_diamond ~left ~right ~pred :
     'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
   function
-  | Leaf value, path -> Ok (Diamond { value; left; right; merge }, path)
+  | Leaf value, path -> Ok (Diamond { value; left; right; pred }, path)
   | zip -> Error zip
 
 let append_diamond ~left ~right ~value : 'a diamond_zipper -> 'a diamond_zipper
     = function
-  | dia, path -> (dia, Merge { value; left; right } :: path)
+  | dia, path -> (dia, Pred { value; left; right } :: path)
 
 (** {1 Modification functions} *)
 

@@ -30,20 +30,18 @@ let%expect_test "nested diamonds" =
   [%expect
     {|
     Diamond {
-      value =
-      { Aslp_state.assume = None; stmts = [assert false];
-        pc_assign =
-        (Some if true then 0xaaa:bv64 else if false then 0xbbb:bv64 else 0xbadbadbad004:bv64)
-        };
+      pred =
+      (Leaf { Aslp_state.assume = None; stmts = [assert true]; pc_assign = None });
       left =
       (Leaf
          { Aslp_state.assume = (Some true); stmts = [$PC:bv64 := 0xaaa:bv64];
            pc_assign = (Some 0xaaa:bv64) });
       right =
       Diamond {
-        value =
-        { Aslp_state.assume = None; stmts = [];
-          pc_assign = (Some if false then 0xbbb:bv64 else 0xbadbadbad004:bv64) };
+        pred =
+        (Leaf
+           { Aslp_state.assume = (Some boolnot(true)); stmts = [];
+             pc_assign = None });
         left =
         (Leaf
            { Aslp_state.assume = (Some false); stmts = [$PC:bv64 := 0xbbb:bv64];
@@ -54,10 +52,12 @@ let%expect_test "nested diamonds" =
              stmts =
              [(var BranchTaken:bool := false, $PC:bv64 := 0xbadbadbad004:bv64)];
              pc_assign = (Some 0xbadbadbad004:bv64) });
-        merge =
-        (Leaf
-           { Aslp_state.assume = (Some boolnot(true)); stmts = [];
-             pc_assign = None })};
-      merge =
-      (Leaf { Aslp_state.assume = None; stmts = [assert true]; pc_assign = None })}
+        value =
+        { Aslp_state.assume = None; stmts = [];
+          pc_assign = (Some if false then 0xbbb:bv64 else 0xbadbadbad004:bv64) }};
+      value =
+      { Aslp_state.assume = None; stmts = [assert false];
+        pc_assign =
+        (Some if true then 0xaaa:bv64 else if false then 0xbbb:bv64 else 0xbadbadbad004:bv64)
+        }}
     |}]
