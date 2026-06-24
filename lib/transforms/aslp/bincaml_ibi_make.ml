@@ -200,7 +200,7 @@ struct
     let st = !bincaml_lifter_state and ncond = Expr.BasilExpr.boolnot cond in
 
     let mk assume = Diamond.empty (Aslp_state.empty_block ?assume ()) in
-    let left = mk (Some cond) and right = mk (Some ncond) and merge = mk None in
+    let left = mk (Some cond) and right = mk (Some ncond) in
 
     let diamond =
       st.diamond
