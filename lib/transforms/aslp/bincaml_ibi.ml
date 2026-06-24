@@ -18,11 +18,8 @@ end
 
 (** Builds a new {!IBI} with the given initial generator state. *)
 let from_generator generator : (module IBI) =
-  let bincaml_lifter_state =
-    ref (Aslp_state.empty_lifter_state ~generator ())
-  in
   (module Make (struct
-    let bincaml_lifter_state = bincaml_lifter_state
+    let initial_lifter_state = Aslp_state.empty_lifter_state ~generator ()
   end))
 
 (** Builds a new {!IBI} where the ID generators are derived from the given
