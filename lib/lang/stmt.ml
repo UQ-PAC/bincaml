@@ -24,12 +24,12 @@ module Intrinsic = struct
     | "@_malloc" -> Some Malloc
     | "@_calloc" -> Some Calloc
     | "@_free" -> Some Free
-    | "@_allcoa" -> Some AllocStack
+    | "@_alloca" -> Some AllocStack
     | "@_free_alloca" -> Some FreeStack
     | "@_aarch64_eval" -> Some Aarch64Eval
     | _ -> None
 
-  let pretty e =
+  let to_string e =
     (match e with
       | Havoc -> "@_havoc"
       | Malloc -> "@_malloc"
@@ -215,14 +215,14 @@ let pretty show_lvar show_var show_expr s =
       ^ int size ^ attrib
   | Instr_IntrinCall { lhs; name; args } when List.length lhs = 0 ->
       append_l ~sep:nil
-        [ text "call "; Intrinsic.pretty name; intrin_plist args ]
+        [ text "call "; Intrinsic.to_string name; intrin_plist args ]
       ^ attrib
   | Instr_IntrinCall { lhs; name; args } ->
       append_l ~sep:nil
         [
           intrin_plist lhs;
           text ":= call ";
-          Intrinsic.pretty name;
+          Intrinsic.to_string name;
           intrin_plist args;
         ]
       ^ attrib

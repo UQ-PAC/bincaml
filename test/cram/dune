@@ -28,6 +28,8 @@
   ../../examples/loop.il
   %{bin:bincaml}
   ssa-multi-deps.il
+  ../../examples/memory/malloc_free.il
+  ../../examples/memory/malloc_free_various.il
   memassign.il
   ptrrec1.il
   ../../examples/gtirb/binsearch_sqrt.gtirb

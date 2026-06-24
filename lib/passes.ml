@@ -48,6 +48,16 @@ module PassManager = struct
             prog);
     }
 
+  let lift_intrinsics_aarhc64 =
+    {
+      name = "lift-intrinsics-aarch64";
+      apply = Prog Transforms.Aarch64_intrin.transform;
+      doc =
+        "Lift procedure calls to matched intrinsics in aslp/aarch64 abi to \
+         intrinsic calls";
+      invariants = Invariants.establishes ~invalidates:[] [ Params ];
+    }
+
   let sparams =
     {
       name = "simple-params";
@@ -411,6 +421,7 @@ module PassManager = struct
 
   let passes =
     [
+      lift_intrinsics_aarhc64;
       chop_unreachable;
       cse_elim;
       flatten_phis;
