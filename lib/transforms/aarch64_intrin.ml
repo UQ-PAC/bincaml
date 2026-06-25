@@ -55,7 +55,7 @@ let specs =
         ];
       in_args = [ "$mem"; "R0_in" ];
       out_args = [ "$mem"; "R0_out" ];
-      intrin = Free;
+      intrin = AllocStack;
     };
   ]
 

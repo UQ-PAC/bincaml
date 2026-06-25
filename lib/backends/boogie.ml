@@ -312,7 +312,7 @@ let pretty_statement (s : Program.stmt) =
         List.map pretty_expr args |> fill (text "," ^ newline_or_spaces 1)
       in
       nest 2 @@ text "call" ^+ lhs
-      ^ Stmt.Intrinsic.to_string name
+      ^ Stmt.Intrinsic.to_pretty name
       ^ bracket "(" rhs ")"
   | Instr_Assign { al = [] } -> text "assert true"
   | Instr_Assign { al = ls } ->

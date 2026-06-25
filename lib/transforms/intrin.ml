@@ -65,21 +65,23 @@ let spec_to_func { in_args; out_args; intrin } lhs rhs p =
   Some (icall :: hvoc)
 
 (** check whether an intrin spec applies a given call instruction *)
+let match_name proc name =
+  let open Option in
+  let has_attrib a =
+    let oa = Procedure.attrib proc in
+    StringMap.for_all
+      (fun k v -> StringMap.find_opt k oa |> Option.exists (Attrib.equal v))
+      a
+  in
+  match name with
+  | ProcName n -> String.equal n (ID.to_string (Procedure.id proc))
+  | NameAttrib name ->
+      has_attrib (StringMap.singleton name_attrib_key (`String name))
+  | HasAttrib a -> has_attrib a
+
+(** Replace first intrinsic replacement pattern which matches a call *)
 let intrin_applies intrin_spec =
   let open Option in
-  let match_name proc name =
-    let has_attrib a =
-      let oa = Procedure.attrib proc in
-      StringMap.for_all
-        (fun k v -> StringMap.find_opt k oa |> Option.exists (Attrib.equal v))
-        a
-    in
-    match name with
-    | ProcName n -> String.equal n (ID.to_string (Procedure.id proc))
-    | NameAttrib name ->
-        has_attrib (StringMap.singleton name_attrib_key (`String name))
-    | HasAttrib a -> has_attrib a
-  in
   fun prog stmt ->
     let* lhs, args, procid, proc =
       match stmt with

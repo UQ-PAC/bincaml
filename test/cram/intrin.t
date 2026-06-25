@@ -12,6 +12,7 @@
   (load-il ../../examples/memory/malloc_free.il)
   (dump-il before.il)
   (run-transforms lift-intrinsics-aarch64)
+  bincaml: [WARNING] Invariants not satisfied during 'lift-intrinsics-aarch64'. Needs [Params] but only have [].
   (dump-il after.il)
   (load-il after.il)
   (dump-il after2.il)
@@ -49,6 +50,7 @@ Different intrin specs
   (load-il ../../examples/memory/malloc_free_various.il)
   (dump-il before.il)
   (run-transforms lift-intrinsics-aarch64)
+  bincaml: [WARNING] Invariants not satisfied during 'lift-intrinsics-aarch64'. Needs [Params] but only have [].
   (dump-il after.il)
   (load-il after.il)
   (dump-il after2.il)
