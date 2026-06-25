@@ -188,20 +188,7 @@ open struct
       | Join of int * int * int
       | UnifyAll of int
       | Copy of int * int * int list
-
-    let show_cmd = function
-      | AddGraph -> "AddGraph"
-      | MakeNode (n, is) ->
-          Printf.sprintf "MakeNode (%d, %s)" n
-            (List.to_string ~start:"[" ~stop:"]" ~sep:"; " Interval.dbg is)
-      | CountCells n -> Printf.sprintf "CountCells %d" n
-      | CellWidths n -> Printf.sprintf "CellWidths %d" n
-      | MakeEdge (n, a, b) -> Printf.sprintf "MakeEdge (%d, %d, %d)" n a b
-      | Join (n, a, b) -> Printf.sprintf "Join (%d, %d, %d)" n a b
-      | UnifyAll n -> Printf.sprintf "UnifyAll %d" n
-      | Copy (f, t, cs) ->
-          Printf.sprintf "Copy (%d, %d, [%s])" f t
-            (List.to_string ~sep:"; " Int.to_string cs)
+    [@@deriving show]
 
     let run cmd sut =
       match cmd with

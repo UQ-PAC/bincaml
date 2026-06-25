@@ -22,7 +22,7 @@
   test_lattice_collections
   test_dsa)
  (preprocess
-  (pps ppx_here))
+  (pps ppx_here ppx_deriving.show))
  (libraries
   bincaml.loader
   bincaml.ast
