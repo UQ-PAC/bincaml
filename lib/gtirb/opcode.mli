@@ -13,6 +13,9 @@ val to_le_bytes : t -> string
 val to_be_bytes : t -> string
 (** Convert to little-endian bytes string *)
 
+val to_bitvec : t -> Bitvec.t
+(** Convert to 32-bit {!Bitvec.t} *)
+
 val pp : Format.formatter -> t -> unit
 (** The same as {! to_hex_string } *)
 

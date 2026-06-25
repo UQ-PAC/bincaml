@@ -32,6 +32,7 @@ Windows is explicitly not supported outside of WSL.
 
 - enable frame pointers on opam switch for performance recording
 - enable flambda for compiler optimisation (for release build only)
+- ensure pac opam repository is installed
 
 - Tests require smt solver CVC5 installed.
 
@@ -41,6 +42,13 @@ opam repository add pac https://github.com/uq-pac/opam-repository.git
 opam install --deps-only --with-doc --with-test .
 dune build
 ```
+
+On MacOS ensure your environment allows linking against homebrew, e.g. in `.bashrc`
+
+```
+export LIBRARY_PATH=$LIBRARY_PATH:/opt/homebrew/lib/
+```
+
 
 
 ### Example

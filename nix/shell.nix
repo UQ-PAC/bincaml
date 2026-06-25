@@ -22,7 +22,6 @@
   linol,
 
   # lsp
-  ppx_import,
   logs,
   mtime,
   z3,
@@ -42,7 +41,6 @@ mkShell {
     bincaml_lsp
     linol
     linol-lwt
-    ppx_import
     logs
     mtime
     z3.out

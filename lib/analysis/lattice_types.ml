@@ -13,6 +13,18 @@ module type Lattice = sig
   val equal : t -> t -> bool
   val leq : t -> t -> bool
   val widening : t -> t -> t
+  val narrowing : t -> t -> t
+end
+
+module type TopElement = sig
+  type t
+
+  val top : t
+end
+
+module type TopLattice = sig
+  include Lattice
+  include TopElement with type t := t
 end
 
 (** an abstract value providing opertions of basil ir *)
@@ -151,6 +163,7 @@ struct
     | _ -> false
 
   let widening a b = join a b
+  let narrowing a b = a
 end
 
 module LiftLattice (L : Lattice) : Lattice = struct
@@ -158,6 +171,7 @@ module LiftLattice (L : Lattice) : Lattice = struct
 
   let name = L.name ^ ".lift_lattice"
   let widening a b = map2 L.widening a b
+  let narrowing a b = a
 
   let join a b =
     match (a, b) with

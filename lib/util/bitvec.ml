@@ -78,111 +78,102 @@ let of_string i =
   { w; v }
 
 let size_is_equal a b = assert (size a = size b) [@@inline always]
-let bind1 f a = create ~size:a.w (f a.v) [@@inline always]
-let bind1_signed f a = create ~size:a.w (f a.v) [@@inline always]
+
+let size_if_equal a b =
+  if a.w = b.w then size a
+  else failwith (Printf.sprintf "bv binop widths differ. a:%d, b:%d" a.w b.w)
+[@@inline always]
+
+let bind1 f a = create ~size:a.w (f ~size:a.w a.v) [@@inline always]
+(*let bind1_signed f a = create ~size:a.w (f ~size:a.w a.v) [@@inline always]*)
 
 (* wrap bv operation *)
 let bind2 f a b =
-  size_is_equal a b;
-  create ~size:a.w (f a.v b.v)
-[@@inline always]
-
-(* wrap signed bv operation *)
-let bind2_signed f a b =
-  size_is_equal a b;
-  create ~size:a.w (f (to_signed_bigint a) (to_signed_bigint b))
+  let size = size_if_equal a b in
+  create ~size:a.w (f ~size a.v b.v)
 [@@inline always]
 
 let map2 f a b =
-  size_is_equal a b;
-  f a.v b.v
+  let size = size_if_equal a b in
+  f ~size a.v b.v
 [@@inline always]
 
-let neg a = bind1_signed Z.neg a
-let add a b = bind2 Z.add a b
-let mul a b = bind2 Z.mul a b
-let sub a b = bind2 Z.sub a b
-let bitnot a = bind1 Z.lognot a
-let bitand a b = bind2 Z.logand a b
-let bitor a b = bind2 Z.logor a b
-let bitxor a b = bind2 Z.logxor a b
-let udiv a b = if is_zero b then ones ~size:a.w else bind2 Z.div a b
-let urem a b = if is_zero b then a else bind2 Z.rem a b
+(** sign negation *)
+let neg a = bind1 Fixed_width_arith.neg a
 
-(** Signed division.
+(** addition *)
+let add a b = bind2 Fixed_width_arith.add a b
 
-    From Z3: https://z3prover.github.io/api/html/group__capi.html
+(** multiplication *)
+let mul a b = bind2 Fixed_width_arith.mul a b
 
-    It is defined in the following way:
-    - The floor of t1/t2 if t2 is different from zero, and t1*t2 >= 0.
-    - The ceiling of t1/t2 if t2 is different from zero, and t1*t2 < 0. If t2 is
-      zero, then the result is undefined. *)
-let sdiv a b =
-  if a.w = 0 then a
-  else begin
-    assert (is_nonzero b);
-    bind2_signed Z.div a b
-  end
+(** subtraction *)
+let sub a b = bind2 Fixed_width_arith.sub a b
+
+(** bitwise not *)
+let bitnot a = bind1 Fixed_width_arith.bitnot a
+
+(** bitwise and *)
+let bitand a b = bind2 Fixed_width_arith.bitand a b
+
+(** bitwise or *)
+let bitor a b = bind2 Fixed_width_arith.bitor a b
+
+(** bitwise exclusive or *)
+let bitxor a b = bind2 Fixed_width_arith.bitxor a b
+
+(** unsigned division *)
+let udiv a b = bind2 Fixed_width_arith.udiv a b
+
+(** unsigned remainder *)
+let urem a b = bind2 Fixed_width_arith.urem a b
+
+(** signed division *)
+let sdiv a b = bind2 Fixed_width_arith.sdiv a b
 
 (** Remainder with result sign following the dividend (a) sign. *)
-let srem a b =
-  if a.w = 0 then a
-  else begin
-    assert (is_nonzero b);
-    bind2_signed Z.rem a b
-  end
+let srem a b = bind2 Fixed_width_arith.srem a b
 
 (** Remainder with result sign following the divisor (b) sign. *)
-let smod a b =
-  size_is_equal a b;
-  if a.w = 0 then a
-  else begin
-    assert (is_nonzero b);
-    let w = a.w and a, b = (to_signed_bigint a, to_signed_bigint b) in
-    let remainder = Z.rem a b and wanted_sign = Z.sign b in
-    match (Z.sign remainder, wanted_sign) with
-    | 1, -1 -> create ~size:w Z.(remainder - abs b)
-    | -1, 1 -> create ~size:w Z.(remainder + abs b)
-    | _ -> create ~size:w remainder
-  end
+let smod a b = bind2 Fixed_width_arith.smod a b
 
-let ult a b = map2 Z.lt a b
-let ugt a b = map2 Z.gt a b
-let ule a b = map2 Z.leq a b
-let uge a b = map2 Z.geq a b
+(** unsigned less-than*)
+let ult a b = map2 Fixed_width_arith.ult a b
 
-let map2_signed f a b =
-  size_is_equal a b;
-  f (to_signed_bigint a) (to_signed_bigint b)
+(** unsigned greater-than*)
+let ugt a b = map2 Fixed_width_arith.ugt a b
 
-let slt a b = map2_signed Z.lt a b
-let sgt a b = map2_signed Z.gt a b
-let sle a b = map2_signed Z.leq a b
-let sge a b = map2_signed Z.geq a b
+(** unsigned less-than-equals*)
+let ule a b = map2 Fixed_width_arith.ule a b
 
-let ashr a b =
-  (* guard avoids overflows in second int argument of shift: should always fit in int*)
-  if Z.gt b.v (Z.of_int a.w) then
-    if Z.testbit a.v (a.w - 1) then ones ~size:a.w else zero ~size:a.w
-  else create ~size:a.w @@ Z.shift_right (to_signed_bigint a) (Z.to_int b.v)
+(** unsigned greater-than-equals*)
+let uge a b = map2 Fixed_width_arith.uge a b
 
-let lshr a b =
-  (* guard avoids overflows in second int argument of shift: should always fit in int*)
-  if Z.gt b.v (Z.of_int a.w) then zero ~size:a.w
-  else
-    create ~size:a.w
-    @@ Z.shift_right_trunc (to_unsigned_bigint a) (Z.to_int b.v)
+(** signed less-than *)
+let slt a b = map2 Fixed_width_arith.slt a b
 
+(** signed greater-than *)
+let sgt a b = map2 Fixed_width_arith.sgt a b
+
+(** signed less-than-equals *)
+let sle a b = map2 Fixed_width_arith.sle a b
+
+(** signed greater-than-equals *)
+let sge a b = map2 Fixed_width_arith.sge a b
+
+(** arithmetic shift right *)
+let ashr a b = bind2 Fixed_width_arith.ashr a b
+
+(** logical shift right *)
+let lshr a b = bind2 Fixed_width_arith.lshr a b
+
+(** shift left *)
+let shl a b = bind2 Fixed_width_arith.shl a b
+
+(** extend [extension] zeros in msb position *)
 let zero_extend ~(extension : int) b = create ~size:(b.w + extension) b.v
 
-let sign_extend ~(extension : int) b =
-  create ~size:(b.w + extension) @@ to_signed_bigint b
-
-let shl a b =
-  (* shift left by a very large number will OOM. guard against that. *)
-  if Z.(geq b.v (of_int a.w)) then create ~size:a.w Z.zero
-  else create ~size:a.w @@ Z.shift_left (to_unsigned_bigint a) (Z.to_int b.v)
-
+(** bitconcat *)
 let concat a b =
   let wd = a.w + b.w in
   let a = zero_extend ~extension:(wd - a.w) a in
@@ -190,5 +181,10 @@ let concat a b =
   let b = zero_extend ~extension:(wd - b.w) b in
   bitor a b
 
+(* bitconcat a with itself n times *)
 let repeat_bits ~(copies : int) a =
   List.init copies (fun _ -> a) |> List.fold_left concat empty
+
+(* extend sign bit by [extension] bits *)
+let sign_extend ~(extension : int) b =
+  create ~size:(b.w + extension) @@ to_signed_bigint b

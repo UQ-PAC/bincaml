@@ -8,6 +8,24 @@ let debug = ref false
 let dbg_print = if !debug then print_endline else fun s -> ()
 let dbg f = if !debug then f () else ()
 
+(** How a variable introduced by lambda-lifting relates to the original global
+    it stands for. *)
+type lifted_kind =
+  | In_param
+      (** formal in-parameter carrying the global's procedure-entry value *)
+  | Out_param
+      (** formal out-parameter carrying the global's procedure-exit value *)
+  | Body_local  (** body-local that replaced the global at its use sites *)
+
+type proc_lift_map = (lifted_kind * Var.t) VarMap.t
+(** Maps each variable {!lift_procedure_params} introduces back to the original
+    global it stands for, tagged with how it was introduced. Used to translate
+    invariants expressed over the lifted program back into the original
+    program's globals (see {!Chc_infer}). *)
+
+type program_lift_map = proc_lift_map IDMap.t
+(** Per-procedure {!proc_lift_map}, keyed by procedure id. *)
+
 (** Introduce a self-copy before every assume or assert that contains one
     variable, so that ssa has branch condition flow-sensitivity.
 
@@ -376,9 +394,25 @@ let lift_procedure_params prog ~skip_observable ~skip_maps all_lifted procid
           b)
       proc
   in
-  proc
+  (* Record how each introduced variable maps back to its original global, so
+     callers can translate invariants over the lifted program back into the
+     original program's globals. *)
+  let lift_map =
+    let add_param kind acc triples =
+      List.fold_left (fun m (_, g, v) -> VarMap.add v (kind, g) m) acc triples
+    in
+    VarMap.empty
+    |> Fun.flip (add_param In_param) inparam
+    |> Fun.flip (add_param Out_param) outparam
+    |> fun m ->
+    List.fold_left
+      (fun m (g, lv) -> VarMap.add lv (Body_local, g) m)
+      m glob_to_local
+  in
+  (proc, lift_map)
 
-let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
+let set_params_with_map ?(skip_observable = true) ?(skip_maps = true)
+    (p : Program.t) : Program.t * program_lift_map =
   (* Collect all globals being lifted, for removal from p.globals at the end *)
   let globals_to_param_lift =
     Program.procs p
@@ -408,15 +442,30 @@ let set_params ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
       }
   in
 
-  p
-  |> Program.map_procedures
-       (lift_procedure_params p ~skip_observable ~skip_maps
-          globals_to_param_lift)
-  |> Program.map_procedures fix_specification
-  |> Program.filter_decls (fun _ -> function
-    | Program.Variable { binding } ->
-        not (List.exists (Var.equal binding) globals_to_param_lift)
-    | _ -> true)
+  let lift_maps = ref IDMap.empty in
+  let lift procid proc =
+    let proc, m =
+      lift_procedure_params p ~skip_observable ~skip_maps globals_to_param_lift
+        procid proc
+    in
+    lift_maps := IDMap.add procid m !lift_maps;
+    proc
+  in
+  let p =
+    p
+    |> Program.map_procedures lift
+    |> Program.map_procedures fix_specification
+    |> Program.filter_decls (fun _ -> function
+      | Program.Variable { binding } ->
+          not (List.exists (Var.equal binding) globals_to_param_lift)
+      | _ -> true)
+  in
+  (p, !lift_maps)
+
+(** Lambda-lifting: replace captured globals with explicit parameters. Discards
+    the back-translation map; use {!set_params_with_map} to keep it. *)
+let set_params ?skip_observable ?skip_maps (p : Program.t) : Program.t =
+  fst (set_params_with_map ?skip_observable ?skip_maps p)
 
 let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
   let in_proc =

@@ -61,7 +61,7 @@ let print_g res = Viscfg.dot_labels (fun v -> Some (label res v))
 
 let print_live_vars_dot fmt p =
   let r = run p in
-  Trace_core.with_span ~__FILE__ ~__LINE__ "dot-priner" @@ fun _ ->
+  Trace_core.with_span ~__FILE__ ~__LINE__ "dot-printer" @@ fun _ ->
   let (module M : Viscfg.ProcPrinter) =
     Viscfg.dot_labels (fun v -> Some (label r v))
   in

@@ -1,4 +1,5 @@
 open Bincaml_util.Common
+module OResult = Result
 open Gtirb_proto
 open Ocaml_protoc_plugin
 open IR.Gtirb.Proto
@@ -11,6 +12,7 @@ module UUIDMap = UUIDMap
 module UUIDSet = UUIDSet
 open Gfir
 open Conf
+module Result = OResult
 
 open struct
   let addr_equal_expr addr =
@@ -114,17 +116,18 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
     let instrs =
       opcodes
       |> List.map (fun op ->
-          Stmt.Instr_Assert
+          let op = Opcode.of_be_bytes op in
+          Stmt.Instr_IntrinCall
             {
-              body = Lang.Expr.BasilExpr.boolconst false;
+              lhs = [];
+              name = Stmt.Intrinsic.Aarch64Eval;
+              args = [ Expr.BasilExpr.const (`Bitvector (Opcode.to_bitvec op)) ];
               attrib =
-                (let op = Opcode.of_be_bytes op in
-                 let asm = if conf.disas then Disas.dis_op op else None in
-                 Option.fold
-                   (fun m a -> StringMap.add ".asm" (`String a) m)
-                   (StringMap.singleton ".opcode"
-                      (`String (Opcode.to_hex_string op)))
-                   asm);
+                op
+                |> (if conf.disas then Disas.dis_op %> Result.to_option
+                    else const None)
+                |> Option.map_or ~default:Attrib.empty (fun asm ->
+                    StringMap.singleton ".asm" (`String asm));
             })
     in
     match b with

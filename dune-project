@@ -23,11 +23,21 @@
 (documentation https://url/to/documentation)
 
 (package
+ (name capstone_arm64_disas)
+ (synopsis "Disas arm ops with capstone")
+ (depends
+   ocaml
+   ppx_expect
+   )
+)
+
+(package
  (name bincaml)
  (synopsis "Program analysis tool.")
  (description "A longer description")
  (depends
   ocaml
+  capstone_arm64_disas
   (aslp_lifter_ocaml (>= 1.1))
   (ocaml-protoc-plugin (>= 6.1.0))
   (qcheck-stm :with-test)
@@ -76,6 +86,5 @@
   linol
   linol-lwt
   containers
-  ppx_import
   ppx_deriving)
  (tags (lsp)))

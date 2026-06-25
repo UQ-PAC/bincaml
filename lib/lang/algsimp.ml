@@ -180,7 +180,14 @@ let drop_assoc
       replace [%here] (BasilExpr.boolconst false)
   | ApplyIntrin { op = `BVConcat; args = [] } ->
       replace [%here] (BasilExpr.bvconst @@ Bitvec.zero ~size:0)
-  | ApplyIntrin { attrib; op; args }
+  | ApplyIntrin
+      {
+        attrib;
+        op =
+          (`BVADD | `BVMUL | `BVOR | `BVXOR | `BVAND | `AND | `OR | `BVConcat)
+          as op;
+        args;
+      }
     when List.exists
            (function
              | ApplyIntrin { op = op' }, _ when Ops.AllOps.equal_intrin op op'

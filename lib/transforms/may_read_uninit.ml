@@ -35,6 +35,7 @@ module ReadUninit = struct
   let show v = match v with ReadUninit -> "RU" | Bot -> "bot" | Write -> "W"
   let pretty v = Containers_pp.text (show v)
   let widening = join
+  let narrowing a b = a
   let bottom = Bot
   let top = ReadUninit
   let analyze (e : Lang.Procedure.G.edge) d = d
