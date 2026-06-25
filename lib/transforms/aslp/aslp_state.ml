@@ -65,6 +65,10 @@ type lifter_state = {
 let empty_block ~assume () =
   { stmts = CCVector.create (); assume; pc_assign = None }
 
+let empty_block_unconditional () =
+  let tt = Expr.BasilExpr.boolconst true in
+  { stmts = CCVector.create (); assume = tt; pc_assign = None }
+
 (** Constructs a new empty {!lifter_state}.
 
     Callers should consider whether they wish to re-use an existing [generator]
@@ -73,9 +77,8 @@ let empty_block ~assume () =
     The initial {!address} is set to a garbage value. Users should remember to
     use {!Bincaml_ibi.IBI.bincaml_set_address} before starting any lifting. *)
 let empty_lifter_state ~generator () =
-  let tt = Expr.BasilExpr.boolconst true in
   {
-    diamond = Diamond.empty_zipper (empty_block ~assume:tt ());
+    diamond = Diamond.empty_zipper (empty_block_unconditional ());
     names = Hashtbl.create 16;
     address = Bitvec.of_int ~size:64 0xbadbadbad000;
     generator;
