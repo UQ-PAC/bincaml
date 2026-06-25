@@ -203,8 +203,7 @@ let move_out_of :
       Ok (Diamond { value; left; right; pred }, rest)
 
 (** Moves the zipper to a position in the inner diamond level. In control-flow
-    terms, this is the left or right predecessor, or the predecessor of
-    left/right. *)
+    terms, this is the left or right branch, or the split point. *)
 let move_in_to direction :
     'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
   function
@@ -224,7 +223,7 @@ let append_diamond ~left ~right ~value : 'a diamond_zipper -> 'a diamond_zipper
     = function
   | dia, path -> (dia, Pred { value; left; right } :: path)
 
-(** Modifies the {!focus} of the given {!diamond_zipper}. *)
+(** Modifies the value at the {!focus} of the given {!diamond_zipper}. *)
 let modify (f : 'a -> 'a) : 'a diamond_zipper -> 'a diamond_zipper = function
   | Leaf x, path -> (Leaf (f x), path)
   | Diamond x, path -> (Diamond { x with value = f x.value }, path)

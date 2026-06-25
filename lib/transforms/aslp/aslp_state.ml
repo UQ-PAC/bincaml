@@ -15,7 +15,7 @@ type nonrec stmt = stmt
 (** A statement within the Bincaml AST. This is just a type alias. *)
 
 type aslp_block = {
-  assume : Expr.BasilExpr.t option;
+  assume : Expr.BasilExpr.t;
   stmts : stmt CCVector.vector;
       [@printer Format.map CCVector.to_list (pp_list_for_printing pp_stmt)]
   pc_assign : Expr.BasilExpr.t option;
@@ -63,7 +63,7 @@ type lifter_state = {
 
 (** {1 Utility functions} *)
 
-let empty_block ?assume ?pc_assign () =
+let empty_block ?(assume = Expr.BasilExpr.boolconst true) ?pc_assign () =
   let stmts = CCVector.create () in
   { assume; stmts; pc_assign }
 
@@ -183,19 +183,15 @@ let ensure_pc_consistency ~address state =
         left (* arbitrary *)
   in
 
-  let state = state |> Diamond.move_out_of |> Result.get_ok
-  and left = state |> Diamond.move_in_to `L |> Result.get_ok
+  let state = state |> Diamond.move_out_of |> Result.get_ok in
+  let left = state |> Diamond.move_in_to `L |> Result.get_ok
   and right = state |> Diamond.move_in_to `R |> Result.get_ok in
   assert (Diamond.(equal_skeleton before_skel (skeleton state)));
 
   match (Diamond.focus left, Diamond.focus right) with
   | { pc_assign = None }, { pc_assign = None } -> state
-  | { pc_assign = Some lpc; assume = lassume }, { pc_assign = Some rpc } ->
-      let lassume =
-        Option.get_exn_or
-          "invariant violation: branch expected to have assume set" lassume
-      in
-      let ite = Expr.BasilExpr.(ifthenelse lassume lpc rpc) in
+  | { pc_assign = Some lpc; assume }, { pc_assign = Some rpc } ->
+      let ite = Expr.BasilExpr.(ifthenelse assume lpc rpc) in
       state |> Diamond.modify (fun b -> { b with pc_assign = Some ite })
   | _ -> failwith "invariant violation: pcs should agree at this point"
 

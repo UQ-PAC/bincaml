@@ -25,7 +25,7 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
   [%expect
     {|
     (Leaf
-       { Aslp_state.assume = None;
+       { Aslp_state.assume = true;
          stmts =
          [var var_0:bv64 := $R2; var var_1:bv64 := $R3;
            $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
@@ -46,13 +46,13 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
   [%expect
     {|
     (Leaf
-       { Aslp_state.assume = None;
+       { Aslp_state.assume = true;
          stmts =
          [$R1:bv64 := 0xabcd:bv64;
            (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
          pc_assign = (Some 0x2004:bv64) })
     (Leaf
-       { Aslp_state.assume = None;
+       { Aslp_state.assume = true;
          stmts =
          [$R1:bv64 := 0xabcd:bv64;
            (var BranchTaken:bool := false, $PC:bv64 := 0x2008:bv64)];
@@ -72,19 +72,19 @@ let%expect_test "lift: b.eq #1024" =
   [%expect
     {|
     Diamond {
-      pred = (Leaf { Aslp_state.assume = None; stmts = []; pc_assign = None });
+      pred = (Leaf { Aslp_state.assume = true; stmts = []; pc_assign = None });
       left =
       (Leaf
-         { Aslp_state.assume = (Some eq($PSTATE_Z, 0x1:bv1));
+         { Aslp_state.assume = eq($PSTATE_Z, 0x1:bv1);
            stmts = [var BranchTaken:bool := true; $PC:bv64 := 0x2400:bv64];
            pc_assign = (Some 0x2400:bv64) });
       right =
       (Leaf
-         { Aslp_state.assume = (Some boolnot(eq($PSTATE_Z, 0x1:bv1)));
+         { Aslp_state.assume = boolnot(eq($PSTATE_Z, 0x1:bv1));
            stmts = [(var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
            pc_assign = (Some 0x2004:bv64) });
       value =
-      { Aslp_state.assume = None; stmts = [];
+      { Aslp_state.assume = true; stmts = [];
         pc_assign =
         (Some if eq($PSTATE_Z, 0x1:bv1) then 0x2400:bv64 else 0x2004:bv64) }}
     |}]
@@ -102,7 +102,7 @@ let%expect_test "lift: b #16" =
   [%expect
     {|
     (Leaf
-       { Aslp_state.assume = None;
+       { Aslp_state.assume = true;
          stmts =
          [var var_0:bv64 := $R2; var var_1:bv64 := $R3;
            $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
