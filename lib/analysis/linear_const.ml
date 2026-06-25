@@ -106,7 +106,7 @@ module LF = struct
         Linear (a, b)
     | _ -> Join (a, b, c)
 
-  (* Should make join edges with top become TopEdges (and probably similar for effectively id Linear and Join edges...) *)
+  (** Should make join edges with top become TopEdges (and probably similar for effectively id Linear and Join edges...) *)
   let join a b =
     assert (canonical a && canonical b);
     match (a, b) with
@@ -347,9 +347,7 @@ module LinearIDE = struct
     |> Iter.map (fun v -> (v, Value.Top))
 end
 
-module LinearConstAnalysis = IDESSI (LinearIDE)
-
-(* For each linear assign and phi node, we create edges from the lhs to all
+(** For each linear assign and phi node, we create edges from the lhs to all
    copied-from variables. For assignments we associate a function encoding the
    linear expression. The function should be thought of pointing opposite to
    the direction of the edge, so we compose functions backwards (opposite
@@ -361,9 +359,9 @@ module LinearConstAnalysis = IDESSI (LinearIDE)
    variables and functions for all successor vertices are all equal, and if so
    we create a path from the parent of these successors. (This is probably hard
    to follow with words, so here is an example:
-   ```
+   [v
    if ( * ) { x1 = a + 1 } else { x2 = a + 1 } x3 = phi(x1, x2)
-   ```
+   v]
    in this hypothetical program, x3 points to x1 and x2, which both point to a
    with (+1), so we can update x3 to point to a with (+1). This gives an
    analysis that works through phi nodes!
@@ -375,15 +373,17 @@ module LinearConstAnalysis = IDESSI (LinearIDE)
    procedure, and see whether all input variables that map into the output
    variable are linear expressions such that their composite functions are all
    equal. (Example:
-   ```
+   [v
    proc f(x) = { return g(x + 1, x) }
    proc g(x, y) = { if ( * ) { z1 = x - 1 } else { z2 = y } return phi(z1, x2) }
-   ```
+   v]
    here the return value of g is the same from the call of f! Hence f's output
    is a function of x. In this case, we can create an edge from the output
    variable in the caller graph to the input variable that copies into it. If
    this ever actually happens, we'll want to re-iterate on this procedure as we
    may have new edges to propagate to other procedures. *)
+module LinearConstAnalysis = IDESSI (LinearIDE)
+
 
 module CopyNode = struct
   type content = {

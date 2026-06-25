@@ -188,8 +188,7 @@ module Builtins = struct
             transform_op_to_decl (Program.global_ids p) op args ret
         | _ -> None))
     |> Iter.to_list
-    |> List.fold_left (fun p v ->
-        Program.add_decl p v) p
+    |> List.fold_left (fun p v -> Program.add_decl p v) p
 end
 
 module Instructions = struct

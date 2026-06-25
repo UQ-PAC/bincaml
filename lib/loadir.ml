@@ -1768,8 +1768,7 @@ proc @f (ZF_in:bv1, VF_in:bv1) -> ();
     |}]
 
 let%expect_test "prop type from decl" =
-  let p =
-    ast_of_string
+  let p = ast_of_string
       {|
 var $NF: bv1;
 var $ZF: bv1;
