@@ -136,7 +136,7 @@ let callees p =
   |> Iter.filter_map (function
     | Stmt.Instr_Call { procid } -> Some procid
     | _ -> None)
-  |> IDSet.of_iter |> IDSet.to_iter
+  |> Iter.sort_uniq
 
 (** Unify the cell specified by the formal sb with the actual sbs, within a
     single graph (recursion). *)
