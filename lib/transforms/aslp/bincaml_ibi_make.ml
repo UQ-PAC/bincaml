@@ -14,7 +14,7 @@ struct
   type lexpr = Aslp_lexpr.t
   type stmt = Aslp_state.stmt
   type branch = [ `T | `F | `M ]
-  type ast = Aslp_state.aslp_block Diamond.diamond
+  type ast = Aslp_state.aslp_diamond
 
   (** {2 Bincaml-specific utility functions} *)
 
@@ -199,13 +199,11 @@ struct
    fun cond ->
     let st = !bincaml_lifter_state and ncond = Expr.BasilExpr.boolnot cond in
 
-    let mk assume = Diamond.empty (Aslp_state.empty_block ?assume ()) in
-    let left = mk (Some cond) and right = mk (Some ncond) in
+    let left = Diamond.empty (Aslp_state.empty_block ~assume:cond ())
+    and right = Diamond.empty (Aslp_state.empty_block ~assume:ncond ()) in
 
-    let diamond =
-      st.diamond
-      |> Diamond.append_diamond ~left ~right ~value:(Aslp_state.empty_block ())
-    in
+    let value = Aslp_state.empty_block () in
+    let diamond = st.diamond |> Diamond.append_diamond ~left ~right ~value in
     bincaml_lifter_state := { st with diamond };
     (`T, `F, `M)
 

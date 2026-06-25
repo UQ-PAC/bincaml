@@ -30,8 +30,8 @@ type aslp_diamond = aslp_block Diamond.diamond [@@deriving show]
 (** Offline lifter state representing a control flow diamond. See {!Diamond} for
     more details of the structure.
 
-    This is used to represent the final output of the offline IBI. However, it
-    is not the representation which is used {i during} lifting. For the
+    This is used to represent the {b final} output of the offline IBI. However,
+    it is not the representation which is used {i during} lifting. For the
     "in-progress" representation, see {!diamond}. *)
 
 type aslp_ids = { local_id : unit -> string }
@@ -70,7 +70,10 @@ let empty_block ?(assume = Expr.BasilExpr.boolconst true) ?pc_assign () =
 (** Constructs a new empty {!lifter_state}.
 
     Callers should consider whether they wish to re-use an existing [generator]
-    value by passing it explicitly. *)
+    value by passing it explicitly.
+
+    The initial {!address} is set to a garbage value. Users should remember to
+    use {!Bincaml_ibi.IBI.bincaml_set_address} before starting any lifting. *)
 let empty_lifter_state ~generator () =
   {
     diamond = Diamond.empty_zipper (empty_block ());
@@ -94,7 +97,7 @@ let empty_aslp_ids () =
 
     This will ensure that ASLp's local variable and block names do not clash
     with existing names. *)
-let aslp_ids_from_generators ~block_ids ~local_ids =
+let aslp_ids_from_generators ~local_ids =
   let local_id = ID.fresh ~name:"var" local_ids %> ID.name in
   { local_id }
 
