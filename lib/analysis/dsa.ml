@@ -133,15 +133,19 @@ module Constraint = struct
 
   (** Special funky map where the second function evaluates within a procedure
       id for call constraint callee formal arguments *)
-  let map f g c =
+  let map (f : 'a -> 'b) ~(per_proc_f : ID.t -> 'a -> 'b) (c : 'a t) : 'b t =
     match c with
     | Mem { addr; value; size } -> Mem { addr = f addr; value = f value; size }
     | Call { lhs; args; callee_id } ->
         let lhs =
-          List.map (fun (actual, formal) -> (f actual, g callee_id formal)) lhs
+          List.map
+            (fun (actual, formal) -> (f actual, per_proc_f callee_id formal))
+            lhs
         in
         let args =
-          List.map (fun (actual, formal) -> (f actual, g callee_id formal)) args
+          List.map
+            (fun (actual, formal) -> (f actual, per_proc_f callee_id formal))
+            args
         in
         Call { lhs; args; callee_id }
 
@@ -1384,7 +1388,7 @@ let dsa (p : Program.t) =
         let proc = Program.proc p pid in
         let constraints =
           Constraint.gen_constraints p proc
-          |> Iter.map (Constraint.map (translate pid) translate)
+          |> Iter.map (Constraint.map (translate pid) ~per_proc_f:translate)
           |> Iter.persistent
         in
         (pid, (constraints, make_local_graph proc sva constraints)))
