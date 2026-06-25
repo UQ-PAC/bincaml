@@ -404,7 +404,8 @@ module PassManager = struct
         "Transforms phi nodes in the program into dynamic single assignment \
          statements.";
       invariants =
-        Invariants.presupposes [] ~establishes:[ DSA; NoPhis ] ~invalidates:[ SSA ];
+        Invariants.presupposes [] ~establishes:[ DSA; NoPhis ]
+          ~invalidates:[ SSA ];
     }
 
   let dynamic_single_assignment =
