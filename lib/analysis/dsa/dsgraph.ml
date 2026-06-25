@@ -426,23 +426,22 @@ let get_cell i (n : node) : cell option =
           Some c)
   | _ -> failwith "find_node returned non terminal"
 
-(** Get all cells corresponding to a value set. *)
-let cells_of (v : Sva.SymAddrSetLattice.t) (g : t) : cell list =
-  snd @@ Sva.SymAddrSetLattice.to_list v
-  |> List.filter_map (fun (sb, i) ->
-      let i = Interval.of_wint i in
+(** Get all cells corresponding to a collection of symbolic values. *)
+let cells_of v (g : t) : cell list =
+  v
+  |> Iter.filter_map (fun (sb, i) ->
       SBMap.get sb g.node_map |> Option.flat_map (fun n -> get_cell i n))
+  |> List.of_iter
 
-(** Merge all of the cells in a graph corresponding to an SVA term *)
-let merge_vs (v : Sva.SymAddrSetLattice.t) (g : t) : unit =
+(** Merge all of the cells in a graph coming from a collection of symbolic
+    values *)
+let merge_vs v (g : t) : unit =
   match cells_of v g with [] -> () | x :: xs -> List.iter (join x) xs
 
-(** Get the/a cell corresponding to the given expression, following the logic of
-    `get_cell` applied to the results of the SVA analysis. If uniq, then it is
-    expected that a unique symbolic base corresponds to the expr, and no cells
-    will be merged. Note that since this method can merge cells, unification may
-    need to be re-performed. *)
-let cell_of (v : Sva.SymAddrSetLattice.t) (g : t) : cell option =
+(** Get a cell corresponding to the given expression, following the logic of
+    `get_cell` applied to the results of the SVA analysis. Note that since this
+    method can merge cells, unification may need to be re-performed. *)
+let cell_of v (g : t) : cell option =
   match cells_of v g with
   | [ x ] -> Some x
   | x :: xs ->

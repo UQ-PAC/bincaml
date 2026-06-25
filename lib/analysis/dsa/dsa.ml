@@ -71,6 +71,17 @@ end
 
 module DSGraph = Dsgraph
 
+(** Determine node flags for a node coming from a specified symbolic base. *)
+let flags_of_base b =
+  match b with
+  | Sva.SymBase.Stack _ -> NodeFlags.(set_flag stack empty)
+  | Sva.SymBase.Heap _ -> NodeFlags.(set_flag heap empty)
+  | GlobSym -> NodeFlags.(set_flag global empty)
+  | Constant | Par _ | Ret _ | Loaded _ -> NodeFlags.(set_flag unknown empty)
+
+let symbolic_values v =
+  Sva.SymAddrSetLattice.to_iter v |> Iter.map (Pair.map_snd Interval.of_wint)
+
 (** Construct the local-phase graph of the given procedure. It will be ensured
     that all loaded/stored addresses, and all formal in/out params are unified,
     however actual params of calls will not be unified for precision and should
@@ -84,14 +95,7 @@ let make_local_graph proc sva
     Sva.SymAddrSetLattice.to_iter sv
     |> Iter.filter (not % Sva.SymBase.equal Sva.SymBase.Constant % fst)
     |> Iter.map (fun (b, i) ->
-        let f =
-          match b with
-          | Sva.SymBase.Stack _ -> NodeFlags.(set_flag stack empty)
-          | Sva.SymBase.Heap _ -> NodeFlags.(set_flag heap empty)
-          | GlobSym -> NodeFlags.(set_flag global empty)
-          | Constant | Par _ | Ret _ | Loaded _ ->
-              NodeFlags.(set_flag unknown empty)
-        in
+        let f = flags_of_base b in
         let i = Interval.of_wint i |> Interval.pad_with_size size in
         let c = DSGraph.add_cell g ~sb:(Some b) i f in
         Vector.push cells c;
@@ -114,7 +118,7 @@ let make_local_graph proc sva
   Procedure.formal_in_params proc
   |> StringMap.values
   |> Iter.iter (fun v ->
-      let v = Sva.StateAbstraction.read v sva in
+      let v = Sva.StateAbstraction.read v sva |> symbolic_values in
       DSGraph.merge_vs v g);
 
   (* Unify all pointees *)
@@ -140,8 +144,8 @@ let resolve_arguments graph actual formal =
   ignore
     (let open Option.Infix in
      let open DSGraph in
-     let* formal_cell = cell_of formal graph in
-     let* actual_cell = cell_of actual graph in
+     let* formal_cell = cell_of (symbolic_values formal) graph in
+     let* actual_cell = cell_of (symbolic_values actual) graph in
      join actual_cell formal_cell;
      unify_node_of actual_cell;
      check_unique_pointee graph;
@@ -154,11 +158,11 @@ let resolve_callee old_to_new caller_graph callee_graph actual formal =
     (let open Option.Infix in
      let open DSGraph in
      (* Only do the joining if a caller cell actually exists *)
-     let* caller_cell = cell_of actual caller_graph in
+     let* caller_cell = cell_of (symbolic_values actual) caller_graph in
      unify_node_of caller_cell;
      let* callee_cell_copy =
-       copy_cells_of ~old_to_new ~clear_stack:true formal callee_graph
-         caller_graph
+       copy_cells_of ~old_to_new ~clear_stack:true (symbolic_values formal)
+         callee_graph caller_graph
      in
      unify_node_of callee_cell_copy;
      check_unique_pointee caller_graph;
@@ -173,10 +177,11 @@ let resolve_caller old_to_new caller_graph callee_graph actual formal =
   ignore
     (let open Option.Infix in
      let open DSGraph in
-     let* callee_cell = cell_of formal callee_graph in
+     let* callee_cell = cell_of (symbolic_values formal) callee_graph in
      (* Copy all cells of the actual param over and join them (only if the callee cell exists of course) *)
      let* caller_cell_copy =
-       copy_cells_of ~old_to_new actual caller_graph callee_graph
+       copy_cells_of ~old_to_new (symbolic_values actual) caller_graph
+         callee_graph
      in
      join callee_cell caller_cell_copy;
      unify_node_of callee_cell;
