@@ -41,7 +41,7 @@ type aslp_ids = { local_id : unit -> string }
     opcodes within the same procedure, to ensure that IDs are unique.*)
 
 type lifter_state = {
-  address : Bitvec.t;
+  address : Bitvec.t option;
       (** Byte address of the instruction currently being lifted. *)
   diamond : aslp_block Diamond.diamond_zipper;
       (** Lifter state representing a control flow diamond while it is being
@@ -66,21 +66,20 @@ let empty_block ~assume () =
   { stmts = CCVector.create (); assume; pc_assign = None }
 
 let empty_block_unconditional () =
-  let tt = Expr.BasilExpr.boolconst true in
-  { stmts = CCVector.create (); assume = tt; pc_assign = None }
+  empty_block ~assume:(Expr.BasilExpr.boolconst true) ()
 
 (** Constructs a new empty {!lifter_state}.
 
     Callers should consider whether they wish to re-use an existing [generator]
     value by passing it explicitly.
 
-    The initial {!address} is set to a garbage value. Users should remember to
-    use {!Bincaml_ibi.IBI.bincaml_set_address} before starting any lifting. *)
+    The initial {!address} is unset. Users should remember to use
+    {!Bincaml_ibi.IBI.bincaml_set_address} before starting any lifting. *)
 let empty_lifter_state ~generator () =
   {
     diamond = Diamond.empty_zipper (empty_block_unconditional ());
     names = Hashtbl.create 16;
-    address = Bitvec.of_int ~size:64 0xbadbadbad000;
+    address = None;
     generator;
   }
 

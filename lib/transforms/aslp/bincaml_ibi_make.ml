@@ -23,6 +23,10 @@ struct
   let bincaml_set_address address =
     bincaml_lifter_state := { !bincaml_lifter_state with address }
 
+  let bincaml_get_address () =
+    let err = "bincaml_get_address: address not set. use bincaml_set_address" in
+    !bincaml_lifter_state.address |> Option.get_exn_or err
+
   (** Emits the given Bincaml statement. *)
   let bincaml_emit stmt =
     bincaml_lifter_state :=
@@ -47,7 +51,7 @@ struct
 
   let get_ir () =
     let diamond = !bincaml_lifter_state.diamond
-    and address = !bincaml_lifter_state.address in
+    and address = bincaml_get_address () in
     diamond |> Aslp_state.ensure_pc_assigned ~address |> Diamond.of_zipper
 
   let bigint_of_string : string -> bigint = Z.of_string_base 10
@@ -210,7 +214,7 @@ struct
   let f_switch_context : branch -> unit =
    fun b ->
     let diamond = !bincaml_lifter_state.diamond
-    and address = !bincaml_lifter_state.address in
+    and address = bincaml_get_address () in
     let diamond =
       match b with
       | `T -> diamond |> Diamond.move_adjacent `L |> Result.get_ok
