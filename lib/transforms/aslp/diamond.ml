@@ -134,16 +134,14 @@ let focus : 'a diamond_zipper -> 'a = function this, _ -> last this
 let subdiamond : 'a diamond_zipper -> 'a diamond = function this, _ -> this
 
 (** Converts the given {!diamond_zipper} to a full {!diamond}. *)
-let rec of_zipper : 'a diamond_zipper -> 'a diamond = function
-  | this, [] -> this
-  | this, bot :: rest -> (
-      match bot with
-      | Left { value; right; pred } ->
-          of_zipper (Diamond { value; left = this; right; pred }, rest)
-      | Right { value; left; pred } ->
-          of_zipper (Diamond { value; left; right = this; pred }, rest)
-      | Pred { value; left; right } ->
-          of_zipper (Diamond { value; left; right; pred = this }, rest))
+let of_zipper : 'a diamond_zipper -> 'a diamond =
+  CCFun.uncurry
+  @@ List.fold_left (fun this step ->
+      match (this, step) with
+      | left, Left { value; right; pred }
+      | right, Right { value; left; pred }
+      | pred, Pred { value; left; right } ->
+          Diamond { value; left; right; pred })
 
 (** Converts the given {!diamond} to a zipper, initially focused at {!last}. *)
 let to_zipper : 'a diamond -> 'a diamond_zipper = fun dmd -> (dmd, [])
