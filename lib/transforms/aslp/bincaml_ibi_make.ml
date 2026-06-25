@@ -21,7 +21,8 @@ struct
   let bincaml_lifter_state = ref S.initial_lifter_state
 
   let bincaml_set_address address =
-    bincaml_lifter_state := { !bincaml_lifter_state with address }
+    bincaml_lifter_state :=
+      { !bincaml_lifter_state with address = Some address }
 
   let bincaml_get_address () =
     let err = "bincaml_get_address: address not set. use bincaml_set_address" in
