@@ -418,7 +418,7 @@ module PassManager = struct
       doc =
         "Perform data structure analysis to generate point-to graphs, and \
          print the graphs as graphviz .dot files to stdout.";
-      invariants = Invariants.needs ~invalidates:[ SSA ] [];
+      invariants = Invariants.needs [ SSA ];
     }
 
   let passes =
