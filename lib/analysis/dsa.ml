@@ -585,15 +585,15 @@ module DSGraph = struct
   let id_gen = ID.make_gen ()
 
   (** Get the union find parent of this cell *)
-  let rec find (c : cell) =
+  let rec find_cell (c : cell) =
     match !c with
     | Path c' ->
-        let p = find c' in
+        let p = find_cell c' in
         c := Path p;
         p
     | Cell _ -> c
 
-  (** Get the union find parent of this cell *)
+  (** Get the union find parent of this node *)
   let rec find_node (n : node) =
     match !n with
     | NodePath (n', off) ->
@@ -604,41 +604,48 @@ module DSGraph = struct
 
   (** Get the offsets interval of this cell's parent *)
   let rec offsets (c : cell) =
-    match !c with Path _ -> offsets (find c) | Cell { offsets } -> offsets
+    match !c with
+    | Path _ -> offsets (find_cell c)
+    | Cell { offsets } -> offsets
 
   (** Get the node of this cell's parent *)
   let rec node_of (c : cell) =
-    match !c with Path _ -> node_of (find c) | Cell { node } -> node
+    match !c with Path _ -> node_of (find_cell c) | Cell { node } -> node
 
   (** Get the pointees of this cell's parent *)
   let rec pointees (c : cell) =
-    match !c with Path _ -> pointees (find c) | Cell { pointees } -> pointees
+    match !c with
+    | Path _ -> pointees (find_cell c)
+    | Cell { pointees } -> pointees
 
   (** Shift the interval of the cell's parent by the given offset *)
   let rec shift off (c : cell) =
     match !c with
-    | Path _ -> shift off (find c)
+    | Path _ -> shift off (find_cell c)
     | Cell r -> r.offsets <- Interval.shift off r.offsets
 
   (** Set the node of this cell's parent *)
   let rec set_node node (c : cell) =
-    match !c with Path _ -> set_node node (find c) | Cell r -> r.node <- node
+    match !c with
+    | Path _ -> set_node node (find_cell c)
+    | Cell r -> r.node <- node
 
   (** Set the pointees of this cell's parent *)
   let rec set_pointees pointees (c : cell) =
     match !c with
-    | Path _ -> set_pointees pointees (find c)
+    | Path _ -> set_pointees pointees (find_cell c)
     | Cell r -> r.pointees <- pointees
 
   (** Add to the list of pointees of this cell's parent *)
   let rec add_pointees pointees (c : cell) =
     match !c with
-    | Path _ -> add_pointees pointees (find c)
+    | Path _ -> add_pointees pointees (find_cell c)
     | Cell r ->
         r.pointees <-
           List.fold_left
             (flip (List.add_nodup ~eq:CCEqual.physical))
-            r.pointees (List.map find pointees)
+            r.pointees
+            (List.map find_cell pointees)
 
   (** Get the cells of this node's parent *)
   let rec cells (n : node) =
@@ -667,9 +674,9 @@ module DSGraph = struct
   (** Make the second cell point to the first *)
   let rec join_paths (c1 : cell) (c2 : cell) =
     match (!c1, !c2) with
-    | Path _, Path _ -> join_paths (find c1) (find c2)
-    | Path _, _ -> join_paths (find c1) c2
-    | _, Path _ -> join_paths c1 (find c2)
+    | Path _, Path _ -> join_paths (find_cell c1) (find_cell c2)
+    | Path _, _ -> join_paths (find_cell c1) c2
+    | _, Path _ -> join_paths c1 (find_cell c2)
     | Cell r, Cell { pointees = p } ->
         if not @@ CCEqual.physical c1 c2 then c2 := Path c1
 
@@ -725,9 +732,9 @@ module DSGraph = struct
       left to the caller to preserve node structure. *)
   let rec join_cells_only c1 c2 =
     match (!c1, !c2) with
-    | Path _, Path _ -> join_cells_only (find c1) (find c2)
-    | Path _, _ -> join_cells_only (find c1) c2
-    | _, Path _ -> join_cells_only c1 (find c2)
+    | Path _, Path _ -> join_cells_only (find_cell c1) (find_cell c2)
+    | Path _, _ -> join_cells_only (find_cell c1) c2
+    | _, Path _ -> join_cells_only c1 (find_cell c2)
     | Cell a, Cell b -> (
         assert (CCEqual.physical a.node b.node);
         let pointees =
@@ -806,7 +813,7 @@ module DSGraph = struct
         insert p cell
     | Node r -> (
         match !cell with
-        | Path _ -> insert node (find cell)
+        | Path _ -> insert node (find_cell cell)
         | Cell { offsets = Interval.Bot } ->
             failwith "Bot cells should not exist"
         | Cell { offsets = Top } ->
@@ -820,7 +827,7 @@ module DSGraph = struct
               | [] -> Some [ cell ]
               | c :: cs -> (
                   match !c with
-                  | Path _ -> insert' (find c :: cs)
+                  | Path _ -> insert' (find_cell c :: cs)
                   | Cell { offsets = Top } ->
                       node := Node { r with cells = cell :: r.cells };
                       collapse node;
@@ -872,10 +879,10 @@ module DSGraph = struct
     if CCEqual.physical c1 c2 then ()
     else
       match !c2 with
-      | Path _ -> join c1 (find c2)
+      | Path _ -> join c1 (find_cell c2)
       | Cell { offsets = i'; pointees = p; node = n2 } -> (
           match !c1 with
-          | Path _ -> join (find c1) c2
+          | Path _ -> join (find_cell c1) c2
           | Cell { offsets = i; node = n1; pointees = p' } ->
               (* Note that cells know their up to date interval relative to the
                  unification offset, so the intervals should not be updated. *)
@@ -928,10 +935,14 @@ module DSGraph = struct
            the process of unification. *)
         let p' =
           pointees cell
-          |> List.filter (fun c' -> not @@ CCEqual.physical (find c') (find c))
+          |> List.filter (fun c' ->
+              not @@ CCEqual.physical (find_cell c') (find_cell c))
         in
-        assert (List.for_all (fun c' -> CCEqual.physical (find c') (find c)) cs);
-        set_pointees (find c :: p') cell;
+        assert (
+          List.for_all
+            (fun c' -> CCEqual.physical (find_cell c') (find_cell c))
+            cs);
+        set_pointees (find_cell c :: p') cell;
         (* Need to unify all of the cells in their new node, since the new cell
            or cells in other parts of the node may have been joined together *)
         unify_node_of c
@@ -1422,7 +1433,7 @@ let dot_string (graph : DSGraph.t) =
             (fun cell ->
               let cid = take_id cur_cid () in
               Hashtbl.add nid_map cid nid;
-              (cid, DSGraph.find cell))
+              (cid, DSGraph.find_cell cell))
             (DSGraph.cells node) ))
   in
   let cells = List.flat_map (fun (_, _, cells) -> cells) node_contents in
@@ -1432,7 +1443,7 @@ let dot_string (graph : DSGraph.t) =
       let ps =
         List.map
           (fun c' ->
-            let c' = DSGraph.find c' in
+            let c' = DSGraph.find_cell c' in
             (* Cursed O(n) lookup with physical equality *)
             List.find_map
               (fun (id, c'') -> Option.return_if (CCEqual.physical c' c'') id)
