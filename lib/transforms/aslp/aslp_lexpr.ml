@@ -1,8 +1,11 @@
+(** A simple abstraction of architecture and local variables which may be
+    accessed by the ASLp lifter. *)
+
 open Lang
 open Common
 
-(** A variable used by the ASLp lifter. Can be converted to a Bincaml {!Var.t}.
-*)
+(** A variable used by the ASLp lifter. Can be converted to a Bincaml
+    {!Lang.Common.Var.t}. *)
 type t =
   | Local of string * Types.t
   | PC

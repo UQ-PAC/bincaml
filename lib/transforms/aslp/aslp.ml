@@ -8,6 +8,7 @@
 open Lang
 open Common
 module Aslp_state = Aslp_state
+module Aslp_lexpr = Aslp_lexpr
 module Bincaml_ibi = Bincaml_ibi
 module Diamond = Diamond
 

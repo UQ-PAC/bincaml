@@ -27,8 +27,8 @@ type aslp_block = {
     guarded by an assume statement. *)
 
 type aslp_diamond = aslp_block Diamond.diamond [@@deriving show]
-(** Offline lifter state representing a control flow diamond. See {!Diamond} for
-    more details of the structure.
+(** Offline lifter state representing a control flow diamond. See
+    {!module-Diamond} for more details of the structure.
 
     This is used to represent the {b final} output of the offline IBI. However,
     it is not the representation which is used {i during} lifting. For the
@@ -57,9 +57,8 @@ type lifter_state = {
 (** Intermediate offline lifter state while {i within} one particular
     instruction.
 
-    This records the {!active} block to support ITE branching within an
-    instruction. The offline IBI ({!Bincaml_ibi}) operates by mutating a
-    reference to this state. *)
+    The offline IBI ({!Bincaml_ibi}) operates by mutating a reference to this
+    state. *)
 
 (** {1 Utility functions} *)
 

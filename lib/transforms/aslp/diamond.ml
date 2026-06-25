@@ -152,8 +152,8 @@ let to_zipper : 'a diamond -> 'a diamond_zipper = fun dmd -> (dmd, [])
 
     When moving around the nested diamonds, there is a notion of "level" and
     whether two positions are at the same nesting level. The rule is that two
-    values are at the same level if they have the same {!Diamond} as their
-    direct parent.
+    values are at the same level if they have the same {!constructor-Diamond} as
+    their direct parent.
 
     This can be subtle, especially with nesting. In the diagram below, we number
     the depths of each value position. 0 is the outermost level ({!last}), and
@@ -191,8 +191,8 @@ let move_adjacent direction :
       | `P -> Ok (pred, Pred { value; left; right } :: rest))
 
 (** Moves the zipper to a position in the outer diamond level. That is, to the
-    {!value} of the containing {!diamond}. In control-flow terms, this is the
-    next control-flow join point. *)
+    {!type-diamond.value} of the containing {!diamond}. In control-flow terms,
+    this is the next control-flow join point. *)
 let move_out_of :
     'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
   function
@@ -218,7 +218,7 @@ let move_in_to direction :
 
 (** Modifies the zipper by inserting a new diamond {i after} the current
     position in program order, using the given parameters to build the new
-    {!Diamond}. *)
+    {!constructor-Diamond}. *)
 let append_diamond ~left ~right ~value : 'a diamond_zipper -> 'a diamond_zipper
     = function
   | dia, path -> (dia, Pred { value; left; right } :: path)
