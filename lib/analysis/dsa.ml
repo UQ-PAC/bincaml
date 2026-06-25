@@ -461,8 +461,11 @@ module FormalDSGraph = struct
     |> List.fold_left
          (fun acc (c, c') ->
            if CellSet.mem c cs then
-             let cur = CellMap.get_or c acc ~default:CellSet.empty in
-             CellMap.add c (CellSet.add c' cur) acc
+             CellMap.update c
+               (function
+                 | Some cur -> Some (CellSet.add c' cur)
+                 | None -> Some (CellSet.singleton c'))
+               acc
            else acc)
          CellMap.empty
     |> CellMap.values |> CellSetSet.of_iter
@@ -929,8 +932,9 @@ module DSGraph = struct
         List.fold_left
           (fun acc c ->
             let id = node_id (node_of c) in
-            let cur = IDMap.get_or id acc ~default:[] in
-            IDMap.add id (c :: cur) acc)
+            IDMap.update id
+              (function Some cur -> Some (c :: cur) | None -> Some [ c ])
+              acc)
           IDMap.empty ps
       in
       IDMap.iter (fun _ cs -> aux cs) node_cells;
