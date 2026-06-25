@@ -62,9 +62,8 @@ type lifter_state = {
 
 (** {1 Utility functions} *)
 
-let empty_block ?(assume = Expr.BasilExpr.boolconst true) ?pc_assign () =
-  let stmts = CCVector.create () in
-  { assume; stmts; pc_assign }
+let empty_block ~assume () =
+  { stmts = CCVector.create (); assume; pc_assign = None }
 
 (** Constructs a new empty {!lifter_state}.
 
@@ -74,8 +73,9 @@ let empty_block ?(assume = Expr.BasilExpr.boolconst true) ?pc_assign () =
     The initial {!address} is set to a garbage value. Users should remember to
     use {!Bincaml_ibi.IBI.bincaml_set_address} before starting any lifting. *)
 let empty_lifter_state ~generator () =
+  let tt = Expr.BasilExpr.boolconst true in
   {
-    diamond = Diamond.empty_zipper (empty_block ());
+    diamond = Diamond.empty_zipper (empty_block ~assume:tt ());
     names = Hashtbl.create 16;
     address = Bitvec.of_int ~size:64 0xbadbadbad000;
     generator;
@@ -112,7 +112,7 @@ let add_stmt_to_block blk ~stmt =
   let pc_assign =
     match stmt with
     | Stmt.Instr_Assign { al = assigns; _ } ->
-        assigns |> List.Assoc.get ~eq:Var.equal Aslp_lexpr.(to_var PC)
+        assigns |> List.Assoc.get ~eq:Var.equal Aslp_lexpr.pc_var
     | _ -> None
   in
   match (pc_assign, blk.pc_assign) with
@@ -134,36 +134,36 @@ let add_stmt_to_active stmt (lifter_state : lifter_state) =
 
 (** {1 Program counter functions} *)
 
-(** Ensures that the given block ID has a PC assignment. If it already
+(** Ensures that the focused block has a PC assignment. If it already has
     {!pc_assign}, no changes are made. *)
 let ensure_pc_assigned ~address =
   Diamond.modify (function
     | { pc_assign = None } as block ->
         let incremented =
           Expr.BasilExpr.bvconst Bitvec.(add address (of_int ~size:64 4))
-        and boolfalse = Expr.BasilExpr.boolconst false in
+        and ff = Expr.BasilExpr.boolconst false in
 
-        let al =
-          Aslp_lexpr.[ (branchtaken_var, boolfalse); (pc_var, incremented) ]
-        in
+        let bt = Aslp_lexpr.branchtaken_var and pc = Aslp_lexpr.pc_var in
+        let al = [ (bt, ff); (pc, incremented) ] in
         block
         |> add_stmt_to_block
              ~stmt:(Stmt.Instr_Assign { attrib = Attrib.empty; al })
     | block -> block)
 
-(** Ensures that the left and right blocks agree on their {!pc_assign} property.
-    If [PC] is assigned in only one of the blocks, a default increment statement
-    will be added to the other block and {!pc_assign} will be propagated to
-    [join]. Otherwise, nothing changes.
+(** Ensures that the preceding left and right blocks agree on their {!pc_assign}
+    property. If [PC] is assigned in only one of the blocks, a default increment
+    statement will be added to the other block and {!pc_assign} will be
+    propagated to the join. Otherwise, nothing changes.
 
-    This function should be called with blocks in this structure:
+    This function should be called with blocks in this structure, with the focus
+    on join:
     {v
     left  right
       \    /
        join
     v}
     It should be called after [left] and [right] have been populated with
-    statements, before moving to [join].
+    statements.
 
     This is used to maintain the invariant that at every control flow point, the
     [PC] variable is either assigned on all paths or assigned on no paths (from
@@ -173,23 +173,21 @@ let ensure_pc_consistency ~address state =
   let left = state |> Diamond.move_in_to `L |> Result.get_ok
   and right = state |> Diamond.move_in_to `R |> Result.get_ok in
 
+  (* Make PCs of left and right agree. Resulting state is at left or right. *)
   let state =
-    match (Diamond.focus left, Diamond.focus right) with
-    | { pc_assign = None }, { pc_assign = None } -> state
-    | { pc_assign = Some pc_assign }, { pc_assign = None } ->
-        ensure_pc_assigned ~address right
-    | { pc_assign = None }, { pc_assign = Some pc_assign } ->
-        ensure_pc_assigned ~address left
-    | ( { pc_assign = Some lpc; assume = lassume },
-        { pc_assign = Some rpc; assume = rassume } ) ->
-        left (* arbitrary *)
+    match ((Diamond.focus left).pc_assign, (Diamond.focus right).pc_assign) with
+    | Some _, None -> right |> ensure_pc_assigned ~address
+    | None, Some _ -> left |> ensure_pc_assigned ~address
+    | None, None | Some _, Some _ -> left (* arbitrary *)
   in
 
+  (* Move back to join point and re-compute left/right with updated state. *)
   let state = state |> Diamond.move_out_of |> Result.get_ok in
   let left = state |> Diamond.move_in_to `L |> Result.get_ok
   and right = state |> Diamond.move_in_to `R |> Result.get_ok in
   assert (Diamond.(equal_skeleton before_skel (skeleton state)));
 
+  (* Propagate PC to join point using ITE. *)
   match (Diamond.focus left, Diamond.focus right) with
   | { pc_assign = None }, { pc_assign = None } -> state
   | { pc_assign = Some lpc; assume }, { pc_assign = Some rpc } ->

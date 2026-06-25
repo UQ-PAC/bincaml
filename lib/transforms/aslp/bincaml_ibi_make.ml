@@ -199,10 +199,11 @@ struct
    fun cond ->
     let st = !bincaml_lifter_state and ncond = Expr.BasilExpr.boolnot cond in
 
+    let tt = Expr.BasilExpr.boolconst true in
     let left = Diamond.empty (Aslp_state.empty_block ~assume:cond ())
-    and right = Diamond.empty (Aslp_state.empty_block ~assume:ncond ()) in
+    and right = Diamond.empty (Aslp_state.empty_block ~assume:ncond ())
+    and value = Aslp_state.empty_block ~assume:tt () in
 
-    let value = Aslp_state.empty_block () in
     let diamond = st.diamond |> Diamond.append_diamond ~left ~right ~value in
     bincaml_lifter_state := { st with diamond };
     (`T, `F, `M)
