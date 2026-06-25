@@ -61,41 +61,45 @@ let rec find_node (n : node) =
   | Node _ -> (n, Z.zero)
 
 (** Get the offsets interval of this cell's parent *)
-let rec offsets (c : cell) =
-  match !c with Path _ -> offsets (find_cell c) | Cell { offsets } -> offsets
+let offsets (c : cell) =
+  match !(find_cell c) with
+  | Path _ -> failwith "find_cell returned non terminal"
+  | Cell { offsets } -> offsets
 
 (** Get the node of this cell's parent *)
-let rec node_of (c : cell) =
-  match !c with Path _ -> node_of (find_cell c) | Cell { node } -> node
+let node_of (c : cell) =
+  match !(find_cell c) with
+  | Path _ -> failwith "find_cell returned non terminal"
+  | Cell { node } -> node
 
 (** Get the pointees of this cell's parent *)
-let rec pointees (c : cell) =
-  match !c with
-  | Path _ -> pointees (find_cell c)
+let pointees (c : cell) =
+  match !(find_cell c) with
+  | Path _ -> failwith "find_cell returned non terminal"
   | Cell { pointees } -> pointees
 
 (** Shift the interval of the cell's parent by the given offset *)
-let rec shift off (c : cell) =
-  match !c with
-  | Path _ -> shift off (find_cell c)
+let shift off (c : cell) =
+  match !(find_cell c) with
+  | Path _ -> failwith "find_cell returned non terminal"
   | Cell r -> r.offsets <- Interval.shift off r.offsets
 
 (** Set the node of this cell's parent *)
-let rec set_node node (c : cell) =
-  match !c with
-  | Path _ -> set_node node (find_cell c)
+let set_node node (c : cell) =
+  match !(find_cell c) with
+  | Path _ -> failwith "find_cell returned non terminal"
   | Cell r -> r.node <- node
 
 (** Set the pointees of this cell's parent *)
-let rec set_pointees pointees (c : cell) =
-  match !c with
-  | Path _ -> set_pointees pointees (find_cell c)
+let set_pointees pointees (c : cell) =
+  match !(find_cell c) with
+  | Path _ -> failwith "find_cell returned non terminal"
   | Cell r -> r.pointees <- pointees
 
 (** Add to the list of pointees of this cell's parent *)
-let rec add_pointees pointees (c : cell) =
-  match !c with
-  | Path _ -> add_pointees pointees (find_cell c)
+let add_pointees pointees (c : cell) =
+  match !(find_cell c) with
+  | Path _ -> failwith "find_cell returned non terminal"
   | Cell r ->
       r.pointees <-
         List.fold_left
@@ -104,35 +108,39 @@ let rec add_pointees pointees (c : cell) =
           (List.map find_cell pointees)
 
 (** Get the cells of this node's parent *)
-let rec cells (n : node) =
-  match !n with NodePath _ -> cells (fst @@ find_node n) | Node r -> r.cells
+let cells (n : node) =
+  match !(fst @@ find_node n) with
+  | NodePath _ -> failwith "find_node returned non terminal"
+  | Node r -> r.cells
 
 (** Get the flags of this node's parent *)
-let rec flags (n : node) =
-  match !n with NodePath _ -> flags (fst @@ find_node n) | Node r -> r.flags
+let flags (n : node) =
+  match !(fst @@ find_node n) with
+  | NodePath _ -> failwith "find_node returned non terminal"
+  | Node r -> r.flags
 
 (** Get the id of this node's parent *)
-let rec node_id (n : node) =
-  match !n with NodePath _ -> node_id (fst @@ find_node n) | Node r -> r.id
+let node_id (n : node) =
+  match !(fst @@ find_node n) with
+  | NodePath _ -> failwith "find_node returned non terminal"
+  | Node r -> r.id
 
 (** Set the cells of this node *)
-let rec set_cells cells (n : node) =
-  match !n with
-  | NodePath _ -> set_cells cells (fst @@ find_node n)
+let set_cells cells (n : node) =
+  match !(fst @@ find_node n) with
+  | NodePath _ -> failwith "find_node returned non terminal"
   | Node r -> r.cells <- cells
 
 (** Join the flags of this node with the new flags *)
-let rec join_flags flags (n : node) =
-  match !n with
-  | NodePath _ -> join_flags flags (fst @@ find_node n)
+let join_flags flags (n : node) =
+  match !(fst @@ find_node n) with
+  | NodePath _ -> failwith "find_node returned non terminal"
   | Node r -> r.flags <- Node_flags.join r.flags flags
 
 (** Make the second cell point to the first *)
-let rec join_paths (c1 : cell) (c2 : cell) =
-  match (!c1, !c2) with
-  | Path _, Path _ -> join_paths (find_cell c1) (find_cell c2)
-  | Path _, _ -> join_paths (find_cell c1) c2
-  | _, Path _ -> join_paths c1 (find_cell c2)
+let join_paths (c1 : cell) (c2 : cell) =
+  match (!(find_cell c1), !(find_cell c2)) with
+  | Path _, _ | _, Path _ -> failwith "find_node returned non terminal"
   | Cell r, Cell { pointees = p } ->
       if not @@ CCEqual.physical c1 c2 then c2 := Path c1
 
@@ -166,9 +174,9 @@ let check_unique_pointee g =
     (nodes g)
 
 (** Collapse all cells in the node into a single cell, with offsets Top *)
-let rec collapse node =
-  match !node with
-  | NodePath _ -> collapse (fst @@ find_node node)
+let collapse node =
+  match !(fst @@ find_node node) with
+  | NodePath _ -> failwith "find_node returned non terminal"
   | Node r ->
       let pointees =
         List.fold_left
@@ -187,10 +195,8 @@ let rec collapse node =
 (** Join c2 into c1 under the assumption that they are in the same node. It is
     left to the caller to preserve node structure. *)
 let rec join_cells_only c1 c2 =
-  match (!c1, !c2) with
-  | Path _, Path _ -> join_cells_only (find_cell c1) (find_cell c2)
-  | Path _, _ -> join_cells_only (find_cell c1) c2
-  | _, Path _ -> join_cells_only c1 (find_cell c2)
+  match (!(find_cell c1), !(find_cell c2)) with
+  | Path _, _ | _, Path _ -> failwith "find_cell returned non terminal"
   | Cell a, Cell b -> (
       assert (CCEqual.physical a.node b.node);
       let pointees =
@@ -330,28 +336,26 @@ let add_cell (g : t) ?(sb = None) offsets flags : cell =
 
 (** Merge the two given cells together. If they belong to different nodes then
     the nodes are merged so that the cell offsets line up. *)
-let rec join (c1 : cell) (c2 : cell) =
+let join (c1 : cell) (c2 : cell) =
   if CCEqual.physical c1 c2 then ()
   else
-    match !c2 with
-    | Path _ -> join c1 (find_cell c2)
-    | Cell { offsets = i'; pointees = p; node = n2 } -> (
-        match !c1 with
-        | Path _ -> join (find_cell c1) c2
-        | Cell { offsets = i; node = n1; pointees = p' } ->
-            (* Note that cells know their up to date interval relative to the
+    match (!(find_cell c1), !(find_cell c2)) with
+    | Path _, _ | _, Path _ -> failwith "find_cell returned non terminal"
+    | ( Cell { offsets = i; node = n1; pointees = p' },
+        Cell { offsets = i'; pointees = p; node = n2 } ) ->
+        (* Note that cells know their up to date interval relative to the
                  unification offset, so the intervals should not be updated. *)
-            let n1, _ = find_node n1 in
-            let n2, _ = find_node n2 in
-            if not @@ CCEqual.physical n1 n2 then
-              match Interval.(start i, start i') with
-              | Some a, Some b when Z.lt a b -> join_nodes_at (Z.sub a b) n1 n2
-              | Some a, Some b -> join_nodes_at (Z.sub b a) n2 n1
-              | _ -> join_nodes_at Z.zero n1 n2
-            else
-              let offsets = Interval.join i i' in
-              let fill = ref (Cell { offsets; node = n1; pointees = [] }) in
-              insert n1 fill)
+        let n1, _ = find_node n1 in
+        let n2, _ = find_node n2 in
+        if not @@ CCEqual.physical n1 n2 then
+          match Interval.(start i, start i') with
+          | Some a, Some b when Z.lt a b -> join_nodes_at (Z.sub a b) n1 n2
+          | Some a, Some b -> join_nodes_at (Z.sub b a) n2 n1
+          | _ -> join_nodes_at Z.zero n1 n2
+        else
+          let offsets = Interval.join i i' in
+          let fill = ref (Cell { offsets; node = n1; pointees = [] }) in
+          insert n1 fill
 
 (** Unify the pointees of this cell and recurse *)
 let rec unify_pointees cell =
