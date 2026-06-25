@@ -1012,9 +1012,9 @@ module DSGraph = struct
   (** Create a copy of the given node with all reachable nodes and cells from
       pointees copied recursively. The copy of the given node is returned.
 
-      `sbs` will update the graph's node_map with the newly copied node assigned
-      said symbolic bases. It is assumed that no node with any given sb exists
-      in the graph prior. *)
+      [sbs] will update the graph's node_map with the newly copied node assigned
+      said symbolic bases. It is assumed that no node with any of the given
+      symbolic bases exists in the graph prior. *)
   let copy_node (graph : t) ?(clear_stack = false) ?old_to_new ?(sbs = [])
       (n : node) =
     List.iter (fun n -> check_valid_node n) graph.nodes;
