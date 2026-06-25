@@ -76,7 +76,7 @@ let make ?(presupposes = []) ?(establishes = []) ?(invalidates = []) () =
 
 let empty = make ()
 
-let needs ?(establishes = []) ?(invalidates = []) presupposes =
+let presupposes ?(establishes = []) ?(invalidates = []) presupposes =
   make ~presupposes ~establishes ~invalidates ()
 
 let establishes ?(needs = []) ?(invalidates = []) establishes =

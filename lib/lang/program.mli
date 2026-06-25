@@ -74,6 +74,8 @@ val global_constants : t -> Var.t Iter.t
 val get_decl_by_name_id : string -> t -> (ID.t * declaration) option
 val get_decl_by_name : string -> t -> declaration option
 val get_proc_by_name : string -> t -> proc
+val get_decl : ID.t -> t -> declaration option
+val get_proc : ID.t -> t -> proc
 val get_implicit_decl_by_name : string -> t -> implicit_declaration option
 val declare_name : string -> t -> ID.t
 val declare_name_exn : string -> t -> ID.t
