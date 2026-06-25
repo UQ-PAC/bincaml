@@ -669,8 +669,8 @@ module DSGraph = struct
     match !n with NodePath _ -> flags (fst @@ find_node n) | Node r -> r.flags
 
   (** Get the id of this node's parent *)
-  let rec id (n : node) =
-    match !n with NodePath _ -> id (fst @@ find_node n) | Node r -> r.id
+  let rec node_id (n : node) =
+    match !n with NodePath _ -> node_id (fst @@ find_node n) | Node r -> r.id
 
   (** Set the cells of this node *)
   let rec set_cells cells (n : node) =
@@ -928,7 +928,7 @@ module DSGraph = struct
       let node_cells =
         List.fold_left
           (fun acc c ->
-            let id = id (node_of c) in
+            let id = node_id (node_of c) in
             let cur = IDMap.get_or id acc ~default:[] in
             IDMap.add id (c :: cur) acc)
           IDMap.empty ps
@@ -1025,9 +1025,9 @@ module DSGraph = struct
     SBMap.iter (fun s n -> check_valid_node n) graph.node_map;
     (* Create a copy of the given node, with cells initialised except for their pointees *)
     let create_new_node n =
-      Hashtbl.get old_to_new (id @@ n)
+      Hashtbl.get old_to_new (node_id @@ n)
       |> Option.get_lazy (fun _ ->
-          assert (not @@ Hashtbl.mem old_to_new @@ id n);
+          assert (not @@ Hashtbl.mem old_to_new @@ node_id n);
           let flags =
             if clear_stack then NodeFlags.(clear_flag stack) (flags n)
             else flags n
@@ -1039,7 +1039,7 @@ module DSGraph = struct
                 ref (Cell { offsets = offsets c; node = new_n; pointees = [] }))
           in
           set_cells new_cells new_n;
-          Hashtbl.add old_to_new (id n) new_n;
+          Hashtbl.add old_to_new (node_id n) new_n;
           graph.nodes <- new_n :: graph.nodes;
           Stack.push (n, new_n) stack;
           new_n)
@@ -1080,7 +1080,7 @@ module DSGraph = struct
     in
     let cells_copy =
       List.map2 (fun c n -> get_cell (offsets c) n) cells nodes_copy
-      |> List.filter_map Fun.id
+      |> List.filter_map id
     in
     List.fold_left
       (fun cur c ->
@@ -1420,9 +1420,11 @@ let dot_string (graph : DSGraph.t) =
   (* Populate the symbase strings per node *)
   SBMap.iter
     (fun sb n ->
-      let s = Hashtbl.get_or node_sbs (ID.index @@ DSGraph.id n) ~default:"" in
+      let s =
+        Hashtbl.get_or node_sbs (ID.index @@ DSGraph.node_id n) ~default:""
+      in
       Hashtbl.add node_sbs
-        (ID.index @@ DSGraph.id n)
+        (ID.index @@ DSGraph.node_id n)
         (s ^ "\\n"
         ^ (Sva.SymBase.show sb
           |> String.replace ~sub:"\"" ~by:"\\\""
@@ -1432,14 +1434,14 @@ let dot_string (graph : DSGraph.t) =
 
   let nodes =
     DSGraph.nodes graph
-    |> List.map DSGraph.(fun n -> (id n, fst @@ find_node n))
+    |> List.map DSGraph.(fun n -> (node_id n, fst @@ find_node n))
     |> IDMap.of_list |> IDMap.to_list |> List.map snd
   in
 
   let node_contents =
     nodes
     |> List.map (fun node ->
-        let nid = ID.index @@ DSGraph.id node in
+        let nid = ID.index @@ DSGraph.node_id node in
         ( nid,
           DSGraph.flags node,
           List.map
