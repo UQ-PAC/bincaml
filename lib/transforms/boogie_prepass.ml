@@ -194,15 +194,17 @@ end
 module Instructions = struct
   let unique_stores_loads (prog : Program.t) =
     let visit_procs proc = Procedure.iter_stmt_topo_fwd proc in
+    (* we only care about the type of these vars to generate placeholder memory ops *)
+    let g = Var.mk_gen () in
     let load_exprs : (Var.t, Var.t, Program.e) Stmt.t Iter.t =
       Builtins.used_ops prog
       |> Iter.filter_map (function op, args, ret ->
           (match op with
           | `Load (endian, size) ->
-              let lhs = Var.create "" ret in
-              let rhs = Var.create "" (List.hd args) in
+              let lhs = g.fresh ret in
+              let rhs = g.fresh (List.hd args) in
               let addr =
-                Expr.BasilExpr.rvar @@ Var.create "" (List.hd @@ List.tl args)
+                Expr.BasilExpr.rvar @@ g.fresh (List.hd @@ List.tl args)
               in
               Some
                 (Stmt.Instr_Load
@@ -227,12 +229,14 @@ module Instructions = struct
     |> Iter.sort_uniq
 
   let store_body ?(be = false) mem_typ val_size addr_size =
-    let memory = Var.create ~scope:Var.LocalVar "#memory" mem_typ in
+    let v = Var.mk_gen () in
+    (** FIXME: function-local variables *)
+    let memory = v.with_name ~scope:Var.LocalVar "#memory" mem_typ in
     let value =
-      Var.create ~scope:Var.LocalVar "#value" (Types.Bitvector val_size)
+      v.with_name ~scope:Var.LocalVar "#value" (Types.Bitvector val_size)
     in
     let index =
-      Var.create ~scope:Var.LocalVar "#index" (Types.Bitvector addr_size)
+      v.with_name ~scope:Var.LocalVar "#index" (Types.Bitvector addr_size)
     in
     (* TODO: maybe generalize to non 8 bit stores, based on mem typ value? *)
     let steps = val_size / 8 in
@@ -256,12 +260,13 @@ module Instructions = struct
                ])
            (Expr.BasilExpr.rvar memory)
     in
-    Expr.BasilExpr.lambda ~bound:[ memory; index; value ] body
+    v, Expr.BasilExpr.lambda ~bound:[ memory; index; value ] body
 
   let load_body ?(be = false) mem_typ val_size addr_size =
-    let memory = Var.create ~scope:Var.LocalVar "#memory" mem_typ in
+    let v = Var.mk_gen () in
+    let memory = v.with_name ~scope:Var.LocalVar "#memory" mem_typ in
     let index =
-      Var.create ~scope:Var.LocalVar "#index" (Types.Bitvector addr_size)
+      v.with_name ~scope:Var.LocalVar "#index" (Types.Bitvector addr_size)
     in
     let steps = val_size / 8 in
     let body =
@@ -286,9 +291,9 @@ module Instructions = struct
                     (Bitvec.of_int ~size:addr_size
                        (if be then 0 else steps - 1)))))
     in
-    Expr.BasilExpr.lambda ~bound:[ memory; index ] body
+    v, Expr.BasilExpr.lambda ~bound:[ memory; index ] body
 
-  let store_load_decl (s : Program.stmt) =
+  let store_load_decl (global_vargen : Var.generator) (s : Program.stmt) =
     match s with
     | Stmt.Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian } }
       ->
@@ -296,7 +301,7 @@ module Instructions = struct
           StringMap.of_list [ (".extern", `List []); (".define", `List []) ]
         in
         let attribs = StringMap.singleton ".boogie" (`Assoc boogie_attribs) in
-        let body =
+        let var_gen,body =
           store_body (Var.typ rhs)
             (match Expr.BasilExpr.type_of value with
             | Types.Bitvector s -> s
@@ -309,8 +314,9 @@ module Instructions = struct
           (Function
              {
                attrib = attribs;
+               var_gen ;
                binding =
-                 Var.create ~scope:Var.GlobalConst
+                 global_vargen.with_name ~scope:Var.GlobalConst
                    (Printf.sprintf "store%d_%s" size
                       (Lang.Stmt.show_endian endian))
                    (Lang.Expr.BasilExpr.type_of value);
@@ -322,7 +328,7 @@ module Instructions = struct
         let attribs =
           StringMap.of_list [ (".boogie", `Assoc boogie_attribs) ]
         in
-        let body =
+        let var_gen, body =
           load_body (Var.typ rhs)
             (match Var.typ lhs with
             | Types.Bitvector s -> s
@@ -335,8 +341,9 @@ module Instructions = struct
           (Function
              {
                attrib = attribs;
+               var_gen;
                binding =
-                 Var.create ~scope:Var.GlobalConst
+                 global_vargen.with_name ~scope:Var.GlobalConst
                    (Printf.sprintf "load%d_%s" size (Stmt.show_endian endian))
                    (Var.typ lhs);
                definition = Function body;
@@ -346,7 +353,9 @@ module Instructions = struct
 
   let transform_add_store_load_decls (prog : Program.t) =
     unique_stores_loads prog
-    |> Iter.filter_map store_load_decl
+    |> Iter.filter_map
+         (store_load_decl
+            (Var.mk_gen ~id_generator:(Program.global_ids prog) ()))
     |> Iter.fold Program.add_decl prog
 end
 

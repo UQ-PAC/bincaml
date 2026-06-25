@@ -220,17 +220,7 @@ let transform_proc ?(check_names = false) (add : ID.t -> Var.t -> bool) prog
 
   let add_globals (p : Program.t) =
     VarSet.to_iter !added
-    |> Iter.fold
-         (fun p v ->
-           Program.add_decl p (Var.id v)
-             Program.(
-               Variable
-                 {
-                   binding = v;
-                   classification = None;
-                   attrib = StringMap.empty;
-                 }))
-         p
+    |> Iter.fold (fun p v -> Program.add_var_decl p v) p
   in
 
   (* Update statements *)

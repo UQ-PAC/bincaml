@@ -36,6 +36,7 @@ let rec to_attrib k l : Attrib.t option =
 type load_st = {
   prog : Program.t;
   curr_proc : Program.proc option;
+  local_id_gen : ID.generator option;
   params_order :
     (string, (string * Var.t) list * (string * Var.t) list) Hashtbl.t;
 }
@@ -45,6 +46,7 @@ let load_st_empty ?(name = "<none>") () =
     prog = Program.empty ~name ();
     params_order = Hashtbl.create 30;
     curr_proc = None;
+    local_id_gen = None;
   }
 
 exception
@@ -243,6 +245,7 @@ module BasilASTLoader = struct
           Function
             {
               attrib = StringMap.empty;
+              var_gen = Var.mk_gen ();
               binding = Var.create id ~scope:GlobalConst rtype;
               definition = Uninterpreted;
             }
@@ -259,6 +262,7 @@ module BasilASTLoader = struct
           Function
             {
               attrib = StringMap.empty;
+              var_gen = Var.mk_gen ();
               binding = bvar;
               definition = Uninterpreted;
             }
@@ -348,7 +352,7 @@ module BasilASTLoader = struct
     let name = unsafe_unsigil (`Global glident) in
     let fundef id : Program.declaration =
       let binding = Var.create id ~scope:GlobalConst rtype in
-      Function { attrib; binding; definition }
+      Function { attrib; binding; definition; var_gen = Var.mk_gen () }
     in
     map_prog (fun prog -> Program.decl_global prog name fundef) prog
 
@@ -363,14 +367,23 @@ module BasilASTLoader = struct
         create_fun prog glident args attrList (Some typ) (Some body)
     | Decl_Axiom (name, attr, body) ->
         let _, attrib = trans_attrib_set ~binds:StringMap.empty prog attr in
+        let v = ID.make_gen () in
+        let prog = { prog with local_id_gen = Some v } in
         let body = trans_expr prog body in
         let name = unsafe_unsigil (`Global name) in
 
         let fundef id : Program.declaration =
           let bvar = Var.create id ~scope:GlobalConst Boolean in
-          Function { attrib; binding = bvar; definition = Axiom body }
+          Function
+            {
+              attrib;
+              binding = bvar;
+              definition = Axiom body;
+              var_gen = Var.mk_gen ~id_generator:v ();
+            }
         in
         map_prog (fun prog -> Program.decl_global prog name fundef) prog
+        |> fun p -> { p with local_id_gen = None }
     | Decl_ProgEmpty (ProcIdent (_, id), attr) ->
         let _, nattrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         prog
@@ -403,7 +416,9 @@ module BasilASTLoader = struct
           proc_def ) ->
         let p = Program.get_proc_by_name id prog.prog in
         let id_gen = Procedure.local_ids p in
-        let prog = { prog with curr_proc = Some p } in
+        let prog =
+          { prog with curr_proc = Some p; local_id_gen = Some id_gen }
+        in
         let prog, blocks =
           match proc_def with
           | ProcDef_Some (bl, blocks, el) -> sequence_st prog trans_block blocks
@@ -911,7 +926,6 @@ module BasilASTLoader = struct
     | Jump_ProcReturn -> `ProcReturn
 
   and assign_var (prog : load_st) v =
-    let p = Option.get_exn_or "no active proc" prog.curr_proc in
     match Var.scope v with
     | Var.LocalVar | Var.LocalConst -> (prog, v)
     | Var.GlobalVar | Var.GlobalVarShared ->
@@ -1339,13 +1353,8 @@ module BasilASTLoader = struct
         let funct = Types.curry (List.map Var.typ bound) (trans_type rt) in
         let id = unsafe_unsigil (`Local id) in
         let idg =
-          p_st.curr_proc
-          |> Option.map Procedure.local_ids
-          |> Option.get_or ~default:(Program.global_ids p_st.prog)
-          (* FIXME: generally the semantics of nested definitions is bad; e.g.
-            local lookups are wrong and here its unclear what generator to use;
-            we should probably pass through which id generator is currently in
-               use *)
+          p_st.local_id_gen
+          |> Option.get_exn_or "failure: no local id context defined"
         in
         (* assume no shadowing *)
         let funvar = Var.create (idg.decl_or_get id) funct ~scope:LocalConst in
@@ -1580,7 +1589,14 @@ let protect_parse parsefun =
 let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
   let block = protect_parse BasilIR.ParBasilIR.pBlock input lexbuf in
   let prog, proc = Program.create_single_proc ~name:proc () in
-  let st = { prog; params_order = Hashtbl.create 30; curr_proc = Some proc } in
+  let st =
+    {
+      prog;
+      params_order = Hashtbl.create 30;
+      curr_proc = Some proc;
+      local_id_gen = Some (Procedure.local_ids proc);
+    }
+  in
   let st, bl = BasilASTLoader.trans_block st block in
   let bl = BasilASTLoader.conv_lblock [] proc bl in
   let proc, bid =
@@ -1768,7 +1784,8 @@ proc @f (ZF_in:bv1, VF_in:bv1) -> ();
     |}]
 
 let%expect_test "prop type from decl" =
-  let p = ast_of_string
+  let p =
+    ast_of_string
       {|
 var $NF: bv1;
 var $ZF: bv1;

@@ -37,9 +37,10 @@ type implicit_declaration =
     }
 
 type declaration =
-  | Type of { binding : string; typ : Types.t }
+  | Type of { binding : ID.t; typ : Types.t }
   | Function of {
       binding : Var.t;
+      var_gen : Var.generator;
       attrib : Attrib.attrib_map;
       definition : func_type;
     }

@@ -30,7 +30,7 @@ type func_type = Axiom of e | Uninterpreted | Function of e
 
 type implicit_declaration =
   | VariantCase of {
-      variant : string;
+      variant : ID.t;
       belongs_to : Types.t;
       constructor : Var.t; (* function to construct a value of this case *)
     }
@@ -50,7 +50,7 @@ type declaration =
   | Procedure of { definition : proc }
 
 let decl_binding = function
-  | Type { binding } -> binding
+  | Type { binding } -> ID.name binding
   | Variable { binding } -> Var.name binding
   | Function { binding } -> Var.name binding
   | Procedure { definition } -> ID.name (Procedure.id definition)
@@ -301,7 +301,7 @@ let add_decl p decl =
 let decl_global p name f =
   let id : ID.t = p.global_names.decl_exn name in
   let decl = f id in
-  add_decl p id decl
+  add_decl p decl
 
 let decl_global_var p ?(attrib = StringMap.empty) ?(classification = None) name
     scope typ =
@@ -345,17 +345,11 @@ let decl_typ ?(attrib = StringMap.empty) p t =
   match t with
   | Sort (type_name, []) as s ->
       let id : ID.t = p.global_names.decl_exn type_name in
-      {
-        p with
-        declarations =
-          IDMap.add id (Type { binding = type_name; typ = s }) p.declarations;
-      }
+      add_decl p (Type { binding = id; typ = s })
   | Sort (name, variants) as s ->
       let id : ID.t = p.global_names.decl_exn name in
       {
-        p with
-        declarations =
-          IDMap.add id (Type { binding = name; typ = s }) p.declarations;
+        {(add_decl p (Type { binding = id; typ = s }))  with
         implicit_decls =
           IDMap.add_list p.implicit_decls
             (variants
@@ -366,7 +360,7 @@ let decl_typ ?(attrib = StringMap.empty) p t =
                 let constructor = Var.create variant ty ~scope:GlobalConst in
                 ( variant,
                   VariantCase
-                    { variant = ID.name variant; belongs_to = s; constructor }
+                    { variant ; belongs_to = s; constructor }
                 )));
       }
   | _ -> failwith "not declarable type"
