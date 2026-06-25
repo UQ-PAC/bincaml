@@ -112,23 +112,20 @@ let aslp_ids_from_generators ~local_ids =
     Raises an exception if the statement is an assignment to [PC] and
     {!pc_assign} is already set. *)
 let add_stmt_to_block blk ~stmt =
-  let pc_assign =
+  let new_pc_assign =
     match stmt with
     | Stmt.Instr_Assign { al = assigns; _ } ->
         assigns |> List.Assoc.get ~eq:Var.equal Aslp_lexpr.pc_var
     | _ -> None
   in
-  match (pc_assign, blk.pc_assign) with
+  match (new_pc_assign, blk.pc_assign) with
   | Some _, Some _ ->
       failwith
         "add_stmt_to_block: attempt to add PC assignment but pc_assign is \
          already set"
-  | Some _, None ->
+  | Some _, None | None, _ ->
       CCVector.push blk.stmts stmt;
-      { blk with pc_assign }
-  | None, _ ->
-      CCVector.push blk.stmts stmt;
-      blk
+      { blk with pc_assign = new_pc_assign }
 
 let add_stmt_to_active stmt (lifter_state : lifter_state) =
   let diamond = lifter_state.diamond in
