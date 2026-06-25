@@ -1,38 +1,6 @@
-(** A zipper is a concept in functional programming (especially, Haskell).
-    Functionally, a zipper for some data type ['a t] acts similarly to ['a t],
-    but augmented with the ability to point to one ['a] element, called the
-    focus.
-
-    A desirable property of zippers is that they should allow for efficient
-    (usually, [O(1)]) movement to adjacent positions within the data structure.
-    In practice, this leads to zippers storing an "inside-out" view of the data
-    structure. For example, a list zipper is made up of two lists, one of which
-    is reversed:
-    {v
-    [1; 2; 3; 4; 5; 6]
-              ^ pointer
-
-    { before = [3, 2, 1]; focus_and_after = [4, 5, 6] }
-    v}
-    In trees, this manifests as storing a bottom-up path to the focus. In this
-    module, this is {!diamond_path}.
-
-    {1 Background}
-
-    There are lots of resources on zippers.
-
-    The idea of a zipper was first described by
-    {{:https://gallium.inria.fr/~huet/PUBLIC/zip.pdf} Huet in 1993}. In this
-    module, we represent a zipper as a "one-hole context" combined with a
-    subtree. This is described by
-    {{:http://strictlypositive.org/diff.pdf} McBride}.
-
-    This module was mostly implemented by following the
-    {{:https://wiki.haskell.org/Zipper} Haskell wiki} (if reading this, be aware
-    that our inner nodes store values). If you enjoy Tony Morris's teaching
-    style, he has
-    {{:https://www.youtube.com/watch?v=HqHdgBXOOsE} a talk on YouTube} (the
-    first 10 minutes are most relevant). *)
+(** Possibly-nested control-flow diamonds. This is enough to represent the
+    runtime control flow emitted by the ASLp lifter, and the explicit structure
+    helps with manipulation and analysis of ASLp's output. *)
 
 (** {1 Diamonds} *)
 
@@ -80,10 +48,51 @@ let empty value : 'a diamond = Leaf value
     outermost ['a] value. *)
 let last = function Leaf value | Diamond { value } -> value
 
-(** {1 Zipper for diamonds} *)
+(** {1 Zippers}
+
+    A zipper is a concept in functional programming (especially, Haskell) that
+    allows for efficient stepwise movement through a recursive algebraic data
+    type.
+
+    Functionally, a zipper for some data type ['a t] acts similarly to ['a t],
+    but augmented with the ability to point to one ['a] element, called the
+    focus.
+
+    A desirable property of zippers is that they should allow for efficient
+    (usually, [O(1)]) movement to adjacent positions within the data structure.
+    In practice, this leads to zippers storing an "inside-out" view of the data
+    structure. For example, a list zipper is made up of two lists, one of which
+    is reversed:
+    {v
+    [1; 2; 3; 4; 5; 6]
+              ^ pointer
+
+    { before = [3, 2, 1]; focus_and_after = [4, 5, 6] }
+    v}
+    In trees, this manifests as storing a bottom-up path to the focus. In this
+    module, this is visible in {!diamond_path}.
+
+    {2 Resources}
+
+    There are lots of resources on zippers. The idea of a zipper was first
+    described by
+    {{:https://gallium.inria.fr/~huet/PUBLIC/zip.pdf} Huet in 1993}. In this
+    module, we represent a zipper as a "one-hole context" combined with a
+    subtree. This is described by
+    {{:http://strictlypositive.org/diff.pdf} McBride}.
+
+    This module was mostly implemented by following the
+    {{:https://wiki.haskell.org/Zipper} Haskell wiki} (if reading this, be aware
+    that our inner nodes store values). If you enjoy Tony Morris's teaching
+    style, he has
+    {{:https://www.youtube.com/watch?v=HqHdgBXOOsE} a talk on YouTube} (the
+    first 10 minutes are most relevant). *)
+
+(** {2 Preliminaries} *)
 
 (** Moving one step through the {!diamond}. Each variant records the direction
-    of the step, as well as the paths {i not} taken. *)
+    of the step, as well as the paths {i not} taken. This allows the {!diamond}
+    to be reconstructed when moving "back" through a path. *)
 type 'a diamond_step =
   | Left of { value : 'a; right : 'a diamond; pred : 'a diamond }
   | Right of { value : 'a; left : 'a diamond; pred : 'a diamond }
@@ -112,6 +121,8 @@ type 'a diamond_path = 'a diamond_step list [@@deriving show]
     As one consequence of this, a {!diamond_path} of [[]] represents a
     {!diamond} which is all hole:
     {v @ v} *)
+
+(** {2 Zipper for diamond} *)
 
 type 'a diamond_zipper = 'a diamond * 'a diamond_path [@@deriving show]
 (** Conceptually, a {!diamond_zipper} is a ['a ]{!diamond} but with additional
@@ -148,7 +159,7 @@ let of_zipper : 'a diamond_zipper -> 'a diamond =
 (** Converts the given {!diamond} to a zipper, initially focused at {!last}. *)
 let to_zipper : 'a diamond -> 'a diamond_zipper = fun dmd -> (dmd, [])
 
-(** {1 Movement functions}
+(** {2 Movement functions}
 
     When moving around the nested diamonds, there is a notion of "level" and
     whether two positions are at the same nesting level. The rule is that two
@@ -214,7 +225,7 @@ let move_in_to direction :
       | `R -> Ok (right, Right { value; left; pred } :: rest)
       | `P -> Ok (pred, Pred { value; left; right } :: rest))
 
-(** {1 Modification functions} *)
+(** {2 Modification functions} *)
 
 (** Modifies the zipper by inserting a new diamond {i after} the current
     position in program order, using the given parameters to build the new
