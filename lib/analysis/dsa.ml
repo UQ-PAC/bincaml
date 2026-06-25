@@ -81,18 +81,18 @@ module NodeFlags = struct
   (* A bool uses 64 bits of memory and we're storing flags per node so it's probably worth using bitflags *)
   type t = int
 
-  let[@inline] empty = 0
-  let[@inline] ( >> ) = Int.shift_right_logical
-  let[@inline] ( << ) = Int.shift_left
-  let[@inline] ( || ) = Int.logor
-  let[@inline] ( & ) = Int.logand
+  let empty = 0
+  let ( >> ) = Int.shift_right_logical
+  let ( << ) = Int.shift_left
+  let ( || ) = Int.logor
+  let ( & ) = Int.logand
   let[@inline] ( != ) a b = not @@ (a = b)
   let[@inline] get_flag idx f = (f >> idx & 1) != 0
   let[@inline] set_flag idx f = f || 1 << idx
   let[@inline] clear_flag idx f = f & Int.lognot (1 << idx)
 
   (* CCBitField didn't have a join function :( *)
-  let[@inline] join f f' = f || f'
+  let join = ( || )
 
   (* Should be used like `get_flag heap f` or `clear_flag unknown f` *)
 
