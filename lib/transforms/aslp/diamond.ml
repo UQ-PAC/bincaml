@@ -135,13 +135,15 @@ let subdiamond : 'a diamond_zipper -> 'a diamond = function this, _ -> this
 
 (** Converts the given {!diamond_zipper} to a full {!diamond}. *)
 let of_zipper : 'a diamond_zipper -> 'a diamond =
-  CCFun.uncurry
-  @@ List.fold_left (fun this step ->
+ fun (this, path) ->
+  List.fold_left
+    (fun this step ->
       match (this, step) with
       | left, Left { value; right; pred }
       | right, Right { value; left; pred }
       | pred, Pred { value; left; right } ->
           Diamond { value; left; right; pred })
+    this path
 
 (** Converts the given {!diamond} to a zipper, initially focused at {!last}. *)
 let to_zipper : 'a diamond -> 'a diamond_zipper = fun dmd -> (dmd, [])
