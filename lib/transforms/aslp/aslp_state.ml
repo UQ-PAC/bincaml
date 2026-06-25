@@ -30,8 +30,9 @@ type aslp_diamond = aslp_block Diamond.diamond [@@deriving show]
 (** Offline lifter state representing a control flow diamond. See {!Diamond} for
     more details of the structure.
 
-    Alone, this is used to represent the lifter state {i between} instructions.
-    Or, it forms a part of {!lifter_state} for {i within}-instruction state. *)
+    This is used to represent the final output of the offline IBI. However, it
+    is not the representation which is used {i during} lifting. For the
+    "in-progress" representation, see {!diamond}. *)
 
 type aslp_ids = { local_id : unit -> string }
 (** Generators for unique IDs used by the offline lifter.
@@ -43,7 +44,8 @@ type lifter_state = {
   address : Bitvec.t;
       (** Byte address of the instruction currently being lifted. *)
   diamond : aslp_block Diamond.diamond_zipper;
-      (** Lifter state representing a control flow diamond. *)
+      (** Lifter state representing a control flow diamond while it is being
+          built. *)
   generator : aslp_ids; [@opaque]  (** Generators for ID names. *)
   names : (string, string) Hashtbl.t;
       (** Map of ASLp local variable names to the "ID-ified" names produced for
@@ -166,8 +168,8 @@ let ensure_pc_assigned ~address =
     the beginning of the instruction). *)
 let ensure_pc_consistency ~address state =
   let before_skel = Diamond.skeleton state in
-  let go state d = state |> Diamond.move_in_to d |> Result.get_ok in
-  let left = go state `L and right = go state `R in
+  let left = state |> Diamond.move_in_to `L |> Result.get_ok
+  and right = state |> Diamond.move_in_to `R |> Result.get_ok in
 
   let state =
     match (Diamond.focus left, Diamond.focus right) with
@@ -181,9 +183,11 @@ let ensure_pc_consistency ~address state =
         left (* arbitrary *)
   in
 
-  let state = state |> Diamond.move_out_of |> Result.get_ok in
+  let state = state |> Diamond.move_out_of |> Result.get_ok
+  and left = state |> Diamond.move_in_to `L |> Result.get_ok
+  and right = state |> Diamond.move_in_to `R |> Result.get_ok in
   assert (Diamond.(equal_skeleton before_skel (skeleton state)));
-  let left = go state `L and right = go state `R in
+
   match (Diamond.focus left, Diamond.focus right) with
   | { pc_assign = None }, { pc_assign = None } -> state
   | { pc_assign = Some lpc; assume = lassume }, { pc_assign = Some rpc } ->

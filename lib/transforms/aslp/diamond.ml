@@ -19,6 +19,8 @@
 
     {1 Background}
 
+    There are lots of resources on zippers.
+
     The idea of a zipper was first described by
     {{:https://gallium.inria.fr/~huet/PUBLIC/zip.pdf} Huet in 1993}. In this
     module, we represent a zipper as a "one-hole context" combined with a
@@ -52,7 +54,16 @@
     This is isomorphic to an annotated ternary tree. However, for the
     control-flow interpretation, it is easier to think of it as {i nested}
     control-flow diamonds. In the diagram above, [pred], [left], and [right]
-    could all be their own diamonds (but [value] is terminal). *)
+    could all be their own diamonds (but [value] is terminal).
+
+    This diamond is "upside-down" in a sense. You could imagine an alternative
+    diamond which has left/right/{i succ} fields, where the outermost value is
+    the {i first} in program order. This might even seem more natural, but the
+    current encoding (with [pred]) leads to much simpler branch switching and PC
+    handling. This is because branch switching and PC insertion are both
+    concerned with what happens at the {i end} of a control-flow diamond. The
+    "upside-down" view makes the control-flow join values conveniently
+    accessible. *)
 type 'a diamond =
   | Leaf of 'a
   | Diamond of {
@@ -164,8 +175,9 @@ let to_zipper : 'a diamond -> 'a diamond_zipper = fun dmd -> (dmd, [])
          0
     v} *)
 
-(** Moves the zipper to a position in the same diamond level. That is, to a
-    sibling of the current position's containing {!diamond}. *)
+(** Moves the zipper to a position in the same diamond level. That is, to the
+    last position of an adjacent subdiamond (see the [1] positions in the
+    diagram above). *)
 let move_adjacent direction :
     'a diamond_zipper -> ('a diamond_zipper, 'a diamond_zipper) result =
   function
