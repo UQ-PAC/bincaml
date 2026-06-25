@@ -47,6 +47,8 @@ let rec find_cell (c : cell) =
   match !c with
   | Path c' ->
       let p = find_cell c' in
+      (* An intermediate steps is unfortunately necessary in order to fit
+         within the type system *)
       c := Path p;
       p
   | Cell _ -> c
@@ -63,86 +65,86 @@ let rec find_node (n : node) =
 (** Get the offsets interval of this cell's parent *)
 let offsets (c : cell) =
   match !(find_cell c) with
-  | Path _ -> failwith "find_cell returned non terminal"
   | Cell { offsets } -> offsets
+  | _ -> failwith "find_cell returned non terminal"
 
 (** Get the node of this cell's parent *)
 let node_of (c : cell) =
   match !(find_cell c) with
-  | Path _ -> failwith "find_cell returned non terminal"
   | Cell { node } -> node
+  | _ -> failwith "find_cell returned non terminal"
 
 (** Get the pointees of this cell's parent *)
 let pointees (c : cell) =
   match !(find_cell c) with
-  | Path _ -> failwith "find_cell returned non terminal"
   | Cell { pointees } -> pointees
+  | _ -> failwith "find_cell returned non terminal"
 
 (** Shift the interval of the cell's parent by the given offset *)
 let shift off (c : cell) =
   match !(find_cell c) with
-  | Path _ -> failwith "find_cell returned non terminal"
   | Cell r -> r.offsets <- Interval.shift off r.offsets
+  | _ -> failwith "find_cell returned non terminal"
 
 (** Set the node of this cell's parent *)
 let set_node node (c : cell) =
   match !(find_cell c) with
-  | Path _ -> failwith "find_cell returned non terminal"
   | Cell r -> r.node <- node
+  | _ -> failwith "find_cell returned non terminal"
 
 (** Set the pointees of this cell's parent *)
 let set_pointees pointees (c : cell) =
   match !(find_cell c) with
-  | Path _ -> failwith "find_cell returned non terminal"
   | Cell r -> r.pointees <- pointees
+  | _ -> failwith "find_cell returned non terminal"
 
 (** Add to the list of pointees of this cell's parent *)
 let add_pointees pointees (c : cell) =
   match !(find_cell c) with
-  | Path _ -> failwith "find_cell returned non terminal"
   | Cell r ->
       r.pointees <-
         List.fold_left
           (flip (List.add_nodup ~eq:CCEqual.physical))
           r.pointees
           (List.map find_cell pointees)
+  | _ -> failwith "find_cell returned non terminal"
 
 (** Get the cells of this node's parent *)
 let cells (n : node) =
   match !(fst @@ find_node n) with
-  | NodePath _ -> failwith "find_node returned non terminal"
   | Node r -> r.cells
+  | _ -> failwith "find_node returned non terminal"
 
 (** Get the flags of this node's parent *)
 let flags (n : node) =
   match !(fst @@ find_node n) with
-  | NodePath _ -> failwith "find_node returned non terminal"
   | Node r -> r.flags
+  | _ -> failwith "find_node returned non terminal"
 
 (** Get the id of this node's parent *)
 let node_id (n : node) =
   match !(fst @@ find_node n) with
-  | NodePath _ -> failwith "find_node returned non terminal"
   | Node r -> r.id
+  | _ -> failwith "find_node returned non terminal"
 
 (** Set the cells of this node *)
 let set_cells cells (n : node) =
   match !(fst @@ find_node n) with
-  | NodePath _ -> failwith "find_node returned non terminal"
   | Node r -> r.cells <- cells
+  | _ -> failwith "find_node returned non terminal"
 
 (** Join the flags of this node with the new flags *)
 let join_flags flags (n : node) =
   match !(fst @@ find_node n) with
-  | NodePath _ -> failwith "find_node returned non terminal"
   | Node r -> r.flags <- Node_flags.join r.flags flags
+  | _ -> failwith "find_node returned non terminal"
 
 (** Make the second cell point to the first *)
 let join_paths (c1 : cell) (c2 : cell) =
   match (!(find_cell c1), !(find_cell c2)) with
-  | Path _, _ | _, Path _ -> failwith "find_node returned non terminal"
   | Cell r, Cell { pointees = p } ->
       if not @@ CCEqual.physical c1 c2 then c2 := Path c1
+  | _ -> failwith "find_node returned non terminal"
 
 (** Returns whether the node has its cell intervals sorted and disjoint *)
 let is_sorted node =
@@ -194,9 +196,8 @@ let collapse node =
 
 (** Join c2 into c1 under the assumption that they are in the same node. It is
     left to the caller to preserve node structure. *)
-let rec join_cells_only c1 c2 =
+let join_cells_only c1 c2 =
   match (!(find_cell c1), !(find_cell c2)) with
-  | Path _, _ | _, Path _ -> failwith "find_cell returned non terminal"
   | Cell a, Cell b -> (
       assert (CCEqual.physical a.node b.node);
       let pointees =
@@ -209,19 +210,17 @@ let rec join_cells_only c1 c2 =
       a.offsets <- offsets;
       join_paths c1 c2;
       match offsets with Top -> collapse a.node | _ -> ())
+  | _ -> failwith "find_cell returned non terminal"
 
 (** Join the two nodes, with the second shifted by the given offset. The second
     node becomes a NodePath and the first is kept *)
-and join_nodes_at off n1 n2 =
+let join_nodes_at off n1 n2 =
   check_valid_node n1;
   check_valid_node n2;
+  let n1, off' = find_node n1 in
+  let n2, off'' = find_node n2 in
+  let off = Z.(off - off' - off'') in
   match (!n1, !n2) with
-  | NodePath _, _ ->
-      let p, off' = find_node n1 in
-      join_nodes_at (Z.( - ) off off') p n2
-  | _, NodePath _ ->
-      let p, off' = find_node n2 in
-      join_nodes_at (Z.( + ) off off') n1 p
   | Node r1, Node r2 ->
       if CCEqual.physical n1 n2 then assert (Z.equal Z.zero off)
       else (
@@ -265,49 +264,45 @@ and join_nodes_at off n1 n2 =
             check_valid_node n1;
             check_valid_node n2
         | _ -> ())
+  | _ -> failwith "find_node returned non terminal"
 
 (** Inserts the cell into the node. *)
-let rec insert node cell =
-  match !node with
-  | NodePath _ ->
-      let p, off = find_node node in
-      shift off cell;
-      insert p cell
-  | Node r -> (
-      match !cell with
-      | Path _ -> insert node (find_cell cell)
-      | Cell { offsets = Interval.Bot } -> failwith "Bot cells should not exist"
-      | Cell { offsets = Top } ->
-          r.cells <- cell :: r.cells;
-          collapse node
-      | Cell ({ offsets = Interval _ as i } as cr) -> (
-          check_valid_node node;
-          set_node node cell;
-          cr.node <- node;
-          let rec insert' = function
-            | [] -> Some [ cell ]
-            | c :: cs -> (
-                match !c with
-                | Path _ -> insert' (find_cell c :: cs)
-                | Cell { offsets = Top } ->
-                    node := Node { r with cells = cell :: r.cells };
-                    collapse node;
-                    None
-                | Cell { offsets = Bot } ->
-                    failwith "Bot cells should not exist"
-                | Cell { offsets = Interval _ as j } when Interval.left_of i j
-                  ->
-                    Some (cell :: c :: cs)
-                | Cell { offsets = Interval _ as j } when Interval.right_of i j
-                  ->
-                    Option.map (List.cons c) @@ insert' cs
-                | Cell { offsets = Interval _ } ->
-                    (* If `cell` overlaps with `c`, join `cell` and `c`
+let insert node cell =
+  let node, off = find_node node in
+  let cell = find_cell cell in
+  shift off cell;
+  match (!node, !cell) with
+  | Node r, Cell { offsets = Interval.Bot } ->
+      failwith "Bot cells should not exist"
+  | Node r, Cell { offsets = Top } ->
+      r.cells <- cell :: r.cells;
+      collapse node
+  | Node r, Cell ({ offsets = Interval _ as i } as cr) -> (
+      check_valid_node node;
+      set_node node cell;
+      cr.node <- node;
+      let rec insert' = function
+        | [] -> Some [ cell ]
+        | c :: cs -> (
+            match !(find_cell c) with
+            | Path _ -> failwith "find_cell returned non terminal"
+            | Cell { offsets = Top } ->
+                node := Node { r with cells = cell :: r.cells };
+                collapse node;
+                None
+            | Cell { offsets = Bot } -> failwith "Bot cells should not exist"
+            | Cell { offsets = Interval _ as j } when Interval.left_of i j ->
+                Some (cell :: c :: cs)
+            | Cell { offsets = Interval _ as j } when Interval.right_of i j ->
+                Option.map (List.cons c) @@ insert' cs
+            | Cell { offsets = Interval _ } ->
+                (* If `cell` overlaps with `c`, join `cell` and `c`
                          together and drop `c` from the list *)
-                    join_cells_only cell c;
-                    insert' cs)
-          in
-          match insert' r.cells with Some n -> r.cells <- n | None -> ()))
+                join_cells_only cell c;
+                insert' cs)
+      in
+      match insert' r.cells with Some n -> r.cells <- n | None -> ())
+  | _ -> failwith "union find returned non terminal node"
 
 (** Creates an empty node *)
 let empty_node ?(flags = Node_flags.empty) () =
@@ -412,11 +407,10 @@ and unify_node_of c = node_of c |> cells |> List.iter unify_pointees
 (** Find a cell corresponding to an interval in a node. If the interval overlaps
     with multiple cells, they are merged, and if it overlaps with no cells None
     is returned. *)
-let rec get_cell i (n : node) : cell option =
+let get_cell i (n : node) : cell option =
+  let n, off = find_node n in
+  let i = Interval.shift off i in
   match !n with
-  | NodePath _ ->
-      let p, off = find_node n in
-      get_cell (Interval.shift off i) p
   | Node r -> (
       let rec aux = function
         | [] -> []
@@ -430,6 +424,7 @@ let rec get_cell i (n : node) : cell option =
       | c :: cs ->
           List.iter (join c) cs;
           Some c)
+  | _ -> failwith "find_node returned non terminal"
 
 (** Get all cells corresponding to a value set. *)
 let cells_of (v : Sva.SymAddrSetLattice.t) (g : t) : cell list =
