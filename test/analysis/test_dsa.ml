@@ -1,6 +1,9 @@
 open Lang.Common
 open Analysis.Dsa
 
+(* TODO decide on how flags should be tested (if at all) maybe only test in
+        expect tests and also symbolic bases probably*)
+
 open struct
   open STM
 
