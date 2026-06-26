@@ -319,7 +319,7 @@ let temp_proc_to_ir_proc pc_var all_blocks m (p : temp_proc) =
 let module_to_ir_prog ir_cfg (m : Module.t) =
   let prog = Lang.Program.empty ~name:m.name () in
   let pc_n, pc_ty = conf.pc_var in
-  let prog, pc_var = Lang.Program.decl_global_var prog pc_n GlobalVar pc_ty in
+  let prog, pc_var = Lang.Program.decl_global_var prog pc_n Var.None pc_ty in
   (* (1) build Gfir CFG *)
   let entry_proc, procs = gtirb_to_gfir prog ir_cfg m in
   (* collect map of all blocks in order to fixup interprocedural control-flow

@@ -49,7 +49,7 @@ let simplify_prog_exprs rewriter ?visit (p : Program.t) =
     Program.(
       fun id ->
         (function
-        | Function { binding; attrib; definition ; var_gen } ->
+        | Function { binding; attrib; definition; var_gen } ->
             let definition =
               match definition with
               | Axiom b ->
@@ -58,7 +58,7 @@ let simplify_prog_exprs rewriter ?visit (p : Program.t) =
               | Function b -> Function (rewriter ?visit b)
               | Uninterpreted -> Uninterpreted
             in
-            Function { binding; attrib; definition ; var_gen }
+            Function { binding; attrib; definition; var_gen }
         | o -> o))
     p
 

@@ -71,7 +71,7 @@ let should_lift ~skip_observable ~skip_maps v =
   let skip =
     (skip_observable && Var.is_shared v)
     || (skip_maps && Var.typ v |> function Map _ -> true | _ -> false)
-    || (Var.is_global v && Var.is_constant v)
+    || (Var.is_global v && Var.is_const v)
   in
   not skip
 
@@ -236,7 +236,7 @@ let lift_procedure_params prog ~skip_observable ~skip_maps all_lifted procid
     let alg node =
       match node with
       | UnaryExpr { op = `Old; arg } -> replace [%here] arg
-      | RVar { id } when Var.is_constant id -> Keep
+      | RVar { id } when Var.is_const id -> Keep
       | RVar { id } -> (
           match StringMap.find_opt (Var.name id) glob_to_inparam with
           | Some v -> replace [%here] (rvar v)
@@ -266,8 +266,7 @@ let lift_procedure_params prog ~skip_observable ~skip_maps all_lifted procid
     let alg node =
       match node with
       | UnaryExpr { op = `Old; arg } -> replace [%here] (rewrite_old_expr arg)
-      | RVar { id } when Var.is_constant id || (not @@ VarSet.mem id fvs) ->
-          Keep
+      | RVar { id } when Var.is_const id || (not @@ VarSet.mem id fvs) -> Keep
       | RVar { id } -> (
           match StringMap.find_opt (Var.name id) glob_to_outparam with
           | Some v -> replace [%here] (rvar v)

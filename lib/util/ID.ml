@@ -23,6 +23,7 @@ open struct
     type cache
 
     type generator = {
+      gen_id : string;  (** unique id for this generator *)
       get_id : string -> t;
           (** return a previously declared unique integer identifier for a name
           *)
@@ -38,7 +39,7 @@ open struct
       get_declared : unit -> M.t;
     }
 
-    val make_gen : unit -> generator
+    val make_gen : ?scope_name:string -> unit -> generator
   end
 end
 
@@ -142,6 +143,7 @@ module ID : ID_Pub = struct
       (name, id)
 
   type generator = {
+    gen_id : string;
     get_id : string -> t;
         (** return a previously declared unique integer identifier for a name *)
     get_name : int -> t;  (** get name for a given unique integer identifier *)
@@ -155,9 +157,14 @@ module ID : ID_Pub = struct
     get_declared : unit -> M.t;
   }
 
+  let gen_ids = Fix.Gensym.make ()
+
   (** return a generator for unique hash-consed string identifiers. general
       implementation of a declaration *)
-  let make_gen () : generator =
+  let make_gen ?scope_name () : generator =
+    let gen_id =
+      Option.get_or ~default:(Int.to_string (gen_ids ())) scope_name
+    in
     let c =
       {
         names = ref M.empty;
@@ -166,6 +173,7 @@ module ID : ID_Pub = struct
       }
     in
     {
+      gen_id;
       get_id = get_id c;
       get_name = get_name c;
       fresh = fresh c;

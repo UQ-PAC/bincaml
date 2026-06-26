@@ -330,7 +330,7 @@ let%expect_test "normalise" =
     @@ BasilExpr.applyintrin ~op:`AND
          [
            BasilExpr.boolnot
-             (BasilExpr.boolnot (BasilExpr.rvar (gs.fresh  Boolean)));
+             (BasilExpr.boolnot (BasilExpr.rvar (gs.fresh Boolean)));
            BasilExpr.rvar (gs.fresh Boolean);
          ]
   in

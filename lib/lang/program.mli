@@ -30,11 +30,7 @@ type prog_spec = { rely : e list; guarantee : e list }
 type func_type = Axiom of e | Uninterpreted | Function of e
 
 type implicit_declaration =
-  | VariantCase of {
-      variant : string;
-      belongs_to : Types.t;
-      constructor : Var.t;
-    }
+  | VariantCase of { variant : ID.t; belongs_to : Types.t; constructor : Var.t }
 
 type declaration =
   | Type of { binding : ID.t; typ : Types.t }
@@ -99,6 +95,7 @@ val flat_map_decls : (ID.t -> declaration -> declaration Iter.t) -> t -> t
 val pretty_to_chan : out_channel -> t -> unit
 val decl_global : t -> string -> (ID.t -> declaration) -> t
 val add_decl : t -> declaration -> t
+val var_generator : t -> Var.generator
 
 val add_var_decl :
   t -> ?attrib:Attrib.attrib_map -> ?classification:e -> Var.t -> t
@@ -108,11 +105,11 @@ val decl_global_var :
   ?attrib:Attrib.t Types.StringMap.t ->
   ?classification:e option ->
   string ->
-  Var.scope ->
+  Var.access_tag ->
   Types.t ->
   t * Var.t
 
-val decl_or_get_var : t -> string -> Var.scope -> Types.t -> t * Var.t
+val decl_or_get_var : t -> string -> Var.access_tag -> Types.t -> t * Var.t
 val global_ids : t -> ID.generator
 val decl_typ : ?attrib:'a Types.StringMap.t -> t -> Types.t -> t
 

@@ -232,7 +232,6 @@ end = struct
     let graph = G.add_vertex graph Return in
     graph
 
-
   let create id ?local_id_gen ?(is_stub = false)
       ?(formal_in_params = StringMap.empty)
       ?(formal_out_params = StringMap.empty) ?(captures_globs = [])
@@ -468,23 +467,27 @@ let lookup_local_decl_exn p v =
   |> Option.or_lazy ~else_:(fun () -> StringMap.find_opt v (formal_in_params p))
   |> Option.get_exn_or ("no local decl : " ^ v)
 
+let var_generator p =
+  let g = Var.mk_gen ~id_generator:(local_ids p) ~scope:`Local () in
+  g
+
 let get_local p ?(pure = false) name typ : Var.t =
-  let scope = if pure then Var.LocalConst else LocalVar in
-  let v = Var.with_name (local_ids p) name ~scope typ in
+  let access = if pure then Var.Const else Var.None in
+  let v = (var_generator p).with_name name ~access typ in
   Hashtbl.replace (local_decls p) (Var.name v) v;
   v
 
 let decl_local p ?(pure = false) name typ : Var.t =
-  let scope = if pure then Var.LocalConst else LocalVar in
-  let v = Var.create_exn (local_ids p) name ~scope typ in
+  let access = if pure then Var.Const else Var.None in
+  let v = (var_generator p).create_exn name ~access typ in
   Hashtbl.replace (local_decls p) (Var.name v) v;
   v
 
 let fresh_var p ?(pure = false) ?name typ : Var.t =
   let name = Option.map (String.drop_while (Char.equal '$')) name in
+  let access = if pure then Var.Const else Var.None in
   let name = Option.get_or ~default:"v" name in
-  let scope = if pure then Var.LocalConst else LocalVar in
-  let v = Var.fresh (local_ids p) name typ ~scope in
+  let v = (var_generator p).fresh ~name typ ~access in
   Hashtbl.replace (local_decls p) (Var.name v) v;
   v
 

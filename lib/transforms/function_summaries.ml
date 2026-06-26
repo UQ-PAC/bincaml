@@ -148,8 +148,8 @@ let add_decls solver prog =
        Program.(
          function
          | Type { binding } -> true
-         | Variable { binding } -> Var.is_constant binding
-         | Function { binding } -> Var.is_constant binding
+         | Variable { binding } -> Var.is_const binding
+         | Function { binding } -> Var.is_const binding
          | Procedure { definition } -> false)
   |> Iter.map (fun d -> Expr_smt.SMTLib2.trans_decl d Expr_smt.SMTLib2.empty)
   |> Iter.map fst

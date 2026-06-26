@@ -18,21 +18,15 @@ struct
   open Var
 
   let r p n =
-    BasilExpr.rvar
-      (p.with_name ~scope:Var.GlobalVar (Printf.sprintf "$R%d" n)
-         (Types.Bitvector 64))
+    BasilExpr.rvar (p.with_name (Printf.sprintf "$R%d" n) (Types.Bitvector 64))
 
   let r_in p n =
     BasilExpr.rvar
-      (p.with_name ~scope:Var.LocalVar
-         (Printf.sprintf "R%d_in" n)
-         (Types.Bitvector 64))
+      (p.with_name (Printf.sprintf "R%d_in" n) (Types.Bitvector 64))
 
   let r_out p n =
     BasilExpr.rvar
-      (p.with_name ~scope:Var.LocalVar
-         (Printf.sprintf "R%d_out" n)
-         (Types.Bitvector 64))
+      (p.with_name (Printf.sprintf "R%d_out" n) (Types.Bitvector 64))
 
   let transform_main (p : Program.proc) =
     (* TODO: Specify Gammas Oneday *)

@@ -448,7 +448,7 @@ module SMTLib2 = struct
 end
 
 let%expect_test "datatypes" =
-  let g = (ID.make_gen ()) in
+  let g = ID.make_gen () in
   let x : Program.declaration =
     Type { binding = g.decl_or_get "test"; typ = Types.mk_sort "Opaque" }
   in

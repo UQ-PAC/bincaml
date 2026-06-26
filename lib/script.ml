@@ -312,7 +312,12 @@ let load_gtirb st fname =
         | Ok e ->
             Loader.Loadir.(
               Some
-                { prog = e; curr_proc = None; params_order = Hashtbl.create 0 })
+                {
+                  prog = e;
+                  curr_proc = None;
+                  params_order = Hashtbl.create 0;
+                  local_id_gen = None;
+                })
         | _ -> None
       in
       { st with load_st = p })

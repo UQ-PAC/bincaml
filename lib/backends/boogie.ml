@@ -503,7 +503,8 @@ let pretty_declaration (d : Program.declaration) =
           ")"
       ^ bracket " returns (" (text (type_to_string rt)) ")"
       ^ text ";"
-  | Program.Type { binding; typ } -> pretty_type_declaration binding typ
+  | Program.Type { binding; typ } ->
+      pretty_type_declaration (ID.name binding) typ
   | Procedure { definition } -> pretty_procedure definition
 
 let pretty_program (p : Program.t) =

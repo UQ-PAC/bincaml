@@ -1,67 +1,44 @@
 open Containers
 open Mtypes
 
+type access_tag = Const | Shared | None [@@deriving show, eq, ord]
+type scope_tag = Global of string | Local of string [@@deriving show, eq, ord]
 
-
-type scope = LocalConst | LocalVar | GlobalVar | GlobalConst | GlobalVarShared
-[@@deriving show, eq, ord]
-
-type t = { name : ID.t; typ : Types.t; scope : scope }
+type t = { name : ID.t; scope : scope_tag; typ : Types.t; tags : access_tag }
 [@@deriving eq, ord, show]
 
 let hash v =
-    Hash.(combine3 (ID.hash v.name) (Hash.poly v.scope) (Hash.poly v.typ))
+  Hash.(combine3 (ID.hash v.name) (Hash.poly v.tags) (Hash.poly v.typ))
 
-
+(*
 let copy ?name ?scope ?typ (v : t) =
     {
         name = Option.get_or ~default:v.name name;
         typ = Option.get_or ~default:v.typ typ;
         scope = Option.get_or ~default:v.scope scope;
-    }
+    } *)
 
-let to_int (v : t) = ID.index (v.name)
+let to_int (v : t) = ID.index v.name
 let name (e : t) = ID.name @@ e.name
-
 let id v = v.name
-
-let scope (e : t) = e.scope
+let tags (e : t) = e.tags
 let typ (e : t) = e.typ
 let to_string v = name v ^ ":" ^ Types.to_string @@ typ v
 let pp fmt v = Format.pp_print_string fmt (to_string v)
 let pretty v = Containers_pp.text (to_string v)
-
-
-let is_local (v : t) =
-  match scope v with LocalVar -> true | LocalConst -> true | _ -> false
-
-let is_global (v : t) =
-  match scope v with
-  | GlobalVar -> true
-  | GlobalConst -> true
-  | GlobalVarShared -> true
-  | _ -> false
-
-let is_mutable (v : t) =
-  match scope v with GlobalVar -> true | LocalVar -> true | _ -> false
-
-let is_constant (v : t) =
-  match scope v with LocalConst -> true | GlobalConst -> true | _ -> false
-
-let is_pure (v : t) = is_constant v
-
-let is_shared (v : t) =
-  match scope v with GlobalVarShared -> true | _ -> false
-
+let is_local (v : t) = match v.scope with Local _ -> true | Global _ -> false
+let is_global (v : t) = not (is_local v)
+let is_const (v : t) = match v.tags with Const -> true | _ -> false
+let access (v : t) = v.tags
+let is_shared (v : t) = match v.tags with Shared -> true | _ -> false
 let to_string_il_rvar v = to_string v
 
 let to_string_il_lvar v =
-  match scope v with
-  | LocalVar -> "var " ^ to_string v
-  | LocalConst -> "let " ^ to_string v
-  | GlobalVar -> to_string v
-  | GlobalVarShared -> to_string v
-  | GlobalConst -> "let " ^ to_string v
+  match (v.scope, v.tags) with
+  | _, Const -> "let " ^ to_string v
+  | Local _, _ -> "var " ^ to_string v
+  | Global _, None -> to_string v
+  | Global _, Shared -> to_string v
 
 let to_decl_string_il v =
   let modifiers = if is_shared v then "observable " else "" in
@@ -69,69 +46,58 @@ let to_decl_string_il v =
 
 (** Variable Generators *)
 
-
 type generator = {
-  fresh: ?name:string -> ?scope:scope -> Types.t -> t;
-  (** generate a fresh unique name optional string prefix hint *)
-  with_name: string -> ?scope:scope -> Types.t -> t;
-  (** Create or return  variable with name*)
-  create_exn: string -> ?scope:scope -> Types.t -> t;
-  (** Create variable or throw exception if it was previously declared *)
-  generator: ID.generator;
-  (** The internal ID generator this closes over *)
+  scope : scope_tag;
+  fresh : ?name:string -> ?access:access_tag -> Types.t -> t;
+      (** generate a fresh unique name optional string prefix hint *)
+  with_name : string -> ?access:access_tag -> Types.t -> t;
+      (** Create or return variable with name*)
+  create_exn : string -> ?access:access_tag -> Types.t -> t;
+      (** Create variable or throw exception if it was previously declared *)
+  generator : ID.generator;  (** The internal ID generator this closes over *)
 }
-
 
 type ('t, 'a, 'g) any_gen = {
-  call: 'a -> 't;
-  (** Create variable or throw exception if it was previously declared *)
-  inner: 'g
+  call : 'a -> 't;
+      (** Create variable or throw exception if it was previously declared *)
+  inner : 'g;
 }
 
-
-let create name ?(scope = LocalVar) typ =
+open struct
+  let create name id_gen ?(access = None) typ =
     (* disallow creating local const as its too hard to have declaration order *)
-    match scope with
-    | LocalConst -> { name; typ; scope = LocalVar }
-    | _ -> { name; typ; scope }
+    { name; scope = id_gen; typ; tags = access }
 
-let to_gen (a:generator) = 
-  let call = function 
-    | `Fresh (g: (string option* scope option * Types.t)) -> let (name, scope, typ) = g in a.fresh ?name ?scope typ 
-    | `WithName  (g : (string * scope option * Types.t))  -> let (name, scope, typ) = g in a.with_name name ?scope typ 
-    | `CreateExn g -> let (name, scope, typ) = g in a.create_exn name ?scope typ in
-   {
-    call;
-    inner=a
-  }
+  let fresh gt (gen : ID.generator) name ?access typ =
+    let name = gen.fresh ~name () in
+    create name gt ?access typ
 
+  let with_name gt (id_gen : ID.generator) name ?access typ =
+    let name = id_gen.decl_or_get name in
+    create name gt ?access typ
 
-let fresh (id_gen: ID.generator) name ?scope typ =
-  let name = id_gen.fresh ~name () in
-  create name ?scope typ
+  let create_exn gt (id_gen : ID.generator) name ?access typ =
+    let name = id_gen.decl_exn name in
+    create name gt ?access typ
+end
 
-let with_name (id_gen: ID.generator) name ?scope typ =
-  let name = id_gen.decl_or_get name in
-  create name ?scope typ
-
-let create_exn (id_gen: ID.generator) name ?scope typ =
-  let name = id_gen.decl_exn name in
-  create name ?scope typ
-
-
-let mk_gen ?id_generator ?(default_name="v") () =
+let mk_gen ?id_generator ?(scope = `Local) ?(default_name = "v") () =
   let id_gen = Option.get_or ~default:(ID.make_gen ()) id_generator in
+  let gt =
+    match scope with
+    | `Local -> Local id_gen.gen_id
+    | `Global -> Global id_gen.gen_id
+  in
 
-  let fresh ?name ?scope typ =
+  let fresh ?name ?access typ =
     let name = Option.get_or ~default:default_name name in
-    fresh id_gen name ?scope typ
+    fresh gt id_gen name ?access typ
   in
 
   {
-    fresh ;
-    with_name= with_name id_gen;
-    create_exn = create_exn id_gen;
-    generator=id_gen;
+    scope = gt;
+    fresh;
+    with_name = with_name gt id_gen;
+    create_exn = create_exn gt id_gen;
+    generator = id_gen;
   }
-
-

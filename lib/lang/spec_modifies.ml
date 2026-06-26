@@ -77,7 +77,7 @@ let set_modsets ?(add_only = false) prog =
         |> Iter.filter Var.is_global |> VarSet.of_iter
       in
       let captures_globs =
-        List.filter (not % Var.is_constant)
+        List.filter (not % Var.is_const)
         @@ VarSet.elements @@ VarSet.union vs
         @@ VarSet.union exist_captures
         @@ VarSet.union read written

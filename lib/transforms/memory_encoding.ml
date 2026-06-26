@@ -13,9 +13,7 @@ module Globals = struct
 
   let mem_encoding_typ_name = "memory_encoding"
   let mem_encoding_typ = Types.Variable mem_encoding_typ_name
-
-  let mem_encoding v =
-    v.with_name "$mem_encoding" ~scope:Var.GlobalVar mem_encoding_typ
+  let mem_encoding v = v.with_name "$mem_encoding" ~access:None mem_encoding_typ
 end
 
 module Calls (N : sig
@@ -32,8 +30,7 @@ struct
   let addr_is_heap ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar
-           (v.with_name "$me_addr_is_heap" ~scope:Var.GlobalConst Types.Boolean))
+        (rvar (v.with_name "$me_addr_is_heap" ~access:Var.Const Types.Boolean))
       args
 
   (** [alloc_base args] returns the base address of a supplied allocation id.
@@ -42,8 +39,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_alloc_base" ~scope:Var.GlobalConst
-              (Types.Bitvector 64)))
+           (v.with_name "$me_alloc_base" ~access:Var.Const (Types.Bitvector 64)))
       args
 
   (** [alloc_live args] returns the liveness of an allocation. Returns value is
@@ -53,8 +49,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_alloc_live" ~scope:Var.GlobalConst
-              (Types.Bitvector 2)))
+           (v.with_name "$me_alloc_live" ~access:Var.Const (Types.Bitvector 2)))
       args
 
   (** [alloc_size args] returns the size of an allocation. args(0) is the memory
@@ -63,8 +58,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_alloc_size" ~scope:Var.GlobalConst
-              (Types.Bitvector 64)))
+           (v.with_name "$me_alloc_size" ~access:Var.Const (Types.Bitvector 64)))
       args
 
   (** [addr_alloc args] returns the allocation id of an address. args(0) is the
@@ -73,8 +67,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_addr_alloc" ~scope:Var.GlobalConst
-              (Types.Bitvector 64)))
+           (v.with_name "$me_addr_alloc" ~access:Var.Const (Types.Bitvector 64)))
       args
 
   (** [addr_offset args] returns the offset an address is into its allocation.
@@ -83,8 +76,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_addr_offset" ~scope:Var.GlobalConst
-              (Types.Bitvector 64)))
+           (v.with_name "$me_addr_offset" ~access:Var.Const (Types.Bitvector 64)))
       args
 
   (** [alloc_size_update args] returns a new memory encoding with the size of an
@@ -94,7 +86,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_alloc_size_update" ~scope:Var.GlobalConst
+           (v.with_name "$me_alloc_size_update" ~access:Var.Const
               Globals.mem_encoding_typ))
       args
 
@@ -105,7 +97,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_alloc_live_update" ~scope:Var.GlobalConst
+           (v.with_name "$me_alloc_live_update" ~access:Var.Const
               Globals.mem_encoding_typ))
       args
 
@@ -114,8 +106,7 @@ struct
       allocated at. args(3) is the size of the allocation. *)
   let allocate ?attrib args =
     apply_fun ?attrib
-      ~func:
-        (rvar (v.with_name "$me_allocate" ~scope:Var.GlobalConst Types.Boolean))
+      ~func:(rvar (v.with_name "$me_allocate" ~access:Var.Const Types.Boolean))
       args
 
   (** [can_alloc args] Returns whether an alloc, performed by [allocate], is
@@ -124,8 +115,7 @@ struct
   let can_alloc ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar
-           (v.with_name "$me_can_allocate" ~scope:Var.GlobalConst Types.Boolean))
+        (rvar (v.with_name "$me_can_allocate" ~access:Var.Const Types.Boolean))
       args
 
   (** [init_encoding args] Returns if a memory encoding is initialized. args(0)
@@ -133,8 +123,7 @@ struct
   let init_encoding ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar
-           (v.with_name "$me_init_encoding" ~scope:Var.GlobalConst Types.Boolean))
+        (rvar (v.with_name "$me_init_encoding" ~access:Var.Const Types.Boolean))
       args
 
   (** [valid_access args] Checks if an access is valid. args(0) is the memory
@@ -143,8 +132,7 @@ struct
   let valid_access ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar
-           (v.with_name "$me_valid_access" ~scope:Var.GlobalConst Types.Boolean))
+        (rvar (v.with_name "$me_valid_access" ~access:Var.Const Types.Boolean))
       args
 end
 
@@ -181,18 +169,20 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
     let name = "$" ^ name in
     let var_gen, body = body in
     let bindings = List.map (fun f -> f var_gen) bindings in
-    Lang.Program.decl_global p name (fun id ->
-        Lang.Program.Function
-          {
-            var_gen;
-            binding =
-              Bincaml_util.Common.Var.create id ~scope:GlobalConst
-                (Types.curry (List.map Var.typ bindings)
-                @@ Lang.Expr.BasilExpr.type_of body);
-            attrib;
-            definition : Lang.Program.func_type =
-              Function (Lang.Expr.BasilExpr.lambda ~bound:bindings body);
-          })
+    let decl =
+      Lang.Program.Function
+        {
+          var_gen;
+          binding =
+            (Program.var_generator p).with_name name ~access:Const
+              (Types.curry (List.map Var.typ bindings)
+              @@ Lang.Expr.BasilExpr.type_of body);
+          attrib;
+          definition : Lang.Program.func_type =
+            Function (Lang.Expr.BasilExpr.lambda ~bound:bindings body);
+        }
+    in
+    Lang.Program.add_decl p decl
 
   let add_mem_encoding p =
     let gids : ID.generator = Program.global_ids p in
@@ -373,16 +363,15 @@ module FlatMemory (M : IDAllocs) : MemoryEncoding = struct
   module Locals = struct
     open Var
 
-    let mem_encoding l : Var.t =
-      l.with_name "mem_encoding" ~scope:Var.LocalVar mem_encoding_type
+    let mem_encoding l : Var.t = l.with_name "mem_encoding" mem_encoding_type
 
     let mem_encoding_out l : Var.t =
-      l.with_name "mem_encoding_out" ~scope:Var.LocalVar mem_encoding_type
+      l.with_name "mem_encoding_out" mem_encoding_type
 
-    let alloc l = l.with_name "alloc" ~scope:Var.LocalVar Types.Integer
-    let addr l = l.with_name "addr" ~scope:Var.LocalVar (Types.Bitvector 64)
-    let size l = l.with_name "size" ~scope:Var.LocalVar (Types.Bitvector 64)
-    let live l = l.with_name "live" ~scope:Var.LocalVar (Types.Bitvector 2)
+    let alloc l = l.with_name "alloc" Types.Integer
+    let addr l = l.with_name "addr" (Types.Bitvector 64)
+    let size l = l.with_name "size" (Types.Bitvector 64)
+    let live l = l.with_name "live" (Types.Bitvector 2)
     let alloc_live_access_h me = unexp ~op:(`ReadField "alloc_live") (rvar me)
     let alloc_live_access l = alloc_live_access_h (mem_encoding l)
     let alloc_size_access_h me = unexp ~op:(`ReadField "alloc_size") (rvar me)
@@ -477,7 +466,7 @@ module FlatMemory (M : IDAllocs) : MemoryEncoding = struct
 
   let allocate_body : function_body =
     let l = Var.mk_gen () in
-    let i = l.with_name "i" ~scope:Var.LocalVar (Types.Bitvector 64) in
+    let i = l.with_name "i" (Types.Bitvector 64) in
     let in_bounds =
       applyintrin ~op:`AND
         [
@@ -588,8 +577,8 @@ module FlatMemory (M : IDAllocs) : MemoryEncoding = struct
 
   let init_encoding_body : function_body =
     let l = Var.mk_gen () in
-    let o = l.with_name "o" ~scope:Var.LocalVar Types.Integer in
-    let i = l.with_name "i" ~scope:Var.LocalVar (Types.Bitvector 64) in
+    let o = l.with_name "o" Types.Integer in
+    let i = l.with_name "i" (Types.Bitvector 64) in
     let b =
       begin
         applyintrin ~op:`AND
@@ -670,16 +659,15 @@ module SplitMemory (M : IDAllocs) : MemoryEncoding = struct
   module Locals = struct
     open Var
 
-    let mem_encoding l =
-      l.with_name "mem_encoding" ~scope:Var.LocalVar mem_encoding_type
+    let mem_encoding l = l.with_name "mem_encoding" mem_encoding_type
 
     let mem_encoding_out l : Var.t =
-      l.with_name "mem_encoding_out" ~scope:Var.LocalVar mem_encoding_type
+      l.with_name "mem_encoding_out" mem_encoding_type
 
-    let alloc l = l.with_name "alloc" ~scope:Var.LocalVar (Types.Bitvector 64)
-    let addr l = l.with_name "addr" ~scope:Var.LocalVar (Types.Bitvector 64)
-    let size l = l.with_name "size" ~scope:Var.LocalVar (Types.Bitvector 64)
-    let live l = l.with_name "live" ~scope:Var.LocalVar (Types.Bitvector 2)
+    let alloc l = l.with_name "alloc" (Types.Bitvector 64)
+    let addr l = l.with_name "addr" (Types.Bitvector 64)
+    let size l = l.with_name "size" (Types.Bitvector 64)
+    let live l = l.with_name "live" (Types.Bitvector 2)
 
     let alloc_live_access l =
       unexp ~op:(`ReadField "alloc_live") (rvar @@ mem_encoding l)
@@ -805,7 +793,7 @@ module SplitMemory (M : IDAllocs) : MemoryEncoding = struct
 
   let init_encoding_body =
     let l = Var.mk_gen () in
-    let i = l.with_name "i" ~scope:Var.LocalVar (Types.Bitvector 64) in
+    let i = l.with_name "i" (Types.Bitvector 64) in
     let mem_enc = rvar (Locals.mem_encoding l) in
     let trigger e = [ [ e ] ] in
     let b =

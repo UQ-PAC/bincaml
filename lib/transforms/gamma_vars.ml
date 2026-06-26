@@ -34,9 +34,7 @@ let transform_proc ?(check_names = false) (add : ID.t -> Var.t -> bool) prog
     let v =
       if Var.is_global v then (
         let v =
-          Var.create ~scope:(Var.scope v)
-            ((Program.global_ids prog).fresh ~name ())
-            typ
+          (Program.var_generator prog).with_name ~access:(Var.access v) name typ
         in
         added := VarSet.add v !added;
         v)
@@ -219,8 +217,7 @@ let transform_proc ?(check_names = false) (add : ID.t -> Var.t -> bool) prog
   let proc = Procedure.set_specification proc spec in
 
   let add_globals (p : Program.t) =
-    VarSet.to_iter !added
-    |> Iter.fold (fun p v -> Program.add_var_decl p v) p
+    VarSet.to_iter !added |> Iter.fold (fun p v -> Program.add_var_decl p v) p
   in
 
   (* Update statements *)
