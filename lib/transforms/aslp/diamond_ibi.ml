@@ -41,14 +41,12 @@ module Make (S : Params) = struct
 
   let f_switch_context : branch -> unit =
    fun b ->
-    let show_branch_error b =
-      "while moving to branch " ^ [%derive.show: [ `T | `F | `M ]] b
-    in
+    let show_err b = "while moving to branch " ^ [%derive.show: branch] b in
     S.diamond_get ()
     |> (match b with
       | `T -> Diamond.move_adjacent `L
       | `F -> Diamond.move_adjacent `R
       | `M -> Diamond.move_out_of)
-    |> Result.map_error (fun _ -> show_branch_error b)
+    |> Result.map_error (fun _ -> show_err b)
     |> CCResult.get_or_failwith |> S.diamond_set
 end
