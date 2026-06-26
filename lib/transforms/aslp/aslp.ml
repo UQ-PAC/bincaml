@@ -62,7 +62,8 @@ let lift_code_block (module I : Bincaml_ibi.IBI) ~address opcodes =
       lift_opcode (module I) ~address op)
   |> Iter.to_list
 
-let aarch64_intrin_of_stmt : Program.stmt -> 'b option = function
+let aarch64_intrin_of_stmt :
+    Program.stmt -> (Bitvec.t * Attrib.attrib_map) option = function
   | Stmt.Instr_IntrinCall { attrib; lhs; name = Aarch64Eval; args } -> (
       match (lhs, args) with
       | [], [ E (Constant { const = `Bitvector op }) ] -> Some (op, attrib)
