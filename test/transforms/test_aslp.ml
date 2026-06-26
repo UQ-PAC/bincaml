@@ -114,6 +114,7 @@ let%expect_test "aslp integration basic" =
   let lst =
     Loader.Loadir.ast_of_string
       {|
+memory shared $mem : (bv64 -> bv8);
 var $PC:bv64;
 prog entry @main;
 
@@ -137,16 +138,24 @@ proc @main()  -> () {  }
 ];
     |}
   in
+  let memory () =
+    Program.get_decl_by_name "$mem" lst.prog |> function
+    | Some (Variable { binding }) -> binding
+    | _ -> failwith "no memory"
+  in
   let prog =
     lst.prog
     |> Program.map_procedures (fun _ proc ->
         Procedure.iter_blocks proc
-        |> Iter.fold (fun proc (_, block) -> transform_block proc block) proc)
+        |> Iter.fold
+             (fun proc (bid, b) -> transform_block ~memory ~proc bid b)
+             proc)
   in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
   [%expect
     {|
+    var observable $mem:(bv64->bv8);
     var $PC:bv64;
     proc @main()  -> () {  }
       captures $PC:bv64
@@ -164,6 +173,44 @@ proc @main()  -> () {  }
          call @_aarch64_eval(0xb9801fe0:bv32) { .asm = "ldrsw x0, [sp, #0x1c]" };
          call @_aarch64_eval(0x97ffffda:bv32) { .asm = "bl #0xffffffffffffff68" };
          assert boolor(eq(0x400784:bv64, $PC));
+         goto (%block);
+       ];
+       block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
+         var var:bv64 := $SP_EL0;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0,
+          0xffffffffffffffe0:bv64) $R29 8;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP_EL0,
+           0xffffffffffffffe0:bv64), 0x8:bv64) $R30 8;
+         $SP_EL0:bv64 := bvadd(var:bv64, 0xffffffffffffffe0:bv64);
+         (var BranchTaken:bool := false, $PC:bv64 := 0xb00004:bv64);
+         goto (%block_1);
+       ];
+       block %block_1 { .asm = "mov x29, sp" } [
+         $R29:bv64 := bvadd($SP_EL0, 0x0:bv64);
+         (var BranchTaken:bool := false, $PC:bv64 := 0xb00008:bv64);
+         goto (%block_2);
+       ];
+       block %block_2 { .asm = "str w0, [sp, #0x1c]" } [
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0, 0x1c:bv64) extract(-32,0, $R0) 4;
+         (var BranchTaken:bool := false, $PC:bv64 := 0xb0000c:bv64);
+         goto (%block_3);
+       ];
+       block %block_3 { .asm = "str x1, [sp, #0x10]" } [
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0, 0x10:bv64) $R1 8;
+         (var BranchTaken:bool := false, $PC:bv64 := 0xb00010:bv64);
+         goto (%block_4);
+       ];
+       block %block_4 { .asm = "ldrsw x0, [sp, #0x1c]" } [
+         $mem:(bv64->bv8) := load le var_3:bv4 bvadd($SP_EL0, 0x1c:bv64) 4;
+         var var_2:bv32 := var_3:bv4;
+         $R0:bv64 := zero_extend(0, sign_extend(32, var_2:bv32));
+         (var BranchTaken:bool := false, $PC:bv64 := 0xb00014:bv64);
+         goto (%block_5);
+       ];
+       block %block_5 { .asm = "bl #0xffffffffffffff68" } [
+         $R30:bv64 := 0xb00018:bv64;
+         var BranchTaken:bool := true;
+         $PC:bv64 := 0xafff7c:bv64;
          goto (%ret_1);
        ];
        block %ret_1 [ return; ]
