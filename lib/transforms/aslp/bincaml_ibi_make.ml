@@ -66,7 +66,7 @@ struct
 
   let f_switch_context b =
     f_switch_context b;
-    match b with
+    match fst b with
     | `T | `F -> ()
     | `M ->
         let address = bincaml_get_address ()
