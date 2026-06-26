@@ -80,14 +80,12 @@ let insert_one_diamond proc dia =
   let with_ids =
     dia
     |> enumerate_with_successors (fun _ ->
-        ID.fresh ~name:"%block" (Procedure.local_ids proc) ())
+        ID.fresh ~name:"%block" (Procedure.block_ids proc) ())
   in
   let proc =
     with_ids |> iter_backwards
     |> Iter.fold
          (fun proc (id, successors, lifter_block) ->
-           Printf.printf "%s : %s\n" (ID.show id)
-             ([%derive.show: ID.t list] successors);
            let stmts = CCVector.to_list lifter_block.Aslp_state.stmts in
            Procedure.add_block proc id ~stmts ~successors ())
          proc
