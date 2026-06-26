@@ -1,3 +1,6 @@
+(** Main definition of the IBI, lifting into a structured
+    {!Aslp_state.aslp_diamond}. *)
+
 open Lang
 open Common
 
