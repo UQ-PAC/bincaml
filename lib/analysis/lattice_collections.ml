@@ -213,6 +213,7 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
         val singleton : K.t -> V.t -> t
         val mapi : (K.t -> V.t -> V.t) -> t -> t
         val fold : (K.t -> V.t -> 'a -> 'a) -> t -> 'a -> 'a
+        val bot_binop : (V.t -> V.t -> V.t) -> t -> t -> t
       end)
 
   module V = V

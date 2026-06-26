@@ -220,6 +220,22 @@ module WrappedIntervalsLattice = struct
         else if (not al_mem) && au_mem && bl_mem && not bu_mem then
           [ interval bl au ]
         else []
+  
+  let meet a b =
+    let intersections = intersect a b in
+    match intersections with
+    | [] -> Bot
+    | [x] -> x
+    | [Interval { lower = al; upper = au }; Interval { lower = bl; upper = bu }] ->
+      let width = size al in
+      let inner_span = cardinality ~width (interval au bl) in
+      let outer_span = cardinality ~width (interval bu al) in
+      if
+        Z.lt inner_span outer_span
+        || (Z.equal inner_span outer_span && ule al bl)
+      then interval al bu
+      else interval bl au
+    | _ -> failwith "unreachable"
 
   let nsplit ~width t =
     match t with

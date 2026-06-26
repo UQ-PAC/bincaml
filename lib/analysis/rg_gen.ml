@@ -27,6 +27,13 @@ module type InterferenceStateDomain = sig
   val filter : t -> BasilExpr.t -> t
 end
 
+module InterferenceWrappedIntervalDomain : InterferenceStateDomain = struct
+  include Wrapped_intervals.Domain
+  let meet = bot_binop Wrapped_intervals.WrappedIntervalsLattice.meet
+  let havoc t var_set = t (* todo *)
+  let filter t exp = t (* todo *)
+end
+
 (** A concrete interference w.r.t. some state domain is a precondition represented by that domain, and a simultaneous
     assignment that may be executed under that precondition. *)
 module ConcreteInterference (D : InterferenceStateDomain) = struct
