@@ -12,6 +12,7 @@ include Bincaml_ibi_make
     but leaving other types opaque. *)
 module type IBI = sig
   val bincaml_set_address : Lang.Common.Bitvec.t -> unit
+  val bincaml_internal_emit : Aslp_state.stmt -> unit
 
   include
     OfflineASL_pc.Instruction_building_interface.IBI
