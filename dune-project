@@ -26,9 +26,9 @@
  (name capstone_arm64_disas)
  (synopsis "Disas arm ops with capstone")
  (depends
-   ocaml
-   ppx_expect
-   )
+  (menhir (>= 20180523))
+  ocaml
+  ppx_expect)
 )
 
 (package
