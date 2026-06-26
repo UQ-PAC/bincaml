@@ -225,11 +225,17 @@ let move_in_to direction :
       | `R -> Ok (right, Right { value; left; pred } :: rest)
       | `P -> Ok (pred, Pred { value; left; right } :: rest))
 
+(** Moves the zipper to the outermost ({!last}) position of the diamond. *)
+let move_to_outermost zip = zip |> of_zipper |> to_zipper
+
 (** {2 Modification functions} *)
 
 (** Modifies the zipper by inserting a new diamond {i after} the current
     position in program order, using the given parameters to build the new
-    {!constructor-Diamond}. *)
+    {!constructor-Diamond}.
+
+    This function {b invalidates} {!type-skeleton}s which point into the
+    currently-focused {!subdiamond}! *)
 let append_diamond ~left ~right ~value : 'a diamond_zipper -> 'a diamond_zipper
     = function
   | dia, path -> (dia, Pred { value; left; right } :: path)
@@ -239,7 +245,34 @@ let modify (f : 'a -> 'a) : 'a diamond_zipper -> 'a diamond_zipper = function
   | Leaf x, path -> (Leaf (f x), path)
   | Diamond x, path -> (Diamond { x with value = f x.value }, path)
 
-(** {1 Debugging} *)
+(** {1 Skeleton of a zipper} *)
+
+type skeleton = [ `L | `R | `P ] list
+[@@deriving show { with_path = false }, eq]
+(** The skeleton of a zipper is its value-less {!diamond_path}. This can be used
+    to reference a position within the {!diamond}, but it cannot reconstruct the
+    full {!diamond}, nor can it (safely) move to adjacent positions.
+
+    Being divorced from its originating {!diamond_zipper}, a {!skeleton} is
+    liable to become {i invalidated} if the zipper is drastically changed. An
+    invalidated skeleton may lead to an {!Error} while resolving, or it may
+    silently resolve to the wrong position. *)
+
+let skeleton : 'a diamond_zipper -> skeleton = function
+  | _, path ->
+      List.map (function Left _ -> `L | Right _ -> `R | Pred _ -> `P) path
+
+(** Resolves the given {!type-skeleton} within the given {!diamond}.
+
+    This takes a {!diamond} rather than a {!diamond_zipper} because a skeleton
+    is always resolved from the root. *)
+let resolve_skeleton : skeleton -> 'a diamond -> 'a diamond_zipper =
+ fun skel dia ->
+  List.fold_left
+    (fun dia dir -> move_in_to dir dia |> Result.get_ok)
+    (to_zipper dia) (List.rev skel)
+
+(** {1 Map and fold} *)
 
 let rec map f = function
   | Leaf x -> Leaf (f x)
@@ -247,14 +280,6 @@ let rec map f = function
       let value = f value in
       let left = map f left and right = map f right and pred = map f pred in
       Diamond { value; left; right; pred }
-
-type skeleton = unit diamond * [ `L | `R | `P ] list
-[@@deriving show { with_path = false }, eq]
-
-let skeleton : 'a diamond_zipper -> skeleton = function
-  | this, path ->
-      ( map (Fun.const ()) this,
-        List.map (function Left _ -> `L | Right _ -> `R | Pred _ -> `P) path )
 
 let rec cata ~(leaf : 'a -> 'b)
     ~(diamond : pred:'b -> left:'b -> right:'b -> value:'b -> 'b) dia : 'b =
