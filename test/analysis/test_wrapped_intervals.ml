@@ -94,7 +94,8 @@ open struct
     lub [ bottom; top; bottom ] = top;
     lub [ bottom; iv 0 9; top ] = top;
     lub [ iv 0 3; iv 3 5; iv 4 6 ] = iv 0 6;
-    lub [ iv 0 3; iv 6 10; iv 14 15 ] = iv 14 10
+    lub [ iv 0 3; iv 6 10; iv 14 15 ] = iv 14 10;
+    lub [ top; iv 8 15; iv 10 0; iv 0 3 ] = top
 
   let intersect () =
     let ( = ) a b = Alcotest.(check (list ival)) "equal" a b in
