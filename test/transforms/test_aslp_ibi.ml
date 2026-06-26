@@ -5,6 +5,7 @@ open Transforms.Aslp
 let id_gen = lazy (ID.make_gen ())
 
 let make_call name =
+  Printf.printf "make_call: %s\n" name;
   Stmt.Instr_Call
     {
       attrib = Attrib.empty;
@@ -13,10 +14,18 @@ let make_call name =
       procid = (Lazy.force_val id_gen).fresh ~name ();
     }
 
+let guard f =
+  CCResult.pp CCFormat.unit Format.stdout
+    (CCResult.guard_str (fun () -> ignore (f ())))
+
+let guard_get_ir f =
+  print_endline @@ CCResult.retract
+  @@ CCResult.guard_str (fun () -> Aslp_state.show_aslp_diamond (f ()))
+
 let%expect_test "nested diamonds" =
   let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
   in
-  I.bincaml_set_address (Bitvec.of_int ~size:64 0xbadbadbad000);
+  I.bincaml_set_address (Bitvec.of_int ~size:64 0xfaf);
   let branch1 = I.f_gen_branch (I.f_gen_bool_lit true) in
   I.bincaml_internal_emit (make_call "entry");
 
@@ -42,9 +51,16 @@ let%expect_test "nested diamonds" =
   I.f_switch_context (I.f_merge_branch branch1);
   I.bincaml_internal_emit (make_call "m");
 
-  print_endline @@ Aslp_state.show_aslp_diamond @@ I.get_ir ();
+  guard_get_ir I.get_ir;
   [%expect
     {|
+    make_call: entry
+    make_call: t
+    make_call: f
+    make_call: ft
+    make_call: ff
+    make_call: fm
+    make_call: m
     Diamond {
       pred =
       (Leaf
@@ -68,15 +84,199 @@ let%expect_test "nested diamonds" =
         (Leaf
            { Aslp_state.assume = boolnot(false);
              stmts =
-             [call ff();
-               (var BranchTaken:bool := false, $PC:bv64 := 0xbadbadbad004:bv64)];
-             pc_assign = (Some 0xbadbadbad004:bv64) });
+             [call ff(); (var BranchTaken:bool := false, $PC:bv64 := 0xfb3:bv64)];
+             pc_assign = (Some 0xfb3:bv64) });
         value =
         { Aslp_state.assume = true; stmts = [call fm()];
-          pc_assign = (Some if false then 0xbbb:bv64 else 0xbadbadbad004:bv64) }};
+          pc_assign = (Some if false then 0xbbb:bv64 else 0xfb3:bv64) }};
       value =
       { Aslp_state.assume = true; stmts = [call m()];
         pc_assign =
-        (Some if true then 0xaaa:bv64 else if false then 0xbbb:bv64 else 0xbadbadbad004:bv64)
+        (Some if true then 0xaaa:bv64 else if false then 0xbbb:bv64 else 0xfb3:bv64)
         }}
+    |}]
+
+let%expect_test "sequential diamonds" =
+  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  in
+  ( guard @@ fun () ->
+    I.bincaml_set_address (Bitvec.of_int ~size:64 0xfaf);
+    let b1 = I.f_gen_branch (I.f_gen_bool_lit true) in
+    I.bincaml_internal_emit (make_call "entry");
+
+    I.f_switch_context (I.f_true_branch b1);
+    I.bincaml_internal_emit (make_call "b1_t");
+    I.f_switch_context (I.f_merge_branch b1);
+
+    let b2 = I.f_gen_branch (I.f_gen_bool_lit true) in
+    I.f_switch_context (I.f_true_branch b2);
+    I.bincaml_internal_emit (make_call "b2_t");
+    I.f_switch_context (I.f_merge_branch b2);
+
+    I.bincaml_internal_emit (make_call "exit");
+
+    guard_get_ir I.get_ir );
+  [%expect
+    {|
+    make_call: entry
+    make_call: b1_t
+    make_call: b2_t
+    make_call: exit
+    Diamond {
+      pred =
+      Diamond {
+        pred =
+        (Leaf
+           { Aslp_state.assume = true; stmts = [call entry_1()]; pc_assign = None
+             });
+        left =
+        (Leaf
+           { Aslp_state.assume = true; stmts = [call b1_t()]; pc_assign = None });
+        right =
+        (Leaf { Aslp_state.assume = boolnot(true); stmts = []; pc_assign = None });
+        value = { Aslp_state.assume = true; stmts = []; pc_assign = None }};
+      left =
+      (Leaf { Aslp_state.assume = true; stmts = [call b2_t()]; pc_assign = None });
+      right =
+      (Leaf { Aslp_state.assume = boolnot(true); stmts = []; pc_assign = None });
+      value =
+      { Aslp_state.assume = true;
+        stmts =
+        [call exit(); (var BranchTaken:bool := false, $PC:bv64 := 0xfb3:bv64)];
+        pc_assign = (Some 0xfb3:bv64) }}
+    ok(())
+    |}]
+
+let%expect_test "skipped merge context when going to outer merge" =
+  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  in
+  I.bincaml_set_address (Bitvec.of_int ~size:64 0xfaf);
+  let outer = I.f_gen_branch (I.f_gen_bool_lit true) in
+  I.bincaml_internal_emit (make_call "entry");
+
+  I.f_switch_context (I.f_true_branch outer);
+  I.bincaml_internal_emit (make_call "t");
+
+  let inner = I.f_gen_branch (I.f_gen_bool_lit true) in
+  I.f_switch_context (I.f_true_branch inner);
+  I.bincaml_internal_emit (make_call "tt");
+  I.f_switch_context (I.f_false_branch inner);
+  I.bincaml_internal_emit (make_call "tf");
+
+  (* context switch skipped: *)
+  (* I.f_switch_context (I.f_merge_branch inner); *)
+  I.f_switch_context (I.f_merge_branch outer);
+  I.bincaml_internal_emit (make_call "m_outer");
+
+  guard_get_ir I.get_ir;
+
+  [%expect
+    {|
+    make_call: entry
+    make_call: t
+    make_call: tt
+    make_call: tf
+    make_call: m_outer
+    Failure("invariant violation: context switches did not return to merge")
+    |}]
+
+let%expect_test "skipped merge context when going to outer branch" =
+  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  in
+  I.bincaml_set_address (Bitvec.of_int ~size:64 0xfaf);
+  let outer = I.f_gen_branch (I.f_gen_bool_lit true) in
+  I.bincaml_internal_emit (make_call "entry");
+
+  I.f_switch_context (I.f_true_branch outer);
+  I.bincaml_internal_emit (make_call "t");
+
+  let inner = I.f_gen_branch (I.f_gen_bool_lit true) in
+  I.f_switch_context (I.f_true_branch inner);
+  I.bincaml_internal_emit (make_call "tt");
+  I.f_switch_context (I.f_false_branch inner);
+  I.bincaml_internal_emit (make_call "tf");
+
+  (* context switch skipped: *)
+  (* I.f_switch_context (I.f_merge_branch inner); *)
+  I.f_switch_context (I.f_false_branch outer);
+  I.bincaml_internal_emit (make_call "f");
+
+  I.f_switch_context (I.f_merge_branch outer);
+  I.bincaml_internal_emit (make_call "m_outer");
+
+  guard_get_ir I.get_ir;
+
+  [%expect
+    {|
+    make_call: entry
+    make_call: t
+    make_call: tt
+    make_call: tf
+    make_call: f
+    make_call: m_outer
+    Failure("invariant violation: context switches did not return to merge")
+    |}]
+
+let%expect_test
+    "pathological: referencing old branch with intervening gen_branch" =
+  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  in
+  I.bincaml_set_address (Bitvec.of_int ~size:64 0xfaf);
+  let b1 = I.f_gen_branch (I.f_gen_bool_lit true) in
+  I.bincaml_internal_emit (make_call "entry");
+
+  let _ = I.f_gen_branch (I.f_gen_bool_lit true) in
+  I.bincaml_internal_emit (make_call "still_in_entry");
+
+  I.f_switch_context (I.f_true_branch b1);
+  I.bincaml_internal_emit (make_call "true_of_first_branch");
+
+  I.f_switch_context (I.f_merge_branch b1);
+  I.bincaml_internal_emit (make_call "end");
+
+  guard_get_ir I.get_ir;
+
+  [%expect
+    {|
+    make_call: entry
+    make_call: still_in_entry
+    make_call: true_of_first_branch
+    make_call: end
+    Failure("invariant violation: context switches did not return to merge")
+    |}]
+
+let%expect_test
+    "pathological: sequential diamonds, then going back into the first one" =
+  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  in
+  ( guard @@ fun () ->
+    begin
+      I.bincaml_set_address (Bitvec.of_int ~size:64 0xfaf);
+      let b1 = I.f_gen_branch (I.f_gen_bool_lit true) in
+      I.bincaml_internal_emit (make_call "entry");
+
+      I.f_switch_context (I.f_true_branch b1);
+      I.bincaml_internal_emit (make_call "b1_t");
+      I.f_switch_context (I.f_merge_branch b1);
+
+      let b2 = I.f_gen_branch (I.f_gen_bool_lit true) in
+      I.f_switch_context (I.f_true_branch b2);
+      I.bincaml_internal_emit (make_call "b2_t");
+      I.f_switch_context (I.f_merge_branch b2);
+
+      I.f_switch_context (I.f_true_branch b1);
+      I.bincaml_internal_emit (make_call "b1_t_again");
+
+      I.f_switch_context (I.f_merge_branch b2);
+      I.bincaml_internal_emit (make_call "exit");
+
+      guard_get_ir I.get_ir
+    end );
+
+  [%expect
+    {|
+    make_call: entry
+    make_call: b1_t
+    make_call: b2_t
+    error(Invalid_argument("result is Error _"))
     |}]
