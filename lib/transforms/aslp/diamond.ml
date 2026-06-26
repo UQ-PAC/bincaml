@@ -244,8 +244,8 @@ let modify (f : 'a -> 'a) : 'a diamond_zipper -> 'a diamond_zipper = function
 let rec map f = function
   | Leaf x -> Leaf (f x)
   | Diamond { value; left; right; pred } ->
+      let pred = map f pred and left = map f left and right = map f right in
       let value = f value in
-      let left = map f left and right = map f right and pred = map f pred in
       Diamond { value; left; right; pred }
 
 type skeleton = unit diamond * [ `L | `R | `P ] list
@@ -257,14 +257,13 @@ let skeleton : 'a diamond_zipper -> skeleton = function
         List.map (function Left _ -> `L | Right _ -> `R | Pred _ -> `P) path )
 
 let rec cata ~(leaf : 'a -> 'b)
-    ~(diamond : pred:'b -> left:'b -> right:'b -> value:'b -> 'b) dia : 'b =
+    ~(diamond : pred:'b -> left:'b -> right:'b -> value:'a -> 'b) dia : 'b =
   match dia with
   | Leaf x -> leaf x
   | Diamond { value; left; right; pred } ->
       let pred = cata ~leaf ~diamond pred
       and left = cata ~leaf ~diamond left
-      and right = cata ~leaf ~diamond right
-      and value = leaf value in
+      and right = cata ~leaf ~diamond right in
       diamond ~pred ~left ~right ~value
 
 (** {1 Derived functions} *)
