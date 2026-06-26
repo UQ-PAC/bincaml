@@ -50,10 +50,8 @@ module Make (S : Params) = struct
 
   let f_switch_context (skel, d, _) =
     let show b = "when moving to branch" ^ [%derive.show: [ `T | `F | `M ]] b in
-    CCResult.guard (fun () ->
-        S.diamond_get () |> Diamond.of_zipper
-        |> Diamond.resolve_skeleton skel
-        |> S.diamond_set)
+    S.diamond_get () |> Diamond.of_zipper
+    |> Diamond.resolve_skeleton skel
     |> Result.map_error (fun _ -> show d)
-    |> CCResult.get_or_failwith
+    |> CCResult.get_or_failwith |> S.diamond_set
 end

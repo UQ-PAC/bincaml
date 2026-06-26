@@ -266,10 +266,11 @@ let skeleton : 'a diamond_zipper -> skeleton = function
 
     This takes a {!diamond} rather than a {!diamond_zipper} because a skeleton
     is always resolved from the root. *)
-let resolve_skeleton : skeleton -> 'a diamond -> 'a diamond_zipper =
+let resolve_skeleton :
+    skeleton -> 'a diamond -> ('a diamond_zipper, 'a diamond_zipper) result =
  fun skel dia ->
-  List.fold_left
-    (fun dia dir -> move_in_to dir dia |> Result.get_ok)
+  CCResult.fold_l
+    (fun dia dir -> move_in_to dir dia)
     (to_zipper dia) (List.rev skel)
 
 (** {1 Map and fold} *)
