@@ -64,15 +64,24 @@ struct
       (t, f, m)
   end)
 
-  let f_switch_context b =
-    f_switch_context b;
-    match fst b with
-    | `T | `F -> ()
-    | `M ->
-        let address = bincaml_get_address ()
-        and diamond = !bincaml_lifter_state.diamond in
-        let diamond = diamond |> Aslp_state.ensure_pc_consistency ~address in
-        bincaml_lifter_state := { !bincaml_lifter_state with diamond }
+  let f_switch_context ((_, d, st) as ctx) =
+    f_switch_context ctx;
+    let address = bincaml_get_address ()
+    and diamond = !bincaml_lifter_state.diamond in
+    let merge_point =
+      (match d with
+        | `T | `F -> diamond |> Diamond.move_out_of |> Result.get_ok
+        | `M ->
+            let diamond =
+              diamond |> Aslp_state.ensure_pc_consistency ~address
+            in
+            bincaml_lifter_state := { !bincaml_lifter_state with diamond };
+            diamond)
+      |> Diamond.focus
+    in
+    if not (CCEqual.physical merge_point.stmts st.Aslp_state.stmts) then
+      failwith
+        "invariant violation: context switch did not arrive at expected point"
 
   (** {2 IR extraction} *)
 

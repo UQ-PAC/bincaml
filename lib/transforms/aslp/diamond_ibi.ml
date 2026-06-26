@@ -19,8 +19,11 @@ end
 (** Implements control flow functionality for the IBI by using
     {!Diamond.diamond_zipper}. See {!module-Diamond} for more details. *)
 module Make (S : Params) = struct
-  type branch = [ `T | `F | `M ] * Diamond.skeleton
-  (** Branch switches are a path into the diamond. *)
+  type branch = Diamond.skeleton * [ `T | `F | `M ] * S.state
+  (** Branch switches are a path into the diamond.
+
+      For downstream uses, this also records the branch direction and the state
+      value at the branch merge point. *)
 
   let f_true_branch : branch * branch * branch -> branch = fun (t, f, m) -> t
   let f_false_branch : branch * branch * branch -> branch = fun (t, f, m) -> f
@@ -39,9 +42,10 @@ module Make (S : Params) = struct
     let t = diamond |> Diamond.move_adjacent `L |> Result.get_ok
     and f = diamond |> Diamond.move_adjacent `R |> Result.get_ok in
     let m = t |> Diamond.move_out_of |> Result.get_ok in
-    Diamond.((`T, skeleton t), (`F, skeleton f), (`M, skeleton m))
+    let s = Diamond.focus m in
+    Diamond.((skeleton t, `T, s), (skeleton f, `F, s), (skeleton m, `M, s))
 
-  let f_switch_context (_, skel) =
+  let f_switch_context (skel, _, _) =
     S.diamond_get () |> Diamond.of_zipper
     |> Diamond.resolve_skeleton skel
     |> S.diamond_set

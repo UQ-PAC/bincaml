@@ -347,32 +347,6 @@ let%expect_test
     make_call: entry
     make_call: b1_t
     make_call: b2_t
-    make_call: b1_t_again
-    make_call: exit
-    Diamond {
-      pred =
-      Diamond {
-        pred =
-        (Leaf
-           { Aslp_state.assume = true; stmts = [call entry_5()]; pc_assign = None
-             });
-        left =
-        (Leaf
-           { Aslp_state.assume = true; stmts = [call b1_t_1()]; pc_assign = None
-             });
-        right =
-        (Leaf { Aslp_state.assume = boolnot(true); stmts = []; pc_assign = None });
-        value = { Aslp_state.assume = true; stmts = []; pc_assign = None }};
-      left =
-      (Leaf
-         { Aslp_state.assume = true; stmts = [call b2_t_1(); call b1_t_again()];
-           pc_assign = None });
-      right =
-      (Leaf { Aslp_state.assume = boolnot(true); stmts = []; pc_assign = None });
-      value =
-      { Aslp_state.assume = true;
-        stmts =
-        [call exit_1(); (var BranchTaken:bool := false, $PC:bv64 := 0xfb3:bv64)];
-        pc_assign = (Some 0xfb3:bv64) }}
-    ok(())
+    error(
+    Failure("invariant violation: context switch did not arrive at expected point"))
     |}]
