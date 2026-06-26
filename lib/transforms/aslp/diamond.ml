@@ -48,6 +48,11 @@ let empty value : 'a diamond = Leaf value
     outermost ['a] value. *)
 let last = function Leaf value | Diamond { value } -> value
 
+(** Returns the first value of the diamond in control-flow order. That is, the
+    entry point. This is the innermost ['a] value following only [pred] links.
+*)
+let rec first = function Leaf x -> x | Diamond { pred } -> first pred
+
 (** {1 Zippers}
 
     A zipper is a concept in functional programming (especially, Haskell) that

@@ -124,12 +124,12 @@ proc @main()  -> () {  }
       .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
               .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
     assume eq(0x400808:bv64, $PC);
-    assert false { .opcode = "0xa9be7bfd" };
-    assert false { .opcode = "0x910003fd" };
-    assert false { .opcode = "0xb9001fe0" };
-    assert false { .opcode = "0xf9000be1" };
-    assert false { .opcode = "0xb9801fe0" };
-    assert false { .opcode = "0x97ffffda" };
+    call @_aarch64_eval(0xa9be7bfd:bv32) { .asm = "stp x29, x30, [sp, #-0x20]!" };
+    call @_aarch64_eval(0x910003fd:bv32) { .asm = "mov x29, sp" };
+    call @_aarch64_eval(0xb9001fe0:bv32) { .asm = "str w0, [sp, #0x1c]" };
+    call @_aarch64_eval(0xf9000be1:bv32) { .asm = "str x1, [sp, #0x10]" };
+    call @_aarch64_eval(0xb9801fe0:bv32) { .asm = "ldrsw x0, [sp, #0x1c]" };
+    call @_aarch64_eval(0x97ffffda:bv32) { .asm = "bl #0xffffffffffffff68" };
     assert boolor(eq(0x400784:bv64, $PC));
     goto (%ret_1);
   ];
@@ -137,8 +137,12 @@ proc @main()  -> () {  }
 ];
     |}
   in
-  let prog = lst.prog in
-  let _proc = Lang.Program.entry_proc_exn prog in
+  let prog =
+    lst.prog
+    |> Program.map_procedures (fun _ proc ->
+        Procedure.iter_blocks proc
+        |> Iter.fold (fun proc (_, block) -> transform_block proc block) proc)
+  in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
   [%expect
@@ -153,12 +157,12 @@ proc @main()  -> () {  }
            .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
                    .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
          assume eq(0x400808:bv64, $PC);
-         assert false { .opcode = "0xa9be7bfd" };
-         assert false { .opcode = "0x910003fd" };
-         assert false { .opcode = "0xb9001fe0" };
-         assert false { .opcode = "0xf9000be1" };
-         assert false { .opcode = "0xb9801fe0" };
-         assert false { .opcode = "0x97ffffda" };
+         call @_aarch64_eval(0xa9be7bfd:bv32) { .asm = "stp x29, x30, [sp, #-0x20]!" };
+         call @_aarch64_eval(0x910003fd:bv32) { .asm = "mov x29, sp" };
+         call @_aarch64_eval(0xb9001fe0:bv32) { .asm = "str w0, [sp, #0x1c]" };
+         call @_aarch64_eval(0xf9000be1:bv32) { .asm = "str x1, [sp, #0x10]" };
+         call @_aarch64_eval(0xb9801fe0:bv32) { .asm = "ldrsw x0, [sp, #0x1c]" };
+         call @_aarch64_eval(0x97ffffda:bv32) { .asm = "bl #0xffffffffffffff68" };
          assert boolor(eq(0x400784:bv64, $PC));
          goto (%ret_1);
        ];
