@@ -155,6 +155,12 @@ proc @main()  -> () {  }
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
   [%expect
     {|
+    ("%block", 4) : []
+    ("%block_1", 5) : []
+    ("%block_2", 6) : []
+    ("%block_3", 7) : []
+    ("%block_4", 8) : []
+    ("%block_5", 9) : []
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
     proc @main()  -> () {  }
@@ -211,3 +217,69 @@ proc @main()  -> () {  }
     ];
     prog entry @main;
     |}]
+
+let%expect_test "aslp integration with branching" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+memory shared $mem : (bv64 -> bv8);
+var $PC:bv64;
+prog entry @main;
+
+proc @main()  -> () {  }
+  requires boolor(eq(0x400808:bv64, $PC))
+[
+  block %main_code { .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+      .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
+              .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
+    assume eq(0x400808:bv64, $PC);
+    call @_aarch64_eval(0x54002000:bv32) { .asm = "b.eq #1024" };
+    assert boolor(eq(0x400784:bv64, $PC));
+    goto (%ret_1);
+  ];
+      block %ret_1 [ unreachable; ]
+];
+    |}
+  in
+  let memory () =
+    Program.get_decl_by_name "$mem" lst.prog |> function
+    | Some (Variable { binding }) -> binding
+    | _ -> failwith "no memory"
+  in
+  let prog =
+    lst.prog
+    |> Program.map_procedures (fun _ proc ->
+        Procedure.iter_blocks proc
+        |> Iter.fold
+             (fun proc (bid, b) -> transform_block ~memory ~proc bid b)
+             proc)
+  in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
+  [%expect {|
+    ("%block_3", 3) : []
+    ("%block_1", 1) : [("%block_3", 3)]
+    ("%block_2", 2) : [("%block_3", 3)]
+    ("%block", 0) : [("%block_1", 1); ("%block_2", 2)]
+    var observable $mem:(bv64->bv8);
+    var $PC:bv64;
+    proc @main()  -> () {  }
+      captures $PC:bv64
+      requires boolor(eq(0x400808:bv64, $PC))
+
+    [
+       block %block { .asm = "b.eq #1024" } [ goto (%block_2,%block_1,%block); ];
+       block %ret_1 [
+         var BranchTaken:bool := true;
+         $PC:bv64 := 0xb00400:bv64;
+         goto (%block_3);
+       ];
+       block %block_2 [
+         (var BranchTaken:bool := false, $PC:bv64 := 0xb00004:bv64);
+         goto (%block_3);
+       ];
+       block %block_3 [ assert boolor(eq(0x400784:bv64, $PC)); goto (%ret_1); ]
+    ];
+    prog entry @main;
+    |}]
+

@@ -48,6 +48,10 @@ let empty value : 'a diamond = Leaf value
     outermost ['a] value. *)
 let last = function Leaf value | Diamond { value } -> value
 
+let modify_last f = function
+  | Leaf x -> Leaf (f x)
+  | Diamond ({ value = x } as dia) -> Diamond { dia with value = f x }
+
 (** Returns the first value of the diamond in control-flow order. That is, the
     entry point. This is the innermost ['a] value following only [pred] links.
 *)

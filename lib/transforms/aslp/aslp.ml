@@ -20,8 +20,13 @@ let affix_successors : 'a Diamond.diamond -> ('a * 'a list) Diamond.diamond =
  fun dia ->
   let leaf x = Diamond.Leaf (x, []) in
   let diamond ~pred ~left ~right ~value =
-    let value = (value, Diamond.[ fst (last left); fst (last right) ]) in
-    Diamond.Diamond { pred; left; right; value }
+    let add_succ = Diamond.modify_last % CCPair.map_snd % List.append in
+
+    let l, r = Diamond.(fst (first left), fst (first right)) in
+    let pred = pred |> add_succ [ l; r ]
+    and left = left |> add_succ [ value ]
+    and right = right |> add_succ [ value ] in
+    Diamond.Diamond { pred; left; right; value = (value, []) }
   in
   Diamond.cata ~leaf ~diamond dia
 
@@ -81,6 +86,8 @@ let insert_one_diamond proc dia =
     with_ids |> iter_backwards
     |> Iter.fold
          (fun proc (id, successors, lifter_block) ->
+           Printf.printf "%s : %s\n" (ID.show id)
+             ([%derive.show: ID.t list] successors);
            let stmts = CCVector.to_list lifter_block.Aslp_state.stmts in
            Procedure.add_block proc id ~stmts ~successors ())
          proc
@@ -95,8 +102,8 @@ let transform_block ~memory ~proc id (b : Program.bloc) =
   let before, stmts =
     List.take_drop_while (Option.is_none % aarch64_intrin_of_stmt) stmts
   in
-  let opcodes, after = take_drop_while_map aarch64_intrin_of_stmt stmts in
-  let opcodes, attribs = List.split opcodes in
+  let intrins, after = take_drop_while_map aarch64_intrin_of_stmt stmts in
+  let opcodes, attribs = List.split intrins in
   (* TODO: hoist this opcode filtering. split up stmt partition into its own funtcion. *)
   match opcodes with
   | [] -> proc
