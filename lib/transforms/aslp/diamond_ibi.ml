@@ -31,12 +31,15 @@ module Make (S : Params) = struct
 
   let f_gen_branch : S.expr -> branch * branch * branch =
    fun cond ->
+    let diamond = S.diamond_get () in
     let t, f, m = S.diamond_make_branch cond in
+    (match diamond with
+    | _, Pred _ :: _ ->
+        failwith "invariant violation: f_gen_branch twice without switching"
+    | _ -> ());
 
     let t = Diamond.empty t and f = Diamond.empty f in
-    let diamond =
-      S.diamond_get () |> Diamond.append_diamond ~left:t ~right:f ~value:m
-    in
+    let diamond = diamond |> Diamond.append_diamond ~left:t ~right:f ~value:m in
     S.diamond_set diamond;
 
     let t = diamond |> Diamond.move_adjacent `L |> Result.get_ok

@@ -64,7 +64,7 @@ struct
       (t, f, m)
   end)
 
-  let f_switch_context ((_, d, st) as ctx) =
+  let f_switch_context ((_, d, expected) as ctx) =
     f_switch_context ctx;
     let address = bincaml_get_address ()
     and diamond = !bincaml_lifter_state.diamond in
@@ -79,7 +79,7 @@ struct
             diamond)
       |> Diamond.focus
     in
-    if not (CCEqual.physical merge_point.stmts st.Aslp_state.stmts) then
+    if not (CCEqual.physical merge_point.stmts expected.Aslp_state.stmts) then
       failwith
         "invariant violation: context switch did not arrive at expected point"
 

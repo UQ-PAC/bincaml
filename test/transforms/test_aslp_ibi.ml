@@ -269,55 +269,29 @@ let%expect_test
     "pathological: referencing old branch with intervening gen_branch" =
   let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
   in
-  I.bincaml_set_address (Bitvec.of_int ~size:64 0xfaf);
-  let b1 = I.f_gen_branch (I.f_gen_bool_lit true) in
-  I.bincaml_internal_emit (make_call "entry");
+  guard (fun () ->
+      I.bincaml_set_address (Bitvec.of_int ~size:64 0xfaf);
+      let b1 = I.f_gen_branch (I.f_gen_bool_lit true) in
+      I.bincaml_internal_emit (make_call "entry");
 
-  let b2 = I.f_gen_branch (I.f_gen_bool_lit true) in
-  I.bincaml_internal_emit (make_call "still_in_entry");
+      let b2 = I.f_gen_branch (I.f_gen_bool_lit true) in
+      I.bincaml_internal_emit (make_call "still_in_entry");
 
-  I.f_switch_context (I.f_true_branch b1);
-  I.bincaml_internal_emit (make_call "true_of_first_branch");
+      I.f_switch_context (I.f_true_branch b1);
+      I.bincaml_internal_emit (make_call "true_of_first_branch");
 
-  I.f_switch_context (I.f_false_branch b2);
-  I.bincaml_internal_emit (make_call "false_of_second_branch");
+      I.f_switch_context (I.f_false_branch b2);
+      I.bincaml_internal_emit (make_call "false_of_second_branch");
 
-  I.f_switch_context (I.f_merge_branch b1);
-  I.bincaml_internal_emit (make_call "end");
+      I.f_switch_context (I.f_merge_branch b1);
+      I.bincaml_internal_emit (make_call "end");
 
-  guard_get_ir I.get_ir;
+      guard_get_ir I.get_ir);
 
   [%expect
     {|
     make_call: entry
-    make_call: still_in_entry
-    make_call: true_of_first_branch
-    make_call: false_of_second_branch
-    make_call: end
-    Diamond {
-      pred =
-      Diamond {
-        pred =
-        (Leaf
-           { Aslp_state.assume = true;
-             stmts = [call entry_4(); call still_in_entry()]; pc_assign = None });
-        left = (Leaf { Aslp_state.assume = true; stmts = []; pc_assign = None });
-        right =
-        (Leaf
-           { Aslp_state.assume = boolnot(true);
-             stmts = [call false_of_second_branch()]; pc_assign = None });
-        value = { Aslp_state.assume = true; stmts = []; pc_assign = None }};
-      left =
-      (Leaf
-         { Aslp_state.assume = true; stmts = [call true_of_first_branch()];
-           pc_assign = None });
-      right =
-      (Leaf { Aslp_state.assume = boolnot(true); stmts = []; pc_assign = None });
-      value =
-      { Aslp_state.assume = true;
-        stmts =
-        [call end(); (var BranchTaken:bool := false, $PC:bv64 := 0xfb3:bv64)];
-        pc_assign = (Some 0xfb3:bv64) }}
+    error(Failure("invariant violation: f_gen_branch twice without switching"))
     |}]
 
 let%expect_test
