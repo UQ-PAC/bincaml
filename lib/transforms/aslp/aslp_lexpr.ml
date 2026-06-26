@@ -1,8 +1,11 @@
+(** A simple abstraction of architecture and local variables which may be
+    accessed by the ASLp lifter. *)
+
 open Lang
 open Common
 
-(** A variable used by the ASLp lifter. Can be converted to a Bincaml {!Var.t}.
-*)
+(** A variable used by the ASLp lifter. Can be converted to a Bincaml
+    {!Lang.Common.Var.t}. *)
 type t =
   | Local of string * Types.t
   | PC
@@ -71,3 +74,6 @@ let to_var x =
   let ty = typ x and name = name x and scope = scope x in
   let name = match scope with GlobalVar -> "$" ^ name | _ -> name in
   Var.create ~scope name ty
+
+let pc_var = to_var PC
+let branchtaken_var = to_var BranchTaken
