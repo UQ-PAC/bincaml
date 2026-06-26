@@ -66,10 +66,10 @@ let aarch64_intrin_of_stmt : Program.stmt -> 'b option = function
 
 let rec take_drop_while_map f = function
   | [] -> ([], [])
-  | hd :: rest -> (
+  | hd :: rest as all -> (
       match f hd with
       | Some x -> ( match take_drop_while_map f rest with a, b -> (x :: a, b))
-      | None -> ([], rest))
+      | None -> ([], all))
 
 let insert_one_diamond proc dia =
   let with_ids =
@@ -101,6 +101,11 @@ let transform_block ~memory ~proc id (b : Program.bloc) =
   match opcodes with
   | [] -> proc
   | _ ->
+      let proc =
+        Procedure.modify_block proc id (fun x ->
+            { x with stmts = Vector.of_list before })
+      in
+
       (* TODO get address from somewhere. change gtirb to add to attribute. *)
       let address = Bitvec.of_int ~size:64 0xb00000 in
 
@@ -108,7 +113,6 @@ let transform_block ~memory ~proc id (b : Program.bloc) =
         (val Bincaml_ibi.from_generator ~memory
                (Aslp_state.aslp_ids_from_generators ~local_ids))
       in
-      (* TODO: propagate asm attributes *)
       let diamonds =
         lift_code_block (module I) ~address Iter.(of_list opcodes)
       in
@@ -124,6 +128,11 @@ let transform_block ~memory ~proc id (b : Program.bloc) =
               Procedure.modify_block proc entry (fun x -> { x with attrib })
               |> Procedure.add_goto ~from:prev_tail ~targets:[ entry ] ))
           (id, proc) diamonds attribs
+      in
+
+      let proc =
+        Procedure.modify_block proc diamond_exit (fun b ->
+            Block.append_stmts b after)
       in
       Procedure.replace_block_succs proc diamond_exit block_successors
 

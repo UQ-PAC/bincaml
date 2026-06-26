@@ -166,13 +166,6 @@ proc @main()  -> () {  }
            .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
                    .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
          assume eq(0x400808:bv64, $PC);
-         call @_aarch64_eval(0xa9be7bfd:bv32) { .asm = "stp x29, x30, [sp, #-0x20]!" };
-         call @_aarch64_eval(0x910003fd:bv32) { .asm = "mov x29, sp" };
-         call @_aarch64_eval(0xb9001fe0:bv32) { .asm = "str w0, [sp, #0x1c]" };
-         call @_aarch64_eval(0xf9000be1:bv32) { .asm = "str x1, [sp, #0x10]" };
-         call @_aarch64_eval(0xb9801fe0:bv32) { .asm = "ldrsw x0, [sp, #0x1c]" };
-         call @_aarch64_eval(0x97ffffda:bv32) { .asm = "bl #0xffffffffffffff68" };
-         assert boolor(eq(0x400784:bv64, $PC));
          goto (%block);
        ];
        block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
@@ -211,6 +204,7 @@ proc @main()  -> () {  }
          $R30:bv64 := 0xb00018:bv64;
          var BranchTaken:bool := true;
          $PC:bv64 := 0xafff7c:bv64;
+         assert boolor(eq(0x400784:bv64, $PC));
          goto (%ret_1);
        ];
        block %ret_1 [ return; ]
