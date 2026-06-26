@@ -48,8 +48,12 @@ module Make (S : Params) = struct
     let s = Diamond.focus m in
     Diamond.((skeleton t, `T, s), (skeleton f, `F, s), (skeleton m, `M, s))
 
-  let f_switch_context (skel, _, _) =
-    S.diamond_get () |> Diamond.of_zipper
-    |> Diamond.resolve_skeleton skel
-    |> S.diamond_set
+  let f_switch_context (skel, d, _) =
+    let show b = "when moving to branch" ^ [%derive.show: [ `T | `F | `M ]] b in
+    CCResult.guard (fun () ->
+        S.diamond_get () |> Diamond.of_zipper
+        |> Diamond.resolve_skeleton skel
+        |> S.diamond_set)
+    |> Result.map_error (fun _ -> show d)
+    |> CCResult.get_or_failwith
 end
