@@ -29,7 +29,7 @@ struct
     !bincaml_lifter_state.address |> Option.get_exn_or err
 
   (** Emits the given Bincaml statement. *)
-  let bincaml_emit stmt =
+  let bincaml_internal_emit stmt =
     bincaml_lifter_state :=
       !bincaml_lifter_state |> Aslp_state.add_stmt_to_active stmt
 
@@ -53,6 +53,8 @@ struct
   let get_ir () =
     let diamond = !bincaml_lifter_state.diamond
     and address = bincaml_get_address () in
+    if not (List.is_empty (snd diamond)) then
+      failwith "invariant violation: context switches did not return to merge";
     diamond |> Aslp_state.ensure_pc_assigned ~address |> Diamond.of_zipper
 
   let bigint_of_string : string -> bigint = Z.of_string_base 10
@@ -231,7 +233,9 @@ struct
   let f_merge_branch : branch * branch * branch -> branch = fun (t, f, m) -> m
 
   let f_gen_assert : expr -> unit =
-   fun e -> bincaml_emit (Stmt.Instr_Assert { attrib = Attrib.empty; body = e })
+   fun e ->
+    bincaml_internal_emit
+      (Stmt.Instr_Assert { attrib = Attrib.empty; body = e })
 
   let f_gen_bit_lit : bigint -> bitvector -> expr =
    fun _ bv -> Expr.BasilExpr.const (`Bitvector bv)
@@ -249,7 +253,7 @@ struct
 
   let f_gen_store : lexpr -> expr -> unit =
    fun lhs rhs ->
-    bincaml_emit
+    bincaml_internal_emit
       (Stmt.Instr_Assign
          { attrib = Attrib.empty; al = [ (Aslp_lexpr.to_var lhs, rhs) ] })
 
