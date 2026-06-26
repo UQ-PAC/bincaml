@@ -177,7 +177,29 @@ let%expect_test "skipped merge context when going to outer merge" =
     make_call: tt
     make_call: tf
     make_call: m_outer
-    Failure("invariant violation: context switches did not return to merge")
+    Diamond {
+      pred =
+      (Leaf
+         { Aslp_state.assume = true; stmts = [call entry_2()]; pc_assign = None });
+      left =
+      Diamond {
+        pred =
+        (Leaf
+           { Aslp_state.assume = true; stmts = [call t_1()]; pc_assign = None });
+        left =
+        (Leaf { Aslp_state.assume = true; stmts = [call tt()]; pc_assign = None });
+        right =
+        (Leaf
+           { Aslp_state.assume = boolnot(true); stmts = [call tf()];
+             pc_assign = None });
+        value = { Aslp_state.assume = true; stmts = []; pc_assign = None }};
+      right =
+      (Leaf { Aslp_state.assume = boolnot(true); stmts = []; pc_assign = None });
+      value =
+      { Aslp_state.assume = true;
+        stmts =
+        [call m_outer(); (var BranchTaken:bool := false, $PC:bv64 := 0xfb3:bv64)];
+        pc_assign = (Some 0xfb3:bv64) }}
     |}]
 
 let%expect_test "skipped merge context when going to outer branch" =
@@ -214,7 +236,33 @@ let%expect_test "skipped merge context when going to outer branch" =
     make_call: tf
     make_call: f
     make_call: m_outer
-    Failure("invariant violation: context switches did not return to merge")
+    Diamond {
+      pred =
+      (Leaf
+         { Aslp_state.assume = true; stmts = [call entry_3()]; pc_assign = None });
+      left =
+      Diamond {
+        pred =
+        (Leaf
+           { Aslp_state.assume = true; stmts = [call t_2()]; pc_assign = None });
+        left =
+        (Leaf
+           { Aslp_state.assume = true; stmts = [call tt_1()]; pc_assign = None });
+        right =
+        (Leaf
+           { Aslp_state.assume = boolnot(true); stmts = [call tf_1()];
+             pc_assign = None });
+        value = { Aslp_state.assume = true; stmts = []; pc_assign = None }};
+      right =
+      (Leaf
+         { Aslp_state.assume = boolnot(true); stmts = [call f_1()];
+           pc_assign = None });
+      value =
+      { Aslp_state.assume = true;
+        stmts =
+        [call m_outer_1();
+          (var BranchTaken:bool := false, $PC:bv64 := 0xfb3:bv64)];
+        pc_assign = (Some 0xfb3:bv64) }}
     |}]
 
 let%expect_test
@@ -242,7 +290,28 @@ let%expect_test
     make_call: still_in_entry
     make_call: true_of_first_branch
     make_call: end
-    Failure("invariant violation: context switches did not return to merge")
+    Diamond {
+      pred =
+      Diamond {
+        pred =
+        (Leaf
+           { Aslp_state.assume = true;
+             stmts = [call entry_4(); call still_in_entry()]; pc_assign = None });
+        left = (Leaf { Aslp_state.assume = true; stmts = []; pc_assign = None });
+        right =
+        (Leaf { Aslp_state.assume = boolnot(true); stmts = []; pc_assign = None });
+        value = { Aslp_state.assume = true; stmts = []; pc_assign = None }};
+      left =
+      (Leaf
+         { Aslp_state.assume = true; stmts = [call true_of_first_branch()];
+           pc_assign = None });
+      right =
+      (Leaf { Aslp_state.assume = boolnot(true); stmts = []; pc_assign = None });
+      value =
+      { Aslp_state.assume = true;
+        stmts =
+        [call end(); (var BranchTaken:bool := false, $PC:bv64 := 0xfb3:bv64)];
+        pc_assign = (Some 0xfb3:bv64) }}
     |}]
 
 let%expect_test
@@ -278,5 +347,32 @@ let%expect_test
     make_call: entry
     make_call: b1_t
     make_call: b2_t
-    error(Invalid_argument("result is Error _"))
+    make_call: b1_t_again
+    make_call: exit
+    Diamond {
+      pred =
+      Diamond {
+        pred =
+        (Leaf
+           { Aslp_state.assume = true; stmts = [call entry_5()]; pc_assign = None
+             });
+        left =
+        (Leaf
+           { Aslp_state.assume = true; stmts = [call b1_t_1()]; pc_assign = None
+             });
+        right =
+        (Leaf { Aslp_state.assume = boolnot(true); stmts = []; pc_assign = None });
+        value = { Aslp_state.assume = true; stmts = []; pc_assign = None }};
+      left =
+      (Leaf
+         { Aslp_state.assume = true; stmts = [call b2_t_1(); call b1_t_again()];
+           pc_assign = None });
+      right =
+      (Leaf { Aslp_state.assume = boolnot(true); stmts = []; pc_assign = None });
+      value =
+      { Aslp_state.assume = true;
+        stmts =
+        [call exit_1(); (var BranchTaken:bool := false, $PC:bv64 := 0xfb3:bv64)];
+        pc_assign = (Some 0xfb3:bv64) }}
+    ok(())
     |}]
