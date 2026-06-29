@@ -135,6 +135,8 @@ let transform_block (module I : Bincaml_ibi.IBI) ~proc bid =
   in
   let opcodes, attribs = List.split intrins in
 
+  let return_blocks = Procedure.get_blocks_pred proc Return in
+
   (* Get the block's address. Permit a missing address iff opcodes is empty. *)
   let address =
     match (address_of_block b, opcodes) with
@@ -147,7 +149,13 @@ let transform_block (module I : Bincaml_ibi.IBI) ~proc bid =
   in
 
   if List.is_empty opcodes then proc
-  else
+  else (
+    (* TODO: this is not a fundamental limitation, but is because the get_blocks_succ
+       function drops Return vertices. *)
+    if List.mem bid return_blocks then
+      failwith
+        "transform_block: cannot transform a returning block at the moment";
+
     (* Clear statements from first block aside from those before the intrinsics. *)
     let proc =
       Procedure.modify_block proc bid (fun x ->
@@ -187,7 +195,7 @@ let transform_block (module I : Bincaml_ibi.IBI) ~proc bid =
     let proc =
       Procedure.modify_block proc last (fun b -> Block.append_stmts b after)
     in
-    Procedure.replace_block_succs proc last block_successors
+    Procedure.replace_block_succs proc last block_successors)
 
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all blocks
     within the given procedure. *)
