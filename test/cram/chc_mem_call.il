@@ -29,7 +29,7 @@ proc @foo() -> ()
 proc @main() -> ()
 [
   block %entry [
-    $mem := store le $mem 0x100:bv64 secret:bv8 8;
+    $mem := store le $mem 0x100:bv64 $secret:bv8 8;
     call @foo ();
     var v:bv8 := load le $mem 0x100:bv64 8;
     assert eq(v:bv8, bvadd($secret, 5:bv8));

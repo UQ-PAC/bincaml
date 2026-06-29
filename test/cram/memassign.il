@@ -11,10 +11,10 @@ type record = Record of {a : bv64; b: bv32; c:bv64};
 
 type ilist = Cons of {head:bv64; tail:ilist} | Nil ;
 
-let $a = UninterpSort;
+let $a = $UninterpSort;
 
 
-let $b = Record {a=1:bv64; b=2:bv64; c=3:bv64};
+let $b = $Record (1:bv64, 2:bv64, 3:bv64);
 
 let $mul_2 (a:bv64), (b:bv64) : bv64 = bvadd(b, bvmul(a, 2:bv64));
 let $three = let func (a:bv64) : bv64 = bvadd(a, 1:bv64) in func($mul_2(2:bv64, 1:bv64));

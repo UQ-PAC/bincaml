@@ -476,20 +476,20 @@ let var_generator p =
   g
 
 let get_local p ?(pure = false) name typ : Var.t =
-  let access = if pure then Var.Const else Var.None in
+  let access = Var.None in
   let v = (var_generator p).with_name name ~access typ in
   Hashtbl.replace (local_decls p) (Var.name v) v;
   v
 
 let decl_local p ?(pure = false) name typ : Var.t =
-  let access = if pure then Var.Const else Var.None in
+  let access = Var.None in
   let v = (var_generator p).create_exn name ~access typ in
   Hashtbl.replace (local_decls p) (Var.name v) v;
   v
 
 let fresh_var p ?(pure = false) ?name typ : Var.t =
   let name = Option.map (String.drop_while (Char.equal '$')) name in
-  let access = if pure then Var.Const else Var.None in
+  let access = Var.None in
   let name = Option.get_or ~default:"v" name in
   let v = (var_generator p).fresh ~name typ ~access in
   Hashtbl.replace (local_decls p) (Var.name v) v;

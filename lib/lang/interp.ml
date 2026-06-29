@@ -420,6 +420,11 @@ module IState = struct
 
   exception InterpreterError of (t * string)
 
+  let () =
+    Printexc.register_printer (function
+      | InterpreterError (_, msg) -> Some ("InterpreterError: " ^ msg)
+      | _ -> None)
+
   let tick st =
     match st.fuel with
     | None -> st
@@ -545,7 +550,11 @@ module IState = struct
     | _ -> failwith "unsupported memory type"
 
   let lookup_memory v st =
-    if Var.is_global v then VarMap.find v st.memories
+    if Var.is_global v then
+      VarMap.find_opt v st.memories
+      |> Option.get_exn_or
+           ("no memory found : " ^ Var.show v ^ " in "
+           ^ Iter.to_string Var.show (VarMap.keys st.memories))
     else failwith "unsupported"
 
   let write_var var value st =
@@ -654,9 +663,7 @@ module IState = struct
     | Stmt.Instr_IndirectCall _ -> failwith "unsupported"
 
   and eval_stmt (stmt : Program.stmt) (st : t) =
-    try eval_stmt_unsafe stmt st with
-    | AssumeFail _ as e -> raise e
-    | e -> raise (InterpreterError (st, Printexc.to_string e))
+    try eval_stmt_unsafe stmt st with AssumeFail _ as e -> raise e
 
   and exec_edge st e =
     let b, l, e = e in

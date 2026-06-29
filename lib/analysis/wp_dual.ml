@@ -178,6 +178,8 @@ let%expect_test "wp_dual" =
   let prog =
     (Loader.Loadir.ast_of_string
        {|
+var $x:bv64;
+
 prog entry @main;
 proc @main () -> ()
 [
@@ -212,9 +214,4 @@ proc @main () -> ()
   IntraAnalysis.A.M.find Procedure.Vert.Entry res
   |> IntraDomain.to_pred |> BasilExpr.to_string |> print_endline;
   [%expect
-    {|
-    Warn: global undeclared $x assuming mutable unshared
-    Warn: global undeclared $x assuming mutable unshared
-    Warn: global undeclared $x assuming mutable unshared
-    true
-    |}]
+    {| true |}]

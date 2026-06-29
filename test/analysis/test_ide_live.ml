@@ -12,6 +12,9 @@ let%expect_test "intra_checks" =
     Loader.Loadir.ast_of_string
       {|
 memory shared $mem : (bv64 -> bv8);
+var $x: bv64;
+var $y: bv64;
+var $z: bv64;
 
 prog entry @main;
 

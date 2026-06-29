@@ -244,17 +244,20 @@ module BasilASTLoader = struct
           prog
     | Decl_FunNoType (glident, _, _) -> prog
     | Decl_Fun (glident, params, _, typ, _) ->
+        let local_id_gen = Some (ID.make_gen ()) in
+        let prog = { prog with local_id_gen } in
         let bound = unpac_lambdaparen ~bound:StringMap.empty prog params in
         let arg_types = List.map Var.typ bound in
         let rtype = Types.curry arg_types (trans_type typ) in
         let name = unsafe_unsigil (`Global glident) in
-        let vg = Program.var_generator prog.prog in
         let fundef : Program.declaration =
           Function
             {
               attrib = StringMap.empty;
-              var_gen = Var.mk_gen ();
-              binding = vg.with_name name ~access:Const rtype;
+              var_gen = local_var_gen prog;
+              binding =
+                (Program.var_generator prog.prog).with_name name ~access:Const
+                  rtype;
               definition = Uninterpreted;
             }
         in
@@ -263,15 +266,18 @@ module BasilASTLoader = struct
             let p = Program.add_decl prog fundef in
             p)
           prog
+        |> fun p -> { p with local_id_gen = None }
     | Decl_Axiom (name, _, _) ->
         let name = unsafe_unsigil (`Global name) in
+        let local_id_gen = Some (ID.make_gen ()) in
+        let prog = { prog with local_id_gen } in
         let fundef : Program.declaration =
           let vg = Program.var_generator prog.prog in
           let bvar = vg.with_name name ~access:Const Boolean in
           Function
             {
               attrib = StringMap.empty;
-              var_gen = Var.mk_gen ();
+              var_gen = local_var_gen prog;
               binding = bvar;
               definition = Uninterpreted;
             }
@@ -324,6 +330,8 @@ module BasilASTLoader = struct
 
   (** desugar let definition function *)
   and create_fun prog glident args attrList typ body =
+    let v = ID.make_gen () in
+    let prog = { prog with local_id_gen = Some v } in
     let bound = unpac_lambdaparen ~bound:StringMap.empty prog args in
     let definition : Program.func_type =
       match body with
@@ -912,12 +920,11 @@ module BasilASTLoader = struct
 
   and unpack_local_lvars ?(bound = StringMap.empty) p_st const lvs : Var.t list
       =
-    let scope = if const then Var.Const else Var.None in
+    (* let scope = if const then Var.Const else Var.None in*)
     lvs
     |> List.map (function
       | LocalTyped (i, t) ->
-          Procedure.get_local
-            (p_st.curr_proc |> Option.get_exn_or "no current proc")
+          (local_var_gen p_st).with_name
             (unsafe_unsigil (`Local i))
             (trans_type t)
       | LocalUntyped i -> lookup_local_decl ~binds:bound i p_st)
@@ -940,7 +947,12 @@ module BasilASTLoader = struct
     match Var.is_global v with
     | true when Var.is_const v -> failwith "assign to global const"
     | true -> (map_curr_proc (fun p -> write_global p v) prog, v)
-    | false -> (prog, v)
+    | false ->
+        ignore
+        @@ Option.map
+             (fun proc -> Procedure.get_local proc (Var.name v) (Var.typ v))
+             prog.curr_proc;
+        (prog, v)
 
   and loc_lvar (x : BasilIR.AbsBasilIR.lVar) : Attrib.attrib_map =
     let l =
@@ -1619,7 +1631,9 @@ let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
         Procedure.G.add_edge g (End bid) Return)
       proc
   in
-  let bl = Procedure.get_block proc bid |> Option.get_exn_or "no current proc" in
+  let bl =
+    Procedure.get_block proc bid |> Option.get_exn_or "no current proc"
+  in
   let inparam =
     Block.free_vars bl |> VarSet.filter Var.is_local |> VarSet.to_list
     |> List.map (fun x -> (Var.name x, x))
@@ -1872,6 +1886,8 @@ proc @c() -> ()
 ];
 |}
   in
+  print_endline "globals: ";
+  print_endline (Program.global_vars prog.prog |> Iter.to_string Var.show);
   let res = analyse prog.prog in
   Iter.iter
     (fun (pid, proc) ->
@@ -1890,7 +1906,7 @@ proc @c() -> ()
     written: $mem:(bv64->bv8)
     |}]
 
-let%test_unit "parses parenthesised lambda param" =
+let%expect_test "parses parenthesised lambda param" =
   let s =
     {|
     let $memory_load32_le : (bv64 -> bv8) -> bv64 -> bv32 = fun (#memory: bv64 -> bv8), (#index: bv64) ::
@@ -1900,6 +1916,7 @@ let%test_unit "parses parenthesised lambda param" =
         load_le(8, #memory, #index)))));
     |}
   in
+  Printexc.record_backtrace true;
   let _ = ast_of_string ~__LINE__ ~__FILE__ ~__FUNCTION__ s in
   ()
 

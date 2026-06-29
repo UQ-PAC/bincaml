@@ -38,7 +38,7 @@ let transform_proc ?(check_names = false) (add : ID.t -> Var.t -> bool) prog
         in
         added := VarSet.add v !added;
         v)
-      else Procedure.fresh_var proc ~name typ
+      else Procedure.get_local proc name typ
     in
     v
   in

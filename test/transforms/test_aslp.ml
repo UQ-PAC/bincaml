@@ -27,8 +27,8 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
     (Leaf
        { Aslp_state.assume = true;
          stmts =
-         [var var_0:bv64 := $R2; var var_1:bv64 := $R3;
-           $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
+         [var v:bv64 := $R2; var v_1:bv64 := $R3;
+           $R1:bv64 := bvadd(v:bv64, bvshl(v_1:bv64, 0x4:bv12));
            (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
          pc_assign = (Some 0x2004:bv64) })
     |}]
@@ -104,8 +104,8 @@ let%expect_test "lift: b #16" =
     (Leaf
        { Aslp_state.assume = true;
          stmts =
-         [var var_0:bv64 := $R2; var var_1:bv64 := $R3;
-           $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
+         [var v:bv64 := $R2; var v_1:bv64 := $R3;
+           $R1:bv64 := bvadd(v:bv64, bvshl(v_1:bv64, 0x4:bv12));
            (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
          pc_assign = (Some 0x2004:bv64) })
     |}]
