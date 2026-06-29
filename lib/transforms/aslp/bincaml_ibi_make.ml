@@ -4,6 +4,7 @@ open Common
 (** Makes a concrete module which implements {!Bincaml_ibi.IBI}. *)
 module Make (S : sig
   val initial_lifter_state : Aslp_state.lifter_state
+  val bincaml_memory_var : unit -> Var.t
 end) =
 struct
   (** {2 Type definitions} *)
@@ -291,11 +292,23 @@ struct
 
   (** [f_gen_Mem_set size address size acctype value] *)
   let f_gen_Mem_set : bigint -> expr -> expr -> expr -> expr -> unit =
-   fun _ -> failwith "f_gen_Mem_set"
+   fun size addr _ _acctype value ->
+    let addr = Stmt.Addr { addr; size = Z.to_int size; endian = `Little }
+    and mem = S.bincaml_memory_var () in
+    bincaml_internal_emit
+      (Stmt.Instr_Store
+         { attrib = Attrib.empty; lhs = mem; rhs = mem; value; addr })
 
   (** [f_gen_Mem_read size address size acctype value] *)
   let f_gen_Mem_read : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_Mem_read"
+   fun size addr _ _acctype ->
+    let addr = Stmt.Addr { addr; size = Z.to_int size; endian = `Little }
+    and mem = S.bincaml_memory_var () in
+    let name = !bincaml_lifter_state.generator.local_id () in
+    let rhs = Var.create name (Types.bv (Z.to_int size)) in
+    bincaml_internal_emit
+      (Stmt.Instr_Load { attrib = Attrib.empty; lhs = mem; rhs; addr });
+    Expr.BasilExpr.rvar rhs
 
   let f_AtomicStart : unit -> unit = fun _ -> failwith "f_AtomicStart"
   let f_AtomicEnd : unit -> unit = fun _ -> failwith "f_AtomicEnd"

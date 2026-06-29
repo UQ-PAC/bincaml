@@ -48,6 +48,15 @@ let empty value : 'a diamond = Leaf value
     outermost ['a] value. *)
 let last = function Leaf value | Diamond { value } -> value
 
+let modify_last f = function
+  | Leaf x -> Leaf (f x)
+  | Diamond ({ value = x } as dia) -> Diamond { dia with value = f x }
+
+(** Returns the first value of the diamond in control-flow order. That is, the
+    entry point. This is the innermost ['a] value following only [pred] links.
+*)
+let rec first = function Leaf x -> x | Diamond { pred } -> first pred
+
 (** {1 Zippers}
 
     A zipper is a concept in functional programming (especially, Haskell) that
@@ -278,19 +287,18 @@ let resolve_skeleton :
 let rec map f = function
   | Leaf x -> Leaf (f x)
   | Diamond { value; left; right; pred } ->
+      let pred = map f pred and left = map f left and right = map f right in
       let value = f value in
-      let left = map f left and right = map f right and pred = map f pred in
       Diamond { value; left; right; pred }
 
 let rec cata ~(leaf : 'a -> 'b)
-    ~(diamond : pred:'b -> left:'b -> right:'b -> value:'b -> 'b) dia : 'b =
+    ~(diamond : pred:'b -> left:'b -> right:'b -> value:'a -> 'b) dia : 'b =
   match dia with
   | Leaf x -> leaf x
   | Diamond { value; left; right; pred } ->
       let pred = cata ~leaf ~diamond pred
       and left = cata ~leaf ~diamond left
-      and right = cata ~leaf ~diamond right
-      and value = leaf value in
+      and right = cata ~leaf ~diamond right in
       diamond ~pred ~left ~right ~value
 
 (** {1 Derived functions} *)
