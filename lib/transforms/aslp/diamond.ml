@@ -42,6 +42,8 @@ type 'a diamond =
     }
 [@@deriving show { with_path = false }, eq]
 
+(** {1 Basic functions} *)
+
 let empty value : 'a diamond = Leaf value
 
 (** Returns the last value of the diamond in control-flow order. That is, the
@@ -59,7 +61,7 @@ let rec first = function Leaf x -> x | Diamond { pred } -> first pred
 
 (** {1 Structural transformations} *)
 
-(** Maps the given function over the {!diamond} structure, processing elements
+(** Maps the given function over the {!diamond} structure, processing values
     {i forwards} in control-flow order. *)
 let rec map_forwards f = function
   | Leaf x -> Leaf (f x)
@@ -70,7 +72,7 @@ let rec map_forwards f = function
       let value = f value in
       Diamond { value; left; right; pred }
 
-(** Maps the given function over the {!diamond} structure, processing elements
+(** Maps the given function over the {!diamond} structure, processing values
     {i backwards} in control-flow order. *)
 let rec map_backwards f = function
   | Leaf x -> Leaf (f x)
@@ -81,7 +83,29 @@ let rec map_backwards f = function
       and pred = map_backwards f pred in
       Diamond { value; left; right; pred }
 
-(** Folds the given functions over the {!diamond} structure, processing elements
+(** Iterates over the {!diamond} structure, processing values {i forwards} in
+    control-flow order. *)
+let rec iter_backwards : 'a diamond -> 'a Iter.t = function
+  | Leaf x -> fun k -> k x
+  | Diamond { value; left; right; pred } ->
+      fun k ->
+        k value;
+        iter_backwards left k;
+        iter_backwards right k;
+        iter_backwards pred k
+
+(** Iterates over the {!diamond} structure, processing values {i backwards} in
+    control-flow order. *)
+let rec iter_backwards : 'a diamond -> 'a Iter.t = function
+  | Leaf x -> fun k -> k x
+  | Diamond { value; left; right; pred } ->
+      fun k ->
+        iter_backwards pred k;
+        iter_backwards left k;
+        iter_backwards right k;
+        k value
+
+(** Folds the given functions over the {!diamond} structure, processing values
     {i forwards} in control-flow order. *)
 let rec cata ~(leaf : 'a -> 'b)
     ~(diamond : pred:'b -> left:'b -> right:'b -> value:'a -> 'b) dia : 'b =
@@ -93,9 +117,16 @@ let rec cata ~(leaf : 'a -> 'b)
       and right = cata ~leaf ~diamond right in
       diamond ~pred ~left ~right ~value
 
+(** Enumerates each value in the {!diamond} with the result of [f value],
+    processing values {i forwards} in control-flow order. *)
 let enumerate : ('a -> 'b) -> 'a diamond -> ('b * 'a) diamond =
  fun f dia -> map_forwards (fun x -> (f x, x)) dia
 
+(** Combines each value in the {!diamond} with the values of its successors in
+    control-flow order.
+
+    A [pred] node has two successors, and a [left] or [right] node has one
+    successor. *)
 let affix_successors : 'a diamond -> ('a * 'a list) diamond =
  fun dia ->
   let leaf x = Leaf (x, []) in
@@ -110,16 +141,13 @@ let affix_successors : 'a diamond -> ('a * 'a list) diamond =
   in
   cata ~leaf ~diamond dia
 
-let enumerate_with_successors f dia =
+(** Enumerates each value in the {!diamond} with the result of [f value], as
+    well as the enumerated value from each of its control-flow successors. *)
+let enumerate_with_successors :
+    ('a -> 'b) -> 'a diamond -> ('b * 'b list * 'a) diamond =
+ fun f dia ->
   dia |> enumerate f |> affix_successors
   |> map_forwards (fun ((id, x), succs) -> (id, List.map fst succs, x))
-
-let iter_backwards : 'a diamond -> 'a Iter.t =
- fun dia ->
-  let diamond ~pred ~left ~right ~value =
-    Iter.append_l [ Iter.singleton value; left; right; pred ]
-  in
-  cata ~leaf:Iter.singleton ~diamond dia
 
 (** {1 Derived functions} *)
 
