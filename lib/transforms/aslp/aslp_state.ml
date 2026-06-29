@@ -43,7 +43,7 @@ type aslp_ids = { local_id : unit -> string }
 type lifter_state = {
   address : Bitvec.t option;
       (** Byte address of the instruction currently being lifted. *)
-  diamond : aslp_block Diamond_zipper.diamond_zipper;
+  diamond : aslp_block Diamond_zipper.zipper;
       (** Lifter state representing a control flow diamond while it is being
           built. *)
   generator : aslp_ids; [@opaque]  (** Generators for ID names. *)

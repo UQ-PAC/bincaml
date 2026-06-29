@@ -1,5 +1,5 @@
 (** Implements control flow functionality for the IBI by using
-    {!Diamond_zipper.diamond_zipper}. *)
+    {!Diamond_zipper.zipper}. *)
 
 (** Necessary parameters to provide IBI control flow functions. *)
 module type Params = sig
@@ -7,18 +7,17 @@ module type Params = sig
 
   type state
   (** Type of the state stored inside each control-flow point of the
-      {!Diamond_zipper.diamond_zipper}. *)
+      {!Diamond_zipper.zipper}. *)
 
-  val diamond_get : unit -> state Diamond_zipper.diamond_zipper
-  val diamond_set : state Diamond_zipper.diamond_zipper -> unit
+  val diamond_get : unit -> state Diamond_zipper.zipper
+  val diamond_set : state Diamond_zipper.zipper -> unit
 
   val diamond_make_branch : expr -> state * state * state
   (** Should return [(t,f,m)] *)
 end
 
 (** Implements control flow functionality for the IBI by using
-    {!Diamond_zipper.diamond_zipper}. See {!module-Diamond_zipper} for more
-    details. *)
+    {!Diamond_zipper.zipper}. See {!module-Diamond_zipper} for more details. *)
 module Make (S : Params) = struct
   type branch = Diamond_zipper.skeleton * [ `T | `F | `M ] * S.state
   (** Branch switches are a path into the diamond.
