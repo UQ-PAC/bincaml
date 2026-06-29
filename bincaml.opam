@@ -11,7 +11,7 @@ homepage: "https://github.com/username/reponame"
 doc: "https://url/to/documentation"
 bug-reports: "https://github.com/username/reponame/issues"
 depends: [
-  "dune" {>= "3.19"}
+  "dune" {>= "3.19" & != "3.23.0"}
   "ocaml"
   "capstone_arm64_disas"
   "aslp_lifter_ocaml" {>= "1.1"}

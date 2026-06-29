@@ -26,9 +26,9 @@
  (name capstone_arm64_disas)
  (synopsis "Disas arm ops with capstone")
  (depends
-   ocaml
-   ppx_expect
-   )
+  (dune (<> 3.23.0))
+  ocaml
+  ppx_expect)
 )
 
 (package
@@ -36,6 +36,7 @@
  (synopsis "Program analysis tool.")
  (description "A longer description")
  (depends
+  (dune (<> 3.23.0))
   ocaml
   capstone_arm64_disas
   (aslp_lifter_ocaml (>= 1.1))
@@ -77,7 +78,7 @@
  (name bincaml_lsp)
  (synopsis "Language server for Bincaml IL files")
  (depends
-  (menhir (>= 20180523))
+  (dune (<> 3.23.0))
   ppx_expect
   bincaml
   fmt

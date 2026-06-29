@@ -10,8 +10,7 @@ homepage: "https://github.com/username/reponame"
 doc: "https://url/to/documentation"
 bug-reports: "https://github.com/username/reponame/issues"
 depends: [
-  "dune" {>= "3.19"}
-  "menhir" {>= "20180523"}
+  "dune" {>= "3.19" & != "3.23.0"}
   "ppx_expect"
   "bincaml"
   "fmt"
