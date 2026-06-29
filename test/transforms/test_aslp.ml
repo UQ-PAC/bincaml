@@ -272,6 +272,7 @@ proc @main()  -> () {  }
        ];
        block %block_3 [
          guard true;
+         $PC:bv64 := if eq($PSTATE_Z, 0x1:bv1) then 0xb00400:bv64 else 0xb00004:bv64;
          assert boolor(eq(0x400784:bv64, $PC));
          goto (%ret_1);
        ];

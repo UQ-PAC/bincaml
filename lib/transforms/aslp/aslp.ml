@@ -111,7 +111,11 @@ let insert_one_diamond ~proc dia =
   (first, last, proc)
 
 (** Transforms the {!Stmt.Intrinsic.Aarch64Eval} intrinsics within the given
-    block ID within the given procedure. *)
+    block ID within the given procedure.
+
+    Inserts control-flow edges between successive instructions within the block,
+    and emits an assertion for the ITE expression representing the final [PC]
+    value. *)
 let transform_block (module I : Bincaml_ibi.IBI) ~proc ~address bid =
   let b = Procedure.get_block proc bid |> Option.get_exn_or "block not found" in
   let before, intrins, after =
@@ -137,6 +141,14 @@ let transform_block (module I : Bincaml_ibi.IBI) ~proc ~address bid =
           Procedure.modify_block proc entry (fun x -> { x with attrib })
           |> Procedure.add_goto ~from:prev_tail ~targets:[ entry ] ))
       (bid, proc) diamonds attribs
+  in
+
+  let after =
+    match List.last_opt diamonds with
+    | Some (Diamond { value = { pc_assign = Some pc_assign } }) ->
+        let al = [ (Aslp_lexpr.pc_var, pc_assign) ] in
+        Stmt.Instr_Assign { attrib = Attrib.empty; al } :: after
+    | _ -> after
   in
 
   let proc =
