@@ -1,5 +1,5 @@
 (** Implements control flow functionality for the IBI by using
-    {!Diamond.diamond_zipper}. *)
+    {!Diamond_zipper.diamond_zipper}. *)
 
 (** Necessary parameters to provide IBI control flow functions. *)
 module type Params = sig
@@ -7,19 +7,20 @@ module type Params = sig
 
   type state
   (** Type of the state stored inside each control-flow point of the
-      {!Diamond.diamond_zipper}. *)
+      {!Diamond_zipper.diamond_zipper}. *)
 
-  val diamond_get : unit -> state Diamond.diamond_zipper
-  val diamond_set : state Diamond.diamond_zipper -> unit
+  val diamond_get : unit -> state Diamond_zipper.diamond_zipper
+  val diamond_set : state Diamond_zipper.diamond_zipper -> unit
 
   val diamond_make_branch : expr -> state * state * state
   (** Should return [(t,f,m)] *)
 end
 
 (** Implements control flow functionality for the IBI by using
-    {!Diamond.diamond_zipper}. See {!module-Diamond} for more details. *)
+    {!Diamond_zipper.diamond_zipper}. See {!module-Diamond_zipper} for more
+    details. *)
 module Make (S : Params) = struct
-  type branch = Diamond.skeleton * [ `T | `F | `M ] * S.state
+  type branch = Diamond_zipper.skeleton * [ `T | `F | `M ] * S.state
   (** Branch switches are a path into the diamond.
 
       For downstream uses, this also records the branch direction and the state
@@ -39,19 +40,22 @@ module Make (S : Params) = struct
     | _ -> ());
 
     let t = Diamond.empty t and f = Diamond.empty f in
-    let diamond = diamond |> Diamond.append_diamond ~left:t ~right:f ~value:m in
+    let diamond =
+      diamond |> Diamond_zipper.append_diamond ~left:t ~right:f ~value:m
+    in
     S.diamond_set diamond;
 
-    let t = diamond |> Diamond.move_adjacent `L |> Result.get_ok
-    and f = diamond |> Diamond.move_adjacent `R |> Result.get_ok in
-    let m = t |> Diamond.move_out_of |> Result.get_ok in
-    let s = Diamond.focus m in
-    Diamond.((skeleton t, `T, s), (skeleton f, `F, s), (skeleton m, `M, s))
+    let t = diamond |> Diamond_zipper.move_adjacent `L |> Result.get_ok
+    and f = diamond |> Diamond_zipper.move_adjacent `R |> Result.get_ok in
+    let m = t |> Diamond_zipper.move_out_of |> Result.get_ok in
+    let s = Diamond_zipper.focus m in
+    Diamond_zipper.
+      ((skeleton t, `T, s), (skeleton f, `F, s), (skeleton m, `M, s))
 
   let f_switch_context (skel, d, _) =
     let show b = "when moving to branch" ^ [%derive.show: [ `T | `F | `M ]] b in
-    S.diamond_get () |> Diamond.of_zipper
-    |> Diamond.resolve_skeleton skel
+    S.diamond_get () |> Diamond_zipper.to_diamond
+    |> Diamond_zipper.resolve_skeleton skel
     |> Result.map_error (fun _ -> show d)
     |> CCResult.get_or_failwith |> S.diamond_set
 end

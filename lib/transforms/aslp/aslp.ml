@@ -13,34 +13,6 @@ module Diamond = Diamond
 module Diamond_ibi = Diamond_ibi
 module Bincaml_ibi = Bincaml_ibi
 
-let enumerate : ('a -> 'b) -> 'a Diamond.diamond -> ('b * 'a) Diamond.diamond =
- fun f dia -> Diamond.map (fun x -> (f x, x)) dia
-
-let affix_successors : 'a Diamond.diamond -> ('a * 'a list) Diamond.diamond =
- fun dia ->
-  let leaf x = Diamond.Leaf (x, []) in
-  let diamond ~pred ~left ~right ~value =
-    let add_succ = Diamond.modify_last % CCPair.map_snd % List.append in
-
-    let l, r = Diamond.(fst (first left), fst (first right)) in
-    let pred = pred |> add_succ [ l; r ]
-    and left = left |> add_succ [ value ]
-    and right = right |> add_succ [ value ] in
-    Diamond.Diamond { pred; left; right; value = (value, []) }
-  in
-  Diamond.cata ~leaf ~diamond dia
-
-let enumerate_with_successors f dia =
-  dia |> enumerate f |> affix_successors
-  |> Diamond.map (fun ((id, x), succs) -> (id, List.map fst succs, x))
-
-let iter_backwards : 'a Diamond.diamond -> 'a Iter.t =
- fun dia ->
-  let diamond ~pred ~left ~right ~value =
-    Iter.append_l [ Iter.singleton value; left; right; pred ]
-  in
-  Diamond.cata ~leaf:Iter.singleton ~diamond dia
-
 (** Requires and ensures that the IBI is in the "reset" state. *)
 let lift_opcode (module I : Bincaml_ibi.IBI) ~address opcode =
   Fun.protect ~finally:I.reset_ir (fun () ->
@@ -80,11 +52,11 @@ let rec take_drop_while_map f = function
 let insert_one_diamond proc dia =
   let with_ids =
     dia
-    |> enumerate_with_successors (fun _ ->
+    |> Diamond.enumerate_with_successors (fun _ ->
         ID.fresh ~name:"%block" (Procedure.block_ids proc) ())
   in
   let proc =
-    with_ids |> iter_backwards
+    with_ids |> Diamond.iter_backwards
     |> Iter.fold
          (fun proc (id, successors, lifter_block) ->
            let stmts = CCVector.to_list lifter_block.Aslp_state.stmts in
