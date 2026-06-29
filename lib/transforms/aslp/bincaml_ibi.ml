@@ -27,6 +27,8 @@ let from_generator generator : (module IBI) =
 
 (** Builds a new {!IBI} where the ID generators are derived from the given
     procedure. *)
-let from_bincaml_procedure proc : (module IBI) =
-  let local_ids = Procedure.local_ids proc in
-  from_generator (Aslp_state.aslp_ids_from_generators ~local_ids)
+let from_bincaml_procedure prog proc : (module IBI) =
+  from_generator
+    (Aslp_lexpr.aslp_ids_from_generators
+       ~local_var:(Procedure.var_generator proc)
+       ~global_var:(Program.var_generator prog))

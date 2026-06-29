@@ -36,9 +36,9 @@ struct
     let id_name =
       match Hashtbl.find_opt !bincaml_lifter_state.names name with
       | None ->
-          let id_name = !bincaml_lifter_state.generator.local_id () in
-          Hashtbl.replace !bincaml_lifter_state.names name id_name;
-          id_name
+          let id_name = !bincaml_lifter_state.generator.local_var.fresh ty in
+          Hashtbl.replace !bincaml_lifter_state.names name (Var.name id_name);
+          Var.name id_name
       | Some x -> x
     in
     Aslp_lexpr.Local (id_name, ty)
@@ -71,7 +71,11 @@ struct
     | `M ->
         let address = bincaml_get_address ()
         and diamond = !bincaml_lifter_state.diamond in
-        let diamond = diamond |> Aslp_state.ensure_pc_consistency ~address in
+        let diamond =
+          diamond
+          |> Aslp_state.ensure_pc_consistency !bincaml_lifter_state.generator
+               ~address
+        in
         bincaml_lifter_state := { !bincaml_lifter_state with diamond }
 
   (** {2 IR extraction} *)
@@ -83,7 +87,9 @@ struct
   let get_ir () =
     let diamond = !bincaml_lifter_state.diamond
     and address = bincaml_get_address () in
-    diamond |> Aslp_state.ensure_pc_assigned ~address |> Diamond.of_zipper
+    diamond
+    |> Aslp_state.ensure_pc_assigned !bincaml_lifter_state.generator ~address
+    |> Diamond.of_zipper
 
   (** {2 Instruction building interface implementation} *)
 
@@ -247,13 +253,13 @@ struct
   let f_decl_bool : string -> lexpr = fun _ -> failwith "f_decl_bool"
 
   let f_gen_load : lexpr -> expr =
-   fun lhs -> Expr.BasilExpr.rvar (Aslp_lexpr.to_var lhs)
+   fun lhs -> Expr.BasilExpr.rvar (Aslp_lexpr.to_var !bincaml_lifter_state.generator lhs)
 
   let f_gen_store : lexpr -> expr -> unit =
    fun lhs rhs ->
     bincaml_emit
       (Stmt.Instr_Assign
-         { attrib = Attrib.empty; al = [ (Aslp_lexpr.to_var lhs, rhs) ] })
+         { attrib = Attrib.empty; al = [ (Aslp_lexpr.to_var !bincaml_lifter_state.generator lhs, rhs) ] })
 
   let f_gen_array_load : lexpr -> bigint -> expr =
    fun array idx ->

@@ -64,40 +64,53 @@ type ('t, 'a, 'g) any_gen = {
 }
 
 open struct
+  let force_sigil sigil s : string =
+    if String.starts_with ~prefix:sigil s then s else sigil ^ s
+
   let create name id_gen ?(access = None) typ =
     (* disallow creating local const as its too hard to have declaration order *)
     { name; scope = id_gen; typ; tags = access }
 
-  let fresh gt (gen : ID.generator) name ?access typ =
+  let fresh gt (gen : ID.generator) sgl name ?access typ =
+    let name = force_sigil sgl name in
     let name = gen.fresh ~name () in
     create name gt ?access typ
 
-  let with_name gt (id_gen : ID.generator) name ?access typ =
+  let with_name gt (id_gen : ID.generator) sgl name ?access typ =
+    let name = force_sigil sgl name in
     let name = id_gen.decl_or_get name in
     create name gt ?access typ
 
-  let create_exn gt (id_gen : ID.generator) name ?access typ =
+  let create_exn gt (id_gen : ID.generator) sgl name ?access typ =
+    let name = force_sigil sgl name in
     let name = id_gen.decl_exn name in
     create name gt ?access typ
 end
 
-let mk_gen ?id_generator ?(scope = `Local) ?(default_name = "v") () =
+let mk_gen ?id_generator ?(req_sigil = Option.None) ?(scope = `Local)
+    ?(default_name = "v") () =
   let id_gen = Option.get_or ~default:(ID.make_gen ()) id_generator in
   let gt =
     match scope with
     | `Local -> Local id_gen.gen_id
     | `Global -> Global id_gen.gen_id
   in
+  let sgl =
+    match (req_sigil, scope) with
+    | Some s, _ -> s
+    | None, `Local -> ""
+    | None, `Global -> "$"
+  in
 
   let fresh ?name ?access typ =
     let name = Option.get_or ~default:default_name name in
-    fresh gt id_gen name ?access typ
+    fresh gt id_gen sgl name ?access typ
   in
 
   {
     scope = gt;
     fresh;
-    with_name = with_name gt id_gen;
-    create_exn = create_exn gt id_gen;
+    with_name = with_name gt id_gen sgl;
+    create_exn = create_exn gt id_gen sgl;
     generator = id_gen;
   }

@@ -3,7 +3,7 @@ open Common
 open Transforms.Aslp
 
 let%expect_test "nested diamonds" =
-  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_lexpr.empty_aslp_ids ()))
   in
   I.bincaml_set_address (Bitvec.of_int ~size:64 0xbadbadbad000);
   let branch1 = I.f_gen_branch (I.f_gen_bool_lit true) in

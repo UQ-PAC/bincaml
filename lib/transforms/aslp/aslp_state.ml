@@ -34,19 +34,13 @@ type aslp_diamond = aslp_block Diamond.diamond [@@deriving show]
     it is not the representation which is used {i during} lifting. For the
     "in-progress" representation, see {!diamond}. *)
 
-type aslp_ids = { local_id : unit -> string }
-(** Generators for unique IDs used by the offline lifter.
-
-    The {!aslp_ids} is stateful and the same {!aslp_ids} should be used by all
-    opcodes within the same procedure, to ensure that IDs are unique.*)
-
 type lifter_state = {
   address : Bitvec.t option;
       (** Byte address of the instruction currently being lifted. *)
   diamond : aslp_block Diamond.diamond_zipper;
       (** Lifter state representing a control flow diamond while it is being
           built. *)
-  generator : aslp_ids; [@opaque]  (** Generators for ID names. *)
+  generator : Aslp_lexpr.aslp_ids; [@opaque]  (** Generators for ID names. *)
   names : (string, string) Hashtbl.t;
       (** Map of ASLp local variable names to the "ID-ified" names produced for
           Bincaml.
@@ -83,24 +77,6 @@ let empty_lifter_state ~generator () =
     generator;
   }
 
-(** Construct a new {!aslp_ids} with no pre-existing IDs.
-
-    Be careful! You should use {!aslp_ids_from_generators} if you will use the
-    lifted statements within an existing Bincaml IR. *)
-let empty_aslp_ids () =
-  let local_id = Fix.Gensym.make () %> Printf.sprintf "var_%d" in
-  { local_id }
-
-(** {2 ID-generating functions} *)
-
-(** Construct a {!aslp_ids} with the given {!Bincaml_util.ID.generator}s as
-    underlying generators.
-
-    This will ensure that ASLp's local variable and block names do not clash
-    with existing names. *)
-let aslp_ids_from_generators ~local_ids =
-  let local_id = ID.fresh ~name:"var" local_ids %> ID.name in
-  { local_id }
 
 (** {1 State manipulation functions} *)
 
@@ -110,11 +86,11 @@ let aslp_ids_from_generators ~local_ids =
     is assumed that [PC] is assigned at most once on any straight-line path.
     Raises an exception if the statement is an assignment to [PC] and
     {!pc_assign} is already set. *)
-let add_stmt_to_block blk ~stmt =
+let add_stmt_to_block gen blk ~stmt =
   let pc_assign =
     match stmt with
     | Stmt.Instr_Assign { al = assigns; _ } ->
-        assigns |> List.Assoc.get ~eq:Var.equal Aslp_lexpr.pc_var
+        assigns |> List.Assoc.get ~eq:Var.equal (Aslp_lexpr.pc_var gen)
     | _ -> None
   in
   match (pc_assign, blk.pc_assign) with
@@ -128,24 +104,27 @@ let add_stmt_to_block blk ~stmt =
 
 let add_stmt_to_active stmt (lifter_state : lifter_state) =
   let diamond = lifter_state.diamond in
-  let diamond = diamond |> Diamond.modify (add_stmt_to_block ~stmt) in
+  let diamond =
+    diamond |> Diamond.modify (add_stmt_to_block lifter_state.generator ~stmt)
+  in
   { lifter_state with diamond }
 
 (** {1 Program counter functions} *)
 
 (** Ensures that the focused block has a PC assignment. If it already has
     {!pc_assign}, no changes are made. *)
-let ensure_pc_assigned ~address =
+let ensure_pc_assigned generator ~address =
   Diamond.modify (function
     | { pc_assign = None } as block ->
         let incremented =
           Expr.BasilExpr.bvconst Bitvec.(add address (of_int ~size:64 4))
         and ff = Expr.BasilExpr.boolconst false in
 
-        let bt = Aslp_lexpr.branchtaken_var and pc = Aslp_lexpr.pc_var in
+        let bt = Aslp_lexpr.branchtaken_var generator in
+        let pc = Aslp_lexpr.pc_var generator in
         let al = [ (bt, ff); (pc, incremented) ] in
         block
-        |> add_stmt_to_block
+        |> add_stmt_to_block generator
              ~stmt:(Stmt.Instr_Assign { attrib = Attrib.empty; al })
     | block -> block)
 
@@ -167,7 +146,7 @@ let ensure_pc_assigned ~address =
     This is used to maintain the invariant that at every control flow point, the
     [PC] variable is either assigned on all paths or assigned on no paths (from
     the beginning of the instruction). *)
-let ensure_pc_consistency ~address state =
+let ensure_pc_consistency gen ~address state =
   let before_skel = Diamond.skeleton state in
   let left = state |> Diamond.move_in_to `L |> Result.get_ok
   and right = state |> Diamond.move_in_to `R |> Result.get_ok in
@@ -175,8 +154,8 @@ let ensure_pc_consistency ~address state =
   (* Make PCs of left and right agree. Resulting state is at left or right. *)
   let state =
     match ((Diamond.focus left).pc_assign, (Diamond.focus right).pc_assign) with
-    | Some _, None -> right |> ensure_pc_assigned ~address
-    | None, Some _ -> left |> ensure_pc_assigned ~address
+    | Some _, None -> right |> ensure_pc_assigned gen ~address
+    | None, Some _ -> left |> ensure_pc_assigned gen ~address
     | None, None | Some _, Some _ -> left (* arbitrary *)
   in
 
