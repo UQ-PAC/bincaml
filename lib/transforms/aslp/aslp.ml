@@ -51,7 +51,7 @@ module Util = struct
         | None -> ([], all))
 end
 
-(** {1 Extracting data from Bincaml IR} *)
+(** {1 Interfacing with Bincaml IR} *)
 
 (** Extracts the opcode and attribute from the given Bincaml statement, if it is
     an {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic call. Otherwise, returns
