@@ -1,4 +1,5 @@
-open Diamond
+(** Functionality for representing and moving through {i positions} of a
+    {!Diamond.diamond}. *)
 
 (** {1 Zippers}
 
@@ -40,11 +41,13 @@ open Diamond
     {{:https://www.youtube.com/watch?v=HqHdgBXOOsE} a talk on YouTube} (the
     first 10 minutes are most relevant). *)
 
-(** {2 Preliminaries} *)
+open Diamond
 
-(** Moving one step through the {!diamond}. Each variant records the direction
-    of the step, as well as the paths {i not} taken. This allows the {!diamond}
-    to be reconstructed when moving "back" through a path. *)
+(** {1 Preliminaries} *)
+
+(** Moving one step through the {!Diamond.diamond}. Each variant records the
+    direction of the step, as well as the paths {i not} taken. This allows the
+    {!Diamond.diamond} to be reconstructed when moving "back" through a path. *)
 type 'a step =
   | Left of { value : 'a; right : 'a diamond; pred : 'a diamond }
   | Right of { value : 'a; left : 'a diamond; pred : 'a diamond }
@@ -52,8 +55,8 @@ type 'a step =
 [@@deriving show { with_path = false }]
 
 type 'a path = 'a step list [@@deriving show]
-(** A type describing a path to a "hole" in a {!diamond}, with the ability to
-    reconstruct the full {!diamond} when the hole is filled.
+(** A type describing a path to a "hole" in a {!Diamond.diamond}, with the
+    ability to reconstruct the full {!Diamond.diamond} when the hole is filled.
 
     For example, this diamond (where [@] is the missing child)
     {v
@@ -66,26 +69,26 @@ type 'a path = 'a step list [@@deriving show]
     would be represented by
     {v Left { value = v; right = r; pred = p } v}
 
-    It is a list when the hole occurs inside a nested {!diamond}, the path is
-    made up of multiple {!step} - starting from the hole and moving upwards
-    until you get to the root.
+    It is a list when the hole occurs inside a nested {!Diamond.diamond}, the
+    path is made up of multiple {!step} - starting from the hole and moving
+    upwards until you get to the root.
 
-    As one consequence of this, a {!path} of [[]] represents a {!diamond} which
-    is all hole:
+    As one consequence of this, a {!path} of [[]] represents a
+    {!Diamond.diamond} which is all hole:
     {v @ v} *)
 
-(** {2 Zipper for diamond} *)
+(** {1 Zipper for diamond} *)
 
 type 'a zipper = 'a diamond * 'a path [@@deriving show]
-(** Conceptually, a {!zipper} is a ['a ]{!diamond} but with additional
+(** Conceptually, a {!zipper} is a ['a ]{!Diamond.diamond} but with additional
     information about a "position" which points to a particular ['a] value
     within the diamond (called the focus). The focus can be moved around to
     point to different positions within the nested diamonds.
 
-    This is implemented by deconstructing a {!diamond} into a {!path} which
-    represents parts of the diamond {i above} the focus, and a {!diamond} which
-    represents the focus and nested diamonds {i below} the focus. The focus is
-    the root of the stored {!diamond}. *)
+    This is implemented by deconstructing a {!Diamond.diamond} into a {!path}
+    which represents parts of the diamond {i above} the focus, and a
+    {!Diamond.diamond} which represents the focus and nested diamonds {i below}
+    the focus. The focus is the root of the stored {!Diamond.diamond}. *)
 
 (** Builds an empty zipper with the given value. *)
 let empty value : 'a zipper = (Leaf value, [])
@@ -96,7 +99,7 @@ let focus : 'a zipper -> 'a = function this, _ -> last this
 (** Returns the subdiamond terminated by the currently focused position. *)
 let subdiamond : 'a zipper -> 'a diamond = function this, _ -> this
 
-(** Converts the given {!zipper} to a full {!diamond}. *)
+(** Converts the given {!zipper} to a full {!Diamond.diamond}. *)
 let to_diamond : 'a zipper -> 'a diamond =
  fun (this, path) ->
   List.fold_left
@@ -108,10 +111,11 @@ let to_diamond : 'a zipper -> 'a diamond =
           Diamond { value; left; right; pred })
     this path
 
-(** Converts the given {!diamond} to a zipper, initially focused at {!last}. *)
+(** Converts the given {!Diamond.diamond} to a zipper, initially focused at
+    {!last}. *)
 let to_zipper : 'a diamond -> 'a zipper = fun dmd -> (dmd, [])
 
-(** {2 Movement functions}
+(** {1 Movement functions}
 
     When moving around the nested diamonds, there is a notion of "level" and
     whether two positions are at the same nesting level. The rule is that two
@@ -153,8 +157,8 @@ let move_adjacent direction : 'a zipper -> ('a zipper, 'a zipper) result =
       | `P -> Ok (pred, Pred { value; left; right } :: rest))
 
 (** Moves the zipper to a position in the outer diamond level. That is, to the
-    {!type-diamond.value} of the containing {!diamond}. In control-flow terms,
-    this is the next control-flow join point. *)
+    {!type-diamond.value} of the containing {!Diamond.diamond}. In control-flow
+    terms, this is the next control-flow join point. *)
 let move_out_of : 'a zipper -> ('a zipper, 'a zipper) result = function
   | (_, []) as zip -> Error zip
   | left, Left { value; right; pred } :: rest
@@ -175,11 +179,11 @@ let move_in_to direction : 'a zipper -> ('a zipper, 'a zipper) result = function
 (** Moves the zipper to the outermost ({!last}) position of the diamond. *)
 let move_to_outermost zip = zip |> to_diamond |> to_zipper
 
-(** {2 Modification functions} *)
+(** {1 Modification functions} *)
 
 (** Modifies the zipper by inserting a new diamond {i after} the current
     position in program order, using the given parameters to build the new
-    {!constructor-Diamond}.
+    {!module-Diamond.constructor-Diamond}.
 
     This function {b invalidates} {!type-skeleton}s which point into the
     currently-focused {!subdiamond}! *)
@@ -196,8 +200,9 @@ let modify (f : 'a -> 'a) : 'a zipper -> 'a zipper = function
 type skeleton = [ `L | `R | `P ] list
 [@@deriving show { with_path = false }, eq]
 (** The skeleton of a zipper is its value-less {!path}. This can be used to
-    reference a position within the {!diamond}, but it cannot reconstruct the
-    full {!diamond}, nor can it (safely) move to adjacent positions.
+    reference a position within the {!Diamond.diamond}, but it cannot
+    reconstruct the full {!Diamond.diamond}, nor can it (safely) move to
+    adjacent positions.
 
     Being divorced from its originating {!zipper}, a {!skeleton} is liable to
     become {i invalidated} if the zipper is drastically changed. An invalidated
@@ -208,10 +213,10 @@ let skeleton : 'a zipper -> skeleton = function
   | _, path ->
       List.map (function Left _ -> `L | Right _ -> `R | Pred _ -> `P) path
 
-(** Resolves the given {!type-skeleton} within the given {!diamond}.
+(** Resolves the given {!type-skeleton} within the given {!Diamond.diamond}.
 
-    This takes a {!diamond} rather than a {!zipper} because a skeleton is always
-    resolved from the root. *)
+    This takes a {!Diamond.diamond} rather than a {!zipper} because a skeleton
+    is always resolved from the root. *)
 let resolve_skeleton : skeleton -> 'a diamond -> ('a zipper, 'a zipper) result =
  fun skel dia ->
   CCResult.fold_l

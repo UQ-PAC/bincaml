@@ -59,7 +59,7 @@ let modify_last f = function
 *)
 let rec first = function Leaf x -> x | Diamond { pred } -> first pred
 
-(** {1 Structural transformations} *)
+(** {1 Map, iter, and fold} *)
 
 (** Maps the given function over the {!diamond} structure, processing values
     {i forwards} in control-flow order. *)
@@ -85,14 +85,14 @@ let rec map_backwards f = function
 
 (** Iterates over the {!diamond} structure, processing values {i forwards} in
     control-flow order. *)
-let rec iter_backwards : 'a diamond -> 'a Iter.t = function
+let rec iter_forwards : 'a diamond -> 'a Iter.t = function
   | Leaf x -> fun k -> k x
   | Diamond { value; left; right; pred } ->
       fun k ->
         k value;
-        iter_backwards left k;
-        iter_backwards right k;
-        iter_backwards pred k
+        iter_forwards left k;
+        iter_forwards right k;
+        iter_forwards pred k
 
 (** Iterates over the {!diamond} structure, processing values {i backwards} in
     control-flow order. *)
@@ -116,6 +116,8 @@ let rec cata ~(leaf : 'a -> 'b)
       and left = cata ~leaf ~diamond left
       and right = cata ~leaf ~diamond right in
       diamond ~pred ~left ~right ~value
+
+(** {1 Utility transformations} *)
 
 (** Enumerates each value in the {!diamond} with the result of [f value],
     processing values {i forwards} in control-flow order. *)

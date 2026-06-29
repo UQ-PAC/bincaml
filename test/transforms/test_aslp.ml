@@ -148,7 +148,7 @@ proc @main()  -> () {  }
     |> Program.map_procedures (fun _ proc ->
         Procedure.iter_blocks proc
         |> Iter.fold
-             (fun proc (bid, b) -> transform_block ~memory ~proc bid b)
+             (fun proc (bid, _) -> transform_block ~memory ~proc bid)
              proc)
   in
   print_endline
@@ -207,7 +207,7 @@ proc @main()  -> () {  }
          assert boolor(eq(0x400784:bv64, $PC));
          goto (%ret_1);
        ];
-       block %ret_1 [ return; ]
+       block %ret_1 [ unreachable; ]
     ];
     prog entry @main;
     |}]
@@ -235,17 +235,15 @@ proc @main()  -> () {  }
 ];
     |}
   in
-  let memory () =
-    Program.get_decl_by_name "$mem" lst.prog |> function
-    | Some (Variable { binding }) -> binding
-    | _ -> failwith "no memory"
-  in
   let prog =
     lst.prog
     |> Program.map_procedures (fun _ proc ->
         Procedure.iter_blocks proc
         |> Iter.fold
-             (fun proc (bid, b) -> transform_block ~memory ~proc bid b)
+             (fun proc (bid, _) ->
+               transform_block
+                 ~memory:(fun _ -> aarch64_mem_of_prog lst.prog)
+                 ~proc bid)
              proc)
   in
   print_endline
@@ -276,7 +274,62 @@ proc @main()  -> () {  }
          goto (%block_3);
        ];
        block %block_3 [ assert boolor(eq(0x400784:bv64, $PC)); goto (%ret_1); ];
-       block %ret_1 [ return; ]
+       block %ret_1 [ unreachable; ]
+    ];
+    prog entry @main;
+    |}]
+
+let%expect_test "aslp integration with no aarch64_eval intrins" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+memory shared $mem : (bv64 -> bv8);
+var $PC:bv64;
+prog entry @main;
+
+proc @main()  -> () {  }
+  requires boolor(eq(0x400808:bv64, $PC))
+[
+  block %main_code { .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+      .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
+              .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
+    assume eq(0x400808:bv64, $PC);
+    // call @_aarch64_eval(0x54002000:bv32) { .asm = "b.eq #1024" };
+    assert boolor(eq(0x400784:bv64, $PC));
+    goto (%ret_1);
+  ];
+      block %ret_1 [ return; ]
+];
+    |}
+  in
+  let prog =
+    lst.prog
+    |> Program.map_procedures (fun _ proc ->
+        Procedure.iter_blocks proc
+        |> Iter.fold
+             (fun proc (bid, _) ->
+               transform_block ~memory:(aarch64_mem_of_prog lst.prog) ~proc bid)
+             proc)
+  in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
+  [%expect
+    {|
+    var observable $mem:(bv64->bv8);
+    var $PC:bv64;
+    proc @main()  -> () {  }
+      captures $PC:bv64
+      requires boolor(eq(0x400808:bv64, $PC))
+
+    [
+       block %main_code { .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+           .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
+                   .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
+         assume eq(0x400808:bv64, $PC);
+         assert boolor(eq(0x400784:bv64, $PC));
+         goto (%ret_1);
+       ];
+       block %ret_1 [ unreachable; ]
     ];
     prog entry @main;
     |}]

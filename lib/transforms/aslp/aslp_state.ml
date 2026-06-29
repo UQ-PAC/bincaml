@@ -1,3 +1,6 @@
+(** Intermediate offline lifter state while {i within} one particular
+    instruction. *)
+
 open Lang
 open Common
 
