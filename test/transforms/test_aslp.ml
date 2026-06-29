@@ -6,8 +6,7 @@ let%expect_test "lift empty" =
   let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
   in
   let x =
-    lift_code_block (module I) ~address:(Bitvec.of_int ~size:64 0x2000)
-    @@ Iter.empty
+    lift_code_block (module I) ~address:(Bitvec.of_int ~size:64 0x2000) []
   in
   List.iter (print_endline % Aslp_state.show_aslp_diamond) x;
   [%expect {| |}]
@@ -37,10 +36,10 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
   let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
   in
   let x =
-    lift_code_block (module I) ~address:(Bitvec.of_int ~size:64 0x2000)
-    @@ Iter.doubleton
-         (Bitvec.of_string "0xd29579a1:bv32")
-         (Bitvec.of_string "0xd29579a1:bv32")
+    lift_code_block
+      (module I)
+      ~address:(Bitvec.of_int ~size:64 0x2000)
+      [ Bitvec.of_string "0xd29579a1:bv32"; Bitvec.of_string "0xd29579a1:bv32" ]
   in
   List.iter (print_endline % Aslp_state.show_aslp_diamond) x;
   [%expect

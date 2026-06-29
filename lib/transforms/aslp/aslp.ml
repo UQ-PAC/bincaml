@@ -30,12 +30,10 @@ let lift_opcode (module I : Bincaml_ibi.IBI) ~address opcode =
 (** Lifts a sequence of opcodes.
 
     Requires and ensures that the IBI is in the "reset" state. *)
-let lift_code_block (module I : Bincaml_ibi.IBI) ~address opcodes =
-  opcodes
-  |> Iter.mapi (fun i op ->
+let lift_code_block (module I : Bincaml_ibi.IBI) ~address =
+  List.mapi (fun i op ->
       let address = Bitvec.add (Bitvec.create ~size:64 Z.(~$4 * ~$i)) address in
       lift_opcode (module I) ~address op)
-  |> Iter.to_list
 
 module Util = struct
   (** [take_drop_while_map f xs] returns the longest prefix of [xs] where the
@@ -56,10 +54,11 @@ end
 (** {1 Extracting data from Bincaml IR} *)
 
 (** Extracts the opcode and attribute from the given Bincaml statement, if it is
-    an {!Stmt.Intrinsic.Aarch64Eval} intrinsic call. Otherwise, returns [None].
+    an {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic call. Otherwise, returns
+    [None].
 
-    Raises an exception if an {!Stmt.Intrinsic.Aarch64Eval} intrinsic call has
-    an unexpected structure. *)
+    Raises an exception if an {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic call
+    has an unexpected structure. *)
 let aarch64_intrin_of_stmt :
     Program.stmt -> (Bitvec.t * Attrib.attrib_map) option = function
   | Stmt.Instr_IntrinCall { attrib; lhs; name = Aarch64Eval; args } -> (
@@ -69,7 +68,10 @@ let aarch64_intrin_of_stmt :
   | _ -> None
 
 (** Extracts Aarch64 intrinsics from the given list of statements, partitioning
-    the statements into [(before, aarch64_ops, after)]. *)
+    the statements into [(before, aarch64_ops, after)].
+
+    If there are no Aarch64 statements, this still succeeds but will return [[]]
+    in the second and third elements. *)
 let partition_aarch64_stmts stmts =
   let before, stmts =
     List.take_drop_while (Option.is_none % aarch64_intrin_of_stmt) stmts
@@ -95,6 +97,7 @@ let aarch64_mem_of_prog prog =
 let insert_one_diamond ~proc dia =
   let next_id _ = ID.fresh ~name:"%block" (Procedure.block_ids proc) () in
   let with_ids = dia |> Diamond.enumerate_with_successors next_id in
+
   let proc =
     with_ids |> Diamond.iter_backwards
     |> Iter.fold
@@ -108,10 +111,11 @@ let insert_one_diamond ~proc dia =
            Procedure.add_block proc id ~stmts ~successors ())
          proc
   and (first, _, _), (last, _, _) = Diamond.(first with_ids, last with_ids) in
+
   (first, last, proc)
 
-(** Transforms the {!Stmt.Intrinsic.Aarch64Eval} intrinsics within the given
-    block ID within the given procedure.
+(** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics within the
+    given block ID within the given procedure.
 
     Inserts control-flow edges between successive instructions within the block,
     and emits an assertion for the ITE expression representing the final [PC]
@@ -123,41 +127,49 @@ let transform_block (module I : Bincaml_ibi.IBI) ~proc ~address bid =
   in
   let opcodes, attribs = List.split intrins in
 
+  (* Clear statements from first block aside from those before the intrinsics. *)
   let proc =
     Procedure.modify_block proc bid (fun x ->
         { x with stmts = Vector.of_list before })
   in
 
-  let diamonds = lift_code_block (module I) ~address Iter.(of_list opcodes) in
-
+  (* Record then clear the successors of the first block. *)
   let block_successors = Procedure.get_blocks_succ proc (End bid) in
   let proc = Procedure.replace_block_succs proc bid [] in
 
+  (* Lift each opcode, then join between each lifted opcode with gotos. *)
+  let diamonds = lift_code_block (module I) ~address opcodes in
   let last, proc =
     List.fold_left2
-      (fun (prev_tail, proc) dia attrib ->
-        let entry, exit, proc = insert_one_diamond ~proc dia in
-        ( exit,
-          Procedure.modify_block proc entry (fun x -> { x with attrib })
-          |> Procedure.add_goto ~from:prev_tail ~targets:[ entry ] ))
+      (fun (prev_last, proc) dia attrib ->
+        let first, last, proc = insert_one_diamond ~proc dia in
+        ( last,
+          Procedure.modify_block proc first (fun x -> { x with attrib })
+          |> Procedure.add_goto ~from:prev_last ~targets:[ first ] ))
       (bid, proc) diamonds attribs
   in
 
+  (* Insert a PC assign to the merge point, if there was a branch. *)
   let after =
     match List.last_opt diamonds with
-    | Some (Diamond { value = { pc_assign = Some pc_assign } }) ->
+    | Some (Diamond { value = { pc_assign } }) ->
+        let pc_assign =
+          Option.get_exn_or "pc_assign unset at last in block?" pc_assign
+        in
         let al = [ (Aslp_lexpr.pc_var, pc_assign) ] in
         Stmt.Instr_Assign { attrib = Attrib.empty; al } :: after
-    | _ -> after
+    | Some (Leaf _) | None -> after
   in
 
+  (* Append back things which were previously after the Aarch64 intrinsic calls,
+     but append them to the *last* block. Finally, fix up successors. *)
   let proc =
     Procedure.modify_block proc last (fun b -> Block.append_stmts b after)
   in
   Procedure.replace_block_succs proc last block_successors
 
-(** Transforms the {!Stmt.Intrinsic.Aarch64Eval} intrinsics of all blocks within
-    the given procedure. *)
+(** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all blocks
+    within the given procedure. *)
 let transform_procedure ~memory proc =
   let module I =
     (val Bincaml_ibi.from_generator
