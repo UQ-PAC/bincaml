@@ -146,46 +146,48 @@ let transform_block (module I : Bincaml_ibi.IBI) ~proc bid =
              (ID.to_string bid))
   in
 
-  (* Clear statements from first block aside from those before the intrinsics. *)
-  let proc =
-    Procedure.modify_block proc bid (fun x ->
-        { x with stmts = Vector.of_list before })
-  in
+  if List.is_empty opcodes then proc
+  else
+    (* Clear statements from first block aside from those before the intrinsics. *)
+    let proc =
+      Procedure.modify_block proc bid (fun x ->
+          { x with stmts = Vector.of_list before })
+    in
 
-  (* Record then clear the successors of the first block. *)
-  let block_successors = Procedure.get_blocks_succ proc (End bid) in
-  let proc = Procedure.replace_block_succs proc bid [] in
+    (* Record then clear the successors of the first block. *)
+    let block_successors = Procedure.get_blocks_succ proc (End bid) in
+    let proc = Procedure.replace_block_succs proc bid [] in
 
-  (* Lift each opcode, then join between each lifted opcode with gotos. *)
-  let diamonds = lift_code_block (module I) ~address opcodes in
-  let last, proc =
-    List.fold_left2
-      (fun (prev_last, proc) dia attrib ->
-        let first, last, proc = insert_one_diamond ~proc dia in
-        ( last,
-          Procedure.modify_block proc first (fun x -> { x with attrib })
-          |> Procedure.add_goto ~from:prev_last ~targets:[ first ] ))
-      (bid, proc) diamonds attribs
-  in
+    (* Lift each opcode, then join between each lifted opcode with gotos. *)
+    let diamonds = lift_code_block (module I) ~address opcodes in
+    let last, proc =
+      List.fold_left2
+        (fun (prev_last, proc) dia attrib ->
+          let first, last, proc = insert_one_diamond ~proc dia in
+          ( last,
+            Procedure.modify_block proc first (fun x -> { x with attrib })
+            |> Procedure.add_goto ~from:prev_last ~targets:[ first ] ))
+        (bid, proc) diamonds attribs
+    in
 
-  (* Insert a PC assign to the merge point, if there was a branch. *)
-  let after =
-    match List.last_opt diamonds with
-    | Some (Diamond { value = { pc_assign } }) ->
-        let pc_assign =
-          Option.get_exn_or "pc_assign unset at last in block?" pc_assign
-        in
-        let al = [ (Aslp_lexpr.pc_var, pc_assign) ] in
-        Stmt.Instr_Assign { attrib = Attrib.empty; al } :: after
-    | Some (Leaf _) | None -> after
-  in
+    (* Insert a PC assign to the merge point, if there was a branch. *)
+    let after =
+      match List.last_opt diamonds with
+      | Some (Diamond { value = { pc_assign } }) ->
+          let pc_assign =
+            Option.get_exn_or "pc_assign unset at last in block?" pc_assign
+          in
+          let al = [ (Aslp_lexpr.pc_var, pc_assign) ] in
+          Stmt.Instr_Assign { attrib = Attrib.empty; al } :: after
+      | Some (Leaf _) | None -> after
+    in
 
-  (* Append back things which were previously after the Aarch64 intrinsic calls,
+    (* Append back things which were previously after the Aarch64 intrinsic calls,
      but append them to the *last* block. Finally, fix up successors. *)
-  let proc =
-    Procedure.modify_block proc last (fun b -> Block.append_stmts b after)
-  in
-  Procedure.replace_block_succs proc last block_successors
+    let proc =
+      Procedure.modify_block proc last (fun b -> Block.append_stmts b after)
+    in
+    Procedure.replace_block_succs proc last block_successors
 
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all blocks
     within the given procedure. *)

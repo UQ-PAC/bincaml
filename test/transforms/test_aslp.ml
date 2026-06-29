@@ -200,7 +200,7 @@ proc @main()  -> () {  }
          assert boolor(eq(0x400784:bv64, $PC));
          goto (%ret_1);
        ];
-       block %ret_1 [ unreachable; ]
+       block %ret_1 [ return; ]
     ];
     var $SP:bv64;
     var $R0:bv64;
@@ -348,7 +348,7 @@ proc @main()  -> () {  }
          assert boolor(eq(0x400784:bv64, $PC));
          goto (%ret_1);
        ];
-       block %ret_1 [ unreachable; ]
+       block %ret_1 [ return; ]
     ];
     var $SP:bv64;
     var $R0:bv64;
@@ -476,7 +476,7 @@ proc @main()  -> () {  }
          assert boolor(eq(0x400784:bv64, $PC));
          goto (%ret_1);
        ];
-       block %ret_1 [ unreachable; ]
+       block %ret_1 [ return; ]
     ];
     var $SP:bv64;
     var $R0:bv64;
