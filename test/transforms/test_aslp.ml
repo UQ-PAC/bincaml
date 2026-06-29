@@ -292,63 +292,66 @@ let%expect_test "aslp integration with branching" =
       {|
 memory shared $mem : (bv64 -> bv8);
 var $PC:bv64;
-prog entry @main;
+prog entry @Sqrt;
 
-proc @main()  -> () {  }
-  requires boolor(eq(0x400808:bv64, $PC))
+proc @Sqrt()  -> () {  }
 [
-    block %main_code { .address = 0x400808; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
-      .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
-              .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
-    assume eq(0x400808:bv64, $PC);
-    call @_aarch64_eval(0x54002000:bv32) { .asm = "b.eq #1024" };
-    assert boolor(eq(0x400784:bv64, $PC));
-    goto (%ret_1);
+  block %Sqrt_code_4 { .address = 0x4007dc; } [
+    assume eq(0x4007dc:bv64, $PC);
+    call @_aarch64_eval(0x5400008b:bv32) { .asm = "b.lt #0x10" };
+    assert boolor(eq(0x4007fc:bv64, $PC), eq(0x4007e0:bv64, $PC));
+    goto (%Sqrt_code_3,%Sqrt_code);
   ];
-      block %ret_1 [ return; ]
+  block %Sqrt_code [
+    assume eq(0x4007e0:bv64, $PC);
+    goto (%ret);
+  ];
+  block %Sqrt_code_3 [
+    assume eq(0x4007fc:bv64, $PC);
+    goto (%ret);
+  ];
+  block %ret [ return; ]
 ];
     |}
   in
   let prog = transform_program lst.prog in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
-  [%expect
-    {|
+  [%expect {|
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
-    proc @main()  -> () {  }
+    proc @Sqrt()  -> () {  }
       captures $PC:bv64
-      requires boolor(eq(0x400808:bv64, $PC))
 
     [
-       block %main_code { .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
-           .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
-                   .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
-         assume eq(0x400808:bv64, $PC);
+       block %Sqrt_code_4 { .address = 4196316 } [
+         assume eq(0x4007dc:bv64, $PC);
          goto (%block);
        ];
-       block %block { .asm = "b.eq #1024" } [
+       block %block { .asm = "b.lt #0x10" } [
          guard true;
          goto (%block_2,%block_1);
        ];
        block %block_1 [
-         guard eq($PSTATE_Z, 0x1:bv1);
+         guard boolnot(eq($PSTATE_N, $PSTATE_V));
          var BranchTaken:bool := true;
-         $PC:bv64 := 0x400c08:bv64;
+         $PC:bv64 := 0x4007ec:bv64;
          goto (%block_3);
        ];
        block %block_2 [
-         guard boolnot(eq($PSTATE_Z, 0x1:bv1));
-         (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
+         guard boolnot(boolnot(eq($PSTATE_N, $PSTATE_V)));
+         (var BranchTaken:bool := false, $PC:bv64 := 0x4007e0:bv64);
          goto (%block_3);
        ];
        block %block_3 [
          guard true;
-         $PC:bv64 := if eq($PSTATE_Z, 0x1:bv1) then 0x400c08:bv64 else 0x40080c:bv64;
-         assert boolor(eq(0x400784:bv64, $PC));
-         goto (%ret_1);
+         $PC:bv64 := if boolnot(eq($PSTATE_N, $PSTATE_V)) then 0x4007ec:bv64 else 0x4007e0:bv64;
+         assert boolor(eq(0x4007fc:bv64, $PC), eq(0x4007e0:bv64, $PC));
+         goto (%Sqrt_code_3,%Sqrt_code);
        ];
-       block %ret_1 [ return; ]
+       block %Sqrt_code [ assume eq(0x4007e0:bv64, $PC); goto (%ret); ];
+       block %Sqrt_code_3 [ assume eq(0x4007fc:bv64, $PC); goto (%ret); ];
+       block %ret [ return; ]
     ];
     var $SP:bv64;
     var $R0:bv64;
@@ -431,7 +434,7 @@ proc @main()  -> () {  }
     var $PSTATE_UAO:bv1;
     var $PSTATE_BTYPE:bv1;
     var $ExclusiveLocal:bool;
-    prog entry @main;
+    prog entry @Sqrt;
     |}]
 
 let%expect_test "aslp integration with no aarch64_eval intrins" =
