@@ -296,6 +296,11 @@ let pretty_statement (s : Program.stmt) =
   let open Containers_pp in
   let open List.Infix in
   match s with
+  | Instr_IntrinCall { lhs; name = Stmt.Intrinsic.Havoc; _ } ->
+      let vars =
+        List.map pretty_variable lhs |> fill (text "," ^ newline_or_spaces 1)
+      in
+      nest 2 @@ text "havoc" ^+ vars
   | Instr_IntrinCall { lhs; name; args } ->
       let lhs =
         if List.length lhs > 0 then
@@ -306,7 +311,8 @@ let pretty_statement (s : Program.stmt) =
       let rhs =
         List.map pretty_expr args |> fill (text "," ^ newline_or_spaces 1)
       in
-      nest 2 @@ text "call" ^+ lhs ^ Stmt.Intrinsic.pretty name
+      nest 2 @@ text "call" ^+ lhs
+      ^ Stmt.Intrinsic.to_pretty name
       ^ bracket "(" rhs ")"
   | Instr_Assign { al = [] } -> text "assert true"
   | Instr_Assign { al = ls } ->

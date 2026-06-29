@@ -9,13 +9,27 @@
   concat.il))
 
 (cram
- (applies_to * \ expr_smt malloc_free memory_safety memory_interproc)
+ (applies_to
+  *
+  \
+  expr_smt
+  malloc_free
+  memory_safety
+  memory_interproc
+  chc_loop
+  chc_call
+  chc_spec
+  chc_per_query
+  chc_mem
+  chc_mem_call)
  (package bincaml)
  (deps
   loop_dfg.sexp
   ../../examples/loop.il
   %{bin:bincaml}
   ssa-multi-deps.il
+  ../../examples/memory/malloc_free.il
+  ../../examples/memory/malloc_free_various.il
   memassign.il
   ptrrec1.il
   ../../examples/gtirb/binsearch_sqrt.gtirb
@@ -63,3 +77,23 @@
   ../../examples/memory/memory_interproc.il
   ./memory_interproc.sexp
   ../../examples/memory/memory_safety.il))
+
+(cram
+ (applies_to chc_loop chc_call chc_spec chc_per_query chc_mem chc_mem_call)
+ (package bincaml)
+ (enabled_if %{bin-available:z3})
+ (deps
+  %{bin:bincaml}
+  chc_loop.il
+  chc_loop.sexp
+  chc_call.il
+  chc_call.sexp
+  chc_spec.il
+  chc_spec.sexp
+  chc_per_query.il
+  chc_per_query.sexp
+  chc_mem.il
+  chc_mem.sexp
+  chc_mem_call.il
+  chc_mem_call.sexp
+  ../../bin/main.exe))

@@ -60,6 +60,7 @@ module IntervalDomain = struct
   let bottom = WrappedIntervalsLattice.bottom
   let leq = WrappedIntervalsLattice.leq
   let widening = WrappedIntervalsLattice.widening
+  let narrowing = WrappedIntervalsLattice.narrowing
   let join = WrappedIntervalsLattice.join
   let top = WrappedIntervalsLattice.Top
   let neg = WrappedIntervalsLatticeOps.neg

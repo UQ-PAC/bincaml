@@ -65,6 +65,7 @@ module KnownBitsLattice = struct
         tnum value mask
 
   let widening a b = join a b
+  let narrowing a b = a
 end
 
 module KnownBitsOps = struct

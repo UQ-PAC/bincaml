@@ -10,4 +10,4 @@ type config = {
 
 let conf =
   let pc_var = ("$PC", Types.(Bitvector 64)) in
-  { opcode_length = 4; pc_var; disas = false; direct = false }
+  { opcode_length = 4; pc_var; disas = true; direct = false }

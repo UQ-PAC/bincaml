@@ -12,9 +12,10 @@
   conf
   gtirb_frontend)
  (libraries
+  bincaml.gtirb_proto
+  capstone_arm64_disas
   base64
   angstrom
-  bincaml.gtirb_proto
   zarith
   fix
   ocamlgraph

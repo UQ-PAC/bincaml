@@ -100,6 +100,7 @@ module Domain (S : FunctionAnnotation) = struct
   let join (a : t) (b : t) : t = BasilExpr.applyintrin ~op:`OR [ a; b ]
   let leq a b = failwith "leq not implemented"
   let widening a b = top
+  let narrowing a b = a
 
   let locals (p : BasilExpr.t) =
     BasilExpr.free_vars p

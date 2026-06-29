@@ -175,6 +175,11 @@ let interp_out st ofile =
   file_opt ofile (fun c -> output_string c ist);
   st
 
+let chc_dump_clauses st args =
+  let ofile = P.(singleton string args) in
+  Transforms.Chc_infer.dump_to_file (get_prog st) ofile;
+  st
+
 let load_il st args =
   let largs = P.(list string args) in
   try
@@ -344,6 +349,10 @@ let cmds_list =
     ("list-procs", list_procs, "", "List procedures in program");
     ("dump-il", dump_il, "?file", "Write IL to file or stdout");
     ("dump-boogie", dump_boogie, "?file", "Write Boogie to file or stdout");
+    ( "chc-dump-clauses",
+      chc_dump_clauses,
+      "<file>",
+      "Encode the program as CHCs and write the SMT-LIB clauses to a file" );
     ( "interp-out",
       interp_out,
       "?file",

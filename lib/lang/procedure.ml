@@ -89,6 +89,9 @@ module PG : sig
   val compare : ('a, 'b) t -> ('c, 'd) t -> int
   (** compare procedure names only *)
 
+  val equal : ('a, 'b) t -> ('c, 'd) t -> bool
+  (** compare procedure names only *)
+
   val id : ('a, 'b) t -> ID.t
   (** Get procedure ID *)
 
@@ -198,6 +201,7 @@ end = struct
   let topo_fwd p = Lazy.force p.topo_fwd
   let topo_rev p = Lazy.force p.topo_rev
   let compare a b = ID.compare (id a) (id b)
+  let equal a b = ID.equal (id a) (id b)
 
   let map_graph f p =
     let np =
@@ -625,6 +629,22 @@ let iter_stmt_topo_fwd p =
 
 let iter_blocks_topo_rev p =
   Iter.from_iter (fun f -> fold_blocks_topo_rev (fun acc a b -> f (a, b)) () p)
+
+let flat_map_stmts_topo_fwd ?visit rewriter p =
+  let blocks = iter_blocks_topo_fwd p in
+  Iter.fold
+    (fun p -> function
+      | bid, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
+          update_block p bid (Block.flat_map ~rev:false ~phi:Fun.id rewriter b))
+    p blocks
+
+let flat_map_stmts_topo_rev ?visit rewriter p =
+  let blocks = iter_blocks_topo_rev p in
+  Iter.fold
+    (fun p -> function
+      | bid, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
+          update_block p bid (Block.flat_map ~rev:true ~phi:Fun.id rewriter b))
+    p blocks
 
 let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
   let open Containers_pp in

@@ -1,4 +1,5 @@
 open Bincaml_util.Common
+module OResult = Result
 open Gtirb_proto
 open Ocaml_protoc_plugin
 open IR.Gtirb.Proto
@@ -11,6 +12,7 @@ module UUIDMap = UUIDMap
 module UUIDSet = UUIDSet
 open Gfir
 open Conf
+module Result = OResult
 
 open struct
   let addr_equal_expr pc_var addr =
@@ -124,7 +126,8 @@ let add_new_code_block (pc_var : Var.t) (all_blocks : block UUIDMap.t) temp_proc
               args = [ Expr.BasilExpr.const (`Bitvector (Opcode.to_bitvec op)) ];
               attrib =
                 op
-                |> (if conf.disas then Disas.dis_op else const None)
+                |> (if conf.disas then Disas.dis_op %> Result.to_option
+                    else const None)
                 |> Option.map_or ~default:Attrib.empty (fun asm ->
                     StringMap.singleton ".asm" (`String asm));
             })

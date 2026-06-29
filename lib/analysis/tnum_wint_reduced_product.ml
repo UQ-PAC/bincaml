@@ -122,6 +122,9 @@ module TnumWintReducedProductLattice = struct
 
   let widening s t =
     { tnum = KBL.widening s.tnum t.tnum; wint = WIL.widening s.wint t.wint }
+
+  let narrowing s t =
+    { tnum = KBL.narrowing s.tnum t.tnum; wint = WIL.narrowing s.wint t.wint }
 end
 
 module TnumWintValueAbstraction = struct
