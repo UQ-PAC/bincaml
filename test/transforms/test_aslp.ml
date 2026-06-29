@@ -138,18 +138,10 @@ proc @main()  -> () {  }
 ];
     |}
   in
-  let memory () =
-    Program.get_decl_by_name "$mem" lst.prog |> function
-    | Some (Variable { binding }) -> binding
-    | _ -> failwith "no memory"
-  in
   let prog =
     lst.prog
-    |> Program.map_procedures (fun _ proc ->
-        Procedure.iter_blocks proc
-        |> Iter.fold
-             (fun proc (bid, _) -> transform_block ~memory ~proc bid)
-             proc)
+    |> Program.map_procedures (fun _ ->
+        transform_procedure ~memory:(aarch64_mem_of_prog lst.prog))
   in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
@@ -169,6 +161,7 @@ proc @main()  -> () {  }
          goto (%block);
        ];
        block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
+         guard true;
          var var:bv64 := $SP_EL0;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0,
           0xffffffffffffffe0:bv64) $R29 8;
@@ -179,21 +172,25 @@ proc @main()  -> () {  }
          goto (%block_1);
        ];
        block %block_1 { .asm = "mov x29, sp" } [
+         guard true;
          $R29:bv64 := bvadd($SP_EL0, 0x0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0xb00008:bv64);
          goto (%block_2);
        ];
        block %block_2 { .asm = "str w0, [sp, #0x1c]" } [
+         guard true;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0, 0x1c:bv64) extract(-32,0, $R0) 4;
          (var BranchTaken:bool := false, $PC:bv64 := 0xb0000c:bv64);
          goto (%block_3);
        ];
        block %block_3 { .asm = "str x1, [sp, #0x10]" } [
+         guard true;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0, 0x10:bv64) $R1 8;
          (var BranchTaken:bool := false, $PC:bv64 := 0xb00010:bv64);
          goto (%block_4);
        ];
        block %block_4 { .asm = "ldrsw x0, [sp, #0x1c]" } [
+         guard true;
          $mem:(bv64->bv8) := load le var_3:bv4 bvadd($SP_EL0, 0x1c:bv64) 4;
          var var_2:bv32 := var_3:bv4;
          $R0:bv64 := zero_extend(0, sign_extend(32, var_2:bv32));
@@ -201,6 +198,7 @@ proc @main()  -> () {  }
          goto (%block_5);
        ];
        block %block_5 { .asm = "bl #0xffffffffffffff68" } [
+         guard true;
          $R30:bv64 := 0xb00018:bv64;
          var BranchTaken:bool := true;
          $PC:bv64 := 0xafff7c:bv64;
@@ -237,14 +235,8 @@ proc @main()  -> () {  }
   in
   let prog =
     lst.prog
-    |> Program.map_procedures (fun _ proc ->
-        Procedure.iter_blocks proc
-        |> Iter.fold
-             (fun proc (bid, _) ->
-               transform_block
-                 ~memory:(fun _ -> aarch64_mem_of_prog lst.prog)
-                 ~proc bid)
-             proc)
+    |> Program.map_procedures (fun _ ->
+        transform_procedure ~memory:(aarch64_mem_of_prog lst.prog))
   in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
@@ -263,17 +255,26 @@ proc @main()  -> () {  }
          assume eq(0x400808:bv64, $PC);
          goto (%block);
        ];
-       block %block { .asm = "b.eq #1024" } [ goto (%block_2,%block_1); ];
+       block %block { .asm = "b.eq #1024" } [
+         guard true;
+         goto (%block_2,%block_1);
+       ];
        block %block_1 [
+         guard eq($PSTATE_Z, 0x1:bv1);
          var BranchTaken:bool := true;
          $PC:bv64 := 0xb00400:bv64;
          goto (%block_3);
        ];
        block %block_2 [
+         guard boolnot(eq($PSTATE_Z, 0x1:bv1));
          (var BranchTaken:bool := false, $PC:bv64 := 0xb00004:bv64);
          goto (%block_3);
        ];
-       block %block_3 [ assert boolor(eq(0x400784:bv64, $PC)); goto (%ret_1); ];
+       block %block_3 [
+         guard true;
+         assert boolor(eq(0x400784:bv64, $PC));
+         goto (%ret_1);
+       ];
        block %ret_1 [ unreachable; ]
     ];
     prog entry @main;
@@ -304,12 +305,8 @@ proc @main()  -> () {  }
   in
   let prog =
     lst.prog
-    |> Program.map_procedures (fun _ proc ->
-        Procedure.iter_blocks proc
-        |> Iter.fold
-             (fun proc (bid, _) ->
-               transform_block ~memory:(aarch64_mem_of_prog lst.prog) ~proc bid)
-             proc)
+    |> Program.map_procedures (fun _ ->
+        transform_procedure ~memory:(aarch64_mem_of_prog lst.prog))
   in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
