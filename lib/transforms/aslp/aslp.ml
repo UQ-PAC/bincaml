@@ -199,7 +199,29 @@ let transform_procedure ~memory proc =
   Procedure.iter_blocks proc
   |> Iter.fold (fun proc (bid, _) -> transform_block (module I) ~proc bid) proc
 
-(** TODO look into global variable declarations *)
+(** Adds all architectural variable declarations to the given program. *)
+let add_aarch64_global_declarations prog =
+  Aslp_lexpr.global_vars ()
+  |> List.fold_left
+       (fun prog var ->
+         let decl =
+           Program.Variable
+             { binding = var; attrib = Attrib.empty; classification = None }
+         in
+         Program.add_decl prog decl)
+       prog
+
+(** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all
+    procedures within the given program.
+
+    Also inserts global variable declarations for the architectural variables,
+    if not already present. *)
+let transform_program prog =
+  let memory = aarch64_mem_of_prog prog in
+
+  prog
+  |> Program.map_procedures (fun _ proc -> transform_procedure ~memory proc)
+  |> add_aarch64_global_declarations
 
 (** TODO look into annotating attributes onto "landmark" points like memory
     access. *)

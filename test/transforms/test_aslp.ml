@@ -137,11 +137,7 @@ proc @main()  -> () {  }
 ];
     |}
   in
-  let prog =
-    lst.prog
-    |> Program.map_procedures (fun _ ->
-        transform_procedure ~memory:(aarch64_mem_of_prog lst.prog))
-  in
+  let prog = transform_program lst.prog in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
   [%expect
@@ -161,36 +157,36 @@ proc @main()  -> () {  }
        ];
        block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
          guard true;
-         var var:bv64 := $SP_EL0;
-         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0,
+         var var:bv64 := $SP;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
           0xffffffffffffffe0:bv64) $R29 8;
-         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP_EL0,
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
            0xffffffffffffffe0:bv64), 0x8:bv64) $R30 8;
-         $SP_EL0:bv64 := bvadd(var:bv64, 0xffffffffffffffe0:bv64);
+         $SP:bv64 := bvadd(var:bv64, 0xffffffffffffffe0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
          goto (%block_1);
        ];
        block %block_1 { .asm = "mov x29, sp" } [
          guard true;
-         $R29:bv64 := bvadd($SP_EL0, 0x0:bv64);
+         $R29:bv64 := bvadd($SP, 0x0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
          goto (%block_2);
        ];
        block %block_2 { .asm = "str w0, [sp, #0x1c]" } [
          guard true;
-         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0, 0x1c:bv64) extract(-32,0, $R0) 4;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) extract(-32,0, $R0) 4;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400814:bv64);
          goto (%block_3);
        ];
        block %block_3 { .asm = "str x1, [sp, #0x10]" } [
          guard true;
-         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0, 0x10:bv64) $R1 8;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x10:bv64) $R1 8;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400818:bv64);
          goto (%block_4);
        ];
        block %block_4 { .asm = "ldrsw x0, [sp, #0x1c]" } [
          guard true;
-         $mem:(bv64->bv8) := load le var_3:bv4 bvadd($SP_EL0, 0x1c:bv64) 4;
+         $mem:(bv64->bv8) := load le var_3:bv4 bvadd($SP, 0x1c:bv64) 4;
          var var_2:bv32 := var_3:bv4;
          $R0:bv64 := zero_extend(0, sign_extend(32, var_2:bv32));
          (var BranchTaken:bool := false, $PC:bv64 := 0x40081c:bv64);
@@ -206,6 +202,87 @@ proc @main()  -> () {  }
        ];
        block %ret_1 [ unreachable; ]
     ];
+    var $SP:bv64;
+    var $R0:bv64;
+    var $R1:bv64;
+    var $R2:bv64;
+    var $R3:bv64;
+    var $R4:bv64;
+    var $R5:bv64;
+    var $R6:bv64;
+    var $R7:bv64;
+    var $R8:bv64;
+    var $R9:bv64;
+    var $R10:bv64;
+    var $R11:bv64;
+    var $R12:bv64;
+    var $R13:bv64;
+    var $R14:bv64;
+    var $R15:bv64;
+    var $R16:bv64;
+    var $R17:bv64;
+    var $R18:bv64;
+    var $R19:bv64;
+    var $R20:bv64;
+    var $R21:bv64;
+    var $R22:bv64;
+    var $R23:bv64;
+    var $R24:bv64;
+    var $R25:bv64;
+    var $R26:bv64;
+    var $R27:bv64;
+    var $R28:bv64;
+    var $R29:bv64;
+    var $R30:bv64;
+    var $Z0:bv128;
+    var $Z1:bv128;
+    var $Z2:bv128;
+    var $Z3:bv128;
+    var $Z4:bv128;
+    var $Z5:bv128;
+    var $Z6:bv128;
+    var $Z7:bv128;
+    var $Z8:bv128;
+    var $Z9:bv128;
+    var $Z10:bv128;
+    var $Z11:bv128;
+    var $Z12:bv128;
+    var $Z13:bv128;
+    var $Z14:bv128;
+    var $Z15:bv128;
+    var $Z16:bv128;
+    var $Z17:bv128;
+    var $Z18:bv128;
+    var $Z19:bv128;
+    var $Z20:bv128;
+    var $Z21:bv128;
+    var $Z22:bv128;
+    var $Z23:bv128;
+    var $Z24:bv128;
+    var $Z25:bv128;
+    var $Z26:bv128;
+    var $Z27:bv128;
+    var $Z28:bv128;
+    var $Z29:bv128;
+    var $Z30:bv128;
+    var $FPSR:bv64;
+    var $FPCR:bv64;
+    var $PSTATE_C:bv1;
+    var $PSTATE_Z:bv1;
+    var $PSTATE_V:bv1;
+    var $PSTATE_N:bv1;
+    var $PSTATE_A:bv1;
+    var $PSTATE_D:bv1;
+    var $PSTATE_DIT:bv1;
+    var $PSTATE_F:bv1;
+    var $PSTATE_I:bv1;
+    var $PSTATE_PAN:bv1;
+    var $PSTATE_SP:bv1;
+    var $PSTATE_SSBS:bv1;
+    var $PSTATE_TCO:bv1;
+    var $PSTATE_UAO:bv1;
+    var $PSTATE_BTYPE:bv1;
+    var $ExclusiveLocal:bool;
     prog entry @main;
     |}]
 
@@ -232,11 +309,7 @@ proc @main()  -> () {  }
 ];
     |}
   in
-  let prog =
-    lst.prog
-    |> Program.map_procedures (fun _ ->
-        transform_procedure ~memory:(aarch64_mem_of_prog lst.prog))
-  in
+  let prog = transform_program lst.prog in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
   [%expect
@@ -277,6 +350,87 @@ proc @main()  -> () {  }
        ];
        block %ret_1 [ unreachable; ]
     ];
+    var $SP:bv64;
+    var $R0:bv64;
+    var $R1:bv64;
+    var $R2:bv64;
+    var $R3:bv64;
+    var $R4:bv64;
+    var $R5:bv64;
+    var $R6:bv64;
+    var $R7:bv64;
+    var $R8:bv64;
+    var $R9:bv64;
+    var $R10:bv64;
+    var $R11:bv64;
+    var $R12:bv64;
+    var $R13:bv64;
+    var $R14:bv64;
+    var $R15:bv64;
+    var $R16:bv64;
+    var $R17:bv64;
+    var $R18:bv64;
+    var $R19:bv64;
+    var $R20:bv64;
+    var $R21:bv64;
+    var $R22:bv64;
+    var $R23:bv64;
+    var $R24:bv64;
+    var $R25:bv64;
+    var $R26:bv64;
+    var $R27:bv64;
+    var $R28:bv64;
+    var $R29:bv64;
+    var $R30:bv64;
+    var $Z0:bv128;
+    var $Z1:bv128;
+    var $Z2:bv128;
+    var $Z3:bv128;
+    var $Z4:bv128;
+    var $Z5:bv128;
+    var $Z6:bv128;
+    var $Z7:bv128;
+    var $Z8:bv128;
+    var $Z9:bv128;
+    var $Z10:bv128;
+    var $Z11:bv128;
+    var $Z12:bv128;
+    var $Z13:bv128;
+    var $Z14:bv128;
+    var $Z15:bv128;
+    var $Z16:bv128;
+    var $Z17:bv128;
+    var $Z18:bv128;
+    var $Z19:bv128;
+    var $Z20:bv128;
+    var $Z21:bv128;
+    var $Z22:bv128;
+    var $Z23:bv128;
+    var $Z24:bv128;
+    var $Z25:bv128;
+    var $Z26:bv128;
+    var $Z27:bv128;
+    var $Z28:bv128;
+    var $Z29:bv128;
+    var $Z30:bv128;
+    var $FPSR:bv64;
+    var $FPCR:bv64;
+    var $PSTATE_C:bv1;
+    var $PSTATE_Z:bv1;
+    var $PSTATE_V:bv1;
+    var $PSTATE_N:bv1;
+    var $PSTATE_A:bv1;
+    var $PSTATE_D:bv1;
+    var $PSTATE_DIT:bv1;
+    var $PSTATE_F:bv1;
+    var $PSTATE_I:bv1;
+    var $PSTATE_PAN:bv1;
+    var $PSTATE_SP:bv1;
+    var $PSTATE_SSBS:bv1;
+    var $PSTATE_TCO:bv1;
+    var $PSTATE_UAO:bv1;
+    var $PSTATE_BTYPE:bv1;
+    var $ExclusiveLocal:bool;
     prog entry @main;
     |}]
 
@@ -303,11 +457,7 @@ proc @main()  -> () {  }
 ];
     |}
   in
-  let prog =
-    lst.prog
-    |> Program.map_procedures (fun _ ->
-        transform_procedure ~memory:(aarch64_mem_of_prog lst.prog))
-  in
+  let prog = transform_program lst.prog in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
   [%expect
@@ -328,5 +478,86 @@ proc @main()  -> () {  }
        ];
        block %ret_1 [ unreachable; ]
     ];
+    var $SP:bv64;
+    var $R0:bv64;
+    var $R1:bv64;
+    var $R2:bv64;
+    var $R3:bv64;
+    var $R4:bv64;
+    var $R5:bv64;
+    var $R6:bv64;
+    var $R7:bv64;
+    var $R8:bv64;
+    var $R9:bv64;
+    var $R10:bv64;
+    var $R11:bv64;
+    var $R12:bv64;
+    var $R13:bv64;
+    var $R14:bv64;
+    var $R15:bv64;
+    var $R16:bv64;
+    var $R17:bv64;
+    var $R18:bv64;
+    var $R19:bv64;
+    var $R20:bv64;
+    var $R21:bv64;
+    var $R22:bv64;
+    var $R23:bv64;
+    var $R24:bv64;
+    var $R25:bv64;
+    var $R26:bv64;
+    var $R27:bv64;
+    var $R28:bv64;
+    var $R29:bv64;
+    var $R30:bv64;
+    var $Z0:bv128;
+    var $Z1:bv128;
+    var $Z2:bv128;
+    var $Z3:bv128;
+    var $Z4:bv128;
+    var $Z5:bv128;
+    var $Z6:bv128;
+    var $Z7:bv128;
+    var $Z8:bv128;
+    var $Z9:bv128;
+    var $Z10:bv128;
+    var $Z11:bv128;
+    var $Z12:bv128;
+    var $Z13:bv128;
+    var $Z14:bv128;
+    var $Z15:bv128;
+    var $Z16:bv128;
+    var $Z17:bv128;
+    var $Z18:bv128;
+    var $Z19:bv128;
+    var $Z20:bv128;
+    var $Z21:bv128;
+    var $Z22:bv128;
+    var $Z23:bv128;
+    var $Z24:bv128;
+    var $Z25:bv128;
+    var $Z26:bv128;
+    var $Z27:bv128;
+    var $Z28:bv128;
+    var $Z29:bv128;
+    var $Z30:bv128;
+    var $FPSR:bv64;
+    var $FPCR:bv64;
+    var $PSTATE_C:bv1;
+    var $PSTATE_Z:bv1;
+    var $PSTATE_V:bv1;
+    var $PSTATE_N:bv1;
+    var $PSTATE_A:bv1;
+    var $PSTATE_D:bv1;
+    var $PSTATE_DIT:bv1;
+    var $PSTATE_F:bv1;
+    var $PSTATE_I:bv1;
+    var $PSTATE_PAN:bv1;
+    var $PSTATE_SP:bv1;
+    var $PSTATE_SSBS:bv1;
+    var $PSTATE_TCO:bv1;
+    var $PSTATE_UAO:bv1;
+    var $PSTATE_BTYPE:bv1;
+    var $ExclusiveLocal:bool;
     prog entry @main;
     |}]
