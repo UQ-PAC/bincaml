@@ -547,7 +547,7 @@ module CopyGraph = struct
     let default_vertex_attributes _ = []
     let graph_attributes _ = []
     let default_edge_attributes _ = []
-    let get_subgraph _ = None
+    let get_subgraph _ = Option.None
 
     let edge_attributes (_, f, _) =
       match f with

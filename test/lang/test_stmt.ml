@@ -4,15 +4,16 @@ open Lang.Common
 open Expr
 
 let%expect_test "frees" =
+  let v = Var.mk_gen ~scope:`Local () in
   let s =
     Instr_Assign
       {
         al =
           [
-            ( Var.create "v1" Types.Boolean,
-              BasilExpr.rvar @@ Var.create "v2" Types.Boolean );
-            ( Var.create "v3" Types.Boolean,
-              BasilExpr.rvar @@ Var.create "v4" Types.Boolean );
+            ( v.with_name "v1" Types.Boolean,
+              BasilExpr.rvar @@ v.with_name "v2" Types.Boolean );
+            ( v.with_name "v3" Types.Boolean,
+              BasilExpr.rvar @@ v.with_name "v4" Types.Boolean );
           ];
         attrib = Attrib.empty;
       }

@@ -575,7 +575,7 @@ module BasilASTLoader = struct
           let name = unsafe_unsigil (`Local localVar) in
           let v =
             Procedure.get_local
-              (p_st.curr_proc |> Option.get_exn_or "")
+              (p_st.curr_proc |> Option.get_exn_or "no current proc")
               name (trans_type ty)
           in
           Logs.warn (fun m ->
@@ -585,8 +585,7 @@ module BasilASTLoader = struct
         lookup_local_decl ~binds localVar p_st
     | VarGlobalVar (GlobalTyped (globalVar, ty)) -> (
         let name = unsafe_unsigil (`Global globalVar) in
-
-        try lookup_global_decl globalVar p_st
+        try lookup_global_decl ~typ:(trans_type ty) globalVar p_st
         with e ->
           let p, v =
             Program.decl_or_get_var p_st.prog name Var.None (trans_type ty)
@@ -918,7 +917,7 @@ module BasilASTLoader = struct
     |> List.map (function
       | LocalTyped (i, t) ->
           Procedure.get_local
-            (p_st.curr_proc |> Option.get_exn_or "")
+            (p_st.curr_proc |> Option.get_exn_or "no current proc")
             (unsafe_unsigil (`Local i))
             (trans_type t)
       | LocalUntyped i -> lookup_local_decl ~binds:bound i p_st)
@@ -956,21 +955,22 @@ module BasilASTLoader = struct
     Attrib.attr_of_loc l
 
   and trans_lvar prog (x : BasilIR.AbsBasilIR.lVar) : load_st * Var.t =
-    let proc = prog.curr_proc |> Option.get_exn_or "" in
     match x with
     | LVar_Local (LocalTyped (bident, type')) ->
+        let proc = prog.curr_proc |> Option.get_exn_or "no current proc" in
         assign_var prog
-        @@ Procedure.decl_local proc
+        @@ Procedure.get_local proc
              (unsafe_unsigil (`Local bident))
              ~pure:false (trans_type type')
     | LVar_LocalConst (LocalTyped (bident, type')) ->
+        let proc = prog.curr_proc |> Option.get_exn_or "no current proc" in
         assign_var prog
-        @@ Procedure.decl_local proc
+        @@ Procedure.get_local proc
              (unsafe_unsigil (`Local bident))
              ~pure:true (trans_type type')
     | LVar_LocalConst (LocalUntyped _) -> failwith "type annotation needed"
     | LVar_Global (GlobalTyped (bident, type')) ->
-        let v = lookup_global_decl bident prog in
+        let v = lookup_global_decl bident ~typ:(trans_type type') prog in
         assign_var prog v
     | LVar_Local (LocalUntyped bident) ->
         let v = lookup_local_decl bident prog in
@@ -1147,22 +1147,25 @@ module BasilASTLoader = struct
         | _ -> fail ())
     | _ -> fail ()
 
-  and lookup_global_decl ident p_st =
+  and lookup_global_decl ?typ ident p_st =
+    (* FIXME: evantually should not need lookup, should be able to locally construct compatible var*)
     let vn = unsafe_unsigil (`Global ident) in
     let token_char_offset_range = Some (loc_ident (`Global ident)) in
-    match Program.get_decl_by_name vn p_st.prog with
-    | Some (Variable { binding }) -> binding
-    | Some (Function { binding }) -> binding
-    | Some (Type _) ->
+    match (typ, Program.get_decl_by_name vn p_st.prog) with
+    | _, Some (Variable { binding }) -> binding
+    | _, Some (Function { binding }) -> binding
+    | _, Some (Type _) ->
         let msg = "found type declaration when looking for variable:" ^ vn in
         raise (LoadError { token_char_offset_range; msg; input = None })
-    | None -> (
+    | Some ty, None ->
+        Program.var_generator p_st.prog |> fun v -> v.with_name vn ty
+    | None, None -> (
         match Program.get_implicit_decl_by_name vn p_st.prog with
         | Some (VariantCase { constructor }) -> constructor
         | None ->
             let msg = "global variable used before declaration : " ^ vn in
             raise (LoadError { token_char_offset_range; msg; input = None }))
-    | Some (Procedure _) -> failwith ""
+    | _, Some (Procedure _) -> failwith "got proc when expecting global var"
 
   and trans_bv_val v : Bitvec.t =
     match v with
@@ -1270,7 +1273,7 @@ module BasilASTLoader = struct
         with Not_found | LoadError _ ->
           let v =
             Procedure.get_local
-              (p_st.curr_proc |> Option.get_exn_or "")
+              (p_st.curr_proc |> Option.get_exn_or "no current proc")
               (unsafe_unsigil (`Local g))
               (trans_type type')
           in
@@ -1616,7 +1619,7 @@ let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
         Procedure.G.add_edge g (End bid) Return)
       proc
   in
-  let bl = Procedure.get_block proc bid |> Option.get_exn_or "" in
+  let bl = Procedure.get_block proc bid |> Option.get_exn_or "no current proc" in
   let inparam =
     Block.free_vars bl |> VarSet.filter Var.is_local |> VarSet.to_list
     |> List.map (fun x -> (Var.name x, x))
