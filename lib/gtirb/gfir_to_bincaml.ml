@@ -73,73 +73,74 @@ let add_new_simple_block ?(name_suffix = "") ?(attrib = StringMap.empty)
   let blockmap = UUIDMap.add uuid nb blockmap in
   (proc, blockmap)
 
+let address_of_uuid all_blocks uuid =
+  match UUIDMap.find_opt uuid all_blocks with
+  | Some (Gtirb.Code { address } | Data { address }) -> Some address
+  | _ -> None
+
 (* Update (procedure, uuidmap) with a newly created IR block with opcodes and
      PC address contract *)
 let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
     (proc, blockmap) (b : Gtirb.block) =
   let open Lang in
   let open Option in
-  let attrib =
-    StringMap.of_list [ (".gtirb_block", `String (UUID.show @@ Gtirb.uuid b)) ]
-  in
-  let bl =
-    let* opcodes =
-      match b with Gtirb.Code { opcodes } -> Some opcodes | _ -> None
-    in
-    let attrib' =
-      let ge e = if G.mem_vertex temp_proc.cfg e then Some e else None in
-      let* e =
-        Option.or_
-          ~else_:(ge @@ External (Gtirb.uuid b))
-          (ge @@ Internal (Gtirb.uuid b))
+  match b with
+  | Gtirb.Code { opcodes; address } -> (
+      let attrib =
+        StringMap.of_list
+          [
+            (".address", `CamlInt address);
+            (".gtirb_block", `String (UUID.show @@ Gtirb.uuid b));
+          ]
       in
-      let es =
-        G.succ_e temp_proc.cfg e
-        |> List.map (fun (_, l, t) ->
-            let addr =
-              UUIDMap.find_opt (Vert.uuid t) all_blocks |> fun c ->
-              Option.bind c (function
-                | Code { address } -> Some address
-                | Data { address } -> Some address
-                | _ -> None)
-              |> Option.map (fun x -> (".address", `CamlInt x))
-              |> Option.to_list
-            in
-            (match l with Some l -> Edge.to_attrib l | None -> Attrib.empty)
-            |> StringMap.add ".target" (Vert.to_attrib t)
-            |> fun m -> StringMap.add_list m addr)
-        |> List.map (fun e -> `Assoc e)
+      let attrib' =
+        let ge e = if G.mem_vertex temp_proc.cfg e then Some e else None in
+        let* e =
+          Option.or_
+            ~else_:(ge @@ External (Gtirb.uuid b))
+            (ge @@ Internal (Gtirb.uuid b))
+        in
+        let es =
+          G.succ_e temp_proc.cfg e
+          |> List.map (fun (_, l, t) ->
+              let addr =
+                address_of_uuid all_blocks (Vert.uuid t)
+                |> Option.map (fun x -> (".address", `CamlInt x))
+                |> Option.to_list
+              in
+              (match l with Some l -> Edge.to_attrib l | None -> Attrib.empty)
+              |> StringMap.add ".target" (Vert.to_attrib t)
+              |> fun m -> StringMap.add_list m addr)
+          |> List.map (fun e -> `Assoc e)
+        in
+        Some (StringMap.singleton ".succ" (`List es))
       in
-      Some (StringMap.singleton ".succ" (`List es))
-    in
-    let attrib = Option.fold Attrib.merge_map_shadow attrib attrib' in
-    let instrs =
-      opcodes
-      |> List.map (fun op ->
-          let op = Opcode.of_be_bytes op in
-          Stmt.Instr_IntrinCall
-            {
-              lhs = [];
-              name = Stmt.Intrinsic.Aarch64Eval;
-              args = [ Expr.BasilExpr.const (`Bitvector (Opcode.to_bitvec op)) ];
-              attrib =
-                op
-                |> (if conf.disas then Disas.dis_op %> Result.to_option
-                    else const None)
-                |> Option.map_or ~default:Attrib.empty (fun asm ->
-                    StringMap.singleton ".asm" (`String asm));
-            })
-    in
-    match b with
-    | Code { address } | Data { address } ->
-        Some
-          (add_new_simple_block ~name_suffix:"_code" ~attrib succ_addr
-             (proc, blockmap)
-             (Gtirb.uuid b, Some address, instrs))
-    | Proxy uuid ->
-        Some (add_proxy_block ~attrib succ_addr (proc, blockmap) uuid)
-  in
-  Option.get_or ~default:(proc, blockmap) bl
+      let attrib = Option.fold Attrib.merge_map_shadow attrib attrib' in
+      let instrs =
+        opcodes
+        |> List.map (fun op ->
+            let op = Opcode.of_be_bytes op in
+            Stmt.Instr_IntrinCall
+              {
+                lhs = [];
+                name = Stmt.Intrinsic.Aarch64Eval;
+                args =
+                  [ Expr.BasilExpr.const (`Bitvector (Opcode.to_bitvec op)) ];
+                attrib =
+                  op
+                  |> (if conf.disas then Disas.dis_op %> Result.to_option
+                      else const None)
+                  |> Option.map_or ~default:Attrib.empty (fun asm ->
+                      StringMap.singleton ".asm" (`String asm));
+              })
+      in
+      match b with
+      | Code { address } | Data { address } ->
+          add_new_simple_block ~name_suffix:"_code" ~attrib succ_addr
+            (proc, blockmap)
+            (Gtirb.uuid b, Some address, instrs)
+      | Proxy uuid -> add_proxy_block ~attrib succ_addr (proc, blockmap) uuid)
+  | Data _ | Proxy _ -> (proc, blockmap)
 
 (** For each successor set containing a fallthrough edge, remove fallthrough
     edge and add it as a successor of all other edges. *)
