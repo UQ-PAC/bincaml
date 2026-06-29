@@ -120,7 +120,7 @@ prog entry @main;
 proc @main()  -> () {  }
   requires boolor(eq(0x400808:bv64, $PC))
 [
-  block %main_code { .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+      block %main_code { .address = 0x400808; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
       .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
               .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
     assume eq(0x400808:bv64, $PC);
@@ -153,7 +153,7 @@ proc @main()  -> () {  }
       requires boolor(eq(0x400808:bv64, $PC))
 
     [
-       block %main_code { .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+       block %main_code { .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
            .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
                    .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
          assume eq(0x400808:bv64, $PC);
@@ -167,25 +167,25 @@ proc @main()  -> () {  }
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP_EL0,
            0xffffffffffffffe0:bv64), 0x8:bv64) $R30 8;
          $SP_EL0:bv64 := bvadd(var:bv64, 0xffffffffffffffe0:bv64);
-         (var BranchTaken:bool := false, $PC:bv64 := 0xb00004:bv64);
+         (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
          goto (%block_1);
        ];
        block %block_1 { .asm = "mov x29, sp" } [
          guard true;
          $R29:bv64 := bvadd($SP_EL0, 0x0:bv64);
-         (var BranchTaken:bool := false, $PC:bv64 := 0xb00008:bv64);
+         (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
          goto (%block_2);
        ];
        block %block_2 { .asm = "str w0, [sp, #0x1c]" } [
          guard true;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0, 0x1c:bv64) extract(-32,0, $R0) 4;
-         (var BranchTaken:bool := false, $PC:bv64 := 0xb0000c:bv64);
+         (var BranchTaken:bool := false, $PC:bv64 := 0x400814:bv64);
          goto (%block_3);
        ];
        block %block_3 { .asm = "str x1, [sp, #0x10]" } [
          guard true;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0, 0x10:bv64) $R1 8;
-         (var BranchTaken:bool := false, $PC:bv64 := 0xb00010:bv64);
+         (var BranchTaken:bool := false, $PC:bv64 := 0x400818:bv64);
          goto (%block_4);
        ];
        block %block_4 { .asm = "ldrsw x0, [sp, #0x1c]" } [
@@ -193,14 +193,14 @@ proc @main()  -> () {  }
          $mem:(bv64->bv8) := load le var_3:bv4 bvadd($SP_EL0, 0x1c:bv64) 4;
          var var_2:bv32 := var_3:bv4;
          $R0:bv64 := zero_extend(0, sign_extend(32, var_2:bv32));
-         (var BranchTaken:bool := false, $PC:bv64 := 0xb00014:bv64);
+         (var BranchTaken:bool := false, $PC:bv64 := 0x40081c:bv64);
          goto (%block_5);
        ];
        block %block_5 { .asm = "bl #0xffffffffffffff68" } [
          guard true;
-         $R30:bv64 := 0xb00018:bv64;
+         $R30:bv64 := 0x400820:bv64;
          var BranchTaken:bool := true;
-         $PC:bv64 := 0xafff7c:bv64;
+         $PC:bv64 := 0x400784:bv64;
          assert boolor(eq(0x400784:bv64, $PC));
          goto (%ret_1);
        ];
@@ -220,7 +220,7 @@ prog entry @main;
 proc @main()  -> () {  }
   requires boolor(eq(0x400808:bv64, $PC))
 [
-  block %main_code { .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+    block %main_code { .address = 0x400808; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
       .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
               .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
     assume eq(0x400808:bv64, $PC);
@@ -248,7 +248,7 @@ proc @main()  -> () {  }
       requires boolor(eq(0x400808:bv64, $PC))
 
     [
-       block %main_code { .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+       block %main_code { .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
            .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
                    .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
          assume eq(0x400808:bv64, $PC);
@@ -261,17 +261,17 @@ proc @main()  -> () {  }
        block %block_1 [
          guard eq($PSTATE_Z, 0x1:bv1);
          var BranchTaken:bool := true;
-         $PC:bv64 := 0xb00400:bv64;
+         $PC:bv64 := 0x400c08:bv64;
          goto (%block_3);
        ];
        block %block_2 [
          guard boolnot(eq($PSTATE_Z, 0x1:bv1));
-         (var BranchTaken:bool := false, $PC:bv64 := 0xb00004:bv64);
+         (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
          goto (%block_3);
        ];
        block %block_3 [
          guard true;
-         $PC:bv64 := if eq($PSTATE_Z, 0x1:bv1) then 0xb00400:bv64 else 0xb00004:bv64;
+         $PC:bv64 := if eq($PSTATE_Z, 0x1:bv1) then 0x400c08:bv64 else 0x40080c:bv64;
          assert boolor(eq(0x400784:bv64, $PC));
          goto (%ret_1);
        ];
@@ -291,7 +291,7 @@ prog entry @main;
 proc @main()  -> () {  }
   requires boolor(eq(0x400808:bv64, $PC))
 [
-  block %main_code { .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+      block %main_code { .address = 0x400808; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
       .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
               .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
     assume eq(0x400808:bv64, $PC);
@@ -319,7 +319,7 @@ proc @main()  -> () {  }
       requires boolor(eq(0x400808:bv64, $PC))
 
     [
-       block %main_code { .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+       block %main_code { .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
            .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
                    .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
          assume eq(0x400808:bv64, $PC);

@@ -85,6 +85,14 @@ let aarch64_mem_of_prog prog =
   | Some (Variable { binding }) -> binding
   | _ -> failwith "aarch64_mem_of_prog: no $mem found"
 
+(** Returns the byte address of the given block, if present. *)
+let address_of_block block =
+  block.Lang.Block.attrib
+  |> StringMap.find_opt ".address"
+  |> Option.map (function
+    | `Integer x -> x
+    | _ -> failwith "address_of_block: invalid type in .address")
+
 (** {1 Transforming Bincaml IR} *)
 
 (** Inserts one {!Aslp_state.aslp_diamond} into the given procedure, including
@@ -120,12 +128,23 @@ let insert_one_diamond ~proc dia =
     Inserts control-flow edges between successive instructions within the block,
     and emits an assertion for the ITE expression representing the final [PC]
     value. *)
-let transform_block (module I : Bincaml_ibi.IBI) ~proc ~address bid =
+let transform_block (module I : Bincaml_ibi.IBI) ~proc bid =
   let b = Procedure.get_block proc bid |> Option.get_exn_or "block not found" in
   let before, intrins, after =
     partition_aarch64_stmts (Vector.to_list b.stmts)
   in
   let opcodes, attribs = List.split intrins in
+
+  (* Get the block's address. Permit a missing address iff opcodes is empty. *)
+  let address =
+    match (address_of_block b, opcodes) with
+    | Some address, _ -> Bitvec.create ~size:64 address
+    | None, [] -> Bitvec.of_int ~size:64 (-1)
+    | None, _ :: _ ->
+        failwith
+          (Printf.sprintf "transform_block: block missing .address attrib: %s"
+             (ID.to_string bid))
+  in
 
   (* Clear statements from first block aside from those before the intrinsics. *)
   let proc =
@@ -178,12 +197,7 @@ let transform_procedure ~memory proc =
               ~local_ids:(Procedure.local_ids proc)))
   in
   Procedure.iter_blocks proc
-  |> Iter.fold
-       (fun proc (bid, _) ->
-         (* TODO get address from somewhere. change gtirb to add to attribute. *)
-         let address = Bitvec.of_int ~size:64 0xb00000 in
-         transform_block (module I) ~proc ~address bid)
-       proc
+  |> Iter.fold (fun proc (bid, _) -> transform_block (module I) ~proc bid) proc
 
 (** TODO look into global variable declarations *)
 
