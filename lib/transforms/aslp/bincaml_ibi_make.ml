@@ -28,7 +28,7 @@ struct
     !bincaml_lifter_state.address |> Option.get_exn_or err
 
   (** Emits the given Bincaml statement. *)
-  let bincaml_emit stmt =
+  let bincaml_internal_emit stmt =
     bincaml_lifter_state :=
       !bincaml_lifter_state |> Aslp_state.add_stmt_to_active stmt
 
@@ -64,15 +64,24 @@ struct
       (t, f, m)
   end)
 
-  let f_switch_context b =
-    f_switch_context b;
-    match b with
-    | `T | `F -> ()
-    | `M ->
-        let address = bincaml_get_address ()
-        and diamond = !bincaml_lifter_state.diamond in
-        let diamond = diamond |> Aslp_state.ensure_pc_consistency ~address in
-        bincaml_lifter_state := { !bincaml_lifter_state with diamond }
+  let f_switch_context ((_, d, expected) as ctx) =
+    f_switch_context ctx;
+    let address = bincaml_get_address ()
+    and diamond = !bincaml_lifter_state.diamond in
+    let merge_point =
+      (match d with
+        | `T | `F -> diamond |> Diamond.move_out_of |> Result.get_ok
+        | `M ->
+            let diamond =
+              diamond |> Aslp_state.ensure_pc_consistency ~address
+            in
+            bincaml_lifter_state := { !bincaml_lifter_state with diamond };
+            diamond)
+      |> Diamond.focus
+    in
+    if not (CCEqual.physical merge_point.stmts expected.Aslp_state.stmts) then
+      failwith
+        "invariant violation: context switch did not arrive at expected point"
 
   (** {2 IR extraction} *)
 
@@ -83,6 +92,8 @@ struct
   let get_ir () =
     let diamond = !bincaml_lifter_state.diamond
     and address = bincaml_get_address () in
+    if not (List.is_empty (snd diamond)) then
+      failwith "invariant violation: context switches did not return to merge";
     diamond |> Aslp_state.ensure_pc_assigned ~address |> Diamond.of_zipper
 
   (** {2 Instruction building interface implementation} *)
@@ -233,7 +244,9 @@ struct
   let v___ExclusiveLocal : lexpr = ExclusiveLocal
 
   let f_gen_assert : expr -> unit =
-   fun e -> bincaml_emit (Stmt.Instr_Assert { attrib = Attrib.empty; body = e })
+   fun e ->
+    bincaml_internal_emit
+      (Stmt.Instr_Assert { attrib = Attrib.empty; body = e })
 
   let f_gen_bit_lit : bigint -> bitvector -> expr =
    fun _ bv -> Expr.BasilExpr.const (`Bitvector bv)
@@ -251,7 +264,7 @@ struct
 
   let f_gen_store : lexpr -> expr -> unit =
    fun lhs rhs ->
-    bincaml_emit
+    bincaml_internal_emit
       (Stmt.Instr_Assign
          { attrib = Attrib.empty; al = [ (Aslp_lexpr.to_var lhs, rhs) ] })
 
