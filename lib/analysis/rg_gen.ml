@@ -19,25 +19,37 @@ let rec fixpoint equal f x =
   let y = f x in
   if equal y x then y else fixpoint equal f y
 
-(** A state domain that is compatible with rely-guarantee generation. *)
-module type InterferenceStateDomain = sig
-  include Lattice_types.Domain
-  val meet : t -> t -> t
-  val havoc : t -> VarSet.t -> t
-  val filter : t -> BasilExpr.t -> t
+(** An {!InterferenceStateDomain} is a state domain that is compatible with rely-guarantee generation. *)
+module InterferenceStateDomain = struct
+  module type Base = sig
+    include Lattice_types.Domain
+    val meet : t -> t -> t
+    (** Derives the greatest lower bound of two domain elements. *)
+    val havoc : t -> VarSet.t -> t
+    (** Abstracts out a set of variables; minimally weakens the domain element such that the vars are not constrained. *)
+  end
+  module type S = sig
+    include Base
+    val filter : t -> BasilExpr.t -> t
+    (** Returns an overapproximation (upper bound) on the states reachable after applying the given condition. *)
+  end
+  module Make(M : Base) : S with type t = M.t = struct
+    include M
+    let filter t exp = transfer t @@ Stmt.Instr_Assume { attrib = Attrib.empty; body = exp; branch = false }
+  end
 end
 
-module InterferenceWrappedIntervalDomain : InterferenceStateDomain = struct
+(** An extension of the wrapped intervals domain, to work with the InterferenceDomain framework. *)
+module InterferenceWrappedIntervalDomain = InterferenceStateDomain.Make(struct
   open Wrapped_intervals
   include Domain
   let meet = bot_binop WrappedIntervalsLattice.meet
   let havoc t var_set = VarSet.fold (fun var acc -> update var WrappedIntervalsLattice.top acc) var_set t
-  let filter t exp = transfer t @@ Stmt.Instr_Assume { attrib = Attrib.empty; body = exp; branch = false }
-end
+end)
 
 (** A concrete interference w.r.t. some state domain is a precondition represented by that domain, and a simultaneous
     assignment that may be executed under that precondition. *)
-module ConcreteInterference (D : InterferenceStateDomain) = struct
+module ConcreteInterference (D : InterferenceStateDomain.S) = struct
   type t = { pre: D.t; assignments: (Var.t * BasilExpr.t) list }
   [@@deriving eq, ord]
 
@@ -53,7 +65,7 @@ end
     applying interferences to states, as well as a {!transitions} function for deriving elements of the interference
     domain from precondition-assignment pairs. *)
 module type InterferenceDomain = sig
-  module D : InterferenceStateDomain
+  module D : InterferenceStateDomain.S
   module ConcInt : module type of ConcreteInterference(D)
   (** The underlying state domain, used by the InterferenceDomain functions, as well as the {!RelyGuaranteeGenerator}
       for generating reachable states. *)
@@ -82,7 +94,7 @@ end
     write-condition than P /\ Q, such as in the case when either x or y can change individually but never in the same
     execution trace (i.e. "at the same time").
     *)
-module ConditionalWritesDomain (D : InterferenceStateDomain) : InterferenceDomain = struct
+module ConditionalWritesDomain (D : InterferenceStateDomain.S) : InterferenceDomain = struct
   module VarSetMap = Map.Make(VarSet)
 
   module D = D
