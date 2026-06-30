@@ -172,22 +172,21 @@ let ensure_pc_assigned ~address =
     the beginning of the instruction). *)
 let ensure_pc_consistency ~address state =
   let before_skel = Diamond_zipper.skeleton state in
-  let left = state and right = state in
+  let left = state |> Diamond_zipper.move_in_to `L |> Result.get_ok
+  and right = state |> Diamond_zipper.move_in_to `R |> Result.get_ok in
 
   (* Make PCs of left and right agree. Resulting state is at left or right. *)
   let state =
-    match
-      ( (Diamond_zipper.focus left).pc_assign,
-        (Diamond_zipper.focus right).pc_assign )
-    with
+    match Diamond_zipper.((focus left).pc_assign, (focus right).pc_assign) with
     | Some _, None -> right |> ensure_pc_assigned ~address
     | None, Some _ -> left |> ensure_pc_assigned ~address
     | None, None | Some _, Some _ -> left (* arbitrary *)
   in
 
   (* Move back to join point and re-compute left/right with updated state. *)
-  let state = state in
-  let left = state and right = state in
+  let state = state |> Diamond_zipper.move_out_of |> Result.get_ok in
+  let left = state |> Diamond_zipper.move_in_to `L |> Result.get_ok
+  and right = state |> Diamond_zipper.move_in_to `R |> Result.get_ok in
   assert (Diamond_zipper.(equal_skeleton before_skel (skeleton state)));
 
   (* Propagate PC to join point using ITE. *)

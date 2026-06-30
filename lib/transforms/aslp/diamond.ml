@@ -89,10 +89,10 @@ let rec iter_forwards : 'a diamond -> 'a Iter.t = function
   | Leaf x -> fun k -> k x
   | Diamond { value; left; right; pred } ->
       fun k ->
-        k value;
+        iter_forwards pred k;
         iter_forwards left k;
         iter_forwards right k;
-        iter_forwards pred k
+        k value
 
 (** Iterates over the {!diamond} structure, processing values {i backwards} in
     control-flow order. *)
@@ -100,10 +100,10 @@ let rec iter_backwards : 'a diamond -> 'a Iter.t = function
   | Leaf x -> fun k -> k x
   | Diamond { value; left; right; pred } ->
       fun k ->
-        iter_backwards pred k;
+        k value;
         iter_backwards left k;
         iter_backwards right k;
-        k value
+        iter_backwards pred k
 
 (** Folds the given functions over the {!diamond} structure, processing values
     {i forwards} in control-flow order. *)

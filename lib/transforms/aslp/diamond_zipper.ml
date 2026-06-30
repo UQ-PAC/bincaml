@@ -46,6 +46,10 @@ type 'a zipper = 'a Priv.zipper
     diamond (called the focus). The focus can be moved around to point to
     different positions within the nested diamonds.
 
+    This is a {b private type}, so users outside this module can coerce it to a
+    [(diamond, skeleton)], but they cannot manually construct a {!zipper}. It
+    is not possible
+
     This is not a traditional functional programming zipper, because it is not
     particularly efficient to move the focus. Also, every access to the focused
     value will traverse the diamond from the root. *)
@@ -53,9 +57,18 @@ type 'a zipper = 'a Priv.zipper
 (** Builds an empty zipper with the given value. *)
 let empty value : 'a zipper = Priv.wrap (Leaf value, [])
 
-(** Returns the subdiamond with the currently focused position as its "merge"
-    value. *)
-let subdiamond : 'a zipper -> 'a diamond = fun x -> fst (unwrap x)
+(** Returns the subdiamond with the currently focused position as its value. *)
+let rec subdiamond dia =
+  dia |> Priv.unwrap |> function
+  | dia, [] -> dia
+  | Diamond { left = x }, `L :: rest
+  | Diamond { right = x }, `R :: rest
+  | Diamond { pred = x }, `P :: rest ->
+      subdiamond (Priv.wrap (x, rest))
+  | Leaf _, _ :: _ -> failwith "invariant violation: invalid zipper path"
+
+(** Returns the skeleton path to the focused position in the zipper. *)
+let skeleton x = snd (unwrap x)
 
 (** Returns the single focused value of the zipper. *)
 let focus : 'a zipper -> 'a = fun x -> last (subdiamond x)
@@ -66,6 +79,20 @@ let to_diamond = fun x -> fst (unwrap x)
 (** Converts the given {!Diamond.diamond} to a zipper, initially focused at
     {!Diamond.last}. *)
 let of_diamond : 'a diamond -> 'a zipper = fun x -> Priv.wrap (x, [])
+
+(** Iterates over all {!zipper} positions of the given diamond, {i backwards} in
+    control-flow order. *)
+let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
+  let rec iter_paths_backwards path dia k =
+    match dia with
+    | Leaf x -> k path
+    | Diamond { value; left; right; pred } ->
+        k path;
+        iter_paths_backwards (`L :: path) left k;
+        iter_paths_backwards (`R :: path) right k;
+        iter_paths_backwards (`P :: path) pred k
+  in
+  fun d -> iter_paths_backwards [] d |> Iter.map (fun p -> Priv.wrap (d, p))
 
 (** {1 Movement functions}
 
@@ -159,15 +186,6 @@ let append_diamond ~left ~right ~value : 'a zipper -> 'a zipper =
   %> move_in_to `P %> CCResult.to_opt
   %> CCOption.get_exn_or
        "unreachable: moving to `P must succeed because subdiamond is not a Leaf"
-
-let skeleton x = snd (unwrap x)
-
-(** Resolves the given {!type-skeleton} within the given {!Diamond.diamond}.
-
-    This takes a {!Diamond.diamond} rather than a {!zipper} because a skeleton
-    is always resolved from the root. *)
-let resolve_skeleton : skeleton -> 'a diamond -> ('a zipper, 'a zipper) result =
- fun skel dia -> failwith ""
 
 (** {1 Derived functions} *)
 

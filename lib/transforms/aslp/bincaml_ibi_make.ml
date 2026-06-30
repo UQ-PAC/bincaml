@@ -63,26 +63,19 @@ struct
       and f = Aslp_state.empty_block ~assume:(Expr.BasilExpr.boolnot cond) ()
       and m = Aslp_state.empty_block_unconditional () in
       (t, f, m)
+
+    let equal_state = CCEqual.map (fun x -> x.Aslp_state.stmts) CCEqual.physical
   end)
 
-  let f_switch_context ((_, d, expected) as ctx) =
-    f_switch_context ctx;
-    let address = bincaml_get_address ()
-    and diamond = !bincaml_lifter_state.diamond in
-    let merge_point =
-      (match d with
-        | `T | `F -> diamond
-        | `M ->
-            let diamond =
-              diamond |> Aslp_state.ensure_pc_consistency ~address
-            in
-            bincaml_lifter_state := { !bincaml_lifter_state with diamond };
-            diamond)
-      |> Diamond_zipper.focus
-    in
-    if not (CCEqual.physical merge_point.stmts expected.Aslp_state.stmts) then
-      failwith
-        "invariant violation: context switch did not arrive at expected point"
+  let f_switch_context (d, ctx) =
+    f_switch_context (d, ctx);
+    match d with
+    | `T | `F -> ()
+    | `M ->
+        let address = bincaml_get_address ()
+        and diamond = !bincaml_lifter_state.diamond in
+        let diamond = diamond |> Aslp_state.ensure_pc_consistency ~address in
+        bincaml_lifter_state := { !bincaml_lifter_state with diamond }
 
   (** {2 IR extraction} *)
 
@@ -93,11 +86,13 @@ struct
   let get_ir () =
     let diamond = !bincaml_lifter_state.diamond
     and address = bincaml_get_address () in
-    if not (List.is_empty (Diamond_zipper.skeleton diamond)) then
-      failwith "invariant violation: context switches did not return to merge";
-    diamond
-    |> Aslp_state.ensure_pc_assigned ~address
-    |> Diamond_zipper.to_diamond
+    match Diamond_zipper.skeleton diamond with
+    | _ :: _ ->
+        failwith "invariant violation: context switches did not return to merge"
+    | [] ->
+        diamond
+        |> Aslp_state.ensure_pc_assigned ~address
+        |> Diamond_zipper.to_diamond
 
   (** {2 Instruction building interface implementation} *)
 

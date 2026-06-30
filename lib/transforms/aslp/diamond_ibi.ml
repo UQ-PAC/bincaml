@@ -1,6 +1,8 @@
 (** Implements control flow functionality for the IBI by using
     {!Diamond_zipper.zipper}. *)
 
+open CCFun
+
 (** Necessary parameters to provide IBI control flow functions. *)
 module type Params = sig
   type expr
@@ -13,13 +15,15 @@ module type Params = sig
   val diamond_set : state Diamond_zipper.zipper -> unit
 
   val diamond_make_branch : expr -> state * state * state
-  (** Should return [(t,f,m)] *)
+  (** Should return [(t,f,m)]. *)
+
+  val equal_state : state -> state -> bool
 end
 
 (** Implements control flow functionality for the IBI by using
     {!Diamond_zipper.zipper}. See {!module-Diamond_zipper} for more details. *)
 module Make (S : Params) = struct
-  type branch = Diamond_zipper.skeleton * [ `T | `F | `M ] * S.state
+  type branch = [ `T | `F | `M ] * S.state
   (** Branch switches are a path into the diamond.
 
       For downstream uses, this also records the branch direction and the state
@@ -31,26 +35,27 @@ module Make (S : Params) = struct
 
   let f_gen_branch : S.expr -> branch * branch * branch =
    fun cond ->
-    let diamond = S.diamond_get () in
     let t, f, m = S.diamond_make_branch cond in
 
-    let t = Diamond.empty t and f = Diamond.empty f in
-    let diamond =
-      diamond |> Diamond_zipper.append_diamond ~left:t ~right:f ~value:m
-    in
-    S.diamond_set diamond;
+    let diamond = S.diamond_get () in
+    (match Diamond_zipper.skeleton diamond with
+    | `P :: _ ->
+        failwith "invariant violation: f_gen_branch twice without switching"
+    | _ -> ());
 
-    let t = diamond
-    and f = diamond in
-    let m = t in
-    let s = Diamond_zipper.focus m in
-    Diamond_zipper.
-      ((skeleton t, `T, s), (skeleton f, `F, s), (skeleton m, `M, s))
+    diamond
+    |> Diamond_zipper.append_diamond ~value:m ~left:(Diamond.empty t)
+         ~right:(Diamond.empty f)
+    |> S.diamond_set;
 
-  let f_switch_context (skel, d, _) =
-    let show b = "when moving to branch" ^ [%derive.show: [ `T | `F | `M ]] b in
+    ((`T, t), (`F, f), (`M, m))
+
+  let f_switch_context (_, ctx) =
     S.diamond_get () |> Diamond_zipper.to_diamond
-    |> Diamond_zipper.resolve_skeleton skel
-    |> Result.map_error (fun _ -> show d)
-    |> CCResult.get_or_failwith |> S.diamond_set
+    |> Diamond_zipper.iter_zippers_backwards
+    |> Iter.find_pred (S.equal_state ctx % Diamond_zipper.focus)
+    |> CCOption.get_exn_or "f_switch_context: cannot find matching position"
+    |> S.diamond_set;
+
+    assert (S.diamond_get () |> Diamond_zipper.focus |> S.equal_state ctx)
 end

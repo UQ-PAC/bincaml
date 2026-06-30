@@ -68,8 +68,7 @@ let%expect_test "lift: b.eq #1024" =
       (Bitvec.of_string "0x54002000:bv32")
   in
   print_endline @@ Aslp_state.show_aslp_diamond x;
-  [%expect
-    {|
+  [%expect {|
     Diamond {
       pred = (Leaf { Aslp_state.assume = true; stmts = []; pc_assign = None });
       left =
@@ -317,8 +316,7 @@ proc @Sqrt()  -> () {  }
   let prog = transform_program lst.prog in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
-  [%expect
-    {|
+  [%expect {|
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
     proc @Sqrt()  -> () {  }
