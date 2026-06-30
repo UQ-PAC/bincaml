@@ -71,7 +71,7 @@ struct
     and diamond = !bincaml_lifter_state.diamond in
     let merge_point =
       (match d with
-        | `T | `F -> diamond |> Diamond_zipper.move_out_of |> Result.get_ok
+        | `T | `F -> diamond
         | `M ->
             let diamond =
               diamond |> Aslp_state.ensure_pc_consistency ~address
@@ -93,7 +93,7 @@ struct
   let get_ir () =
     let diamond = !bincaml_lifter_state.diamond
     and address = bincaml_get_address () in
-    if not (List.is_empty (snd diamond)) then
+    if not (List.is_empty (Diamond_zipper.skeleton diamond)) then
       failwith "invariant violation: context switches did not return to merge";
     diamond
     |> Aslp_state.ensure_pc_assigned ~address

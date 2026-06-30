@@ -33,10 +33,6 @@ module Make (S : Params) = struct
    fun cond ->
     let diamond = S.diamond_get () in
     let t, f, m = S.diamond_make_branch cond in
-    (match diamond with
-    | _, Pred _ :: _ ->
-        failwith "invariant violation: f_gen_branch twice without switching"
-    | _ -> ());
 
     let t = Diamond.empty t and f = Diamond.empty f in
     let diamond =
@@ -44,9 +40,9 @@ module Make (S : Params) = struct
     in
     S.diamond_set diamond;
 
-    let t = diamond |> Diamond_zipper.move_adjacent `L |> Result.get_ok
-    and f = diamond |> Diamond_zipper.move_adjacent `R |> Result.get_ok in
-    let m = t |> Diamond_zipper.move_out_of |> Result.get_ok in
+    let t = diamond
+    and f = diamond in
+    let m = t in
     let s = Diamond_zipper.focus m in
     Diamond_zipper.
       ((skeleton t, `T, s), (skeleton f, `F, s), (skeleton m, `M, s))
