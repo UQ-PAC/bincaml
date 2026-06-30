@@ -28,10 +28,11 @@ module type InterferenceStateDomain = sig
 end
 
 module InterferenceWrappedIntervalDomain : InterferenceStateDomain = struct
-  include Wrapped_intervals.Domain
-  let meet = bot_binop Wrapped_intervals.WrappedIntervalsLattice.meet
-  let havoc t var_set = t (* todo *)
-  let filter t exp = t (* todo *)
+  open Wrapped_intervals
+  include Domain
+  let meet = bot_binop WrappedIntervalsLattice.meet
+  let havoc t var_set = VarSet.fold (fun var acc -> update var WrappedIntervalsLattice.top acc) var_set t
+  let filter t exp = transfer t @@ Stmt.Instr_Assume { attrib = Attrib.empty; body = exp; branch = false }
 end
 
 (** A concrete interference w.r.t. some state domain is a precondition represented by that domain, and a simultaneous
