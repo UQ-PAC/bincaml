@@ -171,7 +171,6 @@ let ensure_pc_assigned ~address =
     [PC] variable is either assigned on all paths or assigned on no paths (from
     the beginning of the instruction). *)
 let ensure_pc_consistency ~address state =
-  let before_skel = Diamond_zipper.skeleton state in
   let left = state |> Diamond_zipper.move_in_to `L |> Result.get_ok
   and right = state |> Diamond_zipper.move_in_to `R |> Result.get_ok in
 
@@ -187,7 +186,6 @@ let ensure_pc_consistency ~address state =
   let state = state |> Diamond_zipper.move_out_of |> Result.get_ok in
   let left = state |> Diamond_zipper.move_in_to `L |> Result.get_ok
   and right = state |> Diamond_zipper.move_in_to `R |> Result.get_ok in
-  assert (Diamond_zipper.(equal_skeleton before_skel (skeleton state)));
 
   (* Propagate PC to join point using ITE. *)
   match (Diamond_zipper.focus left, Diamond_zipper.focus right) with

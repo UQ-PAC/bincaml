@@ -38,8 +38,8 @@ module Make (S : Params) = struct
     let t, f, m = S.diamond_make_branch cond in
 
     let diamond = S.diamond_get () in
-    (match Diamond_zipper.skeleton diamond with
-    | `P :: _ ->
+    (match Diamond_zipper.path diamond with
+    | Pred _ :: _ ->
         failwith "invariant violation: f_gen_branch twice without switching"
     | _ -> ());
 
@@ -55,7 +55,5 @@ module Make (S : Params) = struct
     |> Diamond_zipper.iter_zippers_backwards
     |> Iter.find_pred (S.equal_state ctx % Diamond_zipper.focus)
     |> CCOption.get_exn_or "f_switch_context: cannot find matching position"
-    |> S.diamond_set;
-
-    assert (S.diamond_get () |> Diamond_zipper.focus |> S.equal_state ctx)
+    |> S.diamond_set
 end

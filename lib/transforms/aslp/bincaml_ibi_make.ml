@@ -86,7 +86,7 @@ struct
   let get_ir () =
     let diamond = !bincaml_lifter_state.diamond
     and address = bincaml_get_address () in
-    match Diamond_zipper.skeleton diamond with
+    match Diamond_zipper.path diamond with
     | _ :: _ ->
         failwith "invariant violation: context switches did not return to merge"
     | [] ->

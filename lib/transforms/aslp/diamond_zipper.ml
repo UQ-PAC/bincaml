@@ -4,95 +4,124 @@
 open CCFun
 open Diamond
 
+(** {1 Zippers}
+
+    A zipper is a concept in functional programming (especially, Haskell) that
+    allows for efficient stepwise movement through a recursive algebraic data
+    type.
+
+    Functionally, a zipper for some data type ['a t] acts similarly to ['a t],
+    but augmented with the ability to point to one ['a] element, called the
+    focus.
+
+    A desirable property of zippers is that they should allow for efficient
+    (usually, [O(1)]) movement to adjacent positions within the data structure.
+    In practice, this leads to zippers storing an "inside-out" view of the data
+    structure. For example, a list zipper is made up of two lists, one of which
+    is reversed:
+    {v
+    [1; 2; 3; 4; 5; 6]
+              ^ pointer
+
+    { before = [3, 2, 1]; focus_and_after = [4, 5, 6] }
+    v}
+    In trees, this manifests as storing a bottom-up path to the focus. In this
+    module, this is visible in {!path}.
+
+    {2 Resources}
+
+    There are lots of resources on zippers. The idea of a zipper was first
+    described by
+    {{:https://gallium.inria.fr/~huet/PUBLIC/zip.pdf} Huet in 1993}. In this
+    module, we represent a zipper as a "one-hole context" combined with a
+    subtree. This is described by
+    {{:http://strictlypositive.org/diff.pdf} McBride}.
+
+    This module was mostly implemented by following the
+    {{:https://wiki.haskell.org/Zipper} Haskell wiki} (if reading this, be aware
+    that our inner nodes store values). If you enjoy Tony Morris's teaching
+    style, he has
+    {{:https://www.youtube.com/watch?v=HqHdgBXOOsE} a talk on YouTube} (the
+    first 10 minutes are most relevant). *)
+
+open Diamond
+
+(** {1 Preliminaries} *)
+
+(** Moving one step through the {!Diamond.diamond}. Each variant records the
+    direction of the step, as well as the paths {i not} taken. This allows the
+    {!Diamond.diamond} to be reconstructed when moving "back" through a path. *)
+type 'a step =
+  | Left of { value : 'a; right : 'a diamond; pred : 'a diamond }
+  | Right of { value : 'a; left : 'a diamond; pred : 'a diamond }
+  | Pred of { value : 'a; left : 'a diamond; right : 'a diamond }
+[@@deriving show { with_path = false }]
+
+type 'a path = 'a step list [@@deriving show]
+(** A type describing a path to a "hole" in a {!Diamond.diamond}, with the
+    ability to reconstruct the full {!Diamond.diamond} when the hole is filled.
+
+    For example, this diamond (where [@] is the missing child)
+    {v
+      p
+     / \
+    @   r
+     \ /
+      v
+    v}
+    would be represented by
+    {v [ Left { value = v; right = r; pred = p } ] v}
+
+    It is a list when the hole occurs inside a nested {!Diamond.diamond}, the
+    path is made up of multiple {!step} - starting from the hole and moving
+    upwards until you get to the root.
+
+    As one consequence of this, a {!path} of [[]] represents a
+    {!Diamond.diamond} which is all hole:
+    {v @ v} *)
+
 (** {1 Zipper for diamond} *)
 
-type skeleton = [ `L | `R | `P ] list
-[@@deriving show { with_path = false }, eq]
-(** The skeleton of a zipper is a path of steps. This can be used to reference a
-    position within the {!Diamond.diamond}. *)
+(** Conceptually, a {!zipper} is a ['a ]{!Diamond.diamond} but with additional
+    information about a "position" which points to a particular ['a] value
+    within the diamond (called the focus). The focus can be moved around to
+    point to different positions within the nested diamonds.
 
-(**/**)
-
-module Priv : sig
-  type 'a zipper = private 'a diamond * skeleton
-
-  val wrap : 'a diamond * skeleton -> 'a zipper
-
-  val wrap_result :
-    ('a diamond * skeleton, 'a diamond * skeleton) result ->
-    ('a zipper, 'a zipper) result
-
-  val unwrap : 'a zipper -> 'a diamond * skeleton
-
-  val pp_zipper :
-    (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a zipper -> unit
-
-  val show_zipper : (Format.formatter -> 'a -> unit) -> 'a zipper -> string
-end = struct
-  type 'a zipper = 'a diamond * skeleton [@@deriving show]
-
-  let wrap x = x
-  let unwrap x = x
-  let wrap_result x = CCResult.map2 wrap wrap x
-end
-
-(**/**)
-
-open Priv
-
-type 'a zipper = 'a Priv.zipper
-(** A {!zipper} is a ['a ]{!Diamond.diamond} but with additional information
-    about a "position" which points to a particular ['a] value within the
-    diamond (called the focus). The focus can be moved around to point to
-    different positions within the nested diamonds.
-
-    This is a {b private type}, so users outside this module can coerce it to a
-    [(diamond, skeleton)], but they cannot manually construct a {!zipper}. It
-    is not possible
-
-    This is not a traditional functional programming zipper, because it is not
-    particularly efficient to move the focus. Also, every access to the focused
-    value will traverse the diamond from the root. *)
+    This is implemented by deconstructing a {!Diamond.diamond} into a {!path}
+    which represents parts of the diamond {i above} the focus, and a
+    {!Diamond.diamond} which represents the focus and nested diamonds {i below}
+    the focus. The focus is the root of the stored {!Diamond.diamond}. *)
+type 'a zipper = Zipper of 'a diamond * 'a path [@@deriving show]
 
 (** Builds an empty zipper with the given value. *)
-let empty value : 'a zipper = Priv.wrap (Leaf value, [])
+let empty value : 'a zipper = Zipper (Leaf value, [])
 
-(** Returns the subdiamond with the currently focused position as its value. *)
-let rec subdiamond dia =
-  dia |> Priv.unwrap |> function
-  | dia, [] -> dia
-  | Diamond { left = x }, `L :: rest
-  | Diamond { right = x }, `R :: rest
-  | Diamond { pred = x }, `P :: rest ->
-      subdiamond (Priv.wrap (x, rest))
-  | Leaf _, _ :: _ -> failwith "invariant violation: invalid zipper path"
+(** Returns the single focused value of the zipper. [focus x] is equivalent to
+    {!Diamond.last}[ ]{!subdiamond}[ x]. *)
+let focus (Zipper (this, _)) = last this
 
-(** Returns the skeleton path to the focused position in the zipper. *)
-let skeleton x = snd (unwrap x)
+(** Returns the subdiamond terminated by the currently focused position. *)
+let subdiamond (Zipper (this, _)) = this
 
-(** Returns the single focused value of the zipper. *)
-let focus : 'a zipper -> 'a = fun x -> last (subdiamond x)
+(** Returns the path of the given zipper. The path is the sequence of steps
+    leading to the focused subdiamond, inside-out. *)
+let path (Zipper (_, path)) = path
 
 (** Converts the given {!zipper} to a full {!Diamond.diamond}. *)
-let to_diamond = fun x -> fst (unwrap x)
+let to_diamond : 'a zipper -> 'a diamond = function
+  | Zipper (this, path) ->
+      List.fold_left
+        (fun this step ->
+          match (this, step) with
+          | left, Left { value; right; pred }
+          | right, Right { value; left; pred }
+          | pred, Pred { value; left; right } ->
+              Diamond { value; left; right; pred })
+        this path
 
 (** Converts the given {!Diamond.diamond} to a zipper, initially focused at
-    {!Diamond.last}. *)
-let of_diamond : 'a diamond -> 'a zipper = fun x -> Priv.wrap (x, [])
-
-(** Iterates over all {!zipper} positions of the given diamond, {i backwards} in
-    control-flow order. *)
-let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
-  let rec iter_paths_backwards path dia k =
-    match dia with
-    | Leaf x -> k path
-    | Diamond { value; left; right; pred } ->
-        k path;
-        iter_paths_backwards (`L :: path) left k;
-        iter_paths_backwards (`R :: path) right k;
-        iter_paths_backwards (`P :: path) pred k
-  in
-  fun d -> iter_paths_backwards [] d |> Iter.map (fun p -> Priv.wrap (d, p))
+    {!last}. *)
+let of_diamond : 'a diamond -> 'a zipper = fun d -> Zipper (d, [])
 
 (** {1 Movement functions}
 
@@ -125,56 +154,42 @@ let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
     last position of an adjacent subdiamond (see the [1] positions in the
     diagram above). *)
 let move_adjacent direction : 'a zipper -> ('a zipper, 'a zipper) result =
- fun z ->
-  z |> Priv.unwrap
-  |> ( function
-  | (_, []) as zip -> Error zip
-  | dia, _ :: rest -> Ok (dia, direction :: rest) )
-  |> Priv.wrap_result
+  function
+  | Zipper (_, []) as zip -> Error zip
+  | Zipper (left, Left { value; right; pred } :: rest)
+  | Zipper (right, Right { value; left; pred } :: rest)
+  | Zipper (pred, Pred { value; left; right } :: rest) -> (
+      match direction with
+      | `L -> Ok (Zipper (left, Left { value; right; pred } :: rest))
+      | `R -> Ok (Zipper (right, Right { value; left; pred } :: rest))
+      | `P -> Ok (Zipper (pred, Pred { value; left; right } :: rest)))
 
 (** Moves the zipper to a position in the outer diamond level. That is, to the
     {!type-diamond.value} of the containing {!Diamond.diamond}. In control-flow
     terms, this is the next control-flow join point. *)
-let move_out_of : 'a zipper -> ('a zipper, 'a zipper) result =
- fun z ->
-  z |> Priv.unwrap
-  |> ( function (_, []) as zip -> Error zip | dia, _ :: rest -> Ok (dia, rest) )
-  |> Priv.wrap_result
+let move_out_of : 'a zipper -> ('a zipper, 'a zipper) result = function
+  | Zipper (_, []) as zip -> Error zip
+  | Zipper (left, Left { value; right; pred } :: rest)
+  | Zipper (right, Right { value; left; pred } :: rest)
+  | Zipper (pred, Pred { value; left; right } :: rest) ->
+      Ok (Zipper (Diamond { value; left; right; pred }, rest))
 
 (** Moves the zipper to a position in the inner diamond level. In control-flow
     terms, this is the left or right branch, or the split point. *)
-let move_in_to direction : 'a zipper -> ('a zipper, 'a zipper) result =
-  Priv.unwrap
-  %> ( function
-  | (Leaf _, _) as zip -> Error zip
-  | (Diamond _ as dia), rest -> Ok (dia, direction :: rest) )
-  %> Priv.wrap_result
+let move_in_to direction : 'a zipper -> ('a zipper, 'a zipper) result = function
+  | Zipper (Leaf _, _) as zip -> Error zip
+  | Zipper (Diamond { value; left; right; pred }, rest) -> (
+      match direction with
+      | `L -> Ok (Zipper (left, Left { value; right; pred } :: rest))
+      | `R -> Ok (Zipper (right, Right { value; left; pred } :: rest))
+      | `P -> Ok (Zipper (pred, Pred { value; left; right } :: rest)))
 
 (** {1 Modification functions} *)
 
 (** Modifies the {!subdiamond} of the given {!zipper}. *)
-let rec modify_subdiamond (f : 'a diamond -> 'a diamond) :
-    'a zipper -> 'a zipper =
-  Priv.unwrap
-  %> ( function
-  | dia, [] -> (f dia, [])
-  | Leaf _, _ :: _ -> failwith "invariant violation: invalid zipper path"
-  | Diamond dia, (`L :: rest as path) ->
-      let left, _ =
-        Priv.unwrap (modify_subdiamond f (Priv.wrap (dia.left, rest)))
-      in
-      (Diamond { dia with left }, path)
-  | Diamond dia, (`R :: rest as path) ->
-      let right, _ =
-        Priv.unwrap (modify_subdiamond f (Priv.wrap (dia.right, rest)))
-      in
-      (Diamond { dia with right }, path)
-  | Diamond dia, (`P :: rest as path) ->
-      let pred, _ =
-        Priv.unwrap (modify_subdiamond f (Priv.wrap (dia.pred, rest)))
-      in
-      (Diamond { dia with pred }, path) )
-  %> Priv.wrap
+let modify_subdiamond (f : 'a diamond -> 'a diamond) : 'a zipper -> 'a zipper =
+  function
+  | Zipper (d, path) -> Zipper (f d, path)
 
 let modify f = modify_subdiamond (Diamond.modify_last f)
 
@@ -187,10 +202,30 @@ let append_diamond ~left ~right ~value : 'a zipper -> 'a zipper =
   %> CCOption.get_exn_or
        "unreachable: moving to `P must succeed because subdiamond is not a Leaf"
 
+(** {1 Iteration functions} *)
+
+(** Iterates over all {!zipper} positions within the {!subdiamond} of the current
+    zipper, {i backwards} in control-flow order. *)
+let rec iter_subzippers_backwards (Zipper (dia, path) as zip) =
+  Iter.from_iter (fun k ->
+      match dia with
+      | Leaf x -> k zip
+      | Diamond { value; left; right; pred } ->
+          k zip;
+          iter_subzippers_backwards (move_in_to `L zip |> Result.get_ok) k;
+          iter_subzippers_backwards (move_in_to `R zip |> Result.get_ok) k;
+          iter_subzippers_backwards (move_in_to `P zip |> Result.get_ok) k)
+
+(** Iterates over all {!zipper} positions of the given diamond, {i backwards} in
+    control-flow order. *)
+let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
+ fun d -> iter_subzippers_backwards (of_diamond d)
+
 (** {1 Derived functions} *)
 
-let equal_skeleton = equal_skeleton
 let pp_zipper = pp_zipper
 let show_zipper = show_zipper
-let pp_skeleton = pp_skeleton
-let show_skeleton = show_skeleton
+let pp_step = pp_step
+let show_step = show_step
+let pp_path = pp_path
+let show_path = show_path
