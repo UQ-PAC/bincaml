@@ -868,7 +868,7 @@ let split_transform (p : Program.t) =
   end
   in
   let module E = MemoryEncoder (SplitMemory (I)) in
-  E.transform p
+  E.transform p |> fun prog -> Spec_modifies.set_modsets ~add_only:true prog
 
 let flat_transform (p : Program.t) =
   let module I : IDAllocs = struct
@@ -876,4 +876,4 @@ let flat_transform (p : Program.t) =
   end
   in
   let module E = MemoryEncoder (FlatMemory (I)) in
-  E.transform p
+  E.transform p |> fun prog -> Spec_modifies.set_modsets ~add_only:true prog

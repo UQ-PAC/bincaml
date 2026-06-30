@@ -476,9 +476,6 @@
      ) == 1bv2);
 
 
-<<<<<<< HEAD
-=======
->>>>>>> origin/main
 
   $ boogie ./bad.bpl
   Memory Error: Invalid Access

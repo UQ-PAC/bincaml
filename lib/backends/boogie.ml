@@ -176,7 +176,7 @@ let pretty_apply_intrinsic (op : Ops.AllOps.intrin)
       match args with
       | [ (ty1, arg1); (ty2, arg2) ] -> (
           match Transforms.Boogie_prepass.Builtins.name op [ ty1; ty2; t ] with
-          | Function name -> text name ^ pretty_call_args [ arg1; arg2 ]
+          | Function name -> text "$" ^ text  name ^ pretty_call_args [ arg1; arg2 ]
           | Infix name -> bracket "(" (arg1 ^+ text name ^+ arg2) ")"
           | _ -> failwith "Unsupported binary-reduced intrinsic expr ")
       | _ ->

@@ -2,6 +2,7 @@
  (public_name bincaml.ast)
  (name lang)
  (modules
+  rewrite
   abstract_expr
   attrib
   spec_modifies

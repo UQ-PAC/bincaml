@@ -19,15 +19,15 @@ let copy ?name ?scope ?typ (v : t) =
     } *)
 
 let to_int (v : t) = ID.index v.name
-let name (e : t) = ID.name @@ e.name
 let id v = v.name
 let tags (e : t) = e.tags
 let typ (e : t) = e.typ
+let is_local (v : t) = match v.scope with Local _ -> true | Global _ -> false
+let is_global (v : t) = match v.scope with Global _ -> true | Local _ -> false
+let name (e : t) = if is_global e then "$" ^ ID.name e.name else ID.name e.name
 let to_string v = name v ^ ":" ^ Types.to_string @@ typ v
 let pp fmt v = Format.pp_print_string fmt (to_string v)
 let pretty v = Containers_pp.text (to_string v)
-let is_local (v : t) = match v.scope with Local _ -> true | Global _ -> false
-let is_global (v : t) = not (is_local v)
 let is_const (v : t) = match v.tags with Const -> true | _ -> false
 let access (v : t) = v.tags
 let is_shared (v : t) = match v.tags with Shared -> true | _ -> false
@@ -65,7 +65,7 @@ type ('t, 'a, 'g) any_gen = {
 
 open struct
   let force_sigil sigil s : string =
-    if String.starts_with ~prefix:sigil s then s else sigil ^ s
+    match String.chop_prefix ~pre:sigil s with Some s -> s | None -> s
 
   let create name id_gen ?(access = None) typ =
     (* disallow creating local const as its too hard to have declaration order *)
@@ -92,8 +92,8 @@ let mk_gen ?id_generator ?(req_sigil = Option.None) ?(scope = `Local)
   let id_gen = Option.get_or ~default:(ID.make_gen ()) id_generator in
   let gt =
     match scope with
-    | `Local -> Local id_gen.gen_id
-    | `Global -> Global id_gen.gen_id
+    | `Local -> Local ""
+    | `Global -> Global ""
   in
   let sgl =
     match (req_sigil, scope) with

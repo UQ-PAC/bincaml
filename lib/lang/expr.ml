@@ -472,6 +472,17 @@ module BasilExpr = struct
     let rw_alg e =
       let orig s = fix s in
       match rw_fun e with
+      | SomeInfo { v; __LINE__; __FILE__ } ->
+          log_rw visit ~__LINE__ ~__FILE__ (fix e) v
+      | Keep -> orig e
+    in
+    cata rw_alg expr
+
+  (** substitute subexpression sbased on parameter *)
+  let rewrite_checktype ?visit ~(rw_fun : t abstract_expr -> rewrite) (expr : t) =
+    let rw_alg e =
+      let orig s = fix s in
+      match rw_fun e with
       | SomeInfo { v; __LINE__; __FILE__ }
         when Types.equal (type_of v) (type_of (orig e)) ->
           log_rw visit ~__LINE__ ~__FILE__ (fix e) v

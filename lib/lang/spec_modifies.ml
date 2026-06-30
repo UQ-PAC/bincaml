@@ -5,6 +5,7 @@ open Common
 
 module RWSets = struct
   type property = VarSet.t * VarSet.t [@@deriving eq, ord]
+  (** (read, written) *)
 
   let bottom = (VarSet.empty, VarSet.empty)
   let equal = equal_property
@@ -26,9 +27,17 @@ end
 
 module FixProp = Fix.Fix.ForOrderedType (ID) (RWSets)
 
-let solve (prog : Program.t) =
+let solve ?(add_existing = false) (prog : Program.t) =
   let local_rw (p : ID.t) (valuations : FixProp.valuation) =
     let p = Program.proc prog p in
+    let spec_read =
+      if not add_existing then VarSet.empty
+      else VarSet.of_list (Procedure.specification p).captures_globs
+    in
+    let spec_write =
+      if not add_existing then VarSet.empty
+      else VarSet.of_list (Procedure.specification p).modifies_globs
+    in
     let read, written =
       match Procedure.graph p with
       | Some _ ->
@@ -48,8 +57,7 @@ let solve (prog : Program.t) =
                   | _ -> None)
               in
               Iter.cons local calls |> Iter.fold RWSets.leq_join a)
-            (VarSet.empty, VarSet.empty)
-            p
+            (spec_read, spec_write) p
       | None ->
           let globs = Program.global_vars prog |> VarSet.of_iter in
           (globs, globs)
@@ -59,7 +67,7 @@ let solve (prog : Program.t) =
   FixProp.lfp local_rw
 
 let set_modsets ?(add_only = false) prog =
-  let rwset = solve prog in
+  let rwset = solve ~add_existing:false prog in
   prog
   |> Program.map_procedures (fun i p ->
       let read, written = rwset i in
@@ -91,4 +99,4 @@ let set_modsets ?(add_only = false) prog =
       let spec = { spec with captures_globs; modifies_globs } in
       Procedure.set_specification p spec)
 
-let analyse prog = solve prog
+let analyse prog = solve ~add_existing:false prog

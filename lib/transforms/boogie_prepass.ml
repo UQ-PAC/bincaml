@@ -63,8 +63,8 @@ module Builtins = struct
     | `BVNEG -> "bvneg"
     | `ZeroExtend sz -> Printf.sprintf "zero_extend %d" sz
     | `SignExtend sz -> Printf.sprintf "sign_extend %d" sz
-    | `Load (`Big, i) -> Printf.sprintf "load%d_be" i
-    | `Load (`Little, i) -> Printf.sprintf "load%d_le" i
+    | `Load (`Big, i) -> Printf.sprintf "$load%d_be" i
+    | `Load (`Little, i) -> Printf.sprintf "$load%d_le" i
 
   (** Returns the monomorphized builtin name *)
   let monomorphize_builtin (op : builtin) targs =
@@ -181,6 +181,44 @@ module Builtins = struct
 
   let used_ops (p : Program.t) =
     Iter.from_iter (fun f -> iprog f p) |> Iter.sort_uniq
+
+
+  let expr_ops vargen (e : Types.t Expr.BasilExpr.abstract_expr) =
+    let open Expr.AbstractExpr in
+    let open Ops.AllOps in
+    let get_ty (op : [  unary | binary | intrin  ]) o =
+      match o with
+      | Fun { ret; args } ->
+          Some (function_for_op vargen op args ret)
+      | _ -> None
+    in
+    match e with
+    | UnaryExpr { op = #unary as op; arg; _ } ->
+        ret_type_unary op arg |> get_ty op
+    | BinaryExpr { op = #binary as op; arg1 = l; arg2 = r; _ } ->
+        ret_type_bin op l r |> get_ty op
+    | ApplyIntrin { op = #intrin as op; args; _ } ->
+        ret_type_intrin op args |> get_ty op
+    | _ -> None
+
+  let transform_builtin_decls (p : Program.t) : Program.t =
+    let v = Program.var_generator p in
+    let bvop_alg : (Program.e * Types.t) Expr.BasilExpr.abstract_expr ->
+         Program.e option
+= fun e ->
+      let open Expr.AbstractExpr in
+      let types = map snd e in
+      let ex = map fst e in
+      match ex with
+      | ApplyIntrin {op=`BVConcat | `AND | `OR | `Cases | `MapUpdate } -> None
+      | ApplyIntrin {op; args} -> (match expr_ops v types with
+        | Some (func) -> Some (Expr.BasilExpr.apply_fun ~func:(Expr.BasilExpr.rvar func) (args))
+        | None -> None)
+      | _ -> None
+    in
+    let rw_expr ?visit (e: Expr.BasilExpr.t) = Expr.BasilExpr.rewrite_typed bvop_alg e in
+    Lang.Rewrite.rewrite_prog_exprs rw_expr p
+
 
   let transform_add_builtin_decls (p : Program.t) : Program.t =
     used_ops p
@@ -320,7 +358,7 @@ module Instructions = struct
                var_gen ;
                binding =
                  global_vargen.with_name ~access:Var.Const
-                   (Printf.sprintf "store%d_%s" size
+                   (Printf.sprintf "$store%d_%s" size
                       (Lang.Stmt.show_endian endian))
                    (Lang.Expr.BasilExpr.type_of value);
                definition = Lang.Program.Function body;
@@ -347,7 +385,7 @@ module Instructions = struct
                var_gen;
                binding =
                  global_vargen.with_name ~access:Var.Const
-                   (Printf.sprintf "load%d_%s" size (Stmt.show_endian endian))
+                   (Printf.sprintf "$load%d_%s" size (Stmt.show_endian endian))
                    (Var.typ lhs);
                definition = Function body;
              }
@@ -386,6 +424,7 @@ module Normalise = struct
     (* function application in boogie becomes a map access when on lambdas (identified by local vars) *)
     | ApplyFun { func; args } -> (
         match unfix func with
+        | RVar { attrib; id } when Var.is_local id -> failwith ( "is local var: " ^ Var.show id)
         | RVar { attrib; id } when Var.is_global id ->
             replace [%here]
               (BasilExpr.apply_fun ~attrib
@@ -427,7 +466,7 @@ module Normalise = struct
         Instr_Assign { al = [ (lhs, value) ]; attrib }
     | Instr_Load { lhs; rhs; addr = Addr { addr; size; endian }; attrib } ->
         let fn_name =
-          Printf.sprintf "load%d_%s" size (Stmt.show_endian endian)
+          Printf.sprintf "$load%d_%s" size (Stmt.show_endian endian)
         in
         Instr_Assign
           {
@@ -444,7 +483,7 @@ module Normalise = struct
     | Instr_Store
         { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib } ->
         let fn_name =
-          Printf.sprintf "store%d_%s" size (Stmt.show_endian endian)
+          Printf.sprintf "$store%d_%s" size (Stmt.show_endian endian)
         in
         Stmt.Instr_Assign
           {
@@ -522,3 +561,4 @@ let transform (p : Program.t) =
   p |> Normalise.replace_functions |> Normalise.replace_exprs
   |> Instructions.transform_add_store_load_decls |> Normalise.replace_stmts
   |> Builtins.transform_add_builtin_decls
+  |> Builtins.transform_builtin_decls

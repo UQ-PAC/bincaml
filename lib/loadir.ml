@@ -172,8 +172,8 @@ module BasilASTLoader = struct
     map_prog (fun prog -> Spec_modifies.set_modsets ~add_only:true prog) prog
 
   and var_modifiers_shared (m : varModifiers list) =
-    if not @@ List.exists (function Shared | Observable -> true) m then Var.None
-    else Var.Shared
+    if List.exists (function Shared | Observable -> true) m then Var.Shared
+    else Var.None
 
   and trans_varspec prog (v : varSpec) =
     let trans_one v =
@@ -1217,7 +1217,8 @@ module BasilASTLoader = struct
           failwith
             ("Invalid type constuctor name: " ^ g
            ^ " must start with lowercase.")
-    | `Global (GlobalIdent (pos, g)) -> g
+    | `Global (GlobalIdent (pos, g)) ->
+        String.chop_prefix ~pre:"$" g |> Option.get_or ~default:g
     | `Local (LocalIdent (pos, g)) -> g
     | `Proc (ProcIdent (pos, g)) -> g
     | `Block (BlockIdent (pos, g)) -> g
@@ -1895,6 +1896,11 @@ proc @c() -> ()
     (Program.procs prog.prog);
   [%expect
     {|
+    globals:
+    { Var.name = ("$R0", 0); scope = (Var.Global "23"); typ = bv64;
+      tags = Var.None }, { Var.name = ("$R1", 1); scope = (Var.Global "23"); typ = bv64;
+      tags = Var.None }, { Var.name = ("$mem", 2); scope = (Var.Global "23"); typ = (bv64->bv8);
+      tags = Var.Shared }
     @entry:
     read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
     written: $R0:bv64,$mem:(bv64->bv8)

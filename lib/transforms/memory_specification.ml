@@ -180,7 +180,7 @@ end
 
 let transform_proc prog entry _ (p : Program.proc) =
   let module TR = T (struct
-    let global_ids = Var.mk_gen ~id_generator:(Program.global_ids prog) ()
+    let global_ids = Program.var_generator prog
   end) in
   let open TR in
   let p =
