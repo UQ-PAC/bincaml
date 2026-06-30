@@ -56,8 +56,7 @@ type generator = {
   fresh : ?name:string -> ?access:access_tag -> Types.t -> t;
       (** generate a fresh unique name optional string prefix hint *)
   with_name : string -> ?access:access_tag -> Types.t -> t;
-  of_var: t -> t;
-      (** Create or return variable with name*)
+  of_var : t -> t;  (** Create or return variable with name*)
   create_exn : string -> ?access:access_tag -> Types.t -> t;
       (** Create variable or throw exception if it was previously declared *)
   generator : ID.generator;  (** The internal ID generator this closes over *)
@@ -89,7 +88,7 @@ open struct
     create name gt ?access typ
 
   let of_var gt (id_gen : ID.generator) sgl v =
-    with_name gt (id_gen) sgl (name v) ~access:(access v) (typ v)
+    with_name gt id_gen sgl (name v) ~access:(access v) (typ v)
 
   let create_exn gt (id_gen : ID.generator) sgl name ?access typ =
     let name = force_sigil sgl name in

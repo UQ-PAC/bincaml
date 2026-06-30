@@ -569,8 +569,10 @@ let%expect_test "datatypes" =
       }
   in
 
-  fst @@ SMTLib2.trans_decl x (SMTLib2.empty ()) |> Sexp.to_string |> print_endline;
-  fst @@ SMTLib2.trans_decl y (SMTLib2.empty ()) |> Sexp.to_string |> print_endline;
+  fst @@ SMTLib2.trans_decl x (SMTLib2.empty ())
+  |> Sexp.to_string |> print_endline;
+  fst @@ SMTLib2.trans_decl y (SMTLib2.empty ())
+  |> Sexp.to_string |> print_endline;
   [%expect
     {|
     (declare-datatype Opaque ())

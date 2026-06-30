@@ -204,7 +204,7 @@ let declare_name name prog = prog.global_names.decl_or_get name
 let get_id_by_name name prog = prog.global_names.get_id name
 
 let remove_decl p decl =
-  let d = (decl_id decl) in
+  let d = decl_id decl in
   { p with declarations = IDMap.remove d p.declarations }
 
 let update_decl ?(attrib = StringMap.empty) p decl =

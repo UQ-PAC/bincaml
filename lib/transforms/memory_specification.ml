@@ -58,10 +58,8 @@ struct
                          ])
                       (BasilExpr.bvconst live));
             ];
-        modifies_globs =
-          spec.modifies_globs @ [ Globals.mem_encoding ];
-        captures_globs =
-          spec.captures_globs @ [ Globals.mem_encoding ];
+        modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
+        captures_globs = spec.captures_globs @ [ Globals.mem_encoding ];
       }
 
   let transform_malloc p =
@@ -93,17 +91,15 @@ struct
               Calls.allocate
                 [ old @@ mem_encoding; mem_encoding; r_out 0; r_in 0 ];
             ];
-        modifies_globs =
-          spec.modifies_globs @ [ Globals.mem_encoding  ];
-        captures_globs =
-          spec.captures_globs @ [ Globals.mem_encoding  ];
+        modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
+        captures_globs = spec.captures_globs @ [ Globals.mem_encoding ];
       }
 
   let transform_free p =
     (* TODO: Specify Gammas Oneday *)
     let spec = Procedure.specification p in
     let open BasilExpr in
-    let mem_encoding = BasilExpr.rvar @@ Globals.mem_encoding  in
+    let mem_encoding = BasilExpr.rvar @@ Globals.mem_encoding in
     let pid = Var.mk_gen ~id_generator:(Procedure.local_ids p) () in
     let r_in = r_in pid in
     Procedure.set_specification p
@@ -148,10 +144,8 @@ struct
                      BasilExpr.bvconst dead;
                    ]);
             ];
-        modifies_globs =
-          spec.modifies_globs @ [ Globals.mem_encoding  ];
-        captures_globs =
-          spec.captures_globs @ [ Globals.mem_encoding  ];
+        modifies_globs = spec.modifies_globs @ [ Globals.mem_encoding ];
+        captures_globs = spec.captures_globs @ [ Globals.mem_encoding ];
       }
 
   let transform_stmt (s : Program.stmt) =
@@ -168,7 +162,7 @@ struct
                   BasilExpr.(
                     Calls.valid_access
                       [
-                        rvar (Globals.mem_encoding );
+                        rvar Globals.mem_encoding;
                         addr;
                         bv_of_int ~size:64 (size / 8);
                       ]);

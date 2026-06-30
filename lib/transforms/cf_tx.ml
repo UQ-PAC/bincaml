@@ -62,6 +62,11 @@ let simplify_prog_exprs rewriter ?visit (p : Program.t) =
         | o -> o))
     p
 
+let simplify_all ?visit rewriter prog =
+  prog
+  |> simplify_prog_exprs ?visit rewriter
+  |> simplify_prog_spec_exprs ?visit rewriter
+
 let to_smt (r : Expr.BasilExpr.rwinfo) =
   let open Lang.Expr_smt in
   let cexpr = Expr.BasilExpr.binexp ~op:`NEQ r.from r.into in

@@ -157,14 +157,15 @@ let add_decls solver prog =
 
   let add_decls ds =
     ds
-    |> Iter.map (fun d -> Expr_smt.SMTLib2.trans_decl d (Expr_smt.SMTLib2.empty ()))
+    |> Iter.map (fun d ->
+        Expr_smt.SMTLib2.trans_decl d (Expr_smt.SMTLib2.empty ()))
     |> Iter.map fst
     |> fun i ->
     Iter.for_each i (fun s -> Bincaml_util.Smt.Solver.add_command solver s)
   in
-  (decls
+  decls
   |> Iter.filter Program.(function Type _ -> true | _ -> false)
-  |> add_decls);
+  |> add_decls;
   decls
   |> Iter.filter Program.(function Type _ -> false | _ -> true)
   |> add_decls

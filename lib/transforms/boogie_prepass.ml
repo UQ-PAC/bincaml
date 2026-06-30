@@ -222,7 +222,7 @@ module Builtins = struct
       | _ -> None
     in
     let rw_expr ?visit (e: Expr.BasilExpr.t) = Expr.BasilExpr.rewrite_typed bvop_alg e in
-    Lang.Rewrite.rewrite_prog_exprs rw_expr p
+    Cf_tx.simplify_all rw_expr p
 
 
   let transform_add_builtin_decls (p : Program.t) : Program.t =

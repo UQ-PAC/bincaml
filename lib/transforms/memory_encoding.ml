@@ -357,7 +357,7 @@ module FlatMemory (M : IDAllocs) : MemoryEncoding = struct
   module Calls = Calls (M)
   module Globals = Calls.Globals
 
-  let global_ids = (M.global_ids)
+  let global_ids = M.global_ids
 
   let mem_encoding_type : Types.t =
     Types.Sort

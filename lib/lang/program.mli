@@ -111,7 +111,6 @@ val decl_global_var :
   t * Var.t
 
 val decl_bound_var : declaration -> Var.t option
-
 val decl_or_get_var : t -> string -> Var.access_tag -> Types.t -> t * Var.t
 val global_ids : t -> ID.generator
 val decl_typ : ?attrib:'a Types.StringMap.t -> t -> Types.t -> t
