@@ -1635,6 +1635,10 @@ let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
   let bl =
     Procedure.get_block proc bid |> Option.get_exn_or "no current proc"
   in
+  let prog =
+    Block.free_vars bl |> VarSet.filter Var.is_global |> fun vs ->
+    VarSet.fold (fun v p -> Program.add_var_decl p v) vs prog
+  in
   let inparam =
     Block.free_vars bl |> VarSet.filter Var.is_local |> VarSet.to_list
     |> List.map (fun x -> (Var.name x, x))
