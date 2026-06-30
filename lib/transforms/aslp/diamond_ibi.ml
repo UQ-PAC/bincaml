@@ -9,7 +9,11 @@ module type Params = sig
 
   type state
   (** Type of the state stored inside each control-flow point of the
-      {!Diamond_zipper.zipper}. *)
+      {!Diamond_zipper.zipper}.
+
+      This is used to represent context-switch positions, so it should contain
+      some inner data that is not changed by generating new branches or emitting
+      ASLp statements. *)
 
   val diamond_get : unit -> state Diamond_zipper.zipper
   val diamond_set : state Diamond_zipper.zipper -> unit
@@ -18,20 +22,21 @@ module type Params = sig
   (** Should return [(t,f,m)]. *)
 
   val equal_state : state -> state -> bool
+  (** Used to locate context switch targets. This should compute equality by
+      using some stable identifier within {!state}. *)
 end
 
 (** Implements control flow functionality for the IBI by using
     {!Diamond_zipper.zipper}. See {!module-Diamond_zipper} for more details. *)
 module Make (S : Params) = struct
   type branch = [ `T | `F | `M ] * S.state
-  (** Branch switches are a path into the diamond.
+  (** Branch switches are a {!S.state} as returned by {!S.diamond_make_branch}.
 
-      For downstream uses, this also records the branch direction and the state
-      value at the branch merge point. *)
+      For downstream use, this also records the branch direction. *)
 
-  let f_true_branch : branch * branch * branch -> branch = fun (t, f, m) -> t
-  let f_false_branch : branch * branch * branch -> branch = fun (t, f, m) -> f
-  let f_merge_branch : branch * branch * branch -> branch = fun (t, f, m) -> m
+  let f_true_branch (t, f, m) = t
+  let f_false_branch (t, f, m) = f
+  let f_merge_branch (t, f, m) = m
 
   let f_gen_branch : S.expr -> branch * branch * branch =
    fun cond ->
@@ -51,6 +56,8 @@ module Make (S : Params) = struct
     ((`T, t), (`F, f), (`M, m))
 
   let f_switch_context (_, ctx) =
+    (* Exhaustive search in topological backwards order is probably fast enough,
+       since we are always appending at the end, and there are not many branches. *)
     S.diamond_get () |> Diamond_zipper.to_diamond
     |> Diamond_zipper.iter_zippers_backwards
     |> Iter.find_pred (S.equal_state ctx % Diamond_zipper.focus)

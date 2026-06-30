@@ -191,6 +191,7 @@ let modify_subdiamond (f : 'a diamond -> 'a diamond) : 'a zipper -> 'a zipper =
   function
   | Zipper (d, path) -> Zipper (f d, path)
 
+(** Modifies the {!focus} of the given {!zipper}. *)
 let modify f = modify_subdiamond (Diamond.modify_last f)
 
 (** Modifies the zipper by inserting a new diamond {i after} the current
@@ -200,21 +201,24 @@ let append_diamond ~left ~right ~value : 'a zipper -> 'a zipper =
   modify_subdiamond (fun pred -> Diamond { pred; left; right; value })
   %> move_in_to `P %> CCResult.to_opt
   %> CCOption.get_exn_or
-       "unreachable: moving to `P must succeed because subdiamond is not a Leaf"
+       "unreachable: moving to `P will succeed because subdiamond is not a Leaf"
 
 (** {1 Iteration functions} *)
 
-(** Iterates over all {!zipper} positions within the {!subdiamond} of the current
-    zipper, {i backwards} in control-flow order. *)
-let rec iter_subzippers_backwards (Zipper (dia, path) as zip) =
-  Iter.from_iter (fun k ->
-      match dia with
-      | Leaf x -> k zip
-      | Diamond { value; left; right; pred } ->
-          k zip;
-          iter_subzippers_backwards (move_in_to `L zip |> Result.get_ok) k;
-          iter_subzippers_backwards (move_in_to `R zip |> Result.get_ok) k;
-          iter_subzippers_backwards (move_in_to `P zip |> Result.get_ok) k)
+(** Iterates over all {!zipper} positions within the {!subdiamond} of the
+    current zipper, {i backwards} in control-flow order. *)
+let iter_subzippers_backwards zip : 'a zipper Iter.t =
+ fun k ->
+  let rec recurse = function
+    | Ok (Zipper (Leaf _, _) as zip) -> k zip
+    | Ok (Zipper (Diamond _, _)) ->
+        k zip;
+        recurse (move_in_to `L zip);
+        recurse (move_in_to `R zip);
+        recurse (move_in_to `P zip)
+    | Error _ -> ()
+  in
+  recurse (Ok zip)
 
 (** Iterates over all {!zipper} positions of the given diamond, {i backwards} in
     control-flow order. *)
