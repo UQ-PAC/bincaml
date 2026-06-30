@@ -205,8 +205,8 @@ let append_diamond ~left ~right ~value : 'a zipper -> 'a zipper =
 
 (** {1 Iteration functions} *)
 
-(** Iterates over all {!zipper} positions within the {!subdiamond} of the
-    current zipper, {i backwards} in control-flow order. *)
+(** Iterates over {!zipper} positions within the {!subdiamond} of the current
+    zipper, {i backwards} in control-flow order. *)
 let iter_subzippers_backwards zip : 'a zipper Iter.t =
  fun k ->
   let rec recurse = function
@@ -220,10 +220,27 @@ let iter_subzippers_backwards zip : 'a zipper Iter.t =
   in
   recurse (Ok zip)
 
+let adjacent : 'a zipper -> 'a zipper zipper =
+function Zipper (Leaf _, path)
+
+
+(** Iterates over all {!zipper} positions within the full diamond of the current
+    zipper, expanding {i outwards} through the nested diamonds. *)
+let rec iter_outwards k (q : 'a zipper CCSimple_queue.t) =
+  match CCSimple_queue.pop q with
+  | None -> ()
+  | Some ((Zipper (Leaf _, _) as zip), rest) ->
+      k zip;
+      iter_outwards k rest
+  | Some ((Zipper (Diamond { pred; left; right; value }, _) as zip), rest) ->
+      k zip;
+      iter_outwards k rest
+
 (** Iterates over all {!zipper} positions of the given diamond, {i backwards} in
     control-flow order. *)
 let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
- fun d -> iter_subzippers_backwards (of_diamond d)
+ fun d k -> iter_subzippers_backwards (of_diamond d) k
+(* [k] parameter ensures [of_diamond] is deferred until it is iterated. *)
 
 (** {1 Derived functions} *)
 

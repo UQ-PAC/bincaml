@@ -56,10 +56,19 @@ module Make (S : Params) = struct
     ((`T, t), (`F, f), (`M, m))
 
   let f_switch_context (_, ctx) =
-    (* Exhaustive search in topological backwards order is probably fast enough,
-       since we are always appending at the end, and there are not many branches. *)
-    S.diamond_get () |> Diamond_zipper.to_diamond
-    |> Diamond_zipper.iter_zippers_backwards
+    let zipper = S.diamond_get () in
+
+    let near =
+      Diamond_zipper.(
+        zipper |> move_out_of |> CCResult.retract |> iter_subzippers_backwards)
+    and far k =
+      Diamond_zipper.(zipper |> to_diamond |> iter_zippers_backwards) k
+    in
+
+    (* Exhaustive search, but start nearby by walking up one level. This is
+       probably fast enough since we are always appending and moving near the
+       end, and there are not many nested branches. *)
+    Iter.append near far
     |> Iter.find_pred (S.equal_state ctx % Diamond_zipper.focus)
     |> CCOption.get_exn_or "f_switch_context: cannot find matching position"
     |> S.diamond_set
