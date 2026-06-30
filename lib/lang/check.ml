@@ -87,6 +87,18 @@ let variables_wf p =
            ^ (Procedure.id p |> ID.to_string))))
     else ()
   in
+  begin
+    let check_modset s vs =
+      vs |> List.filter Var.is_local |> function
+      | [] -> ()
+      | ls ->
+          raise
+            (IRWellformed
+               ("local vars in " ^ s ^ " : " ^ List.to_string Var.show ls))
+    in
+    check_modset "modifies" spec.modifies_globs;
+    check_modset "captures" spec.captures_globs
+  end;
   let check e = Expr.BasilExpr.free_vars_iter e |> Iter.iter var_is_ok in
   List.iter check spec.requires;
   List.iter check spec.ensures;

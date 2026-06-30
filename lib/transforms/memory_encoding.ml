@@ -13,7 +13,7 @@ module Globals = struct
 
   let mem_encoding_typ_name = "memory_encoding"
   let mem_encoding_typ = Types.Variable mem_encoding_typ_name
-  let mem_encoding v = v.with_name "$mem_encoding" ~access:None mem_encoding_typ
+  let mem_encoding v = v.with_name "mem_encoding" ~access:None mem_encoding_typ
 end
 
 module Calls (N : sig
@@ -97,7 +97,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_alloc_live_update" ~access:Var.Const
+           (v.with_name "me_alloc_live_update" ~access:Var.Const
               Globals.mem_encoding_typ))
       args
 
@@ -106,7 +106,7 @@ struct
       allocated at. args(3) is the size of the allocation. *)
   let allocate ?attrib args =
     apply_fun ?attrib
-      ~func:(rvar (v.with_name "$me_allocate" ~access:Var.Const Types.Boolean))
+      ~func:(rvar (v.with_name "me_allocate" ~access:Var.Const Types.Boolean))
       args
 
   (** [can_alloc args] Returns whether an alloc, performed by [allocate], is
@@ -115,7 +115,7 @@ struct
   let can_alloc ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar (v.with_name "$me_can_allocate" ~access:Var.Const Types.Boolean))
+        (rvar (v.with_name "me_can_allocate" ~access:Var.Const Types.Boolean))
       args
 
   (** [init_encoding args] Returns if a memory encoding is initialized. args(0)
@@ -123,7 +123,7 @@ struct
   let init_encoding ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar (v.with_name "$me_init_encoding" ~access:Var.Const Types.Boolean))
+        (rvar (v.with_name "me_init_encoding" ~access:Var.Const Types.Boolean))
       args
 
   (** [valid_access args] Checks if an access is valid. args(0) is the memory
@@ -132,7 +132,7 @@ struct
   let valid_access ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar (v.with_name "$me_valid_access" ~access:Var.Const Types.Boolean))
+        (rvar (v.with_name "me_valid_access" ~access:Var.Const Types.Boolean))
       args
 end
 
@@ -198,7 +198,7 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
       Lang.Program.add_decl p
         (Lang.Program.Variable
            {
-             binding = Globals.mem_encoding (Var.mk_gen ~id_generator:gids ());
+             binding = Globals.mem_encoding (Program.var_generator p);
              attrib = Attrib.empty;
              classification = None;
            })
@@ -868,7 +868,7 @@ let split_transform (p : Program.t) =
   end
   in
   let module E = MemoryEncoder (SplitMemory (I)) in
-  E.transform p |> fun prog -> Spec_modifies.set_modsets ~add_only:true prog
+  E.transform p |> fun prog -> Spec_modifies.set_modsets prog
 
 let flat_transform (p : Program.t) =
   let module I : IDAllocs = struct
@@ -876,4 +876,4 @@ let flat_transform (p : Program.t) =
   end
   in
   let module E = MemoryEncoder (FlatMemory (I)) in
-  E.transform p |> fun prog -> Spec_modifies.set_modsets ~add_only:true prog
+  E.transform p |> fun prog -> Spec_modifies.set_modsets  prog

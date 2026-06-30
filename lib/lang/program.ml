@@ -320,6 +320,7 @@ let decl_global p name f =
 
 (** add var decl for with id exising in generator *)
 let add_var_decl p ?(attrib = Attrib.empty) ?classification v =
+  assert (Var.is_global v) ;
   let id = Var.id v in
   (try p.global_names.get_name (ID.index id) |> ignore
    with Not_found -> failwith "Id not created with programs' generator");
