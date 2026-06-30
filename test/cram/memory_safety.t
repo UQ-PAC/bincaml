@@ -23,19 +23,19 @@
   $ boogie out.bpl
   Memory Error: Invalid Free (object not live)
   Execution trace:
-      out.bpl(194,3): b#inputs
+      out.bpl(190,3): b#inputs
   Memory Error: Invalid Free (not base address)
   Execution trace:
-      out.bpl(239,3): b#inputs
+      out.bpl(235,3): b#inputs
   Memory Error: Invalid Access
   Execution trace:
-      out.bpl(274,3): b#inputs
+      out.bpl(270,3): b#inputs
   Memory Error: Invalid Access
   Execution trace:
-      out.bpl(323,3): b#inputs
+      out.bpl(319,3): b#inputs
   Memory Error: Memory Leak
   Execution trace:
-      out.bpl(371,3): b#inputs
+      out.bpl(367,3): b#inputs
   
   Boogie program verifier finished with 1 verified, 5 errors
 
@@ -65,25 +65,25 @@
   $ boogie out.bpl
   Memory Error: Invalid Free (object not live)
   Execution trace:
-      out.bpl(230,3): b#inputs
+      out.bpl(226,3): b#inputs
   Memory Error: Invalid Free (not base address)
   Execution trace:
-      out.bpl(275,3): b#inputs
+      out.bpl(271,3): b#inputs
   Memory Error: Invalid Free (object not live)
   Execution trace:
-      out.bpl(275,3): b#inputs
-  out.bpl(281,5): Error: a precondition for this call could not be proved
-  out.bpl(150,3): Related location: this is the precondition that could not be proved
+      out.bpl(271,3): b#inputs
+  out.bpl(277,5): Error: a precondition for this call could not be proved
+  out.bpl(146,3): Related location: this is the precondition that could not be proved
   Execution trace:
-      out.bpl(275,3): b#inputs
+      out.bpl(271,3): b#inputs
   Memory Error: Invalid Access
   Execution trace:
-      out.bpl(310,3): b#inputs
+      out.bpl(306,3): b#inputs
   Memory Error: Invalid Access
   Execution trace:
-      out.bpl(359,3): b#inputs
+      out.bpl(355,3): b#inputs
   Memory Error: Memory Leak
   Execution trace:
-      out.bpl(407,3): b#inputs
+      out.bpl(403,3): b#inputs
   
   Boogie program verifier finished with 1 verified, 7 errors

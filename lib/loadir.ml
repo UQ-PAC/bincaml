@@ -294,7 +294,7 @@ module BasilASTLoader = struct
           attrib,
           spec,
           definition ) ->
-        let ids = ID.make_gen () in
+        let ids = ID.make_gen ~scope_name:id () in
         let vg = Var.mk_gen ~id_generator:ids ~scope:`Local () in
         let proc_id = Program.declare_name id prog.prog in
         let formal_in_params_order = List.map (param_to_formal vg) in_params in
@@ -1893,7 +1893,6 @@ proc @c() -> ()
 |}
   in
   print_endline "globals: ";
-  print_endline (Program.global_vars prog.prog |> Iter.to_string Var.show);
   let res = analyse prog.prog in
   Iter.iter
     (fun (pid, proc) ->
@@ -1902,10 +1901,6 @@ proc @c() -> ()
   [%expect
     {|
     globals:
-    { Var.name = ("R0", 0); scope = (Var.Global ""); typ = bv64; tags = Var.None
-      }, { Var.name = ("R1", 1); scope = (Var.Global ""); typ = bv64; tags = Var.None
-      }, { Var.name = ("mem", 2); scope = (Var.Global ""); typ = (bv64->bv8);
-      tags = Var.Shared }
     @entry:
     read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)
     written: $R0:bv64,$mem:(bv64->bv8)

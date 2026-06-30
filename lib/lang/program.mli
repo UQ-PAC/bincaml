@@ -95,7 +95,6 @@ val map_decls : (ID.t -> declaration -> declaration) -> t -> t
 val filter_map_decls : (ID.t -> declaration -> declaration option) -> t -> t
 val flat_map_decls : (ID.t -> declaration -> declaration Iter.t) -> t -> t
 val pretty_to_chan : out_channel -> t -> unit
-val decl_global : t -> string -> (ID.t -> declaration) -> t
 val add_decl : t -> declaration -> t
 val var_generator : t -> Var.generator
 
@@ -110,6 +109,8 @@ val decl_global_var :
   Var.access_tag ->
   Types.t ->
   t * Var.t
+
+val decl_bound_var : declaration -> Var.t option
 
 val decl_or_get_var : t -> string -> Var.access_tag -> Types.t -> t * Var.t
 val global_ids : t -> ID.generator

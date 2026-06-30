@@ -17,15 +17,17 @@ module SMTLib2 = struct
     preamble : CCSexp.t list;
     commands : CCSexp.t list;
     var_decls : var_decl VarMap.t;
+    var_gen : Var.generator;
     logics : LSet.t;
   }
 
-  let empty =
+  let empty () =
     {
       preamble = [];
       commands = [];
       var_decls = VarMap.empty;
       logics = LSet.empty;
+      var_gen = Var.mk_gen ();
     }
 
   type 'e t = builder -> 'e * builder
@@ -86,7 +88,7 @@ module SMTLib2 = struct
     let commands = List.rev b.commands |> List.to_iter in
     preamble <+> decls <+> commands
 
-  let run (e : 'e t) = e empty
+  let run (e : 'e t) = e (empty ())
 
   let extract s =
     let* b = get s in
@@ -315,6 +317,7 @@ module SMTLib2 = struct
     go vardefs e
 
   let decl_var (v : Var.t) s =
+    let v = s.var_gen.of_var v in
     VarMap.find_opt v s.var_decls |> function
     | Some { decl_cmd; var } -> (var, s)
     | None ->
@@ -451,7 +454,7 @@ module SMTLib2 = struct
     let e = (BasilExpr.rewrite_typed_two Algsimp.drop_assoc) e in
     BasilExpr.cata smt_alg e b
 
-  let of_bexpr e = fst @@ (bind_of_bexpr e) empty
+  let of_bexpr e = fst @@ (bind_of_bexpr e) (empty ())
 
   let trans_decl (decl : Program.declaration) =
     let* x = return () in
@@ -523,11 +526,11 @@ module SMTLib2 = struct
       let* _ = assert_bexpr e in
       add_command (list [ atom "check-sat" ])
     in
-    let ex = (extract x) empty in
+    let ex = (extract x) (empty ()) in
     fst ex
 
   let%expect_test _ =
-    let assert_bexpr e = fst @@ (assert_bexpr e |> extract) empty in
+    let assert_bexpr e = fst @@ (assert_bexpr e |> extract) (empty ()) in
     let open BasilExpr in
     let e =
       binexp ~op:`EQ
@@ -566,8 +569,8 @@ let%expect_test "datatypes" =
       }
   in
 
-  fst @@ SMTLib2.trans_decl x SMTLib2.empty |> Sexp.to_string |> print_endline;
-  fst @@ SMTLib2.trans_decl y SMTLib2.empty |> Sexp.to_string |> print_endline;
+  fst @@ SMTLib2.trans_decl x (SMTLib2.empty ()) |> Sexp.to_string |> print_endline;
+  fst @@ SMTLib2.trans_decl y (SMTLib2.empty ()) |> Sexp.to_string |> print_endline;
   [%expect
     {|
     (declare-datatype Opaque ())

@@ -25,6 +25,11 @@ let typ (e : t) = e.typ
 let is_local (v : t) = match v.scope with Local _ -> true | Global _ -> false
 let is_global (v : t) = match v.scope with Global _ -> true | Local _ -> false
 let name (e : t) = if is_global e then "$" ^ ID.name e.name else ID.name e.name
+
+let name_scoped (e : t) =
+  let sn = e.scope |> function Local n -> n | Global n -> n in
+  name e ^ sn
+
 let to_string v = name v ^ ":" ^ Types.to_string @@ typ v
 let pp fmt v = Format.pp_print_string fmt (to_string v)
 let pretty v = Containers_pp.text (to_string v)
@@ -51,6 +56,7 @@ type generator = {
   fresh : ?name:string -> ?access:access_tag -> Types.t -> t;
       (** generate a fresh unique name optional string prefix hint *)
   with_name : string -> ?access:access_tag -> Types.t -> t;
+  of_var: t -> t;
       (** Create or return variable with name*)
   create_exn : string -> ?access:access_tag -> Types.t -> t;
       (** Create variable or throw exception if it was previously declared *)
@@ -69,7 +75,8 @@ open struct
 
   let create name id_gen ?(access = None) typ =
     (* disallow creating local const as its too hard to have declaration order *)
-    { name; scope = id_gen; typ; tags = access }
+    let tags = match (id_gen, access) with Local _, _ -> None | _, o -> o in
+    { name; scope = id_gen; typ; tags }
 
   let fresh gt (gen : ID.generator) sgl name ?access typ =
     let name = force_sigil sgl name in
@@ -81,6 +88,9 @@ open struct
     let name = id_gen.decl_or_get name in
     create name gt ?access typ
 
+  let of_var gt (id_gen : ID.generator) sgl v =
+    with_name gt (id_gen) sgl (name v) ~access:(access v) (typ v)
+
   let create_exn gt (id_gen : ID.generator) sgl name ?access typ =
     let name = force_sigil sgl name in
     let name = id_gen.decl_exn name in
@@ -90,7 +100,11 @@ end
 let mk_gen ?id_generator ?(req_sigil = Option.None) ?(scope = `Local)
     ?(default_name = "v") () =
   let id_gen = Option.get_or ~default:(ID.make_gen ()) id_generator in
-  let gt = match scope with `Local -> Local "" | `Global -> Global "" in
+  let gt =
+    match scope with
+    | `Local -> Local id_gen.gen_id
+    | `Global -> Global id_gen.gen_id
+  in
   let sgl =
     match (req_sigil, scope) with
     | Some s, _ -> s
@@ -108,5 +122,6 @@ let mk_gen ?id_generator ?(req_sigil = Option.None) ?(scope = `Local)
     fresh;
     with_name = with_name gt id_gen sgl;
     create_exn = create_exn gt id_gen sgl;
+    of_var = of_var gt id_gen sgl;
     generator = id_gen;
   }

@@ -62,7 +62,7 @@ let decl_id = function
   | Function { binding } -> Var.id binding
   | Procedure { definition } -> Procedure.id definition
 
-let decl_var = function
+let decl_bound_var = function
   | Variable { binding } -> Some binding
   | Function { binding } -> Some binding
   | _ -> None
@@ -204,11 +204,11 @@ let declare_name name prog = prog.global_names.decl_or_get name
 let get_id_by_name name prog = prog.global_names.get_id name
 
 let remove_decl p decl =
-  let d = p.global_names.decl_or_get (decl_binding decl) in
+  let d = (decl_id decl) in
   { p with declarations = IDMap.remove d p.declarations }
 
 let update_decl ?(attrib = StringMap.empty) p decl =
-  let id = p.global_names.decl_or_get (decl_binding decl) in
+  let id = decl_id decl in
   { p with declarations = IDMap.add id decl p.declarations }
 
 let add_proc p prog =
@@ -287,8 +287,7 @@ let flat_map_decls f p =
        (fun prog (i, decl) ->
          let ex = ref false in
          let update_decl prog decl =
-           get_decl_by_name_id (decl_binding decl) prog
-           |> Option.iter (fun (id, _) -> if ID.equal id i then ex := true);
+           (decl_id decl |> fun id -> if ID.equal id i then ex := true);
            update_decl prog decl
          in
          let next = f i decl in
@@ -304,25 +303,15 @@ let pretty_to_chan chan (p : t) =
   Containers_pp.Pretty.to_format ~width:80 fmt p;
   Format.flush fmt ()
 
-(*
-
-Variable { binding = v; attrib; classification }
-
-  *)
-
 let add_decl p decl =
+  decl_bound_var decl |> Option.iter (fun v -> assert (Var.is_global v));
   { p with declarations = IDMap.add (decl_id decl) decl p.declarations }
-
-let decl_global p name f =
-  let id : ID.t = p.global_names.decl_exn name in
-  let decl = f id in
-  add_decl p decl
 
 (** add var decl for with id exising in generator *)
 let add_var_decl p ?(attrib = Attrib.empty) ?classification v =
-  assert (Var.is_global v) ;
+  assert (Var.is_global v);
   let id = Var.id v in
-  (try p.global_names.get_name (ID.index id) |> ignore
+  (try assert (ID.equal id (p.global_names.get_name (ID.index id)))
    with Not_found -> failwith "Id not created with programs' generator");
   {
     p with
@@ -342,10 +331,10 @@ let decl_global_var p ?(attrib = StringMap.empty) ?(classification = None) name
 let global_ids p = p.global_names
 
 let decl_or_get_var p name scope typ =
-  let id : ID.t = p.global_names.decl_or_get name in
-  IDMap.find_opt id p.declarations |> function
+  let vr = (var_generator p).with_name name ~access:scope typ in
+  IDMap.find_opt (Var.id vr) p.declarations |> function
   | Some (Variable { binding }) -> (p, binding)
-  | _ -> decl_global_var p name scope typ
+  | _ -> (add_var_decl p vr, vr)
 
 let decl_typ ?(attrib = StringMap.empty) p t =
   match t with

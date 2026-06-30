@@ -248,7 +248,7 @@ end = struct
       match local_id_gen with
       | Some g -> g
       | None ->
-          let g = ID.make_gen () in
+          let g = ID.make_gen ~scope_name:(ID.name id) () in
           (* Oh no: we could have used a _different_ generator to build the in-params *)
           StringMap.iter (fun k v -> ignore @@ g.decl_exn k) formal_in_params;
           StringMap.iter (fun k v -> ignore @@ g.decl_exn k) formal_out_params;

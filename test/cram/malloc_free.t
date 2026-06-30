@@ -1,17 +1,24 @@
-  $ bincaml script malloc_free.sexp
+  $ bincaml script malloc_free.sexp -v
   (load-il ../../examples/memory/malloc_free.il)
   (run-transforms ssa split-memory-encoding)
+  bincaml: [DEBUG] Starting ssa
+  bincaml: [DEBUG] Starting split-memory-encoding
   (run-transforms memory-specification flatten-phis)
+  bincaml: [DEBUG] Starting memory-specification
+  bincaml: [DEBUG] Starting flatten-phis
   (dump-boogie good.bpl)
   (load-il ../../examples/memory/malloc_free_oob.il)
   (run-transforms ssa split-memory-encoding)
+  bincaml: [DEBUG] Starting ssa
+  bincaml: [DEBUG] Starting split-memory-encoding
   (run-transforms memory-specification flatten-phis)
+  bincaml: [DEBUG] Starting memory-specification
+  bincaml: [DEBUG] Starting flatten-phis
   (dump-boogie bad.bpl)
 
   $ cat ./good.bpl
   var $mem: [bv64]bv8;
   var $stack: [bv64]bv8;
-  datatype memory_encoding {MemEncoding(alloc_live: [bv64]bv2, alloc_size: [bv64]bv64, addr_is_heap: [bv64]bool)}
   var $mem_encoding: memory_encoding;
   function {:extern } {:inline } $me_addr_alloc(mem_encoding: memory_encoding, addr: bv64) returns (bv64) {
     addr
@@ -37,6 +44,7 @@
   function {:extern } {:inline } $me_addr_offset(mem_encoding: memory_encoding, addr: bv64) returns (bv64) {
     $bvand_bv64(addr, 4294967295bv64)
   }
+  datatype memory_encoding {MemEncoding(alloc_live: [bv64]bv2, alloc_size: [bv64]bv64, addr_is_heap: [bv64]bool)}
   function {:extern } {:inline } $me_can_allocate(mem_encoding: memory_encoding, addr: bv64, size: bv64) returns (bool) {
     (((($me_addr_is_heap(mem_encoding, addr)
         &&
@@ -124,10 +132,6 @@
   function {:define } {:extern } $store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
     #memory[#index := #value[8:0]]
   }
-  function {:bvbuiltin "bvadd"} {:extern } $bvadd_bv64(bv64, bv64) returns (bv64);
-  function {:bvbuiltin "bvand"} {:extern } $bvand_bv64(bv64, bv64) returns (bv64);
-  function {:bvbuiltin "bvule"} {:extern } $bvule_bv64_bv64_bool(bv64, bv64) returns (bool);
-  function {:bvbuiltin "bvult"} {:extern } $bvult_bv64_bv64_bool(bv64, bv64) returns (bool);
   function {:bvbuiltin "bvadd"} {:extern } $bvadd_bv64(bv64, bv64) returns (bv64);
   function {:bvbuiltin "bvand"} {:extern } $bvand_bv64(bv64, bv64) returns (bv64);
   function {:bvbuiltin "bvule"} {:extern } $bvule_bv64_bv64_bool(bv64, bv64) returns (bool);
@@ -253,7 +257,6 @@
   $ cat ./bad.bpl
   var $mem: [bv64]bv8;
   var $stack: [bv64]bv8;
-  datatype memory_encoding {MemEncoding(alloc_live: [bv64]bv2, alloc_size: [bv64]bv64, addr_is_heap: [bv64]bool)}
   var $mem_encoding: memory_encoding;
   function {:extern } {:inline } $me_addr_alloc(mem_encoding: memory_encoding, addr: bv64) returns (bv64) {
     addr
@@ -279,6 +282,7 @@
   function {:extern } {:inline } $me_addr_offset(mem_encoding: memory_encoding, addr: bv64) returns (bv64) {
     $bvand_bv64(addr, 4294967295bv64)
   }
+  datatype memory_encoding {MemEncoding(alloc_live: [bv64]bv2, alloc_size: [bv64]bv64, addr_is_heap: [bv64]bool)}
   function {:extern } {:inline } $me_can_allocate(mem_encoding: memory_encoding, addr: bv64, size: bv64) returns (bool) {
     (((($me_addr_is_heap(mem_encoding, addr)
         &&
@@ -366,10 +370,6 @@
   function {:define } {:extern } $store8_le(#memory: [bv64]bv8, #index: bv64, #value: bv8) returns ([bv64]bv8) {
     #memory[#index := #value[8:0]]
   }
-  function {:bvbuiltin "bvadd"} {:extern } $bvadd_bv64(bv64, bv64) returns (bv64);
-  function {:bvbuiltin "bvand"} {:extern } $bvand_bv64(bv64, bv64) returns (bv64);
-  function {:bvbuiltin "bvule"} {:extern } $bvule_bv64_bv64_bool(bv64, bv64) returns (bool);
-  function {:bvbuiltin "bvult"} {:extern } $bvult_bv64_bv64_bool(bv64, bv64) returns (bool);
   function {:bvbuiltin "bvadd"} {:extern } $bvadd_bv64(bv64, bv64) returns (bv64);
   function {:bvbuiltin "bvand"} {:extern } $bvand_bv64(bv64, bv64) returns (bv64);
   function {:bvbuiltin "bvule"} {:extern } $bvule_bv64_bv64_bool(bv64, bv64) returns (bool);
@@ -490,7 +490,7 @@
   $ boogie ./bad.bpl
   Memory Error: Invalid Access
   Execution trace:
-      ./bad.bpl(148,3): b#main_entry
+      ./bad.bpl(144,3): b#main_entry
   
   Boogie program verifier finished with 0 verified, 1 error
 

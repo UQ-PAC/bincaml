@@ -109,8 +109,9 @@ let variables_wf p =
   Procedure.iter_blocks p (fun (_, b) ->
       Block.assigned_vars_iter b |> Iter.iter check_lvar)
 
+
 let wf_checks p =
   try
     formal_params p;
-    variables_wf p
+    variables_wf p;
   with IRWellformed e -> Logs.err (fun m -> m "%s" e)

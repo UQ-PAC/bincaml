@@ -54,7 +54,7 @@ let redundant proc (solver : Bincaml_util.Smt.Solver.t) p ps =
       in
       let open Expr_smt in
       let s =
-        SMTLib2.assert_bexpr q SMTLib2.empty
+        SMTLib2.assert_bexpr q (SMTLib2.empty ())
         |> snd
         |> SMTLib2.to_sexp ~set_logic:false
       in
@@ -143,18 +143,31 @@ let add_summary summary (proc : Program.proc) =
   Procedure.set_specification proc spec
 
 let add_decls solver prog =
-  Program.declarations prog |> Iter.from_iter |> Iter.map snd
-  |> Iter.filter
-       Program.(
-         function
-         | Type { binding } -> true
-         | Variable { binding } -> Var.is_const binding
-         | Function { binding } -> Var.is_const binding
-         | Procedure { definition } -> false)
-  |> Iter.map (fun d -> Expr_smt.SMTLib2.trans_decl d Expr_smt.SMTLib2.empty)
-  |> Iter.map fst
-  |> fun i ->
-  Iter.for_each i (fun s -> Bincaml_util.Smt.Solver.add_command solver s)
+  let decls =
+    Program.declarations prog |> Iter.from_iter |> Iter.map snd
+    |> Iter.filter
+         Program.(
+           function
+           | Type { binding } -> true
+           | Variable { binding } -> Var.is_const binding
+           | Function { binding } -> Var.is_const binding
+           | Procedure { definition } -> false)
+    |> Iter.persistent
+  in
+
+  let add_decls ds =
+    ds
+    |> Iter.map (fun d -> Expr_smt.SMTLib2.trans_decl d (Expr_smt.SMTLib2.empty ()))
+    |> Iter.map fst
+    |> fun i ->
+    Iter.for_each i (fun s -> Bincaml_util.Smt.Solver.add_command solver s)
+  in
+  (decls
+  |> Iter.filter Program.(function Type _ -> true | _ -> false)
+  |> add_decls);
+  decls
+  |> Iter.filter Program.(function Type _ -> false | _ -> true)
+  |> add_decls
 
 let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
   let solver =
@@ -280,6 +293,12 @@ let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
       IDMap.add pid (append_summary (IDMap.find pid res) (sol pid)) res)
     component res
 
+let progs_decls_global p =
+  assert (
+    Program.declarations p
+    |> Iter.for_all (fun (k, v) ->
+        Program.decl_bound_var v |> Option.for_all Var.is_global))
+
 let interproc_transform (prog : Program.t) =
   let call_graph = Program.CallGraph.make_call_graph prog in
   let sccs = Program.CallGraph.Scc.scc_list call_graph in
@@ -290,6 +309,7 @@ let interproc_transform (prog : Program.t) =
         log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
+  progs_decls_global prog;
   add_decls solver prog;
   let summaries =
     Program.procs prog

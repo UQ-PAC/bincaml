@@ -401,7 +401,7 @@ module Instructions = struct
     unique_stores_loads prog
     |> Iter.filter_map
          (store_load_decl
-            (Var.mk_gen ~id_generator:(Program.global_ids prog) ()))
+            (Program.var_generator prog))
     |> Iter.fold Program.add_decl prog
 end
 
@@ -563,7 +563,8 @@ module Normalise = struct
 end
 
 let transform (p : Program.t) =
-  p |> Normalise.replace_functions |> Normalise.replace_exprs
+  p |> Normalise.replace_functions
+  |> Normalise.replace_exprs
   |> Instructions.transform_add_store_load_decls |> Normalise.replace_stmts
   |> Builtins.transform_add_builtin_decls
   |> Builtins.transform_builtin_decls

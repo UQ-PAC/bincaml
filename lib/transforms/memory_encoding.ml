@@ -8,12 +8,17 @@ let dead = Bitvec.of_int 2 ~size:2
 
 type function_body = Var.generator * Expr.BasilExpr.t
 
-module Globals = struct
+module GlobalsF (N : sig
+  val global_ids : Var.generator
+end) =
+struct
   open Var
 
   let mem_encoding_typ_name = "memory_encoding"
   let mem_encoding_typ = Types.Variable mem_encoding_typ_name
-  let mem_encoding v = v.with_name "mem_encoding" ~access:None mem_encoding_typ
+
+  let mem_encoding =
+    N.global_ids.with_name "mem_encoding" ~access:None mem_encoding_typ
 end
 
 module Calls (N : sig
@@ -23,14 +28,17 @@ struct
   open Var
   open BasilExpr
 
-  let v = N.global_ids
+  (* instantiating this first should put the ids in the right order *)
+  module Globals = GlobalsF (N)
 
   (** [addr_is_heap args] checks if an address belongs to the heap. args(0) is
       the memory encoding object. args(1) is the address to check. *)
   let addr_is_heap ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar (v.with_name "me_addr_is_heap" ~access:Var.Const Types.Boolean))
+        (rvar
+           (N.global_ids.with_name "me_addr_is_heap" ~access:Var.Const
+              Types.Boolean))
       args
 
   (** [alloc_base args] returns the base address of a supplied allocation id.
@@ -39,7 +47,8 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "me_alloc_base" ~access:Var.Const (Types.Bitvector 64)))
+           (N.global_ids.with_name "me_alloc_base" ~access:Var.Const
+              (Types.Bitvector 64)))
       args
 
   (** [alloc_live args] returns the liveness of an allocation. Returns value is
@@ -49,7 +58,8 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "me_alloc_live" ~access:Var.Const (Types.Bitvector 2)))
+           (N.global_ids.with_name "me_alloc_live" ~access:Var.Const
+              (Types.Bitvector 2)))
       args
 
   (** [alloc_size args] returns the size of an allocation. args(0) is the memory
@@ -58,7 +68,8 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "me_alloc_size" ~access:Var.Const (Types.Bitvector 64)))
+           (N.global_ids.with_name "me_alloc_size" ~access:Var.Const
+              (Types.Bitvector 64)))
       args
 
   (** [addr_alloc args] returns the allocation id of an address. args(0) is the
@@ -67,7 +78,8 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "me_addr_alloc" ~access:Var.Const (Types.Bitvector 64)))
+           (N.global_ids.with_name "me_addr_alloc" ~access:Var.Const
+              (Types.Bitvector 64)))
       args
 
   (** [addr_offset args] returns the offset an address is into its allocation.
@@ -76,7 +88,8 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "me_addr_offset" ~access:Var.Const (Types.Bitvector 64)))
+           (N.global_ids.with_name "me_addr_offset" ~access:Var.Const
+              (Types.Bitvector 64)))
       args
 
   (** [alloc_size_update args] returns a new memory encoding with the size of an
@@ -86,7 +99,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "me_alloc_size_update" ~access:Var.Const
+           (N.global_ids.with_name "me_alloc_size_update" ~access:Var.Const
               Globals.mem_encoding_typ))
       args
 
@@ -97,7 +110,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "me_alloc_live_update" ~access:Var.Const
+           (N.global_ids.with_name "me_alloc_live_update" ~access:Var.Const
               Globals.mem_encoding_typ))
       args
 
@@ -106,7 +119,9 @@ struct
       allocated at. args(3) is the size of the allocation. *)
   let allocate ?attrib args =
     apply_fun ?attrib
-      ~func:(rvar (v.with_name "me_allocate" ~access:Var.Const Types.Boolean))
+      ~func:
+        (rvar
+           (N.global_ids.with_name "me_allocate" ~access:Var.Const Types.Boolean))
       args
 
   (** [can_alloc args] Returns whether an alloc, performed by [allocate], is
@@ -115,7 +130,9 @@ struct
   let can_alloc ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar (v.with_name "me_can_allocate" ~access:Var.Const Types.Boolean))
+        (rvar
+           (N.global_ids.with_name "me_can_allocate" ~access:Var.Const
+              Types.Boolean))
       args
 
   (** [init_encoding args] Returns if a memory encoding is initialized. args(0)
@@ -123,7 +140,9 @@ struct
   let init_encoding ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar (v.with_name "me_init_encoding" ~access:Var.Const Types.Boolean))
+        (rvar
+           (N.global_ids.with_name "me_init_encoding" ~access:Var.Const
+              Types.Boolean))
       args
 
   (** [valid_access args] Checks if an access is valid. args(0) is the memory
@@ -132,12 +151,20 @@ struct
   let valid_access ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar (v.with_name "me_valid_access" ~access:Var.Const Types.Boolean))
+        (rvar
+           (N.global_ids.with_name "me_valid_access" ~access:Var.Const
+              Types.Boolean))
       args
 end
 
 module type MemoryEncoding = sig
   val global_ids : Var.generator
+
+  module Globals : sig
+    val mem_encoding_typ_name : string
+    val mem_encoding_typ : Types.t
+    val mem_encoding : Var.t
+  end
 
   module Locals : sig
     val mem_encoding : Var.generator -> Var.t
@@ -164,15 +191,16 @@ module type MemoryEncoding = sig
 end
 
 module MemoryEncoder (Encoding : MemoryEncoding) = struct
+  module Globals = Encoding.Globals
+
   let decl_global ?(attrib = Attrib.empty) (p : Program.t) (name : string)
       (bindings : (Var.generator -> Var.t) list) (body : function_body) =
-    let name = "$" ^ name in
-    let var_gen, body = body in
-    let bindings = List.map (fun f -> f var_gen) bindings in
+    let local_var_gen, body = body in
+    let bindings = List.map (fun f -> f local_var_gen) bindings in
     let decl =
       Lang.Program.Function
         {
-          var_gen;
+          var_gen = local_var_gen;
           binding =
             (Program.var_generator p).with_name name ~access:Const
               (Types.curry (List.map Var.typ bindings)
@@ -198,7 +226,7 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
       Lang.Program.add_decl p
         (Lang.Program.Variable
            {
-             binding = Globals.mem_encoding (Program.var_generator p);
+             binding = Globals.mem_encoding;
              attrib = Attrib.empty;
              classification = None;
            })
@@ -327,9 +355,9 @@ end
 module FlatMemory (M : IDAllocs) : MemoryEncoding = struct
   open BasilExpr
   module Calls = Calls (M)
+  module Globals = Calls.Globals
 
-  let v = M.global_ids
-  let global_ids = v
+  let global_ids = (M.global_ids)
 
   let mem_encoding_type : Types.t =
     Types.Sort
@@ -635,6 +663,7 @@ end
 module SplitMemory (M : IDAllocs) : MemoryEncoding = struct
   open BasilExpr
   module Calls = Calls (M)
+  module Globals = Calls.Globals
 
   let v = M.global_ids
   let global_ids = v
@@ -876,4 +905,4 @@ let flat_transform (p : Program.t) =
   end
   in
   let module E = MemoryEncoder (FlatMemory (I)) in
-  E.transform p |> fun prog -> Spec_modifies.set_modsets  prog
+  E.transform p |> fun prog -> Spec_modifies.set_modsets prog

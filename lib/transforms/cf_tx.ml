@@ -65,7 +65,7 @@ let simplify_prog_exprs rewriter ?visit (p : Program.t) =
 let to_smt (r : Expr.BasilExpr.rwinfo) =
   let open Lang.Expr_smt in
   let cexpr = Expr.BasilExpr.binexp ~op:`NEQ r.from r.into in
-  let smt = snd @@ SMTLib2.assert_bexpr cexpr SMTLib2.empty in
+  let smt = snd @@ SMTLib2.assert_bexpr cexpr (SMTLib2.empty ()) in
   smt |> SMTLib2.to_sexp ~set_logic:false
 
 let online_check visit (solver : Bincaml_util.Smt.Solver.t)
