@@ -220,22 +220,6 @@ let iter_subzippers_backwards zip : 'a zipper Iter.t =
   in
   recurse (Ok zip)
 
-let adjacent : 'a zipper -> 'a zipper zipper =
-function Zipper (Leaf _, path)
-
-
-(** Iterates over all {!zipper} positions within the full diamond of the current
-    zipper, expanding {i outwards} through the nested diamonds. *)
-let rec iter_outwards k (q : 'a zipper CCSimple_queue.t) =
-  match CCSimple_queue.pop q with
-  | None -> ()
-  | Some ((Zipper (Leaf _, _) as zip), rest) ->
-      k zip;
-      iter_outwards k rest
-  | Some ((Zipper (Diamond { pred; left; right; value }, _) as zip), rest) ->
-      k zip;
-      iter_outwards k rest
-
 (** Iterates over all {!zipper} positions of the given diamond, {i backwards} in
     control-flow order. *)
 let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
