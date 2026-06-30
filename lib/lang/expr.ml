@@ -479,7 +479,8 @@ module BasilExpr = struct
     cata rw_alg expr
 
   (** substitute subexpression sbased on parameter *)
-  let rewrite_checktype ?visit ~(rw_fun : t abstract_expr -> rewrite) (expr : t) =
+  let rewrite_checktype ?visit ~(rw_fun : t abstract_expr -> rewrite) (expr : t)
+      =
     let rw_alg e =
       let orig s = fix s in
       match rw_fun e with

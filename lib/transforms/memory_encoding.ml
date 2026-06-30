@@ -30,7 +30,7 @@ struct
   let addr_is_heap ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar (v.with_name "$me_addr_is_heap" ~access:Var.Const Types.Boolean))
+        (rvar (v.with_name "me_addr_is_heap" ~access:Var.Const Types.Boolean))
       args
 
   (** [alloc_base args] returns the base address of a supplied allocation id.
@@ -39,7 +39,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_alloc_base" ~access:Var.Const (Types.Bitvector 64)))
+           (v.with_name "me_alloc_base" ~access:Var.Const (Types.Bitvector 64)))
       args
 
   (** [alloc_live args] returns the liveness of an allocation. Returns value is
@@ -49,7 +49,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_alloc_live" ~access:Var.Const (Types.Bitvector 2)))
+           (v.with_name "me_alloc_live" ~access:Var.Const (Types.Bitvector 2)))
       args
 
   (** [alloc_size args] returns the size of an allocation. args(0) is the memory
@@ -58,7 +58,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_alloc_size" ~access:Var.Const (Types.Bitvector 64)))
+           (v.with_name "me_alloc_size" ~access:Var.Const (Types.Bitvector 64)))
       args
 
   (** [addr_alloc args] returns the allocation id of an address. args(0) is the
@@ -67,7 +67,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_addr_alloc" ~access:Var.Const (Types.Bitvector 64)))
+           (v.with_name "me_addr_alloc" ~access:Var.Const (Types.Bitvector 64)))
       args
 
   (** [addr_offset args] returns the offset an address is into its allocation.
@@ -76,7 +76,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_addr_offset" ~access:Var.Const (Types.Bitvector 64)))
+           (v.with_name "me_addr_offset" ~access:Var.Const (Types.Bitvector 64)))
       args
 
   (** [alloc_size_update args] returns a new memory encoding with the size of an
@@ -86,7 +86,7 @@ struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (v.with_name "$me_alloc_size_update" ~access:Var.Const
+           (v.with_name "me_alloc_size_update" ~access:Var.Const
               Globals.mem_encoding_typ))
       args
 
@@ -864,7 +864,7 @@ end
 
 let split_transform (p : Program.t) =
   let module I : IDAllocs = struct
-    let global_ids = Var.mk_gen ~id_generator:(Program.global_ids p) ()
+    let global_ids = Program.var_generator p
   end
   in
   let module E = MemoryEncoder (SplitMemory (I)) in
@@ -872,7 +872,7 @@ let split_transform (p : Program.t) =
 
 let flat_transform (p : Program.t) =
   let module I : IDAllocs = struct
-    let global_ids = Var.mk_gen ~id_generator:(Program.global_ids p) ()
+    let global_ids = Program.var_generator p
   end
   in
   let module E = MemoryEncoder (FlatMemory (I)) in

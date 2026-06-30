@@ -253,13 +253,17 @@ struct
   let f_decl_bool : string -> lexpr = fun _ -> failwith "f_decl_bool"
 
   let f_gen_load : lexpr -> expr =
-   fun lhs -> Expr.BasilExpr.rvar (Aslp_lexpr.to_var !bincaml_lifter_state.generator lhs)
+   fun lhs ->
+    Expr.BasilExpr.rvar (Aslp_lexpr.to_var !bincaml_lifter_state.generator lhs)
 
   let f_gen_store : lexpr -> expr -> unit =
    fun lhs rhs ->
     bincaml_emit
       (Stmt.Instr_Assign
-         { attrib = Attrib.empty; al = [ (Aslp_lexpr.to_var !bincaml_lifter_state.generator lhs, rhs) ] })
+         {
+           attrib = Attrib.empty;
+           al = [ (Aslp_lexpr.to_var !bincaml_lifter_state.generator lhs, rhs) ];
+         })
 
   let f_gen_array_load : lexpr -> bigint -> expr =
    fun array idx ->

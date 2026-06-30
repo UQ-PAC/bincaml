@@ -202,23 +202,20 @@ module SMTLib2 = struct
         Some (Types.Map (k, v))
     | _ -> None
 
-  let expr_of_smt ?(vargen: Var.generator option) vardefs (e : Sexp.t) =
+  let expr_of_smt ?(vargen : Var.generator option) vardefs (e : Sexp.t) =
     let open Option.Infix in
     let module T = List.Traverse (Option) in
     (* One generator for the whole decode. Reserve every Basil variable already
        in scope -- the free vars of the values of [vardefs] -- so the quantifier
        binders minted below stay disjoint from them. *)
-    let vargen = match vargen with
-      | Some v -> v
-      | None -> Var.mk_gen ()
-    in
+    let vargen = match vargen with Some v -> v | None -> Var.mk_gen () in
     StringMap.iter
       (fun _ e ->
-        BasilExpr.free_vars_iter e
-          (* reserve used names  *)
-        |> Iter.iter (fun v -> ignore (vargen.with_name (Var.name v) (Var.typ v))))
+        BasilExpr.free_vars_iter e (* reserve used names  *)
+        |> Iter.iter (fun v ->
+            ignore (vargen.with_name (Var.name v) (Var.typ v))))
       vardefs;
-    let fresh_var typ = vargen.fresh ~name:"x"  typ in
+    let fresh_var typ = vargen.fresh ~name:"x" typ in
     (* Give each binder a fresh variable rather than reusing the name the solver
         chose. This accounts for names that are not valid identifiers (e.g.,
         include [!]) and names that clash with existing variables. *)

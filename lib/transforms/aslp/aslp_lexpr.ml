@@ -86,8 +86,8 @@ let empty_aslp_ids () =
 
     This will ensure that ASLp's local variable and block names do not clash
     with existing names. *)
-let aslp_ids_from_generators ~local_var ~global_var =
-  { local_var ; global_var}
+let aslp_ids_from_generators ~local_var ~global_var = { local_var; global_var }
+
 let scope st = function
   | Local _ -> st.local_var
   | BranchTaken | BTypeCompatible | BTypeNext -> st.local_var

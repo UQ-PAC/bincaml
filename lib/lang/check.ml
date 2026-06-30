@@ -54,6 +54,7 @@ let variables_wf p =
               ^ ID.to_string (Procedure.id p))));
     if
       Var.is_global n
+      && (not (Var.is_const n))
       && (not @@ List.exists (fun v -> Var.equal v n) spec.captures_globs)
     then
       raise

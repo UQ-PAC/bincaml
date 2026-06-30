@@ -126,17 +126,19 @@ module Encoder = struct
     mutable premises : Sexp.t list;
     mutable vars : VarSet.t;
         (** the clause binders for the eventual [forall] *)
-    vargen: Var.generator;
+    vargen : Var.generator;
   }
 
   let create ~initial_vars =
     let vargen = Var.mk_gen () in
-    List.iter (fun i -> ignore @@ vargen.with_name (Var.name i) (Var.typ i)) initial_vars ;
+    List.iter
+      (fun i -> ignore @@ vargen.with_name (Var.name i) (Var.typ i))
+      initial_vars;
     {
       delta = VarMap.empty;
       premises = [];
       vars = VarSet.of_list initial_vars;
-      vargen  ;
+      vargen;
     }
 
   let lookup t v =

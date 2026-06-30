@@ -189,7 +189,8 @@ module Builtins = struct
     let get_ty (op : [  unary | binary | intrin  ]) o =
       match o with
       | Fun { ret; args } ->
-          Some (function_for_op vargen op args ret)
+          try Some (function_for_op vargen op args ret) with
+            | Failure _ -> None
       | _ -> None
     in
     match e with
@@ -211,6 +212,10 @@ module Builtins = struct
       let ex = map fst e in
       match ex with
       | ApplyIntrin {op=`BVConcat | `AND | `OR | `Cases | `MapUpdate } -> None
+      | BinaryExpr {op ;arg1; arg2} ->
+        (match expr_ops v types with
+        | Some (func) -> Some (Expr.BasilExpr.apply_fun ~func:(Expr.BasilExpr.rvar func) ([arg1; arg2]))
+        | None -> None)
       | ApplyIntrin {op; args} -> (match expr_ops v types with
         | Some (func) -> Some (Expr.BasilExpr.apply_fun ~func:(Expr.BasilExpr.rvar func) (args))
         | None -> None)
@@ -424,7 +429,7 @@ module Normalise = struct
     (* function application in boogie becomes a map access when on lambdas (identified by local vars) *)
     | ApplyFun { func; args } -> (
         match unfix func with
-        | RVar { attrib; id } when Var.is_local id -> failwith ( "is local var: " ^ Var.show id)
+        (*| RVar { attrib; id } when Var.is_local id -> failwith ( "is local var: " ^ Var.show id)*)
         | RVar { attrib; id } when Var.is_global id ->
             replace [%here]
               (BasilExpr.apply_fun ~attrib

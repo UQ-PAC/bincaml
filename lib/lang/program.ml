@@ -67,7 +67,6 @@ let decl_var = function
   | Function { binding } -> Some binding
   | _ -> None
 
-
 let pretty_proc p =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
   let show_var v = Containers_pp.text @@ Var.to_string_il_rvar v in
@@ -331,7 +330,6 @@ let add_var_decl p ?(attrib = Attrib.empty) ?classification v =
         (Variable { attrib; classification; binding = v })
         p.declarations;
   }
-
 
 let decl_global_var p ?(attrib = StringMap.empty) ?(classification = None) name
     access_tag typ =

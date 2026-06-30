@@ -77,7 +77,6 @@ let empty_lifter_state ~generator () =
     generator;
   }
 
-
 (** {1 State manipulation functions} *)
 
 (** Appends the given statement to the given block.

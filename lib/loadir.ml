@@ -1897,9 +1897,9 @@ proc @c() -> ()
   [%expect
     {|
     globals:
-    { Var.name = ("$R0", 0); scope = (Var.Global "23"); typ = bv64;
-      tags = Var.None }, { Var.name = ("$R1", 1); scope = (Var.Global "23"); typ = bv64;
-      tags = Var.None }, { Var.name = ("$mem", 2); scope = (Var.Global "23"); typ = (bv64->bv8);
+    { Var.name = ("R0", 0); scope = (Var.Global ""); typ = bv64; tags = Var.None
+      }, { Var.name = ("R1", 1); scope = (Var.Global ""); typ = bv64; tags = Var.None
+      }, { Var.name = ("mem", 2); scope = (Var.Global ""); typ = (bv64->bv8);
       tags = Var.Shared }
     @entry:
     read: $R0:bv64,$R1:bv64,$mem:(bv64->bv8)

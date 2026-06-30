@@ -90,11 +90,7 @@ end
 let mk_gen ?id_generator ?(req_sigil = Option.None) ?(scope = `Local)
     ?(default_name = "v") () =
   let id_gen = Option.get_or ~default:(ID.make_gen ()) id_generator in
-  let gt =
-    match scope with
-    | `Local -> Local ""
-    | `Global -> Global ""
-  in
+  let gt = match scope with `Local -> Local "" | `Global -> Global "" in
   let sgl =
     match (req_sigil, scope) with
     | Some s, _ -> s
