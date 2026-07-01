@@ -14,8 +14,6 @@ module Aslp_state = Aslp_state
 module Diamond_ibi = Diamond_ibi
 module Bincaml_ibi = Bincaml_ibi
 
-module Bfs = Bfs
-
 (** {1 Basic lifting functions} *)
 
 (** Lifts one opcode. Each lifted opcode will increment the [PC]. This can be
@@ -36,6 +34,22 @@ let lift_code_block (module I : Bincaml_ibi.IBI) ~address =
   List.mapi (fun i op ->
       let address = Bitvec.add (Bitvec.create ~size:64 Z.(~$4 * ~$i)) address in
       lift_opcode (module I) ~address op)
+
+module Internal = struct
+  (** [take_drop_while_map f xs] returns the longest prefix of [xs] where the
+      elements yield [Some] when mapped through [f].
+
+      These [Some] values are returned in the first tuple element. Upon reaching
+      a value which yields [None], that value and values after it are returned
+      in the second tuple element. *)
+  let rec take_drop_while_map f = function
+    | [] -> ([], [])
+    | hd :: rest as all -> (
+        match f hd with
+        | Some x -> (
+            match take_drop_while_map f rest with a, b -> (x :: a, b))
+        | None -> ([], all))
+end
 
 (** {1 Interfacing with Bincaml IR} *)
 
@@ -62,7 +76,9 @@ let partition_aarch64_stmts stmts =
   let before, stmts =
     List.take_drop_while (Option.is_none % aarch64_intrin_of_stmt) stmts
   in
-  let intrins, after = Util.take_drop_while_map aarch64_intrin_of_stmt stmts in
+  let intrins, after =
+    Internal.take_drop_while_map aarch64_intrin_of_stmt stmts
+  in
   (before, intrins, after)
 
 (** Returns the Bincaml global variable representing heap memory. *)

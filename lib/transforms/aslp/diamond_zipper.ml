@@ -233,22 +233,56 @@ let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
  fun d k -> iter_subzippers_backwards (of_diamond d) k
 (* [k] parameter ensures [of_diamond] is deferred until it is iterated. *)
 
-module A =
-  Bfs.Make
-    ((val let directions = [ `M; `L; `R; `P ]
-          and is_opposite a b =
-            match (a, b) with `P, `M | `M, `P -> true | _ -> false
-          and move = function
-            | (`L | `R | `P) as d -> move_in_to d %> Result.to_option
-            | `M -> move_out_of ~strict:true %> Result.to_option
-          in
-          Bfs.fractal ~is_opposite ~move ~directions
-         : Bfs.Params with type direction = [ `L | `R | `P | `M ]
-          and type state = 'a zipper))
+(** {1 Breadth-first iteration} *)
+
+(** Implementation details for BFS iteration. *)
+module Bfs_internal = struct
+  (** A {!CCKTree.pset} that ignores all adds and always returns that every
+      value is not in the set. *)
+  let ignoring_pset : _ CCKTree.pset =
+    object (this)
+      method add _ = this
+      method mem _ = false
+    end
+
+  (** Moves in a BFS direction. This is not quite the same as the usual move
+      functions. In particular, moving to the [`M] point is only allowed when
+      currently at a [`P] point. *)
+  let move = function
+    | (`L | `R | `P) as d -> move_in_to d
+    | `M -> move_out_of ~strict:true
+
+  (** [directions from] returns valid adjacent directions, given that the
+      current zipper was reached from the direction [from]. [from] is used to
+      avoid going backwards. *)
+  let directions = function
+    | `M -> [ `M; `L; `R ]
+    | `P -> [ `L; `R; `P ]
+    | `L | `R | `Root -> [ `M; `L; `R; `P ]
+  (* Returns M first and P last because we usually want to search out before searching in. *)
+
+  (** Converts the given [(from, zip)] into a tree. If this is being called
+      recursively, [from] should be set to the direction which led to [zip]. In
+      the initial call, it should be set to [`Root]. *)
+  let rec to_ktree st : ([ `L | `R | `P | `M | `Root ] * 'a zipper) CCKTree.t =
+   fun () -> `Node (st, to_ktree_successors st)
+
+  and to_ktree_successors (from, zip) :
+      ([ `L | `R | `P | `M | `Root ] * 'a zipper) CCKTree.t list =
+    directions from
+    |> List.map (fun d () ->
+        match move d zip with
+        | Ok zip -> to_ktree ((d :> [ `L | `R | `P | `M | `Root ]), zip) ()
+        | Error _ -> `Nil)
+  (* Additional () inside the map function defers running [move] until needed. *)
+end
 
 (** Iterates over all {!zipper} positions of the given zipper, {i breadth-first}
     through the diamond structure starting from the current position. *)
-let iter_bfs (type a) st = Bfs.bfs st
+let iter_bfs st =
+  CCKTree.bfs ~pset:Bfs_internal.ignoring_pset
+    (Bfs_internal.to_ktree (`Root, st))
+  |> Iter.of_seq |> Iter.map snd
 
 (** {1 Derived functions} *)
 
