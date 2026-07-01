@@ -24,12 +24,8 @@ module Bincaml_ibi = Bincaml_ibi
 let lift_opcode (module I : Bincaml_ibi.IBI) ~address opcode =
   Fun.protect ~finally:I.reset_ir (fun () ->
       I.bincaml_set_address address;
-      Result.guard_str_trace (fun () ->
-          OfflineASL_pc.Offline.f_A64_decoder (module I) opcode address;
-          I.get_ir ())
-      |> Result.add_ctxf "opcode: %s, address: %s" (Bitvec.show opcode)
-           (Bitvec.show address)
-      |> Result.get_or_failwith)
+      OfflineASL_pc.Offline.f_A64_decoder (module I) opcode address;
+      I.get_ir ())
 
 (** Lifts a sequence of opcodes.
 
