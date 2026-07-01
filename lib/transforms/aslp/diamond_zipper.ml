@@ -166,13 +166,20 @@ let move_adjacent direction : 'a zipper -> ('a zipper, 'a zipper) result =
 
 (** Moves the zipper to a position in the outer diamond level. That is, to the
     {!type-diamond.value} of the containing {!Diamond.diamond}. In control-flow
-    terms, this is the next control-flow join point. *)
-let move_out_of : 'a zipper -> ('a zipper, 'a zipper) result = function
+    terms, this is the next control-flow join point.
+
+    If [strict] is given, then moving out succeeds only if the current focus is
+    at a {!Pred} position, and not from any other position within a containing
+    {!Diamond.diamond}. *)
+let move_out_of ?(strict = false) : 'a zipper -> ('a zipper, 'a zipper) result =
+  function
   | Zipper (_, []) as zip -> Error zip
-  | Zipper (left, Left { value; right; pred } :: rest)
-  | Zipper (right, Right { value; left; pred } :: rest)
   | Zipper (pred, Pred { value; left; right } :: rest) ->
       Ok (Zipper (Diamond { value; left; right; pred }, rest))
+  | ( Zipper (left, Left { value; right; pred } :: rest)
+    | Zipper (right, Right { value; left; pred } :: rest) ) as zip ->
+      if strict then Error zip
+      else Ok (Zipper (Diamond { value; left; right; pred }, rest))
 
 (** Moves the zipper to a position in the inner diamond level. In control-flow
     terms, this is the left or right branch, or the split point. *)
@@ -225,6 +232,23 @@ let iter_subzippers_backwards zip : 'a zipper Iter.t =
 let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
  fun d k -> iter_subzippers_backwards (of_diamond d) k
 (* [k] parameter ensures [of_diamond] is deferred until it is iterated. *)
+
+module A =
+  Bfs.Make
+    ((val let directions = [ `M; `L; `R; `P ]
+          and is_opposite a b =
+            match (a, b) with `P, `M | `M, `P -> true | _ -> false
+          and move = function
+            | (`L | `R | `P) as d -> move_in_to d %> Result.to_option
+            | `M -> move_out_of ~strict:true %> Result.to_option
+          in
+          Bfs.fractal ~is_opposite ~move ~directions
+         : Bfs.Params with type direction = [ `L | `R | `P | `M ]
+          and type state = 'a zipper))
+
+(** Iterates over all {!zipper} positions of the given zipper, {i breadth-first}
+    through the diamond structure starting from the current position. *)
+let iter_bfs (type a) st = Bfs.bfs st
 
 (** {1 Derived functions} *)
 
