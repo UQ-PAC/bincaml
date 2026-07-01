@@ -230,14 +230,6 @@ let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
 
 (** Implementation details for BFS iteration. *)
 module Bfs_internal = struct
-  (** A {!CCKTree.pset} that ignores all adds and always returns that every
-      value is not in the set. *)
-  let noop_pset : _ CCKTree.pset =
-    object (this)
-      method add _ = this
-      method mem _ = false
-    end
-
   type from_direction =
     [ `In of [ `P | `L | `R ] | `Out of [ `P | `L | `R ] | `Initial ]
   (** Direction which a BFS traversal {i came from}. [`In] and [`Out] record the
@@ -283,13 +275,26 @@ module Bfs_internal = struct
         | d, Ok zip -> to_ktree d zip ()
         | _, Error _ -> `Nil)
   (* Additional () inside the map function defers running [move] until needed. *)
+
+  type 'a queue = 'a CCKTree.t CCSimple_queue.t
+
+  let rec bfs_tree_step (q : 'a queue) : ('a * 'a queue) option =
+    match CCSimple_queue.pop q with
+    | None -> None
+    | Some (tree, q) -> (
+        match tree () with
+        | `Nil -> bfs_tree_step q
+        | `Node (x, children) -> Some (x, CCSimple_queue.add_list q children))
+
+  (** Breadth-first search of a tree. Assumes the tree is a tree, otherwise it
+      may repeat nodes or it may not terminate. *)
+  let bfs_tree tree : _ Iter.t =
+    Iter.unfoldr bfs_tree_step (CCSimple_queue.of_list [ tree ])
 end
 
 (** Iterates over all {!zipper} positions of the given zipper, {i breadth-first}
     through the diamond structure starting from the current position. *)
-let iter_bfs st =
-  CCKTree.bfs ~pset:Bfs_internal.noop_pset (Bfs_internal.to_ktree `Initial st)
-  |> Iter.of_seq
+let iter_bfs st = Bfs_internal.(st |> to_ktree `Initial |> bfs_tree)
 
 (** {1 Derived functions} *)
 
