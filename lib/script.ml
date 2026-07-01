@@ -314,10 +314,10 @@ let load_gtirb st fname =
       let p = Gtirb_frontend.load_gtirb_prog gtirb in
       let p =
         match p with
-        | Ok e ->
+        | Ok prog ->
+            let prog = Transforms.Aslp.transform_program prog in
             Loader.Loadir.(
-              Some
-                { prog = e; curr_proc = None; params_order = Hashtbl.create 0 })
+              Some { prog; curr_proc = None; params_order = Hashtbl.create 0 })
         | _ -> None
       in
       { st with load_st = p })

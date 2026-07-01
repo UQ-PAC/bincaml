@@ -83,7 +83,7 @@ let partition_aarch64_stmts stmts =
 
 (** Returns the Bincaml global variable representing heap memory. *)
 let aarch64_mem_of_prog prog =
-  Program.get_decl_by_name "$mem" prog |> function
+  Program.get_decl_by_name (Var.name Aslp_lexpr.mem_var) prog |> function
   | Some (Variable { binding }) -> binding
   | _ -> failwith "aarch64_mem_of_prog: no $mem found"
 
@@ -93,6 +93,7 @@ let address_of_block block =
   |> StringMap.find_opt ".address"
   |> Option.map (function
     | `Integer x -> x
+    | `CamlInt x -> Z.of_int x
     | _ -> failwith "address_of_block: invalid type in .address")
 
 (** {1 Transforming Bincaml IR} *)
@@ -214,6 +215,7 @@ let transform_procedure ~memory proc =
 (** Adds all architectural variable declarations to the given program. *)
 let add_aarch64_global_declarations prog =
   Aslp_lexpr.global_vars ()
+  |> List.cons Aslp_lexpr.mem_var
   |> List.fold_left
        (fun prog var ->
          let decl =
@@ -229,11 +231,9 @@ let add_aarch64_global_declarations prog =
     Also inserts global variable declarations for the architectural variables,
     if not already present. *)
 let transform_program prog =
+  let prog = add_aarch64_global_declarations prog in
   let memory = aarch64_mem_of_prog prog in
-
-  prog
-  |> Program.map_procedures (fun _ proc -> transform_procedure ~memory proc)
-  |> add_aarch64_global_declarations
+  Program.map_procedures (fun _ proc -> transform_procedure ~memory proc) prog
 
 (** TODO look into annotating attributes onto "landmark" points like memory
     access. *)
