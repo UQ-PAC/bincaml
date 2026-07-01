@@ -79,10 +79,6 @@ let to_var x =
 let pc_var = to_var PC
 let branchtaken_var = to_var BranchTaken
 
-let mem_var =
-  Var.create "$mem" ~scope:GlobalVarShared
-    Type.(Map (Bitvector 64, Bitvector 8))
-
 let predefined =
   [
     PC; SP_EL0;
