@@ -18,8 +18,8 @@ proc @dummy () -> ()
 proc @t1 () -> ()
 [
   block %entry [
-    assume eq($x, 0);
-    $x := bvadd($x, 0x1:bv32);
+    assume eq($x, 0x1:bv32);
+    $x := 0x3:bv32;
     goto(%ret);
   ];
   block %ret [
@@ -30,8 +30,8 @@ proc @t1 () -> ()
 proc @t2 () -> ()
 [
   block %entry [
-    assume eq($x, 1);
-    $x := bvadd($x, 0x2:bv32);
+    assume eq($x, 0x2:bv32);
+    $x := 0x3:bv32;
     goto(%ret);
   ];
   block %ret [

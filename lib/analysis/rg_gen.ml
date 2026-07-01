@@ -6,7 +6,7 @@ open Lang
 open Expr
 
 module Debug = struct
-  let enabled = false
+  let enabled = true
   let print s = if enabled then print_endline s
 end
 
@@ -185,7 +185,9 @@ module ConditionalWritesDomain (D : InterferenceStateDomain) : InterferenceDomai
       |> VarSetMap.of_list
     in
     (* apply aux to every assignment in the list, and join the results *)
-    List.fold_left (fun acc ConcInt.{ pre; assignments } -> join acc @@ aux pre assignments) bottom lst
+    let result = List.fold_left (fun acc ConcInt.{ pre; assignments } -> join acc @@ aux pre assignments) bottom lst in
+    Debug.print @@ "Generated guarantee: " ^ (show result);
+    result
 end
 
 (** We generate rely-guarantee conditions using state domain D and interference domain I via the following process:
