@@ -59,7 +59,8 @@ let%expect_test "diamond bfs" =
       "left_pred")
 |}];
   Diamond_zipper.iter_bfs zip |> Iter.iter (print_endline % Diamond_zipper.focus);
-  [%expect {|
+  [%expect
+    {|
     left_merge
     merge
     left_left
