@@ -228,71 +228,79 @@ let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
 
 (** {1 Breadth-first iteration} *)
 
+module Lazy = struct
+  type 'a lazy_diamond =
+    | Leaf of 'a
+    | Diamond of {
+        pred : 'a lazy_diamond Lazy.t;
+        left : 'a lazy_diamond Lazy.t;
+        right : 'a lazy_diamond Lazy.t;
+        value : 'a;
+      }
+
+  type 'a lazy_step =
+    | Left of { value : 'a; right : 'a diamond; pred : 'a diamond }
+    | Right of { value : 'a; left : 'a diamond; pred : 'a diamond }
+    | Pred of { value : 'a; left : 'a diamond; right : 'a diamond }
+
+  type 'a lazy_path = 'a lazy_step Seq.t
+  type 'a lazy_zipper = LazyZipper of 'a lazy_diamond * 'a lazy_path
+
+  let rec g ~preds : 'a diamond -> 'a zipper lazy_diamond = function
+    | Leaf _ as dia -> Leaf (Zipper (dia, preds))
+    | Diamond { value; left; right; pred } as dia ->
+        Diamond
+          {
+            value = Zipper (dia, preds);
+            left = lazy (g ~preds:(Left { value; right; pred } :: preds) left);
+            right = lazy (g ~preds:(Right { value; left; pred } :: preds) left);
+            pred = lazy (g ~preds:(Pred { value; left; right } :: preds) left);
+          }
+
+  (** structure is unchanged! but each value position is augmented with "all of
+      the context". *)
+  let rec g : 'a zipper -> 'a zipper diamond = function
+    | Zipper ((Leaf _ as dia), path) -> Leaf (Zipper (dia, path))
+    | Zipper (dia, path) as zip ->
+        let left = zip |> move_in_to `L |> Result.get_ok |> g
+        and right = zip |> move_in_to `R |> Result.get_ok |> g
+        and pred = zip |> move_in_to `P |> Result.get_ok |> g in
+        Diamond { value = Zipper (dia, path); left; right; pred }
+
+  (** Steps out by one step *)
+  let h : 'a zipper -> ('a zipper step * 'a zipper) option = function
+    | Zipper (_, []) -> None
+    | Zipper (dia, (step :: _ as path)) as zip -> (
+        let moved_out = move_out_of zip |> Result.get_ok in
+        match (dia, step) with
+        | left, Left _ ->
+            let right = move_adjacent `R zip |> Result.get_ok |> g
+            and pred = move_adjacent `P zip |> Result.get_ok |> g in
+            Some (Left { value = Zipper (left, path); right; pred }, moved_out)
+        | right, Right _ ->
+            let left = move_adjacent `L zip |> Result.get_ok |> g
+            and pred = move_adjacent `P zip |> Result.get_ok |> g in
+            Some (Right { value = Zipper (right, path); left; pred }, moved_out)
+        | pred, Pred _ ->
+            let left = move_adjacent `L zip |> Result.get_ok |> g
+            and right = move_adjacent `R zip |> Result.get_ok |> g in
+            Some (Pred { value = Zipper (pred, path); left; right }, moved_out))
+  (** It's kind of like putting each value into itself *)
+
+  let duplicate : 'a zipper -> 'a zipper zipper =
+   fun zip ->
+    let dia = g zip and path = CCList.unfold h zip in
+    Zipper (dia, path)
+end
+
 (** Implementation details for BFS iteration. *)
 module Bfs_internal = struct
-  type from_direction =
-    [ `In of [ `P | `L | `R ] | `Out of [ `P | `L | `R ] | `Initial ]
-  (** Direction which a BFS traversal {i came from}. [`In] and [`Out] record the
-      field that was moved in to or out of. *)
-
-  type to_direction = [ `In of [ `P | `L | `R ] | `Out ]
-  (** Direction which a BFS traversal is {i going to}. *)
-
-  (** Moves in a BFS direction while recording the direction moved. *)
-  let move (d : to_direction) zip : from_direction * _ result =
-    match (d, zip) with
-    | (`In d as from), _ -> (from, move_in_to d zip)
-    | `Out, Zipper (_, Pred _ :: _) -> (`Out `P, move_out_of zip)
-    | `Out, Zipper (_, Left _ :: _) -> (`Out `L, move_out_of zip)
-    | `Out, Zipper (_, Right _ :: _) -> (`Out `R, move_out_of zip)
-    | `Out, Zipper (_, []) -> (`Initial, Error zip)
-
-  (** [directions from] returns valid adjacent directions, given that the
-      current zipper was reached from the direction [from]. [from] is used to
-      avoid going backwards. For example, if we have just gone [`In], we mustn't
-      go back [`Out]. *)
-  let directions : from_direction -> to_direction list = function
-    | `Initial -> [ `Out; `In `L; `In `R; `In `P ]
-    | `In _ -> [ `In `L; `In `R; `In `P ]
-    | `Out `P -> [ `Out; `In `L; `In `R ]
-    | `Out `L -> [ `Out; `In `R; `In `P ]
-    | `Out `R -> [ `Out; `In `L; `In `P ]
-  (* Order of this list controls iteration order within a BFS level. *)
-
-  (** Converts the given [zip] into a tree. If this is being called recursively,
-      [from] should be set to the direction which led to [zip] to avoid cyclic
-      backtracking. In the initial call, it should be set to [`Initial] to
-      include all starting directions. *)
-  let rec to_ktree from zip : 'a zipper CCKTree.t =
-   fun () -> `Node (zip, to_ktree_successors from zip)
-
-  and to_ktree_successors from zip : 'a zipper CCKTree.t list =
-    directions from
-    |> List.map (fun d () ->
-        match move d zip with
-        | d, Ok zip -> to_ktree d zip ()
-        | _, Error _ -> `Nil)
-  (* Additional () inside the map function defers running [move] until needed. *)
-
-  type 'a queue = 'a CCKTree.t CCSimple_queue.t
-
-  let rec bfs_tree_step (q : 'a queue) : ('a * 'a queue) option =
-    match CCSimple_queue.pop q with
-    | None -> None
-    | Some (tree, q) -> (
-        match tree () with
-        | `Nil -> bfs_tree_step q
-        | `Node (x, children) -> Some (x, CCSimple_queue.add_list q children))
-
-  (** Breadth-first search of a tree. Assumes the tree is a tree, otherwise it
-      may repeat nodes or it may not terminate. *)
-  let bfs_tree tree : _ Iter.t =
-    Iter.unfoldr bfs_tree_step (CCSimple_queue.of_list [ tree ])
+  let to_ktree x = failwith ""
 end
 
 (** Iterates over all {!zipper} positions of the given zipper, {i breadth-first}
     through the diamond structure starting from the current position. *)
-let iter_bfs st = Bfs_internal.(st |> to_ktree `Initial |> bfs_tree)
+let iter_bfs st = failwith ""
 
 (** {1 Derived functions} *)
 
