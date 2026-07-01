@@ -238,48 +238,57 @@ module Bfs_internal = struct
       method mem _ = false
     end
 
-  type direction = [ `In of [ `P | `L | `R ] | `Out of [ `P | `L | `R ] ]
-  (** BFS-specific direction information. This is more detailed than the usual
-      directions to allow us to avoid backtracking. *)
+  type from_direction =
+    [ `In of [ `P | `L | `R ] | `Out of [ `P | `L | `R ] | `Root ]
+  (** Direction which a BFS traversal {i came from}. This is more detailed than
+      the usual directions to allow us to avoid backtracking. *)
+
+  type to_direction = [ `In of [ `P | `L | `R ] | `Out ]
+  (** Direction which a BFS traversal is {i going to}. *)
 
   (** Moves in a BFS direction. This is not quite the same as the usual move
       functions. In particular, moving to the [`M] point is only allowed when
       currently at a [`P] point. *)
-  let move d = match d with `In d -> move_in_to d | `Out -> move_out_of
+  let move d zip : from_direction * ('a zipper, 'a zipper) result =
+    match ((d : to_direction), zip) with
+    | (`In d as from), _ -> (from, move_in_to d zip)
+    | `Out, Zipper (_, Pred _ :: _) -> (`Out `P, move_out_of zip)
+    | `Out, Zipper (_, Left _ :: _) -> (`Out `L, move_out_of zip)
+    | `Out, Zipper (_, Right _ :: _) -> (`Out `R, move_out_of zip)
+    | `Out, Zipper (_, []) -> (`Root, Error zip)
 
   (** [directions from] returns valid adjacent directions, given that the
       current zipper was reached from the direction [from]. [from] is used to
       avoid going backwards. *)
-  let directions = function
+  let directions : from_direction -> to_direction list = function
     | `Root -> [ `Out; `In `L; `In `R; `In `P ]
     | `In d -> [ `In `L; `In `R; `In `P ]
     | `Out `P -> [ `Out; `In `L; `In `R ]
     | `Out `L -> [ `Out; `In `R; `In `P ]
     | `Out `R -> [ `Out; `In `L; `In `P ]
-  (* Returns M first and P last because we usually want to search out before searching in. *)
+  (* Order of this list controls iteration order within a BFS level . *)
 
-  (** Converts the given [(from, zip)] into a tree. If this is being called
-      recursively, [from] should be set to the direction which led to [zip]. In
-      the initial call, it should be set to [`Root]. *)
-  let rec to_ktree st : ([ `L | `R | `P | `M | `Root ] * 'a zipper) CCKTree.t =
-   fun () -> `Node (st, to_ktree_successors st)
+  (** Converts the given [zip] into a tree. If this is being called recursively,
+      [from] should be set to the direction which led to [zip] to avoid cyclic
+      backtracking. In the initial call, it should be set to [`Root]. *)
+  let rec to_ktree from zip : 'a zipper CCKTree.t =
+   fun () -> `Node (zip, to_ktree_successors from zip)
 
-  and to_ktree_successors (from, zip) :
-      ([ `L | `R | `P | `M | `Root ] * 'a zipper) CCKTree.t list =
+  and to_ktree_successors from zip : 'a zipper CCKTree.t list =
     directions from
     |> List.map (fun d () ->
         match move d zip with
-        | Ok zip -> to_ktree ((d :> [ `L | `R | `P | `M | `Root ]), zip) ()
-        | Error _ -> `Nil)
+        | d, Ok zip -> to_ktree d zip ()
+        | _, Error _ -> `Nil)
   (* Additional () inside the map function defers running [move] until needed. *)
 end
 
 (** Iterates over all {!zipper} positions of the given zipper, {i breadth-first}
     through the diamond structure starting from the current position. *)
 let iter_bfs st =
-  CCKTree.bfs ~pset:Bfs_internal.ignoring_pset
-    (Bfs_internal.to_ktree (`Root, st))
-  |> Iter.of_seq |> Iter.map snd
+  Bfs_internal.to_ktree `Root st
+  |> CCKTree.bfs ~pset:Bfs_internal.ignoring_pset
+  |> Iter.of_seq
 
 (** {1 Derived functions} *)
 
