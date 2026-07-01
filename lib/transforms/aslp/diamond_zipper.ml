@@ -239,23 +239,12 @@ module Lazy = struct
       }
 
   type 'a lazy_step =
-    | Left of { value : 'a; right : 'a diamond; pred : 'a diamond }
-    | Right of { value : 'a; left : 'a diamond; pred : 'a diamond }
-    | Pred of { value : 'a; left : 'a diamond; right : 'a diamond }
+    | Left of { value : 'a; right : 'a lazy_diamond; pred : 'a lazy_diamond }
+    | Right of { value : 'a; left : 'a lazy_diamond; pred : 'a lazy_diamond }
+    | Pred of { value : 'a; left : 'a lazy_diamond; right : 'a lazy_diamond }
 
   type 'a lazy_path = 'a lazy_step Seq.t
   type 'a lazy_zipper = LazyZipper of 'a lazy_diamond * 'a lazy_path
-
-  let rec g ~preds : 'a diamond -> 'a zipper lazy_diamond = function
-    | Leaf _ as dia -> Leaf (Zipper (dia, preds))
-    | Diamond { value; left; right; pred } as dia ->
-        Diamond
-          {
-            value = Zipper (dia, preds);
-            left = lazy (g ~preds:(Left { value; right; pred } :: preds) left);
-            right = lazy (g ~preds:(Right { value; left; pred } :: preds) left);
-            pred = lazy (g ~preds:(Pred { value; left; right } :: preds) left);
-          }
 
   (** structure is unchanged! but each value position is augmented with "all of
       the context". *)
@@ -287,10 +276,42 @@ module Lazy = struct
             Some (Pred { value = zip; left; right }, moved_out))
   (** It's kind of like putting each value into itself *)
 
-  let duplicate : 'a zipper -> 'a zipper zipper =
+  (** structure is unchanged! but each value position is augmented with "all of
+      the context". *)
+  let rec g : 'a zipper -> 'a zipper lazy_diamond = function
+    | Zipper (Leaf _, path) as zip -> Leaf zip
+    | Zipper (Diamond _, _) as zip ->
+        let left = zip |> lazy_g (move_in_to `L)
+        and right = zip |> lazy_g (move_in_to `R)
+        and pred = zip |> lazy_g (move_in_to `P) in
+        Diamond { value = zip; left; right; pred }
+
+  and lazy_g f arg = Lazy.from_val arg |> Lazy.map (f %> Result.get_ok %> g)
+
+  (** Steps out by one step *)
+  let h : 'a zipper -> ('a zipper lazy_step * 'a zipper) option = function
+    | Zipper (_, []) -> None
+    | Zipper (_, step :: _) as zip -> (
+        let moved_out = move_out_of zip |> Result.get_ok in
+        match step with
+        | Left _ ->
+            let right = move_adjacent `R zip |> Result.get_ok |> g
+            and pred = move_adjacent `P zip |> Result.get_ok |> g in
+            Some (Left { value = zip; right; pred }, moved_out)
+        | Right _ ->
+            let left = move_adjacent `L zip |> Result.get_ok |> g
+            and pred = move_adjacent `P zip |> Result.get_ok |> g in
+            Some (Right { value = zip; left; pred }, moved_out)
+        | Pred _ ->
+            let left = move_adjacent `L zip |> Result.get_ok |> g
+            and right = move_adjacent `R zip |> Result.get_ok |> g in
+            Some (Pred { value = zip; left; right }, moved_out))
+  (** It's kind of like putting each value into itself *)
+
+  let duplicate : 'a zipper -> 'a zipper lazy_zipper =
    fun zip ->
-    let dia = g zip and path = CCList.unfold h zip in
-    Zipper (dia, path)
+    let dia = g zip and path = CCSeq.unfold h zip in
+    LazyZipper (dia, path)
 end
 
 (** Implementation details for BFS iteration. *)
