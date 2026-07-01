@@ -238,9 +238,7 @@ module Bfs_internal = struct
   type to_direction = [ `In of [ `P | `L | `R ] | `Out ]
   (** Direction which a BFS traversal is {i going to}. *)
 
-  (** Moves in a BFS direction. This is not quite the same as the usual move
-      functions. In particular, moving to the [`M] point is only allowed when
-      currently at a [`P] point. *)
+  (** Moves in a BFS direction while recording the direction moved. *)
   let move (d : to_direction) zip : from_direction * _ result =
     match (d, zip) with
     | (`In d as from), _ -> (from, move_in_to d zip)
@@ -255,7 +253,7 @@ module Bfs_internal = struct
       go back [`Out]. *)
   let directions : from_direction -> to_direction list = function
     | `Initial -> [ `Out; `In `L; `In `R; `In `P ]
-    | `In d -> [ `In `L; `In `R; `In `P ]
+    | `In _ -> [ `In `L; `In `R; `In `P ]
     | `Out `P -> [ `Out; `In `L; `In `R ]
     | `Out `L -> [ `Out; `In `R; `In `P ]
     | `Out `R -> [ `Out; `In `L; `In `P ]
