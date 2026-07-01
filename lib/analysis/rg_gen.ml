@@ -5,51 +5,65 @@ open Lattice_types
 open Lang
 open Expr
 
-(** Utility function for getting the powerset (in list-form) of a list. Assumes list elements are unique. *)
-let rec powerset = function
-  | [] -> [[]]
-  | x :: xs ->
-    let sets_without_x = powerset xs in
-    let sets_with_x = List.map (fun sublst -> x :: sublst) sets_without_x in
-    sets_without_x @ sets_with_x
+module Debug = struct
+  let enabled = false
+  let print s = if enabled then print_endline s
+end
 
+module Util = struct
+  (** Derives the powerset of a list-represented set, as a list. Assumes list elements are unique. *)
+  let rec powerset = function
+    | [] -> [[]]
+    | x :: xs ->
+      let sets_without_x = powerset xs in
+      let sets_with_x = List.map (fun sublst -> x :: sublst) sets_without_x in
+      sets_without_x @ sets_with_x
 
-(** Utility function for deriving a fixpoint. *)
-let rec fixpoint equal f x =
-  let y = f x in
-  if equal y x then y else fixpoint equal f y
+  (** General function for deriving a fixpoint. *)
+  let rec fixpoint equal f x =
+    let y = f x in
+    if equal y x then y else fixpoint equal f y
+end
 
 (** An {!InterferenceStateDomain} is a state domain that is compatible with rely-guarantee generation. *)
-module InterferenceStateDomain = struct
-  module type Base = sig
-    include Lattice_types.Domain
-    val meet : t -> t -> t
-    (** Derives the greatest lower bound of two domain elements. *)
-    val havoc : t -> VarSet.t -> t
-    (** Abstracts out a set of variables; minimally weakens the domain element such that the vars are not constrained. *)
-  end
-  module type S = sig
-    include Base
-    val filter : t -> BasilExpr.t -> t
-    (** Returns an overapproximation (upper bound) on the states reachable after applying the given condition. *)
-  end
-  module Make(M : Base) : S with type t = M.t = struct
-    include M
-    let filter t exp = transfer t @@ Stmt.Instr_Assume { attrib = Attrib.empty; body = exp; branch = false }
-  end
+module type InterferenceStateDomain = sig
+  include Intra_analysis.IntraDomain
+  (** The state domain we extend. In future, we hope to extend this to interprocedural domains. *)
+  val meet : t -> t -> t
+  (** Derives the greatest lower bound of two domain elements. *)
+  val havoc : t -> VarSet.t -> t
+  (** Abstracts out a set of variables; minimally weakens the domain element such that the vars are not constrained. *)
+  val filter : t -> BasilExpr.t -> t
+  (** Returns an overapproximation (upper bound) on the states reachable after applying the given condition. *)
 end
 
 (** An extension of the wrapped intervals domain, to work with the InterferenceDomain framework. *)
-module InterferenceWrappedIntervalDomain = InterferenceStateDomain.Make(struct
+module InterferenceWrappedIntervalDomain : InterferenceStateDomain = struct
   open Wrapped_intervals
   include Domain
   let meet = bot_binop WrappedIntervalsLattice.meet
   let havoc t var_set = VarSet.fold (fun var acc -> update var WrappedIntervalsLattice.top acc) var_set t
-end)
+  let filter t exp = transfer t @@ Stmt.Instr_Assume { attrib = Attrib.empty; body = exp; branch = false }
+end
+
+(** The rely-guarantee conditions we generate are always elements of some lattice. The signature for this lattice is
+    defined here. We use this simpler signature instead of {!Lattice_types.Lattice} because our analysis does not
+    require the 'top', 'widening', or 'narrowing' functions to be defined. *)
+module type Interference = sig
+  val name : string
+
+  include ORD_TYPE
+  include PRETTY with type t := t
+
+  val bottom : t
+  val join : t -> t -> t
+  val equal : t -> t -> bool
+  val leq : t -> t -> bool
+end
 
 (** A concrete interference w.r.t. some state domain is a precondition represented by that domain, and a simultaneous
-    assignment that may be executed under that precondition. *)
-module ConcreteInterference (D : InterferenceStateDomain.S) = struct
+    assignment to global variables that may be executed under that precondition. *)
+module ConcreteInterference (D : InterferenceStateDomain) = struct
   type t = { pre: D.t; assignments: (Var.t * BasilExpr.t) list }
   [@@deriving eq, ord]
 
@@ -65,12 +79,12 @@ end
     applying interferences to states, as well as a {!transitions} function for deriving elements of the interference
     domain from precondition-assignment pairs. *)
 module type InterferenceDomain = sig
-  module D : InterferenceStateDomain.S
+  module D : InterferenceStateDomain
+  (** The underlying state domain. We use this to generate reachable states, from which we generate RG conditions. *)
   module ConcInt : module type of ConcreteInterference(D)
-  (** The underlying state domain, used by the InterferenceDomain functions, as well as the {!RelyGuaranteeGenerator}
-      for generating reachable states. *)
+  (** Concrete interferences are precondition-assignment pairs, where the precondition is of type [D.t]. *)
 
-  include Lattice
+  include Interference
   (** Type [t] represents a set of state transitions, and is typically defined with respect to [D.t]. *)
 
   val stabilise : t -> D.t -> D.t
@@ -92,48 +106,36 @@ end
     x and y can be written to respectively, so we avoid having to look through the write-conditions of their supersets
     when determining the conditions under which they can change. Note that (x U y) may map to a strictly stronger
     write-condition than P /\ Q, such as in the case when either x or y can change individually but never in the same
-    execution trace (i.e. "at the same time").
-    *)
-module ConditionalWritesDomain (D : InterferenceStateDomain.S) : InterferenceDomain = struct
+    execution trace (i.e. "at the same time"). *)
+module ConditionalWritesDomain (D : InterferenceStateDomain) : InterferenceDomain = struct
   module VarSetMap = Map.Make(VarSet)
 
   module D = D
   module ConcInt = ConcreteInterference(D)
 
-  type t = Top | Val of D.t VarSetMap.t
+  type t = D.t VarSetMap.t
 
   let name = "ConditionalWritesDomain"
-
-  let top = Top
   
-  let bottom = Val VarSetMap.empty
+  let bottom = VarSetMap.empty
   (** Variables not appearing in the map are implicitly mapped to D.bottom, meaning they are never written to. *)
   
-  let join i1 i2 = match i1, i2 with
-    | Val m1, Val m2 -> Val (VarSetMap.union (fun _key d1 d2 -> Some (D.join d1 d2)) m1 m2)
-    | _ -> Top
+  let join = VarSetMap.union (fun _key d1 d2 -> Some (D.join d1 d2))
   (** Joins are defined component-wise over the map entries. *)
   
-  let equal i1 i2 = match i1, i2 with
-    | Top, Top -> true
-    | Val m1, Val m2 -> VarSetMap.equal D.equal m1 m2
-    | _ -> false
+  let equal = VarSetMap.equal D.equal
   
-  let leq i1 i2 = equal i2 (join i1 i2)
+  let leq i1 i2 = equal i2 @@ join i1 i2
   (** This could probably be optimised. *)
   
-  let widening = join
-
-  let narrowing = failwith "Narrowing is not implemented for the ConditionalWritesDomain"
-  
-  let show i = match i with
-    | Top -> Bincaml_util.Unicode.top_char
-    | Val m -> if VarSetMap.is_empty m then Bincaml_util.Unicode.bot_char else
+  let show i =
+    if VarSetMap.is_empty i then Bincaml_util.Unicode.bot_char
+    else
       let entry_to_str = (fun (var_set, d) ->
         let var_set_str = VarSet.to_string ~start:"{" ~stop:"}" ~sep:", " Var.to_string var_set in
         let d_str = D.show d in
         Printf.sprintf "%s -> %s" var_set_str d_str
-      ) in VarSetMap.to_list m
+      ) in VarSetMap.to_list i
       |> List.to_string
         ~start:""
         ~stop:""
@@ -143,23 +145,20 @@ module ConditionalWritesDomain (D : InterferenceStateDomain.S) : InterferenceDom
   
   let pretty i = Containers_pp.text (show i)
 
-  let compare i1 i2 = match i1, i2 with
-    | Top, Top -> 0
-    | Top, Val _ -> 1
-    | Val _, Top -> -1
-    | Val m1, Val m2 -> VarSetMap.compare D.compare m1 m2
+  let compare = VarSetMap.compare D.compare
   
-  let stabilise i d = match i with
-    | Top -> D.top
-    | Val m -> VarSetMap.fold
-      (fun var_set write_cond -> D.join @@ D.havoc (D.meet d write_cond) var_set) m d
+  let stabilise i d =
+    Debug.print @@ "Pre stabilise: " ^ (D.show d);
+    let result = VarSetMap.fold (fun var_set write_cond -> D.join @@ D.havoc (D.meet d write_cond) var_set) i d in
+    Debug.print @@ "Post stabilise: " ^ (D.show d);
+    result
   (** For each entry (var_set, write_cond) in the map, take the meet of d and write_cond to get the states in which
       all variables in var_set may update in one step. From the resulting intersection, havoc var_set to simulate an
       update. Do this for each entry, then join all the results together with d. *)
-    
-  let transitions (lst: ConcInt.t list) = match lst with
-    | [] -> bottom
-    | { pre; assignments } :: xs ->
+
+  let transitions (lst: ConcInt.t list) =
+    (* aux derives a guarantee condition from a single (possibly simultaneous) assignment to global vars *)
+    let aux pre assignments =
       (* true iff v := e may modify v under pre *)
       let var_modified (v, e) =
         (* FIXME: create fresh var with type equal to v's type *)
@@ -174,95 +173,99 @@ module ConditionalWritesDomain (D : InterferenceStateDomain.S) : InterferenceDom
         (* apply filter v' != v to the state resulting from v' := e *)
         let filtered = D.filter assign_v' v_not_eq_v' in
         (* if the result is bot, then v' == v must always hold after v' := e, meaning v := e doesn't change v *)
-        not (D.equal filtered D.bottom)
-      (* retrieve those assignments that affect the value of the assigned variable *)
-      in let write_conditions =
-        List.filter var_modified assignments
-        (* get just the variables *)
-        |> List.map fst
-        (* map each subset of the resulting set of variables to 'pre' *)
-        |> powerset
-        |> List.map (fun sublst -> (VarSet.of_list sublst, pre))
-        |> VarSetMap.of_list
-      in Val write_conditions
+        not @@ D.equal filtered D.bottom
+      in
+      (* get only those assignments that may modify the assigned variable *)
+      List.filter var_modified assignments
+      (* get just the variables *)
+      |> List.map fst
+      (* map each subset of the resulting set of variables to 'pre' *)
+      |> Util.powerset
+      |> List.map (fun sublst -> (VarSet.of_list sublst, pre))
+      |> VarSetMap.of_list
+    in
+    (* apply aux to every assignment in the list, and join the results *)
+    List.fold_left (fun acc ConcInt.{ pre; assignments } -> join acc @@ aux pre assignments) bottom lst
 end
 
-
+(** We generate rely-guarantee conditions using state domain D and interference domain I via the following process:
+    1. Create a map from each thread to its current guarantee condition. At first, all threads map to I.bottom.
+    2. For each thread:
+    2.a. Derive a rely condition R by taking the join over all environment guarantees.
+    2.b. Do a forward analysis with domain D to over-approximate the reachable states, but use I.stabilise to stabilise
+         each derived abstract state under R as we go.
+    2.c. From the analysis results, retrieve all concrete interferences. These are precondition-assignment pairs where
+         each assignment may simultaneously assign a set of global variables. Note that this means ignoring any local
+         variables that may also be updated in the assignment.
+    2.d. From those concrete interferences, use the I.transitions function to derive a guarantee condition (as an I.t)
+         that over-approximates the set of state transitions that may be induced by their execution.
+    3. Update each thread's guarantee condition in the map to the new one derived from step 2.
+    4. Repeat steps 2-3 until a fixpoint is reached over the derived guarantee conditions.
+    5. The generated guarantee conditions are given by the map. The generated rely conditions for each thread are given
+       by the join over all environment guarantee conditions.
+    
+    The way in which step 2.c is implemented is somewhat tricky. A naive solution is to integrate it with step 2.b, and
+    build a list of precondition-assignment pairs simultaneously with the derivation of reachable states. The issue here
+    is that the same assignment will be added multiple times to the list when encountered in a loop, for example. The
+    solution to this problem is to use a map from assignments to their preconditions, but the IR does not currently
+    distinguish between two identical assignments in different locations, so preconditions of identical assignments
+    would have to be merged, which results in precision loss when deriving guarantees. To uniquely identify an
+    assignment as required by our analysis, we can exploit the fact that basic blocks have unique identifiers, and no
+    loops. Thus, an assignment can be identified by the order in which it is encountered within its unique block. In our
+    implementation, we choose to derive the reachable preconditions for all blocks first, and then do one more forward
+    pass over each block to derive a list of its precondition-assignment pairs (filtering out the local variables from
+    these assignments, thus creating pure concrete interferences). However, we could have also integrated this with step
+    2.b by maintaining a map from blocks to lists of (filtered) precondition-assignment pairs, and clearing this list
+    upon entering a block. The latter is probably faster, but is a tad more complex to implement.
+*)
 module RelyGuaranteeGenerator (I : InterferenceDomain) = struct
   module D = I.D
   module ConcInt = I.ConcInt
 
-  module type RGDomain = sig
-    include Intra_analysis.IntraDomain
-    val interferences: t -> ConcInt.t list
-  end
+  let stable_closure d rely = Util.fixpoint D.equal (I.stabilise rely) d
 
-  let make_domain rely : (module RGDomain) = (module struct
-    let name = "RelyGuaranteeDomain"
-
-    type t = {
-      state : D.t;
-      interferences : ConcInt.t list;
-    }
-
-    (* fixme *)
-    let transfer_phi t p = t
-
-    let top = failwith "top is not defined for the RelyGuaranteeDomain"
-    
-    let bottom = { state = D.bottom; interferences = [] }
-    
-    let join t1 t2 = { state = D.join t1.state t2.state; interferences = t1.interferences @ t2.interferences }
-    
-    let equal t1 t2 = (D.equal t1.state t2.state) && (List.equal ConcInt.equal t1.interferences t2.interferences)
-    
-    let leq t1 t2 = (D.leq t1.state t2.state) && (List.subset ~eq:ConcInt.equal t1.interferences t2.interferences)
-    
-    (* todo *)
-    let widening = join
-
-    (* todo *)
-    let narrowing = failwith "Narrowing is not defined for the rely-guarantee domain."
-
-    let transfer t stmt =
-      (* stabilise t; note the stabilise function computes one environment step, so we need to do a fixpoint here *)
-      let stable_pre = fixpoint D.equal (I.stabilise rely) t.state in
-      (* capture transitions *)
-      let interferences =
-        match stmt with
-        | Stmt.Instr_Assign { attrib; al } ->
-          let global_assigns = List.filter (fun a -> fst a |> Var.is_global) al in
-          ConcInt.{ pre = stable_pre; assignments = global_assigns } :: t.interferences
-        | _ -> t.interferences
-      in
-      (* transfer state *)
-      let post = D.transfer stable_pre stmt in
-      { state = post; interferences }
-
-    let init ?(vertex = None) p = { state = D.init p; interferences = List.empty }
-
-    let compare t1 t2 =
-      let compare_state = D.compare t1.state t2.state in
-      if compare_state <> 0 then compare_state else List.compare ConcInt.compare t1.interferences t2.interferences
-    
-    let show t = Printf.sprintf "State: %s | Interferences: %s" (D.show t.state)
-      (List.to_string ~sep:", " ConcInt.show t.interferences)
-    
-    let pretty t = Containers_pp.text (show t)
-
-    let interferences t = t.interferences
+  (* returns a first-class module which is essentially D but with stabilisation tacked on before each transfer *)
+  let stable_d rely : (module Intra_analysis.IntraDomain with type t = D.t) = (module struct
+    include D
+    let name = D.name ^ " Stabilised"
+    let transfer t = D.transfer @@ stable_closure t rely
+    (** Stabilise the pre-state before transferring. I believe this may be soundly modified such that stabilisation only
+        occurs before a global read or write. *)
+    (* todo: what about transfer_phi? *)
   end)
-  
+
+  type interference_collection = { state : D.t; rely: I.t; interferences : ConcInt.t list }
+
+  let collect_interferences { state; rely; interferences } stmt =
+    let stable_pre = stable_closure state rely in
+    let post = D.transfer stable_pre stmt in
+    let new_interferences =
+      match stmt with
+      | Stmt.Instr_Assign { attrib; al } ->
+        let global_assigns = List.filter (fun a -> fst a |> Var.is_global) al in
+        if List.is_empty global_assigns then interferences
+        else ConcInt.{ pre=stable_pre; assignments=global_assigns } :: interferences
+      | _ -> interferences
+    in
+    { state=post; rely=rely; interferences=new_interferences }
+
   let derive_guar rely proc =
-    let (module RGDom) = make_domain rely in
-    let module Analysis = Intra_analysis.Forwards(RGDom) in
-    let proof_outline = Analysis.analyse proc in
-    let post_state = Analysis.A.M.find_opt Procedure.Vert.Return proof_outline in
-    match post_state with
-    | Some t -> I.transitions (RGDom.interferences t)
-    | None ->
-      let proc_name = ID.to_string (Procedure.id proc) in
-      failwith (Printf.sprintf "Could not find return node for procedure %s." proc_name)
+    let (module StableD) = stable_d rely in
+    let module Analysis = Intra_analysis.Forwards(StableD) in
+    let analysis_results = Analysis.analyse proc in
+    let concrete_interferences =
+      Analysis.A.M.fold (fun vert state acc ->
+        match vert with
+        | Begin block_id ->
+          (* todo: not sure how to handle phi node things - what should transfer_phi be for this pseudo-domain? *)
+          let b = Procedure.find_block proc block_id in
+          let collection = Block.fold_forwards ~phi:(fun a _ -> a) ~f:collect_interferences { state; rely; interferences=[] } b in
+          collection.interferences @ acc
+        | _ -> acc
+      )
+      analysis_results []
+    in
+    I.transitions concrete_interferences
   
   let derive_rely thread guars =
     List.fold_left (fun acc (t, g) ->
@@ -278,5 +281,5 @@ module RelyGuaranteeGenerator (I : InterferenceDomain) = struct
     in
     (* note: this equality function assumes that 'rederive_guars' preserves the ordering of threads in its given list *)
     (* this only holds here because 'initial_guars' orders threads identically to the 'threads' formal parameter *)
-    fixpoint (List.equal (fun (_, g1) (_, g2) -> I.equal g1 g2)) rederive_guars initial_guars
+    Util.fixpoint (List.equal (fun (_, g1) (_, g2) -> I.equal g1 g2)) rederive_guars initial_guars
 end

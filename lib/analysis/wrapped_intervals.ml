@@ -800,7 +800,7 @@ module Domain = struct
     let vs = Lang.Procedure.formal_in_params p |> StringMap.values in
     vs
     |> Iter.map (fun v -> (v, top_val))
-    |> Iter.fold (fun m (v, d) -> update v d m) bottom
+    |> Iter.fold (fun m (v, d) -> update v d m) top
 
   open struct
     type bin_pred =
