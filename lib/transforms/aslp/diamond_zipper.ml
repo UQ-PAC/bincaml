@@ -260,31 +260,31 @@ module Lazy = struct
   (** structure is unchanged! but each value position is augmented with "all of
       the context". *)
   let rec g : 'a zipper -> 'a zipper diamond = function
-    | Zipper ((Leaf _ as dia), path) -> Leaf (Zipper (dia, path))
-    | Zipper (dia, path) as zip ->
+    | Zipper (Leaf _, path) as zip -> Leaf zip
+    | Zipper (Diamond _, _) as zip ->
         let left = zip |> move_in_to `L |> Result.get_ok |> g
         and right = zip |> move_in_to `R |> Result.get_ok |> g
         and pred = zip |> move_in_to `P |> Result.get_ok |> g in
-        Diamond { value = Zipper (dia, path); left; right; pred }
+        Diamond { value = zip; left; right; pred }
 
   (** Steps out by one step *)
   let h : 'a zipper -> ('a zipper step * 'a zipper) option = function
     | Zipper (_, []) -> None
-    | Zipper (dia, (step :: _ as path)) as zip -> (
+    | Zipper (_, step :: _) as zip -> (
         let moved_out = move_out_of zip |> Result.get_ok in
-        match (dia, step) with
-        | left, Left _ ->
+        match step with
+        | Left _ ->
             let right = move_adjacent `R zip |> Result.get_ok |> g
             and pred = move_adjacent `P zip |> Result.get_ok |> g in
-            Some (Left { value = Zipper (left, path); right; pred }, moved_out)
-        | right, Right _ ->
+            Some (Left { value = zip; right; pred }, moved_out)
+        | Right _ ->
             let left = move_adjacent `L zip |> Result.get_ok |> g
             and pred = move_adjacent `P zip |> Result.get_ok |> g in
-            Some (Right { value = Zipper (right, path); left; pred }, moved_out)
-        | pred, Pred _ ->
+            Some (Right { value = zip; left; pred }, moved_out)
+        | Pred _ ->
             let left = move_adjacent `L zip |> Result.get_ok |> g
             and right = move_adjacent `R zip |> Result.get_ok |> g in
-            Some (Pred { value = Zipper (pred, path); left; right }, moved_out))
+            Some (Pred { value = zip; left; right }, moved_out))
   (** It's kind of like putting each value into itself *)
 
   let duplicate : 'a zipper -> 'a zipper zipper =

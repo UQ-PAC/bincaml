@@ -45,7 +45,8 @@ let%expect_test "diamond bfs" =
   [%expect.unreachable];
   Diamond_zipper.iter_bfs zip |> Iter.iter (print_endline % Diamond_zipper.focus);
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   (* CR expect_test_collector: This test expectation appears to contain a backtrace.
      This is strongly discouraged as backtraces are fragile.
      Please change this test to not include a backtrace. *)
@@ -86,7 +87,8 @@ let%expect_test "nested diamonds" =
 
   guard_get_ir I.get_ir;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   (* CR expect_test_collector: This test expectation appears to contain a backtrace.
      This is strongly discouraged as backtraces are fragile.
      Please change this test to not include a backtrace. *)
@@ -122,8 +124,7 @@ let%expect_test "sequential diamonds" =
     I.bincaml_internal_emit (make_call "exit");
 
     guard_get_ir I.get_ir );
-  [%expect
-    {|
+  [%expect {|
     make_call: entry
     error(Failure(""))
     |}]
@@ -152,7 +153,8 @@ let%expect_test "skipped merge context when going to outer merge" =
   guard_get_ir I.get_ir;
 
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   (* CR expect_test_collector: This test expectation appears to contain a backtrace.
      This is strongly discouraged as backtraces are fragile.
      Please change this test to not include a backtrace. *)
@@ -195,7 +197,8 @@ let%expect_test "skipped merge context when going to outer branch" =
   guard_get_ir I.get_ir;
 
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   (* CR expect_test_collector: This test expectation appears to contain a backtrace.
      This is strongly discouraged as backtraces are fragile.
      Please change this test to not include a backtrace. *)
@@ -268,8 +271,7 @@ let%expect_test
       guard_get_ir I.get_ir
     end );
 
-  [%expect
-    {|
+  [%expect {|
     make_call: entry
     error(Failure(""))
     |}]

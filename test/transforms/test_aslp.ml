@@ -69,7 +69,8 @@ let%expect_test "lift: b.eq #1024" =
   in
   print_endline @@ Aslp_state.show_aslp_diamond x;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   (* CR expect_test_collector: This test expectation appears to contain a backtrace.
      This is strongly discouraged as backtraces are fragile.
      Please change this test to not include a backtrace. *)
@@ -315,7 +316,8 @@ proc @Sqrt()  -> () {  }
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   (* CR expect_test_collector: This test expectation appears to contain a backtrace.
      This is strongly discouraged as backtraces are fragile.
      Please change this test to not include a backtrace. *)
