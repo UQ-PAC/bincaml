@@ -3,7 +3,7 @@ open Common
 
 (** Makes a concrete module which implements {!Bincaml_ibi.IBI}. *)
 module Make (S : sig
-  val bincaml_lifter_state : Aslp_state.lifter_state ref
+  val initial_lifter_state : Aslp_state.lifter_state
 end) =
 struct
   (** {2 Type definitions} *)
@@ -13,44 +13,79 @@ struct
   type expr = Expr.BasilExpr.t
   type lexpr = Aslp_lexpr.t
   type stmt = Aslp_state.stmt
-
-  type branch =
-    [ `T of string
-    | `F of string
-    | `M of string * (string * string)
-      (** A merge branch also records its true and false predecessors to
-          propagate PC information. *) ]
-
   type ast = Aslp_state.aslp_diamond
 
   (** {2 Bincaml-specific utility functions} *)
 
-  (** Emits the given Bincaml statement. *)
+  let bincaml_lifter_state = ref S.initial_lifter_state
 
+  let bincaml_set_address address =
+    bincaml_lifter_state :=
+      { !bincaml_lifter_state with address = Some address }
+
+  let bincaml_get_address () =
+    let err = "bincaml_get_address: address not set. use bincaml_set_address" in
+    !bincaml_lifter_state.address |> Option.get_exn_or err
+
+  (** Emits the given Bincaml statement. *)
   let bincaml_emit stmt =
-    S.bincaml_lifter_state :=
-      !S.bincaml_lifter_state |> Aslp_state.add_stmt_to_active stmt
+    bincaml_lifter_state :=
+      !bincaml_lifter_state |> Aslp_state.add_stmt_to_active stmt
 
   let bincaml_local_var name ty =
     let id_name =
-      match Hashtbl.find_opt !S.bincaml_lifter_state.names name with
+      match Hashtbl.find_opt !bincaml_lifter_state.names name with
       | None ->
-          let id_name = !S.bincaml_lifter_state.generator.local_id () in
-          Hashtbl.replace !S.bincaml_lifter_state.names name id_name;
+          let id_name = !bincaml_lifter_state.generator.local_id () in
+          Hashtbl.replace !bincaml_lifter_state.names name id_name;
           id_name
       | Some x -> x
     in
     Aslp_lexpr.Local (id_name, ty)
 
-  (** {2 Instruction building interface implementation} *)
+  (** {2 Control flow}
+
+      Implemented by {!Diamond_ibi.Make}. *)
+
+  (** @inline *)
+  include Diamond_ibi.Make (struct
+    type nonrec expr = expr
+    type state = Aslp_state.aslp_block
+
+    let diamond_get () = !bincaml_lifter_state.diamond
+
+    let diamond_set diamond =
+      bincaml_lifter_state := { !bincaml_lifter_state with diamond }
+
+    let diamond_make_branch cond =
+      let t = Aslp_state.empty_block ~assume:cond ()
+      and f = Aslp_state.empty_block ~assume:(Expr.BasilExpr.boolnot cond) ()
+      and m = Aslp_state.empty_block_unconditional () in
+      (t, f, m)
+  end)
+
+  let f_switch_context b =
+    f_switch_context b;
+    match b with
+    | `T | `F -> ()
+    | `M ->
+        let address = bincaml_get_address ()
+        and diamond = !bincaml_lifter_state.diamond in
+        let diamond = diamond |> Aslp_state.ensure_pc_consistency ~address in
+        bincaml_lifter_state := { !bincaml_lifter_state with diamond }
+
+  (** {2 IR extraction} *)
 
   let reset_ir () =
-    let generator = !S.bincaml_lifter_state.generator in
-    S.bincaml_lifter_state := Aslp_state.empty_lifter_state ~generator ()
+    let generator = !bincaml_lifter_state.generator in
+    bincaml_lifter_state := Aslp_state.empty_lifter_state ~generator ()
 
   let get_ir () =
-    let diamond = !S.bincaml_lifter_state.diamond in
-    Aslp_state.ensure_pc_assigned ~name:diamond.exit diamond
+    let diamond = !bincaml_lifter_state.diamond
+    and address = bincaml_get_address () in
+    diamond |> Aslp_state.ensure_pc_assigned ~address |> Diamond.of_zipper
+
+  (** {2 Instruction building interface implementation} *)
 
   let bigint_of_string : string -> bigint = Z.of_string_base 10
   let bigint_of_int : int -> bigint = Z.of_int
@@ -196,47 +231,6 @@ struct
   let v___BranchTaken : lexpr = BranchTaken
   let v_BTypeNext : lexpr = BTypeNext
   let v___ExclusiveLocal : lexpr = ExclusiveLocal
-
-  let f_gen_branch : expr -> branch * branch * branch =
-   fun cond ->
-    let st = !S.bincaml_lifter_state in
-    let block_id = st.generator.block_id
-    and ncond = Expr.BasilExpr.boolnot cond in
-
-    let t = block_id () and f = block_id () and m = block_id () in
-    let original_succs =
-      st.diamond |> Aslp_state.get_block ~name:st.active |> fun x -> x.succs
-    in
-    let diamond =
-      st.diamond
-      |> Aslp_state.modify_block ~name:st.active ~f:(fun b ->
-          { b with succs = StringSet.empty })
-      |> Aslp_state.add_block ~pred:st.active ~name:t ~assume:cond
-      |> Aslp_state.add_block ~pred:st.active ~name:f ~assume:ncond
-      |> Aslp_state.add_block ~pred:t ~name:m
-      |> Aslp_state.add_goto ~source:f ~target:m
-      |> Aslp_state.modify_block ~name:m ~f:(fun b ->
-          { b with succs = original_succs })
-    in
-    S.bincaml_lifter_state := { st with diamond };
-    (`T t, `F f, `M (m, (t, f)))
-
-  let f_switch_context : branch -> unit =
-   fun b ->
-    let diamond = !S.bincaml_lifter_state.diamond in
-    let active, diamond =
-      match b with
-      | `T x | `F x -> (x, diamond)
-      | `M (m, (t, f)) ->
-          ( m,
-            diamond |> Aslp_state.ensure_pc_consistency ~left:t ~right:f ~join:m
-          )
-    in
-    S.bincaml_lifter_state := { !S.bincaml_lifter_state with active; diamond }
-
-  let f_true_branch : branch * branch * branch -> branch = fun (t, f, m) -> t
-  let f_false_branch : branch * branch * branch -> branch = fun (t, f, m) -> f
-  let f_merge_branch : branch * branch * branch -> branch = fun (t, f, m) -> m
 
   let f_gen_assert : expr -> unit =
    fun e -> bincaml_emit (Stmt.Instr_Assert { attrib = Attrib.empty; body = e })

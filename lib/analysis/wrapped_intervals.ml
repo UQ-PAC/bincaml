@@ -150,6 +150,7 @@ module WrappedIntervalsLattice = struct
         (fun acc t ->
           match t with
           | Interval { lower; upper } when ule upper lower -> extend acc t
+          | Top -> extend acc t
           | _ -> acc)
         bottom sorted
     in

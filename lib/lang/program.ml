@@ -168,7 +168,13 @@ let get_decl_by_name_id name prog =
     IDMap.find_opt id prog.declarations |> Option.map (fun v -> (id, v))
   with Not_found -> None
 
+let get_decl id prog = IDMap.find_opt id prog.declarations
 let get_decl_by_name name prog = get_decl_by_name_id name prog |> Option.map snd
+
+let get_proc id prog =
+  get_decl id prog |> function
+  | Some (Procedure { definition }) -> definition
+  | _ -> raise Not_found
 
 let get_proc_by_name name prog =
   get_decl_by_name name prog |> function

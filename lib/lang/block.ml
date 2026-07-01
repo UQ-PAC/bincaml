@@ -125,11 +125,11 @@ let append_stmts (b : ('v, 'e) t) (stmt : ('v, 'v, 'e) Stmt.t list) :
     ('vv, 'ee) t =
   fmap_stmts_copy (fun v -> Vector.append_list v stmt) b
 
-let flat_map ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
+let flat_map ?(rev = false) ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
+  let it = if rev then Vector.to_iter_rev else Vector.to_iter in
+  let ot e = (if rev then Iter.rev e else e) |> Vector.of_iter in
   {
-    stmts =
-      Vector.to_iter b.stmts |> Iter.flat_map f |> Vector.of_iter
-      |> Vector.freeze;
+    stmts = it b.stmts |> Iter.flat_map f |> ot |> Vector.freeze;
     phis = phi b.phis;
     attrib = b.attrib;
   }
