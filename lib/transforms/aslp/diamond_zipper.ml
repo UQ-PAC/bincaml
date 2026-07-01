@@ -166,20 +166,13 @@ let move_adjacent direction : 'a zipper -> ('a zipper, 'a zipper) result =
 
 (** Moves the zipper to a position in the outer diamond level. That is, to the
     {!type-diamond.value} of the containing {!Diamond.diamond}. In control-flow
-    terms, this is the next control-flow join point.
-
-    If [strict] is given, then moving out succeeds only if the current focus is
-    at a {!Pred} position, and not from any other position within a containing
-    {!Diamond.diamond}. *)
-let move_out_of ?(strict = false) : 'a zipper -> ('a zipper, 'a zipper) result =
-  function
+    terms, this is the next control-flow join point. *)
+let move_out_of : 'a zipper -> ('a zipper, 'a zipper) result = function
   | Zipper (_, []) as zip -> Error zip
-  | Zipper (pred, Pred { value; left; right } :: rest) ->
+  | Zipper (pred, Pred { value; left; right } :: rest)
+  | Zipper (left, Left { value; right; pred } :: rest)
+  | Zipper (right, Right { value; left; pred } :: rest) ->
       Ok (Zipper (Diamond { value; left; right; pred }, rest))
-  | ( Zipper (left, Left { value; right; pred } :: rest)
-    | Zipper (right, Right { value; left; pred } :: rest) ) as zip ->
-      if strict then Error zip
-      else Ok (Zipper (Diamond { value; left; right; pred }, rest))
 
 (** Moves the zipper to a position in the inner diamond level. In control-flow
     terms, this is the left or right branch, or the split point. *)
@@ -218,7 +211,7 @@ let iter_subzippers_backwards zip : 'a zipper Iter.t =
  fun k ->
   let rec recurse = function
     | Ok (Zipper (Leaf _, _) as zip) -> k zip
-    | Ok (Zipper (Diamond _, _)) ->
+    | Ok (Zipper (Diamond _, _) as zip) ->
         k zip;
         recurse (move_in_to `L zip);
         recurse (move_in_to `R zip);
@@ -245,20 +238,24 @@ module Bfs_internal = struct
       method mem _ = false
     end
 
+  type direction = [ `In of [ `P | `L | `R ] | `Out of [ `P | `L | `R ] ]
+  (** BFS-specific direction information. This is more detailed than the usual
+      directions to allow us to avoid backtracking. *)
+
   (** Moves in a BFS direction. This is not quite the same as the usual move
       functions. In particular, moving to the [`M] point is only allowed when
       currently at a [`P] point. *)
-  let move = function
-    | (`L | `R | `P) as d -> move_in_to d
-    | `M -> move_out_of ~strict:true
+  let move d = match d with `In d -> move_in_to d | `Out -> move_out_of
 
   (** [directions from] returns valid adjacent directions, given that the
       current zipper was reached from the direction [from]. [from] is used to
       avoid going backwards. *)
   let directions = function
-    | `M -> [ `M; `L; `R ]
-    | `P -> [ `L; `R; `P ]
-    | `L | `R | `Root -> [ `M; `L; `R; `P ]
+    | `Root -> [ `Out; `In `L; `In `R; `In `P ]
+    | `In d -> [ `In `L; `In `R; `In `P ]
+    | `Out `P -> [ `Out; `In `L; `In `R ]
+    | `Out `L -> [ `Out; `In `R; `In `P ]
+    | `Out `R -> [ `Out; `In `L; `In `P ]
   (* Returns M first and P last because we usually want to search out before searching in. *)
 
   (** Converts the given [(from, zip)] into a tree. If this is being called

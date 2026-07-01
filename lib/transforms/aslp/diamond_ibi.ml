@@ -58,17 +58,9 @@ module Make (S : Params) = struct
   let f_switch_context (_, ctx) =
     let zipper = S.diamond_get () in
 
-    let near =
-      Diamond_zipper.(
-        zipper |> move_out_of |> CCResult.retract |> iter_subzippers_backwards)
-    and far k =
-      Diamond_zipper.(zipper |> to_diamond |> iter_zippers_backwards) k
-    in
-
-    (* Exhaustive search, but start nearby by walking up one level. This is
-       probably fast enough since we are always appending and moving near the
-       end, and there are not many nested branches. *)
-    Iter.append near far
+    (* Exhaustive search, but run in breadth-first order. This is
+       probably fast enough since we are always moving near the current position. *)
+    Diamond_zipper.iter_bfs zipper
     |> Iter.find_pred (S.equal_state ctx % Diamond_zipper.focus)
     |> CCOption.get_exn_or "f_switch_context: cannot find matching position"
     |> S.diamond_set
