@@ -316,12 +316,48 @@ end
 
 (** Implementation details for BFS iteration. *)
 module Bfs_internal = struct
-  let to_ktree x = failwith ""
+  let rec ktree_of_diamond dia =
+   fun () ->
+    match dia with
+    | Leaf x -> `Node (x, [])
+    | Diamond { value; left; right; pred } ->
+        let children = List.map ktree_of_diamond [ pred; left; right ] in
+        `Node (value, children)
+
+  let rec ktree_of_path path : _ CCKTree.t =
+   fun () ->
+    match path with
+    | [] -> `Nil
+    | Pred { value; left = x1; right = x2 } :: rest
+    | Left { value; right = x1; pred = x2 } :: rest
+    | Right { value; left = x1; pred = x2 } :: rest ->
+        let children = List.map ktree_of_diamond [ x1; x2 ] in
+        `Node (value, ktree_of_path rest :: children)
+
+  let ktree_of_zipper (Zipper (dia, path)) : _ CCKTree.t =
+    ktree_of_diamond dia %> function
+    | `Node (x, children) ->
+        `Node
+          ( x,
+            ktree_of_path path
+            :: (children
+                 : (unit -> [ `Node of _ * 'b list ] as 'b) list
+                 :> _ CCKTree.t list) )
+
+  (* Additional () inside the map function defers running [move] until needed. *)
+
+  let rec bfs_tree_step q : ('a * 'a CCSimple_queue.t) option =
+    match CCSimple_queue.pop q with
+    | None -> None
+    | Some (tree, q) -> (
+        match tree () with
+        | `Nil -> bfs_tree_step q
+        | `Node (x, children) -> Some (x, CCSimple_queue.add_list q children))
 end
 
 (** Iterates over all {!zipper} positions of the given zipper, {i breadth-first}
     through the diamond structure starting from the current position. *)
-let iter_bfs st = failwith ""
+let iter_bfs st : 'a Iter.t = 2
 
 (** {1 Derived functions} *)
 
