@@ -224,6 +224,7 @@ module WrappedIntervalsLattice = struct
   
   let meet a b =
     let intersections = intersect a b in
+    print_endline @@ "Intersections: " ^ (List.to_string ~sep:", " show intersections) ^ "\n";
     match intersections with
     | [] -> Bot
     | [x] -> x
@@ -237,6 +238,8 @@ module WrappedIntervalsLattice = struct
       then interval al bu
       else interval bl au
     | _ -> failwith "unreachable"
+  
+  (* let meet a b = lub @@ intersect a b *)
 
   let nsplit ~width t =
     match t with

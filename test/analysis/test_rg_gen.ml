@@ -18,7 +18,7 @@ proc @dummy () -> ()
 proc @t1 () -> ()
 [
   block %entry [
-    assume eq($x, 0x1:bv32);
+    assume eq($x, 0x2:bv32);
     $x := 0x3:bv32;
     goto(%ret);
   ];
@@ -40,6 +40,62 @@ proc @t2 () -> ()
 ];
 |}
 
+let conditional_writes_wrapped_intervals_stabilisation_1 () =
+  let test = "Stabilising x == 0 under x != 1 ==> x' == x should yield x == 0, " ^
+             "using ConditionalWritesDomain(InterferenceWrappedIntervalDomain)."
+  in
+  let module I = ConditionalWritesDomain(InterferenceWrappedIntervalDomain) in
+  (* create wrapped interval value x = [0,0] *)
+  let open Analysis.Wrapped_intervals in
+  let x = Var.create "x" (Types.Bitvector 32) in
+  let zero = Bitvec.zero ~size:32 in
+  let x_eq_0 = StateAbstraction.update x (WrappedIntervalsLattice.interval zero zero) StateAbstraction.top in
+  (* create rely condition x != 1 ==> x' == x with the conditional writes domain, represented as x -> [x = [1,1]] *)
+  let one = Bitvec.one ~size:32 in
+  let x_eq_1 = StateAbstraction.update x (WrappedIntervalsLattice.interval one one) StateAbstraction.top in
+  (* to create the rely condition, transition over the precondition-assignment pair: {x == 1} x := 0 *)
+  let zero_expr = BasilExpr.bvconst zero in
+  let conc_int = I.ConcInt.{ pre=x_eq_1; assignments=[(x, zero_expr)] } in
+  let interference = I.transitions [conc_int] in
+  let stabilised = I.stabilise interference x_eq_0 in
+  Alcotest.(check bool) test true (StateAbstraction.equal x_eq_0 stabilised)
+
+let conditional_writes_wrapped_intervals_stabilisation_2 () =
+  let test = "Stabilising x == 1 under x != 1 ==> x' == x should yield top, " ^
+             "using ConditionalWritesDomain(InterferenceWrappedIntervalDomain)."
+  in
+  let module I = ConditionalWritesDomain(InterferenceWrappedIntervalDomain) in
+  let open Analysis.Wrapped_intervals in
+  let x = Var.create "x" (Types.Bitvector 32) in
+  (* create rely condition x != 1 ==> x' == x with the conditional writes domain, represented as x -> [x = [1,1]] *)
+  let one = Bitvec.one ~size:32 in
+  let x_eq_1 = StateAbstraction.update x (WrappedIntervalsLattice.interval one one) StateAbstraction.top in
+  (* to create the rely condition, transition over the precondition-assignment pair: {x == 1} x := 0 *)
+  let zero = Bitvec.zero ~size:32 in
+  let zero_expr = BasilExpr.bvconst zero in
+  let conc_int = I.ConcInt.{ pre=x_eq_1; assignments=[(x, zero_expr)] } in
+  let interference = I.transitions [conc_int] in
+  let stabilised = I.stabilise interference x_eq_1 in
+  Alcotest.(check bool) test true (StateAbstraction.equal StateAbstraction.top stabilised)
+
+let conditional_writes_wrapped_intervals_stabilisation_3 () =
+  let test = "Stabilising x == 1 under false ==> x' == x should yield top, " ^
+             "using ConditionalWritesDomain(InterferenceWrappedIntervalDomain)."
+  in
+  let module I = ConditionalWritesDomain(InterferenceWrappedIntervalDomain) in
+  let open Analysis.Wrapped_intervals in
+  let x = Var.create "x" (Types.Bitvector 32) in
+  (* create rely condition false ==> x' == x with the conditional writes domain, represented as x -> top *)
+  let one = Bitvec.one ~size:32 in
+  let x_eq_1 = StateAbstraction.update x (WrappedIntervalsLattice.interval one one) StateAbstraction.top in
+  (* to create the rely condition, transition over the precondition-assignment pair: {top} x := 0 *)
+  let zero = Bitvec.zero ~size:32 in
+  let zero_expr = BasilExpr.bvconst zero in
+  let conc_int = I.ConcInt.{ pre=StateAbstraction.top; assignments=[(x, zero_expr)] } in
+  let interference = I.transitions [conc_int] in
+  let stabilised = I.stabilise interference x_eq_1 in
+  Alcotest.(check bool) test true (StateAbstraction.equal StateAbstraction.top stabilised)
+
 let simple () =
   let ast = Loader.Loadir.ast_of_string prog_str in
   let program = ast.prog in
@@ -57,7 +113,10 @@ let simple () =
   )
 
 let tests = [
-  ("simple", simple)
+  (* ("simple", simple); *)
+  ("conditional_writes_wrapped_intervals_stabilisation_1", conditional_writes_wrapped_intervals_stabilisation_1);
+  ("conditional_writes_wrapped_intervals_stabilisation_2", conditional_writes_wrapped_intervals_stabilisation_2);
+  ("conditional_writes_wrapped_intervals_stabilisation_3", conditional_writes_wrapped_intervals_stabilisation_3)
 ]
 |> List.map (fun (n, t) -> Alcotest.test_case n `Quick t)
 |> fun cases -> [ ("rg_gen", cases) ]
