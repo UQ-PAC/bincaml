@@ -228,127 +228,6 @@ let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
 
 (** {1 Breadth-first iteration} *)
 
-module Lazy = struct
-  type 'a lazy_diamond_cell =
-    | Leaf of 'a
-    | Diamond of {
-        pred : 'a lazy_diamond;
-        left : 'a lazy_diamond;
-        right : 'a lazy_diamond;
-        value : 'a;
-      }
-
-  and 'a lazy_diamond = 'a lazy_diamond_cell Lazy.t
-
-  type 'a lazy_step = ('a, 'a lazy_diamond) step
-  type 'a lazy_path = 'a lazy_step Seq.t
-  type 'a lazy_zipper = LazyZipper of 'a lazy_diamond * 'a lazy_path
-
-  let rec of_diamond : 'a diamond -> 'a lazy_diamond = function
-    | Leaf x -> Lazy.from_val (Leaf x)
-    | Diamond { value; left; right; pred } ->
-        lazy
-          (let left = of_diamond left
-           and right = of_diamond right
-           and pred = of_diamond pred in
-           Diamond { value; left; right; pred })
-
-  let rec scan_diamond ~v ~l ~r ~p acc : 'a lazy_diamond -> _ lazy_diamond =
-    Lazy.map (function
-      | Leaf x -> Leaf (v acc x)
-      | Diamond { value; left; right; pred } ->
-          let value = v acc value in
-          let left = scan_diamond ~v ~l ~r ~p (l value) left
-          and right = scan_diamond ~v ~l ~r ~p (r value) right
-          and pred = scan_diamond ~v ~l ~r ~p (p value) pred in
-          Diamond { value; left; right; pred })
-
-  let rec scan_path ~v ~l ~r ~p ~s acc : 'a lazy_path -> _ lazy_path =
-   fun path () ->
-    match path () with
-    | Nil -> Nil
-    | Cons (step, rest) -> (
-        match step with
-        | Left { value; right; pred } ->
-            let value = s acc value in
-            let right = scan_diamond ~v ~l ~r ~p (r value) right
-            and pred = scan_diamond ~v ~l ~r ~p (p value) pred in
-            Cons
-              (Left { value; right; pred }, scan_path ~v ~l ~r ~p ~s value rest)
-        | Right _ -> _
-        | Pred _ -> _)
-
-  (** structure is unchanged! but each value position is augmented with "all of
-      the context". *)
-  let rec g : 'a zipper -> 'a zipper diamond = function
-    | Zipper (Leaf _, path) as zip -> Leaf zip
-    | Zipper (Diamond _, _) as zip ->
-        let left = zip |> move_in_to `L |> Result.get_ok |> g
-        and right = zip |> move_in_to `R |> Result.get_ok |> g
-        and pred = zip |> move_in_to `P |> Result.get_ok |> g in
-        Diamond { value = zip; left; right; pred }
-
-  (** Steps out by one step *)
-  let h : 'a zipper -> (_ step * 'a zipper) option = function
-    | Zipper (_, []) -> None
-    | Zipper (_, step :: _) as zip -> (
-        let moved_out = move_out_of zip |> Result.get_ok in
-        match step with
-        | Left _ ->
-            let right = move_adjacent `R zip |> Result.get_ok |> g
-            and pred = move_adjacent `P zip |> Result.get_ok |> g in
-            Some (Left { value = zip; right; pred }, moved_out)
-        | Right _ ->
-            let left = move_adjacent `L zip |> Result.get_ok |> g
-            and pred = move_adjacent `P zip |> Result.get_ok |> g in
-            Some (Right { value = zip; left; pred }, moved_out)
-        | Pred _ ->
-            let left = move_adjacent `L zip |> Result.get_ok |> g
-            and right = move_adjacent `R zip |> Result.get_ok |> g in
-            Some (Pred { value = zip; left; right }, moved_out))
-  (** It's kind of like putting each value into itself *)
-
-  (** structure is unchanged! but each value position is augmented with "all of
-      the context". *)
-  let rec g : 'a zipper -> 'a zipper lazy_diamond = function
-    | Zipper (Leaf _, path) as zip -> lazy (Leaf zip)
-    | Zipper (Diamond _, _) as zip ->
-        let left = zip |> move_in_to `L |> Result.get_ok |> g
-        and right = zip |> move_in_to `R |> Result.get_ok |> g
-        and pred = zip |> move_in_to `P |> Result.get_ok |> g in
-        lazy (Diamond { value = zip; left; right; pred })
-
-  (** Steps out by one step *)
-  let h : 'a zipper -> ('a zipper lazy_step * 'a zipper) option = function
-    | Zipper (_, []) -> None
-    | Zipper (_, step :: _) as zip -> (
-        let moved_out = move_out_of zip |> Result.get_ok in
-        match step with
-        | Left _ ->
-            let right = move_adjacent `R zip |> Result.get_ok |> g
-            and pred = move_adjacent `P zip |> Result.get_ok |> g in
-            Some (Left { value = zip; right; pred }, moved_out)
-        | Right _ ->
-            let left = move_adjacent `L zip |> Result.get_ok |> g
-            and pred = move_adjacent `P zip |> Result.get_ok |> g in
-            Some (Right { value = zip; left; pred }, moved_out)
-        | Pred _ ->
-            let left = move_adjacent `L zip |> Result.get_ok |> g
-            and right = move_adjacent `R zip |> Result.get_ok |> g in
-            Some (Pred { value = zip; left; right }, moved_out))
-  (** It's kind of like putting each value into itself *)
-
-  let duplicate : 'a zipper -> 'a zipper lazy_zipper =
-   fun zip ->
-    let dia = g zip and path = CCSeq.unfold h zip in
-    LazyZipper (dia, path)
-
-  let x y (acc : 'acc) : 'acc diamond =
-    let leaf x acc = (Leaf acc : _ diamond) in
-    let diamond ~pred ~left ~right ~value x = (Leaf value : _ diamond) in
-    Diamond.cata ~leaf ~diamond y acc
-end
-
 (** Implementation details for BFS iteration. *)
 module Bfs_internal = struct
   let rec ktree_of_diamond (d, dia) =
@@ -361,7 +240,7 @@ module Bfs_internal = struct
         in
         `Node ((d, value), children)
 
-  let rec ktree_of_path (`S, path) : _ CCKTree.t =
+  let rec ktree_of_path path : _ CCKTree.t =
    fun () ->
     match path with
     | [] -> `Nil
@@ -373,14 +252,14 @@ module Bfs_internal = struct
           | Right { value; left; pred } -> (value, (`L, left), (`P, pred))
         in
         let children = List.map ktree_of_diamond [ x1; x2 ] in
-        `Node ((`S, value), ktree_of_path (`S, rest) :: children)
+        `Node ((`S, value), ktree_of_path rest :: children)
 
   let ktree_of_zipper (Zipper (dia, path)) : _ CCKTree.t =
     ktree_of_diamond (`Root, dia) %> function
     | `Node (x, children) ->
         `Node
           ( x,
-            ktree_of_path (`S, path)
+            ktree_of_path path
             :: (children
                  : (unit -> [ `Node of _ * 'b list ] as 'b) list
                  :> _ CCKTree.t list) )
@@ -394,6 +273,17 @@ module Bfs_internal = struct
         let acc = f acc x in
         `Node (acc, List.map (scan_ktree f acc) children)
 
+  let move : 'a zipper -> [ `L | `P | `R | `Root | `S ] -> 'a zipper =
+   fun zip -> function
+    | `L -> move_in_to `L zip |> Result.get_ok
+    | `R -> move_in_to `R zip |> Result.get_ok
+    | `P -> move_in_to `P zip |> Result.get_ok
+    | `S -> move_out_of zip |> Result.get_ok
+    | `Root -> zip
+
+  let duplicate zip =
+    scan_ktree (fun x (a, b) -> move x a) zip (ktree_of_zipper zip)
+
   (* Additional () inside the map function defers running [move] until needed. *)
 
   let rec bfs_tree_step q : ('a * 'a CCSimple_queue.t) option =
@@ -403,11 +293,18 @@ module Bfs_internal = struct
         match tree () with
         | `Nil -> bfs_tree_step q
         | `Node (x, children) -> Some (x, CCSimple_queue.add_list q children))
+
+  let pset : _ CCKTree.pset =
+    object (this)
+      method add _ = this
+      method mem _ = false
+    end
 end
 
 (** Iterates over all {!zipper} positions of the given zipper, {i breadth-first}
     through the diamond structure starting from the current position. *)
-let iter_bfs st : 'a Iter.t = 2
+let iter_bfs zip : _ Iter.t =
+  Iter.of_seq (CCKTree.bfs ~pset:Bfs_internal.pset (Bfs_internal.duplicate zip))
 
 (** {1 Derived functions} *)
 
