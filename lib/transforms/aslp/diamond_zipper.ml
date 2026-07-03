@@ -51,13 +51,13 @@ open Diamond
 (** Moving one step through the {!Diamond.diamond}. Each variant records the
     direction of the step, as well as the paths {i not} taken. This allows the
     {!Diamond.diamond} to be reconstructed when moving "back" through a path. *)
-type 'a step =
-  | Left of { value : 'a; right : 'a diamond; pred : 'a diamond }
-  | Right of { value : 'a; left : 'a diamond; pred : 'a diamond }
-  | Pred of { value : 'a; left : 'a diamond; right : 'a diamond }
+type ('a, 'd) step =
+  | Left of { value : 'a; right : 'd; pred : 'd }
+  | Right of { value : 'a; left : 'd; pred : 'd }
+  | Pred of { value : 'a; left : 'd; right : 'd }
 [@@deriving show { with_path = false }]
 
-type 'a path = 'a step list [@@deriving show]
+type 'a path = ('a, 'a diamond) step list [@@deriving show]
 (** A type describing a path to a "hole" in a {!Diamond.diamond}, with the
     ability to reconstruct the full {!Diamond.diamond} when the hole is filled.
 
@@ -229,20 +229,18 @@ let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
 (** {1 Breadth-first iteration} *)
 
 module Lazy = struct
-  type 'a lazy_diamond =
+  type 'a lazy_diamond_cell =
     | Leaf of 'a
     | Diamond of {
-        pred : 'a lazy_diamond Lazy.t;
-        left : 'a lazy_diamond Lazy.t;
-        right : 'a lazy_diamond Lazy.t;
+        pred : 'a lazy_diamond;
+        left : 'a lazy_diamond;
+        right : 'a lazy_diamond;
         value : 'a;
       }
 
-  type 'a lazy_step =
-    | Left of { value : 'a; right : 'a lazy_diamond; pred : 'a lazy_diamond }
-    | Right of { value : 'a; left : 'a lazy_diamond; pred : 'a lazy_diamond }
-    | Pred of { value : 'a; left : 'a lazy_diamond; right : 'a lazy_diamond }
+  and 'a lazy_diamond = 'a lazy_diamond_cell Lazy.t
 
+  type 'a lazy_step = ('a, 'a lazy_diamond) step
   type 'a lazy_path = 'a lazy_step Seq.t
   type 'a lazy_zipper = LazyZipper of 'a lazy_diamond * 'a lazy_path
 
@@ -257,7 +255,7 @@ module Lazy = struct
         Diamond { value = zip; left; right; pred }
 
   (** Steps out by one step *)
-  let h : 'a zipper -> ('a zipper step * 'a zipper) option = function
+  let h : 'a zipper -> (_ step * 'a zipper) option = function
     | Zipper (_, []) -> None
     | Zipper (_, step :: _) as zip -> (
         let moved_out = move_out_of zip |> Result.get_ok in
@@ -279,14 +277,12 @@ module Lazy = struct
   (** structure is unchanged! but each value position is augmented with "all of
       the context". *)
   let rec g : 'a zipper -> 'a zipper lazy_diamond = function
-    | Zipper (Leaf _, path) as zip -> Leaf zip
+    | Zipper (Leaf _, path) as zip -> lazy (Leaf zip)
     | Zipper (Diamond _, _) as zip ->
-        let left = zip |> lazy_g (move_in_to `L)
-        and right = zip |> lazy_g (move_in_to `R)
-        and pred = zip |> lazy_g (move_in_to `P) in
-        Diamond { value = zip; left; right; pred }
-
-  and lazy_g f arg = Lazy.from_val arg |> Lazy.map (f %> Result.get_ok %> g)
+        let left = zip |> move_in_to `L |> Result.get_ok |> g
+        and right = zip |> move_in_to `R |> Result.get_ok |> g
+        and pred = zip |> move_in_to `P |> Result.get_ok |> g in
+        lazy (Diamond { value = zip; left; right; pred })
 
   (** Steps out by one step *)
   let h : 'a zipper -> ('a zipper lazy_step * 'a zipper) option = function
@@ -316,8 +312,6 @@ end
 
 (** Implementation details for BFS iteration. *)
 module Bfs_internal = struct
-  type 'a dzipper = [ `Down | `Up ] * 'a zipper
-
   let rec ktree_of_diamond (d, dia) =
    fun () ->
     match dia with
@@ -352,15 +346,14 @@ module Bfs_internal = struct
                  : (unit -> [ `Node of _ * 'b list ] as 'b) list
                  :> _ CCKTree.t list) )
 
-  let rec scan_ktree f tree acc : _ CCKTree.t =
+  let rec scan_ktree (f : 'acc -> 'a -> 'acc) acc (tree : 'a CCKTree.t) :
+      'acc CCKTree.t =
    fun () ->
     match tree () with
     | `Nil -> `Nil
     | `Node (x, children) ->
-        `Node
-          ( acc,
-            let acc = f acc x in
-            List.map (fun c -> scan_ktree f c acc) children )
+        let acc = f acc x in
+        `Node (acc, List.map (scan_ktree f acc) children)
 
   (* Additional () inside the map function defers running [move] until needed. *)
 
