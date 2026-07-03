@@ -49,13 +49,13 @@ open Diamond
 (** Moving one step through the {!Diamond.diamond}. Each variant records the
     direction of the step, as well as the paths {i not} taken. This allows the
     {!Diamond.diamond} to be reconstructed when moving "back" through a path. *)
-type ('a, 'd) step =
-  | Left of { value : 'a; right : 'd; pred : 'd }
-  | Right of { value : 'a; left : 'd; pred : 'd }
-  | Pred of { value : 'a; left : 'd; right : 'd }
+type 'a step =
+  | Left of { value : 'a; right : 'a diamond; pred : 'a diamond }
+  | Right of { value : 'a; left : 'a diamond; pred : 'a diamond }
+  | Pred of { value : 'a; left : 'a diamond; right : 'a diamond }
 [@@deriving show { with_path = false }]
 
-type 'a path = ('a, 'a diamond) step list [@@deriving show]
+type 'a path = 'a step list [@@deriving show]
 (** A type describing a path to a "hole" in a {!Diamond.diamond}, with the
     ability to reconstruct the full {!Diamond.diamond} when the hole is filled.
 
@@ -228,115 +228,69 @@ let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
 
 (** Implementation details for BFS iteration. *)
 module Bfs_internal = struct
-  type 'a lazy_diamond_cell =
-    | Leaf of 'a
-    | Diamond of {
-        pred : 'a lazy_diamond;
-        left : 'a lazy_diamond;
-        right : 'a lazy_diamond;
-        value : 'a;
-      }
+  type from_direction =
+    [ `In of [ `P | `L | `R ] | `Out of [ `P | `L | `R ] | `Initial ]
+  (** Direction which a BFS traversal {i came from}. [`In] and [`Out] record the
+      field that was moved in to or out of. *)
 
-  and 'a lazy_diamond = 'a lazy_diamond_cell Lazy.t
-  (** Alternate version of {!Diamond.diamond} but with lazy recursive cells.
-      This is particularly useful to avoid eagerly computing the full diamond of
-      {!duplicate}.
+  type to_direction = [ `In of [ `P | `L | `R ] | `Out ]
+  (** Direction which a BFS traversal is {i going to}. *)
 
-      There is not great support for interoperaability between lazy and non-lazy
-      diamonds at the moment. *)
+  (** Moves in a BFS direction while recording the direction moved. *)
+  let move (d : to_direction) zip : from_direction * _ result =
+    match (d, zip) with
+    | (`In d as from), _ -> (from, move_in_to d zip)
+    | `Out, Zipper (_, Pred _ :: _) -> (`Out `P, move_out_of zip)
+    | `Out, Zipper (_, Left _ :: _) -> (`Out `L, move_out_of zip)
+    | `Out, Zipper (_, Right _ :: _) -> (`Out `R, move_out_of zip)
+    | `Out, Zipper (_, []) -> (`Initial, Error zip)
 
-  type 'a lazy_step = ('a, 'a lazy_diamond) step
-  type 'a lazy_path = 'a lazy_step Seq.t
-  type 'a lazy_zipper = LazyZipper of 'a lazy_diamond * 'a lazy_path
+  (** [directions from] returns valid adjacent directions, given that the
+      current zipper was reached from the direction [from]. [from] is used to
+      avoid going backwards. For example, if we have just gone [`In], we mustn't
+      go back [`Out]. *)
+  let directions : from_direction -> to_direction list = function
+    | `Initial -> [ `Out; `In `L; `In `R; `In `P ]
+    | `In _ -> [ `In `L; `In `R; `In `P ]
+    | `Out `P -> [ `Out; `In `L; `In `R ]
+    | `Out `L -> [ `Out; `In `R; `In `P ]
+    | `Out `R -> [ `Out; `In `L; `In `P ]
+  (* Order of this list controls iteration order within a BFS level. *)
 
-  (** Zippers {i within} the given zipper, returned as a lazy diamond with the
-      same structure as the given zipper's subdiamond.
+  (** Converts the given [zip] into a tree. If this is being called recursively,
+      [from] should be set to the direction which led to [zip] to avoid cyclic
+      backtracking. In the initial call, it should be set to [`Initial] to
+      include all starting directions. *)
+  let rec to_ktree from zip : 'a zipper CCKTree.t =
+   fun () -> `Node (zip, to_ktree_successors from zip)
 
-      The structure is unchanged! But each value position is augmented with "all
-      of the context". *)
-  let rec inner_zippers : 'a zipper -> 'a zipper lazy_diamond = function
-    | Zipper (Leaf _, path) as zip -> lazy (Leaf zip)
-    | Zipper (Diamond _, _) as zip ->
-        let left = recurse (move_in_to `L) zip
-        and right = recurse (move_in_to `R) zip
-        and pred = recurse (move_in_to `P) zip in
-        lazy (Diamond { value = zip; left; right; pred })
+  and to_ktree_successors from zip : 'a zipper CCKTree.t list =
+    directions from
+    |> List.map (fun d () ->
+        match move d zip with
+        | d, Ok zip -> to_ktree d zip ()
+        | _, Error _ -> `Nil)
+  (* Additional () inside the map function defers running [move] until needed. *)
 
-  and recurse f x = lazy (f x |> Result.get_ok |> inner_zippers |> Lazy.force)
+  type 'a queue = 'a CCKTree.t CCSimple_queue.t
 
-  (** Zippers {i above} the given zipper, returned one step layer at a time.
-      That is, the zippers obtained by walking back up the tree.
-
-      Steps out step at a time. *)
-  let outer_zippers : 'a zipper -> ('a zipper lazy_step * 'a zipper) option =
-    function
-    | Zipper (_, []) -> None
-    | Zipper (_, step :: _) as zip -> (
-        let moved_out = move_out_of zip |> Result.get_ok in
-        match step with
-        | Left _ ->
-            let right = recurse (move_adjacent `R) zip
-            and pred = recurse (move_adjacent `P) zip in
-            Some (Left { value = zip; right; pred }, moved_out)
-        | Right _ ->
-            let left = recurse (move_adjacent `L) zip
-            and pred = recurse (move_adjacent `P) zip in
-            Some (Right { value = zip; left; pred }, moved_out)
-        | Pred _ ->
-            let left = recurse (move_adjacent `L) zip
-            and right = recurse (move_adjacent `R) zip in
-            Some (Pred { value = zip; left; right }, moved_out))
-  (** It's kind of like putting each value into itself *)
-
-  (** Comonad [duplicate] implemention. Each position of the given zipper is
-      filled with the zipper focused on that position. *)
-  let duplicate : 'a zipper -> 'a zipper lazy_zipper =
-   fun zip -> LazyZipper (inner_zippers zip, CCSeq.unfold outer_zippers zip)
-
-  let rec ktree_of_diamond dia =
-   fun () ->
-    match Lazy.force dia with
-    | Leaf x -> `Node (x, [])
-    | Diamond { value; left; right; pred } ->
-        let children = List.map ktree_of_diamond [ pred; left; right ] in
-        `Node (value, children)
-
-  let rec ktree_of_path (path : _ Seq.t) : _ CCKTree.t =
-   fun () ->
-    match path () with
-    | Nil -> `Nil
-    | Cons (Pred { value; left = x1; right = x2 }, rest)
-    | Cons (Left { value; right = x1; pred = x2 }, rest)
-    | Cons (Right { value; left = x1; pred = x2 }, rest) ->
-        let children = List.map ktree_of_diamond [ x1; x2 ] in
-        `Node (value, ktree_of_path rest :: children)
-
-  let ktree_of_zipper (LazyZipper (dia, path)) : _ CCKTree.t =
-    ktree_of_diamond dia %> function
-    | `Node (x, children) ->
-        `Node
-          ( x,
-            ktree_of_path path
-            :: (children
-                 : (unit -> [ `Node of _ * 'b list ] as 'b) list
-                 :> _ CCKTree.t list) )
+  let rec bfs_tree_step (q : 'a queue) : ('a * 'a queue) option =
+    match CCSimple_queue.pop q with
+    | None -> None
+    | Some (tree, q) -> (
+        match tree () with
+        | `Nil -> bfs_tree_step q
+        | `Node (x, children) -> Some (x, CCSimple_queue.add_list q children))
 
   (** Breadth-first search of a tree. Assumes the tree is a tree, otherwise it
       may repeat nodes or it may not terminate. *)
-  let bfs_tree ktree =
-    let noop_pset =
-      object (this)
-        method add _ = this
-        method mem _ = false
-      end
-    in
-    CCKTree.bfs ~pset:noop_pset ktree
+  let bfs_tree tree : _ Iter.t =
+    Iter.unfoldr bfs_tree_step (CCSimple_queue.of_list [ tree ])
 end
 
 (** Iterates over all {!zipper} positions of the given zipper, {i breadth-first}
     through the diamond structure starting from the current position. *)
-let iter_bfs zip =
-  Bfs_internal.(zip |> duplicate |> ktree_of_zipper |> bfs_tree) |> Iter.of_seq
+let iter_bfs st = Bfs_internal.(st |> to_ktree `Initial |> bfs_tree)
 
 (** {1 Derived functions} *)
 
