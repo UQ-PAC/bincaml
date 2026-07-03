@@ -270,18 +270,17 @@ module Bfs_internal = struct
         let acc = f acc x in
         `Node (acc, List.map (scan_ktree f acc) children)
 
-  let move : 'a zipper -> [ `L | `P | `R | `Root | `S ] -> 'a zipper =
-   fun zip -> function
-    | `L -> move_in_to `L zip |> Result.get_ok
-    | `R -> move_in_to `R zip |> Result.get_ok
-    | `P -> move_in_to `P zip |> Result.get_ok
-    | `S -> move_out_of zip |> Result.get_ok
-    | `Root -> zip
+  let move : [ `L | `P | `R | `Root | `S ] -> 'a zipper -> 'a zipper = function
+    | `L -> move_in_to `L %> Result.get_ok
+    | `R -> move_in_to `R %> Result.get_ok
+    | `P -> move_in_to `P %> Result.get_ok
+    | `S -> move_out_of %> Result.get_ok
+    | `Root -> Fun.id
 
   (** (A rough approximation of) comonad duplicate. Builds a tree of all
       reachable zipper positions from the given zipper. *)
   let duplicate zip =
-    scan_ktree (fun x (a, _) -> move x a) zip (ktree_of_zipper zip)
+    scan_ktree (fun x (d, _) -> move d x) zip (ktree_of_zipper zip)
 
   let pset : _ CCKTree.pset =
     object (this)
