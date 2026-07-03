@@ -244,6 +244,40 @@ module Lazy = struct
   type 'a lazy_path = 'a lazy_step Seq.t
   type 'a lazy_zipper = LazyZipper of 'a lazy_diamond * 'a lazy_path
 
+  let rec of_diamond : 'a diamond -> 'a lazy_diamond = function
+    | Leaf x -> Lazy.from_val (Leaf x)
+    | Diamond { value; left; right; pred } ->
+        lazy
+          (let left = of_diamond left
+           and right = of_diamond right
+           and pred = of_diamond pred in
+           Diamond { value; left; right; pred })
+
+  let rec scan_diamond ~v ~l ~r ~p acc : 'a lazy_diamond -> _ lazy_diamond =
+    Lazy.map (function
+      | Leaf x -> Leaf (v acc x)
+      | Diamond { value; left; right; pred } ->
+          let value = v acc value in
+          let left = scan_diamond ~v ~l ~r ~p (l value) left
+          and right = scan_diamond ~v ~l ~r ~p (r value) right
+          and pred = scan_diamond ~v ~l ~r ~p (p value) pred in
+          Diamond { value; left; right; pred })
+
+  let rec scan_path ~v ~l ~r ~p ~s acc : 'a lazy_path -> _ lazy_path =
+   fun path () ->
+    match path () with
+    | Nil -> Nil
+    | Cons (step, rest) -> (
+        match step with
+        | Left { value; right; pred } ->
+            let value = s acc value in
+            let right = scan_diamond ~v ~l ~r ~p (r value) right
+            and pred = scan_diamond ~v ~l ~r ~p (p value) pred in
+            Cons
+              (Left { value; right; pred }, scan_path ~v ~l ~r ~p ~s value rest)
+        | Right _ -> _
+        | Pred _ -> _)
+
   (** structure is unchanged! but each value position is augmented with "all of
       the context". *)
   let rec g : 'a zipper -> 'a zipper diamond = function
@@ -308,6 +342,11 @@ module Lazy = struct
    fun zip ->
     let dia = g zip and path = CCSeq.unfold h zip in
     LazyZipper (dia, path)
+
+  let x y (acc : 'acc) : 'acc diamond =
+    let leaf x acc = (Leaf acc : _ diamond) in
+    let diamond ~pred ~left ~right ~value x = (Leaf value : _ diamond) in
+    Diamond.cata ~leaf ~diamond y acc
 end
 
 (** Implementation details for BFS iteration. *)
