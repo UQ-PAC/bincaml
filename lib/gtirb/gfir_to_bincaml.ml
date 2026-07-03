@@ -151,18 +151,27 @@ let reorder_fallthrough (g : Gfir.G.t) =
       |> List.partition
            Gfir.Edge.(
              function
-             | _, Some { type' = Gfir.Edge.Type_Fallthrough }, v -> true
+             | _, Some { type' = Type_Fallthrough; conditional = false }, v ->
+                 true
              | _ -> false)
+    in
+    let is_call_edge = function
+      | Gfir.Edge.(_, Some { type' = Type_Call }, _) -> true
+      | Gfir.Edge.(_, Some { type' = Type_Syscall }, _) -> true
+      | _ -> false
     in
     (* check if these successors have no successors, this transform is made
          safe by the assertions *)
-    match ft with
-    | [] -> g
-    | [ ((_, _, fallthru_tgt) as fe) ] ->
-        let g = Gfir.G.remove_edge_e g fe in
-        List.fold_left
-          (fun g (_, _, s) -> Gfir.G.add_edge g s fallthru_tgt)
-          g nft
+    match (ft, nft) with
+    | [], _ -> g
+    | [ ((_, _, fallthru_tgt) as fe) ], os ->
+        if not @@ List.exists is_call_edge os then g
+        else begin
+          let g = Gfir.G.remove_edge_e g fe in
+          List.fold_left
+            (fun g (_, _, s) -> Gfir.G.add_edge g s fallthru_tgt)
+            g nft
+        end
     | _ -> failwith "odd: multiple fallthru edges"
   in
   Gfir.G.fold_vertex reorder_fallthrough_succs g g
