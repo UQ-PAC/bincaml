@@ -252,19 +252,26 @@ struct
   let f_gen_bool_lit : bool -> expr = Expr.BasilExpr.boolconst
   let f_gen_int_lit : bigint -> expr = Expr.BasilExpr.intconst
 
-  let f_decl_bv : string -> bigint -> lexpr =
-   fun name size -> bincaml_local_var name (Types.Bitvector (Z.to_int size))
-
-  let f_decl_bool : string -> lexpr = fun _ -> failwith "f_decl_bool"
-
-  let f_gen_load : lexpr -> expr =
-   fun lhs -> Expr.BasilExpr.rvar (Aslp_lexpr.to_var lhs)
-
   let f_gen_store : lexpr -> expr -> unit =
    fun lhs rhs ->
     bincaml_internal_emit
       (Stmt.Instr_Assign
          { attrib = Attrib.empty; al = [ (Aslp_lexpr.to_var lhs, rhs) ] })
+
+  let f_decl_bv : string -> bigint -> lexpr =
+   fun name size ->
+    let v = bincaml_local_var name (Types.Bitvector (Z.to_int size)) in
+    f_gen_store v (f_gen_bit_lit size (Bitvec.zero ~size:(Z.to_int size)));
+    v
+
+  let f_decl_bool : string -> lexpr =
+   fun name ->
+    let v = bincaml_local_var name Types.Boolean in
+    f_gen_store v (f_gen_bool_lit false);
+    v
+
+  let f_gen_load : lexpr -> expr =
+   fun lhs -> Expr.BasilExpr.rvar (Aslp_lexpr.to_var lhs)
 
   let f_gen_array_load : lexpr -> bigint -> expr =
    fun array idx ->

@@ -61,8 +61,8 @@ let rec first = function Leaf x -> x | Diamond { pred } -> first pred
 
 (** {1 Map, iter, and fold} *)
 
-(** Maps the given function over the {!diamond} structure, processing values
-    {i forwards} in control-flow order. *)
+(** Maps the given function over the {!diamond} structure, performing
+    side-effects {i forwards} in control-flow order. *)
 let rec map_forwards f = function
   | Leaf x -> Leaf (f x)
   | Diamond { value; left; right; pred } ->
@@ -72,8 +72,8 @@ let rec map_forwards f = function
       let value = f value in
       Diamond { value; left; right; pred }
 
-(** Maps the given function over the {!diamond} structure, processing values
-    {i backwards} in control-flow order. *)
+(** Maps the given function over the {!diamond} structure, performing
+    side-effects {i backwards} in control-flow order. *)
 let rec map_backwards f = function
   | Leaf x -> Leaf (f x)
   | Diamond { value; left; right; pred } ->

@@ -89,11 +89,9 @@ let aarch64_mem_of_prog prog =
 
 (** Returns the byte address of the given block, if present. *)
 let address_of_block block =
-  block.Lang.Block.attrib
-  |> StringMap.find_opt ".address"
-  |> Option.map (function
-    | `Integer x -> x
-    | _ -> failwith "address_of_block: invalid type in .address")
+  Some (`Assoc block.Lang.Block.attrib)
+  |> Attrib.find_int_opt ".address"
+  |> Option.get_exn_or "address_of_block: expected .address with int value"
 
 (** {1 Transforming Bincaml IR} *)
 
@@ -112,7 +110,7 @@ let insert_one_diamond ~proc dia =
     with_ids |> Diamond.iter_backwards
     |> Iter.fold
          (fun proc (id, successors, lifter_block) ->
-           let { Aslp_state.stmts; assume } = lifter_block in
+           let { stmts; assume } : Aslp_state.aslp_block = lifter_block in
            let stmts =
              Stmt.Instr_Assume
                { attrib = Attrib.empty; body = assume; branch = true }
@@ -137,26 +135,15 @@ let transform_block (module I : Bincaml_ibi.IBI) ~proc bid =
   in
   let opcodes, attribs = List.split intrins in
 
-  let return_blocks = Procedure.get_blocks_pred proc Return in
-
-  (* Get the block's address. Permit a missing address iff opcodes is empty. *)
-  let address =
-    match (address_of_block b, opcodes) with
-    | Some address, _ -> Bitvec.create ~size:64 address
-    | None, [] -> Bitvec.of_int ~size:64 (-1)
-    | None, _ :: _ ->
-        failwith
-          (Printf.sprintf "transform_block: block missing .address attrib: %s"
-             (ID.to_string bid))
-  in
-
   if List.is_empty opcodes then proc
   else (
     (* TODO: this is not a fundamental limitation, but is because the get_blocks_succ
        function drops Return vertices. *)
-    if List.mem bid return_blocks then
+    if List.mem bid (Procedure.get_blocks_pred proc Return) then
       failwith
         "transform_block: cannot transform a returning block at the moment";
+
+    let address = Bitvec.create ~size:64 (address_of_block b) in
 
     (* Clear statements from first block aside from those before the intrinsics. *)
     let proc =
@@ -213,7 +200,7 @@ let transform_procedure ~memory proc =
 
 (** Adds all architectural variable declarations to the given program. *)
 let add_aarch64_global_declarations prog =
-  Aslp_lexpr.global_vars ()
+  Lazy.force Aslp_lexpr.global_vars
   |> List.fold_left
        (fun prog var ->
          let decl =

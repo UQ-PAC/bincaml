@@ -44,8 +44,6 @@ open Diamond
     {{:https://www.youtube.com/watch?v=HqHdgBXOOsE} a talk on YouTube} (the
     first 10 minutes are most relevant). *)
 
-open Diamond
-
 (** {1 Preliminaries} *)
 
 (** Moving one step through the {!Diamond.diamond}. Each variant records the
