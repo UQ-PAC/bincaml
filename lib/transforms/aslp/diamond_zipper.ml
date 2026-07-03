@@ -316,6 +316,21 @@ end
 
 (** Implementation details for BFS iteration. *)
 module Bfs_internal = struct
+  type 'a dzipper = [ `Down | `Up ] * 'a zipper
+
+  let adjacent_zippers : 'a dzipper -> 'a dzipper list = function
+    | `Down, zip ->
+        [ `L; `R; `P ]
+        |> List.map (fun d -> move_in_to d zip)
+        |> CCList.keep_ok
+        |> List.map (CCPair.make `Down)
+    | `Up, zip ->
+let in_directions = match
+        [ move_out_of; move_adjacent `L; move_adjacent `R; move_adjacent `P ]
+        |> List.map (fun move -> move zip)
+        |> CCList.keep_ok
+        |> List.map (CCPair.make `Down)
+
   let rec ktree_of_diamond dia =
    fun () ->
     match dia with
