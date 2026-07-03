@@ -26,7 +26,8 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
     (Leaf
        { Aslp_state.assume = true;
          stmts =
-         [var var_0:bv64 := $R2; var var_1:bv64 := $R3;
+         [var var_0:bv64 := 0x0:bv64; var var_0:bv64 := $R2;
+           var var_1:bv64 := 0x0:bv64; var var_1:bv64 := $R3;
            $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
            (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
          pc_assign = (Some 0x2004:bv64) })
@@ -103,7 +104,8 @@ let%expect_test "lift: b #16" =
     (Leaf
        { Aslp_state.assume = true;
          stmts =
-         [var var_0:bv64 := $R2; var var_1:bv64 := $R3;
+         [var var_0:bv64 := 0x0:bv64; var var_0:bv64 := $R2;
+           var var_1:bv64 := 0x0:bv64; var var_1:bv64 := $R3;
            $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
            (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
          pc_assign = (Some 0x2004:bv64) })
@@ -157,6 +159,7 @@ proc @main()  -> () {  }
        ];
        block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
          guard true;
+         var var:bv64 := 0x0:bv64;
          var var:bv64 := $SP;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
           0xffffffffffffffe0:bv64) $R29 8;
@@ -168,6 +171,7 @@ proc @main()  -> () {  }
        ];
        block %block_1 { .asm = "mov x29, sp" } [
          guard true;
+         var var_1:bv64 := 0x0:bv64;
          $R29:bv64 := bvadd($SP, 0x0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
          goto (%block_2);
@@ -186,6 +190,7 @@ proc @main()  -> () {  }
        ];
        block %block_4 { .asm = "ldrsw x0, [sp, #0x1c]" } [
          guard true;
+         var var_2:bv32 := 0x0:bv32;
          $mem:(bv64->bv8) := load le var_3:bv4 bvadd($SP, 0x1c:bv64) 4;
          var var_2:bv32 := var_3:bv4;
          $R0:bv64 := zero_extend(0, sign_extend(32, var_2:bv32));
@@ -267,10 +272,10 @@ proc @main()  -> () {  }
     var $Z30:bv128;
     var $FPSR:bv64;
     var $FPCR:bv64;
-    var $PSTATE_C:bv1;
-    var $PSTATE_Z:bv1;
-    var $PSTATE_V:bv1;
     var $PSTATE_N:bv1;
+    var $PSTATE_Z:bv1;
+    var $PSTATE_C:bv1;
+    var $PSTATE_V:bv1;
     var $PSTATE_A:bv1;
     var $PSTATE_D:bv1;
     var $PSTATE_DIT:bv1;
@@ -419,10 +424,10 @@ proc @Sqrt()  -> () {  }
     var $Z30:bv128;
     var $FPSR:bv64;
     var $FPCR:bv64;
-    var $PSTATE_C:bv1;
-    var $PSTATE_Z:bv1;
-    var $PSTATE_V:bv1;
     var $PSTATE_N:bv1;
+    var $PSTATE_Z:bv1;
+    var $PSTATE_C:bv1;
+    var $PSTATE_V:bv1;
     var $PSTATE_A:bv1;
     var $PSTATE_D:bv1;
     var $PSTATE_DIT:bv1;
@@ -547,10 +552,10 @@ proc @main()  -> () {  }
     var $Z30:bv128;
     var $FPSR:bv64;
     var $FPCR:bv64;
-    var $PSTATE_C:bv1;
-    var $PSTATE_Z:bv1;
-    var $PSTATE_V:bv1;
     var $PSTATE_N:bv1;
+    var $PSTATE_Z:bv1;
+    var $PSTATE_C:bv1;
+    var $PSTATE_V:bv1;
     var $PSTATE_A:bv1;
     var $PSTATE_D:bv1;
     var $PSTATE_DIT:bv1;
