@@ -60,6 +60,7 @@ let typ (x : t) =
 
 let name = function
   | Local (v, _) -> v
+  | SP_EL0 -> "SP"
   | R (Some n) -> Printf.sprintf "R%d" n
   | Z (Some n) -> Printf.sprintf "Z%d" n
   | R None | Z None -> failwith "name_of_lexpr: array lexpr has no bincaml name"
@@ -77,3 +78,23 @@ let to_var x =
 
 let pc_var = to_var PC
 let branchtaken_var = to_var BranchTaken
+
+let predefined =
+  lazy
+    ([ PC; SP_EL0 ]
+    @ List.init 31 (fun i -> R (Some i))
+    @ List.init 31 (fun i -> Z (Some i))
+    @ [ FPSR; FPCR; PSTATE_N; PSTATE_Z; PSTATE_C; PSTATE_V ]
+    @ [ PSTATE_A; PSTATE_D; PSTATE_DIT; PSTATE_F; PSTATE_I ]
+    @ [
+        PSTATE_PAN; PSTATE_SP; PSTATE_SSBS; PSTATE_TCO; PSTATE_UAO; PSTATE_BTYPE;
+      ]
+    @ [ BTypeCompatible; BranchTaken; BTypeNext; ExclusiveLocal ])
+
+let global_vars =
+  Lazy.map
+    (List.filter_map (fun v ->
+         Option.if_
+           (fun v -> match Var.scope v with GlobalVar -> true | _ -> false)
+           (to_var v)))
+    predefined

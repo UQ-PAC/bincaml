@@ -4,6 +4,7 @@ open Common
 (** Makes a concrete module which implements {!Bincaml_ibi.IBI}. *)
 module Make (S : sig
   val initial_lifter_state : Aslp_state.lifter_state
+  val bincaml_memory_var : unit -> Var.t
 end) =
 struct
   (** {2 Type definitions} *)
@@ -28,7 +29,7 @@ struct
     !bincaml_lifter_state.address |> Option.get_exn_or err
 
   (** Emits the given Bincaml statement. *)
-  let bincaml_emit stmt =
+  let bincaml_internal_emit stmt =
     bincaml_lifter_state :=
       !bincaml_lifter_state |> Aslp_state.add_stmt_to_active stmt
 
@@ -62,11 +63,13 @@ struct
       and f = Aslp_state.empty_block ~assume:(Expr.BasilExpr.boolnot cond) ()
       and m = Aslp_state.empty_block_unconditional () in
       (t, f, m)
+
+    let equal_state = CCEqual.map (fun x -> x.Aslp_state.stmts) CCEqual.physical
   end)
 
-  let f_switch_context b =
-    f_switch_context b;
-    match b with
+  let f_switch_context (d, ctx) =
+    f_switch_context (d, ctx);
+    match d with
     | `T | `F -> ()
     | `M ->
         let address = bincaml_get_address ()
@@ -83,7 +86,13 @@ struct
   let get_ir () =
     let diamond = !bincaml_lifter_state.diamond
     and address = bincaml_get_address () in
-    diamond |> Aslp_state.ensure_pc_assigned ~address |> Diamond.of_zipper
+    match Diamond_zipper.path diamond with
+    | _ :: _ ->
+        failwith "invariant violation: context switches did not return to merge"
+    | [] ->
+        diamond
+        |> Aslp_state.ensure_pc_assigned ~address
+        |> Diamond_zipper.to_diamond
 
   (** {2 Instruction building interface implementation} *)
 
@@ -233,7 +242,9 @@ struct
   let v___ExclusiveLocal : lexpr = ExclusiveLocal
 
   let f_gen_assert : expr -> unit =
-   fun e -> bincaml_emit (Stmt.Instr_Assert { attrib = Attrib.empty; body = e })
+   fun e ->
+    bincaml_internal_emit
+      (Stmt.Instr_Assert { attrib = Attrib.empty; body = e })
 
   let f_gen_bit_lit : bigint -> bitvector -> expr =
    fun _ bv -> Expr.BasilExpr.const (`Bitvector bv)
@@ -241,19 +252,26 @@ struct
   let f_gen_bool_lit : bool -> expr = Expr.BasilExpr.boolconst
   let f_gen_int_lit : bigint -> expr = Expr.BasilExpr.intconst
 
-  let f_decl_bv : string -> bigint -> lexpr =
-   fun name size -> bincaml_local_var name (Types.Bitvector (Z.to_int size))
+  let f_gen_store : lexpr -> expr -> unit =
+   fun lhs rhs ->
+    bincaml_internal_emit
+      (Stmt.Instr_Assign
+         { attrib = Attrib.empty; al = [ (Aslp_lexpr.to_var lhs, rhs) ] })
 
-  let f_decl_bool : string -> lexpr = fun _ -> failwith "f_decl_bool"
+  let f_decl_bv : string -> bigint -> lexpr =
+   fun name size ->
+    let v = bincaml_local_var name (Types.Bitvector (Z.to_int size)) in
+    f_gen_store v (f_gen_bit_lit size (Bitvec.zero ~size:(Z.to_int size)));
+    v
+
+  let f_decl_bool : string -> lexpr =
+   fun name ->
+    let v = bincaml_local_var name Types.Boolean in
+    f_gen_store v (f_gen_bool_lit false);
+    v
 
   let f_gen_load : lexpr -> expr =
    fun lhs -> Expr.BasilExpr.rvar (Aslp_lexpr.to_var lhs)
-
-  let f_gen_store : lexpr -> expr -> unit =
-   fun lhs rhs ->
-    bincaml_emit
-      (Stmt.Instr_Assign
-         { attrib = Attrib.empty; al = [ (Aslp_lexpr.to_var lhs, rhs) ] })
 
   let f_gen_array_load : lexpr -> bigint -> expr =
    fun array idx ->
@@ -278,11 +296,23 @@ struct
 
   (** [f_gen_Mem_set size address size acctype value] *)
   let f_gen_Mem_set : bigint -> expr -> expr -> expr -> expr -> unit =
-   fun _ -> failwith "f_gen_Mem_set"
+   fun size addr _ _acctype value ->
+    let addr = Stmt.Addr { addr; size = Z.to_int size; endian = `Little }
+    and mem = S.bincaml_memory_var () in
+    bincaml_internal_emit
+      (Stmt.Instr_Store
+         { attrib = Attrib.empty; lhs = mem; rhs = mem; value; addr })
 
   (** [f_gen_Mem_read size address size acctype value] *)
   let f_gen_Mem_read : bigint -> expr -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_Mem_read"
+   fun size addr _ _acctype ->
+    let addr = Stmt.Addr { addr; size = Z.to_int size; endian = `Little }
+    and mem = S.bincaml_memory_var () in
+    let name = !bincaml_lifter_state.generator.local_id () in
+    let rhs = Var.create name (Types.bv (Z.to_int size)) in
+    bincaml_internal_emit
+      (Stmt.Instr_Load { attrib = Attrib.empty; lhs = mem; rhs; addr });
+    Expr.BasilExpr.rvar rhs
 
   let f_AtomicStart : unit -> unit = fun _ -> failwith "f_AtomicStart"
   let f_AtomicEnd : unit -> unit = fun _ -> failwith "f_AtomicEnd"
