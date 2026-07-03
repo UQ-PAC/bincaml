@@ -1,3 +1,6 @@
+(** Intermediate offline lifter state while {i within} one particular
+    instruction. *)
+
 open Lang
 open Common
 
@@ -43,7 +46,7 @@ type aslp_ids = { local_id : unit -> string }
 type lifter_state = {
   address : Bitvec.t option;
       (** Byte address of the instruction currently being lifted. *)
-  diamond : aslp_block Diamond.diamond_zipper;
+  diamond : aslp_block Diamond_zipper.zipper;
       (** Lifter state representing a control flow diamond while it is being
           built. *)
   generator : aslp_ids; [@opaque]  (** Generators for ID names. *)
@@ -77,7 +80,7 @@ let empty_block_unconditional () =
     {!Bincaml_ibi.IBI.bincaml_set_address} before starting any lifting. *)
 let empty_lifter_state ~generator () =
   {
-    diamond = Diamond.empty_zipper (empty_block_unconditional ());
+    diamond = Diamond_zipper.empty (empty_block_unconditional ());
     names = Hashtbl.create 16;
     address = None;
     generator;
@@ -128,7 +131,7 @@ let add_stmt_to_block blk ~stmt =
 
 let add_stmt_to_active stmt (lifter_state : lifter_state) =
   let diamond = lifter_state.diamond in
-  let diamond = diamond |> Diamond.modify (add_stmt_to_block ~stmt) in
+  let diamond = diamond |> Diamond_zipper.modify (add_stmt_to_block ~stmt) in
   { lifter_state with diamond }
 
 (** {1 Program counter functions} *)
@@ -136,7 +139,7 @@ let add_stmt_to_active stmt (lifter_state : lifter_state) =
 (** Ensures that the focused block has a PC assignment. If it already has
     {!pc_assign}, no changes are made. *)
 let ensure_pc_assigned ~address =
-  Diamond.modify (function
+  Diamond_zipper.modify (function
     | { pc_assign = None } as block ->
         let incremented =
           Expr.BasilExpr.bvconst Bitvec.(add address (of_int ~size:64 4))
@@ -168,30 +171,28 @@ let ensure_pc_assigned ~address =
     [PC] variable is either assigned on all paths or assigned on no paths (from
     the beginning of the instruction). *)
 let ensure_pc_consistency ~address state =
-  let before_skel = Diamond.skeleton state in
-  let left = state |> Diamond.move_in_to `L |> Result.get_ok
-  and right = state |> Diamond.move_in_to `R |> Result.get_ok in
+  let left = state |> Diamond_zipper.move_in_to `L |> Result.get_ok
+  and right = state |> Diamond_zipper.move_in_to `R |> Result.get_ok in
 
   (* Make PCs of left and right agree. Resulting state is at left or right. *)
   let state =
-    match ((Diamond.focus left).pc_assign, (Diamond.focus right).pc_assign) with
+    match Diamond_zipper.((focus left).pc_assign, (focus right).pc_assign) with
     | Some _, None -> right |> ensure_pc_assigned ~address
     | None, Some _ -> left |> ensure_pc_assigned ~address
     | None, None | Some _, Some _ -> left (* arbitrary *)
   in
 
   (* Move back to join point and re-compute left/right with updated state. *)
-  let state = state |> Diamond.move_out_of |> Result.get_ok in
-  let left = state |> Diamond.move_in_to `L |> Result.get_ok
-  and right = state |> Diamond.move_in_to `R |> Result.get_ok in
-  assert (Diamond.(equal_skeleton before_skel (skeleton state)));
+  let state = state |> Diamond_zipper.move_out_of |> Result.get_ok in
+  let left = state |> Diamond_zipper.move_in_to `L |> Result.get_ok
+  and right = state |> Diamond_zipper.move_in_to `R |> Result.get_ok in
 
   (* Propagate PC to join point using ITE. *)
-  match (Diamond.focus left, Diamond.focus right) with
+  match (Diamond_zipper.focus left, Diamond_zipper.focus right) with
   | { pc_assign = None }, { pc_assign = None } -> state
   | { pc_assign = Some lpc; assume }, { pc_assign = Some rpc } ->
       let ite = Expr.BasilExpr.(ifthenelse assume lpc rpc) in
-      state |> Diamond.modify (fun b -> { b with pc_assign = Some ite })
+      state |> Diamond_zipper.modify (fun b -> { b with pc_assign = Some ite })
   | _ -> failwith "invariant violation: pcs should agree at this point"
 
 (** {1 Formatters} *)
