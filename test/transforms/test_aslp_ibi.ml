@@ -40,7 +40,7 @@ let%expect_test "diamond bfs" =
     Diamond_zipper.(main |> of_diamond |> move_in_to `L |> Result.get_ok)
   in
   CCFormat.output Format.stdout (CCKTree.pp CCString.pp)
-    (Diamond_zipper.Bfs_internal.to_ktree `Initial zip
+    (Diamond_zipper.Bfs_internal.duplicate zip
     |> CCKTree.map Diamond_zipper.focus);
   [%expect
     {|
