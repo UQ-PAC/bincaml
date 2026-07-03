@@ -318,46 +318,49 @@ end
 module Bfs_internal = struct
   type 'a dzipper = [ `Down | `Up ] * 'a zipper
 
-  let adjacent_zippers : 'a dzipper -> 'a dzipper list = function
-    | `Down, zip ->
-        [ `L; `R; `P ]
-        |> List.map (fun d -> move_in_to d zip)
-        |> CCList.keep_ok
-        |> List.map (CCPair.make `Down)
-    | `Up, zip ->
-let in_directions = match
-        [ move_out_of; move_adjacent `L; move_adjacent `R; move_adjacent `P ]
-        |> List.map (fun move -> move zip)
-        |> CCList.keep_ok
-        |> List.map (CCPair.make `Down)
-
-  let rec ktree_of_diamond dia =
+  let rec ktree_of_diamond (d, dia) =
    fun () ->
     match dia with
-    | Leaf x -> `Node (x, [])
+    | Leaf x -> `Node ((d, x), [])
     | Diamond { value; left; right; pred } ->
-        let children = List.map ktree_of_diamond [ pred; left; right ] in
-        `Node (value, children)
+        let children =
+          List.map ktree_of_diamond [ (`L, left); (`R, right); (`P, pred) ]
+        in
+        `Node ((d, value), children)
 
-  let rec ktree_of_path path : _ CCKTree.t =
+  let rec ktree_of_path (`S, path) : _ CCKTree.t =
    fun () ->
     match path with
     | [] -> `Nil
-    | Pred { value; left = x1; right = x2 } :: rest
-    | Left { value; right = x1; pred = x2 } :: rest
-    | Right { value; left = x1; pred = x2 } :: rest ->
+    | step :: rest ->
+        let value, x1, x2 =
+          match step with
+          | Pred { value; left; right } -> (value, (`L, left), (`R, right))
+          | Left { value; right; pred } -> (value, (`R, right), (`P, pred))
+          | Right { value; left; pred } -> (value, (`L, left), (`P, pred))
+        in
         let children = List.map ktree_of_diamond [ x1; x2 ] in
-        `Node (value, ktree_of_path rest :: children)
+        `Node ((`S, value), ktree_of_path (`S, rest) :: children)
 
   let ktree_of_zipper (Zipper (dia, path)) : _ CCKTree.t =
-    ktree_of_diamond dia %> function
+    ktree_of_diamond (`Root, dia) %> function
     | `Node (x, children) ->
         `Node
           ( x,
-            ktree_of_path path
+            ktree_of_path (`S, path)
             :: (children
                  : (unit -> [ `Node of _ * 'b list ] as 'b) list
                  :> _ CCKTree.t list) )
+
+  let rec scan_ktree f tree acc : _ CCKTree.t =
+   fun () ->
+    match tree () with
+    | `Nil -> `Nil
+    | `Node (x, children) ->
+        `Node
+          ( acc,
+            let acc = f acc x in
+            List.map (fun c -> scan_ktree f c acc) children )
 
   (* Additional () inside the map function defers running [move] until needed. *)
 
