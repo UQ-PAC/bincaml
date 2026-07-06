@@ -163,9 +163,7 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
   match next_aarch64_stmt (Vector.to_list b.stmts) with
   | None -> None
   | Some (before, (opcode, intr_attrib), after) -> (
-      let address =
-        try address_of_attrib intr_attrib with _ -> address_of_attrib b.attrib
-      in
+      let address = address_of_attrib intr_attrib in
       match
         CCResult.guard_str (fun () -> lift_opcode (module I) ~address opcode)
       with
