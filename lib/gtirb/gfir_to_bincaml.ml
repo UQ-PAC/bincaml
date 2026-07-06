@@ -118,20 +118,23 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
       let attrib = Option.fold Attrib.merge_map_shadow attrib attrib' in
       let instrs =
         opcodes
-        |> List.map (fun op ->
+        |> List.mapi (fun i op ->
             let op = Opcode.of_be_bytes op in
+            let asm =
+              if conf.disas then
+                [ (".asm", `String (CCResult.retract (Disas.dis_op op))) ]
+              else []
+            and address =
+              let bv = Bitvec.of_int ~size:64 (address + (i * 4)) in
+              [ (".address", `Bitvector bv) ]
+            in
             Stmt.Instr_IntrinCall
               {
                 lhs = [];
                 name = Stmt.Intrinsic.Aarch64Eval;
                 args =
                   [ Expr.BasilExpr.const (`Bitvector (Opcode.to_bitvec op)) ];
-                attrib =
-                  op
-                  |> (if conf.disas then Disas.dis_op %> Result.to_option
-                      else const None)
-                  |> Option.map_or ~default:Attrib.empty (fun asm ->
-                      StringMap.singleton ".asm" (`String asm));
+                attrib = StringMap.of_list (asm @ address);
               })
       in
       match b with
