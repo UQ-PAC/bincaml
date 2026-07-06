@@ -149,11 +149,11 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
 
       let bot_binop f a b =
         match (a, b) with
-        | BotMap a, BotMap b -> BotMap (KM.idempotent_union (const f) a b)
+        | BotMap a, BotMap b -> BotMap (KM.idempotent_inter_filter (bot_v_op f) a b)
         | BotMap a, TopMap b | TopMap b, BotMap a ->
-            BotMap (KM.difference (bot_v_op f) b a)
+            BotMap (KM.difference (bot_v_op f) a b)
         | TopMap a, TopMap b ->
-            BotMap (KM.idempotent_inter_filter (bot_v_op f) a b)
+            TopMap (KM.idempotent_union (const f) a b)
 
       let top_binop f a b =
         match (a, b) with
@@ -164,7 +164,9 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
             TopMap (KM.idempotent_inter_filter (top_v_op f) a b)
 
       let join = top_binop V.join
+      
       let widening = top_binop V.widening
+      
       let narrowing = bot_binop V.narrowing
 
       let read k = function
@@ -220,21 +222,19 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
 end
 
 (** A partial mapping from variables x_i to abstract values v_i represented by V.
-    Represents the set of states where each x_i has any value in v_i, and each unmapped variable has any value. That is
-    to say that unmapped variables are implicitly mapped to [V.top].
-    The empty set of states is represented by a special element [Bot] in place of the map. It is the canonical
-    representation of any map containing a mapping to bot. Such a mapping thus represents a contradiction, rather than
-    an uninitialised variable. Uninitialised variables are represented by top.
 
-    We maintain the invariant that variables never map to top or bot.
+    Represents the set of states where each x_i has any value in v_i, and each unmapped variable has any value. That is
+    to say that unmapped variables are implicitly mapped to [V.top]. This is a refinement of {!LatticeMap}, where any
+    BotMap value, or TopMap value containing a variable mapped to bot, is canonicalised to [bottom]. Users can therefore
+    check if an element concretises to bottom with [equals bottom].
 
     The join and meet functions are defined component-wise. Thus, the join function returns an over-approximation of the
     set of states represented by the operands, as it derives a Cartesian product. For example, join [(x,0)] [(y,0)]
-    yields [], i.e. top. The meet function is precise with respect to the given meet function for [V]. That is, if the
-    latter is precise, an under-approximation, or an over-approximation, then the former is respectively precise, an
-    under-approximation, or an over-approximation. *)
-module ValueLattice (K : MapKey) (V : Lattice) = struct
-  module KM = PatriciaTree.MakeMap (K)
+    yields TopMap [], i.e. top. The meet function is precise with respect to the given meet function for [V]. That is,
+    if the latter is precise, an under-approximation, or an over-approximation, then the former is respectively precise,
+    an under-approximation, or an over-approximation. *)
+module ValueLattice (V : Lattice) = struct
+  module KM = PatriciaTree.MakeMap (Var)
   module V = V
 
   type t = Bot | Map of V.t KM.t
@@ -303,7 +303,7 @@ module ValueLattice (K : MapKey) (V : Lattice) = struct
         ~start:"("
         ~stop:(", _->" ^ top_char ^ ")")
         ~sep:", "
-        (fun (k, v) -> (K.show k) ^ "->" ^ (V.show v))
+        (fun (k, v) -> (Var.show k) ^ "->" ^ (V.show v))
 
   let pretty = let open Containers_pp in function
     | Bot -> text bot_char
@@ -313,7 +313,7 @@ module ValueLattice (K : MapKey) (V : Lattice) = struct
         (fill
           (text "," ^ newline)
           (KM.to_list m
-          |> List.map (fun (k, v) -> (K.pretty k, V.pretty v))
+          |> List.map (fun (k, v) -> (Var.pretty k, V.pretty v))
           |> List.append [ (text "_", text top_char) ]
           |> List.map (fun (k, v) -> k ^ text "->" ^ v)))
         ")"
