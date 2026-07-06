@@ -228,7 +228,7 @@ let iter_zippers_backwards : 'a diamond -> 'a zipper Iter.t =
 
 (** Implementation details for BFS iteration. *)
 module Bfs_internal = struct
-  let rec ktree_of_diamond (d, dia) =
+  let rec ktree_of_diamond (d, dia) : _ CCKTree.t =
    fun () ->
     match dia with
     | Leaf x -> `Node ((d, x), [])
@@ -253,13 +253,8 @@ module Bfs_internal = struct
 
   let ktree_of_zipper (Zipper (dia, path)) : _ CCKTree.t =
     ktree_of_diamond (`Root, dia) %> function
-    | `Node (x, children) ->
-        `Node
-          ( x,
-            ktree_of_path path
-            :: (children
-                 : (unit -> [ `Node of _ * 'b list ] as 'b) list
-                 :> _ CCKTree.t list) )
+    | `Nil -> failwith "impossible"
+    | `Node (x, children) -> `Node (x, ktree_of_path path :: children)
 
   let rec scan_ktree (f : 'acc -> 'a -> 'acc) acc (tree : 'a CCKTree.t) :
       'acc CCKTree.t =
