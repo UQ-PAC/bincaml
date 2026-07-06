@@ -21,21 +21,16 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
       (Bitvec.of_string "0x8b031041:bv32")
   in
   List.iter (print_endline % Aslp_state.show_aslp_diamond) [ x ];
-  [%expect.unreachable]
-[@@expect.uncaught_exn {|
-  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-     This is strongly discouraged as backtraces are fragile.
-     Please change this test to not include a backtrace. *)
-  (Invalid_argument "result is Error _")
-  Raised at Stdlib.invalid_arg in file "stdlib.ml", line 30, characters 20-45
-  Called from Stdlib__Result.get_ok in file "result.ml" (inlined), line 21, characters 45-76
-  Called from Transforms__Aslp__Aslp_state.ensure_forwarded_pc in file "lib/transforms/aslp/aslp_state.ml", line 205, characters 13-67
-  Called from Transforms__Aslp__Bincaml_ibi_make.Make.get_ir in file "lib/transforms/aslp/bincaml_ibi_make.ml", lines 96-98, characters 8-41
-  Called from Stdlib__Fun.protect in file "fun.ml", line 34, characters 8-15
-  Re-raised at Stdlib__Fun.protect in file "fun.ml", line 39, characters 6-52
-  Called from Test_aslp.(fun) in file "test/transforms/test_aslp.ml", lines 18-21, characters 4-42
-  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
-  |}]
+  [%expect {|
+    (Leaf
+       { Aslp_state.assume = true;
+         stmts =
+         [var var_0:bv64 := 0x0:bv64; var var_0:bv64 := $R2;
+           var var_1:bv64 := 0x0:bv64; var var_1:bv64 := $R3;
+           $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
+           (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
+         pc_assign = (Some 0x2004:bv64) })
+    |}]
 
 let%expect_test "lift 2x: mov x1, #0xabcd" =
   let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
@@ -47,22 +42,20 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
       [ Bitvec.of_string "0xd29579a1:bv32"; Bitvec.of_string "0xd29579a1:bv32" ]
   in
   List.iter (print_endline % Aslp_state.show_aslp_diamond) x;
-  [%expect.unreachable]
-[@@expect.uncaught_exn {|
-  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-     This is strongly discouraged as backtraces are fragile.
-     Please change this test to not include a backtrace. *)
-  (Invalid_argument "result is Error _")
-  Raised at Stdlib.invalid_arg in file "stdlib.ml", line 30, characters 20-45
-  Called from Stdlib__Result.get_ok in file "result.ml" (inlined), line 21, characters 45-76
-  Called from Transforms__Aslp__Aslp_state.ensure_forwarded_pc in file "lib/transforms/aslp/aslp_state.ml", line 205, characters 13-67
-  Called from Transforms__Aslp__Bincaml_ibi_make.Make.get_ir in file "lib/transforms/aslp/bincaml_ibi_make.ml", lines 96-98, characters 8-41
-  Called from Stdlib__Fun.protect in file "fun.ml", line 34, characters 8-15
-  Re-raised at Stdlib__Fun.protect in file "fun.ml", line 39, characters 6-52
-  Called from Stdlib__List.mapi in file "list.ml", line 96, characters 15-21
-  Called from Test_aslp.(fun) in file "test/transforms/test_aslp.ml", lines 44-47, characters 4-80
-  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
-  |}]
+  [%expect {|
+    (Leaf
+       { Aslp_state.assume = true;
+         stmts =
+         [$R1:bv64 := 0xabcd:bv64;
+           (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
+         pc_assign = (Some 0x2004:bv64) })
+    (Leaf
+       { Aslp_state.assume = true;
+         stmts =
+         [$R1:bv64 := 0xabcd:bv64;
+           (var BranchTaken:bool := false, $PC:bv64 := 0x2008:bv64)];
+         pc_assign = (Some 0x2008:bv64) })
+    |}]
 
 let%expect_test "lift: b.eq #1024" =
   let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
@@ -105,21 +98,16 @@ let%expect_test "lift: b #16" =
       (Bitvec.of_string "0x8b031041:bv32")
   in
   List.iter (print_endline % Aslp_state.show_aslp_diamond) [ x ];
-  [%expect.unreachable]
-[@@expect.uncaught_exn {|
-  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-     This is strongly discouraged as backtraces are fragile.
-     Please change this test to not include a backtrace. *)
-  (Invalid_argument "result is Error _")
-  Raised at Stdlib.invalid_arg in file "stdlib.ml", line 30, characters 20-45
-  Called from Stdlib__Result.get_ok in file "result.ml" (inlined), line 21, characters 45-76
-  Called from Transforms__Aslp__Aslp_state.ensure_forwarded_pc in file "lib/transforms/aslp/aslp_state.ml", line 205, characters 13-67
-  Called from Transforms__Aslp__Bincaml_ibi_make.Make.get_ir in file "lib/transforms/aslp/bincaml_ibi_make.ml", lines 96-98, characters 8-41
-  Called from Stdlib__Fun.protect in file "fun.ml", line 34, characters 8-15
-  Re-raised at Stdlib__Fun.protect in file "fun.ml", line 39, characters 6-52
-  Called from Test_aslp.(fun) in file "test/transforms/test_aslp.ml", lines 98-101, characters 4-42
-  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
-  |}]
+  [%expect {|
+    (Leaf
+       { Aslp_state.assume = true;
+         stmts =
+         [var var_0:bv64 := 0x0:bv64; var var_0:bv64 := $R2;
+           var var_1:bv64 := 0x0:bv64; var var_1:bv64 := $R3;
+           $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
+           (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
+         pc_assign = (Some 0x2004:bv64) })
+    |}]
 
 let%expect_test "aslp integration basic" =
   let lst =
@@ -165,18 +153,53 @@ proc @main()  -> () {  }
            .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
                    .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
          assume eq(0x400808:bv64, $PC);
-         call @_aarch64_eval(0xa9be7bfd:bv32) { .asm = "stp x29, x30, [sp, #-0x20]!";
-             .error = "Invalid_argument(\"result is Error _\")" };
-         call @_aarch64_eval(0x910003fd:bv32) { .asm = "mov x29, sp";
-             .error = "Invalid_argument(\"result is Error _\")" };
-         call @_aarch64_eval(0xb9001fe0:bv32) { .asm = "str w0, [sp, #0x1c]";
-             .error = "Invalid_argument(\"result is Error _\")" };
-         call @_aarch64_eval(0xf9000be1:bv32) { .asm = "str x1, [sp, #0x10]";
-             .error = "Invalid_argument(\"result is Error _\")" };
-         call @_aarch64_eval(0xb9801fe0:bv32) { .asm = "ldrsw x0, [sp, #0x1c]";
-             .error = "Invalid_argument(\"result is Error _\")" };
-         call @_aarch64_eval(0x97ffffda:bv32) { .asm = "bl #0xffffffffffffff68";
-             .error = "Invalid_argument(\"result is Error _\")" };
+         goto (%block);
+       ];
+       block %block { .address = 0x40080c:bv64; .asm = "stp x29, x30, [sp, #-0x20]!" } [
+         guard true;
+         var var:bv64 := 0x0:bv64;
+         var var:bv64 := $SP;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
+          0xffffffffffffffe0:bv64) $R29 8;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
+           0xffffffffffffffe0:bv64), 0x8:bv64) $R30 8;
+         $SP:bv64 := bvadd(var:bv64, 0xffffffffffffffe0:bv64);
+         (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
+         goto (%block_1);
+       ];
+       block %block_1 { .address = 0x400810:bv64; .asm = "mov x29, sp" } [
+         guard true;
+         var var_1:bv64 := 0x0:bv64;
+         $R29:bv64 := bvadd($SP, 0x0:bv64);
+         (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
+         goto (%block_2);
+       ];
+       block %block_2 { .address = 0x400814:bv64; .asm = "str w0, [sp, #0x1c]" } [
+         guard true;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) extract(-32,0, $R0) 4;
+         (var BranchTaken:bool := false, $PC:bv64 := 0x400814:bv64);
+         goto (%block_3);
+       ];
+       block %block_3 { .address = 0x400818:bv64; .asm = "str x1, [sp, #0x10]" } [
+         guard true;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x10:bv64) $R1 8;
+         (var BranchTaken:bool := false, $PC:bv64 := 0x400818:bv64);
+         goto (%block_4);
+       ];
+       block %block_4 { .address = 0x40081c:bv64; .asm = "ldrsw x0, [sp, #0x1c]" } [
+         guard true;
+         var var_2:bv32 := 0x0:bv32;
+         $mem:(bv64->bv8) := load le var_3:bv4 bvadd($SP, 0x1c:bv64) 4;
+         var var_2:bv32 := var_3:bv4;
+         $R0:bv64 := zero_extend(0, sign_extend(32, var_2:bv32));
+         (var BranchTaken:bool := false, $PC:bv64 := 0x40081c:bv64);
+         goto (%block_5);
+       ];
+       block %block_5 { .address = 0x400820:bv64; .asm = "bl #0xffffffffffffff68" } [
+         guard true;
+         $R30:bv64 := 0x400820:bv64;
+         var BranchTaken:bool := true;
+         $PC:bv64 := 0x400784:bv64;
          assert boolor(eq(0x400784:bv64, $PC));
          goto (%ret_1);
        ];

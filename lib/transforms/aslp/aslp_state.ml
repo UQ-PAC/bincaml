@@ -202,20 +202,22 @@ let ensure_pc_consistency ~address state =
     If the PC was assigned earlier, inserts a new assignment in the last block.
     This is semantically redundant, but is meant to simplify guard cleanup. *)
 let ensure_forwarded_pc state =
-  let left = state |> Diamond_zipper.move_in_to `L |> Result.get_ok
-  and right = state |> Diamond_zipper.move_in_to `R |> Result.get_ok in
-
-  match Diamond_zipper.((focus left).pc_assign, (focus right).pc_assign) with
-  | None, None -> state
-  | Some _, Some _ ->
-      Diamond_zipper.modify
-        (fun b ->
-          let pc = Option.get_exn_or "pc unset in last diamond?" b.pc_assign in
-          let al = [ (Aslp_lexpr.pc_var, pc) ] in
-          let stmt = Stmt.Instr_Assign { attrib = Attrib.empty; al } in
-          add_stmt_to_block ~stmt ~allow_double_pc:true b)
-        state
-  | Some _, None | None, Some _ -> failwith "pcs should agree"
+  match Diamond_zipper.(move_in_to `L state, move_in_to `R state) with
+  | Error _, _ | _, Error _ -> state (* focus is not a branch *)
+  | Ok l, Ok r -> (
+      match Diamond_zipper.((focus l).pc_assign, (focus r).pc_assign) with
+      | None, None -> state
+      | Some _, Some _ ->
+          Diamond_zipper.modify
+            (fun b ->
+              let pc =
+                Option.get_exn_or "pc unset in last diamond?" b.pc_assign
+              in
+              let al = [ (Aslp_lexpr.pc_var, pc) ] in
+              let stmt = Stmt.Instr_Assign { attrib = Attrib.empty; al } in
+              add_stmt_to_block ~stmt ~allow_double_pc:true b)
+            state
+      | Some _, None | None, Some _ -> failwith "pcs should agree")
 
 (** {1 Formatters} *)
 
