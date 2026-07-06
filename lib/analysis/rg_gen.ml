@@ -49,7 +49,7 @@ module InterferenceWrappedIntervalDomain = struct
   let havoc t var_set =
     Debug.print @@ "Havocing " ^ (VarSet.to_string ~start:"{" ~stop:"}" ~sep:"," Var.show var_set) ^ " in " ^ (show t);
     let result =
-      if equal t bottom then t
+      if Domain.contains_bot t then t
       else VarSet.fold (fun var acc -> update var WrappedIntervalsLattice.top acc) var_set t
     in
     Debug.print @@ "Result " ^ (show result) ^ "\n";

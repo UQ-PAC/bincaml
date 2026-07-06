@@ -169,6 +169,10 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
       
       let narrowing = bot_binop V.narrowing
 
+      let contains_bot = function
+      | BotMap _ -> true
+      | TopMap m -> not @@ KM.for_all (fun _ v -> not @@ V.equal v V.bottom) m
+
       let read k = function
         | BotMap m -> KM.find_opt k m |> Option.get_or ~default:V.bottom
         | TopMap m -> KM.find_opt k m |> Option.get_or ~default:V.top
@@ -216,6 +220,7 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
         val mapi : (K.t -> V.t -> V.t) -> t -> t
         val fold : (K.t -> V.t -> 'a -> 'a) -> t -> 'a -> 'a
         val bot_binop : (V.t -> V.t -> V.t) -> t -> t -> t
+        val contains_bot : t -> bool
       end)
 
   module V = V
