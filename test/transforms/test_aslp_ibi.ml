@@ -208,22 +208,22 @@ let%expect_test "sequential diamonds" =
 let%expect_test "pc before branch" =
   let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
   in
-  guard @@ fun () ->
-  I.bincaml_set_address (Bitvec.of_int ~size:64 0xf00);
-  I.bincaml_internal_emit (make_call "entry");
-  I.f_gen_store I.v__PC
-    (I.f_gen_bit_lit (I.bigint_of_int 64) (Bitvec.of_int ~size:64 0xaaa));
-  let b1 = I.f_gen_branch (I.f_gen_bool_lit true) in
+  guard (fun () ->
+      I.bincaml_set_address (Bitvec.of_int ~size:64 0xbadbad);
+      I.bincaml_internal_emit (make_call "entry");
+      I.f_gen_store I.v__PC
+        (I.f_gen_bit_lit (I.bigint_of_int 64) (Bitvec.of_int ~size:64 0xaaa));
+      let b1 = I.f_gen_branch (I.f_gen_bool_lit true) in
 
-  I.f_switch_context (I.f_true_branch b1);
-  I.bincaml_internal_emit (make_call "t");
-  I.f_switch_context (I.f_false_branch b1);
-  I.bincaml_internal_emit (make_call "f");
+      I.f_switch_context (I.f_true_branch b1);
+      I.bincaml_internal_emit (make_call "t");
+      I.f_switch_context (I.f_false_branch b1);
+      I.bincaml_internal_emit (make_call "f");
 
-  I.f_switch_context (I.f_merge_branch b1);
+      I.f_switch_context (I.f_merge_branch b1);
 
-  I.bincaml_internal_emit (make_call "exit");
-  guard_get_ir I.get_ir;
+      I.bincaml_internal_emit (make_call "exit");
+      guard_get_ir I.get_ir);
   [%expect
     {|
     make_call: entry
@@ -237,18 +237,20 @@ let%expect_test "pc before branch" =
            stmts = [call entry_2(); $PC:bv64 := 0xaaa:bv64];
            pc_assign = (Some 0xaaa:bv64) });
       left =
-      (Leaf { Aslp_state.assume = true; stmts = [call t_1()]; pc_assign = None });
+      (Leaf
+         { Aslp_state.assume = true; stmts = [call t_1()];
+           pc_assign = (Some 0xaaa:bv64) });
       right =
       (Leaf
          { Aslp_state.assume = boolnot(true); stmts = [call f_1()];
-           pc_assign = None });
+           pc_assign = (Some 0xaaa:bv64) });
       value =
       { Aslp_state.assume = true;
         stmts =
-        [call exit_1(); (var BranchTaken:bool := false, $PC:bv64 := 0xf04:bv64)];
-        pc_assign = (Some 0xf04:bv64) }}
-    |}];
-  [%expect {| ok(()) |}]
+        [call exit_1(); $PC:bv64 := if true then 0xaaa:bv64 else 0xaaa:bv64];
+        pc_assign = (Some if true then 0xaaa:bv64 else 0xaaa:bv64) }}
+    ok(())
+    |}]
 
 let%expect_test "skipped merge context when going to outer merge" =
   let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))

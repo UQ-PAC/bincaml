@@ -65,7 +65,7 @@ struct
       let t = Aslp_state.empty_block ~assume:cond ()
       and f = Aslp_state.empty_block ~assume:(Expr.BasilExpr.boolnot cond) ()
       and m = Aslp_state.empty_block_unconditional () in
-      (t, f, m)
+      ({ t with pc_assign }, { f with pc_assign }, { m with pc_assign })
 
     let equal_state = CCEqual.map (fun x -> x.Aslp_state.stmts) CCEqual.physical
   end)

@@ -21,7 +21,8 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
       (Bitvec.of_string "0x8b031041:bv32")
   in
   List.iter (print_endline % Aslp_state.show_aslp_diamond) [ x ];
-  [%expect {|
+  [%expect
+    {|
     (Leaf
        { Aslp_state.assume = true;
          stmts =
@@ -42,7 +43,8 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
       [ Bitvec.of_string "0xd29579a1:bv32"; Bitvec.of_string "0xd29579a1:bv32" ]
   in
   List.iter (print_endline % Aslp_state.show_aslp_diamond) x;
-  [%expect {|
+  [%expect
+    {|
     (Leaf
        { Aslp_state.assume = true;
          stmts =
@@ -67,7 +69,8 @@ let%expect_test "lift: b.eq #1024" =
       (Bitvec.of_string "0x54002000:bv32")
   in
   print_endline @@ Aslp_state.show_aslp_diamond x;
-  [%expect {|
+  [%expect
+    {|
     Diamond {
       pred = (Leaf { Aslp_state.assume = true; stmts = []; pc_assign = None });
       left =
@@ -98,7 +101,8 @@ let%expect_test "lift: b #16" =
       (Bitvec.of_string "0x8b031041:bv32")
   in
   List.iter (print_endline % Aslp_state.show_aslp_diamond) [ x ];
-  [%expect {|
+  [%expect
+    {|
     (Leaf
        { Aslp_state.assume = true;
          stmts =
