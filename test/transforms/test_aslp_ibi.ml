@@ -205,6 +205,51 @@ let%expect_test "sequential diamonds" =
     ok(())
     |}]
 
+let%expect_test "pc before branch" =
+  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  in
+  guard @@ fun () ->
+  I.bincaml_set_address (Bitvec.of_int ~size:64 0xf00);
+  I.bincaml_internal_emit (make_call "entry");
+  I.f_gen_store I.v__PC
+    (I.f_gen_bit_lit (I.bigint_of_int 64) (Bitvec.of_int ~size:64 0xaaa));
+  let b1 = I.f_gen_branch (I.f_gen_bool_lit true) in
+
+  I.f_switch_context (I.f_true_branch b1);
+  I.bincaml_internal_emit (make_call "t");
+  I.f_switch_context (I.f_false_branch b1);
+  I.bincaml_internal_emit (make_call "f");
+
+  I.f_switch_context (I.f_merge_branch b1);
+
+  I.bincaml_internal_emit (make_call "exit");
+  guard_get_ir I.get_ir;
+  [%expect
+    {|
+    make_call: entry
+    make_call: t
+    make_call: f
+    make_call: exit
+    Diamond {
+      pred =
+      (Leaf
+         { Aslp_state.assume = true;
+           stmts = [call entry_2(); $PC:bv64 := 0xaaa:bv64];
+           pc_assign = (Some 0xaaa:bv64) });
+      left =
+      (Leaf { Aslp_state.assume = true; stmts = [call t_1()]; pc_assign = None });
+      right =
+      (Leaf
+         { Aslp_state.assume = boolnot(true); stmts = [call f_1()];
+           pc_assign = None });
+      value =
+      { Aslp_state.assume = true;
+        stmts =
+        [call exit_1(); (var BranchTaken:bool := false, $PC:bv64 := 0xf04:bv64)];
+        pc_assign = (Some 0xf04:bv64) }}
+    |}];
+  [%expect {| ok(()) |}]
+
 let%expect_test "skipped merge context when going to outer merge" =
   let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
   in
@@ -238,12 +283,12 @@ let%expect_test "skipped merge context when going to outer merge" =
     Diamond {
       pred =
       (Leaf
-         { Aslp_state.assume = true; stmts = [call entry_2()]; pc_assign = None });
+         { Aslp_state.assume = true; stmts = [call entry_3()]; pc_assign = None });
       left =
       Diamond {
         pred =
         (Leaf
-           { Aslp_state.assume = true; stmts = [call t_1()]; pc_assign = None });
+           { Aslp_state.assume = true; stmts = [call t_2()]; pc_assign = None });
         left =
         (Leaf { Aslp_state.assume = true; stmts = [call tt()]; pc_assign = None });
         right =
@@ -297,12 +342,12 @@ let%expect_test "skipped merge context when going to outer branch" =
     Diamond {
       pred =
       (Leaf
-         { Aslp_state.assume = true; stmts = [call entry_3()]; pc_assign = None });
+         { Aslp_state.assume = true; stmts = [call entry_4()]; pc_assign = None });
       left =
       Diamond {
         pred =
         (Leaf
-           { Aslp_state.assume = true; stmts = [call t_2()]; pc_assign = None });
+           { Aslp_state.assume = true; stmts = [call t_3()]; pc_assign = None });
         left =
         (Leaf
            { Aslp_state.assume = true; stmts = [call tt_1()]; pc_assign = None });
@@ -313,7 +358,7 @@ let%expect_test "skipped merge context when going to outer branch" =
         value = { Aslp_state.assume = true; stmts = []; pc_assign = None }};
       right =
       (Leaf
-         { Aslp_state.assume = boolnot(true); stmts = [call f_1()];
+         { Aslp_state.assume = boolnot(true); stmts = [call f_2()];
            pc_assign = None });
       value =
       { Aslp_state.assume = true;
@@ -392,7 +437,7 @@ let%expect_test
       Diamond {
         pred =
         (Leaf
-           { Aslp_state.assume = true; stmts = [call entry_5()]; pc_assign = None
+           { Aslp_state.assume = true; stmts = [call entry_6()]; pc_assign = None
              });
         left =
         (Leaf
@@ -409,7 +454,7 @@ let%expect_test
       value =
       { Aslp_state.assume = true;
         stmts =
-        [call exit_1(); (var BranchTaken:bool := false, $PC:bv64 := 0xfb3:bv64)];
+        [call exit_2(); (var BranchTaken:bool := false, $PC:bv64 := 0xfb3:bv64)];
         pc_assign = (Some 0xfb3:bv64) }}
     ok(())
     |}]
