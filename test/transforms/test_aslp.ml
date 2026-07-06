@@ -142,7 +142,8 @@ proc @main()  -> () {  }
   let prog = transform_program lst.prog in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
-  [%expect {|
+  [%expect
+    {|
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
     proc @main()  -> () {  }
@@ -333,7 +334,10 @@ proc @Sqrt()  -> () {  }
          assume eq(0x4007dc:bv64, $PC);
          goto (%block);
        ];
-       block %block [ guard true; goto (%block_2,%block_1); ];
+       block %block { .asm = "b.lt #0x10" } [
+         guard true;
+         goto (%block_2,%block_1);
+       ];
        block %block_1 [
          guard boolnot(eq($PSTATE_N, $PSTATE_V));
          var BranchTaken:bool := true;
@@ -345,7 +349,7 @@ proc @Sqrt()  -> () {  }
          (var BranchTaken:bool := false, $PC:bv64 := 0x4007e0:bv64);
          goto (%block_3);
        ];
-       block %block_3 { .address = 0x4007e0:bv64; .asm = "b.lt #0x10" } [
+       block %block_3 { .address = 0x4007e0:bv64 } [
          guard true;
          $PC:bv64 := if boolnot(eq($PSTATE_N, $PSTATE_V)) then 0x4007ec:bv64 else 0x4007e0:bv64;
          assert boolor(eq(0x4007fc:bv64, $PC), eq(0x4007e0:bv64, $PC));

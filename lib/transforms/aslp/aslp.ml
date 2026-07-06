@@ -162,9 +162,9 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
 
   match next_aarch64_stmt (Vector.to_list b.stmts) with
   | None -> None
-  | Some (before, (opcode, attrib), after) -> (
+  | Some (before, (opcode, intr_attrib), after) -> (
       let address =
-        try address_of_attrib attrib with _ -> address_of_attrib b.attrib
+        try address_of_attrib intr_attrib with _ -> address_of_attrib b.attrib
       in
       match
         CCResult.guard_str (fun () -> lift_opcode (module I) ~address opcode)
@@ -185,29 +185,30 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
 
           let aslp_first, aslp_last, proc = insert_one_diamond ~proc diamond in
 
-          Some
-            ( proc
-              |> Procedure.modify_block' ~id:bid ~f:(fun b ->
-                  { b with stmts = Vector.of_list before })
-              |> Procedure.modify_block' ~id:aslp_last ~f:(fun b ->
-                  let attrib =
-                    StringMap.add address_attrib_key
-                      (`Bitvector Bitvec.(add (of_int ~size:64 4) address))
-                      attrib
-                  and stmts =
-                    Iter.append_l
-                      [
-                        Vector.to_iter b.stmts;
-                        Iter.of_list pc_assign;
-                        Iter.of_list after;
-                      ]
-                  in
-                  { b with stmts = Vector.(freeze (of_iter stmts)); attrib })
-              |> Procedure.transplant_outgoing_edges ~from:bid ~to_:aslp_last
-              |> Procedure.add_goto ~from:bid ~targets:[ aslp_first ],
-              aslp_last )
+          let address_after =
+            StringMap.singleton address_attrib_key
+              (`Bitvector Bitvec.(add (of_int ~size:64 4) address))
+          in
+
+          let proc =
+            proc
+            |> Procedure.modify_block' ~id:bid ~f:(fun b ->
+                { b with stmts = Vector.of_list before })
+            |> Procedure.modify_block' ~id:aslp_first ~f:(fun b ->
+                { b with attrib = intr_attrib })
+            |> Procedure.modify_block' ~id:aslp_last ~f:(fun b ->
+                let attrib = Attrib.merge_map_shadow address_after b.attrib in
+                { b with attrib }
+                |> Block.fmap_stmts_copy (fun stmts ->
+                    CCVector.append_list stmts (pc_assign @ after)))
+            |> Procedure.transplant_outgoing_edges ~from:bid ~to_:aslp_last
+            |> Procedure.add_goto ~from:bid ~targets:[ aslp_first ]
+          in
+          Some (proc, aslp_last)
       | Error err ->
-          let attrib = StringMap.add error_attrib_key (`String err) attrib in
+          let attrib =
+            StringMap.add error_attrib_key (`String err) intr_attrib
+          in
           let intrin_stmt = stmt_of_aarch64_intrin (opcode, attrib) in
           let stmts = Vector.of_list (before @ (intrin_stmt :: after)) in
           Some (Procedure.modify_block proc bid (fun b -> { b with stmts }), bid)
