@@ -170,19 +170,6 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
         CCResult.guard_str (fun () -> lift_opcode (module I) ~address opcode)
       with
       | Ok diamond ->
-          (* Make a PC assign for the merge point, if there was a branch. *)
-          let pc_assign =
-            match diamond with
-            | Diamond { value = { pc_assign } } ->
-                let pc_assign =
-                  Option.get_exn_or "pc_assign unset at last in diamond?"
-                    pc_assign
-                in
-                let al = [ (Aslp_lexpr.pc_var, pc_assign) ] in
-                [ Stmt.Instr_Assign { attrib = Attrib.empty; al } ]
-            | Leaf _ -> [] (* assume existing PC assign, if any, is enough *)
-          in
-
           let aslp_first, aslp_last, proc = insert_one_diamond ~proc diamond in
 
           let address_after =
@@ -199,8 +186,7 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
             |> Procedure.modify_block' ~id:aslp_last ~f:(fun b ->
                 let attrib = Attrib.merge_map_shadow address_after b.attrib in
                 { b with attrib }
-                |> Block.fmap_stmts_copy (fun stmts ->
-                    CCVector.append_list stmts (pc_assign @ after)))
+                |> Block.fmap_stmts_copy (Fun.flip CCVector.append_list after))
             |> Procedure.transplant_outgoing_edges ~from:bid ~to_:aslp_last
             |> Procedure.add_goto ~from:bid ~targets:[ aslp_first ]
           in

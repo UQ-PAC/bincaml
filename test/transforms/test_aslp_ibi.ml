@@ -144,7 +144,11 @@ let%expect_test "nested diamonds" =
         { Aslp_state.assume = true; stmts = [call fm()];
           pc_assign = (Some if false then 0xbbb:bv64 else 0xfb3:bv64) }};
       value =
-      { Aslp_state.assume = true; stmts = [call m()];
+      { Aslp_state.assume = true;
+        stmts =
+        [call m();
+          $PC:bv64 := if true then 0xaaa:bv64 else if false then 0xbbb:bv64 else 0xfb3:bv64
+          ];
         pc_assign =
         (Some if true then 0xaaa:bv64 else if false then 0xbbb:bv64 else 0xfb3:bv64)
         }}

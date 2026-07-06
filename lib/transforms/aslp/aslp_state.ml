@@ -113,7 +113,7 @@ let aslp_ids_from_generators ~local_ids =
     is assumed that [PC] is assigned at most once on any straight-line path.
     Raises an exception if the statement is an assignment to [PC] and
     {!pc_assign} is already set. *)
-let add_stmt_to_block blk ~stmt =
+let add_stmt_to_block ?(allow_double_pc = false) ~stmt blk =
   let pc_assign =
     match stmt with
     | Stmt.Instr_Assign { al = assigns; _ } ->
@@ -121,11 +121,11 @@ let add_stmt_to_block blk ~stmt =
     | _ -> None
   in
   match (pc_assign, blk.pc_assign) with
-  | Some _, Some _ ->
+  | Some _, Some _ when not allow_double_pc ->
       failwith
         "add_stmt_to_block: attempt to add PC assignment but pc_assign is \
          already set"
-  | Some _, None | None, _ ->
+  | Some _, None | None, _ | Some _, Some _ ->
       CCVector.push blk.stmts stmt;
       if Option.is_some pc_assign then { blk with pc_assign } else blk
 
@@ -194,6 +194,28 @@ let ensure_pc_consistency ~address state =
       let ite = Expr.BasilExpr.(ifthenelse assume lpc rpc) in
       state |> Diamond_zipper.modify (fun b -> { b with pc_assign = Some ite })
   | _ -> failwith "invariant violation: pcs should agree at this point"
+
+(** Ensures that a PC assignment exists in the last block of the focused
+    diamond. This "forwarded" assignment will use ITEs to express any needed
+    conditional PC assignments.
+
+    If the PC was assigned earlier, inserts a new assignment in the last block.
+    This is semantically redundant, but is meant to simplify guard cleanup. *)
+let ensure_forwarded_pc state =
+  let left = state |> Diamond_zipper.move_in_to `L |> Result.get_ok
+  and right = state |> Diamond_zipper.move_in_to `R |> Result.get_ok in
+
+  match Diamond_zipper.((focus left).pc_assign, (focus right).pc_assign) with
+  | None, None -> state
+  | Some _, Some _ ->
+      Diamond_zipper.modify
+        (fun b ->
+          let pc = Option.get_exn_or "pc unset in last diamond?" b.pc_assign in
+          let al = [ (Aslp_lexpr.pc_var, pc) ] in
+          let stmt = Stmt.Instr_Assign { attrib = Attrib.empty; al } in
+          add_stmt_to_block ~stmt ~allow_double_pc:true b)
+        state
+  | Some _, None | None, Some _ -> failwith "pcs should agree"
 
 (** {1 Formatters} *)
 
