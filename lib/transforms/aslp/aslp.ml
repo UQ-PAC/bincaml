@@ -53,6 +53,9 @@ end
 
 (** {1 Interfacing with Bincaml IR} *)
 
+let address_attrib_key = ".address"
+and error_attrib_key = ".error"
+
 (** Extracts the opcode and attribute from the given Bincaml statement, if it is
     an {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic call. Otherwise, returns
     [None].
@@ -61,11 +64,17 @@ end
     has an unexpected structure. *)
 let aarch64_intrin_of_stmt :
     Program.stmt -> (Bitvec.t * Attrib.attrib_map) option = function
-  | Stmt.Instr_IntrinCall { attrib; lhs; name = Aarch64Eval; args } -> (
+  | Stmt.Instr_IntrinCall { attrib; lhs; name = Aarch64Eval; args }
+    when not (StringMap.mem error_attrib_key attrib) -> (
       match (lhs, args) with
       | [], [ E (Constant { const = `Bitvector op }) ] -> Some (op, attrib)
       | _ -> failwith "unexpected Aarch64Eval intrin structure")
   | _ -> None
+
+let stmt_of_aarch64_intrin : Bitvec.t * Attrib.attrib_map -> Program.stmt =
+ fun (opcode, attrib) ->
+  let args = [ Expr.BasilExpr.bvconst opcode ] in
+  Stmt.Instr_IntrinCall { attrib; lhs = []; name = Aarch64Eval; args }
 
 (** Extracts Aarch64 intrinsics from the given list of statements, partitioning
     the statements into [(before, aarch64_ops, after)].
@@ -81,17 +90,34 @@ let partition_aarch64_stmts stmts =
   in
   (before, intrins, after)
 
+(** Extracts the next Aarch64 intrinsic from the given list of statements,
+    returning [Some (before, (intrin, attrib), after)] if there exists an
+    intrinsic. *)
+let next_aarch64_stmt stmts =
+  let intrin = CCList.find_map aarch64_intrin_of_stmt stmts in
+  match intrin with
+  | None -> None
+  | Some intrin ->
+      let before, after =
+        CCList.take_drop_while (Option.is_none % aarch64_intrin_of_stmt) stmts
+      in
+      let after = CCList.drop 1 after in
+      Some (before, intrin, after)
+
 (** Returns the Bincaml global variable representing heap memory. *)
 let aarch64_mem_of_prog prog =
   Program.get_decl_by_name "$mem" prog |> function
   | Some (Variable { binding }) -> binding
   | _ -> failwith "aarch64_mem_of_prog: no $mem found"
 
-(** Returns the byte address of the given block, if present. *)
-let address_of_block block =
-  Some (`Assoc block.Lang.Block.attrib)
-  |> Attrib.find_int_opt ".address"
-  |> Option.get_exn_or "address_of_block: expected .address with int value"
+(** Returns the byte address in the given attribute map, if present. *)
+let address_of_attrib attrib =
+  match StringMap.find_opt address_attrib_key attrib with
+  | Some (`CamlInt x) -> Bitvec.of_int ~size:64 x
+  | Some (`Integer x) -> Bitvec.create ~size:64 x
+  | Some (`Bitvector x) -> x
+  | _ ->
+      failwith "address_of_attrib: expected .address with int or bitvec value"
 
 (** {1 Transforming Bincaml IR} *)
 
@@ -122,69 +148,81 @@ let insert_one_diamond ~proc dia =
 
   (first, last, proc)
 
+(** Transforms the next {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic within the
+    given block ID within the given procedure.
+
+    The first intrinsic appearing within the block's statement list, if any,
+    will be transformed and [Some] will be returned with the updated procedure.
+    If no intrinsic exists, [None] will be returned.
+
+    If an error occurs while lifting through ASLp, an error attribute will be
+    attached to the intrinsic (and it is excluded from subsequent calls). *)
+let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
+  let b = Procedure.get_block proc bid |> Option.get_exn_or "block not found" in
+
+  match next_aarch64_stmt (Vector.to_list b.stmts) with
+  | None -> None
+  | Some (before, (opcode, attrib), after) -> (
+      let address =
+        try address_of_attrib attrib with _ -> address_of_attrib b.attrib
+      in
+      match
+        CCResult.guard_str (fun () -> lift_opcode (module I) ~address opcode)
+      with
+      | Ok diamond ->
+          (* Make a PC assign for the merge point, if there was a branch. *)
+          let pc_assign =
+            match diamond with
+            | Diamond { value = { pc_assign } } ->
+                let pc_assign =
+                  Option.get_exn_or "pc_assign unset at last in diamond?"
+                    pc_assign
+                in
+                let al = [ (Aslp_lexpr.pc_var, pc_assign) ] in
+                [ Stmt.Instr_Assign { attrib = Attrib.empty; al } ]
+            | Leaf _ -> [] (* assume existing PC assign, if any, is enough *)
+          in
+
+          let aslp_first, aslp_last, proc = insert_one_diamond ~proc diamond in
+
+          Some
+            ( proc
+              |> Procedure.modify_block' ~id:bid ~f:(fun b ->
+                  { b with stmts = Vector.of_list before })
+              |> Procedure.modify_block' ~id:aslp_last ~f:(fun b ->
+                  let attrib =
+                    StringMap.add address_attrib_key
+                      (`Bitvector Bitvec.(add (of_int ~size:64 4) address))
+                      attrib
+                  and stmts =
+                    Iter.append_l
+                      [
+                        Vector.to_iter b.stmts;
+                        Iter.of_list pc_assign;
+                        Iter.of_list after;
+                      ]
+                  in
+                  { b with stmts = Vector.(freeze (of_iter stmts)); attrib })
+              |> Procedure.transplant_outgoing_edges ~from:bid ~to_:aslp_last
+              |> Procedure.add_goto ~from:bid ~targets:[ aslp_first ],
+              aslp_last )
+      | Error err ->
+          let attrib = StringMap.add error_attrib_key (`String err) attrib in
+          let intrin_stmt = stmt_of_aarch64_intrin (opcode, attrib) in
+          let stmts = Vector.of_list (before @ (intrin_stmt :: after)) in
+          Some (Procedure.modify_block proc bid (fun b -> { b with stmts }), bid)
+      )
+
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics within the
     given block ID within the given procedure.
 
     Inserts control-flow edges between successive instructions within the block,
     and emits an assertion for the ITE expression representing the final [PC]
     value. *)
-let transform_block (module I : Bincaml_ibi.IBI) ~proc bid =
-  let b = Procedure.get_block proc bid |> Option.get_exn_or "block not found" in
-  let before, intrins, after =
-    partition_aarch64_stmts (Vector.to_list b.stmts)
-  in
-  let opcodes, attribs = List.split intrins in
-
-  if List.is_empty opcodes then proc
-  else (
-    (* TODO: this is not a fundamental limitation, but is because the get_blocks_succ
-       function drops Return vertices. *)
-    if List.mem bid (Procedure.get_blocks_pred proc Return) then
-      failwith
-        "transform_block: cannot transform a returning block at the moment";
-
-    let address = Bitvec.create ~size:64 (address_of_block b) in
-
-    (* Clear statements from first block aside from those before the intrinsics. *)
-    let proc =
-      Procedure.modify_block proc bid (fun x ->
-          { x with stmts = Vector.of_list before })
-    in
-
-    (* Record then clear the successors of the first block. *)
-    let block_successors = Procedure.get_blocks_succ proc (End bid) in
-    let proc = Procedure.replace_block_succs proc bid [] in
-
-    (* Lift each opcode, then join between each lifted opcode with gotos. *)
-    let diamonds = lift_code_block (module I) ~address opcodes in
-    let last, proc =
-      List.fold_left2
-        (fun (prev_last, proc) dia attrib ->
-          let first, last, proc = insert_one_diamond ~proc dia in
-          ( last,
-            Procedure.modify_block proc first (fun x -> { x with attrib })
-            |> Procedure.add_goto ~from:prev_last ~targets:[ first ] ))
-        (bid, proc) diamonds attribs
-    in
-
-    (* Insert a PC assign to the merge point, if there was a branch. *)
-    let after =
-      match List.last_opt diamonds with
-      | Some (Diamond { value = { pc_assign } }) ->
-          let pc_assign =
-            Option.get_exn_or "pc_assign unset at last in block?" pc_assign
-          in
-          let al = [ (Aslp_lexpr.pc_var, pc_assign) ] in
-          Stmt.Instr_Assign { attrib = Attrib.empty; al } :: after
-      | Some (Leaf _) | None -> after
-    in
-
-    (* Append back things which were previously after the Aarch64 intrinsic calls,
-     but append them to the *last* block. Finally, fix up successors. *)
-    let proc =
-      Procedure.modify_block proc last (fun b -> Block.append_stmts b after)
-    in
-    Procedure.replace_block_succs proc last block_successors)
+let rec transform_block (module I : Bincaml_ibi.IBI) ~proc bid =
+  match transform_one_stmt (module I) ~proc bid with
+  | Some (proc, bid) -> transform_block (module I) ~proc bid
+  | None -> proc
 
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all blocks
     within the given procedure. *)

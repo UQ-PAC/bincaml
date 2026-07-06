@@ -414,6 +414,8 @@ let modify_block p id
       let g = G.add_edge_e g (Begin id, Block block, End id) in
       g)
 
+let modify_block' p ~id ~f = modify_block p id f
+
 let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
   modify_block p id (fun _ -> block)
 
@@ -445,20 +447,34 @@ let replace_block_succs p id succs =
 let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
   update_block p id block
 
-(** Splits the control-flow edges of the given block ID. After this function,
-    the given block ID will have no successors. Its old successor edges are
-    changed to originate from a fresh block with the optionally-given name.
+(** Transfers the outgoing edges of the block ID [from] to instead originate
+    from the block ID [to_].
 
-    Returns [(p, fresh_id)] where [p] is the modified procedure where the given
-    block ID now has predecessors only, and [fresh_id] is the new block ID which
-    has successors only.
+    Returns the modified procedure where [from] now has no successors and [to_]
+    [to_] is modified to additionally have the original outgoing edges of
+    [from_].
 
-    The returned procedure has disconnected control flow! It is the caller's
-    responsibility to connect [id] to [fresh_id], as needed. *)
-let split_block ?name p id : _ t * ID.t =
-  let p, fresh_id = fresh_block ?name ~stmts:[] p () in
-  ( p |> map_graph (fun g -> G.fold_succ_e (fun edge g -> g) g (End id) g),
-    fresh_id )
+    This includes any edges to [Return] nodes, if they exist on [from_]. *)
+let transplant_outgoing_edges p ~from ~to_ : _ t =
+  let replace_outgoing_uses ~from ~to_ g =
+    G.fold_succ_e
+      (function
+        | (_, e, tgt) as edge ->
+            Fun.flip G.remove_edge_e edge %> Fun.flip G.add_edge_e (to_, e, tgt))
+      g from g
+  in
+  p |> map_graph (replace_outgoing_uses ~from:(End from) ~to_:(End to_))
+
+(** Like {!transplant_outgoing_edges}, but for incoming edges. *)
+let transplant_incoming_edges p ~from ~to_ : _ t =
+  let replace_incoming_uses ~from ~to_ g =
+    G.fold_succ_e
+      (function
+        | (src, e, _) as edge ->
+            Fun.flip G.remove_edge_e edge %> Fun.flip G.add_edge_e (src, e, to_))
+      g from g
+  in
+  p |> map_graph (replace_incoming_uses ~from:(Begin from) ~to_:(Begin to_))
 
 let lookup_local_decl p v =
   Var.Decls.find_opt (local_decls p) v
