@@ -56,6 +56,16 @@ end
 let address_attrib_key = ".address"
 and error_attrib_key = ".error"
 
+(** Iterates over global variables in the given program, including both read and
+    assigned variables. Order is unspecified and may have duplicates. *)
+let referenced_vars_of_prog =
+  Program.procs
+  %> Iter.flat_map
+       (snd %> Procedure.iter_blocks
+       %> Iter.flat_map (fun (_, b) ->
+           Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b)))
+  %> Iter.filter Var.is_global
+
 (** Extracts the opcode and attribute from the given Bincaml statement, if it is
     an {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic call. Otherwise, returns
     [None].
@@ -71,6 +81,7 @@ let aarch64_intrin_of_stmt ?(include_errors = false) :
       | _ -> failwith "unexpected Aarch64Eval intrin structure")
   | _ -> None
 
+(** Inverse of {!aarch64_intrin_of_stmt}. *)
 let stmt_of_aarch64_intrin : Bitvec.t * Attrib.attrib_map -> Program.stmt =
  fun (opcode, attrib) ->
   let args = [ Expr.BasilExpr.bvconst opcode ] in
@@ -119,7 +130,7 @@ let address_of_attrib attrib =
   | _ ->
       failwith "address_of_attrib: requires .address with int or bitvec value"
 
-(** {1 Transforming Bincaml IR} *)
+(** {1 Main Bincaml IR transformation functions} *)
 
 (** Inserts one {!Aslp_state.aslp_diamond} into the given procedure, including
     nested subdiamonds and adding any blocks as needed. Returns
@@ -148,9 +159,9 @@ let insert_one_diamond ~proc dia =
     given block ID within the given procedure.
 
     The first intrinsic appearing within the block's statement list, if any,
-    will be transformed. The block will be split at this point, and any
-    statements after the intrinsic (and any successor edges) will be moved to
-    the last block of the freshly-inserted ASLp blocks.
+    will be transformed. The block will be split at this point. Any statements
+    after the intrinsic (and any successor edges) will be moved to the last
+    block of the freshly-inserted ASLp blocks.
 
     If a change happened, [Some] will be returned with the updated procedure,
     along with the ID of the last block of the ASLp output (containing the
@@ -213,16 +224,23 @@ let transform_procedure ~memory proc =
   Procedure.iter_blocks proc
   |> Iter.fold (fun proc (bid, _) -> transform_block (module I) ~proc bid) proc
 
-(** Adds all architectural variable declarations to the given program. *)
-let add_aarch64_global_declarations prog =
+(** Adds architectural variable declarations to the given program. By default,
+    includes only those variables which are used. *)
+let add_aarch64_global_declarations ?(add_all = false) prog =
+  let include_var =
+    if add_all then Fun.const true
+    else
+      Fun.flip VarSet.mem
+        (referenced_vars_of_prog prog |> Iter.to_set (module VarSet))
+  in
+
   Lazy.force Aslp_lexpr.global_vars
-  |> List.fold_left
+  |> VarSet.to_iter |> Iter.filter include_var
+  |> Iter.fold
        (fun prog var ->
-         let decl =
-           Program.Variable
-             { binding = var; attrib = Attrib.empty; classification = None }
-         in
-         Program.add_decl prog decl)
+         let attrib = Attrib.empty and classification = None in
+         Program.add_decl prog
+           (Program.Variable { binding = var; attrib; classification }))
        prog
 
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all
@@ -234,10 +252,13 @@ let transform_program prog =
   let memory = aarch64_mem_of_prog prog in
 
   prog
-  |> Program.map_procedures (fun _ proc -> transform_procedure ~memory proc)
+  |> Program.map_procedures (fun _ -> transform_procedure ~memory)
   |> add_aarch64_global_declarations
 
+(** {1 Supplementary transformation} *)
+
 (** Mini-pass to insert [.address] on each {!Lang.Stmt.Intrinsic.Aarch64Eval}
+
     intrinsic statement, computed from block-level [.address] attributes. This
     can be useful in tests to avoid needing to type every address.
 
@@ -251,10 +272,9 @@ let apply_stmt_addresses_from_block (block : _ Block.t) =
       ->
         let attrib =
           StringMap.add address_attrib_key (`Bitvector address) attrib
-        and args = [ Expr.BasilExpr.bvconst opcode ] in
+        in
         ( Bitvec.(add address (of_int ~size:64 4)),
-          Stmt.Instr_IntrinCall { attrib; lhs = []; name = Aarch64Eval; args }
-        )
+          stmt_of_aarch64_intrin (opcode, attrib) )
     | _ -> (address, stmt)
   in
 
@@ -267,20 +287,6 @@ let apply_stmt_addresses_from_block (block : _ Block.t) =
       in
       { block with stmts }
   | exception _ -> block
-
-let restrict_to_referenced_globals prog =
-  let referenced_vars =
-    Program.procs prog
-    |> Iter.flat_map (fun (_, proc) ->
-        Procedure.iter_blocks proc
-        |> Iter.flat_map (fun (_, b) ->
-            Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b)))
-    |> Iter.filter Var.is_global
-    |> Iter.to_set (module VarSet)
-  in
-
-
-  2
 
 (** TODO look into annotating attributes onto "landmark" points like memory
     access. *)

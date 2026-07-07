@@ -92,9 +92,8 @@ let predefined =
     @ [ BTypeCompatible; BranchTaken; BTypeNext; ExclusiveLocal ])
 
 let global_vars =
-  Lazy.map
-    (List.filter_map (fun v ->
-         Option.if_
-           (fun v -> match Var.scope v with GlobalVar -> true | _ -> false)
-           (to_var v)))
-    predefined
+  predefined
+  |> Lazy.map
+       (List.to_iter %> Iter.map to_var
+       %> Iter.filter (Var.scope %> function GlobalVar -> true | _ -> false)
+       %> Iter.to_set (module VarSet))
