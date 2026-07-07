@@ -94,6 +94,5 @@ let predefined =
 let global_vars =
   predefined
   |> Lazy.map
-       (List.to_iter %> Iter.map to_var
-       %> Iter.filter (Var.scope %> function GlobalVar -> true | _ -> false)
-       %> Iter.to_set (module VarSet))
+       (List.map to_var
+       %> List.filter (Var.scope %> function GlobalVar -> true | _ -> false))

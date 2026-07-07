@@ -204,7 +204,7 @@ let add_aarch64_global_declarations ?(add_all = false) prog =
   in
 
   Lazy.force Aslp_lexpr.global_vars
-  |> VarSet.to_iter |> Iter.filter include_var
+  |> List.to_iter |> Iter.filter include_var
   |> Iter.fold
        (fun prog var ->
          let attrib = Attrib.empty and classification = None in

@@ -208,11 +208,11 @@ proc @main()  -> () {  }
        ];
        block %ret_1 [ return; ]
     ];
-    var $R1:bv64;
     var $SP:bv64;
+    var $R0:bv64;
+    var $R1:bv64;
     var $R29:bv64;
     var $R30:bv64;
-    var $R0:bv64;
     prog entry @main;
     |}]
 
