@@ -35,22 +35,6 @@ let lift_code_block (module I : Bincaml_ibi.IBI) ~address =
       let address = Bitvec.add (Bitvec.create ~size:64 Z.(~$4 * ~$i)) address in
       lift_opcode (module I) ~address op)
 
-module Internal = struct
-  (** [take_drop_while_map f xs] returns the longest prefix of [xs] where the
-      elements yield [Some] when mapped through [f].
-
-      These [Some] values are returned in the first tuple element. Upon reaching
-      a value which yields [None], that value and values after it are returned
-      in the second tuple element. *)
-  let rec take_drop_while_map f = function
-    | [] -> ([], [])
-    | hd :: rest as all -> (
-        match f hd with
-        | Some x -> (
-            match take_drop_while_map f rest with a, b -> (x :: a, b))
-        | None -> ([], all))
-end
-
 (** {1 Interfacing with Bincaml IR} *)
 
 let address_attrib_key = ".address"
@@ -72,10 +56,10 @@ let referenced_vars_of_prog =
 
     Raises an exception if an {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic call
     has an unexpected structure. *)
-let aarch64_intrin_of_stmt ?(include_errors = false) :
+let aarch64_intrin_of_stmt ?(include_failed = false) :
     Program.stmt -> (Bitvec.t * Attrib.attrib_map) option = function
   | Stmt.Instr_IntrinCall { attrib; lhs; name = Aarch64Eval; args }
-    when include_errors || not (StringMap.mem error_attrib_key attrib) -> (
+    when include_failed || not (StringMap.mem error_attrib_key attrib) -> (
       match (lhs, args) with
       | [], [ E (Constant { const = `Bitvector op }) ] -> Some (op, attrib)
       | _ -> failwith "unexpected Aarch64Eval intrin structure")
@@ -86,20 +70,6 @@ let stmt_of_aarch64_intrin : Bitvec.t * Attrib.attrib_map -> Program.stmt =
  fun (opcode, attrib) ->
   let args = [ Expr.BasilExpr.bvconst opcode ] in
   Stmt.Instr_IntrinCall { attrib; lhs = []; name = Aarch64Eval; args }
-
-(** Extracts Aarch64 intrinsics from the given list of statements, partitioning
-    the statements into [(before, aarch64_ops, after)].
-
-    If there are no Aarch64 statements, this still succeeds but will return [[]]
-    in the second and third elements. *)
-let partition_aarch64_stmts stmts =
-  let before, stmts =
-    List.take_drop_while (Option.is_none % aarch64_intrin_of_stmt) stmts
-  in
-  let intrins, after =
-    Internal.take_drop_while_map aarch64_intrin_of_stmt stmts
-  in
-  (before, intrins, after)
 
 (** Extracts the next Aarch64 intrinsic from the given list of statements,
     returning [Some (before, (intrin, attrib), after)] if there exists an
@@ -270,7 +240,7 @@ let transform_program prog =
 let apply_stmt_addresses_from_block (block : _ Block.t) =
   let apply_one address stmt =
     let address' = Bitvec.(add address (of_int ~size:64 4)) in
-    match aarch64_intrin_of_stmt ~include_errors:true stmt with
+    match aarch64_intrin_of_stmt ~include_failed:true stmt with
     | Some (opcode, attr) when not (StringMap.mem address_attrib_key attr) ->
         let attr = StringMap.add address_attrib_key (`Bitvector address) attr in
         (address', stmt_of_aarch64_intrin (opcode, attr))
