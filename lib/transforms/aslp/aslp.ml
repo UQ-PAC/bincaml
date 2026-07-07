@@ -257,8 +257,7 @@ let transform_program prog =
 
 (** {1 Supplementary transformation} *)
 
-(** Mini-pass to insert [.address] on each {!Lang.Stmt.Intrinsic.Aarch64Eval}
-
+(** Micro-pass to insert [.address] on each {!Lang.Stmt.Intrinsic.Aarch64Eval}
     intrinsic statement, computed from block-level [.address] attributes. This
     can be useful in tests to avoid needing to type every address.
 
@@ -267,15 +266,13 @@ let transform_program prog =
     no changes are made to that block. *)
 let apply_stmt_addresses_from_block (block : _ Block.t) =
   let apply_one address stmt =
+    let address' = Bitvec.(add address (of_int ~size:64 4)) in
     match aarch64_intrin_of_stmt ~include_errors:true stmt with
-    | Some (opcode, attrib) when not (StringMap.mem address_attrib_key attrib)
-      ->
-        let attrib =
-          StringMap.add address_attrib_key (`Bitvector address) attrib
-        in
-        ( Bitvec.(add address (of_int ~size:64 4)),
-          stmt_of_aarch64_intrin (opcode, attrib) )
-    | _ -> (address, stmt)
+    | Some (opcode, attr) when not (StringMap.mem address_attrib_key attr) ->
+        let attr = StringMap.add address_attrib_key (`Bitvector address) attr in
+        (address', stmt_of_aarch64_intrin (opcode, attr))
+    | Some (_, attr) -> (address', stmt) (* increment address *)
+    | None -> (address, stmt)
   in
 
   match address_of_attrib block.attrib with
