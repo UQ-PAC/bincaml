@@ -191,7 +191,10 @@ let ensure_pc_consistency ~address state =
   match (Diamond_zipper.focus left, Diamond_zipper.focus right) with
   | { pc_assign = None }, { pc_assign = None } -> state
   | { pc_assign = Some lpc; assume }, { pc_assign = Some rpc } ->
-      let ite = Expr.BasilExpr.(ifthenelse assume lpc rpc) in
+      let ite =
+        if Expr.BasilExpr.equal lpc rpc then lpc
+        else Expr.BasilExpr.ifthenelse assume lpc rpc
+      in
       state |> Diamond_zipper.modify (fun b -> { b with pc_assign = Some ite })
   | _ -> failwith "invariant violation: pcs should agree at this point"
 

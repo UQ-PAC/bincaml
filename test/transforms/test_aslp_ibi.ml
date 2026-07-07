@@ -246,9 +246,8 @@ let%expect_test "pc before branch" =
            pc_assign = (Some 0xaaa:bv64) });
       value =
       { Aslp_state.assume = true;
-        stmts =
-        [call exit_1(); $PC:bv64 := if true then 0xaaa:bv64 else 0xaaa:bv64];
-        pc_assign = (Some if true then 0xaaa:bv64 else 0xaaa:bv64) }}
+        stmts = [call exit_1(); $PC:bv64 := 0xaaa:bv64];
+        pc_assign = (Some 0xaaa:bv64) }}
     ok(())
     |}]
 
