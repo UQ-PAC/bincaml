@@ -211,16 +211,16 @@ let ensure_forwarded_pc state =
       match Diamond_zipper.((focus l).pc_assign, (focus r).pc_assign) with
       | None, None -> state
       | Some _, Some _ ->
-          Diamond_zipper.modify
-            (fun b ->
-              let pc =
-                Option.get_exn_or "pc unset in last diamond?" b.pc_assign
-              in
-              let al = [ (Aslp_lexpr.pc_var, pc) ] in
-              let stmt = Stmt.Instr_Assign { attrib = Attrib.empty; al } in
-              add_stmt_to_block ~stmt ~allow_double_pc:true b)
-            state
-      | Some _, None | None, Some _ -> failwith "pcs should agree")
+          let pc_assign =
+            Option.get_exn_or "invariant violation: pc should be propagated"
+              (Diamond_zipper.focus state).pc_assign
+          in
+          let al = [ (Aslp_lexpr.pc_var, pc_assign) ] in
+          let stmt = Stmt.Instr_Assign { attrib = Attrib.empty; al } in
+          state
+          |> Diamond_zipper.modify
+               (add_stmt_to_block ~stmt ~allow_double_pc:true)
+      | Some _, None | None, Some _ -> failwith "pcs should already agree")
 
 (** Returns an {!Lang.Stmt.Instr_Assume} statement for the given block's guard,
     if it is non-trivial. *)
