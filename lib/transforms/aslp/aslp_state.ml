@@ -134,7 +134,7 @@ let add_stmt_to_active stmt (lifter_state : lifter_state) =
   let diamond = diamond |> Diamond_zipper.modify (add_stmt_to_block ~stmt) in
   { lifter_state with diamond }
 
-(** {1 Program counter functions} *)
+(** {1 Program counter and guard functions} *)
 
 (** Ensures that the focused block has a PC assignment. If it already has
     {!pc_assign}, no changes are made. *)
@@ -218,6 +218,13 @@ let ensure_forwarded_pc state =
               add_stmt_to_block ~stmt ~allow_double_pc:true b)
             state
       | Some _, None | None, Some _ -> failwith "pcs should agree")
+
+(** Returns an {!Lang.Stmt.Instr_Assume} statement for the given block's guard,
+    if it is non-trivial. *)
+let assume_of_aslp_block = function
+  | { assume = E (Constant { const = `Bool true }); _ } -> None
+  | { assume = body } ->
+      Some (Stmt.Instr_Assume { attrib = Attrib.empty; body; branch = true })
 
 (** {1 Formatters} *)
 

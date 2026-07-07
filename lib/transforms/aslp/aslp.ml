@@ -135,13 +135,9 @@ let insert_one_diamond ~proc dia =
   let proc =
     with_ids |> Diamond.iter_backwards
     |> Iter.fold
-         (fun proc (id, successors, lifter_block) ->
-           let { stmts; assume } : Aslp_state.aslp_block = lifter_block in
-           let stmts =
-             Stmt.Instr_Assume
-               { attrib = Attrib.empty; body = assume; branch = true }
-             :: CCVector.to_list stmts
-           in
+         (fun proc (id, successors, st) ->
+           let assume = Aslp_state.assume_of_aslp_block st in
+           let stmts = Option.to_list assume @ CCVector.to_list st.stmts in
            Procedure.add_block proc id ~stmts ~successors ())
          proc
   and (first, _, _), (last, _, _) = Diamond.(first with_ids, last with_ids) in
