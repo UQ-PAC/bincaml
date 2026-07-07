@@ -152,7 +152,7 @@ module ConditionalWritesDomain (D : InterferenceStateDomain) = struct
         ~stop:""
         ~sep:", "
         entry_to_str
-  (** For example: "{x} -> P, {y} -> Q, {x, y} -> R, ..." *)
+  (** For example: "(x) -> P, (y) -> Q, (x, y) -> R, ..." *)
   
   let pretty i = Containers_pp.text (show i)
 
