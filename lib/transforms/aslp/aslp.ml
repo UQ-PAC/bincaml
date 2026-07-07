@@ -148,8 +148,14 @@ let insert_one_diamond ~proc dia =
     given block ID within the given procedure.
 
     The first intrinsic appearing within the block's statement list, if any,
-    will be transformed and [Some] will be returned with the updated procedure.
-    If no intrinsic exists, [None] will be returned.
+    will be transformed. The block will be split at this point, and any
+    statements after the intrinsic (and any successor edges) will be moved to
+    the last block of the freshly-inserted ASLp blocks.
+
+    If a change happened, [Some] will be returned with the updated procedure,
+    along with the ID of the last block of the ASLp output (containing the
+    suffix of the original block's statements). If no intrinsic exists, [None]
+    will be returned.
 
     If an error occurs while lifting through ASLp, an error attribute will be
     attached to the intrinsic (and it is excluded from subsequent calls). *)
@@ -160,10 +166,8 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
   | None -> None
   | Some (before, (opcode, intr_attrib), after) -> (
       let address = address_of_attrib intr_attrib in
-      match
-        CCResult.guard_str (fun () -> lift_opcode (module I) ~address opcode)
-      with
-      | Ok diamond ->
+      match lift_opcode (module I) ~address opcode with
+      | diamond ->
           let aslp_first, aslp_last, proc = insert_one_diamond ~proc diamond in
 
           let proc =
@@ -178,10 +182,9 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
             |> Procedure.add_goto ~from:bid ~targets:[ aslp_first ]
           in
           Some (proc, aslp_last)
-      | Error err ->
-          let attrib =
-            StringMap.add error_attrib_key (`String err) intr_attrib
-          in
+      | exception exn ->
+          let exn = `String (Printexc.to_string exn) in
+          let attrib = StringMap.add error_attrib_key exn intr_attrib in
           let intrin_stmt = stmt_of_aarch64_intrin (opcode, attrib) in
           let stmts = Vector.of_list (before @ (intrin_stmt :: after)) in
           Some (Procedure.modify_block proc bid (fun b -> { b with stmts }), bid)
