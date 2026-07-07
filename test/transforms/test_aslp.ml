@@ -447,6 +447,141 @@ proc @Sqrt()  -> () {  }
     prog entry @Sqrt;
     |}]
 
+let%expect_test "aslp integration should leave unsupporteds" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+memory shared $mem : (bv64 -> bv8);
+var $PC:bv64;
+prog entry @main;
+
+proc @main()  -> () {  }
+  requires boolor(eq(0x400808:bv64, $PC))
+[
+      block %main_code { .address = 0x400808; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+      .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
+              .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
+    assume eq(0x400808:bv64, $PC);
+    call @_aarch64_eval(0xd4000021:bv32) { .asm = "svc 1"; .address = 0x400808:bv64 };
+    call @_aarch64_eval(0xaa1f03ff:bv32) { .asm = "mov xzr, xzr"; .address = 0x40080c:bv64 };
+    goto (%ret_1);
+  ];
+      block %ret_1 [ return; ]
+];
+    |}
+  in
+  let prog = transform_program lst.prog in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
+  [%expect {|
+    var observable $mem:(bv64->bv8);
+    var $PC:bv64;
+    proc @main()  -> () {  }
+      captures $PC:bv64
+      requires boolor(eq(0x400808:bv64, $PC))
+
+    [
+       block %main_code { .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+           .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
+                   .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
+         assume eq(0x400808:bv64, $PC);
+         call @_aarch64_eval(0xd4000021:bv32) { .address = 0x400808:bv64;
+             .asm = "svc 1"; .error = "Failure(\"unsupported\")" };
+         goto (%block);
+       ];
+       block %block { .address = 0x40080c:bv64; .asm = "mov xzr, xzr" } [
+         var var:bv64 := 0x0:bv64;
+         var var_1:bv64 := 0x0:bv64;
+         (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
+         goto (%ret_1);
+       ];
+       block %ret_1 [ return; ]
+    ];
+    var $SP:bv64;
+    var $R0:bv64;
+    var $R1:bv64;
+    var $R2:bv64;
+    var $R3:bv64;
+    var $R4:bv64;
+    var $R5:bv64;
+    var $R6:bv64;
+    var $R7:bv64;
+    var $R8:bv64;
+    var $R9:bv64;
+    var $R10:bv64;
+    var $R11:bv64;
+    var $R12:bv64;
+    var $R13:bv64;
+    var $R14:bv64;
+    var $R15:bv64;
+    var $R16:bv64;
+    var $R17:bv64;
+    var $R18:bv64;
+    var $R19:bv64;
+    var $R20:bv64;
+    var $R21:bv64;
+    var $R22:bv64;
+    var $R23:bv64;
+    var $R24:bv64;
+    var $R25:bv64;
+    var $R26:bv64;
+    var $R27:bv64;
+    var $R28:bv64;
+    var $R29:bv64;
+    var $R30:bv64;
+    var $Z0:bv128;
+    var $Z1:bv128;
+    var $Z2:bv128;
+    var $Z3:bv128;
+    var $Z4:bv128;
+    var $Z5:bv128;
+    var $Z6:bv128;
+    var $Z7:bv128;
+    var $Z8:bv128;
+    var $Z9:bv128;
+    var $Z10:bv128;
+    var $Z11:bv128;
+    var $Z12:bv128;
+    var $Z13:bv128;
+    var $Z14:bv128;
+    var $Z15:bv128;
+    var $Z16:bv128;
+    var $Z17:bv128;
+    var $Z18:bv128;
+    var $Z19:bv128;
+    var $Z20:bv128;
+    var $Z21:bv128;
+    var $Z22:bv128;
+    var $Z23:bv128;
+    var $Z24:bv128;
+    var $Z25:bv128;
+    var $Z26:bv128;
+    var $Z27:bv128;
+    var $Z28:bv128;
+    var $Z29:bv128;
+    var $Z30:bv128;
+    var $FPSR:bv64;
+    var $FPCR:bv64;
+    var $PSTATE_N:bv1;
+    var $PSTATE_Z:bv1;
+    var $PSTATE_C:bv1;
+    var $PSTATE_V:bv1;
+    var $PSTATE_A:bv1;
+    var $PSTATE_D:bv1;
+    var $PSTATE_DIT:bv1;
+    var $PSTATE_F:bv1;
+    var $PSTATE_I:bv1;
+    var $PSTATE_PAN:bv1;
+    var $PSTATE_SP:bv1;
+    var $PSTATE_SSBS:bv1;
+    var $PSTATE_TCO:bv1;
+    var $PSTATE_UAO:bv1;
+    var $PSTATE_BTYPE:bv1;
+    var $ExclusiveLocal:bool;
+    prog entry @main;
+    |}]
+
+
 let%expect_test "aslp integration with no aarch64_eval intrins" =
   let lst =
     Loader.Loadir.ast_of_string
