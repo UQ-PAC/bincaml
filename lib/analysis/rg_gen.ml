@@ -6,7 +6,7 @@ open Lang
 open Expr
 
 module Debug = struct
-  let enabled = true
+  let enabled = false
   let print s = if enabled then print_endline s
 end
 
@@ -118,7 +118,7 @@ end
     when determining the conditions under which they can change. Note that (x U y) may map to a strictly stronger
     write-condition than P /\ Q, such as in the case when either x or y can change individually but never in the same
     execution trace (i.e. "at the same time"). *)
-module ConditionalWritesDomain (D : InterferenceStateDomain) : InterferenceDomain with type D.t = D.t = struct
+module ConditionalWritesDomain (D : InterferenceStateDomain) = struct
   module VarSetMap = Map.Make(VarSet)
 
   module D = D
@@ -170,11 +170,6 @@ module ConditionalWritesDomain (D : InterferenceStateDomain) : InterferenceDomai
     Debug.print @@ "Result: " ^ (D.show result);
     result
   
-  (** Creates a minimal (i.e. precise, or "strong") interference where all variables in [vars] may be simultaneously
-      assigned under [pre]. Assumes [vars] contains no duplicates. *)
-  let create_interference pre vars : t =
-    vars |> Util.powerset |> List.map (fun sublst -> (VarSet.of_list sublst, pre)) |> VarSetMap.of_list
-
   let transitions (lst: ConcInt.t list) =
     Debug.print @@ "Deriving transitions from concrete interferences: " ^ (List.to_string ~sep:", " ConcInt.show lst);
     (* aux derives a guarantee condition from a single (possibly simultaneous) assignment to global vars *)
@@ -200,7 +195,7 @@ module ConditionalWritesDomain (D : InterferenceStateDomain) : InterferenceDomai
       (* get just the variables *)
       |> List.map fst
       (* map each subset of the resulting set of variables to 'pre', creating an interference of type t *)
-      |> create_interference pre
+      |> Util.powerset |> List.map (fun sublst -> (VarSet.of_list sublst, pre)) |> VarSetMap.of_list
     in
     (* apply aux to every assignment in the list, and join the results *)
     let result = List.fold_left (fun acc ConcInt.{ pre; assignments } -> join acc @@ aux pre assignments) bottom lst in
