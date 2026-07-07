@@ -72,18 +72,15 @@ let stmt_of_aarch64_intrin : Bitvec.t * Attrib.attrib_map -> Program.stmt =
   Stmt.Instr_IntrinCall { attrib; lhs = []; name = Aarch64Eval; args }
 
 (** Extracts the next Aarch64 intrinsic from the given list of statements,
-    returning [Some (before, (intrin, attrib), after)] if there exists an
-    intrinsic. *)
+    returning [Some (before, intrin, after)] if there exists an intrinsic. *)
 let next_aarch64_stmt stmts =
-  let intrin = CCList.find_map aarch64_intrin_of_stmt stmts in
-  match intrin with
-  | None -> None
-  | Some intrin ->
-      let before, after =
-        CCList.take_drop_while (Option.is_none % aarch64_intrin_of_stmt) stmts
-      in
-      let after = CCList.drop 1 after in
-      Some (before, intrin, after)
+  let open CCOption.Infix in
+  let before, rest =
+    CCList.take_drop_while (Option.is_none % aarch64_intrin_of_stmt) stmts
+  in
+  let* hd, after = Aslp_util_internal.uncons rest in
+  let* intrin = aarch64_intrin_of_stmt hd in
+  Some (before, intrin, after)
 
 (** Returns the Bincaml global variable representing heap memory. *)
 let aarch64_mem_of_prog prog =
@@ -182,7 +179,7 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
     value. *)
 let rec transform_block (module I : Bincaml_ibi.IBI) ~proc bid =
   match transform_one_stmt (module I) ~proc bid with
-  | Some (proc, bid) -> transform_block (module I) ~proc bid
+  | Some (proc, bid) -> (transform_block [@tailcall]) (module I) ~proc bid
   | None -> proc
 
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all blocks
