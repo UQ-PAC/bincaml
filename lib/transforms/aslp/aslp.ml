@@ -124,11 +124,10 @@ let aarch64_mem_of_prog prog =
 (** Returns the byte address in the given attribute map, if present. *)
 let address_of_attrib attrib =
   match StringMap.find_opt address_attrib_key attrib with
-  | Some (`CamlInt x) -> Bitvec.of_int ~size:64 x
-  | Some (`Integer x) -> Bitvec.create ~size:64 x
-  | Some (`Bitvector x) -> x
-  | _ ->
-      failwith "address_of_attrib: requires .address with int or bitvec value"
+  | Some (`CamlInt x) -> Some (Bitvec.of_int ~size:64 x)
+  | Some (`Integer x) -> Some (Bitvec.create ~size:64 x)
+  | Some (`Bitvector x) -> Some x
+  | _ -> None
 
 (** {1 Main Bincaml IR transformation functions} *)
 
@@ -175,8 +174,12 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
 
   match next_aarch64_stmt (Vector.to_list b.stmts) with
   | None -> None
-  | Some (before, (opcode, intr_attrib), after) -> (
-      let address = address_of_attrib intr_attrib in
+  | Some (before, (opcode, intrin_attrib), after) -> (
+      let address =
+        address_of_attrib intrin_attrib
+        |> CCOption.get_exn_or
+             "aslp transform: requires .address with int or bitvec value"
+      in
       match lift_opcode (module I) ~address opcode with
       | diamond ->
           let aslp_first, aslp_last, proc = insert_one_diamond ~proc diamond in
@@ -186,7 +189,7 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
             |> Procedure.modify_block' ~id:bid ~f:(fun b ->
                 { b with stmts = Vector.of_list before })
             |> Procedure.modify_block' ~id:aslp_first ~f:(fun b ->
-                { b with attrib = intr_attrib })
+                { b with attrib = intrin_attrib })
             |> Procedure.modify_block' ~id:aslp_last ~f:(fun b ->
                 Block.fmap_stmts_copy (Fun.flip CCVector.append_list after) b)
             |> Procedure.transplant_outgoing_edges ~from:bid ~to_:aslp_last
@@ -195,7 +198,7 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
           Some (proc, aslp_last)
       | exception exn ->
           let exn = `String (Printexc.to_string exn) in
-          let attrib = StringMap.add error_attrib_key exn intr_attrib in
+          let attrib = StringMap.add error_attrib_key exn intrin_attrib in
           let intrin_stmt = stmt_of_aarch64_intrin (opcode, attrib) in
           let stmts = Vector.of_list (before @ (intrin_stmt :: after)) in
           Some (Procedure.modify_block proc bid (fun b -> { b with stmts }), bid)
@@ -276,14 +279,14 @@ let apply_stmt_addresses_from_block (block : _ Block.t) =
   in
 
   match address_of_attrib block.attrib with
-  | block_address ->
+  | Some block_address ->
       let stmts =
         block.stmts |> CCVector.to_iter
         |> Iter.fold_map apply_one block_address
         |> CCVector.of_iter |> CCVector.freeze
       in
       { block with stmts }
-  | exception _ -> block
+  | None -> block
 
 (** TODO look into annotating attributes onto "landmark" points like memory
     access. *)
