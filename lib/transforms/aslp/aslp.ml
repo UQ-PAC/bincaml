@@ -62,10 +62,10 @@ and error_attrib_key = ".error"
 
     Raises an exception if an {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic call
     has an unexpected structure. *)
-let aarch64_intrin_of_stmt :
+let aarch64_intrin_of_stmt ?(include_errors = false) :
     Program.stmt -> (Bitvec.t * Attrib.attrib_map) option = function
   | Stmt.Instr_IntrinCall { attrib; lhs; name = Aarch64Eval; args }
-    when not (StringMap.mem error_attrib_key attrib) -> (
+    when include_errors || not (StringMap.mem error_attrib_key attrib) -> (
       match (lhs, args) with
       | [], [ E (Constant { const = `Bitvector op }) ] -> Some (op, attrib)
       | _ -> failwith "unexpected Aarch64Eval intrin structure")
@@ -117,7 +117,7 @@ let address_of_attrib attrib =
   | Some (`Integer x) -> Bitvec.create ~size:64 x
   | Some (`Bitvector x) -> x
   | _ ->
-      failwith "address_of_attrib: expected .address with int or bitvec value"
+      failwith "address_of_attrib: requires .address with int or bitvec value"
 
 (** {1 Transforming Bincaml IR} *)
 
@@ -166,11 +166,6 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
       | Ok diamond ->
           let aslp_first, aslp_last, proc = insert_one_diamond ~proc diamond in
 
-          let address_after =
-            StringMap.singleton address_attrib_key
-              (`Bitvector Bitvec.(add (of_int ~size:64 4) address))
-          in
-
           let proc =
             proc
             |> Procedure.modify_block' ~id:bid ~f:(fun b ->
@@ -178,9 +173,7 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
             |> Procedure.modify_block' ~id:aslp_first ~f:(fun b ->
                 { b with attrib = intr_attrib })
             |> Procedure.modify_block' ~id:aslp_last ~f:(fun b ->
-                let attrib = Attrib.merge_map_shadow address_after b.attrib in
-                { b with attrib }
-                |> Block.fmap_stmts_copy (Fun.flip CCVector.append_list after))
+                Block.fmap_stmts_copy (Fun.flip CCVector.append_list after) b)
             |> Procedure.transplant_outgoing_edges ~from:bid ~to_:aslp_last
             |> Procedure.add_goto ~from:bid ~targets:[ aslp_first ]
           in
@@ -240,6 +233,37 @@ let transform_program prog =
   prog
   |> Program.map_procedures (fun _ proc -> transform_procedure ~memory proc)
   |> add_aarch64_global_declarations
+
+(** Mini-pass to insert [.address] on each {!Lang.Stmt.Intrinsic.Aarch64Eval}
+    intrinsic statement, computed from block-level [.address] attributes. This
+    can be useful in tests to avoid needing to type every address.
+
+    Existing statement [.address] attributes, if they exist, are unchanged and
+    do not interact with this transform. If a block has no [.address] attribute,
+    no changes are made to that block. *)
+let apply_stmt_addresses_from_block (block : _ Block.t) =
+  let apply_one address stmt =
+    match aarch64_intrin_of_stmt ~include_errors:true stmt with
+    | Some (opcode, attrib) when not (StringMap.mem address_attrib_key attrib)
+      ->
+        let attrib =
+          StringMap.add address_attrib_key (`Bitvector address) attrib
+        and args = [ Expr.BasilExpr.bvconst opcode ] in
+        ( Bitvec.(add address (of_int ~size:64 4)),
+          Stmt.Instr_IntrinCall { attrib; lhs = []; name = Aarch64Eval; args }
+        )
+    | _ -> (address, stmt)
+  in
+
+  match address_of_attrib block.attrib with
+  | block_address ->
+      let stmts =
+        block.stmts |> CCVector.to_iter
+        |> Iter.fold_map apply_one block_address
+        |> CCVector.of_iter |> CCVector.freeze
+      in
+      { block with stmts }
+  | exception _ -> block
 
 (** TODO look into annotating attributes onto "landmark" points like memory
     access. *)

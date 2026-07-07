@@ -141,7 +141,12 @@ proc @main()  -> () {  }
 ];
     |}
   in
-  let prog = transform_program lst.prog in
+  let prog =
+    lst.prog
+    |> Program.map_procedures (fun _ ->
+        Procedure.map_blocks_nondet (apply_stmt_addresses_from_block % snd))
+    |> transform_program
+  in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
   [%expect
@@ -159,8 +164,7 @@ proc @main()  -> () {  }
          assume eq(0x400808:bv64, $PC);
          goto (%block);
        ];
-       block %block { .address = 0x40080c:bv64; .asm = "stp x29, x30, [sp, #-0x20]!" } [
-         guard true;
+       block %block { .address = 0x400808:bv64; .asm = "stp x29, x30, [sp, #-0x20]!" } [
          var var:bv64 := 0x0:bv64;
          var var:bv64 := $SP;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
@@ -171,27 +175,23 @@ proc @main()  -> () {  }
          (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
          goto (%block_1);
        ];
-       block %block_1 { .address = 0x400810:bv64; .asm = "mov x29, sp" } [
-         guard true;
+       block %block_1 { .address = 0x40080c:bv64; .asm = "mov x29, sp" } [
          var var_1:bv64 := 0x0:bv64;
          $R29:bv64 := bvadd($SP, 0x0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
          goto (%block_2);
        ];
-       block %block_2 { .address = 0x400814:bv64; .asm = "str w0, [sp, #0x1c]" } [
-         guard true;
+       block %block_2 { .address = 0x400810:bv64; .asm = "str w0, [sp, #0x1c]" } [
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) extract(-32,0, $R0) 4;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400814:bv64);
          goto (%block_3);
        ];
-       block %block_3 { .address = 0x400818:bv64; .asm = "str x1, [sp, #0x10]" } [
-         guard true;
+       block %block_3 { .address = 0x400814:bv64; .asm = "str x1, [sp, #0x10]" } [
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x10:bv64) $R1 8;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400818:bv64);
          goto (%block_4);
        ];
-       block %block_4 { .address = 0x40081c:bv64; .asm = "ldrsw x0, [sp, #0x1c]" } [
-         guard true;
+       block %block_4 { .address = 0x400818:bv64; .asm = "ldrsw x0, [sp, #0x1c]" } [
          var var_2:bv32 := 0x0:bv32;
          $mem:(bv64->bv8) := load le var_3:bv4 bvadd($SP, 0x1c:bv64) 4;
          var var_2:bv32 := var_3:bv4;
@@ -199,8 +199,7 @@ proc @main()  -> () {  }
          (var BranchTaken:bool := false, $PC:bv64 := 0x40081c:bv64);
          goto (%block_5);
        ];
-       block %block_5 { .address = 0x400820:bv64; .asm = "bl #0xffffffffffffff68" } [
-         guard true;
+       block %block_5 { .address = 0x40081c:bv64; .asm = "bl #0xffffffffffffff68" } [
          $R30:bv64 := 0x400820:bv64;
          var BranchTaken:bool := true;
          $PC:bv64 := 0x400784:bv64;
@@ -321,7 +320,12 @@ proc @Sqrt()  -> () {  }
 ];
     |}
   in
-  let prog = transform_program lst.prog in
+  let prog =
+    lst.prog
+    |> Program.map_procedures (fun _ ->
+        Procedure.map_blocks_nondet (apply_stmt_addresses_from_block % snd))
+    |> transform_program
+  in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
   [%expect
@@ -336,8 +340,7 @@ proc @Sqrt()  -> () {  }
          assume eq(0x4007dc:bv64, $PC);
          goto (%block);
        ];
-       block %block { .asm = "b.lt #0x10" } [
-         guard true;
+       block %block { .address = 0x4007dc:bv64; .asm = "b.lt #0x10" } [
          goto (%block_2,%block_1);
        ];
        block %block_1 [
@@ -351,8 +354,7 @@ proc @Sqrt()  -> () {  }
          (var BranchTaken:bool := false, $PC:bv64 := 0x4007e0:bv64);
          goto (%block_3);
        ];
-       block %block_3 { .address = 0x4007e0:bv64 } [
-         guard true;
+       block %block_3 [
          $PC:bv64 := if boolnot(eq($PSTATE_N, $PSTATE_V)) then 0x4007ec:bv64 else 0x4007e0:bv64;
          assert boolor(eq(0x4007fc:bv64, $PC), eq(0x4007e0:bv64, $PC));
          goto (%Sqrt_code_3,%Sqrt_code);
