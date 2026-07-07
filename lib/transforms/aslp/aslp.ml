@@ -268,5 +268,19 @@ let apply_stmt_addresses_from_block (block : _ Block.t) =
       { block with stmts }
   | exception _ -> block
 
+let restrict_to_referenced_globals prog =
+  let referenced_vars =
+    Program.procs prog
+    |> Iter.flat_map (fun (_, proc) ->
+        Procedure.iter_blocks proc
+        |> Iter.flat_map (fun (_, b) ->
+            Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b)))
+    |> Iter.filter Var.is_global
+    |> Iter.to_set (module VarSet)
+  in
+
+
+  2
+
 (** TODO look into annotating attributes onto "landmark" points like memory
     access. *)

@@ -414,6 +414,8 @@ let modify_block p id
       let g = G.add_edge_e g (Begin id, Block block, End id) in
       g)
 
+(** Like {!modify_block}, but the parameters are named so you can specify them
+    with labels and pipe in the procedure. *)
 let modify_block' p ~id ~f = modify_block p id f
 
 let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
