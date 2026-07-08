@@ -11,6 +11,8 @@
   [
      block %block [
        var v:bool := true;
+       guard bvult(a:bv64, 0x0:bv64);
+       guard boolnot(bvult(a:bv64, 0x0:bv64));
        var v_2:bool := booland(v:bool, boolnot(bvult(a:bv64, 0x0:bv64)));
        var x_6:bv64 := if v_2:bool then bvadd(a:bv64, 0x1:bv64) else bvsub(a:bv64,
         0x1:bv64);
