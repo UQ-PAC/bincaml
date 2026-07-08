@@ -1,5 +1,7 @@
 {
   inputs = {
+    self.submodules = true;
+
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
 
     pac-nix.url = "github:katrinafyi/pac-nix";
@@ -41,10 +43,13 @@
           };
           ocaml-protoc-plugin-6-1-0 = ofinal.callPackage ./nix/ocaml-protoc-plugin.nix { };
           bincaml_lsp = ofinal.callPackage ./nix/bincaml-lsp.nix { };
+          capstone_arm64_disas = ofinal.callPackage ./nix/capstone_arm64_disas.nix { };
+          aslp_lifter_ocaml = ofinal.callPackage ./nix/aslp-lifter-ocaml.nix { };
           hector = ofinal.callPackage ./nix/hector.nix { };
           intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
           kittyimg = ofinal.callPackage ./nix/kittyimg.nix { };
           stb_image = ofinal.callPackage ./nix/stb_image.nix { };
+          containers = ofinal.callPackage ./nix/containers.nix { };
         };
 
         enableOcamlFramePointer =
@@ -84,17 +89,23 @@
           legacyPackages = {
             bincaml = selfOcamlPackages.bincaml;
             bincaml_lsp = selfOcamlPackages.bincaml_lsp;
+            aslp_lifter_ocaml = selfOcamlPackages.aslp_lifter_ocaml;
+            capstone_arm64_disas = selfOcamlPackages.capstone_arm64_disas;
             intPQueue = selfOcamlPackages.intPQueue;
             hector = selfOcamlPackages.hector;
             kittyimg = selfOcamlPackages.kittyimg;
             stb_image = selfOcamlPackages.stb_image;
+            containers = selfOcamlPackages.containers;
 
             fp.bincaml = fpOcamlPackages.bincaml;
             fp.bincaml_lsp = fpOcamlPackages.bincaml_lsp;
+            fp.capstone_arm64_disas = fpOcamlPackages.capstone_arm64_disas;
+            fp.aslp_lifter_ocaml = fpOcamlPackages.aslp_lifter_ocaml;
             fp.intPQueue = fpOcamlPackages.intPQueue;
             fp.hector = fpOcamlPackages.hector;
             fp.kittyimg = fpOcamlPackages.kittyimg;
             fp.stb_image = fpOcamlPackages.stb_image;
+            fp.containers = fpOcamlPackages.containers;
           };
 
           devShells = {

@@ -3,9 +3,9 @@
   buildDunePackage,
   nix-gitignore,
   writableTmpDirAsHomeHook,
+  capstone,
 
   # ocaml packages
-  bincaml,
   logs,
   fmt,
   iter,
@@ -13,6 +13,7 @@
   linol-lwt,
   containers,
   ppx_deriving,
+  ppx_expect,
 
   # test:
 
@@ -20,7 +21,7 @@
 }:
 
 buildDunePackage {
-  pname = "bincaml_lsp";
+  pname = "capstone_arm64_disas";
   version = "0.0";
 
   minimalOCamlVersion = "5.0";
@@ -30,7 +31,6 @@ buildDunePackage {
   checkInputs = [ ];
   nativeBuildInputs = [ writableTmpDirAsHomeHook ];
   buildInputs = [
-    bincaml
     logs
     fmt
     iter
@@ -38,10 +38,11 @@ buildDunePackage {
     linol-lwt
     containers
     ppx_deriving
+    ppx_expect
   ];
-  propagatedBuildInputs = [ ];
+  propagatedBuildInputs = [ capstone ];
 
-  doCheck = true;
+  doCheck = false;
   outputs = [
     "out"
     "dev"
@@ -49,7 +50,7 @@ buildDunePackage {
 
   meta = {
     homepage = "https://github.com/agle/bincaml";
-    description = "language server for bincaml intermediate representation";
+    description = "";
     maintainers = with lib.maintainers; [ katrinafyi ];
     mainProgram = "bincaml";
   };
