@@ -311,7 +311,7 @@ GDB is useful to have installed at least for the [pstack] command.
 
 We use the {{:https://github.com/ocaml-tracing/ocaml-trace}trace library} to record coarse function runtimes, this is
 enabled by default and every run dumps the tef format [trace.json] file. This
-can be viewed in {{:ui.perfetto.dev} ui.perfetto.dev}. This provides coarse
+can be viewed in {{:https://ui.perfetto.dev/} ui.perfetto.dev}. This provides coarse
 performance info at the level of analysis passes.
 
 Additional trace sections can be added like the following:

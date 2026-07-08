@@ -163,7 +163,9 @@ module PassManager = struct
         Prog
           (fun p ->
             let r = Analysis.Sva.sva p in
-            List.iter (print_endline % Analysis.Sva.StateAbstraction.show) r;
+            List.iter
+              (print_endline % Analysis.Sva.StateAbstraction.show % snd)
+              r;
             p);
       doc = "Runs symbolic value analysis and prints stuff out after";
       invariants = Invariants.presupposes [ SSA ];
@@ -430,6 +432,16 @@ module PassManager = struct
           ~invalidates:[ SSA ];
     }
 
+  let data_structure_analysis =
+    {
+      name = "data-structure-analysis-dots";
+      apply = Prog Analysis.Dsa.dsa_dots;
+      doc =
+        "Perform data structure analysis to generate point-to graphs, and \
+         print the graphs as graphviz .dot files to stdout.";
+      invariants = Invariants.presupposes [ SSA ];
+    }
+
   let passes =
     [
       lift_intrinsics_aarch64;
@@ -467,6 +479,7 @@ module PassManager = struct
       linear_const;
       linear_copy;
       simp;
+      data_structure_analysis;
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;
