@@ -40,16 +40,6 @@ let lift_code_block (module I : Bincaml_ibi.IBI) ~address =
 let address_attrib_key = ".address"
 and error_attrib_key = ".error"
 
-(** Iterates over global variables in the given program, including both read and
-    assigned variables. Order is unspecified and may have duplicates. *)
-let referenced_vars_of_prog =
-  Program.procs
-  %> Iter.flat_map
-       (snd %> Procedure.iter_blocks
-       %> Iter.flat_map (fun (_, b) ->
-           Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b)))
-  %> Iter.filter Var.is_global
-
 (** Extracts the opcode and attribute from the given Bincaml statement, if it is
     an {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic call. Otherwise, returns
     [None].
@@ -197,7 +187,8 @@ let add_aarch64_global_declarations ?(add_all = false) prog =
     if add_all then Fun.const true
     else
       Fun.flip VarSet.mem
-        (referenced_vars_of_prog prog |> Iter.to_set (module VarSet))
+        (Aslp_util_internal.referenced_vars_of_prog prog
+        |> Iter.to_set (module VarSet))
   in
 
   Lazy.force Aslp_lexpr.global_vars
