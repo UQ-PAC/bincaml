@@ -87,29 +87,19 @@ let construct_final_edge proc =
           2. the statements for the new edge body.
           3. an assignment to the termination variable.
         *)
-      CCVector.push final_edge ites;
-      CCVector.append_list final_edge non_guard_stmts;
-      CCVector.push final_edge termination;
-      final_edge)
-    (CCVector.create ()) proc
-  |> CCVector.freeze
+      final_edge
+      @ List.concat [ [ ites ]; block.stmts |> Vector.to_list; [ termination ] ])
+    List.empty proc
 
 let reduce_procedure (proc : Program.proc) : Program.proc =
   (* Constructed reduced edge to replace procedure blocks. *)
   let final_edge = construct_final_edge proc in
 
-  let proc =
-    proc |> Procedure.iter_blocks |> Iter.map fst
-    |> Iter.fold (fun acc id -> Procedure.remove_block acc id) proc
-  in
-  let proc, id = Procedure.fresh_block proc ~stmts:[] () in
-  let proc =
-    Procedure.modify_block proc id (fun b -> { b with stmts = final_edge })
-  in
+  let out_proc, id = Procedure.fresh_block proc ~stmts:final_edge () in
 
   (* Make this the entry and return block. *)
-  let proc = Procedure.set_entry_block proc id in
+  let out_proc = Procedure.set_entry_block out_proc id in
   Procedure.PG.map_graph
     (fun g ->
       Procedure.G.add_edge g (Procedure.Vert.End id) Procedure.Vert.Return)
-    proc
+    out_proc
