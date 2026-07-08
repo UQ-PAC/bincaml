@@ -470,7 +470,7 @@ let transplant_outgoing_edges p ~from ~to_ : _ t =
 (** Like {!transplant_outgoing_edges}, but for incoming edges. *)
 let transplant_incoming_edges p ~from ~to_ : _ t =
   let replace_incoming_uses ~from ~to_ g =
-    G.fold_succ_e
+    G.fold_pred_e
       (function
         | (src, e, _) as edge ->
             Fun.flip G.remove_edge_e edge %> Fun.flip G.add_edge_e (src, e, to_))
