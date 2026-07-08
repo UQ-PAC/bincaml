@@ -79,7 +79,11 @@ let reduce_procedure (proc : Program.proc) : Program.proc =
   (* Constructed reduced edge to replace procedure blocks. *)
   let final_edge = construct_final_edge proc in
 
-  let out_proc, id = Procedure.fresh_block proc ~stmts:final_edge () in
+  let out_proc =
+    proc |> Procedure.iter_blocks |> Iter.map fst
+    |> Iter.fold (fun acc id -> Procedure.remove_block acc id) proc
+  in
+  let out_proc, id = Procedure.fresh_block out_proc ~stmts:final_edge () in
 
   (* Make this the entry and return block. *)
   let out_proc = Procedure.set_entry_block out_proc id in
