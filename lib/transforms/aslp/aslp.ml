@@ -224,10 +224,11 @@ let transform_program prog =
     changes are made to that block. *)
 let apply_stmt_addresses_from_block (block : _ Block.t) =
   let default_address = Bitvec.ones ~size:64 in
+
   let apply_one address stmt =
     let address' = Bitvec.(add address (of_int ~size:64 4)) in
     match aarch64_intrin_of_stmt ~include_failed:true ~default_address stmt with
-    | Some (opcode, address, attr) when Bitvec.equal address default_address ->
+    | Some (opcode, a, attr) when Bitvec.equal a default_address ->
         (address', stmt_of_aarch64_intrin (opcode, address, attr))
     | Some _ -> (address', stmt) (* increment address *)
     | None -> (address, stmt)

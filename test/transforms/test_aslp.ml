@@ -164,7 +164,7 @@ proc @main()  -> () {  }
          assume eq(0x400808:bv64, $PC);
          goto (%block);
        ];
-       block %block { .address = 0x400808:bv64; .asm = "stp x29, x30, [sp, #-0x20]!" } [
+       block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
          var var:bv64 := 0x0:bv64;
          var var:bv64 := $SP;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
@@ -175,23 +175,23 @@ proc @main()  -> () {  }
          (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
          goto (%block_1);
        ];
-       block %block_1 { .address = 0x40080c:bv64; .asm = "mov x29, sp" } [
+       block %block_1 { .asm = "mov x29, sp" } [
          var var_1:bv64 := 0x0:bv64;
          $R29:bv64 := bvadd($SP, 0x0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
          goto (%block_2);
        ];
-       block %block_2 { .address = 0x400810:bv64; .asm = "str w0, [sp, #0x1c]" } [
+       block %block_2 { .asm = "str w0, [sp, #0x1c]" } [
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) extract(-32,0, $R0) 4;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400814:bv64);
          goto (%block_3);
        ];
-       block %block_3 { .address = 0x400814:bv64; .asm = "str x1, [sp, #0x10]" } [
+       block %block_3 { .asm = "str x1, [sp, #0x10]" } [
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x10:bv64) $R1 8;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400818:bv64);
          goto (%block_4);
        ];
-       block %block_4 { .address = 0x400818:bv64; .asm = "ldrsw x0, [sp, #0x1c]" } [
+       block %block_4 { .asm = "ldrsw x0, [sp, #0x1c]" } [
          var var_2:bv32 := 0x0:bv32;
          $mem:(bv64->bv8) := load le var_3:bv4 bvadd($SP, 0x1c:bv64) 4;
          var var_2:bv32 := var_3:bv4;
@@ -199,7 +199,7 @@ proc @main()  -> () {  }
          (var BranchTaken:bool := false, $PC:bv64 := 0x40081c:bv64);
          goto (%block_5);
        ];
-       block %block_5 { .address = 0x40081c:bv64; .asm = "bl #0xffffffffffffff68" } [
+       block %block_5 { .asm = "bl #0xffffffffffffff68" } [
          $R30:bv64 := 0x400820:bv64;
          var BranchTaken:bool := true;
          $PC:bv64 := 0x400784:bv64;
@@ -264,17 +264,15 @@ proc @Sqrt()  -> () {  }
          assume eq(0x4007dc:bv64, $PC);
          goto (%block);
        ];
-       block %block { .address = 0x4007dc:bv64; .asm = "b.lt #0x10" } [
-         goto (%block_2,%block_1);
-       ];
+       block %block { .asm = "b.lt #0x10" } [ goto (%block_2,%block_1); ];
        block %block_1 [
-         guard boolnot(eq($PSTATE_N, $PSTATE_V));
+         assume boolnot(eq($PSTATE_N, $PSTATE_V));
          var BranchTaken:bool := true;
          $PC:bv64 := 0x4007ec:bv64;
          goto (%block_3);
        ];
        block %block_2 [
-         guard boolnot(boolnot(eq($PSTATE_N, $PSTATE_V)));
+         assume boolnot(boolnot(eq($PSTATE_N, $PSTATE_V)));
          (var BranchTaken:bool := false, $PC:bv64 := 0x4007e0:bv64);
          goto (%block_3);
        ];
@@ -307,19 +305,23 @@ proc @main()  -> () {  }
       .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
               .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
     assume eq(0x400808:bv64, $PC);
-    call @_aarch64_eval(0xd4000021:bv32) { .asm = "svc 1"; .address = 0x400808:bv64 };
-    call @_aarch64_eval(0xaa1f03ff:bv32) { .asm = "mov xzr, xzr"; .address = 0x40080c:bv64 };
+    call @_aarch64_eval(0xd4000021:bv32) { .asm = "svc 1" };
+    call @_aarch64_eval(0xaa1f03ff:bv32) { .asm = "mov xzr, xzr" };
     goto (%ret_1);
   ];
       block %ret_1 [ return; ]
 ];
     |}
   in
-  let prog = transform_program lst.prog in
+  let prog =
+    lst.prog
+    |> Program.map_procedures (fun _ ->
+        Procedure.map_blocks_nondet (apply_stmt_addresses_from_block % snd))
+    |> transform_program
+  in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
-  [%expect
-    {|
+  [%expect {|
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
     proc @main()  -> () {  }
@@ -331,11 +333,11 @@ proc @main()  -> () {  }
            .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
                    .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
          assume eq(0x400808:bv64, $PC);
-         call @_aarch64_eval(0xd4000021:bv32) { .address = 0x400808:bv64;
-             .asm = "svc 1"; .error = "Failure(\"unsupported\")" };
+         call @_aarch64_eval(0xd4000021:bv32, 0x400808:bv64) { .asm = "svc 1";
+             .error = "Failure(\"unsupported\")" };
          goto (%block);
        ];
-       block %block { .address = 0x40080c:bv64; .asm = "mov xzr, xzr" } [
+       block %block { .asm = "mov xzr, xzr" } [
          var var:bv64 := 0x0:bv64;
          var var_1:bv64 := 0x0:bv64;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
