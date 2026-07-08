@@ -1,3 +1,4 @@
+# Vendored to version 3.18 as the nixpkgs version is quite out of date and causes issues with CCResult.
 {
   lib,
   fetchFromGitHub,
