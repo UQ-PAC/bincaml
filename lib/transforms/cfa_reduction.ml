@@ -1,8 +1,7 @@
 open Lang
 open Lang.Common
 
-(* Assumptions: SSA form probably? seems good to me! *)
-(* Also that the program is pure and lacks loops... *)
+(* Assumes program is in SSA, acyclic and pure. *)
 let construct_final_edge proc =
   (* Termination condition for each edge. *)
   let term : (IDSet.elt, Var.t) Hashtbl.t = Hashtbl.create 30 in
