@@ -122,7 +122,7 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
             let op = Opcode.of_be_bytes op in
             let asm =
               if conf.disas then
-                [ (".asm", `String (CCResult.retract (Disas.dis_op op))) ]
+                [ (".asm", `String (Result.retract (Disas.dis_op op))) ]
               else []
             and address =
               let bv = Bitvec.of_int ~size:64 (address + (i * 4)) in

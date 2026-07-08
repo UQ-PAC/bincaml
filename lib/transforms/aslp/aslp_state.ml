@@ -226,8 +226,8 @@ let ensure_forwarded_pc state =
     if it is non-trivial. *)
 let assume_of_aslp_block = function
   | { assume = E (Constant { const = `Bool true }); _ } -> None
-  | { assume = body } ->
-      Some (Stmt.Instr_Assume { attrib = Attrib.empty; body; branch = true })
+  | { assume = body; _ } ->
+      Some (Stmt.Instr_Assume { attrib = Attrib.empty; body; branch = false })
 
 (** {1 Formatters} *)
 
