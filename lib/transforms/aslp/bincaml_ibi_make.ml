@@ -59,10 +59,13 @@ struct
       bincaml_lifter_state := { !bincaml_lifter_state with diamond }
 
     let diamond_make_branch cond =
+      let pc_assign =
+        (Diamond_zipper.focus !bincaml_lifter_state.diamond).pc_assign
+      in
       let t = Aslp_state.empty_block ~assume:cond ()
       and f = Aslp_state.empty_block ~assume:(Expr.BasilExpr.boolnot cond) ()
       and m = Aslp_state.empty_block_unconditional () in
-      (t, f, m)
+      ({ t with pc_assign }, { f with pc_assign }, { m with pc_assign })
 
     let equal_state = CCEqual.map (fun x -> x.Aslp_state.stmts) CCEqual.physical
   end)
@@ -92,7 +95,7 @@ struct
     | [] ->
         diamond
         |> Aslp_state.ensure_pc_assigned ~address
-        |> Diamond_zipper.to_diamond
+        |> Aslp_state.ensure_forwarded_pc |> Diamond_zipper.to_diamond
 
   (** {2 Instruction building interface implementation} *)
 
