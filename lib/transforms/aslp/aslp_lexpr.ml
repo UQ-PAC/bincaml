@@ -92,9 +92,4 @@ let predefined =
     @ [ BTypeCompatible; BranchTaken; BTypeNext; ExclusiveLocal ])
 
 let global_vars =
-  Lazy.map
-    (List.filter_map (fun v ->
-         Option.if_
-           (fun v -> match Var.scope v with GlobalVar -> true | _ -> false)
-           (to_var v)))
-    predefined
+  predefined |> Lazy.map (List.map to_var %> List.filter Var.is_global)

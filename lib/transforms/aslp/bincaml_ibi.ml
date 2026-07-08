@@ -30,6 +30,6 @@ let from_generator ?(memory = fun () -> failwith "bincaml_memory_var undefined")
 
 (** Builds a new {!IBI} where the ID generators are derived from the given
     procedure. *)
-let from_bincaml_procedure proc : (module IBI) =
+let from_bincaml_procedure ?memory proc : (module IBI) =
   let local_ids = Procedure.local_ids proc in
-  from_generator (Aslp_state.aslp_ids_from_generators ~local_ids)
+  from_generator ?memory (Aslp_state.aslp_ids_from_generators ~local_ids)
