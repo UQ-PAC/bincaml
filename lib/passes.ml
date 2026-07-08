@@ -207,6 +207,15 @@ module PassManager = struct
       invariants = Invariants.presupposes [ Params ] ~establishes:[ SSA ];
     }
 
+  let cfa_reduction =
+    {
+      name = "cfa-reduction";
+      apply = Proc Transforms.Cfa_reduction.reduce_procedure;
+      doc =
+        "Performs reduction of acyclic CFA";
+      invariants = Invariants.presupposes [ SSA ];
+    }
+
   let remove_unreachable_blocks =
     {
       name = "remove-unreachable-block";
@@ -462,6 +471,7 @@ module PassManager = struct
       read_uninit false;
       read_uninit true;
       sssa;
+      cfa_reduction;
       sva;
       full_ssa;
       chc_infer_invariants;
