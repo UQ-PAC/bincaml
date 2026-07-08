@@ -211,8 +211,7 @@ module PassManager = struct
     {
       name = "cfa-reduction";
       apply = Proc Transforms.Cfa_reduction.reduce_procedure;
-      doc =
-        "Performs reduction of acyclic CFA";
+      doc = "Performs reduction of acyclic CFA";
       invariants = Invariants.presupposes [ SSA ];
     }
 
