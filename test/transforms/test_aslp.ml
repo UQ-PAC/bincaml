@@ -321,7 +321,8 @@ proc @main()  -> () {  }
   in
   print_endline
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
-  [%expect {|
+  [%expect
+    {|
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
     proc @main()  -> () {  }
