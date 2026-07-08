@@ -37,28 +37,42 @@ let lift_code_block (module I : Bincaml_ibi.IBI) ~address =
 
 (** {1 Interfacing with Bincaml IR} *)
 
-let address_attrib_key = ".address"
 and error_attrib_key = ".error"
 
-(** Extracts the opcode and attribute from the given Bincaml statement, if it is
-    an {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic call. Otherwise, returns
-    [None].
+(** Extracts the opcode, address, and attribute from the given Bincaml
+    statement, if it is an {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic call.
+    Otherwise, returns [None].
 
     Raises an exception if an {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic call
     has an unexpected structure. *)
-let aarch64_intrin_of_stmt ?(include_failed = false) :
-    Program.stmt -> (Bitvec.t * Attrib.attrib_map) option = function
+let aarch64_intrin_of_stmt ?(include_failed = false) ?default_address :
+    Program.stmt -> (Bitvec.t * Bitvec.t * Attrib.attrib_map) option = function
   | Stmt.Instr_IntrinCall { attrib; lhs; name = Aarch64Eval; args }
     when include_failed || not (StringMap.mem error_attrib_key attrib) -> (
-      match (lhs, args) with
-      | [], [ E (Constant { const = `Bitvector op }) ] -> Some (op, attrib)
-      | _ -> failwith "unexpected Aarch64Eval intrin structure")
+      let args =
+        match (args, default_address) with
+        | [ x ], Some default -> [ x; Expr.BasilExpr.bvconst default ]
+        | x, _ -> x
+      in
+      match (lhs, List.map Expr.BasilExpr.unfix args) with
+      | ( [],
+          [
+            Constant { const = `Bitvector op };
+            Constant { const = `Bitvector address };
+          ] )
+        when Bitvec.size op = 32 && Bitvec.size address = 64 ->
+          Some (op, address, attrib)
+      | _ ->
+          failwith
+            "invalid Aarch64Eval args. expected @_aarch64_eval(op:bv32, \
+             addr:bv64)")
   | _ -> None
 
 (** Inverse of {!aarch64_intrin_of_stmt}. *)
-let stmt_of_aarch64_intrin : Bitvec.t * Attrib.attrib_map -> Program.stmt =
- fun (opcode, attrib) ->
-  let args = [ Expr.BasilExpr.bvconst opcode ] in
+let stmt_of_aarch64_intrin :
+    Bitvec.t * Bitvec.t * Attrib.attrib_map -> Program.stmt =
+ fun (opcode, address, attrib) ->
+  let args = List.map Expr.BasilExpr.bvconst [ opcode; address ] in
   Stmt.Instr_IntrinCall { attrib; lhs = []; name = Aarch64Eval; args }
 
 (** Extracts the next Aarch64 intrinsic from the given list of statements,
@@ -77,14 +91,6 @@ let aarch64_mem_of_prog prog =
   Program.get_decl_by_name "$mem" prog |> function
   | Some (Variable { binding }) -> binding
   | _ -> failwith "aarch64_mem_of_prog: no $mem found"
-
-(** Returns the byte address in the given attribute map, if present. *)
-let address_of_attrib attrib =
-  match StringMap.find_opt address_attrib_key attrib with
-  | Some (`CamlInt x) -> Some (Bitvec.of_int ~size:64 x)
-  | Some (`Integer x) -> Some (Bitvec.create ~size:64 x)
-  | Some (`Bitvector x) -> Some x
-  | _ -> None
 
 (** {1 Main Bincaml IR transformation functions} *)
 
@@ -131,12 +137,7 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
 
   match next_aarch64_stmt (Vector.to_list b.stmts) with
   | None -> None
-  | Some (before, (opcode, intrin_attrib), after) -> (
-      let address =
-        address_of_attrib intrin_attrib
-        |> CCOption.get_exn_or
-             "aslp transform: requires .address with int or bitvec value"
-      in
+  | Some (before, (opcode, address, intrin_attrib), after) -> (
       match lift_opcode (module I) ~address opcode with
       | diamond ->
           let aslp_first, aslp_last, proc = insert_one_diamond ~proc diamond in
@@ -156,7 +157,7 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
       | exception exn ->
           let exn = `String (Printexc.to_string exn) in
           let attrib = StringMap.add error_attrib_key exn intrin_attrib in
-          let intrin_stmt = stmt_of_aarch64_intrin (opcode, attrib) in
+          let intrin_stmt = stmt_of_aarch64_intrin (opcode, address, attrib) in
           let stmts = Vector.of_list (before @ (intrin_stmt :: after)) in
           Some (Procedure.modify_block proc bid (fun b -> { b with stmts }), bid)
       )
@@ -214,25 +215,30 @@ let transform_program prog =
 
 (** {1 Supplementary transformation} *)
 
-(** Micro-pass to insert [.address] on each {!Lang.Stmt.Intrinsic.Aarch64Eval}
+(** Micro-pass to insert addresses on each {!Lang.Stmt.Intrinsic.Aarch64Eval}
     intrinsic statement, computed from block-level [.address] attributes. This
     can be useful in tests to avoid needing to type every address.
 
-    Existing statement [.address] attributes, if they exist, are unchanged and
-    do not interact with this transform. If a block has no [.address] attribute,
-    no changes are made to that block. *)
+    Existing statement addresses, if they exist, are unchanged and do not
+    interact with this transform. If a block has no [.address] attribute, no
+    changes are made to that block. *)
 let apply_stmt_addresses_from_block (block : _ Block.t) =
+  let default_address = Bitvec.ones ~size:64 in
   let apply_one address stmt =
     let address' = Bitvec.(add address (of_int ~size:64 4)) in
-    match aarch64_intrin_of_stmt ~include_failed:true stmt with
-    | Some (opcode, attr) when not (StringMap.mem address_attrib_key attr) ->
-        let attr = StringMap.add address_attrib_key (`Bitvector address) attr in
-        (address', stmt_of_aarch64_intrin (opcode, attr))
-    | Some (_, attr) -> (address', stmt) (* increment address *)
+    match aarch64_intrin_of_stmt ~include_failed:true ~default_address stmt with
+    | Some (opcode, address, attr) when Bitvec.equal address default_address ->
+        (address', stmt_of_aarch64_intrin (opcode, address, attr))
+    | Some _ -> (address', stmt) (* increment address *)
     | None -> (address, stmt)
   in
 
-  match address_of_attrib block.attrib with
+  (match StringMap.find_opt ".address" block.attrib with
+    | Some (`CamlInt x) -> Some (Bitvec.of_int ~size:64 x)
+    | Some (`Integer x) -> Some (Bitvec.create ~size:64 x)
+    | Some (`Bitvector x) -> Some x
+    | _ -> None)
+  |> function
   | Some block_address ->
       let stmts =
         block.stmts |> CCVector.to_iter

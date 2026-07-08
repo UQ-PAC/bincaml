@@ -124,17 +124,15 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
               if conf.disas then
                 [ (".asm", `String (Result.retract (Disas.dis_op op))) ]
               else []
-            and address =
-              let bv = Bitvec.of_int ~size:64 (address + (i * 4)) in
-              [ (".address", `Bitvector bv) ]
-            in
+            and address = Bitvec.of_int ~size:64 (address + (i * 4)) in
             Stmt.Instr_IntrinCall
               {
                 lhs = [];
                 name = Stmt.Intrinsic.Aarch64Eval;
                 args =
-                  [ Expr.BasilExpr.const (`Bitvector (Opcode.to_bitvec op)) ];
-                attrib = StringMap.of_list (asm @ address);
+                  Expr.BasilExpr.
+                    [ bvconst (Opcode.to_bitvec op); bvconst address ];
+                attrib = StringMap.of_list asm;
               })
       in
       match b with
