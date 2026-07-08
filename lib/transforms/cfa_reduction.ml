@@ -53,7 +53,7 @@ let construct_final_edge proc =
           ([ reachable ]
           @ (Block.stmts_iter block
             |> Iter.filter_map (function
-              | Stmt.Instr_Assume { body; branch } -> Some body
+              | Stmt.Instr_Assume { body; branch = true } -> Some body
               | _ -> None)
             |> Iter.to_list))
       in
@@ -71,7 +71,19 @@ let construct_final_edge proc =
           3. an assignment to the termination variable.
         *)
       final_edge
-      @ List.concat [ [ ites ]; block.stmts |> Vector.to_list; [ termination ] ])
+      @ List.concat
+          [
+            [ ites ];
+            (* Filter out the now unnecessary guards. *)
+            block.stmts |> Vector.to_list
+            |> List.filter (fun s ->
+                not
+                @@
+                match s with
+                | Stmt.Instr_Assume { branch = true } -> true
+                | _ -> false);
+            [ termination ];
+          ])
     List.empty proc
 
 let reduce_procedure (proc : Program.proc) : Program.proc =
