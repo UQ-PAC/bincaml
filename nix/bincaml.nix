@@ -30,6 +30,9 @@
   stb_image,
   linenoise,
 
+  capstone_arm64_disas,
+  aslp_lifter_ocaml,
+
   # test:
   ppx_expect,
   alcotest,
@@ -93,13 +96,18 @@ buildDunePackage {
     kittyimg
     linenoise
     stb_image
+    capstone_arm64_disas
+    aslp_lifter_ocaml
+    qcheck-core
+    qcheck-alcotest
+    qcheck-stm
   ];
 
   postPatch = ''
     patchShebangs --build test
   '';
 
-  doCheck = false;
+  doCheck = true;
   outputs = [
     "out"
     "dev"
