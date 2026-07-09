@@ -23,6 +23,16 @@ let span_while_some f =
   in
   step f []
 
+let[@tail_mod_cons] group_succ_either =
+  let[@tail_mod_cons] rec while_left xs =
+    let xs, rest = span_while_some Either.find_left xs in
+    Either.Left xs :: while_right rest
+  and[@tail_mod_cons] while_right xs =
+    let xs, rest = span_while_some Either.find_right xs in
+    Right xs :: (match rest with [] -> [] | _ -> while_left rest)
+  in
+  while_left
+
 (** Iterates over global variables in the given program, including both read and
     assigned variables. Order is unspecified and may have duplicates. *)
 let referenced_vars_of_prog =
@@ -95,51 +105,58 @@ let flat_map_stmts
     (f :
       proc:_ Procedure.t ->
       _ Stmt.t ->
-      (ID.t * ID.t * _ Procedure.t, _ Stmt.t) Either.t) ~proc bid =
-  let stmts =
-    Procedure.get_block proc bid |> Option.get_exn_or "block not found"
-    |> fun b -> CCVector.to_list b.stmts
-  in
+      (ID.t * ID.t * _ Procedure.t, _ Stmt.t) Either.t) ~proc base_bid =
+  let open Either in
+  let b = Procedure.get_block proc base_bid |> Option.get_exn_or "not found" in
+  let stmts = CCVector.to_list b.stmts and base_name = ID.name base_bid in
 
-  let proc =
-    Procedure.modify_block proc bid (Block.fmap_stmts_copy CCVector.clear)
-  in
-
-  let proc, block_id_pairs =
+  (* Map, while generating block names for bare statements returned by the mapping function. *)
+  let (_, proc), mapped =
     stmts
-    (* Map, while generating block names for bare statements returned by the mapping function.
-       Collects bare statements into a *mutable* vector for O(n) building. *)
-    |> List.fold_filter_map
-         (fun (basic_block, proc) stmt ->
-           match (basic_block, f ~proc stmt) with
-           (* emitting diamond with no previous basic block *)
-           | None, Left (first, last, proc) -> ((None, proc), Some (first, last))
-           (* emitting diamond with previous basic block. emit that first. *)
-           | Some (prev_bid, vec), Left (first, last, proc) ->
-               ( ( None,
-                   Procedure.modify_block proc prev_bid (fun b ->
-                       { b with stmts = CCVector.freeze vec }) ),
-                 Some (first, last) )
-           (* collecting bare statement with no previous basic block. make a block. *)
+    |> List.fold_map
+         (fun (bid, proc) stmt ->
+           match (bid, f ~proc stmt) with
+           | _, Left (first, last, proc) -> ((None, proc), Left (first, last))
            | None, Right s ->
-               let proc, bid = Procedure.fresh_block proc ~stmts:[] () in
-               ((Some (bid, CCVector.return s), proc), Some (bid, bid))
-           (* collecting bare statement with previous basic block. *)
-           | Some (bid, vec), Right s ->
-               CCVector.push vec s;
-               ((Some (bid, vec), proc), None (* bid is already emitted *)))
-         (Some (bid, CCVector.create ()), proc)
-    |> function
-    | (Some (prev_bid, vec), proc), mapped ->
-        ( Procedure.modify_block proc prev_bid (fun b ->
-              { b with stmts = CCVector.freeze vec }),
-          mapped )
-    | (None, proc), mapped -> (proc, mapped)
+               let name = base_name in
+               let proc, bid = Procedure.fresh_block proc ~name ~stmts:[] () in
+               ((Some bid, proc), Right (bid, s))
+           | Some bid, Right s -> ((Some bid, proc), Right (bid, s)))
+         (Some base_bid, proc)
   in
-
-
-
-  proc
+  (* Collects adjacent bare statements into a basic block, and inserts those statements. *)
+  let proc, block_id_pairs =
+    group_succ_either mapped
+    |> List.fold_flat_map
+         (fun proc -> function
+           | Left pairs | Right ([] as pairs) -> (proc, pairs)
+           | Right ((bid, _) :: _ as pairs) ->
+               let stmts = CCVector.of_list (List.map snd pairs) in
+               ( Procedure.modify_block proc bid (fun b -> { b with stmts }),
+                 [ (bid, bid) ] ))
+         proc
+  in
+  (* Transplant predecessors and successors of the original block as needed. *)
+  let proc =
+    proc
+    |> (match List.last_opt block_id_pairs with
+      | Some (_, to_) -> Procedure.transplant_outgoing_edges ~from:base_bid ~to_
+      | None -> Fun.id)
+    |>
+    match List.head_opt block_id_pairs with
+    | Some (hd, _) when not ID.(equal hd base_bid) ->
+        Procedure.add_goto ~from:base_bid ~targets:[ hd ]
+    | _ -> Fun.id
+  in
+  (* Insert gotos between mapped blocks. This must happen after transplanting
+     so we do not transplant these edges. *)
+  List.combine_gen block_id_pairs (List.drop 1 block_id_pairs)
+  |> Iter.of_gen
+  |> Iter.fold
+       (fun proc (first, second) ->
+         let _, prev = first and next, _ = second in
+         Procedure.add_goto proc ~from:prev ~targets:[ next ])
+       proc
 
 let flat_map_blocks
     (f : proc:_ Procedure.t -> ID.t -> _ Block.t -> ID.t * ID.t * _ Procedure.t)
