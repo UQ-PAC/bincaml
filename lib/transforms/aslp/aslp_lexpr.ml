@@ -69,6 +69,7 @@ let typ (x : t) =
 
 let name : _ -> string = function
   | Local (v, _) -> v
+  | SP_EL0 -> "SP"
   | R (Some n) -> Printf.sprintf "R%d" n
   | Z (Some n) -> Printf.sprintf "Z%d" n
   | R None | Z None -> failwith "name_of_lexpr: array lexpr has no bincaml name"

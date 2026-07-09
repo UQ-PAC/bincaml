@@ -166,34 +166,34 @@ proc @main()  -> () {  }
        ];
        block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
          var v:bv64 := 0x0:bv64;
-         var v:bv64 := $SP_EL0;
-         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0,
+         var v:bv64 := $SP;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
           0xffffffffffffffe0:bv64) $R29 8;
-         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP_EL0,
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
            0xffffffffffffffe0:bv64), 0x8:bv64) $R30 8;
-         $SP_EL0:bv64 := bvadd(v:bv64, 0xffffffffffffffe0:bv64);
+         $SP:bv64 := bvadd(v:bv64, 0xffffffffffffffe0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
          goto (%block_1);
        ];
        block %block_1 { .asm = "mov x29, sp" } [
          var v_1:bv64 := 0x0:bv64;
-         $R29:bv64 := bvadd($SP_EL0, 0x0:bv64);
+         $R29:bv64 := bvadd($SP, 0x0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
          goto (%block_2);
        ];
        block %block_2 { .asm = "str w0, [sp, #0x1c]" } [
-         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0, 0x1c:bv64) extract(-32,0, $R0) 4;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) extract(-32,0, $R0) 4;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400814:bv64);
          goto (%block_3);
        ];
        block %block_3 { .asm = "str x1, [sp, #0x10]" } [
-         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP_EL0, 0x10:bv64) $R1 8;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x10:bv64) $R1 8;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400818:bv64);
          goto (%block_4);
        ];
        block %block_4 { .asm = "ldrsw x0, [sp, #0x1c]" } [
          var v_2:bv32 := 0x0:bv32;
-         $mem:(bv64->bv8) := load le v_3:bv4 bvadd($SP_EL0, 0x1c:bv64) 4;
+         $mem:(bv64->bv8) := load le v_3:bv4 bvadd($SP, 0x1c:bv64) 4;
          var v_2:bv32 := v_3:bv4;
          $R0:bv64 := zero_extend(0, sign_extend(32, v_2:bv32));
          (var BranchTaken:bool := false, $PC:bv64 := 0x40081c:bv64);
@@ -208,7 +208,7 @@ proc @main()  -> () {  }
        ];
        block %ret_1 [ return; ]
     ];
-    var $SP_EL0:bv64;
+    var $SP:bv64;
     var $R29:bv64;
     var $R30:bv64;
     var $R0:bv64;
