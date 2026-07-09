@@ -76,14 +76,76 @@ let isolate_stmts_of_block ?(label = "%singleton") ~proc f bid =
         (proc, hd) tl
       |> fst
 
-(** Maps each statement inside the given block ID into a sequence of blocks,
-    then links those blocks sequentially in control-flow. *)
-let flat_map_block ~proc f bid =
-  let b = Procedure.get_block proc bid |> Option.get_exn_or "block not found" in
-  let new_blocks : (ID.t * _ Block.t) list = f b in
-  List.fold_left
-    (fun proc (bid, b) ->
-      let ({ attrib; phis; stmts } : _ Block.t) = b in
-      Procedure.add_block proc bid ~attrib ~phis ~stmts:(Vector.to_list stmts)
-        ())
-    proc new_blocks
+(** Replaces uses of the old block ID with the new [(first, last)] block IDs.
+    The incoming edges to [old] will be redirected to [first] and the outgoing
+    edges of [old] will be rebased to originate from [last].
+
+    [first] and [last] may be the same. One or both of [first]/[last] may be the
+    same as [old]. If neither is the same as [old], [old] will be removed from
+    the procedure. *)
+let replace_block ~old ~new_:(new_first, new_last) proc =
+  proc
+  |> Procedure.transplant_incoming_edges ~from:old ~to_:new_first
+  |> Procedure.transplant_outgoing_edges ~from:old ~to_:new_last
+  |>
+  if ID.equal old new_first || ID.equal old new_last then Fun.id
+  else Fun.flip Procedure.remove_block old
+
+let flat_map_stmts
+    (f :
+      proc:_ Procedure.t ->
+      _ Stmt.t ->
+      (ID.t * ID.t * _ Procedure.t, _ Stmt.t) Either.t) ~proc bid =
+  let stmts =
+    Procedure.get_block proc bid |> Option.get_exn_or "block not found"
+    |> fun b -> CCVector.to_list b.stmts
+  in
+
+  let proc =
+    Procedure.modify_block proc bid (Block.fmap_stmts_copy CCVector.clear)
+  in
+
+  let proc, block_id_pairs =
+    stmts
+    (* Map, while generating block names for bare statements returned by the mapping function.
+       Collects bare statements into a *mutable* vector for O(n) building. *)
+    |> List.fold_filter_map
+         (fun (basic_block, proc) stmt ->
+           match (basic_block, f ~proc stmt) with
+           (* emitting diamond with no previous basic block *)
+           | None, Left (first, last, proc) -> ((None, proc), Some (first, last))
+           (* emitting diamond with previous basic block. emit that first. *)
+           | Some (prev_bid, vec), Left (first, last, proc) ->
+               ( ( None,
+                   Procedure.modify_block proc prev_bid (fun b ->
+                       { b with stmts = CCVector.freeze vec }) ),
+                 Some (first, last) )
+           (* collecting bare statement with no previous basic block. make a block. *)
+           | None, Right s ->
+               let proc, bid = Procedure.fresh_block proc ~stmts:[] () in
+               ((Some (bid, CCVector.return s), proc), Some (bid, bid))
+           (* collecting bare statement with previous basic block. *)
+           | Some (bid, vec), Right s ->
+               CCVector.push vec s;
+               ((Some (bid, vec), proc), None (* bid is already emitted *)))
+         (Some (bid, CCVector.create ()), proc)
+    |> function
+    | (Some (prev_bid, vec), proc), mapped ->
+        ( Procedure.modify_block proc prev_bid (fun b ->
+              { b with stmts = CCVector.freeze vec }),
+          mapped )
+    | (None, proc), mapped -> (proc, mapped)
+  in
+
+
+
+  proc
+
+let flat_map_blocks
+    (f : proc:_ Procedure.t -> ID.t -> _ Block.t -> ID.t * ID.t * _ Procedure.t)
+    proc =
+  Procedure.fold_blocks_topo_fwd
+    (fun proc bid block ->
+      let first, last, proc = f ~proc bid block in
+      proc |> replace_block ~old:bid ~new_:(first, last))
+    proc proc
