@@ -1,19 +1,11 @@
-  $ bincaml script malloc_free.sexp -v
+  $ bincaml script malloc_free.sexp
   (load-il ../../examples/memory/malloc_free.il)
   (run-transforms ssa split-memory-encoding)
-  bincaml: [DEBUG] Starting ssa
-  bincaml: [DEBUG] Starting split-memory-encoding
   (run-transforms memory-specification flatten-phis)
-  bincaml: [DEBUG] Starting memory-specification
-  bincaml: [DEBUG] Starting flatten-phis
   (dump-boogie good.bpl)
   (load-il ../../examples/memory/malloc_free_oob.il)
   (run-transforms ssa split-memory-encoding)
-  bincaml: [DEBUG] Starting ssa
-  bincaml: [DEBUG] Starting split-memory-encoding
   (run-transforms memory-specification flatten-phis)
-  bincaml: [DEBUG] Starting memory-specification
-  bincaml: [DEBUG] Starting flatten-phis
   (dump-boogie bad.bpl)
 
   $ cat ./good.bpl
