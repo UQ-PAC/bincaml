@@ -13,11 +13,11 @@ module HighestLiveBitLattice = struct
   (* Highest bit is inclusive, i.e. 63 means bits [..63] are used*)
   (* lo_lb is only used in eval: for IDE, return just hi_lb *)
   (* lo_lb can also be called offset *)
-  type t = Bot | HighBit of { vhi : int ; vlo : int ; ehi : int ; elo : int ; width : int} | Top
+  type t = Bot | HighBit of { hi_lb : int; lo_lb : int ; is_var : bool } | Top
   [@@deriving eq, ord, show { with_path = false}]
 
-  let highbit a b c d e =
-    HighBit { vhi = a ; vlo = b ; ehi = c ; elo = d ; width = e}
+  let highbit a b c =
+    HighBit { hi_lb = a ; lo_lb = b ; is_var = c}
 
   let top = Top
   let bottom = Bot
@@ -26,36 +26,24 @@ module HighestLiveBitLattice = struct
   let show = function
     | Top -> "⊤"
     | Bot -> "⊥"
-    | HighBit { vhi ; vlo ; ehi ; elo ; width } -> "(" ^ string_of_int vhi 
-                                                      ^ ", " ^ string_of_int vlo 
-                                                      ^ ", " ^ string_of_int ehi
-                                                      ^ ", " ^ string_of_int elo
-                                                      ^ ", " ^ string_of_int width ^ ")"
+    | HighBit { hi_lb = hi ; lo_lb = lo ; is_var = iv } -> "(" ^ string_of_int hi ^ ", " ^ string_of_int lo ^ ", " ^ string_of_bool iv ^ ")"
   
   let join a b = 
     match (a, b) with
     | Top, _ | _, Top -> Top
     | Bot, a | a, Bot -> a
-    (* TODO: problem if joining completely seperate sections of the same var: possibly has dead bits in the middle? *)
-    | HighBit { vhi = vhi_a ; vlo = vlo_a ; ehi = ehi_a ; elo = elo_a ; width = width_a}, 
-      HighBit { vhi = vhi_b ; vlo = vlo_b ; ehi = ehi_b ; elo = elo_b ; width = width_b} ->
-        let new_vhi = max vhi_a vhi_b in
-        let new_vlo = min vlo_a vlo_b in
-        let new_ehi = max ehi_a ehi_b in
-        let new_elo = min elo_a elo_b in
-        (* let new_ehi = if vhi_a > vhi_b then ehi_a else if vhi_a = vhi_b then max ehi_a ehi_b else ehi_b in
-        let new_elo = if vlo_a < vlo_b then elo_a else if vlo_a = vlo_b then min elo_a elo_b else elo_b in *)
-        let new_width = max width_a width_b in
-        highbit new_vhi new_vlo new_ehi new_elo new_width
+    | HighBit { hi_lb = ha ; lo_lb = la }, HighBit { hi_lb = hb ; lo_lb = lb } ->
+        let max_hi_lb = max ha hb in
+        let min_lo_lb = min la lb in
+        highbit max_hi_lb min_lo_lb false
   
-  (* TODO: Fix this (sigh) *)
-  (* let leq a b =
+  let leq a b =
     match (a, b) with
     | a, b when equal a b -> true
     | HighBit { hi_lb = ha ; lo_lb = la }, HighBit { hi_lb = hb ; lo_lb = lb } ->
         (ha <= hb) && (la >= lb)
     | Bot, _ | _, Top -> true
-    | _, Bot | Top, _ -> false *)
+    | _, Bot | Top, _ -> false
 
   let widening a b = join a b
   let narrowing a b = a
@@ -116,25 +104,9 @@ module IDESSI_LB = struct
     | BotEdge, _ -> Value.bottom
     | IdEdge, x -> x
     | TopEdge, _ -> Top
-    | NumEdge v, _ -> Value.highbit v 0 v 0 v
+    | NumEdge v, _ -> Value.highbit v 0 true
 
   module Extract = struct
-
-   
-    let highbit_extract hi lo vhi vlo ehi elo width =
-      let w = (hi - lo) in
-      (if (hi - 1 < elo || lo > ehi) then Value.bottom
-      else if (hi - 1 <= ehi && lo >= elo) then (Value.highbit (hi - 1 + vlo) (vlo + lo) (hi - lo - 1) 0 w)
-      else if (hi - 1 <= ehi && lo < elo) then (Value.highbit (hi - 1 + vlo - elo) vlo (hi - lo - 1) (elo - lo) w)
-      else if (hi - 1 > ehi && lo >= elo) then (Value.highbit vhi (vlo + lo - elo) (ehi - lo) 0 w)
-      else if (hi - 1 > ehi && lo < elo) then (Value.highbit vhi vlo (ehi - lo) (elo - lo) w)
-      else Value.bottom)
- (* | hi - 1 <= e_hi_lb && lo >= e_lo_lb -> new_v_hi_lb = hi - 1 + old_v_lo_lb, new_v_lo_lb = old_v_lo_lb + lo, new_e_hi_lb = hi - lo - 1, new_e_lo_lb = 0  // All within range
-          | hi - 1 <= e_hi_lb && lo < e_lo_lb  -> new_v_hi_lb = hi - 1 + old_v_lo_lb - old_e_lo_lb, new_v_lo_lb = old_v_lo, new_e_hi_lb = hi - lo - 1, new_e_lo_lb = old_e_lo_lb - lo // lo outside of range
-          | hi - 1 >  e_hi_lb && lo >= e_lo_lb -> new_v_hi_lb = old_v_hi_lb, new_v_lo_lb = old_v_lo_lb + lo - old_e_lo_lb, new_e_hi_lb = old_e_hi_lb - lo, new_e_lo_lb = 0 // hi outside of range
-          | hi - 1 >  e_hi_lb && lo < e_lo_lb  -> new_v_hi_lb = old_v_hi_lb, new_v_lo_lb = old_v_lo_lb, new_e_hi_lb = old_e_hi_lb - lo, new_e_lo_lb = old_e_lo_lb - lo // Both out of range
-          | else Value.bottom *)
-
 
     (* Returns a HighestLiveBitLattice t *)
     (* This does the math that determines the highbit tuple seen in the comments at the bottom *)
@@ -142,97 +114,27 @@ module IDESSI_LB = struct
       let open Expr.AbstractExpr in
       match e with
       | RVar { id } -> readv id 
-      (* | UnaryExpr { op = `Extract (hi, lo) ; arg = (Value.HighBit { hi_lb ; lo_lb }, value) } -> 
-          (Value.highbit (hi - 1 + lo_lb) (lo_lb + lo))  *)
-          (* if hi < lo_lb then 'Bot' and if expr_hi > *)
-
-      (*
-      (v_hi_lb, v_lo_lb, e_hi_lb, e_lo_lb)
-      extract(4, 1, bvlshr(extract(8, 3, var), 2))
-      ex 8 3   (7,3,4,0)
-      43210
-      76543
-
-      >>2      v_lo +2 and e_lo -2
-      43210
-      xx765    (7,5,2,0)
-      xxlll
-
-      ex 4 1
-
-      210
-      x76
-      xll     (7,6,1,0)
-
-      or 
-      extract(4, 1, bvshl(extract(8,3,var), 2))
-      ex 8 3 (7,3,4,0)
-      43210
-      76543
-
-      <<2
-      43210
-      543xx
-      lllxx   (5,3,4,2)
-
-      ex 4 1
-      210
-      43x
-      llx    (4,3,2,1)
-------------
-      extract 3 0 (((extract 5 0) << 2) >> 3)
-
-      extract 5 0
-      43210
-      lllll   (4,0,4,0)
-      -> <<2
-      210xx                       -- extract 4 0 will return (1,0,2,1)
-      lllxx   (2,0,4,2)   // e_hi bounded by index range
-      -> >> 3
-      xxx21
-      xxxll   (2,1,1,0)
-      -> extract 3 0
-      x21
-      xll     (2,1,2,0)
-
-      43210
-      xxx2x
-      xxxlx  (2,2,1,1)
-      -> extract 3 0
-      210
-      x2x
-      xlx   (2,2,1,1)
-
-          | hi - 1 <= e_hi_lb && lo >= e_lo_lb -> new_v_hi_lb = hi - 1 + old_v_lo_lb, new_v_lo_lb = old_v_lo_lb + lo, new_e_hi_lb = hi - lo - 1, new_e_lo_lb = 0  // All within range
-          | hi - 1 <= e_hi_lb && lo < e_lo_lb  -> new_v_hi_lb = hi - 1 + old_v_lo_lb - old_e_lo_lb, new_v_lo_lb = old_v_lo, new_e_hi_lb = hi - lo - 1, new_e_lo_lb = old_e_lo_lb - lo // lo outside of range
-          | hi - 1 >  e_hi_lb && lo >= e_lo_lb -> new_v_hi_lb = old_v_hi_lb, new_v_lo_lb = old_v_lo_lb + lo - old_e_lo_lb, new_e_hi_lb = old_e_hi_lb - lo, new_e_lo_lb = 0 // hi outside of range
-          | hi - 1 >  e_hi_lb && lo < e_lo_lb  -> new_v_hi_lb = old_v_hi_lb, new_v_lo_lb = old_v_lo_lb, new_e_hi_lb = old_e_hi_lb - lo, new_e_lo_lb = old_e_lo_lb - lo // Both out of range
-          | else Value.bottom
-      *)
-      | UnaryExpr { op = `Extract (hi, lo) ; arg = (Value.HighBit { vhi ; vlo ; ehi ; elo ; width }, _) } -> 
-          highbit_extract hi lo vhi vlo ehi elo width
-      | BinaryExpr { op = `BVASHR ; arg1 = (HighBit { vhi ; vlo ; ehi ; elo ; width }, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
-        let shift_value = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
-            if shift_value > ehi then 
-              if ehi = width - 1 then Value.highbit (vhi) (width - 1) (width - 1) (width - 1) (width) 
-              else Value.bottom
-            else Value.highbit (vhi) (vlo + (max 0 (shift_value - elo))) (if ehi = width - 1 then ehi else ehi - shift_value) (max 0 (elo - shift_value)) width
-      (* ALL SHIFTS: if bv.value > e_hi_lb then Value.bottom *)
-      | BinaryExpr { op = `BVLSHR ; arg1 = (HighBit { vhi ; vlo ; ehi ; elo ; width }, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
-          (* (Value.highbit hi_lb @@ ((Bitvec.to_signed_bigint bv) |> Z.to_int) + lo_lb) *)
-          let shift_value = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
-            if shift_value > ehi then Value.bottom
-            else Value.highbit vhi (vlo + (max 0 (shift_value - elo))) (ehi - shift_value) (max 0 (elo - shift_value)) width
-      (* LSHR: new_v_hi = old_v_hi, new_v_lo = old_v_lo + max(0, k - old_e_lo), new_e_hi = old_e_hi - k, new_e_lo = max(old_e_lo - k, 0)*)
-      | BinaryExpr { op = `BVSHL ; arg1 = (HighBit { vhi ; vlo ; ehi ; elo ; width }, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
-          (* (Value.highbit hi_lb @@ lo_lb - ((Bitvec.to_signed_bigint bv) |> Z.to_int)) *)
-          let shift_value = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
-            if shift_value > ehi then Value.bottom
-            else Value.highbit (vhi - (max 0 (ehi + shift_value - width + 1))) vlo (min (width - 1) (ehi + 1)) (elo + shift_value) width
-      (* SHL:  new_v_hi = old_v_hi - max(0, old_e_hi + k - (size-1)), new_v_lo = old_v_lo, new_e_hi = min(size-1, old_e_hi + 1), new_e_lo = old_e_lo + k *)
+      | UnaryExpr { op = `Extract (hi, lo) ; arg = (Value.HighBit { hi_lb ; lo_lb ; is_var }, _) } -> 
+          (if is_var then (Value.highbit (hi - 1 + lo_lb) lo_lb false) else Value.highbit hi_lb lo_lb false)
+      | BinaryExpr { op = `BVASHR ; arg1 ; arg2 } -> Value.top
+      | BinaryExpr { op = `BVLSHR ; arg1 = (Value.HighBit {hi_lb ; lo_lb ; is_var }, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
+        (let shift = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
+          if is_var then (
+            if shift > hi_lb then (Value.bottom) 
+            else Value.highbit hi_lb (shift + lo_lb) false
+          ) 
+          else (Value.highbit hi_lb lo_lb false))
+      | BinaryExpr { op = `BVSHL ; arg1 = (Value.HighBit {hi_lb ; lo_lb ; is_var }, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
+          (let shift = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
+            if is_var then (
+              if shift > hi_lb then Value.bottom 
+              else Value.highbit (hi_lb - shift) (lo_lb - shift) false
+              )
+            else (Value.highbit hi_lb lo_lb false)
+          )
       | BinaryExpr { arg1 = (v1, _) ; arg2 = (v2, _) } -> Value.join v1 v2
       | ApplyIntrin { args = (v1, _) :: rest } -> List.fold_left (fun v1 (v2,_) -> Value.join v1 v2) v1 rest
-      | UnaryExpr { op = _ ; arg = (Value.Top, _) } -> Value.top
+      | UnaryExpr { op ; arg = (Value.Top, _) } -> Value.Top
       | _ -> Value.bottom
 
     (* Converts HighestLiveBitLattice t to IDESSI_LB t*)
@@ -240,8 +142,7 @@ module IDESSI_LB = struct
       match Expr.BasilExpr.zygo_l Expr_eval.eval_expr_alg (extract_alg readv) e with
       | Value.Bot -> BotEdge
       | Value.Top -> TopEdge
-      (* If e_hi_lb < 0 then BotEdge*)
-      | Value.HighBit { vhi ; vlo ; ehi ; elo ; width } -> NumEdge vhi
+      | Value.HighBit { hi_lb ; lo_lb } -> NumEdge hi_lb
 
         (* find number of live bits for a single
     variable [var] in an expression ; read function returns the width for
@@ -251,7 +152,7 @@ module IDESSI_LB = struct
         if Var.equal v var
           then (
             match Types.bit_width (Var.typ var) with 
-            | Some w -> Value.highbit (w-1) 0 (w-1) 0 w
+            | Some w -> Value.highbit (w-1) 0 true
             | None -> Value.bottom
           ) 
         else Value.bottom
@@ -313,6 +214,7 @@ module HighestLiveBitIDE = struct
           | Instr_IndirectCall c -> failwith "unreachable"
           | _ -> Iter.empty)
           (* |_ -> IDESSI_LB.Extract.eval_stmt stmt |> Iter.map (fun (rhs_var, edge) -> (Label rhs_var, edge))) *)
+          (* Lines appear to be identical, I don't know IL well enough to write a test with a Label v stmt that would not be assign *)
 
   let transfer_phi lhs rhs d =
     match d with
@@ -334,386 +236,239 @@ let%expect_test "test1_basic_shifts" =
       {|
 prog entry @main;
 
-proc @main() -> (out1:bv64, out2:bv64, out3:bv1, out4:bv64)
+proc @main() -> (out1:bv64)
 [
     block %main_entry [
       var v1:bv64 := 99:bv64;
 
-      var a:bv64 := extract(1, 0, bvlshr(extract(5, 0, v1), zero_extend(62, 0x3:bv2)));
+      var a:bv64 := bvashr(v1, 2:bv64);
 
-      var x:bv5 := extract(5, 0, v1);
-      var y:bv5 := bvlshr(x, 3:bv64);
-      var b:bv64 := extract(1, 0, y);
-
-      var c:bv2 := extract(2, 0, bvlshr(bvshl(extract(5, 0, v1), 10:bv64), 4:bv64));
-
-      var d:bv64 := bvor(bvand(extract(10,5,v1), bvadd(extract(13,8,v1), extract(5,0,v1))), extract(5,0,bvlshr(extract(11,6,v1), 20:bv64)));
-
-      return (a,b,c,d);
-    ];
-];
-    |}
-  in
-  let program = lst.prog in
-  let results, p2_results = IDELiveBitSSIAnalysis.solve program in
-  Hashtbl.iter
-    (fun pid summary ->
-      print_endline @@ ID.name pid;
-      print_endline @@ IDELiveBitSSIAnalysis.show_summary summary;
-      print_endline
-      @@ Iter.to_string (fun (v, r) -> Var.name v)
-      @@ VarMap.to_iter
-      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
-    results;
-  [%expect
-    {|
-    @main
-    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v1->NumEdge 3), (out1,a->NumEdge 63), (out2,out2->IdEdge), (out2,v1->NumEdge 4), (out2,x->NumEdge 4), (out2,y->NumEdge 0), (out2,b->NumEdge 63), (out3,out3->IdEdge), (out3,c->NumEdge 1), (out4,out4->IdEdge), (out4,v1->NumEdge 12), (out4,d->NumEdge 63)
-    out1, out2, out3, out4, v1, a, x, y, b, c, d
-    |}]
-
-let%expect_test "test2_basic_call" =
-  let lst =
-    Loader.Loadir.ast_of_string
-      {|
-prog entry @main;
-
-proc @main(a:bv64, b:bool) -> (out:bv64)
-[
-    block %main [
-        (var c:bv64) := call @f(a:bv64);
-        return (c);
+      return (a);
     ];
 ];
 
-proc @f(x:bv64) -> (o:bv64)
+proc @f() -> (f_out:bv32)
 [
     block %f_entry [
-      goto (%f_a);
-    ];
-
-    block %f_a [
-      var d:bv64 := x;
-      var e:bv64 := bvlshr(d, 3:bv64);
-      goto (%f_return);
-    ];
-
-    block %f_return [
-        var w:bv64 := extract(5, 2, bvlshr(bvshl(extract(5, 0, d), 1:bv64), 2:bv64));
-        return (w:bv64);
-      ];
-];
-
-    |}
-  in
-  let program = lst.prog in
-  let results, p2_results = IDELiveBitSSIAnalysis.solve program in
-  Hashtbl.iter
-    (fun pid summary ->
-      print_endline @@ ID.name pid;
-      print_endline @@ IDELiveBitSSIAnalysis.show_summary summary;
-      print_endline
-      @@ Iter.to_string (fun (v, r) -> Var.name v)
-      @@ VarMap.to_iter
-      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
-    results;
-  [%expect
-    {|
-    @main
-    (Λ,Λ->IdEdge), (out,out->IdEdge), (out,c->NumEdge 63)
-    out, c
-    @f
-    (Λ,Λ->IdEdge), (o,d->NumEdge 3), (o,x->NumEdge 63), (o,o->IdEdge), (o,w->NumEdge 63)
-    d, x, o, w
-    |}]
- 
-let%expect_test "test3_basic_call_phi" =
-  let lst =
-    Loader.Loadir.ast_of_string
-      {|
-prog entry @main;
-
-proc @main(a:bv64) -> (out:bv64)
-[
-    block %main [
-      (var b:bv64) := call @f(a:bv64);
-      return (b);
-    ];
-];
-
-proc @f(x:bv64) -> (f_o:bv64)
-[
-    block %f_entry [
-      goto (%f_a, %f_b);
-    ];
-
-    block %f_a[
-      var y_1:bv64 := extract(5,0,x);
-      goto (%f_c);
-    ];
-
-    block %f_b[
-      var y_2:bv64 := extract(20,15,x);
-      goto (%f_c);
-    ];
-
-    block %f_c (
-      var y_3:bv64 := phi(%f_a -> y_1:bv64, %f_b -> y_2:bv64)
-    ) [
-      goto (%f_return);  
-    ];
-
-    block %f_return [
-      return (y_3);
-    ];
-];
-    |}
-  in
-  let program = lst.prog in
-  let results, p2_results = IDELiveBitSSIAnalysis.solve program in
-  Hashtbl.iter
-    (fun pid summary ->
-      print_endline @@ ID.name pid;
-      print_endline @@ IDELiveBitSSIAnalysis.show_summary summary;
-      print_endline
-      @@ Iter.to_string (fun (v, r) -> Var.name v)
-      @@ VarMap.to_iter
-      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
-    results;
-  [%expect
-    {|
-    @main
-    (Λ,Λ->IdEdge), (out,b->NumEdge 63), (out,out->IdEdge)
-    b, out
-    @f
-    (Λ,Λ->IdEdge), (f_o,x->NumEdge 19), (f_o,f_o->IdEdge), (f_o,y_1->NumEdge 63), (f_o,y_2->NumEdge 63), (f_o,y_3->NumEdge 63)
-    x, f_o, y_1, y_2, y_3
-    |}]
-
-let%expect_test "test4_dead_var_c" =
-  let lst =
-    Loader.Loadir.ast_of_string
-      {|
-prog entry @main;
-proc @main(global_in:bv64) -> (out:bv64)
-[
-    block %main [
-      var v1:bv64 := 0xffffffffffffffff:bv64;
-
-      var a:bv32 := extract(40,8, v1);
-      assert eq(a, 0xffffffff:bv32);
-
-      var b:bv32 := extract(50,18,v1);
-
-      var c:bv32 := extract(64,32, v1);
-      return(b);
-    ];
-];
-    |}
-  in
-  let program = lst.prog in
-  let results, p2_results = IDELiveBitSSIAnalysis.solve program in
-  Hashtbl.iter
-    (fun pid summary ->
-      print_endline @@ ID.name pid;
-      print_endline @@ IDELiveBitSSIAnalysis.show_summary summary;
-      print_endline
-      @@ Iter.to_string (fun (v, r) -> Var.name v)
-      @@ VarMap.to_iter
-      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
-    results;
-  [%expect
-    {|
-    @main
-    (Λ,Λ->IdEdge), (Λ,v1->NumEdge 39), (Λ,a->NumEdge 31), (out,v1->NumEdge 49), (out,out->IdEdge), (out,b->NumEdge 31)
-    v1, out, a, b
-    |}]
-
-let%expect_test "test5_basic_load_store" =
-  let lst =
-    Loader.Loadir.ast_of_string
-      {|
-prog entry @main;
-
-var $mem: (bv64 -> bv8);
-var $i: bv64;
-
-proc @main() -> (out:bv64)
-[
-  block %entry [
-    $i := 0x0:bv64;
-    goto(%loop);
-  ];
-  block %loop [
-    goto(%loop_body, %loop_exit);
-  ];
-  block %loop_body [
-    guard (bvult($i, 0xa:bv64));
-    $mem := store le $mem 0x100:bv64 $i 64;
-    $i := bvadd($i, 0x1:bv64);
-    goto(%loop);
-  ];
-  block %loop_exit [
-    guard (bvuge($i, 0xa:bv64));
-    var x:bv64 := load le $mem 0x100:bv64 64;
-    assert bvule($i, 0x14:bv64);
-    return (x);
-  ]
-];
-    |}
-  in
-  let program = lst.prog in
-  let results, p2_results = IDELiveBitSSIAnalysis.solve program in
-  Hashtbl.iter
-    (fun pid summary ->
-      print_endline @@ ID.name pid;
-      print_endline @@ IDELiveBitSSIAnalysis.show_summary summary;
-      print_endline
-      @@ Iter.to_string (fun (v, r) -> Var.name v)
-      @@ VarMap.to_iter
-      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
-    results;
-  [%expect
-    {|
-    @main
-    (Λ,Λ->IdEdge), (Λ,$i->NumEdge 63), (out,out->IdEdge), (out,x->NumEdge 63)
-    out, x, $i
-    |}]
-
-let%expect_test "test6_extract_out_of_bounds_after_shift" =
-  let lst =
-    Loader.Loadir.ast_of_string
-      {|
-prog entry @main;
-
-proc @main() -> (one_liner:bv64, multi_liner:bv64)
-[
-    block %main_entry [
       var v1:bv64 := 99:bv64;
 
-      var a:bv64 := extract(5,0,(bvashr(extract(11,6,v1), 2:bv64)));
+      var f_a:bv32 := extract(32,0,v1);
 
-      var b:bv64 := bvashr(extract(11,6,v1), 2:bv64);
-      return (a,b);
-    ];
-];
-    |}
- (* var mid:bv5 := extract(11,6,v1);
-      var b:bv64 := extract(1,0,bvshl(mid, 2:bv64)); *)
-  in
-  let program = lst.prog in
-  let results, p2_results = IDELiveBitSSIAnalysis.solve program in
-  Hashtbl.iter
-    (fun pid summary ->
-      print_endline @@ ID.name pid;
-      print_endline @@ IDELiveBitSSIAnalysis.show_summary summary;
-      print_endline
-      @@ Iter.to_string (fun (v, r) -> Var.name v)
-      @@ VarMap.to_iter
-      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
-    results;
-  [%expect
-    {|
-    @main
-    (Λ,Λ->IdEdge), (one_liner,v1->NumEdge 12), (one_liner,a->NumEdge 63), (one_liner,one_liner->IdEdge), (multi_liner,v1->NumEdge 10), (multi_liner,b->NumEdge 63), (multi_liner,multi_liner->IdEdge)
-    v1, a, b, one_liner, multi_liner
-    |}]
-
-let%expect_test "test7_shifts" =
-  let lst =
-    Loader.Loadir.ast_of_string
-      {|
-prog entry @main;
-
-proc @main() -> (out1:bv64, out2:bv64)
-[
-    block %main_entry [
-      var v:bv64 := 99:bv64;
-
-      var a:bv64 := extract(4, 0, bvshl(extract(5, 0, v), zero_extend(62, 0x3:bv2)));
-
-      var x:bv5 := extract(5, 0, v);
-      var y:bv5 := bvshl(x, 3:bv64);
-      var b:bv64 := extract(4, 0, y);
-
-      return (a,b);
+      return (f_a);
     ];
 ];
 
-proc @f_msb_used() -> (f_out1:bv64, f_out2:bv64)
-[
-    block %f_entry [
-      var v:bv64 := 99:bv64;
-
-      var c:bv64 := bvashr(v, 3:bv64);
-      var d:bv32 := (bvashr(extract(32,0,v), 3:bv64));
-      
-      return (c,d);
-    ];
-];
-
-proc @g_msb_of_extract_5_0_is_used() -> (g_out1:bv64)
+proc @g() -> (g_out:bv1)
 [
     block %g_entry [
-      var v:bv64 := 99:bv64;
+      var v1:bv64 := 99:bv64;
 
-      var e:bv5 := extract(5,0,(bvashr(extract(5,0,v), 300:bv64)));
-      
-      return (e);
+      var g_a:bv1 := extract(1,0,extract(32,0,v1));
+
+      return (g_a);
+    ];
+
+    block %g_entry_2 [
+      var v1:bv32 := 99:bv32;
+
+      var g_a:bv1 := extract(1,0,v1);
+
+      return (g_a);
     ];
 ];
 
-proc @h_v_is_unused() -> (h_out1:bv64)
+proc @h() -> (h_out:bv1)
 [
     block %h_entry [
-      var v:bv64 := 99:bv64;
+      var v1:bv64 := 99:bv64;
 
-      var h_a:bv5 := extract(5, 0, (bvashr(bvlshr(extract(5,0,v), 1:bv64), 300:bv64)));
-      var h_b:bv5 := extract(5, 0, (bvashr(bvlshr(extract(5,0,v), 300:bv64), 1:bv64)));
-      assert neq(h_a, h_b);
+      var h_a:bv32 := extract(32,0,v1);
+      var h_b:bv1 := extract(1,0,h_a);
 
-      return (h_a);
+      return (h_b);
     ];
 ];
 
-proc @i_v_is_unused() -> (i_out1:bv64)
+proc @shift() -> (left_out:bv64, right_out:bv64)
 [
-    block %i_entry [
-      var v:bv64 := 99:bv64;
+    block %shift_entry [
+      var v1:bv32 := 999:bv64;
 
-      var i_a:bv5 := extract(5, 0, bvlshr(extract(11,6,v), 20:bv64));
+      var left:bv64 := bvshl(v1, 32:bv32);
+      var right:bv64 := bvlshr(v1, 32:bv64);
 
-      return (i_a);
+      return (left, right);
     ];
 ];
 
-proc @j_boolean_comparison_shenanigans() -> (j_out1:bv64, j_out2:bv64)
+proc @shift2() -> (left_out:bv64, right_out:bv64)
 [
-    block %j_entry [
-      var v:bv64 := 99:bv64;
+    block %shift_entry [
+      var v1:bv64 := 999:bv64;
 
-      var j_a:bv5 := bvor(bvshl(extract(5,0,v), 3:bv64), bvlshr(extract(5,0,v), 3:bv64));
-      
-      var j_b:bv2 := extract(2,0,bvor(bvshl(extract(5,0,v), 3:bv64), bvlshr(extract(5,0,v), 3:bv64)));
+      var left:bv64 := bvlshr(bvshl(v1, 32:bv64),32:bv64);
+      var right:bv64 := bvshl(bvlshr(v1, 32:bv64), 32:bv64);
 
-      return (j_a, j_b);
+      return (left, right);
     ];
 ];
 
-proc @k() -> (out1:bv64)
+proc @trans() -> (out:bv32)
 [
-    block %k_entry [
-      var v:bv64 := 99:bv32;
-
-      var k_a:bv32 := extract(32,0, v);
-
-      var k_b:bv8 := extract(1,0,extract(32,31, v));
-
-      var j:bv8 := k_a;
-      var i:bv8 := k_b;
-
-      return (k_b);
+    block %trans [
+      var v1:bv64 := 0xffffffff:bv64;
+      var v2:bv32 := extract(32, 0, v1:bv64);
+      return (v2);
     ];
+];
+    |}
+  in
+(*
+  x:bv64, NumEdge 16 -> zero_extend(64-16, x:bv16)
+  var x:bv64, NumEdge 16 -> var x:bv16 := extract(16, 0, expr);
+
+  var v1:bv64 := 0xFFFFFFFF:bv64;
+  var v2:bv32 := extract(32, 0, v1:bv64);
+
+  becomes
+
+  var v1:bv32 := extract(32, 0, 0xFFFFFFFF:bv64);
+  var v2:bv32 := extract(32, 0, zero_extend(32, v1:bv32));
+
+  only when lo is 0
+
+
+  var v1:bv64 := 0xFFFFFFFF:bv64;
+  var v2:bv32 := extract(32, 31, v1:bv64);
+
+  becomes
+
+  var v1:bv32 := extract(32, 0, 0xFFFFFFFF:bv64);
+  var v2:bv32 := extract(32, 31, zero_extend(32, v1:bv32));
+*)
+
+
+  let program = lst.prog in
+  let results, p2_results = IDELiveBitSSIAnalysis.solve program in
+  Hashtbl.iter
+    (fun pid summary ->
+      print_endline @@ ID.name pid;
+      print_endline @@ IDELiveBitSSIAnalysis.show_summary summary;
+      print_endline
+      @@ Iter.to_string (fun (v, r) -> Var.name v)
+      @@ VarMap.to_iter
+      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
+    results;
+  [%expect
+    {|
+    @trans
+    (Λ,Λ->IdEdge), (out,out->IdEdge), (out,v1->NumEdge 31), (out,v2->NumEdge 31)
+    out, v1, v2
+    @shift
+    (Λ,Λ->IdEdge), (left_out,left_out->IdEdge), (left_out,left->NumEdge 63), (right_out,right_out->IdEdge), (right_out,right->NumEdge 63)
+    left_out, right_out, left, right
+    @main
+    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v1->⊤), (out1,a->NumEdge 63)
+    out1, v1, a
+    @g
+    (Λ,Λ->IdEdge), (g_out,g_out->IdEdge), (g_out,v1->NumEdge 31), (g_out,g_a->NumEdge 0)
+    g_out, v1, g_a
+    @h
+    (Λ,Λ->IdEdge), (h_out,h_out->IdEdge), (h_out,v1->NumEdge 31), (h_out,h_a->NumEdge 0), (h_out,h_b->NumEdge 0)
+    h_out, v1, h_a, h_b
+    @shift2
+    (Λ,Λ->IdEdge), (left_out,left_out->IdEdge), (left_out,v1->NumEdge 31), (left_out,left->NumEdge 63), (right_out,right_out->IdEdge), (right_out,v1->NumEdge 63), (right_out,right->NumEdge 63)
+    left_out, right_out, v1, left, right
+    @f
+    (Λ,Λ->IdEdge), (f_out,f_out->IdEdge), (f_out,v1->NumEdge 31), (f_out,f_a->NumEdge 31)
+    f_out, v1, f_a
+    |}]
+
+let%expect_test "sqrt" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+var $stack:(bv64->bv8);
+prog entry @Sqrt_4196228;
+proc @Sqrt_4196228(R0_in:bv64, R31_in:bv64)  -> (R0_out:bv64, R1_out:bv64) { .address = 4196228;
+    .name = "Sqrt"; .returnBlock = "Sqrt_return" }
+  modifies $stack:(bv64->bv8)
+  captures $stack:(bv64->bv8)
+
+[
+   block %Sqrt_entry [
+      $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xffffffffffffffd8:bv64) R0_in:bv64 64;
+      $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xfffffffffffffff8:bv64) 0x0:bv64 64;
+      var var1_4196240_bv64_2:bv64 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xffffffffffffffd8:bv64) 64;
+      $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xfffffffffffffff0:bv64) bvadd(var1_4196240_bv64_2:bv64, 0x1:bv64) 64;
+      goto (%Sqrt_loop1_18);
+   ];
+   block %Sqrt_loop1_18 [
+      var var1_4196328_bv64_2:bv64 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xfffffffffffffff8:bv64) 64;
+      var var1_4196336_bv64_2:bv64 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xfffffffffffffff0:bv64) 64;
+      goto (%phi_3,%phi_2);
+   ];
+   block %phi_2 [
+      guard boolnot(eq(var1_4196336_bv64_2:bv64,
+        bvadd(var1_4196328_bv64_2:bv64, 0x1:bv64)));
+      var var1_4196256_bv64_2:bv64 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xfffffffffffffff8:bv64) 64;
+      var var1_4196260_bv64_2:bv64 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xfffffffffffffff0:bv64) 64;
+      var R0_9:bv64 := bvadd(var1_4196256_bv64_2:bv64, var1_4196260_bv64_2:bv64);
+      var R1_7:bv64 := bvand(bvor(bvlshr(R0_9:bv64, 0x3f:bv64),
+        bvshl(R0_9:bv64, 0x1:bv64)), 0x1:bv64);
+      var R0_10:bv64 := bvadd(R1_7:bv64, R0_9:bv64);
+      var R0_11:bv64 := bvor(bvand(sign_extend(63, extract(64,63, R0_10:bv64)),
+        0x8000000000000000:bv64),
+       bvand(bvor(bvlshr(R0_10:bv64, 0x1:bv64), bvshl(R0_10:bv64, 0x3f:bv64)),
+        0x7fffffffffffffff:bv64));
+      $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xffffffffffffffec:bv64) extract(32,0, R0_11:bv64) 32;
+      var var1_4196284_bv32_2:bv32 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xffffffffffffffec:bv64) 32;
+      var R0_13:bv64 := zero_extend(32,
+      bvmul(var1_4196284_bv32_2:bv32, var1_4196284_bv32_2:bv32));
+      var R0_14:bv64 := bvor(bvand(sign_extend(63, extract(32,31, R0_13:bv64)),
+        0xffffffff00000000:bv64),
+       bvand(bvand(R0_13:bv64, 0xffffffff:bv64), 0xffffffff:bv64));
+      var var1_4196296_bv64_2:bv64 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xffffffffffffffd8:bv64) 64;
+      goto (%phi_6,%phi_5);
+   ];
+   block %phi_5 [
+      guard bvslt(var1_4196296_bv64_2:bv64, R0_14:bv64);
+      var var1_4196320_bv32_2:bv32 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xffffffffffffffec:bv64) 32;
+      $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xfffffffffffffff0:bv64) sign_extend(32, var1_4196320_bv32_2:bv32) 64;
+      goto (%Sqrt_loop1_18);
+   ];
+   block %phi_6 [
+      guard boolnot(bvslt(var1_4196296_bv64_2:bv64, R0_14:bv64));
+      var var1_4196308_bv32_2:bv32 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xffffffffffffffec:bv64) 32;
+      $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xfffffffffffffff8:bv64) sign_extend(32, var1_4196308_bv32_2:bv32) 64;
+      goto (%Sqrt_loop1_18);
+   ];
+   block %phi_3 [
+      guard eq(var1_4196336_bv64_2:bv64, bvadd(var1_4196328_bv64_2:bv64, 0x1:bv64));
+      var var1_4196348_bv64_2:bv64 := load le $stack:(bv64->bv8) bvadd(R31_in:bv64,
+       0xfffffffffffffff8:bv64) 64;
+      goto (%Sqrt_return);
+   ];
+   block %Sqrt_return [
+      (var R0_out:bv64 := var1_4196348_bv64_2:bv64,
+       var R1_out:bv64 := var1_4196336_bv64_2:bv64);
+      return;
+   ]
 ];
     |}
   in
@@ -730,106 +485,7 @@ proc @k() -> (out1:bv64)
     results;
   [%expect
     {|
-    @f_msb_used
-    (Λ,Λ->IdEdge), (f_out1,c->NumEdge 63), (f_out1,f_out1->IdEdge), (f_out1,v->NumEdge 63), (f_out2,f_out2->IdEdge), (f_out2,v->NumEdge 31), (f_out2,d->NumEdge 31)
-    c, f_out1, f_out2, v, d
-    @h_v_is_unused
-    (Λ,Λ->IdEdge), (Λ,h_a->NumEdge 4), (Λ,h_b->NumEdge 4), (h_out1,h_out1->IdEdge)
-    h_out1, h_a, h_b
-    @g_msb_of_extract_5_0_is_used
-    (Λ,Λ->IdEdge), (g_out1,g_out1->IdEdge), (g_out1,v->NumEdge 4), (g_out1,e->NumEdge 4)
-    g_out1, v, e
-    @j_boolean_comparison_shenanigans
-    (Λ,Λ->IdEdge), (j_out1,j_out1->IdEdge), (j_out1,v->NumEdge 4), (j_out1,j_a->NumEdge 4), (j_out2,j_out2->IdEdge), (j_out2,v->NumEdge 1), (j_out2,j_b->NumEdge 1)
-    j_out1, j_out2, v, j_a, j_b
-    @main
-    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,a->NumEdge 63), (out1,v->NumEdge 0), (out2,out2->IdEdge), (out2,x->NumEdge 1), (out2,y->NumEdge 3), (out2,b->NumEdge 63), (out2,v->NumEdge 4)
-    out1, out2, a, x, y, b, v
-    @i_v_is_unused
-    (Λ,Λ->IdEdge), (i_out1,i_out1->IdEdge), (i_out1,i_a->NumEdge 4)
-    i_out1, i_a
-    @k
-    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v->NumEdge 31), (out1,k_b->NumEdge 7)
-    out1, v, k_b
+    @Sqrt_4196228
+    (Λ,Λ->IdEdge), (Λ,R31_in->NumEdge 63), (Λ,R0_in->NumEdge 63), (Λ,var1_4196240_bv64_2->NumEdge 63), (Λ,var1_4196328_bv64_2->NumEdge 63), (Λ,var1_4196336_bv64_2->NumEdge 63), (Λ,var1_4196256_bv64_2->NumEdge 63), (Λ,var1_4196260_bv64_2->NumEdge 63), (Λ,R0_9->NumEdge 63), (Λ,R1_7->NumEdge 63), (Λ,R0_10->NumEdge 63), (Λ,R0_11->NumEdge 31), (Λ,R0_13->NumEdge 63), (Λ,R0_14->NumEdge 63), (Λ,var1_4196296_bv64_2->NumEdge 63), (R0_out,R0_out->IdEdge), (R0_out,var1_4196348_bv64_2->NumEdge 63), (R1_out,R1_out->IdEdge)
+    R31_in, R0_in, R0_out, R1_out, var1_4196240_bv64_2, var1_4196328_bv64_2, var1_4196336_bv64_2, var1_4196256_bv64_2, var1_4196260_bv64_2, R0_9, R1_7, R0_10, R0_11, R0_13, R0_14, var1_4196296_bv64_2, var1_4196348_bv64_2
     |}]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-(*
-  HighBit of { hi_lb : int ; lo_lb : int }
-  extract 1 0 ((extract 5 0 v1) >> 3)
-  543210
-  dlllll   hi_lb, lo_lb = 4, 0
-  -> >>3
-  876543
-  ddddll   hi_lb, lo_lb = 4, 3
-  -> extract 1 0
-  876543
-  dddddl   hi_lb, lo_lb = (1-1)+3, 3
-                        = 3, 3
-
-  extract 3 0 (((extract 5 0) >> 3) << 2) - extract 5 0, then SHR 3, then SHL 2, then extract 3 0
-  543210
-  dlllll   hi_lb, lo_lb = 4, 0
-  -> >> 3
-  876543
-  ddddll   hi_lb, lo_lb = 4, 3
-  -> << 2
-  654321
-  ddll??   hi_lb, lo_lb = 4, 1
-  -> extract 3 0
-  654321
-  dddl??   hi_lb, lo_lb = (3-1) + 1, 1
-                        = 3, 1
-  
-  extract 3 0 (((extract 5 0) << 2) >> 3)
-  543210
-  dlllll   hi_lb, lo_lb = 4, 0
-  -> << 2
-543210-1-2
-dlllll x x hi_lb, lo_lb = 4, -2 
-  -> >> 3
-  654321
-  ddllll  hi_lb, lo_lb = 4, 1
-  -> extract 3 0
-  654321
-  dddlll  hi_lb, lo_lb = (3-1) + 1, 1
-                       = 3, 1
-  
-  extract 5 0
-  43210
-  lllll   (4,0,4,0)
-  -> <<2
-  210xx
-  lllxx   (2,0,4,2)   // e_hi bounded by index range
-  -> >> 3
-  xxx21
-  xxxll   (2,1,1,0)
-  -> extract 3 0
-  x21
-  xll     (2,1,2,0)
-
-
-  
-  *)

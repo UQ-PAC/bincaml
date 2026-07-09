@@ -227,7 +227,7 @@ module IDESSI_LB = struct
       | BinaryExpr { op = `BVSHL ; arg1 = (HighBit { vhi ; vlo ; ehi ; elo ; width }, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
           (* (Value.highbit hi_lb @@ lo_lb - ((Bitvec.to_signed_bigint bv) |> Z.to_int)) *)
           let shift_value = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
-            if shift_value > ehi then Value.bottom
+            if shift_value >= width - elo then Value.highbit 69420 0 0 0 0
             else Value.highbit (vhi - (max 0 (ehi + shift_value - width + 1))) vlo (min (width - 1) (ehi + 1)) (elo + shift_value) width
       (* SHL:  new_v_hi = old_v_hi - max(0, old_e_hi + k - (size-1)), new_v_lo = old_v_lo, new_e_hi = min(size-1, old_e_hi + 1), new_e_lo = old_e_lo + k *)
       | BinaryExpr { arg1 = (v1, _) ; arg2 = (v2, _) } -> Value.join v1 v2
@@ -715,6 +715,30 @@ proc @k() -> (out1:bv64)
       return (k_b);
     ];
 ];
+
+proc @shift() -> (left_out:bv64, right_out:bv64)
+[
+    block %shift_entry [
+      var v1:bv64 := 999:bv64;
+
+      var left:bv64 := bvshl(v1, 32:bv64);
+      var right:bv64 := bvlshr(v1, 32:bv64);
+
+      return (left, right);
+    ];
+];
+
+proc @shift2() -> (left_out:bv64, right_out:bv64)
+[
+    block %shift_entry [
+      var v1:bv64 := 999:bv64;
+
+      var left:bv64 := bvlshr(bvshl(v1, 32:bv64),32:bv64);
+      var right:bv64 := bvshl(bvlshr(v1, 32:bv64), 32:bv64);
+
+      return (left, right);
+    ];
+];
     |}
   in
   let program = lst.prog in
@@ -745,9 +769,15 @@ proc @k() -> (out1:bv64)
     @main
     (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,a->NumEdge 63), (out1,v->NumEdge 0), (out2,out2->IdEdge), (out2,x->NumEdge 1), (out2,y->NumEdge 3), (out2,b->NumEdge 63), (out2,v->NumEdge 4)
     out1, out2, a, x, y, b, v
+    @shift2
+    (Λ,Λ->IdEdge), (left_out,v1->NumEdge 31), (left_out,left_out->IdEdge), (left_out,left->NumEdge 63), (right_out,v1->NumEdge 63), (right_out,right_out->IdEdge), (right_out,right->NumEdge 63)
+    v1, left_out, right_out, left, right
     @i_v_is_unused
     (Λ,Λ->IdEdge), (i_out1,i_out1->IdEdge), (i_out1,i_a->NumEdge 4)
     i_out1, i_a
+    @shift
+    (Λ,Λ->IdEdge), (left_out,v1->NumEdge 31), (left_out,left_out->IdEdge), (left_out,left->NumEdge 63), (right_out,v1->NumEdge 63), (right_out,right_out->IdEdge), (right_out,right->NumEdge 63)
+    v1, left_out, right_out, left, right
     @k
     (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v->NumEdge 31), (out1,k_b->NumEdge 7)
     out1, v, k_b
