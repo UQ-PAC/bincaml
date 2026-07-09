@@ -49,19 +49,16 @@ let isolate_stmts_of_block ?(label = "%singleton") ~proc f bid =
       | xs -> List.pure xs)
   in
 
-  (* Insert disconnected blocks for each group, reusing [initial_bid] for the first group. *)
+  (* Insert disconnected blocks for each group, reusing [bid] for the first group. *)
   let proc, block_ids =
-    List.fold_map_i
-      (fun proc i stmts ->
-        let proc, bid =
-          if i = 0 then
-            ( Procedure.modify_block proc bid (fun b ->
-                  { b with stmts = CCVector.of_list stmts }),
-              bid )
-          else Procedure.fresh_block proc ~name:label ~stmts ()
-        in
-        (proc, bid))
-      proc grouped_stmts
+    grouped_stmts
+    |> List.fold_map_i
+         (fun proc i stmts ->
+           if i = 0 then
+             let stmts = CCVector.of_list stmts in
+             (Procedure.modify_block proc bid (fun b -> { b with stmts }), bid)
+           else Procedure.fresh_block proc ~name:label ~stmts ())
+         proc
   in
 
   let proc =
