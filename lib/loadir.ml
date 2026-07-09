@@ -303,15 +303,12 @@ module BasilASTLoader = struct
           Procedure.create_p proc_id ~attrib ~is_stub ~formal_in_params
             ~formal_out_params ()
         in
+        let param n = StringMap.find n @@ Procedure.get_formal_params p in
         let formal_in_params_order =
-          formal_in_params
-          |> List.map (fun (n, _) ->
-              (n, StringMap.find n (Procedure.formal_in_params p)))
+          formal_in_params |> List.map (fun (n, _) -> (n, param n))
         in
         let formal_out_params_order =
-          formal_out_params
-          |> List.map (fun (n, _) ->
-              (n, StringMap.find n (Procedure.formal_out_params p)))
+          formal_out_params |> List.map (fun (n, _) -> (n, param n))
         in
         Hashtbl.add prog.params_order id
           (formal_in_params_order, formal_out_params_order);

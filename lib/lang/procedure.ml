@@ -251,6 +251,7 @@ end = struct
     let graph = G.add_vertex graph Return in
     graph
 
+  (** Create a generic procedure *)
   let create id ?local_id_gen ?(is_stub = false)
       ?(formal_in_params = StringMap.empty)
       ?(formal_out_params = StringMap.empty) ?(captures_globs = [])
@@ -303,6 +304,7 @@ end = struct
              Return);
     }
 
+  (** Create a (Var.t, Expr.BasilExpr.t) procedure *)
   let create_p id ?(is_stub = false) ?(formal_in_params = [])
       ?(formal_out_params = []) ?(captures_globs = []) ?(modifies_globs = [])
       ?(requires = []) ?(ensures = []) ?(rely = []) ?(guarantee = [])
@@ -684,6 +686,16 @@ let fold_blocks_topo_rev_headers
     is *not* stable *)
 let fold_blocks_topo_rev (f : 'a -> ID.t -> Edge.block -> 'a) init p =
   fold_blocks_topo_rev_headers (fun acc i -> f acc) init p
+
+(** get map for formal params assuming in and out are disjointly named (they
+    should be) *)
+let get_formal_params p =
+  StringMap.merge_safe
+    ~f:(fun _ -> function
+      | `Both _ -> failwith "present in both"
+      | `Left l -> Some l
+      | `Right r -> Some r)
+    (formal_in_params p) (formal_out_params p)
 
 let map_blocks_nondet f p =
   iter_blocks p
