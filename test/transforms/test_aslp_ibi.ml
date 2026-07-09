@@ -78,7 +78,7 @@ let%expect_test "diamond bfs" =
 
 let%expect_test "nested diamonds" =
   let make_call = make_call () in
-  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_lexpr.empty_aslp_ids ()))
   in
   I.bincaml_set_address (Bitvec.of_int ~size:64 0xfaf);
   let branch1 = I.f_gen_branch (I.f_gen_bool_lit true) in
@@ -157,7 +157,7 @@ let%expect_test "nested diamonds" =
 
 let%expect_test "sequential diamonds" =
   let make_call = make_call () in
-  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_lexpr.empty_aslp_ids ()))
   in
   ( guard @@ fun () ->
     I.bincaml_set_address (Bitvec.of_int ~size:64 0xfaf);
@@ -208,7 +208,7 @@ let%expect_test "sequential diamonds" =
 
 let%expect_test "pc before branch" =
   let make_call = make_call () in
-  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_lexpr.empty_aslp_ids ()))
   in
   guard (fun () ->
       I.bincaml_set_address (Bitvec.of_int ~size:64 0xbadbad);
@@ -254,7 +254,7 @@ let%expect_test "pc before branch" =
 
 let%expect_test "skipped merge context when going to outer merge" =
   let make_call = make_call () in
-  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_lexpr.empty_aslp_ids ()))
   in
   I.bincaml_set_address (Bitvec.of_int ~size:64 0xfaf);
   let outer = I.f_gen_branch (I.f_gen_bool_lit true) in
@@ -309,7 +309,7 @@ let%expect_test "skipped merge context when going to outer merge" =
 
 let%expect_test "skipped merge context when going to outer branch" =
   let make_call = make_call () in
-  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_lexpr.empty_aslp_ids ()))
   in
   I.bincaml_set_address (Bitvec.of_int ~size:64 0xfaf);
   let outer = I.f_gen_branch (I.f_gen_bool_lit true) in
@@ -371,7 +371,7 @@ let%expect_test "skipped merge context when going to outer branch" =
 let%expect_test
     "pathological: referencing old branch with intervening gen_branch" =
   let make_call = make_call () in
-  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_lexpr.empty_aslp_ids ()))
   in
   guard (fun () ->
       I.bincaml_set_address (Bitvec.of_int ~size:64 0xfaf);
@@ -401,7 +401,7 @@ let%expect_test
 let%expect_test
     "pathological: sequential diamonds, then going back into the first one" =
   let make_call = make_call () in
-  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_lexpr.empty_aslp_ids ()))
   in
   ( guard @@ fun () ->
     begin
