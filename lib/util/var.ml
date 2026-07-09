@@ -1,121 +1,126 @@
 open Containers
 open Mtypes
 
-type scope = LocalConst | LocalVar | GlobalVar | GlobalConst | GlobalVarShared
-[@@deriving show, eq, ord]
+type access_tag = Const | Shared | None [@@deriving show, eq, ord]
+type scope_tag = Global of string | Local of string [@@deriving show, eq, ord]
 
-open struct
-  module V = struct
-    type t = { name : string; typ : Types.t; scope : scope }
-    [@@deriving eq, ord, show]
+type t = { name : ID.t; scope : scope_tag; typ : Types.t; tags : access_tag }
+[@@deriving eq, ord, show]
 
-    let hash v =
-      Hash.(combine3 (Hash.string v.name) (Hash.poly v.scope) (Hash.poly v.typ))
-  end
-end
+let hash v =
+  Hash.(combine3 (ID.hash v.name) (Hash.poly v.tags) (Hash.poly v.typ))
 
-(** variables are interned *)
+(*
+let copy ?name ?scope ?typ (v : t) =
+    {
+        name = Option.get_or ~default:v.name name;
+        typ = Option.get_or ~default:v.typ typ;
+        scope = Option.get_or ~default:v.scope scope;
+    } *)
 
-module H = Fix.HashCons.ForHashedTypeWeak (V)
+let to_int (v : t) = ID.index v.name
+let id v = v.name
+let tags (e : t) = e.tags
+let typ (e : t) = e.typ
+let is_local (v : t) = match v.scope with Local _ -> true | Global _ -> false
+let is_global (v : t) = match v.scope with Global _ -> true | Local _ -> false
+let name (e : t) = if is_global e then "$" ^ ID.name e.name else ID.name e.name
 
-include (
-  struct
-    type t = V.t Fix.HashCons.cell
+let name_scoped (e : t) =
+  let sn = e.scope |> function Local n -> n | Global n -> n in
+  name e ^ sn
 
-    let create name ?(scope = LocalVar) typ =
-      (* disallow creating local const as its too hard to have declaration order *)
-      match scope with
-      | LocalConst -> H.make { name; typ; scope = LocalVar }
-      | _ -> H.make { name; typ; scope }
-
-    let copy ?name ?scope ?typ (v : t) =
-      let v = Fix.HashCons.data v in
-      H.make
-        {
-          name = Option.get_or ~default:v.name name;
-          typ = Option.get_or ~default:v.typ typ;
-          scope = Option.get_or ~default:v.scope scope;
-        }
-
-    let to_int (v : V.t Fix.HashCons.cell) = v.id
-    let show v = V.show (Fix.HashCons.data v)
-    let equal (a : t) (b : t) : bool = Fix.HashCons.equal a b
-    let compare (a : t) (b : t) : int = Fix.HashCons.compare a b
-    let name (e : t) = (Fix.HashCons.data e).name
-    let scope (e : t) = (Fix.HashCons.data e).scope
-    let typ (e : t) = (Fix.HashCons.data e).typ
-    let hash (a : t) = Fix.HashCons.hash a
-    let to_string v = name v ^ ":" ^ Types.to_string @@ typ v
-    let pp fmt v = Format.pp_print_string fmt (to_string v)
-    let pretty v = Containers_pp.text (to_string v)
-  end :
-    sig
-      type t
-
-      val to_int : t -> int
-
-      include HASH_TYPE with type t := t
-      include PRETTY with type t := t
-
-      val create : string -> ?scope:scope -> Types.t -> t
-      val pp : Format.formatter -> t -> unit
-      val to_string : t -> string
-      val name : t -> string
-      val scope : t -> scope
-      val typ : t -> Types.t
-      val hash : t -> int
-      val copy : ?name:string -> ?scope:scope -> ?typ:Types.t -> t -> t
-    end)
-
-let is_local (v : t) =
-  match scope v with LocalVar -> true | LocalConst -> true | _ -> false
-
-let is_global (v : t) =
-  match scope v with
-  | GlobalVar -> true
-  | GlobalConst -> true
-  | GlobalVarShared -> true
-  | _ -> false
-
-let is_mutable (v : t) =
-  match scope v with GlobalVar -> true | LocalVar -> true | _ -> false
-
-let is_constant (v : t) =
-  match scope v with LocalConst -> true | GlobalConst -> true | _ -> false
-
-let is_pure (v : t) = is_constant v
-
-let is_shared (v : t) =
-  match scope v with GlobalVarShared -> true | _ -> false
-
+let to_string v = name v ^ ":" ^ Types.to_string @@ typ v
+let pp fmt v = Format.pp_print_string fmt (to_string v)
+let pretty v = Containers_pp.text (to_string v)
+let is_const (v : t) = match v.tags with Const -> true | _ -> false
+let access (v : t) = v.tags
+let is_shared (v : t) = match v.tags with Shared -> true | _ -> false
 let to_string_il_rvar v = to_string v
 
 let to_string_il_lvar v =
-  match scope v with
-  | LocalVar -> "var " ^ to_string v
-  | LocalConst -> "let " ^ to_string v
-  | GlobalVar -> to_string v
-  | GlobalVarShared -> to_string v
-  | GlobalConst -> "let " ^ to_string v
+  match (v.scope, v.tags) with
+  | _, Const -> "let " ^ to_string v
+  | Local _, _ -> "var " ^ to_string v
+  | Global _, None -> to_string v
+  | Global _, Shared -> to_string v
 
 let to_decl_string_il v =
   let modifiers = if is_shared v then "observable " else "" in
   "var " ^ modifiers ^ to_string v
 
-module Decls = struct
-  include Hashtbl
+(** Variable Generators *)
 
-  type 'v t = (string, 'v) Hashtbl.t
+type generator = {
+  scope : scope_tag;
+  fresh : ?name:string -> ?access:access_tag -> Types.t -> t;
+      (** generate a fresh unique name optional string prefix hint *)
+  with_name : string -> ?access:access_tag -> Types.t -> t;
+  of_var : t -> t;  (** Create or return variable with name*)
+  create_exn : string -> ?access:access_tag -> Types.t -> t;
+      (** Create variable or throw exception if it was previously declared *)
+  generator : ID.generator;  (** The internal ID generator this closes over *)
+}
 
-  let find_opt m name = Hashtbl.find_opt m name
-  let empty () : 'v t = Hashtbl.create 30
+type ('t, 'a, 'g) any_gen = {
+  call : 'a -> 't;
+      (** Create variable or throw exception if it was previously declared *)
+  inner : 'g;
+}
 
-  (*let add m vn v =
-    let d = find_opt m (name vn) in
-    match d with
-    | Some e when equal e v -> ()
-    | Some _ ->
-        failwith @@ "Already declared diff var with that name: " ^ name v
-    | None -> Hashtbl.add m (name vn) v
-    *)
+open struct
+  let force_sigil sigil s : string =
+    match String.chop_prefix ~pre:sigil s with Some s -> s | None -> s
+
+  let create name id_gen ?(access = None) typ =
+    (* disallow creating local const as its too hard to have declaration order *)
+    let tags = match (id_gen, access) with Local _, _ -> None | _, o -> o in
+    { name; scope = id_gen; typ; tags }
+
+  let fresh gt (gen : ID.generator) sgl name ?access typ =
+    let name = force_sigil sgl name in
+    let name = gen.fresh ~name () in
+    create name gt ?access typ
+
+  let with_name gt (id_gen : ID.generator) sgl name ?access typ =
+    let name = force_sigil sgl name in
+    let name = id_gen.decl_or_get name in
+    create name gt ?access typ
+
+  let of_var gt (id_gen : ID.generator) sgl v =
+    with_name gt id_gen sgl (name v) ~access:(access v) (typ v)
+
+  let create_exn gt (id_gen : ID.generator) sgl name ?access typ =
+    let name = force_sigil sgl name in
+    let name = id_gen.decl_exn name in
+    create name gt ?access typ
 end
+
+let mk_gen ?id_generator ?(req_sigil = Option.None) ?(scope = `Local)
+    ?(default_name = "v") () =
+  let id_gen = Option.get_or ~default:(ID.make_gen ()) id_generator in
+  let gt =
+    match scope with
+    | `Local -> Local id_gen.gen_id
+    | `Global -> Global id_gen.gen_id
+  in
+  let sgl =
+    match (req_sigil, scope) with
+    | Some s, _ -> s
+    | None, `Local -> ""
+    | None, `Global -> "$"
+  in
+
+  let fresh ?name ?access typ =
+    let name = Option.get_or ~default:default_name name in
+    fresh gt id_gen sgl name ?access typ
+  in
+
+  {
+    scope = gt;
+    fresh;
+    with_name = with_name gt id_gen sgl;
+    create_exn = create_exn gt id_gen sgl;
+    of_var = of_var gt id_gen sgl;
+    generator = id_gen;
+  }

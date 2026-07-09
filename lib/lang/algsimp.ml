@@ -331,13 +331,14 @@ let normalise e =
   BasilExpr.rewrite_typed_two normalise e
 
 let%expect_test "normalise" =
+  let gs = Var.mk_gen () in
   let e =
     BasilExpr.boolnot @@ BasilExpr.boolnot @@ BasilExpr.boolnot
     @@ BasilExpr.applyintrin ~op:`AND
          [
            BasilExpr.boolnot
-             (BasilExpr.boolnot (BasilExpr.rvar (Var.create "b" Boolean)));
-           BasilExpr.rvar (Var.create "a" Boolean);
+             (BasilExpr.boolnot (BasilExpr.rvar (gs.fresh Boolean)));
+           BasilExpr.rvar (gs.fresh Boolean);
          ]
   in
   print_endline (BasilExpr.to_string e);
@@ -345,6 +346,6 @@ let%expect_test "normalise" =
   print_endline (BasilExpr.to_string e);
   [%expect
     {|
-    boolnot(boolnot(boolnot(booland(boolnot(boolnot(b:bool)), a:bool))))
-    boolor(boolnot(b:bool), boolnot(a:bool))
+    boolnot(boolnot(boolnot(booland(boolnot(boolnot(v_1:bool)), v:bool))))
+    boolor(boolnot(v_1:bool), boolnot(v:bool))
     |}]

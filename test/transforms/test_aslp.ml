@@ -3,7 +3,7 @@ open Common
 open Transforms.Aslp
 
 let%expect_test "lift empty" =
-  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_lexpr.empty_aslp_ids ()))
   in
   let x =
     lift_code_block (module I) ~address:(Bitvec.of_int ~size:64 0x2000) []
@@ -12,7 +12,7 @@ let%expect_test "lift empty" =
   [%expect {| |}]
 
 let%expect_test "lift: add x1, x2, x3, lsl #4" =
-  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_lexpr.empty_aslp_ids ()))
   in
   let x =
     lift_opcode
@@ -26,15 +26,15 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
     (Leaf
        { Aslp_state.assume = true;
          stmts =
-         [var var_0:bv64 := 0x0:bv64; var var_0:bv64 := $R2;
-           var var_1:bv64 := 0x0:bv64; var var_1:bv64 := $R3;
-           $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
+         [var v:bv64 := 0x0:bv64; var v:bv64 := $R2; var v_1:bv64 := 0x0:bv64;
+           var v_1:bv64 := $R3;
+           $R1:bv64 := bvadd(v:bv64, bvshl(v_1:bv64, 0x4:bv12));
            (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
          pc_assign = (Some 0x2004:bv64) })
     |}]
 
 let%expect_test "lift 2x: mov x1, #0xabcd" =
-  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_lexpr.empty_aslp_ids ()))
   in
   let x =
     lift_code_block
@@ -60,7 +60,7 @@ let%expect_test "lift 2x: mov x1, #0xabcd" =
     |}]
 
 let%expect_test "lift: b.eq #1024" =
-  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_lexpr.empty_aslp_ids ()))
   in
   let x =
     lift_opcode
@@ -92,7 +92,7 @@ let%expect_test "lift: b.eq #1024" =
     |}]
 
 let%expect_test "lift: b #16" =
-  let module I = (val Bincaml_ibi.from_generator (Aslp_state.empty_aslp_ids ()))
+  let module I = (val Bincaml_ibi.from_generator (Aslp_lexpr.empty_aslp_ids ()))
   in
   let x =
     lift_opcode
@@ -106,9 +106,9 @@ let%expect_test "lift: b #16" =
     (Leaf
        { Aslp_state.assume = true;
          stmts =
-         [var var_0:bv64 := 0x0:bv64; var var_0:bv64 := $R2;
-           var var_1:bv64 := 0x0:bv64; var var_1:bv64 := $R3;
-           $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
+         [var v:bv64 := 0x0:bv64; var v:bv64 := $R2; var v_1:bv64 := 0x0:bv64;
+           var v_1:bv64 := $R3;
+           $R1:bv64 := bvadd(v:bv64, bvshl(v_1:bv64, 0x4:bv12));
            (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
          pc_assign = (Some 0x2004:bv64) })
     |}]
@@ -165,18 +165,18 @@ proc @main()  -> () {  }
          goto (%block);
        ];
        block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
-         var var:bv64 := 0x0:bv64;
-         var var:bv64 := $SP;
+         var v:bv64 := 0x0:bv64;
+         var v:bv64 := $SP;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
           0xffffffffffffffe0:bv64) $R29 8;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
            0xffffffffffffffe0:bv64), 0x8:bv64) $R30 8;
-         $SP:bv64 := bvadd(var:bv64, 0xffffffffffffffe0:bv64);
+         $SP:bv64 := bvadd(v:bv64, 0xffffffffffffffe0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
          goto (%block_1);
        ];
        block %block_1 { .asm = "mov x29, sp" } [
-         var var_1:bv64 := 0x0:bv64;
+         var v_1:bv64 := 0x0:bv64;
          $R29:bv64 := bvadd($SP, 0x0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
          goto (%block_2);
@@ -192,10 +192,10 @@ proc @main()  -> () {  }
          goto (%block_4);
        ];
        block %block_4 { .asm = "ldrsw x0, [sp, #0x1c]" } [
-         var var_2:bv32 := 0x0:bv32;
-         $mem:(bv64->bv8) := load le var_3:bv4 bvadd($SP, 0x1c:bv64) 4;
-         var var_2:bv32 := var_3:bv4;
-         $R0:bv64 := zero_extend(0, sign_extend(32, var_2:bv32));
+         var v_2:bv32 := 0x0:bv32;
+         $mem:(bv64->bv8) := load le v_3:bv4 bvadd($SP, 0x1c:bv64) 4;
+         var v_2:bv32 := v_3:bv4;
+         $R0:bv64 := zero_extend(0, sign_extend(32, v_2:bv32));
          (var BranchTaken:bool := false, $PC:bv64 := 0x40081c:bv64);
          goto (%block_5);
        ];
@@ -209,10 +209,10 @@ proc @main()  -> () {  }
        block %ret_1 [ return; ]
     ];
     var $SP:bv64;
-    var $R0:bv64;
-    var $R1:bv64;
     var $R29:bv64;
     var $R30:bv64;
+    var $R0:bv64;
+    var $R1:bv64;
     prog entry @main;
     |}]
 
@@ -285,8 +285,8 @@ proc @Sqrt()  -> () {  }
        block %Sqrt_code_3 [ assume eq(0x4007fc:bv64, $PC); goto (%ret); ];
        block %ret [ return; ]
     ];
-    var $PSTATE_N:bv1;
     var $PSTATE_V:bv1;
+    var $PSTATE_N:bv1;
     prog entry @Sqrt;
     |}]
 
@@ -339,8 +339,8 @@ proc @main()  -> () {  }
          goto (%block);
        ];
        block %block { .asm = "mov xzr, xzr" } [
-         var var:bv64 := 0x0:bv64;
-         var var_1:bv64 := 0x0:bv64;
+         var v:bv64 := 0x0:bv64;
+         var v_1:bv64 := 0x0:bv64;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
          goto (%ret_1);
        ];

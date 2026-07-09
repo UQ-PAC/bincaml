@@ -118,10 +118,11 @@ let%expect_test _ =
 let%expect_test _ =
   let open BasilExpr in
   let ten = bv_of_int ~size:10 10 in
+  let vg = Var.mk_gen () in
   let e =
     binexp ~op:`BVMUL
       (applyintrin ~op:`BVADD [ ten; ten ])
-      (BasilExpr.rvar (Var.create "beans" Types.(Bitvector 10)))
+      (BasilExpr.rvar (vg.fresh ~name:"beans" Types.(Bitvector 10)))
   in
   print_endline (to_string e);
   let r = to_string @@ partial_eval_expr e in

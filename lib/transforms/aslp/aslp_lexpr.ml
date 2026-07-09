@@ -38,6 +38,15 @@ type t =
   | ExclusiveLocal
 [@@deriving show { with_path = false }]
 
+let predefined =
+  [ PC; SP_EL0 ]
+  @ List.init 31 (fun i -> R (Some i))
+  @ List.init 31 (fun i -> Z (Some i))
+  @ [ FPSR; FPCR; PSTATE_N; PSTATE_Z; PSTATE_C; PSTATE_V ]
+  @ [ PSTATE_A; PSTATE_D; PSTATE_DIT; PSTATE_F; PSTATE_I ]
+  @ [ PSTATE_PAN; PSTATE_SP; PSTATE_SSBS; PSTATE_TCO; PSTATE_UAO; PSTATE_BTYPE ]
+  @ [ BTypeCompatible; BranchTaken; BTypeNext; ExclusiveLocal ]
+
 let typ (x : t) =
   let bv = Types.bv in
   match x with
@@ -58,7 +67,7 @@ let typ (x : t) =
   | ExclusiveLocal -> Types.Boolean
   | R None | Z None -> failwith "typeof_lexpr: array lexpr has no bincaml type"
 
-let name = function
+let name : _ -> string = function
   | Local (v, _) -> v
   | SP_EL0 -> "SP"
   | R (Some n) -> Printf.sprintf "R%d" n
@@ -66,30 +75,40 @@ let name = function
   | R None | Z None -> failwith "name_of_lexpr: array lexpr has no bincaml name"
   | v -> show v
 
-let scope = function
-  | Local _ -> Var.LocalVar
-  | BranchTaken | BTypeCompatible | BTypeNext -> LocalVar
-  | _ -> GlobalVar
+type aslp_ids = { local_var : Var.generator; global_var : Var.generator }
+(** Generators for unique IDs used by the offline lifter. The {!aslp_ids} is
+    stateful and the same {!aslp_ids} should be used by all opcodes within the
+    same procedure, to ensure that IDs are unique.*)
 
-let to_var x =
-  let ty = typ x and name = name x and scope = scope x in
-  let name = match scope with GlobalVar -> "$" ^ name | _ -> name in
-  Var.create ~scope name ty
+(** Construct a new {!aslp_ids} with no pre-existing IDs.
 
-let pc_var = to_var PC
-let branchtaken_var = to_var BranchTaken
+    Be careful! You should use {!aslp_ids_from_generators} if you will use the
+    lifted statements within an existing Bincaml IR. *)
+let empty_aslp_ids () =
+  let local_var = Var.mk_gen () in
+  let global_var = Var.mk_gen ~scope:`Global () in
+  { local_var; global_var }
 
-let predefined =
-  lazy
-    ([ PC; SP_EL0 ]
-    @ List.init 31 (fun i -> R (Some i))
-    @ List.init 31 (fun i -> Z (Some i))
-    @ [ FPSR; FPCR; PSTATE_N; PSTATE_Z; PSTATE_C; PSTATE_V ]
-    @ [ PSTATE_A; PSTATE_D; PSTATE_DIT; PSTATE_F; PSTATE_I ]
-    @ [
-        PSTATE_PAN; PSTATE_SP; PSTATE_SSBS; PSTATE_TCO; PSTATE_UAO; PSTATE_BTYPE;
-      ]
-    @ [ BTypeCompatible; BranchTaken; BTypeNext; ExclusiveLocal ])
+(** {2 ID-generating functions} *)
 
-let global_vars =
-  predefined |> Lazy.map (List.map to_var %> List.filter Var.is_global)
+(** Construct a {!aslp_ids} with the given {!Bincaml_util.ID.generator}s as
+    underlying generators.
+
+    This will ensure that ASLp's local variable and block names do not clash
+    with existing names. *)
+let aslp_ids_from_generators ~local_var ~global_var = { local_var; global_var }
+
+let scope st = function
+  | Local _ -> st.local_var
+  | BranchTaken | BTypeCompatible | BTypeNext -> st.local_var
+  | _ -> st.global_var
+
+let to_var st x =
+  let ty = typ x and name = name x and scope = scope st x in
+  scope.with_name name ty
+
+let global_vars gen =
+  predefined |> List.map (to_var gen) %> List.filter Var.is_global
+
+let pc_var st = to_var st PC
+let branchtaken_var st = to_var st BranchTaken

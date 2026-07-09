@@ -420,6 +420,11 @@ module IState = struct
 
   exception InterpreterError of (t * string)
 
+  let () =
+    Printexc.register_printer (function
+      | InterpreterError (_, msg) -> Some ("InterpreterError: " ^ msg)
+      | _ -> None)
+
   let tick st =
     match st.fuel with
     | None -> st
@@ -530,10 +535,9 @@ module IState = struct
   let stack_top st = List.hd st.stack
 
   let lookup_var v st =
-    (match Var.scope v with
-      | LocalVar | LocalConst -> VarMap.find_opt v (stack_top st).locals
-      | GlobalVar | GlobalVarShared | GlobalConst ->
-          VarMap.find_opt v st.globals)
+    (match Var.is_local v with
+      | true -> VarMap.find_opt v (stack_top st).locals
+      | false -> VarMap.find_opt v st.globals)
     |> function
     | Some v -> v
     | None -> raise (ReadUninit v)
@@ -546,22 +550,25 @@ module IState = struct
     | _ -> failwith "unsupported memory type"
 
   let lookup_memory v st =
-    match Var.scope v with
-    | GlobalVar | GlobalConst | GlobalVarShared -> VarMap.find v st.memories
-    | _ -> failwith "unsupported"
+    if Var.is_global v then
+      VarMap.find_opt v st.memories
+      |> Option.get_exn_or
+           ("no memory found : " ^ Var.show v ^ " in "
+           ^ Iter.to_string Var.show (VarMap.keys st.memories))
+    else failwith "unsupported"
 
   let write_var var value st =
     let value = IValue.of_constant value in
-    match Var.scope var with
-    | LocalVar | LocalConst ->
-        let stack =
-          match st.stack with
-          | h :: tl -> { h with locals = VarMap.add var value h.locals } :: tl
-          | _ -> failwith "no stack"
-        in
-        { st with stack }
-    | GlobalVar | GlobalVarShared | GlobalConst ->
-        { st with globals = VarMap.add var value st.globals }
+    if Var.is_local var then
+      let stack =
+        match st.stack with
+        | h :: tl -> { h with locals = VarMap.add var value h.locals } :: tl
+        | _ -> failwith "no stack"
+      in
+      { st with stack }
+    else if Var.is_global var then
+      { st with globals = VarMap.add var value st.globals }
+    else failwith "local and global mutually exclusive"
 
   let map f v = (fst v, f (snd v))
 
@@ -656,9 +663,7 @@ module IState = struct
     | Stmt.Instr_IndirectCall _ -> failwith "unsupported"
 
   and eval_stmt (stmt : Program.stmt) (st : t) =
-    try eval_stmt_unsafe stmt st with
-    | AssumeFail _ as e -> raise e
-    | e -> raise (InterpreterError (st, Printexc.to_string e))
+    try eval_stmt_unsafe stmt st with AssumeFail _ as e -> raise e
 
   and exec_edge st e =
     let b, l, e = e in

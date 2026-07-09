@@ -20,18 +20,14 @@ let formal_params p =
 
 let sigil_ok v =
   let s = Var.name v |> String.take 1 in
-  let sgl = Var.scope v in
-  match sgl with
-  | (Var.LocalVar | Var.LocalConst) when String.equal s "$" ->
-      raise
-      @@ IRWellformed
-           ("local " ^ Var.to_string v ^ "should not have global sigil $")
-  | (Var.GlobalVar | Var.GlobalVarShared | Var.GlobalConst)
-    when not @@ String.equal s "$" ->
-      raise
-      @@ IRWellformed
-           ("global " ^ Var.to_string v ^ " should have global sigil $")
-  | _ -> ()
+  if Var.is_local v && String.equal s "$" then
+    raise
+    @@ IRWellformed
+         ("local " ^ Var.to_string v ^ "should not have global sigil $");
+  if Var.is_global v && (not @@ String.equal s "$") then
+    raise
+    @@ IRWellformed ("global " ^ Var.to_string v ^ " should have global sigil $");
+  ()
 
 let variables_wf p =
   let ref_vars = ref StringMap.empty in
@@ -49,33 +45,32 @@ let variables_wf p =
   let var_is_ok n =
     sigil_ok n;
     ref_var n;
-    match Var.scope n with
-    | Var.LocalConst | Var.LocalVar -> (
-        try ignore @@ Procedure.lookup_local_decl p (Var.name n)
-        with Not_found ->
-          raise
-            (IRWellformed
-               ("local " ^ Var.to_string n ^ " is not declared in "
-               ^ ID.to_string (Procedure.id p))))
-    | (Var.GlobalVar | Var.GlobalVarShared)
-      when not @@ List.exists (fun v -> Var.equal v n) spec.captures_globs ->
-        raise
-          (IRWellformed
-             ("global " ^ Var.to_string n ^ " is not in capture list of "
-             ^ (Procedure.id p |> ID.to_string)))
-    | _ -> ()
+    (if Var.is_local n then
+       try ignore @@ Procedure.lookup_local_decl p (Var.name n)
+       with Not_found ->
+         raise
+           (IRWellformed
+              ("local " ^ Var.to_string n ^ " is not declared in "
+              ^ ID.to_string (Procedure.id p))));
+    if
+      Var.is_global n
+      && (not (Var.is_const n))
+      && (not @@ List.exists (fun v -> Var.equal v n) spec.captures_globs)
+    then
+      raise
+        (IRWellformed
+           ("global " ^ Var.to_string n ^ " is not in capture list of "
+           ^ (Procedure.id p |> ID.to_string)))
   in
 
   let m = ref VarSet.empty in
   let write v =
-    match Var.scope v with
-    | LocalConst ->
-        if VarSet.mem v !m then
-          raise
-            (IRWellformed
-               ("constant local written more than once: " ^ Var.to_string v))
-        else m := VarSet.add v !m
-    | _ -> ()
+    if Var.is_local v && Var.is_const v then
+      if VarSet.mem v !m then
+        raise
+          (IRWellformed
+             ("constant local written more than once: " ^ Var.to_string v))
+      else m := VarSet.add v !m
   in
   let check_lvar v =
     (*sigil_ok v;*)
@@ -92,6 +87,18 @@ let variables_wf p =
            ^ (Procedure.id p |> ID.to_string))))
     else ()
   in
+  begin
+    let check_modset s vs =
+      vs |> List.filter Var.is_local |> function
+      | [] -> ()
+      | ls ->
+          raise
+            (IRWellformed
+               ("local vars in " ^ s ^ " : " ^ List.to_string Var.show ls))
+    in
+    check_modset "modifies" spec.modifies_globs;
+    check_modset "captures" spec.captures_globs
+  end;
   let check e = Expr.BasilExpr.free_vars_iter e |> Iter.iter var_is_ok in
   List.iter check spec.requires;
   List.iter check spec.ensures;

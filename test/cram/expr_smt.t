@@ -6,7 +6,6 @@ Should output no errors
   (load-il ../../examples/cntlm-output.il)
   (run-transforms cf-expressions-smtcheck)
   (load-il concat.il)
-  Warn: global undeclared $__BranchTaken assuming mutable unshared
   (dump-il before.il)
   (run-transforms cf-expressions-smtcheck)
   (dump-il after.il)
@@ -14,7 +13,7 @@ Should output no errors
 Check concat rewrites work
 
   $ diff before.il after.il
-  16,82c16,18
+  17,83c17,19
   <      $R28:bv64 := bvor(bvand(bvconcat(extract(1,0, bvlshr(var1_4206396_bv64:bv64,
   <          0x1f:bv64)), extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
   <         extract(1,0, bvlshr(var1_4206396_bv64:bv64, 0x1f:bv64)),
@@ -86,7 +85,7 @@ Check concat rewrites work
   >      $R28:bv64 := bvor(bvand(sign_extend(63,
   >        extract(32,31, var1_4206396_bv64:bv64)), 0xffffffff00000000:bv64),
   >       bvand(var1_4206396_bv64:bv64, 0xffffffff:bv64, 0xffffffff:bv64));
-  87,88c23
+  88,89c24
   <      $R0:bv64 := bvor(var1_4206400_bv64:bv64,
   <       bvshl(var2_4206400_bv64:bv64, 0x0:bv64));
   ---

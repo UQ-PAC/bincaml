@@ -88,7 +88,7 @@ let next_aarch64_stmt stmts =
 
 (** Returns the Bincaml global variable representing heap memory. *)
 let aarch64_mem_of_prog prog =
-  Program.get_decl_by_name "$mem" prog |> function
+  Program.get_decl_by_name "mem" prog |> function
   | Some (Variable { binding }) -> binding
   | _ -> failwith "aarch64_mem_of_prog: no $mem found"
 
@@ -175,9 +175,9 @@ let rec transform_block (module I : Bincaml_ibi.IBI) ~proc bid =
 
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all blocks
     within the given procedure. *)
-let transform_procedure ~memory proc =
+let transform_procedure prog ~memory proc =
   let memory = Fun.const memory in
-  let module I = (val Bincaml_ibi.from_bincaml_procedure ~memory proc) in
+  let module I = (val Bincaml_ibi.from_bincaml_procedure prog ~memory proc) in
   Procedure.iter_blocks proc
   |> Iter.fold (fun proc (bid, _) -> transform_block (module I) ~proc bid) proc
 
@@ -192,8 +192,12 @@ let add_aarch64_global_declarations ?(add_all = false) prog =
         |> Iter.to_set (module VarSet))
   in
 
-  Lazy.force Aslp_lexpr.global_vars
-  |> List.to_iter |> Iter.filter include_var
+  let gen =
+    Aslp_lexpr.aslp_ids_from_generators ~local_var:(Var.mk_gen ())
+      ~global_var:(Program.var_generator prog)
+  in
+
+  Aslp_lexpr.global_vars gen |> List.to_iter |> Iter.filter include_var
   |> Iter.fold
        (fun prog var ->
          let attrib = Attrib.empty and classification = None in
@@ -210,7 +214,7 @@ let transform_program prog =
   let memory = aarch64_mem_of_prog prog in
 
   prog
-  |> Program.map_procedures (fun _ -> transform_procedure ~memory)
+  |> Program.map_procedures (fun _ -> transform_procedure prog ~memory)
   |> add_aarch64_global_declarations
 
 (** {1 Supplementary transformation} *)

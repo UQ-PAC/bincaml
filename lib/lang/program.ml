@@ -30,15 +30,16 @@ type func_type = Axiom of e | Uninterpreted | Function of e
 
 type implicit_declaration =
   | VariantCase of {
-      variant : string;
+      variant : ID.t;
       belongs_to : Types.t;
       constructor : Var.t; (* function to construct a value of this case *)
     }
 
 type declaration =
-  | Type of { binding : string; typ : Types.t }
+  | Type of { binding : ID.t; typ : Types.t }
   | Function of {
       binding : Var.t;
+      var_gen : Common.Var.generator;
       attrib : Attrib.attrib_map;
       definition : func_type;
     }  (** pure functions *)
@@ -50,10 +51,21 @@ type declaration =
   | Procedure of { definition : proc }
 
 let decl_binding = function
-  | Type { binding } -> binding
+  | Type { binding } -> ID.name binding
   | Variable { binding } -> Var.name binding
   | Function { binding } -> Var.name binding
-  | Procedure { definition } -> ID.to_string (Procedure.id definition)
+  | Procedure { definition } -> ID.name (Procedure.id definition)
+
+let decl_id = function
+  | Type { binding } -> binding
+  | Variable { binding } -> Var.id binding
+  | Function { binding } -> Var.id binding
+  | Procedure { definition } -> Procedure.id definition
+
+let decl_bound_var = function
+  | Variable { binding } -> Some binding
+  | Function { binding } -> Some binding
+  | _ -> None
 
 let pretty_proc p =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
@@ -191,16 +203,13 @@ let declare_name_exn name prog = prog.global_names.decl_exn name
 let declare_name name prog = prog.global_names.decl_or_get name
 let get_id_by_name name prog = prog.global_names.get_id name
 
-let add_decl ?(attrib = StringMap.empty) p decl =
-  let d = p.global_names.decl_or_get (decl_binding decl) in
-  { p with declarations = IDMap.add d decl p.declarations }
-
 let remove_decl p decl =
-  let d = p.global_names.decl_or_get (decl_binding decl) in
+  let d = decl_id decl in
   { p with declarations = IDMap.remove d p.declarations }
 
-let update_decl ?(attrib = StringMap.empty) prog decl =
-  add_decl ~attrib prog decl
+let update_decl ?(attrib = StringMap.empty) p decl =
+  let id = decl_id decl in
+  { p with declarations = IDMap.add id decl p.declarations }
 
 let add_proc p prog =
   let id = Procedure.id p in
@@ -247,6 +256,10 @@ let prog_pretty (p : t) =
 
 let declarations p = p.declarations |> IDMap.to_iter
 
+let var_generator p =
+  let g = Var.mk_gen ~id_generator:p.global_names ~scope:`Global () in
+  g
+
 let filter_decls f p =
   declarations p
   |> Iter.fold
@@ -274,8 +287,7 @@ let flat_map_decls f p =
        (fun prog (i, decl) ->
          let ex = ref false in
          let update_decl prog decl =
-           get_decl_by_name_id (decl_binding decl) prog
-           |> Option.iter (fun (id, _) -> if ID.equal id i then ex := true);
+           (decl_id decl |> fun id -> if ID.equal id i then ex := true);
            update_decl prog decl
          in
          let next = f i decl in
@@ -291,41 +303,60 @@ let pretty_to_chan chan (p : t) =
   Containers_pp.Pretty.to_format ~width:80 fmt p;
   Format.flush fmt ()
 
-let decl_global ?(attrib = StringMap.empty) ?(classification = None) p v =
-  let id : ID.t = p.global_names.decl_exn (Var.name v) in
-  let decl = Variable { binding = v; attrib; classification } in
-  { p with declarations = IDMap.add id decl p.declarations }
+let add_decl p decl =
+  decl_bound_var decl |> Option.iter (fun v -> assert (Var.is_global v));
+  { p with declarations = IDMap.add (decl_id decl) decl p.declarations }
+
+(** add var decl for with id exising in generator *)
+let add_var_decl p ?(attrib = Attrib.empty) ?classification v =
+  assert (Var.is_global v);
+  let id = Var.id v in
+  (try assert (ID.equal id (p.global_names.get_name (ID.index id)))
+   with Not_found -> failwith "Id not created with programs' generator");
+  {
+    p with
+    declarations =
+      IDMap.add id
+        (Variable { attrib; classification; binding = v })
+        p.declarations;
+  }
+
+let decl_global_var p ?(attrib = StringMap.empty) ?(classification = None) name
+    access_tag typ =
+  let vg = var_generator p in
+  let v = vg.with_name name ~access:access_tag typ in
+  let p = add_var_decl p ~attrib ?classification v in
+  (p, v)
+
+let global_ids p = p.global_names
+
+let decl_or_get_var p name scope typ =
+  let vr = (var_generator p).with_name name ~access:scope typ in
+  IDMap.find_opt (Var.id vr) p.declarations |> function
+  | Some (Variable { binding }) -> (p, binding)
+  | _ -> (add_var_decl p vr, vr)
 
 let decl_typ ?(attrib = StringMap.empty) p t =
   match t with
   | Sort (type_name, []) as s ->
       let id : ID.t = p.global_names.decl_exn type_name in
-      {
-        p with
-        declarations =
-          IDMap.add id (Type { binding = type_name; typ = s }) p.declarations;
-      }
+      add_decl p (Type { binding = id; typ = s })
   | Sort (name, variants) as s ->
       let id : ID.t = p.global_names.decl_exn name in
-      {
-        p with
-        declarations =
-          IDMap.add id (Type { binding = name; typ = s }) p.declarations;
-        implicit_decls =
-          IDMap.add_list p.implicit_decls
-            (variants
-            |> List.map (function { variant; fields } ->
-                let variant = p.global_names.decl_exn variant in
-                let args = List.map (function { field; typ } -> typ) fields in
-                let ty = Types.curry args s in
-                let constructor =
-                  Var.create (ID.name variant) ty ~scope:GlobalConst
-                in
-                ( variant,
-                  VariantCase
-                    { variant = ID.name variant; belongs_to = s; constructor }
-                )));
-      }
+      let implicit_decls =
+        IDMap.add_list p.implicit_decls
+          (variants
+          |> List.map (function { variant; fields } ->
+              let args = List.map (function { field; typ } -> typ) fields in
+              let ty = Types.curry args s in
+              let vg = var_generator p in
+              let constructor = vg.with_name variant ~access:Var.Const ty in
+              ( Var.id constructor,
+                VariantCase
+                  { variant = Var.id constructor; belongs_to = s; constructor }
+              )))
+      in
+      { (add_decl p (Type { binding = id; typ = s })) with implicit_decls }
   | _ -> failwith "not declarable type"
 
 let create_single_proc ?(name = "<module>") () =

@@ -6,16 +6,30 @@ let fresh = Bitvec.of_int 0 ~size:2
 let live = Bitvec.of_int 1 ~size:2
 let dead = Bitvec.of_int 2 ~size:2
 
-module Globals = struct
+type function_body = Var.generator * Expr.BasilExpr.t
+
+module GlobalsF (N : sig
+  val global_ids : Var.generator
+end) =
+struct
+  open Var
+
   let mem_encoding_typ_name = "memory_encoding"
   let mem_encoding_typ = Types.Variable mem_encoding_typ_name
 
   let mem_encoding =
-    Var.create "$mem_encoding" ~scope:Var.GlobalVar mem_encoding_typ
+    N.global_ids.with_name "mem_encoding" ~access:None mem_encoding_typ
 end
 
-module Calls = struct
+module Calls (N : sig
+  val global_ids : Var.generator
+end) =
+struct
+  open Var
   open BasilExpr
+
+  (* instantiating this first should put the ids in the right order *)
+  module Globals = GlobalsF (N)
 
   (** [addr_is_heap args] checks if an address belongs to the heap. args(0) is
       the memory encoding object. args(1) is the address to check. *)
@@ -23,7 +37,8 @@ module Calls = struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (Var.create "$me_addr_is_heap" ~scope:Var.GlobalConst Types.Boolean))
+           (N.global_ids.with_name "me_addr_is_heap" ~access:Var.Const
+              Types.Boolean))
       args
 
   (** [alloc_base args] returns the base address of a supplied allocation id.
@@ -32,7 +47,7 @@ module Calls = struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (Var.create "$me_alloc_base" ~scope:Var.GlobalConst
+           (N.global_ids.with_name "me_alloc_base" ~access:Var.Const
               (Types.Bitvector 64)))
       args
 
@@ -43,7 +58,7 @@ module Calls = struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (Var.create "$me_alloc_live" ~scope:Var.GlobalConst
+           (N.global_ids.with_name "me_alloc_live" ~access:Var.Const
               (Types.Bitvector 2)))
       args
 
@@ -53,7 +68,7 @@ module Calls = struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (Var.create "$me_alloc_size" ~scope:Var.GlobalConst
+           (N.global_ids.with_name "me_alloc_size" ~access:Var.Const
               (Types.Bitvector 64)))
       args
 
@@ -63,7 +78,7 @@ module Calls = struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (Var.create "$me_addr_alloc" ~scope:Var.GlobalConst
+           (N.global_ids.with_name "me_addr_alloc" ~access:Var.Const
               (Types.Bitvector 64)))
       args
 
@@ -73,7 +88,7 @@ module Calls = struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (Var.create "$me_addr_offset" ~scope:Var.GlobalConst
+           (N.global_ids.with_name "me_addr_offset" ~access:Var.Const
               (Types.Bitvector 64)))
       args
 
@@ -84,7 +99,7 @@ module Calls = struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (Var.create "$me_alloc_size_update" ~scope:Var.GlobalConst
+           (N.global_ids.with_name "me_alloc_size_update" ~access:Var.Const
               Globals.mem_encoding_typ))
       args
 
@@ -95,7 +110,7 @@ module Calls = struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (Var.create "$me_alloc_live_update" ~scope:Var.GlobalConst
+           (N.global_ids.with_name "me_alloc_live_update" ~access:Var.Const
               Globals.mem_encoding_typ))
       args
 
@@ -105,7 +120,8 @@ module Calls = struct
   let allocate ?attrib args =
     apply_fun ?attrib
       ~func:
-        (rvar (Var.create "$me_allocate" ~scope:Var.GlobalConst Types.Boolean))
+        (rvar
+           (N.global_ids.with_name "me_allocate" ~access:Var.Const Types.Boolean))
       args
 
   (** [can_alloc args] Returns whether an alloc, performed by [allocate], is
@@ -115,7 +131,8 @@ module Calls = struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (Var.create "$me_can_allocate" ~scope:Var.GlobalConst Types.Boolean))
+           (N.global_ids.with_name "me_can_allocate" ~access:Var.Const
+              Types.Boolean))
       args
 
   (** [init_encoding args] Returns if a memory encoding is initialized. args(0)
@@ -124,7 +141,8 @@ module Calls = struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (Var.create "$me_init_encoding" ~scope:Var.GlobalConst Types.Boolean))
+           (N.global_ids.with_name "me_init_encoding" ~access:Var.Const
+              Types.Boolean))
       args
 
   (** [valid_access args] Checks if an access is valid. args(0) is the memory
@@ -134,57 +152,73 @@ module Calls = struct
     apply_fun ?attrib
       ~func:
         (rvar
-           (Var.create "$me_valid_access" ~scope:Var.GlobalConst Types.Boolean))
+           (N.global_ids.with_name "me_valid_access" ~access:Var.Const
+              Types.Boolean))
       args
 end
 
 module type MemoryEncoding = sig
-  module Locals : sig
+  val global_ids : Var.generator
+
+  module Globals : sig
+    val mem_encoding_typ_name : string
+    val mem_encoding_typ : Types.t
     val mem_encoding : Var.t
-    val mem_encoding_out : Var.t
-    val alloc : Var.t
-    val addr : Var.t
-    val size : Var.t
-    val live : Var.t
+  end
+
+  module Locals : sig
+    val mem_encoding : Var.generator -> Var.t
+    val mem_encoding_out : Var.generator -> Var.t
+    val alloc : Var.generator -> Var.t
+    val addr : Var.generator -> Var.t
+    val size : Var.generator -> Var.t
+    val live : Var.generator -> Var.t
   end
 
   val mem_encoding_type : Types.t
-  val can_allocate_body : Lang.Program.e
-  val alloc_size_body : Lang.Program.e
-  val alloc_base_body : Lang.Program.e
-  val addr_alloc_body : Lang.Program.e
-  val alloc_live_body : Lang.Program.e
-  val addr_offset_body : Lang.Program.e
-  val addr_is_heap_body : Lang.Program.e
-  val alloc_size_update_body : Lang.Program.e
-  val alloc_live_update_body : Lang.Program.e
-  val allocate_body : Lang.Program.e
-  val init_encoding_body : Lang.Program.e
-  val valid_access_body : Lang.Program.e
+  val can_allocate_body : function_body
+  val alloc_size_body : function_body
+  val alloc_base_body : function_body
+  val addr_alloc_body : function_body
+  val alloc_live_body : function_body
+  val addr_offset_body : function_body
+  val addr_is_heap_body : function_body
+  val alloc_size_update_body : function_body
+  val alloc_live_update_body : function_body
+  val allocate_body : function_body
+  val init_encoding_body : function_body
+  val valid_access_body : function_body
 end
 
 module MemoryEncoder (Encoding : MemoryEncoding) = struct
-  let add_decl ?(attrib = Attrib.empty) (p : Program.t) (name : string)
-      (bindings : Var.t list) (body : BasilExpr.t) =
-    let name = "$" ^ name in
-    Lang.Program.add_decl ~attrib p
-      (Lang.Program.Function
-         {
-           binding =
-             Bincaml_util.Common.Var.create name ~scope:GlobalConst
-               (Types.curry (List.map Var.typ bindings)
-               @@ Lang.Expr.BasilExpr.type_of body);
-           attrib;
-           definition : Lang.Program.func_type =
-             Function (Lang.Expr.BasilExpr.lambda ~bound:bindings body);
-         })
+  module Globals = Encoding.Globals
+
+  let decl_global ?(attrib = Attrib.empty) (p : Program.t) (name : string)
+      (bindings : (Var.generator -> Var.t) list) (body : function_body) =
+    let local_var_gen, body = body in
+    let bindings = List.map (fun f -> f local_var_gen) bindings in
+    let decl =
+      Lang.Program.Function
+        {
+          var_gen = local_var_gen;
+          binding =
+            (Program.var_generator p).with_name name ~access:Const
+              (Types.curry (List.map Var.typ bindings)
+              @@ Lang.Expr.BasilExpr.type_of body);
+          attrib;
+          definition : Lang.Program.func_type =
+            Function (Lang.Expr.BasilExpr.lambda ~bound:bindings body);
+        }
+    in
+    Lang.Program.add_decl p decl
 
   let add_mem_encoding p =
+    let gids : ID.generator = Program.global_ids p in
     let p =
       Lang.Program.add_decl p
         (Lang.Program.Type
            {
-             binding = Globals.mem_encoding_typ_name;
+             binding = gids.decl_or_get Globals.mem_encoding_typ_name;
              typ = Encoding.mem_encoding_type;
            })
     in
@@ -213,14 +247,14 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
       ]
 
   let add_can_allocate p =
-    add_decl ~attrib p "me_can_allocate"
+    decl_global ~attrib p "me_can_allocate"
       [
         Encoding.Locals.mem_encoding; Encoding.Locals.addr; Encoding.Locals.size;
       ]
       Encoding.can_allocate_body
 
   let add_allocate p =
-    add_decl ~attrib p "me_allocate"
+    decl_global ~attrib p "me_allocate"
       [
         Encoding.Locals.mem_encoding;
         Encoding.Locals.mem_encoding_out;
@@ -230,37 +264,37 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
       Encoding.allocate_body
 
   let add_alloc_size p =
-    add_decl ~attrib p "me_alloc_size"
+    decl_global ~attrib p "me_alloc_size"
       [ Encoding.Locals.mem_encoding; Encoding.Locals.alloc ]
       Encoding.alloc_size_body
 
   let add_addr_alloc p =
-    add_decl ~attrib p "me_addr_alloc"
+    decl_global ~attrib p "me_addr_alloc"
       [ Encoding.Locals.mem_encoding; Encoding.Locals.addr ]
       Encoding.addr_alloc_body
 
   let add_alloc_live p =
-    add_decl ~attrib p "me_alloc_live"
+    decl_global ~attrib p "me_alloc_live"
       [ Encoding.Locals.mem_encoding; Encoding.Locals.alloc ]
       Encoding.alloc_live_body
 
   let add_addr_offset p =
-    add_decl ~attrib p "me_addr_offset"
+    decl_global ~attrib p "me_addr_offset"
       [ Encoding.Locals.mem_encoding; Encoding.Locals.addr ]
       Encoding.addr_offset_body
 
   let add_alloc_base p =
-    add_decl ~attrib p "me_alloc_base"
+    decl_global ~attrib p "me_alloc_base"
       [ Encoding.Locals.mem_encoding; Encoding.Locals.alloc ]
       Encoding.alloc_base_body
 
   let add_addr_is_heap p =
-    add_decl ~attrib p "me_addr_is_heap"
+    decl_global ~attrib p "me_addr_is_heap"
       [ Encoding.Locals.mem_encoding; Encoding.Locals.addr ]
       Encoding.addr_is_heap_body
 
   let add_alloc_size_update p =
-    add_decl ~attrib p "me_alloc_size_update"
+    decl_global ~attrib p "me_alloc_size_update"
       [
         Encoding.Locals.mem_encoding;
         Encoding.Locals.alloc;
@@ -269,7 +303,7 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
       Encoding.alloc_size_update_body
 
   let add_alloc_live_update p =
-    add_decl ~attrib p "me_alloc_live_update"
+    decl_global ~attrib p "me_alloc_live_update"
       [
         Encoding.Locals.mem_encoding;
         Encoding.Locals.alloc;
@@ -278,18 +312,18 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
       Encoding.alloc_live_update_body
 
   let add_init_encoding p =
-    add_decl ~attrib p "me_init_encoding"
+    decl_global ~attrib p "me_init_encoding"
       [ Encoding.Locals.mem_encoding ]
       Encoding.init_encoding_body
 
   let add_valid_access_body p =
-    add_decl ~attrib p "me_valid_access"
+    decl_global ~attrib p "me_valid_access"
       [
         Encoding.Locals.mem_encoding; Encoding.Locals.addr; Encoding.Locals.size;
       ]
       Encoding.valid_access_body
 
-  let add_decls (p : Lang.Program.t) =
+  let decl_globals (p : Lang.Program.t) =
     List.fold_left
       (fun acc f -> f acc)
       p
@@ -309,11 +343,21 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
         add_valid_access_body;
       ]
 
-  let transform (p : Lang.Program.t) = add_decls p
+  let transform (p : Lang.Program.t) = decl_globals p
 end
 
-module FlatMemory : MemoryEncoding = struct
+(** Access to variable allocation functions for getting the handle for global
+    functions and local variables for the procedure we are encoding *)
+module type IDAllocs = sig
+  val global_ids : Var.generator
+end
+
+module FlatMemory (M : IDAllocs) : MemoryEncoding = struct
   open BasilExpr
+  module Calls = Calls (M)
+  module Globals = Calls.Globals
+
+  let global_ids = M.global_ids
 
   let mem_encoding_type : Types.t =
     Types.Sort
@@ -345,210 +389,284 @@ module FlatMemory : MemoryEncoding = struct
         ] )
 
   module Locals = struct
-    let mem_encoding : Var.t =
-      Var.create "mem_encoding" ~scope:Var.LocalVar mem_encoding_type
+    open Var
 
-    let mem_encoding_out : Var.t =
-      Var.create "mem_encoding_out" ~scope:Var.LocalVar mem_encoding_type
+    let mem_encoding l : Var.t = l.with_name "mem_encoding" mem_encoding_type
 
-    let alloc = Var.create "alloc" ~scope:Var.LocalVar Types.Integer
-    let addr = Var.create "addr" ~scope:Var.LocalVar (Types.Bitvector 64)
-    let size = Var.create "size" ~scope:Var.LocalVar (Types.Bitvector 64)
-    let live = Var.create "live" ~scope:Var.LocalVar (Types.Bitvector 2)
+    let mem_encoding_out l : Var.t =
+      l.with_name "mem_encoding_out" mem_encoding_type
+
+    let alloc l = l.with_name "alloc" Types.Integer
+    let addr l = l.with_name "addr" (Types.Bitvector 64)
+    let size l = l.with_name "size" (Types.Bitvector 64)
+    let live l = l.with_name "live" (Types.Bitvector 2)
     let alloc_live_access_h me = unexp ~op:(`ReadField "alloc_live") (rvar me)
-    let alloc_live_access = alloc_live_access_h mem_encoding
+    let alloc_live_access l = alloc_live_access_h (mem_encoding l)
     let alloc_size_access_h me = unexp ~op:(`ReadField "alloc_size") (rvar me)
-    let alloc_size_access = alloc_size_access_h mem_encoding
+    let alloc_size_access l = alloc_size_access_h (mem_encoding l)
 
-    let alloc_base_access =
-      unexp ~op:(`ReadField "alloc_base") (rvar mem_encoding)
+    let alloc_base_access l =
+      unexp ~op:(`ReadField "alloc_base") (rvar @@ mem_encoding l)
 
-    let addr_is_heap_access =
-      unexp ~op:(`ReadField "addr_is_heap") (rvar mem_encoding)
+    let addr_is_heap_access l =
+      unexp ~op:(`ReadField "addr_is_heap") (rvar @@ mem_encoding l)
 
-    let addr_alloc_access =
-      unexp ~op:(`ReadField "addr_alloc") (rvar mem_encoding)
+    let addr_alloc_access l =
+      unexp ~op:(`ReadField "addr_alloc") (rvar @@ mem_encoding l)
 
-    let addr_offset_access =
-      unexp ~op:(`ReadField "addr_offset") (rvar mem_encoding)
+    let addr_offset_access l =
+      unexp ~op:(`ReadField "addr_offset") (rvar @@ mem_encoding l)
   end
 
   let trigger e = [ [ e ] ]
-  let can_allocate_body : Lang.Program.e = boolconst true
+  let can_allocate_body : function_body = (Var.mk_gen (), boolconst true)
 
-  let alloc_size_body : Lang.Program.e =
-    binexp ~op:`MapAccess Locals.alloc_size_access (rvar Locals.alloc)
+  let alloc_size_body : function_body =
+    let l = Var.mk_gen () in
+    ( l,
+      binexp ~op:`MapAccess (Locals.alloc_size_access l) (rvar @@ Locals.alloc l)
+    )
 
-  let alloc_base_body : Lang.Program.e =
-    binexp ~op:`MapAccess Locals.alloc_base_access (rvar Locals.alloc)
+  let alloc_base_body : function_body =
+    let l = Var.mk_gen () in
+    let b =
+      binexp ~op:`MapAccess (Locals.alloc_base_access l) (rvar @@ Locals.alloc l)
+    in
+    (l, b)
 
-  let addr_alloc_body : Lang.Program.e =
-    binexp ~op:`MapAccess Locals.addr_alloc_access (rvar Locals.addr)
+  let addr_alloc_body : function_body =
+    let l = Var.mk_gen () in
+    let b =
+      binexp ~op:`MapAccess (Locals.addr_alloc_access l) (rvar @@ Locals.addr l)
+    in
+    (l, b)
 
-  let alloc_live_body : Lang.Program.e =
-    binexp ~op:`MapAccess Locals.alloc_live_access (rvar Locals.alloc)
+  let alloc_live_body : function_body =
+    let l = Var.mk_gen () in
+    let b =
+      binexp ~op:`MapAccess (Locals.alloc_live_access l) (rvar @@ Locals.alloc l)
+    in
+    (l, b)
 
-  let addr_offset_body : Lang.Program.e =
-    binexp ~op:`MapAccess Locals.addr_offset_access (rvar Locals.addr)
+  let addr_offset_body : function_body =
+    let l = Var.mk_gen () in
+    let b =
+      binexp ~op:`MapAccess (Locals.addr_offset_access l) (rvar @@ Locals.addr l)
+    in
+    (l, b)
 
-  let addr_is_heap_body : Lang.Program.e =
-    binexp ~op:`MapAccess Locals.addr_is_heap_access (rvar Locals.addr)
+  let addr_is_heap_body : function_body =
+    let l = Var.mk_gen () in
+    let b =
+      binexp ~op:`MapAccess
+        (Locals.addr_is_heap_access l)
+        (rvar @@ Locals.addr l)
+    in
+    (l, b)
 
-  let alloc_size_update_body : Lang.Program.e =
-    binexp ~op:(`WriteField "alloc_size") (rvar Locals.mem_encoding)
-      (applyintrin ~op:`MapUpdate
-         [ Locals.alloc_size_access; rvar Locals.alloc; rvar Locals.size ])
+  let alloc_size_update_body : function_body =
+    let l = Var.mk_gen () in
+    let b =
+      binexp ~op:(`WriteField "alloc_size")
+        (rvar @@ Locals.mem_encoding l)
+        (applyintrin ~op:`MapUpdate
+           [
+             Locals.alloc_size_access l;
+             rvar @@ Locals.alloc l;
+             rvar @@ Locals.size l;
+           ])
+    in
+    (l, b)
 
-  let alloc_live_update_body : Lang.Program.e =
-    binexp ~op:(`WriteField "alloc_live") (rvar Locals.mem_encoding)
-      (applyintrin ~op:`MapUpdate
-         [ Locals.alloc_live_access; rvar Locals.alloc; rvar Locals.live ])
+  let alloc_live_update_body : function_body =
+    let l = Var.mk_gen () in
+    let b =
+      binexp ~op:(`WriteField "alloc_live")
+        (rvar @@ Locals.mem_encoding l)
+        (applyintrin ~op:`MapUpdate
+           [
+             Locals.alloc_live_access l;
+             rvar @@ Locals.alloc l;
+             rvar @@ Locals.live l;
+           ])
+    in
+    (l, b)
 
-  let allocate_body : Lang.Program.e =
-    let i = Var.create "i" ~scope:Var.LocalVar (Types.Bitvector 64) in
+  let allocate_body : function_body =
+    let l = Var.mk_gen () in
+    let i = l.with_name "i" (Types.Bitvector 64) in
     let in_bounds =
       applyintrin ~op:`AND
         [
-          binexp ~op:`BVULE (rvar Locals.addr) (rvar i);
+          binexp ~op:`BVULE (rvar @@ Locals.addr l) (rvar i);
           binexp ~op:`BVULT (rvar i)
-            (binexp ~op:`BVADD (rvar Locals.addr) (rvar Locals.size));
+            (binexp ~op:`BVADD (rvar @@ Locals.addr l) (rvar @@ Locals.size l));
         ]
     in
     (* alloc for i and addr are the same *)
-    let same_alloc =
+    let same_alloc l =
       binexp ~op:`EQ
-        (Calls.addr_alloc [ rvar Locals.mem_encoding_out; rvar i ])
-        (Calls.addr_alloc [ rvar Locals.mem_encoding_out; rvar Locals.addr ])
+        (Calls.addr_alloc [ rvar @@ Locals.mem_encoding_out l; rvar i ])
+        (Calls.addr_alloc
+           [ rvar @@ Locals.mem_encoding_out l; rvar @@ Locals.addr l ])
     in
-    applyintrin ~op:`AND
-      [
-        (* update addr_alloc for all pointers in the range [addr, addr+size)
+    let b =
+      applyintrin ~op:`AND
+        [
+          (* update addr_alloc for all pointers in the range [addr, addr+size)
            to point to the old allocation counter. *)
-        forall ~bound:[ i ]
-          ~triggers:
-            (trigger
-               (Calls.addr_alloc [ rvar Locals.mem_encoding_out; rvar i ]))
-          (binexp ~op:`IMPLIES in_bounds
-             (binexp ~op:`EQ
-                (Calls.addr_alloc [ rvar Locals.mem_encoding_out; rvar i ])
-                (unexp ~op:(`ReadField "alloc_counter")
-                   (rvar Locals.mem_encoding))));
-        (* Preserve all other addr_alloc entries. *)
-        forall ~bound:[ i ]
-          ~triggers:
-            (trigger
-               (Calls.addr_alloc [ rvar Locals.mem_encoding_out; rvar i ]))
-          (binexp ~op:`IMPLIES
-             (unexp ~op:`BoolNOT in_bounds)
-             (binexp ~op:`EQ
-                (Calls.addr_alloc [ rvar Locals.mem_encoding_out; rvar i ])
-                (Calls.addr_alloc [ rvar Locals.mem_encoding; rvar i ])));
-        (* Update offsets for all pointers in allocation. *)
-        forall ~bound:[ i ]
-          ~triggers:
-            (trigger
-               (Calls.addr_offset [ rvar Locals.mem_encoding_out; rvar i ]))
-          (binexp ~op:`IMPLIES same_alloc
-             (binexp ~op:`EQ
-                (Calls.addr_offset [ rvar Locals.mem_encoding_out; rvar i ])
-                (binexp ~op:`BVSUB (rvar i) (rvar Locals.addr))));
-        (* Preserve all other addr offsets. *)
-        forall ~bound:[ i ]
-          ~triggers:
-            (trigger
-               (Calls.addr_offset [ rvar Locals.mem_encoding_out; rvar i ]))
-          (binexp ~op:`IMPLIES
-             (unexp ~op:`BoolNOT same_alloc)
-             (binexp ~op:`EQ
-                (Calls.addr_offset [ rvar Locals.mem_encoding_out; rvar i ])
-                (Calls.addr_offset [ rvar Locals.mem_encoding; rvar i ])));
-        (* Update the size of the allocation. *)
-        binexp ~op:`EQ
-          (Locals.alloc_size_access_h Locals.mem_encoding_out)
-          (applyintrin ~op:`MapUpdate
-             [
-               Locals.alloc_size_access;
-               Calls.addr_alloc
-                 [ rvar Locals.mem_encoding_out; rvar Locals.addr ];
-               rvar Locals.size;
-             ]);
-        (* Update the liveness of the allocation. *)
-        binexp ~op:`EQ
-          (Locals.alloc_live_access_h Locals.mem_encoding_out)
-          (applyintrin ~op:`MapUpdate
-             [
-               Locals.alloc_live_access;
-               Calls.addr_alloc
-                 [ rvar Locals.mem_encoding_out; rvar Locals.addr ];
-               bvconst live;
-             ]);
-        (* The allocation at addr was fresh. *)
-        binexp ~op:`EQ
-          (Calls.alloc_live
-             [
-               rvar Locals.mem_encoding;
-               Calls.addr_alloc
-                 [ rvar Locals.mem_encoding_out; rvar Locals.addr ];
-             ])
-          (bvconst fresh);
-        (* The allocation at addr was/is on the heap. *)
-        Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar Locals.addr ];
-        (* addr_is_heap is unchanged. *)
-        binexp ~op:`EQ
-          (unexp ~op:(`ReadField "addr_is_heap") (rvar Locals.mem_encoding))
-          (unexp ~op:(`ReadField "addr_is_heap") (rvar Locals.mem_encoding_out));
-      ]
-
-  let init_encoding_body : Lang.Program.e =
-    let o = Var.create "o" ~scope:Var.LocalVar Types.Integer in
-    let i = Var.create "i" ~scope:Var.LocalVar (Types.Bitvector 64) in
-    applyintrin ~op:`AND
-      [
-        (* allocation counter starts at 0 *)
-        binexp ~op:`EQ
-          (unexp ~op:(`ReadField "alloc_counter") (rvar Locals.mem_encoding))
-          (intconst @@ Z.of_int 0);
-        (* all objects are initially fresh *)
-        forall ~bound:[ o ]
-          ~triggers:
-            (trigger (Calls.alloc_live [ rvar Locals.mem_encoding; rvar o ]))
-          (binexp ~op:`EQ
-             (Calls.alloc_live [ rvar Locals.mem_encoding; rvar o ])
-             (bvconst fresh));
-        (* stack/heap separation, TODO: compute this smartly *)
-        forall ~bound:[ i ]
-          ~triggers:
-            (trigger (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ]))
-          (binexp ~op:`EQ
-             (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ])
-             (unexp ~op:`BoolNOT
-             @@ binexp ~op:`BVULE (rvar i) (bv_of_int ~size:64 100000000)));
-      ]
-
-  let valid_access_body : Lang.Program.e =
-    let alloc =
-      Calls.addr_alloc [ rvar Locals.mem_encoding; rvar Locals.addr ]
+          forall ~bound:[ i ]
+            ~triggers:
+              (trigger
+                 (Calls.addr_alloc
+                    [ rvar @@ Locals.mem_encoding_out l; rvar i ]))
+            (binexp ~op:`IMPLIES in_bounds
+               (binexp ~op:`EQ
+                  (Calls.addr_alloc
+                     [ rvar @@ Locals.mem_encoding_out l; rvar i ])
+                  (unexp ~op:(`ReadField "alloc_counter")
+                     (rvar @@ Locals.mem_encoding l))));
+          (* Preserve all other addr_alloc entries. *)
+          forall ~bound:[ i ]
+            ~triggers:
+              (trigger
+                 (Calls.addr_alloc
+                    [ rvar @@ Locals.mem_encoding_out l; rvar i ]))
+            (binexp ~op:`IMPLIES
+               (unexp ~op:`BoolNOT in_bounds)
+               (binexp ~op:`EQ
+                  (Calls.addr_alloc
+                     [ rvar @@ Locals.mem_encoding_out l; rvar i ])
+                  (Calls.addr_alloc [ rvar @@ Locals.mem_encoding l; rvar i ])));
+          (* Update offsets for all pointers in allocation. *)
+          forall ~bound:[ i ]
+            ~triggers:
+              (trigger
+                 (Calls.addr_offset
+                    [ rvar @@ Locals.mem_encoding_out l; rvar i ]))
+            (binexp ~op:`IMPLIES (same_alloc l)
+               (binexp ~op:`EQ
+                  (Calls.addr_offset
+                     [ rvar @@ Locals.mem_encoding_out l; rvar i ])
+                  (binexp ~op:`BVSUB (rvar i) (rvar @@ Locals.addr l))));
+          (* Preserve all other addr offsets. *)
+          forall ~bound:[ i ]
+            ~triggers:
+              (trigger
+                 (Calls.addr_offset
+                    [ rvar @@ Locals.mem_encoding_out l; rvar i ]))
+            (binexp ~op:`IMPLIES
+               (unexp ~op:`BoolNOT (same_alloc l))
+               (binexp ~op:`EQ
+                  (Calls.addr_offset
+                     [ rvar @@ Locals.mem_encoding_out l; rvar i ])
+                  (Calls.addr_offset [ rvar @@ Locals.mem_encoding l; rvar i ])));
+          (* Update the size of the allocation. *)
+          binexp ~op:`EQ
+            (Locals.alloc_size_access_h (Locals.mem_encoding_out l))
+            (applyintrin ~op:`MapUpdate
+               [
+                 Locals.alloc_size_access l;
+                 Calls.addr_alloc
+                   [ rvar @@ Locals.mem_encoding_out l; rvar @@ Locals.addr l ];
+                 rvar (Locals.size l);
+               ]);
+          (* Update the liveness of the allocation. *)
+          binexp ~op:`EQ
+            (Locals.alloc_live_access_h @@ Locals.mem_encoding_out l)
+            (applyintrin ~op:`MapUpdate
+               [
+                 Locals.alloc_live_access l;
+                 Calls.addr_alloc
+                   [ rvar @@ Locals.mem_encoding_out l; rvar @@ Locals.addr l ];
+                 bvconst live;
+               ]);
+          (* The allocation at addr was fresh. *)
+          binexp ~op:`EQ
+            (Calls.alloc_live
+               [
+                 rvar @@ Locals.mem_encoding l;
+                 Calls.addr_alloc
+                   [ rvar @@ Locals.mem_encoding_out l; rvar @@ Locals.addr l ];
+               ])
+            (bvconst fresh);
+          (* The allocation at addr was/is on the heap. *)
+          Calls.addr_is_heap
+            [ rvar @@ Locals.mem_encoding l; rvar @@ Locals.addr l ];
+          (* addr_is_heap is unchanged. *)
+          binexp ~op:`EQ
+            (unexp ~op:(`ReadField "addr_is_heap")
+               (rvar @@ Locals.mem_encoding l))
+            (unexp ~op:(`ReadField "addr_is_heap")
+               (rvar @@ Locals.mem_encoding_out l));
+        ]
     in
-    let offset =
-      Calls.addr_offset [ rvar Locals.mem_encoding; rvar Locals.addr ]
+    (l, b)
+
+  let init_encoding_body : function_body =
+    let l = Var.mk_gen () in
+    let o = l.with_name "o" Types.Integer in
+    let i = l.with_name "i" (Types.Bitvector 64) in
+    let b =
+      begin
+        applyintrin ~op:`AND
+          [
+            (* allocation counter starts at 0 *)
+            binexp ~op:`EQ
+              (unexp ~op:(`ReadField "alloc_counter")
+                 (rvar @@ Locals.mem_encoding l))
+              (intconst @@ Z.of_int 0);
+            (* all objects are initially fresh *)
+            forall ~bound:[ o ]
+              ~triggers:
+                (trigger
+                   (Calls.alloc_live [ rvar @@ Locals.mem_encoding l; rvar o ]))
+              (binexp ~op:`EQ
+                 (Calls.alloc_live [ rvar @@ Locals.mem_encoding l; rvar o ])
+                 (bvconst fresh));
+            (* stack/heap separation, TODO: compute this smartly *)
+            forall ~bound:[ i ]
+              ~triggers:
+                (trigger
+                   (Calls.addr_is_heap
+                      [ rvar @@ Locals.mem_encoding l; rvar i ]))
+              (binexp ~op:`EQ
+                 (Calls.addr_is_heap [ rvar @@ Locals.mem_encoding l; rvar i ])
+                 (unexp ~op:`BoolNOT
+                 @@ binexp ~op:`BVULE (rvar i) (bv_of_int ~size:64 100000000)));
+          ]
+      end
     in
-    binexp ~op:`IMPLIES
-      (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar Locals.addr ])
-      (applyintrin ~op:`AND
-         [
-           binexp ~op:`EQ
-             (Calls.alloc_live [ rvar Locals.mem_encoding; alloc ])
-             (bvconst live);
-           binexp ~op:`BVULE (bv_of_int 0 ~size:64) offset;
-           binexp ~op:`BVULE
-             (binexp ~op:`BVADD (rvar Locals.size) offset)
-             (Calls.alloc_size [ rvar Locals.mem_encoding; alloc ]);
-         ])
+    (l, b)
+
+  let valid_access_body : function_body =
+    let l = Var.mk_gen () in
+    let me = rvar (Locals.mem_encoding l) in
+    let addr = rvar (Locals.addr l) in
+    let alloc = Calls.addr_alloc [ me; addr ] in
+    let offset = Calls.addr_offset [ me; addr ] in
+    let b =
+      binexp ~op:`IMPLIES
+        (Calls.addr_is_heap [ me; addr ])
+        (applyintrin ~op:`AND
+           [
+             binexp ~op:`EQ (Calls.alloc_live [ me; alloc ]) (bvconst live);
+             binexp ~op:`BVULE (bv_of_int 0 ~size:64) offset;
+             binexp ~op:`BVULE
+               (binexp ~op:`BVADD (rvar @@ Locals.size l) offset)
+               (Calls.alloc_size [ me; alloc ]);
+           ])
+    in
+    (l, b)
 end
 
-module SplitMemory : MemoryEncoding = struct
+module SplitMemory (M : IDAllocs) : MemoryEncoding = struct
   open BasilExpr
+  module Calls = Calls (M)
+  module Globals = Calls.Globals
 
+  let v = M.global_ids
+  let global_ids = v
   let offset_size = 32
   let addr_size = 64 - offset_size
 
@@ -568,174 +686,223 @@ module SplitMemory : MemoryEncoding = struct
         ] )
 
   module Locals = struct
-    let mem_encoding =
-      Var.create "mem_encoding" ~scope:Var.LocalVar mem_encoding_type
+    open Var
 
-    let mem_encoding_out : Var.t =
-      Var.create "mem_encoding_out" ~scope:Var.LocalVar mem_encoding_type
+    let mem_encoding l = l.with_name "mem_encoding" mem_encoding_type
 
-    let alloc = Var.create "alloc" ~scope:Var.LocalVar (Types.Bitvector 64)
-    let addr = Var.create "addr" ~scope:Var.LocalVar (Types.Bitvector 64)
-    let size = Var.create "size" ~scope:Var.LocalVar (Types.Bitvector 64)
-    let live = Var.create "live" ~scope:Var.LocalVar (Types.Bitvector 2)
+    let mem_encoding_out l : Var.t =
+      l.with_name "mem_encoding_out" mem_encoding_type
 
-    let alloc_live_access =
-      unexp ~op:(`ReadField "alloc_live") (rvar mem_encoding)
+    let alloc l = l.with_name "alloc" (Types.Bitvector 64)
+    let addr l = l.with_name "addr" (Types.Bitvector 64)
+    let size l = l.with_name "size" (Types.Bitvector 64)
+    let live l = l.with_name "live" (Types.Bitvector 2)
 
-    let alloc_size_access =
-      unexp ~op:(`ReadField "alloc_size") (rvar mem_encoding)
+    let alloc_live_access l =
+      unexp ~op:(`ReadField "alloc_live") (rvar @@ mem_encoding l)
 
-    let addr_is_heap_access =
-      unexp ~op:(`ReadField "addr_is_heap") (rvar mem_encoding)
+    let alloc_size_access l =
+      unexp ~op:(`ReadField "alloc_size") (rvar @@ mem_encoding l)
+
+    let addr_is_heap_access l =
+      unexp ~op:(`ReadField "addr_is_heap") (rvar @@ mem_encoding l)
   end
 
-  let can_allocate_body =
-    applyintrin ~op:`AND
-      [
-        (* Addr must be on the heap: *)
-        Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar Locals.addr ];
-        (* Address is a base address *)
-        binexp ~op:`EQ
-          (Calls.alloc_base [ rvar Locals.mem_encoding; rvar Locals.addr ])
-          (rvar Locals.addr);
-        (* Adddress is fresh *)
-        binexp ~op:`EQ
-          (Calls.alloc_live
-             [
-               rvar Locals.mem_encoding;
-               Calls.addr_alloc [ rvar Locals.mem_encoding; rvar Locals.addr ];
-             ])
-          (bvconst fresh);
-        (* Size is within bounds *)
-        binexp ~op:`BVULE (rvar Locals.size)
-          (bv_of_int ~size:64 (Int.pow 2 offset_size - 1));
-        binexp ~op:`BVULT (bv_of_int ~size:64 0) (rvar Locals.size);
-      ]
+  let can_allocate_body : function_body =
+    let v = Var.mk_gen () in
+    ( v,
+      applyintrin ~op:`AND
+        [
+          (* Addr must be on the heap: *)
+          Calls.addr_is_heap
+            [ rvar @@ Locals.mem_encoding v; rvar @@ Locals.addr v ];
+          (* Address is a base address *)
+          binexp ~op:`EQ
+            (Calls.alloc_base
+               [ rvar @@ Locals.mem_encoding v; rvar @@ Locals.addr v ])
+            (rvar @@ Locals.addr v);
+          (* Adddress is fresh *)
+          binexp ~op:`EQ
+            (Calls.alloc_live
+               [
+                 rvar @@ Locals.mem_encoding v;
+                 Calls.addr_alloc
+                   [ rvar @@ Locals.mem_encoding v; rvar @@ Locals.addr v ];
+               ])
+            (bvconst fresh);
+          (* Size is within bounds *)
+          binexp ~op:`BVULE
+            (rvar @@ Locals.size v)
+            (bv_of_int ~size:64 (Int.pow 2 offset_size - 1));
+          binexp ~op:`BVULT (bv_of_int ~size:64 0) (rvar @@ Locals.size v);
+        ] )
 
-  let alloc_size_body =
-    binexp ~op:`MapAccess Locals.alloc_size_access (rvar Locals.alloc)
+  let alloc_size_body : function_body =
+    let v = Var.mk_gen () in
+    ( v,
+      binexp ~op:`MapAccess (Locals.alloc_size_access v) (rvar @@ Locals.alloc v)
+    )
 
-  let alloc_base_body =
-    binexp ~op:`BVAND (rvar Locals.alloc)
-      (bv_of_int ~size:64 (Int.lnot (Int.pow 2 addr_size - 1)))
+  let alloc_base_body : function_body =
+    let v = Var.mk_gen () in
+    ( v,
+      binexp ~op:`BVAND
+        (rvar (Locals.alloc v))
+        (bv_of_int ~size:64 (Int.lnot (Int.pow 2 addr_size - 1))) )
 
-  let addr_alloc_body = rvar Locals.addr
+  let addr_alloc_body : function_body =
+    let v = Var.mk_gen () in
+    (v, rvar (Locals.addr v))
 
-  let alloc_live_body =
-    binexp ~op:`MapAccess Locals.alloc_live_access (rvar Locals.alloc)
+  let alloc_live_body : function_body =
+    let v = Var.mk_gen () in
+    ( v,
+      binexp ~op:`MapAccess (Locals.alloc_live_access v) (rvar @@ Locals.alloc v)
+    )
 
   let addr_offset_body =
-    binexp ~op:`BVAND (rvar Locals.addr)
-      (bv_of_int ~size:64 (Int.pow 2 offset_size - 1))
+    let l = Var.mk_gen () in
+    let b =
+      binexp ~op:`BVAND
+        (rvar @@ Locals.addr l)
+        (bv_of_int ~size:64 (Int.pow 2 offset_size - 1))
+    in
+    (l, b)
 
   let addr_is_heap_body =
-    binexp ~op:`MapAccess Locals.addr_is_heap_access (rvar Locals.addr)
+    let l = Var.mk_gen () in
+    ( l,
+      binexp ~op:`MapAccess
+        (Locals.addr_is_heap_access l)
+        (rvar @@ Locals.addr l) )
 
   let alloc_size_update_body =
-    binexp ~op:(`WriteField "alloc_size") (rvar Locals.mem_encoding)
-      (applyintrin ~op:`MapUpdate
-         [ Locals.alloc_size_access; rvar Locals.alloc; rvar Locals.size ])
+    let l = Var.mk_gen () in
+    let b =
+      binexp ~op:(`WriteField "alloc_size")
+        (rvar @@ Locals.mem_encoding l)
+        (applyintrin ~op:`MapUpdate
+           [
+             Locals.alloc_size_access l;
+             rvar @@ Locals.alloc l;
+             rvar @@ Locals.size l;
+           ])
+    in
+    (l, b)
 
   let alloc_live_update_body =
-    binexp ~op:(`WriteField "alloc_live") (rvar Locals.mem_encoding)
-      (applyintrin ~op:`MapUpdate
-         [ Locals.alloc_live_access; rvar Locals.alloc; rvar Locals.live ])
+    let l = Var.mk_gen () in
+    let b =
+      binexp ~op:(`WriteField "alloc_live")
+        (rvar @@ Locals.mem_encoding l)
+        (applyintrin ~op:`MapUpdate
+           [
+             Locals.alloc_live_access l;
+             rvar (Locals.alloc l);
+             rvar (Locals.live l);
+           ])
+    in
+    (l, b)
 
   let allocate_body =
+    let l = Var.mk_gen () in
     let alloc =
-      Calls.addr_alloc [ rvar Locals.mem_encoding; rvar Locals.addr ]
+      Calls.addr_alloc [ rvar (Locals.mem_encoding l); rvar (Locals.addr l) ]
     in
-
     let updated =
       Calls.alloc_size_update
         [
           Calls.alloc_live_update
-            [ rvar Locals.mem_encoding; alloc; bvconst live ];
+            [ rvar (Locals.mem_encoding l); alloc; bvconst live ];
           alloc;
-          rvar Locals.size;
+          rvar (Locals.size l);
         ]
     in
-
-    binexp ~op:`EQ updated (rvar Locals.mem_encoding_out)
+    (l, binexp ~op:`EQ updated (rvar @@ Locals.mem_encoding_out l))
 
   let init_encoding_body =
-    let i = Var.create "i" ~scope:Var.LocalVar (Types.Bitvector 64) in
+    let l = Var.mk_gen () in
+    let i = l.with_name "i" (Types.Bitvector 64) in
+    let mem_enc = rvar (Locals.mem_encoding l) in
     let trigger e = [ [ e ] ] in
-    applyintrin ~op:`AND
-      [
-        (* Ensure that all heap addresses are bigger than the largest global address *)
-        forall
-          ~triggers:
-            (trigger (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ]))
-          ~bound:[ i ]
-          (binexp ~op:`EQ
-             (binexp ~op:`BVULT
-                (* TODO compute this value somehow *)
-                (bv_of_int 100000000 ~size:64)
-                (rvar i))
-             (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ]));
-        (* Heap addresses are initially fresh *)
-        forall
-          ~triggers:
-            (trigger (Calls.alloc_live [ rvar Locals.mem_encoding; rvar i ]))
-          ~bound:[ i ]
-          (binexp ~op:`IMPLIES
-             (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ])
-             (binexp ~op:`EQ
-                (Calls.alloc_live [ rvar Locals.mem_encoding; rvar i ])
-                (bvconst fresh)));
-        (* Non heap addresses are dead *)
-        forall
-          ~triggers:
-            (trigger (Calls.alloc_live [ rvar Locals.mem_encoding; rvar i ]))
-          ~bound:[ i ]
-          (binexp ~op:`IMPLIES
-             (boolnot (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar i ]))
-             (binexp ~op:`EQ
-                (Calls.alloc_live [ rvar Locals.mem_encoding; rvar i ])
-                (bvconst dead)));
-      ]
+    let b =
+      applyintrin ~op:`AND
+        [
+          (* Ensure that all heap addresses are bigger than the largest global address *)
+          forall
+            ~triggers:(trigger (Calls.addr_is_heap [ mem_enc; rvar i ]))
+            ~bound:[ i ]
+            (binexp ~op:`EQ
+               (binexp ~op:`BVULT
+                  (* TODO compute this value somehow *)
+                  (bv_of_int 100000000 ~size:64)
+                  (rvar i))
+               (Calls.addr_is_heap [ mem_enc; rvar i ]));
+          (* Heap addresses are initially fresh *)
+          forall
+            ~triggers:(trigger (Calls.alloc_live [ mem_enc; rvar i ]))
+            ~bound:[ i ]
+            (binexp ~op:`IMPLIES
+               (Calls.addr_is_heap [ mem_enc; rvar i ])
+               (binexp ~op:`EQ
+                  (Calls.alloc_live [ mem_enc; rvar i ])
+                  (bvconst fresh)));
+          (* Non heap addresses are dead *)
+          forall
+            ~triggers:(trigger (Calls.alloc_live [ mem_enc; rvar i ]))
+            ~bound:[ i ]
+            (binexp ~op:`IMPLIES
+               (boolnot (Calls.addr_is_heap [ mem_enc; rvar i ]))
+               (binexp ~op:`EQ
+                  (Calls.alloc_live [ mem_enc; rvar i ])
+                  (bvconst dead)));
+        ]
+    in
+    (l, b)
 
   let valid_access_body =
-    binexp ~op:`IMPLIES
-      (Calls.addr_is_heap [ rvar Locals.mem_encoding; rvar Locals.addr ])
-      (applyintrin ~op:`AND
-         [
-           binexp ~op:`EQ
-             (Calls.alloc_live
-                [
-                  rvar Locals.mem_encoding;
-                  Calls.alloc_base
-                    [
-                      rvar Locals.mem_encoding;
-                      Calls.addr_alloc
-                        [ rvar Locals.mem_encoding; rvar Locals.addr ];
-                    ];
-                ])
-             (bvconst live);
-           binexp ~op:`BVULE
-             (Calls.addr_offset
-                [
-                  rvar Locals.mem_encoding;
-                  binexp ~op:`BVADD (rvar Locals.addr) (rvar Locals.size);
-                ])
-             (Calls.alloc_size
-                [
-                  rvar Locals.mem_encoding;
-                  Calls.alloc_base
-                    [
-                      rvar Locals.mem_encoding;
-                      Calls.addr_alloc
-                        [ rvar Locals.mem_encoding; rvar Locals.addr ];
-                    ];
-                ]);
-         ])
+    let l = Var.mk_gen () in
+    let mem_enc = rvar (Locals.mem_encoding l) in
+    let addr = rvar (Locals.addr l) in
+    let b =
+      binexp ~op:`IMPLIES
+        (Calls.addr_is_heap [ mem_enc; addr ])
+        (applyintrin ~op:`AND
+           [
+             binexp ~op:`EQ
+               (Calls.alloc_live
+                  [
+                    mem_enc;
+                    Calls.alloc_base
+                      [ mem_enc; Calls.addr_alloc [ mem_enc; addr ] ];
+                  ])
+               (bvconst live);
+             binexp ~op:`BVULE
+               (Calls.addr_offset
+                  [ mem_enc; binexp ~op:`BVADD addr (rvar @@ Locals.size l) ])
+               (Calls.alloc_size
+                  [
+                    mem_enc;
+                    Calls.alloc_base
+                      [ mem_enc; Calls.addr_alloc [ mem_enc; addr ] ];
+                  ]);
+           ])
+    in
+    (l, b)
 end
 
 let split_transform (p : Program.t) =
-  let module E = MemoryEncoder (SplitMemory) in
-  E.transform p
+  let module I : IDAllocs = struct
+    let global_ids = Program.var_generator p
+  end
+  in
+  let module E = MemoryEncoder (SplitMemory (I)) in
+  E.transform p |> fun prog -> Spec_modifies.set_modsets prog
 
 let flat_transform (p : Program.t) =
-  let module E = MemoryEncoder (FlatMemory) in
-  E.transform p
+  let module I : IDAllocs = struct
+    let global_ids = Program.var_generator p
+  end
+  in
+  let module E = MemoryEncoder (FlatMemory (I)) in
+  E.transform p |> fun prog -> Spec_modifies.set_modsets prog

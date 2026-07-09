@@ -37,7 +37,10 @@ struct
     let id_name =
       match Hashtbl.find_opt !bincaml_lifter_state.names name with
       | None ->
-          let id_name = !bincaml_lifter_state.generator.local_id () in
+          let id_name =
+            ID.name @@ Var.id
+            @@ !bincaml_lifter_state.generator.local_var.fresh ty
+          in
           Hashtbl.replace !bincaml_lifter_state.names name id_name;
           id_name
       | Some x -> x
@@ -77,7 +80,11 @@ struct
     | `M ->
         let address = bincaml_get_address ()
         and diamond = !bincaml_lifter_state.diamond in
-        let diamond = diamond |> Aslp_state.ensure_pc_consistency ~address in
+        let diamond =
+          diamond
+          |> Aslp_state.ensure_pc_consistency !bincaml_lifter_state.generator
+               ~address
+        in
         bincaml_lifter_state := { !bincaml_lifter_state with diamond }
 
   (** {2 IR extraction} *)
@@ -94,8 +101,10 @@ struct
         failwith "invariant violation: context switches did not return to merge"
     | [] ->
         diamond
-        |> Aslp_state.ensure_pc_assigned ~address
-        |> Aslp_state.ensure_forwarded_pc |> Diamond_zipper.to_diamond
+        |> Aslp_state.ensure_pc_assigned !bincaml_lifter_state.generator
+             ~address
+        |> Aslp_state.ensure_forwarded_pc !bincaml_lifter_state.generator
+        |> Diamond_zipper.to_diamond
 
   (** {2 Instruction building interface implementation} *)
 
@@ -254,12 +263,12 @@ struct
 
   let f_gen_bool_lit : bool -> expr = Expr.BasilExpr.boolconst
   let f_gen_int_lit : bigint -> expr = Expr.BasilExpr.intconst
+  let to_var v = Aslp_lexpr.to_var !bincaml_lifter_state.generator v
 
   let f_gen_store : lexpr -> expr -> unit =
    fun lhs rhs ->
     bincaml_internal_emit
-      (Stmt.Instr_Assign
-         { attrib = Attrib.empty; al = [ (Aslp_lexpr.to_var lhs, rhs) ] })
+      (Stmt.Instr_Assign { attrib = Attrib.empty; al = [ (to_var lhs, rhs) ] })
 
   let f_decl_bv : string -> bigint -> lexpr =
    fun name size ->
@@ -273,8 +282,7 @@ struct
     f_gen_store v (f_gen_bool_lit false);
     v
 
-  let f_gen_load : lexpr -> expr =
-   fun lhs -> Expr.BasilExpr.rvar (Aslp_lexpr.to_var lhs)
+  let f_gen_load : lexpr -> expr = fun lhs -> Expr.BasilExpr.rvar (to_var lhs)
 
   let f_gen_array_load : lexpr -> bigint -> expr =
    fun array idx ->
@@ -311,8 +319,9 @@ struct
    fun size addr _ _acctype ->
     let addr = Stmt.Addr { addr; size = Z.to_int size; endian = `Little }
     and mem = S.bincaml_memory_var () in
-    let name = !bincaml_lifter_state.generator.local_id () in
-    let rhs = Var.create name (Types.bv (Z.to_int size)) in
+    let rhs =
+      !bincaml_lifter_state.generator.local_var.fresh (Types.bv (Z.to_int size))
+    in
     bincaml_internal_emit
       (Stmt.Instr_Load { attrib = Attrib.empty; lhs = mem; rhs; addr });
     Expr.BasilExpr.rvar rhs

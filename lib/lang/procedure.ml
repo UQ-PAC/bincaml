@@ -113,6 +113,7 @@ module PG : sig
 
   val create :
     ID.t ->
+    ?local_id_gen:ID.generator ->
     ?is_stub:bool ->
     ?formal_in_params:'a StringMap.t ->
     ?formal_out_params:'a StringMap.t ->
@@ -125,6 +126,21 @@ module PG : sig
     ?attrib:Attrib.attrib_map ->
     unit ->
     ('a, 'b) t
+
+  val create_p :
+    IDSet.elt ->
+    ?is_stub:bool ->
+    ?formal_in_params:(string * Types.t) list ->
+    ?formal_out_params:(string * Types.t) list ->
+    ?captures_globs:(string * Types.t) list ->
+    ?modifies_globs:(string * Types.t) list ->
+    ?requires:BasilExpr.t list ->
+    ?ensures:BasilExpr.t list ->
+    ?rely:BasilExpr.t list ->
+    ?guarantee:BasilExpr.t list ->
+    ?attrib:Attrib.attrib_map ->
+    unit ->
+    (Var.t, 'a) t
 
   val attrib : ('a, 'b) t -> Attrib.attrib_map
   val set_attrib : ('a, 'b) t -> Attrib.t -> string -> ('a, 'b) t
@@ -142,7 +158,7 @@ module PG : sig
   val local_ids : ('a, 'b) t -> ID.generator
   (** return mutable generator for fresh local variable IDS *)
 
-  val local_decls : ('a, 'b) t -> 'a Var.Decls.t
+  val local_decls : ('a, 'b) t -> (string, 'a) Hashtbl.t
   (** return mutable declaration map for local var IDS *)
 
   val formal_in_params : ('a, 'b) t -> 'a StringMap.t
@@ -176,7 +192,7 @@ end = struct
     formal_in_params : 'v StringMap.t;
     formal_out_params : 'v StringMap.t;
     graph : G.t option;
-    locals : 'v Var.Decls.t;
+    locals : (string, 'v) Hashtbl.t;
     topo_fwd : Vert.t Graph.WeakTopological.t lazy_t;
     topo_rev : Vert.t Graph.WeakTopological.t lazy_t;
     local_ids : ID.generator;
@@ -235,19 +251,96 @@ end = struct
     let graph = G.add_vertex graph Return in
     graph
 
-  let create id ?(is_stub = false) ?(formal_in_params = StringMap.empty)
+  (** Create a generic procedure *)
+  let create id ?local_id_gen ?(is_stub = false)
+      ?(formal_in_params = StringMap.empty)
       ?(formal_out_params = StringMap.empty) ?(captures_globs = [])
       ?(modifies_globs = []) ?(requires = []) ?(ensures = []) ?(rely = [])
       ?(guarantee = []) ?(attrib = Attrib.empty) () =
     let specification =
       { captures_globs; modifies_globs; requires; ensures; rely; guarantee }
     in
-    let local_ids = ID.make_gen () in
+    let local_ids =
+      match local_id_gen with
+      | Some g -> g
+      | None ->
+          let g = ID.make_gen ~scope_name:(ID.name id) () in
+          (* Oh no: we could have used a _different_ generator to build the in-params *)
+          StringMap.iter (fun k v -> ignore @@ g.decl_exn k) formal_in_params;
+          StringMap.iter (fun k v -> ignore @@ g.decl_exn k) formal_out_params;
+          g
+    in
     let block_ids = ID.make_gen () in
-    StringMap.iter (fun k v -> ignore @@ local_ids.decl_exn k) formal_in_params;
-    StringMap.iter (fun k v -> ignore @@ local_ids.decl_exn k) formal_out_params;
-    let locals = Var.Decls.empty () in
-    Var.Decls.add_iter locals
+    let locals =
+      Hashtbl.create
+        (StringMap.cardinal formal_in_params
+        + StringMap.cardinal formal_out_params)
+    in
+    Hashtbl.add_iter locals
+      (Iter.append
+         (StringMap.to_iter formal_in_params)
+         (StringMap.to_iter formal_out_params));
+
+    let graph = if is_stub then None else Some empty_graph in
+    {
+      id;
+      attrib;
+      formal_in_params;
+      formal_out_params;
+      graph;
+      locals;
+      local_ids;
+      block_ids;
+      specification;
+      topo_fwd =
+        lazy
+          (WTO.recursive_scc
+             (Option.get_exn_or "no graph to iterate" graph)
+             Entry);
+      topo_rev =
+        lazy
+          (RevWTO.recursive_scc
+             (Option.get_exn_or "no graph to iterate" graph)
+             Return);
+    }
+
+  (** Create a (Var.t, Expr.BasilExpr.t) procedure *)
+  let create_p id ?(is_stub = false) ?(formal_in_params = [])
+      ?(formal_out_params = []) ?(captures_globs = []) ?(modifies_globs = [])
+      ?(requires = []) ?(ensures = []) ?(rely = []) ?(guarantee = [])
+      ?(attrib = Attrib.empty) () =
+    let local_ids = ID.make_gen ~scope_name:(ID.name id) () in
+    let vg = Var.mk_gen ~id_generator:local_ids () in
+    let vars_of_list =
+      List.map (fun (name, ty) ->
+          let v = vg.with_name name ty in
+          (Var.name v, v))
+    in
+    let formal_in_params =
+      formal_in_params |> vars_of_list |> StringMap.of_list
+    in
+    let specification =
+      {
+        captures_globs =
+          (List.map (uncurry @@ vg.with_name ~access:None)) captures_globs;
+        modifies_globs =
+          (List.map (uncurry @@ vg.with_name ~access:None)) modifies_globs;
+        requires;
+        ensures;
+        rely;
+        guarantee;
+      }
+    in
+    let formal_out_params =
+      formal_out_params |> vars_of_list |> StringMap.of_list
+    in
+    let block_ids = ID.make_gen () in
+    let locals =
+      Hashtbl.create
+        (StringMap.cardinal formal_in_params
+        + StringMap.cardinal formal_out_params)
+    in
+    Hashtbl.add_iter locals
       (Iter.append
          (StringMap.to_iter formal_in_params)
          (StringMap.to_iter formal_out_params));
@@ -479,23 +572,40 @@ let transplant_incoming_edges p ~from ~to_ : _ t =
   p |> map_graph (replace_incoming_uses ~from:(Begin from) ~to_:(Begin to_))
 
 let lookup_local_decl p v =
-  Var.Decls.find_opt (local_decls p) v
+  Hashtbl.find_opt (local_decls p) v
   |> Option.or_lazy ~else_:(fun () ->
       StringMap.find_opt v (formal_out_params p))
   |> Option.or_lazy ~else_:(fun () -> StringMap.find_opt v (formal_in_params p))
 
-let decl_local p v =
-  let _ = (local_ids p).decl_or_get (Var.name v) in
-  Var.Decls.replace (local_decls p) (Var.name v) v;
+let lookup_local_decl_exn p v =
+  Hashtbl.find_opt (local_decls p) v
+  |> Option.or_lazy ~else_:(fun () ->
+      StringMap.find_opt v (formal_out_params p))
+  |> Option.or_lazy ~else_:(fun () -> StringMap.find_opt v (formal_in_params p))
+  |> Option.get_exn_or ("no local decl : " ^ v)
+
+let var_generator p =
+  let g = Var.mk_gen ~id_generator:(local_ids p) ~scope:`Local () in
+  g
+
+let get_local p ?(pure = false) name typ : Var.t =
+  let access = Var.None in
+  let v = (var_generator p).with_name name ~access typ in
+  Hashtbl.replace (local_decls p) (Var.name v) v;
+  v
+
+let decl_local p ?(pure = false) name typ : Var.t =
+  let access = Var.None in
+  let v = (var_generator p).create_exn name ~access typ in
+  Hashtbl.replace (local_decls p) (Var.name v) v;
   v
 
 let fresh_var p ?(pure = false) ?name typ : Var.t =
   let name = Option.map (String.drop_while (Char.equal '$')) name in
+  let access = Var.None in
   let name = Option.get_or ~default:"v" name in
-  let n = ID.name @@ (local_ids p).fresh ~name () in
-  let scope = if pure then Var.LocalConst else LocalVar in
-  let v = Var.create n typ ~scope in
-  Var.Decls.replace (local_decls p) (Var.name v) v;
+  let v = (var_generator p).fresh ~name typ ~access in
+  Hashtbl.replace (local_decls p) (Var.name v) v;
   v
 
 let blocks_to_list p =
@@ -576,6 +686,16 @@ let fold_blocks_topo_rev_headers
     is *not* stable *)
 let fold_blocks_topo_rev (f : 'a -> ID.t -> Edge.block -> 'a) init p =
   fold_blocks_topo_rev_headers (fun acc i -> f acc) init p
+
+(** get map for formal params assuming in and out are disjointly named (they
+    should be) *)
+let get_formal_params p =
+  StringMap.merge_safe
+    ~f:(fun _ -> function
+      | `Both _ -> failwith "present in both"
+      | `Left l -> Some l
+      | `Right r -> Some r)
+    (formal_in_params p) (formal_out_params p)
 
 let map_blocks_nondet f p =
   iter_blocks p

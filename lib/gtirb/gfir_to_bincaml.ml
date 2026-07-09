@@ -15,21 +15,23 @@ open Conf
 module Result = OResult
 
 open struct
-  let addr_equal_expr addr =
+  let addr_equal_expr pc_var addr =
     Lang.Expr.BasilExpr.(
-      binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 addr)) (rvar conf.pc_var))
+      binexp ~op:`EQ
+        (bvconst (Bitvec.of_int ~size:64 addr))
+        (Lang.Expr.BasilExpr.rvar pc_var))
 
   let sanitize_proc_name p =
     List.fold_left (fun a sub -> String.replace ~sub ~by:"" a) p [ "@"; "." ]
 end
 
-let add_proxy_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap) uuid
-    =
+let add_proxy_block pc_var ?(attrib = StringMap.empty) succ_addr
+    (proc, blockmap) uuid =
   let open Lang in
   let open Option in
   let ensure =
     succ_addr uuid
-    |> Iter.map (fun addr -> addr_equal_expr addr)
+    |> Iter.map (fun addr -> addr_equal_expr pc_var addr)
     |> Iter.to_list
     |> Expr.BasilExpr.applyintrin ~op:`OR
   in
@@ -44,13 +46,13 @@ let add_proxy_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap) uuid
 
 (* Update (procedure, uuidmap) with a newly created IR block containing stmts
      and PC address contract*)
-let add_new_simple_block ?(name_suffix = "") ?(attrib = StringMap.empty)
+let add_new_simple_block pc_var ?(name_suffix = "") ?(attrib = StringMap.empty)
     succ_addr (proc, blockmap) (uuid, addr, stmts) =
   let open Lang in
   let open Option in
   let guard =
     let* addr = addr in
-    let guard = addr_equal_expr addr in
+    let guard = addr_equal_expr pc_var addr in
     let guard =
       Stmt.Instr_Assume { body = guard; branch = false; attrib = Attrib.empty }
     in
@@ -58,7 +60,7 @@ let add_new_simple_block ?(name_suffix = "") ?(attrib = StringMap.empty)
   in
   let ensure =
     succ_addr uuid
-    |> Iter.map (fun addr -> addr_equal_expr addr)
+    |> Iter.map (fun addr -> addr_equal_expr pc_var addr)
     |> Iter.to_list
     |> Expr.BasilExpr.applyintrin ~op:`OR
   in
@@ -80,8 +82,8 @@ let address_of_uuid all_blocks uuid =
 
 (* Update (procedure, uuidmap) with a newly created IR block with opcodes and
      PC address contract *)
-let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
-    (proc, blockmap) (b : Gtirb.block) =
+let add_new_code_block (pc_var : Var.t) (all_blocks : block UUIDMap.t) temp_proc
+    succ_addr (proc, blockmap) (b : Gtirb.block) =
   let open Lang in
   let open Option in
   match b with
@@ -137,10 +139,11 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
       in
       match b with
       | Code { address } | Data { address } ->
-          add_new_simple_block ~name_suffix:"_code" ~attrib succ_addr
+          add_new_simple_block pc_var ~name_suffix:"_code" ~attrib succ_addr
             (proc, blockmap)
             (Gtirb.uuid b, Some address, instrs)
-      | Proxy uuid -> add_proxy_block ~attrib succ_addr (proc, blockmap) uuid)
+      | Proxy uuid ->
+          add_proxy_block pc_var ~attrib succ_addr (proc, blockmap) uuid)
   | Data _ | Proxy _ -> (proc, blockmap)
 
 (** For each successor set containing a fallthrough edge, remove fallthrough
@@ -256,7 +259,7 @@ let transform_cfg_calls procs =
       { p with cfg })
     procs
 
-let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
+let temp_proc_to_ir_proc pc_var all_blocks m (p : temp_proc) =
   let entry_addrs =
     UUIDSet.to_iter p.entries
     |> Iter.filter_map (fun x -> UUIDMap.find x p.code_blocks |> Gtirb.address)
@@ -266,7 +269,9 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
     entry_addrs
     |> Iter.map (fun i ->
         Lang.Expr.BasilExpr.(
-          binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 i)) (rvar conf.pc_var)))
+          binexp ~op:`EQ
+            (bvconst (Bitvec.of_int ~size:64 i))
+            (Lang.Expr.BasilExpr.rvar pc_var)))
     |> Iter.to_list
     |> fun conj ->
     Lang.Expr.BasilExpr.applyintrin ~op:`OR conj |> fun pc_init -> [ pc_init ]
@@ -292,7 +297,7 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let proc, blocks =
     p.code_blocks |> UUIDMap.to_iter |> Iter.map snd
     |> Iter.fold
-         (add_new_code_block all_blocks p succ_addr)
+         (add_new_code_block pc_var all_blocks p succ_addr)
          (proc, UUIDMap.empty)
   in
   let proc, blocks =
@@ -308,7 +313,7 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
             (UUIDMap.find_opt uuid all_blocks)
       | _ -> None)
     |> Iter.fold
-         (add_new_simple_block ~name_suffix:"_ext" succ_addr)
+         (add_new_simple_block pc_var ~name_suffix:"_ext" succ_addr)
          (proc, blocks)
   in
 
@@ -328,7 +333,8 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
 (** Convert Gtirb Protobuf module to a Bincaml IR program*)
 let module_to_ir_prog ir_cfg (m : Module.t) =
   let prog = Lang.Program.empty ~name:m.name () in
-  let prog = Lang.Program.decl_global prog conf.pc_var in
+  let pc_n, pc_ty = conf.pc_var in
+  let prog, pc_var = Lang.Program.decl_global_var prog pc_n Var.None pc_ty in
   (* (1) build Gfir CFG *)
   let entry_proc, procs = gtirb_to_gfir prog ir_cfg m in
   (* collect map of all blocks in order to fixup interprocedural control-flow
@@ -351,7 +357,7 @@ let module_to_ir_prog ir_cfg (m : Module.t) =
   *)
   let prog =
     UUIDMap.fold
-      (fun _ proc prog -> temp_proc_to_ir_proc all_blocks prog proc)
+      (fun _ proc prog -> temp_proc_to_ir_proc pc_var all_blocks prog proc)
       procs prog
   in
   let entry_proc = UUIDMap.find entry_proc procs in

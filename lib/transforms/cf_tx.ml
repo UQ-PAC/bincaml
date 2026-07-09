@@ -49,7 +49,7 @@ let simplify_prog_exprs rewriter ?visit (p : Program.t) =
     Program.(
       fun id ->
         (function
-        | Function { binding; attrib; definition } ->
+        | Function { binding; attrib; definition; var_gen } ->
             let definition =
               match definition with
               | Axiom b ->
@@ -58,14 +58,19 @@ let simplify_prog_exprs rewriter ?visit (p : Program.t) =
               | Function b -> Function (rewriter ?visit b)
               | Uninterpreted -> Uninterpreted
             in
-            Function { binding; attrib; definition }
+            Function { binding; attrib; definition; var_gen }
         | o -> o))
     p
+
+let simplify_all ?visit rewriter prog =
+  prog
+  |> simplify_prog_exprs ?visit rewriter
+  |> simplify_prog_spec_exprs ?visit rewriter
 
 let to_smt (r : Expr.BasilExpr.rwinfo) =
   let open Lang.Expr_smt in
   let cexpr = Expr.BasilExpr.binexp ~op:`NEQ r.from r.into in
-  let smt = snd @@ SMTLib2.assert_bexpr cexpr SMTLib2.empty in
+  let smt = snd @@ SMTLib2.assert_bexpr cexpr (SMTLib2.empty ()) in
   smt |> SMTLib2.to_sexp ~set_logic:false
 
 let online_check visit (solver : Bincaml_util.Smt.Solver.t)

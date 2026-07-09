@@ -2,6 +2,7 @@
 var $R28:bv64;
 var $R0:bv64;
 var $R30:bv64;
+var $__BranchTaken:bv1;
 
 prog entry @main_4204352;
 proc @main_4204352()  -> () [

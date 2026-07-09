@@ -30,16 +30,13 @@ type prog_spec = { rely : e list; guarantee : e list }
 type func_type = Axiom of e | Uninterpreted | Function of e
 
 type implicit_declaration =
-  | VariantCase of {
-      variant : string;
-      belongs_to : Types.t;
-      constructor : Var.t;
-    }
+  | VariantCase of { variant : ID.t; belongs_to : Types.t; constructor : Var.t }
 
 type declaration =
-  | Type of { binding : string; typ : Types.t }
+  | Type of { binding : ID.t; typ : Types.t }
   | Function of {
       binding : Var.t;
+      var_gen : Var.generator;
       attrib : Attrib.attrib_map;
       definition : func_type;
     }
@@ -51,6 +48,7 @@ type declaration =
   | Procedure of { definition : proc }
 
 val decl_binding : declaration -> string
+val decl_id : declaration -> ID.t
 val pretty_proc : (Var.t, 'a) Procedure.t -> Containers_pp.t
 val pretty_declaration : declaration -> Containers_pp.t
 
@@ -79,7 +77,6 @@ val get_proc : ID.t -> t -> proc
 val get_implicit_decl_by_name : string -> t -> implicit_declaration option
 val declare_name : string -> t -> ID.t
 val declare_name_exn : string -> t -> ID.t
-val add_decl : ?attrib:'a Types.StringMap.t -> t -> declaration -> t
 val remove_decl : t -> declaration -> t
 val update_decl : ?attrib:'a Types.StringMap.t -> t -> declaration -> t
 val add_proc : (Var.t, Expr.BasilExpr.t) Procedure.t -> t -> t
@@ -98,14 +95,24 @@ val map_decls : (ID.t -> declaration -> declaration) -> t -> t
 val filter_map_decls : (ID.t -> declaration -> declaration option) -> t -> t
 val flat_map_decls : (ID.t -> declaration -> declaration Iter.t) -> t -> t
 val pretty_to_chan : out_channel -> t -> unit
+val add_decl : t -> declaration -> t
+val var_generator : t -> Var.generator
 
-val decl_global :
+val add_var_decl :
+  t -> ?attrib:Attrib.attrib_map -> ?classification:e -> Var.t -> t
+
+val decl_global_var :
+  t ->
   ?attrib:Attrib.t Types.StringMap.t ->
   ?classification:e option ->
-  t ->
-  Var.t ->
-  t
+  string ->
+  Var.access_tag ->
+  Types.t ->
+  t * Var.t
 
+val decl_bound_var : declaration -> Var.t option
+val decl_or_get_var : t -> string -> Var.access_tag -> Types.t -> t * Var.t
+val global_ids : t -> ID.generator
 val decl_typ : ?attrib:'a Types.StringMap.t -> t -> Types.t -> t
 
 val create_single_proc :

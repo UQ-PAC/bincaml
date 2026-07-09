@@ -12,6 +12,9 @@ let%expect_test "intra_checks" =
     Loader.Loadir.ast_of_string
       {|
 memory shared $mem : (bv64 -> bv8);
+var $x: bv64;
+var $y: bv64;
+var $z: bv64;
 
 prog entry @main;
 
@@ -44,17 +47,16 @@ proc @main (a:bv64, b:bv64, c:bv64, d:bv64, e:bv64) -> ()
   print_lives results main;
   [%expect
     {|
-    Warn: global undeclared $x assuming mutable unshared
-    Warn: global undeclared $y assuming mutable unshared
-    Warn: global undeclared $z assuming mutable unshared
     @main
     $mem:(bv64->bv8)
     a:bv64
+    $x:bv64
     b:bv64
+    $y:bv64
     c:bv64
+    $z:bv64
     d:bv64
     e:bv64
-    $x:bv64
     |}]
 
 let%expect_test "phi_loop" =
@@ -189,13 +191,13 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   [%expect
     {|
     @main
+    $global:bv64
     b:bv64
     y:bv64
-    $global:bv64
     @fun1
+    $global:bv64
     c:bv64
     d:bv64
-    $global:bv64
     @fun2
     $global:bv64
     f:bv64
@@ -256,13 +258,13 @@ proc @fun2 (f:bv64) -> (out2:bv64)
   [%expect
     {|
     @main
+    $global:bv64
     b:bv64
     y:bv64
-    $global:bv64
     @fun1
+    $global:bv64
     c:bv64
     d:bv64
-    $global:bv64
     @fun2
     $global:bv64
     f:bv64
