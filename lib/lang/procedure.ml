@@ -427,6 +427,10 @@ let modify_block p id
       let g = G.add_edge_e g (Begin id, Block block, End id) in
       g)
 
+(** Like {!modify_block}, but the parameters are named so you can specify them
+    with labels and pipe in the procedure. *)
+let modify_block' p ~id ~f = modify_block p id f
+
 let update_block p id (block : (Var.t, BasilExpr.t) Block.t) =
   modify_block p id (fun _ -> block)
 
@@ -457,6 +461,35 @@ let replace_block_succs p id succs =
 
 let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
   update_block p id block
+
+(** Transfers the outgoing edges of the block ID [from] to instead originate
+    from the block ID [to_].
+
+    Returns the modified procedure where [from] now has no successors and [to_]
+    [to_] is modified to additionally have the original outgoing edges of
+    [from_].
+
+    This includes any edges to [Return] nodes, if they exist on [from_]. *)
+let transplant_outgoing_edges p ~from ~to_ : _ t =
+  let replace_outgoing_uses ~from ~to_ g =
+    G.fold_succ_e
+      (function
+        | (_, e, tgt) as edge ->
+            Fun.flip G.remove_edge_e edge %> Fun.flip G.add_edge_e (to_, e, tgt))
+      g from g
+  in
+  p |> map_graph (replace_outgoing_uses ~from:(End from) ~to_:(End to_))
+
+(** Like {!transplant_outgoing_edges}, but for incoming edges. *)
+let transplant_incoming_edges p ~from ~to_ : _ t =
+  let replace_incoming_uses ~from ~to_ g =
+    G.fold_pred_e
+      (function
+        | (src, e, _) as edge ->
+            Fun.flip G.remove_edge_e edge %> Fun.flip G.add_edge_e (src, e, to_))
+      g from g
+  in
+  p |> map_graph (replace_incoming_uses ~from:(Begin from) ~to_:(Begin to_))
 
 let lookup_local_decl p v =
   Hashtbl.find_opt (local_decls p) v

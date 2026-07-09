@@ -141,7 +141,7 @@ module BasilASTLoader = struct
         stmts
 
   let failure x = failwith "Undefined case." (* x discarded *)
-  let stripquote s = String.sub s 1 (String.length s - 2)
+  let stripquote s = String.sub s 1 (String.length s - 2) |> Scanf.unescaped
 
   let rec transBVTYPE (x : bVTYPE) : Types.t =
     match x with

@@ -159,7 +159,8 @@ let check_smt =
     let query =
       "(set-logic QF_BV)\n(set-option :print-success true)\n"
       ^ Sexp.to_string
-          (Expr_smt.SMTLib2.add_assert check_p (Expr_smt.SMTLib2.empty () ) |> fst)
+          (Expr_smt.SMTLib2.add_assert check_p (Expr_smt.SMTLib2.empty ())
+          |> fst)
       ^ "\n(exit)"
     in
     check_success_smt query
