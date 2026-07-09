@@ -153,12 +153,11 @@ module Builtins = struct
 
   let function_for_op (pid : Var.generator) op args ret =
     let name =
-      (match name op (args @ [ ret ]) with
+      match name op (args @ [ ret ]) with
       | Function s -> s
-      | _ -> failwith "unexpected")
-      in
-    pid.with_name name ~access:Var.Const
-      (Types.curry args ret)
+      | _ -> failwith "unexpected"
+    in
+    pid.with_name name ~access:Var.Const (Types.curry args ret)
 
   let transform_op_to_decl pid op args ret =
     let boogie_attribs =
@@ -182,15 +181,13 @@ module Builtins = struct
   let used_ops (p : Program.t) =
     Iter.from_iter (fun f -> iprog f p) |> Iter.sort_uniq
 
-
   let expr_ops vargen (e : Types.t Expr.BasilExpr.abstract_expr) =
     let open Expr.AbstractExpr in
     let open Ops.AllOps in
-    let get_ty (op : [  unary | binary | intrin  ]) o =
+    let get_ty (op : [ unary | binary | intrin ]) o =
       match o with
-      | Fun { ret; args } ->
-          try Some (function_for_op vargen op args ret) with
-            | Failure _ -> None
+      | Fun { ret; args } -> (
+          try Some (function_for_op vargen op args ret) with Failure _ -> None)
       | _ -> None
     in
     match e with
@@ -204,26 +201,34 @@ module Builtins = struct
 
   let transform_builtin_decls (p : Program.t) : Program.t =
     let v = Program.var_generator p in
-    let bvop_alg : (Program.e * Types.t) Expr.BasilExpr.abstract_expr ->
-         Program.e option
-= fun e ->
+    let bvop_alg :
+        (Program.e * Types.t) Expr.BasilExpr.abstract_expr -> Program.e option =
+     fun e ->
       let open Expr.AbstractExpr in
       let types = map snd e in
       let ex = map fst e in
       match ex with
-      | ApplyIntrin {op=`BVConcat | `AND | `OR | `Cases | `MapUpdate } -> None
-      | BinaryExpr {op ;arg1; arg2} ->
-        (match expr_ops v types with
-        | Some (func) -> Some (Expr.BasilExpr.apply_fun ~func:(Expr.BasilExpr.rvar func) ([arg1; arg2]))
-        | None -> None)
-      | ApplyIntrin {op; args} -> (match expr_ops v types with
-        | Some (func) -> Some (Expr.BasilExpr.apply_fun ~func:(Expr.BasilExpr.rvar func) (args))
-        | None -> None)
+      | ApplyIntrin { op = `BVConcat | `AND | `OR | `Cases | `MapUpdate } ->
+          None
+      | BinaryExpr { op; arg1; arg2 } -> (
+          match expr_ops v types with
+          | Some func ->
+              Some
+                (Expr.BasilExpr.apply_fun ~func:(Expr.BasilExpr.rvar func)
+                   [ arg1; arg2 ])
+          | None -> None)
+      | ApplyIntrin { op; args } -> (
+          match expr_ops v types with
+          | Some func ->
+              Some
+                (Expr.BasilExpr.apply_fun ~func:(Expr.BasilExpr.rvar func) args)
+          | None -> None)
       | _ -> None
     in
-    let rw_expr ?visit (e: Expr.BasilExpr.t) = Expr.BasilExpr.rewrite_typed bvop_alg e in
+    let rw_expr ?visit (e : Expr.BasilExpr.t) =
+      Expr.BasilExpr.rewrite_typed bvop_alg e
+    in
     Cf_tx.simplify_all rw_expr p
-
 
   let transform_add_builtin_decls (p : Program.t) : Program.t =
     used_ops p
@@ -276,14 +281,9 @@ module Instructions = struct
 
   let store_body ?(be = false) mem_typ val_size addr_size =
     let v = Var.mk_gen ~scope:`Local () in
-    (** FIXME: function-local variables *)
     let memory = v.with_name "#memory" mem_typ in
-    let value =
-      v.with_name "#value" (Types.Bitvector val_size)
-    in
-    let index =
-      v.with_name "#index" (Types.Bitvector addr_size)
-    in
+    let value = v.with_name "#value" (Types.Bitvector val_size) in
+    let index = v.with_name "#index" (Types.Bitvector addr_size) in
     (* TODO: maybe generalize to non 8 bit stores, based on mem typ value? *)
     let steps = val_size / 8 in
     let body =
@@ -306,14 +306,12 @@ module Instructions = struct
                ])
            (Expr.BasilExpr.rvar memory)
     in
-    v, Expr.BasilExpr.lambda ~bound:[ memory; index; value ] body
+    (v, Expr.BasilExpr.lambda ~bound:[ memory; index; value ] body)
 
   let load_body ?(be = false) mem_typ val_size addr_size =
     let v = Var.mk_gen ~scope:`Local () in
     let memory = v.with_name "#memory" mem_typ in
-    let index =
-      v.with_name "#index" (Types.Bitvector addr_size)
-    in
+    let index = v.with_name "#index" (Types.Bitvector addr_size) in
     let steps = val_size / 8 in
     let body =
       (if be then List.range 0 (steps - 1) else List.range (steps - 1) 0)
@@ -337,7 +335,7 @@ module Instructions = struct
                     (Bitvec.of_int ~size:addr_size
                        (if be then 0 else steps - 1)))))
     in
-    v, Expr.BasilExpr.lambda ~bound:[ memory; index ] body
+    (v, Expr.BasilExpr.lambda ~bound:[ memory; index ] body)
 
   let store_load_decl (global_vargen : Var.generator) (s : Program.stmt) =
     match s with
@@ -347,7 +345,7 @@ module Instructions = struct
           StringMap.of_list [ (".extern", `List []); (".define", `List []) ]
         in
         let attribs = StringMap.singleton ".boogie" (`Assoc boogie_attribs) in
-        let var_gen,body =
+        let var_gen, body =
           store_body (Var.typ rhs)
             (match Expr.BasilExpr.type_of value with
             | Types.Bitvector s -> s
@@ -360,7 +358,7 @@ module Instructions = struct
           (Function
              {
                attrib = attribs;
-               var_gen ;
+               var_gen;
                binding =
                  global_vargen.with_name ~access:Var.Const
                    (Printf.sprintf "$store%d_%s" size
@@ -399,9 +397,7 @@ module Instructions = struct
 
   let transform_add_store_load_decls (prog : Program.t) =
     unique_stores_loads prog
-    |> Iter.filter_map
-         (store_load_decl
-            (Program.var_generator prog))
+    |> Iter.filter_map (store_load_decl (Program.var_generator prog))
     |> Iter.fold Program.add_decl prog
 end
 
@@ -433,8 +429,7 @@ module Normalise = struct
         | RVar { attrib; id } when Var.is_global id ->
             replace [%here]
               (BasilExpr.apply_fun ~attrib
-                 ~func:
-                   (BasilExpr.rvar ~attrib id)
+                 ~func:(BasilExpr.rvar ~attrib id)
                  args)
         | _ -> replace [%here] (apply_fun_to_map func args))
     | ApplyIntrin { op = `AND; args } ->
@@ -457,7 +452,7 @@ module Normalise = struct
 
   open Stmt
 
-  let replace_stmt ~(global_vars: Var.generator) (s : Program.stmt) =
+  let replace_stmt ~(global_vars : Var.generator) (s : Program.stmt) =
     match s with
     | Instr_IndirectCall { attrib } ->
         Instr_Assert
@@ -480,7 +475,8 @@ module Normalise = struct
                 ( lhs,
                   Expr.BasilExpr.fapply
                     (Expr.BasilExpr.rvar
-                       (global_vars.with_name ~access:Var.Const fn_name (Var.typ lhs)))
+                       (global_vars.with_name ~access:Var.Const fn_name
+                          (Var.typ lhs)))
                     [ Expr.BasilExpr.rvar rhs; addr ] );
               ];
             attrib;
@@ -497,7 +493,8 @@ module Normalise = struct
                 ( lhs,
                   Expr.BasilExpr.fapply
                     (Expr.BasilExpr.rvar
-                       (global_vars.with_name ~access:Var.Const fn_name (Var.typ lhs)))
+                       (global_vars.with_name ~access:Var.Const fn_name
+                          (Var.typ lhs)))
                     [ Expr.BasilExpr.rvar rhs; addr; value ] );
               ];
             attrib;
@@ -519,25 +516,30 @@ module Normalise = struct
     let prog =
       Program.flat_map_decls
         (fun k -> function
-          | Function { binding; attrib; definition ; var_gen} -> (
+          | Function { binding; attrib; definition; var_gen } -> (
               let keep =
-                Iter.singleton (Function { binding; attrib; definition ; var_gen})
+                Iter.singleton
+                  (Function { binding; attrib; definition; var_gen })
               in
               match definition with
               | Function b -> (
                   match BasilExpr.unfix b with
                   | Lambda { bound_vars; in_body } -> keep
                   | body ->
-                      let axiom_name =
-                        (ID.name k ^ "_funvalue")
-                      in
+                      let axiom_name = ID.name k ^ "_funvalue" in
                       Iter.doubleton
                         (Function
-                           { binding; definition = Uninterpreted; attrib ; var_gen })
+                           {
+                             binding;
+                             definition = Uninterpreted;
+                             attrib;
+                             var_gen;
+                           })
                         (Function
                            {
                              binding =
-                               vg.with_name (axiom_name) ~access:(Var.access binding) (Var.typ binding);
+                               vg.with_name axiom_name
+                                 ~access:(Var.access binding) (Var.typ binding);
                              var_gen;
                              definition =
                                Axiom
@@ -557,14 +559,13 @@ module Normalise = struct
     Program.map_procedures
       (fun _ p ->
         Procedure.map_blocks_nondet
-          (fun (id, b) -> Block.map ~phi:Fun.id (replace_stmt ~global_vars:gids)  b)
+          (fun (id, b) ->
+            Block.map ~phi:Fun.id (replace_stmt ~global_vars:gids) b)
           p)
       p
 end
 
 let transform (p : Program.t) =
-  p |> Normalise.replace_functions
-  |> Normalise.replace_exprs
+  p |> Normalise.replace_functions |> Normalise.replace_exprs
   |> Instructions.transform_add_store_load_decls |> Normalise.replace_stmts
-  |> Builtins.transform_add_builtin_decls
-  |> Builtins.transform_builtin_decls
+  |> Builtins.transform_add_builtin_decls |> Builtins.transform_builtin_decls
