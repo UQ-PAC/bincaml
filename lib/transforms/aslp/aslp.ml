@@ -69,10 +69,11 @@ let aarch64_intrin_of_stmt ?(include_failed = false) ?default_address :
   | _ -> None
 
 (** Inverse of {!aarch64_intrin_of_stmt}. *)
-let stmt_of_aarch64_intrin :
+let stmt_of_aarch64_intrin ?error :
     Bitvec.t * Bitvec.t * Attrib.attrib_map -> Program.stmt =
  fun (opcode, address, attrib) ->
-  let args = List.map Expr.BasilExpr.bvconst [ opcode; address ] in
+  let attrib = Option.fold (Fun.flip (StringMap.add ".error")) attrib error in
+  let args = Expr.BasilExpr.[ bvconst opcode; bvconst address ] in
   Stmt.Instr_IntrinCall { attrib; lhs = []; name = Aarch64Eval; args }
 
 (** Extracts the next Aarch64 intrinsic from the given list of statements,
@@ -109,8 +110,7 @@ let insert_one_diamond ~proc dia =
     with_ids |> Diamond.iter_backwards
     |> Iter.fold
          (fun proc (id, successors, st) ->
-           let assume = Aslp_state.assume_of_aslp_block st in
-           let stmts = Option.to_list assume @ CCVector.to_list st.stmts in
+           let stmts = Aslp_state.stmts_of_aslp_block st in
            Procedure.add_block proc id ~stmts ~successors ())
          proc
   and (first, _, _), (last, _, _) = Diamond.(first with_ids, last with_ids) in
@@ -154,10 +154,11 @@ let transform_one_stmt (module I : Bincaml_ibi.IBI) ~proc bid =
             |> Procedure.add_goto ~from:bid ~targets:[ aslp_first ]
           in
           Some (proc, aslp_last)
-      | exception exn ->
-          let exn = `String (Printexc.to_string exn) in
-          let attrib = StringMap.add error_attrib_key exn intrin_attrib in
-          let intrin_stmt = stmt_of_aarch64_intrin (opcode, address, attrib) in
+      | exception error ->
+          let error = `String (Printexc.to_string error) in
+          let intrin_stmt =
+            stmt_of_aarch64_intrin ~error (opcode, address, intrin_attrib)
+          in
           let stmts = Vector.of_list (before @ (intrin_stmt :: after)) in
           Some (Procedure.modify_block proc bid (fun b -> { b with stmts }), bid)
       )
