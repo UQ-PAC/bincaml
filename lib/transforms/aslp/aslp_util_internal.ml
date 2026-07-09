@@ -23,13 +23,19 @@ let span_while_some f =
   in
   step f []
 
+(** Groups successive list elements based on whether they are [Left] or [Right],
+    maintaining relative order. *)
 let[@tail_mod_cons] group_succ_either =
   let[@tail_mod_cons] rec while_left xs =
     let xs, rest = span_while_some Either.find_left xs in
-    Either.Left xs :: while_right rest
+    match xs with
+    | [] -> while_right rest
+    | h :: xs -> Either.Left (h, xs) :: while_right rest
   and[@tail_mod_cons] while_right xs =
     let xs, rest = span_while_some Either.find_right xs in
-    Right xs :: (match rest with [] -> [] | _ -> while_left rest)
+    match xs with
+    | [] -> []
+    | h :: xs -> Either.Right (h, xs) :: while_left rest
   in
   while_left
 
@@ -130,16 +136,12 @@ let flat_map_stmts
   (* Collects adjacent bare statements into a basic block, and inserts those statements. *)
   let proc, block_id_pairs =
     group_succ_either mapped
-    |> List.filter_map (function
-      | Right ((bid, _) :: _ as pairs) -> Some (Right (bid, List.map snd pairs))
-      | Right [] -> None
-      | Left _ as xs -> Some xs)
     |> List.fold_flat_map
          (fun proc -> function
-           | Left pairs -> (proc, pairs)
-           | Right (bid, stmts) ->
-               ( Procedure.modify_block proc bid (fun b ->
-                     { b with stmts = CCVector.of_list stmts }),
+           | Left (hd, tl) -> (proc, hd :: tl)
+           | Right ((bid, hd), rest) ->
+               let stmts = CCVector.of_list (hd :: List.map snd rest) in
+               ( Procedure.modify_block proc bid (fun b -> { b with stmts }),
                  [ (bid, bid) ] ))
          proc
   in
