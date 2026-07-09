@@ -124,15 +124,22 @@ let flat_map_stmts
            | Some bid, Right s -> ((Some bid, proc), Right (bid, s)))
          (Some base_bid, proc)
   in
+  let proc =
+    Procedure.modify_block proc base_bid (Block.fmap_stmts_copy CCVector.clear)
+  in
   (* Collects adjacent bare statements into a basic block, and inserts those statements. *)
   let proc, block_id_pairs =
     group_succ_either mapped
+    |> List.filter_map (function
+      | Right ((bid, _) :: _ as pairs) -> Some (Right (bid, List.map snd pairs))
+      | Right [] -> None
+      | Left _ as xs -> Some xs)
     |> List.fold_flat_map
          (fun proc -> function
-           | Left pairs | Right ([] as pairs) -> (proc, pairs)
-           | Right ((bid, _) :: _ as pairs) ->
-               let stmts = CCVector.of_list (List.map snd pairs) in
-               ( Procedure.modify_block proc bid (fun b -> { b with stmts }),
+           | Left pairs -> (proc, pairs)
+           | Right (bid, stmts) ->
+               ( Procedure.modify_block proc bid (fun b ->
+                     { b with stmts = CCVector.of_list stmts }),
                  [ (bid, bid) ] ))
          proc
   in
