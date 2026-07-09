@@ -80,7 +80,6 @@ let empty_lifter_state ~generator () =
     generator;
   }
 
-
 (** {1 State manipulation functions} *)
 
 (** Appends the given statement to the given block.
@@ -107,7 +106,10 @@ let add_stmt_to_block gen ?(allow_double_pc = false) ~stmt blk =
 
 let add_stmt_to_active stmt (lifter_state : lifter_state) =
   let diamond = lifter_state.diamond in
-  let diamond = diamond |> Diamond_zipper.modify (add_stmt_to_block lifter_state.generator ~stmt) in
+  let diamond =
+    diamond
+    |> Diamond_zipper.modify (add_stmt_to_block lifter_state.generator ~stmt)
+  in
   { lifter_state with diamond }
 
 (** {1 Program counter and guard functions} *)
@@ -121,7 +123,8 @@ let ensure_pc_assigned gen ~address =
           Expr.BasilExpr.bvconst Bitvec.(add address (of_int ~size:64 4))
         and ff = Expr.BasilExpr.boolconst false in
 
-        let bt = Aslp_lexpr.branchtaken_var gen and pc = Aslp_lexpr.pc_var gen in
+        let bt = Aslp_lexpr.branchtaken_var gen
+        and pc = Aslp_lexpr.pc_var gen in
         let al = [ (bt, ff); (pc, incremented) ] in
         block
         |> add_stmt_to_block gen
@@ -195,7 +198,7 @@ let ensure_forwarded_pc gen state =
           let stmt = Stmt.Instr_Assign { attrib = Attrib.empty; al } in
           state
           |> Diamond_zipper.modify
-               (add_stmt_to_block (gen) ~stmt ~allow_double_pc:true)
+               (add_stmt_to_block gen ~stmt ~allow_double_pc:true)
       | Some _, None | None, Some _ -> failwith "pcs should already agree")
 
 (** Returns an {!Lang.Stmt.Instr_Assume} statement for the given block's guard,

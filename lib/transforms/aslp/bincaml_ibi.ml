@@ -33,4 +33,5 @@ let from_generator ?(memory = fun () -> failwith "bincaml_memory_var undefined")
 let from_bincaml_procedure prog ?memory proc : (module IBI) =
   let local_var = Procedure.var_generator proc in
   let global_var = Program.var_generator prog in
-  from_generator ?memory (Aslp_lexpr.aslp_ids_from_generators ~local_var ~global_var)
+  from_generator ?memory
+    (Aslp_lexpr.aslp_ids_from_generators ~local_var ~global_var)

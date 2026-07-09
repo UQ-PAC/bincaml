@@ -39,16 +39,13 @@ type t =
 [@@deriving show { with_path = false }]
 
 let predefined =
-    ([ PC; SP_EL0 ]
-    @ List.init 31 (fun i -> R (Some i))
-    @ List.init 31 (fun i -> Z (Some i))
-    @ [ FPSR; FPCR; PSTATE_N; PSTATE_Z; PSTATE_C; PSTATE_V ]
-    @ [ PSTATE_A; PSTATE_D; PSTATE_DIT; PSTATE_F; PSTATE_I ]
-    @ [
-        PSTATE_PAN; PSTATE_SP; PSTATE_SSBS; PSTATE_TCO; PSTATE_UAO; PSTATE_BTYPE;
-      ]
-    @ [ BTypeCompatible; BranchTaken; BTypeNext; ExclusiveLocal ])
-
+  [ PC; SP_EL0 ]
+  @ List.init 31 (fun i -> R (Some i))
+  @ List.init 31 (fun i -> Z (Some i))
+  @ [ FPSR; FPCR; PSTATE_N; PSTATE_Z; PSTATE_C; PSTATE_V ]
+  @ [ PSTATE_A; PSTATE_D; PSTATE_DIT; PSTATE_F; PSTATE_I ]
+  @ [ PSTATE_PAN; PSTATE_SP; PSTATE_SSBS; PSTATE_TCO; PSTATE_UAO; PSTATE_BTYPE ]
+  @ [ BTypeCompatible; BranchTaken; BTypeNext; ExclusiveLocal ]
 
 let typ (x : t) =
   let bv = Types.bv in
@@ -110,7 +107,7 @@ let to_var st x =
   scope.with_name name ty
 
 let global_vars gen =
-  predefined |> (List.map (to_var gen) %> List.filter Var.is_global)
+  predefined |> List.map (to_var gen) %> List.filter Var.is_global
 
 let pc_var st = to_var st PC
 let branchtaken_var st = to_var st BranchTaken

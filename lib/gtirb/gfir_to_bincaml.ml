@@ -142,7 +142,8 @@ let add_new_code_block (pc_var : Var.t) (all_blocks : block UUIDMap.t) temp_proc
           add_new_simple_block pc_var ~name_suffix:"_code" ~attrib succ_addr
             (proc, blockmap)
             (Gtirb.uuid b, Some address, instrs)
-      | Proxy uuid -> add_proxy_block pc_var ~attrib succ_addr (proc, blockmap) uuid)
+      | Proxy uuid ->
+          add_proxy_block pc_var ~attrib succ_addr (proc, blockmap) uuid)
   | Data _ | Proxy _ -> (proc, blockmap)
 
 (** For each successor set containing a fallthrough edge, remove fallthrough

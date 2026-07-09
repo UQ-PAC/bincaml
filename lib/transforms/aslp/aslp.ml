@@ -197,8 +197,7 @@ let add_aarch64_global_declarations ?(add_all = false) prog =
       ~global_var:(Program.var_generator prog)
   in
 
-  (Aslp_lexpr.global_vars gen)
-  |> List.to_iter |> Iter.filter include_var
+  Aslp_lexpr.global_vars gen |> List.to_iter |> Iter.filter include_var
   |> Iter.fold
        (fun prog var ->
          let attrib = Attrib.empty and classification = None in
