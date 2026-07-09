@@ -127,6 +127,21 @@ module PG : sig
     unit ->
     ('a, 'b) t
 
+  val create_p :
+    IDSet.elt ->
+    ?is_stub:bool ->
+    ?formal_in_params:(string * Types.t) list ->
+    ?formal_out_params:(string * Types.t) list ->
+    ?captures_globs:(string * Types.t) list ->
+    ?modifies_globs:(string * Types.t) list ->
+    ?requires:BasilExpr.t list ->
+    ?ensures:BasilExpr.t list ->
+    ?rely:BasilExpr.t list ->
+    ?guarantee:BasilExpr.t list ->
+    ?attrib:Attrib.attrib_map ->
+    unit ->
+    (Var.t, 'a) t
+
   val attrib : ('a, 'b) t -> Attrib.attrib_map
   val set_attrib : ('a, 'b) t -> Attrib.t -> string -> ('a, 'b) t
   val set_attribs : ('a, 'b) t -> Attrib.attrib_map -> ('a, 'b) t
@@ -253,6 +268,69 @@ end = struct
           StringMap.iter (fun k v -> ignore @@ g.decl_exn k) formal_in_params;
           StringMap.iter (fun k v -> ignore @@ g.decl_exn k) formal_out_params;
           g
+    in
+    let block_ids = ID.make_gen () in
+    let locals =
+      Hashtbl.create
+        (StringMap.cardinal formal_in_params
+        + StringMap.cardinal formal_out_params)
+    in
+    Hashtbl.add_iter locals
+      (Iter.append
+         (StringMap.to_iter formal_in_params)
+         (StringMap.to_iter formal_out_params));
+
+    let graph = if is_stub then None else Some empty_graph in
+    {
+      id;
+      attrib;
+      formal_in_params;
+      formal_out_params;
+      graph;
+      locals;
+      local_ids;
+      block_ids;
+      specification;
+      topo_fwd =
+        lazy
+          (WTO.recursive_scc
+             (Option.get_exn_or "no graph to iterate" graph)
+             Entry);
+      topo_rev =
+        lazy
+          (RevWTO.recursive_scc
+             (Option.get_exn_or "no graph to iterate" graph)
+             Return);
+    }
+
+  let create_p id ?(is_stub = false) ?(formal_in_params = [])
+      ?(formal_out_params = []) ?(captures_globs = []) ?(modifies_globs = [])
+      ?(requires = []) ?(ensures = []) ?(rely = []) ?(guarantee = [])
+      ?(attrib = Attrib.empty) () =
+    let local_ids = ID.make_gen ~scope_name:(ID.name id) () in
+    let vg = Var.mk_gen ~id_generator:local_ids () in
+    let vars_of_list =
+      List.map (fun (name, ty) ->
+          let v = vg.with_name name ty in
+          (Var.name v, v))
+    in
+    let formal_in_params =
+      formal_in_params |> vars_of_list |> StringMap.of_list
+    in
+    let specification =
+      {
+        captures_globs =
+          (List.map (uncurry @@ vg.with_name ~access:None)) captures_globs;
+        modifies_globs =
+          (List.map (uncurry @@ vg.with_name ~access:None)) modifies_globs;
+        requires;
+        ensures;
+        rely;
+        guarantee;
+      }
+    in
+    let formal_out_params =
+      formal_out_params |> vars_of_list |> StringMap.of_list
     in
     let block_ids = ID.make_gen () in
     let locals =

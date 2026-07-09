@@ -294,23 +294,27 @@ module BasilASTLoader = struct
           attrib,
           spec,
           definition ) ->
-        let ids = ID.make_gen ~scope_name:id () in
-        let vg = Var.mk_gen ~id_generator:ids ~scope:`Local () in
         let proc_id = Program.declare_name id prog.prog in
-        let formal_in_params_order = List.map (param_to_formal vg) in_params in
-        let formal_in_params = formal_in_params_order |> StringMap.of_list in
-        let formal_out_params_order =
-          List.map (param_to_formal vg) out_params
-        in
-        let formal_out_params = StringMap.of_list formal_out_params_order in
-        let _, attrib = trans_attrib_set prog ~binds:formal_in_params attrib in
-        Hashtbl.add prog.params_order id
-          (formal_in_params_order, formal_out_params_order);
+        let formal_in_params = List.map param_names in_params in
+        let formal_out_params = List.map param_names out_params in
+        let _, attrib = trans_attrib_set prog ~binds:StringMap.empty attrib in
         let is_stub = Stdlib.(definition = ProcDef_Empty) in
         let p =
-          Procedure.create proc_id ~local_id_gen:ids ~attrib ~is_stub
-            ~formal_in_params ~formal_out_params ()
+          Procedure.create_p proc_id ~attrib ~is_stub ~formal_in_params
+            ~formal_out_params ()
         in
+        let formal_in_params_order =
+          formal_in_params
+          |> List.map (fun (n, _) ->
+              (n, StringMap.find n (Procedure.formal_in_params p)))
+        in
+        let formal_out_params_order =
+          formal_out_params
+          |> List.map (fun (n, _) ->
+              (n, StringMap.find n (Procedure.formal_out_params p)))
+        in
+        Hashtbl.add prog.params_order id
+          (formal_in_params_order, formal_out_params_order);
         let prog = map_prog (Program.add_proc p) prog in
         prog
 
@@ -1075,6 +1079,9 @@ module BasilASTLoader = struct
     match pp with
     | Params1 (LocalIdent (pos, id), t) ->
         (id, p.with_name id ~access:None (trans_type t))
+
+  and param_names (pp : params) : string * Types.t =
+    match pp with Params1 (LocalIdent (pos, id), t) -> (id, trans_type t)
 
   and trans_funspec prog bound_post
       (spec : (Var.t, BasilExpr.t) Procedure.proc_spec) (s : funSpec) :
