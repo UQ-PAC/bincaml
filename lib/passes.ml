@@ -28,6 +28,14 @@ module PassManager = struct
 
   type t = { avail : pass StringMap.t }
 
+  let hm_elaborate =
+    {
+      name = "hindley-milner-elaborate";
+      apply = Prog Hm.elaborate;
+      invariants = Invariants.make ();
+      doc = "Perform hindley milner type inference on program";
+    }
+
   let chop_unreachable =
     {
       name = "trim-unreachable-proc";
@@ -435,6 +443,7 @@ module PassManager = struct
   let passes =
     [
       lift_intrinsics_aarch64;
+      hm_elaborate;
       chop_unreachable;
       cse_elim;
       flatten_phis;

@@ -51,7 +51,7 @@ type declaration =
   | Procedure of { definition : proc }
 
 val decl_binding : declaration -> string
-val pretty_proc : (Var.t, 'a) Procedure.t -> Containers_pp.t
+val pretty_proc : (Var.t, Expr.BasilExpr.t) Procedure.t -> Containers_pp.t
 val pretty_declaration : declaration -> Containers_pp.t
 
 type t
@@ -90,7 +90,9 @@ val update_proc :
   t ->
   t
 
-val output_proc_pretty : out_channel -> (Var.t, 'a) Procedure.t -> unit
+val output_proc_pretty :
+  out_channel -> (Var.t, Expr.BasilExpr.t) Procedure.t -> unit
+
 val prog_pretty : t -> Containers_pp.t
 val declarations : t -> (ID.t * declaration) CCMap.iter
 val filter_decls : (ID.t -> declaration -> bool) -> t -> t

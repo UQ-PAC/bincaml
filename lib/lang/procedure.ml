@@ -74,10 +74,10 @@ module WTO = Graph.WeakTopological.Make (G)
 module RevWTO = Graph.WeakTopological.Make (RevG)
 
 type ('v, 'e) proc_spec = {
-  requires : BasilExpr.t list;
-  ensures : BasilExpr.t list;
-  rely : BasilExpr.t list;
-  guarantee : BasilExpr.t list;
+  requires : 'e list;
+  ensures : 'e list;
+  rely : 'e list;
+  guarantee : 'e list;
   captures_globs : 'v list;
   modifies_globs : 'v list;
 }
@@ -118,10 +118,10 @@ module PG : sig
     ?formal_out_params:'a StringMap.t ->
     ?captures_globs:'a list ->
     ?modifies_globs:'a list ->
-    ?requires:BasilExpr.t list ->
-    ?ensures:BasilExpr.t list ->
-    ?rely:BasilExpr.t list ->
-    ?guarantee:BasilExpr.t list ->
+    ?requires:'b list ->
+    ?ensures:'b list ->
+    ?rely:'b list ->
+    ?guarantee:'b list ->
     ?attrib:Attrib.attrib_map ->
     unit ->
     ('a, 'b) t

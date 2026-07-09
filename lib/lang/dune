@@ -2,6 +2,7 @@
  (public_name bincaml.ast)
  (name lang)
  (modules
+  hm
   abstract_expr
   attrib
   spec_modifies
@@ -9,6 +10,7 @@
   expr
   algsimp
   common
+  typeExpr
   ops
   viscfg
   expr_smt
@@ -19,6 +21,7 @@
   interp
   program)
  (libraries
+  unionFind
   zarith
   fix
   ocamlgraph
