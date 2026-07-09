@@ -33,8 +33,22 @@ let referenced_vars_of_prog =
            Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b)))
   %> Iter.filter Var.is_global
 
-(** Maps the given block into a sequence of blocks, sequentially ordered in
-    control-flow. *)
+(** Isolates statements satisfying the given predicate into their own block,
+    while maintaining sequential control-flow between them. *)
+let isolate_stmts_of_block ?(label = "%singleton") ~proc f bid =
+  let b = Procedure.get_block proc bid |> Option.get_exn_or "block not found" in
+  let stmts = b.stmts |> CCVector.to_list in
+
+  let block_stmts =
+    List.group_succ ~eq:(CCFun.compose_binop f Bool.equal) stmts
+    |> List.flat_map (function
+      | hd :: _ as xs when f hd -> List.map List.pure xs
+      | xs -> List.pure xs)
+  in
+  2
+
+(** Maps each statement inside the given block ID into a sequence of blocks,
+    then links those blocks sequentially in control-flow. *)
 let flat_map_block ~proc f bid =
   let b = Procedure.get_block proc bid |> Option.get_exn_or "block not found" in
   let new_blocks : (ID.t * _ Block.t) list = f b in
