@@ -32,3 +32,15 @@ let referenced_vars_of_prog =
        %> Iter.flat_map (fun (_, b) ->
            Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b)))
   %> Iter.filter Var.is_global
+
+(** Maps the given block into a sequence of blocks, sequentially ordered in
+    control-flow. *)
+let flat_map_block ~proc f bid =
+  let b = Procedure.get_block proc bid |> Option.get_exn_or "block not found" in
+  let new_blocks : (ID.t * _ Block.t) list = f b in
+  List.fold_left
+    (fun proc (bid, b) ->
+      let ({ attrib; phis; stmts } : _ Block.t) = b in
+      Procedure.add_block proc bid ~attrib ~phis ~stmts:(Vector.to_list stmts)
+        ())
+    proc new_blocks
