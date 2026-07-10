@@ -24,12 +24,16 @@ let span_while_some f =
   step f []
 
 (** Groups successive list elements based on whether they are [Left] or [Right],
-    maintaining relative order. *)
-let[@tail_mod_cons] group_succ_either =
+    maintaining relative order.
+
+    [Left] and [Right] values within the returned list contain values like
+    [('a * 'a list)] to represent a non-empty list. *)
+let[@tail_mod_cons] group_succ_either :
+    ('a, 'b) Either.t list -> ('a * 'a list, 'b * 'b list) Either.t list =
   let[@tail_mod_cons] rec while_left xs =
     let xs, rest = span_while_some Either.find_left xs in
     match xs with
-    | [] -> while_right rest
+    | [] -> while_right rest (* in case the input list starts with Right *)
     | h :: xs -> Either.Left (h, xs) :: while_right rest
   and[@tail_mod_cons] while_right xs =
     let xs, rest = span_while_some Either.find_right xs in
@@ -38,6 +42,8 @@ let[@tail_mod_cons] group_succ_either =
     | h :: xs -> Either.Right (h, xs) :: while_left rest
   in
   while_left
+
+(* TODO: these could be made lazy by using Seq.t rather than list *)
 
 (** Iterates over global variables in the given program, including both read and
     assigned variables. Order is unspecified and may have duplicates. *)
@@ -111,7 +117,7 @@ let flat_map_stmts
     (f :
       proc:_ Procedure.t ->
       _ Stmt.t ->
-      (ID.t * ID.t * _ Procedure.t, _ Stmt.t) Either.t) ~proc base_bid =
+      (ID.t * ID.t * _ Procedure.t, _ Stmt.t list) Either.t) ~proc base_bid =
   let open Either in
   let b = Procedure.get_block proc base_bid |> Option.get_exn_or "not found" in
   let stmts = CCVector.to_list b.stmts and base_name = ID.name base_bid in
@@ -126,8 +132,8 @@ let flat_map_stmts
            | None, Right s ->
                let name = base_name in
                let proc, bid = Procedure.fresh_block proc ~name ~stmts:[] () in
-               ((Some bid, proc), Right (bid, s))
-           | Some bid, Right s -> ((Some bid, proc), Right (bid, s)))
+               ((Some bid, proc), Right (bid, Iter.of_list s))
+           | Some bid, Right s -> ((Some bid, proc), Right (bid, Iter.of_list s)))
          (Some base_bid, proc)
   in
   let proc =
@@ -140,7 +146,10 @@ let flat_map_stmts
          (fun proc -> function
            | Left (hd, tl) -> (proc, hd :: tl)
            | Right ((bid, hd), rest) ->
-               let stmts = CCVector.of_list (hd :: List.map snd rest) in
+               let stmts =
+                 Iter.(append hd (flat_map snd (of_list rest)))
+                 |> CCVector.of_iter |> CCVector.freeze
+               in
                ( Procedure.modify_block proc bid (fun b -> { b with stmts }),
                  [ (bid, bid) ] ))
          proc
