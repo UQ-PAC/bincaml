@@ -33,7 +33,7 @@
 
 (library
  (name test_expr_eval_expect)
- (modules test_expr_eval_expect test_stmt test_interp test_expr_hash)
+ (modules test_expr_eval_expect test_stmt test_interp test_expr_hash test_hm)
  (libraries loader)
  (inline_tests)
  (preprocess
