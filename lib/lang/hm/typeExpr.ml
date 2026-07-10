@@ -45,112 +45,6 @@ module ATyp = struct
     | TypeConstr (l, t) -> Hash.pair (Hash.list he) Hash.string (l, t)
 end
 
-(** Type of mutable type context union find *)
-module type TypeContext = sig
-  val compare : 'a Fix.HashCons.cell -> 'a Fix.HashCons.cell -> int
-  val equal : 'a Fix.HashCons.cell -> 'a Fix.HashCons.cell -> bool
-
-  module Typ : sig
-    type 'a expr = 'a ATyp.expr = Var of tvar | TypeConstr of 'a list * string
-
-    val equal_expr : ('a -> 'a -> bool) -> 'a expr -> 'a expr -> bool
-    val compare_expr : ('a -> 'a -> int) -> 'a expr -> 'a expr -> int
-
-    val pp_expr :
-      (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a expr -> unit
-
-    val show_expr : (Format.formatter -> 'a -> unit) -> 'a expr -> string
-    val map_expr : ('a -> 'b) -> 'a expr -> 'b expr
-    val fold_expr : ('a -> 'b -> 'a) -> 'a -> 'b expr -> 'a
-    val hash : 'a Hash.t -> 'a expr -> int
-
-    type t = nt elem Fix.HashCons.cell
-    and nt = T of t expr
-
-    module Hashed : sig
-      type t = nt elem
-
-      val hash : t -> int
-      val equal : t -> t -> bool
-    end
-
-    module H : sig
-      type data = Hashed.t
-
-      val make : data -> data Fix.HashCons.cell
-    end
-
-    val unfix : nt elem Fix.HashCons.cell -> t expr
-    val fix : t expr -> H.data Fix.HashCons.cell
-    val union : t -> t -> t
-    val find : nt elem Fix.HashCons.cell -> H.data Fix.HashCons.cell
-    val merge : (t expr -> t expr -> t expr) -> t -> t -> t
-  end
-
-  module Rec : sig
-    module O : sig
-      type 'e expr = 'e ATyp.expr
-      type t = Typ.t
-
-      val fix : t expr -> t
-      val unfix : t -> t expr
-      val map_expr : ('b -> 'a) -> 'b expr -> 'a expr
-    end
-
-    type 'a alg = 'a ATyp.expr -> 'a
-    type 'a coalg = 'a -> 'a ATyp.expr
-
-    val cata : 'a alg -> Typ.t -> 'a
-    val ana : 'a coalg -> 'a -> Typ.t
-
-    val map_fold :
-      f:('a -> Typ.t ATyp.expr -> 'a) ->
-      alg:('a -> 'b ATyp.expr -> 'b) ->
-      'a ->
-      Typ.t ->
-      'b
-
-    val rw_recurse_down : f:(Typ.t ATyp.expr -> Typ.t) -> Typ.t -> Typ.t
-
-    val mutu :
-      ?cata:(('a * 'b) alg -> Typ.t -> 'a * 'b) ->
-      (('a * 'b) ATyp.expr -> 'a) ->
-      (('a * 'b) ATyp.expr -> 'b) ->
-      (Typ.t -> 'a) * (Typ.t -> 'b)
-
-    val zygo :
-      ?cata:(('a * 'b) alg -> Typ.t -> 'a * 'b) ->
-      'a alg ->
-      (('a * 'b) ATyp.expr -> 'b) ->
-      Typ.t ->
-      'b
-
-    val zygo_l :
-      ?cata:(('b * 'a) alg -> Typ.t -> 'b * 'a) ->
-      'a alg ->
-      (('b * 'a) ATyp.expr -> 'b) ->
-      Typ.t ->
-      'b
-
-    val map_fold2 :
-      f:('a -> Typ.t ATyp.expr -> 'a) ->
-      alg1:('a -> ('b * 'c) ATyp.expr -> 'b) ->
-      alg2:'c alg ->
-      'a ->
-      Typ.t ->
-      'b
-
-    val para_f : (('a * 'b) ATyp.expr -> 'b) -> (Typ.t -> 'a) -> Typ.t -> 'b
-    val para : ((Typ.t * 'a) ATyp.expr -> 'a) -> Typ.t -> 'a
-
-    val cata_context :
-      ((Typ.t ATyp.expr ATyp.expr * 'a) ATyp.expr -> 'a) -> Typ.t -> 'a
-
-    val iter_children : (Typ.t ATyp.expr -> unit) -> Typ.t -> unit
-    val children_iter : Typ.t -> Typ.t ATyp.expr Iter.t
-  end
-end
-
 (** Create the union find and hash-consing structure for recording type
     relations. This must be done each time we want to perform inference in an
     independent environment, in order to construct a fresh hash-consing and
@@ -207,3 +101,6 @@ module Make () = struct
 
   module Rec = Bincaml_util.Recursionscheme.Recursion (Typ)
 end
+
+module type TypeContext = module type of Make ()
+(** Type of mutable type context union find *)
