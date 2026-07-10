@@ -113,6 +113,21 @@ let replace_block ~old ~new_:(new_first, new_last) proc =
   if ID.equal old new_first || ID.equal old new_last then Fun.id
   else Fun.flip Procedure.remove_block old
 
+(** Maps each statement in the given block through [f]. For each statement, [f]
+    may return either zero or more "bare" statements, {i or} a first/last pair
+    of new block-level control-flow. Returns [(first, last, proc)] where [proc]
+    is the updated procedure and [first] / [last] is the first / last block of
+    the combined map output.
+
+    [first] and [last] may be the same. One or both of [first]/[last] may be the
+    same as the original block. In particular, any bare statements returned by
+    [f] for an initial segment of the block's statements will be retained in the
+    original block. If [f] returns a block ID pair, then the returned block IDs
+    should not be the same as the original block ID - except, perhaps, for the
+    first block of the first statement.
+
+    Additionally, redirects the original block's incoming/outgoing edges to the
+    first / last block of the mapped output. *)
 let flat_map_stmts
     (f :
       proc:_ Procedure.t ->
@@ -155,26 +170,30 @@ let flat_map_stmts
          proc
   in
   (* Transplant predecessors and successors of the original block as needed. *)
+  let first, last =
+    ( List.head_opt block_id_pairs |> Option.map_or fst ~default:base_bid,
+      List.last_opt block_id_pairs |> Option.map_or snd ~default:base_bid )
+  in
   let proc =
     proc
-    |> (match List.last_opt block_id_pairs with
-      | Some (_, to_) -> Procedure.transplant_outgoing_edges ~from:base_bid ~to_
-      | None -> Fun.id)
+    |> Procedure.transplant_outgoing_edges ~from:base_bid ~to_:last
     |>
-    match List.head_opt block_id_pairs with
-    | Some (hd, _) when not ID.(equal hd base_bid) ->
-        Procedure.add_goto ~from:base_bid ~targets:[ hd ]
-    | _ -> Fun.id
+    if not ID.(equal first base_bid) then
+      Procedure.add_goto ~from:base_bid ~targets:[ first ]
+    else Fun.id
   in
   (* Insert gotos between mapped blocks. This must happen after transplanting
      so we do not transplant these edges. *)
-  List.combine_gen block_id_pairs (List.drop 1 block_id_pairs)
-  |> Iter.of_gen
-  |> Iter.fold
-       (fun proc (first, second) ->
-         let _, prev = first and next, _ = second in
-         Procedure.add_goto proc ~from:prev ~targets:[ next ])
-       proc
+  let proc =
+    List.combine_gen block_id_pairs (List.drop 1 block_id_pairs)
+    |> Iter.of_gen
+    |> Iter.fold
+         (fun proc (first, second) ->
+           let _, prev = first and next, _ = second in
+           Procedure.add_goto proc ~from:prev ~targets:[ next ])
+         proc
+  in
+  (first, last, proc)
 
 let flat_map_blocks
     (f : proc:_ Procedure.t -> ID.t -> _ Block.t -> ID.t * ID.t * _ Procedure.t)
