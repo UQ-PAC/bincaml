@@ -69,10 +69,4 @@ test which aims to ensure it's approximately linear.|}
       actual_scale big_t threshold
   end;
   [%expect
-    {|
-    Found base_size of 300 taking base_t of 17.769000ms.
-    If linear, 6x bigger should take approx 6x longer.
-    We found it actually took 11.854747x longer (210.647000ms), which is
-    bigger than the allowed test threshold of 8x. Therefore, we fail this
-    test which aims to ensure it's approximately linear.
-    |}]
+    {| Pass: 6x bigger input took less than 8 longer. |}]

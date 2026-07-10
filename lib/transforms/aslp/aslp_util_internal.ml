@@ -28,7 +28,7 @@ let span_while_some f =
 
     [Left] and [Right] values within the returned list contain values like
     [('a * 'a list)] to represent a non-empty list. *)
-let[@tail_mod_cons] group_succ_either :
+let group_succ_either :
     ('a, 'b) Either.t list -> ('a * 'a list, 'b * 'b list) Either.t list =
   let[@tail_mod_cons] rec while_left xs =
     let xs, rest = span_while_some Either.find_left xs in
@@ -129,10 +129,11 @@ let replace_block ~old ~new_:(new_first, new_last) proc =
     Additionally, redirects the original block's incoming/outgoing edges to the
     first / last block of the mapped output. *)
 let flat_map_stmts
-    (f :
-      proc:_ Procedure.t ->
-      _ Stmt.t ->
-      (ID.t * ID.t * _ Procedure.t, _ Stmt.t list) Either.t) ~proc base_bid =
+    ~(f :
+       proc:_ Procedure.t ->
+       _ Stmt.t ->
+       (ID.t * ID.t * _ Procedure.t, _ Stmt.t list) Either.t) ~proc base_bid =
+  (* TODO: do we need a new type declaration for this big Either type? *)
   let open Either in
   let b = Procedure.get_block proc base_bid |> Option.get_exn_or "not found" in
   let stmts = CCVector.to_list b.stmts and base_name = ID.name base_bid in
