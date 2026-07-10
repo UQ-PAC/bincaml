@@ -32,7 +32,6 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
   let int_type = TypeConstr ([], "int")
   let nat_val_type i = TypeConstr ([], Int.to_string i)
   let bv_type i = map_expr fix @@ TypeConstr ([ nat_val_type i ], "bv")
-  let bvunk i = TypeConstr ([ Var i ], "bv")
   let bool_type = TypeConstr ([], "bool")
   let unit_t = TypeConstr ([], "unit")
   let top_t = TypeConstr ([], "top")
@@ -128,6 +127,8 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
 
   let gen = ID.make_gen ()
   let bv_type i = bv_type i
+
+  (* bitvector of unknown width  *)
   let bvunk i = map_expr fix @@ TypeConstr ([ Var i ], "bv")
 
   let rec ty_of_basil (t : Types.t) : t =
@@ -232,6 +233,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
 
   type typ = t [@@deriving eq, ord]
 
+  (** An AbstractExpr.t with [t] used as the type. *)
   module AbsTypingExpr = struct
     open Ops
     include AllOps
@@ -326,6 +328,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
   let types_universe = "<types>"
   let global_universe = "<global>"
 
+  (* declare type with name in type scheme *)
   let decl_type ctx name vt =
     let tvar = V.create types_universe name in
     TCtx.update tvar
@@ -335,6 +338,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
         | _ -> failwith "unk")
       ctx
 
+  (* declare var with type in type scheme *)
   let decl_var_typ univ ?(no_constraint = false) c v =
     let vvar = V.of_var univ v in
     let vt = inst_annot_v v in
@@ -345,19 +349,19 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
         | _ -> failwith "unk")
       c
 
-  let rec infer_ty ~univ (hr : Lexing.position) e =
+  let rec infer_expr ~univ (hr : Lexing.position) e =
    fun (c : scheme TCtx.t) ->
     Logs.debug (fun m ->
         m "%s" @@ "infer " ^ plpos hr ^ " " ^ Expr.BasilExpr.to_string e);
     let t =
-      try do_infer infer_ty univ hr e c
+      try do_infer infer_expr univ hr e c
       with TypeErr m ->
         raise (TypeErr (m ^ " : " ^ Expr.BasilExpr.to_string e))
     in
     t
 
   let infer ~univ (hr : Lexing.position) e (c : scheme TCtx.t) =
-    infer_ty ~univ hr e c |> AbsTypingExpr.unfix |> AbstractExpr.get_typ
+    infer_expr ~univ hr e c |> AbsTypingExpr.unfix |> AbstractExpr.get_typ
 
   let retype_var univ ctx id =
     lookup_var_typ ~no_constraint:true univ ctx id |> find |> to_basil
@@ -416,7 +420,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
 
   let do_infer_stmt p univ ctx stmt =
     let open Stmt in
-    let infer_ty h e = infer_ty ~univ h e ctx in
+    let infer_ty h e = infer_expr ~univ h e ctx in
 
     (*let r = fix @@ Var (gen.fresh ()) in*)
     match stmt with
@@ -546,7 +550,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
     let ibool_list b =
       List.map
         (fun a ->
-          let a = infer_ty ~univ [%here] a ctx in
+          let a = infer_expr ~univ [%here] a ctx in
           let _ = unify (fix bool_type) (getty a) in
           a)
         b
@@ -616,7 +620,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
           match definition with
           | Axiom b ->
               let bt = fix bool_type in
-              let b = infer_ty ~univ:global_universe [%here] b scheme in
+              let b = infer_expr ~univ:global_universe [%here] b scheme in
               let _ = unify (getty b) bt in
               let nb scheme =
                 Function
@@ -637,7 +641,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
               (scheme, `Decl (decl_id, nu))
           | Function definition ->
               let e =
-                infer_ty ~univ:global_universe [%here] definition scheme
+                infer_expr ~univ:global_universe [%here] definition scheme
               in
               let ne scheme =
                 Function
@@ -657,7 +661,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
             let tyv =
               classification
               |> Option.map (fun classi ->
-                  infer_ty ~univ:global_universe [%here] classi scheme)
+                  infer_expr ~univ:global_universe [%here] classi scheme)
             in
             fun final_scheme ->
               tyv
@@ -688,6 +692,10 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
     let scheme, new_decls =
       decls |> List.fold_map (infer_decl prog) TCtx.empty
     in
+    (* TODO: implicit decls; constructors need to be added after the types they
+    construct, probably simples to do implicits immediately after the thing they
+    relate to. Maybe they should just appear this way in the declaration
+    list. *)
     let prog =
       List.fold_left
         (fun prog -> function
@@ -709,8 +717,71 @@ end
 
 module T = TypeInference (TypeExpr.Make ())
 
+module type HM = module type of TypeInference (TypeExpr.Make ())
+
+(* in order to  maintain well-typedness of rewrites we will probably want to
+ inject the  global type definitions into the program, always. Otherwise we
+ probably risk inferring inconsistent types. Maybe this goes for for all the
+ global bindings. I.e. if we use a definition incorrectly it will end up
+ ill-typed and that error will be harder to track down. Injecting all the
+ bindings is somewhat giving up though. We could justifiably just require
+ transforms to "know what they are doing" and inject enough type information for
+ it to be well-typed coming out.  Mistakes could be found by running a global
+ program typecheck after the transform. *)
+
+(** Algebra that infers types of expressions *)
+let locally_elaborate_expr (e : Expr.BasilExpr.t) =
+  let open AbstractExpr in
+  let open Ops.AllOps in
+  let module T = TypeInference (TypeExpr.Make ()) in
+  (* TODO: need mode where we absorb take the existing annotations and try to
+  extend , rather than expecting everythign declared in context. *)
+  let i = T.infer_expr ~univ:"expr local" [%here] e TypeExpr.TCtx.empty in
+  let e = T.elaborate_expr ~univ:"expr local" [%here] i TypeExpr.TCtx.empty in
+  e
+
+(** Algebra for returning the annotated type (for use with functions like
+    fold_with_type)*)
+let elaborated_type_alg (e : Types.t Expr.BasilExpr.abstract_expr) =
+  Expr.AbstractExpr.get_typ e
+
+(* Partially apply args list to function type funtype and return resulting type *)
+let type_applied (funtype : Types.t) (args : Types.t list) =
+  let module T = TypeInference (TypeExpr.Make ()) in
+  let rt = T.fresh_tvar ~n:"ret" () in
+  let args = List.map T.ty_of_basil args in
+  let funt = T.curry_f args rt in
+  let ft = T.ty_of_basil funtype in
+  try
+    T.unify ~pos:[%here] ft funt |> ignore;
+    Ok (T.to_basil rt)
+  with T.TypeErr e -> Error e
+
 let elaborate prog =
-  (* We need to create a local typing module in order to get fresh state for the union find and hash cons. *)
+  (* We need to create a local typing module in order to get fresh state for the
+  union find and hash cons. *)
   let module T = TypeInference (TypeExpr.Make ()) in
   let scheme, prog = T.infer_program prog in
   prog
+
+let%expect_test "return type of function" =
+  let open Types in
+  let args = [ Bitvector 64 ] in
+  let ft = Map (Bitvector 64, Map (Bitvector 64, Bitvector 64)) in
+  Printf.printf "function type: %s\n" (Types.to_string ft);
+  let _, ort = Types.uncurry ft in
+  Printf.printf "uncurry ret type: %s\n" (Types.to_string ort);
+  Format.force_newline ();
+  Format.printf "%s%a%a" "partially apply bv64: " (Result.pp Types.pp)
+    (type_applied ft args) Format.newline ();
+  Format.printf "%s%a%a" "type error: " (Result.pp Types.pp)
+    (type_applied ft [ Bitvector 24 ])
+    Format.newline ();
+  [%expect
+    {|
+    function type: ((bv64)->(bv64->bv64))
+    uncurry ret type: bv64
+
+    partially apply bv64: ok((bv64->bv64))
+    type error: error(type_error: 64 <> 24)
+    |}]
