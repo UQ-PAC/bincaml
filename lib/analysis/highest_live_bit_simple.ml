@@ -336,10 +336,10 @@ proc @binary_expr() -> (out1:bv32)
     |}
   in
 (*
-  x:bv64, NumEdge 16 -> zero_extend(64-16, x:bv16)
+  x:bv64, NumEdge 15 -> zero_extend(64-16, x:bv16)
   Use Some when writing the expression to replace with, None when wanting to keep it the same
 
-  var x:bv64, NumEdge 16 -> var x:bv16 := extract(16, 0, expr);
+  var x:bv64, NumEdge 15 -> var x:bv16 := extract(16, 0, expr);
 
   var v1:bv64 := 0xFFFFFFFF:bv64;
   var v2:bv32 := extract(32, 0, v1:bv64);
