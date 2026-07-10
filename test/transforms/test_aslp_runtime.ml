@@ -56,7 +56,8 @@ let%expect_test "lifting is sub-quadratic" =
   in
   let actual_scale = big_t /. base_t in
   if big_t <=. Float.of_int threshold *. base_t then
-    Printf.printf "Pass: %dx bigger input took less than %x longer.\n" scale threshold
+    Printf.printf "Pass: %dx bigger input took less than %x longer.\n" scale
+      threshold
   else begin
     Printf.printf "Found base_size of %d taking base_t of %fms.\n" base_size
       base_t;
@@ -68,5 +69,4 @@ bigger than the allowed test threshold of %dx. Therefore, we fail this
 test which aims to ensure it's approximately linear.|}
       actual_scale big_t threshold
   end;
-  [%expect
-    {| Pass: 6x bigger input took less than 8 longer. |}]
+  [%expect {| Pass: 6x bigger input took less than 8 longer. |}]

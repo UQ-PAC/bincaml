@@ -37,18 +37,15 @@ let lift_code_block (module I : Bincaml_ibi.IBI) ~address =
 
 (** {1 Interfacing with Bincaml IR} *)
 
-and error_attrib_key = ".error"
-
 (** Extracts the opcode, address, and attribute from the given Bincaml
     statement, if it is an {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic call.
     Otherwise, returns [None].
 
     Raises an exception if an {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsic call
     has an unexpected structure. *)
-let aarch64_intrin_of_stmt ?(include_failed = false) ?default_address :
+let aarch64_intrin_of_stmt ?default_address :
     Program.stmt -> (Bitvec.t * Bitvec.t * Attrib.attrib_map) option = function
-  | Stmt.Instr_IntrinCall { attrib; lhs; name = Aarch64Eval; args }
-    when include_failed || not (StringMap.mem error_attrib_key attrib) -> (
+  | Stmt.Instr_IntrinCall { attrib; lhs; name = Aarch64Eval; args } -> (
       let args =
         match (args, default_address) with
         | [ x ], Some default -> [ x; Expr.BasilExpr.bvconst default ]
@@ -206,7 +203,7 @@ let apply_stmt_addresses_from_block (block : _ Block.t) =
 
   let apply_one address stmt =
     let address' = Bitvec.(add address (of_int ~size:64 4)) in
-    match aarch64_intrin_of_stmt ~include_failed:true ~default_address stmt with
+    match aarch64_intrin_of_stmt ~default_address stmt with
     | Some (opcode, a, attr) when Bitvec.equal a default_address ->
         (address', stmt_of_aarch64_intrin (opcode, address, attr))
     | Some _ -> (address', stmt) (* increment address *)
