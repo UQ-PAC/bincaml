@@ -3,8 +3,7 @@
 open Common
 open UnionFind
 
-type 'a tycon = 'a list * 'a
-type variance = Cov | Contr | Inv
+(** Type variable identifier *)
 type tvar = ID.t [@@deriving eq, ord, show]
 
 (** Type scoping is handled by "universe" name strings. Hash consing enables
@@ -13,7 +12,10 @@ type tvar = ID.t [@@deriving eq, ord, show]
     type equivalence/unification solving. *)
 
 module V = struct
-  (** scoped type variables *)
+  (** The keys for the typing context map. 
+  We use a simple "universe" string to distinguish types defined in different
+  scopes (i.e. local variables from globals.)
+   *)
 
   type t = { univ : string; v : string } [@@deriving eq, ord, show]
 
@@ -29,10 +31,12 @@ module V = struct
     else { univ; v = Var.name v }
 end
 
+(** The type scheme / typing context : to store a map from scoped type variables to types. *)
 module TCtx = Map.Make (V)
 
-(** unfixed type expression *)
 module ATyp = struct
+  (** Open recursive type expression, either a variable or type constructor. *)
+
   type 'a expr = Var of tvar | TypeConstr of 'a list * string
   [@@deriving eq, ord, show, map, fold]
 
@@ -148,8 +152,9 @@ module type TypeContext = sig
 end
 
 (** Create the union find and hash-consing structure for recording type
-    relations. This must be done per-program as its all implcit mutable state
-    tied to the module *)
+    relations. This must be done each time we want to perform inference in an
+    independent environment, in order to construct a fresh hash-consing and
+    union-find state. *)
 module Make () = struct
   module Typ = struct
     include ATyp

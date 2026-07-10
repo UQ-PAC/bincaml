@@ -1,25 +1,8 @@
+(include_subdirs qualified)
+
 (library
  (public_name bincaml.ast)
  (name lang)
- (modules
-  hm
-  abstract_expr
-  attrib
-  spec_modifies
-  check
-  expr
-  algsimp
-  common
-  typeExpr
-  ops
-  viscfg
-  expr_smt
-  expr_eval
-  stmt
-  block
-  procedure
-  interp
-  program)
  (libraries
   unionFind
   zarith

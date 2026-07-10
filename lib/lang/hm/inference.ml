@@ -28,14 +28,25 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
 
   let tmod_const a = TypeConstr ([ a ], "const")
   let tmod_shared a = TypeConstr ([ a ], "shared")
+
+  (** Function type, takes two arguments: we always curry. *)
   let fun_type a b = TypeConstr ([ a; b ], "->")
-  let int_type = TypeConstr ([], "int")
+
+  (** A type representing a number *)
   let nat_val_type i = TypeConstr ([], Int.to_string i)
+
+  (** A bitvector type parametric in its width *)
   let bv_type i = map_expr fix @@ TypeConstr ([ nat_val_type i ], "bv")
+
+  (** Primitive types *)
+
+  let int_type = TypeConstr ([], "int")
   let bool_type = TypeConstr ([], "bool")
   let unit_t = TypeConstr ([], "unit")
   let top_t = TypeConstr ([], "top")
   let nothing_t = TypeConstr ([], "nothing")
+
+
   let ptr_typ_sub a b = TypeConstr ([ a; b ], "ptr")
   let ptr_typ = bv_type 64
 
@@ -719,12 +730,17 @@ module T = TypeInference (TypeExpr.Make ())
 
 module type HM = module type of TypeInference (TypeExpr.Make ())
 
-(* in order to  maintain well-typedness of rewrites we will probably want to
+(* 
+   TODO:
+
+ In order to  maintain well-typedness of rewrites we will probably want to
  inject the  global type definitions into the program, always. Otherwise we
  probably risk inferring inconsistent types. Maybe this goes for for all the
  global bindings. I.e. if we use a definition incorrectly it will end up
  ill-typed and that error will be harder to track down. Injecting all the
- bindings is somewhat giving up though. We could justifiably just require
+ bindings is somewhat giving up though. 
+
+ We could justifiably just require
  transforms to "know what they are doing" and inject enough type information for
  it to be well-typed coming out.  Mistakes could be found by running a global
  program typecheck after the transform. *)
@@ -763,25 +779,3 @@ let elaborate prog =
   let module T = TypeInference (TypeExpr.Make ()) in
   let scheme, prog = T.infer_program prog in
   prog
-
-let%expect_test "return type of function" =
-  let open Types in
-  let args = [ Bitvector 64 ] in
-  let ft = Map (Bitvector 64, Map (Bitvector 64, Bitvector 64)) in
-  Printf.printf "function type: %s\n" (Types.to_string ft);
-  let _, ort = Types.uncurry ft in
-  Printf.printf "uncurry ret type: %s\n" (Types.to_string ort);
-  Format.force_newline ();
-  Format.printf "%s%a%a" "partially apply bv64: " (Result.pp Types.pp)
-    (type_applied ft args) Format.newline ();
-  Format.printf "%s%a%a" "type error: " (Result.pp Types.pp)
-    (type_applied ft [ Bitvector 24 ])
-    Format.newline ();
-  [%expect
-    {|
-    function type: ((bv64)->(bv64->bv64))
-    uncurry ret type: bv64
-
-    partially apply bv64: ok((bv64->bv64))
-    type error: error(type_error: 64 <> 24)
-    |}]
