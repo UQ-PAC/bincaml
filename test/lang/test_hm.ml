@@ -2,24 +2,43 @@ open Lang
 open Common
 open Hm.Inference
 
-let%expect_test "return type of function" =
-  let open Types in
-  let args = [ Bitvector 64 ] in
-  let ft = Map (Bitvector 64, Map (Bitvector 64, Bitvector 64)) in
-  Printf.printf "function type: %s\n" (Types.to_string ft);
-  let _, ort = Types.uncurry ft in
-  Printf.printf "uncurry ret type: %s\n" (Types.to_string ort);
-  Format.force_newline ();
-  Format.printf "%s%a%a" "partially apply bv64: " (Result.pp Types.pp)
-    (type_applied ft args) Format.newline ();
-  Format.printf "%s%a%a" "type error: " (Result.pp Types.pp)
-    (type_applied ft [ Bitvector 24 ])
-    Format.newline ();
-  [%expect
-    {|
-    function type: ((bv64)->(bv64->bv64))
-    uncurry ret type: bv64
+module HMDifferential = struct
+  let arb_expr =
+    let open QCheck.Gen in
+    let* wd = Expr_gen.gen_width in
+    Expr_gen.gen_bvexpr (5, wd)
 
-    partially apply bv64: ok((bv64->bv64))
-    type error: error(type_error: 64 <> 24)
-    |}]
+  let infer e =
+    try
+      Ok
+        (locally_elaborate_expr e |> Expr.BasilExpr.unfix
+       |> Expr.AbstractExpr.get_typ)
+    with e -> Result.of_exn e
+
+  let gener =
+    QCheck.make ~print:(fun (e, inf_b, inf_hm) ->
+        Printf.sprintf "%s : %s = %s"
+          (Expr.BasilExpr.to_string e)
+          (Types.to_string inf_b)
+          (Format.sprintf "%a" (Result.pp Types.pp) inf_hm))
+    @@
+    let open QCheck.Gen in
+    let* exp = arb_expr in
+    let inf_b = Expr.BasilExpr.get_typ exp in
+    let inf_hm = infer exp in
+    return (exp, inf_b, inf_hm)
+
+  let predicate (a, b, hm) = Result.is_ok hm && Types.equal b (Result.get_ok hm)
+
+  let test =
+    QCheck.Test.make ~name:"Hm inference matches" ~count:1000 ~max_fail:1 gener
+      predicate
+end
+
+let _ =
+  let suite =
+    List.map
+      (QCheck_alcotest.to_alcotest ~long:true ~speed_level:`Slow ~verbose:true)
+      [ HMDifferential.test ]
+  in
+  Alcotest.run "hm" [ ("diff", suite) ]

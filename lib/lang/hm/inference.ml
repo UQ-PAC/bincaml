@@ -35,7 +35,17 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
   let fun_type a b = TypeConstr ([ a; b ], "->")
 
   (** A type representing a number *)
-  let nat_val_type i = TypeConstr ([], Int.to_string i)
+  let nat_val_type i =
+    let num = fix (TypeConstr ([], Int.to_string i)) in
+    TypeConstr ([ num ], "ℕ")
+
+  let is_nat_val_type (i : t) =
+    match unfix i with
+    | TypeConstr ([ num ], "ℕ") -> (
+        match unfix num with
+        | TypeConstr ([], num) -> Int.of_string num
+        | _ -> None)
+    | _ -> None
 
   (** A bitvector type parametric in its width *)
   let bv_type i = map_expr fix @@ TypeConstr ([ nat_val_type i ], "bv")
@@ -50,17 +60,25 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
   let ptr_typ_sub a b = TypeConstr ([ a; b ], "ptr")
   let ptr_typ = bv_type 64
 
+  exception TypeErr of string
+
   let rec to_basil (t : t) : Types.t =
+    let wrapped t f =
+      try f ()
+      with TypeErr e ->
+        raise (TypeErr ("error in " ^ (type_to_string @@ t) ^ ": " ^ e))
+    in
     let open Types in
+    wrapped t @@ fun () ->
     match unfix t with
-    | TypeConstr ([ a; b ], "->") -> Map (to_basil a, to_basil b)
+    | TypeConstr ([ a; b ], "->") ->
+        let a = wrapped a @@ fun () -> to_basil a in
+        let b = wrapped b @@ fun () -> to_basil b in
+        Map (a, b)
     | TypeConstr ([ w ], "bv") -> (
-        match unfix w with
-        | TypeConstr ([], a) -> (
-            match Int.of_string a with
-            | Some i -> Bitvector i
-            | None -> Sort (a ^ "bv", []))
-        | _ -> failwith "generic bv")
+        match is_nat_val_type w with
+        | Some i -> Bitvector i
+        | None -> raise (TypeErr ("bitvector unresolved: " ^ type_to_string t)))
     | TypeConstr ([], "unit") -> Unit
     | TypeConstr ([], "bool") -> Boolean
     | TypeConstr ([], "int") -> Integer
@@ -79,8 +97,6 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
 
   let plpos (l : Lexing.position) =
     Printf.sprintf "%s:%d" l.pos_fname l.pos_lnum
-
-  exception TypeErr of string
 
   let type_error a b =
     let a = find a in
@@ -142,11 +158,75 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
         in
         merge (fun a b -> TypeConstr (args, n)) t t'
 
+  (** {2 Bitvector constraint solving} *)
+
+  type dependent_bv_constraints =
+    | Add of { a : Typ.t; b : Typ.t; equ : Typ.t }  (** a + b = equ*)
+    | AddConst of { a : Typ.t; b : int; equ : Typ.t }  (** a + b = equ*)
+
+  let show_dependent_bv_constraints = function
+    | Add { a; b; equ } ->
+        Printf.sprintf "%s + %s = %s" (type_to_string a) (type_to_string b)
+          (type_to_string equ)
+    | AddConst { a; b; equ } ->
+        Printf.sprintf "%s + (const %d) = %s" (type_to_string a) b
+          (type_to_string equ)
+
+  let is_const a = is_nat_val_type a
+
+  let unify_bv_constraint a : Typ.t option =
+    match a with
+    | Add { a; b; equ } -> (
+        match List.map is_nat_val_type [ find a; find b; find equ ] with
+        | [ Some _; Some _; Some _ ] -> Some equ
+        | [ Some a; Some b; None ] ->
+            Some (unify ~pos:[%here] (fix @@ nat_val_type (a + b)) equ)
+        | [ Some a; None; Some b ] ->
+            Some (unify ~pos:[%here] (fix @@ nat_val_type (b - a)) equ)
+        | [ None; Some a; Some b ] ->
+            Some (unify ~pos:[%here] (fix @@ nat_val_type (b - a)) equ)
+        | _ -> None)
+    | AddConst { a; b; equ } -> (
+        match (is_nat_val_type (find a), is_nat_val_type (find equ)) with
+        | Some i, None ->
+            Some (unify ~pos:[%here] (fix @@ nat_val_type (i + b)) equ)
+        | Some i, Some equ_c ->
+            Some (unify ~pos:[%here] (fix @@ nat_val_type (i + b)) equ)
+        | None, Some e ->
+            Some (unify ~pos:[%here] (fix @@ nat_val_type (e - b)) a)
+        | _ -> None)
+
+  (** Naive solver; loop over constraints and unify until everything is solved.
+  *)
+  let solve_constraints ~max_iters cls =
+    let show = List.to_string ~sep:"\n" show_dependent_bv_constraints in
+    let rec solve tries cs =
+      match cs with
+      | [] -> ()
+      | _ when tries > max_iters ->
+          raise
+            (TypeErr
+               ("Gave up solving bitvec constraints with remaining:\n" ^ show cs))
+      | cs ->
+          let remaining =
+            List.filter_map
+              (fun c ->
+                match unify_bv_constraint c with
+                | Some e -> None
+                | None -> Some c)
+              cs
+          in
+          solve (tries + 1) remaining
+    in
+    solve 0 cls
+
   let gen = ID.make_gen ()
   let bv_type i = bv_type i
 
-  (* bitvector of unknown width  *)
-  let bvunk i = map_expr fix @@ TypeConstr ([ Var i ], "bv")
+  (** {1 Type inference from exprs}*)
+
+  (* Bitvector of unknown width  *)
+  let bvunk i = TypeConstr ([ i ], "bv")
 
   let rec ty_of_basil (t : Types.t) : t =
     let e =
@@ -177,13 +257,21 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
 
       TODO: some approach like weak type variables that makes it a type error to
       fail to instantiate. *)
-  let scheme_of_op (gen : ID.generator)
+  let scheme_of_op ~visit_constraint (gen : ID.generator)
       (o : [ Ops.AllOps.const | Ops.AllOps.unary | Ops.AllOps.binary ]) =
-    let fv () = gen.fresh ~name:"ɑ" () in
+    let fv () = fix @@ Var (gen.fresh ~name:"a" ()) in
     match o with
     | `Extract (hi, lo) -> curry [ bvunk (fv ()) ] (bv_type (hi - lo))
-    | `SignExtend bits -> curry [ bvunk (fv ()) ] (bvunk (fv ()))
-    | `ZeroExtend bits -> curry [ bvunk (fv ()) ] (bvunk (fv ()))
+    | `SignExtend bits ->
+        let a = fv () in
+        let equ = fv () in
+        let r = curry [ bvunk a ] (bvunk equ) in
+        visit_constraint @@ AddConst { a; b = bits; equ };
+        r
+    | `ZeroExtend bits ->
+        let a = fv () and equ = fv () in
+        visit_constraint @@ AddConst { a; b = bits; equ };
+        curry [ bvunk a ] (bvunk equ)
     | `BOOLTOBV1 -> curry [ bool_type ] (bv_type 1)
     | `Bitvector b -> fix @@ bv_type (Bitvec.size b)
     | #Ops.BVOps.binary_unif ->
@@ -202,7 +290,9 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
     | #Ops.LogicalOps.binary -> curry [ bool_type; bool_type ] bool_type
     | #Ops.LogicalOps.unary -> curry [ bool_type ] bool_type
     | #Ops.LogicalOps.const -> fix @@ bool_type
-    | `Old -> fix @@ Var (fv ())
+    | `Old ->
+        let a = fv () in
+        curry_f [ a ] a
     | #Ops.AllOps.binary as o ->
         failwith @@ "unsupported op" ^ Ops.AllOps.to_string o
     | #Ops.AllOps.unary as o ->
@@ -211,20 +301,33 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
         failwith @@ "unsupported op" ^ Ops.AllOps.to_string o
 
   (** return the generic type scheme of an intrinsic operation *)
-  let scheme_of_intrin (gen : ID.generator) (o : Ops.AllOps.intrin) args =
-    let fv () = gen.fresh ~name:"ɑ" () in
+  let scheme_of_intrin ?(visit_constraint = fun a -> ()) (gen : ID.generator)
+      (o : Ops.AllOps.intrin) args =
+    let fv () = fix @@ Var (gen.fresh ~name:"a" ()) in
     match o with
     | `BVADD | `BVMUL | `BVOR | `BVXOR | `BVAND ->
         let a = fv () in
-        curry (List.init args (fun _ -> Var a)) (Var a)
-    | `BVConcat -> curry (List.init args (fun _ -> Var (fv ()))) (Var (fv ()))
+        curry_f (List.init args (fun _ -> a)) a
+    | `BVConcat ->
+        let args = List.init args (fun _ -> fv ()) in
+        let rs =
+          List.reduce_exn
+            (fun a b ->
+              let equ = fv () in
+              visit_constraint (Add { a; b; equ });
+              equ)
+            args
+        in
+        let rs = bvunk rs in
+        let args = List.map bvunk args in
+        curry args rs
     | `OR | `AND -> curry (List.init args (fun _ -> bool_type)) bool_type
     | `MapUpdate ->
         let a = fv () in
         let b = fv () in
-        let m = curry [ Var a ] (Var b) in
-        curry_f [ m; fix @@ Var a; fix @@ Var b ] m
-    | `Cases -> fix @@ Var (fv ())
+        let m = curry_f [ a ] b in
+        curry_f [ m; a; b ] m
+    | `Cases -> fv ()
 
   (* instantiate typescheme for a single type-annotated variable *)
   let inst_annot_v ?(no_constraint = false) v =
@@ -276,7 +379,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
     let typ = lookup_var_typ univ ctx id in
     (id, typ)
 
-  let do_infer
+  let do_infer ~visit_constraint
       (infer :
         univ:string ->
         Lexing.position ->
@@ -312,25 +415,25 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
           (Lambda { op; bound_vars; in_body = bdty; attrib; typ; triggers })
       end
     | Constant { const = #Ops.AllOps.const as op; attrib } -> begin
-        let f = scheme_of_op gen op in
+        let f = scheme_of_op ~visit_constraint gen op in
         let r = unify r f in
         AbsTypingExpr.fix (Constant { typ = r; const = op; attrib })
       end
     | UnaryExpr { op = #Ops.AllOps.unary as op; arg; attrib } -> begin
-        let f = scheme_of_op gen op in
+        let f = scheme_of_op ~visit_constraint gen op in
         let arg = infer ~univ [%here] arg c in
         ignore @@ unify f (curry_f [ getty arg ] r);
         AbsTypingExpr.fix (UnaryExpr { typ = r; op; attrib; arg })
       end
     | BinaryExpr { op = #Ops.AllOps.binary as op; arg1; arg2; attrib } -> begin
-        let f = scheme_of_op gen op in
+        let f = scheme_of_op ~visit_constraint gen op in
         let arg1 = infer ~univ [%here] arg1 c in
         let arg2 = infer ~univ [%here] arg2 c in
         ignore @@ unify f (curry_f [ getty arg1; getty arg2 ] r);
         AbsTypingExpr.fix (BinaryExpr { typ = r; op; attrib; arg1; arg2 })
       end
     | ApplyIntrin { op = #Ops.AllOps.intrin as op; args; attrib } -> begin
-        let f = scheme_of_intrin gen op (List.length args) in
+        let f = scheme_of_intrin ~visit_constraint gen op (List.length args) in
         let args = List.map (fun a -> infer ~univ [%here] a c) args in
         ignore @@ unify f (curry_f (List.map getty args) r);
         AbsTypingExpr.fix (ApplyIntrin { typ = r; op; attrib; args })
@@ -366,19 +469,24 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
         | _ -> failwith "unk")
       c
 
-  let rec infer_expr ~univ (hr : Lexing.position) e =
+  let rec infer_expr visit_constraint ~univ (hr : Lexing.position) e =
    fun (c : scheme TCtx.t) ->
     Logs.debug (fun m ->
         m "%s" @@ "infer " ^ plpos hr ^ " " ^ Expr.BasilExpr.to_string e);
     let t =
-      try do_infer infer_expr univ hr e c
+      try do_infer ~visit_constraint (infer_expr visit_constraint) univ hr e c
       with TypeErr m ->
         raise (TypeErr (m ^ " : " ^ Expr.BasilExpr.to_string e))
     in
     t
 
-  let infer ~univ (hr : Lexing.position) e (c : scheme TCtx.t) =
-    infer_expr ~univ hr e c |> AbsTypingExpr.unfix |> AbstractExpr.get_typ
+  let infer visit_constraint ~univ (hr : Lexing.position) e (c : scheme TCtx.t)
+      =
+    let nexpr =
+      infer_expr visit_constraint ~univ hr e c
+      |> AbsTypingExpr.unfix |> AbstractExpr.get_typ
+    in
+    nexpr
 
   let retype_var univ ctx id =
     lookup_var_typ ~no_constraint:true univ ctx id |> find |> to_basil
@@ -403,7 +511,8 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
   let unfix i = match i with Expr.BasilExpr.E i -> i
   let rec cata alg e = (unfix %> AbstractExpr.map (cata alg) %> alg) e
 
-  let infer_phi univ ctx (p : Var.t Block.phi list) =
+  let infer_phi visit_constraint univ ctx (p : Var.t Block.phi list) =
+    let infer = infer visit_constraint in
     let open Block in
     let r = fix @@ Var (gen.fresh ()) in
     List.fold_left
@@ -435,9 +544,10 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
 
   let fresh_tvar ?(n = "a") () = fix @@ Var (gen.fresh ~name:n ())
 
-  let do_infer_stmt p univ ctx stmt =
+  let do_infer_stmt visit_constraint p univ ctx stmt =
     let open Stmt in
-    let infer_ty h e = infer_expr ~univ h e ctx in
+    let infer_ty h e = infer_expr visit_constraint ~univ h e ctx in
+    let infer = infer visit_constraint in
 
     (*let r = fix @@ Var (gen.fresh ()) in*)
     match stmt with
@@ -533,17 +643,17 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
       ~f_expr:(fun e -> elaborate_expr ~univ [%here] e ctx)
       ~f_lvar:retype_var ~f_rvar:retype_var stmt
 
-  let infer_stmt p univ ctx s =
-    try do_infer_stmt p univ ctx s
+  let infer_stmt vc p univ ctx s =
+    try do_infer_stmt vc p univ ctx s
     with TypeErr m ->
       raise
         (TypeErr
            (m ^ " "
            ^ Stmt.to_string Var.pretty Var.pretty Expr.BasilExpr.pretty s))
 
-  let infer_block p univ ctx (b : Program.bloc) =
-    let _ = infer_phi univ ctx b.phis in
-    Block.map ~phi:Fun.id (infer_stmt p univ ctx) b
+  let infer_block vc p univ ctx (b : Program.bloc) =
+    let _ = infer_phi vc univ ctx b.phis in
+    Block.map ~phi:Fun.id (infer_stmt vc p univ ctx) b
 
   let elaborate_block p univ ctx (b : ('a, 'b) Block.t) =
     Block.map ~phi:(elaborate_phi univ ctx) (elaborate_stmt univ ctx) b
@@ -561,13 +671,13 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
     in
     ctx
 
-  let infer_proc prog ctx ?(no_constraint = false) (p : Program.proc) =
+  let infer_proc vc prog ctx ?(no_constraint = false) (p : Program.proc) =
     let spec = Procedure.specification p in
     let univ = V.proc_univ @@ Procedure.id p in
     let ibool_list b =
       List.map
         (fun a ->
-          let a = infer_expr ~univ [%here] a ctx in
+          let a = infer_expr vc ~univ [%here] a ctx in
           let _ = unify (fix bool_type) (getty a) in
           a)
         b
@@ -602,7 +712,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
     let ctx = assume_proc_decl ctx ~no_constraint p in
     let bvlocks =
       Procedure.iter_blocks_topo_fwd p
-      |> Iter.map (fun (i, b) -> (i, infer_block prog univ ctx b))
+      |> Iter.map (fun (i, b) -> (i, infer_block vc prog univ ctx b))
       |> Iter.persistent
     in
 
@@ -620,8 +730,10 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
 
   (** Run type inference on a declaration, returning an updated typing scheme,
       and elaboration function*)
-  let infer_decl prog scheme =
+  let infer_decl visit_constraint prog scheme =
     let open Program in
+    let infer_expr = infer_expr visit_constraint in
+    let infer_proc = infer_proc visit_constraint in
     (* We have to be careful that inference is run immediately, not delayed until elaboration. *)
     fun (decl_id, d) ->
       match d with
@@ -701,14 +813,17 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
   (** The function that does everything *)
   let infer_program prog =
     let decls = Program.declarations prog |> Iter.to_list in
+    let constraints = ref [] in
+    let visit_constraint c = constraints := c :: !constraints in
     (* We fold the inference context through every declaration and
     calling the inference functions, returning an expressions typed with the
     type expressions herein.  We also return the resulting list of elaboration
     functions, which take the final inference context and convert the HM-typed
     expressions back to bincaml typed expressions. *)
     let scheme, new_decls =
-      decls |> List.fold_map (infer_decl prog) TCtx.empty
+      decls |> List.fold_map (infer_decl visit_constraint prog) TCtx.empty
     in
+    let _ = solve_constraints ~max_iters:50 !constraints in
     (* TODO: implicit decls; constructors need to be added after the types they
     construct, probably simples to do implicits immediately after the thing they
     relate to. Maybe they should just appear this way in the declaration
@@ -754,9 +869,15 @@ let locally_elaborate_expr (e : Expr.BasilExpr.t) =
   let open AbstractExpr in
   let open Ops.AllOps in
   let module T = TypeInference (TypeExpr.Make ()) in
+  let constraints = ref [] in
+  let visit_constraint c = constraints := c :: !constraints in
   (* TODO: need mode where we absorb take the existing annotations and try to
   extend , rather than expecting everythign declared in context. *)
-  let i = T.infer_expr ~univ:"expr local" [%here] e TypeExpr.TCtx.empty in
+  let i =
+    T.infer_expr visit_constraint ~univ:"expr local" [%here] e
+      TypeExpr.TCtx.empty
+  in
+  let _ = T.solve_constraints ~max_iters:100 !constraints in
   let e = T.elaborate_expr ~univ:"expr local" [%here] i TypeExpr.TCtx.empty in
   e
 
