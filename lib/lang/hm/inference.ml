@@ -45,8 +45,6 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
   let unit_t = TypeConstr ([], "unit")
   let top_t = TypeConstr ([], "top")
   let nothing_t = TypeConstr ([], "nothing")
-
-
   let ptr_typ_sub a b = TypeConstr ([ a; b ], "ptr")
   let ptr_typ = bv_type 64
 

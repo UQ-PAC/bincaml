@@ -3,8 +3,8 @@
 open Common
 open UnionFind
 
-(** Type variable identifier *)
 type tvar = ID.t [@@deriving eq, ord, show]
+(** Type variable identifier *)
 
 (** Type scoping is handled by "universe" name strings. Hash consing enables
     types to be canonically identified by their representation, then looked up
@@ -12,10 +12,9 @@ type tvar = ID.t [@@deriving eq, ord, show]
     type equivalence/unification solving. *)
 
 module V = struct
-  (** The keys for the typing context map. 
-  We use a simple "universe" string to distinguish types defined in different
-  scopes (i.e. local variables from globals.)
-   *)
+  (** The keys for the typing context map. We use a simple "universe" string to
+      distinguish types defined in different scopes (i.e. local variables from
+      globals.) *)
 
   type t = { univ : string; v : string } [@@deriving eq, ord, show]
 
@@ -31,8 +30,9 @@ module V = struct
     else { univ; v = Var.name v }
 end
 
-(** The type scheme / typing context : to store a map from scoped type variables to types. *)
 module TCtx = Map.Make (V)
+(** The type scheme / typing context : to store a map from scoped type variables
+    to types. *)
 
 module ATyp = struct
   (** Open recursive type expression, either a variable or type constructor. *)
