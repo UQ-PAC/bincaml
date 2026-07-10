@@ -45,7 +45,7 @@ let find_base_size ~target_millis f arg =
 
 let%expect_test "lifting is sub-quadratic" =
   let base_size, base_t =
-    find_base_size ~target_millis:10. Transforms.Aslp.transform_program
+    find_base_size ~target_millis:15. Transforms.Aslp.transform_program
       make_big_program
   in
 
@@ -70,9 +70,9 @@ test which aims to ensure it's approximately linear.|}
   end;
   [%expect
     {|
-    Found base_size of 200 taking base_t of 12.154000ms.
+    Found base_size of 300 taking base_t of 17.769000ms.
     If linear, 6x bigger should take approx 6x longer.
-    We found it actually took 9.639213x longer (117.155000ms), which is
+    We found it actually took 11.854747x longer (210.647000ms), which is
     bigger than the allowed test threshold of 8x. Therefore, we fail this
     test which aims to ensure it's approximately linear.
     |}]
