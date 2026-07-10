@@ -241,3 +241,63 @@ module InterprocDSE = struct
       (fun _ proc -> transform_proc p keep live_param_strs results proc)
       p
 end
+
+
+let%expect_test "test1_basic_shifts" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+
+proc @trans() -> (out:bv32)
+[
+    block %trans [
+      var v1:bv64 := 0xffffffff:bv64;
+      var v2:bv32 := extract(32, 0, v1:bv64);
+      return (v2);
+    ];
+];
+
+proc @binary_expr() -> (out1:bv32)
+[
+    block %trans [
+      var v1:bv64 := 0xffffffff:bv64;
+      var v2:bv8 := extract(8, 0, v1:bv64);
+      var v3:bv8 := extract(16, 8, v1:bv64);
+      var v4:bv8 := bvand(v2:bv8, v3:bv8);
+      return (v4);
+    ];
+];
+    |}
+  in
+
+  let program = lst.prog in
+  
+  let res = InterprocDSE.transform (fun _ -> true) program in
+  Program.pretty_to_chan  stdout res;
+  [%expect
+  {|
+    proc @trans()  -> (out:bv32) {  }
+
+
+    [
+       block %trans [
+         var v1:bv64 := 0xffffffff:bv64;
+         var v2:bv32 := extract(32,0, v1:bv64);
+         var out:bv32 := v2:bv32;
+         return;
+       ]
+    ];
+    proc @binary_expr()  -> (out1:bv32) {  }
+
+
+    [
+       block %trans [
+         var v1:bv64 := 0xffffffff:bv64;
+         var v2:bv8 := extract(8,0, v1:bv64);
+         var v3:bv8 := extract(16,8, v1:bv64);
+         var v4:bv8 := bvand(v2:bv8, v3:bv8);
+         var out1:bv32 := v4:bv8;
+         return;
+       ]
+    ];
+    |}]

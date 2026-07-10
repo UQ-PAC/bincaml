@@ -35,7 +35,7 @@ module HighestLiveBitLattice = struct
     | HighBit { hi_lb = ha ; lo_lb = la }, HighBit { hi_lb = hb ; lo_lb = lb } ->
         let max_hi_lb = max ha hb in
         let min_lo_lb = min la lb in
-        highbit max_hi_lb min_lo_lb false
+        highbit max_hi_lb min_lo_lb false (* TODO: check if true or false *)
   
   let leq a b =
     match (a, b) with
@@ -47,6 +47,7 @@ module HighestLiveBitLattice = struct
 
   let widening a b = join a b
   let narrowing a b = a
+  let get_hi a = match a with HighBit { hi_lb = hi ; lo_lb ; is_var } -> Some hi | _ -> None
 end
 
 (* IDESSI Lattice Backwards*)
@@ -292,10 +293,10 @@ proc @h() -> (h_out:bv1)
 proc @shift() -> (left_out:bv64, right_out:bv64)
 [
     block %shift_entry [
-      var v1:bv32 := 999:bv64;
+      var v1:bv64 := 999:bv64;
 
-      var left:bv64 := bvshl(v1, 32:bv32);
-      var right:bv64 := bvlshr(v1, 32:bv64);
+      var left:bv64 := bvshl(v1:bv64, 32:bv32);
+      var right:bv64 := bvlshr(v1:bv64, 32:bv64);
 
       return (left, right);
     ];
@@ -306,8 +307,8 @@ proc @shift2() -> (left_out:bv64, right_out:bv64)
     block %shift_entry [
       var v1:bv64 := 999:bv64;
 
-      var left:bv64 := bvlshr(bvshl(v1, 32:bv64),32:bv64);
-      var right:bv64 := bvshl(bvlshr(v1, 32:bv64), 32:bv64);
+      var left:bv64 := bvlshr(bvshl(v1:bv64, 32:bv64),32:bv64);
+      var right:bv64 := bvshl(bvlshr(v1:bv64, 32:bv64), 32:bv64);
 
       return (left, right);
     ];
@@ -321,10 +322,23 @@ proc @trans() -> (out:bv32)
       return (v2);
     ];
 ];
+
+proc @binary_expr() -> (out1:bv32)
+[
+    block %trans [
+      var v1:bv64 := 0xffffffff:bv64;
+      var v2:bv8 := extract(8, 0, v1:bv64);
+      var v3:bv8 := extract(16, 8, v1:bv64);
+      var v4:bv8 := bvand(v2:bv8, v3:bv8);
+      return (v4);
+    ];
+];
     |}
   in
 (*
   x:bv64, NumEdge 16 -> zero_extend(64-16, x:bv16)
+  Use Some when writing the expression to replace with, None when wanting to keep it the same
+
   var x:bv64, NumEdge 16 -> var x:bv16 := extract(16, 0, expr);
 
   var v1:bv64 := 0xFFFFFFFF:bv64;
@@ -345,25 +359,33 @@ proc @trans() -> (out:bv32)
 
   var v1:bv32 := extract(32, 0, 0xFFFFFFFF:bv64);
   var v2:bv32 := extract(32, 31, zero_extend(32, v1:bv32));
+
+  !(!(!( (!(!(b))) && a)))
+  !!!(!!b && a)
+  !(b && a)
+  !b || !a
 *)
 
 
   let program = lst.prog in
   let results, p2_results = IDELiveBitSSIAnalysis.solve program in
-  Hashtbl.iter
-    (fun pid summary ->
-      print_endline @@ ID.name pid;
-      print_endline @@ IDELiveBitSSIAnalysis.show_summary summary;
-      print_endline
-      @@ Iter.to_string (fun (v, r) -> Var.name v)
-      @@ VarMap.to_iter
-      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
-    results;
+  IDMap.iter (fun id vars ->
+  Printf.printf "ID: %s\n" (ID.show id);
+
+  VarMap.iter (fun var value ->
+    Printf.printf "  %s -> %s\n"
+      (Var.show var)
+      (IDESSI_LB.Value.show value))
+    vars
+) p2_results;
   [%expect
     {|
     @trans
     (Λ,Λ->IdEdge), (out,out->IdEdge), (out,v1->NumEdge 31), (out,v2->NumEdge 31)
     out, v1, v2
+    @binary_expr
+    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v1->NumEdge 15), (out1,v2->NumEdge 7), (out1,v3->NumEdge 7), (out1,v4->NumEdge 7)
+    out1, v1, v2, v3, v4
     @shift
     (Λ,Λ->IdEdge), (left_out,left_out->IdEdge), (left_out,left->NumEdge 63), (right_out,right_out->IdEdge), (right_out,right->NumEdge 63)
     left_out, right_out, left, right

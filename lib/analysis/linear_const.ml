@@ -349,6 +349,60 @@ end
 
 module LinearConstAnalysis = IDESSI (LinearIDE)
 
+
+let%expect_test "test1_basic_shifts" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+
+proc @trans() -> (out:bv32)
+[
+    block %trans [
+      var v1:bv64 := 0xffffffff:bv64;
+      var v2:bv32 := extract(32, 0, v1:bv64);
+      return (v2);
+    ];
+];
+
+proc @binary_expr() -> (out1:bv32)
+[
+    block %trans [
+      var v1:bv64 := 0xffffffff:bv64;
+      var v2:bv8 := extract(8, 0, v1:bv64);
+      var v3:bv8 := extract(16, 8, v1:bv64);
+      var v4:bv8 := bvand(v2:bv8, v3:bv8);
+      return (v4);
+    ];
+];
+    |}
+  in
+
+  let program = lst.prog in
+  
+  let results, p2_results = LinearConstAnalysis.solve program in
+  IDMap.iter (fun id vars ->
+  Printf.printf "ID: %s\n" (ID.show id);
+
+  VarMap.iter (fun var value ->
+    Printf.printf "  %s -> %s\n"
+      (Var.show var)
+      (LF.Value.show value))
+    vars
+) p2_results;
+  [%expect
+  {|
+    ID: ("@trans", 0)
+      { Var.V.name = "out"; typ = bv32; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> 0xffffffff:bv64
+      { Var.V.name = "v2"; typ = bv32; scope = Var.LocalVar } -> ⊤
+    ID: ("@binary_expr", 1)
+      { Var.V.name = "out1"; typ = bv32; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> 0xffffffff:bv64
+      { Var.V.name = "v2"; typ = bv8; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v3"; typ = bv8; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v4"; typ = bv8; scope = Var.LocalVar } -> ⊤
+    |}]
+
 (* For each linear assign and phi node, we create edges from the lhs to all
    copied-from variables. For assignments we associate a function encoding the
    linear expression. The function should be thought of pointing opposite to
