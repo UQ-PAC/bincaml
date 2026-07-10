@@ -24,7 +24,9 @@
     - a type variable
     - a type constructor of the form [(type list, constr. name)]
 
-    [  type 'a expr =  Var of tvar  | TypeConstr of 'a list * string ]
+    {[
+    type 'a expr = Var of tvar | TypeConstr of 'a list * string
+    ]}
 
     This type is open recursive so we can traverse it using the
     {! Bincaml_util.Recursionscheme} module.
@@ -58,7 +60,7 @@ module TypeExpr = TypeExpr
 
     We define the types like "5" to represent the number 5. The "Bitvector" type
     is parametric in its width type, i.e [bv5] is defined as
-    [TypeConstr ([TypeConstr ([],"5")], "bv")]. When we do not know the exact
+    {[TypeConstr ([TypeConstr ([],"5")], "bv")]}. When we do not know the exact
     width we use a type variable, and rely on unification to determine the
     precise type. Our type constraints cannot fully represent our
     value-dependent bitvector widths, this will fail (emitting a type varable)
@@ -72,7 +74,7 @@ module TypeExpr = TypeExpr
     A type-scheme in HM is a non-recursive universal quantifier over type
     variables.
 
-    [type scheme = Forall of tvar list * t]
+    {[type scheme = Forall of tvar list * t]}
 
     We represent our ad-hoc polymorphic operators by immediately generalising
     them, returning a type scheme for a generic function type. For instance for

@@ -9,6 +9,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
   include T
   open Typ
 
+  (** Recursion algebra for printing types *)
   let printer_alg = function
     | Var e -> ID.to_string e
     | TypeConstr ([ l ], e) -> l ^ " " ^ e
@@ -19,6 +20,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
 
   let type_to_string t = Rec.cata printer_alg t
 
+  (** Check for type recursion: recursion is failure. *)
   let occurs_in a b =
     let check = function
       | Var t -> equal_tvar t a
@@ -86,6 +88,12 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
     raise
       (TypeErr ("type_error: " ^ type_to_string a ^ " <> " ^ type_to_string b))
 
+  let recursion_error a b =
+    let b = find b in
+    raise
+      (TypeErr
+         ("recursive: tvar " ^ ID.to_string a ^ " occurs in " ^ type_to_string b))
+
   (** Type unification.*)
   let rec unify ?(pos = Lexing.dummy_pos) t t' =
     Logs.debug (fun m ->
@@ -98,7 +106,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
     | TypeConstr ([], "nothing"), _ -> t
     | _, TypeConstr ([], "nothing") -> t'
     | Var x, Var y -> union t t'
-    | Var x, _ when occurs_in x t' -> failwith "recursive type"
+    | Var x, _ when occurs_in x t' -> recursion_error x t'
     | Var _, TypeConstr _ -> merge (fun a b -> b) t t'
     | _, Var x -> unify ~pos:[%here] t' t
     | TypeConstr ([ a ], "const"), TypeConstr ([ b ], "const") ->
@@ -720,15 +728,13 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
         prog new_decls
     in
     (scheme, prog)
-
-  (**let elaborate_program prog (scheme,new_decls) = *)
 end
 
 module T = TypeInference (TypeExpr.Make ())
 
 module type HM = module type of TypeInference (TypeExpr.Make ())
 
-(* 
+(*
    TODO:
 
  In order to  maintain well-typedness of rewrites we will probably want to
