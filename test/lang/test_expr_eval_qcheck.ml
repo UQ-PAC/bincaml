@@ -19,8 +19,6 @@ module EvalExprGen = struct
     let* wd = Expr_gen.gen_width in
     Expr_gen.gen_bvexpr (1, wd)
 
-  let arb_bvexpr = QCheck.make ~print:Expr.BasilExpr.to_string_annot eval_expr
-
   let arb_partial_eval_bvexpr =
     QCheck.make ~print:(fun (e, p) ->
         Printf.sprintf "%s ~> %s"
