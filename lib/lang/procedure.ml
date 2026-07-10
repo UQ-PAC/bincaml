@@ -456,7 +456,10 @@ let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
     [to_] is modified to additionally have the original outgoing edges of
     [from_].
 
-    This includes any edges to [Return] nodes, if they exist on [from_]. *)
+    This includes any edges to [Return] nodes, if they exist on [from_].
+
+    TODO: how does this interact with phi nodes?? probably impossible to handle.
+*)
 let transplant_outgoing_edges p ~from ~to_ : _ t =
   let replace_outgoing_uses ~from ~to_ g =
     G.fold_succ_e

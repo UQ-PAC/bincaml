@@ -55,49 +55,6 @@ let referenced_vars_of_prog =
            Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b)))
   %> Iter.filter Var.is_global
 
-(** Isolates statements satisfying the given predicate into their own block,
-    while maintaining sequential control-flow between them. *)
-let isolate_stmts_of_block ?(label = "%singleton") ~proc f bid =
-  let stmts =
-    Procedure.get_block proc bid |> Option.get_exn_or "block not found"
-    |> fun b -> CCVector.to_list b.stmts
-  in
-
-  (* Group, then flatten isolated statements into their own list. *)
-  let (grouped_stmts : _ Stmt.t list list) =
-    List.group_succ ~eq:(CCFun.compose_binop f Bool.equal) stmts
-    |> List.flat_map (function
-      | hd :: _ as xs when f hd -> List.map List.pure xs
-      | xs -> List.pure xs)
-  in
-
-  (* Insert disconnected blocks for each group, reusing [bid] for the first group. *)
-  let proc, block_ids =
-    grouped_stmts
-    |> List.fold_map_i
-         (fun proc i stmts ->
-           if i = 0 then
-             let stmts = CCVector.of_list stmts in
-             (Procedure.modify_block proc bid (fun b -> { b with stmts }), bid)
-           else Procedure.fresh_block proc ~name:label ~stmts ())
-         proc
-  in
-
-  let proc =
-    match List.last_opt block_ids with
-    | Some to_ -> Procedure.transplant_outgoing_edges proc ~from:bid ~to_
-    | None -> proc
-  in
-
-  match block_ids with
-  | [] -> proc
-  | hd :: tl ->
-      List.fold_left
-        (fun (proc, from) next ->
-          (Procedure.add_goto proc ~from ~targets:[ next ], next))
-        (proc, hd) tl
-      |> fst
-
 (** Replaces uses of the old block ID with the new [(first, last)] block IDs.
     The incoming edges to [old] will be redirected to [first] and the outgoing
     edges of [old] will be rebased to originate from [last].
@@ -195,12 +152,3 @@ let flat_map_stmts
          proc
   in
   (first, last, proc)
-
-let flat_map_blocks
-    (f : proc:_ Procedure.t -> ID.t -> _ Block.t -> ID.t * ID.t * _ Procedure.t)
-    proc =
-  Procedure.fold_blocks_topo_fwd
-    (fun proc bid block ->
-      let first, last, proc = f ~proc bid block in
-      proc |> replace_block ~old:bid ~new_:(first, last))
-    proc proc
