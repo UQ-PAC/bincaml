@@ -120,7 +120,7 @@ let map_one_stmt (module I : Bincaml_ibi.IBI) ~proc stmt =
           Either.Left
             ( aslp_first,
               aslp_last,
-              Procedure.modify_block' proc ~id:aslp_first ~f:(fun b ->
+              Procedure.modify_block proc aslp_first (fun b ->
                   { b with attrib }) )
       | exception error ->
           let error = `String (Printexc.to_string error) in
