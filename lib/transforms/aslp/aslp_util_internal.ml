@@ -59,19 +59,17 @@ module Seq_util = struct
       a value which yields [None], that value and values after it are returned
       in the second tuple element.
 
-      The two returned sequences will traverse the input sequence separately, so
-      the sequence should support multiple iteration. *)
-  let span_while_some f : _ Seq.t -> _ Seq.t * _ Seq.t =
-   fun xs ->
-    let rec get_somes f xs () =
-      match xs () with
-      | Seq.Nil -> Seq.Nil
+      This function eagerly computes the [Some] prefix of the {!Seq.t}. *)
+  let span_while_some f : _ Seq.t -> _ list * _ Seq.t =
+    let rec step f rev_somes all =
+      match all () with
+      | Seq.Nil -> (List.rev rev_somes, Seq.empty)
       | Seq.Cons (hd, tl) -> (
           match f hd with
-          | None -> Seq.Nil
-          | Some x -> Seq.Cons (x, get_somes f tl))
+          | None -> (List.rev rev_somes, Seq.cons hd tl)
+          | Some x -> (step [@tailcall]) f (x :: rev_somes) tl)
     in
-    (get_somes f xs, Seq.drop_while (Option.is_some % f) xs)
+    step f []
 
   (** Groups successive list elements based on whether they are [Left] or
       [Right], maintaining relative order.
@@ -79,17 +77,17 @@ module Seq_util = struct
       [Left] and [Right] values within the returned list contain values like
       [('a * 'a list)] to represent a non-empty list. *)
   let group_succ_either :
-      ('a, 'b) Either.t Seq.t -> ('a * 'a Seq.t, 'b * 'b Seq.t) Either.t Seq.t =
+      ('a, 'b) Either.t Seq.t -> ('a * 'a list, 'b * 'b list) Either.t Seq.t =
     let[@tail_mod_cons] rec while_left xs () =
       let xs, rest = span_while_some Either.find_left xs in
-      match xs () with
-      | Seq.Nil -> while_right rest () (* in case the input starts with Right *)
-      | Seq.Cons (h, xs) -> Seq.Cons (Either.Left (h, xs), while_right rest)
+      match xs with
+      | [] -> while_right rest () (* in case the input starts with Right *)
+      | h :: xs -> Seq.Cons (Either.Left (h, xs), while_right rest)
     and[@tail_mod_cons] while_right xs () =
       let xs, rest = span_while_some Either.find_right xs in
-      match xs () with
-      | Seq.Nil -> Nil
-      | Seq.Cons (h, xs) -> Seq.Cons (Either.Right (h, xs), while_left rest)
+      match xs with
+      | [] -> Nil
+      | h :: xs -> Seq.Cons (Either.Right (h, xs), while_left rest)
     in
     while_left
 end
@@ -142,7 +140,7 @@ let flat_map_stmts
   (* TODO: do we need a new type declaration for this big Either type? *)
   let open Either in
   let b = Procedure.get_block proc base_bid |> Option.get_exn_or "not found" in
-  let stmts = CCVector.to_seq b.stmts and base_name = ID.name base_bid in
+  let stmts = CCVector.to_list b.stmts and base_name = ID.name base_bid in
 
   (* Map, while generating block names for bare statements returned by the mapping function. *)
   let (_, proc), mapped =
