@@ -4,6 +4,8 @@
 open Lang
 open Common
 
+(** {1 General data processing} *)
+
 (** Returns [Some (hd x, tl x)] if [x] is non-empty, otherwise returns [None].
 *)
 let uncons = function [] -> None | hd :: tl -> Some (hd, tl)
@@ -44,6 +46,8 @@ let group_succ_either :
   while_left
 
 (* TODO: these could be made lazy by using Seq.t rather than list *)
+
+(** {1 Bincaml utilities} *)
 
 (** Iterates over global variables in the given program, including both read and
     assigned variables. Order is unspecified and may have duplicates. *)
