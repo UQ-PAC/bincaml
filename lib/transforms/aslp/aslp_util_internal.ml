@@ -97,7 +97,7 @@ let flat_map_stmts
   (* TODO: do we need a new type declaration for this big Either type? *)
   let open Either in
   let b = Procedure.get_block proc base_bid |> Option.get_exn_or "not found" in
-  let stmts = CCVector.to_list b.stmts and base_name = ID.name base_bid in
+  let stmts = CCVector.to_list b.stmts in
 
   (* Map, while generating block names for bare statements returned by the mapping function. *)
   let (_, proc), mapped =
@@ -106,17 +106,15 @@ let flat_map_stmts
          (fun (bid, proc) stmt ->
            match (bid, f ~proc stmt) with
            | _, Left (first, last, proc) -> ((None, proc), Left (first, last))
+           | Some bid, Right s -> ((Some bid, proc), Right (bid, Iter.of_list s))
            | None, Right s ->
-               let name = base_name in
+               let name = ID.name base_bid in
                let proc, bid = Procedure.fresh_block proc ~name ~stmts:[] () in
-               ((Some bid, proc), Right (bid, Iter.of_list s))
-           | Some bid, Right s -> ((Some bid, proc), Right (bid, Iter.of_list s)))
+               ((Some bid, proc), Right (bid, Iter.of_list s)))
          (Some base_bid, proc)
   in
-  let proc =
-    Procedure.modify_block proc base_bid (Block.fmap_stmts_copy CCVector.clear)
-  in
   (* Collects adjacent bare statements into a basic block, and inserts those statements. *)
+  let proc = Procedure.modify_block proc base_bid Block.clear_stmts in
   let proc, block_id_pairs =
     group_succ_either mapped
     |> List.fold_flat_map
@@ -150,8 +148,7 @@ let flat_map_stmts
     List.combine_gen block_id_pairs (List.drop 1 block_id_pairs)
     |> Iter.of_gen
     |> Iter.fold
-         (fun proc (first, second) ->
-           let _, prev = first and next, _ = second in
+         (fun proc ((_, prev), (next, _)) ->
            Procedure.add_goto proc ~from:prev ~targets:[ next ])
          proc
   in

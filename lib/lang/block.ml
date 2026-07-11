@@ -111,6 +111,9 @@ let fmap_stmts_copy (f : (('a, 'a, 'b) Stmt.t, 'mut) Vector.t -> unit) b =
   f v;
   { b with stmts = Vector.freeze v }
 
+let clear_stmts (b : ('v, 'e) t) =
+  { b with stmts = Vector.create () |> Vector.freeze }
+
 (** prepend statements to block statement list (copies underlying vector) *)
 let prepend_stmts (b : ('v, 'e) t) (nstmts : ('v, 'v, 'e) Stmt.t list) :
     ('v, 'e) t =
