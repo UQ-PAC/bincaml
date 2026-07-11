@@ -95,15 +95,14 @@ let flat_map_stmts
        _ Stmt.t ->
        (ID.t * ID.t * _ Procedure.t, _ Stmt.t list) Either.t) ~proc base_bid =
   (* TODO: do we need a new type declaration for this big Either type? *)
-  let open Either in
   let b = Procedure.get_block proc base_bid |> Option.get_exn_or "not found" in
-  let stmts = CCVector.to_list b.stmts in
 
   (* Map, while generating block names for bare statements returned by the mapping function. *)
   let (_, proc), mapped =
-    stmts
+    b.stmts |> CCVector.to_list
     |> List.fold_map
          (fun (bid, proc) stmt ->
+           let open Either in
            match (bid, f ~proc stmt) with
            | _, Left (first, last, proc) -> ((None, proc), Left (first, last))
            | Some bid, Right s -> ((Some bid, proc), Right (bid, Iter.of_list s))
@@ -119,10 +118,10 @@ let flat_map_stmts
     group_succ_either mapped
     |> List.fold_flat_map
          (fun proc -> function
-           | Left (hd, tl) -> (proc, hd :: tl)
-           | Right ((bid, hd), rest) ->
+           | Either.Left (hd, tl) -> (proc, hd :: tl)
+           | Either.Right ((bid, hd), rest) ->
                let stmts =
-                 Iter.(append hd (flat_map snd (of_list rest)))
+                 Iter.append hd (Iter.flat_map snd (Iter.of_list rest))
                  |> CCVector.of_iter |> CCVector.freeze
                in
                ( Procedure.modify_block proc bid (fun b -> { b with stmts }),
