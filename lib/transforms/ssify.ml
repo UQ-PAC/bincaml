@@ -3,7 +3,6 @@ open Lang
 open Lang.Common
 open Containers
 (* Should probably be Procedure.G. Check if so for rename, and how hard a refactor would be *)
-open Procedure
 
 
 
@@ -101,32 +100,101 @@ module Aaa = Graph.Dominator.Make
 module SSIfy = struct 
 
   (* Represents the instruction, i.e. Phi or Statement *)
-  module Inst = struct
+  module Instruction = struct
 
-    (* T *)
     type it =
       | Phi of Var.t Block.phi
       | Statement of { index:int ; statement:Program.stmt }
     [@@deriving ord, eq, show { with_path = false }]
     
+    (* ID.t will be the ID of the block *)
     type t = ID.t * it [@@deriving ord, eq, show { with_path = false }]
 
-    let defines p = function
+    let defines = function
       | Phi { lhs ; rhs } -> Iter.singleton lhs
-      | Statement { index ; statement = (Instr_Assume _) as s} -> Stmt.free_vars_iter s
-      | Statement { index ; statement = (Instr_Assert _) as s} -> Stmt.free_vars_iter s
+      (* | Statement { index ; statement = (Instr_Assume _) as s} -> Stmt.free_vars_iter s
+      | Statement { index ; statement = (Instr_Assert _) as s} -> Stmt.free_vars_iter s *)
       | Statement { index ; statement} -> Stmt.iter_assigned statement
 
-    let uses p = function
+    let uses = function
       | Phi { rhs } -> List.to_iter rhs |> Iter.map snd
       | Statement { statement } -> Stmt.free_vars_iter statement
   end
 
   (* Procedure.G.compute_dom_front *)
 
-  module DefUseMap = CCMultiMap.Make (Var) (Inst)
+  (* Map from Var to (BlockID, Instruction) *)
+  module DefUseMap = CCMultiMap.Make (Var) (Instruction)
+
+  module VariableRenaming = struct
+
+  (* 'Global' def and use maps *)
+  let defs : DefUseMap.t ref = ref DefUseMap.empty
+  let uses : DefUseMap.t ref = ref DefUseMap.empty
+
+  (* List of tuples, where tuples are (old_v, new_v) *)
+  (* TODO: This is a placeholder, there is definitely a better structure for this *)
+  let new_renames : (Var.t * Var.t) list ref = ref []
+
+  let create_v' old_v proc =
+    (let v' = Procedure.fresh_var ~pure:true ~name:(Var.name old_v) proc (Var.typ old_v) in
+    new_renames := (old_v, v') :: !new_renames;
+    v') 
 
 
+  module Dom = Graph.Dominator.Make (Procedure.G)
+
+  (* Returns a procedure that has renamed v *)
+  let rename2 (v: Var.t) proc =
+    let stack : Var.t Stack.t = Stack.create() in
+    let cfg = Procedure.graph in
+
+    (* Returns the proc with replaced inst' *)
+    let set_def (inst : Instruction.t) = 
+      (* Let v' be a fresh version of v *)
+      let v' = create_v' v proc in
+
+      (* Replace the defs of v by v' in inst *)
+      let (inst' : Instruction.t) =
+        match inst with
+        | (block_id, Instruction.Phi { lhs ; rhs } ) -> 
+            (block_id, Instruction.Phi { lhs = if Var.equal lhs v then v' else lhs ; rhs})
+        | (block_id, Instruction.Statement { index ; statement = stmt }) ->
+            let stmt' = Stmt.map ~f_lvar:(fun oldv -> if Var.equal oldv v then v' else oldv)
+                                 ~f_expr:id ~f_rvar:id stmt in
+            (block_id, Instruction.Statement { index ; statement = stmt' }) 
+      in
+
+      (* Set Def(v') = inst' *)
+      defs := DefUseMap.add !defs v' inst';
+      Stack.push v' stack;
+
+      (* Return the updated procedure that contains the updated inst' *)
+      let proc' =
+        match inst, inst' with
+        | (block_id, Instruction.Phi old_phi),
+          (_, Instruction.Phi new_phi) ->
+            Procedure.modify_block proc block_id (fun block ->
+              Block.map ~phi:(List.map (fun phi ->
+                      if Block.equal_phi Var.equal old_phi phi then new_phi else phi
+                      )) Fun.id block
+            )
+        | (block_id, Instruction.Statement old_stmt),
+          (_, Instruction.Statement new_stmt) -> 
+            Procedure.modify_block proc block_id (fun block ->
+              Block.map ~phi:Fun.id 
+            (* TODO: See if we can compare statement indexes as well. I don't think it's possible with Block.map. 
+              Maybe use Block.fmap_stmts_copy*)
+            (fun stmt -> 
+              if Stmt.equal Var.equal Var.equal Expr.BasilExpr.equal (old_stmt.statement) stmt then 
+                new_stmt.statement else stmt) block)
+        | _ -> proc (* Shouldn't occur *)
+      in
+      proc'
+    
+
+    in
+    Printf.printf "NAM"
 
 
   let rename (v: Var.t) proc =
@@ -273,6 +341,8 @@ module SSIfy = struct
     )
       
     nodes
+
+            end
 
 
   (* Procedure.fresh_var ~pure:true ~name:(Var.name v) (Var.typ v) *) (* Maybe ~name:((Var.name v) ^ (string_of_int incrementer)) ?*)
