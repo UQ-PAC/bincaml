@@ -682,7 +682,7 @@ let flat_map_stmts_topo_rev ?visit rewriter p =
 
     Additionally, redirects the original block's incoming/outgoing edges to the
     first / last block of the mapped output. *)
-let flat_map_stmts
+let general_flat_map_stmts
     ~(f : proc:_ t -> _ Stmt.t -> (ID.t * ID.t * _ t, _ Stmt.t list) Either.t)
     ~proc base_bid =
   (* TODO: do we need a new type declaration for this big Either type? *)
