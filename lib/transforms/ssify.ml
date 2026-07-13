@@ -1,8 +1,17 @@
 open Bincaml_util.Common
 open Lang
+open Lang.Common
 open Containers
 (* Should probably be Procedure.G. Check if so for rename, and how hard a refactor would be *)
-open Analysis.Dataflow_graph
+open Procedure
+
+
+
+  (* let phi_to_def (joined_phis : (Var.t * (IDSet.elt * Var.t) list) VarMap.t) =
+    VarMap.values joined_phis
+    |> Iter.map (function lhs, rhs -> Block.{ lhs; rhs })
+    |> Iter.to_list *)
+
 
 
 (* Def(v) is the instruction v is defined in
@@ -71,8 +80,18 @@ Right now, the program creates a new instruction that uses v' and adds it to the
 defs/uses MDeps map.
 
 Defs() can be a map from variables to indexes. The indexes are the index of the statement in the statement list.
-Variant between Phi or Statement.
+Variant between Phi or Statement. It will be a multimap that i make locally.
 
+Will have to create a new Procedure with the replaced statement each time
+Will have to use Block.map for phis and Stmt.map inside of that.
+
+Procedure.map_blocks_topo_fwd (fun (bid, block) ->
+  Block.map
+    ~phi:(function that checks if phi is equal to oldphi and replaces with newphi)
+    (Stmt.map respective map stuff)
+    block
+  )
+  proc
 
 *)
 
@@ -80,16 +99,34 @@ Variant between Phi or Statement.
 module Aaa = Graph.Dominator.Make
 
 module SSIfy = struct 
+
+  (* Represents the instruction, i.e. Phi or Statement *)
+  module Inst = struct
+
+    (* T *)
+    type it =
+      | Phi of Var.t Block.phi
+      | Statement of { index:int ; statement:Program.stmt }
+    [@@deriving ord, eq, show { with_path = false }]
+    
+    type t = ID.t * it [@@deriving ord, eq, show { with_path = false }]
+
+    let defines p = function
+      | Phi { lhs ; rhs } -> Iter.singleton lhs
+      | Statement { index ; statement = (Instr_Assume _) as s} -> Stmt.free_vars_iter s
+      | Statement { index ; statement = (Instr_Assert _) as s} -> Stmt.free_vars_iter s
+      | Statement { index ; statement} -> Stmt.iter_assigned statement
+
+    let uses p = function
+      | Phi { rhs } -> List.to_iter rhs |> Iter.map snd
+      | Statement { statement } -> Stmt.free_vars_iter statement
+  end
+
   (* Procedure.G.compute_dom_front *)
 
-  type inst =
-    | Phi of Var.t Block.phi list
-    | Statement of { index:int ; statement:Program.stmt }
+  module DefUseMap = CCMultiMap.Make (Var) (Inst)
 
-  let phi_to_def (joined_phis : (Var.t * (IDSet.elt * Var.t) list) VarMap.t) =
-    VarMap.values joined_phis
-    |> Iter.map (function lhs, rhs -> Block.{ lhs; rhs })
-    |> Iter.to_list
+
 
 
   let rename (v: Var.t) proc =
@@ -147,7 +184,7 @@ module SSIfy = struct
       
       (* v' <- stack.peek *)
       (* Figure out how to make this (0, Vertex.Entry) *)
-      let v' = Option.value (Stack.top_opt stack) ~default:(Var.create "Bottom" (Var.typ v) ~scope:(Var.scope v))
+      let v' = let open Bincaml_util.Unicode in Option.value (Stack.top_opt stack) ~default:(Var.create bot_char (Var.typ v) ~scope:(Var.scope v))
       in
 
       let expr_transform_alg =
