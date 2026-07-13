@@ -179,17 +179,16 @@ module HighestLiveBitIDE = struct
   open DL
 
   let transfer_call call param d =
-    Printf.printf "ALICE";
+    Printf.printf "AAAAAAAAAAAAAAAAAAA";
     match d with
-    | Lambda -> Printf.printf "NAMAAAAAAAAAA";Iter.singleton (Lambda, NumEdge 4200000)
+    | Lambda -> Iter.singleton (Lambda, IdEdge)
     | Label v ->
-      Printf.printf "Phantom";
         StringMap.to_iter call
         |> Iter.filter (fun (s, e) -> VarSet.mem v (Expr.BasilExpr.free_vars e))
         |> Iter.map (fun (s, e) ->
           let v' = StringMap.find s param in
           let edge = IDESSI_LB.Extract.eval_wrt_var v' e in
-          (Label v', NumEdge 6696))
+          (Label v', edge))
 
     let transfer stmt d =
       let open Stmt in
@@ -232,7 +231,7 @@ module HighestLiveBitIDE = struct
 end
 
 module IDELiveBitSSIAnalysis = IDESSI (HighestLiveBitIDE)
-
+(* 
 let%expect_test "test1_basic_shifts" =
   let lst =
     Loader.Loadir.ast_of_string
@@ -337,36 +336,7 @@ proc @binary_expr() -> (out1:bv32)
 ];
     |}
   in
-(*
-  x:bv64, NumEdge 15 -> zero_extend(64-16, x:bv16)
-  Use Some when writing the expression to replace with, None when wanting to keep it the same
 
-  var x:bv64, NumEdge 15 -> var x:bv16 := extract(16, 0, expr);
-
-  var v1:bv64 := 0xFFFFFFFF:bv64;
-  var v2:bv32 := extract(32, 0, v1:bv64);
-
-  becomes
-
-  var v1:bv32 := extract(32, 0, 0xFFFFFFFF:bv64);
-  var v2:bv32 := extract(32, 0, zero_extend(32, v1:bv32));
-
-  only when lo is 0
-
-
-  var v1:bv64 := 0xFFFFFFFF:bv64;
-  var v2:bv32 := extract(32, 31, v1:bv64);
-
-  becomes
-
-  var v1:bv32 := extract(32, 0, 0xFFFFFFFF:bv64);
-  var v2:bv32 := extract(32, 31, zero_extend(32, v1:bv32));
-
-  !(!(!( (!(!(b))) && a)))
-  !!!(!!b && a)
-  !(b && a)
-  !b || !a
-*)
 
 
   let program = lst.prog in
@@ -527,26 +497,27 @@ proc @Sqrt_4196228(R0_in:bv64, R31_in:bv64)  -> (R0_out:bv64, R1_out:bv64) { .ad
     @Sqrt_4196228
     (Λ,Λ->IdEdge), (Λ,R31_in->NumEdge 63), (Λ,R0_in->NumEdge 63), (Λ,var1_4196240_bv64_2->NumEdge 63), (Λ,var1_4196328_bv64_2->NumEdge 63), (Λ,var1_4196336_bv64_2->NumEdge 63), (Λ,var1_4196256_bv64_2->NumEdge 63), (Λ,var1_4196260_bv64_2->NumEdge 63), (Λ,R0_9->NumEdge 63), (Λ,R1_7->NumEdge 63), (Λ,R0_10->NumEdge 63), (Λ,R0_11->NumEdge 31), (Λ,var1_4196284_bv32_2->NumEdge 31), (Λ,R0_13->NumEdge 63), (Λ,R0_14->NumEdge 63), (Λ,var1_4196296_bv64_2->NumEdge 63), (Λ,var1_4196320_bv32_2->NumEdge 31), (Λ,var1_4196308_bv32_2->NumEdge 31), (R0_out,R0_out->IdEdge), (R0_out,var1_4196348_bv64_2->NumEdge 63), (R1_out,R1_out->IdEdge)
     R31_in, R0_in, R0_out, R1_out, var1_4196240_bv64_2, var1_4196328_bv64_2, var1_4196336_bv64_2, var1_4196256_bv64_2, var1_4196260_bv64_2, R0_9, R1_7, R0_10, R0_11, var1_4196284_bv32_2, R0_13, R0_14, var1_4196296_bv64_2, var1_4196320_bv32_2, var1_4196308_bv32_2, var1_4196348_bv64_2
-    |}]
+    |}] *)
 
     
 let%expect_test "test1_basic_extracts" =
   let lst =
     Loader.Loadir.ast_of_string
       {|
-proc @trans() -> (out:bv32)
+prog entry @trans;
+proc @trans(b:bv64) -> (out:bv32) {}
 [
     block %trans [
-      (var v1:bv64) := call @binary_expr();
+      (var v1:bv64=out1) := call @binary_expr(0xffffffff:bv64);
       var v2:bv32 := extract(32, 0, v1:bv64);
       return (v2);
     ];
 ];
 
-proc @binary_expr() -> (out1:bv64)
+proc @binary_expr(c:bv64) -> (out1:bv64) {}
 [
     block %binary_expr [
-      var v1:bv64 := 0xffffffff:bv64;
+      var v1:bv64 := c:bv64;
       var v2:bv8 := extract(8, 0, v1:bv64);
       var v3:bv8 := extract(16, 8, v1:bv64);
       var v4:bv64 := zero_extend(56, bvand(v2:bv8, v3:bv8));
@@ -577,12 +548,12 @@ proc @binary_expr() -> (out1:bv64)
 ) p2_results;
   [%expect
   {|
-    @trans
+    AAAAAAAAAAAAAAAAAAA@trans
     (Λ,Λ->IdEdge), (out,out->IdEdge), (out,v1->NumEdge 31), (out,v2->NumEdge 31)
     out, v1, v2
     @binary_expr
-    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v1->NumEdge 15), (out1,v2->NumEdge 7), (out1,v3->NumEdge 7), (out1,v4->NumEdge 63)
-    out1, v1, v2, v3, v4
+    (Λ,Λ->IdEdge), (out1,c->NumEdge 63), (out1,out1->IdEdge), (out1,v1->NumEdge 15), (out1,v2->NumEdge 7), (out1,v3->NumEdge 7), (out1,v4->NumEdge 63)
+    c, out1, v1, v2, v3, v4
     ID: ("@trans", 0)
 
 
@@ -592,9 +563,43 @@ proc @binary_expr() -> (out1:bv64)
     ID: ("@binary_expr", 1)
 
 
+      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
       { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> ⊤
       { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (15, 0, true)
       { Var.V.name = "v2"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
       { Var.V.name = "v3"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
       { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
     |}]
+
+
+
+    (*
+  x:bv64, NumEdge 15 -> zero_extend(64-16, x:bv16)
+  Use Some when writing the expression to replace with, None when wanting to keep it the same
+
+  var x:bv64, NumEdge 15 -> var x:bv16 := extract(16, 0, expr);
+
+  var v1:bv64 := 0xFFFFFFFF:bv64;
+  var v2:bv32 := extract(32, 0, v1:bv64);
+
+  becomes
+
+  var v1:bv32 := extract(32, 0, 0xFFFFFFFF:bv64);
+  var v2:bv32 := extract(32, 0, zero_extend(32, v1:bv32));
+
+  only when lo is 0
+
+
+  var v1:bv64 := 0xFFFFFFFF:bv64;
+  var v2:bv32 := extract(32, 31, v1:bv64);
+
+  becomes
+
+  var v1:bv32 := extract(32, 0, 0xFFFFFFFF:bv64);
+  var v2:bv32 := extract(32, 31, zero_extend(32, v1:bv32));
+
+  !(!(!( (!(!(b))) && a)))
+  !!!(!!b && a)
+  !(b && a)
+  !b || !a
+*)

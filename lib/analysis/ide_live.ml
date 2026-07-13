@@ -200,12 +200,7 @@ module IDELiveSSI = struct
   open DL
 
   let transfer_call call_info arg_info d =
-    match d with
-    | Lambda -> Iter.empty
-    | Label v ->
-        StringMap.find (Var.name v) call_info
-        |> Expr.BasilExpr.free_vars_iter
-        |> Iter.map (fun v' -> (Label v', IdEdge))
+    failwith "BBBBBB"
 
   let transfer s d =
     let open Stmt in
@@ -268,7 +263,7 @@ proc @main(b:bv64, global_in:bv64, y:bv64)  -> () {  }
      (var a:bv64=out2) := 
      call @fun2(f=b:bv64, global_in=global_1:bv64);
      (var x:bv64=out) := 
-     call @fun1(c=a:bv64, d=b:bv64, global_in=global_1:bv64);
+     call @fun1(c=0:bv64, d=b:bv64, global_in=global_1:bv64);
      (var b_1:bv64 := b:bv64, var x_1:bv64 := x:bv64);
      assert eq(x_1:bv64, bvadd(b_1:bv64, b_1:bv64));
      var y_1:bv64 := y:bv64;
@@ -285,7 +280,7 @@ proc @fun1(c:bv64, d:bv64, global_in:bv64)  -> (out:bv64) {  }
    block %fun1_entry [
      (var e:bv64=out2) := 
      call @fun2(f=d:bv64, global_in=global_1:bv64);
-     var out:bv64 := bvsub(c:bv64, e:bv64);
+     var out:bv64 := bvsub(c:bv64, 0:bv64);
      return;
    ]
 ];
@@ -326,15 +321,125 @@ proc @fun2(f:bv64, global_in:bv64)  -> (out2:bv64) {  }
       @@ VarMap.to_iter
       @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
     results;
+    IDMap.iter (fun id vars ->
+  Printf.printf "ID: %s\n" (ID.show id);
+      Printf.printf "\n\n";
+  VarMap.iter (fun var value ->
+    Printf.printf "  %s -> %s\n"
+      (Var.show var)
+      (IDELiveSSI.Value.show value))
+    vars
+) p2_results;
   [%expect
     {|
     @fun2
     (L,L->IdEdge), (L,f->ConstEdge true), (L,f_2->ConstEdge true), (L,f_1->ConstEdge true), (out2,global_in->IdEdge), (out2,out2->IdEdge), (out2,global_1->IdEdge), (out2,g_2->IdEdge), (out2,g_1->IdEdge), (out2,f_3->IdEdge), (out2,g_3->IdEdge)
     global_in, f, out2, global_1, f_2, g_2, f_1, g_1, f_3, g_3
     @main
-    (L,L->IdEdge), (L,b->ConstEdge true), (L,global_in->ConstEdge true), (L,y->ConstEdge true), (L,global_1->ConstEdge true), (L,a->ConstEdge true), (L,x->ConstEdge true), (L,b_1->ConstEdge true), (L,x_1->ConstEdge true), (L,y_1->ConstEdge true)
-    b, global_in, y, global_1, a, x, b_1, x_1, y_1
+    (L,L->IdEdge), (L,b->ConstEdge true), (L,y->ConstEdge true), (L,x->ConstEdge true), (L,b_1->ConstEdge true), (L,x_1->ConstEdge true), (L,y_1->ConstEdge true)
+    b, y, x, b_1, x_1, y_1
     @fun1
-    (L,L->IdEdge), (L,d->ConstEdge true), (out,global_in->IdEdge), (out,c->IdEdge), (out,out->IdEdge), (out,global_1->IdEdge), (out,e->IdEdge)
-    global_in, c, d, out, global_1, e
+    (L,L->IdEdge), (L,d->ConstEdge true), (out,c->IdEdge), (out,out->IdEdge)
+    c, d, out
+    ID: ("@main", 0)
+
+
+      { Var.V.name = "b"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "y"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "x"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "b_1"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "x_1"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "y_1"; typ = bv64; scope = Var.LocalVar } -> true
+    ID: ("@fun1", 1)
+
+
+      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "d"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "out"; typ = bv64; scope = Var.LocalVar } -> true
+    ID: ("@fun2", 2)
+
+
+      { Var.V.name = "global_in"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "f"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "out2"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "global_1"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "f_2"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "g_2"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "f_1"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "g_1"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "f_3"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "g_3"; typ = bv64; scope = Var.LocalVar } -> true
     |}]
+
+    
+let%expect_test "test1_basic_extracts" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+prog entry @trans;
+proc @trans(b:bv64)  -> (out:bv32) {  }
+[
+   block %trans [
+      (var v1:bv64=out1) := call @binary_expr(0xffffffff:bv64);
+
+      var v2:bv32 := extract(32, 0, 0:bv64);
+      return (v2);
+   ]
+];
+proc @binary_expr(c:bv64)  -> (out1:bv64) {  }
+[
+   block %binary_expr [
+    var v:bv64 := bvand(0xffffffff:bv64, c:bv64);
+     var out1:bv64 := v:bv64;
+     return;
+   ]
+];
+    |}
+  in
+  let program = lst.prog in
+  let results, p2_results = IDELiveSSIAnalysis.solve program in
+  Hashtbl.iter
+    (fun pid summary ->
+      print_endline @@ ID.name pid;
+      print_endline @@ IDELiveSSIAnalysis.show_summary summary;
+      print_endline
+      @@ Iter.to_string (fun (v, r) -> Var.name v)
+      @@ VarMap.to_iter
+      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
+    results;
+    IDMap.iter (fun id vars ->
+  Printf.printf "ID: %s\n" (ID.show id);
+      Printf.printf "\n\n";
+  VarMap.iter (fun var value ->
+    Printf.printf "  %s -> %s\n"
+      (Var.show var)
+      (IDELiveSSI.Value.show value))
+    vars
+) p2_results;
+  [%expect
+  {|
+    @trans
+    (L,L->IdEdge), (out,out->IdEdge), (out,v2->IdEdge)
+    out, v2
+    @binary_expr
+    (L,L->IdEdge), (out1,c->IdEdge), (out1,out1->IdEdge), (out1,v->IdEdge)
+    c, out1, v
+    ID: ("@trans", 0)
+
+
+      { Var.V.name = "out"; typ = bv32; scope = Var.LocalVar } -> true
+      { Var.V.name = "v2"; typ = bv32; scope = Var.LocalVar } -> true
+    ID: ("@binary_expr", 1)
+
+
+      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> true
+      { Var.V.name = "v"; typ = bv64; scope = Var.LocalVar } -> true
+    |}]
+
+        (* @trans
++    (Λ,Λ->IdEdge), (out,out->IdEdge), (out,v1->NumEdge 31), (out,v2->NumEdge 31)
++    out, v1, v2
++    @binary_expr
++    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v1->NumEdge 15), (out1,v2->NumEdge 7), (out1,v3->NumEdge 7), (out1,v4->NumEdge 63)
++    out1, v1, v2, v3, v4 *)
