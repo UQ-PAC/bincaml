@@ -60,6 +60,21 @@ let gen_bvconst ?min w =
   let* c = gen_bv ?min w in
   return (BasilExpr.bvconst c)
 
+let vname =
+  let v = int_bound 8 in
+  let vl = "abcdefghijklmnopqrstuvwxyz" |> String.to_list in
+  let vl = vl @ List.map Char.uppercase_ascii vl in
+  let cs = QCheck.Gen.oneof_list vl in
+  QCheck.Gen.(string_size ~gen:cs v)
+
+let gen_bvvar ?min w =
+  let* n = vname in
+  return (BasilExpr.rvar (Common.Var.create n (Common.Types.Bitvector w)))
+
+let gen_boolvar =
+  let* n = vname in
+  return (BasilExpr.rvar @@ Var.create n Common.Types.Boolean)
+
 let make_bvconst wd x = BasilExpr.bvconst @@ Bitvec.of_int ~size:wd x
 let ensure_nonzero wd e = BasilExpr.binexp ~op:`BVOR e (make_bvconst wd 1)
 
@@ -95,14 +110,15 @@ let gen_unop_advanced gen_bvexpr wd =
 (* assert (BasilExpr.type_of e = Bitvector wd); *)
 (* e *)
 
-let gen_bvexpr =
+let gen_bvexpr ~with_var =
   fix (fun self (size, wd) ->
+      let gvs = if with_var then [ (1, gen_bvvar wd) ] else [] in
       let self wd = self (size / 2, wd) in
       match size with
       | 0 -> gen_bvconst wd
       | size ->
-          oneof_weighted
-            [
+          oneof_weighted @@ gvs
+          @ [
               (1, gen_bvconst wd);
               (2, self wd >>= gen_unop);
               (2, gen_unop_advanced self wd);
@@ -126,10 +142,10 @@ let gen_not f =
 
 module LT = List.Traverse (QCheck.Gen)
 
-let gen_bv_pred =
+let gen_bv_pred ~with_var =
   let* w = int_range 2 32 in
-  let* a = gen_bvexpr (2, w) in
-  let* b = gen_bvexpr (2, w) in
+  let* a = gen_bvexpr ~with_var (2, w) in
+  let* b = gen_bvexpr ~with_var (2, w) in
   let* op = oneof_list bv_binops_pred in
   return @@ BasilExpr.binexp ~op a b
 
@@ -139,16 +155,17 @@ let gen_pred f =
   let* op = oneof_list [ `AND; `OR ] in
   return @@ BasilExpr.applyintrin ~op args
 
-let gen_pred_expr =
+let gen_pred_expr ~with_var =
   fix (fun self size ->
       let self = self (size / 2) in
+      let v = if with_var then [ (1, gen_boolvar) ] else [] in
       match size with
       | 0 -> gen_bool
       | size ->
-          oneof_weighted
-            [
+          oneof_weighted @@ v
+          @ [
               (1, gen_bool);
-              (2, gen_bv_pred);
+              (2, gen_bv_pred ~with_var);
               (2, gen_not self);
               (2, gen_pred self);
             ])
@@ -157,10 +174,10 @@ let gen_expr =
   let gbv =
     let* wd = int_range 2 65 in
     let* c = int_bound 3 in
-    gen_bvexpr (wd, c)
+    gen_bvexpr ~with_var:false (wd, c)
   in
   let gpred =
     let* c = int_bound 3 in
-    gen_pred_expr c
+    gen_pred_expr ~with_var:false c
   in
   oneof_weighted [ (1, gpred); (1, gbv) ]

@@ -498,8 +498,9 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
       let e =
         match e with
         | AbstractExpr.RVar { id; attrib; typ } ->
-            (* FIXME: bad to have two type annotations *)
-            let id = retype_var univ c id in
+            (* avoid looking up the id in context as we may be in a local
+            binding *)
+            let id = Var.copy id ~typ:(to_basil @@ find typ) in
             AbstractExpr.RVar { id; attrib; typ }
         | o -> o
       in
@@ -870,15 +871,17 @@ let locally_elaborate_expr (e : Expr.BasilExpr.t) =
   let open Ops.AllOps in
   let module T = TypeInference (TypeExpr.Make ()) in
   let constraints = ref [] in
+  let univ = "<expr local>" in
+  let ctx =
+    Expr.BasilExpr.free_vars_iter e
+    |> Iter.fold (T.decl_var_typ univ) TypeExpr.TCtx.empty
+  in
   let visit_constraint c = constraints := c :: !constraints in
   (* TODO: need mode where we absorb take the existing annotations and try to
   extend , rather than expecting everythign declared in context. *)
-  let i =
-    T.infer_expr visit_constraint ~univ:"expr local" [%here] e
-      TypeExpr.TCtx.empty
-  in
+  let i = T.infer_expr visit_constraint ~univ [%here] e ctx in
   let _ = T.solve_constraints ~max_iters:100 !constraints in
-  let e = T.elaborate_expr ~univ:"expr local" [%here] i TypeExpr.TCtx.empty in
+  let e = T.elaborate_expr ~univ [%here] i ctx in
   e
 
 (** Algebra for returning the annotated type (for use with functions like

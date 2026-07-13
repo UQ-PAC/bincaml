@@ -6,7 +6,7 @@ module HMDifferential = struct
   let arb_expr =
     let open QCheck.Gen in
     let* wd = Expr_gen.gen_width in
-    Expr_gen.gen_bvexpr (5, wd)
+    Expr_gen.gen_bvexpr ~with_var:true (5, wd)
 
   let infer e =
     try
