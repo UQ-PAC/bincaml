@@ -110,14 +110,15 @@ let insert_one_diamond ~proc dia =
 
     If an error occurs while lifting through ASLp, an error attribute will be
     attached to the intrinsic (and it is excluded from subsequent calls). *)
-let map_one_stmt (module I : Bincaml_ibi.IBI) ~proc stmt =
+let map_one_stmt (module I : Bincaml_ibi.IBI) ~proc stmt :
+    _ Procedure.mapped_stmt =
   match aarch64_intrin_of_stmt stmt with
-  | None -> Either.Right [ stmt ]
+  | None -> `Stmts [ stmt ]
   | Some (opcode, address, attrib) -> (
       match lift_opcode (module I) ~address opcode with
       | diamond ->
           let aslp_first, aslp_last, proc = insert_one_diamond ~proc diamond in
-          Either.Left
+          `Blocks
             ( aslp_first,
               aslp_last,
               Procedure.modify_block proc aslp_first (fun b ->
@@ -125,7 +126,7 @@ let map_one_stmt (module I : Bincaml_ibi.IBI) ~proc stmt =
       | exception error ->
           let error = `String (Printexc.to_string error) in
           let intrin = (opcode, address, attrib) in
-          Either.Right [ stmt_of_aarch64_intrin ~error intrin ])
+          `Stmts [ stmt_of_aarch64_intrin ~error intrin ])
 
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics within the
     given block ID within the given procedure.

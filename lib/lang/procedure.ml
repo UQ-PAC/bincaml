@@ -403,8 +403,7 @@ let decl_block_exn p name ?(phis = [])
   let p = add_block p id ~phis ~stmts ~successors ~attrib () in
   (p, id)
 
-let modify_block p id
-    (f : (Var.t, BasilExpr.t) Block.t -> (Var.t, BasilExpr.t) Block.t) =
+let modify_block p id (f : _ Block.t -> _ Block.t) =
   let open Edge in
   let open G in
   let block = f (find_block p id) in
@@ -667,25 +666,45 @@ let flat_map_stmts_topo_rev ?visit rewriter p =
           update_block p bid (Block.flat_map ~rev:true ~phi:Fun.id rewriter b))
     p blocks
 
+type ('v, 'e) mapped_stmt =
+  [ `Stmts of (Var.t, Var.t, BasilExpr.t) Stmt.t list
+    (** Zero or more straight-line statements. *)
+  | `Blocks of ID.t * ID.t * ('v, 'e) t
+    (** Block-level control-flow diamond. Represents control-flow entering at
+        the first ID and exiting at the second ID, and with some opaque
+        control-flow between them.
+
+        The contained block IDs should be {b fresh} and should not have
+        control-flow edges to pre-existing blocks in the procedure. The two
+        block IDs may be the same ID (as long as it is fresh).
+
+        The function building this [`Blocks] variant should modify the procedure
+        to insert the first/last blocks, as well as any other blocks or
+        control-flow edges {i between} them. This should be returned as the
+        third value in the variant.
+
+        Generally, the procedure should not be modified in any other way. *) ]
+(** Either a list of zero or more statements, {i or} a first/last pair of
+    block-level control-flow. This is used as the expected return type of
+    mapping one statement in {!general_flat_map_stmts}'s [~f] parameter. *)
+
 (** [general_flat_map_stmts ~f base_bid proc] maps each statement in the given
     block ID through [f]. For each statement, [f] may return either zero or more
     "bare" statements, {i or} a first/last pair of new block-level control-flow.
+    See {!type-mapped_stmt} for details about [f]'s return type.
+
     Returns [(first, last, proc)] where [proc] is the updated procedure and
     [first] / [last] is the first / last block of the combined map output.
 
-    [first] and [last] may be the same. One or both of [first]/[last] may be the
-    same as the original block. In particular, any bare statements returned by
-    [f] for an initial segment of the block's statements will be retained in the
-    original block. If [f] returns a block ID pair, then the returned block IDs
-    should not be the same as the original block ID - except, perhaps, for the
-    first block of the first statement.
+    The returned [first] and [last] may be the same. One or both of
+    [first]/[last] may be the same as the original block. In particular, any
+    bare statements returned by [f] for an initial segment of the block's
+    statements will be retained in the original block.
 
     Additionally, redirects the original block's incoming/outgoing edges to the
     first / last block of the mapped output. *)
-let general_flat_map_stmts
-    ~(f : proc:_ t -> _ Stmt.t -> (ID.t * ID.t * _ t, _ Stmt.t list) Either.t)
-    base_bid proc =
-  (* TODO: do we need a new type declaration for this big Either type? *)
+let general_flat_map_stmts ~(f : proc:_ t -> _ Stmt.t -> _ mapped_stmt) base_bid
+    proc =
   let b = get_block proc base_bid |> Option.get_exn_or "not found" in
 
   (* Map, while generating block names for bare statements returned by the mapping function. *)
@@ -695,9 +714,10 @@ let general_flat_map_stmts
          (fun (bid, proc) stmt ->
            let open Either in
            match (bid, f ~proc stmt) with
-           | _, Left (first, last, proc) -> ((None, proc), Left (first, last))
-           | Some bid, Right s -> ((Some bid, proc), Right (bid, Iter.of_list s))
-           | None, Right s ->
+           | _, `Blocks (first, last, proc) -> ((None, proc), Left (first, last))
+           | Some bid, `Stmts s ->
+               ((Some bid, proc), Right (bid, Iter.of_list s))
+           | None, `Stmts s ->
                let name = ID.name base_bid in
                let proc, bid = fresh_block proc ~name ~stmts:[] () in
                ((Some bid, proc), Right (bid, Iter.of_list s)))
