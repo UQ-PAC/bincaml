@@ -40,6 +40,23 @@ type t =
   | Bottom
   | Var of Var.t
 
+
+(**
+Current assumptions:
+  Using dataflow_graph.DFGraph for CFG
+  Each node is a Dataflow_graph.Vertex
+  Sigma nodes will be implemented as Phi nodes
+
+Unknown:
+  How to represent a Var.Bottom
+  How to replace the old instruction with the new instruction without using Procedure.map
+  How to set Def(v') and Uses(v') globally - currently just local to the function
+  What nodes are vs vertices
+
+Right now, the program creates a new instruction that uses v' and adds it to the local
+defs/uses MDeps map.
+
+*)
 module SSIfy = struct 
 
   let phi_to_def (joined_phis : (Var.t * (IDSet.elt * Var.t) list) VarMap.t) =
