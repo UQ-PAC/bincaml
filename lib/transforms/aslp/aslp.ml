@@ -118,7 +118,7 @@ let map_one_stmt (module I : Bincaml_ibi.IBI) ~proc stmt :
       match lift_opcode (module I) ~address opcode with
       | diamond ->
           let aslp_first, aslp_last, proc = insert_one_diamond ~proc diamond in
-          `Blocks
+          `Graph
             ( aslp_first,
               aslp_last,
               Procedure.modify_block proc aslp_first (fun b ->

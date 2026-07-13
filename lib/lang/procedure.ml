@@ -669,14 +669,16 @@ let flat_map_stmts_topo_rev ?visit rewriter p =
 type ('v, 'e) mapped_stmt =
   [ `Stmts of (Var.t, Var.t, BasilExpr.t) Stmt.t list
     (** Zero or more straight-line statements. *)
-  | `Blocks of ID.t * ID.t * ('v, 'e) t
-    (** Block-level control-flow diamond. Represents control-flow entering at
-        the first ID and exiting at the second ID, and with some opaque
-        control-flow between them.
+  | `Blocks of (Var.t, BasilExpr.t) Block.t list
+    (** Zero or more straight-line blocks. *)
+  | `Graph of ID.t * ID.t * ('v, 'e) t
+    (** Multi-block subgraph. Represents control-flow entering at the first ID
+        and exiting at the second ID, and with some opaque control-flow between
+        them.
 
-        The contained block IDs should be {b fresh} and should not have
-        control-flow edges to pre-existing blocks in the procedure. The two
-        block IDs may be the same ID (as long as it is fresh).
+        The block IDs should be {b fresh} and should not have control-flow edges
+        to pre-existing blocks in the procedure. The two block IDs may be the
+        same ID (as long as it is fresh).
 
         The function building this [`Blocks] variant should modify the procedure
         to insert the first/last blocks, as well as any other blocks or
@@ -711,25 +713,38 @@ let general_flat_map_stmts ~(f : proc:_ t -> _ Stmt.t -> _ mapped_stmt) base_bid
   let is_fresh = fun bid -> not (IDSet.mem bid (Lazy.force existing_bids)) in
 
   (* Map, while generating block names for bare statements returned by the mapping function. *)
-  let (_, proc), mapped =
+  let (proc, _), mapped =
     find_block proc base_bid |> Block.stmts_iter |> Iter.to_list
-    |> List.fold_map
-         (fun (bid, proc) stmt ->
-           let open Either in
-           match (bid, f ~proc stmt) with
-           | _, `Blocks (first, last, _)
-             when (not (is_fresh first)) || not (is_fresh last) ->
-               failwith
-                 "general_flat_map_stmts: `Block variant requires fresh block \
-                  IDs"
-           | _, `Blocks (first, last, proc) -> ((None, proc), Left (first, last))
-           | Some bid, `Stmts s ->
-               ((Some bid, proc), Right (bid, Iter.of_list s))
-           | None, `Stmts s ->
-               let name = ID.name base_bid in
-               let proc, bid = fresh_block proc ~name ~stmts:[] () in
-               ((Some bid, proc), Right (bid, Iter.of_list s)))
-         (Some base_bid, proc)
+    |> List.fold_flat_map
+         (fun (proc, bid) stmt ->
+           match f ~proc stmt with
+           | `Blocks [] | `Stmts [] -> ((proc, bid), [])
+           | `Blocks bs ->
+               let proc, bids =
+                 List.fold_map
+                   (fun proc b ->
+                     let[@warning "+9"] { Block.attrib; stmts; phis } = b in
+                     fresh_block proc ~attrib ~phis
+                       ~stmts:(CCVector.to_list stmts) ())
+                   proc bs
+               in
+               ((proc, None), List.map (fun x -> Either.Left (x, x)) bids)
+           | `Graph (first, last, proc) ->
+               if is_fresh first && is_fresh last then
+                 ((proc, None), [ Either.Left (first, last) ])
+               else
+                 failwith
+                   "general_flat_map_stmts: `Block variant requires fresh \
+                    block IDs"
+           | `Stmts s ->
+               let name = ID.name base_bid and stmts = [] in
+               let proc, bid =
+                 match bid with
+                 | None -> fresh_block proc ~name ~stmts ()
+                 | Some bid -> (proc, bid)
+               in
+               ((proc, Some bid), [ Either.Right (bid, Iter.of_list s) ]))
+         (proc, Some base_bid)
   in
   (* Collects adjacent bare statements into a basic block, and inserts those statements. *)
   let proc = modify_block proc base_bid Block.clear_stmts in
