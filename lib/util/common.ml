@@ -11,8 +11,8 @@ module StringSet = Set.Make (String)
 module IntSet = Set.Make (Int)
 module Worklist = Worklist
 
-(** Extra utilities *)
 module Extras = Extras
+(** Extra utilities *)
 
 (* Byte_slice extension for blitting to Bytes *)
 
