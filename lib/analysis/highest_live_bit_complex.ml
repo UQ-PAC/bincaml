@@ -5,7 +5,7 @@ open Lattice_collections
 open Lattice_types
 open Idessi
 
-(* Should run ide_live before this *)
+(* Note: this doesn't work *)
 
 module HighestLiveBitLattice = struct
   let name = "highestLiveBit"
@@ -13,11 +13,14 @@ module HighestLiveBitLattice = struct
   (* Highest bit is inclusive, i.e. 63 means bits [..63] are used*)
   (* lo_lb is only used in eval: for IDE, return just hi_lb *)
   (* lo_lb can also be called offset *)
-  type t = Bot | HighBit of { vhi : int ; vlo : int ; ehi : int ; elo : int ; width : int} | Top
+  type hb = { vhi : int ; vlo : int ; ehi : int ; elo : int ; width : int}
+  [@@deriving eq, ord, show { with_path = false}]
+
+  type t = Bot | HighBit of hb list | Top
   [@@deriving eq, ord, show { with_path = false}]
 
   let highbit a b c d e =
-    HighBit { vhi = a ; vlo = b ; ehi = c ; elo = d ; width = e}
+    HighBit [{ vhi = a ; vlo = b ; ehi = c ; elo = d ; width = e}]  
 
   let top = Top
   let bottom = Bot
@@ -26,39 +29,22 @@ module HighestLiveBitLattice = struct
   let show = function
     | Top -> "⊤"
     | Bot -> "⊥"
-    | HighBit { vhi ; vlo ; ehi ; elo ; width } -> "(" ^ string_of_int vhi 
-                                                      ^ ", " ^ string_of_int vlo 
-                                                      ^ ", " ^ string_of_int ehi
-                                                      ^ ", " ^ string_of_int elo
-                                                      ^ ", " ^ string_of_int width ^ ")"
+    | HighBit hbs -> "[(" ^ String.concat "); (" (List.map (fun (x: hb) -> string_of_int x.vhi
+                                                                      ^ ", " ^ string_of_int x.vlo
+                                                                      ^ ", " ^ string_of_int x.ehi
+                                                                      ^ ", " ^ string_of_int x.elo
+                                                                      ^ ", " ^ string_of_int x.width) hbs) ^ ")]"
   
   let join a b = 
     match (a, b) with
     | Top, _ | _, Top -> Top
     | Bot, a | a, Bot -> a
-    (* TODO: problem if joining completely seperate sections of the same var: possibly has dead bits in the middle? *)
-    | HighBit { vhi = vhi_a ; vlo = vlo_a ; ehi = ehi_a ; elo = elo_a ; width = width_a}, 
-      HighBit { vhi = vhi_b ; vlo = vlo_b ; ehi = ehi_b ; elo = elo_b ; width = width_b} ->
-        let new_vhi = max vhi_a vhi_b in
-        let new_vlo = min vlo_a vlo_b in
-        let new_ehi = max ehi_a ehi_b in
-        let new_elo = min elo_a elo_b in
-        (* let new_ehi = if vhi_a > vhi_b then ehi_a else if vhi_a = vhi_b then max ehi_a ehi_b else ehi_b in
-        let new_elo = if vlo_a < vlo_b then elo_a else if vlo_a = vlo_b then min elo_a elo_b else elo_b in *)
-        let new_width = max width_a width_b in
-        highbit new_vhi new_vlo new_ehi new_elo new_width
-  
-  (* TODO: Fix this (sigh) *)
-  (* let leq a b =
-    match (a, b) with
-    | a, b when equal a b -> true
-    | HighBit { hi_lb = ha ; lo_lb = la }, HighBit { hi_lb = hb ; lo_lb = lb } ->
-        (ha <= hb) && (la >= lb)
-    | Bot, _ | _, Top -> true
-    | _, Bot | Top, _ -> false *)
+    | HighBit hba, HighBit hbb -> HighBit (List.sort_uniq ~cmp:compare_hb (hba @ hbb))
 
   let widening a b = join a b
   let narrowing a b = a
+  (* Can use this to get the final vhi *)
+  let get_hi hbs = match hbs with | HighBit (hb :: hbs) -> Some (List.fold_left (fun max_vhi hbb -> max max_vhi hbb.vhi) hb.vhi hbs) | _ -> None
 end
 
 (* IDESSI Lattice Backwards*)
@@ -77,7 +63,7 @@ module IDESSI_LB = struct
   type t =
     | BotEdge
     | IdEdge
-    | NumEdge of int (* The index of the highest live bit *)
+    | NumEdge of Value.t (* The index of the highest live bit *)
     | TopEdge
   [@@deriving eq,ord]
 
@@ -87,7 +73,8 @@ module IDESSI_LB = struct
     | BotEdge -> bot_char
     | IdEdge -> "IdEdge"
     | TopEdge -> top_char
-    | NumEdge a -> "NumEdge " ^ string_of_int a
+    (* | NumEdge a -> "NumEdge " ^ string_of_int a *)
+    | NumEdge hbs -> "NumEdge " ^ Value.show hbs
 
   let pp fmt x = Format.pp_print_string fmt (show x)
   let bottom = BotEdge
@@ -107,7 +94,8 @@ module IDESSI_LB = struct
     | TopEdge, _ | _, TopEdge -> TopEdge
     | BotEdge, b -> b
     | a, BotEdge -> a
-    | NumEdge v, NumEdge v' -> NumEdge (max v v')
+    | NumEdge (HighBit hba), NumEdge (HighBit hbb) -> NumEdge (HighBit (List.sort_uniq ~cmp:Value.compare_hb (hba @ hbb)))
+    | NumEdge _, NumEdge _ -> BotEdge
     | IdEdge, b -> b
     | a, IdEdge -> a
 
@@ -116,7 +104,7 @@ module IDESSI_LB = struct
     | BotEdge, _ -> Value.bottom
     | IdEdge, x -> x
     | TopEdge, _ -> Top
-    | NumEdge v, _ -> Value.highbit v 0 v 0 v
+    | NumEdge v, _ -> v
 
   module Extract = struct
 
@@ -129,110 +117,48 @@ module IDESSI_LB = struct
       else if (hi - 1 > ehi && lo >= elo) then (Value.highbit vhi (vlo + lo - elo) (ehi - lo) 0 w)
       else if (hi - 1 > ehi && lo < elo) then (Value.highbit vhi vlo (ehi - lo) (elo - lo) w)
       else Value.bottom)
- (* | hi - 1 <= e_hi_lb && lo >= e_lo_lb -> new_v_hi_lb = hi - 1 + old_v_lo_lb, new_v_lo_lb = old_v_lo_lb + lo, new_e_hi_lb = hi - lo - 1, new_e_lo_lb = 0  // All within range
-          | hi - 1 <= e_hi_lb && lo < e_lo_lb  -> new_v_hi_lb = hi - 1 + old_v_lo_lb - old_e_lo_lb, new_v_lo_lb = old_v_lo, new_e_hi_lb = hi - lo - 1, new_e_lo_lb = old_e_lo_lb - lo // lo outside of range
-          | hi - 1 >  e_hi_lb && lo >= e_lo_lb -> new_v_hi_lb = old_v_hi_lb, new_v_lo_lb = old_v_lo_lb + lo - old_e_lo_lb, new_e_hi_lb = old_e_hi_lb - lo, new_e_lo_lb = 0 // hi outside of range
-          | hi - 1 >  e_hi_lb && lo < e_lo_lb  -> new_v_hi_lb = old_v_hi_lb, new_v_lo_lb = old_v_lo_lb, new_e_hi_lb = old_e_hi_lb - lo, new_e_lo_lb = old_e_lo_lb - lo // Both out of range
-          | else Value.bottom *)
 
+    let highbit_bvashr bv vhi vlo ehi elo width =
+      let shift = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
+          if shift > ehi then 
+            if ehi = width - 1 then Value.highbit (vhi) (width - 1) (width - 1) (width - 1) (width) 
+            else Value.bottom
+          else Value.highbit (vhi) (vlo + (max 0 (shift - elo))) (if ehi = width - 1 then ehi else ehi - shift) (max 0 (elo - shift)) width
+
+    let highbit_bvlshr bv vhi vlo ehi elo width =
+      let shift = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
+        if shift > ehi then Value.bottom
+        else Value.highbit vhi (vlo + (max 0 (shift - elo))) (ehi - shift) (max 0 (elo - shift)) width
+
+    let highbit_bvshl bv vhi vlo ehi elo width =
+      let shift = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
+        if shift >= width - elo then Value.bottom
+        else Value.highbit (vhi - (max 0 (ehi + shift - width + 1))) vlo (min (width - 1) (ehi + 1)) (elo + shift) width
 
     (* Returns a HighestLiveBitLattice t *)
     (* This does the math that determines the highbit tuple seen in the comments at the bottom *)
     let extract_alg readv e =
       let open Expr.AbstractExpr in
+      let eval_shifts f bv hb_list = Value.HighBit (
+        List.concat_map (fun (h: Value.hb) ->
+          match f bv h.vhi h.vlo h.ehi h.elo h.width with
+          | Value.HighBit hbs -> hbs | _ -> []) hb_list
+      ) in
       match e with
       | RVar { id } -> readv id 
-      (* | UnaryExpr { op = `Extract (hi, lo) ; arg = (Value.HighBit { hi_lb ; lo_lb }, value) } -> 
-          (Value.highbit (hi - 1 + lo_lb) (lo_lb + lo))  *)
-          (* if hi < lo_lb then 'Bot' and if expr_hi > *)
-
-      (*
-      (v_hi_lb, v_lo_lb, e_hi_lb, e_lo_lb)
-      extract(4, 1, bvlshr(extract(8, 3, var), 2))
-      ex 8 3   (7,3,4,0)
-      43210
-      76543
-
-      >>2      v_lo +2 and e_lo -2
-      43210
-      xx765    (7,5,2,0)
-      xxlll
-
-      ex 4 1
-
-      210
-      x76
-      xll     (7,6,1,0)
-
-      or 
-      extract(4, 1, bvshl(extract(8,3,var), 2))
-      ex 8 3 (7,3,4,0)
-      43210
-      76543
-
-      <<2
-      43210
-      543xx
-      lllxx   (5,3,4,2)
-
-      ex 4 1
-      210
-      43x
-      llx    (4,3,2,1)
-------------
-      extract 3 0 (((extract 5 0) << 2) >> 3)
-
-      extract 5 0
-      43210
-      lllll   (4,0,4,0)
-      -> <<2
-      210xx                       -- extract 4 0 will return (1,0,2,1)
-      lllxx   (2,0,4,2)   // e_hi bounded by index range
-      -> >> 3
-      xxx21
-      xxxll   (2,1,1,0)
-      -> extract 3 0
-      x21
-      xll     (2,1,2,0)
-
-      43210
-      xxx2x
-      xxxlx  (2,2,1,1)
-      -> extract 3 0
-      210
-      x2x
-      xlx   (2,2,1,1)
-
-          | hi - 1 <= e_hi_lb && lo >= e_lo_lb -> new_v_hi_lb = hi - 1 + old_v_lo_lb, new_v_lo_lb = old_v_lo_lb + lo, new_e_hi_lb = hi - lo - 1, new_e_lo_lb = 0  // All within range
-          | hi - 1 <= e_hi_lb && lo < e_lo_lb  -> new_v_hi_lb = hi - 1 + old_v_lo_lb - old_e_lo_lb, new_v_lo_lb = old_v_lo, new_e_hi_lb = hi - lo - 1, new_e_lo_lb = old_e_lo_lb - lo // lo outside of range
-          | hi - 1 >  e_hi_lb && lo >= e_lo_lb -> new_v_hi_lb = old_v_hi_lb, new_v_lo_lb = old_v_lo_lb + lo - old_e_lo_lb, new_e_hi_lb = old_e_hi_lb - lo, new_e_lo_lb = 0 // hi outside of range
-          | hi - 1 >  e_hi_lb && lo < e_lo_lb  -> new_v_hi_lb = old_v_hi_lb, new_v_lo_lb = old_v_lo_lb, new_e_hi_lb = old_e_hi_lb - lo, new_e_lo_lb = old_e_lo_lb - lo // Both out of range
-          | else Value.bottom
-      *)
-      | UnaryExpr { op = `Extract (hi, lo) ; arg = (Value.HighBit { vhi ; vlo ; ehi ; elo ; width }, _) } -> 
-          highbit_extract hi lo vhi vlo ehi elo width
-      | BinaryExpr { op = `BVASHR ; arg1 = (HighBit { vhi ; vlo ; ehi ; elo ; width }, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
-        let shift_value = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
-            if shift_value > ehi then 
-              if ehi = width - 1 then Value.highbit (vhi) (width - 1) (width - 1) (width - 1) (width) 
-              else Value.bottom
-            else Value.highbit (vhi) (vlo + (max 0 (shift_value - elo))) (if ehi = width - 1 then ehi else ehi - shift_value) (max 0 (elo - shift_value)) width
-      (* ALL SHIFTS: if bv.value > e_hi_lb then Value.bottom *)
-      | BinaryExpr { op = `BVLSHR ; arg1 = (HighBit { vhi ; vlo ; ehi ; elo ; width }, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
-          (* (Value.highbit hi_lb @@ ((Bitvec.to_signed_bigint bv) |> Z.to_int) + lo_lb) *)
-          let shift_value = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
-            if shift_value > ehi then Value.bottom
-            else Value.highbit vhi (vlo + (max 0 (shift_value - elo))) (ehi - shift_value) (max 0 (elo - shift_value)) width
-      (* LSHR: new_v_hi = old_v_hi, new_v_lo = old_v_lo + max(0, k - old_e_lo), new_e_hi = old_e_hi - k, new_e_lo = max(old_e_lo - k, 0)*)
-      | BinaryExpr { op = `BVSHL ; arg1 = (HighBit { vhi ; vlo ; ehi ; elo ; width }, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
-          (* (Value.highbit hi_lb @@ lo_lb - ((Bitvec.to_signed_bigint bv) |> Z.to_int)) *)
-          let shift_value = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
-            if shift_value >= width - elo then Value.highbit 69420 0 0 0 0
-            else Value.highbit (vhi - (max 0 (ehi + shift_value - width + 1))) vlo (min (width - 1) (ehi + 1)) (elo + shift_value) width
-      (* SHL:  new_v_hi = old_v_hi - max(0, old_e_hi + k - (size-1)), new_v_lo = old_v_lo, new_e_hi = min(size-1, old_e_hi + 1), new_e_lo = old_e_lo + k *)
+      | UnaryExpr { op = `Extract (hi, lo) ; arg = (Value.HighBit hb_list, _) } -> Value.HighBit (
+        List.concat_map (fun (h : Value.hb) -> 
+          match highbit_extract hi lo h.vhi h.vlo h.ehi h.elo h.width with
+          | Value.HighBit hbs -> hbs | _ -> []) hb_list)
+      | BinaryExpr { op = `BVASHR ; arg1 = (HighBit hb_list, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
+        eval_shifts highbit_bvashr bv hb_list
+      | BinaryExpr { op = `BVLSHR ; arg1 = (HighBit hb_list, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
+        eval_shifts highbit_bvlshr bv hb_list
+      | BinaryExpr { op = `BVSHL ; arg1 = (HighBit hb_list, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
+        eval_shifts highbit_bvshl bv hb_list
       | BinaryExpr { arg1 = (v1, _) ; arg2 = (v2, _) } -> Value.join v1 v2
       | ApplyIntrin { args = (v1, _) :: rest } -> List.fold_left (fun v1 (v2,_) -> Value.join v1 v2) v1 rest
-      | UnaryExpr { op = _ ; arg = (Value.Top, _) } -> Value.top
+      | UnaryExpr { op = _ ; arg = (nam_waz_here, _) } -> nam_waz_here
       | _ -> Value.bottom
 
     (* Converts HighestLiveBitLattice t to IDESSI_LB t*)
@@ -241,7 +167,9 @@ module IDESSI_LB = struct
       | Value.Bot -> BotEdge
       | Value.Top -> TopEdge
       (* If e_hi_lb < 0 then BotEdge*)
-      | Value.HighBit { vhi ; vlo ; ehi ; elo ; width } -> NumEdge vhi
+      (* | Value.HighBit { vhi ; vlo ; ehi ; elo ; width } -> NumEdge vhi *)
+      | Value.HighBit v when List.is_empty v -> BotEdge
+      | Value.HighBit v -> NumEdge (HighBit v)
 
         (* find number of live bits for a single
     variable [var] in an expression ; read function returns the width for
@@ -368,7 +296,7 @@ proc @main() -> (out1:bv64, out2:bv64, out3:bv1, out4:bv64)
   [%expect
     {|
     @main
-    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v1->NumEdge 3), (out1,a->NumEdge 63), (out2,out2->IdEdge), (out2,v1->NumEdge 4), (out2,x->NumEdge 4), (out2,y->NumEdge 0), (out2,b->NumEdge 63), (out3,out3->IdEdge), (out3,c->NumEdge 1), (out4,out4->IdEdge), (out4,v1->NumEdge 12), (out4,d->NumEdge 63)
+    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v1->NumEdge [(3, 3, 0, 0, 1)]), (out1,a->NumEdge [(63, 0, 63, 0, 64)]), (out2,out2->IdEdge), (out2,v1->NumEdge [(4, 0, 4, 0, 5)]), (out2,x->NumEdge [(4, 3, 1, 0, 5)]), (out2,y->NumEdge [(0, 0, 0, 0, 1)]), (out2,b->NumEdge [(63, 0, 63, 0, 64)]), (out3,out3->IdEdge), (out3,c->NumEdge [(1, 0, 1, 0, 2)]), (out4,out4->IdEdge), (out4,v1->NumEdge [(4, 0, 4, 0, 5); (9, 5, 4, 0, 5); (12, 8, 4, 0, 5)]), (out4,d->NumEdge [(63, 0, 63, 0, 64)])
     out1, out2, out3, out4, v1, a, x, y, b, c, d
     |}]
 
@@ -420,10 +348,10 @@ proc @f(x:bv64) -> (o:bv64)
   [%expect
     {|
     @main
-    (Λ,Λ->IdEdge), (out,out->IdEdge), (out,c->NumEdge 63)
+    (Λ,Λ->IdEdge), (out,out->IdEdge), (out,c->NumEdge [(63, 0, 63, 0, 64)])
     out, c
     @f
-    (Λ,Λ->IdEdge), (o,d->NumEdge 3), (o,x->NumEdge 63), (o,o->IdEdge), (o,w->NumEdge 63)
+    (Λ,Λ->IdEdge), (o,d->NumEdge [(3, 3, 0, 0, 3)]), (o,x->NumEdge [(63, 0, 63, 0, 64)]), (o,o->IdEdge), (o,w->NumEdge [(63, 0, 63, 0, 64)])
     d, x, o, w
     |}]
  
@@ -483,10 +411,10 @@ proc @f(x:bv64) -> (f_o:bv64)
   [%expect
     {|
     @main
-    (Λ,Λ->IdEdge), (out,b->NumEdge 63), (out,out->IdEdge)
+    (Λ,Λ->IdEdge), (out,b->NumEdge [(63, 0, 63, 0, 64)]), (out,out->IdEdge)
     b, out
     @f
-    (Λ,Λ->IdEdge), (f_o,x->NumEdge 19), (f_o,f_o->IdEdge), (f_o,y_1->NumEdge 63), (f_o,y_2->NumEdge 63), (f_o,y_3->NumEdge 63)
+    (Λ,Λ->IdEdge), (f_o,x->NumEdge [(4, 0, 4, 0, 5); (19, 15, 4, 0, 5)]), (f_o,f_o->IdEdge), (f_o,y_1->NumEdge [(63, 0, 63, 0, 64)]), (f_o,y_2->NumEdge [(63, 0, 63, 0, 64)]), (f_o,y_3->NumEdge [(63, 0, 63, 0, 64)])
     x, f_o, y_1, y_2, y_3
     |}]
 
@@ -525,7 +453,7 @@ proc @main(global_in:bv64) -> (out:bv64)
   [%expect
     {|
     @main
-    (Λ,Λ->IdEdge), (Λ,v1->NumEdge 39), (Λ,a->NumEdge 31), (out,v1->NumEdge 49), (out,out->IdEdge), (out,b->NumEdge 31)
+    (Λ,Λ->IdEdge), (Λ,v1->NumEdge [(39, 8, 31, 0, 32)]), (Λ,a->NumEdge [(31, 0, 31, 0, 32)]), (out,v1->NumEdge [(49, 18, 31, 0, 32)]), (out,out->IdEdge), (out,b->NumEdge [(31, 0, 31, 0, 32)])
     v1, out, a, b
     |}]
 
@@ -576,7 +504,7 @@ proc @main() -> (out:bv64)
   [%expect
     {|
     @main
-    (Λ,Λ->IdEdge), (Λ,$i->NumEdge 63), (out,out->IdEdge), (out,x->NumEdge 63)
+    (Λ,Λ->IdEdge), (Λ,$i->NumEdge [(63, 0, 63, 0, 64)]), (out,out->IdEdge), (out,x->NumEdge [(63, 0, 63, 0, 64)])
     out, x, $i
     |}]
 
@@ -615,7 +543,7 @@ proc @main() -> (one_liner:bv64, multi_liner:bv64)
   [%expect
     {|
     @main
-    (Λ,Λ->IdEdge), (one_liner,v1->NumEdge 12), (one_liner,a->NumEdge 63), (one_liner,one_liner->IdEdge), (multi_liner,v1->NumEdge 10), (multi_liner,b->NumEdge 63), (multi_liner,multi_liner->IdEdge)
+    (Λ,Λ->IdEdge), (one_liner,v1->NumEdge [(12, 8, 4, 0, 5)]), (one_liner,a->NumEdge [(63, 0, 63, 0, 64)]), (one_liner,one_liner->IdEdge), (multi_liner,v1->NumEdge [(10, 8, 4, 0, 5)]), (multi_liner,b->NumEdge [(63, 0, 63, 0, 64)]), (multi_liner,multi_liner->IdEdge)
     v1, a, b, one_liner, multi_liner
     |}]
 
@@ -739,6 +667,15 @@ proc @shift2() -> (left_out:bv64, right_out:bv64)
       return (left, right);
     ];
 ];
+
+proc @dead_bits_in_middle() -> (dbout:bv5)
+[
+    block %dead_bits_in_middle_entry [
+      var v1:bv5 := 0x1f:bv5;
+      var dbout:bv5 := extract(4,3,bvand(bvshl(3,v1), bvlshr(3,v1)));
+      return;
+    ];
+];
     |}
   in
   let program = lst.prog in
@@ -755,31 +692,34 @@ proc @shift2() -> (left_out:bv64, right_out:bv64)
   [%expect
     {|
     @f_msb_used
-    (Λ,Λ->IdEdge), (f_out1,c->NumEdge 63), (f_out1,f_out1->IdEdge), (f_out1,v->NumEdge 63), (f_out2,f_out2->IdEdge), (f_out2,v->NumEdge 31), (f_out2,d->NumEdge 31)
+    (Λ,Λ->IdEdge), (f_out1,c->NumEdge [(63, 0, 63, 0, 64)]), (f_out1,f_out1->IdEdge), (f_out1,v->NumEdge [(63, 3, 63, 0, 64)]), (f_out2,f_out2->IdEdge), (f_out2,v->NumEdge [(31, 3, 31, 0, 32)]), (f_out2,d->NumEdge [(31, 0, 31, 0, 32)])
     c, f_out1, f_out2, v, d
     @h_v_is_unused
-    (Λ,Λ->IdEdge), (Λ,h_a->NumEdge 4), (Λ,h_b->NumEdge 4), (h_out1,h_out1->IdEdge)
+    (Λ,Λ->IdEdge), (Λ,h_a->NumEdge [(4, 0, 4, 0, 5)]), (Λ,h_b->NumEdge [(4, 0, 4, 0, 5)]), (h_out1,h_out1->IdEdge)
     h_out1, h_a, h_b
     @g_msb_of_extract_5_0_is_used
-    (Λ,Λ->IdEdge), (g_out1,g_out1->IdEdge), (g_out1,v->NumEdge 4), (g_out1,e->NumEdge 4)
+    (Λ,Λ->IdEdge), (g_out1,g_out1->IdEdge), (g_out1,v->NumEdge [(4, 4, 4, 4, 5)]), (g_out1,e->NumEdge [(4, 0, 4, 0, 5)])
     g_out1, v, e
     @j_boolean_comparison_shenanigans
-    (Λ,Λ->IdEdge), (j_out1,j_out1->IdEdge), (j_out1,v->NumEdge 4), (j_out1,j_a->NumEdge 4), (j_out2,j_out2->IdEdge), (j_out2,v->NumEdge 1), (j_out2,j_b->NumEdge 1)
+    (Λ,Λ->IdEdge), (j_out1,j_out1->IdEdge), (j_out1,v->NumEdge [(1, 0, 4, 3, 5); (4, 3, 1, 0, 5)]), (j_out1,j_a->NumEdge [(4, 0, 4, 0, 5)]), (j_out2,j_out2->IdEdge), (j_out2,v->NumEdge [(4, 3, 1, 0, 2)]), (j_out2,j_b->NumEdge [(1, 0, 1, 0, 2)])
     j_out1, j_out2, v, j_a, j_b
+    @dead_bits_in_middle
+    (Λ,Λ->IdEdge), (dbout,dbout->IdEdge), (dbout,v1->NumEdge [(3, 3, 0, 0, 1)])
+    dbout, v1
     @main
-    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,a->NumEdge 63), (out1,v->NumEdge 0), (out2,out2->IdEdge), (out2,x->NumEdge 1), (out2,y->NumEdge 3), (out2,b->NumEdge 63), (out2,v->NumEdge 4)
+    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,a->NumEdge [(63, 0, 63, 0, 64)]), (out1,v->NumEdge [(0, 0, 3, 3, 4)]), (out2,out2->IdEdge), (out2,x->NumEdge [(1, 0, 4, 3, 5)]), (out2,y->NumEdge [(3, 0, 3, 0, 4)]), (out2,b->NumEdge [(63, 0, 63, 0, 64)]), (out2,v->NumEdge [(4, 0, 4, 0, 5)])
     out1, out2, a, x, y, b, v
     @shift2
-    (Λ,Λ->IdEdge), (left_out,v1->NumEdge 31), (left_out,left_out->IdEdge), (left_out,left->NumEdge 63), (right_out,v1->NumEdge 63), (right_out,right_out->IdEdge), (right_out,right->NumEdge 63)
+    (Λ,Λ->IdEdge), (left_out,v1->NumEdge [(31, 0, 31, 0, 64)]), (left_out,left_out->IdEdge), (left_out,left->NumEdge [(63, 0, 63, 0, 64)]), (right_out,v1->NumEdge [(63, 32, 32, 32, 64)]), (right_out,right_out->IdEdge), (right_out,right->NumEdge [(63, 0, 63, 0, 64)])
     v1, left_out, right_out, left, right
     @i_v_is_unused
-    (Λ,Λ->IdEdge), (i_out1,i_out1->IdEdge), (i_out1,i_a->NumEdge 4)
+    (Λ,Λ->IdEdge), (i_out1,i_out1->IdEdge), (i_out1,i_a->NumEdge [(4, 0, 4, 0, 5)])
     i_out1, i_a
     @shift
-    (Λ,Λ->IdEdge), (left_out,v1->NumEdge 31), (left_out,left_out->IdEdge), (left_out,left->NumEdge 63), (right_out,v1->NumEdge 63), (right_out,right_out->IdEdge), (right_out,right->NumEdge 63)
+    (Λ,Λ->IdEdge), (left_out,v1->NumEdge [(31, 0, 63, 32, 64)]), (left_out,left_out->IdEdge), (left_out,left->NumEdge [(63, 0, 63, 0, 64)]), (right_out,v1->NumEdge [(63, 32, 31, 0, 64)]), (right_out,right_out->IdEdge), (right_out,right->NumEdge [(63, 0, 63, 0, 64)])
     v1, left_out, right_out, left, right
     @k
-    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v->NumEdge 31), (out1,k_b->NumEdge 7)
+    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v->NumEdge [(31, 31, 0, 0, 1)]), (out1,k_b->NumEdge [(7, 0, 7, 0, 8)])
     out1, v, k_b
     |}]
 
@@ -863,3 +803,72 @@ dlllll x x hi_lb, lo_lb = 4, -2
 
   
   *)
+
+
+        (* | UnaryExpr { op = `Extract (hi, lo) ; arg = (Value.HighBit { hi_lb ; lo_lb }, value) } -> 
+          (Value.highbit (hi - 1 + lo_lb) (lo_lb + lo))  *)
+          (* if hi < lo_lb then 'Bot' and if expr_hi > *)
+
+      (*
+      (v_hi_lb, v_lo_lb, e_hi_lb, e_lo_lb)
+      extract(4, 1, bvlshr(extract(8, 3, var), 2))
+      ex 8 3   (7,3,4,0)
+      43210
+      76543
+
+      >>2      v_lo +2 and e_lo -2
+      43210
+      xx765    (7,5,2,0)
+      xxlll
+
+      ex 4 1
+
+      210
+      x76
+      xll     (7,6,1,0)
+
+      or 
+      extract(4, 1, bvshl(extract(8,3,var), 2))
+      ex 8 3 (7,3,4,0)
+      43210
+      76543
+
+      <<2
+      43210
+      543xx
+      lllxx   (5,3,4,2)
+
+      ex 4 1
+      210
+      43x
+      llx    (4,3,2,1)
+------------
+      extract 3 0 (((extract 5 0) << 2) >> 3)
+
+      extract 5 0
+      43210
+      lllll   (4,0,4,0)
+      -> <<2
+      210xx                       -- extract 4 0 will return (1,0,2,1)
+      lllxx   (2,0,4,2)   // e_hi bounded by index range
+      -> >> 3
+      xxx21
+      xxxll   (2,1,1,0)
+      -> extract 3 0
+      x21
+      xll     (2,1,2,0)
+
+      43210
+      xxx2x
+      xxxlx  (2,2,1,1)
+      -> extract 3 0
+      210
+      x2x
+      xlx   (2,2,1,1)
+
+          | hi - 1 <= e_hi_lb && lo >= e_lo_lb -> new_v_hi_lb = hi - 1 + old_v_lo_lb, new_v_lo_lb = old_v_lo_lb + lo, new_e_hi_lb = hi - lo - 1, new_e_lo_lb = 0  // All within range
+          | hi - 1 <= e_hi_lb && lo < e_lo_lb  -> new_v_hi_lb = hi - 1 + old_v_lo_lb - old_e_lo_lb, new_v_lo_lb = old_v_lo, new_e_hi_lb = hi - lo - 1, new_e_lo_lb = old_e_lo_lb - lo // lo outside of range
+          | hi - 1 >  e_hi_lb && lo >= e_lo_lb -> new_v_hi_lb = old_v_hi_lb, new_v_lo_lb = old_v_lo_lb + lo - old_e_lo_lb, new_e_hi_lb = old_e_hi_lb - lo, new_e_lo_lb = 0 // hi outside of range
+          | hi - 1 >  e_hi_lb && lo < e_lo_lb  -> new_v_hi_lb = old_v_hi_lb, new_v_lo_lb = old_v_lo_lb, new_e_hi_lb = old_e_hi_lb - lo, new_e_lo_lb = old_e_lo_lb - lo // Both out of range
+          | else Value.bottom
+      *)

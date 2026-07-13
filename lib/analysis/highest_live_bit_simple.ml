@@ -135,7 +135,7 @@ module IDESSI_LB = struct
           )
       | BinaryExpr { arg1 = (v1, _) ; arg2 = (v2, _) } -> Value.join v1 v2
       | ApplyIntrin { args = (v1, _) :: rest } -> List.fold_left (fun v1 (v2,_) -> Value.join v1 v2) v1 rest
-      | UnaryExpr { op ; arg = (Value.Top, _) } -> Value.Top
+      | UnaryExpr { op ; arg = (nam, _) } -> nam (* TODO: double check if keeping it the same is correct *)
       | _ -> Value.bottom
 
     (* Converts HighestLiveBitLattice t to IDESSI_LB t*)
@@ -179,15 +179,17 @@ module HighestLiveBitIDE = struct
   open DL
 
   let transfer_call call param d =
+    Printf.printf "ALICE";
     match d with
-    | Lambda -> Iter.singleton (Lambda, IdEdge)
+    | Lambda -> Printf.printf "NAMAAAAAAAAAA";Iter.singleton (Lambda, NumEdge 4200000)
     | Label v ->
+      Printf.printf "Phantom";
         StringMap.to_iter call
         |> Iter.filter (fun (s, e) -> VarSet.mem v (Expr.BasilExpr.free_vars e))
         |> Iter.map (fun (s, e) ->
           let v' = StringMap.find s param in
           let edge = IDESSI_LB.Extract.eval_wrt_var v' e in
-          (Label v', edge))
+          (Label v', NumEdge 6696))
 
     let transfer stmt d =
       let open Stmt in
@@ -380,30 +382,45 @@ proc @binary_expr() -> (out1:bv32)
 ) p2_results;
   [%expect
     {|
-    @trans
-    (Λ,Λ->IdEdge), (out,out->IdEdge), (out,v1->NumEdge 31), (out,v2->NumEdge 31)
-    out, v1, v2
-    @binary_expr
-    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v1->NumEdge 15), (out1,v2->NumEdge 7), (out1,v3->NumEdge 7), (out1,v4->NumEdge 7)
-    out1, v1, v2, v3, v4
-    @shift
-    (Λ,Λ->IdEdge), (left_out,left_out->IdEdge), (left_out,left->NumEdge 63), (right_out,right_out->IdEdge), (right_out,right->NumEdge 63)
-    left_out, right_out, left, right
-    @main
-    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v1->⊤), (out1,a->NumEdge 63)
-    out1, v1, a
-    @g
-    (Λ,Λ->IdEdge), (g_out,g_out->IdEdge), (g_out,v1->NumEdge 31), (g_out,g_a->NumEdge 0)
-    g_out, v1, g_a
-    @h
-    (Λ,Λ->IdEdge), (h_out,h_out->IdEdge), (h_out,v1->NumEdge 31), (h_out,h_a->NumEdge 0), (h_out,h_b->NumEdge 0)
-    h_out, v1, h_a, h_b
-    @shift2
-    (Λ,Λ->IdEdge), (left_out,left_out->IdEdge), (left_out,v1->NumEdge 31), (left_out,left->NumEdge 63), (right_out,right_out->IdEdge), (right_out,v1->NumEdge 63), (right_out,right->NumEdge 63)
-    left_out, right_out, v1, left, right
-    @f
-    (Λ,Λ->IdEdge), (f_out,f_out->IdEdge), (f_out,v1->NumEdge 31), (f_out,f_a->NumEdge 31)
-    f_out, v1, f_a
+    ID: ("@main", 0)
+      { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "a"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+    ID: ("@f", 1)
+      { Var.V.name = "f_out"; typ = bv32; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
+      { Var.V.name = "f_a"; typ = bv32; scope = Var.LocalVar } -> (31, 0, true)
+    ID: ("@g", 2)
+      { Var.V.name = "g_out"; typ = bv1; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
+      { Var.V.name = "g_a"; typ = bv1; scope = Var.LocalVar } -> (0, 0, true)
+    ID: ("@h", 3)
+      { Var.V.name = "h_out"; typ = bv1; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
+      { Var.V.name = "h_a"; typ = bv32; scope = Var.LocalVar } -> (0, 0, true)
+      { Var.V.name = "h_b"; typ = bv1; scope = Var.LocalVar } -> (0, 0, true)
+    ID: ("@shift", 4)
+      { Var.V.name = "left_out"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "right_out"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (63, 0, false)
+      { Var.V.name = "left"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "right"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+    ID: ("@shift2", 5)
+      { Var.V.name = "left_out"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "right_out"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (63, 0, false)
+      { Var.V.name = "left"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "right"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+    ID: ("@trans", 6)
+      { Var.V.name = "out"; typ = bv32; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
+      { Var.V.name = "v2"; typ = bv32; scope = Var.LocalVar } -> (31, 0, true)
+    ID: ("@binary_expr", 7)
+      { Var.V.name = "out1"; typ = bv32; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (15, 0, true)
+      { Var.V.name = "v2"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
+      { Var.V.name = "v3"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
+      { Var.V.name = "v4"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
     |}]
 
 let%expect_test "sqrt" =
@@ -508,6 +525,76 @@ proc @Sqrt_4196228(R0_in:bv64, R31_in:bv64)  -> (R0_out:bv64, R1_out:bv64) { .ad
   [%expect
     {|
     @Sqrt_4196228
-    (Λ,Λ->IdEdge), (Λ,R31_in->NumEdge 63), (Λ,R0_in->NumEdge 63), (Λ,var1_4196240_bv64_2->NumEdge 63), (Λ,var1_4196328_bv64_2->NumEdge 63), (Λ,var1_4196336_bv64_2->NumEdge 63), (Λ,var1_4196256_bv64_2->NumEdge 63), (Λ,var1_4196260_bv64_2->NumEdge 63), (Λ,R0_9->NumEdge 63), (Λ,R1_7->NumEdge 63), (Λ,R0_10->NumEdge 63), (Λ,R0_11->NumEdge 31), (Λ,R0_13->NumEdge 63), (Λ,R0_14->NumEdge 63), (Λ,var1_4196296_bv64_2->NumEdge 63), (R0_out,R0_out->IdEdge), (R0_out,var1_4196348_bv64_2->NumEdge 63), (R1_out,R1_out->IdEdge)
-    R31_in, R0_in, R0_out, R1_out, var1_4196240_bv64_2, var1_4196328_bv64_2, var1_4196336_bv64_2, var1_4196256_bv64_2, var1_4196260_bv64_2, R0_9, R1_7, R0_10, R0_11, R0_13, R0_14, var1_4196296_bv64_2, var1_4196348_bv64_2
+    (Λ,Λ->IdEdge), (Λ,R31_in->NumEdge 63), (Λ,R0_in->NumEdge 63), (Λ,var1_4196240_bv64_2->NumEdge 63), (Λ,var1_4196328_bv64_2->NumEdge 63), (Λ,var1_4196336_bv64_2->NumEdge 63), (Λ,var1_4196256_bv64_2->NumEdge 63), (Λ,var1_4196260_bv64_2->NumEdge 63), (Λ,R0_9->NumEdge 63), (Λ,R1_7->NumEdge 63), (Λ,R0_10->NumEdge 63), (Λ,R0_11->NumEdge 31), (Λ,var1_4196284_bv32_2->NumEdge 31), (Λ,R0_13->NumEdge 63), (Λ,R0_14->NumEdge 63), (Λ,var1_4196296_bv64_2->NumEdge 63), (Λ,var1_4196320_bv32_2->NumEdge 31), (Λ,var1_4196308_bv32_2->NumEdge 31), (R0_out,R0_out->IdEdge), (R0_out,var1_4196348_bv64_2->NumEdge 63), (R1_out,R1_out->IdEdge)
+    R31_in, R0_in, R0_out, R1_out, var1_4196240_bv64_2, var1_4196328_bv64_2, var1_4196336_bv64_2, var1_4196256_bv64_2, var1_4196260_bv64_2, R0_9, R1_7, R0_10, R0_11, var1_4196284_bv32_2, R0_13, R0_14, var1_4196296_bv64_2, var1_4196320_bv32_2, var1_4196308_bv32_2, var1_4196348_bv64_2
+    |}]
+
+    
+let%expect_test "test1_basic_extracts" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+proc @trans() -> (out:bv32)
+[
+    block %trans [
+      (var v1:bv64) := call @binary_expr();
+      var v2:bv32 := extract(32, 0, v1:bv64);
+      return (v2);
+    ];
+];
+
+proc @binary_expr() -> (out1:bv64)
+[
+    block %binary_expr [
+      var v1:bv64 := 0xffffffff:bv64;
+      var v2:bv8 := extract(8, 0, v1:bv64);
+      var v3:bv8 := extract(16, 8, v1:bv64);
+      var v4:bv64 := zero_extend(56, bvand(v2:bv8, v3:bv8));
+      return (v4);
+    ];
+];
+    |}
+  in
+  let program = lst.prog in
+  let results, p2_results = IDELiveBitSSIAnalysis.solve program in
+  Hashtbl.iter
+    (fun pid summary ->
+      print_endline @@ ID.name pid;
+      print_endline @@ IDELiveBitSSIAnalysis.show_summary summary;
+      print_endline
+      @@ Iter.to_string (fun (v, r) -> Var.name v)
+      @@ VarMap.to_iter
+      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
+    results;
+    IDMap.iter (fun id vars ->
+  Printf.printf "ID: %s\n" (ID.show id);
+      Printf.printf "\n\n";
+  VarMap.iter (fun var value ->
+    Printf.printf "  %s -> %s\n"
+      (Var.show var)
+      (IDESSI_LB.Value.show value))
+    vars
+) p2_results;
+  [%expect
+  {|
+    @trans
+    (Λ,Λ->IdEdge), (out,out->IdEdge), (out,v1->NumEdge 31), (out,v2->NumEdge 31)
+    out, v1, v2
+    @binary_expr
+    (Λ,Λ->IdEdge), (out1,out1->IdEdge), (out1,v1->NumEdge 15), (out1,v2->NumEdge 7), (out1,v3->NumEdge 7), (out1,v4->NumEdge 63)
+    out1, v1, v2, v3, v4
+    ID: ("@trans", 0)
+
+
+      { Var.V.name = "out"; typ = bv32; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
+      { Var.V.name = "v2"; typ = bv32; scope = Var.LocalVar } -> (31, 0, true)
+    ID: ("@binary_expr", 1)
+
+
+      { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (15, 0, true)
+      { Var.V.name = "v2"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
+      { Var.V.name = "v3"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
+      { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
     |}]

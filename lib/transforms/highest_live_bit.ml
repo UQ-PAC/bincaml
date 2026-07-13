@@ -3,39 +3,31 @@ open Lang
 open Analysis.Highest_live_bit_simple
 open Expr
 
+(**
+  WIP transform for highest live bit. Currently only works intraprocedurally with assignments
+*)
+
 let v_width v = Types.bit_width (Var.typ v)
 
-let create_new_proc_var_map proc procRes =
-  let get_hi_lb = IDESSI_LB.Value.get_hi in
-  let smaller_highBits = VarMap.filter (fun var edge -> 
-      match v_width var with
-      | Some w -> (match get_hi_lb edge with
-          | Some hi -> if hi < w - 1 then true else false
-          | _ -> false)
-      | _ -> false
-    ) procRes
-  in
-  smaller_highBits
-
-let create_new_proc_var_map2 proc procRes =
+let create_new_proc_var_map procRes proc =
   let get_hi_lb = IDESSI_LB.Value.get_hi in
   VarMap.fold (
-    fun v edge (acc : Var.t VarMap.t ) -> 
+    fun v edge (acc : Var.t VarMap.t) -> 
       match v_width v with
       | Some w -> (
         match get_hi_lb edge with
-        | Some hi -> if hi < w - 1 then (
-          let v' = Var.create (Var.name v) (Types.bv (hi + 1)) ~scope:(Var.scope v) in 
-          ignore (Procedure.decl_local proc v');
-          VarMap.add v v' acc) else acc
+        | Some hi when hi < w - 1 -> 
+            let v' = Var.create (Var.name v) (Types.bv (hi + 1)) ~scope:(Var.scope v) in 
+            ignore (Procedure.decl_local proc v');
+            VarMap.add v v' acc
         | _ -> acc
       )
       | _ -> acc
   ) procRes VarMap.empty
 
 
-(* Adds zero_extend(old_width - hi, var:bvhi) where Some hi is IDESSI_LB.Value.get_hi*)
-let extend_sub_expr (get_new_var : Var.t -> Var.t option) =
+(* Adds zero_extend(old_width - hi, var:bvhi) where Some hi is IDESSI_LB.Value.get_hi + 1*)
+let transform_subexpr_rvar (get_new_var : Var.t -> Var.t option) =
   let open BasilExpr in
   rewrite_typed (function
     | RVar { id = v ; attrib = a } -> (
@@ -52,7 +44,8 @@ let extend_sub_expr (get_new_var : Var.t -> Var.t option) =
         | _ -> None
       )
     | _ -> None
-    )
+  )
+
 
 let transform_rvar (get_new_var : Var.t -> Var.t option) v =
   Option.value (get_new_var v) ~default:v
@@ -60,14 +53,15 @@ let transform_rvar (get_new_var : Var.t -> Var.t option) v =
 let transform_lvar_and_expr lvar expr (get_new_var : Var.t -> Var.t option) =
   let nv = get_new_var lvar in
   match nv with
-  | Some new_var ->
-    (match v_width new_var with
+  | Some new_lvar ->
+    (match v_width new_lvar with
     | None -> lvar,expr
-    | Some w' -> let new_expr = BasilExpr.extract ~hi_excl:w' ~lo_incl:0 expr in new_var, new_expr)
+    | Some w' -> let new_expr = BasilExpr.extract ~hi_excl:w' ~lo_incl:0 expr in 
+        new_lvar, new_expr)
   | None -> lvar,expr
 
 let transform_proc procRes proc =
-  let old_to_new_var_map = create_new_proc_var_map2 proc procRes in
+  let old_to_new_var_map = create_new_proc_var_map procRes proc in
   let get_new_var old_var = VarMap.find_opt old_var old_to_new_var_map in
 
   Procedure.flat_map_stmts_topo_fwd (fun stmt ->
@@ -76,20 +70,25 @@ let transform_proc procRes proc =
       | Stmt.Instr_Assign { al ; attrib } -> (
         let new_al =
           List.map (fun (lvar, expr) ->
-            let new_expr = (extend_sub_expr get_new_var) expr in
+            let new_expr = (transform_subexpr_rvar get_new_var) expr in
             transform_lvar_and_expr lvar new_expr get_new_var
             ) al
           in
           Stmt.Instr_Assign { al = new_al ; attrib }
       )
-      (* | Stmt.Instr_Load { attrib ; lhs ; rhs ; addr } -> Iter.pure (stmt) *)
-      (* | Stmt.Instr_Store { attrib ; lhs ; rhs ; value ; addr } -> Iter.pure (stmt) *)
-      (* | Stmt.Instr_IntrinCall { attrib ; lhs ; name ; args } -> Iter.pure (stmt) *)
-      (* | Stmt.Instr_Call { attrib ; lhs ; procid ; args } -> Iter.pure (stmt) *)
-      | _ -> Stmt.map ~f_lvar:id ~f_expr:(extend_sub_expr get_new_var ) ~f_rvar:(transform_rvar get_new_var) stmt
+      (* | Stmt.Instr_Load { attrib ; lhs ; rhs ; addr } -> stmt *)
+      (* | Stmt.Instr_Store { attrib ; lhs ; rhs ; value ; addr } -> stmt *)
+      (* | Stmt.Instr_IntrinCall { attrib ; lhs ; name ; args } -> stmt *)
+      (* | Stmt.Instr_Call { attrib ; lhs = lvar ; procid ; args = rexpr } -> (
+        let nama = transform_lvar_and_expr lvar rexpr get_new_var in
+        Stmt.Instr_Call { attrib ; lhs = (fst nama) ; procid ; args = (snd nama) }
+      ) *)
+      | _ -> Stmt.map ~f_lvar:(transform_rvar get_new_var) 
+                      ~f_expr:(transform_subexpr_rvar get_new_var) 
+                      ~f_rvar:(transform_rvar get_new_var) 
+                      stmt
     )
     ) proc
-(* LHS function will need to take the iterator from iter_rexpr as well*)
 
 let highest_live_bit_transform (prog : Program.t) =
   let _, p2res = 
@@ -176,13 +175,13 @@ proc @trans() -> (out:bv32)
     ];
 ];
 
-proc @binary_expr() -> (out1:bv32)
+proc @binary_expr() -> (out1:bv64)
 [
-    block %trans [
+    block %binary_expr [
       var v1:bv64 := 0xffffffff:bv64;
       var v2:bv8 := extract(8, 0, v1:bv64);
       var v3:bv8 := extract(16, 8, v1:bv64);
-      var v4:bv8 := bvand(v2:bv8, v3:bv8);
+      var v4:bv64 := zero_extend(56, bvand(v2:bv8, v3:bv8));
       return (v4);
     ];
 ];
@@ -193,8 +192,7 @@ proc @binary_expr() -> (out1:bv32)
   
   let res = highest_live_bit_transform program in
   Program.pretty_to_chan  stdout res;
-  [%expect
-  {|
+  [%expect {|
     proc @trans()  -> (out:bv32) {  }
 
 
@@ -206,17 +204,387 @@ proc @binary_expr() -> (out1:bv32)
          return;
        ]
     ];
-    proc @binary_expr()  -> (out1:bv32) {  }
+    proc @binary_expr()  -> (out1:bv64) {  }
 
 
     [
-       block %trans [
+       block %binary_expr [
          var v1:bv16 := extract(16,0, 0xffffffff:bv64);
          var v2:bv8 := extract(8,0, zero_extend(48, v1:bv16));
          var v3:bv8 := extract(16,8, zero_extend(48, v1:bv16));
-         var v4:bv8 := bvand(v2:bv8, v3:bv8);
-         var out1:bv32 := v4:bv8;
+         var v4:bv64 := zero_extend(56, bvand(v2:bv8, v3:bv8));
+         var out1:bv64 := v4:bv64;
          return;
        ]
     ];
     |}]
+
+let%expect_test "test2_basic_shifts" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+
+proc @right_shift() -> (out:bv64)
+[
+    block %right_shift [
+      var v1:bv64 := 0xffffffff:bv64;
+      var v2:bv64 := bvlshr(v1:bv64, 10:bv64);
+      return (v2);
+    ];
+];
+
+proc @left_shift() -> (out1:bv64)
+[
+    block %left_shift [
+      var v3:bv64 := 0xffffffff:bv64;
+      var v4:bv64 := bvshl(v3:bv64, 10:bv64);
+      return (v4);
+    ];
+];
+    |}
+  in
+
+  let program = lst.prog in
+  
+  let res = highest_live_bit_transform program in
+  Program.pretty_to_chan  stdout res;
+  [%expect {|
+    proc @right_shift()  -> (out:bv64) {  }
+
+
+    [
+       block %right_shift [
+         var v1:bv64 := 0xffffffff:bv64;
+         var v2:bv64 := bvlshr(v1:bv64, 0xa:bv64);
+         var out:bv64 := v2:bv64;
+         return;
+       ]
+    ];
+    proc @left_shift()  -> (out1:bv64) {  }
+
+
+    [
+       block %left_shift [
+         var v3:bv54 := extract(54,0, 0xffffffff:bv64);
+         var v4:bv64 := bvshl(zero_extend(10, v3:bv54), 0xa:bv64);
+         var out1:bv64 := v4:bv64;
+         return;
+       ]
+    ];
+    |}]
+
+(* 
+     
+let%expect_test "test1_basic_shifts" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+prog entry @trans;
+proc @trans(b:bv64)  -> (out:bv32) {  }
+[
+   block %trans [
+      (var v1:bv64=out1) := call @binary_expr(0xffffffff:bv64);
+
+      var v2:bv32 := extract(32, 0, v1:bv64);
+      return (v2);
+   ]
+];
+proc @binary_expr(c:bv64)  -> (out1:bv64) {  }
+[
+   block %binary_expr [
+    var v:bv64 := 0xffffffff:bv64;
+     var out1:bv64 := v:bv64;
+     return;
+   ]
+];
+    |}
+  in
+
+  let program = lst.prog in
+  
+  let res = highest_live_bit_transform program in
+  Program.pretty_to_chan  stdout res;
+   let results, p2_results = IDELiveBitSSIAnalysis.solve program in
+  IDMap.iter (fun id vars ->
+  Printf.printf "ID: %s\n" (ID.show id);
+    Printf.printf "\n\n";
+  VarMap.iter (fun var value ->
+    Printf.printf "  %s -> %s\n"
+      (Var.show var)
+      (IDESSI_LB.Value.show value))
+    vars
+) p2_results;
+  [%expect
+  {|
+    proc @trans(b:bv64)  -> (out:bv32) {  }
+
+
+    [
+       block %trans [
+         (var v1:bv64=out1) := call @binary_expr(c=0xffffffff:bv64);
+         var v2:bv32 := extract(32,0, zero_extend(32, v1:bv32));
+         var out:bv32 := v2:bv32;
+         return;
+       ]
+    ];
+    proc @binary_expr(c:bv64)  -> (out1:bv64) {  }
+
+
+    [
+       block %binary_expr [
+         var v:bv64 := 0xffffffff:bv64;
+         var out1:bv64 := v:bv64;
+         return;
+       ]
+    ];
+    prog entry @trans;ID: ("@trans", 0)
+
+
+      { Var.V.name = "out"; typ = bv32; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
+      { Var.V.name = "v2"; typ = bv32; scope = Var.LocalVar } -> (31, 0, true)
+    ID: ("@binary_expr", 1)
+
+
+      { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+    |}] *)
+let%expect_test "test1_basic_shifts" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+prog entry @trans;
+proc @trans(b:bv64)  -> (out:bv32) {  }
+[
+   block %trans [
+      (var v1:bv64=out1) := call @binary_expr(0xffffffff:bv64);
+
+      var v2:bv32 := extract(32, 0, v1:bv64);
+      return (v2);
+   ]
+];
+proc @binary_expr(c:bv64)  -> (out1:bv64) {  }
+[
+   block %binary_expr [
+    var v:bv64 := bvand(0xffffffff:bv64, c:bv64);
+     var out1:bv64 := v:bv64;
+     return;
+   ]
+];
+    |}
+  in
+
+  let program = lst.prog in
+  
+  let res = highest_live_bit_transform program in
+  Program.pretty_to_chan  stdout res;
+   let results, p2_results = IDELiveBitSSIAnalysis.solve program in
+  IDMap.iter (fun id vars ->
+  Printf.printf "ID: %s\n" (ID.show id);
+    Printf.printf "\n\n";
+  VarMap.iter (fun var value ->
+    Printf.printf "  %s -> %s\n"
+      (Var.show var)
+      (IDESSI_LB.Value.show value))
+    vars
+) p2_results;
+  [%expect
+  {|
+    ALICEPhantomproc @trans(b:bv64)  -> (out:bv32) {  }
+
+
+    [
+       block %trans [
+         (var v1:bv32=out1) := call @binary_expr(c=0xffffffff:bv64);
+         var v2:bv32 := extract(32,0, zero_extend(32, v1:bv32));
+         var out:bv32 := v2:bv32;
+         return;
+       ]
+    ];
+    proc @binary_expr(c:bv64)  -> (out1:bv64) {  }
+
+
+    [
+       block %binary_expr [
+         var v:bv64 := bvand(0xffffffff:bv64, c:bv64);
+         var out1:bv64 := v:bv64;
+         return;
+       ]
+    ];
+    prog entry @trans;ALICEPhantomID: ("@trans", 0)
+
+
+      { Var.V.name = "out"; typ = bv32; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
+      { Var.V.name = "v2"; typ = bv32; scope = Var.LocalVar } -> (31, 0, true)
+    ID: ("@binary_expr", 1)
+
+
+      { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "v"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+    |}]
+    
+(*      
+let%expect_test "test1_basic_shifts" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+prog entry @main;
+proc @main(b:bv64, global_in:bv64, y:bv64)  -> () {  }
+  
+
+[
+   block %inputs [ var global_1:bv64 := global_in:bv64; goto (%main_entry); ];
+   block %main_entry [
+     (var a:bv64=out2) := 
+     call @fun2(f=b:bv64, global_in=global_1:bv64);
+     var a_2:bv64 := zero_extend(32, extract(32, 0, a:bv64));
+     (var x:bv64=out) := 
+     call @fun1(c=a_1:bv64, d=b:bv64, global_in=global_1:bv64);
+     (var b_1:bv64 := b:bv64, var x_1:bv64 := x:bv64);
+     assert eq(x_1:bv64, bvadd(b_1:bv64, b_1:bv64));
+     var y_1:bv64 := y:bv64;
+     assert eq(y_1:bv64, 0);
+     nop;
+     return;
+   ]
+];
+proc @fun1(c:bv64, d:bv64, global_in:bv64)  -> (out:bv64) {  }
+  
+
+[
+   block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun1_entry); ];
+   block %fun1_entry [
+     (var e:bv64=out2) := 
+     call @fun2(f=d:bv64, global_in=global_1:bv64);
+     var out:bv64 := bvsub(c:bv64, zero_extend(32, extract(32, 0, e:bv64)));
+     return;
+   ]
+];
+proc @fun2(f:bv64, global_in:bv64)  -> (out2:bv64) {  }
+  
+
+[
+   block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun2_entry); ];
+   block %fun2_entry [ goto (%fun2_b,%fun2_a); ];
+   block %fun2_a [
+     var f_2:bv64 := f:bv64;
+     guard bvsle(f_2:bv64, 0);
+     (var g_2:bv64=out) := 
+     call @fun1(c=f_2:bv64, d=1, global_in=global_1:bv64);
+     goto (%fun2_return);
+   ];
+   block %fun2_b [
+     var f_1:bv64 := f:bv64;
+     guard boolnot(bvsle(f_1:bv64, 0));
+     var g_1:bv64 := global_1:bv64;
+     goto (%fun2_return);
+   ];
+   block %fun2_return (
+     var f_3:bv64 := phi(%fun2_b -> f_1:bv64, %fun2_a -> f_2:bv64),
+     var g_3:bv64 := phi(%fun2_b -> g_1:bv64, %fun2_a -> g_2:bv64)
+   ) [ var out2:bv64 := bvadd(f_3:bv64, g_3:bv64); return; ]
+];
+    |}
+  in
+
+  let program = lst.prog in
+  
+  let res = highest_live_bit_transform program in
+  Program.pretty_to_chan  stdout res;
+   let results, p2_results = IDELiveBitSSIAnalysis.solve program in
+  IDMap.iter (fun id vars ->
+  Printf.printf "ID: %s\n" (ID.show id);
+    Printf.printf "\n\n";
+  VarMap.iter (fun var value ->
+    Printf.printf "  %s -> %s\n"
+      (Var.show var)
+      (IDESSI_LB.Value.show value))
+    vars
+) p2_results;
+  [%expect
+  {|
+    proc @main(b:bv64, global_in:bv64, y:bv64)  -> () {  }
+
+
+    [
+       block %inputs [ var global_1:bv64 := global_in:bv64; goto (%main_entry); ];
+       block %main_entry [
+         (var a:bv64=out2) := call @fun2(f=b:bv64, global_in=global_1:bv64);
+         var a_2:bv64 := zero_extend(32, extract(32,0, zero_extend(32, a:bv32)));
+         (var x:bv64=out) := call @fun1(c=a_1:bv64, d=b:bv64, global_in=global_1:bv64);
+         (var b_1:bv64 := b:bv64, var x_1:bv64 := x:bv64);
+         assert eq(x_1:bv64, bvadd(b_1:bv64, b_1:bv64));
+         var y_1:bv64 := y:bv64;
+         assert eq(y_1:bv64, 0);
+         return;
+       ]
+    ];
+    proc @fun1(c:bv64, d:bv64, global_in:bv64)  -> (out:bv64) {  }
+
+
+    [
+       block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun1_entry); ];
+       block %fun1_entry [
+         (var e:bv64=out2) := call @fun2(f=d:bv64, global_in=global_1:bv64);
+         var out:bv64 := bvsub(c:bv64,
+          zero_extend(32, extract(32,0, zero_extend(32, e:bv32))));
+         return;
+       ]
+    ];
+    proc @fun2(f:bv64, global_in:bv64)  -> (out2:bv64) {  }
+
+
+    [
+       block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun2_entry); ];
+       block %fun2_entry [ goto (%fun2_a,%fun2_b); ];
+       block %fun2_b [
+         var f_1:bv64 := f:bv64;
+         guard boolnot(bvsle(f_1:bv64, 0));
+         var g_1:bv64 := global_1:bv64;
+         goto (%fun2_return);
+       ];
+       block %fun2_a [
+         var f_2:bv64 := f:bv64;
+         guard bvsle(f_2:bv64, 0);
+         (var g_2:bv64=out) := call @fun1(c=f_2:bv64, d=1, global_in=global_1:bv64);
+         goto (%fun2_return);
+       ];
+       block %fun2_return (
+         var f_3:bv64 := phi(%fun2_b -> f_1:bv64, %fun2_a -> f_2:bv64),
+         var g_3:bv64 := phi(%fun2_b -> g_1:bv64, %fun2_a -> g_2:bv64)
+       ) [ var out2:bv64 := bvadd(f_3:bv64, g_3:bv64); return; ]
+    ];
+    prog entry @main;ID: ("@main", 0)
+
+
+      { Var.V.name = "b"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "global_in"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "y"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "a"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
+      { Var.V.name = "x"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "b_1"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "x_1"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "y_1"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+    ID: ("@fun1", 1)
+
+
+      { Var.V.name = "global_in"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "out"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "e"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
+    ID: ("@fun2", 2)
+
+
+      { Var.V.name = "global_in"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "f"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "out2"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "global_1"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "f_2"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "g_2"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "f_1"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "g_1"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "f_3"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "g_3"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+    |}]  *)
