@@ -667,11 +667,11 @@ let flat_map_stmts_topo_rev ?visit rewriter p =
           update_block p bid (Block.flat_map ~rev:true ~phi:Fun.id rewriter b))
     p blocks
 
-(** Maps each statement in the given block through [f]. For each statement, [f]
-    may return either zero or more "bare" statements, {i or} a first/last pair
-    of new block-level control-flow. Returns [(first, last, proc)] where [proc]
-    is the updated procedure and [first] / [last] is the first / last block of
-    the combined map output.
+(** [general_flat_map_stmts ~f base_bid proc] maps each statement in the given
+    block ID through [f]. For each statement, [f] may return either zero or more
+    "bare" statements, {i or} a first/last pair of new block-level control-flow.
+    Returns [(first, last, proc)] where [proc] is the updated procedure and
+    [first] / [last] is the first / last block of the combined map output.
 
     [first] and [last] may be the same. One or both of [first]/[last] may be the
     same as the original block. In particular, any bare statements returned by
@@ -684,7 +684,7 @@ let flat_map_stmts_topo_rev ?visit rewriter p =
     first / last block of the mapped output. *)
 let general_flat_map_stmts
     ~(f : proc:_ t -> _ Stmt.t -> (ID.t * ID.t * _ t, _ Stmt.t list) Either.t)
-    ~proc base_bid =
+    base_bid proc =
   (* TODO: do we need a new type declaration for this big Either type? *)
   let b = get_block proc base_bid |> Option.get_exn_or "not found" in
 
