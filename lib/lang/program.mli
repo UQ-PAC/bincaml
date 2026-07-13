@@ -108,6 +108,10 @@ val decl_global :
 
 val decl_typ : ?attrib:'a Types.StringMap.t -> t -> Types.t -> t
 
+val referenced_vars_of_prog : t -> Var.t Iter.t
+(** Iterates over global variables in the given program, including both read and
+    assigned variables. Order is unspecified and may have duplicates. *)
+
 val create_single_proc :
   ?name:string -> unit -> t * (Var.t, Expr.BasilExpr.t) Procedure.t
 

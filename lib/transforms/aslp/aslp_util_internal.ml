@@ -8,16 +8,6 @@ open Common
 
 (** {1 Bincaml utilities} *)
 
-(** Iterates over global variables in the given program, including both read and
-    assigned variables. Order is unspecified and may have duplicates. *)
-let referenced_vars_of_prog =
-  Program.procs
-  %> Iter.flat_map
-       (snd %> Procedure.iter_blocks
-       %> Iter.flat_map (fun (_, b) ->
-           Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b)))
-  %> Iter.filter Var.is_global
-
 (** Replaces uses of the old block ID with the new [(first, last)] block IDs.
     The incoming edges to [old] will be redirected to [first] and the outgoing
     edges of [old] will be rebased to originate from [last].

@@ -93,9 +93,9 @@ let pretty_declaration d =
   | Procedure { definition } -> pretty_proc definition
 
 (*match definition with
-      | Some d -> 
+      | Some d ->
       let param, rt = Types.uncurry (Var.typ binding) in
-      let param = 
+      let param =
       text "let " ^ text (Var.name binding) ^ text (Var.to_decl_string_il binding)
       | None -> text @@ Var.to_decl_string_il binding)
       *)
@@ -283,6 +283,16 @@ let flat_map_decls f p =
          if !ex then prog
          else { prog with declarations = IDMap.remove i prog.declarations })
        p
+
+(** Iterates over global variables in the given program, including both read and
+    assigned variables. Order is unspecified and may have duplicates. *)
+let referenced_vars_of_prog =
+  procs
+  %> Iter.flat_map
+       (snd %> Procedure.iter_blocks
+       %> Iter.flat_map (fun (_, b) ->
+           Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b)))
+  %> Iter.filter Var.is_global
 
 let pretty_to_chan chan (p : t) =
   let p = prog_pretty p in

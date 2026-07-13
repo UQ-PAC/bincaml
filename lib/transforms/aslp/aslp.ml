@@ -153,8 +153,7 @@ let add_aarch64_global_declarations ?(add_all = false) prog =
     if add_all then Fun.const true
     else
       Fun.flip VarSet.mem
-        (Aslp_util_internal.referenced_vars_of_prog prog
-        |> Iter.to_set (module VarSet))
+        (Program.referenced_vars_of_prog prog |> Iter.to_set (module VarSet))
   in
 
   Lazy.force Aslp_lexpr.global_vars
