@@ -688,8 +688,8 @@ type ('v, 'e) mapped_stmt =
     block-level control-flow. This is used as the expected return type of
     mapping one statement in {!general_flat_map_stmts}'s [~f] parameter. *)
 
-(** [general_flat_map_stmts ~f base_bid proc] maps each statement in the given
-    block ID through [f]. For each statement, [f] may return either zero or more
+(** [general_flat_map_stmts ~f bid proc] maps each statement in the given block
+    ID through [f]. For each statement, [f] may return either zero or more
     "bare" statements, {i or} a first/last pair of new block-level control-flow.
     See {!type-mapped_stmt} for details about [f]'s return type.
 
@@ -705,15 +705,23 @@ type ('v, 'e) mapped_stmt =
     first / last block of the mapped output. *)
 let general_flat_map_stmts ~(f : proc:_ t -> _ Stmt.t -> _ mapped_stmt) base_bid
     proc =
-  let b = get_block proc base_bid |> Option.get_exn_or "not found" in
+  let existing_bids =
+    lazy (iter_blocks proc |> Iter.map fst |> Iter.to_set (module IDSet))
+  in
+  let is_fresh = fun bid -> not (IDSet.mem bid (Lazy.force existing_bids)) in
 
   (* Map, while generating block names for bare statements returned by the mapping function. *)
   let (_, proc), mapped =
-    b.stmts |> CCVector.to_list
+    find_block proc base_bid |> Block.stmts_iter |> Iter.to_list
     |> List.fold_map
          (fun (bid, proc) stmt ->
            let open Either in
            match (bid, f ~proc stmt) with
+           | _, `Blocks (first, last, _)
+             when (not (is_fresh first)) || not (is_fresh last) ->
+               failwith
+                 "general_flat_map_stmts: `Block variant requires fresh block \
+                  IDs"
            | _, `Blocks (first, last, proc) -> ((None, proc), Left (first, last))
            | Some bid, `Stmts s ->
                ((Some bid, proc), Right (bid, Iter.of_list s))
