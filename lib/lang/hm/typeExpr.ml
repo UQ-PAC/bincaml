@@ -49,7 +49,7 @@ end
     relations. This must be done each time we want to perform inference in an
     independent environment, in order to construct a fresh hash-consing and
     union-find state. *)
-module Make () = struct
+module MakeFresh () = struct
   module Typ = struct
     include ATyp
 
@@ -76,11 +76,11 @@ module Make () = struct
 
     module H = Fix.HashCons.Make (M)
 
-    let unfix =
+    let unfix : t -> t expr =
       Fix.HashCons.data %> UnionFind.find %> UnionFind.get %> function
       | T e -> e
 
-    let fix e = H.make (UnionFind.make (T e))
+    let fix (e : t expr) : t = H.make (UnionFind.make (T e))
 
     let union (a : t) (b : t) : t =
       H.make @@ UnionFind.union (Fix.HashCons.data a) (Fix.HashCons.data b)
@@ -94,13 +94,16 @@ module Make () = struct
       @@ UnionFind.merge
            (fun (T a) (T b) -> T (f a b))
            (Fix.HashCons.data a) (Fix.HashCons.data b)
+
+    let compare a b = Fix.HashCons.compare a b
+    let equal a b = Fix.HashCons.equal a b
   end
 
-  let compare a b = Fix.HashCons.compare a b
-  let equal a b = Fix.HashCons.equal a b
+  (** type name generator *)
+  let gen = ID.make_gen ()
 
   module Rec = Bincaml_util.Recursionscheme.Recursion (Typ)
 end
 
-module type TypeContext = module type of Make ()
+module type TypeContext = module type of MakeFresh ()
 (** Type of mutable type context union find *)

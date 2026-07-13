@@ -31,7 +31,7 @@ module PassManager = struct
   let hm_elaborate =
     {
       name = "hindley-milner-elaborate";
-      apply = Prog Hm.Inference.elaborate;
+      apply = Prog Hm.elaborate_prog;
       invariants = Invariants.make ();
       doc = "Perform hindley milner type inference on program";
     }

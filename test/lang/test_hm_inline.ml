@@ -1,6 +1,6 @@
 open Lang
 open Common
-open Hm.Inference
+open Hm
 
 let%expect_test "return type of function" =
   let open Types in

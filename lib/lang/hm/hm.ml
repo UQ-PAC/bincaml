@@ -39,6 +39,15 @@
 
 module TypeExpr = TypeExpr
 
+module Hm_types = Hm_types
+(** Conversions to/form HM state and bincaml types *)
+
+module Unification = Unification
+(** Unification of type-expressions *)
+
+module Solve_bv = Solve_bv
+(** Simple solver for dependently-sized bitvectors *)
+
 (** {1 Type Inference}
 
     Type inference is split into two phases, inference and elaboration.
@@ -89,3 +98,72 @@ module TypeExpr = TypeExpr
     constructs bincaml-typed representations of these structures. *)
 
 module Inference = Inference
+(** Traversal of expressions to infer types *)
+
+module Elaboration = Elaboration
+(** Annotating the AST with the inferred types *)
+
+(** {1 High-level type-inference operations}*)
+
+open Common
+open UnionFind
+open Abstract_expr
+
+(*
+   TODO:
+
+ In order to  maintain well-typedness of rewrites we will probably want to
+ inject the  global type definitions into the program, always. Otherwise we
+ probably risk inferring inconsistent types. Maybe this goes for for all the
+ global bindings. I.e. if we use a definition incorrectly it will end up
+ ill-typed and that error will be harder to track down. Injecting all the
+ bindings is somewhat giving up though.
+
+ We could justifiably just require
+ transforms to "know what they are doing" and inject enough type information for
+ it to be well-typed coming out.  Mistakes could be found by running a global
+ program typecheck after the transform. *)
+
+(** Algebra that infers types of expressions *)
+let locally_elaborate_expr (e : Expr.BasilExpr.t) =
+  let open AbstractExpr in
+  let open Ops.AllOps in
+  let module T = Elaboration.TypeInference (TypeExpr.MakeFresh ()) in
+  let constraints = ref [] in
+  let univ = "<expr local>" in
+  let ctx =
+    Expr.BasilExpr.free_vars_iter e
+    |> Iter.fold (T.decl_var_typ univ) TypeExpr.TCtx.empty
+  in
+  let visit_constraint c = constraints := c :: !constraints in
+  (* TODO: need mode where we absorb take the existing annotations and try to
+  extend , rather than expecting everythign declared in context. *)
+  let i = T.infer_expr visit_constraint ~univ [%here] e ctx in
+  let _ = T.solve_constraints ~max_iters:100 !constraints in
+  let e = T.elaborate_expr ~univ [%here] i ctx in
+  e
+
+(** Algebra for returning the annotated type (for use with functions like
+    fold_with_type)*)
+let elaborated_type_alg (e : Types.t Expr.BasilExpr.abstract_expr) =
+  Expr.AbstractExpr.get_typ e
+
+(* Partially apply args list to function type funtype and return resulting type *)
+let type_applied (funtype : Types.t) (args : Types.t list) =
+  let module T = Elaboration.TypeInference (TypeExpr.MakeFresh ()) in
+  let rt = T.fresh_tvar ~n:"ret" () in
+  let args = List.map T.ty_of_basil args in
+
+  let funt = T.curry_f args rt in
+  let ft = T.ty_of_basil funtype in
+  try
+    T.unify ~pos:[%here] ft funt |> ignore;
+    Ok (T.to_basil rt)
+  with Hm_types.TypeErr e -> Error e
+
+let elaborate_prog prog =
+  (* We need to create a local typing module in order to get fresh state for the
+  union find and hash cons. *)
+  let module T = Elaboration.TypeInference (TypeExpr.MakeFresh ()) in
+  let scheme, prog = T.infer_program prog in
+  prog

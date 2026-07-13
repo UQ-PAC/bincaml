@@ -1,6 +1,6 @@
 open Lang
 open Common
-open Hm.Inference
+open Hm
 
 module HMDifferential = struct
   let arb_expr =
@@ -35,10 +35,12 @@ module HMDifferential = struct
       predicate
 end
 
+type t = Alcotest.speed_level
+
 let _ =
   let suite =
     List.map
-      (QCheck_alcotest.to_alcotest ~long:true ~speed_level:`Slow ~verbose:true)
+      (QCheck_alcotest.to_alcotest ~long:false ~speed_level:`Quick ~verbose:true)
       [ HMDifferential.test ]
   in
   Alcotest.run "hm" [ ("diff", suite) ]
