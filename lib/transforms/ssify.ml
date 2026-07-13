@@ -53,11 +53,38 @@ Unknown:
   How to set Def(v') and Uses(v') globally - currently just local to the function
   What nodes are vs vertices
 
+
+  How to use Procedure.G
+  How to replace Block edges in Procedure.G. Remove and add?
+
+
+Maybe:
+  Each vertex is a program point, each edge is either a block or goto.
+  Gotos are singular: A branch will have multiple outgoing edges that are gotos
+  Is_join and is_branch if it has multiple in/outgoing edges that are gotos
+  In(vertex) is pred and Out(ver)
+
+
+
+
 Right now, the program creates a new instruction that uses v' and adds it to the local
 defs/uses MDeps map.
 
+Defs() can be a map from variables to indexes. The indexes are the index of the statement in the statement list.
+Variant between Phi or Statement.
+
+
 *)
+
+
+module Aaa = Graph.Dominator.Make
+
 module SSIfy = struct 
+  (* Procedure.G.compute_dom_front *)
+
+  type inst =
+    | Phi of Var.t Block.phi list
+    | Statement of { index:int ; statement:Program.stmt }
 
   let phi_to_def (joined_phis : (Var.t * (IDSet.elt * Var.t) list) VarMap.t) =
     VarMap.values joined_phis
@@ -66,6 +93,7 @@ module SSIfy = struct
 
 
   let rename (v: Var.t) proc =
+    let nam = Procedure.graph proc in
     let proc_graph = create proc |> snd |> Lazy.force in
     let defusemap = def_use_maps proc in
     let defs = ref defusemap.var_to_def in
