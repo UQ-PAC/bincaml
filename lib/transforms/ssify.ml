@@ -94,9 +94,6 @@ Procedure.map_blocks_topo_fwd (fun (bid, block) ->
 
 *)
 
-
-module Aaa = Graph.Dominator.Make
-
 module SSIfy = struct 
 
   (* Represents the instruction, i.e. Phi or Statement *)
@@ -140,9 +137,9 @@ module SSIfy = struct
   let new_renames : (Var.t * Var.t) list ref = ref []
 
   let create_v' old_v proc =
-    (let v' = Procedure.fresh_var ~pure:true ~name:(Var.name old_v) proc (Var.typ old_v) in
+    let v' = Procedure.fresh_var ~pure:true ~name:(Var.name old_v) proc (Var.typ old_v) in
     new_renames := (old_v, v') :: !new_renames;
-    v') 
+    Procedure.decl_local proc v'
 
 
   module Dom = Graph.Dominator.Make (Procedure.G)
@@ -204,6 +201,27 @@ module SSIfy = struct
     the single Procedure map, since if it works it will be significantly more efficient.
     *)
 
+    (* Replaces the old instruction with the new inst' that has updated variables. *)
+    let update_proc inst inst' curr_proc =
+      match inst, inst' with
+        | (block_id, Instruction.Phi old_phi),
+          (_, Instruction.Phi new_phi) ->
+            Procedure.modify_block curr_proc block_id (fun block ->
+              Block.map ~phi:(List.map (fun phi ->
+                      if Block.equal_phi Var.equal old_phi phi then new_phi else phi
+                      )) Fun.id block
+            )
+        | (block_id, Instruction.Statement old_stmt),
+          (_, Instruction.Statement new_stmt) -> 
+            Procedure.modify_block curr_proc block_id (fun block ->
+              Block.map ~phi:Fun.id 
+            (* TODO: Try to use Block.fmap_stmts_copy with Vertex.set Stmt.t index stmt' *)
+            (fun stmt -> 
+              if Stmt.equal Var.equal Var.equal Expr.BasilExpr.equal (old_stmt.statement) stmt then 
+                new_stmt.statement else stmt) block)
+        | _ -> failwith "Impossible" (* Shouldn't occur *)
+    in
+
     (* Returns the proc with replaced inst' *)
     let set_def curr_proc (inst : Instruction.t) = 
       (* Let v' be a fresh version of v *)
@@ -227,28 +245,10 @@ module SSIfy = struct
       Stack.push v' stack;
 
       (* Return the updated procedure that contains the updated inst' *)
-      let proc' =
-        match inst, inst' with
-        | (block_id, Instruction.Phi old_phi),
-          (_, Instruction.Phi new_phi) ->
-            Procedure.modify_block curr_proc block_id (fun block ->
-              Block.map ~phi:(List.map (fun phi ->
-                      if Block.equal_phi Var.equal old_phi phi then new_phi else phi
-                      )) Fun.id block
-            )
-        | (block_id, Instruction.Statement old_stmt),
-          (_, Instruction.Statement new_stmt) -> 
-            Procedure.modify_block curr_proc block_id (fun block ->
-              Block.map ~phi:Fun.id 
-            (* TODO: Try to use Block.fmap_stmts_copy with Vertex.set Stmt.t index stmt' *)
-            (fun stmt -> 
-              if Stmt.equal Var.equal Var.equal Expr.BasilExpr.equal (old_stmt.statement) stmt then 
-                new_stmt.statement else stmt) block)
-        | _ -> failwith "Impossible" (* Shouldn't occur *)
+      let proc' = update_proc inst inst' curr_proc
       in
       proc'
     in
-    (* Assuming that the ID.t of a rhs phi is a Block ID? *)
     
     let set_use curr_proc (inst : Instruction.t) (og_bid : ID.t) = 
       (* while Def(stack.peek()) does not dominate inst do *)
@@ -301,8 +301,9 @@ module SSIfy = struct
         ()
       else
         uses := DefUseMap.add !uses v' inst'
-
-      (* TODO: Use proc' function in set_def. Can refactor to be its own function that use and def call *)
+      ;
+      let proc' = update_proc inst inst' curr_proc in
+      proc'
     in
 
     (* foreach CFG node n in dominance order do *)
@@ -331,13 +332,25 @@ module SSIfy = struct
         (* If exists Phi node with lhs matching v in In(node) then *)
         (* TODO: See if this should be just an if statement for a single phi instead of a loop. Probably not,
           but I'm not a fan of using fold_left everywhere *)
-        
         let proc_step_one = List.fold_left (fun curr_proc phi ->
           if Var.equal phi.Block.lhs v then let inst = Instruction.create_phi_inst block_id phi.lhs phi.rhs in
           set_def curr_proc inst
         else
           curr_proc
           ) proc block.phis in
+        
+        (* foreach instruction u in n that uses v do *)
+        (* TODO: I'm unfamiliar with Vector. As far as I can tell there isn't any other way to get
+        the index of a given element in the vector. *)
+        let proc_step_two = Vector.fold (fun (curr_proc, index) stmt ->
+          if VarSet.mem v (Stmt.free_vars stmt) then 
+            let inst = Instruction.create_stmt_inst block_id index stmt in
+          (set_use curr_proc inst block_id, index + 1)
+        else
+          (curr_proc, index + 1)
+          ) (proc_step_one, 0) block.stmts
+          
+        in
         ()
 
         (* (fun (phi : Var.t Block.phi) -> if Var.equal phi.lhs v then 
@@ -352,153 +365,7 @@ module SSIfy = struct
 
     Printf.printf "NAM"
 
-
-  let rename (v: Var.t) proc =
-    let nam = Procedure.graph proc in
-    let proc_graph = create proc |> snd |> Lazy.force in
-    let defusemap = def_use_maps proc in
-    let defs = ref defusemap.var_to_def in
-    let uses = ref defusemap.var_to_use in
-    let stack : Var.t Stack.t = Stack.create () in
-    let nodes = get_dfg_vertices ~direction:`Forwards proc in
-
-    (* let defs = ref VarMap.empty in *)
-
-    let new_renames = ref [] in
-
-    let create_v' old_v = 
-      let v' = Procedure.fresh_var ~pure:true ~name:(Var.name old_v) proc (Var.typ old_v) in
-      new_renames := (old_v, v') :: !new_renames;
-      v'
-    in
-
-    (* TODO: See if we need to also use add_vertex and add_edge, etc to proc_graph *)
-    let set_def (inst : Vertex.t) =
-      let v' = create_v' v in
-
-      (* How to replace v by v' in inst statically and set Def(v') = inst ???? *)
-      let inst' =
-        match inst with 
-        | (priority, Vertex.Stmt (b, stmt)) -> 
-            let stmt' = Stmt.map ~f_lvar:(fun oldv -> if Var.equal oldv v then v' else oldv) 
-                                 ~f_expr:id ~f_rvar:id stmt in
-            (priority, Vertex.Stmt (b, stmt'))
-        | (priority, Vertex.Phi {lhs ; rhs ; widen_point }) ->
-            (priority, Vertex.Phi {lhs = if Var.equal lhs v then v' else lhs ; rhs ; widen_point})
-        | vertex -> vertex
-      in
-      (* Not sure how to do line 3 - replace lhs_vars in-place without mapping over Program to create a new one*)
-      defs := MDeps.add !defs v' inst'; (* Adds v' -> inst' to the defs table. I don't think this does it globally... *)
-      Stack.push v' stack;
-    in
-
-    let set_use (inst : Vertex.t) =
-      (* Vertex dominates other vertex if it's priority (first value) is smaller *)
-      (* while (MDeps.find !defs (Stack.top stack) |> List.hd |> fst) >= (fst inst) do *)
-      let rec pop_while_not_dominating inst =
-        match Stack.top_opt stack with
-        | None -> ()
-        | Some var ->
-          if List.for_all (fun x -> fst x < fst inst) (MDeps.find !defs var) then
-            (
-              ignore (Stack.pop stack);
-              pop_while_not_dominating inst
-            )
-      in 
-      
-      (* v' <- stack.peek *)
-      (* Figure out how to make this (0, Vertex.Entry) *)
-      let v' = let open Bincaml_util.Unicode in Option.value (Stack.top_opt stack) ~default:(Var.create bot_char (Var.typ v) ~scope:(Var.scope v))
-      in
-
-      let expr_transform_alg =
-        let open Expr.BasilExpr in
-        rewrite_typed (function
-          | RVar { id ; attrib } when Var.equal id v -> (
-            Some (rvar ~attrib:attrib v')
-          )
-          | _ -> None
-        )
-      in
-      
-      (* Replace the uses of v by v' in inst *)
-      let inst' =
-        match inst with
-        | (priority, Vertex.Stmt (b, stmt)) ->
-            let stmt' = Stmt.map ~f_lvar:id 
-                                 ~f_expr:(expr_transform_alg) 
-                                 ~f_rvar:(fun oldv -> if Var.equal oldv v then v' else oldv)
-                                 stmt in
-            (priority, Vertex.Stmt (b, stmt'))
-        | (priority, Vertex.Phi { lhs ; rhs ; widen_point}) ->
-            (priority, Vertex.Phi { lhs = lhs ;
-                                   rhs = List.map (fun var -> if Var.equal var v then v' else var) rhs ;
-                                   widen_point})
-        | x -> x
-        in
-      
-      pop_while_not_dominating inst;
-      (* if v' != Bot then add inst to Uses(v') *)
-        (* Assuming that MDeps.add automatically does union *)
-      if String.equal (Var.name v') "Bottom" then () else uses := MDeps.add !uses v' inst'
-    in
-
-    (* Neiher Vertex.t Iter.t nor DFGraph iterate on nodes, they both iterate on vertices... *)
-    Iter.iter (fun (node: Vertex.t) -> 
-      let in_n = DFGraph.pred proc_graph node in
-      let out_n = DFGraph.succ proc_graph node in
-      (* Problem is that these are supposed to be points after the instructions, but this
-      gets the instructions after the instruction*)
-
-      (* If inst is a phi node containing v in In(n) then *)
-      (match node with
-      | (_, Vertex.Phi { lhs ; rhs ; widen_point }) when List.mem node in_n -> 
-          if Var.equal lhs v then set_def node
-      | _ -> ())
-      ;
-
-      (* For each instr u in n that uses v do set_use(u)
-      Right now nodes are actually a single vertex, so can't really do a loop..
-      TODO: Find out what nodes are represented as
-      *)
-      (
-        match node with
-                                                      (* Maybe use iter_rexpr instead? *)
-        | (_, Vertex.Stmt (_, stmt)) when VarSet.mem v (Stmt.free_vars stmt) -> 
-          set_use node
-        | _ -> ()
-      )
-      ;
-
-      (* If exists instruction d in n that defines v (lvar) then *)
-      (
-        match node with 
-        | (_, Vertex.Stmt (_, stmt)) when Iter.exists (fun x -> Var.equal x v) (Stmt.iter_lvar stmt) ->
-          set_def node
-        | _ -> ()
-      )
-      ;
-
-      (* Might not need to do sigma node checking *)
-
-      (* Right now, out_n is the same as direct-successors(n) i think *)
-      (* I think that nodes need to be blocks instead of vertices, since this might not work currently... *)
-
-      (* foreach m in direct-successors(n) do *)
-      List.iter (fun m -> 
-        let in_m = DFGraph.pred proc_graph m in
-        List.iter (fun m_node ->
-          match m_node with 
-            | (_, Vertex.Phi {lhs ; rhs ; widen_point}) when List.mem ~eq:(Var.equal) v rhs ->
-                set_use m_node
-            | _ -> ()
-          ) in_m
-        ) out_n
-    )
-      
-    nodes
-
-            end
+  end
 
 
   (* Procedure.fresh_var ~pure:true ~name:(Var.name v) (Var.typ v) *) (* Maybe ~name:((Var.name v) ^ (string_of_int incrementer)) ?*)
