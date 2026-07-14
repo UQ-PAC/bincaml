@@ -119,6 +119,9 @@ module SSIfy = struct
     let var_uses = function
       | Phi { rhs } -> List.to_iter rhs |> Iter.map snd
       | Statement { statement } -> Stmt.free_vars_iter statement
+
+    let create_phi_inst block_id lhs rhs = (block_id, Phi { lhs ; rhs })
+    let create_stmt_inst block_id index statement = (block_id, Statement { index ; statement })
   end
 
   (* Procedure.G.compute_dom_front *)
@@ -170,14 +173,20 @@ module SSIfy = struct
     else
       block_dominates graph bid_a bid_b
 
+  (* Takes the CFG graph and a current vertex and gives the list of immediately dominating vertices *)
+  let get_dominated_vertices (graph : Dom.t) =
+    let idom = Dom.compute_idom graph Procedure.Vert.Entry in
+    Dom.idom_to_dom_tree graph idom
+
   (* Returns a procedure that has renamed v *)
   let rename2 (v: Var.t) proc =
+    (* Stack <- new *)
     let stack : Var.t Stack.t = Stack.create() in
     
     (* The control flow graph of the current procedure *)
     let cfg = match Procedure.graph proc with 
       | Some g -> g | None -> Procedure.G.empty
-  in
+    in
 
     (**
     Right now, set_def and use_def return a new procedure, which is used
@@ -196,9 +205,9 @@ module SSIfy = struct
     *)
 
     (* Returns the proc with replaced inst' *)
-    let set_def (inst : Instruction.t) = 
+    let set_def curr_proc (inst : Instruction.t) = 
       (* Let v' be a fresh version of v *)
-      let v' = create_v' v proc in
+      let v' = create_v' v curr_proc in
 
       (* Replace the defs of v by v' in inst *)
       let (inst' : Instruction.t) =
@@ -222,14 +231,14 @@ module SSIfy = struct
         match inst, inst' with
         | (block_id, Instruction.Phi old_phi),
           (_, Instruction.Phi new_phi) ->
-            Procedure.modify_block proc block_id (fun block ->
+            Procedure.modify_block curr_proc block_id (fun block ->
               Block.map ~phi:(List.map (fun phi ->
                       if Block.equal_phi Var.equal old_phi phi then new_phi else phi
                       )) Fun.id block
             )
         | (block_id, Instruction.Statement old_stmt),
           (_, Instruction.Statement new_stmt) -> 
-            Procedure.modify_block proc block_id (fun block ->
+            Procedure.modify_block curr_proc block_id (fun block ->
               Block.map ~phi:Fun.id 
             (* TODO: Try to use Block.fmap_stmts_copy with Vertex.set Stmt.t index stmt' *)
             (fun stmt -> 
@@ -241,7 +250,7 @@ module SSIfy = struct
     in
     (* Assuming that the ID.t of a rhs phi is a Block ID? *)
     
-    let set_use (inst : Instruction.t) (og_bid : ID.t) = 
+    let set_use curr_proc (inst : Instruction.t) (og_bid : ID.t) = 
       (* while Def(stack.peek()) does not dominate inst do *)
       let rec pop_while_not_dominating instruction =
         match Stack.top_opt stack with
@@ -292,10 +301,54 @@ module SSIfy = struct
         ()
       else
         uses := DefUseMap.add !uses v' inst'
+
+      (* TODO: Use proc' function in set_def. Can refactor to be its own function that use and def call *)
     in
 
+    (* foreach CFG node n in dominance order do *)
+    let rec visit_begin_node (node : Dom.vertex) = 
+      (* We're only looking at Begin nodes : Skip if not Begin *)
+      match node with
+      | Procedure.Vert.Begin block_id -> (
+        (**
+        IMPORTANT:
+        Our CFG is structured differently to the book. Our nodes that we are looping on are
+        exclusively Begin nodes, so In(node) is the outgoing edge of the node.
 
+        So for a node n, In(n) = succ_e n i.e. the immediate block that this 'Begin' corresponds to,
+        and for m in direct-successors(n), direct-successors(n) is the second vertex from n, since
+        the order is n(Begin) -> n'(End) -> n''(Begin | Return | Exit). 
+        In(m) will be the immediate outgoing edge of n'', iff n'' is a Begin. Otherwise stop processing.
 
+        It's a little confusing, but in relation to the original algorithm, 'n' and 'In(n)' both refer to
+        the same program block.
+        *)
+
+        (* Assuming that all Begin vertices always have a single outgoing Block edge *)
+        
+        let block = Procedure.find_block proc block_id in
+
+        (* If exists Phi node with lhs matching v in In(node) then *)
+        (* TODO: See if this should be just an if statement for a single phi instead of a loop. Probably not,
+          but I'm not a fan of using fold_left everywhere *)
+        
+        let proc_step_one = List.fold_left (fun curr_proc phi ->
+          if Var.equal phi.Block.lhs v then let inst = Instruction.create_phi_inst block_id phi.lhs phi.rhs in
+          set_def curr_proc inst
+        else
+          curr_proc
+          ) proc block.phis in
+        ()
+
+        (* (fun (phi : Var.t Block.phi) -> if Var.equal phi.lhs v then 
+          let inst = Instruction.create_phi_inst block_id phi.lhs phi.rhs in
+          set_def inst) block.phis *)
+      )
+      | _ -> ();
+      
+      List.iter visit_begin_node (get_dominated_vertices cfg node)
+    in
+    visit_begin_node Procedure.Vert.Entry;
 
     Printf.printf "NAM"
 
