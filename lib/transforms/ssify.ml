@@ -110,13 +110,13 @@ module SSIfy = struct
     (* ID.t will be the ID of the block *)
     type t = ID.t * it [@@deriving ord, eq, show { with_path = false }]
 
-    let defines = function
+    let var_defines = function
       | Phi { lhs ; rhs } -> Iter.singleton lhs
       (* | Statement { index ; statement = (Instr_Assume _) as s} -> Stmt.free_vars_iter s
       | Statement { index ; statement = (Instr_Assert _) as s} -> Stmt.free_vars_iter s *)
       | Statement { index ; statement} -> Stmt.iter_assigned statement
 
-    let uses = function
+    let var_uses = function
       | Phi { rhs } -> List.to_iter rhs |> Iter.map snd
       | Statement { statement } -> Stmt.free_vars_iter statement
   end
@@ -144,10 +144,56 @@ module SSIfy = struct
 
   module Dom = Graph.Dominator.Make (Procedure.G)
 
+  (* If we need more stuff, use compute_all cfg Vert.Entry,
+  but for now I only need dom
+  compute_all is part of Make_graph, which I can't figure out how to instantiate
+  *)
+
+  (* Returns true if the beginning of the block with ID bid_a dominates 
+    beginning of block with ID bid_b *)
+  let block_dominates graph bid_a bid_b =
+    let idom = Dom.compute_idom graph Procedure.Vert.Entry in
+    let dom = Dom.idom_to_dom idom in
+    dom (Procedure.Vert.Begin bid_a) (Procedure.Vert.Begin bid_b)
+
+  (* Returns true if instruction a dominates instruction b *)
+  let instruction_dominates (graph : Dom.t) (inst_a : Instruction.t) (inst_b : Instruction.t) =
+    let bid_a = fst inst_a in
+    let bid_b = fst inst_b in
+    if ID.equal bid_a bid_b then (
+      (* Same block: check if statement index is smaller (earlier) than the other *)
+      match inst_a, inst_b with
+      | (_, Instruction.Statement stmt_a), (_, Instruction.Statement stmt_b) ->
+          stmt_a.index <= stmt_b.index
+      | _ -> true
+    )
+    else
+      block_dominates graph bid_a bid_b
+
   (* Returns a procedure that has renamed v *)
   let rename2 (v: Var.t) proc =
     let stack : Var.t Stack.t = Stack.create() in
-    let cfg = Procedure.graph in
+    
+    (* The control flow graph of the current procedure *)
+    let cfg = match Procedure.graph proc with 
+      | Some g -> g | None -> Procedure.G.empty
+  in
+
+    (**
+    Right now, set_def and use_def return a new procedure, which is used
+    for further computation in rename. Remaking the new procedure each time
+    is very inefficient because only a single Stmt/Phi is changed, so we
+    could make a map from old_instructions to new_instructions, and then do
+    a single Procedure map at the end that replaces each respective instruction,
+    but I was worried that newer instructions would overwrite the change of 
+    older new_instructions.
+
+    E.g. x := v + v could become x := v1 + v1 and x := v2 + v2. 
+    The single map would used x := v2 + v2 instead of x := v1 + v2.
+
+    This is just a theory, once I have finished implementing rename I will test using
+    the single Procedure map, since if it works it will be significantly more efficient.
+    *)
 
     (* Returns the proc with replaced inst' *)
     let set_def (inst : Instruction.t) = 
@@ -167,6 +213,8 @@ module SSIfy = struct
 
       (* Set Def(v') = inst' *)
       defs := DefUseMap.add !defs v' inst';
+
+      (* stack.push(v') *)
       Stack.push v' stack;
 
       (* Return the updated procedure that contains the updated inst' *)
@@ -183,17 +231,72 @@ module SSIfy = struct
           (_, Instruction.Statement new_stmt) -> 
             Procedure.modify_block proc block_id (fun block ->
               Block.map ~phi:Fun.id 
-            (* TODO: See if we can compare statement indexes as well. I don't think it's possible with Block.map. 
-              Maybe use Block.fmap_stmts_copy*)
+            (* TODO: Try to use Block.fmap_stmts_copy with Vertex.set Stmt.t index stmt' *)
             (fun stmt -> 
               if Stmt.equal Var.equal Var.equal Expr.BasilExpr.equal (old_stmt.statement) stmt then 
                 new_stmt.statement else stmt) block)
-        | _ -> proc (* Shouldn't occur *)
+        | _ -> failwith "Impossible" (* Shouldn't occur *)
       in
       proc'
-    
-
     in
+    (* Assuming that the ID.t of a rhs phi is a Block ID? *)
+    
+    let set_use (inst : Instruction.t) (og_bid : ID.t) = 
+      (* while Def(stack.peek()) does not dominate inst do *)
+      let rec pop_while_not_dominating instruction =
+        match Stack.top_opt stack with
+        | None -> ()
+        | Some v' ->
+          let v'_def_instructions = DefUseMap.find !defs v' 
+          in
+          if List.for_all (fun v'_def -> 
+                not (instruction_dominates cfg (v'_def) (instruction))
+              ) v'_def_instructions then (
+            ignore (Stack.pop stack);
+            pop_while_not_dominating instruction
+          )
+      in
+
+      (* v' <- stack.peek() *)
+      let v' = let open Bincaml_util.Unicode in Option.value (Stack.top_opt stack) ~default:(Var.create bot_char (Var.typ v) ~scope:(Var.scope v))
+      in
+
+      (* TODO: not 100% sure on this one. *)
+      let expr_transform_alg =
+        let open Expr.BasilExpr in 
+        rewrite_typed (function
+        | RVar { id ; attrib } when Var.equal id v -> (
+          Some (rvar ~attrib:attrib v'))
+        | _ -> None)
+      in
+
+      (* Replace the uses of v by v' in inst *)
+      let inst' = 
+        match inst with
+        | (block_id, Instruction.Phi { lhs ; rhs }) ->
+          (* Only replace the rhs var that is for the 'current' block
+            Remember that set_use is called for the successor the the current block
+          *)
+          let rhs' = List.map (fun (bid, var) -> if ID.equal og_bid bid && Var.equal var v then (bid, v') else (bid, var)) rhs in
+          (block_id, Instruction.Phi { lhs = lhs ; rhs = rhs'})
+        | (block_id, Instruction.Statement old_stmt) -> 
+          let stmt' = Stmt.map ~f_lvar:id
+                               ~f_expr:(expr_transform_alg)
+                               ~f_rvar:(fun oldv -> if Var.equal oldv v then v' else oldv)
+                               old_stmt.statement 
+          in
+          (block_id, Instruction.Statement {index = old_stmt.index ; statement = stmt'})
+      in
+      pop_while_not_dominating inst;
+      if String.equal (Var.name v') Bincaml_util.Unicode.bot_char then
+        ()
+      else
+        uses := DefUseMap.add !uses v' inst'
+    in
+
+
+
+
     Printf.printf "NAM"
 
 
