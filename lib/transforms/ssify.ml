@@ -144,6 +144,9 @@ module SSIfy = struct
 
   module Dom = Graph.Dominator.Make (Procedure.G)
 
+  (* Gets the second successors *)
+  let second_successors graph (vert : Dom.vertex) = Procedure.G.succ graph vert |> List.concat_map (Procedure.G.succ graph)      
+
   (* If we need more stuff, use compute_all cfg Vert.Entry,
   but for now I only need dom
   compute_all is part of Make_graph, which I can't figure out how to instantiate
@@ -176,7 +179,7 @@ module SSIfy = struct
     Dom.idom_to_dom_tree graph idom
 
   (* Returns a procedure that has renamed v *)
-  let rename2 (v: Var.t) proc =
+  let rename (v: Var.t) proc =
     (* Stack <- new *)
     let stack : Var.t Stack.t = Stack.create() in
     
@@ -307,7 +310,8 @@ module SSIfy = struct
     in
 
     (* foreach CFG node n in dominance order do *)
-    let rec visit_begin_node (node : Dom.vertex) = 
+    let rec visit_begin_node start_proc (node : Dom.vertex) = 
+      let final_proc =
       (* We're only looking at Begin nodes : Skip if not Begin *)
       match node with
       | Procedure.Vert.Begin block_id -> (
@@ -327,7 +331,8 @@ module SSIfy = struct
 
         (* Assuming that all Begin vertices always have a single outgoing Block edge *)
         
-        let block = Procedure.find_block proc block_id in
+        let block = Procedure.find_block start_proc block_id in
+
 
         (* If exists Phi node with lhs matching v in In(node) then *)
         (* TODO: See if this should be just an if statement for a single phi instead of a loop. Probably not,
@@ -337,34 +342,49 @@ module SSIfy = struct
           set_def curr_proc inst
         else
           curr_proc
-          ) proc block.phis in
-        
+          ) start_proc block.phis in
+
         (* foreach instruction u in n that uses v do *)
         (* TODO: I'm unfamiliar with Vector. As far as I can tell there isn't any other way to get
         the index of a given element in the vector. *)
         let proc_step_two = Vector.fold (fun (curr_proc, index) stmt ->
+          (* An instruction that uses v *)
           if VarSet.mem v (Stmt.free_vars stmt) then 
             let inst = Instruction.create_stmt_inst block_id index stmt in
-          (set_use curr_proc inst block_id, index + 1)
-        else
-          (curr_proc, index + 1)
-          ) (proc_step_one, 0) block.stmts
-          
+            (set_use curr_proc inst block_id, index + 1)
+
+          else if Iter.mem v (Stmt.iter_lvar stmt) then
+            (* if exists instruction d in n that defines v then *)
+            let inst = Instruction.create_stmt_inst block_id index stmt in
+            (set_def curr_proc inst, index + 1) 
+
+          else
+            (curr_proc, index + 1)
+          ) (proc_step_one, 0) block.stmts 
+          |> fst
         in
-        ()
-
-        (* (fun (phi : Var.t Block.phi) -> if Var.equal phi.lhs v then 
-          let inst = Instruction.create_phi_inst block_id phi.lhs phi.rhs in
-          set_def inst) block.phis *)
+        let next_vertices = second_successors cfg node in
+        let final_proc = List.fold_left (fun curr_proc vert -> 
+          match vert with
+          | Procedure.Vert.Begin succ_block_id -> 
+            let succ_block = Procedure.find_block curr_proc succ_block_id in
+            List.fold_left (fun p phi ->
+              List.fold_left (fun pnam (ogbid, var) -> 
+                if ID.equal ogbid block_id && Var.equal var v then
+                  let inst = Instruction.create_phi_inst succ_block_id phi.Block.lhs phi.Block.rhs in
+                  set_def pnam inst
+                else
+                  pnam) p phi.Block.rhs
+            ) curr_proc succ_block.phis
+          | _ -> curr_proc
+          ) proc_step_two next_vertices in
+        final_proc
       )
-      | _ -> ();
-      
-      List.iter visit_begin_node (get_dominated_vertices cfg node)
+      | _ -> start_proc
+                in 
+      List.fold_left visit_begin_node final_proc (get_dominated_vertices cfg node)
     in
-    visit_begin_node Procedure.Vert.Entry;
-
-    Printf.printf "NAM"
-
+    visit_begin_node proc Procedure.Vert.Entry
   end
 
 
@@ -383,7 +403,7 @@ module SSIfy = struct
     split v pv; rename v; clean v;
 end
 
-let%expect_test "test3_basic_call_phi" =
+let%expect_test "test_rename" =
   let lst =
     Loader.Loadir.ast_of_string
       {|
@@ -439,7 +459,39 @@ proc @OY() -> (OY_out:bv64)
     |}
   in
   let program = lst.prog in
-  Program.pretty_to_chan stdout program;
+  let proc = Program.entry_proc_exn program in
+  let v =
+    match Procedure.lookup_local_decl proc "v" with
+    | Some v -> v
+    | None -> failwith "Bleh"
+  in
+  let proc' = SSIfy.VariableRenaming.rename v proc in
+  Program.output_proc_pretty stdout proc';
   [%expect
-    {| 
+    {|
+    proc @main(i:bv64)  -> (out:bv64) {  }
+
+
+    [
+       block %main [ (var v_1:bv64=OX_out) := call @OX(); goto (%main_2,%main_1); ];
+       block %main_1 [
+         guard bvsmod(i:bv64, 0x2:bv64);
+         var tmp:bv64 := bvadd(i:bv64, 0x1:bv64);
+         var v:bv64 := bvadd(v_4:bv64, 69);
+         goto (%main_return);
+       ];
+       block %main_2 [
+         guard boolnot(bvsmod(i:bv64, 0x2:bv64));
+         (var v_3:bv64=OY_out) := call @OY();
+         var v:bv64 := bvadd(v_3:bv64, 420);
+         goto (%main_return);
+       ];
+       block %main_return (
+         var v_2:bv64 := phi(%main_1 -> v:bv64, %main_2 -> v:bv64)
+       ) [
+         var v:bv64 := bvadd(v_2:bv64, 0x1:bv64);
+         var out:bv64 := v_2:bv64;
+         return;
+       ]
+    ]
     |}]
