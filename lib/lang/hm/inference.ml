@@ -69,7 +69,7 @@ module Make (T : TypeExpr.TypeContext) = struct
     | `INTNEG -> curry [ int_type ] int_type
     | #Ops.IntOps.binary_pred -> curry [ int_type; int_type ] bool_type
     | #Ops.IntOps.const -> fix @@ int_type
-    | #Ops.IntOps.binary_unif -> curry [ int_type; int_type ] bool_type
+    | #Ops.IntOps.binary_unif -> curry [ int_type; int_type ] int_type
     | #Ops.LogicalOps.binary -> curry [ bool_type; bool_type ] bool_type
     | #Ops.LogicalOps.unary -> curry [ bool_type ] bool_type
     | #Ops.LogicalOps.const -> fix @@ bool_type
