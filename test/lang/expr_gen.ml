@@ -61,7 +61,7 @@ let gen_bvconst ?min w =
   return (BasilExpr.bvconst c)
 
 let vname =
-  let v = int_bound 8 in
+  let v = int_range 1 3 in
   let vl = "abcdefghijklmnopqrstuvwxyz" |> String.to_list in
   let vl = vl @ List.map Char.uppercase_ascii vl in
   let cs = QCheck.Gen.oneof_list vl in

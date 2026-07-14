@@ -28,14 +28,29 @@ module HMDifferential = struct
     let inf_hm = infer exp in
     return (exp, inf_b, inf_hm)
 
-  let predicate (a, b, hm) = Result.is_ok hm && Types.equal b (Result.get_ok hm)
+  let expect_type_error e =
+    (* multiple variables with different types *)
+    let has_type (acc, m) v =
+      let e =
+        StringMap.find_opt (Var.name v) m
+        |> Option.for_all (Types.equal (Var.typ v))
+      in
+      (acc && e, StringMap.add (Var.name v) (Var.typ v) m)
+    in
+    let var_types_compat, _ =
+      Expr.BasilExpr.free_vars_iter e
+      |> Iter.fold has_type (true, StringMap.empty)
+    in
+    not var_types_compat
+
+  let predicate (a, b, hm) =
+    (expect_type_error a && Result.is_error hm)
+    || (Result.is_ok hm && Types.equal b (Result.get_ok hm))
 
   let test =
-    QCheck.Test.make ~name:"Hm inference matches" ~count:1000 ~max_fail:1 gener
+    QCheck.Test.make ~name:"Hm inference matches" ~count:10000 ~max_fail:1 gener
       predicate
 end
-
-type t = Alcotest.speed_level
 
 let _ =
   let suite =
