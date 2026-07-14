@@ -179,7 +179,6 @@ module HighestLiveBitIDE = struct
   open DL
 
   let transfer_call call param d =
-    Printf.printf "AAAAAAAAAAAAAAAAAAA";
     match d with
     | Lambda -> Iter.singleton (Lambda, IdEdge)
     | Label v ->

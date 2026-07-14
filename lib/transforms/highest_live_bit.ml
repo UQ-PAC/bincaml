@@ -9,6 +9,10 @@ open Expr
 
 let v_width v = Types.bit_width (Var.typ v)
 
+let create_tmp_var proc v =
+  Procedure.fresh_var ~pure:true ~name:"tmp" proc (Var.typ v) 
+  |> Procedure.decl_local proc
+
 let create_new_proc_var_map procRes proc =
   let get_hi_lb = IDESSI_LB.Value.get_hi in
   VarMap.fold (
@@ -17,8 +21,8 @@ let create_new_proc_var_map procRes proc =
       | Some w -> (
         match get_hi_lb edge with
         | Some hi when hi < w - 1 -> 
-            let v' = Var.create (Var.name v) (Types.bv (hi + 1)) ~scope:(Var.scope v) in 
-            ignore (Procedure.decl_local proc v');
+            let v' = Var.create (Var.name v) (Types.bv (hi + 1)) ~scope:(Var.scope v)
+            |> Procedure.decl_local proc in
             VarMap.add v v' acc
         | _ -> acc
       )
@@ -65,7 +69,7 @@ let transform_proc procRes proc =
   let get_new_var old_var = VarMap.find_opt old_var old_to_new_var_map in
 
   Procedure.flat_map_stmts_topo_fwd (fun stmt ->
-    Iter.pure (
+    (* Iter.pure ( *)
       match stmt with
       | Stmt.Instr_Assign { al ; attrib } -> (
         let new_al =
@@ -74,21 +78,38 @@ let transform_proc procRes proc =
             transform_lvar_and_expr lvar new_expr get_new_var
             ) al
           in
-          Stmt.Instr_Assign { al = new_al ; attrib }
+          Iter.pure (Stmt.Instr_Assign { al = new_al ; attrib })
       )
       (* | Stmt.Instr_Load { attrib ; lhs ; rhs ; addr } -> stmt *)
       (* | Stmt.Instr_Store { attrib ; lhs ; rhs ; value ; addr } -> stmt *)
       (* | Stmt.Instr_IntrinCall { attrib ; lhs ; name ; args } -> stmt *)
-      (* | Stmt.Instr_Call { attrib ; lhs = lvar ; procid ; args = rexpr } -> (
-        let nama = transform_lvar_and_expr lvar rexpr get_new_var in
-        Stmt.Instr_Call { attrib ; lhs = (fst nama) ; procid ; args = (snd nama) }
-      ) *)
-      | _ -> Stmt.map ~f_lvar:(transform_rvar get_new_var) 
+      | Stmt.Instr_Call { attrib ; lhs = lvar_map ; procid ; args } -> 
+        let tmp_smap = StringMap.map (create_tmp_var proc) lvar_map in
+        let updated_call = 
+        Stmt.Instr_Call { attrib ; lhs = tmp_smap ; procid ; args }
+        in
+        let new_al =
+        StringMap.fold (fun key tmp_var (al : (Var.t * BasilExpr.t) list) -> 
+          let lvar = transform_rvar get_new_var (StringMap.find key lvar_map) in 
+          let expr = BasilExpr.rvar tmp_var in
+          let total_expr = 
+            match v_width lvar with
+            | Some w' -> BasilExpr.extract ~hi_excl:w' ~lo_incl:0 expr
+            | _ -> expr
+          in
+          al @ [(lvar, total_expr)]
+          ) tmp_smap List.empty
+        in
+        let updated_assign = 
+          Stmt.Instr_Assign {al = new_al ; attrib } (* TODO: reusing attrib is probably not good *)
+        in
+        Iter.doubleton updated_call updated_assign
+      | _ -> Iter.pure (Stmt.map ~f_lvar:(transform_rvar get_new_var) 
                       ~f_expr:(transform_subexpr_rvar get_new_var) 
                       ~f_rvar:(transform_rvar get_new_var) 
-                      stmt
+                      stmt)
     )
-    ) proc
+     proc
 
 let highest_live_bit_transform (prog : Program.t) =
   let _, p2res = 
@@ -390,12 +411,13 @@ proc @binary_expr(c:bv64)  -> (out1:bv64) {  }
 ) p2_results;
   [%expect
   {|
-    ALICEPhantomproc @trans(b:bv64)  -> (out:bv32) {  }
+    proc @trans(b:bv64)  -> (out:bv32) {  }
 
 
     [
        block %trans [
-         (var v1:bv32=out1) := call @binary_expr(c=0xffffffff:bv64);
+         (var tmp:bv64=out1) := call @binary_expr(c=0xffffffff:bv64);
+         var v1:bv32 := extract(32,0, tmp:bv64);
          var v2:bv32 := extract(32,0, zero_extend(32, v1:bv32));
          var out:bv32 := v2:bv32;
          return;
@@ -411,7 +433,7 @@ proc @binary_expr(c:bv64)  -> (out1:bv64) {  }
          return;
        ]
     ];
-    prog entry @trans;ALICEPhantomID: ("@trans", 0)
+    prog entry @trans;ID: ("@trans", 0)
 
 
       { Var.V.name = "out"; typ = bv32; scope = Var.LocalVar } -> ⊤
