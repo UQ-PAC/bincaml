@@ -1,5 +1,4 @@
 open Common
-open UnionFind
 open Abstract_expr
 
 (** Hindley-Milner type inference based on a union-find. *)

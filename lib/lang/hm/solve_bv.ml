@@ -1,7 +1,6 @@
 (** Solve constraint system of dependently width typed bitvectors *)
 
 open Common
-open UnionFind
 open Abstract_expr
 open Hm_types
 
@@ -28,22 +27,28 @@ module Make (T : TypeExpr.TypeContext) = struct
     match a with
     | Add { a; b; equ } -> (
         match List.map is_nat_val_type [ find a; find b; find equ ] with
-        | [ Some _; Some _; Some _ ] -> Some equ
-        | [ Some a; Some b; None ] ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (a + b)) equ)
-        | [ Some a; None; Some b ] ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (b - a)) equ)
-        | [ None; Some a; Some b ] ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (b - a)) equ)
+        | [ Some a_n; Some b_n; Some e_n ] ->
+            (* check constraint  *)
+            if a_n + b_n <> e_n then
+              type_error (fix @@ nat_val_type (a_n + b_n)) equ;
+            Some equ
+        | [ Some a_n; Some b_n; None ] ->
+            Some (unify ~pos:[%here] (fix @@ nat_val_type (a_n + b_n)) equ)
+        | [ Some a_n; None; Some e_n ] ->
+            Some (unify ~pos:[%here] (fix @@ nat_val_type (e_n - a_n)) b)
+        | [ None; Some b_n; Some e_n ] ->
+            Some (unify ~pos:[%here] (fix @@ nat_val_type (e_n - b_n)) a)
         | _ -> None)
     | AddConst { a; b; equ } -> (
         match (is_nat_val_type (find a), is_nat_val_type (find equ)) with
-        | Some i, None ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (i + b)) equ)
-        | Some i, Some equ_c ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (i + b)) equ)
-        | None, Some e ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (e - b)) a)
+        | Some a_n, Some e_n ->
+            (* check constraint  *)
+            let e = fix @@ nat_val_type (a_n + b) in
+            Some (unify ~pos:[%here] e equ)
+        | Some a_n, None ->
+            Some (unify ~pos:[%here] (fix @@ nat_val_type (a_n + b)) equ)
+        | None, Some e_n ->
+            Some (unify ~pos:[%here] (fix @@ nat_val_type (e_n - b)) a)
         | _ -> None)
 
   (** Naive solver; loop over constraints and unify until everything is solved.

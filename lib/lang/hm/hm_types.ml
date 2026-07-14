@@ -1,7 +1,6 @@
 (** Conversion from bincaml types to and from HM type infernece environment *)
 
 open Common
-open UnionFind
 open Abstract_expr
 
 exception TypeErr of string

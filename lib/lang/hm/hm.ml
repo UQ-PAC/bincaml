@@ -132,7 +132,6 @@ module Elaboration = Elaboration
 (** {1 High-level type-inference operations}*)
 
 open Common
-open UnionFind
 open Abstract_expr
 
 (*

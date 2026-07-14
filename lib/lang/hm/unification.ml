@@ -1,7 +1,6 @@
 (** Unification of type expressions *)
 
 open Common
-open UnionFind
 open Abstract_expr
 
 module Make (T : TypeExpr.TypeContext) = struct
@@ -27,7 +26,7 @@ module Make (T : TypeExpr.TypeContext) = struct
   let occurs_in a b =
     let check = function
       | Var t -> equal_tvar t a
-      | TypeConstr (ls, _) -> List.fold_left ( || ) false ls
+      | TypeConstr (ls, _) -> List.for_all Fun.id ls
     in
     Rec.cata check b
 
@@ -42,24 +41,10 @@ module Make (T : TypeExpr.TypeContext) = struct
     match (map_expr unfix @@ Typ.unfix t, map_expr unfix @@ Typ.unfix t') with
     | TypeConstr ([], "nothing"), _ -> t
     | _, TypeConstr ([], "nothing") -> t'
-    | Var x, Var y -> union t t'
+    | Var x, Var y -> Typ.union t t'
     | Var x, _ when occurs_in x t' -> recursion_error x t'
     | Var _, TypeConstr _ -> merge (fun a b -> b) t t'
     | _, Var x -> unify ~pos:[%here] t' t
-    | TypeConstr ([ a ], "const"), TypeConstr ([ b ], "const") ->
-        let x = unify ~pos:[%here] (fix a) (fix b) in
-        fix @@ TypeConstr ([ x ], "const")
-    | TypeConstr ([ a ], "shared"), TypeConstr ([ b ], "shared") ->
-        let x = unify ~pos:[%here] (fix a) (fix b) in
-        fix @@ TypeConstr ([ x ], "const")
-    | o, TypeConstr ([ b ], "shared") | o, TypeConstr ([ b ], "const") ->
-        unify ~pos:[%here] t' t
-    | TypeConstr ([ b ], "shared"), o ->
-        let b = unify ~pos:[%here] (fix b) (fix (map_expr fix o)) in
-        fix @@ TypeConstr ([ b ], "shared")
-    | TypeConstr ([ b ], "const"), o ->
-        let b = unify ~pos:[%here] (fix b) (fix (map_expr fix o)) in
-        fix @@ TypeConstr ([ b ], "const")
     | TypeConstr (ars, n), TypeConstr (ars', n') when not (String.equal n n') ->
         type_error t t'
     | TypeConstr (ars, n), TypeConstr (ars', n')

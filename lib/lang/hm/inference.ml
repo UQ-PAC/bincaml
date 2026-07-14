@@ -1,5 +1,4 @@
 open Common
-open UnionFind
 open Abstract_expr
 open Hm_types
 
