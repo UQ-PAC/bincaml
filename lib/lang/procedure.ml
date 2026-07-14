@@ -686,14 +686,13 @@ type ('v, 'e) mapped_stmt =
         third value in the variant.
 
         Generally, the procedure should not be modified in any other way. *) ]
-(** Either a list of zero or more statements, {i or} a first/last pair of
-    block-level control-flow. This is used as the expected return type of
-    mapping one statement in {!general_flat_map_stmts}'s [~f] parameter. *)
+(** Expected return type of mapping one statement through
+    {!general_flat_map_stmts}'s [~f] parameter. *)
 
 (** [general_flat_map_stmts ~f bid proc] maps each statement in the given block
-    ID through [f]. For each statement, [f] may return either zero or more
-    "bare" statements, {i or} a first/last pair of new block-level control-flow.
-    See {!type-mapped_stmt} for details about [f]'s return type.
+    ID through [f]. For each statement, [f] may return any number of blocks or
+    statememts. See {!type-mapped_stmt} for details and requirements about [f]'s
+    return value.
 
     Returns [(first, last, proc)] where [proc] is the updated procedure and
     [first] / [last] is the first / last block of the combined map output.
@@ -707,44 +706,45 @@ type ('v, 'e) mapped_stmt =
     first / last block of the mapped output. *)
 let general_flat_map_stmts ~(f : proc:_ t -> _ Stmt.t -> _ mapped_stmt) base_bid
     proc =
-  let existing_bids =
-    lazy (iter_blocks proc |> Iter.map fst |> Iter.to_set (module IDSet))
-  in
+  let existing_bids = lazy (IDSet.of_iter (Iter.map fst (iter_blocks proc))) in
   let is_fresh = fun bid -> not (IDSet.mem bid (Lazy.force existing_bids)) in
+
+  (* Applies the [f] function while recording the current block ID for
+     [`Stmts] insertion, if available.
+
+     Also normalises the output into either:
+     - an iter of already-inserted [(first,last)] bookend IDs, or
+     - a [(bid, stmts)] which will be inserted later into the specified [bid]. *)
+  let apply_f ~proc (cur_stmts_bid : ID.t option) stmt :
+      (_ t * ID.t option)
+      * ((ID.t * ID.t) Iter.t, ID.t * _ Stmt.t Iter.t) Either.t =
+    match f ~proc stmt with
+    | `Blocks [] | `Stmts [] -> ((proc, cur_stmts_bid), Left Iter.empty)
+    | `Blocks bs ->
+        let[@warning "+missing-record-field-pattern"] proc, bids =
+          List.fold_map
+            (fun proc { Block.attrib; stmts; phis } ->
+              fresh_block proc ~attrib ~phis ~stmts:(CCVector.to_list stmts) ())
+            proc bs
+        in
+        ((proc, None), Left (Iter.map Pair.dup (Iter.of_list bids)))
+    | `Graph (first, last, proc) ->
+        if is_fresh first && is_fresh last then
+          ((proc, None), Left (Iter.singleton (first, last)))
+        else failwith "general_flat_map_stmts: `Graph blocks should be fresh"
+    | `Stmts stmts ->
+        let proc, bid =
+          match cur_stmts_bid with
+          | None -> fresh_block proc ~name:(ID.name base_bid) ~stmts:[] ()
+          | Some bid -> (proc, bid)
+        in
+        ((proc, Some bid), Right (bid, Iter.of_list stmts))
+  in
 
   (* Map, while generating block names for bare statements returned by the mapping function. *)
   let (proc, _), mapped =
     find_block proc base_bid |> Block.stmts_iter |> Iter.to_list
-    |> List.fold_flat_map
-         (fun (proc, bid) stmt ->
-           match f ~proc stmt with
-           | `Blocks [] | `Stmts [] -> ((proc, bid), [])
-           | `Blocks bs ->
-               let proc, bids =
-                 List.fold_map
-                   (fun proc b ->
-                     let[@warning "+9"] { Block.attrib; stmts; phis } = b in
-                     fresh_block proc ~attrib ~phis
-                       ~stmts:(CCVector.to_list stmts) ())
-                   proc bs
-               in
-               ((proc, None), List.map (fun x -> Either.Left (x, x)) bids)
-           | `Graph (first, last, proc) ->
-               if is_fresh first && is_fresh last then
-                 ((proc, None), [ Either.Left (first, last) ])
-               else
-                 failwith
-                   "general_flat_map_stmts: `Block variant requires fresh \
-                    block IDs"
-           | `Stmts s ->
-               let name = ID.name base_bid and stmts = [] in
-               let proc, bid =
-                 match bid with
-                 | None -> fresh_block proc ~name ~stmts ()
-                 | Some bid -> (proc, bid)
-               in
-               ((proc, Some bid), [ Either.Right (bid, Iter.of_list s) ]))
-         (proc, Some base_bid)
+    |> List.fold_map (fun (proc, b) -> apply_f ~proc b) (proc, Some base_bid)
   in
   (* Collects adjacent bare statements into a basic block, and inserts those statements. *)
   let proc = modify_block proc base_bid Block.clear_stmts in
@@ -752,7 +752,7 @@ let general_flat_map_stmts ~(f : proc:_ t -> _ Stmt.t -> _ mapped_stmt) base_bid
     Extras.group_succ_either mapped
     |> List.fold_flat_map
          (fun proc -> function
-           | Either.Left (hd, tl) -> (proc, hd :: tl)
+           | Either.Left (hd, tl) -> (proc, Iter.(to_list (append_l (hd :: tl))))
            | Either.Right ((bid, hd), rest) ->
                let stmts =
                  Iter.append hd (Iter.flat_map snd (Iter.of_list rest))
