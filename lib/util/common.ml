@@ -10,7 +10,6 @@ module IntMap = Map.Make (Int)
 module StringSet = Set.Make (String)
 module IntSet = Set.Make (Int)
 module Worklist = Worklist
-
 module Extras = Extras
 
 (* Byte_slice extension for blitting to Bytes *)
