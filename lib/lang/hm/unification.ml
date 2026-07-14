@@ -1,4 +1,4 @@
-(** Unification of types *)
+(** Unification of type expressions *)
 
 open Common
 open UnionFind

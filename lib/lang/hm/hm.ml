@@ -1,5 +1,6 @@
 (** Simple hindley-milner type inference *)
 
+module TypeExpr = TypeExpr
 (** {1 Type Expressions}
 
     Bincaml's AST is generic in the type annotation expression.
@@ -37,17 +38,6 @@
     This type is placed in a union-find datastructre in order to perform type
     unification. *)
 
-module TypeExpr = TypeExpr
-
-module Hm_types = Hm_types
-(** Conversions to/form HM state and bincaml types *)
-
-module Unification = Unification
-(** Unification of type-expressions *)
-
-module Solve_bv = Solve_bv
-(** Simple solver for dependently-sized bitvectors *)
-
 (** {1 Type Inference}
 
     Type inference is split into two phases, inference and elaboration.
@@ -55,53 +45,89 @@ module Solve_bv = Solve_bv
     type errors when conflicts arise. Elaboration anotates the program with
     these expressions.
 
-    {2 Inference}
+    {2 Inference} *)
+
+module Hm_types = Hm_types
+(** Conversions to/form HM state and bincaml types *)
+
+module Unification = Unification
+module Inference = Inference
+
+(** Traversal of expressions to infer types
 
     We traverse the bincaml AST and construct a {! TypeExpr.t} for the type of
     each expression, and perform unification to determine what the type is.
 
-    {3 Parametric Bitvectors}
-
-    Bitvector types are parametric in their widths, technically some operations,
-    such as concatenation, are typed depending on the arguments passed to them.
-    For now our approach is to hope there is enogugh typing information to fully
-    propagate concrete types.
-
-    We define the types like "5" to represent the number 5. The "Bitvector" type
-    is parametric in its width type, i.e [bv5] is defined as
-    {[TypeConstr ([TypeConstr ([],"5")], "bv")]}. When we do not know the exact
-    width we use a type variable, and rely on unification to determine the
-    precise type. Our type constraints cannot fully represent our
-    value-dependent bitvector widths, this will fail (emitting a type varable)
-    unless there are sufficient type annotations.
+    Bincaml has some specific concerns: for its type system:
 
     {3 Ad-hoc polymorpic operators}
 
-    Bincaml has some specific concerns, namely our operators are ad-hoc
-    polymorphic. For each op (e.g. bvadd)
+    Our operators are ad-hoc polymorphic. Polymorphism in HM is represented with
+    type schemes. A type-scheme in HM is a non-recursive universal quantifier
+    over type variables.
 
-    A type-scheme in HM is a non-recursive universal quantifier over type
-    variables.
-
-    {[type scheme = Forall of tvar list * t]}
+    {[
+    type scheme = Forall of tvar list * t
+    ]}
 
     We represent our ad-hoc polymorphic operators by immediately generalising
     them, returning a type scheme for a generic function type. For instance for
     [bvadd] we know all the widths have to be equal, so the type scheme is
 
-    [bvadd :: Forall i : Bitvector i -> Bitvector i -> Bitvector i]
+    [bvadd :: Forall i : Bitvector i -> Bitvector i -> Bitvector i] *)
 
-    {2 Elaboration}
+module Solve_bv = Solve_bv
+
+(** {3 Parametric Bitvectors}
+
+    For cases like [bvadd], it is enough that one of their arguments (or return)
+    be type annotated in order to infer concrete types for all type variables in
+    the type scheme.
+
+    However some operations, such as concatenation, are typed depending on
+    arithmetic over the width values of the arguments passed to them.
+
+    We define the type constructor ℕ to represent numeric types, we interpret it
+    as a number when its argument is a type constructor which is the string
+    representation of a number. E.g. the type "5 ℕ" represents the number 5.
+
+    The [bv] bitvector type is parametric in its width, i.e [bv5] is defined as;
+
+    {[
+    TypeConstr ([5 ℕ, "bv")
+    ]}
+
+    When we do not know the exact width we use a type variable, and rely on
+    unification, and a width-solving post-pass to determine the precise type.
+
+    If there is not enough information to determine a concrete width, extraction
+    to a bincaml type will fail with a type error.
+
+    In order to solve for widths, we represent width-dependent operations as a a
+    pair of a type scheme and type constraint. E.g. for [concat] this type
+    constraint is of the form
+
+    {[
+    (* scheme *)
+    concat :: Forall a  b  c : Bitvector a -> Bitvector b -> Bitvector c
+
+    (* constraint *)
+    Add { a ; b; equ=c }  (** a + b = c *)
+    ]}
+
+    These constraints are collected, and solved iteratively after the inference
+    pass has run. This proces is naive and exponential in the number of
+    deductive steps it has to make. *)
+
+module Elaboration = Elaboration
+(** {2 Elaboration}
 
     As the inference returns a version of the program typed with the HM
     [TypeExpr]s, the elaboration amounts to a traversal of the program which
-    constructs bincaml-typed representations of these structures. *)
+    constructs bincaml-typed representations of these structures.
 
-module Inference = Inference
-(** Traversal of expressions to infer types *)
-
-module Elaboration = Elaboration
-(** Annotating the AST with the inferred types *)
+    This module implements both inference and elaboratino for the high-level
+    program structures as this simplifies book-keeping of types. *)
 
 (** {1 High-level type-inference operations}*)
 
@@ -124,7 +150,8 @@ open Abstract_expr
  it to be well-typed coming out.  Mistakes could be found by running a global
  program typecheck after the transform. *)
 
-(** Algebra that infers types of expressions *)
+(** Algebra that infers types of expressions in a fresh local context, assuming
+    all free variables are defined and annotated. *)
 let locally_elaborate_expr (e : Expr.BasilExpr.t) =
   let open AbstractExpr in
   let open Ops.AllOps in
@@ -161,6 +188,8 @@ let type_applied (funtype : Types.t) (args : Types.t list) =
     Ok (T.to_basil rt)
   with Hm_types.TypeErr e -> Error e
 
+(** Apply type inference to a program and return a fully type-annotated copy of
+    the program. *)
 let elaborate_prog prog =
   (* We need to create a local typing module in order to get fresh state for the
   union find and hash cons. *)
