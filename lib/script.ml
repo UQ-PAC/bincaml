@@ -315,6 +315,7 @@ let load_gtirb st fname =
       let p =
         match p with
         | Ok e ->
+            let e = Program.set_attrib Invariants.(to_attrib [ GTIRB_ARM ]) e in
             Loader.Loadir.(
               Some
                 { prog = e; curr_proc = None; params_order = Hashtbl.create 0 })

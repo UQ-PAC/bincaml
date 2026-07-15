@@ -354,5 +354,6 @@ let module_to_ir_prog ir_cfg (m : Module.t) =
       (fun _ proc prog -> temp_proc_to_ir_proc all_blocks prog proc)
       procs prog
   in
+  let prog = Lang.Spec_modifies.set_modsets prog in
   let entry_proc = UUIDMap.find entry_proc procs in
   Lang.Program.set_entry_proc entry_proc.id prog

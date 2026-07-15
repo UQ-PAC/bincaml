@@ -1523,7 +1523,7 @@ let concrete_prog_ast_of_channel ?input ?filename c =
   let lexbuf = Lexing.from_channel ~with_positions:true c in
   filename |> Option.iter (fun f -> Lexing.set_filename lexbuf f);
   try ParBasilIR.pModuleT LexBasilIR.token lexbuf
-  with ParBasilIR.Error -> raise (ILBParseError { input; lexbuf })
+  with _ -> raise (ILBParseError { input; lexbuf })
 
 let concrete_prog_ast_of_string ?input ?filename str =
   let open BasilIR in

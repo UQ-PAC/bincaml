@@ -297,25 +297,30 @@ struct
       =
    fun _ -> failwith "f_gen_Elem_set"
 
-  (** [f_gen_Mem_set size address size acctype value] *)
+  (** [(f_gen_Mem_set size address size acctype value) : unit] emit instruction
+      which stores value to memory. Value must have bit width equal to size
+      (bytes) in bits. *)
   let f_gen_Mem_set : bigint -> expr -> expr -> expr -> expr -> unit =
    fun size addr _ _acctype value ->
-    let addr = Stmt.Addr { addr; size = Z.to_int size; endian = `Little }
+    let size = 8 * Z.to_int size in
+    let addr = Stmt.Addr { addr; size; endian = `Little }
     and mem = S.bincaml_memory_var () in
     bincaml_internal_emit
       (Stmt.Instr_Store
          { attrib = Attrib.empty; lhs = mem; rhs = mem; value; addr })
 
-  (** [f_gen_Mem_read size address size acctype value] *)
+  (** [let lhs = f_gen_Mem_read size address size acctype value] :emits read
+      instruction which assigns to variable [lhs] and return this expression. *)
   let f_gen_Mem_read : bigint -> expr -> expr -> expr -> expr =
    fun size addr _ _acctype ->
-    let addr = Stmt.Addr { addr; size = Z.to_int size; endian = `Little }
+    let size = 8 * Z.to_int size in
+    let addr = Stmt.Addr { addr; size; endian = `Little }
     and mem = S.bincaml_memory_var () in
     let name = !bincaml_lifter_state.generator.local_id () in
-    let rhs = Var.create name (Types.bv (Z.to_int size)) in
+    let lhs = Var.create name (Types.bv size) in
     bincaml_internal_emit
-      (Stmt.Instr_Load { attrib = Attrib.empty; lhs = mem; rhs; addr });
-    Expr.BasilExpr.rvar rhs
+      (Stmt.Instr_Load { attrib = Attrib.empty; lhs; rhs = mem; addr });
+    Expr.BasilExpr.rvar lhs
 
   let f_AtomicStart : unit -> unit = fun _ -> failwith "f_AtomicStart"
   let f_AtomicEnd : unit -> unit = fun _ -> failwith "f_AtomicEnd"
@@ -375,6 +380,16 @@ struct
   let f_gen_slt_bits : bigint -> expr -> expr -> expr =
    fun _ a b -> Expr.BasilExpr.binexp ~op:`BVSLT a b
 
+  let make_widths_equal a b =
+    let width a =
+      Expr.BasilExpr.type_of a |> Types.bit_width
+      |> Option.get_exn_or "expected bv argument to operator"
+    in
+    let wb = width b and wa = width a in
+    if wa = wb then b
+    else if wa > wb then Expr.BasilExpr.zero_extend ~n_prefix_bits:(wa - wb) b
+    else failwith "expected second shift argument to be equal or smaller"
+
   let f_gen_mul_bits : bigint -> expr -> expr -> expr =
    fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVMUL [ a; b ]
 
@@ -382,13 +397,13 @@ struct
    fun _ _ a b -> Expr.BasilExpr.applyintrin ~op:`BVConcat [ a; b ]
 
   let f_gen_lsr_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVLSHR a b
+   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVLSHR a (make_widths_equal a b)
 
   let f_gen_lsl_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVSHL a b
+   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVSHL a (make_widths_equal a b)
 
   let f_gen_asr_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVASHR a b
+   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVASHR a (make_widths_equal a b)
 
   (** [f_gen_replicate_bits operand_width num_replications operand
        num_replications] *)
@@ -408,7 +423,7 @@ struct
   (** [f_gen_slice x lo wd] *)
   let f_gen_slice : expr -> bigint -> bigint -> expr =
    fun x lo_incl wd ->
-    let hi_excl = Z.(to_int (lo_incl - wd)) and lo_incl = Z.to_int lo_incl in
+    let hi_excl = Z.(to_int (lo_incl + wd)) and lo_incl = Z.to_int lo_incl in
     Expr.BasilExpr.extract ~lo_incl ~hi_excl x
 
   (* {1 Floating point intrinsics} *)
