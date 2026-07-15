@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 open Bincaml_util.Common
 open Lang
 open Lang.Common
@@ -506,11 +505,6 @@ proc @OY() -> (OY_out:bv64)
        ]
     ]
     |}]
-=======
-open Lang.Common
-open Lang
-open Containers
-
 (* First step of SSI conversion - insertion of phi and sigma nodes *)
 (* TODO: make i_up and i_down list of VERTICES, not list of blocks - make i_up list of begin vertices, i_down list of end vertices *)
 
@@ -538,10 +532,10 @@ let split variable i_up i_down graph =
                     |> List.map compute_dom_frontier
                     |> List.map (Procedure.get_blocks_succ graph) 
                     else s_down @ compute_dom_frontier i in 
-    List.map split_down (s_up @ defs variable @ i_down)
+    List.map split_down (s_up @ defs variable @ i_down) in
     
     (* Traverse marked blocks, insert appropriate instruction *)
-    let s = i_up @ i_down @ s_up @ s_down
+    let s = i_up @ i_down @ s_up @ s_down in
     let insert i = 
         let contains_def vert var = 
             match vert with
@@ -560,28 +554,17 @@ let split variable i_up i_down graph =
     | Procedure.Vert.Begin -> if is_join i then insert_sigma i variable in
     | Procedure.Vert.End -> if is_branch then insert_phi i variable in
     | _ -> insert_copy variable in
-    List.map insert s
+    List.map insert s in
     
 (* Second step of SSI conversion - renaming variables *)
-let rename variable = print_endline "hello2"
+let rename variable = print_endline "hello2" in
 
 (* Third step - dead and undefined code elimination *)
 let clean variable renamed_vars = 
     let web = renamed_vars in
-    let defined = []
+    let defined = [] in
     
-    let instructions = List.map Block.stmts_iter Procedure.blocks_to_list 
+    let instructions = List.map Block.stmts_iter Procedure.blocks_to_list in
     let active = List.filter_map (function | Stmt.Instr_Assign attrib al -> Some attrib al | _ -> None ) active 
                  |> Stmt.iter_lvar
-                 |> List.filter (List.mem l2) 
-
-
-(* Converts a CFG to SSI form *)
-(* Uses algorithm defined in SSA Based Compiler Design Ch 13.2*)
-let ssify ~variable ~i_up ~i_down =
-  split variable i_up i_down;
-  rename variable;
-  clean variable;;
-
-
->>>>>>> Stashed changes
+                 |> List.filter (List.mem l2)
