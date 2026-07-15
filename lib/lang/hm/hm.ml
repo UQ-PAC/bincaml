@@ -174,7 +174,7 @@ let locally_elaborate_expr (e : Expr.BasilExpr.t) =
 let elaborated_type_alg (e : Types.t Expr.BasilExpr.abstract_expr) =
   Expr.AbstractExpr.get_typ e
 
-(* Partially apply args list to function type funtype and return resulting type *)
+(** Partially apply args list to function type funtype and return resulting type *)
 let type_applied (funtype : Types.t) (args : Types.t list) =
   let module T = Elaboration.TypeInference (TypeExpr.MakeFresh ()) in
   let rt = T.fresh_tvar ~n:"ret" () in

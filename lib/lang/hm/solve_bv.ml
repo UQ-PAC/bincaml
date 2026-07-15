@@ -23,8 +23,8 @@ module Make (T : TypeExpr.TypeContext) = struct
           (type_to_string equ)
 
   (** Deduce the width if two values of the constraint have inferred widths *)
-  let unify_bv_constraint a : Typ.t option =
-    match a with
+  let unify_bv_constraint constr : Typ.t option =
+    match constr with
     | Add { a; b; equ } -> (
         match List.map is_nat_val_type [ find a; find b; find equ ] with
         | [ Some a_n; Some b_n; Some e_n ] ->

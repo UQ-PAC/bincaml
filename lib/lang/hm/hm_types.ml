@@ -1,4 +1,4 @@
-(** Conversion from bincaml types to and from HM type infernece environment *)
+(** Conversion from bincaml types to and from HM type inference environment *)
 
 open Common
 open Abstract_expr
