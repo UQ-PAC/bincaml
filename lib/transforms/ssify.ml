@@ -117,61 +117,137 @@ module SSIfy = struct
   end
 
   (* Procedure.G.compute_dom_front *)
+  module Dom = Graph.Dominator.Make (Procedure.G)
 
   (* Map from Var to (BlockID, Instruction) *)
   module DefUseMap = CCMultiMap.Make (Var) (Instruction)
 
+  (* 'Global' def and use maps *)
+  let defs : DefUseMap.t ref = ref DefUseMap.empty
+  let uses : DefUseMap.t ref = ref DefUseMap.empty
+
+  (* List of new_v *)
+  (* TODO: This is a placeholder, there is definitely a better structure for this *)
+  let new_renames : (Var.t) list ref = ref []
+
+  (* Gets the second successors *)
+  let second_successors graph (vert : Dom.vertex) = Procedure.G.succ graph vert |> List.concat_map (Procedure.G.succ graph)      
+
+  (* If we need more stuff, use compute_all cfg Vert.Entry,
+  but for now I only need dom
+  compute_all is part of Make_graph, which I can't figure out how to instantiate
+  *)
+
+  (* Returns true if the beginning of the block with ID bid_a dominates 
+    beginning of block with ID bid_b *)
+  let block_dominates graph bid_a bid_b =
+    let idom = Dom.compute_idom graph Procedure.Vert.Entry in
+    let dom = Dom.idom_to_dom idom in
+    dom (Procedure.Vert.Begin bid_a) (Procedure.Vert.Begin bid_b)
+
+  (* Returns true if instruction a dominates instruction b *)
+  let instruction_dominates (graph : Dom.t) (inst_a : Instruction.t) (inst_b : Instruction.t) =
+    let bid_a = fst inst_a in
+    let bid_b = fst inst_b in
+    if ID.equal bid_a bid_b then (
+      (* Same block: check if statement index is smaller (earlier) than the other *)
+      match inst_a, inst_b with
+      | (_, Instruction.Statement stmt_a), (_, Instruction.Statement stmt_b) ->
+          stmt_a.index <= stmt_b.index
+      | _ -> true
+    )
+    else
+      block_dominates graph bid_a bid_b
+
+  (* Takes the CFG graph and a current vertex and gives the list of immediately dominating vertices *)
+  let get_dominated_vertices (graph : Dom.t) =
+    let idom = Dom.compute_idom graph Procedure.Vert.Entry in
+    Dom.idom_to_dom_tree graph idom
+
+  let add_phi proc (block_id : ID.t) (var : Var.t) (pred_block_ids : ID.t list)=
+    let block_to_add_phi_to = Procedure.find_block proc block_id in
+    let new_rhs = List.map (fun pred_id -> (pred_id, var)) pred_block_ids in
+    let new_phi : Var.t Block.phi = { lhs = var ; rhs = new_rhs } in
+    Procedure.modify_block proc block_id (fun block ->
+      Block.map ~phi:(fun phi_list -> new_phi :: phi_list) Fun.id block_to_add_phi_to)
+
+  (* Returns a block. You can use this for Procedure.update_block *)
+  let add_copy_instruction proc (block_id : ID.t) (var : Var.t) =
+    let block = Procedure.find_block proc block_id in
+    let rvar = Expr.BasilExpr.rvar var in
+    let new_al = [(var, rvar)] in
+    let copy_stmt = [Stmt.Instr_Assign { al = new_al ; attrib = Attrib.empty }] in
+    Block.prepend_stmts block copy_stmt
+    (*
+    You can also do
+    let new_proc = modify_block proc block_id (fun block -> 
+      let copy_stmt = [Stmt.Instr_assign { al = [(var, Expr.BasilExpr.rvar var)] ; attrib = Attrib.empty }] in
+      Block.prepend_stmts block copy_stmt)
+    
+    But that would require you to have var.
+    *)
+  
+(* 
+  module SplitLiveRange = struct
+    
+  (* First step of SSI conversion - insertion of phi and sigma nodes *)
+  (* TODO: make i_up and i_down list of VERTICES, not list of blocks - make i_up list of begin vertices, i_down list of end vertices *)
+
+  let split variable i_up i_down graph = 
+      (* Marks blocks reachable by going backwards *)
+      (* Join blocks have phi nodes inserted, else parallel copy *)
+      let s_up = [] in
+          (* Checks whether a program point is a join node by checking the number of predecessors *)
+          let is_join (block : Procedure.Vert.t) =
+              if Procedure.get_blocks_pred graph block |> List.length > 1 then true else false in
+                  let split_up i = if is_join i then s_up @ (i 
+                      |> Procedure.get_blocks_pred graph 
+                      |> List.map compute_dom_frontier 
+                      |> List.map (Procedure.get_blocks_pred graph))
+                  else s_up @ (compute_dom_frontier i |> List.map (Procedure.get_blocks_pred graph)) in
+      List.map split_up i_up
+      
+      (* Marks blocks reachable by going forwards *)
+      (* Branch blocks have sigma nodes inserted, else parallel copy *)
+      let s_down = [] in
+          let is_branch (block : Procedure.Vert.t) = 
+              if Procedure.get_blocks_succ graph block |> List.length > 1 then true else false in
+                  let split_down i = if is_branch i then s_down @ (i 
+                      |> Procedure.get_blocks_succ graph 
+                      |> List.map compute_dom_frontier
+                      |> List.map (Procedure.get_blocks_succ graph) 
+                      else s_down @ compute_dom_frontier i in 
+      List.map split_down (s_up @ defs variable @ i_down) in
+      
+      (* Traverse marked blocks, insert appropriate instruction *)
+      let s = i_up @ i_down @ s_up @ s_down in
+      let insert i = 
+          let contains_def vert var = 
+              match vert with
+          | Procedure.G.Vert.Begin succ_id -> Procedure.find_block succ_id |>
+              |> Block.assigned_vars_iter 
+              |> Iter.to_list 
+              |> List.mem var in
+          | Procedure.G.Vert.End pred_id -> Procedure.find_block pred_id |> 
+              |> Block.assigned_vars_iter 
+              |> Iter.to_list 
+              |> List.mem var in
+          | _ -> () in
+
+      if !contains_def i variable then 
+          match i.t with 
+      | Procedure.Vert.Begin -> if is_join i then insert_sigma i variable in
+      | Procedure.Vert.End -> if is_branch then insert_phi i variable in
+      | _ -> insert_copy variable in
+      List.map insert s in
+  end *)
+
   module VariableRenaming = struct
-
-    (* 'Global' def and use maps *)
-    let defs : DefUseMap.t ref = ref DefUseMap.empty
-    let uses : DefUseMap.t ref = ref DefUseMap.empty
-
-    (* List of tuples, where tuples are (old_v, new_v) *)
-    (* TODO: This is a placeholder, there is definitely a better structure for this *)
-    let new_renames : (Var.t * Var.t) list ref = ref []
-
+  
     let create_v' old_v proc =
       let v' = Procedure.fresh_var ~pure:true ~name:(Var.name old_v) proc (Var.typ old_v) in
-      new_renames := (old_v, v') :: !new_renames;
+      new_renames := (v') :: !new_renames;
       Procedure.decl_local proc v'
-
-
-    module Dom = Graph.Dominator.Make (Procedure.G)
-
-    (* Gets the second successors *)
-    let second_successors graph (vert : Dom.vertex) = Procedure.G.succ graph vert |> List.concat_map (Procedure.G.succ graph)      
-
-    (* If we need more stuff, use compute_all cfg Vert.Entry,
-    but for now I only need dom
-    compute_all is part of Make_graph, which I can't figure out how to instantiate
-    *)
-
-    (* Returns true if the beginning of the block with ID bid_a dominates 
-      beginning of block with ID bid_b *)
-    let block_dominates graph bid_a bid_b =
-      let idom = Dom.compute_idom graph Procedure.Vert.Entry in
-      let dom = Dom.idom_to_dom idom in
-      dom (Procedure.Vert.Begin bid_a) (Procedure.Vert.Begin bid_b)
-
-    (* Returns true if instruction a dominates instruction b *)
-    let instruction_dominates (graph : Dom.t) (inst_a : Instruction.t) (inst_b : Instruction.t) =
-      let bid_a = fst inst_a in
-      let bid_b = fst inst_b in
-      if ID.equal bid_a bid_b then (
-        (* Same block: check if statement index is smaller (earlier) than the other *)
-        match inst_a, inst_b with
-        | (_, Instruction.Statement stmt_a), (_, Instruction.Statement stmt_b) ->
-            stmt_a.index <= stmt_b.index
-        | _ -> true
-      )
-      else
-        block_dominates graph bid_a bid_b
-
-    (* Takes the CFG graph and a current vertex and gives the list of immediately dominating vertices *)
-    let get_dominated_vertices (graph : Dom.t) =
-      let idom = Dom.compute_idom graph Procedure.Vert.Entry in
-      Dom.idom_to_dom_tree graph idom
 
     (* Returns a procedure that has renamed v *)
     let rename (v: Var.t) proc =
@@ -200,7 +276,7 @@ module SSIfy = struct
       *)
 
       (* Replaces the old instruction with the new inst' that has updated variables. *)
-      let update_proc inst inst' curr_proc =
+      let replace_instruction inst inst' curr_proc =
         match inst, inst' with
           | (block_id, Instruction.Phi old_phi),
             (_, Instruction.Phi new_phi) ->
@@ -240,7 +316,7 @@ module SSIfy = struct
         Stack.push v' stack;
 
         (* Return the updated procedure that contains the updated inst' *)
-        let proc' = update_proc inst inst' curr_proc
+        let proc' = replace_instruction inst inst' curr_proc
         in
         proc'
       in
@@ -265,7 +341,6 @@ module SSIfy = struct
         let v' = let open Bincaml_util.Unicode in Option.value (Stack.top_opt stack) ~default:(Var.create bot_char (Var.typ v) ~scope:(Var.scope v))
         in
 
-        (* TODO: not 100% sure on this one. *)
         let expr_transform_alg =
           let open Expr.BasilExpr in 
           rewrite_typed (function
@@ -297,7 +372,7 @@ module SSIfy = struct
         else
           uses := DefUseMap.add !uses v' inst'
         ;
-        let proc' = update_proc inst inst' curr_proc in
+        let proc' = replace_instruction inst inst' curr_proc in
         proc', inst'
       in
 
@@ -309,8 +384,15 @@ module SSIfy = struct
         | Procedure.Vert.Begin block_id -> (
           (**
           IMPORTANT:
-          Our CFG is structured differently to the book. Our nodes that we are looping on are
-          exclusively Begin nodes, so In(node) is the outgoing edge of the node.
+          Our CFG is structured a little differently to the book. Our nodes that we are looping
+          on are exclusively Begin nodes, so In(node) is the outgoing edge of the node.
+
+          Since we don't have explicit 'program points' inside of the block we loop through the statements
+          inside the block, since it is a precondition that they are ordered in the statement list that all
+          blocks contain.
+
+          We can amend this workaround by splitting the procedure into many multiple different blocks during
+          Split(), but this is extra work for the same effect.
 
           So for a node n, In(n) = succ_e n i.e. the immediate block that this 'Begin' corresponds to,
           and for m in direct-successors(n), direct-successors(n) is the second vertex from n, since
@@ -318,14 +400,13 @@ module SSIfy = struct
           In(m) will be the immediate outgoing edge of n'', iff n'' is a Begin. Otherwise stop processing.
 
           It's a little confusing, but in relation to the original algorithm, 'n' and 'In(n)' both refer to
-          the same program block.
+          the same program block. And for my rename implementation, 'n' is referring to a statement in the block.
 
           However, in order to make the algorithm work, for lines 6-9 then we will need a loop
           that loops through every statement in the statement list of a block in order.
           *)
 
           (* Assuming that all Begin vertices always have a single outgoing Block edge *)
-          
           let block = Procedure.find_block start_proc block_id in
 
 
@@ -384,6 +465,15 @@ module SSIfy = struct
       visit_begin_node proc Procedure.Vert.Entry
   end
 
+  (* module DeadCodeElim = struct
+    let clean variable renamed_vars = 
+    let web = renamed_vars in
+    let defined = [] in
+    
+    let instructions = List.map Block.stmts_iter Procedure.blocks_to_list |> List.flatten
+    let active = List.filter_map (function | Stmt.Instr_Assign attrib al -> Some attrib al | _ -> None ) active 
+                 |> Stmt.iter_lvar |> Iter.to_list |> 
+  end *)
 
   let ssify (v: Var.t) pv =
     let split var splitting_strategy =
@@ -399,68 +489,8 @@ module SSIfy = struct
 end
 
 
-(* First step of SSI conversion - insertion of phi and sigma nodes *)
-(* TODO: make i_up and i_down list of VERTICES, not list of blocks - make i_up list of begin vertices, i_down list of end vertices *)
-
-let split variable i_up i_down graph = 
-    (* Marks blocks reachable by going backwards *)
-    (* Join blocks have phi nodes inserted, else parallel copy *)
-    let s_up = [] in
-        (* Checks whether a program point is a join node by checking the number of predecessors *)
-        let is_join (block : Procedure.Vert.t) =
-            if Procedure.get_blocks_pred graph block |> List.length > 1 then true else false in
-                let split_up i = if is_join i then s_up @ (i 
-                    |> Procedure.get_blocks_pred graph 
-                    |> List.map compute_dom_frontier 
-                    |> List.map (Procedure.get_blocks_pred graph))
-                else s_up @ (compute_dom_frontier i |> List.map (Procedure.get_blocks_pred graph)) in
-    List.map split_up i_up
-    
-    (* Marks blocks reachable by going forwards *)
-    (* Branch blocks have sigma nodes inserted, else parallel copy *)
-    let s_down = [] in
-        let is_branch (block : Procedure.Vert.t) = 
-            if Procedure.get_blocks_succ graph block |> List.length > 1 then true else false in
-                let split_down i = if is_branch i then s_down @ (i 
-                    |> Procedure.get_blocks_succ graph 
-                    |> List.map compute_dom_frontier
-                    |> List.map (Procedure.get_blocks_succ graph) 
-                    else s_down @ compute_dom_frontier i in 
-    List.map split_down (s_up @ defs variable @ i_down) in
-    
-    (* Traverse marked blocks, insert appropriate instruction *)
-    let s = i_up @ i_down @ s_up @ s_down in
-    let insert i = 
-        let contains_def vert var = 
-            match vert with
-        | Procedure.G.Vert.Begin succ_id -> Procedure.find_block succ_id |>
-            |> Block.assigned_vars_iter 
-            |> Iter.to_list 
-            |> List.mem var in
-        | Procedure.G.Vert.End pred_id -> Procedure.find_block pred_id |> 
-            |> Block.assigned_vars_iter 
-            |> Iter.to_list 
-            |> List.mem var in
-        | _ -> () in
-
-    if !contains_def i variable then 
-        match i.t with 
-    | Procedure.Vert.Begin -> if is_join i then insert_sigma i variable in
-    | Procedure.Vert.End -> if is_branch then insert_phi i variable in
-    | _ -> insert_copy variable in
-    List.map insert s in
-    
-(* Second step of SSI conversion - renaming variables *)
-let rename variable = print_endline "hello2" in
-
 (* Third step - dead and undefined code elimination *)
-let clean variable renamed_vars = 
-    let web = renamed_vars in
-    let defined = [] in
-    
-    let instructions = List.map Block.stmts_iter Procedure.blocks_to_list |> List.flatten
-    let active = List.filter_map (function | Stmt.Instr_Assign attrib al -> Some attrib al | _ -> None ) active 
-                 |> Stmt.iter_lvar |> Iter.to_list
+
 
 let%expect_test "test_rename" =
   let lst =
@@ -496,12 +526,19 @@ proc @main(i:bv64) -> (out:bv64)
       guard(boolnot(bvsmod(i, 2:bv64)));
       (var v:bv64) := call @OY();
       var v:bv64 := bvadd(v, 420);
+      goto(%main_2_1);
+    ];
+
+    block %main_2_1
+    [
+      var v:bv64 := v:bv64;
+      var namnam:bv64 := bvor(v:bv64, 0xffffffff:bv64);
       goto(%main_return);
     ];
 
     block %main_return
     (
-      var v:bv64 := phi(%main_1 -> v:bv64, %main_2 -> v:bv64)
+      var v:bv64 := phi(%main_1 -> v:bv64, %main_2_1 -> v:bv64)
     )
       [
       var v:bv64 := bvadd(v, 1:bv64);
@@ -547,10 +584,10 @@ proc @OY() -> (OY_out:bv64)
          (var v_2:bv64=OX_out) := call @OX();
          goto (%main_2,%main_1);
        ];
-       block %main_1 ( var v_8:bv64 := phi(%main_entry -> v_2:bv64) ) [
+       block %main_1 ( var v_9:bv64 := phi(%main_entry -> v_2:bv64) ) [
          guard bvsmod(i:bv64, 0x2:bv64);
-         var nam:bv64 := bvadd(v_8:bv64, 0xa:bv64);
-         var v_9:bv64 := bvadd(v_8:bv64, 69);
+         var nam:bv64 := bvadd(v_9:bv64, 0xa:bv64);
+         var v_10:bv64 := bvadd(v_9:bv64, 69);
          var tmp:bv64 := bvadd(i:bv64, 0x1:bv64);
          goto (%main_return);
        ];
@@ -558,10 +595,15 @@ proc @OY() -> (OY_out:bv64)
          guard boolnot(bvsmod(i:bv64, 0x2:bv64));
          (var v_6:bv64=OY_out) := call @OY();
          var v_7:bv64 := bvadd(v_6:bv64, 420);
+         goto (%main_2_1);
+       ];
+       block %main_2_1 [
+         var v_8:bv64 := v_7:bv64;
+         var namnam:bv64 := bvor(v_8:bv64, 0xffffffff:bv64);
          goto (%main_return);
        ];
        block %main_return (
-         var v_3:bv64 := phi(%main_1 -> v_9:bv64, %main_2 -> v_7:bv64)
+         var v_3:bv64 := phi(%main_1 -> v_10:bv64, %main_2_1 -> v_8:bv64)
        ) [
          var v_4:bv64 := bvadd(v_3:bv64, 0x1:bv64);
          var out:bv64 := v_4:bv64;
