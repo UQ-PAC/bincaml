@@ -92,7 +92,7 @@ let transform_proc procRes proc =
           ) tmp_smap List.empty
         in
         let updated_assign = 
-          Stmt.Instr_Assign {al = new_al ; attrib } (* TODO: reusing attrib is probably not good *)
+          Stmt.Instr_Assign {al = new_al ; attrib = Attrib.empty }
         in
         Iter.doubleton updated_call updated_assign
       | _ -> Stmt.map ~f_lvar:(transform_var get_new_var) 
