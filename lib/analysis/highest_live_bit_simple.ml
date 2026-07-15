@@ -13,6 +13,7 @@ module HighestLiveBitLattice = struct
   (* Highest bit is inclusive, i.e. 63 means bits [..63] are used*)
   (* lo_lb is only used in eval: for IDE, return just hi_lb *)
   (* lo_lb can also be called offset *)
+  (* TODO: I think in this simple implementation, lo_lb may be redundant - will double check *)
   type t = Bot | HighBit of { hi_lb : int; lo_lb : int ; is_var : bool } | Top
   [@@deriving eq, ord, show { with_path = false}]
 
@@ -116,23 +117,22 @@ module IDESSI_LB = struct
       match e with
       | RVar { id } -> readv id 
       | UnaryExpr { op = `Extract (hi, lo) ; arg = (Value.HighBit { hi_lb ; lo_lb ; is_var }, _) } -> 
-          (if is_var then (Value.highbit (hi - 1 + lo_lb) lo_lb false) else Value.highbit hi_lb lo_lb false)
+          if is_var then (Value.highbit (hi - 1 + lo_lb) lo_lb false) else Value.highbit hi_lb lo_lb false
       | BinaryExpr { op = `BVASHR ; arg1 ; arg2 } -> Value.top
       | BinaryExpr { op = `BVLSHR ; arg1 = (Value.HighBit {hi_lb ; lo_lb ; is_var }, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
-        (let shift = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
+        let shift = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
           if is_var then (
             if shift > hi_lb then (Value.bottom) 
             else Value.highbit hi_lb (shift + lo_lb) false
           ) 
-          else (Value.highbit hi_lb lo_lb false))
+          else (Value.highbit hi_lb lo_lb false)
       | BinaryExpr { op = `BVSHL ; arg1 = (Value.HighBit {hi_lb ; lo_lb ; is_var }, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
-          (let shift = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
+          let shift = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
             if is_var then (
               if shift > hi_lb then Value.bottom 
               else Value.highbit (hi_lb - shift) (lo_lb - shift) false
-              )
+            )
             else (Value.highbit hi_lb lo_lb false)
-          )
       | BinaryExpr { arg1 = (v1, _) ; arg2 = (v2, _) } -> Value.join v1 v2
       | ApplyIntrin { args = (v1, _) :: rest } -> List.fold_left (fun v1 (v2,_) -> Value.join v1 v2) v1 rest
       | UnaryExpr { op ; arg = (nam, _) } -> nam (* TODO: double check if keeping it the same is correct *)
@@ -194,11 +194,8 @@ module HighestLiveBitIDE = struct
       match d with
       | Lambda -> (
         match stmt with
-        | Instr_Assign _ -> Iter.empty 
-        (* TODO: Check if it's ok to delete this line *)
+        | Instr_Assign _ -> Iter.empty (* If run after ide_live, this line shouldn't matter *)
         | _ ->
-            (* Stmt.free_vars_iter stmt
-            |> Iter.map (fun v -> (Label v, TopEdge))) *)
             IDESSI_LB.Extract.eval_stmt stmt 
             |> Iter.map (fun (rhs_var, edge) -> (Label rhs_var, edge)))
       | Label v -> (
@@ -214,8 +211,6 @@ module HighestLiveBitIDE = struct
                   else Iter.empty)
           | Instr_IndirectCall c -> failwith "unreachable"
           | _ -> Iter.empty)
-          (* |_ -> IDESSI_LB.Extract.eval_stmt stmt |> Iter.map (fun (rhs_var, edge) -> (Label rhs_var, edge))) *)
-          (* Lines appear to be identical, I don't know IL well enough to write a test with a Label v stmt that would not be assign *)
 
   let transfer_phi lhs rhs d =
     match d with
@@ -230,7 +225,7 @@ module HighestLiveBitIDE = struct
 end
 
 module IDELiveBitSSIAnalysis = IDESSI (HighestLiveBitIDE)
-(* 
+
 let%expect_test "test1_basic_shifts" =
   let lst =
     Loader.Loadir.ast_of_string
@@ -314,30 +309,27 @@ proc @shift2() -> (left_out:bv64, right_out:bv64)
     ];
 ];
 
-proc @trans() -> (out:bv32)
+proc @trans(b:bv64) -> (out:bv32) {}
 [
     block %trans [
-      var v1:bv64 := 0xffffffff:bv64;
+      (var v1:bv64=out1) := call @binary_expr(0xffffffff:bv64);
       var v2:bv32 := extract(32, 0, v1:bv64);
       return (v2);
     ];
 ];
 
-proc @binary_expr() -> (out1:bv32)
+proc @binary_expr(c:bv64) -> (out1:bv64) {}
 [
-    block %trans [
-      var v1:bv64 := 0xffffffff:bv64;
+    block %binary_expr [
+      var v1:bv64 := c:bv64;
       var v2:bv8 := extract(8, 0, v1:bv64);
       var v3:bv8 := extract(16, 8, v1:bv64);
-      var v4:bv8 := bvand(v2:bv8, v3:bv8);
+      var v4:bv64 := zero_extend(56, bvand(v2:bv8, v3:bv8));
       return (v4);
     ];
 ];
     |}
   in
-
-
-
   let program = lst.prog in
   let results, p2_results = IDELiveBitSSIAnalysis.solve program in
   IDMap.iter (fun id vars ->
@@ -385,11 +377,12 @@ proc @binary_expr() -> (out1:bv32)
       { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
       { Var.V.name = "v2"; typ = bv32; scope = Var.LocalVar } -> (31, 0, true)
     ID: ("@binary_expr", 7)
-      { Var.V.name = "out1"; typ = bv32; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
       { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (15, 0, true)
       { Var.V.name = "v2"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
       { Var.V.name = "v3"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
-      { Var.V.name = "v4"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
+      { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
     |}]
 
 let%expect_test "sqrt" =
@@ -496,109 +489,4 @@ proc @Sqrt_4196228(R0_in:bv64, R31_in:bv64)  -> (R0_out:bv64, R1_out:bv64) { .ad
     @Sqrt_4196228
     (Λ,Λ->IdEdge), (Λ,R31_in->NumEdge 63), (Λ,R0_in->NumEdge 63), (Λ,var1_4196240_bv64_2->NumEdge 63), (Λ,var1_4196328_bv64_2->NumEdge 63), (Λ,var1_4196336_bv64_2->NumEdge 63), (Λ,var1_4196256_bv64_2->NumEdge 63), (Λ,var1_4196260_bv64_2->NumEdge 63), (Λ,R0_9->NumEdge 63), (Λ,R1_7->NumEdge 63), (Λ,R0_10->NumEdge 63), (Λ,R0_11->NumEdge 31), (Λ,var1_4196284_bv32_2->NumEdge 31), (Λ,R0_13->NumEdge 63), (Λ,R0_14->NumEdge 63), (Λ,var1_4196296_bv64_2->NumEdge 63), (Λ,var1_4196320_bv32_2->NumEdge 31), (Λ,var1_4196308_bv32_2->NumEdge 31), (R0_out,R0_out->IdEdge), (R0_out,var1_4196348_bv64_2->NumEdge 63), (R1_out,R1_out->IdEdge)
     R31_in, R0_in, R0_out, R1_out, var1_4196240_bv64_2, var1_4196328_bv64_2, var1_4196336_bv64_2, var1_4196256_bv64_2, var1_4196260_bv64_2, R0_9, R1_7, R0_10, R0_11, var1_4196284_bv32_2, R0_13, R0_14, var1_4196296_bv64_2, var1_4196320_bv32_2, var1_4196308_bv32_2, var1_4196348_bv64_2
-    |}] *)
-
-    
-let%expect_test "test1_basic_extracts" =
-  let lst =
-    Loader.Loadir.ast_of_string
-      {|
-prog entry @trans;
-proc @trans(b:bv64) -> (out:bv32) {}
-[
-    block %trans [
-      (var v1:bv64=out1) := call @binary_expr(0xffffffff:bv64);
-      var v2:bv32 := extract(32, 0, v1:bv64);
-      return (v2);
-    ];
-];
-
-proc @binary_expr(c:bv64) -> (out1:bv64) {}
-[
-    block %binary_expr [
-      var v1:bv64 := c:bv64;
-      var v2:bv8 := extract(8, 0, v1:bv64);
-      var v3:bv8 := extract(16, 8, v1:bv64);
-      var v4:bv64 := zero_extend(56, bvand(v2:bv8, v3:bv8));
-      return (v4);
-    ];
-];
-    |}
-  in
-  let program = lst.prog in
-  let results, p2_results = IDELiveBitSSIAnalysis.solve program in
-  Hashtbl.iter
-    (fun pid summary ->
-      print_endline @@ ID.name pid;
-      print_endline @@ IDELiveBitSSIAnalysis.show_summary summary;
-      print_endline
-      @@ Iter.to_string (fun (v, r) -> Var.name v)
-      @@ VarMap.to_iter
-      @@ IDMap.get_or pid p2_results ~default:VarMap.empty)
-    results;
-    IDMap.iter (fun id vars ->
-  Printf.printf "ID: %s\n" (ID.show id);
-      Printf.printf "\n\n";
-  VarMap.iter (fun var value ->
-    Printf.printf "  %s -> %s\n"
-      (Var.show var)
-      (IDESSI_LB.Value.show value))
-    vars
-) p2_results;
-  [%expect
-  {|
-    AAAAAAAAAAAAAAAAAAA@trans
-    (Λ,Λ->IdEdge), (out,out->IdEdge), (out,v1->NumEdge 31), (out,v2->NumEdge 31)
-    out, v1, v2
-    @binary_expr
-    (Λ,Λ->IdEdge), (out1,c->NumEdge 63), (out1,out1->IdEdge), (out1,v1->NumEdge 15), (out1,v2->NumEdge 7), (out1,v3->NumEdge 7), (out1,v4->NumEdge 63)
-    c, out1, v1, v2, v3, v4
-    ID: ("@trans", 0)
-
-
-      { Var.V.name = "out"; typ = bv32; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
-      { Var.V.name = "v2"; typ = bv32; scope = Var.LocalVar } -> (31, 0, true)
-    ID: ("@binary_expr", 1)
-
-
-      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
-      { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (15, 0, true)
-      { Var.V.name = "v2"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
-      { Var.V.name = "v3"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
-      { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
     |}]
-
-
-
-    (*
-  x:bv64, NumEdge 15 -> zero_extend(64-16, x:bv16)
-  Use Some when writing the expression to replace with, None when wanting to keep it the same
-
-  var x:bv64, NumEdge 15 -> var x:bv16 := extract(16, 0, expr);
-
-  var v1:bv64 := 0xFFFFFFFF:bv64;
-  var v2:bv32 := extract(32, 0, v1:bv64);
-
-  becomes
-
-  var v1:bv32 := extract(32, 0, 0xFFFFFFFF:bv64);
-  var v2:bv32 := extract(32, 0, zero_extend(32, v1:bv32));
-
-  only when lo is 0
-
-
-  var v1:bv64 := 0xFFFFFFFF:bv64;
-  var v2:bv32 := extract(32, 31, v1:bv64);
-
-  becomes
-
-  var v1:bv32 := extract(32, 0, 0xFFFFFFFF:bv64);
-  var v2:bv32 := extract(32, 31, zero_extend(32, v1:bv32));
-
-  !(!(!( (!(!(b))) && a)))
-  !!!(!!b && a)
-  !(b && a)
-  !b || !a
-*)

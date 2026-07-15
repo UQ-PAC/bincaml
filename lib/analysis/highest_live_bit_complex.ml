@@ -5,7 +5,21 @@ open Lattice_collections
 open Lattice_types
 open Idessi
 
-(* Note: this doesn't work *)
+(* Important note: this doesn't work.
+
+  It's quite close, but the scope was deemed to be too complicated and
+  focus was moved to highest_live_bit_simple.
+
+  This program analyzes the highest live bit of the entire expression, while hlb_simple
+  analyzes the highest live bit of the inner-most expression that operates on variables.
+
+  This program almost works, but doesn't work (yet) for when multiple extracts of the same variable are
+  shifted in opposite directions and then bitwise-joined together such that the top and bottom of the joined variable
+  are live, but there are dead bits in the middle. 
+  I.e. extract(4,3,bvor(bvshl(3,v1:bv5), bvlshr(3,v1:bv5))) returns 3 instead of 0
+
+  Even though the analysis would be effective, the following transform would be very complex
+*)
 
 module HighestLiveBitLattice = struct
   let name = "highestLiveBit"

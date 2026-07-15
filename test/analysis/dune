@@ -17,7 +17,6 @@
  (package bincaml)
  (modules
   analysis_tests
-  test_highest_live_bit
   test_wrapped_intervals
   test_irreducible_loops
   test_lattice_collections)

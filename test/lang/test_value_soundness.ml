@@ -108,11 +108,7 @@ module TestTnumWintReducedDom =
     (Analysis.Tnum_wint_reduced_product
      .TnumWintReducedProductValueAbstractionBasil)
 
-(* module TestHighestLiveBitDom =
-  ValueAbstractionSoundness (Analysis.Live_bits_wip.HighestLiveBitAbstractionBasil) *)
-
 module TestSVADom = ValueAbstractionSoundness (Analysis.Sva.SVAAbstractionBasil)
-
 
 let _ =
   Alcotest.run "value domain abstract eval soundness"
@@ -121,5 +117,4 @@ let _ =
       TestWrappedIntervalDom.suite;
       TestIsKnownDom.suite;
       TestTnumWintReducedDom.suite;
-      (* TestHighestLiveBitDom.suite; *)
     ]
