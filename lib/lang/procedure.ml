@@ -672,39 +672,34 @@ type ('v, 'e) mapped_stmt =
   | `Blocks of (Var.t, BasilExpr.t) Block.t list
     (** Zero or more straight-line blocks. *)
   | `Graph of ID.t * ID.t * ('v, 'e) t
-    (** Multi-block subgraph. Represents control-flow entering at the first ID
-        and exiting at the second ID, and with some opaque control-flow between
-        them.
+    (** Multi-block subgraph. [`Graph (begin, end, proc)] represents
+        control-flow entering at [begin] and exiting at the [end], and with any
+        control-flow between them.
 
-        The block IDs should be {b fresh} and should not have control-flow edges
-        to pre-existing blocks in the procedure. The two block IDs may be the
-        same ID (as long as it is fresh).
+        [proc] is the procedure modified to include fresh blocks [first] and
+        [end], as well as any other blocks or control-flow edges {i between}
+        them. [proc] should be unchanged aside from the addition of fresh blocks
+        and control-flow between them. [begin] should have no predcessors, and
+        dominate all new blocks, including [end]. [end] should have no
+        successors.
 
-        The function building this [`Blocks] variant should modify the procedure
-        to insert the first/last blocks, as well as any other blocks or
-        control-flow edges {i between} them. This should be returned as the
-        third value in the variant.
+        [begin] and [end] may be the same block. *) ]
+(** Program fragment to replace a statement during {!cfg_concatmap_block}:
+    either a list of sequential statements, list of sequential blocks, {i or} a
+    the procedure including an additional cfg fragment bounded by fresh entry
+    and exit block ids. *)
 
-        Generally, the procedure should not be modified in any other way. *) ]
-(** Expected return type of mapping one statement through
-    {!general_flat_map_stmts}'s [~f] parameter. *)
+(** [cfg_concatmap_block ~f bid proc] takes a function [f] from statement to a
+    code fragment, and replaces block [bid] in [proc] with the concatenated
+    result of mapping its statements through through [f]. [f] may return either
+    a statement list, block list, or [proc] modified to include a new CFG
+    fragment bounded by a begining or end block. See {!type-mapped_stmt} for
+    details about [f]'s return type.
 
-(** [general_flat_map_stmts ~f bid proc] maps each statement in the given block
-    ID through [f]. For each statement, [f] may return any number of blocks or
-    statememts. See {!type-mapped_stmt} for details and requirements about [f]'s
-    return value.
-
-    Returns [(first, last, proc)] where [proc] is the updated procedure and
-    [first] / [last] is the first / last block of the combined map output.
-
-    The returned [first] and [last] may be the same. One or both of
-    [first]/[last] may be the same as the original block. In particular, any
-    bare statements returned by [f] for an initial segment of the block's
-    statements will be retained in the original block.
-
-    Additionally, redirects the original block's incoming/outgoing edges to the
-    first / last block of the mapped output. *)
-let general_flat_map_stmts ~(f : proc:_ t -> _ Stmt.t -> _ mapped_stmt) base_bid
+    {b Returns} [(first, last, proc)] where [proc] is the updated procedure and
+    [first] / [last] is the first / last block of the concatenated output
+    program. *)
+let cfg_concatmap_block ~(f : proc:_ t -> _ Stmt.t -> _ mapped_stmt) base_bid
     proc =
   let existing_bids = lazy (IDSet.of_iter (Iter.map fst (iter_blocks proc))) in
   let is_fresh = fun bid -> not (IDSet.mem bid (Lazy.force existing_bids)) in
@@ -731,7 +726,7 @@ let general_flat_map_stmts ~(f : proc:_ t -> _ Stmt.t -> _ mapped_stmt) base_bid
     | `Graph (first, last, proc) ->
         if is_fresh first && is_fresh last then
           ((proc, None), Left (Iter.singleton (first, last)))
-        else failwith "general_flat_map_stmts: `Graph blocks should be fresh"
+        else failwith "cfg_concatmap_block: `Graph blocks should be fresh"
     | `Stmts stmts ->
         let proc, bid =
           match cur_stmts_bid with

@@ -136,7 +136,7 @@ let map_one_stmt (module I : Bincaml_ibi.IBI) ~proc stmt :
     value. *)
 let transform_block (module I : Bincaml_ibi.IBI) ~proc bid =
   let f = map_one_stmt (module I) in
-  let _, _, proc = Procedure.general_flat_map_stmts bid ~f proc in
+  let _, _, proc = Procedure.cfg_concatmap_block bid ~f proc in
   proc
 
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all blocks
