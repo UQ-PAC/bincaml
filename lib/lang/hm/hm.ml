@@ -1,5 +1,16 @@
 (** Simple hindley-milner type inference *)
 
+(** Union-find-based implementation of Hindley-Milner type inference for
+    type-annotating the AST, without let-generalisation at the moment.
+
+    This is based on Algorithm J described in Milner, 1978;
+    {:https://doi.org/10.1016%2F0022-0000%2878%2990014-4}.
+
+    The following may be more accessible:
+
+    - {:https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system#Algorithm_J}
+    - {:https://bernsteinbear.com/blog/type-inference/} *)
+
 module TypeExpr = TypeExpr
 (** {1 Type Expressions}
 
@@ -174,7 +185,8 @@ let locally_elaborate_expr (e : Expr.BasilExpr.t) =
 let elaborated_type_alg (e : Types.t Expr.BasilExpr.abstract_expr) =
   Expr.AbstractExpr.get_typ e
 
-(** Partially apply args list to function type funtype and return resulting type *)
+(** Partially apply args list to function type funtype and return resulting type
+*)
 let type_applied (funtype : Types.t) (args : Types.t list) =
   let module T = Elaboration.TypeInference (TypeExpr.MakeFresh ()) in
   let rt = T.fresh_tvar ~n:"ret" () in
