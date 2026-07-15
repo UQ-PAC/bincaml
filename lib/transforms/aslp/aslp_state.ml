@@ -229,6 +229,9 @@ let assume_of_aslp_block = function
   | { assume = body; _ } ->
       Some (Stmt.Instr_Assume { attrib = Attrib.empty; body; branch = false })
 
+let stmts_of_aslp_block ({ stmts } as st) =
+  Option.to_list (assume_of_aslp_block st) @ CCVector.to_list stmts
+
 (** {1 Formatters} *)
 
 let show_aslp_block = show_aslp_block

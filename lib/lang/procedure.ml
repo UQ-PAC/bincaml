@@ -403,8 +403,7 @@ let decl_block_exn p name ?(phis = [])
   let p = add_block p id ~phis ~stmts ~successors ~attrib () in
   (p, id)
 
-let modify_block p id
-    (f : (Var.t, BasilExpr.t) Block.t -> (Var.t, BasilExpr.t) Block.t) =
+let modify_block p id (f : _ Block.t -> _ Block.t) =
   let open Edge in
   let open G in
   let block = f (find_block p id) in
@@ -456,7 +455,10 @@ let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
     [to_] is modified to additionally have the original outgoing edges of
     [from_].
 
-    This includes any edges to [Return] nodes, if they exist on [from_]. *)
+    This includes any edges to [Return] nodes, if they exist on [from_].
+
+    TODO: how does this interact with phi nodes?? probably impossible to handle.
+*)
 let transplant_outgoing_edges p ~from ~to_ : _ t =
   let replace_outgoing_uses ~from ~to_ g =
     G.fold_succ_e
@@ -477,6 +479,21 @@ let transplant_incoming_edges p ~from ~to_ : _ t =
       g from g
   in
   p |> map_graph (replace_incoming_uses ~from:(Begin from) ~to_:(Begin to_))
+
+(** Replaces uses of the old block ID with the new [(first, last)] block IDs.
+    The incoming edges to [old] will be redirected to [first] and the outgoing
+    edges of [old] will be rebased to originate from [last].
+
+    [first] and [last] may be the same. One or both of [first]/[last] may be the
+    same as [old]. If neither is the same as [old], [old] will be removed from
+    the procedure. *)
+let replace_block ~old ~new_:(new_first, new_last) proc =
+  proc
+  |> transplant_incoming_edges ~from:old ~to_:new_first
+  |> transplant_outgoing_edges ~from:old ~to_:new_last
+  |>
+  if ID.equal old new_first || ID.equal old new_last then Fun.id
+  else Fun.flip remove_block old
 
 let lookup_local_decl p v =
   Var.Decls.find_opt (local_decls p) v
@@ -648,6 +665,122 @@ let flat_map_stmts_topo_rev ?visit rewriter p =
       | bid, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
           update_block p bid (Block.flat_map ~rev:true ~phi:Fun.id rewriter b))
     p blocks
+
+type ('v, 'e) mapped_stmt =
+  [ `Stmts of (Var.t, Var.t, BasilExpr.t) Stmt.t list
+    (** Zero or more straight-line statements. *)
+  | `Blocks of (Var.t, BasilExpr.t) Block.t list
+    (** Zero or more straight-line blocks. *)
+  | `Graph of ID.t * ID.t * ('v, 'e) t
+    (** Multi-block subgraph. [`Graph (begin, end, proc)] represents
+        control-flow entering at [begin] and exiting at the [end], and with any
+        control-flow between them.
+
+        [proc] is the procedure modified to include fresh blocks [first] and
+        [end], as well as any other blocks or control-flow edges {i between}
+        them. [proc] should be unchanged aside from the addition of fresh blocks
+        and control-flow between them. [begin] should have no predcessors, and
+        dominate all new blocks, including [end]. [end] should have no
+        successors.
+
+        [begin] and [end] may be the same block. *) ]
+(** Program fragment to replace a statement during {!cfg_concatmap_block}:
+    either a list of sequential statements, list of sequential blocks, {i or} a
+    the procedure including an additional cfg fragment bounded by fresh entry
+    and exit block ids. *)
+
+(** [cfg_concatmap_block ~f bid proc] takes a function [f] from statement to a
+    code fragment, and replaces block [bid] in [proc] with the concatenated
+    result of mapping its statements through through [f]. [f] may return either
+    a statement list, block list, or [proc] modified to include a new CFG
+    fragment bounded by a begining or end block. See {!type-mapped_stmt} for
+    details about [f]'s return type.
+
+    {b Returns} [(first, last, proc)] where [proc] is the updated procedure and
+    [first] / [last] is the first / last block of the concatenated output
+    program. *)
+let cfg_concatmap_block ~(f : proc:_ t -> _ Stmt.t -> _ mapped_stmt) base_bid
+    proc =
+  let existing_bids = lazy (IDSet.of_iter (Iter.map fst (iter_blocks proc))) in
+  let is_fresh = fun bid -> not (IDSet.mem bid (Lazy.force existing_bids)) in
+
+  (* Applies the [f] function while recording the current block ID for
+     [`Stmts] insertion, if available.
+
+     Also normalises the output into either:
+     - an iter of already-inserted [(first,last)] bookend IDs, or
+     - a [(bid, stmts)] which will be inserted later into the specified [bid]. *)
+  let apply_f ~proc (cur_stmts_bid : ID.t option) stmt :
+      (_ t * ID.t option)
+      * ((ID.t * ID.t) Iter.t, ID.t * _ Stmt.t Iter.t) Either.t =
+    match f ~proc stmt with
+    | `Blocks [] | `Stmts [] -> ((proc, cur_stmts_bid), Left Iter.empty)
+    | `Blocks bs ->
+        let[@warning "+missing-record-field-pattern"] proc, bids =
+          List.fold_map
+            (fun proc { Block.attrib; stmts; phis } ->
+              fresh_block proc ~attrib ~phis ~stmts:(CCVector.to_list stmts) ())
+            proc bs
+        in
+        ((proc, None), Left (Iter.map Pair.dup (Iter.of_list bids)))
+    | `Graph (first, last, proc) ->
+        if is_fresh first && is_fresh last then
+          ((proc, None), Left (Iter.singleton (first, last)))
+        else failwith "cfg_concatmap_block: `Graph blocks should be fresh"
+    | `Stmts stmts ->
+        let proc, bid =
+          match cur_stmts_bid with
+          | None -> fresh_block proc ~name:(ID.name base_bid) ~stmts:[] ()
+          | Some bid -> (proc, bid)
+        in
+        ((proc, Some bid), Right (bid, Iter.of_list stmts))
+  in
+
+  (* Map, while generating block names for bare statements returned by the mapping function. *)
+  let (proc, _), mapped =
+    find_block proc base_bid |> Block.stmts_iter |> Iter.to_list
+    |> List.fold_map (fun (proc, b) -> apply_f ~proc b) (proc, Some base_bid)
+  in
+  (* Collects adjacent bare statements into a basic block, and inserts those statements. *)
+  let proc = modify_block proc base_bid Block.clear_stmts in
+  let proc, block_id_pairs =
+    Extras.group_succ_either mapped
+    |> List.fold_flat_map
+         (fun proc -> function
+           | Either.Left (hd, tl) -> (proc, Iter.(to_list (append_l (hd :: tl))))
+           | Either.Right ((bid, hd), rest) ->
+               let stmts =
+                 Iter.append hd (Iter.flat_map snd (Iter.of_list rest))
+                 |> CCVector.of_iter |> CCVector.freeze
+               in
+               ( modify_block proc bid (fun b -> { b with stmts }),
+                 [ (bid, bid) ] ))
+         proc
+  in
+  (* Transplant predecessors and successors of the original block as needed. *)
+  let first, last =
+    ( List.head_opt block_id_pairs |> Option.map_or fst ~default:base_bid,
+      List.last_opt block_id_pairs |> Option.map_or snd ~default:base_bid )
+  in
+  let proc =
+    proc
+    |> transplant_outgoing_edges ~from:base_bid ~to_:last
+    |>
+    if not ID.(equal first base_bid) then
+      add_goto ~from:base_bid ~targets:[ first ]
+    else Fun.id
+  in
+  (* Insert gotos between mapped blocks. This must happen after transplanting
+     so we do not transplant these edges. *)
+  let proc =
+    List.combine_gen block_id_pairs (List.drop 1 block_id_pairs)
+    |> Iter.of_gen
+    |> Iter.fold
+         (fun proc ((_, prev), (next, _)) ->
+           add_goto proc ~from:prev ~targets:[ next ])
+         proc
+  in
+  (first, last, proc)
 
 let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
   let open Containers_pp in

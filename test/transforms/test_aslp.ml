@@ -203,9 +203,9 @@ proc @main()  -> () {  }
          $R30:bv64 := 0x400820:bv64;
          var BranchTaken:bool := true;
          $PC:bv64 := 0x400784:bv64;
-         assert boolor(eq(0x400784:bv64, $PC));
-         goto (%ret_1);
+         goto (%main_code_1);
        ];
+       block %main_code_1 [ assert boolor(eq(0x400784:bv64, $PC)); goto (%ret_1); ];
        block %ret_1 [ return; ]
     ];
     var $SP:bv64;
@@ -278,6 +278,9 @@ proc @Sqrt()  -> () {  }
        ];
        block %block_3 [
          $PC:bv64 := if boolnot(eq($PSTATE_N, $PSTATE_V)) then 0x4007ec:bv64 else 0x4007e0:bv64;
+         goto (%Sqrt_code_5);
+       ];
+       block %Sqrt_code_5 [
          assert boolor(eq(0x4007fc:bv64, $PC), eq(0x4007e0:bv64, $PC));
          goto (%Sqrt_code_3,%Sqrt_code);
        ];
