@@ -26,7 +26,7 @@ module Make (T : TypeExpr.TypeContext) = struct
   let occurs_in a b =
     let check = function
       | Var t -> equal_tvar t a
-      | TypeConstr (ls, _) -> List.for_all Fun.id ls
+      | TypeConstr (ls, _) -> List.exists Fun.id ls
     in
     Rec.cata check b
 
