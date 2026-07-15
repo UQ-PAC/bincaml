@@ -64,7 +64,7 @@ module Make (T : TypeExpr.TypeContext) = struct
         in
         merge (fun a b -> TypeConstr (args, n)) t t'
 
-  (* instantiate typescheme for a single type-annotated variable *)
+  (** instantiate typescheme for a single type-annotated variable *)
   let inst_annot_v ?(no_constraint = false) v =
     let ty =
       match Var.typ v with
@@ -74,7 +74,7 @@ module Make (T : TypeExpr.TypeContext) = struct
     in
     ty
 
-  (* lookup var and add unify with its type annotation *)
+  (** lookup var and add unify with its type annotation *)
   let lookup_var_typ univ ?(no_constraint = false) c v =
     let vt = inst_annot_v v in
     let a =
@@ -86,7 +86,7 @@ module Make (T : TypeExpr.TypeContext) = struct
     let tt = match a with Forall (_, ty) -> union ty vt in
     tt
 
-  (* declare type with name in type scheme *)
+  (** declare type with name in type scheme *)
   let decl_type ctx name vt =
     let tvar = V.create types_universe name in
     TCtx.update tvar
