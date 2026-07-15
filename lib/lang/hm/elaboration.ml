@@ -152,7 +152,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
               let bt = fix bool_type in
               let b = infer_expr ~univ:global_universe [%here] b scheme in
               let _ = unify (getty b) bt in
-              let nb scheme =
+              let new_axiom scheme =
                 Function
                   {
                     attrib;
@@ -162,18 +162,18 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
                         (elaborate_expr ~univ:global_universe [%here] b scheme);
                   }
               in
-              (scheme, `Decl (decl_id, nb))
+              (scheme, `Decl (decl_id, new_axiom))
           | Uninterpreted ->
-              let nu s =
+              let new_uf s =
                 Function
                   { binding = binding s; attrib; definition = Uninterpreted }
               in
-              (scheme, `Decl (decl_id, nu))
+              (scheme, `Decl (decl_id, new_uf))
           | Function definition ->
               let e =
                 infer_expr ~univ:global_universe [%here] definition scheme
               in
-              let ne scheme =
+              let new_fundef scheme =
                 Function
                   {
                     binding = binding scheme;
@@ -183,7 +183,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
                         (elaborate_expr ~univ:global_universe [%here] e scheme);
                   }
               in
-              (scheme, `Decl (decl_id, ne)))
+              (scheme, `Decl (decl_id, new_fundef)))
       | Variable { binding; attrib; classification } ->
           let scheme = decl_var_typ global_universe scheme binding in
           let binding s = retype_var global_universe s binding in
@@ -198,7 +198,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
               |> Option.map (fun e ->
                   elaborate_expr ~univ:global_universe [%here] e final_scheme)
           in
-          let nb fscheme =
+          let new_vardef fscheme =
             Variable
               {
                 binding = binding fscheme;
@@ -206,7 +206,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
                 classification = classification fscheme;
               }
           in
-          (scheme, `Decl (decl_id, nb))
+          (scheme, `Decl (decl_id, new_vardef))
       | Procedure { definition } ->
           let elaborate_proc, scheme = infer_proc prog scheme definition in
           (scheme, `Procedure (decl_id, elaborate_proc))
