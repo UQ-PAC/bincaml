@@ -14,8 +14,6 @@
   wrapped_intervals
   gamma_domain
   linear_const
-  highest_live_bit_complex
-  highest_live_bit_simple
   tnum_wint_reduced_product
   known_bits
   wp_dual
