@@ -6,6 +6,7 @@
   fixed_width_arith
   mtypes
   common
+  extras
   unicode
   var
   ID

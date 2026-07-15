@@ -1,7 +1,7 @@
 (library
  (name test_aslp)
  (package bincaml)
- (modules test_aslp test_aslp_ibi)
+ (modules test_aslp test_aslp_ibi test_aslp_runtime)
  (inline_tests)
  (libraries bincaml.transforms)
  (preprocess
