@@ -33,7 +33,12 @@
 
 (library
  (name test_expr_eval_expect)
- (modules test_expr_eval_expect test_stmt test_interp test_expr_hash)
+ (modules
+  test_expr_eval_expect
+  test_stmt
+  test_interp
+  test_expr_hash
+  test_hm_inline)
  (libraries loader)
  (inline_tests)
  (preprocess
@@ -62,6 +67,14 @@
  (package bincaml)
  (modules test_pagetable_qcheck)
  (libraries test_pagetable_spec qcheck-core.runner qcheck-stm.sequential))
+
+(test
+ (name test_hm)
+ (package bincaml)
+ (modules test_hm)
+ (preprocess
+  (pps ppx_expect))
+ (libraries expr_gen alcotest qcheck-alcotest qcheck-core bincaml.analysis))
 
 (test
  (name test_value_soundness)
