@@ -96,7 +96,7 @@ module Make (T : TypeExpr.TypeContext) = struct
         | _ -> failwith "unk")
       ctx
 
-  (* declare var with type in type scheme *)
+  (** declare var with type in type scheme *)
   let decl_var_typ univ ?(no_constraint = false) c v =
     let vvar = V.of_var univ v in
     let vt = inst_annot_v v in
