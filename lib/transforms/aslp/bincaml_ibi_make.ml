@@ -297,9 +297,9 @@ struct
       =
    fun _ -> failwith "f_gen_Elem_set"
 
-  (** [(f_gen_Mem_set size address size acctype value) : unit] emit instruction
-      which stores value to memory. Value must have bit width equal to size
-      (bytes) in bits. *)
+  (** [(f_gen_Mem_set size address size acctype value) : unit] emits an
+      instruction which stores value to memory. Value must have bit width equal
+      to size (bytes) in bits. *)
   let f_gen_Mem_set : bigint -> expr -> expr -> expr -> expr -> unit =
    fun size addr _ _acctype value ->
     let size = 8 * Z.to_int size in
@@ -309,8 +309,9 @@ struct
       (Stmt.Instr_Store
          { attrib = Attrib.empty; lhs = mem; rhs = mem; value; addr })
 
-  (** [let lhs = f_gen_Mem_read size address size acctype value] :emits read
-      instruction which assigns to variable [lhs] and return this expression. *)
+  (** [let lhs = f_gen_Mem_read size address size acctype value] emits a read
+      instruction reading a bitvector [size] (bytes) from the memory variable,
+      assigning it to variable [lhs]. Returns [lhs] as an expression). *)
   let f_gen_Mem_read : bigint -> expr -> expr -> expr -> expr =
    fun size addr _ _acctype ->
     let size = 8 * Z.to_int size in

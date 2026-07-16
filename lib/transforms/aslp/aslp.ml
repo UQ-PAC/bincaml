@@ -181,16 +181,22 @@ let transform_program prog =
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all
     procedures within the given program.
 
-    Also inserts global variable declarations for the architectural variables,
-    if not already present. Assumes it is running immediately after gtirb. *)
+    Declares a fresh memory variable, in addition to insert global variable
+    declarations for the architectural variables, if not already present.
+    Assumes it is running immediately after gtirb. *)
 let transform_program_first prog =
   let memory =
     Var.create "$mem" ~scope:Var.GlobalVarShared
       Types.(Map (Bitvector 64, Bitvector 8))
   in
 
-  prog |> fun p ->
-  Program.decl_global p memory
+  let decl_mem =
+   fun prog ->
+    let attrib = Attrib.empty and classification = None in
+    Program.add_decl prog
+      (Program.Variable { binding = memory; attrib; classification })
+  in
+  prog |> decl_mem
   |> Program.map_procedures (fun _ -> transform_procedure ~memory)
   |> add_aarch64_global_declarations
   |> Spec_modifies.set_modsets ~add_only:false
