@@ -214,8 +214,21 @@ module SSIfy = struct
     (* Returns a proc, list of non-actual instructions *)
     let insert_instructions (v : Var.t) (s_combined : Dom.vertex list) proc = 
       let cfg = match Procedure.graph proc with | Some g -> g | None -> Procedure.G.empty in
-      let is_join vertex = (match vertex with | Procedure.Vert.Begin block_id -> if Procedure.G.pred cfg vertex |> List.length |> (<) 1 then true else false | _ -> false) in
-      let is_branch vertex = (match vertex with | Procedure.Vert.End block_id -> if Procedure.G.succ cfg vertex |> List.length |> (<) 1 then true else false | _ -> false) in
+      let is_join vertex = (match vertex with | Procedure.Vert.Begin block_id -> if Procedure.G.pred cfg vertex |> List.length > 1 then true else false | _ -> false) in
+      let is_branch vertex = (match vertex with | Procedure.Vert.End block_id -> if Procedure.G.succ cfg vertex |> List.length > 1 then true else false | _ -> false) in
+      let is_branch_successor vertex = (
+        match vertex with 
+        | Procedure.Vert.Begin block_id -> 
+          let pred_verts = Procedure.G.pred cfg vertex in
+          let rec check_preds (pred_list : Dom.vertex list) =
+            match pred_list with
+            | [] -> false
+            | pred_vert :: tail ->
+              if is_branch pred_vert then true else check_preds tail
+            in
+            check_preds pred_verts
+        | _ -> false
+        ) in
 
       let block_phi_rhs_already_contains (block : Procedure.Edge.block) (var : Var.t) (pred_block_id : ID.t) = 
         let phis = block.phis in
@@ -227,48 +240,60 @@ module SSIfy = struct
         in
         check_phi_rhs_for_var phis
       in
-      
+
+      (* Check if a block uses a given variable that is locally undefined.
+        Returns true if the block has a statement that uses the given variable without defining it 
+        Also returns true if the block doesn't contain a definition of var *)
+      let has_undefined_use (var : Var.t) (block_id : ID.t) proc =
+        let block = Procedure.find_block proc block_id in
+        let stmts = block.stmts in
+        let rec check_stmt (index) =
+          if index = (Vector.size stmts) - 1 then 
+            true
+          else
+            let stmt = Vector.get stmts index in
+            if VarSet.mem var (Stmt.free_vars stmt) then true
+            else if Iter.mem var (Stmt.iter_lvar stmt) then false
+            else check_stmt (index + 1)
+        in
+        check_stmt 0
+      in
+ 
       let proc_and_list =
         List.fold_left (fun (curr_proc, non_actual_insts) vert -> 
           match vert with
           | Procedure.Vert.Begin block_id | Procedure.Vert.End block_id -> 
             let block = Procedure.find_block curr_proc block_id in
-            (* IMPORTANT TODO: This checks if the entire block contains a definition of v, but if
-              the block contains a use of v before a definition of v - thereby warranting a phi join - the
-              code will still skip creating a phi for the entire block. 
-              This also doesn't really work for sigma nodes - if we have a block that ends in a normal assignment
-              to v, then branch off into 2 nodes that use v but don't define it, then this check will
-              skip creating the phi nodes in those successor nodes.
-              
-              To fix: Maybe, first iterate through the statements of the block and see if a use occurs before a join. Once it does, break
-                out of the loop and create a phi node.
-                Always (?) create a phi node for branches, but only when the successor block has a use of v before a define - otherwise the phi is useless But maybe that's in dead code elim
-                Then use Iter.mem v (Block.assigned_vars_iter block) |> not, and if true, then insert the copy v <- v *)
-            if not (Iter.mem v (Block.assigned_vars_iter block)) then
-            (* If block does not already contain any definition of v then *)
-              if is_join vert then 
+            if has_undefined_use v block_id proc then
+              (* If block does not already contain any definition of v then *)
+              if is_join vert then (
                 (* If block.is_join then insert v <- phi([v..v]) in the block *)
                 let pred_block_ids = Procedure.get_blocks_pred curr_proc vert in
                 let (proc_with_phi, phi_inst) = add_phi curr_proc block_id v pred_block_ids in
                 (proc_with_phi, phi_inst :: non_actual_insts)
-              else
-                (
-                  if is_branch vert then
-                    (* If block.is_branch then insert v <- phi(v) at each *)
-                    (* Check if there is already a v <- phi(block_id : v)*)
-                    let succ_block_ids = Procedure.get_blocks_succ curr_proc vert in
-                    List.fold_left (fun (proc', insts') succ_id ->
-                      let succ_block = Procedure.find_block proc' succ_id in
-                        if block_phi_rhs_already_contains succ_block v block_id then (proc', insts')
-                        else 
-                          let (proc_with_phi, phi_inst) = add_phi proc' succ_id v [block_id] in
-                          (proc_with_phi, phi_inst :: non_actual_insts)
-                    ) (curr_proc, non_actual_insts) succ_block_ids
-                  else
+              ) else (
+                if is_branch_successor vert then (
+                  (* If block.is_branch then insert v <- phi(v) at each *)
+                  (* Check if there is already a v <- phi(block_id : v)*)
+                  let pred_block_ids = Procedure.get_blocks_pred curr_proc vert in
+                  List.fold_left (fun (proc', insts') pred_id ->
+                    (* let pred_block = Procedure.find_block proc' pred_id in *)
+                      if is_branch (Procedure.Vert.End (pred_id)) && block_phi_rhs_already_contains block v pred_id then (proc', insts')
+                      else 
+                        let (proc_with_phi, phi_inst) = add_phi proc' block_id v [pred_id] in
+                        (proc_with_phi, phi_inst :: insts')
+                  ) (curr_proc, non_actual_insts) pred_block_ids
+                )
+                else (
+                  if not (Iter.mem v (Block.assigned_vars_iter block)) then (
                     (* Insert a copy into the block *)
                     let (proc_with_copy, copy_inst) = add_copy_instruction curr_proc block_id v in
-                    (proc_with_copy, copy_inst :: non_actual_insts)
+                    (proc_with_copy, copy_inst :: non_actual_insts) )
+                  else (
+                    (curr_proc, non_actual_insts)
+                  )
                 )
+              )
             else
               (curr_proc, non_actual_insts) 
           | _ -> (curr_proc, non_actual_insts) 
@@ -276,6 +301,83 @@ module SSIfy = struct
       in proc_and_list
 
 
+    let insert_instructions_version2 (v : Var.t) (s_combined : Dom.vertex list) proc = 
+      let cfg = match Procedure.graph proc with | Some g -> g | None -> Procedure.G.empty in
+      let is_join vertex = (match vertex with | Procedure.Vert.Begin block_id -> if Procedure.G.pred cfg vertex |> List.length > 1 then true else false | _ -> false) in
+      let is_branch vertex = (match vertex with | Procedure.Vert.End block_id -> if Procedure.G.succ cfg vertex |> List.length > 1 then true else false | _ -> false) in
+
+      let block_phi_rhs_already_contains (block : Procedure.Edge.block) (var : Var.t) (pred_block_id : ID.t) = 
+        let phis = block.phis in
+        let rec check_phi_rhs_for_var (phi_list : Var.t Block.phi list) =
+          match phi_list with
+          | [] -> false
+          | phi :: tail -> 
+            if List.mem (pred_block_id, var) phi.rhs then true else check_phi_rhs_for_var tail
+        in
+        check_phi_rhs_for_var phis
+      in
+
+      (* Check if a block uses a given variable that is locally undefined.
+        Returns true if the block has a statement that uses the given variable without defining it 
+        Also returns true if the block doesn't contain a definition of var *)
+      let has_undefined_use (var : Var.t) (block_id : ID.t) proc =
+        let block = Procedure.find_block proc block_id in
+        let stmts = block.stmts in
+        let rec check_stmt (index) =
+          if index = (Vector.size stmts) - 1 then 
+            true
+          else
+            let stmt = Vector.get stmts index in
+            if VarSet.mem var (Stmt.free_vars stmt) then true
+            else if Iter.mem var (Stmt.iter_lvar stmt) then false
+            else check_stmt (index + 1)
+        in
+        check_stmt 0
+      in
+ 
+      let proc_and_list =
+        List.fold_left (fun (curr_proc, non_actual_insts) vert -> 
+          match vert with
+          | Procedure.Vert.Begin block_id | Procedure.Vert.End block_id -> 
+            let block = Procedure.find_block curr_proc block_id in
+
+            let (proc1, nai1) = if is_join vert then (
+              if has_undefined_use v block_id proc then (
+                let pred_block_ids = Procedure.get_blocks_pred curr_proc vert in
+                let (proc_with_phi, phi_inst) = add_phi curr_proc block_id v pred_block_ids in
+                (proc_with_phi, phi_inst :: non_actual_insts)
+              ) else (
+                (curr_proc, non_actual_insts)
+              )
+            ) else (
+              (curr_proc, non_actual_insts)
+            )
+            in
+
+            (* Ok to seperate the algorithm's if branches because it is 
+              impossible for a vertex to be both a join and a branch anyway *)
+            let (proc2, nai2) = (if is_branch vert then (
+              let succ_block_ids = Procedure.get_blocks_succ proc1 vert in
+              List.fold_left (fun (proc', insts') succ_id ->
+                if has_undefined_use v succ_id proc' then (
+                  let succ_block = Procedure.find_block proc' succ_id in
+                  if block_phi_rhs_already_contains succ_block v block_id then (proc', insts')
+                  else 
+                    let (proc_with_phi, phi_inst) = add_phi proc' succ_id v [block_id] in
+                    (proc_with_phi, phi_inst :: insts')
+                ) else (proc', insts')
+              ) (proc1, nai1) succ_block_ids
+            ) else ((proc1, nai1)))
+            in
+
+            if not (Iter.mem v (Block.assigned_vars_iter block)) then
+              let (proc_with_copy, copy_inst) = add_copy_instruction proc2 block_id v in
+              (proc_with_copy, copy_inst :: nai2)
+            else
+              (proc2, nai2) 
+          | _ -> (curr_proc, non_actual_insts) 
+        ) (proc, List.empty) s_combined 
+      in proc_and_list
 
 
 
@@ -751,6 +853,7 @@ proc @main(i:bv64) -> (out:bv64)
     block %main_1
     [
       guard(bvsmod(i, 2:bv64));
+      var nam:bv64 := bvadd(v:bv64, 10:bv64);
       var v:bv64 := bvadd(v, 69);
       var tmp:bv64 := bvadd(i, 1:bv64);
       goto(%main_return);
@@ -772,7 +875,7 @@ proc @main(i:bv64) -> (out:bv64)
 
     block %main_return
       [
-    var v:bv64 := 0;
+      var v:bv64 := bvadd(v, 1:bv64);
       return(v);
       ];
 ];
@@ -792,7 +895,6 @@ proc @OY() -> (OY_out:bv64)
       return;
     ];
 ];
-
     |}
   in
   let program = lst.prog in
@@ -804,7 +906,7 @@ proc @OY() -> (OY_out:bv64)
   in
   let cfg = match Procedure.graph proc with | Some g -> g | None -> Procedure.G.empty in
   let vertices = Procedure.G.fold_vertex (fun vert verts -> vert :: verts) cfg [] |> List.rev in
-  let proc' = SSIfy.SplitLiveRange.insert_instructions v vertices proc |> fst in
+  let proc' = SSIfy.SplitLiveRange.insert_instructions_version2 v vertices proc |> fst in
   let proc_rename = SSIfy.VariableRenaming.rename v proc' in
   Program.output_proc_pretty stdout proc';
   Printf.printf "\n\n -----------\n RENAME \n ---------\n\n";
@@ -820,8 +922,9 @@ proc @OY() -> (OY_out:bv64)
          (var v:bv64=OX_out) := call @OX();
          goto (%main_2,%main_1);
        ];
-       block %main_1 [
+       block %main_1 ( var v:bv64 := phi(%main_entry -> v:bv64) ) [
          guard bvsmod(i:bv64, 0x2:bv64);
+         var nam:bv64 := bvadd(v:bv64, 0xa:bv64);
          var v:bv64 := bvadd(v:bv64, 69);
          var tmp:bv64 := bvadd(i:bv64, 0x1:bv64);
          goto (%main_return);
@@ -837,7 +940,9 @@ proc @OY() -> (OY_out:bv64)
          var namnam:bv64 := bvor(v:bv64, 0xffffffff:bv64);
          goto (%main_return);
        ];
-       block %main_return [ var v:bv64 := 0; var out:bv64 := v:bv64; return; ]
+       block %main_return (
+         var v:bv64 := phi(%main_2_1 -> v:bv64, %main_1 -> v:bv64)
+       ) [ var v:bv64 := bvadd(v:bv64, 0x1:bv64); var out:bv64 := v:bv64; return; ]
     ]
 
      -----------
@@ -853,24 +958,31 @@ proc @OY() -> (OY_out:bv64)
          (var v_2:bv64=OX_out) := call @OX();
          goto (%main_2,%main_1);
        ];
-       block %main_1 [
+       block %main_1 ( var v_8:bv64 := phi(%main_entry -> v_2:bv64) ) [
          guard bvsmod(i:bv64, 0x2:bv64);
-         var v_7:bv64 := bvadd(v_6:bv64, 69);
+         var nam:bv64 := bvadd(v_8:bv64, 0xa:bv64);
+         var v_9:bv64 := bvadd(v_8:bv64, 69);
          var tmp:bv64 := bvadd(i:bv64, 0x1:bv64);
          goto (%main_return);
        ];
        block %main_2 [
          guard boolnot(bvsmod(i:bv64, 0x2:bv64));
-         (var v_4:bv64=OY_out) := call @OY();
-         var v_5:bv64 := bvadd(v_4:bv64, 420);
+         (var v_5:bv64=OY_out) := call @OY();
+         var v_6:bv64 := bvadd(v_5:bv64, 420);
          goto (%main_2_1);
        ];
        block %main_2_1 [
-         var v_6:bv64 := v_5:bv64;
-         var namnam:bv64 := bvor(v_6:bv64, 0xffffffff:bv64);
+         var v_7:bv64 := v_6:bv64;
+         var namnam:bv64 := bvor(v_7:bv64, 0xffffffff:bv64);
          goto (%main_return);
        ];
-       block %main_return [ var v_3:bv64 := 0; var out:bv64 := v_3:bv64; return; ]
+       block %main_return (
+         var v_3:bv64 := phi(%main_2_1 -> v_7:bv64, %main_1 -> v_9:bv64)
+       ) [
+         var v_4:bv64 := bvadd(v_3:bv64, 0x1:bv64);
+         var out:bv64 := v_4:bv64;
+         return;
+       ]
     ]
     |}]
 
