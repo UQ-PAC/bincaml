@@ -89,7 +89,8 @@ Procedure.map_blocks_topo_fwd (fun (bid, block) ->
 
 *)
 
-module SSIfy = struct 
+module SSIfy = struct
+  (* TODO: reduce usage of ref *)
 
   (* Represents the instruction, i.e. Phi or Statement *)
   module Instruction = struct
@@ -164,6 +165,11 @@ module SSIfy = struct
     let idom = Dom.compute_idom graph Procedure.Vert.Entry in
     Dom.idom_to_dom_tree graph idom
 
+  let dom_frontier (graph : Dom.t) (vertex : Dom.vertex) : Dom.vertex list = 
+    let idom = Dom.compute_idom graph Procedure.Vert.Entry in
+    let dom_tree = Dom.idom_to_dom_tree graph idom in 
+    Dom.compute_dom_frontier graph dom_tree idom vertex
+
   let add_phi proc (block_id : ID.t) (var : Var.t) (pred_block_ids : ID.t list) =
     let block_to_add_phi_to = Procedure.find_block proc block_id in
     let new_rhs = List.map (fun pred_id -> (pred_id, var)) pred_block_ids in
@@ -186,6 +192,31 @@ module SSIfy = struct
     
     But that would require you to have var.
     *)
+
+  (* Returns i_up, i_down, where both are lists of cfg vertices
+  i_up is a list of Procedure.Vert.Entry vertices, for blocks that contain multiple predecessor edges
+  i_down is a list of Procedure.Vert.End vertices, for both blocks that contian multiple successor edges, and blocks
+  that contain var in Block.assigned_vars_iter *)
+  let create_range_analysis_splitting_strategy proc (var : Var.t) = 
+    let cfg = match Procedure.graph proc with 
+        | Some g -> g | None -> Procedure.G.empty
+    in
+    Procedure.G.fold_vertex (fun (vert : Dom.vertex) (i_up, i_down) -> 
+      match vert with
+      | Procedure.Vert.Begin block_id ->
+        if Procedure.get_blocks_pred proc vert |> List.length |> (>) 1 then
+          (vert :: i_up, i_down)
+        else
+          (i_up, i_down)
+      | Procedure.Vert.End block_id ->
+        let block = Procedure.find_block proc block_id in
+        if (Procedure.get_blocks_succ proc vert |> List.length |> (>) 1) && (Iter.mem var (Block.assigned_vars_iter block)) then
+          (i_up, vert :: i_down)
+        else
+          (i_up, i_down)
+      | _ -> (i_up, i_down)
+
+    ) cfg (List.empty, List.empty)
   
 (* 
   module SplitLiveRange = struct
@@ -259,36 +290,6 @@ module SSIfy = struct
         | Some g -> g | None -> Procedure.G.empty
       in
 
-      (**
-      Right now, set_def and use_def return a new procedure, which is used
-      for further computation in rename. Remaking the new procedure each time
-      is very inefficient because only a single Stmt/Phi is changed, so we
-      could make a map from old_instructions to new_instructions, and then do
-      a single Procedure map at the end that replaces each respective instruction,
-      but I was worried that newer instructions would overwrite the change of 
-      older new_instructions.
-
-      E.g. x := v + v could become x := v1 + v1 and x := v2 + v2. 
-      The single map would used x := v2 + v2 instead of x := v1 + v2.
-
-      This is just a theory, once I have finished implementing rename I will test using
-      the single Procedure map, since if it works it will be significantly more efficient.
-      *)
-
-      (*
-      Create map from old_inst to new_inst
-
-      When renaming te rhs of a phi at the start of the loop in rename, check if the phi
-      is a key in the old_to_new_inst_map, and if so, operate on the value new_inst's phi.
-      
-      This is only because the end of the loop can alter the phi node of a different block, so may not
-      need to do this check for statements.
-
-      At the end of it all, do a loop that uses Block.map to replace phis, and another loop that
-      uses Block.fmap_stmts_copy to replace stmts. Since stmts need the index, I'm not sure if using
-      Stmt.map is possible (though it would definitely be nice)
-      *)
-
       (* Replaces the old instruction with the new inst' that has updated variables. *)
       let replace_instruction inst inst' curr_proc =
         match inst, inst' with
@@ -304,7 +305,7 @@ module SSIfy = struct
               Procedure.modify_block curr_proc block_id (fun block ->
                 Block.fmap_stmts_copy (fun stmts -> Vector.set stmts old_stmt.index new_stmt.statement) block
               )
-          | _ -> failwith "Impossible" (* Shouldn't occur *)
+          | _ -> failwith "Impossible - the type between old and new instruction was different" (* Shouldn't occur *)
       in
 
       (* Returns the proc with replaced inst' *)
@@ -319,7 +320,7 @@ module SSIfy = struct
               (block_id, Instruction.Phi { lhs = if Var.equal lhs v then v' else lhs ; rhs})
           | (block_id, Instruction.Statement { index ; statement = stmt }) ->
               let stmt' = Stmt.map ~f_lvar:(fun oldv -> if Var.equal oldv v then v' else oldv)
-                                  ~f_expr:id ~f_rvar:id stmt in
+                                   ~f_expr:id ~f_rvar:id stmt in
               (block_id, Instruction.Statement { index ; statement = stmt' }) 
         in
 
@@ -358,8 +359,7 @@ module SSIfy = struct
         let expr_transform_alg =
           let open Expr.BasilExpr in 
           rewrite_typed (function
-          | RVar { id ; attrib } when Var.equal id v -> (
-            Some (rvar ~attrib:attrib v'))
+          | RVar { id ; attrib } when Var.equal id v -> Some (rvar ~attrib:attrib v')
           | _ -> None)
         in
 
@@ -386,6 +386,7 @@ module SSIfy = struct
         else
           uses := DefUseMap.add !uses v' inst'
         ;
+
         let proc' = replace_instruction inst inst' curr_proc in
         proc', inst'
       in
@@ -435,40 +436,38 @@ module SSIfy = struct
             ) start_proc block.phis in
 
           (* foreach instruction u in n that uses v do *)
-          let proc_step_two = Vector.foldi (fun index curr_proc stmt ->   
+          let proc_step_three = Vector.foldi (fun index curr_proc stmt ->   
             let inst = Instruction.create_stmt_inst block_id index stmt in
-            let updated_proc1, updated_inst1 =
+            let proc_step_two, updated_inst1 =
               (* An instruction that uses v*)
               if VarSet.mem v (Stmt.free_vars stmt) then
                 set_use curr_proc inst block_id
               else
                 curr_proc, inst
             in
-            let updated_proc2 = 
-              (* If exists instruction d in n that defines v then *)
-              if Iter.mem v (Stmt.iter_lvar stmt) then
-                set_def updated_proc1 updated_inst1
-              else
-                updated_proc1
-              in
-            updated_proc2
+            (* If exists instruction d in n that defines v then *)
+            if Iter.mem v (Stmt.iter_lvar stmt) then
+              set_def proc_step_two updated_inst1
+            else
+              proc_step_two
             ) proc_step_one block.stmts
           in
+
           let next_vertices = second_successors cfg node in
           let final_proc = List.fold_left (fun curr_proc vert -> 
             match vert with
             | Procedure.Vert.Begin succ_block_id -> 
               let succ_block = Procedure.find_block curr_proc succ_block_id in
-              List.fold_left (fun p phi ->
-                List.fold_left (fun pnam (ogbid, var) -> 
+              List.fold_left (fun proc' phi ->
+                List.fold_left (fun proc'' (ogbid, var) -> 
                   if ID.equal ogbid block_id && Var.equal var v then
                     let inst = Instruction.create_phi_inst succ_block_id phi.Block.lhs phi.Block.rhs in
-                    set_use pnam inst ogbid |> fst
+                    set_use proc' inst ogbid |> fst
                   else
-                    pnam) p phi.Block.rhs
+                    proc'') proc' phi.Block.rhs
               ) curr_proc succ_block.phis
             | _ -> curr_proc
-            ) proc_step_two next_vertices in
+            ) proc_step_three next_vertices in
           final_proc
         )
         | _ -> start_proc
