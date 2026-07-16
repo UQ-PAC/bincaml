@@ -164,7 +164,7 @@ module SSIfy = struct
     let idom = Dom.compute_idom graph Procedure.Vert.Entry in
     Dom.idom_to_dom_tree graph idom
 
-  let add_phi proc (block_id : ID.t) (var : Var.t) (pred_block_ids : ID.t list)=
+  let add_phi proc (block_id : ID.t) (var : Var.t) (pred_block_ids : ID.t list) =
     let block_to_add_phi_to = Procedure.find_block proc block_id in
     let new_rhs = List.map (fun pred_id -> (pred_id, var)) pred_block_ids in
     let new_phi : Var.t Block.phi = { lhs = var ; rhs = new_rhs } in
@@ -273,6 +273,20 @@ module SSIfy = struct
 
       This is just a theory, once I have finished implementing rename I will test using
       the single Procedure map, since if it works it will be significantly more efficient.
+      *)
+
+      (*
+      Create map from old_inst to new_inst
+
+      When renaming te rhs of a phi at the start of the loop in rename, check if the phi
+      is a key in the old_to_new_inst_map, and if so, operate on the value new_inst's phi.
+      
+      This is only because the end of the loop can alter the phi node of a different block, so may not
+      need to do this check for statements.
+
+      At the end of it all, do a loop that uses Block.map to replace phis, and another loop that
+      uses Block.fmap_stmts_copy to replace stmts. Since stmts need the index, I'm not sure if using
+      Stmt.map is possible (though it would definitely be nice)
       *)
 
       (* Replaces the old instruction with the new inst' that has updated variables. *)
@@ -421,7 +435,7 @@ module SSIfy = struct
             ) start_proc block.phis in
 
           (* foreach instruction u in n that uses v do *)
-          let proc_step_two = Vector.fold (fun (curr_proc, index) stmt ->   
+          let proc_step_two = Vector.foldi (fun index curr_proc stmt ->   
             let inst = Instruction.create_stmt_inst block_id index stmt in
             let updated_proc1, updated_inst1 =
               (* An instruction that uses v*)
@@ -437,9 +451,8 @@ module SSIfy = struct
               else
                 updated_proc1
               in
-            (updated_proc2, index + 1)
-            ) (proc_step_one, 0) block.stmts 
-            |> fst
+            updated_proc2
+            ) proc_step_one block.stmts
           in
           let next_vertices = second_successors cfg node in
           let final_proc = List.fold_left (fun curr_proc vert -> 
