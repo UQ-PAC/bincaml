@@ -109,7 +109,7 @@ module PassManager = struct
   let aslp_semantics =
     {
       name = "aslp-semantics";
-      apply = Prog Transforms.Aslp.transform_program_first;
+      apply = Prog Transforms.Aslp.transform_program;
       doc = "Add ASLP instsruction semantics after gtirb";
       invariants =
         Invariants.presupposes [ GTIRB_ARM ] ~invalidates:[ GTIRB_ARM ];

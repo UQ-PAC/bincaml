@@ -73,11 +73,23 @@ let stmt_of_aarch64_intrin ?error :
   let args = Expr.BasilExpr.[ bvconst opcode; bvconst address ] in
   Stmt.Instr_IntrinCall { attrib; lhs = []; name = Aarch64Eval; args }
 
-(** Returns the Bincaml global variable representing heap memory. *)
+(** Returns the Bincaml global variable representing heap memory, declaring it
+    if it does not exist. *)
 let aarch64_mem_of_prog prog =
   Program.get_decl_by_name "$mem" prog |> function
-  | Some (Variable { binding }) -> binding
-  | _ -> failwith "aarch64_mem_of_prog: no $mem found"
+  | Some (Variable { binding }) -> (prog, binding)
+  | None ->
+      let mem =
+        Var.create "$mem" ~scope:Var.GlobalVarShared
+          Types.(Map (Bitvector 64, Bitvector 8))
+      in
+
+      let prog =
+        let attrib = Attrib.empty and classification = None in
+        Program.add_decl prog
+          (Program.Variable { binding = mem; attrib; classification })
+      in
+      (prog, mem)
 
 (** {1 Main Bincaml IR transformation functions} *)
 
@@ -172,31 +184,8 @@ let add_aarch64_global_declarations ?(add_all = false) prog =
     Also inserts global variable declarations for the architectural variables,
     if not already present. Assumes it is running immediately after gtirb. *)
 let transform_program prog =
-  let memory = aarch64_mem_of_prog prog in
+  let prog, memory = aarch64_mem_of_prog prog in
   prog
-  |> Program.map_procedures (fun _ -> transform_procedure ~memory)
-  |> add_aarch64_global_declarations
-  |> Spec_modifies.set_modsets ~add_only:false
-
-(** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all
-    procedures within the given program.
-
-    Declares a fresh memory variable, in addition to insert global variable
-    declarations for the architectural variables, if not already present.
-    Assumes it is running immediately after gtirb. *)
-let transform_program_first prog =
-  let memory =
-    Var.create "$mem" ~scope:Var.GlobalVarShared
-      Types.(Map (Bitvector 64, Bitvector 8))
-  in
-
-  let decl_mem =
-   fun prog ->
-    let attrib = Attrib.empty and classification = None in
-    Program.add_decl prog
-      (Program.Variable { binding = memory; attrib; classification })
-  in
-  prog |> decl_mem
   |> Program.map_procedures (fun _ -> transform_procedure ~memory)
   |> add_aarch64_global_declarations
   |> Spec_modifies.set_modsets ~add_only:false
