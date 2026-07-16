@@ -26,8 +26,8 @@
   $ cat semantics.il
   var $PC:bv64;
   proc @_fini()  -> () {  }
-    modifies $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R29:bv64, $R30:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R29:bv64, $R30:bv64
+    modifies $PC:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400828:bv64, $PC))
   
   [
@@ -94,10 +94,10 @@
      block %ret_1 [ return; ]
   ];
   proc @_init()  -> () {  }
-    modifies $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R29:bv64, $R30:bv64, $R0:bv64,
-      $R16:bv64, $R17:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R29:bv64, $R30:bv64, $R0:bv64,
-      $R16:bv64, $R17:bv64
+    modifies $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R29:bv64, $R30:bv64,
+      $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R29:bv64, $R30:bv64,
+      $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400600:bv64, $PC))
   
   [
@@ -175,10 +175,10 @@
      block %ret_1 [ return; ]
   ];
   proc @__do_global_dtors_aux()  -> () {  }
-    modifies $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R29:bv64, $R30:bv64, $R19:bv64,
-      $R0:bv64, $R1:bv64, $R16:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R29:bv64, $R30:bv64, $R19:bv64,
-      $R0:bv64, $R1:bv64, $R16:bv64, $PSTATE_Z:bv1
+    modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R19:bv64, $R29:bv64,
+      $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $PSTATE_Z:bv1, $R0:bv64, $R1:bv64, $R16:bv64, $R19:bv64,
+      $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x40074c:bv64, $PC))
   
   [
@@ -339,9 +339,9 @@
      ]
   ];
   proc @register_tm_clones()  -> () {  }
-    modifies $PC:bv64, $R0:bv64, $R1:bv64, $R2:bv64, $R16:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $R30:bv64, $R0:bv64, $R1:bv64, $R2:bv64,
-      $R16:bv64
+    modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64
+    captures $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64, $R30:bv64,
+      $mem:(bv64->bv8)
     requires boolor(eq(0x400710:bv64, $PC))
   
   [
@@ -523,9 +523,9 @@
      block %register_tm_clones_code_8 [ assert boolor(); unreachable; ]
   ];
   proc @frame_dummy()  -> () {  }
-    modifies $PC:bv64, $R0:bv64, $R1:bv64, $R2:bv64, $R16:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $R30:bv64, $R0:bv64, $R1:bv64, $R2:bv64,
-      $R16:bv64
+    modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64
+    captures $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64, $R30:bv64,
+      $mem:(bv64->bv8)
     requires boolor(eq(0x400780:bv64, $PC))
   
   [
@@ -554,7 +554,7 @@
   ];
   proc @FUN_400660()  -> () {  }
     modifies $PC:bv64, $R16:bv64, $R17:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $R16:bv64, $R17:bv64
+    captures $PC:bv64, $R16:bv64, $R17:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400660:bv64, $PC))
   
   [
@@ -598,9 +598,9 @@
      block %FUN_400660_code_1 [ assert boolor(); unreachable; ]
   ];
   proc @Sqrt()  -> () {  }
-    modifies $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R0:bv64, $R1:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R30:bv64, $R0:bv64, $R1:bv64,
-      $PSTATE_Z:bv1, $PSTATE_V:bv1, $PSTATE_N:bv1
+    modifies $PC:bv64, $R0:bv64, $R1:bv64, $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64,
+      $R1:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400784:bv64, $PC))
   
   [
@@ -929,11 +929,10 @@
      ]
   ];
   proc @_start()  -> () {  }
-    modifies $PC:bv64, $R29:bv64, $R30:bv64, $R0:bv64, $R1:bv64, $R2:bv64, $R16:bv64,
-      $R17:bv64, $R5:bv64, $R6:bv64, $R3:bv64, $R4:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R29:bv64, $R30:bv64, $R0:bv64,
-      $R1:bv64, $R2:bv64, $R16:bv64, $R17:bv64, $R5:bv64, $R6:bv64, $R3:bv64,
-      $R4:bv64
+    modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R2:bv64, $R29:bv64,
+      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64
+    captures $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R2:bv64, $R29:bv64,
+      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400680:bv64, $PC))
   
   [
@@ -1073,7 +1072,7 @@
   ];
   proc @call_weak_fn()  -> () {  }
     modifies $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $R30:bv64, $R0:bv64, $R16:bv64, $R17:bv64
+    captures $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R30:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x4006c4:bv64, $PC))
   
   [
@@ -1165,10 +1164,10 @@
      block %ret_3 [ return; ]
   ];
   proc @main()  -> () {  }
-    modifies $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R29:bv64, $R30:bv64, $R0:bv64,
-      $R1:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R29:bv64, $R30:bv64, $R0:bv64,
-      $R1:bv64, $PSTATE_Z:bv1, $PSTATE_V:bv1, $PSTATE_N:bv1
+    modifies $PC:bv64, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $SP:bv64,
+      $mem:(bv64->bv8)
+    captures $PC:bv64, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64,
+      $R1:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400808:bv64, $PC))
   
   [
@@ -1263,7 +1262,7 @@
   ];
   proc @.L_400650()  -> () {  }
     modifies $PC:bv64, $R16:bv64, $R17:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $R16:bv64, $R17:bv64
+    captures $PC:bv64, $R16:bv64, $R17:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400650:bv64, $PC))
   
   [
@@ -1308,7 +1307,7 @@
   ];
   proc @FUN_400640()  -> () {  }
     modifies $PC:bv64, $R16:bv64, $R17:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $R16:bv64, $R17:bv64
+    captures $PC:bv64, $R16:bv64, $R17:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400640:bv64, $PC))
   
   [
@@ -1353,8 +1352,8 @@
   ];
   proc @deregister_tm_clones()  -> () {  }
     modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $R30:bv64, $R0:bv64, $R1:bv64, $R16:bv64,
-      $PSTATE_Z:bv1
+    captures $PC:bv64, $PSTATE_Z:bv1, $R0:bv64, $R1:bv64, $R16:bv64, $R30:bv64,
+      $mem:(bv64->bv8)
     requires boolor(eq(0x4006e0:bv64, $PC))
   
   [
@@ -1509,8 +1508,8 @@
      block %ret_5 [ return; ]
   ];
   proc @FUN_400620()  -> () {  }
-    modifies $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R16:bv64, $R17:bv64
-    captures $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R30:bv64, $R16:bv64, $R17:bv64
+    modifies $PC:bv64, $R16:bv64, $R17:bv64, $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $R16:bv64, $R17:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400620:bv64, $PC))
   
   [

@@ -52,10 +52,10 @@ Run on basic irreducible loop example
   var $ZF:bv1;
   proc @main_1876()  -> () { .address = 1876; .name = "main";
       .returnBlock = "main_basil_return_1" }
-    modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
-      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
-    captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
-      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
+    modifies $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
+      $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8)
+    captures $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
+      $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8)
   
   [
      block %main_entry { .address = 1876 } [
@@ -158,10 +158,10 @@ Run on basic irreducible loop example
      block %main_basil_return_1 [ return; ]
   ];
   proc @puts_1584()  -> () { .address = 1584; .name = "puts" }
-    modifies $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
-      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
-    captures $mem:(bv64->bv8), $stack:(bv64->bv8), $CF:bv1, $NF:bv1, $R0:bv64,
-      $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64, $VF:bv1, $ZF:bv1
+    modifies $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
+      $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8)
+    captures $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
+      $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8)
   ;
   prog entry @main_1876;
 

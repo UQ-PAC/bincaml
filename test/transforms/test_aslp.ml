@@ -154,9 +154,9 @@ proc @main()  -> () {  }
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
     proc @main()  -> () {  }
-      modifies $PC:bv64, $mem:(bv64->bv8), $SP:bv64, $R29:bv64, $R30:bv64, $R0:bv64
-      captures $PC:bv64, $R1:bv64, $mem:(bv64->bv8), $SP:bv64, $R29:bv64, $R30:bv64,
-        $R0:bv64
+      modifies $PC:bv64, $R0:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
+      captures $PC:bv64, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $SP:bv64,
+        $mem:(bv64->bv8)
       requires boolor(eq(0x400808:bv64, $PC))
 
     [
