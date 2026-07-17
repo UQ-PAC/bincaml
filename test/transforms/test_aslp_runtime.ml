@@ -71,4 +71,4 @@ bigger than the allowed test threshold of %dx. Therefore, we fail this
 test which aims to ensure it's approximately linear.|}
       actual_scale big_t threshold
   end;
-  [%expect {| Pass: 6x bigger input took less than 8 longer. |}]
+  [%expect {| Pass: 15x bigger input took less than 20x longer. |}]
