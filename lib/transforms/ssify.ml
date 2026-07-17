@@ -2,92 +2,6 @@ open Bincaml_util.Common
 open Lang
 open Lang.Common
 open Containers
-(* Should probably be Procedure.G. Check if so for rename, and how hard a refactor would be *)
-
-
-
-  (* let phi_to_def (joined_phis : (Var.t * (IDSet.elt * Var.t) list) VarMap.t) =
-    VarMap.values joined_phis
-    |> Iter.map (function lhs, rhs -> Block.{ lhs; rhs })
-    |> Iter.to_list *)
-
-
-
-(* Def(v) is the instruction v is defined in
-   Uses(v) is the set of instructions using v
-   Obtained using def_use_maps proc and var_to_use map or var_to_def map
-*)
-
-(**
- I_up is Defs is Procedure.local_decls
- I_out is the successors of the conditional statements
- Uses is custom
- CFG is Procedure.G
-
- Conditional if Stmt is Instr_Assume for Out(Conds)
-
-  G.map_vertex(v |> succ)
-
-  For is_join, check count of pred. Do length of G.pred vertex
-
-  ocamlgraph.compute_dom_frontier on Procedure.RevG for pDF
-
-  Defs(v) do get_local_decls of procedure and filter.
-
-  For branches, check count of succ
-
-  Out(pDF+(e)) where e is pred of current node do succ on e
-  Similarly In(DF+(e)) is pred of e
-
-  Iterate over vertices, if end of join block then add phi, if start of branch block then add sigma
-
-    Splitting Strategy is Defs_down Union Out(Conds)_down
-*)
-
-(**
-Current assumptions:
-  Using dataflow_graph.DFGraph for CFG
-  Each node is a Dataflow_graph.Vertex
-  Sigma nodes will be implemented as Phi nodes
-
-Unknown:
-  How to represent a Var.Bottom
-  How to replace the old instruction with the new instruction without using Procedure.map
-  How to set Def(v') and Uses(v') globally - currently just local to the function
-  What nodes are vs vertices
-
-
-  How to use Procedure.G
-  How to replace Block edges in Procedure.G. Remove and add?
-
-
-Maybe:
-  Each vertex is a program point, each edge is either a block or goto.
-  Gotos are singular: A branch will have multiple outgoing edges that are gotos
-  Is_join and is_branch if it has multiple in/outgoing edges that are gotos
-  In(vertex) is pred and Out(ver)
-
-
-
-
-Right now, the program creates a new instruction that uses v' and adds it to the local
-defs/uses MDeps map.
-
-Defs() can be a map from variables to indexes. The indexes are the index of the statement in the statement list.
-Variant between Phi or Statement. It will be a multimap that i make locally.
-
-Will have to create a new Procedure with the replaced statement each time
-Will have to use Block.map for phis and Stmt.map inside of that.
-
-Procedure.map_blocks_topo_fwd (fun (bid, block) ->
-  Block.map
-    ~phi:(function that checks if phi is equal to oldphi and replaces with newphi)
-    (Stmt.map respective map stuff)
-    block
-  )
-  proc
-
-*)
 
 module SSIfy = struct
   (* TODO: reduce usage of ref *)
@@ -115,6 +29,54 @@ module SSIfy = struct
 
     let create_phi_inst block_id lhs rhs = (block_id, Phi { lhs ; rhs })
     let create_stmt_inst block_id index statement = (block_id, Statement { index ; statement })
+
+    (* Replace the definitions of v by v' *)
+    let replace_defs v v' (inst : t) : t = match inst with 
+      | (block_id, Phi { lhs ; rhs } ) -> 
+          (block_id, Phi { lhs = if Var.equal lhs v then v' else lhs ; rhs})
+      | (block_id, Statement { index ; statement = stmt }) ->
+          let stmt' = Stmt.map ~f_lvar:(fun oldv -> if Var.equal oldv v then v' else oldv)
+                                ~f_expr:id ~f_rvar:id stmt in
+          (block_id, Statement { index ; statement = stmt' })
+    
+    let replace_uses ?pred_block_id v v' (inst : t) : t =
+      let expr_transform_alg =
+        let open Expr.BasilExpr in 
+        rewrite_typed (function
+        | RVar { id ; attrib } when Var.equal id v -> Some (rvar ~attrib:attrib v')
+        | _ -> None)
+      in
+
+      let (og_bid: ID.t), has_og_bid = match pred_block_id with
+        | Some bid -> bid, true
+        | None -> ID.fresh ~name:"Bot" (ID.make_gen ()) (), false (* TODO: I have no idea how this works, but it shouldn't matter cause we never use og_bid in this case*)
+      in
+
+      match inst with
+      | (block_id, Phi { lhs ; rhs }) ->
+        let rhs' = List.map (fun (bid, var) -> 
+          if has_og_bid then (
+            if ID.equal og_bid bid && Var.equal var v then (
+              (bid, v') 
+            ) else (
+              (bid, var)
+            )
+          ) else (
+            if Var.equal var v then (
+              bid, v'
+            ) else (
+              bid, var
+            )
+          ) 
+        ) rhs in
+        (block_id, Phi { lhs = lhs ; rhs = rhs'})
+      | (block_id, Statement old_stmt) -> 
+        let stmt' = Stmt.map ~f_lvar:id
+                            ~f_expr:(expr_transform_alg)
+                            ~f_rvar:(fun oldv -> if Var.equal oldv v then v' else oldv)
+                            old_stmt.statement 
+        in
+        (block_id, Statement {index = old_stmt.index ; statement = stmt'})
   end
 
   (* Procedure.G.compute_dom_front *)
@@ -128,7 +90,9 @@ module SSIfy = struct
   let uses : DefUseMap.t ref = ref DefUseMap.empty
 
   (* List of new_v *)
-  (* TODO: This is a placeholder, there is definitely a better structure for this *)
+  (* TODO: This is a placeholder, there is definitely a better structure for this.
+           Also, it is very possible to refactor this to not be a ref. Will do this once everything
+           else is complete. *)
   let new_renames : (Var.t) list ref = ref []
 
   (* Gets the second successors *)
@@ -190,8 +154,8 @@ module SSIfy = struct
     new_proc, new_inst
 
   (* Returns i_up, i_down, where both are lists of cfg vertices
-  i_up is a list of Procedure.Vert.Entry vertices, for blocks that contain multiple predecessor edges
-  i_down is a list of Procedure.Vert.End vertices, for both blocks that contian multiple successor edges, and blocks
+  i_up is empty
+  i_down is a list of Procedure.Vert.End vertices, for both blocks that contain multiple successor edges, and blocks
   that contain var in Block.assigned_vars_iter *)
   let create_range_analysis_splitting_strategy proc (var : Var.t) = 
     let cfg = match Procedure.graph proc with 
@@ -212,7 +176,7 @@ module SSIfy = struct
   (* First step of SSI conversion - insertion of phi and sigma nodes *)
   module SplitLiveRange = struct
     (* Returns a proc, list of non-actual instructions *)
-    let insert_instructions (v : Var.t) (s_combined : Dom.vertex list) proc = 
+    let insert_instructions (v : Var.t) (s_combined : Dom.vertex list) proc : ('a, 'b) Procedure.t * Instruction.t list = 
       let cfg = match Procedure.graph proc with | Some g -> g | None -> Procedure.G.empty in
       let is_join vertex = (match vertex with | Procedure.Vert.Begin block_id -> if Procedure.G.pred cfg vertex |> List.length > 1 then true else false | _ -> false) in
       let is_branch vertex = (match vertex with | Procedure.Vert.End block_id -> if Procedure.G.succ cfg vertex |> List.length > 1 then true else false | _ -> false) in
@@ -243,12 +207,13 @@ module SSIfy = struct
 
       (* Check if a block uses a given variable that is locally undefined.
         Returns true if the block has a statement that uses the given variable without defining it 
-        Also returns true if the block doesn't contain a definition of var *)
+        Also returns true if the block doesn't contain a definition of var 
+        Doesn't check phis - should not be needed *)
       let has_undefined_use (var : Var.t) (block_id : ID.t) proc =
         let block = Procedure.find_block proc block_id in
         let stmts = block.stmts in
         let rec check_stmt (index) =
-          if index = (Vector.size stmts) - 1 then 
+          if index = (Vector.size stmts) then 
             true
           else
             let stmt = Vector.get stmts index in
@@ -300,8 +265,8 @@ module SSIfy = struct
         ) (proc, List.empty) s_combined 
       in proc_and_list
 
-
-    let insert_instructions_version2 (v : Var.t) (s_combined : Dom.vertex list) proc = 
+    (* A version that is a little more accurate to the book's algorithm *)
+    let insert_instructions_version2 (v : Var.t) (s_combined : Dom.vertex list) proc : ('a, 'b) Procedure.t * Instruction.t list = 
       let cfg = match Procedure.graph proc with | Some g -> g | None -> Procedure.G.empty in
       let is_join vertex = (match vertex with | Procedure.Vert.Begin block_id -> if Procedure.G.pred cfg vertex |> List.length > 1 then true else false | _ -> false) in
       let is_branch vertex = (match vertex with | Procedure.Vert.End block_id -> if Procedure.G.succ cfg vertex |> List.length > 1 then true else false | _ -> false) in
@@ -324,7 +289,7 @@ module SSIfy = struct
         let block = Procedure.find_block proc block_id in
         let stmts = block.stmts in
         let rec check_stmt (index) =
-          if index = (Vector.size stmts) - 1 then 
+          if index = (Vector.size stmts) then 
             true
           else
             let stmt = Vector.get stmts index in
@@ -443,7 +408,7 @@ module SSIfy = struct
   
     let create_v' old_v proc =
       let v' = Procedure.fresh_var ~pure:true ~name:(Var.name old_v) proc (Var.typ old_v) in
-      new_renames := (v') :: !new_renames;
+      new_renames := (v' :: !new_renames) |> List.sort_uniq ~cmp:Var.compare;
       Procedure.decl_local proc v'
 
     (* Returns a procedure that has renamed v *)
@@ -480,14 +445,7 @@ module SSIfy = struct
         let v' = create_v' v curr_proc in
 
         (* Replace the defs of v by v' in inst *)
-        let (inst' : Instruction.t) =
-          match inst with
-          | (block_id, Instruction.Phi { lhs ; rhs } ) -> 
-              (block_id, Instruction.Phi { lhs = if Var.equal lhs v then v' else lhs ; rhs})
-          | (block_id, Instruction.Statement { index ; statement = stmt }) ->
-              let stmt' = Stmt.map ~f_lvar:(fun oldv -> if Var.equal oldv v then v' else oldv)
-                                   ~f_expr:id ~f_rvar:id stmt in
-              (block_id, Instruction.Statement { index ; statement = stmt' }) 
+        let (inst' : Instruction.t) = Instruction.replace_defs v v' inst
         in
 
         (* Set Def(v') = inst' *)
@@ -522,30 +480,9 @@ module SSIfy = struct
         let v' = let open Bincaml_util.Unicode in Option.value (Stack.top_opt stack) ~default:(Var.create bot_char (Var.typ v) ~scope:(Var.scope v))
         in
 
-        let expr_transform_alg =
-          let open Expr.BasilExpr in 
-          rewrite_typed (function
-          | RVar { id ; attrib } when Var.equal id v -> Some (rvar ~attrib:attrib v')
-          | _ -> None)
+        let inst' = Instruction.replace_uses ~pred_block_id:og_bid v v' inst 
         in
 
-        (* Replace the uses of v by v' in inst *)
-        let inst' = 
-          match inst with
-          | (block_id, Instruction.Phi { lhs ; rhs }) ->
-            (* Only replace the rhs var that is for the 'current' block
-              Remember that set_use is called for the successor the the current block
-            *)
-            let rhs' = List.map (fun (bid, var) -> if ID.equal og_bid bid && Var.equal var v then (bid, v') else (bid, var)) rhs in
-            (block_id, Instruction.Phi { lhs = lhs ; rhs = rhs'})
-          | (block_id, Instruction.Statement old_stmt) -> 
-            let stmt' = Stmt.map ~f_lvar:id
-                                ~f_expr:(expr_transform_alg)
-                                ~f_rvar:(fun oldv -> if Var.equal oldv v then v' else oldv)
-                                old_stmt.statement 
-            in
-            (block_id, Instruction.Statement {index = old_stmt.index ; statement = stmt'})
-        in
         pop_while_not_dominating inst;
         if String.equal (Var.name v') Bincaml_util.Unicode.bot_char then
           ()
@@ -642,13 +579,27 @@ module SSIfy = struct
       in
       visit_begin_node proc Procedure.Vert.Entry
   end
-(* 
+
   module DeadCodeElim = struct
+    let cleanup (live : VarSet.t) proc (non_actual_insts : Instruction.t list) =
+      let web = VarSet.of_list !new_renames in
+      List.fold_left (fun curr_proc (inst : Instruction.t) -> 
+        let inst_is_def_of_web = inst |> snd |> Instruction.var_defines |> VarSet.of_iter |> VarSet.inter web |> VarSet.is_empty |> not  in
+        if inst_is_def_of_web then (
+          proc
+        ) else (
+          curr_proc
+        )
+      ) proc non_actual_insts
+      
+
+    (* Active is the set of actual instructions that contain a v' of web in its defs or uses *)
+
     (* Third step - dead and undefined code elimination *)
-    let clean variable =
+    (* let clean variable =
         (* Renamed variables come from rename *)
-        let web = VarSet.of_list SSIfy.VariableRenaming.new_renames in
-        let defined = [] in
+        let web = VarSet.of_list !new_renames in
+        let defined = in
         
         (* Get all instructions from the CFG *)
         let instructions = List.map Block.stmts_iter Procedure.blocks_to_list |> List.flatten in
@@ -696,9 +647,9 @@ module SSIfy = struct
                 |> VarSet.of_list 
                 |> VarSet.inter web) used |> VarSet.to_list
         
-        let live = VarSet.inter defined used
+        let live = VarSet.inter defined used *)
         
-  end *)
+  end
 
   let ssify (v: Var.t) pv =
     let split var splitting_strategy =
