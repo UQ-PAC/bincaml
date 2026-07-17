@@ -80,13 +80,22 @@ module SSIfy = struct
   end
 
   module VertexSet = CCSet.Make (Procedure.Vert)
+
   module InstructionSet = CCSet.Make (Instruction)
 
   (* Procedure.G.compute_dom_front *)
   module Dom = Graph.Dominator.Make (Procedure.G)
 
+  (* module Nam = struct
+  include Procedure.G
+  let succ = pred
+  include Procedure.RevG
+  end 
+  module RevDom = Graph.Dominator.Make (Nam) *)
+
   (* Map from Var to (BlockID, Instruction) *)
   module DefUseMap = CCMultiMap.Make (Var) (Instruction)
+
 
   (* 'Global' def and use maps *)
   let defs : DefUseMap.t ref = ref DefUseMap.empty
@@ -132,10 +141,11 @@ module SSIfy = struct
     let idom = Dom.compute_idom graph Procedure.Vert.Entry in
     Dom.idom_to_dom_tree graph idom
 
-  let dom_frontier (graph : Dom.t) (vertex : Dom.vertex) : Dom.vertex list = 
+  let dom_frontier (graph : Dom.t) (vertex : Dom.vertex) : VertexSet.t = 
     let idom = Dom.compute_idom graph Procedure.Vert.Entry in
     let dom_tree = Dom.idom_to_dom_tree graph idom in 
     Dom.compute_dom_frontier graph dom_tree idom vertex
+    |> VertexSet.of_list
 
   let add_phi proc (block_id : ID.t) (var : Var.t) (pred_block_ids : ID.t list) =
     let block_to_add_phi_to = Procedure.find_block proc block_id in
@@ -160,7 +170,7 @@ module SSIfy = struct
   i_up is empty
   i_down is a list of Procedure.Vert.End vertices, for both blocks that contain multiple successor edges, and blocks
   that contain var in Block.assigned_vars_iter *)
-  let create_range_analysis_splitting_strategy proc (var : Var.t) : Dom.vertex list * Dom.vertex list = 
+  let create_range_analysis_splitting_strategy proc (var : Var.t) : VertexSet.t * VertexSet.t = 
     let cfg = match Procedure.graph proc with 
         | Some g -> g | None -> Procedure.G.empty
     in
@@ -168,18 +178,36 @@ module SSIfy = struct
       match vert with
       | Procedure.Vert.End block_id ->
         let block = Procedure.find_block proc block_id in
-        let tmp = if (Iter.mem var (Block.assigned_vars_iter block)) then (i_up, vert :: i_down) else (i_up, i_down) in
+        let tmp = if (Iter.mem var (Block.assigned_vars_iter block)) then (i_up, VertexSet.add vert i_down) else (i_up, i_down) in
         if (Procedure.G.succ cfg vert |> List.length |> (<) 1) then
-          Procedure.G.fold_succ (fun succ_vert (up, down) -> (up, succ_vert :: down)) cfg vert tmp
+          Procedure.G.fold_succ (fun succ_vert (up, down) -> (up, VertexSet.add succ_vert down)) cfg vert tmp
         else
           tmp
       | _ -> (i_up, i_down)
-    ) cfg (List.empty, List.empty)
+    ) cfg (VertexSet.empty, VertexSet.empty)
+
+  (* Replaces the old instruction with the new inst' that has updated variables. *)
+  let replace_instruction inst inst' curr_proc =
+    match inst, inst' with
+      | (block_id, Instruction.Phi old_phi),
+        (_, Instruction.Phi new_phi) ->
+          Procedure.modify_block curr_proc block_id (fun block ->
+            Block.map ~phi:(List.map (fun phi ->
+                    if Block.equal_phi Var.equal old_phi phi then new_phi else phi
+                    )) Fun.id block
+          )
+      | (block_id, Instruction.Statement old_stmt),
+        (_, Instruction.Statement new_stmt) -> 
+          Procedure.modify_block curr_proc block_id (fun block ->
+            Block.fmap_stmts_copy (fun stmts -> Vector.set stmts old_stmt.index new_stmt.statement) block
+          )
+      | _ -> failwith "Impossible - the type between old and new instruction was different" (* Shouldn't occur *)
+  
 
   (* First step of SSI conversion - insertion of phi and sigma nodes *)
   module SplitLiveRange = struct
     (* Returns a proc, list of non-actual instructions *)
-    let insert_instructions (v : Var.t) (s_combined : Dom.vertex list) proc : ('a, 'b) Procedure.t * Instruction.t list = 
+    let insert_instructions (v : Var.t) (s_combined : VertexSet.t) proc : ('a, 'b) Procedure.t * Instruction.t list = 
       let cfg = match Procedure.graph proc with | Some g -> g | None -> Procedure.G.empty in
       let is_join vertex = (match vertex with | Procedure.Vert.Begin block_id -> if Procedure.G.pred cfg vertex |> List.length > 1 then true else false | _ -> false) in
       let is_branch vertex = (match vertex with | Procedure.Vert.End block_id -> if Procedure.G.succ cfg vertex |> List.length > 1 then true else false | _ -> false) in
@@ -228,7 +256,7 @@ module SSIfy = struct
       in
  
       let proc_and_list =
-        List.fold_left (fun (curr_proc, non_actual_insts) vert -> 
+        VertexSet.fold (fun vert (curr_proc, non_actual_insts)  -> 
           match vert with
           | Procedure.Vert.Begin block_id | Procedure.Vert.End block_id -> 
             let block = Procedure.find_block curr_proc block_id in
@@ -265,7 +293,7 @@ module SSIfy = struct
             else
               (curr_proc, non_actual_insts) 
           | _ -> (curr_proc, non_actual_insts) 
-        ) (proc, List.empty) s_combined 
+        ) s_combined (proc, List.empty) 
       in proc_and_list
 
     (* A version that is a little more accurate to the book's algorithm *)
@@ -347,57 +375,125 @@ module SSIfy = struct
         ) (proc, List.empty) s_combined 
       in proc_and_list
 
-  (* Construction of s_up and s_down *)
-  (* TODO: make i_up and i_down list of VERTICES, not list of blocks - make i_up list of begin vertices, i_down list of end vertices *)
-  let split variable (i_up : Dom.vertex list) (i_down : Dom.vertex list) (proc : ('a, 'b) Procedure.t) = 
-    let cfg = match Procedure.graph proc with 
-      | Some g -> g | None -> Procedure.G.empty in
+    let split (v : Var.t) ((i_up : VertexSet.t), (i_down : VertexSet.t)) proc =
+      let cfg = match Procedure.graph proc with | Some g -> g | None -> Procedure.G.empty in
+      let is_join vertex = (match vertex with | Procedure.Vert.Begin block_id -> if Procedure.G.pred cfg vertex |> List.length > 1 then true else false | _ -> false) in
+      let is_branch vertex = (match vertex with | Procedure.Vert.End block_id -> if Procedure.G.succ cfg vertex |> List.length > 1 then true else false | _ -> false) in
+      let is_branch_successor vertex = (
+        match vertex with 
+        | Procedure.Vert.Begin block_id -> 
+          let pred_verts = Procedure.G.pred cfg vertex in
+          let rec check_preds (pred_list : Dom.vertex list) =
+            match pred_list with
+            | [] -> false
+            | pred_vert :: tail ->
+              if is_branch pred_vert then true else check_preds tail
+            in
+            check_preds pred_verts
+        | _ -> false
+        ) in
 
-    let defs_of_v = Procedure.G.fold_vertex (fun vert dov ->
+      let defs_of_v : VertexSet.t = Procedure.G.fold_vertex (fun vert dovs ->
         match vert with 
         | Procedure.Vert.Begin bid ->
           let block = Procedure.find_block proc bid in
-          if Iter.mem variable (Block.assigned_vars_iter block) then (
-            vert :: dov
+          if Iter.mem v (Block.assigned_vars_iter block) then (
+            VertexSet.add vert dovs
           ) else (
-            dov
+            dovs
           )
-        | _ -> dov
-      ) cfg [] in
+        | _ -> dovs
+      ) cfg VertexSet.empty
+
+      in
+      (* let s_up = List.fold_left (fun sup vert ->
+        if is_join vert then (
+
+        )  
+      ) List.empty i_up
+          in
+          s_up *)
+      let s_up = VertexSet.empty in
+
+      (* let s_down = List.fold_left (fun sdown vert -> 
+        if is_branch vert then (
+          Procedure.G.fold_succ (fun succ_vert sdown' -> 
+            sdown' @ (dom_frontier cfg succ_vert)  
+          ) cfg vert sdown
+        ) else (
+          sdown @ (dom_frontier cfg vert)
+        )
+      ) (List.empty) (s_up @ defs_of_v @ i_down)
+      in *)
+      let s_down = VertexSet.fold (fun vert sdown -> 
+        if is_branch vert then (
+          Procedure.G.fold_succ (fun succ_vert sdown' ->
+            VertexSet.union sdown' (dom_frontier cfg succ_vert)
+          ) cfg vert sdown
+        ) else (
+          VertexSet.union sdown (dom_frontier cfg vert)
+        )
+      ) (VertexSet.union s_up defs_of_v |> VertexSet.union i_down) (VertexSet.empty)
+      in 
+
+
+      (* let s_combined = List.sort_uniq ~cmp:Procedure.Vert.compare (i_up @ i_down @ s_up @ s_down) in *)
+      let s_combined = VertexSet.union i_up i_down |> VertexSet.union s_up |> VertexSet.union s_down in
+      insert_instructions v s_combined proc
+
+
+      (* Construction of s_up and s_down *)
+      
+
 
       (* Marks blocks reachable by going backwards *)
       (* Join blocks have phi nodes inserted, else parallel copy *)
-      let is_join vert =
-        if Procedure.get_blocks_pred proc vert |> List.length > 1 then true else false in
-      let s_up = List.fold_left (fun s_up_list vert ->  
-      (* Checks whether a program point is a join node by checking the number of predecessors *)
       
-      if is_join vert then s_up_list @ ( 
-        Procedure.G.pred cfg vert
-        |> List.concat_map (dom_frontier cfg)
-        |> List.map (Procedure.G.pred cfg) |> List.flatten)
-      else s_up_list @ (dom_frontier cfg vert |> List.map (Procedure.G.pred cfg) |> List.flatten))
-       [] i_up in
-
+      (* let s_up = [] in
+      (* Checks whether a program point is a join node by checking the number of predecessors *)
+      let is_join (vert : Procedure.Vert.t) = if Procedure.get_blocks_pred proc vert |> List.length > 1 then true else false in
+      
+      let split_up i = if is_join i then s_up @ (i 
+          |> Procedure.get_blocks_pred proc
+          |> List.map (dom_frontier cfg vert)
+          |> List.map (Procedure.get_blocks_pred proc))
+      else s_up @ (dom_frontier cfg vert |> List.map (Procedure.get_blocks_pred graph)) in
+      List.map split_up i_up
+      
       (* Marks blocks reachable by going forwards *)
       (* Branch blocks have sigma nodes inserted, else parallel copy *)
-      let is_branch block = 
-      if (Procedure.get_blocks_succ proc block |> List.length) > 1 then true else false in
-      let s_down = List.fold_left (fun s_down_list vert ->
-        if is_branch vert then 
-          s_down_list @ 
-        (Procedure.G.succ cfg vert 
-        |> List.concat_map (dom_frontier cfg)
-        |> List.map (Procedure.G.succ cfg) |> List.flatten) 
-        else 
-          s_down_list @ 
-          (dom_frontier cfg vert 
-          |> List.map (Procedure.G.succ cfg) |> List.flatten)) [] (s_up @ defs_of_v @ i_down) in
-
+      let s_down = [] in
+          let is_branch (block : Procedure.Vert.t) = 
+              if Procedure.get_blocks_succ graph block |> List.length > 1 then true else false in
+                  let split_down i = if is_branch i then s_down :: (i 
+                      |> Procedure.get_blocks_succ graph 
+                      |> List.map compute_dom_frontier
+                      |> List.map (Procedure.get_blocks_succ graph) 
+                      else s_down :: compute_dom_frontier i in 
+      List.map split_down (s_up :: defs variable :: i_down) in
+      
       (* Traverse marked blocks, insert appropriate instruction *)
-      let s = i_up @ i_down @ s_up @ s_down in
+      let s = i_up :: i_down :: s_up :: s_down in
+      let insert i = 
+          let contains_def vert var = 
+              match vert with
+          | Procedure.G.Vert.Begin succ_id -> Procedure.find_block succ_id |>
+              |> Block.assigned_vars_iter 
+              |> Iter.to_list 
+              |> List.mem var in
+          | Procedure.G.Vert.End pred_id -> Procedure.find_block pred_id |> 
+              |> Block.assigned_vars_iter 
+              |> Iter.to_list 
+              |> List.mem var in
+          | _ -> () in
 
-    insert_instructions variable s proc
+      if !contains_def i variable then 
+          match i.t with 
+      | Procedure.Vert.Begin -> if is_join i then insert_sigma i variable in
+      | Procedure.Vert.End -> if is_branch then insert_phi i variable in
+      | _ -> insert_copy variable in
+      List.map insert s in *)
+  end
 
   module VariableRenaming = struct
   
@@ -414,24 +510,6 @@ module SSIfy = struct
       (* The control flow graph of the current procedure *)
       let cfg = match Procedure.graph proc with 
         | Some g -> g | None -> Procedure.G.empty
-      in
-
-      (* Replaces the old instruction with the new inst' that has updated variables. *)
-      let replace_instruction inst inst' curr_proc =
-        match inst, inst' with
-          | (block_id, Instruction.Phi old_phi),
-            (_, Instruction.Phi new_phi) ->
-              Procedure.modify_block curr_proc block_id (fun block ->
-                Block.map ~phi:(List.map (fun phi ->
-                        if Block.equal_phi Var.equal old_phi phi then new_phi else phi
-                        )) Fun.id block
-              )
-          | (block_id, Instruction.Statement old_stmt),
-            (_, Instruction.Statement new_stmt) -> 
-              Procedure.modify_block curr_proc block_id (fun block ->
-                Block.fmap_stmts_copy (fun stmts -> Vector.set stmts old_stmt.index new_stmt.statement) block
-              )
-          | _ -> failwith "Impossible - the type between old and new instruction was different" (* Shouldn't occur *)
       in
 
       (* Returns the proc with replaced inst' *)
@@ -546,7 +624,7 @@ module SSIfy = struct
             (* If exists instruction d in n that defines v then *)
             if Iter.mem v (Stmt.iter_lvar stmt) then
               set_def proc_step_two updated_inst1
-            else
+            else 
               proc_step_two
             ) proc_step_one block.stmts
           in
@@ -573,87 +651,130 @@ module SSIfy = struct
         List.fold_left visit_begin_node final_proc (get_dominated_vertices cfg node)
       in
       visit_begin_node proc Procedure.Vert.Entry
-    end
+  end
 
   module DeadCodeElim = struct
-    let cleanup (live : VarSet.t) proc (non_actual_insts : Instruction.t list) =
+    (* v is just there because the main clean function currently doesn't exists. Remove it when adding it to the main clean function, since it is
+    the same v*)
+    let cleanup (live : VarSet.t) proc (non_actual_insts : Instruction.t list) (v : Var.t)=
       let web = VarSet.of_list !new_renames in
+      let bot_var = let open Bincaml_util.Unicode in Var.create bot_char (Var.typ v) ~scope:(Var.scope v) in
       List.fold_left (fun curr_proc (inst : Instruction.t) -> 
-        let inst_is_def_of_web = inst |> snd |> Instruction.var_defines |> VarSet.of_iter |> VarSet.inter web |> VarSet.is_empty |> not  in
+        let instruction = snd inst in 
+        let inst_is_def_of_web = instruction |> Instruction.var_defines |> VarSet.of_iter |> VarSet.inter web |> VarSet.is_empty |> not  in
         if inst_is_def_of_web then (
-          proc
+          let all_vars = Iter.append (Instruction.var_defines instruction) (Instruction.var_uses instruction) |> VarSet.of_iter in 
+
+          (* For each v' operand of inst | v' !E live *)
+          let proc_step_one, inst_step_one = VarSet.fold (fun v' (proc', inst') ->
+            if VarSet.mem v' web  && (not (VarSet.mem v' live)) then (
+              (* Replace v' by ⊥ *)
+              let replaced_inst = Instruction.replace_defs v' bot_var inst |> Instruction.replace_defs v' bot_var
+              in
+              replace_instruction inst replaced_inst curr_proc, replaced_inst
+            ) else (
+              proc', inst'
+            ) 
+          ) all_vars (curr_proc, inst)
+          in 
+          
+          let just_bot_char = VarSet.empty |> VarSet.add bot_var in 
+          (* If inst.defs = {⊥} or inst.uses = {⊥} *)
+          if Instruction.var_defines (snd inst_step_one) |> VarSet.of_iter |> VarSet.equal just_bot_char 
+            || Instruction.var_uses  (snd inst_step_one) |> VarSet.of_iter |> VarSet.equal just_bot_char then (
+              match inst_step_one with
+              | (block_id, Instruction.Phi bot_phi) -> 
+                let unmodified_block = Procedure.find_block proc_step_one block_id in
+                let unmodified_phis = unmodified_block.phis in
+                let new_phis = List.filter (fun phi -> 
+                  Block.equal_phi Var.equal phi bot_phi
+                ) unmodified_phis in
+                let modified_block = {unmodified_block with phis = new_phis} in
+                Procedure.update_block proc_step_one block_id modified_block
+              | (block_id, Instruction.Statement bot_stmt) -> 
+                let unmodified_block = Procedure.find_block proc_step_one block_id in
+                let modified_stmts = Vector.create () in 
+                Vector.append modified_stmts unmodified_block.stmts;
+                Vector.remove_and_shift modified_stmts bot_stmt.index;
+                let modified_block = {unmodified_block with stmts = Vector.freeze modified_stmts} in
+                Procedure.update_block proc_step_one block_id modified_block
+            ) else (
+              proc_step_one
+            )
         ) else (
           curr_proc
         )
       ) proc non_actual_insts
       
 
-  (* Third step - dead and undefined code elimination *)
-  let clean variable =
-      (* Renamed variables come from rename *)
-      let web = VarSet.of_list !new_renames in
-      let defined = [] in
-      (* Get all instructions from the CFG *)
-      let instructions = List.map (Block.stmts_iter |> Iter.to_list) Procedure.blocks_to_list |> List.flatten in
-      (* Filter instructions to get only instructions that define variables in web *)
-      (* We get the assigned variables for the instructions, then convert to set, then check if web intersect assigned_vars is empty*)
-      let filter_def_instr instr = if VarSet.is_empty (VarSet.inter (Stmt.assigned instr) web) then false else true in
-      let active_def = List.filter_map (function | Stmt.Instr_Assign attrib al -> Some attrib al | _ -> None ) instructions |> List.filter filter_def_instr |> VarSet.of_list in
-      let add_def v' = 
-          active_def = VarSet.union active_def SSIfy.VariableRenaming.uses v';
-          defined = VarSet.union defined v' in                 
+    (* Active is the set of actual instructions that contain a v' of web in its defs or uses *)
 
-      while !VarSet.is_empty (VarSet.diff active_def defined) do
-          List.map add_def 
-          (VarSet.to_list 
-          (VarSet.diff 
-          (VarSet.inter web 
-              (List.filter_map 
-                  (function | Stmt.Instr_Assign attrib al -> Some attrib al | _ -> None ) instructions )
-                  |> List.filter filter_def_instr instructions 
-                  |> List.map Stmt.assigned 
-                  |> List.flatten 
-                  |> VarSet.of_list)))
-  
-      let used = [] in
-      let filter_used_instr instr = 
-          if VarSet.is_empty 
-              (Stmt.iter_rexpr instr 
-              |> Iter.map (function `Expr e -> e | `Var v -> Expr.BasilExpr.rvar v)
-              |> List.flatten 
-              |> VarSet.of_list 
-              |> VarSet.inter web) 
-          then false else true
+    (* Third step - dead and undefined code elimination *)
+    (* let clean variable =
+        (* Renamed variables come from rename *)
+        let web = VarSet.of_list !new_renames in
+        let defined = in
+        
+        (* Get all instructions from the CFG *)
+        let instructions = List.map Block.stmts_iter Procedure.blocks_to_list |> List.flatten in
+        (* Filter instructions to get only instructions that define variables in web *)
+        (* We get the assigned variables for the instructions, then convert to set, then check if web intersect assigned_vars is empty*)
+        let filter_def_instr instr = if VarSet.is_empty (VarSet.inter (Stmt.assigned instr) web) then false else true
+        let active_def = List.filter_map (function | Stmt.Instr_Assign attrib al -> Some attrib al | _ -> None ) instructions |> List.filter filter_def_instr |> VarSet.of_list in
+        let add_def v' = 
+            active_def = VarSet.union active_def SSIfy.VariableRenaming.uses v';
+            defined = VarSet.union defined v' in                 
 
-      let active_used = instructions |> List.filter filter_used_instr |> VarSet.of_list in
-      let add_used v' =
-          active = VarSet.union active_used SSIfy.VariableRenaming.defs v';
-          used = VarSet.union used v' in
+        while !VarSet.is_empty (VarSet.diff active_def defined) do
+            List.map add_def 
+            (VarSet.to_list 
+            (VarSet.diff 
+            (VarSet.inter web 
+                (List.filter_map 
+                    (function | Stmt.Instr_Assign attrib al -> Some attrib al | _ -> None ) instructions )
+                    |> List.filter filter_def_instr instructions 
+                    |> List.map Stmt.assigned 
+                    |> List.flatten 
+                    |> VarSet.of_list)))
+    
+        let used = [] in
+        let filter_used_instr instr = 
+            if VarSet.is_empty 
+                (Stmt.iter_rexpr instr 
+                |> Iter.map (function `Expr e -> e | `Var v -> Expr.BasilExpr.rvar v)
+                |> List.flatten 
+                |> VarSet.of_list 
+                |> VarSet.inter web) 
+            then false else true
 
-      while !VarSet.is_empty (VarSet.diff active_used used) do
-          List.map add_used 
-              VarSet.diff 
-              (instructions |> List.map Stmt.iter_rexpr 
-              |> Iter.map (function `Expr e -> e | `Var v -> Expr.BasilExpr.rvar v)
-              |> List.flatten 
-              |> VarSet.of_list 
-              |> VarSet.inter web) used |> VarSet.to_list
-      
-      let live = VarSet.inter defined used in
+        let active_used = instructions |> List.filter filter_used_instr |> VarSet.of_list in
+        let add_used v' =
+            active = VarSet.union active_used SSIfy.VariableRenaming.defs v';
+            used = VarSet.union used v' in
 
-  end 
+        while !VarSet.is_empty (VarSet.diff active_used used) do
+            List.map add_used 
+                VarSet.diff 
+                (instructions |> List.map Stmt.iter_rexpr 
+                |> Iter.map (function `Expr e -> e | `Var v -> Expr.BasilExpr.rvar v)
+                |> List.flatten 
+                |> VarSet.of_list 
+                |> VarSet.inter web) used |> VarSet.to_list
+        
+        let live = VarSet.inter defined used *)
+        
+  end
 
-  let ssify (v: Var.t) pv =
-    let split var splitting_strategy =
-      Printf.printf "split"
+  let ssify (v: Var.t) proc =
+    (* let cfg = match Procedure.graph proc with 
+        | Some g -> g | None -> Procedure.G.empty
+    in *)
+    let splitting_strategy = create_range_analysis_splitting_strategy proc v in
+    let split_proc, non_actual_insts = SplitLiveRange.split v splitting_strategy proc in
+    let clean_proc = VariableRenaming.rename v split_proc 
+    (* |> DeadCodeElim.clean non_actual_insts v  *)
     in
-    let rename var =
-      Printf.printf "rename"
-    in
-    let clean var =
-      Printf.printf "clean"
-    in
-    split v pv; rename v; clean v;
+    clean_proc
 end
 
 
@@ -854,6 +975,9 @@ proc @OY() -> (OY_out:bv64)
   Program.output_proc_pretty stdout proc';
   Printf.printf "\n\n -----------\n RENAME \n ---------\n\n";
     Program.output_proc_pretty stdout proc_rename;
+  let proc_split = SSIfy.ssify v proc in
+    Program.output_proc_pretty stdout proc_split;
+
   [%expect
     {|
     proc @main(i:bv64)  -> (out:bv64) {  }
@@ -924,6 +1048,39 @@ proc @OY() -> (OY_out:bv64)
        ) [
          var v_4:bv64 := bvadd(v_3:bv64, 0x1:bv64);
          var out:bv64 := v_4:bv64;
+         return;
+       ]
+    ]proc @main(i:bv64)  -> (out:bv64) {  }
+
+
+    [
+       block %main_entry [
+         var v_10:bv64 := 0x0:bv64;
+         (var v_11:bv64=OX_out) := call @OX();
+         goto (%main_2,%main_1);
+       ];
+       block %main_1 ( var v_16:bv64 := phi(%main_entry -> v_11:bv64) ) [
+         guard bvsmod(i:bv64, 0x2:bv64);
+         var nam:bv64 := bvadd(v_16:bv64, 0xa:bv64);
+         var v_17:bv64 := bvadd(v_16:bv64, 69);
+         var tmp:bv64 := bvadd(i:bv64, 0x1:bv64);
+         goto (%main_return);
+       ];
+       block %main_2 [
+         guard boolnot(bvsmod(i:bv64, 0x2:bv64));
+         (var v_14:bv64=OY_out) := call @OY();
+         var v_15:bv64 := bvadd(v_14:bv64, 420);
+         goto (%main_2_1);
+       ];
+       block %main_2_1 [
+         var namnam:bv64 := bvor(v_15:bv64, 0xffffffff:bv64);
+         goto (%main_return);
+       ];
+       block %main_return (
+         var v_12:bv64 := phi(%main_2_1 -> v_15:bv64, %main_1 -> v_17:bv64)
+       ) [
+         var v_13:bv64 := bvadd(v_12:bv64, 0x1:bv64);
+         var out:bv64 := v_13:bv64;
          return;
        ]
     ]
