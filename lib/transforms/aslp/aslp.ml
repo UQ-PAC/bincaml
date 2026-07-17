@@ -77,7 +77,17 @@ let stmt_of_aarch64_intrin ?error :
     if it does not exist. *)
 let aarch64_mem_of_prog prog =
   Program.get_decl_by_name "$mem" prog |> function
-  | Some (Variable { binding }) -> (prog, binding)
+  | Some (Variable { binding }) ->
+      if
+        not
+          (Types.equal (Var.typ binding)
+             Types.(Map (Bitvector 64, Bitvector 8)))
+      then
+        Logs.warn (fun m ->
+            m
+              "Declared with unexpected type; lifter may not produce \
+               well-typed or correct code.");
+      (prog, binding)
   | None ->
       let mem =
         Var.create "$mem" ~scope:Var.GlobalVarShared
@@ -90,6 +100,7 @@ let aarch64_mem_of_prog prog =
           (Program.Variable { binding = mem; attrib; classification })
       in
       (prog, mem)
+  | _ -> failwith "$mem already declared as non-variable"
 
 (** {1 Main Bincaml IR transformation functions} *)
 
