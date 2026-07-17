@@ -79,6 +79,9 @@ module SSIfy = struct
         (block_id, Statement {index = old_stmt.index ; statement = stmt'})
   end
 
+  module VertexSet = CCSet.Make (Procedure.Vert)
+  module InstructionSet = CCSet.Make (Instruction)
+
   (* Procedure.G.compute_dom_front *)
   module Dom = Graph.Dominator.Make (Procedure.G)
 
@@ -594,7 +597,7 @@ module SSIfy = struct
       let instructions = List.map (Block.stmts_iter |> Iter.to_list) Procedure.blocks_to_list |> List.flatten in
       (* Filter instructions to get only instructions that define variables in web *)
       (* We get the assigned variables for the instructions, then convert to set, then check if web intersect assigned_vars is empty*)
-      let filter_def_instr instr = if VarSet.is_empty (VarSet.inter (Stmt.assigned instr) web) then false else true
+      let filter_def_instr instr = if VarSet.is_empty (VarSet.inter (Stmt.assigned instr) web) then false else true in
       let active_def = List.filter_map (function | Stmt.Instr_Assign attrib al -> Some attrib al | _ -> None ) instructions |> List.filter filter_def_instr |> VarSet.of_list in
       let add_def v' = 
           active_def = VarSet.union active_def SSIfy.VariableRenaming.uses v';
