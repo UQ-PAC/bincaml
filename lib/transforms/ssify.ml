@@ -175,6 +175,7 @@ module SSIfy = struct
 
   (* First step of SSI conversion - insertion of phi and sigma nodes *)
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   module SplitLiveRange = struct
     (* Returns a proc, list of non-actual instructions *)
     let insert_instructions (v : Var.t) (s_combined : Dom.vertex list) proc : ('a, 'b) Procedure.t * Instruction.t list = 
@@ -369,6 +370,8 @@ module SSIfy = struct
       else s_up @ (dom_frontier cfg vert |> List.map (Procedure.get_blocks_pred graph)) in
       List.map split_up i_up
 =======
+=======
+>>>>>>> Stashed changes
   (* TODO: make i_up and i_down list of VERTICES, not list of blocks - make i_up list of begin vertices, i_down list of end vertices *)
   let split variable i_up i_down proc = 
     let cfg = match Procedure.graph proc with 
@@ -386,11 +389,15 @@ module SSIfy = struct
                       |> List.map (Procedure.G.pred cfg))
                   else s_up @ (dom_frontier cfg i |> List.map (Procedure.G.pred cfg)) in
       
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
       
       (* Marks blocks reachable by going forwards *)
       (* Branch blocks have sigma nodes inserted, else parallel copy *)
       let s_down = [] in
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
           let is_branch (block : Procedure.Vert.t) = 
               if Procedure.get_blocks_succ graph block |> List.length > 1 then true else false in
@@ -401,6 +408,8 @@ module SSIfy = struct
                       else s_down :: compute_dom_frontier i in 
       List.map split_down (s_up :: defs variable :: i_down) in
 =======
+=======
+>>>>>>> Stashed changes
           let is_branch block = 
               if Procedure.get_blocks_succ proc block |> List.length > 1 then true else false in
                   let split_down i = if is_branch i then s_down :: (
@@ -408,11 +417,15 @@ module SSIfy = struct
                       |> List.concat_map (dom_frontier cfg)
                       |> List.map (Procedure.G.succ cfg)) 
                       else s_down :: (dom_frontier cfg i |> List.map (Procedure.G.succ cfg)) in 
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
       
       (* Traverse marked blocks, insert appropriate instruction *)
       let s = i_up :: i_down :: s_up :: s_down in
       let insert i = 
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
           let contains_def vert var = 
               match vert with
@@ -434,6 +447,8 @@ module SSIfy = struct
       List.map insert s in *)
   end
 =======
+=======
+>>>>>>> Stashed changes
           let contains_def vert variable = 
               match vert with
               Procedure.Vert.Begin succ_id -> succ_id |>
@@ -447,6 +462,9 @@ module SSIfy = struct
                 |> Iter.to_list 
                 |> List.mem variable
               | _ -> () in
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
       if !contains_def i variable then 
@@ -634,6 +652,7 @@ module SSIfy = struct
 
   module DeadCodeElim = struct
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     let cleanup (live : VarSet.t) proc (non_actual_insts : Instruction.t list) =
       let web = VarSet.of_list !new_renames in
       List.fold_left (fun curr_proc (inst : Instruction.t) -> 
@@ -704,6 +723,8 @@ module SSIfy = struct
         
   end
 =======
+=======
+>>>>>>> Stashed changes
 
   (* Third step - dead and undefined code elimination *)
   let clean variable =
@@ -760,6 +781,9 @@ module SSIfy = struct
       let live = VarSet.inter defined used in
 
   end 
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
   let ssify (v: Var.t) pv =
