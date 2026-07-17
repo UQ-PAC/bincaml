@@ -346,33 +346,50 @@ module SSIfy = struct
 
   (* Construction of s_up and s_down *)
   (* TODO: make i_up and i_down list of VERTICES, not list of blocks - make i_up list of begin vertices, i_down list of end vertices *)
-  let split variable (i_up : Dom.vertex list) (i_down : Dom.vertex list) proc : ('a, 'b) Procedure.t = 
+  let split variable (i_up : Dom.vertex list) (i_down : Dom.vertex list) (proc : ('a, 'b) Procedure.t) = 
     let cfg = match Procedure.graph proc with 
       | Some g -> g | None -> Procedure.G.empty in
 
+    let defs_of_v = Procedure.G.fold_vertex (fun vert dov ->
+        match vert with 
+        | Procedure.Vert.Begin bid ->
+          let block = Procedure.find_block proc bid in
+          if Iter.mem variable (Block.assigned_vars_iter block) then (
+            vert :: dov
+          ) else (
+            dov
+          )
+        | _ -> dov
+      ) cfg [] in
+
       (* Marks blocks reachable by going backwards *)
       (* Join blocks have phi nodes inserted, else parallel copy *)
-      let s_up = List.fold_left (fun s_up_list vert ->  
-      (* Checks whether a program point is a join node by checking the number of predecessors *)
       let is_join vert =
         if Procedure.get_blocks_pred proc vert |> List.length > 1 then true else false in
-      let split_up i = if is_join i then s_up_list @ ( 
-        Procedure.G.pred cfg i 
+      let s_up = List.fold_left (fun s_up_list vert ->  
+      (* Checks whether a program point is a join node by checking the number of predecessors *)
+      
+      if is_join vert then s_up_list @ ( 
+        Procedure.G.pred cfg vert
         |> List.concat_map (dom_frontier cfg)
-        |> List.map (Procedure.G.pred cfg))
-      else s_up_list @ (dom_frontier cfg i |> List.map (Procedure.G.pred cfg))
-      ) [] i_up in
+        |> List.map (Procedure.G.pred cfg) |> List.flatten)
+      else s_up_list @ (dom_frontier cfg vert |> List.map (Procedure.G.pred cfg) |> List.flatten))
+       [] i_up in
 
       (* Marks blocks reachable by going forwards *)
       (* Branch blocks have sigma nodes inserted, else parallel copy *)
-      let s_down = List.fold (fun s_down_list vert ->
-        let is_branch block = 
-        if (Procedure.get_blocks_succ proc block |> List.length) > 1 then true else false in
-      let split_down i = if is_branch i then s_down @ (
-        Procedure.G.succ cfg i 
+      let is_branch block = 
+      if (Procedure.get_blocks_succ proc block |> List.length) > 1 then true else false in
+      let s_down = List.fold_left (fun s_down_list vert ->
+        if is_branch vert then 
+          s_down_list @ 
+        (Procedure.G.succ cfg vert 
         |> List.concat_map (dom_frontier cfg)
-        |> List.map (Procedure.G.succ cfg)) 
-        else s_down @ (dom_frontier cfg i |> List.map (Procedure.G.succ cfg)) in ) [] (s_up @ defs variable @ s_down)
+        |> List.map (Procedure.G.succ cfg) |> List.flatten) 
+        else 
+          s_down_list @ 
+          (dom_frontier cfg vert 
+          |> List.map (Procedure.G.succ cfg) |> List.flatten)) [] (s_up @ defs_of_v @ i_down) in
 
       (* Traverse marked blocks, insert appropriate instruction *)
       let s = i_up @ i_down @ s_up @ s_down in
