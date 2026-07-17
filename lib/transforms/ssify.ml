@@ -580,6 +580,23 @@ module SSIfy = struct
       visit_begin_node proc Procedure.Vert.Entry
   end
 
+  let get_all_instructions proc =
+    Procedure.fold_blocks_topo_fwd (fun all_insts_set bid block -> 
+      let phi_insts = 
+        List.fold_left (fun all_set phi -> 
+          let inst = Instruction.create_phi_inst bid phi.Block.lhs phi.Block.rhs
+          in InstructionSet.add inst all_set
+        ) all_insts_set block.phis 
+      in
+      let stmt_insts =
+        Vector.foldi (fun index all_set stmt -> 
+          let inst = Instruction.create_stmt_inst bid index stmt in
+          InstructionSet.add inst all_set
+        ) all_insts_set block.stmts
+      in
+      InstructionSet.union phi_insts stmt_insts |> InstructionSet.union all_insts_set
+    ) InstructionSet.empty proc
+
   module DeadCodeElim = struct
     (* v is just there because the main clean function currently doesn't exists. Remove it when adding it to the main clean function, since it is
     the same v*)
@@ -633,7 +650,10 @@ module SSIfy = struct
         )
       ) proc non_actual_insts
       
-
+    let clean (v : Var.t) proc (non_actual_insts : Instruction.t list) (original_phi_count : int)= 
+      let web = VarSet.of_list !new_renames in
+      let all_insts = get_all_instructions proc in 
+      ()
     (* Active is the set of actual instructions that contain a v' of web in its defs or uses *)
 
     (* Third step - dead and undefined code elimination *)
