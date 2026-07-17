@@ -83,16 +83,16 @@ module SSIfy = struct
 
   module InstructionSet = CCSet.Make (Instruction)
 
-  (* Procedure.G.compute_dom_front *)
-  module Dom = Graph.Dominator.Make (Procedure.G)
 
-  (* module Nam = struct
+  module Nam = struct
   include Procedure.G
   let succ = pred
   include Procedure.RevG
   end 
-  module RevDom = Graph.Dominator.Make (Nam) *)
+  module RevDom = Graph.Dominator.Make (Nam)
 
+  (* Procedure.G.compute_dom_front *)
+  module Dom = Graph.Dominator.Make (Procedure.G)
   (* Map from Var to (BlockID, Instruction) *)
   module DefUseMap = CCMultiMap.Make (Var) (Instruction)
 
@@ -144,8 +144,10 @@ module SSIfy = struct
   let dom_frontier (graph : Dom.t) (vertex : Dom.vertex) : VertexSet.t = 
     let idom = Dom.compute_idom graph Procedure.Vert.Entry in
     let dom_tree = Dom.idom_to_dom_tree graph idom in 
+    let df = 
     Dom.compute_dom_frontier graph dom_tree idom vertex
     |> VertexSet.of_list
+    in df
 
   let add_phi proc (block_id : ID.t) (var : Var.t) (pred_block_ids : ID.t list) =
     let block_to_add_phi_to = Procedure.find_block proc block_id in
@@ -376,23 +378,11 @@ module SSIfy = struct
       in proc_and_list
 
     let split (v : Var.t) ((i_up : VertexSet.t), (i_down : VertexSet.t)) proc =
-      let cfg = match Procedure.graph proc with | Some g -> g | None -> Procedure.G.empty in
+      let cfg : Dom.t = match Procedure.graph proc with | Some g -> g | None -> Procedure.G.empty in
+      let rev_cfg : RevDom.t = match Procedure.graph proc with | Some g -> g | None -> Procedure.G.empty in
       let is_join vertex = (match vertex with | Procedure.Vert.Begin block_id -> if Procedure.G.pred cfg vertex |> List.length > 1 then true else false | _ -> false) in
       let is_branch vertex = (match vertex with | Procedure.Vert.End block_id -> if Procedure.G.succ cfg vertex |> List.length > 1 then true else false | _ -> false) in
-      let is_branch_successor vertex = (
-        match vertex with 
-        | Procedure.Vert.Begin block_id -> 
-          let pred_verts = Procedure.G.pred cfg vertex in
-          let rec check_preds (pred_list : Dom.vertex list) =
-            match pred_list with
-            | [] -> false
-            | pred_vert :: tail ->
-              if is_branch pred_vert then true else check_preds tail
-            in
-            check_preds pred_verts
-        | _ -> false
-        ) in
-
+      
       let defs_of_v : VertexSet.t = Procedure.G.fold_vertex (fun vert dovs ->
         match vert with 
         | Procedure.Vert.Begin bid ->
@@ -406,25 +396,17 @@ module SSIfy = struct
       ) cfg VertexSet.empty
 
       in
-      (* let s_up = List.fold_left (fun sup vert ->
+      let s_up = VertexSet.fold (fun vert sups -> 
         if is_join vert then (
-
-        )  
-      ) List.empty i_up
-          in
-          s_up *)
-      let s_up = VertexSet.empty in
-
-      (* let s_down = List.fold_left (fun sdown vert -> 
-        if is_branch vert then (
-          Procedure.G.fold_succ (fun succ_vert sdown' -> 
-            sdown' @ (dom_frontier cfg succ_vert)  
-          ) cfg vert sdown
+          Procedure.G.fold_pred (fun pred_vert sups' ->
+            VertexSet.union sups' (dom_frontier rev_cfg pred_vert)
+          ) rev_cfg vert sups
         ) else (
-          sdown @ (dom_frontier cfg vert)
+          VertexSet.union sups (dom_frontier rev_cfg vert)
         )
-      ) (List.empty) (s_up @ defs_of_v @ i_down)
-      in *)
+      ) (i_up) (VertexSet.empty)
+      in
+
       let s_down = VertexSet.fold (fun vert sdown -> 
         if is_branch vert then (
           Procedure.G.fold_succ (fun succ_vert sdown' ->
@@ -436,63 +418,8 @@ module SSIfy = struct
       ) (VertexSet.union s_up defs_of_v |> VertexSet.union i_down) (VertexSet.empty)
       in 
 
-
-      (* let s_combined = List.sort_uniq ~cmp:Procedure.Vert.compare (i_up @ i_down @ s_up @ s_down) in *)
       let s_combined = VertexSet.union i_up i_down |> VertexSet.union s_up |> VertexSet.union s_down in
       insert_instructions v s_combined proc
-
-
-      (* Construction of s_up and s_down *)
-      
-
-
-      (* Marks blocks reachable by going backwards *)
-      (* Join blocks have phi nodes inserted, else parallel copy *)
-      
-      (* let s_up = [] in
-      (* Checks whether a program point is a join node by checking the number of predecessors *)
-      let is_join (vert : Procedure.Vert.t) = if Procedure.get_blocks_pred proc vert |> List.length > 1 then true else false in
-      
-      let split_up i = if is_join i then s_up @ (i 
-          |> Procedure.get_blocks_pred proc
-          |> List.map (dom_frontier cfg vert)
-          |> List.map (Procedure.get_blocks_pred proc))
-      else s_up @ (dom_frontier cfg vert |> List.map (Procedure.get_blocks_pred graph)) in
-      List.map split_up i_up
-      
-      (* Marks blocks reachable by going forwards *)
-      (* Branch blocks have sigma nodes inserted, else parallel copy *)
-      let s_down = [] in
-          let is_branch (block : Procedure.Vert.t) = 
-              if Procedure.get_blocks_succ graph block |> List.length > 1 then true else false in
-                  let split_down i = if is_branch i then s_down :: (i 
-                      |> Procedure.get_blocks_succ graph 
-                      |> List.map compute_dom_frontier
-                      |> List.map (Procedure.get_blocks_succ graph) 
-                      else s_down :: compute_dom_frontier i in 
-      List.map split_down (s_up :: defs variable :: i_down) in
-      
-      (* Traverse marked blocks, insert appropriate instruction *)
-      let s = i_up :: i_down :: s_up :: s_down in
-      let insert i = 
-          let contains_def vert var = 
-              match vert with
-          | Procedure.G.Vert.Begin succ_id -> Procedure.find_block succ_id |>
-              |> Block.assigned_vars_iter 
-              |> Iter.to_list 
-              |> List.mem var in
-          | Procedure.G.Vert.End pred_id -> Procedure.find_block pred_id |> 
-              |> Block.assigned_vars_iter 
-              |> Iter.to_list 
-              |> List.mem var in
-          | _ -> () in
-
-      if !contains_def i variable then 
-          match i.t with 
-      | Procedure.Vert.Begin -> if is_join i then insert_sigma i variable in
-      | Procedure.Vert.End -> if is_branch then insert_phi i variable in
-      | _ -> insert_copy variable in
-      List.map insert s in *)
   end
 
   module VariableRenaming = struct
@@ -926,8 +853,8 @@ proc @main(i:bv64) -> (out:bv64)
     block %main_2
     [
       guard(boolnot(bvsmod(i, 2:bv64)));
-      (var v:bv64) := call @OY();
-      var v:bv64 := bvadd(v, 420);
+      (var v:bv64=OY_out) := call @OY();
+      var v:bv64 := bvadd(v:bv64, 420);
       goto(%main_2_1);
     ];
 
