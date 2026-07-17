@@ -49,14 +49,16 @@ let%expect_test "lifting is sub-quadratic" =
       make_big_program
   in
 
-  let scale = 6 and threshold = 8 in
+  let scale = 15 and threshold = 20 in
   let big_t =
     millis_runtime_of Transforms.Aslp.transform_program
       (make_big_program (scale * base_size))
   in
+  (* Prior quadratic block modification function took 60.769706x longer when
+  should be 15x *)
   let actual_scale = big_t /. base_t in
   if big_t <=. Float.of_int threshold *. base_t then
-    Printf.printf "Pass: %dx bigger input took less than %x longer.\n" scale
+    Printf.printf "Pass: %dx bigger input took less than %dx longer.\n" scale
       threshold
   else begin
     Printf.printf "Found base_size of %d taking base_t of %fms.\n" base_size
