@@ -59,7 +59,13 @@ module type MapKey = sig
   val pretty : t -> Containers_pp.t
 end
 
-(** Lattice map type with a specified Top value *)
+(** Lattice which maps every value of type K in the universe to some value in V. Useful, for example, for representing
+    non-relational value domains where the set of program variables is not known in advance.
+
+    All binary operations are defined component-wise. The meaning, or "concretisation" of a lattice element is defined
+    by the user lattice, and care should be taken to ensure correct use w.r.t. this concretisation.
+
+*)
 module LatticeMap (K : MapKey) (V : TopLattice) = struct
   include (
     struct
