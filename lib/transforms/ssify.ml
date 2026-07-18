@@ -628,7 +628,7 @@ module SSIfy = struct
               (* Replace v' by ⊥ *)
               let replaced_inst = Instruction.replace_defs v' bot_var inst' |> Instruction.replace_uses v' bot_var
               in
-              replace_instruction inst replaced_inst curr_proc, replaced_inst
+              replace_instruction inst replaced_inst proc', replaced_inst
             ) else (
               proc', inst'
             ) 
@@ -665,76 +665,93 @@ module SSIfy = struct
       
     (* Original_phi_count is a map from block_id to an int representing their amount of original phis *)
     let clean (v : Var.t) proc (non_actual_insts : InstructionSet.t) = 
+      Program.output_proc_pretty stdout proc;
       let web = VarSet.of_list !new_renames in
       let all_insts = get_all_instructions proc in 
-      (* Loop through all_insts, and check if they're an actual instruction by
-          | Phi -> Automatically done by get_all_instructions
-          | Stmt -> Check if the block_id and index are the same. A non-actual instruction would only be a single
-            parallel copy for each block anyway *)
       let actual_insts = InstructionSet.diff all_insts non_actual_insts in
-      InstructionSet.iter (fun inst -> Format.printf "\n actual %a\n" Instruction.pp inst) actual_insts;
-      InstructionSet.iter (fun inst -> Format.printf "\n nonactual %a\n" Instruction.pp inst) non_actual_insts;
-      (* let active_defs = InstructionSet.fold (fun inst curr_set -> 
-        
-        ) all_insts InstructionSet.emptycd
-      in *)
-      proc
-    (* Active is the set of actual instructions that contain a v' of web in its defs or uses *)
+      InstructionSet.iter (fun inst -> Format.printf "\nactual instruction: %a\n" Instruction.pp inst) actual_insts;
+      InstructionSet.iter (fun inst -> Format.printf "\nnon-actual instruction: %a\n" Instruction.pp inst) non_actual_insts;
 
-    (* Third step - dead and undefined code elimination *)
-    (* let clean variable =
-        (* Renamed variables come from rename *)
-        let web = VarSet.of_list !new_renames in
-        let defined = in
-        
-        (* Get all instructions from the CFG *)
-        let instructions = List.map Block.stmts_iter Procedure.blocks_to_list |> List.flatten in
-        (* Filter instructions to get only instructions that define variables in web *)
-        (* We get the assigned variables for the instructions, then convert to set, then check if web intersect assigned_vars is empty*)
-        let filter_def_instr instr = if VarSet.is_empty (VarSet.inter (Stmt.assigned instr) web) then false else true
-        let active_def = List.filter_map (function | Stmt.Instr_Assign attrib al -> Some attrib al | _ -> None ) instructions |> List.filter filter_def_instr |> VarSet.of_list in
-        let add_def v' = 
-            active_def = VarSet.union active_def SSIfy.VariableRenaming.uses v';
-            defined = VarSet.union defined v' in                 
+      (* active <- inst|inst actual instruction and web ∩ inst.defs != null *)
+      let active_defs = InstructionSet.filter (fun inst ->
+        inst
+        |> snd
+        |> Instruction.var_defines
+        |> VarSet.of_iter
+        |> VarSet.inter web
+        |> VarSet.is_empty
+        |> not
+        (* VarSet.inter web (Instruction.var_defines (snd inst) |> VarSet.of_iter) |> VarSet.is_empty |> not  *)
+      ) actual_insts in
 
-        while !VarSet.is_empty (VarSet.diff active_def defined) do
-            List.map add_def 
-            (VarSet.to_list 
-            (VarSet.diff 
-            (VarSet.inter web 
-                (List.filter_map 
-                    (function | Stmt.Instr_Assign attrib al -> Some attrib al | _ -> None ) instructions )
-                    |> List.filter filter_def_instr instructions 
-                    |> List.map Stmt.assigned 
-                    |> List.flatten 
-                    |> VarSet.of_list)))
+      let initial_defined = VarSet.empty in 
+      (* While there exists an instruction in tthe active_defs set such that
+          the intersection of web and inst.defs - defined_var_set is not null *)
     
-        let used = [] in
-        let filter_used_instr instr = 
-            if VarSet.is_empty 
-                (Stmt.iter_rexpr instr 
-                |> Iter.map (function `Expr e -> e | `Var v -> Expr.BasilExpr.rvar v)
-                |> List.flatten 
-                |> VarSet.of_list 
-                |> VarSet.inter web) 
-            then false else true
+      let rec create_defined_while_loop (curr_active_defs : InstructionSet.t) (curr_defined : VarSet.t) : VarSet.t =
+        let unregistered_def_vars (inst : Instruction.t) = 
+          VarSet.inter web (Instruction.var_defines (snd inst) |> VarSet.of_iter) 
+          |> VarSet.diff curr_defined
+        in
+        let guard (inst : Instruction.t) =  
+          unregistered_def_vars inst
+          |> VarSet.is_empty |> not in
+        if (InstructionSet.exists guard curr_active_defs) then (
+          let vars = InstructionSet.find_first guard curr_active_defs |> unregistered_def_vars in
+          let new_active, new_defs = VarSet.fold (fun var (active', defined') -> 
+            let var_uses = DefUseMap.find !uses var |> InstructionSet.of_list in
+            let single_var = VarSet.add var VarSet.empty in
+            (InstructionSet.union var_uses active', VarSet.union single_var defined')
+          ) vars (curr_active_defs, curr_defined )
+          in
+          create_defined_while_loop new_active new_defs
+        ) else (
+          curr_defined
+        )
+      in
+      let defined = create_defined_while_loop active_defs initial_defined in
 
-        let active_used = instructions |> List.filter filter_used_instr |> VarSet.of_list in
-        let add_used v' =
-            active = VarSet.union active_used SSIfy.VariableRenaming.defs v';
-            used = VarSet.union used v' in
+      let initial_uses = VarSet.empty in
+      let active_uses = InstructionSet.filter (fun inst ->
+        inst
+        |> snd
+        |> Instruction.var_uses
+        |> VarSet.of_iter
+        |> VarSet.inter web
+        |> VarSet.is_empty
+        |> not
+      ) actual_insts 
+      in
 
-        while !VarSet.is_empty (VarSet.diff active_used used) do
-            List.map add_used 
-                VarSet.diff 
-                (instructions |> List.map Stmt.iter_rexpr 
-                |> Iter.map (function `Expr e -> e | `Var v -> Expr.BasilExpr.rvar v)
-                |> List.flatten 
-                |> VarSet.of_list 
-                |> VarSet.inter web) used |> VarSet.to_list
-        
-        let live = VarSet.inter defined used *)
-        
+      let rec create_uses_while_loop (curr_active_uses : InstructionSet.t) (curr_used : VarSet.t) : VarSet.t =
+        let unregistered_use_vars (inst : Instruction.t) = 
+          VarSet.inter web (Instruction.var_uses (snd inst) |> VarSet.of_iter) 
+          |> VarSet.diff curr_used
+        in
+        let guard (inst : Instruction.t) =  
+          Instruction.var_uses (snd inst) |> VarSet.of_iter |> VarSet.diff curr_used |> VarSet.is_empty |> not
+          (* unregistered_use_vars inst
+          |> VarSet.is_empty |> not *)
+        in
+        if (InstructionSet.exists guard curr_active_uses) then (
+          let vars = InstructionSet.find_first guard curr_active_uses |> unregistered_use_vars in
+          let new_active, new_used = VarSet.fold (fun var (active', used') -> 
+            let var_defs = DefUseMap.find !defs var |> InstructionSet.of_list in
+            let single_var = VarSet.add var VarSet.empty in
+            (InstructionSet.union var_defs active', VarSet.union single_var used')
+          ) vars (curr_active_uses, curr_used )
+          in
+          create_uses_while_loop new_active new_used
+        ) else (
+          curr_used
+        )
+      in
+      let used = create_uses_while_loop active_uses initial_uses in
+      let live = VarSet.inter defined used in
+      VarSet.iter (fun var -> Format.printf "defvar %a\n" Var.pp var) defined;
+      VarSet.iter (fun var -> Format.printf "usedvar %a\n" Var.pp var) used;
+      VarSet.iter (fun var -> Format.printf "livevar %a\n" Var.pp var) live;
+      cleanup live proc non_actual_insts v        
   end
 
   let ssify (v: Var.t) proc =
@@ -871,7 +888,6 @@ proc @OY() -> (OY_out:bv64)
        ]
     ]
     |}]
-
 
 let%expect_test "test_insert_instructions_during_split" =
   let lst =
@@ -1023,9 +1039,7 @@ proc @OY() -> (OY_out:bv64)
        ]
     ]
     |}]
-
-
-    
+ 
 let%expect_test "test_SSIFY" =
   let lst =
     Loader.Loadir.ast_of_string
@@ -1099,63 +1113,6 @@ proc @OY() -> (OY_out:bv64)
 
   [%expect
     {|
-     actual (("%main_entry", 0),
-              Statement {index = 0; statement = var v_1:bv64 := 0x0:bv64})
-
-     actual (
-    ("%main_entry", 0),
-    Statement {index = 1; statement = (var v_2:bv64=OX_out) := call @OX()})
-
-     actual (
-    ("%main_1", 1),
-    Statement {index = 0; statement = guard bvsmod(i:bv64, 0x2:bv64)})
-
-     actual (
-    ("%main_1", 1),
-    Statement {index = 1; statement = var nam:bv64 := bvadd(v_7:bv64, 0xa:bv64)})
-
-     actual (
-    ("%main_1", 1),
-    Statement {index = 2; statement = var v_8:bv64 := bvadd(v_7:bv64, 69)})
-
-     actual (
-    ("%main_1", 1),
-    Statement {index = 3; statement = var tmp:bv64 := bvadd(i:bv64, 0x1:bv64)})
-
-     actual (
-    ("%main_2", 2),
-    Statement {index = 0; statement = guard boolnot(bvsmod(i:bv64, 0x2:bv64))})
-
-     actual (
-    ("%main_2", 2),
-    Statement {index = 1; statement = (var v_5:bv64=OY_out) := call @OY()})
-
-     actual (
-    ("%main_2", 2),
-    Statement {index = 2; statement = var v_6:bv64 := bvadd(v_5:bv64, 420)})
-
-     actual (
-    ("%main_2_1", 3),
-    Statement {index = 0;
-      statement = var namnam:bv64 := bvor(v_6:bv64, 0xffffffff:bv64)})
-
-     actual (
-    ("%main_return", 4),
-    Statement {index = 0; statement = var v_4:bv64 := bvadd(v_3:bv64, 0x1:bv64)})
-
-     actual (
-    ("%main_return", 4),
-    Statement {index = 1; statement = var out:bv64 := v_4:bv64})
-
-     nonactual (
-    ("%main_1", 1),
-    (Phi { Block.lhs = v_7:bv64; rhs = [(("%main_entry", 0), v_2:bv64)] }))
-
-     nonactual (
-    ("%main_return", 4),
-    (Phi
-       { Block.lhs = v_3:bv64;
-         rhs = [(("%main_2_1", 3), v_6:bv64); (("%main_1", 1), v_8:bv64)] }))
     proc @main(i:bv64)  -> (out:bv64) {  }
 
 
@@ -1190,5 +1147,94 @@ proc @OY() -> (OY_out:bv64)
          return;
        ]
     ]
-    |}]
+    actual instruction: (("%main_entry", 0),
+                          Statement {index = 0;
+                            statement = var v_1:bv64 := 0x0:bv64})
 
+    actual instruction: (
+    ("%main_entry", 0),
+    Statement {index = 1; statement = (var v_2:bv64=OX_out) := call @OX()})
+
+    actual instruction: (
+    ("%main_1", 1),
+    Statement {index = 0; statement = guard bvsmod(i:bv64, 0x2:bv64)})
+
+    actual instruction: (
+    ("%main_1", 1),
+    Statement {index = 1; statement = var nam:bv64 := bvadd(v_7:bv64, 0xa:bv64)})
+
+    actual instruction: (
+    ("%main_1", 1),
+    Statement {index = 2; statement = var v_8:bv64 := bvadd(v_7:bv64, 69)})
+
+    actual instruction: (
+    ("%main_1", 1),
+    Statement {index = 3; statement = var tmp:bv64 := bvadd(i:bv64, 0x1:bv64)})
+
+    actual instruction: (
+    ("%main_2", 2),
+    Statement {index = 0; statement = guard boolnot(bvsmod(i:bv64, 0x2:bv64))})
+
+    actual instruction: (
+    ("%main_2", 2),
+    Statement {index = 1; statement = (var v_5:bv64=OY_out) := call @OY()})
+
+    actual instruction: (
+    ("%main_2", 2),
+    Statement {index = 2; statement = var v_6:bv64 := bvadd(v_5:bv64, 420)})
+
+    actual instruction: (
+    ("%main_2_1", 3),
+    Statement {index = 0;
+      statement = var namnam:bv64 := bvor(v_6:bv64, 0xffffffff:bv64)})
+
+    actual instruction: (
+    ("%main_return", 4),
+    Statement {index = 0; statement = var v_4:bv64 := bvadd(v_3:bv64, 0x1:bv64)})
+
+    actual instruction: (
+    ("%main_return", 4),
+    Statement {index = 1; statement = var out:bv64 := v_4:bv64})
+
+    non-actual instruction: (
+    ("%main_1", 1),
+    (Phi { Block.lhs = v_7:bv64; rhs = [(("%main_entry", 0), v_2:bv64)] }))
+
+    non-actual instruction: (
+    ("%main_return", 4),
+    (Phi
+       { Block.lhs = v_3:bv64;
+         rhs = [(("%main_2_1", 3), v_6:bv64); (("%main_1", 1), v_8:bv64)] }))
+    proc @main(i:bv64)  -> (out:bv64) {  }
+
+
+    [
+       block %main_entry [
+         var v_1:bv64 := 0x0:bv64;
+         (var v_2:bv64=OX_out) := call @OX();
+         goto (%main_2,%main_1);
+       ];
+       block %main_1 [
+         guard bvsmod(i:bv64, 0x2:bv64);
+         var nam:bv64 := bvadd(v_7:bv64, 0xa:bv64);
+         var v_8:bv64 := bvadd(v_7:bv64, 69);
+         var tmp:bv64 := bvadd(i:bv64, 0x1:bv64);
+         goto (%main_return);
+       ];
+       block %main_2 [
+         guard boolnot(bvsmod(i:bv64, 0x2:bv64));
+         (var v_5:bv64=OY_out) := call @OY();
+         var v_6:bv64 := bvadd(v_5:bv64, 420);
+         goto (%main_2_1);
+       ];
+       block %main_2_1 [
+         var namnam:bv64 := bvor(v_6:bv64, 0xffffffff:bv64);
+         goto (%main_return);
+       ];
+       block %main_return [
+         var v_4:bv64 := bvadd(v_3:bv64, 0x1:bv64);
+         var out:bv64 := v_4:bv64;
+         return;
+       ]
+    ]
+    |}]
