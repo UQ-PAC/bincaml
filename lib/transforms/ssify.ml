@@ -3,9 +3,12 @@ open Lang
 open Lang.Common
 open Containers
 
-module SSIfy = struct
-  (* TODO: reduce usage of ref *)
+(* TODO:
+  - Optimise usage of defs and uses - update and return them similar to the non-actual instructions set
+  - Make code optimizations
+*)
 
+module SSIfy = struct
   (* Represents the instruction, i.e. Phi or Statement *)
   module Instruction = struct
 
@@ -609,6 +612,30 @@ module SSIfy = struct
       InstructionSet.union phi_insts stmt_insts |> InstructionSet.union all_insts_set
     ) InstructionSet.empty proc
 
+  let get_var_uses_and_defs proc (v : Var.t) = 
+    Procedure.fold_blocks_topo_fwd (fun (uses, defs) bid block ->
+      let (phi_uses, phi_defs) = 
+        List.fold_left (fun (use', def') phi ->
+          let inst = Instruction.create_phi_inst bid phi.Block.lhs phi.Block.rhs
+        in
+        let pu = if Iter.mem v (Instruction.var_uses (snd inst)) then InstructionSet.add inst use' else use'
+      in
+      let pd = if Iter.mem v (Instruction.var_defines (snd inst)) then InstructionSet.add inst def' else def'
+    in
+    (pu, pd)) (uses, defs) block.phis
+  in
+  let (stmt_uses, stmt_defs) = 
+  Vector.foldi (fun index (use', def') stmt ->
+    let inst = Instruction.create_stmt_inst bid index stmt in
+    let pu = if Iter.mem v (Instruction.var_uses (snd inst)) then InstructionSet.add inst use' else use'
+      in
+      let pd = if Iter.mem v (Instruction.var_defines (snd inst)) then InstructionSet.add inst def' else def'
+    in
+    (pu,pd)) (uses, defs) block.stmts
+  in
+  (InstructionSet.union phi_uses stmt_uses, InstructionSet.union phi_defs stmt_defs)
+      ) (InstructionSet.empty, InstructionSet.empty) proc
+
 
   module DeadCodeElim = struct
     (* v is just there because the main clean function currently doesn't exists. Remove it when adding it to the main clean function, since it is
@@ -644,7 +671,7 @@ module SSIfy = struct
                 let unmodified_block = Procedure.find_block proc_step_one block_id in
                 let unmodified_phis = unmodified_block.phis in
                 let new_phis = List.filter (fun phi -> 
-                  Block.equal_phi Var.equal phi bot_phi
+                  Block.equal_phi Var.equal phi bot_phi |> not
                 ) unmodified_phis in
                 let modified_block = {unmodified_block with phis = new_phis} in
                 Procedure.update_block proc_step_one block_id modified_block
@@ -705,26 +732,19 @@ module SSIfy = struct
            g
         in
         (* InstructionSet.iter (fun inst -> Format.printf "CURR_ACTIVE %a\n" Instruction.pp inst) curr_active_defs; *)
-        if (InstructionSet.exists guard curr_active_defs) then (
           (* Printf.printf "TRUEEEEEEEEEE"; *)
-        let insttt =
-          InstructionSet.to_seq curr_active_defs
-          |> Seq.find guard in
-          match insttt with
-          | None -> curr_defined
-          | Some inst -> (
-             let vars = inst |> unregistered_def_vars in
-          (* let vars = InstructionSet.find_first guard curr_active_defs |> unregistered_def_vars in *)
+        match Seq.find guard (InstructionSet.to_seq curr_active_defs) with
+        | None -> curr_defined
+        | Some inst -> (
+          let vars = inst |> unregistered_def_vars in
           let new_active, new_defs = VarSet.fold (fun var (active', defined') -> 
-            let var_uses = DefUseMap.find !uses var |> InstructionSet.of_list in
+            (* let var_uses = DefUseMap.find !uses var |> InstructionSet.of_list in *)
+            let var_uses = get_var_uses_and_defs proc var |> fst in
             let single_var = VarSet.add var VarSet.empty in
             (InstructionSet.union var_uses active', VarSet.union single_var defined')
           ) vars (curr_active_defs, curr_defined )
           in
-          create_defined_while_loop new_active new_defs)
-        ) else (
-          (* Printf.printf "FALSEEEEEEEE"; *)
-          curr_defined
+          create_defined_while_loop new_active new_defs
         )
       in
       let defined = create_defined_while_loop active_defs initial_defined in
@@ -752,32 +772,25 @@ module SSIfy = struct
           unregistered_use_vars inst
           |> VarSet.is_empty |> not
         in
-        if (InstructionSet.exists guard curr_active_uses) then (
-          let insttt =
-          InstructionSet.to_seq curr_active_uses
-           |> Seq.find guard in
-          match insttt with
-          | None -> curr_used
-          | Some inst -> (
-             let vars = inst |> unregistered_use_vars in
-          (* let vars = InstructionSet.find_first guard curr_active_uses |> unregistered_use_vars in *)
+        match Seq.find guard (InstructionSet.to_seq curr_active_uses) with
+        | None -> curr_used
+        | Some inst -> ( let vars = unregistered_use_vars inst in
           let new_active, new_used = VarSet.fold (fun var (active', used') -> 
-            let var_defs = DefUseMap.find !defs var |> InstructionSet.of_list in
+            (* let var_defs = DefUseMap.find !defs var |> InstructionSet.of_list in *)
+            let var_defs = get_var_uses_and_defs proc var |> snd in
             let single_var = VarSet.add var VarSet.empty in
             (InstructionSet.union var_defs active', VarSet.union single_var used')
           ) vars (curr_active_uses, curr_used )
           in
           create_uses_while_loop new_active new_used)
-        ) else (
-          curr_used
-        )
       in
+
       let used = create_uses_while_loop active_uses initial_uses in
       let live = VarSet.inter defined used in
-      Printf.printf "BBBBBBBBBBBBBBB\n";
+      (* Printf.printf "BBBBBBBBBBBBBBB\n";
       VarSet.iter (fun var -> Format.printf "defvar %a\n" Var.pp var) defined;
       VarSet.iter (fun var -> Format.printf "usedvar %a\n" Var.pp var) used;
-      VarSet.iter (fun var -> Format.printf "livevar %a\n" Var.pp var) live;
+      VarSet.iter (fun var -> Format.printf "livevar %a\n" Var.pp var) live; *)
       cleanup live proc non_actual_insts v        
   end
 
@@ -1140,25 +1153,6 @@ proc @OY() -> (OY_out:bv64)
 
   [%expect
     {|
-    BBBBBBBBBBBBBBB
-    defvar v_1:bv64
-    defvar v_2:bv64
-    defvar v_3:bv64
-    defvar v_4:bv64
-    defvar v_5:bv64
-    defvar v_6:bv64
-    defvar v_8:bv64
-    usedvar v_2:bv64
-    usedvar v_3:bv64
-    usedvar v_4:bv64
-    usedvar v_5:bv64
-    usedvar v_6:bv64
-    usedvar v_7:bv64
-    livevar v_2:bv64
-    livevar v_3:bv64
-    livevar v_4:bv64
-    livevar v_5:bv64
-    livevar v_6:bv64
     proc @main(i:bv64)  -> (out:bv64) {  }
 
 
@@ -1168,7 +1162,7 @@ proc @OY() -> (OY_out:bv64)
          (var v_2:bv64=OX_out) := call @OX();
          goto (%main_2,%main_1);
        ];
-       block %main_1 ( var ⊥:bv64 := phi(%main_entry -> v_2:bv64) ) [
+       block %main_1 ( var v_7:bv64 := phi(%main_entry -> v_2:bv64) ) [
          guard bvsmod(i:bv64, 0x2:bv64);
          var nam:bv64 := bvadd(v_7:bv64, 0xa:bv64);
          var v_8:bv64 := bvadd(v_7:bv64, 69);
@@ -1186,7 +1180,7 @@ proc @OY() -> (OY_out:bv64)
          goto (%main_return);
        ];
        block %main_return (
-         var v_3:bv64 := phi(%main_2_1 -> v_6:bv64, %main_1 -> ⊥:bv64)
+         var v_3:bv64 := phi(%main_2_1 -> v_6:bv64, %main_1 -> v_8:bv64)
        ) [
          var v_4:bv64 := bvadd(v_3:bv64, 0x1:bv64);
          var out:bv64 := v_4:bv64;
