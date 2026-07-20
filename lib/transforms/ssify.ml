@@ -686,7 +686,7 @@ module SSIfy = struct
         )
         | _ -> start_proc, nai
         in 
-        List.fold_left visit_begin_node (final_proc, final_nai) (get_dominated_vertices cfg node)
+        List.fold_left visit_begin_node (final_proc, final_nai) (get_dominated_vertices cfg node |> List.rev)
       in
       visit_begin_node (proc, non_actual_insts_split) Procedure.Vert.Entry
   end
@@ -1274,5 +1274,40 @@ prog entry @main;
   in
   let proc_split = SSIfy.ssify v proc in
     Program.output_proc_pretty stdout proc_split;
-[%expect 
+
+[%expect {|
+  proc @main(i:bv64)  -> (out:bv64) {  }
+
+
+  [
+     block %main_entry [ var v_1:bv64 := 0; goto (%main_2,%main_1); ];
+     block %main_1 ( var v_2:bv64 := phi(%main_entry -> v_1:bv64) ) [
+       guard bvsmod(i:bv64, 0x2:bv64);
+       var v_3:bv64 := bvadd(v_2:bv64, 2);
+       goto (%main_4,%main_3);
+     ];
+     block %main_3 ( var v_4:bv64 := phi(%main_1 -> v_3:bv64) ) [
+       guard bvsmod(i:bv64, 0x2:bv64);
+       var v_5:bv64 := bvadd(v_4:bv64, 0x3:bv64);
+       goto (%main_return);
+     ];
+     block %main_4 ( var v_6:bv64 := phi(%main_1 -> v_3:bv64) ) [
+       guard boolnot(bvsmod(i:bv64, 0x2:bv64));
+       var v_7:bv64 := bvadd(v_6:bv64, 0x4:bv64);
+       goto (%main_return);
+     ];
+     block %main_2 ( var v_8:bv64 := phi(%main_entry -> v_1:bv64) ) [
+       guard boolnot(bvsmod(i:bv64, 0x2:bv64));
+       var v_9:bv64 := bvadd(v_8:bv64, 1);
+       goto (%main_return);
+     ];
+     block %main_return (
+       var v_10:bv64 := phi(%main_2 -> v_9:bv64, %main_4 -> v_7:bv64,
+          %main_3 -> v_5:bv64)
+     ) [
+       var v_11:bv64 := bvadd(v_10:bv64, 0x1:bv64);
+       var out:bv64 := v_11:bv64;
+       return;
+     ]
   ]
+  |}]
