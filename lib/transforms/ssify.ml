@@ -656,7 +656,7 @@ module SSIfy = struct
             in
             (* If exists instruction d in n that defines v then *)
             if Iter.mem v (Stmt.iter_lvar stmt) then
-              set_def proc_step_two updated_inst1 curr_nai
+              set_def proc_step_two updated_inst1 nai_step_two
             else 
               proc_step_two, nai_step_two
             ) (proc_step_one, nai_step_one) block.stmts
@@ -1127,7 +1127,7 @@ proc @main(i:bv64) -> (out:bv64)
       var nam:bv64 := bvadd(v:bv64, 10:bv64);
       var v:bv64 := bvadd(v, v);
       var tmp:bv64 := bvadd(i, 1:bv64);
-      goto(%main_return);
+      goto(%main_return, %main_1);
     ];
 
     block %main_2
