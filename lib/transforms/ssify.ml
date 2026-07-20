@@ -18,6 +18,12 @@ open Containers
   - Optimise usage of defs and uses - update and return them similar to the non-actual instructions set, instead of using global refs
     - Also, update the def-use and use-def maps during the renaming process, so that it does not contain outdated instructions
   - Make code optimizations
+
+  KNOWN ISSUES:
+  - Currently does not operate correctly on procedures with a while loop. The rhs of a phi node uses the variable of the exit block rather than the
+    last block in the loop. For example, when an end-of-while-loop block branches to a predecessing block as well as a return block, the phi node of the start of the
+    loop uses the return block's v instead of the v in the end-of-while-loop block.
+    This could be a collision between sigma and phi nodes, or the stack is not being used correctly, or the visitation order is messing up when the program is non-linear.
 *)
 
 module SSIfy = struct
