@@ -1140,6 +1140,7 @@ proc @main(i:bv64) -> (out:bv64)
     block %main_2_1
     [
       var namnam:bv64 := bvor(v:bv64, 0xffffffff:bv64);
+      var v:bv64 := bvadd(v:bv64, 1);
       goto(%main_return);
     ];
 
@@ -1177,7 +1178,7 @@ proc @OY() -> (OY_out:bv64)
   let proc_split = SSIfy.ssify v proc in
     Program.output_proc_pretty stdout proc_split;
 
-  [%expect
+   [%expect
     {|
     proc @main(i:bv64)  -> (out:bv64) {  }
 
@@ -1213,3 +1214,65 @@ proc @OY() -> (OY_out:bv64)
        ]
     ]
     |}]
+
+let%expect_test "test_multiple_conditionals" =
+  let lst = 
+    Loader.Loadir.ast_of_string
+
+{|
+prog entry @main;
+  proc @main(i:bv64) -> (out:bv64)
+  [
+    block %main_entry
+    [
+      var v:bv64 := 0;
+      goto(%main_1, %main_2);
+    ];
+
+    block %main_1
+    [
+      guard(bvsmod(i, 2:bv64));
+      var v:bv64 := bvadd(v, 2);
+      goto(%main_3, %main_4);
+    ];
+
+    block %main_3
+    [
+      guard(bvsmod(i:bv64, 2:bv64));
+      var v := bvadd(v:bv64, 3:bv64);
+      goto(%main_return);
+    ];
+
+    block %main_4
+    [
+      guard(boolnot(bvsmod(i:bv64, 2:bv64)));
+      var v := bvadd(v:bv64, 4:bv64);
+      goto(%main_return);
+    ];
+
+    block %main_2
+    [
+      guard(boolnot(bvsmod(i:bv64, 2:bv64)));
+      var v:bv64 := bvadd(v:bv64, 1);
+      goto(%main_return);
+    ];
+
+    block %main_return
+      [
+      var v:bv64 := bvadd(v, 1:bv64);
+      return(v);
+      ];
+  ];
+|} 
+  in
+  let program = lst.prog in
+  let proc = Program.entry_proc_exn program in
+  let v =
+    match Procedure.lookup_local_decl proc "v" with
+    | Some v -> v
+    | None -> failwith "Bleh"
+  in
+  let proc_split = SSIfy.ssify v proc in
+    Program.output_proc_pretty stdout proc_split;
+[%expect 
+  ]
