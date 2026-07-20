@@ -3,7 +3,7 @@ open Lang
 open Lang.Common
 open Containers
 
-(** 3-part algorithm to construct an SSI representation of a program. 
+(** Naive implementation of a 3-part algorithm to construct an SSI representation of a program. 
     
     Based on chapter 13.2 from "SSA-based Compiler Design" (https://doi.org/10.1007/978-3-030-80515-9)
 
@@ -17,13 +17,14 @@ open Containers
 (* TODO:
   - Optimise usage of defs and uses - update and return them similar to the non-actual instructions set, instead of using global refs
     - Also, update the def-use and use-def maps during the renaming process, so that it does not contain outdated instructions
-  - Make code optimizations
+  - Make code optimizations - current code is quite inefficient
 
   KNOWN ISSUES:
   - Currently does not operate correctly on procedures with a while loop. The rhs of a phi node uses the variable of the exit block rather than the
     last block in the loop. For example, when an end-of-while-loop block branches to a predecessing block as well as a return block, the phi node of the start of the
     loop uses the return block's v instead of the v in the end-of-while-loop block.
     This could be a collision between sigma and phi nodes, or the stack is not being used correctly, or the visitation order is messing up when the program is non-linear.
+  - Null pointer analysis splitting strategy does not seem to be generated correctly (somehow)
 *)
 
 module SSIfy = struct
@@ -391,7 +392,7 @@ module SSIfy = struct
       in proc_and_nai_set
 
     (** A version that is a little more accurate to the book's algorithm *)
-    let insert_instructions_version2 (v : Var.t) (s_combined : Dom.vertex list) proc : ('a, 'b) Procedure.t * InstructionSet.t = 
+    let insert_instructions_version2 (v : Var.t) (s_combined : VertexSet.t) proc : ('a, 'b) Procedure.t * InstructionSet.t = 
       let cfg = match Procedure.graph proc with | Some g -> g | None -> Procedure.G.empty in
       let is_join vertex = (match vertex with | Procedure.Vert.Begin block_id -> if Procedure.G.pred cfg vertex |> List.length > 1 then true else false | _ -> false) in
       let is_branch vertex = (match vertex with | Procedure.Vert.End block_id -> if Procedure.G.succ cfg vertex |> List.length > 1 then true else false | _ -> false) in
@@ -430,7 +431,7 @@ module SSIfy = struct
       in
  
       let proc_and_list =
-        List.fold_left (fun (curr_proc, non_actual_insts) vert -> 
+        VertexSet.fold (fun vert (curr_proc, non_actual_insts) -> 
           match vert with
           | Procedure.Vert.Begin block_id | Procedure.Vert.End block_id -> 
             let block = Procedure.find_block curr_proc block_id in
@@ -470,7 +471,7 @@ module SSIfy = struct
             else
               (proc2, nai2) 
           | _ -> (curr_proc, non_actual_insts) 
-        ) (proc, InstructionSet.empty) s_combined 
+        ) s_combined (proc, InstructionSet.empty)
       in proc_and_list
 
     (** Splits the range of the program *)
@@ -523,7 +524,7 @@ module SSIfy = struct
       in 
 
       let s_combined = VertexSet.union i_up i_down |> VertexSet.union s_up |> VertexSet.union s_down in
-      insert_instructions v s_combined proc
+      insert_instructions_version2 v s_combined proc
   end
 
   (** Renames variable definitions and usages, and builds a def-use and use-def chain*)
@@ -1025,7 +1026,7 @@ proc @OY() -> (OY_out:bv64)
   in
   let cfg = match Procedure.graph proc with | Some g -> g | None -> Procedure.G.empty in
   let vertices = Procedure.G.fold_vertex (fun vert verts -> vert :: verts) cfg [] |> List.rev in
-  let proc', nai' = SSIfy.SplitLiveRange.insert_instructions_version2 v vertices proc  in
+  let proc', nai' = SSIfy.SplitLiveRange.insert_instructions_version2 v (SSIfy.VertexSet.of_list vertices) proc  in
   let proc_rename = SSIfy.VariableRenaming.rename v proc' nai' |> fst in
   Program.output_proc_pretty stdout proc';
   Printf.printf "\n\n -----------\n RENAME \n ---------\n\n";
