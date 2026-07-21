@@ -871,8 +871,8 @@ module SSIfy = struct
     let clean_proc = DeadCodeElim.clean v rename_info in
     clean_proc
 end
-(*    
-let%expect_test "test_rename" =
+    
+(*let%expect_test "test_rename" =
   let lst =
     Loader.Loadir.ast_of_string
       {|
@@ -951,7 +951,7 @@ proc @OY() -> (OY_out:bv64)
     | Some v -> v
     | None -> failwith "Bleh"
   in
-  let proc' = SSIfy.VariableRenaming.rename v proc SSIfy.InstructionSet.empty |> fst in
+  let proc' = SSIfy.VariableRenaming.rename v (proc SSIfy.InstructionSet.empty) |> fst in
   Program.output_proc_pretty stdout proc';
   [%expect
     {|
@@ -1141,9 +1141,8 @@ proc @OY() -> (OY_out:bv64)
          return;
        ]
     ]
-    |}]
-  *)
-(*   
+    |}]*)
+  
 let%expect_test "test_SSIFY" =
   let lst =
     Loader.Loadir.ast_of_string
@@ -1568,7 +1567,7 @@ let proc_split = SSIfy.ssify v proc in
      ];
      block %e5 [ var v_4:bv64 := bvadd(v_3:bv64, 67); return; ]
   ]
-  |}] *)
+  |}]
 
 
   let%expect_test "test_v_1" =
@@ -1701,3 +1700,92 @@ proc @OY() -> (OY_out:bv64)
        ]
     ]
     |}]
+
+let%expect_test "test_ssa_multi_deps_reconstruction" =
+  let lst = 
+    Loader.Loadir.ast_of_string
+
+{|
+prog entry @main;
+  proc @main()  -> () {  }
+
+
+  [
+    block %e [ 
+      var v_1:bv64 := 0;
+      var x:bv64 := 2;
+      goto (%e3,%e2,%e1);
+      ];
+     block %e1 (
+       var v_2:bv64 := phi(%e3 -> v_7:bv64, %e2 -> v_5:bv64, %e -> v_1:bv64)
+     ) [ 
+       var x := bvadd(x, 1);
+       var v_3:bv64 := bvadd(v_2:bv64, 1); goto (%e2); 
+      ];
+     block %e2 ( var v_4:bv64 := phi(%e1 -> v_3:bv64, %e -> v_1:bv64) ) [
+       var v_5:bv64 := v_4:bv64;
+       var x := bvadd(x, 2);
+       goto (%e4,%e1);
+     ];
+     block %e3 ( var v_6:bv64 := phi(%e -> v_1:bv64) ) [
+       var v_7:bv64 := bvadd(v_6:bv64, 2);
+       goto (%e4,%e1);
+     ];
+     block %e4 ( var v_8:bv64 := phi(%e3 -> v_7:bv64, %e2 -> v_5:bv64) ) [
+       var v_9:bv64 := bvadd(v_8:bv64, 2);
+       goto (%e5);
+     ];
+     block %e5 [ 
+       var v_10:bv64 := bvadd(v_9:bv64, 67);
+       var x := bvadd(x, 5);
+       return; 
+     ]
+  ];
+  |}
+
+in
+let program = lst.prog in
+let proc = Program.entry_proc_exn program in
+let v =
+  match Procedure.lookup_local_decl proc "x" with
+  | Some v -> v  | None -> failwith "Bleh"
+in
+let proc_split = SSIfy.ssify v proc in
+  Program.output_proc_pretty stdout proc_split;
+[%expect {|
+  proc @main()  -> () {  } 
+
+
+  [
+     block %e [ var v_1:bv64 := 0; var x_1:bv64 := 2; goto (%e1,%e2,%e3); ];
+     block %e3 (
+       var x_2:bv64 := phi(%e -> x_1:bv64),
+       var v_6:bv64 := phi(%e -> v_1:bv64)
+     ) [ var v_7:bv64 := bvadd(v_6:bv64, 2); goto (%e4,%e1); ];
+     block %e2 (
+       var x_3:bv64 := phi(%e1 -> x_6:bv64, %e -> x_1:bv64),
+       var v_4:bv64 := phi(%e1 -> v_3:bv64, %e -> v_1:bv64)
+     ) [
+       var v_5:bv64 := v_4:bv64;
+       var x_4:bv64 := bvadd(x_3:bv64, 2);
+       goto (%e4,%e1);
+     ];
+     block %e1 (
+       var x_5:bv64 := phi(%e -> x_1:bv64, %e2 -> x_4:bv64, %e3 -> x_2:bv64),
+       var v_2:bv64 := phi(%e3 -> v_7:bv64, %e2 -> v_5:bv64, %e -> v_1:bv64)
+     ) [
+       var x_6:bv64 := bvadd(x_5:bv64, 1);
+       var v_3:bv64 := bvadd(v_2:bv64, 1);
+       goto (%e2);
+     ];
+     block %e4 (
+       var x_7:bv64 := phi(%e2 -> x_4:bv64, %e3 -> x_2:bv64),
+       var v_8:bv64 := phi(%e3 -> v_7:bv64, %e2 -> v_5:bv64)
+     ) [ var v_9:bv64 := bvadd(v_8:bv64, 2); goto (%e5); ];
+     block %e5 [
+       var v_10:bv64 := bvadd(v_9:bv64, 67);
+       var x_8:bv64 := bvadd(x_7:bv64, 5);
+       return;
+     ]
+  ]
+  |}]
