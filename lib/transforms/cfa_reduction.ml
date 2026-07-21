@@ -1,11 +1,17 @@
 (**
   A transform which reduces the CFA (control-flow automaton)
   to a single edge, representing control flow through linear
-  if-then-else expressions rather than phi nodes.
+  if-then-else expressions rather than phi nodes. This is
+  useful for the SMT backend.
+
+  This is done by propagating reachability and termination
+  conditions for blocks forwards in topological order.
+  Phi-node variables then be assigned from an ite-chain on
+  the termination condition of each source block.
 
   The original algorithm assumes no SSA, however this does
-  as it simplifies it greatly. Also assumes the CFA is acyclic
-  and pure.
+  as it simplifies it greatly. Also requires that the CFA
+  is acyclic and pure.
   *)
 
 open Lang
@@ -17,6 +23,12 @@ let construct_final_edge proc =
   let termination_condition : (IDSet.elt, Var.t) Hashtbl.t =
     Hashtbl.create 30
   in
+
+  (* final_edge accumulates as one large edge containing
+     all statements from existing edges with additional
+     predicate variables and ite statements/assignments
+     filling in for phi-nodes. 
+  *)
   Procedure.fold_blocks_topo_fwd
     (fun final_edge id block ->
       (* Compute reachability of this block. *)
