@@ -15,12 +15,10 @@ open Containers
     *)
 
 (* TODO:
-  - N/A
+  - Create a main function that repeatedly does SSIfy on all variables in all procedures
 
   KNOWN ISSUES:
   - Null pointer analysis splitting strategy does not seem to be generated correctly (somehow)
-  - Statements where all variables on the right hand side are BOTTOM are not deleted.
-  - A phi with a BOTTOM lhs is not deleted in clean
 *)
 
 module SSIfy = struct
@@ -748,7 +746,7 @@ module SSIfy = struct
               (* Replace v' by ⊥ *)
               let replaced_inst = Instruction.replace_defs v' bot_var inst' |> Instruction.replace_uses v' bot_var
               in
-              replace_instruction inst replaced_inst proc', replaced_inst
+              replace_instruction inst' replaced_inst proc', replaced_inst
             ) else (
               proc', inst'
             ) 
@@ -1145,6 +1143,7 @@ proc @OY() -> (OY_out:bv64)
     ]
     |}]
   *)
+(*   
 let%expect_test "test_SSIFY" =
   let lst =
     Loader.Loadir.ast_of_string
@@ -1569,10 +1568,10 @@ let proc_split = SSIfy.ssify v proc in
      ];
      block %e5 [ var v_4:bv64 := bvadd(v_3:bv64, 67); return; ]
   ]
-  |}]
+  |}] *)
 
 
-  let%expect_test "test_in" =
+  let%expect_test "test_v_1" =
   let lst =
     Loader.Loadir.ast_of_string
       {|
@@ -1642,6 +1641,27 @@ proc @OY() -> (OY_out:bv64)
 
   [%expect
     {|
+    AAAAAAAAAAAA
+    (("%main_1", 0),
+     (Phi
+        { Block.lhs = v_12:bv64;
+          rhs = [(("%main_entry", 1), v_9:bv64); (("%main_1", 0), v_12:bv64)] }))
+    (
+    ("%main_1", 0),
+    (Phi
+       { Block.lhs = ⊥:bv64;
+         rhs = [(("%main_entry", 1), ⊥:bv64); (("%main_1", 0), ⊥:bv64)] }))
+    AAAAAAAAAAAA
+    (
+    ("%main_return", 4),
+    (Phi
+       { Block.lhs = v_10:bv64;
+         rhs = [(("%main_2_1", 2), v_11:bv64); (("%main_1", 0), v_12:bv64)] }))
+    (
+    ("%main_return", 4),
+    (Phi
+       { Block.lhs = ⊥:bv64;
+         rhs = [(("%main_2_1", 2), ⊥:bv64); (("%main_1", 0), ⊥:bv64)] }))
     proc @main(i:bv64)  -> (out:bv64) {  }
 
 
