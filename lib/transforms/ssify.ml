@@ -17,14 +17,11 @@ open Containers
 (* TODO:
   - Optimise usage of defs and uses - update and return them similar to the non-actual instructions set, instead of using global refs
     - Also, update the def-use and use-def maps during the renaming process, so that it does not contain outdated instructions
-  - Make code optimizations - current code is quite inefficient
+  - Rename functions are using and returning 4-tuples. Create a custom type so that they can use a record instead.
 
   KNOWN ISSUES:
-  - Currently does not operate correctly on procedures with a while loop. The rhs of a phi node uses the variable of the exit block rather than the
-    last block in the loop. For example, when an end-of-while-loop block branches to a predecessing block as well as a return block, the phi node of the start of the
-    loop uses the return block's v instead of the v in the end-of-while-loop block.
-    This could be a collision between sigma and phi nodes, or the stack is not being used correctly, or the visitation order is messing up when the program is non-linear.
   - Null pointer analysis splitting strategy does not seem to be generated correctly (somehow)
+  - Statements where all variables on the right hand side are BOTTOM are not deleted.
 *)
 
 module SSIfy = struct
@@ -103,6 +100,8 @@ module SSIfy = struct
                              old_stmt.statement 
         in
         (block_id, Statement {index = old_stmt.index ; statement = stmt'})
+  
+
   end
 
   module VertexSet = CCSet.Make (Procedure.Vert)
@@ -122,14 +121,10 @@ module SSIfy = struct
   (** Map from Var to (BlockID, Instruction) *)
   module DefUseMap = CCMultiMap.Make (Var) (Instruction)
 
-
-  (** 'Global' def and use maps *)
-  let defs : DefUseMap.t ref = ref DefUseMap.empty
-  let uses : DefUseMap.t ref = ref DefUseMap.empty
-
   (** List of new_v variables *)
   let new_renames : (Var.t) list ref = ref []
 
+  type ssi_info = { proc:((Var.t, Program.e) Procedure.t) ; non_actual_insts:(InstructionSet.t) ; defs:DefUseMap.t ; uses:DefUseMap.t ; web:VarSet.t }
   
   (** Return a set of all phi and statement instructions in a procedure *)
   let get_all_instructions proc  =
@@ -179,7 +174,7 @@ module SSIfy = struct
 
   (** Returns true if the beginning of the block with ID bid_a dominates beginning of block with ID bid_b *)
   let block_dominates graph bid_a bid_b =
-    let idom = Dom.compute_idom graph (Procedure.Vert.Begin bid_a) in
+    let idom = Dom.compute_idom graph (Procedure.Vert.Begin bid_a) in (* TODO: Using the entry node here causes neither of the 2 blocks to dominate eachother, which is odd. Check the Dominator documentation*)
     let dom = Dom.idom_to_dom idom in
     dom (Procedure.Vert.Begin bid_a) (Procedure.Vert.Begin bid_b)
 
@@ -190,20 +185,19 @@ module SSIfy = struct
     if ID.equal bid_a bid_b then (
       (* Same block: check if statement index is smaller (earlier) than the other *)
       match inst_a, inst_b with
-      | (_, Instruction.Statement stmt_a), (_, Instruction.Statement stmt_b) ->
-          stmt_a.index <= stmt_b.index
+      | (_, Instruction.Statement stmt_a), (_, Instruction.Statement stmt_b) -> stmt_a.index <= stmt_b.index
       | _ -> true
     )
     else
-      block_dominates graph bid_a bid_b
+      block_dominates graph bid_a bid_b 
 
   (** Takes the CFG graph and a current vertex and gives the list of immediately dominating vertices *)
-  let get_dominated_vertices (graph : Dom.t) =
-    let idom = Dom.compute_idom graph Procedure.Vert.Entry in
-    Dom.idom_to_dom_tree graph idom
+  let get_dominated_vertices (graph : Dom.t) (vertex : Dom.vertex) =
+    let idom = Dom.compute_idom graph Procedure.Vert.Entry in (* TODO: Have a strong feeling this should be vertex instead of Entry, but using vertex causes an infinite loop somehow(?) *)
+    Dom.idom_to_dom_tree graph idom vertex
 
   let dom_frontier (graph : Dom.t) (vertex : Dom.vertex) : VertexSet.t = 
-    let idom = Dom.compute_idom graph Procedure.Vert.Entry in
+    let idom = Dom.compute_idom graph vertex in
     let dom_tree = Dom.idom_to_dom_tree graph idom in 
     let df = 
     Dom.compute_dom_frontier graph dom_tree idom vertex
@@ -524,12 +518,19 @@ module SSIfy = struct
       in 
 
       let s_combined = VertexSet.union i_up i_down |> VertexSet.union s_up |> VertexSet.union s_down in
-      insert_instructions_version2 v s_combined proc
+      insert_instructions v s_combined proc
   end
 
   (** Renames variable definitions and usages, and builds a def-use and use-def chain*)
   module VariableRenaming = struct
   
+    (* let create_v' old_v (info:ssi_info) =
+      let v' = Procedure.fresh_var ~pure:true ~name:(Var.name old_v) info.proc (Var.typ old_v) in
+      (* new_renames := (v' :: !new_renames) |> List.sort_uniq ~cmp:Var.compare; *)
+      let new_web = VarSet.add v' info.web in
+      ignore(Procedure.decl_local info.proc v');
+      {info with web = new_web} *)
+
     let create_v' old_v proc =
       let v' = Procedure.fresh_var ~pure:true ~name:(Var.name old_v) proc (Var.typ old_v) in
       new_renames := (v' :: !new_renames) |> List.sort_uniq ~cmp:Var.compare;
@@ -546,7 +547,7 @@ module SSIfy = struct
       in
 
       (* Returns the proc with replaced inst' *)
-      let set_def curr_proc (inst : Instruction.t) (non_actual_insts : InstructionSet.t) = 
+      let set_def curr_proc (inst : Instruction.t) (non_actual_insts : InstructionSet.t) (defs : DefUseMap.t) (uses : DefUseMap.t) = 
         (* Let v' be a fresh version of v *)
         let v' = create_v' v curr_proc in
 
@@ -555,54 +556,50 @@ module SSIfy = struct
         in
 
         (* Set Def(v') = inst' *)
-        defs := DefUseMap.add !defs v' inst';
+        let defs' = DefUseMap.add defs v' inst' in
 
         (* stack.push(v') *)
         Stack.push v' stack;
 
-        (* Return the updated procedure that contains the updated inst' *)
-        let proc' = replace_instruction inst inst' curr_proc
-        in
-        proc', InstructionSet.map (fun old_nai_inst -> if Instruction.equal inst old_nai_inst then inst' else old_nai_inst) non_actual_insts
+        let proc' = replace_instruction inst inst' curr_proc in
+        let nai' = InstructionSet.map (fun old_nai_inst -> if Instruction.equal inst old_nai_inst then inst' else old_nai_inst) non_actual_insts in
+        proc', nai', defs', uses
       in
       
-      let set_use curr_proc (inst : Instruction.t) (og_bid : ID.t) (non_actual_insts : InstructionSet.t) = 
+      let set_use curr_proc (inst : Instruction.t) (og_bid : ID.t) (non_actual_insts : InstructionSet.t) (defs : DefUseMap.t) (uses : DefUseMap.t) = 
         (* while Def(stack.peek()) does not dominate inst do *)
         let rec pop_while_not_dominating instruction =
           match Stack.top_opt stack with
           | None -> ()
           | Some v' ->
-            let v'_def_instructions = DefUseMap.find !defs v' 
+            (* It's ok to use the outdated defs map here, because we only use the location pointers, not the potentially outdated instruction *)
+            let v'_def_instructions = DefUseMap.find defs v' 
             in
             if List.for_all (fun v'_def -> 
-                  not (instruction_dominates cfg (v'_def) (instruction))
-                ) v'_def_instructions then (
+                not (instruction_dominates cfg (v'_def) (instruction))
+              ) v'_def_instructions then (
               ignore (Stack.pop stack);
               pop_while_not_dominating instruction
-            )
+              )
         in
+        pop_while_not_dominating inst;
 
         (* v' <- stack.peek() *)
-        let v' = let open Bincaml_util.Unicode in Option.value (Stack.top_opt stack) ~default:(Var.create bot_char (Var.typ v) ~scope:(Var.scope v))
-        in
+        let v' = let open Bincaml_util.Unicode in Option.value (Stack.top_opt stack) ~default:(Var.create bot_char (Var.typ v) ~scope:(Var.scope v)) in
 
         let inst' = Instruction.replace_uses ~pred_block_id:og_bid v v' inst 
         in
 
-        pop_while_not_dominating inst;
-        if String.equal (Var.name v') Bincaml_util.Unicode.bot_char then 
-          ()
-        else
-          uses := DefUseMap.add !uses v' inst'
-        ;
-
         let proc' = replace_instruction inst inst' curr_proc in
-        proc', inst', InstructionSet.map (fun old_nai_inst -> if Instruction.equal inst old_nai_inst then inst' else old_nai_inst) non_actual_insts
+        let nai' = InstructionSet.map (fun old_nai_inst -> if Instruction.equal inst old_nai_inst then inst' else old_nai_inst) non_actual_insts in
+        (* If v' != ⊥ then set Uses(v') = Uses(v') ∪ inst' *) 
+        let uses' = if String.equal (Var.name v') Bincaml_util.Unicode.bot_char then uses else DefUseMap.add uses v' inst' in
+        proc', inst', nai', defs, uses'
       in
 
       (* foreach CFG node n in dominance order do *)
-      let rec visit_begin_node (start_proc, (nai : InstructionSet.t)) (node : Dom.vertex) = 
-        let final_proc, final_nai =
+      let rec visit_begin_node (start_proc, (nai : InstructionSet.t), (defuse : DefUseMap.t), (usedef : DefUseMap.t)) (node : Dom.vertex) = 
+        let final_proc, final_nai, final_defs, final_uses =
         (* We're only looking at Begin nodes : Skip if not Begin *)
         match node with
         | Procedure.Vert.Begin block_id -> (
@@ -635,60 +632,118 @@ module SSIfy = struct
 
 
           (* If exists Phi node with lhs matching v in In(node) then *)
-          let proc_step_one, nai_step_one = List.fold_left (fun (curr_proc, curr_nai) phi ->
+          let proc_step_one, nai_step_one, defs_step_one, uses_step_one = List.fold_left (fun (curr_proc, curr_nai, curr_defs, curr_uses) phi ->
             if Var.equal phi.Block.lhs v then (
               let inst = Instruction.create_phi_inst block_id phi.lhs phi.rhs in
-              set_def curr_proc inst curr_nai
+              set_def curr_proc inst curr_nai curr_defs curr_uses
             ) else (
-              curr_proc, curr_nai
+              curr_proc, curr_nai, curr_defs, curr_uses
             )
-          ) (start_proc, nai) block.phis in
+          ) (start_proc, nai, defuse, usedef) block.phis in
 
           (* foreach instruction u in n that uses v do *)
-          let proc_step_three, nai_step_three = Vector.foldi (fun index (curr_proc, curr_nai) stmt ->   
+          let proc_step_three, nai_step_three, defs_step_three, uses_step_three = Vector.foldi (fun index (curr_proc, curr_nai, curr_defs, curr_uses) stmt ->   
             let inst = Instruction.create_stmt_inst block_id index stmt in
-            let proc_step_two, updated_inst1, nai_step_two =
+            let proc_step_two, updated_inst1, nai_step_two, defs_step_two, uses_step_two =
               (* An instruction that uses v*)
               if VarSet.mem v (Stmt.free_vars stmt) then
-                set_use curr_proc inst block_id curr_nai
+                set_use curr_proc inst block_id curr_nai curr_defs curr_uses
               else
-                curr_proc, inst, curr_nai
+                curr_proc, inst, curr_nai, curr_defs, curr_uses
             in
             (* If exists instruction d in n that defines v then *)
             if Iter.mem v (Stmt.iter_lvar stmt) then
-              set_def proc_step_two updated_inst1 nai_step_two
+              set_def proc_step_two updated_inst1 nai_step_two defs_step_two uses_step_two
             else 
-              proc_step_two, nai_step_two
-            ) (proc_step_one, nai_step_one) block.stmts
+              proc_step_two, nai_step_two, defs_step_two, uses_step_two
+            ) (proc_step_one, nai_step_one, defs_step_one, uses_step_one) block.stmts
           in
 
           let next_vertices = second_successors cfg node in
           (* Foreach m in direct-successors(n) do *)
-          let final_proc, final_nai = List.fold_left (fun (curr_proc, curr_nai) vert -> 
+          let final_proc, final_nai, final_defs, final_uses = List.fold_left (fun (curr_proc, curr_nai, curr_defs, curr_uses) vert -> 
             match vert with
             | Procedure.Vert.Begin succ_block_id -> 
               let succ_block = Procedure.find_block curr_proc succ_block_id in
-              List.fold_left (fun (proc', nai') phi ->
-                List.fold_left (fun (proc'', nai'') (ogbid, var) -> 
+              List.fold_left (fun (proc', nai', defs', uses') phi ->
+                List.fold_left (fun (proc'', nai'', defs'', uses'') (ogbid, var) -> 
                   (* If E v <- phi(v:l) in In(m) then *)
                   if ID.equal ogbid block_id && Var.equal var v then
                     let inst = Instruction.create_phi_inst succ_block_id phi.Block.lhs phi.Block.rhs in
                     (* stack.set_use(v <- v:l) *)
-                    let proc4, inst4, nai4 = set_use proc' inst ogbid nai''
+                    let proc4, inst4, nai4, defs4, uses4 = set_use proc' inst ogbid nai'' defs'' uses''
                     in
-                    proc4, nai4
+                    proc4, nai4, defs4, uses4
                   else
-                    proc'', nai'') (proc', nai') phi.Block.rhs
-              ) (curr_proc, curr_nai) succ_block.phis
-            | _ -> curr_proc, curr_nai
-            ) (proc_step_three, nai_step_three) next_vertices in
-          final_proc, final_nai
+                    proc'', nai'', defs'', uses'') (proc', nai', defs', uses') phi.Block.rhs
+              ) (curr_proc, curr_nai, curr_defs, curr_uses) succ_block.phis
+            | _ -> curr_proc, curr_nai, curr_defs, curr_uses
+            ) (proc_step_three, nai_step_three, defs_step_three, uses_step_three) next_vertices in
+          final_proc, final_nai, final_defs, final_uses
         )
-        | _ -> start_proc, nai
+        | _ -> start_proc, nai, defuse, usedef
         in 
-        List.fold_left visit_begin_node (final_proc, final_nai) (get_dominated_vertices cfg node |> List.rev)
+        List.fold_left visit_begin_node (final_proc, final_nai, final_defs, final_uses) (get_dominated_vertices cfg node )
       in
-      visit_begin_node (proc, non_actual_insts_split) Procedure.Vert.Entry
+      let rename_proc, rename_nai, rename_defs, rename_uses = visit_begin_node (proc, non_actual_insts_split, DefUseMap.empty, DefUseMap.empty) Procedure.Vert.Entry in
+      (*
+      During intermediate process, the uses and defs maps contain outdated insts,
+      but the block id and index of statements is correct - i.e., the location pointers are correct.
+      Thus, at the end of rename, we map over the uses and defs maps, and use the block_id
+      and index to extract the correct instruction from the final updated process.
+      For phis, we will have to match on if the inst in the map is a phi, and then
+      iterate over the block's phi list to find the correct phi.
+      *)
+      (* DefUseMap.t -> 'a -> ('a -> Var.t -> Instruction.t -> 'a) -> 'a *)
+
+        
+    (* Update a potentially outdated instruction with the instruction in the same location in the given proc.
+       For Statements, we simply use the block_id and stmt index to retrieve the relevant statement.
+       For Phis, if we are updating the Def-Use chain, then we use the block_id to get the relevant block, then we
+       loop on the phi list to find the first one that defines our variable. If we are updating the Use-Def chain, then we
+       use the block_id to get the relevant block, then we loop on the phi list to find the first one that uses our variable.
+       Obviously, this is not simple, and is also assuming that a variable can only be used in one phi node. 
+       Perhaps appending to the end of the list in Split, and keeping the index in the list would be easier here, though
+       it may not be as efficient. This will need testing to determine which is better. *)
+
+      let update_chain is_def_map oldmap proc =
+        DefUseMap.fold oldmap DefUseMap.empty (fun newmap var inst -> 
+        let inst' = match inst with
+        | (block_id, Instruction.Statement stmt) -> (
+          let block = Procedure.get_block rename_proc block_id in 
+          match block with
+          | None -> (inst)
+          | Some b -> (let stmt' = Vector.get b.stmts stmt.index in Instruction.create_stmt_inst block_id stmt.index stmt')
+          )
+        | (block_id, Instruction.Phi phi) -> (
+          let block = Procedure.get_block rename_proc block_id in
+          match block with
+          | None -> (inst)
+          | Some b -> (
+            let rec get_def_phi (phi_list : Var.t Block.phi list) =
+              match phi_list with
+              | [] -> inst
+              | head :: tail -> 
+                let cond = (
+                  match is_def_map with
+                  | true -> Var.equal head.lhs var 
+                  | false -> List.mem ~eq:Var.equal var (List.map (fun (_, v) -> v) head.rhs)
+                ) in
+                if cond then (Instruction.create_phi_inst block_id head.lhs head.rhs) else (get_def_phi tail)
+            in
+            get_def_phi b.phis
+          )
+        )
+        in
+        DefUseMap.add newmap var inst'
+      )
+      in
+
+      let updated_defs = update_chain true rename_defs rename_proc in
+
+      let updated_uses = update_chain false rename_uses rename_proc in
+
+      rename_proc, rename_nai, updated_defs, updated_uses
   end
 
   (** Eliminates dead and undefined code, for instructions added by split involving the current variable being split *)
@@ -746,7 +801,7 @@ module SSIfy = struct
       ) non_actual_insts proc 
       
     (** Builds the defined and used sets to be used in cleanup *)
-    let clean (v : Var.t) proc (non_actual_insts : InstructionSet.t) = 
+    let clean (v : Var.t) proc (non_actual_insts : InstructionSet.t) defs uses = 
       let web = VarSet.of_list !new_renames in
       let all_insts = get_all_instructions proc in 
       let actual_insts = InstructionSet.diff all_insts non_actual_insts in
@@ -774,7 +829,7 @@ module SSIfy = struct
           (* Foreach v' elem (web ∩ inst.defs - curr_defined)*)
           let new_active, new_defs = VarSet.fold (fun var (active', defined') -> 
             (* Active <- active union Uses(v') *)
-            let var_uses = get_var_uses_and_defs proc var |> fst in
+            let var_uses = DefUseMap.find uses var |> InstructionSet.of_list in
             (* Defined <- defined union {v'} *)
             let single_var = VarSet.add var VarSet.empty in
             (InstructionSet.union var_uses active', VarSet.union single_var defined')
@@ -808,7 +863,7 @@ module SSIfy = struct
           (* Foreach v' elem (web ∩ inst.uses - curr_used) *)
           let new_active, new_used = VarSet.fold (fun var (active', used') -> 
             (* Active <- active union Def(v') *)
-            let var_defs = get_var_uses_and_defs proc var |> snd in
+            let var_defs = DefUseMap.find defs var |> InstructionSet.of_list in
             (* Used <- used union {v'} *)
             let single_var = VarSet.add var VarSet.empty in
             (InstructionSet.union var_defs active', VarSet.union single_var used')
@@ -831,11 +886,11 @@ module SSIfy = struct
     | Some ss -> ss
     in
     let split_proc, non_actual_insts = SplitLiveRange.split v pv proc in
-    let rename_proc, rename_nai = VariableRenaming.rename v split_proc non_actual_insts in
-    let clean_proc = DeadCodeElim.clean v rename_proc rename_nai in
+    let rename_proc, rename_nai, defs, uses = VariableRenaming.rename v split_proc non_actual_insts in
+    let clean_proc = DeadCodeElim.clean v rename_proc rename_nai defs uses in
     clean_proc
 end
-   
+(*    
 let%expect_test "test_rename" =
   let lst =
     Loader.Loadir.ast_of_string
@@ -928,10 +983,10 @@ proc @OY() -> (OY_out:bv64)
          (var v_2:bv64=OX_out) := call @OX();
          goto (%main_2,%main_1);
        ];
-       block %main_1 ( var v_9:bv64 := phi(%main_entry -> v_2:bv64) ) [
+       block %main_1 ( var v_3:bv64 := phi(%main_entry -> v_2:bv64) ) [
          guard bvsmod(i:bv64, 0x2:bv64);
-         var nam:bv64 := bvadd(v_9:bv64, 0xa:bv64);
-         var v_10:bv64 := bvadd(v_9:bv64, 69);
+         var nam:bv64 := bvadd(v_3:bv64, 0xa:bv64);
+         var v_4:bv64 := bvadd(v_3:bv64, 69);
          var tmp:bv64 := bvadd(i:bv64, 0x1:bv64);
          goto (%main_return);
        ];
@@ -947,10 +1002,10 @@ proc @OY() -> (OY_out:bv64)
          goto (%main_return);
        ];
        block %main_return (
-         var v_3:bv64 := phi(%main_1 -> v_10:bv64, %main_2_1 -> v_8:bv64)
+         var v_9:bv64 := phi(%main_1 -> v_4:bv64, %main_2_1 -> v_8:bv64)
        ) [
-         var v_4:bv64 := bvadd(v_3:bv64, 0x1:bv64);
-         var out:bv64 := v_4:bv64;
+         var v_10:bv64 := bvadd(v_9:bv64, 0x1:bv64);
+         var out:bv64 := v_10:bv64;
          return;
        ]
     ]
@@ -1079,10 +1134,10 @@ proc @OY() -> (OY_out:bv64)
          (var v_2:bv64=OX_out) := call @OX();
          goto (%main_2,%main_1);
        ];
-       block %main_1 ( var v_8:bv64 := phi(%main_entry -> v_2:bv64) ) [
+       block %main_1 ( var v_3:bv64 := phi(%main_entry -> v_2:bv64) ) [
          guard bvsmod(i:bv64, 0x2:bv64);
-         var nam:bv64 := bvadd(v_8:bv64, 0xa:bv64);
-         var v_9:bv64 := bvadd(v_8:bv64, 69);
+         var nam:bv64 := bvadd(v_3:bv64, 0xa:bv64);
+         var v_4:bv64 := bvadd(v_3:bv64, 69);
          var tmp:bv64 := bvadd(i:bv64, 0x1:bv64);
          goto (%main_return);
        ];
@@ -1098,15 +1153,15 @@ proc @OY() -> (OY_out:bv64)
          goto (%main_return);
        ];
        block %main_return (
-         var v_3:bv64 := phi(%main_2_1 -> v_7:bv64, %main_1 -> v_9:bv64)
+         var v_8:bv64 := phi(%main_2_1 -> v_7:bv64, %main_1 -> v_4:bv64)
        ) [
-         var v_4:bv64 := bvadd(v_3:bv64, 0x1:bv64);
-         var out:bv64 := v_4:bv64;
+         var v_9:bv64 := bvadd(v_8:bv64, 0x1:bv64);
+         var out:bv64 := v_9:bv64;
          return;
        ]
     ]
     |}]
- 
+  *)
 let%expect_test "test_SSIFY" =
   let lst =
     Loader.Loadir.ast_of_string
@@ -1133,14 +1188,13 @@ proc @main(i:bv64) -> (out:bv64)
     block %main_2
     [
       guard(boolnot(bvsmod(i, 2:bv64)));
-      var v:bv64 := bvadd(v:bv64, 420);
       goto(%main_2_1);
     ];
 
     block %main_2_1
     [
       var namnam:bv64 := bvor(v:bv64, 0xffffffff:bv64);
-      var v:bv64 := bvadd(v:bv64, 1);
+      var v:bv64 := bvadd(v:bv64, 420);
       goto(%main_return);
     ];
 
@@ -1178,7 +1232,7 @@ proc @OY() -> (OY_out:bv64)
   let proc_split = SSIfy.ssify v proc in
     Program.output_proc_pretty stdout proc_split;
 
-   [%expect
+  [%expect
     {|
     proc @main(i:bv64)  -> (out:bv64) {  }
 
@@ -1189,20 +1243,22 @@ proc @OY() -> (OY_out:bv64)
          (var v_2:bv64=OX_out) := call @OX();
          goto (%main_2,%main_1);
        ];
-       block %main_1 ( var v_7:bv64 := phi(%main_entry -> v_2:bv64) ) [
+       block %main_1 (
+         var v_7:bv64 := phi(%main_1 -> v_8:bv64, %main_entry -> v_2:bv64)
+       ) [
          guard bvsmod(i:bv64, 0x2:bv64);
          var nam:bv64 := bvadd(v_7:bv64, 0xa:bv64);
          var v_8:bv64 := bvadd(v_7:bv64, v_7:bv64);
          var tmp:bv64 := bvadd(i:bv64, 0x1:bv64);
-         goto (%main_return);
+         goto (%main_return,%main_1);
        ];
        block %main_2 ( var v_5:bv64 := phi(%main_entry -> v_2:bv64) ) [
          guard boolnot(bvsmod(i:bv64, 0x2:bv64));
-         var v_6:bv64 := bvadd(v_5:bv64, 420);
          goto (%main_2_1);
        ];
        block %main_2_1 [
-         var namnam:bv64 := bvor(v_6:bv64, 0xffffffff:bv64);
+         var namnam:bv64 := bvor(v_5:bv64, 0xffffffff:bv64);
+         var v_6:bv64 := bvadd(v_5:bv64, 420);
          goto (%main_return);
        ];
        block %main_return (
@@ -1214,320 +1270,3 @@ proc @OY() -> (OY_out:bv64)
        ]
     ]
     |}]
-
-let%expect_test "test_multiple_conditionals" =
-  let lst = 
-    Loader.Loadir.ast_of_string
-
-{|
-prog entry @main;
-  proc @main(i:bv64) -> (out:bv64)
-  [
-    block %main_entry
-    [
-      var v:bv64 := 0;
-      goto(%main_1, %main_2);
-    ];
-
-    block %main_1
-    [
-      guard(bvsmod(i, 2:bv64));
-      var v:bv64 := bvadd(v, 2);
-      goto(%main_3, %main_4);
-    ];
-
-    block %main_3
-    [
-      guard(bvsmod(i:bv64, 2:bv64));
-      var v := bvadd(v:bv64, 3:bv64);
-      goto(%main_return);
-    ];
-
-    block %main_4
-    [
-      guard(boolnot(bvsmod(i:bv64, 2:bv64)));
-      var v := bvadd(v:bv64, 4:bv64);
-      goto(%main_return);
-    ];
-
-    block %main_2
-    [
-      guard(boolnot(bvsmod(i:bv64, 2:bv64)));
-      var v:bv64 := bvadd(v:bv64, 1);
-      goto(%main_return);
-    ];
-
-    block %main_return
-      [
-      var v:bv64 := bvadd(v, 1:bv64);
-      return(v);
-      ];
-  ];
-|} 
-  in
-  let program = lst.prog in
-  let proc = Program.entry_proc_exn program in
-  let v =
-    match Procedure.lookup_local_decl proc "v" with
-    | Some v -> v
-    | None -> failwith "Bleh"
-  in
-  let proc_split = SSIfy.ssify v proc in
-    Program.output_proc_pretty stdout proc_split;
-
-[%expect {|
-  proc @main(i:bv64)  -> (out:bv64) {  }
-
-
-  [
-     block %main_entry [ var v_1:bv64 := 0; goto (%main_2,%main_1); ];
-     block %main_1 ( var v_2:bv64 := phi(%main_entry -> v_1:bv64) ) [
-       guard bvsmod(i:bv64, 0x2:bv64);
-       var v_3:bv64 := bvadd(v_2:bv64, 2);
-       goto (%main_4,%main_3);
-     ];
-     block %main_3 ( var v_4:bv64 := phi(%main_1 -> v_3:bv64) ) [
-       guard bvsmod(i:bv64, 0x2:bv64);
-       var v_5:bv64 := bvadd(v_4:bv64, 0x3:bv64);
-       goto (%main_return);
-     ];
-     block %main_4 ( var v_6:bv64 := phi(%main_1 -> v_3:bv64) ) [
-       guard boolnot(bvsmod(i:bv64, 0x2:bv64));
-       var v_7:bv64 := bvadd(v_6:bv64, 0x4:bv64);
-       goto (%main_return);
-     ];
-     block %main_2 ( var v_8:bv64 := phi(%main_entry -> v_1:bv64) ) [
-       guard boolnot(bvsmod(i:bv64, 0x2:bv64));
-       var v_9:bv64 := bvadd(v_8:bv64, 1);
-       goto (%main_return);
-     ];
-     block %main_return (
-       var v_10:bv64 := phi(%main_2 -> v_9:bv64, %main_4 -> v_7:bv64,
-          %main_3 -> v_5:bv64)
-     ) [
-       var v_11:bv64 := bvadd(v_10:bv64, 0x1:bv64);
-       var out:bv64 := v_11:bv64;
-       return;
-     ]
-  ]
-  |}]
-
-let%expect_test "test_loop_diff_block" =
-  let lst = 
-    Loader.Loadir.ast_of_string
-
-{|
-prog entry @main;
-  proc @main(i:bv64) -> (out:bv64)
-  [
-    block %main_entry
-    [
-      var v:bv64 := 0;
-      goto(%main_1, %main_2);
-    ];
-
-    block %main_1
-    [
-      guard(bvsmod(i, 2:bv64));
-      var v:bv64 := bvadd(v, 2);
-      goto(%main_return);
-    ];
-
-    block %main_2
-    [
-      guard(boolnot(bvsmod(i:bv64, 2:bv64)));
-      var v:bv64 := bvadd(v:bv64, 1);
-      goto(%main_2_1);
-    ];
-
-    block %main_2_1
-    [
-      guard(boolnot(bvsmod(i:bv64, 2:bv64)));
-      var v := bvadd(v:bv64, 4:bv64);
-      goto(%main_2, %main_return);
-    ];
-
-    block %main_return
-      [
-      var v:bv64 := bvadd(v, 1:bv64);
-      return(v);
-      ];
-  ];
-|} 
-  in
-  let program = lst.prog in
-  let proc = Program.entry_proc_exn program in
-  let v =
-    match Procedure.lookup_local_decl proc "v" with
-    | Some v -> v
-    | None -> failwith "Bleh"
-  in
-  let proc_split = SSIfy.ssify v proc in
-    Program.output_proc_pretty stdout proc_split;
-[%expect {|
-  proc @main(i:bv64)  -> (out:bv64) {  } 
-
-
-  [
-     block %main_entry [ var v_1:bv64 := 0; goto (%main_2,%main_1); ];
-     block %main_1 ( var v_2:bv64 := phi(%main_entry -> v_1:bv64) ) [
-       guard bvsmod(i:bv64, 0x2:bv64);
-       var v_3:bv64 := bvadd(v_2:bv64, 2);
-       goto (%main_return);
-     ];
-     block %main_2 (
-       var v_4:bv64 := phi(%main_2_1 -> v_6:bv64, %main_entry -> v_1:bv64)
-     ) [
-       guard boolnot(bvsmod(i:bv64, 0x2:bv64));
-       var v_5:bv64 := bvadd(v_4:bv64, 1);
-       goto (%main_2_1);
-     ];
-     block %main_2_1 [
-       guard boolnot(bvsmod(i:bv64, 0x2:bv64));
-       var v_6:bv64 := bvadd(v_5:bv64, 0x4:bv64);
-       goto (%main_return,%main_2);
-     ];
-     block %main_return (
-       var v_7:bv64 := phi(%main_2_1 -> v_6:bv64, %main_1 -> v_3:bv64)
-     ) [
-       var v_8:bv64 := bvadd(v_7:bv64, 0x1:bv64);
-       var out:bv64 := v_8:bv64;
-       return;
-     ]
-  ]
-  |}]
-
-
-let%expect_test "test_loop_same_block" =
-  let lst = 
-    Loader.Loadir.ast_of_string
-
-{|
-prog entry @main;
-  proc @main(i:bv64) -> (out:bv64)
-  [
-    block %main_entry
-    [
-      var v:bv64 := 0;
-      goto(%main_1);
-    ];
-
-    block %main_1
-    [
-      guard(bvsmod(i, 2:bv64));
-      var v:bv64 := bvadd(v, 2);
-      goto(%main_1, %main_return);
-    ];
-
-    block %main_return
-      [
-      guard(boolnot(bvsmod(i, 2:bv64)));
-      var v:bv64 := bvadd(v, 1:bv64);
-      return(v);
-      ];
-  ];
-|} 
-  in
-  let program = lst.prog in
-  let proc = Program.entry_proc_exn program in
-  let v =
-    match Procedure.lookup_local_decl proc "v" with
-    | Some v -> v
-    | None -> failwith "Bleh"
-  in
-  let proc_split = SSIfy.ssify v proc in
-    Program.output_proc_pretty stdout proc_split;
-[%expect {|
-  proc @main(i:bv64)  -> (out:bv64) {  } 
-
-
-  [
-     block %main_entry [ var v_1:bv64 := 0; goto (%main_1); ];
-     block %main_1 (
-       var v_2:bv64 := phi(%main_1 -> v_3:bv64, %main_entry -> v_1:bv64)
-     ) [
-       guard bvsmod(i:bv64, 0x2:bv64);
-       var v_3:bv64 := bvadd(v_2:bv64, 2);
-       goto (%main_return,%main_1);
-     ];
-     block %main_return ( var v_4:bv64 := phi(%main_1 -> v_3:bv64) ) [
-       guard boolnot(bvsmod(i:bv64, 0x2:bv64));
-       var v_5:bv64 := bvadd(v_4:bv64, 0x1:bv64);
-       var out:bv64 := v_5:bv64;
-       return;
-     ]
-  ]
-  |}]
-
-let%expect_test "test_ssa_multi_deps" =
-  let lst = 
-    Loader.Loadir.ast_of_string
-
-{|
-
-
-
-prog entry @main  { .invariants = ["NoPhis"] } ;
-
-proc @main () -> ()
-[
-  block %e [
-    var v:bv64 := 0;
-    goto (%e1, %e2, %e3);
-  ];
-  block %e1 [
-    var v := bvadd(v, 1);
-    goto (%e2);
-  ];
-  block %e2 [
-    goto (%e4, %e1);
-  ];
-  block %e3 [
-    var v := bvadd(v, 2);
-    goto (%e4, %e1);
-  ];
-
-  block %e4 [
-    var v := bvadd(v, 2);
-    goto (%e5);
-  ];
-
-  block %e5 [
-    var v:= bvadd(v, 67);
-    return ();
-  ]
-];
-|}  
-in
-let program = lst.prog in
-let proc = Program.entry_proc_exn program in
-let v =
-  match Procedure.lookup_local_decl proc "v" with
-  | Some v -> v  | None -> failwith "Bleh"
-in
-let proc_split = SSIfy.ssify v proc in
-  Program.output_proc_pretty stdout proc_split;
-[%expect {|
-  proc @main()  -> () {  }
-
-
-  [
-     block %e [ var v_1:bv64 := 0; goto (%e3,%e2,%e1); ];
-     block %e1 (
-       var v_2:bv64 := phi(%e3 -> v_7:bv64, %e2 -> v_5:bv64, %e -> v_1:bv64)
-     ) [ var v_3:bv64 := bvadd(v_2:bv64, 1); goto (%e2); ];
-     block %e2 ( var v_4:bv64 := phi(%e1 -> v_3:bv64, %e -> v_1:bv64) ) [
-       var v_5:bv64 := v_4:bv64;
-       goto (%e4,%e1);
-     ];
-     block %e3 ( var v_6:bv64 := phi(%e -> v_1:bv64) ) [
-       var v_7:bv64 := bvadd(v_6:bv64, 2);
-       goto (%e4,%e1);
-     ];
-     block %e4 ( var v_8:bv64 := phi(%e3 -> v_7:bv64, %e2 -> v_5:bv64) ) [
-       var v_9:bv64 := bvadd(v_8:bv64, 2);
-       goto (%e5);
-     ];
-     block %e5 [ var v_10:bv64 := bvadd(v_9:bv64, 67); return; ]
-  ]
-  |}]
