@@ -15,12 +15,15 @@ open Expr
 
 let construct_final_edge proc =
   (* Termination condition for each edge. *)
-  let termination_condition : (ID.t, Var.t) Hashtbl.t = Hashtbl.create 30 in
+  let termination_condition : (IDSet.elt, Var.t) Hashtbl.t =
+    Hashtbl.create 30
+  in
 
   (* final_edge accumulates as one large edge containing
      all statements from existing edges with additional
      predicate variables and ite statements/assignments
-     filling in for phi-nodes. *)
+     filling in for phi-nodes. 
+  *)
   Procedure.fold_blocks_topo_fwd
     (fun final_edge id block ->
       (* Compute reachability of this block. *)
