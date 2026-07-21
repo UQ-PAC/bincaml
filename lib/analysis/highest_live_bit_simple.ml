@@ -5,21 +5,27 @@ open Lattice_collections
 open Lattice_types
 open Idessi
 
+(** Highest Live Bit analysis utilizing the IDESSI solver to determine the
+    highest live bit that all variables in a procedure ever use. Allows for
+    bitvectors that are unnecessarily large to be reduced by a further
+    transform.
+
+    Examines the inner-most expression that operates directly on a variable, and
+    determines the highest accessed bit of said expression. Mainly checks
+    whether shifts and extracts are performed on a variable. *)
+
 (* Should run ide_live before this *)
 
 module HighestLiveBitLattice = struct
   let name = "highestLiveBit"
 
   (* Highest bit is inclusive, i.e. 63 means bits [..63] are used*)
-  (* lo_lb is only used in eval: for IDE, return just hi_lb *)
   (* lo_lb can also be called offset *)
-  (* TODO: I think in this simple implementation, lo_lb may be redundant - will double check *)
-  type t = Bot | HighBit of { hi_lb : int; lo_lb : int ; is_var : bool } | Top
-  [@@deriving eq, ord, show { with_path = false}]
+  (* I think that in this simple implementation, lo_lb is redundant, but it is being left here for potential future use *)
+  type t = Bot | HighBit of { hi_lb : int; lo_lb : int; is_var : bool } | Top
+  [@@deriving eq, ord, show { with_path = false }]
 
-  let highbit a b c =
-    HighBit { hi_lb = a ; lo_lb = b ; is_var = c}
-
+  let highbit a b c = HighBit { hi_lb = a; lo_lb = b; is_var = c }
   let top = Top
   let bottom = Bot
   let pretty t = Containers_pp.text (show t)
@@ -27,36 +33,40 @@ module HighestLiveBitLattice = struct
   let show = function
     | Top -> "⊤"
     | Bot -> "⊥"
-    | HighBit { hi_lb = hi ; lo_lb = lo ; is_var = iv } -> "(" ^ string_of_int hi ^ ", " ^ string_of_int lo ^ ", " ^ string_of_bool iv ^ ")"
-  
-  let join a b = 
+    | HighBit { hi_lb = hi; lo_lb = lo; is_var = iv } ->
+        "(" ^ string_of_int hi ^ ", " ^ string_of_int lo ^ ", "
+        ^ string_of_bool iv ^ ")"
+
+  let join a b =
     match (a, b) with
     | Top, _ | _, Top -> Top
     | Bot, a | a, Bot -> a
-    | HighBit { hi_lb = ha ; lo_lb = la }, HighBit { hi_lb = hb ; lo_lb = lb } ->
+    | HighBit { hi_lb = ha; lo_lb = la }, HighBit { hi_lb = hb; lo_lb = lb } ->
         let max_hi_lb = max ha hb in
         let min_lo_lb = min la lb in
         highbit max_hi_lb min_lo_lb false (* TODO: check if true or false *)
-  
+
   let leq a b =
     match (a, b) with
     | a, b when equal a b -> true
-    | HighBit { hi_lb = ha ; lo_lb = la }, HighBit { hi_lb = hb ; lo_lb = lb } ->
-        (ha <= hb) && (la >= lb)
+    | HighBit { hi_lb = ha; lo_lb = la }, HighBit { hi_lb = hb; lo_lb = lb } ->
+        ha <= hb && la >= lb
     | Bot, _ | _, Top -> true
     | _, Bot | Top, _ -> false
 
   let widening a b = join a b
   let narrowing a b = a
-  let get_hi a = match a with HighBit { hi_lb = hi ; lo_lb ; is_var } -> Some hi | _ -> None
+
+  let get_hi a =
+    match a with HighBit { hi_lb = hi; lo_lb; is_var } -> Some hi | _ -> None
 end
 
 (* IDESSI Lattice Backwards*)
 module IDESSI_LB = struct
   let direction = `Backwards
-  
+
   module Value = HighestLiveBitLattice
-  
+
   module DL = struct
     type t = Lambda | Label of Var.t
     [@@deriving eq, ord, show { with_path = false }]
@@ -69,10 +79,10 @@ module IDESSI_LB = struct
     | IdEdge
     | NumEdge of int (* The index of the highest live bit *)
     | TopEdge
-  [@@deriving eq,ord]
+  [@@deriving eq, ord]
 
   let show e =
-    let open Bincaml_util.Unicode in 
+    let open Bincaml_util.Unicode in
     match e with
     | BotEdge -> bot_char
     | IdEdge -> "IdEdge"
@@ -90,7 +100,7 @@ module IDESSI_LB = struct
     | a, IdEdge -> a
     | BotEdge, _ | _, BotEdge -> BotEdge
     | TopEdge, _ | _, TopEdge -> TopEdge
-    | NumEdge v, NumEdge v' -> NumEdge v 
+    | NumEdge v, NumEdge v' -> NumEdge v
 
   let join a b =
     match (a, b) with
@@ -109,63 +119,79 @@ module IDESSI_LB = struct
     | NumEdge v, _ -> Value.highbit v 0 true
 
   module Extract = struct
-
     (* Returns a HighestLiveBitLattice t *)
-    (* This does the math that determines the highbit tuple seen in the comments at the bottom *)
+    (* This does the math that determines the highbit tuple *)
     let extract_alg readv e =
       let open Expr.AbstractExpr in
       match e with
-      | RVar { id } -> readv id 
-      | UnaryExpr { op = `Extract (hi, lo) ; arg = (Value.HighBit { hi_lb ; lo_lb ; is_var }, _) } -> 
-          if is_var then (Value.highbit (hi - 1 + lo_lb) lo_lb false) else Value.highbit hi_lb lo_lb false
-      | BinaryExpr { op = `BVASHR ; arg1 ; arg2 } -> Value.top
-      | BinaryExpr { op = `BVLSHR ; arg1 = (Value.HighBit {hi_lb ; lo_lb ; is_var }, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
-        let shift = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
-          if is_var then (
-            if shift > hi_lb then (Value.bottom) 
+      | RVar { id } -> readv id
+      | UnaryExpr
+          {
+            op = `Extract (hi, lo);
+            arg = Value.HighBit { hi_lb; lo_lb; is_var }, _;
+          } ->
+          if is_var then Value.highbit (hi - 1 + lo_lb) lo_lb false
+          else Value.highbit hi_lb lo_lb false
+      | BinaryExpr { op = `BVASHR; arg1; arg2 } -> Value.top
+      | BinaryExpr
+          {
+            op = `BVLSHR;
+            arg1 = Value.HighBit { hi_lb; lo_lb; is_var }, _;
+            arg2 = _, Some (`Bitvector bv);
+          } ->
+          let shift = Bitvec.to_signed_bigint bv |> Z.to_int in
+          if is_var then
+            if shift > hi_lb then Value.bottom
             else Value.highbit hi_lb (shift + lo_lb) false
-          ) 
-          else (Value.highbit hi_lb lo_lb false)
-      | BinaryExpr { op = `BVSHL ; arg1 = (Value.HighBit {hi_lb ; lo_lb ; is_var }, _) ; arg2 = (_, Some (`Bitvector bv)) } -> 
-          let shift = ((Bitvec.to_signed_bigint bv) |> Z.to_int) in
-            if is_var then (
-              if shift > hi_lb then Value.bottom 
-              else Value.highbit (hi_lb - shift) (lo_lb - shift) false
-            )
-            else (Value.highbit hi_lb lo_lb false)
-      | BinaryExpr { arg1 = (v1, _) ; arg2 = (v2, _) } -> Value.join v1 v2
-      | ApplyIntrin { args = (v1, _) :: rest } -> List.fold_left (fun v1 (v2,_) -> Value.join v1 v2) v1 rest
-      | UnaryExpr { op ; arg = (nam, _) } -> nam (* TODO: double check if keeping it the same is correct *)
+          else Value.highbit hi_lb lo_lb false
+      | BinaryExpr
+          {
+            op = `BVSHL;
+            arg1 = Value.HighBit { hi_lb; lo_lb; is_var }, _;
+            arg2 = _, Some (`Bitvector bv);
+          } ->
+          let shift = Bitvec.to_signed_bigint bv |> Z.to_int in
+          if is_var then
+            if shift > hi_lb then Value.bottom
+            else Value.highbit (hi_lb - shift) (lo_lb - shift) false
+          else Value.highbit hi_lb lo_lb false
+      | BinaryExpr { arg1 = v1, _; arg2 = v2, _ } -> Value.join v1 v2
+      | ApplyIntrin { args = (v1, _) :: rest } ->
+          List.fold_left (fun v1 (v2, _) -> Value.join v1 v2) v1 rest
+      | UnaryExpr { op; arg = a, _ } -> a
       | _ -> Value.bottom
 
     (* Converts HighestLiveBitLattice t to IDESSI_LB t*)
     let extract_expr readv e =
-      match Expr.BasilExpr.zygo_l Expr_eval.eval_expr_alg (extract_alg readv) e with
+      match
+        Expr.BasilExpr.zygo_l Expr_eval.eval_expr_alg (extract_alg readv) e
+      with
       | Value.Bot -> BotEdge
       | Value.Top -> TopEdge
-      | Value.HighBit { hi_lb ; lo_lb } -> NumEdge hi_lb
+      | Value.HighBit { hi_lb; lo_lb } -> NumEdge hi_lb
 
-        (* find number of live bits for a single
+    (* find number of live bits for a single
     variable [var] in an expression ; read function returns the width for
     this variable, and bot for everything else*)
-    let eval_wrt_var var expr = 
-      let readv v = 
-        if Var.equal v var
-          then (
-            match Types.bit_width (Var.typ var) with 
-            | Some w -> Value.highbit (w-1) 0 true
-            | None -> Value.bottom
-          ) 
+    let eval_wrt_var var expr =
+      let readv v =
+        if Var.equal v var then
+          match Types.bit_width (Var.typ var) with
+          | Some w -> Value.highbit (w - 1) 0 true
+          | None -> Value.bottom
         else Value.bottom
-      in extract_expr readv expr
+      in
+      extract_expr readv expr
 
     let eval_stmt stmt =
       Stmt.iter_rexpr stmt (* take every expr on the rhs of stmt *)
-      |> Iter.map (function `Expr e -> e | `Var v -> Expr.BasilExpr.rvar v) (* iterate each variable in each of these *)
-      |> Iter.flat_map (fun rhs_expr -> Expr.BasilExpr.free_vars_iter rhs_expr
-        |> Iter.map (fun rhs_var -> rhs_var, (eval_wrt_var rhs_var rhs_expr)))
-              (* for each variable, return an edge with the number of live bits*)
-    end
+      |> Iter.map (function `Expr e -> e | `Var v -> Expr.BasilExpr.rvar v)
+        (* iterate each variable in each of these *)
+      |> Iter.flat_map (fun rhs_expr ->
+          Expr.BasilExpr.free_vars_iter rhs_expr
+          |> Iter.map (fun rhs_var -> (rhs_var, eval_wrt_var rhs_var rhs_expr)))
+    (* for each variable, return an edge with the number of live bits*)
+  end
 end
 
 module HighestLiveBitIDE = struct
@@ -185,32 +211,35 @@ module HighestLiveBitIDE = struct
         StringMap.to_iter call
         |> Iter.filter (fun (s, e) -> VarSet.mem v (Expr.BasilExpr.free_vars e))
         |> Iter.map (fun (s, e) ->
-          let v' = StringMap.find s param in
-          let edge = IDESSI_LB.Extract.eval_wrt_var v' e in
-          (Label v', edge))
+            let v' = StringMap.find s param in
+            let edge = IDESSI_LB.Extract.eval_wrt_var v' e in
+            (Label v', edge))
 
-    let transfer stmt d =
-      let open Stmt in
-      match d with
-      | Lambda -> (
+  let transfer stmt d =
+    let open Stmt in
+    match d with
+    | Lambda -> (
         match stmt with
-        | Instr_Assign _ -> Iter.empty (* If run after ide_live, this line shouldn't matter *)
+        | Instr_Assign _ ->
+            Iter.empty (* If run after ide_live, this line shouldn't matter *)
         | _ ->
-            IDESSI_LB.Extract.eval_stmt stmt 
+            IDESSI_LB.Extract.eval_stmt stmt
             |> Iter.map (fun (rhs_var, edge) -> (Label rhs_var, edge)))
-      | Label v -> (
-          match stmt with
-          | Instr_Assign { al } ->
-              Iter.of_list al
-              |> Iter.flat_map (fun (lhs_var, rhs_expr) ->
-                  if Var.equal v lhs_var then
-                    Expr.BasilExpr.free_vars_iter rhs_expr
-                    |> Iter.map (fun rhs_var -> 
-                        let edge = IDESSI_LB.Extract.eval_wrt_var rhs_var rhs_expr in
-                        Label rhs_var, edge)
-                  else Iter.empty)
-          | Instr_IndirectCall c -> failwith "unreachable"
-          | _ -> Iter.empty)
+    | Label v -> (
+        match stmt with
+        | Instr_Assign { al } ->
+            Iter.of_list al
+            |> Iter.flat_map (fun (lhs_var, rhs_expr) ->
+                if Var.equal v lhs_var then
+                  Expr.BasilExpr.free_vars_iter rhs_expr
+                  |> Iter.map (fun rhs_var ->
+                      let edge =
+                        IDESSI_LB.Extract.eval_wrt_var rhs_var rhs_expr
+                      in
+                      (Label rhs_var, edge))
+                else Iter.empty)
+        | Instr_IndirectCall c -> failwith "unreachable"
+        | _ -> Iter.empty)
 
   let transfer_phi lhs rhs d =
     match d with
@@ -221,7 +250,6 @@ module HighestLiveBitIDE = struct
     Procedure.formal_out_params proc
     |> StringMap.values
     |> Iter.map (fun v -> (v, Value.Top))
-
 end
 
 module IDELiveBitSSIAnalysis = IDESSI (HighestLiveBitIDE)
@@ -332,15 +360,16 @@ proc @binary_expr(c:bv64) -> (out1:bv64) {}
   in
   let program = lst.prog in
   let results, p2_results = IDELiveBitSSIAnalysis.solve program in
-  IDMap.iter (fun id vars ->
-  Printf.printf "ID: %s\n" (ID.show id);
+  IDMap.iter
+    (fun id vars ->
+      Printf.printf "ID: %s\n" (ID.show id);
 
-  VarMap.iter (fun var value ->
-    Printf.printf "  %s -> %s\n"
-      (Var.show var)
-      (IDESSI_LB.Value.show value))
-    vars
-) p2_results;
+      VarMap.iter
+        (fun var value ->
+          Printf.printf "  %s -> %s\n" (Var.show var)
+            (IDESSI_LB.Value.show value))
+        vars)
+    p2_results;
   [%expect
     {|
     ID: ("@main", 0)

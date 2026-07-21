@@ -3,113 +3,149 @@ open Lang
 open Analysis.Highest_live_bit_simple
 open Expr
 
+(** Transforms a program using information gained from the Highest Live Bit
+    analysis. Any variables that were determined to contain dead bits are
+    shortened to their respective size according to the highest live bit
+    analysis.
+
+    To maintain the types of the expressions, for any occurence of the shortened
+    variable on the right hand side of an expression, a zero_extend is wrapped
+    around the variable, to widen it to its original width.
+
+    For an occurence on the left hand side of an assignment, an extract is
+    wrapped around the entire right hand side expression of the assignment,
+    where the size of the extract is the size of the shortened variable.
+
+    For an occurence on the left hand side of a call, a temporary variable is
+    made, where the size of the temporary variable is the same as the original
+    variable. An assignment to the shortened variable is created immediately
+    after the call, which extracts the highest live bits from the temporary
+    variable.
+
+    Currently, the lhs and rhs of loads, stores, and intrinsic calls are mapped
+    individually. *)
+
 let v_width v = Types.bit_width (Var.typ v)
 
 let create_tmp_var proc v =
-  Procedure.fresh_var ~pure:true ~name:"tmp" proc (Var.typ v) 
+  Procedure.fresh_var ~pure:true ~name:"tmp" proc (Var.typ v)
   |> Procedure.decl_local proc
 
 let create_new_proc_var_map procRes proc =
   let get_hi_lb = IDESSI_LB.Value.get_hi in
-  VarMap.fold (
-    fun v edge (acc : Var.t VarMap.t) -> 
+  VarMap.fold
+    (fun v edge (acc : Var.t VarMap.t) ->
       match v_width v with
       | Some w -> (
-        match get_hi_lb edge with
-        | Some hi when hi < w - 1 -> 
-            let v' = Var.create (Var.name v) (Types.bv (hi + 1)) ~scope:(Var.scope v)
-            |> Procedure.decl_local proc in
-            VarMap.add v v' acc
-        | _ -> acc
-      )
-      | _ -> acc
-  ) procRes VarMap.empty
+          match get_hi_lb edge with
+          | Some hi when hi < w - 1 ->
+              let v' =
+                Var.create (Var.name v) (Types.bv (hi + 1)) ~scope:(Var.scope v)
+                |> Procedure.decl_local proc
+              in
+              VarMap.add v v' acc
+          | _ -> acc)
+      | _ -> acc)
+    procRes VarMap.empty
 
-(* Adds zero_extend(old_width - hi, var:bvhi) where Some hi is IDESSI_LB.Value.get_hi + 1*)
+(** Adds zero_extend(old_width - hi, var:bvhi) where Some hi is
+    IDESSI_LB.Value.get_hi + 1*)
 let transform_subexpr_rvar (get_new_var : Var.t -> Var.t option) =
   let open BasilExpr in
   rewrite_typed (function
-    | RVar { id = v ; attrib = a } -> (
+    | RVar { id = v; attrib = a } -> (
         match get_new_var v with
         | Some new_var -> (
-          match v_width new_var with
-          | Some w' -> (
-            match v_width v with
-            | Some w -> Some (unexp ~attrib:a ~op:(`ZeroExtend (w - w')) (rvar new_var))
-            | _ -> None
-          )
-          | _ -> None
-        )
-        | _ -> None
-      )
-    | _ -> None
-  )
+            match v_width new_var with
+            | Some w' -> (
+                match v_width v with
+                | Some w ->
+                    Some
+                      (unexp ~attrib:a
+                         ~op:(`ZeroExtend (w - w'))
+                         (rvar new_var))
+                | _ -> None)
+            | _ -> None)
+        | _ -> None)
+    | _ -> None)
 
+(** Replaces a variable with a shortened one, if required *)
 let transform_var (get_new_var : Var.t -> Var.t option) v =
   Option.value (get_new_var v) ~default:v
-            
+
+(** Replaces the original lvar with the new lvar, and wraps an extract for the
+    width of the new lvar around the rhs expression *)
 let transform_lvar_and_expr lvar expr (get_new_var : Var.t -> Var.t option) =
   let nv = get_new_var lvar in
   match nv with
-  | Some new_lvar ->
-    (match v_width new_lvar with
-    | None -> lvar,expr
-    | Some w' -> let new_expr = BasilExpr.extract ~hi_excl:w' ~lo_incl:0 expr in 
-        new_lvar, new_expr)
-  | None -> lvar,expr
+  | Some new_lvar -> (
+      match v_width new_lvar with
+      | None -> (lvar, expr)
+      | Some w' ->
+          let new_expr = BasilExpr.extract ~hi_excl:w' ~lo_incl:0 expr in
+          (new_lvar, new_expr))
+  | None -> (lvar, expr)
 
 let transform_proc procRes proc =
   let old_to_new_var_map = create_new_proc_var_map procRes proc in
   let get_new_var old_var = VarMap.find_opt old_var old_to_new_var_map in
 
-  Procedure.flat_map_stmts_topo_fwd (fun stmt ->
+  Procedure.flat_map_stmts_topo_fwd
+    (fun stmt ->
       match stmt with
-      | Stmt.Instr_Assign { al ; attrib } -> (
-        let new_al =
-          List.map (fun (lvar, expr) ->
-            let new_expr = (transform_subexpr_rvar get_new_var) expr in
-            transform_lvar_and_expr lvar new_expr get_new_var
-            ) al
+      | Stmt.Instr_Assign { al; attrib } ->
+          let new_al =
+            List.map
+              (fun (lvar, expr) ->
+                let new_expr = (transform_subexpr_rvar get_new_var) expr in
+                transform_lvar_and_expr lvar new_expr get_new_var)
+              al
           in
-          Stmt.Instr_Assign { al = new_al ; attrib } |> Iter.pure
-      )
+          Stmt.Instr_Assign { al = new_al; attrib } |> Iter.pure
       (* | Stmt.Instr_Load { attrib ; lhs ; rhs ; addr } -> stmt *)
       (* | Stmt.Instr_Store { attrib ; lhs ; rhs ; value ; addr } -> stmt *)
       (* | Stmt.Instr_IntrinCall { attrib ; lhs ; name ; args } -> stmt *)
-      | Stmt.Instr_Call { attrib ; lhs = lvar_map ; procid ; args } -> 
-        let tmp_smap = StringMap.map (create_tmp_var proc) lvar_map in
-        let updated_call = Stmt.Instr_Call { attrib ; lhs = tmp_smap ; procid ; args } in
-        let new_al =
-        StringMap.fold (fun key tmp_var (al : (Var.t * BasilExpr.t) list) -> 
-          let lvar = transform_var get_new_var (StringMap.find key lvar_map) in 
-          let expr = BasilExpr.rvar tmp_var in
-          let total_expr = 
-            match v_width lvar with
-            | Some w' -> BasilExpr.extract ~hi_excl:w' ~lo_incl:0 expr
-            | _ -> expr
+      | Stmt.Instr_Call { attrib; lhs = lvar_map; procid; args } ->
+          let tmp_smap = StringMap.map (create_tmp_var proc) lvar_map in
+          let updated_call =
+            Stmt.Instr_Call { attrib; lhs = tmp_smap; procid; args }
           in
-          al @ [(lvar, total_expr)]
-          ) tmp_smap List.empty
-        in
-        let updated_assign = 
-          Stmt.Instr_Assign {al = new_al ; attrib = Attrib.empty }
-        in
-        Iter.doubleton updated_call updated_assign
-      | _ -> Stmt.map ~f_lvar:(transform_var get_new_var) 
-                      ~f_expr:(transform_subexpr_rvar get_new_var) 
-                      ~f_rvar:(transform_var get_new_var) 
-                      stmt |> Iter.pure
-    )
+          let new_al =
+            StringMap.fold
+              (fun key tmp_var (al : (Var.t * BasilExpr.t) list) ->
+                let lvar =
+                  transform_var get_new_var (StringMap.find key lvar_map)
+                in
+                let expr = BasilExpr.rvar tmp_var in
+                let total_expr =
+                  match v_width lvar with
+                  | Some w' -> BasilExpr.extract ~hi_excl:w' ~lo_incl:0 expr
+                  | _ -> expr
+                in
+                al @ [ (lvar, total_expr) ])
+              tmp_smap List.empty
+          in
+          let updated_assign =
+            Stmt.Instr_Assign { al = new_al; attrib = Attrib.empty }
+          in
+          Iter.doubleton updated_call updated_assign
+      | _ ->
+          Stmt.map
+            ~f_lvar:(transform_var get_new_var)
+            ~f_expr:(transform_subexpr_rvar get_new_var)
+            ~f_rvar:(transform_var get_new_var)
+            stmt
+          |> Iter.pure)
     proc
 
 let highest_live_bit_transform (prog : Program.t) =
-  let _, p2res = 
+  let _, p2res =
     Trace_core.with_span ~__FILE__ ~__LINE__ "ide highest live bit" @@ fun _ ->
-    IDELiveBitSSIAnalysis.solve prog 
+    IDELiveBitSSIAnalysis.solve prog
   in
-
   Program.map_procedures
-    (fun pid proc -> transform_proc (IDMap.find pid p2res) proc) prog
+    (fun pid proc -> transform_proc (IDMap.find pid p2res) proc)
+    prog
 
 let%expect_test "test1_basic_extracts" =
   let lst =
@@ -139,10 +175,11 @@ proc @binary_expr() -> (out1:bv64)
   in
 
   let program = lst.prog in
-  
+
   let res = highest_live_bit_transform program in
-  Program.pretty_to_chan  stdout res;
-  [%expect {|
+  Program.pretty_to_chan stdout res;
+  [%expect
+    {|
     proc @trans()  -> (out:bv32) {  }
 
 
@@ -195,10 +232,11 @@ proc @left_shift() -> (out1:bv64)
   in
 
   let program = lst.prog in
-  
+
   let res = highest_live_bit_transform program in
-  Program.pretty_to_chan  stdout res;
-  [%expect {|
+  Program.pretty_to_chan stdout res;
+  [%expect
+    {|
     proc @right_shift()  -> (out:bv64) {  }
 
 
@@ -260,21 +298,22 @@ proc @double_out() -> (dout1:bv64, dout2:bv64) { }
   in
 
   let program = lst.prog in
-  
+
   let res = highest_live_bit_transform program in
-  Program.pretty_to_chan  stdout res;
-   let results, p2_results = IDELiveBitSSIAnalysis.solve program in
-  IDMap.iter (fun id vars ->
-  Printf.printf "ID: %s\n" (ID.show id);
-    Printf.printf "\n\n";
-  VarMap.iter (fun var value ->
-    Printf.printf "  %s -> %s\n"
-      (Var.show var)
-      (IDESSI_LB.Value.show value))
-    vars
-) p2_results;
+  Program.pretty_to_chan stdout res;
+  let results, p2_results = IDELiveBitSSIAnalysis.solve program in
+  IDMap.iter
+    (fun id vars ->
+      Printf.printf "ID: %s\n" (ID.show id);
+      Printf.printf "\n\n";
+      VarMap.iter
+        (fun var value ->
+          Printf.printf "  %s -> %s\n" (Var.show var)
+            (IDESSI_LB.Value.show value))
+        vars)
+    p2_results;
   [%expect
-  {|
+    {|
     proc @trans(b:bv64)  -> (out:bv30) {  }
 
 
@@ -334,7 +373,7 @@ proc @double_out() -> (dout1:bv64, dout2:bv64) { }
       { Var.V.name = "dout1"; typ = bv64; scope = Var.LocalVar } -> ⊤
       { Var.V.name = "dout2"; typ = bv64; scope = Var.LocalVar } -> ⊤
     |}]
-    
+
 let%expect_test "test4_basic_load_and_store" =
   let lst =
     Loader.Loadir.ast_of_string
@@ -370,21 +409,22 @@ proc @main() -> (out:bv64)
   in
 
   let program = lst.prog in
-  
+
   let res = highest_live_bit_transform program in
-  Program.pretty_to_chan  stdout res;
-   let results, p2_results = IDELiveBitSSIAnalysis.solve program in
-  IDMap.iter (fun id vars ->
-  Printf.printf "ID: %s\n" (ID.show id);
-    Printf.printf "\n\n";
-  VarMap.iter (fun var value ->
-    Printf.printf "  %s -> %s\n"
-      (Var.show var)
-      (IDESSI_LB.Value.show value))
-    vars
-) p2_results;
+  Program.pretty_to_chan stdout res;
+  let results, p2_results = IDELiveBitSSIAnalysis.solve program in
+  IDMap.iter
+    (fun id vars ->
+      Printf.printf "ID: %s\n" (ID.show id);
+      Printf.printf "\n\n";
+      VarMap.iter
+        (fun var value ->
+          Printf.printf "  %s -> %s\n" (Var.show var)
+            (IDESSI_LB.Value.show value))
+        vars)
+    p2_results;
   [%expect
-  {|
+    {|
     var $mem:(bv64->bv8);
     var $i:bv64;
     proc @main()  -> (out:bv64) {  }
