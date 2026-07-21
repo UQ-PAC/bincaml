@@ -357,6 +357,11 @@ module SMTLib2 = struct
     | `MapAccess -> atom "select"
     | `MapUpdate -> atom "store"
     | `IMPLIES -> atom "=>"
+    | `INTADD -> atom "+"
+    | `INTMUL -> atom "*"
+    | `INTSUB -> atom "-"
+    | `INTDIV -> atom "/"
+    | `INTLT -> atom "<"
     | #Ops.AllOps.unary as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.const as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.binary as o -> atom @@ Ops.AllOps.to_string o
@@ -378,7 +383,8 @@ module SMTLib2 = struct
     let* body = in_body in
     return @@ list [ quant; list binds; body ]
 
-  let smt_alg (e : sexp t BasilExpr.abstract_expr) =
+  let smt_alg' (e : sexp t BasilExpr.abstract_expr)
+      (inner : sexp t BasilExpr.abstract_expr BasilExpr.abstract_expr) =
     match e with
     | Constant { const = o } ->
         let* o = add_logic_const o in
@@ -437,6 +443,24 @@ module SMTLib2 = struct
         let* l = l in
         let* r = r in
         return @@ list [ of_op o; l; r ]
+    | ApplyIntrin { op = `Cases; args } -> (
+        match (inner, args) with
+        (* ITE Expressions are special.
+         They cannot be represented using an smt match which
+         expects a datatype not a bool. So we have to
+         identify an ITE and handle it specially. *)
+        | ( ApplyIntrin
+              {
+                op = `Cases;
+                args = [ BinaryExpr { op = `IfThen; arg1; arg2 }; _ ];
+              },
+            [ _; arg3 ] ) ->
+            let* arg1 = arg1 in
+            let* arg2 = arg2 in
+            let* arg3 = arg3 in
+            return @@ list [ atom "ite"; arg1; arg2; arg3 ]
+        (* TODO actual matches. *)
+        | _ -> failwith "Match expressions unsupported.")
     | ApplyIntrin { op = o; args } ->
         let* args = sequence args in
         return (list (of_op o :: args))
@@ -446,9 +470,17 @@ module SMTLib2 = struct
         let* func = func in
         return @@ list (func :: args)
 
-  let bind_of_bexpr e b =
+  let smt_alg
+      (e : (sexp t * sexp t BasilExpr.abstract_expr) BasilExpr.abstract_expr) :
+      sexp t * sexp t BasilExpr.abstract_expr =
+    let l = AbstractExpr.map fst e in
+    let r = AbstractExpr.map snd e in
+    let o = smt_alg' l r in
+    (o, l)
+
+  let bind_of_bexpr e =
     let e = (BasilExpr.rewrite_typed_two Algsimp.drop_assoc) e in
-    BasilExpr.cata smt_alg e b
+    BasilExpr.cata smt_alg e |> fst
 
   let of_bexpr e = fst @@ (bind_of_bexpr e) empty
 

@@ -167,6 +167,16 @@ let repl ~verb ~echo_cmd =
         |> Iter.flat_map complete_filename
         |> Iter.map (fun s -> l ^ " " ^ s)
         |> Iter.iter (LNoise.add_completion completions)
+    | Ok (`Atom "dump-smt" :: fnames as l) ->
+        let c = last fnames in
+        let l =
+          List.take (List.length l - opt_len c) l
+          |> List.to_string ~sep:" " CCSexp.to_string
+        in
+        (match c with Some n -> Iter.singleton n | None -> Iter.empty)
+        |> Iter.flat_map complete_filename
+        |> Iter.map (fun s -> l ^ " " ^ s)
+        |> Iter.iter (LNoise.add_completion completions)
     | Ok (`Atom "run-transforms" :: transforms as l)
     | Ok (`Atom "run-transform" :: transforms as l) ->
         let c = last transforms in
