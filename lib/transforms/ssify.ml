@@ -975,6 +975,7 @@ module SSIfy = struct
     Program.map_procedures (fun id proc -> ssify_proc proc) prog
 end
 
+
 let%expect_test "test_rename" =
   let lst =
     Loader.Loadir.ast_of_string
