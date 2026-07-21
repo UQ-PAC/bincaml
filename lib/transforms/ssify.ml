@@ -20,7 +20,7 @@ open Containers
   KNOWN ISSUES:
   - Null pointer analysis splitting strategy does not seem to be generated correctly (somehow)
   - Statements where all variables on the right hand side are BOTTOM are not deleted.
-  - A phi in the last test with unused var v_10 is neither substituted for bottom nor removed.
+  - A phi with a BOTTOM lhs is not deleted in clean
 *)
 
 module SSIfy = struct
@@ -523,12 +523,11 @@ module SSIfy = struct
   (** Renames variable definitions and usages, and builds a def-use and use-def chain*)
   module VariableRenaming = struct
   
+    (** Creates a fresh version of a variable and adds it to web *)
     let create_v' old_v (info:ssi_info) =
       let v' = Procedure.fresh_var ~pure:true ~name:(Var.name old_v) info.proc (Var.typ old_v) in
-      (* new_renames := (v' :: !new_renames) |> List.sort_uniq ~cmp:Var.compare; *)
       let new_web = VarSet.add v' info.web in
       Procedure.decl_local info.proc v', {info with web = new_web}
-
 
     (** Returns a procedure that has renamed v, and the relative transformed non-actual instructions*)
     let rename (v: Var.t) (split_info : ssi_info) =
@@ -544,7 +543,7 @@ module SSIfy = struct
       (* let set_def curr_proc (inst : Instruction.t) (non_actual_insts : InstructionSet.t) (defs : DefUseMap.t) (uses : DefUseMap.t) =  *)
       let set_def (curr_info : ssi_info) (inst : Instruction.t) = 
         (* Let v' be a fresh version of v *)
-        let v', new_info = create_v' v curr_info in
+        let v', curr_info = create_v' v curr_info in
 
         (* Replace the defs of v by v' in inst *)
         let (inst' : Instruction.t) = Instruction.replace_defs v v' inst
@@ -801,8 +800,7 @@ module SSIfy = struct
       ) non_actual_insts proc 
       
     (** Builds the defined and used sets to be used in cleanup *)
-    let clean (v : Var.t) proc (non_actual_insts : InstructionSet.t) defs uses = 
-      let web = VarSet.of_list !new_renames in
+    let clean (v : Var.t) proc (non_actual_insts : InstructionSet.t) defs uses web =
       let all_insts = get_all_instructions proc in 
       let actual_insts = InstructionSet.diff all_insts non_actual_insts in
 
@@ -888,7 +886,7 @@ module SSIfy = struct
     let split_proc, non_actual_insts = SplitLiveRange.split v pv proc in
     let nama = {proc = split_proc ; non_actual_insts = non_actual_insts ; defs = DefUseMap.empty ; uses = DefUseMap.empty ; web = VarSet.empty} in
     let rename_info = VariableRenaming.rename v nama in
-    let clean_proc = DeadCodeElim.clean v rename_info.proc rename_info.non_actual_insts rename_info.defs rename_info.uses in
+    let clean_proc = DeadCodeElim.clean v rename_info.proc rename_info.non_actual_insts rename_info.defs rename_info.uses rename_info.web in
     clean_proc
 end
 (*    
@@ -1496,7 +1494,7 @@ prog entry @main;
   let proc_split = SSIfy.ssify v proc in
     Program.output_proc_pretty stdout proc_split;
 [%expect {|
-  proc @main(i:bv64)  -> (out:bv64) {  } 
+  proc @main(i:bv64)  -> (out:bv64) {  }
 
 
   [
@@ -1670,7 +1668,7 @@ proc @OY() -> (OY_out:bv64)
          goto (%main_2,%main_1);
        ];
        block %main_1 (
-         var v_12:bv64 := phi(%main_entry -> v_9:bv64, %main_1 -> v_12:bv64),
+         var v_12:bv64 := phi(%main_entry -> ⊥:bv64, %main_1 -> v_12:bv64),
          var v_7:bv64 := phi(%main_1 -> v_8:bv64, %main_entry -> v_2:bv64)
        ) [
          guard bvsmod(i:bv64, 0x2:bv64);
@@ -1690,7 +1688,7 @@ proc @OY() -> (OY_out:bv64)
          goto (%main_return);
        ];
        block %main_return (
-         var v_10:bv64 := phi(%main_2_1 -> v_11:bv64, %main_1 -> v_12:bv64),
+         var ⊥:bv64 := phi(%main_2_1 -> v_11:bv64, %main_1 -> v_12:bv64),
          var v_3:bv64 := phi(%main_2_1 -> v_6:bv64, %main_1 -> v_8:bv64)
        ) [
          var v_4:bv64 := bvadd(v_3:bv64, 0x1:bv64);
