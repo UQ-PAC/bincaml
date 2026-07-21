@@ -87,35 +87,22 @@ let construct_final_edge proc =
           2. the statements for the new edge body.
           3. an assignment to the termination variable.
         *)
-      final_edge
-      @ List.concat
-          [
-            [ ites ];
-            (* Filter out the now unnecessary guards. *)
-            block.stmts |> Vector.to_list
-            |> List.filter (fun s ->
-                not
-                @@
-                match s with
-                | Stmt.Instr_Assume { branch = true } -> true
-                | _ -> false);
-            [ termination ];
-          ])
-    List.empty proc
+      final_edge @ List.concat [ [ ites ]; non_guard_stmts; [ termination ] ])
+    [] proc
 
 let reduce_procedure (proc : Program.proc) : Program.proc =
   (* Constructed reduced edge to replace procedure blocks. *)
   let final_edge = construct_final_edge proc in
 
-  let out_proc =
+  let proc =
     proc |> Procedure.iter_blocks |> Iter.map fst
     |> Iter.fold (fun acc id -> Procedure.remove_block acc id) proc
   in
-  let out_proc, id = Procedure.fresh_block out_proc ~stmts:final_edge () in
+  let proc, id = Procedure.fresh_block proc ~stmts:final_edge () in
 
   (* Make this the entry and return block. *)
-  let out_proc = Procedure.set_entry_block out_proc id in
+  let proc = Procedure.set_entry_block proc id in
   Procedure.PG.map_graph
     (fun g ->
       Procedure.G.add_edge g (Procedure.Vert.End id) Procedure.Vert.Return)
-    out_proc
+    proc
