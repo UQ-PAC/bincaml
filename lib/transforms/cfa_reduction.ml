@@ -1,18 +1,13 @@
-(**
-  A transform which reduces the CFA (control-flow automaton)
-  to a single edge, representing control flow through linear
-  if-then-else expressions rather than phi nodes. This is
-  useful for the SMT backend.
+(** A transform which reduces the CFA (control-flow automaton) to a single edge,
+    representing control flow through linear if-then-else expressions rather
+    than phi nodes. This is useful for the SMT backend.
 
-  This is done by propagating reachability and termination
-  conditions for blocks forwards in topological order.
-  Phi-node variables then be assigned from an ite-chain on
-  the termination condition of each source block.
+    This is done by propagating reachability and termination conditions for
+    blocks forwards in topological order. Phi-node variables then be assigned
+    from an ite-chain on the termination condition of each source block.
 
-  The original algorithm assumes no SSA, however this does
-  as it simplifies it greatly. Also requires that the CFA
-  is acyclic and pure.
-  *)
+    The original algorithm assumes no SSA, however this does as it simplifies it
+    greatly. Also requires that the CFA is acyclic and pure. *)
 
 open Lang
 open Lang.Common
