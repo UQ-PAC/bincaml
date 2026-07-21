@@ -56,6 +56,18 @@ module PassManager = struct
             prog);
     }
 
+  let dump_smt out_channel =
+    {
+      name = "dump-smt";
+      doc = "write smt to channel";
+      invariants = Invariants.make ~presupposes:[ SSA; NoPhis ] ();
+      apply =
+        Prog
+          (fun prog ->
+            Backends.Smt.pretty_to_chan out_channel prog;
+            prog);
+    }
+
   let lift_intrinsics_aarch64 =
     {
       name = "lift-intrinsics-aarch64";
@@ -220,7 +232,7 @@ module PassManager = struct
       name = "cfa-reduction";
       apply = Proc Transforms.Cfa_reduction.reduce_procedure;
       doc = "Performs reduction of acyclic CFA";
-      invariants = Invariants.presupposes [ SSA ];
+      invariants = Invariants.presupposes [ SSA ] ~establishes:[ NoPhis; SSA ];
     }
 
   let remove_unreachable_blocks =
