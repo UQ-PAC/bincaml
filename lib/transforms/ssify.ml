@@ -16,6 +16,10 @@ open Containers
     Sigma instructions of a branch node are implemented by placing a phi node on
     each successor node. *)
 
+  (* In multiple places that require iterating through program points, we first have an outer loop that iterates over
+     Procedure graph vertices, and for vertices with an associated Block edge, we then check the phi nodes of the block, then
+     have an inner loop that loops through all statements in the block. *)
+
 (* TODO:
   - Make this less imperative. I made it close to the book's algorithm at the cost of making it very imperative, and I'm not very happy with how it is
   - Update non-actual instructions at the end of rename similar to the defuse and usedef chains, instead of within set_def and set_use
@@ -272,8 +276,8 @@ module SSIfy = struct
     let new_inst = Instruction.create_stmt_inst block_id 0 copy_stmt in
     (new_proc, new_inst)
 
-  (** Returns i_up and i_down, where both are lists of cfg vertices i_up is
-      empty i_down is a list of Procedure.Vert.End vertices, for both blocks
+  (* Returns i_up and i_down, where both are lists of cfg vertices. i_up is
+      empty, and i_down is a list of Procedure.Vert.End vertices, for both blocks
       that contain multiple successor edges, and blocks that contain var in
       Block.assigned_vars_iter *)
   let create_range_analysis_splitting_strategy proc (var : Var.t) cfg :
