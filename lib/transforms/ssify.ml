@@ -16,7 +16,7 @@ open Containers
     Sigma instructions of a branch node are implemented by placing a phi node on
     each successor node. *)
 
-  (* In multiple places that require iterating through program points, we first have an outer loop that iterates over
+(* In multiple places that require iterating through program points, we first have an outer loop that iterates over
      Procedure graph vertices, and for vertices with an associated Block edge, we then check the phi nodes of the block, then
      have an inner loop that loops through all statements in the block. *)
 
@@ -978,7 +978,6 @@ module SSIfy = struct
   let ssify_prog ?splitting_strategy (prog : Program.t) =
     Program.map_procedures (fun id proc -> ssify_proc proc) prog
 end
-
 
 let%expect_test "test_rename" =
   let lst =
