@@ -23,7 +23,10 @@ open Expr
     variable.
 
     Currently, the lhs and rhs of loads, stores, and intrinsic calls are mapped
-    individually. *)
+    individually. 
+    
+    A different transform will be required to remove the redundant zero_extends
+    and extracts added by this transform. *)
 
 let v_width v = Types.bit_width (Var.typ v)
 
