@@ -11,8 +11,8 @@ open Idessi
     transform.
 
     Examines the inner-most expression that operates directly on a variable, and
-    determines the highest accessed bit of said expression. Mainly checks
-    whether shifts and extracts are performed on a variable. *)
+    determines the highest accessed bit of said variable. Mainly checks whether
+    shifts and extracts are performed on a variable. *)
 
 (* Should run ide_live before this *)
 
