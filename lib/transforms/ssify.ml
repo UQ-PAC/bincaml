@@ -179,7 +179,7 @@ module SSIfy = struct
 
   (** Returns true if the beginning of the block with ID bid_a dominates beginning of block with ID bid_b *)
   let block_dominates graph bid_a bid_b =
-    let idom = Dom.compute_idom graph Procedure.Vert.Entry in
+    let idom = Dom.compute_idom graph (Procedure.Vert.Begin bid_a) in
     let dom = Dom.idom_to_dom idom in
     dom (Procedure.Vert.Begin bid_a) (Procedure.Vert.Begin bid_b)
 
@@ -1307,6 +1307,153 @@ prog entry @main;
      ) [
        var v_11:bv64 := bvadd(v_10:bv64, 0x1:bv64);
        var out:bv64 := v_11:bv64;
+       return;
+     ]
+  ]
+  |}]
+
+let%expect_test "test_loop_diff_block" =
+  let lst = 
+    Loader.Loadir.ast_of_string
+
+{|
+prog entry @main;
+  proc @main(i:bv64) -> (out:bv64)
+  [
+    block %main_entry
+    [
+      var v:bv64 := 0;
+      goto(%main_1, %main_2);
+    ];
+
+    block %main_1
+    [
+      guard(bvsmod(i, 2:bv64));
+      var v:bv64 := bvadd(v, 2);
+      goto(%main_return);
+    ];
+
+    block %main_2
+    [
+      guard(boolnot(bvsmod(i:bv64, 2:bv64)));
+      var v:bv64 := bvadd(v:bv64, 1);
+      goto(%main_2_1);
+    ];
+
+    block %main_2_1
+    [
+      guard(boolnot(bvsmod(i:bv64, 2:bv64)));
+      var v := bvadd(v:bv64, 4:bv64);
+      goto(%main_2, %main_return);
+    ];
+
+    block %main_return
+      [
+      var v:bv64 := bvadd(v, 1:bv64);
+      return(v);
+      ];
+  ];
+|} 
+  in
+  let program = lst.prog in
+  let proc = Program.entry_proc_exn program in
+  let v =
+    match Procedure.lookup_local_decl proc "v" with
+    | Some v -> v
+    | None -> failwith "Bleh"
+  in
+  let proc_split = SSIfy.ssify v proc in
+    Program.output_proc_pretty stdout proc_split;
+[%expect {|
+  proc @main(i:bv64)  -> (out:bv64) {  } 
+
+
+  [
+     block %main_entry [ var v_1:bv64 := 0; goto (%main_2,%main_1); ];
+     block %main_1 ( var v_2:bv64 := phi(%main_entry -> v_1:bv64) ) [
+       guard bvsmod(i:bv64, 0x2:bv64);
+       var v_3:bv64 := bvadd(v_2:bv64, 2);
+       goto (%main_return);
+     ];
+     block %main_2 (
+       var v_4:bv64 := phi(%main_2_1 -> v_6:bv64, %main_entry -> v_1:bv64)
+     ) [
+       guard boolnot(bvsmod(i:bv64, 0x2:bv64));
+       var v_5:bv64 := bvadd(v_4:bv64, 1);
+       goto (%main_2_1);
+     ];
+     block %main_2_1 [
+       guard boolnot(bvsmod(i:bv64, 0x2:bv64));
+       var v_6:bv64 := bvadd(v_5:bv64, 0x4:bv64);
+       goto (%main_return,%main_2);
+     ];
+     block %main_return (
+       var v_7:bv64 := phi(%main_2_1 -> v_6:bv64, %main_1 -> v_3:bv64)
+     ) [
+       var v_8:bv64 := bvadd(v_7:bv64, 0x1:bv64);
+       var out:bv64 := v_8:bv64;
+       return;
+     ]
+  ]
+  |}]
+
+
+let%expect_test "test_loop_same_block" =
+  let lst = 
+    Loader.Loadir.ast_of_string
+
+{|
+prog entry @main;
+  proc @main(i:bv64) -> (out:bv64)
+  [
+    block %main_entry
+    [
+      var v:bv64 := 0;
+      goto(%main_1);
+    ];
+
+    block %main_1
+    [
+      guard(bvsmod(i, 2:bv64));
+      var v:bv64 := bvadd(v, 2);
+      goto(%main_1, %main_return);
+    ];
+
+    block %main_return
+      [
+      guard(boolnot(bvsmod(i, 2:bv64)));
+      var v:bv64 := bvadd(v, 1:bv64);
+      return(v);
+      ];
+  ];
+|} 
+  in
+  let program = lst.prog in
+  let proc = Program.entry_proc_exn program in
+  let v =
+    match Procedure.lookup_local_decl proc "v" with
+    | Some v -> v
+    | None -> failwith "Bleh"
+  in
+  let proc_split = SSIfy.ssify v proc in
+    Program.output_proc_pretty stdout proc_split;
+[%expect {|
+  proc @main(i:bv64)  -> (out:bv64) {  } 
+
+
+  [
+     block %main_entry [ var v_1:bv64 := 0; goto (%main_1); ];
+     block %main_1 (
+       var v_2:bv64 := phi(%main_1 -> v_3:bv64, %main_entry -> v_1:bv64)
+     ) [
+       guard bvsmod(i:bv64, 0x2:bv64);
+       var v_3:bv64 := bvadd(v_2:bv64, 2);
+       goto (%main_return,%main_1);
+     ];
+     block %main_return ( var v_4:bv64 := phi(%main_1 -> v_3:bv64) ) [
+       guard boolnot(bvsmod(i:bv64, 0x2:bv64));
+       var v_5:bv64 := bvadd(v_4:bv64, 0x1:bv64);
+       var out:bv64 := v_5:bv64;
        return;
      ]
   ]
