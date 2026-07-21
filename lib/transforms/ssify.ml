@@ -1789,3 +1789,111 @@ let proc_split = SSIfy.ssify v proc in
      ]
   ]
   |}]
+
+  let%expect_test "test_in" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+prog entry @main;
+
+proc @main(i:bv64)  -> (out:bv64) {  }
+    [
+       block %main_entry [
+         var v_1:bv64 := 0x0:bv64;
+         (var v_2:bv64=OX_out) := call @OX();
+         goto (%main_2,%main_1);
+       ];
+       block %main_1 (
+         var v_7:bv64 := phi(%main_1 -> v_8:bv64, %main_entry -> v_2:bv64)
+       ) [
+         guard bvsmod(i:bv64, 0x2:bv64);
+         var nam:bv64 := bvadd(v_7:bv64, 0xa:bv64);
+         var v_8:bv64 := bvadd(v_7:bv64, v_7:bv64);
+         var tmp:bv64 := bvadd(i:bv64, 0x1:bv64);
+         goto (%main_return,%main_1);
+       ];
+       block %main_2 ( var v_5:bv64 := phi(%main_entry -> v_2:bv64) ) [
+         guard boolnot(bvsmod(i:bv64, 0x2:bv64));
+         var v_1:bv64 := 0x111:bv64;
+         goto (%main_2_1);
+       ];
+       block %main_2_1 [
+         var namnam:bv64 := bvor(v_5:bv64, 0xffffffff:bv64);
+         var v_6:bv64 := bvadd(v_5:bv64, 420);
+         goto (%main_return);
+       ];
+       block %main_return (
+         var v_3:bv64 := phi(%main_2_1 -> v_6:bv64, %main_1 -> v_8:bv64)
+       ) [
+         var v_4:bv64 := bvadd(v_3:bv64, 0x1:bv64);
+         var out:bv64 := v_4:bv64;
+         return;
+       ];
+    ];
+    proc @OX() -> (OX_out:bv64)
+[
+    block %OX_entry [
+      var OX_out:bv64 := 0:bv64;
+      return;
+    ];
+];
+
+proc @OY() -> (OY_out:bv64)
+[
+    block %OY_entry [
+      var OY_out:bv64 := 1:bv64;
+      return;
+    ];
+];
+    |}
+  in
+  let program = lst.prog in
+  let proc = Program.entry_proc_exn program in
+  let v =
+    match Procedure.lookup_local_decl proc "v_1" with
+    | Some v -> v
+    | None -> failwith "Bleh"
+  in
+  let proc_split = SSIfy.ssify v proc in
+    Program.output_proc_pretty stdout proc_split;
+  [%expect
+    {|
+    proc @main(i:bv64)  -> (out:bv64) {  }
+
+
+    [
+       block %main_entry [
+         var v_9:bv64 := 0x0:bv64;
+         (var v_2:bv64=OX_out) := call @OX();
+         goto (%main_2,%main_1);
+       ];
+       block %main_1 (
+         var v_12:bv64 := phi(%main_entry -> ⊥:bv64, %main_1 -> v_12:bv64),
+         var v_7:bv64 := phi(%main_1 -> v_8:bv64, %main_entry -> v_2:bv64)
+       ) [
+         guard bvsmod(i:bv64, 0x2:bv64);
+         var nam:bv64 := bvadd(v_7:bv64, 0xa:bv64);
+         var v_8:bv64 := bvadd(v_7:bv64, v_7:bv64);
+         var tmp:bv64 := bvadd(i:bv64, 0x1:bv64);
+         goto (%main_return,%main_1);
+       ];
+       block %main_2 ( var v_5:bv64 := phi(%main_entry -> v_2:bv64) ) [
+         guard boolnot(bvsmod(i:bv64, 0x2:bv64));
+         var v_11:bv64 := 0x111:bv64;
+         goto (%main_2_1);
+       ];
+       block %main_2_1 [
+         var namnam:bv64 := bvor(v_5:bv64, 0xffffffff:bv64);
+         var v_6:bv64 := bvadd(v_5:bv64, 420);
+         goto (%main_return);
+       ];
+       block %main_return (
+         var ⊥:bv64 := phi(%main_2_1 -> v_11:bv64, %main_1 -> v_12:bv64),
+         var v_3:bv64 := phi(%main_2_1 -> v_6:bv64, %main_1 -> v_8:bv64)
+       ) [
+         var v_4:bv64 := bvadd(v_3:bv64, 0x1:bv64);
+         var out:bv64 := v_4:bv64;
+         return;
+       ]
+    ]
+    |}]
