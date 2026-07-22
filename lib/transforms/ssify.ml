@@ -151,11 +151,12 @@ module SSIfy = struct
     include Procedure.G
 
     let succ = pred
+    let empty () = empty
 
     include Procedure.RevG
   end
 
-  module RevDom = Graph.Dominator.Make (Rev)
+  module RevDom = Graph.Dominator.Make_graph (Rev)
 
   module G_Dom = struct
     include Procedure.G
@@ -291,17 +292,6 @@ module SSIfy = struct
     | Formal_In vars, _ | _, Formal_Out vars -> true
     | Formal_Out vars, _ | _, Formal_In vars -> false
 
-  (** Takes the CFG graph and a current vertex and gives the list of immediately
-      dominating vertices *)
-  let get_dominated_vertices (graph : Dom.t) (vertex : Dom.vertex) idom =
-    (* TODO: Keep a cache of this so that we don't recompute vertices *)
-    Dom.idom_to_dom_tree graph idom vertex
-
-  let dom_frontier (graph : Dom.t) (vertex : Dom.vertex) idom dom_tree :
-      VertexSet.t =
-    (* TODO: Keep a cache of this so that we don't recompute vertices *)
-    Dom.compute_dom_frontier graph dom_tree idom vertex |> VertexSet.of_list
-
   (** Adds a new phi for variable var from associated predecessor blocks with
       pred_block_ids to the block associated with block_id in the procedure proc
   *)
@@ -413,7 +403,8 @@ module SSIfy = struct
 
     (** Splits the range of the program *)
     let split (v : Var.t) ((i_up : VertexSet.t), (i_down : VertexSet.t)) proc
-        (dom_functions : Dom.dom_functions) =
+        (dom_functions : Dom.dom_functions)
+        (rev_dom_functions : Dom.dom_functions) =
       let cfg : Dom.t =
         match Procedure.graph proc with
         | Some g -> g
@@ -472,13 +463,13 @@ module SSIfy = struct
               Procedure.G.fold_pred
                 (fun pred_vert sups' ->
                   VertexSet.union sups'
-                    (dom_frontier rev_cfg pred_vert dom_functions.idom
-                       dom_functions.dom_tree))
+                    (* Dom.compute_dom_frontier graph dom_tree idom vertex |> VertexSet.of_list *)
+                    (rev_dom_functions.dom_frontier pred_vert
+                    |> VertexSet.of_list))
                 rev_cfg vert sups
             else
               VertexSet.union sups
-                (dom_frontier rev_cfg vert dom_functions.idom
-                   dom_functions.dom_tree))
+                (rev_dom_functions.dom_frontier vert |> VertexSet.of_list))
           i_up VertexSet.empty
       in
 
@@ -492,8 +483,7 @@ module SSIfy = struct
               Procedure.G.fold_succ
                 (fun succ_vert sdown' ->
                   VertexSet.union sdown'
-                    (dom_functions.dom_frontier succ_vert |> VertexSet.of_list)
-                  (* (dom_frontier cfg succ_vert idom dom_tree) *))
+                    (dom_functions.dom_frontier succ_vert |> VertexSet.of_list))
                 cfg vert sdown
             else
               VertexSet.union sdown
@@ -644,6 +634,10 @@ module SSIfy = struct
             }
       in
 
+      (* We have an optional og_bid here to differentiate between when set_use is
+      called on a statement, and when it is called on a phi node located in the
+      sucessor m to the current node n. In the latter case, we need the block id of n to
+      know which variable in the rhs of a phi we want to edit. *)
       let set_use ?(og_bid : ID.t option) (curr_info : ssi_info)
           (inst : Instruction.t) =
         (* while Def(stack.peek()) does not dominate inst do *)
@@ -651,7 +645,8 @@ module SSIfy = struct
           match Stack.top_opt stack with
           | None -> ()
           | Some v' ->
-              (* It's ok to use the outdated defs map here, because we only use the location pointers, not the potentially outdated instruction *)
+              (* It's ok to use the outdated defs map here, because we only 
+              use the location pointers, not the potentially outdated instruction *)
               let v'_def_instructions = DefUseMap.find curr_info.defs v' in
               if
                 List.for_all
@@ -803,8 +798,7 @@ module SSIfy = struct
                 info_step_three next_vertices
           | _ -> start_info
         in
-        List.fold_left visit_begin_node final_info
-          (get_dominated_vertices cfg node dom_functions.idom)
+        List.fold_left visit_begin_node final_info (dom_functions.dom_tree node)
       in
       let rename_info = visit_begin_node split_info Procedure.Vert.Entry in
 
@@ -1070,7 +1064,8 @@ module SSIfy = struct
         rename_info.non_actual_insts rename_info.proc
   end
 
-  let ssify ?splitting_strategy (v : Var.t) proc dom_functions =
+  let ssify ?splitting_strategy (v : Var.t) proc dom_functions rev_dom_functions
+      =
     let pv =
       match splitting_strategy with
       | None ->
@@ -1085,7 +1080,7 @@ module SSIfy = struct
     let bot_var =
       Var.create Bincaml_util.Unicode.bot_char (Var.typ v) ~scope:(Var.scope v)
     in
-    SplitLiveRange.split v pv proc dom_functions
+    SplitLiveRange.split v pv proc dom_functions rev_dom_functions
     |> VariableRenaming.rename v bot_var dom_functions
     |> DeadCodeElim.clean v bot_var
 
@@ -1095,8 +1090,12 @@ module SSIfy = struct
       match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
     in
     let dom_functions = Dom.compute_all cfg Procedure.Vert.Entry in
+    let rev_cfg : RevDom.t =
+      match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
+    in
+    let rev_dom_functions = Dom.compute_all rev_cfg Procedure.Vert.Return in
     Var.Decls.fold
-      (fun name var p -> ssify var p dom_functions)
+      (fun name var p -> ssify var p dom_functions rev_dom_functions)
       (* (fun name var p -> if not (StringMap.mem name (Procedure.formal_in_params p)) then ssify var p else p) *)
       all_vars proc
 
@@ -1306,22 +1305,6 @@ proc @OY() -> (OY_out:bv64)
   let program = lst.prog in
   let ssi_prog = SSIfy.ssify_prog program in
   Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
-  (*
-  let program = lst.prog in
-  let proc = Program.entry_proc_exn program in
-  let v =
-    match Procedure.lookup_local_decl proc "nam" with
-    | Some v -> v
-    | None -> failwith "Bleh"
-  in
-  let cfg =
-    match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
-  in
-  let dom_functions = SSIfy.Dom.compute_all cfg Procedure.Vert.Entry in
-
-  let proc_split = SSIfy.ssify v proc dom_functions in
-  Program.output_proc_pretty stdout proc_split;
-  *)
   [%expect
     {|
     proc @main(i:bv64)  -> (out:bv64) {  }
@@ -1863,8 +1846,12 @@ proc @OY() -> (OY_out:bv64)
     match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
   in
   let dom_functions = SSIfy.Dom.compute_all cfg Procedure.Vert.Entry in
+  let rev_cfg : SSIfy.RevDom.t =
+    match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
+  in
+  let rev_dom_functions = SSIfy.Dom.compute_all rev_cfg Procedure.Vert.Return in
 
-  let proc_split = SSIfy.ssify v proc dom_functions in
+  let proc_split = SSIfy.ssify v proc dom_functions rev_dom_functions in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|
@@ -2205,22 +2192,22 @@ proc @bool_id(a:bool) -> (o:bool)
 
     [
        block %entry [
-         var x_41:bv64 := bvadd(x:bv64, 0x1:bv64);
-         var y_40:bv64 := bvadd(y:bv64, 0x1:bv64);
+         var x_40:bv64 := bvadd(x:bv64, 0x1:bv64);
+         var y_39:bv64 := bvadd(y:bv64, 0x1:bv64);
          goto (%ret,%a);
        ];
        block %a (
-         var x_21:bv64 := phi(%f_entry -> x_1:bv64, %f_a -> x_3:bv64),
-         var y_27:bv64 := phi(%f_entry -> y_1:bv64, %f_a -> y_3:bv64)
+         var x_20:bv64 := phi(%entry -> x_40:bv64, %a -> x_26:bv64),
+         var y_26:bv64 := phi(%entry -> y_39:bv64, %a -> y_23:bv64)
        ) [
-         var x_23:bv64 := bvadd(x_21:bv64, 0x1:bv64);
-         var y_24:bv64 := y_27:bv64;
+         var x_26:bv64 := bvadd(x_20:bv64, 0x1:bv64);
+         var y_23:bv64 := y_26:bv64;
          goto (%ret,%a);
        ];
        block %ret (
-         var x_31:bv64 := phi(%f_entry -> x_1:bv64, %f_a -> x_3:bv64),
-         var y_17:bv64 := phi(%f_entry -> y_1:bv64, %f_a -> y_3:bv64)
-       ) [ (var o_1:bv64 := x_31:bv64, var p_5:bv64 := y_17:bv64); return; ]
+         var x_34:bv64 := phi(%entry -> x_40:bv64, %a -> x_26:bv64),
+         var y_17:bv64 := phi(%entry -> y_39:bv64, %a -> y_23:bv64)
+       ) [ (var o_1:bv64 := x_34:bv64, var p_5:bv64 := y_17:bv64); return; ]
     ];
     proc @cross(a:bv64, b:bv64)  -> (o:bv64) {  }
 
