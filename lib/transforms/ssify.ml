@@ -29,8 +29,6 @@ open Containers
 
   KNOWN ISSUES:
   - Formal In and Out params are currently unaccounted for. The fix for this is in progress.
-  - Calling ssify_prog instead of ssify on a specific variable causes the variable IDs to have larger numbers, indicating that
-    split is creating multiple phis for the same variable only when ssify_prog is run, even though there should be no difference
 *)
 
 module SSIfy = struct
@@ -502,7 +500,7 @@ module SSIfy = struct
           match vert with
           | Procedure.Vert.Begin block_id | Procedure.Vert.End block_id ->
               let block = Procedure.find_block curr_info.proc block_id in
-              if has_undefined_var v block_id proc then
+              if has_undefined_var v block_id curr_info.proc then
                 (* If block does not already contain any definition of v then *)
                 if is_join vert then
                   (* If block.is_join then insert v <- phi([v..v]) in the block *)
@@ -1084,8 +1082,9 @@ module SSIfy = struct
     |> VariableRenaming.rename v bot_var dom_functions
     |> DeadCodeElim.clean v bot_var
 
-  let ssify_proc ?splitting_strategy (proc : (Var.t, Program.e) Procedure.t) =
-    let all_vars = Procedure.local_decls proc in
+  let ssify_proc ?splitting_strategy (proc : (Var.t, Program.e) Procedure.t)
+      (og_vars : Var.t Var.Decls.t) =
+    (* let all_vars = Procedure.local_decls proc in *)
     let cfg =
       match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
     in
@@ -1097,11 +1096,126 @@ module SSIfy = struct
     Var.Decls.fold
       (fun name var p -> ssify var p dom_functions rev_dom_functions)
       (* (fun name var p -> if not (StringMap.mem name (Procedure.formal_in_params p)) then ssify var p else p) *)
-      all_vars proc
+      og_vars proc
 
   let ssify_prog ?splitting_strategy (prog : Program.t) =
-    Program.map_procedures (fun id proc -> ssify_proc proc) prog
+    Program.map_procedures
+      (fun id proc ->
+        let og_vars = Var.Decls.copy (Procedure.local_decls proc) in
+        ssify_proc proc og_vars)
+      prog
 end
+
+let%expect_test "test_SSIFY_2" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+prog entry @main;
+
+proc @main() -> (out:bv64)
+[
+    block %main_entry [
+      var nam:bv64 := 12345:bv64;
+      var v:bv64 := 0:bv64;
+      (var v:bv64) := call @OX();
+      goto(%main_1, %main_2);
+    ];
+
+    block %main_1
+    [
+      var nam:bv64 := bvadd(v:bv64, 10:bv64);
+      var v:bv64 := bvadd(v, v);
+      goto(%main_return, %main_1);
+    ];
+
+    block %main_2
+    [
+      var nam:bv64 := bvadd(nam:bv64, v:bv64);
+      goto(%main_2_1);
+    ];
+
+    block %main_2_1
+    [
+      var nam:bv64 := bvor(v:bv64, 0xffffffff:bv64);
+      var v:bv64 := bvadd(v:bv64, nam);
+      goto(%main_return);
+    ];
+
+    block %main_return
+      [
+      var v:bv64 := bvadd(v, nam:bv64);
+      return(v);
+      ];
+];
+
+proc @OX() -> (OX_out:bv64)
+[
+    block %OX_entry [
+      var OX_out:bv64 := 0:bv64;
+      return;
+    ];
+];
+
+proc @OY() -> (OY_out:bv64)
+[
+    block %OY_entry [
+      var OY_out:bv64 := 1:bv64;
+      return;
+    ];
+];
+    |}
+  in
+  let program = lst.prog in
+  let ssi_prog = SSIfy.ssify_prog program in
+  Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
+  [%expect
+    {|
+    proc @main()  -> (out:bv64) {  }
+
+
+    [
+       block %main_entry [
+         var nam_1:bv64 := 0x3039:bv64;
+         var v_1:bv64 := 0x0:bv64;
+         (var v_2:bv64=OX_out) := call @OX();
+         goto (%main_2,%main_1);
+       ];
+       block %main_1 (
+         var v_7:bv64 := phi(%main_1 -> v_8:bv64, %main_entry -> v_2:bv64)
+       ) [
+         var nam_6:bv64 := bvadd(v_7:bv64, 0xa:bv64);
+         var v_8:bv64 := bvadd(v_7:bv64, v_7:bv64);
+         goto (%main_return,%main_1);
+       ];
+       block %main_2 (
+         var v_5:bv64 := phi(%main_entry -> v_2:bv64),
+         var nam_3:bv64 := phi(%main_entry -> nam_1:bv64)
+       ) [ var nam_4:bv64 := bvadd(nam_3:bv64, v_5:bv64); goto (%main_2_1); ];
+       block %main_2_1 [
+         var nam_5:bv64 := bvor(v_5:bv64, 0xffffffff:bv64);
+         var v_6:bv64 := bvadd(v_5:bv64, nam_5:bv64);
+         goto (%main_return);
+       ];
+       block %main_return (
+         var v_3:bv64 := phi(%main_2_1 -> v_6:bv64, %main_1 -> v_8:bv64),
+         var nam_2:bv64 := phi(%main_2_1 -> nam_5:bv64, %main_1 -> nam_6:bv64)
+       ) [
+         var v_4:bv64 := bvadd(v_3:bv64, nam_2:bv64);
+         var out_1:bv64 := v_4:bv64;
+         return;
+       ]
+    ];
+    proc @OX()  -> (OX_out:bv64) {  }
+
+
+    [ block %OX_entry [ var OX_out_1:bv64 := 0x0:bv64; return; ] ];
+    proc @OY()  -> (OY_out:bv64) {  }
+
+
+    [ block %OY_entry [ var OY_out_1:bv64 := 0x1:bv64; return; ] ];
+    prog entry @main;
+    |}]
+
 
 let%expect_test "test_rename" =
   let lst =
@@ -1322,7 +1436,7 @@ proc @OY() -> (OY_out:bv64)
          var v_7:bv64 := phi(%main_1 -> v_8:bv64, %main_entry -> v_2:bv64)
        ) [
          guard bvsmod(i_3:bv64, 0x2:bv64);
-         var nam_48:bv64 := bvadd(v_7:bv64, 0xa:bv64);
+         var nam_3:bv64 := bvadd(v_7:bv64, 0xa:bv64);
          var v_8:bv64 := bvadd(v_7:bv64, v_7:bv64);
          var tmp_3:bv64 := bvadd(i_3:bv64, 0x1:bv64);
          var i_4:bv64 := tmp_3:bv64;
@@ -1331,10 +1445,10 @@ proc @OY() -> (OY_out:bv64)
        block %main_2 (
          var i_2:bv64 := phi(%main_entry -> i:bv64),
          var v_5:bv64 := phi(%main_entry -> v_2:bv64),
-         var namnam_8:bv64 := phi(%main_entry -> namnam_1:bv64)
+         var namnam_3:bv64 := phi(%main_entry -> namnam_1:bv64)
        ) [
          guard boolnot(bvsmod(i_2:bv64, 0x2:bv64));
-         var nam_59:bv64 := bvadd(namnam_8:bv64, v_5:bv64);
+         var nam_2:bv64 := bvadd(namnam_3:bv64, v_5:bv64);
          goto (%main_2_1);
        ];
        block %main_2_1 [
@@ -1346,14 +1460,14 @@ proc @OY() -> (OY_out:bv64)
          var v_3:bv64 := phi(%main_2_1 -> v_6:bv64, %main_1 -> v_8:bv64)
        ) [
          var v_4:bv64 := bvadd(v_3:bv64, 0x1:bv64);
-         var out_4:bv64 := v_4:bv64;
+         var out_1:bv64 := v_4:bv64;
          return;
        ]
     ];
     proc @OX()  -> (OX_out:bv64) {  }
 
 
-    [ block %OX_entry [ var OX_out_4:bv64 := 0x0:bv64; return; ] ];
+    [ block %OX_entry [ var OX_out_1:bv64 := 0x0:bv64; return; ] ];
     proc @OY()  -> (OY_out:bv64) {  }
 
 
@@ -1437,13 +1551,13 @@ let program = lst.prog in
 
 
     [
-       block %main_entry [ var v_28:bv64 := 0; goto (%main_2,%main_1); ];
+       block %main_entry [ var v_1:bv64 := 0; goto (%main_2,%main_1); ];
        block %main_1 (
          var i_3:bv64 := phi(%main_entry -> i:bv64),
-         var v_15:bv64 := phi(%main_entry -> v_28:bv64)
+         var v_6:bv64 := phi(%main_entry -> v_1:bv64)
        ) [
          guard bvsmod(i_3:bv64, 0x2:bv64);
-         var v_7:bv64 := bvadd(v_15:bv64, 2);
+         var v_7:bv64 := bvadd(v_6:bv64, 2);
          goto (%main_4,%main_3);
        ];
        block %main_3 (
@@ -1464,7 +1578,7 @@ let program = lst.prog in
        ];
        block %main_2 (
          var i_2:bv64 := phi(%main_entry -> i:bv64),
-         var v_4:bv64 := phi(%main_entry -> v_28:bv64)
+         var v_4:bv64 := phi(%main_entry -> v_1:bv64)
        ) [
          guard boolnot(bvsmod(i_2:bv64, 0x2:bv64));
          var v_5:bv64 := bvadd(v_4:bv64, 1);
@@ -1475,7 +1589,7 @@ let program = lst.prog in
             %main_3 -> v_11:bv64)
        ) [
          var v_3:bv64 := bvadd(v_2:bv64, 0x1:bv64);
-         var out_16:bv64 := v_3:bv64;
+         var out_1:bv64 := v_3:bv64;
          return;
        ]
     ];
@@ -1533,10 +1647,10 @@ prog entry @main;
 
 
     [
-       block %main_entry [ var v_13:bv64 := 0; goto (%main_2,%main_1); ];
+       block %main_entry [ var v_1:bv64 := 0; goto (%main_2,%main_1); ];
        block %main_1 (
          var i_3:bv64 := phi(%main_entry -> i:bv64),
-         var v_7:bv64 := phi(%main_entry -> v_13:bv64)
+         var v_7:bv64 := phi(%main_entry -> v_1:bv64)
        ) [
          guard bvsmod(i_3:bv64, 0x2:bv64);
          var v_8:bv64 := bvadd(v_7:bv64, 2);
@@ -1544,7 +1658,7 @@ prog entry @main;
        ];
        block %main_2 (
          var i_2:bv64 := phi(%main_2_1 -> i_2:bv64, %main_entry -> i:bv64),
-         var v_4:bv64 := phi(%main_2_1 -> v_11:bv64, %main_entry -> v_13:bv64)
+         var v_4:bv64 := phi(%main_2_1 -> v_6:bv64, %main_entry -> v_1:bv64)
        ) [
          guard boolnot(bvsmod(i_2:bv64, 0x2:bv64));
          var v_5:bv64 := bvadd(v_4:bv64, 1);
@@ -1552,14 +1666,14 @@ prog entry @main;
        ];
        block %main_2_1 [
          guard boolnot(bvsmod(i_2:bv64, 0x2:bv64));
-         var v_11:bv64 := bvadd(v_5:bv64, 0x4:bv64);
+         var v_6:bv64 := bvadd(v_5:bv64, 0x4:bv64);
          goto (%main_return,%main_2);
        ];
        block %main_return (
-         var v_2:bv64 := phi(%main_2_1 -> v_11:bv64, %main_1 -> v_8:bv64)
+         var v_2:bv64 := phi(%main_2_1 -> v_6:bv64, %main_1 -> v_8:bv64)
        ) [
          var v_3:bv64 := bvadd(v_2:bv64, 0x1:bv64);
-         var out_4:bv64 := v_3:bv64;
+         var out_1:bv64 := v_3:bv64;
          return;
        ]
     ];
@@ -1604,10 +1718,10 @@ prog entry @main;
 
 
     [
-       block %main_entry [ var v_6:bv64 := 0; goto (%main_1); ];
+       block %main_entry [ var v_1:bv64 := 0; goto (%main_1); ];
        block %main_1 (
          var i_1:bv64 := phi(%main_1 -> i_1:bv64, %main_entry -> i:bv64),
-         var v_2:bv64 := phi(%main_1 -> v_3:bv64, %main_entry -> v_6:bv64)
+         var v_2:bv64 := phi(%main_1 -> v_3:bv64, %main_entry -> v_1:bv64)
        ) [
          guard bvsmod(i_1:bv64, 0x2:bv64);
          var v_3:bv64 := bvadd(v_2:bv64, 2);
@@ -1619,7 +1733,7 @@ prog entry @main;
        ) [
          guard boolnot(bvsmod(i_2:bv64, 0x2:bv64));
          var v_5:bv64 := bvadd(v_4:bv64, 0x1:bv64);
-         var out_6:bv64 := v_5:bv64;
+         var out_2:bv64 := v_5:bv64;
          return;
        ]
     ];
@@ -1674,18 +1788,18 @@ proc @main () -> ()
 
 
     [
-       block %e [ var v_14:bv64 := 0; goto (%e3,%e2,%e1); ];
+       block %e [ var v_1:bv64 := 0; goto (%e3,%e2,%e1); ];
        block %e1 (
-         var v_8:bv64 := phi(%e3 -> v_11:bv64, %e2 -> v_7:bv64, %e -> v_14:bv64)
+         var v_8:bv64 := phi(%e3 -> v_6:bv64, %e2 -> v_7:bv64, %e -> v_1:bv64)
        ) [ var v_9:bv64 := bvadd(v_8:bv64, 1); goto (%e2); ];
-       block %e2 ( var v_7:bv64 := phi(%e1 -> v_9:bv64, %e -> v_14:bv64) ) [
+       block %e2 ( var v_7:bv64 := phi(%e1 -> v_9:bv64, %e -> v_1:bv64) ) [
          goto (%e4,%e1);
        ];
-       block %e3 ( var v_5:bv64 := phi(%e -> v_14:bv64) ) [
-         var v_11:bv64 := bvadd(v_5:bv64, 2);
+       block %e3 ( var v_5:bv64 := phi(%e -> v_1:bv64) ) [
+         var v_6:bv64 := bvadd(v_5:bv64, 2);
          goto (%e4,%e1);
        ];
-       block %e4 ( var v_2:bv64 := phi(%e3 -> v_11:bv64, %e2 -> v_7:bv64) ) [
+       block %e4 ( var v_2:bv64 := phi(%e3 -> v_6:bv64, %e2 -> v_7:bv64) ) [
          var v_3:bv64 := bvadd(v_2:bv64, 2);
          goto (%e5);
        ];
@@ -1744,33 +1858,33 @@ prog entry @main;
 
 
     [
-       block %e [ var v_224:bv64 := 0; var x_1:bv64 := 2; goto (%e1,%e2,%e3); ];
+       block %e [ var v_52:bv64 := 0; var x_1:bv64 := 2; goto (%e1,%e2,%e3); ];
        block %e3 (
          var x_8:bv64 := phi(%e -> x_1:bv64),
-         var v_174:bv64 := phi(%e -> v_224:bv64)
-       ) [ var v_27:bv64 := bvadd(v_174:bv64, 2); goto (%e4,%e1); ];
+         var v_51:bv64 := phi(%e -> v_52:bv64)
+       ) [ var v_19:bv64 := bvadd(v_51:bv64, 2); goto (%e4,%e1); ];
        block %e2 (
          var x_6:bv64 := phi(%e1 -> x_5:bv64, %e -> x_1:bv64),
-         var v_91:bv64 := phi(%e1 -> v_77:bv64, %e -> v_224:bv64)
+         var v_41:bv64 := phi(%e1 -> v_35:bv64, %e -> v_52:bv64)
        ) [
-         var v_108:bv64 := v_91:bv64;
+         var v_45:bv64 := v_41:bv64;
          var x_7:bv64 := bvadd(x_6:bv64, 2);
          goto (%e4,%e1);
        ];
        block %e1 (
          var x_4:bv64 := phi(%e -> x_1:bv64, %e2 -> x_7:bv64, %e3 -> x_8:bv64),
-         var v_197:bv64 := phi(%e3 -> v_27:bv64, %e2 -> v_108:bv64, %e -> v_224:bv64)
+         var v_13:bv64 := phi(%e3 -> v_19:bv64, %e2 -> v_45:bv64, %e -> v_52:bv64)
        ) [
          var x_5:bv64 := bvadd(x_4:bv64, 1);
-         var v_77:bv64 := bvadd(v_197:bv64, 1);
+         var v_35:bv64 := bvadd(v_13:bv64, 1);
          goto (%e2);
        ];
        block %e4 (
          var x_2:bv64 := phi(%e2 -> x_7:bv64, %e3 -> x_8:bv64),
-         var v_94:bv64 := phi(%e3 -> v_27:bv64, %e2 -> v_108:bv64)
-       ) [ var v_72:bv64 := bvadd(v_94:bv64, 2); goto (%e5); ];
+         var v_21:bv64 := phi(%e3 -> v_19:bv64, %e2 -> v_45:bv64)
+       ) [ var v_30:bv64 := bvadd(v_21:bv64, 2); goto (%e5); ];
        block %e5 [
-         var v_64:bv64 := bvadd(v_72:bv64, 67);
+         var v_26:bv64 := bvadd(v_30:bv64, 67);
          var x_3:bv64 := bvadd(x_2:bv64, 5);
          return;
        ]
@@ -1976,23 +2090,23 @@ proc @main_local () -> () [
     [
        block %entry [
          var v0_1:bv64 := 0x0:bv64;
-         var r1_16:bv64 := 0x0:bv64;
+         var r1_1:bv64 := 0x0:bv64;
          goto (%loop);
        ];
        block %loop (
-         var v0_7:bv64 := phi(%loop_true -> v0_10:bv64, %entry -> v0_1:bv64),
-         var r1_11:bv64 := phi(%loop_true -> r1_35:bv64, %entry -> r1_16:bv64)
+         var v0_2:bv64 := phi(%loop_true -> v0_5:bv64, %entry -> v0_1:bv64),
+         var r1_2:bv64 := phi(%loop_true -> r1_5:bv64, %entry -> r1_1:bv64)
        ) [ goto (%loop_false,%loop_true); ];
        block %loop_true (
-         var v0_4:bv64 := phi(%loop -> v0_7:bv64),
-         var r1_23:bv64 := phi(%loop -> r1_11:bv64)
+         var v0_4:bv64 := phi(%loop -> v0_2:bv64),
+         var r1_4:bv64 := phi(%loop -> r1_2:bv64)
        ) [
          guard bvult(v0_4:bv64, 0xa:bv64);
-         var r1_35:bv64 := bvadd(r1_23:bv64, v0_4:bv64);
-         var v0_10:bv64 := bvadd(v0_4:bv64, 0x1:bv64);
+         var r1_5:bv64 := bvadd(r1_4:bv64, v0_4:bv64);
+         var v0_5:bv64 := bvadd(v0_4:bv64, 0x1:bv64);
          goto (%loop);
        ];
-       block %loop_false ( var v0_3:bv64 := phi(%loop -> v0_7:bv64) ) [
+       block %loop_false ( var v0_3:bv64 := phi(%loop -> v0_2:bv64) ) [
          guard boolnot(bvult(v0_3:bv64, 0xa:bv64));
          return;
        ]
@@ -2134,13 +2248,13 @@ proc @bool_id(a:bool) -> (o:bool)
 
     [
        block %main [
-         (var b_2:bv64=o) := call @f(x=a:bv64);
-         (var c_1:bv64=o, var d_1:bv64=p) := call @loop(x=b_2:bv64, y=b_2:bv64);
-         (var e_3:bv64=o) := call @cross(a=d_1:bv64, b=bvadd(d_1:bv64, 0x1:bv64));
+         (var b_1:bv64=o) := call @f(x=a:bv64);
+         (var c_1:bv64=o, var d_1:bv64=p) := call @loop(x=b_1:bv64, y=b_1:bv64);
+         (var e_1:bv64=o) := call @cross(a=d_1:bv64, b=bvadd(d_1:bv64, 0x1:bv64));
          (var f_1:bv64 := bvadd(0x1:bv64, c_1:bv64),
-          var g_1:bv64 := bvadd(0x1:bv64, e_3:bv64));
+          var g_1:bv64 := bvadd(0x1:bv64, e_1:bv64));
          (var y_1:bool=o) := call @bool_id(a=x:bool);
-         var z_2:bool := y_1:bool;
+         var z_1:bool := y_1:bool;
          return;
        ]
     ];
@@ -2154,20 +2268,20 @@ proc @bool_id(a:bool) -> (o:bool)
          goto (%f_d,%f_c);
        ];
        block %f_b ( var x_4:bv64 := phi(%f_entry -> x:bv64) ) [
-         (var y_75:bv64=o, var z_19:bv64=p) := call @g(x=x_4:bv64);
+         (var y_25:bv64=o, var z_4:bv64=p) := call @g(x=x_4:bv64);
          goto (%f_d,%f_c);
        ];
-       block %f_c ( var y_69:bv64 := phi(%f_a -> y_9:bv64, %f_b -> y_75:bv64) ) [
-         var w_68:bv64 := y_69:bv64;
+       block %f_c ( var y_19:bv64 := phi(%f_a -> y_9:bv64, %f_b -> y_25:bv64) ) [
+         var w_17:bv64 := y_19:bv64;
          goto (%f_return);
        ];
-       block %f_d ( var y_57:bv64 := phi(%f_a -> y_9:bv64, %f_b -> y_75:bv64) ) [
-         (var w_42:bv64=o, var p_2:bv64=p) := call @g(x=y_57:bv64);
+       block %f_d ( var y_12:bv64 := phi(%f_a -> y_9:bv64, %f_b -> y_25:bv64) ) [
+         (var w_11:bv64=o, var p_2:bv64=p) := call @g(x=y_12:bv64);
          goto (%f_return);
        ];
        block %f_return (
-         var w_36:bv64 := phi(%f_c -> w_68:bv64, %f_d -> w_42:bv64)
-       ) [ var o_1:bv64 := w_36:bv64; return; ]
+         var w_5:bv64 := phi(%f_c -> w_17:bv64, %f_d -> w_11:bv64)
+       ) [ var o_1:bv64 := w_5:bv64; return; ]
     ];
     proc @g(x:bv64)  -> (o:bv64, p:bv64) {  }
 
@@ -2175,39 +2289,39 @@ proc @bool_id(a:bool) -> (o:bool)
     [
        block %g_entry [ goto (%g_b,%g_a); ];
        block %g_a ( var x_3:bv64 := phi(%g_entry -> x:bv64) ) [
-         var y_9:bv64 := x_3:bv64;
+         var y_6:bv64 := x_3:bv64;
          goto (%g_return);
        ];
        block %g_b ( var x_2:bv64 := phi(%g_entry -> x:bv64) ) [
-         (var y_36:bv64=o) := call @f(x=x_2:bv64);
+         (var y_12:bv64=o) := call @f(x=x_2:bv64);
          goto (%g_return);
        ];
        block %g_return (
          var x_1:bv64 := phi(%g_b -> x_2:bv64, %g_a -> x_3:bv64),
-         var y_29:bv64 := phi(%g_a -> y_9:bv64, %g_b -> y_36:bv64)
-       ) [ (var o_1:bv64 := x_1:bv64, var p_4:bv64 := y_29:bv64); return; ]
+         var y_8:bv64 := phi(%g_a -> y_6:bv64, %g_b -> y_12:bv64)
+       ) [ (var o_1:bv64 := x_1:bv64, var p_1:bv64 := y_8:bv64); return; ]
     ];
     proc @loop(x:bv64, y:bv64)  -> (o:bv64, p:bv64) {  }
 
 
     [
        block %entry [
-         var x_40:bv64 := bvadd(x:bv64, 0x1:bv64);
-         var y_39:bv64 := bvadd(y:bv64, 0x1:bv64);
+         var x_5:bv64 := bvadd(x:bv64, 0x1:bv64);
+         var y_5:bv64 := bvadd(y:bv64, 0x1:bv64);
          goto (%ret,%a);
        ];
        block %a (
-         var x_20:bv64 := phi(%entry -> x_40:bv64, %a -> x_26:bv64),
-         var y_26:bv64 := phi(%entry -> y_39:bv64, %a -> y_23:bv64)
+         var x_15:bv64 := phi(%entry -> x_5:bv64, %a -> x_9:bv64),
+         var y_15:bv64 := phi(%entry -> y_5:bv64, %a -> y_12:bv64)
        ) [
-         var x_26:bv64 := bvadd(x_20:bv64, 0x1:bv64);
-         var y_23:bv64 := y_26:bv64;
+         var x_9:bv64 := bvadd(x_15:bv64, 0x1:bv64);
+         var y_12:bv64 := y_15:bv64;
          goto (%ret,%a);
        ];
        block %ret (
-         var x_34:bv64 := phi(%entry -> x_40:bv64, %a -> x_26:bv64),
-         var y_17:bv64 := phi(%entry -> y_39:bv64, %a -> y_23:bv64)
-       ) [ (var o_1:bv64 := x_34:bv64, var p_5:bv64 := y_17:bv64); return; ]
+         var x_11:bv64 := phi(%entry -> x_5:bv64, %a -> x_9:bv64),
+         var y_9:bv64 := phi(%entry -> y_5:bv64, %a -> y_12:bv64)
+       ) [ (var o_1:bv64 := x_11:bv64, var p_1:bv64 := y_9:bv64); return; ]
     ];
     proc @cross(a:bv64, b:bv64)  -> (o:bv64) {  }
 
@@ -2215,15 +2329,15 @@ proc @bool_id(a:bool) -> (o:bool)
     [
        block %entry [ goto (%b,%a); ];
        block %a ( var a_3:bv64 := phi(%entry -> a:bv64) ) [
-         var o_22:bv64 := a_3:bv64;
+         var o_13:bv64 := a_3:bv64;
          goto (%ret);
        ];
        block %b ( var b_2:bv64 := phi(%entry -> b:bv64) ) [
-         var o_18:bv64 := bvsub(b_2:bv64, 0x1:bv64);
+         var o_9:bv64 := bvsub(b_2:bv64, 0x1:bv64);
          goto (%ret);
        ];
-       block %ret ( var o_5:bv64 := phi(%a -> o_22:bv64, %b -> o_18:bv64) ) [
-         var o_44:bv64 := o_5:bv64;
+       block %ret ( var o_5:bv64 := phi(%a -> o_13:bv64, %b -> o_9:bv64) ) [
+         var o_14:bv64 := o_5:bv64;
          return;
        ]
     ];
