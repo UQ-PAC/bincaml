@@ -269,13 +269,14 @@ module SSIfy = struct
 
   (** Takes the CFG graph and a current vertex and gives the list of immediately
       dominating vertices *)
-  let get_dominated_vertices (graph : Dom.t) (vertex : Dom.vertex) =
-    let idom = Dom.compute_idom graph Procedure.Vert.Entry in
+  let get_dominated_vertices (graph : Dom.t) (vertex : Dom.vertex) idom =
+    (* let idom = Dom.compute_idom graph Procedure.Vert.Entry in *)
     Dom.idom_to_dom_tree graph idom vertex
 
-  let dom_frontier (graph : Dom.t) (vertex : Dom.vertex) : VertexSet.t =
-    let idom = Dom.compute_idom graph Procedure.Vert.Entry in
-    let dom_tree = Dom.idom_to_dom_tree graph idom in
+  let dom_frontier (graph : Dom.t) (vertex : Dom.vertex) idom dom_tree :
+      VertexSet.t =
+    (* let idom = Dom.compute_idom graph Procedure.Vert.Entry in
+    let dom_tree = Dom.idom_to_dom_tree graph idom in *)
     Dom.compute_dom_frontier graph dom_tree idom vertex |> VertexSet.of_list
 
   (** Adds a new phi for variable var from associated predecessor blocks with
@@ -386,7 +387,8 @@ module SSIfy = struct
       check_stmt 0 || phi_status
 
     (** Splits the range of the program *)
-    let split (v : Var.t) ((i_up : VertexSet.t), (i_down : VertexSet.t)) proc =
+    let split (v : Var.t) ((i_up : VertexSet.t), (i_down : VertexSet.t)) proc
+        idom dom_tree =
       let cfg : Dom.t =
         match Procedure.graph proc with
         | Some g -> g
@@ -439,9 +441,10 @@ module SSIfy = struct
               (* Foreach edge E incoming_edges(i) do *)
               Procedure.G.fold_pred
                 (fun pred_vert sups' ->
-                  VertexSet.union sups' (dom_frontier rev_cfg pred_vert))
+                  VertexSet.union sups'
+                    (dom_frontier rev_cfg pred_vert idom dom_tree))
                 rev_cfg vert sups
-            else VertexSet.union sups (dom_frontier rev_cfg vert))
+            else VertexSet.union sups (dom_frontier rev_cfg vert idom dom_tree))
           i_up VertexSet.empty
       in
 
@@ -454,9 +457,10 @@ module SSIfy = struct
               (* Foreach edge E outgoing_edges(i) do *)
               Procedure.G.fold_succ
                 (fun succ_vert sdown' ->
-                  VertexSet.union sdown' (dom_frontier cfg succ_vert))
+                  VertexSet.union sdown'
+                    (dom_frontier cfg succ_vert idom dom_tree))
                 cfg vert sdown
-            else VertexSet.union sdown (dom_frontier cfg vert))
+            else VertexSet.union sdown (dom_frontier cfg vert idom dom_tree))
           (VertexSet.union s_up defs_of_v |> VertexSet.union i_down)
           VertexSet.empty
       in
@@ -552,7 +556,7 @@ module SSIfy = struct
 
     (** Returns a procedure that has renamed v, and the relative transformed
         non-actual instructions*)
-    let rename (v : Var.t) (bot_var : Var.t) (split_info : ssi_info) =
+    let rename (v : Var.t) (bot_var : Var.t) idom (split_info : ssi_info) =
       (* Stack <- new *)
       let stack : Var.t Stack.t = Stack.create () in
 
@@ -733,7 +737,7 @@ module SSIfy = struct
           | _ -> start_info
         in
         List.fold_left visit_begin_node final_info
-          (get_dominated_vertices cfg node)
+          (get_dominated_vertices cfg node idom)
       in
       let rename_info = visit_begin_node split_info Procedure.Vert.Entry in
 
@@ -914,10 +918,11 @@ module SSIfy = struct
       let used = create_uses_while_loop active_uses initial_uses in
 
       let live = VarSet.inter defined used in
+
       (* Temporary bandaid fix to prevent errors with formal in and out variables *)
       (* let live = StringMap.fold (fun name var currlive -> VarSet.add var currlive) (Procedure.formal_in_params rename_info.proc) live in
       let live = StringMap.fold (fun name var currlive -> VarSet.add var currlive) (Procedure.formal_out_params rename_info.proc) live in *)
-      
+
       (* Foreach non actual instruction E Def(web) do *)
       InstructionSet.fold
         (fun (inst : Instruction.t) curr_proc ->
@@ -939,7 +944,9 @@ module SSIfy = struct
             let proc_step_one, inst_step_one =
               VarSet.fold
                 (fun v' (proc', inst') ->
-                  if VarSet.mem v' rename_info.web && not (VarSet.mem v' live) (* && (not (StringMap.mem (Var.name v') (Procedure.formal_in_params rename_info.proc)))*)
+                  if
+                    VarSet.mem v' rename_info.web && not (VarSet.mem v' live)
+                    (* && (not (StringMap.mem (Var.name v') (Procedure.formal_in_params rename_info.proc)))*)
                   then
                     (* Replace v' by ⊥ *)
                     let replaced_inst =
@@ -948,8 +955,7 @@ module SSIfy = struct
                     in
                     ( replace_instruction inst' replaced_inst proc',
                       replaced_inst )
-                  else 
-                    (proc', inst'))
+                  else (proc', inst'))
                 all_vars (curr_proc, inst)
             in
 
@@ -997,7 +1003,7 @@ module SSIfy = struct
         rename_info.non_actual_insts rename_info.proc
   end
 
-  let ssify ?splitting_strategy (v : Var.t) proc =
+  let ssify ?splitting_strategy (v : Var.t) proc idom dom_tree =
     let pv =
       match splitting_strategy with
       | None ->
@@ -1012,14 +1018,19 @@ module SSIfy = struct
     let bot_var =
       Var.create Bincaml_util.Unicode.bot_char (Var.typ v) ~scope:(Var.scope v)
     in
-    SplitLiveRange.split v pv proc
-    |> VariableRenaming.rename v bot_var
+    SplitLiveRange.split v pv proc idom dom_tree
+    |> VariableRenaming.rename v bot_var idom
     |> DeadCodeElim.clean v bot_var
 
   let ssify_proc ?splitting_strategy (proc : (Var.t, Program.e) Procedure.t) =
     let all_vars = Procedure.local_decls proc in
+    let cfg =
+      match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
+    in
+    let idom = Dom.compute_idom cfg Procedure.Vert.Entry in
+    let dom_tree = Dom.idom_to_dom_tree cfg idom in
     Var.Decls.fold
-      (fun name var p -> ssify var p)
+      (fun name var p -> ssify var p idom dom_tree)
       (* (fun name var p -> if not (StringMap.mem name (Procedure.formal_in_params p)) then ssify var p else p) *)
       all_vars proc
 
@@ -1118,7 +1129,11 @@ proc @OY() -> (OY_out:bv64)
   let bot_var =
     Var.create Bincaml_util.Unicode.bot_char (Var.typ v) ~scope:(Var.scope v)
   in
-  let proc' = SSIfy.VariableRenaming.rename v bot_var info in
+  let cfg =
+    match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
+  in
+  let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
+  let proc' = SSIfy.VariableRenaming.rename v bot_var idom info in
   Program.output_proc_pretty stdout proc'.proc;
   [%expect
     {|
@@ -1346,7 +1361,14 @@ prog entry @main;
     | Some v -> v
     | None -> failwith "Bleh"
   in
-  let proc_split = SSIfy.ssify v proc in
+
+  let cfg =
+    match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
+  in
+  let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
+  let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
+
+  let proc_split = SSIfy.ssify v proc idom dom_tree in
   Program.output_proc_pretty stdout proc_split;
 
   [%expect
@@ -1436,7 +1458,13 @@ prog entry @main;
     | Some v -> v
     | None -> failwith "Bleh"
   in
-  let proc_split = SSIfy.ssify v proc in
+  let cfg =
+    match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
+  in
+  let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
+  let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
+
+  let proc_split = SSIfy.ssify v proc idom dom_tree in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|
@@ -1508,7 +1536,13 @@ prog entry @main;
     | Some v -> v
     | None -> failwith "Bleh"
   in
-  let proc_split = SSIfy.ssify v proc in
+  let cfg =
+    match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
+  in
+  let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
+  let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
+
+  let proc_split = SSIfy.ssify v proc idom dom_tree in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|
@@ -1579,7 +1613,12 @@ proc @main () -> ()
     | Some v -> v
     | None -> failwith "Bleh"
   in
-  let proc_split = SSIfy.ssify v proc in
+  let cfg =
+    match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
+  in
+  let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
+  let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
+  let proc_split = SSIfy.ssify v proc idom dom_tree in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|
@@ -1671,7 +1710,13 @@ proc @OY() -> (OY_out:bv64)
     | Some v -> v
     | None -> failwith "Bleh"
   in
-  let proc_split = SSIfy.ssify v proc in
+  let cfg =
+    match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
+  in
+  let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
+  let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
+
+  let proc_split = SSIfy.ssify v proc idom dom_tree in
   Program.output_proc_pretty stdout proc_split;
 
   [%expect
@@ -1762,7 +1807,13 @@ prog entry @main;
     | Some v -> v
     | None -> failwith "Bleh"
   in
-  let proc_split = SSIfy.ssify v proc in
+  let cfg =
+    match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
+  in
+  let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
+  let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
+
+  let proc_split = SSIfy.ssify v proc idom dom_tree in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|
@@ -1867,7 +1918,13 @@ proc @OY() -> (OY_out:bv64)
     | Some v -> v
     | None -> failwith "Bleh"
   in
-  let proc_split = SSIfy.ssify v proc in
+  let cfg =
+    match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
+  in
+  let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
+  let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
+
+  let proc_split = SSIfy.ssify v proc idom dom_tree in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|
@@ -2016,8 +2073,6 @@ proc @main_local () -> () [
     prog entry @main;
     |}]
 
-
-    
 let%expect_test "test_linear_copy.il" =
   let lst =
     Loader.Loadir.ast_of_string
