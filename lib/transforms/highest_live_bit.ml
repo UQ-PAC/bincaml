@@ -25,8 +25,9 @@ open Expr
     Currently, the lhs and rhs of loads, stores, and intrinsic calls are mapped
     individually.
 
-    A different transform will be required to remove the redundant zero_extends
-    and extracts added by this transform. *)
+    After these first steps, the statement is mapped over again, and any
+    extracts operating on an extend that are of the same width in the
+    statement's rhs expression are removed. *)
 
 let v_width v = Types.bit_width (Var.typ v)
 
@@ -51,6 +52,23 @@ let create_new_proc_var_map procRes proc =
       | _ -> acc)
     procRes VarMap.empty
 
+(** When an extract on 'hi, 0' bits is used on a zero_extend with 'hi' bits,
+    then remove both redundant operations *)
+let extract_extend_rewriter ?visit =
+  let open BasilExpr in
+  rewrite_typed_two ?visit (function
+    | UnaryExpr
+        {
+          op = `Extract (hi, 0);
+          arg = UnaryExpr { op = `ZeroExtend w; arg }, _;
+        }
+      when hi = w ->
+        replace [%here] arg
+    | _ -> Keep)
+
+let remove_extract_extend stmt =
+  Stmt.map ~f_lvar:id ~f_expr:extract_extend_rewriter ~f_rvar:id stmt
+
 (** Adds zero_extend(old_width - hi, var:bvhi) where Some hi is
     IDESSI_LB.Value.get_hi + 1*)
 let transform_subexpr_rvar (get_new_var : Var.t -> Var.t option) =
@@ -59,16 +77,10 @@ let transform_subexpr_rvar (get_new_var : Var.t -> Var.t option) =
     | RVar { id = v; attrib = a } -> (
         match get_new_var v with
         | Some new_var -> (
-            match v_width new_var with
-            | Some w' -> (
-                match v_width v with
-                | Some w ->
-                    Some
-                      (unexp ~attrib:a
-                         ~op:(`ZeroExtend (w - w'))
-                         (rvar new_var))
-                | _ -> None)
-            | _ -> None)
+            match (v_width v, v_width new_var) with
+            | Some w, Some w' ->
+                Some (unexp ~attrib:a ~op:(`ZeroExtend (w - w')) (rvar new_var))
+            | _, _ -> None)
         | _ -> None)
     | _ -> None)
 
@@ -104,7 +116,8 @@ let transform_proc procRes proc =
                 transform_lvar_and_expr lvar new_expr get_new_var)
               al
           in
-          Stmt.Instr_Assign { al = new_al; attrib } |> Iter.pure
+          Stmt.Instr_Assign { al = new_al; attrib }
+          |> remove_extract_extend |> Iter.pure
       (* | Stmt.Instr_Load { attrib ; lhs ; rhs ; addr } -> stmt *)
       (* | Stmt.Instr_Store { attrib ; lhs ; rhs ; value ; addr } -> stmt *)
       (* | Stmt.Instr_IntrinCall { attrib ; lhs ; name ; args } -> stmt *)
@@ -112,6 +125,7 @@ let transform_proc procRes proc =
           let tmp_smap = StringMap.map (create_tmp_var proc) lvar_map in
           let updated_call =
             Stmt.Instr_Call { attrib; lhs = tmp_smap; procid; args }
+            |> remove_extract_extend
           in
           let new_al =
             StringMap.fold
@@ -130,6 +144,7 @@ let transform_proc procRes proc =
           in
           let updated_assign =
             Stmt.Instr_Assign { al = new_al; attrib = Attrib.empty }
+            |> remove_extract_extend
           in
           Iter.doubleton updated_call updated_assign
       | _ ->
@@ -138,7 +153,7 @@ let transform_proc procRes proc =
             ~f_expr:(transform_subexpr_rvar get_new_var)
             ~f_rvar:(transform_var get_new_var)
             stmt
-          |> Iter.pure)
+          |> remove_extract_extend |> Iter.pure)
     proc
 
 let highest_live_bit_transform (prog : Program.t) =
@@ -158,8 +173,9 @@ let%expect_test "test1_basic_extracts" =
 proc @trans() -> (out:bv32)
 [
     block %trans [
-      var v1:bv64 := 0xffffffff:bv64;
-      var v2:bv32 := extract(32, 0, v1:bv64);
+      var R0_2:bv64 := 0xffffffff:bv64;
+      var R0_1:bv64 := zero_extend(32, bvadd(1:bv32, extract(32, 0, R0_2:bv64)));
+      var v2:bv32 := extract(32, 0, R0_1:bv64);
       return (v2);
     ];
 ];
@@ -176,9 +192,7 @@ proc @binary_expr() -> (out1:bv64)
 ];
     |}
   in
-
   let program = lst.prog in
-
   let res = highest_live_bit_transform program in
   Program.pretty_to_chan stdout res;
   [%expect
@@ -188,8 +202,9 @@ proc @binary_expr() -> (out1:bv64)
 
     [
        block %trans [
-         var v1:bv32 := extract(32,0, 0xffffffff:bv64);
-         var v2:bv32 := extract(32,0, zero_extend(32, v1:bv32));
+         var R0_2:bv32 := extract(32,0, 0xffffffff:bv64);
+         var R0_1:bv32 := bvadd(0x1:bv32, R0_2:bv32);
+         var v2:bv32 := R0_1:bv32;
          var out:bv32 := v2:bv32;
          return;
        ]
