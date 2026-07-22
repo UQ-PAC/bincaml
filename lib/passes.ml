@@ -81,6 +81,13 @@ module PassManager = struct
       invariants = Invariants.make ();
     }
 
+   let ssify = {
+    name = "ssify-program";
+    apply = Prog Transforms.Ssify.SSIfy.ssify_prog;
+    doc = "Converts a given procedure to SSI form";
+    invariants = Invariants.make ();
+  }
+
   let dfg_bool =
     {
       name = "demo-dfg-bool-analysis";
@@ -456,6 +463,7 @@ module PassManager = struct
       linear_const;
       linear_copy;
       simp;
+      ssify;
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;
