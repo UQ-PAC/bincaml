@@ -81,12 +81,13 @@ module PassManager = struct
       invariants = Invariants.make ();
     }
 
-   let ssify = {
-    name = "ssify-program";
-    apply = Prog Transforms.Ssify.SSIfy.ssify_prog;
-    doc = "Converts a given procedure to SSI form";
-    invariants = Invariants.establishes [ SSA ];
-  }
+  let ssify =
+    {
+      name = "ssify-program";
+      apply = Prog Transforms.Ssify.SSIfy.ssify_prog;
+      doc = "Converts a given procedure to SSI form";
+      invariants = Invariants.establishes [ SSA ];
+    }
 
   let dfg_bool =
     {

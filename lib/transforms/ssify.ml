@@ -24,11 +24,10 @@ open Containers
   - Make this less imperative. I made it close to the book's algorithm at the cost of making it very imperative, and I'm not very happy with how it is
   - Update non-actual instructions at the end of rename similar to the defuse and usedef chains, instead of within set_def and set_use
   - Expand the Instruction.it type to have a Begin and End type, to represent formal in and out params.
-  - Significantly improve the time efficiency.
+  - Change the Dom.Make module to Dom.Make_graph, to use compute_all, which will make the inputs to split, rename, and clean much simpler.
 
   KNOWN ISSUES:
-  - Calling clean() on a formal_in variable seems to cause an infinite loop. This may be solved by adding a Begin and End
-    type representing the In and Out of a procedure to accomodate for in and out params
+  - Formal In and Out params are currently unaccounted for. The fix for this is in progress.
   - When there are few definitions of a variable in a loop, the code seems to create many, many phi nodes for it. These are cleaned up, but they probably should not
     be created in the first place. Evidence for this can be found in test_SSIfy, which has an ominous nam_59
 *)
@@ -236,47 +235,38 @@ module SSIfy = struct
   let second_successors graph (vert : Dom.vertex) =
     Procedure.G.succ graph vert |> List.concat_map (Procedure.G.succ graph)
 
-  (** Returns true if the beginning of the block with ID bid_a dominates
-      beginning of block with ID bid_b *)
-  let block_dominates graph bid_a bid_b =
-    let idom = Dom.compute_idom graph (Procedure.Vert.Begin bid_a) in
-    (* TODO: Using the entry node here causes neither of the 2 blocks to dominate eachother, which is odd. Check the Dominator documentation*)
-    let dom = Dom.idom_to_dom idom in
-    dom (Procedure.Vert.Begin bid_a) (Procedure.Vert.Begin bid_b)
+  (** Returns true if vertex vert_a dominates vertex vert_b *)
+  let vertex_dominates graph dom vert_a vert_b = dom vert_a vert_b
 
   (** Returns true if instruction a dominates instruction b *)
-  let instruction_dominates (graph : Dom.t) (inst_a : Instruction.t)
-      (inst_b : Instruction.t) =
+  let instruction_dominates pred_block_id (graph : Dom.t) dom
+      (inst_a : Instruction.t) (inst_b : Instruction.t) =
     match (inst_a, inst_b) with
+    | Block_Inst (bid_a, _), Block_Inst (bid_b, Instruction.Phi _)
+      when Option.is_some pred_block_id ->
+        vertex_dominates graph dom (Procedure.Vert.Begin bid_a)
+          (Procedure.Vert.End (Option.get pred_block_id))
     | ( Block_Inst (bid_a, Instruction.Statement stmt_a),
         Block_Inst (bid_b, Instruction.Statement stmt_b) ) ->
         if ID.equal bid_a bid_b then stmt_a.index <= stmt_b.index
-        else block_dominates graph bid_a bid_b
+        else
+          vertex_dominates graph dom (Procedure.Vert.Begin bid_a)
+            (Procedure.Vert.Begin bid_b)
     | Block_Inst (bid_a, _), Block_Inst (bid_b, _) ->
-        if ID.equal bid_a bid_b then true else block_dominates graph bid_a bid_b
+        if ID.equal bid_a bid_b then true
+        else
+          vertex_dominates graph dom (Procedure.Vert.Begin bid_a)
+            (Procedure.Vert.Begin bid_b)
     | Formal_In vars, _ | _, Formal_Out vars -> true
     | Formal_Out vars, _ | _, Formal_In vars -> false
-
-  (* let bid_a = fst inst_a in
-    let bid_b = fst inst_b in
-    if ID.equal bid_a bid_b then
-      (* Same block: check if statement index is smaller (earlier) than the other *)
-      match inst_a, inst_b with
-      | Block_Inst (_, Instruction.Statement stmt_a), Block_Inst (_, Instruction.Statement stmt_b) ->
-          stmt_a.index <= stmt_b.index
-      | _ , _-> true
-    else block_dominates graph bid_a bid_b *)
 
   (** Takes the CFG graph and a current vertex and gives the list of immediately
       dominating vertices *)
   let get_dominated_vertices (graph : Dom.t) (vertex : Dom.vertex) idom =
-    (* let idom = Dom.compute_idom graph Procedure.Vert.Entry in *)
     Dom.idom_to_dom_tree graph idom vertex
 
   let dom_frontier (graph : Dom.t) (vertex : Dom.vertex) idom dom_tree :
       VertexSet.t =
-    (* let idom = Dom.compute_idom graph Procedure.Vert.Entry in
-    let dom_tree = Dom.idom_to_dom_tree graph idom in *)
     Dom.compute_dom_frontier graph dom_tree idom vertex |> VertexSet.of_list
 
   (** Adds a new phi for variable var from associated predecessor blocks with
@@ -556,7 +546,7 @@ module SSIfy = struct
 
     (** Returns a procedure that has renamed v, and the relative transformed
         non-actual instructions*)
-    let rename (v : Var.t) (bot_var : Var.t) idom (split_info : ssi_info) =
+    let rename (v : Var.t) (bot_var : Var.t) idom dom (split_info : ssi_info) =
       (* Stack <- new *)
       let stack : Var.t Stack.t = Stack.create () in
 
@@ -592,8 +582,8 @@ module SSIfy = struct
         { curr_info with proc = proc'; non_actual_insts = nai'; defs = defs' }
       in
 
-      let set_use (curr_info : ssi_info) (inst : Instruction.t) (og_bid : ID.t)
-          =
+      let set_use ?(og_bid : ID.t option) (curr_info : ssi_info)
+          (inst : Instruction.t) =
         (* while Def(stack.peek()) does not dominate inst do *)
         let rec pop_while_not_dominating instruction =
           match Stack.top_opt stack with
@@ -604,7 +594,8 @@ module SSIfy = struct
               if
                 List.for_all
                   (fun v'_def ->
-                    not (instruction_dominates cfg v'_def instruction))
+                    not
+                      (instruction_dominates og_bid cfg dom v'_def instruction))
                   v'_def_instructions
               then (
                 (* Stack.pop *)
@@ -621,7 +612,12 @@ module SSIfy = struct
         in
 
         (* Replace the uses of v by v' in inst *)
-        let inst' = Instruction.replace_uses ~pred_block_id:og_bid v v' inst in
+        let inst' =
+          if Option.is_some og_bid then
+            Instruction.replace_uses ~pred_block_id:(Option.get og_bid) v v'
+              inst
+          else Instruction.replace_uses v v' inst
+        in
 
         (* If v' != ⊥ then set Uses(v') = Uses(v') ∪ inst' *)
         let uses' =
@@ -698,7 +694,7 @@ module SSIfy = struct
                     let info_step_two, updated_inst =
                       (* An instruction that uses v*)
                       if VarSet.mem v (Stmt.free_vars stmt) then
-                        set_use curr_info inst block_id
+                        set_use curr_info inst
                       else (curr_info, inst)
                     in
                     (* If exists instruction d in n that defines v then *)
@@ -728,7 +724,7 @@ module SSIfy = struct
                                     phi.Block.lhs phi.Block.rhs
                                 in
                                 (* stack.set_use(v <- v:l) *)
-                                set_use info'' inst ogbid |> fst
+                                set_use ~og_bid:ogbid info'' inst |> fst
                               else info'')
                             info' phi.Block.rhs)
                         curr_info succ_block.phis
@@ -1003,7 +999,7 @@ module SSIfy = struct
         rename_info.non_actual_insts rename_info.proc
   end
 
-  let ssify ?splitting_strategy (v : Var.t) proc idom dom_tree =
+  let ssify ?splitting_strategy (v : Var.t) proc idom dom_tree dom =
     let pv =
       match splitting_strategy with
       | None ->
@@ -1019,7 +1015,7 @@ module SSIfy = struct
       Var.create Bincaml_util.Unicode.bot_char (Var.typ v) ~scope:(Var.scope v)
     in
     SplitLiveRange.split v pv proc idom dom_tree
-    |> VariableRenaming.rename v bot_var idom
+    |> VariableRenaming.rename v bot_var idom dom
     |> DeadCodeElim.clean v bot_var
 
   let ssify_proc ?splitting_strategy (proc : (Var.t, Program.e) Procedure.t) =
@@ -1029,8 +1025,9 @@ module SSIfy = struct
     in
     let idom = Dom.compute_idom cfg Procedure.Vert.Entry in
     let dom_tree = Dom.idom_to_dom_tree cfg idom in
+    let dom = Dom.idom_to_dom idom in
     Var.Decls.fold
-      (fun name var p -> ssify var p idom dom_tree)
+      (fun name var p -> ssify var p idom dom_tree dom)
       (* (fun name var p -> if not (StringMap.mem name (Procedure.formal_in_params p)) then ssify var p else p) *)
       all_vars proc
 
@@ -1133,7 +1130,8 @@ proc @OY() -> (OY_out:bv64)
     match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
   in
   let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
-  let proc' = SSIfy.VariableRenaming.rename v bot_var idom info in
+  let dom = SSIfy.Dom.idom_to_dom idom in
+  let proc' = SSIfy.VariableRenaming.rename v bot_var idom dom info in
   Program.output_proc_pretty stdout proc'.proc;
   [%expect
     {|
@@ -1367,8 +1365,8 @@ prog entry @main;
   in
   let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
   let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
-
-  let proc_split = SSIfy.ssify v proc idom dom_tree in
+  let dom = SSIfy.Dom.idom_to_dom idom in
+  let proc_split = SSIfy.ssify v proc idom dom_tree dom in
   Program.output_proc_pretty stdout proc_split;
 
   [%expect
@@ -1463,8 +1461,9 @@ prog entry @main;
   in
   let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
   let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
+  let dom = SSIfy.Dom.idom_to_dom idom in
 
-  let proc_split = SSIfy.ssify v proc idom dom_tree in
+  let proc_split = SSIfy.ssify v proc idom dom_tree dom in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|
@@ -1541,8 +1540,9 @@ prog entry @main;
   in
   let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
   let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
+  let dom = SSIfy.Dom.idom_to_dom idom in
 
-  let proc_split = SSIfy.ssify v proc idom dom_tree in
+  let proc_split = SSIfy.ssify v proc idom dom_tree dom in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|
@@ -1618,7 +1618,9 @@ proc @main () -> ()
   in
   let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
   let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
-  let proc_split = SSIfy.ssify v proc idom dom_tree in
+  let dom = SSIfy.Dom.idom_to_dom idom in
+
+  let proc_split = SSIfy.ssify v proc idom dom_tree dom in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|
@@ -1715,8 +1717,9 @@ proc @OY() -> (OY_out:bv64)
   in
   let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
   let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
+  let dom = SSIfy.Dom.idom_to_dom idom in
 
-  let proc_split = SSIfy.ssify v proc idom dom_tree in
+  let proc_split = SSIfy.ssify v proc idom dom_tree dom in
   Program.output_proc_pretty stdout proc_split;
 
   [%expect
@@ -1812,8 +1815,9 @@ prog entry @main;
   in
   let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
   let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
+  let dom = SSIfy.Dom.idom_to_dom idom in
 
-  let proc_split = SSIfy.ssify v proc idom dom_tree in
+  let proc_split = SSIfy.ssify v proc idom dom_tree dom in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|
@@ -1923,8 +1927,9 @@ proc @OY() -> (OY_out:bv64)
   in
   let idom = SSIfy.Dom.compute_idom cfg Procedure.Vert.Entry in
   let dom_tree = SSIfy.Dom.idom_to_dom_tree cfg idom in
+  let dom = SSIfy.Dom.idom_to_dom idom in
 
-  let proc_split = SSIfy.ssify v proc idom dom_tree in
+  let proc_split = SSIfy.ssify v proc idom dom_tree dom in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|
