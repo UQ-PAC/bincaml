@@ -352,6 +352,16 @@ module PassManager = struct
       invariants = Invariants.presupposes [ SSA ];
     }
 
+  let highest_live_bit =
+    {
+      name = "highest-live-bit-test";
+      apply = Prog Transforms.Highest_live_bit.highest_live_bit_transform;
+      doc =
+        "Analyzes and transforms a program to shorten redundant bit operations \
+         and variables with dead live bits.";
+      invariants = Invariants.make ();
+    }
+
   let linear_const =
     {
       name = "linear-const";
@@ -453,6 +463,7 @@ module PassManager = struct
       inter_function_summaries;
       cf_exprs;
       inter_dead;
+      highest_live_bit;
       linear_const;
       linear_copy;
       simp;
