@@ -27,9 +27,8 @@ open Containers
   - Significantly improve the time efficiency.
 
   KNOWN ISSUES:
-  - Calling clean() on a formal_in variable seems to cause an infinite loop. This is solved by changing the guard 
-    of the while loop in line 11 of clean to include 'web ∩ inst.uses' instead of just 'inst.uses', but this is 
-    different to the book's algorithm.
+  - Calling clean() on a formal_in variable seems to cause an infinite loop. This may be solved by adding a Begin and End
+    type representing the In and Out of a procedure to accomodate for in and out params
   - When there are few definitions of a variable in a loop, the code seems to create many, many phi nodes for it. These are cleaned up, but they probably should not
     be created in the first place. Evidence for this can be found in test_SSIfy, which has an ominous nam_59
 *)
@@ -612,6 +611,7 @@ module SSIfy = struct
 
         (* v' <- stack.peek() *)
         let v' =
+          (* if (StringMap.mem (Var.name v) (Procedure.formal_in_params curr_info.proc)) then v else  *)
           let open Bincaml_util.Unicode in
           Option.value (Stack.top_opt stack) ~default:bot_var
         in
@@ -914,7 +914,10 @@ module SSIfy = struct
       let used = create_uses_while_loop active_uses initial_uses in
 
       let live = VarSet.inter defined used in
-
+      (* Temporary bandaid fix to prevent errors with formal in and out variables *)
+      (* let live = StringMap.fold (fun name var currlive -> VarSet.add var currlive) (Procedure.formal_in_params rename_info.proc) live in
+      let live = StringMap.fold (fun name var currlive -> VarSet.add var currlive) (Procedure.formal_out_params rename_info.proc) live in *)
+      
       (* Foreach non actual instruction E Def(web) do *)
       InstructionSet.fold
         (fun (inst : Instruction.t) curr_proc ->
@@ -936,7 +939,7 @@ module SSIfy = struct
             let proc_step_one, inst_step_one =
               VarSet.fold
                 (fun v' (proc', inst') ->
-                  if VarSet.mem v' rename_info.web && not (VarSet.mem v' live)
+                  if VarSet.mem v' rename_info.web && not (VarSet.mem v' live) (* && (not (StringMap.mem (Var.name v') (Procedure.formal_in_params rename_info.proc)))*)
                   then
                     (* Replace v' by ⊥ *)
                     let replaced_inst =
@@ -945,7 +948,8 @@ module SSIfy = struct
                     in
                     ( replace_instruction inst' replaced_inst proc',
                       replaced_inst )
-                  else (proc', inst'))
+                  else 
+                    (proc', inst'))
                 all_vars (curr_proc, inst)
             in
 
@@ -2009,5 +2013,225 @@ proc @main_local () -> () [
          return;
        ]
     ];
+    prog entry @main;
+    |}]
+
+
+    
+let%expect_test "test_linear_copy.il" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+      prog entry @main;
+
+proc @main(a:bv64, x:bool) -> ()
+[
+    block %main [
+        (var b:bv64) := call @f(a:bv64);
+        (var c:bv64, var d:bv64) := call @loop(b:bv64, b:bv64);
+        (var e:bv64) := call @cross(d:bv64, bvadd(d:bv64, 1:bv64));
+        (var f:bv64 := bvadd(1:bv64, c:bv64), var g:bv64 := bvadd(1:bv64, e:bv64));
+        (var y:bool) := call @bool_id(x:bool);
+        var z:bool := y:bool;
+        return;
+    ];
+];
+
+proc @f(x:bv64) -> (o:bv64)
+[
+    block %f_entry [
+        goto (%f_a, %f_b);
+    ];
+    block %f_a [
+        var y_1:bv64 := x;
+        goto (%f_c, %f_d);
+    ];
+    block %f_b [
+        (var y_2:bv64, var z:bv64) := call @g(x);
+        goto (%f_c, %f_d);
+    ];
+    block %f_c (
+        var y_3:bv64 := phi(%f_a -> y_1:bv64, %f_b -> y_2:bv64)
+    ) [
+        var w_1:bv64 := y_3:bv64;
+        goto (%f_return);
+    ];
+    block %f_d (
+        var y_4:bv64 := phi(%f_a -> y_1:bv64, %f_b -> y_2:bv64)
+    ) [
+        (var w_2:bv64, var p:bv64) := call @g(y_4);
+        goto (%f_return);
+    ];
+    block %f_return (
+        var w_3:bv64 := phi(%f_c -> w_1:bv64, %f_d -> w_2:bv64)
+    ) [
+        return (w_3:bv64);
+    ];
+];
+
+proc @g(x:bv64) -> (o:bv64, p:bv64)
+[
+    block %g_entry [
+        goto (%g_a, %g_b);
+    ];
+    block %g_a [
+        var y_1:bv64 := x;
+        goto (%g_return);
+    ];
+    block %g_b [
+        (var y_2:bv64) := call @f(x);
+        goto (%g_return);
+    ];
+    block %g_return (
+        var y_3:bv64 := phi(%g_a -> y_1:bv64, %g_b -> y_2:bv64)
+    ) [
+        return (x:bv64, y_3:bv64);
+    ];
+];
+
+proc @loop(x:bv64, y:bv64) -> (o:bv64, p:bv64)
+[
+    block %entry [
+        var x_1:bv64 := bvadd(x:bv64, 1:bv64);
+        var y_1:bv64 := bvadd(y:bv64, 1:bv64);
+        goto(%a, %ret);
+    ];
+    block %a (
+        var x_2:bv64 := phi(%f_entry -> x_1:bv64, %f_a -> x_3:bv64),
+        var y_2:bv64 := phi(%f_entry -> y_1:bv64, %f_a -> y_3:bv64)
+    ) [
+        var x_3:bv64 := bvadd(x_2:bv64, 1:bv64);
+        var y_3:bv64 := y_2;
+        goto(%a, %ret);
+    ];
+    block %ret (
+        var x_4:bv64 := phi(%f_entry -> x_1:bv64, %f_a -> x_3:bv64),
+        var y_4:bv64 := phi(%f_entry -> y_1:bv64, %f_a -> y_3:bv64)
+    ) [
+        (var o:bv64 := x_4:bv64, var p:bv64 := y_4:bv64);
+        return;
+    ];
+];
+
+proc @cross(a:bv64, b:bv64) -> (o:bv64)
+[
+    block %entry [
+        goto(%a, %b);
+    ];
+    block %a [
+        var o_1:bv64 := a:bv64;
+        goto(%ret);
+    ];
+    block %b [
+        var o_2:bv64 := bvsub(b:bv64, 1:bv64);
+        goto(%ret);
+    ];
+    block %ret (
+        var o_3:bv64 := phi(%a -> o_1:bv64, %b -> o_2:bv64)
+    ) [
+        return (o_3:bv64);
+    ];
+];
+
+proc @bool_id(a:bool) -> (o:bool)
+[
+    block %entry [
+        return (a:bool);
+    ];
+];
+
+    |}
+  in
+  let program = lst.prog in
+  let ssi_prog = SSIfy.ssify_prog program in
+  Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
+  [%expect
+    {|
+    proc @main(a:bv64, x:bool)  -> () {  }
+
+
+    [
+       block %main [
+         (var b_2:bv64=o) := call @f(x=⊥:bv64);
+         (var c_1:bv64=o, var d_1:bv64=p) := call @loop(x=b_2:bv64, y=b_2:bv64);
+         (var e_3:bv64=o) := call @cross(a=d_1:bv64, b=bvadd(d_1:bv64, 0x1:bv64));
+         (var f_1:bv64 := bvadd(0x1:bv64, c_1:bv64),
+          var g_1:bv64 := bvadd(0x1:bv64, e_3:bv64));
+         (var y_1:bool=o) := call @bool_id(a=⊥:bool);
+         var z_2:bool := y_1:bool;
+         return;
+       ]
+    ];
+    proc @f(x:bv64)  -> (o:bv64) {  }
+
+
+    [
+       block %f_entry [ goto (%f_b,%f_a); ];
+       block %f_a [ var y_9:bv64 := x_5:bv64; goto (%f_d,%f_c); ];
+       block %f_b [
+         (var y_75:bv64=o, var z_19:bv64=p) := call @g(x=x_4:bv64);
+         goto (%f_d,%f_c);
+       ];
+       block %f_c ( var y_69:bv64 := phi(%f_a -> y_9:bv64, %f_b -> y_75:bv64) ) [
+         var w_68:bv64 := y_69:bv64;
+         goto (%f_return);
+       ];
+       block %f_d ( var y_57:bv64 := phi(%f_a -> y_9:bv64, %f_b -> y_75:bv64) ) [
+         (var w_42:bv64=o, var p_2:bv64=p) := call @g(x=y_57:bv64);
+         goto (%f_return);
+       ];
+       block %f_return (
+         var w_36:bv64 := phi(%f_c -> w_68:bv64, %f_d -> w_42:bv64)
+       ) [ var o_1:bv64 := w_36:bv64; return; ]
+    ];
+    proc @g(x:bv64)  -> (o:bv64, p:bv64) {  }
+
+
+    [
+       block %g_entry [ goto (%g_b,%g_a); ];
+       block %g_a [ var y_9:bv64 := x_3:bv64; goto (%g_return); ];
+       block %g_b [ (var y_36:bv64=o) := call @f(x=x_2:bv64); goto (%g_return); ];
+       block %g_return (
+         var y_29:bv64 := phi(%g_a -> y_9:bv64, %g_b -> y_36:bv64)
+       ) [ (var o_1:bv64 := x_1:bv64, var p_4:bv64 := y_29:bv64); return; ]
+    ];
+    proc @loop(x:bv64, y:bv64)  -> (o:bv64, p:bv64) {  }
+
+
+    [
+       block %entry [
+         var x_41:bv64 := bvadd(⊥:bv64, 0x1:bv64);
+         var y_40:bv64 := bvadd(⊥:bv64, 0x1:bv64);
+         goto (%ret,%a);
+       ];
+       block %a (
+         var x_21:bv64 := phi(%f_entry -> x_1:bv64, %f_a -> x_3:bv64),
+         var y_27:bv64 := phi(%f_entry -> y_1:bv64, %f_a -> y_3:bv64)
+       ) [
+         var x_23:bv64 := bvadd(x_21:bv64, 0x1:bv64);
+         var y_24:bv64 := y_27:bv64;
+         goto (%ret,%a);
+       ];
+       block %ret (
+         var x_31:bv64 := phi(%f_entry -> x_1:bv64, %f_a -> x_3:bv64),
+         var y_17:bv64 := phi(%f_entry -> y_1:bv64, %f_a -> y_3:bv64)
+       ) [ (var o_1:bv64 := x_31:bv64, var p_5:bv64 := y_17:bv64); return; ]
+    ];
+    proc @cross(a:bv64, b:bv64)  -> (o:bv64) {  }
+
+
+    [
+       block %entry [ goto (%b,%a); ];
+       block %a [ var o_22:bv64 := a_3:bv64; goto (%ret); ];
+       block %b [ var o_18:bv64 := bvsub(b_2:bv64, 0x1:bv64); goto (%ret); ];
+       block %ret ( var o_5:bv64 := phi(%a -> o_22:bv64, %b -> o_18:bv64) ) [
+         var o_44:bv64 := o_5:bv64;
+         return;
+       ]
+    ];
+    proc @bool_id(a:bool)  -> (o:bool) {  }
+
+
+    [ block %entry [ var o_1:bool := ⊥:bool; return; ] ];
     prog entry @main;
     |}]
