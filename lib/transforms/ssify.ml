@@ -23,6 +23,8 @@ open Containers
 (* TODO:
   - Make this less imperative. I made it close to the book's algorithm at the cost of making it very imperative, and I'm not very happy with how it is
   - Update non-actual instructions at the end of rename similar to the defuse and usedef chains, instead of within set_def and set_use
+  - Expand the Instruction.it type to have a Begin and End type, to represent formal in and out params.
+  - Significantly improve the time efficiency.
 
   KNOWN ISSUES:
   - Calling clean() on a formal_in variable seems to cause an infinite loop. This is solved by changing the guard 
@@ -41,38 +43,55 @@ module SSIfy = struct
       | Statement of { index : int; statement : Program.stmt }
     [@@deriving ord, eq, show { with_path = false }]
 
-    type t = ID.t * it [@@deriving ord, eq, show { with_path = false }]
     (** A pair between the block id and the instruction *)
+    type t =
+      | Block_Inst of ID.t * it
+      (* TODO: Using Var.t StringMap.t causes an error with show *)
+      | Formal_In of Var.t list
+      | Formal_Out of Var.t list
+    [@@deriving ord, eq, show { with_path = false }]
 
-    let get_block_id (inst : t) = fst inst
+    let get_block_id (inst : t) =
+      match inst with Block_Inst (id, it) -> Some id | _ -> None
 
     (** Get an iter of the variables defined by the instruction *)
     let var_defines = function
-      | Phi { lhs; rhs } -> Iter.singleton lhs
-      | Statement { index; statement } -> Stmt.iter_assigned statement
+      | Block_Inst (_, Phi { lhs; rhs }) -> Iter.singleton lhs
+      | Block_Inst (_, Statement { index; statement }) ->
+          Stmt.iter_assigned statement
+      | Formal_In vars -> Iter.of_list vars
+      | Formal_Out vars -> Iter.empty
 
     (** Get an iter of the variables used by the instruction *)
     let var_uses = function
-      | Phi { rhs } -> List.to_iter rhs |> Iter.map snd
-      | Statement { statement } -> Stmt.free_vars_iter statement
+      | Block_Inst (_, Phi { rhs }) -> List.to_iter rhs |> Iter.map snd
+      | Block_Inst (_, Statement { statement }) -> Stmt.free_vars_iter statement
+      | Formal_In vars -> Iter.empty
+      | Formal_Out vars -> Iter.of_list vars
 
-    let create_phi_inst block_id lhs rhs = (block_id, Phi { lhs; rhs })
+    let create_phi_inst block_id lhs rhs =
+      Block_Inst (block_id, Phi { lhs; rhs })
 
     let create_stmt_inst block_id index statement =
-      (block_id, Statement { index; statement })
+      Block_Inst (block_id, Statement { index; statement })
 
     (** Replace the definitions of v by v' *)
     let replace_defs v v' (inst : t) : t =
       match inst with
-      | block_id, Phi { lhs; rhs } ->
-          (block_id, Phi { lhs = (if Var.equal lhs v then v' else lhs); rhs })
-      | block_id, Statement { index; statement = stmt } ->
+      | Block_Inst (block_id, Phi { lhs; rhs }) ->
+          Block_Inst
+            (block_id, Phi { lhs = (if Var.equal lhs v then v' else lhs); rhs })
+      | Block_Inst (block_id, Statement { index; statement = stmt }) ->
           let stmt' =
             Stmt.map
               ~f_lvar:(fun oldv -> if Var.equal oldv v then v' else oldv)
               ~f_expr:id ~f_rvar:id stmt
           in
-          (block_id, Statement { index; statement = stmt' })
+          Block_Inst (block_id, Statement { index; statement = stmt' })
+      | Formal_In vars ->
+          Formal_In
+            (List.map (fun var -> if Var.equal v var then v' else var) vars)
+      | Formal_Out vars -> Formal_Out vars
 
     let replace_expr_rvar v v' =
       let open Expr.BasilExpr in
@@ -92,7 +111,7 @@ module SSIfy = struct
       To make this distinction, we use ?pred_block_id to differentiate between when a check for whether the rhs phi's block id is equal to the ID of block n is needed or not. Otherwise,
       two almost identical functions would be needed.*)
       match inst with
-      | block_id, Phi { lhs; rhs } ->
+      | Block_Inst (block_id, Phi { lhs; rhs }) ->
           let rhs' =
             List.map
               (fun (bid, var) ->
@@ -103,14 +122,19 @@ module SSIfy = struct
                 | None -> if Var.equal var v then (bid, v') else (bid, var))
               rhs
           in
-          (block_id, Phi { lhs; rhs = rhs' })
-      | block_id, Statement old_stmt ->
+          Block_Inst (block_id, Phi { lhs; rhs = rhs' })
+      | Block_Inst (block_id, Statement old_stmt) ->
           let stmt' =
             Stmt.map ~f_lvar:id ~f_expr:(replace_expr_rvar v v')
               ~f_rvar:(fun oldv -> if Var.equal oldv v then v' else oldv)
               old_stmt.statement
           in
-          (block_id, Statement { index = old_stmt.index; statement = stmt' })
+          Block_Inst
+            (block_id, Statement { index = old_stmt.index; statement = stmt' })
+      | Formal_In vars -> Formal_In vars
+      | Formal_Out vars ->
+          Formal_Out
+            (List.map (fun var -> if Var.equal v var then v' else var) vars)
   end
 
   module VertexSet = CCSet.Make (Procedure.Vert)
@@ -175,12 +199,12 @@ module SSIfy = struct
                 Instruction.create_phi_inst bid phi.Block.lhs phi.Block.rhs
               in
               let pu =
-                if Iter.mem v (Instruction.var_uses (snd inst)) then
+                if Iter.mem v (Instruction.var_uses inst) then
                   InstructionSet.add inst use'
                 else use'
               in
               let pd =
-                if Iter.mem v (Instruction.var_defines (snd inst)) then
+                if Iter.mem v (Instruction.var_defines inst) then
                   InstructionSet.add inst def'
                 else def'
               in
@@ -192,12 +216,12 @@ module SSIfy = struct
             (fun index (use', def') stmt ->
               let inst = Instruction.create_stmt_inst bid index stmt in
               let su =
-                if Iter.mem v (Instruction.var_uses (snd inst)) then
+                if Iter.mem v (Instruction.var_uses inst) then
                   InstructionSet.add inst use'
                 else use'
               in
               let sd =
-                if Iter.mem v (Instruction.var_defines (snd inst)) then
+                if Iter.mem v (Instruction.var_defines inst) then
                   InstructionSet.add inst def'
                 else def'
               in
@@ -224,15 +248,25 @@ module SSIfy = struct
   (** Returns true if instruction a dominates instruction b *)
   let instruction_dominates (graph : Dom.t) (inst_a : Instruction.t)
       (inst_b : Instruction.t) =
-    let bid_a = fst inst_a in
+    match (inst_a, inst_b) with
+    | ( Block_Inst (bid_a, Instruction.Statement stmt_a),
+        Block_Inst (bid_b, Instruction.Statement stmt_b) ) ->
+        if ID.equal bid_a bid_b then stmt_a.index <= stmt_b.index
+        else block_dominates graph bid_a bid_b
+    | Block_Inst (bid_a, _), Block_Inst (bid_b, _) ->
+        if ID.equal bid_a bid_b then true else block_dominates graph bid_a bid_b
+    | Formal_In vars, _ | _, Formal_Out vars -> true
+    | Formal_Out vars, _ | _, Formal_In vars -> false
+
+  (* let bid_a = fst inst_a in
     let bid_b = fst inst_b in
     if ID.equal bid_a bid_b then
       (* Same block: check if statement index is smaller (earlier) than the other *)
-      match (inst_a, inst_b) with
-      | (_, Instruction.Statement stmt_a), (_, Instruction.Statement stmt_b) ->
+      match inst_a, inst_b with
+      | Block_Inst (_, Instruction.Statement stmt_a), Block_Inst (_, Instruction.Statement stmt_b) ->
           stmt_a.index <= stmt_b.index
-      | _ -> true
-    else block_dominates graph bid_a bid_b
+      | _ , _-> true
+    else block_dominates graph bid_a bid_b *)
 
   (** Takes the CFG graph and a current vertex and gives the list of immediately
       dominating vertices *)
@@ -305,7 +339,8 @@ module SSIfy = struct
       variables. *)
   let replace_instruction inst inst' curr_proc =
     match (inst, inst') with
-    | (block_id, Instruction.Phi old_phi), (_, Instruction.Phi new_phi) ->
+    | ( Instruction.Block_Inst (block_id, Instruction.Phi old_phi),
+        Instruction.Block_Inst (_, Instruction.Phi new_phi) ) ->
         Procedure.modify_block curr_proc block_id (fun block ->
             Block.map
               ~phi:
@@ -313,8 +348,8 @@ module SSIfy = struct
                      if Block.equal_phi Var.equal old_phi phi then new_phi
                      else phi))
               Fun.id block)
-    | ( (block_id, Instruction.Statement old_stmt),
-        (_, Instruction.Statement new_stmt) ) ->
+    | ( Instruction.Block_Inst (block_id, Instruction.Statement old_stmt),
+        Instruction.Block_Inst (_, Instruction.Statement new_stmt) ) ->
         Procedure.modify_block curr_proc block_id (fun block ->
             Block.fmap_stmts_copy
               (fun stmts -> Vector.set stmts old_stmt.index new_stmt.statement)
@@ -714,14 +749,22 @@ module SSIfy = struct
         DefUseMap.fold oldmap DefUseMap.empty (fun newmap var inst ->
             let inst' =
               match inst with
-              | block_id, Instruction.Statement stmt -> (
+              | Formal_In vars ->
+                  Instruction.Formal_In
+                    (proc |> Procedure.formal_in_params |> StringMap.values
+                   |> List.of_iter)
+              | Formal_Out vars ->
+                  Instruction.Formal_Out
+                    (proc |> Procedure.formal_out_params |> StringMap.values
+                   |> List.of_iter)
+              | Block_Inst (block_id, Instruction.Statement stmt) -> (
                   let block = Procedure.get_block proc block_id in
                   match block with
                   | None -> inst
                   | Some b ->
                       let stmt' = Vector.get b.stmts stmt.index in
                       Instruction.create_stmt_inst block_id stmt.index stmt')
-              | block_id, Instruction.Phi phi -> (
+              | Block_Inst (block_id, Instruction.Phi phi) -> (
                   let block = Procedure.get_block proc block_id in
                   match block with
                   | None -> inst
@@ -769,7 +812,7 @@ module SSIfy = struct
         InstructionSet.filter
           (fun inst ->
             VarSet.inter rename_info.web
-              (Instruction.var_defines (snd inst) |> VarSet.of_iter)
+              (Instruction.var_defines inst |> VarSet.of_iter)
             |> VarSet.is_empty |> not)
           actual_insts
       in
@@ -783,7 +826,7 @@ module SSIfy = struct
         let unregistered_def_vars (inst : Instruction.t) =
           VarSet.diff
             (VarSet.inter rename_info.web
-               (Instruction.var_defines (snd inst) |> VarSet.of_iter))
+               (Instruction.var_defines inst |> VarSet.of_iter))
             curr_defined
         in
         let guard (inst : Instruction.t) =
@@ -820,7 +863,7 @@ module SSIfy = struct
         InstructionSet.filter
           (fun inst ->
             VarSet.inter rename_info.web
-              (Instruction.var_uses (snd inst) |> VarSet.of_iter)
+              (Instruction.var_uses inst |> VarSet.of_iter)
             |> VarSet.is_empty |> not)
           actual_insts
       in
@@ -831,7 +874,7 @@ module SSIfy = struct
         let unregistered_use_vars (inst : Instruction.t) =
           VarSet.diff
             (VarSet.inter rename_info.web
-               (Instruction.var_uses (snd inst) |> VarSet.of_iter))
+               (Instruction.var_uses inst |> VarSet.of_iter))
             curr_used
         in
         let guard (inst : Instruction.t) =
@@ -875,9 +918,8 @@ module SSIfy = struct
       (* Foreach non actual instruction E Def(web) do *)
       InstructionSet.fold
         (fun (inst : Instruction.t) curr_proc ->
-          let instruction = snd inst in
           let inst_is_def_of_web =
-            instruction |> Instruction.var_defines |> VarSet.of_iter
+            inst |> Instruction.var_defines |> VarSet.of_iter
             |> VarSet.inter rename_info.web
             |> VarSet.is_empty |> not
           in
@@ -885,8 +927,8 @@ module SSIfy = struct
             (* Instruction is part of Def(web) *)
             let all_vars =
               Iter.append
-                (Instruction.var_defines instruction)
-                (Instruction.var_uses instruction)
+                (Instruction.var_defines inst)
+                (Instruction.var_uses inst)
               |> VarSet.of_iter
             in
 
@@ -910,14 +952,14 @@ module SSIfy = struct
             let just_bot_char = VarSet.empty |> VarSet.add bot_var in
             (* If inst.defs = {⊥} or inst.uses = {⊥} *)
             if
-              Instruction.var_defines (snd inst_step_one)
+              Instruction.var_defines inst_step_one
               |> VarSet.of_iter |> VarSet.equal just_bot_char
-              || Instruction.var_uses (snd inst_step_one)
+              || Instruction.var_uses inst_step_one
                  |> VarSet.of_iter |> VarSet.equal just_bot_char
-            then (
+            then
               (* Remove inst *)
               match inst_step_one with
-              | block_id, Instruction.Phi bot_phi ->
+              | Block_Inst (block_id, Instruction.Phi bot_phi) ->
                   let unmodified_block =
                     Procedure.find_block proc_step_one block_id
                   in
@@ -930,7 +972,7 @@ module SSIfy = struct
                     { unmodified_block with phis = new_phis }
                   in
                   Procedure.update_block proc_step_one block_id modified_block
-              | block_id, Instruction.Statement bot_stmt ->
+              | Block_Inst (block_id, Instruction.Statement bot_stmt) ->
                   let unmodified_block =
                     Procedure.find_block proc_step_one block_id
                   in
@@ -943,7 +985,9 @@ module SSIfy = struct
                       stmts = Vector.freeze modified_stmts;
                     }
                   in
-                  Procedure.update_block proc_step_one block_id modified_block)
+                  Procedure.update_block proc_step_one block_id modified_block
+              (* Should not be editing the formal in or out params *)
+              | _ -> proc_step_one
             else proc_step_one
           else curr_proc)
         rename_info.non_actual_insts rename_info.proc
@@ -1128,16 +1172,17 @@ proc @main(i:bv64) -> (out:bv64)
 
     block %main_1
     [
-      guard(bvsmod(v, 2:bv64));
+      guard(bvsmod(i, 2:bv64));
       var nam:bv64 := bvadd(v:bv64, 10:bv64);
       var v:bv64 := bvadd(v, v);
       var tmp:bv64 := bvadd(i, 1:bv64);
+      var i:bv64 := tmp:bv64;
       goto(%main_return, %main_1);
     ];
 
     block %main_2
     [
-      guard(boolnot(bvsmod(v, 2:bv64)));
+      guard(boolnot(bvsmod(i, 2:bv64)));
       var nam:bv64 := bvadd(namnam:bv64, v:bv64);
       goto(%main_2_1);
     ];
@@ -1199,19 +1244,21 @@ proc @OY() -> (OY_out:bv64)
          goto (%main_2,%main_1);
        ];
        block %main_1 (
+         var i_3:bv64 := phi(%main_1 -> i_4:bv64, %main_entry -> ⊥:bv64),
          var v_7:bv64 := phi(%main_1 -> v_8:bv64, %main_entry -> v_2:bv64)
        ) [
-         guard bvsmod(v_7:bv64, 0x2:bv64);
+         guard bvsmod(i_3:bv64, 0x2:bv64);
          var nam_48:bv64 := bvadd(v_7:bv64, 0xa:bv64);
          var v_8:bv64 := bvadd(v_7:bv64, v_7:bv64);
          var tmp_3:bv64 := bvadd(i_3:bv64, 0x1:bv64);
+         var i_4:bv64 := tmp_3:bv64;
          goto (%main_return,%main_1);
        ];
        block %main_2 (
          var v_5:bv64 := phi(%main_entry -> v_2:bv64),
          var namnam_8:bv64 := phi(%main_entry -> namnam_1:bv64)
        ) [
-         guard boolnot(bvsmod(v_5:bv64, 0x2:bv64));
+         guard boolnot(bvsmod(i_2:bv64, 0x2:bv64));
          var nam_59:bv64 := bvadd(namnam_8:bv64, v_5:bv64);
          goto (%main_2_1);
        ];
@@ -1856,4 +1903,111 @@ proc @OY() -> (OY_out:bv64)
          return;
        ]
     ]
+    |}]
+
+let%expect_test "test_loop.il" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+      prog entry @main ;
+
+var $R0 : bv64;
+var $R1 : bv64;
+
+
+proc @main () -> () [
+  block %entry  [
+    $R0 := 0:bv64;
+    $R1 := 0:bv64;
+    goto (%loop);
+  ];
+  block %loop [
+    goto (%loop_true, %loop_false);
+  ];
+  block %loop_true [
+    guard (bvult($R0, 10:bv64));
+    $R1 := bvadd($R1, $R0);
+    $R0 := bvadd($R0, 1:bv64);
+    goto (%loop);
+  ];
+  block %loop_false [
+    guard (bvuge($R0, 10:bv64));
+    return ();
+  ];
+
+];
+
+proc @main_local () -> () [
+  block %entry  [
+    var v0:bv64 := 0:bv64;
+    var r1:bv64 := 0:bv64;
+    goto (%loop);
+  ];
+  block %loop [
+    goto (%loop_true, %loop_false);
+  ];
+  block %loop_true [
+    guard (bvult(v0, 10:bv64));
+    var r1:bv64 := bvadd(r1, v0);
+    var v0:bv64 := bvadd(v0, 1:bv64);
+    goto (%loop);
+  ];
+  block %loop_false [
+    guard (bvuge(v0, 10:bv64));
+    return ();
+  ];
+
+];
+    |}
+  in
+  let program = lst.prog in
+  let ssi_prog = SSIfy.ssify_prog program in
+  Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
+  [%expect
+    {|
+    var $R0:bv64;
+    var $R1:bv64;
+    proc @main()  -> () {  }
+      modifies $R0:bv64, $R1:bv64
+      captures $R0:bv64, $R1:bv64
+
+    [
+       block %entry [ $R0:bv64 := 0x0:bv64; $R1:bv64 := 0x0:bv64; goto (%loop); ];
+       block %loop [ goto (%loop_false,%loop_true); ];
+       block %loop_true [
+         guard bvult($R0, 0xa:bv64);
+         $R1:bv64 := bvadd($R1, $R0);
+         $R0:bv64 := bvadd($R0, 0x1:bv64);
+         goto (%loop);
+       ];
+       block %loop_false [ guard boolnot(bvult($R0, 0xa:bv64)); return; ]
+    ];
+    proc @main_local()  -> () {  }
+
+
+    [
+       block %entry [
+         var v0_1:bv64 := 0x0:bv64;
+         var r1_16:bv64 := 0x0:bv64;
+         goto (%loop);
+       ];
+       block %loop (
+         var v0_7:bv64 := phi(%loop_true -> v0_10:bv64, %entry -> v0_1:bv64),
+         var r1_11:bv64 := phi(%loop_true -> r1_35:bv64, %entry -> r1_16:bv64)
+       ) [ goto (%loop_false,%loop_true); ];
+       block %loop_true (
+         var v0_4:bv64 := phi(%loop -> v0_7:bv64),
+         var r1_23:bv64 := phi(%loop -> r1_11:bv64)
+       ) [
+         guard bvult(v0_4:bv64, 0xa:bv64);
+         var r1_35:bv64 := bvadd(r1_23:bv64, v0_4:bv64);
+         var v0_10:bv64 := bvadd(v0_4:bv64, 0x1:bv64);
+         goto (%loop);
+       ];
+       block %loop_false ( var v0_3:bv64 := phi(%loop -> v0_7:bv64) ) [
+         guard boolnot(bvult(v0_3:bv64, 0xa:bv64));
+         return;
+       ]
+    ];
+    prog entry @main;
     |}]
