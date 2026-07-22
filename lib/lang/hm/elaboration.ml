@@ -85,7 +85,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
       List.map
         (fun a ->
           let a = infer_expr vc ~univ [%here] a ctx in
-          let _ = unify (fix bool_type) (getty a) in
+          let _ = unify bool_type (getty a) in
           a)
         b
     in
@@ -155,9 +155,8 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
           let binding s = retype_var global_universe s binding in
           match definition with
           | Axiom b ->
-              let bt = fix bool_type in
               let b = infer_expr ~univ:global_universe [%here] b scheme in
-              let _ = unify (getty b) bt in
+              let _ = unify (getty b) bool_type in
               let new_axiom scheme =
                 Function
                   {

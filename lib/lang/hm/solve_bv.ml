@@ -33,26 +33,24 @@ module Make (Ctx : TypeExpr.TypeContext) = struct
         match List.map is_nat_val_type [ find a; find b; find equ ] with
         | [ Some a_n; Some b_n; Some e_n ] ->
             (* check constraint  *)
-            if a_n + b_n <> e_n then
-              type_error (fix @@ nat_val_type (a_n + b_n)) equ;
+            if a_n + b_n <> e_n then type_error (nat_val_type (a_n + b_n)) equ;
             Some equ
         | [ Some a_n; Some b_n; None ] ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (a_n + b_n)) equ)
+            Some (unify ~pos:[%here] (nat_val_type (a_n + b_n)) equ)
         | [ Some a_n; None; Some e_n ] ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (e_n - a_n)) b)
+            Some (unify ~pos:[%here] (nat_val_type (e_n - a_n)) b)
         | [ None; Some b_n; Some e_n ] ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (e_n - b_n)) a)
+            Some (unify ~pos:[%here] (nat_val_type (e_n - b_n)) a)
         | _ -> None)
     | AddConst { a; b; equ } -> (
         match (is_nat_val_type (find a), is_nat_val_type (find equ)) with
         | Some a_n, Some e_n ->
             (* check constraint  *)
-            let e = fix @@ nat_val_type (a_n + b) in
+            let e = nat_val_type (a_n + b) in
             Some (unify ~pos:[%here] e equ)
         | Some a_n, None ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (a_n + b)) equ)
-        | None, Some e_n ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (e_n - b)) a)
+            Some (unify ~pos:[%here] (nat_val_type (a_n + b)) equ)
+        | None, Some e_n -> Some (unify ~pos:[%here] (nat_val_type (e_n - b)) a)
         | _ -> None)
 
   (** Naive solver; loop over constraints and unify until everything is solved.

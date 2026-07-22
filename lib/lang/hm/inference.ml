@@ -24,7 +24,7 @@ module Make (T : TypeExpr.TypeContext) = struct
 
     type nonrec typ = typ
 
-    let top_typ = T.Typ.fix @@ top_t
+    let top_typ = top_t
     let fix i = E i
     let unfix i = match i with E i -> i
   end
@@ -46,35 +46,35 @@ module Make (T : TypeExpr.TypeContext) = struct
       (o : [ Ops.AllOps.const | Ops.AllOps.unary | Ops.AllOps.binary ]) =
     let fv () = fix @@ Var (gen.fresh ~name:"a" ()) in
     match o with
-    | `Extract (hi, lo) -> curry [ bvunk (fv ()) ] (bv_type (hi - lo))
+    | `Extract (hi, lo) -> curry_f [ bvunk (fv ()) ] (bv_type (hi - lo))
     | `SignExtend bits ->
         let a = fv () in
         let equ = fv () in
-        let r = curry [ bvunk a ] (bvunk equ) in
+        let r = curry_f [ bvunk a ] (bvunk equ) in
         visit_constraint @@ AddConst { a; b = bits; equ };
         r
     | `ZeroExtend bits ->
         let a = fv () and equ = fv () in
         visit_constraint @@ AddConst { a; b = bits; equ };
-        curry [ bvunk a ] (bvunk equ)
-    | `BOOLTOBV1 -> curry [ bool_type ] (bv_type 1)
-    | `Bitvector b -> fix @@ bv_type (Bitvec.size b)
+        curry_f [ bvunk a ] (bvunk equ)
+    | `BOOLTOBV1 -> curry_f [ bool_type ] (bv_type 1)
+    | `Bitvector b -> bv_type (Bitvec.size b)
     | #Ops.BVOps.binary_unif ->
         let a = fv () in
-        curry [ bvunk a; bvunk a ] (bvunk a)
+        curry_f [ bvunk a; bvunk a ] (bvunk a)
     | #Ops.BVOps.binary_pred ->
         let a = fv () in
-        curry [ bvunk a; bvunk a ] bool_type
+        curry_f [ bvunk a; bvunk a ] bool_type
     | #Ops.BVOps.unary_unif ->
         let a = fv () in
-        curry [ bvunk a ] (bvunk a)
-    | `INTNEG -> curry [ int_type ] int_type
-    | #Ops.IntOps.binary_pred -> curry [ int_type; int_type ] bool_type
-    | #Ops.IntOps.const -> fix @@ int_type
-    | #Ops.IntOps.binary_unif -> curry [ int_type; int_type ] int_type
-    | #Ops.LogicalOps.binary -> curry [ bool_type; bool_type ] bool_type
-    | #Ops.LogicalOps.unary -> curry [ bool_type ] bool_type
-    | #Ops.LogicalOps.const -> fix @@ bool_type
+        curry_f [ bvunk a ] (bvunk a)
+    | `INTNEG -> curry_f [ int_type ] int_type
+    | #Ops.IntOps.binary_pred -> curry_f [ int_type; int_type ] bool_type
+    | #Ops.IntOps.const -> int_type
+    | #Ops.IntOps.binary_unif -> curry_f [ int_type; int_type ] int_type
+    | #Ops.LogicalOps.binary -> curry_f [ bool_type; bool_type ] bool_type
+    | #Ops.LogicalOps.unary -> curry_f [ bool_type ] bool_type
+    | #Ops.LogicalOps.const -> bool_type
     | `Old ->
         let a = fv () in
         curry_f [ a ] a
@@ -105,8 +105,8 @@ module Make (T : TypeExpr.TypeContext) = struct
         in
         let rs = bvunk rs in
         let args = List.map bvunk args in
-        curry args rs
-    | `OR | `AND -> curry (List.init args (fun _ -> bool_type)) bool_type
+        curry_f args rs
+    | `OR | `AND -> curry_f (List.init args (fun _ -> bool_type)) bool_type
     | `MapUpdate ->
         let a = fv () in
         let b = fv () in
@@ -140,7 +140,7 @@ module Make (T : TypeExpr.TypeContext) = struct
         let typ =
           match op with
           | `Lambda -> getty bdty
-          | `Forall | `Exists -> unify (getty bdty) (fix bool_type)
+          | `Forall | `Exists -> unify (getty bdty) bool_type
         in
         ignore @@ unify r (curry_f (List.map snd tvars) (getty bdty));
         let triggers =
@@ -236,11 +236,11 @@ module Make (T : TypeExpr.TypeContext) = struct
     | Instr_IntrinCall _ -> failwith "intrin unsupported"
     | Instr_Assume { body; branch; attrib } ->
         let body = infer_ty [%here] body in
-        ignore @@ unify (fix bool_type) (getty body);
+        ignore @@ unify bool_type (getty body);
         Instr_Assume { body; branch; attrib }
     | Instr_Assert { body; attrib } ->
         let body = infer_ty [%here] body in
-        ignore @@ unify (fix bool_type) (getty body);
+        ignore @@ unify bool_type (getty body);
         Instr_Assert { body; attrib }
     | Instr_Assign { al = ls; attrib } ->
         let ls = List.map (fun (l, r) -> (l, infer_ty [%here] r)) ls in
@@ -275,7 +275,7 @@ module Make (T : TypeExpr.TypeContext) = struct
         Instr_Call { lhs; procid; args; attrib }
     | Instr_IndirectCall { target; attrib } ->
         let target = infer_ty [%here] target in
-        ignore @@ unify (getty target) (fix ptr_typ);
+        ignore @@ unify (getty target) ptr_typ;
         Instr_IndirectCall { target; attrib }
     | Instr_Load { lhs; rhs; addr = Scalar; attrib } ->
         let lhs' = infer_ty [%here] (Expr.BasilExpr.rvar lhs) in
@@ -284,13 +284,13 @@ module Make (T : TypeExpr.TypeContext) = struct
         Instr_Load { lhs; rhs; addr = Scalar; attrib }
     | Instr_Load { lhs; rhs; addr = Addr { addr; size; endian }; attrib } ->
         let addr = infer_ty [%here] addr in
-        let _ = unify (fix @@ ptr_typ) (getty addr) in
-        let mapt = fix @@ fun_type (getty addr) (fresh_tvar ()) in
+        let _ = unify ptr_typ (getty addr) in
+        let mapt = fun_type (getty addr) (fresh_tvar ()) in
         let _ = unify (lookup_var_typ univ ctx rhs) mapt in
         let _ =
           unify
             (infer_ty [%here] (Expr.BasilExpr.rvar lhs) |> getty)
-            (fix @@ bv_type size)
+            (bv_type size)
         in
         Instr_Load { lhs; rhs; addr = Addr { addr; size; endian }; attrib }
     | Instr_Store { lhs; rhs; value; addr = Scalar; attrib } ->
@@ -305,14 +305,14 @@ module Make (T : TypeExpr.TypeContext) = struct
     | Instr_Store
         { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib } ->
         let addr = infer_ty [%here] addr in
-        let _ = unify (fix @@ ptr_typ) (getty addr) in
-        let mapt = fix @@ fun_type (getty addr) (fresh_tvar ()) in
+        let _ = unify ptr_typ (getty addr) in
+        let mapt = fun_type (getty addr) (fresh_tvar ()) in
         let _ =
           unify mapt (infer ~univ [%here] (Expr.BasilExpr.rvar lhs) ctx)
         in
         let _ = unify (lookup_var_typ univ ctx rhs) mapt in
         let value = infer_ty [%here] value in
-        let _ = unify (getty value) (fix @@ bv_type size) in
+        let _ = unify (getty value) (bv_type size) in
         Instr_Store
           { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib }
 

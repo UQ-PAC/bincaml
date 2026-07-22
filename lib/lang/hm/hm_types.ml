@@ -30,12 +30,12 @@ module Make (Ctx : TypeExpr.TypeContext) = struct
         List.to_string ID.to_string tl ^ ". " ^ type_to_string (Ctx.Typ.find t)
 
   (** Function type, takes two arguments: we always curry. *)
-  let fun_type a b = TypeExpr.ATyp.TypeConstr ([ a; b ], "->")
+  let fun_type a b = Ctx.Typ.fix (TypeConstr ([ a; b ], "->"))
 
   (** A type representing a number *)
   let nat_val_type i =
     let num = Ctx.Typ.fix (TypeExpr.ATyp.TypeConstr ([], Int.to_string i)) in
-    Ctx.Typ.TypeConstr ([ num ], "ℕ")
+    Ctx.Typ.fix (TypeConstr ([ num ], "ℕ"))
 
   let is_nat_val_type (i : Ctx.Typ.t) =
     match Ctx.Typ.unfix i with
@@ -46,20 +46,19 @@ module Make (Ctx : TypeExpr.TypeContext) = struct
     | _ -> None
 
   (** A bitvector type parametric in its width *)
-  let bv_type i =
-    Ctx.Typ.(map_expr fix @@ TypeConstr ([ nat_val_type i ], "bv"))
+  let bv_type i = Ctx.Typ.fix (TypeConstr ([ nat_val_type i ], "bv"))
 
   (** Bitvector of arbitrary size *)
-  let bvunk i = Ctx.Typ.TypeConstr ([ i ], "bv")
+  let bvunk i = Ctx.Typ.fix (TypeConstr ([ i ], "bv"))
 
   (** {2 Primitive types} *)
 
-  let int_type = Ctx.Typ.TypeConstr ([], "int")
-  let bool_type = Ctx.Typ.TypeConstr ([], "bool")
-  let unit_t = Ctx.Typ.TypeConstr ([], "unit")
-  let top_t = Ctx.Typ.TypeConstr ([], "top")
-  let nothing_t = Ctx.Typ.TypeConstr ([], "nothing")
-  let ptr_typ_sub a b = Ctx.Typ.TypeConstr ([ a; b ], "ptr")
+  let int_type = Ctx.Typ.fix (TypeConstr ([], "int"))
+  let bool_type = Ctx.Typ.fix (TypeConstr ([], "bool"))
+  let unit_t = Ctx.Typ.fix (TypeConstr ([], "unit"))
+  let top_t = Ctx.Typ.fix (TypeConstr ([], "top"))
+  let nothing_t = Ctx.Typ.fix (TypeConstr ([], "nothing"))
+  let ptr_typ_sub a b = Ctx.Typ.fix (TypeConstr ([ a; b ], "ptr"))
   let ptr_typ = bv_type 64
 
   let rec to_basil (t : Ctx.Typ.t) : Types.t =
@@ -88,31 +87,26 @@ module Make (Ctx : TypeExpr.TypeContext) = struct
     | _ -> failwith "not impl"
 
   let rec ty_of_basil (t : Types.t) : Ctx.Typ.t =
-    let e =
-      match t with
-      | Types.Boolean -> bool_type
-      | Types.Integer -> int_type
-      | Types.Bitvector i -> bv_type i
-      | Types.Unit -> unit_t
-      | Types.Top -> top_t
-      | Types.Nothing -> nothing_t
-      | Types.Map (a, b) -> fun_type (ty_of_basil a) (ty_of_basil b)
-      | Types.Sort (n, _) -> TypeConstr ([], n)
-      | Types.Struct _ -> failwith "unsupp"
-      | Types.Pointer { lower; upper } ->
-          ptr_typ_sub (ty_of_basil lower) (ty_of_basil upper)
-      | Types.Variable n -> Var (Ctx.gen.fresh ~name:n ())
-    in
-    Ctx.Typ.fix e
+    match t with
+    | Types.Boolean -> bool_type
+    | Types.Integer -> int_type
+    | Types.Bitvector i -> bv_type i
+    | Types.Unit -> unit_t
+    | Types.Top -> top_t
+    | Types.Nothing -> nothing_t
+    | Types.Map (a, b) -> fun_type (ty_of_basil a) (ty_of_basil b)
+    | Types.Sort (n, _) -> Ctx.Typ.fix (TypeConstr ([], n))
+    | Types.Struct _ -> failwith "unsupp"
+    | Types.Pointer { lower; upper } ->
+        ptr_typ_sub (ty_of_basil lower) (ty_of_basil upper)
+    | Types.Variable n -> Ctx.Typ.fix (Var (Ctx.gen.fresh ~name:n ()))
 
   let curry (args : Ctx.Typ.t TypeExpr.ATyp.expr list)
       (v : Ctx.Typ.t TypeExpr.ATyp.expr) =
-    List.fold_left
-      (fun a p -> Ctx.Typ.fix @@ fun_type (Ctx.Typ.fix p) a)
-      (Ctx.Typ.fix v) args
+    List.fold_left (fun a p -> fun_type (Ctx.Typ.fix p) a) (Ctx.Typ.fix v) args
 
   let curry_f (args : Ctx.Typ.t list) (v : Ctx.Typ.t) =
-    List.fold_left (fun a p -> Ctx.Typ.fix @@ fun_type p a) v args
+    List.fold_left (fun a p -> fun_type p a) v args
 
   let types_universe = "<types>"
   let global_universe = "<global>"
