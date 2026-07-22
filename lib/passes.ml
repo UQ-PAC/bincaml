@@ -85,7 +85,7 @@ module PassManager = struct
     name = "ssify-program";
     apply = Prog Transforms.Ssify.SSIfy.ssify_prog;
     doc = "Converts a given procedure to SSI form";
-    invariants = Invariants.make ();
+    invariants = Invariants.establishes [ SSA ];
   }
 
   let dfg_bool =
