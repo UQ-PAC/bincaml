@@ -8,6 +8,8 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
   open Unification.Make (T)
   open Inference.Make (T)
   open Solve_bv.Make (T)
+  open T
+  open T.Typ
 
   let retype_var univ ctx id =
     lookup_var_typ ~no_constraint:true univ ctx id |> find |> to_basil

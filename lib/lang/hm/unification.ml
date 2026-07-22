@@ -7,6 +7,9 @@ module Make (T : TypeExpr.TypeContext) = struct
   open Hm_types.Make (T)
   (* XXX: todo *)
 
+  open T
+  open T.Typ
+
   let type_error a b =
     let a = find a in
     let b = find b in

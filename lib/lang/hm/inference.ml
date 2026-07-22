@@ -8,6 +8,8 @@ module Make (T : TypeExpr.TypeContext) = struct
   open Solve_bv.Make (T)
   open Hm_types.Make (T)
   open Unification.Make (T)
+  open T
+  open T.Typ
 
   (** An AbstractExpr.t with [t] used as the type. *)
   module AbsTypingExpr = struct

@@ -116,9 +116,4 @@ module Make (Ctx : TypeExpr.TypeContext) = struct
 
   let types_universe = "<types>"
   let global_universe = "<global>"
-
-  include Ctx
-  (** XXX: TODO........... *)
-
-  include Typ
 end
