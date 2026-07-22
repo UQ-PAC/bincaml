@@ -3,10 +3,11 @@
 open Common
 open Abstract_expr
 
-module Make (T : TypeExpr.TypeContext) = struct
-  open Hm_types.Make (T)
-  (* XXX: todo *)
-
+module Make
+    (T : TypeExpr.TypeContext)
+    (Hm_types' : module type of Hm_types.Make (T)) =
+struct
+  open Hm_types'
   open T
   open T.Typ
 

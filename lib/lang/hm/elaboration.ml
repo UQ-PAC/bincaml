@@ -5,7 +5,7 @@ open Abstract_expr
 
 module TypeInference (T : TypeExpr.TypeContext) = struct
   open Hm_types.Make (T)
-  open Unification.Make (T)
+  open Unification.Make (T) (Hm_types.Make (T))
   open Inference.Make (T)
   open Solve_bv.Make (T)
   open T
