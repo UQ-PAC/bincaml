@@ -148,7 +148,7 @@ open Abstract_expr
 module Hm_make_fresh () = struct
   module Ctx = TypeExpr.MakeFresh ()
   include Hm_types.Make (Ctx)
-  include Unification.Make (Ctx) (Hm_types.Make (Ctx))
+  include Unification.Make (Ctx)
   include Inference.Make (Ctx)
   include Solve_bv.Make (Ctx)
   include Elaboration.TypeInference (Ctx)

@@ -5,7 +5,7 @@ open Abstract_expr
 open Hm_types
 
 module Make (Ctx : TypeExpr.TypeContext) = struct
-  open Unification.Make (Ctx) (Hm_types.Make (Ctx))
+  open Unification.Make (Ctx)
   open Hm_types.Make (Ctx)
   open Ctx
   open Ctx.Typ
