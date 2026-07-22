@@ -15,17 +15,15 @@ open Expr
 
 let construct_final_edge proc =
   (* Termination condition for each edge. *)
-  let termination_condition : (IDSet.elt, Var.t) Hashtbl.t =
-    Hashtbl.create 30
-  in
+  let termination_condition : (ID.t, Var.t) Hashtbl.t = Hashtbl.create 30 in
 
   (* final_edge accumulates as one large edge containing
      all statements from existing edges with additional
      predicate variables and ite statements/assignments
-     filling in for phi-nodes. 
-  *)
-  Procedure.fold_blocks_topo_fwd
-    (fun final_edge id block ->
+     filling in for phi-nodes. *)
+  let final_edge : (Program.stmt, Vector.rw) Vector.t = CCVector.create () in
+
+  Procedure.iter_blocks_topo_fwd proc (fun (id, block) ->
       (* Compute reachability of this block. *)
       let reachable =
         match Procedure.blocks_pred proc id |> Iter.to_list with
@@ -90,8 +88,11 @@ let construct_final_edge proc =
           2. the statements for the new edge body.
           3. an assignment to the termination variable.
         *)
-      final_edge @ List.concat [ [ ites ]; non_guard_stmts; [ termination ] ])
-    [] proc
+      CCVector.push final_edge ites;
+      CCVector.append_list final_edge non_guard_stmts;
+      CCVector.push final_edge termination);
+
+  CCVector.freeze final_edge
 
 let reduce_procedure (proc : Program.proc) : Program.proc =
   (* Constructed reduced edge to replace procedure blocks. *)
@@ -101,7 +102,10 @@ let reduce_procedure (proc : Program.proc) : Program.proc =
     proc |> Procedure.iter_blocks |> Iter.map fst
     |> Iter.fold (fun acc id -> Procedure.remove_block acc id) proc
   in
-  let proc, id = Procedure.fresh_block proc ~stmts:final_edge () in
+  let proc, id = Procedure.fresh_block proc ~stmts:[] () in
+  let proc =
+    Procedure.modify_block proc id (fun b -> { b with stmts = final_edge })
+  in
 
   (* Make this the entry and return block. *)
   let proc = Procedure.set_entry_block proc id in
