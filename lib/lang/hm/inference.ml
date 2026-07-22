@@ -5,8 +5,9 @@ open Hm_types
 (** Hindley-Milner type inference based on a union-find. *)
 
 module Make (T : TypeExpr.TypeContext) = struct
-  open TypeExpr
-  include Solve_bv.Make (T)
+  open Solve_bv.Make (T)
+  open Hm_types.Make (T)
+  open Unification.Make (T)
 
   (** An AbstractExpr.t with [t] used as the type. *)
   module AbsTypingExpr = struct
@@ -21,7 +22,7 @@ module Make (T : TypeExpr.TypeContext) = struct
 
     type nonrec typ = typ
 
-    let top_typ = fix @@ top_t
+    let top_typ = T.Typ.fix @@ top_t
     let fix i = E i
     let unfix i = match i with E i -> i
   end
@@ -116,9 +117,9 @@ module Make (T : TypeExpr.TypeContext) = struct
         univ:string ->
         Lexing.position ->
         Program.e ->
-        scheme TCtx.t ->
+        scheme TypeExpr.TCtx.t ->
         AbsTypingExpr.t) univ hr e c : AbsTypingExpr.t =
-    let mkv v = V.of_var univ v in
+    let mkv v = TypeExpr.V.of_var univ v in
     let r = fix @@ Var (gen.fresh ()) in
     let open Abstract_expr.AbstractExpr in
     let e = Expr.BasilExpr.unfix e in
@@ -131,7 +132,7 @@ module Make (T : TypeExpr.TypeContext) = struct
         let tvars = List.map (fun v -> (v, inst_annot_v v)) bound_vars in
         let ictx =
           List.map (fun (v, t) -> (mkv v, Forall ([], t))) tvars
-          |> TCtx.add_list c
+          |> TypeExpr.TCtx.add_list c
         in
         let bdty = infer ~univ [%here] in_body ictx in
         let typ =
@@ -178,7 +179,7 @@ module Make (T : TypeExpr.TypeContext) = struct
     | Let _ -> failwith ""
 
   let rec infer_expr visit_constraint ~univ (hr : Lexing.position) e =
-   fun (c : scheme TCtx.t) ->
+   fun (c : scheme TypeExpr.TCtx.t) ->
     Logs.debug (fun m ->
         m "%s" @@ "infer " ^ plpos hr ^ " " ^ Expr.BasilExpr.to_string e);
     let t =
@@ -188,8 +189,8 @@ module Make (T : TypeExpr.TypeContext) = struct
     in
     t
 
-  let infer visit_constraint ~univ (hr : Lexing.position) e (c : scheme TCtx.t)
-      =
+  let infer visit_constraint ~univ (hr : Lexing.position) e
+      (c : scheme TypeExpr.TCtx.t) =
     let nexpr =
       infer_expr visit_constraint ~univ hr e c
       |> AbsTypingExpr.unfix |> AbstractExpr.get_typ
@@ -217,9 +218,9 @@ module Make (T : TypeExpr.TypeContext) = struct
       r p
 
   let ctx_to_string ctx =
-    TCtx.to_iter ctx
+    TypeExpr.TCtx.to_iter ctx
     |> Iter.to_string (fun (a, b) ->
-        Printf.sprintf "%s %s" (V.to_string a) (scheme_to_string b))
+        Printf.sprintf "%s %s" (TypeExpr.V.to_string a) (scheme_to_string b))
 
   let fresh_tvar ?(n = "a") () = fix @@ Var (gen.fresh ~name:n ())
 
@@ -250,7 +251,9 @@ module Make (T : TypeExpr.TypeContext) = struct
     | Instr_Call { lhs; procid; args; attrib } ->
         let p = Program.proc p procid in
         let infer_param p =
-          infer ~univ:(V.proc_univ procid) [%here] (Expr.BasilExpr.rvar p) ctx
+          infer
+            ~univ:(TypeExpr.V.proc_univ procid)
+            [%here] (Expr.BasilExpr.rvar p) ctx
         in
         let args = StringMap.mapi (fun param a -> infer_ty [%here] a) args in
         StringMap.iter
@@ -327,7 +330,7 @@ module Make (T : TypeExpr.TypeContext) = struct
     let globs = Var.Decls.values (Procedure.local_decls p) in
     let formals_in = Procedure.formal_in_params p |> StringMap.values in
     let formals_out = Procedure.formal_out_params p |> StringMap.values in
-    let univ = V.proc_univ @@ Procedure.id p in
+    let univ = TypeExpr.V.proc_univ @@ Procedure.id p in
     let ctx =
       Iter.fold
         (decl_var_typ ~no_constraint univ)

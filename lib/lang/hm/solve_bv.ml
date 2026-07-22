@@ -4,15 +4,17 @@ open Common
 open Abstract_expr
 open Hm_types
 
-module Make (T : TypeExpr.TypeContext) = struct
-  include Unification.Make (T)
+module Make (Ctx : TypeExpr.TypeContext) = struct
+  open Unification.Make (Ctx)
+  open Hm_types.Make (Ctx)
 
   (** Naive solver *)
 
   (** Constraints between nat val types. *)
   type dependent_bv_constraints =
-    | Add of { a : Typ.t; b : Typ.t; equ : Typ.t }  (** a + b = equ*)
-    | AddConst of { a : Typ.t; b : int; equ : Typ.t }  (** a + b = equ*)
+    | Add of { a : Ctx.Typ.t; b : Ctx.Typ.t; equ : Ctx.Typ.t }
+        (** a + b = equ*)
+    | AddConst of { a : Ctx.Typ.t; b : int; equ : Ctx.Typ.t }  (** a + b = equ*)
 
   let show_dependent_bv_constraints = function
     | Add { a; b; equ } ->
@@ -23,7 +25,7 @@ module Make (T : TypeExpr.TypeContext) = struct
           (type_to_string equ)
 
   (** Deduce the width if two values of the constraint have inferred widths *)
-  let unify_bv_constraint constr : Typ.t option =
+  let unify_bv_constraint constr : Ctx.Typ.t option =
     match constr with
     | Add { a; b; equ } -> (
         match List.map is_nat_val_type [ find a; find b; find equ ] with
