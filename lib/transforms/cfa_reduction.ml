@@ -21,9 +21,8 @@ let construct_final_edge proc =
      all statements from existing edges with additional
      predicate variables and ite statements/assignments
      filling in for phi-nodes. *)
-  let final_edge : (Program.stmt, Vector.rw) Vector.t = CCVector.create () in
-
-  Procedure.iter_blocks_topo_fwd proc (fun (id, block) ->
+  Procedure.fold_blocks_topo_fwd
+    (fun final_edge id block ->
       (* Compute reachability of this block. *)
       let reachable =
         match Procedure.blocks_pred proc id |> Iter.to_list with
@@ -90,9 +89,10 @@ let construct_final_edge proc =
         *)
       CCVector.push final_edge ites;
       CCVector.append_list final_edge non_guard_stmts;
-      CCVector.push final_edge termination);
-
-  CCVector.freeze final_edge
+      CCVector.push final_edge termination;
+      final_edge)
+    (CCVector.create ()) proc
+  |> CCVector.freeze
 
 let reduce_procedure (proc : Program.proc) : Program.proc =
   (* Constructed reduced edge to replace procedure blocks. *)
