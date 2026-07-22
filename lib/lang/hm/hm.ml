@@ -11,6 +11,8 @@
     - {:https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system#Algorithm_J}
     - {:https://bernsteinbear.com/blog/type-inference/} *)
 
+module State = State
+
 module TypeExpr = TypeExpr
 (** {1 Type Expressions}
 
