@@ -29,6 +29,7 @@
   kittyimg,
   stb_image,
   linenoise,
+  unionFind,
 
   capstone_arm64_disas,
   aslp_lifter_ocaml,
@@ -92,6 +93,7 @@ buildDunePackage {
     patricia-tree
     logs
     mtime
+    unionFind
     terminal_size
     kittyimg
     linenoise
