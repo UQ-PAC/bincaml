@@ -24,12 +24,21 @@ module AbsTypingExpr = struct
   let unfix i = match i with E i -> i
 end
 
-(* module TypingExpr = Expr.Make (AbsTypingExpr) *)
+module TypingExpr = Bincaml_util.Recursionscheme.Recursion (struct
+  open Ops.AllOps
+
+  type t = AbsTypingExpr.t
+  type 'e expr = (const, Var.t, unary, binary, intrin, typ, 'e) AbstractExpr.t
+
+  let map_expr = AbstractExpr.map
+  let fix = AbsTypingExpr.fix
+  let unfix = AbsTypingExpr.unfix
+end)
 
 let getty = AbsTypingExpr.unfix %> Expr.AbstractExpr.get_typ
 
-let infer_var univ ctx id =
-  let typ = lookup_var_typ univ ctx id in
+let infer_var st univ ctx id =
+  let typ = lookup_var_typ st univ ctx id in
   (id, typ)
 
 (** Return the generic type scheme for an op. We generalise the type, and hope
@@ -330,15 +339,3 @@ let infer_block st vc p univ ctx (b : Program.bloc) =
   let _ = infer_phi st vc univ ctx b.phis in
   Block.map ~phi:Fun.id (infer_stmt st vc p univ ctx) b
 
-let assume_proc_decl st ctx ?(no_constraint = false) (p : Program.proc) =
-  let globs = Var.Decls.values (Procedure.local_decls p) in
-  let formals_in = Procedure.formal_in_params p |> StringMap.values in
-  let formals_out = Procedure.formal_out_params p |> StringMap.values in
-  let univ = TypeExpr.V.proc_univ @@ Procedure.id p in
-  let ctx =
-    Iter.fold
-      (decl_var_typ st ~no_constraint univ)
-      ctx
-      (Iter.append globs @@ Iter.append formals_in formals_out)
-  in
-  ctx

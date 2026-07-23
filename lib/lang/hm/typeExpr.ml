@@ -70,22 +70,27 @@ module Hash_inner = struct
     | T i, T j -> ATyp.equal_expr Fix.HashCons.equal i j
 end
 
-type state = {
-  hcons : Hash_inner.t -> t;
-      (** Construct (or re-obtain) a hash-consed union-find-supporting type
-          expression for the given {!nt}. *)
-  gen : ID.generator;  (** Type name generator. *)
-}
-(** Union find and hash-consing state for recording type relations. *)
+module State = struct
+  type state = {
+    hcons : Hash_inner.t -> t;
+        (** Construct (or re-obtain) a hash-consed union-find-supporting type
+            expression for the given {!nt}. *)
+    gen : ID.generator;  (** Type name generator. *)
+  }
+  (** Union find and hash-consing state for recording type relations. *)
 
-(** Create a new union find and hash-cons state.
+  (** Create a new union find and hash-cons state.
 
-    This must be done each time we want to perform inference in an independent
-    environment, in order to construct a fresh hash-consing and union-find
-    state. *)
-let create_state () =
-  let module H = Fix.HashCons.ForHashedType (Hash_inner) in
-  { hcons = (fun e -> H.make e); gen = ID.make_gen () }
+      This must be done each time we want to perform inference in an independent
+      environment, in order to construct a fresh hash-consing and union-find
+      state. *)
+  let create_state () =
+    let module H = Fix.HashCons.ForHashedType (Hash_inner) in
+    { hcons = (fun e -> H.make e); gen = ID.make_gen () }
+end
+
+include State
+(** @inline *)
 
 let unfix : t -> t ATyp.expr =
   Fix.HashCons.data %> UnionFind.find %> UnionFind.get %> function T e -> e

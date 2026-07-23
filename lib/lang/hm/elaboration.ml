@@ -8,16 +8,17 @@ open Unification
 open Inference
 open Solve_bv
 
-let retype_var univ ctx id =
-  lookup_var_typ ~no_constraint:true univ ctx id |> find |> to_basil
+let retype_var st univ ctx id =
+  lookup_var_typ st ~no_constraint:true univ ctx id
+  |> TypeExpr.find st |> to_basil
   |> fun typ -> Var.copy ~typ id
 
-let elaborate_phi univ ctx (p : Var.t Block.phi list) =
+let elaborate_phi st univ ctx (p : Var.t Block.phi list) =
   let open Block in
   List.map
     (fun { lhs; rhs } ->
-      let lhs = retype_var univ ctx lhs in
-      let rhs = List.map (fun (a, r) -> (a, retype_var univ ctx r)) rhs in
+      let lhs = retype_var st univ ctx lhs in
+      let rhs = List.map (fun (a, r) -> (a, retype_var st univ ctx r)) rhs in
       { lhs; rhs })
     p
 
@@ -26,62 +27,57 @@ let ctx_to_string ctx =
   |> Iter.to_string (fun (a, b) ->
       Printf.sprintf "%s %s" (TypeExpr.V.to_string a) (scheme_to_string b))
 
-let fresh_tvar ?(n = "a") () = fix @@ Var (gen.fresh ~name:n ())
 let unfix i = match i with Expr.BasilExpr.E i -> i
 let rec cata alg e = (unfix %> AbstractExpr.map (cata alg) %> alg) e
 
 (** Extract type after full inference has run. *)
-let elaborate_expr ~univ (hr : Lexing.position) e (c : scheme TypeExpr.TCtx.t) =
+let elaborate_expr st ~univ (hr : Lexing.position) e
+    (c : scheme TypeExpr.TCtx.t) =
   let alg e =
     let e =
       match e with
       | AbstractExpr.RVar { id; attrib; typ } ->
           (* avoid looking up the id in context as we may be in a local
             binding *)
-          let id = Var.copy id ~typ:(to_basil @@ find typ) in
+          let id = Var.copy id ~typ:(to_basil @@ TypeExpr.find st typ) in
           AbstractExpr.RVar { id; attrib; typ }
       | o -> o
     in
-    let t = AbstractExpr.get_typ e |> find |> to_basil in
+    let t = AbstractExpr.get_typ e |> TypeExpr.find st |> to_basil in
     AbstractExpr.set_typ e t |> Expr.BasilExpr.fix
   in
   e |> TypingExpr.cata alg
 
-let elaborate_stmt univ ctx stmt =
-  let retype_var v =
-    let typ =
-      lookup_var_typ ~no_constraint:true univ ctx v |> find |> to_basil
-    in
-    Var.copy ~typ v
-  in
+let elaborate_stmt st univ ctx stmt =
+  let retype_var = retype_var st univ ctx in
   Stmt.map
-    ~f_expr:(fun e -> elaborate_expr ~univ [%here] e ctx)
+    ~f_expr:(fun e -> elaborate_expr st ~univ [%here] e ctx)
     ~f_lvar:retype_var ~f_rvar:retype_var stmt
 
-let elaborate_block p univ ctx (b : ('a, 'b) Block.t) =
-  Block.map ~phi:(elaborate_phi univ ctx) (elaborate_stmt univ ctx) b
+let elaborate_block st p univ ctx (b : ('a, 'b) Block.t) =
+  Block.map ~phi:(elaborate_phi st univ ctx) (elaborate_stmt st univ ctx) b
 
-let assume_proc_decl ctx ?(no_constraint = false) (p : Program.proc) =
+let assume_proc_decl st ctx ?(no_constraint = false) (p : Program.proc) =
   let globs = Var.Decls.values (Procedure.local_decls p) in
   let formals_in = Procedure.formal_in_params p |> StringMap.values in
   let formals_out = Procedure.formal_out_params p |> StringMap.values in
   let univ = TypeExpr.V.proc_univ @@ Procedure.id p in
   let ctx =
     Iter.fold
-      (decl_var_typ ~no_constraint univ)
+      (decl_var_typ st ~no_constraint univ)
       ctx
       (Iter.append globs @@ Iter.append formals_in formals_out)
   in
   ctx
 
-let infer_proc vc prog ctx ?(no_constraint = false) (p : Program.proc) =
+let infer_proc st vc prog ctx ?(no_constraint = false) (p : Program.proc) =
   let spec = Procedure.specification p in
   let univ = TypeExpr.V.proc_univ @@ Procedure.id p in
   let ibool_list b =
     List.map
       (fun a ->
-        let a = infer_expr vc ~univ [%here] a ctx in
-        let _ = unify bool_type (getty a) in
+        let a = infer_expr st vc ~univ [%here] a ctx in
+        let _ = unify st (bool_type st) (getty a) in
         a)
       b
   in
@@ -92,30 +88,30 @@ let infer_proc vc prog ctx ?(no_constraint = false) (p : Program.proc) =
       rely = ibool_list spec.rely;
       guarantee = ibool_list spec.guarantee;
       captures_globs =
-        List.map (infer_var global_universe ctx) spec.captures_globs;
+        List.map (infer_var st global_universe ctx) spec.captures_globs;
       modifies_globs =
-        List.map (infer_var global_universe ctx) spec.modifies_globs;
+        List.map (infer_var st global_universe ctx) spec.modifies_globs;
     }
   in
 
   let new_spec ctx : (Var.t, Expr.BasilExpr.t) Procedure.proc_spec =
     {
       requires =
-        List.map (fun e -> elaborate_expr ~univ [%here] e ctx) spec.requires;
+        List.map (fun e -> elaborate_expr st ~univ [%here] e ctx) spec.requires;
       ensures =
-        List.map (fun e -> elaborate_expr ~univ [%here] e ctx) spec.ensures;
-      rely = List.map (fun e -> elaborate_expr ~univ [%here] e ctx) spec.rely;
+        List.map (fun e -> elaborate_expr st ~univ [%here] e ctx) spec.ensures;
+      rely = List.map (fun e -> elaborate_expr st ~univ [%here] e ctx) spec.rely;
       guarantee =
-        List.map (fun e -> elaborate_expr ~univ [%here] e ctx) spec.guarantee;
+        List.map (fun e -> elaborate_expr st ~univ [%here] e ctx) spec.guarantee;
       captures_globs = spec.captures_globs |> List.map fst;
       modifies_globs = spec.modifies_globs |> List.map fst;
     }
   in
 
-  let ctx = assume_proc_decl ctx ~no_constraint p in
+  let ctx = assume_proc_decl st ctx ~no_constraint p in
   let bvlocks =
     Procedure.iter_blocks_topo_fwd p
-    |> Iter.map (fun (i, b) -> (i, infer_block vc prog univ ctx b))
+    |> Iter.map (fun (i, b) -> (i, infer_block st vc prog univ ctx b))
     |> Iter.persistent
   in
 
@@ -123,36 +119,38 @@ let infer_proc vc prog ctx ?(no_constraint = false) (p : Program.proc) =
     Procedure.set_specification p (new_spec ctx)
     |> (fun p ->
     bvlocks
-    |> Iter.map (fun (bid, b) -> (bid, elaborate_block [%here] univ ctx b))
+    |> Iter.map (fun (bid, b) -> (bid, elaborate_block st [%here] univ ctx b))
     |> Iter.fold (fun p (bid, b) -> Procedure.update_block p bid b) p)
-    |> Procedure.map_formal_in_params (StringMap.map (retype_var univ ctx))
-    |> Procedure.map_formal_out_params (StringMap.map (retype_var univ ctx))
+    |> Procedure.map_formal_in_params (StringMap.map (retype_var st univ ctx))
+    |> Procedure.map_formal_out_params (StringMap.map (retype_var st univ ctx))
   in
   Logs.debug (fun m -> m "%s" (ctx_to_string ctx));
   (elaborate_proc, ctx)
 
 (** Run type inference on a declaration, returning an updated typing scheme, and
     elaboration function*)
-let infer_decl visit_constraint prog scheme =
+let infer_decl st visit_constraint prog scheme =
   let open Program in
-  let infer_expr = infer_expr visit_constraint in
-  let infer_proc = infer_proc visit_constraint in
+  let infer_expr = infer_expr st visit_constraint in
+  let infer_proc = infer_proc st visit_constraint in
   (* We have to be careful that inference is run immediately, not delayed until elaboration. *)
   fun (decl_id, d) ->
     match d with
     | Type { binding; typ } ->
-        let ty = ty_of_basil typ in
-        let scheme = decl_type scheme binding ty in
-        let nty scheme = Type { binding; typ = to_basil (find ty) } in
+        let ty = ty_of_basil st typ in
+        let scheme = decl_type st scheme binding ty in
+        let nty scheme =
+          Type { binding; typ = to_basil (TypeExpr.find st ty) }
+        in
         (scheme, `Decl (decl_id, nty))
     | Function { binding; definition; attrib } -> (
         (* elaboration of var binding *)
-        let scheme = decl_var_typ global_universe scheme binding in
-        let binding s = retype_var global_universe s binding in
+        let scheme = decl_var_typ st global_universe scheme binding in
+        let binding s = retype_var st global_universe s binding in
         match definition with
         | Axiom b ->
             let b = infer_expr ~univ:global_universe [%here] b scheme in
-            let _ = unify (getty b) bool_type in
+            let _ = unify st (getty b) (bool_type st) in
             let new_axiom scheme =
               Function
                 {
@@ -160,7 +158,7 @@ let infer_decl visit_constraint prog scheme =
                   binding = binding scheme;
                   definition =
                     Axiom
-                      (elaborate_expr ~univ:global_universe [%here] b scheme);
+                      (elaborate_expr st ~univ:global_universe [%here] b scheme);
                 }
             in
             (scheme, `Decl (decl_id, new_axiom))
@@ -181,13 +179,13 @@ let infer_decl visit_constraint prog scheme =
                   attrib;
                   definition =
                     Function
-                      (elaborate_expr ~univ:global_universe [%here] e scheme);
+                      (elaborate_expr st ~univ:global_universe [%here] e scheme);
                 }
             in
             (scheme, `Decl (decl_id, new_fundef)))
     | Variable { binding; attrib; classification } ->
-        let scheme = decl_var_typ global_universe scheme binding in
-        let binding s = retype_var global_universe s binding in
+        let scheme = decl_var_typ st global_universe scheme binding in
+        let binding s = retype_var st global_universe s binding in
         let classification =
           let tyv =
             classification
@@ -197,7 +195,7 @@ let infer_decl visit_constraint prog scheme =
           fun final_scheme ->
             tyv
             |> Option.map (fun e ->
-                elaborate_expr ~univ:global_universe [%here] e final_scheme)
+                elaborate_expr st ~univ:global_universe [%here] e final_scheme)
         in
         let new_vardef fscheme =
           Variable
@@ -213,7 +211,7 @@ let infer_decl visit_constraint prog scheme =
         (scheme, `Procedure (decl_id, elaborate_proc))
 
 (** The function that does everything *)
-let infer_program prog =
+let infer_program st prog =
   let decls = Program.declarations prog |> Iter.to_list in
   let constraints = ref [] in
   let visit_constraint c = constraints := c :: !constraints in
@@ -224,9 +222,9 @@ let infer_program prog =
     expressions back to bincaml typed expressions. *)
   let scheme, new_decls =
     decls
-    |> List.fold_map (infer_decl visit_constraint prog) TypeExpr.TCtx.empty
+    |> List.fold_map (infer_decl st visit_constraint prog) TypeExpr.TCtx.empty
   in
-  let _ = solve_constraints ~max_iters:50 !constraints in
+  let _ = solve_constraints st ~max_iters:50 !constraints in
   (* TODO: implicit decls; constructors need to be added after the types they
     construct, probably simples to do implicits immediately after the thing they
     relate to. Maybe they should just appear this way in the declaration

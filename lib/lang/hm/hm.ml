@@ -140,19 +140,33 @@ module Elaboration = Elaboration
     This module implements both inference and elaboratino for the high-level
     program structures as this simplifies book-keeping of types. *)
 
-(** {1 High-level type-inference operations}*)
-
 open Common
 open Abstract_expr
 
-module Hm_make_fresh () = struct
-  module Ctx = TypeExpr.MakeFresh ()
-  include Hm_types.Make (Ctx)
-  include Unification.Make (Ctx)
-  include Inference.Make (Ctx)
-  include Solve_bv.Make (Ctx)
-  include Elaboration.TypeInference (Ctx)
+(** Convenience module including all HM submodules. *)
+module Everything = struct
+  include Hm_types
+  (** @closed *)
+
+  include Unification
+  (** @closed *)
+
+  include Inference
+  (** @closed *)
+
+  include Solve_bv
+  (** @closed *)
+
+  include Elaboration
+  (** @closed *)
 end
+
+(** {2 Union-find / hash-cons state} *)
+
+include TypeExpr.State
+(** @inline *)
+
+(** {1 High-level type-inference operations} *)
 
 (*
    TODO:
@@ -174,19 +188,19 @@ end
 let locally_elaborate_expr (e : Expr.BasilExpr.t) =
   let open AbstractExpr in
   let open Ops.AllOps in
-  let module T = Hm_make_fresh () in
+  let st = create_state () in
   let constraints = ref [] in
   let univ = "<expr local>" in
   let ctx =
     Expr.BasilExpr.free_vars_iter e
-    |> Iter.fold (T.decl_var_typ univ) TypeExpr.TCtx.empty
+    |> Iter.fold (Unification.decl_var_typ st univ) TypeExpr.TCtx.empty
   in
   let visit_constraint c = constraints := c :: !constraints in
   (* TODO: need mode where we absorb take the existing annotations and try to
   extend , rather than expecting everythign declared in context. *)
-  let i = T.infer_expr visit_constraint ~univ [%here] e ctx in
-  let _ = T.solve_constraints ~max_iters:100 !constraints in
-  let e = T.elaborate_expr ~univ [%here] i ctx in
+  let i = Inference.infer_expr st visit_constraint ~univ [%here] e ctx in
+  let _ = Solve_bv.solve_constraints st ~max_iters:100 !constraints in
+  let e = Elaboration.elaborate_expr st ~univ [%here] i ctx in
   e
 
 (** Algebra for returning the annotated type (for use with functions like
@@ -197,15 +211,15 @@ let elaborated_type_alg (e : Types.t Expr.BasilExpr.abstract_expr) =
 (** Partially apply args list to function type funtype and return resulting type
 *)
 let type_applied (funtype : Types.t) (args : Types.t list) =
-  let module T = Hm_make_fresh () in
-  let rt = T.fresh_tvar ~n:"ret" () in
-  let args = List.map T.ty_of_basil args in
+  let st = create_state () in
+  let rt = Inference.fresh_tvar st ~n:"ret" () in
+  let args = List.map (Hm_types.ty_of_basil st) args in
 
-  let funt = T.curry_f args rt in
-  let ft = T.ty_of_basil funtype in
+  let funt = Hm_types.curry_f st args rt in
+  let ft = Hm_types.ty_of_basil st funtype in
   try
-    T.unify ~pos:[%here] ft funt |> ignore;
-    Ok (T.to_basil rt)
+    Unification.unify st ~pos:[%here] ft funt |> ignore;
+    Ok (Hm_types.to_basil rt)
   with Hm_types.TypeErr e -> Error e
 
 (** Apply type inference to a program and return a fully type-annotated copy of
@@ -213,6 +227,6 @@ let type_applied (funtype : Types.t) (args : Types.t list) =
 let elaborate_prog prog =
   (* We need to create a local typing module in order to get fresh state for the
   union find and hash cons. *)
-  let module T = Hm_make_fresh () in
-  let scheme, prog = T.infer_program prog in
+  let st = create_state () in
+  let scheme, prog = Elaboration.infer_program st prog in
   prog
