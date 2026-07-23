@@ -381,8 +381,9 @@ module SSIfy = struct
           block.phis
       in
       let stmts = block.stmts in
+      let size = Vector.size stmts in
       let rec check_stmt index =
-        if index = Vector.size stmts then true
+        if index = size then true
         else
           let stmt = Vector.get stmts index in
           if VarSet.mem var (Stmt.free_vars stmt) then true
@@ -816,14 +817,20 @@ module SSIfy = struct
         DefUseMap.fold oldmap DefUseMap.empty (fun newmap var inst ->
             let inst' =
               match inst with
-              | Formal_In vars ->
-                  Instruction.Formal_In
-                    (proc |> Procedure.formal_in_params |> StringMap.values
-                   |> List.of_iter)
-              | Formal_Out vars ->
-                  Instruction.Formal_Out
-                    (proc |> Procedure.formal_out_params |> StringMap.values
-                   |> List.of_iter)
+              | Formal_In vars -> (
+                  match is_def_map with
+                  | true ->
+                      Instruction.Formal_In
+                        (proc |> Procedure.formal_in_params |> StringMap.values
+                       |> List.of_iter)
+                  | false -> inst (* TODO: Stop the map from adding this. *))
+              | Formal_Out vars -> (
+                  match is_def_map with
+                  | false ->
+                      Instruction.Formal_Out
+                        (proc |> Procedure.formal_out_params |> StringMap.values
+                       |> List.of_iter)
+                  | true -> inst (* TODO: Stop the map from adding this*))
               | Block_Inst (block_id, Instruction.Statement stmt) -> (
                   let block = Procedure.get_block proc block_id in
                   match block with
@@ -962,14 +969,14 @@ module SSIfy = struct
                 (fun var (active', used') ->
                   (* Def(v') *)
                   let var_defs =
-                    DefUseMap.find rename_info.defs var
-                    |> InstructionSet.of_list
+                    DefUseMap.find rename_info.defs var |> List.hd
+                    (* |> InstructionSet.of_list *)
                   in
                   (* {v'} *)
                   let used_with_v' = VarSet.add var used' in
                   (* Active <- Active union Def(v')
                      Used <- Used union {v'} *)
-                  (InstructionSet.union var_defs active', used_with_v'))
+                  (InstructionSet.add var_defs active', used_with_v'))
                 vars
                 (curr_active_uses, curr_used)
             in
@@ -1064,6 +1071,8 @@ module SSIfy = struct
         rename_info.non_actual_insts rename_info.proc
   end
 
+
+  (* TODO: passing splitting strategy into ssify_prog and proc lose the splitting strategy due to optionals *)
   let ssify ?splitting_strategy (v : Var.t) proc dom_functions rev_dom_functions
       =
     let pv =
@@ -1083,6 +1092,11 @@ module SSIfy = struct
     SplitLiveRange.split v pv proc dom_functions rev_dom_functions
     |> VariableRenaming.rename v bot_var dom_functions
     |> DeadCodeElim.clean v bot_var
+
+  let ssify_name ?splitting_strategy (v_name : String.t) proc dom_functions rev_dom_functions =
+    match Procedure.lookup_local_decl proc v_name with
+    | Some v -> ssify v proc dom_functions rev_dom_functions
+    | None -> proc
 
   let ssify_proc ?splitting_strategy (proc : (Var.t, Program.e) Procedure.t)
       (og_vars : Var.t Var.Decls.t) =
