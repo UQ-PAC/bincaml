@@ -87,8 +87,6 @@ let is_nat_val_type (i : TypeExpr.t) =
       | _ -> None)
   | _ -> None
 
-type typ = TypeExpr.t [@@deriving eq, ord]
-
 (** Recursion algebra for printing types *)
 let printer_alg = function
   | TypeExpr.ATyp.Var e -> ID.to_string e

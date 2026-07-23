@@ -8,32 +8,24 @@ open Solve_bv
 
 (** An AbstractExpr.t with [t] used as the type. *)
 module AbsTypingExpr = struct
-  open Ops
-  include AllOps
-  module Var = Var
+  open Ops.AllOps
 
   type var = Var.t
 
-  type t = E of (const, Var.t, unary, binary, intrin, typ, t) AbstractExpr.t
+  type t =
+    | E of (const, Var.t, unary, binary, intrin, TypeExpr.t, t) AbstractExpr.t
   [@@unboxed] [@@deriving eq, ord]
-
-  type nonrec typ = typ
 
   let top_typ = top_t
   let fix i = E i
   let unfix i = match i with E i -> i
+
+  type 'e expr =
+    (const, Var.t, unary, binary, intrin, TypeExpr.t, 'e) AbstractExpr.t
+
+  let rec cata (alg : 'a expr -> 'a) e =
+    (unfix %> AbstractExpr.map (cata alg) %> alg) e
 end
-
-module TypingExpr = Bincaml_util.Recursionscheme.Recursion (struct
-  open Ops.AllOps
-
-  type t = AbsTypingExpr.t
-  type 'e expr = (const, Var.t, unary, binary, intrin, typ, 'e) AbstractExpr.t
-
-  let map_expr = AbstractExpr.map
-  let fix = AbsTypingExpr.fix
-  let unfix = AbsTypingExpr.unfix
-end)
 
 let getty = AbsTypingExpr.unfix %> Expr.AbstractExpr.get_typ
 
@@ -338,4 +330,3 @@ let infer_stmt st vc p univ ctx s =
 let infer_block st vc p univ ctx (b : Program.bloc) =
   let _ = infer_phi st vc univ ctx b.phis in
   Block.map ~phi:Fun.id (infer_stmt st vc p univ ctx) b
-

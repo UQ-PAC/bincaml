@@ -46,7 +46,7 @@ let elaborate_expr st ~univ (hr : Lexing.position) e
     let t = AbstractExpr.get_typ e |> TypeExpr.find st |> to_basil in
     AbstractExpr.set_typ e t |> Expr.BasilExpr.fix
   in
-  e |> TypingExpr.cata alg
+  e |> AbsTypingExpr.cata alg
 
 let elaborate_stmt st univ ctx stmt =
   let retype_var = retype_var st univ ctx in

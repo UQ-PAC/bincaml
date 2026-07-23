@@ -77,7 +77,9 @@ module State = struct
             expression for the given {!nt}. *)
     gen : ID.generator;  (** Type name generator. *)
   }
-  (** Union find and hash-consing state for recording type relations. *)
+  (** Union find and hash-consing state for recording type relations.
+
+      @canonical TypeExpr.state *)
 
   (** Create a new union find and hash-cons state.
 
