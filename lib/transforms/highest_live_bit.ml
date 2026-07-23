@@ -52,8 +52,8 @@ let create_new_proc_var_map procRes proc =
       | _ -> acc)
     procRes VarMap.empty
 
-(** When an extract on 'hi, 0' bits is used on a zero_extend with 'hi' bits,
-    then remove both redundant operations *)
+(** When an extract on 'hi, 0' bits is used on a zero_extend that operates on an
+    instruction of 'hi' width, then remove both redundant operations *)
 let extract_extend_rewriter ?visit =
   let open BasilExpr in
   rewrite_typed_two ?visit (function
@@ -61,9 +61,10 @@ let extract_extend_rewriter ?visit =
         {
           op = `Extract (hi, 0);
           arg = UnaryExpr { op = `ZeroExtend w; arg }, _;
-        }
-      when hi = w ->
-        replace [%here] arg
+        } -> (
+        match type_of arg |> Types.bit_width with
+        | Some width when hi = width -> replace [%here] arg
+        | _ -> Keep)
     | _ -> Keep)
 
 let remove_extract_extend stmt =
@@ -287,11 +288,12 @@ prog entry @trans;
 proc @trans(b:bv64)  -> (out:bv30) {  }
 [
    block %trans [
-      (var v1:bv64=out1) := call @binary_expr(0xffffffff:bv64);
+      var b:bv64 := 0xffffffff:bv64;
+      (var v1:bv64=out1) := call @binary_expr(b:bv64);
 
       var v2:bv30 := extract(30, 0, v1:bv64);
       (var v3:bv64, var v4:bv64) := call @double_out();
-      var v5:bv30 := bvand(v2:bv30, bvor(extract(30, 0, v3:bv64), extract(30, 0, v4:bv64)));
+      var v5:bv30 := bvand(extract(30, 0, b:bv64), bvand(v2:bv30, bvor(extract(30, 0, v3:bv64), extract(30, 0, v4:bv64))));
       return (v5);
    ]
 ];
@@ -337,15 +339,15 @@ proc @double_out() -> (dout1:bv64, dout2:bv64) { }
 
     [
        block %trans [
-         (var tmp:bv64=out1) := call @binary_expr(c=0xffffffff:bv64);
+         var b:bv64 := 0xffffffff:bv64;
+         (var tmp:bv64=out1) := call @binary_expr(c=b:bv64);
          var v1:bv30 := extract(30,0, tmp:bv64);
-         var v2:bv30 := extract(30,0, zero_extend(34, v1:bv30));
+         var v2:bv30 := v1:bv30;
          (var tmp_1:bv64=dout1, var tmp_2:bv64=dout2) := call @double_out();
          (var v3:bv30 := extract(30,0, tmp_1:bv64),
           var v4:bv30 := extract(30,0, tmp_2:bv64));
-         var v5:bv30 := bvand(v2:bv30,
-          bvor(extract(30,0, zero_extend(34, v3:bv30)),
-           extract(30,0, zero_extend(34, v4:bv30))));
+         var v5:bv30 := bvand(extract(30,0, b:bv64),
+          bvand(v2:bv30, bvor(v3:bv30, v4:bv30)));
          var out:bv30 := v5:bv30;
          return;
        ]
@@ -376,6 +378,7 @@ proc @double_out() -> (dout1:bv64, dout2:bv64) { }
       { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
       { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
       { Var.V.name = "v3"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
+      { Var.V.name = "b"; typ = bv64; scope = Var.LocalVar } -> ⊤
       { Var.V.name = "out"; typ = bv30; scope = Var.LocalVar } -> ⊤
       { Var.V.name = "v2"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)
       { Var.V.name = "v5"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)
@@ -472,4 +475,96 @@ proc @main() -> (out:bv64)
       { Var.V.name = "out"; typ = bv64; scope = Var.LocalVar } -> ⊤
       { Var.V.name = "$i"; typ = bv64; scope = Var.GlobalVar } -> (63, 0, true)
       { Var.V.name = "x"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+    |}]
+
+let%expect_test "test3_basic_calls" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+prog entry @trans;
+proc @trans(b:bv64)  -> (out:bv30) {  }
+[
+   block %trans [
+      var b:bv64 := 0xffffffff:bv64;
+      (var v1:bv64=out1) := call @binary_expr(b:bv64);
+
+      var v2:bv30 := extract(30, 0, v1:bv64);
+      var v3:bv64 := 0;
+      var v4:bv64 := 1;
+      var v5:bv30 := bvand(extract(30, 0, b:bv64), bvand(v2:bv30, bvor(extract(30, 0, v3:bv64), extract(30, 0, v4:bv64))));
+      return (v5);
+   ]
+];
+proc @binary_expr(c:bv64)  -> (out1:bv64) {  }
+[
+   block %binary_expr [
+    var v:bv64 := bvand(0xffffffff:bv64, c:bv64);
+     var out1:bv64 := v:bv64;
+     return;
+   ]
+];
+
+    |}
+  in
+
+  let program = lst.prog in
+
+  let res = highest_live_bit_transform program in
+  Program.pretty_to_chan stdout res;
+  let results, p2_results = IDELiveBitSSIAnalysis.solve program in
+  IDMap.iter
+    (fun id vars ->
+      Printf.printf "ID: %s\n" (ID.show id);
+      Printf.printf "\n\n";
+      VarMap.iter
+        (fun var value ->
+          Printf.printf "  %s -> %s\n" (Var.show var)
+            (IDESSI_LB.Value.show value))
+        vars)
+    p2_results;
+  [%expect
+    {|
+    proc @trans(b:bv64)  -> (out:bv30) {  }
+
+
+    [
+       block %trans [
+         var b:bv64 := 0xffffffff:bv64;
+         (var tmp:bv64=out1) := call @binary_expr(c=b:bv64);
+         var v1:bv30 := extract(30,0, tmp:bv64);
+         var v2:bv30 := v1:bv30;
+         var v3:bv30 := extract(30,0, 0);
+         var v4:bv30 := extract(30,0, 1);
+         var v5:bv30 := bvand(extract(30,0, b:bv64),
+          bvand(v2:bv30, bvor(v3:bv30, v4:bv30)));
+         var out:bv30 := v5:bv30;
+         return;
+       ]
+    ];
+    proc @binary_expr(c:bv64)  -> (out1:bv64) {  }
+
+
+    [
+       block %binary_expr [
+         var v:bv64 := bvand(0xffffffff:bv64, c:bv64);
+         var out1:bv64 := v:bv64;
+         return;
+       ]
+    ];
+    prog entry @trans;ID: ("@trans", 0)
+
+
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
+      { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
+      { Var.V.name = "v3"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
+      { Var.V.name = "b"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "out"; typ = bv30; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v2"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)
+      { Var.V.name = "v5"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)
+    ID: ("@binary_expr", 1)
+
+
+      { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "v"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
     |}]

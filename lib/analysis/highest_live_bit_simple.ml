@@ -14,6 +14,11 @@ open Idessi
     determines the highest accessed bit of said variable. Mainly checks whether
     shifts and extracts are performed on a variable. *)
 
+(*
+  KNOWN ISSUE: A variable that is given to a call as a formal-in parameter is either not being detected in the analysis, or is given
+               BOT instead of TOP
+*)
+
 (* Should run ide_live before this *)
 
 module HighestLiveBitLattice = struct
@@ -206,14 +211,25 @@ module HighestLiveBitIDE = struct
 
   let transfer_call call param d =
     match d with
-    | Lambda -> Iter.singleton (Lambda, IdEdge)
+    | Lambda ->
+        (* TODO: This lambda never seems to trigger, which is... odd *)
+        StringMap.to_iter call
+        |> Iter.flat_map (fun (_, e) -> Expr.BasilExpr.free_vars_iter e)
+        |> Iter.map (fun v -> (Label v, TopEdge))
+        (* (StringMap.to_iter call |> Iter.flat_map (snd %> Expr.BasilExpr.free_vars_iter)) *)
+        (* StringMap.to_iter param |> Iter.map (fun (name, var) -> Label var, TopEdge)  *)
+        (* Iter.singleton (Lambda, TopEdge) *)
     | Label v ->
         StringMap.to_iter call
+        |> Iter.flat_map (fun (_, e) -> Expr.BasilExpr.free_vars_iter e)
+        |> Iter.map (fun v -> (Label v, TopEdge))
+
+  (* StringMap.to_iter call
         |> Iter.filter (fun (s, e) -> VarSet.mem v (Expr.BasilExpr.free_vars e))
         |> Iter.map (fun (s, e) ->
             let v' = StringMap.find s param in
             let edge = IDESSI_LB.Extract.eval_wrt_var v' e in
-            (Label v', edge))
+            (Label v', edge)) *)
 
   let transfer stmt d =
     let open Stmt in
@@ -240,6 +256,8 @@ module HighestLiveBitIDE = struct
                 else Iter.empty)
         | Instr_IndirectCall c -> failwith "unreachable"
         | _ -> Iter.empty)
+  (* | _ -> IDESSI_LB.Extract.eval_stmt stmt
+            |> Iter.map (fun (rhs_var, edge) -> (Label rhs_var, edge))) *)
 
   let transfer_phi lhs rhs d =
     match d with
