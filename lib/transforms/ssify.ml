@@ -21,15 +21,12 @@ open Containers
      have an inner loop that loops through all statements in the block. *)
 
 (* TODO:
-  - Does linear_copy.il have an error? The loop procedure contains f_entry phi nodes for the f procedure.
+  - linear_copy.il has an error. The loop procedure contains f_entry phi nodes for the f procedure.
   - Make this less imperative. I made it close to the book's algorithm at the cost of making it very imperative, and I'm not very happy with how it is
   - Update non-actual instructions at the end of rename similar to the defuse and usedef chains, instead of within set_def and set_use, which should improve performance
-  - Expand the Instruction.it type to have a Begin and End type, to represent formal in and out params. We don't change the formal in and out variables,
-    but any redefinitions of them locally are changed like normal. A copy for the formal out vars will need to be placed at the ends of a procedure, copying the
-    latest redefinition of the out param to the out param. If it is "out_name" := "out_name", then don't place the copy.
 
   KNOWN ISSUES:
-  - Formal In and Out params are currently unaccounted for. The fix for this is in progress.
+  - Slow
 *)
 
 module SSIfy = struct
