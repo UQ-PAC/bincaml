@@ -51,6 +51,34 @@ let rec ty_of_basil st (t : Types.t) : TypeExpr.t =
       ptr_typ_sub st (ty_of_basil st lower) (ty_of_basil st upper)
   | Types.Variable n -> fix st (Var (st.gen.fresh ~name:n ()))
 
+module Make_smart_constructors (S : sig
+  val state : TypeExpr.state
+end) =
+struct
+  let fun_type = fun_type S.state
+  let nat_val_type = nat_val_type S.state
+  let bv_type = bv_type S.state
+  let bvunk = bvunk S.state
+  let int_type = int_type S.state
+  let bool_type = bool_type S.state
+  let unit_t = unit_t S.state
+  let top_t = top_t S.state
+  let nothing_t = nothing_t S.state
+  let ptr_typ_sub = ptr_typ_sub S.state
+  let ptr_typ = ptr_typ S.state
+  let curry_f = curry_f S.state
+  let ty_of_basil = ty_of_basil S.state
+end
+
+module type Smart_constructors = module type of Make_smart_constructors (struct
+  let state = TypeExpr.create_state ()
+end)
+
+let smart_constructors st : (module Smart_constructors) =
+  (module Make_smart_constructors (struct
+    let state = st
+  end))
+
 let is_nat_val_type (i : TypeExpr.t) =
   match TypeExpr.unfix i with
   | TypeConstr ([ num ], "ℕ") -> (
