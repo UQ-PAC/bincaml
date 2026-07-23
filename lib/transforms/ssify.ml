@@ -181,23 +181,23 @@ module SSIfy = struct
       (fun all_insts_set bid block ->
         let phi_insts =
           List.fold_left
-            (fun (all_set, index) phi ->
+            (fun all_set phi ->
               let inst =
                 Instruction.create_phi_inst bid phi.Block.lhs phi.Block.rhs
               in
-              (InstructionSet.add inst all_set, index + 1))
-            (all_insts_set, 0) block.phis
-          |> fst
+              InstructionSet.add inst all_set)
+            all_insts_set block.phis
         in
         let stmt_insts =
           Vector.foldi
             (fun index all_set stmt ->
               let inst = Instruction.create_stmt_inst bid index stmt in
               InstructionSet.add inst all_set)
-            all_insts_set block.stmts
+            phi_insts block.stmts
+          (* all_insts_set block.stmts *)
         in
-        InstructionSet.union phi_insts stmt_insts
-        |> InstructionSet.union all_insts_set)
+        (* InstructionSet.union phi_insts stmt_insts *)
+        stmt_insts) (* |> InstructionSet.union all_insts_set) *)
       InstructionSet.empty proc
     |> InstructionSet.add (Instruction.create_in_inst proc)
     |> InstructionSet.add (Instruction.create_out_inst proc)
@@ -265,28 +265,21 @@ module SSIfy = struct
   let second_successors graph (vert : Dom.vertex) =
     Procedure.G.succ graph vert |> List.concat_map (Procedure.G.succ graph)
 
-  (** Returns true if vertex vert_a dominates vertex vert_b *)
-  let vertex_dominates graph dom vert_a vert_b = dom vert_a vert_b
-
   (** Returns true if instruction a dominates instruction b *)
-  let instruction_dominates pred_block_id (graph : Dom.t) dom
-      (inst_a : Instruction.t) (inst_b : Instruction.t) =
+  let instruction_dominates pred_block_id dom (inst_a : Instruction.t)
+      (inst_b : Instruction.t) =
     match (inst_a, inst_b) with
     | Block_Inst (bid_a, _), Block_Inst (bid_b, Instruction.Phi _)
       when Option.is_some pred_block_id ->
-        vertex_dominates graph dom (Procedure.Vert.Begin bid_a)
+        dom (Procedure.Vert.Begin bid_a)
           (Procedure.Vert.End (Option.get pred_block_id))
     | ( Block_Inst (bid_a, Instruction.Statement stmt_a),
         Block_Inst (bid_b, Instruction.Statement stmt_b) ) ->
         if ID.equal bid_a bid_b then stmt_a.index <= stmt_b.index
-        else
-          vertex_dominates graph dom (Procedure.Vert.Begin bid_a)
-            (Procedure.Vert.Begin bid_b)
+        else dom (Procedure.Vert.Begin bid_a) (Procedure.Vert.Begin bid_b)
     | Block_Inst (bid_a, _), Block_Inst (bid_b, _) ->
         if ID.equal bid_a bid_b then true
-        else
-          vertex_dominates graph dom (Procedure.Vert.Begin bid_a)
-            (Procedure.Vert.Begin bid_b)
+        else dom (Procedure.Vert.Begin bid_a) (Procedure.Vert.Begin bid_b)
     | Formal_In vars, _ | _, Formal_Out vars -> true
     | Formal_Out vars, _ | _, Formal_In vars -> false
 
@@ -585,7 +578,7 @@ module SSIfy = struct
     let rename (v : Var.t) (bot_var : Var.t) (dom_functions : Dom.dom_functions)
         (split_info : ssi_info) =
       (* Stack <- new *)
-      let stack : Var.t Stack.t = Stack.create () in
+      let stack : (Var.t * Instruction.t) Stack.t = Stack.create () in
 
       (* The control flow graph of the current procedure *)
       let cfg =
@@ -600,7 +593,7 @@ module SSIfy = struct
         | Instruction.Formal_In vars ->
             (* We don't redefine the formal-in parameter, since it gets a bit messy interprocedurally. *)
             let defs' = DefUseMap.add curr_info.defs v inst in
-            Stack.push v stack;
+            Stack.push (v, inst) stack;
             let web' = VarSet.add v curr_info.web in
             { curr_info with defs = defs'; web = web' }
         | _ ->
@@ -614,7 +607,8 @@ module SSIfy = struct
             let defs' = DefUseMap.add curr_info.defs v' inst' in
 
             (* stack.push(v') *)
-            Stack.push v' stack;
+            (* TODO: Store the def along with the v' in the stack so that we don't have to find it in the map during set_use*)
+            Stack.push (v', inst') stack;
 
             let proc' = replace_instruction inst inst' curr_info.proc in
             let nai' =
@@ -642,10 +636,20 @@ module SSIfy = struct
         let rec pop_while_not_dominating instruction =
           match Stack.top_opt stack with
           | None -> ()
-          | Some v' ->
-              (* It's ok to use the outdated defs map here, because we only 
+          | Some (v', inst') ->
+              (* This is assuming that we have constructed set_def correctly, so that all 
+              variables only have one definition instruction. If not, then we are in trouble, and the slower
+              code commented out below should be used (but we shouldn't have to) *)
+              if
+                not
+                  (instruction_dominates og_bid dom_functions.dom inst'
+                     instruction)
+              then (
+                ignore (Stack.pop stack);
+                pop_while_not_dominating instruction)
+          (* It's ok to use the outdated defs map here, because we only 
               use the location pointers, not the potentially outdated instruction *)
-              let v'_def_instructions = DefUseMap.find curr_info.defs v' in
+          (* let v'_def_instructions = DefUseMap.find curr_info.defs v' in
               if
                 List.for_all
                   (fun v'_def ->
@@ -656,7 +660,7 @@ module SSIfy = struct
               then (
                 (* Stack.pop *)
                 ignore (Stack.pop stack);
-                pop_while_not_dominating instruction)
+                pop_while_not_dominating instruction) *)
         in
         pop_while_not_dominating inst;
 
@@ -664,7 +668,7 @@ module SSIfy = struct
         let v' =
           (* if (StringMap.mem (Var.name v) (Procedure.formal_in_params curr_info.proc)) then v else  *)
           let open Bincaml_util.Unicode in
-          Option.value (Stack.top_opt stack) ~default:bot_var
+          Option.value (Stack.top_opt stack) ~default:(bot_var, inst) |> fst
         in
 
         (* Replace the uses of v by v' in inst *)
@@ -909,9 +913,8 @@ module SSIfy = struct
                     |> InstructionSet.of_list
                   in
                   (* Defined <- defined union {v'} *)
-                  let single_var = VarSet.add var VarSet.empty in
-                  ( InstructionSet.union var_uses active',
-                    VarSet.union single_var defined' ))
+                  let defined_union_v' = VarSet.add var defined' in
+                  (InstructionSet.union var_uses active', defined_union_v'))
                 vars
                 (curr_active_defs, curr_defined)
             in
@@ -963,11 +966,10 @@ module SSIfy = struct
                     |> InstructionSet.of_list
                   in
                   (* {v'} *)
-                  let single_var = VarSet.add var VarSet.empty in
+                  let used_with_v' = VarSet.add var used' in
                   (* Active <- Active union Def(v')
                      Used <- Used union {v'} *)
-                  ( InstructionSet.union var_defs active',
-                    VarSet.union single_var used' ))
+                  (InstructionSet.union var_defs active', used_with_v'))
                 vars
                 (curr_active_uses, curr_used)
             in
@@ -1215,7 +1217,6 @@ proc @OY() -> (OY_out:bv64)
     [ block %OY_entry [ var OY_out_1:bv64 := 0x1:bv64; return; ] ];
     prog entry @main;
     |}]
-
 
 let%expect_test "test_rename" =
   let lst =
@@ -1527,24 +1528,6 @@ prog entry @main;
   let program = lst.prog in
   let ssi_prog = SSIfy.ssify_prog program in
   Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
-  (*
-let program = lst.prog in
-  let proc = Program.entry_proc_exn program in
-  let v =
-    match Procedure.lookup_local_decl proc "v" with
-    | Some v -> v
-    | None -> failwith "Bleh"
-  in
-  let cfg =
-    match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
-  in
-  let dom_functions = SSIfy.Dom.compute_all cfg Procedure.Vert.Entry in
-
-  let proc_split = SSIfy.ssify v proc dom_functions in
-  Program.output_proc_pretty stdout proc_split;
-  *)
-  (* For some reason, these two calls will cause the v in the first block to be v_28 instead of v_1,
-  even though they should only operate on v once.*)
   [%expect
     {|
     proc @main(i:bv64)  -> (out:bv64) {  }
