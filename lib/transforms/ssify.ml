@@ -823,6 +823,10 @@ module SSIfy = struct
                                     phi.Block.lhs phi.Block.rhs
                                 in
                                 (* stack.set_use(v <- v:l) *)
+                                (* In order to avoid recomputing idom for each vertex,
+                                we compare the current vertex to the predecessor of the block 
+                                with the phi node, (which should just be the End of this block, so
+                                this code can definitely be simplified and tidied up) *)
                                 set_use ~og_bid:ogbid info'' inst |> fst
                               else info'')
                             info' phi.Block.rhs)
@@ -1114,6 +1118,9 @@ module SSIfy = struct
     let bot_var =
       Var.create Bincaml_util.Unicode.bot_char (Var.typ v) ~scope:(Var.scope v)
     in
+    (* We pass the same cfg into split and rename, which should be ok, since the only
+    operation on the cfg in rename is to get the second successors of a vertex, which is
+    unchanged from split because we do not add or remove any vertices. *)
     SplitLiveRange.split v pv proc cfg rev_cfg dom_functions rev_dom_functions
     |> VariableRenaming.rename v bot_var cfg dom_functions
     |> DeadCodeElim.clean v bot_var
