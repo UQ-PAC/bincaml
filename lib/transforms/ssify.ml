@@ -395,19 +395,10 @@ module SSIfy = struct
       check_stmt 0 || phi_status
 
     (** Splits the range of the program *)
-    let split (v : Var.t) ((i_up : VertexSet.t), (i_down : VertexSet.t)) proc
+    let split (v : Var.t) ((i_up : VertexSet.t), (i_down : VertexSet.t))
+        (proc : (Var.t, Program.e) Procedure.t) (cfg : Dom.t) (rev_cfg : Dom.t)
         (dom_functions : Dom.dom_functions)
         (rev_dom_functions : Dom.dom_functions) =
-      let cfg : Dom.t =
-        match Procedure.graph proc with
-        | Some g -> g
-        | None -> Procedure.G.empty
-      in
-      let rev_cfg : RevDom.t =
-        match Procedure.graph proc with
-        | Some g -> g
-        | None -> Procedure.G.empty
-      in
       let is_join vertex =
         match vertex with
         | Procedure.Vert.Begin block_id ->
@@ -577,17 +568,10 @@ module SSIfy = struct
 
     (** Returns a procedure that has renamed v, and the relative transformed
         non-actual instructions*)
-    let rename (v : Var.t) (bot_var : Var.t) (dom_functions : Dom.dom_functions)
-        (split_info : ssi_info) =
+    let rename (v : Var.t) (bot_var : Var.t) (cfg : Dom.t)
+        (dom_functions : Dom.dom_functions) (split_info : ssi_info) =
       (* Stack <- new *)
       let stack : (Var.t * Instruction.t) Stack.t = Stack.create () in
-
-      (* The control flow graph of the current procedure *)
-      let cfg =
-        match Procedure.graph split_info.proc with
-        | Some g -> g
-        | None -> Procedure.G.empty
-      in
 
       (* Returns the proc with replaced inst' *)
       let set_def (curr_info : ssi_info) (inst : Instruction.t) =
@@ -847,7 +831,9 @@ module SSIfy = struct
                 info_step_three next_vertices
           | _ -> start_info
         in
-        List.fold_left visit_begin_node final_info (dom_functions.dom_tree node)
+        List.fold_left visit_begin_node final_info
+          (dom_functions.dom_tree
+             node (* Add |> List.rev here if you want a different order*))
       in
       let rename_info = visit_begin_node split_info Procedure.Vert.Entry in
 
@@ -1118,47 +1104,41 @@ module SSIfy = struct
   end
 
   (* TODO: passing splitting strategy into ssify_prog and proc lose the splitting strategy due to optionals *)
-  let ssify ?splitting_strategy (v : Var.t) proc dom_functions rev_dom_functions
-      =
+  let ssify ?splitting_strategy (v : Var.t) proc cfg rev_cfg dom_functions
+      rev_dom_functions =
     let pv =
       match splitting_strategy with
-      | None ->
-          let cfg =
-            match Procedure.graph proc with
-            | Some g -> g
-            | None -> Procedure.G.empty
-          in
-          create_range_analysis_splitting_strategy proc v cfg
+      | None -> create_range_analysis_splitting_strategy proc v cfg
       | Some ss -> ss
     in
     let bot_var =
       Var.create Bincaml_util.Unicode.bot_char (Var.typ v) ~scope:(Var.scope v)
     in
-    SplitLiveRange.split v pv proc dom_functions rev_dom_functions
-    |> VariableRenaming.rename v bot_var dom_functions
+    SplitLiveRange.split v pv proc cfg rev_cfg dom_functions rev_dom_functions
+    |> VariableRenaming.rename v bot_var cfg dom_functions
     |> DeadCodeElim.clean v bot_var
 
-  let ssify_name ?splitting_strategy (v_name : String.t) proc dom_functions
-      rev_dom_functions =
+  let ssify_name ?splitting_strategy (v_name : String.t) proc cfg rev_cfg
+      dom_functions rev_dom_functions =
     match Procedure.lookup_local_decl proc v_name with
-    | Some v -> ssify v proc dom_functions rev_dom_functions
+    | Some v -> ssify v proc cfg rev_cfg dom_functions rev_dom_functions
     | None -> proc
 
   let ssify_proc ?splitting_strategy (proc : (Var.t, Program.e) Procedure.t)
       (og_vars : Var.t Var.Decls.t) =
-    (* let all_vars = Procedure.local_decls proc in *)
-    let cfg =
-      match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
-    in
-    let dom_functions = Dom.compute_all cfg Procedure.Vert.Entry in
-    let rev_cfg : RevDom.t =
-      match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
-    in
-    let rev_dom_functions = Dom.compute_all rev_cfg Procedure.Vert.Return in
-    Var.Decls.fold
-      (fun name var p -> ssify var p dom_functions rev_dom_functions)
-      (* (fun name var p -> if not (StringMap.mem name (Procedure.formal_in_params p)) then ssify var p else p) *)
-      og_vars proc
+    match Procedure.graph proc with
+    | None -> proc
+    | Some cfg ->
+        let dom_functions = Dom.compute_all cfg Procedure.Vert.Entry in
+        let rev_cfg : RevDom.t =
+          cfg (* TODO: Work out how to properly create a reverse cfg. *)
+        in
+        (* TODO: Using Procedure.Vert.Return here is probably incorrect when there are multiple returns *)
+        let rev_dom_functions = Dom.compute_all rev_cfg Procedure.Vert.Return in
+        Var.Decls.fold
+          (fun name var p ->
+            ssify var p cfg rev_cfg dom_functions rev_dom_functions)
+          og_vars proc
 
   let ssify_prog ?splitting_strategy (prog : Program.t) =
     Program.map_procedures
@@ -1386,7 +1366,7 @@ proc @OY() -> (OY_out:bv64)
     match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
   in
   let dom_functions = SSIfy.Dom.compute_all cfg Procedure.Vert.Entry in
-  let proc' = SSIfy.VariableRenaming.rename v bot_var dom_functions info in
+  let proc' = SSIfy.VariableRenaming.rename v bot_var cfg dom_functions info in
   Program.output_proc_pretty stdout proc'.proc;
   [%expect
     {|
@@ -2037,7 +2017,9 @@ proc @OY() -> (OY_out:bv64)
   in
   let rev_dom_functions = SSIfy.Dom.compute_all rev_cfg Procedure.Vert.Return in
 
-  let proc_split = SSIfy.ssify v proc dom_functions rev_dom_functions in
+  let proc_split =
+    SSIfy.ssify v proc cfg rev_cfg dom_functions rev_dom_functions
+  in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|
