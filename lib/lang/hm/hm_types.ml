@@ -5,109 +5,104 @@ open Abstract_expr
 
 exception TypeErr of string
 
-module Make (Ctx : TypeExpr.TypeContext) = struct
-  type typ = Ctx.Typ.t [@@deriving eq, ord]
-
-  (** Recursion algebra for printing types *)
-  let printer_alg = function
-    | TypeExpr.ATyp.Var e -> ID.to_string e
-    | TypeConstr ([ l ], e) -> l ^ " " ^ e
-    | TypeConstr ([ a; b ], "->") -> a ^ " -> " ^ b
-    | TypeConstr ([], e) -> e
-    | TypeConstr (ls, e) ->
-        List.to_string ~start:"(" ~stop:")" ~sep:"," Fun.id ls ^ " " ^ e
-
-  let type_to_string t = Ctx.Rec.cata printer_alg t
-
-  let plpos (l : Lexing.position) =
-    Printf.sprintf "%s:%d" l.pos_fname l.pos_lnum
-
-  (** Type schemes; how values of the typing context are typed. *)
-  type scheme = Forall of TypeExpr.tvar list * Ctx.Typ.t
-
-  let scheme_to_string = function
-    | Forall (tl, t) ->
-        List.to_string ID.to_string tl ^ ". " ^ type_to_string (Ctx.Typ.find t)
-
-  (** Function type, takes two arguments: we always curry. *)
-  let fun_type a b = Ctx.Typ.fix (TypeConstr ([ a; b ], "->"))
-
-  (** A type representing a number *)
-  let nat_val_type i =
-    let num = Ctx.Typ.fix (TypeExpr.ATyp.TypeConstr ([], Int.to_string i)) in
-    Ctx.Typ.fix (TypeConstr ([ num ], "ℕ"))
-
-  let is_nat_val_type (i : Ctx.Typ.t) =
-    match Ctx.Typ.unfix i with
-    | TypeConstr ([ num ], "ℕ") -> (
-        match Ctx.Typ.unfix num with
-        | TypeConstr ([], num) -> Int.of_string num
-        | _ -> None)
-    | _ -> None
-
-  (** A bitvector type parametric in its width *)
-  let bv_type i = Ctx.Typ.fix (TypeConstr ([ nat_val_type i ], "bv"))
-
-  (** Bitvector of arbitrary size *)
-  let bvunk i = Ctx.Typ.fix (TypeConstr ([ i ], "bv"))
-
-  (** {2 Primitive types} *)
-
-  let int_type = Ctx.Typ.fix (TypeConstr ([], "int"))
-  let bool_type = Ctx.Typ.fix (TypeConstr ([], "bool"))
-  let unit_t = Ctx.Typ.fix (TypeConstr ([], "unit"))
-  let top_t = Ctx.Typ.fix (TypeConstr ([], "top"))
-  let nothing_t = Ctx.Typ.fix (TypeConstr ([], "nothing"))
-  let ptr_typ_sub a b = Ctx.Typ.fix (TypeConstr ([ a; b ], "ptr"))
-  let ptr_typ = bv_type 64
-
-  let rec to_basil (t : Ctx.Typ.t) : Types.t =
-    let wrapped t f =
-      try f ()
-      with TypeErr e ->
-        raise (TypeErr ("error in " ^ (type_to_string @@ t) ^ ": " ^ e))
-    in
-    let open Types in
-    wrapped t @@ fun () ->
-    match Ctx.Typ.unfix t with
-    | TypeConstr ([ a; b ], "->") ->
-        let a = wrapped a @@ fun () -> to_basil a in
-        let b = wrapped b @@ fun () -> to_basil b in
-        Map (a, b)
-    | TypeConstr ([ w ], "bv") -> (
-        match is_nat_val_type w with
-        | Some i -> Bitvector i
-        | None -> raise (TypeErr ("bitvector unresolved: " ^ type_to_string t)))
-    | TypeConstr ([], "unit") -> Unit
-    | TypeConstr ([], "bool") -> Boolean
-    | TypeConstr ([], "int") -> Integer
-    | TypeConstr ([], "top") -> Top
-    | TypeConstr ([], "nothing") -> Nothing
-    | TypeConstr ([], o) -> Sort (o, [])
-    | _ -> failwith "not impl"
-
-  let rec ty_of_basil (t : Types.t) : Ctx.Typ.t =
-    match t with
-    | Types.Boolean -> bool_type
-    | Types.Integer -> int_type
-    | Types.Bitvector i -> bv_type i
-    | Types.Unit -> unit_t
-    | Types.Top -> top_t
-    | Types.Nothing -> nothing_t
-    | Types.Map (a, b) -> fun_type (ty_of_basil a) (ty_of_basil b)
-    | Types.Sort (n, _) -> Ctx.Typ.fix (TypeConstr ([], n))
-    | Types.Struct _ -> failwith "unsupp"
-    | Types.Pointer { lower; upper } ->
-        ptr_typ_sub (ty_of_basil lower) (ty_of_basil upper)
-    | Types.Variable n -> Ctx.Typ.fix (Var (Ctx.gen.fresh ~name:n ()))
-
-  let curry (args : Ctx.Typ.t TypeExpr.ATyp.expr list)
-      (v : Ctx.Typ.t TypeExpr.ATyp.expr) =
-    List.fold_left (fun a p -> fun_type (Ctx.Typ.fix p) a) (Ctx.Typ.fix v) args
-
-  let curry_f (args : Ctx.Typ.t list) (v : Ctx.Typ.t) =
-    List.fold_left (fun a p -> fun_type p a) v args
-
-  let types_universe = "<types>"
-  let global_universe = "<global>"
+open struct
+  let fix = TypeExpr.fix
 end
+
+(** Function type, takes two arguments: we always curry. *)
+let fun_type st a b = fix st (TypeConstr ([ a; b ], "->"))
+
+(** A type representing a number *)
+let nat_val_type st i =
+  let num = fix st (TypeExpr.ATyp.TypeConstr ([], Int.to_string i)) in
+  fix st (TypeConstr ([ num ], "ℕ"))
+
+(** A bitvector type parametric in its width *)
+let bv_type st i = fix st (TypeConstr ([ nat_val_type st i ], "bv"))
+
+(** Bitvector of arbitrary size *)
+let bvunk st i = fix st (TypeConstr ([ i ], "bv"))
+
+(** {2 Primitive types} *)
+
+let int_type st = fix st (TypeConstr ([], "int"))
+let bool_type st = fix st (TypeConstr ([], "bool"))
+let unit_t st = fix st (TypeConstr ([], "unit"))
+let top_t st = fix st (TypeConstr ([], "top"))
+let nothing_t st = fix st (TypeConstr ([], "nothing"))
+let ptr_typ_sub st a b = fix st (TypeConstr ([ a; b ], "ptr"))
+let ptr_typ st = bv_type st 64
+
+let curry_f st (args : TypeExpr.t list) (v : TypeExpr.t) =
+  List.fold_left (fun a p -> fun_type st p a) v args
+
+let rec ty_of_basil st (t : Types.t) : TypeExpr.t =
+  match t with
+  | Types.Boolean -> bool_type st
+  | Types.Integer -> int_type st
+  | Types.Bitvector i -> bv_type st i
+  | Types.Unit -> unit_t st
+  | Types.Top -> top_t st
+  | Types.Nothing -> nothing_t st
+  | Types.Map (a, b) -> fun_type st (ty_of_basil st a) (ty_of_basil st b)
+  | Types.Sort (n, _) -> fix st (TypeConstr ([], n))
+  | Types.Struct _ -> failwith "unsupp"
+  | Types.Pointer { lower; upper } ->
+      ptr_typ_sub st (ty_of_basil st lower) (ty_of_basil st upper)
+  | Types.Variable n -> fix st (Var (st.gen.fresh ~name:n ()))
+
+let is_nat_val_type (i : TypeExpr.t) =
+  match TypeExpr.unfix i with
+  | TypeConstr ([ num ], "ℕ") -> (
+      match TypeExpr.unfix num with
+      | TypeConstr ([], num) -> Int.of_string num
+      | _ -> None)
+  | _ -> None
+
+type typ = TypeExpr.t [@@deriving eq, ord]
+
+(** Recursion algebra for printing types *)
+let printer_alg = function
+  | TypeExpr.ATyp.Var e -> ID.to_string e
+  | TypeConstr ([ l ], e) -> l ^ " " ^ e
+  | TypeConstr ([ a; b ], "->") -> a ^ " -> " ^ b
+  | TypeConstr ([], e) -> e
+  | TypeConstr (ls, e) ->
+      List.to_string ~start:"(" ~stop:")" ~sep:"," Fun.id ls ^ " " ^ e
+
+let type_to_string t = TypeExpr.cata printer_alg t
+let plpos (l : Lexing.position) = Printf.sprintf "%s:%d" l.pos_fname l.pos_lnum
+
+(** Type schemes; how values of the typing context are typed. *)
+type scheme = Forall of TypeExpr.tvar list * TypeExpr.t
+
+let scheme_to_string = function
+  | Forall (tl, t) -> List.to_string ID.to_string tl ^ ". " ^ type_to_string t
+
+let rec to_basil (t : TypeExpr.t) : Types.t =
+  let wrapped t f =
+    try f ()
+    with TypeErr e ->
+      raise (TypeErr ("error in " ^ (type_to_string @@ t) ^ ": " ^ e))
+  in
+  let open Types in
+  wrapped t @@ fun () ->
+  match TypeExpr.unfix t with
+  | TypeConstr ([ a; b ], "->") ->
+      let a = wrapped a @@ fun () -> to_basil a in
+      let b = wrapped b @@ fun () -> to_basil b in
+      Map (a, b)
+  | TypeConstr ([ w ], "bv") -> (
+      match is_nat_val_type w with
+      | Some i -> Bitvector i
+      | None -> raise (TypeErr ("bitvector unresolved: " ^ type_to_string t)))
+  | TypeConstr ([], "unit") -> Unit
+  | TypeConstr ([], "bool") -> Boolean
+  | TypeConstr ([], "int") -> Integer
+  | TypeConstr ([], "top") -> Top
+  | TypeConstr ([], "nothing") -> Nothing
+  | TypeConstr ([], o) -> Sort (o, [])
+  | _ -> failwith "not impl"
+
+let types_universe = "<types>"
+let global_universe = "<global>"
