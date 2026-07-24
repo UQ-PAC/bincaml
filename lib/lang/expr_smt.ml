@@ -547,6 +547,8 @@ module SMTLib2 = struct
     let* s = bind_of_bexpr e in
     add_assert s
 
+  let echo s = add_command (list [atom "echo"; atom s])
+
   let push = add_command (list [ atom "push" ])
   let pop = add_command (list [ atom "pop" ])
   let check_sat = add_command (list [ atom "check-sat" ])
