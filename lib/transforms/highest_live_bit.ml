@@ -22,7 +22,7 @@ open Expr
     after the call, which extracts the highest live bits from the temporary
     variable.
 
-    Currently, the lhs and rhs of stores and intrinsic calls are mapped
+    Currently, the lhs and rhs of loads, stores, and intrinsic calls are mapped
     individually.
 
     After these first steps, the statement is mapped over again, and for any
@@ -64,10 +64,6 @@ let extract_extend_rewriter ?visit =
         } -> (
         match type_of arg |> Types.bit_width with
         | Some width when hi = width -> replace [%here] arg
-        | _ -> Keep)
-    | UnaryExpr { op = `Extract (hi, 0); arg = a, ty } -> (
-        match Types.bit_width ty with
-        | Some width when hi = width -> replace [%here] (fix a)
         | _ -> Keep)
     | _ -> Keep)
 
@@ -123,32 +119,7 @@ let transform_proc procRes proc =
           in
           Stmt.Instr_Assign { al = new_al; attrib }
           |> remove_extract_extend |> Iter.pure
-      | Stmt.Instr_Load { attrib; lhs = lvar; rhs = rvar; addr = nama } as
-        load_stmt ->
-          let tmp_var = create_tmp_var proc lvar in
-          let updated_load =
-            Stmt.map
-              ~f_lvar:(fun v -> tmp_var)
-              ~f_expr:(transform_subexpr_rvar get_new_var)
-              ~f_rvar:(transform_var get_new_var)
-              load_stmt
-            |> remove_extract_extend
-          in
-          let new_al =
-            let new_lvar = transform_var get_new_var lvar in
-            let expr = BasilExpr.rvar tmp_var in
-            let total_expr =
-              match v_width new_lvar with
-              | Some w' -> BasilExpr.extract ~hi_excl:w' ~lo_incl:0 expr
-              | _ -> expr
-            in
-            [ (new_lvar, total_expr) ]
-          in
-          let updated_assign =
-            Stmt.Instr_Assign { al = new_al; attrib = Attrib.empty }
-            |> remove_extract_extend
-          in
-          Iter.doubleton updated_load updated_assign
+      (* | Stmt.Instr_Load { attrib ; lhs ; rhs ; addr } -> stmt *)
       (* | Stmt.Instr_Store { attrib ; lhs ; rhs ; value ; addr } -> stmt *)
       (* | Stmt.Instr_IntrinCall { attrib ; lhs ; name ; args } -> stmt *)
       | Stmt.Instr_Call { attrib; lhs = lvar_map; procid; args } ->
@@ -363,6 +334,7 @@ proc @double_out() -> (dout1:bv64, dout2:bv64) { }
     p2_results;
   [%expect
     {|
+    BBBBBBBBB
     proc @trans(b:bv64)  -> (out:bv30) {  }
 
 
@@ -401,13 +373,14 @@ proc @double_out() -> (dout1:bv64, dout2:bv64) { }
          return;
        ]
     ];
-    prog entry @trans;ID: ("@trans", 0)
+    prog entry @trans;BBBBBBBBB
+    ID: ("@trans", 0)
 
 
       { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
       { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
       { Var.V.name = "v3"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
-      { Var.V.name = "b"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "b"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
       { Var.V.name = "out"; typ = bv30; scope = Var.LocalVar } -> ⊤
       { Var.V.name = "v2"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)
       { Var.V.name = "v5"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)
@@ -433,7 +406,7 @@ prog entry @main;
 var $mem: (bv64 -> bv8);
 var $i: bv64;
 
-proc @main() -> (out:bv16)
+proc @main() -> (out:bv64)
 [
   block %entry [
     $i := 0x0:bv64;
@@ -443,17 +416,16 @@ proc @main() -> (out:bv16)
     goto(%loop_body, %loop_exit);
   ];
   block %loop_body [
-    guard (bvult($i, 1));
-    $mem := store le $mem 0x100:bv64 extract(16, 0, $i) 16;
-    var a:bv16 := bvadd(extract(16, 0, $i), 0x1:bv16);
+    guard (bvult($i, 0xa:bv64));
+    $mem := store le $mem 0x100:bv64 $i 64;
+    $i := bvadd($i, 0x1:bv64);
     goto(%loop);
   ];
   block %loop_exit [
-    guard (bvuge($i, 0));
+    guard (bvuge($i, 0xa:bv64));
     var x:bv64 := load le $mem 0x100:bv64 64;
-    assert bvule($i, 0);
-    var y:bv16 := bvor(extract(16, 0, x), a);
-    return (y);
+    assert bvule($i, 0x14:bv64);
+    return (x);
   ]
 ];
     |}
@@ -478,7 +450,7 @@ proc @main() -> (out:bv16)
     {|
     var $mem:(bv64->bv8);
     var $i:bv64;
-    proc @main()  -> (out:bv16) {  }
+    proc @main()  -> (out:bv64) {  }
       modifies $mem:(bv64->bv8), $i:bv64
       captures $mem:(bv64->bv8), $i:bv64
 
@@ -486,27 +458,117 @@ proc @main() -> (out:bv16)
        block %entry [ $i:bv64 := 0x0:bv64; goto (%loop); ];
        block %loop [ goto (%loop_exit,%loop_body); ];
        block %loop_body [
-         guard bvult($i, 1);
-         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x100:bv64 extract(16,0, $i) 16;
-         var a:bv16 := bvadd(extract(16,0, $i), 0x1:bv16);
+         guard bvult($i, 0xa:bv64);
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x100:bv64 $i 64;
+         $i:bv64 := bvadd($i, 0x1:bv64);
          goto (%loop);
        ];
        block %loop_exit [
-         guard boolnot(bvult($i, 0));
-         var tmp:bv64 := load le $mem:(bv64->bv8) 0x100:bv64 64;
-         var x:bv16 := extract(16,0, tmp:bv64);
-         assert bvule($i, 0);
-         var y:bv16 := bvor(x:bv16, a:bv16);
-         var out:bv16 := y:bv16;
+         guard boolnot(bvult($i, 0xa:bv64));
+         var x:bv64 := load le $mem:(bv64->bv8) 0x100:bv64 64;
+         assert bvule($i, 0x14:bv64);
+         var out:bv64 := x:bv64;
          return;
        ]
     ];
     prog entry @main;ID: ("@main", 2)
 
 
+      { Var.V.name = "out"; typ = bv64; scope = Var.LocalVar } -> ⊤
       { Var.V.name = "$i"; typ = bv64; scope = Var.GlobalVar } -> (63, 0, true)
-      { Var.V.name = "out"; typ = bv16; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "a"; typ = bv16; scope = Var.LocalVar } -> (15, 0, true)
-      { Var.V.name = "x"; typ = bv64; scope = Var.LocalVar } -> (15, 0, true)
-      { Var.V.name = "y"; typ = bv16; scope = Var.LocalVar } -> (15, 0, true)
+      { Var.V.name = "x"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+    |}]
+
+let%expect_test "test3_basic_calls" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+prog entry @trans;
+proc @trans(b:bv64)  -> (out:bv30) {  }
+[
+   block %trans [
+      var b:bv64 := 0xffffffff:bv64;
+      (var v1:bv64=out1) := call @binary_expr(b:bv64);
+
+      var v2:bv30 := extract(30, 0, v1:bv64);
+      var v3:bv64 := 0;
+      var v4:bv64 := 1;
+      var v5:bv30 := bvand(extract(30, 0, b:bv64), bvand(v2:bv30, bvor(extract(30, 0, v3:bv64), extract(30, 0, v4:bv64))));
+      return (v5);
+   ]
+];
+proc @binary_expr(c:bv64)  -> (out1:bv64) {  }
+[
+   block %binary_expr [
+    var v:bv64 := bvand(0xffffffff:bv64, c:bv64);
+     var out1:bv64 := v:bv64;
+     return;
+   ]
+];
+
+    |}
+  in
+
+  let program = lst.prog in
+
+  let res = highest_live_bit_transform program in
+  Program.pretty_to_chan stdout res;
+  let results, p2_results = IDELiveBitSSIAnalysis.solve program in
+  IDMap.iter
+    (fun id vars ->
+      Printf.printf "ID: %s\n" (ID.show id);
+      Printf.printf "\n\n";
+      VarMap.iter
+        (fun var value ->
+          Printf.printf "  %s -> %s\n" (Var.show var)
+            (IDESSI_LB.Value.show value))
+        vars)
+    p2_results;
+  [%expect
+    {|
+    BBBBBBBBB
+    proc @trans(b:bv64)  -> (out:bv30) {  }
+
+
+    [
+       block %trans [
+         var b:bv64 := 0xffffffff:bv64;
+         (var tmp:bv64=out1) := call @binary_expr(c=b:bv64);
+         var v1:bv30 := extract(30,0, tmp:bv64);
+         var v2:bv30 := v1:bv30;
+         var v3:bv30 := extract(30,0, 0);
+         var v4:bv30 := extract(30,0, 1);
+         var v5:bv30 := bvand(extract(30,0, b:bv64),
+          bvand(v2:bv30, bvor(v3:bv30, v4:bv30)));
+         var out:bv30 := v5:bv30;
+         return;
+       ]
+    ];
+    proc @binary_expr(c:bv64)  -> (out1:bv64) {  }
+
+
+    [
+       block %binary_expr [
+         var v:bv64 := bvand(0xffffffff:bv64, c:bv64);
+         var out1:bv64 := v:bv64;
+         return;
+       ]
+    ];
+    prog entry @trans;BBBBBBBBB
+    ID: ("@trans", 0)
+
+
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
+      { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
+      { Var.V.name = "v3"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
+      { Var.V.name = "b"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "out"; typ = bv30; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v2"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)
+      { Var.V.name = "v5"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)
+    ID: ("@binary_expr", 1)
+
+
+      { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "v"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
     |}]
