@@ -1152,11 +1152,8 @@ module SSIfy = struct
         let rev_dom_functions = Dom.compute_all rev_cfg Procedure.Vert.Return in
         Var.Decls.fold
           (fun name var p ->
-            match splitting_strategy with
-            | Some ss ->
-                ssify ~splitting_strategy:ss var p cfg rev_cfg dom_functions
-                  rev_dom_functions
-            | None -> ssify var p cfg rev_cfg dom_functions rev_dom_functions)
+            ssify ?splitting_strategy var p cfg rev_cfg dom_functions
+              rev_dom_functions)
           og_vars proc
 
   (** Perform SSIfy on a program *)
@@ -1164,9 +1161,7 @@ module SSIfy = struct
     Program.map_procedures
       (fun id proc ->
         let og_vars = Var.Decls.copy (Procedure.local_decls proc) in
-        match splitting_strategy with
-        | Some ss -> ssify_proc ~splitting_strategy:ss og_vars proc
-        | None -> ssify_proc og_vars proc)
+        ssify_proc ?splitting_strategy og_vars proc)
       prog
 
   (** Perform SSIfy on a specific variable with a specific name in a specific
@@ -1174,12 +1169,9 @@ module SSIfy = struct
   let ssify_name ?splitting_strategy (v_name : String.t) proc cfg rev_cfg
       dom_functions rev_dom_functions =
     match Procedure.lookup_local_decl proc v_name with
-    | Some v -> (
-        match splitting_strategy with
-        | Some ss ->
-            ssify ~splitting_strategy:ss v proc cfg rev_cfg dom_functions
-              rev_dom_functions
-        | None -> ssify v proc cfg rev_cfg dom_functions rev_dom_functions)
+    | Some v ->
+        ssify ?splitting_strategy v proc cfg rev_cfg dom_functions
+          rev_dom_functions
     | None -> proc
 
   (** Perform SSIfy on a process for the variable with the given name *)
@@ -1195,12 +1187,8 @@ module SSIfy = struct
         (* TODO: Using Procedure.Vert.Return here is probably incorrect when there are multiple returns *)
         let rev_dom_functions = Dom.compute_all rev_cfg Procedure.Vert.Return in
         if Var.Decls.mem og_vars v_name then
-          match splitting_strategy with
-          | Some ss ->
-              ssify_name ~splitting_strategy:ss v_name proc cfg rev_cfg
-                dom_functions rev_dom_functions
-          | None ->
-              ssify_name v_name proc cfg rev_cfg dom_functions rev_dom_functions
+          ssify_name ?splitting_strategy v_name proc cfg rev_cfg dom_functions
+            rev_dom_functions
         else proc
 
   (** Perform SSIfy on a program for the variable with the given name *)
@@ -1209,10 +1197,7 @@ module SSIfy = struct
     Program.map_procedures
       (fun id proc ->
         let og_vars = Var.Decls.copy (Procedure.local_decls proc) in
-        match splitting_strategy with
-        | Some ss ->
-            ssify_proc_var_name ~splitting_strategy:ss og_vars v_name proc
-        | None -> ssify_proc_var_name og_vars v_name proc)
+        ssify_proc_var_name ?splitting_strategy og_vars v_name proc)
       prog
 end
 
