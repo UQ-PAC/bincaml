@@ -106,10 +106,13 @@ let map ~phi f (b : ('v, 'e) t) : ('vv, 'ee) t =
   { stmts = Vector.map f b.stmts; phis = phi b.phis; attrib = b.attrib }
 
 (** Modify stmt list by creating a mutable copy of the underlying vector *)
-let fmap_stmts_copy (f : (('a, 'a, 'b) Stmt.t, 'c) Vector.t -> unit) b =
+let fmap_stmts_copy (f : (('a, 'a, 'b) Stmt.t, Vector.rw) Vector.t -> unit) b =
   let v = Vector.copy b.stmts in
   f v;
   { b with stmts = Vector.freeze v }
+
+let clear_stmts (b : ('v, 'e) t) =
+  { b with stmts = Vector.create () |> Vector.freeze }
 
 (** prepend statements to block statement list (copies underlying vector) *)
 let prepend_stmts (b : ('v, 'e) t) (nstmts : ('v, 'v, 'e) Stmt.t list) :

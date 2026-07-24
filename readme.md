@@ -34,7 +34,7 @@ Windows is explicitly not supported outside of WSL.
 - enable flambda for compiler optimisation (for release build only)
 - ensure pac opam repository is installed
 
-- Tests requrie smt solver CVC5 installed.
+- Tests require smt solver CVC5 installed.
 
 ```bash
 opam switch create bincaml ocaml-variants.5.4.1+options ocaml-option-flambda ocaml-option-fp

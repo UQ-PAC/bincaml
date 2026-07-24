@@ -17,9 +17,7 @@ module EvalExprGen = struct
   let eval_expr =
     let open QCheck.Gen in
     let* wd = Expr_gen.gen_width in
-    Expr_gen.gen_bvexpr (1, wd)
-
-  let arb_bvexpr = QCheck.make ~print:Expr.BasilExpr.to_string_annot eval_expr
+    Expr_gen.gen_bvexpr ~with_var:false (1, wd)
 
   let arb_partial_eval_bvexpr =
     QCheck.make ~print:(fun (e, p) ->

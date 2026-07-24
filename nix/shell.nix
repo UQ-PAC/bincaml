@@ -20,6 +20,7 @@
   cvc5,
   linol-lwt,
   linol,
+  capstone,
 
   # lsp
   logs,
@@ -28,6 +29,10 @@
 }:
 
 mkShell {
+  buildInputs = [
+    capstone
+  ];
+
   packages = [
     odoc
     odig

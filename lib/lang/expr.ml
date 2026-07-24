@@ -393,6 +393,7 @@ module BasilExpr = struct
     | BinaryExpr { op; arg1 = l; arg2 = r } -> ret_type_bin op l r |> get_ty
     | ApplyIntrin { op; args } -> ret_type_intrin op args |> get_ty
     | ApplyFun { func; args } ->
+        (* FIXME: this is wrong *)
         let _, rt = Types.uncurry func in
         rt
     | Lambda { op; bound_vars; in_body = b } ->

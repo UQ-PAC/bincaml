@@ -12,6 +12,7 @@ include Bincaml_ibi_make
     but leaving other types opaque. *)
 module type IBI = sig
   val bincaml_set_address : Lang.Common.Bitvec.t -> unit
+  val bincaml_internal_emit : Aslp_state.stmt -> unit
 
   include
     OfflineASL_pc.Instruction_building_interface.IBI
@@ -20,13 +21,15 @@ module type IBI = sig
 end
 
 (** Builds a new {!IBI} with the given initial generator state. *)
-let from_generator generator : (module IBI) =
+let from_generator ?(memory = fun () -> failwith "bincaml_memory_var undefined")
+    generator : (module IBI) =
   (module Make (struct
     let initial_lifter_state = Aslp_state.empty_lifter_state ~generator ()
+    let bincaml_memory_var = memory
   end))
 
 (** Builds a new {!IBI} where the ID generators are derived from the given
     procedure. *)
-let from_bincaml_procedure proc : (module IBI) =
+let from_bincaml_procedure ?memory proc : (module IBI) =
   let local_ids = Procedure.local_ids proc in
-  from_generator (Aslp_state.aslp_ids_from_generators ~local_ids)
+  from_generator ?memory (Aslp_state.aslp_ids_from_generators ~local_ids)
