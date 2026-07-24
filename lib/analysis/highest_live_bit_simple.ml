@@ -15,8 +15,7 @@ open Idessi
     shifts and extracts are performed on a variable. *)
 
 (*
-  KNOWN ISSUE: A variable that is given to a call as a formal-in parameter is either not being detected in the analysis, or is given
-               BOT instead of TOP
+  KNOWN ISSUE: Lambda is not trigerring when transfer_call is invoked
 *)
 
 (* Should run ide_live before this *)
