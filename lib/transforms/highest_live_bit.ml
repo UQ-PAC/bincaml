@@ -25,9 +25,9 @@ open Expr
     Currently, the lhs and rhs of loads, stores, and intrinsic calls are mapped
     individually.
 
-    After these first steps, the statement is mapped over again, and any
-    extracts operating on an extend that are of the same width in the
-    statement's rhs expression are removed. *)
+    After these first steps, the statement is mapped over again, and for any
+    extracts operating on an extend that are of the same width as the extend's
+    expression, both the extract and extend are removed *)
 
 let v_width v = Types.bit_width (Var.typ v)
 
@@ -334,6 +334,7 @@ proc @double_out() -> (dout1:bv64, dout2:bv64) { }
     p2_results;
   [%expect
     {|
+    BBBBBBBBB
     proc @trans(b:bv64)  -> (out:bv30) {  }
 
 
@@ -372,13 +373,14 @@ proc @double_out() -> (dout1:bv64, dout2:bv64) { }
          return;
        ]
     ];
-    prog entry @trans;ID: ("@trans", 0)
+    prog entry @trans;BBBBBBBBB
+    ID: ("@trans", 0)
 
 
       { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
       { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
       { Var.V.name = "v3"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
-      { Var.V.name = "b"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "b"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
       { Var.V.name = "out"; typ = bv30; scope = Var.LocalVar } -> ⊤
       { Var.V.name = "v2"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)
       { Var.V.name = "v5"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)
@@ -524,6 +526,7 @@ proc @binary_expr(c:bv64)  -> (out1:bv64) {  }
     p2_results;
   [%expect
     {|
+    BBBBBBBBB
     proc @trans(b:bv64)  -> (out:bv30) {  }
 
 
@@ -551,13 +554,14 @@ proc @binary_expr(c:bv64)  -> (out1:bv64) {  }
          return;
        ]
     ];
-    prog entry @trans;ID: ("@trans", 0)
+    prog entry @trans;BBBBBBBBB
+    ID: ("@trans", 0)
 
 
       { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
       { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
       { Var.V.name = "v3"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
-      { Var.V.name = "b"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "b"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
       { Var.V.name = "out"; typ = bv30; scope = Var.LocalVar } -> ⊤
       { Var.V.name = "v2"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)
       { Var.V.name = "v5"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)

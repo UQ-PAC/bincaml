@@ -213,23 +213,12 @@ module HighestLiveBitIDE = struct
     match d with
     | Lambda ->
         (* TODO: This lambda never seems to trigger, which is... odd *)
-        StringMap.to_iter call
-        |> Iter.flat_map (fun (_, e) -> Expr.BasilExpr.free_vars_iter e)
-        |> Iter.map (fun v -> (Label v, TopEdge))
-        (* (StringMap.to_iter call |> Iter.flat_map (snd %> Expr.BasilExpr.free_vars_iter)) *)
-        (* StringMap.to_iter param |> Iter.map (fun (name, var) -> Label var, TopEdge)  *)
-        (* Iter.singleton (Lambda, TopEdge) *)
+        Iter.singleton (Lambda, TopEdge)
     | Label v ->
         StringMap.to_iter call
-        |> Iter.flat_map (fun (_, e) -> Expr.BasilExpr.free_vars_iter e)
+        |> Iter.flat_map (fun (s, e) -> Expr.BasilExpr.free_vars_iter e)
         |> Iter.map (fun v -> (Label v, TopEdge))
-
-  (* StringMap.to_iter call
-        |> Iter.filter (fun (s, e) -> VarSet.mem v (Expr.BasilExpr.free_vars e))
-        |> Iter.map (fun (s, e) ->
-            let v' = StringMap.find s param in
-            let edge = IDESSI_LB.Extract.eval_wrt_var v' e in
-            (Label v', edge)) *)
+  (* We could use eval_wrt_var here, but it would be slower for the same effect *)
 
   let transfer stmt d =
     let open Stmt in
@@ -256,8 +245,6 @@ module HighestLiveBitIDE = struct
                 else Iter.empty)
         | Instr_IndirectCall c -> failwith "unreachable"
         | _ -> Iter.empty)
-  (* | _ -> IDESSI_LB.Extract.eval_stmt stmt
-            |> Iter.map (fun (rhs_var, edge) -> (Label rhs_var, edge))) *)
 
   let transfer_phi lhs rhs d =
     match d with
@@ -272,7 +259,7 @@ end
 
 module IDELiveBitSSIAnalysis = IDESSI (HighestLiveBitIDE)
 
-let%expect_test "test1_basic_shifts" =
+let%expect_test "test1_basic" =
   let lst =
     Loader.Loadir.ast_of_string
       {|
