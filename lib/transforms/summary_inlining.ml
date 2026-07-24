@@ -36,7 +36,7 @@ let transform_block (prog : Program.t) (proc : Program.proc)
                     branch = false;
                   })
           in
-          requires @ [stmt] @ ensures
+          requires @ [ stmt ] @ ensures
       | other -> [ other ] )
     block
 

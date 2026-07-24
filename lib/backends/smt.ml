@@ -3,6 +3,8 @@ open Lang.Common
 open Bincaml_util.Common
 open Bincaml_util
 open Expr_smt
+open Expr
+
 (* open Containers *)
 
 (* Takes a procedure that has been reduced to a single edge.
@@ -18,33 +20,47 @@ let build_proc (proc : Program.proc) (builder : SMTLib2.builder) :
     |> Iter.fold (fun acc (k, v) -> snd @@ SMTLib2.decl_var v acc) builder
   in
 
+  (* Need the specification for requires/ensures. *)
+  let spec = Procedure.specification proc in
+  let assert_exprs exprs builder = 
+    exprs |> List.fold_left
+         (fun acc expr -> snd @@ SMTLib2.add_assert (SMTLib2.of_bexpr expr) acc)
+         builder in
+
+  (* Produce assertions for the requires requirements of a procedure. *)
+  let builder = assert_exprs spec.requires builder in
+
+  (* Translate each statement to smt. *)
   let builder =
     Procedure.iter_stmt_topo_fwd proc
     |> Iter.fold
          (fun acc stmt ->
            match stmt with
            | Stmt.Instr_Assert { body } ->
-               let smt = SMTLib2.of_bexpr (Expr.BasilExpr.boolnot body) in
+               let smt = SMTLib2.of_bexpr (BasilExpr.boolnot body) in
                SMTLib2.add_assert smt acc |> snd
            | Stmt.Instr_Assume { body } ->
-               let smt = SMTLib2.of_bexpr (Expr.BasilExpr.boolnot body) in
+               let smt = SMTLib2.of_bexpr (BasilExpr.boolnot body) in
                SMTLib2.add_assert smt acc |> snd
            | Stmt.Instr_Assign { al } ->
                let asserts =
                  List.map
                    (fun (v, e) ->
-                     Expr.BasilExpr.binexp ~op:`EQ (Expr.BasilExpr.rvar v) e
+                     BasilExpr.binexp ~op:`EQ (BasilExpr.rvar v) e
                      |> SMTLib2.of_bexpr)
                    al
                in
                List.fold_left
                  (fun acc smt -> SMTLib2.add_assert smt acc |> snd)
                  acc asserts
-           (* | Stmt.Instr_Call { lhs; procid; args } -> *)
-             (* let assumes = *) 
+           | Stmt.Instr_Call { lhs; procid; args } -> acc
            | _ -> acc)
          builder
   in
+
+  (* Produce assertions for the ensures of a procedure. *)
+  let builder = assert_exprs spec.ensures builder in
+
   let builder = snd @@ SMTLib2.check_sat builder in
   let builder = snd @@ SMTLib2.pop builder in
   builder
