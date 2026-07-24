@@ -816,43 +816,6 @@ module SSIfy = struct
                                 this code can definitely be simplified and tidied up) *)
                               set_use ~og_bid:ogbid info' inst |> fst
                           | None -> info')
-                        (* Does not work. *)
-                        (* match
-                        List.find_map
-                          (fun phi ->
-                            match
-                              List.find_opt
-                                (fun (ogbid, var) ->
-                                  ID.equal ogbid block_id && Var.equal var v)
-                                phi.Block.rhs
-                            with
-                            | Some (ogbid, var) ->
-                                (* info' *)
-                                let inst =
-                                  Instruction.create_phi_inst succ_block_id
-                                    phi.Block.lhs phi.Block.rhs
-                                in
-                                Some
-                                  (set_use ~og_bid:ogbid curr_info inst |> fst)
-                            | None -> None)
-                          succ_block.phis
-                      with
-                      | Some nama -> nama
-                      | None -> curr_info *)
-
-                        (* Use a fold if the above assumption is false *)
-                        (* List.fold_left
-                            (fun info'' (ogbid, var) ->
-                              (* If E v <- phi(v:l) in In(m) then *)
-                              if ID.equal ogbid block_id && Var.equal var v then
-                                let inst =
-                                  Instruction.create_phi_inst succ_block_id
-                                    phi.Block.lhs phi.Block.rhs
-                                in
-                                (* stack.set_use(v <- v:l) *)
-                                set_use ~og_bid:ogbid info'' inst |> fst
-                              else info'')
-                            info' phi.Block.rhs) *)
                         curr_info succ_block.phis
                   | _ -> curr_info)
                 info_step_three next_vertices
