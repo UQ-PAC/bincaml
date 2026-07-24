@@ -67,7 +67,7 @@ let construct_final_edge proc =
       let guard_expressions, non_guard_stmts =
         Block.stmts_iter block |> Iter.to_list
         |> List.partition_map_either (function
-          | Stmt.Instr_Assume { body; branch = _ } -> Left body
+          | Stmt.Instr_Assume { body; branch = true } -> Left body
           | stmt -> Right stmt)
       in
 
