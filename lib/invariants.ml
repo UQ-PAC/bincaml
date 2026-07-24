@@ -13,6 +13,7 @@ type t =
   | SSA
   | DSA
   | NoPhis
+  | NoCalls
   | Params
   | LambdaLift
   | MemoryEncoding
@@ -26,6 +27,7 @@ let read s =
   | "SSA" -> SSA
   | "DSA" -> DSA
   | "NoPhis" -> NoPhis
+  | "NoCalls" -> NoCalls
   | "Params" -> Params
   | "LambdaLift" -> LambdaLift
   | "ReducibleLoops" -> ReducibleLoops
