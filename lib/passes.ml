@@ -232,7 +232,15 @@ module PassManager = struct
       name = "cfa-reduction";
       apply = Proc Transforms.Cfa_reduction.reduce_procedure;
       doc = "Performs reduction of acyclic CFA";
-      invariants = Invariants.presupposes [ SSA ] ~establishes:[ NoPhis; SSA ];
+      invariants = Invariants.presupposes [ SSA; NoCalls ] ~establishes:[ NoPhis; SSA ];
+    }
+
+  let inline_summaries =
+    {
+      name = "inline_summaries";
+      apply = Prog Transforms.Summary_inlining.transform;
+      doc = "Replaces procedure calls with asserts/assumes for summaries";
+      invariants = Invariants.presupposes [ SSA ] ~establishes:[ NoCalls ];
     }
 
   let remove_unreachable_blocks =
@@ -492,6 +500,7 @@ module PassManager = struct
       read_uninit true;
       sssa;
       cfa_reduction;
+      inline_summaries;
       sva;
       full_ssa;
       chc_infer_invariants;

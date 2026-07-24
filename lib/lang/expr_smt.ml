@@ -389,7 +389,9 @@ module SMTLib2 = struct
     | Constant { const = o } ->
         let* o = add_logic_const o in
         return (of_op o)
-    | RVar { id } -> get_var id
+    | RVar { id } ->
+      let* var = get_var id in
+      return @@ list [atom "as"; var; fst @@ of_typ @@ Var.typ id ]
     | UnaryExpr { op = `BOOLTOBV1; arg = e } ->
         let* e = e in
         return

@@ -26,6 +26,9 @@ let build_proc (proc : Program.proc) (builder : SMTLib2.builder) :
            | Stmt.Instr_Assert { body } ->
                let smt = SMTLib2.of_bexpr (Expr.BasilExpr.boolnot body) in
                SMTLib2.add_assert smt acc |> snd
+           | Stmt.Instr_Assume { body } ->
+               let smt = SMTLib2.of_bexpr (Expr.BasilExpr.boolnot body) in
+               SMTLib2.add_assert smt acc |> snd
            | Stmt.Instr_Assign { al } ->
                let asserts =
                  List.map
@@ -37,6 +40,8 @@ let build_proc (proc : Program.proc) (builder : SMTLib2.builder) :
                List.fold_left
                  (fun acc smt -> SMTLib2.add_assert smt acc |> snd)
                  acc asserts
+           (* | Stmt.Instr_Call { lhs; procid; args } -> *)
+             (* let assumes = *) 
            | _ -> acc)
          builder
   in
