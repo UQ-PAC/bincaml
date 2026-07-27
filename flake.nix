@@ -1,5 +1,7 @@
 {
   inputs = {
+    self.submodules = true;
+
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
 
     pac-nix.url = "github:katrinafyi/pac-nix";

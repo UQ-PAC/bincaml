@@ -29,9 +29,7 @@ buildDunePackage {
   src = nix-gitignore.gitignoreSource [ "nix" "flake.nix" "flake.lock" ] ./..;
 
   checkInputs = [ ];
-  nativeBuildInputs = [
-    writableTmpDirAsHomeHook
-  ];
+  nativeBuildInputs = [ writableTmpDirAsHomeHook ];
   buildInputs = [
     logs
     fmt

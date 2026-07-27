@@ -109,7 +109,7 @@ buildDunePackage {
     patchShebangs --build test
   '';
 
-  doCheck = false;
+  doCheck = true;
   outputs = [
     "out"
     "dev"
