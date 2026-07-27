@@ -101,3 +101,19 @@ jobs:
       - uses: actions/checkout@v6
       - run: opam repository --all add pac https://github.com/uq-pac/opam-repository.git
       - run: opam lint
+
+  build-nix:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: cachix/install-nix-action@v31
+
+    - run: nix build .#bincaml
+      name: Test building bincaml
+    - run: nix build .#bincaml_lsp
+      name: Test building bincaml_lsp
+    - run: nix develop .#no-fp
+      name: Test Nix dev shell
+
