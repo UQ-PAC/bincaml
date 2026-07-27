@@ -5,9 +5,7 @@ open Bincaml_util
 open Expr_smt
 open Expr
 
-(* open Containers *)
-
-(* Takes a procedure that has been reduced to a single edge.
+(* Takes a single edge procedure (see cfa_reduction.ml transform).
    Maps each statement to an smt expression. *)
 let build_proc (program : Program.t) (procedure : Program.proc)
     (builder : SMTLib2.builder) : SMTLib2.builder =
@@ -48,9 +46,22 @@ let build_proc (program : Program.t) (procedure : Program.proc)
          (fun acc stmt ->
            match stmt with
            | Stmt.Instr_Assert { body } ->
+               (* Verify negation of assertion is unsat. *)
+               let acc = snd @@ SMTLib2.push acc in
+               let acc =
+                 snd
+                 @@ SMTLib2.add_assert
+                      (SMTLib2.of_bexpr (BasilExpr.boolnot body))
+                      acc
+               in
+               let acc = snd @@ SMTLib2.check_sat acc in
+               let acc = snd @@ SMTLib2.pop acc in
+
+               (* Assert the assertion. *)
                let smt = SMTLib2.of_bexpr body in
                SMTLib2.add_assert smt acc |> snd
            | Stmt.Instr_Assume { body } ->
+               (* Assert the assumption as is. *)
                let smt = SMTLib2.of_bexpr body in
                SMTLib2.add_assert smt acc |> snd
            | Stmt.Instr_Assign { al } ->
@@ -65,13 +76,10 @@ let build_proc (program : Program.t) (procedure : Program.proc)
                  (fun acc smt -> SMTLib2.add_assert smt acc |> snd)
                  acc asserts
            | Stmt.Instr_Call { lhs; procid; args } ->
-               (* Calls are interesting.
-                First we verify their requires in a local scope.
-                  Done by checking their negation is unsatisfiable.
-                Then after exiting their scope, assert the requires
-                to be true as usual.
-                Lastly assert the ensures expressions for future.
-                *)
+               (* For calls, assert the negation of requires is unsat.
+                 Then we simply assert the requires/ensures.
+                 Asserting the requires is fine as this is on fresh SSA
+                 variables.*)
                let subst_var varmap expression =
                  BasilExpr.substitute
                    (fun v ->
@@ -94,38 +102,29 @@ let build_proc (program : Program.t) (procedure : Program.proc)
                  |> List.map (fun e -> subst_var lhs @@ subst_expr args e)
                in
 
-               (* Verify *)
+               (* Verify negation of requires is unsat. *)
                let acc = snd @@ SMTLib2.push acc in
-               let acc =
-                 requires
-                 |> List.fold_left
-                      (fun acc e ->
-                        snd
-                        @@ SMTLib2.add_assert
-                             (SMTLib2.of_bexpr (BasilExpr.boolnot e))
-                             acc)
-                      acc
-               in
+               let acc = assert_exprs BasilExpr.boolnot requires acc in
                let acc = snd @@ SMTLib2.check_sat acc in
                let acc = snd @@ SMTLib2.pop acc in
 
-               (* Assert *)
-               let acc =
-                 requires
-                 |> List.fold_left
-                      (fun acc e ->
-                        snd @@ SMTLib2.add_assert (SMTLib2.of_bexpr e) acc)
-                      acc
-               in
+               (* Assert Requires. *)
+               let acc = assert_exprs id requires acc in
+
+               (* Assert Ensures. *)
+               let acc = assert_exprs id ensures acc in
+
                acc
            | _ -> acc)
          builder
   in
 
-  (* Produce assertions for the ensures of a procedure. *)
+  (* Verify negation of ensures is unsat. *)
+  let builder = snd @@ SMTLib2.push builder in
   let builder = assert_exprs BasilExpr.boolnot spec.ensures builder in
-
   let builder = snd @@ SMTLib2.check_sat builder in
+  let builder = snd @@ SMTLib2.pop builder in
+
   let builder = snd @@ SMTLib2.pop builder in
   builder
 
