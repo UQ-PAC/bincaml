@@ -14,7 +14,7 @@
   (load-il gtirb-output.il)
   (dump-il dumped.il)
   (run-transforms aslp-semantics)
-  bincaml: [WARNING] Invariants not satisfied during 'aslp-semantics'. Needs [GTIRB_ARM] but only have [].
+  bincaml: [WARNING] Invariants not satisfied during 'aslp-semantics'. Needs [GtirbArm] but only have [].
   (dump-il semantics.il)
   (log-level debug)
   (run-transforms type-check check-read-uninitialised-withlocals)
