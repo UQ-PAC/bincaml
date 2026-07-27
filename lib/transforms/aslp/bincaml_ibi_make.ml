@@ -382,14 +382,15 @@ struct
   let f_gen_slt_bits : bigint -> expr -> expr -> expr =
    fun _ a b -> Expr.BasilExpr.binexp ~op:`BVSLT a b
 
-  let make_widths_equal a b =
+  let make_shift_extended_to_value_width value shift =
     let width a =
       Expr.BasilExpr.type_of a |> Types.bit_width
       |> Option.get_exn_or "expected bv argument to operator"
     in
-    let wb = width b and wa = width a in
-    if wa = wb then b
-    else if wa > wb then Expr.BasilExpr.zero_extend ~n_prefix_bits:(wa - wb) b
+    let wb = width shift and wa = width value in
+    if wa = wb then shift
+    else if wa > wb then
+      Expr.BasilExpr.zero_extend ~n_prefix_bits:(wa - wb) shift
     else failwith "expected second shift argument to be equal or smaller"
 
   let f_gen_mul_bits : bigint -> expr -> expr -> expr =
@@ -399,13 +400,16 @@ struct
    fun _ _ a b -> Expr.BasilExpr.applyintrin ~op:`BVConcat [ a; b ]
 
   let f_gen_lsr_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVLSHR a (make_widths_equal a b)
+   fun _ _ a b ->
+    Expr.BasilExpr.binexp ~op:`BVLSHR a (make_shift_extended_to_value_width a b)
 
   let f_gen_lsl_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVSHL a (make_widths_equal a b)
+   fun _ _ a b ->
+    Expr.BasilExpr.binexp ~op:`BVSHL a (make_shift_extended_to_value_width a b)
 
   let f_gen_asr_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVASHR a (make_widths_equal a b)
+   fun _ _ a b ->
+    Expr.BasilExpr.binexp ~op:`BVASHR a (make_shift_extended_to_value_width a b)
 
   (** [f_gen_replicate_bits operand_width num_replications operand
        num_replications] *)
