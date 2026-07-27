@@ -2,6 +2,17 @@ open Lang
 open Lang.Common
 open Expr
 
+(* This transformation inlines procedure summaries.
+   This means three things:
+   1. All procedure requires will be replaced with assumes at the top
+      of the procedures entry block.
+   2. All procedure ensures will be replaced with asserts at the end of
+      the procedures return block.
+   3. Any procedure call will have assert statements added before
+      for the requires, and assumes added after for the ensures.
+   It will also clear all procedure specification ensures/requires.
+*)
+
 let transform_block (prog : Program.t) (proc : Program.proc)
     ((bid, block) : IDSet.elt * Program.bloc) : Program.bloc =
   (* Inline summaries around any procedure call. *)
