@@ -76,23 +76,18 @@ let stmt_of_aarch64_intrin ?error :
 (** Returns the Bincaml global variable representing heap memory, declaring it
     if it does not exist. *)
 let aarch64_mem_of_prog prog =
+  let mem_name = "$mem" in
+  let mem_type = Types.(Map (Bitvector 64, Bitvector 8)) in
   Program.get_decl_by_name "$mem" prog |> function
   | Some (Variable { binding }) ->
-      if
-        not
-          (Types.equal (Var.typ binding)
-             Types.(Map (Bitvector 64, Bitvector 8)))
-      then
+      if not (Types.equal (Var.typ binding) mem_type) then
         Logs.warn (fun m ->
             m
               "Memory declared with unexpected type; lifter may not produce \
                well-typed or correct code.");
       (prog, binding)
   | None ->
-      let mem =
-        Var.create "$mem" ~scope:Var.GlobalVarShared
-          Types.(Map (Bitvector 64, Bitvector 8))
-      in
+      let mem = Var.create mem_name ~scope:Var.GlobalVarShared mem_type in
 
       let prog =
         let attrib = Attrib.empty and classification = None in
@@ -100,7 +95,7 @@ let aarch64_mem_of_prog prog =
           (Program.Variable { binding = mem; attrib; classification })
       in
       (prog, mem)
-  | _ -> failwith "$mem already declared as non-variable"
+  | _ -> failwith @@ mem_name ^ " already declared as non-variable"
 
 (** {1 Main Bincaml IR transformation functions} *)
 
