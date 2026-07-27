@@ -16,7 +16,7 @@ type t =
   | Params
   | LambdaLift
   | MemoryEncoding
-  | GTIRB_ARM
+  | GtirbArm
   | ReducibleLoops
       (** All loops are reducible. That is, there are no {i irreducible} loops.
       *)
