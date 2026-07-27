@@ -1,6 +1,6 @@
 {
   lib,
-  buildDunePackage,
+  buildDunePackage',
   nix-gitignore,
   writableTmpDirAsHomeHook,
   protobuf,
@@ -52,7 +52,7 @@
   # , nodejs
 }:
 
-buildDunePackage {
+buildDunePackage' {
   pname = "bincaml";
   version = "0.0";
 

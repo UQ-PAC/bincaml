@@ -38,6 +38,8 @@
     flake-for-all-systems args {
       overlays = {
         addBincamlPackages = ofinal: _: {
+          buildDunePackage' = ofinal.callPackage "./nix/build-dune-package'.nix" { };
+
           bincaml = ofinal.callPackage ./nix/bincaml.nix {
             ocaml-protoc-plugin = ofinal.ocaml-protoc-plugin-6-1-0;
           };
