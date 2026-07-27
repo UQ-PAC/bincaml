@@ -92,7 +92,7 @@ module PassManager = struct
   let ssify =
     {
       name = "ssify-program";
-      apply = Prog Transforms.Ssify.SSIfy.ssify_prog;
+      apply = Prog Transforms.Into_ssi.ssify_prog;
       doc = "Converts a given procedure to SSI form";
       invariants = Invariants.establishes [ SSA ];
     }

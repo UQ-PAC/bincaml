@@ -65,9 +65,15 @@ module RevG = struct
 
   module V = G.V
 
+  let succ = G.pred
+  let pred = G.succ
   let iter_succ = G.iter_pred
   let iter_vertex = G.iter_vertex
   let fold_pred_e = G.fold_succ_e
+  let fold_vertex = G.fold_vertex
+  let nb_vertex = G.nb_vertex
+  let empty () = G.empty
+  let add_edge g a b = G.add_edge g b a
 end
 
 module WTO = Graph.WeakTopological.Make (G)

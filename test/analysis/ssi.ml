@@ -1,7 +1,7 @@
 open Lang
 open Containers
 open Common
-open Transforms.Ssify
+open Transforms.Into_ssi
 
 let%expect_test "test_SSIFY_2" =
   let lst =
@@ -63,7 +63,7 @@ proc @OY() -> (OY_out:bv64)
     |}
   in
   let program = lst.prog in
-  let ssi_prog = SSIfy.ssify_prog program in
+  let ssi_prog = ssify_prog program in
   Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
   [%expect
     {|
@@ -205,12 +205,12 @@ proc @OY() -> (OY_out:bv64)
     | Some v -> v
     | None -> failwith "Bleh"
   in
-  let (info : SSIfy.ssi_info) =
+  let (info : Datastructures.ssi_info) =
     {
       proc;
-      non_actual_insts = SSIfy.InstructionSet.empty;
-      defs = SSIfy.DefUseMap.empty;
-      uses = SSIfy.DefUseMap.empty;
+      non_actual_insts = Datastructures.InstructionSet.empty;
+      defs = Datastructures.DefUseMap.empty;
+      uses = Datastructures.DefUseMap.empty;
       web = VarSet.empty;
     }
   in
@@ -220,8 +220,8 @@ proc @OY() -> (OY_out:bv64)
   let cfg =
     match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
   in
-  let dom_functions = SSIfy.Dom.compute_all cfg Procedure.Vert.Entry in
-  let proc' = SSIfy.VariableRenaming.rename v bot_var cfg dom_functions info in
+  let dom_functions = Datastructures.Dom.compute_all cfg Procedure.Vert.Entry in
+  let proc' = Renaming.rename v bot_var cfg dom_functions info in
   Program.output_proc_pretty stdout proc'.proc;
   [%expect
     {|
@@ -326,7 +326,7 @@ proc @OY() -> (OY_out:bv64)
     |}
   in
   let program = lst.prog in
-  let ssi_prog = SSIfy.ssify_prog program in
+  let ssi_prog = ssify_prog program in
   Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
   [%expect
     {|
@@ -447,7 +447,7 @@ prog entry @main;
 |}
   in
   let program = lst.prog in
-  let ssi_prog = SSIfy.ssify_prog program in
+  let ssi_prog = ssify_prog program in
   Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
   [%expect
     {|
@@ -544,7 +544,7 @@ prog entry @main;
 |}
   in
   let program = lst.prog in
-  let ssi_prog = SSIfy.ssify_prog program in
+  let ssi_prog = ssify_prog program in
   Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
   [%expect
     {|
@@ -616,7 +616,7 @@ prog entry @main;
 |}
   in
   let program = lst.prog in
-  let ssi_prog = SSIfy.ssify_prog program in
+  let ssi_prog = ssify_prog program in
   Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
   [%expect
     {|
@@ -687,7 +687,7 @@ proc @main () -> ()
 |}
   in
   let program = lst.prog in
-  let ssi_prog = SSIfy.ssify_prog program in
+  let ssi_prog = ssify_prog program in
   Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
   [%expect
     {|
@@ -757,7 +757,7 @@ prog entry @main;
   |}
   in
   let program = lst.prog in
-  let ssi_prog = SSIfy.ssify_prog program in
+  let ssi_prog = ssify_prog program in
   Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
   [%expect
     {|
@@ -866,15 +866,15 @@ proc @OY() -> (OY_out:bv64)
   let cfg =
     match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
   in
-  let dom_functions = SSIfy.Dom.compute_all cfg Procedure.Vert.Entry in
-  let rev_cfg : SSIfy.RevDom.t =
+  let dom_functions = Datastructures.Dom.compute_all cfg Procedure.Vert.Entry in
+  let rev_cfg : Datastructures.RevDom.t =
     match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
   in
-  let rev_dom_functions = SSIfy.Dom.compute_all rev_cfg Procedure.Vert.Return in
-
-  let proc_split =
-    SSIfy.ssify v proc cfg rev_cfg dom_functions rev_dom_functions
+  let rev_dom_functions =
+    Datastructures.Dom.compute_all rev_cfg Procedure.Vert.Return
   in
+
+  let proc_split = ssify v proc cfg rev_cfg dom_functions rev_dom_functions in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|
@@ -972,7 +972,7 @@ proc @main_local () -> () [
     |}
   in
   let program = lst.prog in
-  let ssi_prog = SSIfy.ssify_prog program in
+  let ssi_prog = ssify_prog program in
   Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
   [%expect
     {|
@@ -1148,7 +1148,7 @@ proc @bool_id(a:bool) -> (o:bool)
     |}
   in
   let program = lst.prog in
-  let ssi_prog = SSIfy.ssify_prog program in
+  let ssi_prog = ssify_prog program in
   Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
   [%expect
     {|
@@ -1340,7 +1340,7 @@ proc @OY() -> (OY_out:bv64)
     |}
   in
   let program = lst.prog in
-  let ssi_prog = SSIfy.ssify_prog program in
+  let ssi_prog = ssify_prog program in
   Format.printf "%a\n" Containers_pp.pp (Program.prog_pretty ssi_prog);
   [%expect
     {|
