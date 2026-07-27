@@ -43,10 +43,16 @@
 
           bincaml = ofinal.callPackage ./nix/bincaml.nix {
             ocaml-protoc-plugin = ofinal.ocaml-protoc-plugin-6-1-0;
+            buildDunePackage = ofinal.buildDune324Package;
           };
+          bincaml_lsp = ofinal.callPackage ./nix/bincaml-lsp.nix {
+            buildDunePackage = ofinal.buildDune324Package;
+          };
+          capstone_arm64_disas = ofinal.callPackage ./nix/capstone_arm64_disas.nix {
+            buildDunePackage = ofinal.buildDune324Package;
+          };
+
           ocaml-protoc-plugin-6-1-0 = ofinal.callPackage ./nix/ocaml-protoc-plugin.nix { };
-          bincaml_lsp = ofinal.callPackage ./nix/bincaml-lsp.nix { };
-          capstone_arm64_disas = ofinal.callPackage ./nix/capstone_arm64_disas.nix { };
           aslp_lifter_ocaml = ofinal.callPackage ./nix/aslp-lifter-ocaml.nix { };
           hector = ofinal.callPackage ./nix/hector.nix { };
           intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };

@@ -1,6 +1,6 @@
 {
   lib,
-  buildDune324Package,
+  buildDunePackage,
   nix-gitignore,
   writableTmpDirAsHomeHook,
 
@@ -19,7 +19,7 @@
   # dev:
 }:
 
-buildDune324Package {
+buildDunePackage {
   pname = "bincaml_lsp";
   version = "0.0";
 

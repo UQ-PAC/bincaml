@@ -1,6 +1,6 @@
 {
   lib,
-  buildDune324Package,
+  buildDunePackage,
   nix-gitignore,
   writableTmpDirAsHomeHook,
   capstone,
@@ -20,7 +20,7 @@
   # dev:
 }:
 
-buildDune324Package {
+buildDunePackage {
   pname = "capstone_arm64_disas";
   version = "0.0";
 
