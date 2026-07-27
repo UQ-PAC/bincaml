@@ -7,7 +7,7 @@ open Expr
 
 (* Takes a single edge procedure (see cfa_reduction.ml transform).
    Maps each statement to an smt expression. *)
-let build_proc (program : Program.t) (procedure : Program.proc)
+let build_procedure (program : Program.t) (procedure : Program.proc)
     (builder : SMTLib2.builder) : SMTLib2.builder =
   let builder = snd @@ SMTLib2.push builder in
 
@@ -94,12 +94,14 @@ let build_proc (program : Program.t) (procedure : Program.proc)
                in
                let call_proc = Program.proc program procid in
                let spec = Procedure.specification call_proc in
+
                let requires =
-                 spec.requires |> List.map (fun e -> subst_expr args e)
+                 List.map (fun e -> subst_expr args e) spec.requires
                in
                let ensures =
-                 spec.ensures
-                 |> List.map (fun e -> subst_var lhs @@ subst_expr args e)
+                 List.map
+                   (fun e -> subst_var lhs @@ subst_expr args e)
+                   spec.ensures
                in
 
                (* Verify negation of requires is unsat. *)
@@ -131,7 +133,7 @@ let build_proc (program : Program.t) (procedure : Program.proc)
 let build_declaration (program : Program.t) (declaration : Program.declaration)
     (builder : SMTLib2.builder) : SMTLib2.builder =
   match declaration with
-  | Procedure { definition } -> build_proc program definition builder
+  | Procedure { definition } -> build_procedure program definition builder
   | _ -> failwith "Unsupported SMT declaration"
 
 let build_program (program : Program.t) (builder : SMTLib2.builder) :
