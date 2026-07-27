@@ -5,6 +5,12 @@ open Bincaml_util
 open Expr_smt
 open Expr
 
+(* SMT Backend.
+   This backend expects the CFA Reduction and Summary Inlining transforms.
+   Will output a .smt file containing all declarations and asserts necessary
+   for verification.
+*)
+
 (* Takes a single edge procedure (see cfa_reduction.ml transform).
    Maps each statement to an smt expression. *)
 let build_procedure (program : Program.t) (procedure : Program.proc)
