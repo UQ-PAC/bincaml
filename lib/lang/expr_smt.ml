@@ -390,8 +390,8 @@ module SMTLib2 = struct
         let* o = add_logic_const o in
         return (of_op o)
     | RVar { id } ->
-      let* var = get_var id in
-      return @@ list [atom "as"; var; fst @@ of_typ @@ Var.typ id ]
+        let* var = get_var id in
+        return @@ list [ atom "as"; var; fst @@ of_typ @@ Var.typ id ]
     | UnaryExpr { op = `BOOLTOBV1; arg = e } ->
         let* e = e in
         return
@@ -547,8 +547,7 @@ module SMTLib2 = struct
     let* s = bind_of_bexpr e in
     add_assert s
 
-  let echo s = add_command (list [atom "echo"; atom s])
-
+  let echo s = add_command (list [ atom "echo"; atom s ])
   let push = add_command (list [ atom "push" ])
   let pop = add_command (list [ atom "pop" ])
   let check_sat = add_command (list [ atom "check-sat" ])
