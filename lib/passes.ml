@@ -60,7 +60,7 @@ module PassManager = struct
     {
       name = "dump-smt";
       doc = "write smt to channel";
-      invariants = Invariants.make ~presupposes:[ SSA; NoPhis ] ();
+      invariants = Invariants.make ~presupposes:[ SSA; NoPhis; NoSummaries ] ();
       apply =
         Prog
           (fun prog ->
@@ -240,7 +240,7 @@ module PassManager = struct
       name = "inline_summaries";
       apply = Prog Transforms.Summary_inlining.transform;
       doc = "Replaces procedure calls with asserts/assumes for summaries";
-      invariants = Invariants.presupposes [ SSA ];
+      invariants = Invariants.presupposes [ SSA ] ~establishes:[ NoSummaries ];
     }
 
   let remove_unreachable_blocks =

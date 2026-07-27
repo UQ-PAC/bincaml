@@ -26,19 +26,6 @@ let build_procedure (program : Program.t) (procedure : Program.proc)
     |> Iter.fold (fun acc (k, v) -> snd @@ SMTLib2.decl_var v acc) builder
   in
 
-  (* Need the specification for requires/ensures. *)
-  let spec = Procedure.specification procedure in
-  let assert_exprs f exprs builder =
-    exprs
-    |> List.fold_left
-         (fun acc expr ->
-           snd @@ SMTLib2.add_assert (SMTLib2.of_bexpr @@ f expr) acc)
-         builder
-  in
-
-  (* Produce assertions for the requires requirements of a procedure. *)
-  let builder = assert_exprs id spec.requires builder in
-
   (* Translate each statement to smt. *)
   let builder =
     Procedure.iter_stmt_topo_fwd procedure
@@ -75,57 +62,9 @@ let build_procedure (program : Program.t) (procedure : Program.proc)
                List.fold_left
                  (fun acc smt -> SMTLib2.add_assert smt acc |> snd)
                  acc asserts
-           | Stmt.Instr_Call { lhs; procid; args } ->
-               (* For calls, assert the negation of requires is unsat.
-                 Then we simply assert the requires/ensures.
-                 Asserting the requires is fine as this is on fresh SSA
-                 variables.*)
-               let subst_var varmap expression =
-                 BasilExpr.substitute
-                   (fun v ->
-                     StringMap.get (Var.name v) varmap
-                     |> Option.map BasilExpr.rvar)
-                   expression
-               in
-               let subst_expr varmap expression =
-                 BasilExpr.substitute
-                   (fun v -> StringMap.get (Var.name v) varmap)
-                   expression
-               in
-               let call_proc = Program.proc program procid in
-               let spec = Procedure.specification call_proc in
-
-               let requires =
-                 List.map (fun e -> subst_expr args e) spec.requires
-               in
-               let ensures =
-                 List.map
-                   (fun e -> subst_var lhs @@ subst_expr args e)
-                   spec.ensures
-               in
-
-               (* Verify negation of requires is unsat. *)
-               let acc = snd @@ SMTLib2.push acc in
-               let acc = assert_exprs BasilExpr.boolnot requires acc in
-               let acc = snd @@ SMTLib2.check_sat acc in
-               let acc = snd @@ SMTLib2.pop acc in
-
-               (* Assert Requires. *)
-               let acc = assert_exprs id requires acc in
-
-               (* Assert Ensures. *)
-               let acc = assert_exprs id ensures acc in
-
-               acc
            | _ -> acc)
          builder
   in
-
-  (* Verify negation of ensures is unsat. *)
-  let builder = snd @@ SMTLib2.push builder in
-  let builder = assert_exprs BasilExpr.boolnot spec.ensures builder in
-  let builder = snd @@ SMTLib2.check_sat builder in
-  let builder = snd @@ SMTLib2.pop builder in
 
   let builder = snd @@ SMTLib2.pop builder in
   builder

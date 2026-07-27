@@ -365,6 +365,10 @@ let get_entry_block p =
   let id = get_blocks_succ p Entry in
   List.head_opt id
 
+let get_return_block p =
+  let id = get_blocks_succ p Return in
+  List.head_opt id
+
 let is_entry_block p id =
   graph p
   |> Option.map (fun g ->
