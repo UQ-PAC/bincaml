@@ -76,7 +76,7 @@ let set_modsets ?(add_only = false) prog =
         |> Iter.flat_map Expr.BasilExpr.free_vars_iter
         |> Iter.filter Var.is_global |> VarSet.of_iter
       in
-      let name_compare = fun a b -> String.compare (Var.name a) (Var.name b) in
+      let name_compare = CCOrd.map Var.name String.compare in
       let captures_globs =
         List.sort name_compare
         @@ List.filter (not % Var.is_constant)
