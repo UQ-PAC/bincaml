@@ -867,14 +867,11 @@ proc @OY() -> (OY_out:bv64)
     match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
   in
   let dom_functions = Datastructures.Dom.compute_all cfg Procedure.Vert.Entry in
-  let rev_cfg : Datastructures.RevDom.t =
-    match Procedure.graph proc with Some g -> g | None -> Procedure.G.empty
-  in
   let rev_dom_functions =
-    Datastructures.Dom.compute_all rev_cfg Procedure.Vert.Return
+    Datastructures.RevDom.compute_all cfg Procedure.Vert.Return
   in
 
-  let proc_split = ssify v proc cfg rev_cfg dom_functions rev_dom_functions in
+  let proc_split = ssify v proc cfg dom_functions rev_dom_functions in
   Program.output_proc_pretty stdout proc_split;
   [%expect
     {|

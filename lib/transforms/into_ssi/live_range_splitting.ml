@@ -61,9 +61,9 @@ module SplitLiveRange = struct
 
   (** Splits the range of the program *)
   let split (v : Var.t) ((i_up : VertexSet.t), (i_down : VertexSet.t))
-      (proc : (Var.t, Program.e) Procedure.t) (cfg : Dom.t) (rev_cfg : Dom.t)
+      (proc : (Var.t, Program.e) Procedure.t) (cfg : Dom.t)
       (dom_functions : Dom.dom_functions)
-      (rev_dom_functions : Dom.dom_functions) =
+      (rev_dom_functions : RevDom.dom_functions) =
     let is_join vertex =
       match vertex with
       | Procedure.Vert.Begin block_id ->
@@ -113,7 +113,7 @@ module SplitLiveRange = struct
               (fun pred_vert sups' ->
                 VertexSet.union sups'
                   (rev_dom_functions.dom_frontier pred_vert |> VertexSet.of_list))
-              rev_cfg vert sups
+              cfg vert sups
           else
             VertexSet.union sups
               (rev_dom_functions.dom_frontier vert |> VertexSet.of_list))

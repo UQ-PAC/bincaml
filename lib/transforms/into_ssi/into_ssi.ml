@@ -9,7 +9,7 @@ module Renaming = Renaming
 open Datastructures
 
 (** Perform SSIfy on a specific variable in a specific procedure *)
-let ssify ?splitting_strategy (v : Var.t) proc cfg rev_cfg dom_functions
+let ssify ?splitting_strategy (v : Var.t) proc cfg dom_functions
     rev_dom_functions =
   let pv =
     match splitting_strategy with
@@ -22,7 +22,7 @@ let ssify ?splitting_strategy (v : Var.t) proc cfg rev_cfg dom_functions
   (* We pass the same cfg into split and rename, which should be ok, since the only
     operation on the cfg in rename is to get the second successors of a vertex, which is
     unchanged from split because we do not add or remove any vertices. *)
-  SplitLiveRange.split v pv proc cfg rev_cfg dom_functions rev_dom_functions
+  SplitLiveRange.split v pv proc cfg dom_functions rev_dom_functions
   |> Renaming.rename v bot_var cfg dom_functions
   |> DeadCodeElim.clean v bot_var
 
@@ -33,14 +33,10 @@ let ssify_proc ?splitting_strategy (og_vars : Var.t Var.Decls.t)
   | None -> proc
   | Some cfg ->
       let dom_functions = Dom.compute_all cfg Procedure.Vert.Entry in
-      let rev_cfg : RevDom.t =
-        cfg (* TODO: Work out how to properly create a reverse cfg. *)
-      in
-      let rev_dom_functions = Dom.compute_all rev_cfg Procedure.Vert.Return in
+      let rev_dom_functions = RevDom.compute_all cfg Procedure.Vert.Return in
       Var.Decls.fold
         (fun name var p ->
-          ssify ?splitting_strategy var p cfg rev_cfg dom_functions
-            rev_dom_functions)
+          ssify ?splitting_strategy var p cfg dom_functions rev_dom_functions)
         og_vars proc
 
 (** Perform SSIfy on a program *)
@@ -53,12 +49,11 @@ let ssify_prog ?splitting_strategy (prog : Program.t) =
 
 (** Perform SSIfy on a specific variable with a specific name in a specific
     procedure *)
-let ssify_name ?splitting_strategy (v_name : String.t) proc cfg rev_cfg
-    dom_functions rev_dom_functions =
+let ssify_name ?splitting_strategy (v_name : String.t) proc cfg dom_functions
+    rev_dom_functions =
   match Procedure.lookup_local_decl proc v_name with
   | Some v ->
-      ssify ?splitting_strategy v proc cfg rev_cfg dom_functions
-        rev_dom_functions
+      ssify ?splitting_strategy v proc cfg dom_functions rev_dom_functions
   | None -> proc
 
 (** Perform SSIfy on a process for the variable with the given name *)
@@ -68,13 +63,9 @@ let ssify_proc_var_name ?splitting_strategy (og_vars : Var.t Var.Decls.t)
   | None -> proc
   | Some cfg ->
       let dom_functions = Dom.compute_all cfg Procedure.Vert.Entry in
-      let rev_cfg : RevDom.t =
-        cfg (* TODO: Work out how to properly create a reverse cfg. *)
-      in
-      (* TODO: Using Procedure.Vert.Return here is probably incorrect when there are multiple returns *)
-      let rev_dom_functions = Dom.compute_all rev_cfg Procedure.Vert.Return in
+      let rev_dom_functions = RevDom.compute_all cfg Procedure.Vert.Return in
       if Var.Decls.mem og_vars v_name then
-        ssify_name ?splitting_strategy v_name proc cfg rev_cfg dom_functions
+        ssify_name ?splitting_strategy v_name proc cfg dom_functions
           rev_dom_functions
       else proc
 
