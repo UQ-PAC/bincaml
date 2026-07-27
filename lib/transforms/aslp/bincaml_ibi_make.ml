@@ -317,6 +317,7 @@ struct
     let size = 8 * Z.to_int size in
     let addr = Stmt.Addr { addr; size; endian = `Little }
     and mem = S.bincaml_memory_var () in
+    (* NOTE: avoids `bincaml_local_var` so these variables do not clash with ASLp-declared variables. *)
     let name = !bincaml_lifter_state.generator.local_id () in
     let lhs = Var.create name (Types.bv size) in
     bincaml_internal_emit
