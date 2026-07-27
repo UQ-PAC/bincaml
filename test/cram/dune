@@ -1,11 +1,13 @@
 (cram
- (applies_to expr_smt)
+ (applies_to expr_smt smt_backend)
  (package bincaml)
  (enabled_if %{bin-available:cvc5})
  (deps
   %{bin:bincaml}
   ../../examples/cntlm-output.il
   expr_smt_check.sexp
+  smt_backend.il
+  smt_backend.sexp
   concat.il))
 
 (cram
@@ -21,7 +23,8 @@
   chc_spec
   chc_per_query
   chc_mem
-  chc_mem_call)
+  chc_mem_call
+  smt_backend)
  (package bincaml)
  (deps
   loop_dfg.sexp
@@ -64,8 +67,6 @@
   repeated_ssa.sexp
   cfa_reduction.il
   cfa_reduction.sexp
-  smt_backend.il
-  smt_backend.sexp
   ../../bin/main.exe))
 
 (cram
