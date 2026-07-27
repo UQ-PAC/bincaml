@@ -654,7 +654,7 @@ let iter_stmt_topo_fwd p =
 let iter_blocks_topo_rev p =
   Iter.from_iter (fun f -> fold_blocks_topo_rev (fun acc a b -> f (a, b)) () p)
 
-let flat_map_stmts_topo_fwd ?visit rewriter p =
+let flat_map_stmts_topo_fwd rewriter p =
   let blocks = iter_blocks_topo_fwd p in
   Iter.fold
     (fun p -> function
@@ -662,7 +662,7 @@ let flat_map_stmts_topo_fwd ?visit rewriter p =
           update_block p bid (Block.flat_map ~rev:false ~phi:Fun.id rewriter b))
     p blocks
 
-let flat_map_stmts_topo_rev ?visit rewriter p =
+let flat_map_stmts_topo_rev rewriter p =
   let blocks = iter_blocks_topo_rev p in
   Iter.fold
     (fun p -> function
