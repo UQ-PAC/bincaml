@@ -11,8 +11,6 @@ open Expr
    for verification.
 *)
 
-(* Takes a single edge procedure (see cfa_reduction.ml transform).
-   Maps each statement to an smt expression. *)
 let build_procedure (program : Program.t) (procedure : Program.proc)
     (builder : SMTLib2.builder) : SMTLib2.builder =
   let builder = snd @@ SMTLib2.push builder in
