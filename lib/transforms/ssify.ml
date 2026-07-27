@@ -23,16 +23,17 @@ open Containers
     block.*)
 
 (* TODO:
-  - Update non-actual instructions at the end of rename similar to the defuse and usedef chains, instead of within set_def and set_use, which should improve performance
+  - Update non-actual instructions at the end of rename similar to the defuse
+    and usedef chains, instead of within set_def and set_use, which should
+    improve performance
 
-  KNOWN ISSUES:
-  - Slow, particularly during rename.
-  - Procedures with multiple return points have an error with assigning to the formal-out param(s)
-  - examples/linear_copy.il has an error. The loop procedure contains f_entry phi nodes for the f procedure.
+  KNOWN ISSUES: - Slow, particularly during rename.  - Procedures with multiple
+  return points have an error with assigning to the formal-out param(s) -
+  examples/linear_copy.il has an error. The loop procedure contains f_entry phi
+  nodes for the f procedure.
 
-  RELATIVELY UNTESTED:
-  - Global variables
-  - Procedures that have late uses of formal-in variables
+  RELATIVELY UNTESTED: - Global variables - Procedures that have late uses of
+  formal-in variables
 
 *)
 
@@ -112,15 +113,22 @@ module SSIfy = struct
 
     (** Replace the uses of v by v' *)
     let replace_uses ?pred_block_id v v' (inst : t) : t =
-      (* Replace_uses is used in 2 places - during line 5 of set_use in rename, to rename a variable, and in line 18 of clean, to replace dead v's with ⊥. 
+      (* Replace_uses is used in 2 places - during line 5 of set_use in rename,
+      to rename a variable, and in line 18 of clean, to replace dead v's with ⊥.
 
-      In the former case, a possible scenario it is called is line 17 of the main rename function, when set_use is called on the phi nodes of the direct sucessors of a block n.
-      In this scenario, we need the block ID of n so that we only update the respective v usages for the block n,
-      instead of every rhs v, which may be associated with a completely different block and thus should not be modified.
-      However, in the latter case, we do not have to worry about which block ID the rhs phi variable is associated with, and can just replace it with ⊥.
+      In the former case, a possible scenario it is called is line 17 of the
+      main rename function, when set_use is called on the phi nodes of the
+      direct sucessors of a block n.  In this scenario, we need the block ID of
+      n so that we only update the respective v usages for the block n, instead
+      of every rhs v, which may be associated with a completely different block
+      and thus should not be modified.  However, in the latter case, we do not
+      have to worry about which block ID the rhs phi variable is associated
+      with, and can just replace it with ⊥.
 
-      To make this distinction, we use ?pred_block_id to differentiate between when a check for whether the rhs phi's block id is equal to the ID of block n is needed or not. Otherwise,
-      two almost identical functions would be needed.*)
+      To make this distinction, we use ?pred_block_id to differentiate between
+      when a check for whether the rhs phi's block id is equal to the ID of
+      block n is needed or not. Otherwise, two almost identical functions would
+      be needed.*)
       match inst with
       | Block_Inst (block_id, Phi { lhs; rhs }) ->
           let rhs' =
@@ -208,67 +216,33 @@ module SSIfy = struct
     |> InstructionSet.add (Instruction.create_out_inst proc)
 
   (** Naive iterator through the procedure to produce def-use and use-def chains
-      for a given variable v. Should only be used as a last resort *)
-  let get_var_uses_and_defs proc (v : Var.t) =
-    let uses, defs =
-      Procedure.fold_blocks_topo_fwd
-        (fun (uses, defs) bid block ->
-          let phi_uses, phi_defs =
-            List.fold_left
-              (fun (use', def') phi ->
-                let inst =
-                  Instruction.create_phi_inst bid phi.Block.lhs phi.Block.rhs
-                in
-                let pu =
-                  if Iter.mem v (Instruction.var_uses inst) then
-                    InstructionSet.add inst use'
-                  else use'
-                in
-                let pd =
-                  if Iter.mem v (Instruction.var_defines inst) then
-                    InstructionSet.add inst def'
-                  else def'
-                in
-                (pu, pd))
-              (uses, defs) block.phis
-          in
-          let stmt_uses, stmt_defs =
-            Vector.foldi
-              (fun index (use', def') stmt ->
-                let inst = Instruction.create_stmt_inst bid index stmt in
-                let su =
-                  if Iter.mem v (Instruction.var_uses inst) then
-                    InstructionSet.add inst use'
-                  else use'
-                in
-                let sd =
-                  if Iter.mem v (Instruction.var_defines inst) then
-                    InstructionSet.add inst def'
-                  else def'
-                in
-                (su, sd))
-              (uses, defs) block.stmts
-          in
-          ( InstructionSet.union phi_uses stmt_uses,
-            InstructionSet.union phi_defs stmt_defs ))
-        (InstructionSet.empty, InstructionSet.empty)
-        proc
-    in
-    let uses =
-      if StringMap.mem (Var.name v) (Procedure.formal_out_params proc) then
-        InstructionSet.add (Instruction.create_in_inst proc) uses
-      else uses
-    in
-    let defs =
-      if StringMap.mem (Var.name v) (Procedure.formal_in_params proc) then
-        InstructionSet.add (Instruction.create_in_inst proc) defs
-      else defs
-    in
-    (uses, defs)
+      for a given variable v. Should only be used as a last resort let
+      get_var_uses_and_defs proc (v : Var.t) = let uses, defs =
+      Procedure.fold_blocks_topo_fwd (fun (uses, defs) bid block -> let
+      phi_uses, phi_defs = List.fold_left (fun (use', def') phi -> let inst =
+      Instruction.create_phi_inst bid phi.Block.lhs phi.Block.rhs in let pu = if
+      Iter.mem v (Instruction.var_uses inst) then InstructionSet.add inst use'
+      else use' in let pd = if Iter.mem v (Instruction.var_defines inst) then
+      InstructionSet.add inst def' else def' in (pu, pd)) (uses, defs)
+      block.phis in let stmt_uses, stmt_defs = Vector.foldi (fun index (use',
+      def') stmt -> let inst = Instruction.create_stmt_inst bid index stmt in
+      let su = if Iter.mem v (Instruction.var_uses inst) then InstructionSet.add
+      inst use' else use' in let sd = if Iter.mem v (Instruction.var_defines
+      inst) then InstructionSet.add inst def' else def' in (su, sd)) (uses,
+      defs) block.stmts in ( InstructionSet.union phi_uses stmt_uses,
+      InstructionSet.union phi_defs stmt_defs )) (InstructionSet.empty,
+      InstructionSet.empty) proc in let uses = if StringMap.mem (Var.name v)
+      (Procedure.formal_out_params proc) then InstructionSet.add
+      (Instruction.create_in_inst proc) uses else uses in let defs = if
+      StringMap.mem (Var.name v) (Procedure.formal_in_params proc) then
+      InstructionSet.add (Instruction.create_in_inst proc) defs else defs in
+      (uses, defs) *)
 
   (** Gets the second successors of a vertex *)
   let second_successors graph (vert : Dom.vertex) =
-    Procedure.G.succ graph vert |> List.concat_map (Procedure.G.succ graph)
+    Procedure.G.succ graph vert
+    |> List.to_iter
+    |> Iter.flat_map_l (Procedure.G.succ graph)
 
   (** Returns true if instruction a dominates instruction b *)
   let instruction_dominates pred_block_id dom (inst_a : Instruction.t)
@@ -371,9 +345,10 @@ module SSIfy = struct
 
   (** First step of SSI conversion - insertion of phi and sigma nodes *)
   module SplitLiveRange = struct
-    (* Check if a block uses a given variable before locally defining it, or doesn't define it at all.
-       A statement that has a variable on both its left and right hand sides is considered to be using it
-       before defining it. *)
+    (* Check if a block uses a given variable before locally defining it, or
+       doesn't define it at all.  A statement that has a variable on both its
+       left and right hand sides is considered to be using it before defining
+       it. *)
     let has_undefined_var (var : Var.t) (block_id : ID.t) proc =
       let block = Procedure.find_block proc block_id in
       let phi_status =
@@ -506,8 +481,10 @@ module SSIfy = struct
                       InstructionSet.add phi_inst curr_info.non_actual_insts;
                   }
                 else if is_branch_successor vert then
+                  (*
+                  Check if there is already a v <- phi(block_id : v), i.e. check
+                  for the branch block *)
                   (* If block.is_branch then insert v <- phi(v) at each *)
-                  (* Check if there is already a v <- phi(block_id : v), i.e. check for the branch block *)
                   let pred_block_ids =
                     Procedure.get_blocks_pred curr_info.proc vert
                   in
@@ -576,11 +553,12 @@ module SSIfy = struct
       (* Stack <- new *)
       let stack : (Var.t * Instruction.t) Stack.t = Stack.create () in
 
-      (* Returns the proc with replaced inst' *)
+      (* Returns the ssi_info with replaced inst' *)
       let set_def (curr_info : ssi_info) (inst : Instruction.t) =
         match inst with
         | Instruction.Formal_In vars ->
-            (* We don't redefine the formal-in parameter, since it gets a bit messy interprocedurally. *)
+            (* We don't redefine the formal-in parameter, since it gets a bit
+            messy interprocedurally. *)
             let defs' = DefUseMap.add curr_info.defs v inst in
             Stack.push (v, inst) stack;
             let web' = VarSet.add v curr_info.web in
@@ -644,8 +622,8 @@ module SSIfy = struct
 
         match inst with
         | Instruction.Formal_Out vars ->
-            (* Produces a copy to the unaltered formal-out variable using the version of the formal-out variable
-             at the top of the stack *)
+            (* Produces a copy to the unaltered formal-out variable using the
+             version of the formal-out variable at the top of the stack *)
             let copy_stmt =
               Stmt.Instr_Assign
                 { al = [ (v, Expr.BasilExpr.rvar v') ]; attrib = Attrib.empty }
@@ -695,12 +673,13 @@ module SSIfy = struct
           match node with
           | Procedure.Vert.Return ->
               if
-                StringMap.mem (Var.name v)
-                  (Procedure.formal_out_params start_info.proc)
+                StringMap.values (Procedure.formal_out_params start_info.proc)
+                |> Iter.exists (Var.equal v)
               then
                 let inst = Instruction.create_out_inst start_info.proc in
 
-                (* Assuming that all return vertices have a single End block predecessor *)
+                (* Assuming that all return vertices have a single End block
+                predecessor *)
                 let return_block_id =
                   Procedure.get_blocks_pred start_info.proc node |> List.hd
                 in
@@ -709,42 +688,51 @@ module SSIfy = struct
               else start_info
           | Procedure.Vert.Entry ->
               if
-                StringMap.mem (Var.name v)
-                  (Procedure.formal_in_params start_info.proc)
+                StringMap.values (Procedure.formal_in_params start_info.proc)
+                |> Iter.exists (Var.equal v)
               then
                 let inst = Instruction.create_in_inst start_info.proc in
                 set_def start_info inst
               else start_info
           | Procedure.Vert.Begin block_id ->
-              (*
-                Our CFG is structured a little differently to the book. Our nodes that we are looping
-                on are exclusively Begin nodes, so In(node) is the outgoing edge of the node, which are blocks.
+              (* Our CFG is structured a little differently to the book. Our
+                nodes that we are looping on are exclusively Begin nodes, so
+                In(node) is the outgoing edge of the node, which are blocks.
 
-                Since we don't have explicit 'program points' inside of the block we loop through the statements
-                inside the block, since it is a precondition that they are ordered in the statement list that all
-                blocks contain.
+                Since we don't have explicit 'program points' inside of the
+                block we loop through the statements inside the block, since it
+                is a precondition that they are ordered in the statement list
+                that all blocks contain.
 
-                We could amend this workaround by splitting the procedure into many multiple different blocks during
-                Split(), but this is extra work for the same effect.
+                We could amend this workaround by splitting the procedure into
+                many multiple different blocks during Split(), but this is extra
+                work for the same effect.
 
-                So for a node n, In(n) = succ_e n i.e. the immediate block that this 'Begin' corresponds to,
-                and for m in direct-successors(n), direct-successors(n) is the second vertex from n, since
-                the order is n(Begin) -> n'(End) -> n''(Begin | Return | Exit). 
-                In(m) will be the immediate outgoing edge of n'', iff n'' is a Begin. Otherwise stop processing.
+                So for a node n, In(n) = succ_e n i.e. the immediate block that
+                this 'Begin' corresponds to, and for m in direct-successors(n),
+                direct-successors(n) is the second vertex from n, since the
+                order is n(Begin) -> n'(End) -> n''(Begin | Return | Exit).
+                In(m) will be the immediate outgoing edge of n'', iff n'' is a
+                Begin. Otherwise stop processing.
 
-                It's a little confusing, but in relation to the original algorithm, 'In(n) is a program block',
-                and for my rename implementation, 'n' is referring to a statement in the block.
+                It's a little confusing, but in relation to the original
+                algorithm, 'In(n) is a program block', and for my rename
+                implementation, 'n' is referring to a statement in the block.
 
-                However, in order to make the algorithm work, for lines 6-9 then we will need a loop
-                that loops through every statement in the statement list of a block in order.
+                However, in order to make the algorithm work, for lines 6-9 then
+                we will need a loop that loops through every statement in the
+                statement list of a block in order.
 
-                Additionally, for line 16 of the algorithm, where we check the phi nodes of a program point 'm' - which
-                in our representation is a Begin vertex - that is a direct successor to 'n', in order to significantly 
-                save time, within the call to set_use on line 17, for 'inst', we use the End vertex that is a predecessor
-                to 'm', so that we correctly check the domination of Def(stack.peek()) against 'inst' without needing to 
-                expensively re-compute an idom function for the Begin vertex of 'n'. The End vertex for the predecessor of 
-                'm' should be the same vertex for the block 'n'. 
-              *)
+                Additionally, for line 16 of the algorithm, where we check the
+                phi nodes of a program point 'm' - which in our representation
+                is a Begin vertex - that is a direct successor to 'n', in order
+                to significantly  save time, within the call to set_use on line
+                17, for 'inst', we use the End vertex that is a predecessor to
+                'm', so that we correctly check the domination of
+                Def(stack.peek()) against 'inst' without needing to  expensively
+                re-compute an idom function for the Begin vertex of 'n'. The End
+                vertex for the predecessor of  'm' should be the same vertex for
+                the block 'n'.  *)
 
               (* Assuming that all Begin vertices always have a single outgoing Block edge *)
               let block = Procedure.find_block start_info.proc block_id in
@@ -784,41 +772,44 @@ module SSIfy = struct
 
               let next_vertices = second_successors cfg node in
               (* Foreach m in direct-successors(n) do *)
-              List.fold_left
-                (fun curr_info vert ->
-                  match vert with
-                  | Procedure.Vert.Begin succ_block_id ->
-                      let succ_block =
-                        Procedure.find_block curr_info.proc succ_block_id
-                      in
+              next_vertices
+              |> Iter.fold
+                   (fun curr_info vert ->
+                     match vert with
+                     | Procedure.Vert.Begin succ_block_id ->
+                         let succ_block =
+                           Procedure.find_block curr_info.proc succ_block_id
+                         in
 
-                      (* Assuming that a phi will only have at most one matching id-var pair for our current
-                      block and variable v *)
-                      List.fold_left
-                        (fun info' phi ->
-                          match
-                            List.find_opt
-                              (fun (ogbid, var) ->
-                                (* If E v <- phi(v:l) in In(m) then *)
-                                ID.equal ogbid block_id && Var.equal var v)
-                              phi.Block.rhs
-                          with
-                          | Some (ogbid, var) ->
-                              (* info' *)
-                              let inst =
-                                Instruction.create_phi_inst succ_block_id
-                                  phi.Block.lhs phi.Block.rhs
-                              in
-                              (* stack.set_use(v <- v:l) *)
-                              (* In order to avoid recomputing idom for each vertex,
-                                we compare the current vertex to the predecessor of the block 
-                                with the phi node, (which should just be the End of the current block, so
-                                this code can definitely be simplified and tidied up) *)
-                              set_use ~og_bid:ogbid info' inst |> fst
-                          | None -> info')
-                        curr_info succ_block.phis
-                  | _ -> curr_info)
-                info_step_three next_vertices
+                         (* Assuming that a phi will only have at most one matching
+                      id-var pair for our current block and variable v *)
+                         List.fold_left
+                           (fun info' phi ->
+                             match
+                               List.find_opt
+                                 (fun (ogbid, var) ->
+                                   (* If E v <- phi(v:l) in In(m) then *)
+                                   ID.equal ogbid block_id && Var.equal var v)
+                                 phi.Block.rhs
+                             with
+                             | Some (ogbid, var) ->
+                                 (* info' *)
+                                 let inst =
+                                   Instruction.create_phi_inst succ_block_id
+                                     phi.Block.lhs phi.Block.rhs
+                                 in
+                                 (* In order to avoid
+                              recomputing idom for each vertex, we compare the
+                              current vertex to the predecessor of the block
+                              with the phi node, (which should just be the End
+                              of the current block, so this code can definitely
+                              be simplified and tidied up) *)
+                                 (* stack.set_use(v <- v:l) *)
+                                 set_use ~og_bid:ogbid info' inst |> fst
+                             | None -> info')
+                           curr_info succ_block.phis
+                     | _ -> curr_info)
+                   info_step_three
           | _ -> start_info
         in
         List.fold_left visit_begin_node final_info
@@ -828,68 +819,72 @@ module SSIfy = struct
       in
       let rename_info = visit_begin_node split_info Procedure.Vert.Entry in
 
-      (* Update a potentially outdated instruction with the instruction in the same location in the given proc.
-       For Statements, we simply use the block_id and stmt index to retrieve the relevant statement.
-       For Phis, if we are updating the Def-Use chain, then we use the block_id to get the relevant block, then we
-       loop on the phi list to find the first one that defines our variable. If we are updating the Use-Def chain, then we
-       use the block_id to get the relevant block, and then we loop on the phi list to find the first one that uses our variable.
-       Obviously, this is not simple, and is also assuming that a variable can only be used in one phi node. 
-       Perhaps appending to the end of the list in Split, and keeping the index in the list would be easier here, though
-       it may not be as efficient, and phis are supposed to be unordered. This will need testing to determine which is better. *)
-      let update_chain is_def_map oldmap proc =
-        DefUseMap.fold oldmap DefUseMap.empty (fun newmap var inst ->
-            let inst' =
-              match inst with
-              | Formal_In vars -> (
-                  match is_def_map with
-                  | true ->
-                      Instruction.Formal_In
-                        (proc |> Procedure.formal_in_params |> StringMap.values
-                       |> List.of_iter)
-                  | false -> inst (* TODO: Stop the map from adding this. *))
-              | Formal_Out vars -> (
-                  match is_def_map with
-                  | false ->
-                      Instruction.Formal_Out
-                        (proc |> Procedure.formal_out_params |> StringMap.values
-                       |> List.of_iter)
-                  | true -> inst (* TODO: Stop the map from adding this*))
-              | Block_Inst (block_id, Instruction.Statement stmt) -> (
-                  let block = Procedure.get_block proc block_id in
-                  match block with
-                  | None -> inst
-                  | Some b ->
-                      let stmt' = Vector.get b.stmts stmt.index in
-                      Instruction.create_stmt_inst block_id stmt.index stmt')
-              | Block_Inst (block_id, Instruction.Phi phi) -> (
-                  let block = Procedure.get_block proc block_id in
-                  match block with
-                  | None -> inst
-                  | Some b ->
-                      let rec get_phi (phi_list : Var.t Block.phi list) =
-                        match phi_list with
-                        | [] -> inst
-                        | head :: tail ->
-                            let cond =
-                              match is_def_map with
-                              | true -> Var.equal head.lhs var
-                              | false ->
-                                  List.exists
-                                    (fun (_, v) -> Var.equal var v)
-                                    head.rhs
-                            in
-                            if cond then
-                              Instruction.create_phi_inst block_id head.lhs
+      (* Update a potentially outdated instruction with the instruction in the
+       same location in the given proc.  For Statements, we simply use the
+       block_id and stmt index to retrieve the relevant statement.  For Phis, if
+       we are updating the Def-Use chain, then we use the block_id to get the
+       relevant block, then we loop on the phi list to find the first one that
+       defines our variable. If we are updating the Use-Def chain, then we use
+       the block_id to get the relevant block, and then we loop on the phi list
+       to find the first one that uses our variable.  Obviously, this is not
+       simple, and is also assuming that a variable can only be used in one phi
+       node.  Perhaps appending to the end of the list in Split, and keeping the
+       index in the list would be easier here, though it may not be as
+       efficient, and phis are supposed to be unordered. This will need testing
+       to determine which is better. *)
+      let update_insn is_def_map proc =
+       fun newmap var inst ->
+        let inst' =
+          match (is_def_map, inst) with
+          | `Defs, Instruction.Formal_In vars ->
+              Instruction.Formal_In
+                (proc |> Procedure.formal_in_params |> StringMap.values
+               |> List.of_iter)
+          | `Uses, Instruction.Formal_In vars -> inst
+          | `Defs, Formal_Out vars ->
+              inst (* TODO: Stop the map from adding this*)
+          | `Uses, Formal_Out vars ->
+              Instruction.Formal_Out
+                (proc |> Procedure.formal_out_params |> StringMap.values
+               |> List.of_iter)
+          | _, Block_Inst (block_id, Instruction.Statement stmt) -> (
+              let block = Procedure.get_block proc block_id in
+              match block with
+              | None -> inst
+              | Some b ->
+                  let stmt' = Vector.get b.stmts stmt.index in
+                  Instruction.create_stmt_inst block_id stmt.index stmt')
+          | _, Block_Inst (block_id, Instruction.Phi phi) -> (
+              let block = Procedure.get_block proc block_id in
+              match block with
+              | None -> inst
+              | Some b ->
+                  let rec get_phi (phi_list : Var.t Block.phi list) =
+                    match phi_list with
+                    | [] -> inst
+                    | head :: tail ->
+                        let cond =
+                          match is_def_map with
+                          | `Defs -> Var.equal head.lhs var
+                          | `Uses ->
+                              List.exists
+                                (fun (_, v) -> Var.equal var v)
                                 head.rhs
-                            else get_phi tail
-                      in
-                      get_phi b.phis)
-            in
-            DefUseMap.add newmap var inst')
+                        in
+                        if cond then
+                          Instruction.create_phi_inst block_id head.lhs head.rhs
+                        else get_phi tail
+                  in
+                  get_phi b.phis)
+        in
+        DefUseMap.add newmap var inst'
+      in
+      let update_chain is_def_map oldmap proc =
+        DefUseMap.fold oldmap DefUseMap.empty (update_insn is_def_map proc)
       in
 
-      let updated_defs = update_chain true rename_info.defs rename_info.proc in
-      let updated_uses = update_chain false rename_info.uses rename_info.proc in
+      let updated_defs = update_chain `Defs rename_info.defs rename_info.proc in
+      let updated_uses = update_chain `Uses rename_info.uses rename_info.proc in
 
       { rename_info with defs = updated_defs; uses = updated_uses }
   end
