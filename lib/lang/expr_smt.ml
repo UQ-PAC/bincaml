@@ -36,7 +36,7 @@ module SMTLib2 = struct
     let lia = get_part (function Int -> Some "LIA" | _ -> None) in
     let arr = get_part (function Array -> Some "A" | _ -> None) in
     let dt = get_part (function DT -> Some "DT" | _ -> None) in
-    "QF_" ^ arr ^ bv ^ lia ^ dt
+    arr ^ bv ^ lia ^ dt
 
   let return e = fun s -> (e, s)
 
