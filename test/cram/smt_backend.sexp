@@ -1,6 +1,5 @@
-(load-il "./test.il")
+(load-il "./smt_backend.il")
 (run-transforms "ssa")
 (run-transforms "cfa-reduction")
 (dump-smt "./out.smt")
 (dump-il "./out.il")
-
