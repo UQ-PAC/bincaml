@@ -107,6 +107,7 @@
             kittyimg = selfOcamlPackages.kittyimg;
             stb_image = selfOcamlPackages.stb_image;
             containers = selfOcamlPackages.containers;
+            dune_3_24 = selfOcamlPackages.dune_3_24;
 
             fp.bincaml = fpOcamlPackages.bincaml;
             fp.bincaml_lsp = fpOcamlPackages.bincaml_lsp;
