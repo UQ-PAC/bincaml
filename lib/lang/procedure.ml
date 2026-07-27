@@ -366,7 +366,7 @@ let get_entry_block p =
   List.head_opt id
 
 let get_return_block p =
-  let id = get_blocks_succ p Return in
+  let id = get_blocks_pred p Return in
   List.head_opt id
 
 let is_entry_block p id =
