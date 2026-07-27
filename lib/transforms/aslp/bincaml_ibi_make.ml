@@ -195,22 +195,22 @@ struct
     let extension = Z.(to_int (result_wd - wd)) in
     Bitvec.sign_extend ~extension x
 
-  let unify_shift_widths apply_shift operand shift =
-    let extension = Bitvec.(size operand - size shift) in
+  let zero_extend_to_match_op apply_shift ~width_of shift =
+    let extension = Bitvec.(size width_of - size shift) in
     let shift = Bitvec.zero_extend ~extension shift in
-    apply_shift operand shift
+    apply_shift width_of shift
 
   (** [f_lsl_bits operand_width shift_width operand shift] *)
   let f_lsl_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
-   fun _ _ -> unify_shift_widths Bitvec.shl
+   fun _ _ width_of b -> zero_extend_to_match_op Bitvec.shl ~width_of b
 
   (** [f_lsr_bits operand_width shift_width operand shift] *)
   let f_lsr_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
-   fun _ _ -> unify_shift_widths Bitvec.lshr
+   fun _ _ width_of b -> zero_extend_to_match_op Bitvec.lshr ~width_of b
 
   (** [f_asr_bits operand_width shift_width operand shift] *)
   let f_asr_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
-   fun _ _ -> unify_shift_widths Bitvec.ashr
+   fun _ _ width_of b -> zero_extend_to_match_op Bitvec.ashr ~width_of b
 
   (** [f_cvt_bits_uint operand_width operand] *)
   let f_cvt_bits_uint : bigint -> bitvector -> bigint =
@@ -382,12 +382,12 @@ struct
   let f_gen_slt_bits : bigint -> expr -> expr -> expr =
    fun _ a b -> Expr.BasilExpr.binexp ~op:`BVSLT a b
 
-  let make_shift_extended_to_value_width value shift =
+  let zero_extend_to_match ~width_of shift =
     let width a =
       Expr.BasilExpr.type_of a |> Types.bit_width
       |> Option.get_exn_or "expected bv argument to operator"
     in
-    let wb = width shift and wa = width value in
+    let wb = width shift and wa = width width_of in
     if wa = wb then shift
     else if wa > wb then
       Expr.BasilExpr.zero_extend ~n_prefix_bits:(wa - wb) shift
@@ -401,15 +401,15 @@ struct
 
   let f_gen_lsr_bits : bigint -> bigint -> expr -> expr -> expr =
    fun _ _ a b ->
-    Expr.BasilExpr.binexp ~op:`BVLSHR a (make_shift_extended_to_value_width a b)
+    Expr.BasilExpr.binexp ~op:`BVLSHR a (zero_extend_to_match ~width_of:a b)
 
   let f_gen_lsl_bits : bigint -> bigint -> expr -> expr -> expr =
    fun _ _ a b ->
-    Expr.BasilExpr.binexp ~op:`BVSHL a (make_shift_extended_to_value_width a b)
+    Expr.BasilExpr.binexp ~op:`BVSHL a (zero_extend_to_match ~width_of:a b)
 
   let f_gen_asr_bits : bigint -> bigint -> expr -> expr -> expr =
    fun _ _ a b ->
-    Expr.BasilExpr.binexp ~op:`BVASHR a (make_shift_extended_to_value_width a b)
+    Expr.BasilExpr.binexp ~op:`BVASHR a (zero_extend_to_match ~width_of:a b)
 
   (** [f_gen_replicate_bits operand_width num_replications operand
        num_replications] *)
