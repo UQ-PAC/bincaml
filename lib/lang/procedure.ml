@@ -72,7 +72,7 @@ module RevG = struct
   let fold_pred_e = G.fold_succ_e
   let fold_vertex = G.fold_vertex
   let nb_vertex = G.nb_vertex
-  let empty () = G.empty
+  let empty = G.empty
   let add_edge g a b = G.add_edge g b a
 end
 

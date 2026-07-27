@@ -122,16 +122,19 @@ end
 
 module VertexSet = CCSet.Make (Procedure.Vert)
 module InstructionSet = CCSet.Make (Instruction)
-module RevDom = Graph.Dominator.Make_graph (Procedure.RevG)
 
-module G_Dom = struct
+module RevDom = Graph.Dominator.Make_graph (struct
+  include Procedure.RevG
+
+  let empty () = empty
+end)
+
+(** Contains dominator functions for a procedure graph *)
+module Dom = Graph.Dominator.Make_graph (struct
   include Procedure.G
 
   let empty () = empty
-end
-
-module Dom = Graph.Dominator.Make_graph (G_Dom)
-(** Contains dominator functions for a procedure graph *)
+end)
 
 module DefUseMap = CCMultiMap.Make (Var) (Instruction)
 (** Map from Var to (BlockID, Instruction) *)
