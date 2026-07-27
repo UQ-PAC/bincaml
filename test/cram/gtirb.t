@@ -41,18 +41,18 @@
        goto (%block);
      ];
      block %block { .asm = "stp x29, x30, [sp, #-0x10]!" } [
-       var lv:bv64 := 0x0:bv64;
-       var lv:bv64 := $SP;
+       var local:bv64 := 0x0:bv64;
+       var local:bv64 := $SP;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
         0xfffffffffffffff0:bv64) $R29 64;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
          0xfffffffffffffff0:bv64), 0x8:bv64) $R30 64;
-       $SP:bv64 := bvadd(lv:bv64, 0xfffffffffffffff0:bv64);
+       $SP:bv64 := bvadd(local:bv64, 0xfffffffffffffff0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400830:bv64);
        goto (%block_1);
      ];
      block %block_1 { .asm = "mov x29, sp" } [
-       var lv_1:bv64 := 0x0:bv64;
+       var local_1:bv64 := 0x0:bv64;
        $R29:bv64 := bvadd($SP, 0x0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400834:bv64);
        goto (%_fini_code_2);
@@ -69,22 +69,22 @@
        goto (%block_2);
      ];
      block %block_2 { .asm = "ldp x29, x30, [sp], #0x10" } [
-       var lv_2:bv64 := 0x0:bv64;
-       var lv_2:bv64 := $SP;
-       var lv_3:bv64 := 0x0:bv64;
-       var lv_4:bv64 := load le $mem:(bv64->bv8) $SP 64;
-       var lv_3:bv64 := lv_4:bv64;
-       var lv_5:bv64 := 0x0:bv64;
-       var lv_6:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x8:bv64) 64;
-       var lv_5:bv64 := lv_6:bv64;
-       $R29:bv64 := lv_3:bv64;
-       $R30:bv64 := lv_5:bv64;
-       $SP:bv64 := bvadd(lv_2:bv64, 0x10:bv64);
+       var local_2:bv64 := 0x0:bv64;
+       var local_2:bv64 := $SP;
+       var local_3:bv64 := 0x0:bv64;
+       var local_4:bv64 := load le $mem:(bv64->bv8) $SP 64;
+       var local_3:bv64 := local_4:bv64;
+       var local_5:bv64 := 0x0:bv64;
+       var local_6:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x8:bv64) 64;
+       var local_5:bv64 := local_6:bv64;
+       $R29:bv64 := local_3:bv64;
+       $R30:bv64 := local_5:bv64;
+       $SP:bv64 := bvadd(local_2:bv64, 0x10:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400838:bv64);
        goto (%block_3);
      ];
      block %block_3 { .asm = "ret " } [
-       var lv_7:bv64 := 0x0:bv64;
+       var local_7:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R30;
@@ -110,18 +110,18 @@
        goto (%block);
      ];
      block %block { .asm = "stp x29, x30, [sp, #-0x10]!" } [
-       var lv:bv64 := 0x0:bv64;
-       var lv:bv64 := $SP;
+       var local:bv64 := 0x0:bv64;
+       var local:bv64 := $SP;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
         0xfffffffffffffff0:bv64) $R29 64;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
          0xfffffffffffffff0:bv64), 0x8:bv64) $R30 64;
-       $SP:bv64 := bvadd(lv:bv64, 0xfffffffffffffff0:bv64);
+       $SP:bv64 := bvadd(local:bv64, 0xfffffffffffffff0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400608:bv64);
        goto (%block_1);
      ];
      block %block_1 { .asm = "mov x29, sp" } [
-       var lv_1:bv64 := 0x0:bv64;
+       var local_1:bv64 := 0x0:bv64;
        $R29:bv64 := bvadd($SP, 0x0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x40060c:bv64);
        goto (%block_2);
@@ -150,22 +150,22 @@
        goto (%block_3);
      ];
      block %block_3 { .asm = "ldp x29, x30, [sp], #0x10" } [
-       var lv_2:bv64 := 0x0:bv64;
-       var lv_2:bv64 := $SP;
-       var lv_3:bv64 := 0x0:bv64;
-       var lv_4:bv64 := load le $mem:(bv64->bv8) $SP 64;
-       var lv_3:bv64 := lv_4:bv64;
-       var lv_5:bv64 := 0x0:bv64;
-       var lv_6:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x8:bv64) 64;
-       var lv_5:bv64 := lv_6:bv64;
-       $R29:bv64 := lv_3:bv64;
-       $R30:bv64 := lv_5:bv64;
-       $SP:bv64 := bvadd(lv_2:bv64, 0x10:bv64);
+       var local_2:bv64 := 0x0:bv64;
+       var local_2:bv64 := $SP;
+       var local_3:bv64 := 0x0:bv64;
+       var local_4:bv64 := load le $mem:(bv64->bv8) $SP 64;
+       var local_3:bv64 := local_4:bv64;
+       var local_5:bv64 := 0x0:bv64;
+       var local_6:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x8:bv64) 64;
+       var local_5:bv64 := local_6:bv64;
+       $R29:bv64 := local_3:bv64;
+       $R30:bv64 := local_5:bv64;
+       $SP:bv64 := bvadd(local_2:bv64, 0x10:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400614:bv64);
        goto (%block_4);
      ];
      block %block_4 { .asm = "ret " } [
-       var lv_7:bv64 := 0x0:bv64;
+       var local_7:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R30;
@@ -193,18 +193,18 @@
        goto (%block);
      ];
      block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
-       var lv:bv64 := 0x0:bv64;
-       var lv:bv64 := $SP;
+       var local:bv64 := 0x0:bv64;
+       var local:bv64 := $SP;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
         0xffffffffffffffe0:bv64) $R29 64;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
          0xffffffffffffffe0:bv64), 0x8:bv64) $R30 64;
-       $SP:bv64 := bvadd(lv:bv64, 0xffffffffffffffe0:bv64);
+       $SP:bv64 := bvadd(local:bv64, 0xffffffffffffffe0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400750:bv64);
        goto (%block_1);
      ];
      block %block_1 { .asm = "mov x29, sp" } [
-       var lv_1:bv64 := 0x0:bv64;
+       var local_1:bv64 := 0x0:bv64;
        $R29:bv64 := bvadd($SP, 0x0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400754:bv64);
        goto (%block_2);
@@ -220,12 +220,12 @@
        goto (%block_4);
      ];
      block %block_4 { .asm = "ldrb w0, [x19, #0x28]" } [
-       var lv_2:bv64 := 0x0:bv64;
-       var lv_2:bv64 := $R19;
-       var lv_3:bv8 := 0x0:bv8;
-       var lv_4:bv8 := load le $mem:(bv64->bv8) bvadd(lv_2:bv64, 0x28:bv64) 8;
-       var lv_3:bv8 := lv_4:bv8;
-       $R0:bv64 := zero_extend(32, zero_extend(24, lv_3:bv8));
+       var local_2:bv64 := 0x0:bv64;
+       var local_2:bv64 := $R19;
+       var local_3:bv8 := 0x0:bv8;
+       var local_4:bv8 := load le $mem:(bv64->bv8) bvadd(local_2:bv64, 0x28:bv64) 8;
+       var local_3:bv8 := local_4:bv8;
+       $R0:bv64 := zero_extend(32, zero_extend(24, local_3:bv8));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400760:bv64);
        goto (%block_5);
      ];
@@ -260,30 +260,30 @@
        goto (%block_9);
      ];
      block %block_9 { .asm = "ldr x19, [sp, #0x10]" } [
-       var lv_5:bv64 := 0x0:bv64;
-       var lv_6:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x10:bv64) 64;
-       var lv_5:bv64 := lv_6:bv64;
-       $R19:bv64 := zero_extend(0, zero_extend(0, lv_5:bv64));
+       var local_5:bv64 := 0x0:bv64;
+       var local_6:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x10:bv64) 64;
+       var local_5:bv64 := local_6:bv64;
+       $R19:bv64 := zero_extend(0, zero_extend(0, local_5:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400774:bv64);
        goto (%block_10);
      ];
      block %block_10 { .asm = "ldp x29, x30, [sp], #0x20" } [
-       var lv_7:bv64 := 0x0:bv64;
-       var lv_7:bv64 := $SP;
-       var lv_8:bv64 := 0x0:bv64;
-       var lv_9:bv64 := load le $mem:(bv64->bv8) $SP 64;
-       var lv_8:bv64 := lv_9:bv64;
-       var lv_10:bv64 := 0x0:bv64;
-       var lv_11:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x8:bv64) 64;
-       var lv_10:bv64 := lv_11:bv64;
-       $R29:bv64 := lv_8:bv64;
-       $R30:bv64 := lv_10:bv64;
-       $SP:bv64 := bvadd(lv_7:bv64, 0x20:bv64);
+       var local_7:bv64 := 0x0:bv64;
+       var local_7:bv64 := $SP;
+       var local_8:bv64 := 0x0:bv64;
+       var local_9:bv64 := load le $mem:(bv64->bv8) $SP 64;
+       var local_8:bv64 := local_9:bv64;
+       var local_10:bv64 := 0x0:bv64;
+       var local_11:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x8:bv64) 64;
+       var local_10:bv64 := local_11:bv64;
+       $R29:bv64 := local_8:bv64;
+       $R30:bv64 := local_10:bv64;
+       $SP:bv64 := bvadd(local_7:bv64, 0x20:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400778:bv64);
        goto (%block_11);
      ];
      block %block_11 { .asm = "ret " } [
-       var lv_12:bv64 := 0x0:bv64;
+       var local_12:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R30;
@@ -328,7 +328,7 @@
        goto (%block_14);
      ];
      block %block_14 { .asm = "strb w0, [x19, #0x28]" } [
-       var lv_13:bv64 := 0x0:bv64;
+       var local_13:bv64 := 0x0:bv64;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($R19, 0x28:bv64) extract(8,0, $R0) 8;
        (var BranchTaken:bool := false, $PC:bv64 := 0x400770:bv64);
        goto (%__do_global_dtors_aux_code_7);
@@ -361,10 +361,10 @@
        goto (%block_1);
      ];
      block %block_1 { .asm = "add x0, x0, #0x28" } [
-       var lv:bv64 := 0x0:bv64;
-       var lv_1:bv64 := 0x0:bv64;
-       var lv_1:bv64 := $R0;
-       $R0:bv64 := bvadd(lv_1:bv64, 0x28:bv64);
+       var local:bv64 := 0x0:bv64;
+       var local_1:bv64 := 0x0:bv64;
+       var local_1:bv64 := $R0;
+       $R0:bv64 := bvadd(local_1:bv64, 0x28:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400718:bv64);
        goto (%block_2);
      ];
@@ -374,40 +374,41 @@
        goto (%block_3);
      ];
      block %block_3 { .asm = "add x1, x1, #0x28" } [
-       var lv_2:bv64 := 0x0:bv64;
-       var lv_3:bv64 := 0x0:bv64;
-       var lv_3:bv64 := $R1;
-       $R1:bv64 := bvadd(lv_3:bv64, 0x28:bv64);
+       var local_2:bv64 := 0x0:bv64;
+       var local_3:bv64 := 0x0:bv64;
+       var local_3:bv64 := $R1;
+       $R1:bv64 := bvadd(local_3:bv64, 0x28:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400720:bv64);
        goto (%block_4);
      ];
      block %block_4 { .asm = "sub x1, x1, x0" } [
-       var lv_4:bv64 := 0x0:bv64;
-       var lv_4:bv64 := $R1;
-       var lv_5:bv64 := 0x0:bv64;
-       var lv_5:bv64 := $R0;
-       $R1:bv64 := bvadd(bvadd(lv_4:bv64,
-         bvnot(bvshl(lv_5:bv64, zero_extend(52, 0x0:bv12)))), 0x1:bv64);
+       var local_4:bv64 := 0x0:bv64;
+       var local_4:bv64 := $R1;
+       var local_5:bv64 := 0x0:bv64;
+       var local_5:bv64 := $R0;
+       $R1:bv64 := bvadd(bvadd(local_4:bv64,
+         bvnot(bvshl(local_5:bv64, zero_extend(52, 0x0:bv12)))), 0x1:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400724:bv64);
        goto (%block_5);
      ];
      block %block_5 { .asm = "lsr x2, x1, #0x3f" } [
-       var lv_6:bv64 := 0x0:bv64;
-       var lv_6:bv64 := $R1;
+       var local_6:bv64 := 0x0:bv64;
+       var local_6:bv64 := $R1;
        $R2:bv64 := bvor(bvand(0x0:bv64, 0xfffffffffffffffe:bv64),
         bvand(bvor(bvand(0x0:bv64, 0x0:bv64),
-          bvand(bvor(bvlshr(lv_6:bv64, zero_extend(52, 0x3f:bv12)),
-            bvshl(lv_6:bv64, zero_extend(48, 0x1:bv16))), 0xffffffffffffffff:bv64)),
+          bvand(bvor(bvlshr(local_6:bv64, zero_extend(52, 0x3f:bv12)),
+            bvshl(local_6:bv64, zero_extend(48, 0x1:bv16))), 0xffffffffffffffff:bv64)),
          0x1:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400728:bv64);
        goto (%block_6);
      ];
      block %block_6 { .asm = "add x1, x2, x1, asr #3" } [
-       var lv_7:bv64 := 0x0:bv64;
-       var lv_7:bv64 := $R2;
-       var lv_8:bv64 := 0x0:bv64;
-       var lv_8:bv64 := $R1;
-       $R1:bv64 := bvadd(lv_7:bv64, bvashr(lv_8:bv64, zero_extend(52, 0x3:bv12)));
+       var local_7:bv64 := 0x0:bv64;
+       var local_7:bv64 := $R2;
+       var local_8:bv64 := 0x0:bv64;
+       var local_8:bv64 := $R1;
+       $R1:bv64 := bvadd(local_7:bv64,
+        bvashr(local_8:bv64, zero_extend(52, 0x3:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x40072c:bv64);
        goto (%register_tm_clones_code_4);
      ];
@@ -444,7 +445,7 @@
        goto (%block_11);
      ];
      block %block_11 { .asm = "ret " } [
-       var lv_10:bv64 := 0x0:bv64;
+       var local_10:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R30;
@@ -468,12 +469,12 @@
        goto (%block_13);
      ];
      block %block_13 { .asm = "ldr x2, [x2, #0xfe0]" } [
-       var lv_11:bv64 := 0x0:bv64;
-       var lv_11:bv64 := $R2;
-       var lv_12:bv64 := 0x0:bv64;
-       var lv_13:bv64 := load le $mem:(bv64->bv8) bvadd(lv_11:bv64, 0xfe0:bv64) 64;
-       var lv_12:bv64 := lv_13:bv64;
-       $R2:bv64 := zero_extend(0, zero_extend(0, lv_12:bv64));
+       var local_11:bv64 := 0x0:bv64;
+       var local_11:bv64 := $R2;
+       var local_12:bv64 := 0x0:bv64;
+       var local_13:bv64 := load le $mem:(bv64->bv8) bvadd(local_11:bv64, 0xfe0:bv64) 64;
+       var local_12:bv64 := local_13:bv64;
+       $R2:bv64 := zero_extend(0, zero_extend(0, local_12:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x40073c:bv64);
        goto (%block_14);
      ];
@@ -505,16 +506,17 @@
        goto (%block_18);
      ];
      block %block_18 { .asm = "mov x16, x2" } [
-       var lv_14:bv64 := 0x0:bv64;
-       var lv_14:bv64 := 0x0:bv64;
-       var lv_15:bv64 := 0x0:bv64;
-       var lv_15:bv64 := $R2;
-       $R16:bv64 := bvor(lv_14:bv64, bvshl(lv_15:bv64, zero_extend(52, 0x0:bv12)));
+       var local_14:bv64 := 0x0:bv64;
+       var local_14:bv64 := 0x0:bv64;
+       var local_15:bv64 := 0x0:bv64;
+       var local_15:bv64 := $R2;
+       $R16:bv64 := bvor(local_14:bv64,
+        bvshl(local_15:bv64, zero_extend(52, 0x0:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400744:bv64);
        goto (%block_19);
      ];
      block %block_19 { .asm = "br x16" } [
-       var lv_16:bv64 := 0x0:bv64;
+       var local_16:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x1:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R16;
@@ -571,25 +573,25 @@
        goto (%block_1);
      ];
      block %block_1 { .asm = "ldr x17, [x16, #0x10]" } [
-       var lv:bv64 := 0x0:bv64;
-       var lv:bv64 := $R16;
-       var lv_1:bv64 := 0x0:bv64;
-       var lv_2:bv64 := load le $mem:(bv64->bv8) bvadd(lv:bv64, 0x10:bv64) 64;
-       var lv_1:bv64 := lv_2:bv64;
-       $R17:bv64 := zero_extend(0, zero_extend(0, lv_1:bv64));
+       var local:bv64 := 0x0:bv64;
+       var local:bv64 := $R16;
+       var local_1:bv64 := 0x0:bv64;
+       var local_2:bv64 := load le $mem:(bv64->bv8) bvadd(local:bv64, 0x10:bv64) 64;
+       var local_1:bv64 := local_2:bv64;
+       $R17:bv64 := zero_extend(0, zero_extend(0, local_1:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400668:bv64);
        goto (%block_2);
      ];
      block %block_2 { .asm = "add x16, x16, #0x10" } [
-       var lv_3:bv64 := 0x0:bv64;
-       var lv_4:bv64 := 0x0:bv64;
-       var lv_4:bv64 := $R16;
-       $R16:bv64 := bvadd(lv_4:bv64, 0x10:bv64);
+       var local_3:bv64 := 0x0:bv64;
+       var local_4:bv64 := 0x0:bv64;
+       var local_4:bv64 := $R16;
+       $R16:bv64 := bvadd(local_4:bv64, 0x10:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x40066c:bv64);
        goto (%block_3);
      ];
      block %block_3 { .asm = "br x17" } [
-       var lv_5:bv64 := 0x0:bv64;
+       var local_5:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x1:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R17;
@@ -612,9 +614,9 @@
        goto (%block);
      ];
      block %block { .asm = "sub sp, sp, #0x30" } [
-       var lv:bv64 := 0x0:bv64;
-       var lv:bv64 := $SP;
-       $SP:bv64 := bvadd(bvadd(lv:bv64, 0xffffffffffffffcf:bv64), 0x1:bv64);
+       var local:bv64 := 0x0:bv64;
+       var local:bv64 := $SP;
+       $SP:bv64 := bvadd(bvadd(local:bv64, 0xffffffffffffffcf:bv64), 0x1:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400788:bv64);
        goto (%block_1);
      ];
@@ -629,18 +631,18 @@
        goto (%block_3);
      ];
      block %block_3 { .asm = "ldr x0, [sp, #8]" } [
-       var lv_1:bv64 := 0x0:bv64;
-       var lv_2:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x8:bv64) 64;
-       var lv_1:bv64 := lv_2:bv64;
-       $R0:bv64 := zero_extend(0, zero_extend(0, lv_1:bv64));
+       var local_1:bv64 := 0x0:bv64;
+       var local_2:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x8:bv64) 64;
+       var local_1:bv64 := local_2:bv64;
+       $R0:bv64 := zero_extend(0, zero_extend(0, local_1:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400794:bv64);
        goto (%block_4);
      ];
      block %block_4 { .asm = "add x0, x0, #1" } [
-       var lv_3:bv64 := 0x0:bv64;
-       var lv_4:bv64 := 0x0:bv64;
-       var lv_4:bv64 := $R0;
-       $R0:bv64 := bvadd(lv_4:bv64, 0x1:bv64);
+       var local_3:bv64 := 0x0:bv64;
+       var local_4:bv64 := 0x0:bv64;
+       var local_4:bv64 := $R0;
+       $R0:bv64 := bvadd(local_4:bv64, 0x1:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400798:bv64);
        goto (%block_5);
      ];
@@ -669,26 +671,26 @@
        goto (%block_7);
      ];
      block %block_7 { .asm = "ldr x0, [sp, #0x28]" } [
-       var lv_5:bv64 := 0x0:bv64;
-       var lv_6:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x28:bv64) 64;
-       var lv_5:bv64 := lv_6:bv64;
-       $R0:bv64 := zero_extend(0, zero_extend(0, lv_5:bv64));
+       var local_5:bv64 := 0x0:bv64;
+       var local_6:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x28:bv64) 64;
+       var local_5:bv64 := local_6:bv64;
+       $R0:bv64 := zero_extend(0, zero_extend(0, local_5:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007ec:bv64);
        goto (%block_8);
      ];
      block %block_8 { .asm = "add x0, x0, #1" } [
-       var lv_7:bv64 := 0x0:bv64;
-       var lv_8:bv64 := 0x0:bv64;
-       var lv_8:bv64 := $R0;
-       $R0:bv64 := bvadd(lv_8:bv64, 0x1:bv64);
+       var local_7:bv64 := 0x0:bv64;
+       var local_8:bv64 := 0x0:bv64;
+       var local_8:bv64 := $R0;
+       $R0:bv64 := bvadd(local_8:bv64, 0x1:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007f0:bv64);
        goto (%block_9);
      ];
      block %block_9 { .asm = "ldr x1, [sp, #0x20]" } [
-       var lv_9:bv64 := 0x0:bv64;
-       var lv_10:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x20:bv64) 64;
-       var lv_9:bv64 := lv_10:bv64;
-       $R1:bv64 := zero_extend(0, zero_extend(0, lv_9:bv64));
+       var local_9:bv64 := 0x0:bv64;
+       var local_10:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x20:bv64) 64;
+       var local_9:bv64 := local_10:bv64;
+       $R1:bv64 := zero_extend(0, zero_extend(0, local_9:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007f4:bv64);
        goto (%Sqrt_code_7);
      ];
@@ -727,22 +729,22 @@
        goto (%block_14);
      ];
      block %block_14 { .asm = "ldr x0, [sp, #0x28]" } [
-       var lv_13:bv64 := 0x0:bv64;
-       var lv_14:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x28:bv64) 64;
-       var lv_13:bv64 := lv_14:bv64;
-       $R0:bv64 := zero_extend(0, zero_extend(0, lv_13:bv64));
+       var local_13:bv64 := 0x0:bv64;
+       var local_14:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x28:bv64) 64;
+       var local_13:bv64 := local_14:bv64;
+       $R0:bv64 := zero_extend(0, zero_extend(0, local_13:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400800:bv64);
        goto (%block_15);
      ];
      block %block_15 { .asm = "add sp, sp, #0x30" } [
-       var lv_15:bv64 := 0x0:bv64;
-       var lv_15:bv64 := $SP;
-       $SP:bv64 := bvadd(lv_15:bv64, 0x30:bv64);
+       var local_15:bv64 := 0x0:bv64;
+       var local_15:bv64 := $SP;
+       $SP:bv64 := bvadd(local_15:bv64, 0x30:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400804:bv64);
        goto (%block_16);
      ];
      block %block_16 { .asm = "ret " } [
-       var lv_16:bv64 := 0x0:bv64;
+       var local_16:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R30;
@@ -761,47 +763,49 @@
        goto (%block_17);
      ];
      block %block_17 { .asm = "ldr x1, [sp, #0x28]" } [
-       var lv_17:bv64 := 0x0:bv64;
-       var lv_18:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x28:bv64) 64;
-       var lv_17:bv64 := lv_18:bv64;
-       $R1:bv64 := zero_extend(0, zero_extend(0, lv_17:bv64));
+       var local_17:bv64 := 0x0:bv64;
+       var local_18:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x28:bv64) 64;
+       var local_17:bv64 := local_18:bv64;
+       $R1:bv64 := zero_extend(0, zero_extend(0, local_17:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007a4:bv64);
        goto (%block_18);
      ];
      block %block_18 { .asm = "ldr x0, [sp, #0x20]" } [
-       var lv_19:bv64 := 0x0:bv64;
-       var lv_20:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x20:bv64) 64;
-       var lv_19:bv64 := lv_20:bv64;
-       $R0:bv64 := zero_extend(0, zero_extend(0, lv_19:bv64));
+       var local_19:bv64 := 0x0:bv64;
+       var local_20:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x20:bv64) 64;
+       var local_19:bv64 := local_20:bv64;
+       $R0:bv64 := zero_extend(0, zero_extend(0, local_19:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007a8:bv64);
        goto (%block_19);
      ];
      block %block_19 { .asm = "add x0, x1, x0" } [
-       var lv_21:bv64 := 0x0:bv64;
-       var lv_21:bv64 := $R1;
-       var lv_22:bv64 := 0x0:bv64;
-       var lv_22:bv64 := $R0;
-       $R0:bv64 := bvadd(lv_21:bv64, bvshl(lv_22:bv64, zero_extend(52, 0x0:bv12)));
+       var local_21:bv64 := 0x0:bv64;
+       var local_21:bv64 := $R1;
+       var local_22:bv64 := 0x0:bv64;
+       var local_22:bv64 := $R0;
+       $R0:bv64 := bvadd(local_21:bv64,
+        bvshl(local_22:bv64, zero_extend(52, 0x0:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007ac:bv64);
        goto (%block_20);
      ];
      block %block_20 { .asm = "lsr x1, x0, #0x3f" } [
-       var lv_23:bv64 := 0x0:bv64;
-       var lv_23:bv64 := $R0;
+       var local_23:bv64 := 0x0:bv64;
+       var local_23:bv64 := $R0;
        $R1:bv64 := bvor(bvand(0x0:bv64, 0xfffffffffffffffe:bv64),
         bvand(bvor(bvand(0x0:bv64, 0x0:bv64),
-          bvand(bvor(bvlshr(lv_23:bv64, zero_extend(52, 0x3f:bv12)),
-            bvshl(lv_23:bv64, zero_extend(48, 0x1:bv16))), 0xffffffffffffffff:bv64)),
-         0x1:bv64));
+          bvand(bvor(bvlshr(local_23:bv64, zero_extend(52, 0x3f:bv12)),
+            bvshl(local_23:bv64, zero_extend(48, 0x1:bv16))),
+           0xffffffffffffffff:bv64)), 0x1:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007b0:bv64);
        goto (%block_21);
      ];
      block %block_21 { .asm = "add x0, x1, x0" } [
-       var lv_24:bv64 := 0x0:bv64;
-       var lv_24:bv64 := $R1;
-       var lv_25:bv64 := 0x0:bv64;
-       var lv_25:bv64 := $R0;
-       $R0:bv64 := bvadd(lv_24:bv64, bvshl(lv_25:bv64, zero_extend(52, 0x0:bv12)));
+       var local_24:bv64 := 0x0:bv64;
+       var local_24:bv64 := $R1;
+       var local_25:bv64 := 0x0:bv64;
+       var local_25:bv64 := $R0;
+       $R0:bv64 := bvadd(local_24:bv64,
+        bvshl(local_25:bv64, zero_extend(52, 0x0:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007b4:bv64);
        goto (%Sqrt_code_10);
      ];
@@ -816,23 +820,24 @@
        goto (%block_23);
      ];
      block %block_23 { .asm = "ldr w0, [sp, #0x1c]" } [
-       var lv_27:bv32 := 0x0:bv32;
-       var lv_28:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
-       var lv_27:bv32 := lv_28:bv32;
-       $R0:bv64 := zero_extend(32, zero_extend(0, lv_27:bv32));
+       var local_27:bv32 := 0x0:bv32;
+       var local_28:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
+       var local_27:bv32 := local_28:bv32;
+       $R0:bv64 := zero_extend(32, zero_extend(0, local_27:bv32));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007c0:bv64);
        goto (%block_24);
      ];
      block %block_24 { .asm = "mul w0, w0, w0" } [
-       var lv_29:bv32 := 0x0:bv32;
-       var lv_29:bv32 := extract(32,0, $R0);
-       var lv_30:bv32 := 0x0:bv32;
-       var lv_30:bv32 := extract(32,0, $R0);
-       var lv_31:bv32 := 0x0:bv32;
-       var lv_31:bv32 := 0x0:bv32;
+       var local_29:bv32 := 0x0:bv32;
+       var local_29:bv32 := extract(32,0, $R0);
+       var local_30:bv32 := 0x0:bv32;
+       var local_30:bv32 := extract(32,0, $R0);
+       var local_31:bv32 := 0x0:bv32;
+       var local_31:bv32 := 0x0:bv32;
        $R0:bv64 := zero_extend(32,
-       bvadd(lv_31:bv32,
-        extract(32,0, bvmul(extract(32,0, lv_29:bv32), extract(32,0, lv_30:bv32)))));
+       bvadd(local_31:bv32,
+        extract(32,0, bvmul(extract(32,0, local_29:bv32),
+         extract(32,0, local_30:bv32)))));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007c4:bv64);
        goto (%Sqrt_code_11);
      ];
@@ -842,10 +847,10 @@
        goto (%block_25);
      ];
      block %block_25 { .asm = "ldr x1, [sp, #8]" } [
-       var lv_33:bv64 := 0x0:bv64;
-       var lv_34:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x8:bv64) 64;
-       var lv_33:bv64 := lv_34:bv64;
-       $R1:bv64 := zero_extend(0, zero_extend(0, lv_33:bv64));
+       var local_33:bv64 := 0x0:bv64;
+       var local_34:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x8:bv64) 64;
+       var local_33:bv64 := local_34:bv64;
+       $R1:bv64 := zero_extend(0, zero_extend(0, local_33:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007cc:bv64);
        goto (%Sqrt_code_12);
      ];
@@ -882,10 +887,10 @@
        goto (%block_30);
      ];
      block %block_30 { .asm = "ldrsw x0, [sp, #0x1c]" } [
-       var lv_37:bv32 := 0x0:bv32;
-       var lv_38:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
-       var lv_37:bv32 := lv_38:bv32;
-       $R0:bv64 := zero_extend(0, sign_extend(32, lv_37:bv32));
+       var local_37:bv32 := 0x0:bv32;
+       var local_38:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
+       var local_37:bv32 := local_38:bv32;
+       $R0:bv64 := zero_extend(0, sign_extend(32, local_37:bv32));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007e4:bv64);
        goto (%block_31);
      ];
@@ -906,10 +911,10 @@
        goto (%block_32);
      ];
      block %block_32 { .asm = "ldrsw x0, [sp, #0x1c]" } [
-       var lv_39:bv32 := 0x0:bv32;
-       var lv_40:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
-       var lv_39:bv32 := lv_40:bv32;
-       $R0:bv64 := zero_extend(0, sign_extend(32, lv_39:bv32));
+       var local_39:bv32 := 0x0:bv32;
+       var local_40:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
+       var local_39:bv32 := local_40:bv32;
+       $R0:bv64 := zero_extend(0, sign_extend(32, local_39:bv32));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007d8:bv64);
        goto (%block_33);
      ];
@@ -956,30 +961,30 @@
        goto (%block_2);
      ];
      block %block_2 { .asm = "mov x5, x0" } [
-       var lv:bv64 := 0x0:bv64;
-       var lv:bv64 := 0x0:bv64;
-       var lv_1:bv64 := 0x0:bv64;
-       var lv_1:bv64 := $R0;
-       $R5:bv64 := bvor(lv:bv64, bvshl(lv_1:bv64, zero_extend(52, 0x0:bv12)));
+       var local:bv64 := 0x0:bv64;
+       var local:bv64 := 0x0:bv64;
+       var local_1:bv64 := 0x0:bv64;
+       var local_1:bv64 := $R0;
+       $R5:bv64 := bvor(local:bv64, bvshl(local_1:bv64, zero_extend(52, 0x0:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400690:bv64);
        goto (%block_3);
      ];
      block %block_3 { .asm = "ldr x1, [sp]" } [
-       var lv_2:bv64 := 0x0:bv64;
-       var lv_3:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x0:bv64) 64;
-       var lv_2:bv64 := lv_3:bv64;
-       $R1:bv64 := zero_extend(0, zero_extend(0, lv_2:bv64));
+       var local_2:bv64 := 0x0:bv64;
+       var local_3:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x0:bv64) 64;
+       var local_2:bv64 := local_3:bv64;
+       $R1:bv64 := zero_extend(0, zero_extend(0, local_2:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400694:bv64);
        goto (%block_4);
      ];
      block %block_4 { .asm = "add x2, sp, #8" } [
-       var lv_4:bv64 := 0x0:bv64;
+       var local_4:bv64 := 0x0:bv64;
        $R2:bv64 := bvadd($SP, 0x8:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400698:bv64);
        goto (%block_5);
      ];
      block %block_5 { .asm = "mov x6, sp" } [
-       var lv_5:bv64 := 0x0:bv64;
+       var local_5:bv64 := 0x0:bv64;
        $R6:bv64 := bvadd($SP, 0x0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x40069c:bv64);
        goto (%block_6);
@@ -990,10 +995,10 @@
        goto (%block_7);
      ];
      block %block_7 { .asm = "add x0, x0, #0x6b4" } [
-       var lv_6:bv64 := 0x0:bv64;
-       var lv_7:bv64 := 0x0:bv64;
-       var lv_7:bv64 := $R0;
-       $R0:bv64 := bvadd(lv_7:bv64, 0x6b4:bv64);
+       var local_6:bv64 := 0x0:bv64;
+       var local_7:bv64 := 0x0:bv64;
+       var local_7:bv64 := $R0;
+       $R0:bv64 := bvadd(local_7:bv64, 0x6b4:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x4006a4:bv64);
        goto (%block_8);
      ];
@@ -1061,7 +1066,7 @@
        goto (%block);
      ];
      block %block { .asm = "ret " } [
-       var lv:bv64 := 0x0:bv64;
+       var local:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R30;
@@ -1092,12 +1097,12 @@
        goto (%block_1);
      ];
      block %block_1 { .asm = "ldr x0, [x0, #0xfd8]" } [
-       var lv:bv64 := 0x0:bv64;
-       var lv:bv64 := $R0;
-       var lv_1:bv64 := 0x0:bv64;
-       var lv_2:bv64 := load le $mem:(bv64->bv8) bvadd(lv:bv64, 0xfd8:bv64) 64;
-       var lv_1:bv64 := lv_2:bv64;
-       $R0:bv64 := zero_extend(0, zero_extend(0, lv_1:bv64));
+       var local:bv64 := 0x0:bv64;
+       var local:bv64 := $R0;
+       var local_1:bv64 := 0x0:bv64;
+       var local_2:bv64 := load le $mem:(bv64->bv8) bvadd(local:bv64, 0xfd8:bv64) 64;
+       var local_1:bv64 := local_2:bv64;
+       $R0:bv64 := zero_extend(0, zero_extend(0, local_1:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4006cc:bv64);
        goto (%block_2);
      ];
@@ -1151,7 +1156,7 @@
        goto (%block_7);
      ];
      block %block_7 { .asm = "ret " } [
-       var lv_3:bv64 := 0x0:bv64;
+       var local_3:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R30;
@@ -1178,18 +1183,18 @@
        goto (%block);
      ];
      block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
-       var lv:bv64 := 0x0:bv64;
-       var lv:bv64 := $SP;
+       var local:bv64 := 0x0:bv64;
+       var local:bv64 := $SP;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
         0xffffffffffffffe0:bv64) $R29 64;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
          0xffffffffffffffe0:bv64), 0x8:bv64) $R30 64;
-       $SP:bv64 := bvadd(lv:bv64, 0xffffffffffffffe0:bv64);
+       $SP:bv64 := bvadd(local:bv64, 0xffffffffffffffe0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
        goto (%block_1);
      ];
      block %block_1 { .asm = "mov x29, sp" } [
-       var lv_1:bv64 := 0x0:bv64;
+       var local_1:bv64 := 0x0:bv64;
        $R29:bv64 := bvadd($SP, 0x0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
        goto (%block_2);
@@ -1205,10 +1210,10 @@
        goto (%block_4);
      ];
      block %block_4 { .asm = "ldrsw x0, [sp, #0x1c]" } [
-       var lv_2:bv32 := 0x0:bv32;
-       var lv_3:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
-       var lv_2:bv32 := lv_3:bv32;
-       $R0:bv64 := zero_extend(0, sign_extend(32, lv_2:bv32));
+       var local_2:bv32 := 0x0:bv32;
+       var local_3:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
+       var local_2:bv32 := local_3:bv32;
+       $R0:bv64 := zero_extend(0, sign_extend(32, local_2:bv32));
        (var BranchTaken:bool := false, $PC:bv64 := 0x40081c:bv64);
        goto (%block_5);
      ];
@@ -1236,22 +1241,22 @@
        goto (%block_6);
      ];
      block %block_6 { .asm = "ldp x29, x30, [sp], #0x20" } [
-       var lv_4:bv64 := 0x0:bv64;
-       var lv_4:bv64 := $SP;
-       var lv_5:bv64 := 0x0:bv64;
-       var lv_6:bv64 := load le $mem:(bv64->bv8) $SP 64;
-       var lv_5:bv64 := lv_6:bv64;
-       var lv_7:bv64 := 0x0:bv64;
-       var lv_8:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x8:bv64) 64;
-       var lv_7:bv64 := lv_8:bv64;
-       $R29:bv64 := lv_5:bv64;
-       $R30:bv64 := lv_7:bv64;
-       $SP:bv64 := bvadd(lv_4:bv64, 0x20:bv64);
+       var local_4:bv64 := 0x0:bv64;
+       var local_4:bv64 := $SP;
+       var local_5:bv64 := 0x0:bv64;
+       var local_6:bv64 := load le $mem:(bv64->bv8) $SP 64;
+       var local_5:bv64 := local_6:bv64;
+       var local_7:bv64 := 0x0:bv64;
+       var local_8:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x8:bv64) 64;
+       var local_7:bv64 := local_8:bv64;
+       $R29:bv64 := local_5:bv64;
+       $R30:bv64 := local_7:bv64;
+       $SP:bv64 := bvadd(local_4:bv64, 0x20:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400824:bv64);
        goto (%block_7);
      ];
      block %block_7 { .asm = "ret " } [
-       var lv_9:bv64 := 0x0:bv64;
+       var local_9:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R30;
@@ -1279,25 +1284,25 @@
        goto (%block_1);
      ];
      block %block_1 { .asm = "ldr x17, [x16, #8]" } [
-       var lv:bv64 := 0x0:bv64;
-       var lv:bv64 := $R16;
-       var lv_1:bv64 := 0x0:bv64;
-       var lv_2:bv64 := load le $mem:(bv64->bv8) bvadd(lv:bv64, 0x8:bv64) 64;
-       var lv_1:bv64 := lv_2:bv64;
-       $R17:bv64 := zero_extend(0, zero_extend(0, lv_1:bv64));
+       var local:bv64 := 0x0:bv64;
+       var local:bv64 := $R16;
+       var local_1:bv64 := 0x0:bv64;
+       var local_2:bv64 := load le $mem:(bv64->bv8) bvadd(local:bv64, 0x8:bv64) 64;
+       var local_1:bv64 := local_2:bv64;
+       $R17:bv64 := zero_extend(0, zero_extend(0, local_1:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400658:bv64);
        goto (%block_2);
      ];
      block %block_2 { .asm = "add x16, x16, #8" } [
-       var lv_3:bv64 := 0x0:bv64;
-       var lv_4:bv64 := 0x0:bv64;
-       var lv_4:bv64 := $R16;
-       $R16:bv64 := bvadd(lv_4:bv64, 0x8:bv64);
+       var local_3:bv64 := 0x0:bv64;
+       var local_4:bv64 := 0x0:bv64;
+       var local_4:bv64 := $R16;
+       $R16:bv64 := bvadd(local_4:bv64, 0x8:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x40065c:bv64);
        goto (%block_3);
      ];
      block %block_3 { .asm = "br x17" } [
-       var lv_5:bv64 := 0x0:bv64;
+       var local_5:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x1:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R17;
@@ -1324,25 +1329,25 @@
        goto (%block_1);
      ];
      block %block_1 { .asm = "ldr x17, [x16]" } [
-       var lv:bv64 := 0x0:bv64;
-       var lv:bv64 := $R16;
-       var lv_1:bv64 := 0x0:bv64;
-       var lv_2:bv64 := load le $mem:(bv64->bv8) bvadd(lv:bv64, 0x0:bv64) 64;
-       var lv_1:bv64 := lv_2:bv64;
-       $R17:bv64 := zero_extend(0, zero_extend(0, lv_1:bv64));
+       var local:bv64 := 0x0:bv64;
+       var local:bv64 := $R16;
+       var local_1:bv64 := 0x0:bv64;
+       var local_2:bv64 := load le $mem:(bv64->bv8) bvadd(local:bv64, 0x0:bv64) 64;
+       var local_1:bv64 := local_2:bv64;
+       $R17:bv64 := zero_extend(0, zero_extend(0, local_1:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400648:bv64);
        goto (%block_2);
      ];
      block %block_2 { .asm = "add x16, x16, #0" } [
-       var lv_3:bv64 := 0x0:bv64;
-       var lv_4:bv64 := 0x0:bv64;
-       var lv_4:bv64 := $R16;
-       $R16:bv64 := bvadd(lv_4:bv64, 0x0:bv64);
+       var local_3:bv64 := 0x0:bv64;
+       var local_4:bv64 := 0x0:bv64;
+       var local_4:bv64 := $R16;
+       $R16:bv64 := bvadd(local_4:bv64, 0x0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x40064c:bv64);
        goto (%block_3);
      ];
      block %block_3 { .asm = "br x17" } [
-       var lv_5:bv64 := 0x0:bv64;
+       var local_5:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x1:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R17;
@@ -1373,10 +1378,10 @@
        goto (%block_1);
      ];
      block %block_1 { .asm = "add x0, x0, #0x28" } [
-       var lv:bv64 := 0x0:bv64;
-       var lv_1:bv64 := 0x0:bv64;
-       var lv_1:bv64 := $R0;
-       $R0:bv64 := bvadd(lv_1:bv64, 0x28:bv64);
+       var local:bv64 := 0x0:bv64;
+       var local_1:bv64 := 0x0:bv64;
+       var local_1:bv64 := $R0;
+       $R0:bv64 := bvadd(local_1:bv64, 0x28:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x4006e8:bv64);
        goto (%block_2);
      ];
@@ -1386,10 +1391,10 @@
        goto (%block_3);
      ];
      block %block_3 { .asm = "add x1, x1, #0x28" } [
-       var lv_2:bv64 := 0x0:bv64;
-       var lv_3:bv64 := 0x0:bv64;
-       var lv_3:bv64 := $R1;
-       $R1:bv64 := bvadd(lv_3:bv64, 0x28:bv64);
+       var local_2:bv64 := 0x0:bv64;
+       var local_3:bv64 := 0x0:bv64;
+       var local_3:bv64 := $R1;
+       $R1:bv64 := bvadd(local_3:bv64, 0x28:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x4006f0:bv64);
        goto (%deregister_tm_clones_code_4);
      ];
@@ -1434,12 +1439,12 @@
        goto (%block_9);
      ];
      block %block_9 { .asm = "ldr x1, [x1, #0xfd0]" } [
-       var lv_6:bv64 := 0x0:bv64;
-       var lv_6:bv64 := $R1;
-       var lv_7:bv64 := 0x0:bv64;
-       var lv_8:bv64 := load le $mem:(bv64->bv8) bvadd(lv_6:bv64, 0xfd0:bv64) 64;
-       var lv_7:bv64 := lv_8:bv64;
-       $R1:bv64 := zero_extend(0, zero_extend(0, lv_7:bv64));
+       var local_6:bv64 := 0x0:bv64;
+       var local_6:bv64 := $R1;
+       var local_7:bv64 := 0x0:bv64;
+       var local_8:bv64 := load le $mem:(bv64->bv8) bvadd(local_6:bv64, 0xfd0:bv64) 64;
+       var local_7:bv64 := local_8:bv64;
+       $R1:bv64 := zero_extend(0, zero_extend(0, local_7:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400700:bv64);
        goto (%block_10);
      ];
@@ -1471,16 +1476,17 @@
        goto (%block_14);
      ];
      block %block_14 { .asm = "mov x16, x1" } [
-       var lv_9:bv64 := 0x0:bv64;
-       var lv_9:bv64 := 0x0:bv64;
-       var lv_10:bv64 := 0x0:bv64;
-       var lv_10:bv64 := $R1;
-       $R16:bv64 := bvor(lv_9:bv64, bvshl(lv_10:bv64, zero_extend(52, 0x0:bv12)));
+       var local_9:bv64 := 0x0:bv64;
+       var local_9:bv64 := 0x0:bv64;
+       var local_10:bv64 := 0x0:bv64;
+       var local_10:bv64 := $R1;
+       $R16:bv64 := bvor(local_9:bv64,
+        bvshl(local_10:bv64, zero_extend(52, 0x0:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400708:bv64);
        goto (%block_15);
      ];
      block %block_15 { .asm = "br x16" } [
-       var lv_11:bv64 := 0x0:bv64;
+       var local_11:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x1:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R16;
@@ -1495,7 +1501,7 @@
        goto (%block_16);
      ];
      block %block_16 { .asm = "ret " } [
-       var lv_12:bv64 := 0x0:bv64;
+       var local_12:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R30;
@@ -1521,13 +1527,13 @@
        goto (%block);
      ];
      block %block { .asm = "stp x16, x30, [sp, #-0x10]!" } [
-       var lv:bv64 := 0x0:bv64;
-       var lv:bv64 := $SP;
+       var local:bv64 := 0x0:bv64;
+       var local:bv64 := $SP;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
         0xfffffffffffffff0:bv64) $R16 64;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
          0xfffffffffffffff0:bv64), 0x8:bv64) $R30 64;
-       $SP:bv64 := bvadd(lv:bv64, 0xfffffffffffffff0:bv64);
+       $SP:bv64 := bvadd(local:bv64, 0xfffffffffffffff0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400624:bv64);
        goto (%block_1);
      ];
@@ -1537,25 +1543,25 @@
        goto (%block_2);
      ];
      block %block_2 { .asm = "ldr x17, [x16, #0xff8]" } [
-       var lv_1:bv64 := 0x0:bv64;
-       var lv_1:bv64 := $R16;
-       var lv_2:bv64 := 0x0:bv64;
-       var lv_3:bv64 := load le $mem:(bv64->bv8) bvadd(lv_1:bv64, 0xff8:bv64) 64;
-       var lv_2:bv64 := lv_3:bv64;
-       $R17:bv64 := zero_extend(0, zero_extend(0, lv_2:bv64));
+       var local_1:bv64 := 0x0:bv64;
+       var local_1:bv64 := $R16;
+       var local_2:bv64 := 0x0:bv64;
+       var local_3:bv64 := load le $mem:(bv64->bv8) bvadd(local_1:bv64, 0xff8:bv64) 64;
+       var local_2:bv64 := local_3:bv64;
+       $R17:bv64 := zero_extend(0, zero_extend(0, local_2:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x40062c:bv64);
        goto (%block_3);
      ];
      block %block_3 { .asm = "add x16, x16, #0xff8" } [
-       var lv_4:bv64 := 0x0:bv64;
-       var lv_5:bv64 := 0x0:bv64;
-       var lv_5:bv64 := $R16;
-       $R16:bv64 := bvadd(lv_5:bv64, 0xff8:bv64);
+       var local_4:bv64 := 0x0:bv64;
+       var local_5:bv64 := 0x0:bv64;
+       var local_5:bv64 := $R16;
+       $R16:bv64 := bvadd(local_5:bv64, 0xff8:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400630:bv64);
        goto (%block_4);
      ];
      block %block_4 { .asm = "br x17" } [
-       var lv_6:bv64 := 0x0:bv64;
+       var local_6:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x1:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R17;

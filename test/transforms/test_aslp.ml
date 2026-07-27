@@ -167,18 +167,18 @@ proc @main()  -> () {  }
          goto (%block);
        ];
        block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
-         var lv:bv64 := 0x0:bv64;
-         var lv:bv64 := $SP;
+         var local:bv64 := 0x0:bv64;
+         var local:bv64 := $SP;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
           0xffffffffffffffe0:bv64) $R29 64;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
            0xffffffffffffffe0:bv64), 0x8:bv64) $R30 64;
-         $SP:bv64 := bvadd(lv:bv64, 0xffffffffffffffe0:bv64);
+         $SP:bv64 := bvadd(local:bv64, 0xffffffffffffffe0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
          goto (%block_1);
        ];
        block %block_1 { .asm = "mov x29, sp" } [
-         var lv_1:bv64 := 0x0:bv64;
+         var local_1:bv64 := 0x0:bv64;
          $R29:bv64 := bvadd($SP, 0x0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
          goto (%block_2);
@@ -194,10 +194,10 @@ proc @main()  -> () {  }
          goto (%block_4);
        ];
        block %block_4 { .asm = "ldrsw x0, [sp, #0x1c]" } [
-         var lv_2:bv32 := 0x0:bv32;
-         var lv_3:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
-         var lv_2:bv32 := lv_3:bv32;
-         $R0:bv64 := zero_extend(0, sign_extend(32, lv_2:bv32));
+         var local_2:bv32 := 0x0:bv32;
+         var local_3:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
+         var local_2:bv32 := local_3:bv32;
+         $R0:bv64 := zero_extend(0, sign_extend(32, local_2:bv32));
          (var BranchTaken:bool := false, $PC:bv64 := 0x40081c:bv64);
          goto (%block_5);
        ];
@@ -346,8 +346,8 @@ proc @main()  -> () {  }
          goto (%block);
        ];
        block %block { .asm = "mov xzr, xzr" } [
-         var lv:bv64 := 0x0:bv64;
-         var lv_1:bv64 := 0x0:bv64;
+         var local:bv64 := 0x0:bv64;
+         var local_1:bv64 := 0x0:bv64;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
          goto (%ret_1);
        ];

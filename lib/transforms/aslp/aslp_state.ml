@@ -102,7 +102,7 @@ let empty_aslp_ids () =
     This will ensure that ASLp's local variable and block names do not clash
     with existing names. *)
 let aslp_ids_from_generators ~local_ids =
-  let local_id = ID.fresh ~name:"lv" local_ids %> ID.name in
+  let local_id = ID.fresh ~name:"local" local_ids %> ID.name in
   { local_id }
 
 (** {1 State manipulation functions} *)
