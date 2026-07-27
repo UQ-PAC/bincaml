@@ -64,6 +64,8 @@
   repeated_ssa.sexp
   cfa_reduction.il
   cfa_reduction.sexp
+  smt_backend.il
+  smt_backend.sexp
   ../../bin/main.exe))
 
 (cram
