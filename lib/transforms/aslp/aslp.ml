@@ -85,7 +85,7 @@ let aarch64_mem_of_prog prog =
       then
         Logs.warn (fun m ->
             m
-              "Declared with unexpected type; lifter may not produce \
+              "Memory declared with unexpected type; lifter may not produce \
                well-typed or correct code.");
       (prog, binding)
   | None ->
