@@ -383,7 +383,7 @@ module SMTLib2 = struct
     let* body = in_body in
     return @@ list [ quant; list binds; body ]
 
-  let smt_alg' (e : sexp t BasilExpr.abstract_expr)
+  let smt_alg_helper (e : sexp t BasilExpr.abstract_expr)
       (inner : sexp t BasilExpr.abstract_expr BasilExpr.abstract_expr) =
     match e with
     | Constant { const = o } ->
@@ -477,7 +477,7 @@ module SMTLib2 = struct
       sexp t * sexp t BasilExpr.abstract_expr =
     let l = AbstractExpr.map fst e in
     let r = AbstractExpr.map snd e in
-    let o = smt_alg' l r in
+    let o = smt_alg_helper l r in
     (o, l)
 
   let bind_of_bexpr e =
