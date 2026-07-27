@@ -1,6 +1,6 @@
 {
   lib,
-  buildDunePackage,
+  buildDune324Package,
   nix-gitignore,
   writableTmpDirAsHomeHook,
   capstone,
@@ -20,7 +20,7 @@
   # dev:
 }:
 
-buildDunePackage {
+buildDune324Package {
   pname = "capstone_arm64_disas";
   version = "0.0";
 
@@ -29,7 +29,9 @@ buildDunePackage {
   src = nix-gitignore.gitignoreSource [ "nix" "flake.nix" "flake.lock" ] ./..;
 
   checkInputs = [ ];
-  nativeBuildInputs = [ writableTmpDirAsHomeHook ];
+  nativeBuildInputs = [
+    writableTmpDirAsHomeHook
+  ];
   buildInputs = [
     logs
     fmt

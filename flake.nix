@@ -1,7 +1,5 @@
 {
   inputs = {
-    self.submodules = true;
-
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
 
     pac-nix.url = "github:katrinafyi/pac-nix";
@@ -38,7 +36,10 @@
     flake-for-all-systems args {
       overlays = {
         addBincamlPackages = ofinal: _: {
-          buildDunePackage' = ofinal.callPackage "./nix/build-dune-package'.nix" { };
+          buildDune324Package = ofinal.buildDunePackage.override {
+            dune_3 = ofinal.dune_3_24;
+          };
+          dune_3_24 = ofinal.callPackage ./nix/dune_3_24.nix { };
 
           bincaml = ofinal.callPackage ./nix/bincaml.nix {
             ocaml-protoc-plugin = ofinal.ocaml-protoc-plugin-6-1-0;

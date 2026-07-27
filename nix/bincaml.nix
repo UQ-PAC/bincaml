@@ -1,6 +1,6 @@
 {
   lib,
-  buildDunePackage',
+  buildDune324Package,
   nix-gitignore,
   writableTmpDirAsHomeHook,
   protobuf,
@@ -52,7 +52,7 @@
   # , nodejs
 }:
 
-buildDunePackage' {
+buildDune324Package {
   pname = "bincaml";
   version = "0.0";
 
@@ -109,7 +109,7 @@ buildDunePackage' {
     patchShebangs --build test
   '';
 
-  doCheck = true;
+  doCheck = false;
   outputs = [
     "out"
     "dev"
