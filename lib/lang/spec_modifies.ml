@@ -78,11 +78,11 @@ let set_modsets ?(add_only = false) prog =
       in
       let name_compare = CCOrd.map Var.name String.compare in
       let captures_globs =
-        List.sort name_compare
-        @@ List.filter (not % Var.is_constant)
-        @@ VarSet.elements @@ VarSet.union vs
-        @@ VarSet.union exist_captures
-        @@ VarSet.union read written
+        VarSet.union read written
+        |> VarSet.union exist_captures
+        |> VarSet.union vs |> VarSet.elements
+        |> List.filter (not % Var.is_constant)
+        |> List.sort name_compare
       in
       let modifies_globs =
         List.sort name_compare @@ VarSet.elements

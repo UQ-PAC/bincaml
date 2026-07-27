@@ -24,7 +24,7 @@ type t =
 
 let read s =
   match s with
-  | "GTIRB_ARM" -> GTIRB_ARM
+  | "GtirbArm" -> GtirbArm
   | "SSA" -> SSA
   | "DSA" -> DSA
   | "NoPhis" -> NoPhis

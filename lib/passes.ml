@@ -111,8 +111,7 @@ module PassManager = struct
       name = "aslp-semantics";
       apply = Prog Transforms.Aslp.transform_program;
       doc = "Add ASLP instsruction semantics after gtirb";
-      invariants =
-        Invariants.presupposes [ GTIRB_ARM ] ~invalidates:[ GTIRB_ARM ];
+      invariants = Invariants.presupposes [ GtirbArm ] ~invalidates:[ GtirbArm ];
     }
 
   let cse_elim =
