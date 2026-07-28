@@ -124,47 +124,79 @@
                     opams = lib.map (p: { inherit (p) pname version out; }) ins;
                   in {
               shellHook = (prev.shellHook or "") + ''
-
-                ocamlfind list
-
                 ocaml_hash="${hash}"
                 export OPAMROOT="$(pwd)/.nixx-ocaml/$ocaml_hash"
+
+                mkdir -p "$OPAM_SWITCH_PREFIX"/lib/stublibs
+
+                uniq="$(echo "$OCAMLPATH" | tr ':' '\n' | sort | uniq)"
+                ocamlpaths=( $uniq )
+
+                pnames=()
+                versions=()
+
+                for p in "''${ocamlpaths[@]}"; do
+                  segment="$(cut -d/ -f4 <<< "$p")"
+                  combined="$(echo "$segment" | sed -E 's/^[^-]+-(.*)-([^-]+)''$/\1:\2/')"
+                  IFS=: read -r -a pname_and_version <<< "$combined"
+
+                  pname="''${pname_and_version[0]}"
+                  pname="$(sed s/^ocaml${selfOcamlPackages.ocaml.version}-// <<< "$pname")"
+                  pnames+=( "$pname" )
+
+                  version="''${pname_and_version[1]}"
+                  grepped="$(grep -R 'version = "' "$p/$pname/META" | cut -d'"' -f2 | head -n1)"
+                  if [[ -n "$grepped" ]] && ! [[ "$grepped" = *' '* ]]; then
+                    version="$grepped"
+                  fi
+
+                  echo $segment '->' "''${pname_and_version[@]}" "$version"
+
+                  versions+=( "$version" )
+                done
+
+                opams=()
+                for index in "''${!pnames[@]}"; do
+                  pname="''${pnames[$index]}"
+                  version="''${versions[$index]}"
+
+                  case "$pname" in
+                    qcheck-stm|trace-tef|trace|qcheck-multicoretests-util|pp_loc)
+                      suffix="" ;;
+                    *)
+                      suffix=".$version" ;;
+                  esac
+
+                  case "$pname" in
+                    seq|aslp_lifter_ocaml|capstone_arm64_disas|findlib) ;;
+                    *)
+                      opams+=( "$pname$suffix" ) ;;
+                  esac
+                done
 
                 opam init --yes --disable-sandboxing --no-setup --compiler=ocaml-system
                 # opam env --switch=ocaml-system
                 eval $(opam env --switch=ocaml-system)
 
-                mkdir -p "$OPAM_SWITCH_PREFIX"/lib/stublibs
+                opam install --fake --best-effort "''${opams[@]}"
 
-                opam install --fake --best-effort ${lib.concatMapStringsSep " " ({pname, version, out}:
-                    let
-                      pname' = lib.removePrefix "ocaml${selfOcamlPackages.ocaml.version}-" pname;
-                      versionSuffix = if pname' == "qcheck-stm" then "" else
-                            if pname' == "ppx_expect" then
-                            ".v${version}" else
-                            ".${version}";
-                        in
-                    if pname' == "capstone" || pname' == "capstone_arm64_disas" || pname' == "aslp_lifter_ocaml"
-                          then "" else "${pname'}${versionSuffix}") opams}
+                for i in "''${!ocamlpaths[@]}"; do
+                  site_lib="''${ocamlpaths[$i]}"
+                  pname="''${pnames[$i]}"
 
-                  ${lib.concatMapStrings ({pname, version, out}:
-                      let pname' = lib.removePrefix "ocaml${selfOcamlPackages.ocaml.version}-" pname; in
+                  for d in "$site_lib"/*; do
+                    if [[ "$(basename $d)" != stublibs ]]; then
+                      ln -sf "$d" "$OPAM_SWITCH_PREFIX"/lib/$pname || true
+                    else
+                      ln -sf "$d"/* "$OPAM_SWITCH_PREFIX"/lib/stublibs || true
+                    fi
+                  done
 
-                        ''
-                      for d in ${out}/lib/ocaml/*/site-lib/*; do
-                        if [[ "$(basename $d)" != stublibs ]]; then
-                          ln -sf "$d" "$OPAM_SWITCH_PREFIX"/lib/${pname'} || true
-                        else
-                          ln -sf "$d"/* "$OPAM_SWITCH_PREFIX"/lib/stublibs || true
-                        fi
-                      done
+                  # if [[ -d {out}/share/doc ]]; then
+                  #   ln -sf {out}/share/doc/{pname'} "$OPAM_SWITCH_PREFIX"/doc/{pname'} || true
+                  # fi
 
-                      if [[ -d ${out}/share/doc ]]; then
-                        ln -sf ${out}/share/doc/${pname'} "$OPAM_SWITCH_PREFIX"/doc/${pname'} || true
-                      fi
-
-                    ''
-                    ) opams }
+                done
 
 
               '';
