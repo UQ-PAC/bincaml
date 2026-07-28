@@ -114,10 +114,61 @@
               inherit bnfc-treesitter;
               z3 = pkgs.z3.out;
             };
-            no-fp = selfOcamlPackages.callPackage ./nix/shell.nix {
+            no-fp = (selfOcamlPackages.callPackage ./nix/shell.nix {
               inherit bnfc-treesitter;
               z3 = pkgs.z3.out;
-            };
+            }).overrideAttrs (final: prev:
+                  let
+                    ins = (final.buildInputs ++ final.propagatedBuildInputs);
+                    hash = builtins.hashString "sha512" (lib.concatMapStrings (p: p.outPath) ins);
+                    opams = lib.map (p: { inherit (p) pname version out; }) ins;
+                  in {
+              shellHook = (prev.shellHook or "") + ''
+
+                ocamlfind list
+
+                ocaml_hash="${hash}"
+                export OPAMROOT="$(pwd)/.nixx-ocaml/$ocaml_hash"
+
+                opam init --yes --disable-sandboxing --no-setup --compiler=ocaml-system
+                # opam env --switch=ocaml-system
+                eval $(opam env --switch=ocaml-system)
+
+                mkdir -p "$OPAM_SWITCH_PREFIX"/lib/stublibs
+
+                opam install --fake --best-effort ${lib.concatMapStringsSep " " ({pname, version, out}:
+                    let
+                      pname' = lib.removePrefix "ocaml${selfOcamlPackages.ocaml.version}-" pname;
+                      versionSuffix = if pname' == "qcheck-stm" then "" else
+                            if pname' == "ppx_expect" then
+                            ".v${version}" else
+                            ".${version}";
+                        in
+                    if pname' == "capstone" || pname' == "capstone_arm64_disas" || pname' == "aslp_lifter_ocaml"
+                          then "" else "${pname'}${versionSuffix}") opams}
+
+                  ${lib.concatMapStrings ({pname, version, out}:
+                      let pname' = lib.removePrefix "ocaml${selfOcamlPackages.ocaml.version}-" pname; in
+
+                        ''
+                      for d in ${out}/lib/ocaml/*/site-lib/*; do
+                        if [[ "$(basename $d)" != stublibs ]]; then
+                          ln -sf "$d" "$OPAM_SWITCH_PREFIX"/lib/${pname'} || true
+                        else
+                          ln -sf "$d"/* "$OPAM_SWITCH_PREFIX"/lib/stublibs || true
+                        fi
+                      done
+
+                      if [[ -d ${out}/share/doc ]]; then
+                        ln -sf ${out}/share/doc/${pname'} "$OPAM_SWITCH_PREFIX"/doc/${pname'} || true
+                      fi
+
+                    ''
+                    ) opams }
+
+
+              '';
+            });
           };
         };
     };
