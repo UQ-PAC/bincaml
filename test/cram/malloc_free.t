@@ -132,7 +132,7 @@
   procedure p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
      R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
      R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64);
-    modifies $mem_encoding, $mem, $stack;
+    modifies $mem, $mem_encoding, $stack;
     ensures {:msg "Memory Error: Memory Leak"} (forall 
      i: bv64 :: 
       
@@ -216,13 +216,13 @@
       return;
   }
   procedure p$malloc(R0_in: bv64) returns (R0_out: bv64);
-    modifies $mem_encoding, $mem, $stack;
+    modifies $mem, $mem_encoding, $stack;
     ensures $me_can_allocate(old($mem_encoding), R0_out, R0_in);
     ensures ($me_addr_offset($mem_encoding, R0_out) == 0bv64);
     ensures ($me_alloc_base($mem_encoding, $me_addr_alloc($mem_encoding, R0_out)) == R0_out);
     ensures $me_allocate(old($mem_encoding), $mem_encoding, R0_out, R0_in);
   procedure p$#free(R0_in: bv64);
-    modifies $mem_encoding, $mem, $stack;
+    modifies $mem, $mem_encoding, $stack;
     ensures {:msg "Memory Error: Invalid Free"} ($mem_encoding == $me_alloc_live_update(
        old($mem_encoding),
        $me_addr_alloc(old($mem_encoding), R0_in),
@@ -369,7 +369,7 @@
   procedure p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
      R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
      R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64);
-    modifies $mem_encoding, $mem, $stack;
+    modifies $mem, $mem_encoding, $stack;
     ensures {:msg "Memory Error: Memory Leak"} (forall 
      i: bv64 :: 
       
@@ -453,13 +453,13 @@
       return;
   }
   procedure p$malloc(R0_in: bv64) returns (R0_out: bv64);
-    modifies $mem_encoding, $mem, $stack;
+    modifies $mem, $mem_encoding, $stack;
     ensures $me_can_allocate(old($mem_encoding), R0_out, R0_in);
     ensures ($me_addr_offset($mem_encoding, R0_out) == 0bv64);
     ensures ($me_alloc_base($mem_encoding, $me_addr_alloc($mem_encoding, R0_out)) == R0_out);
     ensures $me_allocate(old($mem_encoding), $mem_encoding, R0_out, R0_in);
   procedure p$#free(R0_in: bv64);
-    modifies $mem_encoding, $mem, $stack;
+    modifies $mem, $mem_encoding, $stack;
     ensures {:msg "Memory Error: Invalid Free"} ($mem_encoding == $me_alloc_live_update(
        old($mem_encoding),
        $me_addr_alloc(old($mem_encoding), R0_in),

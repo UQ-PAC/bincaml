@@ -17,6 +17,7 @@ type t =
   | Params
   | LambdaLift
   | MemoryEncoding
+  | GtirbArm
   | ReducibleLoops
       (** All loops are reducible. That is, there are no {i irreducible} loops.
       *)
@@ -24,6 +25,7 @@ type t =
 
 let read s =
   match s with
+  | "GtirbArm" -> GtirbArm
   | "SSA" -> SSA
   | "DSA" -> DSA
   | "NoPhis" -> NoPhis

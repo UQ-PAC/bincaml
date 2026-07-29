@@ -28,7 +28,7 @@ let%expect_test "lift: add x1, x2, x3, lsl #4" =
          stmts =
          [var var_0:bv64 := 0x0:bv64; var var_0:bv64 := $R2;
            var var_1:bv64 := 0x0:bv64; var var_1:bv64 := $R3;
-           $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
+           $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, zero_extend(52, 0x4:bv12)));
            (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
          pc_assign = (Some 0x2004:bv64) })
     |}]
@@ -108,7 +108,7 @@ let%expect_test "lift: b #16" =
          stmts =
          [var var_0:bv64 := 0x0:bv64; var var_0:bv64 := $R2;
            var var_1:bv64 := 0x0:bv64; var var_1:bv64 := $R3;
-           $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, 0x4:bv12));
+           $R1:bv64 := bvadd(var_0:bv64, bvshl(var_1:bv64, zero_extend(52, 0x4:bv12)));
            (var BranchTaken:bool := false, $PC:bv64 := 0x2004:bv64)];
          pc_assign = (Some 0x2004:bv64) })
     |}]
@@ -154,7 +154,9 @@ proc @main()  -> () {  }
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
     proc @main()  -> () {  }
-      captures $PC:bv64
+      modifies $PC:bv64, $R0:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
+      captures $PC:bv64, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $SP:bv64,
+        $mem:(bv64->bv8)
       requires boolor(eq(0x400808:bv64, $PC))
 
     [
@@ -165,37 +167,37 @@ proc @main()  -> () {  }
          goto (%block);
        ];
        block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
-         var var:bv64 := 0x0:bv64;
-         var var:bv64 := $SP;
+         var local:bv64 := 0x0:bv64;
+         var local:bv64 := $SP;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
-          0xffffffffffffffe0:bv64) $R29 8;
+          0xffffffffffffffe0:bv64) $R29 64;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
-           0xffffffffffffffe0:bv64), 0x8:bv64) $R30 8;
-         $SP:bv64 := bvadd(var:bv64, 0xffffffffffffffe0:bv64);
+           0xffffffffffffffe0:bv64), 0x8:bv64) $R30 64;
+         $SP:bv64 := bvadd(local:bv64, 0xffffffffffffffe0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
          goto (%block_1);
        ];
        block %block_1 { .asm = "mov x29, sp" } [
-         var var_1:bv64 := 0x0:bv64;
+         var local_1:bv64 := 0x0:bv64;
          $R29:bv64 := bvadd($SP, 0x0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
          goto (%block_2);
        ];
        block %block_2 { .asm = "str w0, [sp, #0x1c]" } [
-         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) extract(-32,0, $R0) 4;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) extract(32,0, $R0) 32;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400814:bv64);
          goto (%block_3);
        ];
        block %block_3 { .asm = "str x1, [sp, #0x10]" } [
-         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x10:bv64) $R1 8;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x10:bv64) $R1 64;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400818:bv64);
          goto (%block_4);
        ];
        block %block_4 { .asm = "ldrsw x0, [sp, #0x1c]" } [
-         var var_2:bv32 := 0x0:bv32;
-         $mem:(bv64->bv8) := load le var_3:bv4 bvadd($SP, 0x1c:bv64) 4;
-         var var_2:bv32 := var_3:bv4;
-         $R0:bv64 := zero_extend(0, sign_extend(32, var_2:bv32));
+         var local_2:bv32 := 0x0:bv32;
+         var local_3:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
+         var local_2:bv32 := local_3:bv32;
+         $R0:bv64 := zero_extend(0, sign_extend(32, local_2:bv32));
          (var BranchTaken:bool := false, $PC:bv64 := 0x40081c:bv64);
          goto (%block_5);
        ];
@@ -257,7 +259,8 @@ proc @Sqrt()  -> () {  }
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
     proc @Sqrt()  -> () {  }
-      captures $PC:bv64
+      modifies $PC:bv64
+      captures $PC:bv64, $PSTATE_N:bv1, $PSTATE_V:bv1
 
     [
        block %Sqrt_code_4 { .address = 4196316 } [
@@ -329,6 +332,7 @@ proc @main()  -> () {  }
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
     proc @main()  -> () {  }
+      modifies $PC:bv64
       captures $PC:bv64
       requires boolor(eq(0x400808:bv64, $PC))
 
@@ -342,8 +346,8 @@ proc @main()  -> () {  }
          goto (%block);
        ];
        block %block { .asm = "mov xzr, xzr" } [
-         var var:bv64 := 0x0:bv64;
-         var var_1:bv64 := 0x0:bv64;
+         var local:bv64 := 0x0:bv64;
+         var local_1:bv64 := 0x0:bv64;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
          goto (%ret_1);
        ];

@@ -73,11 +73,29 @@ let stmt_of_aarch64_intrin ?error :
   let args = Expr.BasilExpr.[ bvconst opcode; bvconst address ] in
   Stmt.Instr_IntrinCall { attrib; lhs = []; name = Aarch64Eval; args }
 
-(** Returns the Bincaml global variable representing heap memory. *)
+(** Returns the Bincaml global variable representing heap memory, declaring it
+    if it does not exist. *)
 let aarch64_mem_of_prog prog =
+  let mem_name = "$mem" in
+  let mem_type = Types.(Map (Bitvector 64, Bitvector 8)) in
   Program.get_decl_by_name "$mem" prog |> function
-  | Some (Variable { binding }) -> binding
-  | _ -> failwith "aarch64_mem_of_prog: no $mem found"
+  | Some (Variable { binding }) ->
+      if not (Types.equal (Var.typ binding) mem_type) then
+        Logs.warn (fun m ->
+            m
+              "Memory declared with unexpected type; lifter may not produce \
+               well-typed or correct code.");
+      (prog, binding)
+  | None ->
+      let mem = Var.create mem_name ~scope:Var.GlobalVarShared mem_type in
+
+      let prog =
+        let attrib = Attrib.empty and classification = None in
+        Program.add_decl prog
+          (Program.Variable { binding = mem; attrib; classification })
+      in
+      (prog, mem)
+  | _ -> failwith @@ mem_name ^ " already declared as non-variable"
 
 (** {1 Main Bincaml IR transformation functions} *)
 
@@ -172,11 +190,11 @@ let add_aarch64_global_declarations ?(add_all = false) prog =
     Also inserts global variable declarations for the architectural variables,
     if not already present. *)
 let transform_program prog =
-  let memory = aarch64_mem_of_prog prog in
-
+  let prog, memory = aarch64_mem_of_prog prog in
   prog
   |> Program.map_procedures (fun _ -> transform_procedure ~memory)
   |> add_aarch64_global_declarations
+  |> Spec_modifies.set_modsets ~add_only:false
 
 (** {1 Supplementary transformation} *)
 

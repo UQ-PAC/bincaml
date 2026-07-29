@@ -118,6 +118,14 @@ module PassManager = struct
       invariants = Invariants.presupposes [ SSA ];
     }
 
+  let aslp_semantics =
+    {
+      name = "aslp-semantics";
+      apply = Prog Transforms.Aslp.transform_program;
+      doc = "Add ASLP instsruction semantics after gtirb";
+      invariants = Invariants.presupposes [ GtirbArm ] ~invalidates:[ GtirbArm ];
+    }
+
   let cse_elim =
     {
       name = "cse-elim";
@@ -470,6 +478,7 @@ module PassManager = struct
 
   let passes =
     [
+      aslp_semantics;
       lift_intrinsics_aarch64;
       hm_elaborate;
       chop_unreachable;

@@ -76,14 +76,17 @@ let set_modsets ?(add_only = false) prog =
         |> Iter.flat_map Expr.BasilExpr.free_vars_iter
         |> Iter.filter Var.is_global |> VarSet.of_iter
       in
+      let name_compare = CCOrd.map Var.name String.compare in
       let captures_globs =
-        List.filter (not % Var.is_constant)
-        @@ VarSet.elements @@ VarSet.union vs
-        @@ VarSet.union exist_captures
-        @@ VarSet.union read written
+        VarSet.union read written
+        |> VarSet.union exist_captures
+        |> VarSet.union vs |> VarSet.elements
+        |> List.filter (not % Var.is_constant)
+        |> List.sort name_compare
       in
       let modifies_globs =
-        VarSet.elements @@ VarSet.union exist_modifies written
+        List.sort name_compare @@ VarSet.elements
+        @@ VarSet.union exist_modifies written
       in
       let spec : (Var.t, Program.e) Procedure.proc_spec =
         Procedure.specification p
