@@ -188,7 +188,7 @@ let add_aarch64_global_declarations ?(add_all = false) prog =
     procedures within the given program.
 
     Also inserts global variable declarations for the architectural variables,
-    if not already present. Assumes it is running immediately after gtirb. *)
+    if not already present. *)
 let transform_program prog =
   let prog, memory = aarch64_mem_of_prog prog in
   prog
