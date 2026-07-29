@@ -1,6 +1,6 @@
 open Bincaml_util.Common
 open Lang
-open Analysis.Highest_live_bit_simple
+open Analysis.Highest_live_bit
 open Expr
 
 (** Transforms a program using information gained from the Highest Live Bit
