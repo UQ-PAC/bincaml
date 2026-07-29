@@ -1,5 +1,5 @@
 (library
  (public_name bincaml.backends)
  (name backends)
- (modules boogie smt)
+ (modules boogie smt smt_live)
  (libraries containers containers-data containers.pp lang transforms))
