@@ -25,44 +25,50 @@ module HighestLiveBitLattice = struct
 
   (* Highest bit is inclusive, i.e. 63 means bits [..63] are used*)
   (* lo_lb can also be called offset *)
-  (* I think that in this simple implementation, lo_lb is redundant, but it is being left here for potential future use *)
-  type t = Bot | HighBit of { hi_lb : int; lo_lb : int; is_var : bool } | Top
+  (* I think that in this simple implementation, lo_lb is redundant, but it is
+  being left here for potential future use *)
+  type t =
+    | Bot
+    | HighBits of int
+        (** [Highbits n] : the expression accesses at most n bits of the
+            variable *)
+    | Var of int  (** [Var n] : variable with n bits *)
+    | Top
   [@@deriving eq, ord, show { with_path = false }]
 
-  let highbit a b c = HighBit { hi_lb = a; lo_lb = b; is_var = c }
+  let highbit a c = if c then Var a else HighBits a
   let top = Top
   let bottom = Bot
   let pretty t = Containers_pp.text (show t)
-
-  let show = function
-    | Top -> "⊤"
-    | Bot -> "⊥"
-    | HighBit { hi_lb = hi; lo_lb = lo; is_var = iv } ->
-        "(" ^ string_of_int hi ^ ", " ^ string_of_int lo ^ ", "
-        ^ string_of_bool iv ^ ")"
+  let show = function Top -> "⊤" | Bot -> "⊥" | n -> show n
 
   let join a b =
     match (a, b) with
     | Top, _ | _, Top -> Top
     | Bot, a | a, Bot -> a
-    | HighBit { hi_lb = ha; lo_lb = la }, HighBit { hi_lb = hb; lo_lb = lb } ->
-        let max_hi_lb = max ha hb in
-        let min_lo_lb = min la lb in
-        highbit max_hi_lb min_lo_lb false (* TODO: check if true or false *)
+    | Var ha, Var hb
+    | HighBits ha, Var hb
+    | Var ha, HighBits hb
+    | HighBits ha, HighBits hb ->
+        (* always join to non var since we we are always comparing two
+        subexpressions with join, the result expr cannot be just a var *)
+        HighBits (max ha hb)
 
   let leq a b =
     match (a, b) with
     | a, b when equal a b -> true
-    | HighBit { hi_lb = ha; lo_lb = la }, HighBit { hi_lb = hb; lo_lb = lb } ->
-        ha <= hb && la >= lb
+    | HighBits ha, HighBits hb
+    | Var ha, HighBits hb
+    | HighBits ha, Var hb
+    | Var ha, Var hb ->
+        (* this is funny but we just care about leq wrt the number of bits; *)
+        ha <= hb
     | Bot, _ | _, Top -> true
     | _, Bot | Top, _ -> false
 
   let widening a b = join a b
   let narrowing a b = a
-
-  let get_hi a =
-    match a with HighBit { hi_lb = hi; lo_lb; is_var } -> Some hi | _ -> None
+  let get_hi = function HighBits i -> Some i | Var i -> Some i | _ -> None
 end
 
 (* IDESSI Lattice Backwards*)
@@ -120,69 +126,46 @@ module IDESSI_LB = struct
     | BotEdge, _ -> Value.bottom
     | IdEdge, x -> x
     | TopEdge, _ -> Top
-    | NumEdge v, _ -> Value.highbit v 0 true
+    | NumEdge v, _ -> Value.highbit v true
 
   module Extract = struct
-    (* Returns a HighestLiveBitLattice t *)
-    (* This does the math that determines the highbit tuple *)
-    let extract_alg readv e =
+    (** Collect the maximum width of an access to the variable in an expression
+    *)
+    let extract_alg readv (e : (Value.t * _) Expr.BasilExpr.abstract_expr) =
       let open Expr.AbstractExpr in
       match e with
       | RVar { id } -> readv id
-      | UnaryExpr
-          {
-            op = `Extract (hi, lo);
-            arg = Value.HighBit { hi_lb; lo_lb; is_var }, _;
-          } ->
-          if is_var then Value.highbit (hi - 1 + lo_lb) lo_lb false
-          else Value.highbit hi_lb lo_lb false
-      | BinaryExpr { op = `BVASHR; arg1; arg2 } -> Value.top
+      | UnaryExpr { op = `Extract (hi, lo); arg = arg, _ } -> (
+          match arg with Var b -> Value.HighBits (hi - 1) | i -> i)
       | BinaryExpr
-          {
-            op = `BVLSHR;
-            arg1 = Value.HighBit { hi_lb; lo_lb; is_var }, _;
-            arg2 = _, Some (`Bitvector bv);
-          } ->
+          { op = `BVLSHR; arg1 = arg1, _; arg2 = _, Some (`Bitvector bv) } -> (
+          (* should be safe to conv int because shift values are small *)
           let shift = Bitvec.to_signed_bigint bv |> Z.to_int in
-          if is_var then
-            if shift > hi_lb then Value.bottom
-            else Value.highbit hi_lb (shift + lo_lb) false
-          else Value.highbit hi_lb lo_lb false
-      | BinaryExpr
-          {
-            op = `BVSHL;
-            arg1 = Value.HighBit { hi_lb; lo_lb; is_var }, _;
-            arg2 = _, Some (`Bitvector bv);
-          } ->
-          let shift = Bitvec.to_signed_bigint bv |> Z.to_int in
-          if is_var then
-            if shift > hi_lb then Value.bottom
-            else Value.highbit (hi_lb - shift) (lo_lb - shift) false
-          else Value.highbit hi_lb lo_lb false
-      | BinaryExpr { arg1 = v1, _; arg2 = v2, _ } -> Value.join v1 v2
-      | ApplyIntrin { args = (v1, _) :: rest } ->
-          List.fold_left (fun v1 (v2, _) -> Value.join v1 v2) v1 rest
-      | UnaryExpr { op; arg = a, _ } -> a
-      | _ -> Value.bottom
+          match arg1 with Var hi -> HighBits (max 0 (hi - shift)) | i -> i)
+      | e ->
+          Abstract_expr.AbstractExpr.fold Value.join Value.bottom
+            (Abstract_expr.AbstractExpr.map fst e)
 
     (* Converts HighestLiveBitLattice t to IDESSI_LB t*)
     let extract_expr readv e =
       match
         Expr.BasilExpr.zygo_l Expr_eval.eval_expr_alg (extract_alg readv) e
       with
-      | Value.Bot -> BotEdge
-      | Value.Top -> TopEdge
-      | Value.HighBit { hi_lb; lo_lb } -> NumEdge hi_lb
+      | Bot -> BotEdge
+      | Top -> TopEdge
+      | HighBits v -> NumEdge v
+      | Var v -> NumEdge v
 
     (* find number of live bits for a single
     variable [var] in an expression ; read function returns the width for
     this variable, and bot for everything else*)
     let eval_wrt_var var expr =
       let readv v =
+        (* look at the one var we care about; everything else is bot  *)
         if Var.equal v var then
           match Types.bit_width (Var.typ var) with
-          | Some w -> Value.highbit (w - 1) 0 true
-          | None -> Value.bottom
+          | Some w -> Value.Var (w - 1)
+          | None -> Value.top
         else Value.bottom
       in
       extract_expr readv expr

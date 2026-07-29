@@ -290,8 +290,8 @@ proc @left_shift() -> (out1:bv64)
 
     [
        block %right_shift [
-         var v1:bv64 := 0xffffffff:bv64;
-         var v2:bv64 := bvlshr(v1:bv64, 0xa:bv64);
+         var v1:bv54 := extract(54,0, 0xffffffff:bv64);
+         var v2:bv64 := bvlshr(zero_extend(10, v1:bv54), 0xa:bv64);
          var out:bv64 := v2:bv64;
          return;
        ]
@@ -301,8 +301,8 @@ proc @left_shift() -> (out1:bv64)
 
     [
        block %left_shift [
-         var v3:bv54 := extract(54,0, 0xffffffff:bv64);
-         var v4:bv64 := bvshl(zero_extend(10, v3:bv54), 0xa:bv64);
+         var v3:bv64 := 0xffffffff:bv64;
+         var v4:bv64 := bvshl(v3:bv64, 0xa:bv64);
          var out1:bv64 := v4:bv64;
          return;
        ]
@@ -404,19 +404,19 @@ proc @double_out() -> (dout1:bv64, dout2:bv64) { }
     prog entry @trans;ID: ("@trans", 0)
 
 
-      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
-      { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
-      { Var.V.name = "v3"; typ = bv64; scope = Var.LocalVar } -> (29, 0, true)
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (Var 29)
+      { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (Var 29)
+      { Var.V.name = "v3"; typ = bv64; scope = Var.LocalVar } -> (Var 29)
       { Var.V.name = "b"; typ = bv64; scope = Var.LocalVar } -> ⊤
       { Var.V.name = "out"; typ = bv30; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "v2"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)
-      { Var.V.name = "v5"; typ = bv30; scope = Var.LocalVar } -> (29, 0, true)
+      { Var.V.name = "v2"; typ = bv30; scope = Var.LocalVar } -> (Var 29)
+      { Var.V.name = "v5"; typ = bv30; scope = Var.LocalVar } -> (Var 29)
     ID: ("@binary_expr", 1)
 
 
       { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
-      { Var.V.name = "v"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> (Var 63)
+      { Var.V.name = "v"; typ = bv64; scope = Var.LocalVar } -> (Var 63)
     ID: ("@double_out", 2)
 
 
@@ -504,9 +504,10 @@ proc @main() -> (out:bv16)
     prog entry @main;ID: ("@main", 2)
 
 
-      { Var.V.name = "$i"; typ = bv64; scope = Var.GlobalVar } -> (63, 0, true)
+      { Var.V.name = "$mem"; typ = (bv64->bv8); scope = Var.GlobalVar } -> ⊤
+      { Var.V.name = "$i"; typ = bv64; scope = Var.GlobalVar } -> (Var 63)
       { Var.V.name = "out"; typ = bv16; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "a"; typ = bv16; scope = Var.LocalVar } -> (15, 0, true)
-      { Var.V.name = "x"; typ = bv64; scope = Var.LocalVar } -> (15, 0, true)
-      { Var.V.name = "y"; typ = bv16; scope = Var.LocalVar } -> (15, 0, true)
+      { Var.V.name = "a"; typ = bv16; scope = Var.LocalVar } -> (Var 15)
+      { Var.V.name = "x"; typ = bv64; scope = Var.LocalVar } -> (Var 15)
+      { Var.V.name = "y"; typ = bv16; scope = Var.LocalVar } -> (Var 15)
     |}]

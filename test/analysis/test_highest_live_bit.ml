@@ -111,54 +111,32 @@ proc @binary_expr(c:bv64) -> (out1:bv64) {}
     (fun id vars ->
       Printf.printf "ID: %s\n" (ID.show id);
 
-      VarMap.iter
-        (fun var value ->
-          Printf.printf "  %s -> %s\n" (Var.show var)
-            (IDESSI_LB.Value.show value))
-        vars)
+      let s =
+        VarMap.to_iter vars
+        |> Iter.to_string ~sep:", " (function var, value ->
+            Printf.sprintf "%s -> %s" (Var.to_string var)
+              (IDESSI_LB.Value.show value))
+      in
+      print_endline @@ "  " ^ s)
     p2_results;
   [%expect
     {|
     ID: ("@main", 0)
-      { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "a"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      out1:bv64 -> ⊤, v1:bv64 -> (Var 63), a:bv64 -> (Var 63)
     ID: ("@f", 1)
-      { Var.V.name = "f_out"; typ = bv32; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
-      { Var.V.name = "f_a"; typ = bv32; scope = Var.LocalVar } -> (31, 0, true)
+      f_out:bv32 -> ⊤, v1:bv64 -> (Var 31), f_a:bv32 -> (Var 31)
     ID: ("@g", 2)
-      { Var.V.name = "g_out"; typ = bv1; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
-      { Var.V.name = "g_a"; typ = bv1; scope = Var.LocalVar } -> (0, 0, true)
+      g_out:bv1 -> ⊤, v1:bv64 -> (Var 31), g_a:bv1 -> (Var 0)
     ID: ("@h", 3)
-      { Var.V.name = "h_out"; typ = bv1; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
-      { Var.V.name = "h_a"; typ = bv32; scope = Var.LocalVar } -> (0, 0, true)
-      { Var.V.name = "h_b"; typ = bv1; scope = Var.LocalVar } -> (0, 0, true)
+      h_out:bv1 -> ⊤, v1:bv64 -> (Var 31), h_a:bv32 -> (Var 0), h_b:bv1 -> (Var 0)
     ID: ("@shift", 4)
-      { Var.V.name = "left_out"; typ = bv64; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "right_out"; typ = bv64; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (63, 0, false)
-      { Var.V.name = "left"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
-      { Var.V.name = "right"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      left_out:bv64 -> ⊤, right_out:bv64 -> ⊤, v1:bv64 -> (HighBits 63), left:bv64 -> (Var 63), right:bv64 -> (Var 63)
     ID: ("@shift2", 5)
-      { Var.V.name = "left_out"; typ = bv64; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "right_out"; typ = bv64; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (63, 0, false)
-      { Var.V.name = "left"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
-      { Var.V.name = "right"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      left_out:bv64 -> ⊤, right_out:bv64 -> ⊤, v1:bv64 -> (HighBits 31), left:bv64 -> (Var 63), right:bv64 -> (Var 63)
     ID: ("@trans", 6)
-      { Var.V.name = "out"; typ = bv32; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (31, 0, true)
-      { Var.V.name = "v2"; typ = bv32; scope = Var.LocalVar } -> (31, 0, true)
+      out:bv32 -> ⊤, v1:bv64 -> (Var 31), v2:bv32 -> (Var 31)
     ID: ("@binary_expr", 7)
-      { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
-      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (15, 0, true)
-      { Var.V.name = "v2"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
-      { Var.V.name = "v3"; typ = bv8; scope = Var.LocalVar } -> (7, 0, true)
-      { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (63, 0, true)
+      out1:bv64 -> ⊤, c:bv64 -> (Var 63), v1:bv64 -> (Var 15), v2:bv8 -> (Var 7), v3:bv8 -> (Var 7), v4:bv64 -> (Var 63)
     |}]
 
 let%expect_test "sqrt" =
@@ -263,6 +241,6 @@ proc @Sqrt_4196228(R0_in:bv64, R31_in:bv64)  -> (R0_out:bv64, R1_out:bv64) { .ad
   [%expect
     {|
     @Sqrt_4196228
-    (Λ,Λ->IdEdge), (Λ,R0_in->NumEdge 63), (Λ,R31_in->NumEdge 63), (Λ,var1_4196240_bv64_2->NumEdge 63), (Λ,var1_4196328_bv64_2->NumEdge 63), (Λ,var1_4196336_bv64_2->NumEdge 63), (Λ,var1_4196256_bv64_2->NumEdge 63), (Λ,var1_4196260_bv64_2->NumEdge 63), (Λ,R0_9->NumEdge 63), (Λ,R1_7->NumEdge 63), (Λ,R0_10->NumEdge 63), (Λ,R0_11->NumEdge 31), (Λ,var1_4196284_bv32_2->NumEdge 31), (Λ,R0_13->NumEdge 63), (Λ,R0_14->NumEdge 63), (Λ,var1_4196296_bv64_2->NumEdge 63), (Λ,var1_4196320_bv32_2->NumEdge 31), (Λ,var1_4196308_bv32_2->NumEdge 31), (R0_out,R0_out->IdEdge), (R0_out,var1_4196348_bv64_2->NumEdge 63), (R1_out,R1_out->IdEdge)
-    R0_in, R31_in, R0_out, R1_out, var1_4196240_bv64_2, var1_4196328_bv64_2, var1_4196336_bv64_2, var1_4196256_bv64_2, var1_4196260_bv64_2, R0_9, R1_7, R0_10, R0_11, var1_4196284_bv32_2, R0_13, R0_14, var1_4196296_bv64_2, var1_4196320_bv32_2, var1_4196308_bv32_2, var1_4196348_bv64_2
+    (Λ,Λ->IdEdge), (Λ,$stack->⊤), (Λ,R0_in->NumEdge 63), (Λ,R31_in->NumEdge 63), (Λ,var1_4196240_bv64_2->NumEdge 63), (Λ,var1_4196328_bv64_2->NumEdge 63), (Λ,var1_4196336_bv64_2->NumEdge 63), (Λ,var1_4196256_bv64_2->NumEdge 63), (Λ,var1_4196260_bv64_2->NumEdge 63), (Λ,R0_9->NumEdge 63), (Λ,R1_7->NumEdge 63), (Λ,R0_10->NumEdge 63), (Λ,R0_11->NumEdge 31), (Λ,var1_4196284_bv32_2->NumEdge 31), (Λ,R0_13->NumEdge 63), (Λ,R0_14->NumEdge 63), (Λ,var1_4196296_bv64_2->NumEdge 63), (Λ,var1_4196320_bv32_2->NumEdge 31), (Λ,var1_4196308_bv32_2->NumEdge 31), (R0_out,R0_out->IdEdge), (R0_out,var1_4196348_bv64_2->NumEdge 63), (R1_out,R1_out->IdEdge)
+    $stack, R0_in, R31_in, R0_out, R1_out, var1_4196240_bv64_2, var1_4196328_bv64_2, var1_4196336_bv64_2, var1_4196256_bv64_2, var1_4196260_bv64_2, R0_9, R1_7, R0_10, R0_11, var1_4196284_bv32_2, R0_13, R0_14, var1_4196296_bv64_2, var1_4196320_bv32_2, var1_4196308_bv32_2, var1_4196348_bv64_2
     |}]
