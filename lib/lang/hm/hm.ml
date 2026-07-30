@@ -145,6 +145,15 @@ module Elaboration = Elaboration
 open Common
 open Abstract_expr
 
+module Hm_make_fresh () = struct
+  module Ctx = TypeExpr.MakeFresh ()
+  include Hm_types.Make (Ctx)
+  include Unification.Make (Ctx)
+  include Inference.Make (Ctx)
+  include Solve_bv.Make (Ctx)
+  include Elaboration.TypeInference (Ctx)
+end
+
 (*
    TODO:
 
@@ -165,7 +174,7 @@ open Abstract_expr
 let locally_elaborate_expr (e : Expr.BasilExpr.t) =
   let open AbstractExpr in
   let open Ops.AllOps in
-  let module T = Elaboration.TypeInference (TypeExpr.MakeFresh ()) in
+  let module T = Hm_make_fresh () in
   let constraints = ref [] in
   let univ = "<expr local>" in
   let ctx =
@@ -188,7 +197,7 @@ let elaborated_type_alg (e : Types.t Expr.BasilExpr.abstract_expr) =
 (** Partially apply args list to function type funtype and return resulting type
 *)
 let type_applied (funtype : Types.t) (args : Types.t list) =
-  let module T = Elaboration.TypeInference (TypeExpr.MakeFresh ()) in
+  let module T = Hm_make_fresh () in
   let rt = T.fresh_tvar ~n:"ret" () in
   let args = List.map T.ty_of_basil args in
 
@@ -204,6 +213,6 @@ let type_applied (funtype : Types.t) (args : Types.t list) =
 let elaborate_prog prog =
   (* We need to create a local typing module in order to get fresh state for the
   union find and hash cons. *)
-  let module T = Elaboration.TypeInference (TypeExpr.MakeFresh ()) in
+  let module T = Hm_make_fresh () in
   let scheme, prog = T.infer_program prog in
   prog

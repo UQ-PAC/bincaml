@@ -5,8 +5,11 @@ open Hm_types
 (** Hindley-Milner type inference based on a union-find. *)
 
 module Make (T : TypeExpr.TypeContext) = struct
-  open TypeExpr
-  include Solve_bv.Make (T)
+  open Solve_bv.Make (T)
+  open Hm_types.Make (T)
+  open Unification.Make (T)
+  open T
+  open T.Typ
 
   (** An AbstractExpr.t with [t] used as the type. *)
   module AbsTypingExpr = struct
@@ -21,7 +24,7 @@ module Make (T : TypeExpr.TypeContext) = struct
 
     type nonrec typ = typ
 
-    let top_typ = fix @@ top_t
+    let top_typ = top_t
     let fix i = E i
     let unfix i = match i with E i -> i
   end
@@ -43,35 +46,35 @@ module Make (T : TypeExpr.TypeContext) = struct
       (o : [ Ops.AllOps.const | Ops.AllOps.unary | Ops.AllOps.binary ]) =
     let fv () = fix @@ Var (gen.fresh ~name:"a" ()) in
     match o with
-    | `Extract (hi, lo) -> curry [ bvunk (fv ()) ] (bv_type (hi - lo))
+    | `Extract (hi, lo) -> curry_f [ bvunk (fv ()) ] (bv_type (hi - lo))
     | `SignExtend bits ->
         let a = fv () in
         let equ = fv () in
-        let r = curry [ bvunk a ] (bvunk equ) in
+        let r = curry_f [ bvunk a ] (bvunk equ) in
         visit_constraint @@ AddConst { a; b = bits; equ };
         r
     | `ZeroExtend bits ->
         let a = fv () and equ = fv () in
         visit_constraint @@ AddConst { a; b = bits; equ };
-        curry [ bvunk a ] (bvunk equ)
-    | `BOOLTOBV1 -> curry [ bool_type ] (bv_type 1)
-    | `Bitvector b -> fix @@ bv_type (Bitvec.size b)
+        curry_f [ bvunk a ] (bvunk equ)
+    | `BOOLTOBV1 -> curry_f [ bool_type ] (bv_type 1)
+    | `Bitvector b -> bv_type (Bitvec.size b)
     | #Ops.BVOps.binary_unif ->
         let a = fv () in
-        curry [ bvunk a; bvunk a ] (bvunk a)
+        curry_f [ bvunk a; bvunk a ] (bvunk a)
     | #Ops.BVOps.binary_pred ->
         let a = fv () in
-        curry [ bvunk a; bvunk a ] bool_type
+        curry_f [ bvunk a; bvunk a ] bool_type
     | #Ops.BVOps.unary_unif ->
         let a = fv () in
-        curry [ bvunk a ] (bvunk a)
-    | `INTNEG -> curry [ int_type ] int_type
-    | #Ops.IntOps.binary_pred -> curry [ int_type; int_type ] bool_type
-    | #Ops.IntOps.const -> fix @@ int_type
-    | #Ops.IntOps.binary_unif -> curry [ int_type; int_type ] int_type
-    | #Ops.LogicalOps.binary -> curry [ bool_type; bool_type ] bool_type
-    | #Ops.LogicalOps.unary -> curry [ bool_type ] bool_type
-    | #Ops.LogicalOps.const -> fix @@ bool_type
+        curry_f [ bvunk a ] (bvunk a)
+    | `INTNEG -> curry_f [ int_type ] int_type
+    | #Ops.IntOps.binary_pred -> curry_f [ int_type; int_type ] bool_type
+    | #Ops.IntOps.const -> int_type
+    | #Ops.IntOps.binary_unif -> curry_f [ int_type; int_type ] int_type
+    | #Ops.LogicalOps.binary -> curry_f [ bool_type; bool_type ] bool_type
+    | #Ops.LogicalOps.unary -> curry_f [ bool_type ] bool_type
+    | #Ops.LogicalOps.const -> bool_type
     | `Old ->
         let a = fv () in
         curry_f [ a ] a
@@ -102,8 +105,8 @@ module Make (T : TypeExpr.TypeContext) = struct
         in
         let rs = bvunk rs in
         let args = List.map bvunk args in
-        curry args rs
-    | `OR | `AND -> curry (List.init args (fun _ -> bool_type)) bool_type
+        curry_f args rs
+    | `OR | `AND -> curry_f (List.init args (fun _ -> bool_type)) bool_type
     | `MapUpdate ->
         let a = fv () in
         let b = fv () in
@@ -116,9 +119,9 @@ module Make (T : TypeExpr.TypeContext) = struct
         univ:string ->
         Lexing.position ->
         Program.e ->
-        scheme TCtx.t ->
+        scheme TypeExpr.TCtx.t ->
         AbsTypingExpr.t) univ hr e c : AbsTypingExpr.t =
-    let mkv v = V.of_var univ v in
+    let mkv v = TypeExpr.V.of_var univ v in
     let r = fix @@ Var (gen.fresh ()) in
     let open Abstract_expr.AbstractExpr in
     let e = Expr.BasilExpr.unfix e in
@@ -131,13 +134,13 @@ module Make (T : TypeExpr.TypeContext) = struct
         let tvars = List.map (fun v -> (v, inst_annot_v v)) bound_vars in
         let ictx =
           List.map (fun (v, t) -> (mkv v, Forall ([], t))) tvars
-          |> TCtx.add_list c
+          |> TypeExpr.TCtx.add_list c
         in
         let bdty = infer ~univ [%here] in_body ictx in
         let typ =
           match op with
           | `Lambda -> getty bdty
-          | `Forall | `Exists -> unify (getty bdty) (fix bool_type)
+          | `Forall | `Exists -> unify (getty bdty) bool_type
         in
         ignore @@ unify r (curry_f (List.map snd tvars) (getty bdty));
         let triggers =
@@ -178,7 +181,7 @@ module Make (T : TypeExpr.TypeContext) = struct
     | Let _ -> failwith ""
 
   let rec infer_expr visit_constraint ~univ (hr : Lexing.position) e =
-   fun (c : scheme TCtx.t) ->
+   fun (c : scheme TypeExpr.TCtx.t) ->
     Logs.debug (fun m ->
         m "%s" @@ "infer " ^ plpos hr ^ " " ^ Expr.BasilExpr.to_string e);
     let t =
@@ -188,8 +191,8 @@ module Make (T : TypeExpr.TypeContext) = struct
     in
     t
 
-  let infer visit_constraint ~univ (hr : Lexing.position) e (c : scheme TCtx.t)
-      =
+  let infer visit_constraint ~univ (hr : Lexing.position) e
+      (c : scheme TypeExpr.TCtx.t) =
     let nexpr =
       infer_expr visit_constraint ~univ hr e c
       |> AbsTypingExpr.unfix |> AbstractExpr.get_typ
@@ -217,9 +220,9 @@ module Make (T : TypeExpr.TypeContext) = struct
       r p
 
   let ctx_to_string ctx =
-    TCtx.to_iter ctx
+    TypeExpr.TCtx.to_iter ctx
     |> Iter.to_string (fun (a, b) ->
-        Printf.sprintf "%s %s" (V.to_string a) (scheme_to_string b))
+        Printf.sprintf "%s %s" (TypeExpr.V.to_string a) (scheme_to_string b))
 
   let fresh_tvar ?(n = "a") () = fix @@ Var (gen.fresh ~name:n ())
 
@@ -233,11 +236,11 @@ module Make (T : TypeExpr.TypeContext) = struct
     | Instr_IntrinCall _ -> failwith "intrin unsupported"
     | Instr_Assume { body; branch; attrib } ->
         let body = infer_ty [%here] body in
-        ignore @@ unify (fix bool_type) (getty body);
+        ignore @@ unify bool_type (getty body);
         Instr_Assume { body; branch; attrib }
     | Instr_Assert { body; attrib } ->
         let body = infer_ty [%here] body in
-        ignore @@ unify (fix bool_type) (getty body);
+        ignore @@ unify bool_type (getty body);
         Instr_Assert { body; attrib }
     | Instr_Assign { al = ls; attrib } ->
         let ls = List.map (fun (l, r) -> (l, infer_ty [%here] r)) ls in
@@ -250,7 +253,9 @@ module Make (T : TypeExpr.TypeContext) = struct
     | Instr_Call { lhs; procid; args; attrib } ->
         let p = Program.proc p procid in
         let infer_param p =
-          infer ~univ:(V.proc_univ procid) [%here] (Expr.BasilExpr.rvar p) ctx
+          infer
+            ~univ:(TypeExpr.V.proc_univ procid)
+            [%here] (Expr.BasilExpr.rvar p) ctx
         in
         let args = StringMap.mapi (fun param a -> infer_ty [%here] a) args in
         StringMap.iter
@@ -270,7 +275,7 @@ module Make (T : TypeExpr.TypeContext) = struct
         Instr_Call { lhs; procid; args; attrib }
     | Instr_IndirectCall { target; attrib } ->
         let target = infer_ty [%here] target in
-        ignore @@ unify (getty target) (fix ptr_typ);
+        ignore @@ unify (getty target) ptr_typ;
         Instr_IndirectCall { target; attrib }
     | Instr_Load { lhs; rhs; addr = Scalar; attrib } ->
         let lhs' = infer_ty [%here] (Expr.BasilExpr.rvar lhs) in
@@ -279,13 +284,13 @@ module Make (T : TypeExpr.TypeContext) = struct
         Instr_Load { lhs; rhs; addr = Scalar; attrib }
     | Instr_Load { lhs; rhs; addr = Addr { addr; size; endian }; attrib } ->
         let addr = infer_ty [%here] addr in
-        let _ = unify (fix @@ ptr_typ) (getty addr) in
-        let mapt = fix @@ fun_type (getty addr) (fresh_tvar ()) in
+        let _ = unify ptr_typ (getty addr) in
+        let mapt = fun_type (getty addr) (fresh_tvar ()) in
         let _ = unify (lookup_var_typ univ ctx rhs) mapt in
         let _ =
           unify
             (infer_ty [%here] (Expr.BasilExpr.rvar lhs) |> getty)
-            (fix @@ bv_type size)
+            (bv_type size)
         in
         Instr_Load { lhs; rhs; addr = Addr { addr; size; endian }; attrib }
     | Instr_Store { lhs; rhs; value; addr = Scalar; attrib } ->
@@ -300,14 +305,14 @@ module Make (T : TypeExpr.TypeContext) = struct
     | Instr_Store
         { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib } ->
         let addr = infer_ty [%here] addr in
-        let _ = unify (fix @@ ptr_typ) (getty addr) in
-        let mapt = fix @@ fun_type (getty addr) (fresh_tvar ()) in
+        let _ = unify ptr_typ (getty addr) in
+        let mapt = fun_type (getty addr) (fresh_tvar ()) in
         let _ =
           unify mapt (infer ~univ [%here] (Expr.BasilExpr.rvar lhs) ctx)
         in
         let _ = unify (lookup_var_typ univ ctx rhs) mapt in
         let value = infer_ty [%here] value in
-        let _ = unify (getty value) (fix @@ bv_type size) in
+        let _ = unify (getty value) (bv_type size) in
         Instr_Store
           { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib }
 
@@ -327,7 +332,7 @@ module Make (T : TypeExpr.TypeContext) = struct
     let globs = Var.Decls.values (Procedure.local_decls p) in
     let formals_in = Procedure.formal_in_params p |> StringMap.values in
     let formals_out = Procedure.formal_out_params p |> StringMap.values in
-    let univ = V.proc_univ @@ Procedure.id p in
+    let univ = TypeExpr.V.proc_univ @@ Procedure.id p in
     let ctx =
       Iter.fold
         (decl_var_typ ~no_constraint univ)

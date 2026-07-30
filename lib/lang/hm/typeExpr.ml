@@ -1,7 +1,6 @@
 (** Hash-consed (interned) type expresions with recusion schemes. *)
 
 open Common
-open UnionFind
 
 type tvar = ID.t [@@deriving eq, ord, show]
 (** Type variable identifier *)
@@ -57,7 +56,7 @@ module MakeFresh () = struct
     and nt = T of t expr
 
     module Hashed = struct
-      type t = nt elem
+      type t = nt UnionFind.elem
       (* we hash cons the data underlying the uf reference so we can construct the
        type and get the UF reference *)
 
@@ -69,12 +68,7 @@ module MakeFresh () = struct
         | T i, T j -> ATyp.equal_expr Fix.HashCons.equal i j
     end
 
-    open struct
-      module M = Fix.Memoize.ForHashedType (Hashed)
-      (** we need to make *)
-    end
-
-    module H = Fix.HashCons.Make (M)
+    module H = Fix.HashCons.ForHashedType (Hashed)
 
     let unfix : t -> t expr =
       Fix.HashCons.data %> UnionFind.find %> UnionFind.get %> function

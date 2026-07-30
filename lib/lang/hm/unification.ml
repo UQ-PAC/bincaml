@@ -4,28 +4,29 @@ open Common
 open Abstract_expr
 
 module Make (T : TypeExpr.TypeContext) = struct
-  open TypeExpr
-  include T
-  include Typ
-  open Hm_types
-  include Hm_types.Make (T)
+  open Hm_types.Make (T)
+  (* XXX: todo *)
+
+  open T
+  open T.Typ
 
   let type_error a b =
     let a = find a in
     let b = find b in
     raise
-      (TypeErr ("type_error: " ^ type_to_string a ^ " <> " ^ type_to_string b))
+      (Hm_types.TypeErr
+         ("type_error: " ^ type_to_string a ^ " <> " ^ type_to_string b))
 
   let recursion_error a b =
     let b = find b in
     raise
-      (TypeErr
+      (Hm_types.TypeErr
          ("recursive: tvar " ^ ID.to_string a ^ " occurs in " ^ type_to_string b))
 
   (** Check for type recursion: recursion is failure. *)
   let occurs_in a b =
     let check = function
-      | Var t -> equal_tvar t a
+      | Var t -> TypeExpr.equal_tvar t a
       | TypeConstr (ls, _) -> List.exists Fun.id ls
     in
     Rec.cata check b
@@ -78,18 +79,18 @@ module Make (T : TypeExpr.TypeContext) = struct
   let lookup_var_typ univ ?(no_constraint = false) c v =
     let vt = inst_annot_v v in
     let a =
-      let v = V.of_var univ v in
-      TCtx.find_opt v c |> function
+      let v = TypeExpr.V.of_var univ v in
+      TypeExpr.TCtx.find_opt v c |> function
       | Some v -> v
-      | None -> failwith ("var not found: " ^ V.to_string v)
+      | None -> failwith ("var not found: " ^ TypeExpr.V.to_string v)
     in
     let tt = match a with Forall (_, ty) -> union ty vt in
     tt
 
   (** declare type with name in type scheme *)
   let decl_type ctx name vt =
-    let tvar = V.create types_universe name in
-    TCtx.update tvar
+    let tvar = TypeExpr.V.create types_universe name in
+    TypeExpr.TCtx.update tvar
       (function
         | Some (Forall ([], t)) -> Some (Forall ([], unify vt t))
         | None -> Some (Forall ([], vt))
@@ -98,9 +99,9 @@ module Make (T : TypeExpr.TypeContext) = struct
 
   (** declare var with type in type scheme *)
   let decl_var_typ univ ?(no_constraint = false) c v =
-    let vvar = V.of_var univ v in
+    let vvar = TypeExpr.V.of_var univ v in
     let vt = inst_annot_v v in
-    TCtx.update vvar
+    TypeExpr.TCtx.update vvar
       (function
         | Some (Forall ([], t)) -> Some (Forall ([], unify vt t))
         | None -> Some (Forall ([], vt))

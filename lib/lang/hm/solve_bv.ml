@@ -4,15 +4,19 @@ open Common
 open Abstract_expr
 open Hm_types
 
-module Make (T : TypeExpr.TypeContext) = struct
-  include Unification.Make (T)
+module Make (Ctx : TypeExpr.TypeContext) = struct
+  open Unification.Make (Ctx)
+  open Hm_types.Make (Ctx)
+  open Ctx
+  open Ctx.Typ
 
   (** Naive solver *)
 
   (** Constraints between nat val types. *)
   type dependent_bv_constraints =
-    | Add of { a : Typ.t; b : Typ.t; equ : Typ.t }  (** a + b = equ*)
-    | AddConst of { a : Typ.t; b : int; equ : Typ.t }  (** a + b = equ*)
+    | Add of { a : Ctx.Typ.t; b : Ctx.Typ.t; equ : Ctx.Typ.t }
+        (** a + b = equ*)
+    | AddConst of { a : Ctx.Typ.t; b : int; equ : Ctx.Typ.t }  (** a + b = equ*)
 
   let show_dependent_bv_constraints = function
     | Add { a; b; equ } ->
@@ -23,32 +27,30 @@ module Make (T : TypeExpr.TypeContext) = struct
           (type_to_string equ)
 
   (** Deduce the width if two values of the constraint have inferred widths *)
-  let unify_bv_constraint constr : Typ.t option =
+  let unify_bv_constraint constr : Ctx.Typ.t option =
     match constr with
     | Add { a; b; equ } -> (
         match List.map is_nat_val_type [ find a; find b; find equ ] with
         | [ Some a_n; Some b_n; Some e_n ] ->
             (* check constraint  *)
-            if a_n + b_n <> e_n then
-              type_error (fix @@ nat_val_type (a_n + b_n)) equ;
+            if a_n + b_n <> e_n then type_error (nat_val_type (a_n + b_n)) equ;
             Some equ
         | [ Some a_n; Some b_n; None ] ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (a_n + b_n)) equ)
+            Some (unify ~pos:[%here] (nat_val_type (a_n + b_n)) equ)
         | [ Some a_n; None; Some e_n ] ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (e_n - a_n)) b)
+            Some (unify ~pos:[%here] (nat_val_type (e_n - a_n)) b)
         | [ None; Some b_n; Some e_n ] ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (e_n - b_n)) a)
+            Some (unify ~pos:[%here] (nat_val_type (e_n - b_n)) a)
         | _ -> None)
     | AddConst { a; b; equ } -> (
         match (is_nat_val_type (find a), is_nat_val_type (find equ)) with
         | Some a_n, Some e_n ->
             (* check constraint  *)
-            let e = fix @@ nat_val_type (a_n + b) in
+            let e = nat_val_type (a_n + b) in
             Some (unify ~pos:[%here] e equ)
         | Some a_n, None ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (a_n + b)) equ)
-        | None, Some e_n ->
-            Some (unify ~pos:[%here] (fix @@ nat_val_type (e_n - b)) a)
+            Some (unify ~pos:[%here] (nat_val_type (a_n + b)) equ)
+        | None, Some e_n -> Some (unify ~pos:[%here] (nat_val_type (e_n - b)) a)
         | _ -> None)
 
   (** Naive solver; loop over constraints and unify until everything is solved.

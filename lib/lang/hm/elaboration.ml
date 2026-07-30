@@ -4,7 +4,12 @@ open Abstract_expr
 (** Hindley-Milner type inference based on a union-find. *)
 
 module TypeInference (T : TypeExpr.TypeContext) = struct
-  include Inference.Make (T)
+  open Hm_types.Make (T)
+  open Unification.Make (T)
+  open Inference.Make (T)
+  open Solve_bv.Make (T)
+  open T
+  open T.Typ
 
   let retype_var univ ctx id =
     lookup_var_typ ~no_constraint:true univ ctx id |> find |> to_basil
@@ -20,16 +25,17 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
       p
 
   let ctx_to_string ctx =
-    TCtx.to_iter ctx
+    TypeExpr.TCtx.to_iter ctx
     |> Iter.to_string (fun (a, b) ->
-        Printf.sprintf "%s %s" (V.to_string a) (scheme_to_string b))
+        Printf.sprintf "%s %s" (TypeExpr.V.to_string a) (scheme_to_string b))
 
   let fresh_tvar ?(n = "a") () = fix @@ Var (gen.fresh ~name:n ())
   let unfix i = match i with Expr.BasilExpr.E i -> i
   let rec cata alg e = (unfix %> AbstractExpr.map (cata alg) %> alg) e
 
   (** Extract type after full inference has run. *)
-  let elaborate_expr ~univ (hr : Lexing.position) e (c : scheme TCtx.t) =
+  let elaborate_expr ~univ (hr : Lexing.position) e (c : scheme TypeExpr.TCtx.t)
+      =
     let alg e =
       let e =
         match e with
@@ -63,7 +69,7 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
     let globs = Var.Decls.values (Procedure.local_decls p) in
     let formals_in = Procedure.formal_in_params p |> StringMap.values in
     let formals_out = Procedure.formal_out_params p |> StringMap.values in
-    let univ = V.proc_univ @@ Procedure.id p in
+    let univ = TypeExpr.V.proc_univ @@ Procedure.id p in
     let ctx =
       Iter.fold
         (decl_var_typ ~no_constraint univ)
@@ -74,12 +80,12 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
 
   let infer_proc vc prog ctx ?(no_constraint = false) (p : Program.proc) =
     let spec = Procedure.specification p in
-    let univ = V.proc_univ @@ Procedure.id p in
+    let univ = TypeExpr.V.proc_univ @@ Procedure.id p in
     let ibool_list b =
       List.map
         (fun a ->
           let a = infer_expr vc ~univ [%here] a ctx in
-          let _ = unify (fix bool_type) (getty a) in
+          let _ = unify bool_type (getty a) in
           a)
         b
     in
@@ -149,9 +155,8 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
           let binding s = retype_var global_universe s binding in
           match definition with
           | Axiom b ->
-              let bt = fix bool_type in
               let b = infer_expr ~univ:global_universe [%here] b scheme in
-              let _ = unify (getty b) bt in
+              let _ = unify (getty b) bool_type in
               let new_axiom scheme =
                 Function
                   {
@@ -222,7 +227,8 @@ module TypeInference (T : TypeExpr.TypeContext) = struct
     functions, which take the final inference context and convert the HM-typed
     expressions back to bincaml typed expressions. *)
     let scheme, new_decls =
-      decls |> List.fold_map (infer_decl visit_constraint prog) TCtx.empty
+      decls
+      |> List.fold_map (infer_decl visit_constraint prog) TypeExpr.TCtx.empty
     in
     let _ = solve_constraints ~max_iters:50 !constraints in
     (* TODO: implicit decls; constructors need to be added after the types they
