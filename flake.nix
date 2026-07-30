@@ -38,12 +38,23 @@
     flake-for-all-systems args {
       overlays = {
         addBincamlPackages = ofinal: _: {
+          buildDune324Package = ofinal.buildDunePackage.override {
+            dune_3 = ofinal.dune_3_24;
+          };
+          dune_3_24 = ofinal.callPackage ./nix/dune_3_24.nix { };
+
           bincaml = ofinal.callPackage ./nix/bincaml.nix {
             ocaml-protoc-plugin = ofinal.ocaml-protoc-plugin-6-1-0;
+            buildDunePackage = ofinal.buildDune324Package;
           };
+          bincaml_lsp = ofinal.callPackage ./nix/bincaml-lsp.nix {
+            buildDunePackage = ofinal.buildDune324Package;
+          };
+          capstone_arm64_disas = ofinal.callPackage ./nix/capstone_arm64_disas.nix {
+            buildDunePackage = ofinal.buildDune324Package;
+          };
+
           ocaml-protoc-plugin-6-1-0 = ofinal.callPackage ./nix/ocaml-protoc-plugin.nix { };
-          bincaml_lsp = ofinal.callPackage ./nix/bincaml-lsp.nix { };
-          capstone_arm64_disas = ofinal.callPackage ./nix/capstone_arm64_disas.nix { };
           aslp_lifter_ocaml = ofinal.callPackage ./nix/aslp-lifter-ocaml.nix { };
           hector = ofinal.callPackage ./nix/hector.nix { };
           intPQueue = ofinal.callPackage ./nix/intpqueue.nix { };
@@ -96,6 +107,7 @@
             kittyimg = selfOcamlPackages.kittyimg;
             stb_image = selfOcamlPackages.stb_image;
             containers = selfOcamlPackages.containers;
+            dune_3_24 = selfOcamlPackages.dune_3_24;
 
             fp.bincaml = fpOcamlPackages.bincaml;
             fp.bincaml_lsp = fpOcamlPackages.bincaml_lsp;
