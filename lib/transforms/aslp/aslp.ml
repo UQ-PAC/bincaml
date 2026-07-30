@@ -136,8 +136,7 @@ let transform_block (module I : Bincaml_ibi.IBI) ~proc bid =
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all blocks
     within the given procedure. *)
 let transform_procedure proc =
-  let memory () = Aslp_lexpr.to_var Memory in
-  let module I = (val Bincaml_ibi.from_bincaml_procedure ~memory proc) in
+  let module I = (val Bincaml_ibi.from_bincaml_procedure proc) in
   Procedure.iter_blocks proc
   |> Iter.fold (fun proc (bid, _) -> transform_block (module I) ~proc bid) proc
 
