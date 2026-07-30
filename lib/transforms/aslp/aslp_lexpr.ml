@@ -8,6 +8,7 @@ open Common
     {!Lang.Common.Var.t}. *)
 type t =
   | Local of string * Types.t
+  | Memory
   | PC
   | R of int option
       (** A 64-bit ordinary register. [None] is used to represent the virtual
@@ -42,6 +43,7 @@ let typ (x : t) =
   let bv = Types.bv in
   match x with
   | Local (_, t) -> t
+  | Memory -> Types.Map (Types.Bitvector 64, Types.Bitvector 8)
   | R (Some _) -> bv 64
   | Z (Some _) -> bv 128
   | PC -> bv 64
@@ -58,30 +60,35 @@ let typ (x : t) =
   | ExclusiveLocal -> Types.Boolean
   | R None | Z None -> failwith "typeof_lexpr: array lexpr has no bincaml type"
 
-let name = function
-  | Local (v, _) -> v
-  | SP_EL0 -> "SP"
-  | R (Some n) -> Printf.sprintf "R%d" n
-  | Z (Some n) -> Printf.sprintf "Z%d" n
-  | R None | Z None -> failwith "name_of_lexpr: array lexpr has no bincaml name"
-  | v -> show v
-
 let scope = function
   | Local _ -> Var.LocalVar
   | BranchTaken | BTypeCompatible | BTypeNext -> LocalVar
+  | Memory -> GlobalVarShared
   | _ -> GlobalVar
 
-let to_var x =
-  let ty = typ x and name = name x and scope = scope x in
-  let name = match scope with GlobalVar -> "$" ^ name | _ -> name in
-  Var.create ~scope name ty
+(** Includes sigil for global variables. *)
+let name lexpr =
+  (match lexpr with
+    | Local (v, _) -> v
+    | Memory -> "mem"
+    | SP_EL0 -> "SP"
+    | R (Some n) -> Printf.sprintf "R%d" n
+    | Z (Some n) -> Printf.sprintf "Z%d" n
+    | R None | Z None ->
+        failwith "name_of_lexpr: array lexpr has no bincaml name"
+    | v -> show v)
+  |>
+  match scope lexpr with
+  | GlobalVarShared | GlobalVar | GlobalConst -> ( ^ ) "$"
+  | LocalVar | LocalConst -> Fun.id
 
+let to_var x = Var.create ~scope:(scope x) (name x) (typ x)
 let pc_var = to_var PC
 let branchtaken_var = to_var BranchTaken
 
 let predefined =
   lazy
-    ([ PC; SP_EL0 ]
+    ([ Memory; PC; SP_EL0 ]
     @ List.init 31 (fun i -> R (Some i))
     @ List.init 31 (fun i -> Z (Some i))
     @ [ FPSR; FPCR; PSTATE_N; PSTATE_Z; PSTATE_C; PSTATE_V ]
