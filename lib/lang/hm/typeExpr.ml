@@ -50,10 +50,7 @@ type t = nt UnionFind.elem Fix.HashCons.cell
 and nt = T of t ATyp.expr  (** TODO: what is `nt` mean? *)
 
 let equal = Fix.HashCons.equal
-
-(** TODO: is this the right implementation? *)
 let compare = Fix.HashCons.compare
-
 let map_expr = ATyp.map_expr
 
 (** Hash cons the data underlying the UF reference so we can construct the type
