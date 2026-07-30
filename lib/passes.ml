@@ -275,6 +275,17 @@ module PassManager = struct
       invariants = Invariants.presupposes [] ~establishes:[ ReducibleLoops ];
     }
 
+  let remove_loops =
+    {
+      name = "remove-loops";
+      apply = Prog Transforms.Remove_loops.transform;
+      doc =
+        "Makes reducible loops acyclic by cutting back edges and inserting \
+         assumes/asserts.";
+      invariants =
+        Invariants.presupposes [ ReducibleLoops ] ~establishes:[ CycleFree ];
+    }
+
   let full_ssa =
     let batch = [ remove_unreachable_blocks; sparams; sssa; remove_unused ] in
     {
@@ -486,6 +497,7 @@ module PassManager = struct
       flatten_phis;
       dynamic_single_assignment;
       irreducible_loop;
+      remove_loops;
       remove_unreachable_blocks;
       collapse_empty_blocks;
       cleanup_cfg;
