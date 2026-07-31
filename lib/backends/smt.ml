@@ -42,25 +42,25 @@ let build_procedure (program : Program.t) (procedure : Program.proc)
                let acc =
                  snd
                  @@ SMTLib2.add_assert
-                      (SMTLib2.of_bexpr (BasilExpr.boolnot body))
+                      (SMTLib2.of_bexpr ~type_hints:true (BasilExpr.boolnot body))
                       acc
                in
                let acc = snd @@ SMTLib2.check_sat acc in
                let acc = snd @@ SMTLib2.pop acc in
 
                (* Assert the assertion. *)
-               let smt = SMTLib2.of_bexpr body in
+               let smt = SMTLib2.of_bexpr ~type_hints:true body in
                SMTLib2.add_assert smt acc |> snd
            | Stmt.Instr_Assume { body } ->
                (* Assert the assumption as is. *)
-               let smt = SMTLib2.of_bexpr body in
+               let smt = SMTLib2.of_bexpr ~type_hints:true body in
                SMTLib2.add_assert smt acc |> snd
            | Stmt.Instr_Assign { al } ->
                let asserts =
                  List.map
                    (fun (v, e) ->
                      BasilExpr.binexp ~op:`EQ (BasilExpr.rvar v) e
-                     |> SMTLib2.of_bexpr)
+                     |> SMTLib2.of_bexpr ~type_hints:true)
                    al
                in
                List.fold_left

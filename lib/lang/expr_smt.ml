@@ -384,15 +384,17 @@ module SMTLib2 = struct
     let* body = in_body in
     return @@ list [ quant; list binds; body ]
 
-  let smt_alg_helper (e : sexp t BasilExpr.abstract_expr)
+  let smt_alg_helper ~type_hints (e : sexp t BasilExpr.abstract_expr)
       (inner : sexp t BasilExpr.abstract_expr BasilExpr.abstract_expr) =
     match e with
     | Constant { const = o } ->
         let* o = add_logic_const o in
         return (of_op o)
-    | RVar { id } ->
+    | RVar { id } -> (
         let* var = get_var id in
-        return @@ list [ atom "as"; var; fst @@ of_typ @@ Var.typ id ]
+        match type_hints with
+        | true -> return @@ list [ atom "as"; var; fst @@ of_typ @@ Var.typ id ]
+        | false -> return @@ var)
     | UnaryExpr { op = `BOOLTOBV1; arg = e } ->
         let* e = e in
         return
@@ -473,19 +475,20 @@ module SMTLib2 = struct
         let* func = func in
         return @@ list (func :: args)
 
-  let smt_alg
+  let smt_alg ~type_hints
       (e : (sexp t * sexp t BasilExpr.abstract_expr) BasilExpr.abstract_expr) :
       sexp t * sexp t BasilExpr.abstract_expr =
     let l = AbstractExpr.map fst e in
     let r = AbstractExpr.map snd e in
-    let o = smt_alg_helper l r in
+    let o = smt_alg_helper ~type_hints l r in
     (o, l)
 
-  let bind_of_bexpr e =
+  let bind_of_bexpr ?(type_hints = false) e =
     let e = (BasilExpr.rewrite_typed_two Algsimp.drop_assoc) e in
-    BasilExpr.cata smt_alg e |> fst
+    BasilExpr.cata (smt_alg ~type_hints) e |> fst
 
-  let of_bexpr e = fst @@ (bind_of_bexpr e) empty
+  let of_bexpr ?(type_hints = false) e =
+    fst @@ (bind_of_bexpr ~type_hints e) empty
 
   let trans_decl (decl : Program.declaration) =
     let* x = return () in
@@ -575,8 +578,9 @@ module SMTLib2 = struct
     [%expect
       {|
       eq(sign_extend(10, 0x7:bv3), 0x64:bv13)
-      (set-logic QF_BV)
-      (assert (= ((_ sign_extend 10) (_ bv7 3)) (_ bv100 13))) |}]
+      (set-logic BV)
+      (assert (= ((_ sign_extend 10) (_ bv7 3)) (_ bv100 13)))
+      |}]
 end
 
 let%expect_test "datatypes" =
