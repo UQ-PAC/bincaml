@@ -1,6 +1,6 @@
 {
   inputs = {
-    self.submodules = true;
+    # self.submodules = true;
 
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
 
@@ -119,9 +119,18 @@
               z3 = pkgs.z3.out;
             }).overrideAttrs (final: prev:
                   let
-                    ins = (final.buildInputs ++ final.propagatedBuildInputs);
+                    isocaml = pkg: lib.any (x: (x.pname or "") == "ocaml") pkg.nativeBuildInputs;
+                    make = (pkg: { pkg = pkg; key = pkg.outPath; });
+                    filt = deps: builtins.map make (builtins.filter isocaml deps);
+                    go = pkg: filt ((pkg.buildInputs or []) ++ (pkg.propagatedBuildInputs or []));
+
+                    ins = builtins.map (x: x.pkg) (builtins.genericClosure {
+                      startSet = go final;
+                      operator = {pkg, key}: go pkg;
+                    });
                     hash = builtins.hashString "sha512" (lib.concatMapStrings (p: p.outPath) ins);
                     opams = lib.map (p: { inherit (p) pname version out; }) ins;
+                    v = selfOcamlPackages.ocaml.version;
                   in {
               shellHook = (prev.shellHook or "") + ''
                 ocaml_hash="${hash}"
@@ -130,7 +139,7 @@
                 mkdir -p "$OPAM_SWITCH_PREFIX"/lib/stublibs
 
                 uniq="$(echo "$OCAMLPATH" | tr ':' '\n' | sort | uniq)"
-                ocamlpaths=( $uniq )
+                ocamlpaths=( ${lib.escapeShellArgs (builtins.map (x: "${x.out}/lib/ocaml/${v}/site-lib/") (ins))} )
 
                 pnames=()
                 versions=()
@@ -141,7 +150,7 @@
                   IFS=: read -r -a pname_and_version <<< "$combined"
 
                   pname="''${pname_and_version[0]}"
-                  pname="$(sed s/^ocaml${selfOcamlPackages.ocaml.version}-// <<< "$pname")"
+                  pname="$(sed s/^ocaml${v}-// <<< "$pname")"
                   pnames+=( "$pname" )
 
                   version="''${pname_and_version[1]}"
