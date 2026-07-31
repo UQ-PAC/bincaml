@@ -42,7 +42,8 @@ let build_procedure (program : Program.t) (procedure : Program.proc)
                let acc =
                  snd
                  @@ SMTLib2.add_assert
-                      (SMTLib2.of_bexpr ~type_hints:true (BasilExpr.boolnot body))
+                      (SMTLib2.of_bexpr ~type_hints:true
+                         (BasilExpr.boolnot body))
                       acc
                in
                let acc = snd @@ SMTLib2.check_sat acc in
