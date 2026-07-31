@@ -184,7 +184,7 @@ module Make (T : TypeExpr.TypeContext) = struct
     let t =
       try do_infer ~visit_constraint (infer_expr visit_constraint) univ hr e c
       with TypeErr m ->
-        raise (TypeErr (m ^ " : " ^ Expr.BasilExpr.to_string e))
+        raise (TypeErr (m ^ " in exp " ^ Expr.BasilExpr.to_string e))
     in
     t
 

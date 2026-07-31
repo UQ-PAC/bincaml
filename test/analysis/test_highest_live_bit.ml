@@ -122,21 +122,21 @@ proc @binary_expr(c:bv64) -> (out1:bv64) {}
   [%expect
     {|
     ID: ("@main", 0)
-      out1:bv64 -> ⊤, v1:bv64 -> (Var 63), a:bv64 -> (Var 63)
+      out1:bv64 -> ⊤, v1:bv64 -> ⊤, a:bv64 -> ⊤
     ID: ("@f", 1)
-      f_out:bv32 -> ⊤, v1:bv64 -> (Var 31), f_a:bv32 -> (Var 31)
+      f_out:bv32 -> ⊤, v1:bv64 -> ⊤, f_a:bv32 -> ⊤
     ID: ("@g", 2)
-      g_out:bv1 -> ⊤, v1:bv64 -> (Var 31), g_a:bv1 -> (Var 0)
+      g_out:bv1 -> ⊤, v1:bv64 -> ⊤, g_a:bv1 -> ⊤
     ID: ("@h", 3)
-      h_out:bv1 -> ⊤, v1:bv64 -> (Var 31), h_a:bv32 -> (Var 0), h_b:bv1 -> (Var 0)
+      h_out:bv1 -> ⊤, v1:bv64 -> ⊤, h_a:bv32 -> ⊤, h_b:bv1 -> ⊤
     ID: ("@shift", 4)
-      left_out:bv64 -> ⊤, right_out:bv64 -> ⊤, v1:bv64 -> (HighBits 63), left:bv64 -> (Var 63), right:bv64 -> (Var 63)
+      left_out:bv64 -> ⊤, right_out:bv64 -> ⊤, v1:bv64 -> ⊤, left:bv64 -> ⊤, right:bv64 -> ⊤
     ID: ("@shift2", 5)
-      left_out:bv64 -> ⊤, right_out:bv64 -> ⊤, v1:bv64 -> (HighBits 31), left:bv64 -> (Var 63), right:bv64 -> (Var 63)
+      left_out:bv64 -> ⊤, right_out:bv64 -> ⊤, v1:bv64 -> ⊤, left:bv64 -> ⊤, right:bv64 -> ⊤
     ID: ("@trans", 6)
-      out:bv32 -> ⊤, v1:bv64 -> (Var 31), v2:bv32 -> (Var 31)
+      out:bv32 -> ⊤, v1:bv64 -> ⊤, v2:bv32 -> ⊤
     ID: ("@binary_expr", 7)
-      out1:bv64 -> ⊤, c:bv64 -> (Var 63), v1:bv64 -> (Var 15), v2:bv8 -> (Var 7), v3:bv8 -> (Var 7), v4:bv64 -> (Var 63)
+      out1:bv64 -> ⊤, c:bv64 -> ⊤, v1:bv64 -> ⊤, v2:bv8 -> ⊤, v3:bv8 -> ⊤, v4:bv64 -> ⊤
     |}]
 
 let%expect_test "sqrt" =
@@ -241,6 +241,6 @@ proc @Sqrt_4196228(R0_in:bv64, R31_in:bv64)  -> (R0_out:bv64, R1_out:bv64) { .ad
   [%expect
     {|
     @Sqrt_4196228
-    (Λ,Λ->IdEdge), (Λ,$stack->⊤), (Λ,R0_in->NumEdge 63), (Λ,R31_in->NumEdge 63), (Λ,var1_4196240_bv64_2->NumEdge 63), (Λ,var1_4196328_bv64_2->NumEdge 63), (Λ,var1_4196336_bv64_2->NumEdge 63), (Λ,var1_4196256_bv64_2->NumEdge 63), (Λ,var1_4196260_bv64_2->NumEdge 63), (Λ,R0_9->NumEdge 63), (Λ,R1_7->NumEdge 63), (Λ,R0_10->NumEdge 63), (Λ,R0_11->NumEdge 31), (Λ,var1_4196284_bv32_2->NumEdge 31), (Λ,R0_13->NumEdge 63), (Λ,R0_14->NumEdge 63), (Λ,var1_4196296_bv64_2->NumEdge 63), (Λ,var1_4196320_bv32_2->NumEdge 31), (Λ,var1_4196308_bv32_2->NumEdge 31), (R0_out,R0_out->IdEdge), (R0_out,var1_4196348_bv64_2->NumEdge 63), (R1_out,R1_out->IdEdge)
+    (Λ,Λ->IdEdge), (Λ,$stack->⊤), (Λ,R0_in->NumEdge 63), (Λ,R31_in->NumEdge 63), (Λ,var1_4196240_bv64_2->NumEdge 63), (Λ,var1_4196328_bv64_2->NumEdge 63), (Λ,var1_4196336_bv64_2->NumEdge 63), (Λ,var1_4196256_bv64_2->NumEdge 63), (Λ,var1_4196260_bv64_2->NumEdge 63), (Λ,R0_9->NumEdge 63), (Λ,R1_7->NumEdge 63), (Λ,R0_10->NumEdge 63), (Λ,R0_11->NumEdge 31), (Λ,var1_4196284_bv32_2->NumEdge 63), (Λ,R0_13->NumEdge 63), (Λ,R0_14->NumEdge 63), (Λ,var1_4196296_bv64_2->NumEdge 63), (Λ,var1_4196320_bv32_2->NumEdge 31), (Λ,var1_4196308_bv32_2->NumEdge 31), (R0_out,R0_out->IdEdge), (R0_out,var1_4196348_bv64_2->NumEdge 63), (R1_out,R1_out->IdEdge)
     $stack, R0_in, R31_in, R0_out, R1_out, var1_4196240_bv64_2, var1_4196328_bv64_2, var1_4196336_bv64_2, var1_4196256_bv64_2, var1_4196260_bv64_2, R0_9, R1_7, R0_10, R0_11, var1_4196284_bv32_2, R0_13, R0_14, var1_4196296_bv64_2, var1_4196320_bv32_2, var1_4196308_bv32_2, var1_4196348_bv64_2
     |}]

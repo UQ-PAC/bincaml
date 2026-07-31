@@ -47,8 +47,6 @@ module HighestLiveBitLattice = struct
     | HighBits ha, LowContiguous hb
     | LowContiguous ha, HighBits hb
     | HighBits ha, HighBits hb ->
-        (* always join to non var since we we are always comparing two
-        subexpressions with join, the result expr cannot be just a var *)
         HighBits (max ha hb)
 
   let leq a b =
@@ -111,7 +109,8 @@ module IDESSI_LB = struct
     | a, IdEdge -> a
     | BotEdge, _ | _, BotEdge -> BotEdge
     | TopEdge, _ | _, TopEdge -> TopEdge
-    | NumEdge v, NumEdge v' -> NumEdge v
+    | NumEdge v, NumEdge v' -> NumEdge (max v v')
+  (* TODO: this is suspect *)
 
   let join a b =
     match (a, b) with
@@ -127,7 +126,10 @@ module IDESSI_LB = struct
     | BotEdge, _ -> Value.bottom
     | IdEdge, x -> x
     | TopEdge, _ -> Top
-    | NumEdge v, _ -> Value.LowContiguous v
+    | NumEdge v, Value.HighBits n -> Value.HighBits (max n v)
+    | NumEdge v, Value.LowContiguous n -> Value.HighBits (max n v)
+    | NumEdge v, Top -> Value.Top
+    | NumEdge v, Bot -> Value.HighBits v
 
   module Extract = struct
     (** Collect the maximum width of an access to the variable in an expression
@@ -136,6 +138,9 @@ module IDESSI_LB = struct
       let open Expr.AbstractExpr in
       match e with
       | RVar { id } -> readv id
+      | UnaryExpr { op = `ZeroExtend _; arg = arg, _ } -> arg
+      | UnaryExpr { op = `SignExtend _; arg = arg, _ } -> (
+          match arg with LowContiguous i -> HighBits i | o -> o)
       | UnaryExpr { op = `Extract (hi, lo); arg = arg, _ } -> (
           match arg with
           | LowContiguous b ->
@@ -188,12 +193,13 @@ module IDESSI_LB = struct
       in
       extract_expr readv expr
 
-    let eval_stmt stmt =
+    let eval_stmt v stmt =
       Stmt.iter_rexpr stmt (* take every expr on the rhs of stmt *)
       |> Iter.map (function `Expr e -> e | `Var v -> Expr.BasilExpr.rvar v)
         (* iterate each variable in each of these *)
       |> Iter.flat_map (fun rhs_expr ->
           Expr.BasilExpr.free_vars_iter rhs_expr
+          |> Iter.filter v
           |> Iter.map (fun rhs_var -> (rhs_var, eval_wrt_var rhs_var rhs_expr)))
     (* for each variable, return an edge with the number of live bits*)
   end
@@ -232,7 +238,7 @@ module HighestLiveBitIDE = struct
         | Instr_Assign _ ->
             Iter.empty (* If run after ide_live, this line shouldn't matter *)
         | _ ->
-            IDESSI_LB.Extract.eval_stmt stmt
+            IDESSI_LB.Extract.eval_stmt (fun _ -> true) stmt
             |> Iter.map (fun (rhs_var, edge) -> (Label rhs_var, edge)))
     | Label v -> (
         match stmt with
@@ -248,13 +254,16 @@ module HighestLiveBitIDE = struct
                       (Label rhs_var, edge))
                 else Iter.empty)
         | _ ->
-            IDESSI_LB.Extract.eval_stmt stmt
+            IDESSI_LB.Extract.eval_stmt (Var.equal v) stmt
             |> Iter.map (fun (rhs_var, edge) -> (Label rhs_var, edge)))
 
   let transfer_phi lhs rhs d =
     match d with
     | Lambda -> Iter.empty
-    | _ -> Iter.of_list rhs |> Iter.map (fun v -> (Label v, IdEdge))
+    | Label e ->
+        Iter.of_list rhs
+        |> Iter.filter (Var.equal e)
+        |> Iter.map (fun v -> (Label v, IdEdge))
 
   let init_p2 (proc : Program.proc) =
     Procedure.formal_out_params proc

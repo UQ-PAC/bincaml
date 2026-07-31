@@ -24,6 +24,7 @@
   chc_mem_call)
  (package bincaml)
  (deps
+  sqrt32.il
   loop_dfg.sexp
   ../../examples/loop.il
   %{bin:bincaml}

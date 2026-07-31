@@ -106,84 +106,100 @@ let transform_lvar_and_expr lvar expr (get_new_var : Var.t -> Var.t option) =
           (new_lvar, new_expr))
   | None -> (lvar, expr)
 
+let update_stmt proc get_new_var =
+ fun stmt ->
+  match stmt with
+  | Stmt.Instr_Assign { al; attrib } ->
+      let new_al =
+        List.map
+          (fun (lvar, expr) ->
+            let new_expr = (transform_subexpr_rvar get_new_var) expr in
+            transform_lvar_and_expr lvar new_expr get_new_var)
+          al
+      in
+      Stmt.Instr_Assign { al = new_al; attrib }
+      |> remove_extract_extend |> Iter.pure
+  | Stmt.Instr_Load { attrib; lhs = lvar; rhs = rvar; addr = nama } as load_stmt
+    ->
+      let tmp_var = create_tmp_var proc lvar in
+      let updated_load =
+        Stmt.map
+          ~f_lvar:(fun v -> tmp_var)
+          ~f_expr:(transform_subexpr_rvar get_new_var)
+          ~f_rvar:(transform_var get_new_var)
+          load_stmt
+        |> remove_extract_extend
+      in
+      let new_al =
+        let new_lvar = transform_var get_new_var lvar in
+        let expr = BasilExpr.rvar tmp_var in
+        let total_expr =
+          match v_width new_lvar with
+          | Some w' -> BasilExpr.extract ~hi_excl:w' ~lo_incl:0 expr
+          | _ -> expr
+        in
+        [ (new_lvar, total_expr) ]
+      in
+      let updated_assign =
+        Stmt.Instr_Assign { al = new_al; attrib = Attrib.empty }
+        |> remove_extract_extend
+      in
+      Iter.doubleton updated_load updated_assign
+  (* | Stmt.Instr_Store { attrib ; lhs ; rhs ; value ; addr } -> stmt *)
+  (* | Stmt.Instr_IntrinCall { attrib ; lhs ; name ; args } -> stmt *)
+  | Stmt.Instr_Call { attrib; lhs = lvar_map; procid; args } ->
+      let tmp_smap = StringMap.map (create_tmp_var proc) lvar_map in
+      let updated_call =
+        Stmt.Instr_Call { attrib; lhs = tmp_smap; procid; args }
+        |> remove_extract_extend
+      in
+      let new_al =
+        StringMap.fold
+          (fun key tmp_var (al : (Var.t * BasilExpr.t) list) ->
+            let lvar =
+              transform_var get_new_var (StringMap.find key lvar_map)
+            in
+            let expr = BasilExpr.rvar tmp_var in
+            let total_expr =
+              match v_width lvar with
+              | Some w' -> BasilExpr.extract ~hi_excl:w' ~lo_incl:0 expr
+              | _ -> expr
+            in
+            al @ [ (lvar, total_expr) ])
+          tmp_smap List.empty
+      in
+      let updated_assign =
+        Stmt.Instr_Assign { al = new_al; attrib = Attrib.empty }
+        |> remove_extract_extend
+      in
+      Iter.doubleton updated_call updated_assign
+  | _ ->
+      Stmt.map
+        ~f_lvar:(transform_var get_new_var)
+        ~f_expr:(transform_subexpr_rvar get_new_var)
+        ~f_rvar:(transform_var get_new_var)
+        stmt
+      |> remove_extract_extend |> Iter.pure
+
+let update_phi proc get_new_var (phis : Var.t Block.phi list) =
+  let subst v = get_new_var v |> Option.get_or ~default:v in
+  List.map
+    Block.(
+      function
+      | { lhs; rhs } ->
+          { lhs = subst lhs; rhs = List.map (Pair.map_snd subst) rhs })
+    phis
+
 let transform_proc procRes proc =
   let old_to_new_var_map = create_new_proc_var_map procRes proc in
   let get_new_var old_var = VarMap.find_opt old_var old_to_new_var_map in
 
-  Procedure.flat_map_stmts_topo_fwd
-    (fun stmt ->
-      match stmt with
-      | Stmt.Instr_Assign { al; attrib } ->
-          let new_al =
-            List.map
-              (fun (lvar, expr) ->
-                let new_expr = (transform_subexpr_rvar get_new_var) expr in
-                transform_lvar_and_expr lvar new_expr get_new_var)
-              al
-          in
-          Stmt.Instr_Assign { al = new_al; attrib }
-          |> remove_extract_extend |> Iter.pure
-      | Stmt.Instr_Load { attrib; lhs = lvar; rhs = rvar; addr = nama } as
-        load_stmt ->
-          let tmp_var = create_tmp_var proc lvar in
-          let updated_load =
-            Stmt.map
-              ~f_lvar:(fun v -> tmp_var)
-              ~f_expr:(transform_subexpr_rvar get_new_var)
-              ~f_rvar:(transform_var get_new_var)
-              load_stmt
-            |> remove_extract_extend
-          in
-          let new_al =
-            let new_lvar = transform_var get_new_var lvar in
-            let expr = BasilExpr.rvar tmp_var in
-            let total_expr =
-              match v_width new_lvar with
-              | Some w' -> BasilExpr.extract ~hi_excl:w' ~lo_incl:0 expr
-              | _ -> expr
-            in
-            [ (new_lvar, total_expr) ]
-          in
-          let updated_assign =
-            Stmt.Instr_Assign { al = new_al; attrib = Attrib.empty }
-            |> remove_extract_extend
-          in
-          Iter.doubleton updated_load updated_assign
-      (* | Stmt.Instr_Store { attrib ; lhs ; rhs ; value ; addr } -> stmt *)
-      (* | Stmt.Instr_IntrinCall { attrib ; lhs ; name ; args } -> stmt *)
-      | Stmt.Instr_Call { attrib; lhs = lvar_map; procid; args } ->
-          let tmp_smap = StringMap.map (create_tmp_var proc) lvar_map in
-          let updated_call =
-            Stmt.Instr_Call { attrib; lhs = tmp_smap; procid; args }
-            |> remove_extract_extend
-          in
-          let new_al =
-            StringMap.fold
-              (fun key tmp_var (al : (Var.t * BasilExpr.t) list) ->
-                let lvar =
-                  transform_var get_new_var (StringMap.find key lvar_map)
-                in
-                let expr = BasilExpr.rvar tmp_var in
-                let total_expr =
-                  match v_width lvar with
-                  | Some w' -> BasilExpr.extract ~hi_excl:w' ~lo_incl:0 expr
-                  | _ -> expr
-                in
-                al @ [ (lvar, total_expr) ])
-              tmp_smap List.empty
-          in
-          let updated_assign =
-            Stmt.Instr_Assign { al = new_al; attrib = Attrib.empty }
-            |> remove_extract_extend
-          in
-          Iter.doubleton updated_call updated_assign
-      | _ ->
-          Stmt.map
-            ~f_lvar:(transform_var get_new_var)
-            ~f_expr:(transform_subexpr_rvar get_new_var)
-            ~f_rvar:(transform_var get_new_var)
-            stmt
-          |> remove_extract_extend |> Iter.pure)
+  Procedure.map_blocks_nondet
+    (fun (_, b) ->
+      Block.flat_map
+        ~phi:(update_phi proc get_new_var)
+        (update_stmt proc get_new_var)
+        b)
     proc
 
 let highest_live_bit_transform (prog : Program.t) =
@@ -232,9 +248,9 @@ proc @binary_expr() -> (out1:bv64)
 
     [
        block %trans [
-         var R0_2:bv32 := extract(32,0, 0xffffffff:bv64);
-         var R0_1:bv32 := bvadd(0x1:bv32, R0_2:bv32);
-         var v2:bv32 := R0_1:bv32;
+         var R0_2:bv64 := 0xffffffff:bv64;
+         var R0_1:bv64 := zero_extend(32, bvadd(0x1:bv32, extract(32,0, R0_2:bv64)));
+         var v2:bv32 := extract(32,0, R0_1:bv64);
          var out:bv32 := v2:bv32;
          return;
        ]
@@ -244,9 +260,9 @@ proc @binary_expr() -> (out1:bv64)
 
     [
        block %binary_expr [
-         var v1:bv16 := extract(16,0, 0xffffffff:bv64);
-         var v2:bv8 := extract(8,0, zero_extend(48, v1:bv16));
-         var v3:bv8 := extract(16,8, zero_extend(48, v1:bv16));
+         var v1:bv64 := 0xffffffff:bv64;
+         var v2:bv8 := extract(8,0, v1:bv64);
+         var v3:bv8 := extract(16,8, v1:bv64);
          var v4:bv64 := zero_extend(56, bvand(v2:bv8, v3:bv8));
          var out1:bv64 := v4:bv64;
          return;
@@ -290,8 +306,8 @@ proc @left_shift() -> (out1:bv64)
 
     [
        block %right_shift [
-         var v1:bv54 := extract(54,0, 0xffffffff:bv64);
-         var v2:bv64 := bvlshr(zero_extend(10, v1:bv54), 0xa:bv64);
+         var v1:bv64 := 0xffffffff:bv64;
+         var v2:bv64 := bvlshr(v1:bv64, 0xa:bv64);
          var out:bv64 := v2:bv64;
          return;
        ]
@@ -370,13 +386,12 @@ proc @double_out() -> (dout1:bv64, dout2:bv64) { }
        block %trans [
          var b:bv64 := 0xffffffff:bv64;
          (var tmp:bv64=out1) := call @binary_expr(c=b:bv64);
-         var v1:bv30 := extract(30,0, tmp:bv64);
-         var v2:bv30 := v1:bv30;
+         var v1:bv64 := tmp:bv64;
+         var v2:bv30 := extract(30,0, v1:bv64);
          (var tmp_1:bv64=dout1, var tmp_2:bv64=dout2) := call @double_out();
-         (var v3:bv30 := extract(30,0, tmp_1:bv64),
-          var v4:bv30 := extract(30,0, tmp_2:bv64));
+         (var v3:bv64 := tmp_1:bv64, var v4:bv64 := tmp_2:bv64);
          var v5:bv30 := bvand(extract(30,0, b:bv64),
-          bvand(v2:bv30, bvor(v3:bv30, v4:bv30)));
+          bvand(v2:bv30, bvor(extract(30,0, v3:bv64), extract(30,0, v4:bv64))));
          var out:bv30 := v5:bv30;
          return;
        ]
@@ -404,19 +419,19 @@ proc @double_out() -> (dout1:bv64, dout2:bv64) { }
     prog entry @trans;ID: ("@trans", 0)
 
 
-      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> (Var 29)
-      { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> (Var 29)
-      { Var.V.name = "v3"; typ = bv64; scope = Var.LocalVar } -> (Var 29)
+      { Var.V.name = "v1"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v4"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v3"; typ = bv64; scope = Var.LocalVar } -> ⊤
       { Var.V.name = "b"; typ = bv64; scope = Var.LocalVar } -> ⊤
       { Var.V.name = "out"; typ = bv30; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "v2"; typ = bv30; scope = Var.LocalVar } -> (Var 29)
-      { Var.V.name = "v5"; typ = bv30; scope = Var.LocalVar } -> (Var 29)
+      { Var.V.name = "v2"; typ = bv30; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v5"; typ = bv30; scope = Var.LocalVar } -> ⊤
     ID: ("@binary_expr", 1)
 
 
       { Var.V.name = "out1"; typ = bv64; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> (Var 63)
-      { Var.V.name = "v"; typ = bv64; scope = Var.LocalVar } -> (Var 63)
+      { Var.V.name = "c"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "v"; typ = bv64; scope = Var.LocalVar } -> ⊤
     ID: ("@double_out", 2)
 
 
@@ -494,9 +509,9 @@ proc @main() -> (out:bv16)
        block %loop_exit [
          guard boolnot(bvult($i, 0));
          var tmp:bv64 := load le $mem:(bv64->bv8) 0x100:bv64 64;
-         var x:bv16 := extract(16,0, tmp:bv64);
+         var x:bv64 := tmp:bv64;
          assert bvule($i, 0);
-         var y:bv16 := bvor(x:bv16, a:bv16);
+         var y:bv16 := bvor(extract(16,0, x:bv64), a:bv16);
          var out:bv16 := y:bv16;
          return;
        ]
@@ -505,9 +520,9 @@ proc @main() -> (out:bv16)
 
 
       { Var.V.name = "$mem"; typ = (bv64->bv8); scope = Var.GlobalVar } -> ⊤
-      { Var.V.name = "$i"; typ = bv64; scope = Var.GlobalVar } -> (Var 63)
+      { Var.V.name = "$i"; typ = bv64; scope = Var.GlobalVar } -> (HighBits 63)
       { Var.V.name = "out"; typ = bv16; scope = Var.LocalVar } -> ⊤
-      { Var.V.name = "a"; typ = bv16; scope = Var.LocalVar } -> (Var 15)
-      { Var.V.name = "x"; typ = bv64; scope = Var.LocalVar } -> (Var 15)
-      { Var.V.name = "y"; typ = bv16; scope = Var.LocalVar } -> (Var 15)
+      { Var.V.name = "a"; typ = bv16; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "x"; typ = bv64; scope = Var.LocalVar } -> ⊤
+      { Var.V.name = "y"; typ = bv16; scope = Var.LocalVar } -> ⊤
     |}]
