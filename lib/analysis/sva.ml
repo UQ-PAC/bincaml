@@ -117,7 +117,7 @@ module SVAAbstraction = struct
       match op with
       | (`BVADD | `BVOR | `BVXOR | `BVAND | `BVMUL) as op ->
           (eval_binary op a b rt, rt)
-      | `OR | `AND | `Cases | `MapUpdate -> (SymAddrSetLattice.top, rt)
+      | `OR | `AND | `Cases | `MapUpdate | `IfThen -> (SymAddrSetLattice.top, rt)
       | `BVConcat ->
           ( SymAddrSetLattice.fold
               (fun sb1 vs1 acc ->

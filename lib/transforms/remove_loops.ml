@@ -4,7 +4,10 @@ open Analysis.Irreducible_loops
 open Expr
 
 (* Makes reducible loops acyclic according to the algorithm described in
-  https://dx.doi.org/10.1145/1108768.1108813 *)
+  https://dx.doi.org/10.1145/1108768.1108813.
+
+  The only difference is that we put asserts at top of loop header block
+  instead of at the ends of non-entry blocks. *)
 
 let transform_loop (prog : Program.t) (proc : Program.proc)
     (loop : ProcIntra.block_info) =
