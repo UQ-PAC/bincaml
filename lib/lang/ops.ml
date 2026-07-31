@@ -454,7 +454,7 @@ module AllOps = struct
           in
           return (Bitvector w)
     | `MapUpdate -> return @@ List.hd args
-    | `IfThen -> return @@ List.hd args
+    | `IfThen -> return @@ List.hd @@ List.tl args
 
   (** ops returning booleans *)
 

@@ -202,10 +202,11 @@ let type_check stmt_id block_id expr =
             if Types.equal arg1 arg2 then []
             else
               [
-                type_err "non-equal branch : %s %s" (Types.to_string arg1)
+                type_err "non-equal ite branches : %s %s" (Types.to_string arg1)
                   (Types.to_string arg2);
               ]
-        | _ -> [ type_err "if then expects 3 arguments" ])
+        | [ Types.Boolean; arg1 ] -> []
+        | _ -> [ type_err "if then expects 2 or 3 arguments" ])
     | `MapUpdate -> (
         match args with
         | [ Types.Map (k, v); arg1; arg2 ] ->

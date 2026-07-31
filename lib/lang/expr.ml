@@ -295,13 +295,20 @@ module BasilExpr = struct
               [
                 {
                   inner =
-                    Some
-                      (BinaryExpr
-                         {
-                           op = `IfThen;
-                           arg1 = { this = Some cond };
-                           arg2 = { this = Some thn };
-                         });
+                    ( Some
+                        (BinaryExpr
+                           {
+                             op = `IfThen;
+                             arg1 = { this = Some cond };
+                             arg2 = { this = Some thn };
+                           })
+                    | Some
+                        (ApplyIntrin
+                           {
+                             op = `IfThen;
+                             args =
+                               [ { this = Some cond }; { this = Some thn } ];
+                           }) );
                 };
                 { this = Some els };
               ];

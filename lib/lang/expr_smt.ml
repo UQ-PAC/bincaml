@@ -384,8 +384,7 @@ module SMTLib2 = struct
     let* body = in_body in
     return @@ list [ quant; list binds; body ]
 
-  let smt_alg_helper ~type_hints (e : sexp t BasilExpr.abstract_expr)
-      (inner : sexp t BasilExpr.abstract_expr BasilExpr.abstract_expr) =
+  let smt_alg ~type_hints (e : sexp t BasilExpr.abstract_expr) : sexp t =
     match e with
     | Constant { const = o } ->
         let* o = add_logic_const o in
@@ -448,24 +447,13 @@ module SMTLib2 = struct
         let* l = l in
         let* r = r in
         return @@ list [ of_op o; l; r ]
-    | ApplyIntrin { op = `Cases; args } -> (
-        match (inner, args) with
-        (* ITE Expressions are special.
-         They cannot be represented using an smt match which
-         expects a datatype not a bool. So we have to
-         identify an ITE and handle it specially. *)
-        | ( ApplyIntrin
-              {
-                op = `Cases;
-                args = [ BinaryExpr { op = `IfThen; arg1; arg2 }; _ ];
-              },
-            [ _; arg3 ] ) ->
-            let* arg1 = arg1 in
-            let* arg2 = arg2 in
-            let* arg3 = arg3 in
-            return @@ list [ atom "ite"; arg1; arg2; arg3 ]
-        (* TODO actual matches. *)
-        | _ -> failwith "Match expressions unsupported.")
+    | ApplyIntrin { op = `IfThen; args = [ cond; br_true; br_false ] } ->
+        let* cond = cond in
+        let* br_true = br_true in
+        let* br_false = br_false in
+        return @@ list [ atom "ite"; cond; br_true; br_false ]
+    | ApplyIntrin { op = `Cases; args } ->
+        failwith "Match expressions unsupported."
     | ApplyIntrin { op = o; args } ->
         let* args = sequence args in
         return (list (of_op o :: args))
@@ -475,17 +463,10 @@ module SMTLib2 = struct
         let* func = func in
         return @@ list (func :: args)
 
-  let smt_alg ~type_hints
-      (e : (sexp t * sexp t BasilExpr.abstract_expr) BasilExpr.abstract_expr) :
-      sexp t * sexp t BasilExpr.abstract_expr =
-    let l = AbstractExpr.map fst e in
-    let r = AbstractExpr.map snd e in
-    let o = smt_alg_helper ~type_hints l r in
-    (o, l)
-
   let bind_of_bexpr ?(type_hints = false) e =
     let e = (BasilExpr.rewrite_typed_two Algsimp.drop_assoc) e in
-    BasilExpr.cata (smt_alg ~type_hints) e |> fst
+    let e = (BasilExpr.rewrite_typed_two Algsimp.if_then_else) e in
+    BasilExpr.cata (smt_alg ~type_hints) e
 
   let of_bexpr ?(type_hints = false) e =
     fst @@ (bind_of_bexpr ~type_hints e) empty
