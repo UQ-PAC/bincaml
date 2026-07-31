@@ -110,6 +110,7 @@ module Make (T : TypeExpr.TypeContext) = struct
         let m = curry_f [ a ] b in
         curry_f [ m; a; b ] m
     | `Cases -> fv ()
+    | `IfThen -> fv ()
 
   let do_infer ~visit_constraint
       (infer :

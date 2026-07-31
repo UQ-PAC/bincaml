@@ -196,6 +196,16 @@ let type_check stmt_id block_id expr =
                        :: errs,
                        ty ))
                  ([], h) tl)
+    | `IfThen -> (
+        match args with
+        | [ Types.Boolean; arg1; arg2 ] ->
+            if Types.equal arg1 arg2 then []
+            else
+              [
+                type_err "non-equal branch : %s %s" (Types.to_string arg1)
+                  (Types.to_string arg2);
+              ]
+        | _ -> [ type_err "if then expects 3 arguments" ])
     | `MapUpdate -> (
         match args with
         | [ Types.Map (k, v); arg1; arg2 ] ->

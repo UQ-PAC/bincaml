@@ -298,7 +298,8 @@ module Spec = struct
           and catch fire *) ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type intrin = [ `Cases  (** choose first argument that is defined *) ]
+  type intrin =
+    [ `Cases | `IfThen  (** choose first argument that is defined *) ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type unary = [ `Old | `Classification | `Gamma ]
@@ -453,6 +454,7 @@ module AllOps = struct
           in
           return (Bitvector w)
     | `MapUpdate -> return @@ List.hd args
+    | `IfThen -> return @@ List.hd args
 
   (** ops returning booleans *)
 
