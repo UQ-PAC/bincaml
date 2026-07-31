@@ -283,7 +283,7 @@ module PassManager = struct
         "Makes reducible loops acyclic by cutting back edges and inserting \
          assumes/asserts.";
       invariants =
-        Invariants.presupposes [ ReducibleLoops ] ~establishes:[ CycleFree ];
+        Invariants.presupposes [ ReducibleLoops ] ~establishes:[ Acyclic ];
     }
 
   let full_ssa =

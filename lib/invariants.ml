@@ -19,7 +19,7 @@ type t =
   | MemoryEncoding
   | GtirbArm
   | ReducibleLoops
-  | CycleFree
+  | Acyclic
       (** All loops are reducible. That is, there are no {i irreducible} loops.
       *)
 [@@deriving show { with_path = false }, eq, ord]
@@ -35,7 +35,7 @@ let read s =
   | "LambdaLift" -> LambdaLift
   | "ReducibleLoops" -> ReducibleLoops
   | "MemoryEncoding" -> MemoryEncoding
-  | "CycleFree" -> CycleFree
+  | "Acyclic" -> Acyclic
   | _ -> failwith (Printf.sprintf "cannot parse string into Invariants.t: %s" s)
 
 let show_list xs = "[" ^ CCString.concat ", " (List.map show xs) ^ "]"
