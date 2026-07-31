@@ -1,6 +1,10 @@
 (library
  (name bincaml_analysis_test)
- (modules test_ide_live test_ssadfg test_dynamic_single_assignment)
+ (modules
+  test_ide_live
+  test_ssadfg
+  test_dynamic_single_assignment
+  test_highest_live_bit)
  (inline_tests)
  (libraries
   bincaml.loader
