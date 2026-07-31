@@ -362,6 +362,7 @@ module SMTLib2 = struct
     | `INTSUB -> atom "-"
     | `INTDIV -> atom "/"
     | `INTLT -> atom "<"
+    | `INTLE -> atom "<="
     | #Ops.AllOps.unary as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.const as o -> atom @@ Ops.AllOps.to_string o
     | #Ops.AllOps.binary as o -> atom @@ Ops.AllOps.to_string o
