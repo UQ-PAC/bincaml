@@ -82,14 +82,26 @@ let construct_final_edge proc =
           }
       in
 
+      (* Assert(P) becomes Assert(Reachability => P)
+         to allow assertions in branches prior to joining
+         to reason about assumes/guards. *)
+      let non_guard_stmts =
+        non_guard_stmts
+        |> List.map (function
+          | Stmt.Instr_Assert { body; attrib } ->
+              Stmt.Instr_Assert
+                { body = BasilExpr.binexp ~op:`IMPLIES (BasilExpr.rvar termination_var) body; attrib }
+          | other -> other)
+      in
+
       (* Final edge is existing statements plus:
           1. the ites for the new edge being merged in.
           2. the statements for the new edge body.
           3. an assignment to the termination variable.
         *)
       CCVector.push final_edge ites;
-      CCVector.append_list final_edge non_guard_stmts;
       CCVector.push final_edge termination;
+      CCVector.append_list final_edge non_guard_stmts;
       final_edge)
     (CCVector.create ()) proc
   |> CCVector.freeze

@@ -237,7 +237,7 @@ module PassManager = struct
 
   let inline_summaries =
     {
-      name = "inline_summaries";
+      name = "inline-summaries";
       apply = Prog Transforms.Summary_inlining.transform;
       doc = "Replaces procedure calls with asserts/assumes for summaries";
       invariants = Invariants.presupposes [ SSA ] ~establishes:[ NoSummaries ];
