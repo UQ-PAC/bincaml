@@ -57,14 +57,16 @@ let construct_final_edge proc =
       in
 
       (* Add a fresh termination variable to assign the condition. *)
-      let termination_var = Procedure.fresh_var proc ~pure:true Types.Boolean in
+      let termination_var =
+        Procedure.fresh_var ~name:"trm" proc ~pure:true Types.Boolean
+      in
       Hashtbl.add termination_condition id termination_var;
 
       (* Isolate the guard statements. *)
       let guard_expressions, non_guard_stmts =
         Block.stmts_iter block |> Iter.to_list
         |> List.partition_map_either (function
-          | Stmt.Instr_Assume { body; branch = true } -> Left body
+          | Stmt.Instr_Assume { body; branch = _ } -> Left body
           | stmt -> Right stmt)
       in
 
@@ -85,23 +87,37 @@ let construct_final_edge proc =
       (* Assert(P) becomes Assert(Reachability => P)
          to allow assertions in branches prior to joining
          to reason about assumes/guards. *)
-      let non_guard_stmts =
+      let assert_stmts, non_guard_stmts =
         non_guard_stmts
-        |> List.map (function
+        |> List.partition_filter_map (function
           | Stmt.Instr_Assert { body; attrib } ->
-              Stmt.Instr_Assert
-                { body = BasilExpr.binexp ~op:`IMPLIES (BasilExpr.rvar termination_var) body; attrib }
-          | other -> other)
+              `Left
+                (Stmt.Instr_Assert
+                   {
+                     body =
+                       BasilExpr.binexp ~op:`IMPLIES
+                         (BasilExpr.rvar termination_var)
+                         body;
+                     attrib;
+                   })
+          | other -> `Right other)
       in
 
       (* Final edge is existing statements plus:
           1. the ites for the new edge being merged in.
           2. the statements for the new edge body.
           3. an assignment to the termination variable.
-        *)
+          4. any assertions from the block *)
       CCVector.push final_edge ites;
-      CCVector.push final_edge termination;
       CCVector.append_list final_edge non_guard_stmts;
+      CCVector.push final_edge termination;
+
+      (* Asserts are moved to the end.
+         They should be order invariant thanks to SSA,
+         however the added dependence on the termination
+         condition requires them after it's declared. *)
+      CCVector.append_list final_edge assert_stmts;
+
       final_edge)
     (CCVector.create ()) proc
   |> CCVector.freeze
