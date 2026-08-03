@@ -68,6 +68,18 @@ module PassManager = struct
             prog);
     }
 
+  let live_smt out_channel =
+    {
+      name = "live-smt";
+      doc = "Perform live smt analysis, outputting logs to channel.";
+      invariants = Invariants.make ~presupposes:[ SSA; NoPhis; NoSummaries ] ();
+      apply =
+        Prog
+          (fun prog ->
+            Backends.Smt.eval_program out_channel prog;
+            prog);
+    }
+
   let lift_intrinsics_aarch64 =
     {
       name = "lift-intrinsics-aarch64";

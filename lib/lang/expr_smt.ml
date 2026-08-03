@@ -74,17 +74,41 @@ module SMTLib2 = struct
   let add_preamble (v : Sexp.t) (s : builder) =
     (v, { s with preamble = v :: s.preamble })
 
-  let to_sexp ?(set_logic = true) b =
-    let open Iter.Infix in
+  let preamble_to_sexp ?(set_logic = true) b =
     let logic =
       if set_logic then
         [ list [ atom "set-logic"; atom (get_logic_string b.logics) ] ]
       else []
     in
-    let preamble = List.to_iter (logic @ b.preamble) in
-    let decls = VarMap.to_iter b.var_decls >|= fun (v, d) -> d.decl_cmd in
-    let commands = List.rev b.commands |> List.to_iter in
+    List.to_iter (logic @ b.preamble)
+
+  let decls_to_sexp b =
+    let open Iter.Infix in
+    VarMap.to_iter b.var_decls >|= fun (v, d) -> d.decl_cmd
+
+  let commands_to_sexp b = List.rev b.commands |> List.to_iter
+
+  let to_sexp ?(set_logic = true) b =
+    let open Iter.Infix in
+    let preamble = preamble_to_sexp ~set_logic b in
+    let decls = decls_to_sexp b in
+    let commands = commands_to_sexp b in
     preamble <+> decls <+> commands
+
+  let append (a : builder) (b : builder) =
+    {
+      preamble = b.preamble @ a.preamble;
+      var_decls =
+        VarMap.merge_safe
+          ~f:
+            ( const @@ function
+              | `Both (d1, d2) -> Some d2
+              | `Left d -> Some d
+              | `Right d -> Some d )
+          a.var_decls b.var_decls;
+      commands = b.commands @ a.commands;
+      logics = LSet.union a.logics b.logics;
+    }
 
   let run (e : 'e t) = e empty
 
