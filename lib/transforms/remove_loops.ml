@@ -111,7 +111,6 @@ let transform_proc (prog : Program.t) (proc_id : IDSet.elt)
         | `ReducibleHeader -> true
         | _ -> false)
   in
-  Printf.printf "length: %d\n" @@ List.length loops;
   List.fold_left (transform_loop prog) proc loops
 
 let transform (prog : Program.t) =
