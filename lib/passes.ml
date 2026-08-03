@@ -453,6 +453,7 @@ module PassManager = struct
         cf_exprs;
         inter_dead;
         cleanup_cfg;
+        remove_unused;
       ]
     in
     {

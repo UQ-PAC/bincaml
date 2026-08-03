@@ -11,7 +11,11 @@ open Expr
    for verification.
 *)
 
-type context = { stmt : Program.stmt option; proc : ID.t option; vc : bool }
+type context = {
+  stmt : Program.stmt option;
+  proc : Program.proc option;
+  vc : bool;
+}
 
 let empty : context = { stmt = None; proc = None; vc = false }
 
@@ -22,7 +26,7 @@ let empty : context = { stmt = None; proc = None; vc = false }
    Assertions produce a second builder for verification. *)
 let build_procedure (program : Program.t) (procedure : Program.proc) :
     (SMTLib2.builder * context) list =
-  let ctx = { empty with proc = Some (Procedure.id procedure) } in
+  let ctx = { empty with proc = Some procedure } in
 
   let builders = CCVector.create () in
 
@@ -103,16 +107,32 @@ let build_program (program : Program.t) : (SMTLib2.builder * context) list =
   |> Iter.flat_map_l (fun d -> build_declaration program d)
   |> Iter.to_list
 
-let eval_single chan (solver : Smt.Solver.t)
+let eval_single chan (solver : Smt.Solver.t) (prog : Program.t)
     ((builder, context) : SMTLib2.builder * context) =
   let sexps = SMTLib2.commands_to_sexp builder in
   sexps
   |> flip Iter.for_each (fun sexp ->
       let response = Smt.Solver.add_sexp solver sexp in
       match (context, response) with
-      | { stmt = Some stmt; vc = true }, `Atom "sat" ->
-          Printf.fprintf chan "Failing Assertion: %s\n"
-            (Stmt.to_string Var.pretty Var.pretty BasilExpr.pretty stmt)
+      | { stmt = Some stmt; proc = Some proc; vc = true }, `Atom "sat" -> (
+          Printf.fprintf chan "\nFailing Assertion: %s\n"
+            (Stmt.to_string Var.pretty Var.pretty BasilExpr.pretty stmt);
+          Printf.fprintf chan "Belonging to procedure: %s\n"
+            (ID.name @@ Procedure.id proc);
+          Printf.fprintf chan "Counterexample:\n";
+          let model = Smt.Solver.get_model solver in
+          match model with
+          | `Atom a -> Printf.fprintf chan "%s\n" (Sexp.to_string model)
+          | `List l ->
+              l |> List.to_iter
+              |> Iter.filter (function
+                | `List (`Atom "define-fun" :: `Atom var :: _ :: `Atom typ :: _)
+                  ->
+                    Procedure.lookup_local_decl proc var |> Option.is_some
+                    || Program.get_decl_by_name var prog |> Option.is_some
+                | _ -> false)
+              |> flip Iter.for_each (fun s ->
+                  Printf.fprintf chan "%s\n" (Sexp.to_string s)))
       | _ -> ())
 
 let eval_program chan (program : Program.t) =
@@ -135,7 +155,8 @@ let eval_program chan (program : Program.t) =
   let decls = SMTLib2.decls_to_sexp builder in
   Iter.append preamble decls
   |> flip Iter.for_each (fun sexp -> Smt.Solver.add_command solver sexp);
-  builders |> List.to_iter |> flip Iter.for_each @@ eval_single chan solver;
+  builders |> List.to_iter
+  |> flip Iter.for_each @@ eval_single chan solver program;
   flush chan
 
 let pretty_program (program : Program.t) : Containers_pp.t =
