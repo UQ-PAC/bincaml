@@ -621,7 +621,7 @@ module Solver : sig
   val create : solver_config -> t
   (** Create a new solver with [config] *)
 
-  val add_sexp: t -> sexp -> sexp
+  val add_sexp : t -> sexp -> sexp
   (* Send a sexp to the solver, returning the result *)
 
   val add_command : t -> sexp -> unit
@@ -918,8 +918,7 @@ the model does not contain those.  We need to explicitly add them.
   (** create a new solver with config *)
   let create conf = new_solver conf
 
-  let add_sexp solver cmd =
-    solver.command cmd
+  let add_sexp solver cmd = solver.command cmd
 
   (** add a command to solver *)
   let add_command solver cmd =

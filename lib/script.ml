@@ -366,7 +366,10 @@ let cmds_list =
     ("dump-il", dump_il, "?file", "Write IL to file or stdout");
     ("dump-boogie", dump_boogie, "?file", "Write Boogie to file or stdout");
     ("dump-smt", dump_smt, "?file", "Write SMT to file or stdout");
-    ("live-smt", live_smt, "?file", "Run SMT solver writing output to file or stdout");
+    ( "live-smt",
+      live_smt,
+      "?file",
+      "Run SMT solver writing output to file or stdout" );
     ( "chc-dump-clauses",
       chc_dump_clauses,
       "<file>",
