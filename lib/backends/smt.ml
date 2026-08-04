@@ -104,8 +104,6 @@ let build_declaration (program : Program.t) (declaration : Program.declaration)
   match declaration with
   | Procedure { definition } -> build_procedure program definition
   | other -> [(SMTLib2.trans_decl declaration SMTLib2.empty |> snd, empty)]
-  (* | Type { binding; typ; } -> build_type program binding typ *)
-  (* | _ -> failwith "Unsupported SMT declaration" *)
 
 let build_program (program : Program.t) : (SMTLib2.builder * context) list =
   Program.declarations program

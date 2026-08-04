@@ -417,7 +417,7 @@ module SMTLib2 = struct
         let* var = get_var id in
         match type_hints with
         | true -> return @@ list [ atom "as"; var; fst @@ of_typ @@ Var.typ id ]
-        | false -> return @@ var)
+        | false -> fun s -> ((if s.var_decls |> VarMap.get id |> Option.is_some then var else var), s))
     | UnaryExpr { op = `BOOLTOBV1; arg = e } ->
         let* e = e in
         return
@@ -485,6 +485,7 @@ module SMTLib2 = struct
     | ApplyFun { func; args } ->
         let* args = sequence args in
         let* func = func in
+        print_endline (Sexp.to_string func);
         return @@ list (func :: args)
 
   let bind_of_bexpr ?(type_hints = false) e =
