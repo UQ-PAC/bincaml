@@ -55,8 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ build_test, build_test_slower ]
     if: >
-      needs.build_test.result == 'success' || needs.build_test_slower.result == 'success'
-
+      !cancelled() && ( needs.build_test.result == 'success' || needs.build_test_slower.result == 'success' )
     steps:
       - run: true
 
