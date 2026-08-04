@@ -130,6 +130,9 @@
             no-fp = selfOcamlPackages.callPackage ./nix/shell.nix {
               includeEditorTools = true;
             };
+            ci = selfOcamlPackages.callPackage ./nix/shell.nix {
+              includeEditorTools = false;
+            };
           };
         };
     };
