@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        shell: nix develop .#ci --ignore-env --keep-env-var CI --command bash {0}
+        shell: nix develop .#ci --ignore-env --keep-env-var CI --command bash -e {0}
 
     steps:
       - uses: actions/checkout@v5
@@ -23,7 +23,9 @@ jobs:
           submodules: true
 
       - uses: cachix/install-nix-action@v31
-      - run: echo "Preparing Nix shell"
+      - name: Preparing Nix shell
+        run: true
+
       - run: dune build --profile=release
       - run: dune runtest --force
 
@@ -54,8 +56,8 @@ jobs:
   at_least_one_success:
     runs-on: ubuntu-latest
     needs: [ build_test, build_test_slower ]
-    if: >
-      !cancelled() && ( needs.build_test.result == 'success' || needs.build_test_slower.result == 'success' )
+    if: "!cancelled()"
     steps:
-      - run: true
+      - run: ${{ needs.build_test.result == 'success' || needs.build_test_slower.result == 'success' }}
+        name: "Check that at least one build & test job succeeded"
 
