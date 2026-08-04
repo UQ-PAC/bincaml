@@ -22,7 +22,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     defaults:
       run:
-        shell: exec nix develop .#ci --ignore-env --keep-env-var CI --command {0}
+        shell: nix develop .#ci --ignore-env --keep-env-var CI --command {0}
 
     steps:
       - uses: actions/checkout@v5
