@@ -1,0 +1,106 @@
+/**
+  Facilitates generating ocamldocs for the Bincaml package and its dependencies.
+*/
+{
+  lib,
+  newScope,
+}:
+
+lib.makeScope newScope (
+  self:
+  let
+    callPackage = self.callPackage;
+  in
+  {
+    /**
+      Usually, `odoc_driver` uses opam to discover packages, but we don't have
+      a real opam switch in Nix. Fortunately, `odoc_driver` also has the ability
+      to load packages from Dune's `_build` folder structure, implemented in the
+      `dune_overrides` function:
+        https://github.com/ocaml/odoc/blob/v3.1/src/driver/opam.ml#L228
+
+      This derivation transforms the separate Nix packages for Bincaml and its
+      dependencies into this Dune-like folder structure expected by `odoc_driver`.
+    */
+    fake_dune_prefix = callPackage (
+      {
+        buildEnv,
+        fmt,
+        ocaml,
+      }:
+      buildEnv {
+        name = "fake-dune-prefix-for-odoc";
+        paths = [ fmt ]; # TODO: for faster testing, we use `fmt` rather than `bincaml`
+        includeClosures = true;
+        pathsToLink = [
+          "/share/doc"
+          "/lib/ocaml/${ocaml.version}/site-lib"
+        ];
+
+        postBuild = ''
+          d=$out/_build/install/default
+          mkdir -p $d
+          mv -v $out/share/doc $d/doc
+          mv -v $out/lib/ocaml/*/site-lib $d/lib
+          ln -s ${ocaml}/lib/ocaml $d/lib/ocaml
+
+          rm -rf $out/share $out/lib
+        '';
+
+        passthru.path = "_build/install/default";
+      }
+    ) { };
+
+    /**
+      Provides a fake `opam` script which prints a path which contains the
+      files needed by: https://github.com/ocaml/odoc/blob/v3.1/src/driver/ocamlfind.ml#L6-L9
+    */
+    fake_opam = callPackage (
+      {
+        runCommand,
+        findlib,
+        ocaml,
+        runtimeShell,
+        fake_dune_prefix,
+      }:
+      runCommand "fake-opam-for-odoc-driver" { } ''
+        mkdir -pv $out/lib $out/bin
+        cp ${findlib}/etc/findlib.conf $out/lib
+        ln -s ${fake_dune_prefix}/${fake_dune_prefix.path}/lib/ocaml $out/lib/ocaml
+
+        cat <<EOF > $out/bin/opam
+        #!${runtimeShell}
+        echo $out
+        EOF
+        chmod +x $out/bin/opam
+      ''
+    ) { };
+
+    docs = callPackage (
+      {
+        runCommand,
+        fake_opam,
+        fake_dune_prefix,
+        ocaml,
+        odoc,
+        sherlodoc,
+        odoc-driver,
+      }:
+      runCommand "bincaml-docs"
+        {
+          nativeBuildInputs = [
+            fake_opam
+            odoc-driver
+            odoc
+            sherlodoc
+            ocaml
+          ];
+        }
+        ''
+          dune_prefix=${fake_dune_prefix}/${fake_dune_prefix.path}
+          OCAMLPATH=$dune_prefix/lib \
+            odoc_driver --html-dir=$out $(cd $dune_prefix/lib && echo *)
+        ''
+    ) { };
+  }
+)

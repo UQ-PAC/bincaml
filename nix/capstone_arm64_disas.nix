@@ -1,11 +1,11 @@
 {
   lib,
   buildDunePackage,
-  nix-gitignore,
   writableTmpDirAsHomeHook,
   capstone,
 
   # ocaml packages
+  bincaml,
   logs,
   fmt,
   iter,
@@ -26,7 +26,7 @@ buildDunePackage {
 
   minimalOCamlVersion = "5.0";
 
-  src = nix-gitignore.gitignoreSource [ "nix" "flake.nix" "flake.lock" ] ./..;
+  inherit (bincaml) src;
 
   checkInputs = [ ];
   nativeBuildInputs = [ writableTmpDirAsHomeHook ];
@@ -42,11 +42,7 @@ buildDunePackage {
   ];
   propagatedBuildInputs = [ capstone ];
 
-  doCheck = false;
-  outputs = [
-    "out"
-    "dev"
-  ];
+  outputs = [ "out" ];
 
   meta = {
     homepage = "https://github.com/agle/bincaml";
