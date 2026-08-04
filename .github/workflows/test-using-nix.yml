@@ -1,0 +1,68 @@
+name: build and test (using nix)
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions: read-all
+
+jobs:
+  build_test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: exec nix develop .#ci --ignore-env --keep-env-var CI --command {0}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: cachix/install-nix-action@v31
+
+      - run: echo "Preparing Nix shell"
+
+      - run: dune build --profile=release
+      - run: dune runtest --force
+
+  build_test_slower:
+    timeout-minutes: 15
+    runs-on: ${{ matrix.os }}
+    needs: [ build_test ]
+    if: "! ( cancelled() || success() )"
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - uses: ocaml/setup-ocaml@v3
+
+      - run: opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
+      - run: opam repository --all add pac https://github.com/uq-pac/opam-repository.git
+      - run: opam install . --deps-only --with-test
+      - run: echo LIBRARY_PATH="$LIBRARY_PATH:/opt/homebrew/lib" >> "$GITHUB_ENV"
+        if: ${{ matrix.os }} == "macos-latest"
+      - run: opam lint
+      - run: opam exec -- dune build @fmt --display=quiet
+      - run: opam exec -- dune build --ignore-promoted-rules --profile=release
+      - run: opam exec -- dune build --ignore-promoted-rules '@treesit'
+      - run: opam exec -- dune runtest --ignore-promoted-rules --force
+
+  at_least_one_success:
+    runs-on: ubuntu-latest
+    needs: [ build_test, build_test_slower ]
+    if: >
+      needs.build_test.result == "success" || needs.build_test_slower.result == "success"
+
