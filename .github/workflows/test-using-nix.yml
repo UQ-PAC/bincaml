@@ -66,3 +66,6 @@ jobs:
     if: >
       needs.build_test.result == 'success' || needs.build_test_slower.result == 'success'
 
+    steps:
+      - run: true
+
