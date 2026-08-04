@@ -43,10 +43,7 @@ buildDunePackage {
   propagatedBuildInputs = [ capstone ];
 
   doCheck = false;
-  outputs = [
-    "out"
-    "dev"
-  ];
+  outputs = [ "out" ];
 
   meta = {
     homepage = "https://github.com/agle/bincaml";

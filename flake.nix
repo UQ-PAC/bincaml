@@ -88,10 +88,12 @@
           ...
         }:
         let
-          inherit (pac-nix.legacyPackages) bnfc-treesitter;
-
           pkgs = nixpkgs.legacyPackages;
-          selfOcamlPackages = pkgs.ocamlPackages.overrideScope self.overlays.addBincamlPackages;
+          ocamlPackages = pkgs.ocamlPackages.overrideScope (_: _: {
+            z3-bin = pkgs.z3;
+            inherit (pac-nix.legacyPackages) bnfc-treesitter;
+          });
+          selfOcamlPackages = ocamlPackages.overrideScope self.overlays.addBincamlPackages;
           fpOcamlPackages = selfOcamlPackages.overrideScope self.overlays.enableOcamlFramePointer;
         in
         {
@@ -123,12 +125,10 @@
           devShells = {
             default = self.devShells.fp;
             fp = fpOcamlPackages.callPackage ./nix/shell.nix {
-              inherit bnfc-treesitter;
-              z3 = pkgs.z3.out;
+              includeEditorTools = true;
             };
             no-fp = selfOcamlPackages.callPackage ./nix/shell.nix {
-              inherit bnfc-treesitter;
-              z3 = pkgs.z3.out;
+              includeEditorTools = true;
             };
           };
         };

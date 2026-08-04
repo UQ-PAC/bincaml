@@ -34,18 +34,14 @@ buildDunePackage {
     logs
     fmt
     iter
-    linol
-    linol-lwt
     containers
     ppx_deriving
+    linol
+    linol-lwt
   ];
-  propagatedBuildInputs = [ ];
 
   doCheck = true;
-  outputs = [
-    "out"
-    "dev"
-  ];
+  outputs = [ "out" ];
 
   meta = {
     homepage = "https://github.com/agle/bincaml";
