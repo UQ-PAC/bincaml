@@ -10,7 +10,7 @@ Logs should print conditionally on whether their source has the right level.
   (log-level info)
   (log-level info analysis.irreducible_loops)
   (run-transforms irreducible-loops)
-  bincaml: [INFO] found 15 loops, 1 irreducible
+  bincaml: [INFO] found 15 loops, 1 irreduciblea
   bincaml: [INFO] found 0 loops, 0 irreducible
 
 
