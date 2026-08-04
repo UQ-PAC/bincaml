@@ -19,7 +19,11 @@ type context = {
 
 let empty : context = { stmt = None; proc = None; vc = false }
 
-(* type context = Stmt of Program.stmt | Verify of Program.stmt | None *)
+(* let build_procedure (program : Program.t) binding typ : *)
+    (* (SMTLib2.builder * context) list = *)
+    (* let ctx = empty in *)
+    (* Expr_smt.SMTLib2.decls_to_sexp *)
+    (* [] *)
 
 (* Produce a list of builders for a procedure, with context.
    Builder for local declarations + one for each statement.
@@ -99,11 +103,14 @@ let build_declaration (program : Program.t) (declaration : Program.declaration)
     : (SMTLib2.builder * context) list =
   match declaration with
   | Procedure { definition } -> build_procedure program definition
-  | _ -> failwith "Unsupported SMT declaration"
+  | other -> [(SMTLib2.trans_decl declaration SMTLib2.empty |> snd, empty)]
+  (* | Type { binding; typ; } -> build_type program binding typ *)
+  (* | _ -> failwith "Unsupported SMT declaration" *)
 
 let build_program (program : Program.t) : (SMTLib2.builder * context) list =
   Program.declarations program
   |> Iter.map snd
+  |> Iter.rev
   |> Iter.flat_map_l (fun d -> build_declaration program d)
   |> Iter.to_list
 

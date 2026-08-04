@@ -65,7 +65,7 @@ module SMTLib2 = struct
 
   let add_command (v : Sexp.t) (s : builder) =
     let asrt = v in
-    (asrt, { s with commands = asrt :: s.commands })
+    (asrt, { s with commands = asrt :: s.commands; logics = s.logics })
 
   let add_assert (v : Sexp.t) (s : builder) =
     let asrt = list [ atom "assert"; v ] in
@@ -498,9 +498,13 @@ module SMTLib2 = struct
   let trans_decl (decl : Program.declaration) =
     let* x = return () in
     match decl with
-    | Type { binding; typ = Sort (name, [ { variant; fields = [] } ]) } ->
-        return (Bincaml_util.Smt.Expr.declare_sort variant 0)
-    | Type { binding; typ = Sort (name, vs) } ->
+    | Type { binding; typ = Sort (name, [ { variant; fields = [] } ]) as typ }
+      ->
+        let sexp = Bincaml_util.Smt.Expr.declare_sort variant 0 in
+        let* _ = add_preamble sexp in
+        let* _ = add_logic DT in
+        return sexp
+    | Type { binding; typ = Sort (name, vs) as typ } ->
         let fields =
           List.map
             Types.(
@@ -512,9 +516,12 @@ module SMTLib2 = struct
                       fields ))
             vs
         in
-        return (Bincaml_util.Smt.Expr.declare_datatype name [] fields)
+        let sexp = Bincaml_util.Smt.Expr.declare_datatype name [] fields in
+        let* _ = add_preamble sexp in
+        let* _ = add_logic DT in
+        return sexp
     | Type { binding; typ } ->
-        return (list [ atom "decl-sort"; fst @@ of_typ typ ])
+        add_preamble (list [ atom "decl-sort"; fst @@ of_typ typ ])
     | Function { binding; attrib; definition = Function body } ->
         let op, bound_vars, in_body =
           match BasilExpr.unfix body with
@@ -530,7 +537,7 @@ module SMTLib2 = struct
         let r = Expr.BasilExpr.type_of in_body in
         let* body = bind_of_bexpr in_body in
         let r = fst (of_typ r) in
-        return
+        add_preamble
         @@ list
              [
                atom "define-fun";
@@ -541,12 +548,12 @@ module SMTLib2 = struct
              ]
     | Function { binding; definition = Axiom body } ->
         let* body = bind_of_bexpr body in
-        return @@ list [ atom "assert"; body ]
+        add_preamble @@ list [ atom "assert"; body ]
     | Function { binding; attrib; definition = Uninterpreted } ->
         let args, r = Var.typ binding |> Types.uncurry in
         let args = List.map (of_typ %> fst) args in
         let r = fst (of_typ r) in
-        return
+        add_preamble
         @@ list
              [ atom "declare-fun"; smt_symbol (Var.name binding); list args; r ]
     | Variable v -> failwith "mutable"
