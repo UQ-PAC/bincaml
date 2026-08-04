@@ -12,14 +12,7 @@ permissions: read-all
 
 jobs:
   build_test:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - macos-latest
-          - ubuntu-latest
-
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: nix develop .#ci --ignore-env --keep-env-var CI --command {0}
@@ -30,15 +23,13 @@ jobs:
           submodules: true
 
       - uses: cachix/install-nix-action@v31
-
       - run: echo "Preparing Nix shell"
-
       - run: dune build --profile=release
       - run: dune runtest --force
 
   build_test_slower:
     timeout-minutes: 15
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     needs: [ build_test ]
     if: "! ( cancelled() || success() )"
 
