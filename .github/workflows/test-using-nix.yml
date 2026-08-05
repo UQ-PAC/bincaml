@@ -10,12 +10,17 @@ on:
 
 permissions: read-all
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: nix develop .#ci --ignore-env --keep-env-var CI --command bash -e {0}
+
 jobs:
   build_test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: nix develop .#ci --ignore-env --keep-env-var CI --command bash -e {0}
 
     steps:
       - uses: actions/checkout@v5
@@ -23,17 +28,36 @@ jobs:
           submodules: true
 
       - uses: cachix/install-nix-action@v31
-      - name: Preparing Nix shell
-        run: true
+      - run: echo "Preparing Nix shell"
 
       - run: dune build --profile=release
       - run: dune runtest --force
 
+  format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: cachix/install-nix-action@v31
+      - run: echo "Preparing Nix shell"
+
+      - run: dune build @fmt --display=quiet
+        if: "!cancelled()"
+      - run: dune build '@treesit'
+        if: "!cancelled()"
+
   build_test_slower:
     timeout-minutes: 15
     runs-on: ubuntu-latest
-    needs: [ build_test ]
-    if: "! ( cancelled() || success() )"
+    needs: [ build_test, format ]
+    if: "! ( cancelled() || success() ) || github.ref == 'refs/heads/main'"
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - uses: actions/checkout@v6
@@ -55,9 +79,26 @@ jobs:
 
   at_least_one_success:
     runs-on: ubuntu-latest
-    needs: [ build_test, build_test_slower ]
+    needs: [ build_test_slower ]
     if: "!cancelled()"
+
+    defaults:
+      run:
+        shell: bash
+
     steps:
-      - run: ${{ needs.build_test.result == 'success' || needs.build_test_slower.result == 'success' }}
+      - run: ${{ needs.build_test_slower.result == 'success' || needs.build_test_slower.result == 'skipped' }}
         name: "Check that at least one build & test job succeeded"
 
+  docs-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: cachix/install-nix-action@v31
+      - run: echo "Preparing Nix shell"
+
+      - run: odoc_driver bincaml # TODO: fixme. need to register packages somehow?
