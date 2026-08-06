@@ -1,8 +1,10 @@
 {
   lib,
+  fetchpatch2,
   buildDunePackage,
   writableTmpDirAsHomeHook,
 
+  opam,
   odoc,
   base64,
   bigstringaf,
@@ -24,6 +26,13 @@
 buildDunePackage (self: {
   pname = "sherlodoc";
   inherit (odoc) version src;
+
+  patches = [
+    (fetchpatch2 {
+      url = "https://github.com/ocaml/odoc/commit/9695cd79ec29c082f62c768a99a650ebf06892d3.patch";
+      hash = "sha256-8eyclSV4MnMkVcT+0NjPKWARzITm6tJpg0n/Z7Yi/L4=";
+    })
+  ];
 
   nativeBuildInputs = [
     menhir
@@ -50,12 +59,18 @@ buildDunePackage (self: {
   nativeCheckInputs = [
     odig
     odoc
+    opam
   ];
   checkInputs = [ alcotest ];
   doCheck = true;
 
-  postPatch = ''
+  preCheck = ''
     substituteInPlace sherlodoc/test/dune --replace-quiet --quiet ""
+    export ODIG_LIB_DIR="$(echo ${tyxml}/lib/ocaml/*/site-lib)"
+    export ODIG_DOC_DIR="${tyxml}/share/doc"
+    export LOG_LEVEL=stderr
+    opam init --bare --disable-sandboxing $(mktemp -d) --quiet --no
+    export OPAMCOLOR=never
   '';
 
   meta = {

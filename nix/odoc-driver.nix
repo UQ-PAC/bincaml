@@ -1,5 +1,6 @@
 {
   lib,
+  fetchpatch2,
   buildDunePackage,
 
   odoc,
@@ -22,6 +23,13 @@
 buildDunePackage {
   pname = "odoc-driver";
   inherit (odoc) version src;
+
+  patches = [
+    (fetchpatch2 {
+      url = "https://github.com/ocaml/odoc/commit/02408309dc223f8ab97a023dfec4e4641ec55736.patch";
+      hash = "sha256-FO2QaK1TaxCNBpttFy/GHnePa6uvKOvxE+rstKcPY/Q=";
+    })
+  ];
 
   nativeBuildInputs = [ sherlodoc ];
   buildInputs = [
