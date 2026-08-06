@@ -66,11 +66,18 @@ buildDunePackage (self: {
 
   preCheck = ''
     substituteInPlace sherlodoc/test/dune --replace-quiet --quiet ""
-    export ODIG_LIB_DIR="$(echo ${tyxml}/lib/ocaml/*/site-lib)"
-    export ODIG_DOC_DIR="${tyxml}/share/doc"
-    export LOG_LEVEL=stderr
+
+    cat <<EOF >> sherlodoc/test/dune
+    (env
+     (_
+      (env-vars
+       (ODIG_LIB_DIR $(echo ${tyxml}/lib/ocaml/*/site-lib))
+       (ODIG_DOC_DIR ${tyxml}/share/doc)
+       (LOG_LEVEL info)
+       )))
+    EOF
+
     opam init --bare --disable-sandboxing $(mktemp -d) --quiet --no
-    export OPAMCOLOR=never
   '';
 
   meta = {
