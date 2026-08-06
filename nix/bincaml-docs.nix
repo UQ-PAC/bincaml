@@ -8,6 +8,7 @@ odoc-driver,
 odoc,
 findlib,
 ocaml,
+fmt,
 sherlodoc,
 runtimeShell
 }:
@@ -28,7 +29,7 @@ let
 
 env = buildEnv {
 name = "ajidso";
-  paths = [ odoc ];
+  paths = [ fmt ];
   includeClosures = true;
   pathsToLink = [ "/share/doc" "/lib/ocaml/5.4.1/site-lib" ];
 
@@ -50,5 +51,5 @@ in runCommand "bincaml-docs" {
   mkdir -p $(dirname $dune_prefix)
   ln -s ${env} $dune_prefix
   ls -l $(dirname $dune_prefix)
-  OCAMLPATH=$dune_prefix/lib odoc_driver --html-dir=$out $(cd $dune_prefix/lib && echo *)
+  OCAMLPATH=$dune_prefix/lib odoc_driver --html-dir=$out -v $(cd $dune_prefix/lib && echo *)
 ''
