@@ -5,7 +5,6 @@
   ];
 
   inputs = {
-    self.submodules = true;
 
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
 
@@ -58,6 +57,7 @@
           capstone_arm64_disas = ofinal.callPackage ./nix/capstone_arm64_disas.nix {
             buildDunePackage = ofinal.buildDune324Package;
           };
+          bincaml-docs = ofinal.callPackage ./nix/bincaml-docs.nix { };
 
           ocaml-protoc-plugin-6-1-0 = ofinal.callPackage ./nix/ocaml-protoc-plugin.nix { };
           aslp_lifter_ocaml = ofinal.callPackage ./nix/aslp-lifter-ocaml.nix { };
