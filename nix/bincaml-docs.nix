@@ -35,9 +35,10 @@ name = "ajidso";
   postBuild = ''
     mv $out/share/doc doc
     mv $out/lib/ocaml/*/site-lib lib
+    ln -s ${ocaml}/lib/ocaml lib
 
     rm -rf $out
-    mkdir $out
+    mkdir -v $out
     mv doc lib $out
   '';
 };
