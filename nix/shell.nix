@@ -10,6 +10,7 @@
   bincaml_lsp,
   capstone_arm64_disas,
   odoc,
+  odoc-driver,
   odig,
   ocaml-lsp,
   ocamlformat,
@@ -22,9 +23,9 @@
 mkShell {
   packages = [
     odoc
+    odoc-driver
     odig
     ocamlformat
-    # sherlodoc - not in nixpkgs?
   ]
 
   ++ lib.optionals (!isShellForCI) (
@@ -69,5 +70,8 @@ mkShell {
         ln -sf $i/* "$ODIG_LIB_DIR"
       done
     fi
+  '' + lib.optionalString isShellForCI ''
+    opam init --bare --disable-sandboxing $(mktemp -d) --quiet --no
+    export OPAMCOLOR=never
   '';
 }
