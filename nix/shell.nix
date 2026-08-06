@@ -1,5 +1,5 @@
 {
-  includeEditorTools,
+  isShellForCI,
 
   lib,
   stdenv,
@@ -13,6 +13,7 @@
   odig,
   ocaml-lsp,
   ocamlformat,
+  opam,
 
   # dev packages
   perf,
@@ -25,13 +26,18 @@ mkShell {
     ocamlformat
     # sherlodoc - not in nixpkgs?
   ]
-  ++ lib.optionals includeEditorTools (
+
+  ++ lib.optionals (!isShellForCI) (
     [
       bincaml_lsp
       ocaml-lsp
     ]
     ++ lib.optional stdenv.hostPlatform.isLinux perf
-  );
+  )
+
+  ++ lib.optionals (isShellForCI) [
+    opam
+  ];
 
   inputsFrom = [
     (bincaml.overrideAttrs { doCheck = true; })

@@ -1,6 +1,8 @@
 {
   nixConfig.extra-substituters = [ "https://pac-nix.cachix.org/" ];
-  nixConfig.extra-trusted-public-keys = [ "pac-nix.cachix.org-1:l29Pc2zYR5yZyfSzk1v17uEZkhEw0gI4cXuOIsxIGpc=" ];
+  nixConfig.extra-trusted-public-keys = [
+    "pac-nix.cachix.org-1:l29Pc2zYR5yZyfSzk1v17uEZkhEw0gI4cXuOIsxIGpc="
+  ];
 
   inputs = {
     self.submodules = true;
@@ -40,7 +42,7 @@
     in
     flake-for-all-systems args {
       overlays = {
-        addBincamlPackages = ofinal: _: {
+        addBincamlPackages = ofinal: oprev: {
           buildDune324Package = ofinal.buildDunePackage.override {
             dune_3 = ofinal.dune_3_24;
           };
@@ -64,6 +66,20 @@
           kittyimg = ofinal.callPackage ./nix/kittyimg.nix { };
           stb_image = ofinal.callPackage ./nix/stb_image.nix { };
           containers = ofinal.callPackage ./nix/containers.nix { };
+
+          odoc =
+            (oprev.odoc.override {
+              cmdliner = ofinal.cmdliner;
+            }).overrideAttrs
+              (
+                f: p: {
+                  doCheck = false;
+                  propagatedBuildInputs = (p.propagatedBuildInputs or [ ]) ++ (p.buildInputs or [ ]) ++ [ofinal.ppx_expect];
+                }
+              );
+          sherlodoc = ofinal.callPackage ./nix/sherlodoc.nix { };
+          odoc-md = ofinal.callPackage ./nix/odoc-md.nix { };
+          odoc-driver = ofinal.callPackage ./nix/odoc-driver.nix { };
         };
 
         enableOcamlFramePointer =
@@ -92,10 +108,12 @@
         }:
         let
           pkgs = nixpkgs.legacyPackages;
-          ocamlPackages = pkgs.ocamlPackages.overrideScope (_: _: {
-            z3-bin = pkgs.z3;
-            inherit (pac-nix.legacyPackages) bnfc-treesitter;
-          });
+          ocamlPackages = pkgs.ocamlPackages.overrideScope (
+            _: _: {
+              z3-bin = pkgs.z3;
+              inherit (pac-nix.legacyPackages) bnfc-treesitter;
+            }
+          );
           selfOcamlPackages = ocamlPackages.overrideScope self.overlays.addBincamlPackages;
           fpOcamlPackages = selfOcamlPackages.overrideScope self.overlays.enableOcamlFramePointer;
         in
@@ -103,6 +121,8 @@
           defaultPackage = selfOcamlPackages.bincaml;
 
           legacyPackages = {
+            ocamlPackages = selfOcamlPackages;
+
             bincaml = selfOcamlPackages.bincaml;
             bincaml_lsp = selfOcamlPackages.bincaml_lsp;
             aslp_lifter_ocaml = selfOcamlPackages.aslp_lifter_ocaml;
@@ -128,13 +148,13 @@
           devShells = {
             default = self.devShells.fp;
             fp = fpOcamlPackages.callPackage ./nix/shell.nix {
-              includeEditorTools = true;
+              isShellForCI = false;
             };
             no-fp = selfOcamlPackages.callPackage ./nix/shell.nix {
-              includeEditorTools = true;
+              isShellForCI = false;
             };
             ci = selfOcamlPackages.callPackage ./nix/shell.nix {
-              includeEditorTools = false;
+              isShellForCI = true;
             };
           };
         };
