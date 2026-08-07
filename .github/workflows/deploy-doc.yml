@@ -33,7 +33,7 @@ jobs:
       - name: Build documentation
         run: |
           opam pin add .
-          opam exec -- odoc_driver bincaml
+          opam exec -- odoc_driver fmt -v
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
