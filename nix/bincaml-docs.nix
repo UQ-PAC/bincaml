@@ -42,18 +42,23 @@ lib.makeScope newScope (
           "/share/doc"
           "/lib/ocaml/${ocaml.version}/site-lib"
         ];
-
         postBuild = ''
           d=$out/_build/install/default
+
           mkdir -p $d
           mv -v $out/share/doc $d/doc
           mv -v $out/lib/ocaml/*/site-lib $d/lib
+          ln -s ${ocaml}/lib/ocaml $d/lib
 
           rm -rf $out/share $out/lib
-          rm -rf $d/lib/topfind
-        '';
-        passthru.path = "_build/install/default";
+          rm -rf $d/lib/topfind $d/lib/stublibs
 
+          cat <<EOF > $out/activate.sh
+          export CAMLLIB=$d/lib/ocaml
+          export OCAMLPATH=$d/lib
+          EOF
+          chmod +x $out/activate.sh
+        '';
       }).overrideAttrs
         (
           _: prev: {
@@ -64,6 +69,8 @@ lib.makeScope newScope (
               extraPathsFrom=without_yojson
             ''
             + prev.buildCommand;
+
+          setupHook
           }
         )
     ) { };
@@ -74,34 +81,10 @@ lib.makeScope newScope (
     */
     fake_opam = callPackage (
       {
-        runCommand,
-        findlib,
-        ocaml,
-        runtimeShell,
-        fake_dune_prefix,
+        writeShellScriptBin,
+        emptyDirectory,
       }:
-      runCommand "fake-opam-for-odoc-driver" { } ''
-        mkdir -pv $out/lib $out/bin
-
-        cat <<EOF > $out/lib/findlib.conf
-        destdir="/nix/store/dmdkfg086nl1p8my3wf65sv7v99krd94-ocaml5.4.1-findlib-1.9.8/lib/ocaml/5.4.1/site-lib"
-        path="/nix/store/14nbg9kalx0fzg412ibngwgpfjahcq2b-ocaml-5.4.1/lib/ocaml:/nix/store/dmdkfg086nl1p8my3wf65sv7v99krd94-ocaml5.4.1-findlib-1.9.8/lib/ocaml/5.4.1/site-lib:${fake_dune_prefix}/${fake_dune_prefix.path}/lib"
-        ldconf="ignore"
-        ocamlc="ocamlc.opt"
-        ocamlopt="ocamlopt.opt"
-        ocamldep="ocamldep.opt"
-        ocamldoc="ocamldoc.opt"
-        EOF
-
-        ln -s ${fake_dune_prefix}/${fake_dune_prefix.path}/lib/ocaml $out/lib/ocaml
-        ln -s ${fake_dune_prefix}/${fake_dune_prefix.path}/lib/ocaml $out/lib/ocaml-compiler
-
-        cat <<EOF > $out/bin/opam
-        #!${runtimeShell}
-        echo $out
-        EOF
-        chmod +x $out/bin/opam
-      ''
+      (writeShellScriptBin "opam" "echo ${emptyDirectory}").overrideAttrs { name = "fake-opam-for-odoc"; }
     ) { };
 
     docs = callPackage (
@@ -120,6 +103,7 @@ lib.makeScope newScope (
           nativeBuildInputs = [
             findlib
             fake_opam
+            fake_dune_prefix
             odoc-driver
             odoc
             sherlodoc
@@ -127,18 +111,15 @@ lib.makeScope newScope (
           ];
         }
         ''
-          dune_prefix=${fake_dune_prefix}/${fake_dune_prefix.path}
-          OCAMLPATH=$(ocamlfind query stdlib):$dune_prefix/lib
-          OCAMLFIND_DESTDIR=$dune_prefix
-          OCAMLPATHX=$dune_prefix/lib \
-            odoc_driver --html-dir=$out $(cd $dune_prefix/lib && echo *)
+          (
+            source ${fake_dune_prefix}/activate.sh
+            odoc_driver --html-dir=$out $(cd $OCAMLPATH && echo *)
 
-          ocamlfind query stdlib
-          echo aa
-          ocamlfind printconf
-          echo aa
-          echo ${fake_dune_prefix}
+            ocamlfind printconf
+          )
+
           echo ${fake_opam}
+          echo ${fake_dune_prefix}
         ''
     ) { };
   }

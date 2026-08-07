@@ -43,7 +43,15 @@ buildDunePackage {
 
   postPatch = ''
     substituteInPlace src/driver/ocamlfind.ml --replace-fail '~config ~env_camllib' ""
-    substituteInPlace src/driver/opam.ml --replace-fail 'OCAMLPATH' 'OCAMLPATHX'
+    # substituteInPlace src/driver/opam.ml --replace-fail 'OCAMLPATH' 'OCAMLPATHX'
+    substituteInPlace src/driver/ocamlfind.ml --replace-fail 'let libname_of_archive =' 'let libname_of_archive =
+    (fun x ->
+    Fpath.Map.dump Format.pp_print_text Format.err_formatter x;
+
+    x
+
+    )
+    @@'
   '';
 
   nativeCheckInputs = [ ];
