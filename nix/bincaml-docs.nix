@@ -12,6 +12,34 @@ lib.makeScope newScope (
     callPackage = self.callPackage;
   in
   {
+    blah = callPackage ({
+      dune,
+      buildDunePackage
+    }:
+      buildDunePackage {
+        pname = "blah";
+        version = "0.0";
+        src = dune.src;
+
+        preBuild = ''
+          rm -rf dune-project
+          cd test/blackbox-tests/test-cases/include-qualified/basic.t
+
+          dune describe
+
+          echo '
+          (name blah)
+          (package (name blah))
+          ' >> dune-project
+          substituteInPlace lib/dune --replace-fail 'library' 'library (public_name blah.foolib)'
+        '';
+
+        postInstall = ''
+          cp -rv _build/default/lib/*.ml-gen $out/lib/ocaml/*/site-lib/blah/foolib
+        '';
+      }
+    ) { };
+
     /**
       Usually, `odoc_driver` uses opam to discover packages, but we don't have
       a real opam switch in Nix. Fortunately, `odoc_driver` also has the ability
@@ -29,11 +57,13 @@ lib.makeScope newScope (
         fmt,
         yojson_2,
         bos,
+blah,
       }:
       (buildEnv {
         name = "fake-dune-prefix-for-odoc";
         paths = [
           fmt # TODO: change to bincaml and bincaml_lsp
+          blah
         ];
         includeClosures = true;
         ignoreCollisions = false;
@@ -131,7 +161,7 @@ lib.makeScope newScope (
           odoc_driver \
             --html-dir=$out \
             --mld-dir=$dev --odoc-dir=$dev --odocl-dir=$dev \
-            $(cd $OCAMLPATH && echo *) --json-output
+            $(cd $OCAMLPATH && echo *) --json-output -v
 
           mkdir $db
           export SHERLODOC_DB=$db/sherlodoc.marshal
