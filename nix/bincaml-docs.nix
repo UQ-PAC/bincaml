@@ -63,6 +63,7 @@ lib.makeScope newScope (
 
           cat <<EOF > $out/bin/activate_fake_dune_prefix.sh
           export OCAMLPATH=$d/lib
+          export CAMLLIB=$d/lib/ocaml
           EOF
           chmod +x $out/bin/*
         '';
