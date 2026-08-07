@@ -41,6 +41,11 @@ buildDunePackage {
     ppx_sexp_conv
   ];
 
+  postPatch = ''
+    substituteInPlace src/driver/ocamlfind.ml --replace-fail '~config ~env_camllib' ""
+    substituteInPlace src/driver/opam.ml --replace-fail 'OCAMLPATH' 'OCAMLPATHX'
+  '';
+
   nativeCheckInputs = [ ];
   checkInputs = [ ];
   doCheck = true;

@@ -28,11 +28,13 @@ lib.makeScope newScope (
         buildEnv,
         fmt,
         yojson_2,
+        bos,
       }:
       (buildEnv {
         name = "fake-dune-prefix-for-odoc";
         paths = [
           fmt # TODO: change to bincaml and bincaml_lsp
+          bos
         ];
         includeClosures = true;
         ignoreCollisions = false;
@@ -46,7 +48,6 @@ lib.makeScope newScope (
           mkdir -p $d
           mv -v $out/share/doc $d/doc
           mv -v $out/lib/ocaml/*/site-lib $d/lib
-          ln -s ${ocaml}/lib/ocaml $d/lib/ocaml
 
           rm -rf $out/share $out/lib
           rm -rf $d/lib/topfind
@@ -93,6 +94,7 @@ lib.makeScope newScope (
         EOF
 
         ln -s ${fake_dune_prefix}/${fake_dune_prefix.path}/lib/ocaml $out/lib/ocaml
+        ln -s ${fake_dune_prefix}/${fake_dune_prefix.path}/lib/ocaml $out/lib/ocaml-compiler
 
         cat <<EOF > $out/bin/opam
         #!${runtimeShell}
@@ -108,6 +110,7 @@ lib.makeScope newScope (
         fake_opam,
         fake_dune_prefix,
         ocaml,
+        findlib,
         odoc,
         sherlodoc,
         odoc-driver,
@@ -115,6 +118,7 @@ lib.makeScope newScope (
       runCommand "bincaml-docs"
         {
           nativeBuildInputs = [
+            findlib
             fake_opam
             odoc-driver
             odoc
@@ -124,9 +128,15 @@ lib.makeScope newScope (
         }
         ''
           dune_prefix=${fake_dune_prefix}/${fake_dune_prefix.path}
-          OCAMLPATH=$dune_prefix/lib \
-            odoc_driver --html-dir=$out $(cd $dune_prefix/lib && echo *) -v
+          OCAMLPATH=$(ocamlfind query stdlib):$dune_prefix/lib
+          OCAMLFIND_DESTDIR=$dune_prefix
+          OCAMLPATHX=$dune_prefix/lib \
+            odoc_driver --html-dir=$out $(cd $dune_prefix/lib && echo *)
 
+          ocamlfind query stdlib
+          echo aa
+          ocamlfind printconf
+          echo aa
           echo ${fake_dune_prefix}
           echo ${fake_opam}
         ''
