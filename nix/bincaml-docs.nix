@@ -81,7 +81,17 @@ lib.makeScope newScope (
       }:
       runCommand "fake-opam-for-odoc-driver" { } ''
         mkdir -pv $out/lib $out/bin
-        cp ${findlib}/etc/findlib.conf $out/lib
+
+        cat <<EOF > $out/lib/findlib.conf
+        destdir="/nix/store/dmdkfg086nl1p8my3wf65sv7v99krd94-ocaml5.4.1-findlib-1.9.8/lib/ocaml/5.4.1/site-lib"
+        path="/nix/store/14nbg9kalx0fzg412ibngwgpfjahcq2b-ocaml-5.4.1/lib/ocaml:/nix/store/dmdkfg086nl1p8my3wf65sv7v99krd94-ocaml5.4.1-findlib-1.9.8/lib/ocaml/5.4.1/site-lib:${fake_dune_prefix}/${fake_dune_prefix.path}/lib"
+        ldconf="ignore"
+        ocamlc="ocamlc.opt"
+        ocamlopt="ocamlopt.opt"
+        ocamldep="ocamldep.opt"
+        ocamldoc="ocamldoc.opt"
+        EOF
+
         ln -s ${fake_dune_prefix}/${fake_dune_prefix.path}/lib/ocaml $out/lib/ocaml
 
         cat <<EOF > $out/bin/opam
@@ -115,7 +125,7 @@ lib.makeScope newScope (
         ''
           dune_prefix=${fake_dune_prefix}/${fake_dune_prefix.path}
           OCAMLPATH=$dune_prefix/lib \
-            odoc_driver --html-dir=$out $(cd $dune_prefix/lib && echo *)
+            odoc_driver --html-dir=$out $(cd $dune_prefix/lib && echo *) -v
 
           echo ${fake_dune_prefix}
           echo ${fake_opam}
