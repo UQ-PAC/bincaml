@@ -24,14 +24,18 @@ lib.makeScope newScope (
     */
     fake_dune_prefix = callPackage (
       {
+        ocaml,
         buildEnv,
         fmt,
-        ocaml,
+        yojson_2,
       }:
-      buildEnv {
+      (buildEnv {
         name = "fake-dune-prefix-for-odoc";
-        paths = [ fmt ]; # TODO: for faster testing, we use `fmt` rather than `bincaml`
+        paths = [
+          fmt # TODO: change to bincaml and bincaml_lsp
+        ];
         includeClosures = true;
+        ignoreCollisions = false;
         pathsToLink = [
           "/share/doc"
           "/lib/ocaml/${ocaml.version}/site-lib"
@@ -45,10 +49,22 @@ lib.makeScope newScope (
           ln -s ${ocaml}/lib/ocaml $d/lib/ocaml
 
           rm -rf $out/share $out/lib
+          rm -rf $d/lib/topfind
         '';
-
         passthru.path = "_build/install/default";
-      }
+
+      }).overrideAttrs
+        (
+          _: prev: {
+            # `linol` (and others?) depend on hardcoded `yojson_2` which leads
+            # to both yojson 3 and 2 in the closure, which causes conflicts.
+            buildCommand = ''
+              grep -v ${yojson_2} $extraPathsFrom > without_yojson
+              extraPathsFrom=without_yojson
+            ''
+            + prev.buildCommand;
+          }
+        )
     ) { };
 
     /**
@@ -100,6 +116,9 @@ lib.makeScope newScope (
           dune_prefix=${fake_dune_prefix}/${fake_dune_prefix.path}
           OCAMLPATH=$dune_prefix/lib \
             odoc_driver --html-dir=$out $(cd $dune_prefix/lib && echo *)
+
+          echo ${fake_dune_prefix}
+          echo ${fake_opam}
         ''
     ) { };
   }
