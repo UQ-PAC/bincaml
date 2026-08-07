@@ -1,4 +1,4 @@
-(lang dune 3.24)
+(lang dune 3.19)
 
 (using menhir 3.0)
 
