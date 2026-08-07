@@ -42,7 +42,7 @@
     in
     flake-for-all-systems args {
       overlays = {
-        addBincamlPackages = ofinal: oprev: {
+        addBincamlPackages = ofinal: _: {
           buildDune324Package = ofinal.buildDunePackage.override {
             dune_3 = ofinal.dune_3_24;
           };
@@ -68,20 +68,16 @@
           stb_image = ofinal.callPackage ./nix/stb_image.nix { };
           containers = ofinal.callPackage ./nix/containers.nix { };
 
-          odoc =
-            (oprev.odoc.override {
-              cmdliner = ofinal.cmdliner;
-            }).overrideAttrs
-              (
-                f: p: {
-                  doCheck = false;
-                  propagatedBuildInputs =
-                    (p.propagatedBuildInputs or [ ]) ++ (p.buildInputs or [ ]) ++ [ ofinal.ppx_expect ];
-                }
-              );
-          sherlodoc = ofinal.callPackage ./nix/sherlodoc.nix { };
-          odoc-md = ofinal.callPackage ./nix/odoc-md.nix { };
-          odoc-driver = ofinal.callPackage ./nix/odoc-driver.nix { };
+          odoc_3_2 = ofinal.callPackage ./nix/odoc.nix { };
+          sherlodoc = ofinal.callPackage ./nix/sherlodoc.nix {
+            odoc = ofinal.odoc_3_2;
+          };
+          odoc-md = ofinal.callPackage ./nix/odoc-md.nix {
+            odoc = ofinal.odoc_3_2;
+          };
+          odoc-driver = ofinal.callPackage ./nix/odoc-driver.nix {
+            odoc = ofinal.odoc_3_2;
+          };
         };
 
         enableOcamlFramePointer =

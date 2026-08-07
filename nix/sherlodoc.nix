@@ -1,6 +1,5 @@
 {
   lib,
-  fetchpatch2,
   buildDunePackage,
   writableTmpDirAsHomeHook,
 
@@ -26,13 +25,6 @@
 buildDunePackage (self: {
   pname = "sherlodoc";
   inherit (odoc) version src;
-
-  patches = [
-    (fetchpatch2 {
-      url = "https://github.com/ocaml/odoc/commit/9695cd79ec29c082f62c768a99a650ebf06892d3.patch";
-      hash = "sha256-8eyclSV4MnMkVcT+0NjPKWARzITm6tJpg0n/Z7Yi/L4=";
-    })
-  ];
 
   nativeBuildInputs = [
     menhir
