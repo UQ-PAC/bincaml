@@ -63,6 +63,7 @@ lib.makeScope newScope (
 
           cat <<EOF > $out/bin/activate_fake_dune_prefix.sh
           export OCAMLPATH=$d/lib
+          export CAMLLIB=$d/lib/ocaml
           EOF
           chmod +x $out/bin/*
         '';
@@ -117,21 +118,33 @@ lib.makeScope newScope (
         nativeBuildInputs = [
           ocaml
           findlib
-          odoc
           odoc-driver
           sherlodoc
           fake_opam
           fake_dune_prefix
         ];
 
-        outputs = [ "out" "dev" ];
+        outputs = [ "out" "dev" "db" ];
 
         buildPhase = ''
           source activate_fake_dune_prefix.sh
           odoc_driver \
             --html-dir=$out \
             --mld-dir=$dev --odoc-dir=$dev --odocl-dir=$dev \
-            $(cd $OCAMLPATH && echo *)
+            $(cd $OCAMLPATH && echo *) --json-output
+
+          mkdir $db
+          export SHERLODOC_DB=$db/sherlodoc.marshal
+          for d in $dev/*; do
+            if [[ -d $d ]]; then
+              found="$(find $d -name '*.odocl' -not -name '*__*' -not -name 'impl-*' -not -name page-index.odocl)"
+              if [[ -n "$found" ]]; then
+                printf "$(basename $d)\t%s\n" $found >> file-list
+              fi
+            fi
+          done
+
+          sherlodoc index --file-list file-list
 
           ocamlfind printconf
 
@@ -144,8 +157,23 @@ lib.makeScope newScope (
             echo "stdlib index.html missing. stdlib links are probably broken."
             exit 1
           }
+
+          echo "Testing sherlodoc search..."
+          sherlodoc search Format.formatter | grep 'type Stdlib.Format.formatter'
         '';
       }
+    ) { };
+
+    serve = callPackage (
+      {
+        sherlodoc,
+        docs,
+        writeShellScriptBin,
+      }:
+      writeShellScriptBin "sherlodoc-serve-bincaml" ''
+        export SHERLODOC_DB=${docs.db}/sherlodoc.marshal
+        exec ${lib.getExe sherlodoc} serve "$@"
+      ''
     ) { };
   }
 )

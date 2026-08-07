@@ -1,5 +1,7 @@
 {
   lib,
+  makeWrapper,
+  fetchFromGitHub,
   buildDunePackage,
   writableTmpDirAsHomeHook,
 
@@ -20,6 +22,18 @@
   base,
   alcotest,
   findlib,
+  crunch,
+  cppo,
+  dream,
+
+  enableWww ? true,
+  # Restores `sherlodoc/www` folder. https://github.com/ocaml/odoc/issues/1441
+  sherlodoc-www-src ? fetchFromGitHub {
+    owner = "mt-caret";
+    repo = "odoc";
+    rev = "426bb50b0679ee3bb69f974141ab4a6797587c2c";
+    hash = "sha256-1lzggOwpIBaBHAFKeAMscA+UEB1F4G7DR3Om3rllyzI=";
+  }
 }:
 
 buildDunePackage (self: {
@@ -30,6 +44,10 @@ buildDunePackage (self: {
     menhir
     js_of_ocaml
     writableTmpDirAsHomeHook
+    makeWrapper
+  ] ++ lib.optionals enableWww [
+    cppo
+    crunch
   ];
 
   buildInputs = [
@@ -46,6 +64,8 @@ buildDunePackage (self: {
     tyxml
     base
     alcotest
+  ] ++ lib.optionals enableWww [
+    dream
   ];
 
   nativeCheckInputs = [
@@ -55,6 +75,11 @@ buildDunePackage (self: {
   ];
   checkInputs = [ alcotest ];
   doCheck = true;
+
+  postPatch = lib.optionalString enableWww ''
+    cp -r ${sherlodoc-www-src}/sherlodoc/www sherlodoc/www
+    substituteInPlace sherlodoc/www/dune --replace-fail '(optional)' ""
+  '';
 
   preCheck = ''
     substituteInPlace sherlodoc/test/dune --replace-quiet --quiet ""
@@ -73,7 +98,12 @@ buildDunePackage (self: {
     opam init --bare --disable-sandboxing $(mktemp -d) --quiet --no
   '';
 
+  postInstall = ''
+    wrapProgram $out/bin/sherlodoc --set PATH ${lib.makeBinPath [ odoc ]}
+  '';
+
   meta = {
+    mainProgram = "sherlodoc";
     description = "Search engine for OCaml documentation";
     license = lib.licenses.mit;
     maintainers = [ lib.maintainers.katrinafyi ];
