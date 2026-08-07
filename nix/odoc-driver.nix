@@ -46,6 +46,8 @@ buildDunePackage {
   ];
 
   postPatch = ''
+    substituteInPlace src/driver/packages.ml \
+      --replace-fail '      with _ ->' 'with Not_found ->'
     substituteInPlace src/driver/ocamlfind.ml \
       --replace-fail '~config ~env_camllib' "" \
       --replace-fail 'let config =' 'let _config =' \
@@ -55,6 +57,8 @@ buildDunePackage {
     (fun x ->
       Fpath.Map.dump Format.pp_print_text Format.err_formatter x;
       x) @@'
+
+    cp -v ${./ocamlobjinfo.ml} src/driver/ocamlobjinfo.ml
   '';
 
   nativeCheckInputs = [ ];

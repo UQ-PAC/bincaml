@@ -158,6 +158,7 @@ blah,
 
         buildPhase = ''
           source activate_fake_dune_prefix.sh
+          export OCAMLRUNPARAM=b
           odoc_driver \
             --html-dir=$out \
             --mld-dir=$dev --odoc-dir=$dev --odocl-dir=$dev \
