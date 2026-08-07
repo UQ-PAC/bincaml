@@ -65,6 +65,7 @@ buildDunePackage (self: {
       (env-vars
        (ODIG_LIB_DIR $(echo ${tyxml}/lib/ocaml/*/site-lib))
        (ODIG_DOC_DIR ${tyxml}/share/doc)
+       (OPAMCOLOR never)
        (LOG_LEVEL info)
        )))
     EOF

@@ -34,7 +34,6 @@ lib.makeScope newScope (
         name = "fake-dune-prefix-for-odoc";
         paths = [
           fmt # TODO: change to bincaml and bincaml_lsp
-          bos
         ];
         includeClosures = true;
         ignoreCollisions = false;
@@ -45,19 +44,27 @@ lib.makeScope newScope (
         postBuild = ''
           d=$out/_build/install/default
 
-          mkdir -p $d
+          mkdir -p $d $out/bin
           mv -v $out/share/doc $d/doc
           mv -v $out/lib/ocaml/*/site-lib $d/lib
-          ln -s ${ocaml}/lib/ocaml $d/lib
+
+          mkdir $d/lib/ocaml
+          ln -s ${ocaml}/lib/ocaml/* $d/lib/ocaml
+
+          # this makes the builtin packages (like `unix`) appear
+          # as distinct top-level packages rather than being under
+          # `ocaml`. we probably need to fake `.changes` to avoid this.
+          for meta in ${ocaml}/lib/ocaml/*/META; do
+            ln -s $(dirname $meta) $d/lib
+          done
 
           rm -rf $out/share $out/lib
-          rm -rf $d/lib/topfind $d/lib/stublibs
+          rm -rf $d/lib/{compiler-libs,stdlib,topfind,stublibs}
 
-          cat <<EOF > $out/activate.sh
-          export CAMLLIB=$d/lib/ocaml
+          cat <<EOF > $out/bin/activate_fake_dune_prefix.sh
           export OCAMLPATH=$d/lib
           EOF
-          chmod +x $out/activate.sh
+          chmod +x $out/bin/*
         '';
       }).overrideAttrs
         (
@@ -67,17 +74,14 @@ lib.makeScope newScope (
             buildCommand = ''
               grep -v ${yojson_2} $extraPathsFrom > without_yojson
               extraPathsFrom=without_yojson
-            ''
-            + prev.buildCommand;
-
-          setupHook
+              ${prev.buildCommand}
+            '';
           }
         )
     ) { };
 
     /**
-      Provides a fake `opam` script which prints a path which contains the
-      files needed by: https://github.com/ocaml/odoc/blob/v3.1/src/driver/ocamlfind.ml#L6-L9
+      Provides a no-op `opam` script which prints a path to an empty dir.
     */
     fake_opam = callPackage (
       {
@@ -87,9 +91,15 @@ lib.makeScope newScope (
       (writeShellScriptBin "opam" "echo ${emptyDirectory}").overrideAttrs { name = "fake-opam-for-odoc"; }
     ) { };
 
+    /**
+      Main output which builds the HTML/JS/CSS for the documentation website.
+
+      Also has a `dev` output which contains the `.odocl` files for Sherlodoc.
+    */
     docs = callPackage (
       {
-        runCommand,
+        stdenvNoCC,
+        emptyDirectory,
         fake_opam,
         fake_dune_prefix,
         ocaml,
@@ -98,29 +108,44 @@ lib.makeScope newScope (
         sherlodoc,
         odoc-driver,
       }:
-      runCommand "bincaml-docs"
-        {
-          nativeBuildInputs = [
-            findlib
-            fake_opam
-            fake_dune_prefix
-            odoc-driver
-            odoc
-            sherlodoc
-            ocaml
-          ];
-        }
-        ''
-          (
-            source ${fake_dune_prefix}/activate.sh
-            odoc_driver --html-dir=$out $(cd $OCAMLPATH && echo *)
+      stdenvNoCC.mkDerivation {
+        name = "bincaml-docs";
 
-            ocamlfind printconf
-          )
+        dontUnpack = true;
+        doCheck = true;
+
+        nativeBuildInputs = [
+          ocaml
+          findlib
+          odoc
+          odoc-driver
+          sherlodoc
+          fake_opam
+          fake_dune_prefix
+        ];
+
+        outputs = [ "out" "dev" ];
+
+        buildPhase = ''
+          source activate_fake_dune_prefix.sh
+          odoc_driver \
+            --html-dir=$out \
+            --mld-dir=$dev --odoc-dir=$dev --odocl-dir=$dev \
+            $(cd $OCAMLPATH && echo *)
+
+          ocamlfind printconf
 
           echo ${fake_opam}
           echo ${fake_dune_prefix}
-        ''
+        '';
+
+        checkPhase = ''
+          [[ -f $out/ocaml/stdlib/index.html ]] || {
+            echo "stdlib index.html missing. stdlib links are probably broken."
+            exit 1
+          }
+        '';
+      }
     ) { };
   }
 )
