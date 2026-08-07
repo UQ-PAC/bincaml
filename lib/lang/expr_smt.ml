@@ -349,7 +349,8 @@ module SMTLib2 = struct
             logics = LSet.union logics s.logics;
           } )
 
-  let get_var v = fun s -> decl_var v s
+  let get_var v = fun s ->
+     decl_var v s
 
   let of_op
       (op :
@@ -408,16 +409,14 @@ module SMTLib2 = struct
     let* body = in_body in
     return @@ list [ quant; list binds; body ]
 
-  let smt_alg ~type_hints (e : sexp t BasilExpr.abstract_expr) : sexp t =
+  let smt_alg ?(rvars : sexp t VarMap.t = VarMap.empty)
+      (e : sexp t BasilExpr.abstract_expr) : sexp t =
     match e with
     | Constant { const = o } ->
         let* o = add_logic_const o in
         return (of_op o)
     | RVar { id } -> (
-        let* var = get_var id in
-        match type_hints with
-        | true -> return @@ list [ atom "as"; var; fst @@ of_typ @@ Var.typ id ]
-        | false -> fun s -> ((if s.var_decls |> VarMap.get id |> Option.is_some then var else var), s))
+        match VarMap.get id rvars with Some s -> s | None -> get_var id)
     | UnaryExpr { op = `BOOLTOBV1; arg = e } ->
         let* e = e in
         return
@@ -485,16 +484,14 @@ module SMTLib2 = struct
     | ApplyFun { func; args } ->
         let* args = sequence args in
         let* func = func in
-        print_endline (Sexp.to_string func);
         return @@ list (func :: args)
 
-  let bind_of_bexpr ?(type_hints = false) e =
+  let bind_of_bexpr ?rvars e =
     let e = (BasilExpr.rewrite_typed_two Algsimp.drop_assoc) e in
     let e = (BasilExpr.rewrite_typed_two Algsimp.if_then_else) e in
-    BasilExpr.cata (smt_alg ~type_hints) e
+    BasilExpr.cata (smt_alg ?rvars) e
 
-  let of_bexpr ?(type_hints = false) e =
-    fst @@ (bind_of_bexpr ~type_hints e) empty
+  let of_bexpr ?rvars e = fst @@ (bind_of_bexpr ?rvars e) empty
 
   let trans_decl (decl : Program.declaration) =
     let* x = return () in
