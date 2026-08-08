@@ -35,6 +35,17 @@ lib.makeScope newScope (
         '';
 
         postInstall = ''
+          build="$PWD/_build/default"
+          (
+          cd $OCAMLFIND_DESTDIR
+          shopt -s globstar
+          for cmt in ./**/*.cmt; do
+            source_file="$(ocamlobjinfo "$cmt" | grep "Source file: " | cut -d' ' -f3-)"
+            if [[ "$source_file" == *.ml-gen ]]; then
+              cp -v "$build/$source_file" "$(dirname $cmt)"
+            fi
+          done
+          )
         '';
       }
     ) { };
