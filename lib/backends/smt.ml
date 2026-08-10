@@ -133,6 +133,9 @@ let build_declaration ~rvars (program : Program.t)
   | other -> [ (SMTLib2.trans_decl declaration SMTLib2.empty |> snd, empty) ]
 
 let build_program (program : Program.t) : (SMTLib2.builder * context) list =
+  let program =
+    (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false) program
+  in
   let rvars = rvar_map program in
   Program.declarations program
   |> Iter.map snd |> Iter.rev
@@ -223,7 +226,9 @@ let eval_program chan (program : Program.t) =
     |> Iter.map (fun (a, b) -> (b, a))
     |> Hashtbl.of_iter_count
   in
-  Program.procs program |> Iter.map fst
+  Program.procs program
+  |> Iter.filter (snd %> Procedure.graph %> Option.is_some)
+  |> Iter.map fst
   |> flip Iter.for_each (fun id ->
       Printf.fprintf chan "\nProcedure %s verified with:\n" (ID.name id);
       [ `Success; `Fail; `Unknown ]
