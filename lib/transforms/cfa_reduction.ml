@@ -91,15 +91,10 @@ let construct_final_edge proc =
         non_guard_stmts
         |> List.partition_filter_map (function
           | Stmt.Instr_Assert { body; attrib } ->
-              `Left
-                (Stmt.Instr_Assert
-                   {
-                     body =
-                       BasilExpr.binexp ~op:`IMPLIES
-                         (BasilExpr.rvar termination_var)
-                         body;
-                     attrib;
-                   })
+              let body =
+                BasilExpr.(binexp ~op:`IMPLIES (rvar termination_var) body)
+              in
+              `Left (Stmt.Instr_Assert { body; attrib })
           | other -> `Right other)
       in
 

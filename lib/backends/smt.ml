@@ -5,11 +5,9 @@ open Bincaml_util
 open Expr_smt
 open Expr
 
-(* SMT Backend.
-   This backend expects the CFA Reduction and Summary Inlining transforms.
-   Will output a .smt file containing all declarations and asserts necessary
-   for verification.
-*)
+(** SMT Backend. This backend expects the CFA Reduction and Summary Inlining
+    transforms. Will output a .smt file containing all declarations and asserts
+    necessary for verification. *)
 
 type context = {
   stmt : Program.stmt option;

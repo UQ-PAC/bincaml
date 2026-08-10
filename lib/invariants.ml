@@ -19,9 +19,9 @@ type t =
   | MemoryEncoding
   | GtirbArm
   | ReducibleLoops
-  | Acyclic
       (** All loops are reducible. That is, there are no {i irreducible} loops.
       *)
+  | Acyclic
 [@@deriving show { with_path = false }, eq, ord]
 
 let read s =

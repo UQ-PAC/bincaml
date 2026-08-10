@@ -60,23 +60,25 @@ let transform_block (prog : Program.t) (proc : Program.proc)
   (* Add requires to entry block. *)
   let spec = Procedure.specification proc in
   let block =
-    if match List.head_opt entry_id with Some id -> ID.equal bid id | _ -> false then
-      Block.prepend_stmts block
-        (List.map
-           (fun e ->
-             Stmt.Instr_Assume
-               { attrib = StringMap.empty; body = e; branch = false })
-           spec.requires)
-    else block
+    match List.head_opt entry_id with
+    | Some id when ID.equal bid id ->
+        Block.prepend_stmts block
+          (List.map
+             (fun e ->
+               Stmt.Instr_Assume
+                 { attrib = StringMap.empty; body = e; branch = false })
+             spec.requires)
+    | _ -> block
   in
 
   (* Add ensures to return block. *)
-  if match List.head_opt return_id with Some id ->  ID.equal bid id| _ -> false then
-    Block.append_stmts block
-      (List.map
-         (fun e -> Stmt.Instr_Assert { attrib = StringMap.empty; body = e })
-         spec.ensures)
-  else block
+  match List.head_opt return_id with
+  | Some id when ID.equal bid id ->
+      Block.append_stmts block
+        (List.map
+           (fun e -> Stmt.Instr_Assert { attrib = StringMap.empty; body = e })
+           spec.ensures)
+  | _ -> block
 
 let transform_proc (prog : Program.t) (pid : IDSet.elt) (proc : Program.proc) :
     Program.proc =

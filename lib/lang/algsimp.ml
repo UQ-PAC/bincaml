@@ -312,6 +312,7 @@ let algebraic_simplifications
       replace [%here] arg
   | _ -> Keep
 
+(** Simplify case expressions over booleans into if-then-else chains. *)
 let if_then_else
     (e :
       (BasilExpr.t BasilExpr.abstract_expr * Types.t) BasilExpr.abstract_expr) =
