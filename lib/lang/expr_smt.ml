@@ -349,8 +349,7 @@ module SMTLib2 = struct
             logics = LSet.union logics s.logics;
           } )
 
-  let get_var v = fun s ->
-     decl_var v s
+  let get_var v = fun s -> decl_var v s
 
   let of_op
       (op :
@@ -427,8 +426,7 @@ module SMTLib2 = struct
                of_op (`Bitvector (Bitvec.one ~size:1));
                of_op (`Bitvector (Bitvec.zero ~size:1));
              ]
-    | Lambda { op; bound_vars; in_body } ->
-        (* TODO: trigger *)
+    | Lambda { op; bound_vars; in_body; triggers } ->
         let names = List.map (Var.name %> smt_symbol) bound_vars in
         let types = List.map (Var.typ %> of_typ %> fst) bound_vars in
         let binds =
@@ -441,9 +439,28 @@ module SMTLib2 = struct
           | `Exists -> "exists"
           | `Lambda -> "lambda"
         in
+        (* for body B, introducing triggers replaced it with the sexp:
+           (! B :pattern (t1_1 ... t1_n) ... :pattern (tm_1 .. tm_n))
+           where ti_j are triggers for each pattern. *)
+        let* triggers =
+         fun s ->
+          triggers
+          |> List.fold_flat_map
+               (fun acc inner ->
+                 let inner, acc = sequence inner acc in
+                 let inner = List.map (fun i -> list [i]) inner in
+                 (acc, atom ":pattern" :: inner))
+               s
+          |> function
+          | a, b -> (b, a)
+        in
+        let in_body =
+          if List.length triggers > 0 then
+            list ([ atom "!"; in_body ] @ triggers)
+          else in_body
+        in
         return @@ list [ atom o; list binds; in_body ]
     | Let { bound_vars; in_body } ->
-        (* TODO: trigger *)
         let* in_body = in_body in
         let* binds =
           sequence

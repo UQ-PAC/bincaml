@@ -55,7 +55,7 @@ let rvar_map (program : Program.t) =
 (* Produce a list of builders for a procedure, with context.
    Builder for local declarations + one for each statement.
    Assertions produce a second builder for verification. *)
-let build_procedure (program : Program.t) (procedure : Program.proc) :
+let build_procedure ~rvars (program : Program.t) (procedure : Program.proc) :
     (SMTLib2.builder * context) list =
   let ctx = { empty with proc = Some procedure } in
 
@@ -75,8 +75,6 @@ let build_procedure (program : Program.t) (procedure : Program.proc) :
   in
 
   CCVector.push builders (builder, ctx);
-
-  let rvars = rvar_map program in
 
   (* Translate each statement to smt. *)
   Procedure.iter_stmt_topo_fwd procedure
@@ -128,16 +126,17 @@ let build_procedure (program : Program.t) (procedure : Program.proc) :
   CCVector.push builders (SMTLib2.pop SMTLib2.empty |> snd, ctx);
   CCVector.to_list builders
 
-let build_declaration (program : Program.t) (declaration : Program.declaration)
-    : (SMTLib2.builder * context) list =
+let build_declaration ~rvars (program : Program.t)
+    (declaration : Program.declaration) : (SMTLib2.builder * context) list =
   match declaration with
-  | Procedure { definition } -> build_procedure program definition
+  | Procedure { definition } -> build_procedure ~rvars program definition
   | other -> [ (SMTLib2.trans_decl declaration SMTLib2.empty |> snd, empty) ]
 
 let build_program (program : Program.t) : (SMTLib2.builder * context) list =
+  let rvars = rvar_map program in
   Program.declarations program
   |> Iter.map snd |> Iter.rev
-  |> Iter.flat_map_l (fun d -> build_declaration program d)
+  |> Iter.flat_map_l (fun d -> build_declaration ~rvars program d)
   |> Iter.to_list
 
 (* Joins a list of builders (disregarding context), removing any duplicate declarations
@@ -170,17 +169,17 @@ let eval_single chan (solver : Smt.Solver.t) (prog : Program.t)
     ((builder, context) : SMTLib2.builder * context) =
   let sexps = SMTLib2.commands_to_sexp builder in
   sexps
-  |> flip Iter.for_each (fun sexp ->
+  |> Iter.map (fun sexp ->
       let response = Smt.Solver.add_sexp solver sexp in
       match (context, response) with
-      | { stmt = Some stmt; proc = Some proc; vc = true }, `Atom "sat" -> (
+      | { stmt = Some stmt; proc = Some proc; vc = true }, `Atom "sat" ->
           Printf.fprintf chan "\nFailing Assertion: %s\n"
             (Stmt.to_string Var.pretty Var.pretty BasilExpr.pretty stmt);
           Printf.fprintf chan "Belonging to procedure: %s\n"
             (ID.name @@ Procedure.id proc);
           Printf.fprintf chan "Counterexample:\n";
           let model = Smt.Solver.get_model solver in
-          match model with
+          (match model with
           | `Atom a -> Printf.fprintf chan "%s\n" (Sexp.to_string model)
           | `List l ->
               l |> List.to_iter
@@ -191,8 +190,15 @@ let eval_single chan (solver : Smt.Solver.t) (prog : Program.t)
                     || Program.get_decl_by_name var prog |> Option.is_some
                 | _ -> false)
               |> flip Iter.for_each (fun s ->
-                  Printf.fprintf chan "%s\n" (Sexp.to_string s)))
-      | _ -> ())
+                  Printf.fprintf chan "%s\n" (Sexp.to_string s)));
+          (`Fail, Some (Procedure.id proc))
+      | { stmt = Some stmt; proc = Some proc; vc = true }, `Atom "unknown" ->
+          Printf.fprintf chan "\nUnknown Assertion:\n%s\n"
+            (Stmt.to_string Var.pretty Var.pretty BasilExpr.pretty stmt);
+          (`Unknown, Some (Procedure.id proc))
+      | { proc = Some proc; vc = true }, _ ->
+          (`Success, Some (Procedure.id proc))
+      | _ -> (`Skip, None))
 
 let eval_program chan (program : Program.t) =
   flush chan;
@@ -200,7 +206,7 @@ let eval_program chan (program : Program.t) =
     Bincaml_util.Smt.Solver.create
       {
         Bincaml_util.Smt.Config.cvc5 with
-        log = Bincaml_util.Smt.Config.quiet_log;
+        log = Bincaml_util.Smt.Config.printf_log;
       }
   in
   let builders = build_program program in
@@ -210,8 +216,25 @@ let eval_program chan (program : Program.t) =
   let decls = SMTLib2.decls_to_sexp builder in
   Iter.append preamble decls
   |> flip Iter.for_each (fun sexp -> Smt.Solver.add_command solver sexp);
-  builders |> List.to_iter
-  |> flip Iter.for_each @@ eval_single chan solver program;
+  let results =
+    builders |> List.to_iter
+    |> Iter.flat_map @@ eval_single chan solver program
+    |> Iter.filter_map (fun (a, b) -> Option.map (fun i -> (a, i)) b)
+    |> Iter.map (fun (a, b) -> (b, a))
+    |> Hashtbl.of_iter_count
+  in
+  Program.procs program |> Iter.map fst
+  |> flip Iter.for_each (fun id ->
+      Printf.fprintf chan "\nProcedure %s verified with:\n" (ID.name id);
+      [ `Success; `Fail; `Unknown ]
+      |> List.to_iter
+      |> flip Iter.for_each (fun res ->
+          let count = Hashtbl.get_or ~default:0 results (id, res) in
+          Printf.fprintf chan "%d %s assertions.\n" count
+            (match res with
+            | `Success -> "succeeding"
+            | `Fail -> "failing"
+            | _ -> "unknown")));
   flush chan
 
 let pretty_program (program : Program.t) : Containers_pp.t =
