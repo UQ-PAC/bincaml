@@ -5,6 +5,7 @@
   (run-transforms inline-summaries)
   (dump-smt ./out.smt)
   (dump-il ./out.il)
+  (live-smt)
   $ cvc5 ./out.smt --incremental
   "Verifying Procedure: @f3"
   sat

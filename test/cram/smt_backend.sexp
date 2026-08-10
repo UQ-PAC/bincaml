@@ -4,3 +4,4 @@
 (run-transforms "inline-summaries")
 (dump-smt "./out.smt")
 (dump-il "./out.il")
+(live-smt)
