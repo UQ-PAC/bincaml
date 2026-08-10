@@ -24,19 +24,9 @@ include (
 
     let create name ?(scope = LocalVar) typ =
       (* disallow creating local const as its too hard to have declaration order *)
-      let out = match scope with
-      | LocalConst -> H.make { name; typ; scope = LocalVar }
-      | _ -> H.make { name; typ; scope } in
-      let _ =
-        match name with "mem_encoding_out" -> print_endline "got one";
-      print_endline (V.show (Fix.HashCons.data out));
-      print_endline (Int.to_string @@ V.hash (Fix.HashCons.data out));
-      print_endline (Int.to_string @@ Fix.HashCons.id out);
-      print_endline (Int.to_string @@ Hash.poly typ);
-
-         | _ -> ()
-      in
-    out
+        match scope with
+        | LocalConst -> H.make { name; typ; scope = LocalVar }
+        | _ -> H.make { name; typ; scope }
 
     let copy ?name ?scope ?typ (v : t) =
       let v = Fix.HashCons.data v in

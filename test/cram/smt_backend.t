@@ -6,11 +6,11 @@
   (dump-smt ./out.smt)
   (dump-il ./out.il)
   $ cvc5 ./out.smt --incremental
-  "Verifying Procedure: @bad_square"
-  sat
-  "Verifying Procedure: @f2"
-  unsat
-  unsat
   "Verifying Procedure: @f3"
   sat
   unsat
+  "Verifying Procedure: @f2"
+  unsat
+  unsat
+  "Verifying Procedure: @bad_square"
+  sat
