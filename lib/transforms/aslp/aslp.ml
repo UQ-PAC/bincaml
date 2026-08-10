@@ -142,21 +142,24 @@ let transform_procedure proc =
 
 (** Adds architectural variable declarations to the given program. By default,
     includes only those variables which are used. *)
-let add_aarch64_global_declarations ?(add_all = false) prog =
-  let include_var =
-    if add_all then Fun.const true
+let add_aarch64_global_declarations ?(include_unused = false) prog =
+  let include_predicate =
+    if include_unused then Fun.const true
     else
       Fun.flip VarSet.mem
-        (Program.referenced_vars_of_prog prog |> Iter.to_set (module VarSet))
+        (Program.referenced_vars_of_prog prog |> VarSet.of_iter)
   in
 
-  Lazy.force Aslp_lexpr.global_vars
-  |> List.to_iter |> Iter.filter include_var
+  Lazy.force Aslp_lexpr.globals
+  |> List.to_iter
+  |> Iter.filter (Aslp_lexpr.to_var %> include_predicate)
+  |> Iter.map (Fun.tap (Aslp_lexpr.check_decl_type prog))
   |> Iter.fold
-       (fun prog var ->
+       (fun prog v ->
+         let binding = Aslp_lexpr.to_var v in
          let attrib = Attrib.empty and classification = None in
          Program.add_decl prog
-           (Program.Variable { binding = var; attrib; classification }))
+           (Program.Variable { binding; attrib; classification }))
        prog
 
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all
@@ -166,17 +169,6 @@ let add_aarch64_global_declarations ?(add_all = false) prog =
     memory, if used and not already present. Finally, re-computes the "modifies"
     sets of the procedures. *)
 let transform_program prog =
-  (match Program.get_decl_by_name (Aslp_lexpr.name Memory) prog with
-  | Some (Variable { binding }) ->
-      if not (Types.equal (Var.typ binding) (Aslp_lexpr.typ Memory)) then
-        Logs.warn (fun m ->
-            m
-              "Memory declared with unexpected type; lifter may produce \
-               wrongly-typed or incorrect code.")
-  | Some _ ->
-      failwith (Aslp_lexpr.name Memory ^ " already declared as non-variable")
-  | None -> () (* will be added by add_aarch64_global_declarations *));
-
   prog
   |> Program.map_procedures (fun _ -> transform_procedure)
   |> add_aarch64_global_declarations

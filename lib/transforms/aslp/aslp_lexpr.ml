@@ -60,11 +60,15 @@ let typ (x : t) =
   | ExclusiveLocal -> Types.Boolean
   | R None | Z None -> failwith "typeof_lexpr: array lexpr has no bincaml type"
 
-let scope = function
+let scope : t -> Var.scope = function
   | Local _ -> Var.LocalVar
   | BranchTaken | BTypeCompatible | BTypeNext -> LocalVar
   | Memory -> GlobalVarShared
   | _ -> GlobalVar
+
+let is_global = function
+  | Var.GlobalVarShared | GlobalVar | GlobalConst -> true
+  | LocalVar | LocalConst -> false
 
 (** Includes sigil for global variables. *)
 let name lexpr =
@@ -77,16 +81,13 @@ let name lexpr =
     | R None | Z None ->
         failwith "name_of_lexpr: array lexpr has no bincaml name"
     | v -> show v)
-  |>
-  match scope lexpr with
-  | GlobalVarShared | GlobalVar | GlobalConst -> ( ^ ) "$"
-  | LocalVar | LocalConst -> Fun.id
+  |> if is_global (scope lexpr) then ( ^ ) "$" else Fun.id
 
 let to_var x = Var.create ~scope:(scope x) (name x) (typ x)
 let pc_var = to_var PC
 let branchtaken_var = to_var BranchTaken
 
-let predefined =
+let predefined : t list Lazy.t =
   lazy
     ([ Memory; PC; SP_EL0 ]
     @ List.init 31 (fun i -> R (Some i))
@@ -98,5 +99,20 @@ let predefined =
       ]
     @ [ BTypeCompatible; BranchTaken; BTypeNext; ExclusiveLocal ])
 
-let global_vars =
-  predefined |> Lazy.map (List.map to_var %> List.filter Var.is_global)
+let globals : t list Lazy.t =
+  predefined |> Lazy.map (List.filter (scope %> is_global))
+
+(** Checks that if the given {!Aslp_lexpr.t} global has already been declared in
+    the program, that it has the same type as {!Aslp_lexpr.typ}. *)
+let check_decl_type prog var =
+  match Program.get_decl_by_name (name var) prog with
+  | Some (Variable { binding }) when Types.equal (Var.typ binding) (typ var) ->
+      ()
+  | Some (Variable { binding }) ->
+      Logs.warn (fun m ->
+          m
+            "Aslp variable %a is already declared but has unexpected type: %a. \
+             Lifter output may be incorrect."
+            pp var Var.pp binding)
+  | Some _ -> failwith (name var ^ " already declared as non-variable")
+  | None -> () (* var is not declared yet. this is fine. *)
