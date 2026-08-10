@@ -19,6 +19,39 @@ type context = {
 
 let empty : context = { stmt = None; proc = None; vc = false }
 
+(* Get any ambiguous variables (shared name, different type). *)
+let ambiguities (program : Program.t) : VarSet.t Iter.t =
+  Program.procs program
+  (* Get all variables in program: *)
+  |> Iter.flat_map
+       (snd %> Procedure.iter_blocks
+       %> Iter.flat_map (fun (_, b) ->
+           Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b)))
+  (* Group variables by name: *)
+  |> Iter.group_by
+       ~hash:(fun v -> Hash.string @@ Var.name v)
+       ~eq:(fun v1 v2 -> String.equal (Var.name v1) (Var.name v2))
+  |> Iter.map VarSet.of_list
+  (* Only keep lists of length > 1: *)
+  |> Iter.filter (VarSet.cardinal %> ( <= ) 2)
+
+(* Map rvars to sexps, necessary to handle ambiguities and
+   function calls which are sensitive to context in program. *)
+let rvar_map (program : Program.t) =
+  ambiguities program
+  (* Map all ambiguous variables to as expressions. *)
+  |> Iter.flat_map
+     @@ VarSet.to_iter
+        %> Iter.map (fun v ->
+            let sexp =
+             fun s ->
+              let var, s = SMTLib2.get_var v s in
+              let typ = fst @@ SMTLib2.of_typ (Var.typ v) in
+              (CCSexp.(list [ atom "as"; var; typ ]), s)
+            in
+            (v, sexp))
+  |> VarMap.of_iter
+
 (* Produce a list of builders for a procedure, with context.
    Builder for local declarations + one for each statement.
    Assertions produce a second builder for verification. *)
@@ -43,6 +76,8 @@ let build_procedure (program : Program.t) (procedure : Program.proc) :
 
   CCVector.push builders (builder, ctx);
 
+  let rvars = rvar_map program in
+
   (* Translate each statement to smt. *)
   Procedure.iter_stmt_topo_fwd procedure
   |> flip Iter.for_each (fun stmt ->
@@ -55,7 +90,7 @@ let build_procedure (program : Program.t) (procedure : Program.proc) :
           let builder =
             snd
             @@ SMTLib2.add_assert
-                 (SMTLib2.of_bexpr ~rvars:VarMap.empty (BasilExpr.boolnot body))
+                 (SMTLib2.of_bexpr ~rvars (BasilExpr.boolnot body))
                  builder
           in
           let builder = snd @@ SMTLib2.check_sat builder in
@@ -63,12 +98,12 @@ let build_procedure (program : Program.t) (procedure : Program.proc) :
           CCVector.push builders (builder, { ctx with vc = true });
 
           (* Assert the actual assertion. *)
-          let smt = SMTLib2.of_bexpr ~rvars:VarMap.empty body in
+          let smt = SMTLib2.of_bexpr ~rvars body in
           let builder = SMTLib2.add_assert smt SMTLib2.empty |> snd in
           CCVector.push builders (builder, ctx)
       | Stmt.Instr_Assume { body } ->
           (* Assert the assumption as is. SSA makes this equiv to assume. *)
-          let smt = SMTLib2.of_bexpr ~rvars:VarMap.empty body in
+          let smt = SMTLib2.of_bexpr ~rvars body in
           let builder = SMTLib2.add_assert smt builder |> snd in
           CCVector.push builders (builder, ctx)
       | Stmt.Instr_Assign { al } ->
@@ -79,7 +114,7 @@ let build_procedure (program : Program.t) (procedure : Program.proc) :
             List.map
               (fun (v, e) ->
                 BasilExpr.binexp ~op:`EQ (BasilExpr.rvar v) e
-                |> SMTLib2.of_bexpr ~rvars:VarMap.empty)
+                |> SMTLib2.of_bexpr ~rvars)
               al
           in
           let builder =
@@ -131,29 +166,6 @@ let join_builders (builders : (SMTLib2.builder * context) list) :
       |> VarMap.filter (fun var _ -> not @@ VarSet.mem var removals);
   }
 
-(* Get any ambiguous variables (shared name, different type). *)
-let ambiguities (program : Program.t) =
-  Program.procs program
-  (* Get all variables in program: *)
-  |> Iter.flat_map
-       (snd %> Procedure.iter_blocks
-       %> Iter.flat_map (fun (_, b) ->
-           Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b)))
-  (* Group variables by name: *)
-  |> Iter.group_by
-       ~hash:(fun v -> Hash.string @@ Var.name v)
-       ~eq:(fun v1 v2 -> String.equal (Var.name v1) (Var.name v2))
-  (* Only keep lists of length > 1: *)
-  |> Iter.filter (List.length %> ( > ) 1)
-
-(* Map rvars to sexps, necessary to handle ambiguities and
-   function calls which are sensitive to context in program. *)
-let rvar_map (program : Program.t) =
-  ambiguities program |> Iter.flat_map_l (List.map (fun v ->
-  (* TODO *)
-  fun s -> CCSexp.(list [ atom "as"; fst @@ SMTLib2.get_var v s;  ])
-  ))
-
 let eval_single chan (solver : Smt.Solver.t) (prog : Program.t)
     ((builder, context) : SMTLib2.builder * context) =
   let sexps = SMTLib2.commands_to_sexp builder in
@@ -191,7 +203,6 @@ let eval_program chan (program : Program.t) =
         log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
-  ambiguities program |> StringSet.to_string id |> print_endline;
   let builders = build_program program in
   (* Join the builders together for computing unified declarations/preamble. *)
   let builder = join_builders builders in
