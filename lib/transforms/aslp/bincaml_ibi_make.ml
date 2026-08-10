@@ -4,7 +4,6 @@ open Common
 (** Makes a concrete module which implements {!Bincaml_ibi.IBI}. *)
 module Make (S : sig
   val initial_lifter_state : Aslp_state.lifter_state
-  val bincaml_memory_var : unit -> Var.t
 end) =
 struct
   (** {2 Type definitions} *)
@@ -304,7 +303,7 @@ struct
    fun size addr _ _acctype value ->
     let size = 8 * Z.to_int size in
     let addr = Stmt.Addr { addr; size; endian = `Little }
-    and mem = S.bincaml_memory_var () in
+    and mem = Aslp_lexpr.to_var Memory in
     bincaml_internal_emit
       (Stmt.Instr_Store
          { attrib = Attrib.empty; lhs = mem; rhs = mem; value; addr })
@@ -316,7 +315,7 @@ struct
    fun size addr _ _acctype ->
     let size = 8 * Z.to_int size in
     let addr = Stmt.Addr { addr; size; endian = `Little }
-    and mem = S.bincaml_memory_var () in
+    and mem = Aslp_lexpr.to_var Memory in
     (* NOTE: avoids `bincaml_local_var` so these variables do not clash with ASLp-declared variables. *)
     let name = !bincaml_lifter_state.generator.local_id () in
     let lhs = Var.create name (Types.bv size) in
