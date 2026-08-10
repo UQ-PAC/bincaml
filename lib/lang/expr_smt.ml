@@ -440,8 +440,8 @@ module SMTLib2 = struct
           | `Lambda -> "lambda"
         in
         (* for body B, introducing triggers replaced it with the sexp:
-           (! B :pattern (t1_1 ... t1_n) ... :pattern (tm_1 .. tm_n))
-           where ti_j are triggers for each pattern. *)
+           (! B :pattern (t1_1 ... t1_a) ... :pattern (tn_1 .. tn_b))
+           where ti_j are j expressions from trigger i. *)
         let* triggers =
          fun s ->
           triggers

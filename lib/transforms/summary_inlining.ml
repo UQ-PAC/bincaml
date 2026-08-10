@@ -60,7 +60,7 @@ let transform_block (prog : Program.t) (proc : Program.proc)
   (* Add requires to entry block. *)
   let spec = Procedure.specification proc in
   let block =
-    if match List.head_opt entry_id with Some bid -> true | _ -> false then
+    if match List.head_opt entry_id with Some id -> ID.equal bid id | _ -> false then
       Block.prepend_stmts block
         (List.map
            (fun e ->
@@ -71,7 +71,7 @@ let transform_block (prog : Program.t) (proc : Program.proc)
   in
 
   (* Add ensures to return block. *)
-  if match List.head_opt return_id with Some bid -> true | _ -> false then
+  if match List.head_opt return_id with Some id ->  ID.equal bid id| _ -> false then
     Block.append_stmts block
       (List.map
          (fun e -> Stmt.Instr_Assert { attrib = StringMap.empty; body = e })

@@ -206,7 +206,7 @@ let eval_program chan (program : Program.t) =
     Bincaml_util.Smt.Solver.create
       {
         Bincaml_util.Smt.Config.cvc5 with
-        log = Bincaml_util.Smt.Config.printf_log;
+        log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
   let builders = build_program program in
