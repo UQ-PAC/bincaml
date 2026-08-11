@@ -7,7 +7,8 @@ open Expr
 
 (** SMT Backend. This backend expects the CFA Reduction and Summary Inlining
     transforms. Will output a .smt file containing all declarations and asserts
-    necessary for verification. *)
+    necessary for verification. Live variant runs smt solver in bincaml,
+    printing more useful and readable output from analysis. *)
 
 type context = {
   stmt : Program.stmt option;
