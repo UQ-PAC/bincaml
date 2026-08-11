@@ -27,7 +27,7 @@ module AbsTypingExpr = struct
     (unfix %> AbstractExpr.map (cata alg) %> alg) e
 end
 
-let getty = AbsTypingExpr.unfix %> Expr.AbstractExpr.get_typ
+let getty = AbsTypingExpr.unfix %> AbstractExpr.get_typ
 
 let infer_var st univ ctx id =
   let typ = lookup_var_typ st univ ctx id in
@@ -128,7 +128,7 @@ let do_infer st ~visit_constraint
   let mkv v = TypeExpr.V.of_var univ v in
   let r = TypeExpr.fix st @@ Var (st.gen.fresh ()) in
   let open Abstract_expr.AbstractExpr in
-  let e = Expr.BasilExpr.unfix e in
+  let e = BasilExpr.unfix e in
   let e = set_typ e r in
   match e with
   | RVar { id; attrib } ->
@@ -187,11 +187,11 @@ let do_infer st ~visit_constraint
 let rec infer_expr st visit_constraint ~univ (hr : Lexing.position) e =
  fun (c : scheme TypeExpr.TCtx.t) ->
   Logs.debug (fun m ->
-      m "%s" @@ "infer " ^ plpos hr ^ " " ^ Expr.BasilExpr.to_string e);
+      m "%s" @@ "infer " ^ plpos hr ^ " " ^ BasilExpr.to_string e);
   let t =
     try
       do_infer st ~visit_constraint (infer_expr st visit_constraint) univ hr e c
-    with TypeErr m -> raise (TypeErr (m ^ " : " ^ Expr.BasilExpr.to_string e))
+    with TypeErr m -> raise (TypeErr (m ^ " : " ^ BasilExpr.to_string e))
   in
   t
 
@@ -203,7 +203,7 @@ let infer st visit_constraint ~univ (hr : Lexing.position) e
   in
   nexpr
 
-let unfix i = match i with Expr.BasilExpr.E i -> i
+let unfix i = match i with BasilExpr.E i -> i
 let rec cata alg e = (unfix %> AbstractExpr.map (cata alg) %> alg) e
 
 let infer_phi st visit_constraint univ ctx (p : Var.t Block.phi list) =
@@ -212,11 +212,11 @@ let infer_phi st visit_constraint univ ctx (p : Var.t Block.phi list) =
   let r = TypeExpr.fix st @@ Var (st.gen.fresh ()) in
   List.fold_left
     (fun acc { lhs; rhs } ->
-      let lhs = infer [%here] ~univ (Expr.BasilExpr.rvar lhs) ctx in
+      let lhs = infer [%here] ~univ (BasilExpr.rvar lhs) ctx in
       let e =
         List.fold_left
           (fun a (_, r) ->
-            let r = infer [%here] ~univ (Expr.BasilExpr.rvar r) ctx in
+            let r = infer [%here] ~univ (BasilExpr.rvar r) ctx in
             Unification.unify st a r)
           lhs rhs
       in
@@ -253,7 +253,7 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
       List.iter
         (fun (l, r) ->
           ignore
-          @@ unify (infer ~univ [%here] (Expr.BasilExpr.rvar l) ctx) (getty r))
+          @@ unify (infer ~univ [%here] (BasilExpr.rvar l) ctx) (getty r))
         ls;
       Instr_Assign { al = ls; attrib }
   | Instr_Call { lhs; procid; args; attrib } ->
@@ -261,7 +261,7 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
       let infer_param p =
         infer
           ~univ:(TypeExpr.V.proc_univ procid)
-          [%here] (Expr.BasilExpr.rvar p) ctx
+          [%here] (BasilExpr.rvar p) ctx
       in
       let args = StringMap.mapi (fun param a -> infer_ty [%here] a) args in
       StringMap.iter
@@ -272,7 +272,7 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
           ignore @@ unify form (getty act))
         args;
       lhs
-      |> StringMap.map (fun a -> infer_ty [%here] (Expr.BasilExpr.rvar a))
+      |> StringMap.map (fun a -> infer_ty [%here] (BasilExpr.rvar a))
       |> StringMap.iter (fun param act ->
           let form =
             infer_param (StringMap.find param @@ Procedure.formal_out_params p)
@@ -284,8 +284,8 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
       ignore @@ unify (getty target) (ptr_typ st);
       Instr_IndirectCall { target; attrib }
   | Instr_Load { lhs; rhs; addr = Scalar; attrib } ->
-      let lhs' = infer_ty [%here] (Expr.BasilExpr.rvar lhs) in
-      let rhs' = infer_ty [%here] (Expr.BasilExpr.rvar rhs) in
+      let lhs' = infer_ty [%here] (BasilExpr.rvar lhs) in
+      let rhs' = infer_ty [%here] (BasilExpr.rvar rhs) in
       let _ = unify (getty lhs') (getty rhs') in
       Instr_Load { lhs; rhs; addr = Scalar; attrib }
   | Instr_Load { lhs; rhs; addr = Addr { addr; size; endian }; attrib } ->
@@ -295,7 +295,7 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
       let _ = unify (lookup_var_typ st univ ctx rhs) mapt in
       let _ =
         unify
-          (infer_ty [%here] (Expr.BasilExpr.rvar lhs) |> getty)
+          (infer_ty [%here] (BasilExpr.rvar lhs) |> getty)
           (bv_type st size)
       in
       Instr_Load { lhs; rhs; addr = Addr { addr; size; endian }; attrib }
@@ -304,8 +304,8 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
       let _ =
         unify (getty value)
         @@ unify
-             (infer ~univ [%here] (Expr.BasilExpr.rvar lhs) ctx)
-             (infer ~univ [%here] (Expr.BasilExpr.rvar rhs) ctx)
+             (infer ~univ [%here] (BasilExpr.rvar lhs) ctx)
+             (infer ~univ [%here] (BasilExpr.rvar rhs) ctx)
       in
       Instr_Store { lhs; rhs; value; addr = Scalar; attrib }
   | Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib }
@@ -313,7 +313,7 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
       let addr = infer_ty [%here] addr in
       let _ = unify (ptr_typ st) (getty addr) in
       let mapt = fun_type st (getty addr) ((fresh_tvar st) ()) in
-      let _ = unify mapt (infer ~univ [%here] (Expr.BasilExpr.rvar lhs) ctx) in
+      let _ = unify mapt (infer ~univ [%here] (BasilExpr.rvar lhs) ctx) in
       let _ = unify (lookup_var_typ st univ ctx rhs) mapt in
       let value = infer_ty [%here] value in
       let _ = unify (getty value) (bv_type st size) in
@@ -325,7 +325,7 @@ let infer_stmt st vc p univ ctx s =
   with TypeErr m ->
     raise
       (TypeErr
-         (m ^ " " ^ Stmt.to_string Var.pretty Var.pretty Expr.BasilExpr.pretty s))
+         (m ^ " " ^ Stmt.to_string Var.pretty Var.pretty BasilExpr.pretty s))
 
 let infer_block st vc p univ ctx (b : Program.bloc) =
   let _ = infer_phi st vc univ ctx b.phis in

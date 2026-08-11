@@ -185,14 +185,14 @@ include TypeExpr.State
 
 (** Algebra that infers types of expressions in a fresh local context, assuming
     all free variables are defined and annotated. *)
-let locally_elaborate_expr (e : Expr.BasilExpr.t) =
+let locally_elaborate_expr (e : BasilExpr.t)  : BasilExpr.t =
   let open AbstractExpr in
   let open Ops.AllOps in
   let st = create_state () in
   let constraints = ref [] in
   let univ = "<expr local>" in
   let ctx =
-    Expr.BasilExpr.free_vars_iter e
+    BasilExpr.free_vars_iter e
     |> Iter.fold (Unification.decl_var_typ st univ) TypeExpr.TCtx.empty
   in
   let visit_constraint c = constraints := c :: !constraints in
@@ -205,8 +205,8 @@ let locally_elaborate_expr (e : Expr.BasilExpr.t) =
 
 (** Algebra for returning the annotated type (for use with functions like
     fold_with_type)*)
-let elaborated_type_alg (e : Types.t Expr.BasilExpr.abstract_expr) =
-  Expr.AbstractExpr.get_typ e
+let elaborated_type_alg (e : Types.t BasilExpr.abstract_expr) =
+  BasilExpr.AbstractExpr.get_typ e
 
 (** Partially apply args list to function type funtype and return resulting type
 *)

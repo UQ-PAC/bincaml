@@ -27,7 +27,7 @@ let ctx_to_string ctx =
   |> Iter.to_string (fun (a, b) ->
       Printf.sprintf "%s %s" (TypeExpr.V.to_string a) (scheme_to_string b))
 
-let unfix i = match i with Expr.BasilExpr.E i -> i
+let unfix i = match i with BasilExpr.E i -> i
 let rec cata alg e = (unfix %> AbstractExpr.map (cata alg) %> alg) e
 
 (** Extract type after full inference has run. *)
@@ -44,7 +44,7 @@ let elaborate_expr st ~univ (hr : Lexing.position) e
       | o -> o
     in
     let t = AbstractExpr.get_typ e |> TypeExpr.find st |> to_basil in
-    AbstractExpr.set_typ e t |> Expr.BasilExpr.fix
+    AbstractExpr.set_typ e t |> BasilExpr.fix
   in
   e |> AbsTypingExpr.cata alg
 
@@ -94,7 +94,7 @@ let infer_proc st vc prog ctx ?(no_constraint = false) (p : Program.proc) =
     }
   in
 
-  let new_spec ctx : (Var.t, Expr.BasilExpr.t) Procedure.proc_spec =
+  let new_spec ctx : (Var.t, BasilExpr.t) Procedure.proc_spec =
     {
       requires =
         List.map (fun e -> elaborate_expr st ~univ [%here] e ctx) spec.requires;
