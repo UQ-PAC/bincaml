@@ -447,7 +447,7 @@ module SMTLib2 = struct
         return @@ list (func :: args)
 
   let bind_of_bexpr e b =
-    let e = (BasilExpr.rewrite_typed_two Algsimp.drop_assoc) e in
+    let e = (Expr_rewrite.rewrite_typed_two Algsimp.drop_assoc) e in
     BasilExpr.cata smt_alg e b
 
   let of_bexpr e = fst @@ (bind_of_bexpr e) empty
@@ -484,7 +484,7 @@ module SMTLib2 = struct
           List.combine names types |> List.map (fun (a, b) -> list [ a; b ])
         in
         let args = binds in
-        let r = Expr.BasilExpr.type_of in_body in
+        let r = BasilExpr.type_of in_body in
         let* body = bind_of_bexpr in_body in
         let r = fst (of_typ r) in
         return
@@ -533,7 +533,7 @@ module SMTLib2 = struct
         (unexp ~op:(`SignExtend 10) (bvconst (Bitvec.ones ~size:3)))
         (bvconst @@ Bitvec.of_int ~size:13 100)
     in
-    print_endline (to_string e);
+    print_endline (Expr_pretty.to_string e);
     let smt = assert_bexpr e in
     Iter.for_each smt (fun a -> print_endline (CCSexp.to_string a));
     [%expect

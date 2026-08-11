@@ -1,5 +1,5 @@
 open Common
-open Expr
+open Abstract_expr
 open Ops
 
 let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
@@ -89,24 +89,24 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
   | ApplyIntrin { op = #Ops.Maps.intrin } -> None
 
 let partial_eval_alg (e : BasilExpr.t BasilExpr.abstract_expr) :
-    BasilExpr.rewrite =
+    Expr_rewrite.rewrite =
   let open AbstractExpr in
   let open Option.Infix in
   let is_const e =
     match BasilExpr.unfix e with Constant { const } -> Some const | _ -> None
   in
   let e = AbstractExpr.map is_const e in
-  eval_expr_alg e >|= BasilExpr.const |> BasilExpr.replace_opt
+  eval_expr_alg e >|= BasilExpr.const |> Expr_rewrite.replace_opt
 
-let partial_eval_expr e = BasilExpr.rewrite ~rw_fun:partial_eval_alg e
+let partial_eval_expr e = Expr_rewrite.rewrite ~rw_fun:partial_eval_alg e
 let eval_expr e = BasilExpr.cata eval_expr_alg e
 
 let%expect_test _ =
   let open BasilExpr in
-  let e = binexp ~op:`BVMUL (bv_of_int ~size:10 10) (bv_of_int ~size:10 10) in
-  print_endline (to_string e);
+  let e = binexp ~op:`BVMUL (BasilExpr.bv_of_int ~size:10 10) (BasilExpr.bv_of_int ~size:10 10) in
+  print_endline (Expr_pretty.to_string e);
   let r =
-    eval_expr e |> Option.map const |> Option.map to_string |> function
+    eval_expr e |> Option.map const |> Option.map Expr_pretty.to_string |> function
     | Some e -> e
     | None -> "none"
   in
@@ -121,10 +121,10 @@ let%expect_test _ =
   let e =
     binexp ~op:`BVMUL
       (applyintrin ~op:`BVADD [ ten; ten ])
-      (BasilExpr.rvar (Var.create "beans" Types.(Bitvector 10)))
+      (rvar (Var.create "beans" Types.(Bitvector 10)))
   in
-  print_endline (to_string e);
-  let r = to_string @@ partial_eval_expr e in
+  print_endline (Expr_pretty.to_string e);
+  let r = Expr_pretty.to_string (partial_eval_expr e) in
   print_endline r;
   [%expect
     {|

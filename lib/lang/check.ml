@@ -84,7 +84,7 @@ let variables_wf p =
     else if not @@ List.exists (fun e -> Var.equal v e) spec.modifies_globs then (
       Logs.debug (fun m ->
           m "%s"
-            (Procedure.pretty Var.pretty Var.pretty Expr.BasilExpr.pretty p
+            (Procedure.pretty Var.pretty Var.pretty Expr_pretty.pretty p
             |> Containers_pp.Pretty.to_string ~width:80));
       raise
         (IRWellformed
@@ -92,7 +92,7 @@ let variables_wf p =
            ^ (Procedure.id p |> ID.to_string))))
     else ()
   in
-  let check e = Expr.BasilExpr.free_vars_iter e |> Iter.iter var_is_ok in
+  let check e = BasilExpr.free_vars_iter e |> Iter.iter var_is_ok in
   List.iter check spec.requires;
   List.iter check spec.ensures;
   List.iter check spec.rely;

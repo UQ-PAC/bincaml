@@ -2,8 +2,8 @@
 
 open Bincaml_util.Common
 open Lang
-open Expr
 open Logs
+open Abstract_expr
 
 let get_trigger l =
   StringMap.get_or ~default:(`List []) Attrib.triggers_key l |> function

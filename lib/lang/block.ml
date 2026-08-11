@@ -64,7 +64,7 @@ let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
   in
   let stmts = stmts @ terminator |> List.map (fun i -> i ^ text ";") in
   let stmts = phi ^ bracket' ~n:2 "[" (append_nl stmts) "]" in
-  let attrib = Expr.BasilExpr.pretty_attr b.attrib in
+  let attrib = Expr_pretty.pretty_attr b.attrib in
   let name =
     Option.map
       (fun id -> text "block " ^ text (ID.to_string id) ^ attrib ^ text " ")
@@ -76,7 +76,7 @@ let pretty show_lvar show_var show_expr ?(terminator = []) ?block_id b =
 let to_string b =
   let tt f v = Containers_pp.text (f v) in
   let b =
-    pretty (tt Var.to_string) (tt Var.to_string) (tt BasilExpr.to_string) b
+    pretty (tt Var.to_string) (tt Var.to_string) (tt Expr_pretty.to_string) b
   in
   Containers_pp.Pretty.to_string ~width:80 b
 

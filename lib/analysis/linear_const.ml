@@ -199,8 +199,8 @@ module LF = struct
     | Join _, Top -> Top
 
   let const_expr e =
-    let open Expr.AbstractExpr in
-    let open Expr.BasilExpr in
+    let open Abstract_expr.AbstractExpr in
+    let open BasilExpr in
     match e with E (Constant { const = `Bitvector x }) -> Some x | _ -> None
 
   module Extract = struct
@@ -260,7 +260,7 @@ module LF = struct
     end
 
     let extract_alg e =
-      let open Expr.AbstractExpr in
+      let open Abstract_expr.AbstractExpr in
       match e with
       | RVar { id } -> Lin.var id
       | Constant { const = `Bitvector c } -> Some (Lin.const c)
@@ -275,8 +275,8 @@ module LF = struct
       | _ -> None
 
     let copy_of e =
-      let open Expr.AbstractExpr in
-      let open Expr.BasilExpr in
+      let open Abstract_expr.AbstractExpr in
+      let open BasilExpr in
       match unfix e with RVar { id } -> Some id | _ -> None
 
     let extract_expr e =

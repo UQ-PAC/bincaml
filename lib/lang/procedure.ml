@@ -654,7 +654,7 @@ let flat_map_stmts_topo_fwd rewriter p =
   let blocks = iter_blocks_topo_fwd p in
   Iter.fold
     (fun p -> function
-      | bid, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
+      | bid, (b : (Var.t, BasilExpr.t) Block.t) ->
           update_block p bid (Block.flat_map ~rev:false ~phi:Fun.id rewriter b))
     p blocks
 
@@ -662,7 +662,7 @@ let flat_map_stmts_topo_rev rewriter p =
   let blocks = iter_blocks_topo_rev p in
   Iter.fold
     (fun p -> function
-      | bid, (b : (Var.t, Expr.BasilExpr.t) Block.t) ->
+      | bid, (b : (Var.t, BasilExpr.t) Block.t) ->
           update_block p bid (Block.flat_map ~rev:true ~phi:Fun.id rewriter b))
     p blocks
 

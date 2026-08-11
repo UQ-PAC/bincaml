@@ -29,8 +29,15 @@ module Loc = struct
   let hash (l : t) = Hashtbl.hash l
 end
 
+let print_elist fmt =
+  let e fmt =
+   fun (v, e) ->
+    Format.fprintf fmt "(%s,%s); " (Var.to_string v) (Expr_pretty.to_string e)
+  in
+  Format.list e fmt
+
 type ret_info = {
-  rhs : (Var.t * Expr.BasilExpr.t) list;
+  rhs : (Var.t * Expr.BasilExpr.t) list; [@printer print_elist]
   lhs : (Var.t * Var.t) list;
   call_from : Program.stmt; (* stmt must be variable Instr_Call*)
   caller : ID.t;
@@ -40,7 +47,7 @@ type ret_info = {
 (** (target.formal_in, rhs arg) assignment to call formal params *)
 
 type call_info = {
-  rhs : (Var.t * Expr.BasilExpr.t) list;
+  rhs : (Var.t * Expr.BasilExpr.t) list; [@printer print_elist]
   lhs : (Var.t * Var.t) list;
   call_from : Program.stmt; (* stmt must be variable Instr_Call*)
   aftercall : Loc.stmt_id;

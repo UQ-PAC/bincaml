@@ -15,10 +15,10 @@ module Domain (S : FunctionAnnotation) = struct
 
   type t = Program.e
 
-  let show = BasilExpr.to_string
+  let show = Expr_pretty.to_string
   let equal = BasilExpr.equal
   let compare = BasilExpr.compare
-  let pretty = BasilExpr.pretty
+  let pretty = Expr_pretty.pretty
   let bottom = BasilExpr.boolconst true
   let top = BasilExpr.boolconst false
   let e_true = BasilExpr.boolconst true
@@ -27,10 +27,11 @@ module Domain (S : FunctionAnnotation) = struct
   (** Custom simplifier for this domain used to keep predicates in a consistent
       form while still reducing size. *)
   let simplify =
-    let open AbstractExpr in
+    let open Abstract_expr.AbstractExpr in
     let open BasilExpr in
+    let open Expr_rewrite in
     let rw =
-      BasilExpr.rewrite ~rw_fun:(function
+      rewrite ~rw_fun:(function
         | ApplyIntrin { op; args = [ l ] } -> replace [%here] l
         | ApplyIntrin { attrib; op = `OR; args; typ }
           when List.mem ~eq:BasilExpr.equal e_false args ->
@@ -163,7 +164,7 @@ module Domain (S : FunctionAnnotation) = struct
 
   (** Encode an abstract state as a predicate *)
   let to_pred =
-    Algsimp.Comb.to_steady Expr.BasilExpr.equal Algsimp.alg_simp_rewriter
+    Expr_rewrite.Comb.to_steady Expr.BasilExpr.equal Algsimp.alg_simp_rewriter
     % BasilExpr.boolnot
 end
 
@@ -210,7 +211,7 @@ proc @main () -> ()
       ~widening_set:Graph.ChaoticIteration.FromWto ~widening_delay:5 proc
   in
   IntraAnalysis.A.M.find Procedure.Vert.Entry res
-  |> IntraDomain.to_pred |> BasilExpr.to_string |> print_endline;
+  |> IntraDomain.to_pred |> Expr_pretty.to_string |> print_endline;
   [%expect
     {|
     Warn: global undeclared $x assuming mutable unshared

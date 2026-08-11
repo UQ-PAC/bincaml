@@ -34,8 +34,8 @@ module IValue = struct
 
   (** conversion from basil values *)
   let bv_of_constant (v : Ops.AllOps.const) =
-    let open Expr.BasilExpr in
-    let open Expr.AbstractExpr in
+    let open BasilExpr in
+    let open Abstract_expr.AbstractExpr in
     match v with
     | `Bitvector bv -> bv
     | `Integer v -> Bitvec.create ~size:int_size v
@@ -50,8 +50,8 @@ module IValue = struct
     | `Sort _ -> failwith "struct sort unsupported"
 
   let of_constant (v : Ops.AllOps.const) =
-    let open Expr.BasilExpr in
-    let open Expr.AbstractExpr in
+    let open BasilExpr in
+    let open Abstract_expr.AbstractExpr in
     match v with
     | `Bitvector bv -> bv_value bv
     | `Integer v -> int_value v
@@ -429,7 +429,7 @@ module IState = struct
   let add_event st e = { st with events = e :: st.events }
 
   let add_event_stmt st (stmt : ('a, 'b, Ops.AllOps.const) Stmt.t) =
-    let open Expr.AbstractExpr in
+    let open Abstract_expr.AbstractExpr in
     let log = add_event st in
     match stmt with
     | Stmt.Instr_Load { rhs; addr = Addr { addr; size; endian } } ->
@@ -574,8 +574,8 @@ module IState = struct
   end
 
   let eval_expr (e : Program.e) st =
-    let open Expr.AbstractExpr in
-    let open Expr in
+    let open Abstract_expr.AbstractExpr in
+    let open BasilExpr in
     let alg e =
       match e with
       | RVar { id } ->
@@ -799,13 +799,13 @@ module IState = struct
     (st, r)
 
   let initialise_spec st (sp : (Var.t, Program.e) Procedure.proc_spec) =
-    let open Expr.AbstractExpr in
+    let open Abstract_expr.AbstractExpr in
     sp.requires
     |> List.fold_left
          (fun st e ->
            match
-             Expr.BasilExpr.unfix e
-             |> Expr.AbstractExpr.map Expr.BasilExpr.unfix
+             BasilExpr.unfix e
+             |> Abstract_expr.AbstractExpr.map BasilExpr.unfix
            with
            | BinaryExpr
                {

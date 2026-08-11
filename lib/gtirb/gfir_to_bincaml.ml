@@ -16,7 +16,7 @@ module Result = OResult
 
 open struct
   let addr_equal_expr addr =
-    Lang.Expr.BasilExpr.(
+    Lang.BasilExpr.(
       binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 addr)) (rvar conf.pc_var))
 
   let sanitize_proc_name p =
@@ -31,7 +31,7 @@ let add_proxy_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap) uuid
     succ_addr uuid
     |> Iter.map (fun addr -> addr_equal_expr addr)
     |> Iter.to_list
-    |> Expr.BasilExpr.applyintrin ~op:`OR
+    |> BasilExpr.applyintrin ~op:`OR
   in
   let name =
     "%" ^ (Procedure.id proc |> ID.to_string |> sanitize_proc_name) ^ "_proxy"
@@ -60,7 +60,7 @@ let add_new_simple_block ?(name_suffix = "") ?(attrib = StringMap.empty)
     succ_addr uuid
     |> Iter.map (fun addr -> addr_equal_expr addr)
     |> Iter.to_list
-    |> Expr.BasilExpr.applyintrin ~op:`OR
+    |> BasilExpr.applyintrin ~op:`OR
   in
   let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
   let stmts = Option.to_list guard @ stmts @ [ ensure ] in
@@ -130,7 +130,7 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
                 lhs = [];
                 name = Stmt.Intrinsic.Aarch64Eval;
                 args =
-                  Expr.BasilExpr.
+                  BasilExpr.
                     [ bvconst (Opcode.to_bitvec op); bvconst address ];
                 attrib = StringMap.of_list asm;
               })
@@ -265,11 +265,11 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let requires =
     entry_addrs
     |> Iter.map (fun i ->
-        Lang.Expr.BasilExpr.(
+        Lang.BasilExpr.(
           binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 i)) (rvar conf.pc_var)))
     |> Iter.to_list
     |> fun conj ->
-    Lang.Expr.BasilExpr.applyintrin ~op:`OR conj |> fun pc_init -> [ pc_init ]
+    Lang.BasilExpr.applyintrin ~op:`OR conj |> fun pc_init -> [ pc_init ]
   in
 
   (* Addresses of successor blocks to [uuid] *)

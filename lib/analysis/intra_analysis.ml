@@ -9,7 +9,7 @@ module EvalExpr (V : ValueAbstraction) = struct
   type t
 
   let alg read e =
-    let open Expr.AbstractExpr in
+    let open Abstract_expr.AbstractExpr in
     match e with
     | RVar { id } -> read id
     | Constant { const } -> V.eval_const const
@@ -25,8 +25,8 @@ module EvalExprWithType (V : TypedValueAbstraction) = struct
   type t
 
   let alg read e =
-    let open Expr.AbstractExpr in
-    let tt = V.E.type_alg (Expr.AbstractExpr.map snd e) in
+    let open Abstract_expr in
+    let tt = V.E.type_alg (AbstractExpr.map snd e) in
     let r =
       match e with
       | RVar { id } -> read id
@@ -41,7 +41,7 @@ module EvalExprWithType (V : TypedValueAbstraction) = struct
     (r, tt)
 
   let eval read expr =
-    let open Expr.AbstractExpr in
+    let open Abstract_expr in
     fst (V.E.cata (alg read) expr)
 end
 
@@ -51,8 +51,8 @@ module EvalExprLog (V : TypedValueAbstraction) = struct
   module Eval = EvalExprWithType (V)
 
   let pretty_alg show_const show_unop show_binop show_intrin read e =
-    let e_pretty = Expr.AbstractExpr.map fst e in
-    let evaled = Eval.alg read (Expr.AbstractExpr.map snd e) in
+    let e_pretty = Abstract_expr.AbstractExpr.map fst e in
+    let evaled = Eval.alg read (Abstract_expr.AbstractExpr.map snd e) in
     let pretty =
       let open Containers_pp in
       let eval_e = textpf "%s = " (V.show @@ fst evaled) in
@@ -82,7 +82,7 @@ module EvalExprLog (V : TypedValueAbstraction) = struct
 end
 
 module EvalValueAbstraction
-    (V : ValueAbstraction with module E = Expr.BasilExpr) =
+    (V : ValueAbstraction with module E = BasilExpr) =
 struct
   type t
 
@@ -119,11 +119,11 @@ end
 let tf_forwards st (read_st : 'a -> Var.t -> 'b) (s : Program.stmt)
     (eval : ('b * Types.t) Expr.BasilExpr.abstract_expr -> 'b) tf_stmt =
   let open Expr in
-  let open AbstractExpr in
+  let open Abstract_expr.AbstractExpr in
   let alg e = match e with RVar { id = e } -> (read_st st) e | o -> eval o in
   tf_stmt
   @@ Stmt.map ~f_rvar:(read_st st) ~f_lvar:id
-       ~f_expr:(BasilExpr.fold_with_type alg)
+       ~f_expr:(Expr_rewrite.fold_with_type alg)
        s
 
 module MapState (V : TopLattice) = struct

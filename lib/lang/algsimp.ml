@@ -1,29 +1,12 @@
 (** Basic intra-expression algebraic simplifications *)
 
 open Bincaml_util.Common
-open Expr
 open Ops
-
-module Comb = struct
-  let to_steady equal f x =
-    let rec loop x =
-      let n = f x in
-      if equal n x then n else loop n
-    in
-    loop x
-
-  let sequence (a : 'a -> BasilExpr.rewrite) (b : 'a -> BasilExpr.rewrite) e =
-    match a e with Keep -> b e | e -> e
-
-  let apply_fun in_body args =
-    let args = args |> VarMap.of_list |> fun m v -> VarMap.find_opt v m in
-    BasilExpr.substitute args in_body
-end
-
-open Comb
+open Expr_rewrite
+open Expr_rewrite.Comb
 
 let rec inline_let_rec e =
-  let open AbstractExpr in
+  let open Abstract_expr.AbstractExpr in
   match BasilExpr.unfix e with
   | Let { bound_vars; in_body } ->
       inline_let_rec @@ apply_fun in_body bound_vars
@@ -41,28 +24,26 @@ let rec inline_let_rec e =
       | _ -> e)
   | _ -> e
 
-let inline_let_alg e : BasilExpr.rewrite =
-  let open AbstractExpr in
+let inline_let_alg e : rewrite =
+  let open Abstract_expr.AbstractExpr in
   match e with
   | Let { bound_vars; in_body } ->
       let e = apply_fun in_body bound_vars in
-      BasilExpr.replace [%here] e
+      replace [%here] e
   | ApplyFun { func; args } -> (
       match BasilExpr.unfix func with
       | Lambda { bound_vars; in_body } ->
-          BasilExpr.replace [%here]
-            (apply_fun in_body @@ List.combine bound_vars args)
+          replace [%here] (apply_fun in_body @@ List.combine bound_vars args)
       | _ -> Keep)
   | BinaryExpr { op = `MapAccess; arg1 = func; arg2 } -> (
       match BasilExpr.unfix func with
       | Lambda { bound_vars; in_body } ->
-          BasilExpr.replace [%here]
-            (apply_fun in_body @@ List.combine bound_vars [ arg2 ])
+          replace [%here] (apply_fun in_body @@ List.combine bound_vars [ arg2 ])
       | _ -> Keep)
   | _ -> Keep
 
-let desugar_let_alg e : BasilExpr.rewrite =
-  let open AbstractExpr in
+let desugar_let_alg e : rewrite =
+  let open Abstract_expr.AbstractExpr in
   match e with
   | Let { bound_vars; in_body } ->
       (* desugar let to func
@@ -72,17 +53,17 @@ let desugar_let_alg e : BasilExpr.rewrite =
       let args = bound_vars |> List.map fst in
       let func = BasilExpr.lambda ~bound:args in_body in
       let app_args = bound_vars |> List.map snd in
-      BasilExpr.replace [%here] (BasilExpr.apply_fun ~func app_args)
+      replace [%here] (BasilExpr.apply_fun ~func app_args)
   | _ -> Keep
 
 let desugar_let ?visit =
-  to_steady BasilExpr.equal @@ BasilExpr.rewrite ?visit ~rw_fun:desugar_let_alg
+  to_steady BasilExpr.equal @@ rewrite ?visit ~rw_fun:desugar_let_alg
 
 let inline_let ?visit =
-  to_steady BasilExpr.equal (BasilExpr.rewrite ?visit ~rw_fun:inline_let_alg)
+  to_steady BasilExpr.equal (rewrite ?visit ~rw_fun:inline_let_alg)
 
 let normalise e =
-  let open AbstractExpr in
+  let open Abstract_expr.AbstractExpr in
   let open BasilExpr in
   let open Bitvec in
   let e = AbstractExpr.map fst e in
@@ -115,7 +96,7 @@ let normalise e =
 let simplify_concat
     (e :
       (BasilExpr.t BasilExpr.abstract_expr * Types.t) BasilExpr.abstract_expr) =
-  let open AbstractExpr in
+  let open Abstract_expr.AbstractExpr in
   let open BasilExpr in
   let open Bitvec in
   match e with
@@ -150,7 +131,7 @@ let simplify_concat
   | _ -> Keep
 
 let simp_concat_fix e =
-  to_steady BasilExpr.equal (BasilExpr.rewrite_typed_two simplify_concat) e
+  to_steady BasilExpr.equal (rewrite_typed_two simplify_concat) e
 
 (** Replace associative operators with empty or singleton argument lists with
     the identity element for the operation, or the single argument,
@@ -164,7 +145,7 @@ let simp_concat_fix e =
 let drop_assoc
     (e :
       (BasilExpr.t BasilExpr.abstract_expr * Types.t) BasilExpr.abstract_expr) =
-  let open AbstractExpr in
+  let open Abstract_expr.AbstractExpr in
   let open BasilExpr in
   let open Bitvec in
   match e with
@@ -209,7 +190,7 @@ let drop_assoc
 let algebraic_simplifications
     (e :
       (BasilExpr.t BasilExpr.abstract_expr * Types.t) BasilExpr.abstract_expr) =
-  let open AbstractExpr in
+  let open Abstract_expr.AbstractExpr in
   let open BasilExpr in
   let open Bitvec in
   let keep a = fix (fst a) in
@@ -316,19 +297,21 @@ let algebraic_simplifications = sequence drop_assoc algebraic_simplifications
 
 let alg_simp_rewriter ?visit e =
   let partial_eval_expr e =
-    BasilExpr.rewrite ?visit ~rw_fun:Expr_eval.partial_eval_alg e
+    rewrite ?visit ~rw_fun:Expr_eval.partial_eval_alg e
   in
   let open Option.Infix in
   e
   |> ( to_steady BasilExpr.equal @@ fun e ->
        e |> partial_eval_expr |> simp_concat_fix )
   |> to_steady BasilExpr.equal
-       (BasilExpr.rewrite_typed_two ?visit algebraic_simplifications)
-  |> to_steady BasilExpr.equal (BasilExpr.rewrite_typed_two ?visit normalise)
+       (rewrite_typed_two ?visit algebraic_simplifications)
+  |> to_steady BasilExpr.equal (rewrite_typed_two ?visit normalise)
+    |> Hm.locally_elaborate_expr
 
 let normalise e =
   let e = alg_simp_rewriter e in
-  BasilExpr.rewrite_typed_two normalise e
+  rewrite_typed_two normalise e
+    |> Hm.locally_elaborate_expr
 
 let%expect_test "normalise" =
   let e =
@@ -340,9 +323,9 @@ let%expect_test "normalise" =
            BasilExpr.rvar (Var.create "a" Boolean);
          ]
   in
-  print_endline (BasilExpr.to_string e);
+  print_endline (Expr_pretty.to_string e);
   let e = normalise e in
-  print_endline (BasilExpr.to_string e);
+  print_endline (Expr_pretty.to_string e);
   [%expect
     {|
     boolnot(boolnot(boolnot(booland(boolnot(boolnot(b:bool)), a:bool))))

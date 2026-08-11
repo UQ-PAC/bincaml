@@ -187,13 +187,17 @@ let do_infer st ~visit_constraint
 let rec infer_expr st visit_constraint ~univ (hr : Lexing.position) e =
  fun (c : scheme TypeExpr.TCtx.t) ->
   Logs.debug (fun m ->
-      m "%s" @@ "infer " ^ plpos hr ^ " " ^ BasilExpr.to_string e);
+      m "%s" @@ "infer " ^ plpos hr ^ " " ^ Expr_pretty.to_string e);
   let t =
     try
       do_infer st ~visit_constraint (infer_expr st visit_constraint) univ hr e c
-    with TypeErr m -> raise (TypeErr (m ^ " : " ^ BasilExpr.to_string e))
+    with TypeErr m -> raise (TypeErr (m ^ " : " ^ Expr_pretty.to_string e))
   in
   t
+
+(** infer type down one layer *)
+(** Unimplemented *)
+let shallow_infer st visit_constraint ~univ hr e = failwith "unimplemented"
 
 let infer st visit_constraint ~univ (hr : Lexing.position) e
     (c : scheme TypeExpr.TCtx.t) =
@@ -252,16 +256,13 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
       let ls = List.map (fun (l, r) -> (l, infer_ty [%here] r)) ls in
       List.iter
         (fun (l, r) ->
-          ignore
-          @@ unify (infer ~univ [%here] (BasilExpr.rvar l) ctx) (getty r))
+          ignore @@ unify (infer ~univ [%here] (BasilExpr.rvar l) ctx) (getty r))
         ls;
       Instr_Assign { al = ls; attrib }
   | Instr_Call { lhs; procid; args; attrib } ->
       let p = Program.proc p procid in
       let infer_param p =
-        infer
-          ~univ:(TypeExpr.V.proc_univ procid)
-          [%here] (BasilExpr.rvar p) ctx
+        infer ~univ:(TypeExpr.V.proc_univ procid) [%here] (BasilExpr.rvar p) ctx
       in
       let args = StringMap.mapi (fun param a -> infer_ty [%here] a) args in
       StringMap.iter
@@ -294,9 +295,7 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
       let mapt = fun_type st (getty addr) (fresh_tvar st ()) in
       let _ = unify (lookup_var_typ st univ ctx rhs) mapt in
       let _ =
-        unify
-          (infer_ty [%here] (BasilExpr.rvar lhs) |> getty)
-          (bv_type st size)
+        unify (infer_ty [%here] (BasilExpr.rvar lhs) |> getty) (bv_type st size)
       in
       Instr_Load { lhs; rhs; addr = Addr { addr; size; endian }; attrib }
   | Instr_Store { lhs; rhs; value; addr = Scalar; attrib } ->
@@ -325,7 +324,7 @@ let infer_stmt st vc p univ ctx s =
   with TypeErr m ->
     raise
       (TypeErr
-         (m ^ " " ^ Stmt.to_string Var.pretty Var.pretty BasilExpr.pretty s))
+         (m ^ " " ^ Stmt.to_string Var.pretty Var.pretty Expr_pretty.pretty s))
 
 let infer_block st vc p univ ctx (b : Program.bloc) =
   let _ = infer_phi st vc univ ctx b.phis in

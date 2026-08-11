@@ -73,7 +73,7 @@ let set_modsets ?(add_only = false) prog =
       let vs =
         List.to_iter [ spec.requires; spec.ensures; spec.rely; spec.guarantee ]
         |> Iter.flat_map List.to_iter
-        |> Iter.flat_map Expr.BasilExpr.free_vars_iter
+        |> Iter.flat_map BasilExpr.free_vars_iter
         |> Iter.filter Var.is_global |> VarSet.of_iter
       in
       let name_compare = CCOrd.map Var.name String.compare in

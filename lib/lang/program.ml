@@ -1,6 +1,5 @@
 open Common
 open Types
-open Expr
 open Containers
 
 type e = BasilExpr.t
@@ -20,7 +19,7 @@ let compare_stmt = Stmt.compare Var.compare Var.compare BasilExpr.compare
 let show_stmt =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
   let show_var v = Containers_pp.text @@ Var.to_string_il_rvar v in
-  let show_expr e = BasilExpr.pretty e in
+  let show_expr e = Expr_pretty.pretty e in
   Stmt.to_string show_lvar show_var show_expr
 
 let pp_stmt fmt s = Format.pp_print_string fmt (show_stmt s)
@@ -58,7 +57,7 @@ let decl_binding = function
 let pretty_proc p =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
   let show_var v = Containers_pp.text @@ Var.to_string_il_rvar v in
-  let show_expr e = BasilExpr.pretty e in
+  let show_expr e = Expr_pretty.pretty e in
   Procedure.pretty show_lvar show_var show_expr p
 
 let pretty_declaration d =
@@ -67,20 +66,20 @@ let pretty_declaration d =
   | Variable { binding; attrib; classification } ->
       let classification =
         classification |> Option.to_list
-        |> List.map (fun e -> text " classification " ^ Expr.BasilExpr.pretty e)
+        |> List.map (fun e -> text " classification " ^ Expr_pretty.pretty e)
         |> append_l
       in
       text (Var.to_decl_string_il binding) ^ classification
   | Function { binding; attrib; definition = Axiom body } ->
       text "axiom "
       ^ text (Var.name binding)
-      ^ text " " ^ Expr.BasilExpr.pretty body
+      ^ text " " ^ Expr_pretty.pretty body
   | Function { binding; attrib; definition = Uninterpreted } ->
       text "val " ^ text (Var.to_string binding)
   | Function { binding; attrib; definition = Function body } -> (
-      let open AbstractExpr in
+      let open Abstract_expr.AbstractExpr in
       match BasilExpr.unfix body with
-      | Lambda _ -> Expr.BasilExpr.pretty_let_single binding body None
+      | Lambda _ -> Expr_pretty.pretty_let_single binding body None
       | _ ->
           let args, body, rtype = (text "", body, Var.typ binding) in
           text "let "
@@ -88,7 +87,7 @@ let pretty_declaration d =
           ^ args ^+ text ":"
           ^+ text (Types.to_string rtype)
           ^+ text "="
-          ^+ nest 2 (Expr.BasilExpr.pretty body))
+          ^+ nest 2 (Expr_pretty.pretty body))
   | Type { binding; typ } -> text "type " ^ text (Types.to_string_decl typ)
   | Procedure { definition } -> pretty_proc definition
 

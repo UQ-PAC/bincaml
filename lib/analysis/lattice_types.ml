@@ -30,7 +30,7 @@ end
 (** an abstract value providing opertions of basil ir *)
 module type ValueAbstraction = sig
   include Lattice
-  module E : Expr.ExprType
+  module E : Abstract_expr.ExprType
 
   (** evaluate operators *)
 
@@ -44,7 +44,7 @@ module type TypedValueAbstraction = sig
   (** A value abstraction that takes type information *)
 
   include Lattice
-  module E : Expr.ExprType
+  module E : Abstract_expr.ExprType
 
   (** evaluate operators *)
 

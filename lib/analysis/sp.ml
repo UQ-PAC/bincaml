@@ -13,7 +13,7 @@ module type FunctionAnnotation = sig
 end
 
 let expr_size e =
-  let open AbstractExpr in
+  let open Abstract_expr.AbstractExpr in
   let alg (e : int BasilExpr.abstract_expr) =
     (match e with
       | RVar { attrib; id } -> 0
@@ -37,10 +37,11 @@ module Domain (S : FunctionAnnotation) = struct
   let e_false = BasilExpr.boolconst false
 
   let simplify =
-    let open AbstractExpr in
+    let open Abstract_expr.AbstractExpr in
+    let open Expr_rewrite in
     let open BasilExpr in
     let rw =
-      BasilExpr.rewrite ~rw_fun:(function
+      rewrite ~rw_fun:(function
         | ApplyIntrin { op; args = [ l ] } -> replace [%here] l
         | ApplyIntrin { attrib; op = `OR; args; typ }
           when List.mem ~eq:BasilExpr.equal e_false args ->
@@ -91,10 +92,10 @@ module Domain (S : FunctionAnnotation) = struct
     in
     rw % rw
 
-  let show = BasilExpr.to_string
+  let show = Expr_pretty.to_string
   let equal = BasilExpr.equal
   let compare = BasilExpr.compare
-  let pretty = BasilExpr.pretty
+  let pretty = Expr_pretty.pretty
   let top = e_true
   let bottom = e_false
   let join (a : t) (b : t) : t = BasilExpr.applyintrin ~op:`OR [ a; b ]
@@ -188,7 +189,7 @@ module Domain (S : FunctionAnnotation) = struct
         if expr_size p > 10000 then BasilExpr.boolconst true
         else
           BasilExpr.exists ~bound:(VarSet.to_list @@ l) p
-          |> Algsimp.Comb.to_steady Expr.BasilExpr.equal
+          |> Expr_rewrite.Comb.to_steady Expr.BasilExpr.equal
                Algsimp.alg_simp_rewriter
 end
 
@@ -247,7 +248,7 @@ proc @branching(a:bv64) -> (b:bv64) [
       ~widening_delay:5 proc
   in
   IntraAnalysis.A.M.find Procedure.Vert.Return res
-  |> IntraDomain.to_pred |> BasilExpr.to_string |> print_endline;
+  |> IntraDomain.to_pred |> Expr_pretty.to_string |> print_endline;
   [%expect
     {|
     exists (a_1:bv64) (a_3:bv64) (x_2:bv64) (a_2:bv64) (x_1:bv64) (x_3:bv64) :: (boolor(booland(boolor(booland(boolor(booland(eq(a_1:bv64,

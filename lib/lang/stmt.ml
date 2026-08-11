@@ -167,7 +167,7 @@ let drop_attrib stmt = set_attrib stmt Attrib.empty
 
 (** Get pretty-printer for il format*)
 let pretty show_lvar show_var show_expr s =
-  let attrib = Expr.BasilExpr.pretty_attr (attrib s) in
+  let attrib = Expr_pretty.pretty_attr (attrib s) in
   Trace_core.with_span ~__FILE__ ~__LINE__ "pretty-stmt" @@ fun _ ->
   let open Containers_pp in
   let open Containers_pp.Infix in
@@ -243,7 +243,7 @@ let to_string ?width show_lvar show_var show_expr
 let show_stmt_basil =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
   let show_var v = Containers_pp.text @@ Var.to_string_il_rvar v in
-  let show_expr e = BasilExpr.pretty e in
+  let show_expr e = Expr_pretty.pretty e in
   to_string show_lvar show_var show_expr
 
 let pp_stmt_basil fmt s = Format.pp_print_string fmt (show_stmt_basil s)

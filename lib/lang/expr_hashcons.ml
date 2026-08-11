@@ -1,9 +1,6 @@
-
 open Common
 open Containers
 open Ops
-open Expr
-
 
 module HashExprFix = struct
   open BasilExpr
@@ -52,14 +49,13 @@ module HashExprFix = struct
   let unfix i = match Fix.HashCons.data i with E i -> i
 end
 
-
 (** Special Exprs *)
 module ExprHashCons = struct
   include HashExprFix
-  include Make (HashExprFix)
+  include Abstract_expr.Make (HashExprFix)
 
   let of_expr e =
-    let alg e = fix (AbstractExpr.drop_attrib e) in
+    let alg e = fix (Abstract_expr.AbstractExpr.drop_attrib e) in
     BasilExpr.cata alg e
 
   let show_dbg (e : t) =
@@ -71,7 +67,7 @@ module ExprHashCons = struct
       |> BasilExpr.show_abstract (fun f e ->
           Format.fprintf f "%d" @@ Fix.HashCons.id e)
     in
-    let t = cata BasilExpr.fix e |> BasilExpr.to_string_annot in
+    let t = cata BasilExpr.fix e |> Expr_pretty.to_string_annot in
     Printf.sprintf "%d:%d:%d=%s==%s" i h ihash t full
 
   (*
@@ -109,7 +105,15 @@ module IVarFix = struct
   type t = expr_node_v
 
   and expr_node_v =
-    | E of (const, Int.t, unary, binary, intrin, Types.t, t) AbstractExpr.t
+    | E of
+        ( const,
+          Int.t,
+          unary,
+          binary,
+          intrin,
+          Types.t,
+          t )
+        Abstract_expr.AbstractExpr.t
   [@@unboxed] [@@deriving eq, ord]
 
   type typ = Types.t
@@ -119,5 +123,4 @@ module IVarFix = struct
   let unfix i = match i with E i -> i
 end
 
-module ExprIntVar = Make (IVarFix)
-
+module ExprIntVar = Abstract_expr.Make (IVarFix)
