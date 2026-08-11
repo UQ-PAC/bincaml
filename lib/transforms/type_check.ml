@@ -196,7 +196,7 @@ let type_check stmt_id block_id expr =
                        :: errs,
                        ty ))
                  ([], h) tl)
-    | `IfThen -> (
+    | `IfThenElse -> (
         match args with
         | [ Types.Boolean; arg1; arg2 ] ->
             if Types.equal arg1 arg2 then []

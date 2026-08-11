@@ -324,17 +324,15 @@ let if_then_else
         op = `Cases;
         args =
           [
-            ( ( ApplyIntrin { op = `IfThen; args = [ cond; br_true ] },
-                Types.Boolean )
-            | ( BinaryExpr { op = `IfThen; arg1 = cond; arg2 = br_true },
-                Types.Boolean ) );
+            ( BinaryExpr { op = `IfThen; arg1 = cond; arg2 = br_true },
+              Types.Boolean );
             (br_false, _);
           ];
         attrib;
       } ->
       ApplyIntrin
         {
-          op = `IfThen;
+          op = `IfThenElse;
           args = [ cond; br_true; fix br_false ];
           attrib;
           typ = BasilExpr.type_of br_true;

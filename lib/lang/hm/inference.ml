@@ -111,7 +111,7 @@ let scheme_of_intrin st ?(visit_constraint = fun a -> ()) (gen : ID.generator)
       let m = curry_f st [ a ] b in
       curry_f st [ m; a; b ] m
   | `Cases -> fv ()
-  | `IfThen -> fv ()
+  | `IfThenElse -> fv ()
 
 let do_infer st ~visit_constraint
     (infer :

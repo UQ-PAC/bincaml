@@ -487,7 +487,7 @@ module SMTLib2 = struct
         let* l = l in
         let* r = r in
         return @@ list [ of_op o; l; r ]
-    | ApplyIntrin { op = `IfThen; args = [ cond; br_true; br_false ] } ->
+    | ApplyIntrin { op = `IfThenElse; args = [ cond; br_true; br_false ] } ->
         let* cond = cond in
         let* br_true = br_true in
         let* br_false = br_false in
