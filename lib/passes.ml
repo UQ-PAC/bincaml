@@ -93,7 +93,8 @@ module PassManager = struct
   let sparams =
     {
       name = "simple-params";
-      apply = Prog (Transforms.Ssa.set_params ~skip_observable:true ~skip_maps:true);
+      apply =
+        Prog (Transforms.Ssa.set_params ~skip_observable:true ~skip_maps:true);
       doc =
         "Pull all global variables into the parameter list, discarding initial \
          parameter list (i.e. assuming its empty)";

@@ -448,7 +448,7 @@ module SMTLib2 = struct
           |> List.fold_flat_map
                (fun acc inner ->
                  let inner, acc = sequence inner acc in
-                 let inner = List.map (fun i -> list [i]) inner in
+                 let inner = List.map (fun i -> list [ i ]) inner in
                  (acc, atom ":pattern" :: inner))
                s
           |> function
