@@ -44,60 +44,90 @@ module ATyp = struct
     | TypeConstr (l, t) -> Hash.pair (Hash.list he) Hash.string (l, t)
 end
 
-(** Create the union find and hash-consing structure for recording type
-    relations. This must be done each time we want to perform inference in an
-    independent environment, in order to construct a fresh hash-consing and
-    union-find state. *)
-module MakeFresh () = struct
-  module Typ = struct
-    include ATyp
+type t = nt UnionFind.elem Fix.HashCons.cell
+(** Union find and hash-consing type for representing type expressions. *)
 
-    type t = nt UnionFind.elem Fix.HashCons.cell
-    and nt = T of t expr
+and nt = T of t ATyp.expr  (** TODO: what is `nt` mean? *)
 
-    module Hashed = struct
-      type t = nt UnionFind.elem
-      (* we hash cons the data underlying the uf reference so we can construct the
-       type and get the UF reference *)
+let equal = Fix.HashCons.equal
+let compare = Fix.HashCons.compare
+let map_expr = ATyp.map_expr
 
-      let hash (e : t) : int =
-        e |> UnionFind.get |> function T e -> ATyp.hash Fix.HashCons.hash e
+(** Hash cons the data underlying the UF reference so we can construct the type
+    and get the UF reference. *)
+module Hash_inner = struct
+  type t = nt UnionFind.elem
+  (** This is the type within the {!Fix.HashCons.cell}. *)
 
-      let equal (i : t) (j : t) : bool =
-        match (UnionFind.get i, UnionFind.get j) with
-        | T i, T j -> ATyp.equal_expr Fix.HashCons.equal i j
-    end
+  let hash (e : t) : int =
+    e |> UnionFind.get |> function T e -> ATyp.hash Fix.HashCons.hash e
 
-    module H = Fix.HashCons.ForHashedType (Hashed)
-
-    let unfix : t -> t expr =
-      Fix.HashCons.data %> UnionFind.find %> UnionFind.get %> function
-      | T e -> e
-
-    let fix (e : t expr) : t = H.make (UnionFind.make (T e))
-
-    let union (a : t) (b : t) : t =
-      H.make @@ UnionFind.union (Fix.HashCons.data a) (Fix.HashCons.data b)
-
-    (** dubious; has invariant that H.make returns same ref as find ;
-        - should be true if we don't reassign refs but *)
-    let find e = Fix.HashCons.data e |> UnionFind.find |> H.make
-
-    let merge f (a : t) (b : t) : t =
-      H.make
-      @@ UnionFind.merge
-           (fun (T a) (T b) -> T (f a b))
-           (Fix.HashCons.data a) (Fix.HashCons.data b)
-
-    let compare a b = Fix.HashCons.compare a b
-    let equal a b = Fix.HashCons.equal a b
-  end
-
-  (** type name generator *)
-  let gen = ID.make_gen ()
-
-  module Rec = Bincaml_util.Recursionscheme.Recursion (Typ)
+  let equal (i : t) (j : t) : bool =
+    match (UnionFind.get i, UnionFind.get j) with
+    | T i, T j -> ATyp.equal_expr Fix.HashCons.equal i j
 end
 
-module type TypeContext = module type of MakeFresh ()
-(** Type of mutable type context union find *)
+module State = struct
+  type state = {
+    hcons : Hash_inner.t -> t;
+        (** Construct (or re-obtain) a hash-consed union-find-supporting type
+            expression for the given {!nt}. *)
+    gen : ID.generator;  (** Type name generator. *)
+  }
+  (** Union find and hash-consing state for recording type relations.
+
+      @canonical TypeExpr.state *)
+
+  (** Create a new union find and hash-cons state.
+
+      This must be done each time we want to perform inference in an independent
+      environment, in order to construct a fresh hash-consing and union-find
+      state. *)
+  let create_state () =
+    let module H = Fix.HashCons.ForHashedType (Hash_inner) in
+    { hcons = (fun e -> H.make e); gen = ID.make_gen () }
+end
+
+include State
+(** @inline *)
+
+let unfix : t -> t ATyp.expr =
+  Fix.HashCons.data %> UnionFind.find %> UnionFind.get %> function T e -> e
+
+let fix st (e : t ATyp.expr) : t = st.hcons (UnionFind.make (T e))
+
+let union st (a : t) (b : t) : t =
+  st.hcons @@ UnionFind.union (Fix.HashCons.data a) (Fix.HashCons.data b)
+
+(** dubious; has invariant that H.make returns same ref as find ;
+    - should be true if we don't reassign refs but *)
+let find st e = Fix.HashCons.data e |> UnionFind.find |> st.hcons
+
+let merge st f (a : t) (b : t) : t =
+  st.hcons
+  @@ UnionFind.merge
+       (fun (T a) (T b) -> T (f a b))
+       (Fix.HashCons.data a) (Fix.HashCons.data b)
+
+(** Fold an algebra ['a expr -> 'a] through the type expression, from leaves to
+    nodes, and returns the final ['a].
+
+    This is manually implemented because it only uses {!unfix}, so it does not
+    need {!state}. Whereas, recursion scheme functions which use [fix] would
+    need {!state}. *)
+let rec cata (alg : 'a ATyp.expr -> 'a) e =
+  (unfix %> ATyp.map_expr (cata alg) %> alg) e
+
+(** Full recursion-scheme bundle for {!t}. If you only need [cata], also see the
+    separate {!cata}. *)
+module Rec (S : sig
+  val state : state
+end) =
+Bincaml_util.Recursionscheme.Recursion (struct
+  type 'e expr = 'e ATyp.expr
+  type nonrec t = t
+
+  let fix = fix S.state
+  let unfix = unfix
+  let map_expr = ATyp.map_expr
+end)
