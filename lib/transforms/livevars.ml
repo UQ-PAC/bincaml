@@ -78,7 +78,7 @@ let%expect_test _ =
       (applyintrin ~op:`AND [ rvar v1; rvar v2; rvar v3 ])
   in
   let exp = BasilExpr.forall ~bound:[ v1 ] (binexp ~op:`EQ (rvar v2) e1) in
-  print_endline (to_string exp);
+  print_endline (Expr_pretty.to_string exp);
   let sub v = Some (bvconst (Bitvec.of_int ~size:5 150)) in
   let e2 = BasilExpr.substitute sub exp in
   print_endline (to_string e2);

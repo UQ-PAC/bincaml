@@ -351,9 +351,9 @@ end
 
 module Normalise = struct
   open Lang
-  open Expr
-  open AbstractExpr
+  open Abstract_expr.AbstractExpr
   open BasilExpr
+  open Expr_rewrite
 
   let replace_expr (e : BasilExpr.t BasilExpr.abstract_expr) =
     let normalise_intrinsic op base args =
@@ -447,7 +447,7 @@ module Normalise = struct
           }
     | o -> o
 
-  let rewriter = BasilExpr.rewrite ~rw_fun:replace_expr
+  let rewriter = Expr_rewrite.rewrite ~err_to_string:Expr_pretty.to_string ~rw_fun:replace_expr
 
   let replace_exprs =
     (* have to inline let because rewriter converts to map access *)

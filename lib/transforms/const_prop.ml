@@ -13,6 +13,7 @@ open Expr
 
 let prop_expr (prop : Var.t -> Bitvec.t option) =
   let open BasilExpr in
+  let open Expr_rewrite in
   rewrite ~rw_fun:(function
     | RVar v -> (
         match prop v.id with

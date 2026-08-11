@@ -2,10 +2,11 @@
 open Lang
 open Common
 open Analysis
+open Expr_rewrite
 
 type summary = {
-  requires : Expr.BasilExpr.t list;
-  ensures : Expr.BasilExpr.t list;
+  requires : BasilExpr.t list;
+  ensures : BasilExpr.t list;
 }
 
 let append_summary s1 s2 =
@@ -15,8 +16,8 @@ let append_summary s1 s2 =
   }
 
 module type FunctionSummaryAnnotation = sig
-  val requires : ID.t -> Expr.BasilExpr.t list
-  val ensures : ID.t -> Expr.BasilExpr.t list
+  val requires : ID.t -> BasilExpr.t list
+  val ensures : ID.t -> BasilExpr.t list
   val inout : ID.t -> VarSet.t
   val id : ID.t
 end
@@ -24,11 +25,11 @@ end
 (** Replace gamma expressions with gamma variables for an smt query *)
 let normalise_gamma =
   let open Expr.AbstractExpr in
-  let open Expr.BasilExpr in
+  let open BasilExpr in
   let make_gamma_var v =
     rvar (Var.create ("Gamma_" ^ Var.name v) ~scope:(Var.scope v) Boolean)
   in
-  Expr.BasilExpr.rewrite ~rw_fun:(function
+  rewrite ~rw_fun:(function
     | UnaryExpr { op = `Gamma; arg } -> (
         (* TODO if needed handle the case when arg is a map *)
         let vars = free_vars arg in
@@ -42,15 +43,15 @@ let normalise_gamma =
 (** `redundant p ps` returns true if the conjunction of `p :: ps` is equivalent
     to that of `ps`. *)
 let redundant (solver : Bincaml_util.Smt.Solver.t) p ps =
-  if Expr.BasilExpr.equal p (Expr.BasilExpr.boolconst true) then
+  if BasilExpr.equal p (BasilExpr.boolconst true) then
     Bincaml_util.Smt.Solver.Unsat
   else if List.is_empty ps then Bincaml_util.Smt.Solver.Sat
   else
     try
-      let conj = Expr.BasilExpr.applyintrin ~op:`AND ps in
+      let conj = BasilExpr.applyintrin ~op:`AND ps in
       let q =
-        normalise_gamma @@ Expr.BasilExpr.boolnot
-        @@ Expr.BasilExpr.binexp ~op:`IMPLIES conj p
+        normalise_gamma @@ BasilExpr.boolnot
+        @@ BasilExpr.binexp ~op:`IMPLIES conj p
       in
       let open Expr_smt in
       let s =
@@ -72,7 +73,7 @@ let wp_dual_requires (module S : FunctionSummaryAnnotation)
   let module Analysis = Intra_analysis.Backwards (Domain) in
   let result =
     Analysis.analyse
-      ~init:(fun _ -> Expr.BasilExpr.boolconst false)
+      ~init:(fun _ -> BasilExpr.boolconst false)
       ~widening_set:Graph.ChaoticIteration.FromWto ~widening_delay:5 proc
   in
   Analysis.A.M.find_opt Procedure.Vert.Entry result
@@ -220,8 +221,8 @@ module Domain = struct
   let bottom = { requires = []; ensures = [] }
 
   let equal a b =
-    List.equal Expr.BasilExpr.equal a.requires b.requires
-    && List.equal Expr.BasilExpr.equal a.ensures b.ensures
+    List.equal BasilExpr.equal a.requires b.requires
+    && List.equal BasilExpr.equal a.ensures b.ensures
 
   let is_maximal _ = false
 end

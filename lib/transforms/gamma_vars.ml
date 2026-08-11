@@ -62,9 +62,9 @@ let update_expr ?(check_names = false) (add : Var.t -> bool) =
   (* TODO handle maps ? *)
   let open Expr.AbstractExpr in
   let open Expr.BasilExpr in
-  Expr.BasilExpr.rewrite ~rw_fun:(function
+  Expr_rewrite.rewrite ~rw_fun:(function
     | UnaryExpr { attrib; op = `Gamma; arg } ->
-        replace [%here] (gamma_expr ~check_names add arg)
+        Expr_rewrite.replace [%here] (gamma_expr ~check_names add arg)
     | _ -> Keep)
 
 let update_lhs ?(check_names = false) add_cur add_target proc m =

@@ -1,16 +1,17 @@
 open Lang.Common
 open Lang
 open Expr
-module EMap = Map.Make (Expr.ExprHashCons)
-module ESet = Set.Make (Expr.ExprHashCons)
+open Expr_hashcons
+module EMap = Map.Make (ExprHashCons)
+module ESet = Set.Make (ExprHashCons)
 
 let src = Logs.Src.create ~doc:("common subexpr elim: " ^ __FILE__) "cse"
 
 module Logs = (val Logs.src_log src : Logs.LOG)
 
 open struct
-  let to_basil e = Expr.ExprHashCons.cata Expr.BasilExpr.fix e
-  let of_basil e = Expr.ExprHashCons.of_expr e
+  let to_basil e = ExprHashCons.cata Expr.BasilExpr.fix e
+  let of_basil e = ExprHashCons.of_expr e
 
   let count_candidates_block st ~thresh s =
     let count_subexpr e =
@@ -20,7 +21,7 @@ open struct
     let vstmt st s =
       Stmt.iter_rexpr s
       |> Iter.filter_map (function `Expr e -> Some e | _ -> None)
-      |> Iter.flat_map Expr.BasilExpr.children_iter
+      |> Iter.flat_map BasilExpr.children_iter
       |> Iter.fold
            (fun a k ->
              let k = BasilExpr.fix k in
@@ -44,11 +45,12 @@ open struct
   }
 
   let subst_expr substs e =
-    BasilExpr.rewrite_down
+    let open Expr_rewrite in
+    rewrite_down
       ~rw_fun:(fun e ->
         match EMap.find_opt (of_basil @@ BasilExpr.fix e) substs with
-        | Some v -> BasilExpr.replace [%here] (BasilExpr.rvar v)
-        | None -> BasilExpr.replace [%here] (BasilExpr.fix e))
+        | Some v -> replace [%here] (BasilExpr.rvar v)
+        | None -> replace [%here] (BasilExpr.fix e))
       e
 
   (** introduce new definitions for every cse candidate expression which (i)

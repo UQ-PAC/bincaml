@@ -285,7 +285,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
                type_err
                  "Paramters for the function has a type mismatch: type of %s \
                   != type of %s (%s != %s)"
-                 (BasilExpr.to_string e) (Var.to_string lvar)
+                 (Expr_pretty.to_string e) (Var.to_string lvar)
                  (Types.to_string rtype)
                  (Types.to_string (Var.typ lvar))
                :: acc)
@@ -303,7 +303,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
       let expr_errors, rtype = type_check e in
       if Types.equal rtype Types.Boolean then expr_errors
       else
-        type_err "Body of %s is not a Boolean" (BasilExpr.to_string e)
+        type_err "Body of %s is not a Boolean" (Expr_pretty.to_string e)
         :: expr_errors
   | Stmt.Instr_Load { lhs; rhs; addr = Addr { addr; size } } -> (
       let errors, rtype = type_check addr in
@@ -320,7 +320,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
           errors
       | Map (Bitvector addressSize, _) ->
           type_err "Address loading data (%s) does not match address size (%d)"
-            (BasilExpr.to_string addr) addressSize
+            (Expr_pretty.to_string addr) addressSize
           :: errors
       | _ ->
           (type_err "Invalid field for addressSize in mem %s"
@@ -344,7 +344,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
           errors
       | Map (Bitvector addressSize, _) ->
           type_err "Address loading data (%s) does not match address size (%d)"
-            (BasilExpr.to_string addr) addressSize
+            (Expr_pretty.to_string addr) addressSize
           :: errors
       | _ ->
           (type_err "Invalid field for addressSize in mem %s"
@@ -356,7 +356,7 @@ let check_stmt_types (stmt : Program.stmt) (pt : Program.t) stmt_id block_id =
       else
         type_err
           "Indirect call target (%s) must be an address (i.e. Bitvector 64)"
-          (BasilExpr.to_string target)
+          (Expr_pretty.to_string target)
         :: expr_errors
   | Stmt.Instr_Call { lhs; procid; args } ->
       let compare_stringmaps ty_a str_a a ty_b str_b b =

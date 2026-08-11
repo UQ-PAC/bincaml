@@ -62,14 +62,14 @@ let simplify_prog_exprs rewriter ?visit (p : Program.t) =
         | o -> o))
     p
 
-let to_smt (r : Expr.BasilExpr.rwinfo) =
+let to_smt (r : Expr_rewrite.rwinfo) =
   let open Lang.Expr_smt in
   let cexpr = Expr.BasilExpr.binexp ~op:`NEQ r.from r.into in
   let smt = snd @@ SMTLib2.assert_bexpr cexpr SMTLib2.empty in
   smt |> SMTLib2.to_sexp ~set_logic:false
 
 let online_check visit (solver : Bincaml_util.Smt.Solver.t)
-    (r : Expr.BasilExpr.rwinfo) =
+    (r : Expr_rewrite.rwinfo) =
   let open Bincaml_util.Smt in
   Solver.push solver;
   to_smt r |> Iter.iter (fun i -> Solver.add_command solver i);
@@ -96,7 +96,7 @@ let online_check_all ?(debug = false) visit rws =
   in
   List.iter (online_check visit solver) rws
 
-let print_error model (rw : Expr.BasilExpr.rwinfo) =
+let print_error model (rw : Expr_rewrite.rwinfo) =
   let m =
     model
     |> Option.map (function a, b ->
@@ -109,7 +109,7 @@ let print_error model (rw : Expr.BasilExpr.rwinfo) =
   ^ ":"
   ^ Option.get_or ~default:"" (Option.map Int.to_string rw.__LINE__)
   ^ "\n   "
-  ^ Expr.BasilExpr.show_rwinfo rw
+  ^ Expr_rewrite.show_rwinfo (Expr_pretty.to_string) rw
   ^ "\n" ^ m
 
 (*
@@ -124,7 +124,7 @@ let write_smt_checks ls fname =
 let simplify_prog_with_smt_check x =
   let rewrites = ref [] in
   let failures = ref [] in
-  let visit (x : Expr.BasilExpr.rwinfo) =
+  let visit (x : Expr_rewrite.rwinfo) =
     rewrites := x :: !rewrites;
     ()
   in
