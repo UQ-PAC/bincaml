@@ -513,13 +513,12 @@ module SMTLib2 = struct
   let trans_decl (decl : Program.declaration) =
     let* x = return () in
     match decl with
-    | Type { binding; typ = Sort (name, [ { variant; fields = [] } ]) as typ }
-      ->
+    | Type { binding; typ = Sort (name, [ { variant; fields = [] } ]) } ->
         let sexp = Bincaml_util.Smt.Expr.declare_sort variant 0 in
         let* _ = add_preamble sexp in
         let* _ = add_logic DT in
         return sexp
-    | Type { binding; typ = Sort (name, vs) as typ } ->
+    | Type { binding; typ = Sort (name, vs) } ->
         let fields =
           List.map
             Types.(
