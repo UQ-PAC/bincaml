@@ -22,13 +22,18 @@ let source_possibilities file =
   let source_possibilities file =
     let file = Fpath.(v file) in
     match Astring.String.cut ~sep:"__" Fpath.(filename (rem_ext file)) with
+      (* filename has `__`. this is probably a dune-generated file, whose path is fully described by the filename. *)
     | Some (_lib_name, rest) ->
       let parts = Astring.String.cuts ~sep:"__" rest |> List.map String.uncapitalize_ascii in
       let ext = Fpath.get_ext file in
       source_possibilities (Astring.String.concat ~sep:"/" parts ^ ext)
       @ source_possibilities (Astring.String.concat ~sep:"/" (parts @ [ List.nth parts (List.length parts - 1) ^ Fpath.get_ext file ]))
     | None ->
-      source_possibilities (Fpath.to_string file) @ source_possibilities (Fpath.filename file)
+      (* this is probably an original source file, whose path may be copied into a different subtree. *)
+      let segs = Fpath.segs file in
+      let rec tails = function | [] -> [[]] | (_::rest)as xs -> xs :: tails rest in
+      let possibilities = tails segs |> List.map (String.concat Fpath.dir_sep) |> List.filter (fun x -> (String.length x <> 0)) in
+      List.concat_map source_possibilities possibilities
 
 let get_source file srcdirs =
   let cmd = Cmd.(ocamlobjinfo % p file) in
@@ -53,15 +58,13 @@ let get_source file srcdirs =
             String.sub line (String.length affix)
               (String.length line - String.length affix)
           in
-                Logs.debug (fun m -> m "src: first %s" name);
+          let name =
+            String.sub line (String.length affix)
+              (String.length line - String.length affix)
+          in
           let possibilities =
             List.map
               (fun dir ->
-                Logs.debug (fun m -> m "1" );
-                let name = Fpath.v name in
-                Logs.debug (fun m -> m "2" );
-                let name = Fpath.(rem_prefix (v "lib") name) |> Option.value ~default:name |> Fpath.to_string in
-                Logs.debug (fun m -> m "src: boop %s" name);
                 List.map
                   (fun poss -> Fpath.(dir // (v poss)))
                   (source_possibilities name))
