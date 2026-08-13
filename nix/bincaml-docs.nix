@@ -1,10 +1,7 @@
 /**
   Facilitates generating ocamldocs for the Bincaml package and its dependencies.
 */
-{
-  lib,
-  newScope,
-}:
+{ lib, newScope }:
 
 lib.makeScope newScope (
   self:
@@ -32,9 +29,8 @@ lib.makeScope newScope (
       }:
       (buildEnv {
         name = "fake-dune-prefix-for-odoc";
-        paths = [
-          fmt # TODO: change to bincaml and bincaml_lsp
-        ];
+        # TODO: change to bincaml and bincaml_lsp
+        paths = [ fmt ];
         includeClosures = true;
         ignoreCollisions = false;
         pathsToLink = [
@@ -51,9 +47,9 @@ lib.makeScope newScope (
           mkdir $d/lib/ocaml
           ln -s ${ocaml}/lib/ocaml/* $d/lib/ocaml
 
-          # this makes the builtin packages (like `unix`) appear
-          # as distinct top-level packages rather than being under
-          # `ocaml`. we probably need to fake `.changes` to avoid this.
+          # the builtin packages (like `unix`) have no top-level META
+          # file and only have META files in subdirectories of ocaml/.
+          # this moves them up one level so that odoc can find them.
           for meta in ${ocaml}/lib/ocaml/*/META; do
             ln -s $(dirname $meta) $d/lib
           done
@@ -85,10 +81,7 @@ lib.makeScope newScope (
       Provides a no-op `opam` script which prints a path to an empty dir.
     */
     fake_opam = callPackage (
-      {
-        writeShellScriptBin,
-        emptyDirectory,
-      }:
+      { writeShellScriptBin, emptyDirectory }:
       (writeShellScriptBin "opam" "echo ${emptyDirectory}").overrideAttrs { name = "fake-opam-for-odoc"; }
     ) { };
 
@@ -125,7 +118,10 @@ lib.makeScope newScope (
           fake_dune_prefix
         ];
 
-        outputs = [ "out" "dev" ];
+        outputs = [
+          "out"
+          "dev"
+        ];
 
         buildPhase = ''
           source activate_fake_dune_prefix.sh
