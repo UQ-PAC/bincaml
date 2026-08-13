@@ -20,7 +20,15 @@ let source_possibilities file =
   pp @ default @ generated
 
   let source_possibilities file =
-    source_possibilities file @ source_possibilities Fpath.(filename (v file))
+    let file = Fpath.(v file) in
+    match Astring.String.cut ~sep:"__" Fpath.(filename (rem_ext file)) with
+    | Some (_lib_name, rest) ->
+      let parts = Astring.String.cuts ~sep:"__" rest |> List.map String.uncapitalize_ascii in
+      let ext = Fpath.get_ext file in
+      source_possibilities (Astring.String.concat ~sep:"/" parts ^ ext)
+      @ source_possibilities (Astring.String.concat ~sep:"/" (parts @ [ List.nth parts (List.length parts - 1) ^ Fpath.get_ext file ]))
+    | None ->
+      source_possibilities (Fpath.to_string file) @ source_possibilities (Fpath.filename file)
 
 let get_source file srcdirs =
   let cmd = Cmd.(ocamlobjinfo % p file) in

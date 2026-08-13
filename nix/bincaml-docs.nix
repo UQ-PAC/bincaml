@@ -10,10 +10,7 @@ lib.makeScope newScope (
   in
   {
     blah = callPackage (
-      {
-        dune,
-        buildDunePackage,
-      }:
+      { dune, buildDunePackage }:
       buildDunePackage {
         pname = "blah";
         version = "0.0";
@@ -30,20 +27,6 @@ lib.makeScope newScope (
           (package (name blah))
           ' >> dune-project
           substituteInPlace lib/dune --replace-fail 'library' 'library (public_name blah.foolib)'
-        '';
-
-        postInstall = ''
-          build="$PWD/_build/default"
-          (
-          cd $OCAMLFIND_DESTDIR
-          shopt -s globstar
-          for cmt in ./**/*.cmt; do
-            source_file="$(ocamlobjinfo "$cmt" | grep "Source file: " | cut -d' ' -f3-)"
-            if [[ "$source_file" == *.ml-gen ]]; then
-              cp -v "$build/$source_file" "$(dirname $cmt)"
-            fi
-          done
-          )
         '';
       }
     ) { };
@@ -154,7 +137,6 @@ lib.makeScope newScope (
           ocaml
           findlib
           odoc-driver
-          sherlodoc
           fake_opam
           fake_dune_prefix
         ];
@@ -162,7 +144,6 @@ lib.makeScope newScope (
         outputs = [
           "out"
           "dev"
-          "db"
         ];
 
         buildPhase = ''
@@ -171,20 +152,7 @@ lib.makeScope newScope (
           odoc_driver \
             --html-dir=$out \
             --mld-dir=$dev --odoc-dir=$dev --odocl-dir=$dev \
-            $(cd $OCAMLPATH && echo *) --json-output -v
-
-          mkdir $db
-          export SHERLODOC_DB=$db/sherlodoc.marshal
-          for d in $dev/*; do
-            if [[ -d $d ]]; then
-              found="$(find $d -name '*.odocl' -not -name '*__*' -not -name 'impl-*' -not -name page-index.odocl)"
-              if [[ -n "$found" ]]; then
-                printf "$(basename $d)\t%s\n" $found >> file-list
-              fi
-            fi
-          done
-
-          sherlodoc index --file-list file-list
+            $(cd $OCAMLPATH && echo *) --json-output
 
           ocamlfind printconf
 
@@ -197,23 +165,71 @@ lib.makeScope newScope (
             echo "stdlib index.html missing. stdlib links are probably broken."
             exit 1
           }
+        '';
+      }
+    ) { };
 
+    db = callPackage (
+      {
+        stdenvNoCC,
+        sherlodoc,
+        writeText,
+        src,
+      }:
+      stdenvNoCC.mkDerivation {
+        name = "bincaml-sherlodoc-db";
+
+        src = src;
+        doCheck = true;
+
+        nativeBuildInputs = [ sherlodoc ];
+
+        buildPhase = ''
+          mkdir -p $out/bin
+          export SHERLODOC_DB=$out/sherlodoc.marshal
+          for d in $src/*; do
+            if [[ -d $d ]]; then
+              found="$(find $d -name '*.odocl' -not -name '*__*' -not -name 'impl-*' -not -name page-index.odocl)"
+              if [[ -n "$found" ]]; then
+                printf "$(basename $d)\t%s\n" $found >> file-list
+              fi
+            fi
+          done
+
+          sherlodoc index --file-list file-list
+
+          cat <<EOF > $out/bin/activate_sherlodoc_db.sh
+          export SHERLODOC_DB=$SHERLODOC_DB
+          EOF
+          chmod +x $out/bin/*
+        '';
+
+        checkPhase = ''
           echo "Testing sherlodoc search..."
           sherlodoc search Format.formatter | grep 'type Stdlib.Format.formatter'
         '';
       }
-    ) { };
+    ) { src = self.docs.dev; };
 
     serve = callPackage (
       {
         sherlodoc,
         docs,
-        writeShellScriptBin,
+        writeShellApplication,
+        db,
       }:
-      writeShellScriptBin "sherlodoc-serve-bincaml" ''
-        export SHERLODOC_DB=${docs.db}/sherlodoc.marshal
-        exec ${lib.getExe sherlodoc} serve "$@"
-      ''
+      writeShellApplication {
+        name = "sherlodoc-serve-bincaml";
+        runtimeInputs = [
+          sherlodoc
+          db
+        ];
+        derivationArgs.checkPhase = "";
+        text = ''
+          source activate_sherlodoc_db.sh
+          exec sherlodoc serve "$@"
+        '';
+      }
     ) { };
   }
 )
