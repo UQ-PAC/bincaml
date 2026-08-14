@@ -167,7 +167,7 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
   let add_decl ?(attrib = Attrib.empty) (p : Program.t) (name : string)
       (bindings : Var.t list) (body : BasilExpr.t) =
     let name = "$" ^ name in
-    Lang.Program.add_decl ~attrib p
+    Lang.Program.add_decl p
       (Lang.Program.Function
          {
            binding =

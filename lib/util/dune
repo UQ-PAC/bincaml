@@ -1,7 +1,10 @@
+; (include_subdirs qualified)
+
 (library
  (public_name bincaml.util)
  (name bincaml_util)
  (modules
+  indexed_list
   worklist
   fixed_width_arith
   mtypes

@@ -35,7 +35,7 @@ let add_globals ?(check_names = false) (add : Var.t -> bool) (p : Program.t) =
   |> Iter.fold
        (fun p (s, decl) ->
          match decl with
-         | Program.Variable { binding; attrib } when add binding ->
+         | Program_types.Variable { binding; attrib } when add binding ->
              if check_names then check_var binding;
              Program.decl_global ~attrib p (gamma_of binding)
          | _ -> p)

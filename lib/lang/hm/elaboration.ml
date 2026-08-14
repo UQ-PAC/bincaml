@@ -143,6 +143,23 @@ let infer_decl st visit_constraint prog scheme =
           Type { binding; typ = to_basil (TypeExpr.find st ty) }
         in
         (scheme, `Decl (decl_id, nty))
+    | Implicit (VariantCase { constructor; variant; belongs_to }) ->
+        let scheme = decl_var_typ st global_universe scheme constructor in
+        let binding s = retype_var st global_universe s constructor in
+        let ret_type () =
+          (* I'd hope this doesn't change... should equal return type of binding *)
+          ty_of_basil st belongs_to |> TypeExpr.find st |> to_basil
+        in
+        let new_def fscheme =
+          Implicit
+            (VariantCase
+               {
+                 constructor = binding fscheme;
+                 belongs_to = ret_type ();
+                 variant;
+               })
+        in
+        (scheme, `Decl (decl_id, new_def))
     | Function { binding; definition; attrib } -> (
         (* elaboration of var binding *)
         let scheme = decl_var_typ st global_universe scheme binding in
