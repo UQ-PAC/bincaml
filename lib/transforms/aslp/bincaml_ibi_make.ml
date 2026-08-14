@@ -355,7 +355,8 @@ struct
   let f_gen_not_bits : bigint -> expr -> expr =
    fun _ a -> Expr.BasilExpr.unexp ~op:`BVNOT a
 
-  let f_gen_cvt_bool_bv : expr -> expr = fun _ -> failwith "f_gen_cvt_bool_bv"
+  let f_gen_cvt_bool_bv : expr -> expr =
+   fun e -> Expr.BasilExpr.unexp ~op:`BOOLTOBV1 e
 
   let f_gen_or_bits : bigint -> expr -> expr -> expr =
    fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVOR [ a; b ]
