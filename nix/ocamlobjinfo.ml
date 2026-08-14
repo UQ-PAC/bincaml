@@ -1,6 +1,7 @@
 (* ocamlobjinfo *)
 
 open Bos
+
 let ocamlobjinfo = Cmd.v "ocamlobjinfo"
 
 let source_possibilities file =
@@ -19,20 +20,32 @@ let source_possibilities file =
   in
   pp @ default @ generated
 
-  let source_possibilities file =
-    let file = Fpath.(v file) in
-    match Astring.String.cut ~sep:"__" Fpath.(filename (rem_ext file)) with
-      (* filename has `__`. this is probably a dune-generated file, whose path is fully described by the filename. *)
-    | Some (_lib_name, rest) ->
-      let parts = Astring.String.cuts ~sep:"__" rest |> List.map String.uncapitalize_ascii in
+let source_possibilities file =
+  let file = Fpath.(v file) in
+  match Astring.String.cut ~sep:"__" Fpath.(filename (rem_ext file)) with
+  (* filename has `__`. this is probably a dune-generated file, whose path is fully described by the filename. *)
+  | Some (_lib_name, rest) ->
+      let parts =
+        Astring.String.cuts ~sep:"__" rest |> List.map String.uncapitalize_ascii
+      in
       let ext = Fpath.get_ext file in
       source_possibilities (Astring.String.concat ~sep:"/" parts ^ ext)
-      @ source_possibilities (Astring.String.concat ~sep:"/" (parts @ [ List.nth parts (List.length parts - 1) ^ Fpath.get_ext file ]))
-    | None ->
+      @ source_possibilities
+          (Astring.String.concat ~sep:"/"
+             (parts
+             @ [ List.nth parts (List.length parts - 1) ^ Fpath.get_ext file ]))
+  | None ->
       (* this is probably an original source file, whose path may be copied into a different subtree. *)
       let segs = Fpath.segs file in
-      let rec tails = function | [] -> [[]] | (_::rest)as xs -> xs :: tails rest in
-      let possibilities = tails segs |> List.map (String.concat Fpath.dir_sep) |> List.filter (fun x -> (String.length x <> 0)) in
+      let rec tails = function
+        | [] -> [ [] ]
+        | _ :: rest as xs -> xs :: tails rest
+      in
+      let possibilities =
+        tails segs
+        |> List.map (String.concat Fpath.dir_sep)
+        |> List.filter (fun x -> String.length x <> 0)
+      in
       List.concat_map source_possibilities possibilities
 
 let get_source file srcdirs =
@@ -66,7 +79,7 @@ let get_source file srcdirs =
             List.map
               (fun dir ->
                 List.map
-                  (fun poss -> Fpath.(dir // (v poss)))
+                  (fun poss -> Fpath.(dir // v poss))
                   (source_possibilities name))
               srcdirs
             |> List.flatten
