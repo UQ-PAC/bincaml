@@ -430,30 +430,101 @@
        $R1:bv64 := bvadd(local_7:bv64,
         bvashr(local_8:bv64, zero_extend(52, 0x3:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x40072c:bv64);
-       goto (%register_tm_clones_code_4);
-     ];
-     block %register_tm_clones_code_4 [
-       call @_aarch64_eval(0x9341fc21:bv32, 0x40072c:bv64) { .asm = "asr x1, x1, #1";
-           .error = "Failure(\"f_gen_replicate_bits\")" };
        goto (%block_7);
      ];
-     block %block_7 { .asm = "cbz x1, #0x18" } [ goto (%block_9,%block_8); ];
-     block %block_8 [
+     block %block_7 { .asm = "asr x1, x1, #1" } [
+       var local_9:bv64 := 0x0:bv64;
+       var local_9:bv64 := $R1;
+       $R1:bv64 := bvor(bvand(bvconcat(extract(1,0, extract(1,0, bvlshr(local_9:bv64,
+           zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12))))),
+         0x8000000000000000:bv64),
+        bvand(bvor(bvand(0x0:bv64, 0x0:bv64),
+          bvand(bvor(bvlshr(local_9:bv64, zero_extend(52, 0x1:bv12)),
+            bvshl(local_9:bv64, zero_extend(48, 0x3f:bv16))),
+           0xffffffffffffffff:bv64)), 0x7fffffffffffffff:bv64));
+       (var BranchTaken:bool := false, $PC:bv64 := 0x400730:bv64);
+       goto (%block_8);
+     ];
+     block %block_8 { .asm = "cbz x1, #0x18" } [ goto (%block_10,%block_9); ];
+     block %block_9 [
        assume eq($R1, 0x0:bv64);
        var BranchTaken:bool := true;
        $PC:bv64 := 0x400748:bv64;
-       goto (%block_10);
-     ];
-     block %block_9 [
-       assume boolnot(eq($R1, 0x0:bv64));
-       (var BranchTaken:bool := false, $PC:bv64 := 0x400734:bv64);
-       goto (%block_10);
+       goto (%block_11);
      ];
      block %block_10 [
-       $PC:bv64 := if eq($R1, 0x0:bv64) then 0x400748:bv64 else 0x400734:bv64;
-       goto (%register_tm_clones_code_5);
+       assume boolnot(eq($R1, 0x0:bv64));
+       (var BranchTaken:bool := false, $PC:bv64 := 0x400734:bv64);
+       goto (%block_11);
      ];
-     block %register_tm_clones_code_5 [
+     block %block_11 [
+       $PC:bv64 := if eq($R1, 0x0:bv64) then 0x400748:bv64 else 0x400734:bv64;
+       goto (%register_tm_clones_code_4);
+     ];
+     block %register_tm_clones_code_4 [
        assert boolor(eq(0x400734:bv64, $PC), eq(0x400748:bv64, $PC));
        goto (%register_tm_clones_code_3,%register_tm_clones_code);
      ];
@@ -462,16 +533,16 @@
          .succ = [ { .conditional = "false"; .direct = "false";
                  .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Return" } ] } [
        assume eq(0x400748:bv64, $PC);
-       goto (%block_11);
+       goto (%block_12);
      ];
-     block %block_11 { .asm = "ret " } [
+     block %block_12 { .asm = "ret " } [
        var local_10:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R30;
-       goto (%register_tm_clones_code_6);
+       goto (%register_tm_clones_code_5);
      ];
-     block %register_tm_clones_code_6 [ assert boolor(); goto (%ret); ];
+     block %register_tm_clones_code_5 [ assert boolor(); goto (%ret); ];
      block %ret [ return; ];
      block %register_tm_clones_code_3 { .address = 4196148;
          .gtirb_block = "tXIOhSQ+R1WA/9VL5+6KQQ";
@@ -481,14 +552,14 @@
              { .address = 4196168; .conditional = "true"; .direct = "true";
                  .target = "internal:IkNYmV06TxC75h8A4NM3wA"; .type = "Type_Branch" } ] } [
        assume eq(0x400734:bv64, $PC);
-       goto (%block_12);
-     ];
-     block %block_12 { .asm = "adrp x2, #0x1f000" } [
-       $R2:bv64 := 0x41f000:bv64;
-       (var BranchTaken:bool := false, $PC:bv64 := 0x400738:bv64);
        goto (%block_13);
      ];
-     block %block_13 { .asm = "ldr x2, [x2, #0xfe0]" } [
+     block %block_13 { .asm = "adrp x2, #0x1f000" } [
+       $R2:bv64 := 0x41f000:bv64;
+       (var BranchTaken:bool := false, $PC:bv64 := 0x400738:bv64);
+       goto (%block_14);
+     ];
+     block %block_14 { .asm = "ldr x2, [x2, #0xfe0]" } [
        var local_11:bv64 := 0x0:bv64;
        var local_11:bv64 := $R2;
        var local_12:bv64 := 0x0:bv64;
@@ -496,25 +567,25 @@
        var local_12:bv64 := local_13:bv64;
        $R2:bv64 := zero_extend(0, zero_extend(0, local_12:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x40073c:bv64);
-       goto (%block_14);
+       goto (%block_15);
      ];
-     block %block_14 { .asm = "cbz x2, #0xc" } [ goto (%block_16,%block_15); ];
-     block %block_15 [
+     block %block_15 { .asm = "cbz x2, #0xc" } [ goto (%block_17,%block_16); ];
+     block %block_16 [
        assume eq($R2, 0x0:bv64);
        var BranchTaken:bool := true;
        $PC:bv64 := 0x400748:bv64;
-       goto (%block_17);
-     ];
-     block %block_16 [
-       assume boolnot(eq($R2, 0x0:bv64));
-       (var BranchTaken:bool := false, $PC:bv64 := 0x400740:bv64);
-       goto (%block_17);
+       goto (%block_18);
      ];
      block %block_17 [
-       $PC:bv64 := if eq($R2, 0x0:bv64) then 0x400748:bv64 else 0x400740:bv64;
-       goto (%register_tm_clones_code_7);
+       assume boolnot(eq($R2, 0x0:bv64));
+       (var BranchTaken:bool := false, $PC:bv64 := 0x400740:bv64);
+       goto (%block_18);
      ];
-     block %register_tm_clones_code_7 [
+     block %block_18 [
+       $PC:bv64 := if eq($R2, 0x0:bv64) then 0x400748:bv64 else 0x400740:bv64;
+       goto (%register_tm_clones_code_6);
+     ];
+     block %register_tm_clones_code_6 [
        assert boolor(eq(0x400740:bv64, $PC), eq(0x400748:bv64, $PC));
        goto (%register_tm_clones_code_1,%register_tm_clones_code);
      ];
@@ -523,9 +594,9 @@
          .succ = [ { .conditional = "false"; .direct = "false";
                  .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Branch" } ] } [
        assume eq(0x400740:bv64, $PC);
-       goto (%block_18);
+       goto (%block_19);
      ];
-     block %block_18 { .asm = "mov x16, x2" } [
+     block %block_19 { .asm = "mov x16, x2" } [
        var local_14:bv64 := 0x0:bv64;
        var local_14:bv64 := 0x0:bv64;
        var local_15:bv64 := 0x0:bv64;
@@ -533,16 +604,16 @@
        $R16:bv64 := bvor(local_14:bv64,
         bvshl(local_15:bv64, zero_extend(52, 0x0:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400744:bv64);
-       goto (%block_19);
+       goto (%block_20);
      ];
-     block %block_19 { .asm = "br x16" } [
+     block %block_20 { .asm = "br x16" } [
        var local_16:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x1:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R16;
-       goto (%register_tm_clones_code_8);
+       goto (%register_tm_clones_code_7);
      ];
-     block %register_tm_clones_code_8 [ assert boolor(); unreachable; ]
+     block %register_tm_clones_code_7 [ assert boolor(); unreachable; ]
   ];
   proc @frame_dummy()  -> () {  }
     modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64
@@ -843,27 +914,98 @@
        $R0:bv64 := bvadd(local_24:bv64,
         bvshl(local_25:bv64, zero_extend(52, 0x0:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007b4:bv64);
-       goto (%Sqrt_code_9);
-     ];
-     block %Sqrt_code_9 [
-       call @_aarch64_eval(0x9341fc00:bv32, 0x4007b4:bv64) { .asm = "asr x0, x0, #1";
-           .error = "Failure(\"f_gen_replicate_bits\")" };
        goto (%block_23);
      ];
-     block %block_23 { .asm = "str w0, [sp, #0x1c]" } [
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) extract(32,0, $R0) 32;
-       (var BranchTaken:bool := false, $PC:bv64 := 0x4007bc:bv64);
+     block %block_23 { .asm = "asr x0, x0, #1" } [
+       var local_26:bv64 := 0x0:bv64;
+       var local_26:bv64 := $R0;
+       $R0:bv64 := bvor(bvand(bvconcat(extract(1,0, extract(1,0, bvlshr(local_26:bv64,
+           zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12))))),
+         0x8000000000000000:bv64),
+        bvand(bvor(bvand(0x0:bv64, 0x0:bv64),
+          bvand(bvor(bvlshr(local_26:bv64, zero_extend(52, 0x1:bv12)),
+            bvshl(local_26:bv64, zero_extend(48, 0x3f:bv16))),
+           0xffffffffffffffff:bv64)), 0x7fffffffffffffff:bv64));
+       (var BranchTaken:bool := false, $PC:bv64 := 0x4007b8:bv64);
        goto (%block_24);
      ];
-     block %block_24 { .asm = "ldr w0, [sp, #0x1c]" } [
+     block %block_24 { .asm = "str w0, [sp, #0x1c]" } [
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) extract(32,0, $R0) 32;
+       (var BranchTaken:bool := false, $PC:bv64 := 0x4007bc:bv64);
+       goto (%block_25);
+     ];
+     block %block_25 { .asm = "ldr w0, [sp, #0x1c]" } [
        var local_27:bv32 := 0x0:bv32;
        var local_28:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
        var local_27:bv32 := local_28:bv32;
        $R0:bv64 := zero_extend(32, zero_extend(0, local_27:bv32));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007c0:bv64);
-       goto (%block_25);
+       goto (%block_26);
      ];
-     block %block_25 { .asm = "mul w0, w0, w0" } [
+     block %block_26 { .asm = "mul w0, w0, w0" } [
        var local_29:bv32 := 0x0:bv32;
        var local_29:bv32 := extract(32,0, $R0);
        var local_30:bv32 := 0x0:bv32;
@@ -875,22 +1017,91 @@
         extract(32,0, bvmul(extract(32,0, local_29:bv32),
          extract(32,0, local_30:bv32)))));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007c4:bv64);
-       goto (%Sqrt_code_10);
+       goto (%block_27);
      ];
-     block %Sqrt_code_10 [
-       call @_aarch64_eval(0x93407c00:bv32, 0x4007c4:bv64) { .asm = "sxtw x0, w0";
-           .error = "Failure(\"f_gen_replicate_bits\")" };
-       goto (%block_26);
+     block %block_27 { .asm = "sxtw x0, w0" } [
+       var local_32:bv64 := 0x0:bv64;
+       var local_32:bv64 := $R0;
+       $R0:bv64 := bvor(bvand(bvconcat(extract(1,0, extract(1,0, bvlshr(local_32:bv64,
+           zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12)))),
+          extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12))))),
+         0xffffffff00000000:bv64),
+        bvand(bvor(bvand(0x0:bv64, 0xffffffff00000000:bv64),
+          bvand(local_32:bv64, 0xffffffff:bv64)), 0xffffffff:bv64));
+       (var BranchTaken:bool := false, $PC:bv64 := 0x4007c8:bv64);
+       goto (%block_28);
      ];
-     block %block_26 { .asm = "ldr x1, [sp, #8]" } [
+     block %block_28 { .asm = "ldr x1, [sp, #8]" } [
        var local_33:bv64 := 0x0:bv64;
        var local_34:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x8:bv64) 64;
        var local_33:bv64 := local_34:bv64;
        $R1:bv64 := zero_extend(0, zero_extend(0, local_33:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007cc:bv64);
-       goto (%block_27);
+       goto (%block_29);
      ];
-     block %block_27 { .asm = "cmp x1, x0" } [
+     block %block_29 { .asm = "cmp x1, x0" } [
        var local_35:bv64 := 0x0:bv64;
        var local_36:bv64 := 0x0:bv64;
        $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(64,
@@ -908,25 +1119,25 @@
        $PSTATE_N:bv1 := extract(64,63, bvadd(bvadd($R1,
          bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007d0:bv64);
-       goto (%block_28);
+       goto (%block_30);
      ];
-     block %block_28 { .asm = "b.lt #0x10" } [ goto (%block_30,%block_29); ];
-     block %block_29 [
+     block %block_30 { .asm = "b.lt #0x10" } [ goto (%block_32,%block_31); ];
+     block %block_31 [
        assume boolnot(eq($PSTATE_N, $PSTATE_V));
        var BranchTaken:bool := true;
        $PC:bv64 := 0x4007e0:bv64;
-       goto (%block_31);
+       goto (%block_33);
      ];
-     block %block_30 [
+     block %block_32 [
        assume boolnot(boolnot(eq($PSTATE_N, $PSTATE_V)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007d4:bv64);
-       goto (%block_31);
+       goto (%block_33);
      ];
-     block %block_31 [
+     block %block_33 [
        $PC:bv64 := if boolnot(eq($PSTATE_N, $PSTATE_V)) then 0x4007e0:bv64 else 0x4007d4:bv64;
-       goto (%Sqrt_code_11);
+       goto (%Sqrt_code_9);
      ];
-     block %Sqrt_code_11 [
+     block %Sqrt_code_9 [
        assert boolor(eq(0x4007d4:bv64, $PC), eq(0x4007e0:bv64, $PC));
        goto (%Sqrt_code_2,%Sqrt_code);
      ];
@@ -935,22 +1146,22 @@
                  .target = "internal:32fWxY7+R++JNJOFTmT+Sg";
                  .type = "Type_Fallthrough" } ] } [
        assume eq(0x4007e0:bv64, $PC);
-       goto (%block_32);
+       goto (%block_34);
      ];
-     block %block_32 { .asm = "ldrsw x0, [sp, #0x1c]" } [
+     block %block_34 { .asm = "ldrsw x0, [sp, #0x1c]" } [
        var local_37:bv32 := 0x0:bv32;
        var local_38:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
        var local_37:bv32 := local_38:bv32;
        $R0:bv64 := zero_extend(0, sign_extend(32, local_37:bv32));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007e4:bv64);
-       goto (%block_33);
+       goto (%block_35);
      ];
-     block %block_33 { .asm = "str x0, [sp, #0x20]" } [
+     block %block_35 { .asm = "str x0, [sp, #0x20]" } [
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x20:bv64) $R0 64;
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007e8:bv64);
-       goto (%Sqrt_code_12);
+       goto (%Sqrt_code_10);
      ];
-     block %Sqrt_code_12 [
+     block %Sqrt_code_10 [
        assert boolor(eq(0x4007e8:bv64, $PC));
        goto (%Sqrt_code_5);
      ];
@@ -959,27 +1170,27 @@
          .succ = [ { .address = 4196328; .conditional = "false"; .direct = "true";
                  .target = "internal:32fWxY7+R++JNJOFTmT+Sg"; .type = "Type_Branch" } ] } [
        assume eq(0x4007d4:bv64, $PC);
-       goto (%block_34);
+       goto (%block_36);
      ];
-     block %block_34 { .asm = "ldrsw x0, [sp, #0x1c]" } [
+     block %block_36 { .asm = "ldrsw x0, [sp, #0x1c]" } [
        var local_39:bv32 := 0x0:bv32;
        var local_40:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
        var local_39:bv32 := local_40:bv32;
        $R0:bv64 := zero_extend(0, sign_extend(32, local_39:bv32));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007d8:bv64);
-       goto (%block_35);
+       goto (%block_37);
      ];
-     block %block_35 { .asm = "str x0, [sp, #0x28]" } [
+     block %block_37 { .asm = "str x0, [sp, #0x28]" } [
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x28:bv64) $R0 64;
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007dc:bv64);
-       goto (%block_36);
+       goto (%block_38);
      ];
-     block %block_36 { .asm = "b #0xc" } [
+     block %block_38 { .asm = "b #0xc" } [
        var BranchTaken:bool := true;
        $PC:bv64 := 0x4007e8:bv64;
-       goto (%Sqrt_code_13);
+       goto (%Sqrt_code_11);
      ];
-     block %Sqrt_code_13 [
+     block %Sqrt_code_11 [
        assert boolor(eq(0x4007e8:bv64, $PC));
        goto (%Sqrt_code_5);
      ]

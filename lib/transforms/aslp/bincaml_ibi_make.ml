@@ -43,6 +43,14 @@ struct
     in
     Aslp_lexpr.Local (id_name, ty)
 
+  let try_const_unsigned_value v =
+    match Expr.BasilExpr.unfix v with
+    | Constant { const = `Bitvector v } -> Bitvec.value v
+    | Constant { const = `Integer v } -> v
+    | Constant _ ->
+        raise (Failure ("non-number: " ^ Expr.BasilExpr.to_string v))
+    | _ -> raise (Failure ("non-constant: " ^ Expr.BasilExpr.to_string v))
+
   (** {2 Control flow}
 
       Implemented by {!Diamond_ibi.Make}. *)
@@ -215,8 +223,14 @@ struct
   let f_cvt_bits_uint : bigint -> bitvector -> bigint =
    fun _ -> Bitvec.to_unsigned_bigint
 
-  let f_sdiv_int : bigint -> bigint -> bigint = fun _ -> failwith "sdiv int"
-  let f_shl_int : bigint -> bigint -> bigint = fun _ -> failwith "shl int"
+  let f_sdiv_int : bigint -> bigint -> bigint = fun a b -> Z.div a b
+
+  let f_shl_int : bigint -> bigint -> bigint =
+   fun a b ->
+    Z.shift_left a
+      (Z.to_int64_unsigned b |> Int64.unsigned_to_int
+      |> Option.get_exn_or "shift value too large for camlint")
+
   let v_PSTATE_C : lexpr = PSTATE_C
   let v_PSTATE_Z : lexpr = PSTATE_Z
   let v_PSTATE_V : lexpr = PSTATE_V
@@ -414,7 +428,9 @@ struct
   (** [f_gen_replicate_bits operand_width num_replications operand
        num_replications] *)
   let f_gen_replicate_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_replicate_bits"
+   fun targ0 targ1 opr nr ->
+    try_const_unsigned_value nr |> Z.to_int |> fun repeats ->
+    Expr.BasilExpr.applyintrin ~op:`BVConcat @@ List.init repeats (fun _ -> opr)
 
   (** [f_gen_ZeroExtend operand_width result_width operand result_width] *)
   let f_gen_ZeroExtend : bigint -> bigint -> expr -> expr -> expr =
