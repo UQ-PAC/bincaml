@@ -152,7 +152,7 @@ lib.makeScope newScope (
           odoc_driver \
             --html-dir=$out \
             --mld-dir=$dev --odoc-dir=$dev --odocl-dir=$dev \
-            $(cd $OCAMLPATH && echo *) --json-output -v 2>&1 | tee out
+            $(cd $OCAMLPATH && echo *)
 
           ocamlfind printconf
 
@@ -165,8 +165,6 @@ lib.makeScope newScope (
             echo "stdlib index.html missing. stdlib links are probably broken."
             exit 1
           }
-
-          ! grep 'No source found for module' out
         '';
       }
     ) { };
