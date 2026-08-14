@@ -109,8 +109,9 @@ let%expect_test "empty" =
 open Containers
 
 let%expect_test "invalid from list" =
-  let () = Printexc.record_backtrace false in
-  let m = M.of_list [ (1, 31); (1, 32) ] in
-  pr "remove nonexistent" m;
-  [%expect.unreachable]
-[@@expect.uncaught_exn {| "Assert_failure lib/util/indexed_list.ml:20:4" |}]
+  try
+    let m = M.of_list [ (1, 31); (1, 32) ] in
+    pr "remove nonexistent" m
+  with Assert_failure _ ->
+    print_endline "assert failure";
+    [%expect {| assert failure |}]

@@ -1,10 +1,12 @@
+(** Sequential and associative datastructure with fast iteration, appending, and
+    O(logn) indexing. *)
+
 open Containers
 
 module Make (K : Mtypes.ORD_TYPE) = struct
   module M = Map.Make (K)
 
   (* Order stored reverse *)
-
   type 'a t = { order : K.t list; values : 'a M.t }
   (** invariant : \forall x . x \in order == x \in M.keys values *)
 
@@ -22,20 +24,20 @@ module Make (K : Mtypes.ORD_TYPE) = struct
 
   let of_list m = List.to_iter m |> of_iter
 
-  (* Get in-order iterator of keys *)
+  (** Get in-order iterator of keys *)
   let keys { order } = List.to_iter order |> Iter.rev
 
-  (* Get in-order iterator of key-value pairs  *)
+  (** Get in-order iterator of key-value pairs *)
   let to_iter { order; values } =
     List.to_iter order |> Iter.rev |> Iter.map (fun k -> (k, M.find k values))
 
-  (* Get in-order list of pairs of keys and values *)
+  (** Get in-order list of pairs of keys and values *)
   let to_list m = m |> to_iter |> Iter.to_list
 
-  (* Values iterator in-order  *)
+  (** Values iterator in-order *)
   let values m = to_iter m |> Iter.map snd
 
-  (* Values iterator out-of-order *)
+  (** Values iterator out-of-order *)
   let values_nondet { values } = M.values values
 
   (** [append k v m] replaces k -> v in m, in-place if it is already defined.
@@ -47,7 +49,7 @@ module Make (K : Mtypes.ORD_TYPE) = struct
 
   (** [add k v m] replaces k -> v in m, in-place if it is already defined.
       Otherwise it is appended. This operation is the fastest insertion
-      operation (O(1)). *)
+      operation (O(1)). Identical to {!append}*)
   let add k v m = append k v m
 
   let prepend k v { order; values } =
@@ -68,7 +70,8 @@ module Make (K : Mtypes.ORD_TYPE) = struct
   let insert_before_key ~before k v m =
     insert_before ~before:(fun k _ -> K.equal before k) k v m
 
-  (** Insert value at absolute index. Index is clamped to [0..len-1]. *)
+  (** Insert value at absolute index. Negative indices count inwards from the
+      end of the list, idices greater than the length append. *)
   let insert_at_index ~before_index k v { order; values } =
     if M.mem k values then { order; values = M.add k v values }
     else
@@ -95,9 +98,17 @@ module Make (K : Mtypes.ORD_TYPE) = struct
     let values = List.fold_left (fun acc (k, v) -> M.add k v acc) values news in
     { order; values }
 
+  (** Lookup key, throwing [Not_found] if it does not exists. *)
   let find k { values } = M.find k values
+
+  (** Lookup key, returning [Some] if it exists. O(log n) *)
   let find_opt k { values } = M.find_opt k values
+
+  (** Lookup key, returning [Some] if it exists. O(log n) *)
   let get k { values } = M.find_opt k values
+
+  (** Lookup key, throwing [Not_found] if it does not exist *)
+  let get_exn k { values } = M.find k values
 
   (** Out-of-order map *)
   let map f { order; values } = { order; values = M.map f values }

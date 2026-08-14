@@ -182,7 +182,7 @@ let get_id_by_name name prog = prog.global_names.get_id name
     other values of [at] take at least linear time. *)
 let add_decl
     ?(at : [ `Append | `Prepend | `BeforeVars | `BeforeFuncs | `BeforeProcs ] =
-      `Append) ?(attrib = StringMap.empty) p decl =
+      `Append) p decl =
   let d = p.global_names.decl_or_get (decl_binding decl) in
   let declarations =
     match at with
@@ -201,8 +201,7 @@ let remove_decl p decl =
   let d = p.global_names.decl_or_get (decl_binding decl) in
   { p with declarations = DeclsList.remove d p.declarations }
 
-let update_decl ?(attrib = StringMap.empty) prog decl =
-  add_decl ~attrib prog decl
+let update_decl prog decl = add_decl prog decl
 
 let add_proc p prog =
   let id = Procedure.id p in

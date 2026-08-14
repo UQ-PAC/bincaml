@@ -56,13 +56,12 @@ val declare_name_exn : string -> t -> ID.t
 
 val add_decl :
   ?at:[ `Append | `BeforeFuncs | `BeforeProcs | `BeforeVars | `Prepend ] ->
-  ?attrib:'a StringMap.t ->
   t ->
   declaration ->
   t
 
 val remove_decl : t -> declaration -> t
-val update_decl : ?attrib:'a Types.StringMap.t -> t -> declaration -> t
+val update_decl : t -> declaration -> t
 val add_proc : (Var.t, Expr.BasilExpr.t) Procedure.t -> t -> t
 
 val update_proc :

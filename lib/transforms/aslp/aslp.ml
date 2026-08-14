@@ -154,6 +154,7 @@ let add_aarch64_global_declarations ?(include_unused = false) prog =
   |> List.to_iter
   |> Iter.filter (Aslp_lexpr.to_var %> include_predicate)
   |> Iter.map (Fun.tap (Aslp_lexpr.check_decl_type prog))
+  |> Iter.rev
   |> Iter.fold
        (fun prog v ->
          let binding = Aslp_lexpr.to_var v in
