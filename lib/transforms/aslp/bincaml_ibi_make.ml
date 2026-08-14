@@ -43,14 +43,6 @@ struct
     in
     Aslp_lexpr.Local (id_name, ty)
 
-  let try_const_unsigned_value v =
-    match Expr.BasilExpr.unfix v with
-    | Constant { const = `Bitvector v } -> Bitvec.value v
-    | Constant { const = `Integer v } -> v
-    | Constant _ ->
-        raise (Failure ("non-number: " ^ Expr.BasilExpr.to_string v))
-    | _ -> raise (Failure ("non-constant: " ^ Expr.BasilExpr.to_string v))
-
   (** {2 Control flow}
 
       Implemented by {!Diamond_ibi.Make}. *)
@@ -429,7 +421,7 @@ struct
        num_replications] *)
   let f_gen_replicate_bits : bigint -> bigint -> expr -> expr -> expr =
    fun targ0 targ1 opr nr ->
-    try_const_unsigned_value nr |> Z.to_int |> fun repeats ->
+    targ1 |> Z.to_int |> fun repeats ->
     match Expr.BasilExpr.type_of opr |> Types.bit_width with
     | Some 1 when repeats > 0 ->
         Expr.BasilExpr.unexp ~op:(`SignExtend (repeats - 1)) opr
