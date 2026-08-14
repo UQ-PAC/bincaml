@@ -27,10 +27,6 @@ let decl_is_typ = function Type _ -> true | _ -> false
 let decl_is_func = function Function _ -> true | _ -> false
 let decl_is_var = function Variable _ -> true | _ -> false
 let decl_is_proc = function Procedure _ -> true | _ -> false
-let types_before _ k = not (decl_is_typ k)
-let vars_before _ k = decl_is_proc k || decl_is_func k || decl_is_var k
-let procs_before _ k = decl_is_proc k
-let funcs_before _ k = decl_is_func k
 
 let decl_binding = function
   | Type { binding } -> binding
@@ -183,6 +179,9 @@ let get_id_by_name name prog = prog.global_names.get_id name
 let add_decl
     ?(at : [ `Append | `Prepend | `BeforeVars | `BeforeFuncs | `BeforeProcs ] =
       `Append) p decl =
+  let vars_before _ k = decl_is_proc k || decl_is_func k || decl_is_var k in
+  let procs_before _ k = decl_is_proc k in
+  let funcs_before _ k = decl_is_func k in
   let d = p.global_names.decl_or_get (decl_binding decl) in
   let declarations =
     match at with
