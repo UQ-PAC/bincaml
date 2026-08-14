@@ -14,7 +14,9 @@
 }).overrideAttrs
   (
     _: prev: {
-      version = "3.2.1";
+      version = "3.2.1-patched";
+
+      # fixing https://github.com/ocaml/odoc/issues/1475
       src = fetchFromGitHub {
         owner = "rsc-s";
         repo = "odoc";

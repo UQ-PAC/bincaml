@@ -124,7 +124,6 @@ lib.makeScope newScope (
         ocaml,
         findlib,
         odoc,
-        sherlodoc,
         odoc-driver,
       }:
       stdenvNoCC.mkDerivation {
