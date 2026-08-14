@@ -6,7 +6,7 @@ Should output no errors
   (load-il ../../examples/cntlm-output.il)
   (run-transforms cf-expressions-smtcheck)
   (load-il concat.il)
-  Warn: global undeclared $__BranchTaken assuming mutable unshared
+  bincaml: [WARNING] Warn: global undeclared $__BranchTaken assuming mutable unshared 
   (dump-il before.il)
   (run-transforms cf-expressions-smtcheck)
   (dump-il after.il)

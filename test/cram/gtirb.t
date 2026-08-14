@@ -24,6 +24,23 @@
   $ diff gtirb-output.il dumped.il
 
   $ cat semantics.il
+  var $PSTATE_V:bv1;
+  var $PSTATE_Z:bv1;
+  var $PSTATE_N:bv1;
+  var $R30:bv64;
+  var $R29:bv64;
+  var $R19:bv64;
+  var $R17:bv64;
+  var $R16:bv64;
+  var $R6:bv64;
+  var $R5:bv64;
+  var $R4:bv64;
+  var $R3:bv64;
+  var $R2:bv64;
+  var $R1:bv64;
+  var $R0:bv64;
+  var $SP:bv64;
+  var observable $mem:(bv64->bv8);
   var $PC:bv64;
   proc @_fini()  -> () {  }
     modifies $PC:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
@@ -1569,22 +1586,5 @@
      ];
      block %FUN_400620_code_1 [ assert boolor(); unreachable; ]
   ];
-  var observable $mem:(bv64->bv8);
-  var $SP:bv64;
-  var $R0:bv64;
-  var $R1:bv64;
-  var $R2:bv64;
-  var $R3:bv64;
-  var $R4:bv64;
-  var $R5:bv64;
-  var $R6:bv64;
-  var $R16:bv64;
-  var $R17:bv64;
-  var $R19:bv64;
-  var $R29:bv64;
-  var $R30:bv64;
-  var $PSTATE_N:bv1;
-  var $PSTATE_Z:bv1;
-  var $PSTATE_V:bv1;
   prog entry @_start;
 

@@ -151,6 +151,11 @@ proc @main()  -> () {  }
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
   [%expect
     {|
+    var $R30:bv64;
+    var $R29:bv64;
+    var $R1:bv64;
+    var $R0:bv64;
+    var $SP:bv64;
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
     proc @main()  -> () {  }
@@ -210,11 +215,6 @@ proc @main()  -> () {  }
        block %main_code_1 [ assert boolor(eq(0x400784:bv64, $PC)); goto (%ret_1); ];
        block %ret_1 [ return; ]
     ];
-    var $SP:bv64;
-    var $R0:bv64;
-    var $R1:bv64;
-    var $R29:bv64;
-    var $R30:bv64;
     prog entry @main;
     |}]
 
@@ -256,6 +256,8 @@ proc @Sqrt()  -> () {  }
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
   [%expect
     {|
+    var $PSTATE_V:bv1;
+    var $PSTATE_N:bv1;
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
     proc @Sqrt()  -> () {  }
@@ -291,8 +293,6 @@ proc @Sqrt()  -> () {  }
        block %Sqrt_code_3 [ assume eq(0x4007fc:bv64, $PC); goto (%ret); ];
        block %ret [ return; ]
     ];
-    var $PSTATE_N:bv1;
-    var $PSTATE_V:bv1;
     prog entry @Sqrt;
     |}]
 

@@ -158,7 +158,7 @@ let add_aarch64_global_declarations ?(include_unused = false) prog =
        (fun prog v ->
          let binding = Aslp_lexpr.to_var v in
          let attrib = Attrib.empty and classification = None in
-         Program.add_decl prog
+         Program.add_decl ~at:`Prepend prog
            (Program.Variable { binding; attrib; classification }))
        prog
 
