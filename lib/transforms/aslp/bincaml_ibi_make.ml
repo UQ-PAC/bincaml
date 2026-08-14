@@ -430,7 +430,12 @@ struct
   let f_gen_replicate_bits : bigint -> bigint -> expr -> expr -> expr =
    fun targ0 targ1 opr nr ->
     try_const_unsigned_value nr |> Z.to_int |> fun repeats ->
-    Expr.BasilExpr.applyintrin ~op:`BVConcat @@ List.init repeats (fun _ -> opr)
+    match Expr.BasilExpr.type_of opr |> Types.bit_width with
+    | Some 1 when repeats > 0 ->
+        Expr.BasilExpr.unexp ~op:(`SignExtend (repeats - 1)) opr
+    | _ ->
+        Expr.BasilExpr.applyintrin ~op:`BVConcat
+        @@ List.init repeats (fun _ -> opr)
 
   (** [f_gen_ZeroExtend operand_width result_width operand result_width] *)
   let f_gen_ZeroExtend : bigint -> bigint -> expr -> expr -> expr =
