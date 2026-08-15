@@ -10,4 +10,4 @@
  (modules test_expr_print test_util_indexlist)
  (libraries bincaml.util)
  (preprocess
-  (pps ppx_expect)))
+  (pps ppx_expect ppx_deriving.show)))

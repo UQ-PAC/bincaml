@@ -115,3 +115,37 @@ let%expect_test "invalid from list" =
   with Assert_failure _ ->
     print_endline "assert failure";
     [%expect {| assert failure |}]
+
+let%expect_test "index off by one?" =
+  let m = M.of_list [ (0, 0); (1, 1); (2, 2) ] in
+  m
+  |> M.insert_at_index ~before_index:0 101 101
+  |> M.to_list |> [%derive.show: (int * int) list] |> print_endline;
+  m
+  |> M.insert_at_index ~before_index:1 102 102
+  |> M.to_list |> [%derive.show: (int * int) list] |> print_endline;
+  m
+  |> M.insert_at_index ~before_index:2 103 103
+  |> M.to_list |> [%derive.show: (int * int) list] |> print_endline;
+  m
+  |> M.insert_at_index ~before_index:3 104 104
+  |> M.to_list |> [%derive.show: (int * int) list] |> print_endline;
+  m
+  |> M.insert_at_index ~before_index:4 105 105
+  |> M.to_list |> [%derive.show: (int * int) list] |> print_endline;
+  m
+  |> M.insert_at_index ~before_index:(-1) 101 101
+  |> M.to_list |> [%derive.show: (int * int) list] |> print_endline;
+  m
+  |> M.insert_at_index ~before_index:(-2) 101 101
+  |> M.to_list |> [%derive.show: (int * int) list] |> print_endline;
+  ();
+  [%expect {|
+    [(101, 101); (0, 0); (1, 1); (2, 2)]
+    [(0, 0); (102, 102); (1, 1); (2, 2)]
+    [(0, 0); (1, 1); (103, 103); (2, 2)]
+    [(0, 0); (1, 1); (2, 2); (104, 104)]
+    [(0, 0); (105, 105); (1, 1); (2, 2)]
+    [(101, 101); (0, 0); (1, 1); (2, 2)]
+    [(101, 101); (0, 0); (1, 1); (2, 2)]
+    |}]
