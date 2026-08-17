@@ -701,5 +701,112 @@ let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
   check_ssa ~skip_observable ~skip_maps proc;
   proc
 
-let ssa_prog ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
-  Program.map_procedures (fun _ -> ssa ~skip_observable ~skip_maps) p
+module Skip = struct
+  module S = struct
+    type t = Observable | Map [@@deriving show { with_path = false }, eq, ord]
+  end
+
+  include Set.Make (S)
+
+  let skip (set : t) (v : Var.t) =
+    (mem Observable set && Var.is_shared v)
+    || (mem Map set && Var.typ v |> function Map _ -> true | _ -> false)
+    (* Always skip globals and constants. *)
+    || (Var.is_global v && Var.is_constant v)
+
+  let keep s v = not @@ skip s v
+end
+
+let add_phis ?(skipping = Skip.empty) (procedure : Program.proc) =
+  let open Procedure in
+  let module Dom = Graph.Dominator.Make (G) in
+  let module WL = Worklist.Make (ID) in
+  let module FL = Set.Make (Procedure.Vert) in
+  let procedure =
+    map_blocks_nondet (fun (_, b) -> { b with phis = [] }) procedure
+  in
+
+  (* Adds phis for single var to graph given the dominance frontier and
+     initial definitions of v in blocks listed in defs. *)
+  let per_var (dom_frontier : Vert.t -> Vert.t list) (graph : RevG.t)
+      ((var, defs) : Var.t * IDSet.t) =
+    (* Init the worklist to all initial define sites. *)
+    let worklist = WL.create () in
+    WL.add_iter worklist (IDSet.to_iter defs);
+
+    (* fl flags blocks with added phi nodes. *)
+    let flags = ref FL.empty in
+
+    (* Easier to take a ref to the graph for this. *)
+    let graph = ref graph in
+
+    while WL.non_empty worklist do
+      let x = WL.pop worklist in
+      dom_frontier (Vert.Begin x)
+      |> List.to_iter
+      (* Skip flagged blocks. *)
+      |> Iter.filter (flip FL.mem !flags %> not)
+      |> flip Iter.for_each (function
+        | Vert.Begin id as y ->
+            (* Flag the block as seen. *)
+            flags := FL.add y !flags;
+
+            (* Add to worklist if not in initial_blocks. *)
+            if not @@ IDSet.mem id defs then WL.add worklist id;
+
+            (* Add phi node for var to y. *)
+            let phi : Var.t Block.phi =
+              {
+                lhs = var;
+                rhs =
+                  G.pred !graph y
+                  |> List.filter_map (function
+                    | Vert.End id -> Some (id, var)
+                    | _ -> None);
+              }
+            in
+            let block =
+              match G.find_edge !graph (Vert.Begin id) (Vert.End id) with
+              | _, Block b, _ -> b
+              | _ -> raise Not_found
+            in
+            let block = { block with phis = phi :: block.phis } in
+            graph := G.remove_edge !graph (Begin id) (End id);
+            graph := G.add_edge_e !graph (Begin id, Block block, End id)
+        | _ -> ())
+    done;
+    !graph
+  in
+
+  (* Map variables to assignment locations. *)
+  let defs =
+    iter_blocks procedure
+    |> Iter.flat_map (fun (id, b) ->
+        Block.assigned_vars_iter b
+        (* Filter out irrelevant variables. *)
+        |> Iter.filter (Skip.keep skipping)
+        |> Iter.map (fun v -> (id, v)))
+    |> Iter.fold
+         (fun acc (id, var) ->
+           VarMap.update var
+             (function
+               | None -> Some (IDSet.of_list [ id ])
+               | Some ids -> Some (IDSet.add id ids))
+             acc)
+         VarMap.empty
+  in
+
+  (* Update the procedure. *)
+  map_graph
+    (fun g ->
+      (* Dominator frontier per block: *)
+      let idom = Dom.compute_idom g Entry in
+      let tree = Dom.idom_to_dom_tree g idom in
+      let df = Dom.compute_dom_frontier g tree idom in
+
+      (* Run the worklist solver to update the graph. *)
+      VarMap.to_iter defs |> Iter.fold (per_var df) g)
+    procedure
+
+let ssa_prog ?(skipping = Skip.empty) (program : Program.t) =
+  Program.map_procedures (const @@ add_phis ~skipping) program
