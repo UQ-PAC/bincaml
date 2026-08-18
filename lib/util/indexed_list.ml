@@ -153,9 +153,18 @@ module Make (K : Mtypes.ORD_TYPE) = struct
 
   (** {2 Conversions and iterators} *)
 
-  (** Builds a {!t} from the given pairs. Repeated keys use the order of the
-      first occurence and the value of the last occurence. *)
-  let of_iter m = Iter.fold (fun m (k, v) -> append k v m) empty m
+  (** Builds a {!t} from the given pairs. Keys must be unique. *)
+  let of_iter m =
+    let n = ref 0 in
+    let m =
+      Iter.fold
+        (fun m (k, v) ->
+          n := !n + 1;
+          append k v m)
+        empty m
+    in
+    if !n <> length m then invalid_arg "of_iter: had duplicated keys";
+    m
 
   let of_list m = List.to_iter m |> of_iter
 

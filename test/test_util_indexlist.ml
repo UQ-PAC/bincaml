@@ -109,9 +109,7 @@ let%expect_test "empty" =
 open Containers
 
 let%expect_test "invalid from list" =
-  try
-    let m = M.of_list [ (1, 31); (1, 32) ] in
-    pr "remove nonexistent" m
-  with Assert_failure _ ->
-    print_endline "assert failure";
-    [%expect {| assert failure |}]
+  match CCResult.guard_str (fun () -> M.of_list [ (1, 31); (1, 32) ]) with
+  | Ok _ -> print_endline "ok"
+  | Error e -> print_endline e;
+  [%expect {| Invalid_argument("of_iter: had duplicated keys") |}]
