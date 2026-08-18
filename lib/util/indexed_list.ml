@@ -27,6 +27,8 @@ module Make (K : Mtypes.ORD_TYPE) = struct
 
   let empty = { order = FQ.empty; values = M.empty }
   let singleton k v = { order = FQ.singleton k; values = M.singleton k v }
+  let cardinal m = M.cardinal m.values
+  let length m = cardinal m
 
   (** [append k v m] replaces [k -> v] in m, in-place if it is already defined.
       Otherwise it is appended. This operation is the fastest insertion
@@ -35,34 +37,23 @@ module Make (K : Mtypes.ORD_TYPE) = struct
     if M.mem k values then { order; values = M.add k v values }
     else { order = FQ.snoc order k; values = M.add k v values }
 
-  let of_iter m = Iter.fold (fun m (k, v) -> append k v m) empty m
-  let of_list m = List.to_iter m |> of_iter
-
-  (** Get in-order iterator of keys *)
-  let keys { order } = FQ.to_iter order
-
-  (** Get in-order iterator of key-value pairs *)
-  let to_iter { order; values } =
-    FQ.to_iter order |> Iter.map (fun k -> (k, M.find k values))
-
-  (** Get in-order list of pairs of keys and values *)
-  let to_list m = m |> to_iter |> Iter.to_list
-
-  (** Values iterator in-order *)
-  let values m = to_iter m |> Iter.map snd
-
-  (** Values iterator out-of-order *)
-  let values_nondet { values } = M.values values
-
   (** [add k v m] replaces k -> v in m, in-place if it is already defined.
-      Otherwise it is appended. This operation is the fastest insertion
-      operation (O(1)). Identical to {!append}*)
+      Otherwise it is appended. This operation is fast (O(1)).
+
+      Identical to {!append}. *)
   let add k v m = append k v m
 
+  (** [prepend k v m] replaces k -> v in m, in-place if it is already defined.
+      Otherwise it is prepended. This operation is fast (O(1)). *)
   let prepend k v { order; values } =
     if M.mem k values then { order; values = M.add k v values }
     else { order = FQ.cons k order; values = M.add k v values }
 
+  (** If the key is not in the map, inserts the given key-value pair {i before}
+      the first element satisfying the given [before] predicate. If there is no
+      element satisfying the predicate, the pair is inserted at the end.
+
+      If the key was already in the map, simply updates the value in-place. *)
   let insert_before ~before k v { order; values } =
     if M.mem k values then { order; values = M.add k v values }
     else
@@ -72,21 +63,29 @@ module Make (K : Mtypes.ORD_TYPE) = struct
       let order = FQ.cons_l before (FQ.cons k after) in
       { order; values = M.add k v values }
 
+  (** If the key is not in the map, inserts the given key-value pair {i before}
+      the given [before] key. If [before] was not in the map, the pair is
+      inserted at the end.
+
+      If the key was already in the map, simply updates the value in-place. *)
   let insert_before_key ~before k v m =
     insert_before ~before:(fun k _ -> K.equal before k) k v m
 
-  (** Insert value at absolute index. Negative indices count inwards from the
-      end of the list, idices greater than the length append. *)
+  (** Insert value at absolute index, between [0] and {!length}[ - 1]. *)
   let insert_at_index ~before_index k v { order; values } =
+    if not (0 <= before_index && before_index < M.cardinal values) then
+      invalid_arg "insert_at_index: index out of range";
     if M.mem k values then { order; values = M.add k v values }
     else
       let before, after = FQ.take_front_l before_index order in
       let order = FQ.cons_l before (FQ.cons k after) in
       { order; values = M.add k v values }
 
-  (** Relatively efficient: cons *)
-  let append_list news m = List.fold_left (fun acc (k, v) -> add k v acc) m news
+  (** Inserts the given pairs, as a block, before the first element satisfying
+      the given [before] predicate.
 
+      If any new keys were already in the map, those keys will be updated
+      in-place. *)
   let insert_list_before ~before news { values; order } =
     (* ignore pre-existing keys and only use leftmost position of each new key. *)
     let _, new_keys =
@@ -102,7 +101,18 @@ module Make (K : Mtypes.ORD_TYPE) = struct
     let order = FQ.cons_l before (FQ.cons_l new_keys after) in
     { order; values = M.add_list values news }
 
-  (** Lookup key, throwing [Not_found] if it does not exists. *)
+  (** Appends the given pairs to the end, with same logic as {!append}. *)
+  let append_list news m =
+    List.fold_left (fun acc (k, v) -> append k v acc) m news
+
+  (** Prepends the given pairs to the beginning, with same logic as
+      {!insert_list_before}. *)
+  let prepend_list news m =
+    (* insert_list_before rather than repeatedly prepending, so duplicated keys
+       in [news] will use their first (leftmost) position rather than rightmost. *)
+    insert_list_before ~before:(fun _ _ -> true) news m
+
+  (** Lookup key, throwing [Not_found] if it does not exist. *)
   let find k { values } = M.find k values
 
   (** Lookup key, returning [Some] if it exists. O(log n) *)
@@ -135,6 +145,28 @@ module Make (K : Mtypes.ORD_TYPE) = struct
     | Some new_val -> add k new_val m
     | None -> remove k m
 
+  (** Builds a {!t} from the given pairs. Repeated pairs use the order of the
+      first occurence and the value of the last occurence. *)
+  let of_iter m = Iter.fold (fun m (k, v) -> append k v m) empty m
+
+  let of_list m = List.to_iter m |> of_iter
+
+  (** Get in-order iterator of keys *)
+  let keys { order } = FQ.to_iter order
+
+  (** Get in-order iterator of key-value pairs *)
+  let to_iter { order; values } =
+    FQ.to_iter order |> Iter.map (fun k -> (k, M.find k values))
+
+  (** Get in-order list of pairs of keys and values *)
+  let to_list m = m |> to_iter |> Iter.to_list
+
+  (** Values iterator in-order *)
+  let values m = to_iter m |> Iter.map snd
+
+  (** Values iterator out-of-order *)
+  let values_nondet { values } = M.values values
+
   (** Re-orders keys using a comparison function on keys. *)
   let sort_by_keys compar { order; values } =
     let order = order |> FQ.to_list |> List.sort compar |> FQ.of_list in
@@ -142,7 +174,7 @@ module Make (K : Mtypes.ORD_TYPE) = struct
 
   (** Re-orders keys using a comparison function on `(key, value)`. *)
   let sort (compar : (K.t * 'a) Ord.t) { order; values } =
-    let cmp = Ord.opp (Ord.map (fun k -> (k, M.find k values)) compar) in
+    let cmp = Ord.map (fun k -> (k, M.find k values)) compar in
     let order = order |> FQ.to_list |> List.sort cmp |> FQ.of_list in
     { order; values }
 end
