@@ -27,6 +27,7 @@ buildDunePackage {
   propagatedBuildInputs = [ capstone ];
 
   outputs = [ "out" ];
+  doCheck = false; # missing (package) declarations in dune files
 
   meta = {
     homepage = "https://github.com/agle/bincaml";
