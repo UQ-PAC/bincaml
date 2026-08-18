@@ -1,17 +1,6 @@
 {
-  nixConfig.extra-substituters = [ "https://pac-nix.cachix.org/" ];
-  nixConfig.extra-trusted-public-keys = [
-    "pac-nix.cachix.org-1:l29Pc2zYR5yZyfSzk1v17uEZkhEw0gI4cXuOIsxIGpc="
-  ];
-
   inputs = {
-    self.submodules = true;
-
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-
-    pac-nix.url = "github:katrinafyi/pac-nix";
-    # WARNING: this follows won't work because it causes bnfc build failure
-    # pac-nix.inputs.nixpkgs.follows = "nixpkgs";
 
     infuse-src.url = "https://codeberg.org/awarina/infuse.nix/archive/trunk.tar.gz";
     infuse-src.flake = false;
@@ -21,7 +10,6 @@
       self,
       infuse-src,
       nixpkgs,
-      pac-nix,
     }@args:
     let
       inherit (nixpkgs) lib;
@@ -42,7 +30,11 @@
     in
     flake-for-all-systems args {
       overlays = {
-        addBincamlPackages = ofinal: _: {
+        addPackages = final: _: {
+          bnfc-treesitter = final.callPackage ./nix/bnfc-treesitter.nix { };
+        };
+
+        addOcamlPackages = ofinal: _: {
           buildDune324Package = ofinal.buildDunePackage.override {
             dune_3 = ofinal.dune_3_24;
           };
@@ -101,37 +93,48 @@
           self,
           system,
           nixpkgs,
-          pac-nix,
           ...
         }:
         let
-          pkgs = nixpkgs.legacyPackages;
+          pkgs = import nixpkgs {
+            system = system;
+            overlays = [ self.overlays.addPackages ];
+          };
+
           ocamlPackages = pkgs.ocamlPackages.overrideScope (
             _: _: {
               z3-bin = pkgs.z3;
-              inherit (pac-nix.legacyPackages) bnfc-treesitter;
             }
           );
-          selfOcamlPackages = ocamlPackages.overrideScope self.overlays.addBincamlPackages;
-          fpOcamlPackages = selfOcamlPackages.overrideScope self.overlays.enableOcamlFramePointer;
+          selfOcamlPackages = ocamlPackages.overrideScope self.overlays.addOcamlPackages;
+          fpOcamlPackages = selfOcamlPackages.overrideScope self.overlays.addOcamlPackages;
         in
         {
           defaultPackage = selfOcamlPackages.bincaml;
 
+          packages = {
+            inherit (selfOcamlPackages)
+              bincaml
+              bincaml_lsp
+              aslp_lifter_ocaml
+              capstone_arm64_disas
+              intPQueue
+              hector
+              kittyimg
+              stb_image
+              containers
+              dune_3_24
+              ;
+
+            bnfc-treesitter = pkgs.bnfc-treesitter;
+
+            ci = self.devShells.ci;
+          };
+
           legacyPackages = {
             ocamlPackages = selfOcamlPackages;
             bincamlDocs = selfOcamlPackages.bincamlDocs;
-
-            bincaml = selfOcamlPackages.bincaml;
-            bincaml_lsp = selfOcamlPackages.bincaml_lsp;
-            aslp_lifter_ocaml = selfOcamlPackages.aslp_lifter_ocaml;
-            capstone_arm64_disas = selfOcamlPackages.capstone_arm64_disas;
-            intPQueue = selfOcamlPackages.intPQueue;
-            hector = selfOcamlPackages.hector;
-            kittyimg = selfOcamlPackages.kittyimg;
-            stb_image = selfOcamlPackages.stb_image;
-            containers = selfOcamlPackages.containers;
-            dune_3_24 = selfOcamlPackages.dune_3_24;
+            pkgs = pkgs;
 
             fp.bincaml = fpOcamlPackages.bincaml;
             fp.bincaml_lsp = fpOcamlPackages.bincaml_lsp;
