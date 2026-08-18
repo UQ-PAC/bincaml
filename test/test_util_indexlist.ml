@@ -111,5 +111,6 @@ open Containers
 let%expect_test "invalid from list" =
   match CCResult.guard_str (fun () -> M.of_list [ (1, 31); (1, 32) ]) with
   | Ok _ -> print_endline "ok"
-  | Error e -> print_endline e;
-  [%expect {| Invalid_argument("of_iter: had duplicated keys") |}]
+  | Error e ->
+      print_endline e;
+      [%expect {| Invalid_argument("of_iter: had duplicated keys") |}]
