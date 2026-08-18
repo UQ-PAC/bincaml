@@ -17,8 +17,12 @@ open struct
 end
 
 module Make (K : Mtypes.ORD_TYPE) = struct
-  module S = Set.Make (K)
-  module M = Map.Make (K)
+  open struct
+    module S = Set.Make (K)
+    module M = Map.Make (K)
+  end
+
+  (** {2 Basics} *)
 
   type 'a t = { order : K.t FQ.t; values : 'a M.t }
   (** invariant : \forall x . x \in order == x \in M.keys values
@@ -30,9 +34,10 @@ module Make (K : Mtypes.ORD_TYPE) = struct
   let cardinal m = M.cardinal m.values
   let length m = cardinal m
 
+  (** {2 Inserting, updating, and removing} *)
+
   (** [append k v m] replaces [k -> v] in m, in-place if it is already defined.
-      Otherwise it is appended. This operation is the fastest insertion
-      operation (O(1)). *)
+      Otherwise it is appended. This operation is fast (O(1)). *)
   let append k v { order; values } =
     if M.mem k values then { order; values = M.add k v values }
     else { order = FQ.snoc order k; values = M.add k v values }
@@ -112,6 +117,17 @@ module Make (K : Mtypes.ORD_TYPE) = struct
        in [news] will use their first (leftmost) position rather than rightmost. *)
     insert_list_before ~before:(fun _ _ -> true) news m
 
+  let remove k { order; values } =
+    let values' = M.remove k values in
+    let order =
+      if not (Equal.physical values' values) then
+        order |> FQ.to_iter |> Iter.filter (not % K.equal k) |> FQ.of_iter
+      else order
+    in
+    { order; values = values' }
+
+  (** {2 Lookup (by key)} *)
+
   (** Lookup key, throwing [Not_found] if it does not exist. *)
   let find k { values } = M.find k values
 
@@ -124,28 +140,14 @@ module Make (K : Mtypes.ORD_TYPE) = struct
   (** Lookup key, throwing [Not_found] if it does not exist *)
   let get_exn k { values } = M.find k values
 
-  (** Out-of-order map *)
-  let map f { order; values } = { order; values = M.map f values }
-
-  (** In-order map with both positional index and key *)
-  let mapi f m =
-    to_iter m |> Iter.mapi (fun ind (k, v) -> (k, f ind k v)) |> of_iter
-
-  let remove k { order; values } =
-    let values' = M.remove k values in
-    let order =
-      if not (Equal.physical values' values) then
-        order |> FQ.to_iter |> Iter.filter (not % K.equal k) |> FQ.of_iter
-      else order
-    in
-    { order; values = values' }
-
   let update k f m =
     match f (find k m) with
     | Some new_val -> add k new_val m
     | None -> remove k m
 
-  (** Builds a {!t} from the given pairs. Repeated pairs use the order of the
+  (** {2 Conversions and iterators} *)
+
+  (** Builds a {!t} from the given pairs. Repeated keys use the order of the
       first occurence and the value of the last occurence. *)
   let of_iter m = Iter.fold (fun m (k, v) -> append k v m) empty m
 
@@ -167,14 +169,26 @@ module Make (K : Mtypes.ORD_TYPE) = struct
   (** Values iterator out-of-order *)
   let values_nondet { values } = M.values values
 
+  (** {2 Mapping and sorting} *)
+
+  (** Out-of-order map *)
+  let map f { order; values } = { order; values = M.map f values }
+
+  (** In-order map with both positional index and key *)
+  let mapi f m =
+    to_iter m |> Iter.mapi (fun i (k, v) -> (k, f i k v)) |> of_iter
+
   (** Re-orders keys using a comparison function on keys. *)
   let sort_by_keys compar { order; values } =
     let order = order |> FQ.to_list |> List.sort compar |> FQ.of_list in
     { order; values }
 
-  (** Re-orders keys using a comparison function on `(key, value)`. *)
-  let sort (compar : (K.t * 'a) Ord.t) { order; values } =
-    let cmp = Ord.map (fun k -> (k, M.find k values)) compar in
-    let order = order |> FQ.to_list |> List.sort cmp |> FQ.of_list in
+  (** Re-orders keys using a comparison function on [(key, value)]. *)
+  let sort (cmp : (K.t * 'a) Ord.t) { order; values } =
+    let order =
+      order |> FQ.to_list
+      |> List.map (fun k -> (k, M.find k values))
+      |> List.sort cmp |> List.map fst |> FQ.of_list
+    in
     { order; values }
 end
