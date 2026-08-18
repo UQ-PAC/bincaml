@@ -20,6 +20,7 @@ module Make (K : Mtypes.ORD_TYPE) = struct
   open struct
     module S = Set.Make (K)
     module M = Map.Make (K)
+
     let pp_k = Format.of_to_string K.show
   end
 
@@ -106,7 +107,7 @@ module Make (K : Mtypes.ORD_TYPE) = struct
     in
 
     let before, after =
-      FQ.take_front_while (fun k -> before k (M.find k values)) order
+      FQ.take_front_while (fun k -> not (before k (M.find k values))) order
     in
     let order = FQ.cons_l before (FQ.cons_l new_keys after) in
     { order; values = M.add_list values news }
@@ -146,7 +147,7 @@ module Make (K : Mtypes.ORD_TYPE) = struct
   let get_exn k { values } = M.find k values
 
   let update k f m =
-    match f (find k m) with
+    match f (find_opt k m) with
     | Some new_val -> add k new_val m
     | None -> remove k m
 
