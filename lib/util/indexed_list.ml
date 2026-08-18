@@ -20,11 +20,16 @@ module Make (K : Mtypes.ORD_TYPE) = struct
   open struct
     module S = Set.Make (K)
     module M = Map.Make (K)
+    let pp_k = Format.of_to_string K.show
   end
 
   (** {2 Basics} *)
 
-  type 'a t = { order : K.t FQ.t; values : 'a M.t }
+  type 'a t = {
+    order : K.t FQ.t; [@printer FQ.pp pp_k]
+    values : 'a M.t; [@polyprinter M.pp pp_k]
+  }
+  [@@deriving show]
   (** invariant : \forall x . x \in order == x \in M.keys values
 
       [order] must be a permutation of the keys of [values]. *)
