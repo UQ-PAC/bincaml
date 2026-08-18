@@ -71,7 +71,6 @@ mkShell {
       done
     fi
   '' + lib.optionalString isShellForCI ''
-    opam init --bare --disable-sandboxing $(mktemp -d) --quiet --no
-    export OPAMCOLOR=never
+    opam init --bare --disable-sandboxing $(mktemp -d) --quiet --no --no-setup
   '';
 }
