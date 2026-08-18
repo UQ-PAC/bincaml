@@ -73,30 +73,6 @@ let stmt_of_aarch64_intrin ?error :
   let args = Expr.BasilExpr.[ bvconst opcode; bvconst address ] in
   Stmt.Instr_IntrinCall { attrib; lhs = []; name = Aarch64Eval; args }
 
-(** Returns the Bincaml global variable representing heap memory, declaring it
-    if it does not exist. *)
-let aarch64_mem_of_prog prog =
-  let mem_name = "$mem" in
-  let mem_type = Types.(Map (Bitvector 64, Bitvector 8)) in
-  Program.get_decl_by_name "$mem" prog |> function
-  | Some (Variable { binding }) ->
-      if not (Types.equal (Var.typ binding) mem_type) then
-        Logs.warn (fun m ->
-            m
-              "Memory declared with unexpected type; lifter may not produce \
-               well-typed or correct code.");
-      (prog, binding)
-  | None ->
-      let mem = Var.create mem_name ~scope:Var.GlobalVarShared mem_type in
-
-      let prog =
-        let attrib = Attrib.empty and classification = None in
-        Program.add_decl prog
-          (Program.Variable { binding = mem; attrib; classification })
-      in
-      (prog, mem)
-  | _ -> failwith @@ mem_name ^ " already declared as non-variable"
-
 (** {1 Main Bincaml IR transformation functions} *)
 
 (** Inserts one {!Aslp_state.aslp_diamond} into the given procedure, including
@@ -159,40 +135,43 @@ let transform_block (module I : Bincaml_ibi.IBI) ~proc bid =
 
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all blocks
     within the given procedure. *)
-let transform_procedure ~memory proc =
-  let memory = Fun.const memory in
-  let module I = (val Bincaml_ibi.from_bincaml_procedure ~memory proc) in
+let transform_procedure proc =
+  let module I = (val Bincaml_ibi.from_bincaml_procedure proc) in
   Procedure.iter_blocks proc
   |> Iter.fold (fun proc (bid, _) -> transform_block (module I) ~proc bid) proc
 
 (** Adds architectural variable declarations to the given program. By default,
     includes only those variables which are used. *)
-let add_aarch64_global_declarations ?(add_all = false) prog =
-  let include_var =
-    if add_all then Fun.const true
+let add_aarch64_global_declarations ?(include_unused = false) prog =
+  let include_predicate =
+    if include_unused then Fun.const true
     else
       Fun.flip VarSet.mem
-        (Program.referenced_vars_of_prog prog |> Iter.to_set (module VarSet))
+        (Program.referenced_vars_of_prog prog |> VarSet.of_iter)
   in
 
-  Lazy.force Aslp_lexpr.global_vars
-  |> List.to_iter |> Iter.filter include_var
+  Lazy.force Aslp_lexpr.globals
+  |> List.to_iter
+  |> Iter.filter (Aslp_lexpr.to_var %> include_predicate)
+  |> Iter.map (Fun.tap (Aslp_lexpr.check_decl_type prog))
+  |> Iter.rev
   |> Iter.fold
-       (fun prog var ->
+       (fun prog v ->
+         let binding = Aslp_lexpr.to_var v in
          let attrib = Attrib.empty and classification = None in
-         Program.add_decl prog
-           (Program.Variable { binding = var; attrib; classification }))
+         Program.add_decl ~at:`Prepend prog
+           (Program.Variable { binding; attrib; classification }))
        prog
 
 (** Transforms the {!Lang.Stmt.Intrinsic.Aarch64Eval} intrinsics of all
     procedures within the given program.
 
-    Also inserts global variable declarations for the architectural variables,
-    if not already present. *)
+    Inserts global variable declarations for the architectural variables and
+    memory, if used and not already present. Finally, re-computes the "modifies"
+    sets of the procedures. *)
 let transform_program prog =
-  let prog, memory = aarch64_mem_of_prog prog in
   prog
-  |> Program.map_procedures (fun _ -> transform_procedure ~memory)
+  |> Program.map_procedures (fun _ -> transform_procedure)
   |> add_aarch64_global_declarations
   |> Spec_modifies.set_modsets ~add_only:false
 
