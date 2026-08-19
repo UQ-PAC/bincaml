@@ -1,0 +1,8 @@
+#!/bin/bash -e
+set -e
+make _build/nix-vars.sh
+
+export PATH=
+. _build/nix-vars.sh 
+
+exec "$@"

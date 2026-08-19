@@ -1,8 +1,6 @@
 {
   inputs = {
-    self.submodules = true;
 
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
 
     pac-nix.url = "github:katrinafyi/pac-nix";
     # WARNING: this follows won't work because it causes bnfc build failure
