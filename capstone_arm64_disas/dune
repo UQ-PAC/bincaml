@@ -2,10 +2,12 @@
  (target includes.gen)
  (enabled_if
   (= %{system} "macosx"))
+ (deps capst.c)
  (action
   (with-stdout-to
    includes.gen
-   (system "sh -c \"printf \\\"%s/include\\\" $(brew --prefix)\""))))
+   (system
+    "if cc -E capst.c >/dev/null; then echo '()'; else echo $(brew --prefix)/include; fi"))))
 
 (rule
  (target includes.gen)
