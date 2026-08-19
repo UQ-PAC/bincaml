@@ -6,6 +6,7 @@
   capstone,
 
   # ocaml packages
+  ocaml
 
   # test:
 
@@ -22,7 +23,7 @@ buildDunePackage {
 
   checkInputs = [ ];
   nativeBuildInputs = [ writableTmpDirAsHomeHook ];
-  buildInputs = [ ];
+  buildInputs = [ ocaml ];
   propagatedBuildInputs = [ capstone ];
 
   doCheck = false;
