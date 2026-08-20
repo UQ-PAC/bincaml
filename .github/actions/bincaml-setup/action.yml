@@ -42,6 +42,7 @@ runs:
       shell: bash
 
     - run: opam "clean" "--all-switches" "--download-cache" "--logs" "--repo-cache" "--untracked" "--unused-repositories"
+      shell: bash
 
     - if: !cancelled() && steps.cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v5
