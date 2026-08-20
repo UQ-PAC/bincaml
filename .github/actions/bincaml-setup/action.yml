@@ -23,13 +23,12 @@ runs:
     - id: cache
       uses: actions/cache/restore@v5
       with:
-        key: &key
-          bincaml-opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-${{ steps.month.outputs.month }}
+        key: bincaml-opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-${{ steps.month.outputs.month }}
         restore-keys: |
           bincaml-opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-
           bincaml-opam-${{ runner.os }}-
         # exclude opam compiler paths which are cached by setup-ocaml
-        path: &path |
+        path: |
           _opam
           !_opam/bin/ocaml*
           !_opam/lib/ocaml
@@ -43,10 +42,13 @@ runs:
       shell: bash
 
     - run: opam "clean" "--all-switches" "--download-cache" "--logs" "--repo-cache" "--untracked" "--unused-repositories"
-      shell: bash
 
     - if: !cancelled() && steps.cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v5
       with:
-        key: *key
-        path: *path
+        key: bincaml-opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-${{ steps.month.outputs.month }}
+        path: |
+          _opam
+          !_opam/bin/ocaml*
+          !_opam/lib/ocaml
+          _opam/lib/ocamlformat*
