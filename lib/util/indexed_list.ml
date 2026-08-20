@@ -122,16 +122,30 @@ module Make (K : Mtypes.ORD_TYPE) = struct
        in [news] will use their first (leftmost) position rather than rightmost. *)
     insert_list_before ~before:(fun _ _ -> true) news m
 
-  let remove k { order; values } =
-    let values' = M.remove k values in
-    let order =
-      if not (Equal.physical values' values) then
-        order |> FQ.to_iter |> Iter.filter (not % K.equal k) |> FQ.of_iter
-      else order
-    in
-    { order; values = values' }
-
   (** {2 Lookup (by key)} *)
+
+  (** Updates the given key using the given update function with type
+      ['a option -> 'a option].
+
+      The key is modified in-place if it is already defined. Otherwise, it is
+      appended. *)
+  let update k f { order; values } =
+    let remove_key q k =
+      FQ.to_iter q |> Iter.filter (not % K.equal k) |> FQ.of_iter
+    in
+    let order = ref order in
+    (* using a single M.update avoids repeating map operations. *)
+    let values =
+      values
+      |> M.update k (fun v ->
+          let v' = f v in
+          (match (v, v') with
+          | Some _, None -> order := remove_key !order k
+          | None, Some v' -> order := FQ.snoc !order k
+          | _ -> ());
+          v')
+    in
+    { order = !order; values }
 
   (** Lookup key, throwing [Not_found] if it does not exist. *)
   let find k { values } = M.find k values
@@ -145,10 +159,7 @@ module Make (K : Mtypes.ORD_TYPE) = struct
   (** Lookup key, throwing [Not_found] if it does not exist *)
   let get_exn k { values } = M.find k values
 
-  let update k f m =
-    match f (find_opt k m) with
-    | Some new_val -> add k new_val m
-    | None -> remove k m
+  let remove k m = update k (Fun.const None) m
 
   (** {2 Conversions and iterators} *)
 
@@ -189,15 +200,12 @@ module Make (K : Mtypes.ORD_TYPE) = struct
   let map f { order; values } = { order; values = M.map f values }
 
   (** In-order map with both positional index and key *)
-  let mapi f { order; values } =
+  let mapi f m =
     let f i k : _ option -> _ option = function
       | Some v -> Some (f i k v)
       | None -> failwith "invariant violation: key in order but not values"
     in
-    let values =
-      FQ.to_iter order |> Iter.foldi (fun m i k -> M.update k (f i k) m) values
-    in
-    { order; values }
+    FQ.to_iter m.order |> Iter.foldi (fun m i k -> update k (f i k) m) m
 
   (** Re-orders keys using a comparison function on keys. *)
   let sort_by_keys compar { order; values } =
