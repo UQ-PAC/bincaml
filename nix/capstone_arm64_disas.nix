@@ -6,14 +6,6 @@
   capstone,
 
   # ocaml packages
-  logs,
-  fmt,
-  iter,
-  linol,
-  linol-lwt,
-  containers,
-  ppx_deriving,
-  ppx_expect,
 
   # test:
 
@@ -30,16 +22,7 @@ buildDunePackage {
 
   checkInputs = [ ];
   nativeBuildInputs = [ writableTmpDirAsHomeHook ];
-  buildInputs = [
-    logs
-    fmt
-    iter
-    linol
-    linol-lwt
-    containers
-    ppx_deriving
-    ppx_expect
-  ];
+  buildInputs = [ ];
   propagatedBuildInputs = [ capstone ];
 
   doCheck = false;
