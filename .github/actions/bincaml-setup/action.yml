@@ -16,9 +16,6 @@ runs:
         opam option --global 'archive-mirrors+="https://opam.ocaml.org/cache"'
       shell: bash
 
-    - run: ls -laR _opam
-      shell: bash
-
     - id: month
       run: python3 -c 'from datetime import *; print(datetime.now().strftime("month=%m"))' >> "$GITHUB_OUTPUT"
       shell: bash
@@ -26,12 +23,13 @@ runs:
     - id: cache
       uses: actions/cache/restore@v5
       with:
-        key: bincaml-opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-${{ steps.month.outputs.month }}
+        key: &key
+          bincaml-opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-${{ steps.month.outputs.month }}
         restore-keys: |
           bincaml-opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-
           bincaml-opam-${{ runner.os }}-
         # exclude opam compiler paths which are cached by setup-ocaml
-        path: |
+        path: &path |
           _opam
           !_opam/bin/ocaml*
           !_opam/lib/ocaml
@@ -39,21 +37,16 @@ runs:
 
     - run: opam reinstall
       shell: bash
-    - run: opam install ocamlformat odoc-driver opam-dune-lint
+    - run: opam install dune ocamlformat odoc-driver
       shell: bash
     - run: opam install ./*.opam --deps-only --with-test --with-doc
       shell: bash
 
-    - run: ls -laR _opam
+    - run: opam "clean" "--all-switches" "--download-cache" "--logs" "--repo-cache" "--untracked" "--unused-repositories"
       shell: bash
 
-    - if: always() && steps.cache.outputs.cache-hit != 'true'
+    - if: !cancelled() && steps.cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v5
       with:
-        key: bincaml-opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-${{ steps.month.outputs.month }}
-        path: |
-          _opam
-          !_opam/bin/ocaml*
-          !_opam/lib/ocaml
-          _opam/lib/ocamlformat*
-
+        key: *key
+        path: *path
