@@ -19,12 +19,15 @@
 (library
  (public_name capstone_arm64_disas)
  (name capstone)
+ (modules capstone)
  (foreign_stubs
   (language c)
   (include_dirs
    (include includes.gen))
   (names capst))
- (c_library_flags -lcapstone)
- (inline_tests)
- (preprocess
-  (pps ppx_expect)))
+ (c_library_flags -lcapstone))
+
+(test
+ (name test_capstone)
+ (modules test_capstone)
+ (libraries capstone))
