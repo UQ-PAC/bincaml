@@ -36,9 +36,9 @@ runs:
 
     - run: opam reinstall
       shell: bash
-    - run: opam install dune ocamlformat odoc-driver
-      shell: bash
     - run: opam install ./*.opam --deps-only --with-test --with-doc
+      shell: bash
+    - run: opam install dune ocamlformat odoc-driver
       shell: bash
 
     - run: opam "clean" "--all-switches" "--download-cache" "--logs" "--repo-cache" "--untracked" "--unused-repositories"
@@ -54,3 +54,6 @@ runs:
           !_opam/bin/ocaml*
           !_opam/lib/ocaml
           _opam/lib/ocamlformat*
+
+    - run: opam env --shell=sh | cut -d';' -f1 | tr -d "'" | tee -a "$GITHUB_ENV"
+      shell: bash
