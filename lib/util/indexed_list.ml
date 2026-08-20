@@ -37,8 +37,7 @@ module Make (K : Mtypes.ORD_TYPE) = struct
 
   let empty = { order = FQ.empty; values = M.empty }
   let singleton k v = { order = FQ.singleton k; values = M.singleton k v }
-  let cardinal m = M.cardinal m.values
-  let length m = cardinal m
+  let size m = FQ.size m.order
 
   (** {2 Inserting, updating, and removing} *)
 
@@ -163,7 +162,7 @@ module Make (K : Mtypes.ORD_TYPE) = struct
           append k v m)
         empty m
     in
-    if !n <> length m then invalid_arg "of_iter: had duplicated keys";
+    if !n <> size m then invalid_arg "of_iter: had duplicated keys";
     m
 
   let of_list m = List.to_iter m |> of_iter
@@ -190,8 +189,15 @@ module Make (K : Mtypes.ORD_TYPE) = struct
   let map f { order; values } = { order; values = M.map f values }
 
   (** In-order map with both positional index and key *)
-  let mapi f m =
-    to_iter m |> Iter.mapi (fun i (k, v) -> (k, f i k v)) |> of_iter
+  let mapi f { order; values } =
+    let f i k : _ option -> _ option = function
+      | Some v -> Some (f i k v)
+      | None -> failwith "invariant violation: key in order but not values"
+    in
+    let values =
+      FQ.to_iter order |> Iter.foldi (fun m i k -> M.update k (f i k) m) values
+    in
+    { order; values }
 
   (** Re-orders keys using a comparison function on keys. *)
   let sort_by_keys compar { order; values } =
