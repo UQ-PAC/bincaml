@@ -124,7 +124,5 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          submodules: true
 
       - uses: ocaml/setup-ocaml@v3
