@@ -117,3 +117,14 @@ jobs:
     - run: nix develop .#no-fp
       name: Test Nix dev shell
 
+  opam:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    needs: [ ]
+
+    steps: &opam-steps
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - uses: ocaml/setup-ocaml@v3
