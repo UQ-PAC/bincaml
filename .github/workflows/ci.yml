@@ -1,0 +1,107 @@
+name: ci
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions: read-all
+
+env:
+  OPAMCONFIRMLEVEL: unsafe-yes
+
+jobs:
+
+  format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+      - uses: ./.github/actions/bincaml-setup
+        with:
+          ocaml-compiler: "5.4"
+
+      - run: opam lint
+        if: "!cancelled()"
+      - run: dune build @fmt --display=quiet
+        if: "!cancelled()"
+      - run: dune build '@treesit'
+        if: "!cancelled()"
+
+  test:
+    strategy:
+      matrix:
+        include:
+          - { v: "5.3", os: ubuntu }
+          - { v: "5.4", os: ubuntu }
+          - { v: "5.4", os: macos }
+      fail-fast: false
+    timeout-minutes: 20
+    runs-on: ${{ matrix.os }}-latest
+
+    env:
+      dune_args: ${{ matrix.os == 'macos' && '--ignore-promoted-rules' || '' }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+      - uses: ./.github/actions/bincaml-setup
+        with:
+          ocaml-compiler: ${{ matrix.v }}
+
+      - run: |
+          if command -v brew; then echo LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix)/lib" >> "$GITHUB_ENV"; fi
+
+      - run: opam exec -- dune build $dune_args --profile=release
+        if: "!cancelled()"
+      - run: opam exec -- dune runtest $dune_args --force
+        if: "!cancelled()"
+
+  nix-docs-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: nixbuild/nix-quick-install-action@v35
+      - uses: nix-community/cache-nix-action@v7
+        with: *nix-cache
+
+      - run: ./in-nix echo "Preparing Nix shell"
+
+      - run: nix build .#bincamlDocs.docs -L
+        shell: bash
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: result/.
+
+  docs-deploy:
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
+
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' }}
+
+    needs: docs-build
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    permissions:
+      id-token: write
+      pages: write
+
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

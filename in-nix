@@ -1,0 +1,13 @@
+#!/bin/bash -e
+
+# Helper script to run the given command in the Nix CI shell.
+
+if [[ -n "$GITHUB_WORKSPACE" ]]; then
+  # In Github Actions only, formally build the shell so it can be cached.
+  nix build --accept-flake-config --impure --expr \
+    "(builtins.getFlake \"git+file:$GITHUB_WORKSPACE\")"'.devShells.${builtins.currentSystem}.ci' -o shell
+fi
+
+# FUTURE: try to "export" this shell somehow, so it doesn't need to go through `nix`.
+exec nix --accept-flake-config develop .#ci -i -k CI --command "$@"
+
