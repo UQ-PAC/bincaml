@@ -798,30 +798,24 @@ module Construction = struct
     g
 
   let rename_vars ?(skipping = Skip.empty) (procedure : Program.proc)
-      (g : RevG.t) tree idoms =
+      (g : RevG.t) tree doms =
+
     (* Apply f to vertices in preorder dfs traversal of dominator tree. *)
     let rec traversal update_block update_succ dom_tree ((g, fl) : G.t * FL.t)
         (vert : Vert.t) =
       if FL.mem vert fl then (g, fl)
       else
         let fl = FL.add vert fl in
-        print_endline (Vert.show vert);
-        dom_tree vert |> List.to_iter |> flip Iter.for_each (fun v -> print_endline ("\t" ^ Vert.show v));
         let g =
           match vert with
           | Begin id ->
-              (* print_endline "---"; *)
-              (* print_endline (Vert.show vert); *)
               (* Updating the block. First need to get the edge: *)
               modify_block g id (update_block vert)
           | End id ->
-              (* print_endline "---"; *)
-              (* print_endline (Vert.show vert); *)
               (* Updating successor blocks: *)
               G.succ g vert
               |> List.fold_left
                    (fun g succ ->
-                     (* print_endline (Vert.show succ); *)
                      match succ with
                      | Vert.Begin succ_id ->
                          modify_block g succ_id (update_succ succ_id id)
@@ -841,7 +835,7 @@ module Construction = struct
       let cond =
         r
         |> Option.flat_map (fun rv ->
-            VarMap.get rv defs |> Option.map (fun d -> idoms d vert))
+            VarMap.get rv defs |> Option.map (fun d -> doms d vert))
         |> Option.get_or ~default:true
       in
 
@@ -932,7 +926,7 @@ module Construction = struct
                  phi.rhs
                  |> List.map (function
                    | id, rvar when ID.equal par_id id ->
-                       (id, update_rvar (Begin succ_id) rvar)
+                       (par_id, update_rvar (Begin succ_id) rvar)
                    | o -> o)
                in
                { phi with rhs }))
@@ -956,7 +950,7 @@ module Construction = struct
     |> map_graph (fun g ->
         (* Dominator frontier per block: *)
         let idom = Dom.compute_idom g Entry in
-        let idoms = Dom.idom_to_idoms idom in
+        let doms = Dom.idom_to_dom idom in
         let tree = Dom.idom_to_dom_tree g idom in
         let dom_frontier = Dom.compute_dom_frontier g tree idom in
 
@@ -967,7 +961,7 @@ module Construction = struct
         let g = VarMap.to_iter defs |> Iter.fold (add_phis dom_frontier) g in
 
         (* Rename variables. *)
-        rename_vars ~skipping procedure g tree idoms)
+        rename_vars ~skipping procedure g tree doms)
 end
 
 let ssa_prog ?(skipping = Skip.empty) (program : Program.t) =
