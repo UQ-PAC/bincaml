@@ -112,13 +112,14 @@ module BVOps = struct
     | `ZeroExtend sz -> Bitvec.zero_extend ~extension:sz
     | `Extract (hi, lo) -> Bitvec.extract ~hi ~lo
 
-  type binary_pred = [ `EQ | `BVULT | `BVULE | `BVSLT | `BVSLE ]
+  type binary_pred = [ `NEQ | `EQ | `BVULT | `BVULE | `BVSLT | `BVSLE ]
   [@@deriving show { with_path = false }, eq, ord]
   (** ops with type bv -> bv -> bool *)
 
   let eval_binary_pred (op : [< binary_pred ]) =
     match op with
     | `EQ -> Bitvec.equal
+    | `NEQ -> fun a b -> not (Bitvec.equal a b)
     | `BVSLE -> Bitvec.sle
     | `BVULT -> Bitvec.ult
     | `BVULE -> Bitvec.ule
@@ -189,7 +190,7 @@ module IntOps = struct
   type binary_unif = [ `INTADD | `INTMUL | `INTSUB | `INTDIV | `INTMOD ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type binary_pred = [ `EQ | `INTLT | `INTLE ]
+  type binary_pred = [ `NEQ | `EQ | `INTLT | `INTLE ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let eval_binary_unif (op : binary_unif) =
@@ -201,7 +202,11 @@ module IntOps = struct
     | `INTSUB -> Z.sub
 
   let eval_binary_pred (op : binary_pred) =
-    match op with `EQ -> Z.equal | `INTLT -> Z.lt | `INTLE -> Z.leq
+    match op with
+    | `EQ -> Z.equal
+    | `NEQ -> fun a b -> not (Z.equal a b)
+    | `INTLT -> Z.lt
+    | `INTLE -> Z.leq
 
   type binary = [ binary_unif | binary_pred ]
   [@@deriving show { with_path = false }, eq, ord]

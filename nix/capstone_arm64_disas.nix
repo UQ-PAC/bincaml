@@ -5,15 +5,8 @@
   capstone,
 
   # ocaml packages
+  ocaml,
   bincaml,
-  logs,
-  fmt,
-  iter,
-  linol,
-  linol-lwt,
-  containers,
-  ppx_deriving,
-  ppx_expect,
 
   # test:
 
@@ -30,19 +23,11 @@ buildDunePackage {
 
   checkInputs = [ ];
   nativeBuildInputs = [ writableTmpDirAsHomeHook ];
-  buildInputs = [
-    logs
-    fmt
-    iter
-    linol
-    linol-lwt
-    containers
-    ppx_deriving
-    ppx_expect
-  ];
+  buildInputs = [ ocaml ];
   propagatedBuildInputs = [ capstone ];
 
   outputs = [ "out" ];
+  doCheck = false; # missing (package) declarations in dune files
 
   meta = {
     homepage = "https://github.com/agle/bincaml";
