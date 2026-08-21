@@ -11,9 +11,12 @@ on:
 permissions: read-all
 
 jobs:
-
   nix:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ ubuntu, macos ]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}-latest
     steps:
       - uses: actions/checkout@v5
         with:
