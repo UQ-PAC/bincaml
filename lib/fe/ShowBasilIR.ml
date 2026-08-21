@@ -411,6 +411,7 @@ and showIntrinOp (e : AbsBasilIR.intrinOp) : showable = match e with
   |    AbsBasilIR.IntrinOp_bvconcat  -> s2s "IntrinOp_bvconcat"
   |    AbsBasilIR.IntrinOp_bvmul  -> s2s "IntrinOp_bvmul"
   |    AbsBasilIR.IntrinOp_update  -> s2s "IntrinOp_update"
+  |    AbsBasilIR.IntrinOp_ite  -> s2s "IntrinOp_ite"
 
 
 and showPointerBinOp (e : AbsBasilIR.pointerBinOp) : showable = match e with
