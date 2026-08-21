@@ -1,5 +1,6 @@
 {
   lib,
+  makeWrapper,
   buildDunePackage,
 
   odoc,
@@ -23,7 +24,10 @@ buildDunePackage {
   pname = "odoc-driver";
   inherit (odoc) version src;
 
-  nativeBuildInputs = [ sherlodoc ];
+  nativeBuildInputs = [
+    sherlodoc
+    makeWrapper
+  ];
   buildInputs = [
     odoc
     odoc-md
@@ -51,6 +55,10 @@ buildDunePackage {
   nativeCheckInputs = [ ];
   checkInputs = [ ];
   doCheck = true;
+
+  postInstall = ''
+    wrapProgram $out/bin/odoc_driver --prefix PATH : ${lib.makeBinPath [ odoc sherlodoc ]}
+  '';
 
   meta = {
     description = "OCaml Documentation Generator - Driver";

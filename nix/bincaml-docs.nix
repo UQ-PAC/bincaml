@@ -9,6 +9,28 @@ lib.makeScope newScope (
     callPackage = self.callPackage;
   in
   {
+    blah = callPackage (
+      { dune, buildDunePackage }:
+      buildDunePackage {
+        pname = "blah";
+        version = "0.0";
+        src = dune.src;
+
+        preBuild = ''
+          rm -rf dune-project
+          cd test/blackbox-tests/test-cases/include-qualified/basic.t
+
+          dune describe
+
+          echo '
+          (name blah)
+          (package (name blah))
+          ' >> dune-project
+          substituteInPlace lib/dune --replace-fail 'library' 'library (public_name blah.foolib)'
+        '';
+      }
+    ) { };
+
     /**
       Usually, `odoc_driver` uses opam to discover packages, but we don't have
       a real opam switch in Nix. Fortunately, `odoc_driver` also has the ability
@@ -26,6 +48,7 @@ lib.makeScope newScope (
         bincaml_lsp,
         yojson_2,
         bos,
+        blah,
       }:
       (buildEnv {
         name = "fake-dune-prefix-for-odoc";
@@ -97,8 +120,6 @@ lib.makeScope newScope (
         fake_dune_prefix,
         ocaml,
         findlib,
-        odoc_3_2, # FIXME: use a wrapper instead of `odoc` on path
-        sherlodoc,
         odoc-driver,
       }:
       stdenvNoCC.mkDerivation {
@@ -110,9 +131,7 @@ lib.makeScope newScope (
         nativeBuildInputs = [
           ocaml
           findlib
-          odoc_3_2
           odoc-driver
-          sherlodoc
           fake_opam
           fake_dune_prefix
         ];
@@ -124,6 +143,7 @@ lib.makeScope newScope (
 
         buildPhase = ''
           source activate_fake_dune_prefix.sh
+          export OCAMLRUNPARAM=b
           odoc_driver \
             --html-dir=$out \
             --mld-dir=$dev --odoc-dir=$dev --odocl-dir=$dev \
@@ -140,6 +160,69 @@ lib.makeScope newScope (
             echo "stdlib index.html missing. stdlib links are probably broken."
             exit 1
           }
+        '';
+      }
+    ) { };
+
+    db = callPackage (
+      {
+        stdenvNoCC,
+        sherlodoc,
+        writeText,
+        src,
+      }:
+      stdenvNoCC.mkDerivation {
+        name = "bincaml-sherlodoc-db";
+
+        src = src;
+        doCheck = true;
+
+        nativeBuildInputs = [ sherlodoc ];
+
+        buildPhase = ''
+          mkdir -p $out/bin
+          export SHERLODOC_DB=$out/sherlodoc.marshal
+          for d in $src/*; do
+            if [[ -d $d ]]; then
+              found="$(find $d -name '*.odocl' -not -name '*__*' -not -name 'impl-*' -not -name page-index.odocl)"
+              if [[ -n "$found" ]]; then
+                printf "$(basename $d)\t%s\n" $found >> file-list
+              fi
+            fi
+          done
+
+          sherlodoc index --file-list file-list
+
+          cat <<EOF > $out/bin/activate_sherlodoc_db.sh
+          export SHERLODOC_DB=$SHERLODOC_DB
+          EOF
+          chmod +x $out/bin/*
+        '';
+
+        checkPhase = ''
+          echo "Testing sherlodoc search..."
+          sherlodoc search Format.formatter | grep 'type Stdlib.Format.formatter'
+        '';
+      }
+    ) { src = self.docs.dev; };
+
+    serve = callPackage (
+      {
+        sherlodoc,
+        docs,
+        writeShellApplication,
+        db,
+      }:
+      writeShellApplication {
+        name = "sherlodoc-serve-bincaml";
+        runtimeInputs = [
+          sherlodoc
+          db
+        ];
+        derivationArgs.checkPhase = "";
+        text = ''
+          source activate_sherlodoc_db.sh
+          exec sherlodoc serve "$@"
         '';
       }
     ) { };
