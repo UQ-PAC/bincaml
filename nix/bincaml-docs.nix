@@ -23,6 +23,7 @@ lib.makeScope newScope (
       {
         ocaml,
         buildEnv,
+        runCommand,
         bincaml_lsp,
         yojson_2,
         bos,
@@ -67,10 +68,8 @@ lib.makeScope newScope (
           _: prev: {
             # `linol` (and others?) depend on hardcoded `yojson_2` which leads
             # to both yojson 3 and 2 in the closure, which causes conflicts.
-            buildCommand = ''
-              grep -v ${yojson_2} $extraPathsFrom > without_yojson
-              extraPathsFrom=without_yojson
-              ${prev.buildCommand}
+            extraPathsFrom = runCommand "extraPathsFrom" { } ''
+              grep -v ${yojson_2} ${prev.extraPathsFrom} > $out
             '';
           }
         )
