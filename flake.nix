@@ -1,5 +1,7 @@
 {
   inputs = {
+    self.submodules = true;
+
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
 
     infuse-src.url = "https://codeberg.org/awarina/infuse.nix/archive/trunk.tar.gz";
