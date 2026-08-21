@@ -23,14 +23,13 @@ lib.makeScope newScope (
       {
         ocaml,
         buildEnv,
-        fmt,
+        bincaml_lsp,
         yojson_2,
         bos,
       }:
       (buildEnv {
         name = "fake-dune-prefix-for-odoc";
-        # TODO: change to bincaml and bincaml_lsp
-        paths = [ fmt ];
+        paths = [ bincaml_lsp ];
         includeClosures = true;
         ignoreCollisions = false;
         pathsToLink = [
@@ -98,7 +97,7 @@ lib.makeScope newScope (
         fake_dune_prefix,
         ocaml,
         findlib,
-        odoc,
+        odoc_3_2, # FIXME: use a wrapper instead of `odoc` on path
         sherlodoc,
         odoc-driver,
       }:
@@ -111,7 +110,7 @@ lib.makeScope newScope (
         nativeBuildInputs = [
           ocaml
           findlib
-          odoc
+          odoc_3_2
           odoc-driver
           sherlodoc
           fake_opam
