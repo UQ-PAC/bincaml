@@ -1,18 +1,21 @@
 (rule
  (target includes.gen)
  (enabled_if
-  (= %{system} "macosx"))
- (deps capst.c)
+  (and
+   (= %{system} "macosx")
+   %{bin-available:brew}))
  (action
   (with-stdout-to
    includes.gen
-   (system
-    "if cc -E capst.c >/dev/null; then echo '()'; else echo $(brew --prefix)/include; fi"))))
+   (bash "echo $(brew --prefix)/include"))))
 
 (rule
  (target includes.gen)
  (enabled_if
-  (<> %{system} "macosx"))
+  (not
+   (and
+    (= %{system} "macosx")
+    %{bin-available:brew})))
  (action
   (with-stdout-to
    includes.gen
