@@ -14,9 +14,9 @@ jobs:
   nix:
     strategy:
       matrix:
-        os: [ ubuntu, macos ]
+        os: [ ubuntu-26.04, macos-26 ]
       fail-fast: false
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -47,7 +47,7 @@ jobs:
         if: "!cancelled()"
 
   format:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
       - uses: actions/checkout@v6
@@ -71,7 +71,7 @@ jobs:
         include:
           - { v: "5.3", os: "ubuntu-26.04" }
           - { v: "5.4", os: "ubuntu-26.04" }
-          - { v: "5.4", os: "macos-latest" }
+          - { v: "5.4", os: "macos-26" }
       fail-fast: false
     timeout-minutes: 20
     runs-on: ${{ matrix.os }}
@@ -91,7 +91,7 @@ jobs:
         if: "!cancelled()"
 
   docs-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
       - uses: actions/checkout@v5
@@ -114,7 +114,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: false
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     if: ${{ github.ref == 'refs/heads/main' }}
 
     needs: docs-build
