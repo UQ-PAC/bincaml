@@ -708,6 +708,8 @@ module Skip = struct
 
   include Set.Make (S)
 
+  let full = empty |> add Observable |> add Map
+
   let skip (set : t) (v : Var.t) =
     (mem Observable set && Var.is_shared v)
     || (mem Map set && Var.typ v |> function Map _ -> true | _ -> false)
@@ -799,10 +801,11 @@ module Construction = struct
 
   let rename_vars ?(skipping = Skip.empty) (procedure : Program.proc)
       (g : RevG.t) tree doms =
-    (* Apply f to vertices in preorder dfs traversal of dominator tree. *)
+    let doms a b = doms a b || Vert.equal a b in
+
+    (* Map vertices in preorder dfs traversal of dominator tree. *)
     let rec traversal update_block update_succ dom_tree ((g, fl) : G.t * FL.t)
         (vert : Vert.t) =
-      print_endline (Vert.show vert);
       if FL.mem vert fl then (g, fl)
       else
         let fl = FL.add vert fl in
@@ -832,30 +835,13 @@ module Construction = struct
       let r = Option.or_ r ~else_:(VarMap.get var reaching_defs) in
       let r' = Option.flat_map (flip VarMap.get reaching_defs) r in
 
-      let n o =
-        o
-        |> Option.map (fun v ->
-            Printf.sprintf "%s(%s)" (Var.to_string v)
-              (VarMap.get v defs
-              |> Option.map Vert.block_id_string
-              |> Option.get_or ~default:"%_"))
-        |> Option.get_or ~default:"Bot"
-      in
-
-      let doms a b = doms a b || (Vert.equal a b) in
-
       if
         r
         |> Option.flat_map (flip VarMap.get defs %> Option.map (flip doms vert))
         |> Option.get_or ~default:true
         |> not
       then update_reaching_def ?r:r' defs reaching_defs var vert
-      else (
-        Printf.printf "\tUpdating reaching def %s.rd from %s -> %s\n"
-          (Var.to_string var)
-          (n @@ VarMap.get var reaching_defs)
-          (n r);
-        VarMap.update var (fun _ -> r) reaching_defs)
+      else VarMap.update var (fun _ -> r) reaching_defs
     in
 
     let fresh_name (v : Var.t) : Var.t =
@@ -868,15 +854,6 @@ module Construction = struct
     let reaching_defs : Var.t VarMap.t ref = ref VarMap.empty in
 
     let update_lvar vert lvar =
-      let n o =
-        o
-        |> Option.map (fun v ->
-            Printf.sprintf "%s(%s)" (Var.to_string v)
-              (VarMap.get v !defs
-              |> Option.map Vert.block_id_string
-              |> Option.get_or ~default:"%_"))
-        |> Option.get_or ~default:"Bot"
-      in
       (* Update reaching defs. *)
       reaching_defs := update_reaching_def !defs !reaching_defs lvar vert;
 
@@ -887,23 +864,12 @@ module Construction = struct
       defs := VarMap.add lvar' vert !defs;
 
       (* Set reaching def of lvar' to reaching def lvar *)
-      (* reaching_defs := *)
-      (* VarMap.update lvar' *)
-      (* (fun _ -> VarMap.get lvar !reaching_defs) *)
-      (* !reaching_defs; *)
       reaching_defs :=
         VarMap.add lvar'
           (VarMap.get lvar !reaching_defs |> Option.get_or ~default:lvar)
           !reaching_defs;
-        Printf.printf "\tSetting reaching def %s.rd to  %s\n"
-          (Var.to_string lvar')
-          (n @@ VarMap.get lvar' !reaching_defs);
 
       (* Set reaching def of lvar to lvar' *)
-        Printf.printf "\tUpdating reaching def %s.rd from %s -> %s\n"
-          (Var.to_string lvar)
-          (n @@ VarMap.get lvar !reaching_defs)
-          (Var.to_string lvar');
       reaching_defs := VarMap.add lvar lvar' !reaching_defs;
 
       lvar'
@@ -927,56 +893,36 @@ module Construction = struct
     in
 
     let update_block vert block =
-      print_endline "";
-      !reaching_defs |> VarMap.to_iter
-      |> flip Iter.for_each (fun (v1, v2) ->
-          Printf.printf "%s->%s\n" (Var.name v1) (Var.name v2));
-      print_endline "--";
-
       (* Phi nodes. *)
       let block =
         Block.map
           ~phi:
             (List.map (fun (phi : Var.t Block.phi) ->
-                 print_endline (Block.show_phi Var.pretty phi);
                  let out = { phi with lhs = update_lvar vert phi.lhs } in
 
-                 print_endline (Block.show_phi Var.pretty out);
                  out))
           Fun.id block
       in
 
-      let out =
-        Block.map ~phi:Fun.id
-          (fun stmt ->
-            print_endline
-              (Stmt.to_string Var.pretty Var.pretty Expr.BasilExpr.pretty stmt);
+      (* Update a statement. *)
+      Block.map ~phi:Fun.id
+        (fun stmt ->
+          (* Handle rvars. *)
+          let stmt =
+            Stmt.map ~f_expr:(update_expr vert) ~f_rvar:(update_rvar vert)
+              ~f_lvar:Fun.id stmt
+          in
 
-            (* Handle rvars. *)
-            let stmt =
-              Stmt.map ~f_expr:(update_expr vert) ~f_rvar:(update_rvar vert)
-                ~f_lvar:Fun.id stmt
-            in
-
-            (* Update lvars. *)
-            let stmt =
-              Stmt.map ~f_expr:Fun.id ~f_rvar:Fun.id ~f_lvar:(update_lvar vert)
-                stmt
-            in
-            print_endline
-              (Stmt.to_string Var.pretty Var.pretty Expr.BasilExpr.pretty stmt);
-            stmt)
-          block
-      in
-      !reaching_defs |> VarMap.to_iter
-      |> flip Iter.for_each (fun (v1, v2) ->
-          Printf.printf "%s->%s\n" (Var.name v1) (Var.name v2));
-      print_endline "";
-      out
+          (* Update lvars. *)
+          let stmt =
+            Stmt.map ~f_expr:Fun.id ~f_rvar:Fun.id ~f_lvar:(update_lvar vert)
+              stmt
+          in
+          stmt)
+        block
     in
 
     let update_succ succ_id par_id block =
-      Printf.printf "Updating succ %s\n" (ID.name succ_id);
       Block.map
         ~phi:
           (List.map (fun (phi : Var.t Block.phi) ->
@@ -984,23 +930,14 @@ module Construction = struct
                  phi.rhs
                  |> List.map (function
                    | id, rvar when ID.equal id par_id ->
-                     Printf.printf "\t\tphi %s %s\n" (ID.name id) (Var.name rvar);
-                       (id,
-      VarMap.get rvar !reaching_defs |> Option.get_or ~default:rvar
-
-                       )
+                       (id, update_rvar (End par_id) rvar)
                    | o -> o)
                in
                { phi with rhs }))
         Fun.id block
     in
 
-    (* Update the block. Yippee! *)
-    let g =
-      fst @@ traversal update_block update_succ tree (g, FL.empty) Entry
-    in
-
-    g
+    fst @@ traversal update_block update_succ tree (g, FL.empty) Entry
 
   let ssa_proc ?(skipping = Skip.empty) (procedure : Program.proc) =
     let procedure =
