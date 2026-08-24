@@ -24,7 +24,6 @@ buildDunePackage (self: {
 
   outputs = [
     "out"
-    "dev"
   ];
 
   meta = {

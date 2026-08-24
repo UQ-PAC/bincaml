@@ -1,4 +1,9 @@
 {
+  nixConfig.extra-substituters = [ "https://pac-nix.cachix.org/" ];
+  nixConfig.extra-trusted-public-keys = [
+    "pac-nix.cachix.org-1:l29Pc2zYR5yZyfSzk1v17uEZkhEw0gI4cXuOIsxIGpc="
+  ];
+
   inputs = {
     self.submodules = true;
 
@@ -53,6 +58,7 @@
           capstone_arm64_disas = ofinal.callPackage ./nix/capstone_arm64_disas.nix {
             buildDunePackage = ofinal.buildDune324Package;
           };
+          bincamlDocs = ofinal.callPackage ./nix/bincaml-docs.nix { };
 
           ocaml-protoc-plugin-6-1-0 = ofinal.callPackage ./nix/ocaml-protoc-plugin.nix { };
           aslp_lifter_ocaml = ofinal.callPackage ./nix/aslp-lifter-ocaml.nix { };
@@ -61,6 +67,17 @@
           kittyimg = ofinal.callPackage ./nix/kittyimg.nix { };
           stb_image = ofinal.callPackage ./nix/stb_image.nix { };
           containers = ofinal.callPackage ./nix/containers.nix { };
+
+          odoc_3_2 = ofinal.callPackage ./nix/odoc.nix { };
+          sherlodoc = ofinal.callPackage ./nix/sherlodoc.nix {
+            odoc = ofinal.odoc_3_2;
+          };
+          odoc-md = ofinal.callPackage ./nix/odoc-md.nix {
+            odoc = ofinal.odoc_3_2;
+          };
+          odoc-driver = ofinal.callPackage ./nix/odoc-driver.nix {
+            odoc = ofinal.odoc_3_2;
+          };
         };
 
         enableOcamlFramePointer =
@@ -88,16 +105,23 @@
           ...
         }:
         let
-          inherit (pac-nix.legacyPackages) bnfc-treesitter;
-
           pkgs = nixpkgs.legacyPackages;
-          selfOcamlPackages = pkgs.ocamlPackages.overrideScope self.overlays.addBincamlPackages;
+          ocamlPackages = pkgs.ocamlPackages.overrideScope (
+            _: _: {
+              z3-bin = pkgs.z3;
+              inherit (pac-nix.legacyPackages) bnfc-treesitter;
+            }
+          );
+          selfOcamlPackages = ocamlPackages.overrideScope self.overlays.addBincamlPackages;
           fpOcamlPackages = selfOcamlPackages.overrideScope self.overlays.enableOcamlFramePointer;
         in
         {
           defaultPackage = selfOcamlPackages.bincaml;
 
           legacyPackages = {
+            ocamlPackages = selfOcamlPackages;
+            bincamlDocs = selfOcamlPackages.bincamlDocs;
+
             bincaml = selfOcamlPackages.bincaml;
             bincaml_lsp = selfOcamlPackages.bincaml_lsp;
             aslp_lifter_ocaml = selfOcamlPackages.aslp_lifter_ocaml;
@@ -123,12 +147,13 @@
           devShells = {
             default = self.devShells.fp;
             fp = fpOcamlPackages.callPackage ./nix/shell.nix {
-              inherit bnfc-treesitter;
-              z3 = pkgs.z3.out;
+              isShellForCI = false;
             };
             no-fp = selfOcamlPackages.callPackage ./nix/shell.nix {
-              inherit bnfc-treesitter;
-              z3 = pkgs.z3.out;
+              isShellForCI = false;
+            };
+            ci = selfOcamlPackages.callPackage ./nix/shell.nix {
+              isShellForCI = true;
             };
           };
         };
