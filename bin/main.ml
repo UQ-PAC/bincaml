@@ -84,15 +84,7 @@ let repl ~verb ~echo_cmd =
       ]
   in
 
-  let cmds_m = cmds
-
-
-
-
-
-
-
-    |> Script.add_help_cmd in
+  let cmds_m = cmds |> Script.add_help_cmd in
 
   let completions_from_list ls prefix =
     List.to_iter ls |> Iter.filter (String.starts_with ~prefix)
