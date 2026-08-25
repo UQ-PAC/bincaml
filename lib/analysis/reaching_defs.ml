@@ -5,63 +5,102 @@ open Common
 module ProgramPoint = struct
   type block = ID.t [@@deriving ord, eq, show { with_path = false }]
 
-  type index = Phi of int | Stmt of int
+  type index = Phi of Var.t | Stmt of int
   [@@deriving ord, eq, show { with_path = false }]
 
   type t = block * index [@@deriving ord, eq, show { with_path = false }]
-  (** a program point is a pair of block identifier plus instruction or phi node
-      index. Sensitive to change in instruction counts. *)
+
+  let name = "programPoint"
+  let pretty = show %> Containers_pp.text
 end
 
-module PPSet = Set.Make (ProgramPoint)
+module Domain = struct
+  module S = Lattice_collections.LatticeSet (ProgramPoint)
+  module M = Lattice_collections.LatticeMap (Var) (S)
+  include M
 
-module ReachingDefDomain = struct
-  let name = "defUse"
+  let name = "reachingDefs"
 
-  type map =
-    (PPSet.t VarMap.t
-    [@printer
-      fun fmt (m : map) ->
-        VarMap.to_iter m
-        |> Iter.to_string (fun (v, pp) ->
-            Var.show v ^ " -> "
-            ^ PPSet.to_string ~start:"(" ~stop:")" ~sep:", " ProgramPoint.show
-                pp)
-        |> Format.pp_print_string fmt])
-  [@@deriving ord, eq, show { with_path = false }]
+  let transfer (block : ID.t) (m : t) (i : int) (stmt : Program.stmt) =
+    let pp : ProgramPoint.t = (block, ProgramPoint.Stmt i) in
+    let m =
+      Stmt.iter_assigned stmt
+      |> Iter.fold (fun a k -> M.update k (S.Fin (S.TSet.singleton pp)) a) m
+    in
+    m
 
-  type t = map option [@@deriving ord, eq, show { with_path = false }]
+  let transfer_phi block m (phi : Var.t Block.phi) =
+    let pp : ProgramPoint.t = (block, ProgramPoint.Phi phi.lhs) in
+    M.update phi.lhs (S.Fin (S.TSet.singleton pp)) m
 
-  let top = None
-  let bottom = Some VarMap.empty
-  let pretty t = Containers_pp.text (show t)
-
-  let join (a : t) (b : t) : t =
-    match (a, b) with
-    | None, _ | _, None -> None
-    | Some a, Some b ->
-        Some
-          (VarMap.merge
-             (fun v a b ->
-               match (a, b) with
-               | Some a, Some b -> Some (PPSet.union a b)
-               | Some a, _ | _, Some a -> Some a
-               | _ -> None)
-             a b)
-
-  let leq = raise (Failure "leq unimplemmented for defUse")
-  let widening a b = join a b
-  let narrowing a b = a
-  let init ?vertex proc = bottom
-
-  let transfer (m : t) (stmt : Program.stmt) =
-    match m with
-    | Some m -> Some (match stmt with Stmt.Instr_Assign _ -> m | _ -> m)
-    | _ -> m
-
-  let transfer_phi m (p : Var.t Lang.Block.phi) = failwith ""
-
-  type s = int * Program.stmt
+  let init = M.bottom
 end
 
-module IntraAnalysis = Intra_analysis.Forwards (ReachingDefDomain)
+(* Modified IntraAnalysis because reaching defs requires
+   block and stmt index information in the transfer function. *)
+module IntraAnalysis = struct
+  module M = Map.Make (struct
+    type t = ProgramPoint.t [@@deriving ord, eq, show { with_path = false }]
+  end)
+
+  module AnalyseBlock = struct
+    include Domain
+
+    type edge = Procedure.G.edge
+
+    let analyze (e : edge) (s : Domain.t) =
+      match e with
+      | Begin id, Block b, _ -> begin
+          let s = List.fold_left (transfer_phi id) s b.phis in
+          Block.foldi_forwards ~phi:(fun a _ -> a) ~f:(transfer id) s b
+        end
+      | _ -> s
+  end
+
+  module A = Graph.ChaoticIteration.Make (Procedure.G) (AnalyseBlock)
+
+  let analyse
+      ?(widening_set = Graph.ChaoticIteration.Predicate (fun _ -> false))
+      ?(widening_delay = 0) p =
+    (* Per statement results! *)
+    Trace_core.with_span ~__FILE__ ~__LINE__ Domain.name (fun _ ->
+        Procedure.graph p
+        |> Option.map (fun g ->
+            A.recurse g (Procedure.topo_fwd p)
+              (fun v -> Domain.init)
+              widening_set widening_delay))
+    |> Option.get_or ~default:A.M.empty
+
+  let print_dot fmt p analysis_result =
+    Trace_core.with_span ~__FILE__ ~__LINE__ "dot-printer" @@ fun _ ->
+    let to_dot graph =
+      let r =
+       fun v ->
+        Option.get_or ~default:Domain.bottom (A.M.find_opt v analysis_result)
+      in
+      let (module M : Viscfg.ProcPrinter) =
+        Viscfg.dot_labels (fun v -> Some (Domain.show (r v)))
+      in
+      M.fprint_graph fmt graph
+    in
+    Option.iter to_dot (Procedure.graph p)
+
+  let find_point (proc : Program.proc) (var : Var.t) (from_pp : ProgramPoint.t)
+      (results : AnalyseBlock.t A.M.t) =
+    let ( let* ) = Option.bind in
+    let* block = Procedure.get_block proc (fst from_pp) in
+    let vert = Procedure.Vert.Begin (fst from_pp) in
+    let pps =
+      match snd from_pp with
+      | Stmt i ->
+          Block.stmts_iter_i block |> Iter.take i |> Iter.rev
+          |> Iter.find (fun (i, stmt) ->
+              stmt |> Stmt.iter_assigned
+              |> Iter.exists (Var.equal var)
+              |> flip Option.return_if
+                   (Domain.S.singleton (fst from_pp, ProgramPoint.Stmt i)))
+      | _ -> None
+    in
+    Option.or_ pps
+      ~else_:(A.M.find_opt vert results |> Option.map (AnalyseBlock.read var))
+end

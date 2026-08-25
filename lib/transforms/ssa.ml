@@ -944,6 +944,9 @@ module Construction = struct
       map_blocks_nondet (fun (_, b) -> { b with phis = [] }) procedure
     in
 
+    (* let reaching_defs = Analysis.Reaching_defs.IntraAnalysis.analyse procedure in *)
+    (* Procedure.iter_blocks *) 
+  
     (* Update the procedure. *)
     procedure
     |> map_graph (fun g ->
