@@ -9,10 +9,10 @@ lib.makeScope newScope (
     callPackage = self.callPackage;
   in
   {
-    blah = callPackage (
+    test_package_for_odoc_include_subdirs = callPackage (
       { dune, buildDunePackage }:
-      buildDunePackage {
-        pname = "blah";
+      buildDunePackage (self: {
+        pname = "test_package_for_odoc_include_subdirs";
         version = "0.0";
         src = dune.src;
 
@@ -22,13 +22,13 @@ lib.makeScope newScope (
 
           dune describe
 
-          echo '
-          (name blah)
-          (package (name blah))
-          ' >> dune-project
-          substituteInPlace lib/dune --replace-fail 'library' 'library (public_name blah.foolib)'
+          echo "
+          (name ${self.pname})
+          (package (name ${self.pname}))
+          " >> dune-project
+          substituteInPlace lib/dune --replace-fail 'library' "library (public_name ${self.pname}.foolib)"
         '';
-      }
+      })
     ) { };
 
     /**
@@ -49,7 +49,6 @@ lib.makeScope newScope (
         bincaml_lsp,
         yojson_2,
         bos,
-        blah,
       }:
       (buildEnv {
         name = "fake-dune-prefix-for-odoc";
