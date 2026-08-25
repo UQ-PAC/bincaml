@@ -1,7 +1,7 @@
 depexts: [
   ["capstone-devel"] {os-family = "fedora"}
   ["capstone-dev"] {os-distribution = "alpine"}
-  ["libcapstone-dev"] {os-family = "debian" | os-family = "ubuntu"}
+  ["libcapstone-dev"] {os-family = "debian"}
   ["capstone"] {os = "macos" & os-distribution = "macports"}
   ["capstone"] {os = "macos" & os-distribution = "homebrew"}
   ["capstone"] {os = "freebsd"}
