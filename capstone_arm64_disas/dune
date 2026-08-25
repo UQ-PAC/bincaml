@@ -1,16 +1,21 @@
 (rule
  (target includes.gen)
  (enabled_if
-  (= %{system} "macosx"))
+  (and
+   (= %{system} "macosx")
+   %{bin-available:brew}))
  (action
   (with-stdout-to
    includes.gen
-   (system "sh -c \"printf \\\"%s/include\\\" $(brew --prefix)\""))))
+   (bash "echo $(brew --prefix)/include"))))
 
 (rule
  (target includes.gen)
  (enabled_if
-  (<> %{system} "macosx"))
+  (not
+   (and
+    (= %{system} "macosx")
+    %{bin-available:brew})))
  (action
   (with-stdout-to
    includes.gen
@@ -19,12 +24,15 @@
 (library
  (public_name capstone_arm64_disas)
  (name capstone)
+ (modules capstone)
  (foreign_stubs
   (language c)
   (include_dirs
    (include includes.gen))
   (names capst))
- (c_library_flags -lcapstone)
- (inline_tests)
- (preprocess
-  (pps ppx_expect)))
+ (c_library_flags -lcapstone))
+
+(test
+ (name test_capstone)
+ (modules test_capstone)
+ (libraries capstone))
