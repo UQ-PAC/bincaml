@@ -76,8 +76,10 @@ end
 module IDELive = struct
   include IDELiveCommon
 
-  let init_data globals (proc : Program.proc) =
+  let relevant_params globals (proc : Program.proc) =
     Procedure.formal_out_params proc |> StringMap.values |> Iter.append globals
+
+  let init_data = relevant_params
 
   type 'a state_update = (DL.t * 'a) Iter.t
 
@@ -180,10 +182,12 @@ module IDELive = struct
     | Label v -> Iter.singleton (Label (VarMap.get_or v phi ~default:v), IdEdge)
     | _ -> Iter.singleton (d, IdEdge)
 
-  let init_p2 globals (proc : Program.proc) =
+  let init_param_values globals (proc : Program.proc) =
     Procedure.formal_out_params proc
     |> StringMap.values |> Iter.append globals
     |> Iter.map (fun v -> (v, true))
+
+  let init_p2 = init_param_values
 end
 
 module IDELiveAnalysis = IDE (IDELive)
@@ -192,7 +196,7 @@ open Idessi
 module IDELiveSSI = struct
   include IDELiveCommon
 
-  let init_data (proc : Program.proc) =
+  let relevant_params (proc : Program.proc) =
     Procedure.formal_out_params proc |> StringMap.values
 
   type state_update = (DL.t * t) Iter.t
@@ -246,7 +250,7 @@ module IDELiveSSI = struct
     | Lambda -> Iter.empty
     | _ -> Iter.of_list rhs |> Iter.map (fun v -> (Label v, IdEdge))
 
-  let init_p2 (proc : Program.proc) =
+  let init_param_values (proc : Program.proc) =
     Procedure.formal_out_params proc
     |> StringMap.values
     |> Iter.map (fun v -> (v, Value.live))
