@@ -1,10 +1,14 @@
 {0 Writing IDE analyses}
 
+{1 Introduction}
+
 Before writing an IDE analysis you should first determine whether the analysis you want to implement is an IDE analysis.
+This is very important!
+Not all analyses are IDE analyses, and things will break horribly or be terribly imprecise if one tries to turn a non-IDE analysis into an IDE analysis!
 The requirements are that it is a "distributive" analysis, and that "edge function" can be efficiently represented.
 An IDE analysis can be either a forwards or backwards analysis.
 
-We assume that analyses are map lattices from variables into some "value lattice".
+We assume that analyses are map lattices from variables into some {i value lattice}.
 
 {[
 module Value : Lattice
@@ -12,15 +16,17 @@ module Value : Lattice
 
 Formally, an analysis is distributive if the transfer function satisfies [f(a join b) = f(a) join f(b)] for all elements [a, b] of the lattice we work over.
 From this, distributivity allows us to split the transfer function computation into one computed one variable at a time.
-For example, we could compute [f({a -> x, b -> y, c -> z})] as [f({a -> x}) join f({b -> y}) join f({c -> z})].
+For example, (if braces represent maps which are bottom everywhere except where specified) we could compute [f({a -> x, b -> y, c -> z})] as [f({a -> x}) join f({b -> y}) join f({c -> z})].
 Hence, we can intuitively think that an analysis is distributive if information flows from individual variables to other variables in isolation.
 There will also be information that does not depend on any inputs, or in some sense comes from a "sink", which is encoded in [f({})].
+In code the sink is referred to as Lambda following IDE literature.
 
-Examples of IDE analyses include liveness analysis, taint analysis, copy constant propagation (constant propagation through expressions of the form [y = x]) and linear constant propagation (constant propagation trough expressions of the form [y = a * x + b].,
+Examples of IDE analyses include liveness analysis, taint analysis, copy constant propagation (constant propagation through expressions of the form [y = x]) and linear constant propagation (constant propagation trough expressions of the form [y = a * x + b]).
 In the last two examples, notice that we can only perform copy propagation if the rhs of an assignment contains one variable.
 Indeed if an expression contained two variables, then the constant-ness of the lhs would depend on two variables, violating the requirement that information should flow from single variables in isolation.
 
 {2 Edge functions}
+
 From the earlier manipulations, we could formulate a distributive transfer function as a function that takes a variable/sink and a value from the value lattice, and gives us a mapping of variables to values.
 Mathematically we could write such a function to be of type [f : (SV x L) -> (SV -> L)] where [SV] stands for sink/variable and [L] is our value lattice.
 Currying then gives us [f : SV -> L -> SV -> L] and rearranging gives [f : (SV x SV) -> (L -> L)].
@@ -34,7 +40,7 @@ Since an analysis gets to choose what edge functions are used (as long as things
 We only need to represent the ones that will show up in the transfer function of the analysis.
 The solver will need to be able to compute composites and (pointwise) joins of edge functions, and so the edge function representation must be closed under these operations.
 The solver also needs a bottom function and an identity function.
-See the full [IDESSIDomain] for the module specification of edge functions.
+See {!IDESSIDomain} for the module specification of edge functions.
 
 To follow on from the earlier example analyses, edge functions for liveness, taint, and copy const analyses are simply function of the form either [const l] or [id], and so edge functions can be represented as an ADT:
 {[
@@ -51,12 +57,12 @@ If a target variable is not included in the iterator, implicitly there is a bott
 
 - [relevant_params] specifies which input/output parameters of a procedure should be tracked.
 If the analysis is forwards you probably want to set in params and if it is backwards you probably want to set out params.
-- [transfer_call] specifies the edges from a callee variable/sink into input parameters of a caller.
+- [transfer_call] specifies the edges from a callee variable/sink into input parameters of a caller function based on the arguments in a call statement.
 - [transfer] specifies the edges out of a variable/sink specified by a statement.
 For SSA reasons, identity edges on variables or the sink do not need to be given, unlike in non-SSA IDE analyses.
 - [transfer_phi] specifies edges between a phi node.
 - [init_param_values] specifies the initial value lattice values for in/out params of a procedure.
-If the analysis is forwards you probably want to set in params and if it is backwards you probably want to set out params.
+Like with [relevant_params], you probably only care about in params if forwards and out params if backwards.
 
 {[
 module type IDESSIDomain = sig
