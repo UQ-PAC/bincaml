@@ -1,6 +1,9 @@
 (library
  (name bincaml_analysis_test)
- (modules test_ide_live test_ssadfg test_dynamic_single_assignment)
+ (modules
+  test_ide_live
+  test_ssadfg
+  test_dynamic_single_assignment)
  (inline_tests)
  (libraries
   bincaml.loader
@@ -20,7 +23,8 @@
   test_wrapped_intervals
   test_irreducible_loops
   test_lattice_collections
-  test_dsa)
+  test_dsa
+  test_demanded_bits)
  (preprocess
   (pps ppx_here ppx_deriving.show))
  (libraries
