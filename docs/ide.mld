@@ -45,6 +45,10 @@ Edge functions for the linear const analysis are functions of the form [\x . (a 
 {1 Transfer functions}
 
 After deciding on an edge function representation, all that is left is to write the IDE transfer functions and other related operations.
+Note that transfer functions return state updates, which are iterators of edge functions.
+These iterators do not (and should not) contain functions for every variable.
+If a target variable is not included in the iterator, implicitly there is a bottom edge into that variable.
+
 - [relevant_params] specifies which input/output parameters of a procedure should be tracked.
 If the analysis is forwards you probably want to set in params and if it is backwards you probably want to set out params.
 - [transfer_call] specifies the edges from a callee variable/sink into input parameters of a caller.
