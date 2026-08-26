@@ -20,7 +20,7 @@ Examples of IDE analyses include liveness analysis, taint analysis, copy constan
 In the last two examples, notice that we can only perform copy propagation if the rhs of an assignment contains one variable.
 Indeed if an expression contained two variables, then the constant-ness of the lhs would depend on two variables, violating the requirement that information should flow from single variables in isolation.
 
-{1 Edge functions}
+{2 Edge functions}
 From the earlier manipulations, we could formulate a distributive transfer function as a function that takes a variable/sink and a value from the value lattice, and gives us a mapping of variables to values.
 Mathematically we could write such a function to be of type [f : (SV x L) -> (SV -> L)] where [SV] stands for sink/variable and [L] is our value lattice.
 Currying then gives us [f : SV -> L -> SV -> L] and rearranging gives [f : (SV x SV) -> (L -> L)].
@@ -42,7 +42,7 @@ type t = Const of Value.t | Identity
 ]}
 Edge functions for the linear const analysis are functions of the form [\x . (a * x + b) join c], and hence can be represented as triples of numbers [(a, b, c)].
 
-{1 Transfer functions}
+{2 Transfer functions}
 
 After deciding on an edge function representation, all that is left is to write the IDE transfer functions and other related operations.
 Note that transfer functions return state updates, which are iterators of edge functions.
