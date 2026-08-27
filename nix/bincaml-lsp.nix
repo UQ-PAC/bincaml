@@ -1,21 +1,21 @@
-{ lib
-, buildDunePackage
-, nix-gitignore
-, writableTmpDirAsHomeHook
+{
+  lib,
+  buildDunePackage,
+  writableTmpDirAsHomeHook,
 
-# ocaml packages
-, bincaml
-, logs
-, fmt
-, iter
-, linol
-, linol-lwt
-, containers
-, ppx_deriving
+  # ocaml packages
+  bincaml,
+  logs,
+  fmt,
+  iter,
+  linol,
+  linol-lwt,
+  containers,
+  ppx_deriving,
 
-# test:
+  # test:
 
-# dev:
+  # dev:
 }:
 
 buildDunePackage {
@@ -24,16 +24,23 @@ buildDunePackage {
 
   minimalOCamlVersion = "5.0";
 
-  src = nix-gitignore.gitignoreSource [ "nix" "flake.nix" "flake.lock" ] ./..;
+  inherit (bincaml) src;
 
-  checkInputs = [];
+  checkInputs = [ ];
   nativeBuildInputs = [ writableTmpDirAsHomeHook ];
-  buildInputs =
-    [ bincaml logs fmt iter linol linol-lwt containers ppx_deriving ];
-  propagatedBuildInputs = [ ];
+  buildInputs = [
+    bincaml
+    logs
+    fmt
+    iter
+    containers
+    ppx_deriving
+    linol
+    linol-lwt
+  ];
 
   doCheck = true;
-  outputs = [ "out" "dev" ];
+  outputs = [ "out" ];
 
   meta = {
     homepage = "https://github.com/agle/bincaml";

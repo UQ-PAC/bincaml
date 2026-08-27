@@ -62,6 +62,8 @@
   ll_spec.sexp
   repeated_ssa.il
   repeated_ssa.sexp
+  cfa_reduction.il
+  cfa_reduction.sexp
   ../../bin/main.exe))
 
 (cram

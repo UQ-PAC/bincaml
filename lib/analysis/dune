@@ -1,25 +1,8 @@
+(include_subdirs qualified)
+
 (library
  (public_name bincaml.analysis)
  (name analysis)
- (modules
-  dataflow_graph
-  intra_analysis
-  defuse_bool
-  lattice_types
-  ide
-  irreducible_loops
-  idessi
-  ide_live
-  lattice_collections
-  wrapped_intervals
-  gamma_domain
-  linear_const
-  tnum_wint_reduced_product
-  known_bits
-  wp_dual
-  sp
-  sva
-  rg_gen)
  (libraries
   intPQueue
   patricia-tree

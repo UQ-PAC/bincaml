@@ -29,6 +29,10 @@
   kittyimg,
   stb_image,
   linenoise,
+  unionFind,
+
+  capstone_arm64_disas,
+  aslp_lifter_ocaml,
 
   # test:
   ppx_expect,
@@ -36,6 +40,12 @@
   qcheck-core,
   qcheck-alcotest,
   qcheck-stm,
+  tree-sitter,
+  nodejs-slim,
+  bnfc-treesitter,
+  boogie,
+  cvc5,
+  z3-bin, # custom name for z3 binary, since `z3` is the ocaml library
 
   # dev:
   # , odig
@@ -61,6 +71,14 @@ buildDunePackage {
     qcheck-core
     qcheck-alcotest
     qcheck-stm
+  ];
+  nativeCheckInputs = [
+    tree-sitter
+    nodejs-slim
+    bnfc-treesitter
+    boogie
+    cvc5
+    z3-bin.out
   ];
   nativeBuildInputs = [
     writableTmpDirAsHomeHook
@@ -89,21 +107,24 @@ buildDunePackage {
     patricia-tree
     logs
     mtime
+    unionFind
     terminal_size
     kittyimg
     linenoise
     stb_image
+    capstone_arm64_disas
+    aslp_lifter_ocaml
+    qcheck-core
+    qcheck-alcotest
+    qcheck-stm
   ];
 
   postPatch = ''
     patchShebangs --build test
   '';
 
-  doCheck = false;
-  outputs = [
-    "out"
-    "dev"
-  ];
+  doCheck = true;
+  outputs = [ "out" ];
 
   meta = {
     homepage = "https://github.com/agle/bincaml";

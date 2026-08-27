@@ -14,7 +14,6 @@ open struct
     iloop_headers : string StringMap.t;
     headers : StringSet.t StringMap.t;
   }
-  [@@deriving eq, show]
 
   let block_info = Alcotest.testable pp_block_info equal_block_info
 

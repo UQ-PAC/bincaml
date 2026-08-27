@@ -31,7 +31,9 @@ let add_proxy_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap) uuid
     succ_addr uuid
     |> Iter.map (fun addr -> addr_equal_expr addr)
     |> Iter.to_list
-    |> Expr.BasilExpr.applyintrin ~op:`OR
+    |> function
+    | [] -> Expr.BasilExpr.boolconst true
+    | args -> Expr.BasilExpr.applyintrin ~op:`OR args
   in
   let name =
     "%" ^ (Procedure.id proc |> ID.to_string |> sanitize_proc_name) ^ "_proxy"
@@ -118,20 +120,21 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
       let attrib = Option.fold Attrib.merge_map_shadow attrib attrib' in
       let instrs =
         opcodes
-        |> List.map (fun op ->
+        |> List.mapi (fun i op ->
             let op = Opcode.of_be_bytes op in
+            let asm =
+              if conf.disas then
+                [ (".asm", `String (Result.retract (Disas.dis_op op))) ]
+              else []
+            and address = Bitvec.of_int ~size:64 (address + (i * 4)) in
             Stmt.Instr_IntrinCall
               {
                 lhs = [];
                 name = Stmt.Intrinsic.Aarch64Eval;
                 args =
-                  [ Expr.BasilExpr.const (`Bitvector (Opcode.to_bitvec op)) ];
-                attrib =
-                  op
-                  |> (if conf.disas then Disas.dis_op %> Result.to_option
-                      else const None)
-                  |> Option.map_or ~default:Attrib.empty (fun asm ->
-                      StringMap.singleton ".asm" (`String asm));
+                  Expr.BasilExpr.
+                    [ bvconst (Opcode.to_bitvec op); bvconst address ];
+                attrib = StringMap.of_list asm;
               })
       in
       match b with
@@ -353,5 +356,6 @@ let module_to_ir_prog ir_cfg (m : Module.t) =
       (fun _ proc prog -> temp_proc_to_ir_proc all_blocks prog proc)
       procs prog
   in
+  let prog = Lang.Spec_modifies.set_modsets prog in
   let entry_proc = UUIDMap.find entry_proc procs in
   Lang.Program.set_entry_proc entry_proc.id prog

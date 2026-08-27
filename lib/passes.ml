@@ -28,6 +28,14 @@ module PassManager = struct
 
   type t = { avail : pass StringMap.t }
 
+  let hm_elaborate =
+    {
+      name = "hindley-milner-elaborate";
+      apply = Prog Hm.elaborate_prog;
+      invariants = Invariants.make ();
+      doc = "Perform hindley milner type inference on program";
+    }
+
   let chop_unreachable =
     {
       name = "trim-unreachable-proc";
@@ -98,6 +106,14 @@ module PassManager = struct
       invariants = Invariants.presupposes [ SSA ];
     }
 
+  let aslp_semantics =
+    {
+      name = "aslp-semantics";
+      apply = Prog Transforms.Aslp.transform_program;
+      doc = "Add ASLP instsruction semantics after gtirb";
+      invariants = Invariants.presupposes [ GtirbArm ] ~invalidates:[ GtirbArm ];
+    }
+
   let cse_elim =
     {
       name = "cse-elim";
@@ -163,7 +179,9 @@ module PassManager = struct
         Prog
           (fun p ->
             let r = Analysis.Sva.sva p in
-            List.iter (print_endline % Analysis.Sva.StateAbstraction.show) r;
+            List.iter
+              (print_endline % Analysis.Sva.StateAbstraction.show % snd)
+              r;
             p);
       doc = "Runs symbolic value analysis and prints stuff out after";
       invariants = Invariants.presupposes [ SSA ];
@@ -195,6 +213,14 @@ module PassManager = struct
         "Naive SSA transform assuming all variable uses are dominated by \
          definitions from parameters";
       invariants = Invariants.presupposes [ Params ] ~establishes:[ SSA ];
+    }
+
+  let cfa_reduction =
+    {
+      name = "cfa-reduction";
+      apply = Proc Transforms.Cfa_reduction.reduce_procedure;
+      doc = "Performs reduction of acyclic CFA";
+      invariants = Invariants.presupposes [ SSA ];
     }
 
   let remove_unreachable_blocks =
@@ -420,9 +446,21 @@ module PassManager = struct
           ~invalidates:[ SSA ];
     }
 
+  let data_structure_analysis =
+    {
+      name = "data-structure-analysis-dots";
+      apply = Prog Analysis.Dsa.dsa_dots;
+      doc =
+        "Perform data structure analysis to generate point-to graphs, and \
+         print the graphs as graphviz .dot files to stdout.";
+      invariants = Invariants.presupposes [ SSA ];
+    }
+
   let passes =
     [
+      aslp_semantics;
       lift_intrinsics_aarch64;
+      hm_elaborate;
       chop_unreachable;
       cse_elim;
       flatten_phis;
@@ -441,6 +479,7 @@ module PassManager = struct
       read_uninit false;
       read_uninit true;
       sssa;
+      cfa_reduction;
       sva;
       full_ssa;
       chc_infer_invariants;
@@ -456,6 +495,7 @@ module PassManager = struct
       linear_const;
       linear_copy;
       simp;
+      data_structure_analysis;
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;

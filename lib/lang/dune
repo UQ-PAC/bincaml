@@ -1,24 +1,10 @@
+(include_subdirs qualified)
+
 (library
  (public_name bincaml.ast)
  (name lang)
- (modules
-  abstract_expr
-  attrib
-  spec_modifies
-  check
-  expr
-  algsimp
-  common
-  ops
-  viscfg
-  expr_smt
-  expr_eval
-  stmt
-  block
-  procedure
-  interp
-  program)
  (libraries
+  unionFind
   zarith
   fix
   ocamlgraph

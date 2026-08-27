@@ -4,7 +4,6 @@ open Common
 (** Makes a concrete module which implements {!Bincaml_ibi.IBI}. *)
 module Make (S : sig
   val initial_lifter_state : Aslp_state.lifter_state
-  val bincaml_memory_var : unit -> Var.t
 end) =
 struct
   (** {2 Type definitions} *)
@@ -59,10 +58,13 @@ struct
       bincaml_lifter_state := { !bincaml_lifter_state with diamond }
 
     let diamond_make_branch cond =
+      let pc_assign =
+        (Diamond_zipper.focus !bincaml_lifter_state.diamond).pc_assign
+      in
       let t = Aslp_state.empty_block ~assume:cond ()
       and f = Aslp_state.empty_block ~assume:(Expr.BasilExpr.boolnot cond) ()
       and m = Aslp_state.empty_block_unconditional () in
-      (t, f, m)
+      ({ t with pc_assign }, { f with pc_assign }, { m with pc_assign })
 
     let equal_state = CCEqual.map (fun x -> x.Aslp_state.stmts) CCEqual.physical
   end)
@@ -92,7 +94,7 @@ struct
     | [] ->
         diamond
         |> Aslp_state.ensure_pc_assigned ~address
-        |> Diamond_zipper.to_diamond
+        |> Aslp_state.ensure_forwarded_pc |> Diamond_zipper.to_diamond
 
   (** {2 Instruction building interface implementation} *)
 
@@ -192,29 +194,35 @@ struct
     let extension = Z.(to_int (result_wd - wd)) in
     Bitvec.sign_extend ~extension x
 
-  let unify_shift_widths apply_shift operand shift =
-    let extension = Bitvec.(size operand - size shift) in
+  let zero_extend_to_match_op apply_shift ~width_of shift =
+    let extension = Bitvec.(size width_of - size shift) in
     let shift = Bitvec.zero_extend ~extension shift in
-    apply_shift operand shift
+    apply_shift width_of shift
 
   (** [f_lsl_bits operand_width shift_width operand shift] *)
   let f_lsl_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
-   fun _ _ -> unify_shift_widths Bitvec.shl
+   fun _ _ width_of b -> zero_extend_to_match_op Bitvec.shl ~width_of b
 
   (** [f_lsr_bits operand_width shift_width operand shift] *)
   let f_lsr_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
-   fun _ _ -> unify_shift_widths Bitvec.lshr
+   fun _ _ width_of b -> zero_extend_to_match_op Bitvec.lshr ~width_of b
 
   (** [f_asr_bits operand_width shift_width operand shift] *)
   let f_asr_bits : bigint -> bigint -> bitvector -> bitvector -> bitvector =
-   fun _ _ -> unify_shift_widths Bitvec.ashr
+   fun _ _ width_of b -> zero_extend_to_match_op Bitvec.ashr ~width_of b
 
   (** [f_cvt_bits_uint operand_width operand] *)
   let f_cvt_bits_uint : bigint -> bitvector -> bigint =
    fun _ -> Bitvec.to_unsigned_bigint
 
-  let f_sdiv_int : bigint -> bigint -> bigint = fun _ -> failwith "sdiv int"
-  let f_shl_int : bigint -> bigint -> bigint = fun _ -> failwith "shl int"
+  let f_sdiv_int : bigint -> bigint -> bigint = fun a b -> Z.div a b
+
+  let f_shl_int : bigint -> bigint -> bigint =
+   fun a b ->
+    Z.shift_left a
+      (Z.to_int64_unsigned b |> Int64.unsigned_to_int
+      |> Option.get_exn_or "shift value too large for camlint")
+
   let v_PSTATE_C : lexpr = PSTATE_C
   let v_PSTATE_Z : lexpr = PSTATE_Z
   let v_PSTATE_V : lexpr = PSTATE_V
@@ -294,25 +302,32 @@ struct
       =
    fun _ -> failwith "f_gen_Elem_set"
 
-  (** [f_gen_Mem_set size address size acctype value] *)
+  (** [(f_gen_Mem_set size address size acctype value) : unit] emits an
+      instruction which stores value to memory. Value must have bit width equal
+      to size (bytes) in bits. *)
   let f_gen_Mem_set : bigint -> expr -> expr -> expr -> expr -> unit =
    fun size addr _ _acctype value ->
-    let addr = Stmt.Addr { addr; size = Z.to_int size; endian = `Little }
-    and mem = S.bincaml_memory_var () in
+    let size = 8 * Z.to_int size in
+    let addr = Stmt.Addr { addr; size; endian = `Little }
+    and mem = Aslp_lexpr.to_var Memory in
     bincaml_internal_emit
       (Stmt.Instr_Store
          { attrib = Attrib.empty; lhs = mem; rhs = mem; value; addr })
 
-  (** [f_gen_Mem_read size address size acctype value] *)
+  (** [let lhs = f_gen_Mem_read size address size acctype value] emits a read
+      instruction reading a bitvector [size] (bytes) from the memory variable,
+      assigning it to variable [lhs]. Returns [lhs] as an expression). *)
   let f_gen_Mem_read : bigint -> expr -> expr -> expr -> expr =
    fun size addr _ _acctype ->
-    let addr = Stmt.Addr { addr; size = Z.to_int size; endian = `Little }
-    and mem = S.bincaml_memory_var () in
+    let size = 8 * Z.to_int size in
+    let addr = Stmt.Addr { addr; size; endian = `Little }
+    and mem = Aslp_lexpr.to_var Memory in
+    (* NOTE: avoids `bincaml_local_var` so these variables do not clash with ASLp-declared variables. *)
     let name = !bincaml_lifter_state.generator.local_id () in
-    let rhs = Var.create name (Types.bv (Z.to_int size)) in
+    let lhs = Var.create name (Types.bv size) in
     bincaml_internal_emit
-      (Stmt.Instr_Load { attrib = Attrib.empty; lhs = mem; rhs; addr });
-    Expr.BasilExpr.rvar rhs
+      (Stmt.Instr_Load { attrib = Attrib.empty; lhs; rhs = mem; addr });
+    Expr.BasilExpr.rvar lhs
 
   let f_AtomicStart : unit -> unit = fun _ -> failwith "f_AtomicStart"
   let f_AtomicEnd : unit -> unit = fun _ -> failwith "f_AtomicEnd"
@@ -346,7 +361,8 @@ struct
   let f_gen_not_bits : bigint -> expr -> expr =
    fun _ a -> Expr.BasilExpr.unexp ~op:`BVNOT a
 
-  let f_gen_cvt_bool_bv : expr -> expr = fun _ -> failwith "f_gen_cvt_bool_bv"
+  let f_gen_cvt_bool_bv : expr -> expr =
+   fun e -> Expr.BasilExpr.unexp ~op:`BOOLTOBV1 e
 
   let f_gen_or_bits : bigint -> expr -> expr -> expr =
    fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVOR [ a; b ]
@@ -372,6 +388,17 @@ struct
   let f_gen_slt_bits : bigint -> expr -> expr -> expr =
    fun _ a b -> Expr.BasilExpr.binexp ~op:`BVSLT a b
 
+  let zero_extend_to_match ~width_of shift =
+    let width a =
+      Expr.BasilExpr.type_of a |> Types.bit_width
+      |> Option.get_exn_or "expected bv argument to operator"
+    in
+    let wb = width shift and wa = width width_of in
+    if wa = wb then shift
+    else if wa > wb then
+      Expr.BasilExpr.zero_extend ~n_prefix_bits:(wa - wb) shift
+    else failwith "expected second shift argument to be equal or smaller"
+
   let f_gen_mul_bits : bigint -> expr -> expr -> expr =
    fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVMUL [ a; b ]
 
@@ -379,18 +406,28 @@ struct
    fun _ _ a b -> Expr.BasilExpr.applyintrin ~op:`BVConcat [ a; b ]
 
   let f_gen_lsr_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVLSHR a b
+   fun _ _ a b ->
+    Expr.BasilExpr.binexp ~op:`BVLSHR a (zero_extend_to_match ~width_of:a b)
 
   let f_gen_lsl_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVSHL a b
+   fun _ _ a b ->
+    Expr.BasilExpr.binexp ~op:`BVSHL a (zero_extend_to_match ~width_of:a b)
 
   let f_gen_asr_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ _ a b -> Expr.BasilExpr.binexp ~op:`BVASHR a b
+   fun _ _ a b ->
+    Expr.BasilExpr.binexp ~op:`BVASHR a (zero_extend_to_match ~width_of:a b)
 
   (** [f_gen_replicate_bits operand_width num_replications operand
        num_replications] *)
   let f_gen_replicate_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_replicate_bits"
+   fun targ0 targ1 opr nr ->
+    targ1 |> Z.to_int |> fun repeats ->
+    match Expr.BasilExpr.type_of opr |> Types.bit_width with
+    | Some 1 when repeats > 0 ->
+        Expr.BasilExpr.unexp ~op:(`SignExtend (repeats - 1)) opr
+    | _ ->
+        Expr.BasilExpr.applyintrin ~op:`BVConcat
+        @@ List.init repeats (fun _ -> opr)
 
   (** [f_gen_ZeroExtend operand_width result_width operand result_width] *)
   let f_gen_ZeroExtend : bigint -> bigint -> expr -> expr -> expr =
@@ -405,7 +442,7 @@ struct
   (** [f_gen_slice x lo wd] *)
   let f_gen_slice : expr -> bigint -> bigint -> expr =
    fun x lo_incl wd ->
-    let hi_excl = Z.(to_int (lo_incl - wd)) and lo_incl = Z.to_int lo_incl in
+    let hi_excl = Z.(to_int (lo_incl + wd)) and lo_incl = Z.to_int lo_incl in
     Expr.BasilExpr.extract ~lo_incl ~hi_excl x
 
   (* {1 Floating point intrinsics} *)

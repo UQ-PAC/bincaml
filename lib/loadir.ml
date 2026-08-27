@@ -131,7 +131,7 @@ module BasilASTLoader = struct
         stmts
 
   let failure x = failwith "Undefined case." (* x discarded *)
-  let stripquote s = String.sub s 1 (String.length s - 2)
+  let stripquote s = String.sub s 1 (String.length s - 2) |> Scanf.unescaped
 
   let rec transBVTYPE (x : bVTYPE) : Types.t =
     match x with
@@ -156,10 +156,22 @@ module BasilASTLoader = struct
     let prog =
       match x with
       | Module1 declarations ->
-          List.fold_left trans_declaration prog declarations |> fun p ->
-          List.fold_left trans_definition p declarations
+          let decls = List.fold_left trans_declaration prog declarations in
+          let decls = List.fold_left trans_definition decls declarations in
+          decls
     in
-    map_prog (fun prog -> Spec_modifies.set_modsets ~add_only:true prog) prog
+    let decls =
+      map_prog (fun prog -> Spec_modifies.set_modsets ~add_only:true prog) prog
+    in
+    decls
+
+  and trans_program_just_decls ?(lst : load_st option) ?(name = "<module>")
+      (x : moduleT) : load_st =
+    let prog =
+      match lst with Some lst -> lst | None -> load_st_empty ~name ()
+    in
+    match x with
+    | Module1 declarations -> List.fold_left trans_declaration prog declarations
 
   and var_modifiers_shared (m : varModifiers list) =
     if not @@ List.exists (function Shared | Observable -> true) m then
@@ -946,8 +958,9 @@ module BasilASTLoader = struct
                 (unsafe_unsigil (`Global bident))
                 (trans_type type')
             in
-            print_endline @@ "Warn: global undeclared " ^ Var.name v
-            ^ " assuming mutable unshared";
+            Logs.warn (fun m ->
+                m "Warn: global undeclared %s assuming mutable unshared "
+                  (Var.name v));
             v
         in
         assign_var prog v
@@ -1135,16 +1148,13 @@ module BasilASTLoader = struct
     match Program.get_decl_by_name vn p_st.prog with
     | Some (Variable { binding }) -> binding
     | Some (Function { binding }) -> binding
-    | Some (Type _) ->
-        let msg = "found type declaration when looking for variable:" ^ vn in
+    | Some (Implicit (VariantCase { constructor })) -> constructor
+    | Some _ ->
+        let msg = "found non-var declaration when looking for variable:" ^ vn in
         raise (LoadError { token_char_offset_range; msg; input = None })
-    | None -> (
-        match Program.get_implicit_decl_by_name vn p_st.prog with
-        | Some (VariantCase { constructor }) -> constructor
-        | None ->
-            let msg = "global variable used before declaration : " ^ vn in
-            raise (LoadError { token_char_offset_range; msg; input = None }))
-    | Some (Procedure _) -> failwith ""
+    | None ->
+        let msg = "global variable used before declaration : " ^ vn in
+        raise (LoadError { token_char_offset_range; msg; input = None })
 
   and trans_bv_val v : Bitvec.t =
     match v with
@@ -1523,7 +1533,7 @@ let concrete_prog_ast_of_channel ?input ?filename c =
   let lexbuf = Lexing.from_channel ~with_positions:true c in
   filename |> Option.iter (fun f -> Lexing.set_filename lexbuf f);
   try ParBasilIR.pModuleT LexBasilIR.token lexbuf
-  with ParBasilIR.Error -> raise (ILBParseError { input; lexbuf })
+  with _ -> raise (ILBParseError { input; lexbuf })
 
 let concrete_prog_ast_of_string ?input ?filename str =
   let open BasilIR in
@@ -1608,17 +1618,17 @@ let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
     |> StringMap.of_list
   in
   let proc = Procedure.map_formal_in_params (fun _ -> inparam) proc in
-  let prog = Program.add_proc proc prog in
   let prog =
     Iter.append (Block.read_vars_iter bl) (Block.assigned_vars_iter bl)
     |> Iter.filter Var.is_global
     |> Iter.fold
          (fun prog v ->
            Program.add_decl prog
-             (Program.Variable
+             (Variable
                 { binding = v; attrib = StringMap.empty; classification = None }))
          prog
   in
+  let prog = Program.add_proc proc prog in
   (prog, proc, bl)
 
 let load_single_block ?proc ~input lexbuf =

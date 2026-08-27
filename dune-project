@@ -25,10 +25,7 @@
 (package
  (name capstone_arm64_disas)
  (synopsis "Disas arm ops with capstone")
- (depends
-   ocaml
-   ppx_expect
-   )
+ (depends ocaml)
 )
 
 (package
@@ -37,6 +34,7 @@
  (description "A longer description")
  (depends
   ocaml
+  unionFind
   capstone_arm64_disas
   (aslp_lifter_ocaml (>= 1.1))
   (ocaml-protoc-plugin (>= 6.1.0))

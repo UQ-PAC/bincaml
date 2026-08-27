@@ -1,9 +1,10 @@
 open Common
+open Types
+open Expr
+open Containers
+include module type of Program_types
 
-type e = Expr.BasilExpr.t
-type proc = (Var.t, e) Procedure.t
-type bloc = (Var.t, e) Block.t
-type stmt = (Var.t, Var.t, e) Stmt.t
+type t
 
 module Proc : sig
   type t = proc
@@ -26,36 +27,9 @@ val show_stmt : (Var.t, Var.t, Expr.BasilExpr.t) Stmt.t -> string
 val pp_stmt :
   Containers.Format.formatter -> (Var.t, Var.t, Expr.BasilExpr.t) Stmt.t -> unit
 
-type prog_spec = { rely : e list; guarantee : e list }
-type func_type = Axiom of e | Uninterpreted | Function of e
-
-type implicit_declaration =
-  | VariantCase of {
-      variant : string;
-      belongs_to : Types.t;
-      constructor : Var.t;
-    }
-
-type declaration =
-  | Type of { binding : string; typ : Types.t }
-  | Function of {
-      binding : Var.t;
-      attrib : Attrib.attrib_map;
-      definition : func_type;
-    }
-  | Variable of {
-      binding : Var.t;
-      attrib : Attrib.attrib_map;
-      classification : e option;
-    }
-  | Procedure of { definition : proc }
-
 val decl_binding : declaration -> string
-val pretty_proc : (Var.t, 'a) Procedure.t -> Containers_pp.t
+val pretty_proc : (Var.t, Expr.BasilExpr.t) Procedure.t -> Containers_pp.t
 val pretty_declaration : declaration -> Containers_pp.t
-
-type t
-
 val get_id_by_name : string -> t -> ID.t
 val set_entry_proc : ID.t -> t -> t
 val set_spec : prog_spec -> t -> t
@@ -79,9 +53,15 @@ val get_proc : ID.t -> t -> proc
 val get_implicit_decl_by_name : string -> t -> implicit_declaration option
 val declare_name : string -> t -> ID.t
 val declare_name_exn : string -> t -> ID.t
-val add_decl : ?attrib:'a Types.StringMap.t -> t -> declaration -> t
+
+val add_decl :
+  ?at:[ `Append | `BeforeFuncs | `BeforeProcs | `BeforeVars | `Prepend ] ->
+  t ->
+  declaration ->
+  t
+
 val remove_decl : t -> declaration -> t
-val update_decl : ?attrib:'a Types.StringMap.t -> t -> declaration -> t
+val update_decl : t -> declaration -> t
 val add_proc : (Var.t, Expr.BasilExpr.t) Procedure.t -> t -> t
 
 val update_proc :
@@ -90,7 +70,9 @@ val update_proc :
   t ->
   t
 
-val output_proc_pretty : out_channel -> (Var.t, 'a) Procedure.t -> unit
+val output_proc_pretty :
+  out_channel -> (Var.t, Expr.BasilExpr.t) Procedure.t -> unit
+
 val prog_pretty : t -> Containers_pp.t
 val declarations : t -> (ID.t * declaration) CCMap.iter
 val filter_decls : (ID.t -> declaration -> bool) -> t -> t
@@ -107,6 +89,10 @@ val decl_global :
   t
 
 val decl_typ : ?attrib:'a Types.StringMap.t -> t -> Types.t -> t
+
+val referenced_vars_of_prog : t -> Var.t Iter.t
+(** Iterates over global variables in the given program, including both read and
+    assigned variables. Order is unspecified and may have duplicates. *)
 
 val create_single_proc :
   ?name:string -> unit -> t * (Var.t, Expr.BasilExpr.t) Procedure.t

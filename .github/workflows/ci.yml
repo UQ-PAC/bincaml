@@ -1,0 +1,132 @@
+name: ci
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions: read-all
+
+jobs:
+  nix:
+    strategy:
+      matrix:
+        os: [ ubuntu-26.04, macos-26 ]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: nixbuild/nix-quick-install-action@v35
+
+      - uses: nix-community/cache-nix-action@v7
+        with: &nix-cache
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 1G
+          purge: true
+          purge-prefixes: nix-${{ runner.os }}-
+          purge-created: 0
+          purge-last-accessed: P1DT12H
+          purge-primary-key: never
+      - run: ./in-nix echo "Preparing Nix shell"
+
+      - run: ./in-nix dune build --profile=release
+      - run: ./in-nix opam lint
+        if: "!cancelled()"
+      - run: ./in-nix dune build '@treesit'
+        if: "!cancelled()"
+      - run: ./in-nix dune fmt
+        if: "!cancelled()"
+      - run: ./in-nix dune runtest --force
+        if: "!cancelled()"
+
+  format:
+    runs-on: ubuntu-26.04
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - uses: ./.github/actions/setup-bincaml
+        with:
+          ocaml-compiler: 5.4
+
+      - run: opam lint
+        if: "!cancelled()"
+      - run: dune build '@treesit'
+        if: "!cancelled()"
+      - run: dune fmt
+        if: "!cancelled()"
+
+  opam:
+    strategy: &opam-strategy
+      matrix:
+        include:
+          - { v: "5.3", os: "ubuntu-26.04" }
+          - { v: "5.4", os: "ubuntu-26.04" }
+          - { v: "5.4", os: "macos-26" }
+      fail-fast: false
+    timeout-minutes: 20
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - uses: ./.github/actions/setup-bincaml
+        with:
+          ocaml-compiler: ${{ matrix.v }}
+
+      - run: dune build --profile=release
+        if: "!cancelled()"
+      - run: dune runtest --force
+        if: "!cancelled()"
+
+  docs-build:
+    runs-on: ubuntu-26.04
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: nixbuild/nix-quick-install-action@v35
+      - uses: nix-community/cache-nix-action@v7
+        with: *nix-cache
+      - run: ./in-nix echo "Preparing Nix shell"
+
+      - run: nix build .#bincamlDocs.docs -L
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: result/.
+
+  docs-deploy:
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
+
+    runs-on: ubuntu-26.04
+    if: ${{ github.ref == 'refs/heads/main' }}
+
+    needs: docs-build
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    permissions:
+      id-token: write
+      pages: write
+
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

@@ -102,7 +102,7 @@ let empty_aslp_ids () =
     This will ensure that ASLp's local variable and block names do not clash
     with existing names. *)
 let aslp_ids_from_generators ~local_ids =
-  let local_id = ID.fresh ~name:"var" local_ids %> ID.name in
+  let local_id = ID.fresh ~name:"local" local_ids %> ID.name in
   { local_id }
 
 (** {1 State manipulation functions} *)
@@ -113,7 +113,7 @@ let aslp_ids_from_generators ~local_ids =
     is assumed that [PC] is assigned at most once on any straight-line path.
     Raises an exception if the statement is an assignment to [PC] and
     {!pc_assign} is already set. *)
-let add_stmt_to_block blk ~stmt =
+let add_stmt_to_block ?(allow_double_pc = false) ~stmt blk =
   let pc_assign =
     match stmt with
     | Stmt.Instr_Assign { al = assigns; _ } ->
@@ -121,11 +121,11 @@ let add_stmt_to_block blk ~stmt =
     | _ -> None
   in
   match (pc_assign, blk.pc_assign) with
-  | Some _, Some _ ->
+  | Some _, Some _ when not allow_double_pc ->
       failwith
         "add_stmt_to_block: attempt to add PC assignment but pc_assign is \
          already set"
-  | Some _, None | None, _ ->
+  | Some _, None | None, _ | Some _, Some _ ->
       CCVector.push blk.stmts stmt;
       if Option.is_some pc_assign then { blk with pc_assign } else blk
 
@@ -134,7 +134,7 @@ let add_stmt_to_active stmt (lifter_state : lifter_state) =
   let diamond = diamond |> Diamond_zipper.modify (add_stmt_to_block ~stmt) in
   { lifter_state with diamond }
 
-(** {1 Program counter functions} *)
+(** {1 Program counter and guard functions} *)
 
 (** Ensures that the focused block has a PC assignment. If it already has
     {!pc_assign}, no changes are made. *)
@@ -191,9 +191,46 @@ let ensure_pc_consistency ~address state =
   match (Diamond_zipper.focus left, Diamond_zipper.focus right) with
   | { pc_assign = None }, { pc_assign = None } -> state
   | { pc_assign = Some lpc; assume }, { pc_assign = Some rpc } ->
-      let ite = Expr.BasilExpr.(ifthenelse assume lpc rpc) in
+      let ite =
+        if Expr.BasilExpr.equal lpc rpc then lpc
+        else Expr.BasilExpr.ifthenelse assume lpc rpc
+      in
       state |> Diamond_zipper.modify (fun b -> { b with pc_assign = Some ite })
   | _ -> failwith "invariant violation: pcs should agree at this point"
+
+(** Ensures that a PC assignment exists in the last block of the focused
+    diamond. This "forwarded" assignment will use ITEs to express any needed
+    conditional PC assignments.
+
+    If the PC was assigned earlier, inserts a new assignment in the last block.
+    This is semantically redundant, but is meant to simplify guard cleanup. *)
+let ensure_forwarded_pc state =
+  match Diamond_zipper.(move_in_to `L state, move_in_to `R state) with
+  | Error _, _ | _, Error _ -> state (* focus is not a branch *)
+  | Ok l, Ok r -> (
+      match Diamond_zipper.((focus l).pc_assign, (focus r).pc_assign) with
+      | None, None -> state
+      | Some _, Some _ ->
+          let pc_assign =
+            Option.get_exn_or "invariant violation: pc should be propagated"
+              (Diamond_zipper.focus state).pc_assign
+          in
+          let al = [ (Aslp_lexpr.pc_var, pc_assign) ] in
+          let stmt = Stmt.Instr_Assign { attrib = Attrib.empty; al } in
+          state
+          |> Diamond_zipper.modify
+               (add_stmt_to_block ~stmt ~allow_double_pc:true)
+      | Some _, None | None, Some _ -> failwith "pcs should already agree")
+
+(** Returns an {!Lang.Stmt.Instr_Assume} statement for the given block's guard,
+    if it is non-trivial. *)
+let assume_of_aslp_block = function
+  | { assume = E (Constant { const = `Bool true }); _ } -> None
+  | { assume = body; _ } ->
+      Some (Stmt.Instr_Assume { attrib = Attrib.empty; body; branch = false })
+
+let stmts_of_aslp_block ({ stmts } as st) =
+  Option.to_list (assume_of_aslp_block st) @ CCVector.to_list stmts
 
 (** {1 Formatters} *)
 
