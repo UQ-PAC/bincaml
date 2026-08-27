@@ -409,7 +409,7 @@ module BasilExpr = struct
   let fold_with_type (alg : 'e abstract_expr -> 'a) = zygo_l ~cata type_alg alg
   let fold_with_type_r (alg : 'e abstract_expr -> 'a) = zygo ~cata type_alg alg
 
-  let elabourate_typ e =
+  let elaborate_typ e =
     fold_with_type
       (fun t ->
         let typ = type_alg (AbstractExpr.map snd t) in

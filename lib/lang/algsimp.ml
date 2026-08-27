@@ -310,6 +310,21 @@ let algebraic_simplifications
       replace [%here] arg
   | UnaryExpr { op = `BoolNOT; arg = UnaryExpr { op = `BoolNOT; arg }, _ } ->
       replace [%here] arg
+  | UnaryExpr { op = `SignExtend k; arg = UnaryExpr { op = `BVNOT; arg }, _ } ->
+      replace [%here]
+        (BasilExpr.unexp ~op:`BVNOT
+           (BasilExpr.sign_extend ~n_prefix_bits:k arg))
+  (* bvadd(x, not(y), 1) = bvsub(x, y) *)
+  | ApplyIntrin
+      {
+        op = `BVADD;
+        args = [ (a, _); (UnaryExpr { op = `BVNOT; arg = b }, _); (k, _) ];
+      }
+    when is_bvone k ->
+      replace [%here] (BasilExpr.binexp ~op:`BVSUB (fix a) b)
+  | BinaryExpr { op = `EQ; arg1 = a, _; arg2 = b, _ }
+    when BasilExpr.equal (fix a) (fix b) ->
+      replace [%here] (BasilExpr.boolconst true)
   | _ -> Keep
 
 let algebraic_simplifications = sequence drop_assoc algebraic_simplifications
@@ -322,8 +337,9 @@ let alg_simp_rewriter ?visit e =
   e
   |> ( to_steady BasilExpr.equal @@ fun e ->
        e |> partial_eval_expr |> simp_concat_fix )
-  |> to_steady BasilExpr.equal
-       (BasilExpr.rewrite_typed_two ?visit algebraic_simplifications)
+  |> to_steady BasilExpr.equal (fun e ->
+      e |> partial_eval_expr
+      |> BasilExpr.rewrite_typed_two ?visit algebraic_simplifications)
   |> to_steady BasilExpr.equal (BasilExpr.rewrite_typed_two ?visit normalise)
 
 let normalise e =

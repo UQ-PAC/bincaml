@@ -88,15 +88,42 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
   | ApplyIntrin { op = #Ops.Spec.intrin } -> None
   | ApplyIntrin { op = #Ops.Maps.intrin } -> None
 
-let partial_eval_alg (e : BasilExpr.t BasilExpr.abstract_expr) :
-    BasilExpr.rewrite =
+let const_eval_expr (e : BasilExpr.t BasilExpr.abstract_expr) :
+    BasilExpr.t option =
   let open AbstractExpr in
   let open Option.Infix in
   let is_const e =
     match BasilExpr.unfix e with Constant { const } -> Some const | _ -> None
   in
-  let e = AbstractExpr.map is_const e in
-  eval_expr_alg e >|= BasilExpr.const |> BasilExpr.replace_opt
+  let e' = AbstractExpr.map is_const e in
+  eval_expr_alg e' >|= BasilExpr.const
+
+let partial_eval_intrin (e : BasilExpr.t BasilExpr.abstract_expr) :
+    BasilExpr.t option =
+  let open AbstractExpr in
+  match e with
+  | ApplyIntrin { op; args } ->
+      let consts, rest =
+        List.partition
+          (function Constant _ -> true | _ -> false)
+          (List.map BasilExpr.unfix args)
+        |> Pair.map_same (List.map BasilExpr.fix)
+      in
+      if List.length consts >= 2 then
+        let e_const =
+          BasilExpr.applyintrin ~op consts
+          |> BasilExpr.unfix |> const_eval_expr
+          |> Option.get_exn_or "terms should all be constant"
+        in
+        Some (BasilExpr.applyintrin ~op (List.append rest [ e_const ]))
+      else None
+  | _ -> None
+
+let partial_eval_alg (e : BasilExpr.t BasilExpr.abstract_expr) :
+    BasilExpr.rewrite =
+  const_eval_expr e
+  |> Option.or_lazy ~else_:(fun _ -> partial_eval_intrin e)
+  |> BasilExpr.replace_opt
 
 let partial_eval_expr e = BasilExpr.rewrite ~rw_fun:partial_eval_alg e
 let eval_expr e = BasilExpr.cata eval_expr_alg e
