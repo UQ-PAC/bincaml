@@ -29,10 +29,13 @@ end
 module type InterferenceStateDomain = sig
   include Intra_analysis.IntraDomain
   (** The state domain we extend. In future, we hope to extend this to interprocedural domains. *)
+  
   val meet : t -> t -> t
   (** Derives the greatest lower bound of two domain elements. *)
+  
   val havoc : t -> VarSet.t -> t
   (** Abstracts out a set of variables; minimally weakens the domain element such that the vars are not constrained. *)
+  
   val filter : t -> BasilExpr.t -> t
   (** Returns an overapproximation (upper bound) on the states reachable after applying the given condition. *)
 end
@@ -92,6 +95,7 @@ end
 module type InterferenceDomain = sig
   module D : InterferenceStateDomain
   (** The underlying state domain. We use this to generate reachable states, from which we generate RG conditions. *)
+  
   module ConcInt : module type of ConcreteInterference(D)
   (** Concrete interferences are precondition-assignment pairs, where the precondition is of type [D.t]. *)
 
