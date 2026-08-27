@@ -58,7 +58,7 @@ module InterferenceWrappedIntervalDomain = struct
 end
 
 (** The rely-guarantee conditions we generate are always elements of some lattice. The signature for this lattice is
-    defined here. We use this simpler signature instead of {!Lattice_types.Lattice} because our analysis does not
+    defined here. We use this simpler signature instead of Lattice_types.Lattice because our analysis does not
     require the 'top', 'widening', or 'narrowing' functions to be defined. *)
 module type Interference = sig
   val name : string
@@ -86,8 +86,8 @@ end
 
 (** Interference domains are like abstract domains except that instead of abstracting sets of states, they abstract
     sets of pairs of states representing state transitions. In this way, they can be viewed as abstract rely-guarantee
-    conditions. Rather than defining a transfer function, interference domains define a {!stabilise} function for
-    applying interferences to states, as well as a {!transitions} function for deriving elements of the interference
+    conditions. Rather than defining a transfer function, interference domains define a 'stabilise' function for
+    applying interferences to states, as well as a 'transitions' function for deriving elements of the interference
     domain from precondition-assignment pairs. *)
 module type InterferenceDomain = sig
   module D : InterferenceStateDomain

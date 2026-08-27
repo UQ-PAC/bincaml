@@ -221,7 +221,7 @@ module WrappedIntervalsLattice = struct
         else if (not al_mem) && au_mem && bl_mem && not bu_mem then
           [ interval bl au ]
         else []
-  
+
   let meet a b = lub (intersect a b)
 
   let nsplit ~width t =
