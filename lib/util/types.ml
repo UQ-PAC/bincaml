@@ -163,6 +163,7 @@ let rec to_string = function
   | Map (a, b) -> "(" ^ (to_string a ^ "->" ^ to_string b) ^ ")"
   | Sort (name, _) -> name
 
+(*
 let partially_apply func args  =
   let atypes, rt = uncurry func in
   let act_types, rest_act_types = List.take_drop (List.length args) atypes in
@@ -170,6 +171,7 @@ let partially_apply func args  =
   let match_types = List.combine act_types @@ args in
   if List.for_all (Fun.uncurry equal) match_types then curry rest_act_types rt
   else (failwith @@ Printf.sprintf "(%s) (%s)" (to_string func) (List.to_string to_string args))
+       *)
 
 let to_string_decl = function
   | Sort (name, []) -> name
