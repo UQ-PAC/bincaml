@@ -393,9 +393,8 @@ module BasilExpr = struct
     | BinaryExpr { op; arg1 = l; arg2 = r } -> ret_type_bin op l r |> get_ty
     | ApplyIntrin { op; args } -> ret_type_intrin op args |> get_ty
     | ApplyFun { func; args } ->
-        (* FIXME: this is wrong *)
-        let _, rt = Types.uncurry func in
-        rt
+        let n = Hm_inference.type_applied func args in
+        Result.get_or_failwith n
     | Lambda { op; bound_vars; in_body = b } ->
         ret_type_lambda op (bound_vars |> List.map Var.typ) b |> get_ty
         (*Types.curry (List.map Var.typ bound_vars) b*)
