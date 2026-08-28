@@ -188,3 +188,9 @@ let repeat_bits ~(copies : int) a =
 (* extend sign bit by [extension] bits *)
 let sign_extend ~(extension : int) b =
   create ~size:(b.w + extension) @@ to_signed_bigint b
+
+(* -(2^(size)) *)
+let min_value_signed size = shl (one ~size) (of_int ~size (size - 1))
+
+(* 2^(size-1) - 1 *)
+let max_value_signed size = sub (min_value_signed size) (one ~size)

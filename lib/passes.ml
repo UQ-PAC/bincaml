@@ -247,6 +247,14 @@ module PassManager = struct
       invariants = Invariants.presupposes [];
     }
 
+  let branch_conditions =
+    {
+      name = "branch-conditions";
+      apply = Proc Transforms.Branch_conditions.transform;
+      doc = "TODO";
+      invariants = Invariants.presupposes [];
+    }
+
   let irreducible_loop =
     {
       name = "irreducible-loops";
@@ -469,6 +477,7 @@ module PassManager = struct
       remove_unreachable_blocks;
       collapse_empty_blocks;
       cleanup_cfg;
+      branch_conditions;
       dfg_bool;
       dfg_ival_wint_product;
       demo_ival_wint_dfg;
