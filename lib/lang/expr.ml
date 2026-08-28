@@ -36,6 +36,9 @@ module BasilExpr = struct
   (** create fixed type from abstract type *)
   let fix i = E i
 
+  let fix2 i = fix (AbstractExpr.map fix i)
+  let fix3 i = fix (AbstractExpr.map fix2 i)
+
   (** create abstract type from fixed type *)
   let unfix i = match i with E i -> i
 

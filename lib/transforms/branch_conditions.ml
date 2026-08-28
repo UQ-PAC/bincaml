@@ -22,6 +22,10 @@ module FlagSemantics = struct
         (** Carry when subtracting first from second *)
     | CarryBySum of Expr.BasilExpr.t * Expr.BasilExpr.t
         (** Carry when adding first and second *)
+    | NegEqual of Expr.BasilExpr.t * Expr.BasilExpr.t
+        (** When left == -right (or -left == right) *)
+    | Equal of Expr.BasilExpr.t * Expr.BasilExpr.t  (** When left == right *)
+    | IsZero of Expr.BasilExpr.t  (** When expr is zero *)
   [@@deriving show { with_path = false }]
 end
 
@@ -142,34 +146,6 @@ let extract_semantics e =
           Some (FlagSemantics.CarryByConst (fix a, bv1))
       | ( UnaryExpr
             {
-              op = `ZeroExtend s1;
-              arg =
-                ApplyIntrin
-                  {
-                    op = `BVADD;
-                    args =
-                      [
-                        a;
-                        Constant { const = `Bitvector bv1; typ = Bitvector k1 };
-                      ];
-                  };
-            },
-          ApplyIntrin
-            {
-              op = `BVADD;
-              args =
-                [
-                  UnaryExpr { op = `ZeroExtend s2; arg = c };
-                  Constant { const = `Bitvector bv2; typ = Bitvector k2 };
-                ];
-            } )
-        when s1 = s2 && s1 > 0
-             && equal (fix a) (fix c)
-             && k2 = k1 + s1
-             && zext_eq s1 bv1 bv2 ->
-          Some (FlagSemantics.CarryByConst (fix a, bv1))
-      | ( UnaryExpr
-            {
               op = `ZeroExtend z1;
               arg = ApplyIntrin { op = `BVADD; args = [ a; b ] };
             },
@@ -211,6 +187,25 @@ let extract_semantics e =
              && is_one bv ->
           Some (FlagSemantics.CarryByDiff (fix a, fix b))
       | _ -> None)
+  | UnaryExpr { op = `BOOLTOBV1; arg = BinaryExpr { op = `EQ; arg1; arg2 } }
+    -> (
+      match (unfix2 @@ fix arg1, unfix2 @@ fix arg2) with
+      | ( ApplyIntrin
+            { op = `BVADD; args = [ a; Constant { const = `Bitvector bv } ] },
+          Constant { const = `Bitvector bv2 } )
+        when Bitvec.is_zero bv2 ->
+          Some (FlagSemantics.Equal (fix a, bvconst (Bitvec.neg bv)))
+      | ( ApplyIntrin { op = `BVADD; args = [ a; b ] },
+          Constant { const = `Bitvector bv } )
+        when Bitvec.is_zero bv ->
+          Some (FlagSemantics.NegEqual (fix a, fix b))
+      | ( BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b },
+          Constant { const = `Bitvector bv } )
+        when Bitvec.is_zero bv ->
+          Some (FlagSemantics.Equal (fix a, fix b))
+      | a, Constant { const = `Bitvector bv } when Bitvec.is_zero bv ->
+          Some (FlagSemantics.IsZero (fix2 a))
+      | _ -> None)
   | _ -> None
 
 (** Add flag semantic annotations as attributes for debugging *)
@@ -222,7 +217,7 @@ let annotate_stmt stmt =
         List.filter_map
           (fun (v, e) ->
             let o = extract_semantics e in
-            if Option.is_none o && String.equal (Var.name v) "$PSTATE_C" then
+            if Option.is_none o && String.equal (Var.name v) "$PSTATE_Z" then
               print_endline (Expr.BasilExpr.to_string (Algsimp.normalise e));
             o |> Option.map (fun s -> (v, s)))
           al
