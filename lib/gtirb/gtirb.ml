@@ -48,9 +48,9 @@ let chop_block_opcodes ~(need_flip : bool) block : block option =
   let open Option in
   let contents size () =
     if Bytes.length block.raw = 0 then String.empty
-    else
-      (*Logs.debug (fun m -> m "%d : %d" (Bytes.length block.raw) size);*)
-      String.of_bytes @@ Bytes.sub block.raw block.block.offset size
+    else (
+      Logs.debug (fun m -> m "%d : %d" (Bytes.length block.raw) size);
+      String.of_bytes @@ Bytes.sub block.raw block.block.offset size)
   in
   (* all blocks that have uuid defined  *)
   let* uuid, size, opcodes, contents =

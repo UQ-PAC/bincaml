@@ -36,6 +36,7 @@ let extract_semantics e =
   let e = Algsimp.normalise e in
   let open Expr.AbstractExpr in
   let open Expr.BasilExpr in
+  let equal e1 e2 = equal (drop_attrib e1) (drop_attrib e2) in
   let sext_eq extension bv1 bv2 =
     Bitvec.(equal (sign_extend ~extension bv1) bv2)
   in
@@ -243,7 +244,7 @@ let annotate_flag_assigns stmt =
               && String.starts_with ~prefix:"$PSTATE_" (Var.name v)
             then
               Logs.debug (fun m ->
-                  m "%s had no assiged semantic meaning for expr %s"
+                  m "%s had no assigned semantic meaning for expr %s"
                     (Var.name v)
                     (Expr.BasilExpr.to_string (Algsimp.normalise e)));
             o |> Option.map (fun s -> (v, s)))
@@ -261,7 +262,165 @@ let annotate_flag_assigns stmt =
       Instr_Assign { attrib; al }
   | _ -> stmt
 
-let transform (p : Program.proc) =
+let annotate_flag_assign_stmts (p : Program.proc) =
   Procedure.map_blocks_nondet
     (fun (bid, block) -> Block.map ~phi:id annotate_flag_assigns block)
     p
+
+let transform = annotate_flag_assign_stmts
+
+let%expect_test "flag_types" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+var $R0:bv64;
+var $R1:bv64;
+var $H2:bv64;
+var $H3:bv64;
+var $PSTATE_N:bv1;
+var $PSTATE_Z:bv1;
+var $PSTATE_C:bv1;
+var $PSTATE_V:bv1;
+
+proc @main() -> ()
+[
+  block %main [
+     $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
+        bvadd(extract(32,0, $R0), 0x1:bv32)),
+        bvadd(sign_extend(32, extract(32,0, $R0)), 0x1:bv64))));
+     $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
+        bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)),
+        bvadd(bvadd(sign_extend(32, extract(32,0, $R0)), 0xfffffffffffffffd:bv64),
+         0x1:bv64))));
+     $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
+        bvadd(bvadd(extract(32,0, $R0),
+          bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)),
+        bvadd(bvadd(sign_extend(32, extract(32,0, $R0)),
+          sign_extend(32,
+          bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64))));
+     $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
+        bvadd(local_31:bv32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12)))),
+        bvadd(sign_extend(32, local_31:bv32),
+         sign_extend(32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12)))))));
+
+     $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
+        bvadd(extract(32,0, $R0), 0x1:bv32)),
+        bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64))));
+     $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
+        bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)),
+        bvadd(bvadd(zero_extend(32, extract(32,0, $R0)), 0xfffffffd:bv64),
+         0x1:bv64))));
+     $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
+        bvadd(bvadd(extract(32,0, $R0),
+          bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)),
+        bvadd(bvadd(zero_extend(32, extract(32,0, $R0)),
+          zero_extend(32,
+          bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64))));
+     $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
+        bvadd($H2:bv32, bvshl($H3:bv32, zero_extend(20, 0x0:bv12)))),
+        bvadd(zero_extend(32, $H2:bv32),
+         zero_extend(32, bvshl($H3:bv32, zero_extend(20, 0x0:bv12)))))));
+
+     $PSTATE_Z:bv1 := booltobv1(eq(bvadd($H2:bv32,
+        bvshl($H3:bv32, zero_extend(20, 0x0:bv12))), 0x0:bv32));
+     $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32));
+     $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd(extract(32,0, $R0),
+         bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32),
+       0x0:bv32));
+
+     $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32));
+     $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0),
+       bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32));
+     $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0),
+       0xffffffff:bv32), 0x1:bv32));
+
+     $PSTATE_V:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_V = "Never" };
+     $PSTATE_C:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_C = "Never" };
+     $PSTATE_Z:bv1 := 0x1:bv1 { .flag_semantics_$PSTATE_Z = "Always" };
+     $PSTATE_N:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_N = "Never" };
+
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+prog entry @main;
+    |}
+  in
+  let prog =
+    lst.prog |> Program.map_procedures (fun _ -> annotate_flag_assign_stmts)
+  in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
+  [%expect
+    {|
+    var $R0:bv64;
+    var $R1:bv64;
+    var $H2:bv64;
+    var $H3:bv64;
+    var $PSTATE_N:bv1;
+    var $PSTATE_Z:bv1;
+    var $PSTATE_C:bv1;
+    var $PSTATE_V:bv1;
+    proc @main()  -> () {  }
+      modifies $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1
+      captures $H2:bv64, $H3:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1,
+        $PSTATE_Z:bv1, $R0:bv64, $R1:bv64
+
+    [
+       block %main [
+         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
+            bvadd(extract(32,0, $R0), 0x1:bv32)),
+            bvadd(sign_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OverflowByConst (extract(32,0, $R0), 0x1:bv32))" };
+         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
+            bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)),
+            bvadd(bvadd(sign_extend(32, extract(32,0, $R0)), 0xfffffffffffffffd:bv64),
+             0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OverflowByConst (extract(32,0, $R0), 0xfffffffe:bv32))" };
+         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
+            bvadd(bvadd(extract(32,0, $R0),
+              bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)),
+            bvadd(bvadd(sign_extend(32, extract(32,0, $R0)),
+              sign_extend(32,
+              bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OverflowByDiff (extract(32,0, $R0), extract(32,0, $R1)))" };
+         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
+            bvadd(local_31:bv32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12)))),
+            bvadd(sign_extend(32, local_31:bv32),
+             sign_extend(32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_V = "(OverflowBySum (local_31:bv32, local_32:bv32))" };
+         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
+            bvadd(extract(32,0, $R0), 0x1:bv32)),
+            bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CarryByConst (extract(32,0, $R0), 0x1:bv32))" };
+         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
+            bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)),
+            bvadd(bvadd(zero_extend(32, extract(32,0, $R0)), 0xfffffffd:bv64),
+             0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CarryByConst (extract(32,0, $R0), 0xfffffffe:bv32))" };
+         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
+            bvadd(bvadd(extract(32,0, $R0),
+              bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)),
+            bvadd(bvadd(zero_extend(32, extract(32,0, $R0)),
+              zero_extend(32,
+              bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CarryByDiff (extract(32,0, $R0), extract(32,0, $R1)))" };
+         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
+            bvadd($H2, bvshl($H3, zero_extend(20, 0x0:bv12)))),
+            bvadd(zero_extend(32, $H2),
+             zero_extend(32, bvshl($H3, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_C = "(CarryBySum ($H2, $H3))" };
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd($H2,
+            bvshl($H3, zero_extend(20, 0x0:bv12))), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(NegEqual ($H2, $H3))" };
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(Equal (extract(32,0, $R0), 0xffffffff:bv32))" };
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd(extract(32,0, $R0),
+             bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32),
+           0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(Equal (extract(32,0, $R0), extract(32,0, $R1)))" };
+         $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(Slt (extract(32,0, $R0), 0xffffffff:bv32))" };
+         $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0),
+           bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(Slt (extract(32,0, $R0), extract(32,0, $R1)))" };
+         $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0),
+           0xffffffff:bv32), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(IsNeg extract(32,0, $R0))" };
+         $PSTATE_V:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_V = "Never" };
+         $PSTATE_C:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_C = "Never" };
+         $PSTATE_Z:bv1 := 0x1:bv1 { .flag_semantics_$PSTATE_Z = "Always" };
+         $PSTATE_N:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_N = "Never" };
+         goto (%ret);
+       ];
+       block %ret [ return; ]
+    ];
+    prog entry @main;
+    |}]
