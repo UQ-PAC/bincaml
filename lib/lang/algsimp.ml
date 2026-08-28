@@ -327,6 +327,20 @@ let algebraic_simplifications
   | BinaryExpr { op = `EQ; arg1 = a, _; arg2 = b, _ }
     when BasilExpr.equal (fix a) (fix b) ->
       replace [%here] (BasilExpr.boolconst true)
+  | BinaryExpr
+      {
+        op = `EQ;
+        arg1 = a, _;
+        arg2 =
+          ( ApplyIntrin
+              {
+                op = `BVADD;
+                args = [ b; E (Constant { const = `Bitvector c }) ];
+              },
+            _ );
+      }
+    when BasilExpr.equal (fix a) b && not (is_zero c) ->
+      replace [%here] (BasilExpr.boolconst false)
   | _ -> Keep
 
 let algebraic_simplifications = sequence drop_assoc algebraic_simplifications
