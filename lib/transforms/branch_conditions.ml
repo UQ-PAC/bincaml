@@ -236,7 +236,17 @@ let annotate_flag_assigns stmt =
   | Instr_Assign { attrib; al } ->
       let annotations =
         List.filter_map
-          (fun (v, e) -> extract_semantics e |> Option.map (fun s -> (v, s)))
+          (fun (v, e) ->
+            let o = extract_semantics e in
+            if
+              Option.is_none o
+              && String.starts_with ~prefix:"$PSTATE_" (Var.name v)
+            then
+              Logs.debug (fun m ->
+                  m "%s had no assiged semantic meaning for expr %s"
+                    (Var.name v)
+                    (Expr.BasilExpr.to_string (Algsimp.normalise e)));
+            o |> Option.map (fun s -> (v, s)))
           al
       in
       let attrib =
