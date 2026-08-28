@@ -17,13 +17,14 @@ module FlagSemantics = struct
         (** Carry when subtracting first from second *)
     | CarryBySum of Expr.BasilExpr.t * Expr.BasilExpr.t
         (** Carry when adding first and second *)
-    | NegEqual of Expr.BasilExpr.t * Expr.BasilExpr.t
+    | ZeroNegEqual of Expr.BasilExpr.t * Expr.BasilExpr.t
         (** When left == -right (or -left == right) *)
-    | Equal of Expr.BasilExpr.t * Expr.BasilExpr.t  (** When left == right *)
-    | IsZero of Expr.BasilExpr.t  (** When expr is zero *)
-    | Slt of Expr.BasilExpr.t * Expr.BasilExpr.t
+    | ZeroEqual of Expr.BasilExpr.t * Expr.BasilExpr.t
+        (** When left == right *)
+    | ZeroIsZero of Expr.BasilExpr.t  (** When expr is zero *)
+    | NegSlt of Expr.BasilExpr.t * Expr.BasilExpr.t
         (** When left < right signed *)
-    | IsNeg of Expr.BasilExpr.t  (** When expr is negative *)
+    | NegIsNeg of Expr.BasilExpr.t  (** When expr is negative *)
   [@@deriving show { with_path = false }]
 
   let extract_semantics e =
@@ -194,17 +195,17 @@ module FlagSemantics = struct
               { op = `BVADD; args = [ a; Constant { const = `Bitvector bv } ] },
             Constant { const = `Bitvector bv2 } )
           when Bitvec.is_zero bv2 ->
-            Some (Equal (fix a, bvconst (Bitvec.neg bv)))
+            Some (ZeroEqual (fix a, bvconst (Bitvec.neg bv)))
         | ( ApplyIntrin { op = `BVADD; args = [ a; b ] },
             Constant { const = `Bitvector bv } )
           when Bitvec.is_zero bv ->
-            Some (NegEqual (fix a, fix b))
+            Some (ZeroNegEqual (fix a, fix b))
         | ( BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b },
             Constant { const = `Bitvector bv } )
           when Bitvec.is_zero bv ->
-            Some (Equal (fix a, fix b))
+            Some (ZeroEqual (fix a, fix b))
         | a, Constant { const = `Bitvector bv } when Bitvec.is_zero bv ->
-            Some (IsZero (fix2 a))
+            Some (ZeroIsZero (fix2 a))
         | _ -> None)
     | UnaryExpr
         {
@@ -214,16 +215,16 @@ module FlagSemantics = struct
               { op = `BVADD; args = [ a; Constant { const = `Bitvector bv } ] };
         }
       when e1 = e2 + 1 ->
-        Some (Slt (fix a, bvconst (Bitvec.neg bv)))
+        Some (NegSlt (fix a, bvconst (Bitvec.neg bv)))
     | UnaryExpr
         {
           op = `Extract (e1, e2);
           arg = BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b };
         }
       when e1 = e2 + 1 ->
-        Some (Slt (fix a, fix b))
+        Some (NegSlt (fix a, fix b))
     | UnaryExpr { op = `Extract (e1, e2); arg } when e1 = e2 + 1 ->
-        Some (IsNeg (fix2 arg))
+        Some (NegIsNeg (fix2 arg))
     | _ -> None
 end
 
@@ -331,10 +332,10 @@ proc @main() -> ()
      $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0),
        0xffffffff:bv32), 0x1:bv32));
 
-     $PSTATE_V:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_V = "Never" };
-     $PSTATE_C:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_C = "Never" };
-     $PSTATE_Z:bv1 := 0x1:bv1 { .flag_semantics_$PSTATE_Z = "Always" };
-     $PSTATE_N:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_N = "Never" };
+     $PSTATE_V:bv1 := 0x0:bv1;
+     $PSTATE_C:bv1 := 0x0:bv1;
+     $PSTATE_Z:bv1 := 0x1:bv1;
+     $PSTATE_N:bv1 := 0x0:bv1;
 
     goto (%ret);
   ];
@@ -401,16 +402,16 @@ prog entry @main;
             bvadd(zero_extend(32, $H2),
              zero_extend(32, bvshl($H3, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_C = "(CarryBySum ($H2, $H3))" };
          $PSTATE_Z:bv1 := booltobv1(eq(bvadd($H2,
-            bvshl($H3, zero_extend(20, 0x0:bv12))), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(NegEqual ($H2, $H3))" };
-         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(Equal (extract(32,0, $R0), 0xffffffff:bv32))" };
+            bvshl($H3, zero_extend(20, 0x0:bv12))), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(ZeroNegEqual ($H2, $H3))" };
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(ZeroEqual (extract(32,0, $R0), 0xffffffff:bv32))" };
          $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd(extract(32,0, $R0),
              bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32),
-           0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(Equal (extract(32,0, $R0), extract(32,0, $R1)))" };
-         $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(Slt (extract(32,0, $R0), 0xffffffff:bv32))" };
+           0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(ZeroEqual (extract(32,0, $R0), extract(32,0, $R1)))" };
+         $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(NegSlt (extract(32,0, $R0), 0xffffffff:bv32))" };
          $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0),
-           bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(Slt (extract(32,0, $R0), extract(32,0, $R1)))" };
+           bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(NegSlt (extract(32,0, $R0), extract(32,0, $R1)))" };
          $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0),
-           0xffffffff:bv32), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(IsNeg extract(32,0, $R0))" };
+           0xffffffff:bv32), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(NegIsNeg extract(32,0, $R0))" };
          $PSTATE_V:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_V = "Never" };
          $PSTATE_C:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_C = "Never" };
          $PSTATE_Z:bv1 := 0x1:bv1 { .flag_semantics_$PSTATE_Z = "Always" };
