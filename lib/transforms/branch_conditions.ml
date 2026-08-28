@@ -1,11 +1,6 @@
 open Bincaml_util.Common
 open Lang
 
-(* instead of rewriting shapes, we should perform an analysis that assigns to each flag+codepoint an abstract value corresponding to its semantic meaning! Then we can rewrite assumes with the semantic meaning!
-   For soundness, delete terms of the analysis value map whenever a variable present in the map is assigned to.
-   This should not lose any precision since branch conditions should only occur directly after flag assignment!
- *)
-
 module FlagSemantics = struct
   type t =
     | Never
