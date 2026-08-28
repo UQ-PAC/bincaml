@@ -99,6 +99,7 @@ let normalise e =
   | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `OR; args } } ->
       replace [%here]
         (BasilExpr.applyintrin ~op:`AND (List.map BasilExpr.boolnot args))
+      (*
   | ApplyIntrin
       {
         attrib;
@@ -110,6 +111,7 @@ let normalise e =
       replace [%here]
         (BasilExpr.binexp ~attrib ~op:`BVSUB (fix v)
            (BasilExpr.bvconst ~attrib:cattrib (Bitvec.neg i)))
+        *)
   | _ -> Keep
 
 let simplify_concat
