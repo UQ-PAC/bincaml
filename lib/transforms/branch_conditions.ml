@@ -25,205 +25,207 @@ module FlagSemantics = struct
         (** When left < right signed *)
     | IsNeg of Expr.BasilExpr.t  (** When expr is negative *)
   [@@deriving show { with_path = false }]
-end
 
-let extract_semantics e =
-  let e = Algsimp.normalise e in
-  let open Expr.AbstractExpr in
-  let open Expr.BasilExpr in
-  let equal e1 e2 = equal (drop_attrib e1) (drop_attrib e2) in
-  let sext_eq extension bv1 bv2 =
-    Bitvec.(equal (sign_extend ~extension bv1) bv2)
-  in
-  let zext_eq extension bv1 bv2 =
-    Bitvec.(equal (zero_extend ~extension bv1) bv2)
-  in
-  let is_one bv = Bitvec.(equal bv (one ~size:(size bv))) in
-  match unfix3 e with
-  | Constant { const = `Bitvector k } when Bitvec.equal k (Bitvec.zero ~size:1)
-    ->
-      Some FlagSemantics.Never
-  | Constant { const = `Bitvector k } when Bitvec.equal k (Bitvec.one ~size:1)
-    ->
-      Some FlagSemantics.Always
-  | UnaryExpr
-      {
-        op = `BVNOT;
-        arg =
-          UnaryExpr
-            { op = `BOOLTOBV1; arg = BinaryExpr { op = `EQ; arg1; arg2 } };
-      } -> (
-      match (unfix3 arg1, unfix3 arg2) with
-      | ( UnaryExpr
-            {
-              op = `SignExtend s1;
-              arg =
-                ApplyIntrin
-                  {
-                    op = `BVADD;
-                    args =
-                      [
-                        a;
-                        Constant { const = `Bitvector bv1; typ = Bitvector k1 };
-                      ];
-                  };
-            },
-          ApplyIntrin
-            {
-              op = `BVADD;
-              args =
-                [
-                  UnaryExpr { op = `SignExtend s2; arg = c };
-                  Constant { const = `Bitvector bv2; typ = Bitvector k2 };
-                ];
-            } )
-        when s1 = s2 && s1 > 0
-             && equal (fix a) (fix c)
-             && k2 = k1 + s1
-             && sext_eq s1 bv1 bv2 ->
-          Some (FlagSemantics.OverflowByConst (fix a, bv1))
-      | ( UnaryExpr
-            {
-              op = `SignExtend s1;
-              arg = ApplyIntrin { op = `BVADD; args = [ a; b ] };
-            },
-          ApplyIntrin
-            {
-              op = `BVADD;
-              args =
-                [
-                  UnaryExpr { op = `SignExtend s2; arg = c };
-                  UnaryExpr { op = `SignExtend s3; arg = d };
-                ];
-            } )
-        when s1 = s2 && s2 = s3
-             && equal (fix a) (fix c)
-             && equal (fix b) (fix d) ->
-          Some (FlagSemantics.OverflowBySum (fix a, fix b))
-      | ( UnaryExpr
-            {
-              op = `SignExtend s1;
-              arg = BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b };
-            },
-          BinaryExpr
-            {
-              op = `BVSUB;
-              arg1 = UnaryExpr { op = `SignExtend s2; arg = c };
-              arg2 = UnaryExpr { op = `SignExtend s3; arg = d };
-            } )
-        when s1 = s2 && s2 = s3
-             && equal (fix a) (fix c)
-             && equal (fix b) (fix d) ->
-          Some (FlagSemantics.OverflowByDiff (fix a, fix b))
-      | ( UnaryExpr
-            {
-              op = `ZeroExtend s1;
-              arg =
-                ApplyIntrin
-                  {
-                    op = `BVADD;
-                    args =
-                      [
-                        a;
-                        Constant { const = `Bitvector bv1; typ = Bitvector k1 };
-                      ];
-                  };
-            },
-          ApplyIntrin
-            {
-              op = `BVADD;
-              args =
-                [
-                  UnaryExpr { op = `ZeroExtend s2; arg = c };
-                  Constant { const = `Bitvector bv2; typ = Bitvector k2 };
-                ];
-            } )
-        when s1 = s2 && s1 > 0
-             && equal (fix a) (fix c)
-             && k2 = k1 + s1
-             && zext_eq s1 bv1 bv2 ->
-          Some (FlagSemantics.CarryByConst (fix a, bv1))
-      | ( UnaryExpr
-            {
-              op = `ZeroExtend z1;
-              arg = ApplyIntrin { op = `BVADD; args = [ a; b ] };
-            },
-          ApplyIntrin
-            {
-              op = `BVADD;
-              args =
-                [
-                  UnaryExpr { op = `ZeroExtend z2; arg = c };
-                  UnaryExpr { op = `ZeroExtend z3; arg = d };
-                ];
-            } )
-        when z1 = z2 && z2 = z3
-             && equal (fix a) (fix c)
-             && equal (fix b) (fix d) ->
-          Some (FlagSemantics.CarryBySum (fix a, fix b))
-      | ( UnaryExpr
-            {
-              op = `ZeroExtend z1;
-              arg = BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b };
-            },
-          ApplyIntrin
-            {
-              op = `BVADD;
-              args =
-                [
-                  UnaryExpr { op = `ZeroExtend z2; arg = c };
-                  UnaryExpr
+  let extract_semantics e =
+    let e = Algsimp.normalise e in
+    let open Expr.AbstractExpr in
+    let open Expr.BasilExpr in
+    let equal e1 e2 = equal (drop_attrib e1) (drop_attrib e2) in
+    let sext_eq extension bv1 bv2 =
+      Bitvec.(equal (sign_extend ~extension bv1) bv2)
+    in
+    let zext_eq extension bv1 bv2 =
+      Bitvec.(equal (zero_extend ~extension bv1) bv2)
+    in
+    let is_one bv = Bitvec.(equal bv (one ~size:(size bv))) in
+    match unfix3 e with
+    | Constant { const = `Bitvector k }
+      when Bitvec.equal k (Bitvec.zero ~size:1) ->
+        Some Never
+    | Constant { const = `Bitvector k } when Bitvec.equal k (Bitvec.one ~size:1)
+      ->
+        Some Always
+    | UnaryExpr
+        {
+          op = `BVNOT;
+          arg =
+            UnaryExpr
+              { op = `BOOLTOBV1; arg = BinaryExpr { op = `EQ; arg1; arg2 } };
+        } -> (
+        match (unfix3 arg1, unfix3 arg2) with
+        | ( UnaryExpr
+              {
+                op = `SignExtend s1;
+                arg =
+                  ApplyIntrin
                     {
-                      op = `ZeroExtend z3;
-                      arg = UnaryExpr { op = `BVNOT; arg = d };
+                      op = `BVADD;
+                      args =
+                        [
+                          a;
+                          Constant
+                            { const = `Bitvector bv1; typ = Bitvector k1 };
+                        ];
                     };
-                  Constant { const = `Bitvector bv };
-                ];
-            } )
-        when z1 = z2 && z2 = z3
-             && equal (fix a) (fix c)
-             && equal (fix b) d
-             && is_one bv ->
-          Some (FlagSemantics.CarryByDiff (fix a, fix b))
-      | _ -> None)
-  | UnaryExpr { op = `BOOLTOBV1; arg = BinaryExpr { op = `EQ; arg1; arg2 } }
-    -> (
-      match (unfix2 @@ fix arg1, unfix2 @@ fix arg2) with
-      | ( ApplyIntrin
-            { op = `BVADD; args = [ a; Constant { const = `Bitvector bv } ] },
-          Constant { const = `Bitvector bv2 } )
-        when Bitvec.is_zero bv2 ->
-          Some (FlagSemantics.Equal (fix a, bvconst (Bitvec.neg bv)))
-      | ( ApplyIntrin { op = `BVADD; args = [ a; b ] },
-          Constant { const = `Bitvector bv } )
-        when Bitvec.is_zero bv ->
-          Some (FlagSemantics.NegEqual (fix a, fix b))
-      | ( BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b },
-          Constant { const = `Bitvector bv } )
-        when Bitvec.is_zero bv ->
-          Some (FlagSemantics.Equal (fix a, fix b))
-      | a, Constant { const = `Bitvector bv } when Bitvec.is_zero bv ->
-          Some (FlagSemantics.IsZero (fix2 a))
-      | _ -> None)
-  | UnaryExpr
-      {
-        op = `Extract (e1, e2);
-        arg =
-          ApplyIntrin
-            { op = `BVADD; args = [ a; Constant { const = `Bitvector bv } ] };
-      }
-    when e1 = e2 + 1 ->
-      Some (FlagSemantics.Slt (fix a, bvconst (Bitvec.neg bv)))
-  | UnaryExpr
-      {
-        op = `Extract (e1, e2);
-        arg = BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b };
-      }
-    when e1 = e2 + 1 ->
-      Some (FlagSemantics.Slt (fix a, fix b))
-  | UnaryExpr { op = `Extract (e1, e2); arg } when e1 = e2 + 1 ->
-      Some (FlagSemantics.IsNeg (fix2 arg))
-  | _ -> None
+              },
+            ApplyIntrin
+              {
+                op = `BVADD;
+                args =
+                  [
+                    UnaryExpr { op = `SignExtend s2; arg = c };
+                    Constant { const = `Bitvector bv2; typ = Bitvector k2 };
+                  ];
+              } )
+          when s1 = s2 && s1 > 0
+               && equal (fix a) (fix c)
+               && k2 = k1 + s1
+               && sext_eq s1 bv1 bv2 ->
+            Some (OverflowByConst (fix a, bv1))
+        | ( UnaryExpr
+              {
+                op = `SignExtend s1;
+                arg = ApplyIntrin { op = `BVADD; args = [ a; b ] };
+              },
+            ApplyIntrin
+              {
+                op = `BVADD;
+                args =
+                  [
+                    UnaryExpr { op = `SignExtend s2; arg = c };
+                    UnaryExpr { op = `SignExtend s3; arg = d };
+                  ];
+              } )
+          when s1 = s2 && s2 = s3
+               && equal (fix a) (fix c)
+               && equal (fix b) (fix d) ->
+            Some (OverflowBySum (fix a, fix b))
+        | ( UnaryExpr
+              {
+                op = `SignExtend s1;
+                arg = BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b };
+              },
+            BinaryExpr
+              {
+                op = `BVSUB;
+                arg1 = UnaryExpr { op = `SignExtend s2; arg = c };
+                arg2 = UnaryExpr { op = `SignExtend s3; arg = d };
+              } )
+          when s1 = s2 && s2 = s3
+               && equal (fix a) (fix c)
+               && equal (fix b) (fix d) ->
+            Some (OverflowByDiff (fix a, fix b))
+        | ( UnaryExpr
+              {
+                op = `ZeroExtend s1;
+                arg =
+                  ApplyIntrin
+                    {
+                      op = `BVADD;
+                      args =
+                        [
+                          a;
+                          Constant
+                            { const = `Bitvector bv1; typ = Bitvector k1 };
+                        ];
+                    };
+              },
+            ApplyIntrin
+              {
+                op = `BVADD;
+                args =
+                  [
+                    UnaryExpr { op = `ZeroExtend s2; arg = c };
+                    Constant { const = `Bitvector bv2; typ = Bitvector k2 };
+                  ];
+              } )
+          when s1 = s2 && s1 > 0
+               && equal (fix a) (fix c)
+               && k2 = k1 + s1
+               && zext_eq s1 bv1 bv2 ->
+            Some (CarryByConst (fix a, bv1))
+        | ( UnaryExpr
+              {
+                op = `ZeroExtend z1;
+                arg = ApplyIntrin { op = `BVADD; args = [ a; b ] };
+              },
+            ApplyIntrin
+              {
+                op = `BVADD;
+                args =
+                  [
+                    UnaryExpr { op = `ZeroExtend z2; arg = c };
+                    UnaryExpr { op = `ZeroExtend z3; arg = d };
+                  ];
+              } )
+          when z1 = z2 && z2 = z3
+               && equal (fix a) (fix c)
+               && equal (fix b) (fix d) ->
+            Some (CarryBySum (fix a, fix b))
+        | ( UnaryExpr
+              {
+                op = `ZeroExtend z1;
+                arg = BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b };
+              },
+            ApplyIntrin
+              {
+                op = `BVADD;
+                args =
+                  [
+                    UnaryExpr { op = `ZeroExtend z2; arg = c };
+                    UnaryExpr
+                      {
+                        op = `ZeroExtend z3;
+                        arg = UnaryExpr { op = `BVNOT; arg = d };
+                      };
+                    Constant { const = `Bitvector bv };
+                  ];
+              } )
+          when z1 = z2 && z2 = z3
+               && equal (fix a) (fix c)
+               && equal (fix b) d
+               && is_one bv ->
+            Some (CarryByDiff (fix a, fix b))
+        | _ -> None)
+    | UnaryExpr { op = `BOOLTOBV1; arg = BinaryExpr { op = `EQ; arg1; arg2 } }
+      -> (
+        match (unfix2 @@ fix arg1, unfix2 @@ fix arg2) with
+        | ( ApplyIntrin
+              { op = `BVADD; args = [ a; Constant { const = `Bitvector bv } ] },
+            Constant { const = `Bitvector bv2 } )
+          when Bitvec.is_zero bv2 ->
+            Some (Equal (fix a, bvconst (Bitvec.neg bv)))
+        | ( ApplyIntrin { op = `BVADD; args = [ a; b ] },
+            Constant { const = `Bitvector bv } )
+          when Bitvec.is_zero bv ->
+            Some (NegEqual (fix a, fix b))
+        | ( BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b },
+            Constant { const = `Bitvector bv } )
+          when Bitvec.is_zero bv ->
+            Some (Equal (fix a, fix b))
+        | a, Constant { const = `Bitvector bv } when Bitvec.is_zero bv ->
+            Some (IsZero (fix2 a))
+        | _ -> None)
+    | UnaryExpr
+        {
+          op = `Extract (e1, e2);
+          arg =
+            ApplyIntrin
+              { op = `BVADD; args = [ a; Constant { const = `Bitvector bv } ] };
+        }
+      when e1 = e2 + 1 ->
+        Some (Slt (fix a, bvconst (Bitvec.neg bv)))
+    | UnaryExpr
+        {
+          op = `Extract (e1, e2);
+          arg = BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b };
+        }
+      when e1 = e2 + 1 ->
+        Some (Slt (fix a, fix b))
+    | UnaryExpr { op = `Extract (e1, e2); arg } when e1 = e2 + 1 ->
+        Some (IsNeg (fix2 arg))
+    | _ -> None
+end
 
 (** Add flag semantic annotations as attributes for debugging *)
 let annotate_flag_assigns stmt =
@@ -233,7 +235,7 @@ let annotate_flag_assigns stmt =
       let annotations =
         List.filter_map
           (fun (v, e) ->
-            let o = extract_semantics e in
+            let o = FlagSemantics.extract_semantics e in
             if
               Option.is_none o
               && String.starts_with ~prefix:"$PSTATE_" (Var.name v)
