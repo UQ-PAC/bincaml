@@ -379,6 +379,21 @@ module BasilExpr = struct
     | SomeInfo of { v : t; __LINE__ : int; __FILE__ : string }
     | Keep
 
+  let show_simple show e =
+    AbstractExpr.map show e |> function
+    | RVar { id } -> Var.to_string id
+    | Constant { const } -> Ops.AllOps.to_string const
+    | UnaryExpr { op; arg } -> Ops.AllOps.to_string op ^ "(" ^ arg ^ ")"
+    | BinaryExpr { op; arg1; arg2 } ->
+        Ops.AllOps.to_string op ^ "(" ^ arg1 ^ " " ^ arg2 ^ ")"
+    | ApplyIntrin { op; args } ->
+        Ops.AllOps.to_string op
+        ^ List.to_string ~start:"(" ~stop:")" ~sep:" " Fun.id args
+    | ApplyFun { func; args } ->
+        func ^ List.to_string ~start:"(" ~stop:")" ~sep:" " Fun.id args
+    | Lambda { op; bound_vars; in_body } -> "lambda"
+    | Let _ -> "let"
+
   (** Algebra that infers types of expressions *)
   let type_alg (e : Types.t abstract_expr) =
     let open AbstractExpr in
@@ -392,12 +407,11 @@ module BasilExpr = struct
     | UnaryExpr { op; arg } -> ret_type_unary op arg |> get_ty
     | BinaryExpr { op; arg1 = l; arg2 = r } -> ret_type_bin op l r |> get_ty
     | ApplyIntrin { op; args } -> ret_type_intrin op args |> get_ty
-    | ApplyFun { func; args } ->
+    | ApplyFun { func; args } -> (
         let n = Hm_inference.type_applied func args in
-        Result.get_or_failwith n
+        match n with Ok e -> e | Error m -> failwith @@ m ^ " " ^ (show_simple Types.to_string e))
     | Lambda { op; bound_vars; in_body = b } ->
         ret_type_lambda op (bound_vars |> List.map Var.typ) b |> get_ty
-        (*Types.curry (List.map Var.typ bound_vars) b*)
     | Let { bound_vars; in_body } -> in_body
 
   let type_of e = cata type_alg e
