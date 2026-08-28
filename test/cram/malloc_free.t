@@ -9,9 +9,9 @@
   (dump-boogie bad.bpl)
 
   $ cat ./good.bpl
+  datatype memory_encoding {MemEncoding(alloc_live: [bv64]bv2, alloc_size: [bv64]bv64, addr_is_heap: [bv64]bool)}
   var $mem: [bv64]bv8;
   var $stack: [bv64]bv8;
-  datatype memory_encoding {MemEncoding(alloc_live: [bv64]bv2, alloc_size: [bv64]bv64, addr_is_heap: [bv64]bool)}
   var $mem_encoding: memory_encoding;
   function {:extern } {:inline } $me_addr_offset(mem_encoding: memory_encoding, addr: bv64) returns (bv64) {
     bvand_bv64(addr, 4294967295bv64)
@@ -246,9 +246,9 @@
 
 
   $ cat ./bad.bpl
+  datatype memory_encoding {MemEncoding(alloc_live: [bv64]bv2, alloc_size: [bv64]bv64, addr_is_heap: [bv64]bool)}
   var $mem: [bv64]bv8;
   var $stack: [bv64]bv8;
-  datatype memory_encoding {MemEncoding(alloc_live: [bv64]bv2, alloc_size: [bv64]bv64, addr_is_heap: [bv64]bool)}
   var $mem_encoding: memory_encoding;
   function {:extern } {:inline } $me_addr_offset(mem_encoding: memory_encoding, addr: bv64) returns (bv64) {
     bvand_bv64(addr, 4294967295bv64)

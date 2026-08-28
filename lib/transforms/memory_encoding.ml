@@ -150,7 +150,7 @@ module MemoryEncoder (Encoding : MemoryEncoding) = struct
 
   let add_mem_encoding p =
     let p =
-      Lang.Program.add_decl p
+      Lang.Program.add_decl ~at:`Prepend p
         (Lang.Program.Type
            {
              binding = Globals.mem_encoding_typ_name;

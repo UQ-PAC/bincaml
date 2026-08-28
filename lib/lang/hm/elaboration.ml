@@ -134,12 +134,48 @@ let infer_decl st visit_constraint prog scheme =
   let open Program in
   let infer_expr = infer_expr st visit_constraint in
   let infer_proc = infer_proc st visit_constraint in
+
+  let scheme =
+    Program.declarations prog
+    |> Iter.fold
+         (fun scheme (_, d) ->
+           match d with
+           | Type { binding; typ } ->
+               let ty = ty_of_basil st typ in
+               let scheme = decl_type st scheme binding ty in
+               scheme
+           | Variable { binding } ->
+               let scheme = decl_var_typ st global_universe scheme binding in
+               scheme
+           | Implicit (VariantCase { constructor; variant; belongs_to }) ->
+               let scheme =
+                 decl_var_typ st global_universe scheme constructor
+               in
+               scheme
+           | Function { binding; definition; attrib } ->
+               let scheme = decl_var_typ st global_universe scheme binding in
+               scheme
+           | Procedure { definition } ->
+               let univ = TypeExpr.V.proc_univ (Procedure.id definition) in
+               let inp =
+                 Procedure.formal_in_params definition |> StringMap.values
+               in
+               let outp =
+                 Procedure.formal_out_params definition |> StringMap.values
+               in
+               Iter.append inp outp
+               |> Iter.fold
+                    (fun scheme v -> decl_var_typ st univ scheme v)
+                    scheme
+)
+         scheme
+  in
+
   (* We have to be careful that inference is run immediately, not delayed until elaboration. *)
   fun (decl_id, d) ->
     match d with
     | Type { binding; typ } ->
         let ty = ty_of_basil st typ in
-        let scheme = decl_type st scheme binding ty in
         let nty scheme =
           Type { binding; typ = to_basil (TypeExpr.find st ty) }
         in
@@ -163,7 +199,6 @@ let infer_decl st visit_constraint prog scheme =
         (scheme, `Decl (decl_id, new_def))
     | Function { binding; definition; attrib } -> (
         (* elaboration of var binding *)
-        let scheme = decl_var_typ st global_universe scheme binding in
         let binding s = retype_var st global_universe s binding in
         match definition with
         | Axiom b ->
