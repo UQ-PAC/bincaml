@@ -1,4 +1,5 @@
-(** Type inference functions for hindley-milner *)
+(** Type inference functions for hindley-milner, independent of specific typed
+    language *)
 
 module Hm_types = Hm_types
 module Solve_bv = Solve_bv
