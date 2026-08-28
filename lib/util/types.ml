@@ -135,7 +135,6 @@ let rec uncurry ?(acc = []) (l : t) : t list * t =
 let curry (args : t list) (v : t) =
   List.fold_left (fun a p -> Map (p, a)) v args
 
-
 let rec to_string = function
   | Boolean -> "bool"
   | Integer -> "int"
@@ -162,16 +161,6 @@ let rec to_string = function
       "(" ^ ("(" ^ to_string a ^ ")" ^ "->" ^ to_string b) ^ ")"
   | Map (a, b) -> "(" ^ (to_string a ^ "->" ^ to_string b) ^ ")"
   | Sort (name, _) -> name
-
-(*
-let partially_apply func args  =
-  let atypes, rt = uncurry func in
-  let act_types, rest_act_types = List.take_drop (List.length args) atypes in
-  assert (Int.equal (List.length args) (List.length atypes)) ;
-  let match_types = List.combine act_types @@ args in
-  if List.for_all (Fun.uncurry equal) match_types then curry rest_act_types rt
-  else (failwith @@ Printf.sprintf "(%s) (%s)" (to_string func) (List.to_string to_string args))
-       *)
 
 let to_string_decl = function
   | Sort (name, []) -> name
