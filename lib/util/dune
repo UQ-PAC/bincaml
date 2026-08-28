@@ -1,4 +1,4 @@
-; (include_subdirs qualified)
+;(include_subdirs qualified)
 
 (library
  (public_name bincaml.util)
