@@ -26,6 +26,9 @@ module FlagSemantics = struct
         (** When left == -right (or -left == right) *)
     | Equal of Expr.BasilExpr.t * Expr.BasilExpr.t  (** When left == right *)
     | IsZero of Expr.BasilExpr.t  (** When expr is zero *)
+    | Slt of Expr.BasilExpr.t * Expr.BasilExpr.t
+        (** When left < right signed *)
+    | IsNeg of Expr.BasilExpr.t  (** When expr is negative *)
   [@@deriving show { with_path = false }]
 end
 
@@ -206,20 +209,34 @@ let extract_semantics e =
       | a, Constant { const = `Bitvector bv } when Bitvec.is_zero bv ->
           Some (FlagSemantics.IsZero (fix2 a))
       | _ -> None)
+  | UnaryExpr
+      {
+        op = `Extract (e1, e2);
+        arg =
+          ApplyIntrin
+            { op = `BVADD; args = [ a; Constant { const = `Bitvector bv } ] };
+      }
+    when e1 = e2 + 1 ->
+      Some (FlagSemantics.Slt (fix a, bvconst (Bitvec.neg bv)))
+  | UnaryExpr
+      {
+        op = `Extract (e1, e2);
+        arg = BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b };
+      }
+    when e1 = e2 + 1 ->
+      Some (FlagSemantics.Slt (fix a, fix b))
+  | UnaryExpr { op = `Extract (e1, e2); arg } when e1 = e2 + 1 ->
+      Some (FlagSemantics.IsNeg (fix2 arg))
   | _ -> None
 
 (** Add flag semantic annotations as attributes for debugging *)
-let annotate_stmt stmt =
+let annotate_flag_assigns stmt =
   let open Stmt in
   match stmt with
   | Instr_Assign { attrib; al } ->
       let annotations =
         List.filter_map
-          (fun (v, e) ->
-            let o = extract_semantics e in
-            if Option.is_none o && String.equal (Var.name v) "$PSTATE_Z" then
-              print_endline (Expr.BasilExpr.to_string (Algsimp.normalise e));
-            o |> Option.map (fun s -> (v, s)))
+          (fun (v, e) -> extract_semantics e |> Option.map (fun s -> (v, s)))
           al
       in
       let attrib =
@@ -236,5 +253,5 @@ let annotate_stmt stmt =
 
 let transform (p : Program.proc) =
   Procedure.map_blocks_nondet
-    (fun (bid, block) -> Block.map ~phi:id annotate_stmt block)
+    (fun (bid, block) -> Block.map ~phi:id annotate_flag_assigns block)
     p
