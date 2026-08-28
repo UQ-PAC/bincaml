@@ -99,19 +99,6 @@ let normalise e =
   | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `OR; args } } ->
       replace [%here]
         (BasilExpr.applyintrin ~op:`AND (List.map BasilExpr.boolnot args))
-      (*
-  | ApplyIntrin
-      {
-        attrib;
-        op = `BVADD;
-        args =
-          [ (RVar _ as v); Constant { attrib = cattrib; const = `Bitvector i } ];
-      }
-    when Bitvec.is_negative i ->
-      replace [%here]
-        (BasilExpr.binexp ~attrib ~op:`BVSUB (fix v)
-           (BasilExpr.bvconst ~attrib:cattrib (Bitvec.neg i)))
-        *)
   | _ -> Keep
 
 let simplify_concat
@@ -316,7 +303,6 @@ let algebraic_simplifications
       replace [%here]
         (BasilExpr.unexp ~op:`BVNOT
            (BasilExpr.sign_extend ~n_prefix_bits:k arg))
-  (* bvadd(x, not(y), 1) = bvsub(x, y) *)
   | ApplyIntrin
       {
         op = `BVADD;

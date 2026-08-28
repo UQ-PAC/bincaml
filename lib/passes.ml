@@ -251,7 +251,9 @@ module PassManager = struct
     {
       name = "branch-conditions";
       apply = Proc Transforms.Branch_conditions.transform;
-      doc = "TODO";
+      doc =
+        "(incomplete) Rewrites branch conditions to be in terms of numerical \
+         comparisons instead of flags.";
       invariants = Invariants.presupposes [];
     }
 
