@@ -409,7 +409,9 @@ module BasilExpr = struct
     | ApplyIntrin { op; args } -> ret_type_intrin op args |> get_ty
     | ApplyFun { func; args } -> (
         let n = Hm_inference.type_applied func args in
-        match n with Ok e -> e | Error m -> failwith @@ m ^ " " ^ (show_simple Types.to_string e))
+        match n with
+        | Ok e -> e
+        | Error m -> failwith @@ m ^ " " ^ show_simple Types.to_string e)
     | Lambda { op; bound_vars; in_body = b } ->
         ret_type_lambda op (bound_vars |> List.map Var.typ) b |> get_ty
     | Let { bound_vars; in_body } -> in_body

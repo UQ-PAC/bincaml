@@ -12,6 +12,7 @@
     - {:https://bernsteinbear.com/blog/type-inference/} *)
 
 open Hm_inference
+
 module TypeExpr = TypeExpr
 (** {1 Type Expressions}
 
