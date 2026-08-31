@@ -282,7 +282,7 @@ module FlagAnalysis = struct
 
   (** Remove flags from state that referred to [v] (e.g. if [v] was updated) *)
   let drop_modified v =
-    mapi (fun v' x -> if L.contains_var v' x then L.top else x)
+    mapi (fun v' x -> if L.contains_var v x then L.top else x)
 
   let transfer m stmt =
     match stmt with
@@ -309,7 +309,7 @@ module FlagAnalysis = struct
         rhs
         |> List.map (fun (_, k) -> read k m)
         |> List.fold_left L.join L.bottom
-        |> fun v -> drop_modified v m |> update lhs v
+        |> fun v -> drop_modified lhs m |> update lhs v
 end
 
 module A = struct
@@ -453,6 +453,94 @@ prog entry @main;
          $PSTATE_C:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_C = "Never" };
          $PSTATE_Z:bv1 := 0x1:bv1 { .flag_semantics_$PSTATE_Z = "Always" };
          $PSTATE_N:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_N = "Never" };
+         goto (%ret);
+       ];
+       block %ret [ return; ]
+    ];
+    prog entry @main;
+    |}]
+
+let%expect_test "flag_tracking" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+var $R0:bv64;
+var $R1:bv64;
+var $H2:bv64;
+var $H3:bv64;
+var $PSTATE_N:bv1;
+var $PSTATE_Z:bv1;
+var $PSTATE_C:bv1;
+var $PSTATE_V:bv1;
+
+proc @main() -> ()
+[
+  block %main [
+     $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(sign_extend(32, extract(32,0, $R0)), 0x1:bv64))));
+     $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64))));
+     $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32));
+     $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32));
+
+     assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1));
+
+     $R0:bv64 := bvadd($R0:bv64, 0xdeadbeef:bv64);
+
+     assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1));
+
+     $PSTATE_V:bv1 := 0x0:bv1;
+     $PSTATE_C:bv1 := 0x0:bv1;
+     $PSTATE_Z:bv1 := 0x1:bv1;
+     $PSTATE_N:bv1 := 0x0:bv1;
+
+     assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1));
+
+     $R0:bv64 := bvadd($R0:bv64, 0xdeadbeef:bv64);
+
+     assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1));
+
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+prog entry @main;
+    |}
+  in
+  let prog =
+    lst.prog |> Program.map_procedures (fun _ -> annotate_assume_flags)
+  in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:800 (Lang.Program.prog_pretty prog);
+  [%expect
+    {|
+    var $R0:bv64;
+    var $R1:bv64;
+    var $H2:bv64;
+    var $H3:bv64;
+    var $PSTATE_N:bv1;
+    var $PSTATE_Z:bv1;
+    var $PSTATE_C:bv1;
+    var $PSTATE_V:bv1;
+    proc @main()  -> () {  }
+      modifies $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64
+      captures $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64
+
+    [
+       block %main [
+         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(sign_extend(32, extract(32,0, $R0)), 0x1:bv64))));
+         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64))));
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32));
+         $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32));
+         assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1)) { .flag_semantics_$PSTATE_C = "(O (Sum (extract(32,0, $R0), 0x1:bv32)))"; .flag_semantics_$PSTATE_N = "(N (Sum (extract(32,0, $R0), 0x1:bv32)))"; .flag_semantics_$PSTATE_V = "(O (Sum (extract(32,0, $R0), 0x1:bv32)))"; .flag_semantics_$PSTATE_Z = "(Z (Sum (extract(32,0, $R0), 0x1:bv32)))" };
+         $R0:bv64 := bvadd($R0, 0xdeadbeef:bv64);
+         assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1));
+         $PSTATE_V:bv1 := 0x0:bv1;
+         $PSTATE_C:bv1 := 0x0:bv1;
+         $PSTATE_Z:bv1 := 0x1:bv1;
+         $PSTATE_N:bv1 := 0x0:bv1;
+         assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1)) { .flag_semantics_$PSTATE_C = "Never"; .flag_semantics_$PSTATE_N = "Never"; .flag_semantics_$PSTATE_V = "Never"; .flag_semantics_$PSTATE_Z = "Always" };
+         $R0:bv64 := bvadd($R0, 0xdeadbeef:bv64);
+         assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1)) { .flag_semantics_$PSTATE_C = "Never"; .flag_semantics_$PSTATE_N = "Never"; .flag_semantics_$PSTATE_V = "Never"; .flag_semantics_$PSTATE_Z = "Always" };
          goto (%ret);
        ];
        block %ret [ return; ]
