@@ -128,18 +128,41 @@ let infer_proc st vc prog ctx ?(no_constraint = false) (p : Program.proc) =
   Logs.debug (fun m -> m "%s" (ctx_to_string ctx));
   (elaborate_proc, ctx)
 
+let visit_decl st scheme (_, decl) =
+  let open Program in
+  match decl with
+  | Type { binding; typ } ->
+      let ty = ty_of_basil st typ in
+      let scheme = decl_type st scheme binding ty in
+      scheme
+  | Variable { binding } ->
+      let scheme = decl_var_typ st global_universe scheme binding in
+      scheme
+  | Implicit (VariantCase { constructor; variant; belongs_to }) ->
+      let scheme = decl_var_typ st global_universe scheme constructor in
+      scheme
+  | Function { binding; definition; attrib } ->
+      let scheme = decl_var_typ st global_universe scheme binding in
+      scheme
+  | Procedure { definition } ->
+      let univ = TypeExpr.V.proc_univ (Procedure.id definition) in
+      let inp = Procedure.formal_in_params definition |> StringMap.values in
+      let outp = Procedure.formal_out_params definition |> StringMap.values in
+      Iter.append inp outp
+      |> Iter.fold (fun scheme v -> decl_var_typ st univ scheme v) scheme
+
 (** Run type inference on a declaration, returning an updated typing scheme, and
     elaboration function*)
 let infer_decl st visit_constraint prog scheme =
   let open Program in
   let infer_expr = infer_expr st visit_constraint in
   let infer_proc = infer_proc st visit_constraint in
+
   (* We have to be careful that inference is run immediately, not delayed until elaboration. *)
   fun (decl_id, d) ->
     match d with
     | Type { binding; typ } ->
         let ty = ty_of_basil st typ in
-        let scheme = decl_type st scheme binding ty in
         let nty scheme =
           Type { binding; typ = to_basil (TypeExpr.find st ty) }
         in
@@ -163,7 +186,6 @@ let infer_decl st visit_constraint prog scheme =
         (scheme, `Decl (decl_id, new_def))
     | Function { binding; definition; attrib } -> (
         (* elaboration of var binding *)
-        let scheme = decl_var_typ st global_universe scheme binding in
         let binding s = retype_var st global_universe s binding in
         match definition with
         | Axiom b ->
@@ -238,9 +260,10 @@ let infer_program st prog =
     type expressions herein.  We also return the resulting list of elaboration
     functions, which take the final inference context and convert the HM-typed
     expressions back to bincaml typed expressions. *)
+  let scheme = TypeExpr.TCtx.empty in
+  let scheme = List.fold_left (visit_decl st) scheme decls in
   let scheme, new_decls =
-    decls
-    |> List.fold_map (infer_decl st visit_constraint prog) TypeExpr.TCtx.empty
+    decls |> List.fold_map (infer_decl st visit_constraint prog) scheme
   in
   let _ = solve_constraints st ~max_iters:50 !constraints in
   (* TODO: implicit decls; constructors need to be added after the types they
@@ -250,10 +273,13 @@ let infer_program st prog =
   let prog =
     List.fold_left
       (fun prog -> function
-        | `Decl (id, ndecl) ->
+        | `Decl (id, ndecl) -> (
             let decl = ndecl scheme in
-            (* assuming the id is the same (it has to be) *)
-            Program.update_decl prog decl
+            match decl with
+            | Program.Type _ -> prog
+            | _ ->
+                (* assuming the id is the same (it has to be) *)
+                Program.update_decl prog decl)
         | `Procedure (id, nproc) ->
             let proc = nproc scheme in
             (* assuming the id is the same (it has to be) *)
