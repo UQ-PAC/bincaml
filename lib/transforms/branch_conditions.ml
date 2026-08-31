@@ -370,49 +370,49 @@ prog entry @main;
        block %main [
          $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
             bvadd(extract(32,0, $R0), 0x1:bv32)),
-            bvadd(sign_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OverflowBySum (extract(32,0, $R0), 0x1:bv32))" };
+            bvadd(sign_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OBySum (extract(32,0, $R0), 0x1:bv32))" };
          $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
             bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)),
             bvadd(bvadd(sign_extend(32, extract(32,0, $R0)), 0xfffffffffffffffd:bv64),
-             0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OverflowBySum (extract(32,0, $R0), 0xfffffffe:bv32))" };
+             0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OBySum (extract(32,0, $R0), 0xfffffffe:bv32))" };
          $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
             bvadd(bvadd(extract(32,0, $R0),
               bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)),
             bvadd(bvadd(sign_extend(32, extract(32,0, $R0)),
               sign_extend(32,
-              bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OverflowByDiff (extract(32,0, $R0), extract(32,0, $R1)))" };
+              bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OByDiff (extract(32,0, $R0), extract(32,0, $R1)))" };
          $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
             bvadd(local_31:bv32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12)))),
             bvadd(sign_extend(32, local_31:bv32),
-             sign_extend(32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_V = "(OverflowBySum (local_31:bv32, local_32:bv32))" };
+             sign_extend(32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_V = "(OBySum (local_31:bv32, local_32:bv32))" };
          $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
             bvadd(extract(32,0, $R0), 0x1:bv32)),
-            bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CarryBySum (extract(32,0, $R0), 0x1:bv32))" };
+            bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CBySum (extract(32,0, $R0), 0x1:bv32))" };
          $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
             bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)),
             bvadd(bvadd(zero_extend(32, extract(32,0, $R0)), 0xfffffffd:bv64),
-             0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CarryBySum (extract(32,0, $R0), 0xfffffffe:bv32))" };
+             0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CBySum (extract(32,0, $R0), 0xfffffffe:bv32))" };
          $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
             bvadd(bvadd(extract(32,0, $R0),
               bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)),
             bvadd(bvadd(zero_extend(32, extract(32,0, $R0)),
               zero_extend(32,
-              bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CarryByDiff (extract(32,0, $R0), extract(32,0, $R1)))" };
+              bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CByDiff (extract(32,0, $R0), extract(32,0, $R1)))" };
          $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
             bvadd($H2, bvshl($H3, zero_extend(20, 0x0:bv12)))),
             bvadd(zero_extend(32, $H2),
-             zero_extend(32, bvshl($H3, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_C = "(CarryBySum ($H2, $H3))" };
+             zero_extend(32, bvshl($H3, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_C = "(CBySum ($H2, $H3))" };
          $PSTATE_Z:bv1 := booltobv1(eq(bvadd($H2,
-            bvshl($H3, zero_extend(20, 0x0:bv12))), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(ZeroNegEqual ($H2, $H3))" };
-         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(ZeroEqual (extract(32,0, $R0), 0xffffffff:bv32))" };
+            bvshl($H3, zero_extend(20, 0x0:bv12))), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(ZNegEqual ($H2, $H3))" };
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(ZEqual (extract(32,0, $R0), 0xffffffff:bv32))" };
          $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd(extract(32,0, $R0),
              bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32),
-           0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(ZeroEqual (extract(32,0, $R0), extract(32,0, $R1)))" };
-         $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(NegSlt (extract(32,0, $R0), 0xffffffff:bv32))" };
+           0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(ZEqual (extract(32,0, $R0), extract(32,0, $R1)))" };
+         $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(NSlt (extract(32,0, $R0), 0xffffffff:bv32))" };
          $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0),
-           bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(NegSlt (extract(32,0, $R0), extract(32,0, $R1)))" };
+           bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(NSlt (extract(32,0, $R0), extract(32,0, $R1)))" };
          $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0),
-           0xffffffff:bv32), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(NegIsNeg extract(32,0, $R0))" };
+           0xffffffff:bv32), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(NIsNeg extract(32,0, $R0))" };
          $PSTATE_N:bv1 := extract(31,30, bvadd(extract(32,0, $R0), 0x1:bv32));
          $PSTATE_N:bv1 := extract(31,30, bvadd(bvadd(extract(32,0, $R0),
            bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32));

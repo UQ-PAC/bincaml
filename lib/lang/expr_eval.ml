@@ -102,7 +102,7 @@ let partial_eval_intrin (e : BasilExpr.t BasilExpr.abstract_expr) :
     BasilExpr.t option =
   let open AbstractExpr in
   match e with
-  | ApplyIntrin { op; args } ->
+  | ApplyIntrin { op; args } when Ops.AllOps.is_commutative_intrin op ->
       let consts, rest =
         List.partition
           (function Constant _ -> true | _ -> false)
