@@ -34,7 +34,7 @@ module FlagSemantics = struct
       Bitvec.(equal (zero_extend ~extension bv1) bv2)
     in
     let is_one bv = Bitvec.(equal bv (one ~size:(size bv))) in
-    match (arg1, arg2) with
+    match (unfix3 arg1, unfix3 arg2) with
     | ( UnaryExpr
           {
             op = `SignExtend s1;
@@ -161,7 +161,7 @@ module FlagSemantics = struct
       | Constant { const = `Bitvector bv } -> Bitvec.is_zero bv
       | _ -> false
     in
-    match (arg1, arg2) with
+    match (unfix2 arg1, unfix2 arg2) with
     | ( ApplyIntrin
           { op = `BVADD; args = [ a; Constant { const = `Bitvector bv } ] },
         c )
@@ -195,10 +195,10 @@ module FlagSemantics = struct
             UnaryExpr
               { op = `BOOLTOBV1; arg = BinaryExpr { op = `EQ; arg1; arg2 } };
         } ->
-        extract_overflow_cary (unfix3 arg1) (unfix3 arg2)
+        extract_overflow_cary arg1 arg2
     | UnaryExpr { op = `BOOLTOBV1; arg = BinaryExpr { op = `EQ; arg1; arg2 } }
       ->
-        extract_zero (unfix2 @@ fix arg1) (unfix2 @@ fix arg2)
+        extract_zero (fix arg1) (fix arg2)
     | UnaryExpr
         {
           op = `Extract (e1, e2);
