@@ -178,8 +178,9 @@ module FlagSemantics = struct
     let e = Algsimp.normalise e in
     let open Expr.AbstractExpr in
     let open Expr.BasilExpr in
-    let last_bit e bit =
-      Option.equal ( = ) (Types.bit_width @@ type_of e) (Some bit)
+    let is_msb e (top, bot) =
+      top = bot + 1
+      && Option.equal ( = ) (Types.bit_width @@ type_of e) (Some top)
     in
     match unfix3 e with
     | Constant { const = `Bitvector k }
@@ -201,23 +202,22 @@ module FlagSemantics = struct
         extract_zero (fix arg1) (fix arg2)
     | UnaryExpr
         {
-          op = `Extract (e1, e2);
+          op = `Extract ex;
           arg =
             ApplyIntrin
               { op = `BVADD; args = [ a; Constant { const = `Bitvector bv } ] }
             as arg;
         }
-      when e1 = e2 + 1 && last_bit (fix2 arg) e1 ->
+      when is_msb (fix2 arg) ex ->
         Some (NSlt (fix a, bvconst (Bitvec.neg bv)))
     | UnaryExpr
         {
-          op = `Extract (e1, e2);
+          op = `Extract ex;
           arg = BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b } as arg;
         }
-      when e1 = e2 + 1 && last_bit (fix2 arg) e1 ->
+      when is_msb (fix2 arg) ex ->
         Some (NSlt (fix a, fix b))
-    | UnaryExpr { op = `Extract (e1, e2); arg }
-      when e1 = e2 + 1 && last_bit (fix2 arg) e1 ->
+    | UnaryExpr { op = `Extract ex; arg } when is_msb (fix2 arg) ex ->
         Some (NIsNeg (fix2 arg))
     | _ -> None
 end
