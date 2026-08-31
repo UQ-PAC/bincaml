@@ -207,8 +207,10 @@ let annotate_flag_assigns stmt =
   match stmt with
   | Instr_Assign { attrib; al } ->
       let annotations =
-        List.filter_map
-          (fun (v, e) ->
+        al
+        |> List.filter (fun (v, _) ->
+            Types.equal (Var.typ v) (Types.Bitvector 1))
+        |> List.filter_map (fun (v, e) ->
             let o = FlagSemantics.extract_semantics e in
             if
               Option.is_none o
@@ -219,7 +221,6 @@ let annotate_flag_assigns stmt =
                     (Var.name v)
                     (Expr.BasilExpr.to_string (Algsimp.normalise e)));
             o |> Option.map (fun s -> (v, s)))
-          al
       in
       let attrib =
         List.fold_left
