@@ -384,7 +384,7 @@ module SMTLib2 = struct
     | `INTADD -> atom "+"
     | `INTMUL -> atom "*"
     | `INTSUB -> atom "-"
-    | `INTDIV -> atom "/"
+    | `INTDIV -> atom "div"
     | `INTLT -> atom "<"
     | `INTLE -> atom "<="
     | #Ops.AllOps.unary as o -> atom @@ Ops.AllOps.to_string o

@@ -607,7 +607,7 @@ module Solver : sig
   type t
 
   (** result type *)
-  type result = Unsat | Unknown | Sat
+  type result = Unsat | Unknown | Sat [@@deriving eq,ord]
 
   val pp_result : Format.formatter -> result -> unit
   (** print result *)
@@ -678,7 +678,7 @@ end = struct
     | `Atom "success" -> ()
     | ans -> raise (UnexpectedSolverResponse ans)
 
-  type result = Unsat | Unknown | Sat [@@deriving show]
+  type result = Unsat | Unknown | Sat [@@deriving show, eq, ord]
 
   (** Check if the current set of assumptions are consistent. Throws
       {!UnexpectedSolverResponse}. *)

@@ -64,7 +64,7 @@ module PassManager = struct
       apply =
         Prog
           (fun prog ->
-            Backends.Smt.pretty_to_chan out_channel prog;
+            Backends.Smt.smt_offline out_channel prog;
             prog);
     }
 
@@ -76,7 +76,7 @@ module PassManager = struct
       apply =
         Prog
           (fun prog ->
-            Backends.Smt.eval_program out_channel prog;
+            Backends.Smt.smt_online out_channel prog;
             prog);
     }
 
