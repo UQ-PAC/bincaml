@@ -56,6 +56,30 @@ module PassManager = struct
             prog);
     }
 
+  let dump_smt out_channel =
+    {
+      name = "dump-smt";
+      doc = "write smt to channel";
+      invariants = Invariants.make ~presupposes:[ SSA; NoPhis; NoSummaries ] ();
+      apply =
+        Prog
+          (fun prog ->
+            Backends.Smt.smt_offline out_channel prog;
+            prog);
+    }
+
+  let live_smt out_channel =
+    {
+      name = "live-smt";
+      doc = "Perform live smt analysis, outputting logs to channel.";
+      invariants = Invariants.make ~presupposes:[ SSA; NoPhis; NoSummaries ] ();
+      apply =
+        Prog
+          (fun prog ->
+            Backends.Smt.smt_online out_channel prog;
+            prog);
+    }
+
   let lift_intrinsics_aarch64 =
     {
       name = "lift-intrinsics-aarch64";
@@ -69,7 +93,8 @@ module PassManager = struct
   let sparams =
     {
       name = "simple-params";
-      apply = Prog Transforms.Ssa.set_params;
+      apply =
+        Prog (Transforms.Ssa.set_params ~skip_observable:true ~skip_maps:true);
       doc =
         "Pull all global variables into the parameter list, discarding initial \
          parameter list (i.e. assuming its empty)";
@@ -220,7 +245,15 @@ module PassManager = struct
       name = "cfa-reduction";
       apply = Proc Transforms.Cfa_reduction.reduce_procedure;
       doc = "Performs reduction of acyclic CFA";
-      invariants = Invariants.presupposes [ SSA ];
+      invariants = Invariants.presupposes [ SSA ] ~establishes:[ NoPhis; SSA ];
+    }
+
+  let inline_summaries =
+    {
+      name = "inline-summaries";
+      apply = Prog Transforms.Summary_inlining.transform;
+      doc = "Replaces procedure calls with asserts/assumes for summaries";
+      invariants = Invariants.presupposes [ SSA ] ~establishes:[ NoSummaries ];
     }
 
   let remove_unreachable_blocks =
@@ -253,6 +286,17 @@ module PassManager = struct
       apply = Proc Transforms.Irreducible_loop.transform;
       doc = "Remove blocks unreachable from entry";
       invariants = Invariants.presupposes [] ~establishes:[ ReducibleLoops ];
+    }
+
+  let remove_loops =
+    {
+      name = "remove-loops";
+      apply = Prog Transforms.Remove_loops.transform;
+      doc =
+        "Makes reducible loops acyclic by cutting back edges and inserting \
+         assumes/asserts.";
+      invariants =
+        Invariants.presupposes [ ReducibleLoops ] ~establishes:[ Acyclic ];
     }
 
   let full_ssa =
@@ -410,6 +454,7 @@ module PassManager = struct
         cf_exprs;
         inter_dead;
         cleanup_cfg;
+        remove_unused;
       ]
     in
     {
@@ -466,6 +511,7 @@ module PassManager = struct
       flatten_phis;
       dynamic_single_assignment;
       irreducible_loop;
+      remove_loops;
       remove_unreachable_blocks;
       collapse_empty_blocks;
       cleanup_cfg;
@@ -480,6 +526,7 @@ module PassManager = struct
       read_uninit true;
       sssa;
       cfa_reduction;
+      inline_summaries;
       sva;
       full_ssa;
       chc_infer_invariants;

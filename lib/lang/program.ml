@@ -362,6 +362,65 @@ let empty ?name () =
     spec = { rely = []; guarantee = [] };
   }
 
+module DependencyGraph = struct
+  module Vert = struct
+    type t = ID.t [@@deriving show { with_path = false }, eq, ord]
+
+    let hash id = ID.hash id
+  end
+
+  module G = Graph.Persistent.Digraph.Concrete (Vert)
+
+  (** Return ids of all declarations immediately depended on by decl. *)
+  let rec type_depends_on (prog : t) : Types.t -> IDSet.t = function
+    | Map (k, v) ->
+        IDSet.union (type_depends_on prog k) (type_depends_on prog v)
+    | Sort (name, variants) ->
+        variants
+        |> List.flat_map (fun { fields } -> fields)
+        |> List.map (fun { field; typ } -> type_depends_on prog typ)
+        |> List.fold_left IDSet.union IDSet.empty
+    | Struct fields ->
+        StringMap.to_list fields
+        |> List.map (fun (_, { typ }) -> typ)
+        |> List.map (type_depends_on prog)
+        |> List.fold_left IDSet.union IDSet.empty
+    | Pointer { lower; upper } ->
+        IDSet.union (type_depends_on prog lower) (type_depends_on prog upper)
+    | Variable name ->
+        (* Base case. Should always be a type, no other decl. *)
+        get_decl_by_name_id name prog
+        |> Option.flat_map (function id, Type _ -> Some id | _ -> None)
+        |> Option.map_or IDSet.singleton ~default:IDSet.empty
+    | _ -> IDSet.empty
+
+  let var_depends_on (prog : t) (var : Var.t) : IDSet.t =
+    type_depends_on prog @@ Var.typ var
+
+  let expr_depends_on (prog : t) (e : e) : IDSet.t = IDSet.empty
+  let stmt_depends_on (prog : t) (stmt : stmt) : IDSet.t = IDSet.empty
+  let proc_depends_on (prog : t) (proc : proc) : IDSet.t = IDSet.empty
+
+  (** Return ids of all declarations immediately depended on by decl. *)
+  let decl_depends_on (prog : t) : declaration -> IDSet.t = function
+    | Variable { binding; classification } -> var_depends_on prog binding
+    | Type { binding; typ } -> type_depends_on prog typ
+    | Procedure { definition } -> proc_depends_on prog definition
+    | Function { binding; definition = Axiom body | Function body } ->
+        IDSet.union (var_depends_on prog binding) (expr_depends_on prog body)
+    | Function { binding; definition = Uninterpreted } ->
+        var_depends_on prog binding
+
+  let make_dependency_graph (prog : t) : G.t =
+    declarations prog
+    |> Iter.map @@ Pair.map_snd @@ decl_depends_on prog
+    |> Iter.fold
+         (fun acc (id, children) ->
+           G.add_vertex acc id
+           |> IDSet.fold (fun child acc -> G.add_edge acc id child) children)
+         G.empty
+end
+
 module CallGraph = struct
   module Vert = struct
     type t =

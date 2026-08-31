@@ -312,6 +312,35 @@ let algebraic_simplifications
       replace [%here] arg
   | _ -> Keep
 
+(** Simplify case expressions over booleans into if-then-else chains. *)
+let if_then_else
+    (e :
+      (BasilExpr.t BasilExpr.abstract_expr * Types.t) BasilExpr.abstract_expr) =
+  let open AbstractExpr in
+  let open BasilExpr in
+  match e with
+  | ApplyIntrin
+      {
+        op = `Cases;
+        args =
+          [
+            ( BinaryExpr { op = `IfThen; arg1 = cond; arg2 = br_true },
+              Types.Boolean );
+            (br_false, _);
+          ];
+        attrib;
+      } ->
+      ApplyIntrin
+        {
+          op = `IfThenElse;
+          args = [ cond; br_true; fix br_false ];
+          attrib;
+          typ = BasilExpr.type_of br_true;
+        }
+      |> fix
+      |> replace [%here]
+  | _ -> Keep
+
 let algebraic_simplifications = sequence drop_assoc algebraic_simplifications
 
 let alg_simp_rewriter ?visit e =

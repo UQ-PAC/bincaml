@@ -607,7 +607,7 @@ module Solver : sig
   type t
 
   (** result type *)
-  type result = Unsat | Unknown | Sat
+  type result = Unsat | Unknown | Sat [@@deriving eq,ord]
 
   val pp_result : Format.formatter -> result -> unit
   (** print result *)
@@ -620,6 +620,9 @@ module Solver : sig
 
   val create : solver_config -> t
   (** Create a new solver with [config] *)
+
+  val add_sexp : t -> sexp -> sexp
+  (* Send a sexp to the solver, returning the result *)
 
   val add_command : t -> sexp -> unit
   (** Send a command to the solver *)
@@ -675,7 +678,7 @@ end = struct
     | `Atom "success" -> ()
     | ans -> raise (UnexpectedSolverResponse ans)
 
-  type result = Unsat | Unknown | Sat [@@deriving show]
+  type result = Unsat | Unknown | Sat [@@deriving show, eq, ord]
 
   (** Check if the current set of assumptions are consistent. Throws
       {!UnexpectedSolverResponse}. *)
@@ -914,6 +917,8 @@ the model does not contain those.  We need to explicitly add them.
 
   (** create a new solver with config *)
   let create conf = new_solver conf
+
+  let add_sexp solver cmd = solver.command cmd
 
   (** add a command to solver *)
   let add_command solver cmd =

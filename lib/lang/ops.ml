@@ -303,7 +303,8 @@ module Spec = struct
           and catch fire *) ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type intrin = [ `Cases  (** choose first argument that is defined *) ]
+  type intrin =
+    [ `Cases | `IfThenElse  (** choose first argument that is defined *) ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type unary = [ `Old | `Classification | `Gamma ]
@@ -458,6 +459,7 @@ module AllOps = struct
           in
           return (Bitvector w)
     | `MapUpdate -> return @@ List.hd args
+    | `IfThenElse -> return @@ List.hd @@ List.tl args
 
   (** ops returning booleans *)
 
@@ -526,6 +528,7 @@ module AllOps = struct
     | `MapAccess -> "get"
     | `MapUpdate -> "update"
     | `IfThen -> "case"
+    | `IfThenElse -> "ite"
     | `Cases -> "match"
 
   let eval_equal (a : const) (b : const) =
