@@ -365,11 +365,11 @@ prog entry @main;
        block %main [
          $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
             bvadd(extract(32,0, $R0), 0x1:bv32)),
-            bvadd(sign_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OverflowByConst (extract(32,0, $R0), 0x1:bv32))" };
+            bvadd(sign_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OverflowBySum (extract(32,0, $R0), 0x1:bv32))" };
          $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
             bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)),
             bvadd(bvadd(sign_extend(32, extract(32,0, $R0)), 0xfffffffffffffffd:bv64),
-             0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OverflowByConst (extract(32,0, $R0), 0xfffffffe:bv32))" };
+             0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OverflowBySum (extract(32,0, $R0), 0xfffffffe:bv32))" };
          $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32,
             bvadd(bvadd(extract(32,0, $R0),
               bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)),
@@ -382,11 +382,11 @@ prog entry @main;
              sign_extend(32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_V = "(OverflowBySum (local_31:bv32, local_32:bv32))" };
          $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
             bvadd(extract(32,0, $R0), 0x1:bv32)),
-            bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CarryByConst (extract(32,0, $R0), 0x1:bv32))" };
+            bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CarryBySum (extract(32,0, $R0), 0x1:bv32))" };
          $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
             bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)),
             bvadd(bvadd(zero_extend(32, extract(32,0, $R0)), 0xfffffffd:bv64),
-             0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CarryByConst (extract(32,0, $R0), 0xfffffffe:bv32))" };
+             0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CarryBySum (extract(32,0, $R0), 0xfffffffe:bv32))" };
          $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32,
             bvadd(bvadd(extract(32,0, $R0),
               bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)),
