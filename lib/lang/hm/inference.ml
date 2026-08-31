@@ -67,6 +67,9 @@ let scheme_of_op st ~visit_constraint (gen : ID.generator)
       let a = fv () in
       curry_f [ bvunk a ] (bvunk a)
   | `INTNEG -> curry_f [ int_type ] int_type
+  | `IfThen ->
+      let a = fv () in
+      curry_f [ bool_type; a ] a
   | #Ops.IntOps.binary_pred -> curry_f [ int_type; int_type ] bool_type
   | #Ops.IntOps.const -> int_type
   | #Ops.IntOps.binary_unif -> curry_f [ int_type; int_type ] int_type
@@ -77,11 +80,11 @@ let scheme_of_op st ~visit_constraint (gen : ID.generator)
       let a = fv () in
       curry_f [ a ] a
   | #Ops.AllOps.binary as o ->
-      failwith @@ "unsupported op" ^ Ops.AllOps.to_string o
+      failwith @@ "unsupported binary op: " ^ Ops.AllOps.to_string o
   | #Ops.AllOps.unary as o ->
-      failwith @@ "unsupported op" ^ Ops.AllOps.to_string o
+      failwith @@ "unsupported unary op: " ^ Ops.AllOps.to_string o
   | #Ops.AllOps.const as o ->
-      failwith @@ "unsupported op" ^ Ops.AllOps.to_string o
+      failwith @@ "unsupported const op: " ^ Ops.AllOps.to_string o
 
 (** return the generic type scheme of an intrinsic operation *)
 let scheme_of_intrin st ?(visit_constraint = fun a -> ()) (gen : ID.generator)
@@ -144,7 +147,7 @@ let do_infer st ~visit_constraint
       let bdty = infer ~univ [%here] in_body ictx in
       let typ =
         match op with
-        | `Lambda -> getty bdty
+        | `Lambda -> curry_f (List.map snd tvars) (getty bdty)
         | `Forall | `Exists -> unify (getty bdty) (bool_type st)
       in
       ignore @@ unify r (curry_f (List.map snd tvars) (getty bdty));
@@ -183,7 +186,27 @@ let do_infer st ~visit_constraint
       let args = List.map (fun a -> infer ~univ [%here] a c) args in
       ignore @@ unify (getty f) (curry_f (List.map getty args) r);
       AbsTypingExpr.fix (ApplyFun { typ = r; func = f; attrib; args })
-  | Let _ -> failwith ""
+  | Let { bound_vars; in_body; attrib } ->
+      (* NOTE: we don't create new scope; just shadow binds in the old scope and hope it
+      works out. Note we also don't generalise; just check the annotated types
+      are correct without inference. For more information on approaches to this
+      see: {{: http://archive.today/2025.05.16-131422/https://okmij.org/ftp/ML/generalization.html
+      } okmij.org/ftp/ML/generalization.html}*)
+      let bound_vars =
+        List.map (function v, e -> (v, infer ~univ [%here] e c)) bound_vars
+      in
+      let ctx' =
+        List.fold_left
+          (fun ctx (v, e) ->
+            let c = decl_var_typ st univ ctx v in
+            (* check bound expr equal to var type *)
+            let _ = unify (lookup_var_typ st univ c v) (getty e) in
+            c)
+          c bound_vars
+      in
+      let in_body = infer ~univ [%here] in_body ctx' in
+      let _ = unify r (getty in_body) in
+      AbsTypingExpr.fix (Let { typ = r; bound_vars; attrib; in_body })
 
 let rec infer_expr st visit_constraint ~univ (hr : Lexing.position) e =
  fun (c : scheme TypeExpr.TCtx.t) ->

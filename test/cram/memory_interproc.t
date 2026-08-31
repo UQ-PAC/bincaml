@@ -8,6 +8,7 @@
   > (run-transforms "linear-copy")
   > (run-transforms "inter-function-summaries")
   > (run-transforms "dynamic-single-assignment")
+  > (run-transforms "hindley-milner-elaborate")
   > (dump-il "after.il")
   > (dump-boogie "out.bpl")
   > EOF
@@ -36,6 +37,7 @@
   > (run-transforms "linear-copy")
   > (run-transforms "inter-function-summaries")
   > (run-transforms "dynamic-single-assignment")
+  > (run-transforms "hindley-milner-elaborate")
   > (dump-il "after.il")
   > (dump-boogie "out.bpl")
   > EOF

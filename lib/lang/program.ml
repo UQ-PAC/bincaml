@@ -33,7 +33,7 @@ let decl_binding = function
   | Variable { binding } -> Var.name binding
   | Function { binding } -> Var.name binding
   | Procedure { definition } -> ID.to_string (Procedure.id definition)
-  | Implicit (VariantCase _) -> failwith "variant case has no binding :("
+  | Implicit (VariantCase {variant}) -> variant
 
 let pretty_proc p =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
