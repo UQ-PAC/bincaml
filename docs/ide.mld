@@ -2,6 +2,8 @@
 
 {1 Introduction}
 
+The IDE framework (introduced by Reps et al in {:https://doi.org/10.1145/199448.199462}) lets us efficiently perform {i interprocedural} analyses on specific problems with certain structure.
+
 Before writing an IDE analysis you should first determine whether the analysis you want to implement is an IDE analysis.
 This is very important!
 Not all analyses are IDE analyses, and things will break horribly or be terribly imprecise if one tries to turn a non-IDE analysis into an IDE analysis!
