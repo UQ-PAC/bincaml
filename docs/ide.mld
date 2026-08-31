@@ -64,44 +64,5 @@ For SSA reasons, identity edges on variables or the sink do not need to be given
 - [init_param_values] specifies the initial value lattice values for in/out params of a procedure.
 Like with [relevant_params], you probably only care about in params if forwards and out params if backwards.
 
-{[
-module type IDESSIDomain = sig
-  (* Edge functions *)
-  include Lattice
 
-  module DL : sig
-    type t = Lambda | Label of Var.t
-    [@@deriving eq, ord, show { with_path = false }]
-  end
-
-  val direction : [ `Forwards | `Backwards ]
-  (** The direction this analysis should be performed in *)
-
-  module Value : Lattice
-  (** The underlying lattice the edge functions operate on *)
-
-  val identity : t
-  (** identity edge function *)
-
-  val top : t
-  (** top edge function *)
-
-  val compose : t -> t -> t
-  (** the composite of edge functions *)
-
-  val eval : Value.t -> t -> Value.t
-  (** evaluate an edge function *)
-
-  (* Transfer functions *)
-  type state_update = (DL.t * t) Iter.t
-
-  val relevant_params : Program.proc -> Var.t Iter.t
-  (** data that each procedure should summarise *)
-
-  val transfer_call : call_info -> param_info -> DL.t -> state_update
-  val transfer : Program.stmt -> DL.t -> state_update
-  val transfer_phi : Var.t -> Var.t list -> DL.t -> state_update
-  val init_param_values : Program.proc -> (Var.t * Value.t) Iter.t
-  val pp : Format.formatter -> t -> unit
-end
-]}
+See the {{:https://github.com/UQ-PAC/bincaml/blob/main/lib/analysis/idessi.ml#L22} module specification}.
