@@ -147,14 +147,21 @@
     var R30_out_1: bv64;
     var Exp18__5_25_2: bv64;
     var R0_out_1: bv64;
+    var Exp18__5_25_1: bv64;
     var Exp14__5_21_2: bv64;
     var Exp14__5_22_2: bv64;
     var R0_4: bv64;
     var R1_out_1: bv64;
     var Exp16__5_24_2: bv64;
     var Exp14__5_2_2: bv64;
+    var Exp16__5_24_1: bv64;
     var Exp14__5_1_2: bv64;
+    var Exp14__5_21_1: bv64;
+    var R0_3: bv64;
+    var Exp14__5_22_1: bv64;
     var R29_out_1: bv64;
+    var Exp14__5_2_1: bv64;
+    var Exp14__5_1_1: bv64;
     var R17_out_1: bv64;
     b#main_entry:
       $stack := store64_le(
@@ -393,14 +400,21 @@
     var R30_out_1: bv64;
     var Exp18__5_25_2: bv64;
     var R0_out_1: bv64;
+    var Exp18__5_25_1: bv64;
     var Exp14__5_21_2: bv64;
     var Exp14__5_22_2: bv64;
     var R0_4: bv64;
     var R1_out_1: bv64;
     var Exp16__5_24_2: bv64;
     var Exp14__5_2_2: bv64;
+    var Exp16__5_24_1: bv64;
     var Exp14__5_1_2: bv64;
+    var Exp14__5_21_1: bv64;
+    var R0_3: bv64;
+    var Exp14__5_22_1: bv64;
     var R29_out_1: bv64;
+    var Exp14__5_2_1: bv64;
+    var Exp14__5_1_1: bv64;
     var R17_out_1: bv64;
     b#main_entry:
       $stack := store64_le(
@@ -494,14 +508,10 @@
      ) == 1bv2);
 
 
-<<<<<<< HEAD
-=======
->>>>>>> origin/main
-
   $ boogie ./bad.bpl
   Memory Error: Invalid Access
   Execution trace:
-      ./bad.bpl(148,3): b#main_entry
+      ./bad.bpl(155,3): b#main_entry
   
   Boogie program verifier finished with 0 verified, 1 error
 
