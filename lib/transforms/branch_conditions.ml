@@ -20,7 +20,7 @@ module FlagSemantics = struct
     let open Types in
     let open Expr.AbstractExpr in
     let open Expr.BasilExpr in
-    let equal e1 e2 = equal (drop_attrib e1) (drop_attrib e2) in
+    let equiv_exp e1 e2 = equal (drop_attrib e1) (drop_attrib e2) in
     let sext_eq extension bv1 bv2 =
       Bitvec.(equal (sign_extend ~extension bv1) bv2)
     in
@@ -48,7 +48,8 @@ module FlagSemantics = struct
                 Constant { const = `Bitvector bv2 };
               ];
           } )
-      when s1 = s2 && s1 > 0 && equal (fix a) (fix c) && sext_eq s1 bv1 bv2 ->
+      when s1 = s2 && s1 > 0 && equiv_exp (fix a) (fix c) && sext_eq s1 bv1 bv2
+      ->
         if Bitvec.is_negative bv1 then
           Some (O (Diff (fix a, bvconst (Bitvec.neg bv1))))
         else Some (O (Sum (fix a, bvconst bv1)))
@@ -67,8 +68,8 @@ module FlagSemantics = struct
               ];
           } )
       when s1 = s2 && s2 = s3 && s1 > 0
-           && equal (fix a) (fix c)
-           && equal (fix b) (fix d) ->
+           && equiv_exp (fix a) (fix c)
+           && equiv_exp (fix b) (fix d) ->
         Some (O (Sum (fix a, fix b)))
     | ( UnaryExpr
           {
@@ -82,8 +83,8 @@ module FlagSemantics = struct
             arg2 = UnaryExpr { op = `SignExtend s3; arg = d };
           } )
       when s1 = s2 && s2 = s3 && s1 > 0
-           && equal (fix a) (fix c)
-           && equal (fix b) (fix d) ->
+           && equiv_exp (fix a) (fix c)
+           && equiv_exp (fix b) (fix d) ->
         Some (O (Diff (fix a, fix b)))
     | ( UnaryExpr
           {
@@ -104,7 +105,8 @@ module FlagSemantics = struct
                 Constant { const = `Bitvector bv2 };
               ];
           } )
-      when z1 = z2 && z1 > 0 && equal (fix a) (fix c) && zext_eq z1 bv1 bv2 ->
+      when z1 = z2 && z1 > 0 && equiv_exp (fix a) (fix c) && zext_eq z1 bv1 bv2
+      ->
         if Bitvec.is_negative bv1 then
           Some (C (Diff (fix a, bvconst (Bitvec.neg bv1))))
         else Some (O (Sum (fix a, bvconst bv1)))
@@ -123,8 +125,8 @@ module FlagSemantics = struct
               ];
           } )
       when z1 = z2 && z2 = z3 && z1 > 0
-           && equal (fix a) (fix c)
-           && equal (fix b) (fix d) ->
+           && equiv_exp (fix a) (fix c)
+           && equiv_exp (fix b) (fix d) ->
         Some (C (Sum (fix a, fix b)))
     | ( UnaryExpr
           {
@@ -146,8 +148,8 @@ module FlagSemantics = struct
               ];
           } )
       when z1 = z2 && z2 = z3 && z1 > 0
-           && equal (fix a) (fix c)
-           && equal (fix b) d
+           && equiv_exp (fix a) (fix c)
+           && equiv_exp (fix b) d
            && is_one bv ->
         Some (C (Diff (fix a, fix b)))
     | _ -> None
@@ -168,10 +170,6 @@ module FlagSemantics = struct
     let e = Algsimp.normalise e in
     let open Expr.AbstractExpr in
     let open Expr.BasilExpr in
-    let is_msb e (top, bot) =
-      top = bot + 1
-      && Option.equal ( = ) (Types.bit_width @@ type_of e) (Some top)
-    in
     match unfix3 e with
     | Constant { const = `Bitvector k }
       when Bitvec.equal k (Bitvec.zero ~size:1) ->
@@ -196,7 +194,11 @@ module FlagSemantics = struct
         }
       when Bitvec.is_zero bv ->
         Some (Z (extract_expr (fix arg1)))
-    | UnaryExpr { op = `Extract ex; arg } when is_msb (fix2 arg) ex ->
+    | UnaryExpr { op = `Extract (e1, e2); arg }
+      when e1 = e2 + 1
+           && Option.equal ( = )
+                (Types.bit_width @@ type_of (fix2 arg))
+                (Some e1) ->
         Some (N (extract_expr (fix2 arg)))
     | _ -> None
 end
