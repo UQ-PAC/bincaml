@@ -80,6 +80,7 @@ let drop_unused_var_declarations_prog (p : Program.t) =
   Program.filter_map_decls
     (fun _ v ->
       match v with
+      | Program.(Variable { binding } as b) when Var.is_shared binding -> Some b
       | Program.(Variable { binding } as b) ->
           if VarSet.mem binding used then Some b else None
       | o -> Some o)
