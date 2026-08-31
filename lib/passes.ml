@@ -256,7 +256,7 @@ module PassManager = struct
     }
 
   let full_ssa =
-    let batch = [ remove_unreachable_blocks; sparams; sssa; remove_unused ] in
+    let batch = [ remove_unreachable_blocks; sparams; sssa; ] in
     {
       name = "ssa";
       apply = Batch batch;
