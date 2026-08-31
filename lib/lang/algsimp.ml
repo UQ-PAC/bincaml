@@ -344,9 +344,32 @@ let alg_simp_rewriter ?visit e =
       |> BasilExpr.rewrite_typed_two ?visit algebraic_simplifications)
   |> to_steady BasilExpr.equal (BasilExpr.rewrite_typed_two ?visit normalise)
 
-let normalise e =
-  let e = alg_simp_rewriter e in
-  BasilExpr.rewrite_typed_two normalise e
+let normalise ?visit e =
+  let e = alg_simp_rewriter ?visit e in
+  BasilExpr.rewrite_typed_two ?visit normalise e
+
+(** Simplifications for making ir more readable but interfere with analysis *)
+let readable e =
+  let open AbstractExpr in
+  let open BasilExpr in
+  let open Bitvec in
+  let e = AbstractExpr.map fst e in
+  match e with
+  | ApplyIntrin
+      {
+        attrib;
+        op = `BVADD;
+        args =
+          [ (RVar _ as v); Constant { attrib = cattrib; const = `Bitvector i } ];
+      }
+    when Bitvec.is_negative i ->
+      replace [%here]
+        (BasilExpr.binexp ~attrib ~op:`BVSUB (fix v)
+           (BasilExpr.bvconst ~attrib:cattrib (Bitvec.neg i)))
+  | _ -> Keep
+
+let readable ?visit e =
+  normalise ?visit e |> BasilExpr.rewrite_typed_two ?visit readable
 
 let%expect_test "normalise" =
   let e =

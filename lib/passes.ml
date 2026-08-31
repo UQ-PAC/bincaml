@@ -375,6 +375,17 @@ module PassManager = struct
       invariants = Invariants.presupposes [];
     }
 
+  let readable_exprs =
+    {
+      name = "readable-expressions";
+      apply = Proc Transforms.Cf_tx.simplify_proc_exprs_readable_default;
+      doc =
+        "Perform intra-expression simplifications and constant folding for \
+         whole program. Includes simplifications that aid readability at the \
+         detrement of some analyses.";
+      invariants = Invariants.presupposes [];
+    }
+
   let inter_dead =
     {
       name = "inter-dead-store-elim";
@@ -502,6 +513,7 @@ module PassManager = struct
       intra_function_summaries;
       inter_function_summaries;
       cf_exprs;
+      readable_exprs;
       inter_dead;
       linear_const;
       linear_copy;
