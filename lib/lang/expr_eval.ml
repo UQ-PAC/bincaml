@@ -105,9 +105,8 @@ let partial_eval_intrin (e : BasilExpr.t BasilExpr.abstract_expr) :
   | ApplyIntrin { op; args } when Ops.AllOps.is_commutative_intrin op ->
       let consts, rest =
         List.partition
-          (function Constant _ -> true | _ -> false)
-          (List.map BasilExpr.unfix args)
-        |> Pair.map_same (List.map BasilExpr.fix)
+          (function BasilExpr.E (Constant _) -> true | _ -> false)
+          args
       in
       if List.length consts >= 2 then
         let e_const =
