@@ -14,7 +14,18 @@ module FlagSemantics = struct
     | Sum of Expr.BasilExpr.t * Expr.BasilExpr.t  (** Computed e1 + e2 *)
     | Diff of Expr.BasilExpr.t * Expr.BasilExpr.t  (** Computed e1 - e2 *)
     | Expr of Expr.BasilExpr.t  (** The result of evaluating an expr *)
-  [@@deriving show { with_path = false }]
+  [@@deriving eq, ord, show { with_path = false }]
+
+  (** Determine whether [v] exists in an expression in [f] *)
+  let contains_var v f =
+    match f with
+    | O c | C c | Z c | N c -> (
+        match c with
+        | Sum (e1, e2) | Diff (e1, e2) ->
+            VarSet.mem v (Expr.BasilExpr.free_vars e1)
+            || VarSet.mem v (Expr.BasilExpr.free_vars e2)
+        | Expr e -> VarSet.mem v (Expr.BasilExpr.free_vars e))
+    | Never | Always -> false
 
   let extract_overflow_cary arg1 arg2 =
     let open Types in
@@ -241,7 +252,112 @@ let annotate_flag_assign_stmts (p : Program.proc) =
     (fun (bid, block) -> Block.map ~phi:id annotate_flag_assigns block)
     p
 
-let transform = annotate_flag_assign_stmts
+module L = struct
+  include Analysis.Lattice_types.FlatLattice (struct
+    include FlagSemantics
+
+    let name = "flag"
+  end)
+
+  let contains_var v x =
+    match x with
+    | Top -> false
+    | Bot -> false
+    | V f -> FlagSemantics.contains_var v f
+end
+
+(** Assigns flag meaning values to flag variables at each code point. If a flag
+    assumes a value of a variable that gets updated, that flags value will get
+    dropped and set to top. This should be precise enough still as branches
+    probably only occur direct after flags are set (probably). Note that none of
+    this is a problem if ssa is run prior to this transform. *)
+module FlagAnalysis = struct
+  include Analysis.Intra_analysis.MapState (L)
+
+  let name = "pstate-flag-analysis"
+
+  (* Assume nothing about the initial state *)
+  let init ?vertex _ =
+    match vertex with Some (Some Procedure.Vert.Entry) -> top | _ -> bottom
+
+  (** Remove flags from state that referred to [v] (e.g. if [v] was updated) *)
+  let drop_modified v =
+    mapi (fun v' x -> if L.contains_var v' x then L.top else x)
+
+  let transfer m stmt =
+    match stmt with
+    | Stmt.Instr_Assign { al } ->
+        List.fold_left
+          (fun m (v, e) ->
+            let m = drop_modified v m in
+            (* If v is a bv1, update map with extract results *)
+            if Types.equal (Var.typ v) (Types.Bitvector 1) then
+              let f =
+                FlagSemantics.extract_semantics e
+                |> Option.map (fun f -> L.V f)
+                |> Option.get_or ~default:L.top
+              in
+              update v f m
+            else m)
+          m al
+    | _ -> m
+
+  let transfer_phi m (p : Var.t Block.phi) =
+    match p with
+    | { lhs; rhs } ->
+        (* assume phis never assign to in use variables (yikes) *)
+        rhs
+        |> List.map (fun (_, k) -> read k m)
+        |> List.fold_left L.join L.bottom
+        |> fun v -> drop_modified v m |> update lhs v
+end
+
+module A = struct
+  include Analysis.Intra_analysis.Forwards (FlagAnalysis)
+
+  let analyse p = analyse p
+end
+
+let annotate_stmt_flags m stmt =
+  let open Stmt in
+  match stmt with
+  | Instr_Assume { attrib; body; branch } ->
+      let annotations =
+        FlagAnalysis.to_list m |> snd
+        |> List.filter_map (fun (v, s) ->
+            match s with L.V s -> Some (v, s) | _ -> None)
+      in
+      let attrib =
+        List.fold_left
+          (fun attrib (v, s) ->
+            StringMap.add
+              (".flag_semantics_" ^ Var.name v)
+              (`String (FlagSemantics.show s))
+              attrib)
+          attrib annotations
+      in
+      Instr_Assume { attrib; body; branch }
+  | _ -> stmt
+
+(** Add flag annotations to assume statements based on flag variables prior *)
+let annotate_assume_flags (p : Program.proc) =
+  let a = A.analyse p in
+  Procedure.map_blocks_nondet
+    (fun (bid, b) ->
+      let r =
+        A.A.M.find_opt (Procedure.Vert.Begin bid) a
+        |> Option.get_or ~default:FlagAnalysis.top
+      in
+      Block.map_fold_forwards
+        ~phi:(fun m phi ->
+          (List.fold_left FlagAnalysis.transfer_phi m phi, phi))
+        ~f:(fun m stmt ->
+          (FlagAnalysis.transfer m stmt, annotate_stmt_flags m stmt))
+        r b
+      |> snd)
+    p
+
+let transform = annotate_assume_flags
 
 let%expect_test "flag_types" =
   let lst =
