@@ -5,14 +5,10 @@ module FlagSemantics = struct
   type t =
     | Never
     | Always
-    | OverflowByConst of Expr.BasilExpr.t * Bitvec.t
-        (** Overflow when adding expr and const *)
     | OverflowByDiff of Expr.BasilExpr.t * Expr.BasilExpr.t
         (** Overflow when subtracting first from second *)
     | OverflowBySum of Expr.BasilExpr.t * Expr.BasilExpr.t
         (** Overflow when adding first and second *)
-    | CarryByConst of Expr.BasilExpr.t * Bitvec.t
-        (** Carry when adding expr and const *)
     | CarryByDiff of Expr.BasilExpr.t * Expr.BasilExpr.t
         (** Carry when subtracting first from second *)
     | CarryBySum of Expr.BasilExpr.t * Expr.BasilExpr.t
@@ -82,7 +78,7 @@ module FlagSemantics = struct
                && equal (fix a) (fix c)
                && k2 = k1 + s1
                && sext_eq s1 bv1 bv2 ->
-            Some (OverflowByConst (fix a, bv1))
+            Some (OverflowBySum (fix a, bvconst bv1))
         | ( UnaryExpr
               {
                 op = `SignExtend s1;
@@ -144,7 +140,7 @@ module FlagSemantics = struct
                && equal (fix a) (fix c)
                && k2 = k1 + s1
                && zext_eq s1 bv1 bv2 ->
-            Some (CarryByConst (fix a, bv1))
+            Some (CarryBySum (fix a, bvconst bv1))
         | ( UnaryExpr
               {
                 op = `ZeroExtend z1;
