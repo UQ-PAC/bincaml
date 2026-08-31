@@ -5,21 +5,15 @@ module FlagSemantics = struct
   type t =
     | Never
     | Always
-    | OByDiff of Expr.BasilExpr.t * Expr.BasilExpr.t
-        (** Overflow when subtracting first from second *)
-    | OBySum of Expr.BasilExpr.t * Expr.BasilExpr.t
-        (** Overflow when adding first and second *)
-    | CByDiff of Expr.BasilExpr.t * Expr.BasilExpr.t
-        (** Carry when subtracting first from second *)
-    | CBySum of Expr.BasilExpr.t * Expr.BasilExpr.t
-        (** Carry when adding first and second *)
-    | ZNegEqual of Expr.BasilExpr.t * Expr.BasilExpr.t
-        (** When left == -right (or -left == right) *)
-    | ZEqual of Expr.BasilExpr.t * Expr.BasilExpr.t  (** When left == right *)
-    | ZIsZero of Expr.BasilExpr.t  (** When expr is zero *)
-    | NSlt of Expr.BasilExpr.t * Expr.BasilExpr.t
-        (** When left < right signed *)
-    | NIsNeg of Expr.BasilExpr.t  (** When expr is negative *)
+    | O of computation  (** Overflow from computation *)
+    | C of computation  (** Carry from computation *)
+    | Z of computation  (** When computation is zero *)
+    | N of computation  (** When computation is negative *)
+
+  and computation =
+    | Sum of Expr.BasilExpr.t * Expr.BasilExpr.t  (** Computed e1 + e2 *)
+    | Diff of Expr.BasilExpr.t * Expr.BasilExpr.t  (** Computed e1 - e2 *)
+    | Expr of Expr.BasilExpr.t  (** The result of evaluating an expr *)
   [@@deriving show { with_path = false }]
 
   let extract_overflow_cary arg1 arg2 =
@@ -55,7 +49,9 @@ module FlagSemantics = struct
               ];
           } )
       when s1 = s2 && s1 > 0 && equal (fix a) (fix c) && sext_eq s1 bv1 bv2 ->
-        Some (OBySum (fix a, bvconst bv1))
+        if Bitvec.is_negative bv1 then
+          Some (O (Diff (fix a, bvconst (Bitvec.neg bv1))))
+        else Some (O (Sum (fix a, bvconst bv1)))
     | ( UnaryExpr
           {
             op = `SignExtend s1;
@@ -73,7 +69,7 @@ module FlagSemantics = struct
       when s1 = s2 && s2 = s3 && s1 > 0
            && equal (fix a) (fix c)
            && equal (fix b) (fix d) ->
-        Some (OBySum (fix a, fix b))
+        Some (O (Sum (fix a, fix b)))
     | ( UnaryExpr
           {
             op = `SignExtend s1;
@@ -88,7 +84,7 @@ module FlagSemantics = struct
       when s1 = s2 && s2 = s3 && s1 > 0
            && equal (fix a) (fix c)
            && equal (fix b) (fix d) ->
-        Some (OByDiff (fix a, fix b))
+        Some (O (Diff (fix a, fix b)))
     | ( UnaryExpr
           {
             op = `ZeroExtend z1;
@@ -109,7 +105,9 @@ module FlagSemantics = struct
               ];
           } )
       when z1 = z2 && z1 > 0 && equal (fix a) (fix c) && zext_eq z1 bv1 bv2 ->
-        Some (CBySum (fix a, bvconst bv1))
+        if Bitvec.is_negative bv1 then
+          Some (C (Diff (fix a, bvconst (Bitvec.neg bv1))))
+        else Some (O (Sum (fix a, bvconst bv1)))
     | ( UnaryExpr
           {
             op = `ZeroExtend z1;
@@ -127,7 +125,7 @@ module FlagSemantics = struct
       when z1 = z2 && z2 = z3 && z1 > 0
            && equal (fix a) (fix c)
            && equal (fix b) (fix d) ->
-        Some (CBySum (fix a, fix b))
+        Some (C (Sum (fix a, fix b)))
     | ( UnaryExpr
           {
             op = `ZeroExtend z1;
@@ -151,28 +149,20 @@ module FlagSemantics = struct
            && equal (fix a) (fix c)
            && equal (fix b) d
            && is_one bv ->
-        Some (CByDiff (fix a, fix b))
+        Some (C (Diff (fix a, fix b)))
     | _ -> None
 
-  let extract_zero arg1 arg2 =
+  let extract_expr arg =
     let open Expr.AbstractExpr in
     let open Expr.BasilExpr in
-    let is_zero = function
-      | Constant { const = `Bitvector bv } -> Bitvec.is_zero bv
-      | _ -> false
-    in
-    match (unfix2 arg1, unfix2 arg2) with
-    | ( ApplyIntrin
-          { op = `BVADD; args = [ a; Constant { const = `Bitvector bv } ] },
-        c )
-      when is_zero c ->
-        Some (ZEqual (fix a, bvconst (Bitvec.neg bv)))
-    | ApplyIntrin { op = `BVADD; args = [ a; b ] }, c when is_zero c ->
-        Some (ZNegEqual (fix a, fix b))
-    | BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b }, c when is_zero c ->
-        Some (ZEqual (fix a, fix b))
-    | a, c when is_zero c -> Some (ZIsZero (fix2 a))
-    | _ -> None
+    match unfix2 arg with
+    | ApplyIntrin
+        { op = `BVADD; args = [ a; Constant { const = `Bitvector bv } ] } ->
+        if Bitvec.is_negative bv then Diff (fix a, bvconst (Bitvec.neg bv))
+        else Sum (fix a, bvconst bv)
+    | ApplyIntrin { op = `BVADD; args = [ a; b ] } -> Sum (fix a, fix b)
+    | BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b } -> Diff (fix a, fix b)
+    | a -> Expr (fix2 a)
 
   let extract_semantics e =
     let e = Algsimp.normalise e in
@@ -197,28 +187,17 @@ module FlagSemantics = struct
               { op = `BOOLTOBV1; arg = BinaryExpr { op = `EQ; arg1; arg2 } };
         } ->
         extract_overflow_cary arg1 arg2
-    | UnaryExpr { op = `BOOLTOBV1; arg = BinaryExpr { op = `EQ; arg1; arg2 } }
-      ->
-        extract_zero (fix arg1) (fix arg2)
     | UnaryExpr
         {
-          op = `Extract ex;
+          op = `BOOLTOBV1;
           arg =
-            ApplyIntrin
-              { op = `BVADD; args = [ a; Constant { const = `Bitvector bv } ] }
-            as arg;
+            BinaryExpr
+              { op = `EQ; arg1; arg2 = Constant { const = `Bitvector bv } };
         }
-      when is_msb (fix2 arg) ex ->
-        Some (NSlt (fix a, bvconst (Bitvec.neg bv)))
-    | UnaryExpr
-        {
-          op = `Extract ex;
-          arg = BinaryExpr { op = `BVSUB; arg1 = a; arg2 = b } as arg;
-        }
-      when is_msb (fix2 arg) ex ->
-        Some (NSlt (fix a, fix b))
+      when Bitvec.is_zero bv ->
+        Some (Z (extract_expr (fix arg1)))
     | UnaryExpr { op = `Extract ex; arg } when is_msb (fix2 arg) ex ->
-        Some (NIsNeg (fix2 arg))
+        Some (N (extract_expr (fix2 arg)))
     | _ -> None
 end
 
@@ -334,20 +313,20 @@ prog entry @main;
 
     [
        block %main [
-         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(sign_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OBySum (extract(32,0, $R0), 0x1:bv32))" };
-         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)), bvadd(bvadd(sign_extend(32, extract(32,0, $R0)), 0xfffffffffffffffd:bv64), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OBySum (extract(32,0, $R0), 0xfffffffe:bv32))" };
-         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)), bvadd(bvadd(sign_extend(32, extract(32,0, $R0)), sign_extend(32, bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(OByDiff (extract(32,0, $R0), extract(32,0, $R1)))" };
-         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(local_31:bv32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12)))), bvadd(sign_extend(32, local_31:bv32), sign_extend(32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_V = "(OBySum (local_31:bv32, local_32:bv32))" };
-         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CBySum (extract(32,0, $R0), 0x1:bv32))" };
-         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)), bvadd(bvadd(zero_extend(32, extract(32,0, $R0)), 0xfffffffd:bv64), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CBySum (extract(32,0, $R0), 0xfffffffe:bv32))" };
-         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)), bvadd(bvadd(zero_extend(32, extract(32,0, $R0)), zero_extend(32, bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(CByDiff (extract(32,0, $R0), extract(32,0, $R1)))" };
-         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd($H2, bvshl($H3, zero_extend(20, 0x0:bv12)))), bvadd(zero_extend(32, $H2), zero_extend(32, bvshl($H3, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_C = "(CBySum ($H2, $H3))" };
-         $PSTATE_Z:bv1 := booltobv1(eq(bvadd($H2, bvshl($H3, zero_extend(20, 0x0:bv12))), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(ZNegEqual ($H2, $H3))" };
-         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(ZEqual (extract(32,0, $R0), 0xffffffff:bv32))" };
-         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(ZEqual (extract(32,0, $R0), extract(32,0, $R1)))" };
-         $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(NSlt (extract(32,0, $R0), 0xffffffff:bv32))" };
-         $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(NSlt (extract(32,0, $R0), extract(32,0, $R1)))" };
-         $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), 0xffffffff:bv32), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(NIsNeg extract(32,0, $R0))" };
+         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(sign_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(O (Sum (extract(32,0, $R0), 0x1:bv32)))" };
+         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)), bvadd(bvadd(sign_extend(32, extract(32,0, $R0)), 0xfffffffffffffffd:bv64), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(O (Diff (extract(32,0, $R0), 0x2:bv32)))" };
+         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)), bvadd(bvadd(sign_extend(32, extract(32,0, $R0)), sign_extend(32, bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(O (Diff (extract(32,0, $R0), extract(32,0, $R1))))" };
+         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(local_31:bv32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12)))), bvadd(sign_extend(32, local_31:bv32), sign_extend(32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_V = "(O (Sum (local_31:bv32, local_32:bv32)))" };
+         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(O (Sum (extract(32,0, $R0), 0x1:bv32)))" };
+         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)), bvadd(bvadd(zero_extend(32, extract(32,0, $R0)), 0xfffffffd:bv64), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(C (Diff (extract(32,0, $R0), 0x2:bv32)))" };
+         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)), bvadd(bvadd(zero_extend(32, extract(32,0, $R0)), zero_extend(32, bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(C (Diff (extract(32,0, $R0), extract(32,0, $R1))))" };
+         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd($H2, bvshl($H3, zero_extend(20, 0x0:bv12)))), bvadd(zero_extend(32, $H2), zero_extend(32, bvshl($H3, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_C = "(C (Sum ($H2, $H3)))" };
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd($H2, bvshl($H3, zero_extend(20, 0x0:bv12))), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(Z (Sum ($H2, $H3)))" };
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(Z (Sum (extract(32,0, $R0), 0x1:bv32)))" };
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32), 0x0:bv32)) { .flag_semantics_$PSTATE_Z = "(Z (Diff (extract(32,0, $R0), extract(32,0, $R1))))" };
+         $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Sum (extract(32,0, $R0), 0x1:bv32)))" };
+         $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Diff (extract(32,0, $R0), extract(32,0, $R1))))" };
+         $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), 0xffffffff:bv32), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Expr extract(32,0, $R0)))" };
          $PSTATE_N:bv1 := extract(31,30, bvadd(extract(32,0, $R0), 0x1:bv32));
          $PSTATE_N:bv1 := extract(31,30, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32));
          $PSTATE_N:bv1 := extract(31,30, bvadd(bvadd(extract(32,0, $R0), 0xffffffff:bv32), 0x1:bv32));
