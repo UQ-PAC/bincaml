@@ -247,6 +247,16 @@ module PassManager = struct
       invariants = Invariants.presupposes [];
     }
 
+  let branch_conditions =
+    {
+      name = "branch-conditions";
+      apply = Proc Transforms.Branch_conditions.transform;
+      doc =
+        "(incomplete) Rewrites branch conditions to be in terms of numerical \
+         comparisons instead of flags.";
+      invariants = Invariants.presupposes [];
+    }
+
   let irreducible_loop =
     {
       name = "irreducible-loops";
@@ -365,6 +375,17 @@ module PassManager = struct
       invariants = Invariants.presupposes [];
     }
 
+  let readable_exprs =
+    {
+      name = "readable-expressions";
+      apply = Proc Transforms.Cf_tx.simplify_proc_exprs_readable_default;
+      doc =
+        "Perform intra-expression simplifications and constant folding for \
+         whole program. Includes simplifications that aid readability at the \
+         detrement of some analyses.";
+      invariants = Invariants.presupposes [];
+    }
+
   let inter_dead =
     {
       name = "inter-dead-store-elim";
@@ -469,6 +490,7 @@ module PassManager = struct
       remove_unreachable_blocks;
       collapse_empty_blocks;
       cleanup_cfg;
+      branch_conditions;
       dfg_bool;
       dfg_ival_wint_product;
       demo_ival_wint_dfg;
@@ -491,6 +513,7 @@ module PassManager = struct
       intra_function_summaries;
       inter_function_summaries;
       cf_exprs;
+      readable_exprs;
       inter_dead;
       linear_const;
       linear_copy;
