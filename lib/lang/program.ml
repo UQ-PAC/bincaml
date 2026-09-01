@@ -175,11 +175,11 @@ let add_decl
     ?(at : [ `Append | `Prepend | `BeforeVars | `BeforeFuncs | `BeforeProcs ] =
       `Append) p decl =
   let decl_is_func = function Function _ -> true | _ -> false
-  let decl_is_var = function Variable _ -> true | _ -> false
-  let decl_is_proc = function Procedure _ -> true | _ -> false
-  let vars_before _ k = decl_is_proc k || decl_is_func k || decl_is_var k in
-  let procs_before _ k = decl_is_proc k in
-  let funcs_before _ k = decl_is_func k in
+  and decl_is_var = function Variable _ -> true | _ -> false
+  and decl_is_proc = function Procedure _ -> true | _ -> false in
+  let vars_before _ k = decl_is_proc k || decl_is_func k || decl_is_var k
+  and procs_before _ k = decl_is_proc k
+  and funcs_before _ k = decl_is_func k in
 
   let d = p.global_names.decl_or_get (decl_binding decl) in
   let declarations =
