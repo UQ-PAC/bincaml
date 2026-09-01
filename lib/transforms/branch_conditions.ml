@@ -259,6 +259,18 @@ module L = struct
     let name = "flag"
   end)
 
+  module E = Lang.Expr.BasilExpr
+
+  let eval_const op =
+    match op with
+    | `Bitvector k when Bitvec.equal k (Bitvec.zero ~size:1) -> V Never
+    | `Bitvector k when Bitvec.equal k (Bitvec.one ~size:1) -> V Always
+    | _ -> Top
+
+  let eval_unop _ _ = Top
+  let eval_binop _ _ _ = Top
+  let eval_intrin _ _ = Top
+
   let contains_var v x =
     match x with
     | Top -> false
@@ -318,6 +330,80 @@ module A = struct
   let analyse p = analyse p
 end
 
+module Eval = Analysis.Intra_analysis.EvalExpr (L)
+
+(** Rewrites boolean exprs in terms of flags to be in terms of numerical
+    conditions. *)
+module Rewriter = struct
+  type t =
+    | EQ of FlagSemantics.computation
+    | CS of FlagSemantics.computation
+    | MI of FlagSemantics.computation
+    | VS of FlagSemantics.computation
+    | HI of FlagSemantics.computation * FlagSemantics.computation
+    | GE of FlagSemantics.computation * FlagSemantics.computation
+    | GT of
+        FlagSemantics.computation
+        * FlagSemantics.computation
+        * FlagSemantics.computation
+    | Not of t
+    | Top
+  [@@deriving show { with_path = false }]
+
+  (** Extracts a ConditionHolds(_) term from a boolean typed expression *)
+  let rec extract_alg_asdfg m e : t =
+    let open FlagSemantics in
+    let open Expr.AbstractExpr in
+    match e with
+    | BinaryExpr { op = `EQ; arg1; arg2 } -> (
+        (* evaluate arg1 and arg2, if they are of the right form keep *)
+        let arg1 = Eval.eval (flip FlagAnalysis.read m) arg1 in
+        let arg2 = Eval.eval (flip FlagAnalysis.read m) arg2 in
+        match (arg1, arg2) with
+        | V (Z c), V Always -> EQ c
+        | V (C c), V Always -> CS c
+        | V (N c), V Always -> MI c
+        | V (O c), V Always -> VS c
+        | V (N c), V (O c') -> GE (c, c')
+        | _ -> Top)
+    | ApplyIntrin
+        {
+          op = `AND;
+          args =
+            [
+              Expr.BasilExpr.E (BinaryExpr { op = `EQ; arg1 = a; arg2 = b });
+              E (BinaryExpr { op = `EQ; arg1 = c; arg2 = d });
+            ];
+        } -> (
+        (* there has to be a better way .......... *)
+        let a = Eval.eval (flip FlagAnalysis.read m) a in
+        let b = Eval.eval (flip FlagAnalysis.read m) b in
+        let c = Eval.eval (flip FlagAnalysis.read m) c in
+        let d = Eval.eval (flip FlagAnalysis.read m) d in
+        match (a, b, c, d) with
+        | V (C c), V Always, V (Z c'), V Never -> HI (c, c')
+        | V (N c), V (O c'), V (Z c''), V Never -> GT (c, c', c'')
+        | _ -> Top)
+    | UnaryExpr { op = `BoolNOT; arg } -> (
+        match extract_alg_asdfg m (Expr.BasilExpr.unfix arg) with
+        | Not c -> c
+        | c -> Not c)
+    | _ -> Top
+
+  let alg m e =
+    let open Expr.BasilExpr in
+    let typ = Expr.AbstractExpr.get_typ e in
+    if Types.equal Types.bool typ then (
+      let condition = extract_alg_asdfg m e in
+      print_endline @@ show condition;
+      (* TODO *)
+      Expr.BasilExpr.Keep)
+    else Expr.BasilExpr.Keep
+
+  let rewrite_expr (m : FlagAnalysis.t) e =
+    Expr.BasilExpr.rewrite_down ~rw_fun:(alg m) e
+end
+
 let annotate_stmt_flags m stmt =
   let open Stmt in
   match stmt with
@@ -336,6 +422,8 @@ let annotate_stmt_flags m stmt =
               attrib)
           attrib annotations
       in
+      (* REMOVE THIS !!!!!!! *)
+      let body = Rewriter.rewrite_expr m body in
       Instr_Assume { attrib; body; branch }
   | _ -> stmt
 
