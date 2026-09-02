@@ -349,7 +349,7 @@ module Rewriter = struct
   [@@deriving show { with_path = false }]
 
   (** Extracts a ConditionHolds(_) term from a boolean typed expression *)
-  let rec extract_alg_asdfg m e : t =
+  let rec extract_condition m e : t =
     let open FlagSemantics in
     let open Expr.AbstractExpr in
     match e with
@@ -383,20 +383,52 @@ module Rewriter = struct
         | V (N c), V (O c'), V (Z c''), V Never -> GT (c, c', c'')
         | _ -> Top)
     | UnaryExpr { op = `BoolNOT; arg } -> (
-        match extract_alg_asdfg m (Expr.BasilExpr.unfix arg) with
+        match extract_condition m (Expr.BasilExpr.unfix arg) with
         | Not c -> c
         | c -> Not c)
     | _ -> Top
 
+  let rec condition_expr cond =
+    let open Expr.BasilExpr in
+    let value = function
+      | FlagSemantics.Diff (e, e') -> binexp ~op:`BVSUB e e'
+      | Sum (e, e') -> applyintrin ~op:`BVADD [ e; e' ]
+      | Expr e -> e
+    in
+    match cond with
+    | EQ (Diff (e, e')) -> Some (binexp ~op:`EQ e e')
+    | EQ (Sum (e, e')) -> Some (binexp ~op:`EQ e (unexp ~op:`BVNEG e'))
+    (* | EQ (Expr e) -> Some (binexp ~op:`EQ e (failwith "zero...")) *)
+    (* ???????????? i don't understand!!!!! *)
+    (* | CS (Diff (e, e')) -> Some (binexp ~op:`BVULE e' e) *)
+    (* | CS (Sum (e, e')) -> Some (binexp ~op:`BVULE (unexp ~op:`BVNEG e') e) *)
+    (* | MI c -> Some (binexp ~op:`BVSLT (value c) (failwith "zero....")) *)
+    (* | VS c -> failwith "?????????????????????????????????" *)
+    (* these all need equivalence checks of computations !!!!!!! this sucks !!!!! *)
+    (* | HI (c, c') -> failwith "todo" *)
+    (* | GE (c, c') -> failwith "todo" *)
+    (* | GT (c, c', c'') -> failwith "todo" *)
+    | Not cond -> (
+        let open Expr.AbstractExpr in
+        match condition_expr cond with
+        | Some (E (BinaryExpr { op = `BVULE; arg1; arg2 })) ->
+            Some (binexp ~op:`BVULT arg2 arg1)
+        | Some (E (BinaryExpr { op = `BVULT; arg1; arg2 })) ->
+            Some (binexp ~op:`BVULE arg2 arg1)
+        | Some (E (BinaryExpr { op = `BVSLE; arg1; arg2 })) ->
+            Some (binexp ~op:`BVSLT arg2 arg1)
+        | Some (E (BinaryExpr { op = `BVSLT; arg1; arg2 })) ->
+            Some (binexp ~op:`BVSLE arg2 arg1)
+        | Some e -> Some (Expr.BasilExpr.boolnot e)
+        | None -> None)
+    | _ -> None
+
   let alg m e =
     let open Expr.BasilExpr in
-    let typ = Expr.AbstractExpr.get_typ e in
-    if Types.equal Types.bool typ then (
-      let condition = extract_alg_asdfg m e in
-      print_endline @@ show condition;
-      (* TODO *)
-      Expr.BasilExpr.Keep)
-    else Expr.BasilExpr.Keep
+    extract_condition m e
+    (* |> tap (print_endline % show) *)
+    |> condition_expr
+    |> Expr.BasilExpr.replace_opt
 
   let rewrite_expr (m : FlagDomain.t) e =
     Expr.BasilExpr.rewrite_down ~rw_fun:(alg m) e
@@ -421,7 +453,7 @@ let annotate_stmt_flags m stmt =
           attrib annotations
       in
       (* REMOVE THIS !!!!!!! *)
-      (* let body = Rewriter.rewrite_expr m body in *)
+      let body = Rewriter.rewrite_expr m body in
       Instr_Assume { attrib; body; branch }
   | _ -> stmt
 
