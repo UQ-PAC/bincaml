@@ -8,11 +8,7 @@
   > (run-transforms "linear-copy")
   > (run-transforms "inter-function-summaries")
   > (run-transforms "dynamic-single-assignment")
-  > (dump-il)
-  > (log-level debug)
-  > (run-transforms "hindley-milner-elaborate")
   > (dump-il "after.il")
-  > (dump-il)
   > (dump-boogie "out.bpl")
   > EOF
   (load-il ../../examples/memory/memory_interproc.il)
@@ -32,26 +28,14 @@
 
   $ cat << EOF | bincaml script -
   > (load-il "../../examples/memory/memory_interproc.il")
-  > (dump-il)
-  > (log-level debug)
-  > (dump-il bflat.il)
-  > ;(run-transforms "hindley-milner-elaborate")
-  > (dump-il flat.il)
   > (run-transforms "ssa")
   > (run-transforms "flat-memory-encoding")
-  > (dump-il)
-  > (run-transforms "hindley-milner-elaborate")
   > (run-transforms "memory-specification")
-  > (run-transforms "hindley-milner-elaborate")
   > (run-transforms "ssa")
   > (run-transforms "linear-const")
-  > (run-transforms "hindley-milner-elaborate")
   > (run-transforms "linear-copy")
   > (run-transforms "inter-function-summaries")
-  > (run-transforms "hindley-milner-elaborate")
   > (run-transforms "dynamic-single-assignment")
-  > (log-level debug)
-  > (run-transforms "hindley-milner-elaborate")
   > (dump-il "after.il")
   > (dump-boogie "out.bpl")
   > EOF
@@ -68,8 +52,8 @@
   (dump-boogie out.bpl)
 
   $ boogie out.bpl
-  out.bpl(302,5): Error: this assertion could not be proved
+  out.bpl(314,5): Error: this assertion could not be proved
   Execution trace:
-      out.bpl(291,3): b#inputs
+      out.bpl(303,3): b#inputs
   
   Boogie program verifier finished with 1 verified, 1 error

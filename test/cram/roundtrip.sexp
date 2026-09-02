@@ -18,9 +18,6 @@
 (dump-il "aftermem.il")
 
 (load-il "ptrrec1.il")
-(run-transforms "hindley-milner-elaborate")
 (dump-il "ptrrec2.il")
 (load-il "ptrrec2.il")
-(run-transforms "hindley-milner-elaborate")
 (dump-il "ptrrec3.il")
-
