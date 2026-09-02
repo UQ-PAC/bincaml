@@ -421,7 +421,7 @@ let annotate_stmt_flags m stmt =
           attrib annotations
       in
       (* REMOVE THIS !!!!!!! *)
-      let body = Rewriter.rewrite_expr m body in
+      (* let body = Rewriter.rewrite_expr m body in *)
       Instr_Assume { attrib; body; branch }
   | _ -> stmt
 
