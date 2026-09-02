@@ -252,7 +252,7 @@ let annotate_flag_assign_stmts (p : Program.proc) =
     (fun (bid, block) -> Block.map ~phi:id annotate_flag_assigns block)
     p
 
-module L = struct
+module FlagLattice = struct
   include Analysis.Lattice_types.FlatLattice (struct
     include FlagSemantics
 
@@ -283,8 +283,8 @@ end
     dropped and set to top. This should be precise enough still as branches
     probably only occur direct after flags are set (probably). Note that none of
     this is a problem if ssa is run prior to this transform. *)
-module FlagAnalysis = struct
-  include Analysis.Intra_analysis.MapState (L)
+module FlagDomain = struct
+  include Analysis.Intra_analysis.MapState (FlagLattice)
 
   let name = "pstate-flag-analysis"
 
@@ -294,7 +294,8 @@ module FlagAnalysis = struct
 
   (** Remove flags from state that referred to [v] (e.g. if [v] was updated) *)
   let drop_modified v =
-    mapi (fun v' x -> if L.contains_var v x then L.top else x)
+    mapi (fun v' x ->
+        if FlagLattice.contains_var v x then FlagLattice.top else x)
 
   let transfer m stmt =
     match stmt with
@@ -302,15 +303,12 @@ module FlagAnalysis = struct
         List.fold_left
           (fun m (v, e) ->
             let m = drop_modified v m in
-            (* If v is a bv1, update map with extract results *)
-            if Types.equal (Var.typ v) (Types.Bitvector 1) then
-              let f =
-                FlagSemantics.extract_semantics e
-                |> Option.map (fun f -> L.V f)
-                |> Option.get_or ~default:L.top
-              in
-              update v f m
-            else m)
+            let f =
+              FlagSemantics.extract_semantics e
+              |> Option.map (fun f -> FlagLattice.V f)
+              |> Option.get_or ~default:FlagLattice.top
+            in
+            update v f m)
           m al
     | _ -> m
 
@@ -320,17 +318,17 @@ module FlagAnalysis = struct
         (* assume phis never assign to in use variables (yikes) *)
         rhs
         |> List.map (fun (_, k) -> read k m)
-        |> List.fold_left L.join L.bottom
+        |> List.fold_left FlagLattice.join FlagLattice.bottom
         |> fun v -> drop_modified lhs m |> update lhs v
 end
 
-module A = struct
-  include Analysis.Intra_analysis.Forwards (FlagAnalysis)
+module FlagAnalysis = struct
+  include Analysis.Intra_analysis.Forwards (FlagDomain)
 
   let analyse p = analyse p
 end
 
-module Eval = Analysis.Intra_analysis.EvalExpr (L)
+module Eval = Analysis.Intra_analysis.EvalExpr (FlagLattice)
 
 (** Rewrites boolean exprs in terms of flags to be in terms of numerical
     conditions. *)
@@ -357,8 +355,8 @@ module Rewriter = struct
     match e with
     | BinaryExpr { op = `EQ; arg1; arg2 } -> (
         (* evaluate arg1 and arg2, if they are of the right form keep *)
-        let arg1 = Eval.eval (flip FlagAnalysis.read m) arg1 in
-        let arg2 = Eval.eval (flip FlagAnalysis.read m) arg2 in
+        let arg1 = Eval.eval (flip FlagDomain.read m) arg1 in
+        let arg2 = Eval.eval (flip FlagDomain.read m) arg2 in
         match (arg1, arg2) with
         | V (Z c), V Always -> EQ c
         | V (C c), V Always -> CS c
@@ -376,10 +374,10 @@ module Rewriter = struct
             ];
         } -> (
         (* there has to be a better way .......... *)
-        let a = Eval.eval (flip FlagAnalysis.read m) a in
-        let b = Eval.eval (flip FlagAnalysis.read m) b in
-        let c = Eval.eval (flip FlagAnalysis.read m) c in
-        let d = Eval.eval (flip FlagAnalysis.read m) d in
+        let a = Eval.eval (flip FlagDomain.read m) a in
+        let b = Eval.eval (flip FlagDomain.read m) b in
+        let c = Eval.eval (flip FlagDomain.read m) c in
+        let d = Eval.eval (flip FlagDomain.read m) d in
         match (a, b, c, d) with
         | V (C c), V Always, V (Z c'), V Never -> HI (c, c')
         | V (N c), V (O c'), V (Z c''), V Never -> GT (c, c', c'')
@@ -400,7 +398,7 @@ module Rewriter = struct
       Expr.BasilExpr.Keep)
     else Expr.BasilExpr.Keep
 
-  let rewrite_expr (m : FlagAnalysis.t) e =
+  let rewrite_expr (m : FlagDomain.t) e =
     Expr.BasilExpr.rewrite_down ~rw_fun:(alg m) e
 end
 
@@ -409,9 +407,9 @@ let annotate_stmt_flags m stmt =
   match stmt with
   | Instr_Assume { attrib; body; branch } ->
       let annotations =
-        FlagAnalysis.to_list m |> snd
+        FlagDomain.to_list m |> snd
         |> List.filter_map (fun (v, s) ->
-            match s with L.V s -> Some (v, s) | _ -> None)
+            match s with FlagLattice.V s -> Some (v, s) | _ -> None)
       in
       let attrib =
         List.fold_left
@@ -429,18 +427,17 @@ let annotate_stmt_flags m stmt =
 
 (** Add flag annotations to assume statements based on flag variables prior *)
 let annotate_assume_flags (p : Program.proc) =
-  let a = A.analyse p in
+  let a = FlagAnalysis.analyse p in
   Procedure.map_blocks_nondet
     (fun (bid, b) ->
       let r =
-        A.A.M.find_opt (Procedure.Vert.Begin bid) a
-        |> Option.get_or ~default:FlagAnalysis.top
+        FlagAnalysis.A.M.find_opt (Procedure.Vert.Begin bid) a
+        |> Option.get_or ~default:FlagDomain.top
       in
       Block.map_fold_forwards
-        ~phi:(fun m phi ->
-          (List.fold_left FlagAnalysis.transfer_phi m phi, phi))
+        ~phi:(fun m phi -> (List.fold_left FlagDomain.transfer_phi m phi, phi))
         ~f:(fun m stmt ->
-          (FlagAnalysis.transfer m stmt, annotate_stmt_flags m stmt))
+          (FlagDomain.transfer m stmt, annotate_stmt_flags m stmt))
         r b
       |> snd)
     p
@@ -480,11 +477,6 @@ proc @main() -> ()
      $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32));
      $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32));
      $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), 0xffffffff:bv32), 0x1:bv32));
-
-     // should not be annotated!
-     $PSTATE_N:bv1 := extract(31,30, bvadd(extract(32,0, $R0), 0x1:bv32));
-     $PSTATE_N:bv1 := extract(31,30, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32));
-     $PSTATE_N:bv1 := extract(31,30, bvadd(bvadd(extract(32,0, $R0), 0xffffffff:bv32), 0x1:bv32));
 
      $PSTATE_V:bv1 := 0x0:bv1;
      $PSTATE_C:bv1 := 0x0:bv1;
@@ -534,9 +526,6 @@ prog entry @main;
          $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Sum (extract(32,0, $R0), 0x1:bv32)))" };
          $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Diff (extract(32,0, $R0), extract(32,0, $R1))))" };
          $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), 0xffffffff:bv32), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Expr extract(32,0, $R0)))" };
-         $PSTATE_N:bv1 := extract(31,30, bvadd(extract(32,0, $R0), 0x1:bv32));
-         $PSTATE_N:bv1 := extract(31,30, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32));
-         $PSTATE_N:bv1 := extract(31,30, bvadd(bvadd(extract(32,0, $R0), 0xffffffff:bv32), 0x1:bv32));
          $PSTATE_V:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_V = "Never" };
          $PSTATE_C:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_C = "Never" };
          $PSTATE_Z:bv1 := 0x1:bv1 { .flag_semantics_$PSTATE_Z = "Always" };
@@ -548,7 +537,7 @@ prog entry @main;
     prog entry @main;
     |}]
 
-let%expect_test "flag_tracking" =
+let%expect_test "flag_incorrect" =
   let lst =
     Loader.Loadir.ast_of_string
       {|
@@ -564,28 +553,59 @@ var $PSTATE_V:bv1;
 proc @main() -> ()
 [
   block %main [
+     // N must extract the top bit, this extracts the second top
+     $PSTATE_N:bv1 := extract(31,30, bvadd(extract(32,0, $R0), 0x1:bv32));
+     $PSTATE_N:bv1 := extract(31,30, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32));
+     $PSTATE_N:bv1 := extract(31,30, bvadd(bvadd(extract(32,0, $R0), 0xffffffff:bv32), 0x1:bv32));
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+prog entry @main;
+    |}
+  in
+  let prog =
+    lst.prog |> Program.map_procedures (fun _ -> annotate_flag_assign_stmts)
+  in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:800 (Lang.Program.prog_pretty prog);
+  [%expect
+    {|
+    var $R0:bv64;
+    var $R1:bv64;
+    var $H2:bv64;
+    var $H3:bv64;
+    var $PSTATE_N:bv1;
+    var $PSTATE_Z:bv1;
+    var $PSTATE_C:bv1;
+    var $PSTATE_V:bv1;
+    proc @main()  -> () {  }
+      modifies $PSTATE_N:bv1
+      captures $PSTATE_N:bv1, $R0:bv64, $R1:bv64
+
+    [ block %main [ $PSTATE_N:bv1 := extract(31,30, bvadd(extract(32,0, $R0), 0x1:bv32)); $PSTATE_N:bv1 := extract(31,30, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)); $PSTATE_N:bv1 := extract(31,30, bvadd(bvadd(extract(32,0, $R0), 0xffffffff:bv32), 0x1:bv32)); goto (%ret); ]; block %ret [ return; ] ];
+    prog entry @main;
+    |}]
+
+let%expect_test "flag_tracking" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+var $R0:bv64;
+var $PSTATE_N:bv1;
+var $PSTATE_Z:bv1;
+var $PSTATE_C:bv1;
+var $PSTATE_V:bv1;
+
+proc @main() -> ()
+[
+  block %main [
      $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(sign_extend(32, extract(32,0, $R0)), 0x1:bv64))));
      $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64))));
      $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32));
      $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32));
-
      assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1));
-
-     $R0:bv64 := bvadd($R0:bv64, 0xdeadbeef:bv64);
-
-     assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1));
-
-     $PSTATE_V:bv1 := 0x0:bv1;
-     $PSTATE_C:bv1 := 0x0:bv1;
-     $PSTATE_Z:bv1 := 0x1:bv1;
-     $PSTATE_N:bv1 := 0x0:bv1;
-
-     assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1));
-
-     $R0:bv64 := bvadd($R0:bv64, 0xdeadbeef:bv64);
-
-     assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1));
-
     goto (%ret);
   ];
   block %ret [ return; ]
@@ -602,15 +622,12 @@ prog entry @main;
   [%expect
     {|
     var $R0:bv64;
-    var $R1:bv64;
-    var $H2:bv64;
-    var $H3:bv64;
     var $PSTATE_N:bv1;
     var $PSTATE_Z:bv1;
     var $PSTATE_C:bv1;
     var $PSTATE_V:bv1;
     proc @main()  -> () {  }
-      modifies $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64
+      modifies $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1
       captures $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64
 
     [
@@ -620,15 +637,113 @@ prog entry @main;
          $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32));
          $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32));
          assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1)) { .flag_semantics_$PSTATE_C = "(O (Sum (extract(32,0, $R0), 0x1:bv32)))"; .flag_semantics_$PSTATE_N = "(N (Sum (extract(32,0, $R0), 0x1:bv32)))"; .flag_semantics_$PSTATE_V = "(O (Sum (extract(32,0, $R0), 0x1:bv32)))"; .flag_semantics_$PSTATE_Z = "(Z (Sum (extract(32,0, $R0), 0x1:bv32)))" };
+         goto (%ret);
+       ];
+       block %ret [ return; ]
+    ];
+    prog entry @main;
+    |}]
+
+let%expect_test "flag_clobbering" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+var $R0:bv64;
+var $R1:bv64;
+var $PSTATE_Z:bv1;
+
+proc @main() -> ()
+[
+  block %main [
+     $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32), 0x0:bv32));
+     assume eq($PSTATE_Z, 0x0:bv1);
+     $R0:bv64 := bvadd($R0:bv64, 0xdeadbeef:bv64);
+     assume eq($PSTATE_Z, 0x0:bv1);
+
+     $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32), 0x0:bv32));
+     assume eq($PSTATE_Z, 0x0:bv1);
+     $R1:bv64 := bvadd($R1:bv64, 0xdeadbeef:bv64);
+     assume eq($PSTATE_Z, 0x0:bv1);
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+prog entry @main;
+    |}
+  in
+  let prog =
+    lst.prog |> Program.map_procedures (fun _ -> annotate_assume_flags)
+  in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:200 (Lang.Program.prog_pretty prog);
+  [%expect
+    {|
+    var $R0:bv64;
+    var $R1:bv64;
+    var $PSTATE_Z:bv1;
+    proc @main()  -> () {  }
+      modifies $PSTATE_Z:bv1, $R0:bv64, $R1:bv64
+      captures $PSTATE_Z:bv1, $R0:bv64, $R1:bv64
+
+    [
+       block %main [
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32), 0x0:bv32));
+         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "(Z (Diff (extract(32,0, $R0), extract(32,0, $R1))))" };
          $R0:bv64 := bvadd($R0, 0xdeadbeef:bv64);
-         assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1));
-         $PSTATE_V:bv1 := 0x0:bv1;
-         $PSTATE_C:bv1 := 0x0:bv1;
+         assume eq($PSTATE_Z, 0x0:bv1);
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32), 0x0:bv32));
+         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "(Z (Diff (extract(32,0, $R0), extract(32,0, $R1))))" };
+         $R1:bv64 := bvadd($R1, 0xdeadbeef:bv64);
+         assume eq($PSTATE_Z, 0x0:bv1);
+         goto (%ret);
+       ];
+       block %ret [ return; ]
+    ];
+    prog entry @main;
+    |}]
+
+let%expect_test "flag_not_clobbering" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+var $R0:bv64;
+var $PSTATE_Z:bv1;
+
+proc @main() -> ()
+[
+  block %main [
+     $PSTATE_Z:bv1 := 0x1:bv1;
+     assume eq($PSTATE_Z, 0x0:bv1);
+     $R0:bv64 := bvadd($R0:bv64, 0xdeadbeef:bv64);
+     assume eq($PSTATE_Z, 0x0:bv1);
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+prog entry @main;
+    |}
+  in
+  let prog =
+    lst.prog |> Program.map_procedures (fun _ -> annotate_assume_flags)
+  in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
+  [%expect
+    {|
+    var $R0:bv64;
+    var $PSTATE_Z:bv1;
+    proc @main()  -> () {  }
+      modifies $PSTATE_Z:bv1, $R0:bv64
+      captures $PSTATE_Z:bv1, $R0:bv64
+
+    [
+       block %main [
          $PSTATE_Z:bv1 := 0x1:bv1;
-         $PSTATE_N:bv1 := 0x0:bv1;
-         assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1)) { .flag_semantics_$PSTATE_C = "Never"; .flag_semantics_$PSTATE_N = "Never"; .flag_semantics_$PSTATE_V = "Never"; .flag_semantics_$PSTATE_Z = "Always" };
+         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "Always" };
          $R0:bv64 := bvadd($R0, 0xdeadbeef:bv64);
-         assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1)) { .flag_semantics_$PSTATE_C = "Never"; .flag_semantics_$PSTATE_N = "Never"; .flag_semantics_$PSTATE_V = "Never"; .flag_semantics_$PSTATE_Z = "Always" };
+         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "Always" };
          goto (%ret);
        ];
        block %ret [ return; ]

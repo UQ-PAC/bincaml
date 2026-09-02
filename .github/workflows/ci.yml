@@ -10,8 +10,13 @@ on:
 
 permissions: read-all
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   nix:
+    timeout-minutes: 40
     strategy:
       matrix:
         os: [ ubuntu-26.04, macos-26 ]
@@ -47,6 +52,7 @@ jobs:
         if: "!cancelled()"
 
   format:
+    timeout-minutes: 40
     runs-on: ubuntu-26.04
 
     steps:
@@ -66,6 +72,7 @@ jobs:
         if: "!cancelled()"
 
   opam:
+    timeout-minutes: 40
     strategy: &opam-strategy
       matrix:
         include:
@@ -73,7 +80,6 @@ jobs:
           - { v: "5.4", os: "ubuntu-26.04" }
           - { v: "5.4", os: "macos-26" }
       fail-fast: false
-    timeout-minutes: 20
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -91,6 +97,7 @@ jobs:
         if: "!cancelled()"
 
   docs-build:
+    timeout-minutes: 40
     runs-on: ubuntu-26.04
 
     steps:
@@ -110,6 +117,7 @@ jobs:
           path: result/.
 
   docs-deploy:
+    timeout-minutes: 40
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: false
