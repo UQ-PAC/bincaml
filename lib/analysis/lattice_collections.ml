@@ -73,7 +73,9 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
       let name = V.name ^ "MapLattice"
       let bottom = BotMap KM.empty
       let top = TopMap KM.empty
-      let singleton k v = BotMap (KM.singleton k v)
+
+      let singleton k v =
+        if V.equal V.bottom v then bottom else BotMap (KM.singleton k v)
 
       let bot_v_op f _ x y =
         let x = f x y in
