@@ -291,15 +291,12 @@ module FlagDomain = struct
         List.fold_left
           (fun m (v, e) ->
             let m = drop_modified v m in
-            (* If v is a bv1, update map with extract results *)
-            if Types.equal (Var.typ v) (Types.Bitvector 1) then
-              let f =
-                FlagSemantics.extract_semantics e
-                |> Option.map (fun f -> FlagLattice.V f)
-                |> Option.get_or ~default:FlagLattice.top
-              in
-              update v f m
-            else m)
+            let f =
+              FlagSemantics.extract_semantics e
+              |> Option.map (fun f -> FlagLattice.V f)
+              |> Option.get_or ~default:FlagLattice.top
+            in
+            update v f m)
           m al
     | _ -> m
 
