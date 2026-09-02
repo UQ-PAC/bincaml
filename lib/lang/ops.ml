@@ -190,11 +190,13 @@ module BVOpsFixed = struct
   type unary_bool = [ `BOOLTOBV1 ]
   [@@deriving show { with_path = false }, eq, ord]
 
+  type extend_args = { size : int; extension : int } [@@deriving eq, ord, show]
+
   type unary_unif =
     [ `BVNOT of int
     | `BVNEG of int
-    | `ZeroExtend of int * int
-    | `SignExtend of int * int
+    | `ZeroExtend of extend_args
+    | `SignExtend of extend_args
     | `Extract of int * int ]
   [@@deriving show { with_path = false }, eq, ord]
 
@@ -209,12 +211,18 @@ module BVOpsFixed = struct
   let eval_unary_unif (o : unary_unif) =
     match o with
     | `BVNEG size -> BV.neg ~size
-    | `SignExtend (extension, size) -> BV.sign_extend ~extension ~size
+    | `SignExtend { extension; size } -> BV.sign_extend ~extension ~size
     | `BVNOT size -> BV.bitnot ~size
-    | `ZeroExtend (extension, size) -> Fun.id
+    | `ZeroExtend { extension; size } -> Fun.id
     | `Extract (hi, lo) -> BV.extract ~hi ~lo
 
-  type binary_pred = [ `NEQ | `EQ | `BVULT of int | `BVULE of int | `BVSLT of int | `BVSLE of int ]
+  type binary_pred =
+    [ `NEQ
+    | `EQ
+    | `BVULT of int
+    | `BVULE of int
+    | `BVSLT of int
+    | `BVSLE of int ]
   [@@deriving show { with_path = false }, eq, ord]
   (** ops with type bv -> bv -> bool *)
 
@@ -228,37 +236,38 @@ module BVOpsFixed = struct
     | `BVSLT size -> BV.slt ~size
 
   type binary_unif =
-    [ `BVUDIV
-    | `BVUREM
-    | `BVSHL
-    | `BVLSHR
-    | `BVNAND
-    | `BVSUB
-    | `BVSDIV
-    | `BVSREM
-    | `BVSMOD
-    | `BVASHR ]
+    [ `BVUDIV of int
+    | `BVUREM of int
+    | `BVSHL of int
+    | `BVLSHR of int
+    | `BVNAND of int
+    | `BVSUB of int
+    | `BVSDIV of int
+    | `BVSREM of int
+    | `BVSMOD of int
+    | `BVASHR of int ]
   [@@deriving show { with_path = false }, eq, ord]
   (** ops with type bv -> bv -> bv *)
 
   let eval_binary_unif (op : binary_unif) =
-    let open Bitvec in
+    let open BV in
     match op with
-    | `BVSREM -> srem
-    | `BVSDIV -> sdiv
-    | `BVASHR -> ashr
-    | `BVSMOD -> smod
-    | `BVSHL -> shl
-    | `BVNAND -> fun a b -> bitnot (bitand a b)
-    | `BVUREM -> urem
-    | `BVSUB -> sub
-    | `BVUDIV -> udiv
-    | `BVLSHR -> lshr
+    | `BVSREM size -> srem ~size
+    | `BVSDIV size -> sdiv ~size
+    | `BVASHR size -> ashr ~size
+    | `BVSMOD size -> smod ~size
+    | `BVSHL size -> shl ~size
+    | `BVNAND size -> fun a b -> bitnot ~size (bitand ~size a b)
+    | `BVUREM size -> urem ~size
+    | `BVSUB size -> sub ~size
+    | `BVUDIV size -> udiv ~size
+    | `BVLSHR size -> lshr ~size
 
   type binary = [ binary_pred | binary_unif ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type intrin = [ `BVAND | `BVOR | `BVADD | `BVXOR | `BVConcat | `BVMUL ]
+  type intrin =
+    [ `BVAND of int | `BVOR of int | `BVADD of int | `BVXOR of int | `BVMUL of int ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let eval_intrin (op : intrin) args =
@@ -268,50 +277,11 @@ module BVOpsFixed = struct
       | _ -> raise (Invalid_argument "op needs at least one arg")
     in
     match op with
-    | `BVADD -> ev Bitvec.add
-    | `BVXOR -> ev Bitvec.bitxor
-    | `BVOR -> ev Bitvec.bitor
-    | `BVAND -> ev Bitvec.bitand
-    | `BVConcat -> ev Bitvec.concat
-    | `BVMUL -> ev Bitvec.mul
-
-  let show = function
-    | #const as c -> show_const c
-    | #unary as u -> show_unary u
-    | #binary as b -> show_binary b
-end
-
-module IntOps = struct
-  type const = [ `Integer of PrimInt.t ]
-  [@@deriving show { with_path = false }, eq, ord]
-
-  type unary = [ `INTNEG ] [@@deriving show { with_path = false }, eq, ord]
-
-  let eval_unary (u : unary) = match u with `INTNEG -> Z.neg
-
-  type binary_unif = [ `INTADD | `INTMUL | `INTSUB | `INTDIV | `INTMOD ]
-  [@@deriving show { with_path = false }, eq, ord]
-
-  type binary_pred = [ `NEQ | `EQ | `INTLT | `INTLE ]
-  [@@deriving show { with_path = false }, eq, ord]
-
-  let eval_binary_unif (op : binary_unif) =
-    match op with
-    | `INTDIV -> Z.div
-    | `INTADD -> Z.add
-    | `INTMOD -> Z.( mod )
-    | `INTMUL -> Z.mul
-    | `INTSUB -> Z.sub
-
-  let eval_binary_pred (op : binary_pred) =
-    match op with
-    | `EQ -> Z.equal
-    | `NEQ -> fun a b -> not (Z.equal a b)
-    | `INTLT -> Z.lt
-    | `INTLE -> Z.leq
-
-  type binary = [ binary_unif | binary_pred ]
-  [@@deriving show { with_path = false }, eq, ord]
+    | `BVADD size -> ev @@ BV.add ~size
+    | `BVXOR size -> ev @@ BV.bitxor ~size
+    | `BVOR size -> ev @@ BV.bitor ~size
+    | `BVAND size -> ev @@ BV.bitand ~size
+    | `BVMUL size -> ev @@ BV.mul ~size
 
   let show = function
     | #const as c -> show_const c
