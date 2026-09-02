@@ -79,6 +79,14 @@ let scheme_of_op st ~visit_constraint (gen : ID.generator)
   | `Old ->
       let a = fv () in
       curry_f [ a ] a
+  | `MapAccess ->
+      let key_ty = fv () and val_ty = fv () in
+      let map_ty = fun_type key_ty val_ty in
+      curry_f [ map_ty; key_ty ] val_ty
+  | `Load (endian, sz) ->
+      let key_ty = fv () and val_ty = bvunk (fv ()) in
+      let map_ty = fun_type key_ty val_ty in
+      curry_f [ map_ty; key_ty ] (bv_type sz)
   | #Ops.AllOps.binary as o ->
       failwith @@ "unsupported binary op: " ^ Ops.AllOps.to_string o
   | #Ops.AllOps.unary as o ->
