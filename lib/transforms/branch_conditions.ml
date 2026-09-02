@@ -252,7 +252,7 @@ let annotate_flag_assign_stmts (p : Program.proc) =
     (fun (bid, block) -> Block.map ~phi:id annotate_flag_assigns block)
     p
 
-module L = struct
+module FlagLattice = struct
   include Analysis.Lattice_types.FlatLattice (struct
     include FlagSemantics
 
@@ -271,8 +271,8 @@ end
     dropped and set to top. This should be precise enough still as branches
     probably only occur direct after flags are set (probably). Note that none of
     this is a problem if ssa is run prior to this transform. *)
-module FlagAnalysis = struct
-  include Analysis.Intra_analysis.MapState (L)
+module FlagDomain = struct
+  include Analysis.Intra_analysis.MapState (FlagLattice)
 
   let name = "pstate-flag-analysis"
 
@@ -282,7 +282,8 @@ module FlagAnalysis = struct
 
   (** Remove flags from state that referred to [v] (e.g. if [v] was updated) *)
   let drop_modified v =
-    mapi (fun v' x -> if L.contains_var v x then L.top else x)
+    mapi (fun v' x ->
+        if FlagLattice.contains_var v x then FlagLattice.top else x)
 
   let transfer m stmt =
     match stmt with
@@ -294,8 +295,8 @@ module FlagAnalysis = struct
             if Types.equal (Var.typ v) (Types.Bitvector 1) then
               let f =
                 FlagSemantics.extract_semantics e
-                |> Option.map (fun f -> L.V f)
-                |> Option.get_or ~default:L.top
+                |> Option.map (fun f -> FlagLattice.V f)
+                |> Option.get_or ~default:FlagLattice.top
               in
               update v f m
             else m)
@@ -308,12 +309,12 @@ module FlagAnalysis = struct
         (* assume phis never assign to in use variables (yikes) *)
         rhs
         |> List.map (fun (_, k) -> read k m)
-        |> List.fold_left L.join L.bottom
+        |> List.fold_left FlagLattice.join FlagLattice.bottom
         |> fun v -> drop_modified lhs m |> update lhs v
 end
 
-module A = struct
-  include Analysis.Intra_analysis.Forwards (FlagAnalysis)
+module FlagAnalysis = struct
+  include Analysis.Intra_analysis.Forwards (FlagDomain)
 
   let analyse p = analyse p
 end
@@ -323,9 +324,9 @@ let annotate_stmt_flags m stmt =
   match stmt with
   | Instr_Assume { attrib; body; branch } ->
       let annotations =
-        FlagAnalysis.to_list m |> snd
+        FlagDomain.to_list m |> snd
         |> List.filter_map (fun (v, s) ->
-            match s with L.V s -> Some (v, s) | _ -> None)
+            match s with FlagLattice.V s -> Some (v, s) | _ -> None)
       in
       let attrib =
         List.fold_left
@@ -341,18 +342,17 @@ let annotate_stmt_flags m stmt =
 
 (** Add flag annotations to assume statements based on flag variables prior *)
 let annotate_assume_flags (p : Program.proc) =
-  let a = A.analyse p in
+  let a = FlagAnalysis.analyse p in
   Procedure.map_blocks_nondet
     (fun (bid, b) ->
       let r =
-        A.A.M.find_opt (Procedure.Vert.Begin bid) a
-        |> Option.get_or ~default:FlagAnalysis.top
+        FlagAnalysis.A.M.find_opt (Procedure.Vert.Begin bid) a
+        |> Option.get_or ~default:FlagDomain.top
       in
       Block.map_fold_forwards
-        ~phi:(fun m phi ->
-          (List.fold_left FlagAnalysis.transfer_phi m phi, phi))
+        ~phi:(fun m phi -> (List.fold_left FlagDomain.transfer_phi m phi, phi))
         ~f:(fun m stmt ->
-          (FlagAnalysis.transfer m stmt, annotate_stmt_flags m stmt))
+          (FlagDomain.transfer m stmt, annotate_stmt_flags m stmt))
         r b
       |> snd)
     p
