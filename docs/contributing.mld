@@ -403,17 +403,16 @@ We also host docs for Bincaml and its dependencies: {: https://uq-pac.github.io/
 We recommend you install the language server and dev setup packages:
 
 {v
+opam install ocaml-lsp-server
 opam install --deps-only --with-dev-setup --with-test .
 v}
-
-[--with-dev-setup] includes [ocamlformat] and [ocaml-lsp-server] which are useful for development.
 
 Use the following to build the documentation for the bincaml projects and other packages in the switch:
 
 {v
-dune build @doc-new && python3 -m http.server -d _build/default/_doc_new/html/docs
+dune build @doc-new _build/default/_doc_new/html/docs
 v}
-You will then be able to view the docs at <http://127.0.0.1:8000/>.
+You will then be able to view the docs by opening `_build/default/_doc_new/html/docs/index.html`.
 
 It is good practice to hide implementations by interfaces, however in practice this often requires
 a significant amount of code rewriting to define the module and its interface separately.
