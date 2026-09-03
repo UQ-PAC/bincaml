@@ -142,7 +142,7 @@ module FlagSemantics = struct
       ->
         if Bitvec.is_negative bv1 then
           Some (C (Diff (fix a, bvconst (Bitvec.neg bv1))))
-        else Some (O (Sum (fix a, bvconst bv1)))
+        else Some (C (Sum (fix a, bvconst bv1)))
     | ( UnaryExpr
           {
             op = `ZeroExtend z1;
