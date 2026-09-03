@@ -1,6 +1,10 @@
 open Bincaml_util.Common
 open Lang
 
+open struct
+  let equiv_exp e1 e2 = Expr.BasilExpr.(equal (drop_attrib e1) (drop_attrib e2))
+end
+
 module FlagSemantics = struct
   type t =
     | Const of computation
@@ -19,8 +23,6 @@ module FlagSemantics = struct
 
   let equiv_computations c c' =
     let open Expr.BasilExpr in
-    (* TODO move this helper elsewhere probably *)
-    let equiv_exp e1 e2 = equal (drop_attrib e1) (drop_attrib e2) in
     match (c, c') with
     | Sum (e1, e2), Sum (e1', e2') -> equiv_exp e1 e1' && equiv_exp e2 e2'
     | Diff (e1, e2), Diff (e1', e2') -> equiv_exp e1 e1' && equiv_exp e2 e2'
@@ -42,7 +44,6 @@ module FlagSemantics = struct
     let open Types in
     let open Expr.AbstractExpr in
     let open Expr.BasilExpr in
-    let equiv_exp e1 e2 = equal (drop_attrib e1) (drop_attrib e2) in
     let sext_eq extension bv1 bv2 =
       Bitvec.(equal (sign_extend ~extension bv1) bv2)
     in
