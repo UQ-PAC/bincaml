@@ -16,6 +16,16 @@ module FlagSemantics = struct
     | Expr of Expr.BasilExpr.t  (** The result of evaluating an expr *)
   [@@deriving eq, ord, show { with_path = false }]
 
+  let equiv_computations c c' =
+    let open Expr.BasilExpr in
+    (* TODO move this helper elsewhere probably *)
+    let equiv_exp e1 e2 = equal (drop_attrib e1) (drop_attrib e2) in
+    match (c, c') with
+    | Sum (e1, e2), Sum (e1', e2') -> equiv_exp e1 e1' && equiv_exp e2 e2'
+    | Diff (e1, e2), Diff (e1', e2') -> equiv_exp e1 e1' && equiv_exp e2 e2'
+    | Expr e, Expr e' -> equiv_exp e e'
+    | _ -> false
+
   (** Determine whether [v] exists in an expression in [f] *)
   let contains_var v f =
     match f with
@@ -389,24 +399,42 @@ module Rewriter = struct
     | _ -> Top
 
   let rec condition_expr cond =
+    let open FlagSemantics in
     let open Expr.BasilExpr in
     let value = function
-      | FlagSemantics.Diff (e, e') -> binexp ~op:`BVSUB e e'
+      | Diff (e, e') -> binexp ~op:`BVSUB e e'
       | Sum (e, e') -> applyintrin ~op:`BVADD [ e; e' ]
       | Expr e -> e
+    in
+    let zero_of e =
+      match type_of e with
+      | Bitvector size -> Some (bvconst (Bitvec.zero ~size))
+      | _ -> None
     in
     match cond with
     | EQ (Diff (e, e')) -> Some (binexp ~op:`EQ e e')
     | EQ (Sum (e, e')) -> Some (binexp ~op:`EQ e (unexp ~op:`BVNEG e'))
-    (* | EQ (Expr e) -> Some (binexp ~op:`EQ e (failwith "zero...")) *)
+    | EQ (Expr e) -> zero_of e |> Option.map (binexp ~op:`EQ e)
     | CS (Diff (e, e')) -> Some (binexp ~op:`BVULE e' e)
     | CS (Sum (e, e')) -> Some (binexp ~op:`BVULE (unexp ~op:`BVNEG e') e)
-    (* | MI c -> Some (binexp ~op:`BVSLT (value c) (failwith "zero....")) *)
-    (* | VS c -> failwith "?????????????????????????????????" *)
-    (* these all need equivalence checks of computations !!!!!!! this sucks !!!!! *)
-    (* | HI (c, c') -> failwith "todo" *)
-    (* | GE (c, c') -> failwith "todo" *)
-    (* | GT (c, c', c'') -> failwith "todo" *)
+    | MI c ->
+        let e = value c in
+        zero_of e |> Option.map (binexp ~op:`BVSLT e)
+    (* | VS c -> failwith "idk how this can be expressed" *)
+    | HI ((Diff (e, e') as c), c') when equiv_computations c c' ->
+        Some (binexp ~op:`BVULT e' e)
+    | HI ((Sum (e, e') as c), c') when equiv_computations c c' ->
+        Some (binexp ~op:`BVULT (unexp ~op:`BVNEG e') e)
+    | GE ((Diff (e, e') as c), c') when equiv_computations c c' ->
+        Some (binexp ~op:`BVSLE e' e)
+    | GE ((Sum (e, e') as c), c') when equiv_computations c c' ->
+        Some (binexp ~op:`BVSLE (unexp ~op:`BVNEG e') e)
+    | GT ((Diff (e, e') as c), c', c'')
+      when equiv_computations c c' && equiv_computations c c'' ->
+        Some (binexp ~op:`BVSLT e' e)
+    | GT ((Sum (e, e') as c), c', c'')
+      when equiv_computations c c' && equiv_computations c c'' ->
+        Some (binexp ~op:`BVSLT (unexp ~op:`BVNEG e') e)
     | Not cond -> (
         let open Expr.AbstractExpr in
         match condition_expr cond with
