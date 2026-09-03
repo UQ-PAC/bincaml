@@ -38,10 +38,10 @@ runs:
     - id: cache
       uses: actions/cache/restore@v5
       with:
-        key: bincaml-opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-${{ steps.month.outputs.month }}
+        key: bincaml-opam-${{ inputs.ocaml-compiler }}-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-${{ steps.month.outputs.month }}
         restore-keys: |
-          bincaml-opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-
-          bincaml-opam-${{ runner.os }}-
+          bincaml-opam-${{ inputs.ocaml-compiler }}-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-
+          bincaml-opam-${{ inputs.ocaml-compiler }}-${{ runner.os }}-
         # exclude opam compiler paths which are cached by setup-ocaml
         path: |
           _opam
@@ -63,7 +63,7 @@ runs:
         ! cancelled() && steps.cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v5
       with:
-        key: bincaml-opam-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-${{ steps.month.outputs.month }}
+        key: bincaml-opam-${{ inputs.ocaml-compiler }}-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-${{ steps.month.outputs.month }}
         path: |
           _opam
           !_opam/bin/ocaml*
