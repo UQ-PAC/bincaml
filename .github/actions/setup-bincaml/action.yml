@@ -63,7 +63,7 @@ runs:
         ! cancelled() && steps.cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v5
       with:
-        key: bincaml-opam-${{ inputs.ocaml-compiler }}-${{ runner.os }}-${{ hashFiles('**/*.opam') }}-${{ steps.month.outputs.month }}
+        key: ${{ steps.cache.outputs.cache-primary-key }}
         path: |
           _opam
           !_opam/bin/ocaml*
