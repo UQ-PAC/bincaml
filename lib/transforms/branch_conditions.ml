@@ -1,6 +1,16 @@
 open Bincaml_util.Common
 open Lang
 
+(* TODO:
+    - Handle ccmp instructions (where branch conditions depend on branch conditions, needing a depth 1 path sensitive analysis)
+    - Handle registers being overwritten before branching (SSA):
+        there was an instance of
+        cmn w0, #1
+        mov w0, #0
+        b.ne #0xfffffffffffffff0
+        in cntlm. Here w0 gets overwritten before we can identify a branch condition in terms of w0's current value...
+*)
+
 open struct
   let equiv_exp e1 e2 = Expr.BasilExpr.(equal (drop_attrib e1) (drop_attrib e2))
 end
@@ -345,23 +355,28 @@ module Eval = Analysis.Intra_analysis.EvalExpr (FlagLattice)
 (** Rewrites boolean exprs in terms of flags to be in terms of numerical
     conditions. *)
 module Rewriter = struct
-  (* condition codes from https://support.arm.com/documentation/dui0231/b/arm-instruction-reference/conditional-execution *)
+  (** A type of condition as described in
+      https://support.arm.com/documentation/dui0231/b/arm-instruction-reference/conditional-execution
+
+      We track one computation for each flag read, noting that sometimes not all
+      flags will be computed in the same way. *)
   type t =
     | EQ of FlagSemantics.computation
     | CS of FlagSemantics.computation
     | MI of FlagSemantics.computation
     | VS of FlagSemantics.computation
-    | HI of FlagSemantics.computation * FlagSemantics.computation
-    | GE of FlagSemantics.computation * FlagSemantics.computation
-    | GT of
-        FlagSemantics.computation
-        * FlagSemantics.computation
-        * FlagSemantics.computation
+    | HI of { c : FlagSemantics.computation; z : FlagSemantics.computation }
+    | GE of { n : FlagSemantics.computation; v : FlagSemantics.computation }
+    | GT of {
+        n : FlagSemantics.computation;
+        v : FlagSemantics.computation;
+        z : FlagSemantics.computation;
+      }
     | Not of t
-    | Top
+    | Top  (** Unknown condition type *)
   [@@deriving show { with_path = false }]
 
-  (** Extracts a ConditionHolds(_) term from a boolean typed expression *)
+  (** Extracts a condition from a boolean expression *)
   let rec extract_condition m e : t =
     let open FlagSemantics in
     let open Expr.AbstractExpr in
@@ -375,7 +390,7 @@ module Rewriter = struct
         | V (C c), V (Const Always) -> CS c
         | V (N c), V (Const Always) -> MI c
         | V (O c), V (Const Always) -> VS c
-        | V (N c), V (O c' | Const c') -> GE (c, c')
+        | V (N c), V (O c' | Const c') -> GE { n = c; v = c' }
         | _ -> Top)
     | ApplyIntrin
         {
@@ -392,9 +407,10 @@ module Rewriter = struct
         let c = Eval.eval (flip FlagDomain.read m) c in
         let d = Eval.eval (flip FlagDomain.read m) d in
         match (a, b, c, d) with
-        | V (C c), V (Const Always), V (Z c'), V (Const Never) -> HI (c, c')
+        | V (C c), V (Const Always), V (Z c'), V (Const Never) ->
+            HI { c; z = c' }
         | V (N c), V (O c' | Const c'), V (Z c''), V (Const Never) ->
-            GT (c, c', c'')
+            GT { n = c; v = c'; z = c'' }
         | _ -> Top)
     | UnaryExpr { op = `BoolNOT; arg } -> (
         match extract_condition m (Expr.BasilExpr.unfix arg) with
@@ -402,6 +418,7 @@ module Rewriter = struct
         | c -> Not c)
     | _ -> Top
 
+  (** Replace a condition with its interpretation as an expression *)
   let rec condition_expr cond =
     let open FlagSemantics in
     let open Expr.BasilExpr in
@@ -426,25 +443,25 @@ module Rewriter = struct
     | MI c ->
         let e = value c in
         zero_of e |> Option.map (binexp ~op:`BVSLT e)
-    (* | VS c -> failwith "idk how this can be expressed" *)
-    | HI ((Diff (e, e') as c), c') when equiv_computations c c' ->
+    (* | VS c -> failwith "overflow rewrite is complicated" *)
+    | HI { c = Diff (e, e') as c; z = c' } when equiv_computations c c' ->
         Some (binexp ~op:`BVULT e' e)
-    | HI ((Sum (e, e') as c), c') when equiv_computations c c' ->
+    | HI { c = Sum (e, e') as c; z = c' } when equiv_computations c c' ->
         Some (binexp ~op:`BVULT (unexp ~op:`BVNEG e') e)
-    | GE ((Diff (e, e') as c), c') when equiv_computations c c' ->
+    | GE { n = Diff (e, e') as c; v = c' } when equiv_computations c c' ->
         Some (binexp ~op:`BVSLE e' e)
-    | GE ((Sum (e, e') as c), c') when equiv_computations c c' ->
+    | GE { n = Sum (e, e') as c; v = c' } when equiv_computations c c' ->
         Some (binexp ~op:`BVSLE (unexp ~op:`BVNEG e') e)
-    | GE (c, Never) ->
+    | GE { n = c; v = Never } ->
         let e = value c in
         zero_of e |> Option.map (fun zero -> binexp ~op:`BVSLE zero e)
-    | GT ((Diff (e, e') as c), c', c'')
+    | GT { n = Diff (e, e') as c; v = c'; z = c'' }
       when equiv_computations c c' && equiv_computations c c'' ->
         Some (binexp ~op:`BVSLT e' e)
-    | GT ((Sum (e, e') as c), c', c'')
+    | GT { n = Sum (e, e') as c; v = c'; z = c'' }
       when equiv_computations c c' && equiv_computations c c'' ->
         Some (binexp ~op:`BVSLT (unexp ~op:`BVNEG e') e)
-    | GT (c, Never, c') when equiv_computations c c' ->
+    | GT { n = c; v = Never; z = c' } when equiv_computations c c' ->
         let e = value c in
         zero_of e |> Option.map (fun zero -> binexp ~op:`BVSLT zero e)
     | Not cond -> (
@@ -462,15 +479,14 @@ module Rewriter = struct
         | None -> None)
     | _ -> None
 
-  let alg m e =
+  let rw m e =
     let open Expr.BasilExpr in
-    extract_condition m e
-    (* |> tap (print_endline % show) *)
-    |> condition_expr
-    |> Expr.BasilExpr.replace_opt
+    e |> extract_condition m |> condition_expr |> Expr.BasilExpr.replace_opt
 
+  (** Rewrite an expression's branch conditions in terms of flag analysis
+      results *)
   let rewrite_expr (m : FlagDomain.t) e =
-    Expr.BasilExpr.rewrite_down ~rw_fun:(alg m) e
+    Expr.BasilExpr.rewrite_down ~rw_fun:(rw m) e
 end
 
 let annotate_stmt_flags m stmt =
@@ -497,7 +513,9 @@ let annotate_stmt_flags m stmt =
 let rewrite_stmt_conditions m =
   Stmt.map ~f_lvar:id ~f_rvar:id ~f_expr:(Rewriter.rewrite_expr m)
 
-let stmt_transform trans (p : Program.proc) =
+(** Map statements of a procedure given FlagAnalysis results *)
+let stmt_transform (trans : FlagDomain.t -> Program.stmt -> Program.stmt)
+    (p : Program.proc) =
   let a = FlagAnalysis.analyse p in
   Procedure.map_blocks_nondet
     (fun (bid, b) ->
@@ -512,7 +530,8 @@ let stmt_transform trans (p : Program.proc) =
       |> snd)
     p
 
-(** Add flag annotations to assume statements based on flag variables prior *)
+(** Add flag annotations to assume statements based on flag variables prior
+    (debugging) *)
 let annotate_assume_flags = stmt_transform annotate_stmt_flags
 
 (** Rewrite boolean expressions of flags into numerical conditions *)
@@ -820,6 +839,60 @@ prog entry @main;
          assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "(Const Always)" };
          $R0:bv64 := bvadd($R0, 0xdeadbeef:bv64);
          assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "(Const Always)" };
+         goto (%ret);
+       ];
+       block %ret [ return; ]
+    ];
+    prog entry @main;
+    |}]
+
+let%expect_test "rewrites" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+var $R0:bv64;
+var $PSTATE_N:bv1;
+var $PSTATE_Z:bv1;
+var $PSTATE_C:bv1;
+var $PSTATE_V:bv1;
+
+proc @main() -> ()
+[
+  block %main [
+     $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(sign_extend(32, extract(32,0, $R0)), 0x1:bv64))));
+     $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64))));
+     $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32));
+     $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32));
+     assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1));
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+prog entry @main;
+    |}
+  in
+  let prog = lst.prog |> Program.map_procedures (fun _ -> rewrite_conditions) in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:200 (Lang.Program.prog_pretty prog);
+  [%expect
+    {|
+    var $R0:bv64;
+    var $PSTATE_N:bv1;
+    var $PSTATE_Z:bv1;
+    var $PSTATE_C:bv1;
+    var $PSTATE_V:bv1;
+    proc @main()  -> () {  }
+      modifies $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1
+      captures $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64
+
+    [
+       block %main [
+         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(sign_extend(32, extract(32,0, $R0)), 0x1:bv64))));
+         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64))));
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32));
+         $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32));
+         assume bvslt(bvneg(0x1:bv32), extract(32,0, $R0));
          goto (%ret);
        ];
        block %ret [ return; ]
