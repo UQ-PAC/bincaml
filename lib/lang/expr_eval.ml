@@ -8,47 +8,65 @@ type eval_errors =
   | Nothing (* non-total execution  *)
 [@@deriving eq, ord, show]
 
+type 't map_value = {
+  values : ('t * 't) Iter.t;
+      (** iterator of existing mappings, in a stable deterministic order *)
+  get : 't -> 't;  (** key -> value *)
+  set : 't -> 't -> 't;  (** key -> value -> updated map *)
+}
+
+let equal_map_value equal a b =
+  let a = a.values in
+  let b = b.values in
+  List.equal (Equal.pair equal equal) (Iter.to_list a) (Iter.to_list b)
+
+let compare_map_value compare a b =
+  let a = a.values in
+  let b = b.values in
+  List.compare (Ord.pair compare compare) (Iter.to_list a) (Iter.to_list b)
+
+(** type of map values *)
+
+type 't record_value = string * 't list [@@deriving eq, ord]
+type 't adt_value = { variant_tag : string; argument : 't } [@@deriving eq, ord]
+
 module Value = struct
   type t =
     | Prim of Ops.AllOps.const  (** non-recursive values *)
-    | Record of record_value  (** product type *)
-    | ADT of adt_value  (** values of sum type *)
-    | Map of map_value  (** values of associative type, theory of arrays *)
+    | Record of t record_value  (** product type *)
+    | ADT of t adt_value  (** values of sum type *)
+    | Map of t map_value  (** values of associative type, theory of arrays *)
     | Closure of clos_type  (** type of lambdas *)
-  (*| BoundVar of Var.t (** variables bound in lambdas *)*)
-  [@@deriving ord]
-
-  and map_value = {
-    get : t -> t; [@compare Ord.poly]  (** key -> value *)
-    set : t -> t -> t; [@compare Ord.poly]  (** key -> value -> updated map *)
-  }
-  (** type of map values *)
+      (*| BoundVar of Var.t (** variables bound in lambdas *)*)
+  [@@deriving eq, ord]
 
   and clos_type = { bound : Var.t list; body : Expr.BasilExpr.t }
-  and record_value = string * t list
-  and adt_value = { variant_tag : string; argument : t }
 end
 
 type eval_typ = (eval_errors, Value.t BasilExpr.abstract_expr) Result.t
 (** type of partially-evaluated expressions *)
 
-module Map = struct
+module DMap = struct
   open Value
   module M = Map.Make (Value)
 
+  type t = Value.t map_value
+
   let rec create (map : Value.t M.t) : Value.t =
     let set = fun k v -> create (M.add k v map) in
-    Value.(Map { get = (fun v -> M.find v map); set })
+    let values = M.to_iter map in
+    Value.(Map { get = (fun v -> M.find v map); set; values })
 
   let empty key_typ val_typ = create M.empty
 
-  (** operations *)
+  (** {2 operations} *)
 
   let get v k = match v with Map { get } -> Ok (get k) | _ -> Error TypeError
 
   let set v k =
     match v with Map { set } -> Ok (set k v) | _ -> Error TypeError
 end
+
 
 open Value
 
@@ -64,7 +82,11 @@ module Lambda = struct
     Ok (Closure { bound = rest; body })
 end
 
+open Value
+
 module ADT = struct
+  type value = t
+
   let _match v
       (actions : (string * (value -> (value, eval_errors) Result.t)) list) =
     let _match v (tag, action) =
@@ -109,7 +131,6 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
   let pointer e = Some (`Pointer e) in
 
   let get_bv = function Some (`Bitvector b) -> Some b | _ -> None in
-  let get_record = function Some (`Record b) -> Some b | _ -> None in
   let get_pointer = function Some (`Pointer b) -> Some b | _ -> None in
   let get_bool = function Some (`Bool b) -> Some b | _ -> None in
   let get_int = function Some (`Integer b) -> Some b | _ -> None in
@@ -135,6 +156,7 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
       get_bv b >|= BVOps.eval_unary_unif op >|= bv
   | UnaryExpr { op = #BVOps.unary_bool as op; arg = b } ->
       get_bool b >|= BVOps.eval_unary_bool op >|= bv
+  (*
   | BinaryExpr { op = `WriteField offset; arg1 = a; arg2 = b } ->
       let* a = get_record a in
       let* b = get_bv b in
@@ -142,11 +164,11 @@ let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
   | UnaryExpr { op = `ReadField offset; arg = a } ->
       let* a = get_record a in
       let { value; _ } : Record.field = Record.get_field offset a in
-      Some (bv value)
-  | BinaryExpr { op = `PTRADD; arg1 = a; arg2 = b } ->
+      Some (bv value) *)
+  (*| BinaryExpr { op = `PTRADD; arg1 = a; arg2 = b } ->
       let* a, typ = get_pointer a in
       let* b = get_bv b in
-      pointer (BVOps.eval_intrin `BVADD [ a; b ], typ)
+      pointer (BVOps.eval_intrin `BVADD [ a; b ], typ)*)
   | BinaryExpr { op = #BVOps.binary_unif as op; arg1 = a; arg2 = b } ->
       let* a = get_bv a in
       let* b = get_bv b in

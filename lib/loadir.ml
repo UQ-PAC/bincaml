@@ -1169,10 +1169,10 @@ module BasilASTLoader = struct
     | Value_Int intval -> `Integer (transIntVal intval)
     | Value_True -> `Bool true
     | Value_False -> `Bool false
-    | Value_Pointer (_, v, PointerType1 (_, l, u, _), _) ->
-        `Pointer (trans_bv_val v, { lower = trans_type l; upper = trans_type u })
-    | Value_Record (_, _, fields, _, typ, _) ->
-        `Record
+    | Value_Pointer (_, v, PointerType1 (_, l, u, _), _) -> failwith "pointer"
+    (*`Pointer (trans_bv_val v, { lower = trans_type l; upper = trans_type u })*)
+    | Value_Record (_, _, fields, _, typ, _) -> failwith "record"
+  (*`Record
           ( StringMap.of_list
               (List.map
                  (function
@@ -1181,7 +1181,7 @@ module BasilASTLoader = struct
                          ({ value = trans_bv_val value; typ = trans_type typ }
                            : Ops.Record.field) ))
                  fields),
-            trans_type typ )
+            trans_type typ ) *)
 
   and unsafe_unsigil g : string =
     match g with
@@ -1451,7 +1451,7 @@ module BasilASTLoader = struct
     | IntBinOp_intmod -> `INTMOD
 
   and transPointerBinOp (x : pointerBinOp) =
-    match x with PointerBinOp_ptradd -> `PTRADD
+    match x with PointerBinOp_ptradd -> failwith "ptr"
 
   and transIntLogicalBinOp (x : intLogicalBinOp) =
     match x with

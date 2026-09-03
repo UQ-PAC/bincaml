@@ -12,15 +12,6 @@ module IntSet = Set.Make (Int)
 module Worklist = Worklist
 module Extras = Extras
 
-(* Byte_slice extension for blitting to Bytes *)
-
-module Byte_slice = struct
-  include Byte_slice
-
-  let blit_to src dest dest_pos =
-    Bytes.blit src.bs src.off dest dest_pos src.len
-end
-
 module Z = struct
   include Z
 

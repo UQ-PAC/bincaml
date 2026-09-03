@@ -701,11 +701,8 @@ module WrappedIntervalsValueAbstraction = struct
     match op with
     | `Bool _ -> top
     | `Integer _ -> top
-    | `Bitvector bv | `Pointer (bv, _) ->
-        if size bv = 0 then top else interval bv bv
-    (* NOTE: This kind of thing happens frequently, should I go through all of the fields and make a intervals out of those bvs?*)
-    | `Record fields -> top
-    | `Sort _ -> top
+    | `Bitvector bv -> if size bv = 0 then top else interval bv bv
+  (* NOTE: This kind of thing happens frequently, should I go through all of the fields and make a intervals out of those bvs?*)
 
   let eval_unop (op : Lang.Ops.AllOps.unary) (a, t) rt =
     match t with
@@ -724,9 +721,10 @@ module WrappedIntervalsValueAbstraction = struct
     | Types.Bitvector width, Types.Bitvector w2 when width = w2 -> (
         match op with
         | #Lang.Ops.Spec.binary -> Top
-        | #Lang.Ops.RecordOps.binary -> Top
+        | #Lang.Ops.Record.binary -> Top
         | #Lang.Ops.IntOps.binary -> Top
         | #Lang.Ops.LogicalOps.binary -> Top
+        | #Lang.Ops.BVMaps.binary -> Top
         | `BVADD | `PTRADD -> add ~width a b
         | `BVSUB -> sub ~width a b
         | `BVMUL -> mul ~width a b
@@ -759,6 +757,7 @@ module WrappedIntervalsValueAbstraction = struct
                 concat (fst a, wa) (fst b, wb)
             | _ -> top),
             rt )
+      | #Lang.Ops.BVMaps.intrin -> (top, rt)
       | _ -> (top, rt)
     in
     match args with

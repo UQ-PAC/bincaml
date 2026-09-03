@@ -146,8 +146,6 @@ module SMTLib2 = struct
       | `Bitvector _ -> add_logic BV
       | `Integer _ -> add_logic Int
       | `Bool _ -> return ()
-      | `Record _ | `Sort _ -> add_logic DT
-      | `Pointer _ -> add_logic UF
     in
     return v
 

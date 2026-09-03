@@ -4,6 +4,7 @@
  (public_name bincaml.util)
  (name bincaml_util)
  (modules
+  page_table
   indexed_list
   worklist
   fixed_width_arith
@@ -22,6 +23,7 @@
   recursionscheme)
  (libraries
   intPQueue
+  fmt
   logs
   mtime
   mtime.clock

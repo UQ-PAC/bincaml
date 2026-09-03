@@ -257,13 +257,14 @@ module BasilExpr = struct
                [ text "extract" ^ a ^ textpf "(%d,%d, " hi lo ^ e ^ text ")" ])
       | UnaryExpr { op = `ReadField field; arg = { this = Some arg } } ->
           return (arg ^ text "." ^ text field)
+          (*
       | BinaryExpr
           {
             op = `WriteField field;
             arg1 = { this = Some r };
             arg2 = { this = Some vl };
           } ->
-          return @@ r ^ text " with " ^ text field ^+ text "=" ^+ vl
+          return @@ r ^ text " with " ^ text field ^+ text "=" ^+ vl *)
       | UnaryExpr { op; arg = { this = Some e } } ->
           return (text (AllOps.to_string op) ^ a ^ bracket "(" e ")")
       | BinaryExpr

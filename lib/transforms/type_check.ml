@@ -89,18 +89,6 @@ let type_check stmt_id block_id expr =
     let binary_bool_types = binary_same_types Types.Boolean in
     let open Ops in
     match op with
-    | `PTRADD -> (
-        let err =
-          match arg2 with
-          | Bitvector _ -> []
-          | _ ->
-              [ type_err "%s is not of bitvector type" @@ Types.to_string arg1 ]
-        in
-        match arg1 with
-        | Pointer _ -> err
-        | _ ->
-            err
-            @ [ type_err "%s is not of pointer type" @@ Types.to_string arg2 ])
     | `WriteField offset ->
         let err =
           match arg1 with

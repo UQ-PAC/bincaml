@@ -71,11 +71,6 @@ let pretty_const (c : Ops.AllOps.const) =
   | `Integer i -> text @@ Z.format "%d" i
   | `Bitvector bv -> text @@ Printf.sprintf "%sbv%d" (Z.format "%d" bv.v) bv.w
   | `Bool b -> text @@ string_of_bool b
-  | `Record _ -> raise (BoogieException "records unsupported by boogie backend")
-  | `Pointer _ ->
-      raise (BoogieException "pointers unsupported by boogie backend")
-  | `Sort _ ->
-      raise (BoogieException "const sorts unsupported by boogie backend")
 
 let pretty_call_args_no_brackets (args : Containers_pp.t list) =
   let open Containers_pp in

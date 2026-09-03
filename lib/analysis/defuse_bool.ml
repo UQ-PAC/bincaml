@@ -41,18 +41,10 @@ module IsZeroValueAbstraction = struct
     | `Bool true -> NonZero
     | `Bool false -> Zero
     | `Integer i -> if Z.equal Z.zero i then Zero else NonZero
-    | `Bitvector i | `Pointer (i, _) ->
+    | `Bitvector i ->
         if Bitvec.size i = 0 then Top
         else if Z.equal Z.zero (Bitvec.value i) then Zero
         else NonZero
-    | `Record (fields, _) ->
-        StringMap.fold
-          (fun _ ({ value = i; _ } : Lang.Ops.Record.field) acc ->
-            if Bitvec.size i = 0 then Top
-            else if Z.equal Z.zero (Bitvec.value i) then join acc Zero
-            else join acc NonZero)
-          fields Zero
-    | `Sort _ -> failwith ""
 
   let eval_unop (op : Lang.Ops.AllOps.unary) a =
     match op with
@@ -67,6 +59,7 @@ module IsZeroValueAbstraction = struct
     | `Old | `Gamma | `Classification -> Top
     (* NOTE: More effort would be needed to be able to say is this one field zero or not *)
     | `ReadField offset -> ( match a with Zero -> Zero | _ -> Top)
+    | _ -> Top
 
   let eval_binary op a b =
     match (op, a, b) with
@@ -117,6 +110,7 @@ module IsZeroValueAbstraction = struct
     (* Larger refactor would be needed to reason about individual fields *)
     | `WriteField _, _, _ -> Top
     | #Lang.Ops.Spec.binary, _, _ -> Top
+    | `LoadBV _, _, _ -> Top
 
   let eval_binop op a b = eval_binary op a b
 
@@ -146,6 +140,7 @@ module IsZeroValueAbstraction = struct
         | [ Zero; _; Zero ] -> Zero
         | [ Zero; _; NonZero ] -> NonZero
         | _ -> Top)
+    | _ -> Top
 end
 
 module IsZeroValueAbstractionUntyped = struct

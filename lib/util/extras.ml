@@ -41,3 +41,8 @@ let group_succ_either :
     | h :: xs -> Either.Right (h, xs) :: while_left rest
   in
   while_left
+
+(** blit a byte slice at an offset *)
+let byte_slice_blit src dest dest_pos =
+  let open Containers.Byte_slice in
+  Bytes.blit src.bs src.off dest dest_pos src.len

@@ -223,10 +223,10 @@ module KnownBitsValueAbstraction = struct
   let eval_binary op (a, _) (b, _) rt =
     match op with
     | #Lang.Ops.Spec.binary -> Top
-    | #Lang.Ops.PointerOps.binary -> Top
-    | #Lang.Ops.RecordOps.binary -> Top
+    | #Lang.Ops.Record.binary -> Top
     | #Lang.Ops.IntOps.binary -> Top
     | #Lang.Ops.LogicalOps.binary -> Top
+    | #Lang.Ops.BVMaps.binary -> Top
     | `BVSUB -> tnum_sub a b
     | `BVNAND -> tnum_bitnot (tnum_bitand a b)
     | `BVSHL -> tnum_shl a b

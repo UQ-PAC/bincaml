@@ -32,8 +32,9 @@ module Builtins = struct
     | `BVNOT
     | `BVNEG
     | `ZeroExtend of int
-    | `Load of Ops.Maps.endian * int
-    | `SignExtend of int ]
+    | `SignExtend of int
+    | `LoadBV of Ops.BVMaps.endian * int
+    | `StoreBV of Ops.BVMaps.endian * int ]
   (** Subset of binary/unary/intrinsic ops which have builtins. (":builtin X" in
       boogie) *)
 
@@ -63,8 +64,10 @@ module Builtins = struct
     | `BVNEG -> "bvneg"
     | `ZeroExtend sz -> Printf.sprintf "zero_extend %d" sz
     | `SignExtend sz -> Printf.sprintf "sign_extend %d" sz
-    | `Load (`Big, i) -> Printf.sprintf "load%d_be" i
-    | `Load (`Little, i) -> Printf.sprintf "load%d_le" i
+    | `LoadBV (`Big, i) -> Printf.sprintf "load%d_be" i
+    | `LoadBV (`Little, i) -> Printf.sprintf "load%d_le" i
+    | `StoreBV (`Big, i) -> Printf.sprintf "store%d_be" i
+    | `StoreBV (`Little, i) -> Printf.sprintf "store%d_le" i
 
   (** Returns the monomorphized builtin name *)
   let monomorphize_builtin (op : builtin) targs =
