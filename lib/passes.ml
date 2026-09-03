@@ -97,6 +97,22 @@ module PassManager = struct
       invariants = Invariants.presupposes [ SSA ];
     }
 
+  let dfg_reaching_defs =
+    {
+      name = "demo-dfg-reaching-defs";
+      apply =
+        Proc
+          (fun p ->
+            let r = Analysis.Reaching_defs.IntraAnalysis.analyse p in
+            Analysis.Reaching_defs.IntraAnalysis.print_dot
+              (Format.of_chan stdout) p r;
+            p);
+      doc =
+        "runs reaching definitions analysis on dataflow graph and prints \
+         results";
+      invariants = Invariants.make ();
+    }
+
   let dfg_ival_wint_product =
     {
       name = "demoprint-dfg-ivalbits-product";
@@ -208,7 +224,7 @@ module PassManager = struct
   let sssa =
     {
       name = "simple-ssa";
-      apply = Proc Transforms.Ssa.ssa;
+      apply = Transforms.Ssa.(Prog (ssa_prog ~skipping:Skip.full));
       doc =
         "Naive SSA transform assuming all variable uses are dominated by \
          definitions from parameters";
@@ -492,6 +508,7 @@ module PassManager = struct
       cleanup_cfg;
       branch_conditions;
       dfg_bool;
+      dfg_reaching_defs;
       dfg_ival_wint_product;
       demo_ival_wint_dfg;
       cfg_wrapped_int;
