@@ -118,9 +118,6 @@ jobs:
 
   docs-deploy:
     timeout-minutes: 40
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: false
 
     runs-on: ubuntu-26.04
     if: ${{ github.ref == 'refs/heads/main' }}
