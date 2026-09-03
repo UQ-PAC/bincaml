@@ -446,7 +446,7 @@ module PassManager = struct
   let flatten_phis =
     {
       name = "flatten-phis";
-      apply = Proc Transforms.Dsa.dsa;
+      apply = Proc Transforms.Dynamic_single_assignment.dsa;
       doc =
         "Transforms phi nodes in the program into dynamic single assignment \
          statements.";
@@ -458,7 +458,7 @@ module PassManager = struct
   let dynamic_single_assignment =
     {
       name = "dynamic-single-assignment";
-      apply = Proc Transforms.Dsa.dsa;
+      apply = Proc Transforms.Dynamic_single_assignment.dsa;
       doc =
         "Transforms phi nodes in the program into dynamic single assignment \
          statements.";
