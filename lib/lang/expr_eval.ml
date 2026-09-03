@@ -2,6 +2,104 @@ open Common
 open Expr
 open Ops
 
+type eval_errors =
+  | TypeError
+  | UndefVar of Var.t
+  | Nothing (* non-total execution  *)
+[@@deriving eq, ord, show]
+
+module Value = struct
+  type t =
+    | Prim of Ops.AllOps.const  (** non-recursive values *)
+    | Record of record_value  (** product type *)
+    | ADT of adt_value  (** values of sum type *)
+    | Map of map_value  (** values of associative type, theory of arrays *)
+    | Closure of clos_type  (** type of lambdas *)
+  (*| BoundVar of Var.t (** variables bound in lambdas *)*)
+  [@@deriving ord]
+
+  and map_value = {
+    get : t -> t; [@compare Ord.poly]  (** key -> value *)
+    set : t -> t -> t; [@compare Ord.poly]  (** key -> value -> updated map *)
+  }
+  (** type of map values *)
+
+  and clos_type = { bound : Var.t list; body : Expr.BasilExpr.t }
+  and record_value = string * t list
+  and adt_value = { variant_tag : string; argument : t }
+end
+
+type eval_typ = (eval_errors, Value.t BasilExpr.abstract_expr) Result.t
+(** type of partially-evaluated expressions *)
+
+module Map = struct
+  open Value
+  module M = Map.Make (Value)
+
+  let rec create (map : Value.t M.t) : Value.t =
+    let set = fun k v -> create (M.add k v map) in
+    Value.(Map { get = (fun v -> M.find v map); set })
+
+  let empty key_typ val_typ = create M.empty
+
+  (** operations *)
+
+  let get v k = match v with Map { get } -> Ok (get k) | _ -> Error TypeError
+
+  let set v k =
+    match v with Map { set } -> Ok (set k v) | _ -> Error TypeError
+end
+
+open Value
+
+type value = Value.t
+
+module Lambda = struct
+  let apply (clos : clos_type) args =
+    let app_args, rest = List.take_drop (List.length args) clos.bound in
+    let args = List.combine app_args args |> VarMap.of_list in
+    let body =
+      Expr.BasilExpr.substitute (fun v -> VarMap.get v args) clos.body
+    in
+    Ok (Closure { bound = rest; body })
+end
+
+module ADT = struct
+  let _match v
+      (actions : (string * (value -> (value, eval_errors) Result.t)) list) =
+    let _match v (tag, action) =
+      let open Result.Infix in
+      let* bm =
+        match v with
+        | ADT { variant_tag; argument } when String.equal tag variant_tag ->
+            Ok argument
+        | ADT _ -> Error Nothing
+        | _ -> Error TypeError
+      in
+      action bm
+    in
+    (* take first returning a value *)
+    List.fold_left
+      (function Error Nothing -> _match v | o -> fun _ -> o)
+      (Error Nothing) actions
+
+  let _cases v actions =
+    List.fold_left
+      (function Ok e -> fun _ -> Ok e | _ -> fun action -> action v)
+      actions
+end
+
+let get_bool = function Prim (`Bool b) -> Ok b | _ -> Error TypeError
+let get_bv = function Prim (`Bitvector b) -> Ok b | _ -> Error TypeError
+let get_int = function Prim (`Integer b) -> Ok b | _ -> Error TypeError
+let get_map = function Map b -> Ok b | _ -> Error TypeError
+let get_adt = function ADT b -> Ok b | _ -> Error TypeError
+
+let total_eval_expr_alg (e : eval_typ) =
+  let open AbstractExpr in
+  let open Result.Infix in
+  ()
+
 let eval_expr_alg (e : Ops.AllOps.const option BasilExpr.abstract_expr) =
   let open AbstractExpr in
   let bool e = Some (`Bool e) in

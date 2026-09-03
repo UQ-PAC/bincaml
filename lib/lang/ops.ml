@@ -31,6 +31,14 @@ end
 module Maps = struct
   (* map, value -> result *)
 
+  type 'value map_value = {
+    key_typ : Types.t;
+    val_typ : Types.t;
+    get : 'value -> 'value;
+    (* key -> value *)
+    set : 'value -> 'value -> 'value; (* key -> value -> updated map *)
+  }
+
   type endian = [ `Big | `Little ]
   [@@deriving show { with_path = false }, eq, ord]
 
@@ -267,7 +275,11 @@ module BVOpsFixed = struct
   [@@deriving show { with_path = false }, eq, ord]
 
   type intrin =
-    [ `BVAND of int | `BVOR of int | `BVADD of int | `BVXOR of int | `BVMUL of int ]
+    [ `BVAND of int
+    | `BVOR of int
+    | `BVADD of int
+    | `BVXOR of int
+    | `BVMUL of int ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let eval_intrin (op : intrin) args =
