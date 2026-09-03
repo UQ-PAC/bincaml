@@ -3,8 +3,7 @@ open Lang
 
 module FlagSemantics = struct
   type t =
-    | Never
-    | Always
+    | Const of computation
     | O of computation  (** Overflow from computation *)
     | C of computation  (** Carry from computation *)
     | Z of computation  (** When computation is zero *)
@@ -14,6 +13,8 @@ module FlagSemantics = struct
     | Sum of Expr.BasilExpr.t * Expr.BasilExpr.t  (** Computed e1 + e2 *)
     | Diff of Expr.BasilExpr.t * Expr.BasilExpr.t  (** Computed e1 - e2 *)
     | Expr of Expr.BasilExpr.t  (** The result of evaluating an expr *)
+    | Always
+    | Never
   [@@deriving eq, ord, show { with_path = false }]
 
   let equiv_computations c c' =
@@ -29,13 +30,13 @@ module FlagSemantics = struct
   (** Determine whether [v] exists in an expression in [f] *)
   let contains_var v f =
     match f with
-    | O c | C c | Z c | N c -> (
+    | O c | C c | Z c | N c | Const c -> (
         match c with
         | Sum (e1, e2) | Diff (e1, e2) ->
             VarSet.mem v (Expr.BasilExpr.free_vars e1)
             || VarSet.mem v (Expr.BasilExpr.free_vars e2)
-        | Expr e -> VarSet.mem v (Expr.BasilExpr.free_vars e))
-    | Never | Always -> false
+        | Expr e -> VarSet.mem v (Expr.BasilExpr.free_vars e)
+        | Never | Always -> false)
 
   let extract_overflow_cary arg1 arg2 =
     let open Types in
@@ -194,10 +195,10 @@ module FlagSemantics = struct
     match unfix3 e with
     | Constant { const = `Bitvector k }
       when Bitvec.equal k (Bitvec.zero ~size:1) ->
-        Some Never
+        Some (Const Never)
     | Constant { const = `Bitvector k } when Bitvec.equal k (Bitvec.one ~size:1)
       ->
-        Some Always
+        Some (Const Always)
     | UnaryExpr
         {
           op = `BVNOT;
@@ -273,8 +274,8 @@ module FlagLattice = struct
 
   let eval_const op =
     match op with
-    | `Bitvector k when Bitvec.equal k (Bitvec.zero ~size:1) -> V Never
-    | `Bitvector k when Bitvec.equal k (Bitvec.one ~size:1) -> V Always
+    | `Bitvector k when Bitvec.equal k (Bitvec.zero ~size:1) -> V (Const Never)
+    | `Bitvector k when Bitvec.equal k (Bitvec.one ~size:1) -> V (Const Always)
     | _ -> Top
 
   let eval_unop _ _ = Top
@@ -343,6 +344,7 @@ module Eval = Analysis.Intra_analysis.EvalExpr (FlagLattice)
 (** Rewrites boolean exprs in terms of flags to be in terms of numerical
     conditions. *)
 module Rewriter = struct
+  (* condition codes from https://support.arm.com/documentation/dui0231/b/arm-instruction-reference/conditional-execution *)
   type t =
     | EQ of FlagSemantics.computation
     | CS of FlagSemantics.computation
@@ -368,11 +370,11 @@ module Rewriter = struct
         let arg1 = Eval.eval (flip FlagDomain.read m) arg1 in
         let arg2 = Eval.eval (flip FlagDomain.read m) arg2 in
         match (arg1, arg2) with
-        | V (Z c), V Always -> EQ c
-        | V (C c), V Always -> CS c
-        | V (N c), V Always -> MI c
-        | V (O c), V Always -> VS c
-        | V (N c), V (O c') -> GE (c, c')
+        | V (Z c), V (Const Always) -> EQ c
+        | V (C c), V (Const Always) -> CS c
+        | V (N c), V (Const Always) -> MI c
+        | V (O c), V (Const Always) -> VS c
+        | V (N c), V (O c' | Const c') -> GE (c, c')
         | _ -> Top)
     | ApplyIntrin
         {
@@ -389,8 +391,9 @@ module Rewriter = struct
         let c = Eval.eval (flip FlagDomain.read m) c in
         let d = Eval.eval (flip FlagDomain.read m) d in
         match (a, b, c, d) with
-        | V (C c), V Always, V (Z c'), V Never -> HI (c, c')
-        | V (N c), V (O c'), V (Z c''), V Never -> GT (c, c', c'')
+        | V (C c), V (Const Always), V (Z c'), V (Const Never) -> HI (c, c')
+        | V (N c), V (O c' | Const c'), V (Z c''), V (Const Never) ->
+            GT (c, c', c'')
         | _ -> Top)
     | UnaryExpr { op = `BoolNOT; arg } -> (
         match extract_condition m (Expr.BasilExpr.unfix arg) with
@@ -405,6 +408,8 @@ module Rewriter = struct
       | Diff (e, e') -> binexp ~op:`BVSUB e e'
       | Sum (e, e') -> applyintrin ~op:`BVADD [ e; e' ]
       | Expr e -> e
+      | Always -> bvconst (Bitvec.one ~size:1)
+      | Never -> bvconst (Bitvec.zero ~size:1)
     in
     let zero_of e =
       match type_of e with
@@ -429,12 +434,18 @@ module Rewriter = struct
         Some (binexp ~op:`BVSLE e' e)
     | GE ((Sum (e, e') as c), c') when equiv_computations c c' ->
         Some (binexp ~op:`BVSLE (unexp ~op:`BVNEG e') e)
+    | GE (c, Never) ->
+        let e = value c in
+        zero_of e |> Option.map (fun zero -> binexp ~op:`BVSLE zero e)
     | GT ((Diff (e, e') as c), c', c'')
       when equiv_computations c c' && equiv_computations c c'' ->
         Some (binexp ~op:`BVSLT e' e)
     | GT ((Sum (e, e') as c), c', c'')
       when equiv_computations c c' && equiv_computations c c'' ->
         Some (binexp ~op:`BVSLT (unexp ~op:`BVNEG e') e)
+    | GT (c, Never, c') when equiv_computations c c' ->
+        let e = value c in
+        zero_of e |> Option.map (fun zero -> binexp ~op:`BVSLT zero e)
     | Not cond -> (
         let open Expr.AbstractExpr in
         match condition_expr cond with
@@ -479,8 +490,6 @@ let annotate_stmt_flags m stmt =
               attrib)
           attrib annotations
       in
-      (* REMOVE THIS !!!!!!! *)
-      let body = Rewriter.rewrite_expr m body in
       Instr_Assume { attrib; body; branch }
   | _ -> stmt
 
@@ -585,10 +594,10 @@ prog entry @main;
          $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Sum (extract(32,0, $R0), 0x1:bv32)))" };
          $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Diff (extract(32,0, $R0), extract(32,0, $R1))))" };
          $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), 0xffffffff:bv32), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Expr extract(32,0, $R0)))" };
-         $PSTATE_V:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_V = "Never" };
-         $PSTATE_C:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_C = "Never" };
-         $PSTATE_Z:bv1 := 0x1:bv1 { .flag_semantics_$PSTATE_Z = "Always" };
-         $PSTATE_N:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_N = "Never" };
+         $PSTATE_V:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_V = "(Const Never)" };
+         $PSTATE_C:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_C = "(Const Never)" };
+         $PSTATE_Z:bv1 := 0x1:bv1 { .flag_semantics_$PSTATE_Z = "(Const Always)" };
+         $PSTATE_N:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_N = "(Const Never)" };
          goto (%ret);
        ];
        block %ret [ return; ]
@@ -800,9 +809,9 @@ prog entry @main;
     [
        block %main [
          $PSTATE_Z:bv1 := 0x1:bv1;
-         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "Always" };
+         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "(Const Always)" };
          $R0:bv64 := bvadd($R0, 0xdeadbeef:bv64);
-         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "Always" };
+         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "(Const Always)" };
          goto (%ret);
        ];
        block %ret [ return; ]
