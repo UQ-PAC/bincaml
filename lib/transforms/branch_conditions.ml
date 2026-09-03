@@ -493,8 +493,10 @@ let annotate_stmt_flags m stmt =
       Instr_Assume { attrib; body; branch }
   | _ -> stmt
 
-(** Add flag annotations to assume statements based on flag variables prior *)
-let annotate_assume_flags (p : Program.proc) =
+let rewrite_stmt_conditions m =
+  Stmt.map ~f_lvar:id ~f_rvar:id ~f_expr:(Rewriter.rewrite_expr m)
+
+let stmt_transform trans (p : Program.proc) =
   let a = FlagAnalysis.analyse p in
   Procedure.map_blocks_nondet
     (fun (bid, b) ->
@@ -504,13 +506,18 @@ let annotate_assume_flags (p : Program.proc) =
       in
       Block.map_fold_forwards
         ~phi:(fun m phi -> (List.fold_left FlagDomain.transfer_phi m phi, phi))
-        ~f:(fun m stmt ->
-          (FlagDomain.transfer m stmt, annotate_stmt_flags m stmt))
+        ~f:(fun m stmt -> (FlagDomain.transfer m stmt, trans m stmt))
         r b
       |> snd)
     p
 
-let transform = annotate_assume_flags
+(** Add flag annotations to assume statements based on flag variables prior *)
+let annotate_assume_flags = stmt_transform annotate_stmt_flags
+
+(** Rewrite boolean expressions of flags into numerical conditions *)
+let rewrite_conditions = stmt_transform rewrite_stmt_conditions
+
+let transform = rewrite_conditions
 
 let%expect_test "flag_types" =
   let lst =
