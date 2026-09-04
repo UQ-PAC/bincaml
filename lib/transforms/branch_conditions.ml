@@ -1,10 +1,24 @@
 open Bincaml_util.Common
 open Lang
 
+(* TODO:
+    - Handle ccmp instructions (where branch conditions depend on branch conditions, needing a depth 1 path sensitive analysis)
+    - Handle registers being overwritten before branching (SSA):
+        there was an instance of
+        cmn w0, #1
+        mov w0, #0
+        b.ne #0xfffffffffffffff0
+        in cntlm. Here w0 gets overwritten before we can identify a branch condition in terms of w0's current value...
+  every failing branch condition in cntlm is of one of these two forms!
+*)
+
+open struct
+  let equiv_exp e1 e2 = Expr.BasilExpr.(equal (drop_attrib e1) (drop_attrib e2))
+end
+
 module FlagSemantics = struct
   type t =
-    | Never
-    | Always
+    | Const of computation
     | O of computation  (** Overflow from computation *)
     | C of computation  (** Carry from computation *)
     | Z of computation  (** When computation is zero *)
@@ -14,24 +28,33 @@ module FlagSemantics = struct
     | Sum of Expr.BasilExpr.t * Expr.BasilExpr.t  (** Computed e1 + e2 *)
     | Diff of Expr.BasilExpr.t * Expr.BasilExpr.t  (** Computed e1 - e2 *)
     | Expr of Expr.BasilExpr.t  (** The result of evaluating an expr *)
+    | Always
+    | Never
   [@@deriving eq, ord, show { with_path = false }]
+
+  let equiv_computations c c' =
+    let open Expr.BasilExpr in
+    match (c, c') with
+    | Sum (e1, e2), Sum (e1', e2') -> equiv_exp e1 e1' && equiv_exp e2 e2'
+    | Diff (e1, e2), Diff (e1', e2') -> equiv_exp e1 e1' && equiv_exp e2 e2'
+    | Expr e, Expr e' -> equiv_exp e e'
+    | _ -> false
 
   (** Determine whether [v] exists in an expression in [f] *)
   let contains_var v f =
     match f with
-    | O c | C c | Z c | N c -> (
+    | O c | C c | Z c | N c | Const c -> (
         match c with
         | Sum (e1, e2) | Diff (e1, e2) ->
             VarSet.mem v (Expr.BasilExpr.free_vars e1)
             || VarSet.mem v (Expr.BasilExpr.free_vars e2)
-        | Expr e -> VarSet.mem v (Expr.BasilExpr.free_vars e))
-    | Never | Always -> false
+        | Expr e -> VarSet.mem v (Expr.BasilExpr.free_vars e)
+        | Never | Always -> false)
 
   let extract_overflow_cary arg1 arg2 =
     let open Types in
     let open Expr.AbstractExpr in
     let open Expr.BasilExpr in
-    let equiv_exp e1 e2 = equal (drop_attrib e1) (drop_attrib e2) in
     let sext_eq extension bv1 bv2 =
       Bitvec.(equal (sign_extend ~extension bv1) bv2)
     in
@@ -120,7 +143,7 @@ module FlagSemantics = struct
       ->
         if Bitvec.is_negative bv1 then
           Some (C (Diff (fix a, bvconst (Bitvec.neg bv1))))
-        else Some (O (Sum (fix a, bvconst bv1)))
+        else Some (C (Sum (fix a, bvconst bv1)))
     | ( UnaryExpr
           {
             op = `ZeroExtend z1;
@@ -184,10 +207,10 @@ module FlagSemantics = struct
     match unfix3 e with
     | Constant { const = `Bitvector k }
       when Bitvec.equal k (Bitvec.zero ~size:1) ->
-        Some Never
+        Some (Const Never)
     | Constant { const = `Bitvector k } when Bitvec.equal k (Bitvec.one ~size:1)
       ->
-        Some Always
+        Some (Const Always)
     | UnaryExpr
         {
           op = `BVNOT;
@@ -259,6 +282,18 @@ module FlagLattice = struct
     let name = "flag"
   end)
 
+  module E = Lang.Expr.BasilExpr
+
+  let eval_const op =
+    match op with
+    | `Bitvector k when Bitvec.equal k (Bitvec.zero ~size:1) -> V (Const Never)
+    | `Bitvector k when Bitvec.equal k (Bitvec.one ~size:1) -> V (Const Always)
+    | _ -> Top
+
+  let eval_unop _ _ = Top
+  let eval_binop _ _ _ = Top
+  let eval_intrin _ _ = Top
+
   let contains_var v x =
     match x with
     | Top -> false
@@ -316,6 +351,145 @@ module FlagAnalysis = struct
   let analyse p = analyse p
 end
 
+module Eval = Analysis.Intra_analysis.EvalExpr (FlagLattice)
+
+(** Rewrites boolean exprs in terms of flags to be in terms of numerical
+    conditions. *)
+module Rewriter = struct
+  (** A type of condition as described in
+      https://support.arm.com/documentation/dui0231/b/arm-instruction-reference/conditional-execution
+
+      We track one computation for each flag read, noting that sometimes not all
+      flags will be computed in the same way. *)
+  type t =
+    | EQ of FlagSemantics.computation
+    | CS of FlagSemantics.computation
+    | MI of FlagSemantics.computation
+    | VS of FlagSemantics.computation
+    | HI of { c : FlagSemantics.computation; z : FlagSemantics.computation }
+    | GE of { n : FlagSemantics.computation; v : FlagSemantics.computation }
+    | GT of {
+        n : FlagSemantics.computation;
+        v : FlagSemantics.computation;
+        z : FlagSemantics.computation;
+      }
+    | Not of t
+    | Top  (** Unknown condition type *)
+  [@@deriving show { with_path = false }]
+
+  (** Extracts a condition from a boolean expression *)
+  let rec extract_condition m e : t =
+    let open FlagSemantics in
+    let open Expr.AbstractExpr in
+    match e with
+    | BinaryExpr { op = `EQ; arg1; arg2 } -> (
+        (* evaluate arg1 and arg2, if they are of the right form keep *)
+        let arg1 = Eval.eval (flip FlagDomain.read m) arg1 in
+        let arg2 = Eval.eval (flip FlagDomain.read m) arg2 in
+        match (arg1, arg2) with
+        | V (Z c), V (Const Always) -> EQ c
+        | V (C c), V (Const Always) -> CS c
+        | V (N c), V (Const Always) -> MI c
+        | V (O c), V (Const Always) -> VS c
+        | V (N c), V (O c' | Const c') -> GE { n = c; v = c' }
+        | _ -> Top)
+    | ApplyIntrin
+        {
+          op = `AND;
+          args =
+            [
+              Expr.BasilExpr.E (BinaryExpr { op = `EQ; arg1 = a; arg2 = b });
+              E (BinaryExpr { op = `EQ; arg1 = c; arg2 = d });
+            ];
+        } -> (
+        (* there has to be a better way .......... *)
+        let a = Eval.eval (flip FlagDomain.read m) a in
+        let b = Eval.eval (flip FlagDomain.read m) b in
+        let c = Eval.eval (flip FlagDomain.read m) c in
+        let d = Eval.eval (flip FlagDomain.read m) d in
+        match (a, b, c, d) with
+        | V (C c), V (Const Always), V (Z c'), V (Const Never) ->
+            HI { c; z = c' }
+        | V (N c), V (O c' | Const c'), V (Z c''), V (Const Never) ->
+            GT { n = c; v = c'; z = c'' }
+        | _ -> Top)
+    | UnaryExpr { op = `BoolNOT; arg } -> (
+        match extract_condition m (Expr.BasilExpr.unfix arg) with
+        | Not c -> c
+        | c -> Not c)
+    | _ -> Top
+
+  (** Replace a condition with its interpretation as an expression *)
+  let rec condition_expr cond =
+    let open FlagSemantics in
+    let open Expr.BasilExpr in
+    let value = function
+      | Diff (e, e') -> binexp ~op:`BVSUB e e'
+      | Sum (e, e') -> applyintrin ~op:`BVADD [ e; e' ]
+      | Expr e -> e
+      | Always -> bvconst (Bitvec.one ~size:1)
+      | Never -> bvconst (Bitvec.zero ~size:1)
+    in
+    let zero_of e =
+      match type_of e with
+      | Bitvector size -> Some (bvconst (Bitvec.zero ~size))
+      | _ -> None
+    in
+    match cond with
+    | EQ (Diff (e, e')) -> Some (binexp ~op:`EQ e e')
+    | EQ (Sum (e, e')) -> Some (binexp ~op:`EQ e (unexp ~op:`BVNEG e'))
+    | EQ (Expr e) -> zero_of e |> Option.map (binexp ~op:`EQ e)
+    | CS (Diff (e, e')) -> Some (binexp ~op:`BVULE e' e)
+    | CS (Sum (e, e')) -> Some (binexp ~op:`BVULE (unexp ~op:`BVNEG e') e)
+    | MI c ->
+        let e = value c in
+        zero_of e |> Option.map (binexp ~op:`BVSLT e)
+    (* | VS c -> failwith "overflow rewrite is complicated" *)
+    | HI { c = Diff (e, e') as c; z = c' } when equiv_computations c c' ->
+        Some (binexp ~op:`BVULT e' e)
+    | HI { c = Sum (e, e') as c; z = c' } when equiv_computations c c' ->
+        Some (binexp ~op:`BVULT (unexp ~op:`BVNEG e') e)
+    | GE { n = Diff (e, e') as c; v = c' } when equiv_computations c c' ->
+        Some (binexp ~op:`BVSLE e' e)
+    | GE { n = Sum (e, e') as c; v = c' } when equiv_computations c c' ->
+        Some (binexp ~op:`BVSLE (unexp ~op:`BVNEG e') e)
+    | GE { n = c; v = Never } ->
+        let e = value c in
+        zero_of e |> Option.map (fun zero -> binexp ~op:`BVSLE zero e)
+    | GT { n = Diff (e, e') as c; v = c'; z = c'' }
+      when equiv_computations c c' && equiv_computations c c'' ->
+        Some (binexp ~op:`BVSLT e' e)
+    | GT { n = Sum (e, e') as c; v = c'; z = c'' }
+      when equiv_computations c c' && equiv_computations c c'' ->
+        Some (binexp ~op:`BVSLT (unexp ~op:`BVNEG e') e)
+    | GT { n = c; v = Never; z = c' } when equiv_computations c c' ->
+        let e = value c in
+        zero_of e |> Option.map (fun zero -> binexp ~op:`BVSLT zero e)
+    | Not cond -> (
+        let open Expr.AbstractExpr in
+        match condition_expr cond with
+        | Some (E (BinaryExpr { op = `BVULE; arg1; arg2 })) ->
+            Some (binexp ~op:`BVULT arg2 arg1)
+        | Some (E (BinaryExpr { op = `BVULT; arg1; arg2 })) ->
+            Some (binexp ~op:`BVULE arg2 arg1)
+        | Some (E (BinaryExpr { op = `BVSLE; arg1; arg2 })) ->
+            Some (binexp ~op:`BVSLT arg2 arg1)
+        | Some (E (BinaryExpr { op = `BVSLT; arg1; arg2 })) ->
+            Some (binexp ~op:`BVSLE arg2 arg1)
+        | Some e -> Some (Expr.BasilExpr.boolnot e)
+        | None -> None)
+    | _ -> None
+
+  let rw m e =
+    let open Expr.BasilExpr in
+    e |> extract_condition m |> condition_expr |> Expr.BasilExpr.replace_opt
+
+  (** Rewrite an expression's branch conditions in terms of flag analysis
+      results *)
+  let rewrite_expr (m : FlagDomain.t) e =
+    Expr.BasilExpr.rewrite_down ~rw_fun:(rw m) e
+end
+
 let annotate_stmt_flags m stmt =
   let open Stmt in
   match stmt with
@@ -337,8 +511,12 @@ let annotate_stmt_flags m stmt =
       Instr_Assume { attrib; body; branch }
   | _ -> stmt
 
-(** Add flag annotations to assume statements based on flag variables prior *)
-let annotate_assume_flags (p : Program.proc) =
+let rewrite_stmt_conditions m =
+  Stmt.map ~f_lvar:id ~f_rvar:id ~f_expr:(Rewriter.rewrite_expr m)
+
+(** Map statements of a procedure given FlagAnalysis results *)
+let stmt_transform (trans : FlagDomain.t -> Program.stmt -> Program.stmt)
+    (p : Program.proc) =
   let a = FlagAnalysis.analyse p in
   Procedure.map_blocks_nondet
     (fun (bid, b) ->
@@ -348,13 +526,19 @@ let annotate_assume_flags (p : Program.proc) =
       in
       Block.map_fold_forwards
         ~phi:(fun m phi -> (List.fold_left FlagDomain.transfer_phi m phi, phi))
-        ~f:(fun m stmt ->
-          (FlagDomain.transfer m stmt, annotate_stmt_flags m stmt))
+        ~f:(fun m stmt -> (FlagDomain.transfer m stmt, trans m stmt))
         r b
       |> snd)
     p
 
-let transform = annotate_assume_flags
+(** Add flag annotations to assume statements based on flag variables prior
+    (debugging) *)
+let annotate_assume_flags = stmt_transform annotate_stmt_flags
+
+(** Rewrite boolean expressions of flags into numerical conditions *)
+let rewrite_conditions = stmt_transform rewrite_stmt_conditions
+
+let transform = rewrite_conditions
 
 let%expect_test "flag_types" =
   let lst =
@@ -428,7 +612,7 @@ prog entry @main;
          $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)), bvadd(bvadd(sign_extend(32, extract(32,0, $R0)), 0xfffffffffffffffd:bv64), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(O (Diff (extract(32,0, $R0), 0x2:bv32)))" };
          $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)), bvadd(bvadd(sign_extend(32, extract(32,0, $R0)), sign_extend(32, bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64)))) { .flag_semantics_$PSTATE_V = "(O (Diff (extract(32,0, $R0), extract(32,0, $R1))))" };
          $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(32, bvadd(local_31:bv32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12)))), bvadd(sign_extend(32, local_31:bv32), sign_extend(32, bvshl(local_32:bv32, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_V = "(O (Sum (local_31:bv32, local_32:bv32)))" };
-         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(O (Sum (extract(32,0, $R0), 0x1:bv32)))" };
+         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(C (Sum (extract(32,0, $R0), 0x1:bv32)))" };
          $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(bvadd(extract(32,0, $R0), 0xfffffffd:bv32), 0x1:bv32)), bvadd(bvadd(zero_extend(32, extract(32,0, $R0)), 0xfffffffd:bv64), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(C (Diff (extract(32,0, $R0), 0x2:bv32)))" };
          $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)), bvadd(bvadd(zero_extend(32, extract(32,0, $R0)), zero_extend(32, bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12))))), 0x1:bv64)))) { .flag_semantics_$PSTATE_C = "(C (Diff (extract(32,0, $R0), extract(32,0, $R1))))" };
          $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd($H2, bvshl($H3, zero_extend(20, 0x0:bv12)))), bvadd(zero_extend(32, $H2), zero_extend(32, bvshl($H3, zero_extend(20, 0x0:bv12))))))) { .flag_semantics_$PSTATE_C = "(C (Sum ($H2, $H3)))" };
@@ -438,10 +622,10 @@ prog entry @main;
          $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Sum (extract(32,0, $R0), 0x1:bv32)))" };
          $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Diff (extract(32,0, $R0), extract(32,0, $R1))))" };
          $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), 0xffffffff:bv32), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Expr extract(32,0, $R0)))" };
-         $PSTATE_V:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_V = "Never" };
-         $PSTATE_C:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_C = "Never" };
-         $PSTATE_Z:bv1 := 0x1:bv1 { .flag_semantics_$PSTATE_Z = "Always" };
-         $PSTATE_N:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_N = "Never" };
+         $PSTATE_V:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_V = "(Const Never)" };
+         $PSTATE_C:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_C = "(Const Never)" };
+         $PSTATE_Z:bv1 := 0x1:bv1 { .flag_semantics_$PSTATE_Z = "(Const Always)" };
+         $PSTATE_N:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_N = "(Const Never)" };
          goto (%ret);
        ];
        block %ret [ return; ]
@@ -548,7 +732,7 @@ prog entry @main;
          $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(32, bvadd(extract(32,0, $R0), 0x1:bv32)), bvadd(zero_extend(32, extract(32,0, $R0)), 0x1:bv64))));
          $PSTATE_Z:bv1 := booltobv1(eq(bvadd(extract(32,0, $R0), 0x1:bv32), 0x0:bv32));
          $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32));
-         assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1)) { .flag_semantics_$PSTATE_C = "(O (Sum (extract(32,0, $R0), 0x1:bv32)))"; .flag_semantics_$PSTATE_N = "(N (Sum (extract(32,0, $R0), 0x1:bv32)))"; .flag_semantics_$PSTATE_V = "(O (Sum (extract(32,0, $R0), 0x1:bv32)))"; .flag_semantics_$PSTATE_Z = "(Z (Sum (extract(32,0, $R0), 0x1:bv32)))" };
+         assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1)) { .flag_semantics_$PSTATE_C = "(C (Sum (extract(32,0, $R0), 0x1:bv32)))"; .flag_semantics_$PSTATE_N = "(N (Sum (extract(32,0, $R0), 0x1:bv32)))"; .flag_semantics_$PSTATE_V = "(O (Sum (extract(32,0, $R0), 0x1:bv32)))"; .flag_semantics_$PSTATE_Z = "(Z (Sum (extract(32,0, $R0), 0x1:bv32)))" };
          goto (%ret);
        ];
        block %ret [ return; ]
@@ -653,9 +837,63 @@ prog entry @main;
     [
        block %main [
          $PSTATE_Z:bv1 := 0x1:bv1;
-         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "Always" };
+         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "(Const Always)" };
          $R0:bv64 := bvadd($R0, 0xdeadbeef:bv64);
-         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "Always" };
+         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "(Const Always)" };
+         goto (%ret);
+       ];
+       block %ret [ return; ]
+    ];
+    prog entry @main;
+    |}]
+
+let%expect_test "rewrites" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+var $R0:bv64;
+var $PSTATE_N:bv1;
+var $PSTATE_Z:bv1;
+var $PSTATE_C:bv1;
+var $PSTATE_V:bv1;
+
+proc @main() -> ()
+[
+  block %main [
+     $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(64, bvadd(bvadd($R0, 0xfffffffffffffffe:bv64), 0x1:bv64)), bvadd(bvadd(sign_extend(64, $R0), 0xfffffffffffffffffffffffffffffffe:bv128), 0x1:bv128))));
+     $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(64, bvadd(bvadd($R0, 0xfffffffffffffffe:bv64), 0x1:bv64)), bvadd(bvadd(zero_extend(64, $R0), 0xfffffffffffffffe:bv128), 0x1:bv128))));
+     $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd($R0, 0xfffffffffffffffe:bv64), 0x1:bv64), 0x0:bv64));
+     $PSTATE_N:bv1 := extract(64,63, bvadd(bvadd($R0, 0xfffffffffffffffe:bv64), 0x1:bv64));
+     assume booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1));
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+prog entry @main;
+    |}
+  in
+  let prog = lst.prog |> Program.map_procedures (fun _ -> rewrite_conditions) in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:200 (Lang.Program.prog_pretty prog);
+  [%expect
+    {|
+    var $R0:bv64;
+    var $PSTATE_N:bv1;
+    var $PSTATE_Z:bv1;
+    var $PSTATE_C:bv1;
+    var $PSTATE_V:bv1;
+    proc @main()  -> () {  }
+      modifies $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1
+      captures $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64
+
+    [
+       block %main [
+         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(64, bvadd(bvadd($R0, 0xfffffffffffffffe:bv64), 0x1:bv64)), bvadd(bvadd(sign_extend(64, $R0), 0xfffffffffffffffffffffffffffffffe:bv128), 0x1:bv128))));
+         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(64, bvadd(bvadd($R0, 0xfffffffffffffffe:bv64), 0x1:bv64)), bvadd(bvadd(zero_extend(64, $R0), 0xfffffffffffffffe:bv128), 0x1:bv128))));
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd($R0, 0xfffffffffffffffe:bv64), 0x1:bv64), 0x0:bv64));
+         $PSTATE_N:bv1 := extract(64,63, bvadd(bvadd($R0, 0xfffffffffffffffe:bv64), 0x1:bv64));
+         assume bvslt(0x1:bv64, $R0);
          goto (%ret);
        ];
        block %ret [ return; ]
