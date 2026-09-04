@@ -1,4 +1,5 @@
 open Common
+open Bincaml_util.Errors
 
 (** associative datastructure for attributes *)
 
