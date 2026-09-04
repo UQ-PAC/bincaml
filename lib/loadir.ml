@@ -1475,8 +1475,6 @@ end
 
 exception ILBParseError of { input : Pp_loc.Input.t; lexbuf : Lexing.lexbuf }
 
-let () = Errors.regprinter ()
-
 let conv_error_info (f : unit -> 'a) =
   Errors.protect_with_info
     (function

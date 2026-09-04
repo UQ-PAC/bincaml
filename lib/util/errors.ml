@@ -35,6 +35,7 @@ let loc_to_position = function
 type location_info = { range : location; description : string option }
 (** A source location and what is at this location *)
 
+let location ?msg a = { range = OffsetRange a; description = msg }
 let location_loc ?msg a = { range = OffsetRange a; description = msg }
 let location_lexing ?msg a = { range = Token a; description = msg }
 let location_position ?msg a = { range = Position a; description = msg }
@@ -42,6 +43,7 @@ let location_position ?msg a = { range = Position a; description = msg }
 type error_class =
   | Unhandled  (** Programmer error *)
   | InputError  (** input error *)
+  | TypeError  (** type error *)
   | Error  (** input error *)
   | Exception of exn  (** Programmer error *)
   | VerifierAlarm  (** Verification error *)
@@ -51,6 +53,7 @@ let show_error_class = function
   | Exception exn -> "exception " ^ Printexc.to_string exn
   | VerifierAlarm -> "verification failure"
   | InputError -> "input error"
+  | TypeError -> "type error"
   | Error -> "error"
 
 type extra_loc_info =
@@ -60,6 +63,9 @@ type extra_loc_info =
       input : Pp_loc.Input.t;  (** input *)
       locations : location list;  (** locations to print *)
     }  (** contextual information *)
+    (* TODO: print these *)
+  | InputFile of location_info list  (** A related location in the input file *)
+  | ContextString of string  (** Any random dumped debug messgae *)
 
 type error_info = {
   relevant_input_locations : location_info list;  (** Char offset ranges *)
@@ -202,9 +208,12 @@ let format_extra_location_info fmt = function
       let pos = Position (p, p) in
       Format.fprintf fmt "%s:%d:%d%a%a" p.pos_fname p.pos_lnum p.pos_cnum
         Format.newline () (format_location input) [ pos ]
-  | OtherFile { name; input; locations } ->
-      Format.fprintf fmt "%s%a%a" name Format.pp_print_newline ()
-        (format_location input) locations
+  | OtherFile { name; input; locations } -> (
+      try
+        Format.fprintf fmt "%s%a%a" name Format.pp_print_newline ()
+          (format_location input) locations
+      with Sys_error _ ->
+        Format.fprintf fmt "\"%s\" (error: no such file)" name)
 
 let pp_bincamlerr fmt { messages; input } =
   let format_message fmt
@@ -232,9 +241,11 @@ let pp_bincamlerr fmt { messages; input } =
   let fmt_msgs = Format.list ~sep:Format.newline format_message in
   Format.fprintf fmt "%a" fmt_msgs (List.rev messages)
 
-let regprinter () =
+let () =
   Printexc.register_printer (function
     | BincamlError info -> Some (Format.asprintf "%a" pp_bincamlerr info)
     | _ -> None)
 
-let () = regprinter ()
+let to_result f =
+  try Ok (f ())
+  with BincamlError e -> Error (Format.asprintf "%a" pp_bincamlerr e)

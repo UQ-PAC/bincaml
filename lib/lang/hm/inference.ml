@@ -112,6 +112,16 @@ let scheme_of_intrin st ?(visit_constraint = fun a -> ()) (gen : ID.generator)
       curry_f st [ m; a; b ] m
   | `Cases -> fv ()
 
+let add_err_ctx loc f =
+  match loc with
+  | None -> f ()
+  | Some loc ->
+      Errors.update_error (Errors.update_message ~input_location:loc) f
+
+let loc_e e =
+  Expr.BasilExpr.unfix e |> Expr.AbstractExpr.get_attrib |> Attrib.get_location
+  |> Option.map (fun l -> Errors.location_loc ~msg:"expression" l)
+
 let do_infer st ~visit_constraint
     (infer :
       univ:string ->
@@ -119,6 +129,7 @@ let do_infer st ~visit_constraint
       Program.e ->
       scheme TypeExpr.TCtx.t ->
       AbsTypingExpr.t) univ hr e c : AbsTypingExpr.t =
+  add_err_ctx (loc_e e) @@ fun () ->
   let unify = Unification.unify st
   and curry_f = Hm_types.curry_f st
   and scheme_of_op = scheme_of_op st
@@ -189,9 +200,11 @@ let rec infer_expr st visit_constraint ~univ (hr : Lexing.position) e =
   Logs.debug (fun m ->
       m "%s" @@ "infer " ^ plpos hr ^ " " ^ Expr.BasilExpr.to_string e);
   let t =
-    try
-      do_infer st ~visit_constraint (infer_expr st visit_constraint) univ hr e c
-    with TypeErr m -> raise (TypeErr (m ^ " : " ^ Expr.BasilExpr.to_string e))
+    Errors.update_error
+      (Errors.push_message
+      @@ Errors.error_message (Expr.BasilExpr.to_string e) Errors.TypeError)
+    @@ fun () ->
+    do_infer st ~visit_constraint (infer_expr st visit_constraint) univ hr e c
   in
   t
 
@@ -321,11 +334,17 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
         { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib }
 
 let infer_stmt st vc p univ ctx s =
-  try do_infer_stmt st vc p univ ctx s
-  with TypeErr m ->
-    raise
-      (TypeErr
-         (m ^ " " ^ Stmt.to_string Var.pretty Var.pretty Expr.BasilExpr.pretty s))
+  let input_location =
+    Stmt.attrib s |> Attrib.get_location
+    |> Option.map (fun l -> Errors.location_loc ~msg:"statement" l)
+  in
+  Errors.update_error
+    (Errors.push_message
+    @@ Errors.error_message ?input_location
+         ("statement:"
+         ^ Stmt.to_string Var.pretty Var.pretty Expr.BasilExpr.pretty s)
+         TypeError)
+  @@ fun () -> do_infer_stmt st vc p univ ctx s
 
 let infer_block st vc p univ ctx (b : Program.bloc) =
   let _ = infer_phi st vc univ ctx b.phis in
