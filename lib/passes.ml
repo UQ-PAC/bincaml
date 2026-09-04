@@ -443,22 +443,10 @@ module PassManager = struct
       invariants = Invariants.from_list (fun x -> x.invariants) batch;
     }
 
-  let flatten_phis =
-    {
-      name = "flatten-phis";
-      apply = Proc Transforms.Dsa.dsa;
-      doc =
-        "Transforms phi nodes in the program into dynamic single assignment \
-         statements.";
-      invariants =
-        Invariants.presupposes [] ~establishes:[ DSA; NoPhis ]
-          ~invalidates:[ SSA ];
-    }
-
   let dynamic_single_assignment =
     {
       name = "dynamic-single-assignment";
-      apply = Proc Transforms.Dsa.dsa;
+      apply = Proc Transforms.Dynamic_single_assignment.dsa;
       doc =
         "Transforms phi nodes in the program into dynamic single assignment \
          statements.";
@@ -484,7 +472,6 @@ module PassManager = struct
       hm_elaborate;
       chop_unreachable;
       cse_elim;
-      flatten_phis;
       dynamic_single_assignment;
       irreducible_loop;
       remove_unreachable_blocks;

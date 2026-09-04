@@ -1,5 +1,5 @@
 open Bincaml_util.Common
-module Dsa = Transforms.Dsa
+module Dsa = Transforms.Dynamic_single_assignment
 
 let%expect_test "dsa basic" =
   let lst =
