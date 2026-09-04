@@ -2,6 +2,7 @@
 
 include Containers
 include Fun
+module Errors = Errors
 
 (** Common collections *)
 
