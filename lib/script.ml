@@ -89,12 +89,19 @@ let print_blocks_topo_fwd chan p =
 type dsl_st = {
   history : Sexp.t list;
   load_st : Loader.Loadir.load_st option;
+  source_files : string list; (* if there is a single exact source file *)
   line : int;
   user_cmds : (string * Sexp.t) StringMap.t;
 }
 
 let init_st =
-  { history = []; load_st = None; line = 0; user_cmds = StringMap.empty }
+  {
+    history = [];
+    load_st = None;
+    line = 0;
+    user_cmds = StringMap.empty;
+    source_files = [];
+  }
 
 let get_prog s =
   s.load_st
@@ -205,7 +212,11 @@ let load_il st args =
           List.fold_left
             (fun acc fname ->
               let st = Loader.Loadir.ast_of_fname ?lst:acc.load_st fname in
-              { acc with load_st = Some st })
+              {
+                acc with
+                load_st = Some st;
+                source_files = fname :: acc.source_files;
+              })
             { st with load_st = None } largs))
 
 let run_transform st args =
@@ -419,8 +430,16 @@ let add_help_cmd cmds =
 
 let default_cmds = add_help_cmd cmds_list
 
+let protect_with_input { source_files } f =
+  match source_files with
+  | [ inp ] -> Errors.update_error (Errors.add_input ~input_file:inp) f
+  | _ ->
+      (* there is not a singular source file *)
+      f ()
+
 let rec of_cmd ?(cmds = default_cmds) ?(echo_cmd = true) st
     (i_command : Containers.Sexp.t) =
+  protect_with_input st @@ fun () ->
   match i_command with
   | `List (`Atom "progn" :: rest) ->
       List.fold_left (of_cmd ~cmds ~echo_cmd) st rest
@@ -465,14 +484,20 @@ let of_chan_2 ?fname ?st channel =
   let lbuf = Lexing.from_channel ~with_positions:true channel in
   let s = Sexp.Decoder.of_lexbuf lbuf in
   let st = ref (Option.get_or ~default:init_st st) in
+  let fname = Option.filter Sys.file_exists fname in
   let inp =
-    Option.map Pp_loc.Input.file fname
+    fname
+    |> Option.map Pp_loc.Input.file
     |> Option.get_or ~default:(Pp_loc.Input.in_channel channel)
   in
   while
     let sexp = Sexp.Decoder.next s in
     let e : Sexp.loc option = Sexp.Decoder.last_loc s in
-    let loc = match e with Some e -> Some { pos = [ e ]; inp } | _ -> None in
+    let loc =
+      match (e, fname) with
+      | Some e, Some _ -> Some { pos = [ e ]; inp }
+      | _ -> None
+    in
     let here = Option.map (errpos_to_error_loc ?fname) loc in
     match sexp with
     | Yield sexp ->

@@ -114,5 +114,7 @@ let find_int_opt k (e : t option) =
   | `Integer i -> Some i
   | _ -> None
 
+let get_location a = StringMap.find_opt location_key a |> Option.map loc_of_attr
+
 let find_loc_opt (e : t option) =
   find_opt location_key e |> Option.map loc_of_attr

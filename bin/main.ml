@@ -8,6 +8,8 @@ open Bincaml
 let () = Printexc.record_backtrace true
 let () = Script.printer ()
 
+module E = Bincaml_util.Errors
+
 let kittyimg dotfile =
   CCIO.File.with_temp ~prefix:"bincaml_repl_cfg" ~suffix:".png" (fun pngfile ->
       let pngfile = ".png" in
@@ -233,9 +235,11 @@ let run_script ~verb fname =
   try
     let _ = Script.of_chan_2 ~fname chan in
     Ok ()
-  with e ->
-    Logs.debug (fun m -> m "%s" @@ Printexc.get_backtrace ());
-    Error (Printexc.to_string e)
+  with
+  | Errors.BincamlError e -> Error (Format.asprintf "%a" Errors.pp_bincamlerr e)
+  | e ->
+      Logs.debug (fun m -> m "%s" @@ Printexc.get_backtrace ());
+      Error (Printexc.to_string e)
 
 (*
 let callgraph_cmd =

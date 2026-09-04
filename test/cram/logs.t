@@ -29,6 +29,7 @@ Some error messages for log configuration.
 
   $ cat << EOF | bincaml script -
   > (load-il "../../examples/irreducible_loop_1.il")
+  > (log-level debug)
   > (log-level)
   > (run-transforms "irreducible-loops")
   > EOF
