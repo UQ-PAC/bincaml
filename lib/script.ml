@@ -26,6 +26,11 @@ module Sexp = Sexp.Make (SexpLoc)
 
 type errpos = { pos : SexpLoc.loc list; inp : Pp_loc.Input.t }
 
+let errpos_to_error_loc ?fname { inp; pos } =
+  let name = Option.get_or ~default:"script" fname in
+  let pos = List.map (fun (a, b) -> Errors.PPPosition (a, b)) pos in
+  Errors.OtherFile { input = inp; locations = pos; name }
+
 exception ReplError of { msg : string; cmd : string; loc : errpos option }
 
 let print_repl_error = function
@@ -45,6 +50,17 @@ let print_repl_error = function
       in
       s
   | _ -> failwith ""
+
+let conv_repl_error f =
+  Errors.protect_with_info
+    (function
+      | ReplError { msg; cmd; loc = None } ->
+          Some (Errors.error (msg ^ " in cmd (" ^ cmd ^ ")") Error)
+      | ReplError { msg; cmd; loc = Some pos } ->
+          let here = errpos_to_error_loc pos in
+          Some (Errors.error ~here (msg ^ " in cmd (" ^ cmd ^ ")") Unhandled)
+      | o -> None)
+    f
 
 let printer () =
   Printexc.register_printer (function
@@ -182,16 +198,15 @@ let chc_dump_clauses st args =
 
 let load_il st args =
   let largs = P.(list string args) in
-  try
-    List.fold_left
-      (fun acc fname ->
-        let st = Loader.Loadir.ast_of_fname ?lst:acc.load_st fname in
-        { acc with load_st = Some st })
-      { st with load_st = None } largs
-  with (Loader.Loadir.ILBParseError _ | Loader.Loadir.LoadError _) as e ->
-    let msg = Loader.Loadir.show_ilbparseerror e in
-    raise
-      (ReplError { msg; cmd = "load-il " ^ Sexp.to_string args; loc = None })
+  let cmd = "load-il " ^ Sexp.to_string args in
+  Errors.(update_error (push_message @@ error_message cmd Errors.InputError))
+    (fun () ->
+      Errors.wrap_error (fun () ->
+          List.fold_left
+            (fun acc fname ->
+              let st = Loader.Loadir.ast_of_fname ?lst:acc.load_st fname in
+              { acc with load_st = Some st })
+            { st with load_st = None } largs))
 
 let run_transform st args =
   let args = P.(list string args) in
@@ -436,8 +451,7 @@ and atom_cmd ?(cmds = default_cmds) ?(echo_cmd = true) st
               let st = f st args in
               let st = { st with history = i_command :: st.history } in
               st
-          | None ->
-              raise (ReplError { msg = "not a command."; loc = None; cmd })))
+          | None -> Errors.raise_error "not a command." Error))
 
 let of_channel ?st c =
   let st = Option.get_or ~default:init_st st in
@@ -447,6 +461,7 @@ let of_channel ?st c =
   List.fold_left of_cmd st i
 
 let of_chan_2 ?fname ?st channel =
+  conv_repl_error @@ fun () ->
   let lbuf = Lexing.from_channel ~with_positions:true channel in
   let s = Sexp.Decoder.of_lexbuf lbuf in
   let st = ref (Option.get_or ~default:init_st st) in
@@ -455,34 +470,22 @@ let of_chan_2 ?fname ?st channel =
     |> Option.get_or ~default:(Pp_loc.Input.in_channel channel)
   in
   while
-    let b : Sexp.loc option = Sexp.Decoder.last_loc s in
     let sexp = Sexp.Decoder.next s in
     let e : Sexp.loc option = Sexp.Decoder.last_loc s in
-    let loc =
-      match (b, e) with
-      | Some b, Some e ->
-          Some { pos = [ e ]; inp = Pp_loc.Input.in_channel channel }
-      | _, Some e -> Some { pos = [ e ]; inp }
-      | Some e, _ -> Some { pos = [ e ]; inp }
-      | None, None -> None
-    in
+    let loc = match e with Some e -> Some { pos = [ e ]; inp } | _ -> None in
+    let here = Option.map (errpos_to_error_loc ?fname) loc in
     match sexp with
-    | Yield sexp -> (
-        try
+    | Yield sexp ->
+        let f () =
           st := of_cmd !st sexp;
           true
-        with
-        | ReplError { msg; cmd; loc = None } ->
-            raise (ReplError { msg; cmd; loc })
-        | err ->
-            Logs.debug (fun m -> m "%s" (Printexc.get_backtrace ()));
-            raise
-              (ReplError
-                 {
-                   msg = Printexc.to_string err;
-                   loc;
-                   cmd = Sexp.to_string sexp;
-                 }))
+        in
+        Errors.protect_with_info
+          (function
+            | ReplError { msg; cmd; loc = None } ->
+                Some (Errors.error ?here (msg ^ " in cmd " ^ cmd) Error)
+            | err -> Some (Errors.error_of_exn ?here err))
+          f
     | Fail msg -> raise (ReplError { msg; loc; cmd = "" })
     | End -> false
   do
@@ -491,6 +494,7 @@ let of_chan_2 ?fname ?st channel =
   !st
 
 let of_str st (e : string) =
+  conv_repl_error @@ fun () ->
   let str_comment =
     try String.index_from e 0 ';' with Not_found -> String.length e
   in

@@ -602,7 +602,7 @@ module BasilASTLoader = struct
     | Attr_Str s -> `String (trans_str s)
 
   and trans_attrib_set ~binds p_st (atrs : attribSet) :
-      Bincaml_util.Errors.loc option * Attrib.attrib_map =
+      Errors.loc option * Attrib.attrib_map =
     match atrs with
     | AttribSet_Empty -> (None, StringMap.empty)
     | AttribSet_Some (BeginRec (l, _), attrKeyValue, EndRec (r, _)) ->
@@ -1475,59 +1475,37 @@ end
 
 exception ILBParseError of { input : Pp_loc.Input.t; lexbuf : Lexing.lexbuf }
 
-let format_ploc input =
- fun f ->
-  Pp_loc.setup_highlight_tags f
-    ~single_line_underline:
-      {
-        open_tag =
-          (fun _ -> Format.ANSI_codes.string_of_style_list [ `Bold; `FG `Red ]);
-        close_tag = (fun _ -> Format.ANSI_codes.string_of_style `Reset);
-      }
-    ();
+let () = Errors.regprinter ()
 
-  Pp_loc.pp ~input ~max_lines:5 f
-
-let show_ilbparseerror e =
-  match e with
-  | LoadError { input = None; msg } -> msg
-  | LoadError
-      { input = Some input; msg; token_char_offset_range = Some (btok, etok) }
-    ->
-      let o =
-        Format.asprintf "Error: %s%a%a" msg Format.pp_print_newline ()
-          (format_ploc input)
-          [ (Pp_loc.Position.of_offset btok, Pp_loc.Position.of_offset etok) ]
-      in
-      o
-  | ILBParseError { input; lexbuf } ->
-      let loc =
-        [
-          ( Pp_loc.Position.of_lexing @@ Lexing.lexeme_start_p lexbuf,
-            Pp_loc.Position.of_lexing @@ Lexing.lexeme_end_p lexbuf );
-        ]
-      in
-      let fname = (Lexing.lexeme_end_p lexbuf).pos_fname in
-      let lnum = (Lexing.lexeme_end_p lexbuf).pos_lnum in
-      let o =
-        Format.asprintf "Parse error:  %s:%d%a%a" fname lnum
-          Format.pp_print_newline () (format_ploc input) loc
-      in
-      o
-  | _ -> failwith "diff error"
-
-let () =
-  Printexc.register_printer (function
-    | BasilIR.BNFC_Util.Parse_error (b, e) ->
-        let fname = b.pos_fname in
-        let x = b.pos_lnum in
-        let col = b.pos_cnum - b.pos_bol in
-        Some (Printf.sprintf "Parse error in \"%s\" line %d col %d" fname x col)
-    | ILBParseError _ as e -> Some (show_ilbparseerror e)
-    | LoadError _ as e -> Some (show_ilbparseerror e)
-    | _ -> None (* for other exceptions *))
+let conv_error_info (f : unit -> 'a) =
+  Errors.protect_with_info
+    (function
+      | BasilIR.BNFC_Util.Parse_error (b, e) ->
+          let input_location =
+            Errors.location_position ~msg:"error token" (b, e)
+          in
+          Some
+            (Errors.error ~input_location "bnfc parse error" Errors.InputError)
+      | ILBParseError { input; lexbuf } ->
+          let input_location =
+            Errors.location_lexing ~msg:"next token" lexbuf
+          in
+          Some (Errors.error ~input ~input_location "parse error" InputError)
+      | LoadError { token_char_offset_range; msg; input = i } ->
+          let input_location =
+            Option.map (Errors.location_loc ~msg) token_char_offset_range
+          in
+          Some (Errors.error ?input_location "load error" InputError)
+      | Errors.BincamlError e -> Some e
+      | other ->
+          Some
+            (Errors.error_of_exn other
+            |> Errors.push_message
+                 (Errors.error_message "parse error" InputError)))
+    f
 
 let concrete_prog_ast_of_channel ?input ?filename c =
+  conv_error_info @@ fun () ->
   let open BasilIR in
   let input = Option.get_or ~default:(Pp_loc.Input.in_channel c) input in
   let lexbuf = Lexing.from_channel ~with_positions:true c in
@@ -1537,6 +1515,7 @@ let concrete_prog_ast_of_channel ?input ?filename c =
 
 let concrete_prog_ast_of_string ?input ?filename str =
   let open BasilIR in
+  conv_error_info @@ fun () ->
   let input = Option.get_or ~default:(Pp_loc.Input.string str) input in
   let lexbuf = Lexing.from_string ~with_positions:true str in
   filename |> Option.iter (fun f -> Lexing.set_filename lexbuf f);
@@ -1544,6 +1523,7 @@ let concrete_prog_ast_of_string ?input ?filename str =
   with ParBasilIR.Error -> raise (ILBParseError { input; lexbuf })
 
 let parse_proc ?input lexbuf =
+  conv_error_info @@ fun () ->
   let open BasilIR in
   try ParBasilIR.pDecl LexBasilIR.token lexbuf
   with ParBasilIR.Error -> (
@@ -1554,6 +1534,7 @@ let parse_proc ?input lexbuf =
     | None -> raise (BNFC_Util.Parse_error (start_pos, end_pos)))
 
 let parse_expr ?input lexbuf =
+  conv_error_info @@ fun () ->
   let open BasilIR in
   try ParBasilIR.pExpr LexBasilIR.token lexbuf
   with ParBasilIR.Error -> (
@@ -1564,17 +1545,20 @@ let parse_expr ?input lexbuf =
     | None -> raise (BNFC_Util.Parse_error (start_pos, end_pos)))
 
 let parse_proc_string st c =
+  conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_string ~with_positions:true c in
   let input = Pp_loc.Input.string c in
   let proc = parse_proc ~input lexbuf in
   BasilASTLoader.trans_definition st proc
 
 let parse_proc_channel st c =
+  conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_channel ~with_positions:true c in
   let proc = parse_proc lexbuf in
   BasilASTLoader.trans_definition st proc
 
 let parse_expr_string s =
+  conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_string ~with_positions:true s in
   let input = Pp_loc.Input.string s in
   let e = parse_expr ~input lexbuf in
@@ -1582,6 +1566,7 @@ let parse_expr_string s =
 
 let protect_parse parsefun =
   let parse input lexbuf =
+    conv_error_info @@ fun () ->
     let open BasilIR in
     try parsefun LexBasilIR.token lexbuf
     with ParBasilIR.Error -> (
@@ -1596,6 +1581,7 @@ let protect_parse parsefun =
 (** Loads a single block in isolation in a proceudre and returns it, does not
     support procedure calls or returns *)
 let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
+  conv_error_info @@ fun () ->
   let block = protect_parse BasilIR.ParBasilIR.pBlock input lexbuf in
   let prog, proc = Program.create_single_proc ~name:proc () in
   let st = { prog; params_order = Hashtbl.create 30; curr_proc = Some proc } in
@@ -1636,16 +1622,19 @@ let load_single_block ?proc ~input lexbuf =
   block
 
 let parse_single_block_proc ?proc s =
+  conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_string ~with_positions:true s in
   let input = Pp_loc.Input.string s in
   load_single_block_proc ?proc ~input lexbuf
 
 let parse_single_block s : Program.bloc =
+  conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_string ~with_positions:true s in
   let input = Pp_loc.Input.string s in
   load_single_block ~input lexbuf
 
 let ast_of_concrete_ast ?(lst : load_st option) ~name m =
+  conv_error_info @@ fun () ->
   Trace_core.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->
   let e = BasilASTLoader.trans_program ?lst ~name m in
   Program.procs e.prog |> Iter.map snd |> Iter.iter Lang.Check.wf_checks;
@@ -1653,6 +1642,7 @@ let ast_of_concrete_ast ?(lst : load_st option) ~name m =
 
 let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__
     string =
+  conv_error_info @@ fun () ->
   let name =
     let open Option.Infix in
     let* line = __LINE__ >|= Int.to_string in
@@ -1668,6 +1658,7 @@ let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__
     raise (LoadError { input = Some input; token_char_offset_range; msg })
 
 let ast_of_channel ?(lst : load_st option) ?input fname c =
+  conv_error_info @@ fun () ->
   let m =
     Trace_core.with_span ~__FILE__ ~__LINE__ "load-concrete-ast" @@ fun f ->
     let m = concrete_prog_ast_of_channel ?input ~filename:fname c in
@@ -1678,6 +1669,7 @@ let ast_of_channel ?(lst : load_st option) ?input fname c =
     raise (LoadError { input; token_char_offset_range; msg })
 
 let ast_of_fname ?(lst : load_st option) fname =
+  conv_error_info @@ fun () ->
   IO.with_in fname (fun c ->
       ast_of_channel ?lst ~input:(Pp_loc.Input.file fname) fname c)
 
@@ -1707,10 +1699,8 @@ proc @main_4196260 () -> ()
   [%expect.unreachable]
 [@@expect.uncaught_exn
   {|
-  ( "Error: no such block: %main_7\
-   \n12 |     goto(%main_7, %main_11);\
-   \n              \027[1;31m^^^^^^^\027[0m\
-   \n")
+  ( "load error : input error\
+   \nno such block: %main_7 at ")
   |}]
 
 let%expect_test "missing proc" =
@@ -1735,10 +1725,8 @@ proc @main_4196260 () -> ()
   [%expect.unreachable]
 [@@expect.uncaught_exn
   {|
-  ( "Error: no such procedure: @cat_4198032\
-   \n7 |     call @cat_4198032();\
-   \n             \027[1;31m^^^^^^^^^^^^\027[0m\
-   \n")
+  ( "load error : input error\
+   \nno such procedure: @cat_4198032 at ")
   |}]
 
 let%expect_test "syntax error" =
@@ -1765,7 +1753,8 @@ proc @main_4196260 () -> ()
   [%expect.unreachable]
 [@@expect.uncaught_exn
   {|
-  ( "Parse error:  <string>:8\
+  ( "parse error : input error\
+   \nnext token\
    \n8 |     :bv1 := 1:bv1;\
    \n        \027[1;31m^\027[0m\
    \n")

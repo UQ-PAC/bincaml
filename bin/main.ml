@@ -72,8 +72,8 @@ let repl ~verb ~echo_cmd =
             let fname = Script.P.(singleton string c) in
             CCIO.with_in fname (fun c ->
                 try Script.of_chan_2 ~fname ~st c
-                with Script.ReplError _ as exn ->
-                  print_endline @@ Script.print_repl_error exn;
+                with exn ->
+                  print_endline @@ Printexc.to_string exn;
                   st)),
           "fname.sexp",
           "Interpret a script" );
@@ -231,9 +231,11 @@ let run_script ~verb fname =
   if verb then Logs.set_level (Some Logs.Debug);
   with_in_or_stdin fname @@ fun chan ->
   try
-    let _ = Script.of_chan_2 chan in
+    let _ = Script.of_chan_2 ~fname chan in
     Ok ()
-  with e -> Error (Printexc.to_string e)
+  with e ->
+    Logs.debug (fun m -> m "%s" @@ Printexc.get_backtrace ());
+    Error (Printexc.to_string e)
 
 (*
 let callgraph_cmd =
