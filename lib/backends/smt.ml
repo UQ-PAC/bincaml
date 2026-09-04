@@ -49,25 +49,6 @@ let rvar_map (program : Program.t) =
             (v, sexp))
   |> VarMap.of_iter
 
-(** Remove all variable declarations from a builder which conflict with a sort
-    declaration. *)
-let dedup_decls (builder : SMTLib2.builder) : SMTLib2.builder =
-  let removals =
-    VarMap.to_iter builder.var_decls
-    |> Iter.filter_map (fun (var, _) ->
-        match Var.typ var with
-        | Sort (name, _) -> Some (Var.copy ~typ:(Types.Variable name) var)
-        | _ -> None)
-    |> VarSet.of_iter
-  in
-
-  {
-    builder with
-    var_decls =
-      builder.var_decls
-      |> VarMap.filter (fun var _ -> not @@ VarSet.mem var removals);
-  }
-
 let visit_stmt procedure rvars = function
   | Stmt.Instr_Assert { body } as stmt ->
       (* Verify negation of assertion is unsat. *)
@@ -131,9 +112,12 @@ let visit_program (program : Program.t) =
   let program =
     (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false) program
   in
+  let g = Program.DependencyGraph.make_dependency_graph ~rev:true program in
+  let module Topo = Graph.Topological.Make (Program.DependencyGraph.G) in
   let rvars = rvar_map program in
-  Program.declarations program
-  |> Iter.map snd
+
+  Iter.from_iter (flip Topo.iter g)
+  |> Iter.filter_map (flip Program.get_decl program)
   |> flip Iter.for_each (function
     | Program.Procedure { definition } ->
         visit_procedure ~rvars program definition
@@ -146,31 +130,59 @@ let smt_offline chan (program : Program.t) : unit =
   let builder = ref SMTLib2.empty in
   (try visit_program program with
   | effect Push b, k ->
+      (* Push the builder as is. *)
       builder := SMTLib2.append !builder b;
       Effect.Deep.continue k ()
   | effect Verify (b, c), k ->
+      (* Push, wrapped in a scope + check sat. *)
       builder := snd @@ SMTLib2.push !builder;
       builder := SMTLib2.append !builder b;
       builder := snd @@ SMTLib2.check_sat !builder;
       builder := snd @@ SMTLib2.pop !builder;
       Effect.Deep.continue k ());
-  let p =
-    Expr_smt.SMTLib2.to_sexp ~set_logic:true !builder
-    |> Iter.map (Sexp.to_string %> text)
-    |> Iter.to_list |> append_nl
-  in
-  flush chan;
+
+  (* Pretty print the output. *)
   let fmt = Format.formatter_of_out_channel chan in
-  Containers_pp.Pretty.to_format ~width:80 fmt p;
+  Expr_smt.SMTLib2.to_sexp ~set_logic:true !builder
+  |> flip Iter.for_each (fun s ->
+      Containers_pp.pp fmt (Sexp.to_string s |> text);
+      Containers_pp.pp fmt newline);
+  flush chan;
   Format.flush fmt ()
+
+(** check satisfiability on the live solver, returning the result and printing
+    failures + counterexamples to the output channel. *)
+let check_sat chan stmt solver proc program =
+  let result = Smt.Solver.check solver in
+  (match result with
+  | (Unknown : Smt.Solver.result) ->
+      Printf.fprintf chan "\nUnknown Assertion:\n%s\n"
+        (Stmt.to_string Var.pretty Var.pretty BasilExpr.pretty stmt)
+  | Sat -> (
+      Printf.fprintf chan "\nFailing Assertion: %s\n"
+        (Stmt.to_string Var.pretty Var.pretty BasilExpr.pretty stmt);
+      Printf.fprintf chan "Belonging to procedure: %s\n"
+        (ID.name @@ Procedure.id proc);
+      Printf.fprintf chan "Counterexample:\n";
+      let model = Smt.Solver.get_model solver in
+      match model with
+      | `Atom a -> Printf.fprintf chan "%s\n" (Sexp.to_string model)
+      | `List l ->
+          l |> List.to_iter
+          |> Iter.filter (function
+            | `List (`Atom "define-fun" :: `Atom var :: _ :: `Atom typ :: _) ->
+                Procedure.lookup_local_decl proc var |> Option.is_some
+                || Program.get_decl_by_name var program |> Option.is_some
+            | _ -> false)
+          |> flip Iter.for_each (fun s ->
+              Printf.fprintf chan "%s\n" (Sexp.to_string s)))
+  | Unsat -> ());
+  result
 
 (** Online SMT backend. Starts up a solver and feeds program one statement at a
     time to it. Prints more useful messages for failing VCs and tracks stats for
     entire procedures. *)
 let smt_online chan (program : Program.t) : unit =
-  let module M = Map.Make (struct
-    type t = Smt.Solver.result [@@deriving eq, ord]
-  end) in
   flush chan;
   let solver =
     Bincaml_util.Smt.Solver.create
@@ -179,48 +191,50 @@ let smt_online chan (program : Program.t) : unit =
         log = Bincaml_util.Smt.Config.printf_log;
       }
   in
+
+  (* Track a map of procedure,result to number of occurences. *)
+  let module M = Map.Make (struct
+    type t = Smt.Solver.result [@@deriving eq, ord]
+  end) in
   let results : int M.t IDMap.t ref = ref IDMap.empty in
+
+  (* Track declare-const sexps that have already been sent to avoid
+     repeating them.*)
+  let module DeclSet = Set.Make (struct
+    type t = string * string [@@deriving eq, ord]
+  end) in
+  let declared = ref DeclSet.empty in
+
+  let filter_declared = function
+    | `List [ `Atom "declare-const"; `Atom name; typ ] ->
+        let typ = Sexp.to_string typ in
+        if DeclSet.mem (name, typ) !declared then false
+        else (
+          declared := DeclSet.add (name, typ) !declared;
+          true)
+    | _ -> true
+  in
+
   (try visit_program program with
   | effect Push b, k ->
       if
         SMTLib2.to_sexp ~set_logic:false b
+        |> Iter.filter filter_declared
         |> Iter.map (Smt.Solver.add_sexp solver)
         |> Iter.for_all (function
           | `List (`Atom "error" :: body) as s ->
               Printf.fprintf chan "solver error: %s" (CCSexp.to_string s);
+              (* Exit early on any error. *)
               false
           | _ -> true)
       then Effect.Deep.continue k ()
   | effect Verify (b, (proc, stmt)), k ->
       Smt.Solver.push solver;
       SMTLib2.commands_to_sexp b
-      |> Iter.map (Smt.Solver.add_sexp solver)
-      |> Iter.iter (const ());
-      let result = Smt.Solver.check solver in
-      (match result with
-      | Unknown ->
-          Printf.fprintf chan "\nUnknown Assertion:\n%s\n"
-            (Stmt.to_string Var.pretty Var.pretty BasilExpr.pretty stmt)
-      | Sat -> (
-          Printf.fprintf chan "\nFailing Assertion: %s\n"
-            (Stmt.to_string Var.pretty Var.pretty BasilExpr.pretty stmt);
-          Printf.fprintf chan "Belonging to procedure: %s\n"
-            (ID.name @@ Procedure.id proc);
-          Printf.fprintf chan "Counterexample:\n";
-          let model = Smt.Solver.get_model solver in
-          match model with
-          | `Atom a -> Printf.fprintf chan "%s\n" (Sexp.to_string model)
-          | `List l ->
-              l |> List.to_iter
-              |> Iter.filter (function
-                | `List (`Atom "define-fun" :: `Atom var :: _ :: `Atom typ :: _)
-                  ->
-                    Procedure.lookup_local_decl proc var |> Option.is_some
-                    || Program.get_decl_by_name var program |> Option.is_some
-                | _ -> false)
-              |> flip Iter.for_each (fun s ->
-                  Printf.fprintf chan "%s\n" (Sexp.to_string s)))
-      | Unsat -> ());
+      |> Iter.filter filter_declared
+      |> Iter.iter (Smt.Solver.add_sexp solver %> ignore);
+      let result = check_sat chan stmt solver proc program in
+      (* Increment the counter for procedure/result type: *)
       results :=
         IDMap.update (Procedure.id proc)
           Option.(
@@ -229,10 +243,14 @@ let smt_online chan (program : Program.t) : unit =
           !results;
       Smt.Solver.pop solver;
       Effect.Deep.continue k ());
-  Smt.Solver.stop solver;
-  flip IDMap.iter !results (fun id map ->
+
+  (* Print out the counts of sat/unsat/unknown for each procedure. *)
+  !results
+  |> IDMap.iter (fun id map ->
       Printf.fprintf chan "Procedure %s verified with:\n" (ID.name id);
       [ Unknown; Sat; Unsat ]
       |> List.iter (fun k ->
           M.get_or ~default:0 k map
-          |> Printf.fprintf chan "\t %s: %d\n" (Smt.Solver.show_result k)))
+          |> Printf.fprintf chan "\t %s: %d\n" (Smt.Solver.show_result k)));
+
+  Smt.Solver.stop solver

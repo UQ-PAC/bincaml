@@ -376,7 +376,7 @@ module DependencyGraph = struct
 
   module G = Graph.Persistent.Digraph.Concrete (Vert)
 
-  (** Return ids of all declarations immediately depended on by decl. *)
+  (** Get all type declarations immediately depended on by this type. *)
   let rec type_depends_on (prog : t) : Types.t -> IDSet.t = function
     | Map (k, v) ->
         IDSet.union (type_depends_on prog k) (type_depends_on prog v)
@@ -399,16 +399,130 @@ module DependencyGraph = struct
         |> Option.map_or IDSet.singleton ~default:IDSet.empty
     | _ -> IDSet.empty
 
-  let var_depends_on (prog : t) (var : Var.t) : IDSet.t =
-    type_depends_on prog @@ Var.typ var
+  (** Get all type declarations immediately depended on by this variable.
+      Include this variable if include_self is true and the variable is global.
+  *)
+  let var_depends_on ?(include_self = true) (prog : t) (var : Var.t) : IDSet.t =
+    IDSet.union
+      (type_depends_on prog @@ Var.typ var)
+      (if include_self && Var.is_global var then
+         get_decl_by_name_id (Var.name var) prog
+         |> Option.flat_map (function
+           | id, Variable _ | id, Function _ -> Some id
+           | _ -> None)
+         |> Option.map_or IDSet.singleton ~default:IDSet.empty
+       else IDSet.empty)
 
-  let expr_depends_on (prog : t) (e : e) : IDSet.t = IDSet.empty
-  let stmt_depends_on (prog : t) (stmt : stmt) : IDSet.t = IDSet.empty
-  let proc_depends_on (prog : t) (proc : proc) : IDSet.t = IDSet.empty
+  (** Get all declarations depended on by vars in a phi. *)
+  let phi_depends_on (prog : t) (phi : Var.t Block.phi) : IDSet.t =
+    phi.rhs |> List.to_iter |> Iter.map snd
+    |> Iter.map (var_depends_on prog)
+    |> Iter.fold IDSet.union (var_depends_on prog phi.lhs)
+
+  (** Get all declarations depended on by an expr. *)
+  let rec expr_depends_on (prog : t) (e : e) : IDSet.t =
+    match BasilExpr.unfix e with
+    | RVar { id; typ } ->
+        IDSet.union (var_depends_on prog id) (type_depends_on prog typ)
+    | Constant { typ } -> type_depends_on prog typ
+    | UnaryExpr { arg; typ } ->
+        IDSet.union (expr_depends_on prog arg) (type_depends_on prog typ)
+    | BinaryExpr { arg1; arg2; typ } ->
+        [
+          expr_depends_on prog arg1;
+          expr_depends_on prog arg2;
+          type_depends_on prog typ;
+        ]
+        |> List.fold_left IDSet.union IDSet.empty
+    | ApplyIntrin { args; typ } ->
+        args
+        |> List.map (expr_depends_on prog)
+        |> List.fold_left IDSet.union (type_depends_on prog typ)
+    | ApplyFun { func; args; typ } ->
+        func :: args
+        |> List.map (expr_depends_on prog)
+        |> List.fold_left IDSet.union (type_depends_on prog typ)
+    | Lambda { triggers; bound_vars; in_body; typ } ->
+        [
+          triggers |> List.flatten |> List.map (expr_depends_on prog);
+          bound_vars |> List.map (var_depends_on prog);
+          [ expr_depends_on prog in_body ];
+        ]
+        |> List.flatten
+        |> List.fold_left IDSet.union (type_depends_on prog typ)
+    | Let { bound_vars; in_body; typ } -> IDSet.empty
+
+  (** Get all declarations depended on by a stmt. *)
+  let stmt_depends_on (prog : t) (stmt : stmt) : IDSet.t =
+    match stmt with
+    | Instr_Assign { al } ->
+        al
+        |> List.map
+             (Pair.map (var_depends_on prog) (expr_depends_on prog)
+             %> Pair.merge IDSet.union)
+        |> List.fold_left IDSet.union IDSet.empty
+    | Instr_Assert { body } -> expr_depends_on prog body
+    | Instr_Assume { body; branch } -> expr_depends_on prog body
+    | Instr_Load { lhs; rhs; addr } ->
+        [
+          var_depends_on prog lhs;
+          var_depends_on prog rhs;
+          (match addr with
+          | Addr { addr } -> expr_depends_on prog addr
+          | _ -> IDSet.empty);
+        ]
+        |> List.fold_left IDSet.union IDSet.empty
+    | Instr_Store { lhs; rhs; value; addr } ->
+        [
+          var_depends_on prog lhs;
+          var_depends_on prog rhs;
+          (match addr with
+          | Addr { addr } -> expr_depends_on prog addr
+          | _ -> IDSet.empty);
+          expr_depends_on prog value;
+        ]
+        |> List.fold_left IDSet.union IDSet.empty
+    | Instr_IntrinCall { lhs; name; args } ->
+        [
+          List.map (var_depends_on prog) lhs;
+          List.map (expr_depends_on prog) args;
+        ]
+        |> List.flatten
+        |> List.fold_left IDSet.union IDSet.empty
+    | Instr_Call { lhs; procid; args } ->
+        [
+          StringMap.values lhs |> Iter.map (var_depends_on prog);
+          StringMap.values args |> Iter.map (expr_depends_on prog);
+          Iter.singleton (IDSet.singleton procid);
+        ]
+        |> List.to_iter |> Iter.concat
+        |> Iter.fold IDSet.union IDSet.empty
+    | Instr_IndirectCall { target } -> expr_depends_on prog target
+
+  (** Get all declarations depended on by a procedure. *)
+  let proc_depends_on (prog : t) (proc : proc) : IDSet.t =
+    let deps =
+      [
+        Procedure.formal_in_params proc |> StringMap.values;
+        Procedure.formal_out_params proc |> StringMap.values;
+        Procedure.local_decls proc |> Hashtbl.values;
+      ]
+      |> List.to_iter |> Iter.concat
+      |> Iter.map (var_depends_on prog)
+      |> Iter.fold IDSet.union IDSet.empty
+    in
+    Procedure.iter_blocks proc |> Iter.map snd
+    |> Iter.fold
+         (Block.fold_forwards
+            ~phi:(fun a ->
+              List.map (phi_depends_on prog) %> List.fold_left IDSet.union a)
+            ~f:(fun a stmt -> IDSet.union a (stmt_depends_on prog stmt)))
+         deps
 
   (** Return ids of all declarations immediately depended on by decl. *)
   let decl_depends_on (prog : t) : declaration -> IDSet.t = function
-    | Variable { binding; classification } -> var_depends_on prog binding
+    | Variable { binding; classification } ->
+        var_depends_on ~include_self:false prog binding
     | Type { binding; typ } -> type_depends_on prog typ
     | Procedure { definition } -> proc_depends_on prog definition
     | Function { binding; definition = Axiom body | Function body } ->
@@ -416,13 +530,17 @@ module DependencyGraph = struct
     | Function { binding; definition = Uninterpreted } ->
         var_depends_on prog binding
 
-  let make_dependency_graph (prog : t) : G.t =
+  let make_dependency_graph ?(rev = false) (prog : t) : G.t =
     declarations prog
     |> Iter.map @@ Pair.map_snd @@ decl_depends_on prog
     |> Iter.fold
          (fun acc (id, children) ->
            G.add_vertex acc id
-           |> IDSet.fold (fun child acc -> G.add_edge acc id child) children)
+           |> IDSet.fold
+                (fun child acc ->
+                  if rev then G.add_edge acc child id
+                  else G.add_edge acc id child)
+                children)
          G.empty
 end
 
