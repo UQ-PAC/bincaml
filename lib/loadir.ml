@@ -602,7 +602,7 @@ module BasilASTLoader = struct
     | Attr_Str s -> `String (trans_str s)
 
   and trans_attrib_set ~binds p_st (atrs : attribSet) :
-      Attrib.loc option * Attrib.attrib_map =
+      Bincaml_util.Errors.loc option * Attrib.attrib_map =
     match atrs with
     | AttribSet_Empty -> (None, StringMap.empty)
     | AttribSet_Some (BeginRec (l, _), attrKeyValue, EndRec (r, _)) ->
