@@ -1,4 +1,5 @@
 open Common
+open Bincaml_util.Errors
 
 (** associative datastructure for attributes *)
 
@@ -49,9 +50,6 @@ let to_string ?show_internal e =
   attrib_pretty ?show_internal e |> Containers_pp.Pretty.to_string ~width:80
 
 let empty : attrib_map = StringMap.empty
-
-type loc = int * int
-(** a text token range; beginchar, endchar*)
 
 let attr_of_loc l =
   let s, e = l in
