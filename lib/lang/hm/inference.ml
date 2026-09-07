@@ -113,14 +113,11 @@ let scheme_of_intrin st ?(visit_constraint = fun a -> ()) (gen : ID.generator)
   | `Cases -> fv ()
 
 let add_err_ctx loc f =
-  match loc with
-  | None -> f ()
-  | Some loc ->
-      Errors.update_error (Errors.update_message ~input_location:loc) f
+  match loc with None -> f () | Some loc -> Errors.update_ctx ~ctx_info:loc f
 
 let loc_e e =
   Expr.BasilExpr.unfix e |> Expr.AbstractExpr.get_attrib |> Attrib.get_location
-  |> Option.map (fun l -> Errors.location_loc ~msg:"expression" l)
+  |> Option.map (fun l -> Errors.location_loc ~msg:"infer expression" l)
 
 let do_infer st ~visit_constraint
     (infer :
@@ -199,14 +196,14 @@ let rec infer_expr st visit_constraint ~univ (hr : Lexing.position) e =
  fun (c : scheme TypeExpr.TCtx.t) ->
   Logs.debug (fun m ->
       m "%s" @@ "infer " ^ plpos hr ^ " " ^ Expr.BasilExpr.to_string e);
-  let t =
-    Errors.update_error
-      (Errors.push_message
-      @@ Errors.error_message (Expr.BasilExpr.to_string e) Errors.TypeError)
-    @@ fun () ->
+  let f =
+   fun () ->
     do_infer st ~visit_constraint (infer_expr st visit_constraint) univ hr e c
   in
-  t
+  let m =
+    Errors.context_message ~msg:"infer expr" (Expr.BasilExpr.to_string e)
+  in
+  f ()
 
 let infer st visit_constraint ~univ (hr : Lexing.position) e
     (c : scheme TypeExpr.TCtx.t) =
@@ -337,14 +334,13 @@ let infer_stmt st vc p univ ctx s =
   let input_location =
     Stmt.attrib s |> Attrib.get_location
     |> Option.map (fun l -> Errors.location_loc ~msg:"statement" l)
+    |> Option.get_or
+         ~default:
+           (Errors.context_message ~msg:"statment"
+              (Stmt.to_string Var.pretty Var.pretty Expr.BasilExpr.pretty s))
   in
-  Errors.update_error
-    (Errors.push_message
-    @@ Errors.error_message ?input_location
-         ("statement:"
-         ^ Stmt.to_string Var.pretty Var.pretty Expr.BasilExpr.pretty s)
-         TypeError)
-  @@ fun () -> do_infer_stmt st vc p univ ctx s
+  Errors.update_ctx ~ctx_info:input_location @@ fun () ->
+  do_infer_stmt st vc p univ ctx s
 
 let infer_block st vc p univ ctx (b : Program.bloc) =
   let _ = infer_phi st vc univ ctx b.phis in

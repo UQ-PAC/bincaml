@@ -1479,27 +1479,20 @@ let conv_error_info (f : unit -> 'a) =
   Errors.protect_with_info
     (function
       | BasilIR.BNFC_Util.Parse_error (b, e) ->
-          let input_location =
-            Errors.location_position ~msg:"error token" (b, e)
+          let ctx_info =
+            Errors.location_position ~msg:"error token" (b, Some e)
           in
-          Some
-            (Errors.error ~input_location "bnfc parse error" Errors.InputError)
+          Some (Errors.error ~ctx_info "bnfc parse error" Errors.InputError)
       | ILBParseError { input; lexbuf } ->
-          let input_location =
-            Errors.location_lexing ~msg:"next token" lexbuf
-          in
-          Some (Errors.error ~input ~input_location "parse error" InputError)
+          let ctx_info = Errors.location_lexing ~msg:"next token" lexbuf in
+          Some (Errors.error ~input ~ctx_info "parse error" InputError)
       | LoadError { token_char_offset_range; msg; input = i } ->
-          let input_location =
+          let ctx_info =
             Option.map (Errors.location_loc ~msg) token_char_offset_range
           in
-          Some (Errors.error ?input_location "load error" InputError)
+          Some (Errors.error ?ctx_info "load error" InputError)
       | Errors.BincamlError e -> Some e
-      | other ->
-          Some
-            (Errors.error_of_exn other
-            |> Errors.push_message
-                 (Errors.error_message "parse error" InputError)))
+      | other -> Some (Errors.error_of_exn other))
     f
 
 let concrete_prog_ast_of_channel ?input ?filename c =
@@ -1695,9 +1688,10 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
-  ( "load error : input error\
+[@@expect.uncaught_exn {|
+  ( "Input error: load error\
+   \n\
+   \nRelated context:\
    \nno such block: %main_7 at ")
   |}]
 
@@ -1721,9 +1715,10 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
-  ( "load error : input error\
+[@@expect.uncaught_exn {|
+  ( "Input error: load error\
+   \n\
+   \nRelated context:\
    \nno such procedure: @cat_4198032 at ")
   |}]
 
@@ -1749,9 +1744,10 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
-  ( "parse error : input error\
+[@@expect.uncaught_exn {|
+  ( "Input error: parse error\
+   \n\
+   \nRelated context:\
    \nnext token\
    \n8 |     :bv1 := 1:bv1;\
    \n        \027[1;31m^\027[0m\

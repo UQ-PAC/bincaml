@@ -28,8 +28,9 @@ type errpos = { pos : SexpLoc.loc list; inp : Pp_loc.Input.t }
 
 let errpos_to_error_loc ?fname { inp; pos } =
   let name = Option.get_or ~default:"script" fname in
-  let pos = List.map (fun (a, b) -> Errors.PPPosition (a, b)) pos in
-  Errors.OtherFile { input = inp; locations = pos; name }
+  pos |> List.head_opt
+  |> Option.map @@ fun pos ->
+     Errors.location_pp_position ~input:(Input inp) ~msg:name pos
 
 exception ReplError of { msg : string; cmd : string; loc : errpos option }
 
@@ -58,7 +59,10 @@ let conv_repl_error f =
           Some (Errors.error (msg ^ " in cmd (" ^ cmd ^ ")") Error)
       | ReplError { msg; cmd; loc = Some pos } ->
           let here = errpos_to_error_loc pos in
-          Some (Errors.error ~here (msg ^ " in cmd (" ^ cmd ^ ")") Unhandled)
+          Some
+            (Errors.error ?ctx_info:here
+               (msg ^ " in cmd (" ^ cmd ^ ")")
+               Unhandled)
       | o -> None)
     f
 
@@ -218,7 +222,9 @@ let chc_dump_clauses st args =
 let load_il st args =
   let largs = P.(list string args) in
   let cmd = "load-il " ^ Sexp.to_string args in
-  Errors.(update_error (push_message @@ error_message cmd Errors.InputError))
+  Errors.(
+    update_error
+      (Errors.add_error_context ~ctx_info:(context_message ~msg:"command" cmd)))
     (fun () ->
       Errors.wrap_error (fun () ->
           List.fold_left
@@ -511,7 +517,7 @@ let of_chan_2 ?fname ?st channel =
       | Some e, Some _ -> Some { pos = [ e ]; inp }
       | _ -> None
     in
-    let here = Option.map (errpos_to_error_loc ?fname) loc in
+    let ctx_info = Option.bind loc (errpos_to_error_loc ?fname) in
     match sexp with
     | Yield sexp ->
         let f () =
@@ -521,8 +527,8 @@ let of_chan_2 ?fname ?st channel =
         Errors.protect_with_info
           (function
             | ReplError { msg; cmd; loc = None } ->
-                Some (Errors.error ?here (msg ^ " in cmd " ^ cmd) Error)
-            | err -> Some (Errors.error_of_exn ?here err))
+                Some (Errors.error ?ctx_info (msg ^ " in cmd " ^ cmd) Error)
+            | err -> Some (Errors.error_of_exn ?ctx_info err))
           f
     | Fail msg -> raise (ReplError { msg; loc; cmd = "" })
     | End -> false

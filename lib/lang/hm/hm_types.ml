@@ -4,7 +4,7 @@ open Common
 open Abstract_expr
 
 let type_err ?location msg =
-  Errors.BincamlError (Errors.error ?input_location:location msg TypeError)
+  Errors.BincamlError (Errors.error ?ctx_info:location msg TypeError)
 
 open struct
   let fix = TypeExpr.fix
@@ -108,10 +108,10 @@ let scheme_to_string = function
 
 let rec to_basil (t : TypeExpr.t) : Types.t =
   let wrapped e f =
-    Errors.update_error
-      (Errors.push_message
-      @@ Errors.error_message ("conversion of " ^ type_to_string @@ t) TypeError
-      )
+    Errors.update_ctx
+      ~ctx_info:
+        (Errors.context_message ~msg:"type converted to basil"
+           (type_to_string @@ t))
       f
   in
   let open Types in
