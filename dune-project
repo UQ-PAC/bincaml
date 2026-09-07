@@ -16,7 +16,10 @@
   "Alicia Michael <a.michael1@uq.edu.au>"
 )
 
-(maintainers "Alicia Michael <a.michael1@uq.edu.au>")
+(maintainers
+  "Kait Lam <kait.lam@uq.edu.au>"
+  "Alicia Michael <a.michael1@uq.edu.au>"
+)
 
 (license Apache-2.0)
 

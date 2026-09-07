@@ -3,7 +3,9 @@ opam-version: "2.0"
 version: "0.0"
 synopsis: "Program analysis tool."
 description: "A longer description"
-maintainer: ["Alicia Michael <a.michael1@uq.edu.au>"]
+maintainer: [
+  "Kait Lam <kait.lam@uq.edu.au>" "Alicia Michael <a.michael1@uq.edu.au>"
+]
 authors: [
   "Kait Lam <kait.lam@uq.edu.au>" "Alicia Michael <a.michael1@uq.edu.au>"
 ]
