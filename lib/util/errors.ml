@@ -189,9 +189,6 @@ let update_error info f =
     let bt = Printexc.get_raw_backtrace () in
     Printexc.raise_with_backtrace (BincamlError (info ex)) bt
 
-let update_ctx ?ctx_info ?input f =
-  update_error (add_error_context ?ctx_info ?input) f
-
 (** {3 printer}*)
 
 let format_location input =

@@ -1690,7 +1690,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Input error: load error\
    \n\
    \nRelated context:\
@@ -1717,7 +1718,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Input error: load error\
    \n\
    \nRelated context:\
@@ -1746,7 +1748,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Input error: parse error\
    \n\
    \nRelated context:\
