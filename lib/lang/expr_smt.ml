@@ -11,20 +11,37 @@ module SMTLib2 = struct
     let compare = compare_logic
   end)
 
-  type var_decl = { decl_cmd : CCSexp.t; var : CCSexp.t }
+  module DeclMap = Map.Make (struct
+    type t = Var.t
+
+    (** SMT solver has no notion of local vs global scope, comparing on anything
+        other than name + type would result in conflicts. *)
+    let compare a b =
+      Pair.compare String.compare Types.compare
+        (Var.name a, Var.typ a)
+        (Var.name b, Var.typ b)
+  end)
+
+  type ambiguity = Unambiguous | Ambiguous | Ignored [@@deriving show]
 
   type builder = {
-    preamble : CCSexp.t list;
-    commands : CCSexp.t list;
-    var_decls : var_decl VarMap.t;
-    logics : LSet.t;
+    type_commands : CCSexp.t list;
+    fun_commands : CCSexp.t list;
+    const_commands : CCSexp.t list;
+    commands : CCSexp.t list;  (** Fresh commands not yet extracted. *)
+    ambiguity : ambiguity StringMap.t;  (** Tracks ambiguous variable names. *)
+    var_decls : CCSexp.t DeclMap.t;  (** Map of declared variables to sexps. *)
+    logics : LSet.t;  (** Needed logics. *)
   }
 
   let empty =
     {
-      preamble = [];
+      type_commands = [];
+      fun_commands = [];
+      const_commands = [];
       commands = [];
-      var_decls = VarMap.empty;
+      ambiguity = StringMap.empty;
+      var_decls = DeclMap.empty;
       logics = LSet.empty;
     }
 
@@ -50,7 +67,12 @@ module SMTLib2 = struct
     let bv, bs = f v s in
     (bv, bs)
 
-  let ( let* ) = bind
+  module Infix = struct
+    let ( let* ) = bind
+    let ( >>= ) = bind
+  end
+
+  open Infix
 
   let sequence (args : 'a t list) : 'a list t =
     let* l =
@@ -63,58 +85,41 @@ module SMTLib2 = struct
     in
     return (List.rev l)
 
-  let add_command (v : Sexp.t) (s : builder) =
-    let asrt = v in
-    (asrt, { s with commands = asrt :: s.commands; logics = s.logics })
+  let declare_fun (v : Sexp.t) (s : builder) =
+    let cmd = v in
+    (cmd, { s with fun_commands = cmd :: s.fun_commands; logics = s.logics })
 
-  let add_assert (v : Sexp.t) (s : builder) =
+  let declare_sort (v : Sexp.t) (s : builder) =
+    let cmd = v in
+    (cmd, { s with type_commands = cmd :: s.type_commands; logics = s.logics })
+
+  let add_command (v : Sexp.t) (s : builder) =
+    let cmd = v in
+    (cmd, { s with commands = cmd :: s.commands; logics = s.logics })
+
+  let assert_sexp (v : Sexp.t) (s : builder) =
     let asrt = list [ atom "assert"; v ] in
     (asrt, { s with commands = asrt :: s.commands })
 
-  let add_preamble (v : Sexp.t) (s : builder) =
-    (v, { s with preamble = v :: s.preamble })
+  let logic b = list [ atom "set-logic"; atom (get_logic_string b.logics) ]
 
-  let preamble_to_sexp ?(set_logic = true) b =
-    let logic =
-      if set_logic then
-        [ list [ atom "set-logic"; atom (get_logic_string b.logics) ] ]
-      else []
+  let to_sexp ?(set_logic = false) b =
+    let open Iter.Infix in
+    let logic = List.to_iter @@ if set_logic then [ logic b ] else [] in
+    let type_commands = List.to_iter b.type_commands in
+    let fun_commands = List.to_iter b.fun_commands in
+    let const_commands = List.to_iter b.const_commands in
+    let commands = List.to_iter b.commands in
+    let commands =
+      commands <+> const_commands <+> fun_commands <+> type_commands
     in
-    List.to_iter (logic @ b.preamble)
-
-  let decls_to_sexp b =
-    let open Iter.Infix in
-    VarMap.to_iter b.var_decls >|= fun (v, d) -> d.decl_cmd
-
-  let commands_to_sexp b = List.rev b.commands |> List.to_iter
-
-  let to_sexp ?(set_logic = true) b =
-    let open Iter.Infix in
-    let preamble = preamble_to_sexp ~set_logic b in
-    let decls = decls_to_sexp b in
-    let commands = commands_to_sexp b in
-    preamble <+> decls <+> commands
-
-  let append (a : builder) (b : builder) =
-    {
-      preamble = b.preamble @ a.preamble;
-      var_decls =
-        VarMap.merge_safe
-          ~f:
-            ( const @@ function
-              | `Both (d1, d2) -> Some d2
-              | `Left d -> Some d
-              | `Right d -> Some d )
-          a.var_decls b.var_decls;
-      commands = b.commands @ a.commands;
-      logics = LSet.union a.logics b.logics;
-    }
+    logic <+> Iter.rev commands
 
   let run (e : 'e t) = e empty
 
   let extract s =
     let* b = get s in
-    return @@ to_sexp b
+    fun s -> (to_sexp b, { b with commands = [] })
 
   let rec of_typ (ty : Types.t) =
     match ty with
@@ -162,7 +167,7 @@ module SMTLib2 = struct
     let ty = Var.typ v in
     let ty, logics = of_typ ty in
     let v = smt_symbol n in
-    ({ decl_cmd = list [ atom "declare-const"; v; ty ]; var = v }, logics)
+    ((list [ atom "declare-const"; v; ty ], v), logics)
 
   let add_logic_const (v : Ops.AllOps.const) =
     let* _ =
@@ -338,18 +343,39 @@ module SMTLib2 = struct
     go vardefs e
 
   let decl_var (v : Var.t) s =
-    VarMap.find_opt v s.var_decls |> function
-    | Some { decl_cmd; var } -> (var, s)
+    let (decl_cmd, var), logics = gen_decl v in
+    DeclMap.find_opt v s.var_decls |> function
+    | Some var -> (var, s)
     | None ->
-        let decl, logics = gen_decl v in
-        ( decl.var,
+        let is_ambiguous = StringMap.get (Var.name v) s.ambiguity in
+        ( var,
           {
             s with
-            var_decls = VarMap.add v decl s.var_decls;
+            const_commands =
+              (match is_ambiguous with
+              | None -> decl_cmd :: s.const_commands
+              | _ -> s.const_commands);
+            var_decls = DeclMap.add v var s.var_decls;
             logics = LSet.union logics s.logics;
+            ambiguity =
+              (match is_ambiguous with
+              | None -> StringMap.add (Var.name v) Unambiguous s.ambiguity
+              | Some Unambiguous ->
+                  StringMap.add (Var.name v) Ambiguous s.ambiguity
+              | _ -> s.ambiguity);
           } )
 
-  let get_var v = fun s -> decl_var v s
+  let get_var var s =
+    if String.equal (Var.name var) "mem_encoding_out" then
+      print_endline "getting";
+    let v, s = decl_var var s in
+    match StringMap.get (Var.name var) s.ambiguity with
+    | Some Ambiguous ->
+        (* && match Var.typ var with Map _ -> false | _ -> true *)
+        (* then *)
+        let typ = fst @@ of_typ (Var.typ var) in
+        (list [ atom "as"; v; typ ], s)
+    | _ -> (v, s)
 
   let of_op
       (op :
@@ -508,14 +534,14 @@ module SMTLib2 = struct
     let e = (BasilExpr.rewrite_typed_two Algsimp.if_then_else) e in
     BasilExpr.cata (smt_alg ?rvars) e
 
-  let of_bexpr ?rvars e = fst @@ (bind_of_bexpr ?rvars e) empty
+  let of_bexpr ?rvars e = bind_of_bexpr ?rvars e
+  let sexp_of_bexpr e = fst @@ of_bexpr e empty
 
   let trans_decl (decl : Program.declaration) =
-    let* x = return () in
     match decl with
     | Type { binding; typ = Sort (name, [ { variant; fields = [] } ]) } ->
         let sexp = Bincaml_util.Smt.Expr.declare_sort variant 0 in
-        let* _ = add_preamble sexp in
+        let* _ = declare_sort sexp in
         let* _ = add_logic DT in
         return sexp
     | Type { binding; typ = Sort (name, vs) } ->
@@ -531,11 +557,11 @@ module SMTLib2 = struct
             vs
         in
         let sexp = Bincaml_util.Smt.Expr.declare_datatype name [] fields in
-        let* _ = add_preamble sexp in
+        let* _ = declare_sort sexp in
         let* _ = add_logic DT in
         return sexp
     | Type { binding; typ } ->
-        add_preamble (list [ atom "decl-sort"; fst @@ of_typ typ ])
+        declare_sort (list [ atom "decl-sort"; fst @@ of_typ typ ])
     | Function { binding; attrib; definition = Function body } ->
         let op, bound_vars, in_body =
           match BasilExpr.unfix body with
@@ -551,23 +577,33 @@ module SMTLib2 = struct
         let r = Expr.BasilExpr.type_of in_body in
         let* body = bind_of_bexpr in_body in
         let r = fst (of_typ r) in
-        add_preamble
-        @@ list
-             [
-               atom "define-fun";
-               smt_symbol (Var.name binding);
-               list args;
-               r;
-               body;
-             ]
+        let s =
+          declare_fun
+          @@ list
+               [
+                 atom "define-fun";
+                 smt_symbol (Var.name binding);
+                 list args;
+                 r;
+                 body;
+               ]
+        in
+        fun b ->
+          Pair.map_snd
+            (fun b ->
+              {
+                b with
+                ambiguity = StringMap.add (Var.name binding) Ignored b.ambiguity;
+              })
+            (s b)
     | Function { binding; definition = Axiom body } ->
         let* body = bind_of_bexpr body in
-        add_preamble @@ list [ atom "assert"; body ]
+        add_command @@ list [ atom "assert"; body ]
     | Function { binding; attrib; definition = Uninterpreted } ->
         let args, r = Var.typ binding |> Types.uncurry in
         let args = List.map (of_typ %> fst) args in
         let r = fst (of_typ r) in
-        add_preamble
+        declare_fun
         @@ list
              [ atom "declare-fun"; smt_symbol (Var.name binding); list args; r ]
     | Variable v -> failwith "mutable"
@@ -575,7 +611,7 @@ module SMTLib2 = struct
 
   let assert_bexpr e =
     let* s = bind_of_bexpr e in
-    add_assert s
+    assert_sexp s
 
   let echo s = add_command (list [ atom "echo"; atom s ])
   let push = add_command (list [ atom "push" ])

@@ -13,115 +13,95 @@ open Expr
 open Effect
 
 type _ Effect.t +=
-  | Push : SMTLib2.builder -> unit Effect.t
-  | Verify : SMTLib2.builder * (Program.proc * Program.stmt) -> unit Effect.t
+  | Push : Sexp.t SMTLib2.t -> unit Effect.t
+  | Verify : Sexp.t SMTLib2.t * (Program.proc * Program.stmt) -> unit Effect.t
 
 (* Get any ambiguous variables (shared name, different type). *)
-let ambiguities (program : Program.t) : VarSet.t Iter.t =
-  Program.procs program
-  (* Get all variables in program: *)
-  |> Iter.flat_map
-       (snd %> Procedure.iter_blocks
-       %> Iter.flat_map (fun (_, b) ->
-           Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b)))
-  (* Group variables by name: *)
-  |> Iter.group_by
-       ~hash:(fun v -> Hash.string @@ Var.name v)
-       ~eq:(fun v1 v2 -> String.equal (Var.name v1) (Var.name v2))
-  |> Iter.map VarSet.of_list
-  (* Only keep lists of length > 1: *)
-  |> Iter.filter (VarSet.cardinal %> ( <= ) 2)
+(* let ambiguities (program : Program.t) : VarSet.t Iter.t = *)
+(* Program.procs program *)
+(* Get all variables in program: *)
+(* |> Iter.flat_map *)
+(* (snd %> Procedure.iter_blocks *)
+(* %> Iter.flat_map (fun (_, b) -> *)
+(* Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b))) *)
+(* Group variables by name: *)
+(* |> Iter.group_by *)
+(* ~hash:(fun v -> Hash.string @@ Var.name v) *)
+(* ~eq:(fun v1 v2 -> String.equal (Var.name v1) (Var.name v2)) *)
+(* |> Iter.map VarSet.of_list *)
+(* Only keep lists of length > 1: *)
+(* |> Iter.filter (VarSet.cardinal %> ( <= ) 2) *)
 
-(* Map rvars to sexps, necessary to handle ambiguities and
-   function calls which are sensitive to context in program. *)
-let rvar_map (program : Program.t) =
-  ambiguities program
-  (* Map all ambiguous variables to as expressions. *)
-  |> Iter.flat_map
-     @@ VarSet.to_iter
-        %> Iter.map (fun v ->
-            let sexp =
-             fun s ->
-              let var, s = SMTLib2.get_var v s in
-              let typ = fst @@ SMTLib2.of_typ (Var.typ v) in
-              (CCSexp.(list [ atom "as"; var; typ ]), s)
-            in
-            (v, sexp))
-  |> VarMap.of_iter
+(* (* Map rvars to sexps, necessary to handle ambiguities and *)
+   (* function calls which are sensitive to context in program. *) *)
+(* let rvar_map (program : Program.t) = *)
+(* ambiguities program *)
+(* Map all ambiguous variables to as expressions. *)
+(* |> Iter.flat_map *)
+(* @@ VarSet.to_iter *)
+(* %> Iter.map (fun v -> *)
+(* let sexp = *)
+(* fun s -> *)
+(* let var, s = SMTLib2.get_var v s in *)
+(* let typ = fst @@ SMTLib2.of_typ (Var.typ v) in *)
+(* (CCSexp.(list [ atom "as"; var; typ ]), s) *)
+(* in *)
+(* (v, sexp)) *)
+(* |> VarMap.of_iter *)
 
-let visit_stmt procedure rvars = function
+let visit_stmt procedure =
+  let open SMTLib2.Infix in
+  function
   | Stmt.Instr_Assert { body } as stmt ->
       (* Verify negation of assertion is unsat. *)
-      let builder =
-        SMTLib2.add_assert
-          (SMTLib2.of_bexpr ~rvars (BasilExpr.boolnot body))
-          SMTLib2.empty
-        |> snd
-      in
-      perform (Verify (builder, (procedure, stmt)));
+      perform
+        (Verify
+           ( SMTLib2.of_bexpr (BasilExpr.boolnot body) >>= SMTLib2.assert_sexp,
+             (procedure, stmt) ));
 
-      (* Assert the actual assertion. *)
-      let smt = SMTLib2.of_bexpr ~rvars body in
-      let builder = SMTLib2.add_assert smt SMTLib2.empty |> snd in
-      perform (Push builder)
+      (* Actual assertion. *)
+      perform (Push (SMTLib2.of_bexpr body >>= SMTLib2.assert_sexp))
   | Stmt.Instr_Assume { body } ->
       (* Assert the assumption as is. SSA makes this equiv to assume. *)
-      let smt = SMTLib2.of_bexpr ~rvars body in
-      let builder = SMTLib2.add_assert smt SMTLib2.empty |> snd in
-      perform (Push builder)
+      perform (Push (SMTLib2.of_bexpr body >>= SMTLib2.assert_sexp))
   | Stmt.Instr_Assign { al } ->
       (* Assign is just an assertion of equivalent lhs and rhs.
              This is bidirectional, but SSA + Reachability conds avoid this
              causing issues. *)
-      let asserts =
-        List.map
-          (fun (v, e) ->
-            BasilExpr.binexp ~op:`EQ (BasilExpr.rvar v) e
-            |> SMTLib2.of_bexpr ~rvars)
-          al
-      in
-      let builder =
-        List.fold_left
-          (fun builder smt -> SMTLib2.add_assert smt builder |> snd)
-          SMTLib2.empty asserts
-      in
-      perform (Push builder)
+      al
+      |> List.map (fun (v, e) ->
+          BasilExpr.binexp ~op:`EQ (BasilExpr.rvar v) e
+          |> SMTLib2.of_bexpr >>= SMTLib2.assert_sexp)
+      |> List.map (fun s -> perform (Push s))
+      |> ignore
   | _ -> ()
 
-let visit_procedure ~rvars (program : Program.t) (procedure : Program.proc) =
-  print_endline @@ "visitng proc" ^ (Procedure.id procedure |> ID.name);
-  let builder =
-    SMTLib2.empty |> SMTLib2.push |> snd
-    |> SMTLib2.echo ("Verifying Procedure: " ^ ID.name (Procedure.id procedure))
-    |> snd
-  in
-  perform (Push builder);
+let visit_procedure (program : Program.t) (procedure : Program.proc) =
+  perform (Push SMTLib2.push);
+
+  perform
+    (Push
+       (SMTLib2.echo
+          ("Verifying Procedure: " ^ ID.name (Procedure.id procedure))));
 
   let local_decls = Procedure.local_decls procedure in
   local_decls
-  |> Hashtbl.iter (fun k v ->
-      perform (Push (snd @@ SMTLib2.decl_var v SMTLib2.empty)));
+  |> Hashtbl.iter (fun k v -> perform (Push (fun s -> SMTLib2.decl_var v s)));
 
   (* Translate each statement to smt. *)
   Procedure.iter_stmt_topo_fwd procedure
-  |> flip Iter.for_each (visit_stmt procedure rvars);
+  |> flip Iter.for_each (visit_stmt procedure);
 
-  perform (Push (SMTLib2.pop SMTLib2.empty |> snd))
+  perform (Push SMTLib2.pop)
 
 let visit_program (program : Program.t) =
-  let program =
-    (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false) program
-  in
   let g = Program.DependencyGraph.make_dependency_graph ~rev:true program in
   let module Topo = Graph.Topological.Make (Program.DependencyGraph.G) in
-  let rvars = rvar_map program in
-
   Iter.from_iter (flip Topo.iter g)
   |> Iter.filter_map (flip Program.get_decl program)
   |> flip Iter.for_each (function
-    | Program.Procedure { definition } ->
-        visit_procedure ~rvars program definition
-    | other -> perform (Push (SMTLib2.trans_decl other SMTLib2.empty |> snd)))
+    | Program.Procedure { definition } -> visit_procedure program definition
+    | other -> perform (Push (SMTLib2.trans_decl other)))
 
 (** Offline SMT backend. Converts entire program to smt and dumps to chan.
     Inserts verification condition checks with echos for easier tracing. *)
@@ -129,14 +109,14 @@ let smt_offline chan (program : Program.t) : unit =
   let open Containers_pp in
   let builder = ref SMTLib2.empty in
   (try visit_program program with
-  | effect Push b, k ->
+  | effect Push s, k ->
       (* Push the builder as is. *)
-      builder := SMTLib2.append !builder b;
+      builder := snd @@ s !builder;
       Effect.Deep.continue k ()
-  | effect Verify (b, c), k ->
+  | effect Verify (s, c), k ->
       (* Push, wrapped in a scope + check sat. *)
       builder := snd @@ SMTLib2.push !builder;
-      builder := SMTLib2.append !builder b;
+      builder := snd @@ s !builder;
       builder := snd @@ SMTLib2.check_sat !builder;
       builder := snd @@ SMTLib2.pop !builder;
       Effect.Deep.continue k ());
@@ -188,7 +168,7 @@ let smt_online chan (program : Program.t) : unit =
     Bincaml_util.Smt.Solver.create
       {
         Bincaml_util.Smt.Config.cvc5 with
-        log = Bincaml_util.Smt.Config.printf_log;
+        log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
 
@@ -198,28 +178,14 @@ let smt_online chan (program : Program.t) : unit =
   end) in
   let results : int M.t IDMap.t ref = ref IDMap.empty in
 
-  (* Track declare-const sexps that have already been sent to avoid
-     repeating them.*)
-  let module DeclSet = Set.Make (struct
-    type t = string * string [@@deriving eq, ord]
-  end) in
-  let declared = ref DeclSet.empty in
-
-  let filter_declared = function
-    | `List [ `Atom "declare-const"; `Atom name; typ ] ->
-        let typ = Sexp.to_string typ in
-        if DeclSet.mem (name, typ) !declared then false
-        else (
-          declared := DeclSet.add (name, typ) !declared;
-          true)
-    | _ -> true
-  in
+  let builder = ref SMTLib2.empty in
 
   (try visit_program program with
-  | effect Push b, k ->
+  | effect Push s, k ->
+      let sexps, b = SMTLib2.extract s !builder in
+      builder := b;
       if
-        SMTLib2.to_sexp ~set_logic:false b
-        |> Iter.filter filter_declared
+        sexps
         |> Iter.map (Smt.Solver.add_sexp solver)
         |> Iter.for_all (function
           | `List (`Atom "error" :: body) as s ->
@@ -228,11 +194,11 @@ let smt_online chan (program : Program.t) : unit =
               false
           | _ -> true)
       then Effect.Deep.continue k ()
-  | effect Verify (b, (proc, stmt)), k ->
+  | effect Verify (s, (proc, stmt)), k ->
+      let sexps, b = SMTLib2.extract s !builder in
+      builder := b;
       Smt.Solver.push solver;
-      SMTLib2.commands_to_sexp b
-      |> Iter.filter filter_declared
-      |> Iter.iter (Smt.Solver.add_sexp solver %> ignore);
+      sexps |> Iter.iter (Smt.Solver.add_sexp solver %> ignore);
       let result = check_sat chan stmt solver proc program in
       (* Increment the counter for procedure/result type: *)
       results :=
