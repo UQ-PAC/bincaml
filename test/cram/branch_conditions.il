@@ -1,6 +1,6 @@
 memory shared $mem : (bv64 -> bv8);
 var $PC:bv64;
-prog entry @main;
+prog entry @main {.invariants = ["GtirbArm"]};
 
 proc @main()  -> () {  }
 [
