@@ -23,6 +23,7 @@ let rec to_sexp (p : t) : Containers.Sexp.t =
   | `Bool true -> `Atom "true"
   | `Bool false -> `Atom "false"
   | `Integer i -> `Atom (Z.to_string i)
+  | `CamlInt i -> `Atom (Int.to_string i)
   | `Bitvector i -> `Atom (Bitvec.to_string i)
   | `List ls -> `List (List.map to_sexp ls)
 
