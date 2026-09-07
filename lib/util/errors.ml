@@ -6,78 +6,102 @@ open Containers
 type loc = int * int
 (** A text token range; (beginchar, endchar) *)
 
+(** Information about some location in text or file *)
 type location =
-  | OffsetRange of loc
-  | Token of Lexing.lexbuf
-  | Position of (Lexing.position * Lexing.position)
+  | OffsetRange of loc  (** Character offset range *)
+  | Lexbuf of Lexing.lexbuf
+      (** Lexbuf mid-parsing (use last token as position) *)
+  | Lexing of (Lexing.position * Lexing.position option)
   | PPPosition of (Pp_loc.Position.t * Pp_loc.Position.t)
+      (** PP_loc position range *)
+  | Everything  (** whole file *)
 
+(** Pretty-print a location numerically, without a known input file *)
 let show_location = function
   | OffsetRange (a, b) -> Printf.sprintf "char range (%d, %d)" a b
-  | Token lexbuf ->
+  | Lexbuf lexbuf ->
       let a, b = (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) in
       Printf.sprintf "%s: from %d:%d to %d:%d" a.pos_fname a.pos_lnum a.pos_cnum
         b.pos_lnum b.pos_cnum
-  | Position (a, b) ->
-      Printf.sprintf "%s: from %d:%d to %d:%d" a.pos_fname a.pos_lnum a.pos_cnum
-        b.pos_lnum b.pos_cnum
-  | PPPosition (a, b) -> "position"
+  | Lexing (a, b) ->
+      let b =
+        match b with
+        | Some b -> Printf.sprintf " to %d:%d" b.pos_lnum b.pos_cnum
+        | _ -> ""
+      in
+      Printf.sprintf "%s: from %d:%d%s" a.pos_fname a.pos_lnum a.pos_cnum b
+  | PPPosition (a, b) -> "PPPosition ?" (* cannot convert back *)
+  | Everything -> "file"
 
 let loc_to_position = function
   | OffsetRange (begin_tok, end_tok) ->
-      (Pp_loc.Position.of_offset begin_tok, Pp_loc.Position.of_offset end_tok)
-  | Token lexbuf ->
-      ( Pp_loc.Position.of_lexing @@ Lexing.lexeme_start_p lexbuf,
-        Pp_loc.Position.of_lexing @@ Lexing.lexeme_end_p lexbuf )
-  | Position (b, e) -> (Pp_loc.Position.of_lexing b, Pp_loc.Position.of_lexing e)
-  | PPPosition (a, b) -> (a, b)
+      Some
+        (Pp_loc.Position.of_offset begin_tok, Pp_loc.Position.of_offset end_tok)
+  | Lexbuf lexbuf ->
+      Some
+        ( Pp_loc.Position.of_lexing @@ Lexing.lexeme_start_p lexbuf,
+          Pp_loc.Position.of_lexing @@ Lexing.lexeme_end_p lexbuf )
+  | Lexing (b, Some e) ->
+      Some (Pp_loc.Position.of_lexing b, Pp_loc.Position.of_lexing e)
+  | PPPosition (a, b) -> Some (a, b)
+  | _ -> None
 
-type location_info = { range : location; description : string option }
+type ref_file =
+  | Input of Pp_loc.Input.t
+  | SourceFile  (** The input file *)
+  | RawString of string  (** just string content *)
+
+type error_context_info = {
+  description : string option;  (** What is this object? Why is it relevant? *)
+  loc : location;  (** Location in relevant 'file'. *)
+  input : ref_file;  (** 'file' we are referring to. *)
+}
 (** A source location and what is at this location *)
 
-let location ?msg a = { range = OffsetRange a; description = msg }
-let location_loc ?msg a = { range = OffsetRange a; description = msg }
-let location_lexing ?msg a = { range = Token a; description = msg }
-let location_position ?msg a = { range = Position a; description = msg }
+let location ?msg a =
+  { loc = OffsetRange a; description = msg; input = SourceFile }
+
+let location_loc ?msg ?(input = SourceFile) a =
+  { loc = OffsetRange a; description = msg; input }
+
+let location_lexing ?msg ?(input = SourceFile) a =
+  { loc = Lexbuf a; description = msg; input }
+
+let location_position ?msg ?(input = SourceFile) a =
+  { loc = Lexing a; description = msg; input }
+
+let location_pp_position ?msg ?(input = SourceFile) a =
+  { loc = PPPosition a; description = msg; input }
+
+let context_callsite msg (loc : Lexing.position) =
+  let input = Input (Pp_loc.Input.file loc.pos_fname) in
+  { description = Some msg; input; loc = Lexing (loc, None) }
+
+let context_message ?msg content =
+  { loc = Everything; description = msg; input = RawString content }
 
 type error_class =
-  | Unhandled  (** Programmer error *)
-  | InputError  (** input error *)
-  | TypeError  (** type error *)
-  | Error  (** input error *)
-  | Exception of exn  (** Programmer error *)
+  | Unhandled  (** Undefined output for some case *)
+  | InputError  (** Input program malformed *)
+  | TypeError  (** Type error *)
+  | Error  (** Programmer error *)
+  | Exception of exn  (** Programmer error; wrapper for other exceptions *)
   | VerifierAlarm  (** Verification error *)
 
 let show_error_class = function
-  | Unhandled -> "programmer_error"
-  | Exception exn -> "exception " ^ Printexc.to_string exn
-  | VerifierAlarm -> "verification failure"
-  | InputError -> "input error"
-  | TypeError -> "type error"
-  | Error -> "error"
-
-type extra_loc_info =
-  | Sourcecode of Lexing.position  (** input file *)
-  | OtherFile of {
-      name : string;  (** informative name *)
-      input : Pp_loc.Input.t;  (** input *)
-      locations : location list;  (** locations to print *)
-    }  (** contextual information *)
-    (* TODO: print these *)
-  | InputFile of location_info list  (** A related location in the input file *)
-  | ContextString of string  (** Any random dumped debug messgae *)
+  | Unhandled -> "Programmer error"
+  | Exception exn -> "Exception " ^ Printexc.to_string exn
+  | VerifierAlarm -> "Verification failure"
+  | InputError -> "Input error"
+  | TypeError -> "Type error"
+  | Error -> "Error"
 
 type error_info = {
-  relevant_input_locations : location_info list;  (** Char offset ranges *)
-  relevant_source_code_locations : extra_loc_info list;
-      (** bincaml source code location, if relevant *)
-  message : string;  (** context message *)
-  reason : error_class;  (** type or error *)
-}
-
-type error_context = {
+  message : string;  (** Error message *)
+  reason : error_class;  (** Type of error *)
   input : Pp_loc.Input.t option;
-  messages : error_info list;
+      (** Input corresponding to [SourceFile] (the bincaml il) *)
+  error_context : error_context_info list;  (** List of context information *)
 }
 
 (** {2 Annotating error information} *)
@@ -95,54 +119,42 @@ let add_input ?input ?input_file ?input_channel c =
   in
   { c with input }
 
-let error_message ?here ?input_location message (reason : error_class) =
-  {
-    relevant_input_locations = Option.to_list input_location;
-    relevant_source_code_locations = Option.to_list here;
-    message;
-    reason;
-  }
-
-let push_message msg err_info =
-  { err_info with messages = msg :: err_info.messages }
-
-let update_message ?here ?input_location ?input info =
-  let top, messages =
-    info.messages |> function
-    | m :: t -> (m, t)
-    | [] -> (error_message "error" Unhandled, [])
+let error_message ?here ?input ?ctx_info message (reason : error_class) =
+  let here =
+    Option.map (context_callsite "Bincaml source") here |> Option.to_list
   in
+  { error_context = here @ Option.to_list ctx_info; input; message; reason }
+
+let add_error_context ?ctx_info ?input info =
   let n =
-    {
-      top with
-      relevant_input_locations =
-        Option.to_list input_location @ top.relevant_input_locations;
-      relevant_source_code_locations =
-        Option.to_list here @ top.relevant_source_code_locations;
-    }
+    { info with error_context = Option.to_list ctx_info @ info.error_context }
   in
-  let info = add_input ?input info in
-  { info with messages = n :: messages }
+  let info = add_input ?input n in
+  info
 
-exception BincamlError of error_context
+exception BincamlError of error_info
 
-let error ?here ?input_location ?input ?input_file ?input_channel message
+let error ?here ?ctx_info ?input ?input_file ?input_channel message
     (reason : error_class) =
-  let e = error_message ?here ?input_location message reason in
-  let e =
-    { input = None; messages = [ e ] }
-    |> add_input ?input ?input_file ?input_channel
-  in
-  e
+  error_message ?here ?ctx_info message reason
+  |> add_input ?input ?input_file ?input_channel
 
-let reraise_error ?here ?input_location message (reason : error_class) =
+let reraise_error ?here ?ctx_info message (reason : error_class) =
   let bt = Printexc.get_raw_backtrace () in
-  let e = error_message ?here ?input_location message reason in
-  raise (BincamlError { input = None; messages = [ e ] }) bt
+  let e =
+    error_message ?here ?ctx_info message reason
+    |> add_error_context
+         ?ctx_info:(Option.map (context_callsite "rethrown from") here)
+  in
+  Printexc.raise_with_backtrace (BincamlError e) bt
 
-let raise_error ?here ?input_location message (reason : error_class) =
-  let e = error_message ?here ?input_location message reason in
-  raise (BincamlError { input = None; messages = [ e ] })
+let raise_error ?here ?ctx_info message (reason : error_class) =
+  let e =
+    error_message ?ctx_info message reason
+    |> add_error_context
+         ?ctx_info:(Option.map (context_callsite "thrown from") here)
+  in
+  raise (BincamlError e)
 
 (** Run a function but add error information to an exception it throws *)
 let protect_with_info mod_info f =
@@ -153,23 +165,21 @@ let protect_with_info mod_info f =
     | Some e -> Printexc.raise_with_backtrace (BincamlError e) bt
     | None -> Printexc.raise_with_backtrace err bt)
 
-let error_of_exn ?here ?input_location ?input = function
+let error_of_exn ?ctx_info ?input = function
   | BincamlError info ->
-      let new_err = update_message ?here ?input_location ?input info in
+      let new_err = add_error_context ?ctx_info ?input info in
       new_err
   | other ->
-      let m =
-        error_message ?here ?input_location "exception" (Exception other)
-      in
-      { input; messages = [ m ] }
+      let m = error_message ?ctx_info "exception" (Exception other) in
+      m
 
 (** Run a function but add error information to any exception it throws *)
-let wrap_error ?here ?input_location ?input f =
+let wrap_error ?here ?ctx_info ?input f =
   try f ()
   with e ->
     let bt = Printexc.get_raw_backtrace () in
     Printexc.raise_with_backtrace
-      (BincamlError (error_of_exn ?here ?input_location ?input e))
+      (BincamlError (error_of_exn ?ctx_info ?input e))
       bt
 
 (** Run a function but add error information to any exception it throws *)
@@ -178,6 +188,9 @@ let update_error info f =
   with BincamlError ex ->
     let bt = Printexc.get_raw_backtrace () in
     Printexc.raise_with_backtrace (BincamlError (info ex)) bt
+
+let update_ctx ?ctx_info ?input f =
+  update_error (add_error_context ?ctx_info ?input) f
 
 (** {3 printer}*)
 
@@ -192,16 +205,22 @@ let format_location input =
       }
     ();
 
-  Pp_loc.pp ~input ~max_lines:5 f (List.map loc_to_position l)
+  let ps = List.filter_map loc_to_position l in
+  if not @@ List.is_empty ps then Pp_loc.pp ~input ~max_lines:5 f ps
+  else
+    Format.list ~sep:Format.newline
+      (fun f a -> Format.fprintf f "%s" @@ show_location a)
+      f l
 
-let format_location_info ?input fmt { range; description } =
+let format_context_info ?source fmt { loc; input; description; _ } =
   let description = Option.get_or ~default:"" description in
-  match input with
-  | None -> Format.fprintf fmt "%s at " description
-  | Some input ->
+  match (input, source) with
+  | Input input, _ | SourceFile, Some input ->
       Format.fprintf fmt "%s%a%a" description Format.pp_print_newline ()
-        (format_location input) [ range ]
+        (format_location input) [ loc ]
+  | _ -> Format.fprintf fmt "%s at " description
 
+(*
 let format_extra_location_info fmt = function
   | Sourcecode p ->
       let input = Pp_loc.Input.file p.pos_fname in
@@ -213,33 +232,20 @@ let format_extra_location_info fmt = function
         Format.fprintf fmt "%s%a%a" name Format.pp_print_newline ()
           (format_location input) locations
       with Sys_error _ ->
-        Format.fprintf fmt "\"%s\" (error: no such file)" name)
+        Format.fprintf fmt "\"%s\" (error: no such file)" name) *)
 
-let pp_bincamlerr fmt { messages; input } =
-  let format_message fmt
-      {
-        message;
-        reason;
-        relevant_input_locations;
-        relevant_source_code_locations;
-      } =
-    let fmt_locations =
-      Format.list ~sep:Format.newline (format_location_info ?input)
-    in
-    let fmt_extra_locations =
-      Format.list ~sep:Format.newline format_extra_location_info
-    in
-    Format.fprintf fmt "%s: %s%a%a" (show_error_class reason) message
-      Format.newline () fmt_locations relevant_input_locations;
-    Format.pp_force_newline fmt ();
-    if List.is_empty relevant_source_code_locations |> not then begin
-      Format.fprintf fmt "Related locations:";
-      Format.pp_force_newline fmt ();
-      Format.fprintf fmt "%a" fmt_extra_locations relevant_source_code_locations
-    end
+let pp_bincamlerr fmt { message; reason; error_context; input } =
+  let fmt_locations =
+    Format.list ~sep:Format.newline (format_context_info ?source:input)
   in
-  let fmt_msgs = Format.list ~sep:Format.newline format_message in
-  Format.fprintf fmt "%a" fmt_msgs (List.rev messages)
+  Format.fprintf fmt "%s: %s%a" (show_error_class reason) message Format.newline
+    ();
+  Format.pp_force_newline fmt ();
+  if List.is_empty error_context |> not then begin
+    Format.fprintf fmt "Related context:";
+    Format.pp_force_newline fmt ();
+    Format.fprintf fmt "%a" fmt_locations error_context
+  end
 
 let () =
   Printexc.register_printer (function
