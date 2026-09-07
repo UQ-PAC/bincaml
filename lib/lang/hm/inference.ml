@@ -113,7 +113,9 @@ let scheme_of_intrin st ?(visit_constraint = fun a -> ()) (gen : ID.generator)
   | `Cases -> fv ()
 
 let add_err_ctx loc f =
-  match loc with None -> f () | Some loc -> Errors.update_ctx ~ctx_info:loc f
+  match loc with
+  | None -> f ()
+  | Some loc -> Errors.update_error (Errors.add_error_context ~ctx_info:loc) f
 
 let loc_e e =
   Expr.BasilExpr.unfix e |> Expr.AbstractExpr.get_attrib |> Attrib.get_location
@@ -331,7 +333,7 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
         { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib }
 
 let infer_stmt st vc p univ ctx s =
-  let input_location =
+  let input_location () =
     Stmt.attrib s |> Attrib.get_location
     |> Option.map (fun l -> Errors.location_loc ~msg:"statement" l)
     |> Option.get_or
@@ -339,8 +341,9 @@ let infer_stmt st vc p univ ctx s =
            (Errors.context_message ~msg:"statment"
               (Stmt.to_string Var.pretty Var.pretty Expr.BasilExpr.pretty s))
   in
-  Errors.update_ctx ~ctx_info:input_location @@ fun () ->
-  do_infer_stmt st vc p univ ctx s
+  Errors.update_error (fun m ->
+      Errors.add_error_context ~ctx_info:(input_location ()) m)
+  @@ fun () -> do_infer_stmt st vc p univ ctx s
 
 let infer_block st vc p univ ctx (b : Program.bloc) =
   let _ = infer_phi st vc univ ctx b.phis in

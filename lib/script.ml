@@ -223,9 +223,10 @@ let load_il st args =
   let largs = P.(list string args) in
   let cmd = "load-il " ^ Sexp.to_string args in
   Errors.(
-    update_error
-      (Errors.add_error_context ~ctx_info:(context_message ~msg:"command" cmd)))
-    (fun () ->
+    update_error (fun x ->
+        Errors.add_error_context
+          ~ctx_info:(context_message ~msg:"command" cmd)
+          x)) (fun () ->
       Errors.wrap_error (fun () ->
           List.fold_left
             (fun acc fname ->

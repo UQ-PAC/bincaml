@@ -108,10 +108,13 @@ let scheme_to_string = function
 
 let rec to_basil (t : TypeExpr.t) : Types.t =
   let wrapped e f =
-    Errors.update_ctx
-      ~ctx_info:
-        (Errors.context_message ~msg:"type converted to basil"
-           (type_to_string @@ t))
+    Errors.update_error
+      (fun m ->
+        Errors.add_error_context
+          ~ctx_info:
+            (Errors.context_message ~msg:"type converted to basil"
+               (type_to_string @@ t))
+          m)
       f
   in
   let open Types in
