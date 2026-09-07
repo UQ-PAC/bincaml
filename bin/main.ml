@@ -242,7 +242,6 @@ let run_il ~verb fname =
     let _ = Runfile.run_il_prog [ fname ] in
     Ok ()
   with
-  | Errors.BincamlError e -> Error (Format.asprintf "%a" Errors.pp_bincamlerr e)
   | e ->
       Logs.debug (fun m -> m "%s" @@ Printexc.get_backtrace ());
       Error (Printexc.to_string e)
