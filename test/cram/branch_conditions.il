@@ -117,6 +117,23 @@ proc @main()  -> () {  }
     call @_aarch64_eval(0x9a82b020:bv32, 0x198:bv64) { .asm = "csel x0, x1, x2, lt" };
     call @_aarch64_eval(0x9a82c020:bv32, 0x19c:bv64) { .asm = "csel x0, x1, x2, gt" };
     call @_aarch64_eval(0x9a82d020:bv32, 0x1a0:bv64) { .asm = "csel x0, x1, x2, le" };
+
+    call @_aarch64_eval(0xea84107f:bv32, 0x1a4:bv64) { .asm = "tst x3, x4, asr #4" };
+    call @_aarch64_eval(0x9a820020:bv32, 0x1a8:bv64) { .asm = "csel x0, x1, x2, eq" };
+    call @_aarch64_eval(0x9a821020:bv32, 0x1ac:bv64) { .asm = "csel x0, x1, x2, ne" };
+    call @_aarch64_eval(0x9a822020:bv32, 0x1b0:bv64) { .asm = "csel x0, x1, x2, cs" };
+    call @_aarch64_eval(0x9a823020:bv32, 0x1b4:bv64) { .asm = "csel x0, x1, x2, cc" };
+    call @_aarch64_eval(0x9a824020:bv32, 0x1b8:bv64) { .asm = "csel x0, x1, x2, mi" };
+    call @_aarch64_eval(0x9a825020:bv32, 0x1bc:bv64) { .asm = "csel x0, x1, x2, pl" };
+    call @_aarch64_eval(0x9a826020:bv32, 0x1c0:bv64) { .asm = "csel x0, x1, x2, vs" };
+    call @_aarch64_eval(0x9a827020:bv32, 0x1c4:bv64) { .asm = "csel x0, x1, x2, vc" };
+    call @_aarch64_eval(0x9a828020:bv32, 0x1c8:bv64) { .asm = "csel x0, x1, x2, hi" };
+    call @_aarch64_eval(0x9a829020:bv32, 0x1cc:bv64) { .asm = "csel x0, x1, x2, ls" };
+    call @_aarch64_eval(0x9a82a020:bv32, 0x1d0:bv64) { .asm = "csel x0, x1, x2, ge" };
+    call @_aarch64_eval(0x9a82b020:bv32, 0x1d4:bv64) { .asm = "csel x0, x1, x2, lt" };
+    call @_aarch64_eval(0x9a82c020:bv32, 0x1d8:bv64) { .asm = "csel x0, x1, x2, gt" };
+    call @_aarch64_eval(0x9a82d020:bv32, 0x1dc:bv64) { .asm = "csel x0, x1, x2, le" };
+
     goto (%ret_1);
   ];
   block %ret_1 [ return; ]
