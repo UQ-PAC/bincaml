@@ -9,24 +9,37 @@
 (generate_opam_files true)
 
 (source
- (github username/reponame))
+ (github uq-pac/bincaml))
 
-(authors "Author Name <author@example.com>")
+(authors
+  "Kait Lam <kait.lam@uq.edu.au>"
+  "Alicia Michael <a.michael1@uq.edu.au>"
+)
 
-(maintainers "Maintainer Name <maintainer@example.com>")
+(maintainers "Alicia Michael <a.michael1@uq.edu.au>")
 
 (license Apache-2.0)
 
 (formatting
  (enabled_for ocaml dune))
 
-(documentation https://url/to/documentation)
+(documentation https://uq-pac.github.io/bincaml/bincaml)
 
 (package
  (name capstone_arm64_disas)
- (synopsis "Disas arm ops with capstone")
+ (synopsis "Disas arm ops with capstone.")
  (depends ocaml)
 )
+
+
+(package
+ (name boogieml)
+ (synopsis "Boogie wrapper for ocaml.")
+ (description "Boogie wrapper for ocaml")
+ (depends ocaml containers pp_loc re)
+ (tags
+  ("smt" "formal verification")))
+
 
 (package
  (name bincaml)

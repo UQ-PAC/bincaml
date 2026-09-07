@@ -3,13 +3,15 @@ opam-version: "2.0"
 version: "0.0"
 synopsis: "Program analysis tool."
 description: "A longer description"
-maintainer: ["Maintainer Name <maintainer@example.com>"]
-authors: ["Author Name <author@example.com>"]
+maintainer: ["Alicia Michael <a.michael1@uq.edu.au>"]
+authors: [
+  "Kait Lam <kait.lam@uq.edu.au>" "Alicia Michael <a.michael1@uq.edu.au>"
+]
 license: "Apache-2.0"
 tags: ["program-analysis"]
-homepage: "https://github.com/username/reponame"
-doc: "https://url/to/documentation"
-bug-reports: "https://github.com/username/reponame/issues"
+homepage: "https://github.com/uq-pac/bincaml"
+doc: "https://uq-pac.github.io/bincaml/bincaml"
+bug-reports: "https://github.com/uq-pac/bincaml/issues"
 depends: [
   "dune" {>= "3.19"}
   "ocaml"
@@ -64,5 +66,5 @@ build: [
     "@doc" {with-doc}
   ]
 ]
-dev-repo: "git+https://github.com/username/reponame.git"
+dev-repo: "git+https://github.com/uq-pac/bincaml.git"
 x-maintenance-intent: ["(latest)"]

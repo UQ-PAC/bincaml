@@ -1,0 +1,7 @@
+(env (dev (flags (:standard -warn-error -A))))
+
+(executable
+ (package boogieml)
+ (public_name boogiewrap)
+ (name boogiewrap)
+ (libraries boogieml re containers containers.unix pp_loc))
