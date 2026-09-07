@@ -24,9 +24,10 @@ type t =
 let equiv_computations c c' =
   let open Expr.BasilExpr in
   match (c, c') with
-  | Sum (e1, e2), Sum (e1', e2') -> equiv_exp e1 e1' && equiv_exp e2 e2'
-  | Diff (e1, e2), Diff (e1', e2') -> equiv_exp e1 e1' && equiv_exp e2 e2'
+  | Sum (e1, e2), Sum (e1', e2') | Diff (e1, e2), Diff (e1', e2') ->
+      equiv_exp e1 e1' && equiv_exp e2 e2'
   | Expr e, Expr e' -> equiv_exp e e'
+  | Always, Always | Never, Never -> true
   | _ -> false
 
 (** Determine whether [v] exists in an expression in [f] *)

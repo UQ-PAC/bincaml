@@ -68,10 +68,5 @@ module FlagDomain = struct
         |> fun v -> drop_modified lhs m |> update lhs v
 end
 
-module FlagAnalysis = struct
-  include Analysis.Intra_analysis.Forwards (FlagDomain)
-
-  let analyse p = analyse p
-end
-
+module FlagAnalysis = Analysis.Intra_analysis.Forwards (FlagDomain)
 module Eval = Analysis.Intra_analysis.EvalExpr (FlagLattice)
