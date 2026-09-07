@@ -153,6 +153,18 @@ let dump_boogie st ofile =
       in
       set_prog st prog)
 
+let run_boogie st _ =
+  CCIO.File.with_temp ~prefix:"bincaml" ~suffix:".bpl" @@ fun ofile ->
+  let c = open_out ofile in
+  let prog =
+    Some
+      (Passes.PassManager.run_transform (get_prog st)
+         (Passes.PassManager.dump_boogie c))
+  in
+  let result = Boogieml.run_file ofile in
+  Logs.app (fun m -> m "%a" Boogieml.format_result result);
+  set_prog st prog
+
 let interp_out st ofile =
   let ofile = P.(opt string ofile) in
   let prog = get_prog st in
@@ -345,6 +357,7 @@ let cmds_list =
     ("list-procs", list_procs, "", "List procedures in program");
     ("dump-il", dump_il, "?file", "Write IL to file or stdout");
     ("dump-boogie", dump_boogie, "?file", "Write Boogie to file or stdout");
+    ("boogie", run_boogie, "", "Run boogie verifier");
     ( "chc-dump-clauses",
       chc_dump_clauses,
       "<file>",
