@@ -38,7 +38,7 @@
 (package
  (name boogieml)
  (synopsis "Boogie wrapper for ocaml.")
- (description "Boogie wrapper for ocaml")
+ (description "Boogie wrapper for ocaml.")
  (depends ocaml containers pp_loc re)
  (tags
   ("smt" "formal verification")))
@@ -47,7 +47,7 @@
 (package
  (name bincaml)
  (synopsis "Program analysis tool.")
- (description "A longer description")
+ (description "Bincaml.")
  (depends
   ocaml
   unionFind
