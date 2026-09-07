@@ -241,10 +241,9 @@ let run_il ~verb fname =
   try
     let _ = Runfile.run_il_prog [ fname ] in
     Ok ()
-  with
-  | e ->
-      Logs.debug (fun m -> m "%s" @@ Printexc.get_backtrace ());
-      Error (Printexc.to_string e)
+  with e ->
+    Logs.debug (fun m -> m "%s" @@ Printexc.get_backtrace ());
+    Error (Printexc.to_string e)
 
 (*
 let callgraph_cmd =
