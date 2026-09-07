@@ -12,6 +12,20 @@ type t =
   | `List of t list ]
 [@@deriving eq, ord]
 
+let rec to_sexp (p : t) : Containers.Sexp.t =
+  match p with
+  | `String n -> `Atom n
+  | `Assoc n ->
+      StringMap.to_list n
+      |> List.map (Pair.map (fun k -> `Atom k) to_sexp)
+      |> List.map (fun (k, v) -> `List [ k; v ])
+      |> fun l -> `List l
+  | `Bool true -> `Atom "true"
+  | `Bool false -> `Atom "false"
+  | `Integer i -> `Atom (Z.to_string i)
+  | `Bitvector i -> `Atom (Bitvec.to_string i)
+  | `List ls -> `List (List.map to_sexp ls)
+
 let is_internal_key = String.starts_with ~prefix:"__"
 let location_key = "__text_range"
 let triggers_key = ".triggers"

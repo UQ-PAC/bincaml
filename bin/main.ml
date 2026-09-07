@@ -235,6 +235,18 @@ let run_script ~verb fname =
     Ok ()
   with e -> Error (Printexc.to_string e)
 
+let run_il ~verb fname =
+  if verb then Logs.set_level (Some Logs.Debug);
+  with_in_or_stdin fname @@ fun chan ->
+  try
+    let _ = Runfile.run_il_prog [ fname ] in
+    Ok ()
+  with
+  | Errors.BincamlError e -> Error (Format.asprintf "%a" Errors.pp_bincamlerr e)
+  | e ->
+      Logs.debug (fun m -> m "%s" @@ Printexc.get_backtrace ());
+      Error (Printexc.to_string e)
+
 (*
 let callgraph_cmd =
   let doc = "print dot callgraph for prog" in
@@ -249,6 +261,13 @@ let repl_cmd =
   @@ let+ verb and+ echo_cmd in
      repl ~verb ~echo_cmd
 
+let run_il_cmd =
+  let doc = "load an il file and run embedded script" in
+  let info = Cmd.info "load-il" ~version:"alpha" ~doc in
+  Cmd.make info
+  @@ let+ verb and+ fname in
+     run_il ~verb fname
+
 let script_cmd =
   let doc = "run script" in
   let info = Cmd.info "script" ~version:"alpha" ~doc in
@@ -259,7 +278,7 @@ let script_cmd =
 let cmd =
   let doc = "bincaml" in
   Cmd.group (Cmd.info "bincaml" ~version:"%%VERSION%%" ~doc)
-  @@ [ script_cmd; repl_cmd ]
+  @@ [ script_cmd; repl_cmd; run_il_cmd ]
 
 let main () =
   Trace_core.set_process_name "main";
