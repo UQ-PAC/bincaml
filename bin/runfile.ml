@@ -12,10 +12,11 @@ let run_il_prog fnames =
   let attr =
     Program.attrib p |> StringMap.find_opt ".run" |> Option.map Attrib.to_sexp
   in
+  (*
   let a () =
     Option.map Containers.Sexp.to_string attr |> Option.get_or ~default:""
   in
-  (*Errors.update_error
+  Errors.update_error
     (Errors.add_error_context
        ~ctx_info:
          (Errors.context_message
