@@ -43,9 +43,9 @@ proc @main (x: bv64) -> (out: bv64)
     dsa_blocks;
   [%expect
     {|
-    { Dsa.src = ("%main_1", 0); tgt = ("%main_return", 3);
+    { Dynamic_single_assignment.src = ("%main_1", 0); tgt = ("%main_return", 3);
       phi_assignments = [(y:bv64, x1:bv64)] }
-    { Dsa.src = ("%main_2", 1); tgt = ("%main_return", 3);
+    { Dynamic_single_assignment.src = ("%main_2", 1); tgt = ("%main_return", 3);
       phi_assignments = [(y:bv64, x2:bv64)] }
     |}];
 
