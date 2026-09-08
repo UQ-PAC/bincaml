@@ -2,10 +2,12 @@ prog entry @main {
     .run = ["progn"; ["run-transforms"; "hindley-milner-elaborate"] ]
 };
 
+var $g : bv25;
+
 proc @main () -> ()
 [
   block %main_entry [
-    assert (1:bv32);
+    $g:bv32 := bvadd(1:bv64, $g);
     return;
   ];
 ];

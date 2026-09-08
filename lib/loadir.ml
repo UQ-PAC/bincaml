@@ -1688,12 +1688,11 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
+[@@expect.uncaught_exn {|
   ( "Input error: load error\
    \n\
    \nRelated context:\
-   \nno such block: %main_7 at ")
+   \nno such block: %main_7 in <?.il>")
   |}]
 
 let%expect_test "missing proc" =
@@ -1716,12 +1715,11 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
+[@@expect.uncaught_exn {|
   ( "Input error: load error\
    \n\
    \nRelated context:\
-   \nno such procedure: @cat_4198032 at ")
+   \nno such procedure: @cat_4198032 in <?.il>")
   |}]
 
 let%expect_test "syntax error" =

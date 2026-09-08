@@ -4,3 +4,26 @@
   %{bin:bincaml}
   (glob_files *.il)
   (glob_files *.sexp)))
+
+(include dune.inc)
+
+(rule
+ (deps
+  %{bin:gen_expect}
+  (glob_files *.il))
+ (action
+  (with-stdout-to
+   dune.inc.gen
+   (run
+    %{deps}
+    -action
+    "bincaml load-il ARG"
+    -deps
+    "%{bin:bincaml}"
+    -package
+    "bincaml"))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff dune.inc dune.inc.gen)))
