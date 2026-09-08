@@ -1,0 +1,4 @@
+(library
+ (public_name boogieml)
+ (modules boogieml)
+ (libraries pp_loc re containers containers.unix))
