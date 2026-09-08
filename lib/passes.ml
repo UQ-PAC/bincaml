@@ -451,7 +451,7 @@ module PassManager = struct
         "Transforms phi nodes in the program into dynamic single assignment \
          statements.";
       invariants =
-        Invariants.presupposes [ SSA ] ~establishes:[ DSA; NoPhis ]
+        Invariants.presupposes [] ~establishes:[ DSA; NoPhis ]
           ~invalidates:[ SSA ];
     }
 
