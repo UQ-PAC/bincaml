@@ -5,7 +5,7 @@
   (run-transforms branch-conditions)
   (dump-il branch_conditions_post.il)
 
-  $ diff branch_conditions_pre.il branch_conditions_post.il | grep -v -- '---' | sed -s 's/^[^<>].*//'
+  $ diff branch_conditions_pre.il branch_conditions_post.il | grep -v -- '---' | sed 's/^[^<>].*//'
   
   <      assume eq($PSTATE_Z, 0x1:bv1);
   >      assume eq($R3, $R4);
