@@ -101,9 +101,6 @@ module SMTLib2 = struct
     return (List.rev l)
 
   let declare_fun (name : string) (v : Sexp.t) (b : builder) =
-    (* print_endline "--------------"; *)
-    (* print_endline name; *)
-    (* print_endline "{"; *)
     let cmd = v in
     let b =
       {
@@ -113,13 +110,6 @@ module SMTLib2 = struct
         ambiguity = StringMap.add name Ignored b.ambiguity;
       }
     in
-    (* b.var_decls |> DeclMap.to_iter *)
-    (* |> Iter.to_string ~sep:"\n" (fun (v, s) -> *)
-        (* Var.to_string v ^ " " ^ Sexp.to_string s ^ " " *)
-        (* ^ (StringMap.get name b.ambiguity *)
-          (* |> Option.map_or ~default:"_" show_ambiguity)) *)
-    (* |> print_endline; *)
-    (* print_endline "}"; *)
     (cmd, b)
 
   let declare_sort (v : Sexp.t) (s : builder) =
@@ -143,8 +133,7 @@ module SMTLib2 = struct
     logic <+> Iter.rev commands
 
   let run (e : 'e t) = e empty
-
-  let id (b:builder) : builder * builder = (b, b)
+  let id (b : builder) : builder * builder = (b, b)
 
   let extract s =
     let* b = get s in
@@ -403,7 +392,6 @@ module SMTLib2 = struct
     let v, s = decl_var var s in
     match StringMap.get (Var.name var) s.ambiguity with
     | Some Ignored ->
-        (* print_endline (Var.name var); *)
         (v, s)
     | Some (Count n) when n > 0 ->
         let typ = fst @@ of_typ (Var.typ var) in
