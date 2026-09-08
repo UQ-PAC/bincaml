@@ -607,7 +607,7 @@ module Solver : sig
   type t
 
   (** result type *)
-  type result = Unsat | Unknown | Sat [@@deriving eq,ord]
+  type result = Unsat | Unknown | Sat [@@deriving eq, ord]
 
   val pp_result : Format.formatter -> result -> unit
   (** print result *)

@@ -391,8 +391,7 @@ module SMTLib2 = struct
   let get_var var s =
     let v, s = decl_var var s in
     match StringMap.get (Var.name var) s.ambiguity with
-    | Some Ignored ->
-        (v, s)
+    | Some Ignored -> (v, s)
     | Some (Count n) when n > 0 ->
         let typ = fst @@ of_typ (Var.typ var) in
         (list [ atom "as"; v; typ ], s)

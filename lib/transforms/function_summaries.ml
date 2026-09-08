@@ -90,7 +90,8 @@ let sp_ensures (module S : FunctionSummaryAnnotation) (proc : Program.proc) =
 
 (** Compute an extension of the given procedure's summary *)
 let extra_summary (solver : Bincaml_util.Smt.Solver.t)
-    (module S : FunctionSummaryAnnotation) reiter (proc : Program.proc) builder =
+    (module S : FunctionSummaryAnnotation) reiter (proc : Program.proc) builder
+    =
   (* TODO implement a sample ensures clause generator and some sort of analysis
      pass runner *)
   let cur_req = S.requires (Procedure.id proc) in
@@ -301,7 +302,9 @@ let interproc_transform (prog : Program.t) =
     |> IDMap.of_iter
   in
   let summaries =
-    List.fold_left (solve_component solver call_graph prog builder) summaries sccs
+    List.fold_left
+      (solve_component solver call_graph prog builder)
+      summaries sccs
   in
   IDMap.fold
     (fun procid summary (prog : Program.t) ->
