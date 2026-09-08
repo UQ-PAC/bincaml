@@ -202,10 +202,10 @@ let rec infer_expr st visit_constraint ~univ (hr : Lexing.position) e =
    fun () ->
     do_infer st ~visit_constraint (infer_expr st visit_constraint) univ hr e c
   in
-  let m =
+  let info =
     Errors.context_message ~msg:"infer expr" (Expr.BasilExpr.to_string e)
   in
-  f ()
+  Errors.update_error (fun m -> Errors.add_error_context ~ctx_info:info m) f
 
 let infer st visit_constraint ~univ (hr : Lexing.position) e
     (c : scheme TypeExpr.TCtx.t) =
