@@ -16,6 +16,7 @@
   >  (run-transform inline-summaries)
   >  (run-transform cfa-reduction)
   >  (run-transforms simplify)
+  >  (run-transforms lambda-lifting)
   >  (live-smt)
   > EOF
   (load-il ../../examples/memory/memory_safety.il)
@@ -42,6 +43,7 @@
   (run-transform inline-summaries)
   (run-transform cfa-reduction)
   (run-transforms simplify)
+  (run-transforms lambda-lifting)
   (live-smt)
   
   Unknown Assertion:
@@ -67,36 +69,30 @@
   assert boolor(eq { .boogie = { .msg = "Memory Error: Invalid Free (object not live)" } }(($me_alloc_live)(mem_encoding_13:memory_encoding,
        ($me_addr_alloc)(mem_encoding_13:memory_encoding, addr_5:bv64)), 0x1:bv2),
    boolnot(trm_1:bool))
-  
-  Procedure @main verified with:
-  24 succeeding assertions.
-  0 failing assertions.
-  0 unknown assertions.
-  
-  Procedure @double_free verified with:
-  35 succeeding assertions.
-  0 failing assertions.
-  1 unknown assertions.
-  
-  Procedure @invalid_free verified with:
-  15 succeeding assertions.
-  0 failing assertions.
-  1 unknown assertions.
-  
-  Procedure @use_after_free verified with:
-  23 succeeding assertions.
-  0 failing assertions.
-  1 unknown assertions.
-  
-  Procedure @out_of_bounds verified with:
-  23 succeeding assertions.
-  0 failing assertions.
-  1 unknown assertions.
-  
-  Procedure @memory_leak verified with:
-  11 succeeding assertions.
-  0 failing assertions.
-  1 unknown assertions.
+  Procedure @main succeeded verification with:
+  	 Smt.Solver.Unknown: 0
+  	 Smt.Solver.Sat: 0
+  	 Smt.Solver.Unsat: 6
+  Procedure @double_free failed verification with:
+  	 Smt.Solver.Unknown: 1
+  	 Smt.Solver.Sat: 0
+  	 Smt.Solver.Unsat: 8
+  Procedure @invalid_free failed verification with:
+  	 Smt.Solver.Unknown: 1
+  	 Smt.Solver.Sat: 0
+  	 Smt.Solver.Unsat: 3
+  Procedure @use_after_free failed verification with:
+  	 Smt.Solver.Unknown: 1
+  	 Smt.Solver.Sat: 0
+  	 Smt.Solver.Unsat: 5
+  Procedure @out_of_bounds failed verification with:
+  	 Smt.Solver.Unknown: 1
+  	 Smt.Solver.Sat: 0
+  	 Smt.Solver.Unsat: 5
+  Procedure @memory_leak failed verification with:
+  	 Smt.Solver.Unknown: 1
+  	 Smt.Solver.Sat: 0
+  	 Smt.Solver.Unsat: 2
   $ boogie out.bpl
   Memory Error: Invalid Free (object not live)
   Execution trace:

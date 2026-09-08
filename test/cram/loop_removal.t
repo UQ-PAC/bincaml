@@ -13,12 +13,12 @@
   (dump-boogie ./out.bpl)
 
   $ cvc5 ./out.smt --incremental
-  "Verifying Procedure: @f1_bad"
-  unsat
-  sat
   "Verifying Procedure: @f1_good"
   unsat
   unsat
+  "Verifying Procedure: @f1_bad"
+  unsat
+  sat
 
   $ boogie ./out.bpl
   ./out.bpl(36,5): Error: this assertion could not be proved

@@ -7,36 +7,33 @@
   (dump-il ./out.il)
   (live-smt)
   
-  Failing Assertion: assert boolnot(bvslt(x_1:bv64, 0x0:bv64))
-  Belonging to procedure: @f3
-  Counterexample:
-  (define-fun trm () Bool false)
-  
   Failing Assertion: assert eq(y:bv64, bvmul(x:bv64, x:bv64))
   Belonging to procedure: @bad_square
   Counterexample:
   (define-fun trm () Bool true)
   
-  Procedure @bad_square verified with:
-  3 succeeding assertions.
-  1 failing assertions.
-  0 unknown assertions.
-  
-  Procedure @f2 verified with:
-  8 succeeding assertions.
-  0 failing assertions.
-  0 unknown assertions.
-  
-  Procedure @f3 verified with:
-  7 succeeding assertions.
-  1 failing assertions.
-  0 unknown assertions.
+  Failing Assertion: assert boolnot(bvslt(x_1:bv64, 0x0:bv64))
+  Belonging to procedure: @f3
+  Counterexample:
+  (define-fun trm () Bool false)
+  Procedure @bad_square failed verification with:
+  	 Smt.Solver.Unknown: 0
+  	 Smt.Solver.Sat: 1
+  	 Smt.Solver.Unsat: 0
+  Procedure @f2 succeeded verification with:
+  	 Smt.Solver.Unknown: 0
+  	 Smt.Solver.Sat: 0
+  	 Smt.Solver.Unsat: 2
+  Procedure @f3 failed verification with:
+  	 Smt.Solver.Unknown: 0
+  	 Smt.Solver.Sat: 1
+  	 Smt.Solver.Unsat: 1
   $ cvc5 ./out.smt --incremental
+  "Verifying Procedure: @bad_square"
+  sat
   "Verifying Procedure: @f3"
   sat
   unsat
   "Verifying Procedure: @f2"
   unsat
   unsat
-  "Verifying Procedure: @bad_square"
-  sat

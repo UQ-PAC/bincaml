@@ -16,39 +16,6 @@ type _ Effect.t +=
   | Push : Sexp.t SMTLib2.t -> unit Effect.t
   | Verify : Sexp.t SMTLib2.t * (Program.proc * Program.stmt) -> unit Effect.t
 
-(* Get any ambiguous variables (shared name, different type). *)
-(* let ambiguities (program : Program.t) : VarSet.t Iter.t = *)
-(* Program.procs program *)
-(* Get all variables in program: *)
-(* |> Iter.flat_map *)
-(* (snd %> Procedure.iter_blocks *)
-(* %> Iter.flat_map (fun (_, b) -> *)
-(* Iter.append (Block.read_vars_iter b) (Block.assigned_vars_iter b))) *)
-(* Group variables by name: *)
-(* |> Iter.group_by *)
-(* ~hash:(fun v -> Hash.string @@ Var.name v) *)
-(* ~eq:(fun v1 v2 -> String.equal (Var.name v1) (Var.name v2)) *)
-(* |> Iter.map VarSet.of_list *)
-(* Only keep lists of length > 1: *)
-(* |> Iter.filter (VarSet.cardinal %> ( <= ) 2) *)
-
-(* (* Map rvars to sexps, necessary to handle ambiguities and *)
-   (* function calls which are sensitive to context in program. *) *)
-(* let rvar_map (program : Program.t) = *)
-(* ambiguities program *)
-(* Map all ambiguous variables to as expressions. *)
-(* |> Iter.flat_map *)
-(* @@ VarSet.to_iter *)
-(* %> Iter.map (fun v -> *)
-(* let sexp = *)
-(* fun s -> *)
-(* let var, s = SMTLib2.get_var v s in *)
-(* let typ = fst @@ SMTLib2.of_typ (Var.typ v) in *)
-(* (CCSexp.(list [ atom "as"; var; typ ]), s) *)
-(* in *)
-(* (v, sexp)) *)
-(* |> VarMap.of_iter *)
-
 let visit_stmt procedure =
   let open SMTLib2.Infix in
   function
@@ -198,6 +165,7 @@ let smt_online chan (program : Program.t) : unit =
       let sexps, b = SMTLib2.extract s !builder in
       builder := b;
       Smt.Solver.push solver;
+      builder := SMTLib2.push_scope !builder;
       sexps |> Iter.iter (Smt.Solver.add_sexp solver %> ignore);
       let result = check_sat chan stmt solver proc program in
       (* Increment the counter for procedure/result type: *)
@@ -208,12 +176,21 @@ let smt_online chan (program : Program.t) : unit =
             %> map (M.update result (or_ ~else_:(Some 0) %> map (( + ) 1))))
           !results;
       Smt.Solver.pop solver;
+      builder := SMTLib2.pop_scope !builder;
       Effect.Deep.continue k ());
 
   (* Print out the counts of sat/unsat/unknown for each procedure. *)
   !results
   |> IDMap.iter (fun id map ->
-      Printf.fprintf chan "Procedure %s verified with:\n" (ID.name id);
+      if
+        (Option.is_some @@ M.get Unknown map)
+        || (Option.is_some @@ M.get Sat map)
+      then
+        Printf.fprintf chan "Procedure %s failed verification with:\n"
+          (ID.name id)
+      else
+        Printf.fprintf chan "Procedure %s succeeded verification with:\n"
+          (ID.name id);
       [ Unknown; Sat; Unsat ]
       |> List.iter (fun k ->
           M.get_or ~default:0 k map
