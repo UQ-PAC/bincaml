@@ -28,7 +28,7 @@ let equiv_computations c c' =
       equiv_exp e1 e1' && equiv_exp e2 e2'
   | Expr e, Expr e' -> equiv_exp e e'
   | Always, Always | Never, Never -> true
-  | _ -> false
+  | (Sum _ | Diff _ | Expr _ | Always | Never), _ -> false
 
 (** Determine whether [v] exists in an expression in [f] *)
 let contains_var v f =
