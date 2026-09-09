@@ -24,7 +24,7 @@ buildDunePackage {
 
   checkInputs = [ ];
   nativeBuildInputs = [ writableTmpDirAsHomeHook ];
-  buildInputs = [ ocaml ; containers ; re];
+  buildInputs = [ ocaml containers re];
   propagatedBuildInputs = [ ];
 
   outputs = [ "out" ];
@@ -32,8 +32,8 @@ buildDunePackage {
 
   meta = {
     homepage = "https://github.com/agle/bincaml";
-    description = "";
+    description = "Library to interact with Boogie verifier.";
     maintainers = with lib.maintainers; [ katrinafyi ];
-    mainProgram = "bincaml" # wrong;
+    mainProgram = "bincaml";
   };
 }
