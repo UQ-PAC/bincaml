@@ -34,6 +34,6 @@ buildDunePackage {
     homepage = "https://github.com/agle/bincaml";
     description = "";
     maintainers = with lib.maintainers; [ katrinafyi ];
-    mainProgram = "bincaml";
+    mainProgram = "boogiewrap";
   };
 }
