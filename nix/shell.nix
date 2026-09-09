@@ -9,6 +9,7 @@
   bincaml,
   bincaml_lsp,
   capstone_arm64_disas,
+  boogieml,
   odoc,
   odoc-driver,
   odig,
@@ -43,12 +44,14 @@ mkShell {
   inputsFrom = [
     (bincaml.overrideAttrs { doCheck = true; })
     (capstone_arm64_disas.overrideAttrs { doCheck = true; })
+    (boogieml.overrideAttrs { doCheck = true; })
     (bincaml_lsp.overrideAttrs { doCheck = true; })
 
     # including these unchanged will subtract them from the dependencies of each other:
     # https://github.com/NixOS/nixpkgs/blob/f9bb1890175874edf242921789e8e9fdfcc2023c/pkgs/build-support/mkshell/default.nix#L32-L34
     bincaml
     capstone_arm64_disas
+    boogieml
     bincaml_lsp
   ];
 

@@ -2,7 +2,7 @@
 opam-version: "2.0"
 version: "0.0"
 synopsis: "Boogie wrapper for ocaml."
-description: "Boogie wrapper for ocaml"
+description: "Boogie wrapper for ocaml."
 maintainer: [
   "Kait Lam <kait.lam@uq.edu.au>" "Alicia Michael <a.michael1@uq.edu.au>"
 ]
