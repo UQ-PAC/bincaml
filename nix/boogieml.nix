@@ -24,7 +24,7 @@ buildDunePackage {
 
   checkInputs = [ ];
   nativeBuildInputs = [ writableTmpDirAsHomeHook ];
-  buildInputs = [ ocaml ; bincaml ; containers ; re];
+  buildInputs = [ ocaml ; containers ; re];
   propagatedBuildInputs = [ ];
 
   outputs = [ "out" ];
