@@ -17,20 +17,6 @@
 (rule
  (alias runtest)
  (package bincaml)
- (deps %{bin:bincaml} ./error_inside_expr.il)
- (action
-    (progn
-    (with-accepted-exit-codes (or 0 (not 0))
-    (with-outputs-to ./error_inside_expr.il.out (run bincaml load-il ./error_inside_expr.il)))
-    (diff? ./error_inside_expr.il.expected ./error_inside_expr.il.out)
-)))
-
-
-
-
-(rule
- (alias runtest)
- (package bincaml)
  (deps %{bin:bincaml} ./error_hint_global.il)
  (action
     (progn
