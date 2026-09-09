@@ -8,6 +8,7 @@
 (include dune.inc)
 
 (rule
+ (package bincaml)
  (deps
   %{bin:gen_expect}
   (glob_files *.il))
@@ -24,6 +25,7 @@
     "bincaml"))))
 
 (rule
+ (package bincaml)
  (alias runtest)
  (action
   (diff dune.inc dune.inc.gen)))
