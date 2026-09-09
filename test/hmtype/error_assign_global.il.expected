@@ -1,0 +1,8 @@
+bincaml: Input error: parse error
+         
+         Related context:
+         next token
+         10 |     var $g:bv64 := (1:bv32);
+                      [1;31m^^[0m
+         
+         command: load-il (./error_assign_global.il)
