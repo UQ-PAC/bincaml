@@ -24,7 +24,7 @@ buildDunePackage {
 
   checkInputs = [ ];
   nativeBuildInputs = [ writableTmpDirAsHomeHook ];
-  buildInputs = [ ocaml ];
+  buildInputs = [ ocaml ; bincaml ; containers ; re];
   propagatedBuildInputs = [ ];
 
   outputs = [ "out" ];
@@ -34,6 +34,6 @@ buildDunePackage {
     homepage = "https://github.com/agle/bincaml";
     description = "";
     maintainers = with lib.maintainers; [ katrinafyi ];
-    mainProgram = "boogiewrap";
+    mainProgram = "bincaml" # wrong;
   };
 }
