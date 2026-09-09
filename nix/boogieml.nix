@@ -7,7 +7,8 @@
   ocaml,
   bincaml,
   containers,
-  re
+  re,
+  pp_loc
 
   # test:
 
@@ -24,7 +25,7 @@ buildDunePackage {
 
   checkInputs = [ ];
   nativeBuildInputs = [ writableTmpDirAsHomeHook ];
-  buildInputs = [ ocaml containers re];
+  buildInputs = [ ocaml containers re pp_loc];
   propagatedBuildInputs = [ ];
 
   outputs = [ "out" ];
