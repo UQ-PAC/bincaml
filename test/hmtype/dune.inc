@@ -3,6 +3,20 @@
 (rule
  (alias runtest)
  (package bincaml)
+ (deps %{bin:bincaml} ./parse_error.il)
+ (action
+    (progn
+    (with-accepted-exit-codes (or 0 (not 0))
+    (with-outputs-to ./parse_error.il.out (run bincaml load-il ./parse_error.il)))
+    (diff? ./parse_error.il.expected ./parse_error.il.out)
+)))
+
+
+
+
+(rule
+ (alias runtest)
+ (package bincaml)
  (deps %{bin:bincaml} ./error_use_global.il)
  (action
     (progn

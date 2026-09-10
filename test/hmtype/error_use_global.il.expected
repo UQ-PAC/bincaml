@@ -1,6 +1,13 @@
-bincaml: Input error: parse error
+(run-transforms hindley-milner-elaborate)
+bincaml: Type error: 25 <> 64
          
          Related context:
-         next token
+         infer expression
+         10 |     $g:bv32 := bvadd(1:bv64, $g);
+                                  [1;31m^^^^^^^^^^^^[0m
          
-         command: load-il (./error_use_global.il)
+         statement
+         10 |     $g:bv32 := bvadd(1:bv64, $g);
+                  [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+         
+         prog script in ./error_use_global.il: (progn (run-transforms hindley-milner-elaborate))
