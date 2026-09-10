@@ -1,0 +1,17 @@
+(run-transforms hindley-milner-elaborate)
+bincaml: Type error: 32 <> 64
+         
+         Related context:
+         infer expression
+         10 |     $g:bv32 := bvadd(bvadd(1:bv64,2:bv32), $g);
+                                        [1;31m^^^^^^^^^^^^^^^[0m
+         
+         infer expression
+         10 |     $g:bv32 := bvadd(bvadd(1:bv64,2:bv32), $g);
+                                  [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+         
+         statement
+         10 |     $g:bv32 := bvadd(bvadd(1:bv64,2:bv32), $g);
+                  [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+         
+         prog script in ./error_inside_expr.il: (progn (run-transforms hindley-milner-elaborate))

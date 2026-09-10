@@ -1240,16 +1240,30 @@ module BasilASTLoader = struct
         p_st
     in
     let open Ops in
+    let attr_loc_range a b =
+      let a, b =
+        match (a, b) with OpenParen (a, _), CloseParen (b, _) -> (a, b)
+      in
+
+      Attrib.join_map_locs (Attrib.attr_of_loc a) (Attrib.attr_of_loc b)
+    in
+    let set_attr a e =
+      BasilExpr.unfix e
+      |> AbstractExpr.map_attrib (Attrib.merge_map_shadow a)
+      |> BasilExpr.fix
+    in
     match x with
     | Expr_Match (e, o, cases, c) ->
         let e = trans_expr e in
-        trans_match p_st e cases
-    | Expr_Cases (o, cases, c) -> trans_cases p_st cases
+        trans_match p_st e cases |> set_attr (attr_loc_range o c)
+    | Expr_Cases (o, cases, c) ->
+        trans_cases p_st cases |> set_attr (attr_loc_range o c)
     | Expr_Paren (o, e, c) ->
         trans_expr e |> BasilExpr.unfix
         |> AbstractExpr.map_attrib (fun e ->
             Attrib.merge_map_shadow e (expr_range_attr o c))
         |> BasilExpr.fix
+        |> set_attr (attr_loc_range o c)
     | Expr_Global (GlobalUntyped g) ->
         BasilExpr.rvar @@ lookup_global_decl g p_st
     | Expr_Global (GlobalTyped (g, type')) ->
@@ -1279,28 +1293,38 @@ module BasilASTLoader = struct
           in
           (*print_endline @@ "warn: local use before def: " ^ Var.to_string v;*)
           BasilExpr.rvar v)
-    | Expr_Assoc (binop, _, rs, _) -> (
+    | Expr_Assoc (binop, o, rs, c) -> (
         match trans_intrinop binop with
         | #AllOps.intrin as op ->
-            BasilExpr.applyintrin ~op (List.map trans_expr rs)
+            BasilExpr.applyintrin ~attrib:(attr_loc_range o c) ~op
+              (List.map trans_expr rs)
         | _ -> failwith "non-associative operator")
-    | Expr_Binary (binop, _, expr0, expr, _) -> (
+    | Expr_Binary (binop, o, expr0, expr, c) -> (
         let op = transBinOp binop in
         let e1 = trans_expr expr0 in
         let e2 = trans_expr expr in
+        let attrib = attr_loc_range o c in
         match op with
-        | #AllOps.binary as op -> BasilExpr.binexp ~op e1 e2
-        | #AllOps.intrin as op -> BasilExpr.applyintrin ~op [ e1; e2 ]
-        | `BVUGT -> BasilExpr.boolnot (BasilExpr.binexp ~op:`BVULE e1 e2)
-        | `BVUGE -> BasilExpr.boolnot (BasilExpr.binexp ~op:`BVULT e1 e2)
-        | `BVSGT -> BasilExpr.boolnot (BasilExpr.binexp ~op:`BVSLE e1 e2)
-        | `BVSGE -> BasilExpr.boolnot (BasilExpr.binexp ~op:`BVSLT e1 e2)
-        | `BVXNOR -> BasilExpr.boolnot (BasilExpr.binexp ~op:`BVXOR e1 e2)
-        | `BVNOR -> BasilExpr.boolnot (BasilExpr.binexp ~op:`BVOR e1 e2)
+        | #AllOps.binary as op -> BasilExpr.binexp ~attrib ~op e1 e2
+        | #AllOps.intrin as op -> BasilExpr.applyintrin ~attrib ~op [ e1; e2 ]
+        | `BVUGT ->
+            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`BVULE e1 e2)
+        | `BVUGE ->
+            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`BVULT e1 e2)
+        | `BVSGT ->
+            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`BVSLE e1 e2)
+        | `BVSGE ->
+            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`BVSLT e1 e2)
+        | `BVXNOR ->
+            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`BVXOR e1 e2)
+        | `BVNOR -> BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`BVOR e1 e2)
         | `BVCOMP ->
-            BasilExpr.unexp ~op:`BOOLTOBV1 (BasilExpr.binexp ~op:`EQ e1 e2)
-        | `INTGE -> BasilExpr.boolnot (BasilExpr.binexp ~op:`INTLT e1 e2)
-        | `INTGT -> BasilExpr.boolnot (BasilExpr.binexp ~op:`INTLE e1 e2))
+            BasilExpr.unexp ~attrib ~op:`BOOLTOBV1
+              (BasilExpr.binexp ~op:`EQ e1 e2)
+        | `INTGE ->
+            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`INTLT e1 e2)
+        | `INTGT ->
+            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`INTLE e1 e2))
     | Expr_Unary (unop, o, expr, c) ->
         BasilExpr.unexp ~attrib:(expr_range_attr o c) ~op:(transUnOp unop)
           (trans_expr expr)
