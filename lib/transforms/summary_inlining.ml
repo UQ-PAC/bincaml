@@ -20,15 +20,17 @@ let transform_block (prog : Program.t) (proc : Program.proc)
     Block.flat_map ~phi:Common.id
       ( List.to_iter % function
         | Stmt.Instr_Call { attrib; lhs; procid; args } as stmt ->
-            let subst_var varmap expression =
-              BasilExpr.substitute
-                (fun v ->
-                  StringMap.get (Var.name v) varmap |> Option.map BasilExpr.rvar)
-                expression
-            in
             let subst_expr varmap expression =
               BasilExpr.substitute
                 (fun v -> StringMap.get (Var.name v) varmap)
+                expression
+            in
+            let subst_expr_var var expr expression =
+              BasilExpr.substitute
+                (fun v ->
+                  Option.or_
+                    (StringMap.get (Var.name v) var |> Option.map BasilExpr.rvar)
+                    ~else_:(StringMap.get (Var.name v) expr))
                 expression
             in
             let call_proc = Program.proc prog procid in
@@ -45,7 +47,7 @@ let transform_block (prog : Program.t) (proc : Program.proc)
                   Stmt.Instr_Assume
                     {
                       attrib = StringMap.empty;
-                      body = subst_var lhs @@ subst_expr args e;
+                      body = subst_expr_var lhs args e;
                       branch = false;
                     })
             in
