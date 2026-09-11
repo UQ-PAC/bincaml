@@ -305,7 +305,7 @@ rules BVLogicalBinOp ::= "bvule" |  "bvugt" |  "bvuge" | "bvult" | "bvslt" |  "b
 
 rules IntBinOp ::= "intadd" | "intmul" | "intsub" | "intdiv" | "intmod"  ;
 rules IntLogicalBinOp ::=  "intlt" | "intle" | "intgt" | "intge" ;
-rules IntrinOp ::=  "booland" | "boolor" | "bvand" | "bvor" | "bvadd" | "bvxor" | "bvconcat" | "bvmul" | "update";
+rules IntrinOp ::=  "booland" | "boolor" | "bvand" | "bvor" | "bvadd" | "bvxor" | "bvconcat" | "bvmul" | "update" | "ite";
 rules PointerBinOp ::= "ptradd" ;
 
 {- SPECIFICATION -}

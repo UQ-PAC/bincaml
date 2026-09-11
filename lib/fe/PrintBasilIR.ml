@@ -565,6 +565,7 @@ and prtIntrinOp (i:int) (e : AbsBasilIR.intrinOp) : doc = match e with
   |    AbsBasilIR.IntrinOp_bvconcat  -> prPrec i 0 (concatD [render "bvconcat"])
   |    AbsBasilIR.IntrinOp_bvmul  -> prPrec i 0 (concatD [render "bvmul"])
   |    AbsBasilIR.IntrinOp_update  -> prPrec i 0 (concatD [render "update"])
+  |    AbsBasilIR.IntrinOp_ite  -> prPrec i 0 (concatD [render "ite"])
 
 
 and prtPointerBinOp (i:int) (e : AbsBasilIR.pointerBinOp) : doc = match e with

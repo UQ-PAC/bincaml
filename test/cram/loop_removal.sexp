@@ -1,0 +1,11 @@
+(load-il "./loop_removal.il")
+(run-transform "irreducible-loops")
+(run-transform "remove-loops")
+(run-transform "ssa")
+(run-transform "inline-summaries")
+(run-transform "cfa-reduction")
+(run-transform "simplify")
+(dump-il "./out.il")
+(dump-smt "./out.smt")
+(dump-boogie "./out.bpl")
+

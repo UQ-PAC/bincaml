@@ -13,6 +13,7 @@ type t =
   | SSA
   | DSA
   | NoPhis
+  | NoSummaries
   | Params
   | LambdaLift
   | MemoryEncoding
@@ -20,6 +21,7 @@ type t =
   | ReducibleLoops
       (** All loops are reducible. That is, there are no {i irreducible} loops.
       *)
+  | Acyclic
 [@@deriving show { with_path = false }, eq, ord]
 
 let read s =
@@ -28,10 +30,12 @@ let read s =
   | "SSA" -> SSA
   | "DSA" -> DSA
   | "NoPhis" -> NoPhis
+  | "NoSummaries" -> NoSummaries
   | "Params" -> Params
   | "LambdaLift" -> LambdaLift
   | "ReducibleLoops" -> ReducibleLoops
   | "MemoryEncoding" -> MemoryEncoding
+  | "Acyclic" -> Acyclic
   | _ -> failwith (Printf.sprintf "cannot parse string into Invariants.t: %s" s)
 
 let show_list xs = "[" ^ CCString.concat ", " (List.map show xs) ^ "]"

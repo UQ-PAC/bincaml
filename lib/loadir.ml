@@ -1471,6 +1471,7 @@ module BasilASTLoader = struct
     | IntrinOp_bvxor -> `BVXOR
     | IntrinOp_bvconcat -> `BVConcat
     | IntrinOp_bvmul -> `BVMUL
+    | IntrinOp_ite -> `IfThenElse
 end
 
 exception ILBParseError of { input : Pp_loc.Input.t; lexbuf : Lexing.lexbuf }

@@ -434,6 +434,7 @@ and transIntrinOp (x : intrinOp) : result = match x with
   | IntrinOp_bvconcat  -> failure x
   | IntrinOp_bvmul  -> failure x
   | IntrinOp_update  -> failure x
+  | IntrinOp_ite  -> failure x
 
 
 and transPointerBinOp (x : pointerBinOp) : result = match x with
