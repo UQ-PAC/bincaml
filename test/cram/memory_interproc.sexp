@@ -13,5 +13,5 @@
 (run-transforms "inter-function-summaries")
 
 (dump-il "after.il")
-(run-transforms flatten-phis)
+(run-transforms dynamic-single-assignment)
 (dump-boogie "out.bpl")

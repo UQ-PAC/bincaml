@@ -9,9 +9,8 @@ homepage: "https://github.com/username/reponame"
 doc: "https://url/to/documentation"
 bug-reports: "https://github.com/username/reponame/issues"
 depends: [
-  "dune" {>= "3.24"}
+  "dune" {>= "3.19"}
   "ocaml"
-  "ppx_expect"
   "odoc" {with-doc}
 ]
 build: [
@@ -38,4 +37,5 @@ depexts: [
   ["capstone"] {os = "macos" & os-distribution = "homebrew"}
   ["capstone"] {os = "freebsd"}
   ["capstone"] {os-distribution = "nixos"}
+  ["capstone"] {os-family = "arch"}
 ]

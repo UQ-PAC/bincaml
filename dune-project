@@ -1,4 +1,4 @@
-(lang dune 3.24)
+(lang dune 3.19)
 
 (using menhir 3.0)
 
@@ -25,10 +25,7 @@
 (package
  (name capstone_arm64_disas)
  (synopsis "Disas arm ops with capstone")
- (depends
-   ocaml
-   ppx_expect
-   )
+ (depends ocaml)
 )
 
 (package
@@ -67,9 +64,9 @@
   stb_image
   kittyimg
   terminal_size
-  (ocamlformat :with-dev-setup)
-  (odig :with-dev-setup)
-  (sherlodoc :with-doc)
+  (ocamlformat (and (= 0.29.0) :with-dev-setup))
+  (ocaml-lsp-server :with-dev-setup)
+  (odoc-driver :with-doc)
   ppx_expect
   (alcotest :with-test))
  (tags (program-analysis)))

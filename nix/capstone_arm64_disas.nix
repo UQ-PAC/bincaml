@@ -1,19 +1,12 @@
 {
   lib,
   buildDunePackage,
-  nix-gitignore,
   writableTmpDirAsHomeHook,
   capstone,
 
   # ocaml packages
-  logs,
-  fmt,
-  iter,
-  linol,
-  linol-lwt,
-  containers,
-  ppx_deriving,
-  ppx_expect,
+  ocaml,
+  bincaml,
 
   # test:
 
@@ -26,27 +19,15 @@ buildDunePackage {
 
   minimalOCamlVersion = "5.0";
 
-  src = nix-gitignore.gitignoreSource [ "nix" "flake.nix" "flake.lock" ] ./..;
+  inherit (bincaml) src;
 
   checkInputs = [ ];
   nativeBuildInputs = [ writableTmpDirAsHomeHook ];
-  buildInputs = [
-    logs
-    fmt
-    iter
-    linol
-    linol-lwt
-    containers
-    ppx_deriving
-    ppx_expect
-  ];
+  buildInputs = [ ocaml ];
   propagatedBuildInputs = [ capstone ];
 
-  doCheck = false;
-  outputs = [
-    "out"
-    "dev"
-  ];
+  outputs = [ "out" ];
+  doCheck = false; # missing (package) declarations in dune files
 
   meta = {
     homepage = "https://github.com/agle/bincaml";

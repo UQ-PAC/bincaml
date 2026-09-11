@@ -6,4 +6,5 @@ depexts: [
   ["capstone"] {os = "macos" & os-distribution = "homebrew"}
   ["capstone"] {os = "freebsd"}
   ["capstone"] {os-distribution = "nixos"}
+  ["capstone"] {os-family = "arch"}
 ]

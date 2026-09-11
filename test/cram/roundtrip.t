@@ -27,12 +27,12 @@ Memassign repr
 
   $ diff beforemem.il aftermem.il
   $ cat aftermem.il
+  var observable $Global_4325420_4325424:bv32 classification true;
   type uninterpSort = UninterpSort;
   type opaque = A | B | C;
   type variants = AA of {a: bv64} | BB of {b: bv32} | CC of {c: bv8};
   type record = Record of {a: bv64; b: bv32; c: bv64};
   type ilist = Cons of {head: bv64; tail: ilist} | Nil;
-  var observable $Global_4325420_4325424:bv32 classification true;
   let $mul_2 (a:bv64), (b:bv64) : bv64 = (bvadd(b:bv64, bvmul(a:bv64, 0x2:bv64)));
   let $test (a:bv64) : bv64 = (if eq(a:bv64, 0x1:bv64) then 0xa:bv64 else 0xb:bv64);
   proc @main_4196164(R0_in:bv64, R10_in:bv64, R11_in:bv64, R12_in:bv64, R13_in:bv64,

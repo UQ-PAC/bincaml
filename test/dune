@@ -7,7 +7,7 @@
 (library
  (name bincaml_inline_tests)
  (inline_tests)
- (modules test_expr_print)
- (libraries)
+ (modules test_expr_print test_util_indexlist)
+ (libraries bincaml.util)
  (preprocess
   (pps ppx_expect)))

@@ -4,10 +4,6 @@
 
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
 
-    pac-nix.url = "github:katrinafyi/pac-nix";
-    # WARNING: this follows won't work because it causes bnfc build failure
-    # pac-nix.inputs.nixpkgs.follows = "nixpkgs";
-
     infuse-src.url = "https://codeberg.org/awarina/infuse.nix/archive/trunk.tar.gz";
     infuse-src.flake = false;
   };
@@ -16,7 +12,6 @@
       self,
       infuse-src,
       nixpkgs,
-      pac-nix,
     }@args:
     let
       inherit (nixpkgs) lib;
@@ -37,7 +32,11 @@
     in
     flake-for-all-systems args {
       overlays = {
-        addBincamlPackages = ofinal: _: {
+        addPackages = final: _: {
+          bnfc-treesitter = final.callPackage ./nix/bnfc-treesitter.nix { };
+        };
+
+        addOcamlPackages = ofinal: _: {
           buildDune324Package = ofinal.buildDunePackage.override {
             dune_3 = ofinal.dune_3_24;
           };
@@ -53,6 +52,7 @@
           capstone_arm64_disas = ofinal.callPackage ./nix/capstone_arm64_disas.nix {
             buildDunePackage = ofinal.buildDune324Package;
           };
+          bincamlDocs = ofinal.callPackage ./nix/bincaml-docs.nix { };
 
           ocaml-protoc-plugin-6-1-0 = ofinal.callPackage ./nix/ocaml-protoc-plugin.nix { };
           aslp_lifter_ocaml = ofinal.callPackage ./nix/aslp-lifter-ocaml.nix { };
@@ -61,6 +61,17 @@
           kittyimg = ofinal.callPackage ./nix/kittyimg.nix { };
           stb_image = ofinal.callPackage ./nix/stb_image.nix { };
           containers = ofinal.callPackage ./nix/containers.nix { };
+
+          odoc_3_2 = ofinal.callPackage ./nix/odoc.nix { };
+          sherlodoc = ofinal.callPackage ./nix/sherlodoc.nix {
+            odoc = ofinal.odoc_3_2;
+          };
+          odoc-md = ofinal.callPackage ./nix/odoc-md.nix {
+            odoc = ofinal.odoc_3_2;
+          };
+          odoc-driver = ofinal.callPackage ./nix/odoc-driver.nix {
+            odoc = ofinal.odoc_3_2;
+          };
         };
 
         enableOcamlFramePointer =
@@ -84,30 +95,48 @@
           self,
           system,
           nixpkgs,
-          pac-nix,
           ...
         }:
         let
-          inherit (pac-nix.legacyPackages) bnfc-treesitter;
+          pkgs = import nixpkgs {
+            system = system;
+            overlays = [ self.overlays.addPackages ];
+          };
 
-          pkgs = nixpkgs.legacyPackages;
-          selfOcamlPackages = pkgs.ocamlPackages.overrideScope self.overlays.addBincamlPackages;
-          fpOcamlPackages = selfOcamlPackages.overrideScope self.overlays.enableOcamlFramePointer;
+          ocamlPackages = pkgs.ocamlPackages.overrideScope (
+            _: _: {
+              z3-bin = pkgs.z3;
+            }
+          );
+          selfOcamlPackages = ocamlPackages.overrideScope self.overlays.addOcamlPackages;
+          fpOcamlPackages = selfOcamlPackages.overrideScope self.overlays.addOcamlPackages;
         in
         {
           defaultPackage = selfOcamlPackages.bincaml;
 
+          packages = {
+            inherit (selfOcamlPackages)
+              bincaml
+              bincaml_lsp
+              aslp_lifter_ocaml
+              capstone_arm64_disas
+              intPQueue
+              hector
+              kittyimg
+              stb_image
+              containers
+              dune_3_24
+              ;
+
+            bnfc-treesitter = pkgs.bnfc-treesitter;
+
+            ci = self.devShells.ci;
+          };
+
           legacyPackages = {
-            bincaml = selfOcamlPackages.bincaml;
-            bincaml_lsp = selfOcamlPackages.bincaml_lsp;
-            aslp_lifter_ocaml = selfOcamlPackages.aslp_lifter_ocaml;
-            capstone_arm64_disas = selfOcamlPackages.capstone_arm64_disas;
-            intPQueue = selfOcamlPackages.intPQueue;
-            hector = selfOcamlPackages.hector;
-            kittyimg = selfOcamlPackages.kittyimg;
-            stb_image = selfOcamlPackages.stb_image;
-            containers = selfOcamlPackages.containers;
-            dune_3_24 = selfOcamlPackages.dune_3_24;
+            ocamlPackages = selfOcamlPackages;
+            bincamlDocs = selfOcamlPackages.bincamlDocs;
+            pkgs = pkgs;
 
             fp.bincaml = fpOcamlPackages.bincaml;
             fp.bincaml_lsp = fpOcamlPackages.bincaml_lsp;
@@ -123,12 +152,13 @@
           devShells = {
             default = self.devShells.fp;
             fp = fpOcamlPackages.callPackage ./nix/shell.nix {
-              inherit bnfc-treesitter;
-              z3 = pkgs.z3.out;
+              isShellForCI = false;
             };
             no-fp = selfOcamlPackages.callPackage ./nix/shell.nix {
-              inherit bnfc-treesitter;
-              z3 = pkgs.z3.out;
+              isShellForCI = false;
+            };
+            ci = selfOcamlPackages.callPackage ./nix/shell.nix {
+              isShellForCI = true;
             };
           };
         };
