@@ -55,7 +55,7 @@ let transform_block (prog : Program.t) (proc : Program.proc)
   in
 
   let entry_id = Procedure.get_blocks_succ proc Entry in
-  let return_id = Procedure.get_blocks_pred proc Return in
+  let return_ids = Procedure.get_blocks_pred proc Return in
 
   (* Add requires to entry block. *)
   let spec = Procedure.specification proc in
@@ -72,8 +72,8 @@ let transform_block (prog : Program.t) (proc : Program.proc)
   in
 
   (* Add ensures to return block. *)
-  match List.head_opt return_id with
-  | Some id when ID.equal bid id ->
+  match List.find_opt (ID.equal bid) return_ids with
+  | Some id ->
       Block.append_stmts block
         (List.map
            (fun e -> Stmt.Instr_Assert { attrib = StringMap.empty; body = e })

@@ -24,7 +24,19 @@ let transform_loop (prog : Program.t) (proc : Program.proc)
   let dest = ProcIntra.BlockGraph.E.dst in
   let src = ProcIntra.BlockGraph.E.src in
 
-  (* Treat any assertions in the header as invariants. *)
+  (* Extract all guard assumes. AND them. *)
+  let guard =
+    Block.fold_forwards ~phi:const
+      ~f:(fun acc stmt ->
+        match stmt with
+        | Stmt.Instr_Assume { body; branch = true } -> body :: acc
+        | _ -> acc)
+      [] header_block
+    |> List.cons (BasilExpr.boolconst true)
+    |> BasilExpr.applyintrin ~op:`AND
+  in
+
+  (* Extract all assertions in header as invariants. *)
   let invariants =
     Block.fold_forwards ~phi:const
       ~f:(fun acc stmt ->
@@ -32,10 +44,19 @@ let transform_loop (prog : Program.t) (proc : Program.proc)
       [] header_block
   in
 
+  (* Get modified vars in loop body.
+     Consists of any variable appearing in a lvar
+     in a block internal to the loop. *)
+  let modified =
+    nodes |> IDSet.to_iter
+    |> Iter.filter_map (Procedure.get_block proc)
+    |> Iter.flat_map Block.assigned_vars_iter
+    |> VarSet.of_iter
+  in
+
   (* Add havoc statements. *)
   let havocs =
-    Block.free_vars header_block
-    |> VarSet.to_list
+    modified |> VarSet.to_list
     |> List.map (fun var ->
         Stmt.Instr_IntrinCall
           {
@@ -57,15 +78,15 @@ let transform_loop (prog : Program.t) (proc : Program.proc)
   let header_block = Block.append_stmts header_block (havocs @ assumes) in
   let proc = Procedure.update_block proc header header_block in
 
-  (* Add invariants to a backedge, subbing phi node vars. *)
-  let add_invariants =
+  (* Add invariants to a backedge (implied by guards), subbing phi node vars. *)
+  let add_invariants block bid =
     let phis =
       header_block.phis
       |> List.map (fun (phi : 'v Block.phi) ->
           let rhs =
             List.find_map
               (fun (id, v) ->
-                if ID.equal id header then Some (BasilExpr.rvar v) else None)
+                if ID.equal id bid then Some (BasilExpr.rvar v) else None)
               phi.rhs
           in
           (phi.lhs, rhs))
@@ -73,13 +94,12 @@ let transform_loop (prog : Program.t) (proc : Program.proc)
     in
     let invariants =
       invariants
+      |> List.map (BasilExpr.binexp ~op:`IMPLIES guard)
       |> List.map @@ BasilExpr.substitute (Option.flatten % flip VarMap.get phis)
       |> List.map (fun inv ->
           Stmt.Instr_Assert { body = inv; attrib = Attrib.empty })
     in
-    fun block ->
-      let block = Block.append_stmts block invariants in
-      block
+    Block.append_stmts block invariants
   in
 
   backedges
@@ -89,7 +109,9 @@ let transform_loop (prog : Program.t) (proc : Program.proc)
          let dest_id : IDSet.elt = dest edge in
          let block = Procedure.get_block acc src_id |> Option.get in
          (* Update all entry nodes on back edges to assert invariants. *)
-         let acc = Procedure.update_block acc src_id (add_invariants block) in
+         let acc =
+           Procedure.update_block acc src_id (add_invariants block src_id)
+         in
          (* Remove the back edge. *)
          Procedure.map_graph
            (fun g ->

@@ -299,7 +299,7 @@ module Spec = struct
   [@@deriving show { with_path = false }, eq, ord]
 
   type intrin =
-    [ `Cases | `IfThenElse  (** choose first argument that is defined *) ]
+    [ `Cases  (** choose first argument that is defined *) | `IfThenElse ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type unary = [ `Old | `Classification | `Gamma ]
