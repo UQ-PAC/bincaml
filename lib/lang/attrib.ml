@@ -118,3 +118,6 @@ let find_int_opt k (e : t option) =
 
 let find_loc_opt (e : t option) =
   find_opt location_key e |> Option.map loc_of_attr
+
+let find_int_map k (m : attrib_map) =
+  match StringMap.get k m with Some (`CamlInt n) -> Some n | _ -> None

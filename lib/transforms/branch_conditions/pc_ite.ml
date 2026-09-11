@@ -18,8 +18,12 @@
 open Lang
 open Common
 
+open struct
+  let equiv_exp e1 e2 = Expr.BasilExpr.(equal (drop_attrib e1) (drop_attrib e2))
+end
+
 module PcValue = struct
-  type 'a t = { cond : 'a; t_case : Bitvec.t; f_case : Bitvec.t }
+  type 'a t = { cond : 'a; t_case : int; f_case : int }
   [@@deriving show { with_path = false }, ord, eq]
 
   let extract_value (f : Expr.BasilExpr.t -> 'a option) (e : Expr.BasilExpr.t) :
@@ -39,38 +43,39 @@ module PcValue = struct
                 };
               Constant { const = `Bitvector f_case };
             ];
-        } ->
-        f (fix cond) |> Option.map (fun cond -> { cond; t_case; f_case })
+        } -> (
+        try
+          let t_case = Bitvec.value t_case |> Z.to_int in
+          let f_case = Bitvec.value f_case |> Z.to_int in
+          f (fix cond) |> Option.map (fun cond -> { cond; t_case; f_case })
+        with Z.Overflow -> None)
     | _ -> None
 end
 
-(** A (semi-direct?) product domain that simultaneously finds flags and uses
-    those flags to identify PC values. *)
 module PcDomain = struct
   open Cfg_analysis
 
   let name = "TODO"
 
-  type t = {
-    flags : FlagDomain.t;
-        [@printer fun fmt -> fprintf fmt "%s" % FlagDomain.show]
-    pc : Rewriter.t PcValue.t option;
-  }
+  type t = Top | Pc of Expr.BasilExpr.t PcValue.t | Bottom
   [@@deriving show { with_path = false }, ord, eq]
 
   let pretty = Containers_pp.text % show
-  let top = { flags = FlagDomain.top; pc = None }
-  let bottom = { flags = FlagDomain.bottom; pc = None }
+  let top = Top
+  let bottom = Bottom
 
   let join a b =
-    {
-      flags = FlagDomain.join a.flags b.flags;
-      pc =
-        (if Option.equal (PcValue.equal Rewriter.equal) a.pc b.pc then a.pc
-         else None);
-    }
+    match (a, b) with
+    | Top, _ | _, Top -> Top
+    | Pc a, Pc b -> if (PcValue.equal equiv_exp) a b then Pc a else Top
+    | Bottom, b | b, Bottom -> b
 
-  let leq a b = FlagDomain.leq a.flags b.flags
+  let leq a b =
+    match (a, b) with
+    | Bottom, _ | _, Top -> true
+    | _, Bottom | Top, _ -> false
+    | Pc a, Pc b -> PcValue.equal equiv_exp a b
+
   let widening = join
   let narrowing = const
 
@@ -80,30 +85,82 @@ module PcDomain = struct
   let transfer state stmt =
     match stmt with
     | Stmt.Instr_Assign { al } ->
-        let flags = FlagDomain.transfer state.flags stmt in
         let pc =
           List.fold_left
             (fun pc (_v, e) ->
               (* HACK: the variable is ignored here... we assume that any
-                 assignment that looks like a PC ite is a PC ite... *)
-              PcValue.extract_value
-                (fun cond ->
-                  match
-                    Rewriter.extract_condition flags (Expr.BasilExpr.unfix cond)
-                  with
-                  | Top -> None
-                  | a -> Some a)
-                e
-              |> Option.map (fun pc -> Some pc)
+                 assignment that looks like a PC ite is a PC ite...
+
+                 Ideally there would be a way to identify a variable as PC
+                 without looking at its name! *)
+              PcValue.extract_value (fun cond -> Some cond) e
+              |> Option.map (fun pc -> Pc pc)
               |> Option.get_or ~default:pc)
-            state.pc al
+            state al
         in
-        { flags; pc }
+        pc
     | _ -> state
 
-  let transfer_phi state (p : Var.t Block.phi) =
-    let flags = FlagDomain.transfer_phi state.flags p in
-    { flags; pc = None }
+  let transfer_phi state (p : Var.t Block.phi) = Top
 end
 
 module PcAnalysis = Analysis.Intra_analysis.Forwards (PcDomain)
+
+(** Add singleton guard blocks after the block with id [bid], between the left
+    and right successors [l] and [r] if such an operation is valid. *)
+let try_add_cond_blocks (p : Program.proc) (a : PcDomain.t) bid
+    ((lid, l) : ID.t * Program.bloc) ((rid, r) : ID.t * Program.bloc) =
+  let open Option.Infix in
+  let* pc = match a with Pc p -> Some p | _ -> None in
+  let cond = pc.cond in
+  let ncond = Expr.BasilExpr.unexp ~op:`BoolNOT pc.cond in
+  let* l_addr = Attrib.find_int_map ".address" l.attrib in
+  let* r_addr = Attrib.find_int_map ".address" r.attrib in
+  if
+    (not @@ (l_addr = r_addr))
+    && List.mem pc.t_case [ l_addr; r_addr ]
+    && List.mem pc.f_case [ l_addr; r_addr ]
+  then
+    let p, tb =
+      Procedure.fresh_block p
+        ~stmts:
+          [
+            Stmt.Instr_Assume
+              { attrib = StringMap.empty; body = cond; branch = true };
+          ]
+        ()
+    in
+    let p, fb =
+      Procedure.fresh_block p
+        ~stmts:
+          [
+            Stmt.Instr_Assume
+              { attrib = StringMap.empty; body = ncond; branch = true };
+          ]
+        ()
+    in
+    let p = Procedure.modify_succs p bid ~remove:[ lid; rid ] ~add:[ tb; fb ] in
+    let p =
+      if pc.t_case = l_addr then
+        Procedure.modify_succs p tb ~remove:[] ~add:[ lid ] |> fun p ->
+        Procedure.modify_succs p fb ~remove:[] ~add:[ rid ]
+      else
+        Procedure.modify_succs p tb ~remove:[] ~add:[ rid ] |> fun p ->
+        Procedure.modify_succs p fb ~remove:[] ~add:[ lid ]
+    in
+    Some p
+  else None
+
+let transform (p : Program.proc) =
+  let a = PcAnalysis.analyse p in
+  Procedure.iter_blocks p
+  |> Iter.filter_map (fun (bid, _) ->
+      PcAnalysis.A.M.find_opt (Procedure.Vert.End bid) a
+      |> Option.map (fun r -> (bid, r)))
+  |> Iter.fold
+       (fun p (bid, (r : PcDomain.t)) ->
+         match Procedure.blocks_succ p bid |> Iter.to_list with
+         | [ a; b ] ->
+             try_add_cond_blocks p r bid a b |> Option.get_or ~default:p
+         | _ -> p)
+       p
