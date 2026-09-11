@@ -467,239 +467,261 @@ let set_params_with_map ?(skip_observable = true) ?(skip_maps = true)
 let set_params ?skip_observable ?skip_maps (p : Program.t) : Program.t =
   fst (set_params_with_map ?skip_observable ?skip_maps p)
 
-let ssa ?(skip_observable = true) ?(skip_maps = true) (in_proc : Program.proc) =
-  let in_proc =
-    intro_ssi_assigns in_proc (should_lift ~skip_observable ~skip_maps)
-  in
-  let lives = Livevars.run in_proc in
-  let rename r v : Var.t =
-    if
-      (* don't rename formal out params; should only be assigned once anyway*)
-      (not @@ should_lift ~skip_observable ~skip_maps v)
-      || Procedure.formal_out_params in_proc
-         |> StringMap.exists (fun _ i -> Var.equal i v)
-    then v
+module Skip = struct
+  module S = struct
+    type t = Observable | Map [@@deriving show { with_path = false }, eq, ord]
+  end
+
+  include Set.Make (S)
+
+  let full = empty |> add Observable |> add Map
+
+  let skip (set : t) (v : Var.t) =
+    (mem Observable set && Var.is_shared v)
+    || (mem Map set && Var.typ v |> function Map _ -> true | _ -> false)
+    (* Always skip globals and constants. *)
+    || (Var.is_global v && Var.is_constant v)
+
+  let keep s v = not @@ skip s v
+end
+
+module Construction = struct
+  open Procedure
+  module Dom = Graph.Dominator.Make (G)
+  module WL = Worklist.Make (ID)
+  module FL = Set.Make (Procedure.Vert)
+  open Effect
+  open Effect.Deep
+
+  type _ Effect.t += GetReachingDef : Var.t * Vert.t -> Var.t t
+  type _ Effect.t += SetReachingDef : Var.t * Var.t -> unit t
+  type _ Effect.t += CreateFreshDef : Var.t * Vert.t -> Var.t t
+
+  (** Map variables to assignment locations. *)
+  let defs ?(skipping = Skip.empty) procedure =
+    Procedure.iter_blocks procedure
+    |> Iter.flat_map (fun (id, b) ->
+        Block.assigned_vars_iter b
+        (* Filter out irrelevant variables. *)
+        |> Iter.filter (Skip.keep skipping)
+        |> Iter.map (fun v -> (id, v)))
+    |> Iter.fold
+         (fun acc (id, var) ->
+           VarMap.update var
+             (function
+               | None -> Some (IDSet.of_list [ id ])
+               | Some ids -> Some (IDSet.add id ids))
+             acc)
+         VarMap.empty
+
+  (** Adds phis for single var to graph given the dominance frontier and initial
+      definitions of v in blocks listed in defs. *)
+  let add_phis (dom_frontier : Vert.t -> Vert.t list) (graph : RevG.t)
+      ((var, defs) : Var.t * IDSet.t) : RevG.t =
+    (* Init the worklist to all initial define sites. *)
+    let worklist = WL.create () in
+    WL.add_iter worklist (IDSet.to_iter defs);
+
+    (* fl flags blocks with added phi nodes. *)
+    let flags = ref FL.empty in
+
+    let graph = ref graph in
+    while WL.non_empty worklist do
+      let x = WL.pop worklist in
+      dom_frontier (Vert.Begin x)
+      |> List.to_iter
+      (* Skip flagged blocks. *)
+      |> Iter.filter (flip FL.mem !flags %> not)
+      |> flip Iter.for_each (function
+        | Vert.Begin id as y ->
+            (* Flag the block as seen. *)
+            flags := FL.add y !flags;
+
+            (* Add to worklist if not in initial_blocks. *)
+            if not @@ IDSet.mem id defs then WL.add worklist id;
+
+            (* Add phi node for var to y. *)
+            let phi : Var.t Block.phi =
+              {
+                lhs = var;
+                rhs =
+                  G.pred !graph y
+                  |> List.filter_map (function
+                    | Vert.End id -> Some (id, var)
+                    | _ -> None);
+              }
+            in
+            let block =
+              match G.find_edge !graph (Vert.Begin id) (Vert.End id) with
+              | _, Block b, _ -> b
+              | _ -> raise Not_found
+            in
+            let block = { block with phis = phi :: block.phis } in
+            graph := G.remove_edge !graph (Begin id) (End id);
+            graph := G.add_edge_e !graph (Begin id, Block block, End id)
+        | _ -> ())
+    done;
+    !graph
+
+  (* Helper to modify a block at id *)
+  let modify_block g id f =
+    let _, e, _ = G.find_edge g (Begin id) (End id) in
+    let block = match e with Block block -> block | Jump -> raise Not_found in
+    let block = f block in
+    let g = G.remove_edge g (Begin id) (End id) in
+    let g = G.add_edge_e g (Begin id, Edge.Block block, End id) in
+    g
+
+  (* Map vertices in preorder dfs traversal of dominator tree. *)
+  let rec traversal update_block update_succ dom_tree ((g, fl) : G.t * FL.t)
+      (vert : Vert.t) =
+    if FL.mem vert fl then (g, fl)
     else
-      let nv =
-        Procedure.fresh_var ~pure:true ~name:(Var.name v) in_proc (Var.typ v)
-      in
-      r := (v, nv) :: !r;
-      nv
-  in
-  let rn_stmt rr (stmt : ('v, 'v, 'e) Stmt.t) :
-      Var.t VarMap.t * ('v, 'v, 'e) Stmt.t =
-    let read v =
-      try VarMap.find v rr with
-      | Not_found
-        when (not @@ should_lift ~skip_observable ~skip_maps v)
-             || StringMap.exists
-                  (fun i j -> Var.equal j v)
-                  (Procedure.formal_out_params in_proc)
-             || StringMap.exists
-                  (fun i j -> Var.equal j v)
-                  (Procedure.formal_in_params in_proc) ->
-          v
-      | Not_found ->
-          failwith @@ "not found: " ^ Var.to_string v
-          ^ " likely a read-uninitialised variable"
-    in
-    let new_renames = ref [] in
-    let stmt =
-      Stmt.map ~f_lvar:(rename new_renames) ~f_rvar:read
-        ~f_expr:(fun e ->
-          Expr.BasilExpr.substitute
-            (fun v -> Some (Expr.BasilExpr.rvar @@ read v))
-            e)
-        stmt
-    in
-    let vm =
-      (List.fold_left (fun m (v, nv) -> VarMap.add v nv m) rr !new_renames, stmt)
-    in
-    vm
-  in
-  let st = Hashtbl.create 100 in
-
-  (* map from block -> (orig var  -> (var * (block * var)) list) *)
-  (* block -> orig var -> phis list *)
-  let (phis
-        : ( IDSet.elt,
-            (Var.t * (IDSet.elt * Var.t) list) VarMap.t )
-          Stdlib.Hashtbl.t) =
-    Hashtbl.create 100
-  in
-
-  let phi_to_def (joined_phis : (Var.t * (IDSet.elt * Var.t) list) VarMap.t) =
-    VarMap.values joined_phis
-    |> Iter.map (function lhs, rhs -> Block.{ lhs; rhs })
-    |> Iter.to_list
-  in
-
-  let merge_existing_phi (target_block : ID.t) (block : ID.t) (v : Var.t) r =
-    match r with
-    | `Both ((phi, existing_phi_defs), b) ->
-        Some (phi, (block, b) :: existing_phi_defs)
-    | `Left phi ->
-        failwith @@ "undef pred" ^ Var.to_string v ^ "  " ^ ID.to_string block
-    | `Right rn ->
-        dbg (fun () ->
-            print_endline
-            @@ "cannot join as no phi defined for variable -> should be dead \
-                :: : " ^ Var.to_string v ^ " " ^ " block phi "
-            ^ ID.to_string target_block ^ ID.to_string block);
-        None
-  in
-
-  let merge_phi block v r =
-    match r with
-    | `Both ((phi, defs), b) -> Some (phi, (block, b) :: defs)
-    | `Left phi -> Some phi
-    | `Right rn ->
-        Some
-          ( Procedure.fresh_var ~pure:true in_proc ~name:(Var.name v) (Var.typ v),
-            [ (block, rn) ] )
-  in
-  let delayed_phis = ref IDSet.empty in
-
-  let tf_block proc block_id (b : Program.bloc) =
-    let pred = Procedure.blocks_pred proc block_id |> Iter.to_list in
-    let get_st_pred id =
-      Hashtbl.get st id |> function
-      | Some v -> v
-      | None ->
-          Hashtbl.add phis id VarMap.empty;
-          delayed_phis := IDSet.add id !delayed_phis;
-          VarMap.empty
-    in
-
-    let lives2 = lives (End block_id) in
-    let lives2 =
-      Block.fold_backwards ~init:lives2 ~phi:const
-        ~f:Stmt.(fun init -> free_vars ~init)
-        b
-    in
-
-    let new_renames = ref [] in
-    let cur_phis = b.phis in
-    let cur_phis =
-      List.fold_left
-        (fun acc ({ lhs; rhs } : Var.t Block.phi) ->
-          VarMap.add lhs
-            ( rename new_renames lhs,
-              rhs
-              |> List.map (fun (a, b) ->
-                  (a, VarMap.get_or ~default:b b (get_st_pred a))) )
-            acc)
-        VarMap.empty cur_phis
-    in
-
-    let renames, bl_phis =
-      match pred with
-      | [] ->
-          Hashtbl.add phis block_id VarMap.empty;
-          (VarMap.empty, [])
-      | [ (id, _) ] -> (Hashtbl.find st id, [])
-      | inc ->
-          let joined_phis =
-            List.map (fun (id, _) -> (id, get_st_pred id)) inc
+      let fl = FL.add vert fl in
+      let g =
+        match vert with
+        | Begin id ->
+            (* Updating the block. First need to get the edge: *)
+            modify_block g id (update_block vert)
+        | End id ->
+            (* Updating successor blocks: *)
+            G.succ g vert
             |> List.fold_left
-                 (fun phim (block, rn) ->
-                   let rn = VarMap.filter (fun v _ -> VarSet.mem v lives2) rn in
-                   VarMap.merge_safe ~f:(merge_phi block) phim rn)
-                 cur_phis
-          in
-          (* TODO: this will join everything, we should only join things with diff definitions *)
-          Hashtbl.add phis block_id joined_phis;
+                 (fun g succ ->
+                   match succ with
+                   | Vert.Begin succ_id ->
+                       modify_block g succ_id (update_succ succ_id id)
+                   | _ -> g)
+                 g
+        | _ -> g
+      in
+      dom_tree vert
+      |> List.fold_left (traversal update_block update_succ dom_tree) (g, fl)
 
-          let renames = VarMap.mapi (fun i (v, t) -> v) joined_phis in
-          (renames, phi_to_def joined_phis)
+  let rename_lvar vert lvar =
+    let rdef = perform @@ GetReachingDef (lvar, vert) in
+    (* Create a renamed lvar *)
+    let lvar' = perform @@ CreateFreshDef (lvar, vert) in
+    (* Point it to the rdef of original *)
+    perform @@ SetReachingDef (lvar', rdef);
+    (* Redirect original to this *)
+    perform @@ SetReachingDef (lvar, lvar');
+    lvar'
+
+  let rename_expr vert expr =
+    Expr.BasilExpr.substitute
+      (fun rv ->
+        Some (Expr.BasilExpr.rvar @@ perform @@ GetReachingDef (rv, vert)))
+      expr
+
+  let rename_rvar vert rvar = perform @@ GetReachingDef (rvar, vert)
+
+  let rename_block vert block =
+    (* Rename lvars in phi nodes. *)
+    let block =
+      Block.map
+        ~phi:
+          (List.map (fun (phi : Var.t Block.phi) ->
+               { phi with lhs = rename_lvar vert phi.lhs }))
+        Fun.id block
     in
+    (* Update a statement. Two passes, first update rvars then lvars. *)
+    Block.map ~phi:Fun.id
+      (Stmt.map ~f_expr:(rename_expr vert) ~f_rvar:(rename_rvar vert)
+         ~f_lvar:Fun.id
+      %> Stmt.map ~f_expr:Fun.id ~f_rvar:Fun.id ~f_lvar:(rename_lvar vert))
+      block
 
-    let renames, nb =
-      Block.map_fold_forwards
-        ~phi:(fun i j -> (i, j))
-        ~f:(fun i a -> rn_stmt i a)
-        renames b
-    in
-    let renames =
-      let l = lives (End block_id) in
-      VarMap.filter (fun v a -> VarSet.mem v l) renames
-    in
-    Hashtbl.add st block_id renames;
-    Procedure.update_block proc block_id { nb with phis = bl_phis }
-  in
-
-  let proc = Procedure.fold_blocks_topo_fwd tf_block in_proc in_proc in
-
-  let fixup_delayed block_id proc =
-    let renames = Hashtbl.find st block_id in
-    if IDSet.mem block_id !delayed_phis then
-      Procedure.blocks_succ proc block_id
-      |> Iter.filter (fun (bid, _) ->
-          let pred =
-            Procedure.G.pred
-              (Option.get_exn_or "unreachable" @@ Procedure.graph proc)
-              (Begin bid)
-          in
-          List.length pred > 1)
-      |> Iter.fold
-           (fun proc (succ_bid, _) ->
-             let eblock =
-               Procedure.get_block proc succ_bid
-               |> Option.get_exn_or "block not exist"
+  let rename_succ succ_id par_id block =
+    Block.map
+      ~phi:
+        (List.map (fun (phi : Var.t Block.phi) ->
+             let rhs =
+               phi.rhs
+               |> List.map (function
+                 | id, rvar when ID.equal id par_id ->
+                     (id, rename_rvar (End par_id) rvar)
+                 | o -> o)
              in
-             dbg (fun f ->
-                 print_endline @@ "   updating " ^ ID.to_string succ_bid;
-                 print_endline @@ "     phis"
-                 ^ Iter.to_string (function a, b ->
-                     Var.to_string a ^ "->" ^ Var.to_string b)
-                 @@ VarMap.to_iter renames);
-             let renames : Var.t VarMap.t = renames in
-             let (existing : (Var.t * (ID.t * Var.t) list) VarMap.t) =
-               Hashtbl.get_or ~default:VarMap.empty phis succ_bid
-             in
-             let nphis =
-               VarMap.merge_safe
-                 ~f:((merge_existing_phi succ_bid) block_id)
-                 existing renames
-             in
-             Hashtbl.add phis succ_bid nphis;
-             dbg (fun f ->
-                 print_endline @@ " new PHIS "
-                 ^ (nphis |> VarMap.to_iter
-                   |> Iter.to_string (function v, (v2, defs) ->
-                       Var.to_string v ^ "->" ^ Var.to_string v2 ^ "->"
-                       ^ List.to_string
-                           (function
-                             | a, b -> ID.to_string a ^ "->" ^ Var.to_string b)
-                           defs)));
-             let phis = phi_to_def nphis in
-             dbg (fun f ->
-                 print_endline @@ " new PHIS "
-                 ^ (phis
-                   |> List.to_string (fun b -> (Block.show_phi Var.pretty) b)));
-             Procedure.update_block proc succ_bid { eblock with phis })
-           proc
-    else proc
-  in
-  let proc = IDSet.fold fixup_delayed !delayed_phis proc in
-  let check_bl (block_id, (block : Program.bloc)) =
-    let pred =
-      Procedure.blocks_pred proc block_id |> Iter.map (fun (i, _) -> i)
-    in
-    let npred = Iter.length pred in
-    block.phis
-    |> List.map (fun (p : Var.t Block.phi) ->
-        List.to_iter p.rhs |> Iter.map (fun (b, _) -> b) |> fun bs ->
-        let preg = Iter.length (Iter.inter bs pred) = npred in
-        let bad = Iter.diff pred bs |> Iter.to_string ~sep:", " ID.to_string in
-        if not preg then
-          print_endline @@ "bad: " ^ ID.to_string block_id ^ "; missing " ^ bad;
-        preg)
-    |> List.for_all id
-  in
-  assert (Procedure.iter_blocks_topo_fwd proc |> Iter.for_all check_bl);
-  check_ssa ~skip_observable ~skip_maps proc;
-  proc
+             { phi with rhs }))
+      Fun.id block
 
-let ssa_prog ?(skip_observable = true) ?(skip_maps = true) (p : Program.t) =
-  Program.map_procedures (fun _ -> ssa ~skip_observable ~skip_maps) p
+  let rename_procedure ?(skipping = Skip.empty) (procedure : Program.proc)
+      (g : RevG.t) tree doms =
+    (* Hacky workaround not having stmt level cfg. *)
+    let doms a b = doms a b || Vert.equal a b in
+
+    (* Given a vertex, update the reaching def of the variable
+       such that it is the least element which dominates the existing
+       reaching def value. If no reaching def exists, set it to the
+       current location. *)
+    let rec update_reaching_def ?r defs reaching_defs (var : Var.t)
+        (vert : Vert.t) =
+      let r = Option.or_ r ~else_:(VarMap.get var reaching_defs) in
+      let r' = Option.flat_map (flip VarMap.get reaching_defs) r in
+
+      if
+        r
+        |> Option.flat_map (flip VarMap.get defs %> Option.map (flip doms vert))
+        |> Option.get_or ~default:true %> not
+      then update_reaching_def ?r:r' defs reaching_defs var vert
+      else VarMap.update var (fun _ -> r) reaching_defs
+    in
+
+    let reaching_defs : Var.t VarMap.t ref = ref VarMap.empty in
+    let defs = ref VarMap.empty in
+
+    (* Traverse the procedure renaming variables.
+       Handle reaching defs and renaming via effects for caching. *)
+    try fst @@ traversal rename_block rename_succ tree (g, FL.empty) Entry with
+    | effect GetReachingDef (var, vert), k ->
+        (* Get the reaching def of a variable from a vertex.
+           Also updates the reaching def, cached for future use. *)
+        reaching_defs := update_reaching_def !defs !reaching_defs var vert;
+        continue k (VarMap.get_or ~default:var var !reaching_defs)
+    | effect SetReachingDef (var, new_var), k ->
+        (* Set the reaching def of a var. *)
+        reaching_defs := VarMap.add var new_var !reaching_defs;
+        continue k ()
+    | effect CreateFreshDef (var, vert), k ->
+        (* Get a fresh name (if not skipping). *)
+        let var' =
+          if not @@ Skip.skip skipping var then
+            Procedure.fresh_var ~pure:true ~name:(Var.name var) procedure
+              (Var.typ var)
+          else var
+        in
+
+        (* Add definition to defs. *)
+        defs := VarMap.add var' vert !defs;
+        continue k var'
+
+  let ssa_proc ?(skipping = Skip.empty) (procedure : Program.proc) =
+    let procedure =
+      map_blocks_nondet (fun (_, b) -> { b with phis = [] }) procedure
+    in
+
+    (* let reaching_defs = Analysis.Reaching_defs.IntraAnalysis.analyse procedure in *)
+    (* Procedure.iter_blocks *)
+
+    (* Update the procedure. *)
+    procedure
+    |> map_graph (fun g ->
+        (* Dominator frontier per block: *)
+        let idom = Dom.compute_idom g Entry in
+        let doms = Dom.idom_to_dom idom in
+        let tree = Dom.idom_to_dom_tree g idom in
+        let dom_frontier = Dom.compute_dom_frontier g tree idom in
+
+        (* Map each variable to it's definition. *)
+        let defs = defs ~skipping procedure in
+
+        (* Insert phis nodes. *)
+        let g = VarMap.to_iter defs |> Iter.fold (add_phis dom_frontier) g in
+
+        (* Rename variables. *)
+        rename_procedure ~skipping procedure g tree doms)
+end
+
+let ssa_prog ?(skipping = Skip.empty) (program : Program.t) =
+  Program.map_procedures (const @@ Construction.ssa_proc ~skipping) program
