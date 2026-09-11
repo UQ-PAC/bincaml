@@ -9,7 +9,8 @@
     The original algorithm assumes no SSA, however this does as it simplifies it
     greatly. Also requires that the CFA is acyclic and pure.
 
-    Also assumes there are no assume statements mixed into blocks beyond initial guards. *)
+    Also assumes there are no assume statements mixed into blocks beyond initial
+    guards. *)
 
 open Lang
 open Lang.Common

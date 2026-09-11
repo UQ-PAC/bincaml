@@ -516,9 +516,9 @@ module DependencyGraph = struct
   (** Return ids of all declarations immediately depended on by decl. *)
   let decl_depends_on (prog : t) : declaration -> IDSet.t = function
     | Implicit (VariantCase { variant; belongs_to; constructor }) ->
-      IDSet.union (var_depends_on ~include_self:false prog constructor)
-    (type_depends_on prog belongs_to)
-
+        IDSet.union
+          (var_depends_on ~include_self:false prog constructor)
+          (type_depends_on prog belongs_to)
     | Variable { binding; classification } ->
         var_depends_on ~include_self:false prog binding
     | Type { binding; typ } -> type_depends_on prog typ
