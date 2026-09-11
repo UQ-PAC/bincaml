@@ -17,23 +17,22 @@ end
 module Calls = struct
   open BasilExpr
 
+  (** Return variable for function call bound with [name] called with [args] and
+      with return type [ret]. (Assuming call is correctly typed) *)
+  let fun_var name args ret =
+    let ty = Types.curry (List.map Expr.BasilExpr.get_typ args) ret in
+    rvar @@ Var.create name ~scope:Var.GlobalConst ty
+
   (** [addr_is_heap args] checks if an address belongs to the heap. args(0) is
       the memory encoding object. args(1) is the address to check. *)
   let addr_is_heap ?attrib args =
-    apply_fun ?attrib
-      ~func:
-        (rvar
-           (Var.create "$me_addr_is_heap" ~scope:Var.GlobalConst Types.Boolean))
-      args
+    apply_fun ?attrib ~func:(fun_var "$me_addr_is_heap" args Types.Boolean) args
 
   (** [alloc_base args] returns the base address of a supplied allocation id.
       args(0) is the memory encoding object. args(1) is the allocation id. *)
   let alloc_base ?attrib args =
     apply_fun ?attrib
-      ~func:
-        (rvar
-           (Var.create "$me_alloc_base" ~scope:Var.GlobalConst
-              (Types.Bitvector 64)))
+      ~func:(fun_var "$me_alloc_base" args (Types.Bitvector 64))
       args
 
   (** [alloc_live args] returns the liveness of an allocation. Returns value is
@@ -41,40 +40,28 @@ module Calls = struct
       encoding object. args(1) is the allocation id. *)
   let alloc_live ?attrib args =
     apply_fun ?attrib
-      ~func:
-        (rvar
-           (Var.create "$me_alloc_live" ~scope:Var.GlobalConst
-              (Types.Bitvector 2)))
+      ~func:(fun_var "$me_alloc_live" args (Types.Bitvector 2))
       args
 
   (** [alloc_size args] returns the size of an allocation. args(0) is the memory
       encoding object. args(1) is the allocation id. *)
   let alloc_size ?attrib args =
     apply_fun ?attrib
-      ~func:
-        (rvar
-           (Var.create "$me_alloc_size" ~scope:Var.GlobalConst
-              (Types.Bitvector 64)))
+      ~func:(fun_var "$me_alloc_size" args (Types.Bitvector 64))
       args
 
   (** [addr_alloc args] returns the allocation id of an address. args(0) is the
       memory encoding object. args(1) is the address. *)
   let addr_alloc ?attrib args =
     apply_fun ?attrib
-      ~func:
-        (rvar
-           (Var.create "$me_addr_alloc" ~scope:Var.GlobalConst
-              (Types.Bitvector 64)))
+      ~func:(fun_var "$me_addr_alloc" args (Types.Bitvector 64))
       args
 
   (** [addr_offset args] returns the offset an address is into its allocation.
       args(0) is the memory encoding object. args(1) is the address. *)
   let addr_offset ?attrib args =
     apply_fun ?attrib
-      ~func:
-        (rvar
-           (Var.create "$me_addr_offset" ~scope:Var.GlobalConst
-              (Types.Bitvector 64)))
+      ~func:(fun_var "$me_addr_offset" args (Types.Bitvector 64))
       args
 
   (** [alloc_size_update args] returns a new memory encoding with the size of an
@@ -82,10 +69,7 @@ module Calls = struct
       allocation id. args(2) is the new size. *)
   let alloc_size_update ?attrib args =
     apply_fun ?attrib
-      ~func:
-        (rvar
-           (Var.create "$me_alloc_size_update" ~scope:Var.GlobalConst
-              Globals.mem_encoding_typ))
+      ~func:(fun_var "$me_alloc_size_update" args Globals.mem_encoding_typ)
       args
 
   (** [alloc_live_update args] returns a new memory encoding with the liveness
@@ -93,49 +77,33 @@ module Calls = struct
       is the allocation id. args(2) is the new liveness value as a bv3. *)
   let alloc_live_update ?attrib args =
     apply_fun ?attrib
-      ~func:
-        (rvar
-           (Var.create "$me_alloc_live_update" ~scope:Var.GlobalConst
-              Globals.mem_encoding_typ))
+      ~func:(fun_var "$me_alloc_live_update" args Globals.mem_encoding_typ)
       args
 
   (** [allocate args] allocates space at a size. args(0) is the memory encoding
       object, args(1) is the updated encoding. args(2) is the address being
       allocated at. args(3) is the size of the allocation. *)
   let allocate ?attrib args =
-    apply_fun ?attrib
-      ~func:
-        (rvar (Var.create "$me_allocate" ~scope:Var.GlobalConst Types.Boolean))
-      args
+    apply_fun ?attrib ~func:(fun_var "$me_allocate" args Types.Boolean) args
 
   (** [can_alloc args] Returns whether an alloc, performed by [allocate], is
       valid/allowed. args(0) is the memory encoding object. args(1) is the
       target address. args(2) is the size of the allocation. *)
   let can_alloc ?attrib args =
-    apply_fun ?attrib
-      ~func:
-        (rvar
-           (Var.create "$me_can_allocate" ~scope:Var.GlobalConst Types.Boolean))
-      args
+    apply_fun ?attrib ~func:(fun_var "$me_can_allocate" args Types.Boolean) args
 
   (** [init_encoding args] Returns if a memory encoding is initialized. args(0)
       is the memory encoding. *)
   let init_encoding ?attrib args =
     apply_fun ?attrib
-      ~func:
-        (rvar
-           (Var.create "$me_init_encoding" ~scope:Var.GlobalConst Types.Boolean))
+      ~func:(fun_var "$me_init_encoding" args Types.Boolean)
       args
 
   (** [valid_access args] Checks if an access is valid. args(0) is the memory
       encoding object. args(1) is the address being accessed. args(2) is the
       size of the access in bytes. *)
   let valid_access ?attrib args =
-    apply_fun ?attrib
-      ~func:
-        (rvar
-           (Var.create "$me_valid_access" ~scope:Var.GlobalConst Types.Boolean))
-      args
+    apply_fun ?attrib ~func:(fun_var "$me_valid_access" args Types.Boolean) args
 end
 
 module type MemoryEncoding = sig
@@ -164,19 +132,20 @@ module type MemoryEncoding = sig
 end
 
 module MemoryEncoder (Encoding : MemoryEncoding) = struct
+  let get_decl (name : string) (body : BasilExpr.t) =
+    let name = "$" ^ name in
+    Bincaml_util.Common.Var.create name ~scope:GlobalConst
+      (Lang.Expr.BasilExpr.type_of body)
+
   let add_decl ?(attrib = Attrib.empty) (p : Program.t) (name : string)
       (bindings : Var.t list) (body : BasilExpr.t) =
-    let name = "$" ^ name in
+    let body = Lang.Expr.BasilExpr.lambda ~bound:bindings body in
     Lang.Program.add_decl p
       (Lang.Program.Function
          {
-           binding =
-             Bincaml_util.Common.Var.create name ~scope:GlobalConst
-               (Types.curry (List.map Var.typ bindings)
-               @@ Lang.Expr.BasilExpr.type_of body);
+           binding = get_decl name body;
            attrib;
-           definition : Lang.Program.func_type =
-             Function (Lang.Expr.BasilExpr.lambda ~bound:bindings body);
+           definition : Lang.Program.func_type = Function body;
          })
 
   let add_mem_encoding p =

@@ -3,6 +3,7 @@ open Abstract_expr
 
 (** Hindley-Milner type inference based on a union-find. *)
 
+open Hm_inference
 open Hm_types
 open Unification
 open Inference
