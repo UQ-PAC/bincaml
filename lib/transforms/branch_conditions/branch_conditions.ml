@@ -16,6 +16,7 @@ open Lang
 module Flags = Flags
 module Analysis = Cfg_analysis
 module Rewriter = Rewriter
+module Pc_ite = Pc_ite
 
 (** Add flag semantic annotations as attributes for debugging *)
 let annotate_flag_assigns stmt =
