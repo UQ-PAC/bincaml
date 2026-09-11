@@ -464,7 +464,7 @@ module AllOps = struct
   let is_commutative_intrin (o : intrin) =
     match o with
     | `BVADD | `BVMUL | `BVOR | `BVXOR | `BVAND | `OR | `AND -> true
-    | `Cases | `BVConcat | `MapUpdate -> false
+    | `Cases | `BVConcat | `MapUpdate | `IfThenElse -> false
 
   (** ops returning booleans *)
 
