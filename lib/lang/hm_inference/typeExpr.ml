@@ -36,7 +36,9 @@ module TCtx = Map.Make (V)
 module ATyp = struct
   (** Open recursive type expression, either a variable or type constructor. *)
 
-  type 'a expr = Var of tvar | TypeConstr of 'a list * string
+  type 'a expr =
+    | Var of tvar
+    | TypeConstr of 'a list * string
   [@@deriving eq, ord, show, map, fold]
 
   let hash he = function
