@@ -387,16 +387,15 @@ module LinearConstAnalysis = IDESSI (LinearIDE)
 
 module CopyNode = struct
   type content = {
-    (* The variable this node represents *)
-    v : Var.t;
-    (* The variables this variable is copied from, through a phi. This field
-       should only be read on parent nodes, in which case the list has either
-       no elements or >=2 elements. Note that phis are always copies, so we
-       don't need to store a function per edge *)
+    v : Var.t;  (** The variable this node represents *)
     copied_from : t list;
-    (* The union find parent node. Parent nodes have this set to None (avoid
-       cycles). *)
+        (** The variables this variable is copied from, through a phi. This
+            field should only be read on parent nodes, in which case the list
+            has either no elements or >=2 elements. Note that phis are always
+            copies, so we don't need to store a function per edge *)
     parent : edge option;
+        (** The union find parent node. Parent nodes have this set to None
+            (avoid cycles). *)
     copy_parent : t option;
   }
 
@@ -833,7 +832,7 @@ module Solver = struct
               SSome (LF.join f1 f2, n1)
           | _ -> SNone)
       |> Option.get_or ~default:SNone
-    (* The same thing as above but only copy propagation only (so much
+    (* The same thing as above but only copy propagation (so much
        duplication...) *)
     and effective_copy_parent (nodes : t list) visited =
       let step n =
