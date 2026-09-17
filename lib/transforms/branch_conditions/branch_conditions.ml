@@ -16,6 +16,7 @@ open Lang
 module Flags = Flags
 module Analysis = Cfg_analysis
 module Rewriter = Rewriter
+module Pc_ite = Pc_ite
 
 (** Add flag semantic annotations as attributes for debugging *)
 let annotate_flag_assigns stmt =
@@ -104,4 +105,4 @@ let annotate_assume_flags = stmt_transform annotate_stmt_flags
 (** Rewrite boolean expressions of flags into numerical conditions *)
 let rewrite_conditions = stmt_transform rewrite_stmt_conditions
 
-let transform = rewrite_conditions
+let transform = rewrite_conditions %> Pc_ite.transform

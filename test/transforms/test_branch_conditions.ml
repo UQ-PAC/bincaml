@@ -362,3 +362,57 @@ prog entry @main;
     ];
     prog entry @main;
     |}]
+
+let%expect_test "pc_ite" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+var $R0:bv64;
+var $PC:bv64;
+
+proc @main() -> ()
+[
+  block %main [
+    $PC:bv64 := if boolnot(eq($R0, 0x0:bv64)) then 0xce14:bv64 else 0xce08:bv64;
+    goto (%b1);
+  ];
+  block %b1 [
+    assert boolor(eq(0xce08:bv64, $PC), eq(0xce14:bv64, $PC));
+    goto (%b2,%b3);
+  ];
+  block %b2 { .address = 52756 } [
+    assume eq(0xce14:bv64, $PC);
+    goto (%ret);
+  ];
+  block %b3 { .address = 52744 } [
+    assume eq(0xce08:bv64, $PC);
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+prog entry @main;
+    |}
+  in
+  let prog = lst.prog |> Program.map_procedures (fun _ -> Pc_ite.transform) in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:200 (Lang.Program.prog_pretty prog);
+  [%expect
+    {|
+    var $R0:bv64;
+    var $PC:bv64;
+    proc @main()  -> () {  }
+      modifies $PC:bv64
+      captures $PC:bv64, $R0:bv64
+
+    [
+       block %main [ $PC:bv64 := if boolnot(eq($R0, 0x0:bv64)) then 0xce14:bv64 else 0xce08:bv64; goto (%b1); ];
+       block %b1 [ assert boolor(eq(0xce08:bv64, $PC), eq(0xce14:bv64, $PC)); goto (%block_1,%block); ];
+       block %block [ guard boolnot(eq($R0, 0x0:bv64)); goto (%b2); ];
+       block %b2 { .address = 52756 } [ assume eq(0xce14:bv64, $PC); goto (%ret); ];
+       block %block_1 [ guard boolnot(boolnot(eq($R0, 0x0:bv64))); goto (%b3); ];
+       block %b3 { .address = 52744 } [ assume eq(0xce08:bv64, $PC); goto (%ret); ];
+       block %ret [ return; ]
+    ];
+    prog entry @main;
+    |}]
