@@ -37,8 +37,20 @@ module Make (L : Label) = struct
   and 'a t = 'a content ref
   (** A node in the union find graph *)
 
-  (** Create a new node with the given contents *)
+  (** Create a new node with the given contents and no edges *)
   let make body = ref { body; parent = None }
+
+  (** Get the contents of a node ({b not} the contents of the parent node) *)
+  let get (n : 'a t) : 'a = !n.body
+
+  (** Replace the contents of this node ({b not} the contents of the parent
+      node) *)
+  let set (body : 'a) (n : 'a t) : unit = n := { !n with body }
+
+  (** Map the contents of this node with a function ({b not} the contents of the
+      parent node) *)
+  let update (f : 'a -> 'a) (n : 'a t) : unit =
+    n := { !n with body = f !n.body }
 
   (** Get the edge from a node to its parent. *)
   let rec find (v : 'a t) : 'a edge =
@@ -82,8 +94,20 @@ module MakeEquiv (L : Label) = struct
   and 'a t = 'a content ref
   (** A node in the union find graph *)
 
-  (** Create a new node with the given contents *)
-  let make body = ref { body; parent = None; eq_parent = None }
+  (** Create a new node with the given contents and no edges *)
+  let make (body : 'a) : 'a t = ref { body; parent = None; eq_parent = None }
+
+  (** Get the contents of a node ({b not} the contents of the parent node) *)
+  let get (n : 'a t) : 'a = !n.body
+
+  (** Replace the contents of this node ({b not} the contents of the parent
+      node) *)
+  let set (body : 'a) (n : 'a t) : unit = n := { !n with body }
+
+  (** Map the contents of this node with a function ({b not} the contents of the
+      parent node) *)
+  let update (f : 'a -> 'a) (n : 'a t) : unit =
+    n := { !n with body = f !n.body }
 
   (** Get the edge from a node to its parent. *)
   let rec find (v : 'a t) : 'a edge =
