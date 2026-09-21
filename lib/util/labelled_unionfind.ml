@@ -23,7 +23,7 @@
 module type Label = sig
   type t
 
-  val eq : t -> t -> bool
+  val equal : t -> t -> bool
   val identity : t
   val compose : t -> t -> t
 end
@@ -36,6 +36,9 @@ module Make (L : Label) = struct
 
   and 'a t = 'a content ref
   (** A node in the union find graph *)
+
+  (** Create a new node with the given contents *)
+  let make body = ref { body; parent = None }
 
   (** Get the edge from a node to its parent. *)
   let rec find (v : 'a t) : 'a edge =
@@ -53,12 +56,14 @@ module Make (L : Label) = struct
     let l2, v2 = find v1 in
     (L.compose l2 l1, v2)
 
+  let is_parent (v : 'a t) : bool = Option.is_none !v.parent
+
   (** [join v l v'] sets the parent of [v] to [v'] with label [l]. Panics if [v]
       is not a parent or a non-identity cycle would be formed. *)
   let join (v : 'a t) (l : L.t) (v' : 'a t) =
     assert (Option.is_none !v.parent);
     let l', p = find v' in
-    if CCEqual.physical v p then assert (L.eq (L.compose l' l) L.identity)
+    if CCEqual.physical v p then assert (L.equal (L.compose l' l) L.identity)
     else v := { !v with parent = Some (L.compose l' l, p) }
 end
 
@@ -76,6 +81,9 @@ module MakeEquiv (L : Label) = struct
 
   and 'a t = 'a content ref
   (** A node in the union find graph *)
+
+  (** Create a new node with the given contents *)
+  let make body = ref { body; parent = None; eq_parent = None }
 
   (** Get the edge from a node to its parent. *)
   let rec find (v : 'a t) : 'a edge =
@@ -102,15 +110,18 @@ module MakeEquiv (L : Label) = struct
     let l2, v2 = find v1 in
     (L.compose l2 l1, v2)
 
+  let is_parent (v : 'a t) : bool = Option.is_none !v.parent
+  let is_eq_parent (v : 'a t) : bool = Option.is_none !v.eq_parent
+
   (** [join v l v'] sets the parent of [v] to [v'] with label [l]. Panics if [v]
       is not a parent or a non-identity cycle would be formed. *)
   let join (v : 'a t) (l : L.t) (v' : 'a t) =
     assert (Option.is_none !v.parent);
     let eq_parent =
-      if L.eq l L.identity then Some (find_eq v') else !v.eq_parent
+      if L.equal l L.identity then Some (find_eq v') else !v.eq_parent
     in
     let l', p = find v' in
-    if CCEqual.physical v p then assert (L.eq (L.compose l' l) L.identity)
+    if CCEqual.physical v p then assert (L.equal (L.compose l' l) L.identity)
     else v := { !v with parent = Some (L.compose l' l, p); eq_parent }
 
   (** [join_eq v v'] marks [v] equivalent to [v']. No labelled edges are added.
@@ -119,7 +130,7 @@ module MakeEquiv (L : Label) = struct
   let join_eq (v : 'a t) (v' : 'a t) =
     let f, p = find v in
     let g, p' = find v' in
-    if CCEqual.physical p p' then assert (L.eq f g);
+    if CCEqual.physical p p' then assert (L.equal f g);
     let p = find_eq v in
     let p' = find_eq v' in
     if not @@ CCEqual.physical p p' then p := { !p with eq_parent = Some p' }
