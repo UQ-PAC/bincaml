@@ -646,29 +646,29 @@ module Construction = struct
              { phi with rhs }))
       Fun.id block
 
+  (* Given a vertex, update the reaching def of the variable
+       such that it is the least element which dominates the existing
+       reaching def value. If no reaching def exists, set it to the
+       current location. *)
+  let rec update_reaching_def ?r doms defs reaching_defs (var : Var.t)
+      (vert : Vert.t) =
+    let r = Option.or_ r ~else_:(VarMap.get var reaching_defs) in
+    let r' = Option.flat_map (flip VarMap.get reaching_defs) r in
+
+    if
+      r
+      |> Option.flat_map (flip VarMap.get defs %> Option.map (flip doms vert))
+      |> Option.get_or ~default:true %> not
+      (* && (not @@ Option.equal Var.equal r r') *)
+    then update_reaching_def ?r:r' doms defs reaching_defs var vert
+    else VarMap.update var (fun _ -> r) reaching_defs
+
   let rename_procedure ?(skipping = Skip.empty) (procedure : Program.proc)
       (g : RevG.t) tree doms =
     (* Workaround not having stmt level cfg. Given a block
        is linear/has no control flow, it is enough if a and b
        belong to the same block. *)
     let doms a b = doms a b || Vert.equal a b in
-
-    (* Given a vertex, update the reaching def of the variable
-       such that it is the least element which dominates the existing
-       reaching def value. If no reaching def exists, set it to the
-       current location. *)
-    let rec update_reaching_def ?r defs reaching_defs (var : Var.t)
-        (vert : Vert.t) =
-      let r = Option.or_ r ~else_:(VarMap.get var reaching_defs) in
-      let r' = Option.flat_map (flip VarMap.get reaching_defs) r in
-
-      if
-        r
-        |> Option.flat_map (flip VarMap.get defs %> Option.map (flip doms vert))
-        |> Option.get_or ~default:true %> not
-      then update_reaching_def ?r:r' defs reaching_defs var vert
-      else VarMap.update var (fun _ -> r) reaching_defs
-    in
 
     let reaching_defs : Var.t VarMap.t ref = ref VarMap.empty in
     let defs = ref VarMap.empty in
@@ -679,11 +679,14 @@ module Construction = struct
     | effect GetReachingDef (var, vert), k ->
         (* Get the reaching def of a variable from a vertex.
            Also updates the reaching def, cached for future use. *)
-        reaching_defs := update_reaching_def !defs !reaching_defs var vert;
+        if not @@ Skip.skip skipping var then
+          reaching_defs :=
+            update_reaching_def doms !defs !reaching_defs var vert;
         continue k (VarMap.get_or ~default:var var !reaching_defs)
     | effect SetReachingDef (var, new_var), k ->
         (* Set the reaching def of a var. *)
-        reaching_defs := VarMap.add var new_var !reaching_defs;
+        if not @@ Skip.skip skipping var then
+          reaching_defs := VarMap.add var new_var !reaching_defs;
         continue k ()
     | effect CreateFreshDef (var, vert), k ->
         (* Get a fresh name (if not skipping). *)
