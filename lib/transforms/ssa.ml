@@ -113,6 +113,21 @@ module Construction = struct
     (* fl flags blocks with added phi nodes. *)
     let flags = ref FL.empty in
 
+    (* Find all vertices where this is initialised. *)
+    let initialised = ref defs in
+    let worklist2 = WL.create () in
+    WL.add_iter worklist2 (IDSet.to_iter !initialised);
+    while WL.non_empty worklist2 do
+      let v = WL.pop worklist2 in
+      G.succ graph (Vert.End v) |> List.to_iter
+      |> flip Iter.for_each (function
+        | Vert.End v2 | Vert.Begin v2 ->
+            if not @@ IDSet.mem v2 !initialised then WL.add worklist2 v2;
+            initialised := IDSet.add v2 !initialised;
+            ()
+        | _ -> ())
+    done;
+
     let graph = ref graph in
     while WL.non_empty worklist do
       let x = WL.pop worklist in
@@ -135,7 +150,8 @@ module Construction = struct
                 rhs =
                   G.pred !graph y
                   |> List.filter_map (function
-                    | Vert.End id -> Some (id, var)
+                    | Vert.End id when IDSet.mem id !initialised ->
+                        Some (id, var)
                     | _ -> None);
               }
             in
@@ -163,6 +179,7 @@ module Construction = struct
   (* Map vertices in preorder dfs traversal of dominator tree. *)
   let rec traversal update_block update_succ dom_tree ((g, fl) : G.t * FL.t)
       (vert : Vert.t) =
+    print_endline (Vert.block_id_string vert);
     if FL.mem vert fl then (g, fl)
     else
       let fl = FL.add vert fl in
@@ -234,10 +251,11 @@ module Construction = struct
              { phi with rhs }))
       Fun.id block
 
-  (* Given a vertex, update the reaching def of the variable
-       such that it is the least element which dominates the existing
-       reaching def value. If no reaching def exists, set it to the
-       current location. *)
+  (* Update a the reaching def of var by climbing up the reaching
+     def tree until a definition which dominates vert is found.
+     As traversal is a preorder dfs of dominator tree (and topological),
+     the reaching def for a variable will only ever need to move
+     up to parents or stay fixed. *)
   let rec update_reaching_def ?r doms defs reaching_defs (var : Var.t)
       (vert : Vert.t) =
     let r = Option.or_ r ~else_:(VarMap.get var reaching_defs) in
@@ -245,9 +263,12 @@ module Construction = struct
 
     if
       r
+      (* Is the definition site of r dominated by vert? *)
       |> Option.flat_map (flip VarMap.get defs %> Option.map (flip doms vert))
+      (* Negate that *)
       |> Option.get_or ~default:true %> not
-      (* && (not @@ Option.equal Var.equal r r') *)
+      (* Also require that r has changed to avoid infinite loops. *)
+      && (not @@ Option.equal Var.equal r r')
     then update_reaching_def ?r:r' doms defs reaching_defs var vert
     else VarMap.update var (fun _ -> r) reaching_defs
 
