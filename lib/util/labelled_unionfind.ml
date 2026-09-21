@@ -206,21 +206,6 @@ module VisLabelledGraph (V : VisVertex) (L : VisLabel) = struct
 
     let vertex_name v = CCString.replace ~sub:"#" ~by:"hash" @@ Vert.show v
   end)
-
-  (*
-  let make_graph nodes =
-    let open CopyNode in
-    Iter.fold
-      (fun g (n : CopyNode.t) ->
-        match !n.parent with
-        | Some (f, n') -> G.add_edge_e g (var n, f, var n')
-        | None ->
-            List.fold_left
-              (fun g (n' : CopyNode.t) ->
-                G.add_edge_e g (var n, LF.identity, var n'))
-              g (copied_from n))
-      G.empty nodes
-      *)
 end
 
 module MakeVis (V : VisVertex) (L : VisLabel) = struct
