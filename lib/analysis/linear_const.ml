@@ -623,7 +623,9 @@ module Solver = struct
     else
       (* ARM abi tell us that R19..R29 and R31 are preserved through calls https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#611general-purpose-registers *)
       let regs =
-        List.range 19 29 @ [ 31 ] |> List.map (fun n -> "R" ^ Int.to_string n)
+        List.range 19 29 @ [ 31 ]
+        |> List.map (fun n -> "R" ^ Int.to_string n)
+        |> List.cons "SP"
       in
       let fin, fout =
         (Procedure.formal_in_params proc, Procedure.formal_out_params proc)
