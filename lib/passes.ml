@@ -69,7 +69,7 @@ module PassManager = struct
   let sparams =
     {
       name = "simple-params";
-      apply = Prog Transforms.Ssa.set_params;
+      apply = Prog Transforms.Lambda_lifting.set_params;
       doc =
         "Pull all global variables into the parameter list, discarding initial \
          parameter list (i.e. assuming its empty)";
@@ -214,7 +214,7 @@ module PassManager = struct
   let remove_unused =
     {
       name = "remove-unused-decls";
-      apply = Prog Transforms.Ssa.drop_unused_var_declarations_prog;
+      apply = Prog Transforms.Drop_unused.drop_unused_var_declarations_prog;
       doc =
         "Removes all unused variable declarations (globals and locals on each \
          procedure) from the IR program";
@@ -534,7 +534,7 @@ module PassManager = struct
         name = "lambda-lifting";
         apply =
           Prog
-            (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
+            (Transforms.Lambda_lifting.set_params ~skip_observable:false ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
         invariants = Invariants.establishes [ LambdaLift ];
       };

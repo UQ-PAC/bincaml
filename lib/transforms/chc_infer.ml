@@ -602,13 +602,13 @@ let inline_function_defs (p : Program.t) : Program.t =
 
 (** Transform program to a simplified form that can be encoded directly as
     constrained Horn clauses. *)
-let transform_internally (prog : Program.t) : Program.t * Ssa.program_lift_map =
+let transform_internally (prog : Program.t) : Program.t * Lambda_lifting.program_lift_map =
   let reduced =
     prog |> Boogie_prepass.Instructions.transform_add_store_load_decls
     |> Boogie_prepass.Normalise.replace_stmts |> inline_function_defs
     |> Boogie_prepass.Normalise.replace_exprs
   in
-  Ssa.set_params_with_map ~skip_observable:false ~skip_maps:false reduced
+  Lambda_lifting.set_params_with_map ~skip_observable:false ~skip_maps:false reduced
 
 let dump_to_file (prog : Program.t) (path : string) : unit =
   Logs.info (fun m -> m "Dumping CHC clauses to %s" path);
@@ -682,23 +682,23 @@ let loop_heads (proc : Program.proc) : ID.t list =
 (** Translate an invariant decoded over the lambda-lifted program back into the
     original program's globals, using [lift].
 
-    A {!Ssa.Body_local} (the body-local that replaced a global) or
-    {!Ssa.Out_param} (a modified global's exit value) becomes the global's
-    current value [g]. An {!Ssa.In_param} carries the global's procedure-entry
+    A {!Lambda_lifting.Body_local} (the body-local that replaced a global) or
+    {!Lambda_lifting.Out_param} (a modified global's exit value) becomes the global's
+    current value [g]. An {!Lambda_lifting.In_param} carries the global's procedure-entry
     value: in a [requires] (evaluated at entry) it is simply [g]; in an
     [ensures] or a loop-head assertion it is [old(g)]. Variables absent from
     [lift] -- the procedure's real parameters and ordinary locals -- are left
     unchanged. When [lift] is empty (e.g. the program was already lifted before
     the pass, or nothing was captured) this is the identity. *)
 let back_translate ~(mode : [ `Requires | `Ensures | `Loop ])
-    (lift : Ssa.proc_lift_map) (e : BasilExpr.t) : BasilExpr.t =
+    (lift : Lambda_lifting.proc_lift_map) (e : BasilExpr.t) : BasilExpr.t =
   if VarMap.is_empty lift then e
   else
     BasilExpr.substitute
       (fun v ->
         match VarMap.find_opt v lift with
-        | Some ((Ssa.Body_local | Ssa.Out_param), g) -> Some (BasilExpr.rvar g)
-        | Some (Ssa.In_param, g) -> (
+        | Some ((Lambda_lifting.Body_local | Lambda_lifting.Out_param), g) -> Some (BasilExpr.rvar g)
+        | Some (Lambda_lifting.In_param, g) -> (
             match mode with
             | `Requires -> Some (BasilExpr.rvar g)
             | `Ensures | `Loop ->
@@ -721,7 +721,7 @@ let back_translate ~(mode : [ `Requires | `Ensures | `Loop ])
     it prefers. Attaching them would duplicate the spec. Loop-head invariants
     are still attached either way. *)
 let annotate_proc ~(use_spec : Program.proc -> bool)
-    ~(invs : BasilExpr.t StringMap.t) ~(lift : Ssa.proc_lift_map)
+    ~(invs : BasilExpr.t StringMap.t) ~(lift : Lambda_lifting.proc_lift_map)
     (proc : Program.proc) : Program.proc =
   let live = Livevars.run proc in
   let preds = proc_predicates ~live proc in
@@ -782,7 +782,7 @@ let annotate_proc ~(use_spec : Program.proc -> bool)
     back-translating each through the per-procedure lambda-lifting map in [lift]
     (empty map => identity, for procedures that lifted nothing). *)
 let annotate_program ~(use_spec : Program.proc -> bool)
-    ~(invs : BasilExpr.t StringMap.t) ~(lift : Ssa.program_lift_map)
+    ~(invs : BasilExpr.t StringMap.t) ~(lift : Lambda_lifting.program_lift_map)
     (prog : Program.t) : Program.t =
   Program.map_procedures
     (fun id p ->
