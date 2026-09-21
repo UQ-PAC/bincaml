@@ -159,3 +159,102 @@ module MakeEquiv (L : Label) = struct
     let p' = find_eq v' in
     if not @@ CCEqual.physical p p' then p := { !p with eq_parent = Some p' }
 end
+
+module type VisVertex = sig
+  include Graph.Sig.COMPARABLE
+
+  val show : t -> string
+end
+
+module type VisLabel = sig
+  include Label
+
+  val compare : t -> t -> int
+  val show : t -> string
+end
+
+module VisLabelledGraph (V : VisVertex) (L : VisLabel) = struct
+  module Vert = V
+
+  module Edge = struct
+    include L
+
+    let default = L.identity
+  end
+
+  module G = Graph.Persistent.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
+
+  module Dot = Graph.Graphviz.Dot (struct
+    include G
+    open Vert
+    open Edge
+
+    let default_vertex_attributes _ = []
+    let graph_attributes _ = []
+    let default_edge_attributes _ = []
+    let get_subgraph _ = None
+
+    let edge_attributes (_, f, _) =
+      if L.equal f L.identity then []
+      else
+        let n = L.show f in
+        [ `Label n ]
+
+    let vertex_attributes v =
+      let n = Vert.show v in
+      [ `Shape `Box; `Fontname "Mono"; `Label n ]
+
+    let vertex_name v = CCString.replace ~sub:"#" ~by:"hash" @@ Vert.show v
+  end)
+
+  (*
+  let make_graph nodes =
+    let open CopyNode in
+    Iter.fold
+      (fun g (n : CopyNode.t) ->
+        match !n.parent with
+        | Some (f, n') -> G.add_edge_e g (var n, f, var n')
+        | None ->
+            List.fold_left
+              (fun g (n' : CopyNode.t) ->
+                G.add_edge_e g (var n, LF.identity, var n'))
+              g (copied_from n))
+      G.empty nodes
+      *)
+end
+
+module MakeVis (V : VisVertex) (L : VisLabel) = struct
+  include VisLabelledGraph (V) (L)
+  module UF = Make (L)
+
+  let make_graph edges nodes =
+    let open UF in
+    Iter.fold
+      (fun g (n : V.t t) ->
+        (match !n.parent with
+          | Some (f, n') -> G.add_edge_e g (get n, f, get n')
+          | None -> g)
+        |> fun g ->
+        List.fold_left
+          (fun g (n' : V.t t) -> G.add_edge_e g (get n, L.identity, get n'))
+          g (edges n))
+      G.empty nodes
+end
+
+module MakeEquivVis (V : VisVertex) (L : VisLabel) = struct
+  include VisLabelledGraph (V) (L)
+  module UF = MakeEquiv (L)
+
+  let make_graph edges nodes =
+    let open UF in
+    Iter.fold
+      (fun g (n : V.t t) ->
+        (match !n.parent with
+          | Some (f, n') -> G.add_edge_e g (get n, f, get n')
+          | None -> g)
+        |> fun g ->
+        List.fold_left
+          (fun g (n' : V.t t) -> G.add_edge_e g (get n, L.identity, get n'))
+          g (edges n))
+      G.empty nodes
+end

@@ -385,12 +385,14 @@ module LinearConstAnalysis = IDESSI (LinearIDE)
    this ever actually happens, we'll want to re-iterate on this procedure as we
    may have new edges to propagate to other procedures. *)
 
-module CopyNode = struct
-  module EQ = Bincaml_util.Labelled_unionfind.MakeEquiv (struct
-    include LF
+module Label = struct
+  include LF
 
-    let compose = flip compose
-  end)
+  let compose = flip compose
+end
+
+module CopyNode = struct
+  module EQ = Bincaml_util.Labelled_unionfind.MakeEquiv (Label)
 
   type body = { v : Var.t; copied_from : t list }
   and edge = body EQ.edge
@@ -477,56 +479,21 @@ module CopyNode = struct
     dfs v LF.identity |> Option.map (VarMap.values %> Iter.to_list)
 end
 
-(* TODO move this to labelled_unionfind.ml *)
-
 (** Ocamlgraph representation of the above for debug utilities *)
 module CopyGraph = struct
-  module Vert = Var
+  include
+    Bincaml_util.Labelled_unionfind.MakeEquivVis
+      (struct
+        type t = CopyNode.body
 
-  module Edge = struct
-    include LF
+        let compare (b1 : t) (b2 : t) = Var.compare b1.v b2.v
+        let hash (b : t) = Var.hash b.v
+        let equal (b1 : t) (b2 : t) = Var.equal b1.v b2.v
+        let show (b : t) = Var.name b.v
+      end)
+      (Label)
 
-    let default = identity
-  end
-
-  module G = Graph.Persistent.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
-
-  module Dot = Graph.Graphviz.Dot (struct
-    include G
-    open Vert
-    open Edge
-
-    let default_vertex_attributes _ = []
-    let graph_attributes _ = []
-    let default_edge_attributes _ = []
-    let get_subgraph _ = None
-
-    let edge_attributes (_, f, _) =
-      match f with
-      | IdEdge -> []
-      | f ->
-          let n = LF.show f in
-          [ `Label n ]
-
-    let vertex_attributes v =
-      let n = Var.name v in
-      [ `Shape `Box; `Fontname "Mono"; `Label n ]
-
-    let vertex_name = String.replace ~sub:"#" ~by:"hash" % Var.name
-  end)
-
-  let make_graph nodes =
-    let open CopyNode in
-    Iter.fold
-      (fun g (n : CopyNode.t) ->
-        match !n.parent with
-        | Some (f, n') -> G.add_edge_e g (var n, f, var n')
-        | None ->
-            List.fold_left
-              (fun g (n' : CopyNode.t) ->
-                G.add_edge_e g (var n, LF.identity, var n'))
-              g (copied_from n))
-      G.empty nodes
+  let make_graph = make_graph CopyNode.copied_from
 end
 
 type call_info = {
