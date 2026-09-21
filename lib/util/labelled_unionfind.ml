@@ -29,7 +29,7 @@ module type Label = sig
 end
 
 module Make (L : Label) = struct
-  type 'a content = { body : 'a; parent : 'a edge option }
+  type 'a content = { mutable body : 'a; mutable parent : 'a edge option }
 
   and 'a edge = L.t * 'a t
   (** An edge into a node in the union find graph with a label *)
@@ -45,12 +45,11 @@ module Make (L : Label) = struct
 
   (** Replace the contents of this node ({b not} the contents of the parent
       node) *)
-  let set (body : 'a) (n : 'a t) : unit = n := { !n with body }
+  let set (body : 'a) (n : 'a t) : unit = !n.body <- body
 
   (** Map the contents of this node with a function ({b not} the contents of the
       parent node) *)
-  let update (f : 'a -> 'a) (n : 'a t) : unit =
-    n := { !n with body = f !n.body }
+  let update (f : 'a -> 'a) (n : 'a t) : unit = !n.body <- f !n.body
 
   (** Get the edge from a node to its parent. *)
   let rec find (v : 'a t) : 'a edge =
@@ -59,7 +58,7 @@ module Make (L : Label) = struct
         let l2, v'' = find v' in
         let f = L.compose l2 l1 in
         let p = (f, v'') in
-        v := { !v with parent = Some p };
+        !v.parent <- Some p;
         p
     | None -> (L.identity, v)
 
@@ -76,16 +75,16 @@ module Make (L : Label) = struct
     assert (Option.is_none !v.parent);
     let l', p = find v' in
     if CCEqual.physical v p then assert (L.equal (L.compose l' l) L.identity)
-    else v := { !v with parent = Some (L.compose l' l, p) }
+    else !v.parent <- Some (L.compose l' l, p)
 end
 
 (** A labelled union find that also tracks the standard union find subgraph
     given by identity edges. *)
 module MakeEquiv (L : Label) = struct
   type 'a content = {
-    body : 'a;
-    parent : 'a edge option;
-    eq_parent : 'a t option;
+    mutable body : 'a;
+    mutable parent : 'a edge option;
+    mutable eq_parent : 'a t option;
   }
 
   and 'a edge = L.t * 'a t
@@ -102,12 +101,11 @@ module MakeEquiv (L : Label) = struct
 
   (** Replace the contents of this node ({b not} the contents of the parent
       node) *)
-  let set (body : 'a) (n : 'a t) : unit = n := { !n with body }
+  let set (body : 'a) (n : 'a t) : unit = !n.body <- body
 
   (** Map the contents of this node with a function ({b not} the contents of the
       parent node) *)
-  let update (f : 'a -> 'a) (n : 'a t) : unit =
-    n := { !n with body = f !n.body }
+  let update (f : 'a -> 'a) (n : 'a t) : unit = !n.body <- f !n.body
 
   (** Get the edge from a node to its parent. *)
   let rec find (v : 'a t) : 'a edge =
@@ -116,7 +114,7 @@ module MakeEquiv (L : Label) = struct
         let l2, v'' = find v' in
         let f = L.compose l2 l1 in
         let p = (f, v'') in
-        v := { !v with parent = Some p };
+        !v.parent <- Some p;
         p
     | None -> (L.identity, v)
 
@@ -125,7 +123,7 @@ module MakeEquiv (L : Label) = struct
     match !v.eq_parent with
     | Some v' ->
         let p = find_eq v' in
-        v := { !v with eq_parent = Some p };
+        !v.eq_parent <- Some p;
         p
     | None -> v
 
@@ -146,7 +144,9 @@ module MakeEquiv (L : Label) = struct
     in
     let l', p = find v' in
     if CCEqual.physical v p then assert (L.equal (L.compose l' l) L.identity)
-    else v := { !v with parent = Some (L.compose l' l, p); eq_parent }
+    else (
+      !v.parent <- Some (L.compose l' l, p);
+      !v.eq_parent <- eq_parent)
 
   (** [join_eq v v'] marks [v] equivalent to [v']. No labelled edges are added.
       If [v] and [v'] have the same labelled parent, they must have the same
@@ -157,7 +157,7 @@ module MakeEquiv (L : Label) = struct
     if CCEqual.physical p p' then assert (L.equal f g);
     let p = find_eq v in
     let p' = find_eq v' in
-    if not @@ CCEqual.physical p p' then p := { !p with eq_parent = Some p' }
+    if not @@ CCEqual.physical p p' then !p.eq_parent <- Some p'
 end
 
 module type VisVertex = sig
