@@ -4,6 +4,24 @@ open Lang.Common
 open Lang
 open Containers
 
+module Skip = struct
+  module S = struct
+    type t = Observable | Map [@@deriving show { with_path = false }, eq, ord]
+  end
+
+  include Set.Make (S)
+
+  let full = empty |> add Observable |> add Map
+
+  let skip (set : t) (v : Var.t) =
+    (mem Observable set && Var.is_shared v)
+    || (mem Map set && Var.typ v |> function Map _ -> true | _ -> false)
+    (* Always skip globals and constants. *)
+    || (Var.is_global v && Var.is_constant v)
+
+  let keep s v = not @@ skip s v
+end
+
 let debug = ref false
 let dbg_print = if !debug then print_endline else fun s -> ()
 let dbg f = if !debug then f () else ()
@@ -467,24 +485,6 @@ let set_params_with_map ?(skip_observable = true) ?(skip_maps = true)
 let set_params ?skip_observable ?skip_maps (p : Program.t) : Program.t =
   fst (set_params_with_map ?skip_observable ?skip_maps p)
 
-module Skip = struct
-  module S = struct
-    type t = Observable | Map [@@deriving show { with_path = false }, eq, ord]
-  end
-
-  include Set.Make (S)
-
-  let full = empty |> add Observable |> add Map
-
-  let skip (set : t) (v : Var.t) =
-    (mem Observable set && Var.is_shared v)
-    || (mem Map set && Var.typ v |> function Map _ -> true | _ -> false)
-    (* Always skip globals and constants. *)
-    || (Var.is_global v && Var.is_constant v)
-
-  let keep s v = not @@ skip s v
-end
-
 module Construction = struct
   open Procedure
   module Dom = Graph.Dominator.Make (G)
@@ -648,7 +648,9 @@ module Construction = struct
 
   let rename_procedure ?(skipping = Skip.empty) (procedure : Program.proc)
       (g : RevG.t) tree doms =
-    (* Hacky workaround not having stmt level cfg. *)
+    (* Workaround not having stmt level cfg. Given a block
+       is linear/has no control flow, it is enough if a and b
+       belong to the same block. *)
     let doms a b = doms a b || Vert.equal a b in
 
     (* Given a vertex, update the reaching def of the variable
