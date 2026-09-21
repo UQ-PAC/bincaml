@@ -71,7 +71,7 @@ let check_ssa ?(skipping = Skip.empty) proc =
              acc)
       VarMap.empty proc
   in
-  assert (VarMap.for_all (fun v i -> Skip.keep skipping v || i = 1) assigns)
+  assert (VarMap.for_all (fun v i -> Skip.skip skipping v || i = 1) assigns)
 
 module Construction = struct
   open Procedure
