@@ -301,12 +301,34 @@ module Construction = struct
       map_blocks_nondet (fun (_, b) -> { b with phis = [] }) procedure
     in
 
-    (* let reaching_defs = Analysis.Reaching_defs.IntraAnalysis.analyse procedure in *)
-    (* Procedure.iter_blocks *)
-
+    (* Create a fresh pre-return block for joining out params. *)
+    let procedure, rid =
+      Procedure.fresh_block procedure
+        ~stmts:
+          (Procedure.formal_out_params procedure
+          |> StringMap.values
+          |> Iter.map (fun v ->
+              Stmt.Instr_Assign { al = [(v,Expr.BasilExpr.rvar v)]; attrib = StringMap.empty })
+          |> Iter.to_list)
+        ()
+    in
     (* Update the procedure. *)
     procedure
     |> map_graph (fun g ->
+        (* Connect the pre-return block. *)
+        let returns = G.pred g Return in
+        let g = G.add_edge g (End rid) Return in
+        let g =
+          List.fold_left
+            (fun acc v ->
+              match v with
+              | Procedure.Vert.End id ->
+                  let g = G.remove_edge g (End id) Return in
+                  G.add_edge g (End id) (Begin rid)
+              | _ -> acc)
+            g returns
+        in
+
         (* Dominator frontier per block: *)
         let idom = Dom.compute_idom g Entry in
         let doms = Dom.idom_to_dom idom in
@@ -319,7 +341,6 @@ module Construction = struct
         (* MayReadUninit analysis *)
         let initialised =
           let analysis = May_read_uninit.A.analyse procedure in
-          May_read_uninit.A.print_dot (Format.of_chan stdout) procedure analysis;
           fun vert var ->
             May_read_uninit.A.A.M.find vert analysis
             |> May_read_uninit.ReadUninitAnalysis.read_var var
@@ -333,7 +354,7 @@ module Construction = struct
           VarMap.to_iter defs |> Iter.fold (add_phis initialised dom_frontier) g
         in
 
-        (* Rename variables. *)
+        (* Rename variables. Skip renaming special return block. *)
         rename_procedure ~skipping procedure g tree doms)
 end
 

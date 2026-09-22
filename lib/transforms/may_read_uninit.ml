@@ -1,13 +1,7 @@
-(** May read uninitialised analysis *)
+(** May read uninitialised analysis.
+    Compute whether variables may be uninitialized, and whether they have
+    been read while possibly unitialized. *)
 
-(*
-
-How to do this....
-
-
-BOT -> readuninit -> write
-
-*)
 open Bincaml_util.Common
 open Lang
 open Analysis
@@ -15,7 +9,9 @@ open Analysis
 module ReadUninit = struct
   let name = "read-uninitialised-analysis"
 
+  (* Indicates a variable is certainly initialised or maybe uninitialised. *)
   type state = Init | Uninit [@@deriving eq, ord]
+  (* Indicates a variable has ever been read while uninitialised (sad). *)
   type validity = Happy | Sad [@@deriving eq, ord]
   type t = Bot | Val of state * validity [@@deriving eq, ord]
 
