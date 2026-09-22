@@ -231,6 +231,16 @@ module PassManager = struct
       invariants = Invariants.presupposes [ Params ] ~establishes:[ SSA ];
     }
 
+  let destruct_ssa =
+    {
+      name = "destruct-ssa";
+      apply = Transforms.Ssa.(Proc Destruction.simple_destruction);
+      doc =
+        "Naive SSA destruction, removes all phi nodes replacing them\n\
+        \      with semantically equivalent mutable assigns.";
+      invariants = Invariants.presupposes [] ~establishes:[ NoPhis ];
+    }
+
   let cfa_reduction =
     {
       name = "cfa-reduction";
@@ -496,6 +506,7 @@ module PassManager = struct
       read_uninit false;
       read_uninit true;
       sssa;
+      destruct_ssa;
       cfa_reduction;
       sva;
       full_ssa;

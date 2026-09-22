@@ -73,6 +73,41 @@ let check_ssa ?(skipping = Skip.empty) proc =
   in
   assert (VarMap.for_all (fun v i -> Skip.skip skipping v || i = 1) assigns)
 
+module Destruction = struct
+  open Procedure
+
+  (* Simple destruction pass, replaces phi nodes with semantically equivalent
+     assigns. e.g. the phi node x_3 := phi(A->x_1, B->x_2) would be removed,
+     and statements var x_3 := x_1 would be added to A, and x_3 := x_2 to B. *)
+  let simple_destruction (procedure : Program.proc) =
+    if Procedure.graph procedure |> Option.is_none then procedure
+    else
+      let procedure =
+        fold_blocks_topo_fwd
+          (fun acc id b ->
+            b.phis |> List.to_iter
+            |> Iter.flat_map_l (fun ({ lhs; rhs } : Var.t Block.phi) ->
+                rhs
+                |> List.map (fun (src, src_var) ->
+                    let stmt =
+                      Stmt.Instr_Assign
+                        {
+                          attrib = StringMap.empty;
+                          al = [ (lhs, Expr.BasilExpr.rvar src_var) ];
+                        }
+                    in
+                    (src, stmt)))
+            |> Iter.fold
+                 (fun acc (id, stmt) ->
+                   Procedure.modify_block acc id (fun b ->
+                       Block.append_stmts b [ stmt ]))
+                 acc)
+          procedure procedure
+      in
+      (* Clear old phis afterwards. *)
+      map_blocks_nondet (fun (_, b) -> { b with phis = [] }) procedure
+end
+
 module Construction = struct
   open Procedure
   module Dom = Graph.Dominator.Make (G)
@@ -333,42 +368,43 @@ module Construction = struct
         continue k (not @@ Vert.equal vert (Begin rid))
 
   let ssa_proc ?(skipping = Skip.empty) (procedure : Program.proc) =
-    let procedure =
-      map_blocks_nondet (fun (_, b) -> { b with phis = [] }) procedure
-    in
+    if Procedure.graph procedure |> Option.is_some then
+      let procedure = Destruction.simple_destruction procedure in
 
-    let procedure, rid = unify_returns procedure in
+      let procedure, rid = unify_returns procedure in
 
-    (* Update the procedure. *)
-    procedure
-    |> map_graph (fun g ->
-        (* Dominator frontier per block: *)
-        let idom = Dom.compute_idom g Entry in
-        let doms = Dom.idom_to_dom idom in
-        let tree = Dom.idom_to_dom_tree g idom in
-        let dom_frontier = Dom.compute_dom_frontier g tree idom in
+      (* Update the procedure. *)
+      procedure
+      |> map_graph (fun g ->
+          (* Dominator frontier per block: *)
+          let idom = Dom.compute_idom g Entry in
+          let doms = Dom.idom_to_dom idom in
+          let tree = Dom.idom_to_dom_tree g idom in
+          let dom_frontier = Dom.compute_dom_frontier g tree idom in
 
-        (* Map each variable to it's definition. *)
-        let defs = defs ~skipping procedure in
+          (* Map each variable to it's definition. *)
+          let defs = defs ~skipping procedure in
 
-        (* MayReadUninit analysis *)
-        let initialised =
-          let analysis = May_read_uninit.A.analyse procedure in
-          fun vert var ->
-            May_read_uninit.A.A.M.find vert analysis
-            |> May_read_uninit.ReadUninitAnalysis.read_var var
-            |> function
-            | Val (_, May_read_uninit.ReadUninit.Happy) -> true
-            | _ -> false
-        in
+          (* MayReadUninit analysis *)
+          let initialised =
+            let analysis = May_read_uninit.A.analyse procedure in
+            fun vert var ->
+              May_read_uninit.A.A.M.find vert analysis
+              |> May_read_uninit.ReadUninitAnalysis.read_var var
+              |> function
+              | Val (_, May_read_uninit.ReadUninit.Happy) -> true
+              | _ -> false
+          in
 
-        (* Insert phis nodes. *)
-        let g =
-          VarMap.to_iter defs |> Iter.fold (add_phis initialised dom_frontier) g
-        in
+          (* Insert phis nodes. *)
+          let g =
+            VarMap.to_iter defs
+            |> Iter.fold (add_phis initialised dom_frontier) g
+          in
 
-        (* Rename variables. Skip renaming special return block. *)
-        rename_procedure ~skipping rid procedure g tree doms)
+          (* Rename variables. Skip renaming special return block. *)
+          rename_procedure ~skipping rid procedure g tree doms)
+    else procedure
 end
 
 let ssa_prog ?(skipping = Skip.empty) (program : Program.t) =
