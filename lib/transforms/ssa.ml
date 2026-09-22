@@ -369,8 +369,11 @@ module Construction = struct
 
   let ssa_proc ?(skipping = Skip.empty) (procedure : Program.proc) =
     if Procedure.graph procedure |> Option.is_some then
+      (* Destruct any previous phi nodes. Hacky but ideally
+         reconstruction is used instead of repeated SSA anyway. *)
       let procedure = Destruction.simple_destruction procedure in
 
+      (* Unify all return nodes into a single one. *)
       let procedure, rid = unify_returns procedure in
 
       (* Update the procedure. *)

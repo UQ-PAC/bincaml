@@ -38,8 +38,8 @@ module ReadUninit = struct
     | _, Bot -> false
     | Val (s1, v1), Val (s2, v2) -> leq_state s1 s2 && leq_val v1 v2
 
-  let show_state s = match s with Init -> "I" | Uninit -> "U"
-  let show_val v = match v with Happy -> ":)" | Sad -> ":("
+  let show_state s = match s with Init -> "Init" | Uninit -> "Uninit"
+  let show_val v = match v with Happy -> "Valid" | Sad -> "Invalid"
 
   let show v =
     match v with Val (s, v) -> show_state s ^ " " ^ show_val v | Bot -> "Bot"
@@ -174,6 +174,11 @@ let%expect_test "fold_block" =
       ]
     |}
   in
+  let local_vars =
+    Block.read_vars_iter block
+    |> Iter.append (Block.assigned_vars_iter block)
+    |> Iter.to_list
+  in
   let _ =
     Block.fold_forwards
       ~f:(fun a i ->
@@ -181,7 +186,11 @@ let%expect_test "fold_block" =
         print_endline @@ ReadUninitAnalysis.show_full r;
         r)
       ~phi:(fun a i -> a)
-      ReadUninitAnalysis.bottom block
+      (List.fold_left
+         (fun acc v ->
+           ReadUninitAnalysis.update v (ReadUninit.Val (Uninit, Happy)) acc)
+         ReadUninitAnalysis.bottom local_vars)
+      block
   in
   [%expect
     {|
