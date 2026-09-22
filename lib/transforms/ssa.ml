@@ -308,7 +308,11 @@ module Construction = struct
           (Procedure.formal_out_params procedure
           |> StringMap.values
           |> Iter.map (fun v ->
-              Stmt.Instr_Assign { al = [(v,Expr.BasilExpr.rvar v)]; attrib = StringMap.empty })
+              Stmt.Instr_Assign
+                {
+                  al = [ (v, Expr.BasilExpr.rvar v) ];
+                  attrib = StringMap.empty;
+                })
           |> Iter.to_list)
         ()
     in
