@@ -196,10 +196,10 @@ let%expect_test "fold_block" =
     {|
     Warn: global undeclared $stack assuming mutable unshared
     Warn: global undeclared $mem assuming mutable unshared
-    ($stack->RU, R31_in->RU, R0_in->RU, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, R0_10->W, _->⊥)
+    ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Uninit Valid, R1_4->Uninit Valid, $mem->Uninit Valid, load46_1->Uninit Valid, R0_10->Uninit Valid, _->⊥)
+    ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Init Valid, R1_4->Uninit Valid, $mem->Uninit Valid, load46_1->Uninit Valid, R0_10->Uninit Valid, _->⊥)
+    ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Init Valid, R1_4->Init Valid, $mem->Uninit Valid, load46_1->Uninit Valid, R0_10->Uninit Valid, _->⊥)
+    ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Init Valid, R1_4->Init Valid, $mem->Init Invalid, load46_1->Uninit Valid, R0_10->Uninit Valid, _->⊥)
+    ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Init Valid, R1_4->Init Valid, $mem->Init Invalid, load46_1->Init Valid, R0_10->Uninit Valid, _->⊥)
+    ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Init Valid, R1_4->Init Valid, $mem->Init Invalid, load46_1->Init Valid, R0_10->Init Valid, _->⊥)
     |}]
