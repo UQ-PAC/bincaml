@@ -104,7 +104,8 @@ module Construction = struct
 
   (** Adds phis for single var to graph given the dominance frontier and initial
       definitions of v in blocks listed in defs. *)
-  let add_phis (dom_frontier : Vert.t -> Vert.t list) (graph : RevG.t)
+  let add_phis (initialised : Vert.t -> Var.t -> bool)
+      (dom_frontier : Vert.t -> Vert.t list) (graph : RevG.t)
       ((var, defs) : Var.t * IDSet.t) : RevG.t =
     (* Init the worklist to all initial define sites. *)
     let worklist = WL.create () in
@@ -113,21 +114,6 @@ module Construction = struct
     (* fl flags blocks with added phi nodes. *)
     let flags = ref FL.empty in
 
-    (* Find all vertices where this is initialised. *)
-    let initialised = ref defs in
-    let worklist2 = WL.create () in
-    WL.add_iter worklist2 (IDSet.to_iter !initialised);
-    while WL.non_empty worklist2 do
-      let v = WL.pop worklist2 in
-      G.succ graph (Vert.End v) |> List.to_iter
-      |> flip Iter.for_each (function
-        | Vert.End v2 | Vert.Begin v2 ->
-            if not @@ IDSet.mem v2 !initialised then WL.add worklist2 v2;
-            initialised := IDSet.add v2 !initialised;
-            ()
-        | _ -> ())
-    done;
-
     let graph = ref graph in
     while WL.non_empty worklist do
       let x = WL.pop worklist in
@@ -135,6 +121,8 @@ module Construction = struct
       |> List.to_iter
       (* Skip flagged blocks. *)
       |> Iter.filter (flip FL.mem !flags %> not)
+      (* Skip if this may read uninit. *)
+      |> Iter.filter (flip initialised var)
       |> flip Iter.for_each (function
         | Vert.Begin id as y ->
             (* Flag the block as seen. *)
@@ -150,8 +138,7 @@ module Construction = struct
                 rhs =
                   G.pred !graph y
                   |> List.filter_map (function
-                    | Vert.End id when IDSet.mem id !initialised ->
-                        Some (id, var)
+                    | Vert.End id -> Some (id, var)
                     | _ -> None);
               }
             in
@@ -179,7 +166,6 @@ module Construction = struct
   (* Map vertices in preorder dfs traversal of dominator tree. *)
   let rec traversal update_block update_succ dom_tree ((g, fl) : G.t * FL.t)
       (vert : Vert.t) =
-    print_endline (Vert.block_id_string vert);
     if FL.mem vert fl then (g, fl)
     else
       let fl = FL.add vert fl in
@@ -330,8 +316,22 @@ module Construction = struct
         (* Map each variable to it's definition. *)
         let defs = defs ~skipping procedure in
 
+        (* MayReadUninit analysis *)
+        let initialised =
+          let analysis = May_read_uninit.A.analyse procedure in
+          May_read_uninit.A.print_dot (Format.of_chan stdout) procedure analysis;
+          fun vert var ->
+            May_read_uninit.A.A.M.find vert analysis
+            |> May_read_uninit.ReadUninitAnalysis.read_var var
+            |> function
+            | Val (_, May_read_uninit.ReadUninit.Happy) -> true
+            | _ -> false
+        in
+
         (* Insert phis nodes. *)
-        let g = VarMap.to_iter defs |> Iter.fold (add_phis dom_frontier) g in
+        let g =
+          VarMap.to_iter defs |> Iter.fold (add_phis initialised dom_frontier) g
+        in
 
         (* Rename variables. *)
         rename_procedure ~skipping procedure g tree doms)

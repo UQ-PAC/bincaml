@@ -15,29 +15,44 @@ open Analysis
 module ReadUninit = struct
   let name = "read-uninitialised-analysis"
 
-  type t = Bot | Write | ReadUninit [@@deriving eq, ord]
+  type state = Init | Uninit [@@deriving eq, ord]
+  type validity = Happy | Sad [@@deriving eq, ord]
+  type t = Bot | Val of state * validity [@@deriving eq, ord]
+
+  let join_state a b =
+    match (a, b) with Uninit, _ | _, Uninit -> Uninit | Init, Init -> Init
+
+  let join_val a b =
+    match (a, b) with Sad, _ | _, Sad -> Sad | Happy, Happy -> Happy
 
   let join a b =
     match (a, b) with
-    | _, ReadUninit -> ReadUninit
-    | ReadUninit, _ -> ReadUninit
-    | a, Bot -> a
-    | Bot, a -> a
-    | Write, Write -> Write
+    | x, Bot | Bot, x -> x
+    | Val (s1, v1), Val (s2, v2) -> Val (join_state s1 s2, join_val v1 v2)
+
+  let leq_state a b =
+    match (a, b) with Init, _ | _, Uninit -> true | Uninit, Init -> false
+
+  let leq_val a b =
+    match (a, b) with Happy, _ | _, Sad -> true | Sad, Happy -> false
 
   let leq a b =
     match (a, b) with
-    | a, b when equal a b -> true
-    | Bot, _ | _, ReadUninit -> true
-    | _, Bot | ReadUninit, _ -> false
-    | _ -> false
+    | Bot, _ -> true
+    | _, Bot -> false
+    | Val (s1, v1), Val (s2, v2) -> leq_state s1 s2 && leq_val v1 v2
 
-  let show v = match v with ReadUninit -> "RU" | Bot -> "bot" | Write -> "W"
+  let show_state s = match s with Init -> "I" | Uninit -> "U"
+  let show_val v = match v with Happy -> ":)" | Sad -> ":("
+
+  let show v =
+    match v with Val (s, v) -> show_state s ^ " " ^ show_val v | Bot -> "Bot"
+
   let pretty v = Containers_pp.text (show v)
   let widening = join
   let narrowing a b = a
   let bottom = Bot
-  let top = ReadUninit
+  let top = Val (Uninit, Sad)
   let analyze (e : Lang.Procedure.G.edge) d = d
 end
 
@@ -52,30 +67,47 @@ module ReadUninitAnalysis = struct
 
   let read_var v st =
     match read v st with
-    | Bot -> ReadUninit.ReadUninit
-    | ReadUninit -> ReadUninit
-    | Write -> Write
+    | Bot -> ReadUninit.Bot
+    | Val (Uninit, Happy) -> Val (Uninit, Sad)
+    | o -> o
 
   let write_var st v =
     match read st v with
-    | ReadUninit -> ReadUninit.ReadUninit
-    | Write -> Write
-    | Bot -> Write
+    | Bot -> ReadUninit.Bot
+    | Val (Uninit, v) -> Val (Init, v)
+    | o -> o
 
   let read_uninit_vars st =
     to_iter st
     |> Iter.filter_map (fun (i, v) ->
-        match v with ReadUninit.ReadUninit -> Some i | _ -> None)
+        match v with ReadUninit.Val (_, Sad) -> Some i | _ -> None)
 
   let show_full = show
 
   let show_short st =
     read_uninit_vars st |> Iter.to_string ~sep:", " Var.to_string
 
-  let init ?vertex p =
-    Procedure.formal_in_params p
-    |> Common.StringMap.values
-    |> Iter.fold (fun acc v -> update v ReadUninit.Write acc) bottom
+  let init ?(vertex=None) (p:Program.proc) =
+    let args =
+      Procedure.formal_in_params p
+      |> Common.StringMap.values
+      |> Iter.fold
+           (fun acc v -> update v (ReadUninit.Val (Init, Happy)) acc)
+           bottom
+    in
+    let locals =
+      if
+        vertex
+        |> Option.filter (function Procedure.Vert.Entry -> true | _ -> false)
+        |> Option.is_some
+      then
+        Procedure.local_decls p |> Var.Decls.values
+        |> Iter.fold
+             (fun acc v -> update v (ReadUninit.Val (Uninit, Happy)) acc)
+             bottom
+      else bottom
+    in
+    join args locals
 
   let transfer st stmt =
     let st =
