@@ -10,10 +10,10 @@ only produces a warning.
   (load-il chc_per_query.il)
   (run-transforms ssa)
   (run-transforms chc-infer-invariants-per-query)
-  bincaml: [INFO] Per-query mode: 8 predicates, 9 normal clauses, 2 queries
-  bincaml: [INFO] Query 1/2: sat (8 definitions, 4 non-trivial)
+  bincaml: [INFO] Per-query mode: 9 predicates, 10 normal clauses, 2 queries
+  bincaml: [INFO] Query 1/2: sat (9 definitions, 5 non-trivial)
   bincaml: [WARNING] Query 2/2: unsat -- assertion not provable
-  bincaml: [INFO] Per-query mode: 1/2 queries succeeded; extracted invariants for 4 predicates
+  bincaml: [INFO] Per-query mode: 1/2 queries succeeded; extracted invariants for 5 predicates
   (dump-il chc_per_query_out.il)
 
 The loop invariant inferred from the successful query (the same one
@@ -22,7 +22,7 @@ head:
 
   $ awk '/block %loop \(/,/]/' chc_per_query_out.il | head -5
      block %loop (
-       var i_3:bv64 := phi(%loop_body -> i_5:bv64, %entry -> i_2:bv64)
+       var i_3:bv64 := phi(%loop_body -> i_4:bv64, %entry -> i_2:bv64)
      ) [
        assert eq(extract(64,4, i_3:bv64), 0x0:bv60);
        goto (%loop_exit,%loop_body);

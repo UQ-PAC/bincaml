@@ -10,13 +10,15 @@ Run on basic irreducible loop example
   (run-transforms simple-ssa)
   (dump-il after.il)
   (load-il after.il)
-  bincaml: [WARNING] global undeclared CF_5. assuming mutable unshared
-  bincaml: [WARNING] global undeclared NF_5. assuming mutable unshared
-  bincaml: [WARNING] global undeclared R1_3. assuming mutable unshared
-  bincaml: [WARNING] global undeclared R29_4. assuming mutable unshared
-  bincaml: [WARNING] global undeclared R31_4. assuming mutable unshared
+  bincaml: [WARNING] global undeclared ZF_5. assuming mutable unshared
   bincaml: [WARNING] global undeclared VF_5. assuming mutable unshared
-  bincaml: [WARNING] global undeclared ZF_8. assuming mutable unshared
+  bincaml: [WARNING] global undeclared R31_4. assuming mutable unshared
+  bincaml: [WARNING] global undeclared R30_4. assuming mutable unshared
+  bincaml: [WARNING] global undeclared R29_4. assuming mutable unshared
+  bincaml: [WARNING] global undeclared R1_3. assuming mutable unshared
+  bincaml: [WARNING] global undeclared R0_14. assuming mutable unshared
+  bincaml: [WARNING] global undeclared NF_5. assuming mutable unshared
+  bincaml: [WARNING] global undeclared CF_5. assuming mutable unshared
   (dump-il after_reparsed.il)
   (load-il ../../examples/sqrt.il)
   (run-transforms remove-unreachable-block cf-expressions intra-dead-store-elim)
@@ -211,116 +213,128 @@ Run on basic irreducible loop example
        goto (%main_27,%main_23);
      ];
      block %main_23 [
-       var ZF_4:bv1 := ZF_2:bv1;
-       guard neq(booltobv1(eq(ZF_4:bv1, 0x1:bv1)), 0x0:bv1);
+       guard neq(booltobv1(eq(ZF_2:bv1, 0x1:bv1)), 0x0:bv1);
        goto (%main_21);
      ];
      block %main_21 { .address = 1984 } [ goto (%main_19); ];
      block %main_27 [
-       var ZF_3:bv1 := ZF_2:bv1;
-       guard eq(booltobv1(eq(ZF_3:bv1, 0x1:bv1)), 0x0:bv1);
+       guard eq(booltobv1(eq(ZF_2:bv1, 0x1:bv1)), 0x0:bv1);
        goto (%main_25);
      ];
      block %main_25 { .address = 1928 } [ goto (%main_5); ];
      block %main_5 { .address = 1940 } (
-       var CF_6:bv1 := phi(%main_25 -> CF_2:bv1, %main_7 -> CF_5:bv1),
-       var NF_6:bv1 := phi(%main_25 -> NF_2:bv1, %main_7 -> NF_5:bv1),
-       var R1_4:bv64 := phi(%main_25 -> R1_1:bv64, %main_7 -> R1_3:bv64),
-       var R29_5:bv64 := phi(%main_25 -> R29_2:bv64, %main_7 -> R29_4:bv64),
-       var R31_5:bv64 := phi(%main_25 -> R31_2:bv64, %main_7 -> R31_4:bv64),
-       var VF_6:bv1 := phi(%main_25 -> VF_2:bv1, %main_7 -> VF_5:bv1),
-       var ZF_9:bv1 := phi(%main_25 -> ZF_3:bv1, %main_7 -> ZF_8:bv1)
+       var ZF_7:bv1 := phi(%main_25 -> ZF_2:bv1, %main_7 -> ZF_5:bv1),
+       var VF_7:bv1 := phi(%main_25 -> VF_2:bv1, %main_7 -> VF_5:bv1),
+       var R31_7:bv64 := phi(%main_25 -> R31_2:bv64, %main_7 -> R31_4:bv64),
+       var R30_8:bv64 := phi(%main_25 -> R30_1:bv64, %main_7 -> R30_4:bv64),
+       var R29_7:bv64 := phi(%main_25 -> R29_2:bv64, %main_7 -> R29_4:bv64),
+       var R1_5:bv64 := phi(%main_25 -> R1_1:bv64, %main_7 -> R1_3:bv64),
+       var R0_19:bv64 := phi(%main_25 -> R0_7:bv64, %main_7 -> R0_14:bv64),
+       var NF_7:bv1 := phi(%main_25 -> NF_2:bv1, %main_7 -> NF_5:bv1),
+       var CF_7:bv1 := phi(%main_25 -> CF_2:bv1, %main_7 -> CF_5:bv1)
      ) [
-       var R0_14:bv64 := 0x0:bv64 { .label = "%00000416" };
-       var R0_15:bv64 := bvadd(R0_14:bv64, 0x820:bv64) { .label = "%0000041c" };
-       var R30_4:bv64 := 0x7a0:bv64 { .label = "%00000421" };
-       (var CF_7:bv1=CF_out, var NF_7:bv1=NF_out, var R0_16:bv64=R0_out,
-          var R1_5:bv64=R1_out, var R29_6:bv64=R29_out, var R30_5:bv64=R30_out,
-          var R31_6:bv64=R31_out, var VF_7:bv1=VF_out, var ZF_10:bv1=ZF_out) := call @puts_1584(CF_in=CF_6:bv1,
-          NF_in=NF_6:bv1, R0_in=R0_15:bv64, R1_in=R1_4:bv64, R29_in=R29_5:bv64,
-          R30_in=R30_4:bv64, R31_in=R31_5:bv64, VF_in=VF_6:bv1, ZF_in=ZF_9:bv1) { .label = "%00000423" };
+       var R0_20:bv64 := 0x0:bv64 { .label = "%00000416" };
+       var R0_21:bv64 := bvadd(R0_20:bv64, 0x820:bv64) { .label = "%0000041c" };
+       var R30_9:bv64 := 0x7a0:bv64 { .label = "%00000421" };
+       (var CF_8:bv1=CF_out, var NF_8:bv1=NF_out, var R0_22:bv64=R0_out,
+          var R1_6:bv64=R1_out, var R29_8:bv64=R29_out, var R30_10:bv64=R30_out,
+          var R31_8:bv64=R31_out, var VF_8:bv1=VF_out, var ZF_8:bv1=ZF_out) := call @puts_1584(CF_in=CF_7:bv1,
+          NF_in=NF_7:bv1, R0_in=R0_21:bv64, R1_in=R1_5:bv64, R29_in=R29_7:bv64,
+          R30_in=R30_9:bv64, R31_in=R31_7:bv64, VF_in=VF_7:bv1, ZF_in=ZF_7:bv1) { .label = "%00000423" };
        goto (%main_3);
      ];
      block %main_3 { .address = 1952 } [
-       var R0_17:bv64 := 0x20000:bv64 { .label = "%00000428" };
-       var R0_18:bv64 := bvadd(R0_17:bv64, 0x3c:bv64) { .label = "%0000042e" };
-       var load19_1:bv32 := load le $mem:(bv64->bv8) R0_18:bv64 32 { .label = "%00000435$0" };
-       var R0_19:bv64 := zero_extend(32, load19_1:bv32) { .label = "%00000435$1" };
-       var R1_6:bv64 := zero_extend(32, bvadd(extract(32,0, R0_19:bv64), 0x1:bv32)) { .label = "%0000043b" };
-       var R0_20:bv64 := 0x20000:bv64 { .label = "%00000440" };
-       var R0_21:bv64 := bvadd(R0_20:bv64, 0x3c:bv64) { .label = "%00000446" };
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) R0_21:bv64 extract(32,0, R1_6:bv64) 32 { .label = "%0000044e" };
+       var R0_23:bv64 := 0x20000:bv64 { .label = "%00000428" };
+       var R0_24:bv64 := bvadd(R0_23:bv64, 0x3c:bv64) { .label = "%0000042e" };
+       var load19_1:bv32 := load le $mem:(bv64->bv8) R0_24:bv64 32 { .label = "%00000435$0" };
+       var R0_25:bv64 := zero_extend(32, load19_1:bv32) { .label = "%00000435$1" };
+       var R1_7:bv64 := zero_extend(32, bvadd(extract(32,0, R0_25:bv64), 0x1:bv32)) { .label = "%0000043b" };
+       var R0_26:bv64 := 0x20000:bv64 { .label = "%00000440" };
+       var R0_27:bv64 := bvadd(R0_26:bv64, 0x3c:bv64) { .label = "%00000446" };
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) R0_27:bv64 extract(32,0, R1_7:bv64) 32 { .label = "%0000044e" };
        goto (%main_19);
      ];
      block %main_19 { .address = 1988 } (
-       var CF_3:bv1 := phi(%main_3 -> CF_7:bv1, %main_21 -> CF_2:bv1),
-       var NF_3:bv1 := phi(%main_3 -> NF_7:bv1, %main_21 -> NF_2:bv1),
-       var R1_2:bv64 := phi(%main_3 -> R1_6:bv64, %main_21 -> R1_1:bv64),
-       var R29_3:bv64 := phi(%main_3 -> R29_6:bv64, %main_21 -> R29_2:bv64),
-       var R31_3:bv64 := phi(%main_3 -> R31_6:bv64, %main_21 -> R31_2:bv64),
-       var VF_3:bv1 := phi(%main_3 -> VF_7:bv1, %main_21 -> VF_2:bv1),
-       var ZF_5:bv1 := phi(%main_3 -> ZF_10:bv1, %main_21 -> ZF_4:bv1)
+       var ZF_3:bv1 := phi(%main_21 -> ZF_2:bv1, %main_3 -> ZF_8:bv1),
+       var VF_3:bv1 := phi(%main_21 -> VF_2:bv1, %main_3 -> VF_8:bv1),
+       var R31_3:bv64 := phi(%main_21 -> R31_2:bv64, %main_3 -> R31_8:bv64),
+       var R30_2:bv64 := phi(%main_21 -> R30_1:bv64, %main_3 -> R30_10:bv64),
+       var R29_3:bv64 := phi(%main_21 -> R29_2:bv64, %main_3 -> R29_8:bv64),
+       var R1_2:bv64 := phi(%main_21 -> R1_1:bv64, %main_3 -> R1_7:bv64),
+       var R0_8:bv64 := phi(%main_21 -> R0_7:bv64, %main_3 -> R0_27:bv64),
+       var NF_3:bv1 := phi(%main_21 -> NF_2:bv1, %main_3 -> NF_8:bv1),
+       var CF_3:bv1 := phi(%main_21 -> CF_2:bv1, %main_3 -> CF_8:bv1)
      ) [
-       var R0_8:bv64 := 0x0:bv64 { .label = "%000003d0" };
-       var R0_9:bv64 := bvadd(R0_8:bv64, 0x820:bv64) { .label = "%000003d6" };
-       var R30_2:bv64 := 0x7d0:bv64 { .label = "%000003db" };
-       (var CF_4:bv1=CF_out, var NF_4:bv1=NF_out, var R0_10:bv64=R0_out,
-          var R1_3:bv64=R1_out, var R29_4:bv64=R29_out, var R30_3:bv64=R30_out,
-          var R31_4:bv64=R31_out, var VF_4:bv1=VF_out, var ZF_6:bv1=ZF_out) := call @puts_1584(CF_in=CF_3:bv1,
-          NF_in=NF_3:bv1, R0_in=R0_9:bv64, R1_in=R1_2:bv64, R29_in=R29_3:bv64,
-          R30_in=R30_2:bv64, R31_in=R31_3:bv64, VF_in=VF_3:bv1, ZF_in=ZF_5:bv1) { .label = "%000003de" };
+       var R0_9:bv64 := 0x0:bv64 { .label = "%000003d0" };
+       var R0_10:bv64 := bvadd(R0_9:bv64, 0x820:bv64) { .label = "%000003d6" };
+       var R30_3:bv64 := 0x7d0:bv64 { .label = "%000003db" };
+       (var CF_4:bv1=CF_out, var NF_4:bv1=NF_out, var R0_11:bv64=R0_out,
+          var R1_3:bv64=R1_out, var R29_4:bv64=R29_out, var R30_4:bv64=R30_out,
+          var R31_4:bv64=R31_out, var VF_4:bv1=VF_out, var ZF_4:bv1=ZF_out) := call @puts_1584(CF_in=CF_3:bv1,
+          NF_in=NF_3:bv1, R0_in=R0_10:bv64, R1_in=R1_2:bv64, R29_in=R29_3:bv64,
+          R30_in=R30_3:bv64, R31_in=R31_3:bv64, VF_in=VF_3:bv1, ZF_in=ZF_3:bv1) { .label = "%000003de" };
        goto (%main_17);
      ];
      block %main_17 { .address = 2000 } [
-       var R0_11:bv64 := 0x20000:bv64 { .label = "%000003e3" };
-       var R0_12:bv64 := bvadd(R0_11:bv64, 0x3c:bv64) { .label = "%000003e9" };
-       var load20_1:bv32 := load le $mem:(bv64->bv8) R0_12:bv64 32 { .label = "%000003f0$0" };
-       var R0_13:bv64 := zero_extend(32, load20_1:bv32) { .label = "%000003f0$1" };
-       var #6_1:bv32 := bvadd(extract(32,0, R0_13:bv64), 0xfffffffa:bv32) { .label = "%000003f6" };
+       var R0_12:bv64 := 0x20000:bv64 { .label = "%000003e3" };
+       var R0_13:bv64 := bvadd(R0_12:bv64, 0x3c:bv64) { .label = "%000003e9" };
+       var load20_1:bv32 := load le $mem:(bv64->bv8) R0_13:bv64 32 { .label = "%000003f0$0" };
+       var R0_14:bv64 := zero_extend(32, load20_1:bv32) { .label = "%000003f0$1" };
+       var #6_1:bv32 := bvadd(extract(32,0, R0_14:bv64), 0xfffffffa:bv32) { .label = "%000003f6" };
        var VF_5:bv1 := bvnot(booltobv1(eq(sign_extend(1, bvadd(#6_1:bv32, 0x1:bv32)),
-          bvadd(sign_extend(1, extract(32,0, R0_13:bv64)), 0x1fffffffb:bv33)))) { .label = "%000003fb" };
+          bvadd(sign_extend(1, extract(32,0, R0_14:bv64)), 0x1fffffffb:bv33)))) { .label = "%000003fb" };
        var CF_5:bv1 := bvnot(booltobv1(eq(zero_extend(1, bvadd(#6_1:bv32, 0x1:bv32)),
-          bvadd(zero_extend(1, extract(32,0, R0_13:bv64)), 0xfffffffb:bv33)))) { .label = "%00000400" };
-       var ZF_7:bv1 := booltobv1(eq(bvadd(#6_1:bv32, 0x1:bv32), 0x0:bv32)) { .label = "%00000404" };
+          bvadd(zero_extend(1, extract(32,0, R0_14:bv64)), 0xfffffffb:bv33)))) { .label = "%00000400" };
+       var ZF_5:bv1 := booltobv1(eq(bvadd(#6_1:bv32, 0x1:bv32), 0x0:bv32)) { .label = "%00000404" };
        var NF_5:bv1 := extract(32,31, bvadd(#6_1:bv32, 0x1:bv32)) { .label = "%00000408" };
        goto (%main_15,%main_9);
      ];
      block %main_9 [
-       var ZF_8:bv1 := ZF_7:bv1;
-       guard neq(bvnot(booltobv1(eq(ZF_8:bv1, 0x1:bv1))), 0x0:bv1);
+       guard neq(bvnot(booltobv1(eq(ZF_5:bv1, 0x1:bv1))), 0x0:bv1);
        goto (%main_7);
      ];
      block %main_7 { .address = 1936 } [ goto (%main_5); ];
      block %main_15 [
-       var ZF_11:bv1 := ZF_7:bv1;
-       guard eq(bvnot(booltobv1(eq(ZF_11:bv1, 0x1:bv1))), 0x0:bv1);
-       var R0_22:bv64 := 0x0:bv64 { .label = "%00000459" };
-       var R0_23:bv64 := bvadd(R0_22:bv64, 0x828:bv64) { .label = "%0000045f" };
-       var R30_6:bv64 := 0x7f4:bv64 { .label = "%00000464" };
-       (var CF_8:bv1=CF_out, var NF_8:bv1=NF_out, var R0_24:bv64=R0_out,
-          var R1_7:bv64=R1_out, var R29_7:bv64=R29_out, var R30_7:bv64=R30_out,
-          var R31_7:bv64=R31_out, var VF_8:bv1=VF_out, var ZF_12:bv1=ZF_out) := call @puts_1584(CF_in=CF_5:bv1,
-          NF_in=NF_5:bv1, R0_in=R0_23:bv64, R1_in=R1_3:bv64, R29_in=R29_4:bv64,
-          R30_in=R30_6:bv64, R31_in=R31_4:bv64, VF_in=VF_5:bv1, ZF_in=ZF_11:bv1) { .label = "%00000466" };
+       guard eq(bvnot(booltobv1(eq(ZF_5:bv1, 0x1:bv1))), 0x0:bv1);
+       var R0_15:bv64 := 0x0:bv64 { .label = "%00000459" };
+       var R0_16:bv64 := bvadd(R0_15:bv64, 0x828:bv64) { .label = "%0000045f" };
+       var R30_5:bv64 := 0x7f4:bv64 { .label = "%00000464" };
+       (var CF_6:bv1=CF_out, var NF_6:bv1=NF_out, var R0_17:bv64=R0_out,
+          var R1_4:bv64=R1_out, var R29_5:bv64=R29_out, var R30_6:bv64=R30_out,
+          var R31_5:bv64=R31_out, var VF_6:bv1=VF_out, var ZF_6:bv1=ZF_out) := call @puts_1584(CF_in=CF_5:bv1,
+          NF_in=NF_5:bv1, R0_in=R0_16:bv64, R1_in=R1_3:bv64, R29_in=R29_4:bv64,
+          R30_in=R30_5:bv64, R31_in=R31_4:bv64, VF_in=VF_5:bv1, ZF_in=ZF_5:bv1) { .label = "%00000466" };
        goto (%main_13);
      ];
      block %main_13 { .address = 2020 } [ goto (%main_11); ];
      block %main_11 { .address = 2036 } [
-       var R0_25:bv64 := 0x0:bv64 { .label = "%0000046b" };
-       var load21_1:bv64 := load le $stack:(bv64->bv8) R31_7:bv64 64 { .label = "%00000472$0" };
-       var R29_8:bv64 := load21_1:bv64 { .label = "%00000472$1" };
-       var load22_1:bv64 := load le $stack:(bv64->bv8) bvadd(R31_7:bv64, 0x8:bv64) 64 { .label = "%00000477$0" };
-       var R30_8:bv64 := load22_1:bv64 { .label = "%00000477$1" };
-       var R31_8:bv64 := bvadd(R31_7:bv64, 0x20:bv64) { .label = "%0000047b" };
+       var R0_18:bv64 := 0x0:bv64 { .label = "%0000046b" };
+       var load21_1:bv64 := load le $stack:(bv64->bv8) R31_5:bv64 64 { .label = "%00000472$0" };
+       var R29_6:bv64 := load21_1:bv64 { .label = "%00000472$1" };
+       var load22_1:bv64 := load le $stack:(bv64->bv8) bvadd(R31_5:bv64, 0x8:bv64) 64 { .label = "%00000477$0" };
+       var R30_7:bv64 := load22_1:bv64 { .label = "%00000477$1" };
+       var R31_6:bv64 := bvadd(R31_5:bv64, 0x20:bv64) { .label = "%0000047b" };
        goto (%main_basil_return_1);
      ];
      block %main_basil_return_1 [ goto (%returns); ];
      block %returns [
-       (var CF_out:bv1 := CF_8:bv1, var NF_out:bv1 := NF_8:bv1,
-        var R0_out:bv64 := R0_25:bv64, var R1_out:bv64 := R1_7:bv64,
-        var R29_out:bv64 := R29_8:bv64, var R30_out:bv64 := R30_8:bv64,
-        var R31_out:bv64 := R31_8:bv64, var VF_out:bv1 := VF_8:bv1,
-        var ZF_out:bv1 := ZF_12:bv1);
+       (var CF_out_1:bv1 := CF_6:bv1, var NF_out_1:bv1 := NF_6:bv1,
+        var R0_out_1:bv64 := R0_18:bv64, var R1_out_1:bv64 := R1_4:bv64,
+        var R29_out_1:bv64 := R29_6:bv64, var R30_out_1:bv64 := R30_7:bv64,
+        var R31_out_1:bv64 := R31_6:bv64, var VF_out_1:bv1 := VF_6:bv1,
+        var ZF_out_1:bv1 := ZF_6:bv1);
+       goto (%Return);
+     ];
+     block %Return [
+       var CF_out:bv1 := CF_out_1:bv1;
+       var NF_out:bv1 := NF_out_1:bv1;
+       var R0_out:bv64 := R0_out_1:bv64;
+       var R1_out:bv64 := R1_out_1:bv64;
+       var R29_out:bv64 := R29_out_1:bv64;
+       var R30_out:bv64 := R30_out_1:bv64;
+       var R31_out:bv64 := R31_out_1:bv64;
+       var VF_out:bv1 := VF_out_1:bv1;
+       var ZF_out:bv1 := ZF_out_1:bv1;
        return;
      ]
   ];
@@ -359,19 +373,22 @@ Multiple loops dependencies of loops etc are handled correctly
   >   
   6a5
   >    block %inputs [ var R0_1:bv64 := R0_in:bv64; goto (%e); ];
-  8,11c7,15
+  8,11c7,18
   <    block %e1 [ $R0:bv64 := 0x1:bv64; goto (%e2); ];
   <    block %e2 [ goto (%e4,%e1); ];
   <    block %e3 [ $R0:bv64 := 0x3:bv64; goto (%e4,%e1); ];
   <    block %e4 [ return; ]
   ---
-  >    block %e1 [ var R0_3:bv64 := 0x1:bv64; goto (%e2); ];
-  >    block %e2 ( var R0_4:bv64 := phi(%e1 -> R0_3:bv64, %e -> R0_1:bv64) ) [
+  >    block %e1 (
+  >      var R0_5:bv64 := phi(%e3 -> R0_3:bv64, %e2 -> R0_4:bv64, %e -> R0_1:bv64)
+  >    ) [ var R0_6:bv64 := 0x1:bv64; goto (%e2); ];
+  >    block %e2 ( var R0_4:bv64 := phi(%e1 -> R0_6:bv64, %e -> R0_1:bv64) ) [
   >      goto (%e4,%e1);
   >    ];
-  >    block %e3 [ var R0_2:bv64 := 0x3:bv64; goto (%e4,%e1); ];
-  >    block %e4 (
-  >      var R0_5:bv64 := phi(%e2 -> R0_4:bv64, %e3 -> R0_2:bv64, %e2 -> R0_4:bv64)
-  >    ) [ goto (%returns); ];
-  >    block %returns [ var R0_out:bv64 := R0_5:bv64; return; ]
+  >    block %e3 [ var R0_3:bv64 := 0x3:bv64; goto (%e4,%e1); ];
+  >    block %e4 ( var R0_2:bv64 := phi(%e3 -> R0_3:bv64, %e2 -> R0_4:bv64) ) [
+  >      goto (%returns);
+  >    ];
+  >    block %returns [ var R0_out_1:bv64 := R0_2:bv64; goto (%Return); ];
+  >    block %Return [ var R0_out:bv64 := R0_out_1:bv64; return; ]
   [1]

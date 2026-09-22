@@ -11,8 +11,8 @@ procedure-entry memory via [old($mem)].
   (load-il chc_mem_call.il)
   (run-transforms ssa)
   (run-transforms chc-infer-invariants)
-  bincaml: [INFO] Submitting 17 predicates and 19 clauses to solver
-  bincaml: [INFO] Solver returned sat; extracted 17 definitions
+  bincaml: [INFO] Submitting 19 predicates and 21 clauses to solver
+  bincaml: [INFO] Solver returned sat; extracted 19 definitions
   (dump-il chc_mem_call_out.il)
 
 [foo] gets a relational memory postcondition -- after the call mem[0x100] holds

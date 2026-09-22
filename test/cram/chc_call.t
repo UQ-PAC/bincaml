@@ -9,8 +9,8 @@ call.
   (load-il chc_call.il)
   (run-transforms ssa)
   (run-transforms chc-infer-invariants)
-  bincaml: [INFO] Submitting 6 predicates and 7 clauses to solver
-  bincaml: [INFO] Solver returned sat; extracted 6 definitions
+  bincaml: [INFO] Submitting 8 predicates and 9 clauses to solver
+  bincaml: [INFO] Solver returned sat; extracted 8 definitions
   (dump-il chc_call_out.il)
 
 Both procedures get annotations. Helper gets a [requires] derived from how
