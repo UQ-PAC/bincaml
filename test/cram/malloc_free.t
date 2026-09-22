@@ -144,13 +144,18 @@
   implementation p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
    R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
    R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64) {
+    var R30_out_1: bv64;
     var Exp18__5_25_2: bv64;
+    var R0_out_1: bv64;
     var Exp14__5_21_2: bv64;
     var Exp14__5_22_2: bv64;
     var R0_4: bv64;
+    var R1_out_1: bv64;
     var Exp16__5_24_2: bv64;
     var Exp14__5_2_2: bv64;
     var Exp14__5_1_2: bv64;
+    var R29_out_1: bv64;
+    var R17_out_1: bv64;
     b#main_entry:
       $stack := store64_le(
           $stack,
@@ -211,8 +216,15 @@
         );
       goto b#main_return;
     b#main_return:
-      R0_out, R17_out, R1_out, R29_out, R30_out := 0bv64, Exp14__5_1_2, 121bv64,
-        Exp16__5_24_2, Exp18__5_25_2;
+      R0_out_1, R17_out_1, R1_out_1, R29_out_1, R30_out_1 := 0bv64, Exp14__5_1_2,
+        121bv64, Exp16__5_24_2, Exp18__5_25_2;
+      goto b#Return;
+    b#Return:
+      R0_out := R0_out_1;
+      R17_out := R17_out_1;
+      R1_out := R1_out_1;
+      R29_out := R29_out_1;
+      R30_out := R30_out_1;
       return;
   }
   procedure p$malloc(R0_in: bv64) returns (R0_out: bv64);
@@ -381,13 +393,18 @@
   implementation p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
    R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
    R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64) {
+    var R30_out_1: bv64;
     var Exp18__5_25_2: bv64;
+    var R0_out_1: bv64;
     var Exp14__5_21_2: bv64;
     var Exp14__5_22_2: bv64;
     var R0_4: bv64;
+    var R1_out_1: bv64;
     var Exp16__5_24_2: bv64;
     var Exp14__5_2_2: bv64;
     var Exp14__5_1_2: bv64;
+    var R29_out_1: bv64;
+    var R17_out_1: bv64;
     b#main_entry:
       $stack := store64_le(
           $stack,
@@ -448,8 +465,15 @@
         );
       goto b#main_return;
     b#main_return:
-      R0_out, R17_out, R1_out, R29_out, R30_out := 0bv64, Exp14__5_1_2, 121bv64,
-        Exp16__5_24_2, Exp18__5_25_2;
+      R0_out_1, R17_out_1, R1_out_1, R29_out_1, R30_out_1 := 0bv64, Exp14__5_1_2,
+        121bv64, Exp16__5_24_2, Exp18__5_25_2;
+      goto b#Return;
+    b#Return:
+      R0_out := R0_out_1;
+      R17_out := R17_out_1;
+      R1_out := R1_out_1;
+      R29_out := R29_out_1;
+      R30_out := R30_out_1;
       return;
   }
   procedure p$malloc(R0_in: bv64) returns (R0_out: bv64);
@@ -483,7 +507,7 @@
   $ boogie ./bad.bpl
   Memory Error: Invalid Access
   Execution trace:
-      ./bad.bpl(143,3): b#main_entry
+      ./bad.bpl(148,3): b#main_entry
   
   Boogie program verifier finished with 0 verified, 1 error
 
