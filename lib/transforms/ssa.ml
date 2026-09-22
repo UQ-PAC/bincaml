@@ -81,6 +81,7 @@ module Construction = struct
   open Effect
   open Effect.Deep
 
+  type _ Effect.t += AllowRename : Vert.t -> bool t
   type _ Effect.t += GetReachingDef : Var.t * Vert.t -> Var.t t
   type _ Effect.t += SetReachingDef : Var.t * Var.t -> unit t
   type _ Effect.t += CreateFreshDef : Var.t * Vert.t -> Var.t t
@@ -190,14 +191,16 @@ module Construction = struct
       |> List.fold_left (traversal update_block update_succ dom_tree) (g, fl)
 
   let rename_lvar vert lvar =
-    let rdef = perform @@ GetReachingDef (lvar, vert) in
-    (* Create a renamed lvar *)
-    let lvar' = perform @@ CreateFreshDef (lvar, vert) in
-    (* Point it to the rdef of original *)
-    perform @@ SetReachingDef (lvar', rdef);
-    (* Redirect original to this *)
-    perform @@ SetReachingDef (lvar, lvar');
-    lvar'
+    if perform @@ AllowRename vert then (
+      let rdef = perform @@ GetReachingDef (lvar, vert) in
+      (* Create a renamed lvar *)
+      let lvar' = perform @@ CreateFreshDef (lvar, vert) in
+      (* Point it to the rdef of original *)
+      perform @@ SetReachingDef (lvar', rdef);
+      (* Redirect original to this *)
+      perform @@ SetReachingDef (lvar, lvar');
+      lvar')
+    else lvar
 
   let rename_expr vert expr =
     Expr.BasilExpr.substitute
@@ -258,7 +261,38 @@ module Construction = struct
     then update_reaching_def ?r:r' doms defs reaching_defs var vert
     else VarMap.update var (fun _ -> r) reaching_defs
 
-  let rename_procedure ?(skipping = Skip.empty) (procedure : Program.proc)
+  (* Unify all returning blocks so that phi nodes may be generated. *)
+  let unify_returns procedure =
+    let procedure, rid =
+      Procedure.fresh_block ~name:"%Return" procedure
+        ~stmts:
+          (Procedure.formal_out_params procedure
+          |> StringMap.values
+          |> Iter.map (fun v ->
+              Stmt.Instr_Assign
+                {
+                  al = [ (v, Expr.BasilExpr.rvar v) ];
+                  attrib = StringMap.empty;
+                })
+          |> Iter.to_list)
+        ()
+    in
+    let procedure =
+      procedure
+      |> map_graph (fun g ->
+          (* Connect the pre-return block. *)
+          let returns = G.pred g Return in
+          let g = G.add_edge g (End rid) Return in
+
+          List.fold_left
+            (fun acc v ->
+              let acc = G.remove_edge acc v Return in
+              G.add_edge acc v (Begin rid))
+            g returns)
+    in
+    (procedure, rid)
+
+  let rename_procedure ?(skipping = Skip.empty) rid (procedure : Program.proc)
       (g : RevG.t) tree doms =
     (* Workaround not having stmt level cfg. Given a block
        is linear/has no control flow, it is enough if a and b
@@ -295,44 +329,19 @@ module Construction = struct
         (* Add definition to defs. *)
         defs := VarMap.add var' vert !defs;
         continue k var'
+    | effect AllowRename vert, k ->
+        continue k (not @@ Vert.equal vert (Begin rid))
 
   let ssa_proc ?(skipping = Skip.empty) (procedure : Program.proc) =
     let procedure =
       map_blocks_nondet (fun (_, b) -> { b with phis = [] }) procedure
     in
 
-    (* Create a fresh pre-return block for joining out params. *)
-    let procedure, rid =
-      Procedure.fresh_block procedure
-        ~stmts:
-          (Procedure.formal_out_params procedure
-          |> StringMap.values
-          |> Iter.map (fun v ->
-              Stmt.Instr_Assign
-                {
-                  al = [ (v, Expr.BasilExpr.rvar v) ];
-                  attrib = StringMap.empty;
-                })
-          |> Iter.to_list)
-        ()
-    in
+    let procedure, rid = unify_returns procedure in
+
     (* Update the procedure. *)
     procedure
     |> map_graph (fun g ->
-        (* Connect the pre-return block. *)
-        let returns = G.pred g Return in
-        let g = G.add_edge g (End rid) Return in
-        let g =
-          List.fold_left
-            (fun acc v ->
-              match v with
-              | Procedure.Vert.End id ->
-                  let g = G.remove_edge g (End id) Return in
-                  G.add_edge g (End id) (Begin rid)
-              | _ -> acc)
-            g returns
-        in
-
         (* Dominator frontier per block: *)
         let idom = Dom.compute_idom g Entry in
         let doms = Dom.idom_to_dom idom in
@@ -359,7 +368,7 @@ module Construction = struct
         in
 
         (* Rename variables. Skip renaming special return block. *)
-        rename_procedure ~skipping procedure g tree doms)
+        rename_procedure ~skipping rid procedure g tree doms)
 end
 
 let ssa_prog ?(skipping = Skip.empty) (program : Program.t) =
