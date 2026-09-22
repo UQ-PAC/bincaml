@@ -147,6 +147,7 @@ let add_decls solver prog =
   |> Iter.filter
        Program.(
          function
+         | Implicit _ -> false
          | Type { binding } -> true
          | Variable { binding } -> Var.is_constant binding
          | Function { binding } -> Var.is_constant binding

@@ -194,8 +194,6 @@ let%expect_test "fold_block" =
   in
   [%expect
     {|
-    Warn: global undeclared $stack assuming mutable unshared
-    Warn: global undeclared $mem assuming mutable unshared
     ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Uninit Valid, R1_4->Uninit Valid, $mem->Uninit Valid, load46_1->Uninit Valid, R0_10->Uninit Valid, _->⊥)
     ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Init Valid, R1_4->Uninit Valid, $mem->Uninit Valid, load46_1->Uninit Valid, R0_10->Uninit Valid, _->⊥)
     ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Init Valid, R1_4->Init Valid, $mem->Uninit Valid, load46_1->Uninit Valid, R0_10->Uninit Valid, _->⊥)

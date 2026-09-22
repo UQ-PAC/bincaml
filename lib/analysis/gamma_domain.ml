@@ -120,7 +120,7 @@ module IDEDomain : IDESSIDomain = struct
     | IdEdge -> s
     | TopEdge -> Value.top
 
-  let init_data (proc : Program.proc) =
+  let relevant_params (proc : Program.proc) =
     Procedure.formal_in_params proc |> StringMap.values
 
   type state_update = (DL.t * t) Iter.t
@@ -158,7 +158,7 @@ module IDEDomain : IDESSIDomain = struct
     | Lambda -> Iter.empty
     | Label v -> Iter.singleton (Label lhs, IdEdge)
 
-  let init_p2 (proc : Program.proc) =
+  let init_param_values (proc : Program.proc) =
     Procedure.formal_in_params proc
     |> StringMap.values
     |> Iter.map (fun v -> (v, Value.singleton v))

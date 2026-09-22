@@ -720,7 +720,7 @@ module WrappedIntervalsValueAbstraction = struct
     | _ -> top
 
   let eval_binary op (a, ta) (b, tb) rt =
-    match (ta, ta) with
+    match (ta, tb) with
     | Types.Bitvector width, Types.Bitvector w2 when width = w2 -> (
         match op with
         | #Lang.Ops.Spec.binary -> Top

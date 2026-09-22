@@ -475,9 +475,9 @@ let pretty_declaration (d : Program.declaration) =
   let open Containers_pp in
   let open Containers_pp.Infix in
   match d with
-  | Program.Variable { binding; attrib } ->
+  | Variable { binding; attrib } ->
       pretty_variable_declaration binding ^ text ";"
-  | Program.Function { binding; attrib; definition = Function t } ->
+  | Function { binding; attrib; definition = Function t } ->
       let func_body, return_type = pretty_function_body binding t in
 
       (* Ideally use above return type
@@ -492,12 +492,12 @@ let pretty_declaration (d : Program.declaration) =
       ^+ text "returns"
       ^+ bracket "(" return_type ")"
       ^+ surround ~width:2 (text "{") (newline ^ func_body) (newline ^ text "}")
-  | Program.Function { binding; attrib; definition = Axiom t } ->
+  | Function { binding; attrib; definition = Axiom t } ->
       fill sp [ text "axiom"; bracket "(" (pretty_expr t) ")" ] ^ text ";"
-  | Program.Function { binding; attrib; definition = Uninterpreted }
+  | Function { binding; attrib; definition = Uninterpreted }
     when List.is_empty (fst @@ Types.uncurry (Var.typ binding)) ->
       pretty_variable_declaration ~const:true binding ^ text ";"
-  | Program.Function { binding; attrib; definition = Uninterpreted } ->
+  | Function { binding; attrib; definition = Uninterpreted } ->
       let param, rt = Types.uncurry (Var.typ binding) in
       text "function"
       ^+ pretty_attribute_map ".boogie" attrib
@@ -509,8 +509,9 @@ let pretty_declaration (d : Program.declaration) =
           ")"
       ^ bracket " returns (" (text (type_to_string rt)) ")"
       ^ text ";"
-  | Program.Type { binding; typ } -> pretty_type_declaration binding typ
+  | Type { binding; typ } -> pretty_type_declaration binding typ
   | Procedure { definition } -> pretty_procedure definition
+  | Implicit _ -> failwith "cannot generate implicit"
 
 let pretty_program (p : Program.t) =
   let open Containers_pp in
@@ -519,7 +520,8 @@ let pretty_program (p : Program.t) =
     |> List.partition_filter_map (fun d ->
         let p = pretty_declaration d in
         match d with
-        | Program.Variable _ | Program.Function _ | Program.Type _ -> `Left p
+        | Variable _ | Function _ | Type _ -> `Left p
+        | Implicit _ -> `Drop
         | _ -> `Right p)
   in
   let glob_vars = append_nl glob_vars_funs in

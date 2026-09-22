@@ -1,0 +1,22 @@
+#!/bin/bash -e
+
+# Helper script to run the given command in the Nix CI shell.
+
+if [[ -n "$CI" ]]; then
+  # In CI only, formally build the shell so it can be cached, and re-use
+  # the evaluated shell environment.
+
+  if ! [[ -f .flake ]]; then
+    nix build --accept-flake-config .#ci -o shell
+    nix build --accept-flake-config .#pkgs.bashInteractive -o bash
+
+    echo "#!$(readlink -f bash)/bin/bash" > .flake
+    nix --accept-flake-config print-dev-env .#ci >> .flake
+    echo 'exec "$@"' >> .flake
+    chmod +x .flake
+  fi
+  exec env -i "CI=$CI" "TERM=$TERM" CLICOLOR_FORCE=1 "$PWD/.flake" "$@"
+else
+  exec nix --accept-flake-config develop .#ci -i -k CI --command "$@"
+fi
+

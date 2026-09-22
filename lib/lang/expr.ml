@@ -36,6 +36,9 @@ module BasilExpr = struct
   (** create fixed type from abstract type *)
   let fix i = E i
 
+  let fix2 i = fix (AbstractExpr.map fix i)
+  let fix3 i = fix (AbstractExpr.map fix2 i)
+
   (** create abstract type from fixed type *)
   let unfix i = match i with E i -> i
 
@@ -409,7 +412,7 @@ module BasilExpr = struct
   let fold_with_type (alg : 'e abstract_expr -> 'a) = zygo_l ~cata type_alg alg
   let fold_with_type_r (alg : 'e abstract_expr -> 'a) = zygo ~cata type_alg alg
 
-  let elabourate_typ e =
+  let elaborate_typ e =
     fold_with_type
       (fun t ->
         let typ = type_alg (AbstractExpr.map snd t) in

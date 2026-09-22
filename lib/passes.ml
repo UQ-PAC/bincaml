@@ -273,6 +273,16 @@ module PassManager = struct
       invariants = Invariants.presupposes [];
     }
 
+  let branch_conditions =
+    {
+      name = "branch-conditions";
+      apply = Proc Transforms.Branch_conditions.transform;
+      doc =
+        "(incomplete) Rewrites branch conditions to be in terms of numerical \
+         comparisons instead of flags.";
+      invariants = Invariants.presupposes [];
+    }
+
   let irreducible_loop =
     {
       name = "irreducible-loops";
@@ -391,6 +401,17 @@ module PassManager = struct
       invariants = Invariants.presupposes [];
     }
 
+  let readable_exprs =
+    {
+      name = "readable-expressions";
+      apply = Proc Transforms.Cf_tx.simplify_proc_exprs_readable_default;
+      doc =
+        "Perform intra-expression simplifications and constant folding for \
+         whole program. Includes simplifications that aid readability at the \
+         detrement of some analyses.";
+      invariants = Invariants.presupposes [];
+    }
+
   let inter_dead =
     {
       name = "inter-dead-store-elim";
@@ -448,27 +469,15 @@ module PassManager = struct
       invariants = Invariants.from_list (fun x -> x.invariants) batch;
     }
 
-  let flatten_phis =
+  let dynamic_single_assignment =
     {
-      name = "flatten-phis";
-      apply = Proc Transforms.Dsa.dsa;
+      name = "dynamic-single-assignment";
+      apply = Proc Transforms.Dynamic_single_assignment.dsa;
       doc =
         "Transforms phi nodes in the program into dynamic single assignment \
          statements.";
       invariants =
         Invariants.presupposes [] ~establishes:[ DSA; NoPhis ]
-          ~invalidates:[ SSA ];
-    }
-
-  let dynamic_single_assignment =
-    {
-      name = "dynamic-single-assignment";
-      apply = Proc Transforms.Dsa.dsa;
-      doc =
-        "Transforms phi nodes in the program into dynamic single assignment \
-         statements.";
-      invariants =
-        Invariants.presupposes [ SSA ] ~establishes:[ DSA; NoPhis ]
           ~invalidates:[ SSA ];
     }
 
@@ -489,12 +498,12 @@ module PassManager = struct
       hm_elaborate;
       chop_unreachable;
       cse_elim;
-      flatten_phis;
       dynamic_single_assignment;
       irreducible_loop;
       remove_unreachable_blocks;
       collapse_empty_blocks;
       cleanup_cfg;
+      branch_conditions;
       dfg_bool;
       dfg_reaching_defs;
       dfg_ival_wint_product;
@@ -519,6 +528,7 @@ module PassManager = struct
       intra_function_summaries;
       inter_function_summaries;
       cf_exprs;
+      readable_exprs;
       inter_dead;
       linear_const;
       linear_copy;

@@ -40,6 +40,12 @@
   qcheck-core,
   qcheck-alcotest,
   qcheck-stm,
+  tree-sitter,
+  nodejs-slim,
+  bnfc-treesitter,
+  boogie,
+  cvc5,
+  z3-bin, # custom name for z3 binary, since `z3` is the ocaml library
 
   # dev:
   # , odig
@@ -65,6 +71,14 @@ buildDunePackage {
     qcheck-core
     qcheck-alcotest
     qcheck-stm
+  ];
+  nativeCheckInputs = [
+    tree-sitter
+    nodejs-slim
+    bnfc-treesitter
+    boogie
+    cvc5
+    z3-bin.out
   ];
   nativeBuildInputs = [
     writableTmpDirAsHomeHook
@@ -110,10 +124,7 @@ buildDunePackage {
   '';
 
   doCheck = true;
-  outputs = [
-    "out"
-    "dev"
-  ];
+  outputs = [ "out" ];
 
   meta = {
     homepage = "https://github.com/agle/bincaml";

@@ -215,8 +215,14 @@ struct
   let f_cvt_bits_uint : bigint -> bitvector -> bigint =
    fun _ -> Bitvec.to_unsigned_bigint
 
-  let f_sdiv_int : bigint -> bigint -> bigint = fun _ -> failwith "sdiv int"
-  let f_shl_int : bigint -> bigint -> bigint = fun _ -> failwith "shl int"
+  let f_sdiv_int : bigint -> bigint -> bigint = fun a b -> Z.div a b
+
+  let f_shl_int : bigint -> bigint -> bigint =
+   fun a b ->
+    Z.shift_left a
+      (Z.to_int64_unsigned b |> Int64.unsigned_to_int
+      |> Option.get_exn_or "shift value too large for camlint")
+
   let v_PSTATE_C : lexpr = PSTATE_C
   let v_PSTATE_Z : lexpr = PSTATE_Z
   let v_PSTATE_V : lexpr = PSTATE_V
@@ -355,7 +361,8 @@ struct
   let f_gen_not_bits : bigint -> expr -> expr =
    fun _ a -> Expr.BasilExpr.unexp ~op:`BVNOT a
 
-  let f_gen_cvt_bool_bv : expr -> expr = fun _ -> failwith "f_gen_cvt_bool_bv"
+  let f_gen_cvt_bool_bv : expr -> expr =
+   fun e -> Expr.BasilExpr.unexp ~op:`BOOLTOBV1 e
 
   let f_gen_or_bits : bigint -> expr -> expr -> expr =
    fun _ a b -> Expr.BasilExpr.applyintrin ~op:`BVOR [ a; b ]
@@ -413,7 +420,14 @@ struct
   (** [f_gen_replicate_bits operand_width num_replications operand
        num_replications] *)
   let f_gen_replicate_bits : bigint -> bigint -> expr -> expr -> expr =
-   fun _ -> failwith "f_gen_replicate_bits"
+   fun targ0 targ1 opr nr ->
+    targ1 |> Z.to_int |> fun repeats ->
+    match Expr.BasilExpr.type_of opr |> Types.bit_width with
+    | Some 1 when repeats > 0 ->
+        Expr.BasilExpr.unexp ~op:(`SignExtend (repeats - 1)) opr
+    | _ ->
+        Expr.BasilExpr.applyintrin ~op:`BVConcat
+        @@ List.init repeats (fun _ -> opr)
 
   (** [f_gen_ZeroExtend operand_width result_width operand result_width] *)
   let f_gen_ZeroExtend : bigint -> bigint -> expr -> expr -> expr =

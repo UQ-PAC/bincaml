@@ -507,6 +507,7 @@ module SMTLib2 = struct
         @@ list
              [ atom "declare-fun"; smt_symbol (Var.name binding); list args; r ]
     | Variable v -> failwith "mutable"
+    | Implicit v -> failwith "implicit decl"
     | Procedure p -> failwith "procedure"
 
   let assert_bexpr e =

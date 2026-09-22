@@ -31,7 +31,9 @@ let add_proxy_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap) uuid
     succ_addr uuid
     |> Iter.map (fun addr -> addr_equal_expr addr)
     |> Iter.to_list
-    |> Expr.BasilExpr.applyintrin ~op:`OR
+    |> function
+    | [] -> Expr.BasilExpr.boolconst true
+    | args -> Expr.BasilExpr.applyintrin ~op:`OR args
   in
   let name =
     "%" ^ (Procedure.id proc |> ID.to_string |> sanitize_proc_name) ^ "_proxy"

@@ -44,9 +44,6 @@ proc @main (a:bv64, b:bv64, c:bv64, d:bv64, e:bv64) -> ()
   print_lives results main;
   [%expect
     {|
-    Warn: global undeclared $x assuming mutable unshared
-    Warn: global undeclared $y assuming mutable unshared
-    Warn: global undeclared $z assuming mutable unshared
     @main
     $mem:(bv64->bv8)
     a:bv64
