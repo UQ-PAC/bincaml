@@ -1,28 +1,6 @@
 open Lang
 open Common
-
-module FlagLattice = struct
-  include Analysis.Lattice_types.FlatLattice (struct
-    include Flags
-
-    let name = "flag"
-  end)
-
-  module E = Lang.Expr.BasilExpr
-
-  let eval_const op =
-    match op with
-    | `Bitvector k when Bitvec.equal k (Bitvec.zero ~size:1) -> V (Const Never)
-    | `Bitvector k when Bitvec.equal k (Bitvec.one ~size:1) -> V (Const Always)
-    | _ -> Top
-
-  let eval_unop _ _ = Top
-  let eval_binop _ _ _ = Top
-  let eval_intrin _ _ = Top
-
-  let contains_var v x =
-    match x with Top -> false | Bot -> false | V f -> Flags.contains_var v f
-end
+module FlagLattice = Flags.FlagLattice
 
 (** Assigns flag meaning values to flag variables at each code point. If a flag
     assumes a value of a variable that gets updated, that flags value will get
@@ -30,7 +8,7 @@ end
     probably only occur direct after flags are set (probably). Note that none of
     this is a problem if ssa is run prior to this transform. *)
 module FlagDomain = struct
-  include Analysis.Intra_analysis.MapState (FlagLattice)
+  include Flags.FlagMap
 
   let name = "pstate-flag-analysis"
 
@@ -69,4 +47,3 @@ module FlagDomain = struct
 end
 
 module FlagAnalysis = Analysis.Intra_analysis.Forwards (FlagDomain)
-module Eval = Analysis.Intra_analysis.EvalExpr (FlagLattice)
