@@ -377,7 +377,7 @@ proc @main()  -> () {  }
     assume eq(0x00:bv64, $PC);
     call @_aarch64_eval(0xeb04007f:bv32, 0x000:bv64) { .asm = "cmp x3, x4" };
     call @_aarch64_eval(0xfa4610a4:bv32, 0x004:bv64) { .asm = "ccmp x5, x6, #4, ne" };
-    // rip it doesn't handle chained ccmps...
+    // rip it doesn't handle chained ccmps without condition identification from ites ...
     //call @_aarch64_eval(0xf148c0eb:bv32, 0x008:bv64) { .asm = "ccmp x7, x8, #11, gt" };
     call @_aarch64_eval(0x9a822020:bv32, 0x008:bv64) { .asm = "csel x0, x1, x2, cs" };
 
