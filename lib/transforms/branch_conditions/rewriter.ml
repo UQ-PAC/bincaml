@@ -9,18 +9,12 @@ open Cfg_analysis
 let rec condition_expr cond =
   let open Flags in
   let open Expr.BasilExpr in
-  let open Option.Infix in
-  let rec value = function
-    | Diff (e, e') -> Some (binexp ~op:`BVSUB e e')
-    | Sum (e, e') -> Some (applyintrin ~op:`BVADD [ e; e' ])
-    | Expr e -> Some e
-    | Ite (co, c, c') ->
-        let* co = condition_expr co in
-        let* c = value c in
-        let* c' = value c' in
-        Some (ifthenelse co c c')
-    | Always -> Some (bvconst (Bitvec.one ~size:1))
-    | Never -> Some (bvconst (Bitvec.zero ~size:1))
+  let value = function
+    | Diff (e, e') -> binexp ~op:`BVSUB e e'
+    | Sum (e, e') -> applyintrin ~op:`BVADD [ e; e' ]
+    | Expr e -> e
+    | Always -> bvconst (Bitvec.one ~size:1)
+    | Never -> bvconst (Bitvec.zero ~size:1)
   in
   let zero_of e =
     match type_of e with
@@ -34,7 +28,7 @@ let rec condition_expr cond =
   | CS { c = Diff (e, e') } -> Some (binexp ~op:`BVULE e' e)
   | CS { c = Sum (e, e') } -> Some (binexp ~op:`BVULE (unexp ~op:`BVNEG e') e)
   | MI { n } ->
-      let* e = value n in
+      let e = value n in
       zero_of e |> Option.map (binexp ~op:`BVSLT e)
   (* | VS c -> failwith "overflow rewrite is complicated" *)
   | HI { c = Diff (e, e') as c; z } when equiv_computations c z ->
@@ -49,7 +43,7 @@ let rec condition_expr cond =
   | GE { n = Sum (e, e') as c; v } when equiv_computations c v ->
       Some (binexp ~op:`BVSLE (unexp ~op:`BVNEG e') e)
   | GE { n; v = Never } ->
-      let* e = value n in
+      let e = value n in
       zero_of e |> Option.map (fun zero -> binexp ~op:`BVSLE zero e)
   | GT { n = Diff (e, e') as n; v; z }
     when equiv_computations n v && equiv_computations n z ->
@@ -58,7 +52,7 @@ let rec condition_expr cond =
     when equiv_computations n v && equiv_computations n z ->
       Some (binexp ~op:`BVSLT (unexp ~op:`BVNEG e') e)
   | GT { n; v = Never; z } when equiv_computations n z ->
-      let* e = value n in
+      let e = value n in
       zero_of e |> Option.map (fun zero -> binexp ~op:`BVSLT zero e)
   | AL -> Some (boolconst true)
   | Not cond -> (

@@ -1,5 +1,43 @@
 open Lang
 open Common
+
+(* The ccmp instruction requires additional work to be handled. A lifted ccmp
+   instruction looks like this:
+   ```
+   block %block_75 { .asm = "ccmp x20, x19, #0, ne" } [
+     var local_59:bool := false;
+     var local_59:bool := eq($PSTATE_Z, 0x1:bv1);
+     goto (%block_77,%block_76);
+   ];
+   block %block_76 [
+     assume boolnot(local_59:bool);
+     $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(64, bvsub($R20, $R19)),
+        bvsub(sign_extend(64, $R20), sign_extend(64, $R19)))));
+     $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(64, bvsub($R20, $R19)),
+        bvadd(zero_extend(64, $R20), zero_extend(64, bvnot($R19)), 0x1:bv128))));
+     $PSTATE_Z:bv1 := booltobv1(eq(bvsub($R20, $R19), 0x0:bv64));
+     $PSTATE_N:bv1 := extract(64,63, bvsub($R20, $R19));
+     goto (%block_78);
+   ];
+   block %block_77 [
+     assume boolnot(boolnot(local_59:bool));
+     $PSTATE_V:bv1 := 0x0:bv1;
+     $PSTATE_C:bv1 := 0x0:bv1;
+     $PSTATE_Z:bv1 := 0x0:bv1;
+     $PSTATE_N:bv1 := 0x0:bv1;
+     goto (%block_78);
+   ];
+   block %block_78 [
+     (var BranchTaken:bool := false, $PC:bv64 := 0x95fc:bv64);
+     goto (%block_79);
+   ];
+   ```
+   note that the two paths assume on a variable or its negation, not on a
+   condition. This means we can track the most recently assumed variable and
+   also track conditions of boolean variables. Then when we join two paths
+   where the assumptions are negations of the same variable, then we can create
+   if then else (ite) flag terms in the flag map! *)
+
 module FlagLattice = Flags.FlagLattice
 module FlagMap = Flags.FlagMap
 
@@ -58,14 +96,29 @@ module FlagDomain = struct
   let pretty x = Containers_pp.text (show x)
 
   let join a b =
-    (* TODO create ITE flags if assumes are opposite *)
-    {
-      conds = CondMap.join a.conds b.conds;
-      flags = FlagMap.join a.flags b.flags;
-      assume = AssumeLattice.join a.assume b.assume;
-    }
-
-  let widening = join
+    let conds = CondMap.join a.conds b.conds in
+    let assume = AssumeLattice.join a.assume b.assume in
+    match (a.assume, b.assume) with
+    | (V (Var v), V (NotVar v') | V (NotVar v'), V (Var v)) when Var.equal v v'
+      -> (
+        (* This could maybe possibly become unbounded if there's a ccmp into a
+           branch back into the ccmp... guess we're doing top widening + lots
+           of delays!! *)
+        match (CondMap.read v a.conds, CondMap.read v b.conds) with
+        | V co, V co' when Flags.equiv_cond co co' ->
+            let flags =
+              FlagMap.top_binop
+                (fun f f' ->
+                  match (f, f') with
+                  | Bot, Bot -> Bot
+                  | V f, V f' -> V (Flags.Ite (co, f, f'))
+                  | _ -> Top)
+                a.flags b.flags
+            in
+            print_endline @@ Flags.show_cond co;
+            { conds; flags; assume }
+        | _ -> { conds; flags = FlagMap.join a.flags b.flags; assume })
+    | _ -> { conds; flags = FlagMap.join a.flags b.flags; assume }
 
   let leq a b =
     (* idk what this is wrt the join ... *)
@@ -92,6 +145,7 @@ module FlagDomain = struct
   let top =
     { conds = CondMap.top; flags = FlagMap.top; assume = AssumeLattice.top }
 
+  let widening _ _ = top
   let name = "pstate-flag-analysis"
 
   (* Assume nothing about the initial state *)
@@ -139,8 +193,15 @@ module FlagDomain = struct
         match body with
         | E (RVar { id }) ->
             { m with assume = AssumeLattice.V (AssumeVar.Var id) }
-        | E (UnaryExpr { arg = E (RVar { id }) }) ->
+        | E (UnaryExpr { op = `BoolNOT; arg = E (RVar { id }) }) ->
             { m with assume = AssumeLattice.V (AssumeVar.NotVar id) }
+        | E
+            (UnaryExpr
+               {
+                 op = `BoolNOT;
+                 arg = E (UnaryExpr { op = `BoolNOT; arg = E (RVar { id }) });
+               }) ->
+            { m with assume = AssumeLattice.V (AssumeVar.Var id) }
         | _ -> { m with assume = AssumeLattice.top })
     | _ -> m
 
@@ -163,4 +224,8 @@ module FlagDomain = struct
     }
 end
 
-module FlagAnalysis = Analysis.Intra_analysis.Forwards (FlagDomain)
+module FlagAnalysis = struct
+  include Analysis.Intra_analysis.Forwards (FlagDomain)
+
+  let analyse = analyse ~widening_delay:50
+end

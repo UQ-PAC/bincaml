@@ -25,7 +25,6 @@ module FlagTypes = struct
     | Expr of Expr.BasilExpr.t  (** The result of evaluating an expr *)
     | Always
     | Never
-    | Ite of cond * computation * computation
   [@@deriving eq, ord, show { with_path = false }]
 
   and cond = computation gen_cond [@@deriving show { with_path = false }]
@@ -41,39 +40,38 @@ module FlagTypes = struct
     | C of computation  (** Carry from computation *)
     | Z of computation  (** When computation is zero *)
     | N of computation  (** When computation is negative *)
+    | Ite of cond * t * t
   [@@deriving eq, ord, show { with_path = false }]
 end
 
 include FlagTypes
 
-let rec equiv_computations c c' =
+let equiv_computations c c' =
   let open Expr.BasilExpr in
   match (c, c') with
   | Sum (e1, e2), Sum (e1', e2') | Diff (e1, e2), Diff (e1', e2') ->
       equiv_exp e1 e1' && equiv_exp e2 e2'
   | Expr e, Expr e' -> equiv_exp e e'
-  | Ite (co1, c1, c1'), Ite (co2, c2, c2') ->
-      equiv_cond co1 co2 && equiv_computations c1 c2
-      && equiv_computations c1' c2'
   | Always, Always | Never, Never -> true
-  | (Sum _ | Diff _ | Expr _ | Ite _ | Always | Never), _ -> false
+  | (Sum _ | Diff _ | Expr _ | Always | Never), _ -> false
 
-and equiv_cond co co' = equal_gen_cond equiv_computations co co'
+let equiv_cond co co' = equal_gen_cond equiv_computations co co'
 
-let rec comp_contains_var v = function
+let comp_contains_var v = function
   | Sum (e1, e2) | Diff (e1, e2) ->
       VarSet.mem v (Expr.BasilExpr.free_vars e1)
       || VarSet.mem v (Expr.BasilExpr.free_vars e2)
   | Expr e -> VarSet.mem v (Expr.BasilExpr.free_vars e)
-  | Ite (_, c1, c2) -> comp_contains_var v c1 || comp_contains_var v c2
   | Never | Always -> false
 
 let cond_contains_var v =
   fold_gen_cond (fun b comp -> b && comp_contains_var v comp) true
 
 (** Determine whether [v] exists in an expression in [f] *)
-let contains_var v = function
+let rec contains_var v = function
   | V c | C c | Z c | N c | Const c -> comp_contains_var v c
+  | Ite (co, c1, c2) ->
+      cond_contains_var v co || contains_var v c1 || contains_var v c2
 
 let extract_overflow_cary arg1 arg2 =
   let open Expr.AbstractExpr in
