@@ -83,5 +83,5 @@ let rw m e =
 
 (** Rewrite an expression's branch conditions in terms of flag analysis results
 *)
-let rewrite_expr (m : FlagDomain.t) e =
+let rewrite_expr (m : Flags.FlagMap.t) e =
   Expr.BasilExpr.rewrite_down ~rw_fun:(rw m) e

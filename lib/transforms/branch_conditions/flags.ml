@@ -17,7 +17,7 @@ module FlagTypes = struct
     | AL
     | Not of 'a gen_cond
     | Top  (** Unknown condition type *)
-  [@@deriving show { with_path = false }, eq, ord]
+  [@@deriving show { with_path = false }, eq, ord, fold]
 
   type computation =
     | Sum of Expr.BasilExpr.t * Expr.BasilExpr.t  (** Computed e1 + e2 *)
@@ -68,9 +68,12 @@ let rec comp_contains_var v = function
   | Ite (_, c1, c2) -> comp_contains_var v c1 || comp_contains_var v c2
   | Never | Always -> false
 
+let cond_contains_var v =
+  fold_gen_cond (fun b comp -> b && comp_contains_var v comp) true
+
 (** Determine whether [v] exists in an expression in [f] *)
-let contains_var v f =
-  match f with V c | C c | Z c | N c | Const c -> comp_contains_var v c
+let contains_var v = function
+  | V c | C c | Z c | N c | Const c -> comp_contains_var v c
 
 let extract_overflow_cary arg1 arg2 =
   let open Expr.AbstractExpr in
