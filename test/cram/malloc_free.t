@@ -145,12 +145,19 @@
    R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
    R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64) {
     var Exp18__5_25_2: bv64;
+    var Exp18__5_25_1: bv64;
     var Exp14__5_21_2: bv64;
     var Exp14__5_22_2: bv64;
     var R0_4: bv64;
     var Exp16__5_24_2: bv64;
     var Exp14__5_2_2: bv64;
+    var Exp16__5_24_1: bv64;
     var Exp14__5_1_2: bv64;
+    var Exp14__5_21_1: bv64;
+    var R0_3: bv64;
+    var Exp14__5_22_1: bv64;
+    var Exp14__5_2_1: bv64;
+    var Exp14__5_1_1: bv64;
     b#main_entry:
       $stack := store64_le(
           $stack,
@@ -382,12 +389,19 @@
    R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
    R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64) {
     var Exp18__5_25_2: bv64;
+    var Exp18__5_25_1: bv64;
     var Exp14__5_21_2: bv64;
     var Exp14__5_22_2: bv64;
     var R0_4: bv64;
     var Exp16__5_24_2: bv64;
     var Exp14__5_2_2: bv64;
+    var Exp16__5_24_1: bv64;
     var Exp14__5_1_2: bv64;
+    var Exp14__5_21_1: bv64;
+    var R0_3: bv64;
+    var Exp14__5_22_1: bv64;
+    var Exp14__5_2_1: bv64;
+    var Exp14__5_1_1: bv64;
     b#main_entry:
       $stack := store64_le(
           $stack,
@@ -483,7 +497,7 @@
   $ boogie ./bad.bpl
   Memory Error: Invalid Access
   Execution trace:
-      ./bad.bpl(143,3): b#main_entry
+      ./bad.bpl(150,3): b#main_entry
   
   Boogie program verifier finished with 0 verified, 1 error
 

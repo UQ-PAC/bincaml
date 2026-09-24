@@ -46,10 +46,13 @@ let rec ty_of_basil st (t : Types.t) : TypeExpr.t =
   | Types.Nothing -> nothing_t st
   | Types.Map (a, b) -> fun_type st (ty_of_basil st a) (ty_of_basil st b)
   | Types.Sort (n, _) -> fix st (TypeConstr ([], n))
-  | Types.Struct _ -> failwith "unsupp"
+  | Types.Struct _ -> failwith "structs unsupp"
   | Types.Pointer { lower; upper } ->
       ptr_typ_sub st (ty_of_basil st lower) (ty_of_basil st upper)
-  | Types.Variable n -> fix st (Var (st.gen.fresh ~name:n ()))
+  | Types.Variable n ->
+      (*fix st (Var (st.gen.fresh ~name:n ()))*)
+      (* type variables in the AST are references to declared types for now *)
+      fix st (TypeConstr ([], n))
 
 module Make_smart_constructors (S : sig
   val state : TypeExpr.state
