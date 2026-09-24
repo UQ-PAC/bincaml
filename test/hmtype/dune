@@ -1,0 +1,6 @@
+(cram
+ (package bincaml)
+ (deps
+  %{bin:bincaml}
+  (glob_files *.il)
+  (glob_files *.sexp)))
