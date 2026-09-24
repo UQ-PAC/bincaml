@@ -73,6 +73,12 @@ runs:
     - run: opam env --shell=sh | cut -d';' -f1 | tr -d "'" | tee -a "$GITHUB_ENV"
       shell: bash
 
+    # FIXME: remove this after opam depext bug is fixed
+    - run: |
+        if command -v brew; then brew install capstone; fi
+        if command -v apt-get; then sudo apt-get install libcapstone-dev; fi
+      shell: bash
+
     - run: if command -v brew; then echo LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix)/lib" >> "$GITHUB_ENV"; fi
       shell: bash
 
