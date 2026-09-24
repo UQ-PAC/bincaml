@@ -215,7 +215,8 @@ let format_context_info ?source fmt { loc; input; description; _ } =
   | Input input, _ | SourceFile, Some input ->
       Format.fprintf fmt "%s%a%a" description Format.pp_print_newline ()
         (format_location input) [ loc ]
-  | _ -> Format.fprintf fmt "%s at " description
+  | RawString s, _ -> Format.fprintf fmt "%s: %s" description s
+  | SourceFile, None -> Format.fprintf fmt "%s in <?.il>" description
 
 (*
 let format_extra_location_info fmt = function
@@ -241,7 +242,7 @@ let pp_bincamlerr fmt { message; reason; error_context; input } =
   if List.is_empty error_context |> not then begin
     Format.fprintf fmt "Related context:";
     Format.pp_force_newline fmt ();
-    Format.fprintf fmt "%a" fmt_locations error_context
+    Format.fprintf fmt "%a" fmt_locations (List.rev error_context)
   end
 
 let () =

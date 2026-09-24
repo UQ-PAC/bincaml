@@ -5,7 +5,7 @@ prog entry @main {
 proc @main () -> ()
 [
   block %main_entry [
-    assert (1:bv32);
+    var l:bv64 := (1:bv32);
     return;
   ];
 ];
