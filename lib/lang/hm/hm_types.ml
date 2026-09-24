@@ -3,7 +3,8 @@
 open Common
 open Abstract_expr
 
-exception TypeErr of string
+let type_err ?location msg =
+  Errors.BincamlError (Errors.error ?ctx_info:location msg TypeError)
 
 open struct
   let fix = TypeExpr.fix
@@ -106,10 +107,15 @@ let scheme_to_string = function
   | Forall (tl, t) -> List.to_string ID.to_string tl ^ ". " ^ type_to_string t
 
 let rec to_basil (t : TypeExpr.t) : Types.t =
-  let wrapped t f =
-    try f ()
-    with TypeErr e ->
-      raise (TypeErr ("error in " ^ (type_to_string @@ t) ^ ": " ^ e))
+  let wrapped e f =
+    Errors.update_error
+      (fun m ->
+        Errors.add_error_context
+          ~ctx_info:
+            (Errors.context_message ~msg:"type converted to basil"
+               (type_to_string @@ t))
+          m)
+      f
   in
   let open Types in
   wrapped t @@ fun () ->
@@ -121,7 +127,7 @@ let rec to_basil (t : TypeExpr.t) : Types.t =
   | TypeConstr ([ w ], "bv") -> (
       match is_nat_val_type w with
       | Some i -> Bitvector i
-      | None -> raise (TypeErr ("bitvector unresolved: " ^ type_to_string t)))
+      | None -> raise (type_err ("bitvector unresolved: " ^ type_to_string t)))
   | TypeConstr ([], "unit") -> Unit
   | TypeConstr ([], "bool") -> Boolean
   | TypeConstr ([], "int") -> Integer

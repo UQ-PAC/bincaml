@@ -57,7 +57,7 @@ let solve_constraints st ~max_iters cls =
     | [] -> ()
     | _ when tries > max_iters ->
         raise
-          (TypeErr
+          (type_err
              ("Gave up solving bitvec constraints with remaining:\n" ^ show cs))
     | cs ->
         let remaining =
