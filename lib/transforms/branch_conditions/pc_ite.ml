@@ -108,46 +108,38 @@ module PcAnalysis = Analysis.Intra_analysis.Forwards (PcDomain)
 
 (** Add singleton guard blocks after the block with id [bid], between the left
     and right successors [l] and [r] if such an operation is valid. *)
-let try_add_cond_blocks (p : Program.proc) (a : PcDomain.t) bid
+let try_add_cond_blocks (p : Program.proc) (pc : PcDomain.t) bid
     ((lid, l) : ID.t * Program.bloc) ((rid, r) : ID.t * Program.bloc) =
   let open Option.Infix in
-  let* pc = match a with Pc p -> Some p | _ -> None in
+  let* pc = match pc with Pc pc -> Some pc | _ -> None in
   let cond = pc.cond in
   let ncond = Expr.BasilExpr.unexp ~op:`BoolNOT pc.cond in
   let* l_addr = Attrib.find_int_map ".address" l.attrib in
   let* r_addr = Attrib.find_int_map ".address" r.attrib in
-  if
-    (not @@ Z.equal l_addr r_addr)
-    && List.mem ~eq:Z.equal pc.t_case [ l_addr; r_addr ]
-    && List.mem ~eq:Z.equal pc.f_case [ l_addr; r_addr ]
-  then
-    let p, tb =
-      Procedure.fresh_block p
-        ~stmts:
-          [
-            Stmt.Instr_Assume
-              { attrib = StringMap.empty; body = cond; branch = true };
-          ]
-        ()
+
+  let ite_addrs = ZSet.of_list [ pc.t_case; pc.f_case ] in
+  let attrib_addrs = ZSet.of_list [ l_addr; r_addr ] in
+
+  if ZSet.equal ite_addrs attrib_addrs && ZSet.cardinal ite_addrs == 2 then
+    (* orders will not necessarily match between attrs and ite. *)
+    let l_guard, r_guard =
+      if Z.equal pc.t_case l_addr then (cond, ncond) else (ncond, cond)
     in
-    let p, fb =
-      Procedure.fresh_block p
-        ~stmts:
-          [
-            Stmt.Instr_Assume
-              { attrib = StringMap.empty; body = ncond; branch = true };
-          ]
-        ()
+
+    let l_stmt =
+      Stmt.Instr_Assume
+        { attrib = StringMap.empty; body = l_guard; branch = true }
+    and r_stmt =
+      Stmt.Instr_Assume
+        { attrib = StringMap.empty; body = r_guard; branch = true }
     in
-    let p = Procedure.modify_succs p bid ~remove:[ lid; rid ] ~add:[ tb; fb ] in
-    let p =
-      if Z.equal pc.t_case l_addr then
-        Procedure.modify_succs p tb ~remove:[] ~add:[ lid ] |> fun p ->
-        Procedure.modify_succs p fb ~remove:[] ~add:[ rid ]
-      else
-        Procedure.modify_succs p tb ~remove:[] ~add:[ rid ] |> fun p ->
-        Procedure.modify_succs p fb ~remove:[] ~add:[ lid ]
-    in
+
+    let p, lb = Procedure.fresh_block p ~stmts:[ l_stmt ] () in
+    let p, rb = Procedure.fresh_block p ~stmts:[ r_stmt ] () in
+
+    let p = Procedure.modify_succs p bid ~remove:[ lid; rid ] ~add:[ lb; rb ] in
+    let p = Procedure.modify_succs p lb ~remove:[] ~add:[ lid ] in
+    let p = Procedure.modify_succs p rb ~remove:[] ~add:[ rid ] in
     Some p
   else None
 
