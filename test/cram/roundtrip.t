@@ -56,7 +56,7 @@ Memassign repr
      ]
   ];
   let $a : uninterpSort = UninterpSort;
-  let $b : record = (Record)(0x1:bv64, 0x2:bv64, 0x3:bv64);
+  let $b : record = (Record)(0x1:bv64, 0x2:bv32, 0x3:bv64);
   let $three : bv64 = let func (a:bv64) : bv64 = (bvadd(a:bv64, 0x1:bv64)) in ((func:(bv64->bv64))(($mul_2)(0x2:bv64,
            0x1:bv64)));
   prog entry @main_4196164;

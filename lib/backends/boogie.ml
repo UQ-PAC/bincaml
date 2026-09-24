@@ -263,7 +263,18 @@ let pretty_function_body funcname (e : Program.e) =
   let open Containers_pp in
   match Expr.BasilExpr.unfix e with
   | Lambda { attrib; op = `Lambda; bound_vars; in_body } ->
-      let _, rt = Types.uncurry (Var.typ funcname) in
+      let rt =
+        Hm_inference.type_applied (Var.typ funcname)
+          (List.map Var.typ bound_vars)
+      in
+      let rt =
+        match rt with
+        | Ok e -> e
+        | Error msg ->
+            failwith
+            @@ String.concat "" [ msg; " in "; Expr.BasilExpr.to_string e ]
+      in
+
       (pretty_expr in_body, text @@ type_to_string rt)
   | _ ->
       raise
@@ -320,6 +331,13 @@ let pretty_statement (s : Program.stmt) =
         ls
         >|= compose fst pretty_variable
         |> fill (text "," ^ newline_or_spaces 1)
+      in
+      let pretty_expr e =
+        try pretty_expr e
+        with m ->
+          failwith
+          @@ String.concat " "
+               [ "pretty:"; Expr.BasilExpr.to_string e; Printexc.to_string m ]
       in
       let rhs =
         ls >|= compose snd pretty_expr |> fill (text "," ^ newline_or_spaces 1)
@@ -479,12 +497,6 @@ let pretty_declaration (d : Program.declaration) =
       pretty_variable_declaration binding ^ text ";"
   | Function { binding; attrib; definition = Function t } ->
       let func_body, return_type = pretty_function_body binding t in
-
-      (* Ideally use above return type
-       * but unfortunately curry will uncurry returned maps... :( *)
-      let return_type = Expr.BasilExpr.type_of t in
-      let return_type = text @@ type_to_string return_type in
-
       text "function"
       ^+ pretty_attribute_map ".boogie" attrib
       ^+ (function_name @@ binding)

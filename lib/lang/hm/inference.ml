@@ -1,5 +1,6 @@
 open Common
 open Abstract_expr
+open Hm_inference
 open Hm_types
 open Unification
 open Solve_bv

@@ -312,7 +312,7 @@ module Instructions = struct
                  Var.create ~scope:Var.GlobalConst
                    (Printf.sprintf "store%d_%s" size
                       (Lang.Stmt.show_endian endian))
-                   (Lang.Expr.BasilExpr.type_of value);
+                   (Lang.Expr.BasilExpr.type_of body);
                definition = Lang.Program.Function body;
              }
             : Program.declaration)
@@ -337,7 +337,7 @@ module Instructions = struct
                binding =
                  Var.create ~scope:Var.GlobalConst
                    (Printf.sprintf "load%d_%s" size (Stmt.show_endian endian))
-                   (Var.typ lhs);
+                   (Expr.BasilExpr.type_of body);
                definition = Function body;
              }
             : Program.declaration)
@@ -416,6 +416,9 @@ module Normalise = struct
         let fn_name =
           Printf.sprintf "load%d_%s" size (Stmt.show_endian endian)
         in
+        let args = [ Expr.BasilExpr.rvar rhs; addr ] in
+        let rt = Var.typ lhs in
+        let typ = Types.curry (List.map Expr.BasilExpr.get_typ args) rt in
         Instr_Assign
           {
             al =
@@ -423,8 +426,8 @@ module Normalise = struct
                 ( lhs,
                   Expr.BasilExpr.fapply
                     (Expr.BasilExpr.rvar
-                       (Var.create ~scope:Var.GlobalConst fn_name (Var.typ lhs)))
-                    [ Expr.BasilExpr.rvar rhs; addr ] );
+                       (Var.create ~scope:Var.GlobalConst fn_name typ))
+                    args );
               ];
             attrib;
           }
@@ -433,6 +436,9 @@ module Normalise = struct
         let fn_name =
           Printf.sprintf "store%d_%s" size (Stmt.show_endian endian)
         in
+        let args = [ Expr.BasilExpr.rvar rhs; addr; value ] in
+        let rt = Var.typ lhs in
+        let typ = Types.curry (List.map Expr.BasilExpr.get_typ args) rt in
         Stmt.Instr_Assign
           {
             al =
@@ -440,8 +446,8 @@ module Normalise = struct
                 ( lhs,
                   Expr.BasilExpr.fapply
                     (Expr.BasilExpr.rvar
-                       (Var.create ~scope:Var.GlobalConst fn_name (Var.typ lhs)))
-                    [ Expr.BasilExpr.rvar rhs; addr; value ] );
+                       (Var.create ~scope:Var.GlobalConst fn_name typ))
+                    args );
               ];
             attrib;
           }
