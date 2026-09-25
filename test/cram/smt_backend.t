@@ -11,11 +11,13 @@
   Belonging to procedure: @bad_square
   Counterexample:
   (define-fun trm () Bool true)
+  (define-fun trm_1 () Bool true)
   
   Failing Assertion: assert boolnot(bvslt(x_1:bv64, 0x0:bv64))
   Belonging to procedure: @f3
   Counterexample:
   (define-fun trm () Bool false)
+  (define-fun trm_1 () Bool false)
   Procedure @bad_square failed verification with:
   	 Smt.Solver.Unknown: 0
   	 Smt.Solver.Sat: 1

@@ -92,8 +92,9 @@
        (var x_1:bv64=out) := call @fun1(c=a_2:bv64, global_in=global_1:bv64);
        (var a_3:bv64 := a_2:bv64, var x_2:bv64 := x_1:bv64);
        assert eq(x_2:bv64, bvadd(a_3:bv64, a_3:bv64));
-       return;
-     ]
+       goto (%Return);
+     ];
+     block %Return [ return; ]
   ];
   proc @fun1(c:bv64, global_in:bv64)  -> (out:bv64) {  }
     
@@ -102,9 +103,10 @@
      block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun1_entry); ];
      block %fun1_entry [
        (var e_1:bv64=out2) := call @fun2(global_in=global_1:bv64);
-       var out:bv64 := bvadd(c:bv64, e_1:bv64);
-       return;
-     ]
+       var out_1:bv64 := bvadd(c:bv64, e_1:bv64);
+       goto (%Return);
+     ];
+     block %Return [ var out:bv64 := out_1:bv64; return; ]
   ];
   proc @fun2(global_in:bv64)  -> (out2:bv64) {  }
     
@@ -113,9 +115,10 @@
      block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun2_entry); ];
      block %fun2_entry [
        var g_1:bv64 := global_1:bv64;
-       var out2:bv64 := bvadd(g_1:bv64, g_1:bv64);
-       return;
-     ]
+       var out2_1:bv64 := bvadd(g_1:bv64, g_1:bv64);
+       goto (%Return);
+     ];
+     block %Return [ var out2:bv64 := out2_1:bv64; return; ]
   ];
   prog entry @main;
 
@@ -129,43 +132,58 @@
   >   captures $global:bv64
   5d5
   <    block %inputs [ var global_1:bv64 := global_in:bv64; goto (%main_entry); ];
-  7,11c7,10
+  7,14c7,12
   <      var a_1:bv64 := inp:bv64;
   <      (var a_2:bv64=out) := call @fun1(c=a_1:bv64, global_in=global_1:bv64);
   <      (var x_1:bv64=out) := call @fun1(c=a_2:bv64, global_in=global_1:bv64);
   <      (var a_3:bv64 := a_2:bv64, var x_2:bv64 := x_1:bv64);
   <      assert eq(x_2:bv64, bvadd(a_3:bv64, a_3:bv64));
+  <      goto (%Return);
+  <    ];
+  <    block %Return [ return; ]
   ---
   >      (var a:bv64 := inp:bv64, var b:bv64 := inp:bv64);
   >      (var a:bv64=out) := call @fun1(c=a:bv64, d=b:bv64);
   >      (var x:bv64=out) := call @fun1(c=a:bv64, d=b:bv64);
   >      assert eq(x:bv64, bvadd(a:bv64, a:bv64));
-  15,16c14,15
+  >      return;
+  >    ]
+  16,17c14,15
   < proc @fun1(c:bv64, global_in:bv64)  -> (out:bv64) {  }
   <   
   ---
   > proc @fun1(c:bv64, d:bv64)  -> (out:bv64) {  }
   >   captures $global:bv64
-  19d17
+  20d17
   <    block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun1_entry); ];
-  21,22c19,20
+  22,26c19,22
   <      (var e_1:bv64=out2) := call @fun2(global_in=global_1:bv64);
-  <      var out:bv64 := bvadd(c:bv64, e_1:bv64);
+  <      var out_1:bv64 := bvadd(c:bv64, e_1:bv64);
+  <      goto (%Return);
+  <    ];
+  <    block %Return [ var out:bv64 := out_1:bv64; return; ]
   ---
   >      (var e:bv64=out2) := call @fun2(f=d:bv64);
   >      var out:bv64 := bvadd(c:bv64, e:bv64);
-  26,27c24,25
+  >      return;
+  >    ]
+  28,29c24,25
   < proc @fun2(global_in:bv64)  -> (out2:bv64) {  }
   <   
   ---
   > proc @fun2(f:bv64)  -> (out2:bv64) {  }
   >   captures $global:bv64
-  30d27
+  32d27
   <    block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun2_entry); ];
-  32,33c29,30
+  34,38c29,32
   <      var g_1:bv64 := global_1:bv64;
-  <      var out2:bv64 := bvadd(g_1:bv64, g_1:bv64);
+  <      var out2_1:bv64 := bvadd(g_1:bv64, g_1:bv64);
+  <      goto (%Return);
+  <    ];
+  <    block %Return [ var out2:bv64 := out2_1:bv64; return; ]
   ---
   >      var g:bv64 := $global;
   >      var out2:bv64 := bvadd(g:bv64, g:bv64);
+  >      return;
+  >    ]
   [1]

@@ -32,12 +32,12 @@
   (run-transform irreducible-loops)
   bincaml: [INFO] found 0 loops, 0 irreducible
   bincaml: [INFO] found 0 loops, 0 irreducible
-  bincaml: [INFO] found 4 loops, 0 irreducible
-  bincaml: [INFO] found 4 loops, 0 irreducible
-  bincaml: [INFO] found 4 loops, 0 irreducible
-  bincaml: [INFO] found 4 loops, 0 irreducible
-  bincaml: [INFO] found 4 loops, 0 irreducible
-  bincaml: [INFO] found 4 loops, 0 irreducible
+  bincaml: [INFO] found 6 loops, 0 irreducible
+  bincaml: [INFO] found 6 loops, 0 irreducible
+  bincaml: [INFO] found 6 loops, 0 irreducible
+  bincaml: [INFO] found 6 loops, 0 irreducible
+  bincaml: [INFO] found 6 loops, 0 irreducible
+  bincaml: [INFO] found 6 loops, 0 irreducible
   (run-transform remove-loops)
   (run-transform ssa)
   (run-transform inline-summaries)
@@ -96,19 +96,19 @@
   $ boogie out.bpl
   Memory Error: Invalid Free (object not live)
   Execution trace:
-      out.bpl(190,3): b#inputs
+      out.bpl(198,3): b#inputs
   Memory Error: Invalid Free (not base address)
   Execution trace:
-      out.bpl(235,3): b#inputs
+      out.bpl(250,3): b#inputs
   Memory Error: Invalid Access
   Execution trace:
-      out.bpl(270,3): b#inputs
+      out.bpl(292,3): b#inputs
   Memory Error: Invalid Access
   Execution trace:
-      out.bpl(319,3): b#inputs
+      out.bpl(348,3): b#inputs
   Memory Error: Memory Leak
   Execution trace:
-      out.bpl(367,3): b#inputs
+      out.bpl(403,3): b#inputs
   
   Boogie program verifier finished with 1 verified, 5 errors
 
@@ -138,25 +138,25 @@
   $ boogie out.bpl
   Memory Error: Invalid Free (object not live)
   Execution trace:
-      out.bpl(226,3): b#inputs
+      out.bpl(234,3): b#inputs
   Memory Error: Invalid Free (not base address)
   Execution trace:
-      out.bpl(271,3): b#inputs
+      out.bpl(286,3): b#inputs
   Memory Error: Invalid Free (object not live)
   Execution trace:
-      out.bpl(271,3): b#inputs
-  out.bpl(277,5): Error: a precondition for this call could not be proved
+      out.bpl(286,3): b#inputs
+  out.bpl(292,5): Error: a precondition for this call could not be proved
   out.bpl(146,3): Related location: this is the precondition that could not be proved
   Execution trace:
-      out.bpl(271,3): b#inputs
+      out.bpl(286,3): b#inputs
   Memory Error: Invalid Access
   Execution trace:
-      out.bpl(306,3): b#inputs
+      out.bpl(328,3): b#inputs
   Memory Error: Invalid Access
   Execution trace:
-      out.bpl(355,3): b#inputs
+      out.bpl(384,3): b#inputs
   Memory Error: Memory Leak
   Execution trace:
-      out.bpl(403,3): b#inputs
+      out.bpl(439,3): b#inputs
   
   Boogie program verifier finished with 1 verified, 7 errors

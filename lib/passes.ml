@@ -93,8 +93,7 @@ module PassManager = struct
   let sparams =
     {
       name = "simple-params";
-      apply =
-        Prog (Transforms.Ssa.set_params ~skip_observable:true ~skip_maps:true);
+      apply = Prog Transforms.Lambda_lifting.set_params;
       doc =
         "Pull all global variables into the parameter list, discarding initial \
          parameter list (i.e. assuming its empty)";
@@ -120,6 +119,22 @@ module PassManager = struct
       apply = DFGAnalysis (module Analysis.Defuse_bool.Analysis);
       doc = "runs truthiness analysis on dataflow graph and prints results";
       invariants = Invariants.presupposes [ SSA ];
+    }
+
+  let dfg_reaching_defs =
+    {
+      name = "demo-dfg-reaching-defs";
+      apply =
+        Proc
+          (fun p ->
+            let r = Analysis.Reaching_defs.IntraAnalysis.analyse p in
+            Analysis.Reaching_defs.IntraAnalysis.print_dot
+              (Format.of_chan stdout) p r;
+            p);
+      doc =
+        "runs reaching definitions analysis on dataflow graph and prints \
+         results";
+      invariants = Invariants.make ();
     }
 
   let dfg_ival_wint_product =
@@ -223,7 +238,7 @@ module PassManager = struct
   let remove_unused =
     {
       name = "remove-unused-decls";
-      apply = Prog Transforms.Ssa.drop_unused_var_declarations_prog;
+      apply = Prog Transforms.Drop_unused.drop_unused_var_declarations_prog;
       doc =
         "Removes all unused variable declarations (globals and locals on each \
          procedure) from the IR program";
@@ -233,11 +248,21 @@ module PassManager = struct
   let sssa =
     {
       name = "simple-ssa";
-      apply = Proc Transforms.Ssa.ssa;
+      apply = Prog Transforms.Ssa.(ssa_prog ~skipping:Skip.full);
       doc =
         "Naive SSA transform assuming all variable uses are dominated by \
          definitions from parameters";
       invariants = Invariants.presupposes [ Params ] ~establishes:[ SSA ];
+    }
+
+  let destruct_ssa =
+    {
+      name = "destruct-ssa";
+      apply = Transforms.Ssa.(Proc Destruction.simple_destruction);
+      doc =
+        "Naive SSA destruction, removes all phi nodes replacing them\n\
+        \      with semantically equivalent mutable assigns.";
+      invariants = Invariants.presupposes [] ~establishes:[ NoPhis ];
     }
 
   let cfa_reduction =
@@ -525,6 +550,7 @@ module PassManager = struct
       cleanup_cfg;
       branch_conditions;
       dfg_bool;
+      dfg_reaching_defs;
       dfg_ival_wint_product;
       demo_ival_wint_dfg;
       cfg_wrapped_int;
@@ -534,6 +560,7 @@ module PassManager = struct
       read_uninit false;
       read_uninit true;
       sssa;
+      destruct_ssa;
       cfa_reduction;
       inline_summaries;
       sva;
@@ -574,7 +601,8 @@ module PassManager = struct
         name = "lambda-lifting";
         apply =
           Prog
-            (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
+            (Transforms.Lambda_lifting.set_params ~skip_observable:false
+               ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
         invariants = Invariants.establishes [ LambdaLift ];
       };
