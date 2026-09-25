@@ -295,7 +295,7 @@ let sva (prog : Program.t) =
   let results =
     Program.procs prog
     |> Iter.fold
-         (fun acc (id, v) -> (id, DFGAnalysis.flow_insensitive v) :: acc)
+         (fun acc (id, v) -> (id, DFGAnalysis.flow_insensitive_wto v) :: acc)
          []
   in
   results

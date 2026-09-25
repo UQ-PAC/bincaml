@@ -313,6 +313,98 @@ module SimpleSolver = struct
       ?widen_threshold def_use
 end
 
+(** Perform iteration on the SSA graph based on the methods described in
+    {:https://doi.org/10.1007/BFb0039704}. Although Ocamlgraph provides this
+    functionality, their implementation stores states on each node of the graph
+    which is unlike how we want SSA analyses to perform (where we have a single
+    global state). *)
+module WTOSolver = struct
+  type wto = Vert of Vertex.t | Comp of wto list
+  [@@deriving show { with_path = false }]
+
+  let compute_wto p ~(direction : [ `Backwards | `Forwards ]) =
+    let { var_to_use; var_to_def } = def_use_maps p in
+    let succ v =
+      match direction with
+      | `Forwards ->
+          Vertex.defines p v
+          |> Iter.filter (not % Var.is_global)
+          |> Iter.flat_map (fun v -> MDeps.find_iter var_to_use v)
+      | `Backwards ->
+          Vertex.uses p v
+          |> Iter.filter (not % Var.is_global)
+          |> Iter.flat_map (fun v -> MDeps.find_iter var_to_def v)
+    in
+    (* This algorithm is directly taken from figure 4 of the paper *)
+    let stack = Stack.create () in
+    let dfn = Hashtbl.create 100 in
+    let num = ref 0 in
+    let rec component v =
+      let partition = ref [] in
+      succ v
+      |> Iter.filter (fun v' -> not @@ Hashtbl.mem dfn v')
+      |> Iter.iter (fun v' -> ignore @@ visit v' partition);
+      Comp (Vert v :: !partition)
+    and visit v partition =
+      Stack.push v stack;
+      let head = ref (!num + 1) in
+      num := !head;
+      Hashtbl.replace dfn v !head;
+      let loop =
+        succ v
+        |> Iter.fold
+             (fun loop v' ->
+               let min =
+                 Hashtbl.get dfn v'
+                 |> Option.get_lazy (fun _ -> visit v' partition)
+               in
+               if min <= !head then (
+                 head := min;
+                 true)
+               else loop)
+             false
+      in
+      if Option.equal ( = ) (Hashtbl.get dfn v) (Some !head) then (
+        Hashtbl.replace dfn v Int.max_int;
+        let element = ref (Stack.pop stack) in
+        if loop then (
+          while not @@ Vertex.equal !element v do
+            Hashtbl.remove dfn !element;
+            element := Stack.pop stack
+          done;
+          partition := component v :: !partition)
+        else partition := Vert v :: !partition);
+      !head
+    in
+    let partition = ref [] in
+    ignore @@ visit (0, Vertex.Entry) partition;
+    Comp !partition
+
+  (* oh no i really hope this is correct!!! *)
+  let rec head_deps p verts =
+    match verts with
+    | [] -> Iter.empty
+    | Vert v :: _ -> Vertex.uses p v |> Iter.append @@ Vertex.defines p v
+    | Comp vs :: _ -> head_deps p vs
+
+  let rec recurse ~eq ~transfer ~widen p state = function
+    | Vert v -> transfer v state
+    | Comp vs ->
+        let state' =
+          List.rev vs |> List.fold_left (recurse ~eq ~transfer ~widen p) state
+        in
+        let state' = widen state state' in
+        let re_iter =
+          head_deps p vs |> Iter.for_all (fun v -> eq v state state') |> not
+        in
+        if re_iter then recurse ~eq ~transfer ~widen p state' (Comp vs)
+        else state'
+
+  let solve ~eq ~initial ~transfer ~widen ~direction p =
+    let wto = compute_wto ~direction p in
+    recurse ~eq ~transfer ~widen p initial wto
+end
+
 (** Return a {! DFGraph.t} representing the dataflow. Vertices are phi nodes or
     program statements, edges are directed from definitions to their uses. *)
 let create p =
@@ -409,6 +501,20 @@ open struct
     include D
 
     type edge = G.edge
+
+    let transfer_vert (v : Vertex.t) data =
+      match snd v with
+      | Vertex.(Phi { lhs; rhs }) ->
+          let nlhs =
+            rhs
+            |> List.fold_left (fun a v -> V.join a (D.read v data)) D.V.bottom
+          in
+          D.update lhs nlhs data
+      | Vertex.(Stmt (_, stmt)) ->
+          D.transfer_state (flip D.read data) stmt
+          |> Iter.fold (fun data (k, v) -> D.update k v data) data
+      | Entry -> data
+      | Return -> data
 
     (** Analysis function specificatlly for the flow insensitive fixed point,
         hence incorporates joins etc. *)
@@ -564,6 +670,12 @@ module AnalysisFwd (AD : DFAnalysis) = struct
   let flow_insensitive p =
     SimpleSolver.fixpoint_fwd ~initial:(AD.init p)
       ~transfer:A.Domain.analyze_vert_intra p
+
+  let flow_insensitive_wto p =
+    WTOSolver.solve
+      ~eq:(fun v s s' -> AD.V.equal (AD.read v s) (AD.read v s'))
+      ~widen:AD.widening ~transfer:A.Domain.transfer_vert ~initial:(AD.init p)
+      ~direction:`Forwards p
 end
 
 (** Backwards dataflow analysis over dfg that narrows after widening to a
