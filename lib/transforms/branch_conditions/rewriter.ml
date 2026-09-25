@@ -5,71 +5,6 @@ open Lang
 open Common
 open Cfg_analysis
 
-(** A type of condition as described in
-    https://support.arm.com/documentation/ddi0487/mc/-Part-C-The-AArch64-Instruction-Set/-Chapter-C1-The-A64-Instruction-Set/-C1-2-Structure-of-the-A64-assembler-language/-C1-2-4-Condition-code?lang=en
-
-    We track one computation for each flag read, noting that sometimes not all
-    flags will be computed in the same way. *)
-type t =
-  | EQ of { z : Flags.computation }
-  | CS of { c : Flags.computation }
-  | MI of { n : Flags.computation }
-  | VS of { v : Flags.computation }
-  | HI of { c : Flags.computation; z : Flags.computation }
-  | GE of { n : Flags.computation; v : Flags.computation }
-  | GT of {
-      n : Flags.computation;
-      v : Flags.computation;
-      z : Flags.computation;
-    }
-  | AL
-  | Not of t
-  | Top  (** Unknown condition type *)
-[@@deriving show { with_path = false }]
-
-(** Extracts a condition from a boolean expression *)
-let rec extract_condition m e : t =
-  let open Flags in
-  let open Expr.AbstractExpr in
-  match e with
-  | BinaryExpr { op = `EQ; arg1; arg2 } -> (
-      (* evaluate arg1 and arg2, if they are of the right form keep *)
-      let arg1 = Eval.eval (flip FlagDomain.read m) arg1 in
-      let arg2 = Eval.eval (flip FlagDomain.read m) arg2 in
-      match (arg1, arg2) with
-      | V (Z z), V (Const Always) -> EQ { z }
-      | V (C c), V (Const Always) -> CS { c }
-      | V (N n), V (Const Always) -> MI { n }
-      | V (V v), V (Const Always) -> VS { v }
-      | V (N n), V (V v | Const v) -> GE { n; v }
-      | V (Const Always), V (Const Always) -> AL
-      | V (Const Never), V (Const Always) -> Not AL
-      | _ -> Top)
-  | ApplyIntrin
-      {
-        op = `AND;
-        args =
-          [
-            Expr.BasilExpr.E (BinaryExpr { op = `EQ; arg1 = a; arg2 = b });
-            E (BinaryExpr { op = `EQ; arg1 = c; arg2 = d });
-          ];
-      } -> (
-      (* there has to be a better way .......... *)
-      let a = Eval.eval (flip FlagDomain.read m) a in
-      let b = Eval.eval (flip FlagDomain.read m) b in
-      let c = Eval.eval (flip FlagDomain.read m) c in
-      let d = Eval.eval (flip FlagDomain.read m) d in
-      match (a, b, c, d) with
-      | V (C c | Const c), V (Const Always), V (Z z), V (Const Never) ->
-          HI { c; z }
-      | V (N n), V (V v | Const v), V (Z z), V (Const Never) -> GT { n; v; z }
-      | _ -> Top)
-  | UnaryExpr { op = `BoolNOT; arg } -> (
-      match extract_condition m (Expr.BasilExpr.unfix arg) with
-      | Not c -> c
-      | c -> Not c)
-  | _ -> Top
-
 (** Replace a condition with its interpretation as an expression *)
 let rec condition_expr cond =
   let open Flags in
@@ -138,9 +73,9 @@ let rec condition_expr cond =
 
 let rw m e =
   let open Expr.BasilExpr in
-  e |> extract_condition m |> condition_expr |> Expr.BasilExpr.replace_opt
+  e |> Flags.extract_condition m |> condition_expr |> Expr.BasilExpr.replace_opt
 
 (** Rewrite an expression's branch conditions in terms of flag analysis results
 *)
-let rewrite_expr (m : FlagDomain.t) e =
+let rewrite_expr (m : Flags.FlagMap.t) e =
   Expr.BasilExpr.rewrite_down ~rw_fun:(rw m) e
