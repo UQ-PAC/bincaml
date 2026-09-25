@@ -1,13 +1,7 @@
-(** May read uninitialised analysis *)
-
-(*
-
-How to do this....
-
-
-BOT -> readuninit -> write
-
+(** May read uninitialised analysis. Compute whether variables may be
+    uninitialized, and whether they have been read while possibly unitialized.
 *)
+
 open Bincaml_util.Common
 open Lang
 open Analysis
@@ -15,29 +9,47 @@ open Analysis
 module ReadUninit = struct
   let name = "read-uninitialised-analysis"
 
-  type t = Bot | Write | ReadUninit [@@deriving eq, ord]
+  (* Indicates a variable is certainly initialised or maybe uninitialised. *)
+  type state = Init | Uninit [@@deriving eq, ord]
+
+  (* Indicates a variable has ever been read while uninitialised (sad). *)
+  type validity = Happy | Sad [@@deriving eq, ord]
+  type t = Bot | Val of state * validity [@@deriving eq, ord]
+
+  let join_state a b =
+    match (a, b) with Uninit, _ | _, Uninit -> Uninit | Init, Init -> Init
+
+  let join_val a b =
+    match (a, b) with Sad, _ | _, Sad -> Sad | Happy, Happy -> Happy
 
   let join a b =
     match (a, b) with
-    | _, ReadUninit -> ReadUninit
-    | ReadUninit, _ -> ReadUninit
-    | a, Bot -> a
-    | Bot, a -> a
-    | Write, Write -> Write
+    | x, Bot | Bot, x -> x
+    | Val (s1, v1), Val (s2, v2) -> Val (join_state s1 s2, join_val v1 v2)
+
+  let leq_state a b =
+    match (a, b) with Init, _ | _, Uninit -> true | Uninit, Init -> false
+
+  let leq_val a b =
+    match (a, b) with Happy, _ | _, Sad -> true | Sad, Happy -> false
 
   let leq a b =
     match (a, b) with
-    | a, b when equal a b -> true
-    | Bot, _ | _, ReadUninit -> true
-    | _, Bot | ReadUninit, _ -> false
-    | _ -> false
+    | Bot, _ -> true
+    | _, Bot -> false
+    | Val (s1, v1), Val (s2, v2) -> leq_state s1 s2 && leq_val v1 v2
 
-  let show v = match v with ReadUninit -> "RU" | Bot -> "bot" | Write -> "W"
+  let show_state s = match s with Init -> "Init" | Uninit -> "Uninit"
+  let show_val v = match v with Happy -> "Valid" | Sad -> "Invalid"
+
+  let show v =
+    match v with Val (s, v) -> show_state s ^ " " ^ show_val v | Bot -> "Bot"
+
   let pretty v = Containers_pp.text (show v)
   let widening = join
   let narrowing a b = a
   let bottom = Bot
-  let top = ReadUninit
+  let top = Val (Uninit, Sad)
   let analyze (e : Lang.Procedure.G.edge) d = d
 end
 
@@ -50,32 +62,50 @@ module ReadUninitAnalysis = struct
   type val_t = ReadUninit.t
   type key_t = Var.t
 
+  (** When a variable is read while uninitialised, it is marked as invalid. *)
   let read_var v st =
     match read v st with
-    | Bot -> ReadUninit.ReadUninit
-    | ReadUninit -> ReadUninit
-    | Write -> Write
+    | Bot -> ReadUninit.Bot
+    | Val (Uninit, Happy) -> Val (Uninit, Sad)
+    | o -> o
 
+  (** When a variable is written to, it becomes initialised. *)
   let write_var st v =
     match read st v with
-    | ReadUninit -> ReadUninit.ReadUninit
-    | Write -> Write
-    | Bot -> Write
+    | Bot -> ReadUninit.Bot
+    | Val (Uninit, v) -> Val (Init, v)
+    | o -> o
 
-  let read_uninit_vars st =
+  (** Retrieve all variables read while uninitialised (invalid). *)
+  let invalid_vars st =
     to_iter st
     |> Iter.filter_map (fun (i, v) ->
-        match v with ReadUninit.ReadUninit -> Some i | _ -> None)
+        match v with ReadUninit.Val (_, Sad) -> Some i | _ -> None)
 
   let show_full = show
+  let show_short st = invalid_vars st |> Iter.to_string ~sep:", " Var.to_string
 
-  let show_short st =
-    read_uninit_vars st |> Iter.to_string ~sep:", " Var.to_string
-
-  let init ?vertex p =
-    Procedure.formal_in_params p
-    |> Common.StringMap.values
-    |> Iter.fold (fun acc v -> update v ReadUninit.Write acc) bottom
+  let init ?(vertex = None) (p : Program.proc) =
+    if
+      vertex
+      |> Option.filter (function Procedure.Vert.Entry -> true | _ -> false)
+      |> Option.is_none
+    then bottom
+    else
+      let args =
+        Procedure.formal_in_params p
+        |> Common.StringMap.values
+        |> Iter.fold
+             (fun acc v -> update v (ReadUninit.Val (Init, Happy)) acc)
+             bottom
+      in
+      let locals =
+        Procedure.local_decls p |> Var.Decls.values
+        |> Iter.fold
+             (fun acc v -> update v (ReadUninit.Val (Uninit, Happy)) acc)
+             bottom
+      in
+      join args locals
 
   let transfer st stmt =
     let st =
@@ -115,7 +145,7 @@ let check ?(include_locals = false) (p : Program.proc) =
           match A.A.M.find_opt v result with
           | Some ms ->
               let ru =
-                ReadUninitAnalysis.read_uninit_vars ms
+                ReadUninitAnalysis.invalid_vars ms
                 |> Iter.filter (fun v -> include_locals || Var.is_local v)
                 |> Iter.filter @@ (not % Var.is_shared)
               in
@@ -146,6 +176,11 @@ let%expect_test "fold_block" =
       ]
     |}
   in
+  let local_vars =
+    Block.read_vars_iter block
+    |> Iter.append (Block.assigned_vars_iter block)
+    |> Iter.to_list
+  in
   let _ =
     Block.fold_forwards
       ~f:(fun a i ->
@@ -153,14 +188,18 @@ let%expect_test "fold_block" =
         print_endline @@ ReadUninitAnalysis.show_full r;
         r)
       ~phi:(fun a i -> a)
-      ReadUninitAnalysis.bottom block
+      (List.fold_left
+         (fun acc v ->
+           ReadUninitAnalysis.update v (ReadUninit.Val (Uninit, Happy)) acc)
+         ReadUninitAnalysis.bottom local_vars)
+      block
   in
   [%expect
     {|
-    ($stack->RU, R31_in->RU, R0_in->RU, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, _->⊥)
-    ($stack->RU, R31_in->RU, R0_in->RU, load45_1->W, R1_4->W, $mem->RU, load46_1->W, R0_10->W, _->⊥)
+    ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Uninit Valid, R1_4->Uninit Valid, $mem->Uninit Valid, load46_1->Uninit Valid, R0_10->Uninit Valid, _->⊥)
+    ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Init Valid, R1_4->Uninit Valid, $mem->Uninit Valid, load46_1->Uninit Valid, R0_10->Uninit Valid, _->⊥)
+    ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Init Valid, R1_4->Init Valid, $mem->Uninit Valid, load46_1->Uninit Valid, R0_10->Uninit Valid, _->⊥)
+    ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Init Valid, R1_4->Init Valid, $mem->Init Invalid, load46_1->Uninit Valid, R0_10->Uninit Valid, _->⊥)
+    ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Init Valid, R1_4->Init Valid, $mem->Init Invalid, load46_1->Init Valid, R0_10->Uninit Valid, _->⊥)
+    ($stack->Init Invalid, R31_in->Uninit Invalid, R0_in->Uninit Invalid, load45_1->Init Valid, R1_4->Init Valid, $mem->Init Invalid, load46_1->Init Valid, R0_10->Init Valid, _->⊥)
     |}]
