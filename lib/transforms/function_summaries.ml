@@ -2,6 +2,7 @@
 open Lang
 open Common
 open Analysis
+open Expr_smt
 
 type summary = {
   requires : Expr.BasilExpr.t list;
@@ -41,7 +42,7 @@ let normalise_gamma =
 
 (** `redundant p ps` returns true if the conjunction of `p :: ps` is equivalent
     to that of `ps`. *)
-let redundant (solver : Bincaml_util.Smt.Solver.t) p ps =
+let redundant (solver : Bincaml_util.Smt.Solver.t) p ps builder =
   if Expr.BasilExpr.equal p (Expr.BasilExpr.boolconst true) then
     Bincaml_util.Smt.Solver.Unsat
   else if List.is_empty ps then Bincaml_util.Smt.Solver.Sat
@@ -52,9 +53,8 @@ let redundant (solver : Bincaml_util.Smt.Solver.t) p ps =
         normalise_gamma @@ Expr.BasilExpr.boolnot
         @@ Expr.BasilExpr.binexp ~op:`IMPLIES conj p
       in
-      let open Expr_smt in
       let s =
-        SMTLib2.assert_bexpr q SMTLib2.empty
+        SMTLib2.assert_bexpr q builder
         |> snd
         |> SMTLib2.to_sexp ~set_logic:false
       in
@@ -90,7 +90,8 @@ let sp_ensures (module S : FunctionSummaryAnnotation) (proc : Program.proc) =
 
 (** Compute an extension of the given procedure's summary *)
 let extra_summary (solver : Bincaml_util.Smt.Solver.t)
-    (module S : FunctionSummaryAnnotation) reiter (proc : Program.proc) =
+    (module S : FunctionSummaryAnnotation) reiter (proc : Program.proc) builder
+    =
   (* TODO implement a sample ensures clause generator and some sort of analysis
      pass runner *)
   let cur_req = S.requires (Procedure.id proc) in
@@ -102,7 +103,7 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
       wp_dual_requires (module S) proc
       |> List.fold_left
            (fun rs r ->
-             match redundant solver r (List.append rs cur_req) with
+             match redundant solver r (List.append rs cur_req) builder with
              | Unsat -> rs
              | Sat -> r :: rs
              | Unknown ->
@@ -114,7 +115,7 @@ let extra_summary (solver : Bincaml_util.Smt.Solver.t)
       sp_ensures (module S) proc
       |> List.fold_left
            (fun rs r ->
-             match redundant solver r (List.append rs cur_ens) with
+             match redundant solver r (List.append rs cur_ens) builder with
              | Unsat -> rs
              | Sat -> r :: rs
              | Unknown ->
@@ -142,20 +143,22 @@ let add_summary summary (proc : Program.proc) =
   in
   Procedure.set_specification proc spec
 
-let add_decls solver prog =
-  Program.declarations prog |> Iter.from_iter |> Iter.map snd
-  |> Iter.filter
-       Program.(
-         function
-         | Implicit _ -> false
-         | Type { binding } -> true
-         | Variable { binding } -> Var.is_constant binding
-         | Function { binding } -> Var.is_constant binding
-         | Procedure { definition } -> false)
-  |> Iter.map (fun d -> Expr_smt.SMTLib2.trans_decl d Expr_smt.SMTLib2.empty)
-  |> Iter.map fst
-  |> fun i ->
-  Iter.for_each i (fun s -> Bincaml_util.Smt.Solver.add_command solver s)
+let add_decls solver prog builder =
+  let sexps, builder =
+    Program.declarations prog |> Iter.from_iter |> Iter.map snd
+    |> Iter.filter
+         Program.(
+           function
+           | Implicit _ -> false
+           | Type { binding } -> true
+           | Variable { binding } -> Var.is_constant binding
+           | Function { binding } -> Var.is_constant binding
+           | Procedure { definition } -> false)
+    |> Iter.fold (fun a d -> SMTLib2.trans_decl d a |> snd) builder
+    |> SMTLib2.extract SMTLib2.id
+  in
+  sexps |> flip Iter.for_each (Bincaml_util.Smt.Solver.add_command solver);
+  builder
 
 let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
   let solver =
@@ -165,7 +168,7 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
         log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
-  add_decls solver prog;
+  add_decls solver prog SMTLib2.empty |> ignore;
   let summary =
     extra_summary solver
       (module struct
@@ -194,7 +197,7 @@ let intraproc_transform_proc (prog : Program.t) (proc : Program.proc) =
 
         let id = Procedure.id proc
       end : FunctionSummaryAnnotation)
-      (ref IDSet.empty) proc
+      (ref IDSet.empty) proc SMTLib2.empty
   in
   Bincaml_util.Smt.Solver.stop solver;
   add_summary summary proc
@@ -230,7 +233,7 @@ end
 module FixSummaries = Fix.Fix.ForHashedType (ID) (Domain)
 
 let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
-    res component =
+    builder res component =
   let procs = Program.procs prog |> IDMap.of_iter in
   let component =
     List.filter_map
@@ -264,7 +267,7 @@ let solve_component (solver : Bincaml_util.Smt.Solver.t) g (prog : Program.t)
         end : FunctionSummaryAnnotation)
       in
       let extra =
-        extra_summary solver annotations reiters (IDMap.find pid procs)
+        extra_summary solver annotations reiters (IDMap.find pid procs) builder
       in
       if
         Option.get_or ~default:false
@@ -291,7 +294,7 @@ let interproc_transform (prog : Program.t) =
         log = Bincaml_util.Smt.Config.quiet_log;
       }
   in
-  add_decls solver prog;
+  let builder = add_decls solver prog SMTLib2.empty in
   let summaries =
     Program.procs prog
     |> Iter.map (fun (i, proc) ->
@@ -300,7 +303,9 @@ let interproc_transform (prog : Program.t) =
     |> IDMap.of_iter
   in
   let summaries =
-    List.fold_left (solve_component solver call_graph prog) summaries sccs
+    List.fold_left
+      (solve_component solver call_graph prog builder)
+      summaries sccs
   in
   IDMap.fold
     (fun procid summary (prog : Program.t) ->
