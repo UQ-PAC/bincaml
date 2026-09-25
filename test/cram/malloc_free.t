@@ -220,11 +220,8 @@
         121bv64, Exp16__5_24_2, Exp18__5_25_2;
       goto b#Return;
     b#Return:
-      R0_out := R0_out_1;
-      R17_out := R17_out_1;
-      R1_out := R1_out_1;
-      R29_out := R29_out_1;
-      R30_out := R30_out_1;
+      R0_out, R17_out, R1_out, R29_out, R30_out := R0_out_1, R17_out_1, R1_out_1,
+        R29_out_1, R30_out_1;
       return;
   }
   procedure p$malloc(R0_in: bv64) returns (R0_out: bv64);
@@ -469,11 +466,8 @@
         121bv64, Exp16__5_24_2, Exp18__5_25_2;
       goto b#Return;
     b#Return:
-      R0_out := R0_out_1;
-      R17_out := R17_out_1;
-      R1_out := R1_out_1;
-      R29_out := R29_out_1;
-      R30_out := R30_out_1;
+      R0_out, R17_out, R1_out, R29_out, R30_out := R0_out_1, R17_out_1, R1_out_1,
+        R29_out_1, R30_out_1;
       return;
   }
   procedure p$malloc(R0_in: bv64) returns (R0_out: bv64);

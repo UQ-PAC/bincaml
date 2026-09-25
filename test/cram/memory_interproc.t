@@ -52,8 +52,8 @@
   (dump-boogie out.bpl)
 
   $ boogie out.bpl
-  out.bpl(315,5): Error: this assertion could not be proved
+  out.bpl(320,5): Error: this assertion could not be proved
   Execution trace:
-      out.bpl(306,3): b#inputs
+      out.bpl(309,3): b#inputs
   
   Boogie program verifier finished with 1 verified, 1 error

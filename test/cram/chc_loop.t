@@ -17,7 +17,7 @@ when the assert is checked):
 
   $ awk '/block %loop \(/,/]/' chc_loop_out.il | head -5
      block %loop (
-       var i_3:bv64 := phi(%loop_body -> i_4:bv64, %entry -> i_2:bv64)
+       var i_3:bv64 := phi(%loop_body -> i_7:bv64, %entry -> i_2:bv64)
      ) [
        assert eq(extract(64,4, i_3:bv64), 0x0:bv60);
        goto (%loop_exit,%loop_body);

@@ -90,7 +90,8 @@
        var a_1:bv64 := inp:bv64;
        (var a_2:bv64=out) := call @fun1(c=a_1:bv64, global_in=global_1:bv64);
        (var x_1:bv64=out) := call @fun1(c=a_2:bv64, global_in=global_1:bv64);
-       assert eq(x_1:bv64, bvadd(a_2:bv64, a_2:bv64));
+       (var a_3:bv64 := a_2:bv64, var x_2:bv64 := x_1:bv64);
+       assert eq(x_2:bv64, bvadd(a_3:bv64, a_3:bv64));
        goto (%Return);
      ];
      block %Return [ return; ]
@@ -131,11 +132,12 @@
   >   captures $global:bv64
   5d5
   <    block %inputs [ var global_1:bv64 := global_in:bv64; goto (%main_entry); ];
-  7,13c7,12
+  7,14c7,12
   <      var a_1:bv64 := inp:bv64;
   <      (var a_2:bv64=out) := call @fun1(c=a_1:bv64, global_in=global_1:bv64);
   <      (var x_1:bv64=out) := call @fun1(c=a_2:bv64, global_in=global_1:bv64);
-  <      assert eq(x_1:bv64, bvadd(a_2:bv64, a_2:bv64));
+  <      (var a_3:bv64 := a_2:bv64, var x_2:bv64 := x_1:bv64);
+  <      assert eq(x_2:bv64, bvadd(a_3:bv64, a_3:bv64));
   <      goto (%Return);
   <    ];
   <    block %Return [ return; ]
@@ -146,15 +148,15 @@
   >      assert eq(x:bv64, bvadd(a:bv64, a:bv64));
   >      return;
   >    ]
-  15,16c14,15
+  16,17c14,15
   < proc @fun1(c:bv64, global_in:bv64)  -> (out:bv64) {  }
   <   
   ---
   > proc @fun1(c:bv64, d:bv64)  -> (out:bv64) {  }
   >   captures $global:bv64
-  19d17
+  20d17
   <    block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun1_entry); ];
-  21,25c19,22
+  22,26c19,22
   <      (var e_1:bv64=out2) := call @fun2(global_in=global_1:bv64);
   <      var out_1:bv64 := bvadd(c:bv64, e_1:bv64);
   <      goto (%Return);
@@ -165,15 +167,15 @@
   >      var out:bv64 := bvadd(c:bv64, e:bv64);
   >      return;
   >    ]
-  27,28c24,25
+  28,29c24,25
   < proc @fun2(global_in:bv64)  -> (out2:bv64) {  }
   <   
   ---
   > proc @fun2(f:bv64)  -> (out2:bv64) {  }
   >   captures $global:bv64
-  31d27
+  32d27
   <    block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun2_entry); ];
-  33,37c29,32
+  34,38c29,32
   <      var g_1:bv64 := global_1:bv64;
   <      var out2_1:bv64 := bvadd(g_1:bv64, g_1:bv64);
   <      goto (%Return);

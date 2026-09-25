@@ -33,9 +33,9 @@
        var j_9:bv64 := phi(%b -> j_12:bv64, %a -> j_15:bv64),
        var yi_11:bv64 := phi(%b -> yi_15:bv64, %a -> yi_18:bv64)
      ) [ var x_3:bv64 := j_9:bv64; goto (%Return); ];
-     block %Return [ goto (%Return_1); ];
-     block %Return_1 [ goto (%Return_2); ];
-     block %Return_2 [ return; ]
+     block %Return [ nop; goto (%Return_1); ];
+     block %Return_1 [ nop; goto (%Return_2); ];
+     block %Return_2 [ nop; return; ]
   ];
   proc @g()  -> () {  }
     
@@ -60,8 +60,8 @@
        var x_3:bv64 := j_9:bv64;
        goto (%Return);
      ];
-     block %Return [ goto (%Return_1); ];
-     block %Return_1 [ goto (%Return_2); ];
-     block %Return_2 [ return; ]
+     block %Return [ nop; goto (%Return_1); ];
+     block %Return_1 [ nop; goto (%Return_2); ];
+     block %Return_2 [ nop; return; ]
   ];
   prog entry @f;
