@@ -22,7 +22,6 @@ type proc_lift_map = (lifted_kind * Var.t) VarMap.t
 type program_lift_map = proc_lift_map IDMap.t
 (** Per-procedure {!proc_lift_map}, keyed by procedure id. *)
 
-
 let should_lift ~skip_observable ~skip_maps v =
   let skip =
     (skip_observable && Var.is_shared v)
@@ -381,4 +380,3 @@ let set_params_with_map ?(skip_observable = true) ?(skip_maps = true)
     the back-translation map; use {!set_params_with_map} to keep it. *)
 let set_params ?skip_observable ?skip_maps (p : Program.t) : Program.t =
   fst (set_params_with_map ?skip_observable ?skip_maps p)
-

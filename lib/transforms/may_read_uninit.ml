@@ -83,9 +83,7 @@ module ReadUninitAnalysis = struct
         match v with ReadUninit.Val (_, Sad) -> Some i | _ -> None)
 
   let show_full = show
-
-  let show_short st =
-    invalid_vars st |> Iter.to_string ~sep:", " Var.to_string
+  let show_short st = invalid_vars st |> Iter.to_string ~sep:", " Var.to_string
 
   let init ?(vertex = None) (p : Program.proc) =
     if

@@ -555,7 +555,8 @@ module PassManager = struct
         name = "lambda-lifting";
         apply =
           Prog
-            (Transforms.Lambda_lifting.set_params ~skip_observable:false ~skip_maps:false);
+            (Transforms.Lambda_lifting.set_params ~skip_observable:false
+               ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
         invariants = Invariants.establishes [ LambdaLift ];
       };

@@ -22,8 +22,7 @@ let drop_unused_var_declarations_prog (p : Program.t) =
   let used =
     Program.procs p
     |> Iter.fold
-         (fun acc (i, p) ->
-           VarSet.union acc (used_var_declarations p))
+         (fun acc (i, p) -> VarSet.union acc (used_var_declarations p))
          VarSet.empty
   in
   Program.filter_map_decls
@@ -33,4 +32,3 @@ let drop_unused_var_declarations_prog (p : Program.t) =
           if VarSet.mem binding used then Some b else None
       | o -> Some o)
     p
-

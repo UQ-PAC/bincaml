@@ -190,6 +190,39 @@ module Construction = struct
     done;
     !graph
 
+  (** Unify all returning blocks so that phi nodes may be generated. *)
+  let unify_returns procedure =
+    let procedure, rid =
+      Procedure.fresh_block ~name:"%Return" procedure
+        ~stmts:
+          [
+            Stmt.Instr_Assign
+              {
+                al =
+                  Procedure.formal_out_params procedure
+                  |> StringMap.values
+                  |> Iter.map (fun v -> (v, Expr.BasilExpr.rvar v))
+                  |> Iter.to_list;
+                attrib = StringMap.empty;
+              };
+          ]
+        ()
+    in
+    let procedure =
+      procedure
+      |> map_graph (fun g ->
+          (* Connect the pre-return block. *)
+          let returns = G.pred g Return in
+          let g = G.add_edge g (End rid) Return in
+
+          List.fold_left
+            (fun acc v ->
+              let acc = G.remove_edge acc v Return in
+              G.add_edge acc v (Begin rid))
+            g returns)
+    in
+    (procedure, rid)
+
   (** Helper to modify a block at id *)
   let modify_block g id f =
     let _, e, _ = G.find_edge g (Begin id) (End id) in
@@ -294,39 +327,6 @@ module Construction = struct
       && (not @@ Option.equal Var.equal r r')
     then update_reaching_def ?r:r' doms defs reaching_defs var vert
     else VarMap.update var (fun _ -> r) reaching_defs
-
-  (** Unify all returning blocks so that phi nodes may be generated. *)
-  let unify_returns procedure =
-    let procedure, rid =
-      Procedure.fresh_block ~name:"%Return" procedure
-        ~stmts:
-          [
-            Stmt.Instr_Assign
-              {
-                al =
-                  Procedure.formal_out_params procedure
-                  |> StringMap.values
-                  |> Iter.map (fun v -> (v, Expr.BasilExpr.rvar v))
-                  |> Iter.to_list;
-                attrib = StringMap.empty;
-              };
-          ]
-        ()
-    in
-    let procedure =
-      procedure
-      |> map_graph (fun g ->
-          (* Connect the pre-return block. *)
-          let returns = G.pred g Return in
-          let g = G.add_edge g (End rid) Return in
-
-          List.fold_left
-            (fun acc v ->
-              let acc = G.remove_edge acc v Return in
-              G.add_edge acc v (Begin rid))
-            g returns)
-    in
-    (procedure, rid)
 
   (** Rename all variables in a procedure to be in SSA form. *)
   let rename_procedure ?(skipping = Skip.empty) rid (procedure : Program.proc)
