@@ -77,8 +77,8 @@ module Destruction = struct
   open Procedure
 
   (** Simple destruction pass, replaces phi nodes with semantically equivalent
-     assigns. e.g. the phi node x_3 := phi(A->x_1, B->x_2) would be removed,
-     and statements var x_3 := x_1 would be added to A, and x_3 := x_2 to B. *)
+      assigns. e.g. the phi node x_3 := phi(A->x_1, B->x_2) would be removed,
+      and statements var x_3 := x_1 would be added to A, and x_3 := x_2 to B. *)
   let simple_destruction (procedure : Program.proc) =
     if Procedure.graph procedure |> Option.is_none then procedure
     else
@@ -190,7 +190,7 @@ module Construction = struct
     done;
     !graph
 
-  (* Helper to modify a block at id *)
+  (** Helper to modify a block at id *)
   let modify_block g id f =
     let _, e, _ = G.find_edge g (Begin id) (End id) in
     let block = match e with Block block -> block | Jump -> raise Not_found in
@@ -199,7 +199,7 @@ module Construction = struct
     let g = G.add_edge_e g (Begin id, Edge.Block block, End id) in
     g
 
-  (* Map vertices in preorder dfs traversal of dominator tree. *)
+  (** Map vertices in preorder dfs traversal of dominator tree. *)
   let rec traversal update_block update_succ dom_tree ((g, fl) : G.t * FL.t)
       (vert : Vert.t) =
     if FL.mem vert fl then (g, fl)
@@ -275,11 +275,10 @@ module Construction = struct
              { phi with rhs }))
       Fun.id block
 
-  (* Update a the reaching def of var by climbing up the reaching
-     def tree until a definition which dominates vert is found.
-     As traversal is a preorder dfs of dominator tree (and topological),
-     the reaching def for a variable will only ever need to move
-     up to parents or stay fixed. *)
+  (** Update the reaching def of var by climbing up the reaching def tree until
+      a definition which dominates vert is found. Requires traversal in preorder
+      dfs of dominator tree (and topological) so that the reaching def for a
+      variable will only ever need to move up to parents or stay fixed. *)
   let rec update_reaching_def ?r doms defs reaching_defs (var : Var.t)
       (vert : Vert.t) =
     let r = Option.or_ r ~else_:(VarMap.get var reaching_defs) in
@@ -296,20 +295,22 @@ module Construction = struct
     then update_reaching_def ?r:r' doms defs reaching_defs var vert
     else VarMap.update var (fun _ -> r) reaching_defs
 
-  (* Unify all returning blocks so that phi nodes may be generated. *)
+  (** Unify all returning blocks so that phi nodes may be generated. *)
   let unify_returns procedure =
     let procedure, rid =
       Procedure.fresh_block ~name:"%Return" procedure
         ~stmts:
-          (Procedure.formal_out_params procedure
-          |> StringMap.values
-          |> Iter.map (fun v ->
-              Stmt.Instr_Assign
-                {
-                  al = [ (v, Expr.BasilExpr.rvar v) ];
-                  attrib = StringMap.empty;
-                })
-          |> Iter.to_list)
+          [
+            Stmt.Instr_Assign
+              {
+                al =
+                  Procedure.formal_out_params procedure
+                  |> StringMap.values
+                  |> Iter.map (fun v -> (v, Expr.BasilExpr.rvar v))
+                  |> Iter.to_list;
+                attrib = StringMap.empty;
+              };
+          ]
         ()
     in
     let procedure =
@@ -327,6 +328,7 @@ module Construction = struct
     in
     (procedure, rid)
 
+  (** Rename all variables in a procedure to be in SSA form. *)
   let rename_procedure ?(skipping = Skip.empty) rid (procedure : Program.proc)
       (g : RevG.t) tree doms =
     (* Workaround not having stmt level cfg. Given a block
@@ -367,6 +369,7 @@ module Construction = struct
     | effect AllowRename vert, k ->
         continue k (not @@ Vert.equal vert (Begin rid))
 
+  (** Transform a procedure into SSA form. *)
   let ssa_proc ?(skipping = Skip.empty) (procedure : Program.proc) =
     if Procedure.graph procedure |> Option.is_some then
       (* Destruct any previous phi nodes. Hacky but ideally
@@ -410,5 +413,6 @@ module Construction = struct
     else procedure
 end
 
+(** Transform a program into SSA form. *)
 let ssa_prog ?(skipping = Skip.empty) (program : Program.t) =
   Program.map_procedures (const @@ Construction.ssa_proc ~skipping) program
