@@ -40,7 +40,7 @@ module ReadUninit = struct
     | Val (s1, v1), Val (s2, v2) -> leq_state s1 s2 && leq_val v1 v2
 
   let show_state s = match s with Init -> "Init" | Uninit -> "Uninit"
-  let show_val v = match v with Happy -> "☺ " | Sad -> "☹ "
+  let show_val v = match v with Happy -> "^_^" | Sad -> "T_T"
 
   let show v =
     match v with Val (s, v) -> show_state s ^ " " ^ show_val v | Bot -> "Bot"
@@ -196,10 +196,10 @@ let%expect_test "fold_block" =
   in
   [%expect
     {|
-    ($stack->Init ☹ , R31_in->Uninit ☹ , R0_in->Uninit ☹ , load45_1->Uninit ☺ , R1_4->Uninit ☺ , $mem->Uninit ☺ , load46_1->Uninit ☺ , R0_10->Uninit ☺ , _->⊥)
-    ($stack->Init ☹ , R31_in->Uninit ☹ , R0_in->Uninit ☹ , load45_1->Init ☺ , R1_4->Uninit ☺ , $mem->Uninit ☺ , load46_1->Uninit ☺ , R0_10->Uninit ☺ , _->⊥)
-    ($stack->Init ☹ , R31_in->Uninit ☹ , R0_in->Uninit ☹ , load45_1->Init ☺ , R1_4->Init ☺ , $mem->Uninit ☺ , load46_1->Uninit ☺ , R0_10->Uninit ☺ , _->⊥)
-    ($stack->Init ☹ , R31_in->Uninit ☹ , R0_in->Uninit ☹ , load45_1->Init ☺ , R1_4->Init ☺ , $mem->Init ☹ , load46_1->Uninit ☺ , R0_10->Uninit ☺ , _->⊥)
-    ($stack->Init ☹ , R31_in->Uninit ☹ , R0_in->Uninit ☹ , load45_1->Init ☺ , R1_4->Init ☺ , $mem->Init ☹ , load46_1->Init ☺ , R0_10->Uninit ☺ , _->⊥)
-    ($stack->Init ☹ , R31_in->Uninit ☹ , R0_in->Uninit ☹ , load45_1->Init ☺ , R1_4->Init ☺ , $mem->Init ☹ , load46_1->Init ☺ , R0_10->Init ☺ , _->⊥)
+    ($stack->Init T_T, R31_in->Uninit T_T, R0_in->Uninit T_T, load45_1->Uninit ^_^, R1_4->Uninit ^_^, $mem->Uninit ^_^, load46_1->Uninit ^_^, R0_10->Uninit ^_^, _->⊥)
+    ($stack->Init T_T, R31_in->Uninit T_T, R0_in->Uninit T_T, load45_1->Init ^_^, R1_4->Uninit ^_^, $mem->Uninit ^_^, load46_1->Uninit ^_^, R0_10->Uninit ^_^, _->⊥)
+    ($stack->Init T_T, R31_in->Uninit T_T, R0_in->Uninit T_T, load45_1->Init ^_^, R1_4->Init ^_^, $mem->Uninit ^_^, load46_1->Uninit ^_^, R0_10->Uninit ^_^, _->⊥)
+    ($stack->Init T_T, R31_in->Uninit T_T, R0_in->Uninit T_T, load45_1->Init ^_^, R1_4->Init ^_^, $mem->Init T_T, load46_1->Uninit ^_^, R0_10->Uninit ^_^, _->⊥)
+    ($stack->Init T_T, R31_in->Uninit T_T, R0_in->Uninit T_T, load45_1->Init ^_^, R1_4->Init ^_^, $mem->Init T_T, load46_1->Init ^_^, R0_10->Uninit ^_^, _->⊥)
+    ($stack->Init T_T, R31_in->Uninit T_T, R0_in->Uninit T_T, load45_1->Init ^_^, R1_4->Init ^_^, $mem->Init T_T, load46_1->Init ^_^, R0_10->Init ^_^, _->⊥)
     |}]
