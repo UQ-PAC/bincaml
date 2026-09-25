@@ -3,7 +3,8 @@
 open Lang.Common
 open Lang
 
-let drop_unused_var_declarations_proc p =
+(** Gets the used variable declarations in a procedure. *)
+let used_var_declarations p =
   let used =
     Procedure.fold_blocks_topo_fwd
       (fun acc id bl ->
@@ -16,12 +17,13 @@ let drop_unused_var_declarations_proc p =
     (Procedure.local_decls p);
   VarSet.filter Var.is_global used
 
+(* Transform the program, removing unused variable declarations. *)
 let drop_unused_var_declarations_prog (p : Program.t) =
   let used =
     Program.procs p
     |> Iter.fold
          (fun acc (i, p) ->
-           VarSet.union acc (drop_unused_var_declarations_proc p))
+           VarSet.union acc (used_var_declarations p))
          VarSet.empty
   in
   Program.filter_map_decls

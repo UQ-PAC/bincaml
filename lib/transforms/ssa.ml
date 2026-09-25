@@ -76,7 +76,7 @@ let check_ssa ?(skipping = Skip.empty) proc =
 module Destruction = struct
   open Procedure
 
-  (* Simple destruction pass, replaces phi nodes with semantically equivalent
+  (** Simple destruction pass, replaces phi nodes with semantically equivalent
      assigns. e.g. the phi node x_3 := phi(A->x_1, B->x_2) would be removed,
      and statements var x_3 := x_1 would be added to A, and x_3 := x_2 to B. *)
   let simple_destruction (procedure : Program.proc) =

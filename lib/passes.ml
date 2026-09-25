@@ -224,7 +224,7 @@ module PassManager = struct
   let sssa =
     {
       name = "simple-ssa";
-      apply = Transforms.Ssa.(Prog (ssa_prog ~skipping:Skip.full));
+      apply = Prog Transforms.Ssa.(ssa_prog ~skipping:Skip.full);
       doc =
         "Naive SSA transform assuming all variable uses are dominated by \
          definitions from parameters";

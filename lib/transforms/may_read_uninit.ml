@@ -1,6 +1,6 @@
-(** May read uninitialised analysis.
-    Compute whether variables may be uninitialized, and whether they have
-    been read while possibly unitialized. *)
+(** May read uninitialised analysis. Compute whether variables may be
+    uninitialized, and whether they have been read while possibly unitialized.
+*)
 
 open Bincaml_util.Common
 open Lang
@@ -11,6 +11,7 @@ module ReadUninit = struct
 
   (* Indicates a variable is certainly initialised or maybe uninitialised. *)
   type state = Init | Uninit [@@deriving eq, ord]
+
   (* Indicates a variable has ever been read while uninitialised (sad). *)
   type validity = Happy | Sad [@@deriving eq, ord]
   type t = Bot | Val of state * validity [@@deriving eq, ord]
@@ -61,19 +62,22 @@ module ReadUninitAnalysis = struct
   type val_t = ReadUninit.t
   type key_t = Var.t
 
+  (** When a variable is read while uninitialised, it is marked as invalid. *)
   let read_var v st =
     match read v st with
     | Bot -> ReadUninit.Bot
     | Val (Uninit, Happy) -> Val (Uninit, Sad)
     | o -> o
 
+  (** When a variable is written to, it becomes initialised. *)
   let write_var st v =
     match read st v with
     | Bot -> ReadUninit.Bot
     | Val (Uninit, v) -> Val (Init, v)
     | o -> o
 
-  let read_uninit_vars st =
+  (** Retrieve all variables read while uninitialised (invalid). *)
+  let invalid_vars st =
     to_iter st
     |> Iter.filter_map (fun (i, v) ->
         match v with ReadUninit.Val (_, Sad) -> Some i | _ -> None)
@@ -81,29 +85,29 @@ module ReadUninitAnalysis = struct
   let show_full = show
 
   let show_short st =
-    read_uninit_vars st |> Iter.to_string ~sep:", " Var.to_string
+    invalid_vars st |> Iter.to_string ~sep:", " Var.to_string
 
-  let init ?(vertex=None) (p:Program.proc) =
-    let args =
-      Procedure.formal_in_params p
-      |> Common.StringMap.values
-      |> Iter.fold
-           (fun acc v -> update v (ReadUninit.Val (Init, Happy)) acc)
-           bottom
-    in
-    let locals =
-      if
-        vertex
-        |> Option.filter (function Procedure.Vert.Entry -> true | _ -> false)
-        |> Option.is_some
-      then
+  let init ?(vertex = None) (p : Program.proc) =
+    if
+      vertex
+      |> Option.filter (function Procedure.Vert.Entry -> true | _ -> false)
+      |> Option.is_none
+    then bottom
+    else
+      let args =
+        Procedure.formal_in_params p
+        |> Common.StringMap.values
+        |> Iter.fold
+             (fun acc v -> update v (ReadUninit.Val (Init, Happy)) acc)
+             bottom
+      in
+      let locals =
         Procedure.local_decls p |> Var.Decls.values
         |> Iter.fold
              (fun acc v -> update v (ReadUninit.Val (Uninit, Happy)) acc)
              bottom
-      else bottom
-    in
-    join args locals
+      in
+      join args locals
 
   let transfer st stmt =
     let st =
@@ -143,7 +147,7 @@ let check ?(include_locals = false) (p : Program.proc) =
           match A.A.M.find_opt v result with
           | Some ms ->
               let ru =
-                ReadUninitAnalysis.read_uninit_vars ms
+                ReadUninitAnalysis.invalid_vars ms
                 |> Iter.filter (fun v -> include_locals || Var.is_local v)
                 |> Iter.filter @@ (not % Var.is_shared)
               in

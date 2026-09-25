@@ -1,4 +1,4 @@
-(** Naive parameter form. *)
+(** Naive lambda lifting. *)
 
 open Lang.Common
 open Lang
