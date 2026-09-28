@@ -5,7 +5,7 @@ prog entry @main {.invariants = ["GtirbArm"]};
 proc @main()  -> () {  }
 [
     block %main_code [
-    assume eq(0x00:bv64, $PC);
+    assume eq(0x000:bv64, $PC);
     call @_aarch64_eval(0xeb04007f:bv32, 0x000:bv64) { .asm = "cmp x3, x4" };
     call @_aarch64_eval(0x9a820020:bv32, 0x004:bv64) { .asm = "csel x0, x1, x2, eq" };
     call @_aarch64_eval(0x9a821020:bv32, 0x008:bv64) { .asm = "csel x0, x1, x2, ne" };
