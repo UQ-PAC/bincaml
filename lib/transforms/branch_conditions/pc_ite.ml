@@ -2,7 +2,7 @@
     on the ite before the target goto block.
 
     Lifted binaries will have this described structure on branches:
-    {[
+    {v
         ,___________________________,
         | pc:=if c then k1  else k2 |
         |___________________________|
@@ -17,12 +17,12 @@
     | assume pc = k1 | | assume pc = k2 |
     | // stmts       | | // stmts       |
     |________________| |________________|
-    ]}
+    v}
     Here, the bottom two blocks are the blocks that are executed after the
     branch, but they do not have an explicit guard on the condition [c]! This
     transform inserts blocks in between the edges to these final blocks that
     guard the condition, resulting in something like this.
-    {[
+    {v
         ,___________________________,
         | pc:=if c then k1  else k2 |
         |___________________________|
@@ -42,7 +42,7 @@
     | assume pc = k1 | | assume pc = k2 |
     | // stmts       | | // stmts       |
     |________________| |________________|
-    ]}
+    v}
     We need to insert the guards as intermediate blocks instead of in the body
     of the final blocks as those final blocks may have other predecessors. *)
 
