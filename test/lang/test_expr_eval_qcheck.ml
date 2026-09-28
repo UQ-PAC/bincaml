@@ -95,7 +95,7 @@ let check_smt =
     let open QCheck.Gen in
     let* e = Expr_gen.gen_expr in
     let e = (Expr.BasilExpr.rewrite_typed_two Algsimp.drop_assoc) e in
-    let smt = Expr_smt.SMTLib2.of_bexpr e in
+    let smt = Expr_smt.SMTLib2.sexp_of_bexpr e in
     let parsed = Expr_smt.SMTLib2.expr_of_smt StringMap.empty smt in
     return (e, smt, parsed)
   in
@@ -151,13 +151,13 @@ let check_smt =
 
   let valid_predicate (e, smt, p) =
     let check_p =
-      Expr_smt.SMTLib2.of_bexpr
+      Expr_smt.SMTLib2.sexp_of_bexpr
       @@ Expr.BasilExpr.boolnot (Expr.BasilExpr.binexp ~op:`EQ e e)
     in
     let query =
       "(set-logic QF_BV)\n(set-option :print-success true)\n"
       ^ Sexp.to_string
-          (Expr_smt.SMTLib2.add_assert check_p Expr_smt.SMTLib2.empty |> fst)
+          (Expr_smt.SMTLib2.assert_sexp check_p Expr_smt.SMTLib2.empty |> fst)
       ^ "\n(exit)"
     in
     check_success_smt query
