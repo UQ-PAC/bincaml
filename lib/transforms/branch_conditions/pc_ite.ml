@@ -1,19 +1,50 @@
 (** Rewrite gotos after PC if-then-else (ite) assignments to assert conditions
     on the ite before the target goto block.
 
+    Lifted binaries will have this described structure on branches:
     {[
-    block %block_22 [
-      $PC:bv64 := if boolnot(eq($R19, 0x0:bv64)) then 0xce14:bv64 else 0xce08:bv64;
-      goto (%paclist_get_code_21);
-    ];
-    block %paclist_get_code_21 [
-      assert boolor(eq(0xce08:bv64, $PC), eq(0xce14:bv64, $PC));
-      goto (%paclist_get_code_14,%paclist_get_code_1);
-    ];
+        ,___________________________,
+        | pc:=if c then k1  else k2 |
+        |___________________________|
+                     |
+                     v
+        ,___________________________,
+        | assert pc = k1 or pc = k2 |
+        |___________________________|
+              |               |
+              v               v
+    ,________________, ,________________,
+    | assume pc = k1 | | assume pc = k2 |
+    | // stmts       | | // stmts       |
+    |________________| |________________|
     ]}
-    Here, before [%paclist_get_code_14] we would want to assume either
-    [boolnot(eq($R19, 0x0:bv64))] or its negation! This module performs such
-    rewrites. *)
+    Here, the bottom two blocks are the blocks that are executed after the
+    branch, but they do not have an explicit guard on the condition [c]! This
+    transform inserts blocks in between the edges to these final blocks that
+    guard the condition, resulting in something like this.
+    {[
+        ,___________________________,
+        | pc:=if c then k1  else k2 |
+        |___________________________|
+                     |
+                     v
+        ,___________________________,
+        | assert pc = k1 or pc = k2 |
+        |___________________________|
+              |               |
+              v               v
+    ,________________, ,________________,
+    | assume c       | | assume not c   |
+    |________________| |________________|
+              |               |
+              v               v
+    ,________________, ,________________,
+    | assume pc = k1 | | assume pc = k2 |
+    | // stmts       | | // stmts       |
+    |________________| |________________|
+    ]}
+    We need to insert the guards as intermediate blocks instead of in the body
+    of the final blocks as those final blocks may have other predecessors. *)
 
 open Lang
 open Common
