@@ -22,10 +22,13 @@ open struct
   let equiv_exp e1 e2 = Expr.BasilExpr.(equal (drop_attrib e1) (drop_attrib e2))
 end
 
+(** Abstract PC values representing an if-then-else expression. *)
 module PcValue = struct
   type 'a t = { cond : 'a; t_case : Z.t; f_case : Z.t }
   [@@deriving show { with_path = false }, ord, eq]
 
+  (** Extract an abstract PC value from an if-then-else expression given a way
+      to extract the bodies of branches *)
   let extract_value (f : Expr.BasilExpr.t -> 'a option) (e : Expr.BasilExpr.t) :
       'a t option =
     let open Expr.BasilExpr in
