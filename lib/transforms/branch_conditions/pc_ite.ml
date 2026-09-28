@@ -43,19 +43,17 @@ module PcValue = struct
                 };
               Constant { const = `Bitvector f_case };
             ];
-        } -> (
-        try
-          let t_case = Bitvec.value t_case in
-          let f_case = Bitvec.value f_case in
-          f (fix cond) |> Option.map (fun cond -> { cond; t_case; f_case })
-        with Z.Overflow -> None)
+        } ->
+        let t_case = Bitvec.value t_case in
+        let f_case = Bitvec.value f_case in
+        f (fix cond) |> Option.map (fun cond -> { cond; t_case; f_case })
     | _ -> None
 end
 
 module PcDomain = struct
   open Cfg_analysis
 
-  let name = "TODO"
+  let name = "pc-domain"
 
   type t = Top | Pc of Expr.BasilExpr.t PcValue.t | Bottom
   [@@deriving show { with_path = false }, ord, eq]
