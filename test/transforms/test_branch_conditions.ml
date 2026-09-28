@@ -416,3 +416,50 @@ prog entry @main;
     ];
     prog entry @main;
     |}]
+
+let%expect_test "pc_ite_same_loc" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+var $R0:bv64;
+var $PC:bv64;
+
+proc @main() -> ()
+[
+  block %main [
+    // If the pc location is the same it doesn't make sense to insert guards
+    $PC:bv64 := if boolnot(eq($R0, 0x0:bv64)) then 0xce08:bv64 else 0xce08:bv64;
+    goto (%b1);
+  ];
+  block %b1 [
+    goto (%b2);
+  ];
+  block %b2 { .address = 52744 } [
+    assume eq(0xce08:bv64, $PC);
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+prog entry @main;
+    |}
+  in
+  let prog = lst.prog |> Program.map_procedures (fun _ -> Pc_ite.transform) in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:200 (Lang.Program.prog_pretty prog);
+  [%expect
+    {|
+    var $R0:bv64;
+    var $PC:bv64;
+    proc @main()  -> () {  }
+      modifies $PC:bv64
+      captures $PC:bv64, $R0:bv64
+
+    [
+       block %main [ $PC:bv64 := if boolnot(eq($R0, 0x0:bv64)) then 0xce08:bv64 else 0xce08:bv64; goto (%b1); ];
+       block %b1 [ goto (%b2); ];
+       block %b2 { .address = 52744 } [ assume eq(0xce08:bv64, $PC); goto (%ret); ];
+       block %ret [ return; ]
+    ];
+    prog entry @main;
+    |}]
