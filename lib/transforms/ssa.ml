@@ -536,8 +536,13 @@ module Reconstruction = struct
            let procedure = ref procedure in
            let block =
              Block.map
-               ~phi:(fun phis -> phis)
+               ~phi:
+                 (List.map (fun (phi : Var.t Block.phi) ->
+                      (* TODO this is wrong. Should map any rhs variables
+                 that match var to be find_def_from_bottom of the incoming source block. Also the procedure each time... this is cursed. *)
+                      if not @@ VarSet.mem phi.lhs !allowed then phi else phi))
                (fun stmt ->
+                 (* TODO Check if var does not occur in rvars first to exit early? *)
                  let def =
                    Block.stmts_iter block
                    |> Iter.take_while
@@ -546,7 +551,7 @@ module Reconstruction = struct
                         %> not)
                    |> Iter.rev
                    |> Iter.flat_map Stmt.iter_lvar
-                   |> Iter.find_pred (Var.equal var)
+                   |> Iter.find_pred (flip VarSet.mem !allowed)
                  in
 
                  if Option.is_none def then (
@@ -558,8 +563,11 @@ module Reconstruction = struct
                    Stmt.map ~f_lvar:Fun.id
                      ~f_expr:
                        (Expr.BasilExpr.substitute (fun v ->
-                            Some (Expr.BasilExpr.rvar v)))
-                     ~f_rvar:Fun.id stmt)
+                            if Var.equal v var then
+                              Some (Expr.BasilExpr.rvar def)
+                            else None))
+                     ~f_rvar:(fun v -> if Var.equal v var then def else v)
+                     stmt)
                  else Stmt.map ~f_lvar:Fun.id ~f_expr:Fun.id ~f_rvar:Fun.id stmt)
                block
            in
