@@ -1,0 +1,10 @@
+(run-transforms hindley-milner-elaborate)
+bincaml: Type error: type_error: 25 <> 64
+         
+         Related context:
+         infer expr: bvadd(0x1:bv64, $g)
+         statement
+         10 |     $g:bv32 := bvadd(1:bv64, $g);
+                  [1;31m^^[0m
+         
+         prog script in ./error_use_global.il: (progn (run-transforms hindley-milner-elaborate))
