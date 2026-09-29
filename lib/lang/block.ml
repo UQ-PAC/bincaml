@@ -83,6 +83,11 @@ let to_string b =
 let stmts_iter_i b = Vector.mapi (fun i j -> (i, j)) b.stmts |> Vector.to_iter
 let stmts_iter b = Vector.to_iter b.stmts
 
+let foldi_forwards ~(phi : 'acc -> 'v phi list -> 'acc)
+    ~(f : 'acc -> int -> ('v, 'v, 'e) Stmt.t -> 'acc) (i : 'a) (b : ('v, 'e) t)
+    : 'acc =
+  Iter.foldi f (phi i b.phis) (Vector.to_iter b.stmts)
+
 let fold_forwards ~(phi : 'acc -> 'v phi list -> 'acc)
     ~(f : 'acc -> ('v, 'v, 'e) Stmt.t -> 'acc) (i : 'a) (b : ('v, 'e) t) : 'acc
     =
