@@ -1,42 +1,42 @@
 open Lang
 open Common
 
-(* The ccmp instruction requires additional work to be handled. A lifted ccmp
-   instruction looks like this:
-   ```
-   block %block_75 { .asm = "ccmp x20, x19, #0, ne" } [
-     var local_59:bool := false;
-     var local_59:bool := eq($PSTATE_Z, 0x1:bv1);
-     goto (%block_77,%block_76);
-   ];
-   block %block_76 [
-     assume boolnot(local_59:bool);
-     $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(64, bvsub($R20, $R19)),
-        bvsub(sign_extend(64, $R20), sign_extend(64, $R19)))));
-     $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(64, bvsub($R20, $R19)),
-        bvadd(zero_extend(64, $R20), zero_extend(64, bvnot($R19)), 0x1:bv128))));
-     $PSTATE_Z:bv1 := booltobv1(eq(bvsub($R20, $R19), 0x0:bv64));
-     $PSTATE_N:bv1 := extract(64,63, bvsub($R20, $R19));
-     goto (%block_78);
-   ];
-   block %block_77 [
-     assume boolnot(boolnot(local_59:bool));
-     $PSTATE_V:bv1 := 0x0:bv1;
-     $PSTATE_C:bv1 := 0x0:bv1;
-     $PSTATE_Z:bv1 := 0x0:bv1;
-     $PSTATE_N:bv1 := 0x0:bv1;
-     goto (%block_78);
-   ];
-   block %block_78 [
-     (var BranchTaken:bool := false, $PC:bv64 := 0x95fc:bv64);
-     goto (%block_79);
-   ];
-   ```
-   note that the two paths assume on a variable or its negation, not on a
-   condition. This means we can track the most recently assumed variable and
-   also track conditions of boolean variables. Then when we join two paths
-   where the assumptions are negations of the same variable, then we can create
-   if then else (ite) flag terms in the flag map! *)
+(** The ccmp instruction requires additional work to be handled. A lifted ccmp
+    instruction looks like this:
+    {v
+    block %block_75 { .asm = "ccmp x20, x19, #0, ne" } [
+      var local_59:bool := false;
+      var local_59:bool := eq($PSTATE_Z, 0x1:bv1);
+      goto (%block_77,%block_76);
+    ];
+    block %block_76 [
+      assume boolnot(local_59:bool);
+      $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(64, bvsub($R20, $R19)),
+         bvsub(sign_extend(64, $R20), sign_extend(64, $R19)))));
+      $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(64, bvsub($R20, $R19)),
+         bvadd(zero_extend(64, $R20), zero_extend(64, bvnot($R19)), 0x1:bv128))));
+      $PSTATE_Z:bv1 := booltobv1(eq(bvsub($R20, $R19), 0x0:bv64));
+      $PSTATE_N:bv1 := extract(64,63, bvsub($R20, $R19));
+      goto (%block_78);
+    ];
+    block %block_77 [
+      assume boolnot(boolnot(local_59:bool));
+      $PSTATE_V:bv1 := 0x0:bv1;
+      $PSTATE_C:bv1 := 0x0:bv1;
+      $PSTATE_Z:bv1 := 0x0:bv1;
+      $PSTATE_N:bv1 := 0x0:bv1;
+      goto (%block_78);
+    ];
+    block %block_78 [
+      (var BranchTaken:bool := false, $PC:bv64 := 0x95fc:bv64);
+      goto (%block_79);
+    ];
+    v}
+    note that the two paths assume on a variable or its negation, not on a
+    condition. This means we can track the most recently assumed variable and
+    also track conditions of boolean variables. Then when we join two paths
+    where the assumptions are negations of the same variable, then we can create
+    if then else (ite) flag terms in the flag map! *)
 
 module FlagLattice = Flags.FlagLattice
 module FlagMap = Flags.FlagMap
