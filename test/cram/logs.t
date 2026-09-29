@@ -29,12 +29,15 @@ Some error messages for log configuration.
 
   $ cat << EOF | bincaml script -
   > (load-il "../../examples/irreducible_loop_1.il")
+  > (log-level debug)
   > (log-level)
   > (run-transforms "irreducible-loops")
   > EOF
   (load-il ../../examples/irreducible_loop_1.il)
+  (log-level debug)
   (log-level)
-  bincaml: log-level: Expected at least one argument
+  bincaml: Error: Expected at least one argument in cmd log-level
+           
            
   [123]
 
@@ -45,7 +48,8 @@ Some error messages for log configuration.
   > EOF
   (load-il ../../examples/irreducible_loop_1.il)
   (log-level blah)
-  bincaml: log-level: Incorrect log level option given, correct options are ["info", "quiet", "app", "error", "warning", "debug"]
+  bincaml: Error: Incorrect log level option given, correct options are ["info", "quiet", "app", "error", "warning", "debug"] in cmd log-level
+           
            
   [123]
 
@@ -57,6 +61,7 @@ Some error messages for log configuration.
   > EOF
   (load-il ../../examples/irreducible_loop_1.il)
   (log-level info nowheoijifsda)
-  bincaml: log-level: source nowheoijifsda not found
+  bincaml: Error: source nowheoijifsda not found in cmd log-level
+           
            
   [123]
