@@ -496,7 +496,6 @@ proc @main()  -> () {  }
   @@ Containers_pp.Pretty.to_string ~width:200 (Lang.Program.prog_pretty prog);
   [%expect
     {|
-    EQ {z = (Diff ($R3, $R4))}
     var $R0:bv64;
     var $R1:bv64;
     var $R2:bv64;

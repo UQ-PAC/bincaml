@@ -115,7 +115,6 @@ module FlagDomain = struct
                   | _ -> Top)
                 a.flags b.flags
             in
-            print_endline @@ Flags.show_cond co;
             { conds; flags; assume }
         | _ -> { conds; flags = FlagMap.join a.flags b.flags; assume })
     | _ -> { conds; flags = FlagMap.join a.flags b.flags; assume }
