@@ -84,10 +84,10 @@ prog entry @main;
          $PSTATE_N:bv1 := extract(32,31, bvadd(extract(32,0, $R0), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Sum (extract(32,0, $R0), 0x1:bv32)))" };
          $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), bvnot(bvshl(extract(32,0, $R1), zero_extend(20, 0x0:bv12)))), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Diff (extract(32,0, $R0), extract(32,0, $R1))))" };
          $PSTATE_N:bv1 := extract(32,31, bvadd(bvadd(extract(32,0, $R0), 0xffffffff:bv32), 0x1:bv32)) { .flag_semantics_$PSTATE_N = "(N (Expr extract(32,0, $R0)))" };
-         $PSTATE_V:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_V = "(Const Never)" };
-         $PSTATE_C:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_C = "(Const Never)" };
-         $PSTATE_Z:bv1 := 0x1:bv1 { .flag_semantics_$PSTATE_Z = "(Const Always)" };
-         $PSTATE_N:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_N = "(Const Never)" };
+         $PSTATE_V:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_V = "(Lit Never)" };
+         $PSTATE_C:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_C = "(Lit Never)" };
+         $PSTATE_Z:bv1 := 0x1:bv1 { .flag_semantics_$PSTATE_Z = "(Lit Always)" };
+         $PSTATE_N:bv1 := 0x0:bv1 { .flag_semantics_$PSTATE_N = "(Lit Never)" };
          goto (%ret);
        ];
        block %ret [ return; ]
@@ -299,9 +299,9 @@ prog entry @main;
     [
        block %main [
          $PSTATE_Z:bv1 := 0x1:bv1;
-         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "(Const Always)" };
+         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "(Lit Always)" };
          $R0:bv64 := bvadd($R0, 0xdeadbeef:bv64);
-         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "(Const Always)" };
+         assume eq($PSTATE_Z, 0x0:bv1) { .flag_semantics_$PSTATE_Z = "(Lit Always)" };
          goto (%ret);
        ];
        block %ret [ return; ]
@@ -478,9 +478,8 @@ proc @main()  -> () {  }
     assume eq(0x00:bv64, $PC);
     call @_aarch64_eval(0xeb04007f:bv32, 0x000:bv64) { .asm = "cmp x3, x4" };
     call @_aarch64_eval(0xfa4610a4:bv32, 0x004:bv64) { .asm = "ccmp x5, x6, #4, ne" };
-    // rip it doesn't handle chained ccmps without condition identification from ites ...
-    //call @_aarch64_eval(0xf148c0eb:bv32, 0x008:bv64) { .asm = "ccmp x7, x8, #11, gt" };
-    call @_aarch64_eval(0x9a822020:bv32, 0x008:bv64) { .asm = "csel x0, x1, x2, cs" };
+    call @_aarch64_eval(0xfa48c0eb:bv32, 0x008:bv64) { .asm = "ccmp x7, x8, #11, gt" };
+    call @_aarch64_eval(0x9a822020:bv32, 0x00c:bv64) { .asm = "csel x0, x1, x2, cs" };
 
     goto (%ret_1);
   ];
@@ -503,6 +502,8 @@ proc @main()  -> () {  }
     var $R4:bv64;
     var $R5:bv64;
     var $R6:bv64;
+    var $R7:bv64;
+    var $R8:bv64;
     var $PSTATE_N:bv1;
     var $PSTATE_Z:bv1;
     var $PSTATE_C:bv1;
@@ -511,7 +512,7 @@ proc @main()  -> () {  }
     var $PC:bv64;
     proc @main()  -> () {  }
       modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64
-      captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64, $R1:bv64, $R2:bv64, $R3:bv64, $R4:bv64, $R5:bv64, $R6:bv64
+      captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64, $R1:bv64, $R2:bv64, $R3:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $R7:bv64, $R8:bv64
 
     [
        block %main_code [ assume eq(0x0:bv64, $PC); goto (%block); ];
@@ -547,24 +548,46 @@ proc @main()  -> () {  }
          goto (%block_4);
        ];
        block %block_4 [ (var BranchTaken:bool := false, $PC:bv64 := 0x8:bv64); goto (%block_5); ];
-       block %block_5 { .asm = "csel x0, x1, x2, cs" } [ var local_3:bv64 := 0x0:bv64; var local_3:bv64 := $R1; var local_4:bv64 := 0x0:bv64; var local_4:bv64 := $R2; goto (%block_7,%block_6); ];
+       block %block_5 { .asm = "ccmp x7, x8, #11, gt" } [ var local_3:bool := false; var local_3:bool := booland(eq($PSTATE_N, $PSTATE_V), eq($PSTATE_Z, 0x0:bv1)); goto (%block_7,%block_6); ];
        block %block_6 [
-         assume eq($PSTATE_C, 0x1:bv1) { .flag_semantics_$PSTATE_C = "(Ite (EQ {z = (Diff ($R3, $R4))}, (Const Never), (C (Diff ($R5, $R6)))))";
-             .flag_semantics_$PSTATE_N = "(Ite (EQ {z = (Diff ($R3, $R4))}, (Const Never), (N (Diff ($R5, $R6)))))";
-             .flag_semantics_$PSTATE_V = "(Ite (EQ {z = (Diff ($R3, $R4))}, (Const Never), (V (Diff ($R5, $R6)))))";
-             .flag_semantics_$PSTATE_Z = "(Ite (EQ {z = (Diff ($R3, $R4))}, (Const Always), (Z (Diff ($R5, $R6)))))" };
-         $R0:bv64 := local_3:bv64;
+         assume local_3:bool { .flag_semantics_$PSTATE_C = "(C (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6)))))";
+             .flag_semantics_$PSTATE_N = "(N (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6)))))"; .flag_semantics_$PSTATE_V = "(V (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6)))))";
+             .flag_semantics_$PSTATE_Z = "(Z (Ite (EQ {z = (Diff ($R3, $R4))}, Always, (Diff ($R5, $R6)))))" };
+         $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(64, bvadd(bvadd($R7, bvnot($R8)), 0x1:bv64)), bvadd(bvadd(sign_extend(64, $R7), sign_extend(64, bvnot($R8))), 0x1:bv128))));
+         $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(64, bvadd(bvadd($R7, bvnot($R8)), 0x1:bv64)), bvadd(bvadd(zero_extend(64, $R7), zero_extend(64, bvnot($R8))), 0x1:bv128))));
+         $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd($R7, bvnot($R8)), 0x1:bv64), 0x0:bv64));
+         $PSTATE_N:bv1 := extract(64,63, bvadd(bvadd($R7, bvnot($R8)), 0x1:bv64));
          goto (%block_8);
        ];
        block %block_7 [
-         assume boolnot(eq($PSTATE_C, 0x1:bv1)) { .flag_semantics_$PSTATE_C = "(Ite (EQ {z = (Diff ($R3, $R4))}, (Const Never), (C (Diff ($R5, $R6)))))";
-             .flag_semantics_$PSTATE_N = "(Ite (EQ {z = (Diff ($R3, $R4))}, (Const Never), (N (Diff ($R5, $R6)))))";
-             .flag_semantics_$PSTATE_V = "(Ite (EQ {z = (Diff ($R3, $R4))}, (Const Never), (V (Diff ($R5, $R6)))))";
-             .flag_semantics_$PSTATE_Z = "(Ite (EQ {z = (Diff ($R3, $R4))}, (Const Always), (Z (Diff ($R5, $R6)))))" };
-         $R0:bv64 := local_4:bv64;
+         assume boolnot(local_3:bool) { .flag_semantics_$PSTATE_C = "(C (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6)))))";
+             .flag_semantics_$PSTATE_N = "(N (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6)))))"; .flag_semantics_$PSTATE_V = "(V (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6)))))";
+             .flag_semantics_$PSTATE_Z = "(Z (Ite (EQ {z = (Diff ($R3, $R4))}, Always, (Diff ($R5, $R6)))))" };
+         $PSTATE_V:bv1 := 0x1:bv1;
+         $PSTATE_C:bv1 := 0x1:bv1;
+         $PSTATE_Z:bv1 := 0x0:bv1;
+         $PSTATE_N:bv1 := 0x1:bv1;
          goto (%block_8);
        ];
-       block %block_8 [ (var BranchTaken:bool := false, $PC:bv64 := 0xc:bv64); goto (%ret_1); ];
+       block %block_8 [ (var BranchTaken:bool := false, $PC:bv64 := 0xc:bv64); goto (%block_9); ];
+       block %block_9 { .asm = "csel x0, x1, x2, cs" } [ var local_4:bv64 := 0x0:bv64; var local_4:bv64 := $R1; var local_5:bv64 := 0x0:bv64; var local_5:bv64 := $R2; goto (%block_11,%block_10); ];
+       block %block_10 [
+         assume eq($PSTATE_C, 0x1:bv1) { .flag_semantics_$PSTATE_C = "(C\n   (Ite (\n      GT {n = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        v = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        z = (Ite (EQ {z = (Diff ($R3, $R4))}, Always, (Diff ($R5, $R6))))},\n      Always, (Diff ($R7, $R8)))))";
+             .flag_semantics_$PSTATE_N = "(N\n   (Ite (\n      GT {n = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        v = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        z = (Ite (EQ {z = (Diff ($R3, $R4))}, Always, (Diff ($R5, $R6))))},\n      Always, (Diff ($R7, $R8)))))";
+             .flag_semantics_$PSTATE_V = "(V\n   (Ite (\n      GT {n = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        v = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        z = (Ite (EQ {z = (Diff ($R3, $R4))}, Always, (Diff ($R5, $R6))))},\n      Always, (Diff ($R7, $R8)))))";
+             .flag_semantics_$PSTATE_Z = "(Z\n   (Ite (\n      GT {n = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        v = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        z = (Ite (EQ {z = (Diff ($R3, $R4))}, Always, (Diff ($R5, $R6))))},\n      Never, (Diff ($R7, $R8)))))" };
+         $R0:bv64 := local_4:bv64;
+         goto (%block_12);
+       ];
+       block %block_11 [
+         assume boolnot(eq($PSTATE_C, 0x1:bv1)) { .flag_semantics_$PSTATE_C = "(C\n   (Ite (\n      GT {n = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        v = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        z = (Ite (EQ {z = (Diff ($R3, $R4))}, Always, (Diff ($R5, $R6))))},\n      Always, (Diff ($R7, $R8)))))";
+             .flag_semantics_$PSTATE_N = "(N\n   (Ite (\n      GT {n = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        v = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        z = (Ite (EQ {z = (Diff ($R3, $R4))}, Always, (Diff ($R5, $R6))))},\n      Always, (Diff ($R7, $R8)))))";
+             .flag_semantics_$PSTATE_V = "(V\n   (Ite (\n      GT {n = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        v = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        z = (Ite (EQ {z = (Diff ($R3, $R4))}, Always, (Diff ($R5, $R6))))},\n      Always, (Diff ($R7, $R8)))))";
+             .flag_semantics_$PSTATE_Z = "(Z\n   (Ite (\n      GT {n = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        v = (Ite (EQ {z = (Diff ($R3, $R4))}, Never, (Diff ($R5, $R6))));\n        z = (Ite (EQ {z = (Diff ($R3, $R4))}, Always, (Diff ($R5, $R6))))},\n      Never, (Diff ($R7, $R8)))))" };
+         $R0:bv64 := local_5:bv64;
+         goto (%block_12);
+       ];
+       block %block_12 [ (var BranchTaken:bool := false, $PC:bv64 := 0x10:bv64); goto (%ret_1); ];
        block %ret_1 [ return; ]
     ];
     prog entry @main;

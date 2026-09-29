@@ -25,6 +25,7 @@ module FlagTypes = struct
     | Expr of Expr.BasilExpr.t  (** The result of evaluating an expr *)
     | Always
     | Never
+    | Ite of cond * computation * computation
   [@@deriving eq, ord, show { with_path = false }]
 
   and cond = computation gen_cond [@@deriving show { with_path = false }]
@@ -35,43 +36,64 @@ module FlagTypes = struct
       flags will be computed in the same way. *)
 
   and t =
-    | Const of computation
+    | Lit of computation  (** bv1 literal *)
     | V of computation  (** Overflow from computation *)
     | C of computation  (** Carry from computation *)
     | Z of computation  (** When computation is zero *)
     | N of computation  (** When computation is negative *)
-    | Ite of cond * t * t
   [@@deriving eq, ord, show { with_path = false }]
 end
 
 include FlagTypes
 
-let equiv_computations c c' =
+let rec equiv_computations c c' =
   let open Expr.BasilExpr in
   match (c, c') with
   | Sum (e1, e2), Sum (e1', e2') | Diff (e1, e2), Diff (e1', e2') ->
       equiv_exp e1 e1' && equiv_exp e2 e2'
   | Expr e, Expr e' -> equiv_exp e e'
   | Always, Always | Never, Never -> true
-  | (Sum _ | Diff _ | Expr _ | Always | Never), _ -> false
+  | Ite (c, co1, co2), Ite (c', co1', co2') ->
+      equiv_cond c c'
+      && equiv_computations co1 co1'
+      && equiv_computations co2 co2'
+  | (Sum _ | Diff _ | Expr _ | Always | Never | Ite _), _ -> false
 
-let equiv_cond co co' = equal_gen_cond equiv_computations co co'
+and equiv_cond co co' = equal_gen_cond equiv_computations co co'
 
-let comp_contains_var v = function
+let rec comp_contains_var v = function
   | Sum (e1, e2) | Diff (e1, e2) ->
       VarSet.mem v (Expr.BasilExpr.free_vars e1)
       || VarSet.mem v (Expr.BasilExpr.free_vars e2)
   | Expr e -> VarSet.mem v (Expr.BasilExpr.free_vars e)
   | Never | Always -> false
+  | Ite (c, co1, co2) ->
+      cond_contains_var v c || comp_contains_var v co1
+      || comp_contains_var v co2
 
-let cond_contains_var v =
+and cond_contains_var v =
   fold_gen_cond (fun b comp -> b && comp_contains_var v comp) true
 
 (** Determine whether [v] exists in an expression in [f] *)
-let rec contains_var v = function
-  | V c | C c | Z c | N c | Const c -> comp_contains_var v c
-  | Ite (co, c1, c2) ->
-      cond_contains_var v co || contains_var v c1 || contains_var v c2
+let contains_var v = function
+  | V c | C c | Z c | N c | Lit c -> comp_contains_var v c
+
+(** Make a flag containing an if-then-else computation given the flags of the
+    two branches. One branch should always be a literal computation, as Ites
+    should only come from ccmp instructions (which have literal computations in
+    one branch) *)
+let make_ite cond c1 c2 =
+  match (c1, c2) with
+  | Lit a, Lit b -> Some (Lit (Ite (cond, a, b)))
+  | V a, Lit b -> Some (V (Ite (cond, a, b)))
+  | C a, Lit b -> Some (C (Ite (cond, a, b)))
+  | Z a, Lit b -> Some (Z (Ite (cond, a, b)))
+  | N a, Lit b -> Some (N (Ite (cond, a, b)))
+  | Lit a, V b -> Some (V (Ite (cond, a, b)))
+  | Lit a, C b -> Some (C (Ite (cond, a, b)))
+  | Lit a, Z b -> Some (Z (Ite (cond, a, b)))
+  | Lit a, N b -> Some (N (Ite (cond, a, b)))
+  | _ -> None
 
 let extract_overflow_cary arg1 arg2 =
   let open Expr.AbstractExpr in
@@ -220,10 +242,10 @@ let extract_semantics e =
   match unfix3 e with
   | Constant { const = `Bitvector k } when Bitvec.equal k (Bitvec.zero ~size:1)
     ->
-      Some (Const Never)
+      Some (Lit Never)
   | Constant { const = `Bitvector k } when Bitvec.equal k (Bitvec.one ~size:1)
     ->
-      Some (Const Always)
+      Some (Lit Always)
   | UnaryExpr
       {
         op = `BVNOT;
@@ -259,8 +281,8 @@ module FlagLattice = struct
 
   let eval_const op =
     match op with
-    | `Bitvector k when Bitvec.equal k (Bitvec.zero ~size:1) -> V (Const Never)
-    | `Bitvector k when Bitvec.equal k (Bitvec.one ~size:1) -> V (Const Always)
+    | `Bitvector k when Bitvec.equal k (Bitvec.zero ~size:1) -> V (Lit Never)
+    | `Bitvector k when Bitvec.equal k (Bitvec.one ~size:1) -> V (Lit Always)
     | _ -> Top
 
   let eval_unop _ _ = Top
@@ -283,13 +305,13 @@ let rec extract_condition m e : cond =
       let arg1 = FlagEval.eval (flip FlagMap.read m) arg1 in
       let arg2 = FlagEval.eval (flip FlagMap.read m) arg2 in
       match (arg1, arg2) with
-      | V (Z z), V (Const Always) -> EQ { z }
-      | V (C c), V (Const Always) -> CS { c }
-      | V (N n), V (Const Always) -> MI { n }
-      | V (V v), V (Const Always) -> VS { v }
-      | V (N n), V (V v | Const v) -> GE { n; v }
-      | V (Const Always), V (Const Always) -> AL
-      | V (Const Never), V (Const Always) -> Not AL
+      | V (Z z), V (Lit Always) -> EQ { z }
+      | V (C c), V (Lit Always) -> CS { c }
+      | V (N n), V (Lit Always) -> MI { n }
+      | V (V v), V (Lit Always) -> VS { v }
+      | V (N n), V (V v | Lit v) -> GE { n; v }
+      | V (Lit Always), V (Lit Always) -> AL
+      | V (Lit Never), V (Lit Always) -> Not AL
       | _ -> Top)
   | ApplyIntrin
       {
@@ -306,9 +328,8 @@ let rec extract_condition m e : cond =
       let c = FlagEval.eval (flip FlagMap.read m) c in
       let d = FlagEval.eval (flip FlagMap.read m) d in
       match (a, b, c, d) with
-      | V (C c | Const c), V (Const Always), V (Z z), V (Const Never) ->
-          HI { c; z }
-      | V (N n), V (V v | Const v), V (Z z), V (Const Never) -> GT { n; v; z }
+      | V (C c | Lit c), V (Lit Always), V (Z z), V (Lit Never) -> HI { c; z }
+      | V (N n), V (V v | Lit v), V (Z z), V (Lit Never) -> GT { n; v; z }
       | _ -> Top)
   | UnaryExpr { op = `BoolNOT; arg } -> (
       match extract_condition m (Expr.BasilExpr.unfix arg) with

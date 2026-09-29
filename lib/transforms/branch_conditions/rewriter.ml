@@ -15,6 +15,7 @@ let rec condition_expr cond =
     | Expr e -> e
     | Always -> bvconst (Bitvec.one ~size:1)
     | Never -> bvconst (Bitvec.zero ~size:1)
+    | Ite _ -> failwith "todo!!!"
   in
   let zero_of e =
     match type_of e with

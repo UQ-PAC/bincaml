@@ -111,7 +111,10 @@ module FlagDomain = struct
                 (fun f f' ->
                   match (f, f') with
                   | Bot, Bot -> Bot
-                  | V f, V f' -> V (Flags.Ite (co, f, f'))
+                  | V f, V f' ->
+                      Flags.make_ite co f f'
+                      |> Option.map (fun f -> FlagLattice.V f)
+                      |> Option.get_or ~default:FlagLattice.Top
                   | _ -> Top)
                 a.flags b.flags
             in
