@@ -6,14 +6,13 @@ open Abstract_expr
 let type_error st a b =
   let a, b = TypeExpr.(find st a, find st b) in
   Errors.raise_error
-    ("type_error: " ^ Hm_types.type_to_string a ^ " <> "
-   ^ Hm_types.type_to_string b)
+    (Hm_types.type_to_string a ^ " <> " ^ Hm_types.type_to_string b)
     TypeError
 
 let recursion_error st a b =
   let b = TypeExpr.find st b in
   Errors.raise_error
-    ("recursive: tvar " ^ ID.to_string a ^ " occurs in "
+    ("recursive type: " ^ ID.to_string a ^ " occurs in "
    ^ Hm_types.type_to_string b)
     TypeError
 

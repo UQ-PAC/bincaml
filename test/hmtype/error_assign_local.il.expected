@@ -1,5 +1,5 @@
 (run-transforms hindley-milner-elaborate)
-bincaml: Type error: type_error: 64 <> 32
+bincaml: Type error: 64 <> 32
          
          Related context:
          statement
