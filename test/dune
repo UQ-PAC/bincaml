@@ -6,6 +6,7 @@
 
 (library
  (name bincaml_inline_tests)
+ (package bincaml)
  (inline_tests)
  (modules test_expr_print test_util_indexlist)
  (libraries bincaml.util)
