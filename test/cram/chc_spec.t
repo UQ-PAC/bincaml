@@ -7,8 +7,8 @@ helper's [enter]/[exit] predicates) at the call site in [main].
   (load-il chc_spec.il)
   (run-transforms ssa)
   (run-transforms chc-infer-invariants)
-  bincaml: [INFO] Submitting 6 predicates and 9 clauses to solver
-  bincaml: [INFO] Solver returned sat; extracted 6 definitions
+  bincaml: [INFO] Submitting 8 predicates and 11 clauses to solver
+  bincaml: [INFO] Solver returned sat; extracted 8 definitions
   (dump-il chc_spec_out.il)
 
 Helper's user-provided spec is preserved as-is (no duplicated inferred

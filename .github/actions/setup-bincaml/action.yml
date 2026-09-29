@@ -22,7 +22,8 @@ runs:
       env:
         cached: ${{ steps.nix-cache.outputs.hit-primary-key }}
 
-    - uses: ocaml/setup-ocaml@v3
+    # FIXME: remove version pin after opam depext bug is fixed: https://github.com/ocaml/opam/issues/7153
+    - uses: ocaml/setup-ocaml@v3.8.0
       with:
         ocaml-compiler: ${{ inputs.ocaml-compiler }}
 
