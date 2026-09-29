@@ -84,14 +84,12 @@ end
     probably only occur direct after flags are set (probably). Note that none of
     this is a problem if ssa is run prior to this transform. *)
 module FlagDomain = struct
-  type t = { conds : CondMap.t; flags : FlagMap.t; assume : AssumeLattice.t }
-  [@@deriving eq, ord]
-
-  let show x =
-    "{ conds: (" ^ CondMap.show x.conds ^ "); flags: (" ^ FlagMap.show x.flags
-    ^ "); assume: ("
-    ^ AssumeLattice.show x.assume
-    ^ ") }"
+  type t = {
+    conds : CondMap.t; [@printer CCFormat.of_to_string CondMap.show]
+    flags : FlagMap.t; [@printer CCFormat.of_to_string FlagMap.show]
+    assume : AssumeLattice.t; [@printer CCFormat.of_to_string AssumeLattice.show]
+  }
+  [@@deriving show { with_path = false }, eq, ord]
 
   let pretty x = Containers_pp.text (show x)
 
