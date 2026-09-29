@@ -50,6 +50,13 @@ jobs:
         if: "!cancelled()"
       - run: ./in-nix dune runtest --force
         if: "!cancelled()"
+      - run: ./in-nix dune clean
+        if: "!cancelled()"
+
+      - run: nix build .#bincaml -L --no-link
+        if: "!cancelled()"
+      - run: nix build .#bincaml_lsp -L --no-link
+        if: "!cancelled()"
 
   format:
     timeout-minutes: 40
@@ -95,6 +102,8 @@ jobs:
         if: "!cancelled()"
       - run: dune runtest --force
         if: "!cancelled()"
+      - run: 'dune clean ; opam pin add --with-test --with-doc .'
+        if: "!cancelled()"
 
   docs-build:
     timeout-minutes: 40
@@ -110,7 +119,9 @@ jobs:
         with: *nix-cache
       - run: ./in-nix echo "Preparing Nix shell"
 
-      - run: nix build .#bincamlDocs.docs -L
+      - run: nix build .#bincaml -L --no-link
+      - run: nix build .#bincaml_lsp -L --no-link
+      - run: nix build .#bincamlDocs.docs -L --no-link
 
       - uses: actions/upload-pages-artifact@v3
         with:
