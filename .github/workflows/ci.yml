@@ -121,11 +121,13 @@ jobs:
 
       - run: nix build .#bincaml -L --no-link
       - run: nix build .#bincaml_lsp -L --no-link
-      - run: nix build .#bincamlDocs.docs -L --no-link
+      - run: nix build .#bincamlDocs.docs -L
 
       - uses: actions/upload-pages-artifact@v3
         with:
           path: result/.
+
+      - run: rm result
 
   docs-deploy:
     timeout-minutes: 40
