@@ -152,6 +152,10 @@ let solve prog_proc =
 ]}
 
 
+4. For certain interprocedural analyses over an SSA program, use the SSA IDE solver {! Analysis.Idessi }
+
+See {{!ide} ide docs}.
+
 {2  Testing }
 
 We have multiple kinds of testing

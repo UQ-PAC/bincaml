@@ -294,7 +294,7 @@ module LinearIDE = struct
 
   type state_update = (DL.t * t) Iter.t
 
-  let init_data (proc : Program.proc) =
+  let relevant_params (proc : Program.proc) =
     Procedure.formal_in_params proc |> StringMap.values
 
   open DL
@@ -340,7 +340,7 @@ module LinearIDE = struct
     | Lambda -> Iter.empty
     | Label _ -> Iter.singleton (Label lhs, IdEdge)
 
-  let init_p2 (proc : Program.proc) =
+  let init_param_values (proc : Program.proc) =
     (* TODO could enforce in vars to be const based on requires clause *)
     Procedure.formal_in_params proc
     |> StringMap.values

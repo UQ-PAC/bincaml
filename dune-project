@@ -64,9 +64,9 @@
   stb_image
   kittyimg
   terminal_size
-  (ocamlformat :with-dev-setup)
-  (odig :with-dev-setup)
-  (sherlodoc :with-doc)
+  (ocamlformat (and (= 0.29.0) :with-dev-setup))
+  (ocaml-lsp-server :with-dev-setup)
+  (odoc-driver :with-doc)
   ppx_expect
   (alcotest :with-test))
  (tags (program-analysis)))

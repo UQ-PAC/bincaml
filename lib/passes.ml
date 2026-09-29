@@ -69,7 +69,7 @@ module PassManager = struct
   let sparams =
     {
       name = "simple-params";
-      apply = Prog Transforms.Ssa.set_params;
+      apply = Prog Transforms.Lambda_lifting.set_params;
       doc =
         "Pull all global variables into the parameter list, discarding initial \
          parameter list (i.e. assuming its empty)";
@@ -95,6 +95,22 @@ module PassManager = struct
       apply = DFGAnalysis (module Analysis.Defuse_bool.Analysis);
       doc = "runs truthiness analysis on dataflow graph and prints results";
       invariants = Invariants.presupposes [ SSA ];
+    }
+
+  let dfg_reaching_defs =
+    {
+      name = "demo-dfg-reaching-defs";
+      apply =
+        Proc
+          (fun p ->
+            let r = Analysis.Reaching_defs.IntraAnalysis.analyse p in
+            Analysis.Reaching_defs.IntraAnalysis.print_dot
+              (Format.of_chan stdout) p r;
+            p);
+      doc =
+        "runs reaching definitions analysis on dataflow graph and prints \
+         results";
+      invariants = Invariants.make ();
     }
 
   let dfg_ival_wint_product =
@@ -198,7 +214,7 @@ module PassManager = struct
   let remove_unused =
     {
       name = "remove-unused-decls";
-      apply = Prog Transforms.Ssa.drop_unused_var_declarations_prog;
+      apply = Prog Transforms.Drop_unused.drop_unused_var_declarations_prog;
       doc =
         "Removes all unused variable declarations (globals and locals on each \
          procedure) from the IR program";
@@ -208,11 +224,21 @@ module PassManager = struct
   let sssa =
     {
       name = "simple-ssa";
-      apply = Proc Transforms.Ssa.ssa;
+      apply = Prog Transforms.Ssa.(ssa_prog ~skipping:Skip.full);
       doc =
         "Naive SSA transform assuming all variable uses are dominated by \
          definitions from parameters";
       invariants = Invariants.presupposes [ Params ] ~establishes:[ SSA ];
+    }
+
+  let destruct_ssa =
+    {
+      name = "destruct-ssa";
+      apply = Transforms.Ssa.(Proc Destruction.simple_destruction);
+      doc =
+        "Naive SSA destruction, removes all phi nodes replacing them\n\
+        \      with semantically equivalent mutable assigns.";
+      invariants = Invariants.presupposes [] ~establishes:[ NoPhis ];
     }
 
   let cfa_reduction =
@@ -244,6 +270,16 @@ module PassManager = struct
       name = "cleanup-cfg";
       apply = Proc Transforms.Cleanup_cfg.cleanup_cfg;
       doc = "Collapses empty intermediate blocks";
+      invariants = Invariants.presupposes [];
+    }
+
+  let branch_conditions =
+    {
+      name = "branch-conditions";
+      apply = Proc Transforms.Branch_conditions.transform;
+      doc =
+        "(incomplete) Rewrites branch conditions to be in terms of numerical \
+         comparisons instead of flags.";
       invariants = Invariants.presupposes [];
     }
 
@@ -365,6 +401,17 @@ module PassManager = struct
       invariants = Invariants.presupposes [];
     }
 
+  let readable_exprs =
+    {
+      name = "readable-expressions";
+      apply = Proc Transforms.Cf_tx.simplify_proc_exprs_readable_default;
+      doc =
+        "Perform intra-expression simplifications and constant folding for \
+         whole program. Includes simplifications that aid readability at the \
+         detrement of some analyses.";
+      invariants = Invariants.presupposes [];
+    }
+
   let inter_dead =
     {
       name = "inter-dead-store-elim";
@@ -422,27 +469,15 @@ module PassManager = struct
       invariants = Invariants.from_list (fun x -> x.invariants) batch;
     }
 
-  let flatten_phis =
+  let dynamic_single_assignment =
     {
-      name = "flatten-phis";
-      apply = Proc Transforms.Dsa.dsa;
+      name = "dynamic-single-assignment";
+      apply = Proc Transforms.Dynamic_single_assignment.dsa;
       doc =
         "Transforms phi nodes in the program into dynamic single assignment \
          statements.";
       invariants =
         Invariants.presupposes [] ~establishes:[ DSA; NoPhis ]
-          ~invalidates:[ SSA ];
-    }
-
-  let dynamic_single_assignment =
-    {
-      name = "dynamic-single-assignment";
-      apply = Proc Transforms.Dsa.dsa;
-      doc =
-        "Transforms phi nodes in the program into dynamic single assignment \
-         statements.";
-      invariants =
-        Invariants.presupposes [ SSA ] ~establishes:[ DSA; NoPhis ]
           ~invalidates:[ SSA ];
     }
 
@@ -463,13 +498,14 @@ module PassManager = struct
       hm_elaborate;
       chop_unreachable;
       cse_elim;
-      flatten_phis;
       dynamic_single_assignment;
       irreducible_loop;
       remove_unreachable_blocks;
       collapse_empty_blocks;
       cleanup_cfg;
+      branch_conditions;
       dfg_bool;
+      dfg_reaching_defs;
       dfg_ival_wint_product;
       demo_ival_wint_dfg;
       cfg_wrapped_int;
@@ -479,6 +515,7 @@ module PassManager = struct
       read_uninit false;
       read_uninit true;
       sssa;
+      destruct_ssa;
       cfa_reduction;
       sva;
       full_ssa;
@@ -491,6 +528,7 @@ module PassManager = struct
       intra_function_summaries;
       inter_function_summaries;
       cf_exprs;
+      readable_exprs;
       inter_dead;
       linear_const;
       linear_copy;
@@ -517,7 +555,8 @@ module PassManager = struct
         name = "lambda-lifting";
         apply =
           Prog
-            (Transforms.Ssa.set_params ~skip_observable:false ~skip_maps:false);
+            (Transforms.Lambda_lifting.set_params ~skip_observable:false
+               ~skip_maps:false);
         doc = "Replaces captured global variables with explicit parameters";
         invariants = Invariants.establishes [ LambdaLift ];
       };

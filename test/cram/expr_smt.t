@@ -85,7 +85,7 @@ Check concat rewrites work
   ---
   >      $R28:bv64 := bvor(bvand(sign_extend(63,
   >        extract(32,31, var1_4206396_bv64:bv64)), 0xffffffff00000000:bv64),
-  >       bvand(var1_4206396_bv64:bv64, 0xffffffff:bv64, 0xffffffff:bv64));
+  >       bvand(var1_4206396_bv64:bv64, 0xffffffff:bv64));
   87,88c23
   <      $R0:bv64 := bvor(var1_4206400_bv64:bv64,
   <       bvshl(var2_4206400_bv64:bv64, 0x0:bv64));

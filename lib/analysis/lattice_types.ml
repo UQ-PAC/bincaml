@@ -118,6 +118,7 @@ struct
 
   let name = L.name ^ ".flat_lattice"
   let bottom = Bot
+  let top = Top
 
   let show a =
     match a with

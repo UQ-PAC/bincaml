@@ -459,6 +459,11 @@ module AllOps = struct
           return (Bitvector w)
     | `MapUpdate -> return @@ List.hd args
 
+  let is_commutative_intrin (o : intrin) =
+    match o with
+    | `BVADD | `BVMUL | `BVOR | `BVXOR | `BVAND | `OR | `AND -> true
+    | `Cases | `BVConcat | `MapUpdate -> false
+
   (** ops returning booleans *)
 
   let rec to_string (op : [< const | unary | binary | intrin | lambda ]) =

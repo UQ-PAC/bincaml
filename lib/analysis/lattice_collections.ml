@@ -73,7 +73,9 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
       let name = V.name ^ "MapLattice"
       let bottom = BotMap KM.empty
       let top = TopMap KM.empty
-      let singleton k v = BotMap (KM.singleton k v)
+
+      let singleton k v =
+        if V.equal V.bottom v then bottom else BotMap (KM.singleton k v)
 
       let bot_v_op f _ x y =
         let x = f x y in
@@ -196,8 +198,20 @@ module LatticeMap (K : MapKey) (V : TopLattice) = struct
         | TopMap m -> (`Top, KM.to_list m)
 
       let mapi f = function
-        | BotMap m -> BotMap (KM.mapi f m)
-        | TopMap m -> TopMap (KM.mapi f m)
+        | BotMap m ->
+            BotMap
+              (KM.filter_map
+                 (fun k v ->
+                   let v = f k v in
+                   if V.equal v V.bottom then None else Some v)
+                 m)
+        | TopMap m ->
+            TopMap
+              (KM.filter_map
+                 (fun k v ->
+                   let v = f k v in
+                   if V.equal v V.top then None else Some v)
+                 m)
 
       let fold f m acc =
         match m with BotMap m -> KM.fold f m acc | TopMap m -> KM.fold f m acc

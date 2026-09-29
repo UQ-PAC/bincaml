@@ -2,7 +2,7 @@
 
 (* We create edge functions along the def-use or use-def graph instead of along the cfg.
  * We also only store one summary per variable in each procedure!
- * Finally we explicitly work over the sscs of the call graph of the program we're working on to skip redundant propagation. *)
+ * Finally we explicitly work over the sccs of the call graph of the program to skip redundant propagation. *)
 
 open Lang
 open Containers
@@ -47,13 +47,16 @@ module type IDESSIDomain = sig
 
   type state_update = (DL.t * t) Iter.t
 
-  val init_data : Program.proc -> Var.t Iter.t
-  (** data that each procedure should summarise *)
+  val relevant_params : Program.proc -> Var.t Iter.t
+  (** input/output params that each procedure should propagate from *)
 
   val transfer_call : call_info -> param_info -> DL.t -> state_update
   val transfer : Program.stmt -> DL.t -> state_update
   val transfer_phi : Var.t -> Var.t list -> DL.t -> state_update
-  val init_p2 : Program.proc -> (Var.t * Value.t) Iter.t
+
+  val init_param_values : Program.proc -> (Var.t * Value.t) Iter.t
+  (** Value lattice values assigned to input/output parameters of a procedure *)
+
   val pp : Format.formatter -> t -> unit
 end
 
@@ -233,7 +236,9 @@ module IDESSI (D : IDESSIDomain) = struct
       (fun pid ->
         let proc = Program.proc prog pid in
         let init =
-          D.init_data proc |> Iter.map (fun v -> Label v) |> Iter.cons Lambda
+          D.relevant_params proc
+          |> Iter.map (fun v -> Label v)
+          |> Iter.cons Lambda
         in
         init |> Iter.map (fun v -> (v, pid, v)) |> W1.add_iter worklist;
         init |> Iter.iter (fun v -> update_summary pid v v D.identity))
@@ -253,7 +258,7 @@ module IDESSI (D : IDESSIDomain) = struct
     done
 
   let p2_solve_proc (summary : summary) proc : D.Value.t VarMap.t =
-    D.init_p2 proc |> VarMap.of_iter
+    D.init_param_values proc |> VarMap.of_iter
     |> DlMap.fold
          (fun d ->
            DlMap.fold (fun d2 ef m ->
@@ -299,7 +304,7 @@ module IDESSI (D : IDESSIDomain) = struct
         | Some _ -> ()
         | None ->
             let init =
-              D.init_data proc
+              D.relevant_params proc
               |> Iter.map (fun v -> Label v)
               |> Iter.cons Lambda
             in

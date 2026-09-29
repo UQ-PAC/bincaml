@@ -21,6 +21,9 @@ let simplify_proc_exprs ?visit rewriter p =
 let simplify_proc_exprs_default ?visit p =
   simplify_proc_exprs ?visit Algsimp.alg_simp_rewriter p
 
+let simplify_proc_exprs_readable_default ?visit p =
+  simplify_proc_exprs ?visit Algsimp.readable p
+
 let simplify_proc_spec_exprs ?visit rewriter p =
   let s = Procedure.specification p in
   let s =

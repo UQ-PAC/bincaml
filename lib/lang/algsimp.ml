@@ -99,17 +99,6 @@ let normalise e =
   | UnaryExpr { op = `BoolNOT; arg = ApplyIntrin { op = `OR; args } } ->
       replace [%here]
         (BasilExpr.applyintrin ~op:`AND (List.map BasilExpr.boolnot args))
-  | ApplyIntrin
-      {
-        attrib;
-        op = `BVADD;
-        args =
-          [ (RVar _ as v); Constant { attrib = cattrib; const = `Bitvector i } ];
-      }
-    when Bitvec.is_negative i ->
-      replace [%here]
-        (BasilExpr.binexp ~attrib ~op:`BVSUB (fix v)
-           (BasilExpr.bvconst ~attrib:cattrib (Bitvec.neg i)))
   | _ -> Keep
 
 let simplify_concat
@@ -310,6 +299,34 @@ let algebraic_simplifications
       replace [%here] arg
   | UnaryExpr { op = `BoolNOT; arg = UnaryExpr { op = `BoolNOT; arg }, _ } ->
       replace [%here] arg
+  | UnaryExpr { op = `SignExtend k; arg = UnaryExpr { op = `BVNOT; arg }, _ } ->
+      replace [%here]
+        (BasilExpr.unexp ~op:`BVNOT
+           (BasilExpr.sign_extend ~n_prefix_bits:k arg))
+  | ApplyIntrin
+      {
+        op = `BVADD;
+        args = [ (a, _); (UnaryExpr { op = `BVNOT; arg = b }, _); (k, _) ];
+      }
+    when is_bvone k ->
+      replace [%here] (BasilExpr.binexp ~op:`BVSUB (fix a) b)
+  | BinaryExpr { op = `EQ; arg1 = a, _; arg2 = b, _ }
+    when BasilExpr.equal (fix a) (fix b) ->
+      replace [%here] (BasilExpr.boolconst true)
+  | BinaryExpr
+      {
+        op = `EQ;
+        arg1 = a, _;
+        arg2 =
+          ( ApplyIntrin
+              {
+                op = `BVADD;
+                args = [ b; E (Constant { const = `Bitvector c }) ];
+              },
+            _ );
+      }
+    when BasilExpr.equal (fix a) b && not (is_zero c) ->
+      replace [%here] (BasilExpr.boolconst false)
   | _ -> Keep
 
 let algebraic_simplifications = sequence drop_assoc algebraic_simplifications
@@ -322,13 +339,37 @@ let alg_simp_rewriter ?visit e =
   e
   |> ( to_steady BasilExpr.equal @@ fun e ->
        e |> partial_eval_expr |> simp_concat_fix )
-  |> to_steady BasilExpr.equal
-       (BasilExpr.rewrite_typed_two ?visit algebraic_simplifications)
+  |> to_steady BasilExpr.equal (fun e ->
+      e |> partial_eval_expr
+      |> BasilExpr.rewrite_typed_two ?visit algebraic_simplifications)
   |> to_steady BasilExpr.equal (BasilExpr.rewrite_typed_two ?visit normalise)
 
-let normalise e =
-  let e = alg_simp_rewriter e in
-  BasilExpr.rewrite_typed_two normalise e
+let normalise ?visit e =
+  let e = alg_simp_rewriter ?visit e in
+  BasilExpr.rewrite_typed_two ?visit normalise e
+
+(** Simplifications for making ir more readable but interfere with analysis *)
+let readable e =
+  let open AbstractExpr in
+  let open BasilExpr in
+  let open Bitvec in
+  let e = AbstractExpr.map fst e in
+  match e with
+  | ApplyIntrin
+      {
+        attrib;
+        op = `BVADD;
+        args =
+          [ (RVar _ as v); Constant { attrib = cattrib; const = `Bitvector i } ];
+      }
+    when Bitvec.is_negative i ->
+      replace [%here]
+        (BasilExpr.binexp ~attrib ~op:`BVSUB (fix v)
+           (BasilExpr.bvconst ~attrib:cattrib (Bitvec.neg i)))
+  | _ -> Keep
+
+let readable ?visit e =
+  normalise ?visit e |> BasilExpr.rewrite_typed_two ?visit readable
 
 let%expect_test "normalise" =
   let e =
