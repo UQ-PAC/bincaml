@@ -20,8 +20,8 @@
       src = fetchFromGitHub {
         owner = "rsc-s";
         repo = "odoc";
-        rev = "bd961999c1e24332c26066fe63244092e143b254";
-        hash = "sha256-UDD1o1jaSJadiNmPW98vM2FukbzNDWrlXjdcy8KDPfo=";
+        rev = "67b11fe751bd369620c93c89641c31d8b13a2633";
+        hash = "sha256-oomK4wLBrxca0M4virPLh3fWb/OOdGkaB2qnSjsQ1yk=";
       };
 
       propagatedBuildInputs =
