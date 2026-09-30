@@ -1,5 +1,16 @@
 (** Rewrites boolean exprs in terms of flags to be in terms of numerical
-    conditions. *)
+    conditions.
+
+    ccmp (conditional compare) instructions require extra work to handle. We
+    store ccmp results as if-then-else computations where one branch is
+    definitely either Always or Never. This mirrors the ccmp instruction's
+    logic, where the four flags are set to a constant if the condition required
+    to execute the compare isn't met. From this, we have effectively
+    [nzcv = if cond then cond2 else k] where k is a constant. When branching on
+    this flag field, we have two cases being whether k does or does not branch
+    in the case that cond is false. We can write a branching condition as
+    [cond && cond2 || !cond && k] and if we unwrap the logic, we get that if [k]
+    is true this is [cond ==> cond2], and if [k] is false [cond && cond2]. *)
 
 open Lang
 open Common
