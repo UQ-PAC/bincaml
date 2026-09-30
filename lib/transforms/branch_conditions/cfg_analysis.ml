@@ -93,32 +93,37 @@ module FlagDomain = struct
 
   let pretty x = Containers_pp.text (show x)
 
-  let join a b =
+  let join_ite v a b : t =
     let conds = CondMap.join a.conds b.conds in
     let assume = AssumeLattice.join a.assume b.assume in
-    match (a.assume, b.assume) with
-    | (V (Var v), V (NotVar v') | V (NotVar v'), V (Var v)) when Var.equal v v'
-      -> (
-        (* This could maybe possibly become unbounded if there's a ccmp into a
+    (* This could maybe possibly become unbounded if there's a ccmp into a
            branch back into the ccmp... guess we're doing top widening + lots
            of delays!! *)
-        match (CondMap.read v a.conds, CondMap.read v b.conds) with
-        | V co, V co' when Flags.equiv_cond co co' ->
-            let flags =
-              FlagMap.top_binop
-                (fun f f' ->
-                  match (f, f') with
-                  | Bot, Bot -> Bot
-                  | V f, V f' ->
-                      Flags.make_ite co f f'
-                      |> Option.map (fun f -> FlagLattice.V f)
-                      |> Option.get_or ~default:FlagLattice.Top
-                  | _ -> Top)
-                a.flags b.flags
-            in
-            { conds; flags; assume }
-        | _ -> { conds; flags = FlagMap.join a.flags b.flags; assume })
+    match (CondMap.read v a.conds, CondMap.read v b.conds) with
+    | V co, V co' when Flags.equiv_cond co co' ->
+        let flags =
+          FlagMap.top_binop
+            (fun f f' ->
+              match (f, f') with
+              | Bot, Bot -> Bot
+              | V f, V f' ->
+                  Flags.make_ite co f f'
+                  |> Option.map (fun f -> FlagLattice.V f)
+                  |> Option.get_or ~default:FlagLattice.Top
+              | _ -> Top)
+            a.flags b.flags
+        in
+        { conds; flags; assume }
     | _ -> { conds; flags = FlagMap.join a.flags b.flags; assume }
+
+  let join a b =
+    match (a.assume, b.assume) with
+    | V (Var v), V (NotVar v') when Var.equal v v' -> join_ite v a b
+    | V (NotVar v'), V (Var v) when Var.equal v v' -> join_ite v b a
+    | _ ->
+        let conds = CondMap.join a.conds b.conds in
+        let assume = AssumeLattice.join a.assume b.assume in
+        { conds; flags = FlagMap.join a.flags b.flags; assume }
 
   let leq a b =
     (* idk what this is wrt the join ... *)
