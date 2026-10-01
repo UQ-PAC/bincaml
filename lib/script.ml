@@ -356,7 +356,7 @@ let cmds_list =
     ( "run-transform",
       run_transform,
       "<t1> <t2> ...",
-      "run one IL transforms in sequence" );
+      "run IL transforms in sequence" );
     ("list-passes", list_passes, "", "List transform passes");
     ( "run-transforms",
       run_transform,
