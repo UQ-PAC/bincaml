@@ -1,0 +1,1442 @@
+[
+  {
+    "FileSummary": {
+      "File": "_build/default/test/dsa/bayat1.exe", "Format": "elf64-littleaarch64", "Arch": "aarch64", "AddressSize": "64bit",
+      "LoadName": "<Not found>"
+    },
+    "Relocations": [
+      {
+        "SectionIndex": 8,
+        "Relocs": [
+          {
+            "Relocation": {
+              "Offset": 130472,
+              "Type": {"Name": "R_AARCH64_RELATIVE", "Value": 1027},
+              "Symbol": {"Name": "-", "Value": 0},
+              "Addend": 2144
+            }
+          },
+          {
+            "Relocation": {
+              "Offset": 130480,
+              "Type": {"Name": "R_AARCH64_RELATIVE", "Value": 1027},
+              "Symbol": {"Name": "-", "Value": 0},
+              "Addend": 2060
+            }
+          },
+          {
+            "Relocation": {
+              "Offset": 131032,
+              "Type": {"Name": "R_AARCH64_RELATIVE", "Value": 1027},
+              "Symbol": {"Name": "-", "Value": 0},
+              "Addend": 2148
+            }
+          },
+          {
+            "Relocation": {
+              "Offset": 131112,
+              "Type": {"Name": "R_AARCH64_RELATIVE", "Value": 1027},
+              "Symbol": {"Name": "-", "Value": 0},
+              "Addend": 131112
+            }
+          },
+          {
+            "Relocation": {
+              "Offset": 131008,
+              "Type": {"Name": "R_AARCH64_GLOB_DAT", "Value": 1025},
+              "Symbol": {"Name": "_ITM_deregisterTMCloneTable", "Value": 4},
+              "Addend": 0
+            }
+          },
+          {
+            "Relocation": {
+              "Offset": 131016,
+              "Type": {"Name": "R_AARCH64_GLOB_DAT", "Value": 1025},
+              "Symbol": {"Name": "__cxa_finalize@GLIBC_2.17", "Value": 5},
+              "Addend": 0
+            }
+          },
+          {
+            "Relocation": {
+              "Offset": 131024,
+              "Type": {"Name": "R_AARCH64_GLOB_DAT", "Value": 1025},
+              "Symbol": {"Name": "__gmon_start__", "Value": 6},
+              "Addend": 0
+            }
+          },
+          {
+            "Relocation": {
+              "Offset": 131040,
+              "Type": {"Name": "R_AARCH64_GLOB_DAT", "Value": 1025},
+              "Symbol": {"Name": "_ITM_registerTMCloneTable", "Value": 8},
+              "Addend": 0
+            }
+          }
+        ]
+      },
+      {
+        "SectionIndex": 9,
+        "Relocs": [
+          {
+            "Relocation": {
+              "Offset": 131072,
+              "Type": {"Name": "R_AARCH64_JUMP_SLOT", "Value": 1026},
+              "Symbol": {"Name": "__libc_start_main@GLIBC_2.34", "Value": 3},
+              "Addend": 0
+            }
+          },
+          {
+            "Relocation": {
+              "Offset": 131080,
+              "Type": {"Name": "R_AARCH64_JUMP_SLOT", "Value": 1026},
+              "Symbol": {"Name": "__cxa_finalize@GLIBC_2.17", "Value": 5},
+              "Addend": 0
+            }
+          },
+          {
+            "Relocation": {
+              "Offset": 131088,
+              "Type": {"Name": "R_AARCH64_JUMP_SLOT", "Value": 1026},
+              "Symbol": {"Name": "__gmon_start__", "Value": 6},
+              "Addend": 0
+            }
+          },
+          {
+            "Relocation": {
+              "Offset": 131096,
+              "Type": {"Name": "R_AARCH64_JUMP_SLOT", "Value": 1026},
+              "Symbol": {"Name": "abort@GLIBC_2.17", "Value": 7},
+              "Addend": 0
+            }
+          }
+        ]
+      }
+    ],
+    "Symbols": [
+      {
+        "Symbol": {
+          "Name": {"Name": "", "Value": 0},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Undefined", "Value": 0}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".interp", "Value": 0},
+          "Value": 568,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".interp", "Value": 1}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".hash", "Value": 0},
+          "Value": 680,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".hash", "Value": 2}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".gnu.hash", "Value": 0},
+          "Value": 736,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".gnu.hash", "Value": 3}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".dynsym", "Value": 0},
+          "Value": 768,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".dynsym", "Value": 4}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".dynstr", "Value": 0},
+          "Value": 984,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".dynstr", "Value": 5}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".gnu.version", "Value": 0},
+          "Value": 1328,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".gnu.version", "Value": 6}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".gnu.version_r", "Value": 0},
+          "Value": 1352,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".gnu.version_r", "Value": 7}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".rela.dyn", "Value": 0},
+          "Value": 1400,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".rela.dyn", "Value": 8}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".rela.plt", "Value": 0},
+          "Value": 1592,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".rela.plt", "Value": 9}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".init", "Value": 0},
+          "Value": 1688,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".init", "Value": 10}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".plt", "Value": 0},
+          "Value": 1728,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".plt", "Value": 11}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".text", "Value": 0},
+          "Value": 1856,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".text", "Value": 12}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".fini", "Value": 0},
+          "Value": 2280,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".fini", "Value": 13}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".rodata", "Value": 0},
+          "Value": 2304,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".rodata", "Value": 14}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".eh_frame_hdr", "Value": 0},
+          "Value": 2308,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".eh_frame_hdr", "Value": 15}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".eh_frame", "Value": 0},
+          "Value": 2368,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".eh_frame", "Value": 16}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".note.ABI-tag", "Value": 0},
+          "Value": 2540,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".note.ABI-tag", "Value": 17}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".init_array", "Value": 0},
+          "Value": 130472,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".init_array", "Value": 18}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".fini_array", "Value": 0},
+          "Value": 130480,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".fini_array", "Value": 19}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".dynamic", "Value": 0},
+          "Value": 130488,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".dynamic", "Value": 20}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".got", "Value": 0},
+          "Value": 131000,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".got", "Value": 21}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".got.plt", "Value": 0},
+          "Value": 131048,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".got.plt", "Value": 22}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".data", "Value": 0},
+          "Value": 131104,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".data", "Value": 23}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".bss", "Value": 0},
+          "Value": 131120,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".comment", "Value": 0},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".comment", "Value": 25}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": ".ARM.attributes", "Value": 0},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Section", "Value": 3},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".ARM.attributes", "Value": 26}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "Scrt1.o", "Value": 1},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "File", "Value": 4},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Absolute", "Value": 65521}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$x", "Value": 9},
+          "Value": 1856,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".text", "Value": 12}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$d", "Value": 12},
+          "Value": 2388,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".eh_frame", "Value": 16}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$d", "Value": 12},
+          "Value": 2540,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".note.ABI-tag", "Value": 17}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__abi_tag", "Value": 15},
+          "Value": 2540,
+          "Size": 32,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".note.ABI-tag", "Value": 17}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$d", "Value": 12},
+          "Value": 2304,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".rodata", "Value": 14}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "crti.o", "Value": 25},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "File", "Value": 4},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Absolute", "Value": 65521}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$x", "Value": 9},
+          "Value": 1908,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".text", "Value": 12}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "call_weak_fn", "Value": 32},
+          "Value": 1908,
+          "Size": 20,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Function", "Value": 2},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".text", "Value": 12}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$x", "Value": 9},
+          "Value": 1688,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".init", "Value": 10}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$x", "Value": 9},
+          "Value": 2280,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".fini", "Value": 13}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "crtn.o", "Value": 45},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "File", "Value": 4},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Absolute", "Value": 65521}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$x", "Value": 9},
+          "Value": 1704,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".init", "Value": 10}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$x", "Value": 9},
+          "Value": 2292,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".fini", "Value": 13}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "crtbeginS.o", "Value": 52},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "File", "Value": 4},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Absolute", "Value": 65521}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$x", "Value": 9},
+          "Value": 1952,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".text", "Value": 12}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "deregister_tm_clones", "Value": 64},
+          "Value": 1952,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Function", "Value": 2},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".text", "Value": 12}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "register_tm_clones", "Value": 66},
+          "Value": 2000,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Function", "Value": 2},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".text", "Value": 12}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$d", "Value": 12},
+          "Value": 131112,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".data", "Value": 23}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__do_global_dtors_aux", "Value": 85},
+          "Value": 2060,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Function", "Value": 2},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".text", "Value": 12}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "completed.0", "Value": 107},
+          "Value": 131120,
+          "Size": 1,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$d", "Value": 12},
+          "Value": 130480,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".fini_array", "Value": 19}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__do_global_dtors_aux_fini_array_entry", "Value": 119},
+          "Value": 130480,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".fini_array", "Value": 19}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "frame_dummy", "Value": 158},
+          "Value": 2144,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Function", "Value": 2},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".text", "Value": 12}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$d", "Value": 12},
+          "Value": 130472,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".init_array", "Value": 18}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__frame_dummy_init_array_entry", "Value": 170},
+          "Value": 130472,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".init_array", "Value": 18}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$d", "Value": 12},
+          "Value": 2408,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".eh_frame", "Value": 16}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$d", "Value": 12},
+          "Value": 131120,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "bayat1.c", "Value": 201},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "File", "Value": 4},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Absolute", "Value": 65521}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$d", "Value": 12},
+          "Value": 131128,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$x", "Value": 9},
+          "Value": 2148,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".text", "Value": 12}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$d", "Value": 12},
+          "Value": 2504,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".eh_frame", "Value": 16}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "crtendS.o", "Value": 210},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "File", "Value": 4},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Absolute", "Value": 65521}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$d", "Value": 12},
+          "Value": 2536,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".eh_frame", "Value": 16}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__FRAME_END__", "Value": 220},
+          "Value": 2536,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".eh_frame", "Value": 16}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "", "Value": 0},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "File", "Value": 4},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Absolute", "Value": 65521}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "_DYNAMIC", "Value": 234},
+          "Value": 130488,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Absolute", "Value": 65521}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__GNU_EH_FRAME_HDR", "Value": 243},
+          "Value": 2308,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".eh_frame_hdr", "Value": 15}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "_GLOBAL_OFFSET_TABLE_", "Value": 262},
+          "Value": 131000,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Absolute", "Value": 65521}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "$x", "Value": 9},
+          "Value": 1728,
+          "Size": 0,
+          "Binding": {"Name": "Local", "Value": 0},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".plt", "Value": 11}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__libc_start_main@GLIBC_2.34", "Value": 284},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Function", "Value": 2},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Undefined", "Value": 0}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "_ITM_deregisterTMCloneTable", "Value": 313},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Weak", "Value": 2},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Undefined", "Value": 0}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "data_start", "Value": 412},
+          "Value": 131104,
+          "Size": 0,
+          "Binding": {"Name": "Weak", "Value": 2},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".data", "Value": 23}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__bss_start__", "Value": 341},
+          "Value": 131120,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__cxa_finalize@GLIBC_2.17", "Value": 355},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Weak", "Value": 2},
+          "Type": {"Name": "Function", "Value": 2},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Undefined", "Value": 0}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "_bss_end__", "Value": 399},
+          "Value": 131168,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "_edata", "Value": 381},
+          "Value": 131120,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".data", "Value": 23}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "p", "Value": 388},
+          "Value": 131152,
+          "Size": 8,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "z", "Value": 390},
+          "Value": 131144,
+          "Size": 8,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "x", "Value": 10},
+          "Value": 131128,
+          "Size": 8,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "_fini", "Value": 392},
+          "Value": 2280,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Function", "Value": 2},
+          "Other": {
+            "Value": 2,
+            "Flags": [
+              {"Name": "STV_HIDDEN", "Value": 2}
+            ]
+          },
+          "Section": {"Name": ".fini", "Value": 13}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__bss_end__", "Value": 398},
+          "Value": 131168,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__data_start", "Value": 410},
+          "Value": 131104,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".data", "Value": 23}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__gmon_start__", "Value": 423},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Weak", "Value": 2},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Undefined", "Value": 0}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__dso_handle", "Value": 438},
+          "Value": 131112,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 2,
+            "Flags": [
+              {"Name": "STV_HIDDEN", "Value": 2}
+            ]
+          },
+          "Section": {"Name": ".data", "Value": 23}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "abort@GLIBC_2.17", "Value": 451},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Function", "Value": 2},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Undefined", "Value": 0}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "_IO_stdin_used", "Value": 468},
+          "Value": 2304,
+          "Size": 4,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".rodata", "Value": 14}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "_end", "Value": 483},
+          "Value": 131168,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "_start", "Value": 416},
+          "Value": 1856,
+          "Size": 52,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Function", "Value": 2},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".text", "Value": 12}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__end__", "Value": 488},
+          "Value": 131168,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "y", "Value": 168},
+          "Value": 131136,
+          "Size": 8,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "q", "Value": 496},
+          "Value": 131160,
+          "Size": 8,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__bss_start", "Value": 498},
+          "Value": 131120,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".bss", "Value": 24}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "main", "Value": 510},
+          "Value": 2148,
+          "Size": 132,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Function", "Value": 2},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": ".text", "Value": 12}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "__TMC_END__", "Value": 515},
+          "Value": 131120,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Object", "Value": 1},
+          "Other": {
+            "Value": 2,
+            "Flags": [
+              {"Name": "STV_HIDDEN", "Value": 2}
+            ]
+          },
+          "Section": {"Name": ".data", "Value": 23}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "_ITM_registerTMCloneTable", "Value": 527},
+          "Value": 0,
+          "Size": 0,
+          "Binding": {"Name": "Weak", "Value": 2},
+          "Type": {"Name": "None", "Value": 0},
+          "Other": {
+            "Value": 0,
+            "Flags": []
+          },
+          "Section": {"Name": "Undefined", "Value": 0}
+        }
+      },
+      {
+        "Symbol": {
+          "Name": {"Name": "_init", "Value": 553},
+          "Value": 1688,
+          "Size": 0,
+          "Binding": {"Name": "Global", "Value": 1},
+          "Type": {"Name": "Function", "Value": 2},
+          "Other": {
+            "Value": 2,
+            "Flags": [
+              {"Name": "STV_HIDDEN", "Value": 2}
+            ]
+          },
+          "Section": {"Name": ".init", "Value": 10}
+        }
+      }
+    ]
+  }
+]
