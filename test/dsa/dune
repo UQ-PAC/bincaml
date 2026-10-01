@@ -4,3 +4,13 @@
  (deps %{bin:bincaml})
  (action
   (run make "SRCS=%{dep:bayat1.c}" -f %{dep:../Makefile} %{target})))
+
+(library
+ (name dsa_tests)
+ (package bincaml)
+ (inline_tests
+  (deps bayat1.il))
+ (modules inline)
+ (libraries bincaml.util bincaml)
+ (preprocess
+  (pps ppx_expect)))
