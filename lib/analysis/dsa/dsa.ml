@@ -93,7 +93,6 @@ let make_local_graph proc sva
   (* Add cells to the graph based on sva results *)
   let add_cells size sv =
     Sva.SymAddrSetLattice.to_iter sv
-    |> Iter.filter (not % Sva.SymBase.equal Sva.SymBase.Constant % fst)
     |> Iter.map (fun (b, i) ->
         let f = flags_of_base b in
         let i = Interval.of_wint i |> Interval.pad_with_size size in
