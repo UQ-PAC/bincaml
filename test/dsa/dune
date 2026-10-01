@@ -1,0 +1,6 @@
+(rule
+ (target bayat1.il)
+ (mode promote)
+ (deps %{bin:bincaml})
+ (action
+  (run make "SRCS=%{dep:bayat1.c}" -f %{dep:../Makefile} %{target})))
