@@ -145,8 +145,8 @@ module SVAAbstraction = struct
             rt )
     in
     match args with
-    | h :: b :: tl -> fst @@ List.fold_left op (op h b) tl
-    | _ -> failwith "Operators must have two operands"
+    | h :: tl -> fst @@ List.fold_left op h tl
+    | _ -> failwith "Operators must have at least one operand"
 end
 
 module SVAAbstractionBasil = struct
