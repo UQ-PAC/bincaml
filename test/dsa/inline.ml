@@ -1,7 +1,23 @@
+open Bincaml_util.Common
+
 let%expect_test "bayat1" =
-  let ast = Loader.Loadir.ast_of_fname "bayat1.il" in
-  Lang.Program.output_proc_pretty stdout (Lang.Program.get_proc_by_name "@main" ast.prog);
-  [%expect {|
+  let prog = (Loader.Loadir.ast_of_fname "bayat1.il").prog in
+  let proc = Lang.Program.get_proc_by_name "@main" prog in
+  let mainid = Lang.Procedure.id proc in
+  let prog = Lang.Program.set_entry_proc mainid prog in
+
+  let prog =
+    Lang.Program.declarations prog
+    |> Iter.fold
+         (fun prog (id, decl) ->
+           if not (ID.equal id mainid) then Lang.Program.remove_decl prog decl
+           else prog)
+         prog
+  in
+  Lang.Program.pretty_to_chan stdout prog;
+  let prog = Bincaml.Passes.PassManager.(run_transform prog aslp_semantics) in
+  [%expect
+    {|
     proc @main()  -> () {  }
       captures $PC:bv64
       requires boolor(eq(0x864:bv64, $PC))
@@ -69,9 +85,24 @@ let%expect_test "bayat1" =
          call @_aarch64_eval(0x52800000:bv32, 0x8dc:bv64) { .asm = "mov w0, #0" };
          call @_aarch64_eval(0xa8c37bfd:bv32, 0x8e0:bv64) { .asm = "ldp x29, x30, [sp], #0x30" };
          call @_aarch64_eval(0xd65f03c0:bv32, 0x8e4:bv64) { .asm = "ret " };
-         assert boolor();
+         assert false;
          goto (%ret_4);
        ];
        block %ret_4 [ return; ]
-    ]
+    ];
+    prog entry @main;
+    |}];
+  let dsgraph = Analysis.Dsa.dsa prog in
+  let _, g = IDMap.find mainid dsgraph in
+  print_endline @@ Analysis.Dsa.dot_string g;
+  [%expect {|
+    digraph G {
+      rankdir="LR"
+      node[shape=record]
+      "node0"[label="node0 U \nLoaded(local_31) |{<0>[0, 7]}"];
+      "node1"[label="node1 U \nLoaded(local_33) |{<1>[0, 7]}"];
+      "node2"[label="node2 U \nConstant |{<2>[0, 7]|<3>[131160, 131167]}"];
+      "node3"[label="node3 U \nLoaded(local_3) |{<4>[0, 3]}"];
+      "node2":2 -> "node2":3
+    }
     |}]
