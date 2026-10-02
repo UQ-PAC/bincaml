@@ -76,12 +76,7 @@ let check_ssa ?(skipping = Skip.empty) proc =
              acc)
       VarMap.empty proc
   in
-  assert (
-    VarMap.for_all
-      (fun v i ->
-        print_endline @@ Var.show v ^ Int.to_string i;
-        Skip.skip skipping v || i = 1)
-      assigns)
+  assert (VarMap.for_all (fun v i -> Skip.skip skipping v || i = 1) assigns)
 
 module Destruction = struct
   open Procedure
@@ -461,7 +456,6 @@ module Reconstruction = struct
   let rec find_def_from_top (procedure : Program.proc)
       (definitions : VarSet.t ref) (dfplus : IDSet.t) (idom : Vert.t -> Vert.t)
       (var : Var.t) (bid : ID.t) =
-    print_endline @@ "top:" ^ Var.show var ^ ", " ^ ID.name bid;
     if not @@ IDSet.mem bid dfplus then
       (* If not a member of iterated dominance frontier, proceed from bottom
          of immediate dominator. *)
@@ -473,7 +467,6 @@ module Reconstruction = struct
     else
       (* In iterated dominance frontier. Thus a phi node needs insertion. *)
       let lhs = rename procedure var in
-      print_endline "dom frontier!";
       (* This is fresh, be sure to add it to the definitions variables. *)
       definitions := VarSet.add lhs !definitions;
 
@@ -491,7 +484,6 @@ module Reconstruction = struct
       in
 
       let def : Var.t Block.phi = { lhs; rhs } in
-      print_endline @@ Block.show_phi Var.pretty def;
 
       (* Add phi node to procedure, removing any old one: *)
       let procedure =
@@ -511,7 +503,6 @@ module Reconstruction = struct
   and find_def_from_bottom (procedure : Program.proc)
       (definitions : VarSet.t ref) (dfplus : IDSet.t) (idom : Vert.t -> Vert.t)
       (var : Var.t) (bid : ID.t) =
-    print_endline @@ "bot:" ^ Var.show var ^ ", " ^ ID.name bid;
     (* Get the last definition (or phi) in the block, if it exists. *)
     let def =
       Procedure.get_block procedure bid
@@ -536,10 +527,6 @@ module Reconstruction = struct
       from last to first. *)
   let driver (var : Var.t) (procedure : Program.proc) (initial_defs : IDSet.t) =
     let definitions = ref VarSet.empty in
-    print_endline @@ "driving " ^ Var.show var ^ ". Defs: {"
-    ^ (IDSet.to_iter initial_defs |> Iter.to_string ~sep:"," ID.name)
-    ^ "}";
-
     (* Map each lvar to a fresh var. *)
     let procedure =
       procedure

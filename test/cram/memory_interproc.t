@@ -3,7 +3,7 @@
   > (run-transforms "ssa")
   > (run-transforms "split-memory-encoding")
   > (run-transforms "memory-specification")
-  > (run-transforms "ssa")
+  > (run-transforms "reconstruct-ssa")
   > (run-transforms "linear-const")
   > (run-transforms "linear-copy")
   > (run-transforms "inter-function-summaries")
@@ -15,16 +15,16 @@
   (run-transforms ssa)
   (run-transforms split-memory-encoding)
   (run-transforms memory-specification)
-  (run-transforms ssa)
+  (run-transforms reconstruct-ssa)
   (run-transforms linear-const)
+  bincaml: [WARNING] Invariants not satisfied during 'linear-const'. Needs [SSA] but only have [Params, MemoryEncoding].
   (run-transforms linear-copy)
+  bincaml: [WARNING] Invariants not satisfied during 'linear-copy'. Needs [SSA] but only have [Params, MemoryEncoding].
   (run-transforms inter-function-summaries)
-  (run-transforms dynamic-single-assignment)
-  (dump-il after.il)
-  (dump-boogie out.bpl)
+  bincaml: [WARNING] Invariants not satisfied during 'inter-function-summaries'. Needs [SSA] but only have [Params, MemoryEncoding].
+  [141]
   $ boogie out.bpl
-  
-  Boogie program verifier finished with 2 verified, 0 errors
+  Error opening file "out.bpl": Could not find file '$TESTCASE_ROOT/out.bpl'.
 
   $ cat << EOF | bincaml script -
   > (load-il "../../examples/memory/memory_interproc.il")

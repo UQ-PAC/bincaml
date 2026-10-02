@@ -302,11 +302,14 @@ module PassManager = struct
       invariants = Invariants.from_list (fun x -> x.invariants) batch;
     }
 
-  let reconstruct_ssa = {
+  let reconstruct_ssa =
+    {
       name = "reconstruct-ssa";
       apply = Proc Transforms.Ssa.Reconstruction.reconstruct_proc;
-      doc = "";
-      invariants = Invariants.empty
+      doc =
+        "Performs SSA reconstruction. Fixing up any variables which have \
+         multiple defs.";
+      invariants = Invariants.presupposes [] ~establishes:[ SSA ];
     }
 
   let chc_infer_invariants =
