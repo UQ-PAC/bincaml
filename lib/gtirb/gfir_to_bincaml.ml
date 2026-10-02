@@ -32,7 +32,7 @@ let add_proxy_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap) uuid
     |> Iter.map (fun addr -> addr_equal_expr addr)
     |> Iter.to_list
     |> function
-    | [] -> Expr.BasilExpr.boolconst true
+    | [] -> Expr.BasilExpr.boolconst false
     | args -> Expr.BasilExpr.applyintrin ~op:`OR args
   in
   let name =
@@ -62,7 +62,9 @@ let add_new_simple_block ?(name_suffix = "") ?(attrib = StringMap.empty)
     succ_addr uuid
     |> Iter.map (fun addr -> addr_equal_expr addr)
     |> Iter.to_list
-    |> Expr.BasilExpr.applyintrin ~op:`OR
+    |> function
+    | [] -> Expr.BasilExpr.boolconst false
+    | xs -> Expr.BasilExpr.applyintrin ~op:`OR xs
   in
   let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
   let stmts = Option.to_list guard @ stmts @ [ ensure ] in
