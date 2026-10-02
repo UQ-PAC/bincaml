@@ -2,6 +2,7 @@ open Lang.Common
 open Option
 module UUIDMap = Load_auxdata.UUIDMap
 module UUIDSet = Load_auxdata.UUIDSet
+module Gtirb_readelf = Gtirb_readelf
 
 module Gfir = Gfir
 (** Intermediate representation used by the frontend *)

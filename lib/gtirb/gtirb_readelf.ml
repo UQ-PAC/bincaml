@@ -24,8 +24,7 @@
     The
     [ABI supplement for AArch64](https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst#relocation-types)
     provides information about the interpretation of the `r_type` values. *)
-
-type elf64_rela =
+type t =
   | Elf64Rela of {
       r_offset : int64;
       r_info : int64;
@@ -33,6 +32,7 @@ type elf64_rela =
       r_sym : int64;
       r_type : int64;
     }
+[@@deriving show]
 
 let parse_elf64_rela =
   let open Angstrom in
@@ -50,31 +50,17 @@ let parse_elf64_rela_table = Angstrom.many parse_elf64_rela
 *)
 type aarch64_rela_type =
   (* dynamic relocations: *)
-  | Aarch64_Copy
-  | Aarch64_GlobDat
-  | Aarch64_JumpSlot
-  | Aarch64_Relative
+  | Aarch64_Copy [@value 1024]
+  | Aarch64_GlobDat [@value 1025]
+  | Aarch64_JumpSlot [@value 1026]
+  | Aarch64_Relative [@value 1027]
   (* static relocations: *)
-  | Aarch64_Abs64
+  | Aarch64_Abs64 [@value 257]
+[@@deriving show, eq, enum]
 
-let aarch64_rela_type_value = function
-  | Aarch64_Copy -> 1024
-  | Aarch64_GlobDat -> 1025
-  | Aarch64_JumpSlot -> 1026
-  | Aarch64_Relative -> 1027
-  | Aarch64_Abs64 -> 257
+type elf_ndx = Und | Abs | Section of Int64.t [@@deriving show]
 
-let parse_aarch64_rela_type = function
-  | 1024 -> Aarch64_Copy
-  | 1025 -> Aarch64_GlobDat
-  | 1026 -> Aarch64_JumpSlot
-  | 1027 -> Aarch64_Relative
-  | 257 -> Aarch64_Abs64
-  | _ -> failwith "Unknown aarch64 relocation type"
-
-type elf_ndx = Und | Abs | Section of Int64.t
-
-(** * https://refspecs.linuxfoundation.org/elf/elf.pdf. * Figure 1-7. Special
+(** https://refspecs.linuxfoundation.org/elf/elf.pdf. * Figure 1-7. Special
     Section Indexes *)
 let parse_elf_ndx = function
   | 0L -> Und
