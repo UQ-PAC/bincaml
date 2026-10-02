@@ -106,3 +106,68 @@ let%expect_test "bayat1" =
 
     }
     |}]
+
+let%expect_test "bayat2" =
+  let prog = (Loader.Loadir.ast_of_fname "bayat2.il").prog in
+  let proc = Lang.Program.get_proc_by_name "@main" prog in
+  let mainid = Lang.Procedure.id proc in
+  let prog = Lang.Program.set_entry_proc mainid prog in
+
+  let prog =
+    Lang.Program.declarations prog
+    |> Iter.fold
+         (fun prog (id, decl) ->
+           if not (ID.equal id mainid) then Lang.Program.remove_decl prog decl
+           else prog)
+         prog
+  in
+  Lang.Program.pretty_to_chan stdout prog;
+  let prog = Bincaml.Passes.PassManager.(run_transform prog aslp_semantics) in
+  [%expect
+    {|
+    proc @main()  -> () {  }
+      captures $PC:bv64
+      requires boolor(eq(0x864:bv64, $PC))
+
+    [
+       block %main_code { .address = 2148; .gtirb_block = "HVqN0/3+RWiLPKsHRvUqeg";
+           .succ = [ { .conditional = "false"; .direct = "false";
+                   .target = "proxy:1p7HOmDGQpyP3TVpJTH35g"; .type = "Type_Return" } ] } [
+         assume eq(0x864:bv64, $PC);
+         call @_aarch64_eval(0xa9be7bfd:bv32, 0x864:bv64) { .asm = "stp x29, x30, [sp, #-0x20]!" };
+         call @_aarch64_eval(0x910003fd:bv32, 0x868:bv64) { .asm = "mov x29, sp" };
+         call @_aarch64_eval(0xb9001fe0:bv32, 0x86c:bv64) { .asm = "str w0, [sp, #0x1c]" };
+         call @_aarch64_eval(0x90000100:bv32, 0x870:bv64) { .asm = "adrp x0, #0x20000" };
+         call @_aarch64_eval(0x9101a000:bv32, 0x874:bv64) { .asm = "add x0, x0, #0x68" };
+         call @_aarch64_eval(0x90000101:bv32, 0x878:bv64) { .asm = "adrp x1, #0x20000" };
+         call @_aarch64_eval(0x91018021:bv32, 0x87c:bv64) { .asm = "add x1, x1, #0x60" };
+         call @_aarch64_eval(0xf9000001:bv32, 0x880:bv64) { .asm = "str x1, [x0]" };
+         call @_aarch64_eval(0x90000100:bv32, 0x884:bv64) { .asm = "adrp x0, #0x20000" };
+         call @_aarch64_eval(0x9100c000:bv32, 0x888:bv64) { .asm = "add x0, x0, #0x30" };
+         call @_aarch64_eval(0xb9801fe1:bv32, 0x88c:bv64) { .asm = "ldrsw x1, [sp, #0x1c]" };
+         call @_aarch64_eval(0xb8617800:bv32, 0x890:bv64) { .asm = "ldr w0, [x0, x1, lsl #2]" };
+         call @_aarch64_eval(0xa8c27bfd:bv32, 0x894:bv64) { .asm = "ldp x29, x30, [sp], #0x20" };
+         call @_aarch64_eval(0xd65f03c0:bv32, 0x898:bv64) { .asm = "ret " };
+         assert false;
+         goto (%ret);
+       ];
+       block %ret [ return; ]
+    ];
+    prog entry @main;
+    |}];
+  let dsgraph = Analysis.Dsa.dsa prog in
+  let _, g = IDMap.find mainid dsgraph in
+  print_endline @@ Analysis.Dsa.dot_string g;
+  [%expect
+    {|
+    digraph G {
+      rankdir="LR"
+      node[shape=record]
+      "node3"[label="node3 U \nLoaded(local_17) |{<0>[0, 7]}"];
+      "node4"[label="node4 U \nLoaded(local_19) |{<1>[0, 7]}"];
+      "node5"[label="node5 UO \nLoaded(local_14) |{<2>Top}"];
+      "node6"[label="node6 UO \nLoaded(local_10) |{<3>Top}"];
+      "node5":2 -> "node6":3
+      "node6":3 -> "node5":2
+    }
+    |}]
