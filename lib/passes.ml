@@ -302,6 +302,13 @@ module PassManager = struct
       invariants = Invariants.from_list (fun x -> x.invariants) batch;
     }
 
+  let reconstruct_ssa = {
+      name = "reconstruct-ssa";
+      apply = Proc Transforms.Ssa.Reconstruction.reconstruct_proc;
+      doc = "";
+      invariants = Invariants.empty
+    }
+
   let chc_infer_invariants =
     {
       name = "chc-infer-invariants";
@@ -519,6 +526,7 @@ module PassManager = struct
       cfa_reduction;
       sva;
       full_ssa;
+      reconstruct_ssa;
       chc_infer_invariants;
       chc_infer_invariants_per_query;
       type_check;

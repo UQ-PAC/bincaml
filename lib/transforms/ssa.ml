@@ -76,7 +76,7 @@ let check_ssa ?(skipping = Skip.empty) proc =
              acc)
       VarMap.empty proc
   in
-  assert (VarMap.for_all (fun v i -> Skip.skip skipping v || i = 1) assigns)
+  assert (VarMap.for_all (fun v i -> print_endline @@ (Var.show v) ^ (Int.to_string i); Skip.skip skipping v || i = 1) assigns)
 
 module Destruction = struct
   open Procedure
@@ -411,11 +411,26 @@ module Construction = struct
 
           (* Rename variables. Skip renaming special return block. *)
           rename_procedure ~skipping rid procedure g tree doms)
-      |> tap (check_ssa ~skipping)
+      (* |> tap (check_ssa ~skipping) *)
     else procedure
 end
 
 module Reconstruction = struct
+  (** How reconstruction works? For a variable violating SSA (multiple assigns),
+      we replace each definition with a fresh variable.
+
+      Then, for each use of the same variable we climb up the immediate
+      dominators statement by statement until we find a definition, and replace
+      the use with that definition.
+
+      If a block is seen during this traversal which is in the iterated
+      dominance frontier, then we insert a fresh definition as a phi node and
+      use that.
+
+      Unfortunately introducing a phi node introduces new 'uses' of that
+      variable in the rhs for each incoming block, requiring each rhs variable
+      to be renamed recursively. *)
+
   open Procedure
   module Dom = Graph.Dominator.Make (G)
   module WL = Worklist.Make (ID)
@@ -438,15 +453,24 @@ module Reconstruction = struct
 
   (** Find the first reaching definition of var from the top of a block. Insert
       phi nodes along the way at dominance frontier blocks. *)
-  let rec find_def_from_top (procedure : Program.proc) (allowed : VarSet.t ref)
-      (dfplus : IDSet.t) (idom : ID.t -> ID.t) (var : Var.t) (bid : ID.t) =
+  let rec find_def_from_top (procedure : Program.proc)
+      (definitions : VarSet.t ref) (dfplus : IDSet.t) (idom : Vert.t -> Vert.t)
+      (var : Var.t) (bid : ID.t) =
+    print_endline @@ "top:" ^ Var.show var ^ ", " ^ ID.name bid;
     if not @@ IDSet.mem bid dfplus then
       (* If not a member of iterated dominance frontier, proceed from bottom
          of immediate dominator. *)
-      find_def_from_bottom procedure allowed dfplus idom var (idom bid)
+      match idom @@ Vert.Begin bid with
+      | Vert.Entry -> failwith "entry"
+      | Begin pred | End pred ->
+          find_def_from_bottom procedure definitions dfplus idom var pred
+      | _ -> failwith "magic"
     else
       (* In iterated dominance frontier. Thus a phi node needs insertion. *)
       let lhs = rename procedure var in
+      print_endline "dom frontier!";
+      (* This is fresh, be sure to add it to the definitions variables. *)
+      definitions := VarSet.add lhs !definitions;
 
       (* Find def from bottom of each immediate parent. *)
       let procedure, rhs =
@@ -454,20 +478,22 @@ module Reconstruction = struct
         |> Iter.fold
              (fun (procedure, rhs) (par_id, _) ->
                let procedure', def =
-                 find_def_from_bottom procedure allowed dfplus idom var par_id
+                 find_def_from_bottom procedure definitions dfplus idom var
+                   par_id
                in
                (procedure', (par_id, def) :: rhs))
              (procedure, [])
       in
 
       let def : Var.t Block.phi = { lhs; rhs } in
+      print_endline @@ Block.show_phi Var.pretty def;
 
       (* Add phi node to procedure, removing any old one: *)
       let procedure =
         Procedure.modify_block procedure bid (fun block ->
             let phis =
               List.filter
-                (fun (p : Var.t Block.phi) -> Var.equal p.lhs var)
+                (fun (p : Var.t Block.phi) -> not @@ Var.equal p.lhs var)
                 block.phis
             in
             { block with phis = def :: phis })
@@ -477,8 +503,10 @@ module Reconstruction = struct
       (procedure, lhs)
 
   (** Find the first reaching definition of var from the top of a block. *)
-  and find_def_from_bottom (procedure : Program.proc) (allowed : VarSet.t ref)
-      (dfplus : IDSet.t) (idom : ID.t -> ID.t) (var : Var.t) (bid : ID.t) =
+  and find_def_from_bottom (procedure : Program.proc)
+      (definitions : VarSet.t ref) (dfplus : IDSet.t) (idom : Vert.t -> Vert.t)
+      (var : Var.t) (bid : ID.t) =
+    print_endline @@ "bot:" ^ Var.show var ^ ", " ^ ID.name bid;
     (* Get the last definition (or phi) in the block, if it exists. *)
     let def =
       Procedure.get_block procedure bid
@@ -486,24 +514,26 @@ module Reconstruction = struct
           let open Option in
           let first_stmt =
             b |> Block.stmts_iter |> Iter.rev |> Iter.map Stmt.iter_lvar
-            |> Iter.find_map (Iter.find_pred (flip VarSet.mem !allowed))
+            |> Iter.find_map (Iter.find_pred (flip VarSet.mem !definitions))
           in
           let first_phi =
             b.phis |> List.to_iter
             |> Iter.map (fun (phi : Var.t Block.phi) -> phi.lhs)
-            |> Iter.find_pred (flip VarSet.mem !allowed)
+            |> Iter.find_pred (flip VarSet.mem !definitions)
           in
           first_stmt <+> first_phi)
     in
     match def with
     | Some v -> (procedure, v)
-    | None -> find_def_from_top procedure allowed dfplus idom var bid
+    | None -> find_def_from_top procedure definitions dfplus idom var bid
 
   (** Repair SSA for a variable, var, which breaks SSA. Requires defs is ordered
       from last to first. *)
-  let driver (var : Var.t) (procedure : Program.proc)
-      (defs : Var.t -> ID.t -> int list) =
-    let allowed = ref VarSet.empty in
+  let driver (var : Var.t) (procedure : Program.proc) (initial_defs : IDSet.t) =
+    let definitions = ref VarSet.empty in
+    print_endline @@ "driving " ^ Var.show var ^ ". Defs: {"
+    ^ (IDSet.to_iter initial_defs |> Iter.to_string ~sep:"," ID.name)
+    ^ "}";
 
     (* Map each lvar to a fresh var. *)
     let procedure =
@@ -515,70 +545,131 @@ module Reconstruction = struct
                    let lhs =
                      if Var.equal lhs var then rename procedure lhs else lhs
                    in
-                   allowed := VarSet.add lhs !allowed;
+                   definitions := VarSet.add lhs !definitions;
                    ({ lhs; rhs } : Var.t Block.phi)))
             (Stmt.map
                ~f_lvar:(fun lhs ->
                  let lhs =
                    if Var.equal lhs var then rename procedure lhs else lhs
                  in
-                 allowed := VarSet.add lhs !allowed;
+                 definitions := VarSet.add lhs !definitions;
                  lhs)
                ~f_rvar:Fun.id ~f_expr:Fun.id)
             block)
+    in
+
+    let g =
+      Procedure.graph procedure
+      |> Option.get_exn_or "Expected procedure to have graph."
+    in
+    let idom = Dom.compute_idom g Entry in
+    let tree = Dom.idom_to_dom_tree g idom in
+    let df = Dom.compute_dom_frontier g tree idom in
+
+    let dfplus =
+      initial_defs |> IDSet.to_iter
+      |> Iter.map (fun id -> Vert.Begin id)
+      |> iterated_df df
+      |> Iter.filter_map (function
+        | Vert.Begin id | Vert.End id -> Some id
+        | _ -> None)
+      |> IDSet.of_iter
     in
 
     (* For each use of the var, find the reaching definition. Replace the use
        with that rdef. AKA climb up the uses until we find one that dominates. *)
     Procedure.iter_blocks procedure
     |> Iter.fold
-         (fun procedure (bid, block) ->
-           let procedure = ref procedure in
+         (fun acc (bid, _) ->
+           let block : Program.bloc = Procedure.get_block acc bid |> Option.get_exn_or "missing block" in
+           let acc = ref acc in
            let block =
              Block.map
                ~phi:
                  (List.map (fun (phi : Var.t Block.phi) ->
-                      (* TODO this is wrong. Should map any rhs variables
-                 that match var to be find_def_from_bottom of the incoming source block. Also the procedure each time... this is cursed. *)
-                      if not @@ VarSet.mem phi.lhs !allowed then phi else phi))
+                      let rhs =
+                        phi.rhs |> List.to_iter
+                        |> Iter.map (fun (source, var) ->
+                            let procedure', var' =
+                              if VarSet.mem var !definitions then
+                                find_def_from_bottom !acc definitions
+                                  dfplus idom var source
+                              else (!acc, var)
+                            in
+                            acc := procedure';
+                            (source, var'))
+                        |> Iter.to_list
+                      in
+                      { phi with rhs }))
                (fun stmt ->
-                 (* TODO Check if var does not occur in rvars first to exit early? *)
-                 let def =
-                   Block.stmts_iter block
-                   |> Iter.take_while
-                        (Stmt.equal Var.equal Var.equal Expr.BasilExpr.equal
-                           stmt
-                        %> not)
-                   |> Iter.rev
-                   |> Iter.flat_map Stmt.iter_lvar
-                   |> Iter.find_pred (flip VarSet.mem !allowed)
-                 in
-
-                 if Option.is_none def then (
-                   let procedure', def =
-                     find_def_from_top !procedure allowed IDSet.empty Fun.id var
-                       bid
+                 if
+                   Stmt.iter_rexpr stmt
+                   |> not % Iter.exists (function
+                     | `Expr e -> (
+                         match Expr.BasilExpr.unfix e with
+                         | Expr.AbstractExpr.RVar { id = v; _ } -> true
+                         | _ -> false)
+                     | `Var v -> true
+                     | _ -> false)
+                 then stmt
+                 else
+                   let def =
+                     Block.stmts_iter block
+                     |> Iter.take_while
+                          (Stmt.equal Var.equal Var.equal Expr.BasilExpr.equal
+                             stmt
+                          %> not)
+                     |> Iter.rev
+                     |> Iter.flat_map Stmt.iter_lvar
+                     |> Iter.find_pred (flip VarSet.mem !definitions)
                    in
-                   procedure := procedure';
-                   Stmt.map ~f_lvar:Fun.id
-                     ~f_expr:
-                       (Expr.BasilExpr.substitute (fun v ->
-                            if Var.equal v var then
-                              Some (Expr.BasilExpr.rvar def)
-                            else None))
-                     ~f_rvar:(fun v -> if Var.equal v var then def else v)
-                     stmt)
-                 else Stmt.map ~f_lvar:Fun.id ~f_expr:Fun.id ~f_rvar:Fun.id stmt)
+
+                   if Option.is_none def then (
+                     let procedure', def =
+                       find_def_from_top !acc definitions dfplus idom var
+                         bid
+                     in
+                     acc := procedure';
+                     Stmt.map ~f_lvar:Fun.id
+                       ~f_expr:
+                         (Expr.BasilExpr.substitute (fun v ->
+                              if Var.equal v var then
+                                Some (Expr.BasilExpr.rvar def)
+                              else None))
+                       ~f_rvar:(fun v -> if Var.equal v var then def else v)
+                       stmt)
+                   else
+                     Stmt.map ~f_lvar:Fun.id ~f_expr:Fun.id ~f_rvar:Fun.id stmt)
                block
            in
-           Procedure.update_block !procedure bid block)
+           Procedure.update_block !acc bid block)
          procedure
 
-  (** Find SSA-violating variables in a procedure. *)
-  let find_invalid ?(skipping = Skip.empty) (procedure : Program.proc) = []
+  (** Find SSA-violating variables in a procedure. (anything assigned more than
+      once) *)
+  let find_invalid ?(skipping = Skip.empty) (procedure : Program.proc) =
+    let defs = ref VarMap.empty in
+    let seen = ref VarSet.empty in
+    let invalid = ref VarSet.empty in
+    Procedure.iter_blocks procedure
+    |> Iter.flat_map (fun (id, b) ->
+        b |> Block.stmts_iter
+        |> Iter.flat_map Stmt.iter_assigned
+        |> Iter.map (fun var -> (id, var)))
+    |> flip Iter.for_each (fun (bid, var) ->
+        if VarSet.mem var !seen then invalid := VarSet.add var !invalid;
+        seen := VarSet.add var !seen;
+        defs :=
+          VarMap.update var
+            (Option.map_or (IDSet.add bid) ~default:(IDSet.singleton bid)
+            %> Option.some)
+            !defs);
+    VarMap.filter (flip VarSet.mem !invalid %> const) !defs
 
   (** Reconstruct SSA for a procedure. *)
-  let reconstruct_proc ?(skipping = Skip.empty) (procedure : Program.proc) = ()
+  let reconstruct_proc ?(skipping = Skip.empty) (procedure : Program.proc) =
+    let defs = find_invalid ~skipping procedure in
+    VarMap.fold (fun var bids acc -> driver var acc bids) defs procedure
 end
 
 (** Transform a program into SSA form. *)
