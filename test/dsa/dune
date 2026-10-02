@@ -1,8 +1,8 @@
-(rule
- (targets bayat1.il bayat1.exe bayat1.gtirb)
- (deps %{bin:bincaml})
- (action
-  (run make "SRCS=%{dep:bayat1.c}" -f %{dep:../Makefile} %{targets})))
+; (rule
+;  (targets bayat1.il bayat1.exe bayat1.gtirb)
+;  (deps %{bin:bincaml} ../Makefile)
+;  (action
+;   (run make "SRCS=%{dep:bayat1.c}" -f ../Makefile %{targets})))
 
 (library
  (name dsa_tests)
