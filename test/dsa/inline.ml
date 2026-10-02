@@ -102,8 +102,7 @@ let%expect_test "bayat1" =
       node[shape=record]
       "node0"[label="node0 U \nLoaded(local_31) |{<0>[0, 7]}"];
       "node1"[label="node1 U \nLoaded(local_33) |{<1>[0, 7]}"];
-      "node2"[label="node2 U \nConstant |{<2>[0, 7]|<3>[131160, 131167]}"];
-      "node3"[label="node3 U \nLoaded(local_3) |{<4>[0, 3]}"];
-      "node2":2 -> "node2":3
+      "node2"[label="node2 U \nLoaded(local_3) |{<2>[0, 3]}"];
+
     }
     |}]
