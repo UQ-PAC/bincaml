@@ -108,7 +108,7 @@
        $PC:bv64 := $R30;
        goto (%_fini_code_3);
      ];
-     block %_fini_code_3 [ assert boolor(); goto (%ret_1); ];
+     block %_fini_code_3 [ assert false; goto (%ret_1); ];
      block %ret_1 [ return; ]
   ];
   proc @_init()  -> () {  }
@@ -189,7 +189,7 @@
        $PC:bv64 := $R30;
        goto (%_init_code_3);
      ];
-     block %_init_code_3 [ assert boolor(); goto (%ret_1); ];
+     block %_init_code_3 [ assert false; goto (%ret_1); ];
      block %ret_1 [ return; ]
   ];
   proc @__do_global_dtors_aux()  -> () {  }
@@ -309,7 +309,7 @@
        $PC:bv64 := $R30;
        goto (%__do_global_dtors_aux_code_5);
      ];
-     block %__do_global_dtors_aux_code_5 [ assert boolor(); goto (%ret_2); ];
+     block %__do_global_dtors_aux_code_5 [ assert false; goto (%ret_2); ];
      block %ret_2 [ return; ];
      block %__do_global_dtors_aux_code_3 { .address = 4196196;
          .gtirb_block = "lwyID0MJQb6vgyjzPFtz8Q";
@@ -479,7 +479,7 @@
        $PC:bv64 := $R30;
        goto (%register_tm_clones_code_5);
      ];
-     block %register_tm_clones_code_5 [ assert boolor(); goto (%ret); ];
+     block %register_tm_clones_code_5 [ assert false; goto (%ret); ];
      block %ret [ return; ];
      block %register_tm_clones_code_3 { .address = 4196148;
          .gtirb_block = "tXIOhSQ+R1WA/9VL5+6KQQ";
@@ -550,7 +550,7 @@
        $PC:bv64 := $R16;
        goto (%register_tm_clones_code_7);
      ];
-     block %register_tm_clones_code_7 [ assert boolor(); unreachable; ]
+     block %register_tm_clones_code_7 [ assert false; unreachable; ]
   ];
   proc @frame_dummy()  -> () {  }
     modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64
@@ -578,7 +578,7 @@
      block %frame_dummy_ext [
        assume eq(0x400710:bv64, $PC);
        call @register_tm_clones();
-       assert boolor();
+       assert false;
        unreachable;
      ]
   ];
@@ -625,7 +625,7 @@
        $PC:bv64 := $R17;
        goto (%FUN_400660_code_1);
      ];
-     block %FUN_400660_code_1 [ assert boolor(); unreachable; ]
+     block %FUN_400660_code_1 [ assert false; unreachable; ]
   ];
   proc @Sqrt()  -> () {  }
     modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
@@ -1121,7 +1121,7 @@
      block %_start_ext_2 [
        assume eq(0x400660:bv64, $PC);
        call @FUN_400660();
-       assert boolor();
+       assert false;
        unreachable;
      ]
   ];
@@ -1145,7 +1145,7 @@
        $PC:bv64 := $R30;
        goto (%_dl_relocate_static_pie_code_1);
      ];
-     block %_dl_relocate_static_pie_code_1 [ assert boolor(); goto (%ret); ];
+     block %_dl_relocate_static_pie_code_1 [ assert false; goto (%ret); ];
      block %ret [ return; ]
   ];
   proc @call_weak_fn()  -> () {  }
@@ -1218,7 +1218,7 @@
      block %call_weak_fn_ext_1 [
        assume eq(0x400650:bv64, $PC);
        call @.L_400650();
-       assert boolor();
+       assert false;
        unreachable;
      ];
      block %call_weak_fn_code_2 { .address = 4196052;
@@ -1335,7 +1335,7 @@
        $PC:bv64 := $R30;
        goto (%main_code_3);
      ];
-     block %main_code_3 [ assert boolor(); goto (%ret_1); ];
+     block %main_code_3 [ assert false; goto (%ret_1); ];
      block %ret_1 [ return; ]
   ];
   proc @.L_400650()  -> () {  }
@@ -1381,7 +1381,7 @@
        $PC:bv64 := $R17;
        goto (%L_400650_code_1);
      ];
-     block %L_400650_code_1 [ assert boolor(); unreachable; ]
+     block %L_400650_code_1 [ assert false; unreachable; ]
   ];
   proc @FUN_400640()  -> () {  }
     modifies $PC:bv64, $R16:bv64, $R17:bv64
@@ -1426,7 +1426,7 @@
        $PC:bv64 := $R17;
        goto (%FUN_400640_code_1);
      ];
-     block %FUN_400640_code_1 [ assert boolor(); unreachable; ]
+     block %FUN_400640_code_1 [ assert false; unreachable; ]
   ];
   proc @deregister_tm_clones()  -> () {  }
     modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
@@ -1581,7 +1581,7 @@
        $PC:bv64 := $R16;
        goto (%deregister_tm_clones_code_6);
      ];
-     block %deregister_tm_clones_code_6 [ assert boolor(); unreachable; ];
+     block %deregister_tm_clones_code_6 [ assert false; unreachable; ];
      block %deregister_tm_clones_code_3 { .address = 4196108;
          .gtirb_block = "cdQ2GS2+QhaOa7OUvPWMRQ";
          .succ = [ { .address = 4196200; .conditional = "false"; .direct = "true";
@@ -1656,6 +1656,6 @@
        $PC:bv64 := $R17;
        goto (%FUN_400620_code_1);
      ];
-     block %FUN_400620_code_1 [ assert boolor(); unreachable; ]
+     block %FUN_400620_code_1 [ assert false; unreachable; ]
   ];
   prog entry @_start;
