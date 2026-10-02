@@ -10,7 +10,8 @@
   gfir
   gfir_to_bincaml
   conf
-  gtirb_frontend)
+  gtirb_frontend
+  gtirb_readelf)
  (libraries
   bincaml.gtirb_proto
   capstone_arm64_disas
