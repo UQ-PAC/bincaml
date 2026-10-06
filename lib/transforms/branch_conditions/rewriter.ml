@@ -25,7 +25,7 @@ type t =
   | AL
   | Not of t
   | Top  (** Unknown condition type *)
-[@@deriving show { with_path = false }]
+[@@deriving show { with_path = false }, ord, eq]
 
 (** Extracts a condition from a boolean expression *)
 let rec extract_condition m e : t =
