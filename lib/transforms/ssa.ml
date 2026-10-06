@@ -525,30 +525,125 @@ module Reconstruction = struct
 
   (** Repair SSA for a variable, var, which breaks SSA. Requires defs is ordered
       from last to first. *)
-  let driver (var : Var.t) (procedure : Program.proc) (initial_defs : IDSet.t) =
-    let definitions = ref VarSet.empty in
-    (* Map each lvar to a fresh var. *)
-    let procedure =
-      procedure
-      |> Procedure.map_blocks_nondet (fun (bid, block) ->
-          Block.map
-            ~phi:
-              (List.map (fun ({ lhs; rhs } : Var.t Block.phi) ->
-                   let lhs =
-                     if Var.equal lhs var then rename procedure lhs else lhs
-                   in
-                   definitions := VarSet.add lhs !definitions;
-                   ({ lhs; rhs } : Var.t Block.phi)))
-            (Stmt.map
-               ~f_lvar:(fun lhs ->
+  let make_fresh procedure definitions var =
+    procedure
+    |> Procedure.map_blocks_nondet (fun (bid, block) ->
+        Block.map
+          ~phi:
+            (List.map (fun ({ lhs; rhs } : Var.t Block.phi) ->
                  let lhs =
                    if Var.equal lhs var then rename procedure lhs else lhs
                  in
                  definitions := VarSet.add lhs !definitions;
-                 lhs)
-               ~f_rvar:Fun.id ~f_expr:Fun.id)
-            block)
+                 ({ lhs; rhs } : Var.t Block.phi)))
+          (Stmt.map
+             ~f_lvar:(fun lhs ->
+               let lhs =
+                 if Var.equal lhs var then rename procedure lhs else lhs
+               in
+               definitions := VarSet.add lhs !definitions;
+               lhs)
+             ~f_rvar:Fun.id ~f_expr:Fun.id)
+          block)
+
+  (** Reconstruction for var appearing in rhs of phi nodes. *)
+  let reconstruct_phis definitions dfplus idom var (block : Program.bloc)
+      program bid =
+    let program, phis =
+      List.fold_left
+        (fun (acc, phis) (phi : Var.t Block.phi) ->
+          let acc, rhs =
+            phi.rhs |> List.to_iter
+            |> Iter.fold
+                 (fun (acc, rhs) (source, rv) ->
+                   if Var.equal var rv then
+                     let acc, def =
+                       find_def_from_bottom acc definitions dfplus idom var
+                         source
+                     in
+                     (acc, (source, def) :: rhs)
+                   else (acc, (source, rv) :: rhs))
+                 (acc, [])
+          in
+          (acc, ({ lhs = phi.lhs; rhs } : Var.t Block.phi) :: phis))
+        (program, []) block.phis
     in
+    Procedure.modify_block program bid (fun block -> { block with phis })
+
+  let reconstruct_stmts definitions dfplus idom var (block : Program.bloc)
+      program bid =
+    let use_defs =
+      Block.stmts_iter_i block
+      |> Iter.flat_map_l (fun (i, stmt) ->
+          let use =
+            if Stmt.free_vars_iter stmt |> Iter.exists (Var.equal var) then
+              [ Use (i, var) ]
+            else []
+          in
+          let def =
+            Stmt.iter_lvar stmt
+            |> Iter.find_pred (flip VarSet.mem !definitions)
+            |> Option.map (fun var -> Def var)
+            |> Option.to_list
+          in
+          use @ def)
+    in
+
+    (* Fold forwards over uses and defs, tracking the last definition for substitution. *)
+    let stmts = Vector.copy block.stmts in
+    let program, _ =
+      use_defs
+      |> Iter.fold
+           (fun (acc, def) usedef ->
+             match usedef with
+             | Use (idx, use) ->
+                 (* Variable is used. Get the reaching def (maybe look up). *)
+                 let acc, def =
+                   def
+                   |> Option.map (fun def -> (acc, def))
+                   |> Option.get_lazy (fun _ ->
+                       find_def_from_top acc definitions dfplus idom var bid)
+                 in
+                 (* Update stmt at idx with def. *)
+                 let stmt =
+                   Vector.get stmts idx
+                   |> Stmt.map ~f_lvar:Fun.id
+                        ~f_expr:
+                          (Expr.BasilExpr.substitute (fun v ->
+                               if Var.equal v var then
+                                 Some (Expr.BasilExpr.rvar def)
+                               else None))
+                        ~f_rvar:(fun v -> if Var.equal v var then def else v)
+                 in
+                 Vector.set stmts idx stmt;
+                 (acc, Some def)
+             | Def def ->
+                 (* New definition replaces old def. *)
+                 (acc, Some def))
+           (program, None)
+    in
+    Procedure.modify_block program bid (fun block ->
+        { block with stmts = Vector.freeze stmts })
+
+  (** Reconstruct block bid for variable var, updating program. *)
+  let reconstruct_block definitions dfplus idom var program bid =
+    let block : Program.bloc =
+      Procedure.get_block program bid |> Option.get_exn_or "Missing block."
+    in
+
+    (* Top to bottom, so phis go first. *)
+    let program =
+      reconstruct_phis definitions dfplus idom var block program bid
+    in
+
+    (* Then stmts... *)
+    reconstruct_stmts definitions dfplus idom var block program bid
+
+  let driver (var : Var.t) (procedure : Program.proc) (initial_defs : IDSet.t) =
+    let definitions = ref VarSet.empty in
+
+    (* Map each lvar to a fresh var. *)
+    let procedure = make_fresh procedure definitions var in
 
     let g =
       Procedure.graph procedure
@@ -558,6 +653,7 @@ module Reconstruction = struct
     let tree = Dom.idom_to_dom_tree g idom in
     let df = Dom.compute_dom_frontier g tree idom in
 
+    (* Compute the iterated dominance frontier as a set of IDs, not verts. *)
     let dfplus =
       initial_defs |> IDSet.to_iter
       |> Iter.map (fun id -> Vert.Begin id)
@@ -570,95 +666,7 @@ module Reconstruction = struct
 
     Procedure.iter_blocks procedure
     |> Iter.map fst
-    |> Iter.fold
-         (fun acc bid ->
-           let block : Program.bloc =
-             Procedure.get_block acc bid |> Option.get_exn_or "Missing block."
-           in
-
-           (* Fold over the phis, updating and uses. *)
-           let acc, phis =
-             List.fold_left
-               (fun (acc, phis) (phi : Var.t Block.phi) ->
-                 let acc, rhs =
-                   phi.rhs |> List.to_iter
-                   |> Iter.fold
-                        (fun (acc, rhs) (source, rv) ->
-                          if Var.equal var rv then
-                            let acc, def =
-                              find_def_from_bottom acc definitions dfplus idom
-                                var source
-                            in
-                            (acc, (source, def) :: rhs)
-                          else (acc, (source, rv) :: rhs))
-                        (acc, [])
-                 in
-                 (acc, ({ lhs = phi.lhs; rhs } : Var.t Block.phi) :: phis))
-               (acc, []) block.phis
-           in
-           let acc =
-             Procedure.modify_block acc bid (fun block -> { block with phis })
-           in
-
-           (* Partition into uses and defs. *)
-           let use_defs =
-             Block.stmts_iter_i block
-             |> Iter.flat_map_l (fun (i, stmt) ->
-                 let use =
-                   if Stmt.free_vars_iter stmt |> Iter.exists (Var.equal var)
-                   then [ Use (i, var) ]
-                   else []
-                 in
-                 let def =
-                   Stmt.iter_lvar stmt
-                   |> Iter.find_pred (flip VarSet.mem !definitions)
-                   |> Option.map (fun var -> Def var)
-                   |> Option.to_list
-                 in
-                 use @ def)
-           in
-
-           (* Fold forwards over uses and defs, tracking the last definition for substitution. *)
-           let stmts = Vector.copy block.stmts in
-           let acc, _ =
-             use_defs
-             |> Iter.fold
-                  (fun (acc, def) usedef ->
-                    match usedef with
-                    | Use (idx, use) ->
-                        (* Variable is used. Get the reaching def (maybe look up). *)
-                        let acc, def =
-                          def
-                          |> Option.map (fun def -> (acc, def))
-                          |> Option.get_lazy (fun _ ->
-                              find_def_from_top acc definitions dfplus idom var
-                                bid)
-                        in
-                        (* Update stmt at idx with def. *)
-                        let stmt =
-                          Vector.get stmts idx
-                          |> Stmt.map ~f_lvar:Fun.id
-                               ~f_expr:
-                                 (Expr.BasilExpr.substitute (fun v ->
-                                      if Var.equal v var then
-                                        Some (Expr.BasilExpr.rvar def)
-                                      else None))
-                               ~f_rvar:(fun v ->
-                                 if Var.equal v var then def else v)
-                        in
-                        Vector.set stmts idx stmt;
-                        (acc, Some def)
-                    | Def def ->
-                        (* New definition replaces def. *)
-                        (acc, Some def))
-                  (acc, None)
-           in
-           let acc =
-             Procedure.modify_block acc bid (fun block ->
-                 { block with stmts = Vector.freeze stmts })
-           in
-           acc)
-         procedure
+    |> Iter.fold (reconstruct_block definitions dfplus idom var) procedure
 
   (** Find SSA-violating variables in a procedure. (anything assigned more than
       once) *)
