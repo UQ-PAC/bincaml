@@ -416,20 +416,24 @@ module Construction = struct
 end
 
 module Reconstruction = struct
-  (** How reconstruction works? For a variable violating SSA (multiple assigns),
+  (** SSA Reconstruction. Alternative to fully re-running construction when a
+      transform has *partially* invalidated the SSA single definition property.
+
+      How reconstruction works? For a variable violating SSA (multiple assigns),
       we replace each definition with a fresh variable.
 
       Then, for each use of the same variable we climb up the immediate
       dominators statement by statement until we find a definition, and replace
-      the use with that definition.
+      the use with that definition. Only loooking at idoms ensures it is
+      reachable on all paths.
 
       If a block is seen during this traversal which is in the iterated
       dominance frontier, then we insert a fresh definition as a phi node and
-      use that.
+      use that. This ensures we will never have multiple reaching defs.
 
-      Unfortunately introducing a phi node introduces new 'uses' of that
-      variable in the rhs for each incoming block, requiring each rhs variable
-      to be renamed recursively. *)
+      Introducing a phi node in this way does create new uses of the variable in
+      the rhs of the phi node, which are immediately updated in the same way as
+      any other use of the variable we are updating. *)
 
   open Procedure
   module Dom = Graph.Dominator.Make (G)
