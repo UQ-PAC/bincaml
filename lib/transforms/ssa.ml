@@ -574,6 +574,7 @@ module Reconstruction = struct
     in
     Procedure.modify_block program bid (fun block -> { block with phis })
 
+  (** Reconstruction of stmts top to bottom. *)
   let reconstruct_stmts definitions dfplus idom var (block : Program.bloc)
       program bid =
     let use_defs =
@@ -697,6 +698,7 @@ module Reconstruction = struct
   let reconstruct_proc ?(skipping = Skip.empty) (procedure : Program.proc) =
     let defs = find_invalid ~skipping procedure in
     VarMap.fold (fun var bids acc -> driver var acc bids) defs procedure
+    |> tap check_ssa
 end
 
 (** Transform a program into SSA form. *)
