@@ -23,6 +23,10 @@
   (dump-il after.il)
   (dump-boogie out.bpl)
 
+  $ boogie out.bpl
+  
+  Boogie program verifier finished with 2 verified, 0 errors
+
   $ cat << EOF | bincaml script -
   > (load-il "../../examples/memory/memory_interproc.il")
   > (run-transforms "ssa")
