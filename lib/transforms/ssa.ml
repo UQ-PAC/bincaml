@@ -263,8 +263,8 @@ module Construction = struct
       dom_tree vert
       |> List.fold_left (traversal update_block update_succ dom_tree) (g, fl)
 
-  let rename_lvar vert lvar =
-    if perform @@ AllowRename vert then (
+  let rename_lvar is_phi vert lvar =
+    if is_phi || (perform @@ AllowRename vert) then (
       let rdef = perform @@ GetReachingDef (lvar, vert) in
       (* Create a renamed lvar *)
       let lvar' = perform @@ CreateFreshDef (lvar, vert) in
@@ -289,14 +289,15 @@ module Construction = struct
       Block.map
         ~phi:
           (List.map (fun (phi : Var.t Block.phi) ->
-               { phi with lhs = rename_lvar vert phi.lhs }))
+               { phi with lhs = rename_lvar true vert phi.lhs }))
         Fun.id block
     in
     (* Update a statement. Two passes, first update rvars then lvars. *)
     Block.map ~phi:Fun.id
       (Stmt.map ~f_expr:(rename_expr vert) ~f_rvar:(rename_rvar vert)
          ~f_lvar:Fun.id
-      %> Stmt.map ~f_expr:Fun.id ~f_rvar:Fun.id ~f_lvar:(rename_lvar vert))
+      %> Stmt.map ~f_expr:Fun.id ~f_rvar:Fun.id ~f_lvar:(rename_lvar false vert)
+      )
       block
 
   let rename_succ succ_id par_id block =
@@ -460,14 +461,19 @@ module Reconstruction = struct
   let rec find_def_from_top (procedure : Program.proc)
       (definitions : VarSet.t ref) (dfplus : IDSet.t) (idom : Vert.t -> Vert.t)
       (var : Var.t) (bid : ID.t) =
-    if not @@ IDSet.mem bid dfplus then
+    if
+      Procedure.blocks_pred procedure bid |> Iter.is_empty
+      || (not @@ IDSet.mem bid dfplus)
+    then
       (* If not a member of iterated dominance frontier, proceed from bottom
          of immediate dominator. *)
       match idom @@ Vert.Begin bid with
-      | Vert.Entry -> failwith "entry"
+      | Vert.Entry ->
+          (* Needs to be a formal in param. *)
+          (procedure, var)
       | Begin pred | End pred ->
           find_def_from_bottom procedure definitions dfplus idom var pred
-      | _ -> failwith "magic"
+      | _ -> failwith "idom should be Begin/End vertex."
     else
       (* In iterated dominance frontier. Thus a phi node needs insertion. *)
       let lhs = rename procedure var in
@@ -491,13 +497,15 @@ module Reconstruction = struct
 
       (* Add phi node to procedure, removing any old one: *)
       let procedure =
-        Procedure.modify_block procedure bid (fun block ->
-            let phis =
-              List.filter
-                (fun (p : Var.t Block.phi) -> not @@ Var.equal p.lhs var)
-                block.phis
-            in
-            { block with phis = def :: phis })
+        if List.length rhs > 0 then
+          Procedure.modify_block procedure bid (fun block ->
+              let phis =
+                List.filter
+                  (fun (p : Var.t Block.phi) -> not @@ Var.equal p.lhs var)
+                  block.phis
+              in
+              { block with phis = def :: phis })
+        else procedure
       in
 
       (* Now simply use the lvar of the new phi node as our reaching def. *)
@@ -536,17 +544,20 @@ module Reconstruction = struct
           ~phi:
             (List.map (fun ({ lhs; rhs } : Var.t Block.phi) ->
                  let lhs =
-                   if Var.equal lhs var then rename procedure lhs else lhs
+                   if Var.equal lhs var then (
+                     let rn = rename procedure lhs in
+                     definitions := VarSet.add rn !definitions;
+                     rn)
+                   else lhs
                  in
-                 definitions := VarSet.add lhs !definitions;
                  ({ lhs; rhs } : Var.t Block.phi)))
           (Stmt.map
              ~f_lvar:(fun lhs ->
-               let lhs =
-                 if Var.equal lhs var then rename procedure lhs else lhs
-               in
-               definitions := VarSet.add lhs !definitions;
-               lhs)
+               if Var.equal lhs var then (
+                 let rn = rename procedure lhs in
+                 definitions := VarSet.add rn !definitions;
+                 rn)
+               else lhs)
              ~f_rvar:Fun.id ~f_expr:Fun.id)
           block)
 
@@ -588,7 +599,8 @@ module Reconstruction = struct
           let def =
             Stmt.iter_lvar stmt
             |> Iter.find_pred (flip VarSet.mem !definitions)
-            |> Option.map (fun var -> Def var)
+            |> Option.map (fun var ->
+                Def var)
             |> Option.to_list
           in
           use @ def)
