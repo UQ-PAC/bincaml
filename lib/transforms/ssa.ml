@@ -599,8 +599,7 @@ module Reconstruction = struct
           let def =
             Stmt.iter_lvar stmt
             |> Iter.find_pred (flip VarSet.mem !definitions)
-            |> Option.map (fun var ->
-                Def var)
+            |> Option.map (fun var -> Def var)
             |> Option.to_list
           in
           use @ def)
