@@ -6,6 +6,7 @@ open struct
 end
 
 module FlagTypes = struct
+  (** See [cond]. *)
   type 'a gen_cond =
     | EQ of { z : 'a }
     | CS of { c : 'a }
@@ -309,6 +310,7 @@ let rec extract_condition m e : cond =
       | V (C c), V (Lit Always) -> CS { c }
       | V (N n), V (Lit Always) -> MI { n }
       | V (V v), V (Lit Always) -> VS { v }
+      (* Handle compares with 0, where an overflow can never occur. *)
       | V (N n), V (V v | Lit v) -> GE { n; v }
       | V (Lit Always), V (Lit Always) -> AL
       | V (Lit Never), V (Lit Always) -> Not AL
@@ -328,7 +330,9 @@ let rec extract_condition m e : cond =
       let c = FlagEval.eval (flip FlagMap.read m) c in
       let d = FlagEval.eval (flip FlagMap.read m) d in
       match (a, b, c, d) with
+      (* Handle compares with 0, which never carry. *)
       | V (C c | Lit c), V (Lit Always), V (Z z), V (Lit Never) -> HI { c; z }
+      (* Handle compares with 0, where an overflow can never occur. *)
       | V (N n), V (V v | Lit v), V (Z z), V (Lit Never) -> GT { n; v; z }
       | _ -> Top)
   | UnaryExpr { op = `BoolNOT; arg } -> (
