@@ -125,11 +125,7 @@ module FlagDomain = struct
         let assume = AssumeLattice.join a.assume b.assume in
         { conds; flags = FlagMap.join a.flags b.flags; assume }
 
-  let leq a b =
-    (* idk what this is wrt the join ... *)
-    CondMap.leq a.conds b.conds
-    && FlagMap.leq a.flags b.flags
-    && AssumeLattice.leq a.assume b.assume
+  let leq a b = failwith "unimplemented"
 
   (* if only there was [@@deriving lattice]... *)
 
