@@ -327,6 +327,8 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let proc = Gfir.G.fold_edges_e (cfg_edge_to_ir_edge blocks) p.cfg proc in
   Lang.Program.add_proc proc m
 
+let module_to_ir_attrib (m : Module.t) : Lang.Attrib.t = failwith "a"
+
 (** Convert Gtirb Protobuf module to a Bincaml IR program*)
 let module_to_ir_prog ir_cfg (m : Module.t) =
   let prog = Lang.Program.empty ~name:m.name () in
