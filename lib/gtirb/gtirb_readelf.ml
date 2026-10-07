@@ -1,30 +1,31 @@
 (** Responsible for interpreting the GTIRB's symbol information and producing
-    ELF information in a format matching [[translating.ReadELFLoader]].
+    ELF information in a format matching
+    {{:https://github.com/UQ-PAC/BASIL/blob/main/src/main/scala/gtirb/GTIRBReadELF.scala}
+     BASIL}.
 
-    **Useful links:**
+    {b Useful links:}
 
     - Full ELF64 specification, useful for symbol kinds/visibility/binding:
-      https://irix7.com/techpubs/007-4658-001.pdf
-    - Full ELF32 specification: https://refspecs.linuxfoundation.org/elf/elf.pdf
+      {:https://irix7.com/techpubs/007-4658-001.pdf}
+    - Full ELF32 specification:
+      {:https://refspecs.linuxfoundation.org/elf/elf.pdf}
     - ELF relocation specification, for relocation struct definition:
-      https://refspecs.linuxbase.org/elf/gabi4+/ch4.reloc.html
+      {:https://refspecs.linuxbase.org/elf/gabi4+/ch4.reloc.htm}
     - Aarch64 ELF supplement, for relocation types:
-      https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst#relocation-types
+      {:https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst#relocation-types}
     - An ELF cheatsheet:
-      https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
+      {:https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779}
     - elf man page, extra details:
-      https://www.man7.org/linux/man-pages/man5/elf.5.html *)
+      {:https://www.man7.org/linux/man-pages/man5/elf.5.html} *)
 
+(** An [Elf64_Rela] structure describing a particular symbol relocation, as
+    described by the
+    {{:https://refspecs.linuxfoundation.org/elf/gabi4+/ch4.reloc.html} System V
+     ABI}. *)
 module Elf_rela = struct
-  (** An `Elf64_Rela` structure, as described by the
-      [System V ABI](https://refspecs.linuxfoundation.org/elf/gabi4+/ch4.reloc.html).
-      The three fields `r_offset`, `r_info`, and `r_addend` are as described in
+  (** The three fields `r_offset`, `r_info`, and `r_addend` are as described in
       the struct. The last two fields, `r_sym` and `r_type`, are extracted from
-      the `r_info` value.
-
-      The
-      [ABI supplement for AArch64](https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst#relocation-types)
-      provides information about the interpretation of the `r_type` values. *)
+      the `r_info` value. *)
   type t =
     | Elf64Rela of {
         r_offset : int64;
@@ -47,9 +48,11 @@ module Elf_rela = struct
   let parse_elf64_rela_table = Angstrom.many parse_elf64_rela
 end
 
+(** An Aarch64 symbol relocation type, describing interpretation of
+    {!Elf_rela.r_type} values. *)
 module Aarch64_rela_type = struct
-  (** An Aarch64 relocation type, with constants from:
-      https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst#relocation-types
+  (** Constants are from
+      {:https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst#relocation-types}
   *)
   type t =
     (* dynamic relocations: *)
@@ -62,6 +65,7 @@ module Aarch64_rela_type = struct
   [@@deriving show, eq, enum]
 end
 
+(** "Special" section indexes. *)
 module Elf_ndx = struct
   type t = Und | Abs | Section of Int64.t [@@deriving show]
 
