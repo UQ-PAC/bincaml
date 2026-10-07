@@ -21,3 +21,8 @@
  (libraries bincaml.util bincaml)
  (preprocess
   (pps ppx_expect)))
+
+(executable
+ (name cntlm)
+ (modules cntlm)
+ (libraries bincaml))
