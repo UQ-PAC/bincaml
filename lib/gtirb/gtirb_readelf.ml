@@ -15,60 +15,66 @@
     - elf man page, extra details:
       https://www.man7.org/linux/man-pages/man5/elf.5.html *)
 
-(** An `Elf64_Rela` structure, as described by the
-    [System V ABI](https://refspecs.linuxfoundation.org/elf/gabi4+/ch4.reloc.html).
-    The three fields `r_offset`, `r_info`, and `r_addend` are as described in
-    the struct. The last two fields, `r_sym` and `r_type`, are extracted from
-    the `r_info` value.
+module Elf_rela = struct
+  (** An `Elf64_Rela` structure, as described by the
+      [System V ABI](https://refspecs.linuxfoundation.org/elf/gabi4+/ch4.reloc.html).
+      The three fields `r_offset`, `r_info`, and `r_addend` are as described in
+      the struct. The last two fields, `r_sym` and `r_type`, are extracted from
+      the `r_info` value.
 
-    The
-    [ABI supplement for AArch64](https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst#relocation-types)
-    provides information about the interpretation of the `r_type` values. *)
-type t =
-  | Elf64Rela of {
-      r_offset : int64;
-      r_info : int64;
-      r_addend : int64;
-      r_sym : int64;
-      r_type : int64;
-    }
-[@@deriving show]
+      The
+      [ABI supplement for AArch64](https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst#relocation-types)
+      provides information about the interpretation of the `r_type` values. *)
+  type t =
+    | Elf64Rela of {
+        r_offset : int64;
+        r_info : int64;
+        r_addend : int64;
+        r_sym : int64;
+        r_type : int64;
+      }
+  [@@deriving show]
 
-let parse_elf64_rela =
-  let open Angstrom in
-  let+ r_offset = Angstrom.LE.any_int64
-  and+ r_info = Angstrom.LE.any_int64
-  and+ r_addend = Angstrom.LE.any_int64 in
-  let r_sym = Int64.shift_right_logical r_info 32
-  and r_type = Int64.logand r_info 0xffffffffL in
-  Elf64Rela { r_offset; r_info; r_addend; r_sym; r_type }
+  let parse_elf64_rela =
+    let open Angstrom in
+    let+ r_offset = Angstrom.LE.any_int64
+    and+ r_info = Angstrom.LE.any_int64
+    and+ r_addend = Angstrom.LE.any_int64 in
+    let r_sym = Int64.shift_right_logical r_info 32
+    and r_type = Int64.logand r_info 0xffffffffL in
+    Elf64Rela { r_offset; r_info; r_addend; r_sym; r_type }
 
-let parse_elf64_rela_table = Angstrom.many parse_elf64_rela
+  let parse_elf64_rela_table = Angstrom.many parse_elf64_rela
+end
 
-(** An Aarch64 relocation type, with constants from:
-    https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst#relocation-types
-*)
-type aarch64_rela_type =
-  (* dynamic relocations: *)
-  | Aarch64_Copy [@value 1024]
-  | Aarch64_GlobDat [@value 1025]
-  | Aarch64_JumpSlot [@value 1026]
-  | Aarch64_Relative [@value 1027]
-  (* static relocations: *)
-  | Aarch64_Abs64 [@value 257]
-[@@deriving show, eq, enum]
+module Aarch64_rela_type = struct
+  (** An Aarch64 relocation type, with constants from:
+      https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst#relocation-types
+  *)
+  type t =
+    (* dynamic relocations: *)
+    | Copy [@value 1024]
+    | GlobDat [@value 1025]
+    | JumpSlot [@value 1026]
+    | Relative [@value 1027]
+    (* static relocations: *)
+    | Abs64 [@value 257]
+  [@@deriving show, eq, enum]
+end
 
-type elf_ndx = Und | Abs | Section of Int64.t [@@deriving show]
+module Elf_ndx = struct
+  type t = Und | Abs | Section of Int64.t [@@deriving show]
 
-(** https://refspecs.linuxfoundation.org/elf/elf.pdf. * Figure 1-7. Special
-    Section Indexes *)
-let parse_elf_ndx = function
-  | 0L -> Und
-  | 0xfff1L -> Abs
-  | i ->
-      if Int64.(i >= 0xff00L) then
-        failwith "unhandled special elf section index";
-      Section i
+  (** https://refspecs.linuxfoundation.org/elf/elf.pdf. * Figure 1-7. Special
+      Section Indexes *)
+  let parse_elf_ndx = function
+    | 0L -> Und
+    | 0xfff1L -> Abs
+    | i ->
+        if Int64.(i >= 0xff00L) then
+          failwith "unhandled special elf section index";
+        Section i
+end
 
 (*
 
