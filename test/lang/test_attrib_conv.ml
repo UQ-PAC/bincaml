@@ -25,59 +25,87 @@ prog entry @main {
     .address = 0x400238;
     .size = 0x6e;
     .readOnly = false;
-    .bytes = [
-      "H4sIAAAAAAAA/y3KSxKDIAwA0F4oRDuIXAdthQwx+AMZT68L1++hUMX9SNsfy0V06thGtnZZi+4lsL8m280lyEAOPNMwgnPb";
-      "GIyGLFHSKcAkuYKXDF+lGzAGn4b8e+Htak+q/dy2zzwDbgAAAA=="
-    ]
+    .bytes = "TODO: bytes encoding";
   };
 ]
 } ; |}
   in
   let prog = ast.prog in
-
   let attrib = `Assoc (Lang.Program.attrib prog) in
 
   Lang.Program.pretty_to_chan stdout prog;
   print_endline "";
-  print_endline @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Attrib.attrib_pretty attrib);
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Attrib.attrib_pretty attrib);
 
-  let parsed = Gtirb_frontend.Gtirb_attribs.gtirb_attribs_of_attrib_conv_exn attrib in
-  print_endline @@Gtirb_frontend.Gtirb_attribs.show_gtirb_attribs parsed;
+  let parsed =
+    Gtirb_frontend.Gtirb_attribs.gtirb_attribs_of_attrib_conv_exn attrib
+  in
+  print_endline @@ Gtirb_frontend.Gtirb_attribs.show_gtirb_attribs parsed;
 
-  [%expect.unreachable]
-[@@expect.uncaught_exn {|
-  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-     This is strongly discouraged as backtraces are fragile.
-     Please change this test to not include a backtrace. *)
-  ( "Missing record field: symbols. Got: { .initial_memory = [ { .address = 4194872;\
-   \n            .bytes = [ \"H4sIAAAAAAAA/y3KSxKDIAwA0F4oRDuIXAdthQwx+AMZT68L1++hUMX9SNsfy0V06thGtnZZi+4lsL8m280lyEAOPNMwgnPb\";\
-   \n                \"GIyGLFHSKcAkuYKXDF+lGzAGn4b8e+Htak+q/dy2zzwDbgAAAA==\" ];\
-   \n            .name = \".interp\"; .readOnly = false; .size = 110 } ];\
-   \n    .symbols = { .externalFunctions = [ { .name = \"_ITM_deregisterTMCloneTable\";\
-   \n                .offset = 4325328 }; { .name = \"abort\"; .offset = 4325392 } ];\
-   \n        .funcEntries = [ { .address = 4195968; .name = \"_start\"; .size = 480 } ];\
-   \n        .globalOffsets = [  ];\
-   \n        .globals = [ { .address = 4324824; .name = \"_DYNAMIC\"; .size = 0 };\
-   \n            { .address = 4325424; .name = \"x\"; .size = 64 } ] } }")
-  Raised at Ppx_protocol_driver.Make.wrap in file "drivers/generic/ppx_protocol_driver.ml", line 111, characters 43-77
-  Called from Test_expr_eval_expect__Test_attrib_conv.(fun) in file "test/lang/test_attrib_conv.ml", line 44, characters 15-83
-  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
-
-  Trailing output
-  ---------------
-  proc @main()  -> () {  }
+  [%expect
+    {|
+    proc @main()  -> () {  }
 
 
-  [ block %ret [ return; ] ];
-  prog entry @main;
-  { .initial_memory = [ { .address = 4194872;
-              .bytes = [ "H4sIAAAAAAAA/y3KSxKDIAwA0F4oRDuIXAdthQwx+AMZT68L1++hUMX9SNsfy0V06thGtnZZi+4lsL8m280lyEAOPNMwgnPb";
-                  "GIyGLFHSKcAkuYKXDF+lGzAGn4b8e+Htak+q/dy2zzwDbgAAAA==" ];
-              .name = ".interp"; .readOnly = false; .size = 110 } ];
-      .symbols = { .externalFunctions = [ { .name = "_ITM_deregisterTMCloneTable";
-                  .offset = 4325328 }; { .name = "abort"; .offset = 4325392 } ];
-          .funcEntries = [ { .address = 4195968; .name = "_start"; .size = 480 } ];
-          .globalOffsets = [  ];
-          .globals = [ { .address = 4324824; .name = "_DYNAMIC"; .size = 0 };
-              { .address = 4325424; .name = "x"; .size = 64 } ] } }
-  |}]
+    [ block %ret [ return; ] ];
+    prog entry @main;
+    { .initial_memory = [ { .address = 4194872; .bytes = "TODO: bytes encoding";
+                .name = ".interp"; .readOnly = false; .size = 110 } ];
+        .symbols = { .externalFunctions = [ { .name = "_ITM_deregisterTMCloneTable";
+                    .offset = 4325328 }; { .name = "abort"; .offset = 4325392 } ];
+            .funcEntries = [ { .address = 4195968; .name = "_start"; .size = 480 } ];
+            .globalOffsets = [  ];
+            .globals = [ { .address = 4324824; .name = "_DYNAMIC"; .size = 0 };
+                { .address = 4325424; .name = "x"; .size = 64 } ] } }
+    { Gtirb_attribs.symbols =
+      { Gtirb_attribs.external_functions = [];
+        globals =
+        [{ Gtirb_attribs.name = "_DYNAMIC"; address = 4324824L; size = 0L };
+          { Gtirb_attribs.name = "x"; address = 4325424L; size = 64L }];
+        func_entries = []; global_offsets = [] };
+      initial_memory =
+      [{ Gtirb_attribs.name = ".interp"; address = 4194872L; size = 110L;
+         read_only = false; bytes = "TODO: bytes encoding" }
+        ]
+      }
+    |}]
+
+let%expect_test "adt to attrib" =
+  let parsed =
+    {
+      Gtirb_frontend.Gtirb_attribs.symbols =
+        {
+          external_functions = [];
+          globals =
+            [
+              { name = "_DYNAMIC"; address = 4324824L; size = 0L };
+              { name = "x"; address = 4325424L; size = 64L };
+            ];
+          func_entries = [];
+          global_offsets = [];
+        };
+      initial_memory =
+        [
+          {
+            name = ".interp";
+            address = 4194872L;
+            size = 110L;
+            read_only = false;
+            bytes = "TODO: bytes encoding";
+          };
+        ];
+    }
+  in
+
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:80
+  @@ Lang.Attrib.attrib_pretty
+  @@ Gtirb_frontend.Gtirb_attribs.gtirb_attribs_to_attrib_conv parsed;
+  [%expect
+    {|
+    { .initial_memory = [ { .address = 4194872; .bytes = "TODO: bytes encoding";
+                .name = ".interp"; .size = 110 } ];
+        .symbols = { .globals = [ { .address = 4324824; .name = "_DYNAMIC"; .size = 0 };
+                { .address = 4325424; .name = "x"; .size = 64 } ] } }
+    |}]
