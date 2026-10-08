@@ -2,6 +2,7 @@
 
 (library
  (name expr_gen)
+ (package bincaml)
  (modules expr_gen)
  (libraries
   qcheck-core
@@ -33,6 +34,7 @@
 
 (library
  (name test_expr_eval_expect)
+ (package bincaml)
  (modules
   test_expr_eval_expect
   test_stmt
