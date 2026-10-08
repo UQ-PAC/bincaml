@@ -38,7 +38,8 @@
   test_stmt
   test_interp
   test_expr_hash
-  test_hm_inline)
+  test_hm_inline
+  test_attrib_conv)
  (libraries loader)
  (inline_tests)
  (preprocess
