@@ -20,7 +20,6 @@
  (preprocess
   (pps
    ppx_here
-   ppx_protocol_conv
    ppx_deriving.show
    ppx_deriving.eq
    ppx_deriving.ord
