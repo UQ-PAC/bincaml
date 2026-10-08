@@ -282,16 +282,19 @@ let global_range (prog : Program.t) =
       |> List.fold_left WrappedIntervalsLattice.join WrappedIntervalsLattice.Bot
   | _ -> WrappedIntervalsLattice.Bot
 
-let try_make_global (prog : Program.t) (sym_base, value) =
+let try_make_global (prog : Program.t) =
   (* NOTE this is slow ... it's a significant part of the runtime of the DSA local phase
      (~80%), and can be made O(log n) with an interval tree *)
   let g = global_range prog in
-  match sym_base with
-  | SymBase.Constant when WrappedIntervalsLattice.leq value g ->
+
+  function
+  | SymBase.Constant, value when WrappedIntervalsLattice.leq value g ->
       (SymBase.GlobSym, value)
-  | _ -> (sym_base, value)
+  | x -> x
 
 let sva (prog : Program.t) =
+  let try_make_global' = try_make_global prog in
+
   let results =
     Program.procs prog
     |> Iter.fold
@@ -310,6 +313,5 @@ let sva (prog : Program.t) =
                 | SymBase.Loaded r when Option.is_none r.proc_id ->
                     (SymBase.Loaded { r with proc_id = Some id }, i)
                 | _ -> (base, i))
-            |> List.map (try_make_global prog)
-            |> SymAddrSetLattice.of_list_bot)
+            |> List.map try_make_global' |> SymAddrSetLattice.of_list_bot)
           b ))
