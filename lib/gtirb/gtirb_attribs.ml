@@ -10,31 +10,32 @@ type offset_sym = { name : string; offset : int64 }
 type sized_sym = { name : string; address : int64; size : int64 }
 [@@deriving show, protocol ~driver:(module Lang.Attrib_conv)]
 
-(** [.symbols] attribute and its sub-attributes. *)
-type symbols =
-  | Symbols of {
-      external_functions : offset_sym list;
-      globals : sized_sym list;
-      func_entries : sized_sym list;
-      global_offsets : offset_sym list;
-    }
+type symbols = {
+  external_functions : offset_sym list; [@default []]
+  globals : sized_sym list; [@default []]
+  func_entries : sized_sym list; [@default []]
+  global_offsets : offset_sym list; [@default []]
+}
 [@@deriving show, protocol ~driver:(module Lang.Attrib_conv)]
+(** [.symbols] attribute and its sub-attributes. *)
 
 (** {2 Section type} *)
 
-type section =
-  | Section of {
-      name : string;
-      address : int64;
-      size : int64;
-      read_only : bool;
-      bytes : string;
-    }
+type section = {
+  name : string;
+  address : int64;
+  size : int64;
+  read_only : bool; [@default false]
+  bytes : string;
+}
 [@@deriving show, protocol ~driver:(module Lang.Attrib_conv)]
 
 (** {2 Combined GTIRB attributes} *)
 
-type gtirb_attribs = { symbols : symbols; initial_memory : section list }
+type gtirb_attribs = {
+  symbols : symbols;
+  initial_memory : section list; [@default []]
+}
 [@@deriving show, protocol ~driver:(module Lang.Attrib_conv)]
 
 (** {2 Derived printing functions} *)

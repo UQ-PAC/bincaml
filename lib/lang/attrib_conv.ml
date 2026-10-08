@@ -79,6 +79,14 @@ module Driver = struct
   let is_null : t -> bool = function `Bitvector { w = 0 } -> true | _ -> false
 end
 
+(** Custom parameters. We add a leading [.] to field names so it matches the
+    attrib syntax. *)
+module Parameters : Ppx_protocol_driver.Parameters = struct
+  include Ppx_protocol_driver.Default_parameters
+
+  let field_name s = "." ^ s
+end
+
 (** {2 Generated driver} *)
 
 (** Below this is generated using the {!Ppx_protocol_driver.Make} module
@@ -88,6 +96,6 @@ type t = Attrib.t
 (** @canonical Lang.Attrib.t *)
 
 include (
-  Ppx_protocol_driver.Make (Driver) (Ppx_protocol_driver.Default_parameters) :
+  Ppx_protocol_driver.Make (Driver) (Parameters) :
       Protocol_conv.Runtime.Driver with type t := Attrib.t)
 (** @inline *)
