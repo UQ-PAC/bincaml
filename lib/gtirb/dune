@@ -10,7 +10,6 @@
   gfir
   gfir_to_bincaml
   conf
-  gtirb_resolver
   gtirb_attribs
   gtirb_frontend)
  (libraries
