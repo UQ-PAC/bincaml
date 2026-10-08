@@ -17,6 +17,7 @@
   containers-data,
   iter,
   ppx_deriving,
+  ppx_protocol_conv,
   ocamlgraph,
   intPQueue,
   cmdliner,
@@ -86,13 +87,16 @@ buildDunePackage {
     ocaml-protoc-plugin
     menhir
   ];
+  buildInputs = [
+    ppx_deriving
+    ppx_protocol_conv
+  ];
   propagatedBuildInputs = [
     ocaml-protoc-plugin
     angstrom
     zarith
     ppx_expect
     pp_loc
-    ppx_deriving
     containers
     containers-data
     ocamlgraph
