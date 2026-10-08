@@ -40,4 +40,5 @@
    ppx_deriving.iter
    ppx_deriving.fold
    ppx_deriving.enum
+   ppx_protocol_conv
    ppx_expect)))

@@ -1,11 +1,14 @@
+(** Well-known attributes attached to IL files loaded from GTIRB. *)
+
 open Bincaml_util.Common
 
-type offset_sym = { name : string; offset : int64 }
-type sized_sym = { name : string; address : int64; size : int64 }
+(** {2 Symbol types} *)
 
-let offset_sym_to_attrib { name; offset } : Lang.Attrib.t =
-  let offset = `Integer (Z.of_int64 offset) in
-  `Assoc (StringMap.singleton name offset)
+type offset_sym = { name : string; offset : int64 }
+[@@deriving show, protocol ~driver:(module Lang.Attrib_conv)]
+
+type sized_sym = { name : string; address : int64; size : int64 }
+[@@deriving show, protocol ~driver:(module Lang.Attrib_conv)]
 
 (** [.symbols] attribute and its sub-attributes. *)
 type symbols =
@@ -15,6 +18,9 @@ type symbols =
       func_entries : sized_sym list;
       global_offsets : offset_sym list;
     }
+[@@deriving show, protocol ~driver:(module Lang.Attrib_conv)]
+
+(** {2 Section type} *)
 
 type section =
   | Section of {
@@ -24,26 +30,40 @@ type section =
       read_only : bool;
       bytes : string;
     }
+[@@deriving show, protocol ~driver:(module Lang.Attrib_conv)]
+
+(** {2 Combined GTIRB attributes} *)
 
 type gtirb_attribs = { symbols : symbols; initial_memory : section list }
+[@@deriving show, protocol ~driver:(module Lang.Attrib_conv)]
 
-let symbols_to_attrib (syms : Gtirb_proto.Symbol.Gtirb.Proto.Symbol.t list) :
-    Lang.Attrib.t =
-  `List
-    (syms
-    |> List.map (fun { Gtirb_proto.Symbol.Gtirb.Proto.Symbol.name } ->
-        { name; offset = 0L }) (* TODO: fix offset by getting referent block *)
-    |> List.map offset_sym_to_attrib)
+(** {2 Derived printing functions} *)
 
-let sections_to_attrib (secs : Gtirb_proto.Section.Gtirb.Proto.Section.t list) :
-    Lang.Attrib.t =
-  `List []
+let show_offset_sym = show_offset_sym
+let pp_offset_sym = pp_offset_sym
+let show_sized_sym = show_sized_sym
+let pp_sized_sym = pp_sized_sym
+let show_symbols = show_symbols
+let pp_symbols = pp_symbols
+let show_section = show_section
+let pp_section = pp_section
+let show_gtirb_attribs = show_gtirb_attribs
+let pp_gtirb_attribs = pp_gtirb_attribs
 
-let module_to_attrib (m : Gtirb_proto.Module.Gtirb.Proto.Module.t) :
-    Lang.Attrib.t =
-  `Assoc
-    (StringMap.of_list
-       [
-         (".symbols", symbols_to_attrib m.symbols);
-         (".initial_memory", sections_to_attrib m.sections);
-       ])
+(** {2 Derived {!Attrib.t} conversion functions} *)
+
+let offset_sym_to_attrib_conv = offset_sym_to_attrib_conv
+let offset_sym_of_attrib_conv_exn = offset_sym_of_attrib_conv_exn
+let offset_sym_of_attrib_conv = offset_sym_of_attrib_conv
+let sized_sym_to_attrib_conv = sized_sym_to_attrib_conv
+let sized_sym_of_attrib_conv_exn = sized_sym_of_attrib_conv_exn
+let sized_sym_of_attrib_conv = sized_sym_of_attrib_conv
+let symbols_to_attrib_conv = symbols_to_attrib_conv
+let symbols_of_attrib_conv_exn = symbols_of_attrib_conv_exn
+let symbols_of_attrib_conv = symbols_of_attrib_conv
+let section_to_attrib_conv = section_to_attrib_conv
+let section_of_attrib_conv_exn = section_of_attrib_conv_exn
+let section_of_attrib_conv = section_of_attrib_conv
+let gtirb_attribs_to_attrib_conv = gtirb_attribs_to_attrib_conv
+let gtirb_attribs_of_attrib_conv_exn = gtirb_attribs_of_attrib_conv_exn
+let gtirb_attribs_of_attrib_conv = gtirb_attribs_of_attrib_conv
