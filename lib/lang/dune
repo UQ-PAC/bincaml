@@ -14,7 +14,8 @@
   containers.pp
   fmt
   trace.core
-  bincaml.util)
+  bincaml.util
+  ppx_protocol_conv.driver)
  (inline_tests)
  (preprocess
   (pps
