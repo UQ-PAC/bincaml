@@ -1,0 +1,8 @@
+bincaml: Input error: parse error
+         
+         Related context:
+         next token
+         10 |   aslkdajlj
+                [1;31m^^^^^^^^^[0m
+         
+         command: load-il (./parse_error.il)
