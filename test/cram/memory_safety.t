@@ -1,3 +1,11 @@
+
+  $ bincaml load-il memory_safety.il
+  (run-transforms ssa split-memory-encoding memory-specification ssa linear-const linear-copy dynamic-single-assignment)
+  (boogie)
+  Boogie program verifier finished with 1 verified, 5 errors
+  
+  
+
   $ cat << EOF | bincaml script -
   >  (load-il ../../examples/memory/memory_safety.il)
   >  (run-transforms ssa)
