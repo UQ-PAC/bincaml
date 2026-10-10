@@ -303,7 +303,8 @@ module Spec = struct
           and catch fire *) ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type intrin = [ `Cases  (** choose first argument that is defined *) ]
+  type intrin =
+    [ `Cases  (** choose first argument that is defined *) | `IfThenElse ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type unary = [ `Old | `Classification | `Gamma ]
@@ -458,11 +459,12 @@ module AllOps = struct
           in
           return (Bitvector w)
     | `MapUpdate -> return @@ List.hd args
+    | `IfThenElse -> return @@ List.hd @@ List.tl args
 
   let is_commutative_intrin (o : intrin) =
     match o with
     | `BVADD | `BVMUL | `BVOR | `BVXOR | `BVAND | `OR | `AND -> true
-    | `Cases | `BVConcat | `MapUpdate -> false
+    | `Cases | `BVConcat | `MapUpdate | `IfThenElse -> false
 
   (** ops returning booleans *)
 
@@ -531,6 +533,7 @@ module AllOps = struct
     | `MapAccess -> "get"
     | `MapUpdate -> "update"
     | `IfThen -> "case"
+    | `IfThenElse -> "ite"
     | `Cases -> "match"
 
   let eval_equal (a : const) (b : const) =
