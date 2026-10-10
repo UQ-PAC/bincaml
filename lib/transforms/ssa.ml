@@ -23,6 +23,11 @@ module Skip = struct
   let keep s v = not @@ skip s v
 end
 
+let rename ?(skipping = Skip.empty) proc v =
+  if not @@ Skip.skip skipping v then
+    Procedure.fresh_var ~pure:true ~name:(Var.name v) proc (Var.typ v)
+  else v
+
 (** Introduce a self-copy before every assume or assert that contains one
     variable, so that ssa has branch condition flow-sensitivity.
 
@@ -258,8 +263,8 @@ module Construction = struct
       dom_tree vert
       |> List.fold_left (traversal update_block update_succ dom_tree) (g, fl)
 
-  let rename_lvar vert lvar =
-    if perform @@ AllowRename vert then (
+  let rename_lvar is_phi vert lvar =
+    if is_phi || (perform @@ AllowRename vert) then (
       let rdef = perform @@ GetReachingDef (lvar, vert) in
       (* Create a renamed lvar *)
       let lvar' = perform @@ CreateFreshDef (lvar, vert) in
@@ -284,14 +289,15 @@ module Construction = struct
       Block.map
         ~phi:
           (List.map (fun (phi : Var.t Block.phi) ->
-               { phi with lhs = rename_lvar vert phi.lhs }))
+               { phi with lhs = rename_lvar true vert phi.lhs }))
         Fun.id block
     in
     (* Update a statement. Two passes, first update rvars then lvars. *)
     Block.map ~phi:Fun.id
       (Stmt.map ~f_expr:(rename_expr vert) ~f_rvar:(rename_rvar vert)
          ~f_lvar:Fun.id
-      %> Stmt.map ~f_expr:Fun.id ~f_rvar:Fun.id ~f_lvar:(rename_lvar vert))
+      %> Stmt.map ~f_expr:Fun.id ~f_rvar:Fun.id ~f_lvar:(rename_lvar false vert)
+      )
       block
 
   let rename_succ succ_id par_id block =
@@ -356,12 +362,7 @@ module Construction = struct
         continue k ()
     | effect CreateFreshDef (var, vert), k ->
         (* Get a fresh name (if not skipping). *)
-        let var' =
-          if not @@ Skip.skip skipping var then
-            Procedure.fresh_var ~pure:true ~name:(Var.name var) procedure
-              (Var.typ var)
-          else var
-        in
+        let var' = rename ~skipping procedure var in
 
         (* Add definition to defs. *)
         defs := VarMap.add var' vert !defs;
@@ -411,8 +412,304 @@ module Construction = struct
 
           (* Rename variables. Skip renaming special return block. *)
           rename_procedure ~skipping rid procedure g tree doms)
-      |> tap (check_ssa ~skipping)
+      (* |> tap (check_ssa ~skipping) *)
     else procedure
+end
+
+module Reconstruction = struct
+  (** SSA Reconstruction. Alternative to fully re-running construction when a
+      transform has *partially* invalidated the SSA single definition property.
+
+      How reconstruction works? For a variable violating SSA (multiple assigns),
+      we replace each definition with a fresh variable.
+
+      Then, for each use of the same variable we climb up the immediate
+      dominators statement by statement until we find a definition, and replace
+      the use with that definition. Only loooking at idoms ensures it is
+      reachable on all paths.
+
+      If a block is seen during this traversal which is in the iterated
+      dominance frontier, then we insert a fresh definition as a phi node and
+      use that. This ensures we will never have multiple reaching defs.
+
+      Introducing a phi node in this way does create new uses of the variable in
+      the rhs of the phi node, which are immediately updated in the same way as
+      any other use of the variable we are updating. *)
+
+  open Procedure
+  module Dom = Graph.Dominator.Make (G)
+  module WL = Worklist.Make (ID)
+  module FL = Set.Make (Procedure.Vert)
+
+  type usedef = Def of Var.t | Use of int * Var.t
+
+  (** Compute the iterated dominance frontier (transitive closure). *)
+  let iterated_df (df : Vert.t -> Vert.t list) (iter : Vert.t Iter.t)
+      (f : Vert.t -> unit) : unit =
+    let seen = Hashtbl.create 0 in
+    let rec iterated_df' (x : Vert.t) : unit =
+      if Hashtbl.mem seen x then ()
+      else (
+        f x;
+        Hashtbl.replace seen x ();
+        (df x |> Iter.of_list) iterated_df')
+    in
+    iter iterated_df'
+
+  (** Find the first reaching definition of var from the top of a block. Insert
+      phi nodes along the way at dominance frontier blocks. *)
+  let rec find_def_from_top (procedure : Program.proc)
+      (definitions : VarSet.t ref) (dfplus : IDSet.t) (idom : Vert.t -> Vert.t)
+      (var : Var.t) (bid : ID.t) =
+    if
+      Procedure.blocks_pred procedure bid |> Iter.is_empty
+      || (not @@ IDSet.mem bid dfplus)
+    then
+      (* If not a member of iterated dominance frontier, proceed from bottom
+         of immediate dominator. *)
+      match idom @@ Vert.Begin bid with
+      | Vert.Entry ->
+          (* Needs to be a formal in param. *)
+          (procedure, var)
+      | Begin pred | End pred ->
+          find_def_from_bottom procedure definitions dfplus idom var pred
+      | _ -> failwith "idom should be Begin/End vertex."
+    else
+      (* In iterated dominance frontier. Thus a phi node needs insertion. *)
+      let lhs = rename procedure var in
+      (* This is fresh, be sure to add it to the definitions variables. *)
+      definitions := VarSet.add lhs !definitions;
+
+      (* Find def from bottom of each immediate parent. *)
+      let procedure, rhs =
+        Procedure.blocks_pred procedure bid
+        |> Iter.fold
+             (fun (procedure, rhs) (par_id, _) ->
+               let procedure', def =
+                 find_def_from_bottom procedure definitions dfplus idom var
+                   par_id
+               in
+               (procedure', (par_id, def) :: rhs))
+             (procedure, [])
+      in
+
+      let def : Var.t Block.phi = { lhs; rhs } in
+
+      (* Add phi node to procedure, removing any old one: *)
+      let procedure =
+        if List.length rhs > 0 then
+          Procedure.modify_block procedure bid (fun block ->
+              let phis =
+                List.filter
+                  (fun (p : Var.t Block.phi) -> not @@ Var.equal p.lhs var)
+                  block.phis
+              in
+              { block with phis = def :: phis })
+        else procedure
+      in
+
+      (* Now simply use the lvar of the new phi node as our reaching def. *)
+      (procedure, lhs)
+
+  (** Find the first reaching definition of var from the top of a block. *)
+  and find_def_from_bottom (procedure : Program.proc)
+      (definitions : VarSet.t ref) (dfplus : IDSet.t) (idom : Vert.t -> Vert.t)
+      (var : Var.t) (bid : ID.t) =
+    (* Get the last definition (or phi) in the block, if it exists. *)
+    let def =
+      Procedure.get_block procedure bid
+      |> Option.flat_map (fun b ->
+          let open Option in
+          let first_stmt =
+            b |> Block.stmts_iter |> Iter.rev |> Iter.map Stmt.iter_lvar
+            |> Iter.find_map (Iter.find_pred (flip VarSet.mem !definitions))
+          in
+          let first_phi =
+            b.phis |> List.to_iter
+            |> Iter.map (fun (phi : Var.t Block.phi) -> phi.lhs)
+            |> Iter.find_pred (flip VarSet.mem !definitions)
+          in
+          first_stmt <+> first_phi)
+    in
+    match def with
+    | Some v -> (procedure, v)
+    | None -> find_def_from_top procedure definitions dfplus idom var bid
+
+  (** Repair SSA for a variable, var, which breaks SSA. Requires defs is ordered
+      from last to first. *)
+  let make_fresh procedure definitions var =
+    procedure
+    |> Procedure.map_blocks_nondet (fun (bid, block) ->
+        Block.map
+          ~phi:
+            (List.map (fun ({ lhs; rhs } : Var.t Block.phi) ->
+                 let lhs =
+                   if Var.equal lhs var then (
+                     let rn = rename procedure lhs in
+                     definitions := VarSet.add rn !definitions;
+                     rn)
+                   else lhs
+                 in
+                 ({ lhs; rhs } : Var.t Block.phi)))
+          (Stmt.map
+             ~f_lvar:(fun lhs ->
+               if Var.equal lhs var then (
+                 let rn = rename procedure lhs in
+                 definitions := VarSet.add rn !definitions;
+                 rn)
+               else lhs)
+             ~f_rvar:Fun.id ~f_expr:Fun.id)
+          block)
+
+  (** Reconstruction for var appearing in rhs of phi nodes. *)
+  let reconstruct_phis definitions dfplus idom var (block : Program.bloc)
+      program bid =
+    let program, phis =
+      List.fold_left
+        (fun (acc, phis) (phi : Var.t Block.phi) ->
+          let acc, rhs =
+            phi.rhs |> List.to_iter
+            |> Iter.fold
+                 (fun (acc, rhs) (source, rv) ->
+                   if Var.equal var rv then
+                     let acc, def =
+                       find_def_from_bottom acc definitions dfplus idom var
+                         source
+                     in
+                     (acc, (source, def) :: rhs)
+                   else (acc, (source, rv) :: rhs))
+                 (acc, [])
+          in
+          (acc, ({ lhs = phi.lhs; rhs } : Var.t Block.phi) :: phis))
+        (program, []) block.phis
+    in
+    Procedure.modify_block program bid (fun block -> { block with phis })
+
+  (** Reconstruction of stmts top to bottom. *)
+  let reconstruct_stmts definitions dfplus idom var (block : Program.bloc)
+      program bid =
+    let use_defs =
+      Block.stmts_iter_i block
+      |> Iter.flat_map_l (fun (i, stmt) ->
+          let use =
+            if Stmt.free_vars_iter stmt |> Iter.exists (Var.equal var) then
+              [ Use (i, var) ]
+            else []
+          in
+          let def =
+            Stmt.iter_lvar stmt
+            |> Iter.find_pred (flip VarSet.mem !definitions)
+            |> Option.map (fun var -> Def var)
+            |> Option.to_list
+          in
+          use @ def)
+    in
+
+    (* Fold forwards over uses and defs, tracking the last definition for substitution. *)
+    let stmts = Vector.copy block.stmts in
+    let program, _ =
+      use_defs
+      |> Iter.fold
+           (fun (acc, def) usedef ->
+             match usedef with
+             | Use (idx, use) ->
+                 (* Variable is used. Get the reaching def (maybe look up). *)
+                 let acc, def =
+                   def
+                   |> Option.map (fun def -> (acc, def))
+                   |> Option.get_lazy (fun _ ->
+                       find_def_from_top acc definitions dfplus idom var bid)
+                 in
+                 (* Update stmt at idx with def. *)
+                 let stmt =
+                   Vector.get stmts idx
+                   |> Stmt.map ~f_lvar:Fun.id
+                        ~f_expr:
+                          (Expr.BasilExpr.substitute (fun v ->
+                               if Var.equal v var then
+                                 Some (Expr.BasilExpr.rvar def)
+                               else None))
+                        ~f_rvar:(fun v -> if Var.equal v var then def else v)
+                 in
+                 Vector.set stmts idx stmt;
+                 (acc, Some def)
+             | Def def ->
+                 (* New definition replaces old def. *)
+                 (acc, Some def))
+           (program, None)
+    in
+    Procedure.modify_block program bid (fun block ->
+        { block with stmts = Vector.freeze stmts })
+
+  (** Reconstruct block bid for variable var, updating program. *)
+  let reconstruct_block definitions dfplus idom var program bid =
+    let block : Program.bloc =
+      Procedure.get_block program bid |> Option.get_exn_or "Missing block."
+    in
+
+    (* Top to bottom, so phis go first. *)
+    let program =
+      reconstruct_phis definitions dfplus idom var block program bid
+    in
+
+    (* Then stmts... *)
+    reconstruct_stmts definitions dfplus idom var block program bid
+
+  let driver (var : Var.t) (procedure : Program.proc) (initial_defs : IDSet.t) =
+    let definitions = ref VarSet.empty in
+
+    (* Map each lvar to a fresh var. *)
+    let procedure = make_fresh procedure definitions var in
+
+    let g =
+      Procedure.graph procedure
+      |> Option.get_exn_or "Expected procedure to have graph."
+    in
+    let idom = Dom.compute_idom g Entry in
+    let tree = Dom.idom_to_dom_tree g idom in
+    let df = Dom.compute_dom_frontier g tree idom in
+
+    (* Compute the iterated dominance frontier as a set of IDs, not verts. *)
+    let dfplus =
+      initial_defs |> IDSet.to_iter
+      |> Iter.map (fun id -> Vert.Begin id)
+      |> iterated_df df
+      |> Iter.filter_map (function
+        | Vert.Begin id | Vert.End id -> Some id
+        | _ -> None)
+      |> IDSet.of_iter
+    in
+
+    Procedure.iter_blocks procedure
+    |> Iter.map fst
+    |> Iter.fold (reconstruct_block definitions dfplus idom var) procedure
+
+  (** Find SSA-violating variables in a procedure. (anything assigned more than
+      once) *)
+  let find_invalid ?(skipping = Skip.empty) (procedure : Program.proc) =
+    let defs = ref VarMap.empty in
+    let seen = ref VarSet.empty in
+    let invalid = ref VarSet.empty in
+    Procedure.iter_blocks procedure
+    |> Iter.flat_map (fun (id, b) ->
+        b |> Block.stmts_iter
+        |> Iter.flat_map Stmt.iter_assigned
+        |> Iter.map (fun var -> (id, var)))
+    |> flip Iter.for_each (fun (bid, var) ->
+        if VarSet.mem var !seen then invalid := VarSet.add var !invalid;
+        seen := VarSet.add var !seen;
+        defs :=
+          VarMap.update var
+            (Option.map_or (IDSet.add bid) ~default:(IDSet.singleton bid)
+            %> Option.some)
+            !defs);
+    VarMap.filter (flip VarSet.mem !invalid %> const) !defs
+
+  (** Reconstruct SSA for a procedure. *)
+  let reconstruct_proc ?(skipping = Skip.empty) (procedure : Program.proc) =
+    let defs = find_invalid ~skipping procedure in
+    VarMap.fold (fun var bids acc -> driver var acc bids) defs procedure
+    |> tap check_ssa
 end
 
 (** Transform a program into SSA form. *)

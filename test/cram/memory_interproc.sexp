@@ -5,7 +5,7 @@
 (run-transforms "split-memory-encoding")
 (run-transforms "memory-specification")
 
-(run-transforms "ssa")
+(run-transforms "reconstruct-ssa")
 
 (run-transforms "linear-const")
 (run-transforms "linear-copy")

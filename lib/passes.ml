@@ -302,6 +302,34 @@ module PassManager = struct
       invariants = Invariants.from_list (fun x -> x.invariants) batch;
     }
 
+  let simple_reconstruct_ssa =
+    {
+      name = "simple-reconstruct-ssa";
+      apply = Proc Transforms.Ssa.Reconstruction.reconstruct_proc;
+      doc =
+        "Performs SSA reconstruction. Fixing up any variables which have \
+         multiple defs.";
+      invariants = Invariants.presupposes [] ~establishes:[ SSA ];
+    }
+
+  let reconstruct_ssa =
+    let batch =
+      [
+        remove_unreachable_blocks;
+        sparams;
+        simple_reconstruct_ssa;
+        remove_unused;
+      ]
+    in
+    {
+      name = "reconstruct-ssa";
+      apply = Batch batch;
+      doc =
+        "Performs SSA reconstruction + related transforms. Fixing up any \
+         variables which have multiple defs.";
+      invariants = Invariants.presupposes [] ~establishes:[ SSA ];
+    }
+
   let chc_infer_invariants =
     {
       name = "chc-infer-invariants";
@@ -519,6 +547,8 @@ module PassManager = struct
       cfa_reduction;
       sva;
       full_ssa;
+      simple_reconstruct_ssa;
+      reconstruct_ssa;
       chc_infer_invariants;
       chc_infer_invariants_per_query;
       type_check;
