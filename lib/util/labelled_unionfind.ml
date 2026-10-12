@@ -78,8 +78,8 @@ module Make (L : Label) = struct
     else !v.parent <- Some (L.compose l' l, p)
 end
 
-(** A labelled union find that also tracks the standard union find subgraph
-    given by identity edges. *)
+(** A labelled union find that interprets identity edges as equalities, and
+    tracks such equalities with a standard union find. *)
 module MakeEquiv (L : Label) = struct
   type 'a content = {
     mutable body : 'a;
