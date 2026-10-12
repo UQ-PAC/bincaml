@@ -89,13 +89,13 @@ buildDunePackage {
   ];
   buildInputs = [
     ppx_deriving
-    ppx_protocol_conv
   ];
   propagatedBuildInputs = [
     ocaml-protoc-plugin
     angstrom
     zarith
     ppx_expect
+    ppx_protocol_conv
     pp_loc
     containers
     containers-data
