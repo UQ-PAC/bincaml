@@ -112,6 +112,11 @@ let map_procedures f p =
         | o -> o);
   }
 
+let iter_procedures p =
+  p.declarations |> DeclsList.to_iter
+  |> Iter.filter_map (fun (_, decl) ->
+      match decl with Procedure { definition } -> Some definition | _ -> None)
+
 let proc prog p =
   DeclsList.find p prog.declarations |> function
   | Procedure { definition } -> definition
