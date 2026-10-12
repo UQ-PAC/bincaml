@@ -70,7 +70,7 @@ let computed_offset e =
            arg2 = E (Constant { const = `Bitvector bv });
          })
     when is_sp_in v ->
-      Some (Bitvec.neg bv)
+      Some bv
   | E (RVar { id = v }) when is_sp_in v -> Some (Bitvec.zero ~size:64)
   | _ -> None
 
@@ -123,8 +123,8 @@ let stack_ops_inbounds proc =
             in
             (* print_endline @@ (Bitvec.show o =^.^= Bitvec.show o'); *)
             match stack_size with
-            | Unbounded -> not @@ Bitvec.is_negative o'
-            | Size s -> (not @@ Bitvec.is_negative o') && Bitvec.sle o s
+            | Unbounded -> Bitvec.sgt o' (Bitvec.zero ~size)
+            | Size s -> Bitvec.sgt o' (Bitvec.zero ~size) && Bitvec.sle o s
             | Unknown -> false)
     | _ -> true)
 
@@ -174,10 +174,87 @@ let can_transform ?(bounds_memo = ref IDMap.empty) prog proc =
 
 (* lol we can't translate substr in cntlm because R31_in gets written to R29_in calling strlcpy!! messed up *)
 
-let test_transform prog =
+let check_transform prog =
   let bounds_memo = ref IDMap.empty in
   tap
     (Program.iter_procedures
     %> Iter.filter (not % can_transform ~bounds_memo prog)
     %> Iter.iter (print_endline % ID.show % Procedure.id))
     prog
+
+let%expect_test "checks" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+prog entry @main;
+var $stack:(bv64->bv8);
+
+proc @main(R0_in:bv64, R31_in:bv64) -> ()
+[
+  block %main [
+    call @f(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    call @h(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+proc @f(R0_in:bv64, R31_in:bv64) -> ()
+[
+  block %f [
+    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x10:bv64) R0_in:bv64 64;
+    call @g(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+proc @g(R0_in:bv64, R31_in:bv64) -> ()
+[
+  block %g [
+    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x20:bv64) R0_in:bv64 64;
+    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x18:bv64) R0_in:bv64 64;
+    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x10:bv64) R0_in:bv64 64;
+    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x8:bv64) R0_in:bv64 64;
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+proc @h(R0_in:bv64, R31_in:bv64) -> ()
+[
+  block %h [
+    call @i(R0_in, R31_in);
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+proc @i(R0_in:bv64, R31_in:bv64) -> ()
+[
+  block %i [
+    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 7:bv64) R0_in:bv64 64;
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+proc @j(R0_in:bv64, R31_in:bv64) -> ()
+[
+  block %j [
+    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x8:bv64) R0_in:bv64 64;
+    call @f(R0_in, R31_in);
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+    |}
+  in
+  lst.prog |> check_transform |> ignore;
+  [%expect {|
+    ("@main", 1)
+    ("@h", 4)
+    ("@i", 5)
+    ("@j", 6)
+    |}]

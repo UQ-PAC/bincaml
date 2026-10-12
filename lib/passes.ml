@@ -494,7 +494,7 @@ module PassManager = struct
   let stack_rewrite =
     {
       name = "stack-rewrite";
-      apply = Prog Transforms.Stack_rewrite.test_transform;
+      apply = Prog Transforms.Stack_rewrite.check_transform;
       doc = "TODO Testing for now...";
       invariants = Invariants.presupposes [ SSA ];
     }
