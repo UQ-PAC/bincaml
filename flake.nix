@@ -140,7 +140,7 @@
             devShells = self.devShells;
             versions =
               let
-                shell = self.devShells.no-fp; 
+                shell = self.devShells.ci; 
                 deps = shell.buildInputs ++ shell.nativeBuildInputs ++ shell.propagatedBuildInputs;
               in
                 lib.concatMapStrings (x: "${x.name}\n") deps;
