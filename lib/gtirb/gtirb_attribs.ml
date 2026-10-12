@@ -19,6 +19,14 @@ type symbols = {
 [@@deriving show, protocol ~driver:(module Lang.Attrib_conv)]
 (** [.symbols] attribute and its sub-attributes. *)
 
+let empty_symbols : symbols =
+  {
+    external_functions = [];
+    globals = [];
+    func_entries = [];
+    global_offsets = [];
+  }
+
 (** {2 Section type} *)
 
 type section = {
@@ -33,7 +41,7 @@ type section = {
 (** {2 Combined GTIRB attributes} *)
 
 type gtirb_attribs = {
-  symbols : symbols;
+  symbols : symbols; [@default empty_symbols]
   initial_memory : section list; [@default []]
 }
 [@@deriving show, protocol ~driver:(module Lang.Attrib_conv)]
