@@ -54,6 +54,7 @@
           };
           bincamlDocs = ofinal.callPackage ./nix/bincaml-docs.nix { };
 
+          ppx_protocol_conv = ofinal.callPackage ./nix/ppx_protocol_conv.nix { };
           ocaml-protoc-plugin-6-1-0 = ofinal.callPackage ./nix/ocaml-protoc-plugin.nix { };
           aslp_lifter_ocaml = ofinal.callPackage ./nix/aslp-lifter-ocaml.nix { };
           hector = ofinal.callPackage ./nix/hector.nix { };
