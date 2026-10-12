@@ -139,14 +139,11 @@ module MakeEquiv (L : Label) = struct
       is not a parent or a non-identity cycle would be formed. *)
   let join (v : 'a t) (l : L.t) (v' : 'a t) =
     assert (Option.is_none !v.parent);
-    let eq_parent =
-      if L.equal l L.identity then Some (find_eq v') else !v.eq_parent
-    in
     let l', p = find v' in
     if CCEqual.physical v p then assert (L.equal (L.compose l' l) L.identity)
     else (
       !v.parent <- Some (L.compose l' l, p);
-      !v.eq_parent <- eq_parent)
+      if L.equal l L.identity then !v.eq_parent <- Some (find_eq v'))
 
   (** [join_eq v v'] marks [v] equivalent to [v']. No labelled edges are added.
       If [v] and [v'] have the same labelled parent, they must have the same
