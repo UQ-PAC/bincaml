@@ -137,6 +137,13 @@
             ocamlPackages = selfOcamlPackages;
             bincamlDocs = selfOcamlPackages.bincamlDocs;
             pkgs = pkgs;
+            devShells = self.devShells;
+            versions =
+              let
+                shell = self.devShells.no-fp; 
+                deps = shell.buildInputs ++ shell.nativeBuildInputs ++ shell.propagatedBuildInputs;
+              in
+                lib.concatMapStrings (x: "${x.name}\n") deps;
 
             fp.bincaml = fpOcamlPackages.bincaml;
             fp.bincaml_lsp = fpOcamlPackages.bincaml_lsp;
