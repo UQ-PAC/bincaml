@@ -198,29 +198,30 @@ var $stack:(bv64->bv8);
 proc @main(R0_in:bv64, R31_in:bv64) -> ()
 [
   block %main [
-    call @f(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
-    call @h(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
-    call @k(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
-    call @l(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
-    call @m(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    call @safe_call(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    call @unsafe_call(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    call @frame_size_oob(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    call @variable_offset(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    call @sp_propagated(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    call @unknown_frame_size(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
     goto (%ret);
   ];
   block %ret [ return; ]
 ];
 
-proc @f(R0_in:bv64, R31_in:bv64) -> ()
+proc @safe_call(R0_in:bv64, R31_in:bv64) -> ()
 [
-  block %f [
+  block %block [
     $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x10:bv64) R0_in:bv64 64;
-    call @g(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    call @safe_ops(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
     goto (%ret);
   ];
   block %ret [ return; ]
 ];
 
-proc @g(R0_in:bv64, R31_in:bv64) -> ()
+proc @safe_ops(R0_in:bv64, R31_in:bv64) -> ()
 [
-  block %g [
+  block %block [
     $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x20:bv64) R0_in:bv64 64;
     $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x18:bv64) R0_in:bv64 64;
     $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x10:bv64) R0_in:bv64 64;
@@ -230,59 +231,59 @@ proc @g(R0_in:bv64, R31_in:bv64) -> ()
   block %ret [ return; ]
 ];
 
-proc @h(R0_in:bv64, R31_in:bv64) -> ()
+proc @unsafe_call(R0_in:bv64, R31_in:bv64) -> ()
 [
-  block %h [
-    call @i(R0_in, R31_in);
+  block %block [
+    call @oob_addr(R0_in, R31_in);
     goto (%ret);
   ];
   block %ret [ return; ]
 ];
 
-proc @i(R0_in:bv64, R31_in:bv64) -> ()
+proc @oob_addr(R0_in:bv64, R31_in:bv64) -> ()
 [
-  block %i [
+  block %block [
     $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 7:bv64) R0_in:bv64 64;
     goto (%ret);
   ];
   block %ret [ return; ]
 ];
 
-proc @j(R0_in:bv64, R31_in:bv64) -> ()
+proc @frame_size_oob(R0_in:bv64, R31_in:bv64) -> ()
 [
-  block %j [
+  block %block [
     $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x8:bv64) R0_in:bv64 64;
-    call @f(R0_in, R31_in);
+    call @safe_call(R0_in, R31_in);
     goto (%ret);
   ];
   block %ret [ return; ]
 ];
 
-proc @k(R0_in:bv64, R31_in:bv64) -> ()
+proc @variable_offset(R0_in:bv64, R31_in:bv64) -> ()
 [
-  block %k [
+  block %block [
     $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, R0_in:bv64) R0_in:bv64 64;
     goto (%ret);
   ];
   block %ret [ return; ]
 ];
 
-proc @l(R0_in:bv64, R31_in:bv64) -> ()
+proc @sp_propagated(R0_in:bv64, R31_in:bv64) -> ()
 [
   block %l [
     var x:bv64 := R31_in;
-    call @f(x, R31_in);
+    call @safe_call(x, R31_in);
     goto (%ret);
   ];
   block %ret [ return; ]
 ];
 
-proc @m(R0_in:bv64, R31_in:bv64) -> ()
+proc @unknown_frame_size(R0_in:bv64, R31_in:bv64) -> ()
 [
   block %m [
-    call @f(R0_in, R31_in);
+    call @safe_call(R0_in, R31_in);
     $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x8:bv64) R0_in:bv64 64;
-    call @f(R0_in, bvsub(R31_in, 0x8:bv64));
+    call @safe_call(R0_in, bvsub(R31_in, 0x8:bv64));
     goto (%ret);
   ];
   block %ret [ return; ]
@@ -294,10 +295,10 @@ proc @m(R0_in:bv64, R31_in:bv64) -> ()
   [%expect
     {|
     ("@main", 1)
-    ("@h", 4)
-    ("@i", 5)
-    ("@j", 6)
-    ("@k", 7)
-    ("@l", 8)
-    ("@m", 9)
+    ("@unsafe_call", 4)
+    ("@oob_addr", 5)
+    ("@frame_size_oob", 6)
+    ("@variable_offset", 7)
+    ("@sp_propagated", 8)
+    ("@unknown_frame_size", 9)
     |}]
