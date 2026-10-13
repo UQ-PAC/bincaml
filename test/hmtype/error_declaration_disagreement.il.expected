@@ -1,10 +1,13 @@
 (run-transforms hindley-milner-elaborate)
-bincaml: Type error: type_error: 32 <> 64
+bincaml: Type error: 32 <> 64
          
          Related context:
-         infer expr: bvadd(0x1:bv64, $g)
+         infer expression
+         11 |     $g:bv64 := bvadd(1:bv64, $g:bv64);
+                                  [1;31m^^^^^^^^^^^^^^^^^[0m
+         
          statement
          11 |     $g:bv64 := bvadd(1:bv64, $g:bv64);
-                  [1;31m^^[0m
+                  [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
          
          prog script in ./error_declaration_disagreement.il: (progn (run-transforms hindley-milner-elaborate))
