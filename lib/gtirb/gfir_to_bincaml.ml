@@ -332,7 +332,7 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
 let section_to_bincaml_section (sec : Section.t) : Gtirb_attribs.section option
     =
   let { Section.name; byte_intervals; section_flags } = sec in
-  let read_only = List.mem SectionFlag.Writable section_flags in
+  let read_only = not (List.mem SectionFlag.Writable section_flags) in
   match byte_intervals with
   | { address; size; contents; _ } :: rest ->
       if not (List.is_empty rest) then
@@ -345,7 +345,7 @@ let section_to_bincaml_section (sec : Section.t) : Gtirb_attribs.section option
       Logs.warn (fun m -> m "gtirb section had no byte intervals. ignoring.");
       None
 
-let module_to_bincaml_attrib (m : Module.t) =
+let module_to_bincaml_attrib (m : Module.t) : Gtirb_attribs.gtirb_attrib =
   let initial_memory = List.filter_map section_to_bincaml_section m.sections
   and symbols = Gtirb_attribs.empty_symbols in
   { initial_memory; symbols }
