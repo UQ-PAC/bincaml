@@ -20,6 +20,10 @@ module FlagTypes = struct
     | Top  (** Unknown condition type *)
   [@@deriving show { with_path = false }, eq, ord, fold]
 
+  (** Flags are meant to describe properties about the result of a computation.
+      For example, the V flag determines whether a computation overflowed, or
+      the Z flag determines whether a computation resulted in zero. This type
+      describes such computations. *)
   type computation =
     | Sum of Expr.BasilExpr.t * Expr.BasilExpr.t  (** Computed e1 + e2 *)
     | Diff of Expr.BasilExpr.t * Expr.BasilExpr.t  (** Computed e1 - e2 *)
