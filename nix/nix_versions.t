@@ -7,7 +7,9 @@ are used in CI and in the Nix develop shell.
 
   $ git init --quiet -b dummy
   > git add .
-  > git commit --quiet -m dummy --author 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
+  > git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+  > git config user.name 'github-actions[bot]'
+  > git commit --quiet -m dummy
 
   $ nix eval .#versions --raw \
   > | sort | uniq | grep -v 'writable-tmpdir-as-home-hook\|perf-linux'
