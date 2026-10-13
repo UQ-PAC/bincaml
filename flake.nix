@@ -52,6 +52,9 @@
           capstone_arm64_disas = ofinal.callPackage ./nix/capstone_arm64_disas.nix {
             buildDunePackage = ofinal.buildDune324Package;
           };
+          boogieml = ofinal.callPackage ./nix/boogieml.nix {
+            buildDunePackage = ofinal.buildDune324Package;
+          };
           bincamlDocs = ofinal.callPackage ./nix/bincaml-docs.nix { };
 
           ocaml-protoc-plugin-6-1-0 = ofinal.callPackage ./nix/ocaml-protoc-plugin.nix { };
