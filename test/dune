@@ -4,6 +4,13 @@
  (modules test_bincaml)
  (libraries bincaml_inline_tests))
 
+(executable
+ (package bincaml)
+ (public_name gen_expect)
+ (modules gen_expect)
+ (name gen_expect)
+ (libraries containers))
+
 (library
  (name bincaml_inline_tests)
  (inline_tests)

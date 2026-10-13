@@ -1,0 +1,9 @@
+(run-transforms hindley-milner-elaborate)
+bincaml: Type error: type_error: 64 <> 32
+         
+         Related context:
+         statement
+         8 |     var l:bv64 := (1:bv32);
+                     [1;31m^^^^^^^^^^^^^^^^^^[0m
+         
+         prog script in ./error_assign_local.il: (progn (run-transforms hindley-milner-elaborate))
