@@ -6,7 +6,4 @@
   ../flake.lock
   ../.gitignore
   (source_tree .))
- (enabled_if
-  (or
-   %{bin-available:nix}
-   (= %{env:CI=} "true"))))
+ (enabled_if %{bin-available:nix}))
