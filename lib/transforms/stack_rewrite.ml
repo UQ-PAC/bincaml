@@ -126,7 +126,6 @@ let stack_ops_inbounds proc =
                 Bitvec.sub o
                   (Bitvec.sub (Bitvec.of_int ~size (s / 8)) (Bitvec.one ~size))
               in
-              (* print_endline @@ (Bitvec.show o =^.^= Bitvec.show o'); *)
               match stack_size with
               | Unbounded -> Bitvec.sgt o' (Bitvec.zero ~size)
               | Size s -> Bitvec.sgt o' (Bitvec.zero ~size) && Bitvec.sle o s
@@ -177,8 +176,6 @@ let sp_never_escapes proc =
     except for R31_in/SP_in. *)
 let can_transform ?(bounds_memo = ref IDMap.empty) prog proc =
   subtree_all_inbounds ~bounds_memo prog proc && sp_never_escapes proc
-
-(* lol we can't translate substr in cntlm because R31_in gets written to R29_in calling strlcpy!! messed up *)
 
 let check_transform prog =
   let bounds_memo = ref IDMap.empty in
