@@ -50,6 +50,10 @@ let to_string ?show_internal e =
 
 let empty : attrib_map = StringMap.empty
 
+let to_attrib_map : t -> attrib_map = function
+  | `Assoc x -> x
+  | _ -> invalid_arg "to_attrib_map: not an `Assoc"
+
 type loc = int * int
 (** a text token range; beginchar, endchar*)
 
