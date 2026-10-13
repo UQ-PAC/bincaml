@@ -20,10 +20,22 @@ open Analysis
     frame. Precision could be gained with interprocedural logic, but that is
     future work. *)
 
+let is_sp_name n =
+  List.exists (fun name -> String.equal n name) [ "R31_in"; "SP_in" ]
+
+(** Determine whether a variable is the input stack pointer (with a terrible
+    HACK!!) *)
+let is_sp_in v = is_sp_name (Var.name v)
+
 module Taint = struct
   include Intra_analysis.MapState (Lattice_types.BooleanLattice)
 
-  let init ?(vertex = None) _ = bottom
+  let init ?(vertex = None) proc =
+    Procedure.formal_in_params proc
+    |> StringMap.to_iter
+    |> Iter.filter (fun (n, _) -> is_sp_name n)
+    |> Iter.map (fun (_, v) -> (v, true))
+    |> Iter.fold (fun acc (v, t) -> update v t acc) bottom
 
   let transfer_state is_tainted stmt =
     let open Stmt in
@@ -39,13 +51,6 @@ module Taint = struct
 end
 
 module TaintAnalysis = Dataflow_graph.AnalysisFwd (Taint)
-
-let is_sp_name n =
-  List.exists (fun name -> String.equal n name) [ "R31_in"; "SP_in" ]
-
-(** Determine whether a variable is the input stack pointer (with a terrible
-    HACK!!) *)
-let is_sp_in v = is_sp_name (Var.name v)
 
 (** Determine the offset of an expression of the form R31_in - off *)
 let computed_offset e =
@@ -102,30 +107,31 @@ let stack_frame_size proc =
   | [] -> Unbounded
   | x :: xs -> if List.for_all (Bitvec.equal x) xs then Size x else Unknown
 
-let ( =^.^= ) = ( %> ) (( ^ ) " meow ") % ( ^ )
-
 (** Determines whether all stack memory operations fall within bounds of the
     procedure's stack frame. *)
 let stack_ops_inbounds proc =
   let open Stmt in
+  let m = TaintAnalysis.flow_insensitive proc in
   let stack_size = stack_frame_size proc in
   Procedure.iter_stmt_topo_fwd proc
   |> Iter.for_all (function
     | Instr_Load { addr = Addr { addr; size = s } }
     | Instr_Store { addr = Addr { addr; size = s } } ->
-        computed_offset addr
-        |> Option.for_all (fun o ->
-            let size = Bitvec.size o in
-            (* o' is the offset of the last byte read/written to *)
-            let o' =
-              Bitvec.sub o
-                (Bitvec.sub (Bitvec.of_int ~size (s / 8)) (Bitvec.one ~size))
-            in
-            (* print_endline @@ (Bitvec.show o =^.^= Bitvec.show o'); *)
-            match stack_size with
-            | Unbounded -> Bitvec.sgt o' (Bitvec.zero ~size)
-            | Size s -> Bitvec.sgt o' (Bitvec.zero ~size) && Bitvec.sle o s
-            | Unknown -> false)
+        if Taint.is_tainted_expr m addr then
+          computed_offset addr
+          |> Option.exists (fun o ->
+              let size = Bitvec.size o in
+              (* o' is the offset of the last byte read/written to *)
+              let o' =
+                Bitvec.sub o
+                  (Bitvec.sub (Bitvec.of_int ~size (s / 8)) (Bitvec.one ~size))
+              in
+              (* print_endline @@ (Bitvec.show o =^.^= Bitvec.show o'); *)
+              match stack_size with
+              | Unbounded -> Bitvec.sgt o' (Bitvec.zero ~size)
+              | Size s -> Bitvec.sgt o' (Bitvec.zero ~size) && Bitvec.sle o s
+              | Unknown -> false)
+        else true
     | _ -> true)
 
 (** Determine whether this procedure and all transitive callees of this
@@ -194,6 +200,9 @@ proc @main(R0_in:bv64, R31_in:bv64) -> ()
   block %main [
     call @f(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
     call @h(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    call @k(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    call @l(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    call @m(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
     goto (%ret);
   ];
   block %ret [ return; ]
@@ -249,12 +258,46 @@ proc @j(R0_in:bv64, R31_in:bv64) -> ()
   block %ret [ return; ]
 ];
 
+proc @k(R0_in:bv64, R31_in:bv64) -> ()
+[
+  block %k [
+    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, R0_in:bv64) R0_in:bv64 64;
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+proc @l(R0_in:bv64, R31_in:bv64) -> ()
+[
+  block %l [
+    var x:bv64 := R31_in;
+    call @f(x, R31_in);
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+proc @m(R0_in:bv64, R31_in:bv64) -> ()
+[
+  block %m [
+    call @f(R0_in, R31_in);
+    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x8:bv64) R0_in:bv64 64;
+    call @f(R0_in, bvsub(R31_in, 0x8:bv64));
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
     |}
   in
   lst.prog |> check_transform |> ignore;
-  [%expect {|
+  [%expect
+    {|
     ("@main", 1)
     ("@h", 4)
     ("@i", 5)
     ("@j", 6)
+    ("@k", 7)
+    ("@l", 8)
+    ("@m", 9)
     |}]
