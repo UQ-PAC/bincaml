@@ -138,6 +138,141 @@ module P = struct
     match a with `List l -> List.map f l | _ -> failwith "expected pair"
 end
 
+module ScriptArgs = struct
+  type value_t = Positional | Named of string [@@deriving eq]
+  type value = Enum of string | Int of int | String of string | List of value
+
+  type 'a vt =
+    | Enum of string vt
+    | Int of int vt
+    | String of string vt
+    | List of ('a vt -> 'a list vt)
+
+  type 'a result = (value_t * 'a vt) list
+  type _ term = Int of (int -> int term)
+
+  let get_named n vs = List.find (fst %> equal_value_t (Named n)) vs
+
+  type spec = {
+    name : string option;
+    hintname : string option; (* for documentation  *)
+    value : nonopt;
+    optional : [ `No | `WithDefault of value | `Yes ];
+  }
+
+  and nonopt = Enum of string list | Int | String
+
+  type hl_spec = Many of spec | Args of spec list | Empty
+
+  type _ vl =
+    | Int : Sexp.t -> int vl
+    | Bool : Sexp.t -> bool vl
+    | String : Sexp.t -> string vl
+
+  let pretty_nonopt : nonopt -> string = function
+    | Enum v -> List.to_string ~start:"[" ~stop:"]" ~sep:" | " Fun.id v
+    | Int -> "int"
+    | String -> "string"
+
+  let pretty_spec = function
+    | { name = None; value; hintname = Some n; optional = `No } ->
+        "<" ^ n ^ ":" ^ pretty_nonopt value ^ ">"
+    | { name = None; value; optional = `No } -> pretty_nonopt value
+    | { name = None; value; optional } -> (
+        match optional with
+        | `No -> pretty_nonopt value
+        | `Yes -> "?" ^ pretty_nonopt value
+        | `WithDefault v -> "?(" ^ pretty_nonopt value ^ " default=)")
+    | { name = Some name; value; optional } -> (
+        match optional with
+        | `No -> ":" ^ name ^ " " ^ pretty_nonopt value
+        | `Yes -> "?:" ^ name ^ " " ^ pretty_nonopt value ^ ""
+        | `WithDefault v ->
+            "?(:" ^ name ^ " " ^ pretty_nonopt value ^ "default=())")
+
+  let pretty_hl_spec = function
+    | Many spec -> pretty_spec spec ^ " ... "
+    | Empty -> ""
+    | Args args -> List.to_string ~sep:" " pretty_spec args
+
+  let many a = Many a
+  let noargs = Empty
+  let args args = Args args
+
+  let positional ?hint ty =
+    { name = None; optional = `No; value = ty; hintname = hint }
+
+  let labelled name ty =
+    { name = Some name; optional = `No; value = ty; hintname = None }
+
+  let optional ?default name ty =
+    let optional =
+      match default with Some d -> `WithDefault d | None -> `Yes
+    in
+    { name = Some name; optional; value = ty; hintname = None }
+
+  let rec well_formed_spec names spec =
+    match spec with
+    | [] -> Ok ()
+    | { name = None; optional = `No } :: tl -> well_formed_spec names tl
+    | { name = None; optional = `Yes | `WithDefault _ } :: [] -> Ok ()
+    | { name = None; optional = `Yes | `WithDefault _ } :: tl ->
+        Error "An unnamed optional can only appear as last argument."
+    | { name = Some n } :: tl ->
+        if List.mem ~eq:String.equal n names then Error ("resued label: " ^ n)
+        else well_formed_spec (n :: names) tl
+
+  let get_value value (sexp : CCSexp.t list) :
+      (value * CCSexp.t list, string) Result.t =
+    match (value, sexp) with
+    | Enum vs, `Atom n :: rest ->
+        if List.mem ~eq:String.equal n vs then Ok (Enum n, rest)
+        else
+          Error
+            (Printf.sprintf "enum value %s not in %s" n
+               (List.to_string ~start:"[" ~stop:"]" ~sep:" | " Fun.id vs))
+    | Int, `Atom n :: rest ->
+        Int.of_string n
+        |> Option.to_result ("Not an int: " ^ n)
+        |> Result.map (fun o -> ((Int o : value), rest))
+    | String, `Atom n :: rest -> Ok ((String n : value), rest)
+    | _, `List _ :: rest -> Error "Not an atom"
+    | _, [] -> Error "Not enough arguments"
+
+  let get_labeled name optional value sexp =
+    let open Result.Infix in
+    match sexp with
+    | `Atom n :: tl -> (
+        if String.equal (":" ^ n) name then
+          let* value, tl = get_value value tl in
+          Ok (Some (Named name, value), tl)
+        else
+          match optional with
+          | `No -> Error ("Missing non-optional labelled arg: " ^ name)
+          | `WithDefault v -> Ok (Some (Named name, v), sexp)
+          | `Yes -> Ok (None, sexp))
+    | [] -> (
+        match optional with
+        | `No -> Error ("Missing non-optional labelled arg: " ^ name)
+        | `WithDefault v -> Ok (Some (Named name, v), sexp)
+        | `Yes -> Ok (None, []))
+    | _ -> Error "Expected atom"
+
+  let rec parse_sexp spec sexp =
+    let open Result.Infix in
+    match spec with
+    | { name = None; value; optional = `No } :: tl ->
+        let* v, sexp = get_value value sexp in
+        let* rest = parse_sexp tl sexp in
+        Ok ((Positional, v) :: rest)
+    | { name = Some name; value; optional } :: tl ->
+        let* v, sexp = get_labeled name optional value sexp in
+        let v = Option.to_list v in
+        let* rest = parse_sexp tl sexp in
+        Ok (v @ rest)
+    | _ -> Ok []
+end
+
 let dump_il st ofile =
   let ofile = P.(opt string ofile) in
   file_opt ofile (fun c -> Program.pretty_to_chan c (get_prog st));
@@ -336,12 +471,21 @@ let dbg_gtirb st fname =
   st
 
 let cmds_list =
+  let open ScriptArgs in
   [
-    ("skip", (fun a b -> a), "", "Do nothing");
-    ("load-il", load_il, "<filename1> <filename2> ...", "load il files");
+    ("skip", (fun a b -> a), noargs, "Do nothing");
+    ( "load-il",
+      load_il,
+      many (positional ~hint:"filename" String),
+      "load il files" );
+    (*
     ("gtirb", dbg_gtirb, "in.gtirb output_file?", "Gtirb debug");
     ("load-gtirb", load_gtirb, "in.gtirb output_file?", "Load gtirb file");
-    ("defcmd", def_cmd, "<name> <definition>", "define a command alias");
+    ( "defcmd",
+      def_cmd,
+      args
+        [ positional ~hint:"name" String; positional ~hint:"definition" String ],
+      "define a command alias" );
     ("list-procs", list_procs, "", "List procedures in program");
     ("dump-il", dump_il, "?file", "Write IL to file or stdout");
     ("dump-boogie", dump_boogie, "?file", "Write Boogie to file or stdout");
@@ -374,7 +518,7 @@ let cmds_list =
     ("dump-history", save_history, "file.sexp", "Write script history");
     ("dump-proc-il", dump_proc_il, "procname", "Print the IL of a proc");
     ("!", run_bash_command, "", "run bash command");
-    ("help", (fun a b -> a), "", "print help message");
+    ("help", (fun a b -> a), "", "print help message"); *)
   ]
 
 let add_help_cmd cmds =
