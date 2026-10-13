@@ -100,7 +100,7 @@ let make_ite cond c1 c2 =
   | Lit a, N b -> Some (N (Ite (cond, a, b)))
   | _ -> None
 
-let extract_overflow_cary arg1 arg2 =
+let extract_overflow_carry arg1 arg2 =
   let open Expr.AbstractExpr in
   let open Expr.BasilExpr in
   let sext_eq extension bv1 bv2 =
@@ -258,7 +258,7 @@ let extract_semantics e =
           UnaryExpr
             { op = `BOOLTOBV1; arg = BinaryExpr { op = `EQ; arg1; arg2 } };
       } ->
-      extract_overflow_cary arg1 arg2
+      extract_overflow_carry arg1 arg2
   | UnaryExpr
       {
         op = `BOOLTOBV1;
