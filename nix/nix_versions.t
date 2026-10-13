@@ -1,8 +1,13 @@
 Records versions of tools installed by Nix. These tool versions
 are used in CI and in the Nix develop shell.
 
-  $ mkdir nix && cp *.nix nix && cp ../flake.nix ../flake.lock ../.gitignore .
-  $ git init -b dummy --quiet && git add . && git commit -m dummy --quiet
+  $ mkdir nix
+  > cp *.nix nix
+  > cp ../flake.nix ../flake.lock ../.gitignore .
+
+  $ git init --quiet -b dummy
+  > git add .
+  > git commit --quiet -m dummy --author 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
 
   $ nix eval .#versions --raw \
   > | sort | uniq | grep -v 'writable-tmpdir-as-home-hook\|perf-linux'
