@@ -5,17 +5,17 @@ open Abstract_expr
 
 let type_error st a b =
   let a, b = TypeExpr.(find st a, find st b) in
-  raise
-    (Hm_types.TypeErr
-       ("type_error: " ^ Hm_types.type_to_string a ^ " <> "
-      ^ Hm_types.type_to_string b))
+  Errors.raise_error
+    ("type_error: " ^ Hm_types.type_to_string a ^ " <> "
+   ^ Hm_types.type_to_string b)
+    TypeError
 
 let recursion_error st a b =
   let b = TypeExpr.find st b in
-  raise
-    (Hm_types.TypeErr
-       ("recursive: tvar " ^ ID.to_string a ^ " occurs in "
-      ^ Hm_types.type_to_string b))
+  Errors.raise_error
+    ("recursive: tvar " ^ ID.to_string a ^ " occurs in "
+   ^ Hm_types.type_to_string b)
+    TypeError
 
 (** Check for type recursion: recursion is failure. *)
 let occurs_in a b =
