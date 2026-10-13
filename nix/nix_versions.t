@@ -11,7 +11,7 @@ are used in CI and in the Nix develop shell.
   > git config user.name 'github-actions[bot]'
   > git commit --quiet -m dummy
 
-  $ nix eval .#versions --raw \
+  $ nix --quiet eval .#versions --raw \
   > | sort | uniq | grep -v 'writable-tmpdir-as-home-hook\|perf-linux'
   BNFC-2.9.6.3-unstable-2026-05-08
   Boogie-3.5.7
