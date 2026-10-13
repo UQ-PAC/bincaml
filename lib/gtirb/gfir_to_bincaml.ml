@@ -345,7 +345,7 @@ let section_to_bincaml_section (sec : Section.t) : Gtirb_attribs.section option
       Logs.warn (fun m -> m "gtirb section had no byte intervals. ignoring.");
       None
 
-let module_to_bincaml_attrib (m : Module.t) : Gtirb_attribs.gtirb_attrib =
+let module_to_bincaml_attrib (m : Module.t) : Gtirb_attribs.gtirb_attribs =
   let initial_memory = List.filter_map section_to_bincaml_section m.sections
   and symbols = Gtirb_attribs.empty_symbols in
   { initial_memory; symbols }
