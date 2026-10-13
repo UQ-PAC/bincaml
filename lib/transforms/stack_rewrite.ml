@@ -133,29 +133,6 @@ let stack_ops_inbounds proc =
         else true
     | _ -> true)
 
-(** Determine whether this procedure and all transitive callees of this
-    procedure write to their stacks in bound. *)
-let rec subtree_all_inbounds ~bounds_memo prog proc =
-  let open Stmt in
-  let id = Procedure.id proc in
-  match IDMap.get id !bounds_memo with
-  | Some b -> b
-  | None ->
-      let b = stack_ops_inbounds proc in
-      bounds_memo := IDMap.add id b !bounds_memo;
-      if b then (
-        let x =
-          Procedure.iter_stmt_topo_fwd proc
-          |> Iter.for_all (function
-            | Instr_Call { procid } ->
-                subtree_all_inbounds ~bounds_memo prog
-                  (Program.get_proc procid prog)
-            | _ -> true)
-        in
-        bounds_memo := IDMap.add id x !bounds_memo;
-        x)
-      else false
-
 (** Determines whether the stack pointer is never passed to a non-sp parameter
     of any call. *)
 let sp_never_escapes proc =
@@ -171,11 +148,29 @@ let sp_never_escapes proc =
 
 (** Determins whether this procedure can safely have the stack transform
     applied. We require that all stack operations live in bounds of the stack
-    frame of the procedure and all callees of this procedure, and that no stack
-    pointers of this stack frame get passed as parameters to called procedures
-    except for R31_in/SP_in. *)
-let can_transform ?(bounds_memo = ref IDMap.empty) prog proc =
-  subtree_all_inbounds ~bounds_memo prog proc && sp_never_escapes proc
+    frame of the procedure and that no stack pointers of this stack frame get
+    passed as parameters to called procedures except for R31_in/SP_in. We also
+    require that all transitive callees of this procedure can also be
+    transformed. *)
+let rec can_transform ?(bounds_memo = ref IDMap.empty) prog proc =
+  let open Stmt in
+  let id = Procedure.id proc in
+  match IDMap.get id !bounds_memo with
+  | Some b -> b
+  | None ->
+      let b = stack_ops_inbounds proc && sp_never_escapes proc in
+      bounds_memo := IDMap.add id b !bounds_memo;
+      if b then (
+        let x =
+          Procedure.iter_stmt_topo_fwd proc
+          |> Iter.for_all (function
+            | Instr_Call { procid } ->
+                can_transform ~bounds_memo prog (Program.get_proc procid prog)
+            | _ -> true)
+        in
+        bounds_memo := IDMap.add id x !bounds_memo;
+        x)
+      else false
 
 let check_transform prog =
   let bounds_memo = ref IDMap.empty in
@@ -195,6 +190,15 @@ var $stack:(bv64->bv8);
 proc @main(R0_in:bv64, R31_in:bv64) -> ()
 [
   block %main [
+    call @calls(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+proc @calls(R0_in:bv64, R31_in:bv64) -> ()
+[
+  block %block [
     call @safe_call(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
     call @unsafe_call(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
     call @frame_size_oob(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
@@ -292,10 +296,11 @@ proc @unknown_frame_size(R0_in:bv64, R31_in:bv64) -> ()
   [%expect
     {|
     ("@main", 1)
-    ("@unsafe_call", 4)
-    ("@oob_addr", 5)
-    ("@frame_size_oob", 6)
-    ("@variable_offset", 7)
-    ("@sp_propagated", 8)
-    ("@unknown_frame_size", 9)
+    ("@calls", 2)
+    ("@unsafe_call", 5)
+    ("@oob_addr", 6)
+    ("@frame_size_oob", 7)
+    ("@variable_offset", 8)
+    ("@sp_propagated", 9)
+    ("@unknown_frame_size", 10)
     |}]
