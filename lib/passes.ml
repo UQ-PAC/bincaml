@@ -494,8 +494,10 @@ module PassManager = struct
   let stack_rewrite =
     {
       name = "stack-rewrite";
-      apply = Prog Transforms.Stack_rewrite.check_transform;
-      doc = "TODO Testing for now...";
+      apply = Prog Transforms.Stack_rewrite.transform;
+      doc =
+        "Wherever possible replaces input SP registers with calls to \
+         AllocStack to create stack frames.";
       invariants = Invariants.presupposes [ SSA ];
     }
 

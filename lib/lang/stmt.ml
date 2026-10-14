@@ -35,7 +35,7 @@ module Intrinsic = struct
       | Malloc -> "@_malloc"
       | Calloc -> "@_calloc"
       | Free -> "@_free"
-      | AllocStack -> "@_allcoa"
+      | AllocStack -> "@_alloca"
       | FreeStack -> "@_free_alloca"
       | Aarch64Eval -> "@_aarch64_eval")
     |> Containers_pp.text
