@@ -55,6 +55,7 @@
   ocamlgraph
   (cmdliner (>= 2.0.0))
   pp_loc
+  camlzip
   fmt
   patricia-tree
   ppx_here
