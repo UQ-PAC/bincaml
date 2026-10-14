@@ -223,7 +223,7 @@ let drop_sp_params proc =
   in
   proc
   |> Procedure.set_formal_in_params fin
-  |> Procedure.set_formal_in_params fout
+  |> Procedure.set_formal_out_params fout
 
 let transform prog =
   let open Option.Infix in
@@ -300,7 +300,7 @@ let%expect_test "checks" =
     Loader.Loadir.ast_of_string
       {|
 prog entry @main;
-var $stack:(bv64->bv8);
+var observable $mem:(bv64->bv8);
 
 proc @main(R0_in:bv64, R31_in:bv64) -> ()
 [
@@ -328,7 +328,7 @@ proc @calls(R0_in:bv64, R31_in:bv64) -> ()
 proc @safe_call(R0_in:bv64, R31_in:bv64) -> ()
 [
   block %block [
-    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x10:bv64) R0_in:bv64 64;
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, 0x10:bv64) R0_in:bv64 64;
     call @safe_ops(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
     goto (%ret);
   ];
@@ -338,10 +338,10 @@ proc @safe_call(R0_in:bv64, R31_in:bv64) -> ()
 proc @safe_ops(R0_in:bv64, R31_in:bv64) -> ()
 [
   block %block [
-    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x20:bv64) R0_in:bv64 64;
-    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x18:bv64) R0_in:bv64 64;
-    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x10:bv64) R0_in:bv64 64;
-    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x8:bv64) R0_in:bv64 64;
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, 0x20:bv64) R0_in:bv64 64;
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, 0x18:bv64) R0_in:bv64 64;
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, 0x10:bv64) R0_in:bv64 64;
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, 0x8:bv64) R0_in:bv64 64;
     goto (%ret);
   ];
   block %ret [ return; ]
@@ -359,7 +359,7 @@ proc @unsafe_call(R0_in:bv64, R31_in:bv64) -> ()
 proc @oob_addr(R0_in:bv64, R31_in:bv64) -> ()
 [
   block %block [
-    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 7:bv64) R0_in:bv64 64;
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, 7:bv64) R0_in:bv64 64;
     goto (%ret);
   ];
   block %ret [ return; ]
@@ -368,7 +368,7 @@ proc @oob_addr(R0_in:bv64, R31_in:bv64) -> ()
 proc @frame_size_oob(R0_in:bv64, R31_in:bv64) -> ()
 [
   block %block [
-    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x8:bv64) R0_in:bv64 64;
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, 0x8:bv64) R0_in:bv64 64;
     call @safe_call(R0_in, R31_in);
     goto (%ret);
   ];
@@ -378,7 +378,7 @@ proc @frame_size_oob(R0_in:bv64, R31_in:bv64) -> ()
 proc @variable_offset(R0_in:bv64, R31_in:bv64) -> ()
 [
   block %block [
-    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, R0_in:bv64) R0_in:bv64 64;
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, R0_in:bv64) R0_in:bv64 64;
     goto (%ret);
   ];
   block %ret [ return; ]
@@ -398,7 +398,7 @@ proc @unknown_frame_size(R0_in:bv64, R31_in:bv64) -> ()
 [
   block %m [
     call @safe_call(R0_in, R31_in);
-    $stack:(bv64->bv8) := store le $stack:(bv64->bv8) bvsub(R31_in:bv64, 0x8:bv64) R0_in:bv64 64;
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, 0x8:bv64) R0_in:bv64 64;
     call @safe_call(R0_in, bvsub(R31_in, 0x8:bv64));
     goto (%ret);
   ];
@@ -418,4 +418,97 @@ proc @unknown_frame_size(R0_in:bv64, R31_in:bv64) -> ()
     ("@variable_offset", 8)
     ("@sp_propagated", 9)
     ("@unknown_frame_size", 10)
+    |}]
+
+let%expect_test "transform" =
+  let lst =
+    Loader.Loadir.ast_of_string
+      {|
+prog entry @main;
+var observable $mem:(bv64->bv8);
+
+proc @main(R0_in:bv64, R31_in:bv64) -> ()
+[
+  block %main [
+    call @safe_call(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    call @safe_ops(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+proc @safe_call(R0_in:bv64, R31_in:bv64) -> ()
+[
+  block %block [
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, 0x10:bv64) R0_in:bv64 64;
+    call @safe_ops(R0_in, bvsub(R31_in:bv64, 0x10:bv64));
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+
+proc @safe_ops(R0_in:bv64, R31_in:bv64) -> ()
+[
+  block %block [
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, 0x20:bv64) R0_in:bv64 64;
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, 0x18:bv64) R0_in:bv64 64;
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, 0x10:bv64) R0_in:bv64 64;
+    $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(R31_in:bv64, 0x8:bv64) R0_in:bv64 64;
+    goto (%ret);
+  ];
+  block %ret [ return; ]
+];
+    |}
+  in
+  let prog = lst.prog |> transform in
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
+  [%expect
+    {|
+    ("@main", 1)
+    ("@safe_call", 2)
+    ("@safe_ops", 3)
+    var observable $mem:(bv64->bv8);
+    proc @main(R0_in:bv64)  -> () {  }
+      modifies $mem:(bv64->bv8)
+      captures $mem:(bv64->bv8)
+
+    [
+       block %main [
+         ($mem:(bv64->bv8), var SP:bv64):= call @_alloca($mem, 0x10:bv64);
+         call @safe_call(R0_in=R0_in:bv64);
+         call @safe_ops(R0_in=R0_in:bv64);
+         goto (%ret);
+       ];
+       block %ret [ return; ]
+    ];
+    proc @safe_call(R0_in:bv64)  -> () {  }
+      modifies $mem:(bv64->bv8)
+      captures $mem:(bv64->bv8)
+
+    [
+       block %block [
+         ($mem:(bv64->bv8), var SP:bv64):= call @_alloca($mem, 0x10:bv64);
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(SP:bv64, 0x10:bv64) R0_in:bv64 64;
+         call @safe_ops(R0_in=R0_in:bv64);
+         goto (%ret);
+       ];
+       block %ret [ return; ]
+    ];
+    proc @safe_ops(R0_in:bv64)  -> () {  }
+      modifies $mem:(bv64->bv8)
+      captures $mem:(bv64->bv8)
+
+    [
+       block %block [
+         ($mem:(bv64->bv8), var SP:bv64):= call @_alloca($mem, 0x7fffffffffffffff:bv64);
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(SP:bv64, 0x20:bv64) R0_in:bv64 64;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(SP:bv64, 0x18:bv64) R0_in:bv64 64;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(SP:bv64, 0x10:bv64) R0_in:bv64 64;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvsub(SP:bv64, 0x8:bv64) R0_in:bv64 64;
+         goto (%ret);
+       ];
+       block %ret [ return; ]
+    ];
+    prog entry @main;
     |}]
