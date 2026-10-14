@@ -6,6 +6,8 @@ module UUIDSet = Load_auxdata.UUIDSet
 module Gfir = Gfir
 (** Intermediate representation used by the frontend *)
 
+module Gtirb_attribs = Gtirb_attribs
+
 module Gfir_to_bincaml = Gfir_to_bincaml
 (** Translation from frontend intermediate represntation to bincaml IR *)
 
