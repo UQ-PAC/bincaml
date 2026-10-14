@@ -15,7 +15,9 @@
   fmt
   trace.core
   bincaml.util
-  ppx_protocol_conv.driver)
+  ppx_protocol_conv.driver
+  decompress.gz
+  base64)
  (inline_tests)
  (preprocess
   (pps

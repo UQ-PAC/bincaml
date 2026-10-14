@@ -67,11 +67,53 @@ module Driver = struct
     | _ -> invalid_arg "expected `Bool"
 
   let of_bool : bool -> t = fun b -> `Bool b
+  let w = De.Lz77.make_window ~bits:15
+  let o = De.bigstring_create De.io_buffer_size
+  let i = De.bigstring_create De.io_buffer_size
+  let q = De.Queue.create 4096
+
+  let cfg =
+    Gz.Higher.configuration Unknown (fun () -> Unix.time () |> Int32.of_float)
+
+  let buffered_refill_flush input =
+    let n_used = ref 0 in
+    let out_buf = Buffer.create De.io_buffer_size in
+
+    let refill bs =
+      let n_to_copy = min De.io_buffer_size (Bytes.length input - !n_used) in
+      Iter.int_range ~start:0 ~stop:(n_to_copy - 1)
+      |> Iter.map (Int.add !n_used %> Bytes.get input)
+      |> Iter.iteri (Bigarray.Array1.set bs);
+      n_used := !n_used + n_to_copy;
+      n_to_copy
+    and flush bs i =
+      Iter.to_buffer
+        (Iter.int_range ~start:0 ~stop:(i - 1)
+        |> Iter.map (Bigarray.Array1.get bs))
+        out_buf
+    in
+
+    (refill, flush, out_buf)
 
   (** TODO: compress all bytes? this would be a convenient place to do it. *)
-  let to_bytes : t -> bytes = fun x -> to_string x |> Bytes.unsafe_of_string
+  let to_bytes : t -> bytes = function
+    | `String s ->
+        let decoded = Base64.decode_exn s |> Bytes.unsafe_of_string in
+        let refill, flush, out_buf = buffered_refill_flush decoded in
+        let _ : Gz.Higher.metadata =
+          Gz.Higher.uncompress ~refill ~flush i o
+          |> Result.map_err (fun (`Msg x) -> x)
+          |> Result.get_or_failwith
+        in
+        Buffer.to_bytes out_buf
+    | _ -> invalid_arg "expected `String"
 
-  let of_bytes : bytes -> t = fun x -> Bytes.to_string x |> of_string
+  let of_bytes : bytes -> t =
+   fun x ->
+    let refill, flush, out_buf = buffered_refill_flush x in
+    Gz.Higher.compress ~w ~q ~refill ~flush () cfg i o;
+    let compressed = Buffer.to_bytes out_buf in
+    `String (Base64.encode_exn (Bytes.unsafe_to_string compressed))
 
   (** TODO: null? or maybe make this unsup. *)
   let null : t = `Bitvector (Bitvec.zero ~size:0)
