@@ -23,6 +23,9 @@ open Analysis
 let is_sp_name n =
   List.exists (fun name -> String.equal n name) [ "R31_in"; "SP_in" ]
 
+let is_frame_in_name n =
+  List.exists (fun name -> String.equal n name) [ "R29_in" ]
+
 (** Determine whether a variable is the input stack pointer (with a terrible
     HACK!!) *)
 let is_sp_in v = is_sp_name (Var.name v)
@@ -133,8 +136,8 @@ let stack_ops_inbounds proc =
         else true
     | _ -> true)
 
-(** Determines whether the stack pointer is never passed to a non-sp parameter
-    of any call. *)
+(** Determines whether the stack pointer is never passed to a non-sp (or
+    non-frame-pointer) parameter of any call. *)
 let sp_never_escapes proc =
   let open Stmt in
   let m = TaintAnalysis.flow_insensitive proc in
@@ -142,7 +145,9 @@ let sp_never_escapes proc =
   |> Iter.for_all (function
     | Instr_Call { args } ->
         StringMap.for_all
-          (fun name e -> is_sp_name name || (not @@ Taint.is_tainted_expr m e))
+          (fun name e ->
+            is_sp_name name || is_frame_in_name name
+            || (not @@ Taint.is_tainted_expr m e))
           args
     | _ -> true)
 
