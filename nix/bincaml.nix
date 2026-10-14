@@ -31,7 +31,8 @@
   stb_image,
   linenoise,
   unionFind,
-  camlzip,
+  decompress,
+  base64,
 
   capstone_arm64_disas,
   aslp_lifter_ocaml,
@@ -112,7 +113,8 @@ buildDunePackage {
     patricia-tree
     logs
     mtime
-    camlzip
+    base64
+    decompress
     unionFind
     terminal_size
     kittyimg
