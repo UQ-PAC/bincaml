@@ -147,12 +147,7 @@ lib.makeScope newScope (
           odoc_driver \
             --html-dir=$out \
             --mld-dir=$dev --odoc-dir=$dev --odocl-dir=$dev \
-            $(cd $OCAMLPATH && echo *) -v
-
-          ocamlfind printconf
-
-          echo ${fake_opam}
-          echo ${fake_dune_prefix}
+            $(cd $OCAMLPATH && echo *)
 
           for d in $dev/*; do
             if [[ -d $d ]]; then
@@ -163,7 +158,9 @@ lib.makeScope newScope (
             fi
           done
 
-          find $out -name sherlodoc_db.js -delete -exec ln -s $out/sherlodoc_db.js '{}' ';'
+          find $out -name sherlodoc_db.js -delete
+          find $out -name '*.html' -exec sed -i.old "s|sherlodoc_db.js'|../sherlodoc_db.js'|" '{}' ';'
+          find $out -name '*.old' -delete
           sherlodoc index --file-list $out/sherlodoc-index-list -o $out/sherlodoc_db.js
           rm $out/sherlodoc-index-list
         '';
