@@ -140,16 +140,15 @@ end
 
 module ScriptArgs = struct
   type value_t = Positional | Named of string [@@deriving eq]
-  type value = Enum of string | Int of int | String of string | List of value
 
-  type 'a vt =
-    | Enum of string vt
-    | Int of int vt
-    | String of string vt
-    | List of ('a vt -> 'a list vt)
 
-  type 'a result = (value_t * 'a vt) list
-  type _ term = Int of (int -> int term)
+  type value = Enum of string
+             | Int of int
+             | String of string
+             | List of value
+             | Record of string * value list
+             | Filename of string
+             | ProcID of string
 
   let get_named n vs = List.find (fst %> equal_value_t (Named n)) vs
 
@@ -201,6 +200,12 @@ module ScriptArgs = struct
 
   let positional ?hint ty =
     { name = None; optional = `No; value = ty; hintname = hint }
+
+  let trailopt ?default ?hint ty =
+    let optional =
+      match default with Some d -> `WithDefault d | None -> `Yes
+    in
+    [ { name = None; optional; value = ty; hintname = hint } ]
 
   let labelled name ty =
     { name = Some name; optional = `No; value = ty; hintname = None }
@@ -478,6 +483,7 @@ let cmds_list =
       load_il,
       many (positional ~hint:"filename" String),
       "load il files" );
+    ("help", (fun a b -> a), noargs, "print help message");
     (*
     ("gtirb", dbg_gtirb, "in.gtirb output_file?", "Gtirb debug");
     ("load-gtirb", load_gtirb, "in.gtirb output_file?", "Load gtirb file");
@@ -517,15 +523,17 @@ let cmds_list =
       "Write dot cfg of <proc> to file or stdout" );
     ("dump-history", save_history, "file.sexp", "Write script history");
     ("dump-proc-il", dump_proc_il, "procname", "Print the IL of a proc");
-    ("!", run_bash_command, "", "run bash command");
-    ("help", (fun a b -> a), "", "print help message"); *)
+    ("!", run_bash_command, "", "run bash command"); *)
   ]
 
 let add_help_cmd cmds =
   let open Containers_pp in
   let help st arg =
     let cmds =
-      List.map (fun (name, _, args, help) -> (name, args, help)) cmds
+      List.map
+        (fun (name, _, args, help) ->
+          (name, ScriptArgs.pretty_hl_spec args, help))
+        cmds
     in
     let user_cmds =
       StringMap.to_list st.user_cmds

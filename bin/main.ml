@@ -64,9 +64,12 @@ let repl ~verb ~echo_cmd =
           (fun st c ->
             LNoise.clear_screen ();
             st),
-          "",
+          Script.ScriptArgs.noargs,
           "clear screen" );
-        ("exit", (fun st c -> raise_notrace Exit), "", "exit");
+        ( "exit",
+          (fun st c -> raise_notrace Exit),
+          Script.ScriptArgs.noargs,
+          "exit" );
         ( "run-script",
           (fun st c ->
             let fname = Script.P.(singleton string c) in
@@ -75,11 +78,14 @@ let repl ~verb ~echo_cmd =
                 with Script.ReplError _ as exn ->
                   print_endline @@ Script.print_repl_error exn;
                   st)),
-          "fname.sexp",
+          Script.ScriptArgs.(
+            args @@ [ positional ~hint:"filename.sexp" String ]),
           "Interpret a script" );
         ( "display-proc-cfg",
           display_proc_cfg,
-          "<proc> ?file",
+          Script.ScriptArgs.(
+            args
+            @@ (positional ~hint:"proc" String :: trailopt ~hint:"file" String)),
           "Write dot cfg of <proc> to file or stdout" );
       ]
   in
@@ -111,7 +117,8 @@ let repl ~verb ~echo_cmd =
   let hints_callback cmd =
     let cmd = String.trim cmd in
     StringMap.find_opt cmd cmds_completion
-    |> Option.map (function _, _, c, _ -> (c, LNoise.Blue, true))
+    |> Option.map (function _, _, c, _ ->
+        (Script.ScriptArgs.pretty_hl_spec c, LNoise.Blue, true))
   in
   LNoise.set_hints_callback hints_callback;
 
