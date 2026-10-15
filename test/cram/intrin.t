@@ -30,6 +30,10 @@ Added intrinsics
   ---
   >      ($mem:(bv64->bv8)):= call @_free($mem, Exp14__5_22_1:bv64);
   >      ($stack:(bv64->bv8)):= call @_havoc();
+  134c136
+  <             .name = ".bss"; .readOnly = false; .size = 8 } ];
+  ---
+  >             .name = ".bss"; .readOnly = false; .size = 8 } ]; .invariants = [  ];
   [1]
 
 
@@ -114,6 +118,12 @@ Added intrinsics
   ---
   >      ($mem:(bv64->bv8), var addr:bv64):= call @_malloc($mem, size:bv64);
   >      ($stack:(bv64->bv8), var unrel:bv64):= call @_havoc();
+  119c131
+  < prog entry @main;
+  \ No newline at end of file
+  ---
+  > prog entry @main { .invariants = [  ] };
+  \ No newline at end of file
   [1]
 
 

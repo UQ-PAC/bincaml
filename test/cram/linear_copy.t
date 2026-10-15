@@ -66,4 +66,10 @@
   <    block %ret ( var o_3:bv64 := phi(%a -> o_1:bv64, %b -> o_2:bv64) ) [
   ---
   >    block %ret ( var o_3:bv64 := phi(%a -> a:bv64, %b -> o_2:bv64) ) [
+  88c92
+  < prog entry @main;
+  \ No newline at end of file
+  ---
+  > prog entry @main { .invariants = [  ] };
+  \ No newline at end of file
   [1]

@@ -95,6 +95,11 @@
   >      (var Gamma_out:bool := Gamma_c:bool, var out:bv64 := bvadd(c:bv64, 0x1:bv64));
   >      return;
   >    ]
-  54a67
+  55c67,68
+  < prog entry @main;
+  \ No newline at end of file
+  ---
   > var Gamma_$x:bool;
+  > prog entry @main { .invariants = [  ] };
+  \ No newline at end of file
   [1]
