@@ -128,3 +128,34 @@ let%expect_test "adt to attrib" =
         .symbols = { .globals = [ { .address = 4324824; .name = "_DYNAMIC"; .size = 0 };
                 { .address = 4325424; .name = "x"; .size = 64 } ] } }
     |}]
+
+(* {:https://github.com/UQ-PAC/bincaml-test/blob/8ba042b146f4814d08b396a6d28f31ff7994faa9/conds.il#L313} *)
+let%test "can parse scala basil conds.il" =
+  let ast =
+    Loader.Loadir.ast_of_string
+      {|
+proc @main() -> () [ block %ret [ return; ] ];
+
+prog entry @main {
+  .initial_memory = [
+  {
+    .name = ".bss";
+    .address = 0x420028;
+    .size = 0x10;
+    .readOnly = false;
+    .bytes = [ "H4sIAAAAAAAA/2NgQAUAVUu77BAAAAA=" ]
+  }
+]
+} ; |}
+  in
+  let prog = ast.prog in
+  let attrib = `Assoc (Lang.Program.attrib prog) in
+
+  let parsed =
+    Gtirb_frontend.Gtirb_attribs.gtirb_attribs_of_attrib_conv_exn attrib
+  in
+
+  parsed.initial_memory
+  |> List.for_all (fun section ->
+      let bytes = section.Gtirb_frontend.Gtirb_attribs.bytes in
+      Bytes.equal bytes (Bytes.init 16 (fun _ -> '\x00')))

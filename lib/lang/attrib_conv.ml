@@ -135,10 +135,14 @@ module Driver = struct
   let of_bool : bool -> t = fun b -> `Bool b
 
   (** TODO: compress all bytes? this would be a convenient place to do it. *)
-  let to_bytes : t -> bytes = function
+  let rec to_bytes : t -> bytes = function
     | `String s ->
         Base64.decode_exn s |> Bytes.unsafe_of_string |> Internal.uncompress
-    | _ -> invalid_arg "expected `String"
+    | `List parts ->
+        (* Handle BASIL's output which is a list of b64 strings. *)
+        let parts = List.map to_string parts in
+        `String (String.concat "" parts) |> to_bytes
+    | _ -> invalid_arg "expected `String (for bytes)"
 
   let of_bytes : bytes -> t =
    fun x ->
