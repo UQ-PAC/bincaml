@@ -1,8 +1,15 @@
+let sample_byte_string = "bytes!!! get encoded1234"
+
+(** You can check this with [echo ASDF | base64 -d | gunzip] *)
+let sample_byte_string_encoded =
+  "H4sIAAAAAAAA/wEYAOf/Ynl0ZXMhISEgZ2V0IGVuY29kZWQxMjM0oaypOxgAAAA="
+
 let%expect_test "attrib to adt" =
   let ast =
     Loader.Loadir.ast_of_string
-      {|
-proc @main() -> () [ block %ret [ return; ] ];
+    @@ Printf.sprintf
+         {|
+proc @main() -> () [ block %%ret [ return; ] ];
 
 prog entry @main {
   .symbols = {
@@ -25,10 +32,11 @@ prog entry @main {
     .address = 0x400238;
     .size = 0x6e;
     .readOnly = false;
-    .bytes = "TODO: bytes encoding";
+    .bytes = "%s";
   };
 ]
 } ; |}
+         sample_byte_string_encoded
   in
   let prog = ast.prog in
   let attrib = `Assoc (Lang.Program.attrib prog) in
@@ -41,6 +49,7 @@ prog entry @main {
   let parsed =
     Gtirb_frontend.Gtirb_attribs.gtirb_attribs_of_attrib_conv_exn attrib
   in
+  print_endline "";
   print_endline @@ Gtirb_frontend.Gtirb_attribs.show_gtirb_attribs parsed;
 
   [%expect
@@ -50,7 +59,8 @@ prog entry @main {
 
     [ block %ret [ return; ] ];
     prog entry @main;
-    { .initial_memory = [ { .address = 4194872; .bytes = "TODO: bytes encoding";
+    { .initial_memory = [ { .address = 4194872;
+                .bytes = "H4sIAAAAAAAA/wEYAOf/Ynl0ZXMhISEgZ2V0IGVuY29kZWQxMjM0oaypOxgAAAA=";
                 .name = ".interp"; .readOnly = false; .size = 110 } ];
         .symbols = { .externalFunctions = [ { .name = "_ITM_deregisterTMCloneTable";
                     .offset = 4325328 }; { .name = "abort"; .offset = 4325392 } ];
@@ -58,6 +68,7 @@ prog entry @main {
             .globalOffsets = [  ];
             .globals = [ { .address = 4324824; .name = "_DYNAMIC"; .size = 0 };
                 { .address = 4325424; .name = "x"; .size = 64 } ] } }
+
     { Gtirb_attribs.symbols =
       { Gtirb_attribs.external_functions = [];
         globals =
@@ -66,12 +77,28 @@ prog entry @main {
         func_entries = []; global_offsets = [] };
       initial_memory =
       [{ Gtirb_attribs.name = ".interp"; address = 4194872L; size = 110L;
-         read_only = false; bytes = "TODO: bytes encoding" }
+         read_only = false; bytes = "bytes!!! get encoded1234" }
         ]
       }
     |}]
 
 let%expect_test "adt to attrib" =
+  let section =
+    {
+      Gtirb_frontend.Gtirb_attribs.name = ".interp";
+      address = 4194872L;
+      size = 110L;
+      read_only = false;
+      bytes = Bytes.unsafe_of_string sample_byte_string;
+    }
+  in
+
+  assert (
+    Gtirb_frontend.Gtirb_attribs.section_to_attrib_conv section
+    |> Option.some
+    |> Lang.Attrib.find_str_opt ".bytes"
+    = Some sample_byte_string_encoded);
+
   let parsed =
     {
       Gtirb_frontend.Gtirb_attribs.symbols =
@@ -85,16 +112,7 @@ let%expect_test "adt to attrib" =
           func_entries = [];
           global_offsets = [];
         };
-      initial_memory =
-        [
-          {
-            name = ".interp";
-            address = 4194872L;
-            size = 110L;
-            read_only = false;
-            bytes = "TODO: bytes encoding";
-          };
-        ];
+      initial_memory = [ section ];
     }
   in
 
@@ -104,8 +122,40 @@ let%expect_test "adt to attrib" =
   @@ Gtirb_frontend.Gtirb_attribs.gtirb_attribs_to_attrib_conv parsed;
   [%expect
     {|
-    { .initial_memory = [ { .address = 4194872; .bytes = "TODO: bytes encoding";
+    { .initial_memory = [ { .address = 4194872;
+                .bytes = "H4sIAAAAAAAA/wEYAOf/Ynl0ZXMhISEgZ2V0IGVuY29kZWQxMjM0oaypOxgAAAA=";
                 .name = ".interp"; .size = 110 } ];
         .symbols = { .globals = [ { .address = 4324824; .name = "_DYNAMIC"; .size = 0 };
                 { .address = 4325424; .name = "x"; .size = 64 } ] } }
     |}]
+
+(* {:https://github.com/UQ-PAC/bincaml-test/blob/8ba042b146f4814d08b396a6d28f31ff7994faa9/conds.il#L313} *)
+let%test "can parse scala basil conds.il" =
+  let ast =
+    Loader.Loadir.ast_of_string
+      {|
+proc @main() -> () [ block %ret [ return; ] ];
+
+prog entry @main {
+  .initial_memory = [
+  {
+    .name = ".bss";
+    .address = 0x420028;
+    .size = 0x10;
+    .readOnly = false;
+    .bytes = [ "H4sIAAAAAAAA/2NgQAUAVUu77BAAAAA=" ]
+  }
+]
+} ; |}
+  in
+  let prog = ast.prog in
+  let attrib = `Assoc (Lang.Program.attrib prog) in
+
+  let parsed =
+    Gtirb_frontend.Gtirb_attribs.gtirb_attribs_of_attrib_conv_exn attrib
+  in
+
+  parsed.initial_memory
+  |> List.for_all (fun section ->
+      let bytes = section.Gtirb_frontend.Gtirb_attribs.bytes in
+      Bytes.equal bytes (Bytes.init 16 (fun _ -> '\x00')))

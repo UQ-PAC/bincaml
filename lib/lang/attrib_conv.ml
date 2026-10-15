@@ -1,5 +1,71 @@
 open Bincaml_util.Common
 
+(** Private implementation helpers for (de)compression. *)
+module Internal = struct
+  (** These default constants are copied from:
+      {:https://github.com/mirage/decompress/blob/d0e44781ed329c7ebde7bf6dbcbe547c87554303/bin/decompress.ml}
+  *)
+
+  let w = De.Lz77.make_window ~bits:15
+  let q = De.Queue.create 4096
+
+  (** Warning: These output and input buffers are globally-shared and {b not}
+      thread-safe! *)
+
+  let o = De.bigstring_create De.io_buffer_size
+  let i = De.bigstring_create De.io_buffer_size
+  let cfg = Gz.Higher.configuration Unknown (Fun.const Int32.zero)
+
+  type buffered = {
+    refill : De.bigstring -> int;
+    flush : De.bigstring -> int -> unit;
+    out_buf : CCByte_buffer.t;
+  }
+  (** Contains functions for interacting with the intermediate input/output
+      {!De.bigstring}s.
+
+      The {!refill} and {!flush} are intended to be passed to the same-named
+      parameters of {!Gz.Higher.compress} and {!Gz.Higher.uncompress} *)
+
+  (** Initialises a {!buffered} which obtains its input from the given {!bytes}.
+  *)
+  let make_buffered_of_bytes input =
+    let n_used = ref 0 in
+    let out_buf = CCByte_buffer.create () in
+
+    let refill bs =
+      let n_to_copy = min De.io_buffer_size (Bytes.length input - !n_used) in
+      Iter.int_range ~start:0 ~stop:(n_to_copy - 1)
+      |> Iter.map (Int.add !n_used %> Bytes.get input)
+      |> Iter.iteri (Bigarray.Array1.set bs);
+      n_used := !n_used + n_to_copy;
+      n_to_copy
+    and flush bs i =
+      Iter.int_range ~start:0 ~stop:(i - 1)
+      |> Iter.map (Bigarray.Array1.get bs)
+      |> CCByte_buffer.append_iter out_buf
+    in
+
+    { refill; flush; out_buf }
+
+  (** Wrappers around {!Gz.Higher} functions to provide a [bytes -> bytes]
+      interface. *)
+
+  let compress bytes =
+    let { refill; flush; out_buf } = make_buffered_of_bytes bytes in
+    Gz.Higher.compress ~w ~q ~refill ~flush () cfg i o;
+    CCByte_buffer.contents_bytes out_buf
+
+  let uncompress bytes =
+    let { refill; flush; out_buf } = make_buffered_of_bytes bytes in
+    let _ : Gz.Higher.metadata =
+      Gz.Higher.uncompress ~refill ~flush i o
+      |> Result.map_err (fun (`Msg x) -> x)
+      |> Result.get_or_failwith
+    in
+    CCByte_buffer.contents_bytes out_buf
+end
+
 (** Defined conversion functions to/from Bincaml attributes. *)
 module Driver = struct
   type t = Attrib.t
@@ -69,9 +135,18 @@ module Driver = struct
   let of_bool : bool -> t = fun b -> `Bool b
 
   (** TODO: compress all bytes? this would be a convenient place to do it. *)
-  let to_bytes : t -> bytes = fun x -> to_string x |> Bytes.unsafe_of_string
+  let rec to_bytes : t -> bytes = function
+    | `String s ->
+        Base64.decode_exn s |> Bytes.unsafe_of_string |> Internal.uncompress
+    | `List parts ->
+        (* Handle BASIL's output which is a list of b64 strings. *)
+        let parts = List.map to_string parts in
+        `String (String.concat "" parts) |> to_bytes
+    | _ -> invalid_arg "expected `String (for bytes)"
 
-  let of_bytes : bytes -> t = fun x -> Bytes.to_string x |> of_string
+  let of_bytes : bytes -> t =
+   fun x ->
+    `String (Internal.compress x |> Bytes.unsafe_to_string |> Base64.encode_exn)
 
   (** TODO: null? or maybe make this unsup. *)
   let null : t = `Bitvector (Bitvec.zero ~size:0)
