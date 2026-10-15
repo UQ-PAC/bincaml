@@ -65,8 +65,7 @@ buildDunePackage {
 
   minimalOCamlVersion = "5.0";
 
-  src = /nix/store/1m9rlqj4nwblig1nsqdhz2f4yl2cgbh6-9lsi32i4f9pb5bwr87q9p8j8ah5n70d9-source;
-    # nix-gitignore.gitignoreSource [ "nix" "flake.nix" "flake.lock" ] ./..;
+  src = nix-gitignore.gitignoreSource [ "nix" "flake.nix" "flake.lock" ] ./..;
 
   checkInputs = [
     alcotest
