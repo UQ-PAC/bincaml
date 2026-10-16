@@ -91,10 +91,4 @@ Check concat rewrites work
   <       bvshl(var2_4206400_bv64:bv64, 0x0:bv64));
   ---
   >      $R0:bv64 := bvor(var1_4206400_bv64:bv64, var2_4206400_bv64:bv64);
-  95c30
-  < prog entry @main_4204352;
-  \ No newline at end of file
-  ---
-  > prog entry @main_4204352 { .invariants = [  ] };
-  \ No newline at end of file
   [1]

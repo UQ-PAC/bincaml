@@ -1657,4 +1657,4 @@
      ];
      block %FUN_400620_code_1 [ assert false; unreachable; ]
   ];
-  prog entry @_start { .invariants = [  ] };
+  prog entry @_start { .invariants = [ "GtirbArm" ] };

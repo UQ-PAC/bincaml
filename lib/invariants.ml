@@ -7,6 +7,8 @@
 
 open Lang.Common
 
+(** {2 Invariants} *)
+
 (** Invariants (properties) which describe certain well-known states of the IR.
 *)
 type t =
@@ -20,20 +22,13 @@ type t =
   | ReducibleLoops
       (** All loops are reducible. That is, there are no {i irreducible} loops.
       *)
-[@@deriving show { with_path = false }, eq, ord]
+[@@deriving
+  eq,
+  ord,
+  show { with_path = false },
+  protocol ~driver:(module Lang.Attrib_conv)]
 
-let read s =
-  match s with
-  | "GtirbArm" -> GtirbArm
-  | "SSA" -> SSA
-  | "DSA" -> DSA
-  | "NoPhis" -> NoPhis
-  | "Params" -> Params
-  | "LambdaLift" -> LambdaLift
-  | "ReducibleLoops" -> ReducibleLoops
-  | "MemoryEncoding" -> MemoryEncoding
-  | _ -> failwith (Printf.sprintf "cannot parse string into Invariants.t: %s" s)
-
+let read s = of_attrib_conv_exn (`String s)
 let show_list xs = "[" ^ CCString.concat ", " (List.map show xs) ^ "]"
 
 open struct
@@ -47,6 +42,8 @@ open struct
     let a = List.sort compare a and b = List.sort compare b in
     List.sorted_diff_uniq ~cmp:compare a b
 end
+
+(** {2 Invariant configs} *)
 
 type config = {
   presupposes : t list;
@@ -108,15 +105,24 @@ let apply ~msg ~config x =
           (show_list x));
   x +++ config.establishes --- config.invalidates
 
-let of_attrib (attrib_map : Lang.Attrib.attrib_map) =
-  let attrib = StringMap.find_opt ".invariants" attrib_map in
-  match attrib with
-  | Some (`List xs) ->
-      xs
-      |> List.filter_map (function `String x -> Some x | _ -> None)
-      |> List.map read
-  | _ -> []
+(** {2 Conversion to/from attributes} *)
 
-let to_attrib xs : Lang.Attrib.attrib_map =
-  let vals = List.map (fun x -> `String (show x)) xs in
-  StringMap.singleton ".invariants" (`List vals)
+type prog_invariants = { invariants : t list [@default []] }
+[@@deriving protocol ~driver:(module Lang.Attrib_conv)]
+(** Invariants which are satisfied for a particular IR program. This is used to
+    write to/read from IR attributes. *)
+
+let to_attrib invariants =
+  { invariants } |> prog_invariants_to_attrib_conv |> Lang.Attrib.to_attrib_map
+
+let of_attrib attrib =
+  let { invariants } = prog_invariants_of_attrib_conv_exn (`Assoc attrib) in
+  invariants
+
+open struct
+  (* Hide these ppx-derived functions from odoc, since they are named
+     confusingly similar to [to_attrib] and [of_attrib]. *)
+  let of_attrib_conv = ()
+  let of_attrib_conv_exn = ()
+  let to_attrib_conv = ()
+end [@warning "-unused-value-declaration"]

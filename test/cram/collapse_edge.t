@@ -15,10 +15,4 @@
   ---
   >    block %c [ var b:bv64 := a:bv64; goto (%e); ];
   >    block %e ( var c_1:bv64 := phi(%c -> b:bv64) ) [
-  16c12
-  < prog entry @main;
-  \ No newline at end of file
-  ---
-  > prog entry @main { .invariants = [  ] };
-  \ No newline at end of file
   [1]
