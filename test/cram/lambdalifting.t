@@ -60,6 +60,12 @@ written by @caller.  After the pass:
   >      (var x_out:bv32 := x:bv32, var y_out:bv32 := y:bv32);
   >      return;
   >    ]
+  24c33
+  < prog entry @caller;
+  \ No newline at end of file
+  ---
+  > prog entry @caller { .invariants = [ "LambdaLift" ] };
+  \ No newline at end of file
   [1]
 
 
@@ -133,6 +139,12 @@ all global refs in requires (not just those under Old) become in-params.
   >      (var x_out:bv32 := x:bv32, var y_out:bv32 := y:bv32);
   >      return;
   >    ]
+  30c38
+  < prog entry @caller;
+  \ No newline at end of file
+  ---
+  > prog entry @caller { .invariants = [ "LambdaLift" ] };
+  \ No newline at end of file
   [1]
 
 
