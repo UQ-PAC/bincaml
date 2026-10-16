@@ -385,81 +385,32 @@ module LinearConstAnalysis = IDESSI (LinearIDE)
    this ever actually happens, we'll want to re-iterate on this procedure as we
    may have new edges to propagate to other procedures. *)
 
+module Label = struct
+  include LF
+
+  let compose = flip compose
+end
+
 module CopyNode = struct
-  type content = {
-    (* The variable this node represents *)
-    v : Var.t;
-    (* The variables this variable is copied from, through a phi. This field
-       should only be read on parent nodes, in which case the list has either
-       no elements or >=2 elements. Note that phis are always copies, so we
-       don't need to store a function per edge *)
-    copied_from : t list;
-    (* The union find parent node. Parent nodes have this set to None (avoid
-       cycles). *)
-    parent : edge option;
-    copy_parent : t option;
-  }
+  module EQ = Bincaml_util.Labelled_unionfind.MakeEquiv (Label)
 
-  and edge = LF.t * t
-  and t = content ref
+  type body = { v : Var.t; copied_from : t list }
+  and edge = body EQ.edge
+  and t = body EQ.t
 
-  let var (n : t) = !n.v
-
-  (** Target of an edge *)
-  let target : edge -> t = snd
-
-  let ( @. ) = LF.compose
-
-  let init v : t =
-    ref { v; copied_from = []; parent = None; copy_parent = None }
-
-  (** Get the parent of this node (basically constant time because of path
-      compression) *)
-  let rec find v : edge =
-    match !v.parent with
-    | Some (f1, v') ->
-        let f2, v'' = find v' in
-        let f = f1 @. f2 in
-        let p = (f, v'') in
-        v := { !v with parent = Some p };
-        p
-    | None -> (LF.identity, v)
-
-  (** Get the copy parent of a node with path compression *)
-  let rec find_copy v : t =
-    match !v.copy_parent with
-    | Some v' ->
-        let p = find_copy v' in
-        v := { !v with copy_parent = Some p };
-        p
-    | None -> v
-
-  (** Get the parent of this edge, with functions composed *)
-  let finde ((f1, n) : edge) : edge =
-    let f2, n' = find n in
-    (f1 @. f2, n')
-
-  (** `join v f v'` points `v'` to `v` through f *)
-  let join v f v' : unit =
-    assert (Option.is_none !v'.parent);
-    let copy_parent = if LF.is_id f then Some v else None in
-    v' := { !v' with parent = Some (f, v); copy_parent }
-
-  (** `join_copy v v'` points `v'` to `v` in the copy graph *)
-  let join_copy v v' : unit =
-    assert (Option.is_none !v'.copy_parent);
-    v' := { !v' with copy_parent = Some v }
-
-  let eq (n : t) (m : t) = Var.equal !n.v !m.v
+  let var (n : t) = (EQ.get n).v
+  let copied_from (n : t) = (EQ.get n).copied_from
+  let eq (n : t) (m : t) = Var.equal (var n) (var m)
+  let init v : t = EQ.make { v; copied_from = [] }
 
   (** Set out edges of a given vertex (think `v := phi(a, b, c)` defining edges
       `v -> a, v -> b, v -> c`). All cycles are trimmed (think v2 := phi(v1,
       v2)) *)
   let set_copied v copied_from =
-    assert (Option.is_none !v.parent);
-    assert (Option.is_none !v.copy_parent);
+    assert (EQ.is_parent v);
+    assert (EQ.is_eq_parent v);
     let copied_from = List.filter (not % eq v) copied_from in
-    v := { !v with copied_from; parent = None; copy_parent = None }
+    EQ.update (fun b -> { b with copied_from }) v
 
   (** Returns all reachable leaves from the given node, but aborts if the
       predicate is violated or if a top edge cycle is found *)
@@ -473,14 +424,14 @@ module CopyNode = struct
         if VarSet.mem (var n) !searched then true
         else if VarSet.mem (var n) !searching then LF.is_id f
         else
-          match !n.copied_from with
+          match copied_from n with
           | [] -> true
           | ls ->
               searching := VarSet.add (var n) !searching;
               let ans =
                 List.for_all
                   (fun n' ->
-                    let f', n' = finde (f, n) in
+                    let f', n' = EQ.find_edge (f, n) in
                     match VarMap.get (var n') !memo with
                     | Some None -> if eq root n' then LF.is_id f' else dfs f' n'
                     | _ -> true)
@@ -492,18 +443,17 @@ module CopyNode = struct
       dfs LF.identity root
     in
     let rec dfs v f =
-      let f, v = finde (f, v) in
+      let f, v = EQ.find_edge (f, v) in
       match VarMap.get (var v) !memo with
       | Some (Some l) -> Some l
       (* If there's a cycle, ignore it if the composite of the cycle is id and
          abort otherwise *)
       | Some None when is_id_cycle v -> Some VarMap.empty
-      | Some None ->
-          print_endline @@ Var.name !v.v;
-          None
+      | Some None -> None
       | None -> (
-          match !v.copied_from with
-          | [] -> if keep v then Some (VarMap.singleton !v.v (f, v)) else None
+          match copied_from v with
+          | [] ->
+              if keep v then Some (VarMap.singleton (var v) (f, v)) else None
           | l :: ls ->
               memo := VarMap.add (var v) None !memo;
               let open Option.Infix in
@@ -531,51 +481,19 @@ end
 
 (** Ocamlgraph representation of the above for debug utilities *)
 module CopyGraph = struct
-  module Vert = Var
+  include
+    Bincaml_util.Labelled_unionfind.MakeEquivVis
+      (struct
+        type t = CopyNode.body
 
-  module Edge = struct
-    include LF
+        let compare (b1 : t) (b2 : t) = Var.compare b1.v b2.v
+        let hash (b : t) = Var.hash b.v
+        let equal (b1 : t) (b2 : t) = Var.equal b1.v b2.v
+        let show (b : t) = Var.name b.v
+      end)
+      (Label)
 
-    let default = identity
-  end
-
-  module G = Graph.Persistent.Digraph.ConcreteBidirectionalLabeled (Vert) (Edge)
-
-  module Dot = Graph.Graphviz.Dot (struct
-    include G
-    open Vert
-    open Edge
-
-    let default_vertex_attributes _ = []
-    let graph_attributes _ = []
-    let default_edge_attributes _ = []
-    let get_subgraph _ = None
-
-    let edge_attributes (_, f, _) =
-      match f with
-      | IdEdge -> []
-      | f ->
-          let n = LF.show f in
-          [ `Label n ]
-
-    let vertex_attributes v =
-      let n = Var.name v in
-      [ `Shape `Box; `Fontname "Mono"; `Label n ]
-
-    let vertex_name = String.replace ~sub:"#" ~by:"hash" % Var.name
-  end)
-
-  let make_graph nodes =
-    Iter.fold
-      (fun g (n : CopyNode.t) ->
-        match !n.parent with
-        | Some (f, n') -> G.add_edge_e g (!n.v, f, !n'.v)
-        | None ->
-            List.fold_left
-              (fun g (n' : CopyNode.t) ->
-                G.add_edge_e g (!n.v, LF.identity, !n'.v))
-              g !n.copied_from)
-      G.empty nodes
+  let make_graph = make_graph CopyNode.copied_from
 end
 
 type call_info = {
@@ -595,27 +513,25 @@ module Solver = struct
     let open List.Traverse (Option) in
     ls
     |> List.map (fun (f, (n : CopyNode.t)) ->
-        (f, StringMap.find (Var.name !n.v) c.args))
+        (f, StringMap.find (Var.name (var n)) c.args))
     |> map_m (fun (f, e) ->
         let f', v = LF.Extract.extract_expr e in
-        Option.map (fun v -> (f @. f', v)) v)
+        Option.map (fun v -> (LF.compose f f', v)) v)
     |> Option.iter (fun leaves ->
         match leaves with
         | (f, v) :: vs -> (
             if List.for_all (Var.equal v % snd) vs then
               let assigned = node_of c.caller_id @@ StringMap.find s c.lhs in
-              match !assigned.parent with
-              | Some _ -> ()
-              | None -> (
-                  (* i had so much fun writing this...
+              if EQ.is_parent assigned then
+                (* i had so much fun writing this...
                   match List.fold_left (( %> ) fst % LF.join) f vs with *)
-                  match List.fold_left (fun f (g, _) -> LF.join f g) f vs with
-                  | TopEdge | LF.Join _ -> ()
-                  | f ->
-                      join (node_of c.caller_id v) f assigned;
-                      (* We have updated the caller's graph so we
+                match List.fold_left (fun f (g, _) -> LF.join f g) f vs with
+                | TopEdge | LF.Join _ -> ()
+                | f ->
+                    EQ.join assigned f (node_of c.caller_id v);
+                    (* We have updated the caller's graph so we
                                    should recompute it *)
-                      update_worklist c.caller_id))
+                    update_worklist c.caller_id)
         | [] -> failwith "leaves should never be empty!")
 
   let add_intra_stmt summaries callers node_of pid component stmt =
@@ -628,7 +544,7 @@ module Solver = struct
             | f, Some v' ->
                 let v, v' = (node_of pid v, node_of pid v') in
                 (* v := f(v'), draw edge from v to v' with f *)
-                CopyNode.join v' f v
+                CopyNode.EQ.join v f v'
             | _, None -> ())
     | Instr_Call c ->
         (* We at the same time create a list of all callers of each procedure in the scc. *)
@@ -669,12 +585,14 @@ module Solver = struct
             (let* var = String.chop_suffix ~suf:"in" sin in
              let sout = var ^ "out" in
              let* vout = StringMap.get sout fout in
-             Some (CopyNode.join (node_of vin) LF.bottom (node_of vout))))
+             Some (CopyNode.EQ.join (node_of vout) LF.bottom (node_of vin))))
         fin
     else
       (* ARM abi tell us that R19..R29 and R31 are preserved through calls https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#611general-purpose-registers *)
       let regs =
-        List.range 19 29 @ [ 31 ] |> List.map (fun n -> "R" ^ Int.to_string n)
+        List.range 19 29 @ [ 31 ]
+        |> List.map (fun n -> "R" ^ Int.to_string n)
+        |> List.cons "SP"
       in
       let fin, fout =
         (Procedure.formal_in_params proc, Procedure.formal_out_params proc)
@@ -684,7 +602,7 @@ module Solver = struct
           ignore
             (let* inp = StringMap.get (r ^ "_in") fin in
              let* out = StringMap.get (r ^ "_out") fout in
-             Some (CopyNode.join (node_of inp) LF.identity (node_of out))))
+             Some (CopyNode.EQ.join (node_of out) LF.identity (node_of inp))))
         regs
 
   module Worklist = Worklist.Make (ID)
@@ -729,7 +647,7 @@ module Solver = struct
       |> Iter.filter_map (fun node ->
           leaves
             (fun (n : t) ->
-              StringMap.mem (Var.name !n.v) (Procedure.formal_in_params proc))
+              StringMap.mem (Var.name (var n)) (Procedure.formal_in_params proc))
             node
           |> Option.flat_map (fun leaves ->
               (not (List.is_empty leaves))
@@ -737,14 +655,14 @@ module Solver = struct
       |> Iter.iter (fun ((node : CopyNode.t), leaves) ->
           (* Store a summary of this outvar *)
           let m = Hashtbl.get_or summaries pid ~default:StringMap.empty in
-          let m = StringMap.add (Var.name !node.v) leaves m in
+          let m = StringMap.add (Var.name (var node)) leaves m in
           Hashtbl.replace summaries pid m;
           (* Propagate calls within this scc *)
           Hashtbl.get_or callers pid ~default:[]
           |> List.iter (fun (call : call_info) ->
               propagate_call node_of
                 (fun pid -> Worklist.add worklist call.caller_id)
-                (Var.name @@ var node)
+                (Var.name (var node))
                 call leaves))
     done
 
@@ -762,27 +680,27 @@ module Solver = struct
     (* Ensures: var node in !searched *)
     (* Ensures: !searching == old(!searching) *)
     let rec search (node : t) =
-      if not @@ VarSet.mem !node.v !searched then (
-        searching := VarSet.add !node.v !searching;
+      if not @@ VarSet.mem (var node) !searched then (
+        searching := VarSet.add (var node) !searching;
         propagate node;
-        searching := VarSet.remove !node.v !searching;
-        searched := VarSet.add !node.v !searched)
+        searching := VarSet.remove (var node) !searching;
+        searched := VarSet.add (var node) !searched)
     (* Search targets and see if a common single parent + function exists *)
     and propagate node =
       match
-        effective_parent LF.identity !node.copied_from
-          (ref (VarMap.singleton !node.v SNone))
+        effective_parent LF.identity (copied_from node)
+          (ref (VarMap.singleton (var node) SNone))
       with
       | SSome ((LF.TopEdge | LF.Join _), l) -> propagate_copy node
       | SSome (f, l) ->
-          join l f node;
+          EQ.join node f l;
           if not @@ LF.is_id f then propagate_copy node
       | Skip -> failwith "the effective parent shouldn't ever be skip!"
       | SNone -> ()
     (* Further propagate only copy edges *)
     and propagate_copy node =
-      match effective_copy_parent !node.copied_from (ref VarSet.empty) with
-      | SSome n -> join_copy n node
+      match effective_copy_parent (copied_from node) (ref VarSet.empty) with
+      | SSome n -> EQ.join_eq node n
       | Skip -> failwith "the effective parent shouldn't ever be skip!"
       | _ -> ()
     (* Perform a dfs on the subgraph of nodes that are currently being
@@ -796,10 +714,10 @@ module Solver = struct
        queries memo and finds Some SNone, then there is a cycle. *)
     and effective_parent f (nodes : t list) memo =
       let step ((f', n) : edge) =
-        assert (Option.is_none !n.parent);
-        let f = f @. f' in
-        match VarMap.get !n.v !memo with
-        | Some (SSome (f'', n')) -> SSome (f' @. f'', n')
+        assert (EQ.is_parent n);
+        let f = LF.compose f f' in
+        match VarMap.get (var n) !memo with
+        | Some (SSome (f'', n')) -> SSome (LF.compose f' f'', n')
         | Some Skip -> Skip
         | Some SNone when LF.is_id f -> Skip
         (* I came up with a funky argument for why any non-identity cycle
@@ -812,20 +730,22 @@ module Solver = struct
            be returned as the parent. *)
         | Some SNone -> SSome (f', n)
         | None -> (
-            memo := VarMap.add !n.v SNone !memo;
+            memo := VarMap.add (var n) SNone !memo;
             let r =
-              if VarSet.mem !n.v !searching then
-                effective_parent f !n.copied_from memo
+              if VarSet.mem (var n) !searching then
+                effective_parent f (copied_from n) memo
               else (
                 search n;
-                SSome (find n))
+                SSome (EQ.find n))
             in
             (* If there was no parent then this node is now the parent *)
             let r = match r with SNone -> SSome (LF.identity, n) | e -> e in
-            memo := VarMap.add !n.v r !memo;
-            match r with SSome (f'', n') -> SSome (f' @. f'', n') | a -> a)
+            memo := VarMap.add (var n) r !memo;
+            match r with
+            | SSome (f'', n') -> SSome (LF.compose f' f'', n')
+            | a -> a)
       in
-      List.map (step % find) nodes
+      List.map (step % EQ.find) nodes
       |> List.reduce (fun a b ->
           match (a, b) with
           | a, Skip | Skip, a -> a
@@ -833,21 +753,21 @@ module Solver = struct
               SSome (LF.join f1 f2, n1)
           | _ -> SNone)
       |> Option.get_or ~default:SNone
-    (* The same thing as above but only copy propagation only (so much
+    (* The same thing as above but only copy propagation (so much
        duplication...) *)
     and effective_copy_parent (nodes : t list) visited =
       let step n =
-        assert (Option.is_none !n.copy_parent);
-        if VarSet.mem !n.v !visited then Skip
+        assert (EQ.is_eq_parent n);
+        if VarSet.mem (var n) !visited then Skip
         else (
-          visited := VarSet.add !n.v !visited;
-          if VarSet.mem !n.v !searching then
-            effective_copy_parent !n.copied_from visited
+          visited := VarSet.add (var n) !visited;
+          if VarSet.mem (var n) !searching then
+            effective_copy_parent (copied_from n) visited
           else (
             search n;
-            SSome (find_copy n)))
+            SSome (EQ.find_eq n)))
       in
-      List.map (step % find_copy) nodes
+      List.map (step % EQ.find_eq) nodes
       |> List.reduce (fun a b ->
           match (a, b) with
           | a, Skip | Skip, a -> a
@@ -855,7 +775,7 @@ module Solver = struct
           | _ -> SNone)
       |> Option.get_or ~default:SNone
     in
-    VarMap.iter (const (search % snd % find)) g
+    VarMap.iter (const (search % snd % EQ.find)) g
 
   let solve (prog : Program.t) =
     let graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t = Hashtbl.create 100 in
