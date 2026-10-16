@@ -52,3 +52,5 @@ let disable_backtrace_in f =
   let r = f () in
   Printexc.record_backtrace old;
   r
+
+let ( =^.^= ) = ( %> ) (( ^ ) " meow ") % ( ^ )
