@@ -117,6 +117,7 @@ lib.makeScope newScope (
         fake_opam,
         fake_dune_prefix,
         ocaml,
+        sherlodoc,
         findlib,
         odoc-driver,
       }:
@@ -130,6 +131,7 @@ lib.makeScope newScope (
           ocaml
           findlib
           odoc-driver
+          sherlodoc
           fake_opam
           fake_dune_prefix
         ];
@@ -147,10 +149,20 @@ lib.makeScope newScope (
             --mld-dir=$dev --odoc-dir=$dev --odocl-dir=$dev \
             $(cd $OCAMLPATH && echo *)
 
-          ocamlfind printconf
+          for d in $dev/*; do
+            if [[ -d $d ]]; then
+              found="$(find $d -name '*.odocl' -not -name '*__*' -not -name 'impl-*' -not -name page-index.odocl)"
+              if [[ -n "$found" ]]; then
+                printf "$(basename $d)\t%s\n" $found >> $out/sherlodoc-index-list
+              fi
+            fi
+          done
 
-          echo ${fake_opam}
-          echo ${fake_dune_prefix}
+          find $out -name sherlodoc_db.js -delete
+          find $out -name '*.html' -exec sed -i.old "s|sherlodoc_db.js'|../sherlodoc_db.js'|" '{}' ';'
+          find $out -name '*.old' -delete
+          sherlodoc index --file-list $out/sherlodoc-index-list -o $out/sherlodoc_db.js
+          rm $out/sherlodoc-index-list
         '';
 
         checkPhase = ''
@@ -180,16 +192,7 @@ lib.makeScope newScope (
         buildPhase = ''
           mkdir -p $out/bin
           export SHERLODOC_DB=$out/sherlodoc.marshal
-          for d in $src/*; do
-            if [[ -d $d ]]; then
-              found="$(find $d -name '*.odocl' -not -name '*__*' -not -name 'impl-*' -not -name page-index.odocl)"
-              if [[ -n "$found" ]]; then
-                printf "$(basename $d)\t%s\n" $found >> file-list
-              fi
-            fi
-          done
-
-          sherlodoc index --file-list file-list
+          sherlodoc index --file-list $src/sherlodoc-index-list
 
           cat <<EOF > $out/bin/activate_sherlodoc_db.sh
           export SHERLODOC_DB=$SHERLODOC_DB
