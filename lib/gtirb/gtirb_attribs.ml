@@ -34,7 +34,7 @@ type section = {
   address : int64;
   size : int64;
   read_only : bool; [@default false]
-  bytes : string;
+  bytes : bytes;
 }
 [@@deriving show, protocol ~driver:(module Lang.Attrib_conv)]
 
