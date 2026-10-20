@@ -144,6 +144,7 @@ module Driver = struct
   let of_bool : bool -> t = fun b -> `Bool b
 
   let to_bytes : t -> bytes = function
+    (* string vs list is used to distinguish compressed vs escaped bytes. *)
     | `String s -> Scanf.unescaped s |> Bytes.of_string
     | `List parts ->
         let s = Iter.of_list parts |> Iter.map to_string |> Iter.concat_str in
