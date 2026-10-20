@@ -24,8 +24,10 @@ are used in CI and in the Nix develop shell.
   ocaml5.4.1-alcotest-1.9.1
   ocaml5.4.1-angstrom-0.16.1
   ocaml5.4.1-aslp_lifter_ocaml-1.1.0
+  ocaml5.4.1-base64-3.5.2
   ocaml5.4.1-containers-3.18
   ocaml5.4.1-containers-data-3.18
+  ocaml5.4.1-decompress-1.5.3
   ocaml5.4.1-findlib-1.9.8
   ocaml5.4.1-fix-20250919
   ocaml5.4.1-fmt-0.11.0
