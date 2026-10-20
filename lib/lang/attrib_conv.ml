@@ -2,6 +2,11 @@ open Bincaml_util.Common
 
 (** Private implementation helpers for (de)compression. *)
 module Internal = struct
+  (** We use {:https://github.com/mirage/decompress} in this module. Although
+      {:https://github.com/xavierleroy/camlzip} is perhaps more commonly used,
+      its Ocaml API requires reading from a {!in_channel} which would require
+      writing to disk (or Unix pipes). *)
+
   (** These default constants are copied from:
       {:https://github.com/mirage/decompress/blob/d0e44781ed329c7ebde7bf6dbcbe547c87554303/bin/decompress.ml}
   *)
