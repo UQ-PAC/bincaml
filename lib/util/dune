@@ -5,6 +5,7 @@
  (name bincaml_util)
  (modules
   indexed_list
+  page_table
   worklist
   fixed_width_arith
   mtypes
@@ -22,6 +23,7 @@
   labelled_unionfind
   recursionscheme)
  (libraries
+  fmt
   intPQueue
   logs
   mtime
