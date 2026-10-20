@@ -18,4 +18,4 @@
        return;
      ]
   ];
-  prog entry @f1;
+  prog entry @f1 { .invariants = [ "SSA"; "Params" ] };

@@ -1,124 +1,52 @@
 (** Rewrites boolean exprs in terms of flags to be in terms of numerical
-    conditions. *)
+    conditions.
+
+    ccmp (conditional compare) instructions require extra work to handle. We
+    store ccmp results as if-then-else computations where one branch is
+    definitely either Always or Never. This mirrors the ccmp instruction's
+    logic, where the four flags are set to a constant if the condition required
+    to execute the compare isn't met. From this, we have effectively
+    [nzcv = if cond then cond2 else k] where k is a constant. When branching on
+    this flag field, we have two cases being whether k does or does not branch
+    in the case that cond is false. We can write a branching condition as
+    [cond && cond2 || !cond && k] and if we unwrap the logic, we get that if [k]
+    is true this is [cond ==> cond2], and if [k] is false [cond && cond2]. *)
 
 open Lang
 open Common
 open Cfg_analysis
 
-(** A type of condition as described in
-    https://support.arm.com/documentation/ddi0487/mc/-Part-C-The-AArch64-Instruction-Set/-Chapter-C1-The-A64-Instruction-Set/-C1-2-Structure-of-the-A64-assembler-language/-C1-2-4-Condition-code?lang=en
+open struct
+  let value = function
+    | Flags.Diff (e, e') -> Some (Expr.BasilExpr.binexp ~op:`BVSUB e e')
+    | Sum (e, e') -> Some (Expr.BasilExpr.applyintrin ~op:`BVADD [ e; e' ])
+    | Expr e -> Some e
+    | Always -> Some (Expr.BasilExpr.bvconst (Bitvec.one ~size:1))
+    | Never -> Some (Expr.BasilExpr.bvconst (Bitvec.zero ~size:1))
+    | Ite _ -> None
 
-    We track one computation for each flag read, noting that sometimes not all
-    flags will be computed in the same way. *)
-type t =
-  | EQ of { z : Flags.computation }
-  | CS of { c : Flags.computation }
-  | MI of { n : Flags.computation }
-  | VS of { v : Flags.computation }
-  | HI of { c : Flags.computation; z : Flags.computation }
-  | GE of { n : Flags.computation; v : Flags.computation }
-  | GT of {
-      n : Flags.computation;
-      v : Flags.computation;
-      z : Flags.computation;
-    }
-  | AL
-  | Not of t
-  | Top  (** Unknown condition type *)
-[@@deriving show { with_path = false }, ord, eq]
+  let is_lit = function
+    | Flags.Always | Never -> true
+    | Sum _ | Diff _ | Expr _ | Ite _ -> false
 
-(** Extracts a condition from a boolean expression *)
-let rec extract_condition m e : t =
-  let open Flags in
-  let open Expr.AbstractExpr in
-  match e with
-  | BinaryExpr { op = `EQ; arg1; arg2 } -> (
-      (* evaluate arg1 and arg2, if they are of the right form keep *)
-      let arg1 = Eval.eval (flip FlagDomain.read m) arg1 in
-      let arg2 = Eval.eval (flip FlagDomain.read m) arg2 in
-      match (arg1, arg2) with
-      | V (Z z), V (Const Always) -> EQ { z }
-      | V (C c), V (Const Always) -> CS { c }
-      | V (N n), V (Const Always) -> MI { n }
-      | V (V v), V (Const Always) -> VS { v }
-      | V (N n), V (V v | Const v) -> GE { n; v }
-      | V (Const Always), V (Const Always) -> AL
-      | V (Const Never), V (Const Always) -> Not AL
-      | _ -> Top)
-  | ApplyIntrin
-      {
-        op = `AND;
-        args =
-          [
-            Expr.BasilExpr.E (BinaryExpr { op = `EQ; arg1 = a; arg2 = b });
-            E (BinaryExpr { op = `EQ; arg1 = c; arg2 = d });
-          ];
-      } -> (
-      (* there has to be a better way .......... *)
-      let a = Eval.eval (flip FlagDomain.read m) a in
-      let b = Eval.eval (flip FlagDomain.read m) b in
-      let c = Eval.eval (flip FlagDomain.read m) c in
-      let d = Eval.eval (flip FlagDomain.read m) d in
-      match (a, b, c, d) with
-      | V (C c | Const c), V (Const Always), V (Z z), V (Const Never) ->
-          HI { c; z }
-      | V (N n), V (V v | Const v), V (Z z), V (Const Never) -> GT { n; v; z }
-      | _ -> Top)
-  | UnaryExpr { op = `BoolNOT; arg } -> (
-      match extract_condition m (Expr.BasilExpr.unfix arg) with
-      | Not c -> c
-      | c -> Not c)
-  | _ -> Top
+  let zero_of e =
+    match Expr.BasilExpr.type_of e with
+    | Bitvector size -> Some (Expr.BasilExpr.bvconst (Bitvec.zero ~size))
+    | _ -> None
+end
 
 (** Replace a condition with its interpretation as an expression *)
 let rec condition_expr cond =
   let open Flags in
   let open Expr.BasilExpr in
-  let value = function
-    | Diff (e, e') -> binexp ~op:`BVSUB e e'
-    | Sum (e, e') -> applyintrin ~op:`BVADD [ e; e' ]
-    | Expr e -> e
-    | Always -> bvconst (Bitvec.one ~size:1)
-    | Never -> bvconst (Bitvec.zero ~size:1)
-  in
-  let zero_of e =
-    match type_of e with
-    | Bitvector size -> Some (bvconst (Bitvec.zero ~size))
-    | _ -> None
-  in
   match cond with
-  | EQ { z = Diff (e, e') } -> Some (binexp ~op:`EQ e e')
-  | EQ { z = Sum (e, e') } -> Some (binexp ~op:`EQ e (unexp ~op:`BVNEG e'))
-  | EQ { z = Expr e } -> zero_of e |> Option.map (binexp ~op:`EQ e)
-  | CS { c = Diff (e, e') } -> Some (binexp ~op:`BVULE e' e)
-  | CS { c = Sum (e, e') } -> Some (binexp ~op:`BVULE (unexp ~op:`BVNEG e') e)
-  | MI { n } ->
-      let e = value n in
-      zero_of e |> Option.map (binexp ~op:`BVSLT e)
+  | EQ { z } -> eq_expr z
+  | CS { c } -> cs_expr c
+  | MI { n } -> mi_expr n
   (* | VS c -> failwith "overflow rewrite is complicated" *)
-  | HI { c = Diff (e, e') as c; z } when equiv_computations c z ->
-      Some (binexp ~op:`BVULT e' e)
-  | HI { c = Sum (e, e') as c; z } when equiv_computations c z ->
-      Some (binexp ~op:`BVULT (unexp ~op:`BVNEG e') e)
-  | HI { c = Never; z = Expr e } -> Some (boolconst false)
-  | HI { c = Always; z = Expr e } ->
-      zero_of e |> Option.map (fun zero -> binexp ~op:`BVULT zero e)
-  | GE { n = Diff (e, e') as c; v } when equiv_computations c v ->
-      Some (binexp ~op:`BVSLE e' e)
-  | GE { n = Sum (e, e') as c; v } when equiv_computations c v ->
-      Some (binexp ~op:`BVSLE (unexp ~op:`BVNEG e') e)
-  | GE { n; v = Never } ->
-      let e = value n in
-      zero_of e |> Option.map (fun zero -> binexp ~op:`BVSLE zero e)
-  | GT { n = Diff (e, e') as n; v; z }
-    when equiv_computations n v && equiv_computations n z ->
-      Some (binexp ~op:`BVSLT e' e)
-  | GT { n = Sum (e, e') as n; v; z }
-    when equiv_computations n v && equiv_computations n z ->
-      Some (binexp ~op:`BVSLT (unexp ~op:`BVNEG e') e)
-  | GT { n; v = Never; z } when equiv_computations n z ->
-      let e = value n in
-      zero_of e |> Option.map (fun zero -> binexp ~op:`BVSLT zero e)
+  | HI { c; z } -> hi_expr c z
+  | GE { n; v } -> ge_expr n v
+  | GT { n; v; z } -> gt_expr n v z
   | AL -> Some (boolconst true)
   | Not cond -> (
       let open Expr.AbstractExpr in
@@ -136,11 +64,168 @@ let rec condition_expr cond =
       | None -> None)
   | _ -> None
 
+(** Handle Ites for conditions of the form [FLAG == 1] *)
+and handle_ite_1 f comp =
+  let open Flags in
+  let open Expr.BasilExpr in
+  let open Option.Infix in
+  match comp with
+  | Ite (cond, c, Always) ->
+      let* cond = condition_expr cond in
+      let* c = f c in
+      Some (binexp ~op:`IMPLIES cond c)
+  | Ite (cond, Always, c) ->
+      let* cond = condition_expr (Not cond) in
+      let* c = f c in
+      Some (binexp ~op:`IMPLIES cond c)
+  | Ite (cond, c, Never) ->
+      let* cond = condition_expr cond in
+      let* c = f c in
+      Some (binexp ~op:`AND cond c)
+  | Ite (cond, Never, c) ->
+      let* cond = condition_expr (Not cond) in
+      let* c = f c in
+      Some (binexp ~op:`AND cond c)
+  | _ -> None
+
+and eq_expr z =
+  let open Flags in
+  let open Expr.BasilExpr in
+  match z with
+  | Ite _ -> handle_ite_1 eq_expr z
+  | Diff (e, e') -> Some (binexp ~op:`EQ e e')
+  | Sum (e, e') -> Some (binexp ~op:`EQ e (unexp ~op:`BVNEG e'))
+  | Expr e -> zero_of e |> Option.map (binexp ~op:`EQ e)
+  | _ -> None
+
+and cs_expr c =
+  let open Flags in
+  let open Expr.BasilExpr in
+  match c with
+  | Ite _ -> handle_ite_1 cs_expr c
+  | Diff (e, e') -> Some (binexp ~op:`BVULE e' e)
+  | Sum (e, e') -> Some (binexp ~op:`BVULE (unexp ~op:`BVNEG e') e)
+  | _ -> None
+
+and mi_expr n =
+  let open Flags in
+  let open Expr.BasilExpr in
+  let open Option.Infix in
+  match n with
+  | Ite _ -> handle_ite_1 mi_expr n
+  | e ->
+      let* e = value n in
+      zero_of e |> Option.map (binexp ~op:`BVSLT e)
+
+and hi_expr c z =
+  let open Flags in
+  let open Expr.BasilExpr in
+  let open Option.Infix in
+  match (c, z) with
+  | Ite (cond, c, Always), Ite (cond', c', Never) when equiv_cond cond cond' ->
+      let* cond = condition_expr cond in
+      let* c = hi_expr c c' in
+      Some (binexp ~op:`IMPLIES cond c)
+  | Ite (cond, Always, c), Ite (cond', Never, c') when equiv_cond cond cond' ->
+      let* cond = condition_expr (Not cond) in
+      let* c = hi_expr c c' in
+      Some (binexp ~op:`IMPLIES cond c)
+  | Ite (cond, c, o), Ite (cond', c', o')
+    when equiv_cond cond cond' && is_lit o && is_lit o' ->
+      let* cond = condition_expr cond in
+      let* c = hi_expr c c' in
+      Some (binexp ~op:`AND cond c)
+  | Ite (cond, o, c), Ite (cond', o', c')
+    when equiv_cond cond cond' && is_lit o && is_lit o' ->
+      let* cond = condition_expr (Not cond) in
+      let* c = hi_expr c c' in
+      Some (binexp ~op:`AND cond c)
+  | Diff (e, e'), z when equiv_computations c z -> Some (binexp ~op:`BVULT e' e)
+  | Sum (e, e'), z when equiv_computations c z ->
+      Some (binexp ~op:`BVULT (unexp ~op:`BVNEG e') e)
+  | Never, Expr e -> Some (boolconst false)
+  | Always, Expr e ->
+      zero_of e |> Option.map (fun zero -> binexp ~op:`BVULT zero e)
+  | _ -> None
+
+and ge_expr n v =
+  let open Flags in
+  let open Expr.BasilExpr in
+  let open Option.Infix in
+  match (n, v) with
+  | Ite (cond, c, Always), Ite (cond', c', Always)
+  | Ite (cond, c, Never), Ite (cond', c', Never)
+    when equiv_cond cond cond' ->
+      let* cond = condition_expr cond in
+      let* c = ge_expr c c' in
+      Some (binexp ~op:`IMPLIES cond c)
+  | Ite (cond, Always, c), Ite (cond', Always, c')
+  | Ite (cond, Never, c), Ite (cond', Never, c')
+    when equiv_cond cond cond' ->
+      let* cond = condition_expr (Not cond) in
+      let* c = ge_expr c c' in
+      Some (binexp ~op:`IMPLIES cond c)
+  | Ite (cond, c, o), Ite (cond', c', o')
+    when equiv_cond cond cond' && is_lit o && is_lit o' ->
+      let* cond = condition_expr cond in
+      let* c = ge_expr c c' in
+      Some (binexp ~op:`AND cond c)
+  | Ite (cond, o, c), Ite (cond', o', c')
+    when equiv_cond cond cond' && is_lit o && is_lit o' ->
+      let* cond = condition_expr (Not cond) in
+      let* c = ge_expr c c' in
+      Some (binexp ~op:`AND cond c)
+  | Diff (e, e'), v when equiv_computations n v -> Some (binexp ~op:`BVSLE e' e)
+  | Sum (e, e'), v when equiv_computations n v ->
+      Some (binexp ~op:`BVSLE (unexp ~op:`BVNEG e') e)
+  | n, Never ->
+      let* e = value n in
+      zero_of e |> Option.map (fun zero -> binexp ~op:`BVSLE zero e)
+  | _ -> None
+
+and gt_expr n v z =
+  let open Flags in
+  let open Expr.BasilExpr in
+  let open Option.Infix in
+  match (n, v, z) with
+  | Ite (cond, c, Always), Ite (cond', c', Always), Ite (cond'', c'', Never)
+  | Ite (cond, c, Never), Ite (cond', c', Never), Ite (cond'', c'', Never)
+    when equiv_cond cond cond' && equiv_cond cond cond'' ->
+      let* cond = condition_expr cond in
+      let* c = gt_expr c c' c'' in
+      Some (binexp ~op:`IMPLIES cond c)
+  | Ite (cond, Always, c), Ite (cond', Always, c'), Ite (cond'', Never, c'')
+  | Ite (cond, Never, c), Ite (cond', Never, c'), Ite (cond'', Never, c'')
+    when equiv_cond cond cond' && equiv_cond cond cond'' ->
+      let* cond = condition_expr (Not cond) in
+      let* c = gt_expr c c' c'' in
+      Some (binexp ~op:`IMPLIES cond c)
+  | Ite (cond, c, o), Ite (cond', c', o'), Ite (cond'', c'', o'')
+    when equiv_cond cond cond' && equiv_cond cond cond'' && is_lit o
+         && is_lit o' && is_lit o'' ->
+      let* cond = condition_expr cond in
+      let* c = gt_expr c c' c'' in
+      Some (binexp ~op:`AND cond c)
+  | Ite (cond, o, c), Ite (cond', o', c'), Ite (cond'', o'', c'')
+    when equiv_cond cond cond' && equiv_cond cond cond'' && is_lit o
+         && is_lit o' && is_lit o'' ->
+      let* cond = condition_expr (Not cond) in
+      let* c = gt_expr c c' c'' in
+      Some (binexp ~op:`AND cond c)
+  | Diff (e, e'), v, z when equiv_computations n v && equiv_computations n z ->
+      Some (binexp ~op:`BVSLT e' e)
+  | Sum (e, e'), v, z when equiv_computations n v && equiv_computations n z ->
+      Some (binexp ~op:`BVSLT (unexp ~op:`BVNEG e') e)
+  | n, Never, z when equiv_computations n z ->
+      let* e = value n in
+      zero_of e |> Option.map (fun zero -> binexp ~op:`BVSLT zero e)
+  | _ -> None
+
 let rw m e =
   let open Expr.BasilExpr in
-  e |> extract_condition m |> condition_expr |> Expr.BasilExpr.replace_opt
+  e |> Flags.extract_condition m |> condition_expr |> Expr.BasilExpr.replace_opt
 
 (** Rewrite an expression's branch conditions in terms of flag analysis results
 *)
-let rewrite_expr (m : FlagDomain.t) e =
+let rewrite_expr (m : Flags.FlagMap.t) e =
   Expr.BasilExpr.rewrite_down ~rw_fun:(rw m) e
