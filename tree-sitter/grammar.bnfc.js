@@ -846,7 +846,7 @@ module.exports = ({
     token_EndRec: $ =>
       /\}/,
     token_Str: $ =>
-      /"([^"\\]|\\["\\fnrt])*"/,
+      /"([^"\\]|\\(["\\bfnrt]|([abcdefx]|\d)([abcdef]|\d)([abcdef]|\d)))*"/,
     token_IntegerHex: $ =>
       /0x([abcdef]|\d)+/,
     token_IntegerDec: $ =>

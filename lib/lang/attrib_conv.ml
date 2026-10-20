@@ -1,5 +1,81 @@
 open Bincaml_util.Common
 
+(** Private implementation helpers for (de)compression. *)
+module Internal = struct
+  (** We use {:https://github.com/mirage/decompress} in this module. Although
+      {:https://github.com/xavierleroy/camlzip} is perhaps more commonly used,
+      its Ocaml API requires reading from a {!in_channel} which would require
+      writing to disk (or Unix pipes). *)
+
+  (** These default constants are copied from:
+      {:https://github.com/mirage/decompress/blob/d0e44781ed329c7ebde7bf6dbcbe547c87554303/bin/decompress.ml}
+  *)
+
+  let make_cfg = Gz.Higher.configuration Unknown (Fun.const Int32.zero)
+  let buffer_size = 1024
+
+  type compress_fns = { compress : bytes -> bytes; decompress : bytes -> bytes }
+  (** Functions for compressing and decompressing bytes. Each function
+      {i copies} its given bytes input. Each instance of {!compress_fns}
+      operates over its own intermediate buffers. *)
+
+  (** Makes a new instance of {!compress_fns} with input from the given bytes.
+  *)
+  let make_compress_fns () =
+    let w = De.Lz77.make_window ~bits:15 and q = De.Queue.create 4096 in
+
+    let source = ref (CCByte_slice.create Bytes.empty) in
+    let set_source bytes = source := CCByte_slice.create bytes in
+
+    let in_buf = De.bigstring_create buffer_size
+    and out_buf = De.bigstring_create buffer_size in
+
+    let result = CCByte_buffer.create () in
+    let get_result () = CCByte_buffer.contents_bytes result in
+
+    let refill bs =
+      let n_to_copy = min De.io_buffer_size (CCByte_slice.len !source) in
+      for i = 0 to n_to_copy - 1 do
+        bs.{i} <- CCByte_slice.get !source 0;
+        CCByte_slice.consume !source 1
+      done;
+      n_to_copy
+    and flush bs i =
+      Iter.int_range ~start:0 ~stop:(i - 1)
+      |> Iter.map (Bigarray.Array1.get bs)
+      |> CCByte_buffer.append_iter result
+    in
+
+    {
+      compress =
+        (fun bytes ->
+          set_source bytes;
+          Gz.Higher.compress ~w ~q ~refill ~flush () make_cfg in_buf out_buf;
+          get_result ());
+      decompress =
+        (fun bytes ->
+          set_source bytes;
+          (* ignore returned metadata but ensure it succeeded *)
+          let _ : Gz.Higher.metadata =
+            Gz.Higher.uncompress ~refill ~flush in_buf out_buf
+            |> Result.map_err (fun (`Msg x) -> x)
+            |> Result.get_or_failwith
+          in
+          get_result ());
+    }
+
+  (** Wrappers around {!Gz.Higher} functions to provide a [bytes -> bytes]
+      interface. *)
+
+  let compress bytes =
+    let { compress; _ } = make_compress_fns () in
+    compress bytes
+
+  let decompress bytes =
+    let { decompress; _ } = make_compress_fns () in
+    decompress bytes
+end
+
 (** Defined conversion functions to/from Bincaml attributes. *)
 module Driver = struct
   type t = Attrib.t
@@ -38,7 +114,6 @@ module Driver = struct
     | `Integer n -> Z.to_int32 n
     | _ -> invalid_arg "expected `Integer"
 
-  (** TODO: should these be unsigned or signed?? *)
   let of_int32 : int32 -> t = fun n -> `Integer (Z.of_int32 n)
 
   let to_int64 : t -> int64 = function
@@ -68,10 +143,21 @@ module Driver = struct
 
   let of_bool : bool -> t = fun b -> `Bool b
 
-  (** TODO: compress all bytes? this would be a convenient place to do it. *)
-  let to_bytes : t -> bytes = fun x -> to_string x |> Bytes.unsafe_of_string
+  let to_bytes : t -> bytes = function
+    (* string vs list is used to distinguish compressed vs escaped bytes. *)
+    | `String s -> Scanf.unescaped s |> Bytes.of_string
+    | `List parts ->
+        let s = Iter.of_list parts |> Iter.map to_string |> Iter.concat_str in
+        Base64.decode_exn s |> Bytes.unsafe_of_string |> Internal.decompress
+    | _ -> invalid_arg "expected `String or `List (for bytes)"
 
-  let of_bytes : bytes -> t = fun x -> Bytes.to_string x |> of_string
+  let of_bytes : bytes -> t = function
+    | x when Bytes.length x < 80 -> `String (String.escaped (String.of_bytes x))
+    | x ->
+        let s =
+          Internal.compress x |> Bytes.unsafe_to_string |> Base64.encode_exn
+        in
+        `List [ `String s ]
 
   (** TODO: null? or maybe make this unsup. *)
   let null : t = `Bitvector (Bitvec.zero ~size:0)
