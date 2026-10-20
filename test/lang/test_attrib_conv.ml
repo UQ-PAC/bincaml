@@ -100,7 +100,7 @@ let%expect_test "adt to attrib" =
             address = 4194872L;
             size = 110L;
             read_only = false;
-            bytes = "TODO: bytes encoding";
+            bytes = Bytes.unsafe_of_string "TODO: bytes encoding";
           };
         ];
     }

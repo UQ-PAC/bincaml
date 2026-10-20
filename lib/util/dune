@@ -19,6 +19,7 @@
   smt
   reverse_graph
   logger
+  labelled_unionfind
   recursionscheme)
  (libraries
   intPQueue
