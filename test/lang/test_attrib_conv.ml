@@ -32,7 +32,7 @@ prog entry @main {
     .address = 0x400238;
     .size = 0x6e;
     .readOnly = false;
-    .bytes = "%s";
+    .bytes = [ "%s" ];
   };
 ]
 } ; |}
@@ -60,7 +60,7 @@ prog entry @main {
     [ block %ret [ return; ] ];
     prog entry @main;
     { .initial_memory = [ { .address = 4194872;
-                .bytes = "H4sIAAAAAAAA/wEYAOf/Ynl0ZXMhISEgZ2V0IGVuY29kZWQxMjM0oaypOxgAAAA=";
+                .bytes = [ "H4sIAAAAAAAA/wEYAOf/Ynl0ZXMhISEgZ2V0IGVuY29kZWQxMjM0oaypOxgAAAA=" ];
                 .name = ".interp"; .readOnly = false; .size = 110 } ];
         .symbols = { .externalFunctions = [ { .name = "_ITM_deregisterTMCloneTable";
                     .offset = 4325328 }; { .name = "abort"; .offset = 4325392 } ];
@@ -96,8 +96,8 @@ let%expect_test "adt to attrib" =
   assert (
     Gtirb_frontend.Gtirb_attribs.section_to_attrib_conv section
     |> Option.some
-    |> Lang.Attrib.find_str_opt ".bytes"
-    = Some sample_byte_string_encoded);
+    |> Lang.Attrib.find_opt ".bytes"
+    = Some (`String sample_byte_string));
 
   let parsed =
     {
@@ -120,10 +120,8 @@ let%expect_test "adt to attrib" =
   @@ Containers_pp.Pretty.to_string ~width:80
   @@ Lang.Attrib.attrib_pretty
   @@ Gtirb_frontend.Gtirb_attribs.gtirb_attribs_to_attrib_conv parsed;
-  [%expect
-    {|
-    { .initial_memory = [ { .address = 4194872;
-                .bytes = "H4sIAAAAAAAA/wEYAOf/Ynl0ZXMhISEgZ2V0IGVuY29kZWQxMjM0oaypOxgAAAA=";
+  [%expect {|
+    { .initial_memory = [ { .address = 4194872; .bytes = "bytes!!! get encoded1234";
                 .name = ".interp"; .size = 110 } ];
         .symbols = { .globals = [ { .address = 4324824; .name = "_DYNAMIC"; .size = 0 };
                 { .address = 4325424; .name = "x"; .size = 64 } ] } }
@@ -159,3 +157,72 @@ prog entry @main {
   |> List.for_all (fun section ->
       let bytes = section.Gtirb_frontend.Gtirb_attribs.bytes in
       Bytes.equal bytes (Bytes.init 16 (fun _ -> '\x00')))
+
+let%expect_test "can round trip escaped strings" =
+  let s = "(((\x00\x01\xff)))" in
+  let s_encoded = "(((\\x00\\x01\\xff)))" in
+  let prog =
+    Printf.sprintf
+         {|
+proc @main() -> () [ block %%ret [ return; ] ];
+
+prog entry @main {
+  .initial_memory = [
+  {
+    .name = ".bss";
+    .address = 0x420028;
+    .size = 0x10;
+    .readOnly = false;
+    .bytes = "%s";
+  }
+]
+} ; |} s_encoded
+  in
+  (*  let prog =
+    prog |> Lang.Program.prog_pretty |> Containers_pp.Pretty.to_string ~width:80
+  in
+  let prog = prog |> Loader.Loadir.ast_of_string |> fun x -> x.prog in
+  let prog =
+    prog |> Lang.Program.prog_pretty |> Containers_pp.Pretty.to_string ~width:80
+      in *)
+  print_endline prog;
+  let prog = prog |> Loader.Loadir.ast_of_string |> fun x -> x.prog in
+
+  let attrib = Lang.Program.attrib prog in
+  assert (
+    let xs =
+      Some (`Assoc attrib)
+      |> Lang.Attrib.find_opt ".initial_memory"
+      |> Option.get
+    in
+    match xs with
+    | `List xs ->
+    List.for_all (fun x ->
+
+    Some x
+    |> Lang.Attrib.find_str_opt ".bytes"
+    |> Option.get = s) xs
+    | _ -> failwith "initial_memory should be list");
+
+  Containers_pp.Pretty.to_format ~width:80 Format.std_formatter
+    (Lang.Program.prog_pretty prog);
+  [%expect {|
+    proc @main() -> () [ block %ret [ return; ] ];
+
+    prog entry @main {
+      .initial_memory = [
+      {
+        .name = ".bss";
+        .address = 0x420028;
+        .size = 0x10;
+        .readOnly = false;
+        .bytes = "(((\x00\x01\xff)))";
+      }
+    ]
+    } ;
+    proc @main()  -> () {  }
+
+
+    [ block %ret [ return; ] ];
+    prog entry @main;
+    |}]

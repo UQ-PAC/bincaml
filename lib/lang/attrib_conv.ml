@@ -143,18 +143,20 @@ module Driver = struct
 
   let of_bool : bool -> t = fun b -> `Bool b
 
-  let rec to_bytes : t -> bytes = function
-    | `String s ->
-        Base64.decode_exn s |> Bytes.unsafe_of_string |> Internal.decompress
+  let to_bytes : t -> bytes = function
+    | `String s -> Scanf.unescaped s |> Bytes.of_string
     | `List parts ->
-        (* Handle BASIL's output which is a list of b64 strings. *)
-        let parts = List.map to_string parts in
-        `String (String.concat "" parts) |> to_bytes
-    | _ -> invalid_arg "expected `String (for bytes)"
+        let s = Iter.of_list parts |> Iter.map to_string |> Iter.concat_str in
+        Base64.decode_exn s |> Bytes.unsafe_of_string |> Internal.decompress
+    | _ -> invalid_arg "expected `String or `List (for bytes)"
 
-  let of_bytes : bytes -> t =
-   fun x ->
-    `String (Internal.compress x |> Bytes.unsafe_to_string |> Base64.encode_exn)
+  let of_bytes : bytes -> t = function
+    | x when Bytes.length x < 80 -> `String (String.of_bytes x)
+    | x ->
+        let s =
+          Internal.compress x |> Bytes.unsafe_to_string |> Base64.encode_exn
+        in
+        `List [ `String s ]
 
   (** TODO: null? or maybe make this unsup. *)
   let null : t = `Bitvector (Bitvec.zero ~size:0)

@@ -71,7 +71,7 @@ let beginList = '['
 let endList = ']'
 let beginRec = '{'
 let endRec = '}'
-let str = '"' ([^ '"' '\\']| '\\' ('"' | '\\' | 'f' | 'n' | 'r' | 't')) * '"'
+let str = '"' ([^ '"' '\\']| '\\' ('"' | '\\' | 'f' | 'n' | 'r' | 't' | 'x' ('a' | 'b' | 'c' | 'd' | 'e' | 'f' | _digit)('a' | 'b' | 'c' | 'd' | 'e' | 'f' | _digit)))* '"'
 let integerHex = "0x" ('a' | 'b' | 'c' | 'd' | 'e' | 'f' | _digit)+
 let integerDec = _digit +
 

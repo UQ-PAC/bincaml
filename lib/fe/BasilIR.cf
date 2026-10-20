@@ -33,7 +33,7 @@ rules LambdaSep ::= "->" | "::" ;
 
 {- Literals -}
 
-token Str '"' ((char - ["\"\\"]) | ('\\' ["\"\\tnrf"]))* '"' ;
+token Str '"' ((char - ["\"\\"]) | ('\\' ( ["\"\\tnrf"] | ('x')  (["abcdef"] | digit) (["abcdef"] | digit))))* '"' ;
 position token IntegerHex ('0' 'x' (digit | ["abcdef"])+);
 position token IntegerDec (digit+);
 
