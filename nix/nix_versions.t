@@ -43,11 +43,12 @@ are used in CI and in the Nix develop shell.
   ocaml5.4.1-ocamlgraph-2.2.0
   ocaml5.4.1-odig-0.1.0
   ocaml5.4.1-odoc-3.2.1
-  ocaml5.4.1-odoc-driver-3.2.1
+  ocaml5.4.1-odoc-driver-3.2.1-patched
   ocaml5.4.1-patricia-tree-0.11.0
   ocaml5.4.1-pp_loc-2.1.0
   ocaml5.4.1-ppx_deriving-6.1.1
   ocaml5.4.1-ppx_expect-0.17.3
+  ocaml5.4.1-ppx_protocol_conv-5.2.3
   ocaml5.4.1-qcheck-alcotest-0.91
   ocaml5.4.1-qcheck-core-0.91
   ocaml5.4.1-qcheck-stm-0.11
