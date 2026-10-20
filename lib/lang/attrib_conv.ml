@@ -11,8 +11,6 @@ module Internal = struct
       {:https://github.com/mirage/decompress/blob/d0e44781ed329c7ebde7bf6dbcbe547c87554303/bin/decompress.ml}
   *)
 
-  let w = De.Lz77.make_window ~bits:15
-  let q = De.Queue.create 1024
   let make_cfg = Gz.Higher.configuration Unknown (Fun.const Int32.zero)
   let buffer_size = 1024
 
@@ -24,6 +22,8 @@ module Internal = struct
   (** Makes a new instance of {!compress_fns} with input from the given bytes.
   *)
   let make_compress_fns () =
+    let w = De.Lz77.make_window ~bits:15 and q = De.Queue.create 4096 in
+
     let source = ref (CCByte_slice.create Bytes.empty) in
     let set_source bytes = source := CCByte_slice.create bytes in
 
