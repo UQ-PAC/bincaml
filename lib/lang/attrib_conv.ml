@@ -12,8 +12,9 @@ module Internal = struct
   *)
 
   let w = De.Lz77.make_window ~bits:15
-  let q = De.Queue.create 4096
+  let q = De.Queue.create 1024
   let make_cfg = Gz.Higher.configuration Unknown (Fun.const Int32.zero)
+  let buffer_size = 1024
 
   type compress_fns = { compress : bytes -> bytes; decompress : bytes -> bytes }
   (** Functions for compressing and decompressing bytes. Each function
@@ -26,8 +27,8 @@ module Internal = struct
     let source = ref (CCByte_slice.create Bytes.empty) in
     let set_source bytes = source := CCByte_slice.create bytes in
 
-    let in_buf = De.bigstring_create De.io_buffer_size
-    and out_buf = De.bigstring_create De.io_buffer_size in
+    let in_buf = De.bigstring_create buffer_size
+    and out_buf = De.bigstring_create buffer_size in
 
     let result = CCByte_buffer.create () in
     let get_result () = CCByte_buffer.contents_bytes result in
