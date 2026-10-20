@@ -25,12 +25,9 @@ let rec attrib_pretty ?(show_internal = false) (e : t) : Containers_pp.t =
   | `Bitvector bv -> text @@ Bitvec.to_string bv
   | `Integer bv -> text @@ Z.to_string bv
   | `List s ->
-      nest 2
-      @@ bracket "[ "
-           (fill
-              (text ";" ^ newline)
-              (List.map (attrib_pretty ~show_internal) s))
-           " ]"
+      bracket2 "["
+        (fill (text ";" ^ newline) (List.map (attrib_pretty ~show_internal) s))
+        "]"
   | `Assoc sm ->
       let pairs =
         sm
@@ -40,8 +37,7 @@ let rec attrib_pretty ?(show_internal = false) (e : t) : Containers_pp.t =
         |> List.map (function k, v ->
             text k ^ text " = " ^ (attrib_pretty ~show_internal) v)
       in
-      let int = fill (text ";" ^ newline) pairs in
-      nest 2 (bracket "{ " int " }")
+      bracket2 "{" (fill (text ";" ^ newline) pairs) "}"
 
 type attrib_map = t StringMap.t [@@deriving eq, ord]
 
