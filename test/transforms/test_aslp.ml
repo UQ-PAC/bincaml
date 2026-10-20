@@ -158,22 +158,17 @@ proc @main()  -> () {  }
     var $R30:bv64;
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
-    proc @main()  -> () {  }
+    proc @main()  -> () { }
       modifies $PC:bv64, $R0:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
       captures $PC:bv64, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
       requires boolor(eq(0x400808:bv64, $PC))
 
     [
-       block %main_code {
-         .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+       block %main_code { .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
          .succ = [
-           {
-             .address = 4196228; .conditional = "false"; .direct = "true"; .target = "stmts:OuTzy8qRTci75taVjGinFQ";
-             .type = "Type_Call"
-           }
-         ]
-       } [ assume eq(0x400808:bv64, $PC); goto (%block); ];
-       block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
+           { .address = 4196228; .conditional = "false"; .direct = "true"; .target = "stmts:OuTzy8qRTci75taVjGinFQ";
+             .type = "Type_Call"; }; ]; } [ assume eq(0x400808:bv64, $PC); goto (%block); ];
+       block %block { .asm = "stp x29, x30, [sp, #-0x20]!"; } [
          var local:bv64 := 0x0:bv64;
          var local:bv64 := $SP;
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0xffffffffffffffe0:bv64) $R29 64;
@@ -182,23 +177,23 @@ proc @main()  -> () {  }
          (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
          goto (%block_1);
        ];
-       block %block_1 { .asm = "mov x29, sp" } [
+       block %block_1 { .asm = "mov x29, sp"; } [
          var local_1:bv64 := 0x0:bv64;
          $R29:bv64 := bvadd($SP, 0x0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
          goto (%block_2);
        ];
-       block %block_2 { .asm = "str w0, [sp, #0x1c]" } [
+       block %block_2 { .asm = "str w0, [sp, #0x1c]"; } [
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) extract(32,0, $R0) 32;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400814:bv64);
          goto (%block_3);
        ];
-       block %block_3 { .asm = "str x1, [sp, #0x10]" } [
+       block %block_3 { .asm = "str x1, [sp, #0x10]"; } [
          $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0x10:bv64) $R1 64;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400818:bv64);
          goto (%block_4);
        ];
-       block %block_4 { .asm = "ldrsw x0, [sp, #0x1c]" } [
+       block %block_4 { .asm = "ldrsw x0, [sp, #0x1c]"; } [
          var local_2:bv32 := 0x0:bv32;
          var local_3:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
          var local_2:bv32 := local_3:bv32;
@@ -206,7 +201,7 @@ proc @main()  -> () {  }
          (var BranchTaken:bool := false, $PC:bv64 := 0x40081c:bv64);
          goto (%block_5);
        ];
-       block %block_5 { .asm = "bl #0xffffffffffffff68" } [
+       block %block_5 { .asm = "bl #0xffffffffffffff68"; } [
          $R30:bv64 := 0x400820:bv64;
          var BranchTaken:bool := true;
          $PC:bv64 := 0x400784:bv64;
@@ -260,13 +255,13 @@ proc @Sqrt()  -> () {  }
     var $PSTATE_V:bv1;
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
-    proc @Sqrt()  -> () {  }
+    proc @Sqrt()  -> () { }
       modifies $PC:bv64
       captures $PC:bv64, $PSTATE_N:bv1, $PSTATE_V:bv1
 
     [
-       block %Sqrt_code_4 { .address = 4196316 } [ assume eq(0x4007dc:bv64, $PC); goto (%block); ];
-       block %block { .asm = "b.lt #0x10" } [ goto (%block_2,%block_1); ];
+       block %Sqrt_code_4 { .address = 4196316; } [ assume eq(0x4007dc:bv64, $PC); goto (%block); ];
+       block %block { .asm = "b.lt #0x10"; } [ goto (%block_2,%block_1); ];
        block %block_1 [
          assume boolnot(eq($PSTATE_N, $PSTATE_V));
          var BranchTaken:bool := true;
@@ -325,26 +320,21 @@ proc @main()  -> () {  }
     {|
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
-    proc @main()  -> () {  }
+    proc @main()  -> () { }
       modifies $PC:bv64
       captures $PC:bv64
       requires boolor(eq(0x400808:bv64, $PC))
 
     [
-       block %main_code {
-         .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+       block %main_code { .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
          .succ = [
-           {
-             .address = 4196228; .conditional = "false"; .direct = "true"; .target = "stmts:OuTzy8qRTci75taVjGinFQ";
-             .type = "Type_Call"
-           }
-         ]
-       } [
+           { .address = 4196228; .conditional = "false"; .direct = "true"; .target = "stmts:OuTzy8qRTci75taVjGinFQ";
+             .type = "Type_Call"; }; ]; } [
          assume eq(0x400808:bv64, $PC);
-         call @_aarch64_eval(0xd4000021:bv32, 0x400808:bv64) { .asm = "svc 1"; .error = "Failure(\"unsupported\")" };
+         call @_aarch64_eval(0xd4000021:bv32, 0x400808:bv64) { .asm = "svc 1"; .error = "Failure(\"unsupported\")"; };
          goto (%block);
        ];
-       block %block { .asm = "mov xzr, xzr" } [
+       block %block { .asm = "mov xzr, xzr"; } [
          var local:bv64 := 0x0:bv64;
          var local_1:bv64 := 0x0:bv64;
          (var BranchTaken:bool := false, $PC:bv64 := 0x400810:bv64);
@@ -385,20 +375,19 @@ proc @main()  -> () {  }
     {|
     var observable $mem:(bv64->bv8);
     var $PC:bv64;
-    proc @main()  -> () {  }
+    proc @main()  -> () { }
       captures $PC:bv64
       requires boolor(eq(0x400808:bv64, $PC))
 
     [
-       block %main_code {
-         .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+       block %main_code { .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
          .succ = [
-           {
-             .address = 4196228; .conditional = "false"; .direct = "true"; .target = "stmts:OuTzy8qRTci75taVjGinFQ";
-             .type = "Type_Call"
-           }
-         ]
-       } [ assume eq(0x400808:bv64, $PC); assert boolor(eq(0x400784:bv64, $PC)); goto (%ret_1); ];
+           { .address = 4196228; .conditional = "false"; .direct = "true"; .target = "stmts:OuTzy8qRTci75taVjGinFQ";
+             .type = "Type_Call"; }; ]; } [
+         assume eq(0x400808:bv64, $PC);
+         assert boolor(eq(0x400784:bv64, $PC));
+         goto (%ret_1);
+       ];
        block %ret_1 [ return; ]
     ];
     prog entry @main;

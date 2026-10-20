@@ -19,8 +19,8 @@ let%expect_test "hash" =
   [%expect
     {|
     basilexpr not equal
-    1:883721435:311146716=bvnot(0x1:bv64: bv64): bv64==UnaryExpr {attrib = {  }; op = `BVNOT; arg = 0; typ = bv64} =
-    1:883721435:311146716=bvnot(0x1:bv64: bv64): bv64==UnaryExpr {attrib = {  }; op = `BVNOT; arg = 0; typ = bv64}
+    1:883721435:311146716=bvnot(0x1:bv64: bv64): bv64==UnaryExpr {attrib = { }; op = `BVNOT; arg = 0; typ = bv64} =
+    1:883721435:311146716=bvnot(0x1:bv64: bv64): bv64==UnaryExpr {attrib = { }; op = `BVNOT; arg = 0; typ = bv64}
      equal
     basilattrdrop  equal
     |}]
