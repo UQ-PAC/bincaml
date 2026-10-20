@@ -8,62 +8,65 @@ module Internal = struct
 
   let w = De.Lz77.make_window ~bits:15
   let q = De.Queue.create 4096
+  let make_cfg = Gz.Higher.configuration Unknown (Fun.const Int32.zero)
 
-  (** Warning: These output and input buffers are globally-shared and {b not}
-      thread-safe! *)
+  type compress_fns = { compress : bytes -> bytes; decompress : bytes -> bytes }
+  (** Functions for compressing and decompressing bytes. Each function
+      {i copies} its given bytes input. *)
 
-  let o = De.bigstring_create De.io_buffer_size
-  let i = De.bigstring_create De.io_buffer_size
-  let cfg = Gz.Higher.configuration Unknown (Fun.const Int32.zero)
+  (** Makes a new instance of {!compress_fns} with input from the given bytes.
+      This creates new intermediate buffers for working space. *)
+  let make_compress_fns () =
+    let source = ref (CCByte_slice.create Bytes.empty) in
+    let set_source bytes = source := CCByte_slice.create bytes in
 
-  type buffered = {
-    refill : De.bigstring -> int;
-    flush : De.bigstring -> int -> unit;
-    out_buf : CCByte_buffer.t;
-  }
-  (** Contains functions for interacting with the intermediate input/output
-      {!De.bigstring}s.
+    let in_buf = De.bigstring_create De.io_buffer_size
+    and out_buf = De.bigstring_create De.io_buffer_size in
 
-      The {!refill} and {!flush} are intended to be passed to the same-named
-      parameters of {!Gz.Higher.compress} and {!Gz.Higher.uncompress} *)
-
-  (** Initialises a {!buffered} which obtains its input from the given {!bytes}.
-  *)
-  let make_buffered_of_bytes input =
-    let n_used = ref 0 in
-    let out_buf = CCByte_buffer.create () in
+    let result = CCByte_buffer.create () in
+    let get_result () = CCByte_buffer.contents_bytes result in
 
     let refill bs =
-      let n_to_copy = min De.io_buffer_size (Bytes.length input - !n_used) in
-      Iter.int_range ~start:0 ~stop:(n_to_copy - 1)
-      |> Iter.map (Int.add !n_used %> Bytes.get input)
-      |> Iter.iteri (Bigarray.Array1.set bs);
-      n_used := !n_used + n_to_copy;
+      let n_to_copy = min De.io_buffer_size (CCByte_slice.len !source) in
+      for i = 0 to n_to_copy - 1 do
+        bs.{i} <- CCByte_slice.get !source 0;
+        CCByte_slice.consume !source 1
+      done;
       n_to_copy
     and flush bs i =
       Iter.int_range ~start:0 ~stop:(i - 1)
       |> Iter.map (Bigarray.Array1.get bs)
-      |> CCByte_buffer.append_iter out_buf
+      |> CCByte_buffer.append_iter result
     in
 
-    { refill; flush; out_buf }
+    {
+      compress =
+        (fun bytes ->
+          set_source bytes;
+          Gz.Higher.compress ~w ~q ~refill ~flush () make_cfg in_buf out_buf;
+          get_result ());
+      decompress =
+        (fun bytes ->
+          set_source bytes;
+          (* ignore returned metadata but ensure it succeeded *)
+          let _ : Gz.Higher.metadata =
+            Gz.Higher.uncompress ~refill ~flush in_buf out_buf
+            |> Result.map_err (fun (`Msg x) -> x)
+            |> Result.get_or_failwith
+          in
+          get_result ());
+    }
 
   (** Wrappers around {!Gz.Higher} functions to provide a [bytes -> bytes]
       interface. *)
 
   let compress bytes =
-    let { refill; flush; out_buf } = make_buffered_of_bytes bytes in
-    Gz.Higher.compress ~w ~q ~refill ~flush () cfg i o;
-    CCByte_buffer.contents_bytes out_buf
+    let { compress; _ } = make_compress_fns () in
+    compress bytes
 
-  let uncompress bytes =
-    let { refill; flush; out_buf } = make_buffered_of_bytes bytes in
-    let _ : Gz.Higher.metadata =
-      Gz.Higher.uncompress ~refill ~flush i o
-      |> Result.map_err (fun (`Msg x) -> x)
-      |> Result.get_or_failwith
-    in
-    CCByte_buffer.contents_bytes out_buf
+  let decompress bytes =
+    let { decompress; _ } = make_compress_fns () in
+    decompress bytes
 end
 
 (** Defined conversion functions to/from Bincaml attributes. *)
@@ -104,7 +107,6 @@ module Driver = struct
     | `Integer n -> Z.to_int32 n
     | _ -> invalid_arg "expected `Integer"
 
-  (** TODO: should these be unsigned or signed?? *)
   let of_int32 : int32 -> t = fun n -> `Integer (Z.of_int32 n)
 
   let to_int64 : t -> int64 = function
@@ -134,10 +136,9 @@ module Driver = struct
 
   let of_bool : bool -> t = fun b -> `Bool b
 
-  (** TODO: compress all bytes? this would be a convenient place to do it. *)
   let rec to_bytes : t -> bytes = function
     | `String s ->
-        Base64.decode_exn s |> Bytes.unsafe_of_string |> Internal.uncompress
+        Base64.decode_exn s |> Bytes.unsafe_of_string |> Internal.decompress
     | `List parts ->
         (* Handle BASIL's output which is a list of b64 strings. *)
         let parts = List.map to_string parts in
