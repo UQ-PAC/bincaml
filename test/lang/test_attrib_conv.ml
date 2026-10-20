@@ -49,7 +49,15 @@ prog entry @main {
 
 
     [ block %ret [ return; ] ];
-    prog entry @main;
+    prog entry @main { .initial_memory = [ { .address = 4194872;
+                .bytes = "TODO: bytes encoding"; .name = ".interp"; .readOnly = false;
+                .size = 110 } ];
+        .symbols = { .externalFunctions = [ { .name = "_ITM_deregisterTMCloneTable";
+                    .offset = 4325328 }; { .name = "abort"; .offset = 4325392 } ];
+            .funcEntries = [ { .address = 4195968; .name = "_start"; .size = 480 } ];
+            .globalOffsets = [  ];
+            .globals = [ { .address = 4324824; .name = "_DYNAMIC"; .size = 0 };
+                { .address = 4325424; .name = "x"; .size = 64 } ] } };
     { .initial_memory = [ { .address = 4194872; .bytes = "TODO: bytes encoding";
                 .name = ".interp"; .readOnly = false; .size = 110 } ];
         .symbols = { .externalFunctions = [ { .name = "_ITM_deregisterTMCloneTable";

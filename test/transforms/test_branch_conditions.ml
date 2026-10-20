@@ -590,5 +590,5 @@ proc @main()  -> () {  }
        block %block_12 [ (var BranchTaken:bool := false, $PC:bv64 := 0x10:bv64); goto (%ret_1); ];
        block %ret_1 [ return; ]
     ];
-    prog entry @main;
+    prog entry @main { .invariants = [ "GtirbArm" ] };
     |}]
