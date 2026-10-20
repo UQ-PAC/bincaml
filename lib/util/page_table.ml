@@ -12,7 +12,11 @@ module type IFace = sig
   type t
 
   val empty : unit -> t
+
   val clone : t -> t
+  (** WARN: shallow clone: the original table will now panic if attempted to be
+      written-to. *)
+
   val clobbered : t -> t
   val show : t -> string
 
@@ -23,6 +27,7 @@ module type IFace = sig
   val read_bv : t -> addr:Z.t -> nbits:int -> Bitvec.t
 end
 
+(** immutable mutable page table implemented with a Map *)
 module Naive : IFace = struct
   module IntegerMap = Map.Make (Z)
 
@@ -68,6 +73,7 @@ module MutablePaged = struct
     parent : t option;
     page_len : int;
     random_gen : Random.State.t option;
+    mutable frozen : bool;
   }
 
   let flatten tbl =
@@ -123,10 +129,15 @@ module MutablePaged = struct
       parent = None;
       page_len;
       random_gen = use_random_init;
+      frozen = false;
     }
 
   let empty () = create ()
-  let clone tbl = { tbl with table = Hashtbl.create 10; parent = Some tbl }
+
+  let clone tbl =
+    tbl.frozen <- true;
+    { tbl with frozen = false; table = Hashtbl.create 10; parent = Some tbl }
+
   let clobbered tbl = { tbl with table = Hashtbl.create 10; parent = None }
 
   let page_range_iter st i j yield =
@@ -140,6 +151,11 @@ module MutablePaged = struct
   let rec lookup_page ?(write = false) st v =
     let addr = page_of_addr st v in
     Hashtbl.find_opt st.table addr |> function
+    | Some page when write && st.frozen ->
+        (* This would make page changes visible to cloned tables. *)
+        (* First clone the page table, and write to the clone to *)
+        (* trigger page copies.  *)
+        failwith "cannot write to frozen page-table"
     | Some page -> page
     | None -> (
         match st.parent with
@@ -253,3 +269,4 @@ module MutablePaged = struct
 end
 
 module Mutable : IFace = MutablePaged
+(** mutable page table *)
