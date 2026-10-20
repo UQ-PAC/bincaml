@@ -152,7 +152,7 @@ module Driver = struct
     | _ -> invalid_arg "expected `String or `List (for bytes)"
 
   let of_bytes : bytes -> t = function
-    | x when Bytes.length x < 80 -> `String (String.of_bytes x)
+    | x when Bytes.length x < 80 -> `String (String.escaped (String.of_bytes x))
     | x ->
         let s =
           Internal.compress x |> Bytes.unsafe_to_string |> Base64.encode_exn
