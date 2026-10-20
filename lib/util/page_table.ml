@@ -12,11 +12,15 @@ module type IFace = sig
   type t
 
   val empty : unit -> t
-  val write_bv : t -> addr:Z.t -> Bitvec.t -> t
-  val read_bv : t -> addr:Z.t -> nbits:int -> Bitvec.t
   val clone : t -> t
   val clobbered : t -> t
   val show : t -> string
+
+  (* little-endian write of bitvector at byte-address [addr] *)
+  val write_bv : t -> addr:Z.t -> Bitvec.t -> t
+
+  (* little-endian read of of [nbits] from byte-address *)
+  val read_bv : t -> addr:Z.t -> nbits:int -> Bitvec.t
 end
 
 module Naive : IFace = struct
@@ -53,8 +57,7 @@ module Naive : IFace = struct
     |> Iter.map (Z.of_int %> Z.add addr %> read_byte st)
     |> Iter.zip_i
     |> Iter.fold (fun acc (i, v) -> Z.logor acc (Z.( lsl ) v (i * 8))) Z.zero
-    |> fun v ->
-    Bitvec.create ~size:nbits @@ Z.shift_right v ((nbytes * 8) - nbits)
+    |> fun v -> Bitvec.create ~size:nbits v
 end
 
 module MutablePaged = struct
@@ -231,14 +234,16 @@ module MutablePaged = struct
   let read_bv st ~addr ~nbits =
     let d, r = Z.div_rem (Z.of_int nbits) (Z.of_int 8) in
     let num_bytes = Z.to_int @@ if Z.equal Z.zero r then d else Z.succ d in
-    read_bytes st ~addr ~num_bytes |> fun x ->
-    Z.shift_right x ((num_bytes * 8) - nbits) |> Bitvec.create ~size:nbits
+    (* base is aligned, and Bitvec.create chops off the msb
+      (highest addressed in little-endian) *)
+    read_bytes st ~addr ~num_bytes |> Bitvec.create ~size:nbits
 
   let write_bv st ~addr (bits : Bitvec.t) =
     let bits_aligned =
       if Int.rem bits.w 8 = 0 then bits.w else ((bits.w / 8) + 1) * 8
     in
     let b =
+      (* perform aligned read then blit this partial write, before aligned write *)
       read_bv st ~addr ~nbits:bits_aligned |> fun x ->
       Bitvec.bitand x (Bitvec.zero ~size:bits.w) |> fun x ->
       Bitvec.bitor x
