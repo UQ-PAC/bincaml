@@ -12,10 +12,11 @@ module Internal = struct
 
   type compress_fns = { compress : bytes -> bytes; decompress : bytes -> bytes }
   (** Functions for compressing and decompressing bytes. Each function
-      {i copies} its given bytes input. *)
+      {i copies} its given bytes input. Each instance of {!compress_fns}
+      operates over its own intermediate buffers. *)
 
   (** Makes a new instance of {!compress_fns} with input from the given bytes.
-      This creates new intermediate buffers for working space. *)
+  *)
   let make_compress_fns () =
     let source = ref (CCByte_slice.create Bytes.empty) in
     let set_source bytes = source := CCByte_slice.create bytes in
