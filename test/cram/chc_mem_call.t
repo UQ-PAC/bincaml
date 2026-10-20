@@ -27,7 +27,7 @@ addressed [store le]/[load le] instructions are preserved:
 
   $ grep -E '(store|load) le ' chc_mem_call_out.il
        var cur_1:bv8 := load le $mem:(bv64->bv8) 0x100:bv64 8;
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x100:bv64 bvadd(cur_1:bv8,
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x100:bv64 bvadd(cur_1:bv8, 0x1:bv8) 8;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) 0x100:bv64 secret_1:bv8 8;
        var v_1:bv8 := load le $mem:(bv64->bv8) 0x100:bv64 8;
 

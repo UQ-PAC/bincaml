@@ -48,22 +48,24 @@
     requires boolor(eq(0x400828:bv64, $PC))
   
   [
-     block %_fini_code { .address = 4196392; .gtirb_block = "gFBdrsFTRkSCdIsDFMk6qA";
-         .succ = [ { .address = 4196404; .conditional = "false"; .direct = "true";
-                 .target = "internal:wK9NYU4TTr+D8gXPiCk+7w";
-                 .type = "Type_Fallthrough" } ] } [
+     block %_fini_code {
+       .address = 4196392; .gtirb_block = "gFBdrsFTRkSCdIsDFMk6qA";
+       .succ = [
+         {
+           .address = 4196404; .conditional = "false"; .direct = "true"; .target = "internal:wK9NYU4TTr+D8gXPiCk+7w";
+           .type = "Type_Fallthrough"
+         }
+       ]
+     } [
        assume eq(0x400828:bv64, $PC);
-       call @_aarch64_eval(0xd503201f:bv32, 0x400828:bv64) { .asm = "nop ";
-           .error = "Failure(\"unsupported\")" };
+       call @_aarch64_eval(0xd503201f:bv32, 0x400828:bv64) { .asm = "nop "; .error = "Failure(\"unsupported\")" };
        goto (%block);
      ];
      block %block { .asm = "stp x29, x30, [sp, #-0x10]!" } [
        var local:bv64 := 0x0:bv64;
        var local:bv64 := $SP;
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
-        0xfffffffffffffff0:bv64) $R29 64;
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
-         0xfffffffffffffff0:bv64), 0x8:bv64) $R30 64;
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0xfffffffffffffff0:bv64) $R29 64;
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP, 0xfffffffffffffff0:bv64), 0x8:bv64) $R30 64;
        $SP:bv64 := bvadd(local:bv64, 0xfffffffffffffff0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400830:bv64);
        goto (%block_1);
@@ -74,17 +76,13 @@
        (var BranchTaken:bool := false, $PC:bv64 := 0x400834:bv64);
        goto (%_fini_code_2);
      ];
-     block %_fini_code_2 [
-       assert boolor(eq(0x400834:bv64, $PC));
-       goto (%_fini_code_1);
-     ];
-     block %_fini_code_1 { .address = 4196404;
-         .gtirb_block = "wK9NYU4TTr+D8gXPiCk+7w";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Return" } ] } [
-       assume eq(0x400834:bv64, $PC);
-       goto (%block_2);
-     ];
+     block %_fini_code_2 [ assert boolor(eq(0x400834:bv64, $PC)); goto (%_fini_code_1); ];
+     block %_fini_code_1 {
+       .address = 4196404; .gtirb_block = "wK9NYU4TTr+D8gXPiCk+7w";
+       .succ = [
+         { .conditional = "false"; .direct = "false"; .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Return" }
+       ]
+     } [ assume eq(0x400834:bv64, $PC); goto (%block_2); ];
      block %block_2 { .asm = "ldp x29, x30, [sp], #0x10" } [
        var local_2:bv64 := 0x0:bv64;
        var local_2:bv64 := $SP;
@@ -111,28 +109,29 @@
      block %ret_1 [ return; ]
   ];
   proc @_init()  -> () {  }
-    modifies $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R29:bv64, $R30:bv64,
-      $SP:bv64, $mem:(bv64->bv8)
-    captures $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R29:bv64, $R30:bv64,
-      $SP:bv64, $mem:(bv64->bv8)
+    modifies $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400600:bv64, $PC))
   
   [
-     block %_init_code { .address = 4195840; .gtirb_block = "UfNyH7KvQiam2F847lIf0g";
-         .succ = [ { .address = 4196036; .conditional = "false"; .direct = "true";
-                 .target = "stmts:Djx7L34DQzuSXaBFEj/bpQ"; .type = "Type_Call" } ] } [
+     block %_init_code {
+       .address = 4195840; .gtirb_block = "UfNyH7KvQiam2F847lIf0g";
+       .succ = [
+         {
+           .address = 4196036; .conditional = "false"; .direct = "true"; .target = "stmts:Djx7L34DQzuSXaBFEj/bpQ";
+           .type = "Type_Call"
+         }
+       ]
+     } [
        assume eq(0x400600:bv64, $PC);
-       call @_aarch64_eval(0xd503201f:bv32, 0x400600:bv64) { .asm = "nop ";
-           .error = "Failure(\"unsupported\")" };
+       call @_aarch64_eval(0xd503201f:bv32, 0x400600:bv64) { .asm = "nop "; .error = "Failure(\"unsupported\")" };
        goto (%block);
      ];
      block %block { .asm = "stp x29, x30, [sp, #-0x10]!" } [
        var local:bv64 := 0x0:bv64;
        var local:bv64 := $SP;
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
-        0xfffffffffffffff0:bv64) $R29 64;
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
-         0xfffffffffffffff0:bv64), 0x8:bv64) $R30 64;
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0xfffffffffffffff0:bv64) $R29 64;
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP, 0xfffffffffffffff0:bv64), 0x8:bv64) $R30 64;
        $SP:bv64 := bvadd(local:bv64, 0xfffffffffffffff0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400608:bv64);
        goto (%block_1);
@@ -149,23 +148,19 @@
        $PC:bv64 := 0x4006c4:bv64;
        goto (%_init_code_2);
      ];
-     block %_init_code_2 [
-       assert boolor(eq(0x4006c4:bv64, $PC));
-       goto (%_init_ext);
-     ];
+     block %_init_code_2 [ assert boolor(eq(0x4006c4:bv64, $PC)); goto (%_init_ext); ];
      block %_init_ext [
        assume eq(0x4006c4:bv64, $PC);
        call @call_weak_fn();
        assert boolor(eq(0x400610:bv64, $PC));
        goto (%_init_code_1);
      ];
-     block %_init_code_1 { .address = 4195856;
-         .gtirb_block = "xdU61Ad4R3aE/hVJ17n5eQ";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Return" } ] } [
-       assume eq(0x400610:bv64, $PC);
-       goto (%block_3);
-     ];
+     block %_init_code_1 {
+       .address = 4195856; .gtirb_block = "xdU61Ad4R3aE/hVJ17n5eQ";
+       .succ = [
+         { .conditional = "false"; .direct = "false"; .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Return" }
+       ]
+     } [ assume eq(0x400610:bv64, $PC); goto (%block_3); ];
      block %block_3 { .asm = "ldp x29, x30, [sp], #0x10" } [
        var local_2:bv64 := 0x0:bv64;
        var local_2:bv64 := $SP;
@@ -192,32 +187,31 @@
      block %ret_1 [ return; ]
   ];
   proc @__do_global_dtors_aux()  -> () {  }
-    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
-      $R0:bv64, $R1:bv64, $R16:bv64, $R19:bv64, $R29:bv64, $R30:bv64, $SP:bv64,
-      $mem:(bv64->bv8)
-    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
-      $R0:bv64, $R1:bv64, $R16:bv64, $R19:bv64, $R29:bv64, $R30:bv64, $SP:bv64,
-      $mem:(bv64->bv8)
+    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64, $R1:bv64, $R16:bv64, $R19:bv64,
+      $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64, $R1:bv64, $R16:bv64, $R19:bv64,
+      $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x40074c:bv64, $PC))
   
   [
-     block %__do_global_dtors_aux_code { .address = 4196172;
-         .gtirb_block = "D9t2gNJrSmyMH3GAVRe3IQ";
-         .succ = [ { .address = 4196196; .conditional = "true"; .direct = "true";
-                 .target = "internal:lwyID0MJQb6vgyjzPFtz8Q";
-                 .type = "Type_Fallthrough" };
-             { .address = 4196208; .conditional = "true"; .direct = "true";
-                 .target = "internal:SFN4dpBgSO2bPUu0fyDluw"; .type = "Type_Branch" } ] } [
-       assume eq(0x40074c:bv64, $PC);
-       goto (%block);
-     ];
+     block %__do_global_dtors_aux_code {
+       .address = 4196172; .gtirb_block = "D9t2gNJrSmyMH3GAVRe3IQ";
+       .succ = [
+         {
+           .address = 4196196; .conditional = "true"; .direct = "true"; .target = "internal:lwyID0MJQb6vgyjzPFtz8Q";
+           .type = "Type_Fallthrough"
+         };
+         {
+           .address = 4196208; .conditional = "true"; .direct = "true"; .target = "internal:SFN4dpBgSO2bPUu0fyDluw";
+           .type = "Type_Branch"
+         }
+       ]
+     } [ assume eq(0x40074c:bv64, $PC); goto (%block); ];
      block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
        var local:bv64 := 0x0:bv64;
        var local:bv64 := $SP;
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
-        0xffffffffffffffe0:bv64) $R29 64;
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
-         0xffffffffffffffe0:bv64), 0x8:bv64) $R30 64;
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0xffffffffffffffe0:bv64) $R29 64;
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP, 0xffffffffffffffe0:bv64), 0x8:bv64) $R30 64;
        $SP:bv64 := bvadd(local:bv64, 0xffffffffffffffe0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400750:bv64);
        goto (%block_1);
@@ -250,34 +244,30 @@
      ];
      block %block_5 { .asm = "tbnz w0, #0, #0x10" } [ goto (%block_7,%block_6); ];
      block %block_6 [
-       assume eq(extract(1,0, extract(1,0, bvlshr(extract(32,0, $R0),
-         zero_extend(20, 0x0:bv12)))), 0x1:bv1);
+       assume eq(extract(1,0, extract(1,0, bvlshr(extract(32,0, $R0), zero_extend(20, 0x0:bv12)))), 0x1:bv1);
        var BranchTaken:bool := true;
        $PC:bv64 := 0x400770:bv64;
        goto (%block_8);
      ];
      block %block_7 [
-       assume boolnot(eq(extract(1,0, extract(1,0, bvlshr(extract(32,0, $R0),
-          zero_extend(20, 0x0:bv12)))), 0x1:bv1));
+       assume boolnot(eq(extract(1,0, extract(1,0, bvlshr(extract(32,0, $R0), zero_extend(20, 0x0:bv12)))), 0x1:bv1));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400764:bv64);
        goto (%block_8);
      ];
      block %block_8 [
-       $PC:bv64 := if eq(extract(1,0, extract(1,0, bvlshr(extract(32,0, $R0),
-         zero_extend(20, 0x0:bv12)))), 0x1:bv1) then 0x400770:bv64 else 0x400764:bv64;
+       $PC:bv64 := if eq(extract(1,0, extract(1,0, bvlshr(extract(32,0, $R0), zero_extend(20, 0x0:bv12)))), 0x1:bv1) then 0x400770:bv64 else 0x400764:bv64;
        goto (%__do_global_dtors_aux_code_4);
      ];
      block %__do_global_dtors_aux_code_4 [
        assert boolor(eq(0x400764:bv64, $PC), eq(0x400770:bv64, $PC));
        goto (%__do_global_dtors_aux_code_3,%__do_global_dtors_aux_code_1);
      ];
-     block %__do_global_dtors_aux_code_1 { .address = 4196208;
-         .gtirb_block = "SFN4dpBgSO2bPUu0fyDluw";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Return" } ] } [
-       assume eq(0x400770:bv64, $PC);
-       goto (%block_9);
-     ];
+     block %__do_global_dtors_aux_code_1 {
+       .address = 4196208; .gtirb_block = "SFN4dpBgSO2bPUu0fyDluw";
+       .succ = [
+         { .conditional = "false"; .direct = "false"; .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Return" }
+       ]
+     } [ assume eq(0x400770:bv64, $PC); goto (%block_9); ];
      block %block_9 { .asm = "ldr x19, [sp, #0x10]" } [
        var local_5:bv64 := 0x0:bv64;
        var local_6:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x10:bv64) 64;
@@ -310,37 +300,37 @@
      ];
      block %__do_global_dtors_aux_code_5 [ assert false; goto (%ret_2); ];
      block %ret_2 [ return; ];
-     block %__do_global_dtors_aux_code_3 { .address = 4196196;
-         .gtirb_block = "lwyID0MJQb6vgyjzPFtz8Q";
-         .succ = [ { .address = 4196064; .conditional = "false"; .direct = "true";
-                 .target = "stmts:GW0MHC+ORUKlCdpgOcZ6zA"; .type = "Type_Call" } ] } [
-       assume eq(0x400764:bv64, $PC);
-       goto (%block_12);
-     ];
+     block %__do_global_dtors_aux_code_3 {
+       .address = 4196196; .gtirb_block = "lwyID0MJQb6vgyjzPFtz8Q";
+       .succ = [
+         {
+           .address = 4196064; .conditional = "false"; .direct = "true"; .target = "stmts:GW0MHC+ORUKlCdpgOcZ6zA";
+           .type = "Type_Call"
+         }
+       ]
+     } [ assume eq(0x400764:bv64, $PC); goto (%block_12); ];
      block %block_12 { .asm = "bl #0xffffffffffffff7c" } [
        $R30:bv64 := 0x400768:bv64;
        var BranchTaken:bool := true;
        $PC:bv64 := 0x4006e0:bv64;
        goto (%__do_global_dtors_aux_code_6);
      ];
-     block %__do_global_dtors_aux_code_6 [
-       assert boolor(eq(0x4006e0:bv64, $PC));
-       goto (%__do_global_dtors_aux_ext);
-     ];
+     block %__do_global_dtors_aux_code_6 [ assert boolor(eq(0x4006e0:bv64, $PC)); goto (%__do_global_dtors_aux_ext); ];
      block %__do_global_dtors_aux_ext [
        assume eq(0x4006e0:bv64, $PC);
        call @deregister_tm_clones();
        assert boolor(eq(0x400768:bv64, $PC));
        goto (%__do_global_dtors_aux_code_2);
      ];
-     block %__do_global_dtors_aux_code_2 { .address = 4196200;
-         .gtirb_block = "TxTRm4kpQiq/Xgistx+xbQ";
-         .succ = [ { .address = 4196208; .conditional = "false"; .direct = "true";
-                 .target = "internal:SFN4dpBgSO2bPUu0fyDluw";
-                 .type = "Type_Fallthrough" } ] } [
-       assume eq(0x400768:bv64, $PC);
-       goto (%block_13);
-     ];
+     block %__do_global_dtors_aux_code_2 {
+       .address = 4196200; .gtirb_block = "TxTRm4kpQiq/Xgistx+xbQ";
+       .succ = [
+         {
+           .address = 4196208; .conditional = "false"; .direct = "true"; .target = "internal:SFN4dpBgSO2bPUu0fyDluw";
+           .type = "Type_Fallthrough"
+         }
+       ]
+     } [ assume eq(0x400768:bv64, $PC); goto (%block_13); ];
      block %block_13 { .asm = "mov w0, #1" } [
        $R0:bv64 := 0x1:bv64;
        (var BranchTaken:bool := false, $PC:bv64 := 0x40076c:bv64);
@@ -352,28 +342,27 @@
        (var BranchTaken:bool := false, $PC:bv64 := 0x400770:bv64);
        goto (%__do_global_dtors_aux_code_7);
      ];
-     block %__do_global_dtors_aux_code_7 [
-       assert boolor(eq(0x400770:bv64, $PC));
-       goto (%__do_global_dtors_aux_code_1);
-     ]
+     block %__do_global_dtors_aux_code_7 [ assert boolor(eq(0x400770:bv64, $PC)); goto (%__do_global_dtors_aux_code_1); ]
   ];
   proc @register_tm_clones()  -> () {  }
     modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64
-    captures $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64, $R30:bv64,
-      $mem:(bv64->bv8)
+    captures $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64, $R30:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400710:bv64, $PC))
   
   [
-     block %register_tm_clones_code_2 { .address = 4196112;
-         .gtirb_block = "rIlbG4jGSTydaFqMhxCKWw";
-         .succ = [ { .address = 4196148; .conditional = "true"; .direct = "true";
-                 .target = "internal:tXIOhSQ+R1WA/9VL5+6KQQ";
-                 .type = "Type_Fallthrough" };
-             { .address = 4196168; .conditional = "true"; .direct = "true";
-                 .target = "internal:IkNYmV06TxC75h8A4NM3wA"; .type = "Type_Branch" } ] } [
-       assume eq(0x400710:bv64, $PC);
-       goto (%block);
-     ];
+     block %register_tm_clones_code_2 {
+       .address = 4196112; .gtirb_block = "rIlbG4jGSTydaFqMhxCKWw";
+       .succ = [
+         {
+           .address = 4196148; .conditional = "true"; .direct = "true"; .target = "internal:tXIOhSQ+R1WA/9VL5+6KQQ";
+           .type = "Type_Fallthrough"
+         };
+         {
+           .address = 4196168; .conditional = "true"; .direct = "true"; .target = "internal:IkNYmV06TxC75h8A4NM3wA";
+           .type = "Type_Branch"
+         }
+       ]
+     } [ assume eq(0x400710:bv64, $PC); goto (%block); ];
      block %block { .asm = "adrp x0, #0x20000" } [
        $R0:bv64 := 0x420000:bv64;
        (var BranchTaken:bool := false, $PC:bv64 := 0x400714:bv64);
@@ -405,8 +394,7 @@
        var local_4:bv64 := $R1;
        var local_5:bv64 := 0x0:bv64;
        var local_5:bv64 := $R0;
-       $R1:bv64 := bvadd(bvadd(local_4:bv64,
-         bvnot(bvshl(local_5:bv64, zero_extend(52, 0x0:bv12)))), 0x1:bv64);
+       $R1:bv64 := bvadd(bvadd(local_4:bv64, bvnot(bvshl(local_5:bv64, zero_extend(52, 0x0:bv12)))), 0x1:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400724:bv64);
        goto (%block_5);
      ];
@@ -415,9 +403,8 @@
        var local_6:bv64 := $R1;
        $R2:bv64 := bvor(bvand(0x0:bv64, 0xfffffffffffffffe:bv64),
         bvand(bvor(bvand(0x0:bv64, 0x0:bv64),
-          bvand(bvor(bvlshr(local_6:bv64, zero_extend(52, 0x3f:bv12)),
-            bvshl(local_6:bv64, zero_extend(48, 0x1:bv16))), 0xffffffffffffffff:bv64)),
-         0x1:bv64));
+          bvand(bvor(bvlshr(local_6:bv64, zero_extend(52, 0x3f:bv12)), bvshl(local_6:bv64, zero_extend(48, 0x1:bv16))),
+           0xffffffffffffffff:bv64)), 0x1:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400728:bv64);
        goto (%block_6);
      ];
@@ -426,20 +413,17 @@
        var local_7:bv64 := $R2;
        var local_8:bv64 := 0x0:bv64;
        var local_8:bv64 := $R1;
-       $R1:bv64 := bvadd(local_7:bv64,
-        bvashr(local_8:bv64, zero_extend(52, 0x3:bv12)));
+       $R1:bv64 := bvadd(local_7:bv64, bvashr(local_8:bv64, zero_extend(52, 0x3:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x40072c:bv64);
        goto (%block_7);
      ];
      block %block_7 { .asm = "asr x1, x1, #1" } [
        var local_9:bv64 := 0x0:bv64;
        var local_9:bv64 := $R1;
-       $R1:bv64 := bvor(bvand(sign_extend(63,
-         extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12))))),
+       $R1:bv64 := bvor(bvand(sign_extend(63, extract(1,0, extract(1,0, bvlshr(local_9:bv64, zero_extend(52, 0x3f:bv12))))),
          0x8000000000000000:bv64),
         bvand(bvor(bvand(0x0:bv64, 0x0:bv64),
-          bvand(bvor(bvlshr(local_9:bv64, zero_extend(52, 0x1:bv12)),
-            bvshl(local_9:bv64, zero_extend(48, 0x3f:bv16))),
+          bvand(bvor(bvlshr(local_9:bv64, zero_extend(52, 0x1:bv12)), bvshl(local_9:bv64, zero_extend(48, 0x3f:bv16))),
            0xffffffffffffffff:bv64)), 0x7fffffffffffffff:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400730:bv64);
        goto (%block_8);
@@ -464,13 +448,12 @@
        assert boolor(eq(0x400734:bv64, $PC), eq(0x400748:bv64, $PC));
        goto (%register_tm_clones_code_3,%register_tm_clones_code);
      ];
-     block %register_tm_clones_code { .address = 4196168;
-         .gtirb_block = "IkNYmV06TxC75h8A4NM3wA";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Return" } ] } [
-       assume eq(0x400748:bv64, $PC);
-       goto (%block_12);
-     ];
+     block %register_tm_clones_code {
+       .address = 4196168; .gtirb_block = "IkNYmV06TxC75h8A4NM3wA";
+       .succ = [
+         { .conditional = "false"; .direct = "false"; .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Return" }
+       ]
+     } [ assume eq(0x400748:bv64, $PC); goto (%block_12); ];
      block %block_12 { .asm = "ret " } [
        var local_10:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
@@ -480,16 +463,19 @@
      ];
      block %register_tm_clones_code_5 [ assert false; goto (%ret); ];
      block %ret [ return; ];
-     block %register_tm_clones_code_3 { .address = 4196148;
-         .gtirb_block = "tXIOhSQ+R1WA/9VL5+6KQQ";
-         .succ = [ { .address = 4196160; .conditional = "true"; .direct = "true";
-                 .target = "internal:oqiqdATZTc6MDOYJqL9Aew";
-                 .type = "Type_Fallthrough" };
-             { .address = 4196168; .conditional = "true"; .direct = "true";
-                 .target = "internal:IkNYmV06TxC75h8A4NM3wA"; .type = "Type_Branch" } ] } [
-       assume eq(0x400734:bv64, $PC);
-       goto (%block_13);
-     ];
+     block %register_tm_clones_code_3 {
+       .address = 4196148; .gtirb_block = "tXIOhSQ+R1WA/9VL5+6KQQ";
+       .succ = [
+         {
+           .address = 4196160; .conditional = "true"; .direct = "true"; .target = "internal:oqiqdATZTc6MDOYJqL9Aew";
+           .type = "Type_Fallthrough"
+         };
+         {
+           .address = 4196168; .conditional = "true"; .direct = "true"; .target = "internal:IkNYmV06TxC75h8A4NM3wA";
+           .type = "Type_Branch"
+         }
+       ]
+     } [ assume eq(0x400734:bv64, $PC); goto (%block_13); ];
      block %block_13 { .asm = "adrp x2, #0x1f000" } [
        $R2:bv64 := 0x41f000:bv64;
        (var BranchTaken:bool := false, $PC:bv64 := 0x400738:bv64);
@@ -525,20 +511,18 @@
        assert boolor(eq(0x400740:bv64, $PC), eq(0x400748:bv64, $PC));
        goto (%register_tm_clones_code_1,%register_tm_clones_code);
      ];
-     block %register_tm_clones_code_1 { .address = 4196160;
-         .gtirb_block = "oqiqdATZTc6MDOYJqL9Aew";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Branch" } ] } [
-       assume eq(0x400740:bv64, $PC);
-       goto (%block_19);
-     ];
+     block %register_tm_clones_code_1 {
+       .address = 4196160; .gtirb_block = "oqiqdATZTc6MDOYJqL9Aew";
+       .succ = [
+         { .conditional = "false"; .direct = "false"; .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Branch" }
+       ]
+     } [ assume eq(0x400740:bv64, $PC); goto (%block_19); ];
      block %block_19 { .asm = "mov x16, x2" } [
        var local_14:bv64 := 0x0:bv64;
        var local_14:bv64 := 0x0:bv64;
        var local_15:bv64 := 0x0:bv64;
        var local_15:bv64 := $R2;
-       $R16:bv64 := bvor(local_14:bv64,
-        bvshl(local_15:bv64, zero_extend(52, 0x0:bv12)));
+       $R16:bv64 := bvor(local_14:bv64, bvshl(local_15:bv64, zero_extend(52, 0x0:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400744:bv64);
        goto (%block_20);
      ];
@@ -553,33 +537,26 @@
   ];
   proc @frame_dummy()  -> () {  }
     modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64
-    captures $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64, $R30:bv64,
-      $mem:(bv64->bv8)
+    captures $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64, $R30:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400780:bv64, $PC))
   
   [
-     block %frame_dummy_code { .address = 4196224;
-         .gtirb_block = "6JJvkaLhTaWXaEL0+yxKxg";
-         .succ = [ { .address = 4196112; .conditional = "false"; .direct = "true";
-                 .target = "stmts:rIlbG4jGSTydaFqMhxCKWw"; .type = "Type_Branch" } ] } [
-       assume eq(0x400780:bv64, $PC);
-       goto (%block);
-     ];
+     block %frame_dummy_code {
+       .address = 4196224; .gtirb_block = "6JJvkaLhTaWXaEL0+yxKxg";
+       .succ = [
+         {
+           .address = 4196112; .conditional = "false"; .direct = "true"; .target = "stmts:rIlbG4jGSTydaFqMhxCKWw";
+           .type = "Type_Branch"
+         }
+       ]
+     } [ assume eq(0x400780:bv64, $PC); goto (%block); ];
      block %block { .asm = "b #0xffffffffffffff90" } [
        var BranchTaken:bool := true;
        $PC:bv64 := 0x400710:bv64;
        goto (%frame_dummy_code_1);
      ];
-     block %frame_dummy_code_1 [
-       assert boolor(eq(0x400710:bv64, $PC));
-       goto (%frame_dummy_ext);
-     ];
-     block %frame_dummy_ext [
-       assume eq(0x400710:bv64, $PC);
-       call @register_tm_clones();
-       assert false;
-       unreachable;
-     ]
+     block %frame_dummy_code_1 [ assert boolor(eq(0x400710:bv64, $PC)); goto (%frame_dummy_ext); ];
+     block %frame_dummy_ext [ assume eq(0x400710:bv64, $PC); call @register_tm_clones(); assert false; unreachable; ]
   ];
   proc @FUN_400660()  -> () {  }
     modifies $PC:bv64, $R16:bv64, $R17:bv64
@@ -587,13 +564,12 @@
     requires boolor(eq(0x400660:bv64, $PC))
   
   [
-     block %FUN_400660_code { .address = 4195936;
-         .gtirb_block = "iedVtPHmSjuLgqSxHgXOuw";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:BsLBdgTFQlOA45HTKKU2gQ"; .type = "Type_Branch" } ] } [
-       assume eq(0x400660:bv64, $PC);
-       goto (%block);
-     ];
+     block %FUN_400660_code {
+       .address = 4195936; .gtirb_block = "iedVtPHmSjuLgqSxHgXOuw";
+       .succ = [
+         { .conditional = "false"; .direct = "false"; .target = "proxy:BsLBdgTFQlOA45HTKKU2gQ"; .type = "Type_Branch" }
+       ]
+     } [ assume eq(0x400660:bv64, $PC); goto (%block); ];
      block %block { .asm = "adrp x16, #0x20000" } [
        $R16:bv64 := 0x420000:bv64;
        (var BranchTaken:bool := false, $PC:bv64 := 0x400664:bv64);
@@ -627,20 +603,22 @@
      block %FUN_400660_code_1 [ assert false; unreachable; ]
   ];
   proc @Sqrt()  -> () {  }
-    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
-      $R0:bv64, $R1:bv64, $SP:bv64, $mem:(bv64->bv8)
-    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
-      $R0:bv64, $R1:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
+    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64, $R1:bv64, $SP:bv64,
+      $mem:(bv64->bv8)
+    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64, $R1:bv64, $R30:bv64, $SP:bv64,
+      $mem:(bv64->bv8)
     requires boolor(eq(0x400784:bv64, $PC))
   
   [
-     block %Sqrt_code_1 { .address = 4196228;
-         .gtirb_block = "OuTzy8qRTci75taVjGinFQ";
-         .succ = [ { .address = 4196328; .conditional = "false"; .direct = "true";
-                 .target = "internal:32fWxY7+R++JNJOFTmT+Sg"; .type = "Type_Branch" } ] } [
-       assume eq(0x400784:bv64, $PC);
-       goto (%block);
-     ];
+     block %Sqrt_code_1 {
+       .address = 4196228; .gtirb_block = "OuTzy8qRTci75taVjGinFQ";
+       .succ = [
+         {
+           .address = 4196328; .conditional = "false"; .direct = "true"; .target = "internal:32fWxY7+R++JNJOFTmT+Sg";
+           .type = "Type_Branch"
+         }
+       ]
+     } [ assume eq(0x400784:bv64, $PC); goto (%block); ];
      block %block { .asm = "sub sp, sp, #0x30" } [
        var local:bv64 := 0x0:bv64;
        var local:bv64 := $SP;
@@ -679,25 +657,21 @@
        (var BranchTaken:bool := false, $PC:bv64 := 0x40079c:bv64);
        goto (%block_6);
      ];
-     block %block_6 { .asm = "b #0x4c" } [
-       var BranchTaken:bool := true;
-       $PC:bv64 := 0x4007e8:bv64;
-       goto (%Sqrt_code_6);
-     ];
-     block %Sqrt_code_6 [
-       assert boolor(eq(0x4007e8:bv64, $PC));
-       goto (%Sqrt_code_5);
-     ];
-     block %Sqrt_code_5 { .address = 4196328;
-         .gtirb_block = "32fWxY7+R++JNJOFTmT+Sg";
-         .succ = [ { .address = 4196256; .conditional = "true"; .direct = "true";
-                 .target = "internal:rCSSdLZcRB2TKAu9h+WCqg"; .type = "Type_Branch" };
-             { .address = 4196348; .conditional = "true"; .direct = "true";
-                 .target = "internal:lr6o4ptnRiK3TGR1gpiWGg";
-                 .type = "Type_Fallthrough" } ] } [
-       assume eq(0x4007e8:bv64, $PC);
-       goto (%block_7);
-     ];
+     block %block_6 { .asm = "b #0x4c" } [ var BranchTaken:bool := true; $PC:bv64 := 0x4007e8:bv64; goto (%Sqrt_code_6); ];
+     block %Sqrt_code_6 [ assert boolor(eq(0x4007e8:bv64, $PC)); goto (%Sqrt_code_5); ];
+     block %Sqrt_code_5 {
+       .address = 4196328; .gtirb_block = "32fWxY7+R++JNJOFTmT+Sg";
+       .succ = [
+         {
+           .address = 4196256; .conditional = "true"; .direct = "true"; .target = "internal:rCSSdLZcRB2TKAu9h+WCqg";
+           .type = "Type_Branch"
+         };
+         {
+           .address = 4196348; .conditional = "true"; .direct = "true"; .target = "internal:lr6o4ptnRiK3TGR1gpiWGg";
+           .type = "Type_Fallthrough"
+         }
+       ]
+     } [ assume eq(0x4007e8:bv64, $PC); goto (%block_7); ];
      block %block_7 { .asm = "ldr x0, [sp, #0x28]" } [
        var local_5:bv64 := 0x0:bv64;
        var local_6:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x28:bv64) 64;
@@ -727,24 +701,16 @@
        var local_12:bv64 := 0x0:bv64;
        $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(64,
           bvadd(bvadd($R1, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64)),
-          bvadd(bvadd(sign_extend(64, $R1),
-            sign_extend(64, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12))))),
-           0x1:bv128))));
+          bvadd(bvadd(sign_extend(64, $R1), sign_extend(64, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12))))), 0x1:bv128))));
        $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(64,
           bvadd(bvadd($R1, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64)),
-          bvadd(bvadd(zero_extend(64, $R1),
-            zero_extend(64, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12))))),
-           0x1:bv128))));
-       $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd($R1,
-           bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64), 0x0:bv64));
-       $PSTATE_N:bv1 := extract(64,63, bvadd(bvadd($R1,
-         bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64));
+          bvadd(bvadd(zero_extend(64, $R1), zero_extend(64, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12))))), 0x1:bv128))));
+       $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd($R1, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64), 0x0:bv64));
+       $PSTATE_N:bv1 := extract(64,63, bvadd(bvadd($R1, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007f8:bv64);
        goto (%block_11);
      ];
-     block %block_11 { .asm = "b.ne #0xffffffffffffffa8" } [
-       goto (%block_13,%block_12);
-     ];
+     block %block_11 { .asm = "b.ne #0xffffffffffffffa8" } [ goto (%block_13,%block_12); ];
      block %block_12 [
        assume boolnot(eq($PSTATE_Z, 0x1:bv1));
        var BranchTaken:bool := true;
@@ -764,13 +730,15 @@
        assert boolor(eq(0x4007a0:bv64, $PC), eq(0x4007fc:bv64, $PC));
        goto (%Sqrt_code_4,%Sqrt_code_3);
      ];
-     block %Sqrt_code_3 { .address = 4196348;
-         .gtirb_block = "lr6o4ptnRiK3TGR1gpiWGg";
-         .succ = [ { .address = 4196384; .conditional = "false"; .direct = "true";
-                 .target = "external:rlVqjjqoR6uHwOYvPCS15g"; .type = "Type_Return" } ] } [
-       assume eq(0x4007fc:bv64, $PC);
-       goto (%block_15);
-     ];
+     block %Sqrt_code_3 {
+       .address = 4196348; .gtirb_block = "lr6o4ptnRiK3TGR1gpiWGg";
+       .succ = [
+         {
+           .address = 4196384; .conditional = "false"; .direct = "true"; .target = "external:rlVqjjqoR6uHwOYvPCS15g";
+           .type = "Type_Return"
+         }
+       ]
+     } [ assume eq(0x4007fc:bv64, $PC); goto (%block_15); ];
      block %block_15 { .asm = "ldr x0, [sp, #0x28]" } [
        var local_13:bv64 := 0x0:bv64;
        var local_14:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x28:bv64) 64;
@@ -795,16 +763,19 @@
      ];
      block %Sqrt_code_8 [ assert boolor(eq(0x400820:bv64, $PC)); goto (%ret_3); ];
      block %ret_3 [ return; ];
-     block %Sqrt_code_4 { .address = 4196256;
-         .gtirb_block = "rCSSdLZcRB2TKAu9h+WCqg";
-         .succ = [ { .address = 4196308; .conditional = "true"; .direct = "true";
-                 .target = "internal:ZLfuz7OtTNOS9GLtqSI1gg";
-                 .type = "Type_Fallthrough" };
-             { .address = 4196320; .conditional = "true"; .direct = "true";
-                 .target = "internal:HVqN0/3+RWiLPKsHRvUqeg"; .type = "Type_Branch" } ] } [
-       assume eq(0x4007a0:bv64, $PC);
-       goto (%block_18);
-     ];
+     block %Sqrt_code_4 {
+       .address = 4196256; .gtirb_block = "rCSSdLZcRB2TKAu9h+WCqg";
+       .succ = [
+         {
+           .address = 4196308; .conditional = "true"; .direct = "true"; .target = "internal:ZLfuz7OtTNOS9GLtqSI1gg";
+           .type = "Type_Fallthrough"
+         };
+         {
+           .address = 4196320; .conditional = "true"; .direct = "true"; .target = "internal:HVqN0/3+RWiLPKsHRvUqeg";
+           .type = "Type_Branch"
+         }
+       ]
+     } [ assume eq(0x4007a0:bv64, $PC); goto (%block_18); ];
      block %block_18 { .asm = "ldr x1, [sp, #0x28]" } [
        var local_17:bv64 := 0x0:bv64;
        var local_18:bv64 := load le $mem:(bv64->bv8) bvadd($SP, 0x28:bv64) 64;
@@ -826,8 +797,7 @@
        var local_21:bv64 := $R1;
        var local_22:bv64 := 0x0:bv64;
        var local_22:bv64 := $R0;
-       $R0:bv64 := bvadd(local_21:bv64,
-        bvshl(local_22:bv64, zero_extend(52, 0x0:bv12)));
+       $R0:bv64 := bvadd(local_21:bv64, bvshl(local_22:bv64, zero_extend(52, 0x0:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007ac:bv64);
        goto (%block_21);
      ];
@@ -836,8 +806,7 @@
        var local_23:bv64 := $R0;
        $R1:bv64 := bvor(bvand(0x0:bv64, 0xfffffffffffffffe:bv64),
         bvand(bvor(bvand(0x0:bv64, 0x0:bv64),
-          bvand(bvor(bvlshr(local_23:bv64, zero_extend(52, 0x3f:bv12)),
-            bvshl(local_23:bv64, zero_extend(48, 0x1:bv16))),
+          bvand(bvor(bvlshr(local_23:bv64, zero_extend(52, 0x3f:bv12)), bvshl(local_23:bv64, zero_extend(48, 0x1:bv16))),
            0xffffffffffffffff:bv64)), 0x1:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007b0:bv64);
        goto (%block_22);
@@ -847,20 +816,17 @@
        var local_24:bv64 := $R1;
        var local_25:bv64 := 0x0:bv64;
        var local_25:bv64 := $R0;
-       $R0:bv64 := bvadd(local_24:bv64,
-        bvshl(local_25:bv64, zero_extend(52, 0x0:bv12)));
+       $R0:bv64 := bvadd(local_24:bv64, bvshl(local_25:bv64, zero_extend(52, 0x0:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007b4:bv64);
        goto (%block_23);
      ];
      block %block_23 { .asm = "asr x0, x0, #1" } [
        var local_26:bv64 := 0x0:bv64;
        var local_26:bv64 := $R0;
-       $R0:bv64 := bvor(bvand(sign_extend(63,
-         extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12))))),
+       $R0:bv64 := bvor(bvand(sign_extend(63, extract(1,0, extract(1,0, bvlshr(local_26:bv64, zero_extend(52, 0x3f:bv12))))),
          0x8000000000000000:bv64),
         bvand(bvor(bvand(0x0:bv64, 0x0:bv64),
-          bvand(bvor(bvlshr(local_26:bv64, zero_extend(52, 0x1:bv12)),
-            bvshl(local_26:bv64, zero_extend(48, 0x3f:bv16))),
+          bvand(bvor(bvlshr(local_26:bv64, zero_extend(52, 0x1:bv12)), bvshl(local_26:bv64, zero_extend(48, 0x3f:bv16))),
            0xffffffffffffffff:bv64)), 0x7fffffffffffffff:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007b8:bv64);
        goto (%block_24);
@@ -886,20 +852,16 @@
        var local_31:bv32 := 0x0:bv32;
        var local_31:bv32 := 0x0:bv32;
        $R0:bv64 := zero_extend(32,
-       bvadd(local_31:bv32,
-        extract(32,0, bvmul(extract(32,0, local_29:bv32),
-         extract(32,0, local_30:bv32)))));
+       bvadd(local_31:bv32, extract(32,0, bvmul(extract(32,0, local_29:bv32), extract(32,0, local_30:bv32)))));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007c4:bv64);
        goto (%block_27);
      ];
      block %block_27 { .asm = "sxtw x0, w0" } [
        var local_32:bv64 := 0x0:bv64;
        var local_32:bv64 := $R0;
-       $R0:bv64 := bvor(bvand(sign_extend(63,
-         extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12))))),
+       $R0:bv64 := bvor(bvand(sign_extend(63, extract(1,0, extract(1,0, bvlshr(local_32:bv64, zero_extend(52, 0x1f:bv12))))),
          0xffffffff00000000:bv64),
-        bvand(bvor(bvand(0x0:bv64, 0xffffffff00000000:bv64),
-          bvand(local_32:bv64, 0xffffffff:bv64)), 0xffffffff:bv64));
+        bvand(bvor(bvand(0x0:bv64, 0xffffffff00000000:bv64), bvand(local_32:bv64, 0xffffffff:bv64)), 0xffffffff:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007c8:bv64);
        goto (%block_28);
      ];
@@ -916,18 +878,12 @@
        var local_36:bv64 := 0x0:bv64;
        $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(64,
           bvadd(bvadd($R1, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64)),
-          bvadd(bvadd(sign_extend(64, $R1),
-            sign_extend(64, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12))))),
-           0x1:bv128))));
+          bvadd(bvadd(sign_extend(64, $R1), sign_extend(64, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12))))), 0x1:bv128))));
        $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(64,
           bvadd(bvadd($R1, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64)),
-          bvadd(bvadd(zero_extend(64, $R1),
-            zero_extend(64, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12))))),
-           0x1:bv128))));
-       $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd($R1,
-           bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64), 0x0:bv64));
-       $PSTATE_N:bv1 := extract(64,63, bvadd(bvadd($R1,
-         bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64));
+          bvadd(bvadd(zero_extend(64, $R1), zero_extend(64, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12))))), 0x1:bv128))));
+       $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd($R1, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64), 0x0:bv64));
+       $PSTATE_N:bv1 := extract(64,63, bvadd(bvadd($R1, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007d0:bv64);
        goto (%block_30);
      ];
@@ -947,17 +903,16 @@
        $PC:bv64 := if boolnot(eq($PSTATE_N, $PSTATE_V)) then 0x4007e0:bv64 else 0x4007d4:bv64;
        goto (%Sqrt_code_9);
      ];
-     block %Sqrt_code_9 [
-       assert boolor(eq(0x4007d4:bv64, $PC), eq(0x4007e0:bv64, $PC));
-       goto (%Sqrt_code_2,%Sqrt_code);
-     ];
-     block %Sqrt_code { .address = 4196320; .gtirb_block = "HVqN0/3+RWiLPKsHRvUqeg";
-         .succ = [ { .address = 4196328; .conditional = "false"; .direct = "true";
-                 .target = "internal:32fWxY7+R++JNJOFTmT+Sg";
-                 .type = "Type_Fallthrough" } ] } [
-       assume eq(0x4007e0:bv64, $PC);
-       goto (%block_34);
-     ];
+     block %Sqrt_code_9 [ assert boolor(eq(0x4007d4:bv64, $PC), eq(0x4007e0:bv64, $PC)); goto (%Sqrt_code_2,%Sqrt_code); ];
+     block %Sqrt_code {
+       .address = 4196320; .gtirb_block = "HVqN0/3+RWiLPKsHRvUqeg";
+       .succ = [
+         {
+           .address = 4196328; .conditional = "false"; .direct = "true"; .target = "internal:32fWxY7+R++JNJOFTmT+Sg";
+           .type = "Type_Fallthrough"
+         }
+       ]
+     } [ assume eq(0x4007e0:bv64, $PC); goto (%block_34); ];
      block %block_34 { .asm = "ldrsw x0, [sp, #0x1c]" } [
        var local_37:bv32 := 0x0:bv32;
        var local_38:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
@@ -971,17 +926,16 @@
        (var BranchTaken:bool := false, $PC:bv64 := 0x4007e8:bv64);
        goto (%Sqrt_code_10);
      ];
-     block %Sqrt_code_10 [
-       assert boolor(eq(0x4007e8:bv64, $PC));
-       goto (%Sqrt_code_5);
-     ];
-     block %Sqrt_code_2 { .address = 4196308;
-         .gtirb_block = "ZLfuz7OtTNOS9GLtqSI1gg";
-         .succ = [ { .address = 4196328; .conditional = "false"; .direct = "true";
-                 .target = "internal:32fWxY7+R++JNJOFTmT+Sg"; .type = "Type_Branch" } ] } [
-       assume eq(0x4007d4:bv64, $PC);
-       goto (%block_36);
-     ];
+     block %Sqrt_code_10 [ assert boolor(eq(0x4007e8:bv64, $PC)); goto (%Sqrt_code_5); ];
+     block %Sqrt_code_2 {
+       .address = 4196308; .gtirb_block = "ZLfuz7OtTNOS9GLtqSI1gg";
+       .succ = [
+         {
+           .address = 4196328; .conditional = "false"; .direct = "true"; .target = "internal:32fWxY7+R++JNJOFTmT+Sg";
+           .type = "Type_Branch"
+         }
+       ]
+     } [ assume eq(0x4007d4:bv64, $PC); goto (%block_36); ];
      block %block_36 { .asm = "ldrsw x0, [sp, #0x1c]" } [
        var local_39:bv32 := 0x0:bv32;
        var local_40:bv32 := load le $mem:(bv64->bv8) bvadd($SP, 0x1c:bv64) 32;
@@ -1000,26 +954,27 @@
        $PC:bv64 := 0x4007e8:bv64;
        goto (%Sqrt_code_11);
      ];
-     block %Sqrt_code_11 [
-       assert boolor(eq(0x4007e8:bv64, $PC));
-       goto (%Sqrt_code_5);
-     ]
+     block %Sqrt_code_11 [ assert boolor(eq(0x4007e8:bv64, $PC)); goto (%Sqrt_code_5); ]
   ];
   proc @_start()  -> () {  }
-    modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R2:bv64, $R29:bv64,
-      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64
-    captures $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R2:bv64, $R29:bv64,
-      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
+    modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R2:bv64, $R29:bv64, $R3:bv64, $R30:bv64, $R4:bv64,
+      $R5:bv64, $R6:bv64
+    captures $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R2:bv64, $R29:bv64, $R3:bv64, $R30:bv64, $R4:bv64,
+      $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400680:bv64, $PC))
   
   [
-     block %_start_code_2 { .address = 4195968;
-         .gtirb_block = "xdHqi8HzTJ+zBYVemlzAtg";
-         .succ = [ { .address = 4195904; .conditional = "false"; .direct = "true";
-                 .target = "stmts:YmNxI7RsS/6TZy3HTKzvWg"; .type = "Type_Call" } ] } [
+     block %_start_code_2 {
+       .address = 4195968; .gtirb_block = "xdHqi8HzTJ+zBYVemlzAtg";
+       .succ = [
+         {
+           .address = 4195904; .conditional = "false"; .direct = "true"; .target = "stmts:YmNxI7RsS/6TZy3HTKzvWg";
+           .type = "Type_Call"
+         }
+       ]
+     } [
        assume eq(0x400680:bv64, $PC);
-       call @_aarch64_eval(0xd503201f:bv32, 0x400680:bv64) { .asm = "nop ";
-           .error = "Failure(\"unsupported\")" };
+       call @_aarch64_eval(0xd503201f:bv32, 0x400680:bv64) { .asm = "nop "; .error = "Failure(\"unsupported\")" };
        goto (%block);
      ];
      block %block { .asm = "mov x29, #0" } [
@@ -1090,39 +1045,30 @@
        $PC:bv64 := 0x400640:bv64;
        goto (%_start_code_3);
      ];
-     block %_start_code_3 [
-       assert boolor(eq(0x400640:bv64, $PC));
-       goto (%_start_ext);
-     ];
+     block %_start_code_3 [ assert boolor(eq(0x400640:bv64, $PC)); goto (%_start_ext); ];
      block %_start_ext [
        assume eq(0x400640:bv64, $PC);
        call @FUN_400640();
        assert boolor(eq(0x4006b0:bv64, $PC));
        goto (%_start_code_1);
      ];
-     block %_start_code_1 { .address = 4196016;
-         .gtirb_block = "t/6C+3O4SbalxMsQ9Vg3LA";
-         .succ = [ { .address = 4195936; .conditional = "false"; .direct = "true";
-                 .target = "stmts:iedVtPHmSjuLgqSxHgXOuw"; .type = "Type_Call" } ] } [
-       assume eq(0x4006b0:bv64, $PC);
-       goto (%block_11);
-     ];
+     block %_start_code_1 {
+       .address = 4196016; .gtirb_block = "t/6C+3O4SbalxMsQ9Vg3LA";
+       .succ = [
+         {
+           .address = 4195936; .conditional = "false"; .direct = "true"; .target = "stmts:iedVtPHmSjuLgqSxHgXOuw";
+           .type = "Type_Call"
+         }
+       ]
+     } [ assume eq(0x4006b0:bv64, $PC); goto (%block_11); ];
      block %block_11 { .asm = "bl #0xffffffffffffffb0" } [
        $R30:bv64 := 0x4006b4:bv64;
        var BranchTaken:bool := true;
        $PC:bv64 := 0x400660:bv64;
        goto (%_start_code_4);
      ];
-     block %_start_code_4 [
-       assert boolor(eq(0x400660:bv64, $PC));
-       goto (%_start_ext_2);
-     ];
-     block %_start_ext_2 [
-       assume eq(0x400660:bv64, $PC);
-       call @FUN_400660();
-       assert false;
-       unreachable;
-     ]
+     block %_start_code_4 [ assert boolor(eq(0x400660:bv64, $PC)); goto (%_start_ext_2); ];
+     block %_start_ext_2 [ assume eq(0x400660:bv64, $PC); call @FUN_400660(); assert false; unreachable; ]
   ];
   proc @_dl_relocate_static_pie()  -> () {  }
     modifies $PC:bv64
@@ -1130,13 +1076,12 @@
     requires boolor(eq(0x4006c0:bv64, $PC))
   
   [
-     block %_dl_relocate_static_pie_code { .address = 4196032;
-         .gtirb_block = "KTHyjTW0SWiGwqylcMDw6Q";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Return" } ] } [
-       assume eq(0x4006c0:bv64, $PC);
-       goto (%block);
-     ];
+     block %_dl_relocate_static_pie_code {
+       .address = 4196032; .gtirb_block = "KTHyjTW0SWiGwqylcMDw6Q";
+       .succ = [
+         { .conditional = "false"; .direct = "false"; .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Return" }
+       ]
+     } [ assume eq(0x4006c0:bv64, $PC); goto (%block); ];
      block %block { .asm = "ret " } [
        var local:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
@@ -1153,16 +1098,19 @@
     requires boolor(eq(0x4006c4:bv64, $PC))
   
   [
-     block %call_weak_fn_code { .address = 4196036;
-         .gtirb_block = "Djx7L34DQzuSXaBFEj/bpQ";
-         .succ = [ { .address = 4196052; .conditional = "true"; .direct = "true";
-                 .target = "internal:yQ1z8A+IRoSs4MRYTbbghg"; .type = "Type_Branch" };
-             { .address = 4196048; .conditional = "true"; .direct = "true";
-                 .target = "internal:fxMAJl44TWOTA8IHVD8V7Q";
-                 .type = "Type_Fallthrough" } ] } [
-       assume eq(0x4006c4:bv64, $PC);
-       goto (%block);
-     ];
+     block %call_weak_fn_code {
+       .address = 4196036; .gtirb_block = "Djx7L34DQzuSXaBFEj/bpQ";
+       .succ = [
+         {
+           .address = 4196052; .conditional = "true"; .direct = "true"; .target = "internal:yQ1z8A+IRoSs4MRYTbbghg";
+           .type = "Type_Branch"
+         };
+         {
+           .address = 4196048; .conditional = "true"; .direct = "true"; .target = "internal:fxMAJl44TWOTA8IHVD8V7Q";
+           .type = "Type_Fallthrough"
+         }
+       ]
+     } [ assume eq(0x4006c4:bv64, $PC); goto (%block); ];
      block %block { .asm = "adrp x0, #0x1f000" } [
        $R0:bv64 := 0x41f000:bv64;
        (var BranchTaken:bool := false, $PC:bv64 := 0x4006c8:bv64);
@@ -1198,35 +1146,31 @@
        assert boolor(eq(0x4006d4:bv64, $PC), eq(0x4006d0:bv64, $PC));
        goto (%call_weak_fn_code_2,%call_weak_fn_code_1);
      ];
-     block %call_weak_fn_code_1 { .address = 4196048;
-         .gtirb_block = "fxMAJl44TWOTA8IHVD8V7Q";
-         .succ = [ { .address = 4195920; .conditional = "false"; .direct = "true";
-                 .target = "stmts:i2bc6yURTw+Pq2nxe63pQA"; .type = "Type_Branch" } ] } [
-       assume eq(0x4006d0:bv64, $PC);
-       goto (%block_6);
-     ];
+     block %call_weak_fn_code_1 {
+       .address = 4196048; .gtirb_block = "fxMAJl44TWOTA8IHVD8V7Q";
+       .succ = [
+         {
+           .address = 4195920; .conditional = "false"; .direct = "true"; .target = "stmts:i2bc6yURTw+Pq2nxe63pQA";
+           .type = "Type_Branch"
+         }
+       ]
+     } [ assume eq(0x4006d0:bv64, $PC); goto (%block_6); ];
      block %block_6 { .asm = "b #0xffffffffffffff80" } [
        var BranchTaken:bool := true;
        $PC:bv64 := 0x400650:bv64;
        goto (%call_weak_fn_code_4);
      ];
-     block %call_weak_fn_code_4 [
-       assert boolor(eq(0x400650:bv64, $PC));
-       goto (%call_weak_fn_ext_1);
-     ];
-     block %call_weak_fn_ext_1 [
-       assume eq(0x400650:bv64, $PC);
-       call @.L_400650();
-       assert false;
-       unreachable;
-     ];
-     block %call_weak_fn_code_2 { .address = 4196052;
-         .gtirb_block = "yQ1z8A+IRoSs4MRYTbbghg";
-         .succ = [ { .address = 4195856; .conditional = "false"; .direct = "true";
-                 .target = "external:xdU61Ad4R3aE/hVJ17n5eQ"; .type = "Type_Return" } ] } [
-       assume eq(0x4006d4:bv64, $PC);
-       goto (%block_7);
-     ];
+     block %call_weak_fn_code_4 [ assert boolor(eq(0x400650:bv64, $PC)); goto (%call_weak_fn_ext_1); ];
+     block %call_weak_fn_ext_1 [ assume eq(0x400650:bv64, $PC); call @.L_400650(); assert false; unreachable; ];
+     block %call_weak_fn_code_2 {
+       .address = 4196052; .gtirb_block = "yQ1z8A+IRoSs4MRYTbbghg";
+       .succ = [
+         {
+           .address = 4195856; .conditional = "false"; .direct = "true"; .target = "external:xdU61Ad4R3aE/hVJ17n5eQ";
+           .type = "Type_Return"
+         }
+       ]
+     } [ assume eq(0x4006d4:bv64, $PC); goto (%block_7); ];
      block %block_7 { .asm = "ret " } [
        var local_3:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
@@ -1234,33 +1178,31 @@
        $PC:bv64 := $R30;
        goto (%call_weak_fn_code_5);
      ];
-     block %call_weak_fn_code_5 [
-       assert boolor(eq(0x400610:bv64, $PC));
-       goto (%ret_3);
-     ];
+     block %call_weak_fn_code_5 [ assert boolor(eq(0x400610:bv64, $PC)); goto (%ret_3); ];
      block %ret_3 [ return; ]
   ];
   proc @main()  -> () {  }
-    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
-      $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
-    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
-      $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
+    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64,
+      $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64,
+      $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400808:bv64, $PC))
   
   [
-     block %main_code { .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
-         .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
-                 .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
-       assume eq(0x400808:bv64, $PC);
-       goto (%block);
-     ];
+     block %main_code {
+       .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+       .succ = [
+         {
+           .address = 4196228; .conditional = "false"; .direct = "true"; .target = "stmts:OuTzy8qRTci75taVjGinFQ";
+           .type = "Type_Call"
+         }
+       ]
+     } [ assume eq(0x400808:bv64, $PC); goto (%block); ];
      block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
        var local:bv64 := 0x0:bv64;
        var local:bv64 := $SP;
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
-        0xffffffffffffffe0:bv64) $R29 64;
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
-         0xffffffffffffffe0:bv64), 0x8:bv64) $R30 64;
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0xffffffffffffffe0:bv64) $R29 64;
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP, 0xffffffffffffffe0:bv64), 0x8:bv64) $R30 64;
        $SP:bv64 := bvadd(local:bv64, 0xffffffffffffffe0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
        goto (%block_1);
@@ -1295,23 +1237,19 @@
        $PC:bv64 := 0x400784:bv64;
        goto (%main_code_2);
      ];
-     block %main_code_2 [
-       assert boolor(eq(0x400784:bv64, $PC));
-       goto (%main_ext);
-     ];
+     block %main_code_2 [ assert boolor(eq(0x400784:bv64, $PC)); goto (%main_ext); ];
      block %main_ext [
        assume eq(0x400784:bv64, $PC);
        call @Sqrt();
        assert boolor(eq(0x400820:bv64, $PC));
        goto (%main_code_1);
      ];
-     block %main_code_1 { .address = 4196384;
-         .gtirb_block = "rlVqjjqoR6uHwOYvPCS15g";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Return" } ] } [
-       assume eq(0x400820:bv64, $PC);
-       goto (%block_6);
-     ];
+     block %main_code_1 {
+       .address = 4196384; .gtirb_block = "rlVqjjqoR6uHwOYvPCS15g";
+       .succ = [
+         { .conditional = "false"; .direct = "false"; .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Return" }
+       ]
+     } [ assume eq(0x400820:bv64, $PC); goto (%block_6); ];
      block %block_6 { .asm = "ldp x29, x30, [sp], #0x20" } [
        var local_4:bv64 := 0x0:bv64;
        var local_4:bv64 := $SP;
@@ -1343,13 +1281,12 @@
     requires boolor(eq(0x400650:bv64, $PC))
   
   [
-     block %L_400650_code { .address = 4195920;
-         .gtirb_block = "i2bc6yURTw+Pq2nxe63pQA";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:QQLF2yhHRgKOi0ouqIEdXw"; .type = "Type_Branch" } ] } [
-       assume eq(0x400650:bv64, $PC);
-       goto (%block);
-     ];
+     block %L_400650_code {
+       .address = 4195920; .gtirb_block = "i2bc6yURTw+Pq2nxe63pQA";
+       .succ = [
+         { .conditional = "false"; .direct = "false"; .target = "proxy:QQLF2yhHRgKOi0ouqIEdXw"; .type = "Type_Branch" }
+       ]
+     } [ assume eq(0x400650:bv64, $PC); goto (%block); ];
      block %block { .asm = "adrp x16, #0x20000" } [
        $R16:bv64 := 0x420000:bv64;
        (var BranchTaken:bool := false, $PC:bv64 := 0x400654:bv64);
@@ -1388,13 +1325,12 @@
     requires boolor(eq(0x400640:bv64, $PC))
   
   [
-     block %FUN_400640_code { .address = 4195904;
-         .gtirb_block = "YmNxI7RsS/6TZy3HTKzvWg";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:3AqniX2CT+OA1g1jJcUzbQ"; .type = "Type_Branch" } ] } [
-       assume eq(0x400640:bv64, $PC);
-       goto (%block);
-     ];
+     block %FUN_400640_code {
+       .address = 4195904; .gtirb_block = "YmNxI7RsS/6TZy3HTKzvWg";
+       .succ = [
+         { .conditional = "false"; .direct = "false"; .target = "proxy:3AqniX2CT+OA1g1jJcUzbQ"; .type = "Type_Branch" }
+       ]
+     } [ assume eq(0x400640:bv64, $PC); goto (%block); ];
      block %block { .asm = "adrp x16, #0x20000" } [
        $R16:bv64 := 0x420000:bv64;
        (var BranchTaken:bool := false, $PC:bv64 := 0x400644:bv64);
@@ -1428,23 +1364,25 @@
      block %FUN_400640_code_1 [ assert false; unreachable; ]
   ];
   proc @deregister_tm_clones()  -> () {  }
-    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
-      $R0:bv64, $R1:bv64, $R16:bv64
-    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
-      $R0:bv64, $R1:bv64, $R16:bv64, $R30:bv64, $mem:(bv64->bv8)
+    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64, $R1:bv64, $R16:bv64
+    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1, $R0:bv64, $R1:bv64, $R16:bv64, $R30:bv64,
+      $mem:(bv64->bv8)
     requires boolor(eq(0x4006e0:bv64, $PC))
   
   [
-     block %deregister_tm_clones_code { .address = 4196064;
-         .gtirb_block = "GW0MHC+ORUKlCdpgOcZ6zA";
-         .succ = [ { .address = 4196108; .conditional = "true"; .direct = "true";
-                 .target = "internal:cdQ2GS2+QhaOa7OUvPWMRQ"; .type = "Type_Branch" };
-             { .address = 4196088; .conditional = "true"; .direct = "true";
-                 .target = "internal:GghTYm6bT12tNFmqu0nIjA";
-                 .type = "Type_Fallthrough" } ] } [
-       assume eq(0x4006e0:bv64, $PC);
-       goto (%block);
-     ];
+     block %deregister_tm_clones_code {
+       .address = 4196064; .gtirb_block = "GW0MHC+ORUKlCdpgOcZ6zA";
+       .succ = [
+         {
+           .address = 4196108; .conditional = "true"; .direct = "true"; .target = "internal:cdQ2GS2+QhaOa7OUvPWMRQ";
+           .type = "Type_Branch"
+         };
+         {
+           .address = 4196088; .conditional = "true"; .direct = "true"; .target = "internal:GghTYm6bT12tNFmqu0nIjA";
+           .type = "Type_Fallthrough"
+         }
+       ]
+     } [ assume eq(0x4006e0:bv64, $PC); goto (%block); ];
      block %block { .asm = "adrp x0, #0x20000" } [
        $R0:bv64 := 0x420000:bv64;
        (var BranchTaken:bool := false, $PC:bv64 := 0x4006e4:bv64);
@@ -1476,18 +1414,12 @@
        var local_5:bv64 := 0x0:bv64;
        $PSTATE_V:bv1 := bvnot(booltobv1(eq(sign_extend(64,
           bvadd(bvadd($R1, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64)),
-          bvadd(bvadd(sign_extend(64, $R1),
-            sign_extend(64, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12))))),
-           0x1:bv128))));
+          bvadd(bvadd(sign_extend(64, $R1), sign_extend(64, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12))))), 0x1:bv128))));
        $PSTATE_C:bv1 := bvnot(booltobv1(eq(zero_extend(64,
           bvadd(bvadd($R1, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64)),
-          bvadd(bvadd(zero_extend(64, $R1),
-            zero_extend(64, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12))))),
-           0x1:bv128))));
-       $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd($R1,
-           bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64), 0x0:bv64));
-       $PSTATE_N:bv1 := extract(64,63, bvadd(bvadd($R1,
-         bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64));
+          bvadd(bvadd(zero_extend(64, $R1), zero_extend(64, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12))))), 0x1:bv128))));
+       $PSTATE_Z:bv1 := booltobv1(eq(bvadd(bvadd($R1, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64), 0x0:bv64));
+       $PSTATE_N:bv1 := extract(64,63, bvadd(bvadd($R1, bvnot(bvshl($R0, zero_extend(52, 0x0:bv12)))), 0x1:bv64));
        (var BranchTaken:bool := false, $PC:bv64 := 0x4006f4:bv64);
        goto (%block_5);
      ];
@@ -1511,16 +1443,19 @@
        assert boolor(eq(0x40070c:bv64, $PC), eq(0x4006f8:bv64, $PC));
        goto (%deregister_tm_clones_code_3,%deregister_tm_clones_code_1);
      ];
-     block %deregister_tm_clones_code_1 { .address = 4196088;
-         .gtirb_block = "GghTYm6bT12tNFmqu0nIjA";
-         .succ = [ { .address = 4196108; .conditional = "true"; .direct = "true";
-                 .target = "internal:cdQ2GS2+QhaOa7OUvPWMRQ"; .type = "Type_Branch" };
-             { .address = 4196100; .conditional = "true"; .direct = "true";
-                 .target = "internal:NfWWPq4PTwyv0VapVhBGag";
-                 .type = "Type_Fallthrough" } ] } [
-       assume eq(0x4006f8:bv64, $PC);
-       goto (%block_9);
-     ];
+     block %deregister_tm_clones_code_1 {
+       .address = 4196088; .gtirb_block = "GghTYm6bT12tNFmqu0nIjA";
+       .succ = [
+         {
+           .address = 4196108; .conditional = "true"; .direct = "true"; .target = "internal:cdQ2GS2+QhaOa7OUvPWMRQ";
+           .type = "Type_Branch"
+         };
+         {
+           .address = 4196100; .conditional = "true"; .direct = "true"; .target = "internal:NfWWPq4PTwyv0VapVhBGag";
+           .type = "Type_Fallthrough"
+         }
+       ]
+     } [ assume eq(0x4006f8:bv64, $PC); goto (%block_9); ];
      block %block_9 { .asm = "adrp x1, #0x1f000" } [
        $R1:bv64 := 0x41f000:bv64;
        (var BranchTaken:bool := false, $PC:bv64 := 0x4006fc:bv64);
@@ -1556,20 +1491,18 @@
        assert boolor(eq(0x40070c:bv64, $PC), eq(0x400704:bv64, $PC));
        goto (%deregister_tm_clones_code_3,%deregister_tm_clones_code_2);
      ];
-     block %deregister_tm_clones_code_2 { .address = 4196100;
-         .gtirb_block = "NfWWPq4PTwyv0VapVhBGag";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Branch" } ] } [
-       assume eq(0x400704:bv64, $PC);
-       goto (%block_15);
-     ];
+     block %deregister_tm_clones_code_2 {
+       .address = 4196100; .gtirb_block = "NfWWPq4PTwyv0VapVhBGag";
+       .succ = [
+         { .conditional = "false"; .direct = "false"; .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Branch" }
+       ]
+     } [ assume eq(0x400704:bv64, $PC); goto (%block_15); ];
      block %block_15 { .asm = "mov x16, x1" } [
        var local_9:bv64 := 0x0:bv64;
        var local_9:bv64 := 0x0:bv64;
        var local_10:bv64 := 0x0:bv64;
        var local_10:bv64 := $R1;
-       $R16:bv64 := bvor(local_9:bv64,
-        bvshl(local_10:bv64, zero_extend(52, 0x0:bv12)));
+       $R16:bv64 := bvor(local_9:bv64, bvshl(local_10:bv64, zero_extend(52, 0x0:bv12)));
        (var BranchTaken:bool := false, $PC:bv64 := 0x400708:bv64);
        goto (%block_16);
      ];
@@ -1581,13 +1514,15 @@
        goto (%deregister_tm_clones_code_6);
      ];
      block %deregister_tm_clones_code_6 [ assert false; unreachable; ];
-     block %deregister_tm_clones_code_3 { .address = 4196108;
-         .gtirb_block = "cdQ2GS2+QhaOa7OUvPWMRQ";
-         .succ = [ { .address = 4196200; .conditional = "false"; .direct = "true";
-                 .target = "external:TxTRm4kpQiq/Xgistx+xbQ"; .type = "Type_Return" } ] } [
-       assume eq(0x40070c:bv64, $PC);
-       goto (%block_17);
-     ];
+     block %deregister_tm_clones_code_3 {
+       .address = 4196108; .gtirb_block = "cdQ2GS2+QhaOa7OUvPWMRQ";
+       .succ = [
+         {
+           .address = 4196200; .conditional = "false"; .direct = "true"; .target = "external:TxTRm4kpQiq/Xgistx+xbQ";
+           .type = "Type_Return"
+         }
+       ]
+     } [ assume eq(0x40070c:bv64, $PC); goto (%block_17); ];
      block %block_17 { .asm = "ret " } [
        var local_12:bv64 := 0x0:bv64;
        var BTypeNext:bv2 := 0x0:bv2;
@@ -1595,10 +1530,7 @@
        $PC:bv64 := $R30;
        goto (%deregister_tm_clones_code_7);
      ];
-     block %deregister_tm_clones_code_7 [
-       assert boolor(eq(0x400768:bv64, $PC));
-       goto (%ret_5);
-     ];
+     block %deregister_tm_clones_code_7 [ assert boolor(eq(0x400768:bv64, $PC)); goto (%ret_5); ];
      block %ret_5 [ return; ]
   ];
   proc @FUN_400620()  -> () {  }
@@ -1607,20 +1539,17 @@
     requires boolor(eq(0x400620:bv64, $PC))
   
   [
-     block %FUN_400620_code { .address = 4195872;
-         .gtirb_block = "wtDzxxOjSJeWxzGBUpQYxA";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Branch" } ] } [
-       assume eq(0x400620:bv64, $PC);
-       goto (%block);
-     ];
+     block %FUN_400620_code {
+       .address = 4195872; .gtirb_block = "wtDzxxOjSJeWxzGBUpQYxA";
+       .succ = [
+         { .conditional = "false"; .direct = "false"; .target = "proxy:P8unZs8jR1SVxJeeo8n1sg"; .type = "Type_Branch" }
+       ]
+     } [ assume eq(0x400620:bv64, $PC); goto (%block); ];
      block %block { .asm = "stp x16, x30, [sp, #-0x10]!" } [
        var local:bv64 := 0x0:bv64;
        var local:bv64 := $SP;
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
-        0xfffffffffffffff0:bv64) $R16 64;
-       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
-         0xfffffffffffffff0:bv64), 0x8:bv64) $R30 64;
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0xfffffffffffffff0:bv64) $R16 64;
+       $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP, 0xfffffffffffffff0:bv64), 0x8:bv64) $R30 64;
        $SP:bv64 := bvadd(local:bv64, 0xfffffffffffffff0:bv64);
        (var BranchTaken:bool := false, $PC:bv64 := 0x400624:bv64);
        goto (%block_1);

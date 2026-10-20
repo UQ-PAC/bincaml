@@ -25,16 +25,12 @@
   function {:extern } {:inline } $me_alloc_size(mem_encoding: memory_encoding, alloc: bv64) returns (bv64) {
     mem_encoding->alloc_size[alloc]
   }
-  function {:extern } {:inline } $me_addr_alloc(mem_encoding: memory_encoding, addr: bv64) returns (bv64) {
-    addr
-  }
+  function {:extern } {:inline } $me_addr_alloc(mem_encoding: memory_encoding, addr: bv64) returns (bv64) { addr }
   function {:extern } {:inline } $me_addr_is_heap(mem_encoding: memory_encoding, addr: bv64) returns (bool) {
     mem_encoding->addr_is_heap[addr]
   }
   function {:extern } {:inline } $me_can_allocate(mem_encoding: memory_encoding, addr: bv64, size: bv64) returns (bool) {
-    (((($me_addr_is_heap(mem_encoding, addr)
-        &&
-        ($me_alloc_base(mem_encoding, addr) == addr))
+    (((($me_addr_is_heap(mem_encoding, addr) && ($me_alloc_base(mem_encoding, addr) == addr))
        &&
        ($me_alloc_live(mem_encoding, $me_addr_alloc(mem_encoding, addr)) == 0bv2))
       &&
@@ -50,11 +46,7 @@
   }
   function {:extern } {:inline } $me_allocate(mem_encoding: memory_encoding, mem_encoding_out: memory_encoding, addr: bv64, size: bv64) returns (bool) {
     ($me_alloc_size_update(
-       $me_alloc_live_update(
-         mem_encoding,
-         $me_addr_alloc(mem_encoding, addr),
-         1bv2
-       ),
+       $me_alloc_live_update(mem_encoding, $me_addr_alloc(mem_encoding, addr), 1bv2),
        $me_addr_alloc(mem_encoding, addr),
        size
      ) == mem_encoding_out)
@@ -63,10 +55,7 @@
     (((forall 
        i: bv64 :: 
        {$me_addr_is_heap(mem_encoding, i)} 
-       (bvult_bv64_bv64_bool(100000000bv64, i) == $me_addr_is_heap(
-          mem_encoding,
-          i
-        )))
+       (bvult_bv64_bv64_bool(100000000bv64, i) == $me_addr_is_heap(mem_encoding, i)))
       &&
       (forall 
        i: bv64 :: 
@@ -86,16 +75,11 @@
       &&
       bvule_bv64_bv64_bool(
         $me_addr_offset(mem_encoding, bvadd_bv64(addr, size)),
-        $me_alloc_size(
-          mem_encoding,
-          $me_alloc_base(mem_encoding, $me_addr_alloc(mem_encoding, addr))
-        )
+        $me_alloc_size(mem_encoding, $me_alloc_base(mem_encoding, $me_addr_alloc(mem_encoding, addr)))
       )))
   }
   function {:extern } load64_le(#memory: [bv64]bv8, #index: bv64) returns (bv64) {
-    (((((((#memory[bvadd_bv64(#index, 7bv64)]
-           ++
-           #memory[bvadd_bv64(#index, 6bv64)]): bv16
+    (((((((#memory[bvadd_bv64(#index, 7bv64)] ++ #memory[bvadd_bv64(#index, 6bv64)]): bv16
           ++
           #memory[bvadd_bv64(#index, 5bv64)]): bv24
          ++
@@ -110,13 +94,10 @@
      #memory[bvadd_bv64(#index, 0bv64)]): bv64
   }
   function {:define } {:extern } store64_le(#memory: [bv64]bv8, #index: bv64, #value: bv64) returns ([bv64]bv8) {
-    #memory[#index := #value[8:0]][bvadd_bv64(#index, 1bv64) := #value[16:8]][bvadd_bv64(
+    #memory[#index := #value[8:0]][bvadd_bv64(#index, 1bv64) := #value[16:8]][bvadd_bv64(#index, 2bv64) := #value[24:16]][bvadd_bv64(
       #index,
-      2bv64
-    ) := #value[24:16]][bvadd_bv64(#index, 3bv64) := #value[32:24]][bvadd_bv64(
-      #index,
-      4bv64
-    ) := #value[40:32]][bvadd_bv64(#index, 5bv64) := #value[48:40]][bvadd_bv64(
+      3bv64
+    ) := #value[32:24]][bvadd_bv64(#index, 4bv64) := #value[40:32]][bvadd_bv64(#index, 5bv64) := #value[48:40]][bvadd_bv64(
       #index,
       6bv64
     ) := #value[56:48]][bvadd_bv64(#index, 7bv64) := #value[64:56]]
@@ -129,21 +110,16 @@
   function {:bvbuiltin "bvule"} {:extern } bvule_bv64_bv64_bool(bv64, bv64) returns (bool);
   function {:bvbuiltin "bvult"} {:extern } bvult_bv64_bv64_bool(bv64, bv64) returns (bool);
   
-  procedure p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
-     R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
-     R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64);
+  procedure p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64, R29_in: bv64, R30_in: bv64, R31_in: bv64,
+     _PC_in: bv64) returns (R0_out: bv64, R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64);
     modifies $mem, $mem_encoding, $stack;
     ensures {:msg "Memory Error: Memory Leak"} (forall 
      i: bv64 :: 
       
-     ($me_addr_is_heap($mem_encoding, i) ==> ($me_alloc_live(
-         $mem_encoding,
-         $me_addr_alloc($mem_encoding, i)
-       ) != 1bv2)));
+     ($me_addr_is_heap($mem_encoding, i) ==> ($me_alloc_live($mem_encoding, $me_addr_alloc($mem_encoding, i)) != 1bv2)));
     requires $me_init_encoding($mem_encoding);
-  implementation p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
-   R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
-   R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64) {
+  implementation p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64, R29_in: bv64, R30_in: bv64, R31_in: bv64,
+   _PC_in: bv64) returns (R0_out: bv64, R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64) {
     var R30_out_1: bv64;
     var Exp18__5_25_2: bv64;
     var R0_out_1: bv64;
@@ -157,71 +133,33 @@
     var R29_out_1: bv64;
     var R17_out_1: bv64;
     b#main_entry:
-      $stack := store64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551584bv64),
-          R29_in
-        );
-      $stack := store64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551592bv64),
-          R30_in
-        );
-      assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
-        $mem_encoding,
-        131088bv64,
-        8bv64
-      );
+      $stack := store64_le($stack, bvadd_bv64(R31_in, 18446744073709551584bv64), R29_in);
+      $stack := store64_le($stack, bvadd_bv64(R31_in, 18446744073709551592bv64), R30_in);
+      assert{:msg "Memory Error: Invalid Access"} $me_valid_access($mem_encoding, 131088bv64, 8bv64);
       Exp14__5_2_2 := load64_le($mem, 131088bv64);
       assert true;
       call R0_4 := p$malloc(1bv64);
       goto b#phi_5;
     b#phi_5:
-      $stack := store64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551608bv64),
-          R0_4
-        );
-      Exp14__5_21_2 := load64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551608bv64)
-        );
-      assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
-        $mem_encoding,
-        Exp14__5_21_2,
-        1bv64
-      );
+      $stack := store64_le($stack, bvadd_bv64(R31_in, 18446744073709551608bv64), R0_4);
+      Exp14__5_21_2 := load64_le($stack, bvadd_bv64(R31_in, 18446744073709551608bv64));
+      assert{:msg "Memory Error: Invalid Access"} $me_valid_access($mem_encoding, Exp14__5_21_2, 1bv64);
       $mem := store8_le($mem, Exp14__5_21_2, 121bv8);
-      Exp14__5_22_2 := load64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551608bv64)
-        );
-      assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
-        $mem_encoding,
-        131112bv64,
-        8bv64
-      );
+      Exp14__5_22_2 := load64_le($stack, bvadd_bv64(R31_in, 18446744073709551608bv64));
+      assert{:msg "Memory Error: Invalid Access"} $me_valid_access($mem_encoding, 131112bv64, 8bv64);
       Exp14__5_1_2 := load64_le($mem, 131112bv64);
       assert true;
       call p$#free(Exp14__5_22_2);
       goto b#phi_6;
     b#phi_6:
-      Exp16__5_24_2 := load64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551584bv64)
-        );
-      Exp18__5_25_2 := load64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551592bv64)
-        );
+      Exp16__5_24_2 := load64_le($stack, bvadd_bv64(R31_in, 18446744073709551584bv64));
+      Exp18__5_25_2 := load64_le($stack, bvadd_bv64(R31_in, 18446744073709551592bv64));
       goto b#main_return;
     b#main_return:
-      R0_out_1, R17_out_1, R1_out_1, R29_out_1, R30_out_1 := 0bv64, Exp14__5_1_2,
-        121bv64, Exp16__5_24_2, Exp18__5_25_2;
+      R0_out_1, R17_out_1, R1_out_1, R29_out_1, R30_out_1 := 0bv64, Exp14__5_1_2, 121bv64, Exp16__5_24_2, Exp18__5_25_2;
       goto b#Return;
     b#Return:
-      R0_out, R17_out, R1_out, R29_out, R30_out := R0_out_1, R17_out_1, R1_out_1,
-        R29_out_1, R30_out_1;
+      R0_out, R17_out, R1_out, R29_out, R30_out := R0_out_1, R17_out_1, R1_out_1, R29_out_1, R30_out_1;
       return;
   }
   procedure p$malloc(R0_in: bv64) returns (R0_out: bv64);
@@ -238,10 +176,7 @@
        2bv2
      ));
     requires $me_addr_is_heap($mem_encoding, R0_in);
-    requires {:msg "Memory Error: Invalid Free (not base address)"} (0bv64 == $me_addr_offset(
-       $mem_encoding,
-       R0_in
-     ));
+    requires {:msg "Memory Error: Invalid Free (not base address)"} (0bv64 == $me_addr_offset($mem_encoding, R0_in));
     requires {:msg "Memory Error: Invalid Free (object not live)"} ($me_alloc_live(
        $mem_encoding,
        $me_addr_alloc($mem_encoding, R0_in)
@@ -271,16 +206,12 @@
   function {:extern } {:inline } $me_alloc_size(mem_encoding: memory_encoding, alloc: bv64) returns (bv64) {
     mem_encoding->alloc_size[alloc]
   }
-  function {:extern } {:inline } $me_addr_alloc(mem_encoding: memory_encoding, addr: bv64) returns (bv64) {
-    addr
-  }
+  function {:extern } {:inline } $me_addr_alloc(mem_encoding: memory_encoding, addr: bv64) returns (bv64) { addr }
   function {:extern } {:inline } $me_addr_is_heap(mem_encoding: memory_encoding, addr: bv64) returns (bool) {
     mem_encoding->addr_is_heap[addr]
   }
   function {:extern } {:inline } $me_can_allocate(mem_encoding: memory_encoding, addr: bv64, size: bv64) returns (bool) {
-    (((($me_addr_is_heap(mem_encoding, addr)
-        &&
-        ($me_alloc_base(mem_encoding, addr) == addr))
+    (((($me_addr_is_heap(mem_encoding, addr) && ($me_alloc_base(mem_encoding, addr) == addr))
        &&
        ($me_alloc_live(mem_encoding, $me_addr_alloc(mem_encoding, addr)) == 0bv2))
       &&
@@ -296,11 +227,7 @@
   }
   function {:extern } {:inline } $me_allocate(mem_encoding: memory_encoding, mem_encoding_out: memory_encoding, addr: bv64, size: bv64) returns (bool) {
     ($me_alloc_size_update(
-       $me_alloc_live_update(
-         mem_encoding,
-         $me_addr_alloc(mem_encoding, addr),
-         1bv2
-       ),
+       $me_alloc_live_update(mem_encoding, $me_addr_alloc(mem_encoding, addr), 1bv2),
        $me_addr_alloc(mem_encoding, addr),
        size
      ) == mem_encoding_out)
@@ -309,10 +236,7 @@
     (((forall 
        i: bv64 :: 
        {$me_addr_is_heap(mem_encoding, i)} 
-       (bvult_bv64_bv64_bool(100000000bv64, i) == $me_addr_is_heap(
-          mem_encoding,
-          i
-        )))
+       (bvult_bv64_bv64_bool(100000000bv64, i) == $me_addr_is_heap(mem_encoding, i)))
       &&
       (forall 
        i: bv64 :: 
@@ -332,16 +256,11 @@
       &&
       bvule_bv64_bv64_bool(
         $me_addr_offset(mem_encoding, bvadd_bv64(addr, size)),
-        $me_alloc_size(
-          mem_encoding,
-          $me_alloc_base(mem_encoding, $me_addr_alloc(mem_encoding, addr))
-        )
+        $me_alloc_size(mem_encoding, $me_alloc_base(mem_encoding, $me_addr_alloc(mem_encoding, addr)))
       )))
   }
   function {:extern } load64_le(#memory: [bv64]bv8, #index: bv64) returns (bv64) {
-    (((((((#memory[bvadd_bv64(#index, 7bv64)]
-           ++
-           #memory[bvadd_bv64(#index, 6bv64)]): bv16
+    (((((((#memory[bvadd_bv64(#index, 7bv64)] ++ #memory[bvadd_bv64(#index, 6bv64)]): bv16
           ++
           #memory[bvadd_bv64(#index, 5bv64)]): bv24
          ++
@@ -356,13 +275,10 @@
      #memory[bvadd_bv64(#index, 0bv64)]): bv64
   }
   function {:define } {:extern } store64_le(#memory: [bv64]bv8, #index: bv64, #value: bv64) returns ([bv64]bv8) {
-    #memory[#index := #value[8:0]][bvadd_bv64(#index, 1bv64) := #value[16:8]][bvadd_bv64(
+    #memory[#index := #value[8:0]][bvadd_bv64(#index, 1bv64) := #value[16:8]][bvadd_bv64(#index, 2bv64) := #value[24:16]][bvadd_bv64(
       #index,
-      2bv64
-    ) := #value[24:16]][bvadd_bv64(#index, 3bv64) := #value[32:24]][bvadd_bv64(
-      #index,
-      4bv64
-    ) := #value[40:32]][bvadd_bv64(#index, 5bv64) := #value[48:40]][bvadd_bv64(
+      3bv64
+    ) := #value[32:24]][bvadd_bv64(#index, 4bv64) := #value[40:32]][bvadd_bv64(#index, 5bv64) := #value[48:40]][bvadd_bv64(
       #index,
       6bv64
     ) := #value[56:48]][bvadd_bv64(#index, 7bv64) := #value[64:56]]
@@ -375,21 +291,16 @@
   function {:bvbuiltin "bvule"} {:extern } bvule_bv64_bv64_bool(bv64, bv64) returns (bool);
   function {:bvbuiltin "bvult"} {:extern } bvult_bv64_bv64_bool(bv64, bv64) returns (bool);
   
-  procedure p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
-     R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
-     R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64);
+  procedure p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64, R29_in: bv64, R30_in: bv64, R31_in: bv64,
+     _PC_in: bv64) returns (R0_out: bv64, R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64);
     modifies $mem, $mem_encoding, $stack;
     ensures {:msg "Memory Error: Memory Leak"} (forall 
      i: bv64 :: 
       
-     ($me_addr_is_heap($mem_encoding, i) ==> ($me_alloc_live(
-         $mem_encoding,
-         $me_addr_alloc($mem_encoding, i)
-       ) != 1bv2)));
+     ($me_addr_is_heap($mem_encoding, i) ==> ($me_alloc_live($mem_encoding, $me_addr_alloc($mem_encoding, i)) != 1bv2)));
     requires $me_init_encoding($mem_encoding);
-  implementation p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64,
-   R29_in: bv64, R30_in: bv64, R31_in: bv64, _PC_in: bv64) returns (R0_out: bv64,
-   R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64) {
+  implementation p$main_2276(R0_in: bv64, R16_in: bv64, R17_in: bv64, R1_in: bv64, R29_in: bv64, R30_in: bv64, R31_in: bv64,
+   _PC_in: bv64) returns (R0_out: bv64, R17_out: bv64, R1_out: bv64, R29_out: bv64, R30_out: bv64) {
     var R30_out_1: bv64;
     var Exp18__5_25_2: bv64;
     var R0_out_1: bv64;
@@ -403,71 +314,33 @@
     var R29_out_1: bv64;
     var R17_out_1: bv64;
     b#main_entry:
-      $stack := store64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551584bv64),
-          R29_in
-        );
-      $stack := store64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551592bv64),
-          R30_in
-        );
-      assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
-        $mem_encoding,
-        131088bv64,
-        8bv64
-      );
+      $stack := store64_le($stack, bvadd_bv64(R31_in, 18446744073709551584bv64), R29_in);
+      $stack := store64_le($stack, bvadd_bv64(R31_in, 18446744073709551592bv64), R30_in);
+      assert{:msg "Memory Error: Invalid Access"} $me_valid_access($mem_encoding, 131088bv64, 8bv64);
       Exp14__5_2_2 := load64_le($mem, 131088bv64);
       assert true;
       call R0_4 := p$malloc(1bv64);
       goto b#phi_5;
     b#phi_5:
-      $stack := store64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551608bv64),
-          R0_4
-        );
-      Exp14__5_21_2 := load64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551608bv64)
-        );
-      assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
-        $mem_encoding,
-        bvadd_bv64(Exp14__5_21_2, 7bv64),
-        1bv64
-      );
+      $stack := store64_le($stack, bvadd_bv64(R31_in, 18446744073709551608bv64), R0_4);
+      Exp14__5_21_2 := load64_le($stack, bvadd_bv64(R31_in, 18446744073709551608bv64));
+      assert{:msg "Memory Error: Invalid Access"} $me_valid_access($mem_encoding, bvadd_bv64(Exp14__5_21_2, 7bv64), 1bv64);
       $mem := store8_le($mem, bvadd_bv64(Exp14__5_21_2, 7bv64), 121bv8);
-      Exp14__5_22_2 := load64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551608bv64)
-        );
-      assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
-        $mem_encoding,
-        131112bv64,
-        8bv64
-      );
+      Exp14__5_22_2 := load64_le($stack, bvadd_bv64(R31_in, 18446744073709551608bv64));
+      assert{:msg "Memory Error: Invalid Access"} $me_valid_access($mem_encoding, 131112bv64, 8bv64);
       Exp14__5_1_2 := load64_le($mem, 131112bv64);
       assert true;
       call p$#free(Exp14__5_22_2);
       goto b#phi_6;
     b#phi_6:
-      Exp16__5_24_2 := load64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551584bv64)
-        );
-      Exp18__5_25_2 := load64_le(
-          $stack,
-          bvadd_bv64(R31_in, 18446744073709551592bv64)
-        );
+      Exp16__5_24_2 := load64_le($stack, bvadd_bv64(R31_in, 18446744073709551584bv64));
+      Exp18__5_25_2 := load64_le($stack, bvadd_bv64(R31_in, 18446744073709551592bv64));
       goto b#main_return;
     b#main_return:
-      R0_out_1, R17_out_1, R1_out_1, R29_out_1, R30_out_1 := 0bv64, Exp14__5_1_2,
-        121bv64, Exp16__5_24_2, Exp18__5_25_2;
+      R0_out_1, R17_out_1, R1_out_1, R29_out_1, R30_out_1 := 0bv64, Exp14__5_1_2, 121bv64, Exp16__5_24_2, Exp18__5_25_2;
       goto b#Return;
     b#Return:
-      R0_out, R17_out, R1_out, R29_out, R30_out := R0_out_1, R17_out_1, R1_out_1,
-        R29_out_1, R30_out_1;
+      R0_out, R17_out, R1_out, R29_out, R30_out := R0_out_1, R17_out_1, R1_out_1, R29_out_1, R30_out_1;
       return;
   }
   procedure p$malloc(R0_in: bv64) returns (R0_out: bv64);
@@ -484,10 +357,7 @@
        2bv2
      ));
     requires $me_addr_is_heap($mem_encoding, R0_in);
-    requires {:msg "Memory Error: Invalid Free (not base address)"} (0bv64 == $me_addr_offset(
-       $mem_encoding,
-       R0_in
-     ));
+    requires {:msg "Memory Error: Invalid Free (not base address)"} (0bv64 == $me_addr_offset($mem_encoding, R0_in));
     requires {:msg "Memory Error: Invalid Free (object not live)"} ($me_alloc_live(
        $mem_encoding,
        $me_addr_alloc($mem_encoding, R0_in)
@@ -501,7 +371,7 @@
   $ boogie ./bad.bpl
   Memory Error: Invalid Access
   Execution trace:
-      ./bad.bpl(148,3): b#main_entry
+      ./bad.bpl(124,3): b#main_entry
   
   Boogie program verifier finished with 0 verified, 1 error
 

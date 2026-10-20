@@ -634,12 +634,12 @@ module PassManager = struct
             print_endline (D.D.name ^ " :: " ^ ID.to_string pn);
             print_endline
               Containers_pp.(
-                Pretty.to_string ~width:80 @@ nest 4 (D.D.pretty r));
+                Pretty.to_string ~width:120 @@ nest 4 (D.D.pretty r));
             (*
             print_endline "insens";
             print_endline
               Containers_pp.(
-                Pretty.to_string ~width:80 @@ nest 4 (D.D.pretty r2)) *)
+                Pretty.to_string ~width:120 @@ nest 4 (D.D.pretty r2)) *)
             ());
         p
     | ProcCheck app ->

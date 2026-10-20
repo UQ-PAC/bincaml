@@ -78,7 +78,7 @@ let to_string b =
   let b =
     pretty (tt Var.to_string) (tt Var.to_string) (tt BasilExpr.to_string) b
   in
-  Containers_pp.Pretty.to_string ~width:80 b
+  Containers_pp.Pretty.to_string ~width:120 b
 
 let stmts_iter_i b = Vector.mapi (fun i j -> (i, j)) b.stmts |> Vector.to_iter
 let stmts_iter b = Vector.to_iter b.stmts

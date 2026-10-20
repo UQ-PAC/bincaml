@@ -365,10 +365,10 @@ module BasilExpr = struct
   let pretty_a ?(type_annot = false) s =
     cata (pretty_alg ~type_annot pretty_attr) s |> FoldN.get
 
-  let to_string s = Containers_pp.Pretty.to_string ~width:80 (pretty s)
+  let to_string s = Containers_pp.Pretty.to_string ~width:120 (pretty s)
 
   let to_string_annot s =
-    Containers_pp.Pretty.to_string ~width:80 (pretty_a ~type_annot:true s)
+    Containers_pp.Pretty.to_string ~width:120 (pretty_a ~type_annot:true s)
 
   let pp fmt s = Format.pp_print_string fmt @@ to_string s
 

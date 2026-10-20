@@ -36,7 +36,7 @@ prog entry @main {
   Lang.Program.pretty_to_chan stdout prog;
   print_endline "";
   print_endline
-  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Attrib.attrib_pretty attrib);
+  @@ Containers_pp.Pretty.to_string ~width:120 (Lang.Attrib.attrib_pretty attrib);
 
   let parsed =
     Gtirb_frontend.Gtirb_attribs.gtirb_attribs_of_attrib_conv_exn attrib
@@ -51,39 +51,27 @@ prog entry @main {
     [ block %ret [ return; ] ];
     prog entry @main {
       .initial_memory = [
-        {
-          .address = 4194872; .bytes = "TODO: bytes encoding"; .name = ".interp";
-          .readOnly = false; .size = 110
-        }
+        { .address = 4194872; .bytes = "TODO: bytes encoding"; .name = ".interp"; .readOnly = false; .size = 110 }
       ];
       .symbols = {
         .externalFunctions = [
-          { .name = "_ITM_deregisterTMCloneTable"; .offset = 4325328 };
-          { .name = "abort"; .offset = 4325392 }
-        ]; .funcEntries = [ { .address = 4195968; .name = "_start"; .size = 480 } ];
-        .globalOffsets = [  ];
+          { .name = "_ITM_deregisterTMCloneTable"; .offset = 4325328 }; { .name = "abort"; .offset = 4325392 }
+        ]; .funcEntries = [ { .address = 4195968; .name = "_start"; .size = 480 } ]; .globalOffsets = [  ];
         .globals = [
-          { .address = 4324824; .name = "_DYNAMIC"; .size = 0 };
-          { .address = 4325424; .name = "x"; .size = 64 }
+          { .address = 4324824; .name = "_DYNAMIC"; .size = 0 }; { .address = 4325424; .name = "x"; .size = 64 }
         ]
       }
     };
     {
       .initial_memory = [
-        {
-          .address = 4194872; .bytes = "TODO: bytes encoding"; .name = ".interp";
-          .readOnly = false; .size = 110
-        }
+        { .address = 4194872; .bytes = "TODO: bytes encoding"; .name = ".interp"; .readOnly = false; .size = 110 }
       ];
       .symbols = {
         .externalFunctions = [
-          { .name = "_ITM_deregisterTMCloneTable"; .offset = 4325328 };
-          { .name = "abort"; .offset = 4325392 }
-        ]; .funcEntries = [ { .address = 4195968; .name = "_start"; .size = 480 } ];
-        .globalOffsets = [  ];
+          { .name = "_ITM_deregisterTMCloneTable"; .offset = 4325328 }; { .name = "abort"; .offset = 4325392 }
+        ]; .funcEntries = [ { .address = 4195968; .name = "_start"; .size = 480 } ]; .globalOffsets = [  ];
         .globals = [
-          { .address = 4324824; .name = "_DYNAMIC"; .size = 0 };
-          { .address = 4325424; .name = "x"; .size = 64 }
+          { .address = 4324824; .name = "_DYNAMIC"; .size = 0 }; { .address = 4325424; .name = "x"; .size = 64 }
         ]
       }
     }

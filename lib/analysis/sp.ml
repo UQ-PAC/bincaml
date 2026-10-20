@@ -251,15 +251,12 @@ proc @branching(a:bv64) -> (b:bv64) [
   [%expect
     {|
     exists (a_1:bv64) (a_3:bv64) (x_2:bv64) (a_2:bv64) (x_1:bv64) (x_3:bv64) :: (boolor(booland(boolor(booland(boolor(booland(eq(a_1:bv64,
-            a:bv64), bvult(a_1:bv64, 0x64:bv64), eq(a_3:bv64, a_1:bv64),
+            a:bv64), bvult(a_1:bv64, 0x64:bv64), eq(a_3:bv64, a_1:bv64), bvult(a_3:bv64, 0x32:bv64), eq(x_2:bv64, a_3:bv64)),
+          booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64), eq(a_2:bv64, a_1:bv64),
+           boolnot(bvult(a_2:bv64, 0x32:bv64)), eq(x_1:bv64, 0x0:bv64))), eq(x_3:bv64, x_1:bv64)),
+        booland(boolor(booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64), eq(a_3:bv64, a_1:bv64),
            bvult(a_3:bv64, 0x32:bv64), eq(x_2:bv64, a_3:bv64)),
-          booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64),
-           eq(a_2:bv64, a_1:bv64), boolnot(bvult(a_2:bv64, 0x32:bv64)),
-           eq(x_1:bv64, 0x0:bv64))), eq(x_3:bv64, x_1:bv64)),
-        booland(boolor(booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64),
-           eq(a_3:bv64, a_1:bv64), bvult(a_3:bv64, 0x32:bv64), eq(x_2:bv64, a_3:bv64)),
-          booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64),
-           eq(a_2:bv64, a_1:bv64), boolnot(bvult(a_2:bv64, 0x32:bv64)),
-           eq(x_1:bv64, 0x0:bv64))), eq(x_3:bv64, x_2:bv64))), eq(b:bv64, x_3:bv64)),
+          booland(eq(a_1:bv64, a:bv64), bvult(a_1:bv64, 0x64:bv64), eq(a_2:bv64, a_1:bv64),
+           boolnot(bvult(a_2:bv64, 0x32:bv64)), eq(x_1:bv64, 0x0:bv64))), eq(x_3:bv64, x_2:bv64))), eq(b:bv64, x_3:bv64)),
       false))
     |}]

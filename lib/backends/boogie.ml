@@ -533,5 +533,5 @@ let pretty_to_chan chan (p : Program.t) =
   let p = pretty_program p in
   flush chan;
   let fmt = Format.formatter_of_out_channel chan in
-  Containers_pp.Pretty.to_format ~width:80 fmt p;
+  Containers_pp.Pretty.to_format ~width:120 fmt p;
   Format.flush fmt ()

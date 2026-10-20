@@ -57,8 +57,8 @@ struct
           (Expr.BasilExpr.to_string (Lazy.force p))
           (V.show (fst (Lazy.force q)))
           (V.show (fst (Lazy.force r)))
-          (Containers_pp.Pretty.to_string ~width:80 (snd (Lazy.force q)))
-          (Containers_pp.Pretty.to_string ~width:80 (snd (Lazy.force r))))
+          (Containers_pp.Pretty.to_string ~width:120 (snd (Lazy.force q)))
+          (Containers_pp.Pretty.to_string ~width:120 (snd (Lazy.force r))))
     @@
     let open QCheck.Gen in
     let* exp = arb_expr in

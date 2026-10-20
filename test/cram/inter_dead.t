@@ -25,23 +25,11 @@
   proc @fun1(c:bv64, d:bv64)  -> (out:bv64) {  }
     captures $global:bv64
   
-  [
-     block %fun1_entry [
-       (var e:bv64=out2) := call @fun2(f=d:bv64);
-       var out:bv64 := bvadd(c:bv64, e:bv64);
-       return;
-     ]
-  ];
+  [ block %fun1_entry [ (var e:bv64=out2) := call @fun2(f=d:bv64); var out:bv64 := bvadd(c:bv64, e:bv64); return; ] ];
   proc @fun2(f:bv64)  -> (out2:bv64) {  }
     captures $global:bv64
   
-  [
-     block %fun2_entry [
-       var g:bv64 := $global;
-       var out2:bv64 := bvadd(g:bv64, g:bv64);
-       return;
-     ]
-  ];
+  [ block %fun2_entry [ var g:bv64 := $global; var out2:bv64 := bvadd(g:bv64, g:bv64); return; ] ];
   prog entry @main { .invariants = [ "NoPhis" ] };
 
   $ cat intra.il
@@ -61,23 +49,11 @@
   proc @fun1(c:bv64, d:bv64)  -> (out:bv64) {  }
     captures $global:bv64
   
-  [
-     block %fun1_entry [
-       (var e:bv64=out2) := call @fun2(f=d:bv64);
-       var out:bv64 := bvadd(c:bv64, e:bv64);
-       return;
-     ]
-  ];
+  [ block %fun1_entry [ (var e:bv64=out2) := call @fun2(f=d:bv64); var out:bv64 := bvadd(c:bv64, e:bv64); return; ] ];
   proc @fun2(f:bv64)  -> (out2:bv64) {  }
     captures $global:bv64
   
-  [
-     block %fun2_entry [
-       var g:bv64 := $global;
-       var out2:bv64 := bvadd(g:bv64, g:bv64);
-       return;
-     ]
-  ];
+  [ block %fun2_entry [ var g:bv64 := $global; var out2:bv64 := bvadd(g:bv64, g:bv64); return; ] ];
   prog entry @main { .invariants = [ "NoPhis" ] };
 
   $ cat inter.il
@@ -113,11 +89,7 @@
   
   [
      block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun2_entry); ];
-     block %fun2_entry [
-       var g_1:bv64 := global_1:bv64;
-       var out2_1:bv64 := bvadd(g_1:bv64, g_1:bv64);
-       goto (%Return);
-     ];
+     block %fun2_entry [ var g_1:bv64 := global_1:bv64; var out2_1:bv64 := bvadd(g_1:bv64, g_1:bv64); goto (%Return); ];
      block %Return [ var out2:bv64 := out2_1:bv64; return; ]
   ];
   prog entry @main { .invariants = [ "SSA"; "NoPhis"; "Params" ] };
@@ -154,42 +126,32 @@
   ---
   > proc @fun1(c:bv64, d:bv64)  -> (out:bv64) {  }
   >   captures $global:bv64
-  20d17
+  19,29c17,19
+  < [
   <    block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun1_entry); ];
-  22,26c19,22
+  <    block %fun1_entry [
   <      (var e_1:bv64=out2) := call @fun2(global_in=global_1:bv64);
   <      var out_1:bv64 := bvadd(c:bv64, e_1:bv64);
   <      goto (%Return);
   <    ];
   <    block %Return [ var out:bv64 := out_1:bv64; return; ]
-  ---
-  >      (var e:bv64=out2) := call @fun2(f=d:bv64);
-  >      var out:bv64 := bvadd(c:bv64, e:bv64);
-  >      return;
-  >    ]
-  28,29c24,25
+  < ];
   < proc @fun2(global_in:bv64)  -> (out2:bv64) {  }
   <   
   ---
+  > [ block %fun1_entry [ (var e:bv64=out2) := call @fun2(f=d:bv64); var out:bv64 := bvadd(c:bv64, e:bv64); return; ] ];
   > proc @fun2(f:bv64)  -> (out2:bv64) {  }
   >   captures $global:bv64
-  32d27
+  31,36c21,22
+  < [
   <    block %inputs [ var global_1:bv64 := global_in:bv64; goto (%fun2_entry); ];
-  34,38c29,32
-  <      var g_1:bv64 := global_1:bv64;
-  <      var out2_1:bv64 := bvadd(g_1:bv64, g_1:bv64);
-  <      goto (%Return);
-  <    ];
+  <    block %fun2_entry [ var g_1:bv64 := global_1:bv64; var out2_1:bv64 := bvadd(g_1:bv64, g_1:bv64); goto (%Return); ];
   <    block %Return [ var out2:bv64 := out2_1:bv64; return; ]
-  ---
-  >      var g:bv64 := $global;
-  >      var out2:bv64 := bvadd(g:bv64, g:bv64);
-  >      return;
-  >    ]
-  40c34
+  < ];
   < prog entry @main { .invariants = [ "SSA"; "NoPhis"; "Params" ] };
   \ No newline at end of file
   ---
+  > [ block %fun2_entry [ var g:bv64 := $global; var out2:bv64 := bvadd(g:bv64, g:bv64); return; ] ];
   > prog entry @main { .invariants = [ "NoPhis" ] };
   \ No newline at end of file
   [1]

@@ -21,49 +21,36 @@ written by @caller.  After the pass:
   ---
   > proc @callee(x_in:bv32, y_in:bv32)  -> (x_out:bv32) {  }
   >   
-  8,9c5,11
-  <    block %entry [ $x:bv32 := bvadd($x, $y); goto (%ret); ];
-  <    block %ret [ return; ]
-  ---
-  >    block %inputs [
-  >      (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32);
-  >      goto (%entry);
-  >    ];
-  >    block %entry [ var x:bv32 := bvadd(x:bv32, y:bv32); goto (%ret); ];
-  >    block %ret [ goto (%returns); ];
-  >    block %returns [ var x_out:bv32 := x:bv32; return; ]
-  11,13c13,14
+  7,10c4,11
+  < [ block %entry [ $x:bv32 := bvadd($x, $y); goto (%ret); ]; block %ret [ return; ] ];
   < proc @caller()  -> () {  }
   <   modifies $x:bv32, $y:bv32
   <   captures $x:bv32, $y:bv32
   ---
+  > [
+  >    block %inputs [ (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32); goto (%entry); ];
+  >    block %entry [ var x:bv32 := bvadd(x:bv32, y:bv32); goto (%ret); ];
+  >    block %ret [ goto (%returns); ];
+  >    block %returns [ var x_out:bv32 := x:bv32; return; ]
+  > ];
   > proc @caller(x_in:bv32, y_in:bv32)  -> (x_out:bv32, y_out:bv32) {  }
   >   
-  15a17,20
-  >    block %inputs [
-  >      (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32);
-  >      goto (%entry);
-  >    ];
-  17,19c22,24
-  <      $y:bv32 := 0x0:bv32;
-  <      $x:bv32 := 0x1:bv32;
-  <      call @callee();
-  ---
-  >      var y:bv32 := 0x0:bv32;
-  >      var x:bv32 := 0x1:bv32;
-  >      (var x:bv32=x_out) := call @callee(x_in=x:bv32, y_in=y:bv32);
-  22c27,31
-  <    block %ret [ return; ]
-  ---
-  >    block %ret [ goto (%returns); ];
-  >    block %returns [
-  >      (var x_out:bv32 := x:bv32, var y_out:bv32 := y:bv32);
-  >      return;
-  >    ]
-  24c33
+  12,13c13,24
+  < [ block %entry [ $y:bv32 := 0x0:bv32; $x:bv32 := 0x1:bv32; call @callee(); goto (%ret); ]; block %ret [ return; ] ];
   < prog entry @caller;
   \ No newline at end of file
   ---
+  > [
+  >    block %inputs [ (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32); goto (%entry); ];
+  >    block %entry [
+  >      var y:bv32 := 0x0:bv32;
+  >      var x:bv32 := 0x1:bv32;
+  >      (var x:bv32=x_out) := call @callee(x_in=x:bv32, y_in=y:bv32);
+  >      goto (%ret);
+  >    ];
+  >    block %ret [ goto (%returns); ];
+  >    block %returns [ (var x_out:bv32 := x:bv32, var y_out:bv32 := y:bv32); return; ]
+  > ];
   > prog entry @caller { .invariants = [ "LambdaLift" ] };
   \ No newline at end of file
   [1]
@@ -95,54 +82,36 @@ all global refs in requires (not just those under Old) become in-params.
   > proc @callee(x_in:bv32, y_in:bv32)  -> (x_out:bv32) {  }
   >   requires eq(x_in:bv32, 0x1:bv32)
   >   ensures eq(x_out:bv32, bvadd(x_in:bv32, y_in:bv32))
-  9a6,9
-  >    block %inputs [
-  >      (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32);
-  >      goto (%entry);
-  >    ];
-  11,12c11,12
-  <      assert eq($x, old($x));
-  <      $x:bv32 := bvadd($x, $y);
-  ---
-  >      assert eq(x:bv32, x_in:bv32);
-  >      var x:bv32 := bvadd(x:bv32, y:bv32);
-  15c15,16
-  <    block %ret [ return; ]
-  ---
-  >    block %ret [ goto (%returns); ];
-  >    block %returns [ var x_out:bv32 := x:bv32; return; ]
-  17,19c18,19
+  9,12c5,12
+  < [ block %entry [ assert eq($x, old($x)); $x:bv32 := bvadd($x, $y); goto (%ret); ]; block %ret [ return; ] ];
   < proc @caller()  -> () {  }
   <   modifies $x:bv32, $y:bv32
   <   captures $x:bv32, $y:bv32
   ---
+  > [
+  >    block %inputs [ (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32); goto (%entry); ];
+  >    block %entry [ assert eq(x:bv32, x_in:bv32); var x:bv32 := bvadd(x:bv32, y:bv32); goto (%ret); ];
+  >    block %ret [ goto (%returns); ];
+  >    block %returns [ var x_out:bv32 := x:bv32; return; ]
+  > ];
   > proc @caller(x_in:bv32, y_in:bv32)  -> (x_out:bv32, y_out:bv32) {  }
   >   
-  21a22,25
-  >    block %inputs [
-  >      (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32);
-  >      goto (%entry);
-  >    ];
-  23,25c27,29
-  <      $y:bv32 := 0x0:bv32;
-  <      $x:bv32 := 0x1:bv32;
-  <      call @callee();
-  ---
-  >      var y:bv32 := 0x0:bv32;
-  >      var x:bv32 := 0x1:bv32;
-  >      (var x:bv32=x_out) := call @callee(x_in=x:bv32, y_in=y:bv32);
-  28c32,36
-  <    block %ret [ return; ]
-  ---
-  >    block %ret [ goto (%returns); ];
-  >    block %returns [
-  >      (var x_out:bv32 := x:bv32, var y_out:bv32 := y:bv32);
-  >      return;
-  >    ]
-  30c38
+  14,15c14,25
+  < [ block %entry [ $y:bv32 := 0x0:bv32; $x:bv32 := 0x1:bv32; call @callee(); goto (%ret); ]; block %ret [ return; ] ];
   < prog entry @caller;
   \ No newline at end of file
   ---
+  > [
+  >    block %inputs [ (var x:bv32 := x_in:bv32, var y:bv32 := y_in:bv32); goto (%entry); ];
+  >    block %entry [
+  >      var y:bv32 := 0x0:bv32;
+  >      var x:bv32 := 0x1:bv32;
+  >      (var x:bv32=x_out) := call @callee(x_in=x:bv32, y_in=y:bv32);
+  >      goto (%ret);
+  >    ];
+  >    block %ret [ goto (%returns); ];
+  >    block %returns [ (var x_out:bv32 := x:bv32, var y_out:bv32 := y:bv32); return; ]
+  > ];
   > prog entry @caller { .invariants = [ "LambdaLift" ] };
   \ No newline at end of file
   [1]
@@ -164,7 +133,7 @@ and @main_1876 acquires the expected _in parameters.
   no top-level globals
 
   $ head -4 after_ll_real.il
-  proc @main_1876(CF_in:bv1, NF_in:bv1, R0_in:bv64, R1_in:bv64, R29_in:bv64,
-     R30_in:bv64, R31_in:bv64, VF_in:bv1, ZF_in:bv1, mem_in:(bv64->bv8),
-     stack_in:(bv64->bv8))
-     -> (CF_out:bv1, NF_out:bv1, R0_out:bv64, R1_out:bv64, R29_out:bv64,
+  proc @main_1876(CF_in:bv1, NF_in:bv1, R0_in:bv64, R1_in:bv64, R29_in:bv64, R30_in:bv64, R31_in:bv64, VF_in:bv1, ZF_in:bv1,
+     mem_in:(bv64->bv8), stack_in:(bv64->bv8))
+     -> (CF_out:bv1, NF_out:bv1, R0_out:bv64, R1_out:bv64, R29_out:bv64, R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1,
+     mem_out:(bv64->bv8), stack_out:(bv64->bv8)) { .address = 1876; .name = "main"; .returnBlock = "main_basil_return_1" }

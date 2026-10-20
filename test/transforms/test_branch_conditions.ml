@@ -287,7 +287,7 @@ prog entry @main;
     lst.prog |> Program.map_procedures (fun _ -> annotate_assume_flags)
   in
   print_endline
-  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
+  @@ Containers_pp.Pretty.to_string ~width:120 (Lang.Program.prog_pretty prog);
   [%expect
     {|
     var $R0:bv64;

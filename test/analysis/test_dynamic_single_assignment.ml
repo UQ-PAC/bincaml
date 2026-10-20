@@ -60,17 +60,9 @@ proc @main (x: bv64) -> (out: bv64)
 
     [
        block %main_entry [ goto (%main_2,%main_1); ];
-       block %main_1 [
-         guard boolnot(eq(x:bv64, 0x0:bv64));
-         var x1:bv64 := 0x0:bv64;
-         goto (%main_return__phi);
-       ];
+       block %main_1 [ guard boolnot(eq(x:bv64, 0x0:bv64)); var x1:bv64 := 0x0:bv64; goto (%main_return__phi); ];
        block %main_return__phi [ var y:bv64 := x1:bv64; goto (%main_return); ];
-       block %main_2 [
-         guard eq(x:bv64, 0x0:bv64);
-         var x2:bv64 := 0x1:bv64;
-         goto (%main_return__phi_1);
-       ];
+       block %main_2 [ guard eq(x:bv64, 0x0:bv64); var x2:bv64 := 0x1:bv64; goto (%main_return__phi_1); ];
        block %main_return__phi_1 [ var y:bv64 := x2:bv64; goto (%main_return); ];
        block %main_return [ var out:bv64 := y:bv64; return; ]
     ]
@@ -123,8 +115,7 @@ proc @main(a_in:bv64, b_in:bv64, x_in:bv64)  -> (x_out:bv64) {  }
 
     [
        block %inputs [
-         (var x_1:bv64 := x_in:bv64, var a_1:bv64 := a_in:bv64,
-          var b_1:bv64 := b_in:bv64);
+         (var x_1:bv64 := x_in:bv64, var a_1:bv64 := a_in:bv64, var b_1:bv64 := b_in:bv64);
          goto (%main_entry__phi_1);
        ];
        block %main_entry__phi_1 [
@@ -132,19 +123,13 @@ proc @main(a_in:bv64, b_in:bv64, x_in:bv64)  -> (x_out:bv64) {  }
          goto (%main_entry);
        ];
        block %main_entry [ goto (%main_1,%main_2); ];
-       block %main_2 [
-         var x_3:bv64 := bvadd(x_2:bv64, b_2:bv64);
-         goto (%main_return__phi,%main_entry__phi);
-       ];
+       block %main_2 [ var x_3:bv64 := bvadd(x_2:bv64, b_2:bv64); goto (%main_return__phi,%main_entry__phi); ];
        block %main_entry__phi [
          (var x_2:bv64 := x_3:bv64, var a_2:bv64 := a_2:bv64, var b_2:bv64 := b_2:bv64);
          goto (%main_entry);
        ];
        block %main_return__phi [ var x_5:bv64 := x_3:bv64; goto (%main_return); ];
-       block %main_1 [
-         var x_4:bv64 := bvadd(x_2:bv64, a_2:bv64);
-         goto (%main_return__phi_1);
-       ];
+       block %main_1 [ var x_4:bv64 := bvadd(x_2:bv64, a_2:bv64); goto (%main_return__phi_1); ];
        block %main_return__phi_1 [ var x_5:bv64 := x_4:bv64; goto (%main_return); ];
        block %main_return [ goto (%returns); ];
        block %returns [ var x_out:bv64 := x_5:bv64; return; ]

@@ -148,7 +148,7 @@ proc @main()  -> () {  }
     |> transform_program
   in
   print_endline
-  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
+  @@ Containers_pp.Pretty.to_string ~width:120 (Lang.Program.prog_pretty prog);
   [%expect
     {|
     var $SP:bv64;
@@ -160,24 +160,24 @@ proc @main()  -> () {  }
     var $PC:bv64;
     proc @main()  -> () {  }
       modifies $PC:bv64, $R0:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
-      captures $PC:bv64, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $SP:bv64,
-        $mem:(bv64->bv8)
+      captures $PC:bv64, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
       requires boolor(eq(0x400808:bv64, $PC))
 
     [
-       block %main_code { .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
-           .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
-                   .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
-         assume eq(0x400808:bv64, $PC);
-         goto (%block);
-       ];
+       block %main_code {
+         .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+         .succ = [
+           {
+             .address = 4196228; .conditional = "false"; .direct = "true"; .target = "stmts:OuTzy8qRTci75taVjGinFQ";
+             .type = "Type_Call"
+           }
+         ]
+       } [ assume eq(0x400808:bv64, $PC); goto (%block); ];
        block %block { .asm = "stp x29, x30, [sp, #-0x20]!" } [
          var local:bv64 := 0x0:bv64;
          var local:bv64 := $SP;
-         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP,
-          0xffffffffffffffe0:bv64) $R29 64;
-         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP,
-           0xffffffffffffffe0:bv64), 0x8:bv64) $R30 64;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($SP, 0xffffffffffffffe0:bv64) $R29 64;
+         $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd(bvadd($SP, 0xffffffffffffffe0:bv64), 0x8:bv64) $R30 64;
          $SP:bv64 := bvadd(local:bv64, 0xffffffffffffffe0:bv64);
          (var BranchTaken:bool := false, $PC:bv64 := 0x40080c:bv64);
          goto (%block_1);
@@ -253,7 +253,7 @@ proc @Sqrt()  -> () {  }
     |> transform_program
   in
   print_endline
-  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
+  @@ Containers_pp.Pretty.to_string ~width:120 (Lang.Program.prog_pretty prog);
   [%expect
     {|
     var $PSTATE_N:bv1;
@@ -265,10 +265,7 @@ proc @Sqrt()  -> () {  }
       captures $PC:bv64, $PSTATE_N:bv1, $PSTATE_V:bv1
 
     [
-       block %Sqrt_code_4 { .address = 4196316 } [
-         assume eq(0x4007dc:bv64, $PC);
-         goto (%block);
-       ];
+       block %Sqrt_code_4 { .address = 4196316 } [ assume eq(0x4007dc:bv64, $PC); goto (%block); ];
        block %block { .asm = "b.lt #0x10" } [ goto (%block_2,%block_1); ];
        block %block_1 [
          assume boolnot(eq($PSTATE_N, $PSTATE_V));
@@ -285,10 +282,7 @@ proc @Sqrt()  -> () {  }
          $PC:bv64 := if boolnot(eq($PSTATE_N, $PSTATE_V)) then 0x4007ec:bv64 else 0x4007e0:bv64;
          goto (%Sqrt_code_5);
        ];
-       block %Sqrt_code_5 [
-         assert boolor(eq(0x4007fc:bv64, $PC), eq(0x4007e0:bv64, $PC));
-         goto (%Sqrt_code_3,%Sqrt_code);
-       ];
+       block %Sqrt_code_5 [ assert boolor(eq(0x4007fc:bv64, $PC), eq(0x4007e0:bv64, $PC)); goto (%Sqrt_code_3,%Sqrt_code); ];
        block %Sqrt_code [ assume eq(0x4007e0:bv64, $PC); goto (%ret); ];
        block %Sqrt_code_3 [ assume eq(0x4007fc:bv64, $PC); goto (%ret); ];
        block %ret [ return; ]
@@ -326,7 +320,7 @@ proc @main()  -> () {  }
     |> transform_program
   in
   print_endline
-  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
+  @@ Containers_pp.Pretty.to_string ~width:120 (Lang.Program.prog_pretty prog);
   [%expect
     {|
     var observable $mem:(bv64->bv8);
@@ -337,12 +331,17 @@ proc @main()  -> () {  }
       requires boolor(eq(0x400808:bv64, $PC))
 
     [
-       block %main_code { .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
-           .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
-                   .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
+       block %main_code {
+         .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+         .succ = [
+           {
+             .address = 4196228; .conditional = "false"; .direct = "true"; .target = "stmts:OuTzy8qRTci75taVjGinFQ";
+             .type = "Type_Call"
+           }
+         ]
+       } [
          assume eq(0x400808:bv64, $PC);
-         call @_aarch64_eval(0xd4000021:bv32, 0x400808:bv64) { .asm = "svc 1";
-             .error = "Failure(\"unsupported\")" };
+         call @_aarch64_eval(0xd4000021:bv32, 0x400808:bv64) { .asm = "svc 1"; .error = "Failure(\"unsupported\")" };
          goto (%block);
        ];
        block %block { .asm = "mov xzr, xzr" } [
@@ -381,7 +380,7 @@ proc @main()  -> () {  }
   in
   let prog = transform_program lst.prog in
   print_endline
-  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
+  @@ Containers_pp.Pretty.to_string ~width:120 (Lang.Program.prog_pretty prog);
   [%expect
     {|
     var observable $mem:(bv64->bv8);
@@ -391,13 +390,15 @@ proc @main()  -> () {  }
       requires boolor(eq(0x400808:bv64, $PC))
 
     [
-       block %main_code { .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
-           .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
-                   .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
-         assume eq(0x400808:bv64, $PC);
-         assert boolor(eq(0x400784:bv64, $PC));
-         goto (%ret_1);
-       ];
+       block %main_code {
+         .address = 4196360; .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+         .succ = [
+           {
+             .address = 4196228; .conditional = "false"; .direct = "true"; .target = "stmts:OuTzy8qRTci75taVjGinFQ";
+             .type = "Type_Call"
+           }
+         ]
+       } [ assume eq(0x400808:bv64, $PC); assert boolor(eq(0x400784:bv64, $PC)); goto (%ret_1); ];
        block %ret_1 [ return; ]
     ];
     prog entry @main;

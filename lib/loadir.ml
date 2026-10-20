@@ -1786,7 +1786,7 @@ proc @f (ZF_in:bv1, VF_in:bv1) -> ();
 
   let ast = ast_of_concrete_ast ~name:"boop" prog in
   print_endline
-  @@ Containers_pp.Pretty.to_string ~width:80 (Program.prog_pretty ast.prog);
+  @@ Containers_pp.Pretty.to_string ~width:120 (Program.prog_pretty ast.prog);
   [%expect
     {|
     proc @f(VF_in:bv1, ZF_in:bv1)  -> () {  }
@@ -1826,11 +1826,7 @@ proc @main_4196260 () -> ()
       captures $NF:bv1, $ZF:bv1
 
     [
-       block %main_entry [
-         $NF:bv1 := 0x1:bv1;
-         $ZF:bv1 := $NF;
-         goto (%main_basil_return_1);
-       ];
+       block %main_entry [ $NF:bv1 := 0x1:bv1; $ZF:bv1 := $NF; goto (%main_basil_return_1); ];
        block %main_basil_return_1 [ return; ]
     ];
     prog entry @main_4196260;
@@ -1959,7 +1955,7 @@ proc @main()  -> () {  }
   let prog = lst.prog in
   let _proc = Lang.Program.entry_proc_exn prog in
   print_endline
-  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
+  @@ Containers_pp.Pretty.to_string ~width:120 (Lang.Program.prog_pretty prog);
   [%expect
     {|
     var $PC:bv64;
@@ -1968,9 +1964,15 @@ proc @main()  -> () {  }
       requires boolor(eq(0x400808:bv64, $PC))
 
     [
-       block %main_code { .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
-           .succ = [ { .address = 4196228; .conditional = "false"; .direct = "true";
-                   .target = "stmts:OuTzy8qRTci75taVjGinFQ"; .type = "Type_Call" } ] } [
+       block %main_code {
+         .gtirb_block = "b8tsihT4Q6a/SWPo4w8HoA";
+         .succ = [
+           {
+             .address = 4196228; .conditional = "false"; .direct = "true"; .target = "stmts:OuTzy8qRTci75taVjGinFQ";
+             .type = "Type_Call"
+           }
+         ]
+       } [
          assume eq(0x400808:bv64, $PC);
          assert false { .opcode = "0xa9be7bfd" };
          assert boolor(eq(0x400784:bv64, $PC));

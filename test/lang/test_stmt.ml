@@ -17,7 +17,7 @@ let%expect_test "frees" =
         attrib = Attrib.empty;
       }
   in
-  print_endline (to_string ~width:80 Var.pretty Var.pretty BasilExpr.pretty s);
+  print_endline (to_string ~width:120 Var.pretty Var.pretty BasilExpr.pretty s);
   print_string "Rvars: ";
   print_endline @@ Iter.to_string ~sep:"," Var.to_string (free_vars_iter s);
   print_string "Lvars: ";

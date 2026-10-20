@@ -20,12 +20,12 @@
 Added intrinsics
 
   $ diff before.il after.il
-  19c19,20
+  20c20,21
   <      (var R0_3:bv64=R0_out) := call @malloc(R0_in=0x1:bv64) { .label = "1916_2" };
   ---
   >      ($mem:(bv64->bv8), var R0_3:bv64):= call @_malloc($mem, 0x1:bv64);
   >      ($stack:(bv64->bv8)):= call @_havoc();
-  32c33,34
+  36c37,38
   <      call @#free(R0_in=Exp14__5_22_1:bv64) { .label = "1964_2" };
   ---
   >      ($mem:(bv64->bv8)):= call @_free($mem, Exp14__5_22_1:bv64);

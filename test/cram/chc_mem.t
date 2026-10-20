@@ -17,11 +17,10 @@ The inferred loop invariant is attached as an [assert] at the loop head, just
 as in the memory-free case (chc_loop.t):
 
   $ awk '/block %loop \(/,/]/' chc_mem_out.il | head -5
-     block %loop (
-       var i_3:bv64 := phi(%loop_body -> i_7:bv64, %entry -> i_2:bv64)
-     ) [
+     block %loop ( var i_3:bv64 := phi(%loop_body -> i_7:bv64, %entry -> i_2:bv64) ) [
        assert eq(extract(64,4, i_3:bv64), 0x0:bv60);
        goto (%loop_exit,%loop_body);
+     ];
 
 The annotated output is the original program: the [$mem] global and the
 addressed [store le]/[load le] instructions are preserved:

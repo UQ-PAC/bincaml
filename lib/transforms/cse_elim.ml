@@ -269,8 +269,7 @@ let%expect_test "cse mid" =
        block blah [
          var VF_110:bv1 := bvnot(booltobv1(eq(sign_extend(64,
             bvadd(R22_85:bv64, bvnot(bvashr(R0_179:bv64, 0xa:bv64)), 0x1:bv64)),
-            bvadd(sign_extend(64, R22_85:bv64),
-             sign_extend(64, bvnot(bvashr(R0_179:bv64, 0xa:bv64))), 0x1:bv128))));
+            bvadd(sign_extend(64, R22_85:bv64), sign_extend(64, bvnot(bvashr(R0_179:bv64, 0xa:bv64))), 0x1:bv128))));
          return;
        ]
     ]
@@ -281,8 +280,7 @@ let%expect_test "cse mid" =
        block blah [
          var cse:bv64 := bvashr(R0_179:bv64, 0xa:bv64);
          var cse_1:bv64 := bvnot(bvashr(R0_179:bv64, 0xa:bv64));
-         var VF_110:bv1 := bvnot(booltobv1(eq(sign_extend(64,
-            bvadd(R22_85:bv64, cse_1:bv64, 0x1:bv64)),
+         var VF_110:bv1 := bvnot(booltobv1(eq(sign_extend(64, bvadd(R22_85:bv64, cse_1:bv64, 0x1:bv64)),
             bvadd(sign_extend(64, R22_85:bv64), sign_extend(64, cse_1:bv64), 0x1:bv128))));
          return;
        ]

@@ -240,7 +240,7 @@ let update_proc id f (prog : t) =
   | None -> { prog with declarations = DeclsList.remove id prog.declarations }
 
 let output_proc_pretty chan p =
-  output_string chan @@ Containers_pp.Pretty.to_string ~width:80 (pretty_proc p)
+  output_string chan @@ Containers_pp.Pretty.to_string ~width:120 (pretty_proc p)
 
 let prog_pretty (p : t) =
   let open Containers_pp in
@@ -316,7 +316,7 @@ let pretty_to_chan chan (p : t) =
   let p = prog_pretty p in
   flush chan;
   let fmt = Format.formatter_of_out_channel chan in
-  Containers_pp.Pretty.to_format ~width:80 fmt p;
+  Containers_pp.Pretty.to_format ~width:120 fmt p;
   Format.flush fmt ()
 
 let decl_global ?(attrib = StringMap.empty) ?(classification = None) p v =
