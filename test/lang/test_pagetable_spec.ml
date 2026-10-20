@@ -17,13 +17,13 @@ end
     operations. *)
 module Model = struct
   type cmd =
-    | Read of { addr : Z.t; nbytes : int }
+    | Read of { addr : Z.t; nbits : int }
     | Write of { addr : Z.t; bv : Bitvec.t }
   [@@deriving show { with_path = false }]
 
   let show_cmd = function
-    | Read { addr; nbytes } ->
-        Printf.sprintf "read %x %d" (Z.to_int addr) nbytes
+    | Read { addr; nbits } ->
+        Printf.sprintf "read %x %d bits" (Z.to_int addr) nbits
     | Write { addr; bv } ->
         Printf.sprintf "write %x %s" (Z.to_int addr) (Bitvec.show bv)
 
@@ -37,7 +37,7 @@ module Model = struct
       reads/writes are byte-sized and non-zero sized. *)
   let precond cmd _ =
     match cmd with
-    | Read { addr; nbytes } -> Z.(geq addr zero) && nbytes > 0
+    | Read { addr; nbits } -> Z.(geq addr zero) && nbits > 0
     | Write { addr; bv } -> Z.(geq addr zero) && bv.w mod 8 == 0 && bv.w > 0
 
   (** Given an abstract state and a command, computes the abstract state after
@@ -74,8 +74,8 @@ module Model = struct
     |> Iter.map (fun size -> Bitvec.create ~size bv.v)
 
   let shrink_cmd : cmd Shrink.t = function
-    | Read { addr; nbytes } ->
-        Iter.map (fun nbytes -> Read { addr; nbytes }) (Shrink.int nbytes)
+    | Read { addr; nbits } ->
+        Iter.map (fun nbits -> Read { addr; nbits }) (Shrink.int nbits)
     | Write { addr; bv } ->
         Iter.map (fun bv -> Write { addr; bv }) (shrink_bitvec bv)
 
@@ -83,13 +83,13 @@ module Model = struct
     let open QCheck.Gen in
     QCheck.make ~print:show_cmd ~shrink:shrink_cmd
     @@
-    let* nbytes = nat_small >|= Int.add 1 in
+    let* nbits = nat_small >|= Int.add 1 in
     let* addr = gen_addr st in
     oneof
       [
-        return (Read { addr; nbytes });
+        return (Read { addr; nbits });
         (let+ v = arb_zint_nonneg in
-         Write { addr; bv = Bitvec.create ~size:(nbytes * 8) v });
+         Write { addr; bv = Bitvec.create ~size:nbits v });
       ]
 end
 
@@ -119,8 +119,7 @@ module Spec : STM.Spec = struct
       result of the command. *)
   let run cmd sut =
     match cmd with
-    | Read { addr; nbytes } ->
-        let nbits = nbytes * 8 in
+    | Read { addr; nbits } ->
         STM.Res (bitvec_show, PageTable.read_bv ~addr ~nbits sut)
     | Write { addr; bv } -> STM.Res (pt_ty, PageTable.write_bv sut ~addr bv)
 
@@ -131,8 +130,8 @@ module Spec : STM.Spec = struct
       because a later read could expose errors). *)
   let postcond cmd oldst res =
     match (cmd, res) with
-    | Read { addr; nbytes }, STM.Res ((BitvecTy, _), bv) ->
-        bv.w = nbytes * 8
+    | Read { addr; nbits }, STM.Res ((BitvecTy, _), bv) ->
+        bv.w = nbits
         && (Bitvec.equal bv @@ RefModel.read_bv oldst ~addr ~nbits:bv.w)
     | Write { addr; bv }, STM.Res ((PageTableTy, _), rst) ->
         let rp = PageTable.read_bv rst ~addr ~nbits:bv.w in

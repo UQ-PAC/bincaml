@@ -54,8 +54,7 @@ module Naive : IFace = struct
     |> Iter.zip_i
     |> Iter.fold (fun acc (i, v) -> Z.logor acc (Z.( lsl ) v (i * 8))) Z.zero
     |> fun v ->
-    Bitvec.create ~size:nbits
-    @@ Fixed_width_arith.extract ~hi:nbits ~lo:((nbytes * 8) - nbits) v
+    Bitvec.create ~size:nbits @@ Z.shift_right v ((nbytes * 8) - nbits)
 end
 
 module MutablePaged = struct
@@ -222,7 +221,7 @@ module MutablePaged = struct
   let write_bytes st ~addr ~bytes =
     bytes_view ~addr ~num_bytes:(Byte_slice.len bytes) ~write:bytes st
 
-  let write_bv st ~addr (bits : Bitvec.t) =
+  let write_bv_aligned st ~addr (bits : Bitvec.t) =
     assert (bits.w mod 8 = 0);
     assert (bits.w / 8 > 0);
     let bytes = Bitvec.to_bytes bits |> Byte_slice.create in
@@ -232,7 +231,20 @@ module MutablePaged = struct
   let read_bv st ~addr ~nbits =
     let d, r = Z.div_rem (Z.of_int nbits) (Z.of_int 8) in
     let num_bytes = Z.to_int @@ if Z.equal Z.zero r then d else Z.succ d in
-    read_bytes st ~addr ~num_bytes |> Bitvec.create ~size:nbits
+    read_bytes st ~addr ~num_bytes |> fun x ->
+    Z.shift_right x ((num_bytes * 8) - nbits) |> Bitvec.create ~size:nbits
+
+  let write_bv st ~addr (bits : Bitvec.t) =
+    let bits_aligned =
+      if Int.rem bits.w 8 = 0 then bits.w else ((bits.w / 8) + 1) * 8
+    in
+    let b =
+      read_bv st ~addr ~nbits:bits_aligned |> fun x ->
+      Bitvec.bitand x (Bitvec.zero ~size:bits.w) |> fun x ->
+      Bitvec.bitor x
+      @@ Bitvec.zero_extend ~extension:(bits_aligned - bits.w) bits
+    in
+    write_bv_aligned st ~addr b
 end
 
 module Mutable : IFace = MutablePaged
