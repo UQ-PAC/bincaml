@@ -6,4 +6,7 @@
   ../flake.lock
   ../.gitignore
   (source_tree .))
- (enabled_if %{bin-available:nix}))
+ (enabled_if
+  (and
+   %{bin-available:nix}
+   (not %{ignoring_promoted_rules}))))
