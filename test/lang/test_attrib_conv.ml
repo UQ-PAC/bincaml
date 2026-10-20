@@ -121,3 +121,52 @@ let%expect_test "adt to attrib" =
         .globals = [ { .address = 4324824; .name = "_DYNAMIC"; .size = 0; };
           { .address = 4325424; .name = "x"; .size = 64; }; ]; }; }
     |}]
+
+
+let%expect_test "a" =
+  let open Containers_pp in
+  let open Containers.Fun.Infix in
+  let d = bracket2 "[" (fill nl (List.init 100 (text % string_of_int))) "]" in
+  Containers_pp.Pretty.to_format ~width:40 Format.std_formatter d;
+  [%expect {|
+    [
+      0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+      16 17 18 19 20 21 22 23 24 25 26 27 28
+      29 30 31 32 33 34 35 36 37 38 39 40 41
+      42 43 44 45 46 47 48 49 50 51 52 53 54
+      55 56 57 58 59 60 61 62 63 64 65 66 67
+      68 69 70 71 72 73 74 75 76 77 78 79 80
+      81 82 83 84 85 86 87 88 89 90 91 92 93
+      94 95 96 97 98 99
+    ]
+    |}]
+
+let%expect_test "b" =
+  let open Containers_pp in
+  let open Containers.Fun.Infix in
+  let bracket2 l middle r =
+    group( nest 2 (text l ^ sp ^ middle ^ nl ^ text r))
+    in
+
+
+  let d = bracket2 "[" (fill (char ';' ^ nl) (List.init 100 (text % string_of_int))) "]" in
+  let keys = fill (char ',' ^ nl) (List.init 3 (fun i -> text (string_of_int i) ^ text " aaaaaaaaaaaaa = ") )in
+  let d = bracket2 "{" (keys ^ d ^ keys) "}" in
+  Containers_pp.Pretty.to_format ~width:40 Format.std_formatter d;
+  [%expect {|
+    { 0 aaaaaaaaaaaaa = , 1 aaaaaaaaaaaaa = ,
+      2 aaaaaaaaaaaaa = [ 0; 1; 2; 3; 4; 5; 6;
+        7; 8; 9; 10; 11; 12; 13; 14; 15; 16;
+        17; 18; 19; 20; 21; 22; 23; 24; 25; 26;
+        27; 28; 29; 30; 31; 32; 33; 34; 35; 36;
+        37; 38; 39; 40; 41; 42; 43; 44; 45; 46;
+        47; 48; 49; 50; 51; 52; 53; 54; 55; 56;
+        57; 58; 59; 60; 61; 62; 63; 64; 65; 66;
+        67; 68; 69; 70; 71; 72; 73; 74; 75; 76;
+        77; 78; 79; 80; 81; 82; 83; 84; 85; 86;
+        87; 88; 89; 90; 91; 92; 93; 94; 95; 96;
+        97; 98; 99
+        ]0 aaaaaaaaaaaaa = ,
+      1 aaaaaaaaaaaaa = , 2 aaaaaaaaaaaaa =
+      }
+    |}]
