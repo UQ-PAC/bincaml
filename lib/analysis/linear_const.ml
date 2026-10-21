@@ -404,12 +404,10 @@ module CopyNode = struct
   let init v : t = EQ.make { v; copied_from = [] }
 
   (** Set out edges of a given vertex (think `v := phi(a, b, c)` defining edges
-      `v -> a, v -> b, v -> c`). All cycles are trimmed (think v2 := phi(v1,
-      v2)) *)
+      `v -> a, v -> b, v -> c`). *)
   let set_copied v copied_from =
     assert (EQ.is_parent v);
     assert (EQ.is_eq_parent v);
-    let copied_from = List.filter (not % eq v) copied_from in
     EQ.update (fun b -> { b with copied_from }) v
 
   open struct
