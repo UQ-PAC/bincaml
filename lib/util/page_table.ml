@@ -8,6 +8,14 @@ module Byte_slice = struct
     Bytes.blit src.bs src.off dest dest_pos src.len
 end
 
+open struct
+  let blit_low_bits larger toset =
+    let open Bitvec in
+    let mask = concat (ones ~size:(larger.w - toset.w)) (zero ~size:toset.w) in
+    let masked = bitand larger mask in
+    bitor masked (zero_extend ~extension:(masked.w - toset.w) toset)
+end
+
 module type IFace = sig
   type t
 
@@ -27,7 +35,7 @@ module type IFace = sig
   val read_bv : t -> addr:Z.t -> nbits:int -> Bitvec.t
 end
 
-(** immutable mutable page table implemented with a Map *)
+(** Persistent sparse byte array implemented with a Map *)
 module Naive : IFace = struct
   module IntegerMap = Map.Make (Z)
 
@@ -50,10 +58,6 @@ module Naive : IFace = struct
     |> Iter.to_string ~sep:"," (fun (k, v) ->
         Z.to_string k ^ "->" ^ Char.to_string v)
 
-  let write_bv (imap : t) ~addr (bits : Bitvec.t) : t =
-    Bitvec.to_bytes bits |> Bytes.to_seq
-    |> Seq.fold_lefti (fun st i c -> IntegerMap.add Z.(addr + ~$i) c st) imap
-
   let read_bv st ~addr ~nbits =
     let nbytes =
       Int.div nbits 8 |> if Int.rem nbits 8 <> 0 then ( + ) 1 else Fun.id
@@ -63,6 +67,15 @@ module Naive : IFace = struct
     |> Iter.zip_i
     |> Iter.fold (fun acc (i, v) -> Z.logor acc (Z.( lsl ) v (i * 8))) Z.zero
     |> fun v -> Bitvec.create ~size:nbits v
+
+  let write_bv (imap : t) ~addr (bits : Bitvec.t) : t =
+    let bits_aligned =
+      if Int.rem bits.w 8 = 0 then bits.w else ((bits.w / 8) + 1) * 8
+    in
+    let bread = read_bv imap ~addr ~nbits:bits_aligned in
+    let aligned_bits = blit_low_bits bread bits in
+    Bitvec.to_bytes aligned_bits |> Bytes.to_seq
+    |> Seq.fold_lefti (fun st i c -> IntegerMap.add Z.(addr + ~$i) c st) imap
 end
 
 module MutablePaged = struct
@@ -260,10 +273,8 @@ module MutablePaged = struct
     in
     let b =
       (* perform aligned read then blit this partial write, before aligned write *)
-      read_bv st ~addr ~nbits:bits_aligned |> fun x ->
-      Bitvec.bitand x (Bitvec.zero ~size:bits.w) |> fun x ->
-      Bitvec.bitor x
-      @@ Bitvec.zero_extend ~extension:(bits_aligned - bits.w) bits
+      let bread = read_bv st ~addr ~nbits:bits_aligned in
+      blit_low_bits bread bits
     in
     write_bv_aligned st ~addr b
 end

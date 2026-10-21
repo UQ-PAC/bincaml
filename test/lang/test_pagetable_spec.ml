@@ -38,7 +38,7 @@ module Model = struct
   let precond cmd _ =
     match cmd with
     | Read { addr; nbits } -> Z.(geq addr zero) && nbits > 0
-    | Write { addr; bv } -> Z.(geq addr zero) && bv.w mod 8 == 0 && bv.w > 0
+    | Write { addr; bv } -> Z.(geq addr zero)  && bv.w > 0
 
   (** Given an abstract state and a command, computes the abstract state after
       the command. *)
