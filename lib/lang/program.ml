@@ -111,6 +111,7 @@ let set_spec spec (p : t) = { p with spec }
 let set_entry_proc e (p : t) = { p with entry_proc = Some e }
 let attrib (p : t) = p.attrib
 let set_attrib attrib (p : t) = { p with attrib }
+let merge_attrib a p = set_attrib (Attrib.merge_map_shadow (attrib p) a) p
 let modulename (p : t) = p.modulename
 
 let entry_proc_exn p =
