@@ -194,3 +194,10 @@ let min_value_signed size = shl (one ~size) (of_int ~size (size - 1))
 
 (** largest signed value computed as 2^(size-1) - 1 *)
 let max_value_signed size = bitnot (min_value_signed size)
+
+(** [blit_low_bits larger toset] sets bits [(size toset)..0] of [larger] to
+    equal [toset]. *)
+let blit_low_bits larger toset =
+  let mask = concat (ones ~size:(larger.w - toset.w)) (zero ~size:toset.w) in
+  let masked = bitand larger mask in
+  bitor masked (zero_extend ~extension:(masked.w - toset.w) toset)
