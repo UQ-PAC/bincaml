@@ -412,69 +412,130 @@ module CopyNode = struct
     let copied_from = List.filter (not % eq v) copied_from in
     EQ.update (fun b -> { b with copied_from }) v
 
-  (** Returns all reachable leaves from the given node, but aborts if the
-      predicate is violated or if a top edge cycle is found *)
-  let leaves (keep : t -> bool) v : edge list option =
-    let memo = ref VarMap.empty in
-    (* Determines whether all cycles through the node `root` are copy cycles *)
-    let is_id_cycle root =
-      let searching = ref VarSet.empty in
-      let searched = ref VarSet.empty in
-      let rec dfs f n =
-        if VarSet.mem (var n) !searched then true
-        else if VarSet.mem (var n) !searching then LF.is_id f
-        else
-          match copied_from n with
-          | [] -> true
-          | ls ->
-              searching := VarSet.add (var n) !searching;
-              let ans =
-                List.for_all
-                  (fun n' ->
-                    let f', n' = EQ.find_edge (f, n) in
-                    match VarMap.get (var n') !memo with
-                    | Some None -> if eq root n' then LF.is_id f' else dfs f' n'
-                    | _ -> true)
-                  ls
+  open struct
+    type status = Searching | Searched
+
+    (** Compute the strongly connected components in the graph reachable from
+        [v]. *)
+    let sccs v : VarSet.t VarMap.t =
+      let _, v = EQ.find v in
+      (* Tarjan's *)
+      let sccs = ref VarMap.empty in
+      let index = ref VarMap.empty in
+      let lowlink = ref VarMap.empty in
+      let on_stack = ref VarSet.empty in
+      let stack = Stack.create () in
+      let i = ref 0 in
+
+      let rec strongconnect v =
+        let _, v = EQ.find v in
+        index := VarMap.add (var v) !i !index;
+        lowlink := VarMap.add (var v) !i !lowlink;
+        i := !i + 1;
+        Stack.push (var v) stack;
+        on_stack := VarSet.add (var v) !on_stack;
+
+        copied_from v
+        |> List.iter (fun w ->
+            let _, w = EQ.find w in
+            if not (VarMap.mem (var w) !index) then (
+              strongconnect w;
+              let ll =
+                min
+                  (VarMap.find (var v) !lowlink)
+                  (VarMap.find (var w) !lowlink)
               in
-              searched := VarSet.add (var n) !searched;
-              ans
+              lowlink := VarMap.add (var v) ll !lowlink)
+            else if VarSet.mem (var w) !on_stack then
+              let ll =
+                min (VarMap.find (var v) !lowlink) (VarMap.find (var w) !index)
+              in
+              lowlink := VarMap.add (var v) ll !lowlink);
+
+        if VarMap.find (var v) !lowlink = VarMap.find (var v) !index then (
+          let scc = ref VarSet.empty in
+          while
+            let w = Stack.pop stack in
+            on_stack := VarSet.remove w !on_stack;
+            scc := VarSet.add w !scc;
+            not @@ Var.equal (var v) w
+          do
+            ()
+          done;
+          VarSet.iter (fun v -> sccs := VarMap.add v !scc !sccs) !scc)
+      in
+      strongconnect v;
+      !sccs
+  end
+
+  (** Returns all reachable "leaves" (nodes with no out-edges) from the given
+      node. If distinct paths to the same leaf have different labels, they are
+      joined.
+
+      If the supplied predicate is not met for any found leaves, the search
+      short circuits and None is returned.
+
+      If a non-identity cycle is found in the graph, None is returned, as else
+      there would possibly be infinitely many paths. *)
+  let leaves (keep : t -> bool) v : edge list option =
+    let status : status VarMap.t ref = ref VarMap.empty in
+    let sccs = sccs v in
+    (* Determines whether all cycles through the node `root` are identity
+       cycles.
+
+       There is a non-id cycle at [root] iff there are two distinctly labelled
+       paths from root to another vertex which is in [root]'s scc. I think...
+       The reasoning is that you can then postcompose any path from that vertex
+       back to the root, and one of the two distinct now-obtained cycles must
+       not be the identity! I think................
+
+       It's at the very least an overapproximation... there may be a super
+       super rare edge case where two distinct edges compose to identity along
+       the same path back to the root as left inverses aren't necessarily
+       unique. *)
+    let is_id_cycle root =
+      let scc = VarMap.find (var root) sccs in
+      let edges = ref VarMap.empty in
+      let rec dfs f n =
+        let f, n = EQ.find_edge (f, n) in
+        if not @@ VarSet.mem (var n) scc then true
+        else
+          match VarMap.get (var n) !edges with
+          | Some f' -> LF.equal f f'
+          | None -> (
+              edges := VarMap.add (var n) f !edges;
+              match copied_from n with
+              | [] -> true
+              | ls -> ls |> List.for_all (fun n' -> dfs f n'))
       in
       dfs LF.identity root
     in
-    let rec dfs v f =
+    let join =
+      VarMap.fold (fun v (f, n) acc ->
+          match VarMap.get v acc with
+          | Some (f', n') -> VarMap.add v (LF.join f f', n) acc
+          | None -> VarMap.add v (f, n) acc)
+    in
+    let rec dfs v f : edge VarMap.t option =
       let f, v = EQ.find_edge (f, v) in
-      match VarMap.get (var v) !memo with
-      | Some (Some l) -> Some l
-      (* If there's a cycle, ignore it if the composite of the cycle is id and
-         abort otherwise *)
-      | Some None when is_id_cycle v -> Some VarMap.empty
-      | Some None -> None
+      match VarMap.get (var v) !status with
+      (* We have already searched this node, and so its leaves will have
+         already been added to the list! *)
+      | Some Searched -> Some VarMap.empty
+      (* We have found a cycle! If all cycles are identity cycles, all is well
+         and we can skip recursing on this node. *)
+      | Some Searching -> Option.return_if (is_id_cycle v) VarMap.empty
       | None -> (
           match copied_from v with
-          | [] ->
-              if keep v then Some (VarMap.singleton (var v) (f, v)) else None
-          | l :: ls ->
-              memo := VarMap.add (var v) None !memo;
-              let open Option.Infix in
-              let ans : _ option =
-                List.fold_left
-                  (fun acc l ->
-                    let* acc = acc in
-                    let* b = dfs l f in
-                    Some
-                      (VarMap.fold
-                         (fun v (f, n) acc ->
-                           match VarMap.get v acc with
-                           | Some (f', n') -> VarMap.add v (LF.join f f', n) acc
-                           | None -> VarMap.add v (f, n) acc)
-                         b acc))
-                  (dfs l f) ls
-              in
-              Option.iter
-                (fun a -> memo := VarMap.add (var v) (Some a) !memo)
-                ans;
-              ans)
+          | [] -> Option.return_if (keep v) (VarMap.singleton (var v) (f, v))
+          | ls ->
+              let open List.Traverse (Option) in
+              status := VarMap.add (var v) Searching !status;
+              ls
+              |> fold_m
+                   (fun acc l -> dfs l f |> Option.map (join acc))
+                   VarMap.empty
+              |> tap (fun _ -> status := VarMap.add (var v) Searched !status))
     in
     dfs v LF.identity |> Option.map (VarMap.values %> Iter.to_list)
 end
