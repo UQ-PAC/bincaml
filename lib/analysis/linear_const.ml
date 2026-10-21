@@ -562,11 +562,18 @@ type call_info = {
 }
 
 module Solver = struct
+  (** Add edges from a phi assignment to the graph. *)
   let add_phi node_of (phi : Var.t Block.phi) =
     let l = node_of phi.lhs in
     let copied = List.map (fun (_, v) -> node_of v) phi.rhs in
     CopyNode.set_copied l copied
 
+  (** If the leaves of an output node of a called procedure are all inputs, then
+      we can try to propagate those paths back into the caller by composing with
+      the parameters in the call statement. This function does this.
+
+      If we did propagate new things, then the caller's graph has updated and we
+      update a worklist to indicate new information is to be propagated. *)
   let propagate_call node_of update_worklist s c ls =
     let open CopyNode in
     let open List.Traverse (Option) in
@@ -582,8 +589,6 @@ module Solver = struct
             if List.for_all (Var.equal v % snd) vs then
               let assigned = node_of c.caller_id @@ StringMap.find s c.lhs in
               if EQ.is_parent assigned then
-                (* i had so much fun writing this...
-                  match List.fold_left (( %> ) fst % LF.join) f vs with *)
                 match List.fold_left (fun f (g, _) -> LF.join f g) f vs with
                 | TopEdge | LF.Join _ -> ()
                 | f ->
@@ -593,6 +598,10 @@ module Solver = struct
                     update_worklist c.caller_id)
         | [] -> failwith "leaves should never be empty!")
 
+  (** Add edges corresponding to a statement to the graph. This can be either an
+      assignment, or a call to a procedure who's graph is already fully computed
+      (determined by sccs). If a call to an in-scc procedure is found, then we
+      log the callsite to be processed later. *)
   let add_intra_stmt summaries callers node_of pid component stmt =
     let open Stmt in
     match stmt with
@@ -627,6 +636,8 @@ module Solver = struct
 
   let exits = [ "@__assert_fail"; "@exit" ]
 
+  (** Adds assumed edges to procedures with no implementation. Exits get bottom
+      edges, and other procedures get identity edges describing the ARM ABI. *)
   let add_stub node_of proc =
     let open Option.Infix in
     let fin, fout =
@@ -666,6 +677,8 @@ module Solver = struct
 
   module Worklist = Worklist.Make (ID)
 
+  (** Solve for the graphs of all procedures in a given strongly connected
+      component. *)
   let solve_component (prog : Program.t) call_graph summaries
       (graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t) component =
     let open CopyNode in
@@ -679,10 +692,11 @@ module Solver = struct
           Hashtbl.replace graphs pid vm;
           n
     in
-    (* Initialise the graph with all intraprocedural copies *)
+    (* Initialise the graph with all intraprocedural statements and out-of-scc
+       calls, and also track all in-scc calls *)
     let callers = Hashtbl.create 10 in
-    List.iter
-      (fun pid ->
+    component
+    |> List.iter (fun pid ->
         let proc = Program.proc prog pid in
         match Procedure.graph proc with
         | None -> add_stub (node_of pid) proc
@@ -692,9 +706,11 @@ module Solver = struct
                 Block.stmts_iter b
                 |> Iter.iter
                      (add_intra_stmt summaries callers node_of pid component);
-                List.iter (add_phi (node_of pid)) b.phis))
-      component;
-    (* The interproc part *)
+                List.iter (add_phi (node_of pid)) b.phis));
+    (* The interproc part:
+
+       Propagate in-scc call edges and if new information is found, update the
+       worklist to re-propagate further if necessary. *)
     let worklist = Worklist.create () in
     Worklist.add_list worklist component;
     while Worklist.non_empty worklist do
