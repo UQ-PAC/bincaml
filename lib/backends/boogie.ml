@@ -332,13 +332,6 @@ let pretty_statement (s : Program.stmt) =
         >|= compose fst pretty_variable
         |> fill (text "," ^ newline_or_spaces 1)
       in
-      let pretty_expr e =
-        try pretty_expr e
-        with m ->
-          failwith
-          @@ String.concat " "
-               [ "pretty:"; Expr.BasilExpr.to_string e; Printexc.to_string m ]
-      in
       let rhs =
         ls >|= compose snd pretty_expr |> fill (text "," ^ newline_or_spaces 1)
       in
