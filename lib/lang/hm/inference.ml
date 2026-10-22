@@ -122,7 +122,9 @@ let scheme_of_intrin st ?(visit_constraint = fun a -> ()) (gen : ID.generator)
       let b = fv () in
       let m = curry_f st [ a ] b in
       curry_f st [ m; a; b ] m
-  | `Cases -> fv ()
+  | `Cases ->
+      let a = fv () in
+      curry_f st (List.init args (fun _ -> a)) a
 
 let do_infer st ~visit_constraint
     (infer :
@@ -206,7 +208,7 @@ let do_infer st ~visit_constraint
       let ctx' =
         List.fold_left
           (fun ctx (v, e) ->
-            let c = decl_var_typ st univ ctx v in
+            let c = shadow_var_typ st univ ctx v in
             (* check bound expr equal to var type *)
             let _ = unify (lookup_var_typ st univ c v) (getty e) in
             c)
