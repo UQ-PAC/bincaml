@@ -40,6 +40,7 @@ val attrib : t -> Attrib.attrib_map
 val entry_proc_exn : t -> proc
 val entry_proc_opt : t -> proc option
 val map_procedures : (ID.t -> proc -> proc) -> t -> t
+val iter_procedures : t -> proc Iter.t
 val proc : t -> ID.t -> proc
 val proc_opt : t -> ID.t -> proc option
 val procs : t -> (ID.t * proc) Iter.t

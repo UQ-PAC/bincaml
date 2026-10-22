@@ -491,6 +491,14 @@ module PassManager = struct
       invariants = Invariants.presupposes [ SSA ];
     }
 
+  let stack_rewrite =
+    {
+      name = "stack-rewrite";
+      apply = Prog Transforms.Stack_rewrite.check_transform;
+      doc = "TODO Testing for now...";
+      invariants = Invariants.presupposes [ SSA ];
+    }
+
   let passes =
     [
       aslp_semantics;
@@ -534,6 +542,7 @@ module PassManager = struct
       linear_copy;
       simp;
       data_structure_analysis;
+      stack_rewrite;
       {
         name = "cf-expressions-smtcheck";
         apply = Prog Transforms.Cf_tx.simplify_prog_with_smt_check;
