@@ -434,6 +434,7 @@ module BasilExpr = struct
   let fold_with_type_r (alg : 'e abstract_expr -> 'a) =
     zygo ~cata AbstractExpr.get_typ alg
 
+  (** Perform one layer of local type inference *)
   let fixup_typ (exp : t) : t =
     let type_alg_opt e =
       try type_alg e
@@ -442,11 +443,14 @@ module BasilExpr = struct
         Types.Top
     in
     let e = unfix exp in
-    let t =
-      e |> AbstractExpr.map (unfix %> AbstractExpr.get_typ) |> type_alg_opt
-    in
-    let e = AbstractExpr.set_typ e t |> fix in
-    e
+    match AbstractExpr.get_typ e with
+    | Types.Top | Types.Nothing -> begin
+        let t =
+          e |> AbstractExpr.map (unfix %> AbstractExpr.get_typ) |> type_alg_opt
+        in
+        AbstractExpr.set_typ e t |> fix
+      end
+    | _ -> exp
 
   type rwinfo = {
     from : t;
