@@ -1,10 +1,11 @@
+(** Inference functions for typing Bincaml IR constructs. *)
+
 open Common
 open Abstract_expr
+open Hm_inference
 open Hm_types
 open Unification
 open Solve_bv
-
-(** Hindley-Milner type inference based on a union-find. *)
 
 (** An AbstractExpr.t with [t] used as the type. *)
 module AbsTypingExpr = struct

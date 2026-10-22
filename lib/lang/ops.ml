@@ -369,7 +369,7 @@ module AllOps = struct
     match o with
     | `Forall -> return Boolean
     | `Exists -> return Boolean
-    | `Lambda -> Fun { args; ret = a }
+    | `Lambda -> Fun { args = []; ret = Types.curry args a }
 
   let ret_type_unary (o : [< unary ]) a =
     let open Types in
