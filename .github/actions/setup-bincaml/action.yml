@@ -17,7 +17,7 @@ runs:
         paths: "~/.nix-profile/bin"
 
     - run: |
-        if ! $cached || ! command -v bnfc; then nix profile install .#bnfc-treesitter .#pkgs.boogie .#pkgs.cvc5 .#pkgs.tree-sitter; fi
+        if ! $cached || ! command -v z3; then nix profile install .#bnfc-treesitter .#pkgs.boogie .#pkgs.cvc5 .#pkgs.z3 .#pkgs.tree-sitter; fi
       shell: bash
       env:
         cached: ${{ steps.nix-cache.outputs.hit-primary-key }}

@@ -69,11 +69,11 @@
   Memory Error: Invalid Free (not base address)
   Execution trace:
       out.bpl(287,3): b#inputs
-  out.bpl(293,5): Error: a precondition for this call could not be proved
-  out.bpl(147,3): Related location: this is the precondition that could not be proved
+  Memory Error: Invalid Free (object not live)
   Execution trace:
       out.bpl(287,3): b#inputs
-  Memory Error: Invalid Free (object not live)
+  out.bpl(293,5): Error: a precondition for this call could not be proved
+  out.bpl(147,3): Related location: this is the precondition that could not be proved
   Execution trace:
       out.bpl(287,3): b#inputs
   Memory Error: Invalid Access
