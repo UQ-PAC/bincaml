@@ -1363,6 +1363,7 @@ module BasilASTLoader = struct
         let _, attrib = trans_attrib_set ~binds p_st attrs in
         BasilExpr.lambda ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_Let (id, param, rt, body, in_expr) ->
+        (* construct lambda with let syntax *)
         let id = unsafe_unsigil (`Local id) in
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st param in
         let funct = Types.curry (List.map Var.typ bound) (trans_type rt) in

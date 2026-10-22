@@ -10,3 +10,5 @@ trace.json
 .vscode/
 .direnv
 .envrc
+
+.bincaml_repl_history
