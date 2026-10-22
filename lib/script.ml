@@ -195,14 +195,12 @@ let load_il st args =
 
 let run_transforms st args =
   let args = Attrib.of_sexp args in
-  Logs.debug (fun m -> m "%s" @@ Attrib.to_string args);
   let ba = Passes.PassManager.construct_batch_attrib args in
   let prog = Some (Passes.PassManager.run_batch ba (get_prog st)) in
   set_prog st prog
 
 let run_transform st args =
   let args = Attrib.of_sexp args in
-  Logs.debug (fun m -> m "%s" @@ Attrib.to_string args);
   let ba = [ Passes.PassManager.pass_of_attrib args ] in
   let prog = Some (Passes.PassManager.run_batch ba (get_prog st)) in
   set_prog st prog
