@@ -143,16 +143,21 @@ module Driver = struct
 
   let of_bool : bool -> t = fun b -> `Bool b
 
+  (** Bytes are stored as either literal (escaped) strings for short
+      bytestrings, and as GZIP-compressed strings for longer bytestrings. For
+      the first case, escaping / unescaping is handled by
+      {!Attrib.attrib_pretty} / {!Loadir}, respectively. *)
+
   let to_bytes : t -> bytes = function
     (* string vs list is used to distinguish compressed vs escaped bytes. *)
-    | `String s -> Scanf.unescaped s |> Bytes.of_string
+    | `String s -> Bytes.of_string s
     | `List parts ->
         let s = Iter.of_list parts |> Iter.map to_string |> Iter.concat_str in
         Base64.decode_exn s |> Bytes.unsafe_of_string |> Internal.decompress
     | _ -> invalid_arg "expected `String or `List (for bytes)"
 
   let of_bytes : bytes -> t = function
-    | x when Bytes.length x < 80 -> `String (String.escaped (String.of_bytes x))
+    | x when Bytes.length x < 80 -> `String (String.of_bytes x)
     | x ->
         let s =
           Internal.compress x |> Bytes.unsafe_to_string |> Base64.encode_exn

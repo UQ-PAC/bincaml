@@ -339,8 +339,7 @@ let section_to_bincaml_section (sec : Section.t) : Gtirb_attribs.section option
         Logs.warn (fun m ->
             m "gtirb section had more than one byte interval. selecting first.");
       let address = Int64.of_int address and size = Int64.of_int size in
-      ignore contents;
-      Some { name; address; size; read_only; bytes = Bytes.empty }
+      Some { name; address; size; read_only; bytes = contents }
   | [] ->
       Logs.warn (fun m -> m "gtirb section had no byte intervals. ignoring.");
       None
