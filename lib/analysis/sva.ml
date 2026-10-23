@@ -33,9 +33,11 @@ module SymBase = struct
     | Heap { name } -> Printf.sprintf "Heap(%s)" name
     | GlobSym -> "Global"
     | Constant -> "Constant"
-    | Par { name; param } -> Printf.sprintf "Par(%s_%s)" name (Var.show param)
-    | Ret { name; param } -> Printf.sprintf "Ret(%s_%s)" name (Var.show param)
-    | Loaded { var } -> Printf.sprintf "Loaded(%s)" (Var.name var)
+    | Par { name; param } ->
+        Printf.sprintf "Par(%s_%s)" name (Var.to_string param)
+    | Ret { name; param } ->
+        Printf.sprintf "Ret(%s_%s)" name (Var.to_string param)
+    | Loaded { var } -> Printf.sprintf "Loaded(%s)" (Var.to_string var)
 
   let is_place_holder = function
     | Stack _ | Heap _ | GlobSym | Constant -> false
@@ -157,34 +159,35 @@ end
 module StateAbstraction = Intra_analysis.MapState (SVAAbstractionBasil)
 module Eval = Intra_analysis.EvalStmt (SVAAbstractionBasil)
 
+let try_make_local proc_id (param : Var.t) =
+  let open Option in
+  let proc_name = ID.name proc_id in
+  let+ size =
+    match Var.typ param with
+    | Types.Boolean -> Some 1
+    | Types.Bitvector size -> Some size
+    | _ -> None
+  in
+  let sym =
+    match Var.name param with
+    | s
+      when String.starts_with ~prefix:"R31" s
+           || String.starts_with ~prefix:"SP" s ->
+        SymBase.Stack proc_name
+    | _ -> Par { name = proc_name; param; proc_id = Some proc_id }
+  and interval = IntervalDomain.init (Bitvec.zero ~size) in
+  (param, sym, interval)
+
 module Domain = struct
   include StateAbstraction
 
   let init ?(vertex = None) proc =
-    let open Option in
     let proc_id = Procedure.id proc in
-    let name = ID.name @@ proc_id in
     Procedure.formal_in_params proc
     |> StringMap.to_iter
-    |> Iter.filter_map (fun (_, param) ->
-        let* size =
-          match Var.typ param with
-          | Types.Boolean -> Some 1
-          | Types.Bitvector size -> Some size
-          | _ -> None
-        in
-        match Var.name param with
-        | s when String.starts_with ~prefix:"R31" s ->
-            Some
-              ( param,
-                SymAddrSetLattice.singleton (SymBase.Stack name)
-                @@ IntervalDomain.init @@ Bitvec.zero ~size:64 )
-        | _ ->
-            Some
-              ( param,
-                SymAddrSetLattice.singleton
-                  (Par { name; param; proc_id = Some proc_id })
-                @@ IntervalDomain.init @@ Bitvec.zero ~size ))
+    |> Iter.filter_map (fun (_, param) -> try_make_local proc_id param)
+    |> Iter.map (fun (param, sym, interval) ->
+        (param, SymAddrSetLattice.singleton sym interval))
     |> Iter.fold (fun m (v, d) -> update v d m) bottom
 
   let transfer_state read stmt =
@@ -256,42 +259,34 @@ module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
 (** Obtain an interval encoding the range of global addresses, loosely
     determined by the symbol table attributes. *)
 let global_range (prog : Program.t) =
-  let open Option.Infix in
-  match StringMap.get ".initial_memory" (Program.attrib prog) with
-  | Some (`List attrs) ->
-      List.filter_map
-        (fun attr ->
-          match attr with
-          | `Assoc m ->
-              let* address =
-                match StringMap.get ".address" m with
-                | Some (`Bitvector bv) -> Some bv
-                | _ -> None
-              in
-              let* size =
-                match StringMap.get ".size" m with
-                | Some (`Bitvector bv) -> Some bv
-                | _ -> None
-              in
-              let end_address =
-                flip Bitvec.sub (Bitvec.one ~size:64) @@ Bitvec.add address size
-              in
-              Some (WrappedIntervalsLattice.interval address end_address)
-          | _ -> None)
-        attrs
-      |> List.fold_left WrappedIntervalsLattice.join WrappedIntervalsLattice.Bot
-  | _ -> WrappedIntervalsLattice.Bot
+  StringMap.get ".initial_memory" (Program.attrib prog)
+  |> Iter.of_opt
+  |> Iter.flat_map_l (function `List sections -> sections | _ -> [])
+  |> Iter.filter_map (function
+    | `Assoc sec ->
+        let open Option.Infix in
+        let+ addr = Attrib.find_int_map ".address" sec
+        and+ size = Attrib.find_int_map ".size" sec in
+        WrappedIntervalsLattice.interval
+          (Bitvec.create ~size:64 addr)
+          (Bitvec.create ~size:64 (Z.add addr (Z.sub size Z.one)))
+    | _ -> None)
+  |> Iter.fold WrappedIntervalsLattice.join WrappedIntervalsLattice.Bot
 
-let try_make_global (prog : Program.t) (sym_base, value) =
+let try_make_global (prog : Program.t) =
   (* NOTE this is slow ... it's a significant part of the runtime of the DSA local phase
      (~80%), and can be made O(log n) with an interval tree *)
   let g = global_range prog in
-  match sym_base with
-  | SymBase.Constant when WrappedIntervalsLattice.leq value g ->
+
+  function
+  | SymBase.Constant, value
+    when WrappedIntervalsLattice.(compatible value g && leq value g) ->
       (SymBase.GlobSym, value)
-  | _ -> (sym_base, value)
+  | x -> x
 
 let sva (prog : Program.t) =
+  let try_make_global' = try_make_global prog in
+
   let results =
     Program.procs prog
     |> Iter.fold
@@ -310,6 +305,5 @@ let sva (prog : Program.t) =
                 | SymBase.Loaded r when Option.is_none r.proc_id ->
                     (SymBase.Loaded { r with proc_id = Some id }, i)
                 | _ -> (base, i))
-            |> List.map (try_make_global prog)
-            |> SymAddrSetLattice.of_list_bot)
+            |> List.map try_make_global' |> SymAddrSetLattice.of_list_bot)
           b ))
