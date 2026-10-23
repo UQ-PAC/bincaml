@@ -434,7 +434,8 @@ let%expect_test "bayat1" =
   let dsgraph = Analysis.Dsa.dsa prog in
   let _, g = IDMap.find mainid dsgraph in
   print_endline @@ Analysis.Dsa.dot_string g;
-  [%expect {|
+  [%expect
+    {|
     digraph G {
       rankdir="LR"
       node[shape=record]
@@ -575,7 +576,8 @@ let%expect_test "bayat2" =
   let dsgraph = Analysis.Dsa.dsa prog in
   let _, g = IDMap.find mainid dsgraph in
   print_endline @@ Analysis.Dsa.dot_string g;
-  [%expect {|
+  [%expect
+    {|
     digraph G {
       rankdir="LR"
       node[shape=record]
