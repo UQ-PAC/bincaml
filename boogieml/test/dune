@@ -1,0 +1,4 @@
+(cram
+ (package boogieml)
+ (enabled_if %{bin-available:boogie})
+ (deps %{bin:boogiewrap} claslocnew.bpl))
