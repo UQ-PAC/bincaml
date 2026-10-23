@@ -47,7 +47,7 @@ module WrappedIntervalsLattice = struct
   let bottom = Bot
   let pretty t = Containers_pp.text (show t)
 
-  (** Returns whether the two lattive elements have compatible widths. *)
+  (** Returns whether the two lattice elements have compatible widths. *)
   let compatible x y =
     match (x, y) with
     | Interval { lower = x; _ }, Interval { lower = y; _ } ->
