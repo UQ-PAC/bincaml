@@ -65,6 +65,7 @@
   trace-tef
   containers
   iter
+  boogieml
   containers-data
   (ppx_deriving :build)
   (ppx_protocol_conv :build)

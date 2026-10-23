@@ -35,6 +35,7 @@
   base64,
 
   capstone_arm64_disas,
+  boogieml,
   aslp_lifter_ocaml,
 
   # test:
@@ -121,6 +122,7 @@ buildDunePackage {
     linenoise
     stb_image
     capstone_arm64_disas
+    boogieml
     aslp_lifter_ocaml
     qcheck-core
     qcheck-alcotest
