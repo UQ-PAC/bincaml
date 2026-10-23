@@ -220,5 +220,5 @@ module CallGraph : sig
       Vert.t list list
   end
 
-  val make_call_graph : t -> G.t
+  val make_call_graph : ?returns:bool -> t -> G.t
 end
