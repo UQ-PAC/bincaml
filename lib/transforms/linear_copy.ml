@@ -17,19 +17,15 @@ let expr_of f v =
 
 let transform_proc (p : Program.t) g (proc : Program.proc) =
   let copied_by v =
-    VertMap.get (Var v) g
-    |> Option.map CopyNode.(vert % EQ.find_eq)
-    |> Option.flat_map Vertex.(function Var v -> Some v | _ -> None)
+    VarMap.get v g
+    |> Option.map CopyNode.(var % EQ.find_eq)
     |> Option.get_or ~default:v
   in
   let trans v =
-    VertMap.get (Var v) g
+    VarMap.get v g
     |> Option.flat_map (fun n ->
         let f, n = CopyNode.EQ.find n in
-        match f with
-        | IdEdge | Linear _ -> Some (f, CopyNode.vert n)
-        | _ -> None)
-    |> Option.flat_map Vertex.(function f, Var v -> Some (f, v) | _ -> None)
+        match f with IdEdge | Linear _ -> Some (f, CopyNode.var n) | _ -> None)
   in
 
   Procedure.map_blocks_nondet

@@ -441,7 +441,6 @@ module PassManager = struct
     {
       name = "linear-copy";
       apply = Prog Transforms.Linear_copy.transform;
-      (* apply = Prog (Analysis.Linear_const.test_transform %> Transforms.Linear_copy.transform); *)
       doc =
         "Inteprocedural linear expression propagation. This is helpful in \
          cleaning stack address uses. Assumes SSA.";
